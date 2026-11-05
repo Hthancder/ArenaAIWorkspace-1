@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#05070f" />
+  <meta name="description" content="LUMEN — game giải đố xoay ô, nối ánh sáng giữa những ngôi sao. 600 màn chơi, đồ hoạ tối giản, không áp lực thời gian." />
+  <title>LUMEN — Nối những vì sao</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <canvas id="starfield" aria-hidden="true"></canvas>
+  <div class="nebula" aria-hidden="true">
+    <span class="nebula-blob n1"></span>
+    <span class="nebula-blob n2"></span>
+    <span class="nebula-blob n3"></span>
+  </div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <div id="app">
+    <!-- ============ HOME ============ -->
+    <section id="screen-home" class="screen active">
+      <header class="home-top">
+        <div class="brand"><span class="brand-mark">✦</span><span>LUMEN</span></div>
+        <button class="icon-btn" id="btn-home-settings" aria-label="Cài đặt" title="Cài đặt">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1.11 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H9a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V9a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/></svg>
+        </button>
+      </header>
+
+      <div class="home-main">
+        <div class="hero-mark-wrap" aria-hidden="true">
+          <svg class="hero-mark" viewBox="0 0 160 160">
+            <defs>
+              <radialGradient id="orbGrad" cx="50%" cy="42%" r="60%">
+                <stop offset="0%" stop-color="#ffffff" stop-opacity=".95"/>
+                <stop offset="35%" stop-color="var(--accent)" stop-opacity=".95"/>
+                <stop offset="100%" stop-color="var(--accent2)" stop-opacity="0"/>
+              </radialGradient>
+              <linearGradient id="sparkGrad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#ffffff"/>
+                <stop offset="55%" stop-color="var(--accent)"/>
+                <stop offset="100%" stop-color="var(--accent2)"/>
+              </linearGradient>
+            </defs>
+            <circle cx="80" cy="80" r="62" fill="none" stroke="var(--accent)" stroke-opacity=".16" stroke-width="1"/>
+            <circle cx="80" cy="80" r="46" fill="none" stroke="var(--accent)" stroke-opacity=".1" stroke-width="1" stroke-dasharray="2 7"/>
+            <circle cx="80" cy="80" r="30" fill="url(#orbGrad)" opacity=".55"/>
+            <path class="hero-spark" d="M80 26 Q86 68 134 80 Q86 92 80 134 Q74 92 26 80 Q74 68 80 26 Z" fill="url(#sparkGrad)"/>
+            <circle cx="80" cy="80" r="6.5" fill="#fff" opacity=".95"/>
+            <circle class="hero-orbit" cx="80" cy="18" r="2.6" fill="var(--accent)"/>
+            <circle class="hero-orbit o2" cx="142" cy="80" r="2" fill="var(--accent2)"/>
+            <circle class="hero-orbit o3" cx="80" cy="142" r="1.7" fill="var(--accent)"/>
+          </svg>
+        </div>
+
+        <h1 class="hero-title">LUMEN</h1>
+        <p class="hero-tag">Nối những vì sao.<br />Thắp sáng dải ngân hà.</p>
+
+        <div class="home-actions">
+          <button class="btn btn-primary" id="btn-continue">
+            <span class="btn-glow" aria-hidden="true"></span>
+            <span class="btn-text">
+              <span class="btn-label" id="continue-label">Bắt đầu</span>
+              <span class="btn-meta" id="continue-meta">Màn 1 · Khởi Nguyên</span>
+            </span>
+            <span class="btn-arrow" aria-hidden="true">→</span>
+          </button>
+          <div class="home-row">
+            <button class="btn btn-ghost" id="btn-levels">Chọn màn</button>
+            <button class="btn btn-ghost" id="btn-how">Cách chơi</button>
+          </div>
+        </div>
+
+        <div class="home-stats">
+          <div class="stat-chip">
+            <span class="stat-icon gold">★</span>
+            <div><strong id="home-stars">0</strong><span>ngôi sao</span></div>
+          </div>
+          <div class="stat-chip">
+            <span class="stat-icon">◈</span>
+            <div><strong id="home-done">0</strong><span>màn hoàn thành</span></div>
+          </div>
+        </div>
+      </div>
+
+      <footer class="home-foot">
+        <span>600 màn chơi</span><span class="dot"></span>
+        <span>Không giới hạn thời gian</span><span class="dot"></span>
+        <span>Không có thất bại</span>
+      </footer>
+    </section>
+
+    <!-- ============ LEVEL SELECT ============ -->
+    <section id="screen-levels" class="screen">
+      <header class="topbar">
+        <button class="icon-btn" id="btn-levels-back" aria-label="Về trang chủ">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <div class="topbar-title">
+          <span>Chọn màn</span>
+          <strong id="levels-total">0 / 1800 ★</strong>
+        </div>
+        <div class="topbar-spacer"></div>
+      </header>
+
+      <div class="chapter-tabs-wrap">
+        <div class="chapter-tabs" id="chapter-tabs" role="tablist" aria-label="Chương"></div>
+      </div>
+
+      <div class="chapter-head">
+        <div class="chapter-copy">
+          <div class="chapter-kicker" id="chapter-kicker">Chương 1</div>
+          <h2 id="chapter-name">Khởi Nguyên</h2>
+          <p id="chapter-blurb">Một ngôi sao, một tia sáng.</p>
+        </div>
+        <div class="chapter-progress">
+          <div class="ring" id="chapter-ring">
+            <svg viewBox="0 0 44 44"><circle class="ring-bg" cx="22" cy="22" r="18"/><circle class="ring-fill" id="chapter-ring-fill" cx="22" cy="22" r="18"/></svg>
+            <span id="chapter-pct">0%</span>
+          </div>
+          <div class="chapter-stars"><span class="gold">★</span> <span id="chapter-stars">0</span> / 180</div>
+        </div>
+      </div>
+
+      <div class="level-grid" id="level-grid"></div>
+      <div class="levels-foot">Mọi màn đều mở. Chơi theo cảm hứng của bạn — không có gì bị khoá.</div>
+    </section>
+
+    <!-- ============ GAME ============ -->
+    <section id="screen-game" class="screen">
+      <header class="topbar game-topbar">
+        <button class="icon-btn" id="btn-game-back" aria-label="Về chọn màn">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <div class="topbar-title">
+          <span id="game-chapter">Chương 1 · Khởi Nguyên</span>
+          <strong id="game-level">Màn 1</strong>
+        </div>
+        <button class="icon-btn" id="btn-game-sound" aria-label="Bật hoặc tắt âm thanh" title="Âm thanh">
+          <svg class="ico-sound-on" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+          <svg class="ico-sound-off" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H3v6h3l5 4V5z"/><path d="M22 9l-6 6M16 9l6 6"/></svg>
+        </button>
+      </header>
+
+      <div class="game-meta" id="game-meta">
+        <div class="meta-chip" id="meta-moves">
+          <span class="meta-label">Nước đi</span>
+          <strong id="moves-val">0</strong>
+        </div>
+        <div class="meta-chip" id="meta-par">
+          <span class="meta-label">Tối ưu</span>
+          <strong id="par-val">0</strong>
+        </div>
+        <div class="beacon-meter" id="beacon-meter" aria-label="Tiến độ thắp sáng"></div>
+      </div>
+
+      <div class="board-shell">
+        <div class="board-wrap" id="board-wrap">
+          <svg id="board" xmlns="http://www.w3.org/2000/svg" role="grid" aria-label="Bàn chơi LUMEN"></svg>
+        </div>
+        <div class="coach" id="coach"><span class="coach-dot"></span> Nhấn vào một ô để xoay</div>
+      </div>
+
+      <div class="game-controls">
+        <div class="dir-toggle" role="group" aria-label="Chiều xoay">
+          <button class="dir-btn active" id="dir-cw" title="Xoay theo chiều kim đồng hồ (Q để đổi)" aria-label="Xoay theo chiều kim đồng hồ">↻</button>
+          <button class="dir-btn" id="dir-ccw" title="Xoay ngược chiều kim đồng hồ (Q để đổi)" aria-label="Xoay ngược chiều kim đồng hồ">↺</button>
+        </div>
+        <button class="tool-btn" id="btn-undo" title="Hoàn tác (U)"><span aria-hidden="true">↶</span><span class="tool-label">Hoàn tác</span></button>
+        <button class="tool-btn" id="btn-hint" title="Gợi ý (H)"><span aria-hidden="true">✦</span><span class="tool-label">Gợi ý</span><b id="hint-count">3</b></button>
+        <button class="tool-btn" id="btn-restart" title="Chơi lại (R)"><span aria-hidden="true">⟳</span><span class="tool-label">Chơi lại</span></button>
+      </div>
+
+      <div class="game-foot">
+        <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+        <div class="foot-note" id="foot-note">Thắp sáng mọi ngôi sao để hoàn thành màn chơi.</div>
+        <button class="btn btn-primary next-btn" id="btn-next" hidden>
+          <span class="btn-text"><span class="btn-label">Màn tiếp</span><span class="btn-meta" id="next-meta">Tiếp tục</span></span>
+          <span class="btn-arrow" aria-hidden="true">→</span>
+        </button>
+      </div>
+    </section>
+  </div>
+
+  <div id="modal-root" class="modal-root" aria-live="polite"></div>
+  <div id="toast" class="toast" role="status"></div>
+  <canvas id="fx" aria-hidden="true"></canvas>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
