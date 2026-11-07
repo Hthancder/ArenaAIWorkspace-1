@@ -4374,8 +4374,8 @@ Sau khi đổi routing, **không tin** kết quả trả về. Kiểm chứng b�
 | 9 | Rate limit | 100 req/s `/windows` ⇒ 429, audit |
 | 10 | Fuzz | REST + WSS + DataChannel: 1 triệu input ngẫu nhiên ⇒ không panic, không crash |
 | 11 | Input không vượt biên | toạ độ ±2^31 ⇒ clamp, không lái chuột ra ngoài |
-| 12 | Log redaction | grep log sau 100 phiên ⇒ **0** tiêu đề cửa sổ, 0 token, 0 clipboard |
-| 13 | Update giả | gói update sai chữ ký ⇒ từ chối, không downgrade |
+| 12 | Log redaction | grep log sau 100 phiên ⇒ **0** token, 0 clipboard, 0 nội dung app |
+| 13 | `config.json` hỏng | ghi `.tmp`+rename ⇒ không mất cấu hình; file hỏng ⇒ app dùng mặc định + báo rõ |
 | 14 | Bị gắn cờ | thêm exclusion + xem Defender history; **không** cố "vượt" (§21.11) |
 
 ### 41.11 Nhánh mới rẽ ra
