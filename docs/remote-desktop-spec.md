@@ -1,6 +1,6 @@
 # SPEC v3.15 — Remote Desktop qua trình duyệt **cho dùng cá nhân**: HVNC + VNC, window picker, âm thanh server-side, trải nghiệm điều khiển đầy đủ
 
-- Phiên bản: **v3.17 — thêm §47 khởi động cùng Windows + vòng đời process + trải nghiệm theo thời gian** · trước đó: **v3.16 — thêm §46 "máy có ở đó không" (ngủ/reboot/đổi IP/khoá màn hình)**, lĩnh vực G còn trống · trước đó: **v3.15** — phạm vi thu hẹp về 1–2 người dùng (§0.3). Bản v3.14 là bản "sản phẩm": có cert, EULA, RBAC, accessibility, đóng gói ký số. Tất cả những thứ đó **đã cắt** ở đây — xem §0.3.1 để biết cắt gì và cắt có an toàn không. Lịch sử đầy đủ v1.0→v3.14 ở §0.
+- Phiên bản: **v3.18 — thêm §48 mô hình tuỳ chỉnh, §49 chống vỡ UI, §50 tính năng còn thiếu** · trước đó: **v3.17 — thêm §47 khởi động cùng Windows + vòng đời process + trải nghiệm theo thời gian** · trước đó: **v3.16 — thêm §46 "máy có ở đó không" (ngủ/reboot/đổi IP/khoá màn hình)**, lĩnh vực G còn trống · trước đó: **v3.15** — phạm vi thu hẹp về 1–2 người dùng (§0.3). Bản v3.14 là bản "sản phẩm": có cert, EULA, RBAC, accessibility, đóng gói ký số. Tất cả những thứ đó **đã cắt** ở đây — xem §0.3.1 để biết cắt gì và cắt có an toàn không. Lịch sử đầy đủ v1.0→v3.14 ở §0.
 - Trạng thái: **Đề xuất — CHƯA implement, chờ duyệt.** Sau v3.15, spec **không còn chương nào cần viết**; việc tiếp theo là **P0 (đo thật)**, không phải viết thêm.
 - Nền tảng: Server **Windows 10 2004+ / Windows 11** · Client **trình duyệt** (không app)
 
@@ -27,6 +27,7 @@
 | **v3.11** | **§41 threat model: 10 tài sản · 10 vị trí P1–P10 · **lật giả định nền — client KHÔNG tin cậy, agent tin về hành vi nhưng không tin về dữ liệu** · 3 hệ quả kiến trúc · 20 mối đe doạ T1–T20 theo ranh giới · 5 quyết định *bắt nguồn từ threat model* (client không gửi `hwnd`; không endpoint chạy lệnh; transfer/clipboard mặc định tắt; `X-Frame-Options: DENY`; người ngồi máy luôn dừng được) · token rotate + reuse detection · P6 quyền phủ quyết · supply chain/chống downgrade · 9 rủi ro chấp nhận · 14 kiểm chứng** |
 | **v3.12** | **§42 multi-session — phát hiện ràng buộc bị bỏ qua: 1 desktop = 1 con trỏ + 1 focus ⇒ chỉ 1 controller/session, N viewer** · input lease (server-side, TTL, release_all trước khi chuyển) · bảng chia sẻ vs cách ly 13 tài nguyên · admission control theo VRAM/RAM/CPU/slot/display có số (thay cho "max 3") · giới hạn display slot của VDD = câu hỏi chặn Phase 0 · fanout 1 encode → N SRTP (PLI theo **stream** không theo peer) · cách ly lỗi + tự phục hồi sau TDR · fairness 4 mức · **10 bảo đảm cách ly phải test (I1–I10), fail ⇒ tắt multi-session** · refcount dọn sau 5 s** |
 | **v3.13** | **§43 client perf: vì sao client dễ chết hơn server (6 nền tảng, Safari iOS kill tab ~200–400 MB, GC không kiểm soát) · 15 chỉ số ngân sách có cách đo · quyết định render (video element ≠ canvas; cursor = div transform; HUD 2 Hz) · **10 chỗ tốn tiền thật** (#1 forced reflow từ `getBoundingClientRect` mỗi pointer event — bug phổ biến nhất, không thấy bằng mắt) · kiến trúc JS (0 dependency, 12 module, `render(state)`) · perf-probe + **CI gate thật** (size/type/perf/leak, baseline 7 ngày) · 3 giới hạn cứng mobile · overlay 0 ms main thread · 8 nguồn rò rỉ + test 50 lần vào/ra** |
+| **v3.18** | **§48 tuỳ chỉnh**: 3 tầng **có số cứng** (T1 = 12 mục, T2 ≤ 20, T3 = file) · **4 phạm vi** (app/server/user/**device**) và thứ tự thắng `device > user > server > app` (device thắng để điện thoại 4G dùng "Mượt" mà laptop LAN vẫn "Nét"); mục thuộc **server** thì **không** cho ghi đè theo thiết bị · thay thanh trượt bằng **preset** (T1 không có ô số) · tìm bằng từ người dùng nghĩ ("trễ", "mờ") chứ không bằng tên tham số · **4 điều kiện để một mục được vào UI** (chống phình lại 60 mục) · "không thắt khởi động lại" + nhãn `áp dụng từ phiên sau` · **§49 chống vỡ UI**: thang **6 tầng z cố định** (0 literal `z-index`), **máy trạng thái bề mặt** (1 dialog / 1 sheet / 1 toast / 1 banner / Esc đóng đúng 1), banner **đẩy** layout không phủ, toast neo trong STAGE, test cỡ chữ 200% + 320 px + tiếng Việt + ảnh chụp baseline · **§50** 8 tính năng còn thiếu (lịch sử phiên, ghim cửa sổ, ảnh cuối khi mất mạng, chuyển app trên mobile, âm báo, chế độ mạng yếu, gửi file 1 chiều, không ghi hình) |
 | **v3.17** | **§47 khởi động & vòng đời process** — chỗ hở thực tế nhất: §13.6 chỉ có 1 dòng "At log on". **4 cách tự chạy, chỉ 1 cách đúng** (Task Scheduler At-logon dưới user; **Session 0 = app chạy mà không capture được** — bẫy phổ biến nhất) · **2 cờ Task Scheduler mặc định sai**: không chạy trên pin + dừng khi rút sạc (⇒ app tắt lúc đi họp, không báo gì) · **delay 20 s** vì driver/DWM chưa sẵn sàng + retry 3×10 s + web server mở ngay · mutex `Local\` + "đã có bản khác" + **không bao giờ kill bản cũ** · **`state.json` có 4 trạng thái** (thiếu / crash / **reboot ⇒ không restore gì** / hỏng) và **HWND bị tái sử dụng** ⇒ phải khớp bộ 4 · restore **đúng thứ tự cứng** ①audio → ②cửa sổ → ④xoá display sau cùng · `install.ps1 -Restart` thay binary khi đang chạy · **first-run 5 trạng thái** + QR ở `/setup` là khoảnh khắc quyết định · **bảng hỏng dần theo thời gian** (10 s → tuần 1 → tháng 6) · 14 edge case khởi động + 7 test |
 | **v3.16** | **§46 "Máy có ở đó không?"** — lỗ hổng chỉ lộ khi dùng thật: mọi chương trước giả định máy chủ **đang chạy, đã đăng nhập, trả lời được**. 5 lỗi khác nhau bị gộp thành 1 thông báo "không kết nối được" · phân biệt `refused` vs `timeout` từ browser (4 mẹo, không đạt 100%) · `SetThreadExecutionState` **chỉ khi có phiên** + nhả ngay (bug "app làm nóng pin") · **WoL: browser KHÔNG gửi được UDP** ⇒ không hứa nút "đánh thức"; bẫy **Fast Startup** · reboot sau Windows Update: "Run whether user is logged on or not" chạy **Session 0 = vô dụng**, auto-logon là **đánh đổi bảo mật của bạn** không phải mặc định · đổi IP ⇒ **Tailscale MagicDNS là đường chính** + DHCP reservation · khoá màn hình: phát hiện qua `WTSConnectState`, **không** gửi input mù · 5 lỗi → 5 câu → 5 nút |
 | **v3.15** | **§0.3 Thu hẹp phạm vi: dùng cá nhân, 1 người, 1 máy.** Cắt khỏi spec: **EV cert / ký driver / SmartScreen / EULA / SBOM / GDPR / pháp lý** · **accessibility cho người khiếm thị** (screen reader qua audio, NVDA test, WCAG, UIA over the wire) · **multi-user / role / TOTP / `/admin` / handover / chia sẻ link** · **đóng gói MSI + wizard + chữ ký số / auto-update có kênh** · **RBAC, SLA, self-hosted runner, ma trận hỗ trợ nhiều OS, soak 72 h, fuzz định kỳ**. Thay bằng: **§0.3 phạm vi**, **9 điều kiện cài chạy được ngay trên máy của bạn**, **3 khoản $0 duy nhất**, và **4 thứ đổi hành vi thiết kế** (setup 30 phút; HVNC = chế độ có công tắc; 1 profile cài đặt thay 5 tab; CI = 1 workflow) |
@@ -70,7 +71,7 @@
 | **A. Video/capture/encode** | ●●● §35–§39 — sâu nhất | **không** — chỉ còn P0 phải **đo** (p95, TWCC) |
 | **B. Âm thanh** | ●● §40 | không |
 | **C. Input & bàn phím** | ●● §44 | không (còn #18, nhỏ) |
-| **D. Giao diện & trải nghiệm** | ●● §22–25, §28–34 + **§47** | thu nhỏ ở v3.15 (12 mục thay 60, bỏ `/admin`); v3.17 thêm **vòng đời process, first-run, hỏng dần theo thời gian** |
+| **D. Giao diện & trải nghiệm** | ●●● §22–25, §28–34, §47, **§48, §49**, §50 | sâu nhất về **trải nghiệm**: vòng đời process (§47), mô hình tuỳ chỉnh (§48), chống vỡ UI (§49), tính năng còn thiếu (§50) |
 | **E. Bảo mật & tin cậy** | ●● §41 | **thu nhỏ**: giữ auth + HTTPS + token; bỏ EULA/GDPR/SBOM (§0.3.1) |
 | **F. Vận hành & triển khai** | ●● §42, §45 | **thu nhỏ**: 1 phiên, `install.ps1`, $0 |
 | **G. Bền vững & tiến hoá** | ●● **§46** | dữ liệu thì đóng (2 file JSON, không DB — §26.16), nhưng **máy ngủ/reboot/đổi IP** mới là vấn đề thật ⇒ §46 |
@@ -86,7 +87,8 @@
 | **P0-d** | Máy ngủ/reboot có phục hồi sạch không | §46.10 (test 1–6) |
 | **P0-e** | Cài → reboot → login có tự chạy, không cần bấm gì | §47.9 (test 1–7, ~10 phút) |
 
-> **Luật luân chuyển (≤2 lượt/lĩnh vực) đã hoàn thành nhiệm vụ.** Ở v3.15 nó giúp **cắt** thay vì đào thêm. Ở v3.16 nó giúp tìm ra **một lĩnh vực trống thật** mà 15 bản trước bỏ qua: **máy ngủ / reboot / đổi IP** (§46) — thứ không phải "tính năng sản phẩm" mà là lý do số 1 khiến bạn mở điện thoại ra và không kết nối được.
+> **Luật luân chuyển (≤2 lượt/lĩnh vực) đã hoàn thành nhiệm vụ.** v3.15 dùng nó để **cắt**; v3.16 tìm ra lĩnh vực trống **máy ngủ/reboot** (§46); v3.17–18 đào nốt **trải nghiệm** (§47 vòng đời, §48 tuỳ chỉnh, §49 chống vỡ UI, §50 tính năng thiếu).
+> **Không còn nhánh nào để rà.** Từ v3.18, mọi việc còn lại là **P0 — đo thật** (§0.2 bảng dưới), không phải viết thêm chương.
 
 ### 0.3 PHẠM VI THẬT: **1–2 người, 1–2 cái máy, không phát hành**
 
@@ -240,7 +242,7 @@ Spec giả định: **bạn điều khiển máy của chính bạn** (hoặc m�
 clipboard có nút bấm · link xem tạm (1 link, view-only) · đổi preset/zoom local · chuyển cửa sổ/mode/monitor giữa phiên · chọn thiết bị audio · chế độ "bàn phím thô" (§44.3) · ẩn cả taskbar (S1)
 > **Đã bỏ khỏi Tier 2** (vì là nhu cầu của sản phẩm, không phải của bạn): multi-session như *tính năng*, multi-user, role, TOTP, allowlist app, force-close, handover, audit export, stealth S2 "policy". Xem §0.3.1 #4–5.
 ### Tier 3 — OPTIONAL
-file transfer · recording · whiteboard · chat · TURN · multi-display · WoL · reboot · auto-update · login-screen control · printing · voice chat · pressure/stylus · "text mode" cho mạng yếu
+**gửi 1 file 1 chiều (tuỳ chọn, §50.3)** · TURN · "text mode" cho mạng yếu (§50.1 #6) — **không làm**: recording · whiteboard · chat · multi-display (đã có `switch monitor`) · WoL trong app (§46.3 nói rõ vì sao không) · reboot · auto-update · login-screen control · printing · voice chat · pressure/stylus
 
 ### Không làm
 SFU/broadcast · app native · HDR streaming · VP9/AV1 · SSO/LDAP · cloud relay · hidden desktop `WinSta0\HVNC` (§15)
@@ -859,6 +861,9 @@ IDLE ──POST /sessions──► PREPARING ──► CONNECTING ──DTLS ok�
 | POST | `/api/sessions/{sid}/cursor_mode` | `{mode}` | `local\|remote\|auto` |
 | POST | `/api/sessions/{sid}/takeover` | — | thiết bị khác tiếp quản (§6.11.4, §42.2) |
 | POST | `/api/sessions/{sid}/share` | `{ttl_min}` | link xem tạm, view-only (§21.6) |
+| GET | `/api/history` | `?from=&to=` | `[{ts,sid,user,app,titleHash,mode,duration_s,end_reason,bytes_out}]` — ≤500 dòng (§50.2) |
+| GET | `/api/pins` · POST · DELETE | `{wid,label}` | ghim cửa sổ hay dùng (§50.1 #2) |
+| POST | `/api/upload` | multipart ≤50 MB | 1 chiều client→server, **chỉ khi bật** (§50.3); chặn `exe/ps1/bat/scr/lnk`, lưu `Downloads\RD\`, trả `{path,size,sha256}` |
 | T2 | `/api/sessions/{sid}/clipboard` | `{text}`/`{image_b64}` | |
 
 ### 8.2 WSS signaling
@@ -1679,7 +1684,7 @@ Thứ tự thắng: **thiết bị > chung**. Cài đặt nào không áp đư�
 - Thay đổi **nguy hiểm** (đổi default audio device, bật elevated, tắt thông báo…) → có bước xác nhận **một lần**, không hỏi lại.
 
 ### 20.14 Tầng "Nâng cao" — chứa gì và mở thế nào
-- Mở bằng `⚙ → Nâng cao → Tôi hiểu các thiết lập này` (một lần, nhớ theo user).
+- Mở bằng `⚙ → Nâng cao` (**1 lần bấm, không cần tick "tôi hiểu"** — bỏ ma sát vô nghĩa). Danh sách T2 ≤ 20 mục gom **theo triệu chứng** ("trễ", "mờ") ⇒ **§48.1**.
 - Chứa: resolution tự chọn, DPI scale, encoder, bitrate/fps thật, cursor mode, kênh datachannel, debug barcode, đo glass-to-glass, công cụ chẩn đoán, xuất log.
 - **Không bao giờ** chứa thứ mà bật sai sẽ làm mất dữ liệu hoặc phá máy (ví dụ: không có "tắt mã hoá", không có "tắt audit", không có "chạy như SYSTEM").
 
@@ -1724,10 +1729,13 @@ Không tour dài, không video, không bắt đọc. Có "Xem lại hướng d�
 - Câu ≤ 12 từ, chủ động, có chủ thể. Lỗi luôn kèm **một** hành động.
 
 ### 20.20 Những thứ **không** cho tuỳ chỉnh (và nói rõ lý do)
+> Danh sách đầy đủ + 4 điều kiện để một mục **được vào UI** ⇒ **§48.5**. Mục ở đây là tóm tắt.
+
 | Không cho đổi | Vì sao |
 |---|---|
 | Tắt mã hoá / hạ TLS | Không thể thoả hiệp bảo mật |
 | Tắt log phiên | Khi có sự cố (kẹt phím, cửa sổ mắc) log là thứ duy nhất cứu bạn |
+| Theme tự do / CSS tuỳ biến | 4 theme là đủ; tự do = vỡ layout (**§49**) |
 | Tắt thông báo tray "đang bị điều khiển" | §2.4.2 |
 | Chọn codec bằng tay | H.264 luôn đúng; chọn sai = không xem được |
 | Tự đổi default audio device mà không xác nhận | Nguy cơ làm câm máy (§5.10.3) |
@@ -1916,6 +1924,7 @@ Không role, không "xem cùng lúc", không handover (§0.3.1 #4). Có **tối 
 │     └── sheet: cài đặt phiên
 ├── /settings              → cài đặt (~12 mục, 1 trang — §0.3.4)
 ├── /diagnostics           → chẩn đoán 12 bước (§21.1)
+├── /history               → lịch sử phiên của tôi, đọc-only, ≤500 dòng (§50.2)
 ├── /help                  → trợ giúp + phím tắt + khắc phục sự cố
 ├── /403 · /404 · /offline → trang lỗi (luôn có 1 hành động)
 └── /s/new?wid=..&mode=..  → deep link tạo phiên (sau khi login)
@@ -2191,7 +2200,8 @@ Nâng cao ▸
 - Thay đổi áp dụng ngay; toast "Đã đổi chất lượng — [Hoàn tác]".
 - Không có nút "Lưu"/"Huỷ"; đóng bằng `Esc`/`×`/chạm ngoài.
 
-### 24.6 `/settings` — **1 trang, 12 mục** (thay 5 tab)
+### 24.6 `/settings` — **1 trang, 12 mục** (thay 5 tab) · **nguồn duy nhất: §48.1**
+> Danh sách 12 mục, phạm vi (server/device) và hiệu lực của từng mục nằm ở **§48.1** — không chép lại ở đây để không có 2 nguồn sự thật.
 60 mục trong 5 tab là dành cho nhiều người có khẩu vị khác nhau. Bạn cần 12.
 
 | Nhóm | Mục (mặc định in đậm) | Kiểu |
@@ -2678,6 +2688,7 @@ Nguyên tắc chung bắt buộc cho cả hai:
 - Chế độ mặc định khi vào phiên: **fullscreen + 2 bar tự ẩn** ⇒ video chiếm ~100%. Bar hiện khi rê chuột vào mép trên/dưới.
 - Trong cửa sổ thường (không fullscreen): 2 bar luôn hiện (vì có chỗ), video letterbox.
 - **Không bao giờ** có thanh công cụ dọc/ngang thứ ba. Không có panel cố định bên phải (khác bản nháp §24.12 cho tablet — xem §30.11).
+- Ngân sách chiều cao ở trên **chưa đủ** để chống đè: thang lớp, máy trạng thái bề mặt (1 dialog/1 sheet/1 toast/1 banner), banner **đẩy** layout thay vì phủ ⇒ **§49**.
 
 ### 29.2 Đường tắt desktop (không cần bấm nút)
 | Hành động | Đường tắt | Ghi chú |
@@ -5220,3 +5231,323 @@ Công cụ loại này không hỏng lúc cài. Nó hỏng **dần**, và mỗi 
 | ~~#26 "App thật" (shortcut, jump list, tray thay console)~~ | D | đã đủ ở §24.9 |
 | **#27 Đa máy** (1 dashboard nhiều máy) | F | chỉ khi bạn có máy thứ hai — §21.14 |
 | **#28 Chẩn đoán tự sửa** (`rd.exe doctor --fix`: firewall/port/driver) | F | đã có §21.9, giữ mức hiện tại |
+
+---
+
+## 48. Tuỳ chỉnh: 3 tầng, 4 phạm vi, và luật chống phình (nhánh #29 — lĩnh vực D)
+
+> §20 nói *"tuỳ chỉnh phải dễ"*, §24.6 vừa rút xuống **12 mục**. Nhưng "12 mục" chỉ là con số — chưa có **mô hình** trả lời 4 câu mà mọi app loại này đều trả lời sai:
+> ① Mục này thuộc về **máy nào** (server hay thiết bị đang cầm)? ② Khi 2 nơi mâu thuẫn, **ai thắng**? ③ Mục này **áp dụng ngay** hay cần phiên mới? ④ Ai quyết định một mục **được phép tồn tại** trong UI?
+> Không có 4 câu trả lời này thì cài đặt sẽ phình lại 60 mục sau 3 tháng — đúng thứ §0.3 vừa cắt.
+
+### 48.1 Ba tầng — số mục **cứng**, không phải "khoảng"
+| Tầng | Số mục | Ai dùng | Mở thế nào | Nguyên tắc vào tầng |
+|---|---|---|---|---|
+| **T1 · Thường** | **12**, không hơn | bạn, 100% thời gian | `/settings` (1 trang) | đổi ≥ 1 lần/tháng, hiểu được **không cần đọc** |
+| **T2 · Nâng cao** | **≤ 20** | khi có vấn đề cụ thể | `⚙ → Nâng cao` (1 lần bấm, không cần "tôi hiểu") | đổi 1–2 lần/**năm**, hoặc khi hỏng cần thử |
+| **T3 · File** | không giới hạn | khi bạn sửa `config.json` | text editor | chỉ *có* để cứu hộ/debug; **không** có UI |
+| **Không tồn tại** | — | — | — | xem §48.5 |
+
+> **Luật cứng:** thêm 1 mục vào T1 ⇒ **phải bỏ 1 mục khác** khỏi T1 (hoặc chứng minh mục mới thay thế 2 mục cũ). Cùng luật §25 component: ngân sách, không phải ước lượng.
+
+**T1 — 12 mục, chốt danh sách** (thay bảng §24.6; nay có cả **phạm vi** và **hiệu lực**):
+
+| # | Mục | Giá trị | Phạm vi | Hiệu lực |
+|---|---|---|---|---|
+| 1 | Chất lượng | Tự động · Nét · Mượt | thiết bị | **ngay** |
+| 2 | Hiển thị | Dùng thật · Vừa mắt · Chữ to · Nét | thiết bị | **ngay** |
+| 3 | Tỉ lệ khung | Vừa · Đầy · 100% | thiết bị | **ngay** |
+| 4 | Cách chạm (mobile) | 2 ngón cuộn · Chuột ảo | thiết bị | **ngay** |
+| 5 | Con trỏ | Tự động · Cục bộ · Theo video | server | **ngay** |
+| 6 | Bàn phím | Theo ý định · Thô (dùng IME của máy kia) | server | phiên sau |
+| 7 | Tiếng | Hỏi mỗi phiên · Bật · Tắt | server | **ngay** |
+| 8 | Âm lượng nghe | 0–100% | thiết bị | **ngay** |
+| 9 | Ẩn khỏi màn hình thật | Bật · Tắt (= HVNC / VNC) | server | phiên sau |
+| 10 | Ẩn cả taskbar | Bật · Tắt | server | **ngay** |
+| 11 | Ngôn ngữ | Tiếng Việt · English | thiết bị | **ngay** |
+| 12 | Theme | Sáng · Tối · Hệ thống | thiết bị | **ngay** |
+
+> "Hiệu lực" là thông tin **bắt buộc hiện trong UI** cạnh mục đó (một chữ nhỏ "áp dụng từ phiên sau"). Không có nhãn này ⇒ bạn sẽ bấm, không thấy gì đổi, và cho rằng app hỏng.
+
+**T2 — 20 mục, gom theo lý do bạn mở chúng** (không gom theo kỹ thuật):
+
+| Nhóm | Mục | Khi nào mở |
+|---|---|---|
+| Muốn nét hơn / mượt hơn | bitrate trần · fps trần · keyframe · scaler · sharpening | mạng khác thường |
+| Muốn ít trễ hơn | jitter buffer · cursor echo · tắt ripple | WAN, cảm giác trễ |
+| Màn hình & toạ độ | resolution · DPI scale · monitor ưu tiên | đổi màn hình |
+| Bàn phím | layout server · rate limit · chặn `Win+L` | gõ sai, dùng app lạ |
+| Bàn giao | port · cert · STUN/TURN · Tailscale | khi không kết nối được |
+| Chẩn đoán | barcode · HUD độ trễ · log level | đang tìm lỗi |
+
+> Cách gom này quan trọng: người dùng mở cài đặt với **một triệu chứng** trong đầu ("trễ", "mờ"), không phải với một cái tên tham số. Nếu bạn phải biết "jitter buffer" là gì mới tìm được nó, đó là UI hỏng.
+
+### 48.2 Bốn phạm vi — và ai thắng ai (bảng phải thuộc)
+| Phạm vi | Lưu ở | Sống bao lâu | Ví dụ |
+|---|---|---|---|
+| **app** (mặc định cho mọi thứ) | hằng số trong code | mãi | preset "Tự động" |
+| **server** | `config.json` (§26.1) | mãi, đi theo máy | con trỏ, ẩn taskbar, port |
+| **user** | trong `config.json`, theo user | mãi, theo người | ngôn ngữ, theme |
+| **device** | `localStorage` của trình duyệt | tới khi xoá dữ liệu trang | chất lượng, âm lượng, tỉ lệ khung |
+
+**Thứ tự thắng:** `device > user > server > app`.
+- Lý do `device` thắng: bạn cầm điện thoại 4G thì muốn "Mượt"; ngồi laptop cắm LAN thì muốn "Nét". Nếu server thắng, mỗi lần đổi thiết bị bạn phải vào sửa — đúng thứ §20.1 cấm.
+- **Ngoại lệ có lý do:** mục thuộc **server** (con trỏ, ẩn taskbar, bàn phím) **không** cho phép ghi đè theo thiết bị. Lý do: nó thay đổi **máy thật**, không phải cách bạn nhìn máy. Nếu cho ghi đè, mở 2 tab ở 2 chế độ khác nhau sẽ đánh nhau (§42.1).
+- Hiển thị: mục nào đang bị thiết bị ghi đè ⇒ có chữ nhỏ *"riêng cho thiết bị này"* + nút **"Dùng chung"** để bỏ ghi đè.
+
+### 48.3 Ba preset thay vì thanh trượt (và khi nào mới cho số)
+| Thay vì… | Cho… | Vì sao |
+|---|---|---|
+| bitrate 1–50 Mbps | **Tự động / Nét / Mượt** | người dùng không biết mạng mình chịu được gì; ta **đo** được (§36) |
+| resolution 1280×720 … 3840×2160 | **Dùng thật / Vừa mắt / Chữ to / Nét** (§20.3) | tên theo **mục đích**, không theo con số |
+| fps 15/30/60 | gộp trong Chất lượng | 3 thanh trượt cho 1 cảm giác là 3 lần đoán sai |
+| jitter buffer ms | **Ít trễ ↔ Mượt** (2 nấc) | đây là đánh đổi thật, nhưng chỉ 2 nấc có nghĩa |
+> **Luật:** T1 **không có** ô nhập số nào. T2 có số nhưng **luôn** kèm giá trị mặc định + khoảng an toàn + cảnh báo khi ra ngoài khoảng. Không có "ô trống để bạn tự điền" ở bất kỳ đâu.
+
+### 48.4 Tìm cài đặt bằng từ bạn nghĩ, không bằng tên tham số
+- `/settings` có **ô tìm** ngay trên cùng (không cần bấm để hiện). Gõ `"trễ"` → gợi ý *"Ít trễ (jitter buffer)"*, *"Tắt ripple"*, *"fps trần"*.
+- Mỗi mục có **từ khoá đồng nghĩa** trong `settings.index`: `trễ|lag|chậm|delay`, `mờ|nét|sharp|blur`, `tiếng|âm thanh|audio|loa`, `gõ|bàn phím|keyboard|IME`, `pin|tiết kiệm|battery`. Không có synonym này thì tìm kiếm vô dụng với người không biết thuật ngữ.
+- `Ctrl+K` (desktop) mở **command palette** §31 — gõ được cả **lệnh** ("chụp màn hình", "chuyển cửa sổ") và **cài đặt** trong cùng một ô. Một ô, hai loại kết quả, có nhãn phân biệt.
+
+### 48.5 Luật "một mục có được vào UI hay không" (chống phình, kiểm tra được)
+Một cài đặt chỉ được vào **T1/T2** nếu thoả **cả 4**:
+
+| # | Điều kiện | Nếu không thoả |
+|---|---|---|
+| 1 | Đổi **≥ 1 lần/năm** với ≥ 20% người dùng (với ta: ≥ 1 trong 2 người) | xuống **T3 (file)**, không có UI |
+| 2 | Trả lời được *"người dùng nhận ra sự khác biệt trong 2 giây?"* | gộp vào preset, **không** tách mục |
+| 3 | Không phá an toàn / không làm mất dữ liệu (§20.20) | **không tồn tại** |
+| 4 | Có **giá trị mặc định đúng** cho ≥ 90% trường hợp | nếu không: đó là **lỗi thiết kế**, không phải tính năng cần cài đặt |
+> Điều 4 là điều quan trọng nhất: mỗi cài đặt là một **lời xin lỗi** vì ta chọn sai mặc định. Ví dụ: nếu phải có "tắt tự chuyển preset khi mạng yếu", nghĩa là tự chuyển đang làm phiền — sửa cái đó trước, đừng thêm công tắc.
+
+**Danh sách "không tồn tại" (ghi để không ai hỏi lại)** — mở rộng §20.20:
+
+| Không có | Lý do |
+|---|---|
+| Tắt mã hoá / hạ TLS / bỏ xác thực cert | không thể thoả hiệp (§41) |
+| Chọn codec thủ công (H.264/VP9/AV1) | 1 codec đúng; chọn sai = không xem được |
+| Tắt log | log là thứ duy nhất cứu bạn khi kẹt phím |
+| "Chạy như SYSTEM / service" | §2.3 |
+| Số phiên tối đa | luôn là **1** (§42.2) |
+| Đổi default audio device mà không xác nhận | làm câm máy (§40) |
+| Tắt thông báo tray "đang bị điều khiển" | §2.4.1 |
+| Theme tuỳ chỉnh màu tự do / CSS tuỳ biến | 4 theme là đủ; tự do = vỡ layout (§49) |
+
+### 48.6 Không bắt khởi động lại, không bắt làm lại — và cách nói khi buộc phải
+| Loại thay đổi | Hiệu lực | Cách nói trong UI |
+|---|---|---|
+| Thuần client (theme, tỉ lệ, âm lượng) | **ngay**, 0 ms | không cần nói gì |
+| Preset/chất lượng | **ngay**, ≤ 1 s (không rớt khung hình đầu) | toast nhỏ "Đang áp dụng…" |
+| Cần dựng lại pipeline (resolution, scaler) | **ngay**, 1–3 s, có overlay "Đang đổi…" | không rời phiên (§6.9) |
+| Cần **phiên mới** (con trỏ, ẩn/HVNC, bàn phím thô) | phiên sau | nhãn `áp dụng từ phiên sau` + nút **[Áp dụng ngay]** (tạo lại phiên, 3–5 s, hỏi 1 lần) |
+| Cần **app khởi động lại** (port, cert, driver) | sau restart | nhãn + nút **[Khởi động lại app]** (chặn nếu đang có phiên — §47.3) |
+> **Luật tuyệt đối:** không có thay đổi nào **âm thầm** không có hiệu lực. Hoặc nó áp dụng, hoặc UI nói rõ vì sao chưa — và **luôn** có nút để áp dụng ngay.
+
+### 48.7 Hoàn tác, đặt lại, mang theo máy mới
+- Mọi thay đổi ở T1/T2: toast có **[Hoàn tác]** 5 s (chỉ với thay đổi *gây hại được nhận ra chậm*: ẩn taskbar, đổi preset).
+- Mỗi nhóm có **"Về mặc định nhóm này"**; toàn bộ có **"Về mặc định tất cả"** (hỏi 1 lần, ghi rõ mất gì).
+- `Xuất`/`Nhập` = **1 file JSON** gồm cả `server` + `user` (không gồm `device` — nó thuộc về từng máy). Đây là cách "mang theo" khi đổi máy (§47.7).
+- Nhập file từ **phiên bản app khác** ⇒ migrate theo `schema`, mục lạ bị **bỏ qua + báo 1 dòng**, không làm hỏng phần còn lại.
+
+### 48.8 Cài đặt có gì **không** thuộc về cài đặt (phân biệt dễ nhầm)
+| Thứ này… | Thuộc về | Không phải cài đặt vì |
+|---|---|---|
+| Chọn cửa sổ để điều khiển | **hành động**, không phải setting | mỗi lần dùng khác nhau |
+| Phiên đang mở / trạng thái kết nối | **trạng thái** | UI hiện ở dashboard, không nằm trong `/settings` |
+| Ẩn/hiện thanh công cụ trong phiên | **trạng thái tạm của phiên** | tự ẩn sau 2.5 s (§29.1), không cần lưu |
+| Sắp xếp cửa sổ trong dashboard | **device pref ẩn** | nhớ ngầm, không bày ra thành mục |
+> Đây là lỗi phổ biến: nhét *hành động* vào *cài đặt* ⇒ cài đặt phình, và người dùng không biết mình vừa thay đổi **vĩnh viễn** hay chỉ **lần này**.
+
+### 48.9 Kiểm chứng (6 test)
+| # | Test | Ngưỡng |
+|---|---|---|
+| 1 | Đếm mục T1 / T2 bằng script đọc `settings.index` | **đúng 12 / ≤20** — fail build nếu vượt |
+| 2 | Đổi mỗi mục ở T1 | hoặc có hiệu lực ≤1 s, hoặc có nhãn `phiên sau`/`khởi động lại` — **0** mục im lặng |
+| 3 | Đổi chất lượng trên điện thoại, mở laptop | laptop **vẫn** dùng giá trị của nó (device thắng), không bị kéo theo |
+| 4 | Gõ "trễ", "mờ", "tiếng" vào ô tìm | mỗi từ trả ≥1 kết quả đúng |
+| 5 | Đổi ẩn taskbar ở tab A, tab B đang mở | tab B thấy trạng thái mới ≤2 s (qua WSS), không cần F5 |
+| 6 | Nhập file cấu hình của bản cũ hơn | mục lạ bị bỏ + báo 1 dòng, phần còn lại áp dụng đúng |
+
+---
+
+## 49. Chống vỡ giao diện: không chồng, không đè, không tràn (nhánh #30 — lĩnh vực D)
+
+> Câu hỏi trực tiếp: *"làm sao để UI không bị quá nhiều gây ra biến dạng, đè chồng lên nhau?"*
+> Spec cũ chỉ có **ngân sách chiều cao** (§29.1: top bar 48 px, banner 40 px…) — đó là *kích thước*, không phải **luật**. Không có luật thì 6 lớp phủ sẽ tự do đè lên nhau, và bạn sẽ gặp đúng cảnh: **toast che banner, banner che toolbar, toolbar che nút đóng sheet, sheet mở trên một overlay khác, và phím Esc đóng nhầm cái**.
+> Chương này là bộ luật **kiểm tra được bằng script**, không phải lời khuyên thiết kế.
+
+### 49.1 Bệnh thật của loại UI này: **5 lớp phủ chồng lên nhau, không lớp nào "sở hữu" màn hình**
+Trong một phiên điều khiển, cùng lúc có thể tồn tại: **video** · **top bar** · **bottom bar** · **cursor/ripple layer** · **banner** (mất mạng) · **toast** (đã đổi chất lượng) · **sheet cài đặt** · **overlay chuyển cửa sổ** · **HUD stats** · **keyboard ảo** (mobile) · **loupe** (mobile). Đó là **11** lớp.
+
+| Nếu không có luật | Kết quả bạn sẽ thấy |
+|---|---|
+| Mỗi thành phần tự đặt `z-index: 9999` | toast nằm **dưới** banner; nút "Đóng" của sheet bị banner che ⇒ **không bấm được** |
+| Không có "một bề mặt tại một thời điểm" | mở sheet cài đặt khi overlay chuyển cửa sổ đang mở ⇒ 2 lớp cùng nhận click |
+| Banner + toast cùng hiện ở đáy | đè lên nhau thành 1 khối chữ không đọc được |
+| Mobile: keyboard ảo + bottom bar + toast | **3 thứ** ở cùng đáy màn hình, che mất vùng đang gõ |
+| Cỡ chữ Lớn (200%) | top bar 48 px **cố định** ⇒ chữ tràn ra ngoài, icon đè lên tiêu đề |
+| Safe area (tai thỏ iPhone) | nút đóng nằm dưới notch ⇒ không bấm được |
+
+> **Nguyên tắc gốc:** UI không vỡ vì *nhiều thành phần*, mà vì **không có ai quyết định ai được ở trên**. Sửa bằng 2 thứ: **thang lớp (z-scale)** và **máy trạng thái bề mặt**.
+
+### 49.2 Thang lớp — 6 tầng **cố định**, không có số tuỳ ý
+```css
+/* tokens.css — nguồn duy nhất. KHÔNG có z-index nào khác trong codebase. */
+--z-base:     0;   /* video */
+--z-content: 10;   /* cursor, ripple, HUD, loupe */
+--z-chrome:  20;   /* top bar, bottom bar, banner */
+--z-float:   30;   /* toast, tooltip, popover */
+--z-sheet:   40;   /* bottom sheet, side panel, command palette */
+--z-block:   50;   /* dialog chặn (xác nhận phá huỷ), overlay "đang chuyển…" */
+--z-system:  60;   /* mất kết nối toàn màn hình, "đang tải lại" */
+```
+
+| Luật | Kiểm tra tự động |
+|---|---|
+| Mọi `z-index` phải là **biến token** ở trên | `grep -rE "z-index:\s*[0-9]" client/` ⇒ **0 kết quả** (fail build) |
+| Không tầng nào có **≥ 2 bề mặt cùng loại** cùng hiện | xem §49.3 |
+| `--z-system` chỉ dùng cho **1** thành phần, và phải **chặn toàn bộ** input | test Playwright: click vào `--z-base` khi system up ⇒ không có event |
+
+### 49.3 Máy trạng thái bề mặt — "một lúc chỉ X"
+Đây là luật chống đè **quan trọng nhất**. Không phải "cố gắng hạn chế", mà là **bất biến có test**:
+
+| Nhóm bề mặt | Tối đa cùng lúc | Nếu yêu cầu cái thứ 2 | Ví dụ |
+|---|---|---|---|
+| **Dialog chặn** (`--z-block`) | **1** | cái mới **thay** cái cũ (cái cũ đóng, không xếp chồng) | xác nhận "kết thúc phiên" khi đang có dialog "xoá cấu hình" |
+| **Sheet / panel** (`--z-sheet`) | **1** | **đóng cái cũ trước**, rồi mở cái mới (không mở 2) | sheet cài đặt + command palette |
+| **Overlay toàn màn hình trong phiên** (chuyển cửa sổ, chẩn đoán) | **1** | như trên | — |
+| **Toast** (`--z-float`) | **1** | cái mới **đẩy** cái cũ xuống (cũ tự đóng sau 1.5 s), hoặc **gộp** nếu cùng nhóm (`Đã lưu 3 thay đổi`) | đổi 3 cài đặt liên tiếp |
+| **Banner** (mất mạng, thiếu driver, secure desktop) | **1** | banner mới **xếp hàng** theo mức ưu tiên: `danger > warn > info`; chỉ hiện 1, cái còn lại chờ | "mất mạng" + "đang đổi chất lượng" |
+| **Popover / tooltip** | **1** | đóng cái cũ | — |
+| **Keyboard ảo (mobile)** | **1**, và nó **đẩy** layout chứ không phủ lên (§30.7) | — | — |
+
+**Esc luôn đóng bề mặt trên cùng, và chỉ một** — thứ tự: popover → toast → sheet → dialog. Test: mở sheet, mở dialog từ sheet, bấm Esc ⇒ **chỉ dialog đóng**, sheet còn. Đây là bug kinh điển và nó có test riêng (§49.7 #3).
+
+**Mở sheet ⇒ toolbar tự ẩn**, không phải "toolbar nằm dưới sheet". Cơ chế: sheet ở `--z-sheet` và có `backdrop` bán trong suốt; toolbar ở `--z-chrome` ⇒ **nó bị backdrop che và không nhận click** (`pointer-events: none` khi sheet mở). Không có chuyện "thấy toolbar mà bấm không được".
+
+### 49.4 Ba vùng cố định (không bao giờ chồng) và vùng "an toàn" cho lớp phủ
+```
+┌───────────────────────────────┐
+│  TOP  (chrome, --z-chrome)    │  48 px · co giãn theo cỡ chữ · có safe-area-top
+├───────────────────────────────┤
+│                               │
+│   STAGE  (video, --z-base)    │  ← cursor/ripple/HUD ở đây (--z-content)
+│                               │
+├───────────────────────────────┤
+│  BOTTOM (chrome, --z-chrome)  │  40 px · tự ẩn khi fullscreen · safe-area-bottom
+└───────────────────────────────┘
+   TOAST  → neo ở đáy STAGE, **phía trên** BOTTOM, không đè nút
+   BANNER → **đẩy** STAGE xuống (không phủ), nằm dưới TOP
+```
+
+| Luật | Vì sao |
+|---|---|
+| **Banner đẩy layout**, không phủ | banner phủ lên video ⇒ che đúng chỗ bạn đang làm việc; và trên mobile nó che luôn nút |
+| **Toast neo trong STAGE**, không neo ở `bottom:0` | neo ở `bottom:0` thì nó đè BOTTOM bar và nút "Đóng" |
+| **Chỉ 1 banner + 1 toast**; toast tự đóng 3 s, banner **không** tự đóng nếu là `danger` | banner danger tự đóng = mất cảnh báo quan trọng |
+| **Không lớp phủ nào ở giữa màn hình** trừ dialog chặn | giữa màn hình là nơi mắt bạn đang nhìn |
+
+### 49.5 Chống vỡ khi cỡ chữ Lớn, màn hình hẹp, tiếng Việt dài
+Đây là 3 nguyên nhân **thật** gây "biến dạng" mà không ai nghĩ tới lúc thiết kế:
+
+| Nguyên nhân | Cách chống |
+|---|---|
+| **Cỡ chữ 150–200%** (browser/OS setting) | Mọi chiều cao là `min-height` + `padding` theo `rem`, **không** `height: 48px` cố định. Bar **được phép cao lên**; STAGE nhỏ lại. Test ở 200% là **bắt buộc** trong CI ảnh chụp |
+| **Tiếng Việt dài hơn tiếng Anh ~30%** | Không cắt chữ (`text-overflow: ellipsis` chỉ cho tên cửa sổ, **không** cho nút). Nút có `min-width` + cho xuống 2 dòng. §24.16 đã nói, nhưng cần **test ảnh chụp** chứ không chỉ lời |
+| **Màn hình 320 px** | 1 cột; bar gộp icon; nhãn chữ ẩn dưới icon **chỉ khi** có `aria-label`/tooltip. Test ở 320×480 |
+| **Tai thỏ / thanh home iPhone** | `env(safe-area-inset-*)` cho TOP và BOTTOM; toast neo trên `safe-area-bottom + 8px` |
+| **Xoay ngang ↔ dọc** | Không layout nào **đổi cấu trúc** khi xoay; chỉ đổi kích thước. Xoay không được làm mất trạng thái đang mở (sheet còn mở) |
+| **Video letterbox 2 bên** | Lớp phủ (cursor, toast) neo theo **STAGE**, không theo cửa sổ ⇒ không bao giờ "trôi" ra vùng đen |
+
+### 49.6 Ngân sách số lượng — đếm được, không phải cảm tính
+| Chỉ số | Ngưỡng | Cách đo |
+|---|---|---|
+| Bề mặt phủ **cùng lúc** trên màn hình phiên | **≤ 3** (1 chrome ẩn được + 1 banner **hoặc** toast + 1 sheet/dialog) | test đếm `[data-surface]` đang hiển thị |
+| Nút hiện thường trực trên video (desktop) | **0** khi không hover (chỉ 2 bar tự ẩn) | ảnh chụp + đếm |
+| Nút hiện thường trực trên video (mobile) | **0** (§30.1) | — |
+| Diện tích video bị lớp phủ che (khi rảnh) | **0%** | đo bounding box |
+| Diện tích video bị che khi có banner + toast | **≤ 8%** | đo |
+| Số `z-index` literal trong code | **0** | grep |
+| Số cài đặt trong UI T1 / T2 | **12 / ≤20** | §48.9 #1 |
+| Số mục trong menu `⋯` | **≤ 8** (nhiều hơn ⇒ command palette) | đếm trong ảnh chụp |
+
+### 49.7 Kiểm chứng — 8 test tự động (Playwright + 1 script)
+| # | Test | Ngưỡng |
+|---|---|---|
+| 1 | **Ma trận chồng lớp**: mở mọi cặp bề mặt (banner×toast, sheet×dialog, overlay×sheet, palette×sheet) | **0** cặp cùng hiện; luôn ≤3 bề mặt |
+| 2 | Banner danger + đổi chất lượng cùng lúc | toast **không** che banner; banner không tự đóng |
+| 3 | Esc khi (sheet + dialog) đang mở | chỉ dialog đóng; sheet còn; Esc lần 2 đóng sheet |
+| 4 | Cỡ chữ 200%, 320 px rộng, tiếng Việt | **0** phần tử tràn/đè — so ảnh chụp với baseline (`overflow` check: `scrollWidth > clientWidth` trên mọi phần tử text) |
+| 5 | Mở sheet trong phiên | toolbar `pointer-events: none`; bấm vào vị trí toolbar ⇒ không có event |
+| 6 | Ảnh chụp 12 tổ hợp (3 kích thước × 2 hướng × 2 theme) | diff pixel < 0.1% so baseline — **bắt được "lệch 4 px"** mà mắt bỏ qua |
+| 7 | Mobile: bàn phím ảo mở | toast + bottom bar + keyboard **không** đè; video bị đẩy, không bị phủ |
+| 8 | `grep -rE "z-index:\s*[0-9]" client/` | 0 kết quả |
+
+> Test 6 quan trọng hơn vẻ ngoài: **UI vỡ dần từng 4 px**. Một lần không ai thấy. Sau 20 PR, nút "Đóng" nằm ngoài màn hình. Ảnh chụp baseline là cách duy nhất phát hiện mà không cần mở mắt mỗi lần.
+
+### 49.8 Ba luật viết ra để không phải tranh luận lại
+1. **Không có bề mặt nào "tự đặt vị trí"**: mọi lớp phủ khai báo *tầng* + *nhóm*, và máy trạng thái §49.3 quyết định nó có được hiện không.
+2. **Thà bỏ một tính năng UI còn hơn thêm một lớp phủ**: nếu cần thêm thành phần thứ 4 cùng lúc trên màn hình phiên ⇒ phải **bỏ** một cái khác (cùng luật ngân sách §48.1).
+3. **Không có "settings trong settings"**: cài đặt chỉ ở `/settings` và sheet trong phiên (§24.5); không có panel cài đặt thứ ba, không có wizard cài đặt giữa phiên.
+
+---
+
+## 50. Tính năng còn thiếu — danh sách đã rà, và quyết định từng cái (nhánh #31)
+
+> Bạn nói *"vẫn còn thiếu mấy chỗ tính năng"*. Tôi rà lại toàn bộ theo góc nhìn **"một ngày dùng thật"** và tìm ra **8** chỗ trống. Đây là danh sách đầy đủ, mỗi cái có quyết định rõ (làm / không làm / làm sau), **không** phải danh sách "để đó".
+
+### 50.1 Tám chỗ trống thật (và 3 chỗ trống giả)
+| # | Thiếu gì | Vì sao cần với 1–2 người | Giá | Quyết định |
+|---|---|---|---|---|
+| 1 | **Lịch sử phiên** (ai/cửa sổ nào/lúc nào/bao lâu/lý do kết thúc) | bạn về nhà, muốn biết *"sáng nay mình đã mở gì trên máy đó"*; và khi có sự cố, đây là thứ duy nhất trả lời được | ~40 dòng + 1 file `history.jsonl` xoay 7 ngày | ✅ **P1** |
+| 2 | **Lối tắt tới cửa sổ hay dùng** (ghim "Chrome ở nhà") | 4 lần/ngày bạn mở đúng 1 cửa sổ. 3 bấm → **1 bấm** | ~30 dòng (dùng `windows_recent` đã có) | ✅ **P1** |
+| 3 | **Mất kết nối: giữ ảnh cuối + đồng hồ "đã mất 3 giây"** | màn hình trắng + spinner làm bạn tưởng app chết; ảnh cuối + đồng hồ cho biết **đang thử lại**, không phải đã chết | ~20 dòng | ✅ **P1** |
+| 4 | **Chuyển sang app khác trên điện thoại** (tab ẩn) | bạn đang xem, mở Zalo trả lời 20 s, quay lại ⇒ phải **không** mất phiên và **không** kẹt phím | ~25 dòng (`visibilitychange` + `pagehide` đã có §6.4.7) | ✅ **P1** |
+| 5 | **Âm thanh/rung báo khi phiên bắt đầu & kết thúc** (client) | biết ngay khi phiên bị ngắt, không phải nhìn màn hình | ~15 dòng | ✅ **P2** |
+| 6 | **Chế độ "mạng rất yếu"** (1 fps + chỉ bàn phím) | 3G/yếu: thà đọc chữ còn hơn màn hình đứng | ~50 dòng (đã có khung §36.9) | ✅ **P2** |
+| 7 | **Gửi 1 file tới máy chủ** (một chiều, ≤50 MB, có xác nhận) | dán ảnh/tài liệu vào máy ở nhà — nhu cầu thật của người dùng cá nhân | ~150 dòng + 1 endpoint | ⚠️ **quyết định của bạn** (xem 50.3) |
+| 8 | **Ghi hình phiên** | không cần (bạn tự chụp màn hình được) | — | ❌ **không làm** |
+
+**Ba "chỗ trống giả"** (đã có, chỉ khó tìm — không phải thiếu):
+
+| Tưởng thiếu | Thật ra ở đâu |
+|---|---|
+| Chụp màn hình | §26.14 — nút `⋯ → Chụp màn hình` (client chụp frame, không cần server) |
+| Chuyển màn hình khi server có 2 display | §6.9 `switch monitor`, `POST /sessions/{sid}/monitor` |
+| Xem ai đang dùng máy | §6.8.5 `presence` + banner "Có người đang dùng máy này" |
+
+### 50.2 Lịch sử phiên — thiết kế tối thiểu (đừng dựng lại bảng audit)
+Đã cắt bảng `audit` 7 bảng ở §26.1. Nhưng **lịch sử** là thứ khác: nó là *"nhật ký của tôi"*, không phải *"audit trail của tổ chức"*.
+
+| Trường | Ghi chú |
+|---|---|
+| `ts`, `sid`, `user` (1 trong 2), `app` + `titleHash`, `mode` (HVNC/VNC), `duration_s`, `end_reason`, `bytes_out` | **không** lưu nội dung, không lưu ảnh |
+- Lưu **1 dòng JSON** / phiên vào `history.jsonl`, xoay vòng 7 ngày hoặc 500 dòng (cái nào tới trước).
+- UI: `/history` (đọc-only) — danh sách + lọc theo ngày. **Không** có xuất CSV (§0.3.1 #4), không phân trang ảo hoá, tối đa 500 dòng.
+- Dùng được cho **chẩn đoán**: khi bạn báo "hôm qua nó giật", `history.jsonl` cho biết phiên nào, mode nào, bao lâu, bitrate trung bình.
+
+### 50.3 Gửi file — vì sao tôi để nó là **quyết định của bạn**
+§41.5 cấm "đường vận chuyển dữ liệu không kiểm soát" — đúng với sản phẩm, hơi quá với 1 người dùng máy của mình.
+
+| Nếu bật (1 chiều, client → server) | Nếu tắt |
+|---|---|
+| ✅ dán ảnh/tài liệu sang máy ở nhà trong 1 cú kéo | ✅ ít bề mặt tấn công hơn |
+| ⚠️ cần: giới hạn 50 MB, đuôi file chặn (`exe/ps1/bat/scr/lnk`), ghi vào `%USERPROFILE%\Downloads\RD\`, **có** hộp xác nhận hiện tên + dung lượng, **không** tự mở | — |
+| ⚠️ **không** làm chiều server → client (đó là "tải dữ liệu về" và không bao giờ cần) | — |
+> **Khuyến nghị của tôi:** **bật**, vì clipboard ảnh chỉ đi qua được file nhỏ, và đây là nhu cầu thật. Nhưng tôi để bạn quyết — nếu bạn không thấy mình cần, tắt đi cho gọn. Đây là mục **duy nhất** trong spec mà tôi khuyên "tuỳ bạn".
+
+### 50.4 Ba việc nhỏ nhưng đáng làm ngay vì gần như miễn phí
+| Việc | Vì sao | Giá |
+|---|---|---|
+| **Tiêu đề tab = tên cửa sổ đang xem** (`Chrome — Tin tức · RD`) | 5 tab mở cùng lúc thì bạn biết tab nào là gì | 3 dòng |
+| **Favicon đổi màu theo trạng thái** (xám = rảnh, xanh = đang phiên, đỏ = lỗi) | nhìn tab bar là biết, không phải mở tab | 5 dòng |
+| **`?debug=1` hiện HUD độ trễ** (đã có ở §6.2.3 dạng `debug.show_latency_hud`) | không cần mở `/diagnostics` giữa phiên | đã có |
+
+### 50.5 Cập nhật hàng đợi — spec **đã đóng**, chỉ còn P0
+| # | Việc | Trạng thái |
+|---|---|---|
+| #29 | **Mô hình tuỳ chỉnh** (3 tầng, 4 phạm vi, luật chống phình) | ✅ **xong — §48** |
+| #30 | **Chống vỡ UI** (thang lớp, máy trạng thái bề mặt, kiểm bằng ảnh chụp) | ✅ **xong — §49** |
+| #31 | **Tính năng còn thiếu** (8 chỗ, 6 làm, 1 tuỳ bạn, 1 không) | ✅ **xong — §50** |
+| — | **P0: đo thật** (p95 · TWCC · display slot · khởi động · ngủ/reboot) | ⬜ **việc duy nhất còn lại** |
+> Sau v3.18, nếu bạn còn thấy thiếu, khả năng cao là (a) một trong 6 mục §50.1 mà tôi xếp P2, hoặc (b) một **giới hạn kỹ thuật** đã ghi ở §6.13/§19.3 — không phải thiếu spec. Cả hai đều đã có chỗ trong bảng, nên không cần chương mới.
