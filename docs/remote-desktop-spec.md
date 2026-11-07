@@ -1,6 +1,6 @@
-# SPEC v3.7 — Remote Desktop qua trình duyệt: HVNC + VNC, window picker, âm thanh server-side, **trải nghiệm điều khiển đầy đủ**
+# SPEC v3.8 — Remote Desktop qua trình duyệt: HVNC + VNC, window picker, âm thanh server-side, **trải nghiệm điều khiển đầy đủ**
 
-- Phiên bản: **v3.7** (v3.6 + **§37 rate-control theo từng hãng**: 3 vòng điều khiển lồng nhau, đo ở pacer, tham số NVENC/QSV/AMF/x264, xung đột CBR↔màn hình tĩnh, giới hạn slot, bảng kiểm chứng): hai thiết bị một lõi — mobile zero-chrome, grip 3 tầng, radial 8 ô, command registry, flow contract FE↔BE**)
+- Phiên bản: **v3.8** (v3.7 + **§38 scaler & độ nét**: tách native vs post-scale, chọn scaler GPU, bậc thang tỉ lệ sạch, sharpening có điều kiện, giới hạn 4:2:0, phân loại text/motion, đo bằng OCR, chống UI nhảy): hai thiết bị một lõi — mobile zero-chrome, grip 3 tầng, radial 8 ô, command registry, flow contract FE↔BE**)
 - Trạng thái: **Đề xuất — CHƯA implement, chờ duyệt**
 - Nền tảng: Server **Windows 10 2004+ / Windows 11** · Client **trình duyệt** (không app)
 
@@ -21,6 +21,7 @@
 | **v3.5** | **§35 mô hình thực thi: 8 thread, 1 GStreamer pipeline/phiên, vòng đời frame + ownership, hàng đợi có trần + chính sách drop, ngân sách độ trễ phân rã tới từng chặng (gồm jitter buffer — khoản ẩn lớn nhất), timestamps từng chặng, screen-content tuning, chế độ màn hình tĩnh, restart/shutdown theo thứ tự, MMCSS, ngân sách bộ nhớ, 8 bất biến, fault-injection matrix** · §0.2 depth-first |
 | **v3.6** | **§36 AI sở hữu gì vs thư viện · 3 nguồn CC + luật `min(...)` · phân loại 4 loại mất gói (nghẽn/ngẫu nhiên/burst/jitter) · máy trạng thái STARTUP/DRAIN/CRUISE/PROBE/BACKOFF có số + chống dao động · phân bổ budget theo thứ tự cứng (audio không bao giờ bị bóp) · IDR storm chống + intra-refresh · chọn FEC vs NACK theo RTT · playout-delay thích ứng · degradation preference theo preset · encoder rate-control · đổi mạng giữa phiên · 22 tham số · 7 profile netem + 7 chỉ số fail CI** |
 | **v3.7** | **§37 ba vòng điều khiển lồng nhau (CC 200 ms / trim 500 ms / encoder 16 ms) · đo bitrate tại pacer là sự thật duy nhất · trim loop công thức · NVENC (`rc-mode=cbr`, VBV, zeroLatency, không multipass) · QSV (`BufferSizeInKB` bẫy 8×, LowDelayBRC, sai số lớn nhất) · AMF (EnforceHRD, không filler, yếu ở bitrate thấp) · x264 (`vbv-bufsize` bắt buộc + `sliced-threads` — thiếu là trễ 130 ms) · 10 bất biến chung · xung đột CBR↔tĩnh↔tiết kiệm pin · chi phí đổi cấu hình · giới hạn slot + fallback · 8 kiểm chứng · bảng ánh xạ 4 hãng** |
+| **v3.8** | **§38 hai cơ chế hạ res (native vs post-scale) — §36.9 đã gộp sai · vì sao chữ chết (nội suy + 4:2:0 + deblock) · chọn scaler có số (bicubic/area GPU, cấm Lanczos cho text) · bậc thang tỉ lệ sạch 3/4 & 1/2 · sharpening có điều kiện (tắt khi <3 Mbps) · giới hạn 4:2:0 không vượt được · phân loại text/motion để chọn giảm fps hay res · chống UI nhảy khi đổi res · đo bằng **OCR CER** thay vì cảm tính** |
 
 ### 0.1 v3.0 sửa gì — danh sách "còn thiếu" (đây là lý do v2.1 chưa đủ)
 
@@ -60,10 +61,12 @@ Một lượt rà rộng 20 chỗ thì chỗ nào cũng nông. Spec này đượ
 | 1 | **Mô hình thực thi pipeline thời gian thực** (thread, hàng đợi, buffer, drop, restart, shutdown, ngân sách độ trễ) | ✅ **xong — §35** | toàn bộ sản phẩm |
 | 2 | **Transport tuning & điều tiết băng thông** (phân loại mất gói, máy trạng thái CC, budget alloc, IDR storm, FEC/NACK, playout-delay, ladder, CI netem) | ✅ **xong — §36** | §35.6 |
 | 2a | **Encoder rate-control theo từng hãng** | ✅ **xong — §37** | §36.10 |
-| 2b | **Scaler & độ nét khi hạ resolution** (chọn scaler GPU, text sharpening) | ⬜ **kế tiếp** | §36.9, §37.9 |
+| 2b | **Scaler & độ nét khi hạ resolution** | ✅ **xong — §38** | §36.9, §37.9 |
 | 2c | Đo TWCC/REMB trên GStreamer (probe element / Pion sidecar) | ⬜ **chặn Phase 0** | §36.1 |
 | 2d | Chọn encoder theo nội dung & theo phiên (chấm điểm) | ⬜ | §37.10 |
 | 2e | Ma trận driver/toolchain tối thiểu theo hãng | ⬜ | §37.12 |
+| 2f | **BGRA→NV12 & HDR/tonemap trong cùng pass GPU** | ⬜ **kế tiếp** | §38.6 |
+| 2g | Phân loại nội dung sâu hơn (text/motion/ảnh/game/DRM) | ⬜ | §38.7 |
 | 3 | Fault injection & chaos harness (ACCESS_LOST, audio device mất, mạng đứt, driver reset) | ⬜ | §35.14 |
 | 4 | Vòng đời cửa sổ & display (state machine + phục hồi sau crash) | ⬜ | §35.10 |
 | 5 | Threat model theo từng bề mặt (HTTP/WS/DC/tray/driver/local) | ⬜ | §35.13 |
@@ -3647,4 +3650,164 @@ mỗi 500 ms:
 | **#2b Scaler & độ nét** (vẫn giữ) | §37.9 phụ thuộc scaler khi đổi resolution |
 | **#2d Chọn encoder theo nội dung & theo phiên** (chấm điểm: text vs video, GPU rảnh, nhiệt, giới hạn slot) | §37.10 |
 | **#2e Đo & pin driver/toolchain theo hãng** (ma trận driver tối thiểu, hành vi khác nhau) | §37.5, §37.12 |
+| **#3 Fault injection harness** | vẫn chờ |
+
+---
+
+## 38. Scaler & độ nét khi hạ resolution (nhánh #2b — nơi chữ bị giết)
+
+> §36.9 nói: preset **"Nét"** thì *"cuối cùng mới hạ resolution"*. Nhưng khi buộc phải hạ, **hạ bằng cách nào** quyết định chữ còn đọc được hay không — và có **hai cơ chế hoàn toàn khác nhau** mà §36.9 đã gộp làm một. Chương này tách chúng ra, chọn scaler, và đặt ngưỡng đo được.
+> Đây là chương ảnh hưởng trực tiếp tới mục đích sử dụng phổ biến nhất: **đọc chữ trên máy từ xa**.
+
+### 38.1 Hai cơ chế khác nhau — §36.9 đã gộp sai
+| | **(A) Hạ resolution của display ảo** ("native lower") | **(B) Hạ resolution sau khi capture** ("post-scale") |
+|---|---|---|
+| App render ở đâu | **Ở độ phân giải thấp** ⇒ UI lớn hơn, chữ **nét ở res đó** | Ở 1080p như bình thường |
+| Sau đó | capture 1280×720, **không scale** | scale 1920×1080 → 1280×720 |
+| Chi phí | **1.5–3 s** (đổi display + app nhận `WM_DISPLAYCHANGE`, reflow, có khi phải restart app) | **150–400 ms** (1 IDR) |
+| Chữ sau khi xem | **Nét** (nét theo res mới) | **Mờ** (nhòe do nội suy) |
+| Bố cục app | Thay đổi (đúng như khi user đổi res thật) | Không đổi |
+| Ảnh hưởng người ngồi máy | Có (nếu mode VNC) | Không |
+| Dùng khi | người dùng **muốn chữ to/nét** (§20.3 "Chữ to") | cần **giảm băng thông nhanh** giữa phiên (§36.9) |
+**Quyết định:**
+1. **(B) là mặc định của ladder §36.9** — vì nó nhanh, đảo ngược được, không đụng bố cục app.
+2. **(A) chỉ dùng khi người dùng chủ động chọn "Chữ to"**, hoặc khi ladder đã xuống **2 bậc liên tiếp và giữ >20 s** ⇒ gợi ý một lần: *"Muốn chữ nét hơn? Đổi sang 'Chữ to' (áp dụng 2 giây)."* Không tự đổi (vì nó reflow app của người dùng).
+3. **Không bao giờ** tự làm (A) mà không nói — nó thay đổi thứ người dùng đang nhìn.
+
+### 38.2 Vì sao hạ resolution giết chữ (cơ chế, không phải cảm tính)
+Chữ trên màn hình là **chi tiết tần số cao với biên độ thấp** — đúng loại **kém nhất** cho mọi khâu trong chuỗi:
+1. **Downscale nội suy** làm mất cạnh sắc: 10 px cao của chữ thành 6.7 px ở 2/3 scale ⇒ nét thành gradient.
+2. **Chroma subsampling 4:2:0** (NV12) làm mất chi tiết **màu** ở cạnh chữ — với chữ đen trên nền trắng thì ít hại, nhưng với **ClearType (subpixel AA)** thì mất luôn phần làm nét ngang ⇒ chữ mảnh hơn, khó đọc hơn.
+3. **H.264 ở QP cao** dùng **deblocking filter** ⇒ làm mờ thêm cạnh; và biến đổi DCT **bỏ hệ số tần số cao** trước ⇒ chữ "nhoè đều".
+4. **Mắt người** đọc theo **đường viền**, không theo điểm ảnh ⇒ mất cạnh = mất khả năng đọc, ngay cả khi SSIM còn cao.
+> Hệ quả: **cùng một bitrate, cùng resolution**, nội dung chữ khó hơn video tự nhiên **2–4×**. Đây là lý do 8 Mbps "đủ cho 1080p60" theo thông lệ game-streaming lại **không đủ** cho desktop văn phòng cuộn nhanh.
+
+### 38.3 Chọn scaler (có số, có bẫy)
+| Scaler | Chất lượng chữ | Chi phí 1080p→720p @60fps | Ở đâu | Ghi chú |
+|---|---|---|---|---|
+| **Nearest / point** | ❌ rất tệ (răng cưa) | ~0 | — | chỉ dùng để test |
+| **Bilinear** | ⚠️ mờ đều | ~0 (GPU) | D3D11 VideoProcessor mặc định | "mờ như sương" — đúng vấn đề cần tránh |
+| **Bicubic (Catmull-Rom)** | ✅ khá | ~0 (GPU shader) | shader tự viết, `d3d11` compute | mặc định đề xuất |
+| **Lanczos-3** | ✅✅ sắc, **có halo** | ~0 GPU / **8–18 ms CPU** | shader GPU | halo quanh chữ ⇒ trông "gai"; không hợp |
+| **Area / box (đúng tỉ lệ nguyên)** | ✅✅ sạch, không halo | ~0 GPU | shader, hoặc **1/2 = average 2×2** | **tốt nhất khi tỉ lệ nguyên** |
+| **D3D11 VideoProcessor + `Filter=Sharpness`** | ⚠️ tuỳ driver | ~0 | DXVA | driver-dependent, không đoán được |
+| **swscale (CPU, `videoscale`)** | ✅ bicubic tốt | **2–5 ms/khung** = 12–30% core | GStreamer soft | dùng khi không có GPU path |
+| **swscale lanczos** | ✅✅ | **8–18 ms/khung** | GStreamer | quá đắt ở 60 fps |
+**Quyết định:**
+1. **Ưu tiên GPU**: D3D11 **compute shader** bicubic hoặc area, chạy **trong cùng D3D11 device** với capture và encoder ⇒ **không copy, không đọc lại CPU**.
+2. **Tỉ lệ nguyên thì dùng area/box**: 1920→960 (1/2), 1280→640 (1/2). Đây là ca **nét nhất** và **rẻ nhất**.
+3. **Không dùng Lanczos** cho screen content (halo quanh chữ khó chịu hơn là mờ đều).
+4. **Fallback CPU** khi không có shader path: `videoscale method=4` (bicubic) — và **hạ fps xuống 30** trước khi dùng, vì 60 fps + CPU scale + CPU encode là quá tải.
+5. **Xác minh ở Phase 0** (không thể biết trước): GStreamer 1.22/1.24 có element GPU scaling đủ tốt không (`d3d11convert` mức độ hỗ trợ khác nhau theo phiên bản/driver), hay phải tự viết compute shader trong pipeline. Ghi vào danh sách câu hỏi chặn.
+
+### 38.4 Chọn bậc thang để **tránh tỉ lệ lẻ** (sửa §36.9)
+Bảng §36.9 có các bậc 1728×972, 1536×864 — đó là tỉ lệ **0.9** và **0.8**, đều là **tỉ lệ lẻ** ⇒ mờ hơn cần thiết. Thay bằng thang **ưu tiên tỉ lệ nguyên/đơn giản**:
+| Bậc | Kích thước | Tỉ lệ từ 1080p | Loại | Ghi chú |
+|---|---|---|---|---|
+| 0 | 1920×1080 | 1:1 | — | |
+| 1 | **1600×900** | 0.833 (5/6) | lẻ nhưng gần "sạch" về số nguyên dọc | dự phòng |
+| 2 | **1440×810** | 0.75 (3/4) | **đẹp** | 4 px → 3 px, area filter rất tốt |
+| 3 | **1280×720** | 0.667 (2/3) | chấp nhận | 3 px → 2 px |
+| 4 | **960×540** | **0.5 (1/2)** | **tốt nhất** | average 2×2, rẻ, nét |
+| 5 | **854×480** | ~0.445 | lẻ | chỉ khi buộc |
+**Luật:** khi ladder phải chọn bậc, **nhảy tới bậc có tỉ lệ sạch nhất mà vẫn đủ giảm** — ví dụ cần giảm ~35% thì chọn 1280×720 (bậc 3) **chứ không** 1440×810 (giảm 25%) rồi 1280 (giảm 44%). Giảm ít hơn nhưng **sạch hơn** tốt hơn giảm nhiều mà mờ.
+> `1600×900` và `854×480` giữ trong bảng nhưng **không dùng trừ khi** các bậc sạch không đủ.
+
+### 38.5 Sharpening — có, nhưng rất hạn chế
+| Điều kiện | Làm gì |
+|---|---|
+| Tỉ lệ ≥ 0.75 (giảm nhẹ) | **không** sharpen — không cần |
+| Tỉ lệ 0.5–0.75 | unsharp mask **nhẹ**: radius 0.6 px, amount 0.25–0.35, **chỉ trên luma** |
+| Tỉ lệ ≤ 0.5 | amount tới 0.5, radius 0.8 — nhưng **cân nhắc chuyển sang (A) native** thay vì sharpen |
+| Không bao giờ | sharpen khi bitrate <3 Mbps (nó tăng chi tiết ⇒ encoder tốn bit hơn ⇒ tệ hơn) |
+**Bẫy:** sharpen làm **tăng entropy** ⇒ encoder cần **nhiều bit hơn** để giữ cùng chất lượng. Nếu đang giảm resolution vì **thiếu băng thông**, sharpen là **tự bắn vào chân**. UI/logic phải biết: `if (target_bps < 3Mbps) sharpening = off`.
+**Vị trí:** sharpen phải nằm **trong cùng pass GPU** với scale (shader), trước khi chuyển NV12. Nếu sharpen sau khi đã NV12 ⇒ phải làm trên luma (được, nhưng ít hiệu quả hơn).
+
+### 38.6 Vấn đề 4:2:0 — giới hạn thật, không vượt được
+- Capture ra **BGRA** (DDAPI), encoder cần **NV12** ⇒ chuyển đổi **mất 3/4 thông tin màu**.
+- Ảnh hưởng: chữ **trắng trên nền màu đậm**, icon màu, viền cửa sổ màu → mất sắc cạnh màu.
+- Lựa chọn khác: **H.264 High 4:4:4 Predictive** — chất lượng text tốt hơn rõ rệt, nhưng **browser không giải mã được** (Chrome/Safari chỉ có High 4:2:0 / Baseline / Main cho H.264 trong WebRTC). ⇒ **không khả thi**.
+- Lựa chọn khác nữa: **VP9 profile 2 (4:4:4)** — Chrome có thể? Nhưng không đảm bảo trên Safari, và hardware decode 4:4:4 hiếm ⇒ **không chọn**.
+- ⇒ **Chấp nhận 4:2:0**, và **không** hứa chất lượng màu chính xác. Ghi vào §6.13 (giới hạn trung thực): *"màu ở cạnh chữ có thể lem nhẹ"*.
+- Giảm nhẹ: **dither/ordered dithering** khi chuyển BGRA→NV12 giúp mượt gradient (nền tối), **không** giúp chữ. Bật khi nền tối chiếm nhiều (dark mode) — rẻ, có ích.
+
+### 38.7 Khi nào thà giảm fps hơn giảm resolution (bảng quyết định)
+Cần biết **nội dung đang là gì**. Phân loại rẻ, chạy mỗi 500 ms:
+```
+lấy frame 480×270 (downsample rẻ) → tính trung bình |gradient| (Sobel) trên luma
+edge_density = % pixel có |grad| > ngưỡng
+text_score   = edge_density cao  +  chuyển động thấp–trung bình
+motion_score = trung bình |frame_i - frame_i-1| trên 480×270
+```
+| `text_score` | `motion_score` | Loại | Ưu tiên giữ | Hành động |
+|---|---|---|---|---|
+| cao | thấp | **đọc tài liệu / code / terminal** | **resolution** | giảm fps 60→30, **không** hạ res; bật sharpen nhẹ |
+| cao | cao | cuộn trang chữ, bảng tính | resolution + fps cân bằng | hạ res **1 bậc sạch** trước, rồi fps |
+| thấp | cao | video, animation, game 2D | **fps** | hạ res trước (mắt không thấy mờ khi đang động) |
+| thấp | thấp | desktop tĩnh | băng thông | vào chế độ tĩnh §35.11 |
+| — | — | không xác định được | cân bằng | dùng preset người dùng chọn |
+**Đây là lý do ta cần phân loại:** cùng một "giảm 30% bitrate", với tài liệu thì nên giảm **fps**, với video thì nên giảm **resolution**. Nếu chỉ có một ladder cứng, nửa số người dùng sẽ thấy sai.
+- **Không** hiện thông tin này cho người dùng (nội bộ). Người dùng chỉ thấy preset họ chọn; hệ thống tự chọn cách giảm **trong biên của preset đó**, trừ khi preset ghi rõ (như "Nét" = giữ res).
+- `text_score`/`motion_score` vào stats (debug) để giải thích vì sao hệ thống chọn bậc đó.
+
+### 38.8 Hệ quả lên client: đổi resolution giữa phiên **không được làm UI nhảy**
+Khi server đổi encoder resolution, video element đổi kích thước ⇒ nếu client để video tự giãn theo thì **bố cục UI nhảy** và con trỏ mapping phải tính lại giữa lúc người dùng đang bấm.
+**Luật:**
+1. Video element giữ **kích thước không đổi** (theo display ảo gốc), video stream được **letterbox trong đó**.
+2. Cursor mapping dùng `video.videoWidth/videoHeight` (**kích thước stream thật**), không dùng kích thước element ⇒ tự đúng (§10.4 đã đúng, nhưng phải **test** khi res đổi giữa lúc đang kéo chuột).
+3. Trong 500 ms quanh lúc đổi: **không** gửi click đầu tiên nếu mapping chưa cập nhật (`videoWidth` đổi chưa kịp) — chờ `resize` event hoặc 1 frame, tối đa 100 ms. Đây là chi tiết nhỏ nhưng gây "click lệch 1 lần" rất khó chịu.
+4. Không hiện overlay "đang đổi chất lượng" cho việc **chỉ đổi bitrate/fps**; chỉ hiện cho **đổi resolution** (vì có 1 nhịp khựng thật).
+
+### 38.9 Đo độ đọc được — kiểm chứng khách quan (bắt buộc)
+Không thể chỉ nhìn rồi nói "ổn". Dùng **OCR** làm thước đo:
+```
+1. Server render trang test: 3 cỡ chữ (8pt/10pt/12pt), 3 kiểu (sans/serif/mono),
+   nền sáng + nền tối, tiếng Việt có dấu + code + số
+2. Chạy qua pipeline ở các cấu hình: res × bitrate × preset (ma trận dưới)
+3. Lưu frame ở client (hoặc decode lại) → Tesseract OCR → so với ground truth
+4. character_error_rate (CER) = lỗi / tổng ký tự
+```
+| Cấu hình | CER mục tiêu (8pt, sans, nền sáng) |
+|---|---|
+| 1080p, 8 Mbps, Nét | **≤ 1%** |
+| 1080p, 4 Mbps | ≤ 3% |
+| 720p (post-scale), 8 Mbps upscale khi xem | ≤ 4% |
+| 720p **native** (A), 8 Mbps | ≤ 2% |
+| 720p post-scale, 3 Mbps | ≤ 10% (**báo cho người dùng: chuyển "Chữ to"**) |
+| ≤540p | không đặt ngưỡng — **cảnh báo** trong UI |
+- Chạy trong CI như một bài test (không phải "thử bằng mắt"), fail nếu vượt 20% so với baseline đã chốt.
+- Cũng đo **SSIM trên vùng chữ** (crop vùng có `text_score` cao) — bổ sung cho CER.
+- Đây là thước đo **duy nhất** chứng minh "chữ còn đọc được", và nó khách quan với mọi thay đổi codec/scaler sau này.
+
+### 38.10 Chi phí & khả năng đảo ngược (để chọn đúng)
+| Thao tác | Chi phí | Khựng | Đảo ngược | Ảnh hưởng app |
+|---|---|---|---|---|
+| đổi bitrate | 0 | không | tức thì | không |
+| đổi fps | 50–150 ms | 1 IDR | tức thì | không |
+| đổi res **post-scale** | 150–400 ms | 1 IDR + 1 nhịp | tức thì | không |
+| đổi res **native** | 1.5–3 s | rõ | chậm (lại 1.5–3 s) | **có** (reflow) |
+| bật/tắt sharpen | chỉ đổi shader param | không | tức thì | không |
+| đổi scaler | cần dựng lại pass | 1 IDR | — | không |
+**Luật:** trong 1 phiên, **tổng số lần đổi post-scale res ≤ 6** (đếm trong stats). Vượt ⇒ khoá ở bậc an toàn + log `scale.churn` — vì đổi res liên tục khó chịu hơn là hơi mờ.
+
+### 38.11 Cấu hình (bảng tham số)
+| Tham số | Default | Khoảng |
+|---|---|---|
+| `scale.preferred_ratios` | `[1, 0.75, 0.667, 0.5]` | danh sách bậc sạch |
+| `scale.method` | `gpu_bicubic` (fallback `cpu_bicubic`) | |
+| `scale.sharpen.enable_below_ratio` | 0.75 | 0.6–0.9 |
+| `scale.sharpen.amount` | 0.3 | 0–0.6 |
+| `scale.sharpen.min_bitrate_bps` | 3 000 000 | |
+| `scale.max_changes_per_session` | 6 | 3–15 |
+| `content.classify_interval_ms` | 500 | 250–1000 |
+| `content.text_edge_threshold` | 0.18 | 0.1–0.3 |
+| `content.suggest_native_after_s` | 20 | 10–60 |
+| `dither.when_dark_ratio` | 0.6 | 0.4–0.8 |
+
+### 38.12 Nhánh mới rẽ ra
+| Nhánh | Vì sao rẽ ra từ §38 |
+|---|---|
+| **#2f Chuyển đổi màu BGRA→NV12 & xử lý HDR/tonemap trong cùng pass GPU** | §38.6 nói "chấp nhận 4:2:0" nhưng chưa nói *cách* chuyển đúng (matrix, range, dither), và §5.5.2 có HDR tonemap — hai việc này **cùng một shader** |
+| **#2g Phân loại nội dung sâu hơn** (text/motion → còn có: video DRM đen, ảnh, biểu đồ, game) | §38.7 chỉ có 2 chiều |
+| **#2c Đo TWCC/REMB trên GStreamer** (vẫn chặn Phase 0) | §36.1 |
 | **#3 Fault injection harness** | vẫn chờ |
