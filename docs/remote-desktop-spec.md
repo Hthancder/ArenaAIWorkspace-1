@@ -1,6 +1,6 @@
 # SPEC v3.15 — Remote Desktop qua trình duyệt **cho dùng cá nhân**: HVNC + VNC, window picker, âm thanh server-side, trải nghiệm điều khiển đầy đủ
 
-- Phiên bản: **v3.20 — §51.10–14: VRAM 4 GB, trần 1440p, sửa lỗi AdapterRAM** · trước đó: **v3.19 — thêm §51 hồ sơ GTX 1050, bẫy adapter, P0 cụ thể** · trước đó: **v3.18 — thêm §48 mô hình tuỳ chỉnh, §49 chống vỡ UI, §50 tính năng còn thiếu** · trước đó: **v3.17 — thêm §47 khởi động cùng Windows + vòng đời process + trải nghiệm theo thời gian** · trước đó: **v3.16 — thêm §46 "máy có ở đó không" (ngủ/reboot/đổi IP/khoá màn hình)**, lĩnh vực G còn trống · trước đó: **v3.15** — phạm vi thu hẹp về 1–2 người dùng (§0.3). Bản v3.14 là bản "sản phẩm": có cert, EULA, RBAC, accessibility, đóng gói ký số. Tất cả những thứ đó **đã cắt** ở đây — xem §0.3.1 để biết cắt gì và cắt có an toàn không. Lịch sử đầy đủ v1.0→v3.14 ở §0.
+- Phiên bản: **v3.21 — §52 máy hybrid iGPU+1050: topology quyết định, DDAPI fail trên GPU rời** · trước đó: **v3.20 — §51.10–14: VRAM 4 GB, trần 1440p, sửa lỗi AdapterRAM** · trước đó: **v3.19 — thêm §51 hồ sơ GTX 1050, bẫy adapter, P0 cụ thể** · trước đó: **v3.18 — thêm §48 mô hình tuỳ chỉnh, §49 chống vỡ UI, §50 tính năng còn thiếu** · trước đó: **v3.17 — thêm §47 khởi động cùng Windows + vòng đời process + trải nghiệm theo thời gian** · trước đó: **v3.16 — thêm §46 "máy có ở đó không" (ngủ/reboot/đổi IP/khoá màn hình)**, lĩnh vực G còn trống · trước đó: **v3.15** — phạm vi thu hẹp về 1–2 người dùng (§0.3). Bản v3.14 là bản "sản phẩm": có cert, EULA, RBAC, accessibility, đóng gói ký số. Tất cả những thứ đó **đã cắt** ở đây — xem §0.3.1 để biết cắt gì và cắt có an toàn không. Lịch sử đầy đủ v1.0→v3.14 ở §0.
 - Trạng thái: **Đề xuất — CHƯA implement, chờ duyệt.** Sau v3.15, spec **không còn chương nào cần viết**; việc tiếp theo là **P0 (đo thật)**, không phải viết thêm.
 - Nền tảng: Server **Windows 10 2004+ / Windows 11** · Client **trình duyệt** (không app)
 
@@ -27,6 +27,7 @@
 | **v3.11** | **§41 threat model: 10 tài sản · 10 vị trí P1–P10 · **lật giả định nền — client KHÔNG tin cậy, agent tin về hành vi nhưng không tin về dữ liệu** · 3 hệ quả kiến trúc · 20 mối đe doạ T1–T20 theo ranh giới · 5 quyết định *bắt nguồn từ threat model* (client không gửi `hwnd`; không endpoint chạy lệnh; transfer/clipboard mặc định tắt; `X-Frame-Options: DENY`; người ngồi máy luôn dừng được) · token rotate + reuse detection · P6 quyền phủ quyết · supply chain/chống downgrade · 9 rủi ro chấp nhận · 14 kiểm chứng** |
 | **v3.12** | **§42 multi-session — phát hiện ràng buộc bị bỏ qua: 1 desktop = 1 con trỏ + 1 focus ⇒ chỉ 1 controller/session, N viewer** · input lease (server-side, TTL, release_all trước khi chuyển) · bảng chia sẻ vs cách ly 13 tài nguyên · admission control theo VRAM/RAM/CPU/slot/display có số (thay cho "max 3") · giới hạn display slot của VDD = câu hỏi chặn Phase 0 · fanout 1 encode → N SRTP (PLI theo **stream** không theo peer) · cách ly lỗi + tự phục hồi sau TDR · fairness 4 mức · **10 bảo đảm cách ly phải test (I1–I10), fail ⇒ tắt multi-session** · refcount dọn sau 5 s** |
 | **v3.13** | **§43 client perf: vì sao client dễ chết hơn server (6 nền tảng, Safari iOS kill tab ~200–400 MB, GC không kiểm soát) · 15 chỉ số ngân sách có cách đo · quyết định render (video element ≠ canvas; cursor = div transform; HUD 2 Hz) · **10 chỗ tốn tiền thật** (#1 forced reflow từ `getBoundingClientRect` mỗi pointer event — bug phổ biến nhất, không thấy bằng mắt) · kiến trúc JS (0 dependency, 12 module, `render(state)`) · perf-probe + **CI gate thật** (size/type/perf/leak, baseline 7 ngày) · 3 giới hạn cứng mobile · overlay 0 ms main thread · 8 nguồn rò rỉ + test 50 lần vào/ra** |
+| **v3.21** | **Có iGPU ⇒ máy hybrid, và §51.4 chưa đủ mạnh**: tài liệu Microsoft nói DDAPI **theo thiết kế** trả `DXGI_ERROR_UNSUPPORTED` khi chạy trên **GPU rời** trong hệ hybrid; `DuplicateOutput` **bắt buộc** device cùng adapter với output; trên hybrid `EnumOutputs` của iGPU **có thể trả 0 output**; và display ảo **có thể có trong Windows mà không có trong DXGI** (VDD #483) ⇒ `E_FAIL` = **pipeline chết**, không phải chậm · **4 topology A/B/C/D** và phán quyết từng cái · **VDD có `<gpu><friendlyname>`** (mặc định `default` = OS tự chọn = thường iGPU) + changelog 25.7.23 chọn render adapter **theo LUID từ PCI bus** ⇒ đây là công tắc quyết định · topology C (chéo adapter) tốn **1.76 GB/s copy + 2–5 ms + 1 nhân CPU** ⇒ chọn **C1 QSV** thay vì copy sang NVENC · **thang leo khi `E_FAIL`**: EnumDisplayDevices → WGC theo monitor-handle → báo `unsupported_topology` **kèm cách sửa**, **không bao giờ** tự chuyển sang capture màn hình thật · vòng dò adapter mới: **bỏ Microsoft Basic Render (0x1414)**, **không hạ preset khi lệch LUID** (hạ preset không sửa được copy chéo) · **P0-g** trước P0-a · `/diagnostics` + `capture_luid/encode_luid/same` · §48 T2 thêm "GPU mã hoá" |
 | **v3.20** | **Xác nhận VRAM 4 GB** ⇒ §51.3 đảo kết luận: **VRAM không phải ràng buộc** trên máy này; trần display ảo **1920×1200 → 2560×1440**; "giật" có **4 nguyên nhân khác** và cách phân biệt bằng số (`encode_ms p95 < 8 ms` ⇒ **không phải GPU**) · trần cứng thật là **băng thông đường quét ảo** (Pascal **không có DSC**) chứ không phải VRAM ⇒ 4K có thể phải lùi **30 Hz** · cảnh báo **1050 Ti OEM low-profile bị hạ xung** (NVENC không bị, **DWM bị**) · **`Win32_VideoController.AdapterRAM` là `uint32` ⇒ tràn số với card ≥ 4 GB** — phải dùng `nvidia-smi` hoặc DXGI `DedicatedVideoMemory` (§9.4.1 bước 1b sửa theo) · cấu hình `config.json` chốt cho máy này · còn 2 câu: **có iGPU không** (quyết định bẫy LUID) và driver version |
 | **v3.19** | **§51 máy chủ thật (GTX 1050)**: GitHub dùng được để **đọc source**, **không** để đo (runner không GPU) · 1050 = NVENC thế hệ 6: H.264 1080p60 dư, **không AV1**, **không HEVC B-frame** (không dùng), trần phiên **12** với driver mới (không thành vấn đề — ta dùng 1–2) · **ràng buộc thật là 2 GB VRAM ⇒ trần display ảo 1920×1200**, không phải tốc độ; hết VRAM **không báo lỗi, chỉ giật** ⇒ banner < 300 MB · **bẫy tìm từ source**: `d3d11screencapturesrc` khi `capture-api=wgc` tạo device theo **adapter index bạn truyền** (mặc định `-1`), khi `dxgi` thì theo **adapter sở hữu monitor** ⇒ máy 2 adapter (iGPU + Optimus) có thể capture và NVENC ở **2 LUID khác nhau** = copy staging +3–8 ms hoặc `not-negotiated` ⇒ P0 phải kiểm **LUID trùng** · **tin tốt P0-b**: GStreamer **có TWCC** (`rtptwcc`, `twcc-stats`) và webrtcbin tự quảng cáo `transport-cc`, **không có REMB**; ta vốn không cần CC trong GStreamer vì §36 là CC của ta ⇒ P0-b hạ từ "đổi stack" xuống "nối extmap + đọc 1 property" · VDD **25.7.23 / VDC đã ký**, cài cả display + audio trong app · 12 bước P0 cụ thể cho máy này |
 | **v3.18** | **§48 tuỳ chỉnh**: 3 tầng **có số cứng** (T1 = 12 mục, T2 ≤ 20, T3 = file) · **4 phạm vi** (app/server/user/**device**) và thứ tự thắng `device > user > server > app` (device thắng để điện thoại 4G dùng "Mượt" mà laptop LAN vẫn "Nét"); mục thuộc **server** thì **không** cho ghi đè theo thiết bị · thay thanh trượt bằng **preset** (T1 không có ô số) · tìm bằng từ người dùng nghĩ ("trễ", "mờ") chứ không bằng tên tham số · **4 điều kiện để một mục được vào UI** (chống phình lại 60 mục) · "không thắt khởi động lại" + nhãn `áp dụng từ phiên sau` · **§49 chống vỡ UI**: thang **6 tầng z cố định** (0 literal `z-index`), **máy trạng thái bề mặt** (1 dialog / 1 sheet / 1 toast / 1 banner / Esc đóng đúng 1), banner **đẩy** layout không phủ, toast neo trong STAGE, test cỡ chữ 200% + 320 px + tiếng Việt + ảnh chụp baseline · **§50** 8 tính năng còn thiếu (lịch sử phiên, ghim cửa sổ, ảnh cuối khi mất mạng, chuyển app trên mobile, âm báo, chế độ mạng yếu, gửi file 1 chiều, không ghi hình) |
@@ -85,7 +86,7 @@
 |---|---|---|
 | **P0-a** | Đo **p95 glass-to-glass** trên máy bạn | phụ thuộc GPU/driver/Windows build thật của bạn |
 | **P0-b** | Nối **extmap transport-cc** + đọc `rtpsession:twcc-stats` | **đã hạ rủi ro**: source cho thấy TWCC **có** (không có REMB, không có CC — §51.5). Chỉ cần chứng minh `bitrate-sent` giảm khi bóp băng thông |
-| **P0-f** | **LUID capture == LUID NVENC** (§51.4) | máy 2 adapter (iGPU/Optimus) có thể lệch ⇒ trễ +3–8 ms hoặc `not-negotiated`, không báo lỗi |
+| **P0-g** | **Topology + LUID capture == LUID NVENC** (§52) | máy **có iGPU** ⇒ DDAPI có thể **fail hẳn** trên GPU rời (§52.1 #1) chứ không chỉ chậm; và display ảo có thể **không có** trong `EnumOutputs` ⇒ **P0 phải làm bước này trước khi đo p95**, nếu không số đo vô nghĩa |
 | **P0-c** | VDD tạo được mấy display, có ổn định | §42.6 |
 | **P0-d** | Máy ngủ/reboot có phục hồi sạch không | §46.10 (test 1–6) |
 | **P0-e** | Cài → reboot → login có tự chạy, không cần bấm gì | §47.9 (test 1–7, ~10 phút) |
@@ -342,7 +343,7 @@ EnumWindows(hwnd):
 |---|---|
 | HVNC | **DDAPI trên monitor ảo** |
 | VNC | **DDAPI trên monitor vật lý** |
-| `ACCESS_LOST`/`UNSUPPORTED` | re-init DDAPI (≤3 lần/10 s) → **WGC** |
+| `ACCESS_LOST`/`UNSUPPORTED` | re-init DDAPI (≤3 lần/10 s) → **WGC** → **kiểm topology (§52.6)**: trên máy hybrid `UNSUPPORTED` là **lỗi chọn adapter**, re-init bao nhiêu lần cũng vô ích |
 | Game exclusive / DirectComposition | **WGC monitor** (hoặc WGC window nếu cần) |
 | Win10 <1803 / trong RDP | **BitBlt** (chậm) |
 | Stream 1 cửa sổ không move (T3) | **WGC window item** + `IsBorderRequired=false` |
@@ -981,7 +982,8 @@ Không hỏi "máy bạn có GPU gì" lúc cài — **dò lúc chạy**, mỗi l
 1. Enumerate adapter (DXGI) → nhận diện vendor + tên + VRAM + feature level
 1b. Đọc **DXGI_ADAPTER_DESC1.DedicatedVideoMemory** (KHÔNG dùng WMI `AdapterRAM` — nó là uint32, tràn số với card ≥4 GB — §51.12)
     ⇒ chọn TRẦN resolution: <3 GB → 1920x1200; 3–6 GB → 2560x1440; 6–10 GB → 4K@60 (lùi 4K@30 nếu SetDisplayConfig fail); >10 GB → 4K@60
-1c. Kiểm LUID: adapter sở hữu monitor capture == adapter NVENC mở (§51.4). Lệch ⇒ ghi log + hạ preset
+1c. Kiểm LUID: adapter sở hữu monitor capture == adapter NVENC mở. Lệch ⇒ **KHÔNG hạ preset** (vô ích, xem §52.7)
+    mà chọn QSV trên adapter capture HOẶC chấp nhận staging + ghi cross_adapter=true (§52.5)
 2. Thử khởi tạo encoder theo thứ tự: NVENC → QSV → AMF → MF(x264/OpenH264)
    · thử bằng một session 1280x720 @30 fps 1 giây (throwaway) để chắc chắn chạy được
    · ghi lại "encoder nào thực sự khởi tạo được" (không đoán theo vendor string)
@@ -5287,6 +5289,7 @@ Công cụ loại này không hỏng lúc cài. Nó hỏng **dần**, và mỗi 
 | Bàn phím | layout server · rate limit · chặn `Win+L` | gõ sai, dùng app lạ |
 | Bàn giao | port · cert · STUN/TURN · Tailscale | khi không kết nối được |
 | Chẩn đoán | barcode · HUD độ trễ · log level | đang tìm lỗi |
+| GPU mã hoá | Tự động · **NVIDIA** · **Intel QSV** | máy hybrid: chọn QSV khi display ảo render trên iGPU (§52.5) |
 
 > Cách gom này quan trọng: người dùng mở cài đặt với **một triệu chứng** trong đầu ("trễ", "mờ"), không phải với một cái tên tham số. Nếu bạn phải biết "jitter buffer" là gì mới tìm được nó, đó là UI hỏng.
 
@@ -5616,6 +5619,7 @@ Trong một phiên điều khiển, cùng lúc có thể tồn tại: **video** 
 > §9.4.1 (auto-detect) phải thêm bước: **đọc `DedicatedVideoMemory` từ DXGI và chọn trần resolution theo VRAM**, không chỉ theo tên GPU. Dưới 3 GB ⇒ trần 1200p; 3–6 GB ⇒ 1440p; > 6 GB ⇒ 4K.
 
 ### 51.4 **Bẫy mới phát hiện (từ source, không có trong blog nào): WGC không cho chọn adapter theo monitor**
+> ⚠️ **Đính chính ở §52**: mục này nói "lệch LUID ⇒ chậm +3–8 ms". **Chưa đủ** — trên máy hybrid, DDAPI có thể **fail hẳn** (`DXGI_ERROR_UNSUPPORTED`), và display ảo có thể **không có** trong `EnumOutputs`. Đọc **§52** trước khi làm P0.
 Đọc `gstd3d11screencapturesrc.cpp` (nhánh `start`), đúng nguyên văn:
 ```c
 if (self->capture_api == GST_D3D11_SCREEN_CAPTURE_API_DXGI) {
@@ -5781,3 +5785,172 @@ Get-CimInstance Win32_DesktopMonitor | Select-Object Name,ScreenWidth,ScreenHeig
 > Get-CimInstance Win32_DesktopMonitor | Select-Object Name,ScreenWidth,ScreenHeight
 > ```
 > Lệnh thứ nhất cho **cả** VRAM thật, driver **và** tên card (1050 hay 1050 Ti — hai card khác nhau về số nhân CUDA nhưng **cùng NVENC**, nên không đổi kết luận). Lệnh thứ hai cho resolution thật.
+
+---
+
+## 52. Máy hybrid (iGPU + GTX 1050): khi nào **chậm**, khi nào **chết** (nhánh #33)
+
+> Bạn xác nhận **có iGPU**. §51.4 chỉ nói "nếu 2 adapter thì LUID có thể lệch ⇒ chậm +3–8 ms". **Điều đó chưa đủ mạnh.** Tài liệu Microsoft nói trường hợp này có thể **fail hẳn**, và VDD lại có một cài đặt quyết định toàn bộ (mà tôi chưa đọc kỹ). Chương này thay thế §51.4 về mặt kết luận.
+
+### 52.1 Năm sự thật, mỗi cái có nguồn
+| # | Sự thật | Nguồn | Nghĩa với ta |
+|---|---|---|---|
+| 1 | **DDAPI (`IDXGIOutput1::DuplicateOutput`) *theo thiết kế* trả `DXGI_ERROR_UNSUPPORTED` khi chạy trên GPU rời trong hệ Microsoft Hybrid** | Microsoft KB "Error when DDA-capable app is run against GPU" + MSDN forum | ⇒ trên máy bạn, capture **phải** ở adapter sở hữu output, **không** "chọn GPU mạnh cho nhanh" |
+| 2 | `DuplicateOutput` **bắt buộc** device được tạo từ **chính adapter của output** ("must be created from the adapter to which the output is connected") | docs `IDXGIOutput1::DuplicateOutput`, `E_INVALIDARG` | ⇒ 1 device cho mỗi adapter; không dùng chung |
+| 3 | Trong hybrid, `EnumOutputs` trên **iGPU có thể trả 0 output** dù `DISPLAY1` **thuộc về** iGPU (mọi pixel đi qua iGPU) | SO 37349427 | ⇒ `EnumAdapters1 → EnumOutputs` có thể **không tìm ra** màn hình bạn muốn |
+| 4 | Một monitor có thể **có** trong `EnumDisplayDevices` nhưng **không có** trong `EnumDisplayMonitors`/DXGI `EnumOutputs` (đã xảy ra với VDD trên ARM) | VDD issue #483 | ⇒ nhánh `dxgi` trả `E_FAIL` ⇒ **pipeline chết**, không phải chậm |
+| 5 | `Microsoft Basic Render Driver` luôn tồn tại, vendor **0x1414**, **0 output**, cờ `DXGI_ADAPTER_FLAG_SOFTWARE` | DXGI overview (MS) | ⇒ vòng dò LUID **phải bỏ qua** nó, nếu không sẽ chọn nhầm "adapter rẻ nhất" |
+
+> **Điểm mấu chốt:** với 1 adapter, sai thì **chậm**. Với 2 adapter, sai thì **không chạy** — và thông báo lỗi là `E_FAIL`/`UNSUPPORTED`/`not-negotiated`, **không nói gì về adapter**. Đây là loại lỗi làm người ta mất 2 ngày.
+
+### 52.2 Trước khi viết thêm dòng code nào: **cắm cáp màn hình vào cổng của 1050**
+Đây là cách rẻ nhất và triệt để nhất, và tôi phải nói nó **trước** mọi thứ kỹ thuật:
+
+| Hiện trạng (suy đoán rất có khả năng, cần bạn xác nhận) | Hệ quả | Sửa |
+|---|---|---|
+| Cáp HDMI/DP **cắm vào mainboard** (dùng iGPU) ⇒ desktop render trên **Intel**, 1050 chỉ ngồi không | **Mọi** chế độ đều phải copy chéo adapter: capture ở iGPU → encode ở NVENC. VNC mode **luôn** ở tình trạng này | **Rút cáp, cắm vào cổng HDMI/DP của 1050** ⇒ desktop render trên 1050, iGPU về 0 dùng, **hết hybrid** |
+| Cáp đã cắm vào 1050, iGPU chỉ bật trong BIOS | Windows vẫn là "hybrid system" theo nghĩa driver, nhưng output chính thuộc 1050 | VDD phải trỏ render adapter về 1050 (§52.3) |
+
+**Sau khi cắm cáp vào 1050, kiểm 1 phát:** `Win+P` và Settings → Display → Advanced: adapter của màn hình phải là **NVIDIA**. Nếu đúng, §52.4–52.5 dưới đây trở thành **dự phòng** thay vì đường chính, và P0 đơn giản hơn nhiều.
+
+> Nếu máy bạn là **laptop** (không cắm cáp được): bỏ qua mục này, đi thẳng §52.3.
+
+### 52.3 VDD có cài đặt chọn GPU render — và nó quyết định tất cả
+Trong `C:\VirtualDisplayDriver\vdd_settings.xml` (bản HDR 25.7.23, đọc từ repo):
+```xml
+<monitors><count>1</count></monitors>
+<gpu>
+    <friendlyname>default</friendlyname>   <!-- ĐỔI DÒNG NÀY -->
+</gpu>
+```
+
+| Giá trị | Nghĩa |
+|---|---|
+| `default` | Windows/OS tự chọn render adapter cho display ảo — trên máy hybrid thường là **iGPU** |
+| **tên GPU rời** (chuỗi khớp tên adapter, ví dụ `NVIDIA`) | ép display ảo render trên **1050** ⇒ capture + NVENC **cùng adapter** |
+
+Và bản 25.7.23 ghi trong changelog: *"PCI-bus based GPU selection (LUID): improved multi-GPU render adapter selection by resolving an adapter **LUID from a PCI bus number** (more deterministic than name-only matching)"* ⇒ cơ chế chọn theo LUID **đã có**, đáng tin hơn so với khớp tên.
+
+**Bốn topology và phán quyết:**
+
+| # | Topology | Capture | Encode | Phán quyết |
+|---|---|---|---|---|
+| **A** | Cáp vào 1050, VDD `friendlyname=default` | 1050 | NVENC 1050 | ✅ **tốt nhất** — 1 adapter, 0 copy |
+| **B** | Cáp mainboard, VDD `=NVIDIA` | 1050 (cho display ảo) | NVENC 1050 | ✅ tốt cho **HVNC**; **VNC mode** vẫn chéo adapter (màn hình thật ở iGPU) |
+| **C** | Cáp mainboard, VDD `=default` (⇒ iGPU) | iGPU | NVENC 1050 | ⚠️ **chéo adapter** ⇒ xem §52.5 |
+| **D** | VDD render trên adapter mà DXGI **không thấy output** | — | — | ❌ `E_FAIL` ⇒ **pipeline không khởi động** ⇒ xem §52.6 |
+
+### 52.4 Chi phí thật của topology C (để biết "chậm" là bao nhiêu)
+| Bước | Dữ liệu | Chi phí |
+|---|---|---|
+| DWM render display ảo trên iGPU | 1440p BGRA = **14.7 MB/frame** | — |
+| Texture nằm ở device iGPU, encoder cần device NVIDIA | **không share được** `D3D11Memory` giữa 2 LUID | ⇒ `d3d11download` → system memory → upload lên 1050 |
+| 2 lần copy full-frame | 14.7 MB × 2 × 60 fps = **1.76 GB/s** qua PCIe + bộ nhớ hệ thống | **≈ +2–5 ms/frame** và **1 nhân CPU** bận (không phải GPU) |
+| Nguy cơ thêm | staging readback đồng bộ ⇒ **stall** nếu không dùng ring buffer ≥3 | +1 frame nếu làm ẩu |
+> **Nghĩa là:** topology C **không** làm hỏng, nhưng **ăn hết ngân sách p95** một mình (mục tiêu 120 ms; 5 ms là 4% nhưng nó **cộng dồn** với jitter buffer + encode + mạng). Và nó là **nguyên nhân số 2** trong bảng §51.11 — đúng dấu hiệu "một nhân CPU cao, trễ cao đều từ giây đầu".
+
+### 52.5 Topology C: hai cách, và tôi khuyên cách nào
+| Cách | Làm gì | Ưu | Nhược |
+|---|---|---|---|
+| **C1 · Chuyển sang QSV** | capture iGPU → `qsvh264enc` (Quick Sync **trên cùng iGPU**) | **0 copy chéo**; không dùng 1050 nữa | chất lượng/bitrate khác NVENC (§37: QSV có bẫy `BufferSizeInKB` 8×); tải iGPU thay vì GPU rời |
+| **C2 · Copy sang NVENC** | capture iGPU → staging → NVENC 1050 | giữ chất lượng NVENC | +2–5 ms, +1 nhân CPU, +PCIe |
+
+> **Khuyến nghị:** trên máy này **đừng** chọn C bằng phần mềm. **Sửa topology** (§52.2 cắm cáp, §52.3 `friendlyname`) để về A hoặc B — rẻ hơn mọi tối ưu code. Chỉ khi không sửa được vật lý (laptop) mới chọn **C1**, và ghi rõ trong `/diagnostics` là "đang chạy QSV vì display ảo render trên iGPU".
+
+### 52.6 Khi monitor có trong Windows nhưng **không** trong DXGI `EnumOutputs`
+Đây là lỗi **chết**, không phải chậm, và GStreamer sẽ trả về đúng chuỗi này:
+```c
+for (adapter_idx = 0; ; adapter_idx++) {          /* EnumAdapters1 */
+  for (output_idx = 0; ; output_idx++) {          /* EnumOutputs */
+    if (desc.Monitor == monitor) return S_OK;
+  }
+}
+return E_FAIL;                                    /* monitor không thuộc adapter nào */
+```
+**Thang leo khi gặp `E_FAIL` (thay hành vi hiện tại là bỏ cuộc):**
+
+| Bước | Hành động | Vì sao đúng |
+|---|---|---|
+| 1 | Dò lại qua **`EnumDisplayDevices`** để lấy `HMONITOR` thật | Windows biết monitor mà DXGI không biết |
+| 2 | Chuyển sang **WGC theo `monitor-handle`** (`gst_d3d11_winrt_capture_new(device, monitor, …)`) | WGC lấy item từ **HMONITOR**, không cần DXGI output |
+| 3 | Nếu WGC cũng fail ⇒ **`unsupported_topology`** trong `/diagnostics` + gợi ý *"đổi `<gpu><friendlyname>` trong vdd_settings.xml"* | đây là lỗi cấu hình, phải nói **cách sửa**, không chỉ báo lỗi |
+| 4 | **Không** tự ý chuyển sang capture màn hình **thật** | người dùng sẽ thấy desktop thật của mình bị stream ra ngoài — vi phạm §41 |
+
+### 52.7 Vòng dò adapter — bản sửa cho §9.4.1
+```
+1. EnumAdapters1 → bỏ qua nếu VendorId == 0x1414 (Microsoft Basic Render) hoặc cờ SOFTWARE
+2. Với mỗi adapter: EnumOutputs → ghi {adapter LUID, tên, số output, device name}
+3. Monitor mục tiêu ⇒ adapter sở hữu nó. KHÔNG có ⇒ §52.6
+4. Kiểm: adapter capture == adapter NVENC?  (so LUID)
+     · trùng  → capture-api=dxgi, preset bình thường          [A/B]
+     · lệch   → KHÔNG hạ preset vô ích; chọn 1 trong 2:
+                (a) ưu tiên QSV trên adapter capture           [C1]
+                (b) dxgi + staging, ghi rõ "cross_adapter=true" [C2]
+5. Ghi tất cả vào /diagnostics: {"capture_luid","encode_luid","same":bool}
+```
+> Điều quan trọng nhất trong khối trên là **④ không được "hạ preset"**. Hạ preset **không** sửa được copy chéo adapter — nó chỉ làm hình mờ hơn mà vẫn trễ. Đây là loại "tối ưu" vô nghĩa mà §48.5 gọi là *lỗi thiết kế*, không phải tính năng.
+
+### 52.8 P0-g (mới) — 5 phút, quyết định topology trước khi đo p95
+Đo p95 trên topology C rồi kết luận "GStreamer chậm" là **kết luận sai**. Trước P0-a, chạy:
+
+| # | Việc | Đạt khi |
+|---|---|---|
+| 1 | Đổ topology: tên + LUID + số output của **từng** adapter, và adapter của màn hình thật | có bảng, biết đang ở A/B/C/D |
+| 2 | Cài VDD, đặt `friendlyname` theo §52.3, khởi động lại driver | display ảo xuất hiện |
+| 3 | Kiểm display ảo **có** trong `EnumOutputs` (script §52.9) | không `E_FAIL` |
+| 4 | Kiểm LUID capture == LUID NVENC | `same=true`, hoặc biết chắc đang ở C và chấp nhận |
+| 5 | **Chỉ sau đó** mới đo p95 | số p95 có nghĩa |
+
+### 52.9 Script đổ topology (PowerShell, không cần admin, không cần cài gì)
+```powershell
+Add-Type -TypeDefinition @"
+using System; using SharpDX; using SharpDX.DXGI;   // nếu không có SharpDX, dùng bản C# dưới đây
+"@
+```
+> SharpDX không có sẵn ⇒ dùng cách **không cần thư viện**: chạy `dxdiag /t %TEMP%\dx.txt` rồi đọc, **hoặc** dùng bản C# tối giản ở dưới (Copy vào `dump.ps1`, chạy `powershell -File dump.ps1`):
+```csharp
+// dump.ps1 — liệt kê adapter + output + LUID. Không cần admin.
+$src = @'
+using System; using System.Runtime.InteropServices;
+public class D {
+  [DllImport("dxgi.dll")] static extern int CreateDXGIFactory1(ref Guid i, out IntPtr f);
+  [ComImport, Guid("770aae78-f26f-4dba-a829-253c83d1b387"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+  interface IF { int SetPrivateData(); int SetPrivateDataInterface(); int GetPrivateData();
+                 int GetParent(); int EnumAdapters1(uint i, out IntPtr a); int IsCurrent(); }
+  [ComImport, Guid("29038f61-3839-4626-91fd-086879011a05"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+  interface IA { int SetPrivateData(); int SetPrivateDataInterface(); int GetPrivateData(); int GetParent();
+                 int EnumOutputs(uint i, out IntPtr o); int GetDesc(out D d); int CheckInterfaceSupport(); }
+  [StructLayout(LayoutKind.Sequential)] public struct D { public IntPtr a; public uint b; public uint c;
+    public uint d; public UIntPtr e; [MarshalAs(UnmanagedType.ByValTStr, SizeConst=128)] public string name;
+    public uint vendor; public uint dev; public uint sub; public uint rev; }
+  public static void Run() {
+    Guid g = new Guid("770aae78-f26f-4dba-a829-253c83d1b387"); IntPtr f;
+    if (CreateDXGIFactory1(ref g, out f) != 0) { Console.WriteLine("no dxgi"); return; }
+    IF fac = (IF)Marshal.GetObjectForIUnknown(f);
+    for (uint i = 0; ; i++) {
+      IntPtr ap; if (fac.EnumAdapters1(i, out ap) != 0) break;
+      IA ad = (IA)Marshal.GetObjectForIUnknown(ap); D desc; ad.GetDesc(out desc);
+      Console.WriteLine(String.Format("adapter[{0}] {1}  vendor=0x{2:X} luid={3}.{4}",
+          i, desc.name.Trim(), desc.vendor, desc.b, desc.c));
+      for (uint j = 0; ; j++) {
+        IntPtr op; if (ad.EnumOutputs(j, out op) != 0) break;
+        Console.WriteLine(String.Format("   output[{0}] present", j));
+      }
+    }
+  }
+}
+'@
+Add-Type -TypeDefinition $src -Language CSharp
+[D]::Run()
+```
+> Nếu script không chạy được trên máy bạn (COM interop qua PowerShell hay lỗi), **không sao** — dùng `dxdiag /t` hoặc chỉ cần trả lời 2 câu: *"cáp màn hình đang cắm vào 1050 hay vào mainboard"* và *"trong `vdd_settings.xml`, `friendlyname` là `default` hay tên GPU"*. Hai câu đó đã xác định topology A/B/C/D với độ chính xác 90%.
+
+### 52.10 Cập nhật ngược
+| Nơi | Đổi |
+|---|---|
+| §51.4 | thay kết luận: không chỉ "+3–8 ms" mà **có thể fail** (`UNSUPPORTED`/`E_FAIL`); trỏ §52 |
+| §5.5 (recovery) | `UNSUPPORTED` ⇒ **không** chỉ re-init: kiểm topology trước (§52.6) |
+| §9.4.1 | thay vòng dò bằng bản §52.7 (bỏ Basic Render, không hạ preset khi lệch LUID) |
+| §21.9 (`/diagnostics`) | thêm `capture_luid` / `encode_luid` / `same` / `cross_adapter` / `vdd_render_adapter` |
+| §18 P0 | thêm **P0-g** trước P0-a |
+| §48 T2 | thêm 1 mục: **"GPU mã hoá"** = `Tự động · NVIDIA · Intel QSV` (vì topology C là lựa chọn **thật**, không phải lỗi) |
