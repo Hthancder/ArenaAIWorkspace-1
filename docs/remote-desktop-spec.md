@@ -1,6 +1,6 @@
-# SPEC v3.5 — Remote Desktop qua trình duyệt: HVNC + VNC, window picker, âm thanh server-side, **trải nghiệm điều khiển đầy đủ**
+# SPEC v3.6 — Remote Desktop qua trình duyệt: HVNC + VNC, window picker, âm thanh server-side, **trải nghiệm điều khiển đầy đủ**
 
-- Phiên bản: **v3.5** (v3.4 + **§35 mô hình thực thi pipeline thời gian thực** — chương quyết định độ trễ/độ ổn định · §0.2 phương pháp depth-first + hàng đợi nhánh): hai thiết bị một lõi — mobile zero-chrome, grip 3 tầng, radial 8 ô, command registry, flow contract FE↔BE**)
+- Phiên bản: **v3.6** (v3.5 + **§36 transport tuning & điều tiết băng thông**: phân loại mất gói, máy trạng thái CC có số, phân bổ budget, IDR storm, FEC/NACK, playout-delay, ladder giảm cấp, kịch bản mạng CI): hai thiết bị một lõi — mobile zero-chrome, grip 3 tầng, radial 8 ô, command registry, flow contract FE↔BE**)
 - Trạng thái: **Đề xuất — CHƯA implement, chờ duyệt**
 - Nền tảng: Server **Windows 10 2004+ / Windows 11** · Client **trình duyệt** (không app)
 
@@ -19,6 +19,7 @@
 | v3.3 | §22 IA/tuyến đường · §23 design system (token, màu, chữ, chuyển động) · §24 đặc tả 12+ màn hình (dashboard, phiên, sheet, settings, admin, tray, wizard, mobile) · §25 component + ma trận state↔UI** · **§26 audit 20 nhóm: dữ liệu, API+lỗi, log, CLI, config reload, cert, proxy, môi trường cài, ma trận hỗ trợ, không third-party, ngân sách client, đa ngữ nhập liệu, clipboard chi tiết, chụp màn hình, thời gian, lưu trữ, ký số, lỗi browser, pin/data, help** · §27 trả lời thẳng |
 | **v3.4** | **§28 hai thiết bị khác bản chất · §29 desktop chrome mỏng + phím tắt · §30 mobile zero-chrome (0 nút thường trực, grip 3 độ sâu, 13 gesture, radial 8 ô theo ngữ cảnh, bàn phím không che video, kính lúp/trackpad, one-hand) · §31 command registry 1 nguồn · §32 flow contract (1 controller, intent_id, rev, idempotency, bảng race, SLA) · §33 checklist 2 vỏ + Playwright song song** |
 | **v3.5** | **§35 mô hình thực thi: 8 thread, 1 GStreamer pipeline/phiên, vòng đời frame + ownership, hàng đợi có trần + chính sách drop, ngân sách độ trễ phân rã tới từng chặng (gồm jitter buffer — khoản ẩn lớn nhất), timestamps từng chặng, screen-content tuning, chế độ màn hình tĩnh, restart/shutdown theo thứ tự, MMCSS, ngân sách bộ nhớ, 8 bất biến, fault-injection matrix** · §0.2 depth-first |
+| **v3.6** | **§36 AI sở hữu gì vs thư viện · 3 nguồn CC + luật `min(...)` · phân loại 4 loại mất gói (nghẽn/ngẫu nhiên/burst/jitter) · máy trạng thái STARTUP/DRAIN/CRUISE/PROBE/BACKOFF có số + chống dao động · phân bổ budget theo thứ tự cứng (audio không bao giờ bị bóp) · IDR storm chống + intra-refresh · chọn FEC vs NACK theo RTT · playout-delay thích ứng · degradation preference theo preset · encoder rate-control · đổi mạng giữa phiên · 22 tham số · 7 profile netem + 7 chỉ số fail CI** |
 
 ### 0.1 v3.0 sửa gì — danh sách "còn thiếu" (đây là lý do v2.1 chưa đủ)
 
@@ -56,7 +57,10 @@ Một lượt rà rộng 20 chỗ thì chỗ nào cũng nông. Spec này đượ
 | # | Nhánh | Trạng thái | Rẽ ra từ |
 |---|---|---|---|
 | 1 | **Mô hình thực thi pipeline thời gian thực** (thread, hàng đợi, buffer, drop, restart, shutdown, ngân sách độ trễ) | ✅ **xong — §35** | toàn bộ sản phẩm |
-| 2 | Transport tuning & điều tiết băng thông (pacer, TWCC/REMB, thuật toán adaptive cụ thể, FEC/NACK, jitter buffer) | ⬜ **kế tiếp** | §35.6 |
+| 2 | **Transport tuning & điều tiết băng thông** (phân loại mất gói, máy trạng thái CC, budget alloc, IDR storm, FEC/NACK, playout-delay, ladder, CI netem) | ✅ **xong — §36** | §35.6 |
+| 2a | Encoder rate-control theo từng hãng (VBV/HRD thực tế, sai số ±%) | ⬜ **kế tiếp** | §36.10 |
+| 2b | Scaler & độ nét khi hạ resolution (chọn scaler GPU, text sharpening) | ⬜ | §36.9 |
+| 2c | Đo TWCC/REMB trên GStreamer (probe element / Pion sidecar) | ⬜ **chặn Phase 0** | §36.1 |
 | 3 | Fault injection & chaos harness (ACCESS_LOST, audio device mất, mạng đứt, driver reset) | ⬜ | §35.14 |
 | 4 | Vòng đời cửa sổ & display (state machine + phục hồi sau crash) | ⬜ | §35.10 |
 | 5 | Threat model theo từng bề mặt (HTTP/WS/DC/tray/driver/local) | ⬜ | §35.13 |
@@ -3217,3 +3221,230 @@ Dừng phiên (thứ tự NGƯỢC, bắt buộc):
 | 13 | Sleep/resume máy | phục hồi hoặc đóng sạch, không treo |
 | 14 | Màn hình thứ 2 bị rút | capture recreate, không crash |
 | 15 | CPU 100% trong 10 s | drop frame, không tăng trễ vô hạn |
+
+---
+
+## 36. Transport tuning & điều tiết băng thông (nhánh #2 — quyết định p95 có đạt hay không)
+
+> §5.6 viết *"adaptive: loss >5% trong 3 s → −25%; loss <1% trong 10 s → +15%"*. Đó là **một câu**, không phải thuật toán: nó sẽ dao động (tăng rồi giảm rồi tăng), không biết băng thông thật, không phân biệt mất gói do nghẽn với mất gói do sóng Wi-Fi, và không nói *giảm cái gì* (bitrate? fps? resolution?).
+> Chương này thay thế nó bằng: **ai sở hữu quyết định**, **thuật toán cụ thể có số**, **giảm theo thứ tự nào**, và **kiểm chứng ra sao**.
+
+### 36.1 Ai sở hữu gì (ranh giới với thư viện)
+| Việc | Ai làm | Ghi chú |
+|---|---|---|
+| Ước lượng băng thông khả dụng | **Ta** (từ TWCC + REMB) | không tin mù vào lib; GStreamer's CC chưa đủ tốt cho screen content |
+| Quyết định bitrate/fps/resolution | **Ta** (`BitrateAllocator`) | đây là nơi hiểu "chữ nhỏ cần nét" |
+| Pacer (nhịp gửi gói) | **Ta** (nếu lib không đủ) hoặc `rtpgccbwe`+`rtpbin` pacer | nếu không pace, encoder bắn burst 200 gói → hàng đợi router đầy → spike trễ |
+| Đóng gói RTP/SRTP | webrtcbin | |
+| Jitter buffer (nhận) | **Browser** | ta chỉ ảnh hưởng qua `playout-delay` (§36.8) |
+| Keyframe | **Ta** (quyết định *khi nào*) | §36.6 |
+| FEC / NACK / RTX | Ta bật/tắt + cấu hình | §36.7 |
+
+**Rủi ro phải xác minh ở Phase 0** (ghi rõ vì không thể biết trước): liệu GStreamer 1.22+ expose TWCC feedback đủ để ta tự chạy CC, hay phải (a) dùng `rtpgccbwe` (loss-based, thô), (b) chèn probe element đọc RTCP, hoặc (c) chuyển sang Pion sidecar (§16.6). **Đây là câu hỏi chặn #1 của Phase 0**, cùng với 80 ms.
+
+### 36.2 Ba nguồn thông tin (và tin ai)
+| Nguồn | Cho biết | Tin bao nhiêu |
+|---|---|---|
+| **TWCC** (transport-wide CC feedback, RTCP) | thời điểm *từng gói* tới nơi → mất gói + một-chiều-trễ theo thời gian | **chính** — độ phân giải cao, phát hiện nghẽn sớm |
+| **REMB** (browser → ta) | browser ước lượng nhanh | phụ — dùng làm trần, làm mượt |
+| **Loss/NACK/PLI counters** (RR) | mất gói thô, chu kỳ | phụ — để phân loại nguyên nhân |
+
+**Luật tổng hợp:** `target = min(delay_based_estimate, loss_based_cap, remb_cap, policy_cap)`.
+- `remb_cap` làm mượt EMA 0.3 (browser hay nhảy).
+- Nếu TWCC không có (browser/proxy không hỗ trợ) → fallback REMB, và ghi `cc.mode=remb` vào stats để biết chất lượng điều tiết đang kém.
+
+### 36.3 Phân loại mất gói — chỗ §5.6 không có
+Không phải mất gói nào cũng là nghẽn. Phân loại bằng cách so **mất gói** với **trễ tăng**:
+
+| Trạng thái | Dấu hiệu | Hành động |
+|---|---|---|
+| **Nghẽn (congestion)** | mất gói **VÀ** one-way delay tăng liên tục | **giảm mạnh** (×0.85 hoặc ×0.7 nếu nặng) |
+| **Mất ngẫu nhiên** (Wi-Fi/4G) | mất gói **NHƯNG** trễ ổn định | **không giảm bitrate**; bật **FEC/NACK** (§36.7) |
+| **Burst mất** (chuyển tay 4G) | mất theo cụm 10–40 gói, trễ nhảy rồi về | giảm nhẹ 1 bậc, **không** reset về min; chờ 500 ms |
+| **Jitter cao, không mất** | trễ dao động, mất ~0 | **không giảm** bitrate; tăng `playout-delay` (§36.8) |
+> Đây là khác biệt lớn nhất so với "loss >5% → −25%": nếu không phân loại, mỗi lần Wi-Fi nhiễu (mất 2% ngẫu nhiên) ta lại hạ chất lượng vô ích, rồi lại nâng, rồi lại hạ → **hình nhấp nháy độ nét** — đúng thứ người dùng ghét nhất.
+
+### 36.4 Máy trạng thái điều tiết (số cụ thể)
+```
+        ┌──────────┐  2 s ổn định, dưới 70% trần
+        │ STARTUP  │──────────────────────────────┐
+        │ ×1.5/200ms│                             ▼
+        └────┬─────┘                        ┌─────────┐
+             │ mất/trễ tăng                │ CRUISE  │◄──────────┐
+             ▼                              │ ±5%/s   │           │
+        ┌──────────┐  500 ms ổn định        └────┬────┘           │
+        │ DRAIN    │──────────────────────────────┘                │
+        │ ×0.85    │                                               │
+        └──────────┘                          ┌──────────┐         │
+             ▲                                │  PROBE   │─────────┘
+             │ mất nặng                       │ +10%,1 s │  thành công
+        ┌────┴─────┐                          └──────────┘
+        │ BACKOFF  │◄──── mất nặng khi PROBE
+        │ ×0.7     │
+        └──────────┘
+```
+| Trạng thái | Điều kiện vào | Hành vi | Ra |
+|---|---|---|---|
+| **STARTUP** | bắt đầu phiên / sau đổi mạng | nhân **1.5× mỗi 200 ms** cho tới khi thấy trễ tăng hoặc mất | trễ tăng → DRAIN |
+| **DRAIN** | vừa phát hiện over-use | **×0.85** mỗi 200 ms, tối đa 3 lần (≈ −60%) | 500 ms không mất → CRUISE |
+| **CRUISE** | gần băng thông thật | **+5%/s** (chậm, tránh vượt) | mất → phân loại §36.3 |
+| **PROBE** | CRUISE 10 s | +10% trong 1 s để dò trần | thành công → CRUISE; thất bại → BACKOFF |
+| **BACKOFF** | mất gói do nghẽn | **×0.7** ngay, rồi chờ 1 s | 1 s ổn → CRUISE |
+**Clamp & chống dao động (bắt buộc):**
+- Trần: `policy_cap` (§6.10.1 preset) và `remb_cap`.
+- Sàn: **300 kbps** video (dưới nữa thì thà về "Low" 720p30).
+- Thay đổi mỗi bước **≤ ±20%** (trừ BACKOFF được −30%).
+- Hysteresis: **không tăng** trong 1 s sau bất kỳ lần giảm nào.
+- Không tăng trong **1 s** sau keyframe (vì IDR làm tăng bitrate tạm thời → estimator tưởng nghẽn).
+- Nếu bitrate **dao động >20% biên độ trong 5 s** (đo bằng variance) ⇒ **khoá 10 s ở mức thấp hơn**, ghi `cc.oscillation`.
+
+### 36.5 Phân bổ băng thông (thứ tự cứng)
+```
+target_total (từ §36.4, đơn vị = byte/s thực trên dây)
+  ├── overhead RTP/SRTP/UDP/IP      ≈ 4.7% @1200 B payload   (tính trước, không đoán)
+  ├── audio (luôn được cấp trước)   Opus 24–32 kbps + DTX; không bao giờ bị bóp
+  ├── RTCP/TWCC/keepalive           ≈ 5 kbps (dự phòng)
+  ├── FEC nếu bật                   10–30% của video (chỉ khi mất ngẫu nhiên)
+  └── video = phần còn lại
+```
+**Luật:**
+1. Audio **không bao giờ** bị giảm vì video. Nếu không đủ cho cả hai → giảm video về sàn, nếu vẫn không đủ → **tắt video tạm** (chỉ audio) + banner. (Hiếm, nhưng phải định nghĩa.)
+2. Khi bật FEC, **giảm bitrate video trước** để FEC không ăn vào phần đã cam kết.
+3. `target_total` tính bằng **byte trên dây**, không phải bitrate encoder — sai chỗ này thì luôn vượt 5–8% và estimator luôn báo nghẽn.
+
+### 36.6 Keyframe — chính sách chống "IDR storm"
+**Chi phí thật:** IDR 1080p60 @8 Mbps ≈ 300–600 KB = **300–600 ms** ngân sách băng thông. 3 IDR trong 1 s = nghẽn tự tạo.
+
+| Kích hoạt IDR | Cho phép? | Điều kiện |
+|---|---|---|
+| PLI/FIR từ client (mất hình) | ✅ | tối đa **2/giây**, gộp nếu đồng thời |
+| Vào phiên / đổi cửa sổ / đổi resolution | ✅ | 1 lần |
+| Client vào muộn | ✅ | 1 lần |
+| Sau BACKOFF | ✅ nhưng **trễ 200 ms** | để không cộng dồn với mất gói |
+| Định kỳ | ⚠️ **mặc định tắt** khi đã bật `intra-refresh`; nếu không có intra-refresh thì 2 s | |
+| Idle → active | ✅ | |
+**Cơ chế chống storm:** hàng đợi IDR với **coalescing** — nhiều yêu cầu trong 200 ms = 1 IDR; nếu đã có IDR trong 500 ms và client vẫn hỏi ⇒ **tăng `playout-delay`/kiểm tra NACK** thay vì gửi thêm IDR (dấu hiệu mất gói nặng, không phải thiếu keyframe).
+**Ưu tiên:** bật `intra-refresh=1` (NVENC/QSV) khi mất gói >1% — không có IDR đột ngột, client luôn phục hồi được sau ≤1 chu kỳ refresh (1–2 s) mà không có spike băng thông.
+
+### 36.7 FEC vs NACK vs RTX — chọn theo loại mất gói
+| Cơ chế | Chi phí | Trễ thêm | Dùng khi |
+|---|---|---|---|
+| **NACK + RTX** | ~1 gói retransmit | +1 RTT (**30–80 ms LAN**) | mất lẻ tẻ, RTT thấp — **mặc định bật cho video** |
+| **ULPFEC + RED** | +10–30% băng thông, luôn trả | 0 (không chờ) | RTT cao (>80 ms), mất 1–5% ngẫu nhiên, hoặc 4G |
+| **Không gì cả** | 0 | +1 chu kỳ refresh | mất <0.2% |
+| **Audio** | — | — | **Opus inband FEC + DTX**; **không** dùng NACK (không kịp) |
+**Quy tắc chọn (tự động):**
+```
+loss_random > 3%  và RTT > 80 ms   → FEC on, NACK on
+loss_random > 3%  và RTT ≤ 80 ms   → FEC off, NACK on   (retransmit rẻ hơn)
+loss_random ≤ 3%                    → FEC off, NACK on
+mất burst (chuyển mạng)             → FEC off, NACK on, chờ 500 ms
+```
+- FEC **không bao giờ** bật cho audio (Opus inband FEC đã đủ và rẻ hơn).
+- Kiểm tra: FEC che được mất gói nhưng **không che được nghẽn** — nếu bật FEC mà vẫn mất, tắt FEC và giảm bitrate (§36.3 phân loại).
+
+### 36.8 playout-delay — cơ chế can thiệp jitter buffer
+- Dùng RTP header extension `http://www.webrtc.org/experiments/rtp-hdrext/playout-delay` — **phải** khai báo trong SDP answer (ta kiểm soát answer ⇒ thêm `a=extmap`).
+- Giá trị: **min/max delay**, đơn vị 10 ms (ví dụ 0/0 = tối thiểu, 0/10 = tối đa 100 ms). **Xác minh cách pack bit chính xác ở Phase 0** — đây là extension thử nghiệm của Chromium, không phải chuẩn RFC, nên phải test thật với Chrome/Edge/Safari.
+- Điều khiển thích ứng:
+
+| Tình trạng | Giá trị gửi | Ghi chú |
+|---|---|---|
+| Ổn định 30 s | `min=0, max=0` | trễ thấp nhất |
+| Jitter tăng nhẹ (mất 0) | `max=30` (300 ms? không — xem dưới) | xem bảng đơn vị |
+| Mất gói + jitter | `max=60` | ưu tiên mượt hơn trễ |
+| Vừa BACKOFF | `max=100` trong 2 s rồi giảm dần | tránh giật trong lúc thu hẹp |
+> **Đơn vị cần kiểm chứng**: nếu đơn vị là 10 ms thì `max=10` = 100 ms. Trong spec ghi **mục tiêu bằng ms** và để hằng số `PLAYOUT_STEP_MS` cấu hình được, test ở Phase 0 rồi chốt. Không được hardcode trước khi test.
+- Nếu browser không hỗ trợ extension (Safari?) → không can thiệp được; khi đó **giảm bitrate sớm hơn** (giữ mạng sạch) thay vì trông chờ buffer.
+- `jitter_buffer_ms` hiện trong stats để người dùng hiểu vì sao hình giật.
+
+### 36.9 Giảm theo thứ tự nào (degradation preference)
+Khi phải giảm, **giảm cái gì trước** là quyết định trải nghiệm, không phải kỹ thuật:
+
+| Preset | Ưu tiên giữ | Thứ tự giảm |
+|---|---|---|
+| **Nét** (đọc chữ) | **resolution** | fps 60→30 → fps 15 → **cuối cùng mới** hạ resolution |
+| **Cân bằng** | resolution + fps | fps 60→30 → resolution 1080p→900p → fps 30→20 |
+| **Mượt** (thao tác) | **fps** | resolution 1080p→900p→720p → fps 60→45 |
+| **Tiết kiệm** | băng thông | resolution 720p→540p → fps 30→15 |
+**Bảng bậc thang (dùng chung, có số):**
+```
+resolution: 1920×1080 → 1728×972 → 1536×864 → 1280×720 → 1024×576 → 854×480
+fps       : 60 → 45 → 30 → 20 → 15
+```
+- Mỗi lần chỉ đổi **1 bậc**, chờ **2 s** đánh giá lại (tránh nhảy 3 bậc).
+- Khi tăng: tăng **ngược thứ tự**, cũng 1 bậc/2 s, và **không vượt** bậc đã biết là ổn định gần nhất (nhớ `safe_ceiling`).
+- Đổi resolution = **tạo lại scaler + encoder** (không cần đổi display ảo, không cần move cửa sổ). Downscale bằng **bilinear chất lượng cao** (hoặc GPU `d3d11video` scaler) — scaler rẻ làm **chữ nhoè** đúng ở preset "Nét", tức là phá mục đích.
+
+### 36.10 Encoder rate control (khớp với x264/NVENC thực tế)
+| Vấn đề | Quyết định |
+|---|---|
+| CBR hay VBR? | **CBR + `vbv-bufsize`** ngắn (0.5–1 s) để bitrate bám sát và trễ thấp |
+| VBV quá dài | tích frame → trễ tăng; **không** dùng bufsize >1 s |
+| x264 `bitrate` + `vbv-maxrate` + `vbv-bufsize` | phải set **cả ba**, thiếu `vbv` thì bitrate vượt trần |
+| NVENC `rc=cbr` + `multipass=disabled` + `zerolatency` | không `multipass` (thêm trễ cho lợi ích không đáng) |
+| Đổi bitrate giữa phiên | property của encoder, **không** tạo lại element (tránh mất IDR + spike) |
+| Đổi resolution/fps | **phải** tạo lại (caps change) ⇒ 1 IDR, 1 nhịp khựng ~200 ms; gộp mọi thay đổi trong 500 ms thành 1 lần |
+| Ứng xử khi `target` < mức tối thiểu của codec | clamp, không để encoder tự bỏ qua |
+
+### 36.11 Mạng đổi giữa phiên
+| Sự kiện | Xử lý |
+|---|---|
+| Wi-Fi → 4G, IP đổi | ICE restart (không đổi phiên, không restore cửa sổ) → **về STARTUP**, trần = 60% mức cuối |
+| RTT nhảy >2× | giữ bitrate, tăng `playout-delay`, chờ 2 s |
+| Đứt 3–30 s | giữ trần cũ **không** reset về min (tránh "khởi động lại từ thấp" mỗi lần rớt mạng ngắn) |
+| Đổi VPN/đường đi | coi như mạng mới: STARTUP, xoá `safe_ceiling` |
+| Băng thông tăng vọt (về LAN) | PROBE sớm (không chờ 10 s) |
+
+### 36.12 Tham số (một bảng, có default và khoảng)
+| Tham số | Default | Khoảng | Ghi chú |
+|---|---|---|---|
+| `cc.decision_interval_ms` | 200 | 100–500 | nhịp quyết định |
+| `cc.startup_gain` | 1.5 | 1.2–2.0 | |
+| `cc.drain_factor` | 0.85 | 0.7–0.95 | |
+| `cc.backoff_factor` | 0.7 | 0.5–0.85 | |
+| `cc.cruise_gain_per_s` | 0.05 | 0.02–0.10 | |
+| `cc.probe_interval_s` | 10 | 5–30 | |
+| `cc.min_video_bps` | 300 000 | 150k–800k | |
+| `cc.max_step_pct` | 20 | 10–30 | |
+| `cc.hysteresis_ms` | 1000 | 500–3000 | |
+| `overhead_pct` | 4.7 | 4–8 | tính lại khi bật FEC |
+| `idr.max_per_s` | 2 | 1–4 | |
+| `idr.coalesce_ms` | 200 | 100–500 | |
+| `fec.enable_loss_pct` | 3 | 1–8 | |
+| `fec.overhead_pct` | 20 | 10–30 | |
+| `playout.max_ms` (ổn định) | 0 | 0–100 | |
+| `playout.max_ms` (jitter) | 100 | 50–300 | |
+| `ladder.resolution_steps` | 6 bậc | — | §36.9 |
+| `ladder.step_hold_ms` | 2000 | 1000–5000 | |
+
+### 36.13 Đo & kiểm chứng (phải làm trong CI, không chỉ "chạy thử")
+**Kịch bản mạng mô phỏng** (netem trên Linux, hoặc `clumsy`/router thật trên Windows):
+
+| Profile | Trễ | Jitter | Mất | Băng thông | Kỳ vọng |
+|---|---|---|---|---|---|
+| LAN sạch | 0.5 ms | 0.2 | 0 | ∞ | 1080p60, khớp preset, **0 thay đổi bậc** trong 60 s |
+| Wi-Fi tốt | 8 ms | 5 | 0.2% | 30 Mbps | 1080p60, không giảm bitrate (phân loại đúng là "mất ngẫu nhiên") |
+| Wi-Fi xấu | 25 ms | 40 | 2% | 10 Mbps | 900p hoặc fps 30, **không dao động** |
+| 4G | 45 ms | 25 | 1% | 4 Mbps | 720p30, FEC bật, jitter buffer >0 |
+| Nghẽn đột ngột | 20 ms | 10 | 8% trong 3 s | 2 Mbps | BACKOFF trong ≤400 ms, phục hồi ≤2 s |
+| Burst (chuyển mạng) | nhảy 200 ms | — | 20% trong 1 s | — | không reset về min, hồi phục ≤3 s |
+| Suy giảm dần | — | — | — | 8→1 Mbps trong 20 s | giảm bậc dần, **không nhảy 3 bậc** |
+**Chỉ số chấp nhận (fail CI nếu vượt):**
+| Chỉ số | Ngưỡng |
+|---|---|
+| Thời gian phát hiện nghẽn | ≤ 400 ms |
+| Thời gian phục hồi sau nghẽn | ≤ 2 s |
+| Biên độ dao động bitrate ở trạng thái ổn định | ≤ 20% |
+| Số IDR/giây | ≤ 2 |
+| Số lần đổi bậc ladder/60 s ở LAN sạch | **0** |
+| Trễ tăng thêm do CC (so với không CC) | ≤ 5 ms |
+| "Nhấp nháy độ nét" (số lần đổi resolution/5 phút ở Wi-Fi tốt) | **0** |
+
+### 36.14 Nhánh mới rẽ ra từ đây (đã thêm vào hàng đợi §0.2)
+| Nhánh | Vì sao rẽ ra từ §36 |
+|---|---|
+| **#2a Encoder rate-control cụ thể theo từng hãng** (NVENC/QSV/AMF/x264: tham số VBV/HRD, giới hạn bitrate thực tế, sai số ±%) | §36.10 chỉ nêu nguyên tắc; mỗi hãng lệch 5–15% |
+| **#2b Scaler & độ nét khi hạ resolution** (chọn scaler GPU, xử lý text sharpening, khi nào thà giảm fps hơn giảm res) | §36.9 |
+| **#2c Đo TWCC/REMB thực tế trên GStreamer** (probe element, hoặc Pion sidecar) | §36.1 rủi ro |
+| **#3 Fault injection harness** | vẫn chờ, §35.15 |
