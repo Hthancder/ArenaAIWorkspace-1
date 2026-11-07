@@ -1,6 +1,6 @@
-# SPEC v3.8 — Remote Desktop qua trình duyệt: HVNC + VNC, window picker, âm thanh server-side, **trải nghiệm điều khiển đầy đủ**
+# SPEC v3.9 — Remote Desktop qua trình duyệt: HVNC + VNC, window picker, âm thanh server-side, **trải nghiệm điều khiển đầy đủ**
 
-- Phiên bản: **v3.8** (v3.7 + **§38 scaler & độ nét**: tách native vs post-scale, chọn scaler GPU, bậc thang tỉ lệ sạch, sharpening có điều kiện, giới hạn 4:2:0, phân loại text/motion, đo bằng OCR, chống UI nhảy): hai thiết bị một lõi — mobile zero-chrome, grip 3 tầng, radial 8 ô, command registry, flow contract FE↔BE**)
+- Phiên bản: **v3.9** (v3.8 + **§39 một pass GPU**: gộp scale+màu+tonemap+NV12, matrix/range/chroma-siting/dither đúng chuẩn, HDR BT.2408, shader pseudo-code, 7 test pattern CI): hai thiết bị một lõi — mobile zero-chrome, grip 3 tầng, radial 8 ô, command registry, flow contract FE↔BE**)
 - Trạng thái: **Đề xuất — CHƯA implement, chờ duyệt**
 - Nền tảng: Server **Windows 10 2004+ / Windows 11** · Client **trình duyệt** (không app)
 
@@ -22,6 +22,7 @@
 | **v3.6** | **§36 AI sở hữu gì vs thư viện · 3 nguồn CC + luật `min(...)` · phân loại 4 loại mất gói (nghẽn/ngẫu nhiên/burst/jitter) · máy trạng thái STARTUP/DRAIN/CRUISE/PROBE/BACKOFF có số + chống dao động · phân bổ budget theo thứ tự cứng (audio không bao giờ bị bóp) · IDR storm chống + intra-refresh · chọn FEC vs NACK theo RTT · playout-delay thích ứng · degradation preference theo preset · encoder rate-control · đổi mạng giữa phiên · 22 tham số · 7 profile netem + 7 chỉ số fail CI** |
 | **v3.7** | **§37 ba vòng điều khiển lồng nhau (CC 200 ms / trim 500 ms / encoder 16 ms) · đo bitrate tại pacer là sự thật duy nhất · trim loop công thức · NVENC (`rc-mode=cbr`, VBV, zeroLatency, không multipass) · QSV (`BufferSizeInKB` bẫy 8×, LowDelayBRC, sai số lớn nhất) · AMF (EnforceHRD, không filler, yếu ở bitrate thấp) · x264 (`vbv-bufsize` bắt buộc + `sliced-threads` — thiếu là trễ 130 ms) · 10 bất biến chung · xung đột CBR↔tĩnh↔tiết kiệm pin · chi phí đổi cấu hình · giới hạn slot + fallback · 8 kiểm chứng · bảng ánh xạ 4 hãng** |
 | **v3.8** | **§38 hai cơ chế hạ res (native vs post-scale) — §36.9 đã gộp sai · vì sao chữ chết (nội suy + 4:2:0 + deblock) · chọn scaler có số (bicubic/area GPU, cấm Lanczos cho text) · bậc thang tỉ lệ sạch 3/4 & 1/2 · sharpening có điều kiện (tắt khi <3 Mbps) · giới hạn 4:2:0 không vượt được · phân loại text/motion để chọn giảm fps hay res · chống UI nhảy khi đổi res · đo bằng **OCR CER** thay vì cảm tính** |
+| **v3.9** | **§39 vì sao gộp 1 pass (10–13 ms → 2–4 ms) · 4 lỗi chuẩn: matrix BT.709, range limited 16–235, chroma **left-sited**, dither TPDF · chuỗi 7 bước đúng thứ tự · ma trận số cụ thể · scale ở **gamma** (không linear — linear làm chữ mờ) · HDR PQ→SDR với 203 nits + BT.2020→709 · bỏ alpha · giới hạn ICC/10-bit/4:4:4 · pseudo-HLSL 1 dispatch · 3 fallback · **7 test pattern CI** (grey ramp/color bars/1px chroma line/HDR)** |
 
 ### 0.1 v3.0 sửa gì — danh sách "còn thiếu" (đây là lý do v2.1 chưa đủ)
 
@@ -65,8 +66,10 @@ Một lượt rà rộng 20 chỗ thì chỗ nào cũng nông. Spec này đượ
 | 2c | Đo TWCC/REMB trên GStreamer (probe element / Pion sidecar) | ⬜ **chặn Phase 0** | §36.1 |
 | 2d | Chọn encoder theo nội dung & theo phiên (chấm điểm) | ⬜ | §37.10 |
 | 2e | Ma trận driver/toolchain tối thiểu theo hãng | ⬜ | §37.12 |
-| 2f | **BGRA→NV12 & HDR/tonemap trong cùng pass GPU** | ⬜ **kế tiếp** | §38.6 |
-| 2g | Phân loại nội dung sâu hơn (text/motion/ảnh/game/DRM) | ⬜ | §38.7 |
+| 2f | **BGRA→NV12 & HDR/tonemap trong cùng pass GPU** | ✅ **xong — §39** | §38.6 |
+| 2g | Phân loại nội dung sâu hơn | ⬜ | §38.7 |
+| 2h | **Đồng bộ caps/màu capture↔GStreamer↔encoder (chống videoconvert CPU)** | ⬜ | §39.15 |
+| 2i | Đa màn hình & per-monitor HDR | ⬜ | §39.8 |
 | 3 | Fault injection & chaos harness (ACCESS_LOST, audio device mất, mạng đứt, driver reset) | ⬜ | §35.14 |
 | 4 | Vòng đời cửa sổ & display (state machine + phục hồi sau crash) | ⬜ | §35.10 |
 | 5 | Threat model theo từng bề mặt (HTTP/WS/DC/tray/driver/local) | ⬜ | §35.13 |
@@ -3811,3 +3814,180 @@ Không thể chỉ nhìn rồi nói "ổn". Dùng **OCR** làm thước đo:
 | **#2g Phân loại nội dung sâu hơn** (text/motion → còn có: video DRM đen, ảnh, biểu đồ, game) | §38.7 chỉ có 2 chiều |
 | **#2c Đo TWCC/REMB trên GStreamer** (vẫn chặn Phase 0) | §36.1 |
 | **#3 Fault injection harness** | vẫn chờ |
+
+---
+
+## 39. Một pass GPU: scale + màu + tonemap + NV12 (nhánh #2f — nơi màu lệch và chữ mờ)
+
+> §38 chọn **GPU bicubic**, §5.5.2 có **HDR tonemap**, §38.6 nói **"chấp nhận 4:2:0"**. Ba câu đó là **cùng một shader**. Nếu làm rời nhau: mỗi frame 1080p đi qua GPU **3 lần** (scale → tonemap → BGRA→NV12), mỗi lần đọc+ghi texture ≈ **3–4 ms** ⇒ **10–12 ms/frame** chỉ để di chuyển pixel — ăn hết ngân sách encode 4–8 ms (§35.6).
+> Chương này gộp thành **1 pass**, và xử lý 4 chỗ mà 90% dự án remote desktop làm sai: **matrix**, **range**, **chroma siting**, **dither**.
+
+### 39.1 Vì sao phải 1 pass (số cụ thể)
+| Cách làm | Số pass | Chi phí 1080p60 | Ghi chú |
+|---|---|---|---|
+| Rời: scale → tonemap → convert | 3 | **10–13 ms/frame** | + 3 texture 1080p tạm (mỗi cái ~8 MB RGBA) |
+| Gộp: 1 compute shader | 1 | **2–4 ms/frame** | đọc 1 texture, ghi thẳng NV12 (2 plane) |
+| Gộp nhưng qua `d3d11convert` + `videoscale` | 2 | 5–8 ms | phụ thuộc driver, khó kiểm soát matrix/range |
+**Quyết định:** 1 **compute shader** (hoặc pixel shader nếu compute không có), trong **cùng D3D11 device** với capture và encoder, đọc texture capture, ghi **NV12 hai plane** (`R8` luma + `R8G8` chroma), đặt **cùng hàng đợi** với encoder.
+
+### 39.2 Bốn thứ làm sai màu/chữ (và cách đúng)
+| # | Lỗi | Triệu chứng người dùng thấy | Nguyên nhân |
+|---|---|---|---|
+| 1 | **Sai matrix** (BT.601 vs BT.709) | đỏ thành cam, xanh lá thành vàng nhạt — **lệch màu toàn ảnh** | desktop HD dùng **BT.709**; dùng 601 thì R/G/B lệch 5–15% |
+| 2 | **Sai range** (full vs limited) | đen thành xám, trắng thành 235 — **ảnh bạc / mất tương phản** | capture trả full (0–255); H.264 mặc định limited (16–235) |
+| 3 | **Sai chroma siting** | chữ màu bị **lem sang phải**, viền đỏ/xanh ở mép | 4:2:0 MPEG-2 = chroma **left-sited**, không phải centered |
+| 4 | **Không dither** | nền tối bị **dải màu (banding)**, gradient thành bậc thang | 8-bit + chuyển sang limited range làm giảm số mức khả dụng |
+Cộng 2 lỗi ít gặp nhưng khó tìm: **alpha** (capture trả BGRA có alpha=255 nhưng một số app/DWM cho alpha thấp → nếu nhân alpha thì tối ảnh) và **gamma** (scale ở linear space làm chữ mờ — §39.5).
+
+### 39.3 Chuỗi biến đổi đúng (thứ tự bắt buộc)
+```
+① texture capture (BGRA8 hoặc RGB10A2 nếu HDR)
+   ↓ bỏ alpha (dùng 1.0), giữ giá trị non-linear sRGB
+② [chỉ HDR] decode PQ → linear nits → tonemap (BT.2408) → giảm về BT.709 primaries
+③ scale  ← ở **gamma space** (non-linear), KHÔNG ở linear (§39.5)
+         ← bicubic hoặc area theo §38.3
+④ [chỉ khi giảm nhiều] unsharp nhẹ trên luma (§38.5)
+⑤ RGB (BT.709, full) → **YUV BT.709 limited** bằng matrix chuẩn (§39.4)
+⑥ dither 8-bit có nhiễu tam giác (TPDF) khi ghi xuống R8/R8G8 (§39.6)
+⑦ ghi NV12: Y plane full-res, UV plane half-res với **chroma left-sited** (§39.7)
+```
+**Một chi tiết dễ sai:** bước ② phải xảy ra **trước** bước ③ nếu là HDR (scale trên nội dung PQ mà không decode là sai hoàn toàn), nhưng bước ③ phải ở **gamma space** ⇒ với HDR, decode PQ → tonemap → **encode lại gamma 2.2** rồi mới scale. Tức là có 1 lần "về SDR gamma" trước khi scale. Đừng scale trực tiếp trên nits linear.
+
+### 39.4 Ma trận chuyển màu (dùng đúng số này)
+Nguồn: **sRGB / BT.709 primaries, full range, gamma ~2.2 (đã là non-linear)** → **YUV BT.709 limited**:
+
+```
+Y  =  0.2126·R' + 0.7152·G' + 0.0722·B'                          (R' = non-linear)
+U  = (B' − Y) / 1.8556                       → + 128
+V  = (R' − Y) / 1.5748                       → + 128
+
+rồi limited:  Y' = 16 + Y·219/255 ;  U' = 16 + U·224/255 ; V' = 16 + V·224/255
+```
+Dạng ma trận tại chỗ (để implement, đã gộp range):
+```
+Y_lim  = (16/255) + (219/255)·( 0.2126 0.7152 0.0722)·RGB
+U_lim  = (128/255) + (224/255)·(−0.1146 −0.3854  0.5000)·RGB
+V_lim  = (128/255) + (224/255)·( 0.5000 −0.4542 −0.0458)·RGB
+```
+| Nguồn | Dùng matrix | Dùng range |
+|---|---|---|
+| Desktop SDR, monitor HDTV (≥720p) | **BT.709** | full → **limited** |
+| Desktop SDR trên màn hình SD? (hiếm) | BT.601 | — |
+| **HDR** (DXGI `RGB_FULL_G2084_NONE_P2020`) | **BT.2020** → rồi chuyển primaries về 709 | full (PQ) |
+**Phải khai báo `VUI` trong H.264 stream** (`color_primaries=1`, `transfer=1`, `matrix=1`, `range=limited`) — nếu không khai báo, browser đoán và có thể đoán sai ⇒ màu lệch. NVENC/QSV/x264 đều có property (`--colorprim bt709 --transfer bt709 --colormatrix bt709 --range limited` cho x264); **kiểm tra bằng `ffprobe`** trong CI.
+
+### 39.5 Scale ở gamma space hay linear? (ngược với trực giác)
+| Cách | Kết quả trên chữ | Kết quả trên ảnh |
+|---|---|---|
+| Scale ở **linear** | **mờ hơn** và **sáng hơn** — cạnh chữ bị "phình", chữ nhỏ mất nét | đúng vật lý, mượt hơn |
+| Scale ở **gamma (non-linear)** | **nét hơn**, tương phản cạnh giữ tốt | hơi tối ở vùng sáng |
+**Quyết định: scale ở gamma space** — vì mục tiêu là **đọc chữ**. Đây là ngược với kết luận của đồ hoạ 3D (nơi linear là đúng), và đây là lý do nhiều pipeline "chuẩn" lại cho ra chữ mờ. Ghi rõ để không ai "sửa" thành linear.
+- Ngoại lệ: nếu nội dung là **ảnh/video** (`text_score` thấp — §38.7), scale linear cho kết quả tự nhiên hơn; nhưng khác biệt nhỏ, **không** đáng để có 2 nhánh shader. Chọn 1: gamma.
+
+### 39.6 Dither (rẻ, hiệu quả, hay bị bỏ qua)
+- Lý do: H.264 8-bit + limited range ⇒ chỉ còn **219/255** mức cho luma ⇒ nền tối (dark mode, terminal) bị **banding**.
+- Cách: **TPDF** (triangular PDF) = `noise = (rand01() - rand01()) * 1.0`; cộng vào **trước khi** quantize; cho **luma và chroma**.
+- Nhiễu phải **khác nhau mỗi frame** với **static pattern** để tránh "nhiễu đứng yên" — dùng bảng 64×64 blue-noise + offset theo frame id (**không** dùng `rand()` mỗi pixel: đắt + tạo nhiễu trắng xấu).
+- Bật **mặc định**; tắt khi `dither.when_dark_ratio` (§38.11) thấp. Chi phí: ~0 trên GPU.
+- **Không** dither khi nội dung là video sáng (không có banding, nhiễu là lãng phí bit).
+
+### 39.7 Chroma siting & NV12 (lỗi lem màu)
+- 4:2:0 **MPEG-2 / H.264 mặc định = chroma left-sited**: mẫu chroma nằm ở **cột chẵn, dòng chẵn** (góc trên-trái của khối 2×2), **không** ở tâm khối.
+- Vì vậy khi tính UV cho khối (2x, 2y): dùng **lấy mẫu tại (2x, 2y)** hoặc trung bình **4 pixel (2x..2x+1, 2y..2y+1)** rồi ghi vào vị trí (x, y). Nếu lấy mẫu **centered** ⇒ chữ màu lem **nửa pixel sang phải** — nhìn kỹ thấy viền xanh/đỏ ở mép chữ cỡ nhỏ.
+- Khai báo `chroma_loc` trong VUI nếu codec hỗ trợ; H.264 coi là left-sited theo mặc định ⇒ **không** set gì thêm.
+- **Test bắt buộc:** ảnh test có **đường kẻ dọc màu đỏ 1 px trên nền đen**; sau pipeline phải thấy đường **1 px, đúng vị trí**, không lem sang phải. Đây là test duy nhất bắt được lỗi siting.
+
+### 39.8 HDR — tonemap đúng (không "ám vàng", không "cháy trắng")
+| Bước | Làm gì |
+|---|---|
+| Phát hiện HDR | `DXGI_OUTDUPL_DESC` color space = `RGB_FULL_G2084_NONE_P2020` (hoặc `G10`/`G12`), hoặc `Get-AdvancedColorInfo` |
+| Decode | PQ (SMPTE ST 2084) → **linear nits** (0–10000) |
+| Điểm trắng tham chiếu | **SDR white = 203 nits** (theo BT.2408) — **không** dùng 100 nits (sẽ tối) |
+| Tonemap | **BT.2408 EETF** (khuyến nghị) hoặc Reinhard/Narkowicz `x/(1+x)`; clamp đỉnh ~1000 nits |
+| Gamut | **BT.2020 → BT.709**: ma trận 3×3, **clamp** sau khi chuyển (ra ngoài gamut là bình thường với nội dung HDR) |
+| Encode lại | gamma **2.2** (không phải sRGB EOTF chính xác — chênh không đáng, rẻ hơn) |
+| Ghi VUI | `transfer=1` (BT.709) ở đầu ra |
+**Ba lỗi phổ biến và triệu chứng:**
+1. Dùng 100 nits cho SDR white ⇒ **ảnh tối**, mất chi tiết vùng tối.
+2. Không chuyển BT.2020→709 ⇒ **màu bão hoà quá mức** (đỏ cháy, xanh neon).
+3. Tonemap **sau** khi đã downscale ⇒ nén dải động vào ít pixel ⇒ mất chi tiết. Tonemap **trước** scale (như §39.3).
+> **Giới hạn trung thực:** sau tonemap, HDR trên remote sẽ **không** giống HDR gốc. Ghi vào §6.13: *"nội dung HDR sẽ được chuyển sang SDR, màu không chính xác như màn hình HDR thật"*.
+
+### 39.9 Alpha & nền trong suốt
+- DDAPI trả BGRA với alpha thường = 255. **Bỏ alpha**, dùng 1.0. Không nhân alpha (một số app để alpha 0 ở vùng chưa vẽ ⇒ nhân sẽ ra đen).
+- Cửa sổ có **acrylic/mica trong suốt**: DWM đã composite lên desktop nên capture đã có nền — **không** cần xử lý alpha.
+- **Không** hỗ trợ nền trong suốt trong stream (H.264 4:2:0 không có alpha). Ghi rõ.
+
+### 39.10 Nơi nào không kiểm soát được (và không nên cố)
+| Thứ | Tại sao bỏ qua |
+|---|---|
+| **ICC profile** của màn hình server (wide gamut) | Capture trả pixel **sau** khi DWM composite theo profile. Chuyển ngược ICC là **không xác định** (không có API đọc "đã áp profile gì"). Kết quả: trên màn hình wide-gamut, màu có thể hơi bão hoà so với màn hình client. **Chấp nhận + ghi rõ.** |
+| **Màu màn hình client** | Client hiển thị theo profile của nó; không thể đúng tuyệt đối. |
+| **H.264 10-bit** | Browser WebRTC không hỗ trợ High10 ⇒ luôn 8-bit. |
+| **4:4:4** | §38.6 — không khả thi. |
+> Nguyên tắc: chuyển đổi **đúng theo chuẩn** (709/limited/siting/dither), và **ghi rõ** phần không kiểm soát được. Không hứa "màu chính xác như màn hình thật".
+
+### 39.11 Sơ đồ shader (một pass, pseudo-HLSL)
+```hlsl
+// input:  Texture2D<float4> src (BGRA8 hoặc RGB10A2)
+//         cbuffer: scale params, matrix, range, hdr params, dither seed
+// output: RWTexture2D<float> yPlane; RWTexture2D<float2> uvPlane
+[numthreads(8,8,1)]
+void CS(uint3 id : SV_DispatchThreadID) {
+    float2 uv = (id.xy + 0.5) * texelSize;          // sample center
+    float3 c  = SampleBicubic(src, uv).rgb;         // gamma space
+    c = ExcludeAlpha(c);                            // bỏ alpha
+    if (isHDR) {                                    // §39.8
+        c = PQToLinear(c) * sdrWhiteScale;          // 203 nits ref
+        c = TonemapBT2408(c);
+        c = LinearToGamma(BT2020to709(c));
+    }
+    if (doSharpen) c = UnsharpLuma(c, uv, amount);  // §38.5
+    float y, u, v;
+    RGBtoYUV709Limited(c, y, u, v);                 // §39.4
+    yPlane[id.xy]   = Dither(y, id.xy);             // §39.6
+    if (all(id.xy % 2 == 0))                        // left-sited, 1 sample per 2x2
+        uvPlane[id.xy/2] = float2(Dither(u,id.xy), Dither(v,id.xy));
+}
+```
+- **Một** dispatch cho toàn frame; với 1080p ≈ 32 400 nhóm 8×8 — GPU rảnh thừa sức.
+- **Không** dùng barrier giữa các bước trong pass; mọi thứ tuần tự trong shader.
+- Upscale **không** xảy ra ở đây (`(A) native` §38.1 do Windows/app làm).
+
+### 39.12 Khi không có compute shader
+| Fallback | Khi nào | Hệ quả |
+|---|---|---|
+| **Pixel shader** trong cùng device | compute bị chặn (hiếm) | chậm hơn ~1 ms/frame, vẫn 1 pass |
+| **D3D11 VideoProcessor** | muốn ít code | **matrix/range do driver** ⇒ phải kiểm tra màu bằng test; rủi ro |
+| **CPU `videoscale` + `videoconvert`** | GPU không dùng được (VM, driver lỗi) | **4–10 ms/frame**; bắt buộc **hạ fps xuống 30** trước |
+| **WARP** (software D3D) | — | **không dùng** cho 1080p60 |
+- Chọn fallback **theo đo đạc ở Phase 0**, không theo giả định: chạy cả 2 đường và so `PSNR` với reference + thời gian.
+
+### 39.13 Kiểm chứng màu (bắt buộc trong CI)
+**Bộ test pattern** render trên desktop ảo rồi chụp lại qua pipeline:
+| # | Pattern | Kiểm tra | Ngưỡng |
+|---|---|---|---|
+| 1 | Grey ramp 0→255, 256 bậc | banding? black/white level đúng? | đen = **16±1**, trắng = **235±1** (limited); không có bậc thang nhìn thấy |
+| 2 | Color bars (SMPTE) | matrix đúng? | ΔE2000 mỗi thanh **< 4** (so với reference tính bằng công thức chuẩn) |
+| 3 | Đường kẻ dọc đỏ 1 px trên đen | chroma siting | đường còn 1 px, **không lem phải** >0.5 px |
+| 4 | Chữ 8pt trên nền tối (dark mode) | dither + độ nét | không banding; CER ≤1% (§38.9) |
+| 5 | Chữ màu trên nền trắng | 4:2:0 bleed | đo độ lem ≤ ngưỡng baseline, **không tệ hơn** |
+| 6 | Ảnh HDR (PQ) test | tonemap | không cháy trắng vùng sáng, không bệt vùng tối; ΔE < 8 vs reference tonemap |
+| 7 | Cửa sổ có acrylic | alpha | nền đúng, không đen |
+**Đo bằng:** decode lại stream (ffmpeg) → so pixel với reference **đã tính bằng công thức trong §39.4**. Fail CI nếu ΔE/RMSE vượt ngưỡng. Cộng `ffprobe` kiểm tra VUI (`color_matrix=bt709`, `color_range=tv`).
+
+### 39.14 Chi phí (đo, không đoán)
+| Nội dung | 1080p60 | 1080p30 |
+|---|---|---|
+| 1 pass compute, scale 1.0 (chỉ màu) | 1.2–2 ms | 0.6–1 ms |
+| 1 pass, scale 0.667 + sharpen | 2–4 ms | 1–2 ms |
+| + HDR tonemap | +0.3–0.8 ms | +0.2–0.4 ms |
+| Fallback CPU | 4–10 ms (**+ fps ≤30**) | 2–5 ms |
+> Nếu vượt 6 ms ở GPU ⇒ kiểm tra: đang **đọc lại texture về CPU** (map) chưa? Đó là lỗi phổ biến nhất — pass phải ở hoàn toàn trên GPU, **không** `Map()` trừ khi fallback CPU.
+
+### 39.15 Nhánh mới rẽ ra
+| Nhánh | Vì sao rẽ ra từ §39 |
+|---|---|
+| **#2h Đồng bộ 3 nguồn màu giữa capture ↔ scaler ↔ encoder** (DXGI color space, GStreamer caps negotiation `video/x-raw(memory:D3D11Memory)`, NV12 vs P010) | §39.3 cần khai báo caps chính xác nếu không GStreamer tự chèn `videoconvert` CPU ⇒ mất toàn bộ lợi ích |
+| **#2i Đa màn hình & per-monitor HDR** (màn hình 1 SDR, màn hình 2 HDR) | §39.8 giả định 1 display; thực tế có thể khác nhau |
+| **#3 Fault injection harness** | vẫn chờ, **kế tiếp đề xuất** |
