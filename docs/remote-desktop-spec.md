@@ -1,6 +1,6 @@
 # SPEC v3.15 — Remote Desktop qua trình duyệt **cho dùng cá nhân**: HVNC + VNC, window picker, âm thanh server-side, trải nghiệm điều khiển đầy đủ
 
-- Phiên bản: **v3.15 — phạm vi đã thu hẹp về 1 người dùng** (§0.3). Bản v3.14 là bản "sản phẩm": có cert, EULA, RBAC, accessibility, đóng gói ký số. Tất cả những thứ đó **đã cắt** ở đây — xem §0.3.1 để biết cắt gì và cắt có an toàn không. Lịch sử đầy đủ v1.0→v3.14 ở §0.
+- Phiên bản: **v3.16 — thêm §46 "máy có ở đó không" (ngủ/reboot/đổi IP/khoá màn hình)**, lĩnh vực G còn trống · trước đó: **v3.15** — phạm vi thu hẹp về 1–2 người dùng (§0.3). Bản v3.14 là bản "sản phẩm": có cert, EULA, RBAC, accessibility, đóng gói ký số. Tất cả những thứ đó **đã cắt** ở đây — xem §0.3.1 để biết cắt gì và cắt có an toàn không. Lịch sử đầy đủ v1.0→v3.14 ở §0.
 - Trạng thái: **Đề xuất — CHƯA implement, chờ duyệt.** Sau v3.15, spec **không còn chương nào cần viết**; việc tiếp theo là **P0 (đo thật)**, không phải viết thêm.
 - Nền tảng: Server **Windows 10 2004+ / Windows 11** · Client **trình duyệt** (không app)
 
@@ -27,6 +27,7 @@
 | **v3.11** | **§41 threat model: 10 tài sản · 10 vị trí P1–P10 · **lật giả định nền — client KHÔNG tin cậy, agent tin về hành vi nhưng không tin về dữ liệu** · 3 hệ quả kiến trúc · 20 mối đe doạ T1–T20 theo ranh giới · 5 quyết định *bắt nguồn từ threat model* (client không gửi `hwnd`; không endpoint chạy lệnh; transfer/clipboard mặc định tắt; `X-Frame-Options: DENY`; người ngồi máy luôn dừng được) · token rotate + reuse detection · P6 quyền phủ quyết · supply chain/chống downgrade · 9 rủi ro chấp nhận · 14 kiểm chứng** |
 | **v3.12** | **§42 multi-session — phát hiện ràng buộc bị bỏ qua: 1 desktop = 1 con trỏ + 1 focus ⇒ chỉ 1 controller/session, N viewer** · input lease (server-side, TTL, release_all trước khi chuyển) · bảng chia sẻ vs cách ly 13 tài nguyên · admission control theo VRAM/RAM/CPU/slot/display có số (thay cho "max 3") · giới hạn display slot của VDD = câu hỏi chặn Phase 0 · fanout 1 encode → N SRTP (PLI theo **stream** không theo peer) · cách ly lỗi + tự phục hồi sau TDR · fairness 4 mức · **10 bảo đảm cách ly phải test (I1–I10), fail ⇒ tắt multi-session** · refcount dọn sau 5 s** |
 | **v3.13** | **§43 client perf: vì sao client dễ chết hơn server (6 nền tảng, Safari iOS kill tab ~200–400 MB, GC không kiểm soát) · 15 chỉ số ngân sách có cách đo · quyết định render (video element ≠ canvas; cursor = div transform; HUD 2 Hz) · **10 chỗ tốn tiền thật** (#1 forced reflow từ `getBoundingClientRect` mỗi pointer event — bug phổ biến nhất, không thấy bằng mắt) · kiến trúc JS (0 dependency, 12 module, `render(state)`) · perf-probe + **CI gate thật** (size/type/perf/leak, baseline 7 ngày) · 3 giới hạn cứng mobile · overlay 0 ms main thread · 8 nguồn rò rỉ + test 50 lần vào/ra** |
+| **v3.16** | **§46 "Máy có ở đó không?"** — lỗ hổng chỉ lộ khi dùng thật: mọi chương trước giả định máy chủ **đang chạy, đã đăng nhập, trả lời được**. 5 lỗi khác nhau bị gộp thành 1 thông báo "không kết nối được" · phân biệt `refused` vs `timeout` từ browser (4 mẹo, không đạt 100%) · `SetThreadExecutionState` **chỉ khi có phiên** + nhả ngay (bug "app làm nóng pin") · **WoL: browser KHÔNG gửi được UDP** ⇒ không hứa nút "đánh thức"; bẫy **Fast Startup** · reboot sau Windows Update: "Run whether user is logged on or not" chạy **Session 0 = vô dụng**, auto-logon là **đánh đổi bảo mật của bạn** không phải mặc định · đổi IP ⇒ **Tailscale MagicDNS là đường chính** + DHCP reservation · khoá màn hình: phát hiện qua `WTSConnectState`, **không** gửi input mù · 5 lỗi → 5 câu → 5 nút |
 | **v3.15** | **§0.3 Thu hẹp phạm vi: dùng cá nhân, 1 người, 1 máy.** Cắt khỏi spec: **EV cert / ký driver / SmartScreen / EULA / SBOM / GDPR / pháp lý** · **accessibility cho người khiếm thị** (screen reader qua audio, NVDA test, WCAG, UIA over the wire) · **multi-user / role / TOTP / `/admin` / handover / chia sẻ link** · **đóng gói MSI + wizard + chữ ký số / auto-update có kênh** · **RBAC, SLA, self-hosted runner, ma trận hỗ trợ nhiều OS, soak 72 h, fuzz định kỳ**. Thay bằng: **§0.3 phạm vi**, **9 điều kiện cài chạy được ngay trên máy của bạn**, **3 khoản $0 duy nhất**, và **4 thứ đổi hành vi thiết kế** (setup 30 phút; HVNC = chế độ có công tắc; 1 profile cài đặt thay 5 tab; CI = 1 workflow) |
 | **v3.14** | **§44 input sâu: 2 lớp (intent vs raw) không bao giờ trộn · 15 dòng máy trạng thái input với 5 bất biến (kẹt phím) · server-side IME: 3 cách, chọn A (VK thô) và từ chối TSF · game/Raw Input/injected flag, không hứa vượt anti-cheat · remote-in-remote (2 tầng trễ, phím bị nuốt) · **accessibility: screen reader chạy trên MÁY SERVER, tiếng đọc đi qua audio stream — 0 đồng và hoạt động thật** · release_all nhảy hàng · 7 giới hạn an toàn · 10 test** · **§45 build/licence: GStreamer LGPL động OK, `gst-plugins-ugly`+x264 = GPL hoá cả app, openh264 tự build = tự gánh patent → thứ tự NVENC→QSV→AMF→MediaFoundation, **không ship x264** · GitHub Actions free nhưng **không test được GPU/desktop** ⇒ self-hosted runner · 2 khoản phải trả tiền (EV cert ký driver, VB-Audio tổ chức) · driver ký = cái bẫy thực tế nhất** |
 
@@ -71,7 +72,7 @@
 | **D. Giao diện & trải nghiệm** | ● §22–25, §28–34 | **thu nhỏ** ở v3.15: 12 mục thay 60, bỏ `/admin`, bỏ role |
 | **E. Bảo mật & tin cậy** | ●● §41 | **thu nhỏ**: giữ auth + HTTPS + token; bỏ EULA/GDPR/SBOM (§0.3.1) |
 | **F. Vận hành & triển khai** | ●● §42, §45 | **thu nhỏ**: 1 phiên, `install.ps1`, $0 |
-| **G. Bền vững & tiến hoá** | ● | **đóng** — 2 file JSON + 1 log, không DB ⇒ không có gì để migrate (§26.16) |
+| **G. Bền vững & tiến hoá** | ●● **§46** | dữ liệu thì đóng (2 file JSON, không DB — §26.16), nhưng **máy ngủ/reboot/đổi IP** mới là vấn đề thật ⇒ §46 |
 | **H. Hiệu năng client** | ●● §43 | không (còn #15, nhỏ) |
 
 **Hàng đợi — KHÔNG còn nhánh nào để rà.** Spec đã đủ để code. Hai việc còn lại không phải "viết thêm chương":
@@ -81,13 +82,24 @@
 | **P0-a** | Đo **p95 glass-to-glass** trên máy bạn | phụ thuộc GPU/driver/Windows build thật của bạn |
 | **P0-b** | Đo **TWCC/REMB trên GStreamer** có hoạt động không | nếu không có, phải đổi stack (§16.6) — quyết định sau khi đo |
 | **P0-c** | VDD tạo được mấy display, có ổn định | §42.6 |
+| **P0-d** | Máy ngủ/reboot có phục hồi sạch không | §46.10 (test 1–6, làm được trên 1 máy) |
 
-> **Luật luân chuyển (≤2 lượt/lĩnh vực) đã hoàn thành nhiệm vụ:** nó tồn tại để chống việc đi mãi một nhánh. Ở v3.15, việc đúng **không phải** đào thêm lĩnh vực G hay D — mà là **cắt** (đã làm) và **chạy P0**.
+> **Luật luân chuyển (≤2 lượt/lĩnh vực) đã hoàn thành nhiệm vụ.** Ở v3.15 nó giúp **cắt** thay vì đào thêm. Ở v3.16 nó giúp tìm ra **một lĩnh vực trống thật** mà 15 bản trước bỏ qua: **máy ngủ / reboot / đổi IP** (§46) — thứ không phải "tính năng sản phẩm" mà là lý do số 1 khiến bạn mở điện thoại ra và không kết nối được.
 
-### 0.3 PHẠM VI THẬT: **một người dùng, một cái máy, một mục đích**
+### 0.3 PHẠM VI THẬT: **1–2 người, 1–2 cái máy, không phát hành**
 
-> **Chốt lại (quan trọng nhất trong toàn spec):** đây là **công cụ cá nhân** — bạn ngồi ở đâu đó mở trình duyệt điều khiển **máy Windows của chính bạn**. Không phát hành cho người khác, không có tổ chức, không có người dùng thứ hai, không bán.
+> **Chốt lại (quan trọng nhất trong toàn spec):** đây là **công cụ của cá nhân/gia đình** — bạn (và nhiều nhất là **một người nữa**: vợ/chồng, anh em, người thân) ngồi ở đâu đó mở trình duyệt điều khiển **máy Windows của chính mình**. Không phát hành, không có tổ chức, không bán, không có "người dùng thứ 10".
 > Spec v3.0–v3.14 đã bị **kéo về phía sản phẩm** (cert, EULA, RBAC, accessibility, đóng gói ký số). Mục này cắt những thứ đó và **nói rõ cái gì không được cắt** — vì cắt sai chỗ thì công cụ hỏng thật, không phải chỉ thiếu tính năng.
+
+**Ranh giới "1–2 người" (dùng để quyết định giữ hay cắt):**
+
+| Giữ nếu… | Cắt nếu… |
+|---|---|
+| người thứ 2 là **người bạn tin** (gia đình), và họ chỉ cần **một** trong hai: tài khoản riêng của chính họ, hoặc **link xem tạm** | cần phân quyền, cần biết ai đã làm gì, cần thu hồi quyền của một người → đó là sản phẩm |
+| họ dùng **máy của chính họ** (2 máy, mỗi người 1 mật khẩu riêng) | 2 người cùng điều khiển **1 máy** cùng lúc → **không thể** về mặt Win32 (§42.1), dù có làm gì đi nữa |
+| cần **chuyển phiên giữa 2 thiết bị của cùng 1 người** (điện thoại ↔ laptop) | cần nhiều người **xem cùng lúc** như họp/hỗ trợ → SFU, ngoài phạm vi |
+
+⇒ Kết quả cụ thể của ranh giới này: **giữ 2 tài khoản** (mỗi người 1 cái, không role, không policy), **bỏ TOTP/`/admin`/handover**, **giữ 1 link xem tạm**. Xem bảng dưới.
 
 #### 0.3.1 Đã cắt (và hậu quả chấp nhận)
 
@@ -96,7 +108,7 @@
 | 1 | **EV cert, ký driver, attestation/Partner Center, SmartScreen** | v3.14 §45.3–45.4, §26.17 | **VDD đã được ký sẵn** — bản phát hành chính thức ký qua SignPath Foundation (miễn phí cho dự án mở). Ta **dùng bản phát hành**, không tự build driver ⇒ không cần cert của mình | Không có. Nếu sau này bạn fork/sửa driver VDD thì mới quay lại khoản này |
 | 2 | **EULA, privacy notice, third-party licences, SBOM công bố** | v3.14 §45.9 (#19), §41.8 | không phát hành cho ai ⇒ không có nghĩa vụ công bố | Giữ lại **một** việc: `LICENSES.md` ghi nguồn VDD/plugin (5 phút, để 6 tháng sau bạn còn biết cái gì đang chạy trên máy) |
 | 3 | **Accessibility: screen reader qua audio, NVDA, WCAG, UIA over the wire** | §44.6 (nay là ghi chú "đã cắt"), §20.18, §6.12, #17 | không có người dùng khiếm thị | Bỏ hẳn. Vẫn **giữ** `aria-label` ở picker vì nó là 3 dòng HTML, nhưng không test, không hứa |
-| 4 | **Multi-user, role, TOTP, `/admin`, handover, xem cùng lúc** | §3 Tier 2, §22.3, §24.8, §21.6, §6.11.4 | 1 tài khoản = chính bạn | `/admin` xoá. "Chia sẻ" thay bằng **1 link tạm** (§21.6) nếu cần đưa cho người nhà xem — 20 dòng code, giữ lại |
+| 4 | **Role, TOTP, `/admin`, handover, xem cùng lúc, policy** | §3 Tier 2, §22.3, §24.8, §21.6, §6.11.4 | không ai cần phân quyền giữa 2 người tin nhau | **Giữ 2 tài khoản** (mỗi người 1 mật khẩu, cùng quyền — không role) + **1 link xem tạm** (§21.6). `/admin` xoá vì không có gì để quản |
 | 5 | **Đa phiên (multi-session) như *tính năng*** | §42 (toàn chương) | bạn không cần 3 phiên song song | §42 giữ làm **tài liệu giới hạn**: nếu bạn vô tình mở 2 tab, hệ thống phải trả `409` + cho **chuyển tab** thay vì phá cả hai. Đó là **phòng thủ**, không phải tính năng |
 | 6 | **MSI, wizard 5 bước, auto-update có kênh + chữ ký** | §24.10, §13.6, §21.5, v3.14 §45.7 | cài 1 lần trên 1 máy | Cài bằng **script** (`install.ps1` 4 bước) — nhưng **uninstall vẫn phải sạch** (§13.7), xem 0.3.3 |
 | 7 | **GDPR/retention/export dữ liệu, "xoá dữ liệu người dùng X"** | §21.8, §26.16 | luật về dữ liệu của *người khác*; đây là dữ liệu của bạn | Audit rút xuống **1 file log xoay vòng 5×10 MB**, không bảng DB, không retention job |
@@ -123,7 +135,7 @@ Không có cái nào trong đây là "production". Chúng là thứ mà **một 
 
 | # | Giữ | Vì sao với **1 người dùng** vẫn bắt buộc |
 |---|---|---|
-| 1 | **Đăng nhập (1 tài khoản, không TOTP)** | Bất kỳ ai trong LAN/cùng Wi-Fi mở được URL đó. Không có auth = mở toang máy cho cả quán cà phê |
+| 1 | **Đăng nhập (≤2 tài khoản, không TOTP)** | Bất kỳ ai trong LAN/cùng Wi-Fi mở được URL đó. Không có auth = mở toang máy cho cả quán cà phê |
 | 2 | **HTTPS** | Không chỉ bảo mật: **WebRTC và clipboard API yêu cầu secure context**, `http://` không chạy được |
 | 3 | **Chống kẹt phím/nút** (§44.2, `release_all`) | Đây là lỗi bạn gặp **nhiều lần mỗi tuần** khi dùng thật: chuyển tab khi đang giữ Ctrl ⇒ máy kẹt Ctrl ⇒ phải reboot |
 | 4 | **Restore cửa sổ + audio + display khi đóng tab / crash** (§6.11, §9.2.3, §13.7) | Nếu app chết giữa phiên, cửa sổ của bạn **mắc kẹt trên màn hình ảo** và bạn không thấy nó nữa. Đây là thứ tệ nhất có thể xảy ra với 1 người dùng |
@@ -160,6 +172,7 @@ Không có cái nào trong đây là "production". Chúng là thứ mà **một 
 - Client: browser hiện đại trong **secure context (HTTPS)** — WebRTC/DataChannel/audio đều cần.
 - Server: Win10 2004+ / Win11, **user đăng nhập tương tác**.
 - Server chạy **tray app trong user session**, không phải Windows Service (§2.3).
+- **Máy phải thức và đã đăng nhập** thì mới kết nối được. Đây không phải chi tiết nhỏ: nó là nguyên nhân số 1 của "không kết nối được" ⇒ **§46** (giữ thức chỉ khi có phiên, WoL thật ra không làm được từ browser, reboot sau Windows Update, đổi IP, khoá màn hình).
 
 ### 2.2 Ma trận Windows
 | Thành phần | Tối thiểu | Ghi chú |
@@ -211,7 +224,7 @@ Spec giả định: **bạn điều khiển máy của chính bạn** (hoặc m�
 ### Tier 1 — CORE
 | Nhóm | Nội dung |
 |---|---|
-| Auth | argon2id · JWT (access 15′ + refresh rotate) · lockout · **1 tài khoản** (không TOTP, không role — §0.3.1 #4) |
+| Auth | argon2id · JWT (access 15′ + refresh rotate) · lockout · **≤2 tài khoản** (bạn + 1 người thân; không TOTP, không role — §0.3.1 #4) |
 | Picker | danh sách cửa sổ · thumbnail · tìm kiếm · badge `minimized`/`elevated` |
 | Mode | HVNC · VNC |
 | Video | H.264 (NVENC→QSV→AMF→x264) · 1080p60 · adaptive · PLI |
@@ -249,7 +262,7 @@ SFU/broadcast · app native · HDR streaming · VP9/AV1 · SSO/LDAP · cloud rel
 | Thành phần | Trách nhiệm | Tier |
 |---|---|---|
 | `web` | static UI · REST · WSS signaling · health | 1 |
-| `auth` | argon2id · JWT · lockout (**1 tài khoản, không TOTP/role** — §0.3.1 #4) | 1 |
+| `auth` | argon2id · JWT · lockout (**≤2 tài khoản, cùng quyền**, không TOTP/role — §0.3.1 #4) | 1 |
 | `window-picker` | EnumWindows → danh sách + thumbnail (§5.4) | 1 |
 | `display-manager` | màn hình ảo · move/restore cửa sổ · **window rescue** (§12.3) | 1 |
 | `capture` | DDAPI/WGC/BitBlt + recovery (§5.5) + **cursor metadata** (§6.3) | 1 |
@@ -809,6 +822,7 @@ IDLE ──POST /sessions──► PREPARING ──► CONNECTING ──DTLS ok�
 ### 7.2 Timeout
 | Loại | Giá trị | Ghi chú |
 |---|---|---|
+| **Kết nối tới máy chủ** | **2.5 s** | client `fetch /api/health` với `AbortController`; fail <300 ms ⇒ `refused` (app tắt), đúng 2.5 s ⇒ timeout (máy ngủ/off) — §46.7 |
 | PREPARING → FAILED | 15 s | nếu tạo display/move window treo |
 | CONNECTING → FAILED | 15 s | |
 | RECONNECTING → CLOSED | 30 s | |
@@ -1151,7 +1165,7 @@ ny = round((Y - SM_YVIRTUALSCREEN)*65535/(SM_CYVIRTUALSCREEN-1))
 | Đổi resolution giữa phiên | `ACCESS_LOST` → recreate + encoder reinit |
 | RDP chiếm console | `paused/session_disconnected` → phục hồi khi RDP out |
 | Windows Update restart | phiên chết; tray restart sau login |
-| Sleep | `SetThreadExecutionState(ES_CONTINUOUS|ES_SYSTEM_REQUIRED|ES_DISPLAY_REQUIRED)` **chỉ khi có phiên** |
+| Sleep | `SetThreadExecutionState` **chỉ khi có phiên**, `ES_DISPLAY_REQUIRED` chỉ ở VNC, **nhả ngay** khi đóng (§46.2) |
 | Screen saver | display ảo không bị ảnh hưởng |
 | Màn hình vật lý tắt nguồn | capture vẫn chạy |
 | Tablet mode / rotation | display ảo cố định landscape |
@@ -1187,7 +1201,7 @@ ny = round((Y - SM_YVIRTUALSCREEN)*65535/(SM_CYVIRTUALSCREEN-1))
 | 2 tab cùng user, limit=1 | tab 2 nhận `409` (hoặc T2: 2 phiên) |
 | Logout khi đang stream | kill mọi phiên + cleanup |
 | Server shutdown | signal handler → cleanup (§13.4) |
-| Console khoá (Win+L/timeout) | HVNC: video **vẫn chạy**, input **bị chặn** → `secure_desktop`; VNC: thấy lock screen, cùng warning |
+| Console khoá (Win+L/timeout) | HVNC: video **vẫn chạy**, input **bị chặn** → `secure_desktop`; VNC: thấy lock screen, cùng warning. Phát hiện **trước** khi bạn bấm bằng `WTSConnectState` (§46.6) |
 | UAC prompt | như trên; **không** gửi input (tránh bấm Yes ngoài ý muốn) |
 | Fast User Switching | session của ta disconnected → `paused` |
 | Phiên 12 h | auto-close + warning 5 phút trước |
@@ -1803,7 +1817,7 @@ Mọi trạng thái phải có: **câu giải thích + 1 hành động chính + 
 | Rollback bản lỗi | `git checkout <tag trước>` + build lại |
 
 ### 21.6 Chia sẻ — chỉ còn **1 link tạm**
-Không role, không "xem cùng lúc", không handover (§0.3.1 #4).
+Không role, không "xem cùng lúc", không handover (§0.3.1 #4). Có **tối đa 2 tài khoản** (bạn + 1 người thân) — cùng quyền, mỗi người 1 mật khẩu; không ai xem được mật khẩu/phiên của người kia (§41.7).
 
 | Giữ lại | Chi tiết |
 |---|---|
@@ -1891,7 +1905,7 @@ Không role, không "xem cùng lúc", không handover (§0.3.1 #4).
 ### 22.1 Sơ đồ
 ```
 /                          → chuyển hướng theo trạng thái đăng nhập
-├── /login                 → đăng nhập (1 tài khoản, không TOTP)
+├── /login                 → đăng nhập (≤2 tài khoản, không TOTP)
 ├── /windows               → DASHBOARD: cửa sổ + phiên đang mở + trạng thái máy
 ├── /s/:sid                → PHIÊN ĐIỀU KHIỂN (toàn màn hình)
 │     ├── overlay: chuyển cửa sổ (window switcher)
@@ -2029,7 +2043,7 @@ Không role, không "xem cùng lúc", không handover (§0.3.1 #4).
 - `Enter` submit; `autocomplete="username"/"current-password"`; `autofocus` vào username.
 - Sai: thông báo dưới nút, **không** rung/đỏ cả form; đếm số lần còn lại.
 - Khoá: thay nút bằng đếm ngược `Thử lại sau 14:32` (đếm realtime).
-- Không TOTP (§0.3.1 #4): 1 tài khoản, mật khẩu + lockout là đủ.
+- Không TOTP (§0.3.1 #4): ≤2 tài khoản, mật khẩu + lockout là đủ. Không có "quên mật khẩu" qua email (§21.5).
 - Trạng thái: `idle · submitting (nút có spinner, disable) · error · locked`.
 - Không có "quên mật khẩu" (không có email) → link "Cần trợ giúp?" mở `/help#reset`.
 
@@ -2358,7 +2372,7 @@ v3.3 dựng 7 bảng SQLite cho một sản phẩm nhiều người dùng. Với
 
 | Bảng cũ | Bản cá nhân dùng gì |
 |---|---|
-| `users`, `sessions_auth` | **1 dòng trong `config.json`**: `{user, pwd_hash(argon2id), refresh_hash, failed_count, locked_until}` |
+| `users`, `sessions_auth` | **mảng ≤2 phần tử trong `config.json`**: `{user, pwd_hash(argon2id), refresh_hash, failed_count, locked_until}` — mỗi người 1 mật khẩu, **cùng quyền** (không role) |
 | `prefs` | chính `config.json` (§9.11) — 1 người thì "prefs theo user/thiết bị/app" là 3 tầng không cần |
 | `sessions` | **`state.json`** (đã có, §9.2.4 — phục hồi sau crash). Phiên đang chạy nằm trong RAM |
 | `audit` | **`rd.log`**: 1 dòng JSON/sự kiện, xoay 5×10 MB |
@@ -2478,6 +2492,8 @@ rd.exe version
 | **Antivirus chặn driver** | cài thất bại | hướng dẫn whitelist + kiểm tra chữ ký driver |
 | **Màn hình không có (headless)** | vẫn cần desktop ảo | hoạt động (VDD không cần màn hình thật) |
 | **Laptop gập nắp** | màn hình tắt, vẫn chạy | display ảo không bị ảnh hưởng; `ES_DISPLAY_REQUIRED` giữ |
+| **Máy ngủ / vừa reboot / IP đổi** | không kết nối được, không rõ vì sao | **§46**: 5 lỗi → 5 câu → 5 nút |
+| **Windows Update tự restart lúc đêm** | app không chạy tới khi đăng nhập | §46.4: giảm số lần reboot + `last_seen` để nói rõ "vừa khởi động lại lúc 03:12" |
 
 ### 26.9 Cái gì cần chạy được (không phải "ma trận hỗ trợ")
 Đã cắt ma trận OS × browser × RAM và "chính sách 2 phiên bản" (§0.3.1 #9). Chỉ cần:
@@ -3258,7 +3274,7 @@ Dừng phiên (thứ tự NGƯỢC, bắt buộc):
 | 10 | Dừng phiên khi đang encode | không crash, assert frame treo = 0, cleanup <3 s |
 | 11 | Kill process giữa lúc move window | khởi động lại → cửa sổ được cứu (§9.2.3) |
 | 12 | Đổi resolution 10 lần liên tiếp | không rò VRAM/handle, không crash |
-| 13 | Sleep/resume máy | phục hồi hoặc đóng sạch, không treo |
+| 13 | Sleep/resume máy | phục hồi hoặc đóng sạch, không treo (§46.10 test 1) |
 | 14 | Màn hình thứ 2 bị rút | capture recreate, không crash |
 | 15 | CPU 100% trong 10 s | drop frame, không tăng trễ vô hạn |
 
@@ -4874,4 +4890,154 @@ node ci/size-gate.mjs            # §43.12 — 1 dòng
 | ~~#6 Mô hình dữ liệu & migration sâu~~ | G | **đã cắt**: chỉ còn 2 file JSON + 1 log (§26.16) ⇒ không có DB, không migration |
 | #7 UI state thực thi (skeleton/optimistic/lỗi) | D | còn — nhưng **thu nhỏ** cho 1 người |
 | #12 Đo TWCC/REMB trên GStreamer | A | **chặn P0** — vẫn là việc thật duy nhất phải làm trước |
-| #20 **Chế độ chạy trên máy yếu / không GPU** (chỉ MF hoặc VNC-only) | A/F | mới, từ §45.2 |
+| **#20 Chế độ chạy trên máy yếu / không GPU** (chỉ MF hoặc VNC-only) | A/F | mới, từ §45.2 |
+| #21 **"Máy có ở đó không"** (ngủ/reboot/IP/khoá) | G/F | ✅ **xong — §46** |
+| #22 WoL + máy trung gian | F | tuỳ chọn, §46.3 |
+| #23 Auto-logon + BitLocker (đi xa nhiều ngày) | F/E | quyết định của bạn, §46.4 |
+
+---
+
+## 46. "Máy có ở đó không?" — ngủ, reboot, đổi IP, khoá màn hình (nhánh #21 — lĩnh vực G/F)
+
+> Đây là **lỗ hổng lớn nhất còn lại**, và nó chỉ lộ ra khi dùng thật: mọi chương từ §6 đến §45 giả định **máy chủ đang chạy, đã đăng nhập, và trả lời được**. Trên thực tế, lần nào bạn mở điện thoại ra cũng có 3 khả năng: máy **ngủ**, máy **vừa reboot** (Windows Update), hoặc **IP đã đổi**.
+> Spec cũ chỉ có §11.2 dòng "Sleep → `SetThreadExecutionState`" và §11.4 "Console khoá". Một dòng cho một vấn đề chiếm **phần lớn số lần "không kết nối được"** trong đời thật. Đây là lĩnh vực **G** (bền vững) — nông nhất còn lại.
+
+### 46.1 Năm chuyện khác nhau, và tại sao gộp chúng là sai
+"Không kết nối được" có **năm** nguyên nhân rất khác nhau, cần **năm hành động khác nhau**. Hiện một thông báo chung ⇒ bạn không biết phải làm gì, và mất 5 phút thử ngẫu nhiên mỗi lần.
+
+| # | Thực tế | Triệu chứng ở client | Bạn phải làm gì |
+|---|---|---|---|
+| 1 | **Máy ngủ** | TCP connect **timeout** (không phải refused) sau 2–5 s | đánh thức máy (nếu có WoL) hoặc về nhà (§46.3) |
+| 2 | **App không chạy** (máy bật nhưng chưa đăng nhập / app bị tắt) | TCP **refused** (`ECONNREFUSED`, <1 s) | đăng nhập tại máy / mở app (§46.4) |
+| 3 | **IP đổi** | **DNS fail** hoặc timeout (không có gì ở IP đó) | dùng tên ổn định (§46.5) |
+| 4 | **Máy khoá màn hình** | kết nối **thành công**, phiên `secure_desktop`, input bị chặn | mở khoá tại máy (§46.6) |
+| 5 | **Tailscale/VPN chưa bật** | `ERR_NAME_NOT_RESOLVED` hoặc timeout ở 100.64/10 | bật VPN trên điện thoại |
+
+> **Luật:** client **phân biệt được 5 trường hợp trên** và hiện **một câu + một nút** cho mỗi trường hợp. Đây là điều §32.7 ("liền mạch khi mất mạng") hứa nhưng chưa có cơ chế, vì lúc đó mới chỉ xét "mất mạng", không xét "máy không ở đó".
+> **Phân biệt `refused` vs `timeout` là toàn bộ mẹo:** `refused` = có máy, không có app. `timeout` = không ai trả lời (ngủ/off/sai IP). Trình duyệt **không** cho JS biết loại lỗi này trực tiếp → xem §46.7.
+
+### 46.2 Giữ máy thức **chỉ khi có phiên** (và chỉ cái cần giữ)
+```c
+// bật khi PREPARING, tắt khi CLOSED — 2 dòng, đúng chỗ
+SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED
+                        | (mode == VNC ? ES_DISPLAY_REQUIRED : 0));
+// tắt: SetThreadExecutionState(ES_CONTINUOUS);
+```
+
+| Cần biết | Sự thật |
+|---|---|
+| `ES_SYSTEM_REQUIRED` chỉ chặn **idle sleep** | nó **không** chặn: gập nắp, nút nguồn, pin yếu, Windows Update reboot. Đừng tưởng nó là "giữ máy thức" đầy đủ |
+| `ES_DISPLAY_REQUIRED` chỉ cần ở **VNC mode** | HVNC capture **display ảo** ⇒ màn hình thật tắt vẫn composite. Ở VNC cần màn hình thật sáng, nếu không DWM có thể dừng vẽ |
+| Nhả **ngay** khi phiên đóng | nếu quên: laptop nằm trong balo vẫn chạy full load, nóng, pin cạn. Đây là bug "app làm hỏng máy tôi" |
+| Đừng sửa power settings của máy | `powercfg lidaction=0` đổi hành vi máy của bạn vĩnh viễn và cần admin ⇒ **không làm**. Chỉ **cảnh báo** (§46.2.1) |
+
+#### 46.2.1 Cảnh báo trước khi máy tự ngủ (thay vì sửa cài đặt)
+`GetSystemPowerStatus` + `powercfg /requests` cho biết máy sắp ngủ vì lý do gì. Ba cảnh báo, hiện **1 lần mỗi phiên**, không lặp:
+
+| Điều kiện | Banner trên client |
+|---|---|
+| Đang chạy **pin** và < 25% | "Máy đang dùng pin 23% — nếu hết pin, phiên sẽ mất." + [Đã hiểu] |
+| Đang chạy **pin** và > 15 phút | "Đang dùng pin. Cắm sạc nếu bạn cần phiên lâu." (chỉ 1 lần/phiên) |
+| Sắp tới **thời điểm ngủ** theo power plan (< 5 phút) | "Máy sẽ ngủ sau ~4 phút." + **[Giữ thức tới khi tôi đóng phiên]** — nút này chỉ **gia hạn `ES_SYSTEM_REQUIRED`**, không đổi cài đặt |
+> Ngược lại cũng cần: công tắc **"cho máy ngủ dù đang có phiên"** trong `Nâng cao` — cho trường hợp bạn quên đóng phiên rồi đi ra ngoài.
+
+### 46.3 Máy đã ngủ thì **không thể** đánh thức từ trình duyệt
+Sự thật không có đường vòng: máy ngủ thì **card mạng vẫn nghe** một loại packet duy nhất — **magic packet Wake-on-LAN**, gửi bằng **UDP broadcast trong LAN**. Trình duyệt **không gửi được UDP** ⇒ **không có** nút "đánh thức" trên web. Đừng hứa.
+
+| Cách | Có thật không | Giá | Ghi chú |
+|---|---|---|---|
+| **(1) Đừng để nó ngủ** (§46.2) | ✅ **hiệu quả nhất** | 0 | áp dụng được cho ~90% trường hợp. Đây là câu trả lời chính |
+| **(2) WoL từ máy thứ 2 trong LAN** | ✅ có, nhưng cần thiết bị luôn bật | ~0 (nếu có sẵn Pi/router/điện thoại cũ) | NIC: "Wake on Magic Packet" + BIOS; **tắt Fast Startup** (xem dưới) |
+| **(3) Router có WoL** | ⚠️ tuỳ router | 0 | nhiều router gia đình không có; kiểm tra trước khi tin |
+| **(4) WoL qua Internet** | ⚠️ cần port-forward UDP 9 + biết MAC + máy trung gian | 0 | không làm được từ browser ⇒ cần app/script riêng |
+| **(5) Để máy chạy 24/7** | ✅ | tiền điện | máy để bàn: ~10–40 W ⇒ ~$15–50/năm. Laptop: không nên |
+
+**Bẫy thật: Fast Startup.** Windows 10/11 mặc định bật *Fast Startup* — "Shutdown" thực chất là **hibernate**. Ở trạng thái đó **WoL không đánh thức được** (chỉ đánh thức từ Sleep). Nếu bạn định dùng WoL: tắt Fast Startup (`powercfg /h off` hoặc trong Control Panel) **và** hiểu rằng máy sẽ boot chậm hơn ~10 s.
+> **Kết luận cho 1–2 người:** dùng (1). Ghi (2) vào `/help` như một tuỳ chọn nếu bạn có Pi/điện thoại cũ ở nhà. **Không** xây tính năng WoL trong app.
+
+### 46.4 Reboot (Windows Update) — cái bẫy "chạy khi không đăng nhập"
+Kịch bản ác nhất và rất thường: máy reboot lúc 3 giờ sáng để cài update → không ai đăng nhập → **tray app không chạy** → sáng ra bạn ở xa, không có gì để kết nối.
+
+Ba "giải pháp" mọi người nghĩ tới, và tại sao hai cái đầu **sai**:
+
+| Cách | Kết quả | Kết luận |
+|---|---|---|
+| Task Scheduler **"Run whether user is logged on or not"** | chạy ở **Session 0** ⇒ **không capture, không `SendInput` được** (§2.3) | ❌ **vô dụng** — đây là bẫy phổ biến nhất; app *chạy* nhưng không làm được gì |
+| **Auto-logon** (`AutoAdminLogon`) | app chạy được | ⚠️ **đánh đổi thật**: mật khẩu lưu ở LSA secret, **đọc được bằng mimikatz**; máy ở nhà, có BitLocker thì rủi ro chấp nhận được — nhưng đây là quyết định **của bạn**, không phải mặc định của app |
+| Chấp nhận + báo rõ | app không chạy, nhưng bạn **biết vì sao** | ✅ **mặc định của spec này** |
+
+**Làm gì (mặc định):**
+1. **Giảm số lần reboot**: đặt *Active hours* rộng, tắt "Restart as soon as possible" ⇒ update dồn vào lúc bạn ở nhà. (Windows Settings → 1 lần)
+2. **Tray app ghi "lần chạy cuối"** vào `state.json`; client hiện chính xác: *"Máy đã khởi động lại lúc 03:12 và chưa đăng nhập. Cần đăng nhập tại máy."* — khác hoàn toàn với "không kết nối được".
+3. **`/help` có mục "Tôi đi xa nhiều ngày"**: nói thẳng 3 lựa chọn (để máy bật + tắt auto-restart / auto-logon + BitLocker / nhờ người nhà đăng nhập). Không giấu.
+4. Nếu bạn chọn auto-logon: app **không** tự bật nó (không sửa registry `Winlogon`), chỉ đưa **lệnh mẫu** trong `/help` để bạn tự chạy và tự chịu.
+
+### 46.5 Đổi IP — client tìm máy bằng gì
+| Môi trường | Cách ổn định | Ghi chú |
+|---|---|---|
+| **LAN** | **DHCP reservation** trong router (gán IP theo MAC) | 2 phút, 1 lần. Đây là cách duy nhất **miễn phí và chắc chắn** |
+| LAN, không muốn vào router | đặt **static IP** trên máy | dễ xung đột nếu router cấp trùng dải — chọn ngoài pool DHCP |
+| LAN, muốn tên | `https://rd.local` (mDNS) | ⚠️ Windows **không có** mDNS responder mặc định cho việc advertise; LLMNR chỉ giúp trong LAN và thường bị chặn ⇒ **đừng dựa vào** |
+| **Ngoài LAN** | **Tailscale MagicDNS**: `https://desktop.tailnet.ts.net` | ✅ tên **không đổi** dù IP đổi, cert hợp lệ thật (`tailscale cert`) ⇒ **khuyến nghị làm đường chính** cho 1–2 người |
+| Sau khi đổi | cert tự ký phải có **SAN gồm mọi IP private + hostname + Tailscale IP** | §26.6 đã ghi; nhưng nếu IP đổi **thường xuyên** ⇒ cert thành gánh nặng ⇒ **dùng Tailscale cert** thay vì tự ký |
+
+**Quyết định:** với 1–2 người, **Tailscale là đường chính, LAN là đường phụ**. Lý do không phải "thích VPN": nó giải **3 vấn đề cùng lúc** — tên ổn định (§46.5), cert hợp lệ (§26.6), và NAT (§13.4). Nếu chỉ dùng LAN thì **bắt buộc** có DHCP reservation, nếu không bookmark của bạn sẽ chết sau mỗi lần router restart.
+
+### 46.6 Khoá màn hình sau khi resume / hết screensaver
+Với laptop ngủ–thức nhiều lần mỗi ngày, `secure_desktop` (§11.4) sẽ xuất hiện **liên tục** — và đó là trải nghiệm tệ nhất của cả hệ thống: bạn kết nối được, thấy hình, nhưng mọi cú bấm bị bỏ.
+
+| Việc | Cách | Ghi chú |
+|---|---|---|
+| **Nói trước** | khi phiên sắp gặp `secure_desktop`: overlay + *"Máy đang khoá. Bấm phím bất kỳ **trên máy thật** để mở khoá."* | input **không** gửi (an toàn), và **không** cố gửi |
+| **Giảm tần suất** | hướng dẫn `/help`: tắt "Require sign-in on wakeup" (`powercfg /SETACVALUEINDEX SCHEME_CURRENT SUB_NONE CONSOLELOCK 0`) | ⚠️ cần admin; **app không tự làm** — đổi bảo mật máy của bạn là việc của bạn |
+| **Phát hiện sớm** | `WTSQuerySessionInformation(WTSConnectState)` = `WTSDisconnected` ngay sau resume ⇒ biết khoá **trước khi** bạn bấm gì | không dựa vào "input không có tác dụng" |
+| **Đừng** gửi input mù | kể cả `SendInput` có thể đánh thức màn hình khoá — **không làm**: gõ mật khẩu qua stream vào màn hình khoá là đường rò rỉ | §44.8 đã cấm |
+
+### 46.7 Cơ chế: làm sao biết là lỗi gì (browser không nói)
+Trình duyệt **không** cho JS phân biệt `refused` vs `timeout`. Bốn mẹo thật, xếp theo độ tin cậy:
+
+| # | Cách | Độ tin cậy | Ghi chú |
+|---|---|---|---|
+| 1 | **`fetch` + đo thời gian + `AbortController`** (`timeout=2500 ms`) | trung bình | fail **<300 ms** ⇒ gần như chắc `refused` (app không chạy, máy vẫn bật) · fail **đúng 2500 ms** ⇒ timeout (ngủ/off/sai IP) |
+| 2 | **`GET /api/health` qua 2 hostname khác nhau** (IP LAN + Tailscale) | cao | cái nào trả lời ⇒ biết đang ở mạng nào, và phân biệt "máy bật nhưng app tắt" (refused) với "không tới được máy" |
+| 3 | **Service worker / `navigator.onLine`** | thấp | chỉ biết client có mạng, không nói gì về máy chủ |
+| 4 | **Server "last seen"** (nếu có máy thứ 2 hoặc Tailscale admin API) | cao nhưng phức tạp | **không làm** cho 1–2 người |
+> Không có cách nào đạt 100% từ browser. Vì vậy: đoán **2 nhánh** (<300 ms vs timeout) là đủ, và **luôn** kèm nút "Thử lại" + 1 dòng giải thích có thể sai ("có thể máy đang ngủ"). Thà nói "có thể" còn hơn nói sai chắc chắn.
+
+### 46.8 API & trạng thái (nhỏ, cụ thể)
+```
+GET /api/machine        →  { awake, logged_in, locked, uptime_s, booted_at,
+                             last_seen, power:{ac,battery_pct,idle_sleep_in_s},
+                             app_version, ipv4:[…], tailscale:bool }
+GET /api/health         →  (đã có) version, vdd, audio, encoders, os
+```
+- `last_seen` được ghi **mỗi 60 s** vào `state.json` khi app chạy (một dòng) ⇒ sau reboot, client biết **máy đã từng chạy tới lúc nào**. Không có nó, bạn không phân biệt được "chưa bao giờ cài" với "vừa reboot".
+- Máy ngủ ⇒ **không** endpoint nào trả lời ⇒ client dùng §46.7 để đoán. Không có "trạng thái máy" thật khi máy không ở đó — **đừng vẽ ra**.
+- `GET /api/machine` chỉ trả lời khi **đã đăng nhập** (nó ở sau auth) ⇒ không rò thông tin máy cho người lạ.
+
+### 46.9 Bảng: 5 lỗi → 5 thông báo → 5 hành động (bắt buộc trong UI)
+| Lỗi | Câu (≤12 từ) | Nút |
+|---|---|---|
+| timeout / không phản hồi | "Máy không phản hồi. Có thể đang ngủ hoặc mất mạng." | [Thử lại] · [Xem cách đánh thức] |
+| `refused` nhanh | "Máy đang bật nhưng ứng dụng chưa chạy." | [Thử lại] · [Cách bật lại app] |
+| DNS không phân giải | "Không tìm thấy máy theo tên này. VPN đã bật chưa?" | [Kiểm tra VPN] |
+| kết nối được nhưng `locked` | "Máy đang khoá. Cần mở khoá trên máy thật." | [Đã hiểu] (input tắt) |
+| app chạy, máy vừa reboot (`booted_at` mới) | "Máy vừa khởi động lại lúc 03:12." | [Thử lại] · [Xem log] |
+> Câu chữ theo §20.19: không thuật ngữ, có chủ thể, mỗi lỗi **một** hành động chính.
+
+### 46.10 Kiểm chứng (5 test, làm được trên 1 máy)
+| # | Test | Ngưỡng |
+|---|---|---|
+| 1 | Gập nắp / `powercfg /sleep` giữa phiên | phiên chuyển `reconnecting` **không** treo UI; thức dậy ⇒ resume hoặc `CLOSED` + nói rõ lý do, **không** đứng im |
+| 2 | Tắt app rồi mở browser | phát hiện `refused` <300 ms ⇒ câu "ứng dụng chưa chạy", **không** phải "máy đang ngủ" |
+| 3 | Rút mạng máy chủ (không tắt máy) | timeout ⇒ câu "không phản hồi"; phân biệt được với test 2 |
+| 4 | Đổi IP máy chủ (đổi DHCP lease) | Tailscale vẫn kết nối; LAN fail với câu DNS/IP rõ ràng |
+| 5 | `Win+L` giữa phiên | thấy `secure_desktop` **trước** khi bấm; input không gửi; mở khoá tại máy ⇒ tự phục hồi ≤2 s |
+| 6 | Đóng phiên ⇒ kiểm `powercfg /requests` | **rỗng** (đã nhả `ES_SYSTEM_REQUIRED`) — nếu không, app làm nóng pin vô ích |
+
+### 46.11 Nhánh mới rẽ ra
+| Nhánh | Lĩnh vực | Trạng thái |
+|---|---|---|
+| **#22 WoL + máy trung gian** (Pi/điện thoại cũ ở nhà) | F | **tuỳ chọn**, đọc §46.3 trước. Không làm trong P1 |
+| **#23 Auto-logon + BitLocker** (đi xa nhiều ngày) | F/E | **quyết định của bạn**, không phải mặc định. `/help` có lệnh mẫu |
+| **#24 Máy chủ là laptop pin yếu / nhiệt** | A | chỉ ảnh hưởng preset; ghi nhận |
