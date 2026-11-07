@@ -1,6 +1,6 @@
-# SPEC v3.10 — Remote Desktop qua trình duyệt: HVNC + VNC, window picker, âm thanh server-side, **trải nghiệm điều khiển đầy đủ**
+# SPEC v3.11 — Remote Desktop qua trình duyệt: HVNC + VNC, window picker, âm thanh server-side, **trải nghiệm điều khiển đầy đủ**
 
-- Phiên bản: **v3.10** (v3.9 + **§40 âm thanh**: tách routing↔capture, AudioPolicyConfig không tài liệu, 3 mức routing + kiểm chứng bằng session enumeration, WASAPI loopback bẫy, ASRC chống drift, device notifications · **§0.2 bản đồ 8 lĩnh vực thay cho đi mãi một nhánh**): hai thiết bị một lõi — mobile zero-chrome, grip 3 tầng, radial 8 ô, command registry, flow contract FE↔BE**)
+- Phiên bản: **v3.11** (v3.10 + **§41 threat model & ranh giới tin cậy**: 10 tài sản, 10 vị trí tấn công, 20 mối đe doạ theo ranh giới, 5 quyết định thiết kế bắt nguồn từ threat model, token chi tiết, người ngồi máy, supply chain, 9 rủi ro chấp nhận, 14 kiểm chứng · trước đó: **§40 âm thanh**: tách routing↔capture, AudioPolicyConfig không tài liệu, 3 mức routing + kiểm chứng bằng session enumeration, WASAPI loopback bẫy, ASRC chống drift, device notifications · **§0.2 bản đồ 8 lĩnh vực thay cho đi mãi một nhánh**): hai thiết bị một lõi — mobile zero-chrome, grip 3 tầng, radial 8 ô, command registry, flow contract FE↔BE**)
 - Trạng thái: **Đề xuất — CHƯA implement, chờ duyệt**
 - Nền tảng: Server **Windows 10 2004+ / Windows 11** · Client **trình duyệt** (không app)
 
@@ -24,6 +24,7 @@
 | **v3.8** | **§38 hai cơ chế hạ res (native vs post-scale) — §36.9 đã gộp sai · vì sao chữ chết (nội suy + 4:2:0 + deblock) · chọn scaler có số (bicubic/area GPU, cấm Lanczos cho text) · bậc thang tỉ lệ sạch 3/4 & 1/2 · sharpening có điều kiện (tắt khi <3 Mbps) · giới hạn 4:2:0 không vượt được · phân loại text/motion để chọn giảm fps hay res · chống UI nhảy khi đổi res · đo bằng **OCR CER** thay vì cảm tính** |
 | **v3.9** | **§39 vì sao gộp 1 pass (10–13 ms → 2–4 ms) · 4 lỗi chuẩn: matrix BT.709, range limited 16–235, chroma **left-sited**, dither TPDF · chuỗi 7 bước đúng thứ tự · ma trận số cụ thể · scale ở **gamma** (không linear — linear làm chữ mờ) · HDR PQ→SDR với 203 nits + BT.2020→709 · bỏ alpha · giới hạn ICC/10-bit/4:4:4 · pseudo-HLSL 1 dispatch · 3 fallback · **7 test pattern CI** (grey ramp/color bars/1px chroma line/HDR)** |
 | **v3.10** | **§40 audio: routing ≠ capture · AudioPolicyConfig không có API tài liệu (rủi ro #1) · 3 mức routing (per-app → toàn máy → như VNC) + **kiểm chứng bằng EnumerateSessions** (phát hiện cả rò rỉ `audio_leak`) · app chỉ đọc thiết bị lúc khởi động · WASAPI loopback không có event khi im lặng ⇒ polling · `IMMNotificationClient` (không giành lại default device của người dùng) · **ASRC chống drift ±100 ppm = 720 ms/2 h** · toggle dùng `NULL` + SSRC mới · 12 test chấp nhận · Bluetooth client +150–300 ms không sửa được** · **§0.2 bản đồ 8 lĩnh vực, luật ≤2 lượt liên tiếp mỗi lĩnh vực** |
+| **v3.11** | **§41 threat model: 10 tài sản · 10 vị trí P1–P10 · **lật giả định nền — client KHÔNG tin cậy, agent tin về hành vi nhưng không tin về dữ liệu** · 3 hệ quả kiến trúc · 20 mối đe doạ T1–T20 theo ranh giới · 5 quyết định *bắt nguồn từ threat model* (client không gửi `hwnd`; không endpoint chạy lệnh; transfer/clipboard mặc định tắt; `X-Frame-Options: DENY`; người ngồi máy luôn dừng được) · token rotate + reuse detection · P6 quyền phủ quyết · supply chain/chống downgrade · 9 rủi ro chấp nhận · 14 kiểm chứng** |
 
 ### 0.1 v3.0 sửa gì — danh sách "còn thiếu" (đây là lý do v2.1 chưa đủ)
 
@@ -64,7 +65,7 @@
 | **B. Âm thanh** | §5.10 | **§40** | §40.13 | ●● vừa |
 | **C. Input & bàn phím** | §5.7, §5.8, §6.4–6.7 | — | — | ● nông |
 | **D. Giao diện & trải nghiệm** | §22–25, §28–34 | — | — | ● nông (rộng nhưng mỏng) |
-| **E. Bảo mật & tin cậy** | §10, §26.2 | — | — | ● nông |
+| **E. Bảo mật & tin cậy** | §10, §26.2 | **§41** | §41.10 | ●● vừa |
 | **F. Vận hành & triển khai** | §13, §26 | — | — | ● nông |
 | **G. Bền vững & tiến hoá** | §21, §35.12 | — | — | ● nông |
 | **H. Hiệu năng client** | §26.11, §30.1 | — | — | ● rất nông |
@@ -73,8 +74,8 @@
 
 | # | Nhánh | Lĩnh vực | Vì sao ưu tiên |
 |---|---|---|---|
-| 1 | **Threat model & tin cậy giữa các thành phần** | E | chưa có; ảnh hưởng thiết kế chứ không chỉ thêm test |
-| 2 | **Multi-session: tài nguyên, cách ly, 1 capture → N encode** | F | §37.10 mới nêu giới hạn slot, chưa có kiến trúc |
+| 1 | **Threat model & tin cậy** | E | ✅ **xong — §41** |
+| 2 | **Multi-session: tài nguyên, cách ly, 1 capture → N encode** | F | ⬜ **kế tiếp** — §37.10 mới nêu giới hạn slot, chưa có kiến trúc; cách ly session là yêu cầu bảo mật (§41.4 T1/T3) |
 | 3 | **Đóng gói & vòng đời cài đặt** (MSI, driver, rollback kiểm chứng được) | F | nơi hay hỏng nhất khi giao cho người dùng |
 | 4 | **Hiệu năng client đo trong CI** | H | có ngân sách nhưng chưa có cách chặn |
 | 5 | **Input sâu**: IME server-side, accessibility, game/Raw Input, remote-in-remote | C | ● nông, ảnh hưởng trực tiếp cảm giác dùng |
@@ -4192,3 +4193,167 @@ Sau khi đổi routing, **không tin** kết quả trả về. Kiểm chứng b�
 | **#4b Trộn nhiều app thành 1 stream có kiểm soát** (mức "cả máy" nhưng loại trừ app) | mức B hiện thô: im tất cả |
 | **#5 Threat model** (vẫn chờ) | |
 | **#6 Multi-session & tài nguyên** (vẫn chờ) | |
+
+---
+
+## 41. Threat model & ranh giới tin cậy (nhánh #1 — lĩnh vực E)
+
+> §10 liệt kê **biện pháp** (JWT, DTLS, clamp, CSP). Đó không phải threat model. Threat model hỏi: **ai** ở **đâu**, **làm được gì**, và **ta tin ai**.
+> Khi viết ra, nó lật một giả định nền của toàn spec cũ: **agent trên máy Windows là thành phần được tin cậy, trình duyệt là thành phần không được tin cậy** — ngược với trực giác "server chạy trên máy người dùng còn client thì đã đăng nhập nên đáng tin".
+
+### 41.1 Tài sản (cái gì cần bảo vệ, theo mức tổn thất)
+| # | Tài sản | Mất/ lộ thì sao | Mức |
+|---|---|---|---|
+| A1 | **Nội dung màn hình** (mật khẩu gõ, tin nhắn, tài liệu, email) | toàn bộ lý do tồn tại của sản phẩm đều là rủi ro | **Cao nhất** |
+| A2 | **Điều khiển bàn phím/chuột** của máy Windows | kẻ tấn công = toàn quyền máy (mở PowerShell, cài gì cũng được) | **Cao nhất** |
+| A3 | Âm thanh trong phiên (họp, gọi) | nghe lén nội dung | Cao |
+| A4 | Clipboard & file (T2/T3) | rò dữ liệu 2 chiều | Cao |
+| A5 | Mật khẩu & refresh token của người dùng | chiếm phiên, chiếm máy | Cao |
+| A6 | Khoá riêng TLS & khoá ký JWT | giả mạo server cho **mọi** người dùng | Cao |
+| A7 | Nhật ký (metadata: ai xem gì, khi nào) | suy ra hành vi, giờ giấc | Trung bình |
+| A8 | Danh sách cửa sổ / tên app | lộ "máy này đang làm gì" | Trung bình |
+| A9 | Sự tồn tại của phiên (người ngồi máy có biết không) | §2.4: **cố ý** thông báo, không phải tài sản bí mật | Thấp (theo thiết kế) |
+| A10 | Tài nguyên máy (CPU/GPU/RAM) | DoS, hao pin | Thấp |
+
+### 41.2 Vị trí kẻ tấn công (10 vị trí, mỗi vị trí làm được gì)
+| # | Vị trí | Năng lực | Ví dụ trong sản phẩm này |
+|---|---|---|---|
+| P1 | **Kẻ trên mạng** (LAN/VPN, chặn gói được) | nghe, chèn, phát lại, cắt | ARP spoof trong LAN; VPN provider |
+| P2 | **Người dùng web độc hại khác** (có tài khoản, không có quyền) | gọi API với tài khoản của họ | user A cố mở phiên của user B; dò `sid` |
+| P3 | **Trình duyệt / máy client bị chiếm** | đọc mọi thứ client thấy, điều khiển phiên | malware trên laptop người điều khiển |
+| P4 | **Trang web độc hại** (không có tài khoản) | dụ người dùng, CSRF, clickjacking, XSS | link phishing tới `/s/:sid` |
+| P5 | **Trình duyệt có extension độc** | đọc/sửa DOM, đọc clipboard, chụp API | extension "tiện ích" cài vào Chrome |
+| P6 | **Người ngồi trước máy** (có quyền OS nhưng không phải admin, không có mật khẩu RD) | dùng máy, đọc file của mình, đọc log, chặn app | nhân viên dùng máy bị hỗ trợ |
+| P7 | **Người có quyền admin OS trên máy server** | đọc state file, đọc khoá, hook agent | — |
+| P8 | **Kẻ tấn công supply chain** | thư viện/driver/update độc | plugin GStreamer, bản update giả |
+| P9 | **Nhà cung cấp hạ tầng** (VPN provider, CDN) | thấy metadata, chặn | Tailscale, ISP |
+| P10 | **Chính agent** bị lỗi (không phải kẻ tấn công, nhưng gây hại) | dùng sai API, rò dữ liệu, crash | bug trong code của ta |
+> **Không** đưa vào: kẻ có quyền SYSTEM trên máy đích (coi như đã mất máy) — không hệ thống remote desktop nào chống được; và kẻ kiểm soát máy client + token (coi như đã chiếm phiên).
+
+### 41.3 Ranh giới tin cậy — quyết định nền
+```
+   ┌──────────── KHÔNG TIN CẬY ────────────┐        ┌──────── TIN CẬY (có điều kiện) ────────┐
+   │ Trình duyệt client                    │        │ Agent trên máy Windows                 │
+   │ · DOM, JS, extension                  │◄──────►│ · capture, encode, input, audio        │
+   │ · mọi thứ gửi từ đây phải kiểm tra    │  TLS/  │ · **được tin**: nó điều khiển máy thật │
+   │ · KHÔNG được tin: toạ độ, input, sid  │  DTLS  │ · nhưng KHÔNG được tin: input thô      │
+   └───────────────────────────────────────┘        └────────────────────────────────────────┘
+                    ▲                                              ▲
+                    │                                              │
+              người dùng đăng nhập                          người ngồi máy (P6) + admin (P7)
+```
+**Ba hệ quả lật ngược so với spec cũ:**
+1. **Client không được tin** ⇒ agent phải **kiểm tra lại mọi thứ** client gửi: toạ độ (clamp), phím (validate UTF-16), `sid` (thuộc user), lệnh (đúng quyền), tần suất (rate limit). §10 có nói nhưng như "biện pháp"; ở đây nó là **luật kiến trúc**.
+2. **Agent được tin về *hành vi*, không được tin về *dữ liệu*** ⇒ agent được phép `SendInput` (vì đó là chức năng), nhưng **không** được phép tự quyết định vượt quyền của user (ví dụ: agent chạy elevated thì phiên thường **không** được tự động hưởng quyền đó — phải có cờ §9.9b).
+3. **`window list` là dữ liệu do agent sinh** ⇒ client **không bao giờ** gửi `hwnd` tuỳ ý; agent chỉ chấp nhận `wid` **nằm trong danh sách nó vừa trả** (cache 3 s). Nếu không, client có thể đưa `hwnd` của cửa sổ bất kỳ (kể cả cửa sổ của app nhạy cảm người dùng không cho xem). **Đây là lỗ hổng leo thang quyền thật** trong thiết kế "client chọn cửa sổ".
+
+### 41.4 Bảng mối đe doạ theo ranh giới
+| # | Ranh giới | Mối đe doạ | Vị trí | Tác động | Giảm thiểu | Còn lại |
+|---|---|---|---|---|---|---|
+| T1 | Client→Agent: danh sách cửa sổ | gửi `hwnd` tuỳ ý để stream cửa sổ người dùng không cho phép | P2,P3 | **xem trộm nội dung** | `wid` phải nằm trong danh sách agent vừa trả (cache + TTL 3 s); allowlist; audit `wid` | — |
+| T2 | Client→Agent: input | input flood, toạ độ ngoài biên, key sequence làm treo app | P3 | DoS app, hành vi ngoài ý muốn | clamp, rate limit, `release_all` watchdog (§7.5), không cho `Win+L`/SAS | app vẫn có thể bị làm treo |
+| T3 | Client→Agent: lệnh | gọi lệnh của user khác / lệnh ngoài state | P2 | chiếm phiên | mọi request kiểm `sid.owner == token.sub`; `availableIn` check server-side (không chỉ UI) | — |
+| T4 | Client↔Agent: media | nghe lén, chèn frame | P1 | xem trộm | DTLS-SRTP bắt buộc; không có đường plaintext; cert hợp lệ | P1 kiểm soát cả hai đầu (MITM) nếu cert không được xác minh ⇒ §41.6 |
+| T5 | Client: XSS qua dữ liệu agent | tên cửa sổ do app bên thứ ba đặt ⇒ chèn HTML | P2 (đặt tên app) | chạy JS trong origin ⇒ chiếm phiên | `textContent` mọi nơi, CSP `default-src 'self'`, không `innerHTML` với dữ liệu server, **không** render thumbnail từ HTML | — |
+| T6 | Client: trang độc hại | CSRF (POST tạo phiên), clickjacking (nút "kết thúc"/"cho phép") | P4 | tạo phiên / thao tác ngoài ý muốn | SameSite=Strict, custom header cho mutation, `X-Frame-Options: DENY` / `frame-ancestors 'none'`, **không** nhận token từ query | — |
+| T7 | Client: extension | đọc DOM, đọc clipboard, đọc video | P5 | mất toàn bộ nội dung | **không thể chống** — ghi rõ trong §6.13; khuyến nghị profile riêng / không extension | chấp nhận |
+| T8 | Client: máy bị chiếm | keylogger, screenshot | P3 | như trên | **không thể chống** | chấp nhận |
+| T9 | Token bị lộ (log, shoulder-surf, malware) | dùng lại | P3 | chiếm phiên | access 15′, refresh rotate + **reuse detection**, cookie HttpOnly, revoke all, IP/UA audit | refresh bị lộ **trước** khi dùng lần đầu = không phát hiện được |
+| T10 | Agent: state file / khoá | đọc khoá JWT ⇒ giả token | P7 | toàn quyền | khoá trong `ProgramData` ACL + **DPAPI**, state file chỉ có vị trí cửa sổ (không bí mật), không lưu secret trong log | P7 = đã mất máy |
+| T11 | Agent: log | rò tiêu đề cửa sổ, IP, clipboard | P6 | suy ra hành vi | **không log** tiêu đề/clipboard mặc định; redaction bắt buộc (§26.3); log rotate; audit 90 ngày | P6 đọc được metadata phiên |
+| T12 | Agent: driver/update | driver giả, update giả | P8 | toàn quyền | ký số binary + driver; **verify signature trước khi chạy**; update qua HTTPS + signature; pin hash | P8 kiểm soát nhà cung cấp cert |
+| T13 | Người ngồi máy (P6) | chặn/kết thúc phiên, xem log | P6 | mất phiên (nhưng **đúng thiết kế** — §21.8) | **không** chống: người ngồi máy **luôn** có quyền dừng | chấp nhận (đây là tính năng) |
+| T14 | Người ngồi máy: `SetWindowDisplayAffinity` | đặt `WDA_EXCLUDEFROMCAPTURE` lên app của họ ⇒ ta không capture được | P6 | phá phiên (DoS) | phát hiện + `412 capture_blocked` + thông báo | chấp nhận (họ có quyền trên máy của họ) |
+| T15 | Client: clipboard (T2) | dán nội dung độc vào app (macro, công thức Excel, URL) | P3/P5 | thao tác ngoài ý muốn | chỉ dán khi **bấm nút**, có xem trước, không auto-sync; không dán file/HTML | người dùng vẫn có thể tự dán |
+| T16 | Agent: `SendInput` vào app elevated | leo quyền qua UIPI | P2 (nếu agent elevated) | điều khiển app admin | agent elevated **chỉ khi** người dùng chọn (§9.9b); phiên thường không hưởng | nếu bật elevated, đây là đánh đổi đã biết |
+| T17 | Agent: audio | rò tiếng máy thật khi routing sai | P10 | phá HVNC | kiểm chứng session enumeration (§40.6) + `audio_leak` cảnh báo | app exclusive mode không kiểm chứng được |
+| T18 | Metadata: `GET /api/windows` | liệt kê cửa sổ liên tục ⇒ biết người dùng đang làm gì | P2 (user khác) | **giám sát ngầm** | rate limit `/windows` (30/phút), audit mỗi call, **không** trả tiêu đề cho user không phải chủ máy | theo dõi được trong giới hạn rate limit |
+| T19 | Toàn hệ: replay | phát lại request tạo phiên | P1 | phiên trùng | `Idempotency-Key` + nonce; TLS đã chống replay trong phiên | — |
+| T20 | Toàn hệ: cert không được xác minh | client bỏ qua cảnh báo cert ⇒ MITM | P4/P1 | chiếm toàn bộ | **hard fail** nếu cert không hợp lệ (không cho "tiếp tục anyway" trong app); hướng dẫn cài cert | người dùng *có thể* bấm qua cảnh báo của trình duyệt |
+
+### 41.5 Năm quyết định thiết kế **bắt nguồn từ threat model** (không phải từ tiện lợi)
+| # | Quyết định | Từ mối đe doạ | Nếu làm khác thì sao |
+|---|---|---|---|
+| D1 | **Client không bao giờ gửi `hwnd`; chỉ gửi `wid` đã có trong danh sách** | T1 | leo thang: xem cửa sổ người dùng không cho phép, kể cả cửa sổ của app khác |
+| D2 | **Không có endpoint "chạy lệnh"/"mở file"** trên agent | A2 | biến agent thành backdoor; mọi phiên đều có thể chạy lệnh dù người dùng chỉ muốn xem |
+| D3 | **File transfer & clipboard mặc định TẮT**, chỉ bật tường minh | A4 | đường vận chuyển dữ liệu không kiểm soát giữa 2 máy khác nhau về chính sách |
+| D4 | **`X-Frame-Options: DENY` + không nhận token trong URL** | T6 | clickjacking nút "cho phép điều khiển"; link chứa token lọt vào lịch sử/referrer |
+| D5 | **Người ngồi máy luôn có quyền dừng, và toast/icon tray không tắt được** | T13 + §2.4 | biến sản phẩm thành RAT; mất khả năng phân biệt với malware khi bị EDR soi |
+
+### 41.6 Token & phiên — chi tiết (thay cho 3 dòng ở §10)
+| Hạng mục | Thiết kế | Vì sao |
+|---|---|---|
+| Access token | JWT RS256, **15 phút**, chứa `sub`, `role`, `sid_scope`, `jti` | ngắn để giảm giá trị đánh cắp |
+| Refresh token | **opaque** (không phải JWT), lưu **hash** (SHA-256) trong DB, **rotate mỗi lần dùng** | rotate phát hiện trộm |
+| Reuse detection | dùng refresh cũ ⇒ **revoke toàn bộ chuỗi** + audit + buộc đăng nhập lại | chuẩn công nghiệp |
+| Nơi lưu | `HttpOnly; Secure; SameSite=Strict; Path=/api` | JS không đọc được ⇒ XSS không lấy token |
+| Access token ở client | trong **memory** (không localStorage) | localStorage bị extension/JS đọc |
+| Binding | refresh gắn `device_id` (random, trong cookie riêng) + UA hash; lệch ⇒ cảnh báo, không chặn | giảm giá trị token bị đánh cắp, không phá UX |
+| Revoke | logout → revoke chain; "đăng xuất mọi nơi"; **đổi mật khẩu ⇒ revoke tất cả** | |
+| Clock | skew ±60 s; `jti` chống replay trong 15 phút | |
+| Password | argon2id (m=64 MB, t=3, p=1), min 12 ký tự, không cấm ký tự đặc biệt, **kiểm tra danh sách phổ biến** offline | |
+| Lockout | 5 lần / 15 phút / (IP+user); đếm cả **user không tồn tại** để không lộ user | |
+| Timing | so sánh hash **hằng thời gian**; trả lỗi giống nhau cho user sai/không tồn tại | |
+
+### 41.7 Người ngồi máy (P6) — đối xử thế nào
+Đây là ranh giới **không rõ ràng nhất** và phải nói rõ:
+| Họ được phép | Không được phép | Ta xử lý |
+|---|---|---|
+| Dùng máy của họ, mở app, kéo cửa sổ | tắt agent, kill process (nếu không phải admin) | nếu họ tắt: phiên `closed`, client thấy lý do rõ, **không** tự khởi động lại trong 60 s (tôn trọng ý định) |
+| Dừng phiên bất kỳ lúc nào (§21.8) | đọc token | — |
+| Đọc log của chính họ | đọc log của người dùng khác | log theo user, ACL |
+| Cài app hiển thị `WDA_EXCLUDEFROMCAPTURE` | — | `412 capture_blocked`, không cố vượt |
+| Đổi default audio device | — | không giành lại (§40.8) |
+**Nguyên tắc:** người ngồi máy có **quyền phủ quyết** với phiên, nhưng **không** có quyền xem bí mật của người điều khiển (token, mật khẩu). Hai chiều đều phải tôn trọng.
+
+### 41.8 Supply chain & cập nhật
+| Hạng mục | Yêu cầu |
+|---|---|
+| Binary | ký Authenticode; **verify chữ ký của chính mình** khi auto-update |
+| Driver (VDD) | chỉ dùng bản có ký của nhà cung cấp; ghi hash vào installer; không bundle bản tải động |
+| Update | HTTPS + **chữ ký riêng trên gói update** (không chỉ TLS) + version chống rollback (chống downgrade tấn công) |
+| GStreamer plugin | pin phiên bản **và hash**; không cho load plugin từ `GST_PLUGIN_PATH` tuỳ ý (agent tự set, không kế thừa env) |
+| Rust deps | `cargo-deny` + RustSec trong CI; **không** build script lạ |
+| Client assets | SRI cho mọi tài nguyên; **không** third-party (§26.10) |
+| SBOM | xuất mỗi release |
+
+### 41.9 Rủi ro chấp nhận (ghi rõ, không giấu)
+| # | Rủi ro | Vì sao chấp nhận | Người dùng cần biết |
+|---|---|---|---|
+| R1 | Client bị chiếm (P3) ⇒ lộ toàn bộ nội dung | không thể chống từ server | §6.13 |
+| R2 | Extension độc (P5) | không thể chống | §6.13 + khuyến nghị profile riêng |
+| R3 | Admin OS trên máy đích (P7) | đã mất máy | — |
+| R4 | Người ngồi máy tắt agent / chặn capture | quyền của họ | — |
+| R5 | VPN provider thấy metadata (P9) | chấp nhận; không log nội dung | — |
+| R6 | Cert tự ký bị người dùng bấm qua cảnh báo | giáo dục + hard-fail trong app | §41.6 |
+| R7 | EDR gắn cờ (S1/S2 + inject) | bản chất kỹ thuật | §21.12 |
+| R8 | App exclusive-mode audio không kiểm chứng được | giới hạn Windows | §40.7 |
+| R9 | Xem trộm trong giới hạn rate limit `GET /windows` (T18) | cần cho UI | chỉ chủ máy xem |
+
+### 41.10 Kiểm chứng bảo mật (không chỉ đọc code)
+| # | Kiểm tra | Cách |
+|---|---|---|
+| 1 | `wid` lạ bị từ chối | test: gửi `wid` không có trong danh sách ⇒ 403 + audit |
+| 2 | `sid` người khác | 2 user, chéo `sid` ⇒ 403 ở **mọi** endpoint + WSS |
+| 3 | XSS qua tên cửa sổ | test: đặt tên cửa sổ `<img onerror=...>` ⇒ không chạy |
+| 4 | CSRF | POST từ origin khác, không custom header ⇒ 403 |
+| 5 | Clickjacking | `X-Frame-Options` + thử nhúng iframe ⇒ bị chặn |
+| 6 | Token reuse | dùng refresh cũ ⇒ toàn bộ chain revoke, các phiên khác chết |
+| 7 | Plaintext media | Wireshark: chỉ TLS/DTLS, không H.264/Opus thô (§17.1) |
+| 8 | Cert | cert sai ⇒ hard fail, không có nút "tiếp tục" |
+| 9 | Rate limit | 100 req/s `/windows` ⇒ 429, audit |
+| 10 | Fuzz | REST + WSS + DataChannel: 1 triệu input ngẫu nhiên ⇒ không panic, không crash |
+| 11 | Input không vượt biên | toạ độ ±2^31 ⇒ clamp, không lái chuột ra ngoài |
+| 12 | Log redaction | grep log sau 100 phiên ⇒ **0** tiêu đề cửa sổ, 0 token, 0 clipboard |
+| 13 | Update giả | gói update sai chữ ký ⇒ từ chối, không downgrade |
+| 14 | Quét động | chạy agent qua `Sysinternals` + 1 EDR để biết bị gắn cờ gì (§21.12) |
+
+### 41.11 Nhánh mới rẽ ra
+| Nhánh | Lĩnh vực | Vì sao từ §41 |
+|---|---|---|
+| **#2 Multi-session: tài nguyên, cách ly, 1 capture → N encode** | F | T1/T3 phức tạp hơn khi nhiều phiên; cách ly session là yêu cầu bảo mật |
+| **#3 Đóng gói & vòng đời cài đặt** | F | §41.8 (ký số, verify) chỉ thực thi được ở installer |
+| **#9 Consent UX người bị điều khiển** | E | T13 + §2.4: cần thiết kế cụ thể, không chỉ "có toast" |
+| **#10 Cert/proxy/trust chain sâu** | E | T20 + §41.6 |
+| #4 Hiệu năng client | H | |
+| #5 Input sâu | C | |
