@@ -1,6 +1,6 @@
-# SPEC v3.11 — Remote Desktop qua trình duyệt: HVNC + VNC, window picker, âm thanh server-side, **trải nghiệm điều khiển đầy đủ**
+# SPEC v3.12 — Remote Desktop qua trình duyệt: HVNC + VNC, window picker, âm thanh server-side, **trải nghiệm điều khiển đầy đủ**
 
-- Phiên bản: **v3.11** (v3.10 + **§41 threat model & ranh giới tin cậy**: 10 tài sản, 10 vị trí tấn công, 20 mối đe doạ theo ranh giới, 5 quyết định thiết kế bắt nguồn từ threat model, token chi tiết, người ngồi máy, supply chain, 9 rủi ro chấp nhận, 14 kiểm chứng · trước đó: **§40 âm thanh**: tách routing↔capture, AudioPolicyConfig không tài liệu, 3 mức routing + kiểm chứng bằng session enumeration, WASAPI loopback bẫy, ASRC chống drift, device notifications · **§0.2 bản đồ 8 lĩnh vực thay cho đi mãi một nhánh**): hai thiết bị một lõi — mobile zero-chrome, grip 3 tầng, radial 8 ô, command registry, flow contract FE↔BE**)
+- Phiên bản: **v3.12** (v3.11 + **§42 multi-session**: ràng buộc 1 con trỏ/1 focus của Win32, input lease, admission control có số, display slot, fanout 1 encode → N SRTP, cách ly lỗi, fairness, 10 bảo đảm cách ly · trước đó: **§41 threat model & ranh giới tin cậy**: 10 tài sản, 10 vị trí tấn công, 20 mối đe doạ theo ranh giới, 5 quyết định thiết kế bắt nguồn từ threat model, token chi tiết, người ngồi máy, supply chain, 9 rủi ro chấp nhận, 14 kiểm chứng · trước đó: **§40 âm thanh**: tách routing↔capture, AudioPolicyConfig không tài liệu, 3 mức routing + kiểm chứng bằng session enumeration, WASAPI loopback bẫy, ASRC chống drift, device notifications · **§0.2 bản đồ 8 lĩnh vực thay cho đi mãi một nhánh**): hai thiết bị một lõi — mobile zero-chrome, grip 3 tầng, radial 8 ô, command registry, flow contract FE↔BE**)
 - Trạng thái: **Đề xuất — CHƯA implement, chờ duyệt**
 - Nền tảng: Server **Windows 10 2004+ / Windows 11** · Client **trình duyệt** (không app)
 
@@ -25,6 +25,7 @@
 | **v3.9** | **§39 vì sao gộp 1 pass (10–13 ms → 2–4 ms) · 4 lỗi chuẩn: matrix BT.709, range limited 16–235, chroma **left-sited**, dither TPDF · chuỗi 7 bước đúng thứ tự · ma trận số cụ thể · scale ở **gamma** (không linear — linear làm chữ mờ) · HDR PQ→SDR với 203 nits + BT.2020→709 · bỏ alpha · giới hạn ICC/10-bit/4:4:4 · pseudo-HLSL 1 dispatch · 3 fallback · **7 test pattern CI** (grey ramp/color bars/1px chroma line/HDR)** |
 | **v3.10** | **§40 audio: routing ≠ capture · AudioPolicyConfig không có API tài liệu (rủi ro #1) · 3 mức routing (per-app → toàn máy → như VNC) + **kiểm chứng bằng EnumerateSessions** (phát hiện cả rò rỉ `audio_leak`) · app chỉ đọc thiết bị lúc khởi động · WASAPI loopback không có event khi im lặng ⇒ polling · `IMMNotificationClient` (không giành lại default device của người dùng) · **ASRC chống drift ±100 ppm = 720 ms/2 h** · toggle dùng `NULL` + SSRC mới · 12 test chấp nhận · Bluetooth client +150–300 ms không sửa được** · **§0.2 bản đồ 8 lĩnh vực, luật ≤2 lượt liên tiếp mỗi lĩnh vực** |
 | **v3.11** | **§41 threat model: 10 tài sản · 10 vị trí P1–P10 · **lật giả định nền — client KHÔNG tin cậy, agent tin về hành vi nhưng không tin về dữ liệu** · 3 hệ quả kiến trúc · 20 mối đe doạ T1–T20 theo ranh giới · 5 quyết định *bắt nguồn từ threat model* (client không gửi `hwnd`; không endpoint chạy lệnh; transfer/clipboard mặc định tắt; `X-Frame-Options: DENY`; người ngồi máy luôn dừng được) · token rotate + reuse detection · P6 quyền phủ quyết · supply chain/chống downgrade · 9 rủi ro chấp nhận · 14 kiểm chứng** |
+| **v3.12** | **§42 multi-session — phát hiện ràng buộc bị bỏ qua: 1 desktop = 1 con trỏ + 1 focus ⇒ chỉ 1 controller/session, N viewer** · input lease (server-side, TTL, release_all trước khi chuyển) · bảng chia sẻ vs cách ly 13 tài nguyên · admission control theo VRAM/RAM/CPU/slot/display có số (thay cho "max 3") · giới hạn display slot của VDD = câu hỏi chặn Phase 0 · fanout 1 encode → N SRTP (PLI theo **stream** không theo peer) · cách ly lỗi + tự phục hồi sau TDR · fairness 4 mức · **10 bảo đảm cách ly phải test (I1–I10), fail ⇒ tắt multi-session** · refcount dọn sau 5 s** |
 
 ### 0.1 v3.0 sửa gì — danh sách "còn thiếu" (đây là lý do v2.1 chưa đủ)
 
@@ -66,7 +67,7 @@
 | **C. Input & bàn phím** | §5.7, §5.8, §6.4–6.7 | — | — | ● nông |
 | **D. Giao diện & trải nghiệm** | §22–25, §28–34 | — | — | ● nông (rộng nhưng mỏng) |
 | **E. Bảo mật & tin cậy** | §10, §26.2 | **§41** | §41.10 | ●● vừa |
-| **F. Vận hành & triển khai** | §13, §26 | — | — | ● nông |
+| **F. Vận hành & triển khai** | §13, §26 | **§42** | §42.15 | ●● vừa |
 | **G. Bền vững & tiến hoá** | §21, §35.12 | — | — | ● nông |
 | **H. Hiệu năng client** | §26.11, §30.1 | — | — | ● rất nông |
 
@@ -75,8 +76,8 @@
 | # | Nhánh | Lĩnh vực | Vì sao ưu tiên |
 |---|---|---|---|
 | 1 | **Threat model & tin cậy** | E | ✅ **xong — §41** |
-| 2 | **Multi-session: tài nguyên, cách ly, 1 capture → N encode** | F | ⬜ **kế tiếp** — §37.10 mới nêu giới hạn slot, chưa có kiến trúc; cách ly session là yêu cầu bảo mật (§41.4 T1/T3) |
-| 3 | **Đóng gói & vòng đời cài đặt** (MSI, driver, rollback kiểm chứng được) | F | nơi hay hỏng nhất khi giao cho người dùng |
+| 2 | **Multi-session: tài nguyên, cách ly, fanout** | F | ✅ **xong — §42** |
+| 3 | **Đóng gói & vòng đời cài đặt** (MSI, display slot, rollback kiểm chứng được) | F | ⬜ **kế tiếp** — §42.6 phụ thuộc driver, chỉ kiểm chứng được khi cài thật |
 | 4 | **Hiệu năng client đo trong CI** | H | có ngân sách nhưng chưa có cách chặn |
 | 5 | **Input sâu**: IME server-side, accessibility, game/Raw Input, remote-in-remote | C | ● nông, ảnh hưởng trực tiếp cảm giác dùng |
 | 6 | **Mô hình dữ liệu & migration sâu** (đã có bảng, chưa có hành vi) | G | |
@@ -4355,5 +4356,212 @@ Sau khi đổi routing, **không tin** kết quả trả về. Kiểm chứng b�
 | **#3 Đóng gói & vòng đời cài đặt** | F | §41.8 (ký số, verify) chỉ thực thi được ở installer |
 | **#9 Consent UX người bị điều khiển** | E | T13 + §2.4: cần thiết kế cụ thể, không chỉ "có toast" |
 | **#10 Cert/proxy/trust chain sâu** | E | T20 + §41.6 |
+| #4 Hiệu năng client | H | |
+| #5 Input sâu | C | |
+
+---
+
+## 42. Multi-session: tài nguyên, cách ly, và một ràng buộc bị bỏ qua (nhánh #2 — lĩnh vực F)
+
+> §3 hứa **Tier 2: 3 phiên song song**. §37.10 mới nói *giới hạn slot encoder*. §41 nói cách ly là yêu cầu bảo mật. Nhưng câu hỏi chưa ai đặt: **3 phiên trên CÙNG một Windows user session có thật sự chạy được không?**
+> Câu trả lời là **không, không phải cho input** — và lý do là một thứ nằm ngoài mọi thứ spec đã bàn.
+
+### 42.1 Ràng buộc nền: **một desktop chỉ có MỘT con trỏ và MỘT focus**
+Windows (user session) có **một** `GetCursorPos` toàn cục và **một** foreground window cho **toàn bộ desktop** — bất kể có bao nhiêu display ảo, bao nhiêu cửa sổ. Điều này không phải giới hạn của ta; nó là kiến trúc của Win32.
+
+Hệ quả trực tiếp:
+| Thao tác | Thực tế |
+|---|---|
+| `SendInput` absolute tới display ảo **A** | con trỏ hệ thống **rời** display B, **đi** sang A. Chỉ cửa sổ ở A nhận message |
+| Phiên B gửi click tới display ảo **B** | con trỏ **rời** A ⇒ phiên A **mất hover**, mất drag đang giữ, tooltip tắt |
+| Hai phiên cùng gửi `pointermove` | con trỏ **nhảy qua lại** giữa 2 display ở 120 Hz ⇒ **cả hai đều không dùng được** |
+| Hai phiên cùng gõ phím | tất cả đi vào **một** foreground window ⇒ phiên này gõ vào app của phiên kia |
+> **Kết luận cứng: trên cùng một Windows user session, tại một thời điểm chỉ có ĐÚNG MỘT phiên được điều khiển.**
+> Đây không phải "nên tránh" — hai phiên điều khiển đồng thời sẽ **phá cả hai**, và tệ hơn: phiên A có thể gõ vào cửa sổ của phiên B (**rò rỉ chéo**).
+
+### 42.2 Ba loại phiên (thay cho "3 phiên song song")
+| Loại | Được gì | Số lượng | Ghi chú |
+|---|---|---|---|
+| **controller** | xem + điều khiển | **1 / Windows session** | giữ **input lease** §42.3 |
+| **viewer** | xem + nghe, không điều khiển | **N** (giới hạn tài nguyên) | mỗi viewer 1 cửa sổ riêng trên display riêng của nó |
+| **waiting** | đã tạo, chờ lease | **N** (xếp hàng, TTL 90 s) | hiện "Đang chờ người khác nhường quyền" + nút xin |
+> Vậy "Tier 2 nhiều phiên" = **1 controller + N viewer**, không phải "N controller". Phải sửa lời hứa ở §3 — và nói rõ lý do trong UI, không chỉ trong spec.
+
+### 42.3 Input lease — cơ chế (không phải "lock mềm")
+```
+LEASE(session) = { holder_sid, acquired_at, ttl=300s, renewed_by_input }
+```
+| Sự kiện | Hành vi |
+|---|---|
+| Tạo phiên, **không ai giữ lease** | cấp ngay (không cần chờ) |
+| Tạo phiên, lease đang bị giữ | phiên mới ở trạng thái **waiting**, UI: *"Người khác đang điều khiển. [Xem] [Xin quyền]"* |
+| Xin quyền | gửi yêu cầu tới holder: *"user B xin điều khiển [Cho] [Từ chối] [Cho 5 phút]"* |
+| Holder im lặng 10 s với yêu cầu | **không** tự chuyển (tránh cướp phiên khi holder đang bận) — chỉ nhắc lại 1 lần |
+| Holder mất kết nối >30 s | lease **tự giải phóng** (tránh treo vĩnh viễn) |
+| Holder kết thúc phiên | giải phóng ngay, phiên waiting đầu tiên nhận (FIFO), thông báo cả 2 |
+| Admin force-handover | bỏ qua yêu cầu, **release_all** trước khi chuyển (tránh kẹt phím/nút của holder cũ) |
+| Chuyển lease | **bắt buộc** `release_all` + **dừng gửi input** của holder cũ **trước**, rồi mới cấp cho người mới. Thứ tự ngược = 2 nguồn input chồng lên nhau trong 1 khoảng thời gian |
+- Lease **không** phải thứ client tự giữ: nó ở **server**, client chỉ biết qua WSS `lease_state`.
+- **Kiểm tra ở server** mỗi input event: nếu `sid != lease.holder` ⇒ **drop** + đếm `input_rejected` (không báo lỗi cho user, chỉ stats). Client độc hại tự gửi input dù không có lease ⇒ **không có tác dụng**.
+- Một tinh chỉnh: **viewer vẫn được gửi** `pointermove` để thấy con trỏ local của họ **không** — không, viewer không có con trỏ local (cursor_mode = remote, §6.3.6). Vậy viewer **không gửi input gì**.
+
+### 42.4 Cái gì chia sẻ, cái gì cách ly (bảng phải thuộc)
+| Tài nguyên | Chia sẻ? | Cách ly thế nào | Rủi ro nếu sai |
+|---|---|---|---|
+| **Windows user session** | **có** (nền tảng) | — | không thể cách ly; đây là lý do §42.1 |
+| **Con trỏ / focus** | **có** (1 cái) | **input lease** | rò input chéo, phá cả 2 |
+| **Clipboard** | **có** (1 cái) | clipboard **mặc định tắt** (§41.5 D3); nếu bật: **chỉ controller** được dùng | A dán nội dung của B |
+| D3D11 device | **có** | dùng chung, refcount | device mất ⇒ **mọi** phiên chết (§42.10) |
+| Màn hình ảo (VDD) | **không** | 1 display / phiên | 2 phiên thấy nhau |
+| Capture (duplication) | **không** (HVNC) | 1 duplication / display | — |
+| Encoder | **không** (mỗi phiên 1) | 1 element / phiên | — |
+| Encode output cho viewer | **có** (fanout §42.9) | cùng preset | — |
+| Cable âm thanh | **không** (mỗi phiên 1) | CABLE-A/B/C | trộn tiếng giữa phiên |
+| Audio routing (mức B) | **có** (default device) | chỉ **1** phiên được dùng mức B; phiên khác buộc mức A hoặc C | phiên B đổi default ⇒ phá audio phiên A |
+| VRAM / CPU | **có** | admission control §42.5 | crash/OOM |
+| Audit, DB | có | theo `sid` | — |
+| Token, quyền | **không** | per user | — |
+
+### 42.5 Admission control — công thức có số (thay cho "max 3")
+```
+required(session) =
+  VRAM : 12.5 MB (pool 1080p NV12 ×4)
+       + encoder_vram   (NVENC ~96 MB | QSV ~64 MB | AMF ~80 MB | x264 ~8 MB)
+       + display_fb      (~16 MB cho display ảo 1080p)
+  RAM  : ~120 MB (pipeline + queues) + 24 MB (audio + buffers)
+  CPU  : x264: 30–45% core · HW: 3–6% core
+  SLOT : NVENC 1 · QSV 1 · AMF 1 · x264 1/cửa sổ core/3
+  DISPLAY: 1 màn hình ảo
+admit if:
+  free_vram_after  > 150 MB        (dự trữ cứng, §35.14)
+  free_ram_after   > 400 MB
+  cpu_headroom     > 30%           (đo 5 s gần nhất)
+  encoder_slot     > 0  (hoặc fallback x264 nếu CPU đủ)
+  display_slots    > 0
+else: 503 `server.busy` + `retry_after_ms` + **lý do cụ thể** ("hết bộ nhớ GPU" ≠ "hết màn hình ảo")
+```
+- Trả lý do **theo tài nguyên nào thiếu** — người dùng cần biết nên đóng phiên nào.
+- **Không** dùng "max_sessions = N" làm biến duy nhất: N=3 trên máy 4 GB VRAM sẽ crash, N=3 trên máy 24 GB sẽ lãng phí.
+- Đo **thật** mỗi 5 s (`QueryVideoMemoryInfo`, `GetProcessMemoryInfo`, CPU), không ước lượng từ config.
+- **Đoán trước** khi tạo: nếu không đủ, **không** tạo rồi mới chết giữa phiên.
+
+### 42.6 Màn hình ảo — giới hạn thật (câu hỏi mở cho Phase 0)
+- Windows **giới hạn số display** trên một adapter (thường 4–8 tuỳ driver/adapter); mỗi display ảo của VDD là một display **thật** ở tầng OS ⇒ **tiêu tốn slot display thật**.
+- **Chưa biết chắc** VDD tạo được bao nhiêu display đồng thời, và có ổn định ở 3–4 không. **Đây là câu hỏi chặn Phase 0** (cùng với p95 và TWCC).
+- Thiết kế phòng thủ:
+  1. `display.max = min(3, slot thật còn lại − 1)` (chừa 1 slot cho màn hình thật; nếu rút màn hình thật ra thì cảnh báo).
+  2. Không đủ slot ⇒ phiên mới nhận `503 display_exhausted` + gợi ý: *"Đóng một phiên khác, hoặc chuyển phiên này sang 'Xem 1 cửa sổ' (chế độ VNC-window, chưa hỗ trợ)"*.
+  3. **Không bao giờ** dùng chung display giữa 2 phiên (sẽ thấy nhau — §42.12).
+  4. Nếu VDD hỏng khi tạo display thứ N ⇒ coi như hết slot, **không** thử lại vô hạn.
+- **HVNC màn hình ảo bị giữ** giữa các phiên (§9.2.2) — nghĩa là slot display **không được giải phóng** khi phiên kết thúc. Điều này **giới hạn cứng** số phiên từng chạy đồng thời trong lịch sử máy. Phải có: nếu tạo display mới thất bại 2 lần ⇒ **tái sử dụng display đang rảnh** (reset nó, move cửa sổ vào) thay vì tạo mới, và nếu display rảnh còn cửa sổ mồ côi ⇒ rescue (§9.2.3).
+
+### 42.7 Âm thanh nhiều phiên
+| Tình huống | Hành vi |
+|---|---|
+| ≥3 cable | mỗi phiên 1 cable (A/B/C) — cách ly thật |
+| 1–2 cable, ≥3 phiên | phiên thứ 3: `audio_route = vnc` (nghe thiết bị thật) hoặc `off`, **kèm cảnh báo** "âm thanh có thể lẫn" |
+| Phiên dùng mức B (đổi default device) | **độc quyền**: chỉ 1 phiên được mức B; phiên khác bị **ép** về A/C. Nếu không ép ⇒ 2 phiên đổi default liên tục, audio của cả 2 hỏng |
+| Cable bị xoá | chỉ phiên dùng nó bị ảnh hưởng; các phiên khác không được dừng |
+- Watchdog restore default device phải **biết** mức B có đang bị phiên nào giữ hay không (refcount), nếu không sẽ restore giữa lúc phiên khác cần.
+
+### 42.8 Encode: chia sẻ ở đâu thì có lợi
+| Trường hợp | Có chia sẻ encode không? | Lý do |
+|---|---|---|
+| 2 controller khác cửa sổ (2 display) | **không** | nguồn khác, resolution/preset có thể khác |
+| 1 controller + 1 viewer **cùng cửa sổ** | **có** — 1 encode, 2 SRTP (§42.9) | tiết kiệm 1 slot encoder + VRAM |
+| 2 viewer cùng cửa sổ, **cùng preset** | **có** | |
+| 2 viewer cùng cửa sổ, **khác preset** | **không** — 2 encode | preset là hợp đồng với người dùng (§6.10.1), không hạ cấp người khác |
+| Viewer + controller khác preset | 2 encode (controller ưu tiên slot) | |
+**Luật:** slot encoder cấp theo thứ tự **controller trước, viewer sau**, và viewer dùng chung encode **chỉ khi** preset + resolution + fps **trùng hoàn toàn** với chủ stream.
+
+### 42.9 Fanout 1 encode → N SRTP (kiến trúc)
+```
+capture → 1 pass GPU (§39) → 1 encoder → h264parse
+                                            ├── rtph264pay + webrtcbin(A)  → SRTP → viewer A
+                                            ├── rtph264pay + webrtcbin(B)  → SRTP → viewer B
+                                            └── rtph264pay + webrtcbin(C)
+```
+- **Không** dùng SFU ngoài; đây là fanout trong cùng process với **N `webrtcbin`** (mỗi peer 1 DTLS/SRTP riêng — bắt buộc, vì SRTP key khác nhau).
+- Cần: mỗi nhánh 1 `rtph264pay` riêng (sequence number/SSRC riêng), **nhưng** có thể dùng chung buffers (zero-copy).
+- **Điểm nghẽn thật**: CPU cho SRTP encryption × N. Ở 8 Mbps, AES-NI mã hoá ~1–2% core mỗi peer ⇒ 3 viewer ≈ 5% core. Chấp nhận.
+- **PLI/NACK riêng từng nhánh**: viewer A mất gói ⇒ A xin IDR ⇒ **IDR đó phát cho tất cả** (vì 1 encoder). Đây là đánh đổi: 1 viewer mạng xấu làm **mọi** viewer nhận IDR ⇒ §36.6 (chống IDR storm) phải tính cả trường hợp này: giới hạn IDR **theo stream chứ không theo peer**.
+- Nếu 1 viewer có mạng rất xấu (loss >10% kéo dài) ⇒ **tách** nó ra encode riêng ở bitrate thấp hơn (khi còn slot), hoặc hạ nó xuống "ảnh tĩnh 1 fps" (degrade riêng, không kéo người khác xuống).
+
+### 42.10 Cách ly lỗi (failure isolation)
+| Lỗi ở | Được phép ảnh hưởng | Không được phép |
+|---|---|---|
+| capture của phiên A | phiên A | B, C |
+| encoder của A (GPU reset) | A (fallback x264) | B, C |
+| audio của A | A | B, C |
+| webrtcbin của A (DTLS hỏng) | A | B, C |
+| **D3D11 device bị mất** (`DXGI_ERROR_DEVICE_REMOVED`) | **tất cả** — không tránh được | nhưng phải: recreate device → **cả N phiên tự phục hồi**, không crash process |
+| audio routing mức B | phiên giữ mức B + **cảnh báo cho các phiên khác** | — |
+| **một app bị treo trên display A** | A (frame_freeze) | B, C |
+| lease holder chết | cả N (giải phóng lease + release_all) | — |
+- Yêu cầu kỹ thuật: **không có `unwrap`/`panic` trên đường nóng** của một phiên làm sập cả process. Mỗi phiên là **một task có supervisor riêng**; panic trong task ⇒ restart task đó, ghi audit, các phiên khác không biết.
+- **TDR (GPU reset)**: nếu `DEVICE_REMOVED` ⇒ tạo device mới, **tất cả** phiên re-init encoder (HW có thể không khả dụng ngay ⇒ fallback x264). Ghi rõ trong test §42.15.
+
+### 42.11 Công bằng khi quá tải (fairness)
+Khi CPU/GPU quá tải, **giảm ai trước**? Không được để "phiên tạo sau làm phiên đang dùng bị giật".
+| Thứ tự ưu tiên (giảm dần) | Đối tượng |
+|---|---|
+| 1 | **controller** > viewer |
+| 2 | **phiên đang có input trong 30 s qua** > phiên im lặng |
+| 3 | **phiên cũ** > phiên mới (không cướp trải nghiệm đang dùng) |
+| 4 | phiên có preset thấp > preset cao (dễ hạ hơn) |
+Hành vi khi vượt ngưỡng:
+- Tranh chấp CPU > 85% trong 3 s ⇒ **viewer bị hạ fps 60→15** trước, rồi controller hạ 1 bậc preset (§36.9), rồi mới từ chối phiên mới.
+- Tranh chấp VRAM ⇒ **từ chối** phiên mới (không hạ chất lượng phiên đang chạy — VRAM không trả lại được nếu không dựng lại encoder).
+- Ghi `fairness_action` vào audit để giải thích "vì sao hình tôi mờ".
+
+### 42.12 Bảo đảm cách ly — bảng phải test được
+| # | Điều phải đúng | Test |
+|---|---|---|
+| I1 | Viewer A **không** thấy cửa sổ của phiên B | 2 phiên 2 cửa sổ có nội dung khác nhau (màu nền khác) ⇒ capture A **chỉ** có màu A |
+| I2 | Input của A **không** tới cửa sổ B | 2 phiên, gõ 1 chuỗi ở A ⇒ app B **không** nhận ký tự |
+| I3 | A **không** kết thúc được phiên B | gọi `DELETE /sessions/{sidB}` với token A ⇒ 403 |
+| I4 | A **không** xem được thumbnail cửa sổ của B khi B ở display riêng | `GET /windows` của A không liệt kê cửa sổ đang được B độc quyền |
+| I5 | Clipboard của A **không** sang B | copy ở A ⇒ clipboard B không đổi |
+| I6 | Audio của A **không** sang B | phát âm thanh riêng ở A ⇒ stream B im |
+| I7 | Token/lỗi của A không lộ sang B | audit tách theo `sid` + `sub` |
+| I8 | A không gửi input khi không có lease | tự gửi qua DC ⇒ server drop, `input_rejected` tăng, cửa sổ B không nhận |
+| I9 | Một phiên crash không làm sập phiên khác | bơm panic vào task A ⇒ B vẫn chạy |
+| I10 | 1 phiên hết tài nguyên không làm OOM cả process | ép A dùng 5 GB ⇒ A bị kill, B chạy |
+> I1, I2, I4, I6, I8 là **năm điều không thể thoả hiệp**. Nếu bất kỳ điều nào fail ⇒ **multi-session phải tắt** (về Tier 1: 1 phiên) cho tới khi sửa xong. Ghi rõ để không ai "tạm bỏ qua".
+
+### 42.13 Vòng đời chia sẻ tài nguyên (refcount)
+| Tài nguyên | Refcount bởi | Tạo khi | Xoá khi |
+|---|---|---|---|
+| D3D11 device | tất cả phiên | lần đầu cần | phiên cuối đóng **+ 5 s** (tránh tạo/xoá liên tục khi reconnect) |
+| Màn hình ảo | 1 phiên (nhưng **giữ** sau khi đóng, §9.2.2) | cần | uninstall hoặc khi hết slot (§42.6) |
+| Cable âm thanh | 1 phiên | cần | khi phiên đóng |
+| Mức B default device | 1 phiên (độc quyền) | khi chọn | restore khi phiên đóng **hoặc** khi nhường cho phiên khác |
+| Encoder | 1 phiên (+ N viewer nếu fanout) | cần | khi stream cuối cùng đóng |
+**Luật:** refcount giảm về 0 ⇒ **hẹn giờ 5 s** rồi mới dọn (reconnect xảy ra trong cửa sổ này). Nếu có phiên mới trong 5 s ⇒ huỷ hẹn.
+
+### 42.14 Metrics
+Cấp phiên: các metric §35/§36/§40 + `lease_holder`, `role(controller/viewer/waiting)`, `input_rejected`, `vram_mb`, `cpu_pct`.
+Cấp máy: `sessions_total`, `vram_used/free`, `display_slots_used/free`, `encoder_slots`, `cpu_headroom`, `fairness_action_last`, `admission_rejected_reason`.
+
+### 42.15 Kiểm chứng (bắt buộc)
+| # | Test | Ngưỡng |
+|---|---|---|
+| 1 | I1–I10 ở §42.12 | 10/10 pass |
+| 2 | 3 phiên (1 controller + 2 viewer) 30 phút | không rò VRAM/handle; mỗi phiên fps p95 ≥ 55 (viewer) |
+| 3 | Lease: A giữ, B xin, A cho | input A **dừng trước** khi B bắt đầu (đo bằng timestamp server) |
+| 4 | Lease: A mất mạng 30 s | lease tự giải phóng, B nhận được, **0** kẹt phím trên máy thật |
+| 5 | Admission: máy 4 GB VRAM, 3 phiên | phiên 3 nhận `503` **trước khi** tạo, lý do đúng tài nguyên |
+| 6 | Đoán sai: tạo 5 phiên cùng lúc khi còn chỗ 3 | 3 thành công, 2 nhận `503`, **không** crash |
+| 7 | TDR giữa phiên (bơm bằng driver reset tool) | cả 3 phiên tự phục hồi hoặc báo lỗi rõ, process **không** chết |
+| 8 | Panic trong task phiên A | B, C không ảnh hưởng |
+| 9 | Viewer xấu mạng (loss 10%) | IDR bị giới hạn theo stream, viewer khác không bị giật |
+| 10 | 1 display slot (giả lập) | phiên 2 nhận `display_exhausted`, không thử lại vô hạn |
+
+### 42.16 Nhánh mới rẽ ra
+| Nhánh | Lĩnh vực | Vì sao từ §42 |
+|---|---|---|
+| **#3 Đóng gói & vòng đời cài đặt** | F | **kế tiếp** — §42.6 phụ thuộc driver/display slot, chỉ kiểm chứng được khi cài thật |
+| **#13 Lease UX** (xin/nhường quyền trên UI, mobile) | D | §42.3 mới có server-side; UI chưa có |
+| **#14 Nhiều Windows user session** (Fast User Switching / RDS) để có >1 controller thật | F | §42.1 chỉ giải được bằng nhiều desktop; đắt, ngoài scope, ghi nhận |
 | #4 Hiệu năng client | H | |
 | #5 Input sâu | C | |
