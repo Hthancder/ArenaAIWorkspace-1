@@ -1,6 +1,6 @@
 # SPEC v3.15 — Remote Desktop qua trình duyệt **cho dùng cá nhân**: HVNC + VNC, window picker, âm thanh server-side, trải nghiệm điều khiển đầy đủ
 
-- Phiên bản: **v3.16 — thêm §46 "máy có ở đó không" (ngủ/reboot/đổi IP/khoá màn hình)**, lĩnh vực G còn trống · trước đó: **v3.15** — phạm vi thu hẹp về 1–2 người dùng (§0.3). Bản v3.14 là bản "sản phẩm": có cert, EULA, RBAC, accessibility, đóng gói ký số. Tất cả những thứ đó **đã cắt** ở đây — xem §0.3.1 để biết cắt gì và cắt có an toàn không. Lịch sử đầy đủ v1.0→v3.14 ở §0.
+- Phiên bản: **v3.17 — thêm §47 khởi động cùng Windows + vòng đời process + trải nghiệm theo thời gian** · trước đó: **v3.16 — thêm §46 "máy có ở đó không" (ngủ/reboot/đổi IP/khoá màn hình)**, lĩnh vực G còn trống · trước đó: **v3.15** — phạm vi thu hẹp về 1–2 người dùng (§0.3). Bản v3.14 là bản "sản phẩm": có cert, EULA, RBAC, accessibility, đóng gói ký số. Tất cả những thứ đó **đã cắt** ở đây — xem §0.3.1 để biết cắt gì và cắt có an toàn không. Lịch sử đầy đủ v1.0→v3.14 ở §0.
 - Trạng thái: **Đề xuất — CHƯA implement, chờ duyệt.** Sau v3.15, spec **không còn chương nào cần viết**; việc tiếp theo là **P0 (đo thật)**, không phải viết thêm.
 - Nền tảng: Server **Windows 10 2004+ / Windows 11** · Client **trình duyệt** (không app)
 
@@ -27,6 +27,7 @@
 | **v3.11** | **§41 threat model: 10 tài sản · 10 vị trí P1–P10 · **lật giả định nền — client KHÔNG tin cậy, agent tin về hành vi nhưng không tin về dữ liệu** · 3 hệ quả kiến trúc · 20 mối đe doạ T1–T20 theo ranh giới · 5 quyết định *bắt nguồn từ threat model* (client không gửi `hwnd`; không endpoint chạy lệnh; transfer/clipboard mặc định tắt; `X-Frame-Options: DENY`; người ngồi máy luôn dừng được) · token rotate + reuse detection · P6 quyền phủ quyết · supply chain/chống downgrade · 9 rủi ro chấp nhận · 14 kiểm chứng** |
 | **v3.12** | **§42 multi-session — phát hiện ràng buộc bị bỏ qua: 1 desktop = 1 con trỏ + 1 focus ⇒ chỉ 1 controller/session, N viewer** · input lease (server-side, TTL, release_all trước khi chuyển) · bảng chia sẻ vs cách ly 13 tài nguyên · admission control theo VRAM/RAM/CPU/slot/display có số (thay cho "max 3") · giới hạn display slot của VDD = câu hỏi chặn Phase 0 · fanout 1 encode → N SRTP (PLI theo **stream** không theo peer) · cách ly lỗi + tự phục hồi sau TDR · fairness 4 mức · **10 bảo đảm cách ly phải test (I1–I10), fail ⇒ tắt multi-session** · refcount dọn sau 5 s** |
 | **v3.13** | **§43 client perf: vì sao client dễ chết hơn server (6 nền tảng, Safari iOS kill tab ~200–400 MB, GC không kiểm soát) · 15 chỉ số ngân sách có cách đo · quyết định render (video element ≠ canvas; cursor = div transform; HUD 2 Hz) · **10 chỗ tốn tiền thật** (#1 forced reflow từ `getBoundingClientRect` mỗi pointer event — bug phổ biến nhất, không thấy bằng mắt) · kiến trúc JS (0 dependency, 12 module, `render(state)`) · perf-probe + **CI gate thật** (size/type/perf/leak, baseline 7 ngày) · 3 giới hạn cứng mobile · overlay 0 ms main thread · 8 nguồn rò rỉ + test 50 lần vào/ra** |
+| **v3.17** | **§47 khởi động & vòng đời process** — chỗ hở thực tế nhất: §13.6 chỉ có 1 dòng "At log on". **4 cách tự chạy, chỉ 1 cách đúng** (Task Scheduler At-logon dưới user; **Session 0 = app chạy mà không capture được** — bẫy phổ biến nhất) · **2 cờ Task Scheduler mặc định sai**: không chạy trên pin + dừng khi rút sạc (⇒ app tắt lúc đi họp, không báo gì) · **delay 20 s** vì driver/DWM chưa sẵn sàng + retry 3×10 s + web server mở ngay · mutex `Local\` + "đã có bản khác" + **không bao giờ kill bản cũ** · **`state.json` có 4 trạng thái** (thiếu / crash / **reboot ⇒ không restore gì** / hỏng) và **HWND bị tái sử dụng** ⇒ phải khớp bộ 4 · restore **đúng thứ tự cứng** ①audio → ②cửa sổ → ④xoá display sau cùng · `install.ps1 -Restart` thay binary khi đang chạy · **first-run 5 trạng thái** + QR ở `/setup` là khoảnh khắc quyết định · **bảng hỏng dần theo thời gian** (10 s → tuần 1 → tháng 6) · 14 edge case khởi động + 7 test |
 | **v3.16** | **§46 "Máy có ở đó không?"** — lỗ hổng chỉ lộ khi dùng thật: mọi chương trước giả định máy chủ **đang chạy, đã đăng nhập, trả lời được**. 5 lỗi khác nhau bị gộp thành 1 thông báo "không kết nối được" · phân biệt `refused` vs `timeout` từ browser (4 mẹo, không đạt 100%) · `SetThreadExecutionState` **chỉ khi có phiên** + nhả ngay (bug "app làm nóng pin") · **WoL: browser KHÔNG gửi được UDP** ⇒ không hứa nút "đánh thức"; bẫy **Fast Startup** · reboot sau Windows Update: "Run whether user is logged on or not" chạy **Session 0 = vô dụng**, auto-logon là **đánh đổi bảo mật của bạn** không phải mặc định · đổi IP ⇒ **Tailscale MagicDNS là đường chính** + DHCP reservation · khoá màn hình: phát hiện qua `WTSConnectState`, **không** gửi input mù · 5 lỗi → 5 câu → 5 nút |
 | **v3.15** | **§0.3 Thu hẹp phạm vi: dùng cá nhân, 1 người, 1 máy.** Cắt khỏi spec: **EV cert / ký driver / SmartScreen / EULA / SBOM / GDPR / pháp lý** · **accessibility cho người khiếm thị** (screen reader qua audio, NVDA test, WCAG, UIA over the wire) · **multi-user / role / TOTP / `/admin` / handover / chia sẻ link** · **đóng gói MSI + wizard + chữ ký số / auto-update có kênh** · **RBAC, SLA, self-hosted runner, ma trận hỗ trợ nhiều OS, soak 72 h, fuzz định kỳ**. Thay bằng: **§0.3 phạm vi**, **9 điều kiện cài chạy được ngay trên máy của bạn**, **3 khoản $0 duy nhất**, và **4 thứ đổi hành vi thiết kế** (setup 30 phút; HVNC = chế độ có công tắc; 1 profile cài đặt thay 5 tab; CI = 1 workflow) |
 | **v3.14** | **§44 input sâu: 2 lớp (intent vs raw) không bao giờ trộn · 15 dòng máy trạng thái input với 5 bất biến (kẹt phím) · server-side IME: 3 cách, chọn A (VK thô) và từ chối TSF · game/Raw Input/injected flag, không hứa vượt anti-cheat · remote-in-remote (2 tầng trễ, phím bị nuốt) · **accessibility: screen reader chạy trên MÁY SERVER, tiếng đọc đi qua audio stream — 0 đồng và hoạt động thật** · release_all nhảy hàng · 7 giới hạn an toàn · 10 test** · **§45 build/licence: GStreamer LGPL động OK, `gst-plugins-ugly`+x264 = GPL hoá cả app, openh264 tự build = tự gánh patent → thứ tự NVENC→QSV→AMF→MediaFoundation, **không ship x264** · GitHub Actions free nhưng **không test được GPU/desktop** ⇒ self-hosted runner · 2 khoản phải trả tiền (EV cert ký driver, VB-Audio tổ chức) · driver ký = cái bẫy thực tế nhất** |
@@ -69,7 +70,7 @@
 | **A. Video/capture/encode** | ●●● §35–§39 — sâu nhất | **không** — chỉ còn P0 phải **đo** (p95, TWCC) |
 | **B. Âm thanh** | ●● §40 | không |
 | **C. Input & bàn phím** | ●● §44 | không (còn #18, nhỏ) |
-| **D. Giao diện & trải nghiệm** | ● §22–25, §28–34 | **thu nhỏ** ở v3.15: 12 mục thay 60, bỏ `/admin`, bỏ role |
+| **D. Giao diện & trải nghiệm** | ●● §22–25, §28–34 + **§47** | thu nhỏ ở v3.15 (12 mục thay 60, bỏ `/admin`); v3.17 thêm **vòng đời process, first-run, hỏng dần theo thời gian** |
 | **E. Bảo mật & tin cậy** | ●● §41 | **thu nhỏ**: giữ auth + HTTPS + token; bỏ EULA/GDPR/SBOM (§0.3.1) |
 | **F. Vận hành & triển khai** | ●● §42, §45 | **thu nhỏ**: 1 phiên, `install.ps1`, $0 |
 | **G. Bền vững & tiến hoá** | ●● **§46** | dữ liệu thì đóng (2 file JSON, không DB — §26.16), nhưng **máy ngủ/reboot/đổi IP** mới là vấn đề thật ⇒ §46 |
@@ -82,7 +83,8 @@
 | **P0-a** | Đo **p95 glass-to-glass** trên máy bạn | phụ thuộc GPU/driver/Windows build thật của bạn |
 | **P0-b** | Đo **TWCC/REMB trên GStreamer** có hoạt động không | nếu không có, phải đổi stack (§16.6) — quyết định sau khi đo |
 | **P0-c** | VDD tạo được mấy display, có ổn định | §42.6 |
-| **P0-d** | Máy ngủ/reboot có phục hồi sạch không | §46.10 (test 1–6, làm được trên 1 máy) |
+| **P0-d** | Máy ngủ/reboot có phục hồi sạch không | §46.10 (test 1–6) |
+| **P0-e** | Cài → reboot → login có tự chạy, không cần bấm gì | §47.9 (test 1–7, ~10 phút) |
 
 > **Luật luân chuyển (≤2 lượt/lĩnh vực) đã hoàn thành nhiệm vụ.** Ở v3.15 nó giúp **cắt** thay vì đào thêm. Ở v3.16 nó giúp tìm ra **một lĩnh vực trống thật** mà 15 bản trước bỏ qua: **máy ngủ / reboot / đổi IP** (§46) — thứ không phải "tính năng sản phẩm" mà là lý do số 1 khiến bạn mở điện thoại ra và không kết nối được.
 
@@ -172,6 +174,7 @@ Không có cái nào trong đây là "production". Chúng là thứ mà **một 
 - Client: browser hiện đại trong **secure context (HTTPS)** — WebRTC/DataChannel/audio đều cần.
 - Server: Win10 2004+ / Win11, **user đăng nhập tương tác**.
 - Server chạy **tray app trong user session**, không phải Windows Service (§2.3).
+- App phải **tự chạy sau khi login** — không cần bấm gì, và phải sống sót qua reboot/kill (§47).
 - **Máy phải thức và đã đăng nhập** thì mới kết nối được. Đây không phải chi tiết nhỏ: nó là nguyên nhân số 1 của "không kết nối được" ⇒ **§46** (giữ thức chỉ khi có phiên, WoL thật ra không làm được từ browser, reboot sau Windows Update, đổi IP, khoá màn hình).
 
 ### 2.2 Ma trận Windows
@@ -945,7 +948,7 @@ Xử lý:
   "display":"{id}" }
 ```
 - Ghi **trước** khi move/route; xoá sau khi restore thành công.
-- Lúc khởi động: nếu file còn → restore (audio trước, cửa sổ sau) → xoá. Đây là lưới an toàn cho crash/power loss.
+- Lúc khởi động: **4 trạng thái** của file, **thứ tự restore cứng**, và cách nhận diện cửa sổ còn sống (`HWND` bị tái sử dụng) ⇒ **§47.4**. Đây là lưới an toàn cho crash/power loss.
 
 ### 9.3 `capture` — §5.5
 - Drop frame khi encoder bận >33 ms (không queue) — latency trên hết.
@@ -1304,7 +1307,7 @@ Như v2.1, cộng:
 |---|---|---|
 | 1 | `winget install VirtualDrivers.Virtual-Display-Driver` (đã ký sẵn) hoặc VDC app | 5′ |
 | 2 | Cài cable âm thanh: **VB-CABLE** (đã ký, không cần tắt Secure Boot) — hoặc Virtual Audio Driver nếu chấp nhận `testsigning on` (§0.3.2) | 5′ |
-| 3 | `install.ps1`: copy binary + tạo shortcut "At log on" + firewall rule 443/UDP + sinh cert tự ký | 2′ |
+| 3 | `install.ps1`: copy binary + **Task Scheduler At-logon (delay 20 s, chạy cả trên pin)** + firewall rule 443/UDP + sinh cert tự ký — cấu hình chính xác ở **§47.2** | 2′ |
 | 4 | **Cài trust cert** trên máy bạn dùng để điều khiển (Windows/macOS/iOS/Android — §26.6) | 5′ |
 | 5 | `/setup`: mật khẩu → chọn LAN hay Tailscale → 5 dòng kiểm tra → xong | 3′ |
 | 6 | Mở `https://<host>/` trên điện thoại, thử 1 phiên | 5′ |
@@ -1809,7 +1812,7 @@ Mọi trạng thái phải có: **câu giải thích + 1 hành động chính + 
 ### 21.5 Cập nhật & sao lưu — bản cá nhân
 | Việc | Cách làm (không ký số, không kênh update) |
 |---|---|
-| Cập nhật | **`git pull` + `cargo build --release` + restart app**. Không auto-update, không server update, không chữ ký gói (bạn là người build ra nó) |
+| Cập nhật | **`git pull` + `cargo build --release` + `install.ps1 -Restart`** (§47.6: app đang chạy khoá file ⇒ phải shutdown-clean trước). Không auto-update, không server update, không chữ ký gói (bạn là người build ra nó) |
 | Đang có phiên | nhắc "đóng phiên rồi hãy cập nhật" — **không** tự cập nhật giữa phiên |
 | Sao lưu | **2 file**: `config.json` + `state.json` — copy là xong |
 | Trước khi migrate schema | tự copy `config.json.bak-<ngày>` (1 dòng code, cứu bạn đúng 1 lần) |
@@ -2244,6 +2247,8 @@ Thoát
 - Tooltip: `RD — 1 phiên đang điều khiển (Chrome, 12 phút)`.
 - `Dừng điều khiển ngay` = **không** cần quyền người điều khiển (§21.7).
 - Hotkey khẩn cấp toàn cục `Ctrl+Alt+Shift+X` → dừng mọi phiên + toast.
+- Mục **Thông tin cài đặt…** (port, cert hết hạn, driver version, task name, thư mục) — để 3 tháng sau bạn không phải nhớ gì (§47.7).
+- Nếu app khởi động lúc **thiếu driver**: tray vàng + *"Chờ driver…"*, **không** im lặng (§47.2.1).
 
 ### 24.10 `/setup` — 4 bước, chỉ hiện khi chưa có mật khẩu
 ```
@@ -5041,3 +5046,177 @@ GET /api/health         →  (đã có) version, vdd, audio, encoders, os
 | **#22 WoL + máy trung gian** (Pi/điện thoại cũ ở nhà) | F | **tuỳ chọn**, đọc §46.3 trước. Không làm trong P1 |
 | **#23 Auto-logon + BitLocker** (đi xa nhiều ngày) | F/E | **quyết định của bạn**, không phải mặc định. `/help` có lệnh mẫu |
 | **#24 Máy chủ là laptop pin yếu / nhiệt** | A | chỉ ảnh hưởng preset; ghi nhận |
+
+---
+
+## 47. Khởi động cùng Windows, vòng đời process, trải nghiệm theo thời gian (nhánh #25 — lĩnh vực D/F)
+
+> §46 nói *máy ngủ thì sao*. Chương này nói thứ xảy ra **trước** đó và **thường xuyên hơn nhiều**: bạn bật máy lên, và công cụ này phải **tự có mặt** — không cần bấm gì, không hỏi han, không làm máy chậm. §13.6 chỉ có 1 dòng *"tạo shortcut At log on"*, và thế **không đủ** để chạy đúng.
+> Đây cũng là chỗ trải nghiệm người dùng bị đánh giá trong **10 giây đầu** — trước khi có bất kỳ tính năng nào.
+
+### 47.1 Ba yêu cầu, và một câu để nhớ
+| Yêu cầu | Nghĩa là |
+|---|---|
+| **Sống sót** | reboot, mất điện, Windows Update, bị kill từ Task Manager ⇒ lần sau vẫn có mặt, và **không mất cửa sổ** của bạn |
+| **Không làm phiền** | không cửa sổ bật lên, không UAC mỗi lần login, không tranh CPU với app khởi động khác, không chạy 2 bản |
+| **Hỏng thì nói rõ** | thiếu driver / cổng bị chiếm / config hỏng ⇒ **một câu + một nút**, không im lặng và không crash |
+
+> Câu để nhớ: **"Cài 1 lần, từ đó không phải nghĩ tới nó nữa."** Mỗi lần bạn phải *nghĩ* tới nó (bấm mở, kiểm tra nó có chạy không, nhớ port) là một lỗi thiết kế.
+
+### 47.2 Bốn cách tự chạy trên Windows — chỉ **một** cách đúng
+| Cách | Chạy ở session nào | Capture/`SendInput` được? | Kết luận |
+|---|---|---|---|
+| **Task Scheduler "At log on"** (dưới user hiện tại) | user session | ✅ | ✅ **chọn** — có delay, retry, điều kiện pin, không cần admin |
+| `HKCU\...\Run` | user session | ✅ | ⚠️ chạy được nhưng **không delay, không retry**; hay chạy quá sớm (§47.2.1) |
+| Startup folder shortcut | user session | ✅ | ⚠️ tương đương `Run`, và bạn **dễ xoá nhầm** khi dọn startup |
+| Task Scheduler **"Run whether user is logged on or not"** | **Session 0** | ❌ | ❌ **bẫy** — app chạy nhưng **không capture được** (§2.3, §46.4) |
+| Service (SYSTEM) | Session 0 | ❌ | ❌ §2.3 |
+
+**Cấu hình chính xác** (phần dễ sai nhất; `install.ps1` sinh đúng file này cho **user hiện tại, không cần admin**):
+```powershell
+$A = New-ScheduledTaskAction -Execute "$env:LOCALAPPDATA\RD\rd.exe" -Argument "--startup"
+$T = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+$T.Delay = 'PT20S'                                   # 20 giây — xem 47.2.1
+$S = New-ScheduledTaskSettingsSet `
+      -AllowStartIfOnBatteries `                     # ★ mặc định FALSE => app KHÔNG chạy khi dùng pin
+      -DontStopIfGoingOnBatteries `                  # ★ mặc định TRUE  => app TẮT khi rút sạc
+      -ExecutionTimeLimit 0 `                        # không giới hạn (mặc định 3 ngày)
+      -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) `
+      -MultipleInstances IgnoreNew                   # không 2 bản khi login nhanh 2 lần
+Register-ScheduledTask -TaskName 'RD Agent' -Action $A -Trigger $T -Settings $S -Force
+```
+> **Hai dấu ★ là bẫy thật, không phải chi tiết vụn:** mặc định Task Scheduler là **không chạy trên pin** và **dừng khi rút sạc**. Bạn dùng laptop, rút sạc để đi họp ⇒ **app tắt** ⇒ tới cơ quan không kết nối được, và **không có thông báo nào**. Đúng loại lỗi "không biết vì sao" mà §46 cố loại bỏ.
+
+#### 47.2.1 Vì sao delay 20 giây (không phải 0, không phải 2 phút)
+| Nếu chạy quá sớm | Hậu quả |
+|---|---|
+| Ngay khi login | GPU driver/DWM chưa sẵn sàng ⇒ tạo display ảo **fail**; danh sách audio device còn trống ⇒ `audio_unavailable` giả |
+| Trong 20 s đầu | tranh CPU/disk với 20–60 app khởi động khác ⇒ **máy khởi động chậm rõ rệt**, và bạn sẽ đổ lỗi cho app này |
+| Delay 20 s | driver sẵn sàng, máy đã ổn định, app lên trong ~1 s và bạn **không thấy gì** |
+| Delay > 60 s | bạn mở browser trước khi app sẵn sàng ⇒ *"không kết nối được"* dù chỉ cần chờ |
+
+> Nếu app khởi động mà **driver vẫn chưa sẵn sàng** (máy rất chậm): đừng bỏ cuộc — **retry 3 lần, cách 10 s** riêng cho bước khởi tạo driver/audio, và **vẫn mở web server ngay** (để `/diagnostics` trả lời được). Đó là khác biệt giữa "app chết" và "app đang chờ driver".
+
+### 47.3 Vòng đời process: một bản, và "đang chạy rồi" không phải lỗi
+| Tình huống | Hành vi |
+|---|---|
+| Bấm icon khi app **đã chạy** | **không** mở bản thứ 2. Mang dashboard của bản đang chạy ra trước (`WM_COPYDATA` tới window ẩn, hoặc mở `https://localhost/`) |
+| Copy `rd.exe` sang thư mục khác rồi chạy | mutex `Local\RD.Agent` ⇒ bản 2 hiện hộp: *"Đã có bản khác đang chạy (PID 1234, từ 3 giờ trước)."* **[Dùng bản đó]** · **[Khôi phục cửa sổ & thoát bản cũ]** |
+| `Local\` hay `Global\` mutex? | **`Local\`** — 2 người (§0.3) có thể fast-switch giữa 2 user session, mỗi session cần 1 bản riêng |
+| Thoát khi đang có phiên | hỏi 1 lần: *"Đang có 1 phiên. Thoát sẽ ngắt phiên và trả cửa sổ về màn hình thật."* **[Ngắt & thoát]** · **[Ở lại]** |
+| Thoát bình thường | chạy **đúng thứ tự** §13.7 (audio → cửa sổ → display → task) rồi mới exit. **Không** exit trước rồi dọn sau |
+| Bị kill từ Task Manager | không dọn được ⇒ `state.json` là lưới an toàn (§47.4) |
+| 3 lần crash trong 5 phút | **không** restart vô hạn (Task Scheduler đã giới hạn 3) + tự ghi `crash_loop` ⇒ lần sau chỉ mở web + tray đỏ, **không** tự tạo display ảo tới khi bạn bấm "Thử lại" |
+| Uninstall khi đang có phiên | **chặn**: *"Đóng phiên trước khi gỡ."* (không ngoại lệ — gỡ giữa phiên là cách chắc nhất để mắc cửa sổ) |
+
+> **Không bao giờ** tự kill bản cũ để nhường chỗ bản mới. Bản cũ có thể đang giữ display ảo + cửa sổ của bạn; kill nó = cửa sổ mồ côi (§9.2.3).
+
+### 47.4 Khôi phục lúc khởi động — `state.json` có **4 trạng thái**, không phải 2
+§9.2.4 chỉ nói "nếu file còn → restore". Thực tế file có thể ở 4 trạng thái, và **2 trong 4 không được restore gì**:
+
+| Trạng thái file | Nguyên nhân thường gặp | Hành vi đúng |
+|---|---|---|
+| **(a) không có** | lần đầu, hoặc lần trước thoát sạch | không làm gì. Khởi động bình thường |
+| **(b) hợp lệ + app crash giữa phiên** | kill, panic, cúp điện | **restore đầy đủ** theo thứ tự dưới + toast 1 lần |
+| **(c) hợp lệ nhưng cửa sổ/app đã đóng** | **reboot** (phổ biến nhất) | **không restore gì**, chỉ xoá entry. **Im lặng** — app tự đóng thì không có gì để cứu |
+| **(d) file hỏng** (ghi dở) | mất điện đúng lúc ghi | đổi tên `state.json.corrupt-<ts>`, **giữ lại** để xem, khởi động sạch, 1 dòng trong `/diagnostics` |
+
+**Thứ tự restore là cứng** (sai ⇒ cửa sổ bay ra ngoài màn hình):
+```
+① default audio device  ->  ② từng cửa sổ (SetWindowPos về origRect, bỏ maximized giả)
+-> ③ tắt per-app routing  ->  ④ xoá display ảo nếu rỗng  ->  ⑤ xoá state.json
+```
+- ① trước: nếu restore cửa sổ trước, app có thể phát ra loa thật trong 1–2 s ⇒ đúng lúc "đang ẩn" lại có tiếng.
+- ④ sau cùng: xoá display khi cửa sổ **còn** trên đó ⇒ Windows dồn cửa sổ về màn hình chính ở toạ độ **có thể ngoài màn hình** (§12.3) ⇒ mất cửa sổ.
+
+**Nhận diện "cửa sổ còn không" — `hwnd` một mình là không đủ:** Windows **tái sử dụng** `HWND`. Nếu state ghi `0x0012` của Chrome mà sau reboot `0x0012` là cửa sổ app khác ⇒ ta sẽ move **sai cửa sổ**. Phải khớp **bộ 4**: `hwnd` + `pid` (+ process start time) + `class` + `title hash`. Không khớp đủ ⇒ coi như (c) và bỏ qua.
+
+**`state.json` tối thiểu phải chứa** (bổ sung §9.2.4):
+```jsonc
+{ "schema":1, "appVersion":"...", "savedAt":<epoch>,
+  "windows":[{ "hwnd":"0x...", "pid":1234, "procStart":"2026-11-07T09:12:03Z",
+               "class":"Chrome_WidgetWin_1", "titleHash":"a1b2",   // chỉ hash, không lưu tiêu đề
+               "origRect":{...}, "wasMax":false, "displayId":"{...}" }],
+  "audio":{ "defaultBefore":"{guid}", "perApp":[...] },
+  "display":{ "id":"{...}", "createdByUs":true },
+  "lastSeen":<epoch> }
+```
+- `lastSeen` ghi **mỗi 60 s** (§46.8) ⇒ sau reboot, client nói được *"máy từng chạy tới 03:12"*.
+- Ghi **nguyên tử** (`.tmp` → `fsync` → `rename`) — cùng luật với `config.json` (§26.1).
+- Không lưu **tiêu đề** cửa sổ, chỉ hash: file nằm trên đĩa và không cần biết bạn đang mở gì.
+
+### 47.5 First run — 5 trạng thái trước khi có phiên đầu tiên
+Người dùng mới không đọc hướng dẫn. Thứ tự trạng thái phải **không thể đi sai**:
+
+| # | Trạng thái | Điều kiện phát hiện | UI |
+|---|---|---|---|
+| 1 | **Chưa cấu hình** | `config.json` không có user | mọi route redirect về `/setup` (4 bước §24.10). **Không** có dashboard trước khi xong |
+| 2 | **Xong setup, thiếu driver** | `vdd:false` | dashboard mở được + banner vàng: *"Chưa có màn hình ảo — chỉ dùng được chế độ xem toàn màn hình (VNC)."* **[Cài ngay]** (mở `winget`) · **[Dùng tiếp không có màn hình ảo]** |
+| 3 | **Đủ, chưa từng dùng** | `prefs.firstRunDone=false` | **coach mark 3 bước**, chỉ 1 lần: ① chọn cửa sổ ② điều khiển ③ đóng tab là cửa sổ tự trở về. Có **[Bỏ qua]** |
+| 4 | **Đang dùng** | bình thường | không coach mark, không banner |
+| 5 | **Lần đầu trên điện thoại** | UA mobile + `devicePrefs` trống | gợi ý 1 lần: *"Xoay ngang để xem rộng hơn"* — không tự xoay, không chặn |
+
+**Khoảnh khắc quyết định của cả sản phẩm:** bước 4 của `/setup` (§24.10) có **QR code**, và bạn quét bằng **điện thoại thật** ngay tại chỗ. Nếu bước này fail (cert, LAN, firewall), bạn phát hiện **trong 30 phút cài đặt** — không phải 3 tuần sau, ở nơi không có ai giúp. Vì vậy `/setup` **không được** cho "hoàn tất" khi chưa có ít nhất 1 lần tải trang thành công từ thiết bị khác.
+
+### 47.6 Cập nhật binary khi app đang chạy (edge case gặp ngay lần thứ 2)
+`cargo build` sẽ **fail** vì `rd.exe` đang bị khoá. Ba cách, chọn cách 3:
+
+| Cách | Vấn đề |
+|---|---|
+| Kill app rồi build | cửa sổ có thể đang ở display ảo ⇒ **mất cửa sổ** nếu kill cứng |
+| Build ra chỗ khác rồi copy đè | vẫn fail (file đang chạy) |
+| ✅ **`install.ps1 -Restart`** | ① gọi `rd.exe --shutdown-clean` (**restore đủ thứ tự §13.7** rồi mới exit) ② copy file mới ③ start lại. Nếu ① fail (app treo) ⇒ **không** copy, báo rõ: *"App không tắt được. Dùng tray → Thoát trước rồi chạy lại script."* |
+
+> Đừng làm auto-updater (§0.3.1 #6). Chỉ cần script này — và nó phải **tôn trọng** nguyên tắc: không bao giờ thay binary khi chưa dọn sạch cửa sổ.
+
+### 47.7 Trải nghiệm theo thời gian — cái gì hỏng ở tuần 1, tháng 1, tháng 6
+Công cụ loại này không hỏng lúc cài. Nó hỏng **dần**, và mỗi lần hỏng đều có dạng "trước đây vẫn được mà".
+
+| Thời điểm | Triệu chứng | Nguyên nhân thật | Chặn bằng |
+|---|---|---|---|
+| **10 giây đầu** (login) | app không chạy; bạn tưởng chưa cài | Task Scheduler mặc định **không chạy trên pin** | 2 cờ ★ ở §47.2 |
+| **lần dùng đầu** | "không kết nối được" trên điện thoại | cert chưa cài trust / firewall | bước QR bắt buộc (§47.5) |
+| **tuần 1** | quên mật khẩu (chỉ gõ 1 lần/tháng) | 1 mật khẩu, không có email reset | gợi ý lưu vào password manager ngay ở `/setup`; `rd.exe reset-admin` (§21.5) |
+| **tuần 2** | cảnh báo cert đỏ trên điện thoại | cert tự ký hết hạn **hoặc IP đổi ⇒ SAN sai** | nhắc 30/14/7 ngày (§26.6); **chuyển sang Tailscale cert** nếu IP hay đổi (§46.5) |
+| **tháng 1** | video không lên, app vẫn chạy | Windows Update đổi build ⇒ VDD lỗi | `doctor` phát hiện + tự về **VNC-only**, không crash (§21.9) |
+| **tháng 1** | máy tự khởi động lại lúc đêm | Windows Update | §46.4: giảm reboot + `last_seen` để nói rõ lý do |
+| **tháng 2** | Defender cách ly file | bộ dấu hiệu RAT (VDD + ẩn taskbar + inject) | exclusion 1 lần (§21.11); ghi trong `/help` |
+| **tháng 3** | "cái này chiếm port gì nhỉ?" | không ai nhớ | tray → **Thông tin cài đặt**: 1 trang (port, cert hết hạn, driver version, task name, thư mục) |
+| **tháng 6** | quên hẳn cách gỡ | — | `uninstall.ps1` trong cùng thư mục + 1 dòng trong tray |
+| **đổi máy / cài lại Windows** | phải làm lại 30 phút | không có gì mang theo | `Xuất cấu hình` (§20.13) + `install.ps1` + `LICENSES.md` ghi 3 driver cần cài |
+
+### 47.8 Mười bốn edge case khởi động (tất cả test được trên 1 máy)
+| # | Case | Kỳ vọng |
+|---|---|---|
+| 1 | Login lần đầu trên máy chậm (nhiều app startup) | app trễ 20 s rồi lên; driver chưa sẵn ⇒ retry 3×10 s; web server **mở ngay** |
+| 2 | Logoff → login lại trong 15 s | **không** 2 bản (`MultipleInstances=IgnoreNew`) |
+| 3 | Reboot khi đang có phiên | state còn ⇒ restore đủ; nếu app đã đóng thì **im lặng**, không báo lỗi |
+| 4 | Mất điện đúng lúc move window | entry ghi **trước** khi move ⇒ lần sau rescue (§9.2.3) |
+| 5 | Kill app từ Task Manager | lần sau restore + toast "Đã trả 2 cửa sổ về màn hình chính" |
+| 6 | Crash 3 lần trong 5 phút | không restart vô hạn; tray đỏ + `crash_loop`; chỉ mở web, không tạo display |
+| 7 | Rút sạc khi đang chạy | **vẫn chạy** (cờ ★) — test bằng cách rút sạc + `Get-ScheduledTaskInfo` |
+| 8 | Khởi động khi không có mạng | vẫn chạy; dashboard nói "chưa có IP/Tailscale" thay vì treo |
+| 9 | Port 443 bị chiếm (IIS, Skype) | thử 8443; fail ⇒ tray đỏ + câu rõ + log; **không** im lặng |
+| 10 | Thiếu VDD | VNC-only, không crash, banner có nút cài |
+| 11 | `config.json` hỏng | dùng mặc định + giữ `.corrupt` + banner 1 dòng |
+| 12 | `state.json` hỏng | như trên, **không** restore nửa vời |
+| 13 | Chạy bản thứ 2 từ thư mục khác | mutex ⇒ hộp "đã có bản khác" + 2 nút (§47.3); **không** đụng display |
+| 14 | Thoát / uninstall khi đang có phiên | thoát: hỏi rồi restore; uninstall: **chặn** |
+
+### 47.9 Kiểm chứng (7 test, ~10 phút)
+| # | Test | Ngưỡng |
+|---|---|---|
+| 1 | Cài → reboot → login, **không bấm gì** | sau ≤30 s: `https://<host>/` trả lời; không cửa sổ nào bật lên; không UAC |
+| 2 | Rút sạc, reboot | app vẫn chạy (bẫy ★) |
+| 3 | Đang có phiên → `taskkill /f` | mở app lại ⇒ cửa sổ đã được trả về + toast đúng số cửa sổ |
+| 4 | Đang có phiên → tắt máy bằng nút nguồn | lần sau không mất cửa sổ, không màn hình đen |
+| 5 | `state.json` sửa thành chuỗi rác | app khởi động sạch, `.corrupt` được giữ, không crash |
+| 6 | Chạy 2 bản | bản 2 thoát trong ≤2 s, không tạo display thứ 2 |
+| 7 | `install.ps1 -Restart` khi đang có phiên | restore xong mới thay file; nếu app treo ⇒ **không** thay, báo rõ |
+
+### 47.10 Nhánh mới rẽ ra
+| Nhánh | Lĩnh vực | Trạng thái |
+|---|---|---|
+| ~~#26 "App thật" (shortcut, jump list, tray thay console)~~ | D | đã đủ ở §24.9 |
+| **#27 Đa máy** (1 dashboard nhiều máy) | F | chỉ khi bạn có máy thứ hai — §21.14 |
+| **#28 Chẩn đoán tự sửa** (`rd.exe doctor --fix`: firewall/port/driver) | F | đã có §21.9, giữ mức hiện tại |
