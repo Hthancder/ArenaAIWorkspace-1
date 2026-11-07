@@ -1,6 +1,6 @@
-# SPEC v3.2 — Remote Desktop qua trình duyệt: HVNC + VNC, window picker, âm thanh server-side, **trải nghiệm điều khiển đầy đủ**
+# SPEC v3.3 — Remote Desktop qua trình duyệt: HVNC + VNC, window picker, âm thanh server-side, **trải nghiệm điều khiển đầy đủ**
 
-- Phiên bản: **v3.2** (v3.1 + **§20 tuỳ chỉnh dễ dùng** + **§21 danh sách "còn thiếu" đã xử lý**)
+- Phiên bản: **v3.3** (v3.2 + **§22–25 thiết kế giao diện đầy đủ** + **§26 audit 20 nhóm còn trống** + §27 trả lời thẳng)
 - Trạng thái: **Đề xuất — CHƯA implement, chờ duyệt**
 - Nền tảng: Server **Windows 10 2004+ / Windows 11** · Client **trình duyệt** (không app)
 
@@ -15,7 +15,8 @@
 | v2.1 | sửa lỗi capture/DPI/audio-safety/2 kênh input · state machine · test matrix |
 | v3.0 | **chương §6 "Trải nghiệm điều khiển"** + 20 lỗ hổng dưới đây |
 | v3.1 | §16 kiến trúc đa ngôn ngữ (Rust+C+JS+Python) · §13 LAN→Tailscale/ZeroTier · §9.6 audio "hỏi mỗi phiên" · elevated tuỳ chọn khi cài · §14 stealth đầy đủ (S1/S2) · §19 chốt quyết định |
-| **v3.2** | **§20 tuỳ chỉnh cho người dùng (3 tầng, dịch ý định → tham số, độ phân giải = 4 lựa chọn có tên, không số trần)** · **§21 những gì còn thiếu: chẩn đoán, state coverage, error boundary, soak/rò rỉ, updater, backup, chia sẻ/cộng tác, phía người bị điều khiển, pháp lý, hỗ trợ, quy trình test, top-8 rủi ro** |
+| v3.2 | §20 tuỳ chỉnh cho người dùng (3 tầng, dịch ý định → tham số, độ phân giải = lựa chọn có tên) · §21 chẩn đoán, state coverage, error boundary, soak, updater, backup, chia sẻ, phía người bị điều khiển, pháp lý, quy trình test, rủi ro |
+| **v3.3** | **§22 IA/tuyến đường · §23 design system (token, màu, chữ, chuyển động) · §24 đặc tả 12+ màn hình (dashboard, phiên, sheet, settings, admin, tray, wizard, mobile) · §25 component + ma trận state↔UI** · **§26 audit 20 nhóm: dữ liệu, API+lỗi, log, CLI, config reload, cert, proxy, môi trường cài, ma trận hỗ trợ, không third-party, ngân sách client, đa ngữ nhập liệu, clipboard chi tiết, chụp màn hình, thời gian, lưu trữ, ký số, lỗi browser, pin/data, help** · §27 trả lời thẳng |
 
 ### 0.1 v3.0 sửa gì — danh sách "còn thiếu" (đây là lý do v2.1 chưa đủ)
 
@@ -1772,3 +1773,776 @@ Mọi trạng thái phải có: **câu giải thích + 1 hành động chính + 
 - Điều khiển **nhiều máy** từ 1 dashboard (danh sách máy → cửa sổ).
 - "Text mode" cho mạng cực yếu (chỉ gửi diff UI dạng ảnh nhỏ/vector).
 - Chia sẻ ứng dụng cho 2–3 người xem đồng thời qua SFU nhỏ (LiveKit) — chỉ khi có nhu cầu thật.
+
+---
+
+# PHẦN V — THIẾT KẾ GIAO DIỆN
+
+## 22. Kiến trúc thông tin & tuyến đường (IA)
+
+### 22.1 Sơ đồ
+```
+/                          → chuyển hướng theo trạng thái đăng nhập
+├── /login                 → đăng nhập (+TOTP)
+├── /windows               → DASHBOARD: cửa sổ + phiên đang mở + trạng thái máy
+├── /s/:sid                → PHIÊN ĐIỀU KHIỂN (toàn màn hình)
+│     ├── overlay: chuyển cửa sổ (window switcher)
+│     ├── overlay: chẩn đoán nhanh
+│     └── sheet: cài đặt phiên
+├── /settings              → cài đặt (5 tab)
+├── /diagnostics           → chẩn đoán 12 bước (§21.1)
+├── /admin                 → quản trị (chỉ role admin)
+│     ├── /admin/users
+│     ├── /admin/sessions
+│     ├── /admin/audit
+│     ├── /admin/policy
+│     └── /admin/server
+├── /help                  → trợ giúp + phím tắt + khắc phục sự cố
+├── /403 · /404 · /offline → trang lỗi (luôn có 1 hành động)
+└── /s/new?wid=..&mode=..  → deep link tạo phiên (sau khi login)
+```
+**Quy tắc:** tối đa **2 lần bấm** từ bất kỳ đâu tới phiên đang chạy. Không có menu nhiều cấp. Không có trang nào không tới được từ đâu (mọi trang đều có đường về `/windows`).
+
+### 22.2 Điều hướng
+| Từ | Tới | Cách |
+|---|---|---|
+| Login | Dashboard | tự động |
+| Dashboard | Phiên | bấm card cửa sổ → chọn "Điều khiển" |
+| Dashboard | Phiên đang mở | bấm tile "Tiếp tục" |
+| Phiên | Dashboard | nút `←` (có xác nhận nếu đang điều khiển) |
+| Bất kỳ | Cài đặt | avatar → Cài đặt, hoặc `Ctrl+,` |
+| Bất kỳ | Trợ giúp | avatar → Trợ giúp, `?` |
+- Trình duyệt Back trong phiên = **rời phiên** (cần xác nhận sau khi đã điều khiển >5 s; dưới 5 s thì thoát ngay để tránh ma sát).
+- Không dùng SPA router phức tạp: mỗi trang là 1 HTML nhỏ, chia sẻ 1 module JS. Đơn giản hơn, back/forward hoạt động tự nhiên.
+
+### 22.3 Phân quyền theo vai
+| Vai | Thấy gì |
+|---|---|
+| `admin` | tất cả + `/admin` + mọi phiên (kể cả của người khác) |
+| `user` | dashboard của mình, phiên của mình, cài đặt của mình |
+| `viewer` | chỉ xem; không nút điều khiển; ribbon "Chỉ xem" |
+| link tạm (§21.7) | **duy nhất** 1 phiên được chia sẻ; không có dashboard, không có avatar, không cài đặt; hết hạn → trang "Link đã hết hạn" |
+
+---
+
+## 23. Hệ thống thiết kế (design system)
+
+### 23.1 Token — lưới & khoảng cách
+- Đơn vị gốc **4 px**. Thang: `4 · 8 · 12 · 16 · 24 · 32 · 48 · 64`.
+- Mọi khoảng cách/kích thước dùng token, **không** số lẻ tuỳ ý.
+- Bán kính: `r-sm 6` · `r-md 10` · `r-lg 14` · `r-full 999`.
+- Viền: `1px` cho mặc định, `2px` cho trạng thái chọn/focus.
+- Đổ bóng: **ưu tiên viền + nền chênh lệch**, chỉ dùng shadow cho overlay (sheet, popover, toast).
+
+### 23.2 Token — màu (vai trò, không phải mã màu)
+| Token | Dùng cho | Ghi chú |
+|---|---|---|
+| `bg` | nền trang | |
+| `surface` | card, panel | |
+| `surface-2` | hover, input | |
+| `border` | viền | đạt 3:1 với nền |
+| `text` | chữ chính | 4.5:1 |
+| `text-muted` | chữ phụ | ≥4.5:1 với surface |
+| `accent` | hành động chính, focus | |
+| `danger` | dừng, xoá, mất kết nối | kèm icon, không chỉ màu |
+| `warn` | mạng yếu, ai đó đang dùng máy | |
+| `ok` | kết nối tốt | |
+| `info` | gợi ý | |
+- **Dark mặc định ở màn hình phiên** (để video là thứ sáng nhất); dashboard/settings theo hệ thống.
+- Không dùng màu để truyền tải trạng thái một mình: luôn kèm chữ hoặc icon (§6.12).
+- Kiểm tra mù màu: cặp ok/warn/danger có độ sáng khác nhau + khác icon.
+
+### 23.3 Chữ
+| Vai | Cỡ / đậm / cao dòng | Dùng cho |
+|---|---|---|
+| `h1` | 24 / 600 / 1.3 | tiêu đề trang |
+| `h2` | 20 / 600 / 1.35 | tiêu đề nhóm |
+| `body` | 14 / 400 / 1.5 | mặc định |
+| `body-strong` | 14 / 500 | nhãn nút, tên cửa sổ |
+| `small` | 13 / 400 / 1.45 | phụ, mô tả dưới nhãn |
+| `caption` | 12 / 400 / 1.4 | badge, số liệu |
+| `mono-num` | 13 / tabular-nums | Mbps, ms, fps, giờ |
+- Font: `system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`. **Không tải webfont** (0 KB, không FOUT, tiếng Việt đúng dấu).
+- Số dùng `font-variant-numeric: tabular-nums` để không nhảy khi cập nhật.
+- Cỡ chữ UI người dùng chọn được (§20.10) → nhân bằng CSS var, **không** zoom trình duyệt.
+
+### 23.4 Chuyển động
+| Loại | Thời lượng | Easing |
+|---|---|---|
+| hover/press | 120 ms | `cubic-bezier(.2,0,0,1)` |
+| mở/đóng panel, sheet | 200 ms | như trên |
+| toast, banner | 180 ms vào / 150 ms ra | |
+| chuyển cửa sổ (overlay) | 240 ms | |
+- **Không** animate thứ nằm trên video (gợi ý về vị trí, tooltip) quá 150 ms — cảm giác trễ.
+- `prefers-reduced-motion` → duration 0, chỉ đổi opacity.
+
+### 23.5 Biểu tượng
+- SVG inline (sprite 1 file), `24×24`, stroke `1.5`, `currentColor`.
+- Không dùng emoji làm icon chức năng (khác nhau giữa OS) — emoji chỉ trong nhãn vui.
+- Mỗi icon có `aria-hidden` + nhãn chữ đi kèm khi có thể.
+
+### 23.6 Quy tắc chữ (microcopy)
+- Nút = **động từ + đối tượng**: "Kết thúc phiên", không phải "OK".
+- Không viết hoa toàn bộ; không dấu chấm cuối nhãn.
+- Lỗi: `[điều gì] + [tại sao] + [làm gì]`, ≤ 2 câu.
+- Xác nhận nguy hiểm: nêu **hậu quả cụ thể** ("Cửa sổ sẽ quay lại màn hình thật").
+- Xưng "bạn", không "quý khách", không "người dùng".
+- Số: `< 1000` không phân cách; ≥ 1000 dùng dấu chấm theo `vi-VN` (1.500). Thời gian: "1 giờ 12 phút", không "72m".
+
+### 23.7 Mật độ & vùng chạm
+| Ngữ cảnh | Cao tối thiểu | Khoảng cách |
+|---|---|---|
+| Desktop | 32 px | 8 px |
+| Mobile | **44 px** | 8 px |
+| Nút trong toolbar phiên | 36 px | 4 px (dùng icon, có tooltip) |
+- Vùng ngón cái trên mobile: **1/3 dưới** màn hình. Mọi hành động thường dùng phải ở đó.
+
+---
+
+## 24. Đặc tả từng màn hình
+
+### 24.1 `/login`
+```
+┌──────────────────────────────────────────────┐
+│                                              │
+│                  ◉  RD                        │
+│            Điều khiển từ xa                   │
+│                                              │
+│   ┌────────────────────────────────────┐     │
+│   │ Tên đăng nhập                      │     │
+│   └────────────────────────────────────┘     │
+│   ┌────────────────────────────────────┐     │
+│   │ Mật khẩu                      👁   │     │
+│   └────────────────────────────────────┘     │
+│   ┌────────────────────────────────────┐     │
+│   │ Mã 2 lớp (nếu đã bật)              │     │
+│   └────────────────────────────────────┘     │
+│                                              │
+│   [        Đăng nhập        ]                │
+│                                              │
+│   ⓘ Sai mật khẩu 2 lần. Còn 3 lần thử.       │
+└──────────────────────────────────────────────┘
+```
+- Cao 1 cột, tối đa **360 px**; không có ảnh nền lớn (tải chậm, không giúp gì).
+- `Enter` submit; `autocomplete="username"/"current-password"`; `autofocus` vào username.
+- Sai: thông báo dưới nút, **không** rung/đỏ cả form; đếm số lần còn lại.
+- Khoá: thay nút bằng đếm ngược `Thử lại sau 14:32` (đếm realtime).
+- TOTP: chỉ hiện ô khi server báo user có TOTP; 6 số, tự chuyển focus.
+- Trạng thái: `idle · submitting (nút có spinner, disable) · error · locked`.
+- Không có "quên mật khẩu" (không có email) → link "Cần trợ giúp?" mở `/help#reset`.
+
+### 24.2 `/windows` — DASHBOARD (màn hình chính)
+```
+┌───────────────────────────────────────────────────────────────────────────┐
+│ ◉ RD  ·  DESKTOP-01                                     ● Tốt   [👤 ▾]     │
+├───────────────────────────────────────────────────────────────────────────┤
+│  ⚠ Chưa cài dây âm thanh ảo — phiên sẽ không có tiếng.  [Cài ngay]  [×]   │
+├───────────────────────────────────────────────────────────────────────────┤
+│  PHIÊN ĐANG MỞ                                              (2)            │
+│  ┌────────────────────┐  ┌────────────────────┐                           │
+│  │ [thumbnail]        │  │ [thumbnail]        │                           │
+│  │ Chrome — Tin tức   │  │ VS Code — app.ts   │                           │
+│  │ 12:04 · HVNC · 🔊  │  │ 3:11 · VNC · 🔇    │                           │
+│  │ [Tiếp tục] [Kết…]  │  │ [Tiếp tục] [Kết…]  │                           │
+│  └────────────────────┘  └────────────────────┘                           │
+├───────────────────────────────────────────────────────────────────────────┤
+│  CỬA SỔ TRÊN MÁY                                        [⟳ 5s ▾]  [🔍 …]  │
+│  Sắp xếp: Gần đây ▾   Lọc: Tất cả ▾                                       │
+│  ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐                  │
+│  │[thumb]    │ │[thumb]    │ │[icon]     │ │[thumb]    │                  │
+│  │Chrome     │ │Explorer   │ │Notepad    │ │Excel      │                  │
+│  │chrome.exe │ │explorer   │ │notepad.exe│ │excel.exe  │                  │
+│  │      [▸]  │ │ ⛶ Ẩn nhỏ  │ │  Đã thu nhỏ│ │ 🛡 Admin  │                  │
+│  └───────────┘ └───────────┘ └───────────┘ └───────────┘                  │
+│                                                                           │
+│  (trống)  Chưa có cửa sổ nào đang mở trên máy đó.                         │
+│           Mở app bạn cần rồi bấm [Tải lại].                                │
+├───────────────────────────────────────────────────────────────────────────┤
+│  GẦN ĐÂY:  Chrome · 2 giờ trước    Explorer · hôm qua                     │
+└───────────────────────────────────────────────────────────────────────────┘
+```
+**Cấu trúc (thứ tự ưu tiên từ trên xuống):**
+1. **Top bar 56 px**: tên máy, chỉ báo chất lượng kết nối (1 chấm + chữ), menu người dùng.
+2. **Banner cảnh báo** (chỉ khi có vấn đề): thiếu driver/cable, GPU yếu, có bản cập nhật, chứng chỉ sắp hết hạn. Tối đa **1** banner tại một lúc (quan trọng nhất); cái khác vào chuông.
+3. **Phiên đang mở**: chỉ hiện khi có; card **lớn hơn** card cửa sổ (vì "tiếp tục việc đang làm" là hành động phổ biến nhất). Live thumbnail cập nhật 1 fps (không phải video — rẻ).
+4. **Cửa sổ trên máy**: lưới card, tự động 5 s (có nút tạm dừng "⟳ 5s ▾"), tìm kiếm **lọc tức thì phía client** (không gọi API mỗi ký tự).
+5. **Gần đây**: 5 mục, cho lần sau bấm nhanh.
+
+**Card cửa sổ — các trạng thái:**
+| Trạng thái | Hình | Hành động |
+|---|---|---|
+| Bình thường | thumbnail hoặc icon, tên cửa sổ, tên exe | hover → nút `Điều khiển` + `Chỉ xem` |
+| Đã thu nhỏ | badge "Đã thu nhỏ" | vẫn bấm được; server restore |
+| App admin | badge 🛡 + tooltip "Có thể không điều khiển được" | vẫn bấm; trước khi vào hiện cảnh báo 1 lần |
+| Đang được người khác stream | overlay mờ + "Đang được [tên] xem" | nút xem (nếu được phép) |
+| Bị allowlist chặn | ẩn khỏi danh sách (không hiện "bị chặn" — tránh lộ) | — |
+| Không có thumbnail | icon app lớn | — |
+| Đang tải | **skeleton** hình chữ nhật, không spinner | — |
+
+**Tương tác:**
+- Click card = mở **popover nhỏ** tại chỗ (không phải modal) với 3 dòng: `Điều khiển · Chỉ xem · Âm thanh ▾` + nút `Bắt đầu`. Chọn 1 lần, nhớ theo app.
+- Double-click card = bắt đầu với lựa chọn đã nhớ (cho người dùng quen).
+- `Tab` đi qua card, `Enter` = như click, `Esc` đóng popover.
+- Không có drag-and-drop, không sắp xếp thủ công (tự sắp theo gần đây).
+
+**Live tile phiên đang mở:**
+- Thumbnail 1 fps + tên cửa sổ + thời lượng + badge mode + 🔊/🔇.
+- Nút chính `Tiếp tục` (to), phụ `Kết thúc` (cần xác nhận).
+- "Kết thúc" ở đây = **của tôi**; admin thấy thêm "Kết thúc của người khác" màu danger.
+
+**Mobile `/windows`:** 1 cột; card cửa sổ cao hơn (thumbnail 16:9); bộ lọc thu vào nút `Lọc`; nút "Tải lại" là FAB dưới-phải; top bar gộp còn tên máy + `👤`.
+
+### 24.3 `/s/:sid` — MÀN HÌNH ĐIỀU KHIỂN
+```
+┌───────────────────────────────────────────────────────────────────────────┐
+│ ←  Chrome — Tin tức      HVNC · 🔊 · 12:04     ● Tốt    ⚙  ⛶  🛑  …      │  48px
+├───────────────────────────────────────────────────────────────────────────┤
+│                                                                           │
+│                                                                           │
+│                    ┌─────────────────────────────────┐                    │
+│                    │                                 │                    │
+│                    │          VIDEO (16:9)            │                    │
+│                    │      + con trỏ local             │                    │
+│                    │                                 │                    │
+│                    └─────────────────────────────────┘                    │
+│                                                                           │
+│  ┌─────────────────────────────────────┐                                  │
+│  │ ⚠ Có người đang dùng máy này        │  ← banner chỉ khi cần            │
+│  └─────────────────────────────────────┘                                  │
+├───────────────────────────────────────────────────────────────────────────┤
+│  8.2 Mbps · 58 fps · 42 ms        [A+] [Chất lượng ▾] [Bàn phím] [⌨]      │  40px
+└───────────────────────────────────────────────────────────────────────────┘
+```
+**Vùng:**
+| Vùng | Cao | Nội dung | Ẩn khi |
+|---|---|---|---|
+| Top bar | 48 | `←` · tên cửa sổ · mode/audio/timer · chất lượng kết nối · `⚙ ⛶ 🛑 ⋯` | fullscreen + không hover 3 s |
+| Video | co giãn | letterbox/fit/fill, overlay con trỏ + ripple | — |
+| Banner | 40 | cảnh báo (tối đa 1) | không có cảnh báo |
+| Bottom bar | 40 | số liệu · `A+` · chất lượng · bàn phím | fullscreen + không hover 3 s |
+- **Fullscreen**: cả 2 bar trượt lên khi rê chuột vào mép trên/dưới, tự ẩn 2 s sau. Trên touch: 1 tap giữa video → hiện/ẩn.
+- Toàn màn hình nền **đen tuyệt đối** (#000) để video không bị viền xám.
+- `Esc` lần 1 = thoát fullscreen, lần 2 = hộp "Dừng điều khiển?" — **không** dùng Esc đơn để rời phiên (dễ bấm nhầm khi đang gõ).
+- `Esc Esc` nhanh (<600 ms) = **dừng điều khiển khẩn cấp** (§6.8.6), khác với Esc đơn.
+- Con trỏ: `cursor: none` chỉ khi đang ở trong vùng video và mode `local` (§6.3.4).
+
+**Chỉ báo "có người đang dùng máy"** — banner vàng, không modal, có nút `Ẩn`; tự hiện lại sau 5 phút nếu còn.
+
+**Overlay `secure_desktop`** (UAC/khoá máy): video bị phủ 40% đen + icon ổ khoá + "Máy đang hiện hộp thoại bảo mật. Cần thao tác trên máy thật." Input **không** gửi. Overlay tự biến mất khi hết.
+
+**Overlay `RECONNECTING`:** video giữ frame cuối + phủ 30% + chấm nhấp nháy + "Đang kết nối lại… (2/8)" + `[Thử lại ngay] [Kết thúc]`.
+
+**Ribbon `Chỉ xem`:** dải màu thông tin mỏng ở góc trên-phải, có mắt; nhấp vào → "Yêu cầu quyền điều khiển" (T2).
+
+**Nút `🛑`:** luôn hiện, một chạm = ngừng gửi input **ngay** (client-side) + hộp "Đã tạm dừng điều khiển. [Tiếp tục] [Kết thúc phiên]". Không hỏi trước khi dừng (dừng phải tức thì), chỉ hỏi khi **kết thúc**.
+
+**Nút `⋯` (menu phụ):** Chụp màn hình · Ảnh trong ảnh (PiP) · Chuyển cửa sổ · Đổi màn hình (nếu có) · Âm thanh (định tuyến) · Con trỏ (chế độ) · Chẩn đoán · Phím tắt · Sa thải phiên.
+
+### 24.4 Overlay "Chuyển cửa sổ" (trong phiên)
+```
+┌───────────────────────────────────────────────────────────────┐
+│  Chuyển sang cửa sổ khác                        [×]           │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐              │
+│  │[thumb]  │ │[thumb]  │ │[thumb]  │ │[thumb]  │              │
+│  │Chrome ● │ │Explorer │ │Notepad  │ │Excel    │              │
+│  └─────────┘ └─────────┘ └─────────┘ └─────────┘              │
+│  Cửa sổ hiện tại có dấu ●. Đang chuyển mất 1–2 giây.          │
+└───────────────────────────────────────────────────────────────┘
+```
+- Mở bằng `Ctrl+Alt+Shift+W` hoặc `⋯ → Chuyển cửa sổ`.
+- Không rời phiên, không mất kết nối (§6.9). Video phủ 60% đen, vẫn thấy frame cuối.
+- Chọn → overlay chuyển "Đang chuyển…" → tự đóng khi `active`.
+- `Esc` đóng, giữ cửa sổ cũ.
+
+### 24.5 Sheet cài đặt **trong phiên** (`⚙`)
+Bottom sheet trên mobile, panel phải 360 px trên desktop. Chỉ chứa thứ **liên quan phiên**:
+```
+Chất lượng      [Nét] [Cân bằng] [Mượt] [Tiết kiệm]
+Hiển thị        [Vừa khung] [Đầy màn hình] [1:1] [Phóng to]
+Con trỏ         [Theo máy] [To hơn] [Rất to]   ·  Viền tương phản ▢
+Âm thanh        🔊 ▢  ·  Nguồn: [Chỉ app này ▾]
+Bàn phím        Khoá phím ▢ (Chrome/Edge)  ·  Hàng phím phụ ▢
+Cách chạm       [Trực tiếp] [Trackpad] [Kính lúp]      (mobile)
+Phản hồi        Gợn sóng ▢
+Nâng cao ▸
+```
+- Mỗi dòng: nhãn · control · dòng phụ 12 px giải thích hậu quả (§20.2).
+- Thay đổi áp dụng ngay; toast "Đã đổi chất lượng — [Hoàn tác]".
+- Không có nút "Lưu"/"Huỷ"; đóng bằng `Esc`/`×`/chạm ngoài.
+
+### 24.6 `/settings` — 5 tab
+| Tab | Nội dung |
+|---|---|
+| **Chung** | ngôn ngữ, theme (Sáng/Tối/Hệ thống), cỡ chữ UI, mật độ |
+| **Điều khiển** | chất lượng mặc định, hiển thị mặc định, con trỏ, cách chạm, phím tắt xem |
+| **Âm thanh** | mặc định (hỏi mỗi phiên), âm lượng, nhớ theo app |
+| **Thông báo** | mức (tất cả / quan trọng / tắt) |
+| **Bảo mật** | đổi mật khẩu, TOTP, phiên đăng nhập (thiết bị), đăng xuất mọi nơi |
+- Layout: nav trái 200 px (mobile: segmented trên cùng) + nội dung 1 cột tối đa 640 px.
+- Mọi thay đổi lưu ngay; không có nút Lưu.
+- Mỗi mục có nút `↺` khi khác mặc định.
+- Cuối trang: `Xuất cấu hình` / `Nhập` (§20.13).
+
+### 24.7 `/diagnostics`
+```
+Kiểm tra máy chủ                                    [Chạy lại]
+✓ Ứng dụng đang chạy             ✓ Tường lửa (443)
+✓ Màn hình ảo                    ✗ Cổng UDP  ← [Sửa tự động]
+✓ Dây âm thanh ảo                ✓ Chứng chỉ HTTPS
+✓ Bộ mã hoá (NVENC)              ✓ Quyền điều khiển
+✓ Màn hình ảo nhận tín hiệu      ✓ Độ trễ: 42 ms  ✓ 38 Mbps
+
+1 vấn đề: tường lửa/router chặn UDP.
+→ Chất lượng sẽ kém, điều khiển vẫn được.
+[ Sửa tự động ]   [ Sao chép báo cáo ]   [ Xem chi tiết ]
+```
+- Mỗi dòng: icon trạng thái + tên **không thuật ngữ** + kết quả; fail thì có hành động ngay trên dòng.
+- Chạy song song, mỗi kiểm tra tự timeout 3 s; tổng ≤ 6 s.
+- Đang chạy: skeleton + dòng nhấp nháy, không spinner toàn trang.
+- Nút "Sao chép báo cáo" → JSON đã lọc (§21.10), có hộp xem trước.
+
+### 24.8 `/admin` — quản trị
+```
+┌ Tổng quan ─┬ Người dùng ┬ Phiên ┬ Nhật ký ┬ Chính sách ┬ Máy chủ ┐
+```
+| Mục | Nội dung chính |
+|---|---|
+| **Tổng quan** | số phiên, CPU/GPU/RAM, băng thông ra, lỗi 24 h, cảnh báo |
+| **Người dùng** | danh sách, thêm/sửa/xoá, đổi vai, buộc đổi mật khẩu, reset TOTP |
+| **Phiên** | bảng: ai, cửa sổ, mode, bắt đầu, băng thông, nút **Kết thúc** (xác nhận gõ tên) |
+| **Nhật ký** | lọc theo loại/người/thời gian, phân trang, xuất CSV. **Không** có nội dung phiên |
+| **Chính sách** | trần chất lượng, allowlist app, mức che giấu (S0/S1/S2), bật/tắt clipboard/audio, số phiên tối đa |
+| **Máy chủ** | version, cập nhật, cert (hết hạn), driver, cổng, restart app, xuất gói chẩn đoán |
+- Bảng dùng **ảo hoá** khi >200 dòng; sắp xếp mọi cột; tìm kiếm server-side.
+- Hành động phá huỷ: hộp xác nhận **gõ tên** (người dùng/kết thúc phiên người khác).
+- Mobile: bảng → danh sách card; ẩn cột phụ.
+
+### 24.9 Tray app (phía server)
+```
+◉ RD — Đang chạy
+─────────────────────────────
+Mở bảng điều khiển…        (mở https://localhost/)
+─────────────────────────────
+Đang kết nối: 1             ← chỉ hiện khi có phiên
+  · Chrome — từ 192.168.1.5, 12 phút
+  [ Dừng điều khiển ngay ]
+─────────────────────────────
+Trạng thái: Màn hình ảo ✓   Dây âm thanh ✓
+Chẩn đoán…
+Cài đặt…
+─────────────────────────────
+Thoát
+```
+- Icon đổi: bình thường (xám) · có phiên (xanh) · có cảnh báo (vàng).
+- Tooltip: `RD — 1 phiên đang điều khiển (Chrome, 12 phút)`.
+- `Dừng điều khiển ngay` = **không** cần quyền người điều khiển (§21.8).
+- Hotkey khẩn cấp toàn cục `Ctrl+Alt+Shift+X` → dừng mọi phiên + toast.
+
+### 24.10 Wizard cài đặt (lần đầu, 5 bước, ≤ 60 s)
+```
+1/5  Mật khẩu quản trị      ▸ tạo mật khẩu (bắt buộc đổi nếu là mặc định)
+2/5  Cách truy cập          ▸ [Trong mạng LAN] [Qua VPN (Tailscale…)] [Internet]
+3/5  Kiểm tra môi trường    ▸ 5 dòng ✓/✗ + [Cài những gì còn thiếu]
+4/5  Mặc định               ▸ che giấu (S1) · âm thanh (hỏi mỗi phiên) · chất lượng (tự động)
+5/5  Xong                   ▸ link truy cập + [Mở bảng điều khiển] + QR để mở trên điện thoại
+```
+- Thanh tiến trình 5 chấm; mỗi bước **1 quyết định**, không có bước nào bắt đọc.
+- Bỏ qua được bước 4 (dùng mặc định). Không bỏ qua 1 và 3.
+- Nếu thiếu driver → bước 3 có nút cài; nếu fail → vẫn cho "Tiếp tục không có màn hình ảo" (chế độ VNC-only).
+
+### 24.11 Trang lỗi (luôn có 1 hành động)
+| Mã | Nội dung | Hành động |
+|---|---|---|
+| 403 | "Bạn không có quyền xem mục này." | Về trang chính · Đăng nhập tài khoản khác |
+| 404 | "Trang không tồn tại. Có thể phiên đã kết thúc." | Về cửa sổ · Trợ giúp |
+| offline | "Mất kết nối mạng." | Thử lại (tự thử 5 s/lần) |
+| link hết hạn | "Link xem đã hết hạn (tạo lúc 14:02, hạn 1 giờ)." | Yêu cầu link mới |
+| server tắt | "Máy chủ không phản hồi. Có thể ứng dụng đã tắt." | Chẩn đoán · Thử lại |
+
+### 24.12 Mobile — 3 bố cục
+**Dọc (mặc định điện thoại):**
+```
+┌─────────────────────────┐
+│ ← Chrome   🔊   ⋯       │ 44
+├─────────────────────────┤
+│                         │
+│     VIDEO (16:9)        │
+│                         │
+├─────────────────────────┤
+│  ⌨  ←  ↑  ↓  →  Ctrl    │ 44  ← hàng phím phụ (tuỳ chọn)
+├─────────────────────────┤
+│ [✋] [🖱] [🔍] [A+] [⚙]  │ 56  ← toolbar ngón cái
+└─────────────────────────┘
+```
+**Ngang (khi xoay):** video toàn màn hình, 2 bar tự ẩn, toolbar dọc bên phải 48 px.
+**Máy tính bảng:** video + panel phải 320 px (cài đặt + danh sách cửa sổ) — như "mission control" thu nhỏ.
+- Vùng an toàn: `env(safe-area-inset-*)` cho cả 4 cạnh.
+- Không có hover: mọi tooltip phải hiện được bằng chạm-giữ.
+- Bottom sheet cho cài đặt (§20.17), cao tối đa 80% và kéo được.
+
+### 24.13 Trạng thái rỗng / tải / lỗi — theo màn hình
+| Màn hình | Rỗng | Đang tải | Lỗi |
+|---|---|---|---|
+| Dashboard | "Chưa có cửa sổ nào…" + [Tải lại] | skeleton 6 card | banner + thử lại |
+| Phiên đang mở | ẩn cả section | skeleton 2 tile | ẩn |
+| Phiên | — | "Đang chuẩn bị…" + [Huỷ] | lý do + 2 hành động |
+| Cài đặt | — | skeleton form | giữ giá trị cũ + toast |
+| Nhật ký | "Chưa có hoạt động" | skeleton 8 dòng | thử lại |
+| Chẩn đoán | — | skeleton 12 dòng | "không chạy được" + thử lại |
+
+### 24.14 Thông báo trong app (toast & banner)
+| | Toast | Banner |
+|---|---|---|
+| Dùng cho | kết quả hành động ("Đã đổi chất lượng") | trạng thái kéo dài (mất mạng, ai đó dùng máy) |
+| Vị trí | dưới-trái (desktop), trên video (mobile) | dưới top bar |
+| Tự ẩn | 5 s (lỗi: 8 s hoặc tới khi đóng) | theo sự kiện |
+| Số lượng | tối đa 3, cũ nhất bị đẩy | tối đa 1 |
+| Có hành động | "Hoàn tác" khi phù hợp | "[Sửa]", "[Xem]" |
+- Toast **không** che toolbar và không nằm trên nút `🛑`.
+- `aria-live="polite"` cho toast, `role="alert"` cho banner nguy hiểm.
+
+### 24.15 Bàn phím & focus (client)
+| Phím | Hành động | Ghi chú |
+|---|---|---|
+| `Tab` / `Shift+Tab` | điều hướng | **không** gửi sang server khi focus ở UI |
+| `Enter` | kích hoạt | khi focus ở card/nút |
+| `Esc` | đóng sheet/overlay/fullscreen | |
+| `Esc Esc` (<600 ms) | **dừng điều khiển khẩn cấp** | |
+| `F11` | fullscreen | hoặc nút ⛶ (Safari không có) |
+| `Ctrl+,` | cài đặt | |
+| `Ctrl+Alt+Shift+W` | chuyển cửa sổ | cần đăng ký, không xung đột OS |
+| `Ctrl+Alt+Shift+D` | HUD chẩn đoán | |
+| `?` | trợ giúp phím tắt | |
+- Vòng focus **không** bị nhốt trong video; `Tab` ra khỏi video → focus lên toolbar (để vẫn dùng được bàn phím điều hướng UI khi đang ở chế độ điều khiển).
+- Có nút "Nhường bàn phím cho máy" (gửi mọi phím, kể cả Tab) — rời trạng thái đó bằng `Esc` 2 lần hoặc nút rõ ràng. **Bắt buộc** vì nhiều app cần Tab.
+- Focus ring luôn hiện khi điều hướng bằng bàn phím (`:focus-visible`), 2 px accent + offset 2 px.
+
+### 24.16 Ngôn ngữ & i18n
+- Chuỗi trong file `vi.json` / `en.json`, không hardcode.
+- Không nối chuỗi (dùng placeholder): `{count} cửa sổ`.
+- Số/ngày/giờ qua `Intl.*`; không tự format.
+- Sẵn sàng RTL: dùng `margin-inline`/`padding-inline`, không `left/right` cứng.
+- Độ dài chuỗi tiếng Anh có thể dài hơn 30% → nút có `min-width` + cho phép xuống dòng, không cắt.
+
+---
+
+## 25. Thành phần (component inventory)
+
+| Nhóm | Thành phần | Trạng thái phải có |
+|---|---|---|
+| Hành động | Button (primary/secondary/ghost/danger), IconButton, SplitButton | default · hover · active · focus · disabled · loading |
+| Nhập | Input, PasswordInput, SearchInput, OTPInput, Toggle, Segmented, Select, Slider | default · focus · invalid · disabled · readonly |
+| Hiển thị | Card (window/session/stat), Tile, Badge, Ribbon, Skeleton, Tooltip, EmptyState | — |
+| Phản hồi | Toast, Banner, InlineAlert, ProgressDots, Countdown | info · success · warn · danger |
+| Lớp phủ | Sheet (bottom/side), Popover, Dialog, Overlay (cursor/ripple/loupe/minimap) | entering · open · exiting |
+| Chuyên biệt | VideoStage, CursorLayer, RippleLayer, LoupeLayer, HudStats, QualityPicker, KeyTray, MonitorSwitcher, WindowSwitcher | — |
+| Điều hướng | TopBar, TabBar, BreadcrumbBack, UserMenu | — |
+| Dữ liệu | Table (ảo hoá), AuditRow, SessionRow | loading · empty · error · sorted |
+- Mọi thành phần: **1 file JS export hàm tạo DOM** (không framework), CSS theo BEM + token.
+- Mỗi thành phần phải có: trạng thái focus, aria, chịu được cỡ chữ Lớn, chịu được 320 px rộng.
+
+### 25.1 Ma trận trạng thái phiên ↔ UI (bổ sung §7.1)
+| State | Top bar | Video | Input | Banner | Hành động chính |
+|---|---|---|---|---|---|
+| PREPARING | tên cửa sổ, "Đang chuẩn bị…" | skeleton | tắt | — | Huỷ |
+| CONNECTING | "Đang kết nối…" | skeleton | tắt | — | Huỷ |
+| ACTIVE | đầy đủ + timer | video | bật | nếu cần | — |
+| SWITCHING | "Đang chuyển…" | frame cũ | tắt | — | Huỷ (giữ cũ) |
+| RECONNECTING | "Đang kết nối lại (n/8)" | frame cuối + phủ | tắt | banner | Thử lại · Kết thúc |
+| FAILED | tên cửa sổ | trống | tắt | lý do | Thử lại · Cửa sổ khác |
+| CLOSING | "Đang kết thúc…" | mờ | tắt | — | — |
+| CLOSED | — | — | — | — | về Dashboard |
+
+---
+
+# PHẦN VI — NHỮNG GÌ CÒN THIẾU (audit v3.3)
+
+## 26. Audit toàn diện — 20 nhóm còn trống, đã xử lý
+
+> Đây là kết quả rà **toàn bộ** spec theo 20 trục. Mỗi mục đều có quyết định, không phải "để sau".
+
+### 26.1 Mô hình dữ liệu (thiếu hoàn toàn)
+v3.2 chưa nói **lưu cái gì, ở đâu, bằng gì**. Quyết định: **SQLite** cho dữ liệu có truy vấn, **JSON** cho cấu hình tĩnh, **không** dùng ORM.
+
+```sql
+-- users
+id INTEGER PK, username TEXT UNIQUE, pwd_hash TEXT (argon2id), role TEXT,
+totp_secret BLOB (DPAPI), must_change_pwd INTEGER, disabled INTEGER,
+created_at INTEGER, last_login_at INTEGER, failed_count INTEGER, locked_until INTEGER
+
+-- sessions_auth  (refresh token, rotate)
+id TEXT PK, user_id INT, token_hash TEXT UNIQUE, device TEXT, ip TEXT,
+created_at INT, last_used_at INT, expires_at INT, revoked_at INT, replaced_by TEXT
+
+-- sessions  (phiên điều khiển; một phần ở RAM, phần bền vững ở đây)
+sid TEXT PK, user_id INT, wid TEXT, app TEXT, mode TEXT, audio INT,
+started_at INT, ended_at INT, end_reason TEXT, bytes_out INT, cursor_mode TEXT
+
+-- prefs  (sở thích theo user / theo thiết bị / theo app)
+user_id INT, scope TEXT ('user'|'device'|'app'), key TEXT, value TEXT,
+PRIMARY KEY(user_id, scope, key)
+
+-- audit
+id INTEGER PK, ts INT, user_id INT, action TEXT, target TEXT, ip TEXT,
+result TEXT, detail TEXT (JSON, đã lọc), corr TEXT
+-- INDEX (ts), (user_id, ts), (action, ts)
+
+-- shares  (link xem tạm)
+token_hash TEXT PK, sid TEXT, created_by INT, created_at INT,
+expires_at INT, view_only INT, used_count INT, revoked_at INT
+
+-- windows_recent
+user_id INT, wid TEXT, app TEXT, title TEXT, last_at INT
+```
+**Quy tắc:**
+- `-- WAL`, `synchronous=NORMAL`; ghi audit theo lô 200 ms (không fsync mỗi dòng — nhưng **không mất** quá 200 ms khi crash).
+- **Không** lưu: nội dung clipboard, keystroke, frame, mật khẩu dạng thô, token dạng thô (chỉ hash).
+- `state.json` (§9.2.4) tách riêng: nó là **phục hồi sau crash**, không phải DB.
+- Migration: bảng `schema_version` + script một chiều, **backup file .db trước khi migrate**.
+- Vacuum/`PRAGMA optimize` mỗi ngày; audit cũ hơn `retention_days` xoá theo lô 1000.
+
+### 26.2 Quy ước API & bảng mã lỗi (thiếu)
+**Quy ước:** `/api/v1/...`; JSON UTF-8; mọi thời gian = epoch ms UTC; mọi id là string; phân trang `?cursor=&limit=` (limit ≤ 200); lọc theo `?from=&to=&q=`; `ETag` cho GET tĩnh; mutation **idempotent** qua header `Idempotency-Key` (bắt buộc cho tạo phiên).
+
+**Bảng mã lỗi** — dùng chung cho REST + WS, client dịch sang câu người dùng được:
+| `error_code` | HTTP | Câu cho người dùng | Hành động UI |
+|---|---|---|---|
+| `auth.bad_credential` | 401 | Sai tên hoặc mật khẩu | thử lại |
+| `auth.locked` | 423 | Tạm khoá tới {time} | đếm ngược |
+| `auth.totp_required` | 401 | Nhập mã 2 lớp | hiện ô OTP |
+| `auth.expired` | 401 | Phiên đăng nhập hết hạn | chuyển login |
+| `perm.denied` | 403 | Bạn không có quyền | về trang chính |
+| `session.limit` | 409 | Đã đạt số phiên tối đa | kết thúc phiên cũ |
+| `session.in_use` | 409 | Cửa sổ đang được người khác xem | xem (nếu được phép) |
+| `session.gone` | 404 | Phiên đã kết thúc | về dashboard |
+| `window.gone` | 404 | Cửa sổ vừa đóng | tải lại danh sách |
+| `window.immovable` | 412 | App này không cho di chuyển cửa sổ | dùng chế độ VNC |
+| `window.unrestorable` | 412 | Không mở lại được cửa sổ | chọn cửa sổ khác |
+| `capture.blocked` | 412 | App này chặn chụp màn hình | chọn cửa sổ khác |
+| `capture.exclusive` | 412 | App đang toàn màn hình độc quyền | chuyển borderless |
+| `driver.missing` | 412 | Chưa cài màn hình ảo | cài tự động |
+| `driver.failed` | 500 | Màn hình ảo không hoạt động | chẩn đoán |
+| `audio.device_missing` | 412 | Chưa cài dây âm thanh ảo | cài hoặc tiếp tục không tiếng |
+| `audio.busy` | 409 | Thiết bị âm thanh đang bận | thử lại |
+| `enc.init_failed` | 500 | Không khởi tạo được bộ mã hoá | dùng CPU |
+| `net.no_candidate` | 409 | Không kết nối trực tiếp được | hướng dẫn VPN |
+| `net.udp_blocked` | 409 | Mạng chặn UDP | tiếp tục chất lượng thấp |
+| `rate.limited` | 429 | Quá nhiều yêu cầu | đếm ngược |
+| `server.busy` | 503 | Máy chủ đang bận | thử lại sau |
+| `server.version` | 426 | Cần cập nhật ứng dụng | hướng dẫn |
+| `policy.blocked` | 403 | Quản trị viên không cho phép | liên hệ admin |
+- Client **không** hiện `error_code` trần; luôn map qua bảng này. Có test tự động: mọi code trong server phải có dòng trong bảng i18n (CI fail nếu thiếu).
+
+### 26.3 Log, số liệu, quan sát (thiếu)
+| Loại | Nội dung | Nơi |
+|---|---|---|
+| **App log** | JSON-lines: `ts, level, mod, corr, msg, kv` — xoay 10 MB × 5 | `%LOCALAPPDATA%\RD\logs\` |
+| **Audit** | theo §26.1, bền vững, UI xem được | DB |
+| **Metrics** | `GET /metrics` (chỉ từ loopback hoặc cần token): phiên đang chạy, fps, encode_ms, rtt, loss, bytes, driver_ok, restart_count | Prometheus text |
+| **Health** | `GET /health` → `{ok, version, checks:{...}}` **không cần auth** nhưng **không lộ** chi tiết (chỉ ok/fail từng nhóm) | — |
+| **Correlation** | mỗi request/phiên có `corr` 8 ký tự; xuất hiện trong log + gói chẩn đoán | — |
+- **Redaction bắt buộc**: mật khẩu, token, cookie, `Authorization`, nội dung clipboard, tiêu đề cửa sổ (có thể chứa thông tin) → **`window_title` chỉ log khi `debug`**. Tiêu đề cửa sổ là dữ liệu nhạy cảm (tên file, URL) — điều này hay bị bỏ qua.
+- Log mức: `error` (lỗi thật), `warn` (tự phục hồi được), `info` (đăng nhập, tạo/kết thúc phiên), `debug` (tắt mặc định).
+- Không log mỗi frame, mỗi input, mỗi ack.
+
+### 26.4 CLI & vận hành tại máy (thiếu)
+```
+rd.exe run                    # chạy như bình thường (tray)
+rd.exe --config <path>
+rd.exe check                  # kiểm tra môi trường, exit code 0/1/2
+rd.exe diagnose --json        # 12 kiểm tra §21.1, dạng máy đọc
+rd.exe reset-admin            # đặt lại mật khẩu admin (cần quyền OS)
+rd.exe doctor --fix           # sửa firewall rule / khởi động lại driver
+rd.exe uninstall-clean        # rollback thủ công (§13.7)
+rd.exe export-config > a.json
+rd.exe version
+```
+- Mọi lệnh có `--json` để script đọc.
+- `rd.exe check` được wizard và gói chẩn đoán gọi lại.
+- Không có lệnh nào chạy được mà không cần quyền OS phù hợp (rõ ràng trong `--help`).
+
+### 26.5 Cấu hình: nạp lại & hiệu lực (thiếu)
+| Nhóm | Nạp lại không cần restart? | Ghi chú |
+|---|---|---|
+| Giới hạn/phiên, encoder, cursor, input, stealth | ✅ | áp dụng cho phiên **mới**; phiên đang chạy giữ nguyên (trừ khi ghi rõ) |
+| TLS cert | ✅ | đọc lại khi file đổi (watch), không ngắt phiên đang chạy |
+| Port, driver | ❌ | cần restart app; UI báo rõ |
+| Users/roles | ✅ | từ DB, hiệu lực ngay |
+- `SIGHUP`/file-watch → nạp lại + ghi audit `config.reloaded` (kèm diff **đã lọc**, không log mật khẩu).
+- Config sai cú pháp → **giữ cấu hình cũ đang chạy**, ghi `error`, hiện banner trong admin. Không bao giờ tự tắt app vì config lỗi.
+- Có `rd.exe check --config` để validate trước khi áp.
+
+### 26.6 Quản lý chứng chỉ (thiếu)
+| Việc | Cách làm |
+|---|---|
+| Tạo self-signed | SAN gồm hostname + mọi IP private + `localhost` + Tailscale IP; hiệu lực 825 ngày; RSA 2048 hoặc ECDSA P-256 |
+| Cài vào trust | hướng dẫn **theo từng client OS** (Windows/macOS/iOS/Android) + cảnh báo rõ "chỉ cài cho máy bạn kiểm soát" |
+| Let's Encrypt (Internet) | hỗ trợ `webroot` + `dns-01`; tự renew 30 ngày trước; cần domain |
+| Tailscale cert | gọi `tailscale cert` nếu có |
+| Hết hạn | nhắc ở 30/14/7/1 ngày (banner admin + tray); **không** tự gia hạn cert tự ký (phải cài lại trust → bắt buộc người quyết định) |
+| HSTS | **chỉ bật khi cert được tin cậy**; nếu self-signed chưa cài trust → tắt HSTS (tránh khoá người dùng ra ngoài) |
+| HTTP→HTTPS | 301, trừ `/health` (cho monitoring) |
+- Khoá riêng nằm `ProgramData` với ACL hạn chế; hỗ trợ cung cấp PFX có mật khẩu.
+
+### 26.7 Reverse proxy / TLS termination (thiếu)
+- Hỗ trợ đứng sau Caddy/nginx: tin `X-Forwarded-For`/`X-Forwarded-Proto` **chỉ từ** `trusted_proxies` (CIDR) đã cấu hình; nếu không cấu hình thì **bỏ qua** các header đó (chống giả mạo).
+- WebSocket: hướng dẫn `proxy_buffering off`, `proxy_read_timeout 1h`, `Upgrade`/`Connection`.
+- WebRTC **không** đi qua proxy HTTP — phải mở UDP trực tiếp hoặc dùng TURN; nếu chỉ có 443/tcp thì ghi rõ "chất lượng sẽ kém/không hoạt động".
+- Có file cấu hình mẫu cho nginx + Caddy trong repo.
+- `X-Forwarded-Prefix` (khi chạy dưới subpath) — UI dùng relative URL nên không cần biết prefix.
+
+### 26.8 Môi trường cài đặt đặc biệt (thiếu)
+| Môi trường | Vấn đề | Cách xử lý |
+|---|---|---|
+| **Windows Home** | không có policy/GPO | không phụ thuộc GPO ở đâu cả; dùng Task Scheduler thay |
+| **Không có quyền admin** | không cài được VDD/cable/firewall | chế độ **VNC-only** (không cần driver); ghi rõ "HVNC cần quyền admin" |
+| **Máy ảo (VMware/Hyper-V/VirtualBox)** | không GPU, không desktop ảo tốt | x264 + 1080p30; cảnh báo; vẫn dùng được |
+| **WSL** | không áp dụng (client Linux GUI không có) | không hỗ trợ |
+| **Windows trên ARM** | không NVENC/QSV | x264/AMF? — test; preset Low |
+| **Windows Server** | không có Store, ít codec | Media Foundation có thể generic-only → test; fallback x264 |
+| **RDP đang chiếm console** | capture fail | phát hiện → thông báo "đang có phiên RDP khác"; gợi ý dùng console |
+| **Nhiều user trên cùng máy (RDS)** | mỗi session riêng | ngoài phạm vi; yêu cầu tắt RDS |
+| **Sau khi cài driver cần reboot** | VDD lần đầu có thể cần | wizard kiểm tra + nói rõ "cần khởi động lại 1 lần" |
+| **Antivirus chặn driver** | cài thất bại | hướng dẫn whitelist + kiểm tra chữ ký driver |
+| **Màn hình không có (headless)** | vẫn cần desktop ảo | hoạt động (VDD không cần màn hình thật) |
+| **Laptop gập nắp** | màn hình tắt, vẫn chạy | display ảo không bị ảnh hưởng; `ES_DISPLAY_REQUIRED` giữ |
+
+### 26.9 Ma trận hỗ trợ & chính sách phiên bản (thiếu)
+| Hạng mục | Hỗ trợ | Ghi chú |
+|---|---|---|
+| Server | Win10 2004+, Win11 22H2+ | test cả 2 nhánh |
+| Client | Chrome/Edge ≥ 110, Firefox ≥ 115 ESR, Safari ≥ 16.4 | dưới mức → trang "chưa hỗ trợ" |
+| Mobile | Chrome Android ≥ 110, Safari iOS ≥ 16.4 | |
+| Màn hình | ≥ 320 px rộng, ≥ 480 px cao | |
+| Mạng | ≥ 1 Mbps cho preset Low | |
+| RAM client | ≥ 2 GB (Safari iOS cần ít hơn) | |
+| Đa ngôn ngữ | vi, en | chuẩn bị thêm không cần đổi code |
+| **Chính sách** | hỗ trợ 2 phiên bản lớn gần nhất; bản cũ hơn → cảnh báo + `server.version` 426 | |
+- Bảng này hiện trong `/help` và trong gói chẩn đoán.
+
+### 26.10 Không có phụ thuộc bên thứ ba (quyết định, chưa nêu)
+- **Không** CDN, **không** Google Fonts, **không** analytics, **không** telemetry mặc định, **không** Sentry, **không** Web Push, **không** third-party script.
+- Lý do: (a) không rò IP/usage của người dùng ra ngoài; (b) chạy được trong mạng kín; (c) CSP chặt `default-src 'self'` không cần ngoại lệ.
+- Telemetry/crash report là **opt-in** rõ ràng, mặc định **tắt**, và chỉ gửi file người dùng đã xem trước (§21.10).
+- Trang offline (`/offline`) là HTML tĩnh, không service worker (tránh phức tạp cache).
+
+### 26.11 Hiệu năng phía client (chưa có ngân sách)
+| Chỉ số | Ngân sách |
+|---|---|
+| JS tổng (chưa nén) | ≤ 220 KB; gzip ≤ 70 KB |
+| CSS | ≤ 30 KB (gzip ≤ 10 KB) |
+| Không có framework, không bundler | ✔ |
+| First paint `/login` (LAN) | < 400 ms |
+| Dashboard với 20 cửa sổ | < 700 ms, < 80 ms/frame khi cuộn |
+| Thumbnail | JPEG 160 px ≤ 12 KB mỗi cái, cache 5 s, decode ngoài main thread nếu có `createImageBitmap` |
+| Memory phiên (1080p60) | < 250 MB (Chrome), < 180 MB (Safari) |
+| CPU client | < 15% (decode HW) |
+| Pin (mobile) | < 12%/giờ ở preset Cân bằng |
+- Kiểm tra bằng Lighthouse + `performance.mark` trong CI; **fail nếu vượt 20%**.
+- `content-visibility: auto` cho lưới card; ảnh `loading="lazy"`, `decoding="async"`.
+
+### 26.12 Nhập liệu ngoài tiếng Việt (thiếu)
+| Trường hợp | Xử lý |
+|---|---|
+| **CJK** (Trung/Nhật/Hàn) | client IME → `compositionend` → Unicode; **bắt buộc** không gửi từng ký tự; test với Microsoft Pinyin + Google 日本語 |
+| **RTL** (Ả Rập, Do Thái) | Unicode injection; con trỏ/highlight do app server xử lý; test thứ tự chèn |
+| **Indic** (Devanagari…) | Unicode; chú ý dấu tổ hợp — gửi nguyên chuỗi như IME trả |
+| **Tiếng Việt Telex/VNI** | `compositionend`; test "tieengs"→"tiếng", "dduowngf"→"đường" |
+| **Emoji / ngoài BMP** | surrogate pair = 4 event (§6.5.1) |
+| **Bàn phím ảo mobile** | textarea ẩn + composition; test Gboard tiếng Việt + iOS tiếng Nhật |
+| **Layout khác** (AZERTY, Dvorak) | ký tự OK (Unicode); shortcut theo layout server — ghi rõ (§6.5.8) |
+| **Dead keys** | gửi kết quả cuối; test `^e`→`ê` |
+| **Gõ bằng tay (handwriting / voice)** | qua IME của client → text; hoạt động |
+| Ngưỡng chấp nhận | 12 tổ hợp ngôn ngữ × IME phải pass trong ma trận test |
+
+### 26.13 Clipboard — loại dữ liệu (chỉ nói "text + ảnh")
+| Loại | Hỗ trợ | Ghi chú |
+|---|---|---|
+| Text thuần UTF-8 | ✅ | chuẩn, ≤ 256 KB |
+| HTML (rich text) | ⚠️ chỉ dán dạng **text thuần** | giữ HTML sẽ rò style/script; quyết định: **không** hỗ trợ HTML |
+| Ảnh (PNG) | ✅ | ≤ 8 MB sau nén; chuyển DIB→PNG ở server |
+| Danh sách file | ❌ | trùng chức năng file transfer (T3); tránh đường vận chuyển dữ liệu không kiểm soát |
+| Đường dẫn file | ⚠️ dạng text thôi | không tự mở |
+- Có **xem trước** trước khi dán vào máy (tránh dán nhầm mật khẩu vào app khác).
+- Có nút **xoá clipboard server** sau khi dán (mặc định bật) → giảm rò rỉ.
+
+### 26.14 Chụp màn hình từ xa & in ấn (thiếu)
+- Nút `⋯ → Chụp màn hình` = **client chụp frame hiện tại** (không cần server), tải PNG về; ghi tên `chrome-2026-11-07-1402.png`.
+- `PrintScreen` gửi sang server → ảnh vào clipboard server (dùng kèm chức năng copy). Không tự tải file về (tránh đường vận chuyển ngầm).
+- In từ xa: **không hỗ trợ** (T3 nếu cần); ghi rõ để không ai chờ.
+
+### 26.15 Đồng hồ, múi giờ, NTP (thiếu)
+- Mọi thời gian server = epoch ms UTC. Client hiển thị theo múi giờ **của client**, có nhãn khi khác server.
+- JWT: skew ±60 s; TOTP: ±1 bước.
+- Dashboard hiện giờ **của máy chủ** ở tooltip ("12:04 giờ máy chủ").
+- Nếu lệch > 5 phút so với NTP (nếu kiểm tra được) → banner admin "đồng hồ máy chủ lệch, ảnh hưởng đăng nhập 2 lớp".
+- Timeout/idle tính bằng **clock đơn điệu** (monotonic), không dùng wall clock (tránh bug khi đổi giờ/NTP nhảy).
+
+### 26.16 Lưu trữ & xoá dữ liệu (thiếu)
+| Dữ liệu | Giữ | Xoá |
+|---|---|---|
+| Audit | 90 ngày (mặc định, cấu hình) | tự động theo lô |
+| Log app | 5 × 10 MB | xoay vòng |
+| Ảnh clipboard tạm | 0 (không lưu đĩa) | ngay |
+| Thumbnail cache | 5 s (RAM) | — |
+| Phiên đã kết thúc | metadata 90 ngày | tự động |
+| Link chia sẻ | theo hạn + 7 ngày sau | tự động |
+| Gói chẩn đoán | người dùng tải, **server không lưu** | — |
+| Crash dump | **tắt mặc định**; nếu bật: 7 ngày, local, không upload | tự động |
+- Có nút admin **"Xoá dữ liệu của người dùng X"** (GDPR-style) — xoá prefs + audit liên quan, giữ lại dòng audit tối thiểu về việc xoá.
+
+### 26.17 Ký số, SmartScreen, AV (thiếu)
+- Binary + driver **nên** ký (EV cert nếu có) — không có thì SmartScreen sẽ cảnh báo "Unknown publisher"; ghi trong `/help` cách bỏ qua một cách có hiểu biết.
+- Hướng dẫn whitelist Defender (folder + process) khi cần — **không** tự tắt AV.
+- Không có "chống phát hiện" dưới mọi hình thức (§21.14).
+
+### 26.18 Lỗi đặc thù trình duyệt (danh sách kiểm)
+| Browser | Lỗi đã biết | Xử lý |
+|---|---|---|
+| Safari iOS | không fullscreen `<video>` | fullscreen CSS container |
+| Safari iOS | audio cần gesture | nút bật tiếng |
+| Safari iOS | `navigator.clipboard.readText` cần gesture | nút Paste = gesture |
+| Safari mac | Pointer Lock cần gesture, `movementX` bị gia tốc | cảnh báo; vẫn dùng được |
+| Firefox | không Keyboard Lock | cảnh báo Ctrl+W (§6.5.3) |
+| Firefox | `wheel` delta khác (line vs pixel) | chuẩn hoá `deltaMode` |
+| Chrome | mDNS obfuscation | §13.3 |
+| Chrome Android | tab bị kill khi ẩn lâu | resume + cảnh báo "giữ tab mở" |
+| Mọi browser | autoplay policy | nút bật tiếng |
+| Mọi browser | `beforeunload` không đảm bảo | `sendBeacon` + watchdog server |
+| Mọi browser | zoom trang (Ctrl+wheel) làm lệch toạ độ | chặn khi focus video + tính theo `getBoundingClientRect` (đã đúng) |
+
+### 26.19 Tiết kiệm pin & dữ liệu (thiếu)
+- `navigator.connection.saveData` hoặc `effectiveType` 2g/3g → gợi ý Tiết kiệm; tự hạ preset **một lần** (có toast + hoàn tác).
+- Mobile pin yếu (`navigator.getBattery` nếu có) → hạ 30 fps, tắt ripple khi < 20%.
+- Khi tab ẩn → 5 fps (§6.11.2) = tiết kiệm pin đáng kể.
+- Không giữ `wake lock` mặc định; chỉ giữ khi người dùng bật "giữ màn hình sáng".
+
+### 26.20 Trang `/help` & nội dung trợ giúp (thiếu)
+- 4 mục: **Bắt đầu** (3 bước) · **Không kết nối được** (8 nguyên nhân theo tần suất) · **Phím tắt** (bảng đầy đủ §6.5.2 + §24.15) · **Câu hỏi thường gặp** (giới hạn đã biết: DRM, UAC, Ctrl+Alt+Del, NAT).
+- Mỗi mục trỏ tới `/diagnostics` khi phù hợp.
+- Tìm kiếm trong help là lọc phía client, không cần backend.
+- Nội dung nằm trong file markdown → cùng nguồn với docs, không viết 2 lần.
+
+---
+
+## 27. Trả lời thẳng: còn gì thiếu?
+
+### 27.1 Đã đóng (rà 2 lượt, 20 trục ở §26 + 20 lỗ hổng ở §0.1)
+Kiến trúc · ngôn ngữ · capture · cursor · input · bàn phím/IME · touch · audio · stealth · mạng · bảo mật · **giao diện (9 chương §22–25)** · tuỳ chỉnh · chẩn đoán · trạng thái/lỗi · bền & rò rỉ · cập nhật · backup · chia sẻ · phía người bị điều khiển · pháp lý · hỗ trợ · quy trình test · rủi ro · **dữ liệu · API · log · CLI · config reload · cert · proxy · môi trường cài · ma trận hỗ trợ · không phụ thuộc bên thứ ba · ngân sách hiệu năng · nhập liệu đa ngôn ngữ · clipboard chi tiết · chụp màn hình · thời gian · lưu trữ · ký số · lỗi browser · pin/data · help**.
+
+### 27.2 **Chưa** thể nói "không còn gì thiếu" — và đây là lý do (thật thà)
+Có 4 loại điều **không thể** biết bằng cách viết spec thêm:
+
+| # | Điều chỉ đo được | Cách giải quyết | Khi nào biết |
+|---|---|---|---|
+| 1 | `d3d11screencapturesrc` + `webrtcbin` + VDD có đạt **p95 <80 ms** không | Phase 0 spike + đo barcode | sau 1–1.5 tuần |
+| 2 | Per-app audio routing API có **ổn định trên mọi build Win10/11** không | Phase 0 test trên 4 máy/build | sau Phase 0 |
+| 3 | `ITaskbarList.DeleteTab` + `WS_EX_TOOLWINDOW` có bị app phổ biến **tự đảo lại** không | Thử trên 15 app thật (Chrome, VS Code, Excel, Teams, Notepad++, Zalo, Photoshop…) | sau Phase 1 |
+| 4 | Trải nghiệm "đủ tốt" thật sự (người dùng có thấy mượt không) | 3 người dùng thử 5 tác vụ, đo thời gian hoàn thành + hỏi 2 câu | sau Phase 1 |
+
+Ngoài 4 điều đó, **về mặt thiết kế** tôi không còn nhóm nào chưa có quyết định. Nếu bạn muốn, tôi có thể rà thêm lượt thứ 3 theo một trục bạn chọn (ví dụ: "chỉ soi bảo mật", "chỉ soi mobile", "chỉ soi vận hành") — nhưng tôi sẽ không tự nói "đã hoàn hảo" trước khi bạn xác nhận hoặc trước khi có kết quả Phase 0.
+
+### 27.3 Việc tiếp theo (đề xuất thứ tự)
+1. **Bạn đọc §22–25** (giao diện) — chỗ dễ phải sửa nhất vì nó là gu, không phải kỹ thuật.
+2. Chốt 3 câu §19.2 (đang có mặc định).
+3. Tôi dựng **Phase 0**: Cargo workspace + spike GStreamer + trang test client + script đo barcode. Không đụng Tier 1.
