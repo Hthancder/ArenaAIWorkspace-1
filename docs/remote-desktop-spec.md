@@ -1,6 +1,6 @@
 # SPEC v3.15 — Remote Desktop qua trình duyệt **cho dùng cá nhân**: HVNC + VNC, window picker, âm thanh server-side, trải nghiệm điều khiển đầy đủ
 
-- Phiên bản: **v3.19 — thêm §51 hồ sơ GTX 1050, bẫy adapter, P0 cụ thể** · trước đó: **v3.18 — thêm §48 mô hình tuỳ chỉnh, §49 chống vỡ UI, §50 tính năng còn thiếu** · trước đó: **v3.17 — thêm §47 khởi động cùng Windows + vòng đời process + trải nghiệm theo thời gian** · trước đó: **v3.16 — thêm §46 "máy có ở đó không" (ngủ/reboot/đổi IP/khoá màn hình)**, lĩnh vực G còn trống · trước đó: **v3.15** — phạm vi thu hẹp về 1–2 người dùng (§0.3). Bản v3.14 là bản "sản phẩm": có cert, EULA, RBAC, accessibility, đóng gói ký số. Tất cả những thứ đó **đã cắt** ở đây — xem §0.3.1 để biết cắt gì và cắt có an toàn không. Lịch sử đầy đủ v1.0→v3.14 ở §0.
+- Phiên bản: **v3.20 — §51.10–14: VRAM 4 GB, trần 1440p, sửa lỗi AdapterRAM** · trước đó: **v3.19 — thêm §51 hồ sơ GTX 1050, bẫy adapter, P0 cụ thể** · trước đó: **v3.18 — thêm §48 mô hình tuỳ chỉnh, §49 chống vỡ UI, §50 tính năng còn thiếu** · trước đó: **v3.17 — thêm §47 khởi động cùng Windows + vòng đời process + trải nghiệm theo thời gian** · trước đó: **v3.16 — thêm §46 "máy có ở đó không" (ngủ/reboot/đổi IP/khoá màn hình)**, lĩnh vực G còn trống · trước đó: **v3.15** — phạm vi thu hẹp về 1–2 người dùng (§0.3). Bản v3.14 là bản "sản phẩm": có cert, EULA, RBAC, accessibility, đóng gói ký số. Tất cả những thứ đó **đã cắt** ở đây — xem §0.3.1 để biết cắt gì và cắt có an toàn không. Lịch sử đầy đủ v1.0→v3.14 ở §0.
 - Trạng thái: **Đề xuất — CHƯA implement, chờ duyệt.** Sau v3.15, spec **không còn chương nào cần viết**; việc tiếp theo là **P0 (đo thật)**, không phải viết thêm.
 - Nền tảng: Server **Windows 10 2004+ / Windows 11** · Client **trình duyệt** (không app)
 
@@ -27,6 +27,7 @@
 | **v3.11** | **§41 threat model: 10 tài sản · 10 vị trí P1–P10 · **lật giả định nền — client KHÔNG tin cậy, agent tin về hành vi nhưng không tin về dữ liệu** · 3 hệ quả kiến trúc · 20 mối đe doạ T1–T20 theo ranh giới · 5 quyết định *bắt nguồn từ threat model* (client không gửi `hwnd`; không endpoint chạy lệnh; transfer/clipboard mặc định tắt; `X-Frame-Options: DENY`; người ngồi máy luôn dừng được) · token rotate + reuse detection · P6 quyền phủ quyết · supply chain/chống downgrade · 9 rủi ro chấp nhận · 14 kiểm chứng** |
 | **v3.12** | **§42 multi-session — phát hiện ràng buộc bị bỏ qua: 1 desktop = 1 con trỏ + 1 focus ⇒ chỉ 1 controller/session, N viewer** · input lease (server-side, TTL, release_all trước khi chuyển) · bảng chia sẻ vs cách ly 13 tài nguyên · admission control theo VRAM/RAM/CPU/slot/display có số (thay cho "max 3") · giới hạn display slot của VDD = câu hỏi chặn Phase 0 · fanout 1 encode → N SRTP (PLI theo **stream** không theo peer) · cách ly lỗi + tự phục hồi sau TDR · fairness 4 mức · **10 bảo đảm cách ly phải test (I1–I10), fail ⇒ tắt multi-session** · refcount dọn sau 5 s** |
 | **v3.13** | **§43 client perf: vì sao client dễ chết hơn server (6 nền tảng, Safari iOS kill tab ~200–400 MB, GC không kiểm soát) · 15 chỉ số ngân sách có cách đo · quyết định render (video element ≠ canvas; cursor = div transform; HUD 2 Hz) · **10 chỗ tốn tiền thật** (#1 forced reflow từ `getBoundingClientRect` mỗi pointer event — bug phổ biến nhất, không thấy bằng mắt) · kiến trúc JS (0 dependency, 12 module, `render(state)`) · perf-probe + **CI gate thật** (size/type/perf/leak, baseline 7 ngày) · 3 giới hạn cứng mobile · overlay 0 ms main thread · 8 nguồn rò rỉ + test 50 lần vào/ra** |
+| **v3.20** | **Xác nhận VRAM 4 GB** ⇒ §51.3 đảo kết luận: **VRAM không phải ràng buộc** trên máy này; trần display ảo **1920×1200 → 2560×1440**; "giật" có **4 nguyên nhân khác** và cách phân biệt bằng số (`encode_ms p95 < 8 ms` ⇒ **không phải GPU**) · trần cứng thật là **băng thông đường quét ảo** (Pascal **không có DSC**) chứ không phải VRAM ⇒ 4K có thể phải lùi **30 Hz** · cảnh báo **1050 Ti OEM low-profile bị hạ xung** (NVENC không bị, **DWM bị**) · **`Win32_VideoController.AdapterRAM` là `uint32` ⇒ tràn số với card ≥ 4 GB** — phải dùng `nvidia-smi` hoặc DXGI `DedicatedVideoMemory` (§9.4.1 bước 1b sửa theo) · cấu hình `config.json` chốt cho máy này · còn 2 câu: **có iGPU không** (quyết định bẫy LUID) và driver version |
 | **v3.19** | **§51 máy chủ thật (GTX 1050)**: GitHub dùng được để **đọc source**, **không** để đo (runner không GPU) · 1050 = NVENC thế hệ 6: H.264 1080p60 dư, **không AV1**, **không HEVC B-frame** (không dùng), trần phiên **12** với driver mới (không thành vấn đề — ta dùng 1–2) · **ràng buộc thật là 2 GB VRAM ⇒ trần display ảo 1920×1200**, không phải tốc độ; hết VRAM **không báo lỗi, chỉ giật** ⇒ banner < 300 MB · **bẫy tìm từ source**: `d3d11screencapturesrc` khi `capture-api=wgc` tạo device theo **adapter index bạn truyền** (mặc định `-1`), khi `dxgi` thì theo **adapter sở hữu monitor** ⇒ máy 2 adapter (iGPU + Optimus) có thể capture và NVENC ở **2 LUID khác nhau** = copy staging +3–8 ms hoặc `not-negotiated` ⇒ P0 phải kiểm **LUID trùng** · **tin tốt P0-b**: GStreamer **có TWCC** (`rtptwcc`, `twcc-stats`) và webrtcbin tự quảng cáo `transport-cc`, **không có REMB**; ta vốn không cần CC trong GStreamer vì §36 là CC của ta ⇒ P0-b hạ từ "đổi stack" xuống "nối extmap + đọc 1 property" · VDD **25.7.23 / VDC đã ký**, cài cả display + audio trong app · 12 bước P0 cụ thể cho máy này |
 | **v3.18** | **§48 tuỳ chỉnh**: 3 tầng **có số cứng** (T1 = 12 mục, T2 ≤ 20, T3 = file) · **4 phạm vi** (app/server/user/**device**) và thứ tự thắng `device > user > server > app` (device thắng để điện thoại 4G dùng "Mượt" mà laptop LAN vẫn "Nét"); mục thuộc **server** thì **không** cho ghi đè theo thiết bị · thay thanh trượt bằng **preset** (T1 không có ô số) · tìm bằng từ người dùng nghĩ ("trễ", "mờ") chứ không bằng tên tham số · **4 điều kiện để một mục được vào UI** (chống phình lại 60 mục) · "không thắt khởi động lại" + nhãn `áp dụng từ phiên sau` · **§49 chống vỡ UI**: thang **6 tầng z cố định** (0 literal `z-index`), **máy trạng thái bề mặt** (1 dialog / 1 sheet / 1 toast / 1 banner / Esc đóng đúng 1), banner **đẩy** layout không phủ, toast neo trong STAGE, test cỡ chữ 200% + 320 px + tiếng Việt + ảnh chụp baseline · **§50** 8 tính năng còn thiếu (lịch sử phiên, ghim cửa sổ, ảnh cuối khi mất mạng, chuyển app trên mobile, âm báo, chế độ mạng yếu, gửi file 1 chiều, không ghi hình) |
 | **v3.17** | **§47 khởi động & vòng đời process** — chỗ hở thực tế nhất: §13.6 chỉ có 1 dòng "At log on". **4 cách tự chạy, chỉ 1 cách đúng** (Task Scheduler At-logon dưới user; **Session 0 = app chạy mà không capture được** — bẫy phổ biến nhất) · **2 cờ Task Scheduler mặc định sai**: không chạy trên pin + dừng khi rút sạc (⇒ app tắt lúc đi họp, không báo gì) · **delay 20 s** vì driver/DWM chưa sẵn sàng + retry 3×10 s + web server mở ngay · mutex `Local\` + "đã có bản khác" + **không bao giờ kill bản cũ** · **`state.json` có 4 trạng thái** (thiếu / crash / **reboot ⇒ không restore gì** / hỏng) và **HWND bị tái sử dụng** ⇒ phải khớp bộ 4 · restore **đúng thứ tự cứng** ①audio → ②cửa sổ → ④xoá display sau cùng · `install.ps1 -Restart` thay binary khi đang chạy · **first-run 5 trạng thái** + QR ở `/setup` là khoảnh khắc quyết định · **bảng hỏng dần theo thời gian** (10 s → tuần 1 → tháng 6) · 14 edge case khởi động + 7 test |
@@ -978,7 +979,8 @@ Không hỏi "máy bạn có GPU gì" lúc cài — **dò lúc chạy**, mỗi l
 
 ```
 1. Enumerate adapter (DXGI) → nhận diện vendor + tên + VRAM + feature level
-1b. Đọc DedicatedVideoMemory ⇒ chọn TRẦN resolution (§51.3): <3 GB → 1920x1200; 3–6 GB → 2560x1440; >6 GB → 4K
+1b. Đọc **DXGI_ADAPTER_DESC1.DedicatedVideoMemory** (KHÔNG dùng WMI `AdapterRAM` — nó là uint32, tràn số với card ≥4 GB — §51.12)
+    ⇒ chọn TRẦN resolution: <3 GB → 1920x1200; 3–6 GB → 2560x1440; 6–10 GB → 4K@60 (lùi 4K@30 nếu SetDisplayConfig fail); >10 GB → 4K@60
 1c. Kiểm LUID: adapter sở hữu monitor capture == adapter NVENC mở (§51.4). Lệch ⇒ ghi log + hạ preset
 2. Thử khởi tạo encoder theo thứ tự: NVENC → QSV → AMF → MF(x264/OpenH264)
    · thử bằng một session 1280x720 @30 fps 1 giây (throwaway) để chắc chắn chạy được
@@ -997,7 +999,7 @@ Không hỏi "máy bạn có GPU gì" lúc cài — **dò lúc chạy**, mỗi l
 | HW encoder yếu (iGPU đời cũ, laptop U) | Smooth | 1080p60 → tự hạ 900p nếu rơi frame |
 | Chỉ x264, CPU ≥8 nhân hiện đại | Smooth | 1080p30 |
 | Chỉ x264, CPU yếu / máy ảo | Low | 720p30 |
-| **GTX 1050 (2 GB)** | Balanced | **1080p60, trần 1200p** — §51.3 |
+| **GTX 1050 Ti (4 GB)** | Balanced | **1080p60@1440p, trần 1440p** — §51.10 |
 
 - **Người dùng vẫn đổi được tay** (§6.10.1); auto chỉ là mặc định + trần. Đổi tay thì khoá auto 10 phút.
 - Panel `⚙ → Thông tin máy chủ` **hiện rõ**: GPU, encoder đang dùng, encode_ms, lý do chọn preset. Không giấu — nếu hình mờ, người dùng biết vì sao.
@@ -1507,7 +1509,7 @@ Bản cá nhân: **1 OS, 1 DPI, 1 GPU, 1 trình duyệt chính + 1 trình duyệ
 |---|---|---|
 | Phase | Nội dung | Ước tính |
 |---|---|---|---|
-| **P0** | **Spike (cổng quyết định):** Rust + GStreamer `d3d11screencapturesrc` → `webrtcbin` → browser 1080p60; DDAPI cursor shape + client render; đo glass-to-glass. **p95 >120 ms ⇒ đổi stack (§16.6) trước khi viết tiếp**. Trên **GTX 1050**: `capture-api=dxgi`, trần 1200p, kiểm **LUID capture == LUID NVENC** (§51) | 1–1.5 tuần |
+| **P0** | **Spike (cổng quyết định):** Rust + GStreamer `d3d11screencapturesrc` → `webrtcbin` → browser 1080p60; DDAPI cursor shape + client render; đo glass-to-glass. **p95 >120 ms ⇒ đổi stack (§16.6) trước khi viết tiếp**. Trên **GTX 1050 Ti 4 GB**: `capture-api=dxgi`, trần **1440p**, kiểm **LUID capture == LUID NVENC** (§51) | 1–1.5 tuần |
 | **P1** | **Dùng được hằng ngày:** auth 1 user, picker, HVNC move/restore + khôi phục khi crash, encoder auto-detect, input đầy đủ (§6.3–6.7), audio "hỏi mỗi phiên" + toggle, reconnect, resume, `install.ps1`/`uninstall.ps1` | 4–6 tuần |
 | **P2** | **Dễ chịu:** preset/zoom, bố cục mobile, chuyển cửa sổ giữa phiên, link xem tạm, chế độ bàn phím thô | 2–3 tuần |
 | — | ~~Tier 2 sản phẩm, Tier 3, ma trận test, hardening~~ | **đã cắt** (§0.3.1) |
@@ -5585,13 +5587,13 @@ Trong một phiên điều khiển, cùng lúc có thể tồn tại: **video** 
 | Codec | H.264 ✔ · HEVC ✔ (kể cả 10-bit) · **AV1 ✘** | ta chỉ cần H.264 (browser nào cũng có, và §45.1 đã chốt NVENC) |
 | HEVC **B-frame** | **không hỗ trợ** | không ảnh hưởng: chế độ low-latency của ta **không dùng B-frame** (§37) |
 | Giới hạn phiên NVENC | lịch sử 2 → 3 → 5 → 8 → 12 phiên; **driver mới = 12** | ta chỉ dùng **1–2** phiên (§42) ⇒ **không phải lo** |
-| VRAM | **2 GB** (bản 1050 thường) hoặc 3 GB (1050 Ti) | **đây mới là ràng buộc thật** — xem §51.3 |
+| VRAM | 2 GB (1050) · 4 GB (1050 Ti) — **máy bạn: 4 GB** | ban đầu tôi coi đây là ràng buộc thật; **đã đảo** ở §51.10 với 4 GB |
 | NVDEC | H.264/HEVC/VP9 giải mã được | không dùng tới (client giải mã) |
 | Tuổi driver | Pascal vẫn được driver mới hỗ trợ | phải **≥ 551.76** nếu muốn trần 8+ phiên, nhưng ta không cần |
 
 > **Phán quyết:** 1050 **không phải chướng ngại** cho mục tiêu 1080p60 + p95 < 120 ms. Nó là **mức sàn hợp lý** — nếu chạy được trên 1050 thì máy mạnh hơn chạy tốt hơn. Nếu **không** chạy được trên 1050 thì vấn đề **không phải GPU**, mà là pipeline (§16.6).
 
-### 51.3 Ràng buộc thật trên 1050: **2 GB VRAM**, không phải tốc độ
+### 51.3 ~~Ràng buộc thật trên 1050: **2 GB VRAM**~~ → **đã sửa ở §51.10** (máy thật là **4 GB**)
 | Thành phần | VRAM ước tính | Ghi chú |
 |---|---|---|
 | Desktop Windows ở 1080p | ~150–250 MB | tường thuê bao theo số cửa sổ |
@@ -5606,7 +5608,7 @@ Trong một phiên điều khiển, cùng lúc có thể tồn tại: **video** 
 
 | Mục | Giá trị trên 1050 | Vì sao |
 |---|---|---|
-| Trần display ảo | **1920×1200** (hoặc 2560×1440 nếu bạn thật sự cần) | 4K trên 2 GB là tự bắn chân; 1200p đọc chữ vẫn nét ở 100% |
+| Trần display ảo | ~~1920×1200~~ → **2560×1440** (§51.10) | 4K trên **4 GB** không còn là tự bắn chân, nhưng DWM/đường quét vẫn nặng ⇒ mặc định 1440p |
 | Preset mặc định | **Balanced 1080p60 (8 Mbps)** | Sharp 12 Mbps @1440p không thêm giá trị trên 1050 |
 | Cảnh báo khi VRAM trống < 300 MB | **bật** — banner vàng "máy sắp hết VRAM, hình sẽ giật" | đây là thứ **không** có ở spec cũ: hết VRAM **không** báo lỗi, chỉ giật |
 | Không bao giờ | chạy *thêm* một display ảo thứ 3 khi đang có phiên | §42.6 |
@@ -5702,3 +5704,80 @@ Get-CimInstance Win32_DesktopMonitor | Select-Object Name,ScreenWidth,ScreenHeig
 | §18 P0 | thêm *"trên GTX 1050: trần 1200p, `capture-api=dxgi`, kiểm LUID"* |
 | §45 | VDD nay cài bằng **VDC** (đã ký, có cả audio) — thay quy trình Device Manager thủ công |
 | §46 | thêm 1 dòng: hết VRAM **không báo lỗi**, chỉ giật ⇒ banner VRAM < 300 MB |
+| §9.4.1 | **sửa nguồn đo VRAM**: DXGI `DedicatedVideoMemory`, **không** WMI `AdapterRAM` (uint32 tràn số) — §51.12 |
+| §18 P0 | trần **1440p** (không phải 1200p) — §51.10 |
+
+### 51.10 Cập nhật từ máy thật: **VRAM = 4 GB** ⇒ trần là **D3D feature level**, không phải VRAM
+> Bạn xác nhận **4 GB**. Đây là **GTX 1050 Ti 4 GB** hoặc biến thể 4 GB (1050 thường chính thức 2 GB). Điều này **đổi kết luận của §51.3** — và tôi phải sửa một chỗ §51.3 viết sai (xem cuối mục).
+
+| Kết luận cũ (§51.3, khi giả định 2 GB) | Kết luận mới (4 GB) |
+|---|---|
+| VRAM là **ràng buộc thật** | ❌ **sai với máy này** — 4 GB dư cho 1 phiên 1080p60 hoặc 1440p, kể cả 4K capture ~700 MB |
+| Trần display ảo **1200p** | ✅ nâng lên **2560×1440** (và 4K **được phép thử**, xem cảnh báo dưới) |
+| Banner VRAM < 300 MB | **giữ**, nhưng chỉ còn là lưới an toàn (Chrome nhiều tab 4K vẫn ăn 400–900 MB) |
+| Chẩn đoán khi "giật" | **đổi hẳn**: trên máy này giật **không phải** do VRAM ⇒ xem 4 nguyên nhân thật ở §51.11 |
+
+**Trần mới theo VRAM** (thay bảng "Dưới 3 GB ⇒ 1200p…"):
+
+| VRAM khả dụng | Trần display ảo | Ghi chú |
+|---|---|---|
+| < 3 GB | 1920×1200 | máy yếu; 4K là tự bắn chân |
+| **3–6 GB (máy bạn: 4 GB)** | **2560×1440** | mức ngọt: chữ nét ở 150%/175% |
+| 6–10 GB | 4K @60 (30 nếu 4K@60 fail) | kiểm `SetDisplayConfig` thành công |
+| > 10 GB | 4K @60 | — |
+
+**Nhưng "trần" này chỉ là *policy* của ta. Windows còn một trần cứng khác:** display ảo phải mang mode mà driver chấp nhận. Nếu VDD khai `4K@60` nhưng **băng thông pixel** của mode vượt khả năng đường quét ảo (và **Pascal không có DSC**), `SetDisplayConfig` trả lỗi ⇒ phải lùi về **4K@30**. Đây là lý do bảng trên ghi "(30 nếu 4K@60 fail)" — **không phải** vì VRAM.
+
+⚠️ **Một cảnh báo riêng cho 1050 Ti 4 GB:** rất nhiều bản 1050 Ti là **card low-profile/OEM không có đầu cấp nguồn phụ**, và một số bản OEM **bị hạ xung khi chạy tải đồ hoạ kéo dài** (giới hạn công suất ~75 W qua khe PCIe). NVENC **không** bị hạ xung (nó là khối riêng), nhưng **DWM composite lại bị**. Nếu soak 4 h mà thấy khung hình trễ tăng dần **chỉ khi Chrome đang vẽ nhiều** ⇒ nghi vấn này, cách xác nhận: log `nvidia-smi --query-gpu=clocks.gr,clocks_throttle_reasons.active --format=csv -l 5`.
+
+### 51.11 Trên máy 4 GB, "giật" có **4 nguyên nhân khác** — và mỗi cái có dấu hiệu riêng
+Đây là bảng để đọc số liệu, không phải để đoán:
+
+| # | Nguyên nhân | Dấu hiệu phân biệt | Cách sửa | Xác suất trên máy bạn |
+|---|---|---|---|---|
+| 1 | **VRAM cạn** (Chrome 4K) | trễ tăng **khi mở thêm tab**; `nvidia-smi` memory.used sát trần | hạ trần display, đóng tab | **thấp** (4 GB) |
+| 2 | **LUID lệch** (capture ↔ NVENC) — §51.4 | `not-negotiated`, hoặc trễ **cao đều đặn** ngay từ giây đầu; CPU% **một nhân** cao (copy staging) | `capture-api=dxgi` | **cao nếu có iGPU** |
+| 3 | **Đường quét ảo / DWM quá tải** | trễ tăng theo **số cửa sổ đang vẽ**, không theo bitrate | preset/scale 1-pass (§39), hạ trần 1440p | trung bình |
+| 4 | **Không phải GPU:** mạng/jitter buffer/pacing | trễ tăng theo **thời gian trong ngày** hoặc khi đổi Wi-Fi; `encode_ms` **bình thường** | §36 CC, §37 preset | **cao nhất** — đa số "giật" là cái này |
+
+> **Quy tắc đọc số:** nếu `encode_ms p95 < 8 ms` mà glass-to-glass vẫn >120 ms ⇒ **GPU không phải thủ phạm**. Đừng mua card mới. Đây là cái bẫy tốn tiền nhất của toàn bộ dự án: 1050 Ti 4 GB **đủ**, và mọi cải thiện phải đến từ pipeline/mạng.
+
+### 51.12 Đo VRAM trên Windows — đừng dùng `AdapterRAM` (nó sẽ báo sai)
+| Cách | Trả về | Đúng? |
+|---|---|---|
+| `Win32_VideoController.AdapterRAM` | `uint32` ⇒ card **≥ 4 GB bị tràn số** (báo ~4 GB hoặc giá trị vô lý) | ❌ **không dùng để kết luận** |
+| **`nvidia-smi --query-gpu=memory.total`** | MiB thật | ✅ **dùng cái này** |
+| DXGI `DXGI_ADAPTER_DESC1.DedicatedVideoMemory` | byte thật (`SIZE_T`) | ✅ dùng trong app (§9.4.1 bước 1b) |
+| Task Manager → GPU → Dedicated | MiB | ✅ để nhìn nhanh bằng mắt |
+
+> **Hệ quả cho §9.4.1:** bước 1b **phải** đọc `DedicatedVideoMemory` từ **DXGI**, không đọc WMI. Nếu đọc WMI, máy 4 GB có thể bị xếp nhầm nhóm một cách tình cờ, nhưng máy **6 GB** sẽ bị xếp nhầm vào "2 GB" ⇒ tự hạ trần vô cớ. Đây là lỗi im lặng, không bao giờ báo.
+
+### 51.13 Cấu hình chốt cho **máy này** (dán vào `config.json`)
+```json
+{
+  "display": {
+    "virtual_max": "2560x1440@60",
+    "virtual_fallback": ["1920x1200@60", "1920x1080@60"],
+    "never_4k_by_default": true
+  },
+  "encoder": { "order": ["nvenc", "mf"], "preset": "balanced",
+               "capture_api": "dxgi", "max_bitrate_mbps": 12 },
+  "guards": { "vram_low_banner_mb": 300, "luid_mismatch_fatal_log": true },
+  "p0": { "measure": ["p95_g2g", "twcc_bitrate_sent", "luid_pair", "vram_peak", "encode_ms_p95"] }
+}
+```
+> `never_4k_by_default: true` — bạn **vẫn bật 4K được** trong Nâng cao (§48 T2), nhưng mặc định không. Lý do: 4K trên 1050 Ti làm đường quét ảo + DWM nặng gấp ~2.25 lần diện tích, và lợi ích duy nhất là chữ nét hơn — đạt được rẻ hơn bằng **DPI 150% ở 1440p**.
+
+### 51.14 Ba câu còn lại (sau khi đã biết VRAM)
+| Câu | Trạng thái | Vì sao vẫn cần |
+|---|---|---|
+| **Có iGPU không?** | ⬜ chưa biết | quyết định **bẫy LUID** (§51.4) có cắn hay không — ảnh hưởng **trực tiếp p95**, không phải chuyện nhỏ |
+| **Driver version** | ⬜ chưa biết | NVENC 6 đời cần driver đủ mới; và trần phiên (3/5/8/12) tuỳ driver |
+| **Màn hình thật đang ở resolution nào** | ⬜ chưa biết | nếu bạn đang dùng 1080p thì display ảo **1440p** vẫn hợp lý (khác mode), nhưng nếu đang 1440p thì **đừng** cho client mặc định 1440p — dễ nhầm "cùng một màn hình" |
+
+> Hai lệnh còn thiếu (không cần admin):
+> ```powershell
+> nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv
+> Get-CimInstance Win32_DesktopMonitor | Select-Object Name,ScreenWidth,ScreenHeight
+> ```
+> Lệnh thứ nhất cho **cả** VRAM thật, driver **và** tên card (1050 hay 1050 Ti — hai card khác nhau về số nhân CUDA nhưng **cùng NVENC**, nên không đổi kết luận). Lệnh thứ hai cho resolution thật.
