@@ -1,6 +1,6 @@
-# SPEC v3.12 — Remote Desktop qua trình duyệt: HVNC + VNC, window picker, âm thanh server-side, **trải nghiệm điều khiển đầy đủ**
+# SPEC v3.13 — Remote Desktop qua trình duyệt: HVNC + VNC, window picker, âm thanh server-side, **trải nghiệm điều khiển đầy đủ**
 
-- Phiên bản: **v3.12** (v3.11 + **§42 multi-session**: ràng buộc 1 con trỏ/1 focus của Win32, input lease, admission control có số, display slot, fanout 1 encode → N SRTP, cách ly lỗi, fairness, 10 bảo đảm cách ly · trước đó: **§41 threat model & ranh giới tin cậy**: 10 tài sản, 10 vị trí tấn công, 20 mối đe doạ theo ranh giới, 5 quyết định thiết kế bắt nguồn từ threat model, token chi tiết, người ngồi máy, supply chain, 9 rủi ro chấp nhận, 14 kiểm chứng · trước đó: **§40 âm thanh**: tách routing↔capture, AudioPolicyConfig không tài liệu, 3 mức routing + kiểm chứng bằng session enumeration, WASAPI loopback bẫy, ASRC chống drift, device notifications · **§0.2 bản đồ 8 lĩnh vực thay cho đi mãi một nhánh**): hai thiết bị một lõi — mobile zero-chrome, grip 3 tầng, radial 8 ô, command registry, flow contract FE↔BE**)
+- Phiên bản: **v3.13** (v3.12 + **§43 hiệu năng client**: vì sao client dễ chết hơn server, 15 chỉ số ngân sách có cách đo, đường render quyết định, 10 chỗ tốn tiền thật, kiến trúc JS giữ ngân sách, probe + CI gate, 3 giới hạn cứng mobile, overlay 0 ms, 8 nguồn rò rỉ · trước đó: **§42 multi-session**: ràng buộc 1 con trỏ/1 focus của Win32, input lease, admission control có số, display slot, fanout 1 encode → N SRTP, cách ly lỗi, fairness, 10 bảo đảm cách ly · trước đó: **§41 threat model & ranh giới tin cậy**: 10 tài sản, 10 vị trí tấn công, 20 mối đe doạ theo ranh giới, 5 quyết định thiết kế bắt nguồn từ threat model, token chi tiết, người ngồi máy, supply chain, 9 rủi ro chấp nhận, 14 kiểm chứng · trước đó: **§40 âm thanh**: tách routing↔capture, AudioPolicyConfig không tài liệu, 3 mức routing + kiểm chứng bằng session enumeration, WASAPI loopback bẫy, ASRC chống drift, device notifications · **§0.2 bản đồ 8 lĩnh vực thay cho đi mãi một nhánh**): hai thiết bị một lõi — mobile zero-chrome, grip 3 tầng, radial 8 ô, command registry, flow contract FE↔BE**)
 - Trạng thái: **Đề xuất — CHƯA implement, chờ duyệt**
 - Nền tảng: Server **Windows 10 2004+ / Windows 11** · Client **trình duyệt** (không app)
 
@@ -26,6 +26,7 @@
 | **v3.10** | **§40 audio: routing ≠ capture · AudioPolicyConfig không có API tài liệu (rủi ro #1) · 3 mức routing (per-app → toàn máy → như VNC) + **kiểm chứng bằng EnumerateSessions** (phát hiện cả rò rỉ `audio_leak`) · app chỉ đọc thiết bị lúc khởi động · WASAPI loopback không có event khi im lặng ⇒ polling · `IMMNotificationClient` (không giành lại default device của người dùng) · **ASRC chống drift ±100 ppm = 720 ms/2 h** · toggle dùng `NULL` + SSRC mới · 12 test chấp nhận · Bluetooth client +150–300 ms không sửa được** · **§0.2 bản đồ 8 lĩnh vực, luật ≤2 lượt liên tiếp mỗi lĩnh vực** |
 | **v3.11** | **§41 threat model: 10 tài sản · 10 vị trí P1–P10 · **lật giả định nền — client KHÔNG tin cậy, agent tin về hành vi nhưng không tin về dữ liệu** · 3 hệ quả kiến trúc · 20 mối đe doạ T1–T20 theo ranh giới · 5 quyết định *bắt nguồn từ threat model* (client không gửi `hwnd`; không endpoint chạy lệnh; transfer/clipboard mặc định tắt; `X-Frame-Options: DENY`; người ngồi máy luôn dừng được) · token rotate + reuse detection · P6 quyền phủ quyết · supply chain/chống downgrade · 9 rủi ro chấp nhận · 14 kiểm chứng** |
 | **v3.12** | **§42 multi-session — phát hiện ràng buộc bị bỏ qua: 1 desktop = 1 con trỏ + 1 focus ⇒ chỉ 1 controller/session, N viewer** · input lease (server-side, TTL, release_all trước khi chuyển) · bảng chia sẻ vs cách ly 13 tài nguyên · admission control theo VRAM/RAM/CPU/slot/display có số (thay cho "max 3") · giới hạn display slot của VDD = câu hỏi chặn Phase 0 · fanout 1 encode → N SRTP (PLI theo **stream** không theo peer) · cách ly lỗi + tự phục hồi sau TDR · fairness 4 mức · **10 bảo đảm cách ly phải test (I1–I10), fail ⇒ tắt multi-session** · refcount dọn sau 5 s** |
+| **v3.13** | **§43 client perf: vì sao client dễ chết hơn server (6 nền tảng, Safari iOS kill tab ~200–400 MB, GC không kiểm soát) · 15 chỉ số ngân sách có cách đo · quyết định render (video element ≠ canvas; cursor = div transform; HUD 2 Hz) · **10 chỗ tốn tiền thật** (#1 forced reflow từ `getBoundingClientRect` mỗi pointer event — bug phổ biến nhất, không thấy bằng mắt) · kiến trúc JS (0 dependency, 12 module, `render(state)`) · perf-probe + **CI gate thật** (size/type/perf/leak, baseline 7 ngày) · 3 giới hạn cứng mobile · overlay 0 ms main thread · 8 nguồn rò rỉ + test 50 lần vào/ra** |
 
 ### 0.1 v3.0 sửa gì — danh sách "còn thiếu" (đây là lý do v2.1 chưa đủ)
 
@@ -69,7 +70,7 @@
 | **E. Bảo mật & tin cậy** | §10, §26.2 | **§41** | §41.10 | ●● vừa |
 | **F. Vận hành & triển khai** | §13, §26 | **§42** | §42.15 | ●● vừa |
 | **G. Bền vững & tiến hoá** | §21, §35.12 | — | — | ● nông |
-| **H. Hiệu năng client** | §26.11, §30.1 | — | — | ● rất nông |
+| **H. Hiệu năng client** | §26.11, §30.1 | **§43** | §43.12 | ●● vừa |
 
 **Hàng đợi (theo lĩnh vực nông nhất trước, không theo thứ tự cảm hứng):**
 
@@ -78,8 +79,8 @@
 | 1 | **Threat model & tin cậy** | E | ✅ **xong — §41** |
 | 2 | **Multi-session: tài nguyên, cách ly, fanout** | F | ✅ **xong — §42** |
 | 3 | **Đóng gói & vòng đời cài đặt** (MSI, display slot, rollback kiểm chứng được) | F | ⬜ **kế tiếp** — §42.6 phụ thuộc driver, chỉ kiểm chứng được khi cài thật |
-| 4 | **Hiệu năng client đo trong CI** | H | có ngân sách nhưng chưa có cách chặn |
-| 5 | **Input sâu**: IME server-side, accessibility, game/Raw Input, remote-in-remote | C | ● nông, ảnh hưởng trực tiếp cảm giác dùng |
+| 4 | **Hiệu năng client đo trong CI** | H | ✅ **xong — §43** |
+| 5 | **Input sâu**: IME server-side, accessibility, game/Raw Input, remote-in-remote | C | ⬜ **kế tiếp** — lĩnh vực nông nhất còn lại |
 | 6 | **Mô hình dữ liệu & migration sâu** (đã có bảng, chưa có hành vi) | G | |
 | 7 | **UI: state thực thi** (skeleton/optimistic/lỗi từng màn hình, không chỉ wireframe) | D | |
 | 8 | **Accessibility lượt sâu** | D | |
@@ -4565,3 +4566,220 @@ Cấp máy: `sessions_total`, `vram_used/free`, `display_slots_used/free`, `enco
 | **#14 Nhiều Windows user session** (Fast User Switching / RDS) để có >1 controller thật | F | §42.1 chỉ giải được bằng nhiều desktop; đắt, ngoài scope, ghi nhận |
 | #4 Hiệu năng client | H | |
 | #5 Input sâu | C | |
+
+---
+
+## 43. Hiệu năng client — ngân sách, cách đo, và cách chặn (nhánh #4 — lĩnh vực H)
+
+> §26.11 đặt ngân sách (JS ≤220 KB, first paint <400 ms, pin <12%/giờ) nhưng **không có cách nào chặn**. Đó là "mong ước", không phải ràng buộc: một PR thêm 80 KB library vẫn merge được, và 3 tháng sau client là 900 KB.
+> Chương này quan trọng hơn vẻ ngoài của nó: **trên điện thoại, hiệu năng client quyết định "dùng được hay không" nhiều hơn cả độ trễ mạng.** Một client 40 ms/frame overlay + 60 fps video đã là 30 fps cảm nhận, dù đường truyền hoàn hảo.
+
+### 43.1 Vì sao client dễ chết hơn server (dù code ít hơn 5×)
+| Ràng buộc | Server | Client |
+|---|---|---|
+| Nền tảng | **1** (Windows, ta kiểm soát) | **6+** (Chrome/Edge/Firefox/Safari × desktop/mobile) |
+| CPU | core hiện đại | **điện thoại 4 năm tuổi**, bị throttle vì nhiệt |
+| Bộ nhớ | 8–32 GB | **Safari iOS kill tab ở ~200–400 MB** (không cảnh báo) |
+| Runtime | native | JS với JIT, GC **không kiểm soát được** (`Major GC` 30–80 ms) |
+| Đo | dễ | phải qua Stats API, `performance.mark`, và **không đo được mọi thứ** |
+| Người dùng | 1 | mỗi người 1 thiết bị, không debug được từ xa |
+> Hệ quả: mọi thứ ở đây phải bảo thủ **2×** so với server, và phải **đo trên thiết bị thật**, không chỉ trên máy dev.
+
+### 43.2 Ngân sách (một bảng, có cách đo từng dòng)
+| # | Chỉ số | Ngân sách | Đo bằng | Fail CI? |
+|---|---|---|---|---|
+| 1 | JS tổng (chưa nén, không gzip) | **≤ 220 KB** | `du` sau build | ✅ |
+| 2 | JS gzip | ≤ 70 KB | `gzip -9 \| wc -c` | ✅ |
+| 3 | CSS | ≤ 30 KB (gzip ≤ 10) | | ✅ |
+| 4 | Không có dependency runtime | **0** | `package.json` không có `dependencies` | ✅ |
+| 5 | First contentful paint `/login` (LAN, cold) | < 400 ms | Lighthouse / Playwright trace | ✅ |
+| 6 | Dashboard 20 cửa sổ: interactive | < 700 ms | Playwright `TBT` + `measure()` | ✅ |
+| 7 | Dashboard cuộn | ≥ 55 fps | Playwright + `requestAnimationFrame` sampling | ✅ |
+| 8 | **Chi phí overlay mỗi frame** (cursor+ripple+HUD) | **≤ 2.5 ms p95** | `performance.now()` quanh vẽ | ✅ |
+| 9 | **Main-thread long task** khi đang xem | **0 task > 50 ms / 60 s** | `PerformanceObserver('longtask')` | ✅ |
+| 10 | Memory phiên 1080p60 (Chrome desktop) | < 250 MB | `performance.memory` / CDP | ⚠️ |
+| 11 | Memory phiên (Safari iOS) | < 180 MB (**hard**) | Instruments / CDP không có ⇒ manual | ⚠️ |
+| 12 | Rò rỉ qua 2 h | RSS tăng < 15% | soak + `measureUserAgentSpecificMemory()` | ✅ |
+| 13 | Pin (mobile, Cân bằng) | < 12%/giờ | 30 phút đo, ngoại suy | ⚠️ |
+| 14 | Số frame decode drop (khi CPU rảnh) | < 1% | `getStats()` `framesDropped` | ✅ |
+| 15 | Nhiệt: không throttle trong 10 phút | fps p95 ≥ 55 | thiết bị thật | ⚠️ |
+> Dòng **8 và 9** là hai dòng quan trọng nhất và hay bị bỏ: overlay vẽ sai cách sẽ ăn 10–20 ms/frame, và long task (JSON parse, DOM rebuild) làm **giật cả video** dù video decode trên GPU.
+
+### 43.3 Đường render — cái gì chạy ở đâu (quyết định)
+```
+┌─ Compositor (GPU, ngoài main thread) ─────────────────────────────┐
+│  <video> (decode HW → texture → composite)                        │
+│  overlay layer: <canvas 2d> hoặc vài <div> transform (cursor)     │
+└───────────────────────────────────────────────────────────────────┘
+┌─ Main thread (JS) ────────────────────────────────────────────────┐
+│  input capture (pointer/key) → gửi DataChannel                    │
+│  cursor position update (từ local pointer, không từ server!)       │
+│  ripple animation (canvas)                                        │
+│  HUD cập nhật 2 Hz (không phải 60 Hz)                              │
+└───────────────────────────────────────────────────────────────────┘
+```
+**Quyết định cụ thể:**
+| Việc | Cách | Vì sao không dùng cách khác |
+|---|---|---|
+| Video | **`<video>` element** với `srcObject` | Canvas + `drawImage` mỗi frame = copy + main thread ⇒ mất HW decode path, +8–15 ms/frame |
+| Con trỏ | **`<div>` với `transform: translate3d()`**, 1 element, cập nhật trong `pointermove` | Canvas vẽ lại mỗi move = 1 clear + 1 draw = tốn; div transform do compositor xử lý, **0 ms main thread** |
+| Ripple | `<canvas>` riêng, **chỉ vẽ khi có ripple**, tự dừng rAF khi hết | vẽ liên tục = 60 fps vô ích |
+| HUD số liệu | cập nhật **2 Hz** bằng `textContent` | 60 Hz = 60 lần layout/giây; `textContent` rẻ hơn `innerHTML` 10× |
+| Letterbox | CSS `object-fit: contain` trên video | tự tính toán + `transform` thủ công dễ sai khi resize |
+| Zoom local | CSS `transform: scale()` trên **container** | đổi `width/height` = reflow + video re-decode |
+| Đo vị trí chuột | `getBoundingClientRect()` **cache**, invalidate khi resize/scroll | gọi mỗi `pointermove` = **forced reflow** (đắt nhất trong list này) |
+
+### 43.4 Chỗ tốn tiền thật (theo thứ tự, đo được)
+| # | Nguyên nhân | Chi phí điển hình | Cách tránh |
+|---|---|---|---|
+| 1 | **Forced reflow** khi lấy `getBoundingClientRect()`/`offsetX` mỗi pointer event | **0.2–2 ms/event × 60 = 12–120 ms/s** | cache rect; chỉ tính lại khi `resize`/`scroll`/zoom |
+| 2 | **`canvas` vẽ lại toàn bộ** overlay mỗi frame | 3–8 ms/frame | chỉ vẽ vùng thay đổi, hoặc dùng div transform cho cursor |
+| 3 | **JSON.parse** message lớn (clipboard, stats history) | 2–20 ms, 1 lần nhưng **long task** | giới hạn kích thước, parse trong Worker nếu >64 KB |
+| 4 | **Rebuild DOM** danh sách cửa sổ (20 card) mỗi 5 s | 8–25 ms + layout | diff keyed, hoặc chỉ update text/hash-diff thumbnail |
+| 5 | **Thumbnail decode** 20 ảnh JPEG | 30–120 ms tổng | `createImageBitmap` **trong Worker**, `loading` tuần tự, cache theo hash |
+| 6 | **`innerHTML`** với dữ liệu server | parse HTML + XSS risk | `textContent` + `createElement` |
+| 7 | **CSS filter/backdrop-filter** trên overlay | 2–6 ms/frame trên mobile | chỉ dùng khi tĩnh |
+| 8 | **Shadow blur lớn** trong canvas | 4–12 ms/frame | vẽ sẵn ảnh blur, hoặc bỏ |
+| 9 | `requestAnimationFrame` **luôn chạy** khi không cần (ripple/HUD) | 1–3% CPU | tự huỷ rAF khi không có hoạt ảnh |
+| 10 | **Timer 2 Hz cập nhật HUD** khi tab ẩn | pin | dừng hết timer khi `hidden` |
+> Dòng 1 là **bug hiệu năng phổ biến nhất** trong app kiểu này và **không nhìn thấy bằng mắt** — chỉ đo mới biết.
+
+### 43.5 Kiến trúc JS để giữ ngân sách (không framework, có kỷ luật)
+| Quyết định | Lý do |
+|---|---|
+| **ES modules, không bundler** | 0 KB build tooling, browser tự cache từng module; không có "bundle phình" |
+| **1 file/chức năng**, tổng ≤ 12 module | dễ đọc, dễ kiểm kích thước |
+| **Render = `render(state)` thuần**, không JSX, không reactive proxy | diff thủ công theo `data-key`; proxy = overhead mỗi lần đọc |
+| **Không dùng `class` cho component**, dùng closure + object | tránh `this` bug, nhỏ hơn |
+| **Không polyfill** (Safari 16.4+ / Chrome 110+ là baseline) | polyfill = KB vô ích |
+| **Không thư viện icon** — SVG sprite 1 file, chỉ icon đang dùng | font icon = tải cả bộ |
+| **Không webfont** (§23.3) | |
+| **Worker chỉ cho**: thumbnail decode, parse clipboard lớn | Worker = +tầng phức tạp, chỉ dùng khi có số chứng minh cần |
+| **Không service worker** | cache phức tạp, lợi ích thấp vì app cần mạng |
+| **JSDoc + `// @ts-check`** trong CI (`tsc --noEmit`) | type safety **không** tốn runtime KB |
+| Đo kích thước trong CI, **fail nếu vượt** | đây là cơ chế thực thi duy nhất có tác dụng |
+
+### 43.6 Bộ đo — phải chạy được trong CI (không phải "mở DevTools xem")
+```js
+// perf-probe.js — bật bằng ?perf=1, tự tắt ở production
+export const probe = {
+  marks: {}, longTasks: [], frames: [],
+  start() {
+    new PerformanceObserver(l => l.getEntries().forEach(e =>
+      this.longTasks.push({ t: e.startTime, d: e.duration }))).observe({entryTypes:['longtask']});
+    this._rafLoop();
+  },
+  _rafLoop() {
+    let last = performance.now();
+    const tick = (t) => { this.frames.push(t - last); last = t;
+      if (this.frames.length > 600) this.frames.shift();
+      this._id = requestAnimationFrame(tick); };
+    this._id = requestAnimationFrame(tick);
+  },
+  overlay(ms) { this.marks.overlay = (this.marks.overlay||[]).concat(ms); },
+  summary() { /* p50/p95 của frames, overlay, longTasks */ }
+};
+```
+- **Chỉ bật khi `?perf=1`** hoặc qua header debug — không chạy ở production (rAF loop liên tục = tốn pin).
+- `summary()` xuất JSON → Playwright đọc → so với ngân sách §43.2 → **fail CI**.
+- Đo **trên 3 cấu hình**: desktop Chrome, **mobile Chrome throttled 4× CPU** (Playwright `--cpu-throttling`), và Safari iOS thật (manual, mỗi release).
+- Thêm `video.getVideoPlaybackQuality()` để lấy `droppedVideoFrames` / `totalVideoFrames` — chỉ số **thật** về decode, không phải fps JS.
+- `pc.getStats()` → `framesDecoded`, `framesDropped`, `jitterBufferDelay`, `freezeCount` — đối chiếu với server stats (nếu lệch ⇒ lỗi mạng/pipeline).
+
+### 43.7 Máy ảo hoá thời gian: điểm mù và cách xử lý
+| Việc **không** đo được trong CI | Thay bằng |
+|---|---|
+| Nhiệt/throttle thật của điện thoại | chạy 10 phút trên thiết bị thật, mỗi release; ngưỡng fps p95 |
+| Pin | đo 30 phút + ngoại suy; so **tương đối** giữa 2 bản |
+| GC thật của Safari iOS | `measureUserAgentSpecificMemory` không có ⇒ theo dõi `memory` qua Instruments (manual) |
+| Kill tab do bộ nhớ (iOS) | test thủ công: mở 5 tab nặng + phiên 30 phút |
+| Độ trễ cảm nhận | §17.3 đo glass-to-glass, không đo bằng CI |
+> Nguyên tắc: **CI chặn hồi quy**, thiết bị thật xác nhận trải nghiệm. Không giả vờ CI đo được mọi thứ.
+
+### 43.8 Mobile: ba giới hạn cứng phải thiết kế quanh
+| Giới hạn | Số thật | Hệ quả thiết kế |
+|---|---|---|
+| **Safari iOS kill tab** khi bộ nhớ cao | ~200–400 MB (không cảnh báo, không catch được) | giữ memory < 180 MB: 1 video, không giữ frame buffer lớn, giải phóng thumbnail ngay sau khi vẽ, **không** cache ảnh lớn |
+| **JIT bị hạn chế** ở một số chế độ (iOS standalone PWA cũ) | chậm 2–3× | không phụ thuộc micro-optimization; giữ code đơn giản |
+| **`requestAnimationFrame` bị throttle** ở 30 Hz trên một số máy iOS (ProMotion không mở cho web) | 30 fps | **không** giả định rAF = 60 Hz khi đo; dùng `video.getVideoPlaybackQuality()` làm chuẩn |
+| Android Chrome kill tab khi ẩn lâu | phổ biến | resume + thông báo (§6.11.1); lưu `sid` vào `sessionStorage` |
+| Canvas 2D trên mobile chậm hơn desktop 3–5× | | hạn chế canvas: chỉ ripple, không vẽ cursor |
+
+### 43.9 Overlay con trỏ — thiết kế để **0 ms main thread**
+Đây là chỗ dễ phá ngân sách nhất vì nó chạy theo con trỏ (60–120 Hz).
+```html
+<div id="stage" style="position:relative; contain: layout paint size;">
+  <video></video>                                     <!-- compositor -->
+  <div id="cursor" style="will-change:transform;
+       transform: translate3d(0,0,0); contain: strict;">
+     <img id="cursorShape" />                          <!-- đổi src khi shape đổi -->
+  </div>
+  <canvas id="ripple" style="pointer-events:none"></canvas>
+</div>
+```
+| Quy tắc | Lý do |
+|---|---|
+| Cursor = **`transform: translate3d(x,y,0)`**, không `left/top` | `left/top` gây **layout**; transform chỉ composite |
+| `will-change: transform` + `contain: strict` | tách layer, không reflow phần còn lại |
+| Đổi **shape** bằng cách đổi `img.src` (data URI, đã cache) | đổi `background-image` cũng được nhưng `src` dễ cache hơn |
+| Scale shape bằng `transform: scale()`, **không** đổi width/height | tránh layout |
+| Ẩn cursor = `opacity: 0` (không `display:none`) | `display` gây layout mỗi lần |
+| Ripple canvas: **chỉ** 1 canvas, xoá từng vòng khi hết hạn, tạm dừng rAF khi hết vòng | |
+| **Không** dùng `filter: drop-shadow` cho viền cursor (đắt trên mobile) — dùng ảnh shape có viền sẵn (server gửi kèm biến thể "có viền") | |
+> Đo: `overlay()` gọi `performance.now()` quanh phần cập nhật, **không** quanh việc browser composite (không đo được từ JS). Ngân sách 2.5 ms p95 là cho **phần JS**.
+
+### 43.10 Rò rỉ bộ nhớ — 8 nguồn thật trong app kiểu này
+| # | Nguồn | Cách phát hiện | Cách tránh |
+|---|---|---|---|
+| 1 | `createImageBitmap`/`Blob URL` thumbnail **không revoke** | memory tăng khi refresh 5 s | `URL.revokeObjectURL` + `bitmap.close()` sau khi vẽ |
+| 2 | Listener trên `window`/`document` không gỡ | tăng theo số lần vào/ra phiên | 1 `AbortController` cho mỗi phiên, `abort()` khi đóng |
+| 3 | `setInterval` HUD không clear | CPU/pin khi đã rời phiên | timer thuộc về controller, clear trong `dispose()` |
+| 4 | **rAF loop** không cancel | pin | `cancelAnimationFrame` trong `dispose()` |
+| 5 | `DataChannel`/`RTCPeerConnection` không `close()` | memory + kết nối treo | `pc.close()` bắt buộc trong `dispose()` |
+| 6 | Cache cursor shape **không giới hạn** | app gửi 1000 shape lạ ⇒ phình | LRU 64 shape, mỗi shape ≤64 KB |
+| 7 | Mảng `frames`/`marks` của probe **không cắt** | phình khi bật perf | cửa sổ trượt (đã có trong code mẫu) |
+| 8 | Giữ reference tới frame/`ImageData` | phình theo resolution | không lưu `ImageData`; chỉ lưu metadata |
+**Test:** vào/ra phiên **50 lần** trong 1 trang ⇒ memory không tăng >10%; sau `dispose()` không còn listener/timer (kiểm bằng cách đếm qua `AbortSignal`).
+
+### 43.11 Throttle khi tab ẩn & tiết kiệm pin
+| Trạng thái | Video | Overlay | HUD | Timer |
+|---|---|---|---|---|
+| Tab active | bình thường | bật | 2 Hz | bật |
+| Tab ẩn >10 s | server hạ 5 fps (§6.11.2) | tắt rAF | **dừng** | chỉ WS ping |
+| Mobile màn hình tắt | như trên + `visibilitychange` | — | — | — |
+| Pin <20% | hạ 30 fps, tắt ripple | tắt | 2 Hz | bật |
+| `saveData` | như Tiết kiệm (§36.9) | tắt | 2 Hz | |
+- **Không** giữ `wake lock` mặc định (tốn pin); chỉ khi người dùng bật "giữ màn hình sáng".
+- `document.hidden` → **dừng hết rAF và timer thường**; chỉ giữ WS ping 30 s.
+
+### 43.12 Kiểm chứng trong CI (cụ thể, không chung chung)
+```yaml
+# 1. size gate (nhanh, mọi PR)
+- du -sb client/*.js | awk '{s+=$1} END {exit (s>225280)}'    # 220 KB
+- cat client/*.js | gzip -9 | wc -c | awk '{exit ($1>71680)}' # 70 KB
+- test "$(jq '.dependencies // {} | length' package.json)" = "0"
+
+# 2. type gate
+- npx tsc --noEmit -p client/jsconfig.json
+
+# 3. perf gate (Playwright, mọi PR vào main)
+- npx playwright test perf/ --project=chromium-desktop --project=chromium-mobile-4x
+#    kịch bản: login → dashboard 20 card → mở phiên (video giả lập) → 60 s
+#    assert: overlay p95 ≤ 2.5 ms · longTask 0 · fps p95 ≥ 55 · memory < 250 MB
+
+# 4. leak gate (nightly)
+- npx playwright test perf/leak.spec.js --repeat-each=1   # 50 lần vào/ra, RSS +10%
+```
+- **Video giả lập** cho CI: dùng 1 file `.y4m`/`webm` phát lặp gắn vào `<video>` (không cần server) — đủ để đo overlay/render/GC, không đo được path WebRTC thật (đo ở §17.3).
+- So **tương đối** với baseline đã lưu để tránh fail do máy CI khác nhau: fail nếu **>15%** so với baseline 7 ngày gần nhất.
+- Lưu baseline trong repo (`perf/baseline.json`), cập nhật bằng commit riêng có review.
+
+### 43.13 Nhánh mới rẽ ra
+| Nhánh | Lĩnh vực | Vì sao từ §43 |
+|---|---|---|
+| **#5 Input sâu** (IME server-side, Raw Input, accessibility, remote-in-remote) | C | **kế tiếp** — ● nông nhất còn lại sau H; ảnh hưởng trực tiếp cảm giác dùng |
+| **#15 Render thích ứng theo thiết bị** (tự chọn preset/overlay theo `hardwareConcurrency`, `deviceMemory`, nhiệt) | H | §43.5 chỉ nói "đo", chưa nói tự thích ứng khác nhau |
+| **#16 Giám sát client trong thực tế** (nếu opt-in telemetry: phát hiện long task/leak trên máy người dùng) | H/G | §26.10 cấm telemetry mặc định ⇒ chỉ opt-in |
+| #3 Đóng gói | F | vẫn trong hàng đợi |
+| #6 Dữ liệu & migration | G | |
+| #7 UI state thực thi | D | |
