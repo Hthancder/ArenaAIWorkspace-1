@@ -1,6 +1,6 @@
-# SPEC v3.4 — Remote Desktop qua trình duyệt: HVNC + VNC, window picker, âm thanh server-side, **trải nghiệm điều khiển đầy đủ**
+# SPEC v3.5 — Remote Desktop qua trình duyệt: HVNC + VNC, window picker, âm thanh server-side, **trải nghiệm điều khiển đầy đủ**
 
-- Phiên bản: **v3.4** (v3.3 + **§28–34: hai thiết bị một lõi — mobile zero-chrome, grip 3 tầng, radial 8 ô, command registry, flow contract FE↔BE**)
+- Phiên bản: **v3.5** (v3.4 + **§35 mô hình thực thi pipeline thời gian thực** — chương quyết định độ trễ/độ ổn định · §0.2 phương pháp depth-first + hàng đợi nhánh): hai thiết bị một lõi — mobile zero-chrome, grip 3 tầng, radial 8 ô, command registry, flow contract FE↔BE**)
 - Trạng thái: **Đề xuất — CHƯA implement, chờ duyệt**
 - Nền tảng: Server **Windows 10 2004+ / Windows 11** · Client **trình duyệt** (không app)
 
@@ -18,6 +18,7 @@
 | v3.2 | §20 tuỳ chỉnh cho người dùng (3 tầng, dịch ý định → tham số, độ phân giải = lựa chọn có tên) · §21 chẩn đoán, state coverage, error boundary, soak, updater, backup, chia sẻ, phía người bị điều khiển, pháp lý, quy trình test, rủi ro |
 | v3.3 | §22 IA/tuyến đường · §23 design system (token, màu, chữ, chuyển động) · §24 đặc tả 12+ màn hình (dashboard, phiên, sheet, settings, admin, tray, wizard, mobile) · §25 component + ma trận state↔UI** · **§26 audit 20 nhóm: dữ liệu, API+lỗi, log, CLI, config reload, cert, proxy, môi trường cài, ma trận hỗ trợ, không third-party, ngân sách client, đa ngữ nhập liệu, clipboard chi tiết, chụp màn hình, thời gian, lưu trữ, ký số, lỗi browser, pin/data, help** · §27 trả lời thẳng |
 | **v3.4** | **§28 hai thiết bị khác bản chất · §29 desktop chrome mỏng + phím tắt · §30 mobile zero-chrome (0 nút thường trực, grip 3 độ sâu, 13 gesture, radial 8 ô theo ngữ cảnh, bàn phím không che video, kính lúp/trackpad, one-hand) · §31 command registry 1 nguồn · §32 flow contract (1 controller, intent_id, rev, idempotency, bảng race, SLA) · §33 checklist 2 vỏ + Playwright song song** |
+| **v3.5** | **§35 mô hình thực thi: 8 thread, 1 GStreamer pipeline/phiên, vòng đời frame + ownership, hàng đợi có trần + chính sách drop, ngân sách độ trễ phân rã tới từng chặng (gồm jitter buffer — khoản ẩn lớn nhất), timestamps từng chặng, screen-content tuning, chế độ màn hình tĩnh, restart/shutdown theo thứ tự, MMCSS, ngân sách bộ nhớ, 8 bất biến, fault-injection matrix** · §0.2 depth-first |
 
 ### 0.1 v3.0 sửa gì — danh sách "còn thiếu" (đây là lý do v2.1 chưa đủ)
 
@@ -45,6 +46,27 @@
 | 20 | Không có tiêu chí "cảm giác dùng được" | Không biết khi nào coi là xong | §17.3 |
 
 ---
+
+### 0.2 Cách spec này được hoàn thiện (depth-first, không rà rộng)
+
+Một lượt rà rộng 20 chỗ thì chỗ nào cũng nông. Spec này được làm theo **một nhánh tại một thời điểm**: chọn chỗ thiếu **quan trọng nhất**, làm tới mức implement được, rồi ghi lại **những nhánh mới rẽ ra** từ chỗ đó, và đi tiếp.
+
+**Hàng đợi nhánh (cập nhật mỗi lượt, theo thứ tự ưu tiên):**
+
+| # | Nhánh | Trạng thái | Rẽ ra từ |
+|---|---|---|---|
+| 1 | **Mô hình thực thi pipeline thời gian thực** (thread, hàng đợi, buffer, drop, restart, shutdown, ngân sách độ trễ) | ✅ **xong — §35** | toàn bộ sản phẩm |
+| 2 | Transport tuning & điều tiết băng thông (pacer, TWCC/REMB, thuật toán adaptive cụ thể, FEC/NACK, jitter buffer) | ⬜ **kế tiếp** | §35.6 |
+| 3 | Fault injection & chaos harness (ACCESS_LOST, audio device mất, mạng đứt, driver reset) | ⬜ | §35.14 |
+| 4 | Vòng đời cửa sổ & display (state machine + phục hồi sau crash) | ⬜ | §35.10 |
+| 5 | Threat model theo từng bề mặt (HTTP/WS/DC/tray/driver/local) | ⬜ | §35.13 |
+| 6 | Multi-session & chia sẻ tài nguyên (1 capture → N encode) | ⬜ | §35.4 |
+| 7 | Client perf budget trong CI (đo thật, chặn merge) | ⬜ | §26.11 |
+| 8 | Installer/uninstaller: hành vi chính xác + kiểm chứng rollback | ⬜ | §13.7 |
+| 9 | Accessibility lượt sâu (screen reader, bàn phím, contrast thực đo) | ⬜ | §6.12 |
+| 10 | Legal/consent UX & thoả thuận người bị điều khiển | ⬜ | §2.4 |
+
+Nguyên tắc đi tiếp: **không mở nhánh mới khi nhánh hiện tại còn câu hỏi mở**, trừ khi nhánh mới chặn nhánh cũ.
 
 ## 1. Tóm tắt
 
@@ -2948,3 +2970,250 @@ gesture/ui  →  CommandBus (client)  →  SessionController (1 instance)
 2. **Gesture có cái giá: không nhìn thấy thì không biết.** Nên (a) lần đầu dùng có gợi ý động 1 s cho gesture chính; (b) mọi gesture đều có đường thay thế trong bảng lệnh; (c) bảng lệnh in gesture tương đương để học dần. Không có gesture nào là **đường duy nhất**.
 
 3. **Nhất quán FE/BE không đến từ quy ước, mà từ 1 nguồn.** `commands.json` + 1 `SessionController` + 1 bảng lỗi + `rev` monotonic. Nếu thiếu bất kỳ cái nào, sau 3 tháng sẽ có 4 kiểu thông báo lỗi và 3 kiểu trạng thái khác nhau — đây là điều chắc chắn xảy ra nếu không có kỷ luật này.
+
+---
+
+# PHẦN VIII — MÔ HÌNH THỰC THI
+
+## 35. Mô hình thực thi pipeline thời gian thực (nhánh #1 — quan trọng nhất còn thiếu)
+
+> v3.4 nói *"capture → encode → RTP"* như thể đó là một hàm. Nó không phải. Đó là **5 thành phần chạy đồng thời trên 3 loại luồng khác nhau, chia sẻ 4 hàng đợi có trần**, và **mọi thứ về độ trễ/độ ổn định nằm ở đây** — không nằm ở codec, không nằm ở mạng.
+> Nếu chương này sai, toàn bộ §17.3 (p95 <80 ms) là không thể, và mọi chương khác chỉ là trang trí.
+
+### 35.1 Nguyên tắc chi phối
+| # | Nguyên tắc | Hệ quả cứng |
+|---|---|---|
+| 1 | **Không hàng đợi nào không có trần.** | mọi queue khai báo capacity + chính sách khi đầy |
+| 2 | **Trễ là thứ bị hy sinh trước, không phải frame.** | đầy → **drop**, không bao giờ block producer |
+| 3 | **Không block trên đường nóng.** | không mutex dài, không I/O, không cấp phát, không log, không format string |
+| 4 | **Không cấp phát trong vòng lặp frame.** | pool + reuse; chỉ cấp phát lúc khởi tạo hoặc khi đổi resolution |
+| 5 | **Mọi thành phần restart được độc lập.** | capture chết không được kéo encoder chết |
+| 6 | **Chỉ một chiều sở hữu buffer tại một thời điểm.** | ownership chuyển tuyến tính, không copy |
+| 7 | **Session kết thúc phải dừng đúng thứ tự.** | nếu không sẽ deadlock hoặc crash driver |
+| 8 | **Đo được từng chặng.** | mỗi frame mang timestamp ở 5 điểm |
+
+### 35.2 Sơ đồ thread & pipeline
+```
+┌─ Thread: net-http (tokio) ──────────────────────────────────────────────┐
+│  axum: REST, static, auth        │  tungstenite: WSS signaling          │
+│  → tạo/huỷ phiên, đổi cấu hình, ack chỉ số                              │
+└───────────────┬─────────────────────────────────────────────────────────┘
+                │ (chỉ control-plane; KHÔNG chạm frame)
+┌─ Thread: input ─────────────────────────────────────────────────────────┐
+│  SCTP recv (move/ctrl) → parse → validate/clamp → SendInput → ack       │
+│  yêu cầu keyframe (on-demand) ──┐                                       │
+└─────────────────────────────────┼───────────────────────────────────────┘
+┌─ Thread: cursor (60–120 Hz tick) ─┼──────────────────────────────────────┐
+│  DDAPI pointer metadata → shape hash → (a) phát cshape/cpos (b) compos.  │
+└─────────────────────────────────┼───────────────────────────────────────┘
+┌─ Thread: presence (1 Hz) ────────┼──────────────────────────────────────┐
+│  GetLastInputInfo → someone_local                                       │
+└─────────────────────────────────┼───────────────────────────────────────┘
+                                  ▼
+┌─ Thread: capture [1/GStreamer pipeline] ────────────────────────────────┐
+│  d3d11screencapturesrc (DDAPI) → NV12 pool → appsrc + PTS               │
+│  watchdog: ACCESS_LOST → recreate; >3 lần/10 s → switch WGC/BitBlt      │
+└───────────────┬─────────────────────────────────────────────────────────┘
+                │ zero-copy D3D11 texture (cùng adapter)
+┌─ Thread: encode [GStreamer streaming thread] ───────────────────────────┐
+│  nvh264enc / qsvh264enc / amfh264enc / x264enc → h264parse              │
+│  → rtph264pay → webrtcbin (SRTP) → UDP                                  │
+└───────────────┬─────────────────────────────────────────────────────────┘
+                │ (đi ngược lên) RTCP RR/PLI/TWCC
+┌─ Thread: audio [GStreamer] ─────────────────────────────────────────────┐
+│  wasapi2src (loopback 48 kHz) → audioconvert/resample → opusenc         │
+│  → rtpopuspay → webrtcbin                                               │
+└───────────────┬─────────────────────────────────────────────────────────┘
+┌─ Thread: gst-bus / supervisor ──────────────────────────────────────────┐
+│  nhận lỗi/warning từ mọi pipeline; quyết định restart/hạ cấp; audit     │
+└───────────────┬─────────────────────────────────────────────────────────┘
+┌─ Thread: stats/audit ───────────────────────────────────────────────────┐
+│  gộp số liệu 250 ms → WSS 2 Hz; audit theo lô; không chạm frame         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+**Tổng: 8 nhóm luồng cho 1 phiên.** Không có luồng nào "chỉ để cho có" — mỗi cái có lý do tách (block khác nhau, ưu tiên khác nhau).
+
+**Vì sao capture và encode tách nhưng *cùng một pipeline** GStreamer: chúng chia sẻ D3D11 device + texture pool ⇒ **zero-copy**. Nếu tách thành 2 process hoặc 2 pipeline riêng, mỗi frame phải đi qua shared memory = +2–6 ms và giảm độ phân giải thực tế.
+
+### 35.3 Vòng đời một frame + ownership (chuỗi 6 mắt xích)
+```
+① DDAPI AcquireNextFrame  → ② chuyển thành GstBuffer (giữ texture, KHÔNG copy)
+   → ③ encoder map đọc (read-only)  → ④ size ≤2 MB: encoder giữ ref tới khi xong
+   → ⑤ release buffer về pool  → ⑥ ReleaseFrame (đúng 1 lần)
+```
+| Mắt xích | Ai sở hữu | Luật |
+|---|---|---|
+| ①② | capture thread | **phải** `ReleaseFrame` **sau** khi encoder không còn đọc texture. Nếu release sớm → NVIDIA đôi khi trả **NO_ACCESS** hoặc frame rách |
+| ③④ | encoder | không được gọi API capture; không được `ReleaseFrame` |
+| ⑤⑥ | pool + capture | pool **cố định** (4 buffer cho 1080p NV12 = 4 × 3.1 MB ≈ 12.5 MB) |
+**Bất biến (assert trong debug build):**
+1. mỗi `AcquireNextFrame` có đúng 1 `ReleaseFrame`
+2. buffer về pool **trước** `ReleaseFrame` của frame tương ứng
+3. frame id tăng đơn điệu; gap >3 frame ⇒ **bỏ hiển thị** (encoder sẽ gặp "scene jump" — phải force IDR)
+4. không có 2 frame cùng PTS
+5. không có buffer từ pool cũ sau khi đổi resolution (pool phải được tạo lại)
+
+> Đây là chỗ gây crash khó tìm nhất trong toàn hệ thống: release sớm 1 frame → chạy tốt 40 phút → màn hình xanh. Assert ở trên là bắt buộc ở `debug`, và counter ở `release` trong production.
+
+### 35.4 Hàng đợi — bảng cứng
+| Hàng đợi | Trần | Khi đầy | Không bao giờ | Lý do |
+|---|---|---|---|---|
+| **capture→appsrc** | **1** | drop frame cũ, giữ mới (**latest-wins**) | block | trễ > mất frame |
+| **encoder in-flight** | 2 | drop | xếp hàng | giữ 1 frame đang mã hoá + 1 dự phòng |
+| **encode→RTP (pacer)** | 30 gói (~50 ms @8 Mbps) | drop gói không trọng yếu | burst vô hạn | tránh "burst" làm đầy buffer mạng |
+| **RTCP / control** | không giới hạn (tỉ lệ thấp) | — | — | không được mất feedback |
+| **input `move`** | **1** per kênh | drop cũ | block | con trỏ phải mới nhất |
+| **input `ctrl`** | 64 | **backpressure** (ngừng đọc SCTP 100 ms) | drop | **không được mất** click/key |
+| **audio** | 3 buffer 20 ms | drop cũ | block | giữ ≤60 ms |
+| **frame → WSS stats** | 1 (gộp) | ghi đè | xếp hàng | stats không quan trọng bằng frame |
+| **Bus message** | 256 | drop + log | block | không được làm chết pipeline |
+**Quy tắc chung:** producer **không bao giờ** ngủ; consumer quyết định drop. Mỗi hàng đợi có counter `dropped_total` hiện trong stats (§35.12) — nếu >0 kéo dài ⇒ có vấn đề về hiệu năng, phải thấy được, không im lặng.
+
+### 35.5 Đường input — vì sao "dính tay" hay "dính chặt"
+```
+SCTP recv → parse (0 alloc, ring buffer 64 KB) → clamp → SendInput → ack(gộp)
+```
+- **một** thread cho `move` + `ctrl`, nhưng **hai hàng đợi riêng** (§5.7). `move` chỉ giữ **1** vị trí mới nhất ⇒ nếu máy chậm, con trỏ **nhảy** tới vị trí mới chứ không "đi từ từ" (đúng ý người dùng: họ đã di tay tới đó rồi).
+- `ctrl` giữ tối đa 64 sự kiện; khi đầy → **ngừng đọc SCTP 100 ms** (backpressure thật) thay vì drop, vì mất 1 keyup = **kẹt phím**.
+- `SendInput` là lời gọi kernel có thể tốn **0.1–2 ms** khi hệ thống bận. Không gộp batch (Windows không hỗ trợ batch cho input liên quan đến timing).
+- ack: gộp mỗi **500 ms** hoặc **32 sự kiện**, trả `seq` cuối ⇒ client phát hiện kênh chết mà không tốn round-trip mỗi event.
+- Latency budget cho thread này: **p99 < 3 ms** từ recv → SendInput xong. Nếu vượt ⇒ ghi `input_worker_slow` + tăng ưu tiên.
+
+### 35.6 Ngân sách độ trễ phân rã (từng chặng, có số)
+> Bảng §6.2.1 gộp quá nhiều thứ. Đây là bảng **phải dùng khi implement** — cộng lại phải khớp SLA.
+
+| # | Chặng | Cơ chế | LAN p50 | LAN p95 | Ghi chú |
+|---|---|---|---|---|---|
+| 1 | Browser event → DC send | rAF batch | 8 | 17 | 1 frame ở 60 Hz |
+| 2 | Uplink RTT/2 | UDP | 1 | 3 | |
+| 3 | Parse + SendInput | kernel | 0.5 | 2 | |
+| 4 | App phản ứng | phụ thuộc app | 8 | 20 | **không kiểm soát được** |
+| 5 | DWM composite | vsync | 8 | 17 | |
+| 6 | DDAPI acquire | vsync | 8 | 17 | **1 frame trễ cố hữu** |
+| 7 | appsrc → encoder | hàng đợi 1 | 0.5 | 3 | |
+| 8 | Encode | NVENC low-latency | 4 | 8 | x264: 10–20 |
+| 9 | RTP pay + SRTP | CPU | 0.5 | 2 | |
+| 10 | Downlink | UDP + **jitter buffer** | **10** | **35** | **khoản ẩn lớn nhất** |
+| 11 | Decode | HW | 3 | 8 | |
+| 12 | Composite → photon | browser | 8 | 17 | |
+| | **Tổng** | | **≈52** | **≈147** | p95 vượt 80 ⇒ phải cắt |
+**Cắt ở đâu (theo thứ tự hiệu quả):**
+1. **Jitter buffer (10)** — cấu hình được; xem §35.7.
+2. **Encode (8)** — hardware + preset low-latency + không B-frame.
+3. **DDAPI trễ 1 frame (6)** — không tránh được với DDAPI; WGC cũng tương tự.
+4. **Browser (1, 12)** — giảm bằng cách bỏ qua rAF (dùng `pointerrawupdate`) và **cursor local** (đã có, loại bỏ chặng 3–12 khỏi cảm giác con trỏ).
+> **Kết luận quan trọng:** SLA **p95 <80 ms** chỉ đạt được nếu jitter buffer ở mức **thấp** (≤2 frame) và mạng LAN sạch. Với mạng có jitter, **p95 thực tế là 110–150 ms**. Phải nói rõ điều này trong `/help` và **đo lại ở Phase 0**; nếu không đạt, hạ kỳ vọng SLA xuống `p95 <120 ms` **một cách có ý thức**, không phải lặng lẽ.
+
+### 35.7 Jitter buffer — quyết định lớn nhất về độ trễ
+- Browser tự quản jitter buffer cho video; không có API chuẩn để đặt kích thước. Có 2 cách ảnh hưởng:
+  1. **`playout-delay` RTP header extension** (Chromium hỗ trợ): server gửi `min=0, max=…`; đặt **`min=max=0`** ⇒ buffer tối thiểu. Đây là cách chính.
+  2. Gửi **pacing đều** + `abs-send-time`/TWCC tốt ⇒ buffer tự co.
+- Đánh đổi: buffer = 0 ⇒ mạng jitter 5 ms là **giật hình**. Vì vậy: **thích ứng** — nếu loss/jitter tăng, tăng `max` lên (tối đa 100 ms); khi ổn định 30 s, giảm về 0. Có thể đổi **giữa phiên**, không cần renegotiate.
+- Tham số vào `stats` để người dùng thấy: `jitter_buffer_ms`. Nếu >60 ms kéo dài ⇒ banner "mạng không ổn định".
+
+### 35.8 Timestamp & đồng bộ A/V — 5 mốc
+| Mốc | Đặt ở | Dùng để |
+|---|---|---|
+| `t_capture` (QPC) | sau `AcquireNextFrame` | đo chặng 6–8 |
+| `t_encode_in` / `t_encode_out` | quanh encoder | đo chặng 8 |
+| `pts` (90 kHz) | gán theo **QPC capture**, không theo wall clock | ổn định qua NTP jump |
+| `rtp_ts` | suy ra từ `pts` cùng timebase | A/V sync |
+| `t_send` | trước `sendto` (hook GStreamer) | đo chặng 9–10 bằng `ack`/TWCC |
+- **Audio và video phải dùng cùng gốc QPC**, không phải `GstSystemClock` mặc định nếu 2 pipeline tách. Sai chỗ này = lệch tiếng/hình 200–500 ms (đã nêu ở §5.6 nhưng **cơ chế** là ở đây).
+- Clock: `GstSystemClock` (monotonic) — **không** dùng wall clock. Nếu cần map sang wall clock (cho audit), lưu offset 1 lần lúc khởi động.
+- Nếu PTS nhảy ngược (sau restart capture) → **reset base**: `new_base = old_base + (last_pts - first_pts_new) + 1 frame`; không để RTP timestamp nhảy ngược (client sẽ treo/hỏi keyframe liên tục).
+
+### 35.9 Tuning theo loại nội dung (screen content)
+| Cấu hình | Khi nào | Tác dụng |
+|---|---|---|
+| `nvh264enc preset=p1 tune=ull bframes=0 rc=cbr zerolatency=1` | mặc định | trễ thấp nhất |
+| thêm `intra-refresh=1` (thay keyframe) | mạng hay mất gói | không có IDR đột ngột ⇒ không "khựng" |
+| `qos=1` trên pipeline | CPU/GPU yếu | tự bỏ frame thay vì tăng trễ |
+| `x264enc tune=zerolatency sliced-threads=1 sliced-threads=4` | fallback CPU | giảm trễ ở x264 |
+| bitrate **thấp + text sắc** (không B-frame, `spatial-aq`) | đọc chữ/terminal | chữ không bị nhoè |
+| **`h264parse config-interval=-1`** | luôn | gửi lại SPS/PPS trước mỗi IDR ⇒ client vào muộn vẫn giải mã được |
+| FEC (ULPFEC + RED) | loss >2% | tăng băng thông 10–30%, giảm giật |
+> Screen content (chữ, đường kẻ) **khó mã hoá hơn video tự nhiên** ở cùng bitrate — đây là lý do preset "Nét" (§6.10.1) tồn tại và tại sao 8 Mbps cho 1080p60 desktop có thể **không đủ** khi cuộn trang chữ nhỏ. Ghi rõ để không ai ngạc nhiên.
+
+### 35.10 Thay đổi giữa phiên (cái gì làm pipeline dừng)
+| Sự kiện | Dừng gì | Cách làm | Người dùng thấy |
+|---|---|---|---|
+| Đổi resolution display ảo | capture + encoder + pool | `set_state(PAUSED)` pipeline video → đổi display → tạo lại pool → `PLAYING` | đen 1–3 s + "Đang đổi kích thước…" |
+| Đổi preset chất lượng | chỉ encoder | `webrtcbin` giữ nguyên; đổi `bitrate`/`preset` qua property hoặc tạo lại encoder element | không gián đoạn (có thể 1 nhịp) |
+| Đổi cursor mode | không dừng gì | bật/tắt `IncludeCursor`/composite | nhịp ~100 ms |
+| Chuyển cửa sổ | không dừng pipeline (cùng display) | capture vẫn chạy, không làm gì | 0.5–1.5 s (move window) |
+| Đổi mode HVNC↔VNC | capture + có/không move | dừng capture, đổi nguồn, khởi động lại | 1–2 s |
+| Mất GPU / driver reset | encoder | fallback x264 + giảm resolution | "Đã chuyển sang CPU" |
+| Đổi monitor (VNC) | capture | recreate duplication | 1–2 s |
+**Bất biến:** `webrtcbin`, DTLS, SRTP, DataChannel **không bao giờ** bị dựng lại vì thay đổi hiển thị. Nếu phải dựng lại ⇒ đã thiết kế sai.
+
+### 35.11 Chế độ màn hình tĩnh (tiết kiệm CPU/GPU/pin/băng thông)
+- Máy không đổi pixel (đọc sách, xem tài liệu, để yên): **không gửi frame** hoặc gửi 1 frame/2 s.
+- Phát hiện: so **hash 64×64** của frame; nếu giống 5 frame liên tiếp → vào chế độ tĩnh.
+- Thoát: hash đổi, hoặc có input, hoặc có keyframe request, hoặc 2 s timeout.
+- Trong chế độ tĩnh: encoder vẫn chạy nhưng `bitrate` giảm về ~50 kbps; audio vẫn đi bình thường.
+- Lợi ích thực tế: **pin điện thoại** và **data 4G** — hai thứ người dùng mobile quan tâm nhất (§30). Đo được: giảm 40–70% băng thông khi đọc tài liệu.
+
+### 35.12 Restart & shutdown theo thứ tự (nếu sai → deadlock/crash driver)
+```
+Khởi động phiên:
+  1 pool → 2 capture → 3 video pipeline PAUSED → 4 audio pipeline PAUSED
+  → 5 webrtcbin (offer/answer, DTLS) → 6 PLAYING cả hai → 7 bắt đầu input
+
+Dừng phiên (thứ tự NGƯỢC, bắt buộc):
+  1 ngừng nhận input (chặn mới, chờ đang xử lý ≤100 ms)
+  2 dừng audio PLAYING→NULL
+  3 dừng video NULL (giải phóng encoder + texture)
+  4 đóng webrtcbin (đợi DTLS close hoặc 500 ms)
+  5 ReleaseFrame mọi frame còn treo (assert = 0)
+  6 huỷ pool + D3D11 device
+  7 restore cửa sổ + audio (§9.2.4, §5.10.3)
+  8 xoá state file
+```
+- Timeout tổng 3 s; nếu vượt ⇒ log `cleanup_timeout` + **vẫn** restore cửa sổ/audio (không được bỏ bước 7 vì đây là thứ ảnh hưởng người dùng thật).
+- Restart một thành phần (capture chết): chỉ 2→3 của video; **không** đụng webrtcbin/audio/input.
+- Crash toàn process: state file + khởi động lại (§9.2.4) — đây là lý do state file phải ghi **trước** khi move window.
+
+### 35.13 Ưu tiên luồng & tránh bị hệ điều hành "trễ"
+| Thành phần | Cơ chế | Vì sao |
+|---|---|---|
+| capture | `MMCSS "Capture"` + `AvSetMmThreadCharacteristics` | Windows hạ ưu tiên thread khi không có MMCSS ⇒ trễ spike 50 ms |
+| encoder | GStreamer thread + MMCSS "Playback" | |
+| input | **`THREAD_PRIORITY_TIME_CRITICAL`** + MMCSS | click phải đi ngay |
+| audio | MMCSS "Audio" | |
+| net/stats/audit | ưu tiên thường | không cần |
+- Core affinity: **không** ghim mặc định (gây hại trên máy nhiều P/E-core); chỉ ghim khi đo thấy di cư E-core gây spike.
+- Tránh: `timeBeginPeriod(1)` toàn cục (tăng tiêu thụ pin toàn máy) — chỉ dùng trong lúc phiên, và nhả khi kết thúc.
+
+### 35.14 Ngân sách bộ nhớ & VRAM
+| Thành phần | Đo | Ngân sách/phiên |
+|---|---|---|
+| Texture pool video | 4 × 1920×1080 NV12 | ≈12.5 MB VRAM |
+| Encoder NVENC session | ~64–128 MB VRAM | tuỳ driver |
+| Ring buffer input | 64 KB × 2 | 128 KB |
+| Frame metadata | nhỏ | <1 MB |
+| Pipeline GStreamer | ~40–80 MB RSS | |
+| Jitter/encoder queue | ≤ 3 frame | ≈37 MB RAM/VRAM |
+| **Tổng mục tiêu** | | **<200 MB RSS + <200 MB VRAM** |
+- Đo bằng `GetProcessMemoryInfo` + `IDXGIAdapter3::QueryVideoMemoryInfo`, đưa vào stats.
+- Khi VRAM <150 MB trống → **từ chối tạo phiên mới** với lỗi rõ ràng (tốt hơn là crash giữa phiên).
+- Rò rỉ phát hiện bằng: tăng đơn điệu `handle_count`/`VRAM` qua 60 phút ⇒ tự restart pipeline + `audit.warn`.
+
+### 35.15 Ma trận fault-injection (bắt buộc làm trước khi coi là xong Phase 1)
+| # | Bơm lỗi | Kỳ vọng |
+|---|---|---|
+| 1 | `ACCESS_LOST` mỗi 30 s | recreate im lặng, ≤1 s mất hình, không đóng phiên |
+| 2 | Capture chết hẳn | switch WGC → BitBlt → nếu vẫn chết: báo, giữ phiên 60 s |
+| 3 | Encoder init fail | fallback x264 + giảm 720p + thông báo |
+| 4 | GPU bị reset (TDR) giữa phiên | fallback x264, không đóng phiên, không crash |
+| 5 | Audio device mất 5 s | video tiếp tục, `audio_unavailable`, tự khôi phục |
+| 6 | Mất 30% gói 10 s | adaptive giảm bitrate, không đóng phiên, `move` vẫn dùng được |
+| 7 | RTT nhảy 300 ms | không deadlock, stats đúng |
+| 8 | SCTP đầy | backpressure `ctrl`, không drop keyup |
+| 9 | Input flood 500 evt/s | drop `move`, giữ `ctrl`, rate-limit + 1 warning |
+| 10 | Dừng phiên khi đang encode | không crash, assert frame treo = 0, cleanup <3 s |
+| 11 | Kill process giữa lúc move window | khởi động lại → cửa sổ được cứu (§9.2.3) |
+| 12 | Đổi resolution 10 lần liên tiếp | không rò VRAM/handle, không crash |
+| 13 | Sleep/resume máy | phục hồi hoặc đóng sạch, không treo |
+| 14 | Màn hình thứ 2 bị rút | capture recreate, không crash |
+| 15 | CPU 100% trong 10 s | drop frame, không tăng trễ vô hạn |
