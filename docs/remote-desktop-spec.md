@@ -1,7 +1,7 @@
-# SPEC v3.14 — Remote Desktop qua trình duyệt: HVNC + VNC, window picker, âm thanh server-side, **trải nghiệm điều khiển đầy đủ**
+# SPEC v3.15 — Remote Desktop qua trình duyệt **cho dùng cá nhân**: HVNC + VNC, window picker, âm thanh server-side, trải nghiệm điều khiển đầy đủ
 
-- Phiên bản: **v3.14** (v3.13 + **§44 input sâu** + **§45 build/release: free hay phải trả tiền** · trước đó: **§43 hiệu năng client**: vì sao client dễ chết hơn server, 15 chỉ số ngân sách có cách đo, đường render quyết định, 10 chỗ tốn tiền thật, kiến trúc JS giữ ngân sách, probe + CI gate, 3 giới hạn cứng mobile, overlay 0 ms, 8 nguồn rò rỉ · trước đó: **§42 multi-session**: ràng buộc 1 con trỏ/1 focus của Win32, input lease, admission control có số, display slot, fanout 1 encode → N SRTP, cách ly lỗi, fairness, 10 bảo đảm cách ly · trước đó: **§41 threat model & ranh giới tin cậy**: 10 tài sản, 10 vị trí tấn công, 20 mối đe doạ theo ranh giới, 5 quyết định thiết kế bắt nguồn từ threat model, token chi tiết, người ngồi máy, supply chain, 9 rủi ro chấp nhận, 14 kiểm chứng · trước đó: **§40 âm thanh**: tách routing↔capture, AudioPolicyConfig không tài liệu, 3 mức routing + kiểm chứng bằng session enumeration, WASAPI loopback bẫy, ASRC chống drift, device notifications · **§0.2 bản đồ 8 lĩnh vực thay cho đi mãi một nhánh**): hai thiết bị một lõi — mobile zero-chrome, grip 3 tầng, radial 8 ô, command registry, flow contract FE↔BE**)
-- Trạng thái: **Đề xuất — CHƯA implement, chờ duyệt**
+- Phiên bản: **v3.15 — phạm vi đã thu hẹp về 1 người dùng** (§0.3). Bản v3.14 là bản "sản phẩm": có cert, EULA, RBAC, accessibility, đóng gói ký số. Tất cả những thứ đó **đã cắt** ở đây — xem §0.3.1 để biết cắt gì và cắt có an toàn không. Lịch sử đầy đủ v1.0→v3.14 ở §0.
+- Trạng thái: **Đề xuất — CHƯA implement, chờ duyệt.** Sau v3.15, spec **không còn chương nào cần viết**; việc tiếp theo là **P0 (đo thật)**, không phải viết thêm.
 - Nền tảng: Server **Windows 10 2004+ / Windows 11** · Client **trình duyệt** (không app)
 
 ---
@@ -27,6 +27,7 @@
 | **v3.11** | **§41 threat model: 10 tài sản · 10 vị trí P1–P10 · **lật giả định nền — client KHÔNG tin cậy, agent tin về hành vi nhưng không tin về dữ liệu** · 3 hệ quả kiến trúc · 20 mối đe doạ T1–T20 theo ranh giới · 5 quyết định *bắt nguồn từ threat model* (client không gửi `hwnd`; không endpoint chạy lệnh; transfer/clipboard mặc định tắt; `X-Frame-Options: DENY`; người ngồi máy luôn dừng được) · token rotate + reuse detection · P6 quyền phủ quyết · supply chain/chống downgrade · 9 rủi ro chấp nhận · 14 kiểm chứng** |
 | **v3.12** | **§42 multi-session — phát hiện ràng buộc bị bỏ qua: 1 desktop = 1 con trỏ + 1 focus ⇒ chỉ 1 controller/session, N viewer** · input lease (server-side, TTL, release_all trước khi chuyển) · bảng chia sẻ vs cách ly 13 tài nguyên · admission control theo VRAM/RAM/CPU/slot/display có số (thay cho "max 3") · giới hạn display slot của VDD = câu hỏi chặn Phase 0 · fanout 1 encode → N SRTP (PLI theo **stream** không theo peer) · cách ly lỗi + tự phục hồi sau TDR · fairness 4 mức · **10 bảo đảm cách ly phải test (I1–I10), fail ⇒ tắt multi-session** · refcount dọn sau 5 s** |
 | **v3.13** | **§43 client perf: vì sao client dễ chết hơn server (6 nền tảng, Safari iOS kill tab ~200–400 MB, GC không kiểm soát) · 15 chỉ số ngân sách có cách đo · quyết định render (video element ≠ canvas; cursor = div transform; HUD 2 Hz) · **10 chỗ tốn tiền thật** (#1 forced reflow từ `getBoundingClientRect` mỗi pointer event — bug phổ biến nhất, không thấy bằng mắt) · kiến trúc JS (0 dependency, 12 module, `render(state)`) · perf-probe + **CI gate thật** (size/type/perf/leak, baseline 7 ngày) · 3 giới hạn cứng mobile · overlay 0 ms main thread · 8 nguồn rò rỉ + test 50 lần vào/ra** |
+| **v3.15** | **§0.3 Thu hẹp phạm vi: dùng cá nhân, 1 người, 1 máy.** Cắt khỏi spec: **EV cert / ký driver / SmartScreen / EULA / SBOM / GDPR / pháp lý** · **accessibility cho người khiếm thị** (screen reader qua audio, NVDA test, WCAG, UIA over the wire) · **multi-user / role / TOTP / `/admin` / handover / chia sẻ link** · **đóng gói MSI + wizard + chữ ký số / auto-update có kênh** · **RBAC, SLA, self-hosted runner, ma trận hỗ trợ nhiều OS, soak 72 h, fuzz định kỳ**. Thay bằng: **§0.3 phạm vi**, **9 điều kiện cài chạy được ngay trên máy của bạn**, **3 khoản $0 duy nhất**, và **4 thứ đổi hành vi thiết kế** (setup 30 phút; HVNC = chế độ có công tắc; 1 profile cài đặt thay 5 tab; CI = 1 workflow) |
 | **v3.14** | **§44 input sâu: 2 lớp (intent vs raw) không bao giờ trộn · 15 dòng máy trạng thái input với 5 bất biến (kẹt phím) · server-side IME: 3 cách, chọn A (VK thô) và từ chối TSF · game/Raw Input/injected flag, không hứa vượt anti-cheat · remote-in-remote (2 tầng trễ, phím bị nuốt) · **accessibility: screen reader chạy trên MÁY SERVER, tiếng đọc đi qua audio stream — 0 đồng và hoạt động thật** · release_all nhảy hàng · 7 giới hạn an toàn · 10 test** · **§45 build/licence: GStreamer LGPL động OK, `gst-plugins-ugly`+x264 = GPL hoá cả app, openh264 tự build = tự gánh patent → thứ tự NVENC→QSV→AMF→MediaFoundation, **không ship x264** · GitHub Actions free nhưng **không test được GPU/desktop** ⇒ self-hosted runner · 2 khoản phải trả tiền (EV cert ký driver, VB-Audio tổ chức) · driver ký = cái bẫy thực tế nhất** |
 
 ### 0.1 v3.0 sửa gì — danh sách "còn thiếu" (đây là lý do v2.1 chưa đủ)
@@ -56,45 +57,90 @@
 
 ---
 
-### 0.2 Bản đồ nhánh: rẽ khắp spec, không đi mãi một nhánh
+### 0.2 Bản đồ nhánh — **đã dừng ở v3.15** (phạm vi thu hẹp, xem §0.3)
 
 **Sai lầm đã mắc (v3.5 → v3.9):** đi 5 lượt liền trong **một** nhánh (video pipeline §35–39) tới mức đo ΔE2000, trong khi **cả một hệ thống con** (âm thanh §40) mới chỉ có kết luận, và **bảo mật, multi-session, đóng gói** vẫn là dòng tóm tắt.
 
 **Cách đúng:** spec được chia thành **8 lĩnh vực**. Mỗi lượt tôi chọn **lĩnh vực nông nhất** (hoặc bị chặn), đào **một tầng**, rồi **chuyển lĩnh vực khác** — chỉ quay lại khi có lý do cụ thể. Dấu ● số tầng đã đào.
 
-| Lĩnh vực | Tầng 1 (khung) | Tầng 2 (cơ chế) | Tầng 3 (số & kiểm chứng) | Trạng thái |
+| Lĩnh vực | Trạng thái cuối | Có còn phải đào? |
+|---|---|---|
+| **A. Video/capture/encode** | ●●● §35–§39 — sâu nhất | **không** — chỉ còn P0 phải **đo** (p95, TWCC) |
+| **B. Âm thanh** | ●● §40 | không |
+| **C. Input & bàn phím** | ●● §44 | không (còn #18, nhỏ) |
+| **D. Giao diện & trải nghiệm** | ● §22–25, §28–34 | **thu nhỏ** ở v3.15: 12 mục thay 60, bỏ `/admin`, bỏ role |
+| **E. Bảo mật & tin cậy** | ●● §41 | **thu nhỏ**: giữ auth + HTTPS + token; bỏ EULA/GDPR/SBOM (§0.3.1) |
+| **F. Vận hành & triển khai** | ●● §42, §45 | **thu nhỏ**: 1 phiên, `install.ps1`, $0 |
+| **G. Bền vững & tiến hoá** | ● | **đóng** — 2 file JSON + 1 log, không DB ⇒ không có gì để migrate (§26.16) |
+| **H. Hiệu năng client** | ●● §43 | không (còn #15, nhỏ) |
+
+**Hàng đợi — KHÔNG còn nhánh nào để rà.** Spec đã đủ để code. Hai việc còn lại không phải "viết thêm chương":
+
+| # | Việc | Vì sao không viết được nữa bằng giấy bút |
+|---|---|---|
+| **P0-a** | Đo **p95 glass-to-glass** trên máy bạn | phụ thuộc GPU/driver/Windows build thật của bạn |
+| **P0-b** | Đo **TWCC/REMB trên GStreamer** có hoạt động không | nếu không có, phải đổi stack (§16.6) — quyết định sau khi đo |
+| **P0-c** | VDD tạo được mấy display, có ổn định | §42.6 |
+
+> **Luật luân chuyển (≤2 lượt/lĩnh vực) đã hoàn thành nhiệm vụ:** nó tồn tại để chống việc đi mãi một nhánh. Ở v3.15, việc đúng **không phải** đào thêm lĩnh vực G hay D — mà là **cắt** (đã làm) và **chạy P0**.
+
+### 0.3 PHẠM VI THẬT: **một người dùng, một cái máy, một mục đích**
+
+> **Chốt lại (quan trọng nhất trong toàn spec):** đây là **công cụ cá nhân** — bạn ngồi ở đâu đó mở trình duyệt điều khiển **máy Windows của chính bạn**. Không phát hành cho người khác, không có tổ chức, không có người dùng thứ hai, không bán.
+> Spec v3.0–v3.14 đã bị **kéo về phía sản phẩm** (cert, EULA, RBAC, accessibility, đóng gói ký số). Mục này cắt những thứ đó và **nói rõ cái gì không được cắt** — vì cắt sai chỗ thì công cụ hỏng thật, không phải chỉ thiếu tính năng.
+
+#### 0.3.1 Đã cắt (và hậu quả chấp nhận)
+
+| # | Hạng mục đã cắt | Nằm ở đâu (coi như lịch sử) | Vì sao bỏ | Hậu quả — chấp nhận được vì… |
 |---|---|---|---|---|
-| **A. Video/capture/encode** | §5.5, §8.3 | §35, §37, §38, §39 | §36 | ●●● **sâu nhất** — tạm dừng |
-| **B. Âm thanh** | §5.10 | **§40** | §40.13 | ●● vừa |
-| **C. Input & bàn phím** | §5.7, §5.8, §6.4–6.7 | **§44** | §44.10 | ●● vừa |
-| **D. Giao diện & trải nghiệm** | §22–25, §28–34 | — | — | ● nông (rộng nhưng mỏng) |
-| **E. Bảo mật & tin cậy** | §10, §26.2 | **§41** | §41.10 | ●● vừa |
-| **F. Vận hành & triển khai** | §13, §26 | **§42** | §42.15 | ●● vừa |
-| **G. Bền vững & tiến hoá** | §21, §35.12 | — | — | ● nông |
-| **H. Hiệu năng client** | §26.11, §30.1 | **§43** | §43.12 | ●● vừa |
+| 1 | **EV cert, ký driver, attestation/Partner Center, SmartScreen** | v3.14 §45.3–45.4, §26.17 | **VDD đã được ký sẵn** — bản phát hành chính thức ký qua SignPath Foundation (miễn phí cho dự án mở). Ta **dùng bản phát hành**, không tự build driver ⇒ không cần cert của mình | Không có. Nếu sau này bạn fork/sửa driver VDD thì mới quay lại khoản này |
+| 2 | **EULA, privacy notice, third-party licences, SBOM công bố** | v3.14 §45.9 (#19), §41.8 | không phát hành cho ai ⇒ không có nghĩa vụ công bố | Giữ lại **một** việc: `LICENSES.md` ghi nguồn VDD/plugin (5 phút, để 6 tháng sau bạn còn biết cái gì đang chạy trên máy) |
+| 3 | **Accessibility: screen reader qua audio, NVDA, WCAG, UIA over the wire** | §44.6 (nay là ghi chú "đã cắt"), §20.18, §6.12, #17 | không có người dùng khiếm thị | Bỏ hẳn. Vẫn **giữ** `aria-label` ở picker vì nó là 3 dòng HTML, nhưng không test, không hứa |
+| 4 | **Multi-user, role, TOTP, `/admin`, handover, xem cùng lúc** | §3 Tier 2, §22.3, §24.8, §21.6, §6.11.4 | 1 tài khoản = chính bạn | `/admin` xoá. "Chia sẻ" thay bằng **1 link tạm** (§21.6) nếu cần đưa cho người nhà xem — 20 dòng code, giữ lại |
+| 5 | **Đa phiên (multi-session) như *tính năng*** | §42 (toàn chương) | bạn không cần 3 phiên song song | §42 giữ làm **tài liệu giới hạn**: nếu bạn vô tình mở 2 tab, hệ thống phải trả `409` + cho **chuyển tab** thay vì phá cả hai. Đó là **phòng thủ**, không phải tính năng |
+| 6 | **MSI, wizard 5 bước, auto-update có kênh + chữ ký** | §24.10, §13.6, §21.5, v3.14 §45.7 | cài 1 lần trên 1 máy | Cài bằng **script** (`install.ps1` 4 bước) — nhưng **uninstall vẫn phải sạch** (§13.7), xem 0.3.3 |
+| 7 | **GDPR/retention/export dữ liệu, "xoá dữ liệu người dùng X"** | §21.8, §26.16 | luật về dữ liệu của *người khác*; đây là dữ liệu của bạn | Audit rút xuống **1 file log xoay vòng 5×10 MB**, không bảng DB, không retention job |
+| 8 | **SLA nhiều mức, fairness 4 mức, admission control, fanout N viewer** | v3.14 §42.4–42.5, §42.9, §42.11 | chỉ có 1 phiên | Giữ **nguyên tắc**: quá tài nguyên thì báo lý do, không crash. Bỏ công thức |
+| 9 | **CI 2 tầng, self-hosted runner, perf gate + baseline 7 ngày, soak 72 h, fuzz định kỳ, ma trận OS/browser** | v3.14 §45.2, §43.12, §21.11, §17.2 | test trên máy bạn = chính là môi trường thật | `cargo test` + 1 lần chạy tay mỗi release. **Mất** khả năng phát hiện regression tự động — chấp nhận, 1 người dùng |
+| 10 | **Nhiều Windows user session / RDS / Fast User Switching** | #14 | đắt, không cần | — |
+| 11 | **Ứng dụng native, SFU/broadcast, HDR streaming, cloud relay** | §3 "Không làm" | đã bị loại từ trước | — |
 
-**Hàng đợi (theo lĩnh vực nông nhất trước, không theo thứ tự cảm hứng):**
+> **Không đụng tới:** §35–§39 (pipeline, CC, encoder, scale, màu), §40 (âm thanh), §6.3–6.7 (con trỏ/chuột/bàn phím), §44.1–44.5 (2 lớp input, máy trạng thái, IME). Đó là **kỹ thuật**, không phải production — và chúng quyết định "dùng có sướng không". Cắt chúng là cắt đúng thứ bạn cần.
 
-| # | Nhánh | Lĩnh vực | Vì sao ưu tiên |
-|---|---|---|---|
-| 1 | **Threat model & tin cậy** | E | ✅ **xong — §41** |
-| 2 | **Multi-session: tài nguyên, cách ly, fanout** | F | ✅ **xong — §42** |
-| 3 | **Đóng gói & vòng đời cài đặt** (MSI, display slot, rollback kiểm chứng được) | F | ⬜ **kế tiếp** — §42.6 phụ thuộc driver, chỉ kiểm chứng được khi cài thật |
-| 4 | **Hiệu năng client đo trong CI** | H | ✅ **xong — §43** |
-| 5 | **Input sâu**: IME, Raw Input, remote-in-remote, accessibility | C | ✅ **xong — §44** |
-| 5b | **Build/release & licence (free vs phải trả tiền)** | F | ✅ **xong — §45** |
-| 6 | **Mô hình dữ liệu & migration sâu** (đã có bảng, chưa có hành vi) | G | ⬜ **kế tiếp** — lĩnh vực nông nhất còn lại |
-| 7 | **UI: state thực thi** (skeleton/optimistic/lỗi từng màn hình, không chỉ wireframe) | D | |
-| 8 | **Accessibility lượt sâu** | D | |
-| 9 | **Consent UX người bị điều khiển** | E | |
-| 10 | **Cert/proxy/trust chain sâu** | E | |
-| 11 | Fault injection harness | A/G | chỉ làm **sau** khi các nhánh khác ổn định |
-| 12 | Đo TWCC/REMB trên GStreamer | A | **chặn Phase 0**, làm cùng lúc spike |
+#### 0.3.2 Ba khoản tiền — bây giờ là **$0** (thay §45.3)
 
-**Luật đi tiếp:**
-1. Không quá **2 lượt liên tiếp** trong cùng một lĩnh vực.
-2. Mỗi lượt phải đưa một lĩnh vực từ ● lên ●● (tầng cơ chế), không chỉ thêm chi tiết cho lĩnh vực đã ●●●.
-3. Nhánh mới rẽ ra được **ghi vào bảng**, không đi ngay — trừ khi nó **chặn Phase 0**.
+| Thứ cần | Cách $0 | Ghi chú thật |
+|---|---|---|
+| Màn hình ảo (HVNC) | **VDD bản phát hành đã ký sẵn** (SignPath Foundation ký miễn phí) | Cài qua `winget install VirtualDrivers.Virtual-Display-Driver` hoặc VDC app. **Không** tự build driver |
+| HTTPS | **cert tự ký** cho LAN, hoặc `tailscale cert` (free) nếu đi qua Tailscale | Trình duyệt cần secure context ⇒ cert tự ký **bắt buộc phải cài trust** trên máy bạn dùng để điều khiển (§26.6) |
+| Âm thanh | **Virtual Audio Driver của cùng nhóm** (virtual speaker, thay VB-Audio) | ⚠️ Bản này **còn beta và cần `bcdedit /set testsigning on`** ⇒ **phải tắt Secure Boot** để chạy. Nếu bạn không muốn tắt Secure Boot: **VB-CABLE** (miễn phí cho cá nhân, đã ký sẵn) — chọn cái này nếu ưu tiên "không đụng vào bảo mật máy". Cả 2 đều là "cable": app phát ra loa ảo, ta capture loopback từ đó |
+
+> Nếu bạn hỏi "có phải trả đồng nào không": **không**, với 1 điều kiện — bạn dùng **bản driver có sẵn**, không fork. Đó là toàn bộ khác biệt giữa "$0" và "$200–500/năm".
+
+#### 0.3.3 Chín điều **không được cắt** (cắt là hỏng thật, không phải thiếu tính năng)
+
+Không có cái nào trong đây là "production". Chúng là thứ mà **một người dùng hằng ngày** sẽ đau nếu thiếu:
+
+| # | Giữ | Vì sao với **1 người dùng** vẫn bắt buộc |
+|---|---|---|
+| 1 | **Đăng nhập (1 tài khoản, không TOTP)** | Bất kỳ ai trong LAN/cùng Wi-Fi mở được URL đó. Không có auth = mở toang máy cho cả quán cà phê |
+| 2 | **HTTPS** | Không chỉ bảo mật: **WebRTC và clipboard API yêu cầu secure context**, `http://` không chạy được |
+| 3 | **Chống kẹt phím/nút** (§44.2, `release_all`) | Đây là lỗi bạn gặp **nhiều lần mỗi tuần** khi dùng thật: chuyển tab khi đang giữ Ctrl ⇒ máy kẹt Ctrl ⇒ phải reboot |
+| 4 | **Restore cửa sổ + audio + display khi đóng tab / crash** (§6.11, §9.2.3, §13.7) | Nếu app chết giữa phiên, cửa sổ của bạn **mắc kẹt trên màn hình ảo** và bạn không thấy nó nữa. Đây là thứ tệ nhất có thể xảy ra với 1 người dùng |
+| 5 | **`Ctrl+Alt+Shift+X` dừng khẩn cấp tại máy** | Bạn đi công tác, có người ngồi vào máy bạn. 5 dòng code |
+| 6 | **Watchdog audio**: nếu app chết, default device phải được trả lại (không để máy câm) | §5.10.3 — lỗi "câm máy" là lỗi tệ nhất của loại app này |
+| 7 | **Không ship codec GPL** (`gst-plugins-ugly`, x264) — dùng NVENC/QSV/AMF/MF (§45.1, §37) | Vẫn đúng, và nó **miễn phí**. x264 chỉ bật khi bạn tự build trên máy dev |
+| 8 | **Uninstall sạch** (§13.7) dưới dạng `uninstall.ps1` | 1 lần, khi bạn đổi máy hoặc gỡ. Không có nó, driver/display ảo/task cũ ở lại vĩnh viễn |
+| 9 | **Timeout an toàn**: mất mạng >30 s thì đóng, phiên >12 h thì đóng | Không có, một buổi sáng mở máy ra sẽ thấy phiên "ma" từ hôm qua vẫn giữ display ảo |
+
+#### 0.3.4 Bốn chỗ **hành vi thiết kế đổi** vì đã bớt scope
+
+| Trước (bản production) | Bây giờ (bản cá nhân) | Vì sao tốt hơn cho bạn |
+|---|---|---|
+| Wizard 5 bước, ≤60 s, có bước "chính sách" | **1 trang `/setup`**: mật khẩu → chọn mạng (LAN/Tailscale) → kiểm tra 5 dòng (VDD/cable/encoder/cổng) → xong. **~30 phút** tính cả cài driver | Ít bước hơn, và bước bạn thật sự cần (kiểm tra driver) vẫn còn |
+| `/settings` 5 tab, ~60 mục | **1 trang, ~12 mục**: chất lượng, hiển thị, con trỏ, âm thanh, phím tắt, ngôn ngữ | 60 mục là để phục vụ nhiều người có khẩu vị khác nhau. Bạn chỉ cần 12 |
+| Stealth 3 cấp S0/S1/S2 + policy | **1 công tắc "Ẩn khỏi màn hình thật"** (bật = HVNC) + 1 công tắc phụ "ẩn cả taskbar" | Bạn không cần "chính sách"; bạn cần biết cửa sổ đang ở đâu |
+| CI 2 tầng + self-hosted runner + baseline | **1 workflow local**: `cargo test`, `cargo build --release`, `node ci/size-gate.mjs` | Máy bạn **chính là** môi trường thật ⇒ không cần runner thứ hai để test capture |
 
 ## 1. Tóm tắt
 
@@ -134,27 +180,26 @@ Desktop Duplication, `SendInput`, clipboard, WASAPI loopback đều gắn với 
 ⇒ tray app chạy dưới user (Task Scheduler "At log on").
 ⇒ **Hệ quả:** không điều khiển được **màn hình login / lock screen / UAC secure desktop**. Muốn có → phải thêm service SYSTEM + Winlogon desktop → **Tier 3, mặc định KHÔNG làm**.
 
-### 2.4 Giả định & đạo đức (đã chốt: **stealth đầy đủ, có thông báo**)
-Bạn chọn: **ẩn cả taskbar button, Alt+Tab, thumbnail**. Spec hỗ trợ đầy đủ, nhưng giữ **một** thứ không tắt được — xem §2.4.2.
+### 2.4 Che giấu — 2 công tắc, và một thứ không tắt được
+Bạn là người duy nhất dùng máy này, nên không có "mức che giấu theo chính sách" (§0.3.4). Chỉ có 2 công tắc:
 
-#### 2.4.1 Mức che giấu (3 cấp, cấu hình được)
-| Cấp | Tên | Làm gì | Mặc định |
-|---|---|---|---|
-| **S0** | `content` | Cửa sổ ở màn hình ảo + audio route cable. Taskbar/Alt+Tab vẫn thấy. | — |
-| **S1** | `hidden` | S0 + `ITaskbarList.DeleteTab` (mất taskbar button + thumbnail hover) | ✅ **mặc định khi bật HVNC** |
-| **S2** | `deep` | S1 + loại khỏi Alt+Tab/Task View theo cách an toàn nhất có thể (§14.3) + ẩn khỏi `Win+number` | opt-in |
+| Công tắc | Bật thì | Mặc định |
+|---|---|---|
+| **Ẩn khỏi màn hình thật** | cửa sổ được move lên display ảo + audio route qua cable ⇒ người ngồi máy không thấy nội dung, không nghe tiếng | ✅ **bật** (đây chính là HVNC) |
+| **Ẩn cả khỏi taskbar** | thêm `ITaskbarList.DeleteTab` (mất taskbar button + thumbnail hover) | ✅ bật khi công tắc trên bật |
 
-#### 2.4.2 Thông báo — **không tắt được**
-- Khi bắt đầu phiên: **toast** hệ thống 1 lần ("Cửa sổ X đang được điều khiển từ xa") + **icon tray đổi màu/khác** trong suốt phiên + tooltip tray ghi rõ ai/ở đâu.
-- Khi kết thúc: toast 1 lần.
-- Lý do giữ lại dù bạn muốn stealth: (a) nếu cửa sổ "biến mất" mà người dùng máy không biết vì sao, họ sẽ **kill process / khởi động lại máy** → phiên chết và khó debug; (b) đây là ranh giới giữa "công cụ hỗ trợ từ xa" và "RAT" — vượt qua ranh giới đó biến dự án thành malware, kéo theo rủi ro pháp lý và bị AV/EDR gắn cờ (VDD + SetWindowDisplayAffinity + ẩn taskbar + input injection là **đúng bộ signature** mà Defender/EDR săn).
-- **Toàn bộ phần ẩn khác đều bật/tắt được**; chỉ 2 dòng toast + icon tray là cố định. Tôi ghi rõ ở đây để bạn quyết định trước khi code, không phải phát hiện giữa đường.
-- Nếu bối cảnh là **máy của chính bạn, truy cập từ xa** (§2.5) → toast không làm phiền ai. Nếu bối cảnh là máy của người khác → bạn cần sự đồng ý của họ, và điều đó hợp pháp hơn là ẩn hoàn toàn.
+- Tắt công tắc đầu ⇒ **VNC mode**: stream màn hình thật, không cần display ảo, không cần driver.
+- Không có "S0/S1/S2": ở bản cá nhân, "mức che giấu" chỉ là **bạn có muốn ẩn hay không**. Chi tiết từng kênh rò rỉ vẫn ở §14 (hữu ích để biết cái gì *vẫn* lộ).
 
-#### 2.4.3 Hệ quả kỹ thuật của S1/S2 (đã có trong §14)
-- Ẩn taskbar ⇒ mất luôn **thumbnail hover** ⇒ hết lộ nội dung (§14.2).
-- Ẩn Alt+Tab ⇒ **không thể** làm sạch 100% mà không hook (xem §14.3): chọn cách "ít xâm lấn nhất" là `WS_EX_TOOLWINDOW` + `DeleteTab`, chấp nhận một số app (Electron/Chromium) tự thêm lại → phải retry định kỳ.
-- **Không** dùng hook toàn cục (`SetWindowsHookEx`/API hooking) — đó là kỹ thuật malware, bị AV chặn, và không cần thiết cho mục tiêu "không thấy nội dung".
+#### 2.4.1 Một thứ không tắt được: **thông báo đang bị điều khiển**
+- Bắt đầu phiên: **toast** 1 lần ("Cửa sổ X đang được điều khiển từ xa") + **icon tray đổi màu** + tooltip ghi rõ từ đâu/bao lâu. Kết thúc: toast 1 lần.
+- Vì sao vẫn giữ dù bạn muốn ẩn: (a) nếu cửa sổ "biến mất" mà chính bạn quên vì sao, bạn sẽ kill process hoặc reboot ⇒ phiên chết, khó tìm nguyên nhân; (b) đây là **ranh giới giữa "công cụ của tôi" và RAT** — bộ dấu hiệu (display ảo + ẩn taskbar + input injection) là đúng thứ Defender săn; giữ thông báo là cách rẻ nhất để không bị gắn cờ nặng hơn.
+- 1 dòng code, không ảnh hưởng gì khi bạn là người duy nhất nhìn màn hình.
+
+#### 2.4.2 Hệ quả kỹ thuật (đã có trong §14)
+- Ẩn taskbar ⇒ mất **thumbnail hover** ⇒ hết lộ nội dung (§14.2). Phải **retry** vì Electron/Chromium tự thêm lại tab.
+- **Alt+Tab / Task View vẫn thấy app** — không thể sạch 100% nếu không hook (và không hook, §14.3). Chấp nhận: người duy nhất có thể thấy là bạn.
+- **Không** dùng hook toàn cục (`SetWindowsHookEx`/API hooking) — kỹ thuật malware, bị AV chặn, không cần thiết.
 
 ### 2.5 Bối cảnh sử dụng (cần xác nhận — ảnh hưởng legal/AV)
 Spec giả định: **bạn điều khiển máy của chính bạn** (hoặc máy trong tổ chức của bạn, có sự cho phép) từ xa. Nếu là máy của người khác → phải có sự đồng ý rõ ràng; một số tính năng (S2 + elevated) có thể bị coi là công cụ xâm nhập.
@@ -166,7 +211,7 @@ Spec giả định: **bạn điều khiển máy của chính bạn** (hoặc m�
 ### Tier 1 — CORE
 | Nhóm | Nội dung |
 |---|---|
-| Auth | argon2id · JWT RS256 (access 15′ + refresh rotate) · lockout |
+| Auth | argon2id · JWT (access 15′ + refresh rotate) · lockout · **1 tài khoản** (không TOTP, không role — §0.3.1 #4) |
 | Picker | danh sách cửa sổ · thumbnail · tìm kiếm · badge `minimized`/`elevated` |
 | Mode | HVNC · VNC |
 | Video | H.264 (NVENC→QSV→AMF→x264) · 1080p60 · adaptive · PLI |
@@ -175,9 +220,9 @@ Spec giả định: **bạn điều khiển máy của chính bạn** (hoặc m�
 | Session | 1 phiên · reconnect + ICE restart · resume sau reload · view-only · stats · quality selector |
 | Security | HTTPS/WSS · DTLS-SRTP/SCTP · CSP/CORS · audit |
 
-### Tier 2 — FULL
-clipboard có nút bấm · multi-session (≤3) · multi-user + TOTP · role · allowlist app · force-close · resolution/fps per phiên · chọn thiết bị audio · đồng bộ layout bàn phím · handover phiên · zoom local · audit export
-
+### Tier 2 — FULL (bản cá nhân: "dễ chịu hơn", không phải "nhiều người hơn")
+clipboard có nút bấm · link xem tạm (1 link, view-only) · đổi preset/zoom local · chuyển cửa sổ/mode/monitor giữa phiên · chọn thiết bị audio · chế độ "bàn phím thô" (§44.3) · ẩn cả taskbar (S1)
+> **Đã bỏ khỏi Tier 2** (vì là nhu cầu của sản phẩm, không phải của bạn): multi-session như *tính năng*, multi-user, role, TOTP, allowlist app, force-close, handover, audit export, stealth S2 "policy". Xem §0.3.1 #4–5.
 ### Tier 3 — OPTIONAL
 file transfer · recording · whiteboard · chat · TURN · multi-display · WoL · reboot · auto-update · login-screen control · printing · voice chat · pressure/stylus · "text mode" cho mạng yếu
 
@@ -204,7 +249,7 @@ SFU/broadcast · app native · HDR streaming · VP9/AV1 · SSO/LDAP · cloud rel
 | Thành phần | Trách nhiệm | Tier |
 |---|---|---|
 | `web` | static UI · REST · WSS signaling · health | 1 |
-| `auth` | argon2id · JWT · TOTP · role | 1 (2) |
+| `auth` | argon2id · JWT · lockout (**1 tài khoản, không TOTP/role** — §0.3.1 #4) | 1 |
 | `window-picker` | EnumWindows → danh sách + thumbnail (§5.4) | 1 |
 | `display-manager` | màn hình ảo · move/restore cửa sổ · **window rescue** (§12.3) | 1 |
 | `capture` | DDAPI/WGC/BitBlt + recovery (§5.5) + **cursor metadata** (§6.3) | 1 |
@@ -703,16 +748,15 @@ POST /api/sessions/{sid}/window { "wid": 123456 }
 v2.1: "không input 10 phút" ⇒ **người chỉ ngồi xem bị đá**.
 v3.0: idle = **không input VÀ không có tương tác UI** (không move chuột, không scroll, tab không active) trong 10 phút. Trước khi đá: hỏi "Còn đó không? [Tiếp tục]" ở phút 9. Người đang xem video vẫn bị coi là idle (không tương tác) → cảnh báo là đủ, không đá ngay.
 
-#### 6.11.4 Handover (T2)
-Chuyển phiên đang mở cho user khác (admin) mà **không** restore cửa sổ: `POST /api/sessions/{sid}/handover {to_user}` → đổi chủ sở hữu `sid`, kill kết nối cũ, user mới nhận.
+#### 6.11.4 Chuyển phiên giữa 2 thiết bị của bạn (thay "handover cho user khác")
+Không có user khác (§0.3.1 #4). Tình huống thật: đang xem trên điện thoại, muốn chuyển sang laptop.
+`POST /api/sessions/{sid}/takeover` → tab/thiết bị mới nhận, kết nối cũ bị đóng **sau khi** server nhận `release_all` từ thiết bị cũ (§42.2). Không đổi chủ sở hữu, không restore cửa sổ.
 
-### 6.12 Accessibility
-- Picker và toàn bộ toolbar **điều hướng được bằng bàn phím** (Tab/Enter/Esc), có `aria-label`.
-- Cảnh báo dùng `role="alert"` / `aria-live="polite"` → screen reader đọc.
+### 6.12 Bàn phím dùng được (không phải accessibility — đã cắt, §0.3.1 #3)
+- Picker và toolbar **điều hướng được bằng Tab/Enter/Esc**; mọi nút có nhãn chữ (không chỉ icon).
 - `prefers-reduced-motion` → tắt ripple/animation.
-- `prefers-contrast: more` → viền rõ hơn; không dùng **chỉ** màu để truyền tải trạng thái (kèm icon/chữ).
-- Cỡ chữ HUD theo `rem`, tôn trọng font-size của browser.
-- Trạng thái không chỉ bằng màu: "Chỉ xem" có icon mắt, "đang kết nối" có text.
+- Trạng thái không chỉ bằng màu: "Chỉ xem" có icon mắt, "đang kết nối" có chữ.
+- Không test NVDA, không WCAG, không `aria-live` cho nội dung remote (nội dung remote là pixel — không có cách nào đọc được).
 
 ### 6.13 Giới hạn trung thực (phải hiện trong UI, không giấu)
 | Không làm được | Lý do | UI nói gì |
@@ -734,6 +778,7 @@ Chuyển phiên đang mở cho user khác (admin) mà **không** restore cửa s
 
 ### 7.1 Máy trạng thái phiên
 ```
+SETUP ──lưu config──► IDLE          (chỉ lần đầu: /setup, ~30 phút cài driver)
 IDLE ──POST /sessions──► PREPARING ──► CONNECTING ──DTLS ok──► ACTIVE
                               │             │                    │
                               │ fail        │ fail               │ mất media
@@ -747,6 +792,7 @@ IDLE ──POST /sessions──► PREPARING ──► CONNECTING ──DTLS ok�
                                               ▼
                                            CLOSED
 ```
+
 | State | Ý nghĩa | Có restore cửa sổ? | Client hiện |
 |---|---|---|---|
 | `PREPARING` | tạo display ảo + move window + route audio | — | spinner "Đang chuẩn bị…" |
@@ -794,7 +840,8 @@ IDLE ──POST /sessions──► PREPARING ──► CONNECTING ──DTLS ok�
 | POST | `/api/sessions/{sid}/keyframe` | — | 204 |
 | POST | `/api/sessions/{sid}/release` | — | `sendBeacon` khi unload (§6.4.7) |
 | POST | `/api/sessions/{sid}/cursor_mode` | `{mode}` | `local\|remote\|auto` |
-| POST | `/api/sessions/{sid}/handover` | `{to_user}` | T2 |
+| POST | `/api/sessions/{sid}/takeover` | — | thiết bị khác tiếp quản (§6.11.4, §42.2) |
+| POST | `/api/sessions/{sid}/share` | `{ttl_min}` | link xem tạm, view-only (§21.6) |
 | T2 | `/api/sessions/{sid}/clipboard` | `{text}`/`{image_b64}` | |
 
 ### 8.2 WSS signaling
@@ -973,9 +1020,9 @@ Không hỏi "máy bạn có GPU gì" lúc cài — **dò lúc chạy**, mỗi l
 ### 9.9b Cài đặt & mức quyền (**chốt: user thường mặc định, elevated là tuỳ chọn**)
 | Mức | Cài thế nào | Điều khiển được | Ghi chú |
 |---|---|---|---|
-| **Standard (mặc định)** | MSI chạy admin **chỉ** để cài (driver/firewall/task), app chạy dưới user thường | app thường | an toàn nhất; stream được cửa sổ admin **nhưng** click/gõ bị UIPI chặn → cảnh báo `need_admin` trước khi bắt đầu |
+| **Standard (mặc định)** | `install.ps1` chạy admin **1 lần** (firewall/task/cert), app chạy dưới user thường | app thường | an toàn nhất; stream được cửa sổ admin **nhưng** click/gõ bị UIPI chặn → cảnh báo `need_admin` trước khi bắt đầu |
 | **Elevated (opt-in)** | Thêm shortcut/task "Run as administrator" | cả app admin | giảm an toàn: nếu server bị chiếm ⇒ toàn quyền máy; UI cài đặt cảnh báo rõ, cần tick xác nhận |
-- Wizard cài đặt **hỏi 1 lần**: "Bạn có cần điều khiển app chạy quyền admin không?" → mặc định **Không**.
+- `/setup` hỏi **1 lần**: "Có cần điều khiển app chạy quyền admin không?" → mặc định **Không**.
 - Elevated không tự bật nếu người dùng không chọn; có thể đổi sau trong `⚙ → Nâng cao`.
 - Khi server ở mức Standard và user chọn cửa sổ elevated: picker hiện badge + checkbox "Tôi hiểu: chỉ xem, không điều khiển được" (hoặc cho chuyển sang view-only).
 - UIPI: **không** dùng `SeDebugPrivilege` như phép màu (§5.8.5).
@@ -988,7 +1035,8 @@ Như v2.1, cộng: audit thêm `session.switch_window`, `session.cursor_mode`, `
 {
   "listen":"0.0.0.0:443",
   "tls":{"cert":"...","key":"..."},
-  "auth":{"max_sessions":1,"access_min":15,"refresh_days":7},
+  "auth":{"max_sessions":1,"access_min":15,"refresh_days":7},   // 1 user duy nhất, không role
+  "deployment":"personal",          // personal = bỏ qua policy/role/SBOM (§0.3)
   "stun":["stun:stun.l.google.com:19302"],
   "display":{"w":1920,"h":1080,"fps":60,"scale":100,"keep_after_close":true,"on_window_drift":"warn"},
   "audio":{"route_default":"ask","remember_per_app":true,"device":"CABLE Input (VB-Audio Virtual Cable)","bitrate_kbps":32},
@@ -997,9 +1045,10 @@ Như v2.1, cộng: audit thêm `session.switch_window`, `session.cursor_mode`, `
   "input":{"block_win_l":true,"max_move_hz":120,"stuck_release_ms":3000},
   "session":{"disconnect_timeout_s":30,"idle_timeout_s":600,"max_hours":12,"grace_s":30},
   "clipboard":{"enabled":false,"text_kb":256,"img_mb":8},
-  "stealth":{"level":"hidden","notice":"always"},   // S0 content | S1 hidden | S2 deep; notice luôn "always"
+  "stealth":{"hide_from_desktop":true,"also_hide_taskbar":false,"notice":"always"},  // 2 công tắc, không phải "level S0/S1/S2" (§0.3.4)
   "mode":"auto",                                    // auto | lan | vpn | internet
-  "debug":{"barcode":false,"show_latency_hud":false}
+  "debug":{"barcode":false,"show_latency_hud":false},
+  "share":{"enabled":true,"max_ttl_h":24}          // 1 link tạm (§21.6)
 }
 ```
 
@@ -1236,38 +1285,51 @@ Như v2.1, cộng:
 | UDP 50000–50100 | WebRTC media + SCTP | range cố định để firewall dễ; nếu bị chiếm → fallback ephemeral |
 | 3478/udp | STUN | chỉ khi mode internet/vpn-public |
 
-### 13.6 Setup 15 phút
-1. Cài MSI (admin) → app + tray + firewall rule.
-2. Wizard: tạo admin password → sinh cert tự ký (LAN) hoặc nhập cert (Internet) → chọn `mode: lan|vpn|internet`.
-3. Wizard kiểm tra: VDD · VB-Audio (tuỳ chọn) · encoder · cổng · IP/interface.
-4. Chọn mode mặc định + audio ("hỏi mỗi phiên" mặc định).
-5. Mở `https://<host>/` → login → picker.
+### 13.6 Setup (~30 phút, một lần, trên máy của bạn)
+| # | Việc | Thời gian |
+|---|---|---|
+| 1 | `winget install VirtualDrivers.Virtual-Display-Driver` (đã ký sẵn) hoặc VDC app | 5′ |
+| 2 | Cài cable âm thanh: **VB-CABLE** (đã ký, không cần tắt Secure Boot) — hoặc Virtual Audio Driver nếu chấp nhận `testsigning on` (§0.3.2) | 5′ |
+| 3 | `install.ps1`: copy binary + tạo shortcut "At log on" + firewall rule 443/UDP + sinh cert tự ký | 2′ |
+| 4 | **Cài trust cert** trên máy bạn dùng để điều khiển (Windows/macOS/iOS/Android — §26.6) | 5′ |
+| 5 | `/setup`: mật khẩu → chọn LAN hay Tailscale → 5 dòng kiểm tra → xong | 3′ |
+| 6 | Mở `https://<host>/` trên điện thoại, thử 1 phiên | 5′ |
+> Không có wizard 5 bước có ảnh, không có bước "chính sách", không có bước "che giấu". Bước 3–5 là **bắt buộc**; 1–2 có thể bỏ (mất HVNC / mất tiếng).
 
-### 13.7 Uninstall / rollback (bắt buộc)
-restore audio (state file) → restore mọi cửa sổ → bỏ ẩn taskbar/Alt+Tab → xoá display ảo (nếu do ta cài) → xoá firewall rule → xoá task/cert/state.
+### 13.7 Uninstall / rollback (bắt buộc — `uninstall.ps1`)
+Thứ tự **cứng**, sai thứ tự = cửa sổ của bạn mắc kẹt hoặc máy câm tiếng:
+```
+1. restore audio (đọc state.json)      → 2. restore mọi cửa sổ về màn hình thật
+→ 3. AddTab lại (bỏ ẩn taskbar)        → 4. xoá display ảo do ta tạo
+→ 5. xoá firewall rule + Task Scheduler → 6. xoá cert tự ký khỏi store
+→ 7. xoá config/state/log
+```
+- Nếu `state.json` mất (ổ hỏng, cài lại Windows): có **nút "Đưa mọi cửa sổ về màn hình chính"** trong tray — dùng `EnumWindows` + `SetWindowPos`, không cần state.
+- **Không** gỡ VDD/cable tự động nếu chúng đã có từ trước khi cài (kiểm bằng thời điểm cài đặt).
 
-## 14. Che giấu — từng kênh rò rỉ (đã chốt: stealth đầy đủ)
+## 14. Che giấu — từng kênh rò rỉ (bản cá nhân: 2 cột)
+Đây là danh sách **để biết cái gì vẫn lộ**, không phải để hứa "ẩn hoàn toàn". Ở bản cá nhân, "người nhìn thấy" hầu như luôn là bạn.
 
-### 14.1 Bảng rò rỉ đầy đủ + cách xử lý
-| # | Kênh lộ | S0 content | **S1 hidden (default)** | **S2 deep (opt-in)** |
-|---|---|---|---|---|
-| 1 | Màn hình chính (pixel) | ❌ ẩn | ❌ ẩn | ❌ ẩn |
-| 2 | Loa thật | ❌ ẩn (route cable) | ❌ ẩn | ❌ ẩn |
-| 3 | Taskbar button | ✅ lộ | ❌ **ẩn** (`ITaskbarList.DeleteTab`) | ❌ ẩn |
-| 4 | Hover taskbar → thumbnail **nội dung** | ✅ lộ | ❌ ẩn (mất button ⇒ mất thumbnail) | ❌ ẩn |
-| 5 | `Alt+Tab` | ✅ lộ | ✅ lộ (giới hạn kỹ thuật, xem §14.3) | ⚠️ giảm tối đa |
-| 6 | Task View (Win+Tab) | ✅ lộ | ✅ lộ | ⚠️ giảm tối đa |
-| 7 | `Win+1..9` tới app | ✅ | ✅ | ⚠️ thường không tới được sau khi ẩn |
-| 8 | Volume Mixer thấy app phát vào CABLE | ✅ | ✅ | ✅ chấp nhận |
-| 9 | Notification toast của app | ✅ | ✅ | ✅ chấp nhận |
-| 10 | Task Manager / process list | ✅ | ✅ | ✅ chấp nhận (không giấu process — đó là malware) |
-| 11 | Toast + icon tray "đang được điều khiển" | ✅ cố ý | ✅ cố ý | ✅ cố ý (**không tắt được**, §2.4.2) |
-| 12 | Lịch sử Jump List / recent files | ✅ | ✅ | ✅ chấp nhận |
-| 13 | Screenshot toàn màn hình của người dùng | ❌ không có cửa sổ | ❌ | ❌ |
-| 14 | Screen recording phần mềm khác | ❌ | ❌ | ❌ |
-| 15 | `PrintScreen` khi cửa sổ đang active | không active ⇒ không lộ | ❌ | ❌ |
+### 14.1 Bảng rò rỉ
+| # | Kênh lộ | HVNC bật | HVNC tắt (VNC) |
+|---|---|---|---|
+| 1 | Màn hình chính (pixel) | ❌ ẩn | ✅ lộ (đúng ý) |
+| 2 | Loa thật | ❌ ẩn (route cable) | ✅ lộ |
+| 3 | Taskbar button | ❌ ẩn (nếu bật công tắc 2) | ✅ lộ |
+| 4 | Hover taskbar → thumbnail nội dung | ❌ ẩn (mất button ⇒ mất thumbnail) | ✅ lộ |
+| 5 | `Alt+Tab` | ⚠️ **vẫn lộ** (giới hạn kỹ thuật, §14.3) | ✅ lộ |
+| 6 | Task View (Win+Tab) | ⚠️ vẫn lộ | ✅ lộ |
+| 7 | `Win+1..9` | ✅ thường không tới được sau khi ẩn tab | ✅ |
+| 8 | Volume Mixer thấy app phát vào CABLE | ✅ chấp nhận | — |
+| 9 | Notification toast của app | ✅ chấp nhận | ✅ |
+| 10 | Task Manager / process list | ✅ chấp nhận (không giấu process — đó là malware) | ✅ |
+| 11 | Toast + icon tray "đang được điều khiển" | ✅ cố ý (**không tắt được**, §2.4.1) | ✅ |
+| 12 | Jump List / recent files | ✅ chấp nhận | ✅ |
+| 13 | Screenshot toàn màn hình | ❌ không có cửa sổ trên màn hình thật | ✅ |
+| 14 | Screen recording phần mềm khác | ❌ | ✅ |
+| 15 | `PrintScreen` khi cửa sổ active | không active ⇒ không lộ | — |
 
-> Ở **S1** (mặc định), 2 kênh còn lộ là **Alt+Tab** và **Task View**. Không thể đóng hoàn toàn mà không hook — xem §14.3 và chấp nhận, hoặc chọn S2.
+> Chỉ **Alt+Tab / Task View** là không đóng được (§14.3). Với 1 người dùng, đây là mức "đủ tốt" — đừng đánh đổi bằng hook hệ thống.
 
 ### 14.2 Ẩn taskbar — chi tiết triển khai
 ```
@@ -1275,29 +1337,22 @@ ITaskbarList3.CoCreateInstance(CLSID_TaskbarList) → HrInit()
 → DeleteTab(hwnd)   khi bắt đầu phiên
 → AddTab(hwnd)      khi kết thúc (và khi app tự thêm lại)
 ```
-- **Bắt buộc retry**: Electron/Chromium và một số app gọi `SetTaskbarState`/tự `RegisterTab` lại sau vài giây → poll 2 s/lần, nếu `DeleteTab` lại được thì làm; tối đa 20 lần, sau đó ghi audit `hide_taskbar_flaky` (không loop vô hạn).
-- **Không** ảnh hưởng chức năng app (chỉ là shell integration). Nếu app crash, explorer tự dọn.
-- Khi kết thúc: `AddTab` — nếu app đã thoát thì bỏ qua (`IsWindow` false).
-- Nếu Explorer restart giữa phiên → taskbar mới không biết gì → button **hiện lại**; phát hiện qua `RegisterWindowMessage("TaskbarCreated")` → `DeleteTab` lại.
+- **Bắt buộc retry**: Electron/Chromium và vài app gọi `RegisterTab` lại sau vài giây → poll 2 s/lần, tối đa 20 lần, sau đó ghi log `hide_taskbar_flaky` (không loop vô hạn).
+- Không ảnh hưởng chức năng app (chỉ shell integration). App crash ⇒ explorer tự dọn.
+- Kết thúc: `AddTab` — app đã thoát thì bỏ qua (`IsWindow` false).
+- Explorer restart giữa phiên → button hiện lại; phát hiện qua `RegisterWindowMessage("TaskbarCreated")` → `DeleteTab` lại.
 
-### 14.3 Alt+Tab / Task View — giới hạn thật, và cách "ít xâm lấn nhất"
-**Sự thật:** Alt+Tab lấy danh sách từ một cấu trúc nội bộ của `explorer`/`win32k`. Không có API công khai để loại một cửa sổ khỏi Alt+Tab. Các cách tồn tại:
+### 14.3 Alt+Tab / Task View — giới hạn thật
+**Sự thật:** Alt+Tab lấy danh sách từ cấu trúc nội bộ của `explorer`/`win32k`. Không có API công khai để loại một cửa sổ khỏi Alt+Tab.
 
 | Cách | Hiệu quả | Rủi ro |
 |---|---|---|
-| `WS_EX_TOOLWINDOW` trên cửa sổ **top-level** | **Có** — cửa sổ tool window không vào Alt+Tab | Đổi style của app bên thứ ba: một số app (Electron, app tự quản style) sẽ **tự đổi lại**; một số app có thể vẽ lại/đổi hành vi. Phải khôi phục style cũ khi kết thúc. |
-| `WS_EX_NOACTIVATE` | Không giúp | Cửa sổ không nhận focus ⇒ **không gõ được** |
-| `ITaskbarList.DeleteTab` | Không ảnh hưởng Alt+Tab (chỉ taskbar) | — |
-| Owner = hidden window | Không hiệu quả với top-level đã có owner | — |
-| Hook `SetWindowsHookEx` / API hook `SwitchToThisWindow` | Hiệu quả cao | **Không làm** — đúng signature malware, bị AV/EDR chặn, dễ crash explorer |
-| Ẩn hẳn cửa sổ (`ShowWindow(SW_HIDE)`) | Cửa sổ mất khỏi mọi danh sách | **Không dùng** — cửa sổ bị ẩn thì DWM **không composite** ⇒ **không capture được** |
-
-⇒ **S2 `deep` = `WS_EX_TOOLWINDOW` + `DeleteTab` + poll retry**, chấp nhận:
-- Một số app sẽ hiện lại trong Alt+Tab (ghi nhận trong log, UI báo "app này không ẩn được khỏi Alt+Tab").
-- Style thay đổi trong lúc chạy có thể làm app vẽ lại 1 lần (nháy) — chấp nhận, có thể tránh bằng cách set style **trước** khi move cửa sổ.
-- Khôi phục style gốc khi kết thúc — **bắt buộc**, nếu không app sẽ mãi không hiện lại trong Alt+Tab.
-
-Với Task View (Win+Tab): cùng cơ chế với Alt+Tab ⇒ kết quả tương tự S2.
+| `WS_EX_TOOLWINDOW` trên cửa sổ top-level | **Có** — tool window không vào Alt+Tab | đổi style app bên thứ ba: Electron/app tự quản style sẽ **tự đổi lại**; một số app vẽ lại (nháy). Phải khôi phục style cũ khi kết thúc |
+| `WS_EX_NOACTIVATE` | Không giúp | cửa sổ không nhận focus ⇒ **không gõ được** |
+| `ITaskbarList.DeleteTab` | Không ảnh hưởng Alt+Tab | — |
+| Hook `SetWindowsHookEx` / API hook | Hiệu quả cao | **Không làm** — signature malware, AV chặn, dễ crash explorer |
+| `ShowWindow(SW_HIDE)` | Mất khỏi mọi danh sách | **Không dùng** — DWM không composite ⇒ **không capture được** |
+⇒ Bản cá nhân: **không bật `WS_EX_TOOLWINDOW` theo mặc định**. Nó là một tuỳ chọn trong `Nâng cao` (vì nó sửa style của app khác — rủi ro thật, lợi ích nhỏ khi bạn là người duy nhất nhìn màn hình).
 
 ### 14.4 Không dùng `WDA_EXCLUDEFROMCAPTURE` trên cửa sổ target
 Nó sẽ chặn **luôn** capture của ta. Chỉ dùng để *kiểm tra* xem app khác có đặt cờ đó không (§11.1).
@@ -1343,7 +1398,7 @@ Ngoài đường nóng thì ngược lại: dùng ngôn ngữ nào *rẻ nhất 
 | **Tray + settings UI** | **Rust** (tray menu) + **web UI cục bộ** (chính HTML/JS của client, mở ở `https://localhost/`) | Tránh kéo theo .NET runtime chỉ để làm 1 menu tray. Cấu hình dùng lại web UI ⇒ 1 bộ UI, không viết 2 lần. | ~0.3 kLOC |
 | **Client** | **HTML + CSS + JavaScript ES2022** (ES modules, không bundler, không framework) | Trình duyệt là runtime duy nhất cần. Không build step ⇒ sửa 1 dòng là reload, debug trực tiếp trên máy khách. Có `// @ts-check` + JSDoc để VS Code vẫn bắt lỗi type. | ~1.8–2.5 kLOC |
 | **Driver màn hình ảo** | **C** (VDD có sẵn, IddCx/WDK) | Kernel mode — **không tự viết**, dùng VDD (MIT). | 0 (reuse) |
-| **Đóng gói** | **WiX (XML)** + **PowerShell** | MSI + đăng ký Task Scheduler + cài VDD/VB-Audio + kiểm tra môi trường. | ~600 dòng |
+| **Đóng gói** | **PowerShell** (`install.ps1` / `uninstall.ps1`) | copy binary + Task Scheduler + firewall rule + sinh cert + kiểm tra môi trường. **Không WiX, không MSI** (§0.3.1 #6). | ~150 dòng |
 | **Test & CI** | **Python** (pytest + Playwright cho browser) + PowerShell | Điều khiển browser thật, đo latency, chạy ma trận §17.2. Không dùng Python ở runtime. | ~1.5 kLOC |
 | **Công cụ đo** | **Python** (đọc barcode từ video camera) | §6.2.3 glass-to-glass. | ~200 dòng |
 
@@ -1359,7 +1414,7 @@ Ngoài đường nóng thì ngược lại: dùng ngôn ngữ nào *rẻ nhất 
 ### 16.4 Cái giá của đa ngôn ngữ (chấp nhận, có kiểm soát)
 | Rủi ro | Cách kiểm soát |
 |---|---|
-| Nhiều toolchain (Rust, MSVC, GStreamer SDK, WiX, Python) | 1 script `bootstrap.ps1` cài hết, pin version; CI dùng cùng image. |
+| Nhiều toolchain (Rust, MSVC, GStreamer SDK, Python) | 1 script `bootstrap.ps1` cài hết, pin version. |
 | Debug xuyên ngôn ngữ | Ranh giới rõ: Rust ⇄ C *chỉ* qua GStreamer API và Win32. **Không** có tầng "Rust gọi C# gọi Python". |
 | Client JS khó bảo trì | ES modules + JSDoc types + `// @ts-check`; lint bằng `tsc --noEmit` trong CI, không thêm build step. |
 | Bus factor | Tài liệu kiến trúc (§16.2) + hướng dẫn build trong README. |
@@ -1391,12 +1446,19 @@ Phase 0 (§18) là cổng kiểm tra. Nếu `d3d11screencapturesrc` + `webrtcbin
 10. Resume sau F5.
 11. Mã hoá: Wireshark chỉ thấy TLS/DTLS-SRTP.
 12. Cleanup: đóng tab → 30 s sau cửa sổ restore, audio restore, không rò handle/VRAM.
-13. Bảo mật: lockout; `sid` người khác → 403.
+13. Bảo mật: lockout sau 5 lần sai; URL/`sid` không đoán được (token ngẫu nhiên).
 
-### 17.2 Ma trận test
-OS (Win10 22H2, Win11 23H2/24H2) × DPI (100/125/150/200) × monitor (1, 2 cùng size, 2 khác size + phụ bên trái) × GPU (NVENC, QSV, AMF, x264) × browser (Chrome, Edge, Firefox, Safari mac, Chrome Android, Safari iOS) × mode (HVNC, VNC) × audio (có/không cable, cable mất giữa phiên) × app (Notepad, Chrome, Explorer, Office, admin/elevated, game borderless, Netflix, terminal) × trạng thái (bình thường, khoá console, UAC, RDP chiếm console) × mạng (LAN, WiFi 5% loss, Tailscale, đổi mạng) × thời lượng (10′, 2 h).
+### 17.2 Test — 1 máy, không ma trận
+Bản cá nhân: **1 OS, 1 DPI, 1 GPU, 1 trình duyệt chính + 1 trình duyệt phụ trên điện thoại**. Ma trận đầy đủ (OS × DPI × GPU × browser × app × mạng) là việc của sản phẩm — đã cắt (§0.3.1 #9).
 
-### 17.3 Tiêu chí "cảm giác dùng được" (đo được, không cảm tính)
+| Cần test | Cách |
+|---|---|
+| 1 máy Windows + DPI thật của bạn | test tay 8 mục §21.10 |
+| Điện thoại của bạn (1 iOS **hoặc** 1 Android) | mở URL thật, thử touch + bàn phím ảo |
+| Trình duyệt phụ (Chrome/Edge/Firefox) | chỉ test luồng chính: login → picker → phiên → thoát |
+| Mạng | LAN + (nếu dùng) Tailscale. **Không** cần netem, không cần 4 profile loss |
+
+### 17.3 Tiêu chí
 | Chỉ số | Ngưỡng |
 |---|---|
 | **Cursor→photon** (cursor local) | **0 ms** — không có độ trễ cảm nhận |
@@ -1415,34 +1477,35 @@ OS (Win10 22H2, Win11 23H2/24H2) × DPI (100/125/150/200) × monitor (1, 2 cùng
 
 | Phase | Nội dung | Ước tính |
 |---|---|---|
-| **0** | **Spike (cổng quyết định):** Rust + GStreamer `d3d11screencapturesrc` → `webrtcbin` → browser 1080p60; DDAPI cursor shape + client render; đo glass-to-glass. **Nếu không đạt p95 <80 ms ⇒ đổi stack theo §16.6 trước khi viết tiếp.** | 1–1.5 tuần |
-| 1 | Tier 1: auth, picker, HVNC move/restore, display ảo giữ, encoder auto-detect, input đầy đủ (§6.3–6.7), audio "hỏi mỗi phiên" + toggle, stealth S1, reconnect, resume, cleanup, uninstall | 5–7 tuần |
-| 2 | Tier 2: clipboard, multi-session, multi-user/TOTP, allowlist, switch window/mode/monitor giữa phiên, preset, zoom local, handover, stealth S2 | 3–4 tuần |
-| 3 | Tier 3 theo nhu cầu thực tế (file transfer, recording, TURN, whiteboard…) | — |
-| — | Ma trận test §17.2 + hardening + đo lại §17.3 | 2 tuần |
-| **Tổng** | | **≈ 12–15 tuần (1 dev)** |
+| Phase | Nội dung | Ước tính |
+|---|---|---|---|
+| **P0** | **Spike (cổng quyết định):** Rust + GStreamer `d3d11screencapturesrc` → `webrtcbin` → browser 1080p60; DDAPI cursor shape + client render; đo glass-to-glass. **p95 >120 ms ⇒ đổi stack (§16.6) trước khi viết tiếp** | 1–1.5 tuần |
+| **P1** | **Dùng được hằng ngày:** auth 1 user, picker, HVNC move/restore + khôi phục khi crash, encoder auto-detect, input đầy đủ (§6.3–6.7), audio "hỏi mỗi phiên" + toggle, reconnect, resume, `install.ps1`/`uninstall.ps1` | 4–6 tuần |
+| **P2** | **Dễ chịu:** preset/zoom, bố cục mobile, chuyển cửa sổ giữa phiên, link xem tạm, chế độ bàn phím thô | 2–3 tuần |
+| — | ~~Tier 2 sản phẩm, Tier 3, ma trận test, hardening~~ | **đã cắt** (§0.3.1) |
+| **Tổng** | | **≈ 8–11 tuần (1 dev, dùng cá nhân)** |
 
-## 19. Quyết định đã chốt & còn mở
+## 19. Quyết định
 
 ### 19.1 Đã chốt (v3.1)
 | # | Quyết định | Ghi ở |
 |---|---|---|
-| 1 | **Ngôn ngữ:** Rust (core + web + tray) · C/GStreamer (media) · HTML/JS (client) · Python (test/CI) · C (VDD có sẵn) · PowerShell+WiX (đóng gói). Luật: **hot path 1 process** | §16 |
+| 1 | **Ngôn ngữ:** Rust (core + web + tray) · C/GStreamer (media) · HTML/JS (client) · Python/Node (test). Luật: **hot path 1 process**. **Không WiX** — cài bằng PowerShell (§45.3) | §16 |
 | 2 | **GPU:** auto-detect lúc chạy + micro-benchmark + tự hạ preset; người dùng đổi tay được | §9.4.1 |
 | 3 | **Mạng:** LAN trước (không STUN) → Tailscale/WireGuard/ZeroTier → port-forward+STUN (Phase 2) → TURN (T3). Một binary, khác config | §13 |
 | 4 | **Audio:** hỏi mỗi phiên, nhớ theo app; toggle stream riêng; routing không tự đổi | §9.6 |
 | 5 | **Quyền:** user thường mặc định; elevated là opt-in khi cài, có cảnh báo | §9.9b |
-| 6 | **Stealth:** mặc định **S1 hidden** (ẩn taskbar + thumbnail); **S2 deep** opt-in (Alt+Tab giảm tối đa); toast + icon tray **không tắt được** | §2.4, §14 |
+| 6 | **Che giấu:** 2 công tắc (**ẩn khỏi màn hình thật** = HVNC, **ẩn cả taskbar**) đều mặc định bật; `WS_EX_TOOLWINDOW` chỉ trong Nâng cao; toast + icon tray **không tắt được** | §2.4, §14 |
 
-### 19.2 Còn mở — chỉ 3 câu, không chặn Phase 0
-1. ~~Display ảo~~ → **đã chốt ở §20.3**: 4 lựa chọn có tên (Vừa mắt / Chữ to / Nét / Như máy thật / Dọc), đổi được **giữa phiên** trong 2–4 s, nhớ theo thiết bị. Không có "1920×1080 cố định".
-2. **Số người dùng:** 1 tài khoản cho chính bạn, hay nhiều người + role? *(mặc định: 1 admin; Tier 2 mới mở multi-user)*
-3. **Tier 1 đã đủ cho bản đầu chưa?** *(mặc định: đủ — clipboard/multi-user để Phase 2)*
-
+### 19.2 Đã đóng hết (không còn câu hỏi chặn)
+1. ~~Display ảo~~ → chốt ở §20.3: 4 lựa chọn có tên (Vừa mắt / Chữ to / Nét / Dùng thật), đổi giữa phiên 2–4 s.
+2. ~~Số người dùng~~ → **1** (§0.3). Hết.
+3. ~~Tier 1 đủ chưa~~ → **đủ**, và bản cá nhân còn ít hơn Tier 1 (§18).
+> Câu còn mở **duy nhất** là câu kỹ thuật, không phải sản phẩm: **p95 thật trên máy bạn là bao nhiêu** (đo ở P0) và **VDD tạo được mấy display** (§42.6). Cả hai chỉ trả lời được bằng cách chạy.
 ### 19.3 Ba cảnh báo tôi muốn bạn thấy trước khi tôi code
 1. **`Ctrl+Alt+Del` và màn hình login/UAC sẽ không điều khiển được.** Cần service SYSTEM + Winlogon — tôi để Tier 3, mặc định không làm.
 2. **Video DRM (Netflix/Prime) sẽ đen** trên màn hình ảo. Không có cách vượt.
-3. **S1/S2 stealth có thể bị Windows Defender/EDR gắn cờ** vì bộ dấu hiệu (driver display ảo + ẩn taskbar + input injection + audio cable) trùng với RAT. Cách giảm: ký số binary + driver, không hook API, giữ thông báo tray, whitelist trong AV của tổ chức. Không có cách "chắc chắn không bị flag".
+3. **Stealth (HVNC) có thể bị Defender gắn cờ** vì bộ dấu hiệu (driver display ảo + ẩn taskbar + input injection) trùng với RAT. Cách giảm: **thêm exclusion cho thư mục app** trên máy bạn, không hook API, giữ thông báo tray. Không có cách "chắc chắn không bị flag".
 
 ---
 
@@ -1582,13 +1645,14 @@ Màn hình ảo là **display ảo, không nối với cổng xuất vật lý**
 - Không có notification đẩy ra ngoài trang (không Web Push) — tránh xin quyền thừa.
 
 ### 20.12 Lưu & đồng bộ — ai thắng ai
-| Loại cài đặt | Lưu ở | Đồng bộ |
+Chỉ còn **2 tầng** (bỏ tầng "chính sách/admin" — không có admin, §0.3.1 #4):
+
+| Loại | Lưu ở | Ghi chú |
 |---|---|---|
-| Chính sách (trần chất lượng, allowlist, stealth level, bật/tắt audio) | server | admin đặt, **thắng** mọi thứ |
-| Sở thích hiển thị (fit/zoom, theme, cỡ chữ UI, ngôn ngữ) | server theo user | mọi thiết bị của user |
-| Sở thích theo thiết bị (mức chất lượng cho điện thoại, cách chạm) | localStorage | chỉ thiết bị đó |
-| Theo app (audio route, hide taskbar) | server theo app | mọi phiên của app đó |
-Thứ tự thắng: **chính sách > user > thiết bị**. Khi bị chính sách chặn → ghi rõ lý do, không disable im lặng.
+| Cài đặt chung (chất lượng, hiển thị, con trỏ, audio mặc định, ngôn ngữ) | `config.json` trên server | mọi thiết bị của bạn dùng chung |
+| Cài đặt theo thiết bị (mức chất lượng cho điện thoại, cách chạm, zoom) | `localStorage` | chỉ thiết bị đó; đổi máy thì mất — chấp nhận |
+| Theo app (audio route, ẩn taskbar) | `config.json` | áp cho mọi phiên của app đó |
+Thứ tự thắng: **thiết bị > chung**. Cài đặt nào không áp được → nói lý do trong UI, không disable im lặng.
 
 ### 20.13 Hoàn tác, mặc định, xuất/nhập
 - Mỗi thay đổi: toast có **Hoàn tác** 5 s.
@@ -1624,14 +1688,14 @@ Không tour dài, không video, không bắt đọc. Có "Xem lại hướng d�
 - Thanh trên gộp còn 3 nút + menu `⋯`.
 - Không có hover-only hint — mọi gợi ý phải hiện được khi chạm.
 
-### 20.18 Accessibility của chính phần cài đặt
-- Điều hướng bằng bàn phím đầy đủ, `Esc` đóng, focus bị giữ trong sheet.
-- Mọi toggle có `role="switch"` + `aria-checked`; mọi slider có `aria-valuetext` đọc được ("8 trên 10").
-- Không truyền tải bằng màu đơn thuần.
-- `prefers-reduced-motion` → tắt animation minh hoạ (thay bằng ảnh tĩnh).
-- Kiểm tra với trình đọc màn hình (NVDA) các luồng: login → picker → đổi chất lượng → thoát.
+### 20.18 Chỉ cần **bàn phím dùng được** (không phải accessibility)
+Đã cắt accessibility/WCAG/NVDA (§0.3.1 #3). Giữ 4 dòng vì chúng là **thói quen tốt, miễn phí**:
+- Mọi thứ bấm được bằng chuột cũng bấm được bằng `Tab`/`Enter`/`Esc` (cần khi tay đang cầm điện thoại / dùng 1 tay).
+- Focus ring rõ ràng (không `outline: none`).
+- `prefers-reduced-motion` → tắt ripple/animation (chống say tàu xe khi xem trên điện thoại).
+- Không truyền tải trạng thái chỉ bằng màu (kèm icon) — để nhìn được dưới nắng, ngoài trời.
 
-### 20.19 Cách viết chữ (để "dễ" thật sự)
+### 20.19 Cách viết chữ
 | ❌ Không viết | ✅ Viết |
 |---|---|
 | Bitrate / FPS / Codec / Latency | Lượng dữ liệu / Độ mượt / (không hiện) / Độ trễ |
@@ -1646,7 +1710,7 @@ Không tour dài, không video, không bắt đọc. Có "Xem lại hướng d�
 | Không cho đổi | Vì sao |
 |---|---|
 | Tắt mã hoá / hạ TLS | Không thể thoả hiệp bảo mật |
-| Tắt audit | Cần cho trách nhiệm & điều tra |
+| Tắt log phiên | Khi có sự cố (kẹt phím, cửa sổ mắc) log là thứ duy nhất cứu bạn |
 | Tắt thông báo tray "đang bị điều khiển" | §2.4.2 |
 | Chọn codec bằng tay | H.264 luôn đúng; chọn sai = không xem được |
 | Tự đổi default audio device mà không xác nhận | Nguy cơ làm câm máy (§5.10.3) |
@@ -1728,102 +1792,95 @@ Mọi trạng thái phải có: **câu giải thích + 1 hành động chính + 
 | Driver VDD lỗi | không capture được | phát hiện + hướng dẫn cài lại + đường lui: capture màn hình thật (chế độ suy giảm) |
 | Nâng cấp app khi đang có phiên | phiên chết giữa việc | updater kiểm tra phiên đang chạy → hoãn, hoặc hỏi |
 
-### 21.5 Cập nhật & phiên bản
-- **Auto-update có kênh** (stable/beta), ký số, kiểm tra chữ ký trước khi chạy.
-- **Không tự cập nhật khi đang có phiên**; hiện "Có bản mới — cập nhật khi kết thúc phiên".
-- Kiểm tra tương thích: server cũ + client mới → API có version, server trả `min_client`. Ngược lại client cũ + server mới → giữ tương thích 2 phiên bản gần nhất.
-- **Migration**: config/state file có `schema_version` + migrate một chiều, có backup trước khi migrate.
-- Rollback: giữ 1 bản trước, cho phép quay lại trong 7 ngày.
-- Release note hiện **trong app** (không bắt vào web).
-
-### 21.6 Backup & phục hồi cấu hình
-- Export/import JSON (đã có §20.13) + backup tự động trước mỗi lần migrate.
-- Khôi phục mật khẩu admin: mã hoá bằng DPAPI machine-scope; nếu mất → quy trình reset **offline** (dừng app, chạy `rd.exe reset-admin` tại máy, cần quyền admin OS) — không có "email reset".
-- Nếu mất khoá ký JWT → mọi phiên bị đăng xuất, người dùng đăng nhập lại (chấp nhận).
-
-### 21.7 Chia sẻ & cộng tác (Tier 2, đã có handover — bổ sung)
-| Tính năng | Chi tiết |
+### 21.5 Cập nhật & sao lưu — bản cá nhân
+| Việc | Cách làm (không ký số, không kênh update) |
 |---|---|
-| **Link xem tạm** | tạo link một lần, hết hạn 1–24 h, chỉ view-only, thu hồi được, có audit. Link = token ngẫu nhiên 256-bit, **không** phải mật khẩu user |
-| **Xem cùng lúc (2 người)** | 1 người điều khiển + 1 người xem; người xem không chiếm quyền; hiện "2 người đang xem" |
-| **Chuyển quyền điều khiển** | nút "Cho [tên] điều khiển" — nguyên tử (atomic), release_all trước khi chuyển (tránh kẹt input) |
-| **Xin quyền** | người xem bấm "Xin điều khiển" → người đang điều khiển nhận thông báo chấp nhận/từ chối |
-| **Ghi chú trên màn hình (T3)** | whiteboard có nút xoá tất cả; không lưu |
+| Cập nhật | **`git pull` + `cargo build --release` + restart app**. Không auto-update, không server update, không chữ ký gói (bạn là người build ra nó) |
+| Đang có phiên | nhắc "đóng phiên rồi hãy cập nhật" — **không** tự cập nhật giữa phiên |
+| Sao lưu | **2 file**: `config.json` + `state.json` — copy là xong |
+| Trước khi migrate schema | tự copy `config.json.bak-<ngày>` (1 dòng code, cứu bạn đúng 1 lần) |
+| Mất mật khẩu | sửa tay `config.json` hoặc `rd.exe reset-admin` tại máy. Không có "email reset" |
+| Rollback bản lỗi | `git checkout <tag trước>` + build lại |
 
-### 21.8 Người dùng phía máy bị điều khiển
-- **Icon tray** đổi trạng thái + tooltip "Ai đang điều khiển, từ đâu, bao lâu".
-- **Menu tray**: "Xem ai đang kết nối" · "Dừng điều khiển ngay" (ngắt phiên, **không** cần quyền của người điều khiển) · "Chặn người này".
-- **Phím tắt khẩn cấp tại máy**: `Ctrl+Alt+Shift+X` → ngắt mọi phiên ngay (hoạt động cả khi app treo UI, vì là hotkey toàn cục do app đăng ký).
-- Trước khi phiên bắt đầu: nếu `presence` báo có người đang dùng máy, tray hiện "Sắp có người điều khiển cửa sổ X" 2 s trước (trừ khi đã cấu hình tắt cái này — nhưng vẫn giữ §2.4.2).
-- **Người ngồi máy luôn có quyền dừng** — đây là nguyên tắc, không phải tuỳ chọn.
+### 21.6 Chia sẻ — chỉ còn **1 link tạm**
+Không role, không "xem cùng lúc", không handover (§0.3.1 #4).
 
-### 21.9 Ranh giới pháp lý & tuân thủ (bổ sung, không phải luật sư)
-| Vấn đề | Cách xử lý trong sản phẩm |
+| Giữ lại | Chi tiết |
 |---|---|
-| Ghi hình phiên (T3) | mặc định **tắt**; nếu bật, **cả 2 phía** thấy chỉ báo đỏ "đang ghi"; lưu mã hoá; tự xoá sau N ngày (cấu hình) |
-| Dữ liệu cá nhân (GDPR-style) | audit giữ 90 ngày cấu hình được; export/xoá theo user; không log nội dung (§9.10) |
-| Clipboard ảnh (có thể chứa dữ liệu nhạy cảm) | chỉ explicit, có audit, có thể tắt toàn cục |
-| Người dùng ở nước khác | cảnh báo trong docs: mã hoá đúng, nhưng luật nơi bạn dùng có thể yêu cầu thông báo/đồng ý |
-| Log chứa IP | IP là dữ liệu cá nhân ở nhiều nơi → nói rõ trong chính sách lưu trữ |
+| **Link xem tạm** | `POST /api/sessions/{sid}/share {ttl_min}` → view-only 1–24 h, thu hồi được, token 256-bit **riêng** (không phải mật khẩu của bạn). Dùng khi muốn người nhà xem màn hình mà không đưa mật khẩu — ~20 dòng code |
+| Hết hạn | trang "Link đã hết hạn" (§24.11) |
+| Không làm | chuyển quyền điều khiển, "xin quyền", whiteboard |
 
-### 21.10 Hỗ trợ khách hàng / vận hành
-- **Gói chẩn đoán** (1 file zip): version, config (đã lọc secret), 500 dòng log cuối, kết quả 12 kiểm tra §21.1, thông tin GPU/driver/OS. **Không** chứa mật khẩu/khoá/frame.
-- **Xem trước khi gửi**: hiện nội dung gói, người dùng thấy hết trước khi tải lên (không tự upload).
-- Tài liệu: 1 trang "Không kết nối được" với 8 nguyên nhân phổ biến theo thứ tự tần suất thực.
+### 21.7 Người ngồi máy — chính là bạn
+- **Icon tray** đổi trạng thái + tooltip "đang được điều khiển từ 192.168.1.5, 12 phút".
+- **Menu tray**: "Đang kết nối từ đâu" · "Dừng điều khiển ngay".
+- **Phím tắt khẩn cấp `Ctrl+Alt+Shift+X`** → ngắt mọi phiên ngay, hoạt động cả khi UI app treo (hotkey toàn cục).
+- Không có "chặn người này", không có `presence` riêng — chỉ có bạn.
+- **Người ngồi máy luôn có quyền dừng** — nguyên tắc, không phải tuỳ chọn (§2.4.2).
 
-### 21.11 Chất lượng & quy trình (engineering)
-| Việc | Khi nào |
+### 21.8 Pháp lý — 3 dòng
+Đã cắt GDPR/retention/export/consent (§0.3.1 #7): dữ liệu ở đây là **của bạn**.
+
+| Chỉ cần biết | |
 |---|---|
-| Unit test phần thuần (protocol, mapping toạ độ, state machine) | mỗi commit |
-| **Test toạ độ tự động**: ảnh mẫu + crosshair 4 góc + giữa, 4 mức DPI, 2 cấu hình màn hình → so pixel | mỗi PR |
-| **Test kẹt input**: 20 kịch bản blur/mất mạng | mỗi PR |
-| E2E Playwright: login → picker → phiên → đổi chất lượng → thoát | mỗi PR |
-| Soak 72 h | hàng đêm |
-| Đo §17.3 (glass-to-glass) | mỗi release |
-| Fuzz protocol (REST + WSS + datachannel) | mỗi tuần |
-| Quét dependency (RustSec, GStreamer CVE) | hàng tuần |
-| Test trên máy thật (ma trận §17.2) | mỗi release |
-| Đo bundle/latency **client** trên điện thoại cũ (4 năm) | mỗi release |
+| Điều khiển máy **của chính bạn** | không vấn đề pháp lý. Đây là 100% trường hợp của spec |
+| Máy của người khác | phải có sự đồng ý của họ. Không ngoại lệ, không có tính năng nào để lách (§2.4.2) |
+| Ghi hình (nếu bật) | chỉ quay màn hình của bạn; chỉ báo đỏ cả 2 phía là đủ |
 
-### 21.12 Rủi ro & phương án (top 8)
+### 21.9 Chẩn đoán khi có sự cố
+- **Nút "Chẩn đoán"** (tray + `/diagnostics`): **8 kiểm tra** — display ảo có chưa? cable có? encoder nào chọn được? 443 mở? cert còn hạn? WASAPI loopback có frame? GPU driver? có phiên "ma" đang giữ display?
+- **1 file log**: `%LOCALAPPDATA%\RD\rd.log`, xoay 5×10 MB, mỗi phiên 1 `corr` id ⇒ grep 1 lệnh ra cả phiên.
+- Không gói zip, không upload, không trang support. Bạn đọc log của chính mình.
+
+### 21.10 Chất lượng — 1 người, 1 workflow
+| Việc | Khi nào | Ghi chú |
+|---|---|---|
+| `cargo test` (protocol, toạ độ §5.9, state machine §7.1/§44.2, CC §36.4) | mỗi lần build | phần thuần, không cần GPU |
+| `node ci/size-gate.mjs` | mỗi lần sửa client | §43.12, 3 dòng |
+| **8 mục test tay** (dưới) | trước lần dùng quan trọng | máy bạn **là** môi trường thật |
+| Soak 2 h + mở/đóng 20 lần | khi sửa capture/encode | phát hiện rò VRAM/handle; **không** cần 72 h |
+
+**8 mục test tay (5 phút — thay ma trận §17.2):** ① cửa sổ lên display ảo, màn hình thật **không** thấy ② click đúng 4 góc ③ Telex "tieengs" → "tiếng" ④ giữ Ctrl → alt-tab → nhả ⇒ **không kẹt** ⑤ tắt audio ⇒ loa thật vẫn im ⑥ F5 ⇒ resume ⑦ đóng tab ⇒ cửa sổ + audio trở lại ⑧ `Ctrl+Alt+Shift+X` dừng ngay.
+> Ma trận §17.2 (OS × DPI × GPU × browser × app × mạng) đã cắt: bạn có **1** máy, **1** DPI, **1** GPU, **1** trình duyệt.
+
+### 21.11 Rủi ro thật (top 6)
 | Rủi ro | Khả năng | Ảnh hưởng | Giảm thiểu |
 |---|---|---|---|
-| Phase 0 không đạt 80 ms | Trung bình | Cao | §16.6 đường lui; quyết định sau 1 tuần, không sau 6 tuần |
-| VDD không ổn định trên Win11 build mới | Trung bình | Cao | Kênh Amyuni IDD (thương mại) làm dự phòng; test sớm |
-| Defender/EDR gắn cờ (S1/S2) | **Cao** | Cao | Ký số, không hook, giữ thông báo tray, tài liệu whitelist, **không** hứa "không bị flag" |
-| Per-app audio API không ổn định theo build | Trung bình | Trung bình | Fallback đổi default device (có watchdog) + hướng dẫn Volume Mixer |
-| GStreamer webrtcbin khó dùng | Trung bình | Trung bình | Spike 3 ngày với 1 luồng tối giản trước khi cam kết; thay bằng Pion sidecar |
-| Scope creep (Tier 3) | Cao | Trung bình | Tier 1 chốt cứng; mọi thêm mới phải cắt thứ khác |
-| Bus factor 1 dev | Cao | Cao | Tài liệu kiến trúc + test tự động + không dùng công nghệ quá lạ |
-| Người dùng không đọc hướng dẫn | Cao | Thấp | §20.15/§20.16 + chẩn đoán tự động |
+| **Defender gắn cờ** (VDD + ẩn taskbar + input injection = bộ dấu hiệu RAT) | **Cao** | Trung bình | thêm **exclusion cho thư mục app** trên máy bạn (1 lần). Không ký số, không "chống phát hiện" (§21.13) |
+| P0 không đạt 80 ms | Trung bình | Cao | đường lui §16.6; quyết định sau ~1 tuần, không sau 6 tuần |
+| VDD hỏng sau Windows update | Trung bình | Cao | ghim version VDD; hỏng thì **VNC-only** vẫn dùng được (§26.8) |
+| App chết giữa phiên ⇒ cửa sổ mắc trên display ảo | Trung bình | **Cao** | §0.3.3 #4: khôi phục lúc khởi động + nút "đưa cửa sổ về màn hình thật" |
+| Máy câm tiếng sau khi dùng | Trung bình | Cao | watchdog restore default device (§5.10.3) — chạy cả khi app crash |
+| 3 tháng sau quên code | Cao | Trung bình | `docs/` + `cargo test` + chính spec này |
 
-### 21.13 Kế hoạch đo & tiêu chí "phase xong"
-| Phase | Xong khi |
+### 21.12 "Xong" nghĩa là gì (3 mốc)
+| Mốc | Xong khi |
 |---|---|
-| 0 | 1080p60, p95 <80 ms LAN đo bằng barcode; cursor local 0 ms; quyết định stack được ghi lại |
-| 1 | 13 mục §17.1 pass; 0 lần kẹt input trong 50 thử; uninstall sạch (máy trở lại như trước); soak 24 h không rò |
-| 2 | §21.7 hoạt động; multi-user; chẩn đoán §21.1 pass trên 3 máy khác cấu hình |
-| 3 | theo nhu cầu thực tế |
+| **P0 — spike** | 1 cửa sổ → display ảo → browser 1080p60, cursor local 0 ms, đo được p95. p95 >120 ms ⇒ đổi stack (§16.6) **trước khi** viết tiếp |
+| **P1 — dùng được hằng ngày** | 8 mục test tay §21.10 pass; 0 lần kẹt input trong 50 thử; đóng tab ⇒ mọi thứ trở lại; mở/đóng 20 lần không rò |
+| **P2 — dễ chịu** | preset + zoom local + bố cục mobile + audio toggle + chuyển cửa sổ giữa phiên <1.5 s. **Dừng ở đây** nếu đã đủ |
 
-### 21.14 Những thứ **cố tình không làm** (ghi để không ai hỏi lại)
+### 21.13 Những thứ **cố tình không làm** (ghi để không hỏi lại)
 | Không làm | Lý do |
 |---|---|
 | Điều khiển màn hình login/UAC | §2.3 |
 | Hidden desktop `WinSta0\HVNC` | §5.2 (mất state, giống malware) |
 | Hook API / `SetWindowsHookEx` | §14.3 |
 | Giấu process khỏi Task Manager | §14.5 |
-| SFU/nhiều người xem hàng loạt | không cần; P2P đủ |
+| SFU/nhiều người xem | không cần; P2P đủ |
 | App native mobile | yêu cầu là browser |
 | HDR streaming | chỉ tonemap |
-| Cloud relay | tự chủ, không phụ thuộc bên thứ ba |
-| TURN mặc định | §13.1 |
-| Đa nền tảng server (macOS/Linux lúc này) | kiến trúc Windows-first; ghi nhận là hướng mở rộng |
+| Cloud relay / TURN mặc định | tự chủ, §13.1 |
+| **EV cert / ký driver / SmartScreen / EULA / SBOM** | **§0.3.1 #1–2** |
+| **Multi-user, role, TOTP, `/admin`, handover** | **§0.3.1 #4** |
+| **Accessibility cho người khiếm thị** (screen reader qua audio, UIA over the wire) | **§0.3.1 #3** |
+| **MSI + wizard 5 bước + auto-update có kênh** | **§0.3.1 #6** |
+| **CI 2 tầng + self-hosted runner + soak 72 h + ma trận OS** | **§0.3.1 #9** |
 
-### 21.15 Hướng mở rộng sau này (không cam kết)
-- Server trên macOS (ScreenCaptureKit) / Linux (PipeWire + XDG portal) — dùng lại client, đổi core.
-- Điều khiển **nhiều máy** từ 1 dashboard (danh sách máy → cửa sổ).
-- "Text mode" cho mạng cực yếu (chỉ gửi diff UI dạng ảnh nhỏ/vector).
-- Chia sẻ ứng dụng cho 2–3 người xem đồng thời qua SFU nhỏ (LiveKit) — chỉ khi có nhu cầu thật.
+### 21.14 Hướng mở rộng (ghi để khỏi nghĩ lại)
+- Server trên **Linux** (PipeWire + XDG portal) / **macOS** (ScreenCaptureKit) nếu sau này đổi máy — dùng lại client, đổi core.
+- **Nhiều máy** từ 1 dashboard — chỉ khi bạn có máy thứ hai.
+- ~~SFU/broadcast, text mode, voice chat~~ — không cần cho 1 người dùng.
 
 ---
 
@@ -1834,20 +1891,14 @@ Mọi trạng thái phải có: **câu giải thích + 1 hành động chính + 
 ### 22.1 Sơ đồ
 ```
 /                          → chuyển hướng theo trạng thái đăng nhập
-├── /login                 → đăng nhập (+TOTP)
+├── /login                 → đăng nhập (1 tài khoản, không TOTP)
 ├── /windows               → DASHBOARD: cửa sổ + phiên đang mở + trạng thái máy
 ├── /s/:sid                → PHIÊN ĐIỀU KHIỂN (toàn màn hình)
 │     ├── overlay: chuyển cửa sổ (window switcher)
 │     ├── overlay: chẩn đoán nhanh
 │     └── sheet: cài đặt phiên
-├── /settings              → cài đặt (5 tab)
+├── /settings              → cài đặt (~12 mục, 1 trang — §0.3.4)
 ├── /diagnostics           → chẩn đoán 12 bước (§21.1)
-├── /admin                 → quản trị (chỉ role admin)
-│     ├── /admin/users
-│     ├── /admin/sessions
-│     ├── /admin/audit
-│     ├── /admin/policy
-│     └── /admin/server
 ├── /help                  → trợ giúp + phím tắt + khắc phục sự cố
 ├── /403 · /404 · /offline → trang lỗi (luôn có 1 hành động)
 └── /s/new?wid=..&mode=..  → deep link tạo phiên (sau khi login)
@@ -1866,13 +1917,13 @@ Mọi trạng thái phải có: **câu giải thích + 1 hành động chính + 
 - Trình duyệt Back trong phiên = **rời phiên** (cần xác nhận sau khi đã điều khiển >5 s; dưới 5 s thì thoát ngay để tránh ma sát).
 - Không dùng SPA router phức tạp: mỗi trang là 1 HTML nhỏ, chia sẻ 1 module JS. Đơn giản hơn, back/forward hoạt động tự nhiên.
 
-### 22.3 Phân quyền theo vai
-| Vai | Thấy gì |
+### 22.3 Không có phân quyền
+Đã cắt role/admin/viewer (§0.3.1 #4). Có **2 loại người dùng** thôi:
+
+| Ai | Thấy gì |
 |---|---|
-| `admin` | tất cả + `/admin` + mọi phiên (kể cả của người khác) |
-| `user` | dashboard của mình, phiên của mình, cài đặt của mình |
-| `viewer` | chỉ xem; không nút điều khiển; ribbon "Chỉ xem" |
-| link tạm (§21.7) | **duy nhất** 1 phiên được chia sẻ; không có dashboard, không có avatar, không cài đặt; hết hạn → trang "Link đã hết hạn" |
+| **bạn** (đăng nhập bằng mật khẩu) | mọi thứ: dashboard, phiên, cài đặt |
+| **người nhận link xem tạm** (§21.6) | **duy nhất** 1 phiên, view-only, không dashboard, không cài đặt; hết hạn ⇒ "Link đã hết hạn" |
 
 ---
 
@@ -1966,7 +2017,7 @@ Mọi trạng thái phải có: **câu giải thích + 1 hành động chính + 
 │   │ Mật khẩu                      👁   │     │
 │   └────────────────────────────────────┘     │
 │   ┌────────────────────────────────────┐     │
-│   │ Mã 2 lớp (nếu đã bật)              │     │
+│   └────────────────────────────────────┘     │
 │   └────────────────────────────────────┘     │
 │                                              │
 │   [        Đăng nhập        ]                │
@@ -1978,7 +2029,7 @@ Mọi trạng thái phải có: **câu giải thích + 1 hành động chính + 
 - `Enter` submit; `autocomplete="username"/"current-password"`; `autofocus` vào username.
 - Sai: thông báo dưới nút, **không** rung/đỏ cả form; đếm số lần còn lại.
 - Khoá: thay nút bằng đếm ngược `Thử lại sau 14:32` (đếm realtime).
-- TOTP: chỉ hiện ô khi server báo user có TOTP; 6 số, tự chuyển focus.
+- Không TOTP (§0.3.1 #4): 1 tài khoản, mật khẩu + lockout là đủ.
 - Trạng thái: `idle · submitting (nút có spinner, disable) · error · locked`.
 - Không có "quên mật khẩu" (không có email) → link "Cần trợ giúp?" mở `/help#reset`.
 
@@ -1989,13 +2040,13 @@ Mọi trạng thái phải có: **câu giải thích + 1 hành động chính + 
 ├───────────────────────────────────────────────────────────────────────────┤
 │  ⚠ Chưa cài dây âm thanh ảo — phiên sẽ không có tiếng.  [Cài ngay]  [×]   │
 ├───────────────────────────────────────────────────────────────────────────┤
-│  PHIÊN ĐANG MỞ                                              (2)            │
-│  ┌────────────────────┐  ┌────────────────────┐                           │
-│  │ [thumbnail]        │  │ [thumbnail]        │                           │
-│  │ Chrome — Tin tức   │  │ VS Code — app.ts   │                           │
-│  │ 12:04 · HVNC · 🔊  │  │ 3:11 · VNC · 🔇    │                           │
-│  │ [Tiếp tục] [Kết…]  │  │ [Tiếp tục] [Kết…]  │                           │
-│  └────────────────────┘  └────────────────────┘                           │
+│  PHIÊN ĐANG MỞ                                              (1)            │
+│  ┌────────────────────┐                                                   │
+│  │ [thumbnail]        │   ← chỉ 1 phiên/lúc (§42.2). Tab thứ 2 sẽ thấy     │
+│  │ Chrome — Tin tức   │     "Tiếp tục ở tab này".                          │
+│  │ 12:04 · HVNC · 🔊  │                                                   │
+│  │ [Tiếp tục] [Kết…]  │                                                   │
+│  └────────────────────┘                                                   │
 ├───────────────────────────────────────────────────────────────────────────┤
 │  CỬA SỔ TRÊN MÁY                                        [⟳ 5s ▾]  [🔍 …]  │
 │  Sắp xếp: Gần đây ▾   Lọc: Tất cả ▾                                       │
@@ -2020,6 +2071,7 @@ Mọi trạng thái phải có: **câu giải thích + 1 hành động chính + 
 5. **Gần đây**: 5 mục, cho lần sau bấm nhanh.
 
 **Card cửa sổ — các trạng thái:**
+
 | Trạng thái | Hình | Hành động |
 |---|---|---|
 | Bình thường | thumbnail hoặc icon, tên cửa sổ, tên exe | hover → nút `Điều khiển` + `Chỉ xem` |
@@ -2065,6 +2117,7 @@ Mọi trạng thái phải có: **câu giải thích + 1 hành động chính + 
 └───────────────────────────────────────────────────────────────────────────┘
 ```
 **Vùng:**
+
 | Vùng | Cao | Nội dung | Ẩn khi |
 |---|---|---|---|
 | Top bar | 48 | `←` · tên cửa sổ · mode/audio/timer · chất lượng kết nối · `⚙ ⛶ 🛑 ⋯` | fullscreen + không hover 3 s |
@@ -2121,18 +2174,19 @@ Nâng cao ▸
 - Thay đổi áp dụng ngay; toast "Đã đổi chất lượng — [Hoàn tác]".
 - Không có nút "Lưu"/"Huỷ"; đóng bằng `Esc`/`×`/chạm ngoài.
 
-### 24.6 `/settings` — 5 tab
-| Tab | Nội dung |
-|---|---|
-| **Chung** | ngôn ngữ, theme (Sáng/Tối/Hệ thống), cỡ chữ UI, mật độ |
-| **Điều khiển** | chất lượng mặc định, hiển thị mặc định, con trỏ, cách chạm, phím tắt xem |
-| **Âm thanh** | mặc định (hỏi mỗi phiên), âm lượng, nhớ theo app |
-| **Thông báo** | mức (tất cả / quan trọng / tắt) |
-| **Bảo mật** | đổi mật khẩu, TOTP, phiên đăng nhập (thiết bị), đăng xuất mọi nơi |
-- Layout: nav trái 200 px (mobile: segmented trên cùng) + nội dung 1 cột tối đa 640 px.
-- Mọi thay đổi lưu ngay; không có nút Lưu.
-- Mỗi mục có nút `↺` khi khác mặc định.
-- Cuối trang: `Xuất cấu hình` / `Nhập` (§20.13).
+### 24.6 `/settings` — **1 trang, 12 mục** (thay 5 tab)
+60 mục trong 5 tab là dành cho nhiều người có khẩu vị khác nhau. Bạn cần 12.
+
+| Nhóm | Mục (mặc định in đậm) | Kiểu |
+|---|---|---|
+| **Hình** | Chất lượng (**Tự động** / Nét / Mượt) · Tỉ lệ khung (**Vừa**) · Hiển thị (**Dùng thật** / Vừa mắt / Chữ to / Nét) | 3 segmented |
+| **Điều khiển** | Con trỏ (**Tự động** / Cục bộ / Theo video) · Cách chạm (**2 ngón cuộn**) · Bàn phím (**Ý định** / Thô) | 3 segmented |
+| **Tiếng** | Mặc định (**Hỏi mỗi phiên** / Bật / Tắt) · Nhớ theo app (**Bật**) | 2 toggle |
+| **Chung** | Ngôn ngữ (**Tiếng Việt**) · Theme (**Hệ thống**) · Thông báo (**Quan trọng**) | 3 select |
+
+- Mọi thay đổi **lưu ngay**, không có nút Lưu; mỗi mục có `↺` khi khác mặc định.
+- Cuối trang: `Xuất` / `Nhập` cấu hình (§20.13) + `⬇ Nâng cao` (§20.14) chứa 8 mục ít dùng (bitrate trần, keyframe, cursor size max, MMCSS, debug barcode…).
+- Không có tab "Bảo mật" (không TOTP, không phiên thiết bị) — chỉ 1 dòng "Đổi mật khẩu".
 
 ### 24.7 `/diagnostics`
 ```
@@ -2150,23 +2204,11 @@ Kiểm tra máy chủ                                    [Chạy lại]
 - Mỗi dòng: icon trạng thái + tên **không thuật ngữ** + kết quả; fail thì có hành động ngay trên dòng.
 - Chạy song song, mỗi kiểm tra tự timeout 3 s; tổng ≤ 6 s.
 - Đang chạy: skeleton + dòng nhấp nháy, không spinner toàn trang.
-- Nút "Sao chép báo cáo" → JSON đã lọc (§21.10), có hộp xem trước.
+- Nút "Sao chép báo cáo" → JSON của 8 kiểm tra (không chứa token/mật khẩu), dán vào chat cho chính bạn khi cần nhớ lại.
 
-### 24.8 `/admin` — quản trị
-```
-┌ Tổng quan ─┬ Người dùng ┬ Phiên ┬ Nhật ký ┬ Chính sách ┬ Máy chủ ┐
-```
-| Mục | Nội dung chính |
-|---|---|
-| **Tổng quan** | số phiên, CPU/GPU/RAM, băng thông ra, lỗi 24 h, cảnh báo |
-| **Người dùng** | danh sách, thêm/sửa/xoá, đổi vai, buộc đổi mật khẩu, reset TOTP |
-| **Phiên** | bảng: ai, cửa sổ, mode, bắt đầu, băng thông, nút **Kết thúc** (xác nhận gõ tên) |
-| **Nhật ký** | lọc theo loại/người/thời gian, phân trang, xuất CSV. **Không** có nội dung phiên |
-| **Chính sách** | trần chất lượng, allowlist app, mức che giấu (S0/S1/S2), bật/tắt clipboard/audio, số phiên tối đa |
-| **Máy chủ** | version, cập nhật, cert (hết hạn), driver, cổng, restart app, xuất gói chẩn đoán |
-- Bảng dùng **ảo hoá** khi >200 dòng; sắp xếp mọi cột; tìm kiếm server-side.
-- Hành động phá huỷ: hộp xác nhận **gõ tên** (người dùng/kết thúc phiên người khác).
-- Mobile: bảng → danh sách card; ẩn cột phụ.
+### 24.8 Không có `/admin`
+Đã cắt (§0.3.1 #4): không multi-user, không role, không policy, không bảng audit phân trang.
+Thay bằng: **`/diagnostics`** (8 kiểm tra) + **1 file log** (§21.9). Các công tắc vận hành (âm thanh, che giấu, preset mặc định, link xem tạm) nằm trong `/settings`.
 
 ### 24.9 Tray app (phía server)
 ```
@@ -2186,22 +2228,21 @@ Thoát
 ```
 - Icon đổi: bình thường (xám) · có phiên (xanh) · có cảnh báo (vàng).
 - Tooltip: `RD — 1 phiên đang điều khiển (Chrome, 12 phút)`.
-- `Dừng điều khiển ngay` = **không** cần quyền người điều khiển (§21.8).
+- `Dừng điều khiển ngay` = **không** cần quyền người điều khiển (§21.7).
 - Hotkey khẩn cấp toàn cục `Ctrl+Alt+Shift+X` → dừng mọi phiên + toast.
 
-### 24.10 Wizard cài đặt (lần đầu, 5 bước, ≤ 60 s)
+### 24.10 `/setup` — 4 bước, chỉ hiện khi chưa có mật khẩu
 ```
-1/5  Mật khẩu quản trị      ▸ tạo mật khẩu (bắt buộc đổi nếu là mặc định)
-2/5  Cách truy cập          ▸ [Trong mạng LAN] [Qua VPN (Tailscale…)] [Internet]
-3/5  Kiểm tra môi trường    ▸ 5 dòng ✓/✗ + [Cài những gì còn thiếu]
-4/5  Mặc định               ▸ che giấu (S1) · âm thanh (hỏi mỗi phiên) · chất lượng (tự động)
-5/5  Xong                   ▸ link truy cập + [Mở bảng điều khiển] + QR để mở trên điện thoại
+1/4  Mật khẩu        ▸ tạo mật khẩu (bắt buộc, không cho bỏ trống)
+2/4  Mạng            ▸ [Trong LAN] [Qua Tailscale]     → tự điền listen/cert/STUN
+3/4  Kiểm tra        ▸ 5 dòng ✓/✗: display ảo · cable âm thanh · encoder · cổng 443 · cert
+4/4  Xong            ▸ link truy cập + QR để mở trên điện thoại
 ```
-- Thanh tiến trình 5 chấm; mỗi bước **1 quyết định**, không có bước nào bắt đọc.
-- Bỏ qua được bước 4 (dùng mặc định). Không bỏ qua 1 và 3.
-- Nếu thiếu driver → bước 3 có nút cài; nếu fail → vẫn cho "Tiếp tục không có màn hình ảo" (chế độ VNC-only).
+- 4 bước (không phải 5): bước "chính sách/che giấu" đã bỏ — đó là 2 công tắc trong `/settings`.
+- Bỏ qua được bước 2 (mặc định LAN). **Không** bỏ qua 1 và 3.
+- Bước 3 thiếu driver/cable ⇒ có nút cài (mở `winget`) và vẫn cho "Tiếp tục không có màn hình ảo" (⇒ VNC-only, §26.8).
 
-### 24.11 Trang lỗi (luôn có 1 hành động)
+### 24.11 Trang lỗi
 | Mã | Nội dung | Hành động |
 |---|---|---|
 | 403 | "Bạn không có quyền xem mục này." | Về trang chính · Đăng nhập tài khoản khác |
@@ -2312,50 +2353,30 @@ Thoát
 
 > Đây là kết quả rà **toàn bộ** spec theo 20 trục. Mỗi mục đều có quyết định, không phải "để sau".
 
-### 26.1 Mô hình dữ liệu (thiếu hoàn toàn)
-v3.2 chưa nói **lưu cái gì, ở đâu, bằng gì**. Quyết định: **SQLite** cho dữ liệu có truy vấn, **JSON** cho cấu hình tĩnh, **không** dùng ORM.
+### 26.1 Mô hình dữ liệu — **2 file JSON + 1 log** (thay 7 bảng SQLite)
+v3.3 dựng 7 bảng SQLite cho một sản phẩm nhiều người dùng. Với **1 người** (§0.3), mỗi bảng đó là một nguồn lỗi không đổi lại được gì:
 
-```sql
--- users
-id INTEGER PK, username TEXT UNIQUE, pwd_hash TEXT (argon2id), role TEXT,
-totp_secret BLOB (DPAPI), must_change_pwd INTEGER, disabled INTEGER,
-created_at INTEGER, last_login_at INTEGER, failed_count INTEGER, locked_until INTEGER
+| Bảng cũ | Bản cá nhân dùng gì |
+|---|---|
+| `users`, `sessions_auth` | **1 dòng trong `config.json`**: `{user, pwd_hash(argon2id), refresh_hash, failed_count, locked_until}` |
+| `prefs` | chính `config.json` (§9.11) — 1 người thì "prefs theo user/thiết bị/app" là 3 tầng không cần |
+| `sessions` | **`state.json`** (đã có, §9.2.4 — phục hồi sau crash). Phiên đang chạy nằm trong RAM |
+| `audit` | **`rd.log`**: 1 dòng JSON/sự kiện, xoay 5×10 MB |
+| `shares` | 1 object trong `config.json` (tối đa vài link, tự dọn khi hết hạn) |
+| `windows_recent` | 10 phần tử trong `config.json` (để dashboard gợi ý cửa sổ hay dùng) |
+| `schema_version` | 1 số trong `config.json` + tự copy `.bak` trước khi migrate (§21.5) |
 
--- sessions_auth  (refresh token, rotate)
-id TEXT PK, user_id INT, token_hash TEXT UNIQUE, device TEXT, ip TEXT,
-created_at INT, last_used_at INT, expires_at INT, revoked_at INT, replaced_by TEXT
-
--- sessions  (phiên điều khiển; một phần ở RAM, phần bền vững ở đây)
-sid TEXT PK, user_id INT, wid TEXT, app TEXT, mode TEXT, audio INT,
-started_at INT, ended_at INT, end_reason TEXT, bytes_out INT, cursor_mode TEXT
-
--- prefs  (sở thích theo user / theo thiết bị / theo app)
-user_id INT, scope TEXT ('user'|'device'|'app'), key TEXT, value TEXT,
-PRIMARY KEY(user_id, scope, key)
-
--- audit
-id INTEGER PK, ts INT, user_id INT, action TEXT, target TEXT, ip TEXT,
-result TEXT, detail TEXT (JSON, đã lọc), corr TEXT
--- INDEX (ts), (user_id, ts), (action, ts)
-
--- shares  (link xem tạm)
-token_hash TEXT PK, sid TEXT, created_by INT, created_at INT,
-expires_at INT, view_only INT, used_count INT, revoked_at INT
-
--- windows_recent
-user_id INT, wid TEXT, app TEXT, title TEXT, last_at INT
-```
-**Quy tắc:**
-- `-- WAL`, `synchronous=NORMAL`; ghi audit theo lô 200 ms (không fsync mỗi dòng — nhưng **không mất** quá 200 ms khi crash).
-- **Không** lưu: nội dung clipboard, keystroke, frame, mật khẩu dạng thô, token dạng thô (chỉ hash).
-- `state.json` (§9.2.4) tách riêng: nó là **phục hồi sau crash**, không phải DB.
-- Migration: bảng `schema_version` + script một chiều, **backup file .db trước khi migrate**.
-- Vacuum/`PRAGMA optimize` mỗi ngày; audit cũ hơn `retention_days` xoá theo lô 1000.
+**Quy tắc (ít hơn hẳn, và đúng hơn):**
+- Ghi `config.json` **nguyên tử**: ghi `.tmp` → `fsync` → `rename`. Không có WAL, không có transaction, không có tranh chấp writer ⇒ **toàn bộ nhánh #6 (dữ liệu & migration) không còn lý do tồn tại**.
+- `state.json` chỉ để phục hồi sau crash; xoá sau khi restore thành công.
+- **Không** lưu: clipboard, keystroke, frame, token dạng thô (chỉ hash), mật khẩu dạng thô.
+- Log không chứa nội dung phiên (không tiêu đề cửa sổ đầy đủ? — **có** tiêu đề, vì đây là máy của bạn và nó giúp tìm lỗi; chỉ không ghi nội dung *bên trong* app).
 
 ### 26.2 Quy ước API & bảng mã lỗi (thiếu)
 **Quy ước:** `/api/v1/...`; JSON UTF-8; mọi thời gian = epoch ms UTC; mọi id là string; phân trang `?cursor=&limit=` (limit ≤ 200); lọc theo `?from=&to=&q=`; `ETag` cho GET tĩnh; mutation **idempotent** qua header `Idempotency-Key` (bắt buộc cho tạo phiên).
 
 **Bảng mã lỗi** — dùng chung cho REST + WS, client dịch sang câu người dùng được:
+
 | `error_code` | HTTP | Câu cho người dùng | Hành động UI |
 |---|---|---|---|
 | `auth.bad_credential` | 401 | Sai tên hoặc mật khẩu | thử lại |
@@ -2458,23 +2479,20 @@ rd.exe version
 | **Màn hình không có (headless)** | vẫn cần desktop ảo | hoạt động (VDD không cần màn hình thật) |
 | **Laptop gập nắp** | màn hình tắt, vẫn chạy | display ảo không bị ảnh hưởng; `ES_DISPLAY_REQUIRED` giữ |
 
-### 26.9 Ma trận hỗ trợ & chính sách phiên bản (thiếu)
-| Hạng mục | Hỗ trợ | Ghi chú |
-|---|---|---|
-| Server | Win10 2004+, Win11 22H2+ | test cả 2 nhánh |
-| Client | Chrome/Edge ≥ 110, Firefox ≥ 115 ESR, Safari ≥ 16.4 | dưới mức → trang "chưa hỗ trợ" |
-| Mobile | Chrome Android ≥ 110, Safari iOS ≥ 16.4 | |
-| Màn hình | ≥ 320 px rộng, ≥ 480 px cao | |
-| Mạng | ≥ 1 Mbps cho preset Low | |
-| RAM client | ≥ 2 GB (Safari iOS cần ít hơn) | |
-| Đa ngôn ngữ | vi, en | chuẩn bị thêm không cần đổi code |
-| **Chính sách** | hỗ trợ 2 phiên bản lớn gần nhất; bản cũ hơn → cảnh báo + `server.version` 426 | |
-- Bảng này hiện trong `/help` và trong gói chẩn đoán.
+### 26.9 Cái gì cần chạy được (không phải "ma trận hỗ trợ")
+Đã cắt ma trận OS × browser × RAM và "chính sách 2 phiên bản" (§0.3.1 #9). Chỉ cần:
 
-### 26.10 Không có phụ thuộc bên thứ ba (quyết định, chưa nêu)
+| Hạng mục | |
+|---|---|
+| Server | chính máy bạn — Win10 2004+ hoặc Win11. **Không** hỗ trợ phiên bản khác |
+| Client | trình duyệt bạn đang dùng (Chrome/Edge 110+, Safari 16.4+) + **1 trình duyệt trên điện thoại của bạn** |
+| Nếu trình duyệt cũ hơn | trang "chưa hỗ trợ" — bạn tự update, không cần hỗ trợ ngược |
+| Phiên bản app | 1 bản duy nhất. Không có `min_client`, không có tương thích 2 phiên bản |
+
+### 26.10 Không có phụ thuộc
 - **Không** CDN, **không** Google Fonts, **không** analytics, **không** telemetry mặc định, **không** Sentry, **không** Web Push, **không** third-party script.
 - Lý do: (a) không rò IP/usage của người dùng ra ngoài; (b) chạy được trong mạng kín; (c) CSP chặt `default-src 'self'` không cần ngoại lệ.
-- Telemetry/crash report là **opt-in** rõ ràng, mặc định **tắt**, và chỉ gửi file người dùng đã xem trước (§21.10).
+- Không có telemetry, không crash report, không gửi gì ra ngoài. Gói chẩn đoán là **file bạn tự lưu**, không upload (§21.9).
 - Trang offline (`/offline`) là HTML tĩnh, không service worker (tránh phức tạp cache).
 
 ### 26.11 Hiệu năng phía client (chưa có ngân sách)
@@ -2524,28 +2542,25 @@ rd.exe version
 
 ### 26.15 Đồng hồ, múi giờ, NTP (thiếu)
 - Mọi thời gian server = epoch ms UTC. Client hiển thị theo múi giờ **của client**, có nhãn khi khác server.
-- JWT: skew ±60 s; TOTP: ±1 bước.
+- JWT: skew ±60 s. Không TOTP (§0.3.1 #4).
 - Dashboard hiện giờ **của máy chủ** ở tooltip ("12:04 giờ máy chủ").
-- Nếu lệch > 5 phút so với NTP (nếu kiểm tra được) → banner admin "đồng hồ máy chủ lệch, ảnh hưởng đăng nhập 2 lớp".
+- Nếu lệch > 5 phút so với NTP → dòng cảnh báo ở `/diagnostics` "đồng hồ máy lệch (ảnh hưởng JWT)".
 - Timeout/idle tính bằng **clock đơn điệu** (monotonic), không dùng wall clock (tránh bug khi đổi giờ/NTP nhảy).
 
-### 26.16 Lưu trữ & xoá dữ liệu (thiếu)
-| Dữ liệu | Giữ | Xoá |
+### 26.16 Lưu trữ (bản cá nhân: không có DB, không có retention job)
+| Dữ liệu | Ở đâu | Xoá thế nào |
 |---|---|---|
-| Audit | 90 ngày (mặc định, cấu hình) | tự động theo lô |
-| Log app | 5 × 10 MB | xoay vòng |
-| Ảnh clipboard tạm | 0 (không lưu đĩa) | ngay |
-| Thumbnail cache | 5 s (RAM) | — |
-| Phiên đã kết thúc | metadata 90 ngày | tự động |
-| Link chia sẻ | theo hạn + 7 ngày sau | tự động |
-| Gói chẩn đoán | người dùng tải, **server không lưu** | — |
-| Crash dump | **tắt mặc định**; nếu bật: 7 ngày, local, không upload | tự động |
-- Có nút admin **"Xoá dữ liệu của người dùng X"** (GDPR-style) — xoá prefs + audit liên quan, giữ lại dòng audit tối thiểu về việc xoá.
+| Cấu hình | `config.json` | bạn sửa tay |
+| Trạng thái phục hồi sau crash | `state.json` | tự xoá sau khi restore thành công |
+| Log | `rd.log`, 5×10 MB | xoay vòng tự động; muốn sạch thì xoá file |
+| Clipboard / frame / keystroke | **không lưu ở đâu cả** | — |
+> Đã cắt khỏi §26.1 (bảng SQLite 7 bảng): `users`/`sessions_auth`/`audit`/`shares`/`windows_recent` không cần khi chỉ có 1 người. Cần đúng **2 file** + 1 log. Đây là điều làm bản cá nhân **ít lỗi hơn** bản sản phẩm: không có migration DB, không có WAL, không có tranh chấp writer (đó là toàn bộ nhánh #6 — **không còn cần**).
 
-### 26.17 Ký số, SmartScreen, AV (thiếu)
-- Binary + driver **nên** ký (EV cert nếu có) — không có thì SmartScreen sẽ cảnh báo "Unknown publisher"; ghi trong `/help` cách bỏ qua một cách có hiểu biết.
-- Hướng dẫn whitelist Defender (folder + process) khi cần — **không** tự tắt AV.
-- Không có "chống phát hiện" dưới mọi hình thức (§21.14).
+### 26.17 Ký số, SmartScreen — **không áp dụng**
+Đã cắt (§0.3.1 #1): bạn dùng VDD **bản phát hành đã ký sẵn** và binary do chính bạn build trên máy mình ⇒ không có SmartScreen, không có Authenticode, không có EV cert.
+Chỉ còn 1 việc: khi Defender cảnh báo, thêm **exclusion cho thư mục app** (§21.11). Không "chống phát hiện" dưới mọi hình thức (§21.13).
+- Hướng dẫn whitelist Defender (folder + process) — **không** tự tắt AV.
+- Không có "chống phát hiện" dưới mọi hình thức (§21.13).
 
 ### 26.18 Lỗi đặc thù trình duyệt (danh sách kiểm)
 | Browser | Lỗi đã biết | Xử lý |
@@ -3069,6 +3084,7 @@ gesture/ui  →  CommandBus (client)  →  SessionController (1 instance)
    → ③ encoder map đọc (read-only)  → ④ size ≤2 MB: encoder giữ ref tới khi xong
    → ⑤ release buffer về pool  → ⑥ ReleaseFrame (đúng 1 lần)
 ```
+
 | Mắt xích | Ai sở hữu | Luật |
 |---|---|---|
 | ①② | capture thread | **phải** `ReleaseFrame` **sau** khi encoder không còn đọc texture. Nếu release sớm → NVIDIA đôi khi trả **NO_ACCESS** hoặc frame rách |
@@ -3307,6 +3323,7 @@ Không phải mất gói nào cũng là nghẽn. Phân loại bằng cách so **
         │ ×0.7     │
         └──────────┘
 ```
+
 | Trạng thái | Điều kiện vào | Hành vi | Ra |
 |---|---|---|---|
 | **STARTUP** | bắt đầu phiên / sau đổi mạng | nhân **1.5× mỗi 200 ms** cho tới khi thấy trễ tăng hoặc mất | trễ tăng → DRAIN |
@@ -3455,6 +3472,7 @@ fps       : 60 → 45 → 30 → 20 → 15
 | Burst (chuyển mạng) | nhảy 200 ms | — | 20% trong 1 s | — | không reset về min, hồi phục ≤3 s |
 | Suy giảm dần | — | — | — | 8→1 Mbps trong 20 s | giảm bậc dần, **không nhảy 3 bậc** |
 **Chỉ số chấp nhận (fail CI nếu vượt):**
+
 | Chỉ số | Ngưỡng |
 |---|---|
 | Thời gian phát hiện nghẽn | ≤ 400 ms |
@@ -3720,6 +3738,7 @@ Chữ trên màn hình là **chi tiết tần số cao với biên độ thấp*
 
 ### 38.4 Chọn bậc thang để **tránh tỉ lệ lẻ** (sửa §36.9)
 Bảng §36.9 có các bậc 1728×972, 1536×864 — đó là tỉ lệ **0.9** và **0.8**, đều là **tỉ lệ lẻ** ⇒ mờ hơn cần thiết. Thay bằng thang **ưu tiên tỉ lệ nguyên/đơn giản**:
+
 | Bậc | Kích thước | Tỉ lệ từ 1080p | Loại | Ghi chú |
 |---|---|---|---|---|
 | 0 | 1920×1080 | 1:1 | — | |
@@ -3757,6 +3776,7 @@ edge_density = % pixel có |grad| > ngưỡng
 text_score   = edge_density cao  +  chuyển động thấp–trung bình
 motion_score = trung bình |frame_i - frame_i-1| trên 480×270
 ```
+
 | `text_score` | `motion_score` | Loại | Ưu tiên giữ | Hành động |
 |---|---|---|---|---|
 | cao | thấp | **đọc tài liệu / code / terminal** | **resolution** | giảm fps 60→30, **không** hạ res; bật sharpen nhẹ |
@@ -3785,6 +3805,7 @@ Không thể chỉ nhìn rồi nói "ổn". Dùng **OCR** làm thước đo:
 3. Lưu frame ở client (hoặc decode lại) → Tesseract OCR → so với ground truth
 4. character_error_rate (CER) = lỗi / tổng ký tự
 ```
+
 | Cấu hình | CER mục tiêu (8pt, sans, nền sáng) |
 |---|---|
 | 1080p, 8 Mbps, Nét | **≤ 1%** |
@@ -3884,6 +3905,7 @@ Y_lim  = (16/255) + (219/255)·( 0.2126 0.7152 0.0722)·RGB
 U_lim  = (128/255) + (224/255)·(−0.1146 −0.3854  0.5000)·RGB
 V_lim  = (128/255) + (224/255)·( 0.5000 −0.4542 −0.0458)·RGB
 ```
+
 | Nguồn | Dùng matrix | Dùng range |
 |---|---|---|
 | Desktop SDR, monitor HDTV (≥720p) | **BT.709** | full → **limited** |
@@ -3980,6 +4002,7 @@ void CS(uint3 id : SV_DispatchThreadID) {
 
 ### 39.13 Kiểm chứng màu (bắt buộc trong CI)
 **Bộ test pattern** render trên desktop ảo rồi chụp lại qua pipeline:
+
 | # | Pattern | Kiểm tra | Ngưỡng |
 |---|---|---|---|
 | 1 | Grey ramp 0→255, 256 bậc | banding? black/white level đúng? | đen = **16±1**, trắng = **235±1** (limited); không có bậc thang nhìn thấy |
@@ -4104,6 +4127,7 @@ Sau khi đổi routing, **không tin** kết quả trả về. Kiểm chứng b�
 
 ### 40.8 Device change notification — không thể thiếu
 `IMMNotificationClient` trên `IMMDeviceEnumerator`:
+
 | Callback | Dùng cho |
 |---|---|
 | `OnDefaultDeviceChanged` | phát hiện người dùng đổi default giữa phiên (⇒ nếu đang mức B, **giành lại**? **KHÔNG** — ghi nhận + cảnh báo; nếu giành lại sẽ đánh nhau với người dùng) |
@@ -4152,8 +4176,8 @@ Sau khi đổi routing, **không tin** kết quả trả về. Kiểm chứng b�
 ### 40.11 Nhiều phiên & thiếu cable
 | Tình huống | Xử lý |
 |---|---|
-| 3 phiên, 3 cable (CABLE-A/B/C) | mỗi phiên 1 cable ⇒ cách ly thật |
-| 3 phiên, 1 cable | **trộn** ⇒ ghi rõ trong UI: "âm thanh có thể lẫn giữa các phiên"; Tier 2 mới hỗ trợ tách |
+| **1 phiên (bản cá nhân)** | 1 cable là đủ. Không có trường hợp trộn vì chỉ 1 phiên được sống (§42.2) |
+| (nếu sau này cần) 2 cable | mỗi phiên 1 cable ⇒ cách ly thật — nhưng đừng làm khi chưa cần |
 | Không có cable | mức C (nghe như VNC) hoặc video-only (§9.6.4) |
 | Cable bị xoá | `audio_unavailable` + retry 5 s; >60 s ⇒ tắt audio, **giữ phiên** |
 | Đổi cable giữa phiên (mức B) | coi như đổi default ⇒ `on_device_state`; nếu cable mới có → reinit |
@@ -4185,7 +4209,7 @@ Sau khi đổi routing, **không tin** kết quả trả về. Kiểm chứng b�
 | 9 | Người dùng đổi default giữa phiên (mức B) | **không** giành lại, có toast, phiên vẫn chạy |
 | 10 | Chữ "ế" trong audio? (không áp dụng) | — |
 | 11 | Restore sau uninstall/crash | default device đúng như ban đầu (**bắt buộc**, §11.4) |
-| 12 | 3 phiên 3 cable | mỗi stream chỉ có tiếng app của nó (kiểm bằng nội dung khác nhau: 3 tông) |
+| 12 | cable bị xoá giữa phiên | phiên báo `audio_device_missing`, hình **không** dừng; cắm lại ⇒ tự phục hồi (§40.8) |
 
 ### 40.14 Metrics trong stats
 `audio_kbps`, `audio_state` (on/off), `audio_route` (app/machine/vnc), `routing_verified` (bool!), `av_skew_ms`, `audio_buf_ms`, `asrc_ratio`, `dropped_samples`, `device` (tên + id hash).
@@ -4246,6 +4270,8 @@ Sau khi đổi routing, **không tin** kết quả trả về. Kiểm chứng b�
                     │                                              │
               người dùng đăng nhập                          người ngồi máy (P6) + admin (P7)
 ```
+> **Áp dụng cho bản cá nhân (v3.15):** threat model này **giữ nguyên**. Lý do rất cụ thể: "client" không chỉ là bạn — nó là **bất kỳ ai trong LAN** mở được URL đó. Thiết kế "server không tin client" là thứ duy nhất khiến việc chỉ có 1 mật khẩu vẫn an toàn (§0.3.3 #1). Cái **đã bỏ** chỉ là phần nhiều người/quyền hạn (role, policy, audit export).
+
 **Ba hệ quả lật ngược so với spec cũ:**
 1. **Client không được tin** ⇒ agent phải **kiểm tra lại mọi thứ** client gửi: toạ độ (clamp), phím (validate UTF-16), `sid` (thuộc user), lệnh (đúng quyền), tần suất (rate limit). §10 có nói nhưng như "biện pháp"; ở đây nó là **luật kiến trúc**.
 2. **Agent được tin về *hành vi*, không được tin về *dữ liệu*** ⇒ agent được phép `SendInput` (vì đó là chức năng), nhưng **không** được phép tự quyết định vượt quyền của user (ví dụ: agent chạy elevated thì phiên thường **không** được tự động hưởng quyền đó — phải có cờ §9.9b).
@@ -4266,7 +4292,7 @@ Sau khi đổi routing, **không tin** kết quả trả về. Kiểm chứng b�
 | T10 | Agent: state file / khoá | đọc khoá JWT ⇒ giả token | P7 | toàn quyền | khoá trong `ProgramData` ACL + **DPAPI**, state file chỉ có vị trí cửa sổ (không bí mật), không lưu secret trong log | P7 = đã mất máy |
 | T11 | Agent: log | rò tiêu đề cửa sổ, IP, clipboard | P6 | suy ra hành vi | **không log** tiêu đề/clipboard mặc định; redaction bắt buộc (§26.3); log rotate; audit 90 ngày | P6 đọc được metadata phiên |
 | T12 | Agent: driver/update | driver giả, update giả | P8 | toàn quyền | ký số binary + driver; **verify signature trước khi chạy**; update qua HTTPS + signature; pin hash | P8 kiểm soát nhà cung cấp cert |
-| T13 | Người ngồi máy (P6) | chặn/kết thúc phiên, xem log | P6 | mất phiên (nhưng **đúng thiết kế** — §21.8) | **không** chống: người ngồi máy **luôn** có quyền dừng | chấp nhận (đây là tính năng) |
+| T13 | Người ngồi máy (P6) | chặn/kết thúc phiên, xem log | P6 | mất phiên (nhưng **đúng thiết kế** — §21.7) | **không** chống: người ngồi máy **luôn** có quyền dừng | chấp nhận (đây là tính năng) |
 | T14 | Người ngồi máy: `SetWindowDisplayAffinity` | đặt `WDA_EXCLUDEFROMCAPTURE` lên app của họ ⇒ ta không capture được | P6 | phá phiên (DoS) | phát hiện + `412 capture_blocked` + thông báo | chấp nhận (họ có quyền trên máy của họ) |
 | T15 | Client: clipboard (T2) | dán nội dung độc vào app (macro, công thức Excel, URL) | P3/P5 | thao tác ngoài ý muốn | chỉ dán khi **bấm nút**, có xem trước, không auto-sync; không dán file/HTML | người dùng vẫn có thể tự dán |
 | T16 | Agent: `SendInput` vào app elevated | leo quyền qua UIPI | P2 (nếu agent elevated) | điều khiển app admin | agent elevated **chỉ khi** người dùng chọn (§9.9b); phiên thường không hưởng | nếu bật elevated, đây là đánh đổi đã biết |
@@ -4301,25 +4327,25 @@ Sau khi đổi routing, **không tin** kết quả trả về. Kiểm chứng b�
 
 ### 41.7 Người ngồi máy (P6) — đối xử thế nào
 Đây là ranh giới **không rõ ràng nhất** và phải nói rõ:
+
 | Họ được phép | Không được phép | Ta xử lý |
 |---|---|---|
 | Dùng máy của họ, mở app, kéo cửa sổ | tắt agent, kill process (nếu không phải admin) | nếu họ tắt: phiên `closed`, client thấy lý do rõ, **không** tự khởi động lại trong 60 s (tôn trọng ý định) |
-| Dừng phiên bất kỳ lúc nào (§21.8) | đọc token | — |
+| Dừng phiên bất kỳ lúc nào (§21.7) | đọc token | — |
 | Đọc log của chính họ | đọc log của người dùng khác | log theo user, ACL |
 | Cài app hiển thị `WDA_EXCLUDEFROMCAPTURE` | — | `412 capture_blocked`, không cố vượt |
 | Đổi default audio device | — | không giành lại (§40.8) |
 **Nguyên tắc:** người ngồi máy có **quyền phủ quyết** với phiên, nhưng **không** có quyền xem bí mật của người điều khiển (token, mật khẩu). Hai chiều đều phải tôn trọng.
 
-### 41.8 Supply chain & cập nhật
+### 41.8 Supply chain — bản cá nhân (4 dòng thay vì 7)
+Đã cắt Authenticode/SBOM/signature gói update (§0.3.1 #1–2, #6). Còn lại thứ **thật sự** bảo vệ bạn:
+
 | Hạng mục | Yêu cầu |
 |---|---|
-| Binary | ký Authenticode; **verify chữ ký của chính mình** khi auto-update |
-| Driver (VDD) | chỉ dùng bản có ký của nhà cung cấp; ghi hash vào installer; không bundle bản tải động |
-| Update | HTTPS + **chữ ký riêng trên gói update** (không chỉ TLS) + version chống rollback (chống downgrade tấn công) |
-| GStreamer plugin | pin phiên bản **và hash**; không cho load plugin từ `GST_PLUGIN_PATH` tuỳ ý (agent tự set, không kế thừa env) |
-| Rust deps | `cargo-deny` + RustSec trong CI; **không** build script lạ |
-| Client assets | SRI cho mọi tài nguyên; **không** third-party (§26.10) |
-| SBOM | xuất mỗi release |
+| **Driver (VDD, cable)** | chỉ dùng **bản phát hành đã ký** (đã ký sẵn bởi nhà cung cấp); ghim version + hash vào `LICENSES.md`; **không** tự build/ký |
+| **GStreamer plugin** | ghim version + hash; app **tự set** `GST_PLUGIN_PATH`, **không** kế thừa env (một `GST_PLUGIN_PATH` độc = chạy code lạ trong process của bạn) |
+| **Rust deps** | `cargo deny check` (licence + RustSec) chạy tay trước mỗi lần build release — **không** build script lạ |
+| **Client assets** | không third-party, không CDN (CSP `default-src 'self'`) — §26.10 |
 
 ### 41.9 Rủi ro chấp nhận (ghi rõ, không giấu)
 | # | Rủi ro | Vì sao chấp nhận | Người dùng cần biết |
@@ -4330,7 +4356,7 @@ Sau khi đổi routing, **không tin** kết quả trả về. Kiểm chứng b�
 | R4 | Người ngồi máy tắt agent / chặn capture | quyền của họ | — |
 | R5 | VPN provider thấy metadata (P9) | chấp nhận; không log nội dung | — |
 | R6 | Cert tự ký bị người dùng bấm qua cảnh báo | giáo dục + hard-fail trong app | §41.6 |
-| R7 | EDR gắn cờ (S1/S2 + inject) | bản chất kỹ thuật | §21.12 |
+| R7 | Defender gắn cờ (HVNC + inject) | bản chất kỹ thuật | §21.11 |
 | R8 | App exclusive-mode audio không kiểm chứng được | giới hạn Windows | §40.7 |
 | R9 | Xem trộm trong giới hạn rate limit `GET /windows` (T18) | cần cho UI | chỉ chủ máy xem |
 
@@ -4350,7 +4376,7 @@ Sau khi đổi routing, **không tin** kết quả trả về. Kiểm chứng b�
 | 11 | Input không vượt biên | toạ độ ±2^31 ⇒ clamp, không lái chuột ra ngoài |
 | 12 | Log redaction | grep log sau 100 phiên ⇒ **0** tiêu đề cửa sổ, 0 token, 0 clipboard |
 | 13 | Update giả | gói update sai chữ ký ⇒ từ chối, không downgrade |
-| 14 | Quét động | chạy agent qua `Sysinternals` + 1 EDR để biết bị gắn cờ gì (§21.12) |
+| 14 | Bị gắn cờ | thêm exclusion + xem Defender history; **không** cố "vượt" (§21.11) |
 
 ### 41.11 Nhánh mới rẽ ra
 | Nhánh | Lĩnh vực | Vì sao từ §41 |
@@ -4364,7 +4390,9 @@ Sau khi đổi routing, **không tin** kết quả trả về. Kiểm chứng b�
 
 ---
 
-## 42. Multi-session: tài nguyên, cách ly, và một ràng buộc bị bỏ qua (nhánh #2 — lĩnh vực F)
+## 42. Một phiên tại một thời điểm — vì sao không thể nhiều hơn (nhánh #2 — lĩnh vực F, đã thu hẹp)
+
+> **Chương này đã thu hẹp ở v3.15.** v3.12 viết nó như tính năng "3 phiên song song"; §0.3.1 #5 cắt tính năng đó. Nhưng **§42.1 (ràng buộc 1 con trỏ / 1 focus) là kiến trúc của Win32 — nó vẫn đúng**, và nó là lý do bạn không thể mở 2 tab. Phần còn lại: cách **từ chối đúng** và cách **không mất dữ liệu** khi chuyển tab.
 
 > §3 hứa **Tier 2: 3 phiên song song**. §37.10 mới nói *giới hạn slot encoder*. §41 nói cách ly là yêu cầu bảo mật. Nhưng câu hỏi chưa ai đặt: **3 phiên trên CÙNG một Windows user session có thật sự chạy được không?**
 > Câu trả lời là **không, không phải cho input** — và lý do là một thứ nằm ngoài mọi thứ spec đã bàn.
@@ -4373,6 +4401,7 @@ Sau khi đổi routing, **không tin** kết quả trả về. Kiểm chứng b�
 Windows (user session) có **một** `GetCursorPos` toàn cục và **một** foreground window cho **toàn bộ desktop** — bất kể có bao nhiêu display ảo, bao nhiêu cửa sổ. Điều này không phải giới hạn của ta; nó là kiến trúc của Win32.
 
 Hệ quả trực tiếp:
+
 | Thao tác | Thực tế |
 |---|---|
 | `SendInput` absolute tới display ảo **A** | con trỏ hệ thống **rời** display B, **đi** sang A. Chỉ cửa sổ ở A nhận message |
@@ -4382,192 +4411,54 @@ Hệ quả trực tiếp:
 > **Kết luận cứng: trên cùng một Windows user session, tại một thời điểm chỉ có ĐÚNG MỘT phiên được điều khiển.**
 > Đây không phải "nên tránh" — hai phiên điều khiển đồng thời sẽ **phá cả hai**, và tệ hơn: phiên A có thể gõ vào cửa sổ của phiên B (**rò rỉ chéo**).
 
-### 42.2 Ba loại phiên (thay cho "3 phiên song song")
-| Loại | Được gì | Số lượng | Ghi chú |
-|---|---|---|---|
-| **controller** | xem + điều khiển | **1 / Windows session** | giữ **input lease** §42.3 |
-| **viewer** | xem + nghe, không điều khiển | **N** (giới hạn tài nguyên) | mỗi viewer 1 cửa sổ riêng trên display riêng của nó |
-| **waiting** | đã tạo, chờ lease | **N** (xếp hàng, TTL 90 s) | hiện "Đang chờ người khác nhường quyền" + nút xin |
-> Vậy "Tier 2 nhiều phiên" = **1 controller + N viewer**, không phải "N controller". Phải sửa lời hứa ở §3 — và nói rõ lý do trong UI, không chỉ trong spec.
+### 42.2 Bản cá nhân: **1 phiên tại một thời điểm** — và 3 dòng phòng thủ
+Đã cắt multi-session như tính năng (§0.3.1 #5). Nhưng **không** xoá chương này, vì ràng buộc §42.1 là có thật và bạn sẽ vô tình đụng nó:
 
-### 42.3 Input lease — cơ chế (không phải "lock mềm")
-```
-LEASE(session) = { holder_sid, acquired_at, ttl=300s, renewed_by_input }
-```
-| Sự kiện | Hành vi |
-|---|---|
-| Tạo phiên, **không ai giữ lease** | cấp ngay (không cần chờ) |
-| Tạo phiên, lease đang bị giữ | phiên mới ở trạng thái **waiting**, UI: *"Người khác đang điều khiển. [Xem] [Xin quyền]"* |
-| Xin quyền | gửi yêu cầu tới holder: *"user B xin điều khiển [Cho] [Từ chối] [Cho 5 phút]"* |
-| Holder im lặng 10 s với yêu cầu | **không** tự chuyển (tránh cướp phiên khi holder đang bận) — chỉ nhắc lại 1 lần |
-| Holder mất kết nối >30 s | lease **tự giải phóng** (tránh treo vĩnh viễn) |
-| Holder kết thúc phiên | giải phóng ngay, phiên waiting đầu tiên nhận (FIFO), thông báo cả 2 |
-| Admin force-handover | bỏ qua yêu cầu, **release_all** trước khi chuyển (tránh kẹt phím/nút của holder cũ) |
-| Chuyển lease | **bắt buộc** `release_all` + **dừng gửi input** của holder cũ **trước**, rồi mới cấp cho người mới. Thứ tự ngược = 2 nguồn input chồng lên nhau trong 1 khoảng thời gian |
-- Lease **không** phải thứ client tự giữ: nó ở **server**, client chỉ biết qua WSS `lease_state`.
-- **Kiểm tra ở server** mỗi input event: nếu `sid != lease.holder` ⇒ **drop** + đếm `input_rejected` (không báo lỗi cho user, chỉ stats). Client độc hại tự gửi input dù không có lease ⇒ **không có tác dụng**.
-- Một tinh chỉnh: **viewer vẫn được gửi** `pointermove` để thấy con trỏ local của họ **không** — không, viewer không có con trỏ local (cursor_mode = remote, §6.3.6). Vậy viewer **không gửi input gì**.
-
-### 42.4 Cái gì chia sẻ, cái gì cách ly (bảng phải thuộc)
-| Tài nguyên | Chia sẻ? | Cách ly thế nào | Rủi ro nếu sai |
-|---|---|---|---|
-| **Windows user session** | **có** (nền tảng) | — | không thể cách ly; đây là lý do §42.1 |
-| **Con trỏ / focus** | **có** (1 cái) | **input lease** | rò input chéo, phá cả 2 |
-| **Clipboard** | **có** (1 cái) | clipboard **mặc định tắt** (§41.5 D3); nếu bật: **chỉ controller** được dùng | A dán nội dung của B |
-| D3D11 device | **có** | dùng chung, refcount | device mất ⇒ **mọi** phiên chết (§42.10) |
-| Màn hình ảo (VDD) | **không** | 1 display / phiên | 2 phiên thấy nhau |
-| Capture (duplication) | **không** (HVNC) | 1 duplication / display | — |
-| Encoder | **không** (mỗi phiên 1) | 1 element / phiên | — |
-| Encode output cho viewer | **có** (fanout §42.9) | cùng preset | — |
-| Cable âm thanh | **không** (mỗi phiên 1) | CABLE-A/B/C | trộn tiếng giữa phiên |
-| Audio routing (mức B) | **có** (default device) | chỉ **1** phiên được dùng mức B; phiên khác buộc mức A hoặc C | phiên B đổi default ⇒ phá audio phiên A |
-| VRAM / CPU | **có** | admission control §42.5 | crash/OOM |
-| Audit, DB | có | theo `sid` | — |
-| Token, quyền | **không** | per user | — |
-
-### 42.5 Admission control — công thức có số (thay cho "max 3")
-```
-required(session) =
-  VRAM : 12.5 MB (pool 1080p NV12 ×4)
-       + encoder_vram   (NVENC ~96 MB | QSV ~64 MB | AMF ~80 MB | x264 ~8 MB)
-       + display_fb      (~16 MB cho display ảo 1080p)
-  RAM  : ~120 MB (pipeline + queues) + 24 MB (audio + buffers)
-  CPU  : x264: 30–45% core · HW: 3–6% core
-  SLOT : NVENC 1 · QSV 1 · AMF 1 · x264 1/cửa sổ core/3
-  DISPLAY: 1 màn hình ảo
-admit if:
-  free_vram_after  > 150 MB        (dự trữ cứng, §35.14)
-  free_ram_after   > 400 MB
-  cpu_headroom     > 30%           (đo 5 s gần nhất)
-  encoder_slot     > 0  (hoặc fallback x264 nếu CPU đủ)
-  display_slots    > 0
-else: 503 `server.busy` + `retry_after_ms` + **lý do cụ thể** ("hết bộ nhớ GPU" ≠ "hết màn hình ảo")
-```
-- Trả lý do **theo tài nguyên nào thiếu** — người dùng cần biết nên đóng phiên nào.
-- **Không** dùng "max_sessions = N" làm biến duy nhất: N=3 trên máy 4 GB VRAM sẽ crash, N=3 trên máy 24 GB sẽ lãng phí.
-- Đo **thật** mỗi 5 s (`QueryVideoMemoryInfo`, `GetProcessMemoryInfo`, CPU), không ước lượng từ config.
-- **Đoán trước** khi tạo: nếu không đủ, **không** tạo rồi mới chết giữa phiên.
-
-### 42.6 Màn hình ảo — giới hạn thật (câu hỏi mở cho Phase 0)
-- Windows **giới hạn số display** trên một adapter (thường 4–8 tuỳ driver/adapter); mỗi display ảo của VDD là một display **thật** ở tầng OS ⇒ **tiêu tốn slot display thật**.
-- **Chưa biết chắc** VDD tạo được bao nhiêu display đồng thời, và có ổn định ở 3–4 không. **Đây là câu hỏi chặn Phase 0** (cùng với p95 và TWCC).
-- Thiết kế phòng thủ:
-  1. `display.max = min(3, slot thật còn lại − 1)` (chừa 1 slot cho màn hình thật; nếu rút màn hình thật ra thì cảnh báo).
-  2. Không đủ slot ⇒ phiên mới nhận `503 display_exhausted` + gợi ý: *"Đóng một phiên khác, hoặc chuyển phiên này sang 'Xem 1 cửa sổ' (chế độ VNC-window, chưa hỗ trợ)"*.
-  3. **Không bao giờ** dùng chung display giữa 2 phiên (sẽ thấy nhau — §42.12).
-  4. Nếu VDD hỏng khi tạo display thứ N ⇒ coi như hết slot, **không** thử lại vô hạn.
-- **HVNC màn hình ảo bị giữ** giữa các phiên (§9.2.2) — nghĩa là slot display **không được giải phóng** khi phiên kết thúc. Điều này **giới hạn cứng** số phiên từng chạy đồng thời trong lịch sử máy. Phải có: nếu tạo display mới thất bại 2 lần ⇒ **tái sử dụng display đang rảnh** (reset nó, move cửa sổ vào) thay vì tạo mới, và nếu display rảnh còn cửa sổ mồ côi ⇒ rescue (§9.2.3).
-
-### 42.7 Âm thanh nhiều phiên
-| Tình huống | Hành vi |
-|---|---|
-| ≥3 cable | mỗi phiên 1 cable (A/B/C) — cách ly thật |
-| 1–2 cable, ≥3 phiên | phiên thứ 3: `audio_route = vnc` (nghe thiết bị thật) hoặc `off`, **kèm cảnh báo** "âm thanh có thể lẫn" |
-| Phiên dùng mức B (đổi default device) | **độc quyền**: chỉ 1 phiên được mức B; phiên khác bị **ép** về A/C. Nếu không ép ⇒ 2 phiên đổi default liên tục, audio của cả 2 hỏng |
-| Cable bị xoá | chỉ phiên dùng nó bị ảnh hưởng; các phiên khác không được dừng |
-- Watchdog restore default device phải **biết** mức B có đang bị phiên nào giữ hay không (refcount), nếu không sẽ restore giữa lúc phiên khác cần.
-
-### 42.8 Encode: chia sẻ ở đâu thì có lợi
-| Trường hợp | Có chia sẻ encode không? | Lý do |
+| Tình huống bạn sẽ gặp | Hành vi phải có | Code |
 |---|---|---|
-| 2 controller khác cửa sổ (2 display) | **không** | nguồn khác, resolution/preset có thể khác |
-| 1 controller + 1 viewer **cùng cửa sổ** | **có** — 1 encode, 2 SRTP (§42.9) | tiết kiệm 1 slot encoder + VRAM |
-| 2 viewer cùng cửa sổ, **cùng preset** | **có** | |
-| 2 viewer cùng cửa sổ, **khác preset** | **không** — 2 encode | preset là hợp đồng với người dùng (§6.10.1), không hạ cấp người khác |
-| Viewer + controller khác preset | 2 encode (controller ưu tiên slot) | |
-**Luật:** slot encoder cấp theo thứ tự **controller trước, viewer sau**, và viewer dùng chung encode **chỉ khi** preset + resolution + fps **trùng hoàn toàn** với chủ stream.
+| Mở 2 tab cùng lúc (1 tab cũ còn sống trong grace 30 s) | tab thứ 2 nhận `409 already_streaming` + nút **"Tiếp tục ở tab này"** (giết phiên cũ, xin keyframe) | ~10 dòng |
+| Chuyển từ điện thoại sang laptop giữa phiên | như trên: 1 cú bấm là chuyển, `release_all` **trước** khi cấp cho tab mới | ~15 dòng |
+| App cũ chưa đóng hẳn, bạn mở app mới | khởi động mới phát hiện `state.json` còn ⇒ hiện "Có phiên cũ, khôi phục?" thay vì tạo display thứ 2 | ~20 dòng |
+> **Bỏ hẳn** (chi tiết ở v3.12 §42.3–42.5, §42.9, §42.11): input lease, xin quyền, waiting, FIFO, force-handover, fairness 4 mức, fanout N viewer, admission control theo VRAM/RAM, bảng 13 tài nguyên.
+> **Giữ:** đúng **1** phiên; khi tạo phiên mới fail thì báo **lý do cụ thể** (hết display slot ≠ hết VRAM); tài nguyên giải phóng sau 5 s delay (§42.13) để F5 không phá display.
 
-### 42.9 Fanout 1 encode → N SRTP (kiến trúc)
-```
-capture → 1 pass GPU (§39) → 1 encoder → h264parse
-                                            ├── rtph264pay + webrtcbin(A)  → SRTP → viewer A
-                                            ├── rtph264pay + webrtcbin(B)  → SRTP → viewer B
-                                            └── rtph264pay + webrtcbin(C)
-```
-- **Không** dùng SFU ngoài; đây là fanout trong cùng process với **N `webrtcbin`** (mỗi peer 1 DTLS/SRTP riêng — bắt buộc, vì SRTP key khác nhau).
-- Cần: mỗi nhánh 1 `rtph264pay` riêng (sequence number/SSRC riêng), **nhưng** có thể dùng chung buffers (zero-copy).
-- **Điểm nghẽn thật**: CPU cho SRTP encryption × N. Ở 8 Mbps, AES-NI mã hoá ~1–2% core mỗi peer ⇒ 3 viewer ≈ 5% core. Chấp nhận.
-- **PLI/NACK riêng từng nhánh**: viewer A mất gói ⇒ A xin IDR ⇒ **IDR đó phát cho tất cả** (vì 1 encoder). Đây là đánh đổi: 1 viewer mạng xấu làm **mọi** viewer nhận IDR ⇒ §36.6 (chống IDR storm) phải tính cả trường hợp này: giới hạn IDR **theo stream chứ không theo peer**.
-- Nếu 1 viewer có mạng rất xấu (loss >10% kéo dài) ⇒ **tách** nó ra encode riêng ở bitrate thấp hơn (khi còn slot), hoặc hạ nó xuống "ảnh tĩnh 1 fps" (degrade riêng, không kéo người khác xuống).
+### 42.6 Display slot — vấn đề **đổi nghĩa** khi chỉ có 1 phiên
+Windows giới hạn số display trên một adapter (**thường 4–8**, tuỳ driver); mỗi display ảo của VDD là display **thật** ở tầng OS. Với 3 phiên, đây là điểm chết. **Với 1 phiên, nó gần như không còn là vấn đề** — nhưng còn **hai** hệ quả thật:
 
-### 42.10 Cách ly lỗi (failure isolation)
-| Lỗi ở | Được phép ảnh hưởng | Không được phép |
-|---|---|---|
-| capture của phiên A | phiên A | B, C |
-| encoder của A (GPU reset) | A (fallback x264) | B, C |
-| audio của A | A | B, C |
-| webrtcbin của A (DTLS hỏng) | A | B, C |
-| **D3D11 device bị mất** (`DXGI_ERROR_DEVICE_REMOVED`) | **tất cả** — không tránh được | nhưng phải: recreate device → **cả N phiên tự phục hồi**, không crash process |
-| audio routing mức B | phiên giữ mức B + **cảnh báo cho các phiên khác** | — |
-| **một app bị treo trên display A** | A (frame_freeze) | B, C |
-| lease holder chết | cả N (giải phóng lease + release_all) | — |
-- Yêu cầu kỹ thuật: **không có `unwrap`/`panic` trên đường nóng** của một phiên làm sập cả process. Mỗi phiên là **một task có supervisor riêng**; panic trong task ⇒ restart task đó, ghi audit, các phiên khác không biết.
-- **TDR (GPU reset)**: nếu `DEVICE_REMOVED` ⇒ tạo device mới, **tất cả** phiên re-init encoder (HW có thể không khả dụng ngay ⇒ fallback x264). Ghi rõ trong test §42.15.
+1. **Display ảo được giữ lại sau khi đóng phiên** (§9.2.2) ⇒ sau vài chục lần dùng, số display ảo **tích tụ**. Trên laptop 1 màn hình, 4 display ảo là chạm trần.
+   ⇒ Luật: **tối đa 2 display ảo tồn tại** (`display.keep_max = 2`). Tạo cái thứ 3 ⇒ **tái sử dụng** cái đang rảnh (reset + move cửa sổ vào) thay vì tạo mới; nếu cái rảnh còn cửa sổ mồ côi ⇒ rescue (§9.2.3) rồi mới tái sử dụng.
+2. **Chừa 1 slot cho màn hình thật**: nếu không còn slot ⇒ `503 display_exhausted` kèm việc cần làm ("đưa 1 cửa sổ về màn hình thật để giải phóng display"), **không** thử lại vô hạn, **không** tự xoá display đang có cửa sổ.
 
-### 42.11 Công bằng khi quá tải (fairness)
-Khi CPU/GPU quá tải, **giảm ai trước**? Không được để "phiên tạo sau làm phiên đang dùng bị giật".
-| Thứ tự ưu tiên (giảm dần) | Đối tượng |
-|---|---|
-| 1 | **controller** > viewer |
-| 2 | **phiên đang có input trong 30 s qua** > phiên im lặng |
-| 3 | **phiên cũ** > phiên mới (không cướp trải nghiệm đang dùng) |
-| 4 | phiên có preset thấp > preset cao (dễ hạ hơn) |
-Hành vi khi vượt ngưỡng:
-- Tranh chấp CPU > 85% trong 3 s ⇒ **viewer bị hạ fps 60→15** trước, rồi controller hạ 1 bậc preset (§36.9), rồi mới từ chối phiên mới.
-- Tranh chấp VRAM ⇒ **từ chối** phiên mới (không hạ chất lượng phiên đang chạy — VRAM không trả lại được nếu không dựng lại encoder).
-- Ghi `fairness_action` vào audit để giải thích "vì sao hình tôi mờ".
+> Vẫn giữ nguyên: **chưa biết chắc** VDD chịu được mấy display và có ổn định không ⇒ đây là một trong **hai** câu hỏi chặn P0 (cùng p95/TWCC). Kiểm chứng: tạo 4 display ảo liên tiếp, capture từng cái, xoá — xem cái nào fail.
 
-### 42.12 Bảo đảm cách ly — bảng phải test được
-| # | Điều phải đúng | Test |
-|---|---|---|
-| I1 | Viewer A **không** thấy cửa sổ của phiên B | 2 phiên 2 cửa sổ có nội dung khác nhau (màu nền khác) ⇒ capture A **chỉ** có màu A |
-| I2 | Input của A **không** tới cửa sổ B | 2 phiên, gõ 1 chuỗi ở A ⇒ app B **không** nhận ký tự |
-| I3 | A **không** kết thúc được phiên B | gọi `DELETE /sessions/{sidB}` với token A ⇒ 403 |
-| I4 | A **không** xem được thumbnail cửa sổ của B khi B ở display riêng | `GET /windows` của A không liệt kê cửa sổ đang được B độc quyền |
-| I5 | Clipboard của A **không** sang B | copy ở A ⇒ clipboard B không đổi |
-| I6 | Audio của A **không** sang B | phát âm thanh riêng ở A ⇒ stream B im |
-| I7 | Token/lỗi của A không lộ sang B | audit tách theo `sid` + `sub` |
-| I8 | A không gửi input khi không có lease | tự gửi qua DC ⇒ server drop, `input_rejected` tăng, cửa sổ B không nhận |
-| I9 | Một phiên crash không làm sập phiên khác | bơm panic vào task A ⇒ B vẫn chạy |
-| I10 | 1 phiên hết tài nguyên không làm OOM cả process | ép A dùng 5 GB ⇒ A bị kill, B chạy |
-> I1, I2, I4, I6, I8 là **năm điều không thể thoả hiệp**. Nếu bất kỳ điều nào fail ⇒ **multi-session phải tắt** (về Tier 1: 1 phiên) cho tới khi sửa xong. Ghi rõ để không ai "tạm bỏ qua".
+### 42.7 Âm thanh
+Không có "nhiều phiên". Chỉ 1 cable: nếu tab 2 chiếm audio thì tab 1 mất tiếng — **đúng**, vì chỉ 1 tab được sống (§42.2). Không cần logic cách ly.
+Watchdog restore default device (§40) chỉ chạy khi **không còn phiên nào**.
 
-### 42.13 Vòng đời chia sẻ tài nguyên (refcount)
-| Tài nguyên | Refcount bởi | Tạo khi | Xoá khi |
-|---|---|---|---|
-| D3D11 device | tất cả phiên | lần đầu cần | phiên cuối đóng **+ 5 s** (tránh tạo/xoá liên tục khi reconnect) |
-| Màn hình ảo | 1 phiên (nhưng **giữ** sau khi đóng, §9.2.2) | cần | uninstall hoặc khi hết slot (§42.6) |
-| Cable âm thanh | 1 phiên | cần | khi phiên đóng |
-| Mức B default device | 1 phiên (độc quyền) | khi chọn | restore khi phiên đóng **hoặc** khi nhường cho phiên khác |
-| Encoder | 1 phiên (+ N viewer nếu fanout) | cần | khi stream cuối cùng đóng |
-**Luật:** refcount giảm về 0 ⇒ **hẹn giờ 5 s** rồi mới dọn (reconnect xảy ra trong cửa sổ này). Nếu có phiên mới trong 5 s ⇒ huỷ hẹn.
+### 42.13 Dọn tài nguyên — chỉ cần đúng 1 luật
+Refcount về 0 ⇒ **hẹn 5 s** rồi mới dọn (F5 / reconnect xảy ra trong cửa sổ này). Có phiên mới trong 5 s ⇒ huỷ hẹn.
+Áp dụng cho: D3D11 device, encoder, cable. **Không** áp dụng cho màn hình ảo (nó được **giữ lại** sau khi đóng phiên — §9.2.2 — chính là lý do phải có "khôi phục phiên cũ" ở §42.2).
 
-### 42.14 Metrics
-Cấp phiên: các metric §35/§36/§40 + `lease_holder`, `role(controller/viewer/waiting)`, `input_rejected`, `vram_mb`, `cpu_pct`.
-Cấp máy: `sessions_total`, `vram_used/free`, `display_slots_used/free`, `encoder_slots`, `cpu_headroom`, `fairness_action_last`, `admission_rejected_reason`.
+### 42.14 Metrics cần xem (rút từ 10 xuống 6)
+`sid`, `fps_sent`, `bitrate`, `rtt`, `loss`, `freezeCount`, `vram_mb`, `cpu_pct`, `display_slots_used`, `restore_pending` (cửa sổ chưa được trả về màn hình thật).
+Đã bỏ: `lease_holder`, `role`, `input_rejected`, `fairness_action`, `admission_rejected_reason` — không còn khái niệm tương ứng.
 
-### 42.15 Kiểm chứng (bắt buộc)
+### 42.15 Kiểm chứng — 4 test (thay 10)
 | # | Test | Ngưỡng |
 |---|---|---|
-| 1 | I1–I10 ở §42.12 | 10/10 pass |
-| 2 | 3 phiên (1 controller + 2 viewer) 30 phút | không rò VRAM/handle; mỗi phiên fps p95 ≥ 55 (viewer) |
-| 3 | Lease: A giữ, B xin, A cho | input A **dừng trước** khi B bắt đầu (đo bằng timestamp server) |
-| 4 | Lease: A mất mạng 30 s | lease tự giải phóng, B nhận được, **0** kẹt phím trên máy thật |
-| 5 | Admission: máy 4 GB VRAM, 3 phiên | phiên 3 nhận `503` **trước khi** tạo, lý do đúng tài nguyên |
-| 6 | Đoán sai: tạo 5 phiên cùng lúc khi còn chỗ 3 | 3 thành công, 2 nhận `503`, **không** crash |
-| 7 | TDR giữa phiên (bơm bằng driver reset tool) | cả 3 phiên tự phục hồi hoặc báo lỗi rõ, process **không** chết |
-| 8 | Panic trong task phiên A | B, C không ảnh hưởng |
-| 9 | Viewer xấu mạng (loss 10%) | IDR bị giới hạn theo stream, viewer khác không bị giật |
-| 10 | 1 display slot (giả lập) | phiên 2 nhận `display_exhausted`, không thử lại vô hạn |
+| 1 | Mở tab 2 khi tab 1 đang chạy | `409` + 1 cú bấm chuyển được; **0** kẹt phím trên máy thật |
+| 2 | F5 giữa phiên | resume, **không** tạo display thứ 2, không mất tiếng |
+| 3 | Kill app giữa phiên rồi mở lại | `state.json` ⇒ "khôi phục phiên cũ?"; cửa sổ vẫn ở display ảo |
+| 4 | Đóng phiên | sau 5 s: encoder/cable/D3D giải phóng; display ảo **vẫn còn** (đúng như thiết kế) |
 
-### 42.16 Nhánh mới rẽ ra
-| Nhánh | Lĩnh vực | Vì sao từ §42 |
+### 42.16 Nhánh mới
+| Nhánh | Lĩnh vực | Trạng thái |
 |---|---|---|
-| **#3 Đóng gói & vòng đời cài đặt** | F | **kế tiếp** — §42.6 phụ thuộc driver/display slot, chỉ kiểm chứng được khi cài thật |
-| **#13 Lease UX** (xin/nhường quyền trên UI, mobile) | D | §42.3 mới có server-side; UI chưa có |
-| **#14 Nhiều Windows user session** (Fast User Switching / RDS) để có >1 controller thật | F | §42.1 chỉ giải được bằng nhiều desktop; đắt, ngoài scope, ghi nhận |
-| #4 Hiệu năng client | H | |
-| #5 Input sâu | C | |
+| ~~#3 Đóng gói MSI~~ | — | **đã cắt** (§0.3.1 #6) — còn `install.ps1`/`uninstall.ps1` (§45.3) |
+| ~~#13 Lease UX~~ | — | **đã cắt** (không còn lease) |
+| ~~#14 Nhiều Windows user session~~ | — | **đã cắt** (§0.3.1 #10) |
+| **#20 Máy không GPU / VNC-only** (chỉ Media Foundation, hoặc không có display ảo) | A/F | còn — §45.2, ảnh hưởng P1 |
+| #7 UI state thực thi | D | còn |
 
 ---
 
@@ -4621,6 +4512,7 @@ Cấp máy: `sessions_total`, `vram_used/free`, `display_slots_used/free`, `enco
 └───────────────────────────────────────────────────────────────────┘
 ```
 **Quyết định cụ thể:**
+
 | Việc | Cách | Vì sao không dùng cách khác |
 |---|---|---|
 | Video | **`<video>` element** với `srcObject` | Canvas + `drawImage` mỗi frame = copy + main thread ⇒ mất HW decode path, +8–15 ms/frame |
@@ -4719,6 +4611,7 @@ export const probe = {
   <canvas id="ripple" style="pointer-events:none"></canvas>
 </div>
 ```
+
 | Quy tắc | Lý do |
 |---|---|
 | Cursor = **`transform: translate3d(x,y,0)`**, không `left/top` | `left/top` gây **layout**; transform chỉ composite |
@@ -4754,43 +4647,28 @@ export const probe = {
 - **Không** giữ `wake lock` mặc định (tốn pin); chỉ khi người dùng bật "giữ màn hình sáng".
 - `document.hidden` → **dừng hết rAF và timer thường**; chỉ giữ WS ping 30 s.
 
-### 43.12 Kiểm chứng trong CI (cụ thể, không chung chung)
-```yaml
-# 1. size gate (nhanh, mọi PR)
-- du -sb client/*.js | awk '{s+=$1} END {exit (s>225280)}'    # 220 KB
-- cat client/*.js | gzip -9 | wc -c | awk '{exit ($1>71680)}' # 70 KB
-- test "$(jq '.dependencies // {} | length' package.json)" = "0"
-
-# 2. type gate
-- npx tsc --noEmit -p client/jsconfig.json
-
-# 3. perf gate (Playwright, mọi PR vào main)
-- npx playwright test perf/ --project=chromium-desktop --project=chromium-mobile-4x
-#    kịch bản: login → dashboard 20 card → mở phiên (video giả lập) → 60 s
-#    assert: overlay p95 ≤ 2.5 ms · longTask 0 · fps p95 ≥ 55 · memory < 250 MB
-
-# 4. leak gate (nightly)
-- npx playwright test perf/leak.spec.js --repeat-each=1   # 50 lần vào/ra, RSS +10%
+### 43.12 Kiểm chứng — 3 dòng, chạy trên máy bạn
+Đã cắt CI gate 2 tầng + baseline 7 ngày + nightly leak (§0.3.1 #9). Còn lại thứ **vẫn bắt được lỗi thật**:
+```powershell
+node ci/size-gate.mjs                     # JS ≤220 KB / gzip ≤70 KB / 0 dependency  (§43.2)
+npx tsc --noEmit -p client/jsconfig.json  # type gate
+npx playwright test perf/                 # overlay p95 ≤2.5 ms · 0 long task >50 ms · memory <250 MB
 ```
-- **Video giả lập** cho CI: dùng 1 file `.y4m`/`webm` phát lặp gắn vào `<video>` (không cần server) — đủ để đo overlay/render/GC, không đo được path WebRTC thật (đo ở §17.3).
-- So **tương đối** với baseline đã lưu để tránh fail do máy CI khác nhau: fail nếu **>15%** so với baseline 7 ngày gần nhất.
-- Lưu baseline trong repo (`perf/baseline.json`), cập nhật bằng commit riêng có review.
+- **Size gate là quan trọng nhất** và nó là 3 dòng: nó chặn đúng thứ đã giết nhiều client loại này (thêm 1 library ⇒ 900 KB ⇒ điện thoại 4 năm tuổi không tải nổi).
+- Playwright dùng **video giả lập** `.webm` gắn vào `<video>` — đủ để đo overlay/render/GC, không cần server. Path WebRTC thật đo bằng **tay** (8 mục §21.10).
+- Bỏ: baseline tương đối, leak test 50 lần tự động (làm tay khi sửa vòng đời phiên), mobile 4× CPU throttling (máy bạn tự nhiên chậm hơn hoặc không).
 
-### 43.13 Nhánh mới rẽ ra
-| Nhánh | Lĩnh vực | Vì sao từ §43 |
+| Nhánh | Lĩnh vực | Trạng thái |
 |---|---|---|
-| **#5 Input sâu** (IME server-side, Raw Input, accessibility, remote-in-remote) | C | **kế tiếp** — ● nông nhất còn lại sau H; ảnh hưởng trực tiếp cảm giác dùng |
-| **#15 Render thích ứng theo thiết bị** (tự chọn preset/overlay theo `hardwareConcurrency`, `deviceMemory`, nhiệt) | H | §43.5 chỉ nói "đo", chưa nói tự thích ứng khác nhau |
-| **#16 Giám sát client trong thực tế** (nếu opt-in telemetry: phát hiện long task/leak trên máy người dùng) | H/G | §26.10 cấm telemetry mặc định ⇒ chỉ opt-in |
-| #3 Đóng gói | F | vẫn trong hàng đợi |
-| #6 Dữ liệu & migration | G | |
-| #7 UI state thực thi | D | |
+| **#15 Render thích ứng theo thiết bị** (chọn preset/overlay theo `hardwareConcurrency`, `deviceMemory`) | H | **giữ** — với 1 người dùng vẫn có nghĩa: điện thoại cũ của bạn khác laptop |
+| ~~#16 Giám sát client từ xa / opt-in telemetry~~ | — | **đã cắt** (§0.3.1 #3/#9) |
+| #5 Input sâu | C | ✅ xong §44 |
 
 ---
 
-## 44. Input sâu: IME, Raw Input, remote-in-remote, accessibility (nhánh #5 — lĩnh vực C)
+## 44. Input sâu: IME, Raw Input, remote-in-remote (nhánh #5 — lĩnh vực C)
 
-> §5.7/§5.8/§6.4–6.7 mô tả **hành vi mong muốn**. Chưa có: **máy trạng thái input** đầy đủ (thứ quyết định kẹt phím), **khi nào server-side IME thật sự cần và giá của nó**, **game/Raw Input**, **remote-in-remote**, và **accessibility** — chỗ mà "remote desktop" thường bỏ rơi hoàn toàn.
+> §5.7/§5.8/§6.4–6.7 mô tả **hành vi mong muốn**. Chương này bổ sung: **máy trạng thái input** (thứ quyết định kẹt phím — lỗi bạn sẽ gặp nhiều lần mỗi tuần), **khi nào server-side IME thật sự cần và giá của nó**, **game/Raw Input**, **remote-in-remote**. Phần **accessibility đã cắt** theo yêu cầu (§0.3.1 #3) — xem ghi chú ở §44.6.
 > Input là tài sản **A2 (mức cao nhất)** trong §41: kẻ tấn công có input = toàn quyền máy.
 
 ### 44.1 Hai lớp input (tách ra thì mọi thứ rõ)
@@ -4815,6 +4693,7 @@ input_state = {
   lease:          holder_sid|null
 }
 ```
+
 | Sự kiện | Chuyển trạng thái | Bất biến phải giữ |
 |---|---|---|
 | `key down` | thêm vào `keys_held` | nếu VK đã có ⇒ **bỏ** (client gửi repeat) |
@@ -4851,7 +4730,7 @@ input_state = {
 | Thực tế | Chi tiết |
 |---|---|
 | `SendInput` tạo input **được đánh dấu injected** (`LLKHF_INJECTED` / `LLMHF_INJECTED`) | hầu hết Raw Input app **vẫn nhận**; app lọc injected thì **không** |
-| Anti-cheat (kernel-level) | chặn/không quan tâm; **không thể** vượt, và **không nên thử** (§21.14) |
+| Anti-cheat (kernel-level) | chặn/không quan tâm; **không thể** vượt, và **không nên thử** (§21.13) |
 | Game fullscreen-exclusive | đã có ở §11.1 (khuyến nghị borderless) |
 | Chuột relative + Pointer Lock | §6.4.6 — bắt buộc cho game 3D |
 | `SendInput` với `MOUSEEVENTF_MOVE` relative | một số game đọc `WM_INPUT` relative ⇒ hoạt động; một số đọc `GetCursorPos` delta ⇒ cần absolute; **gửi cả hai** ở chế độ game (absolute + relative cùng lúc sẽ nhân đôi → chỉ chọn 1, cấu hình được) |
@@ -4867,21 +4746,9 @@ input_state = {
 | Phát hiện | kiểm tra process đang foreground có phải `mstsc.exe`/`vncviewer`/`vmware`/`VirtualBox` ⇒ banner nhẹ: *"Máy đang điều khiển một máy khác — có thể có 2 tầng trễ"* |
 | Không cố sửa | đây là giới hạn bản chất; chỉ cần **thông báo** để người dùng hiểu vì sao trễ gấp đôi |
 
-### 44.6 Accessibility — chỗ remote desktop thường bỏ rơi
-**Sự thật khó chịu:** nội dung remote là **pixel**, không có accessibility tree. Screen reader trên client **không đọc được** nội dung app. Không có cách "vừa stream video vừa giữ a11y tree" (trừ khi dùng UIA over the wire — một dự án khác hoàn toàn).
-
-Vậy làm gì — 5 biện pháp thật, xếp theo hiệu quả:
-
-| # | Biện pháp | Giúp ai | Chi phí |
-|---|---|---|---|
-| 1 | **Screen reader chạy trên MÁY SERVER** (Narrator/NVDA): tiếng đọc đi vào **audio stream** | người khiếm thị | **0** — chỉ cần bật Narrator trên server, audio đã có (§40) |
-| 2 | **Client UI điều hướng được bằng bàn phím** (§24.15) + focus ring rõ | người không dùng được chuột | thấp |
-| 3 | **Zoom local + "Chữ to"** (§20.3) | thị lực kém | đã có |
-| 4 | **Tương phản cao + không phụ thuộc màu** (§23.2) | mù màu | đã có |
-| 5 | **Screen reader đọc được CHÍNH client UI** (picker, toolbar, cảnh báo) — `aria-live`, `role`, nhãn | mọi người | đã có §6.12 |
-| 6 | (T3) **Text mode**: gửi diff UI dạng text cho app hỗ trợ UIA | — | **đắt**, ghi nhận |
-> **Cách nói trung thực trong `/help`:** *"Trình đọc màn hình không đọc được nội dung bên trong cửa sổ từ xa. Nếu bạn dùng trình đọc màn hình, hãy bật nó trên máy được điều khiển — tiếng đọc sẽ được truyền qua âm thanh."* Đây là một **tính năng thật**, không phải lời xin lỗi: nó hoạt động tốt và miễn phí.
-> Cộng thêm: kiểm tra a11y của **chính client** bằng NVDA trên 3 luồng (đăng nhập → chọn cửa sổ → điều khiển → thoát) trong §43.12.
+### 44.6 (đã cắt) Accessibility cho người khiếm thị
+Bản v3.14 có 6 biện pháp a11y (screen reader chạy trên máy server để tiếng đọc đi qua audio, UIA over the wire, NVDA test). **Đã cắt theo yêu cầu** (§0.3.1 #3): không có người dùng khiếm thị trong phạm vi này.
+Giữ đúng 1 dòng, vì nó miễn phí: **UI client bấm được bằng bàn phím** (§20.18) — cần khi bạn dùng 1 tay trên điện thoại, không phải vì accessibility.
 
 ### 44.7 Ưu tiên & gộp khi tải (nối §35.5)
 | Lớp | Hàng đợi | Khi tải |
@@ -4919,6 +4786,7 @@ Vậy làm gì — 5 biện pháp thật, xếp theo hiệu quả:
 
 ### 44.10 Metrics & test
 Metrics: `input_events_in/out`, `input_rejected`, `input_flood`, `odd_keyup`, `surrogate_dropped`, `release_all_count`, `layer`, `keys_held_count`, `ime_composing`.
+
 | # | Test | Ngưỡng |
 |---|---|---|
 | 1 | 20 kịch bản blur/mất mạng (§17.1 dòng 8) | 0 lần kẹt modifier/nút |
@@ -4932,159 +4800,78 @@ Metrics: `input_events_in/out`, `input_rejected`, `input_flood`, `odd_keyup`, `s
 | 9 | Layer switch giữa `intent`↔`raw` | 0 ký tự nhân đôi |
 | 10 | App lọc injected input | không kết luận sai; ghi stats đúng |
 
-### 44.11 Nhánh mới rẽ ra
-| Nhánh | Lĩnh vực | Vì sao từ §44 |
+| Nhánh | Lĩnh vực | Trạng thái |
 |---|---|---|
-| **#6 Mô hình dữ liệu & migration** (hành vi, không chỉ bảng) | G | **kế tiếp (theo luật luân chuyển)** |
-| **#17 UIA over the wire** (a11y thật cho nội dung remote) | C | §44.6 — dự án con, không làm bây giờ |
-| **#18 Chế độ "bàn phím thô" UX** (chọn layout, hiển thị IME server) | C/D | §44.3 |
+| ~~#6 Mô hình dữ liệu & migration~~ | G | **đã cắt** — chỉ 2 file JSON + 1 log (§26.16), không còn DB |
+| ~~#17 UIA over the wire~~ | — | **đã cắt** (§0.3.1 #3) |
+| **#18 Chế độ "bàn phím thô"** (chọn layout, hiện IME của server) | C/D | còn — nhỏ, làm cùng P2 |
 
 ---
 
-## 45. Build & release: có build được hoàn toàn bằng nguồn free / GitHub không?
+## 45. Build & cài đặt — bản cá nhân: **$0**, không cert, không CI 2 tầng (viết lại từ v3.14)
 
-> Câu hỏi trực tiếp: *"biên dịch file chạy có dùng GitHub hay nguồn free được không"*.
-> **Trả lời ngắn:** **Dev + CI + phát hành: được, 0 đồng**, nếu chấp nhận 2 điều kiện. **Bản production cài trên máy người khác: có 2 khoản phải trả tiền** (không tránh được), và **3 thứ phải tránh ship** để không vướng giấy phép. Chi tiết dưới đây, kèm bảng licence từng thành phần.
-> *(Đây là phân tích kỹ thuật, không phải tư vấn pháp lý. Các con số giá và điều khoản licence thay đổi — kiểm tra lại trước khi phát hành.)*
+> v3.14 trả lời câu "có dùng được nguồn free/GitHub không" theo hướng **phát hành sản phẩm**: EV cert, ký driver, self-hosted runner, SBOM. §0.3 đã cắt hướng đó. Đây là bản đúng với phạm vi: **bạn build trên máy bạn, cài trên máy bạn**.
 
-### 45.1 Bảng licence — từng thành phần, có được dùng free trong bản thương mại không
-| Thành phần | Licence | Dùng free? | Rủi ro / ghi chú |
-|---|---|---|---|
-| **Rust** (rustc, cargo) | MIT/Apache-2.0 | ✅ | — |
-| crate: `windows`, `tokio`, `axum`, `serde`, `rustls` | MIT/Apache-2.0 | ✅ | kiểm bằng `cargo-deny` |
-| **GStreamer core** | **LGPL-2.1** | ✅ | link **động** (DLL) + cho phép thay thế ⇒ OK cho app đóng. **Không** static link nếu không mở source |
-| `gst-plugins-base/good/bad` | LGPL-2.1 | ✅ | |
-| **`gst-plugins-ugly`** (chứa **x264enc**) | **GPL-2.0** | ⚠️ | ship kèm ⇒ **toàn bộ app thành GPL**. Đây là bẫy lớn nhất |
-| **`openh264enc`** (Cisco) | BSD | ⚠️ | mã nguồn BSD, nhưng **patent H.264**: Cisco trả MPEG-LA **chỉ cho binary tải từ Cisco**, không cho binary **bạn tự build/phân phối**. Build lại ⇒ tự gánh patent |
-| **NVENC / QSV / AMF** (encoder phần cứng) | Không cần ship codec | ✅ | **đây là đường sạch nhất**: chỉ gọi driver, không phân phối implementation H.264 |
-| **Media Foundation** (H.264 encoder của Windows) | API của OS | ✅ | miễn phí trên Windows; chất lượng/độ trễ kém NVENC, dùng làm fallback không cần ship codec |
-| **x264** (nếu ship) | **GPL-2.0** + patent | ❌ | hoặc mở source toàn bộ app, hoặc trả phí thương mại (x264 có dual license qua x264 LLC) |
-| **ffmpeg** | LGPL-2.1 **hoặc** GPL (tuỳ build) | ⚠️ | dùng bản LGPL, **không** bật `--enable-gpl`, **không** ship ffmpeg binary nếu không cần |
-| **VDD** (VirtualDrivers/Virtual-Display-Driver) | **MIT** | ✅ | nhưng xem **45.4** — chữ ký driver mới là vấn đề |
-| **VB-Audio Virtual Cable** | Donationware | ⚠️ **KHÔNG free cho doanh nghiệp** | Miễn phí cho **cá nhân**; dùng trong tổ chức phải mua licence (~€5–50 tuỳ bản). **Phải nói trong docs** |
-| **WiX Toolset** | MS-RL (open source) | ✅ | tạo MSI |
-| **MSVC Build Tools** | Free (Build Tools licence) | ✅ | không cần Visual Studio bản quyền |
-| **Playwright / Tesseract / pytest** | Apache-2.0 / Apache-2.0 / MIT | ✅ | |
-| **coturn** | BSD | ✅ | nếu cần TURN |
-| **Tailscale** | Free tier cá nhân | ✅ (cá nhân) | tổ chức >3 user cần gói trả phí |
-| **Let's Encrypt** | Free | ✅ | cert Internet |
-| **GitHub Actions / Releases** | Free (public repo) | ✅ | xem 45.2 |
-
-### 45.2 GitHub: dùng được tới đâu, và giới hạn thật
-| Việc | GitHub free? | Ghi chú thực tế |
+### 45.1 Licence — chỉ 5 dòng thật sự ảnh hưởng bạn
+| Thành phần | Licence | Bạn cần làm gì |
 |---|---|---|
-| Lưu mã | ✅ | repo **public** ⇒ Actions **không giới hạn phút**; private ⇒ 2 000 phút/tháng (Windows tính **×2**, macOS **×10**) |
-| CI build Windows (rustc + GStreamer) | ✅ | Windows runner **2 core, 7 GB RAM**, không GPU |
-| CI test đơn vị, lint, `cargo-deny`, size gate | ✅ | |
-| CI **test capture/encode/input thật** | ❌ **không thể** | runner **không có GPU, không có desktop tương tác**, không cài được VDD ⇒ **DDAPI/SendInput/WASAPI không test được** |
-| CI test WebRTC thật (netem) | ⚠️ | cần quyền admin cho netem/tc → không có trên runner |
-| Phát hành bản build | ✅ | GitHub **Releases** (dung lượng lớn, miễn phí) |
-| Ký số | ❌ | chứng chỉ phải mua (45.3) |
-| CDN cho installer | ✅ | Releases đủ; hoặc Cloudflare Pages free |
-| Container registry | ✅ | ghcr.io free cho public |
-**Kiến trúc CI phải chia 2 tầng (quan trọng):**
+| Rust + crate (`windows`, `tokio`, `axum`, `serde`, `rustls`) | MIT/Apache-2.0 | không gì cả |
+| GStreamer core + `base/good/bad` | LGPL-2.1 | link **động** (DLL) — mặc định đã vậy |
+| **`gst-plugins-ugly` (x264enc)** | **GPL-2.0** | **đừng cài plugin này** trên máy nếu bạn định đưa code cho ai. Tự dùng thì không sao về pháp lý, nhưng đừng để nó thành đường phát hành |
+| **VDD** | MIT | dùng bản phát hành; nếu fork/sửa driver thì mới phải lo chữ ký |
+| **VB-CABLE** | free cho **cá nhân** | đúng phạm vi của bạn ⇒ $0 |
+
+> Không ship codec nào: encoder là **NVENC → QSV → AMF → Media Foundation** (§37, §39 — **miễn phí** vì chỉ gọi driver/OS). x264enc chỉ dùng như fallback trên máy dev, và **không** đưa vào bản bạn chia sẻ.
+> `LICENSES.md` 5 dòng: ghi URL + licence của VDD, cable, GStreamer. Không phải nghĩa vụ pháp lý — để 6 tháng sau bạn còn biết máy mình đang chạy cái gì.
+
+### 45.2 Ba thứ cần — và tại sao bây giờ là **$0**
+| Cần | Cách $0 | Điều kiện |
+|---|---|---|
+| **Màn hình ảo (HVNC)** | VDD **bản phát hành đã được ký sẵn** — dự án được **SignPath Foundation ký miễn phí**, và có trên **winget** (`VirtualDrivers.Virtual-Display-Driver`) | Bạn **dùng** bản phát hành, không tự build driver ⇒ **không cần EV cert, không cần tắt Secure Boot** |
+| **HTTPS** | cert tự ký (LAN) hoặc `tailscale cert` (free) | phải **cài trust cert** trên máy bạn dùng để điều khiển. Không có cách vừa $0 vừa không cài gì (trừ khi dùng Tailscale) |
+| **Âm thanh** | **VB-CABLE** (đã ký, cài là chạy) — hoặc Virtual Audio Driver của cùng nhóm dự án | ⚠️ Virtual Audio Driver **còn beta, cần `bcdedit /set testsigning on`** ⇒ **phải tắt Secure Boot**. Nếu không muốn đụng vào bảo mật máy: **chọn VB-CABLE** |
+
+> **Câu trả lời gọn:** không mất đồng nào, **với điều kiện bạn dùng driver có sẵn, không fork**. Toàn bộ "$200–500/năm" ở bản v3.14 là giá của việc **tự ký driver** — chỉ cần khi bạn sửa VDD hoặc phát hành cho người khác.
+
+### 45.3 Build — không cần GitHub Actions
+```powershell
+# build-release.ps1  (chạy trên máy bạn, ~10 phút lần đầu, ~2 phút các lần sau)
+cargo build --release            # + cargo test trước khi build
+node ci/size-gate.mjs            # §43.12 — 1 dòng
+# copy rd.exe ra %LOCALAPPDATA%\RD\ + tạo shortcut "At log on"
 ```
-Tầng 1 — GitHub-hosted (mọi PR, miễn phí)
-  · build release + debug, clippy, cargo-deny, test đơn vị
-  · test phần thuần: protocol, toạ độ (§5.9), state machine (§7.1, §44.2), CC (§36.4)
-  · client: size gate, tsc, Playwright UI (không cần GPU)
-  · sinh SBOM, build MSI (không ký)
-  ↓
-Tầng 2 — self-hosted runner trên 1 máy Windows thật (miễn phí nếu bạn có máy)
-  · Windows 11 + GPU (NVENC hoặc QSV)
-  · test DDAPI/WGC/cursor/WASAPI/SendInput, p95 §35.6, OCR §38.9, màu §39.13
-  · netem (cần admin) + fault injection §35.15
-  · chạy nightly + trước release, KHÔNG cần mọi PR
-```
-- Self-hosted runner **miễn phí** (GitHub không tính phí runner tự cài). Đây là cách duy nhất test được thứ thật mà không tốn tiền.
-- Dùng `actions/cache` cho `~/.cargo` + GStreamer runtime ⇒ build 8–15 phút thay vì 25–40.
-- **Ma trận tối thiểu** trên runner: Win10 22H2 (1 máy) + Win11 (1 máy), NVIDIA + Intel iGPU. AMD/ARM chỉ test thủ công trước release.
 
-### 45.3 Hai khoản **phải trả tiền** (không có đường free)
-| # | Khoản | Vì sao bắt buộc | Giá tham khảo | Nếu không trả |
-|---|---|---|---|---|
-| 1 | **Chứng chỉ ký driver (EV code signing)** | Từ Win10, driver kernel-mode **phải được ký** (attestation/WHQL qua Partner Center) mới load được mà không phải tắt "driver signature enforcement" | EV cert ~**$200–500/năm**; Partner Center account free | người dùng phải **tắt bảo vệ driver** để cài VDD ⇒ không thể phát hành, và làm yếu bảo mật máy họ |
-| 2 | **VB-Audio licence** (nếu dùng cho doanh nghiệp) | licence donationware: cá nhân free, tổ chức phải mua | ~**€5–50**/máy tuỳ bản | vi phạm licence; hoặc bỏ audio (mất tính năng "nghe") |
-| 3 | (khuyến nghị) **Authenticode cert** cho app | SmartScreen cảnh báo "Unknown publisher" nếu không ký | ~$200–400/năm (thường **cùng EV cert** ở trên) | người dùng thấy cảnh báo đỏ khi cài — chấp nhận được với LAN nội bộ, không chấp nhận được với phát hành rộng |
-> **Có thể hoãn:** cả 3 khoản chỉ cần khi **phát hành cho người khác**. **Dùng cho chính bạn** (dev, test, máy của mình) thì có thể dùng chế độ **test-signing** của Windows (tắt signature enforcement trên máy đó) — **chỉ trên máy dev, không bao giờ trên máy người dùng**.
+| Việc | Có cần GitHub không? |
+|---|---|
+| Lưu code | Repo **riêng tư** free là đủ (bạn không cần public) |
+| Build | **Không.** Build trên máy bạn = đúng môi trường thật, không cần cache, không cần runner |
+| Test capture/encode/audio | **Không.** Máy bạn có GPU và desktop thật — thứ mà GitHub-hosted runner **không có** (bản v3.14 §45.2). Đây là **lợi thế** của bản cá nhân |
+| Phát hành | **Không phát hành.** Không MSI, không Releases, không auto-update |
+> GitHub Actions chỉ có nghĩa khi có nhiều máy/người. Ở đây nó **chậm hơn** build local và test được ít hơn.
 
-### 45.4 VDD và chữ ký driver — cái bẫy thực tế nhất
-| Vấn đề | Chi tiết | Cách xử lý |
+### 45.4 Bốn việc vẫn phải làm (không phải production, là để không tự làm khổ mình)
+| # | Việc | Vì sao với 1 người vẫn bắt buộc |
 |---|---|---|
-| VDD là **driver kernel-mode** | phải ký mới load trên máy bật Secure Boot + driver signature enforcement | build VDD với **attestation signing** của riêng bạn (cần EV cert) |
-| Có build VDD đã ký sẵn? | repo có phát hành bản đã ký **bởi họ** — nhưng **bạn** phân phối lại có thể phải tuân theo điều kiện của họ (MIT cho code, **không** cho chữ ký) | đọc kỹ điều kiện phân phối lại; an toàn nhất là tự ký |
-| Secure Boot + test-signing | không thể dùng test-signing khi Secure Boot bật | ⇒ **không** có đường tắt cho người dùng thường |
-| Giải pháp không cần ký | **chế độ VNC-only** (không màn hình ảo) ⇒ không cần driver, chạy ngay | ✅ đây là lý do §26.8 có "chế độ VNC-only khi không có quyền admin" |
+| 1 | **`uninstall.ps1`** sạch: restore audio → restore cửa sổ → bỏ ẩn taskbar → xoá display ảo → xoá firewall rule + task + cert | bạn đổi máy / cài lại Windows. Không có nó, display ảo + cable ở lại và bạn sẽ không nhớ vì sao |
+| 2 | **Defender exclusion** cho `%LOCALAPPDATA%\RD\` | 3 dấu hiệu (driver display ảo + ẩn taskbar + input injection) đủ để bị gắn cờ. Exclusion 1 lần, không phải "chống phát hiện" |
+| 3 | **Ghim version** VDD + GStreamer (ghi vào `LICENSES.md`) | Windows update hoặc VDD mới có thể làm hỏng capture (§21.11). Biết đang dùng bản nào = sửa được trong 5 phút |
+| 4 | **`config.json.bak` trước mỗi lần đổi schema** | 1 dòng code |
 
-### 45.5 Tránh vướng licence: chọn codec thế nào (nối §37, §39)
-Từ bảng 45.1, có 1 quyết định kiến trúc để **không bao giờ** phải trả tiền patent hay mở source:
-| Đường | Ship gì | GPL? | Patent H.264? |
-|---|---|---|---|
-| **NVENC / QSV / AMF** | **không ship codec** — gọi driver | ✅ không | ✅ không (driver/OS đã licensed) |
-| **Media Foundation H.264 encoder** | không ship codec | ✅ | ✅ (trong Windows) |
-| **x264enc (GPL plugin)** | ship GPL ⇒ app thành GPL | ❌ | ❌ |
-| **openh264 tự build** | ship codec | ⚠️ BSD | ❌ phải tự gánh patent |
-**Quyết định:** thứ tự encoder **NVENC → QSV → AMF → Media Foundation → (chỉ trên máy dev) x264**. Bản phát hành **không** kèm `gst-plugins-ugly`, **không** kèm x264. Và §37.6 (đã viết rất kỹ về x264) trở thành **tài liệu cho chế độ dev/không GPU**, không phải đường phát hành.
-> Hệ quả nếu máy người dùng **không có GPU và không có MF encoder phù hợp**: chỉ có thể dùng x264 ⇒ phải chọn: (a) phát hành app dưới GPL (mã mở), hoặc (b) mua licence x264 thương mại, hoặc (c) **không hỗ trợ** cấu hình đó và yêu cầu GPU. Đây là quyết định sản phẩm, phải chốt trước khi phát hành — **không thể phát hiện muộn**.
+### 45.5 Tổng kết chi phí — bản cá nhân
+| Khoản | Chi phí |
+|---|---|
+| VDD, VB-CABLE, GStreamer, Rust, trình duyệt | **0** |
+| Cert (tự ký LAN / Tailscale) | **0** |
+| CI / build | **0** (build local) |
+| Lưu code | **0** (repo private) |
+| **Tổng** | **$0/năm.** Chỉ cần: dùng driver **bản phát hành**, không fork, không phát hành cho người khác |
 
-### 45.6 Pipeline build cụ thể (chạy được, 0 đồng)
-```yaml
-# .github/workflows/build.yml  (rút gọn)
-jobs:
-  win:
-    runs-on: windows-2022          # miễn phí (repo public)
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2          # cache ~/.cargo ⇒ 8–15 phút
-      - name: GStreamer runtime
-        run: |
-          curl -L -o gst.msi https://gstreamer.freedesktop.org/data/pkg/windows/1.24.x/msvc/gstreamer-1.0-msvc-x86_64-1.24.x.msi
-          start /wait msiexec /i gst.msi /qn /norestart
-      - run: cargo clippy -- -D warnings
-      - run: cargo test --workspace            # phần thuần (không GPU)
-      - run: cargo deny check                  # licence + RustSec
-      - run: npm ci && npx tsc --noEmit -p client/jsconfig.json
-      - run: node ci/size-gate.mjs             # §43.12
-      - run: npx playwright test perf/ --project=chromium-desktop
-      - run: cargo build --release
-      - run: candle/wix build installer.wxs    # MSI chưa ký
-      - uses: actions/upload-artifact@v4
-```
-| Bước | Thời gian ước tính | Ghi chú |
+### 45.6 Nhánh mới rẽ ra (đã cắt bớt so với v3.14)
+| Nhánh | Lĩnh vực | Trạng thái |
 |---|---|---|
-| checkout + rust-cache | 1–2′ | |
-| build debug + test | 6–10′ | |
-| GStreamer MSI install | 1–2′ | pin version + **ghi hash** vào repo |
-| client gates | 2–4′ | Playwright tải browser lần đầu (cache) |
-| build release + MSI | 4–8′ | |
-| **tổng** | **~15–25′** | vừa 2000′ free/tháng (private) hoặc không giới hạn (public) |
-
-### 45.7 Phát hành: free và có kiểm chứng
-| Bước | Cách | Chi phí |
-|---|---|---|
-| Artifact | GitHub Releases | 0 |
-| Manifest update | JSON ký bằng khoá riêng, **version chống rollback** (§41.8) | 0 |
-| Verify trước khi chạy | agent tự kiểm **Authenticode + hash** | 0 |
-| Kênh stable/beta | 2 tag/release channel | 0 |
-| Delta update | zip theo version; hoặc dùng `bsdiff` tự viết | 0 |
-| Website | GitHub Pages | 0 |
-| Docs | repo + Pages | 0 |
-> **Không** dùng auto-update kiểu "tải exe từ URL không ký" — đó là bề mặt tấn công (P8, §41.8). Update phải **có chữ ký riêng của ta**, không chỉ TLS.
-
-### 45.8 Cái gì **không** thể free (tổng kết thật thà)
-| Không thể free | Vì sao | Hệ quả |
-|---|---|---|
-| Ký driver kernel | yêu cầu của Microsoft từ Win10 | phải có EV cert hoặc chỉ dùng chế độ VNC-only |
-| VB-Audio cho tổ chức | licence của họ | trả tiền hoặc mất tính năng audio |
-| Test trên ma trận máy thật | cần máy thật | dùng self-hosted runner (free nếu có máy) hoặc test thủ công |
-| H.264 encode **trong phần mềm** mà không GPL | GPL + patent | dựa vào HW/MF; hoặc mở source; hoặc mua |
-| Chứng chỉ tin cậy cho HTTPS công khai | không free với self-signed | Let's Encrypt free (cần domain ~$10/năm) hoặc Tailscale cert (free) |
-> **Tổng chi phí tối thiểu để phát hành cho người khác:** **~$200–500/năm** (EV cert) + (~$10/năm domain nếu cần HTTPS công khai) + (VB-Audio nếu tổ chức). **Để tự dùng: $0.**
-
-### 45.9 Nhánh mới rẽ ra
-| Nhánh | Lĩnh vực | Vì sao từ §45 |
-|---|---|---|
-| **#19 Tài liệu pháp lý cho người dùng** (EULA, privacy notice, third-party licences, SBOM công bố) | E/F | §45.1 cần được **công bố**, không chỉ ghi trong spec |
-| **#3 Đóng gói** (vẫn chờ) | F | §45.4 nói "phải ký", #3 nói **cách** cài/rollback |
-| **#6 Dữ liệu & migration** | G | kế tiếp theo luật luân chuyển |
+| ~~#19 Tài liệu pháp lý (EULA, SBOM, privacy)~~ | — | **đã cắt** (§0.3.1 #2) |
+| ~~#3 Đóng gói MSI + wizard + ký số~~ | — | **đã cắt** (§0.3.1 #6) — chỉ còn `install.ps1`/`uninstall.ps1` |
+| ~~#6 Mô hình dữ liệu & migration sâu~~ | G | **đã cắt**: chỉ còn 2 file JSON + 1 log (§26.16) ⇒ không có DB, không migration |
+| #7 UI state thực thi (skeleton/optimistic/lỗi) | D | còn — nhưng **thu nhỏ** cho 1 người |
+| #12 Đo TWCC/REMB trên GStreamer | A | **chặn P0** — vẫn là việc thật duy nhất phải làm trước |
+| #20 **Chế độ chạy trên máy yếu / không GPU** (chỉ MF hoặc VNC-only) | A/F | mới, từ §45.2 |
