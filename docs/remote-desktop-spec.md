@@ -1,6 +1,6 @@
-# SPEC v3.3 — Remote Desktop qua trình duyệt: HVNC + VNC, window picker, âm thanh server-side, **trải nghiệm điều khiển đầy đủ**
+# SPEC v3.4 — Remote Desktop qua trình duyệt: HVNC + VNC, window picker, âm thanh server-side, **trải nghiệm điều khiển đầy đủ**
 
-- Phiên bản: **v3.3** (v3.2 + **§22–25 thiết kế giao diện đầy đủ** + **§26 audit 20 nhóm còn trống** + §27 trả lời thẳng)
+- Phiên bản: **v3.4** (v3.3 + **§28–34: hai thiết bị một lõi — mobile zero-chrome, grip 3 tầng, radial 8 ô, command registry, flow contract FE↔BE**)
 - Trạng thái: **Đề xuất — CHƯA implement, chờ duyệt**
 - Nền tảng: Server **Windows 10 2004+ / Windows 11** · Client **trình duyệt** (không app)
 
@@ -16,7 +16,8 @@
 | v3.0 | **chương §6 "Trải nghiệm điều khiển"** + 20 lỗ hổng dưới đây |
 | v3.1 | §16 kiến trúc đa ngôn ngữ (Rust+C+JS+Python) · §13 LAN→Tailscale/ZeroTier · §9.6 audio "hỏi mỗi phiên" · elevated tuỳ chọn khi cài · §14 stealth đầy đủ (S1/S2) · §19 chốt quyết định |
 | v3.2 | §20 tuỳ chỉnh cho người dùng (3 tầng, dịch ý định → tham số, độ phân giải = lựa chọn có tên) · §21 chẩn đoán, state coverage, error boundary, soak, updater, backup, chia sẻ, phía người bị điều khiển, pháp lý, quy trình test, rủi ro |
-| **v3.3** | **§22 IA/tuyến đường · §23 design system (token, màu, chữ, chuyển động) · §24 đặc tả 12+ màn hình (dashboard, phiên, sheet, settings, admin, tray, wizard, mobile) · §25 component + ma trận state↔UI** · **§26 audit 20 nhóm: dữ liệu, API+lỗi, log, CLI, config reload, cert, proxy, môi trường cài, ma trận hỗ trợ, không third-party, ngân sách client, đa ngữ nhập liệu, clipboard chi tiết, chụp màn hình, thời gian, lưu trữ, ký số, lỗi browser, pin/data, help** · §27 trả lời thẳng |
+| v3.3 | §22 IA/tuyến đường · §23 design system (token, màu, chữ, chuyển động) · §24 đặc tả 12+ màn hình (dashboard, phiên, sheet, settings, admin, tray, wizard, mobile) · §25 component + ma trận state↔UI** · **§26 audit 20 nhóm: dữ liệu, API+lỗi, log, CLI, config reload, cert, proxy, môi trường cài, ma trận hỗ trợ, không third-party, ngân sách client, đa ngữ nhập liệu, clipboard chi tiết, chụp màn hình, thời gian, lưu trữ, ký số, lỗi browser, pin/data, help** · §27 trả lời thẳng |
+| **v3.4** | **§28 hai thiết bị khác bản chất · §29 desktop chrome mỏng + phím tắt · §30 mobile zero-chrome (0 nút thường trực, grip 3 độ sâu, 13 gesture, radial 8 ô theo ngữ cảnh, bàn phím không che video, kính lúp/trackpad, one-hand) · §31 command registry 1 nguồn · §32 flow contract (1 controller, intent_id, rev, idempotency, bảng race, SLA) · §33 checklist 2 vỏ + Playwright song song** |
 
 ### 0.1 v3.0 sửa gì — danh sách "còn thiếu" (đây là lý do v2.1 chưa đủ)
 
@@ -2546,3 +2547,404 @@ Ngoài 4 điều đó, **về mặt thiết kế** tôi không còn nhóm nào c
 1. **Bạn đọc §22–25** (giao diện) — chỗ dễ phải sửa nhất vì nó là gu, không phải kỹ thuật.
 2. Chốt 3 câu §19.2 (đang có mặc định).
 3. Tôi dựng **Phase 0**: Cargo workspace + spike GStreamer + trang test client + script đo barcode. Không đụng Tier 1.
+
+---
+
+# PHẦN VII — HAI THIẾT BỊ, MỘT HỆ THỐNG
+
+## 28. Nguyên tắc: không "thu nhỏ desktop", mà hai giao diện cùng một lõi
+
+Điện thoại và desktop **khác nhau về bản chất**, không phải về kích thước:
+
+| | Desktop | Điện thoại |
+|---|---|---|
+| Con trỏ | có, chính xác tuyệt đối | **không có** → phải tạo cảm giác chính xác bằng kỹ thuật khác |
+| Hover | có (tooltip, menu) | không có |
+| Bàn phím | đầy đủ, luôn sẵn | ảo, che **50% màn hình** khi mở |
+| Số tay | 1–2, nghỉ trên bàn | 2 tay cầm, ngón cái **chỉ với tới 60% dưới** |
+| Màn hình | 1920×1080, nhiều chỗ cho chrome | 390×844, **mỗi px đều quý** |
+| Ngữ cảnh | ngồi, tập trung | đi lại, một tay, mạng chập chờn |
+| Thời gian phiên | 30–120 phút | 2–15 phút, gián đoạn nhiều |
+
+⇒ Hệ quả thiết kế: **cùng một lõi (state machine, command registry, transport), hai vỏ khác nhau.**
+- Desktop: **chrome mỏng nhưng luôn hiện** — vì có chỗ, và vì hover cho phép giấu nhãn.
+- Mobile: **chrome gần như bằng 0**, thay bằng **gesture + một nút "grip" duy nhất** có 3 độ sâu.
+
+Nguyên tắc chung bắt buộc cho cả hai:
+1. **Video là nội dung, không phải nền.** Mọi thứ khác phải nhường chỗ.
+2. **Mọi hành động có ≤ 2 thao tác.** Nếu 3 → thiết kế sai.
+3. **Không có tính năng chỉ tồn tại trong menu.** Tính năng phải có đường tắt (gesture/shortcut) và **cùng một tên** ở mọi nơi.
+4. **Phản hồi ≤ 100 ms** cho *mọi* thao tác, bất kể mạng.
+5. **Không che nội dung đang cần xem.** (Đây là yêu cầu trực tiếp của bạn.)
+
+---
+
+## 29. Desktop — chrome mỏng, luôn hiện, không che
+
+### 29.1 Ngân sách
+| Vùng | Cao | Che nội dung? | Ghi chú |
+|---|---|---|---|
+| Top bar | 48 px | **có** (trên video) | tự ẩn khi fullscreen + không hover 3 s |
+| Bottom bar | 40 px | **có** | như trên |
+| Overlay con trỏ/ripple | 0 | không | vẽ trên video, trong suốt |
+| Toast | — | **không** | dưới-trái, ngoài vùng video nếu đủ chỗ |
+| Banner | 40 px | **có** | chỉ khi có vấn đề, tối đa 1 |
+- Chế độ mặc định khi vào phiên: **fullscreen + 2 bar tự ẩn** ⇒ video chiếm ~100%. Bar hiện khi rê chuột vào mép trên/dưới.
+- Trong cửa sổ thường (không fullscreen): 2 bar luôn hiện (vì có chỗ), video letterbox.
+- **Không bao giờ** có thanh công cụ dọc/ngang thứ ba. Không có panel cố định bên phải (khác bản nháp §24.12 cho tablet — xem §30.11).
+
+### 29.2 Đường tắt desktop (không cần bấm nút)
+| Hành động | Đường tắt | Ghi chú |
+|---|---|---|
+| Đổi chất lượng | `Ctrl+Alt+1..4` (Nét/Cân bằng/Mượt/Tiết kiệm) | hiện HUD nhỏ 1 s |
+| Toggle âm thanh | `Ctrl+Alt+M` | |
+| Chuyển cửa sổ | `Ctrl+Alt+Shift+W` | mở window switcher |
+| Dừng điều khiển | `Esc Esc` | |
+| Toàn bộ lệnh | `Ctrl+K` | **command palette** (§31) |
+| HUD số liệu | `Ctrl+Alt+Shift+D` | |
+| Phóng to chữ | `Ctrl+Alt+=` / `-` | zoom local |
+| Chụp màn hình | `Ctrl+Alt+S` | |
+| Fullscreen | `F11` / `Ctrl+Alt+F` | |
+
+### 29.3 Chuột phải
+- Chuột phải trên video = **gửi right-click sang server**, không mở context menu browser.
+- Giữ `Shift` + chuột phải = mở menu **của ứng dụng ta** (Cắt/Chụp/Chuyển cửa sổ). Đây là quy ước để không mất chức năng nào.
+
+---
+
+## 30. Mobile — "zero chrome" nhưng đầy đủ
+
+### 30.1 Ngân sách màn hình (số cụ thể, test được)
+| Chỉ số | Ngưỡng |
+|---|---|
+| **Nút hiện thường trực trên video** | **0** |
+| Phần tử chrome thường trực | **2 grip 28×28 px** (mờ 25%) ở 2 góc dưới |
+| Diện tích video (dọc, xem) | **≥ 92%** màn hình |
+| Diện tích video (ngang) | **≥ 97%** |
+| Cao chrome khi đang thao tác | 1 thanh **≤ 44 px**, tự ẩn sau **2.5 s** |
+| Số thao tác tới bất kỳ lệnh nào | **≤ 2** |
+| Thời gian tới lệnh thường dùng | ≤ 1.5 s |
+| Vùng ngón cái (1 tay) | toàn bộ điều khiển chính nằm trong **40% dưới** màn hình |
+
+### 30.2 Ba tầng truy cập — "gộp" đúng nghĩa
+```
+TẦNG 0 — TRỰC TIẾP trên video (không cần nút)
+  tap · double tap · long press · 2 ngón · 3 ngón · pinch · vuốt mép
+  → phủ ~80% thao tác hằng ngày
+
+TẦNG 1 — GRIP (1 nút duy nhất, 3 độ sâu)
+  chạm        → thanh ngữ cảnh 4 nút (theo thứ hay dùng nhất lúc đó)
+  giữ 400 ms  → vòng tròn 8 lệnh (radial) tại ngón
+  vuốt lên    → bảng lệnh đầy đủ (command sheet)
+
+TẦNG 2 — BẢNG LỆNH (tất cả, có tìm kiếm)
+  mọi lệnh, kèm gesture tương đương để học dần
+```
+> Một nút, ba độ sâu = **không chiếm chỗ** mà vẫn **đầy đủ**. Đây là câu trả lời cho "gộp chẳng hạn".
+
+### 30.3 Bản đồ gesture đầy đủ
+| Gesture | Tác dụng | Ghi chú |
+|---|---|---|
+| 1 tap | left click tại điểm chạm | ripple xác nhận |
+| 2 tap nhanh | double click | gửi down/up/down/up thật (§6.4.2) |
+| giữ 500 ms | **right click** (menu ngữ cảnh của app) | rung nhẹ nếu hỗ trợ |
+| giữ + kéo | drag (giữ nút trái) | có chỉ báo "đang kéo"; nút "nhả" riêng |
+| 2 ngón vuốt | scroll | delta → wheel notch |
+| 2 ngón chạm | **right click** (thay thế) | cho người không quen giữ |
+| 3 ngón chạm | **mở vòng tròn 8 lệnh** (radial) | |
+| 3 ngón vuốt lên/xuống | thanh ngữ cảnh / bảng lệnh | |
+| pinch | zoom local (mặc định) hoặc Ctrl+wheel (toggle) | nhãn rõ đang ở chế độ nào |
+| vuốt mép trái → phải | quay lại (rời phiên, có xác nhận) | |
+| vuốt mép phải → trái | panel cửa sổ nhanh (chuyển cửa sổ) | |
+| vuốt mép dưới lên | **bàn phím** (mở để gõ) | đây là cách gõ nhanh nhất |
+| 2 ngón chạm 3 lần | dừng điều khiển khẩn cấp | khó bấm nhầm |
+
+**Nguyên tắc chọn gesture:** theo quy ước đã có của iOS/Android (2 ngón = scroll, pinch = zoom, vuốt mép = back) → người dùng **không phải học**. Chỉ 3 ngón và "grip" là mới, và cả hai đều có đường thay thế trong bảng lệnh.
+
+### 30.4 Vòng tròn 8 lệnh (radial) — dùng ngón cái, không cần nhìn
+```
+                ↖ Dán          ↑ Cuộn lên
+        ← Bàn phím                    → Chuột phải
+                ↙ Ẩn/hiện       ↓ Cuộn xuống
+                      ⏺ (ngón giữ)      ✕ Đóng
+```
+- Mở tại **vị trí ngón** (không phải giữa màn hình) → không phải di chuyển tay.
+- **8 ô cố định vị trí theo giờ**, không xoay theo hướng → dùng được mà **không cần nhìn** (muscle memory). Ô đầu tiên mở tại vị trí ngón; các ô khác ở bán kính 64 px.
+- Chọn bằng: nhả ngay tại ô, hoặc kéo tới ô rồi nhả. Kéo ra khỏi vòng = huỷ.
+- Nội dung 8 ô **theo ngữ cảnh** (thay đổi theo app đang xem — học từ vài lần đầu, sau đó cố định nếu người dùng ghim):
+ | Ngữ cảnh | 8 lệnh |
+ |---|---|
+ | Mặc định | Bàn phím · Chuột phải · Cuộn lên · Cuộn xuống · Dán · Chuyển cửa sổ · Chụp màn hình · Đóng |
+ | App có text (Word, chat) | Bàn phím · Dán · Sao chép · Chọn tất cả · Chuột phải · Cuộn lên · Cuộn xuống · Đóng |
+ | Trình duyệt | Bàn phím · Back · Forward · Tab mới · Cuộn lên · Cuộn xuống · Chuột phải · Đóng |
+ | Media player | Play/Pause · Tua ±10 s · Toàn màn hình · Âm lượng · … |
+- **Ghim được**: người dùng giữ 1 ô 1 s → "Ghim vào thanh ngữ cảnh". Học dần.
+- Radial **có nhãn chữ** (không chỉ icon) ở lần đầu 10 lần, sau đó chỉ icon (cấu hình được).
+
+### 30.5 Thanh ngữ cảnh — 4 nút, ngữ cảnh, tự ẩn
+Chạm grip → thanh nổi **ngay trên grip**, 44 px, 4 nút:
+```
+[ ⌨ Bàn phím ] [ 🖱 Chuột phải ] [ ⤢ Cửa sổ ] [ ⚙ ]
+```
+- Nội dung 4 nút = 4 lệnh **hay dùng nhất trong 10 phút qua** (tự học), không phải cố định.
+- Tự ẩn sau 2.5 s hoặc khi chạm video.
+- Nằm trong vùng ngón cái; không bao giờ ở trên cùng.
+
+### 30.6 Bảng lệnh — tất cả, có tìm kiếm, có "học"
+```
+┌───────────────────────────────────────┐
+│ 🔍 Tìm lệnh…                    [×]   │
+├───────────────────────────────────────┤
+│ ⌨  Bàn phím                    (grip) │
+│ 🖱  Chuột phải              (giữ 500ms)│
+│ ⤢  Chuyển cửa sổ          (3 ngón, …) │
+│ 🎚  Chất lượng                      ▸  │
+│   · Nét · Cân bằng · Mượt · Tiết kiệm │
+│ 👁  Chỉ xem                          ▢ │
+│ 🔊  Âm thanh                         ▢ │
+│ ⛶  Toàn màn hình                      │
+│ 📸  Chụp màn hình                     │
+│ 🔍  Kính lúp                         ▢ │
+│ ⌖  Cách chạm                    ▸     │
+│ 🩺  Chẩn đoán                          │
+│ ⏻  Kết thúc phiên                     │
+└───────────────────────────────────────┘
+```
+- Mở bằng: vuốt lên từ grip · 3 ngón vuốt lên · nút `⚙` ở thanh ngữ cảnh.
+- Mỗi dòng hiện **gesture tương đương** ở cột phải → người dùng học dần rồi bỏ bảng.
+- Tìm kiếm lọc tức thì; gõ được bằng bàn phím ảo.
+- Nhóm con mở tại chỗ (accordion), không mở sheet mới.
+
+### 30.7 Bàn phím — gõ mà không bị che
+Đây là vấn đề lớn nhất trên điện thoại: bàn phím ảo chiếm ~50% màn hình.
+```
+Trước khi mở:                     Khi mở bàn phím:
+┌───────────────────┐             ┌───────────────────┐
+│                   │             │  (video thu nhỏ,  │
+│      VIDEO        │             │   neo trên cùng,  │
+│                   │             │   vẫn thấy chỗ    │
+│                   │             │   đang gõ)        │
+│                   │             ├───────────────────┤
+│                   │             │ [Ctrl][Alt][⇧][⌫] │ ← hàng chip 36px
+│                   │             ├───────────────────┤
+│  [grip]     [grip]│             │   BÀN PHÍM ẢO     │
+└───────────────────┘             │   (của hệ điều    │
+                                  │    hành)          │
+                                  └───────────────────┘
+```
+- **Video KHÔNG bị che** — nó co lại (CSS `visualViewport` + `translate`), neo vùng đang gõ vào giữa phần còn lại. Nếu app có ô nhập liệu, tự pan để ô đó nằm phía trên bàn phím (không thể biết chính xác trên remote → dùng heuristic: giữ **vị trí con trỏ** trong 30% trên của vùng video).
+- Hàng chip `Ctrl/Alt/Shift/Esc/Tab/⌫/↑↓←→`: **sticky modifier** — chạm = sáng, áp dụng cho phím kế tiếp rồi tự nhả; chạm 2 lần = khoá.
+- Chỉ 1 hàng chip (36 px), không 3 hàng. Các phím khác dùng bàn phím ảo của HĐH (đúng ngôn ngữ, đúng IME, không phải tự vẽ).
+- `Done`/`Ẩn bàn phím` luôn ở góc phải hàng chip.
+- Không tự đóng bàn phím khi chạm video (gây ức chế) — chỉ đóng khi bấm `Ẩn` hoặc vuốt xuống.
+
+### 30.8 Chính xác — vấn đề "ngón tay to, nút nhỏ"
+| Kỹ thuật | Khi nào bật | Hành vi |
+|---|---|---|
+| **Kính lúp** (mặc định bật) | khi **giữ** ngón | phóng 2.5× vùng dưới ngón, hiện phía trên ngón; kéo để tinh chỉnh; nhả = click |
+| **Chế độ trackpad** | người dùng chọn | vuốt = di con trỏ (relative, có gia tốc), chạm = click; có con trỏ ảo |
+| **Chế độ chạm trực tiếp** | mặc định | chạm đâu click đó |
+| **Lưới tinh chỉnh** | giữ 1 s *sau khi* đã giữ | hiện 2 nút `←→` `↑↓` để dịch con trỏ 1 px |
+| **Crosshair mode** | tự bật khi app dưới ngón có control <20 px | hiện đường ngang/dọc mờ để căn |
+- Ba chế độ chọn được ở `⚙ → Cách chạm`, có **hình minh hoạ động 1 s** (không phải chữ giải thích).
+- Mặc định = **Chạm trực tiếp + kính lúp**: đúng nhất cho người mới, và không cần bật gì.
+
+### 30.9 Một tay với tới (reachability)
+- Mọi điều khiển chính ở **40% dưới**; vùng trên cùng chỉ để **đọc** (tên cửa sổ, trạng thái).
+- Grip mặc định ở góc **dưới-phải** (hoặc dưới-trái nếu người dùng thuận tay trái — cài đặt 1 chạm).
+- Bảng lệnh và thanh ngữ cảnh **trượt lên từ dưới**, không phải dropdown từ trên.
+- Không có nút nào ở góc trên-phải (chỗ khó với tay nhất) — trừ nút "về dashboard" và nó có **cả** gesture vuốt mép trái.
+
+### 30.10 Xoay máy & bố cục
+| Orientation | Bố cục | Ghi chú |
+|---|---|---|
+| Dọc | video căn giữa, 16:9 letterbox trên/dưới; grip 2 góc dưới | phần letterbox dùng cho **bàn phím/chip** khi mở → **không che video** |
+| Ngang | video toàn màn hình; grip 2 góc dưới; thanh ngữ cảnh dọc mép phải nếu cần | chrome ẩn hoàn toàn |
+| Chuyển hướng | giữ nguyên phiên, không reload; tính lại letterbox | gửi `resize` ≤1/10 s (§9.10) |
+- Khi xoay, **không** gửi lệnh đổi display ảo (trừ khi người dùng chọn "Dọc" ở §20.3).
+
+### 30.11 Tablet
+- ≥ 768 px: video + **panel trượt** bên phải 320 px **chỉ khi mở** (không thường trực).
+- Panel chứa: danh sách cửa sổ, cài đặt phiên, chẩn đoán nhanh — **cùng component** với sheet mobile, chỉ khác vị trí.
+- Vẫn giữ grip; vẫn ẩn được mọi thứ. Không có "chế độ desktop" riêng.
+
+### 30.12 Tự ẩn & trạng thái
+| Trạng thái | Chrome hiện |
+|---|---|
+| Đang thao tác (chạm trong 2.5 s qua) | thanh ngữ cảnh (nếu mở) |
+| Không thao tác 2.5 s | chỉ 2 grip (mờ 25%) |
+| Đang xem video/đọc | grip mờ 10% (gần như vô hình) |
+| Đang gõ bàn phím | hàng chip 36 px |
+| Có cảnh báo | banner 40 px ở dưới (không trên) |
+| Đang kết nối lại | overlay trung tâm |
+| Chỉ xem | ribbon mỏng góc trên-phải |
+
+---
+
+## 31. Command registry — một nguồn sự thật cho mọi thao tác
+
+Đây là thứ làm cho "gộp" **không** thành mớ hỗn độn và làm FE/BE nhất quán.
+
+### 31.1 Mỗi lệnh có đúng 1 định nghĩa
+```jsonc
+// commands.json  — sinh ra cho cả client và tài liệu, kiểm tra trong CI
+{
+  "id": "quality.set",
+  "label": "Chất lượng",
+  "icon": "gauge",
+  "group": "chat-luong",
+  "args": [{"name":"preset","type":"enum","values":["sharp","balanced","smooth","low"]}],
+  "shortcutDesktop": "Ctrl+Alt+1..4",
+  "gestureMobile": "command-sheet>Chat luong",
+  "api": {"method":"POST","path":"/api/v1/sessions/{sid}/preset","body":"{preset}"},
+  "availableIn": ["active","reconnecting"],
+  "roles": ["admin","user"],
+  "optimistic": true,          // UI đổi ngay, hoàn tác nếu server từ chối
+  "confirm": false,
+  "telemetry": "cmd.quality_set"
+}
+```
+- **Một file** định nghĩa **mọi** lệnh (khoảng 45 lệnh). Client sinh: bảng lệnh, thanh ngữ cảnh, radial, keyboard shortcuts, tooltip, trang `/help`, test.
+- Server đối chiếu: mỗi `api` phải tồn tại thật; CI **fail** nếu registry trỏ tới route không có hoặc ngược lại.
+- Không có lệnh nào "chỉ có trong code". Nếu thêm nút mới mà không thêm vào registry → review chặn.
+
+### 31.2 Nhóm lệnh (đầy đủ)
+| Nhóm | Lệnh |
+|---|---|
+| **Phiên** | kết thúc · tạm dừng điều khiển · tiếp tục · chỉ xem · sao chép link xem · chuyển cửa sổ · đổi mode · đổi màn hình |
+| **Chất lượng** | preset (4) · tự động · yêu cầu keyframe |
+| **Hiển thị** | vừa khung · đầy · 1:1 · phóng to ± · xoay? (không) · toàn màn hình · PiP |
+| **Chạm** | chạm trực tiếp · trackpad · kính lúp · độ nhạy · thuận tay |
+| **Con trỏ** | chế độ local/remote/auto · kích thước · viền |
+| **Bàn phím** | mở bàn phím · chip modifier · layout · khoá phím · gửi Tab |
+| **Âm thanh** | bật/tắt · âm lượng · nguồn (app/máy) · thiết bị |
+| **Clipboard** | dán vào máy · sao chép từ máy · xoá clipboard máy |
+| **Công cụ** | chụp màn hình · chẩn đoán · HUD số liệu · sao chép báo cáo |
+| **Hỗ trợ** | trợ giúp phím tắt · xem lại hướng dẫn · gửi phản hồi (opt-in) |
+
+### 31.3 Ánh xạ 3 nơi dùng
+| Lệnh | Desktop | Mobile |
+|---|---|---|
+| `quality.set` | `Ctrl+Alt+1..4` hoặc `⚙ → Chất lượng` | radial `↑`? không — command sheet → Chất lượng; hoặc thanh ngữ cảnh nếu hay dùng |
+| `input.keyboard` | tự nhiên (có bàn phím) | vuốt mép dưới / chip ⌨ |
+| `session.stop` | `Esc Esc` / `🛑` | 2 ngón chạm 3 lần / command sheet |
+| `window.switch` | `Ctrl+Alt+Shift+W` | vuốt mép phải / radial `⤢` |
+- **Cùng một nhãn chữ** ở mọi nơi ("Chuyển cửa sổ", không phải "Switch" ở đây "Đổi cửa sổ" ở kia).
+- Test CI: quét UI tìm chuỗi không đến từ registry → fail.
+
+---
+
+## 32. Luồng liền mạch end-to-end (flow contract)
+
+Vấn đề bạn nêu: "luồng phải liền mạch, logic nhất quán kể cả backend hay frontend". Cách làm: **một hợp đồng**, không phải "mỗi bên tự hiểu".
+
+### 32.1 Kiến trúc một chiều
+```
+gesture/ui  →  CommandBus (client)  →  SessionController (1 instance)
+                                          │  intent_id, rev, TTL
+                                          ▼
+                              HTTP (lệnh)  /  DataChannel (input)  /  WSS (điều khiển nhẹ)
+                                          ▼
+                                    Server handler
+                                          ▼
+                              effect (display/audio/input/…)
+                                          ▼
+                              state(rev++)  →  WSS broadcast
+                                          ▼
+                              Store (client)  →  render (diff)
+```
+**Quy tắc tuyệt đối:**
+1. **Chỉ 1 `SessionController`** cho mỗi phiên. Không component nào tự gọi `fetch`/`pc`/`ws`. (Ngăn "mỗi nút một đường" — nguồn gốc của không nhất quán.)
+2. **Chỉ 1 WebSocket**, 1 supervisor reconnect, 1 backoff. Media/DC do cùng controller quản.
+3. **Server là nguồn sự thật của `state`.** Client giữ **bản sao** + ghi rõ `server_rev` nó đang thấy.
+4. **Render chỉ từ Store.** Không có `element.textContent = ...` rải rác; mọi hiển thị đi qua 1 hàm `render(state)`.
+5. **Không có state ẩn trong DOM.** Trạng thái nằm trong Store, DOM là kết quả.
+
+### 32.2 Vòng đời một lệnh (bảng bắt buộc theo)
+| Bước | Việc | Thời gian | Nếu lỗi |
+|---|---|---|---|
+| 1 | Gesture → `CommandBus.dispatch(id,args)` | 0 ms | — |
+| 2 | Kiểm tra `availableIn` + role + `confirm` | <1 ms | khoá nút + lý do |
+| 3 | **Optimistic**: Store áp dụng, UI đổi ngay | <16 ms | — |
+| 4 | Sinh `intent_id` (uuid v7), gửi HTTP/DC | <5 ms | — |
+| 5 | **Phản hồi thị giác** (nút sáng/ripple/HUD) | **≤100 ms** | — |
+| 6 | Server xử lý, trả `{ok, rev, state?}` | 20–400 ms | map `error_code` → toast |
+| 7 | `rev > server_rev` → áp `state`; ngược lại bỏ | — | — |
+| 8 | Nếu optimistic bị từ chối → **hoàn tác** + toast "Không đổi được. [Thử lại]" | — | — |
+| 9 | Lệnh lặp trong 500 ms (`intent` khác, cùng đích) → **gộp**, chỉ gửi cái cuối | — | — |
+
+**Bắt buộc:** bước 5 xảy ra **trước** khi biết kết quả mạng. Người dùng phải luôn thấy "đã nhận". Thiếu bước này → cảm giác "app không phản hồi" dù mạng bình thường.
+
+### 32.3 Idempotency & chống lặp
+- Mọi mutation gửi `Idempotency-Key: intent_id`; server giữ 60 s → **gửi lại an toàn**.
+- Server dedupe theo `(user, intent_id)`; trả lại kết quả cũ nếu trùng.
+- Input (mouse/key) **không** idempotent → không retry; dùng `seq` + watchdog (§7.5), mất thì bỏ (move) hoặc release (click).
+- Tạo phiên: `POST /sessions` với `Idempotency-Key` = hash(wid+mode+audio+phút) → bấm 2 lần **không** tạo 2 phiên.
+
+### 32.4 Thứ tự & race
+| Tình huống race | Luật |
+|---|---|
+| Bấm "Tạm dừng" đang lúc `switching` | dừng áp dụng **ngay** ở client (không gửi input), lệnh pause xếp hàng chờ `active` |
+| Đổi chất lượng 2 lần liên tiếp | chỉ gửi cái cuối (debounce 400 ms), server nhận 1 |
+| Đổi cửa sổ khi đang reconnect | bị chặn, toast "Đang kết nối lại…" |
+| Kết thúc phiên khi đang `switching` | cho phép, huỷ switch, rồi đóng |
+| Toggle audio khi audio đang khởi tạo | xếp hàng, áp sau khi init xong, giữ trạng thái cuối |
+| Nhận `state` cũ về muộn | bỏ nếu `rev` ≤ `server_rev` |
+| Hai tab cùng user | tab sau vào **read-only + banner** "đang mở ở tab khác", có nút "Tiếp quản" (đóng tab kia) |
+- Hàng đợi lệnh có **TTL 3 s**; quá hạn → bỏ + toast, không áp dụng lệnh cũ vào trạng thái mới.
+
+### 32.5 Hợp đồng thời gian
+| Thứ | Ngưỡng |
+|---|---|
+| Phản hồi thị giác cho mọi lệnh | ≤ 100 ms |
+| Lệnh thường (đổi chất lượng, toggle) | ≤ 400 ms |
+| Bắt đầu phiên (display ảo đã có) | ≤ 2.5 s |
+| Chuyển cửa sổ | ≤ 1.5 s |
+| Kết thúc + dọn dẹp | ≤ 3 s |
+| Reconnect (ICE restart) | ≤ 4 s |
+| Nếu vượt ngưỡng 1.5× | hiện "đang xử lý…" (không im lặng) |
+
+### 32.6 Nhất quán về ngôn ngữ & lỗi (FE↔BE)
+- **Một** bảng `error_code` (§26.2) — server **chỉ** trả mã, client **chỉ** dịch. Không bên nào tự viết câu cho người dùng.
+- **Một** hàm `toast(code, ctx)` — không có `alert()`, không có 2 kiểu thông báo.
+- Một nơi quyết định "có hỏi xác nhận không" (`registry.confirm`), không rải `confirm()` khắp code.
+- Tên trạng thái (§7.1) dùng **nguyên văn** ở BE, WS, store, UI, test. Không có "active" ở đây "running" ở kia.
+- Đơn vị: ms, px, Mbps, byte — ghi trong tên field (`rtt_ms`, `bitrate_kbps`). Không có field mơ hồ.
+
+### 32.7 Liền mạch khi mất mạng (không "vỡ" luồng)
+| Mất gì | Người dùng thấy | Khôi phục |
+|---|---|---|
+| DataChannel | video vẫn chạy, điều khiển không tác dụng | `input_channel_lost` banner + tự tạo lại DC (renegotiation) trong 2 s |
+| WebSocket | video vẫn chạy, stats đứng | banner mờ, tự reconnect 1/2/4/8 s |
+| Media | overlay RECONNECTING, input tạm dừng | ICE restart, ≤8 lần |
+| Cả hai | overlay đầy đủ + nút | như trên |
+| Tab bị ẩn/kill | — | resume §6.11.1 |
+- **Không bao giờ** `location.reload()` tự động (mất ngữ cảnh, mất scroll, mất bàn phím).
+
+---
+
+## 33. Nhất quán giữa 2 vỏ (checklist test bắt buộc)
+
+| # | Kiểm tra | Desktop | Mobile |
+|---|---|---|---|
+| 1 | Cùng danh sách lệnh (registry) | ✔ | ✔ |
+| 2 | Cùng nhãn chữ | ✔ | ✔ |
+| 3 | Cùng mã lỗi → cùng câu | ✔ | ✔ |
+| 4 | Cùng state machine, cùng rev | ✔ | ✔ |
+| 5 | Mọi lệnh có phản hồi ≤100 ms | ✔ | ✔ |
+| 6 | Không lệnh nào chỉ có ở 1 nền tảng | ✔ | ✔ (hoặc có ghi lý do) |
+| 7 | Bàn phím điều hướng được toàn bộ | ✔ | ⌨️ (bàn phím ngoài) |
+| 8 | Không che nội dung khi đang xem | ✔ (tự ẩn) | ✔ (zero chrome) |
+| 9 | Xoay/resize không mất phiên | ✔ | ✔ |
+| 10 | Cùng hành vi khi mất mạng | ✔ | ✔ |
+- Test tự động: Playwright chạy **cùng kịch bản** trên 2 viewport (1440×900 + 390×844), so sánh **state cuối** và **số request** — nếu khác nhau → fail.
+
+---
+
+## 34. Ba điều tôi muốn nói thẳng về thiết kế này
+
+1. **Mobile không thể "đầy đủ như desktop" nếu đếm nút.** Nhưng có thể đầy đủ nếu đếm **thao tác**: mọi lệnh ở mobile ≤ 2 thao tác, phần lớn ≤ 1. Đó là định nghĩa "đầy đủ" tôi dùng, và §33 là cách kiểm chứng.
+
+2. **Gesture có cái giá: không nhìn thấy thì không biết.** Nên (a) lần đầu dùng có gợi ý động 1 s cho gesture chính; (b) mọi gesture đều có đường thay thế trong bảng lệnh; (c) bảng lệnh in gesture tương đương để học dần. Không có gesture nào là **đường duy nhất**.
+
+3. **Nhất quán FE/BE không đến từ quy ước, mà từ 1 nguồn.** `commands.json` + 1 `SessionController` + 1 bảng lỗi + `rev` monotonic. Nếu thiếu bất kỳ cái nào, sau 3 tháng sẽ có 4 kiểu thông báo lỗi và 3 kiểu trạng thái khác nhau — đây là điều chắc chắn xảy ra nếu không có kỷ luật này.
