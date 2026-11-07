@@ -1,6 +1,6 @@
 # SPEC v3.15 — Remote Desktop qua trình duyệt **cho dùng cá nhân**: HVNC + VNC, window picker, âm thanh server-side, trải nghiệm điều khiển đầy đủ
 
-- Phiên bản: **v3.18 — thêm §48 mô hình tuỳ chỉnh, §49 chống vỡ UI, §50 tính năng còn thiếu** · trước đó: **v3.17 — thêm §47 khởi động cùng Windows + vòng đời process + trải nghiệm theo thời gian** · trước đó: **v3.16 — thêm §46 "máy có ở đó không" (ngủ/reboot/đổi IP/khoá màn hình)**, lĩnh vực G còn trống · trước đó: **v3.15** — phạm vi thu hẹp về 1–2 người dùng (§0.3). Bản v3.14 là bản "sản phẩm": có cert, EULA, RBAC, accessibility, đóng gói ký số. Tất cả những thứ đó **đã cắt** ở đây — xem §0.3.1 để biết cắt gì và cắt có an toàn không. Lịch sử đầy đủ v1.0→v3.14 ở §0.
+- Phiên bản: **v3.19 — thêm §51 hồ sơ GTX 1050, bẫy adapter, P0 cụ thể** · trước đó: **v3.18 — thêm §48 mô hình tuỳ chỉnh, §49 chống vỡ UI, §50 tính năng còn thiếu** · trước đó: **v3.17 — thêm §47 khởi động cùng Windows + vòng đời process + trải nghiệm theo thời gian** · trước đó: **v3.16 — thêm §46 "máy có ở đó không" (ngủ/reboot/đổi IP/khoá màn hình)**, lĩnh vực G còn trống · trước đó: **v3.15** — phạm vi thu hẹp về 1–2 người dùng (§0.3). Bản v3.14 là bản "sản phẩm": có cert, EULA, RBAC, accessibility, đóng gói ký số. Tất cả những thứ đó **đã cắt** ở đây — xem §0.3.1 để biết cắt gì và cắt có an toàn không. Lịch sử đầy đủ v1.0→v3.14 ở §0.
 - Trạng thái: **Đề xuất — CHƯA implement, chờ duyệt.** Sau v3.15, spec **không còn chương nào cần viết**; việc tiếp theo là **P0 (đo thật)**, không phải viết thêm.
 - Nền tảng: Server **Windows 10 2004+ / Windows 11** · Client **trình duyệt** (không app)
 
@@ -27,6 +27,7 @@
 | **v3.11** | **§41 threat model: 10 tài sản · 10 vị trí P1–P10 · **lật giả định nền — client KHÔNG tin cậy, agent tin về hành vi nhưng không tin về dữ liệu** · 3 hệ quả kiến trúc · 20 mối đe doạ T1–T20 theo ranh giới · 5 quyết định *bắt nguồn từ threat model* (client không gửi `hwnd`; không endpoint chạy lệnh; transfer/clipboard mặc định tắt; `X-Frame-Options: DENY`; người ngồi máy luôn dừng được) · token rotate + reuse detection · P6 quyền phủ quyết · supply chain/chống downgrade · 9 rủi ro chấp nhận · 14 kiểm chứng** |
 | **v3.12** | **§42 multi-session — phát hiện ràng buộc bị bỏ qua: 1 desktop = 1 con trỏ + 1 focus ⇒ chỉ 1 controller/session, N viewer** · input lease (server-side, TTL, release_all trước khi chuyển) · bảng chia sẻ vs cách ly 13 tài nguyên · admission control theo VRAM/RAM/CPU/slot/display có số (thay cho "max 3") · giới hạn display slot của VDD = câu hỏi chặn Phase 0 · fanout 1 encode → N SRTP (PLI theo **stream** không theo peer) · cách ly lỗi + tự phục hồi sau TDR · fairness 4 mức · **10 bảo đảm cách ly phải test (I1–I10), fail ⇒ tắt multi-session** · refcount dọn sau 5 s** |
 | **v3.13** | **§43 client perf: vì sao client dễ chết hơn server (6 nền tảng, Safari iOS kill tab ~200–400 MB, GC không kiểm soát) · 15 chỉ số ngân sách có cách đo · quyết định render (video element ≠ canvas; cursor = div transform; HUD 2 Hz) · **10 chỗ tốn tiền thật** (#1 forced reflow từ `getBoundingClientRect` mỗi pointer event — bug phổ biến nhất, không thấy bằng mắt) · kiến trúc JS (0 dependency, 12 module, `render(state)`) · perf-probe + **CI gate thật** (size/type/perf/leak, baseline 7 ngày) · 3 giới hạn cứng mobile · overlay 0 ms main thread · 8 nguồn rò rỉ + test 50 lần vào/ra** |
+| **v3.19** | **§51 máy chủ thật (GTX 1050)**: GitHub dùng được để **đọc source**, **không** để đo (runner không GPU) · 1050 = NVENC thế hệ 6: H.264 1080p60 dư, **không AV1**, **không HEVC B-frame** (không dùng), trần phiên **12** với driver mới (không thành vấn đề — ta dùng 1–2) · **ràng buộc thật là 2 GB VRAM ⇒ trần display ảo 1920×1200**, không phải tốc độ; hết VRAM **không báo lỗi, chỉ giật** ⇒ banner < 300 MB · **bẫy tìm từ source**: `d3d11screencapturesrc` khi `capture-api=wgc` tạo device theo **adapter index bạn truyền** (mặc định `-1`), khi `dxgi` thì theo **adapter sở hữu monitor** ⇒ máy 2 adapter (iGPU + Optimus) có thể capture và NVENC ở **2 LUID khác nhau** = copy staging +3–8 ms hoặc `not-negotiated` ⇒ P0 phải kiểm **LUID trùng** · **tin tốt P0-b**: GStreamer **có TWCC** (`rtptwcc`, `twcc-stats`) và webrtcbin tự quảng cáo `transport-cc`, **không có REMB**; ta vốn không cần CC trong GStreamer vì §36 là CC của ta ⇒ P0-b hạ từ "đổi stack" xuống "nối extmap + đọc 1 property" · VDD **25.7.23 / VDC đã ký**, cài cả display + audio trong app · 12 bước P0 cụ thể cho máy này |
 | **v3.18** | **§48 tuỳ chỉnh**: 3 tầng **có số cứng** (T1 = 12 mục, T2 ≤ 20, T3 = file) · **4 phạm vi** (app/server/user/**device**) và thứ tự thắng `device > user > server > app` (device thắng để điện thoại 4G dùng "Mượt" mà laptop LAN vẫn "Nét"); mục thuộc **server** thì **không** cho ghi đè theo thiết bị · thay thanh trượt bằng **preset** (T1 không có ô số) · tìm bằng từ người dùng nghĩ ("trễ", "mờ") chứ không bằng tên tham số · **4 điều kiện để một mục được vào UI** (chống phình lại 60 mục) · "không thắt khởi động lại" + nhãn `áp dụng từ phiên sau` · **§49 chống vỡ UI**: thang **6 tầng z cố định** (0 literal `z-index`), **máy trạng thái bề mặt** (1 dialog / 1 sheet / 1 toast / 1 banner / Esc đóng đúng 1), banner **đẩy** layout không phủ, toast neo trong STAGE, test cỡ chữ 200% + 320 px + tiếng Việt + ảnh chụp baseline · **§50** 8 tính năng còn thiếu (lịch sử phiên, ghim cửa sổ, ảnh cuối khi mất mạng, chuyển app trên mobile, âm báo, chế độ mạng yếu, gửi file 1 chiều, không ghi hình) |
 | **v3.17** | **§47 khởi động & vòng đời process** — chỗ hở thực tế nhất: §13.6 chỉ có 1 dòng "At log on". **4 cách tự chạy, chỉ 1 cách đúng** (Task Scheduler At-logon dưới user; **Session 0 = app chạy mà không capture được** — bẫy phổ biến nhất) · **2 cờ Task Scheduler mặc định sai**: không chạy trên pin + dừng khi rút sạc (⇒ app tắt lúc đi họp, không báo gì) · **delay 20 s** vì driver/DWM chưa sẵn sàng + retry 3×10 s + web server mở ngay · mutex `Local\` + "đã có bản khác" + **không bao giờ kill bản cũ** · **`state.json` có 4 trạng thái** (thiếu / crash / **reboot ⇒ không restore gì** / hỏng) và **HWND bị tái sử dụng** ⇒ phải khớp bộ 4 · restore **đúng thứ tự cứng** ①audio → ②cửa sổ → ④xoá display sau cùng · `install.ps1 -Restart` thay binary khi đang chạy · **first-run 5 trạng thái** + QR ở `/setup` là khoảnh khắc quyết định · **bảng hỏng dần theo thời gian** (10 s → tuần 1 → tháng 6) · 14 edge case khởi động + 7 test |
 | **v3.16** | **§46 "Máy có ở đó không?"** — lỗ hổng chỉ lộ khi dùng thật: mọi chương trước giả định máy chủ **đang chạy, đã đăng nhập, trả lời được**. 5 lỗi khác nhau bị gộp thành 1 thông báo "không kết nối được" · phân biệt `refused` vs `timeout` từ browser (4 mẹo, không đạt 100%) · `SetThreadExecutionState` **chỉ khi có phiên** + nhả ngay (bug "app làm nóng pin") · **WoL: browser KHÔNG gửi được UDP** ⇒ không hứa nút "đánh thức"; bẫy **Fast Startup** · reboot sau Windows Update: "Run whether user is logged on or not" chạy **Session 0 = vô dụng**, auto-logon là **đánh đổi bảo mật của bạn** không phải mặc định · đổi IP ⇒ **Tailscale MagicDNS là đường chính** + DHCP reservation · khoá màn hình: phát hiện qua `WTSConnectState`, **không** gửi input mù · 5 lỗi → 5 câu → 5 nút |
@@ -82,7 +83,8 @@
 | # | Việc | Vì sao không viết được nữa bằng giấy bút |
 |---|---|---|
 | **P0-a** | Đo **p95 glass-to-glass** trên máy bạn | phụ thuộc GPU/driver/Windows build thật của bạn |
-| **P0-b** | Đo **TWCC/REMB trên GStreamer** có hoạt động không | nếu không có, phải đổi stack (§16.6) — quyết định sau khi đo |
+| **P0-b** | Nối **extmap transport-cc** + đọc `rtpsession:twcc-stats` | **đã hạ rủi ro**: source cho thấy TWCC **có** (không có REMB, không có CC — §51.5). Chỉ cần chứng minh `bitrate-sent` giảm khi bóp băng thông |
+| **P0-f** | **LUID capture == LUID NVENC** (§51.4) | máy 2 adapter (iGPU/Optimus) có thể lệch ⇒ trễ +3–8 ms hoặc `not-negotiated`, không báo lỗi |
 | **P0-c** | VDD tạo được mấy display, có ổn định | §42.6 |
 | **P0-d** | Máy ngủ/reboot có phục hồi sạch không | §46.10 (test 1–6) |
 | **P0-e** | Cài → reboot → login có tự chạy, không cần bấm gì | §47.9 (test 1–7, ~10 phút) |
@@ -976,6 +978,8 @@ Không hỏi "máy bạn có GPU gì" lúc cài — **dò lúc chạy**, mỗi l
 
 ```
 1. Enumerate adapter (DXGI) → nhận diện vendor + tên + VRAM + feature level
+1b. Đọc DedicatedVideoMemory ⇒ chọn TRẦN resolution (§51.3): <3 GB → 1920x1200; 3–6 GB → 2560x1440; >6 GB → 4K
+1c. Kiểm LUID: adapter sở hữu monitor capture == adapter NVENC mở (§51.4). Lệch ⇒ ghi log + hạ preset
 2. Thử khởi tạo encoder theo thứ tự: NVENC → QSV → AMF → MF(x264/OpenH264)
    · thử bằng một session 1280x720 @30 fps 1 giây (throwaway) để chắc chắn chạy được
    · ghi lại "encoder nào thực sự khởi tạo được" (không đoán theo vendor string)
@@ -993,6 +997,7 @@ Không hỏi "máy bạn có GPU gì" lúc cài — **dò lúc chạy**, mỗi l
 | HW encoder yếu (iGPU đời cũ, laptop U) | Smooth | 1080p60 → tự hạ 900p nếu rơi frame |
 | Chỉ x264, CPU ≥8 nhân hiện đại | Smooth | 1080p30 |
 | Chỉ x264, CPU yếu / máy ảo | Low | 720p30 |
+| **GTX 1050 (2 GB)** | Balanced | **1080p60, trần 1200p** — §51.3 |
 
 - **Người dùng vẫn đổi được tay** (§6.10.1); auto chỉ là mặc định + trần. Đổi tay thì khoá auto 10 phút.
 - Panel `⚙ → Thông tin máy chủ` **hiện rõ**: GPU, encoder đang dùng, encode_ms, lý do chọn preset. Không giấu — nếu hình mờ, người dùng biết vì sao.
@@ -1448,7 +1453,8 @@ Chỉ khi có lý do cứng (ví dụ: encoder crash làm sập web server). Khi
 - Đo lại §17.3 ngay; nếu p95 vượt 100 ms ⇒ quay lại single-process.
 
 ### 16.6 Dự phòng nếu Rust + GStreamer vướng
-Phase 0 (§18) là cổng kiểm tra. Nếu `d3d11screencapturesrc` + `webrtcbin` không đạt, thứ tự thay thế:
+Phase 0 (§18) là cổng kiểm tra. **Đã hạ rủi ro cho P0-b bằng cách đọc source (§51.5):** TWCC **có** (`rtptwcc`, `rtpsession:twcc-stats`), webrtcbin tự quảng cáo `transport-cc`, **không có REMB** và **không có CC** — nhưng ta không cần CC trong GStreamer vì §36 chính là CC. Chỉ khi **không nối được extmap** mới phải xét phương án 2.
+Nếu `d3d11screencapturesrc` + `webrtcbin` không đạt, thứ tự thay thế:
 1. Capture tự viết bằng Rust (`windows` crate + DDAPI trực tiếp) → đẩy frame vào `appsrc` → GStreamer chỉ encode/RTP.
 2. Đổi `webrtcbin` → Pion (chạy như **sidecar process**, chấp nhận +3–8 ms ở chặng signaling/media, không ảnh hưởng chặng input).
 3. C++ + GStreamer (Sunshine-style) nếu cả 2 cách trên thất bại.
@@ -1501,7 +1507,7 @@ Bản cá nhân: **1 OS, 1 DPI, 1 GPU, 1 trình duyệt chính + 1 trình duyệ
 |---|---|---|
 | Phase | Nội dung | Ước tính |
 |---|---|---|---|
-| **P0** | **Spike (cổng quyết định):** Rust + GStreamer `d3d11screencapturesrc` → `webrtcbin` → browser 1080p60; DDAPI cursor shape + client render; đo glass-to-glass. **p95 >120 ms ⇒ đổi stack (§16.6) trước khi viết tiếp** | 1–1.5 tuần |
+| **P0** | **Spike (cổng quyết định):** Rust + GStreamer `d3d11screencapturesrc` → `webrtcbin` → browser 1080p60; DDAPI cursor shape + client render; đo glass-to-glass. **p95 >120 ms ⇒ đổi stack (§16.6) trước khi viết tiếp**. Trên **GTX 1050**: `capture-api=dxgi`, trần 1200p, kiểm **LUID capture == LUID NVENC** (§51) | 1–1.5 tuần |
 | **P1** | **Dùng được hằng ngày:** auth 1 user, picker, HVNC move/restore + khôi phục khi crash, encoder auto-detect, input đầy đủ (§6.3–6.7), audio "hỏi mỗi phiên" + toggle, reconnect, resume, `install.ps1`/`uninstall.ps1` | 4–6 tuần |
 | **P2** | **Dễ chịu:** preset/zoom, bố cục mobile, chuyển cửa sổ giữa phiên, link xem tạm, chế độ bàn phím thô | 2–3 tuần |
 | — | ~~Tier 2 sản phẩm, Tier 3, ma trận test, hardening~~ | **đã cắt** (§0.3.1) |
@@ -5551,3 +5557,148 @@ Trong một phiên điều khiển, cùng lúc có thể tồn tại: **video** 
 | #31 | **Tính năng còn thiếu** (8 chỗ, 6 làm, 1 tuỳ bạn, 1 không) | ✅ **xong — §50** |
 | — | **P0: đo thật** (p95 · TWCC · display slot · khởi động · ngủ/reboot) | ⬜ **việc duy nhất còn lại** |
 > Sau v3.18, nếu bạn còn thấy thiếu, khả năng cao là (a) một trong 6 mục §50.1 mà tôi xếp P2, hoặc (b) một **giới hạn kỹ thuật** đã ghi ở §6.13/§19.3 — không phải thiếu spec. Cả hai đều đã có chỗ trong bảng, nên không cần chương mới.
+
+---
+
+## 51. Máy chủ thật: GTX 1050 (Pascal) — và GitHub dùng được tới đâu (nhánh #32)
+
+> Bạn cho biết **GTX 1050** và hỏi về GitHub. Hai câu trả lời:
+> **GitHub: dùng được, nhưng không phải để *chạy* — để *đọc source và trả lời câu hỏi trước khi tiêu tiền*.**
+> **GTX 1050: đủ cho H.264 1080p60, và tôi tìm ra 1 cái bẫy trong source GStreamer mà spec chưa ghi — nó chỉ xuất hiện khi máy có ≥2 adapter.**
+
+### 51.1 GitHub làm được gì / không làm được gì (đừng trông đợi sai)
+| Việc | Được? | Ghi chú |
+|---|---|---|
+| Đọc **source** thư viện (GStreamer, VDD…) qua `api.github.com` | ✅ **đang làm** — mọi kết luận ở §51.4 lấy từ source, không phải blog | đây là giá trị thật |
+| Đọc **release notes + asset** của VDD/VAD | ✅ đã xác nhận VDD **25.7.23** có *Virtual Driver Control* **đã ký**, cài/gỡ khỏi app, gồm cả driver display **và** audio đã ký | ⇒ **không cần cài bằng Device Manager thủ công nữa** (khác §45 mô tả cũ) |
+| Lưu code + artifact + `docs/p0-results.md` | ✅ | repo của bạn |
+| **Chạy** capture / NVENC / WebRTC để **đo p95** | ❌ | runner GitHub **không có GPU, không có desktop, không capture được** (§45.7 vẫn đúng, không thay đổi) |
+| Build + lint + test đơn vị trên CI | ⚠️ được, nhưng gần như vô nghĩa cho phần khó | **đừng** dựng CI trước P0 — nó không trả lời được câu nào trong 5 câu P0 |
+| Build bản release (khi đã có code) | ✅ | repo public = 2.000 phút/tháng free; private = 2.000 phút free rồi trả tiền |
+
+> **Kết luận:** GitHub là **kính hiển vi**, không phải **máy đo**. 5 câu P0 vẫn phải chạy trên máy bạn. Nhưng nhờ đọc source, tôi **hạ được rủi ro của P0-b** và **tìm thêm một bẫy** (§51.4) — tức là P0 giờ **hẹp hơn** so với v3.18.
+
+### 51.2 Hồ sơ GTX 1050 — đủ hay không, và đủ **cho cái gì**
+| Hạng mục | GTX 1050 (GP107, Pascal) | Nghĩa với spec |
+|---|---|---|
+| NVENC | **thế hệ 6**, 1 đơn vị mã hoá | 1080p60 H.264 thoải mái; trần thực tế ~**1440p60** |
+| Codec | H.264 ✔ · HEVC ✔ (kể cả 10-bit) · **AV1 ✘** | ta chỉ cần H.264 (browser nào cũng có, và §45.1 đã chốt NVENC) |
+| HEVC **B-frame** | **không hỗ trợ** | không ảnh hưởng: chế độ low-latency của ta **không dùng B-frame** (§37) |
+| Giới hạn phiên NVENC | lịch sử 2 → 3 → 5 → 8 → 12 phiên; **driver mới = 12** | ta chỉ dùng **1–2** phiên (§42) ⇒ **không phải lo** |
+| VRAM | **2 GB** (bản 1050 thường) hoặc 3 GB (1050 Ti) | **đây mới là ràng buộc thật** — xem §51.3 |
+| NVDEC | H.264/HEVC/VP9 giải mã được | không dùng tới (client giải mã) |
+| Tuổi driver | Pascal vẫn được driver mới hỗ trợ | phải **≥ 551.76** nếu muốn trần 8+ phiên, nhưng ta không cần |
+
+> **Phán quyết:** 1050 **không phải chướng ngại** cho mục tiêu 1080p60 + p95 < 120 ms. Nó là **mức sàn hợp lý** — nếu chạy được trên 1050 thì máy mạnh hơn chạy tốt hơn. Nếu **không** chạy được trên 1050 thì vấn đề **không phải GPU**, mà là pipeline (§16.6).
+
+### 51.3 Ràng buộc thật trên 1050: **2 GB VRAM**, không phải tốc độ
+| Thành phần | VRAM ước tính | Ghi chú |
+|---|---|---|
+| Desktop Windows ở 1080p | ~150–250 MB | tường thuê bao theo số cửa sổ |
+| **Display ảo VDD ở 1920×1200** | ~**60 MB** | 1 surface RGBA |
+| **Display ảo VDD ở 3840×2160** | ~**130–260 MB** (kèm staging + cursor) | **+200 MB** so với 1200p |
+| Capture texture (pool 4–6) | 30–60 MB @1200p · **150–250 MB @4K** | pool là bội số |
+| NVENC session | ~64–128 MB | §39 |
+| App của bạn (Chrome, VSCode…) | **biến động nhất** — Chrome 20 tab 4K = 400–900 MB | thủ phạm thật khi hết VRAM |
+| **Tổng dễ chạm trần 2 GB** | khi mở **4K** + Chrome nhiều tab | ⇒ Windows bắt đầu **dồn bộ nhớ ra RAM hệ thống** ⇒ cà giật + trễ tăng vọt, **không có cảnh báo** |
+
+**Luật cho máy này (ghi vào `config.json`, không phải lời khuyên):**
+
+| Mục | Giá trị trên 1050 | Vì sao |
+|---|---|---|
+| Trần display ảo | **1920×1200** (hoặc 2560×1440 nếu bạn thật sự cần) | 4K trên 2 GB là tự bắn chân; 1200p đọc chữ vẫn nét ở 100% |
+| Preset mặc định | **Balanced 1080p60 (8 Mbps)** | Sharp 12 Mbps @1440p không thêm giá trị trên 1050 |
+| Cảnh báo khi VRAM trống < 300 MB | **bật** — banner vàng "máy sắp hết VRAM, hình sẽ giật" | đây là thứ **không** có ở spec cũ: hết VRAM **không** báo lỗi, chỉ giật |
+| Không bao giờ | chạy *thêm* một display ảo thứ 3 khi đang có phiên | §42.6 |
+
+> §9.4.1 (auto-detect) phải thêm bước: **đọc `DedicatedVideoMemory` từ DXGI và chọn trần resolution theo VRAM**, không chỉ theo tên GPU. Dưới 3 GB ⇒ trần 1200p; 3–6 GB ⇒ 1440p; > 6 GB ⇒ 4K.
+
+### 51.4 **Bẫy mới phát hiện (từ source, không có trong blog nào): WGC không cho chọn adapter theo monitor**
+Đọc `gstd3d11screencapturesrc.cpp` (nhánh `start`), đúng nguyên văn:
+```c
+if (self->capture_api == GST_D3D11_SCREEN_CAPTURE_API_DXGI) {
+  hr = adapter->GetDesc (&desc);                       /* adapter SỞ HỮU monitor */
+  self->adapter_luid = gst_d3d11_luid_to_int64 (&desc.AdapterLuid);
+  gst_d3d11_ensure_element_data_for_adapter_luid (..., self->adapter_luid, &self->device);
+} else {
+  gst_d3d11_ensure_element_data (..., self->adapter, &self->device);  /* WGC: adapter do BẠN chọn */
+}
+```
+Và property: `adapter` = *"DXGI Adapter index for creating device **when WGC mode is selected**"*, mặc định `-1` (= adapter mặc định của hệ thống).
+
+| Đường | Adapter dùng để tạo device | Hệ quả |
+|---|---|---|
+| `capture-api=dxgi` (mặc định) | **đúng adapter sở hữu monitor** (dò bằng `EnumAdapters1` + `EnumOutputs`) | an toàn; nhưng DDAPI cổ điển |
+| `capture-api=wgc` | **adapter index bạn truyền**, mặc định `-1` | ⚠️ nếu display ảo của VDD nằm trên **adapter khác** (iGPU laptop, hoặc Microsoft Basic Render), device sẽ ở sai adapter |
+
+**Khi nào cái bẫy này cắn thật:**
+
+| Máy | Rủi ro |
+|---|---|
+| Desktop chỉ có 1050, iGPU **tắt** trong BIOS | **không** cắn (chỉ 1 adapter) |
+| Desktop có iGPU (Intel) **bật** | monitor thật cắm iGPU, VDD có thể gắn NVIDIA ⇒ **2 adapter** |
+| **Laptop Optimus** | chắc chắn 2 adapter — đúng loại máy hay gặp nhất |
+| Sau khi cài driver GPU mới (§45 cảnh báo) | thứ tự adapter đổi ⇒ index cũ trỏ sai |
+
+**Hệ quả kỹ thuật:** nếu device capture ở adapter A còn `nvh264enc` mở device theo LUID (`GST_NV_ENCODER_DEVICE_D3D11` + `gst_d3d11_handle_set_context_for_adapter_luid`) ở adapter B ⇒ frame phải **copy qua staging** (≈ +3–8 ms và +VRAM) hoặc **fail hẳn**. Không có thông báo rõ ràng — chỉ thấy "trễ hơn dự kiến" hoặc "`not-negotiated`".
+
+**Luật:** P0 **bắt buộc** chạy với `capture-api=dxgi`, và **ghi lại LUID** của (a) adapter sở hữu monitor ảo, (b) adapter mà NVENC mở. **Hai LUID phải trùng.** Nếu không trùng ⇒ đó là lý do p95 cao, **không phải tại 1050**.
+
+### 51.5 Tin tốt: P0-b hạ rủi ro — GStreamer **có** TWCC, **không có** REMB
+Đọc source `gst-plugins-good/gst/rtpmanager/rtptwcc.c` + `gstrtpsession.c` + `gst-plugins-bad/ext/webrtc/gstwebrtcbin.c`:
+
+| Có gì | Bằng chứng |
+|---|---|
+| **TWCC phía nhận** | `rtptwcc.c` (`rtp_twcc_manager_recv_packet`), `rtpsession` có property **`twcc-stats`** với `bitrate-sent`, `packets-sent`, `recv-packet-count`… |
+| **webrtcbin quảng cáo TWCC** | `_add_supported_attributes_to_caps()` luôn set `rtcp-fb-transport-cc` |
+| **REMB** | **0 hit** trong `gstwebrtcbin.c`, **0** trong `rtpmanager` ⇒ **không có** estimator kiểu REMB |
+| CC (thuật toán) | **không có** — webrtcbin **không** tự điều chỉnh bitrate |
+> **Nghĩa là gì:** ta **không** cần GStreamer có CC, vì **§36 chính là CC của ta** (vòng trim 500 ms đo tại pacer). Ta chỉ cần **feedback** (gói tin cho biết mất gói/trễ) — và TWCC **đã có**. Việc phải làm chỉ là **nối extmap** transport-cc vào transceiver video + đọc `twcc-stats`. Nếu không nối được ⇒ rơi về **REMB** thì phải tự sinh (không có sẵn) ⇒ **đó** mới là lúc cân nhắc Pion (§16.6).
+> ⇒ **P0-b từ "có thể phải đổi stack" hạ xuống "phải nối extmap + đọc 1 property"**. Đây là tin tốt nhất trong lượt này.
+
+### 51.6 P0 trên **máy này** — 12 bước, ~1 ngày (thay bảng P0 trừu tượng)
+| # | Việc | Lệnh / cách | Kết quả cần ghi |
+|---|---|---|---|
+| 1 | Hồ sơ GPU | `nvidia-smi` · `Get-CimInstance Win32_VideoController \| select Name,DriverVersion,AdapterRAM` | driver version, **VRAM thật**, **danh sách adapter** |
+| 2 | Cài VDD | **VDC 25.7.23** (đã ký, installer-less) → Install | có display ảo mới trong Settings |
+| 3 | Đặt resolution | `vdd_settings.xml` → **1920×1200@60** (§51.3) | — |
+| 4 | LUID | `nvidia-smi --query-gpu=name --format=csv` + liệt kê output của từng adapter | **LUID monitor ảo == LUID NVENC** (§51.4) |
+| 5 | Capture chay | `gst-launch-1.0 d3d11screencapturesrc monitor-index=N capture-api=dxgi ! d3d11download ! videoconvert ! autovideosink` | thấy hình, **không** `not-negotiated` |
+| 6 | NVENC chay | thêm `! d3d11convert ! video/x-raw(memory:D3D11Memory),format=NV12 ! nvh264enc rc-mode=cbr bitrate=8000 zerolatency=true ! h264parse ! fakesink` | `nvidia-smi` thấy encoder load |
+| 7 | WebRTC | `webrtcbin` + trang test (§16) | hình trong Chrome, LAN |
+| 8 | **p95** | barcode + camera điện thoại (§6.2.3) **hoặc** timestamp echo nếu 1 máy | **số p95** — câu P0-a |
+| 9 | TWCC | bật extmap, đọc `twcc-stats`, giảm băng thông 2 lần | `bitrate-sent` giảm ≤ 300 ms — câu P0-b |
+| 10 | Soak 4 h | `nvidia-smi --query-gpu=memory.used --loop=5` chạy song song | VRAM **không tăng dần** (rò rỉ = chết) |
+| 11 | Audio | Virtual Audio **25.7.14** qua VDC → `Get-AuthenticodeSignature` trên `.sys` | **ký hay không** — nếu không ký ⇒ dùng VB-Audio (free cá nhân) |
+| 12 | Khởi động | `install.ps1` → reboot → login → **không bấm gì** | ≤ 30 s có trang — câu P0-e (§47.9) |
+
+> Ghi **số** vào `docs/p0-results.md` (repo này), không ghi cảm nhận. Một bảng 12 dòng là đủ để quyết định đi tiếp hay đổi stack.
+
+### 51.7 Chi phí trên máy này — vẫn **$0**
+| Thứ | Giá | Ghi chú |
+|---|---|---|
+| NVENC H.264 | $0 | driver đã có sẵn |
+| VDD 25.7.23 + VDC | $0 | **đã ký** (SignPath Foundation) |
+| Virtual Audio Driver | $0 | **kiểm tra chữ ký trên máy** (§51.6 #11) — nếu unsigned thì cần test-signing ⇒ **đổi sang VB-Audio** |
+| Tailscale (3 user free) | $0 | HTTPS hợp lệ, `tailscale cert` |
+| GStreamer | $0 | LGPL, dùng DLL động (§45.1) |
+| GitHub repo public | $0 | Actions 2.000 phút/tháng (không cần cho P0) |
+| **Tổng** | **$0** | không có khoản nào mới |
+
+### 51.8 Ba việc cần **bạn** chạy (tôi không chạy được Windows ở đây)
+Dán output 3 lệnh này, tôi sẽ **điền sẵn** `config.json` + bảng P0 thay vì để bạn tự suy:
+```powershell
+nvidia-smi
+Get-CimInstance Win32_VideoController | Select-Object Name,DriverVersion,@{n='VRAM_GB';e={[math]::Round($_.AdapterRAM/1GB,1)}},VideoProcessor | Format-List
+Get-CimInstance Win32_DesktopMonitor | Select-Object Name,ScreenWidth,ScreenHeight
+```
+> Ba lệnh này trả lời ngay: (a) 1050 là **2 GB hay 4 GB**, (b) có **iGPU** hay không (⇒ §51.4 có cắn không), (c) màn hình thật đang ở **resolution nào** (⇒ chọn trần display ảo). Không cần cài gì, không cần quyền admin.
+
+### 51.9 Cập nhật ngược vào spec (để không có 2 nguồn sự thật)
+| Nơi | Đổi gì |
+|---|---|
+| §9.4.1 | thêm bước **đọc VRAM ⇒ chọn trần resolution** (§51.3) + bước **kiểm LUID trùng** (§51.4) |
+| §16.6 | P0-b hạ mức: *"TWCC có, REMB không; chỉ cần nối extmap"* (§51.5) |
+| §18 P0 | thêm *"trên GTX 1050: trần 1200p, `capture-api=dxgi`, kiểm LUID"* |
+| §45 | VDD nay cài bằng **VDC** (đã ký, có cả audio) — thay quy trình Device Manager thủ công |
+| §46 | thêm 1 dòng: hết VRAM **không báo lỗi**, chỉ giật ⇒ banner VRAM < 300 MB |
