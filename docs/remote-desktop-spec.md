@@ -1,6 +1,6 @@
-# SPEC v3.1 — Remote Desktop qua trình duyệt: HVNC + VNC, window picker, âm thanh server-side, **trải nghiệm điều khiển đầy đủ**
+# SPEC v3.2 — Remote Desktop qua trình duyệt: HVNC + VNC, window picker, âm thanh server-side, **trải nghiệm điều khiển đầy đủ**
 
-- Phiên bản: **v3.1** (v3.0 + **chốt ngôn ngữ/kiến trúc đa tầng**, mạng LAN→VPN, audio hỏi mỗi phiên, stealth đầy đủ)
+- Phiên bản: **v3.2** (v3.1 + **§20 tuỳ chỉnh dễ dùng** + **§21 danh sách "còn thiếu" đã xử lý**)
 - Trạng thái: **Đề xuất — CHƯA implement, chờ duyệt**
 - Nền tảng: Server **Windows 10 2004+ / Windows 11** · Client **trình duyệt** (không app)
 
@@ -14,7 +14,8 @@
 | v2.0 | window picker · dual-mode HVNC/VNC · audio toggle · feature tiers · edge cases |
 | v2.1 | sửa lỗi capture/DPI/audio-safety/2 kênh input · state machine · test matrix |
 | v3.0 | **chương §6 "Trải nghiệm điều khiển"** + 20 lỗ hổng dưới đây |
-| **v3.1** | **§16 kiến trúc đa ngôn ngữ (Rust+C+JS+Python)** · §13 LAN→Tailscale/ZeroTier · §10.3 audio "hỏi mỗi phiên" · elevated tuỳ chọn khi cài · **§14 stealth đầy đủ (ẩn taskbar/Alt+Tab/thumbnail)** · §19 chốt quyết định |
+| v3.1 | §16 kiến trúc đa ngôn ngữ (Rust+C+JS+Python) · §13 LAN→Tailscale/ZeroTier · §9.6 audio "hỏi mỗi phiên" · elevated tuỳ chọn khi cài · §14 stealth đầy đủ (S1/S2) · §19 chốt quyết định |
+| **v3.2** | **§20 tuỳ chỉnh cho người dùng (3 tầng, dịch ý định → tham số, độ phân giải = 4 lựa chọn có tên, không số trần)** · **§21 những gì còn thiếu: chẩn đoán, state coverage, error boundary, soak/rò rỉ, updater, backup, chia sẻ/cộng tác, phía người bị điều khiển, pháp lý, hỗ trợ, quy trình test, top-8 rủi ro** |
 
 ### 0.1 v3.0 sửa gì — danh sách "còn thiếu" (đây là lý do v2.1 chưa đủ)
 
@@ -1382,7 +1383,7 @@ OS (Win10 22H2, Win11 23H2/24H2) × DPI (100/125/150/200) × monitor (1, 2 cùng
 | 6 | **Stealth:** mặc định **S1 hidden** (ẩn taskbar + thumbnail); **S2 deep** opt-in (Alt+Tab giảm tối đa); toast + icon tray **không tắt được** | §2.4, §14 |
 
 ### 19.2 Còn mở — chỉ 3 câu, không chặn Phase 0
-1. **Display ảo:** cố định 1920×1080@60 hay theo màn hình thật? *(mặc định spec: 1920×1080@60, đổi được per phiên — nếu bạn không nói gì tôi giữ mặc định)*
+1. ~~Display ảo~~ → **đã chốt ở §20.3**: 4 lựa chọn có tên (Vừa mắt / Chữ to / Nét / Như máy thật / Dọc), đổi được **giữa phiên** trong 2–4 s, nhớ theo thiết bị. Không có "1920×1080 cố định".
 2. **Số người dùng:** 1 tài khoản cho chính bạn, hay nhiều người + role? *(mặc định: 1 admin; Tier 2 mới mở multi-user)*
 3. **Tier 1 đã đủ cho bản đầu chưa?** *(mặc định: đủ — clipboard/multi-user để Phase 2)*
 
@@ -1390,3 +1391,384 @@ OS (Win10 22H2, Win11 23H2/24H2) × DPI (100/125/150/200) × monitor (1, 2 cùng
 1. **`Ctrl+Alt+Del` và màn hình login/UAC sẽ không điều khiển được.** Cần service SYSTEM + Winlogon — tôi để Tier 3, mặc định không làm.
 2. **Video DRM (Netflix/Prime) sẽ đen** trên màn hình ảo. Không có cách vượt.
 3. **S1/S2 stealth có thể bị Windows Defender/EDR gắn cờ** vì bộ dấu hiệu (driver display ảo + ẩn taskbar + input injection + audio cable) trùng với RAT. Cách giảm: ký số binary + driver, không hook API, giữ thông báo tray, whitelist trong AV của tổ chức. Không có cách "chắc chắn không bị flag".
+
+---
+
+# PHẦN IV — NGƯỜI DÙNG & VẬN HÀNH
+
+## 20. Tuỳ chỉnh cho người dùng — dễ, không cần biết kỹ thuật
+
+> Yêu cầu của bạn: *"user là người dùng, họ muốn tuỳ chỉnh theo ý họ, nhưng phải dễ, không phải làm hành động kỹ thuật phức tạp"*.
+> Chương này là **yêu cầu**, không phải gợi ý.
+
+### 20.1 Mười nguyên tắc
+
+| # | Nguyên tắc | Nghĩa là |
+|---|---|---|
+| 1 | **Cấu hình theo ý định, không theo tham số** | Người dùng không chọn "bitrate 8 Mbps"; họ chọn "hình nét hơn" hoặc "đỡ tốn data". Máy tự dịch. |
+| 2 | **Không có nút "Lưu"** | Mọi thay đổi áp dụng ngay + có "Hoàn tác" 5 giây. Không có trạng thái "chưa áp dụng" gây bối rối. |
+| 3 | **Không bao giờ bắt khởi động lại** | Thay đổi nào cần phiên mới thì ghi rõ "áp dụng từ phiên sau", không bắt làm lại. |
+| 4 | **Ba tầng, mặc định chỉ thấy tầng 1** | Tầng 1 "Một chạm" (thứ dùng hằng ngày) · Tầng 2 "Cài đặt" (chữ thường, có giải thích) · Tầng 3 "Nâng cao" (kỹ thuật, mở 1 lần là nhớ). |
+| 5 | **Mặc định phải đúng cho 90%** | Nếu người dùng không mở cài đặt gì, trải nghiệm vẫn tốt. Cài đặt là để *tinh chỉnh*, không phải để *dùng được*. |
+| 6 | **Mỗi lựa chọn nói hậu quả bằng ví dụ** | Không phải "giảm bitrate" mà "dùng ít data hơn, hình hơi mờ khi chuyển động nhanh". |
+| 7 | **Không hỏi lại điều đã trả lời** | Nhớ theo app/thiết bị; chỉ hỏi khi gặp tình huống mới. |
+| 8 | **Sai thì tự sửa, và nói ra** | Bật một lựa chọn làm hỏng trải nghiệm → tự quay lại + thông báo, không để người dùng tự phát hiện. |
+| 9 | **Không giấu tính năng sau thuật ngữ** | Tên nút dùng động từ thường: "Chữ to hơn", "Đỡ tốn data", "Cho xem màn hình dọc". |
+| 10 | **Người dùng luôn thoát được** | Mọi màn hình cài đặt đóng được bằng `Esc`, không có modal chặn, không có bước "bắt buộc làm tiếp". |
+
+### 20.2 Bảng dịch: người dùng nói gì → ta chỉnh gì
+
+| Người dùng nói | Nút/nơi chỉnh | Ta thực sự đổi | Hiệu lực | Ảnh hưởng ai |
+|---|---|---|---|---|
+| "Chữ nhỏ quá" | `A+` trên toolbar (1 chạm) | zoom hiển thị local 125/150/200% | **tức thì** | chỉ mình |
+| "Chữ vẫn nhỏ, tôi muốn app thật sự to" | `⚙ → Kích thước → Chữ to` | hạ độ phân giải display ảo (1280×720) ⇒ UI chiếm tỉ lệ lớn hơn | 2–4 s | cả phiên |
+| "Hình mờ / chữ nhoè" | `⚙ → Chất lượng → Nét` | tăng bitrate, ưu tiên chi tiết, giảm khử nhiễu | 1–2 s | cả phiên |
+| "Giật, chuột không mượt" | `⚙ → Chất lượng → Mượt` | 60 fps, bitrate thấp hơn, giảm resolution nếu cần | 1–2 s | cả phiên |
+| "Tốn 4G quá" | `⚙ → Tiết kiệm data` | 720p30, 1.5 Mbps, tắt audio mặc định | 1–2 s | cả phiên |
+| "Tôi xem trên điện thoại dọc" | `⚙ → Kích thước → Dọc` | display ảo 1080×1920 | 3–5 s | cả phiên |
+| "Tôi muốn thấy đúng như máy thật" | `⚙ → Kích thước → Như máy thật` | display ảo = resolution màn hình vật lý | 3–5 s | cả phiên |
+| "Không muốn nghe" | 🔊 trên toolbar | tắt stream audio (routing giữ nguyên) | tức thì | chỉ mình |
+| "Chỉ muốn xem, không điều khiển" | nút "Chỉ xem" | view_only | tức thì | cả phiên |
+| "Đừng hiện gợn sóng khi tôi bấm" | `⚙ → Phản hồi → Gợn sóng` | ripple off | tức thì | chỉ mình |
+| "Không thấy con trỏ" | `⚙ → Con trỏ → To & viền` | tăng kích thước + viền tương phản | tức thì | chỉ mình |
+| "Điện thoại: bấm cứ sai" | `⚙ → Cách chạm` | đổi "Chạm trực tiếp" ↔ "Như trackpad" | tức thì | chỉ mình |
+| "Ẩn thanh công cụ" | ⛶ fullscreen | toolbar tự ẩn | tức thì | chỉ mình |
+| "Gõ phím tắt bị đóng tab" | `⚙ → Bàn phím → Khoá phím` | keyboard lock (nếu browser hỗ trợ) | tức thì | chỉ mình |
+
+**Quy tắc:** mỗi dòng trong bảng trên phải bấm được **≤ 2 lần** từ màn hình phiên. Nếu cần 3 lần trở lên ⇒ thiết kế sai, đưa ra ngoài hoặc bỏ.
+
+### 20.3 Độ phân giải — ví dụ cụ thể của bạn, giải đúng
+
+#### 20.3.1 Sự thật kỹ thuật làm việc này *dễ*
+Màn hình ảo là **display ảo, không nối với cổng xuất vật lý**. Vì vậy đổi độ phân giải/refresh của nó:
+- **Không cần đăng xuất** (khác hoàn toàn đổi độ phân giải màn hình thật — thứ thường bắt logoff/khởi động lại ở nhiều máy).
+- **Không ảnh hưởng màn hình thật** của người ngồi máy (không nháy, không reflow icon của họ).
+- Mất 2–4 s: `ChangeDisplaySettingsEx` trên monitor ảo → DWM re-composite → capture reinit → encoder reinit → keyframe.
+
+⇒ Vì thế ta **cho người dùng chỉnh thoải mái**, kể cả giữa phiên. Đây là lý do thiết kế này dễ chịu: rào cản kỹ thuật của "đổi resolution" chỉ tồn tại với màn hình thật.
+
+#### 20.3.2 Bốn lựa chọn hiện ra (không có con số trần)
+| Nhãn hiển thị | Người dùng hiểu | Thực tế cấu hình | Ghi chú |
+|---|---|---|---|
+| **Vừa mắt** *(mặc định)* | "tự hợp với máy tôi" | `min(khả năng client, 1920×1080)`, tỉ lệ theo khung nhìn client (dọc nếu điện thoại dọc) | Không cần nghĩ |
+| **Chữ to** | "cho tôi đọc dễ" | 1280×720 (UI ~1.5× to hơn trên cùng khung) | Dùng cho mắt kém, điện thoại |
+| **Nét** | "cho tôi xem chi tiết" | 2560×1440 nếu client + GPU đủ, ngược lại 1920×1080 | Có kiểm tra GPU trước khi cho chọn |
+| **Như máy thật** | "đúng bằng máy kia" | = resolution màn hình vật lý của server | Hữu ích khi hỗ trợ kỹ thuật |
+| **Dọc** | "tôi xem tài liệu dài trên điện thoại" | 1080×1920 | Tự đề xuất khi client ở orientation dọc |
+| *Tự chọn (Nâng cao)* | — | nhập W×H | Ẩn sau "Nâng cao" §20.14 |
+
+- **Không bao giờ** hiện "1920×1080" ở tầng 1. Con số chỉ xuất hiện ở dòng phụ nhỏ (`1280×720 · 30 fps`) để người muốn biết vẫn thấy.
+- Nếu chọn "Nét" mà GPU/CPU không kham được → nút vẫn bấm được, nhưng hiện ngay "Máy này hơi yếu cho mức này, có thể giật. [Vẫn thử] [Giữ mức cũ]" — **không chặn**, chỉ cảnh báo. Nếu thử 10 s mà rơi frame >10% → tự quay lại + toast "Đã tự quay lại mức trước cho mượt hơn".
+
+#### 20.3.3 Khác biệt "to chữ" theo 2 cách — khi nào dùng cách nào
+| Cách | Đổi gì | Ưu | Nhược |
+|---|---|---|---|
+| **Zoom local** (`A+`) | chỉ khung nhìn của mình, phóng to pixel | tức thì, không ảnh hưởng ai, không reflow app | ảnh nhoè khi phóng >150%; phải pan |
+| **Hạ độ phân giải** | app thật sự render ở không gian lớn hơn | chữ nét, app bố cục lại đúng, không cần pan | 2–4 s, ảnh hưởng người xem khác |
+- Mặc định `A+` (nhẹ, tức thì). Nếu người dùng bấm `A+` **2 lần trong 1 phiên** → gợi ý một lần: *"Muốn chữ nét hơn? Đổi sang mức 'Chữ to' (áp dụng cho cả phiên)."* — dạy đúng lúc, không làm phiền.
+- **DPI scale 125/150%** = tầng Nâng cao, có cảnh báo: một số app phải khởi động lại mới nhận; app cũ có thể vẽ lệch. Không đưa vào tầng 1 vì hậu quả không đoán trước được.
+
+#### 20.3.4 Nhớ & đồng bộ
+- Nhớ theo **thiết bị** (điện thoại ≠ laptop): mở trên điện thoại → tự "Vừa mắt" dọc 720p; mở trên laptop → "Vừa mắt" 1080p. Người dùng không phải chỉnh lại.
+- Đổi tay thì ghi nhớ theo thiết bị đó + theo app (nếu người dùng chọn "nhớ cho app này").
+- Chính sách của tổ chức (nếu admin đặt trần) **thắng** lựa chọn người dùng; UI ghi "Quản trị viên giới hạn mức này" thay vì disable im lặng.
+
+### 20.4 Chất lượng & độ mượt
+- 3 nút ở tầng 1: **Nét** · **Cân bằng (mặc định)** · **Mượt**. Thêm **Tiết kiệm data** (điều kiện: mạng chậm hoặc người dùng bật).
+- `Tự động` luôn bật mặc định: máy tự điều chỉnh trong biên ±. Người dùng chọn tay → khoá auto 10 phút rồi tự bật lại (có toast "Đã bật lại tự động").
+- Dòng phụ hiện số liệu thật (`8.2 Mbps · 58 fps · 42 ms`) — cho người tò mò, không bắt ai đọc.
+- Nếu người dùng chọn "Nét" mà mạng không đủ → hiện "Mạng đang yếu, mức này sẽ giật. [Đổi sang Mượt]".
+
+### 20.5 Cách hiển thị
+| Nhãn | Hành vi | Nhớ |
+|---|---|---|
+| **Vừa khung** (mặc định) | letterbox, đúng toạ độ | theo thiết bị |
+| **Đầy màn hình** | crop mép, pan để xem | theo phiên |
+| **Đúng điểm ảnh** | 1:1, có thanh cuộn | theo thiết bị |
+| **Phóng to** (`A+`, pinch) | 125/150/200% | reset mỗi phiên |
+- Chuyển chế độ bằng 1 nút xoay vòng trên toolbar (hiện nhãn hiện tại), không mở menu.
+- Khi crop/zoom: luôn có **mini-map** nhỏ ở góc để biết đang xem phần nào của màn hình.
+
+### 20.6 Con trỏ & phản hồi (cho người mắt kém / tay run)
+| Lựa chọn | Mặc định | Ghi chú |
+|---|---|---|
+| Kích thước con trỏ | theo server | có mức "To hơn" và "Rất to" (phóng bitmap, không vỡ nếu ≤200%) |
+| Viền tương phản quanh con trỏ | bật khi nền tối? → mặc định **bật nhẹ** | giúp thấy con trỏ trên nền đen (terminal) |
+| Gợn sóng khi bấm | bật trên mobile, tắt trên desktop | tắt được 1 chạm |
+| "Điểm nhấn" khi double click | tắt | tránh nhiễu |
+| Ẩn con trỏ khi chỉ xem | bật | |
+
+### 20.7 Bàn phím & chạm
+- **Cách chạm** (mobile): `Chạm trực tiếp` / `Như trackpad` / `Chạm kèm kính lúp (mặc định)`. Ba lựa chọn, có hình minh hoạ động 1 giây.
+- **Bàn phím**: hàng phím phụ bật/tắt; vị trí toolbar (dưới/trên); sticky modifier (mặc định bật).
+- **Phím tắt của app**: danh sách cố định, hiện trong `⚙ → Trợ giúp phím tắt` (không cho đổi — tránh phá tính nhất quán; đây là chỗ duy nhất ta **không** cho tuỳ chỉnh, và nói rõ lý do).
+
+### 20.8 Âm thanh
+- Thanh âm lượng **của riêng mình** (client) — mặc định 70%, nhớ theo thiết bị. Tắt tiếng có nút riêng.
+- Nhớ trạng thái tắt tiếng theo app.
+- Không có EQ/mixer ở tầng 1; "âm lượng app trên server" là **Nâng cao** (vì nó đổi âm lượng thật của người ngồi máy — xâm lấn).
+
+### 20.9 Ngôn ngữ & định dạng
+- `Tiếng Việt` (mặc định) / `English`; tự theo ngôn ngữ trình duyệt lần đầu.
+- Định dạng ngày/giờ theo locale; 24h/12h chọn được. Thời lượng phiên hiện "1 giờ 12 phút", không phải "72m".
+
+### 20.10 Giao diện
+- Sáng / Tối / Theo hệ thống (mặc định).
+- Cỡ chữ UI: Nhỏ / Vừa / Lớn (mặc định Vừa) — áp dụng cả toolbar, không chỉ settings.
+- Tương phản cao (mặc định theo `prefers-contrast`).
+- Mật độ: thoáng / gọn.
+- **Không** cho đổi màu tuỳ ý (tránh phá khả năng đọc và trạng thái ngữ nghĩa).
+
+### 20.11 Thông báo
+| Loại | Mặc định | Chọn được |
+|---|---|---|
+| Cửa sổ bị đóng / app crash | banner | có |
+| Có người đang dùng máy | banner vàng | có |
+| Mạng yếu | tự ẩn sau 3 s, không lặp | có (mức: tất cả / chỉ quan trọng / tắt) |
+| Đã tự đổi chất lượng | toast nhỏ | có |
+| Kết nối lại thành công | không hiện (chỉ trạng thái) | có |
+- Không có notification đẩy ra ngoài trang (không Web Push) — tránh xin quyền thừa.
+
+### 20.12 Lưu & đồng bộ — ai thắng ai
+| Loại cài đặt | Lưu ở | Đồng bộ |
+|---|---|---|
+| Chính sách (trần chất lượng, allowlist, stealth level, bật/tắt audio) | server | admin đặt, **thắng** mọi thứ |
+| Sở thích hiển thị (fit/zoom, theme, cỡ chữ UI, ngôn ngữ) | server theo user | mọi thiết bị của user |
+| Sở thích theo thiết bị (mức chất lượng cho điện thoại, cách chạm) | localStorage | chỉ thiết bị đó |
+| Theo app (audio route, hide taskbar) | server theo app | mọi phiên của app đó |
+Thứ tự thắng: **chính sách > user > thiết bị**. Khi bị chính sách chặn → ghi rõ lý do, không disable im lặng.
+
+### 20.13 Hoàn tác, mặc định, xuất/nhập
+- Mỗi thay đổi: toast có **Hoàn tác** 5 s.
+- Mỗi mục: "Về mặc định" (↺ nhỏ bên phải) — chỉ hiện khi khác mặc định.
+- Mỗi nhóm: "Đặt lại nhóm này".
+- Toàn bộ: `⚙ → Nâng cao → Xuất cấu hình` (JSON) / `Nhập` — để chuyển máy hoặc nhờ hỗ trợ.
+- Thay đổi **nguy hiểm** (đổi default audio device, bật elevated, tắt thông báo…) → có bước xác nhận **một lần**, không hỏi lại.
+
+### 20.14 Tầng "Nâng cao" — chứa gì và mở thế nào
+- Mở bằng `⚙ → Nâng cao → Tôi hiểu các thiết lập này` (một lần, nhớ theo user).
+- Chứa: resolution tự chọn, DPI scale, encoder, bitrate/fps thật, cursor mode, kênh datachannel, debug barcode, đo glass-to-glass, công cụ chẩn đoán, xuất log.
+- **Không bao giờ** chứa thứ mà bật sai sẽ làm mất dữ liệu hoặc phá máy (ví dụ: không có "tắt mã hoá", không có "tắt audit", không có "chạy như SYSTEM").
+
+### 20.15 Lần đầu dùng — 4 bước, ≤ 60 giây
+1. **Đăng nhập** (1 màn hình).
+2. **Chọn cửa sổ** — chỉ tay vào 3 chỗ: thumbnail, tìm kiếm, nút Start. Có nút "Bỏ qua".
+3. **Điều khiển** — 3 điều duy nhất cần biết: kéo chuột = di chuyển, click = click, gõ = gõ; và `Esc Esc` = dừng điều khiển.
+4. **Chất lượng** — "Nếu thấy giật, bấm vào đây" (mở đúng nút).
+Không tour dài, không video, không bắt đọc. Có "Xem lại hướng dẫn" trong `⚙ → Trợ giúp`.
+
+### 20.16 Trạng thái rỗng & lỗi — luôn có hành động
+| Trạng thái | Không được làm | Phải làm |
+|---|---|---|
+| Không có cửa sổ nào | "Không có dữ liệu" | "Chưa có cửa sổ nào đang mở trên máy đó. Mở app bạn cần rồi bấm [Tải lại]." |
+| Không có quyền xem app đó | disable nút | "App này không nằm trong danh sách được phép. Liên hệ quản trị viên." |
+| Mất kết nối >30 s | spinner vô tận | "Đã mất kết nối. [Thử lại] [Chọn cửa sổ khác]" + nhớ cửa sổ cũ |
+| Thiếu driver | lỗi kỹ thuật | "Máy chưa cài màn hình ảo. [Cài tự động] (1 phút)" |
+| GPU yếu | im lặng giật | "Máy này phù hợp 1080p30" hiện ở picker trước khi Start |
+
+### 20.17 Mobile
+- Cài đặt mở bằng **bottom sheet** (không phải modal giữa màn hình), kéo xuống để đóng, nằm trong vùng ngón cái.
+- Mỗi mục cao ≥44 px. Không có dropdown nhỏ.
+- Thanh trên gộp còn 3 nút + menu `⋯`.
+- Không có hover-only hint — mọi gợi ý phải hiện được khi chạm.
+
+### 20.18 Accessibility của chính phần cài đặt
+- Điều hướng bằng bàn phím đầy đủ, `Esc` đóng, focus bị giữ trong sheet.
+- Mọi toggle có `role="switch"` + `aria-checked`; mọi slider có `aria-valuetext` đọc được ("8 trên 10").
+- Không truyền tải bằng màu đơn thuần.
+- `prefers-reduced-motion` → tắt animation minh hoạ (thay bằng ảnh tĩnh).
+- Kiểm tra với trình đọc màn hình (NVDA) các luồng: login → picker → đổi chất lượng → thoát.
+
+### 20.19 Cách viết chữ (để "dễ" thật sự)
+| ❌ Không viết | ✅ Viết |
+|---|---|
+| Bitrate / FPS / Codec / Latency | Lượng dữ liệu / Độ mượt / (không hiện) / Độ trễ |
+| Session | Phiên (hoặc "lần kết nối") |
+| Đang khởi tạo peer connection | Đang kết nối… |
+| 412 driver_missing | Máy chưa cài màn hình ảo. [Cài ngay] |
+| UIPI chặn input | App này chạy quyền quản trị nên có thể không điều khiển được |
+| Reconnect failed | Không kết nối lại được. [Thử lại] |
+- Câu ≤ 12 từ, chủ động, có chủ thể. Lỗi luôn kèm **một** hành động.
+
+### 20.20 Những thứ **không** cho tuỳ chỉnh (và nói rõ lý do)
+| Không cho đổi | Vì sao |
+|---|---|
+| Tắt mã hoá / hạ TLS | Không thể thoả hiệp bảo mật |
+| Tắt audit | Cần cho trách nhiệm & điều tra |
+| Tắt thông báo tray "đang bị điều khiển" | §2.4.2 |
+| Chọn codec bằng tay | H.264 luôn đúng; chọn sai = không xem được |
+| Tự đổi default audio device mà không xác nhận | Nguy cơ làm câm máy (§5.10.3) |
+| Chạy như SYSTEM / service | §2.3 |
+| Hook hệ thống | §14.3 |
+- Nguyên tắc: **tuỳ chỉnh để phù hợp, không phải để vô hiệu an toàn**. Chỗ nào bị giới hạn thì UI nói lý do bằng 1 câu, không giấu.
+
+## 21. Những gì còn thiếu (ngoài spec v3.1) — nhìn rộng
+
+Chương này là kết quả rà lại **toàn hệ thống** theo các trục: vận hành, người dùng, pháp lý, chất lượng, tiến hoá. Mỗi mục đều đã có quyết định, không phải danh sách "để sau".
+
+### 21.1 Chẩn đoán & sửa lỗi (thiếu hoàn toàn ở v3.1)
+Người dùng sẽ gặp: "không kết nối được", "giật", "không có tiếng", "gõ không ra chữ". Không thể bắt họ đọc log.
+
+**Nút "Chẩn đoán" (Tier 1, một chạm)** — chạy 12 kiểm tra song song, hiện bảng đơn giản:
+
+| Kiểm tra | Nếu fail → câu chữ + hành động |
+|---|---|
+| Phiên bản app/tray còn chạy | "Ứng dụng chưa chạy trên máy đó. [Khởi động lại]" |
+| Driver màn hình ảo | "Chưa cài màn hình ảo. [Cài tự động]" |
+| Thiết bị âm thanh ảo | "Chưa cài dây âm thanh ảo. [Cài]" hoặc "[Tiếp tục không có tiếng]" |
+| Encoder khởi tạo | "Máy không có bộ mã hoá phần cứng → dùng CPU (chậm hơn)" |
+| Cổng 443 nghe được | "Tường lửa đang chặn. [Sửa tự động]" (cần admin) |
+| UDP media (thử 100 gói) | "Tường lửa/router chặn UDP → chất lượng sẽ kém" |
+| ICE candidate + STUN | "Mạng chặn kết nối trực tiếp. [Xem hướng dẫn VPN]" |
+| Cert HTTPS | "Chứng chỉ không hợp lệ. [Tạo lại]" |
+| Màn hình ảo nhận được tín hiệu | "Màn hình ảo không hoạt động. [Khởi động lại driver]" |
+| Quyền điều khiển (UIPI) | "Bạn cần chạy ứng dụng bằng quyền quản trị để điều khiển app này" |
+| Đo latency 5 s | "Độ trễ hiện tại: 42 ms — tốt" |
+| Đo băng thông 5 s | "Băng thông: ~38 Mbps — đủ cho 1080p60" |
+
+- Kết quả: **1 nút "Sửa những gì sửa được"** (firewall rule, khởi động lại driver, cài thiếu) + nút "Sao chép báo cáo" (JSON, **không chứa** nội dung phiên, không chứa mật khẩu, có ảnh chụp stats).
+- Tự chạy **một lần** khi kết nối thất bại 2 lần liên tiếp, hiện kết quả thu gọn ("Có 1 vấn đề: tường lửa chặn UDP. [Xem]").
+
+### 21.2 Trạng thái → hành động (state coverage)
+Mọi trạng thái phải có: **câu giải thích + 1 hành động chính + đường thoát**. Bảng đầy đủ:
+
+| Trạng thái | Câu | Hành động chính |
+|---|---|---|
+| Chưa đăng nhập | "Đăng nhập để xem các cửa sổ" | form |
+| Đăng nhập sai | "Sai tên hoặc mật khẩu (còn 4 lần thử)" | thử lại |
+| Bị khoá | "Tạm khoá 14:32 — thử lại sau" | đếm ngược |
+| Không có cửa sổ | §20.16 | Tải lại |
+| Đang chuẩn bị | "Đang chuẩn bị màn hình… 2 s" | Huỷ |
+| Đang kết nối | "Đang kết nối…" | Huỷ |
+| Đang chạy | — | (toolbar) |
+| Đang chuyển cửa sổ | "Đang chuyển…" | Huỷ (giữ cửa sổ cũ) |
+| Mạng yếu | "Mạng yếu — đã giảm chất lượng" | chi tiết |
+| Mất kết nối, đang thử lại | "Đang kết nối lại… (2/8)" | Thử lại ngay / Kết thúc |
+| Mất kết nối hẳn | §20.16 | Thử lại / cửa sổ khác |
+| App bị đóng | "App đã đóng trên máy đó" | chọn cửa sổ khác |
+| Máy bị khoá | "Máy đang khoá — cần mở khoá trên máy thật" | (không có) + giải thích |
+| Chỉ xem | nhãn mắt | Yêu cầu quyền điều khiển (T2) |
+| Bị admin đóng | "Quản trị viên đã kết thúc phiên" | OK |
+| Hết thời gian | "Đã hết thời gian (12 giờ)" | tạo lại |
+
+### 21.3 Xử lý lỗi phía client (chưa có ở v3.1)
+| Tình huống | Hiện tại (v3.1) | Phải làm |
+|---|---|---|
+| JS lỗi giữa phiên | trắng màn hình, treo | **Error boundary**: bắt `window.onerror` + `unhandledrejection` → hiện "Có lỗi, đang khôi phục…" → reload trang (session còn sống nhờ grace 30 s + resume §6.11.1) |
+| Mất WS | đã có | + banner nhỏ, không chặn video |
+| Không tạo được RTCPeerConnection | im lặng | "Trình duyệt này không hỗ trợ WebRTC" + gợi ý |
+| Trình duyệt quá cũ | có thể lỗi khó hiểu | kiểm tra capability **trước khi login** → trang "trình duyệt chưa hỗ trợ" với danh sách |
+| Hết bộ nhớ (phiên dài, tab khác nặng) | video đứng | phát hiện `video.played` không tiến → gợi ý reload |
+| Storage bị chặn (chế độ riêng tư) | lỗi im lặng khi ghi localStorage | try/catch, chạy không lưu |
+| Tab bị kill (Android) | mất phiên | resume + thông báo |
+| `navigator.mediaDevices` không có | — | không dùng, nhưng kiểm tra |
+| Autoplay audio bị chặn | có | + phát hiện `play()` reject → hiện nút |
+
+### 21.4 Tính bền & tài nguyên (thiếu)
+| Vấn đề | Rủi ro thật | Giải pháp |
+|---|---|---|
+| Phiên chạy nhiều ngày | rò rỉ handle/VRAM → crash | soak test 72 h trong CI; đếm handle (`GetGuiResources`) mỗi phút, cảnh báo khi tăng đơn điệu; tự khởi động lại capture pipeline nếu rò |
+| Tray app crash | mất điều khiển giữa phiên | Task Scheduler restart-on-failure + state file restore (§9.2.4) + client thấy `closed` |
+| Mất điện khi đang move cửa sổ | cửa sổ mồ côi trên display ảo | state file ghi **trước** khi move; khởi động lại → rescue (§9.2.3) |
+| Ổ đĩa đầy (log) | app chết | log rotate 10 MB × 5, không log frame |
+| Rò rỉ VRAM nhiều phiên | GPU hết bộ nhớ | đóng duplication đúng thứ tự; đo VRAM/phiên; giới hạn phiên |
+| RAM tăng theo thời gian | OOM | mỗi module có trần buffer; drop thay vì queue |
+| Driver VDD lỗi | không capture được | phát hiện + hướng dẫn cài lại + đường lui: capture màn hình thật (chế độ suy giảm) |
+| Nâng cấp app khi đang có phiên | phiên chết giữa việc | updater kiểm tra phiên đang chạy → hoãn, hoặc hỏi |
+
+### 21.5 Cập nhật & phiên bản
+- **Auto-update có kênh** (stable/beta), ký số, kiểm tra chữ ký trước khi chạy.
+- **Không tự cập nhật khi đang có phiên**; hiện "Có bản mới — cập nhật khi kết thúc phiên".
+- Kiểm tra tương thích: server cũ + client mới → API có version, server trả `min_client`. Ngược lại client cũ + server mới → giữ tương thích 2 phiên bản gần nhất.
+- **Migration**: config/state file có `schema_version` + migrate một chiều, có backup trước khi migrate.
+- Rollback: giữ 1 bản trước, cho phép quay lại trong 7 ngày.
+- Release note hiện **trong app** (không bắt vào web).
+
+### 21.6 Backup & phục hồi cấu hình
+- Export/import JSON (đã có §20.13) + backup tự động trước mỗi lần migrate.
+- Khôi phục mật khẩu admin: mã hoá bằng DPAPI machine-scope; nếu mất → quy trình reset **offline** (dừng app, chạy `rd.exe reset-admin` tại máy, cần quyền admin OS) — không có "email reset".
+- Nếu mất khoá ký JWT → mọi phiên bị đăng xuất, người dùng đăng nhập lại (chấp nhận).
+
+### 21.7 Chia sẻ & cộng tác (Tier 2, đã có handover — bổ sung)
+| Tính năng | Chi tiết |
+|---|---|
+| **Link xem tạm** | tạo link một lần, hết hạn 1–24 h, chỉ view-only, thu hồi được, có audit. Link = token ngẫu nhiên 256-bit, **không** phải mật khẩu user |
+| **Xem cùng lúc (2 người)** | 1 người điều khiển + 1 người xem; người xem không chiếm quyền; hiện "2 người đang xem" |
+| **Chuyển quyền điều khiển** | nút "Cho [tên] điều khiển" — nguyên tử (atomic), release_all trước khi chuyển (tránh kẹt input) |
+| **Xin quyền** | người xem bấm "Xin điều khiển" → người đang điều khiển nhận thông báo chấp nhận/từ chối |
+| **Ghi chú trên màn hình (T3)** | whiteboard có nút xoá tất cả; không lưu |
+
+### 21.8 Người dùng phía máy bị điều khiển
+- **Icon tray** đổi trạng thái + tooltip "Ai đang điều khiển, từ đâu, bao lâu".
+- **Menu tray**: "Xem ai đang kết nối" · "Dừng điều khiển ngay" (ngắt phiên, **không** cần quyền của người điều khiển) · "Chặn người này".
+- **Phím tắt khẩn cấp tại máy**: `Ctrl+Alt+Shift+X` → ngắt mọi phiên ngay (hoạt động cả khi app treo UI, vì là hotkey toàn cục do app đăng ký).
+- Trước khi phiên bắt đầu: nếu `presence` báo có người đang dùng máy, tray hiện "Sắp có người điều khiển cửa sổ X" 2 s trước (trừ khi đã cấu hình tắt cái này — nhưng vẫn giữ §2.4.2).
+- **Người ngồi máy luôn có quyền dừng** — đây là nguyên tắc, không phải tuỳ chọn.
+
+### 21.9 Ranh giới pháp lý & tuân thủ (bổ sung, không phải luật sư)
+| Vấn đề | Cách xử lý trong sản phẩm |
+|---|---|
+| Ghi hình phiên (T3) | mặc định **tắt**; nếu bật, **cả 2 phía** thấy chỉ báo đỏ "đang ghi"; lưu mã hoá; tự xoá sau N ngày (cấu hình) |
+| Dữ liệu cá nhân (GDPR-style) | audit giữ 90 ngày cấu hình được; export/xoá theo user; không log nội dung (§9.10) |
+| Clipboard ảnh (có thể chứa dữ liệu nhạy cảm) | chỉ explicit, có audit, có thể tắt toàn cục |
+| Người dùng ở nước khác | cảnh báo trong docs: mã hoá đúng, nhưng luật nơi bạn dùng có thể yêu cầu thông báo/đồng ý |
+| Log chứa IP | IP là dữ liệu cá nhân ở nhiều nơi → nói rõ trong chính sách lưu trữ |
+
+### 21.10 Hỗ trợ khách hàng / vận hành
+- **Gói chẩn đoán** (1 file zip): version, config (đã lọc secret), 500 dòng log cuối, kết quả 12 kiểm tra §21.1, thông tin GPU/driver/OS. **Không** chứa mật khẩu/khoá/frame.
+- **Xem trước khi gửi**: hiện nội dung gói, người dùng thấy hết trước khi tải lên (không tự upload).
+- Tài liệu: 1 trang "Không kết nối được" với 8 nguyên nhân phổ biến theo thứ tự tần suất thực.
+
+### 21.11 Chất lượng & quy trình (engineering)
+| Việc | Khi nào |
+|---|---|
+| Unit test phần thuần (protocol, mapping toạ độ, state machine) | mỗi commit |
+| **Test toạ độ tự động**: ảnh mẫu + crosshair 4 góc + giữa, 4 mức DPI, 2 cấu hình màn hình → so pixel | mỗi PR |
+| **Test kẹt input**: 20 kịch bản blur/mất mạng | mỗi PR |
+| E2E Playwright: login → picker → phiên → đổi chất lượng → thoát | mỗi PR |
+| Soak 72 h | hàng đêm |
+| Đo §17.3 (glass-to-glass) | mỗi release |
+| Fuzz protocol (REST + WSS + datachannel) | mỗi tuần |
+| Quét dependency (RustSec, GStreamer CVE) | hàng tuần |
+| Test trên máy thật (ma trận §17.2) | mỗi release |
+| Đo bundle/latency **client** trên điện thoại cũ (4 năm) | mỗi release |
+
+### 21.12 Rủi ro & phương án (top 8)
+| Rủi ro | Khả năng | Ảnh hưởng | Giảm thiểu |
+|---|---|---|---|
+| Phase 0 không đạt 80 ms | Trung bình | Cao | §16.6 đường lui; quyết định sau 1 tuần, không sau 6 tuần |
+| VDD không ổn định trên Win11 build mới | Trung bình | Cao | Kênh Amyuni IDD (thương mại) làm dự phòng; test sớm |
+| Defender/EDR gắn cờ (S1/S2) | **Cao** | Cao | Ký số, không hook, giữ thông báo tray, tài liệu whitelist, **không** hứa "không bị flag" |
+| Per-app audio API không ổn định theo build | Trung bình | Trung bình | Fallback đổi default device (có watchdog) + hướng dẫn Volume Mixer |
+| GStreamer webrtcbin khó dùng | Trung bình | Trung bình | Spike 3 ngày với 1 luồng tối giản trước khi cam kết; thay bằng Pion sidecar |
+| Scope creep (Tier 3) | Cao | Trung bình | Tier 1 chốt cứng; mọi thêm mới phải cắt thứ khác |
+| Bus factor 1 dev | Cao | Cao | Tài liệu kiến trúc + test tự động + không dùng công nghệ quá lạ |
+| Người dùng không đọc hướng dẫn | Cao | Thấp | §20.15/§20.16 + chẩn đoán tự động |
+
+### 21.13 Kế hoạch đo & tiêu chí "phase xong"
+| Phase | Xong khi |
+|---|---|
+| 0 | 1080p60, p95 <80 ms LAN đo bằng barcode; cursor local 0 ms; quyết định stack được ghi lại |
+| 1 | 13 mục §17.1 pass; 0 lần kẹt input trong 50 thử; uninstall sạch (máy trở lại như trước); soak 24 h không rò |
+| 2 | §21.7 hoạt động; multi-user; chẩn đoán §21.1 pass trên 3 máy khác cấu hình |
+| 3 | theo nhu cầu thực tế |
+
+### 21.14 Những thứ **cố tình không làm** (ghi để không ai hỏi lại)
+| Không làm | Lý do |
+|---|---|
+| Điều khiển màn hình login/UAC | §2.3 |
+| Hidden desktop `WinSta0\HVNC` | §5.2 (mất state, giống malware) |
+| Hook API / `SetWindowsHookEx` | §14.3 |
+| Giấu process khỏi Task Manager | §14.5 |
+| SFU/nhiều người xem hàng loạt | không cần; P2P đủ |
+| App native mobile | yêu cầu là browser |
+| HDR streaming | chỉ tonemap |
+| Cloud relay | tự chủ, không phụ thuộc bên thứ ba |
+| TURN mặc định | §13.1 |
+| Đa nền tảng server (macOS/Linux lúc này) | kiến trúc Windows-first; ghi nhận là hướng mở rộng |
+
+### 21.15 Hướng mở rộng sau này (không cam kết)
+- Server trên macOS (ScreenCaptureKit) / Linux (PipeWire + XDG portal) — dùng lại client, đổi core.
+- Điều khiển **nhiều máy** từ 1 dashboard (danh sách máy → cửa sổ).
+- "Text mode" cho mạng cực yếu (chỉ gửi diff UI dạng ảnh nhỏ/vector).
+- Chia sẻ ứng dụng cho 2–3 người xem đồng thời qua SFU nhỏ (LiveKit) — chỉ khi có nhu cầu thật.
