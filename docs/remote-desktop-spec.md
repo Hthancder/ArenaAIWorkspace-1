@@ -1,6 +1,6 @@
-# SPEC v3.9 — Remote Desktop qua trình duyệt: HVNC + VNC, window picker, âm thanh server-side, **trải nghiệm điều khiển đầy đủ**
+# SPEC v3.10 — Remote Desktop qua trình duyệt: HVNC + VNC, window picker, âm thanh server-side, **trải nghiệm điều khiển đầy đủ**
 
-- Phiên bản: **v3.9** (v3.8 + **§39 một pass GPU**: gộp scale+màu+tonemap+NV12, matrix/range/chroma-siting/dither đúng chuẩn, HDR BT.2408, shader pseudo-code, 7 test pattern CI): hai thiết bị một lõi — mobile zero-chrome, grip 3 tầng, radial 8 ô, command registry, flow contract FE↔BE**)
+- Phiên bản: **v3.10** (v3.9 + **§40 âm thanh**: tách routing↔capture, AudioPolicyConfig không tài liệu, 3 mức routing + kiểm chứng bằng session enumeration, WASAPI loopback bẫy, ASRC chống drift, device notifications · **§0.2 bản đồ 8 lĩnh vực thay cho đi mãi một nhánh**): hai thiết bị một lõi — mobile zero-chrome, grip 3 tầng, radial 8 ô, command registry, flow contract FE↔BE**)
 - Trạng thái: **Đề xuất — CHƯA implement, chờ duyệt**
 - Nền tảng: Server **Windows 10 2004+ / Windows 11** · Client **trình duyệt** (không app)
 
@@ -23,6 +23,7 @@
 | **v3.7** | **§37 ba vòng điều khiển lồng nhau (CC 200 ms / trim 500 ms / encoder 16 ms) · đo bitrate tại pacer là sự thật duy nhất · trim loop công thức · NVENC (`rc-mode=cbr`, VBV, zeroLatency, không multipass) · QSV (`BufferSizeInKB` bẫy 8×, LowDelayBRC, sai số lớn nhất) · AMF (EnforceHRD, không filler, yếu ở bitrate thấp) · x264 (`vbv-bufsize` bắt buộc + `sliced-threads` — thiếu là trễ 130 ms) · 10 bất biến chung · xung đột CBR↔tĩnh↔tiết kiệm pin · chi phí đổi cấu hình · giới hạn slot + fallback · 8 kiểm chứng · bảng ánh xạ 4 hãng** |
 | **v3.8** | **§38 hai cơ chế hạ res (native vs post-scale) — §36.9 đã gộp sai · vì sao chữ chết (nội suy + 4:2:0 + deblock) · chọn scaler có số (bicubic/area GPU, cấm Lanczos cho text) · bậc thang tỉ lệ sạch 3/4 & 1/2 · sharpening có điều kiện (tắt khi <3 Mbps) · giới hạn 4:2:0 không vượt được · phân loại text/motion để chọn giảm fps hay res · chống UI nhảy khi đổi res · đo bằng **OCR CER** thay vì cảm tính** |
 | **v3.9** | **§39 vì sao gộp 1 pass (10–13 ms → 2–4 ms) · 4 lỗi chuẩn: matrix BT.709, range limited 16–235, chroma **left-sited**, dither TPDF · chuỗi 7 bước đúng thứ tự · ma trận số cụ thể · scale ở **gamma** (không linear — linear làm chữ mờ) · HDR PQ→SDR với 203 nits + BT.2020→709 · bỏ alpha · giới hạn ICC/10-bit/4:4:4 · pseudo-HLSL 1 dispatch · 3 fallback · **7 test pattern CI** (grey ramp/color bars/1px chroma line/HDR)** |
+| **v3.10** | **§40 audio: routing ≠ capture · AudioPolicyConfig không có API tài liệu (rủi ro #1) · 3 mức routing (per-app → toàn máy → như VNC) + **kiểm chứng bằng EnumerateSessions** (phát hiện cả rò rỉ `audio_leak`) · app chỉ đọc thiết bị lúc khởi động · WASAPI loopback không có event khi im lặng ⇒ polling · `IMMNotificationClient` (không giành lại default device của người dùng) · **ASRC chống drift ±100 ppm = 720 ms/2 h** · toggle dùng `NULL` + SSRC mới · 12 test chấp nhận · Bluetooth client +150–300 ms không sửa được** · **§0.2 bản đồ 8 lĩnh vực, luật ≤2 lượt liên tiếp mỗi lĩnh vực** |
 
 ### 0.1 v3.0 sửa gì — danh sách "còn thiếu" (đây là lý do v2.1 chưa đủ)
 
@@ -51,35 +52,44 @@
 
 ---
 
-### 0.2 Cách spec này được hoàn thiện (depth-first, không rà rộng)
+### 0.2 Bản đồ nhánh: rẽ khắp spec, không đi mãi một nhánh
 
-Một lượt rà rộng 20 chỗ thì chỗ nào cũng nông. Spec này được làm theo **một nhánh tại một thời điểm**: chọn chỗ thiếu **quan trọng nhất**, làm tới mức implement được, rồi ghi lại **những nhánh mới rẽ ra** từ chỗ đó, và đi tiếp.
+**Sai lầm đã mắc (v3.5 → v3.9):** đi 5 lượt liền trong **một** nhánh (video pipeline §35–39) tới mức đo ΔE2000, trong khi **cả một hệ thống con** (âm thanh §40) mới chỉ có kết luận, và **bảo mật, multi-session, đóng gói** vẫn là dòng tóm tắt.
 
-**Hàng đợi nhánh (cập nhật mỗi lượt, theo thứ tự ưu tiên):**
+**Cách đúng:** spec được chia thành **8 lĩnh vực**. Mỗi lượt tôi chọn **lĩnh vực nông nhất** (hoặc bị chặn), đào **một tầng**, rồi **chuyển lĩnh vực khác** — chỉ quay lại khi có lý do cụ thể. Dấu ● số tầng đã đào.
 
-| # | Nhánh | Trạng thái | Rẽ ra từ |
+| Lĩnh vực | Tầng 1 (khung) | Tầng 2 (cơ chế) | Tầng 3 (số & kiểm chứng) | Trạng thái |
+|---|---|---|---|---|
+| **A. Video/capture/encode** | §5.5, §8.3 | §35, §37, §38, §39 | §36 | ●●● **sâu nhất** — tạm dừng |
+| **B. Âm thanh** | §5.10 | **§40** | §40.13 | ●● vừa |
+| **C. Input & bàn phím** | §5.7, §5.8, §6.4–6.7 | — | — | ● nông |
+| **D. Giao diện & trải nghiệm** | §22–25, §28–34 | — | — | ● nông (rộng nhưng mỏng) |
+| **E. Bảo mật & tin cậy** | §10, §26.2 | — | — | ● nông |
+| **F. Vận hành & triển khai** | §13, §26 | — | — | ● nông |
+| **G. Bền vững & tiến hoá** | §21, §35.12 | — | — | ● nông |
+| **H. Hiệu năng client** | §26.11, §30.1 | — | — | ● rất nông |
+
+**Hàng đợi (theo lĩnh vực nông nhất trước, không theo thứ tự cảm hứng):**
+
+| # | Nhánh | Lĩnh vực | Vì sao ưu tiên |
 |---|---|---|---|
-| 1 | **Mô hình thực thi pipeline thời gian thực** (thread, hàng đợi, buffer, drop, restart, shutdown, ngân sách độ trễ) | ✅ **xong — §35** | toàn bộ sản phẩm |
-| 2 | **Transport tuning & điều tiết băng thông** (phân loại mất gói, máy trạng thái CC, budget alloc, IDR storm, FEC/NACK, playout-delay, ladder, CI netem) | ✅ **xong — §36** | §35.6 |
-| 2a | **Encoder rate-control theo từng hãng** | ✅ **xong — §37** | §36.10 |
-| 2b | **Scaler & độ nét khi hạ resolution** | ✅ **xong — §38** | §36.9, §37.9 |
-| 2c | Đo TWCC/REMB trên GStreamer (probe element / Pion sidecar) | ⬜ **chặn Phase 0** | §36.1 |
-| 2d | Chọn encoder theo nội dung & theo phiên (chấm điểm) | ⬜ | §37.10 |
-| 2e | Ma trận driver/toolchain tối thiểu theo hãng | ⬜ | §37.12 |
-| 2f | **BGRA→NV12 & HDR/tonemap trong cùng pass GPU** | ✅ **xong — §39** | §38.6 |
-| 2g | Phân loại nội dung sâu hơn | ⬜ | §38.7 |
-| 2h | **Đồng bộ caps/màu capture↔GStreamer↔encoder (chống videoconvert CPU)** | ⬜ | §39.15 |
-| 2i | Đa màn hình & per-monitor HDR | ⬜ | §39.8 |
-| 3 | Fault injection & chaos harness (ACCESS_LOST, audio device mất, mạng đứt, driver reset) | ⬜ | §35.14 |
-| 4 | Vòng đời cửa sổ & display (state machine + phục hồi sau crash) | ⬜ | §35.10 |
-| 5 | Threat model theo từng bề mặt (HTTP/WS/DC/tray/driver/local) | ⬜ | §35.13 |
-| 6 | Multi-session & chia sẻ tài nguyên (1 capture → N encode) | ⬜ | §35.4 |
-| 7 | Client perf budget trong CI (đo thật, chặn merge) | ⬜ | §26.11 |
-| 8 | Installer/uninstaller: hành vi chính xác + kiểm chứng rollback | ⬜ | §13.7 |
-| 9 | Accessibility lượt sâu (screen reader, bàn phím, contrast thực đo) | ⬜ | §6.12 |
-| 10 | Legal/consent UX & thoả thuận người bị điều khiển | ⬜ | §2.4 |
+| 1 | **Threat model & tin cậy giữa các thành phần** | E | chưa có; ảnh hưởng thiết kế chứ không chỉ thêm test |
+| 2 | **Multi-session: tài nguyên, cách ly, 1 capture → N encode** | F | §37.10 mới nêu giới hạn slot, chưa có kiến trúc |
+| 3 | **Đóng gói & vòng đời cài đặt** (MSI, driver, rollback kiểm chứng được) | F | nơi hay hỏng nhất khi giao cho người dùng |
+| 4 | **Hiệu năng client đo trong CI** | H | có ngân sách nhưng chưa có cách chặn |
+| 5 | **Input sâu**: IME server-side, accessibility, game/Raw Input, remote-in-remote | C | ● nông, ảnh hưởng trực tiếp cảm giác dùng |
+| 6 | **Mô hình dữ liệu & migration sâu** (đã có bảng, chưa có hành vi) | G | |
+| 7 | **UI: state thực thi** (skeleton/optimistic/lỗi từng màn hình, không chỉ wireframe) | D | |
+| 8 | **Accessibility lượt sâu** | D | |
+| 9 | **Consent UX người bị điều khiển** | E | |
+| 10 | **Cert/proxy/trust chain sâu** | E | |
+| 11 | Fault injection harness | A/G | chỉ làm **sau** khi các nhánh khác ổn định |
+| 12 | Đo TWCC/REMB trên GStreamer | A | **chặn Phase 0**, làm cùng lúc spike |
 
-Nguyên tắc đi tiếp: **không mở nhánh mới khi nhánh hiện tại còn câu hỏi mở**, trừ khi nhánh mới chặn nhánh cũ.
+**Luật đi tiếp:**
+1. Không quá **2 lượt liên tiếp** trong cùng một lĩnh vực.
+2. Mỗi lượt phải đưa một lĩnh vực từ ● lên ●● (tầng cơ chế), không chỉ thêm chi tiết cho lĩnh vực đã ●●●.
+3. Nhánh mới rẽ ra được **ghi vào bảng**, không đi ngay — trừ khi nó **chặn Phase 0**.
 
 ## 1. Tóm tắt
 
@@ -3991,3 +4001,194 @@ void CS(uint3 id : SV_DispatchThreadID) {
 | **#2h Đồng bộ 3 nguồn màu giữa capture ↔ scaler ↔ encoder** (DXGI color space, GStreamer caps negotiation `video/x-raw(memory:D3D11Memory)`, NV12 vs P010) | §39.3 cần khai báo caps chính xác nếu không GStreamer tự chèn `videoconvert` CPU ⇒ mất toàn bộ lợi ích |
 | **#2i Đa màn hình & per-monitor HDR** (màn hình 1 SDR, màn hình 2 HDR) | §39.8 giả định 1 display; thực tế có thể khác nhau |
 | **#3 Fault injection harness** | vẫn chờ, **kế tiếp đề xuất** |
+
+---
+
+## 40. Âm thanh: routing, capture, drift, toggle (nhánh #4 — cả một hệ thống con còn nông)
+
+> §5.10 và §9.6 mô tả audio bằng **kết luận** — *"per-app routing dùng Audio Policy Config API, nếu không ổn định thì fallback đổi default device"*. Đó là câu **không implement được**: không có API per-app routing **có tài liệu** trên Windows, "ổn định" không định nghĩa, và "fallback" là đổi hành vi **toàn máy** của người dùng.
+> Chương này tách audio thành **hai bài toán khác nhau** (routing vs capture), nói rõ cái nào **không có API chính thức**, và định nghĩa **cách kiểm chứng routing đã thành công** — thứ thiếu hoàn toàn.
+
+### 40.1 Vì sao audio khó hơn video
+| | Video | Audio |
+|---|---|---|
+| Nguồn | 1 (display) — **luôn có** | nhiều app, **có thể không có gì đang phát** |
+| "Đúng" nghĩa là gì | đúng pixel | **đúng cả về nội dung lẫn thời điểm** (lệch 40 ms đã nghe ra) |
+| Đổi cấu hình | 1 IDR, 150–600 ms | mất tiếng 200–600 ms, dễ nghe thấy hơn nhiều |
+| API | DDAPI (tài liệu đầy đủ) | routing per-app **không có API tài liệu** |
+| Drift | không (frame theo vsync) | **có thật**: clock thiết bị ≠ clock hệ thống |
+| Lỗi phổ biến | màu lệch | **mất tiếng vĩnh viễn trên máy người dùng** (nếu routing sai và không watchdog) |
+> Video hỏng thì thấy ngay. Audio hỏng thì **hoặc** người dùng mất tiếng máy thật, **hoặc** người ngồi máy nghe tiếng lẽ ra phải im (phá HVNC). Cả hai đều tệ hơn "hình hơi mờ".
+
+### 40.2 Tách đôi bài toán (spec cũ gộp làm một → mọi lẫn lộn từ đây)
+| Bài toán | Câu hỏi | Ai kiểm soát | Độ tin cậy |
+|---|---|---|---|
+| **A. Routing** | "âm thanh của app X **đi vào đâu**?" | Windows mixer / AudioPolicyConfig | ⚠️ **không có API chính thức** |
+| **B. Capture** | "làm sao **lấy** âm thanh từ thiết bị Y vào stream?" | WASAPI loopback | ✅ tài liệu đầy đủ, tin cậy |
+- §5.10 trộn hai cái này nên đọc thành "nếu routing không được thì capture cũng hỏng" — không đúng: capture loopback **luôn** làm được, chỉ có *nội dung* nó bắt được là tuỳ routing.
+- **Hệ quả thiết kế:** nếu routing thất bại, ta vẫn **stream được** — chỉ là sai nội dung (hoặc im lặng). Đây là trạng thái **phải phát hiện và nói ra**, không phải im lặng.
+
+### 40.3 Routing — các cơ chế thật trên Windows (và rủi ro từng cái)
+| # | Cơ chế | Phạm vi | Tài liệu | Rủi ro |
+|---|---|---|---|---|
+| 1 | **AudioPolicyConfig** (`AudioPolicyConfigFactory`, COM không tài liệu; EarTrumpet dùng) | **per-app** | ❌ **không** | thay đổi giữa các build Windows; interface GUID/version phải dò; có thể ngừng hoạt động sau update |
+| 2 | **Settings → Volume Mixer** (Win11 22H2+) | per-app, qua UI | ✅ (UI) | **không điều khiển được bằng API** ⇒ chỉ hướng dẫn người dùng |
+| 3 | **`IPolicyConfig::SetDefaultEndpoint`** (không tài liệu) | **toàn máy** | ❌ | đổi trải nghiệm **của mọi app** + rủi ro mất tiếng nếu crash (§5.10.3 watchdog) |
+| 4 | **`ISimpleAudioVolume`** | per-app, **chỉ âm lượng**, không đổi thiết bị | ✅ | không giải quyết routing |
+| 5 | **APO / virtual device là default** | toàn máy | ✅ | như 3 |
+| 6 | **App tự cho chọn output** (VLC, OBS, một số DAW) | per-app | ✅ | chỉ app đó; hướng dẫn người dùng |
+> **Sự thật phải chấp nhận:** Windows **không** cung cấp API per-app routing có tài liệu, **không** có API để "di chuyển session audio sang thiết bị khác" một cách chính thức. Mọi giải pháp đều dựa trên COM không tài liệu (1, 3) hoặc UI (2).
+> **Đây là rủi ro #1 của toàn bộ tính năng audio** và phải kiểm chứng ở Phase 0 trên nhiều build. Nếu AudioPolicyConfig không dùng được: chuyển sang **mô hình khai báo** (§40.5) chứ không phải cố vá.
+
+### 40.4 Chiến lược routing: 3 mức, tự chọn, có kiểm chứng
+```
+Mức A — per-app (ưu tiên, đúng yêu cầu HVNC)
+   thử AudioPolicyConfig cho (app pid, endpoint = CABLE Input)
+   → KIỂM CHỨNG (§40.6): session của pid có xuất hiện trên CABLE không?
+   → thành công: dùng
+   → thất bại: xuống mức B, và NÓI RA
+Mức B — toàn máy (fallback)
+   SetDefaultEndpoint(CABLE Input) + watchdog + state file (§5.10.3)
+   → cảnh báo 1 lần: "máy sẽ im lặng trong lúc điều khiển"
+Mức C — không đổi gì (chế độ "nghe như VNC")
+   loopback trên default device thật; người ngồi máy VẪN nghe
+   → dùng cho mode VNC, hoặc khi người dùng chọn "như đang ở máy" (§9.6.1)
+```
+**Luật chọn mức:**
+1. Người dùng chọn ở màn hình tạo phiên (§9.6.1); mức A là mặc định cho HVNC.
+2. **Không tự xuống B mà không nói** — vì B làm **im cả máy**. Toast: *"Không tách riêng được tiếng của app này. [Đổi cả máy (máy sẽ im)] [Chỉ nghe như VNC]"* — người dùng quyết.
+3. Mức C **không bao giờ** tự chọn cho HVNC (phá mục đích "không nghe").
+4. Sau khi chọn, **lưu theo app exe** (§9.6.2), lần sau áp dụng luôn — nhưng **vẫn kiểm chứng** rồi mới tin.
+
+### 40.5 App chỉ đọc thiết bị lúc khởi động (bẫy lớn nhất về UX)
+- Rất nhiều app khởi tạo WASAPI **một lần** khi mở và **không** theo dõi đổi thiết bị: Chrome/Electron (một số bản), game, app cũ.
+- → đổi routing **không có tác dụng** cho tới khi app khởi động lại.
+- **Không được** kill app của người dùng. Thiết kế:
+  | Tình huống | Hành vi |
+  |---|---|
+  | Kiểm chứng thấy session **không** xuất hiện trên CABLE | hiện gợi ý **một lần**: *"App này cần khởi động lại để chuyển âm thanh. [Tôi tự làm] [Bỏ qua]"* (nút đầu chỉ hiện nếu app không có dữ liệu chưa lưu — ta **không thể biết**, nên **không** cung cấp nút tự restart) |
+  | App đang phát (state Active) nhưng trên default device thật | cảnh báo `audio_routing_stale` + trạng thái "Đang phát ở loa thật" |
+  | Không phát gì | không cảnh báo (không biết được) |
+- Ghi vào §6.13 (giới hạn trung thực): *"một số app cần khởi động lại mới đổi được thiết bị âm thanh"*.
+
+### 40.6 Kiểm chứng routing — vòng lặp bắt buộc (thứ §5.10 thiếu hoàn toàn)
+Sau khi đổi routing, **không tin** kết quả trả về. Kiểm chứng bằng **trạng thái thật**:
+```
+1. IAudioSessionManager2 trên device đích (CABLE) → EnumerateSessions
+2. lấy IAudioSessionControl2::GetProcessId cho từng session
+3. tìm pid của app target
+   → thấy + state == Active      : OK (đang thật sự phát vào CABLE)
+   → thấy + state == Inactive    : OK về routing (chưa phát gì)
+   → KHÔNG thấy                   : routing thất bại → §40.5
+4. lặp lại sau 2 s và 10 s (một số app tạo session muộn)
+```
+- Đây cũng là cách phát hiện **"app không phát tiếng"** cho UX (§9.6.4): không có session Active nào trên CABLE ⇒ hiện gợi ý.
+- Và là cách phát hiện **rò rỉ**: session Active của app target **vẫn còn** trên loa thật sau khi đã route ⇒ `audio_leak` — cảnh báo **ngay** (đây là lỗi phá HVNC nghiêm trọng nhất).
+
+### 40.7 Capture — WASAPI loopback, các bẫy cụ thể
+| Bẫy | Chi tiết | Xử lý |
+|---|---|---|
+| **Event-driven loopback không fire khi im lặng** | `AUDCLNT_STREAMFLAGS_EVENTCALLBACK` + loopback: khi không có app phát, **không có event** ⇒ stream "treo" và không bao giờ chạy lại | **Dùng polling timer 10 ms** (không dùng event callback) cho loopback; hoặc event + timer dự phòng |
+| Loopback trả **gói im lặng** chứ không phải "không có gì" | vẫn nhận buffer 0 | tốt: giữ stream sống; nhưng **không** đẩy lên encoder — dùng DTX (§40.9) |
+| **Exclusive mode** | app chiếm device exclusive ⇒ loopback **fail** (`AUDCLNT_E_DEVICE_IN_USE`) | báo `audio.exclusive_mode`, gợi ý đổi sang shared, **không** tự đổi |
+| **Format** | device mix format có thể 44.1/48 kHz, 16/24/float32, mono/stereo/5.1 | dùng `AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | SRC_DEFAULT_QUALITY` nếu cần; mặc định xin **48 kHz float32 stereo** và để WASAPI chuyển |
+| **`AUDCLNT_E_DEVICE_INVALIDATED`** | device bị rút/xoá/driver reset | reinit + thông báo; **không** crash pipeline |
+| Buffer quá nhỏ | < 10 ms ⇒ underrun, tiếng rè | 2 buffer × 10 ms là tối thiểu; 3 × 10 ms an toàn hơn (+10 ms trễ) |
+| **Sample rate mismatch** giữa lúc init | đổi rate khi đang chạy | phải reinit; phát hiện qua invalidated |
+| Không có gì phát **trong 20 s** | session Inactive | vẫn capture (giữ stream), nhưng **không gửi** gói → tiết kiệm pin/data (§35.11 tinh thần) |
+
+### 40.8 Device change notification — không thể thiếu
+`IMMNotificationClient` trên `IMMDeviceEnumerator`:
+| Callback | Dùng cho |
+|---|---|
+| `OnDefaultDeviceChanged` | phát hiện người dùng đổi default giữa phiên (⇒ nếu đang mức B, **giành lại**? **KHÔNG** — ghi nhận + cảnh báo; nếu giành lại sẽ đánh nhau với người dùng) |
+| `OnDeviceStateChanged` (Disabled/Unplugged/Removed) | `audio_unavailable` + retry §5.10 |
+| `OnDeviceAdded` | nếu cable xuất hiện lại → khôi phục |
+| `OnDevicePropertyChanged` | đổi tên/format |
+**Luật quan trọng:** nếu người dùng **chủ động** đổi default device giữa phiên (mức B) → **không giành lại**. Ghi audit + toast *"Bạn vừa đổi thiết bị âm thanh — phiên vẫn chạy nhưng âm thanh có thể không còn nữa"*. Đánh nhau với người dùng là cách chắc chắn nhất để bị gỡ cài đặt.
+
+### 40.9 Drift & đồng bộ A/V — phần khó nhất, §5.6 chỉ nói "cùng clock"
+**Vấn đề thật:** clock của thiết bị âm thanh và clock hệ thống (QPC) lệch nhau. Thiết bị rẻ: **±100 ppm** ⇒ **360 ms/giờ**. Sau 1 phiên 2 giờ: lệch **720 ms** — không nghe được nữa (tiếng đi trước/sau hình gần 1 giây).
+
+| Cách | Cơ chế | Chất lượng | Chọn? |
+|---|---|---|---|
+| Không bù | — | lệch 6 ms/phút | ❌ |
+| **Đệm thích ứng (drop/dup 1 frame khi tràn/cạn)** | rẻ | nghe thấy "tách" mỗi 10–60 s | ❌ |
+| **ASRC (resample thích ứng)** | resample liên tục với tỉ lệ điều chỉnh chậm | không nghe thấy | ✅ **chọn** |
+| Đồng bộ theo RTCP SR ở client | browser tự làm | cần base timebase đúng | ✅ bắt buộc kèm |
+**Triển khai ASRC (cụ thể):**
+```
+- nguồn: 48 kHz từ WASAPI (theo clock thiết bị) → đích: 48 kHz theo QPC/90 kHz RTP
+- đo: độ đầy buffer trung bình (mục tiêu 30 ms)
+- điều khiển: PI controller → tỉ lệ resample r ∈ [0.995, 1.005]
+  · sai số < 5 ms  → r = 1.0 (không chỉnh, tránh hao CPU)
+  · sai số 5–100 ms → r = 1 ± k·error, |k·error| ≤ 0.005
+  · sai số > 100 ms → resync nhanh (r = 1 ± 0.02) trong ≤ 200 ms
+- giới hạn: |r−1| ≤ 0.5% ⇒ sai lệch cao độ ≤ **8.6 cent** (không nghe ra với giọng nói)
+- resampler: `speex_resampler` hoặc `swr` (chất lượng 5–7); bật `resampler` **1 lần**, không tạo lại mỗi buffer
+```
+- **A/V sync tổng thể:** audio PTS gán theo QPC **sau khi** đã qua ASRC (§35.8 đã yêu cầu cùng gốc QPC). Client dùng RTCP SR để map sang timebase của nó ⇒ nếu hai bên đúng, lệch < 20 ms.
+- **Kiểm tra lệch A/V mỗi 30 s** trong stats: `av_skew_ms`. Nếu >60 ms kéo dài 10 s ⇒ banner (và đây là **bug**, không phải "mạng").
+
+### 40.10 Toggle âm thanh — ngữ nghĩa triển khai (đã có §5.10.2, đây là cơ chế)
+| Trạng thái | Routing | Pipeline | Gói RTP | Client |
+|---|---|---|---|---|
+| **ON** | giữ | PLAYING | gửi | nghe |
+| **OFF** | **giữ** (§5.10.2) | `NULL` (không PAUSED — giải phóng thiết bị) | **dừng** | im; badge 🔇 từ WSS `audio_state` |
+| **Chuyển OFF→ON** | giữ | reinit → PLAYING | SSRC **mới** | đợi gói đầu, ~200–600 ms |
+| **Chuyển ON→OFF** | giữ | `NULL` | dừng ngay | im ngay (<50 ms) |
+**Chi tiết dễ sai:**
+1. **Không để client tự suy ra "mất kết nối"** vì không thấy gói audio — trạng thái lấy từ WSS `audio_state`, không từ "không có RTP".
+2. **Đổi SSRC khi bật lại** — nếu giữ SSRC cũ, client có thể chờ theo timestamp cũ (§5.10.2 đã nêu; đây là lý do).
+3. `NULL` (không `PAUSED`) để **nhả thiết bị** — nếu không, cable bị giữ và app khác không dùng được.
+4. Nếu OFF trong lúc đang **route mức B** (đổi default device) ⇒ routing **vẫn giữ** ⇒ máy vẫn im. Đúng yêu cầu §5.10.2.
+5. Toggle 100 lần liên tiếp: không rò handle/thiết bị; có test (§40.13).
+
+### 40.11 Nhiều phiên & thiếu cable
+| Tình huống | Xử lý |
+|---|---|
+| 3 phiên, 3 cable (CABLE-A/B/C) | mỗi phiên 1 cable ⇒ cách ly thật |
+| 3 phiên, 1 cable | **trộn** ⇒ ghi rõ trong UI: "âm thanh có thể lẫn giữa các phiên"; Tier 2 mới hỗ trợ tách |
+| Không có cable | mức C (nghe như VNC) hoặc video-only (§9.6.4) |
+| Cable bị xoá | `audio_unavailable` + retry 5 s; >60 s ⇒ tắt audio, **giữ phiên** |
+| Đổi cable giữa phiên (mức B) | coi như đổi default ⇒ `on_device_state`; nếu cable mới có → reinit |
+
+### 40.12 Ngân sách độ trễ & jitter buffer phía client
+| Chặng | ms |
+|---|---|
+| WASAPI buffer (3 × 10) | 30 |
+| ASRC | ~2 |
+| Opus encode (20 ms frame) | 20 (một frame) |
+| Mạng (LAN) | 2–10 |
+| **Browser jitter buffer cho audio** | **20–80** (không kiểm soát được) |
+| Decode + render | 10–20 |
+| **Thiết bị client** | 5 (có dây) / **150–300 (Bluetooth)** |
+| **Tổng** | **90–160 ms (có dây)** |
+> Bluetooth của **client** thêm 150–300 ms — đây là lý do phổ biến nhất của "tiếng không khớp hình" mà **không sửa được từ server**. Ghi vào §6.13 + gợi ý dùng tai nghe có dây.
+
+### 40.13 Kiểm chứng (bắt buộc)
+| # | Test | Ngưỡng |
+|---|---|---|
+| 1 | Routing per-app: route Chrome, phát video | session của Chrome **xuất hiện trên CABLE**, **không còn** trên loa thật |
+| 2 | Rò rỉ: sau route, kiểm 10 s | **0** session Active của pid trên loa thật |
+| 3 | Drift 2 giờ | `av_skew_ms` p95 **< 20 ms**, không nghe "tách" |
+| 4 | Toggle 100 lần | không rò handle (`GetGuiResources`/`GetProcessHandleCount` không tăng đơn điệu); mỗi lần <600 ms |
+| 5 | Im lặng 30 s | **không** gói RTP (DTX), bitrate < 2 kbps |
+| 6 | Rút cable giữa phiên | video tiếp tục, `audio_unavailable`, khôi phục khi cắm lại |
+| 7 | App exclusive mode | `audio.exclusive_mode`, video OK, không crash |
+| 8 | Device 44.1 kHz | resample đúng, không rè, pitch không đổi |
+| 9 | Người dùng đổi default giữa phiên (mức B) | **không** giành lại, có toast, phiên vẫn chạy |
+| 10 | Chữ "ế" trong audio? (không áp dụng) | — |
+| 11 | Restore sau uninstall/crash | default device đúng như ban đầu (**bắt buộc**, §11.4) |
+| 12 | 3 phiên 3 cable | mỗi stream chỉ có tiếng app của nó (kiểm bằng nội dung khác nhau: 3 tông) |
+
+### 40.14 Metrics trong stats
+`audio_kbps`, `audio_state` (on/off), `audio_route` (app/machine/vnc), `routing_verified` (bool!), `av_skew_ms`, `audio_buf_ms`, `asrc_ratio`, `dropped_samples`, `device` (tên + id hash).
+
+### 40.15 Nhánh mới rẽ ra
+| Nhánh | Vì sao |
+|---|---|
+| **#4a Âm thanh vào (micro) & voice chat** | nếu Tier 3 làm voice, cần capture mic + echo cancellation — **ngược chiều** với audio ra |
+| **#4b Trộn nhiều app thành 1 stream có kiểm soát** (mức "cả máy" nhưng loại trừ app) | mức B hiện thô: im tất cả |
+| **#5 Threat model** (vẫn chờ) | |
+| **#6 Multi-session & tài nguyên** (vẫn chờ) | |
