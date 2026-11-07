@@ -1,6 +1,6 @@
-# SPEC v3.13 — Remote Desktop qua trình duyệt: HVNC + VNC, window picker, âm thanh server-side, **trải nghiệm điều khiển đầy đủ**
+# SPEC v3.14 — Remote Desktop qua trình duyệt: HVNC + VNC, window picker, âm thanh server-side, **trải nghiệm điều khiển đầy đủ**
 
-- Phiên bản: **v3.13** (v3.12 + **§43 hiệu năng client**: vì sao client dễ chết hơn server, 15 chỉ số ngân sách có cách đo, đường render quyết định, 10 chỗ tốn tiền thật, kiến trúc JS giữ ngân sách, probe + CI gate, 3 giới hạn cứng mobile, overlay 0 ms, 8 nguồn rò rỉ · trước đó: **§42 multi-session**: ràng buộc 1 con trỏ/1 focus của Win32, input lease, admission control có số, display slot, fanout 1 encode → N SRTP, cách ly lỗi, fairness, 10 bảo đảm cách ly · trước đó: **§41 threat model & ranh giới tin cậy**: 10 tài sản, 10 vị trí tấn công, 20 mối đe doạ theo ranh giới, 5 quyết định thiết kế bắt nguồn từ threat model, token chi tiết, người ngồi máy, supply chain, 9 rủi ro chấp nhận, 14 kiểm chứng · trước đó: **§40 âm thanh**: tách routing↔capture, AudioPolicyConfig không tài liệu, 3 mức routing + kiểm chứng bằng session enumeration, WASAPI loopback bẫy, ASRC chống drift, device notifications · **§0.2 bản đồ 8 lĩnh vực thay cho đi mãi một nhánh**): hai thiết bị một lõi — mobile zero-chrome, grip 3 tầng, radial 8 ô, command registry, flow contract FE↔BE**)
+- Phiên bản: **v3.14** (v3.13 + **§44 input sâu** + **§45 build/release: free hay phải trả tiền** · trước đó: **§43 hiệu năng client**: vì sao client dễ chết hơn server, 15 chỉ số ngân sách có cách đo, đường render quyết định, 10 chỗ tốn tiền thật, kiến trúc JS giữ ngân sách, probe + CI gate, 3 giới hạn cứng mobile, overlay 0 ms, 8 nguồn rò rỉ · trước đó: **§42 multi-session**: ràng buộc 1 con trỏ/1 focus của Win32, input lease, admission control có số, display slot, fanout 1 encode → N SRTP, cách ly lỗi, fairness, 10 bảo đảm cách ly · trước đó: **§41 threat model & ranh giới tin cậy**: 10 tài sản, 10 vị trí tấn công, 20 mối đe doạ theo ranh giới, 5 quyết định thiết kế bắt nguồn từ threat model, token chi tiết, người ngồi máy, supply chain, 9 rủi ro chấp nhận, 14 kiểm chứng · trước đó: **§40 âm thanh**: tách routing↔capture, AudioPolicyConfig không tài liệu, 3 mức routing + kiểm chứng bằng session enumeration, WASAPI loopback bẫy, ASRC chống drift, device notifications · **§0.2 bản đồ 8 lĩnh vực thay cho đi mãi một nhánh**): hai thiết bị một lõi — mobile zero-chrome, grip 3 tầng, radial 8 ô, command registry, flow contract FE↔BE**)
 - Trạng thái: **Đề xuất — CHƯA implement, chờ duyệt**
 - Nền tảng: Server **Windows 10 2004+ / Windows 11** · Client **trình duyệt** (không app)
 
@@ -27,6 +27,7 @@
 | **v3.11** | **§41 threat model: 10 tài sản · 10 vị trí P1–P10 · **lật giả định nền — client KHÔNG tin cậy, agent tin về hành vi nhưng không tin về dữ liệu** · 3 hệ quả kiến trúc · 20 mối đe doạ T1–T20 theo ranh giới · 5 quyết định *bắt nguồn từ threat model* (client không gửi `hwnd`; không endpoint chạy lệnh; transfer/clipboard mặc định tắt; `X-Frame-Options: DENY`; người ngồi máy luôn dừng được) · token rotate + reuse detection · P6 quyền phủ quyết · supply chain/chống downgrade · 9 rủi ro chấp nhận · 14 kiểm chứng** |
 | **v3.12** | **§42 multi-session — phát hiện ràng buộc bị bỏ qua: 1 desktop = 1 con trỏ + 1 focus ⇒ chỉ 1 controller/session, N viewer** · input lease (server-side, TTL, release_all trước khi chuyển) · bảng chia sẻ vs cách ly 13 tài nguyên · admission control theo VRAM/RAM/CPU/slot/display có số (thay cho "max 3") · giới hạn display slot của VDD = câu hỏi chặn Phase 0 · fanout 1 encode → N SRTP (PLI theo **stream** không theo peer) · cách ly lỗi + tự phục hồi sau TDR · fairness 4 mức · **10 bảo đảm cách ly phải test (I1–I10), fail ⇒ tắt multi-session** · refcount dọn sau 5 s** |
 | **v3.13** | **§43 client perf: vì sao client dễ chết hơn server (6 nền tảng, Safari iOS kill tab ~200–400 MB, GC không kiểm soát) · 15 chỉ số ngân sách có cách đo · quyết định render (video element ≠ canvas; cursor = div transform; HUD 2 Hz) · **10 chỗ tốn tiền thật** (#1 forced reflow từ `getBoundingClientRect` mỗi pointer event — bug phổ biến nhất, không thấy bằng mắt) · kiến trúc JS (0 dependency, 12 module, `render(state)`) · perf-probe + **CI gate thật** (size/type/perf/leak, baseline 7 ngày) · 3 giới hạn cứng mobile · overlay 0 ms main thread · 8 nguồn rò rỉ + test 50 lần vào/ra** |
+| **v3.14** | **§44 input sâu: 2 lớp (intent vs raw) không bao giờ trộn · 15 dòng máy trạng thái input với 5 bất biến (kẹt phím) · server-side IME: 3 cách, chọn A (VK thô) và từ chối TSF · game/Raw Input/injected flag, không hứa vượt anti-cheat · remote-in-remote (2 tầng trễ, phím bị nuốt) · **accessibility: screen reader chạy trên MÁY SERVER, tiếng đọc đi qua audio stream — 0 đồng và hoạt động thật** · release_all nhảy hàng · 7 giới hạn an toàn · 10 test** · **§45 build/licence: GStreamer LGPL động OK, `gst-plugins-ugly`+x264 = GPL hoá cả app, openh264 tự build = tự gánh patent → thứ tự NVENC→QSV→AMF→MediaFoundation, **không ship x264** · GitHub Actions free nhưng **không test được GPU/desktop** ⇒ self-hosted runner · 2 khoản phải trả tiền (EV cert ký driver, VB-Audio tổ chức) · driver ký = cái bẫy thực tế nhất** |
 
 ### 0.1 v3.0 sửa gì — danh sách "còn thiếu" (đây là lý do v2.1 chưa đủ)
 
@@ -65,7 +66,7 @@
 |---|---|---|---|---|
 | **A. Video/capture/encode** | §5.5, §8.3 | §35, §37, §38, §39 | §36 | ●●● **sâu nhất** — tạm dừng |
 | **B. Âm thanh** | §5.10 | **§40** | §40.13 | ●● vừa |
-| **C. Input & bàn phím** | §5.7, §5.8, §6.4–6.7 | — | — | ● nông |
+| **C. Input & bàn phím** | §5.7, §5.8, §6.4–6.7 | **§44** | §44.10 | ●● vừa |
 | **D. Giao diện & trải nghiệm** | §22–25, §28–34 | — | — | ● nông (rộng nhưng mỏng) |
 | **E. Bảo mật & tin cậy** | §10, §26.2 | **§41** | §41.10 | ●● vừa |
 | **F. Vận hành & triển khai** | §13, §26 | **§42** | §42.15 | ●● vừa |
@@ -80,8 +81,9 @@
 | 2 | **Multi-session: tài nguyên, cách ly, fanout** | F | ✅ **xong — §42** |
 | 3 | **Đóng gói & vòng đời cài đặt** (MSI, display slot, rollback kiểm chứng được) | F | ⬜ **kế tiếp** — §42.6 phụ thuộc driver, chỉ kiểm chứng được khi cài thật |
 | 4 | **Hiệu năng client đo trong CI** | H | ✅ **xong — §43** |
-| 5 | **Input sâu**: IME server-side, accessibility, game/Raw Input, remote-in-remote | C | ⬜ **kế tiếp** — lĩnh vực nông nhất còn lại |
-| 6 | **Mô hình dữ liệu & migration sâu** (đã có bảng, chưa có hành vi) | G | |
+| 5 | **Input sâu**: IME, Raw Input, remote-in-remote, accessibility | C | ✅ **xong — §44** |
+| 5b | **Build/release & licence (free vs phải trả tiền)** | F | ✅ **xong — §45** |
+| 6 | **Mô hình dữ liệu & migration sâu** (đã có bảng, chưa có hành vi) | G | ⬜ **kế tiếp** — lĩnh vực nông nhất còn lại |
 | 7 | **UI: state thực thi** (skeleton/optimistic/lỗi từng màn hình, không chỉ wireframe) | D | |
 | 8 | **Accessibility lượt sâu** | D | |
 | 9 | **Consent UX người bị điều khiển** | E | |
@@ -4783,3 +4785,306 @@ export const probe = {
 | #3 Đóng gói | F | vẫn trong hàng đợi |
 | #6 Dữ liệu & migration | G | |
 | #7 UI state thực thi | D | |
+
+---
+
+## 44. Input sâu: IME, Raw Input, remote-in-remote, accessibility (nhánh #5 — lĩnh vực C)
+
+> §5.7/§5.8/§6.4–6.7 mô tả **hành vi mong muốn**. Chưa có: **máy trạng thái input** đầy đủ (thứ quyết định kẹt phím), **khi nào server-side IME thật sự cần và giá của nó**, **game/Raw Input**, **remote-in-remote**, và **accessibility** — chỗ mà "remote desktop" thường bỏ rơi hoàn toàn.
+> Input là tài sản **A2 (mức cao nhất)** trong §41: kẻ tấn công có input = toàn quyền máy.
+
+### 44.1 Hai lớp input (tách ra thì mọi thứ rõ)
+| Lớp | Client gửi gì | Server làm gì | Ai quyết định kết quả |
+|---|---|---|---|
+| **Lớp ý định** (intent) | `{"t":"text","s":"ế"}`, `{"t":"key","vk":65,"mods":2}` | inject Unicode hoặc VK | **client** (IME/subject của nó) |
+| **Lớp thô** (raw) | `{"t":"raw","sc":30,"down":1}` (scan code) | inject scan code | **server** (layout + IME của nó) |
+- Mặc định: **lớp ý định**. Lớp thô là opt-in (Tier 2, §44.3).
+- **Không bao giờ** trộn: nếu client đang ở lớp thô thì không gửi `text`; nếu ở lớp ý định thì không gửi `raw`. Trộn ⇒ ký tự nhân đôi. Đây là bug kinh điển.
+
+### 44.2 Máy trạng thái input — bảng chuẩn (thứ thay cho "gửi keyup khi blur")
+Server giữ **trạng thái** cho mỗi phiên; mọi chuyển trạng thái phải qua đây:
+
+```
+input_state = {
+  keys_held:      set<VK>          // phím vật lý đang giữ
+  unicode_pending: bool             // đang gửi surrogate pair (2 event chưa đủ)
+  buttons_held:   bitmask           // L/R/M/X1/X2
+  mods:           bitmask           // Ctrl/Shift/Alt/Win do *client* giữ
+  ime_composing:  bool              // client đang composition
+  layer:          'intent'|'raw'
+  lease:          holder_sid|null
+}
+```
+| Sự kiện | Chuyển trạng thái | Bất biến phải giữ |
+|---|---|---|
+| `key down` | thêm vào `keys_held` | nếu VK đã có ⇒ **bỏ** (client gửi repeat) |
+| `key up` | xoá khỏi `keys_held` | nếu không có trong set ⇒ vẫn gửi (an toàn) nhưng đếm `odd_keyup` |
+| `text` (1 code unit) | gửi 1 cặp UNICODE | nếu là **high surrogate** ⇒ giữ `unicode_pending`, chờ low |
+| `text` (low surrogate) khi `unicode_pending` | gửi cặp thứ 2, xoá cờ | nếu không có pending ⇒ **bỏ** (dữ liệu hỏng) |
+| `composition*` | `ime_composing=true` | **không gửi** gì trong lúc compose (§6.6) |
+| `compositionend` | gửi `text`, `ime_composing=false` | nếu rỗng ⇒ không gửi |
+| `button down/up` | cập nhật `buttons_held` | up không khớp ⇒ vẫn gửi |
+| `release_all` | gửi up cho **mọi** `keys_held` + mọi `buttons_held` + Ctrl/Shift/Alt/Win; xoá sạch | đây là **đường duy nhất** đảm bảo không kẹt |
+| mất lease | `release_all` **rồi** mới nhường | thứ tự ngược = input chồng |
+| watchdog 3 s không event + `keys_held≠∅` hoặc `buttons_held≠0` | `release_all` + `input_reset` warning | §6.4.7 lớp 4 |
+| đổi layer | `release_all` trước | tránh nửa nọ nửa kia |
+**Bất biến kiểm tra được (assert + test):**
+1. Sau bất kỳ chuỗi sự kiện nào, nếu client im ≥3 s thì `keys_held = ∅` và `buttons_held = 0`.
+2. Không bao giờ có 2 `down` liên tiếp cho cùng VK mà không có `up`.
+3. `release_all` luôn idempotent.
+4. Không gửi `text` khi `ime_composing = true`.
+5. Không có surrogate lẻ tồn tại >1 s (nếu có ⇒ bỏ + log).
+
+### 44.3 Server-side IME — có thật sự cần? (câu trả lời có giá)
+**Khi nào cần:** app cần **key event thật** chứ không nhận Unicode — game có chat box riêng, app dùng Raw Input + kiểm tra scan code, app remote-in-remote, một số app Java/Qt cũ.
+**Có 3 cách làm, giá rất khác nhau:**
+
+| Cách | Cơ chế | Ưu | Nhược | Chọn? |
+|---|---|---|---|---|
+| **A. Gửi VK thô, để IME của server soạn** | client gửi `vk` thay vì `text`; IME (Telex/Japanese) trên server xử lý | không cần API đặc biệt; dùng đúng IME đã cài trên máy đó | phụ thuộc IME/layout của **máy người dùng** (có thể không cài Telex, hoặc layout AZERTY); trạng thái IME hiển thị ở đâu? | ✅ **chọn cho Tier 2** |
+| **B. TSF (Text Services Framework) client-side ảo** | tự viết TSF text service để "đánh" chữ vào app | chính xác nhất về mặt kỹ thuật | **rất đắt** (COM text service, phải đăng ký, phải per-process), dễ crash app, và **chỉ hoạt động với app dùng TSF** | ❌ không làm |
+| **C. Gửi scan code (lớp thô) + layout do client chỉ định** | client gửi `sc` + layout name; server `ActivateKeyboardLayout` | độc lập IME server | **đổi layout của máy người dùng** (xâm lấn, §40.8 tinh thần) ⇒ chỉ khi opt-in | ⚠️ chỉ trong chế độ "chơi game" |
+**Quyết định:** Tier 1 = **lớp ý định (Unicode)**. Tier 2 = thêm **chế độ "bàn phím thô"** (client gửi `vk`/`sc`), hiện rõ trong UI: *"Chế độ bàn phím thô: dùng bàn phím/IME của máy kia. Gõ tiếng Việt sẽ phụ thuộc máy đó có Telex."* Và **cảnh báo layout** nếu layout server ≠ layout client (đọc được qua `GetKeyboardLayout`).
+**Không** cam kết "gõ được tiếng Việt trong mọi app ở mọi chế độ" — chỉ cam kết ở lớp ý định.
+
+### 44.4 Game, Raw Input, DirectInput
+| Thực tế | Chi tiết |
+|---|---|
+| `SendInput` tạo input **được đánh dấu injected** (`LLKHF_INJECTED` / `LLMHF_INJECTED`) | hầu hết Raw Input app **vẫn nhận**; app lọc injected thì **không** |
+| Anti-cheat (kernel-level) | chặn/không quan tâm; **không thể** vượt, và **không nên thử** (§21.14) |
+| Game fullscreen-exclusive | đã có ở §11.1 (khuyến nghị borderless) |
+| Chuột relative + Pointer Lock | §6.4.6 — bắt buộc cho game 3D |
+| `SendInput` với `MOUSEEVENTF_MOVE` relative | một số game đọc `WM_INPUT` relative ⇒ hoạt động; một số đọc `GetCursorPos` delta ⇒ cần absolute; **gửi cả hai** ở chế độ game (absolute + relative cùng lúc sẽ nhân đôi → chỉ chọn 1, cấu hình được) |
+| Phát hiện "app không nhận input" | nếu 500 ms sau khi gửi mà không có phản hồi thị giác **và** không có thay đổi focus, **không** kết luận được — chỉ ghi stats. Không hứa "phát hiện app chặn input" |
+> Ghi vào §6.13: *"một số game/anti-cheat sẽ không nhận điều khiển từ xa"*.
+
+### 44.5 Remote-in-remote (máy server đang là client của VNC/RDP khác)
+| Vấn đề | Xử lý |
+|---|---|
+| `SendInput` vào app đang là **RDP client** | hoạt động; nhưng RDP client tự gửi tiếp input tới máy xa ⇒ ta điều khiển **2 tầng** ⇒ trễ cộng dồn, và `Ctrl+Alt+Del` mất tác dụng |
+| Phím bị **RDP client bắt** (Alt+Tab, Win) | RDP giữ lại cho máy local ⇒ app đích không nhận. Không sửa được từ phía ta |
+| Secure desktop của tầng dưới | `secure_desktop` warning có thể **không** xuất hiện (vì desktop của ta vẫn là Default) ⇒ người dùng bấm mà không thấy gì xảy ra |
+| Phát hiện | kiểm tra process đang foreground có phải `mstsc.exe`/`vncviewer`/`vmware`/`VirtualBox` ⇒ banner nhẹ: *"Máy đang điều khiển một máy khác — có thể có 2 tầng trễ"* |
+| Không cố sửa | đây là giới hạn bản chất; chỉ cần **thông báo** để người dùng hiểu vì sao trễ gấp đôi |
+
+### 44.6 Accessibility — chỗ remote desktop thường bỏ rơi
+**Sự thật khó chịu:** nội dung remote là **pixel**, không có accessibility tree. Screen reader trên client **không đọc được** nội dung app. Không có cách "vừa stream video vừa giữ a11y tree" (trừ khi dùng UIA over the wire — một dự án khác hoàn toàn).
+
+Vậy làm gì — 5 biện pháp thật, xếp theo hiệu quả:
+
+| # | Biện pháp | Giúp ai | Chi phí |
+|---|---|---|---|
+| 1 | **Screen reader chạy trên MÁY SERVER** (Narrator/NVDA): tiếng đọc đi vào **audio stream** | người khiếm thị | **0** — chỉ cần bật Narrator trên server, audio đã có (§40) |
+| 2 | **Client UI điều hướng được bằng bàn phím** (§24.15) + focus ring rõ | người không dùng được chuột | thấp |
+| 3 | **Zoom local + "Chữ to"** (§20.3) | thị lực kém | đã có |
+| 4 | **Tương phản cao + không phụ thuộc màu** (§23.2) | mù màu | đã có |
+| 5 | **Screen reader đọc được CHÍNH client UI** (picker, toolbar, cảnh báo) — `aria-live`, `role`, nhãn | mọi người | đã có §6.12 |
+| 6 | (T3) **Text mode**: gửi diff UI dạng text cho app hỗ trợ UIA | — | **đắt**, ghi nhận |
+> **Cách nói trung thực trong `/help`:** *"Trình đọc màn hình không đọc được nội dung bên trong cửa sổ từ xa. Nếu bạn dùng trình đọc màn hình, hãy bật nó trên máy được điều khiển — tiếng đọc sẽ được truyền qua âm thanh."* Đây là một **tính năng thật**, không phải lời xin lỗi: nó hoạt động tốt và miễn phí.
+> Cộng thêm: kiểm tra a11y của **chính client** bằng NVDA trên 3 luồng (đăng nhập → chọn cửa sổ → điều khiển → thoát) trong §43.12.
+
+### 44.7 Ưu tiên & gộp khi tải (nối §35.5)
+| Lớp | Hàng đợi | Khi tải |
+|---|---|---|
+| `pointermove` | 1 (latest-wins) | drop cũ |
+| `wheel` | 8 | gộp delta cùng dấu, drop nếu >8 |
+| `btn down/up` | 64 | **backpressure**, không drop |
+| `key down/up` | 64 | **backpressure**, không drop |
+| `text` | 32 | backpressure (không gộp được) |
+| `release_all` | **ưu tiên tuyệt đối** | xử lý **trước** mọi thứ đang chờ (nhảy hàng) |
+> `release_all` nhảy hàng là chi tiết nhỏ nhưng quan trọng: nếu nó xếp sau 60 event move đang chờ, người dùng đã nhả chuột 100 ms trước mà máy vẫn đang drag.
+
+### 44.8 An toàn input (nối §41.4 T2, cụ thể hoá)
+| Kiểm tra | Ngưỡng | Khi vượt |
+|---|---|---|
+| Toạ độ | `u16` luôn; clamp `[0,65535]` | không thể vượt (kiểu dữ liệu) |
+| Tốc độ `move` | >200/s | drop + `input_flood` stat |
+| Tốc độ `ctrl` | >100/s | 429-style: drop + warning 1 lần |
+| Độ dài `text` | >256 code unit / message | từ chối message |
+| Chuỗi `keys_held` | >16 phím | release_all + reset (dấu hiệu bất thường) |
+| Unicode không hợp lệ (surrogate lẻ) | — | bỏ, log, không crash |
+| `vk` ngoài danh sách cho phép | — | bỏ (danh sách: 0x01–0xFF trừ các VK cấm: `VK_LWIN/RWIN` khi `block_win`, SAS 0x2E) |
+| Phím cấm | `VK_LWIN`+`L` (§5.8.4), `Ctrl+Alt+Del` | chặn, toast |
+> Mọi giới hạn này **phải có test** với dữ liệu hỏng (§41.10 #10–11).
+
+### 44.9 Độ chính xác & cảm giác
+| Vấn đề | Xử lý |
+|---|---|
+| Chuột gaming 1000 Hz | gộp trong rAF (§6.4.4) |
+| Touch precision | kính lúp + trackpad (§30.8) |
+| **Sub-pixel** | không thể (toạ độ 16-bit trên virtual desktop) — nhưng 1920 rộng = bước 0.03 px nên **không đáng lo** |
+| **Tăng tốc chuột của client** | ở chế độ absolute, `clientX` đã tính gia tốc của HĐH client ⇒ vị trí tuyệt đối vẫn đúng; ở relative (pointer lock) **không** dùng được nếu client bật accel — cảnh báo (§6.4.5) |
+| Cursor shape "lạ" (app tự vẽ) | bitmap + hotspot (§6.3.3) |
+| Con trỏ ẩn bởi app | `cpos.vis=false` (§6.3.5) |
+
+### 44.10 Metrics & test
+Metrics: `input_events_in/out`, `input_rejected`, `input_flood`, `odd_keyup`, `surrogate_dropped`, `release_all_count`, `layer`, `keys_held_count`, `ime_composing`.
+| # | Test | Ngưỡng |
+|---|---|---|
+| 1 | 20 kịch bản blur/mất mạng (§17.1 dòng 8) | 0 lần kẹt modifier/nút |
+| 2 | Giữ Ctrl → mất mạng → kết nối lại | `keys_held = ∅` sau 3 s |
+| 3 | Emoji (4 event) | đúng ký tự, không rác |
+| 4 | Tiếng Việt Telex 200 từ | CER 0 (so với text mong đợi) |
+| 5 | CJK (Microsoft Pinyin) 50 câu | đúng |
+| 6 | Gửi surrogate lẻ / 1 MB text / vk cấm | bỏ an toàn, không crash |
+| 7 | 500 event/s trong 10 s | drop `move`, giữ `ctrl`, 1 warning |
+| 8 | `release_all` khi có 60 move đang chờ | xử lý **trước** (đo timestamp) |
+| 9 | Layer switch giữa `intent`↔`raw` | 0 ký tự nhân đôi |
+| 10 | App lọc injected input | không kết luận sai; ghi stats đúng |
+
+### 44.11 Nhánh mới rẽ ra
+| Nhánh | Lĩnh vực | Vì sao từ §44 |
+|---|---|---|
+| **#6 Mô hình dữ liệu & migration** (hành vi, không chỉ bảng) | G | **kế tiếp (theo luật luân chuyển)** |
+| **#17 UIA over the wire** (a11y thật cho nội dung remote) | C | §44.6 — dự án con, không làm bây giờ |
+| **#18 Chế độ "bàn phím thô" UX** (chọn layout, hiển thị IME server) | C/D | §44.3 |
+
+---
+
+## 45. Build & release: có build được hoàn toàn bằng nguồn free / GitHub không?
+
+> Câu hỏi trực tiếp: *"biên dịch file chạy có dùng GitHub hay nguồn free được không"*.
+> **Trả lời ngắn:** **Dev + CI + phát hành: được, 0 đồng**, nếu chấp nhận 2 điều kiện. **Bản production cài trên máy người khác: có 2 khoản phải trả tiền** (không tránh được), và **3 thứ phải tránh ship** để không vướng giấy phép. Chi tiết dưới đây, kèm bảng licence từng thành phần.
+> *(Đây là phân tích kỹ thuật, không phải tư vấn pháp lý. Các con số giá và điều khoản licence thay đổi — kiểm tra lại trước khi phát hành.)*
+
+### 45.1 Bảng licence — từng thành phần, có được dùng free trong bản thương mại không
+| Thành phần | Licence | Dùng free? | Rủi ro / ghi chú |
+|---|---|---|---|
+| **Rust** (rustc, cargo) | MIT/Apache-2.0 | ✅ | — |
+| crate: `windows`, `tokio`, `axum`, `serde`, `rustls` | MIT/Apache-2.0 | ✅ | kiểm bằng `cargo-deny` |
+| **GStreamer core** | **LGPL-2.1** | ✅ | link **động** (DLL) + cho phép thay thế ⇒ OK cho app đóng. **Không** static link nếu không mở source |
+| `gst-plugins-base/good/bad` | LGPL-2.1 | ✅ | |
+| **`gst-plugins-ugly`** (chứa **x264enc**) | **GPL-2.0** | ⚠️ | ship kèm ⇒ **toàn bộ app thành GPL**. Đây là bẫy lớn nhất |
+| **`openh264enc`** (Cisco) | BSD | ⚠️ | mã nguồn BSD, nhưng **patent H.264**: Cisco trả MPEG-LA **chỉ cho binary tải từ Cisco**, không cho binary **bạn tự build/phân phối**. Build lại ⇒ tự gánh patent |
+| **NVENC / QSV / AMF** (encoder phần cứng) | Không cần ship codec | ✅ | **đây là đường sạch nhất**: chỉ gọi driver, không phân phối implementation H.264 |
+| **Media Foundation** (H.264 encoder của Windows) | API của OS | ✅ | miễn phí trên Windows; chất lượng/độ trễ kém NVENC, dùng làm fallback không cần ship codec |
+| **x264** (nếu ship) | **GPL-2.0** + patent | ❌ | hoặc mở source toàn bộ app, hoặc trả phí thương mại (x264 có dual license qua x264 LLC) |
+| **ffmpeg** | LGPL-2.1 **hoặc** GPL (tuỳ build) | ⚠️ | dùng bản LGPL, **không** bật `--enable-gpl`, **không** ship ffmpeg binary nếu không cần |
+| **VDD** (VirtualDrivers/Virtual-Display-Driver) | **MIT** | ✅ | nhưng xem **45.4** — chữ ký driver mới là vấn đề |
+| **VB-Audio Virtual Cable** | Donationware | ⚠️ **KHÔNG free cho doanh nghiệp** | Miễn phí cho **cá nhân**; dùng trong tổ chức phải mua licence (~€5–50 tuỳ bản). **Phải nói trong docs** |
+| **WiX Toolset** | MS-RL (open source) | ✅ | tạo MSI |
+| **MSVC Build Tools** | Free (Build Tools licence) | ✅ | không cần Visual Studio bản quyền |
+| **Playwright / Tesseract / pytest** | Apache-2.0 / Apache-2.0 / MIT | ✅ | |
+| **coturn** | BSD | ✅ | nếu cần TURN |
+| **Tailscale** | Free tier cá nhân | ✅ (cá nhân) | tổ chức >3 user cần gói trả phí |
+| **Let's Encrypt** | Free | ✅ | cert Internet |
+| **GitHub Actions / Releases** | Free (public repo) | ✅ | xem 45.2 |
+
+### 45.2 GitHub: dùng được tới đâu, và giới hạn thật
+| Việc | GitHub free? | Ghi chú thực tế |
+|---|---|---|
+| Lưu mã | ✅ | repo **public** ⇒ Actions **không giới hạn phút**; private ⇒ 2 000 phút/tháng (Windows tính **×2**, macOS **×10**) |
+| CI build Windows (rustc + GStreamer) | ✅ | Windows runner **2 core, 7 GB RAM**, không GPU |
+| CI test đơn vị, lint, `cargo-deny`, size gate | ✅ | |
+| CI **test capture/encode/input thật** | ❌ **không thể** | runner **không có GPU, không có desktop tương tác**, không cài được VDD ⇒ **DDAPI/SendInput/WASAPI không test được** |
+| CI test WebRTC thật (netem) | ⚠️ | cần quyền admin cho netem/tc → không có trên runner |
+| Phát hành bản build | ✅ | GitHub **Releases** (dung lượng lớn, miễn phí) |
+| Ký số | ❌ | chứng chỉ phải mua (45.3) |
+| CDN cho installer | ✅ | Releases đủ; hoặc Cloudflare Pages free |
+| Container registry | ✅ | ghcr.io free cho public |
+**Kiến trúc CI phải chia 2 tầng (quan trọng):**
+```
+Tầng 1 — GitHub-hosted (mọi PR, miễn phí)
+  · build release + debug, clippy, cargo-deny, test đơn vị
+  · test phần thuần: protocol, toạ độ (§5.9), state machine (§7.1, §44.2), CC (§36.4)
+  · client: size gate, tsc, Playwright UI (không cần GPU)
+  · sinh SBOM, build MSI (không ký)
+  ↓
+Tầng 2 — self-hosted runner trên 1 máy Windows thật (miễn phí nếu bạn có máy)
+  · Windows 11 + GPU (NVENC hoặc QSV)
+  · test DDAPI/WGC/cursor/WASAPI/SendInput, p95 §35.6, OCR §38.9, màu §39.13
+  · netem (cần admin) + fault injection §35.15
+  · chạy nightly + trước release, KHÔNG cần mọi PR
+```
+- Self-hosted runner **miễn phí** (GitHub không tính phí runner tự cài). Đây là cách duy nhất test được thứ thật mà không tốn tiền.
+- Dùng `actions/cache` cho `~/.cargo` + GStreamer runtime ⇒ build 8–15 phút thay vì 25–40.
+- **Ma trận tối thiểu** trên runner: Win10 22H2 (1 máy) + Win11 (1 máy), NVIDIA + Intel iGPU. AMD/ARM chỉ test thủ công trước release.
+
+### 45.3 Hai khoản **phải trả tiền** (không có đường free)
+| # | Khoản | Vì sao bắt buộc | Giá tham khảo | Nếu không trả |
+|---|---|---|---|---|
+| 1 | **Chứng chỉ ký driver (EV code signing)** | Từ Win10, driver kernel-mode **phải được ký** (attestation/WHQL qua Partner Center) mới load được mà không phải tắt "driver signature enforcement" | EV cert ~**$200–500/năm**; Partner Center account free | người dùng phải **tắt bảo vệ driver** để cài VDD ⇒ không thể phát hành, và làm yếu bảo mật máy họ |
+| 2 | **VB-Audio licence** (nếu dùng cho doanh nghiệp) | licence donationware: cá nhân free, tổ chức phải mua | ~**€5–50**/máy tuỳ bản | vi phạm licence; hoặc bỏ audio (mất tính năng "nghe") |
+| 3 | (khuyến nghị) **Authenticode cert** cho app | SmartScreen cảnh báo "Unknown publisher" nếu không ký | ~$200–400/năm (thường **cùng EV cert** ở trên) | người dùng thấy cảnh báo đỏ khi cài — chấp nhận được với LAN nội bộ, không chấp nhận được với phát hành rộng |
+> **Có thể hoãn:** cả 3 khoản chỉ cần khi **phát hành cho người khác**. **Dùng cho chính bạn** (dev, test, máy của mình) thì có thể dùng chế độ **test-signing** của Windows (tắt signature enforcement trên máy đó) — **chỉ trên máy dev, không bao giờ trên máy người dùng**.
+
+### 45.4 VDD và chữ ký driver — cái bẫy thực tế nhất
+| Vấn đề | Chi tiết | Cách xử lý |
+|---|---|---|
+| VDD là **driver kernel-mode** | phải ký mới load trên máy bật Secure Boot + driver signature enforcement | build VDD với **attestation signing** của riêng bạn (cần EV cert) |
+| Có build VDD đã ký sẵn? | repo có phát hành bản đã ký **bởi họ** — nhưng **bạn** phân phối lại có thể phải tuân theo điều kiện của họ (MIT cho code, **không** cho chữ ký) | đọc kỹ điều kiện phân phối lại; an toàn nhất là tự ký |
+| Secure Boot + test-signing | không thể dùng test-signing khi Secure Boot bật | ⇒ **không** có đường tắt cho người dùng thường |
+| Giải pháp không cần ký | **chế độ VNC-only** (không màn hình ảo) ⇒ không cần driver, chạy ngay | ✅ đây là lý do §26.8 có "chế độ VNC-only khi không có quyền admin" |
+
+### 45.5 Tránh vướng licence: chọn codec thế nào (nối §37, §39)
+Từ bảng 45.1, có 1 quyết định kiến trúc để **không bao giờ** phải trả tiền patent hay mở source:
+| Đường | Ship gì | GPL? | Patent H.264? |
+|---|---|---|---|
+| **NVENC / QSV / AMF** | **không ship codec** — gọi driver | ✅ không | ✅ không (driver/OS đã licensed) |
+| **Media Foundation H.264 encoder** | không ship codec | ✅ | ✅ (trong Windows) |
+| **x264enc (GPL plugin)** | ship GPL ⇒ app thành GPL | ❌ | ❌ |
+| **openh264 tự build** | ship codec | ⚠️ BSD | ❌ phải tự gánh patent |
+**Quyết định:** thứ tự encoder **NVENC → QSV → AMF → Media Foundation → (chỉ trên máy dev) x264**. Bản phát hành **không** kèm `gst-plugins-ugly`, **không** kèm x264. Và §37.6 (đã viết rất kỹ về x264) trở thành **tài liệu cho chế độ dev/không GPU**, không phải đường phát hành.
+> Hệ quả nếu máy người dùng **không có GPU và không có MF encoder phù hợp**: chỉ có thể dùng x264 ⇒ phải chọn: (a) phát hành app dưới GPL (mã mở), hoặc (b) mua licence x264 thương mại, hoặc (c) **không hỗ trợ** cấu hình đó và yêu cầu GPU. Đây là quyết định sản phẩm, phải chốt trước khi phát hành — **không thể phát hiện muộn**.
+
+### 45.6 Pipeline build cụ thể (chạy được, 0 đồng)
+```yaml
+# .github/workflows/build.yml  (rút gọn)
+jobs:
+  win:
+    runs-on: windows-2022          # miễn phí (repo public)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2          # cache ~/.cargo ⇒ 8–15 phút
+      - name: GStreamer runtime
+        run: |
+          curl -L -o gst.msi https://gstreamer.freedesktop.org/data/pkg/windows/1.24.x/msvc/gstreamer-1.0-msvc-x86_64-1.24.x.msi
+          start /wait msiexec /i gst.msi /qn /norestart
+      - run: cargo clippy -- -D warnings
+      - run: cargo test --workspace            # phần thuần (không GPU)
+      - run: cargo deny check                  # licence + RustSec
+      - run: npm ci && npx tsc --noEmit -p client/jsconfig.json
+      - run: node ci/size-gate.mjs             # §43.12
+      - run: npx playwright test perf/ --project=chromium-desktop
+      - run: cargo build --release
+      - run: candle/wix build installer.wxs    # MSI chưa ký
+      - uses: actions/upload-artifact@v4
+```
+| Bước | Thời gian ước tính | Ghi chú |
+|---|---|---|
+| checkout + rust-cache | 1–2′ | |
+| build debug + test | 6–10′ | |
+| GStreamer MSI install | 1–2′ | pin version + **ghi hash** vào repo |
+| client gates | 2–4′ | Playwright tải browser lần đầu (cache) |
+| build release + MSI | 4–8′ | |
+| **tổng** | **~15–25′** | vừa 2000′ free/tháng (private) hoặc không giới hạn (public) |
+
+### 45.7 Phát hành: free và có kiểm chứng
+| Bước | Cách | Chi phí |
+|---|---|---|
+| Artifact | GitHub Releases | 0 |
+| Manifest update | JSON ký bằng khoá riêng, **version chống rollback** (§41.8) | 0 |
+| Verify trước khi chạy | agent tự kiểm **Authenticode + hash** | 0 |
+| Kênh stable/beta | 2 tag/release channel | 0 |
+| Delta update | zip theo version; hoặc dùng `bsdiff` tự viết | 0 |
+| Website | GitHub Pages | 0 |
+| Docs | repo + Pages | 0 |
+> **Không** dùng auto-update kiểu "tải exe từ URL không ký" — đó là bề mặt tấn công (P8, §41.8). Update phải **có chữ ký riêng của ta**, không chỉ TLS.
+
+### 45.8 Cái gì **không** thể free (tổng kết thật thà)
+| Không thể free | Vì sao | Hệ quả |
+|---|---|---|
+| Ký driver kernel | yêu cầu của Microsoft từ Win10 | phải có EV cert hoặc chỉ dùng chế độ VNC-only |
+| VB-Audio cho tổ chức | licence của họ | trả tiền hoặc mất tính năng audio |
+| Test trên ma trận máy thật | cần máy thật | dùng self-hosted runner (free nếu có máy) hoặc test thủ công |
+| H.264 encode **trong phần mềm** mà không GPL | GPL + patent | dựa vào HW/MF; hoặc mở source; hoặc mua |
+| Chứng chỉ tin cậy cho HTTPS công khai | không free với self-signed | Let's Encrypt free (cần domain ~$10/năm) hoặc Tailscale cert (free) |
+> **Tổng chi phí tối thiểu để phát hành cho người khác:** **~$200–500/năm** (EV cert) + (~$10/năm domain nếu cần HTTPS công khai) + (VB-Audio nếu tổ chức). **Để tự dùng: $0.**
+
+### 45.9 Nhánh mới rẽ ra
+| Nhánh | Lĩnh vực | Vì sao từ §45 |
+|---|---|---|
+| **#19 Tài liệu pháp lý cho người dùng** (EULA, privacy notice, third-party licences, SBOM công bố) | E/F | §45.1 cần được **công bố**, không chỉ ghi trong spec |
+| **#3 Đóng gói** (vẫn chờ) | F | §45.4 nói "phải ký", #3 nói **cách** cài/rollback |
+| **#6 Dữ liệu & migration** | G | kế tiếp theo luật luân chuyển |
