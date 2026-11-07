@@ -1,6 +1,6 @@
-# SPEC v3.6 — Remote Desktop qua trình duyệt: HVNC + VNC, window picker, âm thanh server-side, **trải nghiệm điều khiển đầy đủ**
+# SPEC v3.7 — Remote Desktop qua trình duyệt: HVNC + VNC, window picker, âm thanh server-side, **trải nghiệm điều khiển đầy đủ**
 
-- Phiên bản: **v3.6** (v3.5 + **§36 transport tuning & điều tiết băng thông**: phân loại mất gói, máy trạng thái CC có số, phân bổ budget, IDR storm, FEC/NACK, playout-delay, ladder giảm cấp, kịch bản mạng CI): hai thiết bị một lõi — mobile zero-chrome, grip 3 tầng, radial 8 ô, command registry, flow contract FE↔BE**)
+- Phiên bản: **v3.7** (v3.6 + **§37 rate-control theo từng hãng**: 3 vòng điều khiển lồng nhau, đo ở pacer, tham số NVENC/QSV/AMF/x264, xung đột CBR↔màn hình tĩnh, giới hạn slot, bảng kiểm chứng): hai thiết bị một lõi — mobile zero-chrome, grip 3 tầng, radial 8 ô, command registry, flow contract FE↔BE**)
 - Trạng thái: **Đề xuất — CHƯA implement, chờ duyệt**
 - Nền tảng: Server **Windows 10 2004+ / Windows 11** · Client **trình duyệt** (không app)
 
@@ -20,6 +20,7 @@
 | **v3.4** | **§28 hai thiết bị khác bản chất · §29 desktop chrome mỏng + phím tắt · §30 mobile zero-chrome (0 nút thường trực, grip 3 độ sâu, 13 gesture, radial 8 ô theo ngữ cảnh, bàn phím không che video, kính lúp/trackpad, one-hand) · §31 command registry 1 nguồn · §32 flow contract (1 controller, intent_id, rev, idempotency, bảng race, SLA) · §33 checklist 2 vỏ + Playwright song song** |
 | **v3.5** | **§35 mô hình thực thi: 8 thread, 1 GStreamer pipeline/phiên, vòng đời frame + ownership, hàng đợi có trần + chính sách drop, ngân sách độ trễ phân rã tới từng chặng (gồm jitter buffer — khoản ẩn lớn nhất), timestamps từng chặng, screen-content tuning, chế độ màn hình tĩnh, restart/shutdown theo thứ tự, MMCSS, ngân sách bộ nhớ, 8 bất biến, fault-injection matrix** · §0.2 depth-first |
 | **v3.6** | **§36 AI sở hữu gì vs thư viện · 3 nguồn CC + luật `min(...)` · phân loại 4 loại mất gói (nghẽn/ngẫu nhiên/burst/jitter) · máy trạng thái STARTUP/DRAIN/CRUISE/PROBE/BACKOFF có số + chống dao động · phân bổ budget theo thứ tự cứng (audio không bao giờ bị bóp) · IDR storm chống + intra-refresh · chọn FEC vs NACK theo RTT · playout-delay thích ứng · degradation preference theo preset · encoder rate-control · đổi mạng giữa phiên · 22 tham số · 7 profile netem + 7 chỉ số fail CI** |
+| **v3.7** | **§37 ba vòng điều khiển lồng nhau (CC 200 ms / trim 500 ms / encoder 16 ms) · đo bitrate tại pacer là sự thật duy nhất · trim loop công thức · NVENC (`rc-mode=cbr`, VBV, zeroLatency, không multipass) · QSV (`BufferSizeInKB` bẫy 8×, LowDelayBRC, sai số lớn nhất) · AMF (EnforceHRD, không filler, yếu ở bitrate thấp) · x264 (`vbv-bufsize` bắt buộc + `sliced-threads` — thiếu là trễ 130 ms) · 10 bất biến chung · xung đột CBR↔tĩnh↔tiết kiệm pin · chi phí đổi cấu hình · giới hạn slot + fallback · 8 kiểm chứng · bảng ánh xạ 4 hãng** |
 
 ### 0.1 v3.0 sửa gì — danh sách "còn thiếu" (đây là lý do v2.1 chưa đủ)
 
@@ -58,9 +59,11 @@ Một lượt rà rộng 20 chỗ thì chỗ nào cũng nông. Spec này đượ
 |---|---|---|---|
 | 1 | **Mô hình thực thi pipeline thời gian thực** (thread, hàng đợi, buffer, drop, restart, shutdown, ngân sách độ trễ) | ✅ **xong — §35** | toàn bộ sản phẩm |
 | 2 | **Transport tuning & điều tiết băng thông** (phân loại mất gói, máy trạng thái CC, budget alloc, IDR storm, FEC/NACK, playout-delay, ladder, CI netem) | ✅ **xong — §36** | §35.6 |
-| 2a | Encoder rate-control theo từng hãng (VBV/HRD thực tế, sai số ±%) | ⬜ **kế tiếp** | §36.10 |
-| 2b | Scaler & độ nét khi hạ resolution (chọn scaler GPU, text sharpening) | ⬜ | §36.9 |
+| 2a | **Encoder rate-control theo từng hãng** | ✅ **xong — §37** | §36.10 |
+| 2b | **Scaler & độ nét khi hạ resolution** (chọn scaler GPU, text sharpening) | ⬜ **kế tiếp** | §36.9, §37.9 |
 | 2c | Đo TWCC/REMB trên GStreamer (probe element / Pion sidecar) | ⬜ **chặn Phase 0** | §36.1 |
+| 2d | Chọn encoder theo nội dung & theo phiên (chấm điểm) | ⬜ | §37.10 |
+| 2e | Ma trận driver/toolchain tối thiểu theo hãng | ⬜ | §37.12 |
 | 3 | Fault injection & chaos harness (ACCESS_LOST, audio device mất, mạng đứt, driver reset) | ⬜ | §35.14 |
 | 4 | Vòng đời cửa sổ & display (state machine + phục hồi sau crash) | ⬜ | §35.10 |
 | 5 | Threat model theo từng bề mặt (HTTP/WS/DC/tray/driver/local) | ⬜ | §35.13 |
@@ -3448,3 +3451,200 @@ fps       : 60 → 45 → 30 → 20 → 15
 | **#2b Scaler & độ nét khi hạ resolution** (chọn scaler GPU, xử lý text sharpening, khi nào thà giảm fps hơn giảm res) | §36.9 |
 | **#2c Đo TWCC/REMB thực tế trên GStreamer** (probe element, hoặc Pion sidecar) | §36.1 rủi ro |
 | **#3 Fault injection harness** | vẫn chờ, §35.15 |
+
+---
+
+## 37. Encoder rate-control theo từng hãng (nhánh #2a — nơi 5–15% sai số phá vỡ §36)
+
+> §36.10 chỉ nêu nguyên tắc: *"CBR + VBV ngắn"*. Nhưng cùng một câu "CBR 8 Mbps" cho ra **7.4 Mbps trên NVENC, 9.1 Mbps trên QSV, 8.6 Mbps trên x264**. Với §36 (CC đo băng thông thật), sai số đó **không phải chuyện nhỏ**: nếu encoder thật sự bắn 9.1 Mbps trong khi CC nghĩ là 8.0, CC sẽ **luôn** thấy trễ tăng → liên tục BACKOFF → hình mờ vĩnh viễn.
+> Chương này chốt: **ba vòng điều khiển lồng nhau**, **đo ở đâu là sự thật**, và **tham số cụ thể cho 4 encoder**.
+
+### 37.1 Ba vòng điều khiển lồng nhau (kiến trúc, không phải chi tiết)
+```
+        ┌─ Vòng ngoài: CC (§36) ──────────────────────────────┐
+        │  nhịp 200 ms · mục tiêu: không nghẽn ·              │
+        │  đầu ra: target_total (byte/s TRÊN DÂY)             │
+        └───────────────────┬─────────────────────────────────┘
+                            ▼  trừ overhead + audio + RTCP + FEC
+        ┌─ Vòng giữa: trim loop (§37.2) ──────────────────────┐
+        │  nhịp 500 ms · mục tiêu: encoder thật sự bắn        │
+        │  đúng target_video · đầu ra: encoder_target         │
+        └───────────────────┬─────────────────────────────────┘
+                            ▼
+        ┌─ Vòng trong: encoder RC (phần cứng/phần mềm) ───────┐
+        │  nhịp 1 frame · mục tiêu: bám encoder_target        │
+        │  đầu ra: gói RTP                                     │
+        └──────────────────────────────────────────────────────┘
+```
+**Vì sao phải 3 vòng, không phải 2:** CC không thể biết vendor nào đang chạy và lệch bao nhiêu; encoder RC không thể biết mạng đang nghẽn. Vòng giữa là **cái phanh hiệu chuẩn** — nó biến "bitrate khai báo" thành "bitrate thật".
+**Hằng số thời gian phải tách xa nhau** (nếu gần nhau → dao động cộng hưởng): 200 ms / 500 ms / 16 ms ⇒ tỉ lệ ≥2.5× giữa các tầng. Không được đổi `decision_interval_ms` xuống dưới 300 ms nếu trim còn 500 ms.
+
+### 37.2 "Bitrate khai báo" ≠ "bitrate thật" — đo ở đâu
+| Nơi đo | Giá trị | Tin? |
+|---|---|---|
+| Property `bitrate` ta set | ý định | ❌ |
+| Encoder tự báo (`GstVideoEncoder` stats / vendor query) | gần đúng | ⚠️ nhiều hãng báo sai 3–10% |
+| **Byte thật trên dây tại pacer (trước `sendto`)** | **sự thật** | ✅ **nguồn duy nhất** |
+| Browser báo nhận được (`bytesReceived`) | sau mất gói | ✅ để tính loss, không để tính bitrate gửi |
+**Trim loop (§37.1 vòng giữa):**
+```
+mỗi 500 ms:
+  actual = byte_sent_window * 8 / window_s        # tại pacer, đã gồm overhead
+  target = target_video_bps
+  ratio  = actual / target
+  if ratio > 1.10:  encoder_target *= (1 / ratio_clamped_0.9_1.15)
+  if ratio < 0.90:  encoder_target *= 1.05              # nhích lên chậm
+  encoder_target = clamp(encoder_target, 0.5*target, 1.3*target)
+  hysteresis: không đổi 2 lần liên tiếp cùng chiều nếu |ratio-1| < 0.05
+```
+- **Không bao giờ** để trim loop bù quá 30% (nếu cần hơn ⇒ encoder/hãng có vấn đề, ghi `enc.trim_saturated` và **đổi encoder** nếu có thể).
+- Nếu `ratio > 1.3` kéo dài 3 s ⇒ coi như encoder không tôn trọng CBR ⇒ chuyển sang `VBR + cap cứng` và ghi audit (một số build NVENC/QSV làm vậy với `vbv` quá nhỏ).
+- **Khi màn hình tĩnh** (§35.11) `actual` thấp hơn nhiều target ⇒ **tắt trim loop** (không phải lỗi encoder) và CC cũng phải bỏ qua giai đoạn này (§37.8).
+
+### 37.3 NVENC (NVIDIA) — tham số và bẫy
+| Tham số | Giá trị | Bẫy |
+|---|---|---|
+| `rateControlMode` | `NV_ENC_PARAMS_RC_CBR` | **không** dùng `CBR_LOWDELAY` nếu cần bám bitrate chính xác (nó ưu tiên trễ và được phép lệch) |
+| `vbvBufferSize` | ~0.5–1 s × bitrate | **quá nhỏ** (≤0.25 s) ⇒ chính NVENC giảm chất lượng đột ngột / drop frame; quá lớn ⇒ trễ |
+| `vbvInitialDelay` | ≈ 0.5 × vbvBufferSize | |
+| `multiPass` | **NONE** (hoặc `qres` nếu GPU rảnh) | `fullres` thêm 1 frame trễ, không đáng cho screen content |
+| `enableLookahead` / `lookaheadDepth` | **0 / false** | có lookahead = thêm trễ bằng N frame |
+| `zeroLatencyEnable` | **true** | |
+| `frameIntervalP` (B-frame) | **1** (không B) | B-frame = trễ + không hợp screen content |
+| `idrPeriod` | 2 s × fps | |
+| `enableIntraRefresh` + `intraRefreshPeriod` + `intraRefreshCnt` | **bật** khi loss >1% | xem §37.7 |
+| `repeatSPSPPS` | **true** | thiếu ⇒ client vào muộn không giải mã được |
+| `sliceMode` | 1 slice/frame (đơn giản) hoặc multi-slice để giảm trễ tail | |
+| `presetGUID` | `P1` (fastest) hoặc `P2` | **không** P4+ cho screen: thêm trễ |
+| `tuningInfo` | `ULL` (ultra low latency) | |
+**Sai số thật thường gặp:** NVENC CBR có **filler data** hoạt động ⇒ đạt sát target (±2%) **nhưng tốn băng thông khi tĩnh**. Trên screen content, NVENC hay **vượt 3–8% trong 1–2 s đầu** (GOP khởi đầu) rồi ổn định ⇒ trim loop phải có **warm-up 2 s** không trim.
+**Giới hạn phiên:** consumer card **3–8 phiên** (tuỳ đời). Vượt ⇒ phần cứng trả lỗi khởi tạo, **không phải** mất chất lượng im lặng ⇒ §37.10.
+
+### 37.4 QSV (Intel) — tham số và bẫy
+| Tham số | Giá trị | Bẫy |
+|---|---|---|
+| `RateControlMethod` | `MFX_RATECONTROL_CBR` | |
+| `BufferSizeInKB` | **quan trọng nhất** và hay đặt sai: `bitrate_kbps × vbv_s / 8`. Ví dụ 8000 kbps, 0.75 s ⇒ **750 KB** | đặt **KB** nhưng nhiều người đặt theo bit ⇒ buffer bé 8× ⇒ **giảm chất lượng thảm** hoặc drop |
+| `TargetKbps` | = mục tiêu | QSV hiểu **kbps**, làm tròn **xuống** ⇒ 7800 kbps nếu ta set 7800.6 |
+| `LowDelayBRC` | **bật** (ICQ/LA off) | tắt ⇒ QSV có xu hướng đệm |
+| `GopRefDist` | **1** (không B) | |
+| `GopPicSize` | 2 s × fps | |
+| `MaxFrameSize` (nếu có) | `bitrate/fps × 3` | giới hạn spike 1 frame |
+| `NumRefFrame` | 1–2 | nhiều ref = thêm trễ |
+| `ExtBRC` / `LookAheadDepth` | **tắt / 0** | |
+**Sai số thật:** QSV **thiếu filler** (trừ khi bật), nên trên màn hình tĩnh nó **thấp hơn** target đáng kể — hoàn toàn ổn định với §35.11 nhưng làm trim loop tưởng "encoder yếu". Thêm nữa, QSV **vượt 5–15% khi có text scroll nhanh** (nhiều chi tiết mới) — đây chính là ca làm CC BACKOFF oan nếu trim loop không bù.
+> **Kết luận QSV:** sai số lớn nhất trong 4 hãng. Nếu Phase 0 đo trên máy Intel mà thấy `ratio` biến động >15%, phải chấp nhận **target thấp hơn 10%** làm việc (dùng `encoder_target = 0.9 × target`).
+
+### 37.5 AMF (AMD) — tham số và bẫy
+| Tham số | Giá trị | Bẫy |
+|---|---|---|
+| `AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD` | `CBR` | |
+| `VBVBufferSize` | 0.5–1 s | |
+| `EnforceHRD` | **true** | tắt ⇒ bitrate trôi tự do |
+| `FillerData` | **false** (screen content) | bật ⇒ tốn băng thông khi tĩnh |
+| `BFrameDeltaQP` / `BFramePattern` | **tắt B-frame** | |
+| `MaxNumOfRefFrames` | 1–2 | |
+| `PreAnalysis` | **tắt** | thêm trễ |
+| `Vbaq` / `EnableVBAQ` | bật nếu muốn vùng tối rõ hơn | ảnh hưởng phân bổ bit, không ảnh hưởng tổng |
+| `IntraRefresh` | có, khi cần | |
+**Bẫy riêng của AMF:** chất lượng ở **bitrate thấp (<2 Mbps)** kém hơn NVENC rõ rệt với text ⇒ với preset "Tiết kiệm" trên AMD phải **giảm resolution trước**, không ép bitrate.
+**Ổn định:** AMF trên driver mới thay đổi property khá thường xuyên ⇒ **phải pin driver version** trong tài liệu và test ở Phase 0, và có fallback x264 nếu element không khởi tạo.
+
+### 37.6 x264 (CPU, fallback) — nơi dễ sai nhất
+| Tham số | Giá trị | Bẫy |
+|---|---|---|
+| `bitrate` | kbps | |
+| `vbv-maxrate` + `vbv-bufsize` | **bắt buộc set cả hai**, bufsize = 0.5–1 s × maxrate | **thiếu `vbv-bufsize` ⇒ trần không có hiệu lực**, bitrate vượt 30%+ trong cảnh phức tạp. Đây là lỗi phổ biến nhất |
+| `nal-hrd` | `cbr` (nếu cần HRD) + `filler=1` | `filler` tốn băng thông khi tĩnh → **không dùng** cho screen |
+| `rc-lookahead` | **0** | >0 = trễ N frame |
+| `sync-lookahead` | 0 | |
+| `bframes` | 0 | |
+| `sliced-threads` | **1 (bật)** + `threads = số core vật lý (≤8)` | **quan trọng:** x264 mặc định dùng *frame-level* threads ⇒ **trễ = số thread × frame time** (8 thread ≈ 130 ms!). `sliced-threads` đổi sang *slice-level* ⇒ trễ 1 frame. Thiếu dòng này, x264 **không bao giờ** đạt <80 ms |
+| `tune` | `zerolatency` | |
+| `preset` | `veryfast` (hoặc `superfast` nếu CPU yếu) | |
+| `keyint` | 2 s × fps; `min-keyint` = keyint | |
+| `scenecut` | 0 | cắt cảnh tự phát = IDR ngoài ý muốn → §36.6 |
+| `repeat-headers` | 1 | |
+| `aud` | 1 | |
+| `intra-refresh` | bật khi loss >1% (thay keyint) | |
+**Con số thật:** x264 `veryfast` + `sliced-threads` + `zerolatency` ở 1080p60 tốn **25–45% CPU** của một core hiện đại cho mỗi phiên (tuỳ nội dung). Đây là lý do §37.10 giới hạn số phiên phần mềm trên máy yếu.
+
+### 37.7 Quy tắc chung cho cả 4 (bất biến)
+| # | Bất biến | Vì sao |
+|---|---|---|
+| 1 | **Không B-frame** | trễ + không hợp screen content |
+| 2 | **Không lookahead / pre-analysis** | mỗi frame lookahead = +16.7 ms |
+| 3 | **VBV/HRD luôn khai báo**, ngắn (≤1 s) | bám target, trễ thấp |
+| 4 | **`repeat SPS/PPS` = true** | client vào muộn vẫn giải mã được |
+| 5 | **Không `scenecut` tự động** | IDR ngoài kiểm soát ⇒ phá §36.4 |
+| 6 | **GOP = 2 s × fps**, hoặc **intra-refresh** khi loss >1% | §36.6 |
+| 7 | **Đổi bitrate = property**, không tạo lại element | tạo lại = 1 IDR + caps renegotiation |
+| 8 | **Đổi resolution/fps = phải tạo lại** | chấp nhận 1 nhịp khựng ~200 ms, gộp thay đổi trong 500 ms |
+| 9 | **Đơn vị: kbps cho property, bps trong logic nội bộ** — chuyển đổi ở đúng 1 chỗ | lỗi 1000× là có thật và khó thấy |
+| 10 | **Filler data = tắt** | tĩnh thì im, không đốt băng thông (§37.8) |
+
+### 37.8 Xung đột thật: CBR vs màn hình tĩnh vs §35.11
+Đây là chỗ 3 chương đụng nhau và **phải quyết định rõ**:
+- §36 muốn CBR để CC đo được.
+- §35.11 muốn **im lặng hoàn toàn** khi màn hình tĩnh (tiết kiệm pin/data — yêu cầu mobile của người dùng).
+- CBR + filler sẽ **đốt 8 Mbps để gửi màu giống nhau** — vô nghĩa và phá mục tiêu pin/data.
+**Quyết định:**
+1. **Filler = tắt luôn** ⇒ bitrate **được phép thấp hơn target** khi tĩnh.
+2. Trim loop **tạm dừng** khi ở chế độ tĩnh (§35.11), và CC **không** dùng pha tĩnh để suy ra băng thông (bỏ mẫu, giữ target cũ).
+3. Khi rời chế độ tĩnh: **IDR + 500 ms warm-up**, CC vẫn giữ target cũ (**không** STARTUP lại — mạng chưa đổi).
+4. `ratio < 0.5` trong **>5 s** ở trạng thái *động* ⇒ cảnh báo `enc.undershoot` (encoder bị bóp sai hoặc nội dung quá đơn giản — bình thường thì chỉ log).
+> Ghi rõ để không ai "sửa" bằng cách bật filler: bật filler là **đánh đổi trực tiếp** pin/data của người dùng mobile lấy một con số cho đẹp trong stats. Không làm.
+
+### 37.9 Chi phí đổi cấu hình giữa phiên (theo từng encoder)
+| Thay đổi | NVENC | QSV | AMF | x264 | Ghi chú |
+|---|---|---|---|---|---|
+| bitrate | ~0 ms (property) | ~0 ms | ~0 ms | ~0 ms | không IDR |
+| fps | 1 caps renegotiation (~50–150 ms, 1 IDR) | như NVENC | như NVENC | như NVENC | |
+| resolution | tạo lại pool + scaler + encoder: **150–400 ms, 1 IDR** | 200–500 ms | 200–450 ms | 300–600 ms | |
+| bật intra-refresh | ~0 ms | ~0 | tuỳ driver | ~0 (option-string lúc init ⇒ **cần tạo lại**) | **x264 phải tạo lại element** |
+| đổi preset encoder | cần tạo lại (GUID) | cần tạo lại | cần tạo lại | cần tạo lại | |
+**Luật:** mọi thay đổi cần tạo lại element đều phải **gom trong 500 ms** thành 1 lần (người dùng kéo slider chất lượng ⇒ chỉ 1 lần dựng lại).
+
+### 37.10 Giới hạn phiên & chính sách fallback
+| Encoder | Giới hạn | Khi vượt |
+|---|---|---|
+| NVENC (consumer) | 3–8 phiên (tuỳ đời; một số driver mới không giới hạn cứng nhưng giảm tốc) | phiên mới → **QSV/AMF** nếu có → **x264** |
+| QSV | 1–2 phiên (tuỳ iGPU) | → x264 |
+| AMF | 1–2 phiên | → x264 |
+| x264 | giới hạn CPU: **≤ (số core vật lý / 3)** phiên ở 1080p60 | từ chối với lỗi rõ: `server.busy` + gợi ý hạ preset |
+- Không bao giờ **im lặng** giảm chất lượng vì hết slot encoder: ghi stat `encoder_fallback=true` + thông báo trong UI phiên ("đang dùng CPU, hình có thể kém mượt hơn").
+- Khi dùng x264 ở nhiều phiên, **không** tăng `threads` vượt core/2 mỗi phiên (tranh chấp làm tăng trễ).
+
+### 37.11 Kiểm chứng (bắt buộc, đo chứ không tin)
+| Kiểm tra | Cách | Ngưỡng |
+|---|---|---|
+| Bitrate thật vs target | đo tại pacer 10 s, 3 mức (2/4/8 Mbps) | **±8%** (QSV cho phép ±10%) |
+| Vượt trong 2 s đầu GOP | đo 0–2 s | ≤ 20% (rồi trim bù) |
+| Trễ encoder tăng thêm | `t_encode_in → t_encode_out` | p95 ≤ 8 ms (HW), ≤ 20 ms (x264 veryfast) |
+| Spike khi đổi resolution | đo 2 s quanh | khựng ≤ 400 ms, 1 IDR duy nhất |
+| Đổi bitrate giữa phiên | 100 lần lên/xuống | **0** IDR thêm, 0 lần tạo lại element |
+| SPS/PPS có trong mọi IDR | parse H.264 stream | 100% |
+| Không có B-frame | parse stream (`ffprobe -show_frames`) | 100% |
+| x264 `sliced-threads` hiệu lực | so trễ p95 có/không | phải **giảm ≥50%** |
+| Filler data tắt | đo bitrate khi màn hình tĩnh | ≤ 100 kbps |
+
+### 37.12 Bảng ánh xạ tham số (một nơi để tra)
+| Khái niệm | NVENC | QSV | AMF | x264 |
+|---|---|---|---|---|
+| Bitrate | `bitrate` (bps/kbps tuỳ element) | `bitrate` (kbps) | `bitrate` (bps) | `bitrate` (kbps) |
+| RC mode | `rc-mode=cbr` | `rate-control=cbr` | `rate-control=cbr` | `pass=0` + vbv |
+| VBV | `vbv-buffer-size` | `buffer-size` (KB) | `vbv-buffer-size` | `vbv-bufsize` (kbit) |
+| B-frame | `bframes=0` | `b-frames=0` | `b-frames=0` | `bframes=0` |
+| GOP | `gop-size` | `gop-size` | `gop-size` | `key-int-max` |
+| intra-refresh | `intra-refresh=true` | `intra-refresh=true` | `intra-refresh` | `intra-refresh=true` |
+| SPS/PPS lặp | `repeat-sequence-header=true` | `header` / `repeat-headers` | `repeat-headers` | `repeat-headers=true` |
+| Số thread | — | — | — | `threads` + `sliced-threads=true` |
+> Tên property **phải xác minh trên đúng phiên bản GStreamer** dùng (1.22/1.24/1.26 khác nhau đôi chỗ). Ở Phase 0, chạy `gst-inspect-1.0 <element>` và ghi lại vào repo làm tài liệu chuẩn — **không** dựa vào trí nhớ hay blog.
+
+### 37.13 Nhánh mới rẽ ra
+| Nhánh | Vì sao |
+|---|---|
+| **#2b Scaler & độ nét** (vẫn giữ) | §37.9 phụ thuộc scaler khi đổi resolution |
+| **#2d Chọn encoder theo nội dung & theo phiên** (chấm điểm: text vs video, GPU rảnh, nhiệt, giới hạn slot) | §37.10 |
+| **#2e Đo & pin driver/toolchain theo hãng** (ma trận driver tối thiểu, hành vi khác nhau) | §37.5, §37.12 |
+| **#3 Fault injection harness** | vẫn chờ |
