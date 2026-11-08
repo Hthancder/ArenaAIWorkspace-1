@@ -14,7 +14,7 @@ tab Chrome — không cài gì trên máy điều khiển.
 | [`web/`](web/) | App mock tương tác: dashboard, session controls, window picker, settings T1/T2, responsive mobile |
 | [`mock-server/`](mock-server/) | Backend Node.js không dependency: API cho trạng thái, cài đặt, window picker và vòng đời phiên mock |
 | [`docs/run-on-windows.md`](docs/run-on-windows.md) | **Chạy thật trên laptop**: cài GStreamer, bấm "Xem máy thật", xem từ điện thoại, lỗi thường gặp |
-| [`docs/remote-desktop-spec.md`](docs/remote-desktop-spec.md) | **Spec thiết kế, ~6 860 dòng, §1–§58.** Kiến trúc, giao thức, pipeline mã hoá video, UI, bảo mật, edge case. §57 = tầng bảo mật đã thành code, §58 = xem màn hình thật bằng MJPEG |
+| [`docs/remote-desktop-spec.md`](docs/remote-desktop-spec.md) | **Spec thiết kế, ~6 910 dòng, §1–§58.** Kiến trúc, giao thức, pipeline mã hoá video, UI, bảo mật, edge case. §57 = tầng bảo mật đã thành code, §58 = xem màn hình thật bằng MJPEG |
 | [`docs/remote-hidden-window-guide.md`](docs/remote-hidden-window-guide.md) | Cách chạy một cửa sổ trên máy bị điều khiển mà **màn hình thật ở nhà không thấy** |
 | [`spike/`](spike/) | Rust, **0 dependency**: sinh chuỗi GStreamer (desktop/camera/mic), guard chính sách 3 mức, **tầng bảo mật** (`security/`: token, lockout, CSRF, wid, input, cleanup) — **100 test** |
 | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | CI: `clippy -D warnings` → `cargo test` → build `rd.exe` + artifact |
@@ -38,7 +38,7 @@ Exe có nút **◉ Xem máy thật**. Bấm là khung hình chuyển từ bản 
 
 Bản này **chỉ có hình**: chưa có tiếng, chưa điều khiển được, chưa phải WebRTC, và chỉ bind loopback (chưa TLS ⇒ không mở ra LAN).
 
-Đường này được kiểm bằng **socket thật + `gst-launch` giả** trong CI (`cargo test --manifest-path app/Cargo.toml`), không chỉ bằng unit test: đóng tab ⇒ pipeline chết trong ≤ ¼ s, không có frame ⇒ `504` sau 8 s kèm lỗi GStreamer. Bốn lỗi thật tìm được trong lúc kiểm (kill sai, **FIN ≠ RST**, đọc `stderr` treo, và một câu tài liệu hứa chặn LAN mà code không làm) được ghi lại ở §58.6–§58.10 — mỗi lỗi có một test hồi quy.
+Đường này được kiểm bằng **socket thật + `gst-launch` giả** trong CI (`cargo test --manifest-path app/Cargo.toml`), không chỉ bằng unit test: đóng tab ⇒ pipeline chết trong ≤ ¼ s, không có frame ⇒ `504` sau 8 s kèm lỗi GStreamer. Năm lỗi thật tìm được trong lúc kiểm (kill sai, **FIN ≠ RST**, đọc `stderr` treo, một câu tài liệu hứa chặn LAN mà code không làm, và một test flaky) được ghi lại ở §58.6–§58.12 — mỗi lỗi có một test hồi quy.
 
 Đây chưa phải remote desktop hoàn chỉnh. Exe có **probe phần cứng thật**: đọc Windows/GPU/RAM/Wi-Fi/monitor, kiểm tra GStreamer plugins và — khi bạn bấm — capture 150 frame DXGI trong 5 giây rồi huỷ vào fakesink. Frame không lưu hay gửi qua mạng. Chưa có session streaming WebRTC, gửi input, camera/micro/audio phiên hay truy cập LAN/Internet. Artifact `rd-windows-x64` khác là CLI pipeline spike.
 
