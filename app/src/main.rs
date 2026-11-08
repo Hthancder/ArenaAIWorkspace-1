@@ -161,36 +161,73 @@ fn run_diagnostics() -> String {
     let body=checks.iter().map(check_json).collect::<Vec<_>>().join(",");
     format!("{{\"mock\":false,\"checkedAt\":{},\"checks\":[{}]}}",now_seconds(),body)
 }
-fn capture_probe(body: &str) -> (u16, String) {
-    let Some(fields) = parse_flat_object(body) else { return (400, "{\"error\":\"invalid_json\"}".into()); };
-    let monitor = fields.get("monitorIndex").and_then(|v| v.parse::<u8>().ok()).filter(|v| *v <= 8);
-    let Some(monitor) = monitor else { return (422, "{\"error\":\"invalid_monitor_index\"}".into()); };
-    let args = vec!["-e", "-q", "d3d11screencapturesrc", "", "capture-api=dxgi", "num-buffers=150", "!", "video/x-raw,framerate=30/1", "!", "d3d11download", "!", "videoconvert", "!", "fakesink", "sync=true"];
-    let mut owned = args.iter().map(|s| s.to_string()).collect::<Vec<_>>();
-    owned[3] = format!("monitor-index={monitor}");
-    let mut cmd = std::process::Command::new("gst-launch-1.0");
-    cmd.args(&owned).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::piped());
-    let mut child = match cmd.spawn() {
+fn pipeline_args(monitor: u8, encoder: bool) -> Vec<String> {
+    let mut args = vec!["-e".into(), "-q".into(), "d3d11screencapturesrc".into(),
+        format!("monitor-index={monitor}"), "capture-api=dxgi".into(),
+        if encoder { "num-buffers=300" } else { "num-buffers=150" }.into(), "!".into()];
+    if encoder {
+        args.extend(["d3d11convert".into(), "!".into(),
+            "video/x-raw(memory:D3D11Memory),format=NV12,width=1920,height=1080,framerate=60/1".into(), "!".into(),
+            "qsvh264enc".into(), "target-usage=7".into(), "bitrate=8000".into(), "rate-control=cbr".into(),
+            "gop-size=120".into(), "b-frames=0".into(), "low-latency=true".into(), "!".into(),
+            "h264parse".into(), "!".into(), "fakesink".into()]);
+    } else {
+        args.extend(["video/x-raw,framerate=30/1".into(), "!".into(), "d3d11download".into(),
+            "!".into(), "videoconvert".into(), "!".into(), "autovideosink".into()]);
+    }
+    args
+}
+
+fn run_gst_pipeline(args: &[String]) -> (bool, String) {
+    let mut child = match std::process::Command::new("gst-launch-1.0")
+        .args(args).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::piped()).spawn() {
         Ok(child) => child,
-        Err(error) => {
-            let output = format!("Không chạy được gst-launch-1.0: {error}");
-            return (200, format!("{{\"status\":\"warn\",\"output\":{},\"advice\":\"Cài GStreamer runtime để thử capture.\",\"mock\":false}}", json_quote(&output)));
-        }
+        Err(error) => return (false, format!("Không chạy được gst-launch-1.0: {error}")),
     };
     let start = std::time::Instant::now();
     let mut timed_out = false;
     loop {
-        match child.try_wait() { Ok(Some(_)) => break, Ok(None) => {}, Err(_) => break }
-        if start.elapsed() > std::time::Duration::from_secs(12) { timed_out = true; let _ = child.kill(); break; }
+        match child.try_wait() { Ok(Some(_)) => break, Ok(None) => {}, Err(error) => {
+            let _ = child.kill();
+            return (false, format!("Không đọc được trạng thái pipeline: {error}"));
+        } }
+        if start.elapsed() > std::time::Duration::from_secs(12) {
+            timed_out = true;
+            let _ = child.kill();
+            break;
+        }
         thread::sleep(std::time::Duration::from_millis(100));
     }
     let output = child.wait_with_output().ok();
     let success = output.as_ref().map(|o| o.status.success()).unwrap_or(false) && !timed_out;
     let details = output.map(|o| clean_output(&String::from_utf8_lossy(&o.stderr))).unwrap_or_default();
-    let shown = if details.is_empty() { if success { "Đã nhận đủ 150 frame trong giới hạn 12 giây." } else { "gst-launch thất bại hoặc hết giờ." } } else { &details };
-    let advice = if success { "Capture DXGI đã phát đủ 150 frame vào fakesink; không có stream mạng." } else { "Đọc lỗi bên dưới. Kiểm tra monitor-index, VDD, runtime và gst-inspect d3d11screencapturesrc." };
-    (200, format!("{{\"status\":{},\"output\":{},\"advice\":{},\"monitorIndex\":{},\"mock\":false}}", json_quote(if success {"pass"} else {"warn"}), json_quote(shown), json_quote(advice), monitor))
+    let shown = if timed_out { "Pipeline vượt quá giới hạn 12 giây.".to_string() }
+        else if details.is_empty() && success { "Đã xử lý đủ số frame.".to_string() }
+        else { details };
+    (success, shown)
 }
+
+fn capture_probe(body: &str) -> (u16, String) {
+    let Some(fields) = parse_flat_object(body) else { return (400, "{\"error\":\"invalid_json\"}".into()); };
+    let monitor = fields.get("monitorIndex").and_then(|v| v.parse::<u8>().ok()).filter(|v| *v <= 8);
+    let Some(monitor) = monitor else { return (422, "{\"error\":\"invalid_monitor_index\"}".into()); };
+
+    // One user action follows the laptop P0 order: first prove visible DXGI
+    // capture, then run the QSV path expected to keep capture+encode on the iGPU.
+    let (capture_ok, capture_output) = run_gst_pipeline(&pipeline_args(monitor, false));
+    if !capture_ok {
+        let output = format!("DXGI visible capture: WARN\n{capture_output}\nQSV stage: skipped because capture did not pass.");
+        return (200, format!("{{\"status\":\"warn\",\"output\":{},\"advice\":\"DXGI capture chưa đạt. Kiểm tra VDD, monitor-index và topology trước khi đánh giá encoder.\",\"monitorIndex\":{},\"mock\":false}}", json_quote(&output), monitor));
+    }
+    let (qsv_ok, qsv_output) = run_gst_pipeline(&pipeline_args(monitor, true));
+    let status = if qsv_ok { "pass" } else { "warn" };
+    let output = format!("DXGI visible capture: PASS — 150 frame ở 30 FPS, đã mở autovideosink.\nQSV capture→encode: {} — 300 frame ở 1080p60 vào fakesink.\n{}",
+        if qsv_ok { "PASS" } else { "WARN" }, qsv_output);
+    let advice = if qsv_ok { "DXGI preview và QSV đã chạy. Đây mới là kiểm tra pipeline cục bộ; chưa có WebRTC hoặc đo glass-to-glass." }
+        else { "DXGI capture đạt nhưng QSV encode chưa đạt. Kiểm tra gst-inspect-1.0 qsvh264enc và topology/LUID; NVENC chưa tự động thay thế QSV trên laptop." };
+    (200, format!("{{\"status\":{},\"output\":{},\"advice\":{},\"monitorIndex\":{},\"mock\":false}}", json_quote(status), json_quote(&output), json_quote(advice), monitor))
+}
+
 fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
     let Some((method,path,body)) = read_request(&mut stream) else { return; };
     if body == "__BODY_TOO_LARGE__" { return json_response(&mut stream, 413, "{\"error\":\"body_too_large\"}".into()); }
@@ -265,5 +302,21 @@ mod tests {
     #[test] fn rejects_bad_enum() { assert!(!allowed_value("quality","disable-encryption")); assert!(!allowed_value("volume","101")); }
     #[test] fn serves_embedded_frontend_sources() { assert!(INDEX.contains("Lantern")); assert!(CSS.contains(".app-shell")); assert!(JS.contains("/api/sessions")); }
     #[test] fn capture_probe_rejects_untrusted_monitor_index() { assert_eq!(capture_probe(r#"{"monitorIndex":99}"#).0,422); }
+    #[test] fn p0_capture_pipeline_shows_real_dxgi_frames() {
+        let args = pipeline_args(1, false);
+        let command = args.join(" ");
+        assert!(command.contains("monitor-index=1 capture-api=dxgi num-buffers=150"));
+        assert!(command.contains("d3d11download ! videoconvert ! autovideosink"));
+        assert!(!command.contains("fakesink"));
+    }
+    #[test] fn laptop_p0_encoder_pipeline_uses_qsv_and_bounded_frames() {
+        let args = pipeline_args(1, true);
+        let command = args.join(" ");
+        assert!(command.contains("num-buffers=300"));
+        assert!(command.contains("qsvh264enc target-usage=7 bitrate=8000 rate-control=cbr"));
+        assert!(command.contains("width=1920,height=1080,framerate=60/1"));
+        assert!(command.contains("b-frames=0 low-latency=true"));
+        assert!(command.ends_with("fakesink"));
+    }
     #[test] fn diagnostics_api_is_marked_as_hardware_not_ui_mock() { assert!(run_diagnostics().contains("\"mock\":false")); }
 }

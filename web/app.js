@@ -210,7 +210,7 @@
       return;
     }
     button.disabled = true; button.textContent = 'Đang capture…';
-    $('#captureResult').classList.remove('hidden'); $('#captureResult').textContent = 'Chạy pipeline DXGI 150 frame…';
+    $('#captureResult').classList.remove('hidden'); $('#captureResult').textContent = 'Mở preview DXGI 5 giây, sau đó thử QSV 1080p60…';
     try {
       const result = await apiRequest('/api/diagnostics/capture', { method: 'POST', body: { monitorIndex: Number($('#monitorIndex').value) } });
       diagnosticsReport.capture = result;
