@@ -1,5 +1,6 @@
 mod capture;
 #[allow(dead_code)] // dùng trong nhánh #[cfg(windows)] của stream_live
+mod input;
 mod jpeg;
 mod stream;
 
@@ -69,7 +70,7 @@ fn now_ms() -> u128 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)
 }
 
-struct State { settings: BTreeMap<String, String>, session: Option<Session>, next_id: u64, data_dir: PathBuf, live_status: Option<(bool, String)>, live_metrics: LiveMetrics }
+struct State { settings: BTreeMap<String, String>, session: Option<Session>, next_id: u64, data_dir: PathBuf, live_status: Option<(bool, String)>, live_metrics: LiveMetrics, input: input::InputState, move_limiter: input::RateLimiter }
 
 fn json_quote(value: &str) -> String {
     let mut out = String::from("\"");
@@ -109,16 +110,74 @@ fn parse_flat_object(input: &str) -> Option<BTreeMap<String, String>> {
     }
     Some(map)
 }
+/// Đọc một chuỗi JSON từ `bytes[start] == b'"'`.
+///
+/// **UTF-8**: bản trước làm `out.push(b as char)` — biến mỗi *byte* thành một
+/// ký tự Latin-1. Hậu quả: `"ế"` (3 byte UTF-8) thành 3 ký tự rác, và tầng
+/// input gửi 3 code unit thay vì 1 ⇒ gõ tiếng Việt ra `Ã¡ÂºÂ¿`. Test HTTP
+/// thật bắt được; unit test thì không, vì chúng dựng `Event` trực tiếp.
+///
+/// Cách sửa: gom các byte >= 0x80 thành một lát, rồi `from_utf8` **một lần**
+/// cho cả lát — không giải mã từng byte.
 fn parse_json_string(bytes: &[u8], start: usize) -> Option<(String, usize)> {
-    let mut i = start + 1; let mut out = String::new();
+    let mut i = start + 1;
+    let mut out = String::new();
     while i < bytes.len() {
         match bytes[i] {
             b'"' => return Some((out, i + 1)),
-            b'\\' => { i += 1; if i >= bytes.len() { return None; } match bytes[i] { b'"' => out.push('"'), b'\\' => out.push('\\'), b'n' => out.push('\n'), b'r' => out.push('\r'), b't' => out.push('\t'), _ => return None } },
+            b'\\' => {
+                i += 1;
+                if i >= bytes.len() { return None; }
+                match bytes[i] {
+                    b'"' => out.push('"'),
+                    b'\\' => out.push('\\'),
+                    b'n' => out.push('\n'),
+                    // Hai escape JSON chuẩn còn thiếu — client có thể gửi
+                    // `\b`/`\f` từ clipboard.
+                    b'b' => out.push('\u{8}'),
+                    b'f' => out.push('\u{c}'),
+                    b'r' => out.push('\r'),
+                    b't' => out.push('\t'),
+                    b'u' => {
+                        // \uXXXX (kể cả surrogate pair — ghép ở dưới).
+                        if i + 4 >= bytes.len() { return None; }
+                        let hex = std::str::from_utf8(&bytes[i + 1..i + 5]).ok()?;
+                        let unit = u16::from_str_radix(hex, 16).ok()?;
+                        if (0xD800..=0xDBFF).contains(&unit) {
+                            // Chờ low surrogate ở escape kế tiếp dạng `\uXXXX`.
+                            // Chỉ số: `i` đang ở 'u' của escape thứ nhất; hex1 =
+                            // i+1..i+5. Escape thứ hai bắt đầu ở i+5 (`\\`),
+                            // 'u' ở i+6, hex2 = i+7..i+11.
+                            if bytes.get(i + 5) != Some(&b'\\') || bytes.get(i + 6) != Some(&b'u') {
+                                return None;
+                            }
+                            let hex2 = std::str::from_utf8(bytes.get(i + 7..i + 11)?).ok()?;
+                            let low = u16::from_str_radix(hex2, 16).ok()?;
+                            if !(0xDC00..=0xDFFF).contains(&low) { return None; }
+                            let scalar = 0x1_0000
+                                + ((u32::from(unit) - 0xD800) << 10)
+                                + (u32::from(low) - 0xDC00);
+                            out.push(char::from_u32(scalar)?);
+                            i += 11;
+                            continue;
+                        }
+                        out.push(char::from_u32(u32::from(unit))?);
+                        i += 5;
+                        continue;
+                    }
+                    _ => return None,
+                }
+                i += 1;
+            }
             b if b < 0x20 => return None,
-            b => out.push(b as char),
+            b if b < 0x80 => { out.push(b as char); i += 1; }
+            _ => {
+                // Lát byte UTF-8: gom tới ký tự ASCII tiếp theo (hoặc `"`).
+                let begin = i;
+                while i < bytes.len() && bytes[i] >= 0x80 { i += 1; }
+                out.push_str(std::str::from_utf8(&bytes[begin..i]).ok()?);
+            }
         }
-        i += 1;
     }
     None
 }
@@ -145,6 +204,14 @@ fn settings_json(settings: &BTreeMap<String, String>) -> String {
         format!("{}:{}", json_quote(k), encoded)
     }).collect::<Vec<_>>().join(","); format!("{{{values}}}")
 }
+fn input_stats_json(stats: &input::InputStats) -> String {
+    format!(
+        "{{\"eventsIn\":{},\"eventsOut\":{},\"rejected\":{},\"oddKeyup\":{},\"surrogateDropped\":{},\"releaseAllCount\":{}}}",
+        stats.events_in, stats.events_out, stats.rejected, stats.odd_keyup,
+        stats.surrogate_dropped, stats.release_all_count
+    )
+}
+
 fn session_json(s: &Session) -> String {
     format!("{{\"id\":{},\"mode\":{},\"windowId\":{},\"startedAt\":{},\"audio\":{},\"status\":\"connected\",\"mock\":true}}", json_quote(&s.id), json_quote(&s.mode), json_quote(&s.window_id), s.started_at, s.audio)
 }
@@ -595,6 +662,56 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
             s.next_id += 1; let session = Session { id: format!("mock-{}",s.next_id), mode: mode.into(), window_id: win.into(), started_at: now_seconds(), audio: input.get("audio").map(|v|v!="false").unwrap_or(true) };
             let result = session_json(&session); s.session = Some(session); json_response(&mut stream, 201, format!("{{\"session\":{},\"mock\":true}}",result))
         }
+        // §8.3 + §44: input. Tách 3 phần rõ ràng:
+        //   1. parse JSON → `input::Event` (dữ liệu hỏng bị loại ở đây)
+        //   2. máy trạng thái quyết định hành động (§44.2)
+        //   3. `inject()` thực thi (chỉ Windows)
+        // Nhờ tách vậy, phần 1+2 có 20 test chạy trên Linux; chỉ phần 3 cần
+        // máy thật — và nó không chứa quyết định nào.
+        ("POST", p) if p.starts_with("/api/sessions/") && p.ends_with("/input") => {
+            let sid = p.trim_start_matches("/api/sessions/").trim_end_matches("/input");
+            if s.session.as_ref().map(|session| session.id.as_str()) != Some(sid) {
+                return json_response(&mut stream, 404, "{\"error\":\"session_not_found\"}".into());
+            }
+            let Some(input) = parse_flat_object(&body) else {
+                return json_response(&mut stream, 400, "{\"error\":\"invalid_json\"}".into());
+            };
+            let Some(event) = input::parse_event(&input) else {
+                return json_response(&mut stream, 422, "{\"error\":\"invalid_input\"}".into());
+            };
+            // §44.8: chỉ `move` bị rate limit; click/phím là backpressure.
+            if matches!(event, input::Event::Move { .. } | input::Event::MoveRel { .. })
+                && !s.move_limiter.allow(now_ms())
+            {
+                let stats = s.input.stats;
+                return json_response(&mut stream, 200, format!(
+                    "{{\"dropped\":true,\"reason\":\"input_flood\",\"stats\":{}}}", input_stats_json(&stats)));
+            }
+            let (actions, rejection) = s.input.apply(event, now_ms());
+            let sent = input::inject(&actions);
+            let stats = s.input.stats;
+            // `refused` là lý do từ chối; UI hiện toast khi có phím cấm.
+            let refused = match rejection {
+                Some(input::Rejected::ForbiddenKey) => json_quote("forbidden_key"),
+                Some(input::Rejected::TextTooLong) => json_quote("text_too_long"),
+                Some(input::Rejected::StraySurrogate) => json_quote("bad_unicode"),
+                Some(input::Rejected::TooManyKeys) => json_quote("too_many_keys"),
+                None => "null".to_string(),
+            };
+            json_response(&mut stream, 200, format!(
+                "{{\"ok\":true,\"actions\":{},\"sent\":{},\"refused\":{},\"stats\":{}}}",
+                actions.len(), sent, refused, input_stats_json(&stats)))
+        }
+        // §6.4.7 lớp 3: `sendBeacon` khi đóng tab — không phụ thuộc WS còn sống.
+        ("POST", p) if p.starts_with("/api/sessions/") && p.ends_with("/release") => {
+            let sid = p.trim_start_matches("/api/sessions/").trim_end_matches("/release");
+            if s.session.as_ref().map(|session| session.id.as_str()) != Some(sid) {
+                return json_response(&mut stream, 404, "{\"error\":\"session_not_found\"}".into());
+            }
+            let actions = s.input.release_all();
+            input::inject(&actions);
+            json_response(&mut stream, 200, format!("{{\"released\":{}}}", actions.len()))
+        }
         ("DELETE", _) if route.starts_with("/api/sessions/") => {
             let id = route.trim_start_matches("/api/sessions/");
             if s.session.as_ref().map(|session| session.id.as_str()) != Some(id) { return json_response(&mut stream, 404, "{\"error\":\"session_not_found\"}".into()); }
@@ -618,6 +735,19 @@ fn main() {
         // một phiên) ⇒ `--check` báo đỏ trên máy có GPU, trong khi capture tốt.
         let (available, detail) = probe_live_status();
         println!("capture: available={available} — {detail}");
+
+        // Kiểm encoder **thật** khi khởi động, không chỉ trong `#[cfg(test)]`.
+        //
+        // Vì sao ở đây: `jpeg::encode` chỉ được gọi từ nhánh `#[cfg(windows)]`
+        // của `stream_live`, nên trên Linux nó là dead-code và mọi bảng lượng
+        // tử/Huffman bị cảnh báo "never used" — 25 warning che mất cảnh báo
+        // thật. Gọi một lần ở `--check` vừa chứng minh encoder chạy được trên
+        // mọi nền tảng (không cần GPU), vừa giữ cảnh báo có ích.
+        let probe_pixels = vec![0x7Fu8; 16 * 16 * 4];
+        let probe_jpeg = jpeg::encode(&probe_pixels, 16, 16, 70);
+        assert!(probe_jpeg.starts_with(&[0xFF, 0xD8]), "JPEG phải bắt đầu bằng SOI");
+        assert!(probe_jpeg.ends_with(&[0xFF, 0xD9]), "JPEG phải kết thúc bằng EOI");
+        println!("jpeg: encoder chạy được, {} byte cho 16×16", probe_jpeg.len());
         // §58.8: in rõ vì sao nút "Xem máy thật" có thể bị xám — nếu không,
         // trên Linux/CI người đọc chỉ thấy "live route ready" và tưởng capture
         // hỏng, trong khi thực tế không có desktop để capture.
@@ -637,7 +767,7 @@ fn main() {
     let data_dir = env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(env::temp_dir).join("LanternMock");
     let mut settings = SETTINGS_DEFAULTS.iter().map(|(k,v)|(k.to_string(),v.to_string())).collect::<BTreeMap<_,_>>();
     if let Ok(text) = fs::read_to_string(data_dir.join("settings.json")) { if let Some(saved)=parse_flat_object(&text) { for (k,v) in saved { if settings.contains_key(&k) && allowed_value(&k,&v) { settings.insert(k,v); } } } }
-    let state=Arc::new(Mutex::new(State{settings,session:None,next_id:0,data_dir,live_status:None,live_metrics:LiveMetrics::default()}));
+    let state=Arc::new(Mutex::new(State{settings,session:None,next_id:0,data_dir,live_status:None,live_metrics:LiveMetrics::default(),input:input::InputState::new(),move_limiter:input::RateLimiter::default()}));
     let url = format!("http://127.0.0.1:{actual}");
     println!("Lantern mock is ready. Open {url} in your browser.");
     println!("Xem màn hình thật: {url}/live  — hoặc bấm nút \"Xem máy thật\" (không cần cài gì).");
@@ -688,6 +818,116 @@ mod tests {
         assert!(command.contains("b-frames=0 low-latency=true"));
         assert!(command.ends_with("fakesink"));
     }
+    /// Dựng một server thật trên cổng ngẫu nhiên, trả `(địa chỉ, JoinHandle)`.
+    ///
+    /// Vì sao phải là HTTP thật chứ không gọi `handle()` trực tiếp: lỗi UTF-8
+    /// dưới đây nằm ở **chỗ nối** giữa socket, `read_request` và
+    /// `parse_flat_object` — gọi hàm trực tiếp sẽ bỏ qua đúng chỗ hỏng.
+    fn spawn_server() -> (std::net::SocketAddr, std::thread::JoinHandle<()>) {
+        use std::net::TcpListener;
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let handle = std::thread::spawn(move || {
+            let state = Arc::new(Mutex::new(State {
+                settings: BTreeMap::new(),
+                session: None,
+                next_id: 0,
+                data_dir: std::env::temp_dir(),
+                live_status: None,
+                live_metrics: LiveMetrics::default(),
+                input: input::InputState::new(),
+                move_limiter: input::RateLimiter::default(),
+            }));
+            for stream in listener.incoming().take(8) {
+                if let Ok(stream) = stream {
+                    handle(stream, Arc::clone(&state));
+                }
+            }
+        });
+        (addr, handle)
+    }
+
+    /// Gửi một request HTTP thô, trả toàn bộ response (header + body).
+    fn http(addr: std::net::SocketAddr, method: &str, path: &str, body: &str) -> String {
+        use std::io::Write;
+        let mut stream = TcpStream::connect(addr).expect("connect");
+        let request = format!(
+            "{method} {path} HTTP/1.1\r\nHost: test\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        stream.write_all(request.as_bytes()).expect("write");
+        let mut out = String::new();
+        stream.read_to_string(&mut out).expect("read");
+        out
+    }
+
+    /// **Lỗi thật**: `parse_json_string` cũ làm `out.push(b as char)` — mỗi
+    /// *byte* thành một ký tự Latin-1. `"ế"` (3 byte UTF-8) thành 3 ký tự
+    /// rác, tầng input gửi 3 code unit ⇒ gõ tiếng Việt ra `Ã¡ÂºÂ¿`.
+    ///
+    /// Unit test không bắt được vì chúng dựng `Event` trực tiếp, bỏ qua JSON.
+    /// Test này đi qua socket thật, nên bắt được — và đã bắt được.
+    #[test] fn vietnamese_text_survives_the_http_layer_as_one_code_unit() {
+        let (addr, server) = spawn_server();
+        let created = http(addr, "POST", "/api/sessions", r#"{"mode":"vnc","windowId":"desktop"}"#);
+        assert!(created.contains("\"id\""), "tạo phiên: {created}");
+        let sid = created.split("\"id\":\"").nth(1).and_then(|r| r.split('"').next()).expect("sid").to_string();
+
+        // UTF-8 thô trong body (đúng thứ trình duyệt gửi).
+        let response = http(
+            addr,
+            "POST",
+            &format!("/api/sessions/{sid}/input"),
+            "{\"t\":\"text\",\"s\":\"ế\"}",
+        );
+        assert!(response.contains("\"ok\":true"), "response: {response}");
+        // **1** code unit, không phải 3 byte.
+        assert!(
+            response.contains("\"actions\":1"),
+            "`ế` phải là 1 code unit, không phải 3 byte: {response}"
+        );
+        drop(server);
+    }
+
+    #[test] fn a_surrogate_pair_arrives_as_two_units_over_http() {
+        let (addr, server) = spawn_server();
+        let created = http(addr, "POST", "/api/sessions", r#"{"mode":"vnc","windowId":"desktop"}"#);
+        let sid = created.split("\"id\":\"").nth(1).and_then(|r| r.split('"').next()).expect("sid").to_string();
+        // `\\ud83d\\ude00` = 😀 dạng escape JSON (một số client gửi kiểu này).
+        let response = http(
+            addr,
+            "POST",
+            &format!("/api/sessions/{sid}/input"),
+            r#"{"t":"text","s":"\ud83d\ude00"}"#,
+        );
+        assert!(response.contains("\"actions\":2"), "emoji phải là 2 code unit: {response}");
+        drop(server);
+    }
+
+    #[test] fn input_to_an_unknown_session_is_404_not_a_crash() {
+        let (addr, server) = spawn_server();
+        let response = http(addr, "POST", "/api/sessions/khong-co/input", r#"{"t":"move","nx":1,"ny":1}"#);
+        assert!(response.contains("404"), "{response}");
+        assert!(response.contains("session_not_found"), "{response}");
+        drop(server);
+    }
+
+    #[test] fn a_forbidden_key_is_refused_over_http() {
+        let (addr, server) = spawn_server();
+        let created = http(addr, "POST", "/api/sessions", r#"{"mode":"vnc","windowId":"desktop"}"#);
+        let sid = created.split("\"id\":\"").nth(1).and_then(|r| r.split('"').next()).expect("sid").to_string();
+        // vk 76 = 'L' ⇒ Win+L bị chặn (§5.8.4).
+        let response = http(
+            addr,
+            "POST",
+            &format!("/api/sessions/{sid}/input"),
+            r#"{"t":"key","down":1,"vk":76}"#,
+        );
+        assert!(response.contains("forbidden_key"), "{response}");
+        assert!(response.contains("\"actions\":0"), "{response}");
+        drop(server);
+    }
+
     #[test] fn peer_closed_sees_a_hangup_and_not_just_a_slow_client() {
         use std::net::TcpListener;
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
