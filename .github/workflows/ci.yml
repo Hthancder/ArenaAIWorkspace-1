@@ -115,8 +115,47 @@ jobs:
           path: spike/target/release/rd.exe
           if-no-files-found: error
 
+      # §58.13: tải sẵn GStreamer runtime + gói vào **cùng** artifact. Người
+      # dùng cuối không phải cài gì, không phải sửa PATH — giải nén là chạy.
+      # Bản cài trong máy (nếu có) không bị dùng tới, nên không có chuyện
+      # "GStreamer cũ trong PATH làm thiếu plugin".
+      - name: download GStreamer runtime (MSVC 64-bit)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ProgressPreference = 'SilentlyContinue'
+          $version = '1.24.10'
+          $url = "https://gstreamer.freedesktop.org/data/pkg/windows/$version/msvc/gstreamer-1.0-msvc-x86_64-$version.zip"
+          $zip = Join-Path $env:RUNNER_TEMP 'gstreamer.zip'
+          Write-Host "Tải $url"
+          Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+          $size = (Get-Item $zip).Length
+          Write-Host "Đã tải $([math]::Round($size / 1MB, 1)) MB"
+          $gst = 'app/target/release/gst'
+          New-Item -ItemType Directory -Force -Path $gst | Out-Null
+          tar -xf $zip -C $gst
+          $exe = Join-Path $gst 'bin/gst-launch-1.0.exe'
+          if (-not (Test-Path $exe)) { throw "Gói tải về không có bin/gst-launch-1.0.exe" }
+          # Kiểm **ngay trong CI** rằng bản đóng gói có plugin d3d11 — nếu không
+          # thì ta sẽ giao một artifact hỏng mà không ai biết cho tới khi bạn bấm nút.
+          Push-Location (Join-Path $gst 'bin')
+          $env:GST_PLUGIN_SYSTEM_PATH_1_0 = Join-Path $gst 'lib/gstreamer-1.0'
+          $env:GST_PLUGIN_PATH_1_0 = ''
+          ./gst-inspect-1.0.exe d3d11screencapturesrc | Select-Object -First 6
+          if ($LASTEXITCODE -ne 0) { throw "Bản đóng gói thiếu plugin d3d11screencapturesrc" }
+          ./gst-inspect-1.0.exe jpegenc | Select-Object -First 3
+          if ($LASTEXITCODE -ne 0) { throw "Bản đóng gói thiếu jpegenc" }
+          Pop-Location
+          # Bỏ thư mục dev không cần cho chạy: giảm ~50% kích thước artifact.
+          foreach ($drop in @('lib/gstreamer-1.0/gst-plugin-scanner.exe', 'share', 'include')) {
+            Remove-Item -Recurse -Force (Join-Path $gst $drop) -ErrorAction SilentlyContinue
+          }
+          Write-Host "Kích thước gst: $([math]::Round((Get-ChildItem $gst -Recurse | Measure-Object Length -Sum).Sum / 1MB, 1)) MB"
+
       - uses: actions/upload-artifact@v4
         with:
           name: lantern-mock-windows-x64
-          path: app/target/release/lantern-mock.exe
+          path: |
+            app/target/release/lantern-mock.exe
+            app/target/release/gst/
           if-no-files-found: error

@@ -1,6 +1,6 @@
 # Chạy trên máy thật — từ 0 tới "thấy màn hình trong trình duyệt"
 
-> Mục tiêu của file này: **15 phút**, kết thúc bằng một tab trình duyệt (trên laptop hoặc trên điện thoại cùng Wi-Fi) hiện **màn hình thật** của laptop Windows.
+> Mục tiêu của file này: **5 phút**, kết thúc bằng một tab trình duyệt (trên laptop hoặc trên điện thoại cùng Wi-Fi) hiện **màn hình thật** của laptop Windows.
 >
 > Đây **chưa phải** bản remote desktop hoàn chỉnh. Nó **chỉ có hình**. Không có tiếng, không điều khiển được chuột/bàn phím, và không phải WebRTC. Nói rõ để bạn không chờ đợi sai: xem §"Nó chưa làm được gì" ở cuối.
 
@@ -11,13 +11,24 @@
 | Thứ | Vì sao | Thời gian |
 |---|---|---|
 | Laptop Dell 7467 đang chạy | máy ghi hình | — |
-| **GStreamer MSVC 64-bit** (bản **Complete**) | capture DXGI + JPEG + multipart | ~5 phút tải/cài |
+| ~~GStreamer~~ **đã có trong artifact** | capture DXGI + JPEG + multipart | **0 phút** |
 | Artifact `lantern-mock-windows-x64` từ GitHub Actions | app + UI, không cần cài Rust | 10 giây |
 | Chrome/Edge trên máy xem | hiển thị MJPEG | — |
 
 ---
 
-## 1. Cài GStreamer (5 phút, 1 lần)
+## 1. GStreamer: **không cần cài** (bản v3.31 trở đi)
+
+Artifact đã **có sẵn GStreamer** trong thư mục `gst\` cạnh exe. Bạn giải nén, chạy `lantern-mock.exe`, bấm **Xem máy thật**. Hết. Không tải installer, không sửa `PATH`, không cài lần thứ hai.
+
+Nếu vì lý do nào đó thư mục `gst\` không có (bạn tải `lantern-mock.exe` lẻ, hoặc antivirus cách ly file), app **không** im lặng: nó hiện trong khung hình một khối *"Máy chưa có GStreamer"* kèm nút **Tự cài GStreamer (~40 MB, một lần)**. Bấm đó là app tự tải bằng `powershell`/`tar` có sẵn của Windows, giải nén vào `gst\`, rồi kiểm lại plugin. Một lần, dùng mãi.
+
+<details>
+<summary>Vẫn muốn tự cài bằng tay (hoặc dùng GStreamer bạn đã có)</summary>
+
+App tìm theo thứ tự: `LANTERN_GST` → `gst\bin\` cạnh exe → `gst\msvc_x86_64\bin\` → `PATH`. Nghĩa là bản bạn đã cài vẫn được dùng nếu không có bản đi kèm.
+
+
 
 1. Mở <https://gstreamer.freedesktop.org/download/#windows>
 2. Tải **runtime installer** và **development installer**, loại **MSVC 64-bit**.
@@ -44,6 +55,8 @@ gst-inspect-1.0 jpegenc
 ```
 
 > Nếu `gst-inspect-1.0` báo **No such element or plugin 'd3d11screencapturesrc'** ⇒ bạn đã cài bản Typical. Cài lại bản Complete.
+
+</details>
 
 ---
 

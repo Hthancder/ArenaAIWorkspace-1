@@ -30,11 +30,11 @@ Trên máy phát triển: `npm run mock` → mở `http://127.0.0.1:4173` (Node.
 
 Trên laptop Windows không cần cài Node/Rust: GitHub → **Actions** → run thành công mới nhất → **Artifacts → `lantern-mock-windows-x64`** → giải nén và chạy `lantern-mock.exe`. App tự mở browser, bind loopback và lưu mock settings trong `%LOCALAPPDATA%\\LanternMock`.
 
-### Xem màn hình thật trong trình duyệt (bản v3.30)
+### Xem màn hình thật trong trình duyệt (bản v3.31)
 
 Exe có nút **◉ Xem máy thật**. Bấm là khung hình chuyển từ bản mô phỏng sang **màn hình thật** của laptop (MJPEG ~15 fps, 1280×720). Nút chỉ hiện khi máy đã có GStreamer + plugin `d3d11`; nếu thiếu, nó **nói lý do cụ thể** thay vì hiện khung đen.
 
-**Chuẩn bị 1 lần, ~5 phút:** cài [GStreamer MSVC 64-bit bản **Complete**](https://gstreamer.freedesktop.org/download/#windows) và thêm `...\msvc_x86_64\bin` vào `PATH`. Chi tiết từng bước + lỗi thường gặp: [`docs/run-on-windows.md`](docs/run-on-windows.md).
+**Không phải cài gì.** Artifact đã nhúng sẵn GStreamer trong thư mục `gst\` cạnh exe (~40 MB) — giải nén, chạy, bấm nút. Nếu `gst\` thiếu vì lý do nào đó, app hiện nút **Tự cài GStreamer** và tự tải một lần, không cần PowerShell thủ công. Chi tiết + lỗi thường gặp: [`docs/run-on-windows.md`](docs/run-on-windows.md).
 
 Bản này **chỉ có hình**: chưa có tiếng, chưa điều khiển được, chưa phải WebRTC, và chỉ bind loopback (chưa TLS ⇒ không mở ra LAN).
 
@@ -45,7 +45,7 @@ Bản này **chỉ có hình**: chưa có tiếng, chưa điều khiển đượ
 ## Chạy kiểm tra
 
 ```sh
-./spike/check.sh          # spike (build -D warnings -> 100 test -> smoke-run) + app (23 test) + web, ~10 giây
+./spike/check.sh          # spike (build -D warnings -> 100 test -> smoke-run) + app (32 test) + web, ~10 giây
 node --check web/app.js   # kiểm cú pháp JavaScript của mock
 npm test                 # integration test API + chặn XSS/innerHTML (T5)
 ```

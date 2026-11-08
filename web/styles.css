@@ -41,3 +41,24 @@ body[data-theme="dark"] .live-bar .screen-tool{background:#1b2721;border-color:#
 @media(max-width:760px){.live-bar{gap:7px;font-size:8px}.live-bar #liveMeta{flex-basis:100%;min-width:0}}
 /* Nút live khi máy chưa có GStreamer: vẫn hiện (để giải thích) nhưng không giả vờ bấm được. */
 .text-button.unavailable{opacity:.6;cursor:not-allowed}
+
+/* §58.13: khối "máy chưa có GStreamer" — chỉ hiện khi server báo thiếu.
+   Đặt trong cùng khung với hình để người dùng hiểu đây là bước chuẩn bị, không
+   phải lỗi của app. */
+.live-setup {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 10px; padding: 24px;
+  text-align: center; background: var(--surface-2, #14181f); color: var(--text, #e8edf5);
+}
+.live-setup b { font-size: 15px; }
+.live-setup small { max-width: 46ch; color: var(--muted, #93a1b3); line-height: 1.45; }
+.live-setup-note { font-size: 11.5px; opacity: .8; }
+.live-install {
+  border: 1px solid var(--accent, #4f8cff); background: color-mix(in srgb, var(--accent, #4f8cff) 14%, transparent);
+  color: var(--accent, #4f8cff); border-radius: 8px; padding: 9px 14px; font: inherit;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.live-install:hover:not(:disabled) { background: color-mix(in srgb, var(--accent, #4f8cff) 24%, transparent); }
+.live-install:disabled { cursor: progress; opacity: .65; }
+.live-install.done { border-color: #2f9e6b; color: #2f9e6b; }
+@media (max-width: 620px) { .live-setup { padding: 16px; gap: 8px; } }

@@ -4,7 +4,7 @@
   const state = { connected: false, mode: 'hvnc', room: false, audio: true, mic: false, selectedWindow: 'desktop', cursor: true, quality: 'balanced', resolution: '1080' };
   // §58: trạng thái của đường "xem màn hình thật" (MJPEG). Tách khỏi `state`
   // của phiên mock để không trộn hai thứ có vòng đời khác nhau.
-  const live = { active: false, monitor: 0, fps: 15, startedAt: 0 };
+  const live = { active: false, monitor: 0, fps: 15, startedAt: 0, ready: false, installing: false };
   const settingDefs = [
     { id:'quality', title:'Chất lượng hình ảnh', hint:'Ưu tiên rõ nét hay mượt khi mạng yếu?', group:'view', scope:'device', effect:'Ngay', terms:'mờ nét blur sharp lag chậm mạng', options:[['auto','Tự động'],['sharp','Nét'],['smooth','Mượt']] },
     { id:'display', title:'Kiểu hiển thị', hint:'Chọn theo việc bạn đang làm.', group:'view', scope:'device', effect:'Ngay', terms:'màn hình độ phân giải chữ nhỏ to đọc', options:[['real','Dùng thật'],['comfortable','Vừa mắt'],['large-text','Chữ to'],['sharp','Nét']] },
@@ -127,6 +127,61 @@
     renderLive();
     if (notify) toast('Đã dừng xem màn hình thật.');
   }
+  // §58.13: tự cài GStreamer. Người dùng **không** phải mở PowerShell, không phải
+  // tải installer, không phải sửa PATH. Bấm một nút, chờ, xong — và chỉ một lần.
+  async function installGstreamer() {
+    const button = $('#liveInstall');
+    if (live.installing) return;
+    live.installing = true;
+    button.disabled = true;
+    button.textContent = '⏳ Đang tải… (có thể mất 1–2 phút)';
+    $('#liveSetupText').textContent = 'Đang tải GStreamer. Đừng đóng tab này.';
+    try {
+      const response = await fetch('/api/live/install', { method: 'POST' });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || `HTTP ${response.status}`);
+      button.classList.add('done');
+      button.textContent = '✓ Đã cài xong';
+      $('#liveSetupText').textContent = body.detail || 'Đã cài GStreamer.';
+      // Kiểm lại thay vì tin lời hứa của chính mình: nếu plugin d3d11 vẫn thiếu
+      // thì nói thẳng, đừng để người dùng bấm Xem máy thật rồi thấy khung đen.
+      await refreshLiveStatus();
+      if (live.ready) {
+        $('#liveSetup').classList.add('hidden');
+        toast('Đã cài GStreamer. Bấm “Xem máy thật”.');
+      }
+    } catch (error) {
+      $('#liveSetupText').textContent = `Không cài được: ${error.message}`;
+      button.disabled = false;
+      button.textContent = '⬇ Thử lại';
+    } finally {
+      live.installing = false;
+    }
+  }
+
+  // Hỏi server một chỗ duy nhất: nút có dùng được không, và nếu không thì vì sao.
+  async function refreshLiveStatus() {
+    try {
+      const response = await fetch('/api/live/status');
+      if (!response.ok) return;
+      const status = await response.json();
+      if (typeof status.available !== 'boolean') return;
+      live.ready = status.available;
+      renderLiveStatus(status);
+    } catch { /* server cũ: không có route này */ }
+  }
+
+  function renderLiveStatus(status) {
+    $('#liveBtn').classList.remove('hidden');
+    $('#liveBtn').classList.toggle('unavailable', !status.available);
+    $('#liveBtn').title = status.available ? '' : (status.detail || 'Chưa sẵn sàng');
+    $('#connectionNote').textContent = status.available ? '' : (status.detail || '');
+    // Khối "tự cài" chỉ hiện khi **có đường cài** và máy thật sự thiếu.
+    const canInstall = status.canInstall !== false;
+    $('#liveSetup').classList.toggle('hidden', status.available || !canInstall);
+    if (!status.available) $('#liveSetupText').textContent = status.detail || 'Bộ giải mã màn hình chưa có trên máy này.';
+  }
+
   function toggleLive() {
     if ($('#liveBtn').classList.contains('unavailable')) {
       // Nói **lý do cụ thể** thay vì bật một khung đen — đây là khác biệt giữa
@@ -403,19 +458,13 @@
     // Nút "Xem máy thật" mặc định ẩn. Chỉ hiện khi **cả hai** đúng: server này có
     // đường live (bản exe Windows, không phải `npm run mock`) VÀ máy có GStreamer
     // + plugin d3d11. Nếu không, nút sẽ là một cái bẫy bấm-vào-rồi-lỗi.
-    fetch('/api/live/status')
-      .then(response => response.ok ? response.json() : null)
-      .then(status => {
-        if (!status || typeof status.available !== 'boolean') return;
-        $('#liveBtn').classList.remove('hidden');
-        if (!status.available) {
-          $('#liveBtn').classList.add('unavailable');
-          $('#liveBtn').title = status.detail || 'Chưa sẵn sàng';
-          $('#connectionNote').textContent = status.detail || '';
-          toast(status.detail || 'Chưa xem được màn hình thật.');
-        }
-      })
-      .catch(() => {});
+    refreshLiveStatus().then(() => {
+      // Chỉ làm ồn khi máy **thật sự** thiếu GStreamer (có nút tự cài), không
+      // phải khi chạy `npm run mock` trên Linux — ở đó nút vô nghĩa.
+      if (!live.ready && !$('#liveSetup').classList.contains('hidden')) {
+        toast('Máy chưa có GStreamer — bấm “Tự cài GStreamer” để xem màn hình thật.');
+      }
+    });
     try {
       const [health, stored, device, windows, current] = await Promise.all([
         apiRequest('/api/health'), apiRequest('/api/settings'), apiRequest('/api/device'), apiRequest('/api/windows'), apiRequest('/api/sessions/current')
@@ -460,6 +509,7 @@
     $('#cursorPointer').style.top = `${Math.max(4, Math.min(90, (event.clientY - rect.top) / rect.height * 100))}%`;
   });
   $('#liveBtn').addEventListener('click', toggleLive);
+  $('#liveInstall').addEventListener('click', installGstreamer);
   $('#liveFullscreen').addEventListener('click', async () => {
     try {
       if (!document.fullscreenElement) await $('#screenFrame').requestFullscreen();

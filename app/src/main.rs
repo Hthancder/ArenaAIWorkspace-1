@@ -1,3 +1,4 @@
+mod gst;
 mod stream;
 
 use std::collections::BTreeMap;
@@ -279,24 +280,42 @@ fn probe_live_status() -> (bool, String) {
     }
     #[cfg(target_os = "windows")]
     {
-        match std::process::Command::new("gst-launch-1.0")
+        let program = gst_program();
+        let mut version = std::process::Command::new(&program);
+        for (key, value) in gst_env() {
+            version.env(key, value);
+        }
+        match version
             .arg("--version")
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .status()
         {
-            Err(_) => return (false, "Chưa có GStreamer trong PATH. Cài GStreamer MSVC 64-bit (Complete) rồi mở lại app — xem docs/run-on-windows.md.".into()),
+            Err(_) => return (false, "Không tìm thấy GStreamer: không có thư mục gst cạnh exe và cũng không có trong PATH. Tải lại artifact lantern-mock-windows-x64 (bản v3.31 đã nhúng sẵn) — xem docs/run-on-windows.md.".into()),
             Ok(status) if !status.success() => return (false, "gst-launch-1.0 chạy được nhưng trả mã lỗi.".into()),
             Ok(_) => {}
         }
-        match std::process::Command::new("gst-inspect-1.0")
+        // Kiểm plugin bằng `gst-inspect-1.0` **cạnh** bản gst-launch vừa tìm thấy,
+        // không phải bản đầu tiên trong PATH.
+        let inspect = std::path::Path::new(&program)
+            .parent()
+            .map(|dir| dir.join(gst::inspect_name()))
+            .unwrap_or_else(|| std::path::PathBuf::from(gst::inspect_name()));
+        let mut detail_cmd = std::process::Command::new(&inspect);
+        for (key, value) in gst_env() {
+            detail_cmd.env(key, value);
+        }
+        match detail_cmd
             .arg("d3d11screencapturesrc")
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .status()
         {
-            Ok(status) if status.success() => (true, "Sẵn sàng: DXGI capture + MJPEG.".into()),
-            _ => (false, "Thiếu plugin d3d11 (gst-plugins-bad). Cài GStreamer bản Complete, hoặc thêm gst-plugins-bad.".into()),
+            Ok(status) if status.success() => (
+                true,
+                format!("Sẵn sàng: DXGI capture + MJPEG (dùng {}).", program),
+            ),
+            _ => (false, format!("Thiếu plugin d3d11 trong {}. Bản cài GStreamer phải là Complete (có gst-plugins-bad).", inspect.display())),
         }
     }
 }
@@ -311,11 +330,41 @@ fn first_frame_timeout() -> std::time::Duration {
     std::time::Duration::from_millis(ms.clamp(200, 30_000))
 }
 
-/// Tên lệnh GStreamer. Tách ra thành một hàm **chỉ để test có thể trỏ vào
-/// script giả** (`LANTERN_GST`) — nhờ vậy các test HTTP dưới đây chạy được trên
-/// CI Linux mà vẫn đi qua đúng đoạn code sẽ chạy trên laptop Windows.
+/// Thư mục chứa exe đang chạy — gốc để tìm `gst\` đi kèm. `None` khi không
+/// xác định được (hiếm), và khi đó chỉ còn `PATH`.
+fn exe_dir() -> Option<std::path::PathBuf> {
+    std::env::current_exe().ok().and_then(|path| path.parent().map(|dir| dir.to_path_buf()))
+}
+
+/// Đường dẫn `gst-launch-1.0` sẽ chạy: bản đi kèm trước, `PATH` sau.
+///
+/// Tách thành một hàm **chỉ để test có thể trỏ vào script giả** (`LANTERN_GST`)
+/// — nhờ vậy các test HTTP dưới đây chạy được trên CI Linux mà vẫn đi qua đúng
+/// đoạn code sẽ chạy trên laptop Windows.
 fn gst_program() -> String {
-    env::var("LANTERN_GST").unwrap_or_else(|_| "gst-launch-1.0".to_string())
+    let override_path = env::var("LANTERN_GST").ok();
+    if let Some(dir) = exe_dir() {
+        if let Some(found) = gst::resolve(&dir, override_path.as_deref()) {
+            return found.display().to_string();
+        }
+    }
+    // Không có bản đi kèm: tên trần để OS tìm trong PATH (bản người dùng tự cài).
+    override_path
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| gst::exe_name().to_string())
+}
+
+/// Biến môi trường phải đặt cho **tiến trình con** để nó thấy plugin của bản đi
+/// kèm. Rỗng khi GStreamer đến từ `PATH` (bản cài chuẩn tự biết plugin ở đâu).
+fn gst_env() -> Vec<(String, String)> {
+    let program = gst_program();
+    let path = std::path::Path::new(&program);
+    // Chỉ khi đường dẫn có thư mục (tức là tìm được file thật), không phải tên trần.
+    if path.parent().map(|parent| !parent.as_os_str().is_empty()).unwrap_or(false) {
+        gst::plugin_env(path.parent().unwrap_or(path))
+    } else {
+        Vec::new()
+    }
 }
 
 /// Giữ `Child` và **luôn** kill khi ra khỏi scope — kể cả khi return sớm giữa
@@ -390,7 +439,11 @@ fn stream_live(mut stream: TcpStream, monitor: u8, fps: u8) {
 
     let args = stream::mjpeg_args(monitor, fps, stream::DEFAULT_WIDTH, stream::DEFAULT_HEIGHT);
     let program = gst_program();
-    let mut child = match Command::new(&program)
+    let mut command = Command::new(&program);
+    for (key, value) in gst_env() {
+        command.env(key, value);
+    }
+    let mut child = match command
         .args(&args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -467,6 +520,34 @@ fn stream_live(mut stream: TcpStream, monitor: u8, fps: u8) {
     // `child` drop ở đây ⇒ SIGKILL + wait.
 }
 
+/// `POST /api/live/install` — tải GStreamer vào `gst\` cạnh exe rồi trả lời.
+///
+/// Trả `200` + `{"installed":true,"detail":"..."}`, hoặc `502` + `{"error":...}`
+/// với câu **đọc được** (không phải mã lỗi). Không có tham số từ client nào được
+/// dùng cho việc này — URL viết cứng trong `gst::download_url()`.
+fn install_gstreamer(stream: &mut TcpStream) -> bool {
+    let Some(dir) = exe_dir() else {
+        json_response(stream, 500, format!("{{\"error\":{}}}", json_quote(&gst::FetchError::NoExeDir.message())));
+        return false;
+    };
+    // Đã có thì không tải lại: người dùng bấm hai lần không được tải 40 MB hai lần.
+    if gst::resolve(&dir, env::var("LANTERN_GST").ok().as_deref()).is_some() {
+        json_response(stream, 200, format!("{{\"installed\":true,\"detail\":{}}}", json_quote("GStreamer đã có sẵn, không tải lại.")));
+        return true;
+    }
+    match gst::fetch_into(&dir) {
+        Ok(bin) => {
+            let detail = format!("Đã cài GStreamer vào {}. Bấm Xem máy thật lại.", bin.display());
+            json_response(stream, 200, format!("{{\"installed\":true,\"detail\":{}}}", json_quote(&detail)));
+            true
+        }
+        Err(error) => {
+            json_response(stream, 502, format!("{{\"error\":{}}}", json_quote(&error.message())));
+            false
+        }
+    }
+}
+
 fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
     let Some((method,path,body)) = read_request(&mut stream) else { return; };
     if body == "__BODY_TOO_LARGE__" { return json_response(&mut stream, 413, "{\"error\":\"body_too_large\"}".into()); }
@@ -480,12 +561,28 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
     // `/api/live/status` trả lời được câu "nút Xem máy thật có dùng được không, và
     // nếu không thì vì sao" — thay vì để người dùng bấm vào rồi mới thấy lỗi.
     if method == "GET" && route == "/api/live/status" {
+        // Cache bị **xoá** sau khi cài xong (`install_gstreamer`) để lần hỏi sau
+        // phản ánh trạng thái mới — nếu không, UI vẫn hiện "chưa có GStreamer"
+        // sau khi vừa cài thành công, và người dùng bấm lại vô ích.
         let mut s = state.lock().unwrap_or_else(|e| e.into_inner());
         if s.live_status.is_none() { s.live_status = Some(probe_live_status()); }
         let (available, detail) = s.live_status.clone().unwrap_or((false, String::new()));
+        let can_install = gst::download_url().is_some()
+            && exe_dir().map(|dir| gst::resolve(&dir, env::var("LANTERN_GST").ok().as_deref()).is_none()).unwrap_or(false);
+        drop(s);
         return json_response(&mut stream, 200, format!(
-            "{{\"available\":{available},\"detail\":{},\"contentType\":{},\"boundary\":{}}}",
+            "{{\"available\":{available},\"canInstall\":{can_install},\"detail\":{},\"contentType\":{},\"boundary\":{}}}",
             json_quote(&detail), json_quote(&stream::mjpeg_content_type()), json_quote(stream::BOUNDARY)));
+    }
+    // Tự tải GStreamer khi máy chưa có. Chỉ chạy khi người dùng **bấm**, không
+    // tự động ở startup: tự tải 40 MB khi mở app là hành vi không ai muốn.
+    if method == "POST" && route == "/api/live/install" {
+        let installed = install_gstreamer(&mut stream);
+        if installed {
+            // Xoá cache để `/api/live/status` hỏi lại máy thật.
+            if let Ok(mut s) = state.lock() { s.live_status = None; }
+        }
+        return;
     }
     if method == "GET" && (route == "/live" || route == "/api/live.mjpg") {
         let query = path.split_once('?').map(|(_, q)| q).unwrap_or("");
@@ -562,6 +659,9 @@ fn main() {
     let url = format!("http://127.0.0.1:{actual}");
     println!("Lantern mock is ready. Open {url} in your browser.");
     println!("Xem màn hình thật (nếu đã cài GStreamer): {url}/live  — hoặc bấm nút \"Xem máy thật\".");
+    if let Some(dir) = exe_dir() {
+        println!("{}", gst::describe(&dir));
+    }
     println!("This is a local UI/API mock; it does not control Windows or capture media.");
     #[cfg(target_os = "windows")]
     { let _ = std::process::Command::new("cmd").arg("/C").arg("start").arg("").arg(&url).spawn(); }
