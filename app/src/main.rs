@@ -333,11 +333,6 @@ fn peer_closed(stream: &TcpStream) -> bool {
 /// `fdsink fd=1` ghi thẳng vào stdout của tiến trình con, ta chuyển tiếp.
 ///
 /// Hai chỗ **không được block vô hạn**, vì đó là cách hỏng tệ nhất (im lặng):
-/// 1. **Frame đầu tiên**: pipeline có thể chết hoặc đứng ⇒ chờ tối đa
-///    `FIRST_FRAME_TIMEOUT`, quá hạn thì kill + `504`, không để client tải mãi.
-/// 2. **Vòng chép**: đọc stdout bằng `recv_timeout`, mỗi lần hết hạn thì hỏi xem
-///    client còn đó không. Trước khi có bản này, đóng tab **không** dừng pipeline
-///    — đúng lỗi tìm ra khi thử bằng socket thật (xem §58.6).
 /// Chất lượng JPEG cho đường xem màn hình: 70 là điểm "chữ còn đọc được" mà
 /// vẫn nhẹ (một frame 720p khoảng 40–90 KB). Đổi số này là đổi băng thông —
 /// xem §58.14.
@@ -357,15 +352,18 @@ fn frame_chunk(jpeg: &[u8]) -> Vec<u8> {
 /// `GET /api/live.mjpg` — vòng lặp capture → nén → ghi, **không** GStreamer.
 ///
 /// Ba thứ bản này làm mà bản GStreamer không làm được:
+///
 /// 1. **Chỉ gửi khi hình đổi.** Màn hình tĩnh ⇒ 0 byte, 0% CPU nén, pin không tụt.
+///
 /// 2. **Không có tiến trình con** ⇒ không có capture mồ côi, không có `ChildGuard`,
 ///    không có `stderr` treo (§58.7–§58.9 trở thành vô nghĩa vì không còn gì để dọn).
+///
 /// 3. **Không cài gì**: toàn bộ nằm trong exe ~2 MB.
 fn stream_live(mut stream: TcpStream, monitor: u8, fps: u8) {
     #[cfg(not(windows))]
     {
         let _ = fps;
-        return response(
+        response(
             &mut stream,
             503,
             "text/plain; charset=utf-8",

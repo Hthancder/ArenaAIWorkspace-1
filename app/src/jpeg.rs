@@ -162,7 +162,7 @@ impl BitWriter {
 /// `quality` 1–100, giống thang của mọi encoder khác để so sánh được.
 fn scaled_quant(table: &[u8; 64], quality: u8) -> [u16; 64] {
     let quality = quality.clamp(1, 100) as i32;
-    let scale = if quality < 50 { 5000 / quality } else { 200 - quality as i32 * 2 };
+    let scale = if quality < 50 { 5000 / quality } else { 200 - quality * 2 };
     let mut out = [0u16; 64];
     for (slot, base) in out.iter_mut().zip(table.iter()) {
         let value = (*base as i32 * scale + 50) / 100;
@@ -366,12 +366,8 @@ pub fn encode(bgra: &[u8], width: usize, height: usize, quality: u8) -> Vec<u8> 
             let base_y = mcu_y * mcu_h;
 
             // Cb/Cr lấy mẫu 1 điểm cho mỗi 2×2 pixel (trung bình 4 pixel).
-            for (by, (cb_row, cr_row)) in cb_block
-                .chunks_exact_mut(8)
-                .zip(cr_block.chunks_exact_mut(8))
-                .enumerate()
-            {
-                for (bx, (cb_cell, cr_cell)) in cb_row.iter_mut().zip(cr_row.iter_mut()).enumerate() {
+            for by in 0..8 {
+                for bx in 0..8 {
                     let mut cb_sum = 0f32;
                     let mut cr_sum = 0f32;
                     for dy in 0..2 {
@@ -381,8 +377,8 @@ pub fn encode(bgra: &[u8], width: usize, height: usize, quality: u8) -> Vec<u8> 
                             cr_sum += cr;
                         }
                     }
-                    *cb_cell = cb_sum / 4.0 - 128.0;
-                    *cr_cell = cr_sum / 4.0 - 128.0;
+                    cb_block[by * 8 + bx] = cb_sum / 4.0 - 128.0;
+                    cr_block[by * 8 + bx] = cr_sum / 4.0 - 128.0;
                 }
             }
 
@@ -418,16 +414,12 @@ mod tests {
     /// Huffman sai.
     fn test_image(width: usize, height: usize) -> Vec<u8> {
         let mut bgra = vec![0u8; width * height * 4];
-        for y in 0..height {
-            for x in 0..width {
-                let index = (y * width + x) * 4;
-                let r = if (x / 16 + y / 16).is_multiple_of(2) { 220u8 } else { 30u8 };
-                let g = ((x * 255) / width.max(1)) as u8;
-                let b = ((y * 255) / height.max(1)) as u8;
-                bgra[index] = b;
-                bgra[index + 1] = g;
-                bgra[index + 2] = r;
-                bgra[index + 3] = 255;
+        for (y, row) in bgra.chunks_mut(width * 4).enumerate() {
+            for (x, pixel) in row.chunks_mut(4).enumerate() {
+                pixel[0] = ((y * 255) / height.max(1)) as u8; // B
+                pixel[1] = ((x * 255) / width.max(1)) as u8; // G
+                pixel[2] = if (x / 16 + y / 16).is_multiple_of(2) { 220 } else { 30 }; // R
+                pixel[3] = 255;
             }
         }
         bgra
@@ -439,12 +431,13 @@ mod tests {
         // thể trên một core. Đo **trong sandbox** chỉ để biết bậc độ lớn.
         let (w, h) = (1920usize, 1080usize);
         let mut bgra = vec![0u8; w * h * 4];
-        for (i, px) in bgra.chunks_exact_mut(4).enumerate() {
-            let x = i % w;
-            px[0] = (x % 256) as u8;
-            px[1] = ((i / w) % 256) as u8;
-            px[2] = 128;
-            px[3] = 255;
+        for (y, row) in bgra.chunks_mut(w * 4).enumerate() {
+            for (x, pixel) in row.chunks_mut(4).enumerate() {
+                pixel[0] = (x % 256) as u8;
+                pixel[1] = (y % 256) as u8;
+                pixel[2] = 128;
+                pixel[3] = 255;
+            }
         }
         let _ = encode(&bgra, w, h, 70); // warm-up
         let start = std::time::Instant::now();

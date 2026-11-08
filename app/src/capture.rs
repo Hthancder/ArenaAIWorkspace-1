@@ -660,7 +660,7 @@ impl Capture {
         let mut bgra = vec![0u8; self.width * self.height * 4];
         let pitch = mapped.row_pitch as usize;
         let row_bytes = self.width * 4;
-        for (y, row) in bgra.chunks_exact_mut(row_bytes).enumerate() {
+        for (y, row) in bgra.chunks_mut(row_bytes).enumerate() {
             let src = (mapped.p_data as *const u8).add(y * pitch);
             ptr::copy_nonoverlapping(src, row.as_mut_ptr(), row_bytes);
         }
