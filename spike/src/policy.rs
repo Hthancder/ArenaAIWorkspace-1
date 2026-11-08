@@ -31,7 +31,8 @@ pub struct Thresholds {
     pub battery_warn_pct: u8,
     pub ram_block_mb: u32,
     pub ram_warn_mb: u32,
-    pub vram_block_mb: u32,
+    /// §52.5 / §54.2: VRAM low is a **banner**, never a block — a busy GPU
+    /// costs frames, it does not lose data. There is deliberately no block value.
     pub vram_warn_mb: u32,
     pub temp_warn_c: f32,
     pub temp_sustain_secs: u32,
@@ -46,8 +47,7 @@ impl Default for Thresholds {
             battery_warn_pct: 15,
             ram_block_mb: 200,
             ram_warn_mb: 500,
-            vram_block_mb: 80,
-            vram_warn_mb: 150,
+            vram_warn_mb: 300,
             temp_warn_c: 96.0,
             temp_sustain_secs: 60,
         }
@@ -126,6 +126,24 @@ pub fn topology(m: &super::machine::Machine) -> Vec<Finding> {
         ));
     }
     out
+}
+
+/// §52.5: the dGPU is the other user's? No — on this laptop it is the *encoder's*
+/// fallback. When free VRAM drops under the banner threshold we say so once and
+/// let the session run; the recovery is "close the game", not "refuse to start".
+pub fn vram_low(m: &super::machine::Machine, t: &Thresholds) -> Option<Finding> {
+    let free = m.free_vram_mb?;
+    if free >= t.vram_warn_mb {
+        return None;
+    }
+    Some(Finding::new(
+        "vram_low",
+        Level::Warn,
+        format!(
+            "VRAM trống còn {free} MB — nếu đang mở game/nhiều tab 3D, đóng bớt \
+             (đang dùng QSV nên màn hình vẫn xem được)."
+        ),
+    ))
 }
 
 /// Highest level in a set of findings, or Silent when empty.

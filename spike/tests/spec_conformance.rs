@@ -20,6 +20,7 @@ fn laptop() -> Machine {
         battery_pct: Some(100),
         cpu_temp_c: Some(60.0),
         wifi_ssid: None,
+        free_vram_mb: Some(3600),
     }
 }
 
@@ -161,4 +162,21 @@ fn capture_uses_dxgi_not_wgc() {
     let s = pipeline::desktop(&Profile::laptop_default());
     assert!(s.contains("capture-api=dxgi"));
     assert!(!s.contains("capture-api=wgc"));
+}
+
+#[test]
+fn vram_low_is_a_banner_never_a_block() {
+    // §54.2: a busy GPU costs frames, it does not lose data — so it may warn,
+    // it may never block. This test exists so the field cannot come back.
+    let mut m = laptop();
+    m.free_vram_mb = Some(120);
+    let t = Thresholds::default();
+    let f = policy::vram_low(&m, &t).expect("120 MB < 300 MB must warn");
+    assert_eq!(f.level, Level::Warn);
+    assert!(policy::may_start(&[f]), "VRAM low must never block a session");
+
+    m.free_vram_mb = Some(3600);
+    assert!(policy::vram_low(&m, &t).is_none(), "3600 MB is fine");
+    m.free_vram_mb = None;
+    assert!(policy::vram_low(&m, &t).is_none(), "unmeasured must not guess");
 }

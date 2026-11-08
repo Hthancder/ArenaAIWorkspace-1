@@ -35,8 +35,13 @@ impl Encoder {
                 self.element(),
                 bitrate_kbps
             ),
+            // `mfh264enc` is the last-resort fallback (spec §53.2). It exposes
+            // fewer knobs than QSV/NVENC; `b-frames=0` is the one we cannot do
+            // without. Verify the property exists on the real box with
+            // `gst-inspect-1.0 mfh264enc` during P0 step 2 — an unknown property
+            // makes the pipeline fail to build rather than fail quietly.
             Encoder::MediaFoundation => format!(
-                "{} bitrate={} gop-size=120 low-latency=true",
+                "{} bitrate={} gop-size=120 b-frames=0 low-latency=true",
                 self.element(),
                 bitrate_kbps
             ),

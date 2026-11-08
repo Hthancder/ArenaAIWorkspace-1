@@ -21,3 +21,28 @@ cargo run -- --demo
 
 Runner không có GPU, không có desktop, không capture được (§45.7). Nên p95 glass-to-glass,
 NVENC/QSV thật, VDD slot, khởi động sau login vẫn phải chạy trên máy bạn (§51.6, §53.12).
+
+## Chạy kiểm tra (thay CI khi Actions tắt — spec §56.8)
+
+```sh
+./spike/check.sh
+```
+
+Làm đúng 3 bước của job `test`: `cargo build` với `-D warnings` -> `cargo test`
+(16 test) -> `cargo run -- --demo`. Khoảng 3 giây.
+
+Không có `cargo` và `static.rust-lang.org` bị chặn (như sandbox đã viết spec)?
+Cài Rust từ npm:
+
+```sh
+npm install -g @rust-sandbox/rust-1-95-x86_64-linux
+export PATH="$HOME/.local/rust/bin:$PATH"
+```
+
+## Trạng thái đã kiểm (2026-11-08)
+
+- `cargo build` với `RUSTFLAGS=-D warnings`: sạch.
+- `cargo test`: **16/16 pass**.
+- `cargo run -- --demo`: exit 0.
+- `clippy`: **chưa chạy lần nào** (không có trong toolchain npm; chỉ CI, mà CI
+  đang `startup_failure` ở mức repo).

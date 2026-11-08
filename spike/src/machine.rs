@@ -41,6 +41,9 @@ pub struct Machine {
     pub battery_pct: Option<u8>,
     pub cpu_temp_c: Option<f32>,
     pub wifi_ssid: Option<String>,
+    /// Free VRAM on the encode adapter, from DXGI `QueryVideoMemoryInfo`
+    /// (Budget − CurrentUsage). `None` = not measured yet.
+    pub free_vram_mb: Option<u32>,
 }
 
 impl Machine {

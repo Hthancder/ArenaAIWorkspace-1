@@ -1,8 +1,7 @@
-mod machine;
-mod pipeline;
-mod policy;
-
-use machine::{Adapter, AdapterKind, Machine};
+// Use the library crate instead of `mod`-including the sources, so the binary and
+// the tests compile the *same* code and `dead_code` is judged once, for `pub` items.
+use rd_spike_lib::machine::{Adapter, AdapterKind, Machine};
+use rd_spike_lib::{pipeline, policy};
 use policy::Level;
 
 fn demo_machine() -> Machine {
@@ -23,6 +22,8 @@ fn demo_machine() -> Machine {
         battery_pct: Some(100),
         cpu_temp_c: Some(64.0),
         wifi_ssid: Some("nha-5g".into()),
+        // Comfortably above the 300 MB banner: the demo must not fake a warning.
+        free_vram_mb: Some(3600),
     }
 }
 
@@ -39,6 +40,7 @@ fn main() {
     let t = policy::Thresholds::default();
     let mut findings = policy::pre_session(&m, &t, 0);
     findings.extend(policy::topology(&m));
+    findings.extend(policy::vram_low(&m, &t));
 
     let p = if m.is_laptop {
         pipeline::Profile::laptop_default()
