@@ -38,6 +38,9 @@ jobs:
       - name: web mock syntax
         run: node --check ../web/app.js
 
+      - name: mock backend integration
+        run: node --test ../mock-server/server.test.js
+
       - name: print pipelines (reviewable in the log)
         run: cargo run --quiet -- --demo
 

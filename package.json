@@ -1,0 +1,10 @@
+{
+  "name": "lantern-remote-desktop-mock",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Runnable local mock for browser remote desktop flows",
+  "scripts": {
+    "mock": "node mock-server/server.js",
+    "test": "node --test mock-server/server.test.js"
+  }
+}

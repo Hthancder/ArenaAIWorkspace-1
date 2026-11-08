@@ -44,6 +44,13 @@
   let settingsGroup = 'all';
   const labels = { desktop: 'Toàn bộ màn hình', browser: 'Trình duyệt', notes: 'Ghi chú' };
   let toastTimer;
+  let currentSessionId = null;
+  const apiRequest = async (path, options = {}) => {
+    const response = await fetch(path, { ...options, headers: { ...(options.body ? { 'content-type': 'application/json' } : {}), ...options.headers }, body: options.body ? JSON.stringify(options.body) : undefined });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || `http_${response.status}`);
+    return payload;
+  };
 
   function toast(message) {
     const el = $('#toast');
@@ -79,7 +86,7 @@
     $('#mockMessageText').textContent = content[2];
     $$('.window-option').forEach(btn => btn.classList.toggle('selected', btn.dataset.window === state.selectedWindow));
   }
-  function setConnected(active) {
+  function setConnected(active, notify = true) {
     state.connected = active;
     $('#connectBtn').classList.toggle('connected', active);
     $('#connectLabel').textContent = active ? 'Kết thúc phiên demo' : 'Bắt đầu phiên demo';
@@ -92,8 +99,8 @@
     $('.latency').classList.toggle('good', active);
     $('#mockMessageTitle').textContent = active ? 'Phiên demo đang hoạt động' : ({ desktop: 'Phiên demo đã sẵn sàng', browser: 'Trình duyệt đã được chọn', notes: 'Ghi chú đang mở' }[state.selectedWindow]);
     $('#cursorPointer').classList.toggle('hidden', !active || !state.cursor);
-    if (active) toast('Phiên demo bắt đầu — thiết bị thật chưa được kết nối.');
-    else toast('Phiên demo đã kết thúc.');
+    if (notify && active) toast('Phiên mock bắt đầu — thiết bị thật chưa được kết nối.');
+    else if (notify) toast('Phiên mock đã kết thúc.');
   }
   function openOverlay(id) {
     // The spec allows one surface at a time: replace, never stack dialogs.
@@ -110,7 +117,21 @@
     if ($$('.overlay').every(overlay => overlay.classList.contains('hidden'))) document.body.classList.remove('has-overlay');
   }
 
-  $('#connectBtn').addEventListener('click', () => setConnected(!state.connected));
+  $('#connectBtn').addEventListener('click', async () => {
+    $('#connectBtn').disabled = true;
+    try {
+      if (!state.connected) {
+        const result = await apiRequest('/api/sessions', { method: 'POST', body: { mode: state.mode, windowId: state.selectedWindow, audio: state.audio } });
+        currentSessionId = result.session.id;
+        setConnected(true);
+      } else {
+        if (currentSessionId) await apiRequest(`/api/sessions/${currentSessionId}`, { method: 'DELETE' });
+        currentSessionId = null;
+        setConnected(false);
+      }
+    } catch (error) { toast(error.message === 'session_already_active' ? 'Đã có phiên mock đang hoạt động ở nơi khác.' : 'Không gọi được mock backend. Hãy chạy `npm run mock`.'); }
+    finally { $('#connectBtn').disabled = false; }
+  });
   $$('.mode-btn').forEach(btn => btn.addEventListener('click', () => {
     state.mode = btn.dataset.mode;
     syncMode();
@@ -183,6 +204,7 @@
   function saveSetting(id, value) {
     settings[id] = value;
     try { localStorage.setItem('lantern-mock-settings', JSON.stringify(settings)); } catch {}
+    apiRequest('/api/settings', { method: 'PATCH', body: { [id]: value } }).catch(() => {});
     $('#settingsSaved').textContent = 'Đã lưu trên thiết bị này';
     if (id === 'quality') {
       $('.quality-indicator').innerHTML = `<i></i> ${value === 'sharp' ? 'Nét' : value === 'smooth' ? 'Mượt' : 'HD'}`;
@@ -231,6 +253,37 @@
   $('#screenResolution').textContent = `${settings.display === 'large-text' ? 'Chữ to' : settings.display === 'comfortable' ? 'Vừa mắt' : settings.display === 'sharp' ? 'Nét' : '1920 × 1080'} · demo`;
   $('#mockDesktop').dataset.aspect = settings.aspect;
   $('#mockDesktop').dataset.touch = settings.touch;
+  async function hydrateMockApi() {
+    try {
+      const [health, stored, device, windows, current] = await Promise.all([
+        apiRequest('/api/health'), apiRequest('/api/settings'), apiRequest('/api/device'), apiRequest('/api/windows'), apiRequest('/api/sessions/current')
+      ]);
+      settings = { ...stored.settings, ...settings };
+      try { localStorage.setItem('lantern-mock-settings', JSON.stringify(settings)); } catch {}
+      renderSettings();
+      state.audio = settings.audio !== 'off'; state.cursor = settings['cursor-mode'] !== 'local';
+      setToggle($('#audioToggle'), state.audio);
+      $('.desktop-taskbar').classList.toggle('hidden', Boolean(settings['hide-taskbar']));
+      document.body.dataset.theme = settings.theme;
+      $('.quality-indicator').innerHTML = `<i></i> ${settings.quality === 'sharp' ? 'Nét' : settings.quality === 'smooth' ? 'Mượt' : 'HD'}`;
+      $('#screenResolution').textContent = `${settings.display === 'large-text' ? 'Chữ to' : settings.display === 'comfortable' ? 'Vừa mắt' : settings.display === 'sharp' ? 'Nét' : '1920 × 1080'} · demo`;
+      $('#connectHint').textContent = `${device.name} · mock backend sẵn sàng · không truy cập máy thật`;
+      $('.demo-pill').innerHTML = '<i></i> MOCK API · ONLINE';
+      const validWindowIds = new Set(windows.windows.map(win => win.id));
+      if (!validWindowIds.has(state.selectedWindow)) state.selectedWindow = 'desktop';
+      if (current.session) {
+        currentSessionId = current.session.id;
+        state.mode = current.session.mode;
+        state.selectedWindow = current.session.windowId;
+        syncMode(); updateMockWindow(); setConnected(true, false);
+      }
+      document.documentElement.dataset.api = health.ok ? 'online' : 'offline';
+    } catch {
+      $('.demo-pill').innerHTML = '<i></i> LOCAL MOCK';
+      document.documentElement.dataset.api = 'offline';
+    }
+  }
+  hydrateMockApi();
   $('#fullscreenBtn').addEventListener('click', async () => {
     try {
       if (!document.fullscreenElement) await $('#screenFrame').requestFullscreen();

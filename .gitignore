@@ -18,6 +18,9 @@ secrets/
 report-*.json
 diagnostics-*.json
 
+# --- Local mock runtime settings (generated, never commit) ---
+.mock-data/
+
 # --- Build ---
 target/
 spike/target/

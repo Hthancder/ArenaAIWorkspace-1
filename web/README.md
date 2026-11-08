@@ -1,23 +1,7 @@
 # Lantern web mock
 
-Frontend tĩnh, không dependency, mô phỏng luồng chính của remote desktop theo spec. Không kết nối đến máy Windows và không capture/stream màn hình, camera, micro hay âm thanh.
+Frontend tĩnh, không dependency, nối với `mock-server/` cùng origin. Có dashboard, window picker, HVNC/VNC mode, luồng start/stop session, settings T1/T2 và các toggle camera/audio/micro ở mức UI.
 
-## Chạy
+Chạy cả frontend + backend từ repo root: `npm run mock`. Mở `http://127.0.0.1:4173`.
 
-Từ thư mục gốc repo:
-
-```sh
-python3 -m http.server 4173 --bind 0.0.0.0 --directory web
-```
-
-Mở `http://localhost:4173`. Hoặc mở `index.html` trực tiếp trong trình duyệt.
-
-## Luồng đã mô phỏng
-
-- Bắt đầu/kết thúc phiên và trạng thái/metrics minh hoạ.
-- Window picker, lựa chọn cửa sổ, hai mode xem.
-- Bật/tắt khung camera phòng, âm thanh và micro (chỉ trạng thái UI).
-- Panel cài đặt searchable: 12 mục T1 + 20 mục T2 theo triệu chứng, nhóm/phạm vi/hiệu lực, lưu cục bộ và khôi phục mặc định.
-- Phóng to màn hình, responsive desktop/mobile và thông báo thao tác.
-
-Mọi thông tin màn hình đều được gắn `MOCK`; không có request backend hay quyền thiết bị.
+**Giới hạn:** hình desktop/camera/audio/micro là minh hoạ; không có capture, streaming, điều khiển hệ điều hành, authentication hay kết nối thiết bị thật. Backend chỉ lưu cài đặt mock và trạng thái phiên mock.
