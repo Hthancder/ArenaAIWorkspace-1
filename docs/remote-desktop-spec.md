@@ -1,6 +1,6 @@
 # SPEC v3.32 — Remote Desktop qua trình duyệt **cho dùng cá nhân**: HVNC + VNC, window picker, âm thanh server-side, trải nghiệm điều khiển đầy đủ
 
-- Phiên bản: **v3.32 — §58.14–§58.17 bỏ GStreamer 517 MB: tự viết JPEG encoder + gọi DXGI qua COM, exe còn ~2 MB, không cài gì** · trước đó: **v3.30 — §58.6–§58.13 năm lỗi chỉ hiện khi chạy thật (kill sai, FIN≠RST, đọc stderr treo, docs hứa mà code không làm, flaky CI) + 5 test HTTP thật** · trước đó: **v3.29 — §58 đường dùng được ngay hôm nay: xem màn hình thật bằng MJPEG trong trình duyệt (0 dependency, 0 dòng JS ở client)** · trước đó: **v3.28 — §57 tầng bảo mật thành code có test: `security.rs` 7 module, 100 test, 10/14 kiểm chứng §41.10 tự động, 1 XSS thật được sửa** · trước đó: **v3.27 — §56.10 GitHub Actions đã xanh sau khi user cập nhật billing: clippy + test + Windows build + smoke-run** · trước đó: **v3.26 — §56.9 tìm ra nguyên nhân thật của `startup_failure`: account bị khoá vì billing, không phải file CI** · trước đó: v3.25 — §56.7 compile thật: 16/16 test xanh, bắt được 3 lỗi · §56.8 GitHub Actions của repo này đang tắt (không phải lỗi file)** · trước đó: v3.24 — §56 code + GitHub Actions · trước đó: **v3.23 — §54 nới lỏng (bỏ luật cứng không cần), §55 camera + micro máy chủ** · trước đó: **v3.22 — §53 host là laptop Dell 7467: QSV trước NVENC, nắp/pin/nhiệt/Wi-Fi 1x1** · trước đó: **v3.21 — §52 máy hybrid iGPU+1050: topology quyết định, DDAPI fail trên GPU rời** · trước đó: **v3.20 — §51.10–14: VRAM 4 GB, trần 1440p, sửa lỗi AdapterRAM** · trước đó: **v3.19 — thêm §51 hồ sơ GTX 1050, bẫy adapter, P0 cụ thể** · trước đó: **v3.18 — thêm §48 mô hình tuỳ chỉnh, §49 chống vỡ UI, §50 tính năng còn thiếu** · trước đó: **v3.17 — thêm §47 khởi động cùng Windows + vòng đời process + trải nghiệm theo thời gian** · trước đó: **v3.16 — thêm §46 "máy có ở đó không" (ngủ/reboot/đổi IP/khoá màn hình)**, lĩnh vực G còn trống · trước đó: **v3.15** — phạm vi thu hẹp về 1–2 người dùng (§0.3). Bản v3.14 là bản "sản phẩm": có cert, EULA, RBAC, accessibility, đóng gói ký số. Tất cả những thứ đó **đã cắt** ở đây — xem §0.3.1 để biết cắt gì và cắt có an toàn không. Lịch sử đầy đủ v1.0→v3.14 ở §0.
+- Phiên bản: **v3.33 — §58.19 năm slot vtable sai được bắt trên Linux (không phải trên máy bạn); exe đo lại còn 747 KB** · trước đó: **v3.32 — §58.14–§58.17 bỏ GStreamer 517 MB: tự viết JPEG encoder + gọi DXGI qua COM, không cài gì** · trước đó: **v3.30 — §58.6–§58.13 năm lỗi chỉ hiện khi chạy thật (kill sai, FIN≠RST, đọc stderr treo, docs hứa mà code không làm, flaky CI) + 5 test HTTP thật** · trước đó: **v3.29 — §58 đường dùng được ngay hôm nay: xem màn hình thật bằng MJPEG trong trình duyệt (0 dependency, 0 dòng JS ở client)** · trước đó: **v3.28 — §57 tầng bảo mật thành code có test: `security.rs` 7 module, 100 test, 10/14 kiểm chứng §41.10 tự động, 1 XSS thật được sửa** · trước đó: **v3.27 — §56.10 GitHub Actions đã xanh sau khi user cập nhật billing: clippy + test + Windows build + smoke-run** · trước đó: **v3.26 — §56.9 tìm ra nguyên nhân thật của `startup_failure`: account bị khoá vì billing, không phải file CI** · trước đó: v3.25 — §56.7 compile thật: 16/16 test xanh, bắt được 3 lỗi · §56.8 GitHub Actions của repo này đang tắt (không phải lỗi file)** · trước đó: v3.24 — §56 code + GitHub Actions · trước đó: **v3.23 — §54 nới lỏng (bỏ luật cứng không cần), §55 camera + micro máy chủ** · trước đó: **v3.22 — §53 host là laptop Dell 7467: QSV trước NVENC, nắp/pin/nhiệt/Wi-Fi 1x1** · trước đó: **v3.21 — §52 máy hybrid iGPU+1050: topology quyết định, DDAPI fail trên GPU rời** · trước đó: **v3.20 — §51.10–14: VRAM 4 GB, trần 1440p, sửa lỗi AdapterRAM** · trước đó: **v3.19 — thêm §51 hồ sơ GTX 1050, bẫy adapter, P0 cụ thể** · trước đó: **v3.18 — thêm §48 mô hình tuỳ chỉnh, §49 chống vỡ UI, §50 tính năng còn thiếu** · trước đó: **v3.17 — thêm §47 khởi động cùng Windows + vòng đời process + trải nghiệm theo thời gian** · trước đó: **v3.16 — thêm §46 "máy có ở đó không" (ngủ/reboot/đổi IP/khoá màn hình)**, lĩnh vực G còn trống · trước đó: **v3.15** — phạm vi thu hẹp về 1–2 người dùng (§0.3). Bản v3.14 là bản "sản phẩm": có cert, EULA, RBAC, accessibility, đóng gói ký số. Tất cả những thứ đó **đã cắt** ở đây — xem §0.3.1 để biết cắt gì và cắt có an toàn không. Lịch sử đầy đủ v1.0→v3.14 ở §0.
 - Trạng thái: **Đề xuất — phần [CỨNG] đã thành code có test (§57), phần còn lại chờ P0.** Sau v3.15 spec **không còn chương lý thuyết nào cần viết**; từ v3.28 việc viết mới là **code + test cho từng chương**, và việc còn lại của bạn là **P0 (đo thật)** trên laptop.
 - Nền tảng: Server **Windows 10 2004+ / Windows 11** · Client **trình duyệt** (không app)
 
@@ -6920,7 +6920,7 @@ Kết quả đo được, không phải ước lượng:
 
 | Số đo | Giá trị | Nghĩa |
 |---|---|---|
-| Kích thước exe | **~2 MB** (thay vì 517 MB) | không cần cài gì |
+| Kích thước exe | **747 KB** (thay vì 517 MB) | không cần cài gì |
 | 1280×720 q70 | **39 KB/frame** | 15 fps ≈ 590 KB/s |
 | 1080p q70, một core | **42 ms/frame ⇒ 23 fps** | đủ cho 15 fps với CPU còn trống |
 | Phụ thuộc ngoài | **0** | không DLL, không PATH, không installer |
@@ -6972,7 +6972,7 @@ Sòng phẳng về mức độ tin cậy của từng phần — vì "test xanh"
 |---|---|---|
 | JPEG encoder (bảng lượng tử, Huffman, DCT) | 7 unit test **+ ImageMagick** + xem ảnh bằng mắt | **cao** — ảnh 320×200 giải mã đúng màu, đúng hình học |
 | JPEG: kích thước/chất lượng | đo thật: 39 KB @ 720p q70, 42 ms/frame @ 1080p | **cao** (trong sandbox; laptop sẽ nhanh hơn) |
-| Vtable COM (thứ tự slot) | `size_of` assert + đối chiếu header | **trung bình** — kiểm được **số** slot, không kiểm được **đúng** hàm nào ở slot nào |
+| Vtable COM (thứ tự slot) | **offset thật của từng method** (test) + đối chiếu `d3d11.idl`/`dxgi.idl` của Wine | **cao** — năm slot sai đã được bắt và sửa (§58.19); vẫn cần một lần chạy thật để xác nhận |
 | Hằng số DXGI/D3D11 | assert giá trị theo header | **cao** |
 | Mở phiên DXGI thật | **chưa ai kiểm** trong sandbox | **0** — cần Windows |
 | Hình ảnh thật từ màn hình bạn | **chưa ai kiểm** | **0** — cần máy bạn |
@@ -6983,3 +6983,33 @@ Sòng phẳng về mức độ tin cậy của từng phần — vì "test xanh"
 > **Dòng thứ ba là dòng tôi lo nhất.** Vtable COM khai báo tay: nếu `DuplicateOutput` thật ra ở slot 21 chứ không phải 22, app sẽ gọi nhầm một hàm khác và **crash**, không báo lỗi. Test của tôi chỉ chứng minh *độ dài* vtable đúng như tôi tin — nó không chứng minh *tôi tin đúng*. Đây là chỗ mà một lần chạy trên máy bạn có giá trị hơn 1000 dòng test trong sandbox.
 >
 > Nếu exe crash ngay khi bấm **Xem máy thật** (không phải báo lỗi, mà tắt ngang), nguyên nhân gần như chắc chắn là một slot vtable sai — và đó là lúc cần sửa `app/src/capture.rs`, không phải sửa gì khác.
+
+### 58.19 Lỗi thật thứ 6–10: **năm slot vtable sai**, và cách bắt chúng trên Linux
+
+§58.18 viết: *"Test của tôi chỉ chứng minh độ dài vtable đúng như tôi tin — nó không chứng minh tôi tin đúng."* Đó không phải câu tu từ. Khi kiểm lại bằng nguồn ngoài, **năm trong sáu** con số slot tôi đã viết đều sai.
+
+| Hàm | Tôi tin (đếm tay) | Sự thật (IDL của Wine) | Lệch | Nếu giữ nguyên thì gì xảy ra |
+|---|---|---|---|---|
+| `IDXGIFactory1::EnumAdapters1` | 14 | **12** | +2 | gọi một method khác cùng arity ⇒ tham số bị hiểu sai nghĩa, trả rác hoặc crash ngay khi liệt kê GPU |
+| `IDXGIOutputDuplication::ReleaseFrame` | 11 | **14** | −3 | gọi nhầm một `Get*Rects` ⇒ **không bao giờ trả frame về** ⇒ treo ở frame thứ 2, không một dòng lỗi |
+| `ID3D11DeviceContext::Map` | 13 | **14** | −1 | gọi `Draw` (6 tham số, khác kiểu) ⇒ đọc texture rác / hỏng stack |
+| `ID3D11DeviceContext::Unmap` | 14 | **15** | −1 | gọi `Map` với 3 tham số ⇒ sai kiểu, hỏng stack |
+| `ID3D11Device::CreateTexture2D` | 3 | **5** | −2 | gọi `CreateBuffer` với `D3D11_TEXTURE2D_DESC` 44 byte ⇒ `E_INVALIDARG` hoặc đọc rác |
+| `ID3D11DeviceContext::CopyResource` | 47 (đoán) | **47** ✓ | 0 | (đúng — nhưng đúng vì may, không vì đếm đúng) |
+
+Năm trên sáu con số **sai**, mỗi con số sai theo một kiểu khác nhau, và **không con nào** phát ra lỗi: hai cái crash, hai cái đọc rác, một cái treo. Đó là lý do một lần chạy thật quan trọng — nhưng không phải lý do duy nhất để kiểm.
+
+Nguồn đúng không phải trí nhớ, và **cũng không phải** trang MS Learn: bảng method ở `learn.microsoft.com/.../nn-d3d11-id3d11devicecontext` xếp **theo alphabet**, dùng nó để đánh số slot là sai ngay từ bước đầu. Nguồn đúng là **file IDL** (`include/d3d11.idl` trong Wine, chép nguyên từ header của Microsoft), nơi method nằm đúng thứ tự khai báo — và tôi đếm bằng script, không đếm bằng mắt.
+
+**Bốn thay đổi để lỗi loại này không lặp lại:**
+
+1. **Mọi slot có tên.** `_pad: [*mut c_void; N]` giấu đi *cái gì* ở giữa; đặt tên từng slot (`_create_buffer`, `_create_texture1d`) thì comment và code buộc phải khớp nhau khi đọc.
+2. **Test khẳng định *địa chỉ* của từng field, không phải *độ dài* struct.** Test cũ `size_of::<T>() == N*8` chỉ khẳng định vtable dài đúng như tôi tin — nó đúng dù mọi hàm nằm sai chỗ. Test mới đo `(addr_of!(field) - base) / 8` cho **từng** hàm tôi thật sự gọi.
+3. **Khai báo COM compile được trên Linux.** `#![cfg(windows)]` ở đầu file từng làm cả module biến mất khỏi build Linux ⇒ mọi lỗi kiểu dữ liệu chỉ hiện trong CI Windows (mỗi vòng 4–6 phút). Nay chỉ những hàm *gọi* Win32 mới bị gate; khai báo struct/hằng số/test compile ở mọi nền tảng, nên vòng phản hồi còn **dưới 1 giây**.
+4. **Không tin con số mình vừa nghĩ ra.** Ba lần đếm tay trong một buổi cho ba kết quả khác nhau. Từ giờ: lấy danh sách có thứ tự từ file IDL, đếm bằng script, khoá bằng test.
+
+> Bài học rộng hơn: **thứ tự method COM là một API không có kiểu.** Không có compiler nào kiểm nó, không có linker nào báo sai, và hàm sai chữ ký chỉ *crash* hoặc *trả rác* — không bao giờ báo "bạn gọi nhầm". Mọi chỗ dựa vào `vtable[n]` đều cần một test đo **offset thật**, và một nguồn ngoài để đối chiếu con số.
+>
+> Test này chạy trên Linux, trong 0.3 giây, và bắt được đúng những lỗi mà trước đó chỉ lộ ra khi exe crash trên Windows của bạn. Đó là toàn bộ lý do của việc bỏ `#![cfg(windows)]`.
+
+Về dung lượng: sau khi bỏ GStreamer, exe release đo được **747 KB** — nhỏ hơn cả con số ~2 MB tôi ghi trong §58.15 và README. Đã sửa lại các chỗ ghi "~2 MB" thành "~750 KB".
