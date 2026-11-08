@@ -1,6 +1,6 @@
-# SPEC v3.28 — Remote Desktop qua trình duyệt **cho dùng cá nhân**: HVNC + VNC, window picker, âm thanh server-side, trải nghiệm điều khiển đầy đủ
+# SPEC v3.30 — Remote Desktop qua trình duyệt **cho dùng cá nhân**: HVNC + VNC, window picker, âm thanh server-side, trải nghiệm điều khiển đầy đủ
 
-- Phiên bản: **v3.28 — §57 tầng bảo mật thành code có test: `security.rs` 7 module, 100 test, 10/14 kiểm chứng §41.10 tự động, 1 XSS thật được sửa** · trước đó: **v3.27 — §56.10 GitHub Actions đã xanh sau khi user cập nhật billing: clippy + test + Windows build + smoke-run** · trước đó: **v3.26 — §56.9 tìm ra nguyên nhân thật của `startup_failure`: account bị khoá vì billing, không phải file CI** · trước đó: v3.25 — §56.7 compile thật: 16/16 test xanh, bắt được 3 lỗi · §56.8 GitHub Actions của repo này đang tắt (không phải lỗi file)** · trước đó: v3.24 — §56 code + GitHub Actions · trước đó: **v3.23 — §54 nới lỏng (bỏ luật cứng không cần), §55 camera + micro máy chủ** · trước đó: **v3.22 — §53 host là laptop Dell 7467: QSV trước NVENC, nắp/pin/nhiệt/Wi-Fi 1x1** · trước đó: **v3.21 — §52 máy hybrid iGPU+1050: topology quyết định, DDAPI fail trên GPU rời** · trước đó: **v3.20 — §51.10–14: VRAM 4 GB, trần 1440p, sửa lỗi AdapterRAM** · trước đó: **v3.19 — thêm §51 hồ sơ GTX 1050, bẫy adapter, P0 cụ thể** · trước đó: **v3.18 — thêm §48 mô hình tuỳ chỉnh, §49 chống vỡ UI, §50 tính năng còn thiếu** · trước đó: **v3.17 — thêm §47 khởi động cùng Windows + vòng đời process + trải nghiệm theo thời gian** · trước đó: **v3.16 — thêm §46 "máy có ở đó không" (ngủ/reboot/đổi IP/khoá màn hình)**, lĩnh vực G còn trống · trước đó: **v3.15** — phạm vi thu hẹp về 1–2 người dùng (§0.3). Bản v3.14 là bản "sản phẩm": có cert, EULA, RBAC, accessibility, đóng gói ký số. Tất cả những thứ đó **đã cắt** ở đây — xem §0.3.1 để biết cắt gì và cắt có an toàn không. Lịch sử đầy đủ v1.0→v3.14 ở §0.
+- Phiên bản: **v3.30 — §58.6–§58.10 ba lỗi chỉ hiện khi chạy thật (kill sai, FIN≠RST, đọc stderr treo) + 5 test HTTP thật** · trước đó: **v3.29 — §58 đường dùng được ngay hôm nay: xem màn hình thật bằng MJPEG trong trình duyệt (0 dependency, 0 dòng JS ở client)** · trước đó: **v3.28 — §57 tầng bảo mật thành code có test: `security.rs` 7 module, 100 test, 10/14 kiểm chứng §41.10 tự động, 1 XSS thật được sửa** · trước đó: **v3.27 — §56.10 GitHub Actions đã xanh sau khi user cập nhật billing: clippy + test + Windows build + smoke-run** · trước đó: **v3.26 — §56.9 tìm ra nguyên nhân thật của `startup_failure`: account bị khoá vì billing, không phải file CI** · trước đó: v3.25 — §56.7 compile thật: 16/16 test xanh, bắt được 3 lỗi · §56.8 GitHub Actions của repo này đang tắt (không phải lỗi file)** · trước đó: v3.24 — §56 code + GitHub Actions · trước đó: **v3.23 — §54 nới lỏng (bỏ luật cứng không cần), §55 camera + micro máy chủ** · trước đó: **v3.22 — §53 host là laptop Dell 7467: QSV trước NVENC, nắp/pin/nhiệt/Wi-Fi 1x1** · trước đó: **v3.21 — §52 máy hybrid iGPU+1050: topology quyết định, DDAPI fail trên GPU rời** · trước đó: **v3.20 — §51.10–14: VRAM 4 GB, trần 1440p, sửa lỗi AdapterRAM** · trước đó: **v3.19 — thêm §51 hồ sơ GTX 1050, bẫy adapter, P0 cụ thể** · trước đó: **v3.18 — thêm §48 mô hình tuỳ chỉnh, §49 chống vỡ UI, §50 tính năng còn thiếu** · trước đó: **v3.17 — thêm §47 khởi động cùng Windows + vòng đời process + trải nghiệm theo thời gian** · trước đó: **v3.16 — thêm §46 "máy có ở đó không" (ngủ/reboot/đổi IP/khoá màn hình)**, lĩnh vực G còn trống · trước đó: **v3.15** — phạm vi thu hẹp về 1–2 người dùng (§0.3). Bản v3.14 là bản "sản phẩm": có cert, EULA, RBAC, accessibility, đóng gói ký số. Tất cả những thứ đó **đã cắt** ở đây — xem §0.3.1 để biết cắt gì và cắt có an toàn không. Lịch sử đầy đủ v1.0→v3.14 ở §0.
 - Trạng thái: **Đề xuất — phần [CỨNG] đã thành code có test (§57), phần còn lại chờ P0.** Sau v3.15 spec **không còn chương lý thuyết nào cần viết**; từ v3.28 việc viết mới là **code + test cho từng chương**, và việc còn lại của bạn là **P0 (đo thật)** trên laptop.
 - Nền tảng: Server **Windows 10 2004+ / Windows 11** · Client **trình duyệt** (không app)
 
@@ -6666,3 +6666,197 @@ Cùng lượt đó: **cả hai mock server** (Node và `lantern-mock.exe`) trư�
 | **D** | Client shell thật (không mock) — window picker + video + 2 thanh tự ẩn §29 | sau C |
 
 > Tôi vẫn giữ thứ tự **B → C → D**. Lý do đổi so với §56.6: **A xong**; và `config.rs` giờ là thứ chặn nhiều việc nhất — không có nó thì mọi module sau phải nhận 30 tham số bằng tay, và đó là cách một spec 7 000 dòng biến thành một hàm 40 đối số.
+
+---
+
+## 58. Cái **dùng được ngay hôm nay**: MJPEG trong trình duyệt (nhánh #39)
+
+> Câu bạn nói: *"mình muốn dùng thật trên máy, hóng quá"*. Đây là câu trả lời đúng nhất tôi có thể đưa ra **hôm nay**, không phải sau khi làm xong WebRTC.
+>
+> Nguyên tắc: **đi đường ngắn nhất tới "nhìn thấy máy thật trên máy thật"**, rồi mới nói rõ nó thiếu gì. Không hứa, không để bạn chờ một tính năng lớn rồi mới được nhìn thấy gì.
+
+### 58.1 Vì sao MJPEG, không phải WebRTC trước
+
+| | MJPEG (đã có ở v3.29) | WebRTC (chưa) |
+|---|---|---|
+| Dòng JS ở client | **0** (`<img src>` tự chạy) | ~600 (peer connection, SDP, ICE, DC) |
+| Dependency mới | **0** | `webrtcbin` + DTLS + ICE stack |
+| Dùng đúng đường capture của spec | ✅ cùng `d3d11screencapturesrc capture-api=dxgi` (§52.4) | ✅ |
+| Kiểm được **ngay** trên laptop | ✅ | cần P0 xong trước |
+| Độ trễ | ~150–300 ms | mục tiêu ≤ 80 ms LAN |
+| Âm thanh | ❌ | ✅ |
+| Điều khiển | ❌ | ✅ |
+
+> **Điểm quan trọng:** MJPEG và WebRTC **dùng chung một chặng capture**. Nếu MJPEG hiện được hình thì `d3d11screencapturesrc` + adapter đúng đã chạy — tức là **một nửa P0 đã xong**, và phần còn lại chỉ là đổi chặng vận chuyển. Nếu MJPEG **không** hiện hình, làm WebRTC bây giờ cũng sẽ không hiện — sẽ khó tìm lỗi hơn nhiều.
+
+### 58.2 Cấu hình cụ thể (và vì sao từng số)
+
+```
+d3d11screencapturesrc monitor-index=N capture-api=dxgi
+  ! video/x-raw,framerate=15/1          ← chặn TRƯỚC d3d11download (bớt 50% frame đọc)
+  ! d3d11download ! videoconvert        ← khỏi D3D11 memory, sang CPU
+  ! video/x-raw,format=I420,width=1280,height=720
+  ! jpegenc quality=70                  ← 70 = điểm "chữ còn đọc được"
+  ! multipartmux boundary=lanternframe
+  ! fdsink fd=1                         ← ra stdout; exe bơm vào socket
+```
+
+| Lựa chọn | Vì sao | Nếu làm khác |
+|---|---|---|
+| `framerate` đặt **trước** `d3d11download` | bỏ frame ở GPU, rẻ hơn nhiều | đặt sau ⇒ GPU vẫn đọc 60 fps rồi CPU mới bỏ — đúng lỗi tốn nhiệt §53.3 |
+| 1280×720, không 1080p | JPEG 1080p15 tốn ~3× CPU mà nhìn không khác | 1080p ⇒ quạt chạy, hình vẫn thế |
+| `jpegenc quality=70` | dưới 60 chữ nhoè, trên 80 tốn CPU vô ích | 90 ⇒ +40% CPU, không thấy khác |
+| `capture-api=dxgi` | cùng đường §52.4, chọn được adapter trên máy hybrid | WGC không chọn được adapter (§52.4) |
+| `fdsink fd=1` | không file tạm, không pipe shell, dừng là dừng | ghi file rồi đọc ⇒ trễ + đầy đĩa |
+| Không `nvh264enc` | giữ dGPU ngủ (§53.2) | NVENC ⇒ dGPU thức, nóng, pin |
+
+### 58.3 Ba thứ **phải** đúng, nếu không sẽ là lỗi im lặng
+
+| # | Thứ | Nếu sai |
+|---|---|---|
+| 1 | `boundary` trong `Content-Type` **giống tuyệt đối** boundary trong pipeline | trình duyệt nhận byte, không vẽ gì, **không báo lỗi**. Test `the_content_type_boundary_matches_the_pipeline_exactly` giữ chỗ này |
+| 2 | Header gửi **sau** frame đầu tiên | pipeline chết ngay ⇒ client treo vô hạn ở trạng thái "đang tải". Code chờ ≤ 64 KB đầu rồi mới trả 200; lỗi ⇒ `503` + stderr của GStreamer |
+| 3 | Đóng tab ⇒ **kill** `gst-launch-1.0` | capture chạy mồ côi: nóng máy, tắt app vẫn còn tiến trình. **Luật này khó hơn vẻ ngoài của nó — xem §58.7–§58.9; bản đầu viết sai và đã để lại tiến trình mồ côi thật** |
+
+> Cả ba đều là loại *"không thấy bằng mắt khi đúng, rất khó thấy tại sao khi sai"*. (1) và (2) có test từ đầu; (3) phải chạy thật bằng socket mới lộ ra **ba** lỗi riêng biệt — đó là toàn bộ nội dung §58.7–§58.9.
+
+### 58.4 Trung thực về **cái không có**
+
+Bản này **chỉ có hình**. Không tiếng, không điều khiển, không WebRTC, không đăng nhập, chỉ loopback (chưa TLS trong binary ⇒ §54.5 #1 cấm bind LAN). Chi tiết + cách xử lý từng cái: [`docs/run-on-windows.md`](run-on-windows.md).
+
+**Vì sao vẫn đáng làm ngay:** nó trả lời đúng một câu hỏi mà mọi thứ khác phụ thuộc vào — *"máy này có capture được màn hình và gửi tới trình duyệt không?"* Trả lời "có" ⇒ P0 bước 3 đã xong. Trả lời "không" ⇒ ta biết phải sửa gì **trước khi** xây WebRTC lên trên.
+
+### 58.5 Test (không cần GPU, không cần Windows)
+
+| Test | Giữ cái gì |
+|---|---|
+| `the_pipeline_uses_dxgi_and_ends_in_a_pipe` | không rơi về WGC, không `fakesink`, không NVENC |
+| `framerate_is_capped_before_download` | thứ tự `framerate` < `d3d11download` |
+| `monitor_index_from_the_query_string_is_clamped_not_trusted` | `?monitor=99` ⇒ 8, không phải lỗi 500 |
+| `the_content_type_boundary_matches_the_pipeline_exactly` | lỗi im lặng #1 |
+| `the_stream_response_has_no_content_length_and_keeps_the_security_headers` | stream vô hạn + vẫn có `X-Frame-Options` |
+| `the_live_page_never_renders_untrusted_input` | chỉ hai số đã clamp vào HTML |
+| `live_status_is_honest_about_the_sandbox` | trên Linux phải nói "chỉ Windows", **không** giả vờ sẵn sàng |
+| `--check` trong CI | route live tồn tại trong binary, không chỉ trong docs |
+
+> **`probe_live_status()` là chỗ đáng chú ý:** nó biến "nút bấm được nhưng lỗi" thành "nút mờ + nói lý do cụ thể". Một app nói *"Chưa có GStreamer trong PATH"* tốt hơn một app hiện khung đen, và tốt hơn nhiều lần một app không có nút đó.
+
+Bản v3.30 thêm **bốn test HTTP thật** — dựng server trên cổng ngẫu nhiên, đóng vai trình duyệt bằng `TcpStream`, và dùng một `gst-launch-1.0` giả (`LANTERN_GST`) để điều khiển pipeline. Chúng **không** mock `stream_live()`: request đi qua đúng `handle()`, đúng socket, đúng `ChildGuard`.
+
+| Test | Giữ cái gì | Lỗi nó bắt được |
+|---|---|---|
+| `http_stream_kills_the_pipeline_when_the_tab_closes` | đóng tab ⇒ PID trong pidfile chết ≤ 3 s | §58.7 + §58.8 |
+| `http_stream_returns_504_and_cleans_up_when_no_frame_arrives` | `504` < 6 s, giữ stderr, không để lại tiến trình | §58.9 |
+| `http_stream_sends_multipart_headers_before_body` | 200 + đúng `Content-Type` + **không** `Content-Length` | hợp đồng với trình duyệt |
+| `peer_closed_also_catches_an_rst_from_a_closed_tab` | RST tính là "đã đóng" | §58.8 |
+| `stderr_is_read_only_after_the_child_is_gone` | đọc stderr sau kill, < 2 s | §58.9 |
+
+> **Đếm tiến trình bằng PID, không bằng tên.** `ps | grep gst` trên CI có thể dính tiến trình lạ; script giả tự `echo $$ > pid` nên test chỉ hỏi đúng tiến trình của nó sống hay chết.
+
+> **`probe_live_status()` là chỗ đáng chú ý:** nó biến "nút bấm được nhưng lỗi" thành "nút mờ + nói lý do cụ thể". Một app nói *"Chưa có GStreamer trong PATH"* tốt hơn một app hiện khung đen, và tốt hơn nhiều lần một app không có nút đó.
+
+### 58.6 Ba lỗi chỉ hiện ra khi chạy thật
+
+Đoạn code trên **qua hết unit test** mà vẫn sai ba lần. Cả ba đều vô hình trong test thường vì chúng chỉ xảy ra khi có một **tiến trình bên ngoài** và một **socket thật**. Ghi lại nguyên văn vì đây là dạng lỗi sẽ quay lại: nó không nằm ở logic của ta, nó nằm ở *hợp đồng với hệ điều hành*.
+
+| # | Triệu chứng quan sát được | Nguyên nhân thật | Sửa |
+|---|---|---|---|
+| 1 | Đóng tab, `gst-launch-1.0` **vẫn chạy** | Chỉ kill khi `write_all` trả lỗi. Pipeline **im lặng** thì không có lần ghi nào ⇒ không có lỗi nào | Poll 250 ms + `peek` + `ChildGuard` (§58.7) |
+| 2 | Sau khi sửa (1), vẫn còn 1 tiến trình | Trình duyệt đóng khi còn byte chưa đọc ⇒ OS gửi **RST**, không phải FIN; `peek` trả `Err`, mà code chỉ nhận `Ok(0)` | `Err` khác timeout ⇒ coi là đã đóng (§58.8) |
+| 3 | Nhánh lỗi `504` **treo > 15 s** | Đọc `stderr` của tiến trình **còn sống** ⇒ `read_to_string` chờ tới khi nó thoát (có thể mãi mãi) | Kill + `wait` **trước**, rồi mới đọc stderr (§58.9) |
+
+> Bài học chung, viết ra để lần sau không mất thêm một vòng: **một tiến trình con + một socket = ba trạng thái, không phải một.** "Đã đóng", "còn sống", và "không nói gì" là ba chuyện khác nhau; code nào chỉ xử lý hai trong ba thì sẽ để lại capture mồ côi hoặc spinner vô hạn.
+
+### 58.7 Lỗi 1 — kill chỉ khi ghi lỗi là **không đủ**
+
+Bản đầu của vòng lặp:
+
+```rust
+loop {
+    match rx.recv() {
+        Ok(chunk) => if stream.write_all(&chunk).is_err() { break; },  // "client đóng tab"
+        Err(_) => break,
+    }
+}
+```
+
+Nó đúng **chỉ khi** pipeline liên tục đẩy frame. Nhưng `d3d11screencapturesrc` có thể im lặng rất lâu — màn hình tĩnh, DPMS tắt, dGPU ngủ (§53.4), hoặc người dùng chọn monitor không tồn tại. Khi đó:
+
+1. Không có chunk nào ⇒ không có `write_all` ⇒ **không có lỗi**.
+2. Client đã đóng từ lâu, nhưng ta không biết vì ta chỉ *ghi*, không bao giờ *hỏi*.
+3. Tiến trình capture sống tới khi tắt app. Trên laptop: quạt chạy, pin tụt, và người dùng kết luận "app này hỏng".
+
+Cách sửa gồm ba phần, thiếu phần nào cũng hỏng:
+
+| Phần | Vì sao cần |
+|---|---|
+| `recv_timeout(POLL)` thay `recv()` | để vòng lặp **thức dậy** kể cả khi pipeline không nói gì |
+| `peer_closed()` bằng `peek` | hỏi thẳng socket "đầu bên kia còn đó không", **không** lấy mất dữ liệu |
+| `ChildGuard` (Drop ⇒ `kill` + `wait`) | mọi đường ra — kể cả `return` sớm ở nhánh `504` — đều dọn tiến trình |
+
+`ChildGuard` là phần dễ bỏ qua nhất và cũng là phần quan trọng nhất: nó biến việc dọn dẹp từ *"nhớ gọi ở mọi nhánh"* thành *"không thể quên"*.
+
+### 58.8 Lỗi 2 — FIN và RST là hai kiểu đóng khác nhau
+
+Sau khi sửa §58.7, bài test bằng socket thật **vẫn** thấy tiến trình còn sống. Đoạn mã khi đó:
+
+```rust
+matches!(stream.peek(&mut probe), Ok(0))   // "chỉ Ok(0) là đã đóng"
+```
+
+Đó là định nghĩa của **FIN** — đóng bình thường, hết dữ liệu. Nhưng trình duyệt đóng tab **khi trong buffer còn frame chưa vẽ** thì hệ điều hành gửi **RST**: kết nối bị huỷ, không phải kết thúc. `peek` trả `Err(ConnectionReset)`, và biểu thức trên trả `false` ⇒ "client còn sống" ⇒ pipeline chạy mãi.
+
+Bảng đúng phải là bốn dòng, không phải một:
+
+| `peek` trả | Nghĩa | Kết luận |
+|---|---|---|
+| `Ok(0)` | FIN — đóng bình thường | **đã đóng** |
+| `Ok(n>0)` | có byte đến (đường này client không gửi gì) | còn sống |
+| `Err(kind)` khác `WouldBlock`/`TimedOut` | **RST**, `ECONNRESET`, … | **đã đóng** |
+| `Err(WouldBlock \| TimedOut)` | 200 ms không có gì | còn sống |
+
+> **Vì sao unit test không bắt được:** test cũ đóng socket **sạch** (`drop` sau khi hai bên đã trao đổi hết) ⇒ luôn ra FIN. Chỉ khi phía server còn dữ liệu chưa gửi xong mà client bỏ đi thì mới ra RST — đúng thứ xảy ra với MJPEG 15 fps. Test mới `peer_closed_also_catches_an_rst_from_a_closed_tab` dựng đúng tình huống đó: server ghi 4 KB mà client không đọc, rồi client đóng.
+
+### 58.9 Lỗi 3 — đọc `stderr` của tiến trình đang chạy là **chờ nó chết**
+
+Nhánh "pipeline không trả frame" cần lời giải thích của GStreamer, nên nó đọc `stderr`:
+
+```rust
+let text = BufReader::new(stderr).read_to_string(&mut text);  // ❌ chờ EOF
+```
+
+`read_to_string` đọc **tới EOF**, mà EOF chỉ đến khi tiến trình đóng `stderr` — tức là khi nó **thoát**. Với `gst-launch-1.0` bị treo (chờ frame mãi, hoặc lỗi DXGI giữ pipeline sống), người dùng thấy: bấm nút → spinner → **không có gì**, mãi mãi. Đo được: `curl` bỏ cuộc ở 15 s, server chưa gửi byte nào.
+
+Cách sửa: **kill trước, đọc sau.**
+
+```rust
+fn take_stderr_after_kill(&mut self) -> String {
+    let _ = self.0.kill();
+    let _ = self.0.wait();          // chắc chắn đã chết trước khi đọc
+    let mut text = String::new();
+    if let Some(stderr) = self.0.stderr.take() {
+        let _ = BufReader::new(stderr).read_to_string(&mut text);   // giờ EOF đến ngay
+    }
+    text
+}
+```
+
+Đo lại: `504` trong **8.0 s** (đúng bằng `FIRST_FRAME_TIMEOUT`), body là thông báo lỗi thật của GStreamer, và không còn tiến trình nào sót lại.
+
+> **Một chi tiết nhỏ nhưng là cái bẫy:** kill ngay lập tức có thể đến *trước khi* GStreamer kịp ghi lỗi ra stderr — test `stderr_is_read_only_after_the_child_is_gone` đỏ vì đúng lý do đó (nhận về chuỗi rỗng). Trong luồng thật điều này không xảy ra vì ta đã chờ 8 s trước khi kill; test phải mô phỏng đúng thứ tự (chờ 150 ms) thay vì đòi hỏi một hành vi mà code không hứa.
+
+### 58.10 Bảng "đã kiểm bằng gì"
+
+Sòng phẳng về mức độ tin cậy của từng phần — vì "test xanh" không có nghĩa "chạy được trên laptop của bạn":
+
+| Phần | Kiểm bằng | Tin được đến đâu |
+|---|---|---|
+| Tham số pipeline (DXGI, thứ tự, fps) | unit test so chuỗi | **cao** — đúng chuỗi sẽ chạy trên Windows |
+| Header/status/`boundary` | test HTTP thật (socket) | **cao** — đúng byte trình duyệt nhận |
+| Đóng tab ⇒ kill pipeline | test HTTP thật + PID | **cao** — đúng cơ chế, không phụ thuộc GStreamer |
+| `504` khi không có frame | test HTTP thật + `gst` giả | **cao** cho phần bọc; **trung bình** cho nội dung lỗi (tuỳ GStreamer) |
+| Hình ảnh thật từ DXGI | **chưa ai kiểm** trong sandbox | **0** — cần máy Windows của bạn |
+| Chất lượng/độ trễ MJPEG thật | **chưa ai kiểm** | **0** — §6.2.3 không áp dụng cho MJPEG, xem `docs/run-on-windows.md` |
+| Âm thanh, chuột/bàn phím, TLS, LAN | **không có trong bản này** | — |
+
+> Dòng thứ năm là dòng quan trọng nhất. Toàn bộ §58 tồn tại để **giảm** phần "chưa ai kiểm" đó xuống còn đúng một lần bấm nút trên máy bạn — không phải để tuyên bố nó đã xong.

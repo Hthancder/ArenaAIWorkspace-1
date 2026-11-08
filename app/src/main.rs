@@ -1,7 +1,9 @@
+mod stream;
+
 use std::collections::BTreeMap;
 use std::env;
 use std::fs;
-use std::io::{Read, Write};
+use std::io::{BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -24,7 +26,7 @@ const SETTINGS_DEFAULTS: &[(&str, &str)] = &[
 
 #[derive(Clone)]
 struct Session { id: String, mode: String, window_id: String, started_at: u64, audio: bool }
-struct State { settings: BTreeMap<String, String>, session: Option<Session>, next_id: u64, data_dir: PathBuf }
+struct State { settings: BTreeMap<String, String>, session: Option<Session>, next_id: u64, data_dir: PathBuf, live_status: Option<(bool, String)> }
 
 fn json_quote(value: &str) -> String {
     let mut out = String::from("\"");
@@ -237,6 +239,204 @@ fn capture_probe(body: &str) -> (u16, String) {
     (200, format!("{{\"status\":{},\"output\":{},\"advice\":{},\"monitorIndex\":{},\"mock\":false}}", json_quote(status), json_quote(&output), json_quote(advice), monitor))
 }
 
+/// Kiểm tra **một lần** xem đường live có chạy được không: có `gst-launch-1.0`
+/// trong PATH và có plugin `d3d11screencapturesrc`. Trả về `(available, detail)`
+/// với `detail` là câu **người dùng đọc được**, không phải mã lỗi.
+fn probe_live_status() -> (bool, String) {
+    #[cfg(not(target_os = "windows"))]
+    {
+        (false, "Chỉ bản .exe trên Windows mới capture được màn hình.".into())
+    }
+    #[cfg(target_os = "windows")]
+    {
+        match std::process::Command::new("gst-launch-1.0")
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+        {
+            Err(_) => return (false, "Chưa có GStreamer trong PATH. Cài GStreamer MSVC 64-bit (Complete) rồi mở lại app — xem docs/run-on-windows.md.".into()),
+            Ok(status) if !status.success() => return (false, "gst-launch-1.0 chạy được nhưng trả mã lỗi.".into()),
+            Ok(_) => {}
+        }
+        match std::process::Command::new("gst-inspect-1.0")
+            .arg("d3d11screencapturesrc")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+        {
+            Ok(status) if status.success() => (true, "Sẵn sàng: DXGI capture + MJPEG.".into()),
+            _ => (false, "Thiếu plugin d3d11 (gst-plugins-bad). Cài GStreamer bản Complete, hoặc thêm gst-plugins-bad.".into()),
+        }
+    }
+}
+
+/// Thời gian chờ frame đầu, có thể hạ xuống cho test (`LANTERN_FIRST_FRAME_MS`).
+/// Clamp để một biến môi trường sai không làm app treo vô hạn hoặc bỏ cuộc ngay.
+fn first_frame_timeout() -> std::time::Duration {
+    let ms = env::var("LANTERN_FIRST_FRAME_MS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(8_000);
+    std::time::Duration::from_millis(ms.clamp(200, 30_000))
+}
+
+/// Tên lệnh GStreamer. Tách ra thành một hàm **chỉ để test có thể trỏ vào
+/// script giả** (`LANTERN_GST`) — nhờ vậy các test HTTP dưới đây chạy được trên
+/// CI Linux mà vẫn đi qua đúng đoạn code sẽ chạy trên laptop Windows.
+fn gst_program() -> String {
+    env::var("LANTERN_GST").unwrap_or_else(|_| "gst-launch-1.0".to_string())
+}
+
+/// Giữ `Child` và **luôn** kill khi ra khỏi scope — kể cả khi return sớm giữa
+/// đường. Không có guard này thì mỗi nhánh lỗi là một tiến trình capture mồ côi:
+/// người dùng đóng tab, pipeline vẫn chạy, laptop vẫn nóng, và không ai thấy gì.
+struct ChildGuard(std::process::Child);
+
+impl Drop for ChildGuard {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+impl ChildGuard {
+    /// Kill trước, rồi mới đọc stderr. Đọc stderr của một tiến trình **còn
+    /// đang chạy** là treo tới khi nó thoát (§58.7) — `gst-launch` sống mãi khi
+    /// pipeline chỉ chờ frame, nên người dùng thấy spinner vô hạn thay vì lỗi.
+    fn take_stderr_after_kill(&mut self) -> String {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+        let mut text = String::new();
+        if let Some(stderr) = self.0.stderr.take() {
+            let _ = BufReader::new(stderr).read_to_string(&mut text);
+        }
+        text
+    }
+}
+
+/// Client còn kết nối không? `peek` không lấy mất dữ liệu (client không gửi gì
+/// trên đường này).
+///
+/// Bản đầu tiên chỉ coi `Ok(0)` là đóng, và **đóng tab của Chrome đi qua đường
+/// khác** — nên pipeline sống mãi:
+/// | `peek` trả | Nghĩa | Kết luận |
+/// |---|---|---|
+/// | `Ok(0)` | FIN: đóng bình thường | **đã đóng** |
+/// | `Ok(_)` | có byte đến (không xảy ra trên đường này) | còn sống |
+/// | `Err(...)` khác timeout | **RST**: đóng khi còn byte chưa đọc | **đã đóng** |
+/// | `Err(WouldBlock/TimedOut)` | 200 ms không có gì | còn sống |
+fn peer_closed(stream: &TcpStream) -> bool {
+    use std::io::ErrorKind;
+    let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(200)));
+    let mut probe = [0u8; 1];
+    match stream.peek(&mut probe) {
+        Ok(0) => true,
+        Ok(_) => false,
+        Err(error) => !matches!(error.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut),
+    }
+}
+
+/// Bơm MJPEG từ `gst-launch-1.0` ra socket. Không qua shell, không qua file tạm:
+/// `fdsink fd=1` ghi thẳng vào stdout của tiến trình con, ta chuyển tiếp.
+///
+/// Hai chỗ **không được block vô hạn**, vì đó là cách hỏng tệ nhất (im lặng):
+/// 1. **Frame đầu tiên**: pipeline có thể chết hoặc đứng ⇒ chờ tối đa
+///    `FIRST_FRAME_TIMEOUT`, quá hạn thì kill + `504`, không để client tải mãi.
+/// 2. **Vòng chép**: đọc stdout bằng `recv_timeout`, mỗi lần hết hạn thì hỏi xem
+///    client còn đó không. Trước khi có bản này, đóng tab **không** dừng pipeline
+///    — đúng lỗi tìm ra khi thử bằng socket thật (xem §58.6).
+fn stream_live(mut stream: TcpStream, monitor: u8, fps: u8) {
+    use std::io::Read;
+    use std::process::{Command, Stdio};
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    // Chờ frame đầu: 8 s mặc định (đủ cho cold start DXGI, §53.4); test hạ
+    // xuống qua LANTERN_FIRST_FRAME_MS để không phải chờ 8 s thật.
+    let first_frame_timeout = first_frame_timeout();
+    /// Nhịp kiểm "client còn đó không": tab đóng ⇒ pipeline chết trong ≤ ¼ s.
+    const POLL: Duration = Duration::from_millis(250);
+
+    let args = stream::mjpeg_args(monitor, fps, stream::DEFAULT_WIDTH, stream::DEFAULT_HEIGHT);
+    let program = gst_program();
+    let mut child = match Command::new(&program)
+        .args(&args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+    {
+        Ok(child) => ChildGuard(child),
+        Err(error) => {
+            let message = format!("Không chạy được gst-launch-1.0: {error}");
+            return response(&mut stream, 503, "text/plain; charset=utf-8", message.as_bytes());
+        }
+    };
+
+    let Some(stdout) = child.0.stdout.take() else {
+        return response(&mut stream, 500, "text/plain; charset=utf-8", b"gst-launch-1.0: no stdout");
+    };
+
+    // stdout đọc trên thread riêng ⇒ luồng chính không bao giờ block vô hạn.
+    let (tx, rx) = mpsc::channel::<Vec<u8>>();
+    std::thread::spawn(move || {
+        let mut reader = BufReader::new(stdout);
+        let mut buffer = vec![0u8; 64 * 1024];
+        loop {
+            match reader.read(&mut buffer) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    if tx.send(buffer[..n].to_vec()).is_err() {
+                        break;
+                    }
+                }
+            }
+        }
+    });
+
+    let first = match rx.recv_timeout(first_frame_timeout) {
+        Ok(chunk) => chunk,
+        Err(_) => {
+            let mut detail = format!(
+                "Pipeline không trả về frame nào trong {} giây. Kiểm tra monitor-index và GStreamer.",
+                first_frame_timeout.as_secs_f32()
+            );
+            // Kill TRƯỚC khi đọc stderr — xem `take_stderr_after_kill`.
+            let text = child.take_stderr_after_kill();
+            if !text.trim().is_empty() {
+                detail = clean_output(&text);
+            }
+            return response(&mut stream, 504, "text/plain; charset=utf-8", detail.as_bytes());
+        }
+    };
+
+    if stream.write_all(stream::stream_head().as_bytes()).is_err()
+        || stream.write_all(&first).is_err()
+        || stream.flush().is_err()
+    {
+        return; // guard kill khi drop
+    }
+
+    loop {
+        match rx.recv_timeout(POLL) {
+            Ok(chunk) => {
+                if stream.write_all(&chunk).is_err() {
+                    break; // client đóng tab
+                }
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                // Pipeline im lặng không có nghĩa là nó còn sống.
+                if peer_closed(&stream) {
+                    break;
+                }
+            }
+        }
+    }
+    // `child` drop ở đây ⇒ SIGKILL + wait.
+}
+
 fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
     let Some((method,path,body)) = read_request(&mut stream) else { return; };
     if body == "__BODY_TOO_LARGE__" { return json_response(&mut stream, 413, "{\"error\":\"body_too_large\"}".into()); }
@@ -245,6 +445,26 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
     if method == "GET" && route == "/styles.css" { return response(&mut stream, 200, "text/css; charset=utf-8", CSS.as_bytes()); }
     if method == "GET" && route == "/app.js" { return response(&mut stream, 200, "text/javascript; charset=utf-8", JS.as_bytes()); }
     if method == "GET" && route == "/api/diagnostics" { return json_response(&mut stream, 200, run_diagnostics()); }
+    // Nhìn thấy màn hình thật trong trình duyệt, không cần WebRTC (§58).
+    // `GET /live` là trang tối giản cho điện thoại; `GET /api/live.mjpg` là stream.
+    // `/api/live/status` trả lời được câu "nút Xem máy thật có dùng được không, và
+    // nếu không thì vì sao" — thay vì để người dùng bấm vào rồi mới thấy lỗi.
+    if method == "GET" && route == "/api/live/status" {
+        let mut s = state.lock().unwrap_or_else(|e| e.into_inner());
+        if s.live_status.is_none() { s.live_status = Some(probe_live_status()); }
+        let (available, detail) = s.live_status.clone().unwrap_or((false, String::new()));
+        return json_response(&mut stream, 200, format!(
+            "{{\"available\":{available},\"detail\":{},\"contentType\":{},\"boundary\":{}}}",
+            json_quote(&detail), json_quote(&stream::mjpeg_content_type()), json_quote(stream::BOUNDARY)));
+    }
+    if method == "GET" && (route == "/live" || route == "/api/live.mjpg") {
+        let query = path.split_once('?').map(|(_, q)| q).unwrap_or("");
+        let (monitor, fps) = stream::parse_live_query(query);
+        if route == "/live" {
+            return response(&mut stream, 200, "text/html; charset=utf-8", stream::live_page(monitor, fps).as_bytes());
+        }
+        return stream_live(stream, monitor, fps);
+    }
     if method == "POST" && route == "/api/diagnostics/capture" { let (status,body)=capture_probe(&body); return json_response(&mut stream,status,body); }
     let mut s = state.lock().unwrap_or_else(|e| e.into_inner());
     match (method.as_str(), route) {
@@ -285,7 +505,16 @@ fn main() {
     if env::args().any(|arg| arg == "--check") {
         assert!(INDEX.contains("/api/sessions") || JS.contains("/api/sessions"));
         assert!(JS.contains("/api/settings"));
-        println!("Lantern mock assets embedded; API routes ready.");
+        // Đường "xem máy thật" phải tồn tại trong bản build này, không chỉ trong docs.
+        assert!(stream::mjpeg_content_type().contains(stream::BOUNDARY));
+        assert!(stream::mjpeg_args(0, 15, 1280, 720).join(" ").contains("d3d11screencapturesrc"));
+        // §58.8: in rõ vì sao nút "Xem máy thật" có thể bị xám — nếu không,
+        // trên Linux/CI người đọc chỉ thấy "live route ready" và tưởng capture
+        // hỏng, trong khi thực tế là thiếu GStreamer.
+        let (available, detail) = probe_live_status();
+        println!(
+            "Lantern mock assets embedded; API routes ready; live MJPEG route ready (capture available: {available} — {detail})."
+        );
         return;
     }
     let host = env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
@@ -295,9 +524,10 @@ fn main() {
     let data_dir = env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(env::temp_dir).join("LanternMock");
     let mut settings = SETTINGS_DEFAULTS.iter().map(|(k,v)|(k.to_string(),v.to_string())).collect::<BTreeMap<_,_>>();
     if let Ok(text) = fs::read_to_string(data_dir.join("settings.json")) { if let Some(saved)=parse_flat_object(&text) { for (k,v) in saved { if settings.contains_key(&k) && allowed_value(&k,&v) { settings.insert(k,v); } } } }
-    let state=Arc::new(Mutex::new(State{settings,session:None,next_id:0,data_dir}));
+    let state=Arc::new(Mutex::new(State{settings,session:None,next_id:0,data_dir,live_status:None}));
     let url = format!("http://127.0.0.1:{actual}");
     println!("Lantern mock is ready. Open {url} in your browser.");
+    println!("Xem màn hình thật (nếu đã cài GStreamer): {url}/live  — hoặc bấm nút \"Xem máy thật\".");
     println!("This is a local UI/API mock; it does not control Windows or capture media.");
     #[cfg(target_os = "windows")]
     { let _ = std::process::Command::new("cmd").arg("/C").arg("start").arg("").arg(&url).spawn(); }
@@ -307,6 +537,182 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `LANTERN_GST`/`LANTERN_FIRST_FRAME_MS` là biến **toàn cục**, mà test chạy
+    /// song song ⇒ mọi test dựng server phải giữ lock này, nếu không chúng ghi
+    /// đè lẫn nhau và thành flaky (đúng loại lỗi khó chịu nhất trong CI).
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    struct TestServer {
+        port: u16,
+        dir: std::path::PathBuf,
+        _guard: std::sync::MutexGuard<'static, ()>,
+    }
+
+    /// Dựng server thật trên cổng ngẫu nhiên, dùng script `gst` giả. Request đi
+    /// qua đúng `handle()` và đúng socket như trình duyệt — không phải mock của
+    /// `stream_live`. Đây chính là thứ đã bắt được 3 lỗi thật của §58.7–§58.9.
+    fn spawn_test_server(gst_script: &str, first_frame_ms: &str) -> TestServer {
+        use std::io::Write as _;
+        let guard = ENV_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let dir = std::env::temp_dir().join(format!("lantern-test-{}-{stamp}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("tạo thư mục tạm");
+
+        let gst = dir.join("gst-launch-1.0");
+        let mut file = std::fs::File::create(&gst).expect("tạo gst giả");
+        file.write_all(gst_script.as_bytes()).expect("ghi gst giả");
+        drop(file);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&gst, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+        }
+        env::set_var("LANTERN_GST", &gst);
+        env::set_var("LANTERN_FIRST_FRAME_MS", first_frame_ms);
+
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().expect("addr").port();
+        let state = Arc::new(Mutex::new(State {
+            settings: BTreeMap::new(),
+            session: None,
+            next_id: 0,
+            data_dir: dir.clone(),
+            live_status: None,
+        }));
+        thread::spawn(move || {
+            for incoming in listener.incoming() {
+                match incoming {
+                    Ok(stream) => {
+                        let shared = Arc::clone(&state);
+                        let _ = thread::spawn(move || handle(stream, shared));
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+        TestServer { port, dir, _guard: guard }
+    }
+
+    /// Đọc PID mà script giả đã tự ghi (`echo $$ > pidfile`). Đếm tiến trình
+    /// theo tên/chuỗi lệnh thì trên CI có thể dính tiến trình lạ; PID thì không.
+    fn fake_pid(dir: &std::path::Path) -> Option<u32> {
+        std::fs::read_to_string(dir.join("pid")).ok()?.trim().parse().ok()
+    }
+
+    /// Tiến trình còn sống? (`kill -0`; thu stderr để log test không bị rác.)
+    fn process_alive(pid: u32) -> bool {
+        std::process::Command::new("kill")
+            .args(["-0", &pid.to_string()])
+            .stderr(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false)
+    }
+
+    /// Mở stream như trình duyệt rồi bỏ đi ngay (còn byte chưa đọc ⇒ RST).
+    fn open_and_abandon(port: u16) {
+        let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("kết nối");
+        stream
+            .write_all(b"GET /api/live.mjpg?monitor=1 HTTP/1.1\r\nHost: t\r\n\r\n")
+            .expect("gửi request");
+        stream
+            .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+            .ok();
+        let mut head = [0u8; 96];
+        let _ = stream.read(&mut head);
+        drop(stream); // không đọc nốt ⇒ OS gửi RST
+    }
+
+    /// Đợi tới khi điều kiện đúng, tối đa `limit`. Trả `false` nếu hết giờ.
+    fn wait_until(limit: std::time::Duration, mut check: impl FnMut() -> bool) -> bool {
+        let start = std::time::Instant::now();
+        while start.elapsed() < limit {
+            if check() { return true; }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        check()
+    }
+
+    #[cfg(unix)]
+    #[test] fn http_stream_kills_the_pipeline_when_the_tab_closes() {
+        // §58.7 (lỗi 1): bản đầu chỉ kill khi `write_all` lỗi. Một pipeline im
+        // lặng thì không có lần ghi nào ⇒ tiến trình sống mãi, laptop nóng.
+        // §58.8 (lỗi 2): đóng tab khi còn byte chưa đọc ⇒ RST, mà `peer_closed`
+        // bản đầu chỉ nhận `Ok(0)`.
+        let server = spawn_test_server(
+            "#!/bin/sh\necho $$ > \"$(dirname \"$0\")/pid\"\nprintf -- '--lanternframe\\r\\nContent-Type: image/jpeg\\r\\n\\r\\n'\nprintf 'F1'\nprintf -- '\\r\\n'\nexec sleep 173\n",
+            "4000",
+        );
+        open_and_abandon(server.port);
+        let pid = fake_pid(&server.dir).expect("script giả phải ghi pid");
+        assert!(process_alive(pid), "pipeline phải đang chạy khi có người xem");
+        assert!(
+            wait_until(std::time::Duration::from_secs(3), || !process_alive(pid)),
+            "đóng tab mà pipeline (pid {pid}) vẫn chạy"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test] fn http_stream_returns_504_and_cleans_up_when_no_frame_arrives() {
+        // §58.9 (lỗi 3): nhánh lỗi đọc stderr của tiến trình **còn sống** ⇒ treo
+        // tới khi pipeline thoát (có thể là mãi mãi). Phải trả 504 trong khoảng
+        // thời gian chờ, kèm lời giải thích của GStreamer, và không để lại gì.
+        let server = spawn_test_server(
+            "#!/bin/sh\necho $$ > \"$(dirname \"$0\")/pid\"\necho 'ERROR: monitor-index khong ton tai' >&2\nexec sleep 179\n",
+            "300",
+        );
+        let start = std::time::Instant::now();
+        let mut stream = TcpStream::connect(("127.0.0.1", server.port)).expect("kết nối");
+        stream
+            .write_all(b"GET /api/live.mjpg?monitor=9 HTTP/1.1\r\nHost: t\r\n\r\n")
+            .expect("gửi request");
+        stream
+            .set_read_timeout(Some(std::time::Duration::from_secs(10)))
+            .ok();
+        let mut text = String::new();
+        let _ = stream.read_to_string(&mut text);
+        let elapsed = start.elapsed();
+
+        assert!(text.starts_with("HTTP/1.1 504"), "mong 504, nhận: {:?}", &text[..text.len().min(60)]);
+        assert!(text.contains("monitor-index khong ton tai"), "phải giữ lỗi của GStreamer: {text:?}");
+        assert!(elapsed < std::time::Duration::from_secs(6), "trả lời quá chậm: {elapsed:?}");
+        let pid = fake_pid(&server.dir).expect("script giả phải ghi pid");
+        assert!(wait_until(std::time::Duration::from_secs(2), || !process_alive(pid)), "để lại tiến trình capture (pid {pid})");
+    }
+
+    #[cfg(unix)]
+    #[test] fn http_stream_sends_multipart_headers_before_body() {
+        // Hợp đồng với trình duyệt: đúng content-type, không có Content-Length,
+        // và header đi **sau** frame đầu tiên (nếu gửi 200 trước rồi mới phát
+        // hiện pipeline chết thì trình duyệt đã hiện khung vỡ).
+        let server = spawn_test_server(
+            "#!/bin/sh\necho $$ > \"$(dirname \"$0\")/pid\"\nprintf -- '--lanternframe\\r\\nContent-Type: image/jpeg\\r\\n\\r\\n'\nprintf 'F1'\nprintf -- '\\r\\n'\nexec sleep 181\n",
+            "4000",
+        );
+        let mut stream = TcpStream::connect(("127.0.0.1", server.port)).expect("kết nối");
+        stream
+            .write_all(b"GET /api/live.mjpg?monitor=1&fps=99 HTTP/1.1\r\nHost: t\r\n\r\n")
+            .expect("gửi request");
+        stream
+            .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+            .ok();
+        let mut head = [0u8; 512];
+        let n = stream.read(&mut head).expect("đọc header");
+        let text = String::from_utf8_lossy(&head[..n]).to_string();
+        assert!(text.starts_with("HTTP/1.1 200"), "{text:?}");
+        assert!(text.contains(stream::mjpeg_content_type().as_str()), "content-type: {text:?}");
+        assert!(!text.to_lowercase().contains("content-length"), "stream không được có Content-Length");
+        drop(stream);
+        if let Some(pid) = fake_pid(&server.dir) {
+            let _ = wait_until(std::time::Duration::from_secs(2), || !process_alive(pid));
+        }
+    }
+
     #[test] fn parses_patch_and_escapes() { let p=parse_flat_object(r#"{"quality":"smooth","volume":35,"hide-taskbar":true}"#).unwrap(); assert_eq!(p.get("quality").unwrap(),"smooth"); assert_eq!(p.get("volume").unwrap(),"35"); assert!(allowed_value("hide-taskbar",p.get("hide-taskbar").unwrap())); }
     #[test] fn rejects_bad_enum() { assert!(!allowed_value("quality","disable-encryption")); assert!(!allowed_value("volume","101")); }
     #[test] fn serves_embedded_frontend_sources() { assert!(INDEX.contains("Lantern")); assert!(CSS.contains(".app-shell")); assert!(JS.contains("/api/sessions")); }
@@ -326,6 +732,97 @@ mod tests {
         assert!(command.contains("width=1920,height=1080,framerate=60/1"));
         assert!(command.contains("b-frames=0 low-latency=true"));
         assert!(command.ends_with("fakesink"));
+    }
+    #[test] fn peer_closed_sees_a_hangup_and_not_just_a_slow_client() {
+        use std::net::TcpListener;
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let client = TcpStream::connect(addr).expect("connect");
+        let (server, _) = listener.accept().expect("accept");
+
+        assert!(!peer_closed(&server), "client còn mở thì không được coi là đã đóng");
+
+        drop(client);
+
+        let start = std::time::Instant::now();
+        while start.elapsed() < std::time::Duration::from_secs(2) {
+            if peer_closed(&server) { return; }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        panic!("đã đóng socket mà peer_closed vẫn báo còn sống");
+    }
+
+    #[test] fn peer_closed_also_catches_an_rst_from_a_closed_tab() {
+        // Đóng tab khi còn byte chưa đọc ⇒ OS gửi **RST**, không phải FIN;
+        // `peek` trả `Err(ConnectionReset)` và bản đầu bỏ sót ⇒ capture chạy mãi.
+        // Test viết lại đúng lần chạy thật đã phát hiện lỗi này.
+        use std::io::Write;
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let client = TcpStream::connect(addr).expect("connect");
+        let (server, _) = listener.accept().expect("accept");
+
+        // Server gửi dữ liệu client **không đọc**, rồi client đóng ⇒ RST.
+        (&server).write_all(&[7u8; 4096]).ok();
+        drop(client);
+        (&server).write_all(&[7u8; 4096]).ok();
+
+        let start = std::time::Instant::now();
+        while start.elapsed() < std::time::Duration::from_secs(2) {
+            if peer_closed(&server) { return; }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        panic!("RST từ client phải được coi là đã đóng");
+    }
+    #[cfg(unix)]
+    #[test] fn stderr_is_read_only_after_the_child_is_gone() {
+        // Lỗi thật §58.7: đọc stderr của pipeline **còn sống** thì treo tới khi
+        // nó thoát. Test này spawn một tiến trình chỉ in lỗi rồi ngủ, và đòi
+        // hỏi đáp trong < 2 s.
+        use std::process::Stdio;
+        let child = std::process::Command::new("sh")
+            .args(["-c", "echo 'loi gst' >&2; exec sleep 97"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("spawn");
+        let mut guard = ChildGuard(child);
+        // Trong thực tế ta đã chờ 8 s trước khi tới nhánh này, nên tiến trình
+        // đã kịp ghi lỗi. Chờ 150 ms để mô phỏng đúng thứ tự đó.
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        let start = std::time::Instant::now();
+        let text = guard.take_stderr_after_kill();
+        assert!(start.elapsed() < std::time::Duration::from_secs(2), "đọc stderr bị treo");
+        assert!(text.contains("loi gst"), "phải giữ được thông báo lỗi: {text:?}");
+    }
+
+    #[test] fn child_guard_kills_the_process_even_on_early_return() {
+        let child = std::process::Command::new("sleep")
+            .arg("30")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .expect("spawn sleep");
+        let pid = child.id();
+        { let _guard = ChildGuard(child); }
+        let alive = std::process::Command::new("kill")
+            .args(["-0", &pid.to_string()])
+            .stderr(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false);
+        assert!(!alive, "ChildGuard phải kill tiến trình con khi drop");
+    }
+    #[test] fn live_status_is_honest_about_the_sandbox() {
+        // Trên Linux (CI/sandbox) phải nói rõ "chỉ Windows" và `available=false`,
+        // không được giả vờ sẵn sàng rồi để UI vẽ khung đen.
+        #[cfg(not(target_os = "windows"))]
+        {
+            let (available, detail) = probe_live_status();
+            assert!(!available);
+            assert!(detail.contains("Windows"), "{detail}");
+        }
     }
     #[test] fn diagnostics_api_is_marked_as_hardware_not_ui_mock() { assert!(run_diagnostics().contains("\"mock\":false")); }
     #[test] fn responses_carry_clickjacking_headers() {
