@@ -2,6 +2,23 @@
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const state = { connected: false, mode: 'hvnc', room: false, audio: true, mic: false, selectedWindow: 'desktop', cursor: true, quality: 'balanced', resolution: '1080' };
+  const settingDefs = [
+    { id:'quality', title:'Chất lượng hình ảnh', hint:'Ưu tiên rõ nét hay mượt khi mạng yếu?', group:'view', scope:'device', effect:'Ngay', terms:'mờ nét blur sharp lag chậm mạng', options:[['auto','Tự động'],['sharp','Nét'],['smooth','Mượt']] },
+    { id:'display', title:'Kiểu hiển thị', hint:'Chọn theo việc bạn đang làm.', group:'view', scope:'device', effect:'Ngay', terms:'màn hình độ phân giải chữ nhỏ to đọc', options:[['real','Dùng thật'],['comfortable','Vừa mắt'],['large-text','Chữ to'],['sharp','Nét']] },
+    { id:'aspect', title:'Tỉ lệ khung hình', hint:'Cách vừa nội dung vào khung xem.', group:'view', scope:'device', effect:'Ngay', terms:'đầy vừa fit crop tỉ lệ', options:[['fit','Vừa'],['fill','Đầy'],['100','100%']] },
+    { id:'touch', title:'Cách chạm trên điện thoại', hint:'Chọn thao tác cuộn hoặc rê chuột.', group:'input', scope:'device', effect:'Ngay', terms:'mobile điện thoại scroll chuột ảo', options:[['scroll','Hai ngón cuộn'],['mouse','Chuột ảo']] },
+    { id:'cursor-mode', title:'Con trỏ từ xa', hint:'Cách hiển thị con trỏ trong màn hình.', group:'input', scope:'server', effect:'Phiên sau', terms:'cursor chuột vị trí', options:[['auto','Tự động'],['local','Cục bộ'],['video','Theo video']] },
+    { id:'keyboard', title:'Bàn phím', hint:'“Theo ý định” phù hợp hầu hết trường hợp.', group:'input', scope:'server', effect:'Phiên sau', terms:'gõ keyboard ime thô nhập', options:[['intent','Theo ý định'],['raw','Thô · dùng IME máy kia']] },
+    { id:'audio', title:'Âm thanh phiên', hint:'Chọn có hỏi trước khi phát âm thanh không.', group:'sound', scope:'server', effect:'Ngay', terms:'tiếng loa audio hỏi', options:[['ask','Hỏi mỗi phiên'],['on','Bật'],['off','Tắt']] },
+    { id:'volume', title:'Âm lượng nghe', hint:'Âm lượng phát trên thiết bị bạn đang dùng.', group:'sound', scope:'device', effect:'Ngay', terms:'tiếng nhỏ to loa volume', range:true },
+    { id:'hide-screen', title:'Ẩn khỏi màn hình thật', hint:'Ẩn cửa sổ đang điều khiển trên máy chủ.', group:'device', scope:'server', effect:'Phiên sau', terms:'ẩn hvnc vnc riêng tư màn hình', toggle:true },
+    { id:'hide-taskbar', title:'Ẩn cả taskbar', hint:'Chỉ áp dụng trong phiên điều khiển.', group:'device', scope:'server', effect:'Ngay', terms:'taskbar thanh công cụ ẩn', toggle:true },
+    { id:'language', title:'Ngôn ngữ', hint:'Ngôn ngữ giao diện.', group:'device', scope:'device', effect:'Ngay', terms:'language tiếng việt english', options:[['vi','Tiếng Việt'],['en','English · mock']] },
+    { id:'theme', title:'Giao diện', hint:'Chọn sáng, tối hoặc theo thiết bị.', group:'device', scope:'device', effect:'Ngay', terms:'theme dark sáng tối hệ thống', options:[['light','Sáng'],['dark','Tối'],['system','Theo hệ thống']] }
+  ];
+  const settingDefaults = Object.fromEntries(settingDefs.map(def => [def.id, def.range ? 70 : def.options ? def.options[0][0] : false]));
+  let settings = (() => { try { return { ...settingDefaults, ...JSON.parse(localStorage.getItem('lantern-mock-settings') || '{}') }; } catch { return { ...settingDefaults }; } })();
+  let settingsGroup = 'all';
   const labels = { desktop: 'Toàn bộ màn hình', browser: 'Trình duyệt', notes: 'Ghi chú' };
   let toastTimer;
 
@@ -106,22 +123,78 @@
   $('#settingsMini').addEventListener('click', () => openOverlay('#settingsOverlay'));
   $('#settingsClose').addEventListener('click', () => closeOverlay('#settingsOverlay'));
   $('#settingsDone').addEventListener('click', () => closeOverlay('#settingsOverlay'));
-  $('#qualitySelect').addEventListener('change', event => {
-    state.quality = event.target.value;
-    $('.quality-indicator').innerHTML = `<i></i> ${state.quality === 'sharp' ? 'Rõ nét' : state.quality === 'smooth' ? 'Mượt' : 'HD'}`;
-    toast(`Chất lượng: ${event.target.selectedOptions[0].text}.`);
+  function renderSettings() {
+    const query = $('#settingsSearch').value.trim().toLocaleLowerCase();
+    const rows = settingDefs.filter(def => (settingsGroup === 'all' || def.group === settingsGroup) && (!query || `${def.title} ${def.hint} ${def.terms}`.toLocaleLowerCase().includes(query)));
+    $('#settingsItems').innerHTML = rows.length ? rows.map(def => {
+      const value = settings[def.id];
+      let control;
+      if (def.range) control = `<div class="range-control"><input type="range" min="0" max="100" step="5" value="${value}" data-setting="${def.id}" aria-label="${def.title}"><b>${value}%</b></div>`;
+      else if (def.toggle) control = `<button class="toggle-setting ${value ? 'on' : ''}" data-setting="${def.id}" aria-pressed="${value}" aria-label="${def.title}"><i></i></button>`;
+      else control = `<select data-setting="${def.id}" aria-label="${def.title}">${def.options.map(([key,label]) => `<option value="${key}" ${key===value?'selected':''}>${label}</option>`).join('')}</select>`;
+      const valLabel = def.options && def.options.find(o => o[0] === value)?.[1];
+      const override = def.scope === 'device' ? '<button class="override-reset" data-reset="'+def.id+'" title="Bỏ tuỳ chỉnh riêng cho thiết bị này">Dùng chung</button>' : '';
+      return `<div class="setting-row" data-setting-row="${def.id}"><span class="setting-copy"><b>${def.title}</b><small>${def.hint}</small><em>${def.scope === 'device' ? 'Riêng thiết bị này' : 'Thiết lập máy chủ'} · ${def.effect === 'Ngay' ? 'áp dụng ngay' : 'áp dụng từ phiên sau'}</em></span><div class="setting-control">${control}${override}</div></div>`;
+    }).join('') : '<div class="settings-empty">Không tìm thấy cài đặt phù hợp. Thử “mờ”, “trễ” hoặc “tiếng”.</div>';
+    const total = settingsGroup === 'all' && !query ? '12' : `${rows.length}`;
+    $('[data-settings-group="all"] span').textContent = total;
+    $$('#settingsItems [data-setting]').forEach(control => {
+      const eventName = control.tagName === 'BUTTON' ? 'click' : control.type === 'range' ? 'change' : 'change';
+      control.addEventListener(eventName, event => {
+        if (control.tagName === 'BUTTON') event.preventDefault();
+        saveSetting(control.dataset.setting, control.tagName === 'BUTTON' ? !settings[control.dataset.setting] : control.type === 'range' ? Number(control.value) : control.value);
+      });
+    });
+    $$('#settingsItems [data-reset]').forEach(button => button.addEventListener('click', () => saveSetting(button.dataset.reset, settingDefaults[button.dataset.reset])));
+  }
+  function saveSetting(id, value) {
+    settings[id] = value;
+    try { localStorage.setItem('lantern-mock-settings', JSON.stringify(settings)); } catch {}
+    $('#settingsSaved').textContent = 'Đã lưu trên thiết bị này';
+    if (id === 'quality') {
+      $('.quality-indicator').innerHTML = `<i></i> ${value === 'sharp' ? 'Nét' : value === 'smooth' ? 'Mượt' : 'HD'}`;
+      state.quality = value;
+    }
+    if (id === 'volume') toast(`Âm lượng nghe: ${value}%.`);
+    if (id === 'audio') { state.audio = value !== 'off'; setToggle($('#audioToggle'), state.audio); }
+    if (id === 'cursor-mode') { state.cursor = value !== 'local'; $('#cursorPointer').classList.toggle('hidden', !state.connected || !state.cursor); }
+    if (id === 'hide-taskbar') $('.desktop-taskbar').classList.toggle('hidden', Boolean(value));
+    if (id === 'theme') document.body.dataset.theme = value;
+    if (id === 'display') $('#screenResolution').textContent = `${value === 'large-text' ? 'Chữ to' : value === 'comfortable' ? 'Vừa mắt' : value === 'sharp' ? 'Nét' : '1920 × 1080'} · demo`;
+    if (id === 'aspect') $('#mockDesktop').dataset.aspect = value;
+    if (id === 'touch') $('#mockDesktop').dataset.touch = value;
+    renderSettings();
+    if (settingDefs.find(def => def.id === id)?.effect === 'Phiên sau') toast('Đã lưu — áp dụng từ phiên sau.');
+  }
+  $('#settingsSearch').addEventListener('input', renderSettings);
+  $$('.settings-nav button').forEach(button => button.addEventListener('click', () => {
+    settingsGroup = button.dataset.settingsGroup;
+    $$('.settings-nav button').forEach(item => item.classList.toggle('selected', item === button));
+    renderSettings();
+  }));
+  $('#resetSettings').addEventListener('click', () => {
+    settings = { ...settingDefaults };
+    try { localStorage.removeItem('lantern-mock-settings'); } catch {}
+    state.audio = true; state.cursor = true;
+    setToggle($('#audioToggle'), true);
+    document.body.dataset.theme = 'light';
+    $('.desktop-taskbar').classList.remove('hidden');
+    $('#screenResolution').textContent = '1080p · 30 FPS (demo)';
+    $('#settingsSearch').value = ''; settingsGroup = 'all';
+    $$('.settings-nav button').forEach(item => item.classList.toggle('selected', item.dataset.settingsGroup === 'all'));
+    renderSettings();
+    toast('Đã khôi phục cài đặt mặc định.');
   });
-  $('#resolutionSelect').addEventListener('change', event => {
-    state.resolution = event.target.value;
-    const val = state.resolution === '720' ? '720p' : state.resolution === 'native' ? 'Theo cửa sổ' : '1080p';
-    $('#screenResolution').textContent = `${val} · 30 FPS (demo)`;
-    toast(`Kích thước xem: ${val}.`);
-  });
-  $('#cursorSetting').addEventListener('click', () => {
-    state.cursor = !state.cursor;
-    setToggle($('#cursorSetting'), state.cursor);
-    $('#cursorPointer').classList.toggle('hidden', !state.connected || !state.cursor);
-  });
+  renderSettings();
+  state.audio = settings.audio !== 'off';
+  setToggle($('#audioToggle'), state.audio);
+  state.cursor = settings['cursor-mode'] !== 'local';
+  $('.desktop-taskbar').classList.toggle('hidden', Boolean(settings['hide-taskbar']));
+  document.body.dataset.theme = settings.theme;
+  $('.quality-indicator').innerHTML = `<i></i> ${settings.quality === 'sharp' ? 'Nét' : settings.quality === 'smooth' ? 'Mượt' : 'HD'}`;
+  $('#screenResolution').textContent = `${settings.display === 'large-text' ? 'Chữ to' : settings.display === 'comfortable' ? 'Vừa mắt' : settings.display === 'sharp' ? 'Nét' : '1920 × 1080'} · demo`;
+  $('#mockDesktop').dataset.aspect = settings.aspect;
+  $('#mockDesktop').dataset.touch = settings.touch;
   $('#fullscreenBtn').addEventListener('click', async () => {
     try {
       if (!document.fullscreenElement) await $('#screenFrame').requestFullscreen();
@@ -143,6 +216,11 @@
     if (event.target === overlay) overlay.classList.add('hidden');
   }));
   document.addEventListener('keydown', event => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      if ($('#settingsOverlay').classList.contains('hidden')) openOverlay('#settingsOverlay');
+      $('#settingsSearch').focus();
+    }
     if (event.key === 'Escape') $$('.overlay').forEach(el => el.classList.add('hidden'));
   });
 })();
