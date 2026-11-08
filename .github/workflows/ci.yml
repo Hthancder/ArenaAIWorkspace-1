@@ -29,8 +29,17 @@ jobs:
         with:
           workspaces: spike
 
+      # §57.9: log của job này **không tải được** trong sandbox (blob storage bị
+      # chặn, xem §56.10), nên lỗi clippy được phát lại dưới dạng *annotation*
+      # — thứ đọc được qua api.github.com. Không đổi ngữ nghĩa: vẫn `-D warnings`.
       - name: clippy
-        run: cargo clippy --all-targets -- -D warnings
+        run: |
+          set +e
+          cargo clippy --all-targets --message-format=json -- -D warnings > /tmp/clippy.json
+          status=$?
+          set -e
+          jq -r 'select(.reason=="compiler-message") | .message | select(.level=="error") | "\(.spans[0].file_name // "?"):\(.spans[0].line_start // 0): \(.message)"' /tmp/clippy.json 2>/dev/null | sort -u | head -40 | while IFS= read -r line; do echo "::error::clippy: $line"; done
+          exit $status
 
       - name: test
         run: cargo test --all-targets
@@ -38,11 +47,29 @@ jobs:
       - name: web mock syntax
         run: node --check ../web/app.js
 
-      - name: mock backend integration
+      - name: mock backend integration (incl. T5 innerHTML guard)
         run: node --test ../mock-server/server.test.js
 
+      # §57: mỗi luật [CỨNG] của §41 phải xuất hiện trong log CI, không chỉ
+      # trong file test. Đọc bằng mắt được ngay trên trang run.
+      - name: security conformance summary
+        run: |
+          cargo test --test spec_conformance 2>&1 | grep -E "security_conformance::" | sed 's/^test security_conformance:://'
+
+      # §57.9 + §58.12: log job này **không tải được** trong sandbox, nên khi
+      # test app đỏ thì đẩy tên test + thông báo lỗi ra *annotation*. Đã có lần
+      # CI đỏ ở đây mà chỉ đọc được "exit code 101" — vô dụng.
       - name: standalone exe tests
-        run: cargo test --manifest-path ../app/Cargo.toml
+        run: |
+          set +e
+          cargo test --manifest-path ../app/Cargo.toml > /tmp/app-test.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/app-test.log
+          if [ $status -ne 0 ]; then
+            grep -E "^test .* FAILED|^---- .* stdout ----|panicked at|assertion|^failures:" /tmp/app-test.log | head -30 | while IFS= read -r line; do echo "::error::app test: $line"; done
+          fi
+          exit $status
 
       - name: standalone exe clippy
         run: cargo clippy --manifest-path ../app/Cargo.toml --all-targets -- -D warnings
@@ -87,6 +114,26 @@ jobs:
           name: rd-windows-x64
           path: spike/target/release/rd.exe
           if-no-files-found: error
+
+      # §58.15: KHÔNG còn GStreamer. Bản v3.31 mượn `d3d11screencapturesrc` +
+      # `jpegenc`, kéo theo installer 517 MB — sai với người dùng cá nhân. Bản
+      # v3.32 tự gọi DXGI Desktop Duplication qua COM và tự nén JPEG (~300 dòng
+      # Rust thuần). Artifact: exe ~2 MB, **không cài gì**.
+      #
+      # Bước này kiểm đúng thứ người dùng cần: exe tự chạy, tự báo capture được
+      # hay không, và **không** phụ thuộc file ngoài nào.
+      - name: verify the exe is self-contained
+        shell: pwsh
+        run: |
+          $exe = 'app/target/release/lantern-mock.exe'
+          $size = [math]::Round((Get-Item $exe).Length / 1MB, 2)
+          Write-Host "== lantern-mock.exe: $size MB (không kèm runtime nào)"
+          # Không được có thư mục gst/ bên cạnh — nếu có nghĩa là ta lại quay
+          # về hướng "tải 517 MB", thứ vừa bị bỏ.
+          if (Test-Path 'app/target/release/gst') { Write-Output "::error::Còn thư mục gst/ — artifact lại phình to"; exit 1 }
+          & $exe --check
+          if ($LASTEXITCODE -ne 0) { Write-Output "::error::--check thất bại"; exit 1 }
+          Write-Host "== exe tự kiểm xong (capture + JPEG nằm trong binary)"
 
       - uses: actions/upload-artifact@v4
         with:

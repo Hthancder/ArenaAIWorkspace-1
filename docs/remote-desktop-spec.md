@@ -1,7 +1,7 @@
-# SPEC v3.15 — Remote Desktop qua trình duyệt **cho dùng cá nhân**: HVNC + VNC, window picker, âm thanh server-side, trải nghiệm điều khiển đầy đủ
+# SPEC v3.32 — Remote Desktop qua trình duyệt **cho dùng cá nhân**: HVNC + VNC, window picker, âm thanh server-side, trải nghiệm điều khiển đầy đủ
 
-- Phiên bản: **v3.27 — §56.10 GitHub Actions đã xanh sau khi user cập nhật billing: clippy + test + Windows build + smoke-run** · trước đó: **v3.26 — §56.9 tìm ra nguyên nhân thật của `startup_failure`: account bị khoá vì billing, không phải file CI** · trước đó: v3.25 — §56.7 compile thật: 16/16 test xanh, bắt được 3 lỗi · §56.8 GitHub Actions của repo này đang tắt (không phải lỗi file)** · trước đó: v3.24 — §56 code + GitHub Actions · trước đó: **v3.23 — §54 nới lỏng (bỏ luật cứng không cần), §55 camera + micro máy chủ** · trước đó: **v3.22 — §53 host là laptop Dell 7467: QSV trước NVENC, nắp/pin/nhiệt/Wi-Fi 1x1** · trước đó: **v3.21 — §52 máy hybrid iGPU+1050: topology quyết định, DDAPI fail trên GPU rời** · trước đó: **v3.20 — §51.10–14: VRAM 4 GB, trần 1440p, sửa lỗi AdapterRAM** · trước đó: **v3.19 — thêm §51 hồ sơ GTX 1050, bẫy adapter, P0 cụ thể** · trước đó: **v3.18 — thêm §48 mô hình tuỳ chỉnh, §49 chống vỡ UI, §50 tính năng còn thiếu** · trước đó: **v3.17 — thêm §47 khởi động cùng Windows + vòng đời process + trải nghiệm theo thời gian** · trước đó: **v3.16 — thêm §46 "máy có ở đó không" (ngủ/reboot/đổi IP/khoá màn hình)**, lĩnh vực G còn trống · trước đó: **v3.15** — phạm vi thu hẹp về 1–2 người dùng (§0.3). Bản v3.14 là bản "sản phẩm": có cert, EULA, RBAC, accessibility, đóng gói ký số. Tất cả những thứ đó **đã cắt** ở đây — xem §0.3.1 để biết cắt gì và cắt có an toàn không. Lịch sử đầy đủ v1.0→v3.14 ở §0.
-- Trạng thái: **Đề xuất — CHƯA implement đầy đủ, chờ duyệt.** Sau v3.15, spec **không còn chương nào cần viết**; việc tiếp theo là **P0 (đo thật)**, không phải viết thêm.
+- Phiên bản: **v3.32 — §58.14–§58.17 bỏ GStreamer 517 MB: tự viết JPEG encoder + gọi DXGI qua COM, exe còn ~2 MB, không cài gì** · trước đó: **v3.30 — §58.6–§58.13 năm lỗi chỉ hiện khi chạy thật (kill sai, FIN≠RST, đọc stderr treo, docs hứa mà code không làm, flaky CI) + 5 test HTTP thật** · trước đó: **v3.29 — §58 đường dùng được ngay hôm nay: xem màn hình thật bằng MJPEG trong trình duyệt (0 dependency, 0 dòng JS ở client)** · trước đó: **v3.28 — §57 tầng bảo mật thành code có test: `security.rs` 7 module, 100 test, 10/14 kiểm chứng §41.10 tự động, 1 XSS thật được sửa** · trước đó: **v3.27 — §56.10 GitHub Actions đã xanh sau khi user cập nhật billing: clippy + test + Windows build + smoke-run** · trước đó: **v3.26 — §56.9 tìm ra nguyên nhân thật của `startup_failure`: account bị khoá vì billing, không phải file CI** · trước đó: v3.25 — §56.7 compile thật: 16/16 test xanh, bắt được 3 lỗi · §56.8 GitHub Actions của repo này đang tắt (không phải lỗi file)** · trước đó: v3.24 — §56 code + GitHub Actions · trước đó: **v3.23 — §54 nới lỏng (bỏ luật cứng không cần), §55 camera + micro máy chủ** · trước đó: **v3.22 — §53 host là laptop Dell 7467: QSV trước NVENC, nắp/pin/nhiệt/Wi-Fi 1x1** · trước đó: **v3.21 — §52 máy hybrid iGPU+1050: topology quyết định, DDAPI fail trên GPU rời** · trước đó: **v3.20 — §51.10–14: VRAM 4 GB, trần 1440p, sửa lỗi AdapterRAM** · trước đó: **v3.19 — thêm §51 hồ sơ GTX 1050, bẫy adapter, P0 cụ thể** · trước đó: **v3.18 — thêm §48 mô hình tuỳ chỉnh, §49 chống vỡ UI, §50 tính năng còn thiếu** · trước đó: **v3.17 — thêm §47 khởi động cùng Windows + vòng đời process + trải nghiệm theo thời gian** · trước đó: **v3.16 — thêm §46 "máy có ở đó không" (ngủ/reboot/đổi IP/khoá màn hình)**, lĩnh vực G còn trống · trước đó: **v3.15** — phạm vi thu hẹp về 1–2 người dùng (§0.3). Bản v3.14 là bản "sản phẩm": có cert, EULA, RBAC, accessibility, đóng gói ký số. Tất cả những thứ đó **đã cắt** ở đây — xem §0.3.1 để biết cắt gì và cắt có an toàn không. Lịch sử đầy đủ v1.0→v3.14 ở §0.
+- Trạng thái: **Đề xuất — phần [CỨNG] đã thành code có test (§57), phần còn lại chờ P0.** Sau v3.15 spec **không còn chương lý thuyết nào cần viết**; từ v3.28 việc viết mới là **code + test cho từng chương**, và việc còn lại của bạn là **P0 (đo thật)** trên laptop.
 - Nền tảng: Server **Windows 10 2004+ / Windows 11** · Client **trình duyệt** (không app)
 
 ---
@@ -4362,15 +4362,15 @@ Sau khi đổi routing, **không tin** kết quả trả về. Kiểm chứng b�
 ### 41.6 Token & phiên — chi tiết (thay cho 3 dòng ở §10)
 | Hạng mục | Thiết kế | Vì sao |
 |---|---|---|
-| Access token | JWT RS256, **15 phút**, chứa `sub`, `role`, `sid_scope`, `jti` | ngắn để giảm giá trị đánh cắp |
-| Refresh token | **opaque** (không phải JWT), lưu **hash** (SHA-256) trong DB, **rotate mỗi lần dùng** | rotate phát hiện trộm |
+| Access token | JWT **HS256**, **15 phút**, chứa `sub`, `role`, `sid_scope`, `jti`, `iss`, `aud` — *(v3.28: RS256 → HS256, lý do §57.4 D-1)* | ngắn để giảm giá trị đánh cắp |
+| Refresh token | **opaque** `rt.<id>.<secret>`, lưu **hash** SHA-256 trong DB, **rotate mỗi lần dùng**, TTL **7 ngày** (§9.11 — con số 30 ngày không tồn tại) | rotate phát hiện trộm |
 | Reuse detection | dùng refresh cũ ⇒ **revoke toàn bộ chuỗi** + audit + buộc đăng nhập lại | chuẩn công nghiệp |
 | Nơi lưu | `HttpOnly; Secure; SameSite=Strict; Path=/api` | JS không đọc được ⇒ XSS không lấy token |
 | Access token ở client | trong **memory** (không localStorage) | localStorage bị extension/JS đọc |
 | Binding | refresh gắn `device_id` (random, trong cookie riêng) + UA hash; lệch ⇒ cảnh báo, không chặn | giảm giá trị token bị đánh cắp, không phá UX |
 | Revoke | logout → revoke chain; "đăng xuất mọi nơi"; **đổi mật khẩu ⇒ revoke tất cả** | |
 | Clock | skew ±60 s; `jti` chống replay trong 15 phút | |
-| Password | argon2id (m=64 MB, t=3, p=1), min 12 ký tự, không cấm ký tự đặc biệt, **kiểm tra danh sách phổ biến** offline | |
+| Password | **PBKDF2-HMAC-SHA256 210 000 vòng** *(v3.28: argon2id → PBKDF2, lý do §57.4 D-2)*, salt 16 byte, min 12 ký tự, không cấm ký tự đặc biệt, **kiểm tra danh sách phổ biến** offline | |
 | Lockout | 5 lần / 15 phút / (IP+user); đếm cả **user không tồn tại** để không lộ user | |
 | Timing | so sánh hash **hằng thời gian**; trả lỗi giống nhau cho user sai/không tồn tại | |
 
@@ -6411,11 +6411,12 @@ Camera và micro là thứ khác bản chất với việc xem màn hình. Ba lu
 ### 56.6 Việc tiếp theo tôi đề nghị (chọn 1)
 | # | Việc | Giá trị |
 |---|---|---|
-| **A** | **`security.rs`** — token/session/rate-limit theo §41, có test (không cần GPU) | phần **[CỨNG]** nhiều nhất, và test được 100% |
-| **B** | **`config.rs`** — schema + migrate + 12 mục T1 của §48, có test round-trip | chặn được lỗi "config hỏng" (§47.4c) |
+| **A** | **`security.rs`** — token/session/rate-limit theo §41, có test (không cần GPU) | phần **[CỨNG]** nhiều nhất, và test được 100% — ✅ **đã xong ở v3.28, xem §57** |
+| **B** | **`config.rs`** — schema + migrate + 12 mục T1 của §48, có test round-trip | chặn được lỗi "config hỏng" (§47.4c) — **đề nghị tiếp theo** |
 | **C** | **`signaling.rs`** — SDP/ICE state machine + `intent_id`/`rev` của §32 | phần dễ sinh bug race nhất |
 | **D** | **Client shell** — `index.html` + JS thuần: window picker + video + 2 thanh tự ẩn (§29), chạy được với `--demo` | nhìn thấy được, không cần GPU |
 > Tôi khuyên **A** trước: nó là **[CỨNG]**, test được hoàn toàn ngoài môi trường thật, và sai ở đó là hậu quả nặng nhất. **D** sau, vì nó cho bạn thứ để *nhìn*.
+> **Cập nhật v3.28:** A đã xong (§57). Thứ tự mới là **B → C → D**.
 
 ### 56.7 Chạy thật trong sandbox — và nó bắt được 3 lỗi
 
@@ -6506,3 +6507,479 @@ Run `42451848287` chạy trên commit `8047ed27adec07bea73fa23decb8026bd07e4d4b`
 
 **Kết luận cập nhật:** billing đã được xử lý đủ để Actions cấp runner. Bằng chứng compile thật hiện có: CI chạy `clippy -D warnings` + test trên Ubuntu và build + smoke-run `rd.exe` trên Windows thành công. Không cần thay đổi workflow. Còn cảnh báo không chặn build: action `checkout@v4` nhắm Node.js 20 nhưng runner ép Node.js 24; `ubuntu-latest` sẽ chuyển sang Ubuntu 26.
 
+
+### 56.11 Ngoài lề: `[CỨNG]` đang **23/20** — ngân sách §54.6 đã bị vượt 3
+
+> §54.6 đặt luật: "CI đếm `[CỨNG]` **≤ 20** trên toàn spec". Đếm bằng `grep -o '\[CỨNG\]'` (2026-11-08): **23** — tức là **đã vượt 3** so với ngân sách. (§54.1 đếm 78 "luật cứng" theo *bảng*, không theo *nhãn*; con số 23 là con số §54.6 thực sự định nghĩa.)
+>
+> **Đây là vi phạm, không phải con số đẹp.** 3 chỗ phải hạ nhãn — đề nghị cụ thể, chưa làm vì cần bạn chọn: (a) "banner phải đúng 1 cái" (§49) → `[MỀM]`, vì 2 banner chồng là xấu chứ không mất dữ liệu; (b) "T1 đúng 12 mục" (§48.1) → `[MỀM]`, vì 13 mục không làm hỏng gì; (c) "không lưu tiêu đề cửa sổ" → **giữ `[CỨNG]`** (đây là quyền riêng tư, đúng loại), nên chỗ thứ ba phải là "restore đúng thứ tự §47.4" → tách làm 2 luật con thay vì 1 luật chung.
+>
+> Sau khi hạ 3 nhãn: **20/20**, không còn slot trống — nghĩa là từ đây mỗi `[CỨNG]` mới **phải** đổi lấy một cái cũ. Đó là ý của ngân sách, và cũng là lý do §57 **không** thêm luật cứng nào (§57 dùng hết 0 slot: cả 7 file đều hiện thực luật đã có nhãn từ §41/§54.5).
+>
+> §57 dùng hết **0** slot mới: cả 7 file `security/` đều là hiện thực của luật **đã** được đánh dấu `[CỨNG]` từ §41 và §54.5. Một chương mới không tự động đẻ ra luật cứng mới — đó là điểm của ngân sách.
+
+
+### 57.9 CI bắt 3 lint mà sandbox không thể bắt — và cách đọc chúng
+
+> Sandbox không có `clippy` (toolchain npm chỉ có rustc + cargo), nên `check.sh` **không thể** thay CI ở bước này. Lần push đầu tiên của §57 đỏ đúng ở `clippy`. Log job **không tải được** (blob storage trả EOF — đúng như §56.10 đã ghi), nên đã đổi bước CI để lỗi hiện thành **annotation**:
+
+```yaml
+- name: clippy
+  run: |
+    set +e
+    cargo clippy --all-targets --message-format=json -- -D warnings > /tmp/clippy.json
+    status=$?
+    set -e
+    jq -r 'select(.reason=="compiler-message") | .message
+           | select(.level=="error")
+           | "\(.spans[0].file_name):\(.spans[0].line_start): \(.message)"' /tmp/clippy.json \
+      | sort -u | head -40 | while IFS= read -r line; do echo "::error::clippy: $line"; done
+    exit $status
+```
+
+Ba lint thật, sửa trong một commit:
+
+| Lint | Chỗ | Sửa |
+|---|---|---|
+| `chunks_exact` với chunk size hằng (clippy khuyên `as_chunks`) | `crypto.rs` nén SHA-256 | vòng `while` theo chỉ số — **không** phụ thuộc phiên bản toolchain, và ở đây còn ngắn hơn |
+| doc comment treo lơ lửng trước `impl` | `window.rs` | chuyển vào doc của `enum WindowError` (nơi nó thực sự nói về điều gì) |
+| `drain(..).collect()` | `input.rs` `release_all` | `std::mem::take` — **cùng một hành vi**, không cấp phát thêm |
+
+> **Bài học, lần thứ ba trong repo này (§56.7, §56.9, §57.9):** thứ duy nhất tìm ra lỗi là **chạy cái gì đó**. Và khi log không đọc được, **đổi cách phát lỗi** (annotation) rẻ hơn nhiều so với đoán.
+>
+> Từ giờ bước `clippy` trong CI **không bao giờ** im lặng: mỗi lỗi là một annotation có `file:line`, đọc được bằng `gh api .../check-runs/<job>/annotations` — kể cả khi ZIP log bị chặn.
+
+
+---
+
+## 57. Tầng bảo mật **thành code có test** — `security.rs` (nhánh #38)
+
+> §41 là chương **đúng nhất** của spec này: nó lật giả định nền (client không đáng tin), nó đẻ ra 5 quyết định kiến trúc, và nó có 14 kiểm chứng. Nhưng đến v3.27, cả 14 kiểm chứng đó **vẫn là chữ**. Chương này là lần đầu tiên chúng chạy.
+>
+> Kết quả ngắn: **100 test** (74 unit + 26 conformance), 0 dependency thêm, 10/14 kiểm chứng §41.10 tự động, và **4 chỗ spec tự mâu thuẫn được sửa** — trong đó 3 chỗ chỉ lộ ra khi phải viết code, không phải khi đọc lại.
+
+### 57.1 Có gì trong `spike/src/security/` (7 file, 0 dependency)
+
+| File | Luật **[CỨNG]** mà nó giữ | Spec | Test |
+|---|---|---|---|
+| `crypto.rs` | SHA-256 · HMAC-SHA256 · so sánh **hằng thời gian** · entropy | §41.6 | 5 |
+| `auth.rs` | lockout 5/15′ · user lạ tốn **đúng một** KDF · policy mật khẩu 12 ký tự | §41.6, §5.8 | 11 |
+| `token.rs` | access 15′ · refresh 7 ngày rotate · **reuse ⇒ chết cả chuỗi** · revoke-all chết **ngay** · `alg:none` bị từ chối | §41.6, §32.3 | 19 |
+| `gate.rs` | **không TLS thì không bind ra LAN** · `X-Frame-Options: DENY` · không nhận token trong URL · mutation cần custom header · `/windows` 30/phút | §41.5 D4, §54.5 #1–2, T6, T18 | 12 |
+| `window.rs` | client **không bao giờ** gửi `hwnd`; `wid` phải nằm trong snapshot agent vừa trả, TTL **3 s** | §41.4 **T1**, §41.5 **D1** | 6 |
+| `input.rs` | clamp `u16` · chặn `Win+L` + SAS · `release_all` idempotent + **nhảy hàng** · watchdog **3 s** | §44.2, §44.8, §6.5.4 | 12 |
+| `refresh.rs` | dọn tài nguyên **sau 5 s** (F5 không phá display) · display ảo **không** bị dọn | §42.13, §9.2.2 | 6 |
+
+> **Vì sao 7 file chứ không 1:** mỗi file là **một** ranh giới lỗi. `window.rs` sai thì lộ cửa sổ; `input.rs` sai thì kẹt phím; `gate.rs` sai thì mất cả máy. Gộp lại thì một test đỏ không cho biết đang mất cái nào.
+
+### 57.2 Bốn thứ chỉ lộ ra khi **chạy**, không lộ khi **đọc**
+
+| # | Phát hiện | Nếu không viết test thì hậu quả |
+|---|---|---|
+| 1 | **Thứ tự kiểm `alg` ↔ chữ ký sai**: token `alg:none` + chữ ký rỗng trả `Malformed` thay vì `WrongAlg` | log bảo "token hỏng" trong khi thực tế là **một cuộc tấn công downgrade**. Vẫn bị chặn, nhưng **không nhìn thấy**. Đổi 2 dòng để mã lỗi nói đúng sự thật |
+| 2 | `Session`/`Rotated` có `#[derive(Debug)]` ⇒ `{:?}` in **nguyên access + refresh token** | §41.10 #12 ("grep log ⇒ 0 token") **đỏ ngay** ở dòng log đầu tiên. Đã thay bằng `Debug` viết tay in `<redacted N chars>`, kèm test |
+| 3 | `RevokedReason` không `Copy` ⇒ chỗ đọc `family.revoked` **move** ra khỏi reference | nếu chỉ sửa cho compile được bằng `.clone()`, mỗi lần kiểm token là một cấp phát — và kiểm token chạy **mỗi request**. Sửa bằng `Copy` |
+| 4 | `Lockout` không có `Default`, `RateLimiter` không `Clone` | test đầu tiên không viết được ⇒ dấu hiệu API **không dùng được** ở chỗ khác. Thêm `Default`/`Clone` là sửa API, không phải sửa test |
+
+> **Bài học lặp lại của §56.7:** cả 4 lỗi đều thuộc loại *"đọc thì thấy đúng"*. Assertion **rẻ hơn tranh luận**, và rẻ hơn review.
+
+### 57.3 Mười kiểm chứng §41.10 giờ là test
+
+| # | §41.10 nói | Test thật | File |
+|---|---|---|---|
+| 1 | `wid` lạ ⇒ 403 | `c1_wid_outside_the_returned_list_is_403` | conformance |
+| 2 | `sid` người khác ⇒ 403 | `c2_someone_elses_sid_is_refused_on_every_route` | conformance |
+| 3 | XSS qua tên cửa sổ | `the UI never injects server data through innerHTML` (+ **sửa một XSS thật**, §57.5) | `server.test.js` |
+| 4 | CSRF thiếu custom header ⇒ 403 | `c4_post_without_the_custom_header_is_refused` | conformance |
+| 5 | Clickjacking bị chặn | `c5_clickjacking_headers_are_present` + `responses_carry_clickjacking_headers` | conformance + app |
+| 6 | Refresh reuse ⇒ revoke chuỗi | `c6_refresh_reuse_revokes_the_whole_chain` | conformance |
+| 7 | Media chỉ TLS/DTLS | **không test được ở đây** — cần Wireshark + pipeline thật (§56.4) | — |
+| 8 | Cert sai ⇒ hard fail | một nửa: `c8_tls_cannot_be_switched_off…` (không có đường tắt TLS). Phần "cert sai" thuộc OS/browser | conformance |
+| 9 | `/windows` 100 req/s ⇒ 429 | `c9_windows_metadata_is_rate_limited_to_thirty_per_minute` (**30/phút** theo T18, xem §57.6 #2) | conformance |
+| 10 | Fuzz REST/WSS/DC không panic | `garbage_never_panics` + `garbage_refresh_tokens_are_unknown_not_a_crash` (10 dạng input hỏng). **Chưa phải 1 triệu input** — đó vẫn là việc của P1 | token |
+| 11 | Toạ độ ±2³¹ ⇒ clamp | `c11_coordinates_cannot_leave_the_screen_and_win_lock_is_blocked` — mạnh hơn clamp: toạ độ là `u16` ở **kiểu dữ liệu** | conformance |
+| 12 | Log redaction | `c12_nothing_in_a_debug_rendering_leaks_a_token` + `debug_output_never_contains_a_token` | conformance + token |
+| 13 | `config.json` hỏng ⇒ mặc định | **chưa** — thuộc `config.rs` (§56.6 **B**) | — |
+| 14 | Bị Defender gắn cờ | **không test được** ngoài máy thật | — |
+
+> **10/14 → 4 còn hở, và cả 4 đều đúng loại "chỉ máy thật trả lời được"** (#7 Wireshark, #13 `config.rs` chưa viết, #8/#14 thuộc OS). Không có kiểm chứng nào bị bỏ vì *khó viết test*.
+
+### 57.4 Bốn chỗ code **cố ý** khác spec (và điều kiện quay lại)
+
+> Đây là `security::DEVIATIONS` — danh sách này nằm **trong code** để không ai phải đoán, và `rd --demo` in nó ra mỗi lần chạy.
+
+| # | Spec ghi | Code làm | Vì sao | Quay lại khi |
+|---|---|---|---|---|
+| **D-1** | JWT **RS256** | **HS256**, khoá ≥ 32 byte | RS256 cần crate RSA/ring ⇒ 2–6 dependency, đúng thứ §56.1 cắt. Cả hai đầu token đều ở **cùng một máy của bạn** ⇒ khoá đối xứng không mất tính chất nào | có client thứ ba không được giữ khoá ký |
+| **D-2** | **argon2id** (m=64 MB, t=3, p=1) | **PBKDF2-HMAC-SHA256**, 210 000 vòng | argon2 cần crate + build C. PBKDF2 210k ≈ 100–200 ms trên i5-7300HQ — đủ chậm cho 1 người dùng, đúng NIST SP 800-132 | hash bị lộ (P7) hoặc có user thứ hai — record **đã lưu** `iterations` + `salt` nên migrate được tại chỗ |
+| **D-3** | refresh **7 ngày** (vài chỗ ghi 30) | 7 ngày, **một** hằng số | hai con số trong spec là lỗi chép; 7 khớp §9.11 `refresh_days: 7` | — (đã sửa spec, không sửa code) |
+| **D-4** | threat model giả định nhiều user/role | 1 user `owner`; **mọi** kiểm tra `sid.owner == sub` vẫn đầy đủ | §0.3.1 #4 cắt multi-user, nhưng phần kiểm quyền là thứ khiến "1 mật khẩu" vẫn an toàn khi **bất kỳ ai trong LAN** mở được URL (§41.3) | có user thứ hai — `role` đã có sẵn trong claims, không phải đổi schema |
+
+> **Ranh giới của "0 dependency":** tự viết SHA-256/HMAC là **đúng** ở đây vì chúng là primitive có vector chuẩn (FIPS 180-4, RFC 4231, RFC 6070) và test đối chiếu vector — sai là đỏ ngay. Nếu ngày nào cần TLS, chữ ký số, hay constant-time crypto thật thì **phải** dùng crate đã kiểm định; dòng này để không ai tự viết tiếp.
+
+### 57.5 Một **XSS thật** tìm thấy trong mock khi áp T5
+
+> Test #3 của §41.10 bắt được lỗi trong **chính repo này**, không phải lỗi giả định.
+
+| Trước | Sau |
+|---|---|
+| `$('#diagnosticsList').innerHTML = checks.map(item => \`…${item.title}…${item.output}…\`)` | `renderDiagnostics(checks)` — `createElement` + `textContent`, không một chuỗi HTML nào |
+| Output là `Get-PnpDevice`, `Get-CimInstance`, `nvidia-smi`, **tên Wi-Fi**, tên app từ máy thật | như trên, nhưng đi qua `textContent` ⇒ `<img onerror=…>` trong tên thiết bị chỉ là **chữ** |
+
+**Vì sao nó nguy hiểm hơn vẻ ngoài:** trang này là origin sẽ giữ **cookie refresh `HttpOnly`** (§41.6). XSS trong origin đó không đọc được cookie, nhưng nó **gọi API bằng cookie của bạn** — tức là tạo phiên, xem màn hình, điều khiển chuột. Đúng chuỗi T5 → A2.
+
+**Test chặn tái phát** (`mock-server/server.test.js`): markup tĩnh thì `innerHTML` được phép; **mọi** object đến từ server (`item`, `check`, `result`, `report`, `device`, `session`, `window`) thì không bao giờ được nội suy. Grep 1 dòng, chạy 0.2 s.
+
+Cùng lượt đó: **cả hai mock server** (Node và `lantern-mock.exe`) trước đây **không có** `X-Frame-Options`/CSP. Đã thêm, kèm test đọc header thật từ response — vì một mock thiếu header sẽ dạy sai người đọc, và sản phẩm thật bám theo mock.
+
+### 57.6 Hai chỗ spec **tự mâu thuẫn** (đã sửa nhờ viết code)
+
+| # | Mâu thuẫn | Sửa |
+|---|---|---|
+| 1 | §5.8 ghi "login **5/phút/IP**"; §41.6 ghi "**5 lần / 15 phút / (IP+user)**" | **Không mâu thuẫn** — hai **phạm vi** khác nhau: luật IP chặn dò **nhanh** (spray nhiều username), luật (IP+user) chặn dò **chậm**. Code giữ **cả hai**; §57.1 ghi rõ thay vì để người đọc tự đoán cái nào thắng |
+| 2 | §41.10 #9 ghi "100 req/s `/windows` ⇒ 429"; §41.4 **T18** ghi "**30/phút**" | Đây là **hai đại lượng khác nhau**: 100/s là **tần suất tức thời** phải chịu được (burst), 30/phút là **ngân sách** của endpoint metadata. Code hiện thực **30/phút** (con số chặt hơn, và là con số có lý do: T18 nói về giám sát ngầm). 100/s phải được hiểu là "server không sập dưới burst", thuộc test tải P1 |
+| 3 | §41.6 "refresh 7 ngày" vs. các chỗ ghi 30 ngày | 7 ngày — xem D-3 |
+| 4 | §57.1 `input.rs` cần `block_win_l` từ config, nhưng §48 chưa có `config.rs` | Tham số **truyền vào hàm**, không đọc global. Khi `config.rs` (§56.6 **B**) ra đời thì nó chỉ việc truyền giá trị |
+
+### 57.7 Trạng thái test (2026-11-08, sandbox)
+
+| Bộ | Số test | Kết quả |
+|---|---|---|
+| `spike` unit + doc (`cargo test`) | **74** | xanh |
+| `spike` conformance (`tests/spec_conformance.rs`) | **26** (16 cũ + 10 §41.10) | xanh |
+| `lantern-mock.exe` (`app/`) | **8** | xanh |
+| mock backend (`npm test`) | **2** | xanh |
+| `cargo build` với `RUSTFLAGS=-D warnings` | — | **sạch** |
+| `cargo clippy -D warnings` | — | **xanh trên CI** (run `42464776111`) — sandbox không có clippy, và CI đã bắt **3 lint thật** (§57.9) |
+| `./spike/check.sh` | — | **all green**, ~1.5 s |
+| CI đầy đủ | 2 job | run `42464776111`: `test (ubuntu)` **success** · `build rd.exe (windows)` **success**; artifact `rd-windows-x64` 87 461 B, `lantern-mock-windows-x64` 208 878 B |
+
+> **Điều test này KHÔNG chứng minh:** nó không chứng minh app an toàn. Nó chứng minh **14 luật [CỨNG] đã được viết ra và không ai xoá được mà không thấy test đỏ**. Phần còn lại — TLS thật, cert, DTLS-SRTP, driver — vẫn phải làm và vẫn có thể sai.
+
+### 57.8 Việc tiếp theo (cập nhật §56.6)
+
+| # | Việc | Trạng thái |
+|---|---|---|
+| **A** | `security.rs` | ✅ **xong ở v3.28** (§57) |
+| **B** | `config.rs` — schema + migrate + 12 mục T1 của §48 + round-trip test | **đề nghị tiếp theo**: giờ là chỗ duy nhất còn `unwrap` tiềm ẩn khi khởi động, và nó mở đường cho §41.10 #13 |
+| **C** | `signaling.rs` — SDP/ICE state machine + `intent_id`/`rev` §32 | sau B |
+| **D** | Client shell thật (không mock) — window picker + video + 2 thanh tự ẩn §29 | sau C |
+
+> Tôi vẫn giữ thứ tự **B → C → D**. Lý do đổi so với §56.6: **A xong**; và `config.rs` giờ là thứ chặn nhiều việc nhất — không có nó thì mọi module sau phải nhận 30 tham số bằng tay, và đó là cách một spec 7 000 dòng biến thành một hàm 40 đối số.
+
+---
+
+## 58. Cái **dùng được ngay hôm nay**: MJPEG trong trình duyệt (nhánh #39)
+
+> Câu bạn nói: *"mình muốn dùng thật trên máy, hóng quá"*. Đây là câu trả lời đúng nhất tôi có thể đưa ra **hôm nay**, không phải sau khi làm xong WebRTC.
+>
+> Nguyên tắc: **đi đường ngắn nhất tới "nhìn thấy máy thật trên máy thật"**, rồi mới nói rõ nó thiếu gì. Không hứa, không để bạn chờ một tính năng lớn rồi mới được nhìn thấy gì.
+
+### 58.1 Vì sao MJPEG, không phải WebRTC trước
+
+| | MJPEG (đã có ở v3.29) | WebRTC (chưa) |
+|---|---|---|
+| Dòng JS ở client | **0** (`<img src>` tự chạy) | ~600 (peer connection, SDP, ICE, DC) |
+| Dependency mới | **0** | `webrtcbin` + DTLS + ICE stack |
+| Dùng đúng đường capture của spec | ✅ cùng `d3d11screencapturesrc capture-api=dxgi` (§52.4) | ✅ |
+| Kiểm được **ngay** trên laptop | ✅ | cần P0 xong trước |
+| Độ trễ | ~150–300 ms | mục tiêu ≤ 80 ms LAN |
+| Âm thanh | ❌ | ✅ |
+| Điều khiển | ❌ | ✅ |
+
+> **Điểm quan trọng:** MJPEG và WebRTC **dùng chung một chặng capture**. Nếu MJPEG hiện được hình thì `d3d11screencapturesrc` + adapter đúng đã chạy — tức là **một nửa P0 đã xong**, và phần còn lại chỉ là đổi chặng vận chuyển. Nếu MJPEG **không** hiện hình, làm WebRTC bây giờ cũng sẽ không hiện — sẽ khó tìm lỗi hơn nhiều.
+
+### 58.2 Cấu hình cụ thể (và vì sao từng số)
+
+```
+d3d11screencapturesrc monitor-index=N capture-api=dxgi
+  ! video/x-raw,framerate=15/1          ← chặn TRƯỚC d3d11download (bớt 50% frame đọc)
+  ! d3d11download ! videoconvert        ← khỏi D3D11 memory, sang CPU
+  ! video/x-raw,format=I420,width=1280,height=720
+  ! jpegenc quality=70                  ← 70 = điểm "chữ còn đọc được"
+  ! multipartmux boundary=lanternframe
+  ! fdsink fd=1                         ← ra stdout; exe bơm vào socket
+```
+
+| Lựa chọn | Vì sao | Nếu làm khác |
+|---|---|---|
+| `framerate` đặt **trước** `d3d11download` | bỏ frame ở GPU, rẻ hơn nhiều | đặt sau ⇒ GPU vẫn đọc 60 fps rồi CPU mới bỏ — đúng lỗi tốn nhiệt §53.3 |
+| 1280×720, không 1080p | JPEG 1080p15 tốn ~3× CPU mà nhìn không khác | 1080p ⇒ quạt chạy, hình vẫn thế |
+| `jpegenc quality=70` | dưới 60 chữ nhoè, trên 80 tốn CPU vô ích | 90 ⇒ +40% CPU, không thấy khác |
+| `capture-api=dxgi` | cùng đường §52.4, chọn được adapter trên máy hybrid | WGC không chọn được adapter (§52.4) |
+| `fdsink fd=1` | không file tạm, không pipe shell, dừng là dừng | ghi file rồi đọc ⇒ trễ + đầy đĩa |
+| Không `nvh264enc` | giữ dGPU ngủ (§53.2) | NVENC ⇒ dGPU thức, nóng, pin |
+
+### 58.3 Ba thứ **phải** đúng, nếu không sẽ là lỗi im lặng
+
+| # | Thứ | Nếu sai |
+|---|---|---|
+| 1 | `boundary` trong `Content-Type` **giống tuyệt đối** boundary trong pipeline | trình duyệt nhận byte, không vẽ gì, **không báo lỗi**. Test `the_content_type_boundary_matches_the_pipeline_exactly` giữ chỗ này |
+| 2 | Header gửi **sau** frame đầu tiên | pipeline chết ngay ⇒ client treo vô hạn ở trạng thái "đang tải". Code chờ ≤ 64 KB đầu rồi mới trả 200; lỗi ⇒ `503` + stderr của GStreamer |
+| 3 | Đóng tab ⇒ **kill** `gst-launch-1.0` | capture chạy mồ côi: nóng máy, tắt app vẫn còn tiến trình. **Luật này khó hơn vẻ ngoài của nó — xem §58.7–§58.9; bản đầu viết sai và đã để lại tiến trình mồ côi thật** |
+
+> Cả ba đều là loại *"không thấy bằng mắt khi đúng, rất khó thấy tại sao khi sai"*. (1) và (2) có test từ đầu; (3) phải chạy thật bằng socket mới lộ ra **ba** lỗi riêng biệt — đó là toàn bộ nội dung §58.7–§58.9.
+
+### 58.4 Trung thực về **cái không có**
+
+Bản này **chỉ có hình**. Không tiếng, không điều khiển, không WebRTC, không đăng nhập, chỉ loopback (chưa TLS trong binary ⇒ §54.5 #1 cấm bind LAN). Chi tiết + cách xử lý từng cái: [`docs/run-on-windows.md`](run-on-windows.md).
+
+**Vì sao vẫn đáng làm ngay:** nó trả lời đúng một câu hỏi mà mọi thứ khác phụ thuộc vào — *"máy này có capture được màn hình và gửi tới trình duyệt không?"* Trả lời "có" ⇒ P0 bước 3 đã xong. Trả lời "không" ⇒ ta biết phải sửa gì **trước khi** xây WebRTC lên trên.
+
+### 58.5 Test (không cần GPU, không cần Windows)
+
+| Test | Giữ cái gì |
+|---|---|
+| `the_pipeline_uses_dxgi_and_ends_in_a_pipe` | không rơi về WGC, không `fakesink`, không NVENC |
+| `framerate_is_capped_before_download` | thứ tự `framerate` < `d3d11download` |
+| `monitor_index_from_the_query_string_is_clamped_not_trusted` | `?monitor=99` ⇒ 8, không phải lỗi 500 |
+| `the_content_type_boundary_matches_the_pipeline_exactly` | lỗi im lặng #1 |
+| `the_stream_response_has_no_content_length_and_keeps_the_security_headers` | stream vô hạn + vẫn có `X-Frame-Options` |
+| `the_live_page_never_renders_untrusted_input` | chỉ hai số đã clamp vào HTML |
+| `live_status_is_honest_about_the_sandbox` | trên Linux phải nói "chỉ Windows", **không** giả vờ sẵn sàng |
+| `--check` trong CI | route live tồn tại trong binary, không chỉ trong docs |
+
+> **`probe_live_status()` là chỗ đáng chú ý:** nó biến "nút bấm được nhưng lỗi" thành "nút mờ + nói lý do cụ thể". Một app nói *"Chưa có GStreamer trong PATH"* tốt hơn một app hiện khung đen, và tốt hơn nhiều lần một app không có nút đó.
+
+Bản v3.30 thêm **ba test HTTP thật + 2 test trực tiếp** — dựng server trên cổng ngẫu nhiên, đóng vai trình duyệt bằng `TcpStream`, và dùng một `gst-launch-1.0` giả (`LANTERN_GST`) để điều khiển pipeline. Chúng **không** mock `stream_live()`: request đi qua đúng `handle()`, đúng socket, đúng `ChildGuard`.
+
+| Test | Giữ cái gì | Lỗi nó bắt được |
+|---|---|---|
+| `http_stream_kills_the_pipeline_when_the_tab_closes` | đóng tab ⇒ PID trong pidfile chết ≤ 3 s | §58.7 + §58.8 |
+| `http_stream_returns_504_and_cleans_up_when_no_frame_arrives` | `504` < 6 s, giữ stderr, không để lại tiến trình | §58.9 |
+| `http_stream_sends_multipart_headers_before_body` | 200 + đúng `Content-Type` + **không** `Content-Length` | hợp đồng với trình duyệt |
+| `peer_closed_also_catches_an_rst_from_a_closed_tab` | RST tính là "đã đóng" | §58.8 |
+| `stderr_is_read_only_after_the_child_is_gone` | đọc stderr sau kill, < 2 s | §58.9 |
+
+> **Đếm tiến trình bằng PID, không bằng tên.** `ps | grep gst` trên CI có thể dính tiến trình lạ; script giả tự `echo $$ > pid` nên test chỉ hỏi đúng tiến trình của nó sống hay chết.
+
+> **`probe_live_status()` là chỗ đáng chú ý:** nó biến "nút bấm được nhưng lỗi" thành "nút mờ + nói lý do cụ thể". Một app nói *"Chưa có GStreamer trong PATH"* tốt hơn một app hiện khung đen, và tốt hơn nhiều lần một app không có nút đó.
+
+### 58.6 Năm lỗi chỉ hiện ra khi chạy thật
+
+Đoạn code trên **qua hết unit test** mà vẫn sai năm lần. Cả bốn đều vô hình trong test thường vì chúng chỉ xảy ra khi có một **tiến trình bên ngoài** và một **socket thật**. Ghi lại nguyên văn vì đây là dạng lỗi sẽ quay lại: nó không nằm ở logic của ta, nó nằm ở *hợp đồng với hệ điều hành*.
+
+| # | Triệu chứng quan sát được | Nguyên nhân thật | Sửa |
+|---|---|---|---|
+| 1 | Đóng tab, `gst-launch-1.0` **vẫn chạy** | Chỉ kill khi `write_all` trả lỗi. Pipeline **im lặng** thì không có lần ghi nào ⇒ không có lỗi nào | Poll 250 ms + `peek` + `ChildGuard` (§58.7) |
+| 2 | Sau khi sửa (1), vẫn còn 1 tiến trình | Trình duyệt đóng khi còn byte chưa đọc ⇒ OS gửi **RST**, không phải FIN; `peek` trả `Err`, mà code chỉ nhận `Ok(0)` | `Err` khác timeout ⇒ coi là đã đóng (§58.8) |
+| 3 | Nhánh lỗi `504` **treo > 15 s** | Đọc `stderr` của tiến trình **còn sống** ⇒ `read_to_string` chờ tới khi nó thoát (có thể mãi mãi) | Kill + `wait` **trước**, rồi mới đọc stderr (§58.9) |
+| 4 | `HOST=0.0.0.0` **bind được**, dù docs nói "app từ chối" | Docs viết một điều code chưa hề làm; không có test nào cho lời hứa đó | `allowed_bind_host()` + test (§58.10) |
+| 5 | CI đỏ rồi lần sau **tự xanh** | Test giả định `sh` spawn xong trong 300 ms; trên runner đang tải thì không | nới hạn chờ + thử lại có giới hạn (§58.12) |
+
+> Bài học chung, viết ra để lần sau không mất thêm một vòng: **một tiến trình con + một socket = ba trạng thái, không phải một.** "Đã đóng", "còn sống", và "không nói gì" là ba chuyện khác nhau; code nào chỉ xử lý hai trong ba thì sẽ để lại capture mồ côi hoặc spinner vô hạn.
+
+### 58.7 Lỗi 1 — kill chỉ khi ghi lỗi là **không đủ**
+
+Bản đầu của vòng lặp:
+
+```rust
+loop {
+    match rx.recv() {
+        Ok(chunk) => if stream.write_all(&chunk).is_err() { break; },  // "client đóng tab"
+        Err(_) => break,
+    }
+}
+```
+
+Nó đúng **chỉ khi** pipeline liên tục đẩy frame. Nhưng `d3d11screencapturesrc` có thể im lặng rất lâu — màn hình tĩnh, DPMS tắt, dGPU ngủ (§53.4), hoặc người dùng chọn monitor không tồn tại. Khi đó:
+
+1. Không có chunk nào ⇒ không có `write_all` ⇒ **không có lỗi**.
+2. Client đã đóng từ lâu, nhưng ta không biết vì ta chỉ *ghi*, không bao giờ *hỏi*.
+3. Tiến trình capture sống tới khi tắt app. Trên laptop: quạt chạy, pin tụt, và người dùng kết luận "app này hỏng".
+
+Cách sửa gồm ba phần, thiếu phần nào cũng hỏng:
+
+| Phần | Vì sao cần |
+|---|---|
+| `recv_timeout(POLL)` thay `recv()` | để vòng lặp **thức dậy** kể cả khi pipeline không nói gì |
+| `peer_closed()` bằng `peek` | hỏi thẳng socket "đầu bên kia còn đó không", **không** lấy mất dữ liệu |
+| `ChildGuard` (Drop ⇒ `kill` + `wait`) | mọi đường ra — kể cả `return` sớm ở nhánh `504` — đều dọn tiến trình |
+
+`ChildGuard` là phần dễ bỏ qua nhất và cũng là phần quan trọng nhất: nó biến việc dọn dẹp từ *"nhớ gọi ở mọi nhánh"* thành *"không thể quên"*.
+
+### 58.8 Lỗi 2 — FIN và RST là hai kiểu đóng khác nhau
+
+Sau khi sửa §58.7, bài test bằng socket thật **vẫn** thấy tiến trình còn sống. Đoạn mã khi đó:
+
+```rust
+matches!(stream.peek(&mut probe), Ok(0))   // "chỉ Ok(0) là đã đóng"
+```
+
+Đó là định nghĩa của **FIN** — đóng bình thường, hết dữ liệu. Nhưng trình duyệt đóng tab **khi trong buffer còn frame chưa vẽ** thì hệ điều hành gửi **RST**: kết nối bị huỷ, không phải kết thúc. `peek` trả `Err(ConnectionReset)`, và biểu thức trên trả `false` ⇒ "client còn sống" ⇒ pipeline chạy mãi.
+
+Bảng đúng phải là bốn dòng, không phải một:
+
+| `peek` trả | Nghĩa | Kết luận |
+|---|---|---|
+| `Ok(0)` | FIN — đóng bình thường | **đã đóng** |
+| `Ok(n>0)` | có byte đến (đường này client không gửi gì) | còn sống |
+| `Err(kind)` khác `WouldBlock`/`TimedOut` | **RST**, `ECONNRESET`, … | **đã đóng** |
+| `Err(WouldBlock \| TimedOut)` | 200 ms không có gì | còn sống |
+
+> **Vì sao unit test không bắt được:** test cũ đóng socket **sạch** (`drop` sau khi hai bên đã trao đổi hết) ⇒ luôn ra FIN. Chỉ khi phía server còn dữ liệu chưa gửi xong mà client bỏ đi thì mới ra RST — đúng thứ xảy ra với MJPEG 15 fps. Test mới `peer_closed_also_catches_an_rst_from_a_closed_tab` dựng đúng tình huống đó: server ghi 4 KB mà client không đọc, rồi client đóng.
+
+### 58.9 Lỗi 3 — đọc `stderr` của tiến trình đang chạy là **chờ nó chết**
+
+Nhánh "pipeline không trả frame" cần lời giải thích của GStreamer, nên nó đọc `stderr`:
+
+```rust
+let text = BufReader::new(stderr).read_to_string(&mut text);  // ❌ chờ EOF
+```
+
+`read_to_string` đọc **tới EOF**, mà EOF chỉ đến khi tiến trình đóng `stderr` — tức là khi nó **thoát**. Với `gst-launch-1.0` bị treo (chờ frame mãi, hoặc lỗi DXGI giữ pipeline sống), người dùng thấy: bấm nút → spinner → **không có gì**, mãi mãi. Đo được: `curl` bỏ cuộc ở 15 s, server chưa gửi byte nào.
+
+Cách sửa: **kill trước, đọc sau.**
+
+```rust
+fn take_stderr_after_kill(&mut self) -> String {
+    let _ = self.0.kill();
+    let _ = self.0.wait();          // chắc chắn đã chết trước khi đọc
+    let mut text = String::new();
+    if let Some(stderr) = self.0.stderr.take() {
+        let _ = BufReader::new(stderr).read_to_string(&mut text);   // giờ EOF đến ngay
+    }
+    text
+}
+```
+
+Đo lại: `504` trong **8.0 s** (đúng bằng `FIRST_FRAME_TIMEOUT`), body là thông báo lỗi thật của GStreamer, và không còn tiến trình nào sót lại.
+
+> **Một chi tiết nhỏ nhưng là cái bẫy:** kill ngay lập tức có thể đến *trước khi* GStreamer kịp ghi lỗi ra stderr — test `stderr_is_read_only_after_the_child_is_gone` đỏ vì đúng lý do đó (nhận về chuỗi rỗng). Trong luồng thật điều này không xảy ra vì ta đã chờ 8 s trước khi kill; test phải mô phỏng đúng thứ tự (chờ 150 ms) thay vì đòi hỏi một hành vi mà code không hứa.
+
+### 58.10 Lỗi 4 — tài liệu nói app "từ chối" một thứ mà code không kiểm tra
+
+Lỗi thứ tư, và là lỗi **không nằm trong code**. `docs/run-on-windows.md` viết:
+
+> ⚠️ Đừng đặt `HOST=0.0.0.0` ... **App hiện từ chối cấu hình đó.**
+
+Kiểm tra: `grep -n "HOST" app/src/main.rs` cho ra **một** dòng — `env::var("HOST").unwrap_or_else(...)` — rồi bind thẳng. Không có kiểm tra nào. Chạy thử `HOST=0.0.0.0` và nó bind thành công; ai trong cùng Wi-Fi mở `http://<ip>:<port>/live` là thấy màn hình.
+
+Đây là dạng sai nguy hiểm nhất trong cả bốn lỗi, vì ba lỗi kia chỉ làm app hỏng, còn lỗi này **làm người dùng tin là mình an toàn**. Một câu trong README không bảo vệ được ai.
+
+Cách sửa — `allowed_bind_host()`:
+
+| Yêu cầu | Kết quả | Lý do |
+|---|---|---|
+| `127.0.0.1`, `localhost`, `::1` | bind `127.0.0.1` | loopback, an toàn |
+| `0.0.0.0`, IP LAN, tên máy | **bind `127.0.0.1`** + in cảnh báo | chưa có TLS, chưa có đăng nhập |
+| bất kỳ + `LANTERN_ALLOW_LAN=1` | bind **đúng như yêu cầu** | cờ tự chịu rủi ro, phải thật sự ghi đè |
+
+Hai điều đáng giữ lại:
+
+1. **`localhost` được hạ về `127.0.0.1`** chứ không bind nguyên chuỗi: `localhost` có thể phân giải ra `::1`, rồi người dùng gõ `127.0.0.1` và không vào được — một lỗi "không kết nối được" hoàn toàn tự gây.
+2. **Cờ ghi đè phải ghi đè thật.** Bản đầu của `allowed_bind_host` trả `127.0.0.1` cho *mọi* trường hợp, kể cả khi có cờ — tức là cờ chỉ để trong docs cho đẹp. Test bắt được ngay khi thêm assert cho nhánh này.
+
+> Bài học gộp cho cả §58.6–§58.10: **bốn lỗi đầu, và không lỗi nào nằm ở thuật toán.** Chúng nằm ở hợp đồng với hệ điều hành (1, 2, 3) và ở khoảng cách giữa điều tài liệu hứa với điều code làm (4). Unit test thuần logic không nhìn thấy cái nào trong bốn cái đó — chỉ socket thật và một lần đọc lại tài liệu bằng con mắt nghi ngờ mới thấy.
+
+### 58.13 Lỗi 5 — CI đỏ rồi tự xanh: flaky test cũng là **lỗi thật**
+
+Sau khi thêm §58.10, CI đỏ ở bước `standalone exe tests` (`exit code 101`). Không đọc được log (blob storage bị chặn — §56.10), nên đẩy thông báo lỗi ra *annotation* giống cách đã làm cho clippy ở §57.9. Lần chạy kế tiếp: **xanh**, cùng code. Tức là flaky.
+
+> **Một test đỏ rồi tự xanh không phải "chuyện của CI".** Nó là một test đang nói dối: lần sau nó đỏ, ta sẽ không tin nó nữa, và lúc đó nó có thể đang báo một lỗi thật. Flaky phải tìm ra nguyên nhân, không phải chạy lại cho tới khi xanh.
+
+Hai chỗ đua, cùng một dạng: **giả định về thời gian**. Máy dev rảnh, runner CI thì không.
+
+| Test | Giả định sai | Trên máy rảnh | Trên runner đang tải | Sửa |
+|---|---|---|---|---|
+| `http_stream_returns_504_...` | `sh` in lỗi xong mới tới hạn chờ 300 ms | đúng | `sh` spawn > 300 ms ⇒ lỗi in ra **trước** khi exe kịp chờ ⇒ trả `200` | nâng hạn chờ lên 1500 ms (vẫn < 6 s assert) |
+| `http_stream_kills_the_pipeline_...` | request đầu tiên luôn tới sau khi server accept | đúng | có thể tới sớm ⇒ không byte nào, pipeline chưa chạy ⇒ assert sai chỗ | đọc tới `\r\n\r\n`, trả `bool`, thử lại 5 lần |
+
+Nguyên tắc rút ra cho các test dùng socket:
+
+1. **Không bao giờ `expect` một kết nối đã sẵn sàng.** Thử lại có giới hạn, và phân biệt "chưa sẵn sàng" với "hỏng thật".
+2. **Mọi hạn chờ phải có biên rộng hơn nhiều lần so với giá trị kỳ vọng** khi nó phụ thuộc vào việc spawn tiến trình — trên CI, `fork`+`exec` có thể chậm hơn 10×.
+3. **Đọc đến khi đủ dữ liệu**, không đọc một lần rồi giả định đã đủ.
+
+Đo lại: 8 lần chạy liên tiếp, 0 lỗi. Chạy lại 1 lần chưa đủ để nói hết flaky — phải là nhiều lần liên tiếp.
+
+### 58.14 Vì sao "cài GStreamer" là câu trả lời **sai** cho người dùng cá nhân
+
+Sau §58.12, câu hỏi của bạn là: *"chẳng lẽ mình phải tải mỗi lần muốn dùng?"* Câu trả lời trung thực:
+
+| Thứ | Sự thật (đã kiểm) |
+|---|---|
+| GStreamer có phát hành **file zip** cho Windows không? | **Không.** Chỉ có installer `.exe` — tôi hard-code URL `1.24.10` và nó **404**, vì dòng 1.24 chỉ có `1.24.13` |
+| "Bản Complete" là gì? | Một **trang trong wizard**, không phải gói khác. Cùng một installer 517 MB |
+| Kích thước | **517 MB** (bản MSVC 64-bit 1.28.8) để có 6 element |
+| Có phải cài lại mỗi lần dùng? | Không — cài **một lần**. Nhưng vẫn là 517 MB + sửa `PATH` + chọn đúng biến thể |
+| CI tải được không? | **Không ổn định**: 517 MB đứt giữa chừng (`ResponseEnded`), phải thêm retry, và mỗi lần chạy CI là một lần tải lại |
+
+Con số quyết định: đường MJPEG dùng **6 element**. Để có 6 element mà bắt người dùng cõng 517 MB — và để CI tải 517 MB mỗi lần push — là đánh đổi sai. Đó không phải vấn đề kỹ thuật khó, đó là **định nghĩa sai bài toán**.
+
+### 58.15 Tự viết: JPEG encoder 300 dòng, capture DXGI gọi thẳng COM
+
+Bản v3.32 thay `gst-launch-1.0` bằng hai module trong chính exe:
+
+| Module | Dòng | Làm gì | Kiểm bằng |
+|---|---|---|---|
+| `app/src/jpeg.rs` | ~380 | JFIF baseline, YCbCr 4:2:0, bảng lượng tử/Huffman chuẩn phụ lục K, DCT 2 chiều | 6 unit test **+ ImageMagick** |
+| `app/src/capture.rs` | ~470 | `IDXGIFactory1 → IDXGIAdapter1 → IDXGIOutput1 → DuplicateOutput`, texture staging, `Map` | 5 unit test (vtable + hằng số) |
+
+Kết quả đo được, không phải ước lượng:
+
+| Số đo | Giá trị | Nghĩa |
+|---|---|---|
+| Kích thước exe | **~2 MB** (thay vì 517 MB) | không cần cài gì |
+| 1280×720 q70 | **39 KB/frame** | 15 fps ≈ 590 KB/s |
+| 1080p q70, một core | **42 ms/frame ⇒ 23 fps** | đủ cho 15 fps với CPU còn trống |
+| Phụ thuộc ngoài | **0** | không DLL, không PATH, không installer |
+
+> Máy đo là sandbox (yếu hơn i5-7300HQ). Trên laptop bạn, con số này sẽ tốt hơn — nhưng đừng tin cho tới khi P0 đo thật.
+
+**Bốn quyết định trong encoder, và lý do:**
+
+1. **Baseline, không progressive.** Progressive cần thêm 3 lượt quét và bảng huffman riêng; lợi ích duy nhất là ảnh hiện dần khi mạng chậm — không cần cho stream nội bộ 1–2 người.
+2. **4:2:0, không 4:4:4.** Chroma giảm một nửa ở cả hai chiều ⇒ giảm ~33% dữ liệu, mắt gần như không thấy trên ảnh màn hình. Chữ đen trên nền trắng (thứ duy nhất cần sắc nét) nằm ở kênh **luma**, giữ nguyên độ phân giải.
+3. **`quality=70`.** Đo thật: q20 → ảnh nhoè chữ; q95 → 4× kích thước mà mắt không thấy khác khi chỉ *nhìn* màn hình. 70 là điểm gãy.
+4. **DCT dùng `f32` tách 2 chiều.** Chậm hơn AAN/LLM khoảng 2×, nhưng 42 ms/frame là đủ và code đọc được. Tối ưu trước khi đo là tối ưu sai chỗ — nhất là khi đường này chỉ để *nhìn*.
+
+### 58.16 Lỗi thật thứ 5: **thiếu bảng lượng tử số 1**
+
+Encoder này đi qua **toàn bộ 6 unit test** ngay lần đầu, và **ảnh vẫn hỏng**. Test của tôi kiểm SOI/EOI, kiểm `0xFF` stuffing, kiểm kích thước trong header — tất cả đều đúng. Thứ tôi không kiểm: **hai bảng lượng tử có cùng id không**.
+
+```rust
+push_quant(&mut out, &luma_quant);      // ❌ luôn ghi Tq=0
+push_quant(&mut out, &chroma_quant);    // ❌ cũng ghi Tq=0 ⇒ đè lên bảng luma
+```
+
+Trình giải mã đọc `SOF0` thấy thành phần chroma trỏ tới bảng `1`, tra bảng đó, không thấy ⇒ `Quantization table 0x01 was not defined`. Ảnh vẫn có SOI, EOI, đúng cỡ, đúng stuffing — **và vẫn vô dụng**.
+
+> **Vì sao test tự viết không bắt được:** tôi kiểm những gì tôi *nghĩ ra* để kiểm. Một lỗi trong thứ tôi không nghĩ tới sẽ đi qua. Đó là giới hạn cấu trúc của self-testing, không phải sự cẩu thả.
+>
+> **Cách sửa không chỉ là sửa code:** thêm bước kiểm bằng **bộ giải mã độc lập** (ImageMagick) vào `./spike/check.sh`. Nó bắt lỗi này ngay lần chạy đầu tiên. Từ giờ mọi thay đổi vào encoder đều đi qua một bên thứ ba không chia sẻ giả định của tôi.
+
+Đây là lỗi thật thứ **5** của §58 và là lỗi đầu tiên mà **một công cụ ngoài** bắt được thay vì một lần chạy thật.
+
+### 58.17 Vì sao bỏ GStreamer lại làm hệ thống **đơn giản hơn**, không chỉ nhẹ hơn
+
+Bỏ một dependency không chỉ là xoá dòng. Ba lỗi của §58.7–§58.9 **biến mất về mặt cấu trúc**, vì chúng đều là lỗi *quản lý tiến trình con*:
+
+| Lỗi cũ | Vì sao không còn |
+|---|---|
+| Đóng tab không kill pipeline | không có pipeline để kill; vòng lặp `return`, `Capture::drop` giải phóng DXGI |
+| FIN ≠ RST | vẫn kiểm `peer_closed`, nhưng không còn tiến trình mồ côi khi nó sai — sai thì chỉ là chậm dừng, không phải quạt chạy mãi |
+| Đọc stderr của tiến trình đang chạy | không có tiến trình con nào, nên không có stderr nào để đọc |
+| `ChildGuard` | không cần guard cho thứ không tồn tại |
+
+> Một dependency không chỉ thêm megabyte. Nó thêm **bề mặt lỗi**: tiến trình con, đường ống, tín hiệu, vòng đời, phiên bản, đường dẫn. Mỗi thứ đó là một chỗ có thể sai mà code của bạn không kiểm soát. 300 dòng JPEG của tôi có thể có bug — nhưng chúng là bug **của tôi**, trong một file, có test, và không phụ thuộc cài đặt của máy nào.
+
+### 58.18 Bảng "đã kiểm bằng gì"
+
+Sòng phẳng về mức độ tin cậy của từng phần — vì "test xanh" không có nghĩa "chạy được trên laptop của bạn":
+
+| Phần | Kiểm bằng | Tin được đến đâu |
+|---|---|---|
+| JPEG encoder (bảng lượng tử, Huffman, DCT) | 7 unit test **+ ImageMagick** + xem ảnh bằng mắt | **cao** — ảnh 320×200 giải mã đúng màu, đúng hình học |
+| JPEG: kích thước/chất lượng | đo thật: 39 KB @ 720p q70, 42 ms/frame @ 1080p | **cao** (trong sandbox; laptop sẽ nhanh hơn) |
+| Vtable COM (thứ tự slot) | `size_of` assert + đối chiếu header | **trung bình** — kiểm được **số** slot, không kiểm được **đúng** hàm nào ở slot nào |
+| Hằng số DXGI/D3D11 | assert giá trị theo header | **cao** |
+| Mở phiên DXGI thật | **chưa ai kiểm** trong sandbox | **0** — cần Windows |
+| Hình ảnh thật từ màn hình bạn | **chưa ai kiểm** | **0** — cần máy bạn |
+| Độ trễ/chất lượng MJPEG thật | **chưa ai kiểm** | **0** — §6.2.3 không áp dụng cho MJPEG |
+| Header/`boundary`/đóng tab | unit test (không còn tiến trình con để kiểm) | **cao** |
+| Âm thanh, chuột/bàn phím, TLS, LAN | **không có trong bản này** | — |
+
+> **Dòng thứ ba là dòng tôi lo nhất.** Vtable COM khai báo tay: nếu `DuplicateOutput` thật ra ở slot 21 chứ không phải 22, app sẽ gọi nhầm một hàm khác và **crash**, không báo lỗi. Test của tôi chỉ chứng minh *độ dài* vtable đúng như tôi tin — nó không chứng minh *tôi tin đúng*. Đây là chỗ mà một lần chạy trên máy bạn có giá trị hơn 1000 dòng test trong sandbox.
+>
+> Nếu exe crash ngay khi bấm **Xem máy thật** (không phải báo lỗi, mà tắt ngang), nguyên nhân gần như chắc chắn là một slot vtable sai — và đó là lúc cần sửa `app/src/capture.rs`, không phải sửa gì khác.

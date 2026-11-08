@@ -2,6 +2,9 @@
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const state = { connected: false, mode: 'hvnc', room: false, audio: true, mic: false, selectedWindow: 'desktop', cursor: true, quality: 'balanced', resolution: '1080' };
+  // §58: trạng thái của đường "xem màn hình thật" (MJPEG). Tách khỏi `state`
+  // của phiên mock để không trộn hai thứ có vòng đời khác nhau.
+  const live = { active: false, monitor: 0, fps: 15, startedAt: 0, ready: false };
   const settingDefs = [
     { id:'quality', title:'Chất lượng hình ảnh', hint:'Ưu tiên rõ nét hay mượt khi mạng yếu?', group:'view', scope:'device', effect:'Ngay', terms:'mờ nét blur sharp lag chậm mạng', options:[['auto','Tự động'],['sharp','Nét'],['smooth','Mượt']] },
     { id:'display', title:'Kiểu hiển thị', hint:'Chọn theo việc bạn đang làm.', group:'view', scope:'device', effect:'Ngay', terms:'màn hình độ phân giải chữ nhỏ to đọc', options:[['real','Dùng thật'],['comfortable','Vừa mắt'],['large-text','Chữ to'],['sharp','Nét']] },
@@ -86,6 +89,80 @@
     $('#mockMessageText').textContent = content[2];
     $$('.window-option').forEach(btn => btn.classList.toggle('selected', btn.dataset.window === state.selectedWindow));
   }
+  // ---------------------------------------------------------------------
+  // §58 — "Xem máy thật": MJPEG, không WebRTC.
+  // Nút này chỉ sống trong bản exe Windows (nơi có gst-launch-1.0 + DXGI).
+  // Trên `npm run mock` nó tự ẩn, vì để một nút luôn lỗi còn tệ hơn không có nút.
+  // ---------------------------------------------------------------------
+  function liveUrl() {
+    return `/api/live.mjpg?monitor=${live.monitor}&fps=${live.fps}`;
+  }
+  function renderLive() {
+    const img = $('#liveImage');
+    const holder = $('#liveView');
+    const empty = $('#liveEmpty');
+    const frame = $('#screenFrame');
+    holder.classList.toggle('hidden', !live.active);
+    empty.classList.toggle('hidden', live.active);
+    frame.classList.toggle('live', live.active);
+    $('#mockDesktop').classList.toggle('hidden', live.active);
+    $('#liveBtn').classList.toggle('on', live.active);
+    $('#liveBar').classList.toggle('hidden', !live.active);
+    $('#liveBtnLabel').textContent = live.active ? 'Dừng xem máy thật' : 'Xem máy thật';
+    $('#liveMeta').textContent = live.active
+      ? `MJPEG · màn hình ${live.monitor} · ${live.fps} fps · không có tiếng/điều khiển`
+      : '';
+    if (live.active) {
+      if (img.dataset.src !== liveUrl()) { img.dataset.src = liveUrl(); img.src = liveUrl(); }
+    } else if (img.dataset.src) {
+      // Bỏ `src` là cách duy nhất để trình duyệt **đóng kết nối** stream;
+      // nếu chỉ ẩn ảnh thì pipeline vẫn chạy và vẫn nóng máy.
+      img.removeAttribute('src');
+      img.dataset.src = '';
+    }
+  }
+  function stopLive(notify = false) {
+    if (!live.active) return;
+    live.active = false;
+    renderLive();
+    if (notify) toast('Đã dừng xem màn hình thật.');
+  }
+  // Hỏi server một chỗ duy nhất: nút có dùng được không, và nếu không thì vì sao.
+  async function refreshLiveStatus() {
+    try {
+      const response = await fetch('/api/live/status');
+      if (!response.ok) return;
+      const status = await response.json();
+      if (typeof status.available !== 'boolean') return;
+      live.ready = status.available;
+      renderLiveStatus(status);
+    } catch { /* server cũ: không có route này */ }
+  }
+
+  function renderLiveStatus(status) {
+    $('#liveBtn').classList.remove('hidden');
+    $('#liveBtn').classList.toggle('unavailable', !status.available);
+    $('#liveBtn').title = status.available ? '' : (status.detail || 'Chưa sẵn sàng');
+    $('#connectionNote').textContent = status.available ? '' : (status.detail || '');
+    // Không còn bước cài đặt nào: capture + JPEG nằm trong exe. Nếu không dùng
+    // được thì lý do là môi trường (Linux, RDP, driver), không phải "thiếu phần mềm".
+  }
+
+  function toggleLive() {
+    if ($('#liveBtn').classList.contains('unavailable')) {
+      // Nói **lý do cụ thể** thay vì bật một khung đen — đây là khác biệt giữa
+      // "app lỗi" và "máy chưa cài GStreamer".
+      toast($('#liveBtn').title || 'Chưa xem được màn hình thật.');
+      return;
+    }
+    live.active = !live.active;
+    if (live.active) live.startedAt = Date.now();
+    renderLive();
+    toast(live.active
+      ? 'Đang xem màn hình thật (MJPEG). Đóng tab hoặc bấm Dừng để tắt capture.'
+      : 'Đã dừng xem màn hình thật.');
+  }
+
   function setConnected(active, notify = true) {
     state.connected = active;
     $('#connectBtn').classList.toggle('connected', active);
@@ -121,6 +198,7 @@
     $('#connectBtn').disabled = true;
     try {
       if (!state.connected) {
+        stopLive(); // một bề mặt tại một thời điểm (§49.3)
         const result = await apiRequest('/api/sessions', { method: 'POST', body: { mode: state.mode, windowId: state.selectedWindow, audio: state.audio } });
         currentSessionId = result.session.id;
         setConnected(true);
@@ -177,6 +255,39 @@
     setToggle($('#micToggle'), state.mic);
     toast(state.mic ? 'Micro mô phỏng đã bật — chưa thu âm thật.' : 'Micro mô phỏng đã tắt.');
   });
+  // §41.4 T5 — output của probe là dữ liệu từ MÁY THẬT (Get-PnpDevice, tên app,
+  // driver, tên Wi-Fi) và có thể chứa bất kỳ ký tự nào. Nó KHÔNG được đi qua
+  // innerHTML: mọi thứ ở đây tạo bằng createElement + textContent. Đổi dòng này
+  // thành template string là mở lại XSS, nên có test grep chặn (server.test.js).
+  function renderDiagnostics(checks) {
+    const list = $('#diagnosticsList');
+    list.replaceChildren();
+    for (const item of checks) {
+      const row = document.createElement('div');
+      row.className = 'diagnostic-row';
+
+      const badge = document.createElement('span');
+      const status = ['pass', 'fail', 'warn'].includes(item.status) ? item.status : 'warn';
+      badge.className = `diagnostic-status ${status}`;
+      badge.textContent = status === 'pass' ? '✓' : status === 'fail' ? '×' : '!';
+
+      const copy = document.createElement('span');
+      copy.className = 'diagnostic-copy';
+      const title = document.createElement('b');
+      title.textContent = String(item.title ?? '');
+      const output = document.createElement('small');
+      output.textContent = String(item.output || item.advice || '');
+      copy.append(title, output);
+      if (item.advice && item.output) {
+        const advice = document.createElement('em');
+        advice.textContent = String(item.advice);
+        copy.append(advice);
+      }
+
+      row.append(badge, copy);
+      list.append(row);
+    }
+  }
   let diagnosticsReport = null;
   $('#runDiagnostics').addEventListener('click', async () => {
     openOverlay('#diagnosticsOverlay');
@@ -188,16 +299,16 @@
       diagnosticsReport = await apiRequest('/api/diagnostics');
       if (diagnosticsReport.mock) {
         $('#diagnosticsIntro').textContent = 'Preview UI không có quyền đọc phần cứng. Dùng exe Windows để chạy probe thật.';
-        $('#diagnosticsList').innerHTML = '<div class="diagnostic-row"><span class="diagnostic-status warn">!</span><span>Chẩn đoán phần cứng chỉ có trong Lantern mock exe.</span></div>';
+        renderDiagnostics([{ status: 'warn', title: 'Chẩn đoán phần cứng chỉ có trong Lantern mock exe.' }]);
         $('#captureProbe').disabled = true;
       } else {
         const checks = diagnosticsReport.checks || [];
         const pass = checks.filter(item => item.status === 'pass').length;
         $('#diagnosticsIntro').textContent = `${pass}/${checks.length} kiểm tra đạt. Không có thay đổi hệ thống nào được thực hiện.`;
-        $('#diagnosticsList').innerHTML = checks.map(item => `<div class="diagnostic-row"><span class="diagnostic-status ${item.status}">${item.status === 'pass' ? '✓' : item.status === 'fail' ? '×' : '!'}</span><span class="diagnostic-copy"><b>${item.title}</b><small>${item.output || item.advice || ''}</small>${item.advice && item.output ? `<em>${item.advice}</em>` : ''}</span></div>`).join('');
+        renderDiagnostics(checks);
         $('#captureProbe').disabled = false;
       }
-    } catch { $('#diagnosticsIntro').textContent = 'Không nhận được báo cáo. Hãy chạy standalone Lantern mock exe trên Windows.'; $('#diagnosticsList').innerHTML = ''; }
+    } catch { $('#diagnosticsIntro').textContent = 'Không nhận được báo cáo. Hãy chạy standalone Lantern mock exe trên Windows.'; $('#diagnosticsList').replaceChildren(); }
   });
   $('#diagnosticsClose').addEventListener('click', () => closeOverlay('#diagnosticsOverlay'));
   $('#diagnosticsDone').addEventListener('click', () => closeOverlay('#diagnosticsOverlay'));
@@ -310,6 +421,10 @@
   $('#mockDesktop').dataset.aspect = settings.aspect;
   $('#mockDesktop').dataset.touch = settings.touch;
   async function hydrateMockApi() {
+    // Nút "Xem máy thật" mặc định ẩn. Chỉ hiện khi **cả hai** đúng: server này có
+    // đường live (bản exe Windows, không phải `npm run mock`) VÀ máy có GStreamer
+    // + plugin d3d11. Nếu không, nút sẽ là một cái bẫy bấm-vào-rồi-lỗi.
+    refreshLiveStatus();
     try {
       const [health, stored, device, windows, current] = await Promise.all([
         apiRequest('/api/health'), apiRequest('/api/settings'), apiRequest('/api/device'), apiRequest('/api/windows'), apiRequest('/api/sessions/current')
@@ -352,6 +467,34 @@
     const rect = event.currentTarget.getBoundingClientRect();
     $('#cursorPointer').style.left = `${Math.max(4, Math.min(96, (event.clientX - rect.left) / rect.width * 100))}%`;
     $('#cursorPointer').style.top = `${Math.max(4, Math.min(90, (event.clientY - rect.top) / rect.height * 100))}%`;
+  });
+  $('#liveBtn').addEventListener('click', toggleLive);
+  $('#liveInstall').addEventListener('click', installGstreamer);
+  $('#liveFullscreen').addEventListener('click', async () => {
+    try {
+      if (!document.fullscreenElement) await $('#screenFrame').requestFullscreen();
+      else await document.exitFullscreen();
+    } catch { toast('Trình duyệt không cho phép phóng to tại đây.'); }
+  });
+  $('#liveOpen').addEventListener('click', () => {
+    // Mở tab riêng: trên điện thoại đây là đường ngắn nhất để "nhìn thấy nhà".
+    window.open(`/live?monitor=${live.monitor}&fps=${live.fps}`, '_blank', 'noopener');
+  });
+  $('#liveMonitor').addEventListener('change', event => {
+    live.monitor = Math.max(0, Math.min(8, Number(event.target.value) || 0));
+    renderLive();
+  });
+  $('#liveFps').addEventListener('change', event => {
+    live.fps = Math.max(1, Math.min(30, Number(event.target.value) || 15));
+    renderLive();
+  });
+  $('#liveImage').addEventListener('error', () => {
+    // Ảnh MJPEG lỗi (pipeline chết, GStreamer thiếu) ⇒ dừng trạng thái để người
+    // dùng thấy thông báo thật thay vì một khung đen im lặng.
+    if (!live.active) return;
+    live.active = false;
+    renderLive();
+    toast('Không xem được màn hình thật: kiểm tra GStreamer và monitor index trong bảng chẩn đoán.');
   });
   $('#sendCtrlAltDel').addEventListener('click', () => toast(state.connected ? 'Phím tắt đang được mô phỏng; chưa gửi tới máy.' : 'Hãy bắt đầu phiên demo trước.'));
   $('#blankScreen').addEventListener('click', () => toast('Màn hình riêng tư chưa được kết nối với máy thật.'));

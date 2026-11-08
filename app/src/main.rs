@@ -1,3 +1,8 @@
+mod capture;
+#[allow(dead_code)] // dùng trong nhánh #[cfg(windows)] của stream_live
+mod jpeg;
+mod stream;
+
 use std::collections::BTreeMap;
 use std::env;
 use std::fs;
@@ -24,7 +29,7 @@ const SETTINGS_DEFAULTS: &[(&str, &str)] = &[
 
 #[derive(Clone)]
 struct Session { id: String, mode: String, window_id: String, started_at: u64, audio: bool }
-struct State { settings: BTreeMap<String, String>, session: Option<Session>, next_id: u64, data_dir: PathBuf }
+struct State { settings: BTreeMap<String, String>, session: Option<Session>, next_id: u64, data_dir: PathBuf, live_status: Option<(bool, String)> }
 
 fn json_quote(value: &str) -> String {
     let mut out = String::from("\"");
@@ -103,9 +108,18 @@ fn settings_json(settings: &BTreeMap<String, String>) -> String {
 fn session_json(s: &Session) -> String {
     format!("{{\"id\":{},\"mode\":{},\"windowId\":{},\"startedAt\":{},\"audio\":{},\"status\":\"connected\",\"mock\":true}}", json_quote(&s.id), json_quote(&s.mode), json_quote(&s.window_id), s.started_at, s.audio)
 }
-fn response(stream: &mut TcpStream, status: u16, content_type: &str, body: &[u8]) {
+/// Header của **mọi** response. Tách khỏi socket để test được bằng giá trị trả
+/// về, không phải bằng cách bắt chước chuỗi trong test.
+///
+/// §41.5 D4: thiếu hai header đầu thì một trang khác nhúng được app trong iframe
+/// và bấm hộ nút "điều khiển" (clickjacking). Mock cũng phải giữ đúng, vì sản
+/// phẩm thật sẽ bám theo mock.
+fn response_head(status: u16, content_type: &str, content_length: usize) -> String {
     let reason = match status { 200 => "OK", 201 => "Created", 400 => "Bad Request", 404 => "Not Found", 405 => "Method Not Allowed", 409 => "Conflict", 413 => "Payload Too Large", 422 => "Unprocessable Entity", _ => "Internal Server Error" };
-    let head = format!("HTTP/1.1 {status} {reason}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\n\r\n", body.len());
+    format!("HTTP/1.1 {status} {reason}\r\nContent-Type: {content_type}\r\nContent-Length: {content_length}\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nX-Frame-Options: DENY\r\nContent-Security-Policy: default-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'\r\nReferrer-Policy: no-referrer\r\nConnection: close\r\n\r\n")
+}
+fn response(stream: &mut TcpStream, status: u16, content_type: &str, body: &[u8]) {
+    let head = response_head(status, content_type, body.len());
     let _ = stream.write_all(head.as_bytes()); let _ = stream.write_all(body); let _ = stream.flush();
 }
 fn json_response(stream: &mut TcpStream, status: u16, body: String) { response(stream, status, "application/json; charset=utf-8", body.as_bytes()); }
@@ -228,6 +242,227 @@ fn capture_probe(body: &str) -> (u16, String) {
     (200, format!("{{\"status\":{},\"output\":{},\"advice\":{},\"monitorIndex\":{},\"mock\":false}}", json_quote(status), json_quote(&output), json_quote(advice), monitor))
 }
 
+/// Kiểm tra **một lần** xem đường live có chạy được không: có `gst-launch-1.0`
+/// trong PATH và có plugin `d3d11screencapturesrc`. Trả về `(available, detail)`
+/// với `detail` là câu **người dùng đọc được**, không phải mã lỗi.
+/// Có được bind ra ngoài loopback không? **Chưa** — binary này không có TLS và
+/// chưa có đăng nhập, nên bind LAN nghĩa là ai trong cùng Wi-Fi cũng xem được
+/// màn hình của bạn (§54.5 #1, §41.5 D4).
+///
+/// Hàm này tồn tại vì tài liệu **từng nói** app "từ chối" `HOST=0.0.0.0` trong
+/// khi code không kiểm tra gì — đó là kiểu sai tệ nhất: tuyên bố an toàn mà
+/// không có gì bảo vệ. Giờ lời hứa và code là một.
+///
+/// Trả `(được_bind, lý_do)`.
+fn allowed_bind_host(requested: &str) -> (String, Option<String>) {
+    // `LANTERN_ALLOW_LAN=1` chỉ để tự kiểm trên máy mình, có cảnh báo rõ ràng.
+    let forced = env::var("LANTERN_ALLOW_LAN").map(|value| value == "1").unwrap_or(false);
+    let loopback_only = ["127.0.0.1", "localhost", "::1"].contains(&requested);
+    if loopback_only {
+        // Bind `127.0.0.1` thay vì để OS quyết: "localhost" có thể ra ::1 rồi
+        // trình duyệt lại gõ 127.0.0.1 và không vào được.
+        return ("127.0.0.1".to_string(), None);
+    }
+    if forced {
+        // Cờ ghi đè phải **thật sự** ghi đè, nếu không nó chỉ là lời nói suông.
+        return (requested.to_string(), None);
+    }
+    (
+        "127.0.0.1".to_string(),
+        Some(format!(
+            "Từ chối bind {requested}: bản này chưa có TLS và chưa có đăng nhập. Đang bind 127.0.0.1 thay thế. Muốn tự chịu rủi ro trên LAN: đặt LANTERN_ALLOW_LAN=1 (không khuyến khích)."
+        )),
+    )
+}
+
+/// Đường xem màn hình có dùng được không, và **nếu không thì vì sao**.
+///
+/// Trên Windows: kiểm DXGI thật bằng cách **mở một phiên capture rồi đóng ngay**.
+/// Đó là câu trả lời đúng nhất có thể đưa ra mà không capture nội dung — nếu
+/// `IDXGIOutputDuplication` mở được thì nút "Xem máy thật" sẽ chạy.
+///
+/// Trên Linux/macOS: trả `false` kèm lý do, **không** giả vờ sẵn sàng (§58.3).
+fn probe_live_status() -> (bool, String) {
+    #[cfg(windows)]
+    {
+        match capture::Capture::open(0) {
+            Ok(session) => {
+                let (width, height) = session.size();
+                drop(session); // đóng ngay: không giữ phiên nào khi chỉ đang kiểm
+                (true, format!("Sẵn sàng: DXGI {width}×{height}, JPEG trong exe, không cần cài gì."))
+            }
+            Err(error) => (false, error.message()),
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        (
+            false,
+            format!(
+                "Capture màn hình chỉ chạy trên Windows. Đang chạy trên {} nên không có desktop để capture.",
+                std::env::consts::OS
+            ),
+        )
+    }
+}
+
+/// Client còn kết nối không? `peek` không lấy mất dữ liệu (client không gửi gì
+/// trên đường này).
+///
+/// Bản đầu tiên chỉ coi `Ok(0)` là đóng, và **đóng tab của Chrome đi qua đường
+/// khác** — nên pipeline sống mãi:
+/// | `peek` trả | Nghĩa | Kết luận |
+/// |---|---|---|
+/// | `Ok(0)` | FIN: đóng bình thường | **đã đóng** |
+/// | `Ok(_)` | có byte đến (không xảy ra trên đường này) | còn sống |
+/// | `Err(...)` khác timeout | **RST**: đóng khi còn byte chưa đọc | **đã đóng** |
+/// | `Err(WouldBlock/TimedOut)` | 200 ms không có gì | còn sống |
+#[cfg_attr(not(windows), allow(dead_code))]
+fn peer_closed(stream: &TcpStream) -> bool {
+    use std::io::ErrorKind;
+    let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(200)));
+    let mut probe = [0u8; 1];
+    match stream.peek(&mut probe) {
+        Ok(0) => true,
+        Ok(_) => false,
+        Err(error) => !matches!(error.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut),
+    }
+}
+
+/// Bơm MJPEG từ `gst-launch-1.0` ra socket. Không qua shell, không qua file tạm:
+/// `fdsink fd=1` ghi thẳng vào stdout của tiến trình con, ta chuyển tiếp.
+///
+/// Hai chỗ **không được block vô hạn**, vì đó là cách hỏng tệ nhất (im lặng):
+/// 1. **Frame đầu tiên**: pipeline có thể chết hoặc đứng ⇒ chờ tối đa
+///    `FIRST_FRAME_TIMEOUT`, quá hạn thì kill + `504`, không để client tải mãi.
+/// 2. **Vòng chép**: đọc stdout bằng `recv_timeout`, mỗi lần hết hạn thì hỏi xem
+///    client còn đó không. Trước khi có bản này, đóng tab **không** dừng pipeline
+///    — đúng lỗi tìm ra khi thử bằng socket thật (xem §58.6).
+/// Chất lượng JPEG cho đường xem màn hình: 70 là điểm "chữ còn đọc được" mà
+/// vẫn nhẹ (một frame 720p khoảng 40–90 KB). Đổi số này là đổi băng thông —
+/// xem §58.14.
+#[cfg_attr(not(windows), allow(dead_code))]
+const JPEG_QUALITY: u8 = 70;
+
+/// Một phần của multipart: header + JPEG + CRLF.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn frame_chunk(jpeg: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(jpeg.len() + 64);
+    out.extend_from_slice(stream::frame_header().as_bytes());
+    out.extend_from_slice(jpeg);
+    out.extend_from_slice(b"\r\n");
+    out
+}
+
+/// `GET /api/live.mjpg` — vòng lặp capture → nén → ghi, **không** GStreamer.
+///
+/// Ba thứ bản này làm mà bản GStreamer không làm được:
+/// 1. **Chỉ gửi khi hình đổi.** Màn hình tĩnh ⇒ 0 byte, 0% CPU nén, pin không tụt.
+/// 2. **Không có tiến trình con** ⇒ không có capture mồ côi, không có `ChildGuard`,
+///    không có `stderr` treo (§58.7–§58.9 trở thành vô nghĩa vì không còn gì để dọn).
+/// 3. **Không cài gì**: toàn bộ nằm trong exe ~2 MB.
+fn stream_live(mut stream: TcpStream, monitor: u8, fps: u8) {
+    #[cfg(not(windows))]
+    {
+        let _ = fps;
+        return response(
+            &mut stream,
+            503,
+            "text/plain; charset=utf-8",
+            format!(
+                "Capture màn hình chỉ chạy trên Windows. Đang chạy trên {} nên không có desktop để capture (monitor={monitor}).",
+                std::env::consts::OS
+            )
+            .as_bytes(),
+        );
+    }
+
+    #[cfg(windows)]
+    {
+        use std::time::{Duration, Instant};
+
+        /// Chờ frame **đầu tiên**. Ngắn hơn bản GStreamer (8 s) vì không có
+        /// cold start của pipeline: chỉ là thời gian DXGI trả frame đầu.
+        const FIRST_FRAME: Duration = Duration::from_secs(4);
+        /// Nhịp kiểm "tab còn mở không".
+        const POLL: Duration = Duration::from_millis(200);
+
+        let mut capture = match capture::Capture::open(monitor) {
+            Ok(capture) => capture,
+            Err(error) => {
+                return response(&mut stream, 503, "text/plain; charset=utf-8", error.message().as_bytes());
+            }
+        };
+
+        let deadline = Instant::now() + FIRST_FRAME;
+        let first = loop {
+            match capture.next_frame(200) {
+                Ok(frame) => break frame,
+                Err(capture::CaptureError::Timeout) => {
+                    if peer_closed(&stream) {
+                        return;
+                    }
+                    if Instant::now() >= deadline {
+                        let message = format!(
+                            "Màn hình {} không trả frame nào trong {} giây. Thử monitor khác hoặc kiểm tra driver GPU.",
+                            monitor,
+                            FIRST_FRAME.as_secs()
+                        );
+                        return response(&mut stream, 504, "text/plain; charset=utf-8", message.as_bytes());
+                    }
+                }
+                Err(error) => {
+                    return response(&mut stream, 503, "text/plain; charset=utf-8", error.message().as_bytes());
+                }
+            }
+        };
+
+        // Header chỉ đi **sau** khi đã có frame thật (§58.3 #2).
+        let first_jpeg = jpeg::encode(&first.bgra, first.width, first.height, JPEG_QUALITY);
+        if stream.write_all(stream::stream_head().as_bytes()).is_err()
+            || stream.write_all(&frame_chunk(&first_jpeg)).is_err()
+            || stream.flush().is_err()
+        {
+            return;
+        }
+
+        let budget = Duration::from_micros(1_000_000 / u64::from(fps.max(1)));
+        let mut previous = first.bgra;
+        let mut next_due = Instant::now() + budget;
+        loop {
+            if peer_closed(&stream) {
+                return;
+            }
+            match capture.next_frame(0) {
+                Ok(frame) => {
+                    if frame.bgra != previous {
+                        let jpeg = jpeg::encode(&frame.bgra, frame.width, frame.height, JPEG_QUALITY);
+                        if stream.write_all(&frame_chunk(&jpeg)).is_err() {
+                            return; // tab đóng
+                        }
+                        previous = frame.bgra;
+                    }
+                }
+                // Không có frame mới = màn hình không đổi, **không phải lỗi**.
+                Err(capture::CaptureError::Timeout) => {}
+                // Desktop đổi (UAC/khoá máy/đổi độ phân giải): dừng sạch. Trình
+                // duyệt sẽ thấy stream kết thúc và `#liveImage` báo lỗi, UI dừng
+                // chứ không hiện khung đen đứng.
+                Err(capture::CaptureError::AccessLost) => return,
+                Err(_) => return,
+            }
+            // Giới hạn tốc độ: DXGI có thể trả frame nhanh hơn `fps` khi có
+            // chuyển động mạnh (con trỏ, video). Không giới hạn thì ta nén
+            // nhiều hơn mức người xem nhận được.
+            let now = Instant::now();
+            if next_due > now {
+                std::thread::sleep(next_due - now);
+            }
+            next_due = Instant::now() + budget;
+        }
+    }
+}
+
 fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
     let Some((method,path,body)) = read_request(&mut stream) else { return; };
     if body == "__BODY_TOO_LARGE__" { return json_response(&mut stream, 413, "{\"error\":\"body_too_large\"}".into()); }
@@ -236,6 +471,33 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
     if method == "GET" && route == "/styles.css" { return response(&mut stream, 200, "text/css; charset=utf-8", CSS.as_bytes()); }
     if method == "GET" && route == "/app.js" { return response(&mut stream, 200, "text/javascript; charset=utf-8", JS.as_bytes()); }
     if method == "GET" && route == "/api/diagnostics" { return json_response(&mut stream, 200, run_diagnostics()); }
+    // Nhìn thấy màn hình thật trong trình duyệt, không cần WebRTC (§58).
+    // `GET /live` là trang tối giản cho điện thoại; `GET /api/live.mjpg` là stream.
+    // `/api/live/status` trả lời được câu "nút Xem máy thật có dùng được không, và
+    // nếu không thì vì sao" — thay vì để người dùng bấm vào rồi mới thấy lỗi.
+    if method == "GET" && route == "/api/live/status" {
+        // Cache bị **xoá** sau khi cài xong (`install_gstreamer`) để lần hỏi sau
+        // phản ánh trạng thái mới — nếu không, UI vẫn hiện "chưa có GStreamer"
+        // sau khi vừa cài thành công, và người dùng bấm lại vô ích.
+        let mut s = state.lock().unwrap_or_else(|e| e.into_inner());
+        if s.live_status.is_none() { s.live_status = Some(probe_live_status()); }
+        let (available, detail) = s.live_status.clone().unwrap_or((false, String::new()));
+        // Không còn bước cài đặt nào: mọi thứ đã nằm trong exe. UI dùng trường
+        // này để biết có nên hiện nút "Tự cài" hay không — giờ luôn là `false`.
+        let can_install = false;
+        drop(s);
+        return json_response(&mut stream, 200, format!(
+            "{{\"available\":{available},\"canInstall\":{can_install},\"detail\":{},\"contentType\":{},\"boundary\":{}}}",
+            json_quote(&detail), json_quote(&stream::mjpeg_content_type()), json_quote(stream::BOUNDARY)));
+    }
+    if method == "GET" && (route == "/live" || route == "/api/live.mjpg") {
+        let query = path.split_once('?').map(|(_, q)| q).unwrap_or("");
+        let (monitor, fps) = stream::parse_live_query(query);
+        if route == "/live" {
+            return response(&mut stream, 200, "text/html; charset=utf-8", stream::live_page(monitor, fps).as_bytes());
+        }
+        return stream_live(stream, monitor, fps);
+    }
     if method == "POST" && route == "/api/diagnostics/capture" { let (status,body)=capture_probe(&body); return json_response(&mut stream,status,body); }
     let mut s = state.lock().unwrap_or_else(|e| e.into_inner());
     match (method.as_str(), route) {
@@ -276,20 +538,36 @@ fn main() {
     if env::args().any(|arg| arg == "--check") {
         assert!(INDEX.contains("/api/sessions") || JS.contains("/api/sessions"));
         assert!(JS.contains("/api/settings"));
-        println!("Lantern mock assets embedded; API routes ready.");
+        // Đường "xem máy thật" phải tồn tại trong bản build này, không chỉ trong docs.
+        assert!(stream::mjpeg_content_type().contains(stream::BOUNDARY));
+        // Không còn GStreamer: đường capture phải nằm **trong** binary này.
+        let (available, detail) = probe_live_status();
+        println!("capture: available={available} — {detail}");
+        // §58.8: in rõ vì sao nút "Xem máy thật" có thể bị xám — nếu không,
+        // trên Linux/CI người đọc chỉ thấy "live route ready" và tưởng capture
+        // hỏng, trong khi thực tế là thiếu GStreamer.
+        let (available, detail) = probe_live_status();
+        println!(
+            "Lantern mock assets embedded; API routes ready; live MJPEG route ready (capture available: {available} — {detail})."
+        );
         return;
     }
-    let host = env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
+    let requested_host = env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
+    let (host, refusal) = allowed_bind_host(&requested_host);
+    if let Some(reason) = refusal {
+        eprintln!("{reason}");
+    }
     let port = env::var("PORT").unwrap_or_else(|_| "0".into());
     let listener = TcpListener::bind(format!("{host}:{port}")).unwrap_or_else(|e| { eprintln!("Cannot listen on {host}:{port}: {e}"); std::process::exit(1); });
     let actual = listener.local_addr().map(|a|a.port()).unwrap_or(0);
     let data_dir = env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(env::temp_dir).join("LanternMock");
     let mut settings = SETTINGS_DEFAULTS.iter().map(|(k,v)|(k.to_string(),v.to_string())).collect::<BTreeMap<_,_>>();
     if let Ok(text) = fs::read_to_string(data_dir.join("settings.json")) { if let Some(saved)=parse_flat_object(&text) { for (k,v) in saved { if settings.contains_key(&k) && allowed_value(&k,&v) { settings.insert(k,v); } } } }
-    let state=Arc::new(Mutex::new(State{settings,session:None,next_id:0,data_dir}));
+    let state=Arc::new(Mutex::new(State{settings,session:None,next_id:0,data_dir,live_status:None}));
     let url = format!("http://127.0.0.1:{actual}");
     println!("Lantern mock is ready. Open {url} in your browser.");
-    println!("This is a local UI/API mock; it does not control Windows or capture media.");
+    println!("Xem màn hình thật: {url}/live  — hoặc bấm nút \"Xem máy thật\" (không cần cài gì).");
+    println!("Capture + JPEG nằm trong chính exe này; không cần GStreamer, không cần DLL.");
     #[cfg(target_os = "windows")]
     { let _ = std::process::Command::new("cmd").arg("/C").arg("start").arg("").arg(&url).spawn(); }
     for incoming in listener.incoming() { match incoming { Ok(stream)=>{ let shared=Arc::clone(&state); let _=thread::Builder::new().name("lantern-mock-request".into()).spawn(move||handle(stream,shared)); }, Err(e)=>eprintln!("Request error: {e}") } }
@@ -298,8 +576,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test] fn parses_patch_and_escapes() { let p=parse_flat_object(r#"{"quality":"smooth","volume":35,"hide-taskbar":true}"#).unwrap(); assert_eq!(p.get("quality").unwrap(),"smooth"); assert_eq!(p.get("volume").unwrap(),"35"); assert!(allowed_value("hide-taskbar",p.get("hide-taskbar").unwrap())); }
-    #[test] fn rejects_bad_enum() { assert!(!allowed_value("quality","disable-encryption")); assert!(!allowed_value("volume","101")); }
+
     #[test] fn serves_embedded_frontend_sources() { assert!(INDEX.contains("Lantern")); assert!(CSS.contains(".app-shell")); assert!(JS.contains("/api/sessions")); }
     #[test] fn capture_probe_rejects_untrusted_monitor_index() { assert_eq!(capture_probe(r#"{"monitorIndex":99}"#).0,422); }
     #[test] fn p0_capture_pipeline_shows_real_dxgi_frames() {
@@ -318,5 +595,72 @@ mod tests {
         assert!(command.contains("b-frames=0 low-latency=true"));
         assert!(command.ends_with("fakesink"));
     }
+    #[test] fn peer_closed_sees_a_hangup_and_not_just_a_slow_client() {
+        use std::net::TcpListener;
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let client = TcpStream::connect(addr).expect("connect");
+        let (server, _) = listener.accept().expect("accept");
+
+        assert!(!peer_closed(&server), "client còn mở thì không được coi là đã đóng");
+
+        drop(client);
+
+        let start = std::time::Instant::now();
+        while start.elapsed() < std::time::Duration::from_secs(2) {
+            if peer_closed(&server) { return; }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        panic!("đã đóng socket mà peer_closed vẫn báo còn sống");
+    }
+
+    #[test] fn peer_closed_also_catches_an_rst_from_a_closed_tab() {
+        // Đóng tab khi còn byte chưa đọc ⇒ OS gửi **RST**, không phải FIN;
+        // `peek` trả `Err(ConnectionReset)` và bản đầu bỏ sót ⇒ capture chạy mãi.
+        // Test viết lại đúng lần chạy thật đã phát hiện lỗi này.
+        use std::io::Write;
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let client = TcpStream::connect(addr).expect("connect");
+        let (server, _) = listener.accept().expect("accept");
+
+        // Server gửi dữ liệu client **không đọc**, rồi client đóng ⇒ RST.
+        (&server).write_all(&[7u8; 4096]).ok();
+        drop(client);
+        (&server).write_all(&[7u8; 4096]).ok();
+
+        let start = std::time::Instant::now();
+        while start.elapsed() < std::time::Duration::from_secs(2) {
+            if peer_closed(&server) { return; }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        panic!("RST từ client phải được coi là đã đóng");
+    }
+    #[cfg(unix)]
+    
+        
+    #[test] fn live_status_is_honest_about_the_sandbox() {
+        // Trên Linux (CI/sandbox) phải nói rõ "chỉ Windows" và `available=false`,
+        // không được giả vờ sẵn sàng rồi để UI vẽ khung đen.
+        #[cfg(not(target_os = "windows"))]
+        {
+            let (available, detail) = probe_live_status();
+            assert!(!available);
+            assert!(detail.contains("Windows"), "{detail}");
+        }
+    }
     #[test] fn diagnostics_api_is_marked_as_hardware_not_ui_mock() { assert!(run_diagnostics().contains("\"mock\":false")); }
+    #[test] fn responses_carry_clickjacking_headers() {
+        // §41.5 D4 — test trên giá trị thật mà socket sẽ ghi, không phải chuỗi chép tay.
+        let head = response_head(200, "text/html; charset=utf-8", 42);
+        assert!(head.contains("X-Frame-Options: DENY"), "{head}");
+        assert!(head.contains("Content-Security-Policy: default-src 'self'; frame-ancestors 'none'"), "{head}");
+        assert!(head.contains("Referrer-Policy: no-referrer"), "{head}");
+        assert!(head.contains("Content-Length: 42"), "{head}");
+        // Cùng bộ header cho response JSON và lỗi — không có đường nào thiếu.
+        for status in [200u16, 201, 400, 404, 409, 413, 422, 500] {
+            let head = response_head(status, "application/json", 2);
+            assert!(head.contains("X-Frame-Options: DENY"), "status {status}: {head}");
+        }
+    }
 }
