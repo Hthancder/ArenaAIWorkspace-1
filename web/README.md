@@ -17,7 +17,7 @@ Mở `http://localhost:4173`. Hoặc mở `index.html` trực tiếp trong trìn
 - Bắt đầu/kết thúc phiên và trạng thái/metrics minh hoạ.
 - Window picker, lựa chọn cửa sổ, hai mode xem.
 - Bật/tắt khung camera phòng, âm thanh và micro (chỉ trạng thái UI).
-- Panel cài đặt searchable với 12 mục T1, nhóm, phạm vi thiết bị/máy chủ, nhãn hiệu lực, lưu cục bộ và khôi phục mặc định.
+- Panel cài đặt searchable: 12 mục T1 + 20 mục T2 theo triệu chứng, nhóm/phạm vi/hiệu lực, lưu cục bộ và khôi phục mặc định.
 - Phóng to màn hình, responsive desktop/mobile và thông báo thao tác.
 
 Mọi thông tin màn hình đều được gắn `MOCK`; không có request backend hay quyền thiết bị.

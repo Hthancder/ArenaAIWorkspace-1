@@ -16,7 +16,30 @@
     { id:'language', title:'Ngôn ngữ', hint:'Ngôn ngữ giao diện.', group:'device', scope:'device', effect:'Ngay', terms:'language tiếng việt english', options:[['vi','Tiếng Việt'],['en','English · mock']] },
     { id:'theme', title:'Giao diện', hint:'Chọn sáng, tối hoặc theo thiết bị.', group:'device', scope:'device', effect:'Ngay', terms:'theme dark sáng tối hệ thống', options:[['light','Sáng'],['dark','Tối'],['system','Theo hệ thống']] }
   ];
-  const settingDefaults = Object.fromEntries(settingDefs.map(def => [def.id, def.range ? 70 : def.options ? def.options[0][0] : false]));
+  const advancedDefs = [
+    {id:'max-bitrate',title:'Bitrate trần',hint:'Giới hạn dữ liệu khi mạng yếu.',section:'Muốn nét hơn / mượt hơn',terms:'mờ nét mạng bitrate',options:[['5','5 Mbps'],['10','10 Mbps · mặc định'],['15','15 Mbps']]},
+    {id:'max-fps',title:'Tốc độ khung hình',hint:'Chọn mức tối đa cho phiên.',section:'Muốn nét hơn / mượt hơn',terms:'fps mượt giật',options:[['15','15 FPS'],['30','30 FPS · mặc định'],['60','60 FPS']]},
+    {id:'keyframe',title:'Khung hình chủ',hint:'Khoảng gửi khung hình đầy đủ.',section:'Muốn nét hơn / mượt hơn',terms:'keyframe video khựng',options:[['1','1 giây'],['2','2 giây · mặc định'],['3','3 giây']]},
+    {id:'scaler',title:'Độ sắc nét khi co giãn',hint:'Thuật toán nội suy hình ảnh.',section:'Muốn nét hơn / mượt hơn',terms:'scaler sharpen mờ nét',options:[['balanced','Cân bằng · mặc định'],['sharp','Sắc nét'],['fast','Nhanh']]},
+    {id:'sharpen',title:'Làm nét chữ',hint:'Tăng nét nhẹ sau khi co giãn.',section:'Muốn nét hơn / mượt hơn',terms:'sharpen text chữ',options:[['off','Tắt · mặc định'],['low','Nhẹ']]},
+    {id:'jitter',title:'Ưu tiên độ trễ',hint:'Đổi độ trễ lấy hình ảnh ổn định hơn.',section:'Muốn ít trễ hơn',terms:'trễ lag chậm jitter',options:[['low','Ít trễ · mặc định'],['smooth','Mượt hơn']]},
+    {id:'cursor-echo',title:'Phản hồi con trỏ tức thì',hint:'Hiển thị vị trí dự đoán khi mạng trễ.',section:'Muốn ít trễ hơn',terms:'chuột cursor lag trễ',options:[['on','Bật · mặc định'],['off','Tắt']]},
+    {id:'ripple',title:'Hiệu ứng chạm',hint:'Tắt vòng sáng nếu gây rối mắt.',section:'Muốn ít trễ hơn',terms:'ripple animation chạm',options:[['on','Bật · mặc định'],['off','Tắt']]},
+    {id:'resolution',title:'Độ phân giải đầu ra',hint:'Tự động theo màn hình hoặc chọn mức thấp hơn.',section:'Màn hình & toạ độ',terms:'resolution màn hình 720 1080',options:[['auto','Tự động · mặc định'],['1080','1080p'],['720','720p']]},
+    {id:'dpi',title:'Tỉ lệ giao diện Windows',hint:'Dùng khi chữ trên máy chủ quá nhỏ.',section:'Màn hình & toạ độ',terms:'dpi scale chữ nhỏ',options:[['100','100% · mặc định'],['125','125%'],['150','150%']]},
+    {id:'monitor',title:'Màn hình ưu tiên',hint:'Chọn màn hình khi máy có nhiều display.',section:'Màn hình & toạ độ',terms:'monitor display màn hình',options:[['primary','Màn hình chính · mặc định'],['2','Màn hình 2']]},
+    {id:'keyboard-layout',title:'Bố cục bàn phím máy chủ',hint:'Chỉ đổi nếu phím gõ ra ký tự sai.',section:'Bàn phím',terms:'keyboard layout gõ sai',options:[['system','Theo máy chủ · mặc định'],['vi','Tiếng Việt'],['en','English']]},
+    {id:'input-rate',title:'Tốc độ nhập tối đa',hint:'Giữ mặc định trừ khi bị rớt phím.',section:'Bàn phím',terms:'rate limit input phím rớt',options:[['60','60 sự kiện/s · mặc định'],['100','100 sự kiện/s']]},
+    {id:'block-win-lock',title:'Chặn phím khoá máy',hint:'Không gửi Win+L tới máy chủ.',section:'Bàn phím',terms:'win l lock khoá màn hình',options:[['on','Chặn · mặc định'],['off','Cho phép']]},
+    {id:'listen-port',title:'Cổng kết nối',hint:'Đổi cổng cần khởi động lại dịch vụ.',section:'Bàn giao kết nối',terms:'port cổng kết nối',effect:'Khởi động lại',options:[['8443','8443 · mặc định'],['443','443']]},
+    {id:'certificate',title:'Chứng chỉ HTTPS',hint:'Không có lựa chọn tắt mã hoá.',section:'Bàn giao kết nối',terms:'TLS SSL cert chứng chỉ HTTPS',options:[['self','Tự tạo · mặc định'],['custom','Chứng chỉ riêng']]},
+    {id:'stun-turn',title:'Kết nối ngoài mạng nhà',hint:'Chỉ cấu hình khi không dùng được tailnet.',section:'Bàn giao kết nối',terms:'stun turn relay internet WAN',options:[['auto','Tự động · mặc định'],['tailnet','Chỉ tailnet']]},
+    {id:'latency-hud',title:'HUD độ trễ',hint:'Hiện số liệu nhỏ trong màn hình phiên.',section:'Chẩn đoán',terms:'debug latency hud chẩn đoán',options:[['off','Tắt · mặc định'],['on','Bật']]},
+    {id:'log-level',title:'Chi tiết nhật ký',hint:'Không tắt nhật ký bảo mật.',section:'Chẩn đoán',terms:'log debug nhật ký',options:[['normal','Thông thường · mặc định'],['verbose','Chi tiết']]},
+    {id:'encoder',title:'Bộ mã hoá video',hint:'Tự động chọn Intel QSV trên máy này.',section:'GPU mã hoá',terms:'gpu encoder nvenc qsv nvidia intel',options:[['auto','Tự động · QSV'],['qsv','Intel QSV'],['nvenc','NVIDIA']]}
+  ];
+  const allSettingDefs = [...settingDefs, ...advancedDefs];
+  const settingDefaults = Object.fromEntries(allSettingDefs.map(def => [def.id, def.range ? 70 : def.options ? def.options[0][0] : false]));
   let settings = (() => { try { return { ...settingDefaults, ...JSON.parse(localStorage.getItem('lantern-mock-settings') || '{}') }; } catch { return { ...settingDefaults }; } })();
   let settingsGroup = 'all';
   const labels = { desktop: 'Toàn bộ màn hình', browser: 'Trình duyệt', notes: 'Ghi chú' };
@@ -131,8 +154,12 @@
   $('#settingsDone').addEventListener('click', () => closeOverlay('#settingsOverlay'));
   function renderSettings() {
     const query = $('#settingsSearch').value.trim().toLocaleLowerCase();
-    const rows = settingDefs.filter(def => (settingsGroup === 'all' || def.group === settingsGroup) && (!query || `${def.title} ${def.hint} ${def.terms}`.toLocaleLowerCase().includes(query)));
+    const source = settingsGroup === 'advanced' ? advancedDefs : settingsGroup === 'all' && query ? allSettingDefs : settingDefs;
+    const rows = source.filter(def => (settingsGroup === 'all' || settingsGroup === 'advanced' || def.group === settingsGroup) && (!query || `${def.title} ${def.hint} ${def.terms}`.toLocaleLowerCase().includes(query)));
+    let previousSection = '';
     $('#settingsItems').innerHTML = rows.length ? rows.map(def => {
+      const sectionHeading = def.section && def.section !== previousSection ? `<h4 class="advanced-section">${def.section}</h4>` : '';
+      previousSection = def.section || '';
       const value = settings[def.id];
       let control;
       if (def.range) control = `<div class="range-control"><input type="range" min="0" max="100" step="5" value="${value}" data-setting="${def.id}" aria-label="${def.title}"><b>${value}%</b></div>`;
@@ -140,9 +167,9 @@
       else control = `<select data-setting="${def.id}" aria-label="${def.title}">${def.options.map(([key,label]) => `<option value="${key}" ${key===value?'selected':''}>${label}</option>`).join('')}</select>`;
       const valLabel = def.options && def.options.find(o => o[0] === value)?.[1];
       const override = def.scope === 'device' ? '<button class="override-reset" data-reset="'+def.id+'" title="Bỏ tuỳ chỉnh riêng cho thiết bị này">Dùng chung</button>' : '';
-      return `<div class="setting-row" data-setting-row="${def.id}"><span class="setting-copy"><b>${def.title}</b><small>${def.hint}</small><em>${def.scope === 'device' ? 'Riêng thiết bị này' : 'Thiết lập máy chủ'} · ${def.effect === 'Ngay' ? 'áp dụng ngay' : 'áp dụng từ phiên sau'}</em></span><div class="setting-control">${control}${override}</div></div>`;
+      return `${sectionHeading}<div class="setting-row" data-setting-row="${def.id}"><span class="setting-copy"><b>${def.title}</b><small>${def.hint}</small><em>${def.scope === 'device' ? 'Riêng thiết bị này' : def.scope === 'server' ? 'Thiết lập máy chủ' : 'Nâng cao'} · ${def.effect === 'Khởi động lại' ? 'cần khởi động lại' : def.effect === 'Phiên sau' ? 'áp dụng từ phiên sau' : 'áp dụng ngay'}</em></span><div class="setting-control">${control}${override}</div></div>`;
     }).join('') : '<div class="settings-empty">Không tìm thấy cài đặt phù hợp. Thử “mờ”, “trễ” hoặc “tiếng”.</div>';
-    const total = settingsGroup === 'all' && !query ? '12' : `${rows.length}`;
+    const total = settingsGroup === 'advanced' ? '20' : settingsGroup === 'all' && !query ? '12' : `${rows.length}`;
     $('[data-settings-group="all"] span').textContent = total;
     $$('#settingsItems [data-setting]').forEach(control => {
       const eventName = control.tagName === 'BUTTON' ? 'click' : control.type === 'range' ? 'change' : 'change';
@@ -170,7 +197,10 @@
     if (id === 'aspect') $('#mockDesktop').dataset.aspect = value;
     if (id === 'touch') $('#mockDesktop').dataset.touch = value;
     renderSettings();
-    if (settingDefs.find(def => def.id === id)?.effect === 'Phiên sau') toast('Đã lưu — áp dụng từ phiên sau.');
+    const changed = allSettingDefs.find(def => def.id === id);
+    if (changed?.effect === 'Phiên sau') toast('Đã lưu — áp dụng từ phiên sau.');
+    else if (changed?.effect === 'Khởi động lại') toast('Đã lưu — cần khởi động lại dịch vụ để áp dụng.');
+    else if (advancedDefs.includes(changed)) toast(`Đã lưu: ${changed.title}.`);
   }
   $('#settingsSearch').addEventListener('input', renderSettings);
   $$('.settings-nav button').forEach(button => button.addEventListener('click', () => {
