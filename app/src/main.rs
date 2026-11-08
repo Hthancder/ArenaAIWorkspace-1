@@ -5,6 +5,7 @@ mod capture;
 mod history;
 mod input;
 mod jpeg;
+mod pins;
 mod session_state;
 mod stream;
 
@@ -115,7 +116,7 @@ fn now_ms() -> u128 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)
 }
 
-struct State { settings: BTreeMap<String, String>, session: Option<Session>, next_id: u64, data_dir: PathBuf, live_status: Option<(bool, String)>, live_metrics: LiveMetrics, input: input::InputSanitizer, history: history::History, auth: auth_wire::AuthState, policy: guard::Policy, keyframes: u64 }
+struct State { settings: BTreeMap<String, String>, session: Option<Session>, next_id: u64, data_dir: PathBuf, live_status: Option<(bool, String)>, live_metrics: LiveMetrics, input: input::InputSanitizer, history: history::History, auth: auth_wire::AuthState, policy: guard::Policy, keyframes: u64, pins: pins::Pins }
 
 fn json_quote(value: &str) -> String {
     let mut out = String::from("\"");
@@ -491,6 +492,23 @@ fn release_all_input(state: &mut State) -> usize {
     let sent = input::inject(&actions);
     let _ = sent;
     actions.len()
+}
+
+/// Lấy một tham số từ query string: `?wid=desktop&x=1`.
+///
+/// Không decode `%20` — không route nào cần, và một bộ decode nửa vời là chỗ
+/// để lỗi. Nếu sau này cần, viết nó **một** chỗ với test, đừng rải ra đây.
+///
+/// `route` được truyền vào là **path đầy đủ có query**; hàm này tự tách.
+fn query_param(route: &str, name: &str) -> Option<String> {
+    let query = route.split_once('?')?.1;
+    for pair in query.split('&') {
+        let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
+        if key == name {
+            return Some(value.to_string());
+        }
+    }
+    None
 }
 
 /// Chạy cổng quyền cho một mutation. `None` = được đi tiếp; `Some(_)` = đã
@@ -1084,66 +1102,43 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
                 outcome.actions.len(), sent, refused, sankeys, sanbuttons, dropped, floods, releases, odd))
         }
         // ══════════════════════════════════════════════════════════════════
+        // ══════════════════════════════════════════════════════════════════
         // §6.9 — đổi nguồn capture **giữa phiên**. Điểm của cả mục này: KHÔNG
         // đóng phiên, KHÔNG mất peer/DTLS. v2.1 làm ngược lại (5–8 s màn hình
         // đen), nên các route dưới đây là thứ khiến §6.9 có nghĩa.
+        //
+        // Một nhánh cho cả 7 route của §8.1 (`window`, `mode`, `monitor`,
+        // `preset`, `cursor_mode`, `permission`, `share`): chúng khác nhau ở
+        // **giá trị được phép**, không khác ở luồng xử lý. Viết 7 nhánh giống
+        // nhau là 7 chỗ để quên một bước (clippy cũng chỉ ra: 14 `return`
+        // thừa) — và bản đầu của tôi đúng là viết như vậy.
         // ══════════════════════════════════════════════════════════════════
-        ("POST", p) if p.starts_with("/api/sessions/") && p.ends_with("/window") => {
-            let sid = p.trim_start_matches("/api/sessions/").trim_end_matches("/window");
-            // §41.3 #3: `wid` **phải** nằm trong danh sách agent vừa trả. Ở đây
-            // danh sách là 3 cửa sổ của mock, nhưng luật được viết đúng chỗ:
-            // client không bao giờ quyết định hwnd.
-            match switch_session(&mut stream, &mut s, sid, &req_headers, Switch::Window(&body)) {
-                Some(response) => return json_response(&mut stream, response.0, response.1),
-                None => return,
+        ("POST", p)
+            if p.starts_with("/api/sessions/")
+                && ["/window", "/mode", "/monitor", "/preset", "/cursor_mode", "/permission", "/share"]
+                    .iter()
+                    .any(|suffix| p.ends_with(suffix)) =>
+        {
+            let tail = p.trim_start_matches("/api/sessions/");
+            let (sid, action) = tail.rsplit_once('/').expect("có `/` vì khớp ở trên");
+            let what = match action {
+                "window" => Switch::Window(&body),
+                "mode" => Switch::Mode(&body),
+                "monitor" => Switch::Monitor(&body),
+                "preset" => Switch::Preset(&body),
+                "cursor_mode" => Switch::CursorMode(&body),
+                "permission" => Switch::Permission(&body),
+                "share" => Switch::Share(&body),
+                other => unreachable!("đã lọc ở điều kiện route: {other}"),
+            };
+            if let Some((status, response)) =
+                switch_session(&mut stream, &mut s, sid, &req_headers, what)
+            {
+                json_response(&mut stream, status, response);
             }
+            return;
         }
-        ("POST", p) if p.starts_with("/api/sessions/") && p.ends_with("/mode") => {
-            let sid = p.trim_start_matches("/api/sessions/").trim_end_matches("/mode");
-            match switch_session(&mut stream, &mut s, sid, &req_headers, Switch::Mode(&body)) {
-                Some(response) => return json_response(&mut stream, response.0, response.1),
-                None => return,
-            }
-        }
-        ("POST", p) if p.starts_with("/api/sessions/") && p.ends_with("/monitor") => {
-            let sid = p.trim_start_matches("/api/sessions/").trim_end_matches("/monitor");
-            match switch_session(&mut stream, &mut s, sid, &req_headers, Switch::Monitor(&body)) {
-                Some(response) => return json_response(&mut stream, response.0, response.1),
-                None => return,
-            }
-        }
-        // §6.10.1: đổi preset = đổi encoder config, **không** đổi màn hình ảo.
-        ("POST", p) if p.starts_with("/api/sessions/") && p.ends_with("/preset") => {
-            let sid = p.trim_start_matches("/api/sessions/").trim_end_matches("/preset");
-            match switch_session(&mut stream, &mut s, sid, &req_headers, Switch::Preset(&body)) {
-                Some(response) => return json_response(&mut stream, response.0, response.1),
-                None => return,
-            }
-        }
-        // §8.1 `{sid}/cursor_mode` — `local|remote|auto`.
-        ("POST", p) if p.starts_with("/api/sessions/") && p.ends_with("/cursor_mode") => {
-            let sid = p.trim_start_matches("/api/sessions/").trim_end_matches("/cursor_mode");
-            match switch_session(&mut stream, &mut s, sid, &req_headers, Switch::CursorMode(&body)) {
-                Some(response) => return json_response(&mut stream, response.0, response.1),
-                None => return,
-            }
-        }
-        // §8.1 `{sid}/permission {view_only}` — T2: xem mà không điều khiển.
-        ("POST", p) if p.starts_with("/api/sessions/") && p.ends_with("/permission") => {
-            let sid = p.trim_start_matches("/api/sessions/").trim_end_matches("/permission");
-            match switch_session(&mut stream, &mut s, sid, &req_headers, Switch::Permission(&body)) {
-                Some(response) => return json_response(&mut stream, response.0, response.1),
-                None => return,
-            }
-        }
-        // §21.6: link xem tạm, view-only. §8.1 ghi `{ttl_min}`.
-        ("POST", p) if p.starts_with("/api/sessions/") && p.ends_with("/share") => {
-            let sid = p.trim_start_matches("/api/sessions/").trim_end_matches("/share");
-            match switch_session(&mut stream, &mut s, sid, &req_headers, Switch::Share(&body)) {
-                Some(response) => return json_response(&mut stream, response.0, response.1),
-                None => return,
-            }
-        }
+
         // §8.1 `{sid}/keyframe` — 204, xin IDR mới. Với MJPEG mỗi frame đã
         // độc lập nên không có gì để làm; route vẫn phải tồn tại vì client
         // (§6.9 bước 5) gọi nó và không được nhận 404.
@@ -1224,8 +1219,63 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
         }
         // §8.1 + §50.2: lịch sử, **mới nhất trước**, tối đa 500 dòng, không
         // phân trang. Không có route ghi: client không được tạo lịch sử.
+        // §50.1 #2: ghim cửa sổ hay dùng. `GET /api/pins`, `POST`, `DELETE`
+        // (§8.1 gộp cả ba vào một dòng).
+        ("GET", "/api/pins") => json_response(&mut stream, 200, s.pins.json()),
+        ("POST", "/api/pins") => {
+            if deny_if_unauthorised(&mut stream, &s, &req_headers, None).is_none() { return; }
+            let Some(fields) = parse_flat_object(&body) else {
+                return json_response(&mut stream, 400, "{\"error\":\"invalid_json\"}".into());
+            };
+            let (Some(wid), label) = (fields.get("wid"), fields.get("label")) else {
+                return json_response(&mut stream, 422, "{\"error\":\"invalid_wid\"}".into());
+            };
+            // `label` không bắt buộc: không có thì dùng chính `wid` làm nhãn
+            // — bấm "ghim" mà phải gõ tên trước là thêm một bước cản.
+            let label = label.cloned().unwrap_or_else(|| wid.clone());
+            let wid = wid.clone();
+            match s.pins.upsert(&wid, &label, now_ms() as u64) {
+                Ok(pin) => json_response(&mut stream, 200, format!(
+                    "{{\"wid\":{},\"label\":{}}}", json_quote(&pin.wid), json_quote(&pin.label))),
+                Err(error) => json_response(&mut stream, error.status(), format!(
+                    "{{\"error\":{}}}", json_quote(error.code()))),
+            }
+        }
+        ("DELETE", "/api/pins") => {
+            if deny_if_unauthorised(&mut stream, &s, &req_headers, None).is_none() { return; }
+            // `wid` đi trong query string (§8.1 không ghi rõ, nhưng `DELETE`
+            // không có body trong HTTP/1.1 là chuyện thường).
+            //
+            // Phải đọc từ `path`, **không** từ `route`: `route` đã bị tách
+            // query ở dòng `let route = path.split('?')...`, nên
+            // `query_param(&route, ..)` luôn trả `None` — DELETE nào cũng
+            // thành 404 dù ghim có thật. Bug này chỉ lộ ra khi gọi bằng curl;
+            // unit test của `Pins` không đi qua HTTP nên không thấy.
+            let wid = query_param(&path, "wid").unwrap_or_default();
+            match s.pins.remove(&wid) {
+                Ok(removed) => json_response(&mut stream, 200, format!(
+                    "{{\"removed\":{}}}", json_quote(&removed.wid))),
+                Err(error) => json_response(&mut stream, error.status(), format!(
+                    "{{\"error\":{}}}", json_quote(error.code()))),
+            }
+        }
         ("GET", "/api/history") => {
-            let records = s.history.read();
+            // §8.1 ghi `?from=&to=`; §50.2 "danh sách + lọc theo ngày".
+            // **Không** phân trang ảo hoá: tối đa 500 dòng (§50.2).
+            let records: Vec<history::Record> = s
+                .history
+                .read()
+                .into_iter()
+                .filter(|record| {
+                    let Some(from) = query_param(&path, "from").and_then(|v| v.parse::<u64>().ok()) else {
+                        return true;
+                    };
+                    let to = query_param(&route, "to")
+                        .and_then(|v| v.parse::<u64>().ok())
+                        .unwrap_or(u64::MAX);
+                    record.ts >= from && record.ts <= to
+                })
+                .collect();
             let items: Vec<String> = records.iter().map(history::Record::to_json).collect();
             json_response(&mut stream, 200, format!(
                 "{{\"history\":[{}],\"count\":{}}}", items.join(","), records.len()))
@@ -1412,8 +1462,10 @@ fn main() {
     let data_dir = env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(env::temp_dir).join("LanternMock");
     let mut settings = SETTINGS_DEFAULTS.iter().map(|(k,v)|(k.to_string(),v.to_string())).collect::<BTreeMap<_,_>>();
     if let Ok(text) = fs::read_to_string(data_dir.join("settings.json")) { if let Some(saved)=parse_flat_object(&text) { for (k,v) in saved { if settings.contains_key(&k) && allowed_value(&k,&v) { settings.insert(k,v); } } } }
+    // Dựng trước khi `data_dir` bị move vào `State` — cùng lý do với `history`.
     let history_log = history::History::new(&data_dir);
-    let state=Arc::new(Mutex::new(State{settings,session:None,next_id:0,data_dir,live_status:None,live_metrics:LiveMetrics::default(),input:input::InputSanitizer::default(),history:history_log,auth:auth_wire::AuthState::default(),policy:guard::Policy::for_bind(&host),keyframes:0}));
+    let pins_store = pins::Pins::new(&data_dir);
+    let state=Arc::new(Mutex::new(State{settings,session:None,next_id:0,data_dir,live_status:None,live_metrics:LiveMetrics::default(),input:input::InputSanitizer::default(),history:history_log,pins:pins_store,auth:auth_wire::AuthState::default(),policy:guard::Policy::for_bind(&host),keyframes:0}));
     let url = format!("http://127.0.0.1:{actual}");
     println!("Lantern mock is ready. Open {url} in your browser.");
     println!("Xem màn hình thật: {url}/live  — hoặc bấm nút \"Xem máy thật\" (không cần cài gì).");
@@ -1503,6 +1555,7 @@ mod tests {
                 policy,
                 keyframes: 0,
                 history: history::History::new(&data_dir),
+                pins: pins::Pins::new(&data_dir),
             }));
             // `take(32)`: luồng đăng nhập đầy đủ (§8.1) cần 8 request **chỉ
             // riêng** cho setup/login/refresh/logout; `take(8)` khiến test
@@ -1619,6 +1672,42 @@ mod tests {
             &[("Cookie", &format!("lantern_refresh={second}"))]);
         assert!(after.starts_with("HTTP/1.1 401"), "family đã bị thu hồi: {after}");
 
+        drop(server);
+    }
+
+    /// §50.1 #2 + §8.1: `GET/POST/DELETE /api/pins` chạy qua HTTP.
+    ///
+    /// # Bug thật mà test này tồn tại để bắt
+    ///
+    /// `/api/pins?wid=browser` — `route` **đã** bị tách query ở
+    /// `let route = path.split('?')...`, nên `query_param(&route, ..)` luôn
+    /// trả `None` và **mọi** `DELETE` thành 404 dù ghim có thật. Unit test của
+    /// `Pins` không thấy vì nó không đi qua HTTP. Chỉ `curl` thấy.
+    #[test] fn pin_routes_work_over_http_including_delete_with_a_query_string() {
+        let (addr, server) = spawn_server();
+        assert_eq!(http(addr, "GET", "/api/pins", "").contains(r#""pins":[]"#), true,
+            "ban đầu phải rỗng");
+
+        let added = http(addr, "POST", "/api/pins", r#"{"wid":"browser","label":"Chrome ở nhà"}"#);
+        assert!(added.contains(r#""label":"Chrome ở nhà""#), "thêm ghim: {added}");
+
+        // Không có nhãn ⇒ lấy `wid` làm nhãn (không bắt người dùng gõ thêm).
+        let bare = http(addr, "POST", "/api/pins", r#"{"wid":"desktop"}"#);
+        assert!(bare.contains(r#""label":"desktop""#), "nhãn mặc định: {bare}");
+
+        let list = http(addr, "GET", "/api/pins", "");
+        assert_eq!(list.matches(r#""wid":"#).count(), 2, "phải có 2 ghim: {list}");
+        // Mới ghim lên trước (§50.1 #2: "3 bấm → 1 bấm", danh sách phải ngắn
+        // và mới nhất ở đầu).
+        assert!(list.find("desktop").unwrap() < list.find("browser").unwrap(),
+            "mới ghim phải đứng trước: {list}");
+
+        // §50.1 #2: nhãn là của người dùng, có dấu tiếng Việt — phải giữ nguyên.
+        let removed = http(addr, "DELETE", "/api/pins?wid=browser", "");
+        assert!(removed.contains(r#""removed":"browser""#),
+            "DELETE kèm query string phải tìm được ghim: {removed}");
+        let again = http(addr, "DELETE", "/api/pins?wid=browser", "");
+        assert!(again.contains("pin_not_found"), "xoá lần 2 ⇒ 404: {again}");
         drop(server);
     }
 
