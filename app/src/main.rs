@@ -649,17 +649,32 @@ mod tests {
     }
 
     /// Mở stream như trình duyệt rồi bỏ đi ngay (còn byte chưa đọc ⇒ RST).
-    fn open_and_abandon(port: u16) {
+    /// Trả `true` nếu **đã** nhận được byte (tức pipeline đã chạy và server đã
+    /// gửi 200). Đọc tới khi thấy `\n\n` để chắc chắn header đã xong, chứ không
+    /// chỉ một mẩu ngẫu nhiên.
+    fn open_and_abandon(port: u16) -> bool {
         let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("kết nối");
         stream
             .write_all(b"GET /api/live.mjpg?monitor=1 HTTP/1.1\r\nHost: t\r\n\r\n")
             .expect("gửi request");
         stream
-            .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+            .set_read_timeout(Some(std::time::Duration::from_secs(10)))
             .ok();
-        let mut head = [0u8; 96];
-        let _ = stream.read(&mut head);
-        drop(stream); // không đọc nốt ⇒ OS gửi RST
+        let mut received = Vec::new();
+        let mut buffer = [0u8; 256];
+        let ok = loop {
+            match stream.read(&mut buffer) {
+                Ok(0) | Err(_) => break false,
+                Ok(n) => {
+                    received.extend_from_slice(&buffer[..n]);
+                    if received.windows(4).any(|w| w == b"\r\n\r\n") || received.len() > 1024 {
+                        break true;
+                    }
+                }
+            }
+        };
+        drop(stream); // bỏ đi khi còn byte chưa đọc ⇒ OS gửi RST
+        ok
     }
 
     /// Đợi tới khi điều kiện đúng, tối đa `limit`. Trả `false` nếu hết giờ.
@@ -682,7 +697,14 @@ mod tests {
             "#!/bin/sh\necho $$ > \"$(dirname \"$0\")/pid\"\nprintf -- '--lanternframe\\r\\nContent-Type: image/jpeg\\r\\n\\r\\n'\nprintf 'F1'\nprintf -- '\\r\\n'\nexec sleep 173\n",
             "4000",
         );
-        open_and_abandon(server.port);
+        // Có thể request đầu tiên tới trước khi server kịp accept ⇒ thử lại thay
+        // vì đỏ ngẫu nhiên. Test này chỉ được phép đỏ vì lý do thật.
+        let mut received = false;
+        for _ in 0..5 {
+            if open_and_abandon(server.port) { received = true; break; }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        assert!(received, "không nhận được byte nào từ stream — server chưa sẵn sàng?");
         let pid = fake_pid(&server.dir).expect("script giả phải ghi pid");
         assert!(process_alive(pid), "pipeline phải đang chạy khi có người xem");
         assert!(
@@ -698,7 +720,10 @@ mod tests {
         // thời gian chờ, kèm lời giải thích của GStreamer, và không để lại gì.
         let server = spawn_test_server(
             "#!/bin/sh\necho $$ > \"$(dirname \"$0\")/pid\"\necho 'ERROR: monitor-index khong ton tai' >&2\nexec sleep 179\n",
-            "300",
+            // 1500 ms, không phải 300: trên runner CI đang tải, spawn `sh` có thể
+            // mất hơn 300 ms, lỗi được in *trước* khi exe kịp chờ ⇒ 200 thay vì
+            // 504 ⇒ test đỏ ngẫu nhiên. Đây là lần đỏ CI 42467145495.
+            "1500",
         );
         let start = std::time::Instant::now();
         let mut stream = TcpStream::connect(("127.0.0.1", server.port)).expect("kết nối");

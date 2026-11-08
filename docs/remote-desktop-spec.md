@@ -1,6 +1,6 @@
 # SPEC v3.30 — Remote Desktop qua trình duyệt **cho dùng cá nhân**: HVNC + VNC, window picker, âm thanh server-side, trải nghiệm điều khiển đầy đủ
 
-- Phiên bản: **v3.30 — §58.6–§58.11 bốn lỗi chỉ hiện khi chạy thật (kill sai, FIN≠RST, đọc stderr treo, docs hứa mà code không làm) + 5 test HTTP thật** · trước đó: **v3.29 — §58 đường dùng được ngay hôm nay: xem màn hình thật bằng MJPEG trong trình duyệt (0 dependency, 0 dòng JS ở client)** · trước đó: **v3.28 — §57 tầng bảo mật thành code có test: `security.rs` 7 module, 100 test, 10/14 kiểm chứng §41.10 tự động, 1 XSS thật được sửa** · trước đó: **v3.27 — §56.10 GitHub Actions đã xanh sau khi user cập nhật billing: clippy + test + Windows build + smoke-run** · trước đó: **v3.26 — §56.9 tìm ra nguyên nhân thật của `startup_failure`: account bị khoá vì billing, không phải file CI** · trước đó: v3.25 — §56.7 compile thật: 16/16 test xanh, bắt được 3 lỗi · §56.8 GitHub Actions của repo này đang tắt (không phải lỗi file)** · trước đó: v3.24 — §56 code + GitHub Actions · trước đó: **v3.23 — §54 nới lỏng (bỏ luật cứng không cần), §55 camera + micro máy chủ** · trước đó: **v3.22 — §53 host là laptop Dell 7467: QSV trước NVENC, nắp/pin/nhiệt/Wi-Fi 1x1** · trước đó: **v3.21 — §52 máy hybrid iGPU+1050: topology quyết định, DDAPI fail trên GPU rời** · trước đó: **v3.20 — §51.10–14: VRAM 4 GB, trần 1440p, sửa lỗi AdapterRAM** · trước đó: **v3.19 — thêm §51 hồ sơ GTX 1050, bẫy adapter, P0 cụ thể** · trước đó: **v3.18 — thêm §48 mô hình tuỳ chỉnh, §49 chống vỡ UI, §50 tính năng còn thiếu** · trước đó: **v3.17 — thêm §47 khởi động cùng Windows + vòng đời process + trải nghiệm theo thời gian** · trước đó: **v3.16 — thêm §46 "máy có ở đó không" (ngủ/reboot/đổi IP/khoá màn hình)**, lĩnh vực G còn trống · trước đó: **v3.15** — phạm vi thu hẹp về 1–2 người dùng (§0.3). Bản v3.14 là bản "sản phẩm": có cert, EULA, RBAC, accessibility, đóng gói ký số. Tất cả những thứ đó **đã cắt** ở đây — xem §0.3.1 để biết cắt gì và cắt có an toàn không. Lịch sử đầy đủ v1.0→v3.14 ở §0.
+- Phiên bản: **v3.30 — §58.6–§58.12 năm lỗi chỉ hiện khi chạy thật (kill sai, FIN≠RST, đọc stderr treo, docs hứa mà code không làm, flaky CI) + 5 test HTTP thật** · trước đó: **v3.29 — §58 đường dùng được ngay hôm nay: xem màn hình thật bằng MJPEG trong trình duyệt (0 dependency, 0 dòng JS ở client)** · trước đó: **v3.28 — §57 tầng bảo mật thành code có test: `security.rs` 7 module, 100 test, 10/14 kiểm chứng §41.10 tự động, 1 XSS thật được sửa** · trước đó: **v3.27 — §56.10 GitHub Actions đã xanh sau khi user cập nhật billing: clippy + test + Windows build + smoke-run** · trước đó: **v3.26 — §56.9 tìm ra nguyên nhân thật của `startup_failure`: account bị khoá vì billing, không phải file CI** · trước đó: v3.25 — §56.7 compile thật: 16/16 test xanh, bắt được 3 lỗi · §56.8 GitHub Actions của repo này đang tắt (không phải lỗi file)** · trước đó: v3.24 — §56 code + GitHub Actions · trước đó: **v3.23 — §54 nới lỏng (bỏ luật cứng không cần), §55 camera + micro máy chủ** · trước đó: **v3.22 — §53 host là laptop Dell 7467: QSV trước NVENC, nắp/pin/nhiệt/Wi-Fi 1x1** · trước đó: **v3.21 — §52 máy hybrid iGPU+1050: topology quyết định, DDAPI fail trên GPU rời** · trước đó: **v3.20 — §51.10–14: VRAM 4 GB, trần 1440p, sửa lỗi AdapterRAM** · trước đó: **v3.19 — thêm §51 hồ sơ GTX 1050, bẫy adapter, P0 cụ thể** · trước đó: **v3.18 — thêm §48 mô hình tuỳ chỉnh, §49 chống vỡ UI, §50 tính năng còn thiếu** · trước đó: **v3.17 — thêm §47 khởi động cùng Windows + vòng đời process + trải nghiệm theo thời gian** · trước đó: **v3.16 — thêm §46 "máy có ở đó không" (ngủ/reboot/đổi IP/khoá màn hình)**, lĩnh vực G còn trống · trước đó: **v3.15** — phạm vi thu hẹp về 1–2 người dùng (§0.3). Bản v3.14 là bản "sản phẩm": có cert, EULA, RBAC, accessibility, đóng gói ký số. Tất cả những thứ đó **đã cắt** ở đây — xem §0.3.1 để biết cắt gì và cắt có an toàn không. Lịch sử đầy đủ v1.0→v3.14 ở §0.
 - Trạng thái: **Đề xuất — phần [CỨNG] đã thành code có test (§57), phần còn lại chờ P0.** Sau v3.15 spec **không còn chương lý thuyết nào cần viết**; từ v3.28 việc viết mới là **code + test cho từng chương**, và việc còn lại của bạn là **P0 (đo thật)** trên laptop.
 - Nền tảng: Server **Windows 10 2004+ / Windows 11** · Client **trình duyệt** (không app)
 
@@ -6755,9 +6755,9 @@ Bản v3.30 thêm **ba test HTTP thật + 2 test trực tiếp** — dựng serv
 
 > **`probe_live_status()` là chỗ đáng chú ý:** nó biến "nút bấm được nhưng lỗi" thành "nút mờ + nói lý do cụ thể". Một app nói *"Chưa có GStreamer trong PATH"* tốt hơn một app hiện khung đen, và tốt hơn nhiều lần một app không có nút đó.
 
-### 58.6 Bốn lỗi chỉ hiện ra khi chạy thật
+### 58.6 Năm lỗi chỉ hiện ra khi chạy thật
 
-Đoạn code trên **qua hết unit test** mà vẫn sai bốn lần. Cả bốn đều vô hình trong test thường vì chúng chỉ xảy ra khi có một **tiến trình bên ngoài** và một **socket thật**. Ghi lại nguyên văn vì đây là dạng lỗi sẽ quay lại: nó không nằm ở logic của ta, nó nằm ở *hợp đồng với hệ điều hành*.
+Đoạn code trên **qua hết unit test** mà vẫn sai năm lần. Cả bốn đều vô hình trong test thường vì chúng chỉ xảy ra khi có một **tiến trình bên ngoài** và một **socket thật**. Ghi lại nguyên văn vì đây là dạng lỗi sẽ quay lại: nó không nằm ở logic của ta, nó nằm ở *hợp đồng với hệ điều hành*.
 
 | # | Triệu chứng quan sát được | Nguyên nhân thật | Sửa |
 |---|---|---|---|
@@ -6765,6 +6765,7 @@ Bản v3.30 thêm **ba test HTTP thật + 2 test trực tiếp** — dựng serv
 | 2 | Sau khi sửa (1), vẫn còn 1 tiến trình | Trình duyệt đóng khi còn byte chưa đọc ⇒ OS gửi **RST**, không phải FIN; `peek` trả `Err`, mà code chỉ nhận `Ok(0)` | `Err` khác timeout ⇒ coi là đã đóng (§58.8) |
 | 3 | Nhánh lỗi `504` **treo > 15 s** | Đọc `stderr` của tiến trình **còn sống** ⇒ `read_to_string` chờ tới khi nó thoát (có thể mãi mãi) | Kill + `wait` **trước**, rồi mới đọc stderr (§58.9) |
 | 4 | `HOST=0.0.0.0` **bind được**, dù docs nói "app từ chối" | Docs viết một điều code chưa hề làm; không có test nào cho lời hứa đó | `allowed_bind_host()` + test (§58.10) |
+| 5 | CI đỏ rồi lần sau **tự xanh** | Test giả định `sh` spawn xong trong 300 ms; trên runner đang tải thì không | nới hạn chờ + thử lại có giới hạn (§58.12) |
 
 > Bài học chung, viết ra để lần sau không mất thêm một vòng: **một tiến trình con + một socket = ba trạng thái, không phải một.** "Đã đóng", "còn sống", và "không nói gì" là ba chuyện khác nhau; code nào chỉ xử lý hai trong ba thì sẽ để lại capture mồ côi hoặc spinner vô hạn.
 
@@ -6869,7 +6870,7 @@ Hai điều đáng giữ lại:
 1. **`localhost` được hạ về `127.0.0.1`** chứ không bind nguyên chuỗi: `localhost` có thể phân giải ra `::1`, rồi người dùng gõ `127.0.0.1` và không vào được — một lỗi "không kết nối được" hoàn toàn tự gây.
 2. **Cờ ghi đè phải ghi đè thật.** Bản đầu của `allowed_bind_host` trả `127.0.0.1` cho *mọi* trường hợp, kể cả khi có cờ — tức là cờ chỉ để trong docs cho đẹp. Test bắt được ngay khi thêm assert cho nhánh này.
 
-> Bài học gộp cho cả §58.6–§58.10: **bốn lỗi, và không lỗi nào nằm ở thuật toán.** Chúng nằm ở hợp đồng với hệ điều hành (1, 2, 3) và ở khoảng cách giữa điều tài liệu hứa với điều code làm (4). Unit test thuần logic không nhìn thấy cái nào trong bốn cái đó — chỉ socket thật và một lần đọc lại tài liệu bằng con mắt nghi ngờ mới thấy.
+> Bài học gộp cho cả §58.6–§58.10: **bốn lỗi đầu, và không lỗi nào nằm ở thuật toán.** Chúng nằm ở hợp đồng với hệ điều hành (1, 2, 3) và ở khoảng cách giữa điều tài liệu hứa với điều code làm (4). Unit test thuần logic không nhìn thấy cái nào trong bốn cái đó — chỉ socket thật và một lần đọc lại tài liệu bằng con mắt nghi ngờ mới thấy.
 
 ### 58.11 Bảng "đã kiểm bằng gì"
 
@@ -6887,3 +6888,24 @@ Sòng phẳng về mức độ tin cậy của từng phần — vì "test xanh"
 | Âm thanh, chuột/bàn phím, TLS, LAN | **không có trong bản này** | — |
 
 > Dòng thứ năm là dòng quan trọng nhất. Toàn bộ §58 tồn tại để **giảm** phần "chưa ai kiểm" đó xuống còn đúng một lần bấm nút trên máy bạn — không phải để tuyên bố nó đã xong.
+
+### 58.12 Lỗi 5 — CI đỏ rồi tự xanh: flaky test cũng là **lỗi thật**
+
+Sau khi thêm §58.10, CI đỏ ở bước `standalone exe tests` (`exit code 101`). Không đọc được log (blob storage bị chặn — §56.10), nên đẩy thông báo lỗi ra *annotation* giống cách đã làm cho clippy ở §57.9. Lần chạy kế tiếp: **xanh**, cùng code. Tức là flaky.
+
+> **Một test đỏ rồi tự xanh không phải "chuyện của CI".** Nó là một test đang nói dối: lần sau nó đỏ, ta sẽ không tin nó nữa, và lúc đó nó có thể đang báo một lỗi thật. Flaky phải tìm ra nguyên nhân, không phải chạy lại cho tới khi xanh.
+
+Hai chỗ đua, cùng một dạng: **giả định về thời gian**. Máy dev rảnh, runner CI thì không.
+
+| Test | Giả định sai | Trên máy rảnh | Trên runner đang tải | Sửa |
+|---|---|---|---|---|
+| `http_stream_returns_504_...` | `sh` in lỗi xong mới tới hạn chờ 300 ms | đúng | `sh` spawn > 300 ms ⇒ lỗi in ra **trước** khi exe kịp chờ ⇒ trả `200` | nâng hạn chờ lên 1500 ms (vẫn < 6 s assert) |
+| `http_stream_kills_the_pipeline_...` | request đầu tiên luôn tới sau khi server accept | đúng | có thể tới sớm ⇒ không byte nào, pipeline chưa chạy ⇒ assert sai chỗ | đọc tới `\r\n\r\n`, trả `bool`, thử lại 5 lần |
+
+Nguyên tắc rút ra cho các test dùng socket:
+
+1. **Không bao giờ `expect` một kết nối đã sẵn sàng.** Thử lại có giới hạn, và phân biệt "chưa sẵn sàng" với "hỏng thật".
+2. **Mọi hạn chờ phải có biên rộng hơn nhiều lần so với giá trị kỳ vọng** khi nó phụ thuộc vào việc spawn tiến trình — trên CI, `fork`+`exec` có thể chậm hơn 10×.
+3. **Đọc đến khi đủ dữ liệu**, không đọc một lần rồi giả định đã đủ.
+
+Đo lại: 8 lần chạy liên tiếp, 0 lỗi. Chạy lại 1 lần chưa đủ để nói hết flaky — phải là nhiều lần liên tiếp.
