@@ -159,6 +159,28 @@ jobs:
           }
           Write-Host "== cài xong vào $target"
 
+      - name: debug (tạm)
+        shell: pwsh
+        run: |
+          $t = Join-Path $env:RUNNER_TEMP 'gstreamer'
+          Write-Host "ROOT=$t"
+          Get-ChildItem $t | Select-Object Name | Format-Table
+          Write-Host "--- bin (10):"
+          Get-ChildItem (Join-Path $t 'bin') -Filter '*.exe' | Select-Object -First 10 Name | Format-Table
+          Write-Host "--- plugins:", (Get-ChildItem (Join-Path $t 'lib/gstreamer-1.0') -Filter '*.dll').Count, "dll"
+          $env:GST_PLUGIN_SYSTEM_PATH_1_0 = Join-Path $t 'lib/gstreamer-1.0'
+          $env:GST_PLUGIN_PATH_1_0 = ''
+          $exe = Join-Path $t 'bin/gst-inspect-1.0.exe'
+          Write-Host "--- inspect d3d11screencapturesrc:"
+          & $exe d3d11screencapturesrc 2>&1 | Select-Object -First 12
+          Write-Host "exit=$LASTEXITCODE"
+          Write-Host "--- inspect file jpeg:"
+          & $exe (Join-Path $t 'lib/gstreamer-1.0/libgstjpeg.dll') 2>&1 | Select-Object -First 6
+          Write-Host "--- job summary path: $env:GITHUB_STEP_SUMMARY"
+          & $exe d3d11screencapturesrc 2>&1 | Select-Object -First 12 | Add-Content $env:GITHUB_STEP_SUMMARY
+          "count=" + (Get-ChildItem (Join-Path $t 'lib/gstreamer-1.0') -Filter '*.dll').Count | Add-Content $env:GITHUB_STEP_SUMMARY
+          & $exe (Join-Path $t 'lib/gstreamer-1.0/libgstjpeg.dll') 2>&1 | Select-Object -First 8 | Add-Content $env:GITHUB_STEP_SUMMARY
+
       - name: trim GStreamer to the 6 elements this app uses
         shell: pwsh
         run: |
