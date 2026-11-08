@@ -161,7 +161,10 @@ jobs:
 
       - name: debug (tạm)
         shell: pwsh
+        continue-on-error: true
         run: |
+          $ErrorActionPreference = 'Continue'
+          trap { Write-Output "::error::DEBUG LỖI: $($_.Exception.Message) @ $($_.InvocationInfo.ScriptLineNumber)"; continue }
           $t = Join-Path $env:RUNNER_TEMP 'gstreamer'
           Write-Host "ROOT=$t"
           Get-ChildItem $t | Select-Object Name | Format-Table
