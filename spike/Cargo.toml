@@ -1,0 +1,20 @@
+[lib]
+name = "rd_spike_lib"
+path = "src/lib.rs"
+
+[package]
+name = "rd-spike"
+version = "0.1.0"
+edition = "2021"
+description = "Remote desktop P0 spike: pipeline builder + policy engine (no GPU needed to build)"
+license = "MIT"
+
+[[bin]]
+name = "rd"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
+panic = "abort"

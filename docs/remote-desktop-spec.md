@@ -1,6 +1,6 @@
 # SPEC v3.15 — Remote Desktop qua trình duyệt **cho dùng cá nhân**: HVNC + VNC, window picker, âm thanh server-side, trải nghiệm điều khiển đầy đủ
 
-- Phiên bản: **v3.23 — §54 nới lỏng (bỏ luật cứng không cần), §55 camera + micro máy chủ** · trước đó: **v3.22 — §53 host là laptop Dell 7467: QSV trước NVENC, nắp/pin/nhiệt/Wi-Fi 1x1** · trước đó: **v3.21 — §52 máy hybrid iGPU+1050: topology quyết định, DDAPI fail trên GPU rời** · trước đó: **v3.20 — §51.10–14: VRAM 4 GB, trần 1440p, sửa lỗi AdapterRAM** · trước đó: **v3.19 — thêm §51 hồ sơ GTX 1050, bẫy adapter, P0 cụ thể** · trước đó: **v3.18 — thêm §48 mô hình tuỳ chỉnh, §49 chống vỡ UI, §50 tính năng còn thiếu** · trước đó: **v3.17 — thêm §47 khởi động cùng Windows + vòng đời process + trải nghiệm theo thời gian** · trước đó: **v3.16 — thêm §46 "máy có ở đó không" (ngủ/reboot/đổi IP/khoá màn hình)**, lĩnh vực G còn trống · trước đó: **v3.15** — phạm vi thu hẹp về 1–2 người dùng (§0.3). Bản v3.14 là bản "sản phẩm": có cert, EULA, RBAC, accessibility, đóng gói ký số. Tất cả những thứ đó **đã cắt** ở đây — xem §0.3.1 để biết cắt gì và cắt có an toàn không. Lịch sử đầy đủ v1.0→v3.14 ở §0.
+- Phiên bản: **v3.24 — §56 code + GitHub Actions: `spike/` 14 test, `rd.exe` artifact** · trước đó: **v3.23 — §54 nới lỏng (bỏ luật cứng không cần), §55 camera + micro máy chủ** · trước đó: **v3.22 — §53 host là laptop Dell 7467: QSV trước NVENC, nắp/pin/nhiệt/Wi-Fi 1x1** · trước đó: **v3.21 — §52 máy hybrid iGPU+1050: topology quyết định, DDAPI fail trên GPU rời** · trước đó: **v3.20 — §51.10–14: VRAM 4 GB, trần 1440p, sửa lỗi AdapterRAM** · trước đó: **v3.19 — thêm §51 hồ sơ GTX 1050, bẫy adapter, P0 cụ thể** · trước đó: **v3.18 — thêm §48 mô hình tuỳ chỉnh, §49 chống vỡ UI, §50 tính năng còn thiếu** · trước đó: **v3.17 — thêm §47 khởi động cùng Windows + vòng đời process + trải nghiệm theo thời gian** · trước đó: **v3.16 — thêm §46 "máy có ở đó không" (ngủ/reboot/đổi IP/khoá màn hình)**, lĩnh vực G còn trống · trước đó: **v3.15** — phạm vi thu hẹp về 1–2 người dùng (§0.3). Bản v3.14 là bản "sản phẩm": có cert, EULA, RBAC, accessibility, đóng gói ký số. Tất cả những thứ đó **đã cắt** ở đây — xem §0.3.1 để biết cắt gì và cắt có an toàn không. Lịch sử đầy đủ v1.0→v3.14 ở §0.
 - Trạng thái: **Đề xuất — CHƯA implement, chờ duyệt.** Sau v3.15, spec **không còn chương nào cần viết**; việc tiếp theo là **P0 (đo thật)**, không phải viết thêm.
 - Nền tảng: Server **Windows 10 2004+ / Windows 11** · Client **trình duyệt** (không app)
 
@@ -27,6 +27,7 @@
 | **v3.11** | **§41 threat model: 10 tài sản · 10 vị trí P1–P10 · **lật giả định nền — client KHÔNG tin cậy, agent tin về hành vi nhưng không tin về dữ liệu** · 3 hệ quả kiến trúc · 20 mối đe doạ T1–T20 theo ranh giới · 5 quyết định *bắt nguồn từ threat model* (client không gửi `hwnd`; không endpoint chạy lệnh; transfer/clipboard mặc định tắt; `X-Frame-Options: DENY`; người ngồi máy luôn dừng được) · token rotate + reuse detection · P6 quyền phủ quyết · supply chain/chống downgrade · 9 rủi ro chấp nhận · 14 kiểm chứng** |
 | **v3.12** | **§42 multi-session — phát hiện ràng buộc bị bỏ qua: 1 desktop = 1 con trỏ + 1 focus ⇒ chỉ 1 controller/session, N viewer** · input lease (server-side, TTL, release_all trước khi chuyển) · bảng chia sẻ vs cách ly 13 tài nguyên · admission control theo VRAM/RAM/CPU/slot/display có số (thay cho "max 3") · giới hạn display slot của VDD = câu hỏi chặn Phase 0 · fanout 1 encode → N SRTP (PLI theo **stream** không theo peer) · cách ly lỗi + tự phục hồi sau TDR · fairness 4 mức · **10 bảo đảm cách ly phải test (I1–I10), fail ⇒ tắt multi-session** · refcount dọn sau 5 s** |
 | **v3.13** | **§43 client perf: vì sao client dễ chết hơn server (6 nền tảng, Safari iOS kill tab ~200–400 MB, GC không kiểm soát) · 15 chỉ số ngân sách có cách đo · quyết định render (video element ≠ canvas; cursor = div transform; HUD 2 Hz) · **10 chỗ tốn tiền thật** (#1 forced reflow từ `getBoundingClientRect` mỗi pointer event — bug phổ biến nhất, không thấy bằng mắt) · kiến trúc JS (0 dependency, 12 module, `render(state)`) · perf-probe + **CI gate thật** (size/type/perf/leak, baseline 7 ngày) · 3 giới hạn cứng mobile · overlay 0 ms main thread · 8 nguồn rò rỉ + test 50 lần vào/ra** |
+| **v3.24** | **Code + CI có thật** (`spike/`, `.github/workflows/ci.yml`): 4 file Rust **0 dependency** — `machine.rs` (adapter/VRAM/`cross_adapter()`/trần display), `pipeline.rs` (sinh chuỗi GStreamer desktop·camera·mic, `b-frames=0`, không multipass/lookahead), `policy.rs` (guard **3 mức**, mặc định **Warn**), `tests/spec_conformance.rs` (**14 test = spec thành assertion**) · CI 2 job: ubuntu `clippy -D warnings` + `cargo test` + **in pipeline ra log để đọc bằng mắt**; windows `build --release` + **smoke-run `rd.exe --demo`** + upload artifact `rd-windows-x64` · **5 test chặn đúng lỗi tôi từng mắc** (pin 15% chỉ warn · bắt buộc `capture-api=dxgi` · mọi encoder `b-frames=0` · "Xem phòng" không kéo capture desktop · Microsoft Basic Render không bao giờ thắng VRAM) · **ranh giới rõ**: CI không chạy được capture/NVENC/p95/VDD/khởi động/LED webcam ⇒ P0 vẫn 6 bước trên máy thật, nhưng từ nay *"CI xanh = code đúng"* thay vì *"tin tôi đi"* · đề xuất kế tiếp A `security.rs` / B `config.rs` / C `signaling.rs` / D client shell |
 | **v3.23** | **Nới lỏng theo phản hồi người dùng** — tôi đã biến mọi thứ thành luật cứng: đếm được **~78 luật có số + 33 test "bắt buộc"** cho một công cụ 1–2 người. §54 phân 3 loại **[CỨNG] ≤ 20 / [MỀM] / [GỢI Ý]**, hạ nhãn 10 chỗ (VRAM, RAM, pin, nhiệt, Wi-Fi power save…), **P0 rút 11 → 6 bước/45 phút**, phần còn lại "làm khi gặp"; **8 thứ vẫn cứng** (TLS, auth, `release_all`, thứ tự restore, không kill bản cũ, không lưu tiêu đề, 1 controller, không tắt được dấu hiệu bị điều khiển); CI đếm `[CỨNG] ≤ 20` · cập nhật máy: **RAM 8 GB, Wi-Fi đã nâng lên Intel AC 8265 (2×2, 867 Mbps)** ⇒ 2 mối lo cũ (§53.7 1×1, §53.8 4 GB) **giảm hẳn** · **§55 camera + micro máy chủ**: `mfvideosrc` + `wasapi2src` (cùng code chọn thiết bị với §40), **cùng `webrtcbin`, transceiver riêng**, **không dùng NVENC** (giữ dGPU ngủ), camera 640×480 ≈ 0.6–1.2 Mbps **trừ trước** khỏi bitrate màn hình, PiP 160×120 trong STAGE (không thêm thanh thứ 3), **AEC `webrtcdsp` + `webrtcechoprobe`** lấy reference từ loa máy chủ (ta **có sẵn**), camera/mic **mặc định tắt**, **luôn hiện dấu hiệu đang bật**, **đóng thiết bị** khi hết phiên, intercom = bước 2 có push-to-talk |
 | **v3.22** | **Host là LAPTOP Dell Inspiron 7467** (i5-7300HQ 45 W · HD 630 · GTX 1050 4 GB · panel 14″ 1080p) ⇒ **đảo 3 kết luận**: không cắm cáp được nên hybrid **vĩnh viễn**; trần display **1440p → 1080p** (panel 1080p, tiết kiệm 78% pixel); "sửa topology rồi hãy tối ưu code" chỉ còn đường `vdd_settings.xml` · **kết luận ngược trực giác: dùng QSV trên iGPU HD 630, để 1050 ngủ** — capture+encode **cùng adapter = 0 copy**, giảm **10–20 W** trong thân 14″, dGPU về D3cold · `order: qsv trước nvenc` (quyết định theo máy) · **Optimus D3cold ⇒ frame đầu +200–800 ms** ⇒ warm-up 5 frame, đo riêng 2 giây đầu · **gập nắp mặc định = Sleep = giết phiên** (nguyên nhân số 1 "không kết nối được" với laptop host) + lời khuyên **để nắp mở** vì máy này thoát nhiệt ở bản lề · **nhiệt**: phiên remote tệ hơn chơi game vì tải **liên tục phẳng**; 3 việc giảm nhiệt (QSV, kê đáy, **giới hạn CPU 99% tắt turbo**) + banner > 95 °C · **pin**: Sleep/Hibernate mặc định phá phiên, banner khi chạy pin, **từ chối tạo phiên nếu pin < 15%** · **máy có RJ-45 ⇒ dùng cáp, không Wi-Fi** (Intel 3165 **1x1**, power save gây spike 20–200 ms) + 4 thứ phải tắt nếu buộc dùng Wi-Fi · **RAM gốc 4 GB là ràng buộc thật** (không phải app — app < 200 MB, mà là host tự swap) ⇒ guard `ram_low_refuse_mb` · 3 cài đặt Dell âm thầm phá phiên (Thermal Management, Battery Extender, SupportAssist auto-update) · P0 laptop 11 bước **khác thứ tự desktop** (cold start, pin, nhiệt, nắp) |
 | **v3.21** | **Có iGPU ⇒ máy hybrid, và §51.4 chưa đủ mạnh**: tài liệu Microsoft nói DDAPI **theo thiết kế** trả `DXGI_ERROR_UNSUPPORTED` khi chạy trên **GPU rời** trong hệ hybrid; `DuplicateOutput` **bắt buộc** device cùng adapter với output; trên hybrid `EnumOutputs` của iGPU **có thể trả 0 output**; và display ảo **có thể có trong Windows mà không có trong DXGI** (VDD #483) ⇒ `E_FAIL` = **pipeline chết**, không phải chậm · **4 topology A/B/C/D** và phán quyết từng cái · **VDD có `<gpu><friendlyname>`** (mặc định `default` = OS tự chọn = thường iGPU) + changelog 25.7.23 chọn render adapter **theo LUID từ PCI bus** ⇒ đây là công tắc quyết định · topology C (chéo adapter) tốn **1.76 GB/s copy + 2–5 ms + 1 nhân CPU** ⇒ chọn **C1 QSV** thay vì copy sang NVENC · **thang leo khi `E_FAIL`**: EnumDisplayDevices → WGC theo monitor-handle → báo `unsupported_topology` **kèm cách sửa**, **không bao giờ** tự chuyển sang capture màn hình thật · vòng dò adapter mới: **bỏ Microsoft Basic Render (0x1414)**, **không hạ preset khi lệch LUID** (hạ preset không sửa được copy chéo) · **P0-g** trước P0-a · `/diagnostics` + `capture_luid/encode_luid/same` · §48 T2 thêm "GPU mã hoá" |
@@ -6340,3 +6341,68 @@ Camera và micro là thứ khác bản chất với việc xem màn hình. Ba lu
 | 2 | Đóng tab khi camera đang bật | LED camera **tắt** ≤ 2 s; `mfvideosrc` được release |
 | 3 | Mở Teams trên máy chủ rồi bật camera trong app | báo đúng "đang được ứng dụng khác dùng" |
 | 4 | Bóp băng thông xuống 1 Mbps | camera hạ 480→240 hoặc tắt, **màn hình vẫn xem được** |
+
+---
+
+## 56. Code + GitHub Actions: cái gì compile được ở đâu (nhánh #37)
+
+> Bạn hỏi *"có thể viết code rồi compile bằng GitHub Action không"* — **được**, và đã có trong repo.
+> Điều đáng nói không phải "có CI", mà là **ranh giới**: phần nào CI làm được thật, phần nào **không bao giờ** (và vì sao điều đó không phải vấn đề lớn như nó nghe).
+
+### 56.1 `spike/` — 4 file, không dependency ngoài
+| File | Nội dung | Spec tương ứng |
+|---|---|---|
+| `src/machine.rs` | adapter/VRAM/RAM/pin/nhiệt; `cross_adapter()`; trần display | §9.4.1, §51.12, §52.7, §53.9 |
+| `src/pipeline.rs` | sinh chuỗi GStreamer: desktop · camera · mic, đúng tham số low-latency | §37, §55 |
+| `src/policy.rs` | guard **3 mức**, mặc định **Warn** | §54.2 |
+| `tests/spec_conformance.rs` | **14 test** = biến spec thành assertion | nhiều chương |
+
+> **Vì sao không dùng crate nào:** mỗi dependency là một lý do khiến CI fail vì lý do không liên quan đến spec. `spike` cố ý **0 dependency** ⇒ `cargo test` chạy trong 20 s và **không thể** hỏng vì crate thượng nguồn.
+
+### 56.2 Ba test đáng chú ý nhất (vì chúng chặn đúng lỗi tôi từng mắc)
+| Test | Chặn cái gì |
+|---|---|
+| `battery_15_percent_only_warns` | chặn tái phát **đúng lỗi §54** — tôi từng "từ chối tạo phiên ở 15% pin" |
+| `capture_uses_dxgi_not_wgc` | chặn chọn `capture-api=wgc` trên máy hybrid (§52.4) |
+| `every_encoder_is_zero_latency` | chặn quay lại `multipass`/`lookahead` — mỗi cái +30–130 ms (§37) |
+| `room_view_does_not_capture_desktop` | chặn "Xem phòng" kéo theo capture desktop (tốn nhiệt/pin, §55.3) |
+| `basic_render_never_wins_vram` | chặn chọn Microsoft Basic Render khi dò adapter (§52.1 #5) |
+
+### 56.3 `ci.yml` — 2 job, có artifact để tải về
+| Job | Runner | Làm gì |
+|---|---|---|
+| `test` | ubuntu | `clippy -D warnings` → `cargo test` → in 3 chuỗi pipeline ra log để **đọc bằng mắt** |
+| `build-windows` | windows-latest | `cargo build --release` → **smoke-run `rd.exe --demo`** → upload artifact `rd-windows-x64` |
+
+> Bước **smoke-run** quan trọng: nếu `rd.exe` build được nhưng **panic khi chạy** (ví dụ format string sai), CI đỏ ngay — chứ không để bạn tải về rồi mới phát hiện.
+> `RUSTFLAGS: -D warnings` + `clippy -D warnings` ⇒ **không có cảnh báo nào lọt**. Đây là cách duy nhất để một spike 600 dòng không mục sau 2 tuần.
+
+### 56.4 Ranh giới: CI **không** làm được gì, và vì sao không sao
+| Không làm được | Vì sao không sao |
+|---|---|
+| Chạy capture / NVENC / QSV thật | runner **không GPU, không desktop** (§45.7). Nhưng logic đã được test ⇒ khi chạy thật, lỗi còn lại là **lỗi môi trường**, không phải lỗi code |
+| Đo p95 glass-to-glass | cần camera/điện thoại thật (§6.2.3) |
+| Kiểm VDD tạo được display | cần driver đã cài |
+| Kiểm khởi động sau login | cần Task Scheduler thật (§47.2) |
+| Kiểm LED webcam | cần phần cứng thật (§55.8) |
+> **Kết luận thực dụng:** CI không thay được P0, nhưng nó biến *"tôi viết code rồi bạn tự biết nó có compile không"* thành *"CI xanh = code đúng, đỏ = sửa ngay"*. Đó là toàn bộ giá trị, và nó đủ.
+
+### 56.5 Vòng làm việc từ giờ
+| Bước | Ai | Thời gian |
+|---|---|---|
+| 1 | Tôi viết logic (pipeline, policy, config, protocol) + test | — |
+| 2 | CI: clippy + 14 test + build `rd.exe` | ~2 phút/lần |
+| 3 | Bạn tải `rd-windows-x64` từ tab Actions | 10 s |
+| 4 | Bạn chạy **P0 6 bước** (§54.4) trên laptop | 45 phút, **1 lần** |
+| 5 | Bạn dán số (p95, TWCC, cold start) | — |
+| 6 | Tôi chốt stack: tiếp tục Rust+GStreamer, hay đổi (§16.6) | — |
+> Nghĩa là từ đây **không còn "spec trên giấy"**: mỗi lượt tôi có thể thêm một module có test, CI chứng minh nó đúng, và bạn chỉ phải làm đúng **một** việc mà máy không làm thay được — chạy trên máy thật.
+
+### 56.6 Việc tiếp theo tôi đề nghị (chọn 1)
+| # | Việc | Giá trị |
+|---|---|---|
+| **A** | **`security.rs`** — token/session/rate-limit theo §41, có test (không cần GPU) | phần **[CỨNG]** nhiều nhất, và test được 100% |
+| **B** | **`config.rs`** — schema + migrate + 12 mục T1 của §48, có test round-trip | chặn được lỗi "config hỏng" (§47.4c) |
+| **C** | **`signaling.rs`** — SDP/ICE state machine + `intent_id`/`rev` của §32 | phần dễ sinh bug race nhất |
+| **D** | **Client shell** — `index.html` + JS thuần: window picker + video + 2 thanh tự ẩn (§29), chạy được với `--demo` | nhìn thấy được, không cần GPU |
+> Tôi khuyên **A** trước: nó là **[CỨNG]**, test được hoàn toàn ngoài môi trường thật, và sai ở đó là hậu quả nặng nhất. **D** sau, vì nó cho bạn thứ để *nhìn*.
