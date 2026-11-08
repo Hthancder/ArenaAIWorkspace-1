@@ -34,7 +34,7 @@ Trên laptop Windows không cần cài Node/Rust: GitHub → **Actions** → run
 
 Exe có nút **◉ Xem máy thật**. Bấm là khung hình chuyển sang **màn hình thật** của laptop (MJPEG ~15 fps). Nút chỉ sáng khi app mở được một phiên DXGI thật; nếu không, nó **nói lý do cụ thể** thay vì hiện khung đen.
 
-**Không phải cài gì.** Bản v3.31 mượn GStreamer ⇒ installer **517 MB** cho 6 element. Bản v3.32 bỏ hẳn: `app/src/jpeg.rs` (~380 dòng, JFIF baseline 4:2:0) và `app/src/capture.rs` (~470 dòng, gọi thẳng DXGI Desktop Duplication qua COM). Exe còn **747 KB** (đo thật, bản release), 0 phụ thuộc ngoài.
+**Không phải cài gì.** Bản v3.31 mượn GStreamer ⇒ installer **517 MB** cho 6 element. Bản v3.32 bỏ hẳn: `app/src/jpeg.rs` (~380 dòng, JFIF baseline 4:2:0) và `app/src/capture.rs` (~470 dòng, gọi thẳng DXGI Desktop Duplication qua COM). Exe còn **514 KB** (Windows release, CI đo), 0 phụ thuộc ngoài.
 
 Số đo thật trong sandbox: 1280×720 q70 = **39 KB/frame**, 1080p q70 = **42 ms/frame** (23 fps trên một core). Chi tiết + lý do từng quyết định: spec §58.14–§58.17. Đo trên máy bạn: [`docs/run-on-windows.md`](docs/run-on-windows.md).
 

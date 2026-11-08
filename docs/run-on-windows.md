@@ -23,7 +23,7 @@
 > (installer GStreamer) — với một người dùng cá nhân, đó là cái giá sai cho một
 > việc chỉ cần hai thứ: một frame ảnh, và một hàm nén JPEG.
 >
-> Giờ cả hai nằm **trong `lantern-mock.exe`** (747 KB): app tự gọi DXGI Desktop
+> Giờ cả hai nằm **trong `lantern-mock.exe`** (514 KB): app tự gọi DXGI Desktop
 > Duplication qua COM và tự nén JPEG. Không DLL, không PATH, không installer,
 > không bước cài nào. Xem `docs/remote-desktop-spec.md` §58.15.
 
