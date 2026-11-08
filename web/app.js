@@ -78,7 +78,15 @@
   const settingDefaults = Object.fromEntries(allSettingDefs.map(def => [def.id, def.range ? 70 : def.options ? def.options[0][0] : false]));
   let settings = (() => { try { return { ...settingDefaults, ...JSON.parse(localStorage.getItem('lantern-mock-settings') || '{}') }; } catch { return { ...settingDefaults }; } })();
   let settingsGroup = 'all';
-  const labels = { desktop: 'Toàn bộ màn hình', browser: 'Trình duyệt', notes: 'Ghi chú' };
+  // Nhãn cửa sổ **động**: giờ đến từ `GET /api/windows` (§5.4 EnumWindows),
+  // không còn ba chuỗi viết cứng. `desktop` vẫn là mục đặc biệt (stream cả màn
+  // hình, §5.3 VNC) vì nó không phải một hwnd nào.
+  const labels = { desktop: 'Toàn bộ màn hình' };
+  // Snapshot §41.3 #3: client **chỉ** mở được `wid` trong snapshot này (TTL
+  // 3 s). Không phải để tiện — nếu thiếu, server trả 403 `window.unknown` và
+  // đây chính là chỗ người dùng thấy "bấm không được".
+  let windowSnapshot = '';
+  let realWindows = [];
   let toastTimer;
   let currentSessionId = null;
   const apiRequest = async (path, options = {}) => {
@@ -110,13 +118,56 @@
       updateMockWindow();
     }
   }
+  /**
+   * §5.4 — hiện danh sách cửa sổ **thật** trong dialog chọn.
+   *
+   * Dùng `textContent` cho mọi chuỗi: title do app bên thứ ba đặt, nên nó có
+   * thể chứa `<script>` (§41.4 T5). `innerHTML` với dữ liệu server là lỗ hổng
+   * XSS kinh điển, và CSP không cứu được nếu ta tự chèn thẻ.
+   */
+  function renderWindowOptions() {
+    const box = $('#windowOptions');
+    if (!box) return;
+    box.replaceChildren();
+    // `desktop` luôn có mặt: trên Linux `EnumWindows` trả rỗng (§58.3), và nếu
+    // danh sách rỗng thì người dùng còn ít nhất một lựa chọn dùng được.
+    const choices = [{ wid: 'desktop', title: 'Toàn bộ màn hình', app: 'Desktop', min: false, elevated: false }]
+      .concat(realWindows);
+    for (const choice of choices) {
+      const button = document.createElement('button');
+      button.className = 'window-option' + (choice.wid === state.selectedWindow ? ' selected' : '');
+      button.dataset.window = choice.wid;
+      // Không có thumbnail (chưa nối §5.4 `PrintWindow`) ⇒ icon chữ cái đầu
+      // của app, thay vì một ô ảnh rỗng trông như hỏng.
+      const icon = document.createElement('span');
+      icon.className = 'option-icon';
+      icon.textContent = (choice.app || '?').slice(0, 1).toUpperCase();
+      const text = document.createElement('span');
+      const title = document.createElement('b');
+      title.textContent = choice.title || choice.app || choice.wid;
+      const small = document.createElement('small');
+      // §5.4: nói rõ trạng thái, vì "cửa sổ thu nhỏ" và "chạy quyền admin" là
+      // hai thứ người dùng cần biết **trước** khi bấm.
+      const bits = [choice.app];
+      if (choice.min) bits.push('đang thu nhỏ');
+      if (choice.elevated) bits.push('quyền admin — chỉ xem được');
+      small.textContent = bits.filter(Boolean).join(' · ');
+      text.append(title, small);
+      const check = document.createElement('span');
+      check.className = 'option-check';
+      check.textContent = '✓';
+      button.append(icon, text, check);
+      box.append(button);
+    }
+  }
+
   function updateMockWindow() {
     const content = {
       desktop: ['Màn hình nền', 'Phiên demo đã sẵn sàng', 'Đây là hình ảnh minh hoạ — chưa truyền hình ảnh thật.'],
       browser: ['Google Chrome — Tab mới', 'Trình duyệt đã được chọn', 'Window picker cập nhật theo lựa chọn của bạn.'],
       notes: ['Ghi chú — Notepad', 'Ghi chú đang mở', 'Nội dung minh hoạ trong cửa sổ riêng.']
-    }[state.selectedWindow];
-    $('#windowLabel').textContent = labels[state.selectedWindow];
+    }[state.selectedWindow] || ['Cửa sổ đã chọn', state.selectedWindow, ''];
+    $('#windowLabel').textContent = labels[state.selectedWindow] || state.selectedWindow;
     $('#mockWindowTitle').textContent = content[0];
     $('#mockMessageTitle').textContent = content[1];
     $('#mockMessageText').textContent = content[2];
@@ -246,7 +297,9 @@
     try {
       if (!state.connected) {
         stopLive(); // một bề mặt tại một thời điểm (§49.3)
-        const result = await apiRequest('/api/sessions', { method: 'POST', body: { mode: state.mode, windowId: state.selectedWindow, audio: state.audio } });
+        // §41.3 #3: `snapshotId` **phải** đi kèm `wid`, nếu không server không
+        // kiểm được `wid` có thuộc danh sách vừa trả hay không ⇒ 403.
+        const result = await apiRequest('/api/sessions', { method: 'POST', body: { mode: state.mode, windowId: state.selectedWindow, snapshotId: windowSnapshot, audio: state.audio } });
         currentSessionId = result.session.id;
         setConnected(true);
       } else {
@@ -266,14 +319,18 @@
     if (state.mode === 'vnc') toast('Window picker chỉ áp dụng cho chế độ Cửa sổ riêng.');
     else openOverlay('#dialogOverlay');
   });
-  $$('.window-option').forEach(btn => btn.addEventListener('click', () => {
+  // **Uỷ quyền** sự kiện: các nút giờ do `renderWindowOptions` sinh ra sau khi
+  // có dữ liệu, nên gắn listener lúc load sẽ không bao giờ chạy.
+  $('#windowOptions')?.addEventListener('click', event => {
+    const btn = event.target.closest('.window-option');
+    if (!btn) return;
     state.selectedWindow = btn.dataset.window;
     $$('.window-option').forEach(option => option.classList.toggle('selected', option === btn));
-  }));
+  });
   $('#dialogConfirm').addEventListener('click', () => {
     updateMockWindow();
     closeOverlay('#dialogOverlay');
-    toast(`Đã chọn: ${labels[state.selectedWindow]}.`);
+    toast(`Đã chọn: ${labels[state.selectedWindow] || state.selectedWindow}.`);
   });
   $('#dialogClose').addEventListener('click', () => closeOverlay('#dialogOverlay'));
   $('#dialogCancel').addEventListener('click', () => closeOverlay('#dialogOverlay'));
@@ -490,8 +547,21 @@
       $('#screenResolution').textContent = `${settings.display === 'large-text' ? 'Chữ to' : settings.display === 'comfortable' ? 'Vừa mắt' : settings.display === 'sharp' ? 'Nét' : '1920 × 1080'} · demo`;
       $('#connectHint').textContent = `${device.name} · mock backend sẵn sàng · không truy cập máy thật`;
       $('.demo-pill').innerHTML = '<i></i> MOCK API · ONLINE';
-      const validWindowIds = new Set(windows.windows.map(win => win.id));
+      // Schema của §8.1 là `wid`, không phải `id` — bản trước đọc `win.id` nên
+      // luôn thấy `undefined` và rơi về 'desktop', tức là **window picker
+      // không bao giờ hoạt động** dù server trả đúng.
+      windowSnapshot = windows.snapshotId || '';
+      realWindows = (windows.windows || []).filter(win => win && win.wid);
+      for (const win of realWindows) labels[win.wid] = win.title || win.app || win.wid;
+      const validWindowIds = new Set(['desktop', ...realWindows.map(win => win.wid)]);
       if (!validWindowIds.has(state.selectedWindow)) state.selectedWindow = 'desktop';
+      renderWindowOptions();
+      if (windows.note) {
+        // §58.3: nếu danh sách rỗng vì lý do nền tảng, **nói** thay vì để
+        // người dùng tưởng máy không có app nào đang mở.
+        const hint = $('#windowPickerHint');
+        if (hint) hint.textContent = realWindows.length === 0 ? windows.note : '';
+      }
       if (current.session) {
         currentSessionId = current.session.id;
         state.mode = current.session.mode;

@@ -41,3 +41,9 @@ body[data-theme="dark"] .live-bar .screen-tool{background:#1b2721;border-color:#
 @media(max-width:760px){.live-bar{gap:7px;font-size:8px}.live-bar #liveMeta{flex-basis:100%;min-width:0}}
 /* Nút live khi máy chưa có GStreamer: vẫn hiện (để giải thích) nhưng không giả vờ bấm được. */
 .text-button.unavailable{opacity:.6;cursor:not-allowed}
+
+/* §5.4 window picker: dòng giải thích khi danh sách rỗng vì nền tảng.
+   Không có nó thì người dùng Linux thấy dialog trống và tưởng app hỏng,
+   trong khi thật ra `EnumWindows` chỉ chạy trên Windows (§58.3). */
+.window-picker-hint { margin: 0 0 10px; font-size: 12px; line-height: 1.45; color: var(--muted, #8b9a92); }
+.window-picker-hint:empty { display: none; }
