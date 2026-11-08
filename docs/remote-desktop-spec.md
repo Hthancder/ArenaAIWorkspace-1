@@ -6519,6 +6519,37 @@ Run `42451848287` chạy trên commit `8047ed27adec07bea73fa23decb8026bd07e4d4b`
 > §57 dùng hết **0** slot mới: cả 7 file `security/` đều là hiện thực của luật **đã** được đánh dấu `[CỨNG]` từ §41 và §54.5. Một chương mới không tự động đẻ ra luật cứng mới — đó là điểm của ngân sách.
 
 
+### 57.9 CI bắt 3 lint mà sandbox không thể bắt — và cách đọc chúng
+
+> Sandbox không có `clippy` (toolchain npm chỉ có rustc + cargo), nên `check.sh` **không thể** thay CI ở bước này. Lần push đầu tiên của §57 đỏ đúng ở `clippy`. Log job **không tải được** (blob storage trả EOF — đúng như §56.10 đã ghi), nên đã đổi bước CI để lỗi hiện thành **annotation**:
+
+```yaml
+- name: clippy
+  run: |
+    set +e
+    cargo clippy --all-targets --message-format=json -- -D warnings > /tmp/clippy.json
+    status=$?
+    set -e
+    jq -r 'select(.reason=="compiler-message") | .message
+           | select(.level=="error")
+           | "\(.spans[0].file_name):\(.spans[0].line_start): \(.message)"' /tmp/clippy.json \
+      | sort -u | head -40 | while IFS= read -r line; do echo "::error::clippy: $line"; done
+    exit $status
+```
+
+Ba lint thật, sửa trong một commit:
+
+| Lint | Chỗ | Sửa |
+|---|---|---|
+| `chunks_exact` với chunk size hằng (clippy khuyên `as_chunks`) | `crypto.rs` nén SHA-256 | vòng `while` theo chỉ số — **không** phụ thuộc phiên bản toolchain, và ở đây còn ngắn hơn |
+| doc comment treo lơ lửng trước `impl` | `window.rs` | chuyển vào doc của `enum WindowError` (nơi nó thực sự nói về điều gì) |
+| `drain(..).collect()` | `input.rs` `release_all` | `std::mem::take` — **cùng một hành vi**, không cấp phát thêm |
+
+> **Bài học, lần thứ ba trong repo này (§56.7, §56.9, §57.9):** thứ duy nhất tìm ra lỗi là **chạy cái gì đó**. Và khi log không đọc được, **đổi cách phát lỗi** (annotation) rẻ hơn nhiều so với đoán.
+>
+> Từ giờ bước `clippy` trong CI **không bao giờ** im lặng: mỗi lỗi là một annotation có `file:line`, đọc được bằng `gh api .../check-runs/<job>/annotations` — kể cả khi ZIP log bị chặn.
+
+
 ---
 
 ## 57. Tầng bảo mật **thành code có test** — `security.rs` (nhánh #38)
@@ -6619,8 +6650,9 @@ Cùng lượt đó: **cả hai mock server** (Node và `lantern-mock.exe`) trư�
 | `lantern-mock.exe` (`app/`) | **8** | xanh |
 | mock backend (`npm test`) | **2** | xanh |
 | `cargo build` với `RUSTFLAGS=-D warnings` | — | **sạch** |
-| `cargo clippy -D warnings` | — | **chưa chạy được trong sandbox** (toolchain npm không có clippy) → chỉ CI; CI đã xanh ở §56.10 |
+| `cargo clippy -D warnings` | — | **xanh trên CI** (run `42464776111`) — sandbox không có clippy, và CI đã bắt **3 lint thật** (§57.9) |
 | `./spike/check.sh` | — | **all green**, ~1.5 s |
+| CI đầy đủ | 2 job | run `42464776111`: `test (ubuntu)` **success** · `build rd.exe (windows)` **success**; artifact `rd-windows-x64` 87 461 B, `lantern-mock-windows-x64` 208 878 B |
 
 > **Điều test này KHÔNG chứng minh:** nó không chứng minh app an toàn. Nó chứng minh **14 luật [CỨNG] đã được viết ra và không ai xoá được mà không thấy test đỏ**. Phần còn lại — TLS thật, cert, DTLS-SRTP, driver — vẫn phải làm và vẫn có thể sai.
 

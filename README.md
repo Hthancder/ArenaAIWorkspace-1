@@ -13,7 +13,7 @@ tab Chrome — không cài gì trên máy điều khiển.
 |---|---|
 | [`web/`](web/) | App mock tương tác: dashboard, session controls, window picker, settings T1/T2, responsive mobile |
 | [`mock-server/`](mock-server/) | Backend Node.js không dependency: API cho trạng thái, cài đặt, window picker và vòng đời phiên mock |
-| [`docs/remote-desktop-spec.md`](docs/remote-desktop-spec.md) | **Spec thiết kế, ~6 500 dòng, §1–§56.** Kiến trúc, giao thức, pipeline mã hoá video, UI, bảo mật, edge case |
+| [`docs/remote-desktop-spec.md`](docs/remote-desktop-spec.md) | **Spec thiết kế, ~6 600 dòng, §1–§57.** Kiến trúc, giao thức, pipeline mã hoá video, UI, bảo mật, edge case. §57 = tầng bảo mật đã thành code |
 | [`docs/remote-hidden-window-guide.md`](docs/remote-hidden-window-guide.md) | Cách chạy một cửa sổ trên máy bị điều khiển mà **màn hình thật ở nhà không thấy** |
 | [`spike/`](spike/) | Rust, **0 dependency**: sinh chuỗi GStreamer (desktop/camera/mic), guard chính sách 3 mức, **tầng bảo mật** (`security/`: token, lockout, CSRF, wid, input, cleanup) — **100 test** |
 | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | CI: `clippy -D warnings` → `cargo test` → build `rd.exe` + artifact |
