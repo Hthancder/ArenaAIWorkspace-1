@@ -175,6 +175,7 @@
     $('#diagnosticsIntro').textContent = 'Đang kiểm tra Windows, adapter, GStreamer và display driver…';
     $('#diagnosticsList').innerHTML = '<div class="diagnostic-row"><span class="diagnostic-status pending">…</span><span>Đang chạy các phép kiểm tra chỉ đọc</span></div>';
     $('#captureResult').classList.add('hidden');
+    $('#captureProbe').disabled = true;
     try {
       diagnosticsReport = await apiRequest('/api/diagnostics');
       if (diagnosticsReport.mock) {
@@ -193,7 +194,14 @@
   $('#diagnosticsClose').addEventListener('click', () => closeOverlay('#diagnosticsOverlay'));
   $('#diagnosticsDone').addEventListener('click', () => closeOverlay('#diagnosticsOverlay'));
   $('#captureProbe').addEventListener('click', async () => {
-    const button = $('#captureProbe'); button.disabled = true; button.textContent = 'Đang capture…';
+    const button = $('#captureProbe');
+    if (!diagnosticsReport || diagnosticsReport.mock) {
+      $('#captureResult').classList.remove('hidden');
+      $('#captureResult').textContent = 'Chạy kiểm tra máy thật trước; probe capture chỉ khả dụng trong Windows exe.';
+      button.disabled = true;
+      return;
+    }
+    button.disabled = true; button.textContent = 'Đang capture…';
     $('#captureResult').classList.remove('hidden'); $('#captureResult').textContent = 'Chạy pipeline DXGI 150 frame…';
     try {
       const result = await apiRequest('/api/diagnostics/capture', { method: 'POST', body: { monitorIndex: Number($('#monitorIndex').value) } });
