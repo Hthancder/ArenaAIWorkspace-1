@@ -37,8 +37,14 @@ use std::ffi::c_void;
 #[cfg(windows)]
 use std::ptr;
 
+// Tên dùng đúng chữ của header Windows (`HRESULT`, `UINT`, `LUID`) chứ không
+// theo convention của Rust: khi tra cứu tài liệu, hai bên phải khớp nhau từng
+// chữ. Đây là ngoại lệ có chủ ý, không phải sơ suất.
+#[allow(clippy::upper_case_acronyms)]
 type HRESULT = i32;
+#[allow(clippy::upper_case_acronyms)]
 type UINT = u32;
+#[allow(clippy::upper_case_acronyms)]
 type LUID = i64;
 
 const S_OK: HRESULT = 0;
