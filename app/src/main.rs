@@ -242,6 +242,36 @@ fn capture_probe(body: &str) -> (u16, String) {
 /// Kiểm tra **một lần** xem đường live có chạy được không: có `gst-launch-1.0`
 /// trong PATH và có plugin `d3d11screencapturesrc`. Trả về `(available, detail)`
 /// với `detail` là câu **người dùng đọc được**, không phải mã lỗi.
+/// Có được bind ra ngoài loopback không? **Chưa** — binary này không có TLS và
+/// chưa có đăng nhập, nên bind LAN nghĩa là ai trong cùng Wi-Fi cũng xem được
+/// màn hình của bạn (§54.5 #1, §41.5 D4).
+///
+/// Hàm này tồn tại vì tài liệu **từng nói** app "từ chối" `HOST=0.0.0.0` trong
+/// khi code không kiểm tra gì — đó là kiểu sai tệ nhất: tuyên bố an toàn mà
+/// không có gì bảo vệ. Giờ lời hứa và code là một.
+///
+/// Trả `(được_bind, lý_do)`.
+fn allowed_bind_host(requested: &str) -> (String, Option<String>) {
+    // `LANTERN_ALLOW_LAN=1` chỉ để tự kiểm trên máy mình, có cảnh báo rõ ràng.
+    let forced = env::var("LANTERN_ALLOW_LAN").map(|value| value == "1").unwrap_or(false);
+    let loopback_only = ["127.0.0.1", "localhost", "::1"].contains(&requested);
+    if loopback_only {
+        // Bind `127.0.0.1` thay vì để OS quyết: "localhost" có thể ra ::1 rồi
+        // trình duyệt lại gõ 127.0.0.1 và không vào được.
+        return ("127.0.0.1".to_string(), None);
+    }
+    if forced {
+        // Cờ ghi đè phải **thật sự** ghi đè, nếu không nó chỉ là lời nói suông.
+        return (requested.to_string(), None);
+    }
+    (
+        "127.0.0.1".to_string(),
+        Some(format!(
+            "Từ chối bind {requested}: bản này chưa có TLS và chưa có đăng nhập. Đang bind 127.0.0.1 thay thế. Muốn tự chịu rủi ro trên LAN: đặt LANTERN_ALLOW_LAN=1 (không khuyến khích)."
+        )),
+    )
+}
+
 fn probe_live_status() -> (bool, String) {
     #[cfg(not(target_os = "windows"))]
     {
@@ -517,7 +547,11 @@ fn main() {
         );
         return;
     }
-    let host = env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
+    let requested_host = env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
+    let (host, refusal) = allowed_bind_host(&requested_host);
+    if let Some(reason) = refusal {
+        eprintln!("{reason}");
+    }
     let port = env::var("PORT").unwrap_or_else(|_| "0".into());
     let listener = TcpListener::bind(format!("{host}:{port}")).unwrap_or_else(|e| { eprintln!("Cannot listen on {host}:{port}: {e}"); std::process::exit(1); });
     let actual = listener.local_addr().map(|a|a.port()).unwrap_or(0);
@@ -814,6 +848,29 @@ mod tests {
             .unwrap_or(false);
         assert!(!alive, "ChildGuard phải kill tiến trình con khi drop");
     }
+    #[test] fn a_lan_bind_is_refused_unless_explicitly_forced() {
+        // §58.11: docs từng hứa app "từ chối HOST=0.0.0.0" trong khi code không
+        // kiểm tra — bind LAN không TLS = ai cùng Wi-Fi cũng xem màn hình bạn.
+        // Test này giữ cho lời hứa và code không tách rời lần nữa.
+        for host in ["127.0.0.1", "localhost", "::1"] {
+            assert_eq!(allowed_bind_host(host).0, "127.0.0.1", "{host} phải bind được");
+            assert!(allowed_bind_host(host).1.is_none(), "{host} không được cảnh báo");
+        }
+        for host in ["0.0.0.0", "192.168.1.10", "::", "máy-của-tôi"] {
+            let (bound, reason) = allowed_bind_host(host);
+            assert_eq!(bound, "127.0.0.1", "{host} phải bị hạ về loopback");
+            assert!(reason.is_some(), "{host} bị từ chối thì phải nói lý do");
+        }
+        // Và cờ ghi đè phải thật sự ghi đè — nếu không thì nó vô dụng.
+        // Giữ ENV_LOCK vì đây là biến môi trường **toàn cục**.
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        env::set_var("LANTERN_ALLOW_LAN", "1");
+        let (bound, reason) = allowed_bind_host("0.0.0.0");
+        env::remove_var("LANTERN_ALLOW_LAN");
+        assert_eq!(bound, "0.0.0.0");
+        assert!(reason.is_none());
+    }
+
     #[test] fn live_status_is_honest_about_the_sandbox() {
         // Trên Linux (CI/sandbox) phải nói rõ "chỉ Windows" và `available=false`,
         // không được giả vờ sẵn sàng rồi để UI vẽ khung đen.

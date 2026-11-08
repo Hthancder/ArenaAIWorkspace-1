@@ -1,6 +1,6 @@
 # SPEC v3.30 — Remote Desktop qua trình duyệt **cho dùng cá nhân**: HVNC + VNC, window picker, âm thanh server-side, trải nghiệm điều khiển đầy đủ
 
-- Phiên bản: **v3.30 — §58.6–§58.10 ba lỗi chỉ hiện khi chạy thật (kill sai, FIN≠RST, đọc stderr treo) + 5 test HTTP thật** · trước đó: **v3.29 — §58 đường dùng được ngay hôm nay: xem màn hình thật bằng MJPEG trong trình duyệt (0 dependency, 0 dòng JS ở client)** · trước đó: **v3.28 — §57 tầng bảo mật thành code có test: `security.rs` 7 module, 100 test, 10/14 kiểm chứng §41.10 tự động, 1 XSS thật được sửa** · trước đó: **v3.27 — §56.10 GitHub Actions đã xanh sau khi user cập nhật billing: clippy + test + Windows build + smoke-run** · trước đó: **v3.26 — §56.9 tìm ra nguyên nhân thật của `startup_failure`: account bị khoá vì billing, không phải file CI** · trước đó: v3.25 — §56.7 compile thật: 16/16 test xanh, bắt được 3 lỗi · §56.8 GitHub Actions của repo này đang tắt (không phải lỗi file)** · trước đó: v3.24 — §56 code + GitHub Actions · trước đó: **v3.23 — §54 nới lỏng (bỏ luật cứng không cần), §55 camera + micro máy chủ** · trước đó: **v3.22 — §53 host là laptop Dell 7467: QSV trước NVENC, nắp/pin/nhiệt/Wi-Fi 1x1** · trước đó: **v3.21 — §52 máy hybrid iGPU+1050: topology quyết định, DDAPI fail trên GPU rời** · trước đó: **v3.20 — §51.10–14: VRAM 4 GB, trần 1440p, sửa lỗi AdapterRAM** · trước đó: **v3.19 — thêm §51 hồ sơ GTX 1050, bẫy adapter, P0 cụ thể** · trước đó: **v3.18 — thêm §48 mô hình tuỳ chỉnh, §49 chống vỡ UI, §50 tính năng còn thiếu** · trước đó: **v3.17 — thêm §47 khởi động cùng Windows + vòng đời process + trải nghiệm theo thời gian** · trước đó: **v3.16 — thêm §46 "máy có ở đó không" (ngủ/reboot/đổi IP/khoá màn hình)**, lĩnh vực G còn trống · trước đó: **v3.15** — phạm vi thu hẹp về 1–2 người dùng (§0.3). Bản v3.14 là bản "sản phẩm": có cert, EULA, RBAC, accessibility, đóng gói ký số. Tất cả những thứ đó **đã cắt** ở đây — xem §0.3.1 để biết cắt gì và cắt có an toàn không. Lịch sử đầy đủ v1.0→v3.14 ở §0.
+- Phiên bản: **v3.30 — §58.6–§58.11 bốn lỗi chỉ hiện khi chạy thật (kill sai, FIN≠RST, đọc stderr treo, docs hứa mà code không làm) + 5 test HTTP thật** · trước đó: **v3.29 — §58 đường dùng được ngay hôm nay: xem màn hình thật bằng MJPEG trong trình duyệt (0 dependency, 0 dòng JS ở client)** · trước đó: **v3.28 — §57 tầng bảo mật thành code có test: `security.rs` 7 module, 100 test, 10/14 kiểm chứng §41.10 tự động, 1 XSS thật được sửa** · trước đó: **v3.27 — §56.10 GitHub Actions đã xanh sau khi user cập nhật billing: clippy + test + Windows build + smoke-run** · trước đó: **v3.26 — §56.9 tìm ra nguyên nhân thật của `startup_failure`: account bị khoá vì billing, không phải file CI** · trước đó: v3.25 — §56.7 compile thật: 16/16 test xanh, bắt được 3 lỗi · §56.8 GitHub Actions của repo này đang tắt (không phải lỗi file)** · trước đó: v3.24 — §56 code + GitHub Actions · trước đó: **v3.23 — §54 nới lỏng (bỏ luật cứng không cần), §55 camera + micro máy chủ** · trước đó: **v3.22 — §53 host là laptop Dell 7467: QSV trước NVENC, nắp/pin/nhiệt/Wi-Fi 1x1** · trước đó: **v3.21 — §52 máy hybrid iGPU+1050: topology quyết định, DDAPI fail trên GPU rời** · trước đó: **v3.20 — §51.10–14: VRAM 4 GB, trần 1440p, sửa lỗi AdapterRAM** · trước đó: **v3.19 — thêm §51 hồ sơ GTX 1050, bẫy adapter, P0 cụ thể** · trước đó: **v3.18 — thêm §48 mô hình tuỳ chỉnh, §49 chống vỡ UI, §50 tính năng còn thiếu** · trước đó: **v3.17 — thêm §47 khởi động cùng Windows + vòng đời process + trải nghiệm theo thời gian** · trước đó: **v3.16 — thêm §46 "máy có ở đó không" (ngủ/reboot/đổi IP/khoá màn hình)**, lĩnh vực G còn trống · trước đó: **v3.15** — phạm vi thu hẹp về 1–2 người dùng (§0.3). Bản v3.14 là bản "sản phẩm": có cert, EULA, RBAC, accessibility, đóng gói ký số. Tất cả những thứ đó **đã cắt** ở đây — xem §0.3.1 để biết cắt gì và cắt có an toàn không. Lịch sử đầy đủ v1.0→v3.14 ở §0.
 - Trạng thái: **Đề xuất — phần [CỨNG] đã thành code có test (§57), phần còn lại chờ P0.** Sau v3.15 spec **không còn chương lý thuyết nào cần viết**; từ v3.28 việc viết mới là **code + test cho từng chương**, và việc còn lại của bạn là **P0 (đo thật)** trên laptop.
 - Nền tảng: Server **Windows 10 2004+ / Windows 11** · Client **trình duyệt** (không app)
 
@@ -6755,15 +6755,16 @@ Bản v3.30 thêm **ba test HTTP thật + 2 test trực tiếp** — dựng serv
 
 > **`probe_live_status()` là chỗ đáng chú ý:** nó biến "nút bấm được nhưng lỗi" thành "nút mờ + nói lý do cụ thể". Một app nói *"Chưa có GStreamer trong PATH"* tốt hơn một app hiện khung đen, và tốt hơn nhiều lần một app không có nút đó.
 
-### 58.6 Ba lỗi chỉ hiện ra khi chạy thật
+### 58.6 Bốn lỗi chỉ hiện ra khi chạy thật
 
-Đoạn code trên **qua hết unit test** mà vẫn sai ba lần. Cả ba đều vô hình trong test thường vì chúng chỉ xảy ra khi có một **tiến trình bên ngoài** và một **socket thật**. Ghi lại nguyên văn vì đây là dạng lỗi sẽ quay lại: nó không nằm ở logic của ta, nó nằm ở *hợp đồng với hệ điều hành*.
+Đoạn code trên **qua hết unit test** mà vẫn sai bốn lần. Cả bốn đều vô hình trong test thường vì chúng chỉ xảy ra khi có một **tiến trình bên ngoài** và một **socket thật**. Ghi lại nguyên văn vì đây là dạng lỗi sẽ quay lại: nó không nằm ở logic của ta, nó nằm ở *hợp đồng với hệ điều hành*.
 
 | # | Triệu chứng quan sát được | Nguyên nhân thật | Sửa |
 |---|---|---|---|
 | 1 | Đóng tab, `gst-launch-1.0` **vẫn chạy** | Chỉ kill khi `write_all` trả lỗi. Pipeline **im lặng** thì không có lần ghi nào ⇒ không có lỗi nào | Poll 250 ms + `peek` + `ChildGuard` (§58.7) |
 | 2 | Sau khi sửa (1), vẫn còn 1 tiến trình | Trình duyệt đóng khi còn byte chưa đọc ⇒ OS gửi **RST**, không phải FIN; `peek` trả `Err`, mà code chỉ nhận `Ok(0)` | `Err` khác timeout ⇒ coi là đã đóng (§58.8) |
 | 3 | Nhánh lỗi `504` **treo > 15 s** | Đọc `stderr` của tiến trình **còn sống** ⇒ `read_to_string` chờ tới khi nó thoát (có thể mãi mãi) | Kill + `wait` **trước**, rồi mới đọc stderr (§58.9) |
+| 4 | `HOST=0.0.0.0` **bind được**, dù docs nói "app từ chối" | Docs viết một điều code chưa hề làm; không có test nào cho lời hứa đó | `allowed_bind_host()` + test (§58.10) |
 
 > Bài học chung, viết ra để lần sau không mất thêm một vòng: **một tiến trình con + một socket = ba trạng thái, không phải một.** "Đã đóng", "còn sống", và "không nói gì" là ba chuyện khác nhau; code nào chỉ xử lý hai trong ba thì sẽ để lại capture mồ côi hoặc spinner vô hạn.
 
@@ -6845,7 +6846,32 @@ fn take_stderr_after_kill(&mut self) -> String {
 
 > **Một chi tiết nhỏ nhưng là cái bẫy:** kill ngay lập tức có thể đến *trước khi* GStreamer kịp ghi lỗi ra stderr — test `stderr_is_read_only_after_the_child_is_gone` đỏ vì đúng lý do đó (nhận về chuỗi rỗng). Trong luồng thật điều này không xảy ra vì ta đã chờ 8 s trước khi kill; test phải mô phỏng đúng thứ tự (chờ 150 ms) thay vì đòi hỏi một hành vi mà code không hứa.
 
-### 58.10 Bảng "đã kiểm bằng gì"
+### 58.10 Lỗi 4 — tài liệu nói app "từ chối" một thứ mà code không kiểm tra
+
+Lỗi thứ tư, và là lỗi **không nằm trong code**. `docs/run-on-windows.md` viết:
+
+> ⚠️ Đừng đặt `HOST=0.0.0.0` ... **App hiện từ chối cấu hình đó.**
+
+Kiểm tra: `grep -n "HOST" app/src/main.rs` cho ra **một** dòng — `env::var("HOST").unwrap_or_else(...)` — rồi bind thẳng. Không có kiểm tra nào. Chạy thử `HOST=0.0.0.0` và nó bind thành công; ai trong cùng Wi-Fi mở `http://<ip>:<port>/live` là thấy màn hình.
+
+Đây là dạng sai nguy hiểm nhất trong cả bốn lỗi, vì ba lỗi kia chỉ làm app hỏng, còn lỗi này **làm người dùng tin là mình an toàn**. Một câu trong README không bảo vệ được ai.
+
+Cách sửa — `allowed_bind_host()`:
+
+| Yêu cầu | Kết quả | Lý do |
+|---|---|---|
+| `127.0.0.1`, `localhost`, `::1` | bind `127.0.0.1` | loopback, an toàn |
+| `0.0.0.0`, IP LAN, tên máy | **bind `127.0.0.1`** + in cảnh báo | chưa có TLS, chưa có đăng nhập |
+| bất kỳ + `LANTERN_ALLOW_LAN=1` | bind **đúng như yêu cầu** | cờ tự chịu rủi ro, phải thật sự ghi đè |
+
+Hai điều đáng giữ lại:
+
+1. **`localhost` được hạ về `127.0.0.1`** chứ không bind nguyên chuỗi: `localhost` có thể phân giải ra `::1`, rồi người dùng gõ `127.0.0.1` và không vào được — một lỗi "không kết nối được" hoàn toàn tự gây.
+2. **Cờ ghi đè phải ghi đè thật.** Bản đầu của `allowed_bind_host` trả `127.0.0.1` cho *mọi* trường hợp, kể cả khi có cờ — tức là cờ chỉ để trong docs cho đẹp. Test bắt được ngay khi thêm assert cho nhánh này.
+
+> Bài học gộp cho cả §58.6–§58.10: **bốn lỗi, và không lỗi nào nằm ở thuật toán.** Chúng nằm ở hợp đồng với hệ điều hành (1, 2, 3) và ở khoảng cách giữa điều tài liệu hứa với điều code làm (4). Unit test thuần logic không nhìn thấy cái nào trong bốn cái đó — chỉ socket thật và một lần đọc lại tài liệu bằng con mắt nghi ngờ mới thấy.
+
+### 58.11 Bảng "đã kiểm bằng gì"
 
 Sòng phẳng về mức độ tin cậy của từng phần — vì "test xanh" không có nghĩa "chạy được trên laptop của bạn":
 
@@ -6857,6 +6883,7 @@ Sòng phẳng về mức độ tin cậy của từng phần — vì "test xanh"
 | `504` khi không có frame | test HTTP thật + `gst` giả | **cao** cho phần bọc; **trung bình** cho nội dung lỗi (tuỳ GStreamer) |
 | Hình ảnh thật từ DXGI | **chưa ai kiểm** trong sandbox | **0** — cần máy Windows của bạn |
 | Chất lượng/độ trễ MJPEG thật | **chưa ai kiểm** | **0** — §6.2.3 không áp dụng cho MJPEG, xem `docs/run-on-windows.md` |
+| Chặn bind LAN | unit test `allowed_bind_host` + chạy thật với `HOST=0.0.0.0` | **cao** — nhưng là chặn *tai nạn*, không phải bảo mật đã kiểm |
 | Âm thanh, chuột/bàn phím, TLS, LAN | **không có trong bản này** | — |
 
 > Dòng thứ năm là dòng quan trọng nhất. Toàn bộ §58 tồn tại để **giảm** phần "chưa ai kiểm" đó xuống còn đúng một lần bấm nút trên máy bạn — không phải để tuyên bố nó đã xong.

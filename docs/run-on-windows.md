@@ -99,7 +99,9 @@ Mở trên điện thoại: `https://inspiron-7467.<tailnet>.ts.net:8443/live`
 
 Không mở cổng nào ra ngoài, không cần cert, nhưng cần bật OpenSSH Server trên Windows.
 
-> ⚠️ **Đừng** đặt `HOST=0.0.0.0` không có TLS và mở cổng router. Đó là đưa màn hình của bạn cho cả quán cà phê. App hiện **từ chối** cấu hình đó.
+> ⚠️ **Đừng** đặt `HOST=0.0.0.0` không có TLS và mở cổng router. Đó là đưa màn hình của bạn cho cả quán cà phê.
+>
+> App **thật sự** chặn việc này: mọi `HOST` không phải loopback đều bị hạ về `127.0.0.1` kèm cảnh báo trong console (§58.11 — trước v3.30 tài liệu nói câu này mà code không kiểm tra gì). Nếu bạn tự chịu rủi ro và hiểu mình đang làm gì: `LANTERN_ALLOW_LAN=1` + `HOST=0.0.0.0`. Không khuyến khích.
 
 ---
 

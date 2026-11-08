@@ -38,14 +38,14 @@ Exe có nút **◉ Xem máy thật**. Bấm là khung hình chuyển từ bản 
 
 Bản này **chỉ có hình**: chưa có tiếng, chưa điều khiển được, chưa phải WebRTC, và chỉ bind loopback (chưa TLS ⇒ không mở ra LAN).
 
-Đường này được kiểm bằng **socket thật + `gst-launch` giả** trong CI (`cargo test --manifest-path app/Cargo.toml`), không chỉ bằng unit test: đóng tab ⇒ pipeline chết trong ≤ ¼ s, không có frame ⇒ `504` sau 8 s kèm lỗi GStreamer. Ba lỗi thật tìm được trong lúc kiểm (kill sai, **FIN ≠ RST**, đọc `stderr` treo) được ghi lại ở §58.6–§58.9 — mỗi lỗi có một test hồi quy.
+Đường này được kiểm bằng **socket thật + `gst-launch` giả** trong CI (`cargo test --manifest-path app/Cargo.toml`), không chỉ bằng unit test: đóng tab ⇒ pipeline chết trong ≤ ¼ s, không có frame ⇒ `504` sau 8 s kèm lỗi GStreamer. Bốn lỗi thật tìm được trong lúc kiểm (kill sai, **FIN ≠ RST**, đọc `stderr` treo, và một câu tài liệu hứa chặn LAN mà code không làm) được ghi lại ở §58.6–§58.10 — mỗi lỗi có một test hồi quy.
 
 Đây chưa phải remote desktop hoàn chỉnh. Exe có **probe phần cứng thật**: đọc Windows/GPU/RAM/Wi-Fi/monitor, kiểm tra GStreamer plugins và — khi bạn bấm — capture 150 frame DXGI trong 5 giây rồi huỷ vào fakesink. Frame không lưu hay gửi qua mạng. Chưa có session streaming WebRTC, gửi input, camera/micro/audio phiên hay truy cập LAN/Internet. Artifact `rd-windows-x64` khác là CLI pipeline spike.
 
 ## Chạy kiểm tra
 
 ```sh
-./spike/check.sh          # spike (build -D warnings -> 100 test -> smoke-run) + app (22 test) + web, ~10 giây
+./spike/check.sh          # spike (build -D warnings -> 100 test -> smoke-run) + app (23 test) + web, ~10 giây
 node --check web/app.js   # kiểm cú pháp JavaScript của mock
 npm test                 # integration test API + chặn XSS/innerHTML (T5)
 ```
