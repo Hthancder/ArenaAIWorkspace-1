@@ -1,0 +1,65 @@
+RUNNER_TEMP=D:\a\_temp
+exists=True
+--- top level:
+bin
+etc
+include
+lib
+libexec
+share
+unins000.dat
+unins000.exe
+--- bin exists=True
+g-ir-compiler.exe
+g-ir-generate.exe
+g-ir-inspect.exe
+gdbus.exe
+gdk-pixbuf-csource.exe
+gdk-pixbuf-query-loaders.exe
+ges-launch-1.0.exe
+gio-querymodules.exe
+glib-compile-resources.exe
+glib-compile-schemas.exe
+gresource.exe
+gsettings.exe
+gspawn-win64-helper-console.exe
+gspawn-win64-helper.exe
+gst-device-monitor-1.0.exe
+gst-discoverer-1.0.exe
+gst-dots-viewer.exe
+gst-inspect-1.0.exe
+gst-launch-1.0.exe
+gst-play-1.0.exe
+gst-typefind-1.0.exe
+gst-validate-1.0.exe
+gst-validate-media-check-1.0.exe
+gst-validate-rtsp-server-1.0.exe
+gst-validate-transcoding-1.0.exe
+json-glib-format.exe
+json-glib-validate.exe
+orc-bugreport.exe
+orcc.exe
+pkg-config.exe
+xmllint.exe
+--- plugins dir exists=True
+plugin dll count=271
+--- gst-inspect d3d11screencapturesrc:
+Factory Details:
+  Rank                     none (0)
+  Long-name                Direct3D11 Screen Capture Source
+  Klass                    Source/Video
+  Description              Captures desktop screen
+  Author                   Seungha Yang <seungha@centricular.com>
+  Documentation            https://gstreamer.freedesktop.org/documentation/d3d11/d3d11screencapturesrc.html
+
+Plugin Details:
+  Name                     d3d11
+--- inspect file gstjpeg.dll:
+Plugin Details:
+  Name                     jpeg
+  Description              JPeg plugin library
+  Filename                 D:\a\_temp\gstreamer\lib\gstreamer-1.0\gstjpeg.dll
+  Version                  1.28.8.1
+  License                  LGPL
+  Source module            gst-plugins-good
+  Documentation            https://gstreamer.freedesktop.org/documentation/jpeg/
