@@ -164,9 +164,9 @@ fn scaled_quant(table: &[u8; 64], quality: u8) -> [u16; 64] {
     let quality = quality.clamp(1, 100) as i32;
     let scale = if quality < 50 { 5000 / quality } else { 200 - quality as i32 * 2 };
     let mut out = [0u16; 64];
-    for i in 0..64 {
-        let value = (table[i] as i32 * scale + 50) / 100;
-        out[i] = value.clamp(1, 255) as u16;
+    for (slot, base) in out.iter_mut().zip(table.iter()) {
+        let value = (*base as i32 * scale + 50) / 100;
+        *slot = value.clamp(1, 255) as u16;
     }
     out
 }
@@ -185,23 +185,21 @@ fn dct_1d(input: &[f32; 8], output: &mut [f32; 8], cos_table: &[[f32; 8]; 8]) {
 /// DCT 2 chiều + lượng tử hoá, trả khối theo thứ tự tự nhiên (đã chia quant).
 fn transform(block: &[f32; 64], quant: &[u16; 64], cos_table: &[[f32; 8]; 8], out: &mut [i32; 64]) {
     let mut rows = [[0f32; 8]; 8];
-    for y in 0..8 {
+    for (y, output) in rows.iter_mut().enumerate() {
         let mut input = [0f32; 8];
         input.copy_from_slice(&block[y * 8..y * 8 + 8]);
-        let mut row = [0f32; 8];
-        dct_1d(&input, &mut row, cos_table);
-        rows[y] = row;
+        dct_1d(&input, output, cos_table);
     }
     for x in 0..8 {
         let mut column = [0f32; 8];
-        for y in 0..8 {
-            column[y] = rows[y][x];
+        for (y, cell) in rows.iter().enumerate() {
+            column[y] = cell[x];
         }
         let mut transformed = [0f32; 8];
         dct_1d(&column, &mut transformed, cos_table);
-        for y in 0..8 {
+        for (y, value) in transformed.iter().enumerate() {
             let index = y * 8 + x;
-            out[index] = (transformed[y] / quant[index] as f32).round() as i32;
+            out[index] = (*value / quant[index] as f32).round() as i32;
         }
     }
 }
@@ -229,8 +227,8 @@ fn encode_block(writer: &mut BitWriter, block: &[i32; 64], previous_dc: &mut i32
     writer.write(bits, size);
 
     let mut zero_run = 0u8;
-    for index in 1..64 {
-        let value = block[ZIGZAG[index]];
+    for step in ZIGZAG.iter().skip(1) {
+        let value = block[*step];
         if value == 0 {
             zero_run += 1;
             continue;
@@ -268,8 +266,8 @@ fn push_quant(out: &mut Vec<u8>, table: &[u16; 64], id: u8) {
     // "Quantization table 0x01 was not defined" (ImageMagick bắt được, test tự
     // viết của tôi thì không).
     body.push(id & 0x0F);
-    for index in 0..64 {
-        body.push(table[ZIGZAG[index]] as u8);
+    for index in ZIGZAG.iter() {
+        body.push(table[*index] as u8);
     }
     push_segment(out, 0xDB, &body);
 }
@@ -368,8 +366,12 @@ pub fn encode(bgra: &[u8], width: usize, height: usize, quality: u8) -> Vec<u8> 
             let base_y = mcu_y * mcu_h;
 
             // Cb/Cr lấy mẫu 1 điểm cho mỗi 2×2 pixel (trung bình 4 pixel).
-            for by in 0..8 {
-                for bx in 0..8 {
+            for (by, (cb_row, cr_row)) in cb_block
+                .chunks_exact_mut(8)
+                .zip(cr_block.chunks_exact_mut(8))
+                .enumerate()
+            {
+                for (bx, (cb_cell, cr_cell)) in cb_row.iter_mut().zip(cr_row.iter_mut()).enumerate() {
                     let mut cb_sum = 0f32;
                     let mut cr_sum = 0f32;
                     for dy in 0..2 {
@@ -379,14 +381,12 @@ pub fn encode(bgra: &[u8], width: usize, height: usize, quality: u8) -> Vec<u8> 
                             cr_sum += cr;
                         }
                     }
-                    cb_block[by * 8 + bx] = cb_sum / 4.0 - 128.0;
-                    cr_block[by * 8 + bx] = cr_sum / 4.0 - 128.0;
+                    *cb_cell = cb_sum / 4.0 - 128.0;
+                    *cr_cell = cr_sum / 4.0 - 128.0;
                 }
             }
 
-            for (block_index, (offset_x, offset_y)) in
-                [(0usize, 0usize), (8, 0), (0, 8), (8, 8)].iter().enumerate()
-            {
+            for (offset_x, offset_y) in [(0usize, 0usize), (8, 0), (0, 8), (8, 8)] {
                 for y in 0..8 {
                     for x in 0..8 {
                         let (luma, _, _) = pixel(base_x + offset_x + x, base_y + offset_y + y);
@@ -394,7 +394,6 @@ pub fn encode(bgra: &[u8], width: usize, height: usize, quality: u8) -> Vec<u8> 
                     }
                 }
                 transform(&y_block, &luma_quant, &cos_table, &mut coefficients);
-                let _ = block_index;
                 encode_block(&mut writer, &coefficients, &mut previous[0], &dc_luma, &ac_luma);
             }
 
@@ -422,7 +421,7 @@ mod tests {
         for y in 0..height {
             for x in 0..width {
                 let index = (y * width + x) * 4;
-                let r = if (x / 16 + y / 16) % 2 == 0 { 220u8 } else { 30u8 };
+                let r = if (x / 16 + y / 16).is_multiple_of(2) { 220u8 } else { 30u8 };
                 let g = ((x * 255) / width.max(1)) as u8;
                 let b = ((y * 255) / height.max(1)) as u8;
                 bgra[index] = b;
@@ -472,7 +471,7 @@ mod tests {
                     (220u8, 30u8, 30u8)
                 } else if y > h * 3 / 4 {
                     (0u8, 60u8, 220u8)
-                } else if (x / 4) % 2 == 0 && y < h / 8 {
+                } else if (x / 4).is_multiple_of(2) && y < h / 8 {
                     (0u8, 0u8, 0u8)
                 } else {
                     (128u8, 128u8, 128u8)

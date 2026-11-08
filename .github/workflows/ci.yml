@@ -71,8 +71,15 @@ jobs:
           fi
           exit $status
 
+      # §57.9: log không tải được ⇒ đẩy từng lint ra annotation.
       - name: standalone exe clippy
-        run: cargo clippy --manifest-path ../app/Cargo.toml --all-targets -- -D warnings
+        run: |
+          set +e
+          cargo clippy --manifest-path ../app/Cargo.toml --all-targets --message-format=json -- -D warnings > /tmp/app-clippy.json
+          status=$?
+          set -e
+          jq -r 'select(.reason=="compiler-message") | .message | select(.level=="error") | "\(.spans[0].file_name // "?"):\(.spans[0].line_start // 0): \(.message)"' /tmp/app-clippy.json 2>/dev/null | sort -u | head -20 | while IFS= read -r line; do echo "::error::app clippy: $line"; done
+          exit $status
 
       - name: standalone exe smoke check
         run: cargo run --manifest-path ../app/Cargo.toml -- --check

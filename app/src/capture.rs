@@ -659,10 +659,10 @@ impl Capture {
         check(code, "Map")?;
         let mut bgra = vec![0u8; self.width * self.height * 4];
         let pitch = mapped.row_pitch as usize;
-        for y in 0..self.height {
+        let row_bytes = self.width * 4;
+        for (y, row) in bgra.chunks_exact_mut(row_bytes).enumerate() {
             let src = (mapped.p_data as *const u8).add(y * pitch);
-            let dst = bgra.as_mut_ptr().add(y * self.width * 4);
-            ptr::copy_nonoverlapping(src, dst, self.width * 4);
+            ptr::copy_nonoverlapping(src, row.as_mut_ptr(), row_bytes);
         }
         if let Some(unmap) = self.context.as_ref().and_then(|context| context.unmap) {
             unmap(self.context as *mut c_void, self.staging as *mut c_void, 0);
