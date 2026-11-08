@@ -73,13 +73,19 @@
     else toast('Phiên demo đã kết thúc.');
   }
   function openOverlay(id) {
+    // The spec allows one surface at a time: replace, never stack dialogs.
+    $$('.overlay').forEach(overlay => overlay.classList.add('hidden'));
     const el = $(id);
     el.classList.remove('hidden');
+    document.body.classList.add('has-overlay');
     const dialog = $('.dialog', el);
     if (dialog) dialog.setAttribute('tabindex', '-1');
     $('.dialog', el)?.focus();
   }
-  function closeOverlay(id) { $(id).classList.add('hidden'); }
+  function closeOverlay(id) {
+    $(id).classList.add('hidden');
+    if ($$('.overlay').every(overlay => overlay.classList.contains('hidden'))) document.body.classList.remove('has-overlay');
+  }
 
   $('#connectBtn').addEventListener('click', () => setConnected(!state.connected));
   $$('.mode-btn').forEach(btn => btn.addEventListener('click', () => {
@@ -213,7 +219,7 @@
   $('#aboutMock').addEventListener('click', () => toast('Chưa có truyền hình ảnh, camera, micro hay lệnh tới máy thật.'));
   $$('.nav-item').forEach(btn => btn.addEventListener('click', () => toast(`${btn.textContent.trim()} — mục này thuộc mock giao diện.`)));
   $$('.overlay').forEach(overlay => overlay.addEventListener('click', event => {
-    if (event.target === overlay) overlay.classList.add('hidden');
+    if (event.target === overlay) closeOverlay(`#${overlay.id}`);
   }));
   document.addEventListener('keydown', event => {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
@@ -221,6 +227,9 @@
       if ($('#settingsOverlay').classList.contains('hidden')) openOverlay('#settingsOverlay');
       $('#settingsSearch').focus();
     }
-    if (event.key === 'Escape') $$('.overlay').forEach(el => el.classList.add('hidden'));
+    if (event.key === 'Escape') {
+      const top = $$('.overlay').find(el => !el.classList.contains('hidden'));
+      if (top) closeOverlay(`#${top.id}`);
+    }
   });
 })();
