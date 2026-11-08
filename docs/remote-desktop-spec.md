@@ -1,6 +1,6 @@
 # SPEC v3.15 — Remote Desktop qua trình duyệt **cho dùng cá nhân**: HVNC + VNC, window picker, âm thanh server-side, trải nghiệm điều khiển đầy đủ
 
-- Phiên bản: **v3.21 — §52 máy hybrid iGPU+1050: topology quyết định, DDAPI fail trên GPU rời** · trước đó: **v3.20 — §51.10–14: VRAM 4 GB, trần 1440p, sửa lỗi AdapterRAM** · trước đó: **v3.19 — thêm §51 hồ sơ GTX 1050, bẫy adapter, P0 cụ thể** · trước đó: **v3.18 — thêm §48 mô hình tuỳ chỉnh, §49 chống vỡ UI, §50 tính năng còn thiếu** · trước đó: **v3.17 — thêm §47 khởi động cùng Windows + vòng đời process + trải nghiệm theo thời gian** · trước đó: **v3.16 — thêm §46 "máy có ở đó không" (ngủ/reboot/đổi IP/khoá màn hình)**, lĩnh vực G còn trống · trước đó: **v3.15** — phạm vi thu hẹp về 1–2 người dùng (§0.3). Bản v3.14 là bản "sản phẩm": có cert, EULA, RBAC, accessibility, đóng gói ký số. Tất cả những thứ đó **đã cắt** ở đây — xem §0.3.1 để biết cắt gì và cắt có an toàn không. Lịch sử đầy đủ v1.0→v3.14 ở §0.
+- Phiên bản: **v3.22 — §53 host là laptop Dell 7467: QSV trước NVENC, nắp/pin/nhiệt/Wi-Fi 1x1** · trước đó: **v3.21 — §52 máy hybrid iGPU+1050: topology quyết định, DDAPI fail trên GPU rời** · trước đó: **v3.20 — §51.10–14: VRAM 4 GB, trần 1440p, sửa lỗi AdapterRAM** · trước đó: **v3.19 — thêm §51 hồ sơ GTX 1050, bẫy adapter, P0 cụ thể** · trước đó: **v3.18 — thêm §48 mô hình tuỳ chỉnh, §49 chống vỡ UI, §50 tính năng còn thiếu** · trước đó: **v3.17 — thêm §47 khởi động cùng Windows + vòng đời process + trải nghiệm theo thời gian** · trước đó: **v3.16 — thêm §46 "máy có ở đó không" (ngủ/reboot/đổi IP/khoá màn hình)**, lĩnh vực G còn trống · trước đó: **v3.15** — phạm vi thu hẹp về 1–2 người dùng (§0.3). Bản v3.14 là bản "sản phẩm": có cert, EULA, RBAC, accessibility, đóng gói ký số. Tất cả những thứ đó **đã cắt** ở đây — xem §0.3.1 để biết cắt gì và cắt có an toàn không. Lịch sử đầy đủ v1.0→v3.14 ở §0.
 - Trạng thái: **Đề xuất — CHƯA implement, chờ duyệt.** Sau v3.15, spec **không còn chương nào cần viết**; việc tiếp theo là **P0 (đo thật)**, không phải viết thêm.
 - Nền tảng: Server **Windows 10 2004+ / Windows 11** · Client **trình duyệt** (không app)
 
@@ -27,6 +27,7 @@
 | **v3.11** | **§41 threat model: 10 tài sản · 10 vị trí P1–P10 · **lật giả định nền — client KHÔNG tin cậy, agent tin về hành vi nhưng không tin về dữ liệu** · 3 hệ quả kiến trúc · 20 mối đe doạ T1–T20 theo ranh giới · 5 quyết định *bắt nguồn từ threat model* (client không gửi `hwnd`; không endpoint chạy lệnh; transfer/clipboard mặc định tắt; `X-Frame-Options: DENY`; người ngồi máy luôn dừng được) · token rotate + reuse detection · P6 quyền phủ quyết · supply chain/chống downgrade · 9 rủi ro chấp nhận · 14 kiểm chứng** |
 | **v3.12** | **§42 multi-session — phát hiện ràng buộc bị bỏ qua: 1 desktop = 1 con trỏ + 1 focus ⇒ chỉ 1 controller/session, N viewer** · input lease (server-side, TTL, release_all trước khi chuyển) · bảng chia sẻ vs cách ly 13 tài nguyên · admission control theo VRAM/RAM/CPU/slot/display có số (thay cho "max 3") · giới hạn display slot của VDD = câu hỏi chặn Phase 0 · fanout 1 encode → N SRTP (PLI theo **stream** không theo peer) · cách ly lỗi + tự phục hồi sau TDR · fairness 4 mức · **10 bảo đảm cách ly phải test (I1–I10), fail ⇒ tắt multi-session** · refcount dọn sau 5 s** |
 | **v3.13** | **§43 client perf: vì sao client dễ chết hơn server (6 nền tảng, Safari iOS kill tab ~200–400 MB, GC không kiểm soát) · 15 chỉ số ngân sách có cách đo · quyết định render (video element ≠ canvas; cursor = div transform; HUD 2 Hz) · **10 chỗ tốn tiền thật** (#1 forced reflow từ `getBoundingClientRect` mỗi pointer event — bug phổ biến nhất, không thấy bằng mắt) · kiến trúc JS (0 dependency, 12 module, `render(state)`) · perf-probe + **CI gate thật** (size/type/perf/leak, baseline 7 ngày) · 3 giới hạn cứng mobile · overlay 0 ms main thread · 8 nguồn rò rỉ + test 50 lần vào/ra** |
+| **v3.22** | **Host là LAPTOP Dell Inspiron 7467** (i5-7300HQ 45 W · HD 630 · GTX 1050 4 GB · panel 14″ 1080p) ⇒ **đảo 3 kết luận**: không cắm cáp được nên hybrid **vĩnh viễn**; trần display **1440p → 1080p** (panel 1080p, tiết kiệm 78% pixel); "sửa topology rồi hãy tối ưu code" chỉ còn đường `vdd_settings.xml` · **kết luận ngược trực giác: dùng QSV trên iGPU HD 630, để 1050 ngủ** — capture+encode **cùng adapter = 0 copy**, giảm **10–20 W** trong thân 14″, dGPU về D3cold · `order: qsv trước nvenc` (quyết định theo máy) · **Optimus D3cold ⇒ frame đầu +200–800 ms** ⇒ warm-up 5 frame, đo riêng 2 giây đầu · **gập nắp mặc định = Sleep = giết phiên** (nguyên nhân số 1 "không kết nối được" với laptop host) + lời khuyên **để nắp mở** vì máy này thoát nhiệt ở bản lề · **nhiệt**: phiên remote tệ hơn chơi game vì tải **liên tục phẳng**; 3 việc giảm nhiệt (QSV, kê đáy, **giới hạn CPU 99% tắt turbo**) + banner > 95 °C · **pin**: Sleep/Hibernate mặc định phá phiên, banner khi chạy pin, **từ chối tạo phiên nếu pin < 15%** · **máy có RJ-45 ⇒ dùng cáp, không Wi-Fi** (Intel 3165 **1x1**, power save gây spike 20–200 ms) + 4 thứ phải tắt nếu buộc dùng Wi-Fi · **RAM gốc 4 GB là ràng buộc thật** (không phải app — app < 200 MB, mà là host tự swap) ⇒ guard `ram_low_refuse_mb` · 3 cài đặt Dell âm thầm phá phiên (Thermal Management, Battery Extender, SupportAssist auto-update) · P0 laptop 11 bước **khác thứ tự desktop** (cold start, pin, nhiệt, nắp) |
 | **v3.21** | **Có iGPU ⇒ máy hybrid, và §51.4 chưa đủ mạnh**: tài liệu Microsoft nói DDAPI **theo thiết kế** trả `DXGI_ERROR_UNSUPPORTED` khi chạy trên **GPU rời** trong hệ hybrid; `DuplicateOutput` **bắt buộc** device cùng adapter với output; trên hybrid `EnumOutputs` của iGPU **có thể trả 0 output**; và display ảo **có thể có trong Windows mà không có trong DXGI** (VDD #483) ⇒ `E_FAIL` = **pipeline chết**, không phải chậm · **4 topology A/B/C/D** và phán quyết từng cái · **VDD có `<gpu><friendlyname>`** (mặc định `default` = OS tự chọn = thường iGPU) + changelog 25.7.23 chọn render adapter **theo LUID từ PCI bus** ⇒ đây là công tắc quyết định · topology C (chéo adapter) tốn **1.76 GB/s copy + 2–5 ms + 1 nhân CPU** ⇒ chọn **C1 QSV** thay vì copy sang NVENC · **thang leo khi `E_FAIL`**: EnumDisplayDevices → WGC theo monitor-handle → báo `unsupported_topology` **kèm cách sửa**, **không bao giờ** tự chuyển sang capture màn hình thật · vòng dò adapter mới: **bỏ Microsoft Basic Render (0x1414)**, **không hạ preset khi lệch LUID** (hạ preset không sửa được copy chéo) · **P0-g** trước P0-a · `/diagnostics` + `capture_luid/encode_luid/same` · §48 T2 thêm "GPU mã hoá" |
 | **v3.20** | **Xác nhận VRAM 4 GB** ⇒ §51.3 đảo kết luận: **VRAM không phải ràng buộc** trên máy này; trần display ảo **1920×1200 → 2560×1440**; "giật" có **4 nguyên nhân khác** và cách phân biệt bằng số (`encode_ms p95 < 8 ms` ⇒ **không phải GPU**) · trần cứng thật là **băng thông đường quét ảo** (Pascal **không có DSC**) chứ không phải VRAM ⇒ 4K có thể phải lùi **30 Hz** · cảnh báo **1050 Ti OEM low-profile bị hạ xung** (NVENC không bị, **DWM bị**) · **`Win32_VideoController.AdapterRAM` là `uint32` ⇒ tràn số với card ≥ 4 GB** — phải dùng `nvidia-smi` hoặc DXGI `DedicatedVideoMemory` (§9.4.1 bước 1b sửa theo) · cấu hình `config.json` chốt cho máy này · còn 2 câu: **có iGPU không** (quyết định bẫy LUID) và driver version |
 | **v3.19** | **§51 máy chủ thật (GTX 1050)**: GitHub dùng được để **đọc source**, **không** để đo (runner không GPU) · 1050 = NVENC thế hệ 6: H.264 1080p60 dư, **không AV1**, **không HEVC B-frame** (không dùng), trần phiên **12** với driver mới (không thành vấn đề — ta dùng 1–2) · **ràng buộc thật là 2 GB VRAM ⇒ trần display ảo 1920×1200**, không phải tốc độ; hết VRAM **không báo lỗi, chỉ giật** ⇒ banner < 300 MB · **bẫy tìm từ source**: `d3d11screencapturesrc` khi `capture-api=wgc` tạo device theo **adapter index bạn truyền** (mặc định `-1`), khi `dxgi` thì theo **adapter sở hữu monitor** ⇒ máy 2 adapter (iGPU + Optimus) có thể capture và NVENC ở **2 LUID khác nhau** = copy staging +3–8 ms hoặc `not-negotiated` ⇒ P0 phải kiểm **LUID trùng** · **tin tốt P0-b**: GStreamer **có TWCC** (`rtptwcc`, `twcc-stats`) và webrtcbin tự quảng cáo `transport-cc`, **không có REMB**; ta vốn không cần CC trong GStreamer vì §36 là CC của ta ⇒ P0-b hạ từ "đổi stack" xuống "nối extmap + đọc 1 property" · VDD **25.7.23 / VDC đã ký**, cài cả display + audio trong app · 12 bước P0 cụ thể cho máy này |
@@ -1001,7 +1002,8 @@ Không hỏi "máy bạn có GPU gì" lúc cài — **dò lúc chạy**, mỗi l
 | HW encoder yếu (iGPU đời cũ, laptop U) | Smooth | 1080p60 → tự hạ 900p nếu rơi frame |
 | Chỉ x264, CPU ≥8 nhân hiện đại | Smooth | 1080p30 |
 | Chỉ x264, CPU yếu / máy ảo | Low | 720p30 |
-| **GTX 1050 Ti (4 GB)** | Balanced | **1080p60@1440p, trần 1440p** — §51.10 |
+| **GTX 1050 Ti (4 GB), desktop** | Balanced | **1080p60@1440p, trần 1440p** — §51.10 |
+| **Laptop hybrid (HD 630 + 1050)** | Balanced | **QSV 1080p60@1080p, dGPU ngủ** — §53.2 (đảo thứ tự: qsv trước nvenc) |
 
 - **Người dùng vẫn đổi được tay** (§6.10.1); auto chỉ là mặc định + trần. Đổi tay thì khoá auto 10 phút.
 - Panel `⚙ → Thông tin máy chủ` **hiện rõ**: GPU, encoder đang dùng, encode_ms, lý do chọn preset. Không giấu — nếu hình mờ, người dùng biết vì sao.
@@ -2516,7 +2518,7 @@ rd.exe version
 | **Sau khi cài driver cần reboot** | VDD lần đầu có thể cần | wizard kiểm tra + nói rõ "cần khởi động lại 1 lần" |
 | **Antivirus chặn driver** | cài thất bại | hướng dẫn whitelist + kiểm tra chữ ký driver |
 | **Màn hình không có (headless)** | vẫn cần desktop ảo | hoạt động (VDD không cần màn hình thật) |
-| **Laptop gập nắp** | màn hình tắt, vẫn chạy | display ảo không bị ảnh hưởng; `ES_DISPLAY_REQUIRED` giữ |
+| **Laptop gập nắp** | màn hình tắt, vẫn chạy | **mặc định Windows là SLEEP, không phải "vẫn chạy"** ⇒ §53.5: đặt "Do nothing" hoặc tốt hơn là **để nắp mở** (máy này thoát nhiệt ở bản lề) |
 | **Máy ngủ / vừa reboot / IP đổi** | không kết nối được, không rõ vì sao | **§46**: 5 lỗi → 5 câu → 5 nút |
 | **Windows Update tự restart lúc đêm** | app không chạy tới khi đăng nhập | §46.4: giảm số lần reboot + `last_seen` để nói rõ "vừa khởi động lại lúc 03:12" |
 
@@ -3283,6 +3285,7 @@ Dừng phiên (thứ tự NGƯỢC, bắt buộc):
 | **Tổng mục tiêu** | | **<200 MB RSS + <200 MB VRAM** |
 - Đo bằng `GetProcessMemoryInfo` + `IDXGIAdapter3::QueryVideoMemoryInfo`, đưa vào stats.
 - Khi VRAM <150 MB trống → **từ chối tạo phiên mới** với lỗi rõ ràng (tốt hơn là crash giữa phiên).
+- Khi **RAM khả dụng < 500 MB** → từ chối với lý do rõ ("máy chủ còn X MB RAM"). Trên host 4 GB, chính Windows+Chrome swap làm **host** giật — không phải app, không phải mạng (§53.8).
 - Rò rỉ phát hiện bằng: tăng đơn điệu `handle_count`/`VRAM` qua 60 phút ⇒ tự restart pipeline + `audit.warn`.
 
 ### 35.15 Ma trận fault-injection (bắt buộc làm trước khi coi là xong Phase 1)
@@ -5289,7 +5292,7 @@ Công cụ loại này không hỏng lúc cài. Nó hỏng **dần**, và mỗi 
 | Bàn phím | layout server · rate limit · chặn `Win+L` | gõ sai, dùng app lạ |
 | Bàn giao | port · cert · STUN/TURN · Tailscale | khi không kết nối được |
 | Chẩn đoán | barcode · HUD độ trễ · log level | đang tìm lỗi |
-| GPU mã hoá | Tự động · **NVIDIA** · **Intel QSV** | máy hybrid: chọn QSV khi display ảo render trên iGPU (§52.5) |
+| GPU mã hoá | Tự động · **Intel QSV** · **NVIDIA** | laptop hybrid: **QSV mặc định** — cùng adapter với capture, mát hơn 10–20 W (§53.2) |
 
 > Cách gom này quan trọng: người dùng mở cài đặt với **một triệu chứng** trong đầu ("trễ", "mờ"), không phải với một cái tên tham số. Nếu bạn phải biết "jitter buffer" là gì mới tìm được nó, đó là UI hỏng.
 
@@ -5954,3 +5957,192 @@ Add-Type -TypeDefinition $src -Language CSharp
 | §21.9 (`/diagnostics`) | thêm `capture_luid` / `encode_luid` / `same` / `cross_adapter` / `vdd_render_adapter` |
 | §18 P0 | thêm **P0-g** trước P0-a |
 | §48 T2 | thêm 1 mục: **"GPU mã hoá"** = `Tự động · NVIDIA · Intel QSV` (vì topology C là lựa chọn **thật**, không phải lỗi) |
+
+---
+
+## 53. Host là **laptop**: Dell Inspiron 7467 (i5-7300HQ + HD 630 + GTX 1050 4 GB) (nhánh #34)
+
+> §52 kết luận: *"cắm cáp màn hình vào 1050 để hết hybrid"*. **Laptop không cắm được vào đâu cả.** Nên §52 phải đảo một nửa, và thêm 5 ràng buộc mà một cái desktop không có: **nắp gập, pin, nhiệt, Wi-Fi 1x1, RAM**.
+
+### 53.1 Ba kết luận bị đảo
+| Kết luận cũ | Trên laptop |
+|---|---|
+| §52.2 "cắm cáp vào cổng 1050 ⇒ hết hybrid" | ❌ **không làm được**. Panel nội bộ **luôn** thuộc iGPU ⇒ hybrid là **vĩnh viễn** trên máy này. Không phải sự cố, là **điều kiện làm việc** |
+| §52.5 "sửa topology rồi hãy tối ưu code" | ⚠️ chỉ còn **một** cách sửa topology: **`vdd_settings.xml` + chọn encoder** (§53.2). Không còn cách vật lý |
+| §51.10 "trần display ảo 2560×1440" | ❌ hạ về **1920×1080** — panel chỉ 1080p, VDD 1440p làm app tưởng màn hình lớn hơn, DPI lệch, và capture đắt hơn 78% pixel (§53.9) |
+
+### 53.2 Tin tốt: **iGPU HD 630 là host GPU tốt hơn GTX 1050** cho đúng bài toán này
+Đây là kết luận quan trọng nhất của chương, và nó ngược với trực giác "dùng card rời cho khoẻ":
+
+| | **HD 630 (iGPU) + QSV** | **GTX 1050 (dGPU) + NVENC** |
+|---|---|---|
+| Capture nguồn | ✅ panel + VDD đều thuộc iGPU ⇒ **cùng adapter** | ❌ phải kéo frame qua PCIe từ iGPU |
+| Copy chéo adapter | **0** | **1.76 GB/s + 2–5 ms + 1 nhân CPU** (§52.4) |
+| Nhiệt phát sinh | thấp (chia sẵn với CPU) | **+10–20 W** trong chassis 14″ |
+| Quạt | thường im | **quay to, liên tục** — máy đặt ở nhà, bạn nghe qua điện thoại |
+| Điện | thấp hơn ~8–15 W | cao hơn |
+| Optimus | ✅ dGPU **ngủ hẳn** (D3cold) | ❌ phải đánh thức dGPU suốt phiên |
+| Chất lượng H.264 @8 Mbps | khá | **tốt hơn** (NVENC 6th gen > HD 630) |
+| Trần thực tế | 1080p60 thoải mái | 1080p60 thoải mái |
+
+> **Khuyến nghị cho máy này: mặc định dùng QSV trên HD 630, để 1050 ngủ.** Đây là lần đầu spec chọn iGPU trước dGPU, và lý do rất cụ thể: **host là laptop đặt ở nhà** ⇒ nhiệt/quạt/điện là chi phí thật hằng ngày, còn chất lượng hơn 1 bậc ở 8 Mbps thì gần như không nhìn ra trên điện thoại.
+> Đổi lại được: §48 T2 có mục **"GPU mã hoá"** = `Tự động · Intel QSV · NVIDIA`. Đặt `Intel QSV` cho máy này. NVENC vẫn dùng được khi bạn cần chất lượng (ví dụ đọc bảng tính nhiều chữ nhỏ).
+
+**Topology A′ (chốt cho laptop):**
+```xml
+<!-- C:\VirtualDisplayDriver\vdd_settings.xml -->
+<gpu><friendlyname>Intel</friendlyname></gpu>   <!-- ép display ảo render trên iGPU -->
+```
+⇒ capture (iGPU) → QSV (iGPU) = **1 adapter, 0 copy, dGPU ngủ**. Đây là topology **duy nhất** trên laptop vừa rẻ vừa mát.
+
+### 53.3 Nhiệt: i5-7300HQ 45 W + GTX 1050 trong thân 14″ — và phiên remote **tệ hơn chơi game**
+Lý do: chơi game là tải **từng đợt** (có màn hình chờ, có lúc rảnh). Remote desktop để mở 8 tiếng là tải **liên tục, phẳng** — nhiệt ổn định ở mức cao và **không có lúc hạ**.
+
+| Ngưỡng | Ý nghĩa | Hành vi của app |
+|---|---|---|
+| CPU package < 80 °C | bình thường | không làm gì |
+| 80–95 °C | turbo giảm dần | ghi log, không báo người dùng |
+| **> 95 °C kéo dài 60 s** | throttle thật ⇒ `encode_ms` p95 nhảy vọt | banner xanh nhạt *"máy đang nóng, hình có thể giật — kê máy cao hơn"* **1 lần/phiên** |
+| **> 100 °C** | Tjmax, CPU tự hạ xung mạnh | giảm preset 1 bậc + banner |
+
+**Ba việc làm được ngay, xếp theo hiệu quả/giá:**
+
+| # | Việc | Hiệu quả |
+|---|---|---|
+| 1 | **QSV thay NVENC** (§53.2) | **giảm 10–20 W** — nhiều nhất, miễn phí |
+| 2 | **Kê cao đáy máy 2–3 cm** (2 nắp chai, hoặc đế tản) | giảm 5–10 °C; máy này hút gió **dưới đáy** |
+| 3 | **Giới hạn CPU 99%** (Power Options → Processor power management → Maximum processor state = 99%) | **tắt turbo** ⇒ giảm 10–15 °C, mất ~10% hiệu năng đơn nhân. Với remote desktop thì đánh đổi này **nên làm** — nút thắt là nhiệt, không phải CPU |
+
+> **Không** dùng "Dell Thermal Management → Cool" như một giải pháp: nó hạ xung **mạnh hơn** mức cần, và bạn sẽ thấy chậm mà không hiểu vì sao. Dùng mục 3, có kiểm soát.
+
+### 53.4 Optimus: dGPU ngủ ⇒ **frame đầu tiên trễ 200–800 ms** (bẫy mới)
+Nếu bạn chọn **NVENC** trên laptop: khi không tải, Optimus đưa 1050 vào **D3cold** (tắt điện hoàn toàn). Lần encode đầu tiên phải đánh thức nó: driver load, clock ramp, VRAM cấp phát.
+
+| Hiện tượng | Hệ quả | Xử lý |
+|---|---|---|
+| Frame đầu + 200–800 ms | client thấy "đứng hình" 0.5 s đầu, tưởng app treo | **warm-up: encode 5 frame throwaway ngay sau khi tạo pipeline**, trước khi gửi frame thật (§53.12 #4) |
+| Clock ramp 300–800 MHz → boost | 1–2 s đầu bitrate không đạt | giữ bitrate ở 60% trong 2 s đầu rồi mới lên đủ |
+| Nếu rút sạc | Windows hạ cả hai GPU | §53.6 |
+> **Với QSV (khuyến nghị) thì bẫy này biến mất** — iGPU không bao giờ ngủ vì nó là "GPU màn hình". Đây là lợi ích thứ hai của §53.2, và là lý do P0 phải đo **riêng** độ trễ 2 giây đầu.
+
+### 53.5 Nắp gập: mặc định của Windows là **SLEEP** — tức là giết phiên
+§46.8 có dòng *"Laptop gập nắp → màn hình tắt, vẫn chạy"* — **đó là điều mong muốn, không phải mặc định**. Mặc định Dell/Windows: **gập nắp → Sleep**.
+
+| Lựa chọn | Hệ quả | Phán quyết |
+|---|---|---|
+| Gập nắp → **Do nothing** | máy chạy tiếp, panel tắt, VDD không ảnh hưởng | ✅ cần thiết nếu bạn muốn gập máy |
+| Gập nắp → **Sleep** (mặc định) | mất kết nối sau ~5 s; WoL từ browser không làm được (§46.3) | ❌ **đây là lý do số 1 "không kết nối được" với laptop host** |
+| Gập nắp → **Shut down** | tệ nhất | ❌ |
+
+**Nhưng với máy này, tôi khuyên: ĐỂ NẮP MỞ khi ở nhà, đặt "Do nothing".**
+
+| Vì sao nắp mở | Vì sao đừng gập |
+|---|---|
+| Tản nhiệt tốt hơn (máy này thoát nhiệt ở **bản lề**) | gập nắp ⇒ khe thoát bí ⇒ §53.3 nặng hơn rõ rệt |
+| Bạn nhìn thấy màn hình = biết máy đang làm gì | gập nắp + HVNC ⇒ không ai biết máy đang chạy gì |
+| Không cần đổi setting nguy hiểm | "Do nothing" + quên ⇒ máy chạy trong balo, **nóng, hao pin** |
+
+> Nếu bạn **buộc** phải gập: đặt "Do nothing" **nhưng** chỉ khi cắm sạc và đặt máy ở chỗ thoáng. App ghi vào `/diagnostics`: `lid_policy` và cảnh báo 1 lần nếu phát hiện `Do nothing` **không** cắm sạc.
+
+### 53.6 Pin: host chạy bằng pin là cấu hình **sai**, và Windows sẽ tự phá nó
+| Việc Windows tự làm khi rảnh/chạy pin | Hậu quả | Cần tắt |
+|---|---|---|
+| Sleep sau 15–30 phút | mất phiên | Power Options → Sleep = **Never** (khi cắm sạc) |
+| Hibernate sau 3 giờ | mất phiên, khởi động lại 40 s | Hibernate = **Never** |
+| **Critical battery → Hibernate** | tắt giữa phiên | hoặc để, nhưng phải **cảnh báo trước** |
+| Hạ xung CPU mạnh khi rời sạc | QSV/NVENC cùng hạ theo | cắm sạc **luôn** |
+| **Dell Power Manager "Battery Extender"/"Primarily AC"** | giới hạn sạc 80% ⇒ tốt cho pin, **nhưng** khi mất điện thì chỉ còn 80% | chấp nhận được, ghi vào `/diagnostics` |
+
+**Hành vi của app trên máy này:**
+- `/diagnostics` + `GET /api/machine` (§46.4) trả thêm: `on_ac`, `battery_pct`, `lid_policy`, `cpu_temp_c`, `gpu_active` (dGPU đang bật hay D3cold).
+- Nếu `on_ac == false` trong phiên: **banner vàng 1 lần** *"Đang chạy pin — máy sẽ ngủ/tắt sau ~X phút"*, kèm pin % và **thời gian ước còn lại** (từ `Win32_Battery.EstimatedChargeRemaining` + công suất tiêu thụ ước).
+- Nếu pin < 15% và **không** cắm sạc: **không cho tạo phiên mới** (từ chối rõ ràng), vì bắt đầu phiên rồi mất giữa đường tệ hơn.
+
+### 53.7 Mạng: máy này **có cổng RJ-45** — dùng nó, đừng dùng Wi-Fi
+Đây là nút thắt **lớn hơn GPU** trên laptop, và spec chưa nói gì:
+
+| Đường | Đặc điểm | Phán quyết |
+|---|---|---|
+| **RJ-45 (có sẵn trên 7467)** | 1 Gbps, không power-save, jitter ~0 | ✅ **dùng cái này** khi ở nhà — cắm dây là xong |
+| Wi-Fi **Intel 3165, 802.11ac 1x1** | 1 luồng, ~200 Mbps thực, **power save gây spike 20–200 ms** | ⚠️ chỉ khi không cắm được dây |
+| Wi-Fi 2.4 GHz | nhiễu, 20 MHz | ❌ |
+
+**Bốn thứ phải tắt trên Intel 3165 nếu buộc dùng Wi-Fi** (mỗi cái đều gây "giật 1 giây rồi thôi" mà không ai nghĩ tới):
+
+| # | Ở đâu | Tắt gì |
+|---|---|---|
+| 1 | Device Manager → adapter → **Power Management** | ✅ bỏ *"Allow the computer to turn off this device to save power"* |
+| 2 | Device Manager → adapter → **Advanced** | `Power Saving Mode` → **Highest performance** (nếu có) |
+| 3 | Power Options → Wireless Adapter Settings | **Maximum Performance** (cả cắm sạc **và** dùng pin) |
+| 4 | Router | bật **5 GHz**, chọn kênh 36–48; tắt "airtime fairness" nếu có |
+
+> **Đừng** đổ lỗi "GStreamer trễ" khi đang chạy Wi-Fi 1x1 có power save. §51.11 mục 4 (mạng) là xác suất cao nhất, và trên máy này xác suất đó còn cao hơn vì card chỉ 1 luồng.
+
+### 53.8 RAM: cấu hình gốc là **4 GB** — nếu đúng thì đây là ràng buộc thật
+Spec này nhẹ (mục tiêu **< 200 MB RSS**, §43.10), nên **app** không phải vấn đề. Nhưng trên host:
+
+| RAM | Tình hình |
+|---|---|
+| **4 GB** | Windows 10 idle ~2.2 GB + Chrome ~1 GB ⇒ **swap liên tục** ⇒ **chính host** giật, không phải mạng. Phải nâng cấp — 1 thanh 8 GB DDR4-2400 rất rẻ, máy có **2 slot** |
+| 8 GB | dùng được; đóng bớt tab trên máy host |
+| 16 GB+ | thoải mái |
+
+**Guard (thêm vào §43.10):** trước khi tạo phiên, kiểm `Available MBytes` < 500 ⇒ từ chối với lý do rõ *"Máy chủ chỉ còn X MB RAM — đóng bớt ứng dụng"*. Không bao giờ để phiên chết giữa đường vì OOM.
+
+### 53.9 Display: panel 1080p ⇒ **VDD 1080p**, không 1440p (đảo §51.10)
+| Lý do | Chi tiết |
+|---|---|
+| Panel vật lý 14″ FHD 1920×1080 | VDD 1440p ⇒ app tưởng màn hình lớn hơn, DPI/scale lệch so với lúc bạn ngồi trước máy |
+| Pixel cost | 1440p = **+78%** pixel so với 1080p ⇒ QSV phải làm nhiều hơn, capture texture lớn hơn |
+| Chuyển VNC ↔ HVNC | cùng 1080p ⇒ cửa sổ không nhảy vị trí/kích thước khi đổi mode |
+| Đọc chữ | trên 14″ bạn vốn đã dùng **125–150% scaling**; giữ nguyên scaling đó, đừng nới resolution |
+
+```xml
+<resolutions>
+  <resolution><width>1920</width><height>1080</height><refresh_rate>60</refresh_rate></resolution>
+</resolutions>
+```
+
+### 53.10 Đặc thù Dell: 3 cài đặt hay âm thầm phá phiên
+| Cài đặt | Ở đâu | Vấn đề | Đặt thành |
+|---|---|---|---|
+| **Dell Thermal Management** | Dell Power Manager | "Cool"/"Quiet" hạ xung mạnh hơn cần | **Balanced** (hoặc Ultra Performance nếu đã làm §53.3 #3) |
+| **Battery Extender / Primarily AC** | Dell Power Manager | giới hạn sạc 80% (tốt), nhưng mất điện thì ít pin hơn | giữ, chỉ cần biết |
+| **Dell Update / SupportAssist chạy nền** | Services | tự cập nhật BIOS/driver **giữa phiên** ⇒ reboot (§45 cảnh báo VDD) | tắt auto-update, tự chạy khi rảnh |
+
+### 53.11 `config.json` chốt cho **máy này**
+```json
+{
+  "display": { "virtual_max": "1920x1080@60", "virtual_fallback": ["1600x900@60"] },
+  "encoder": { "order": ["qsv", "nvenc", "mf"], "preset": "balanced",
+               "capture_api": "dxgi", "max_bitrate_mbps": 10,
+               "warmup_frames": 5 },
+  "network": { "prefer_wired": true, "wifi_powersave_must_be_off": true },
+  "guards": { "vram_low_banner_mb": 300, "ram_low_refuse_mb": 500,
+              "cpu_throttle_warn_c": 95, "battery_refuse_pct": 15,
+              "require_ac_for_new_session": false },
+  "laptop": { "lid_policy_expect": "do_nothing_or_open", "warn_if_lid_closed": true }
+}
+```
+> `order` đặt **qsv trước** — khác mặc định §9.4.1 (NVENC trước). Đây là **quyết định theo máy**, không phải thay đổi toàn cục.
+
+### 53.12 P0 trên laptop — thứ tự **khác** desktop, vì có thêm 4 biến
+| # | Việc | Đạt khi | Khác gì desktop |
+|---|---|---|---|
+| 1 | Đổ topology (§52.9) | biết panel thuộc iGPU, VDD render adapter | — |
+| 2 | Cài VDD, `friendlyname=Intel`, resolution **1080p** | display ảo hiện, `EnumOutputs` thấy | — |
+| 3 | **QSV** thay NVENC | `qsvh264enc` khởi tạo được; `nvidia-smi` không thấy process | **mới** |
+| 4 | **Đo cold start**: tạo phiên, đo 2 giây đầu | frame đầu < 300 ms (QSV) | **mới** — Optimus §53.4 |
+| 5 | p95 ở **cắm sạc** | số chính | — |
+| 6 | p95 ở **pin** (để so sánh) | ghi số, **không** dùng làm chuẩn | **mới** — §53.6 |
+| 7 | Soak 4 h, log nhiệt + throttle + VRAM + RAM | không throttle > 95 °C kéo dài; RAM phẳng | **mới** — §53.3 |
+| 8 | Test **nắp gập** ("Do nothing") | phiên sống, panel tắt | **mới** — §53.5 |
+| 9 | Test **rút dây mạng** giữa phiên (nếu dùng cáp) | ICE restart, không mất phiên | — |
+| 10 | TWCC (§52.5 P0-b) | `bitrate-sent` giảm ≤ 300 ms | — |
+| 11 | Khởi động lại máy → login không bấm gì | ≤ 30 s có trang | — |
+
+### 53.13 Còn **hai** câu, và cả hai đều đổi cấu hình
+| Câu | Vì sao quan trọng |
+|---|---|
+| **RAM bao nhiêu GB?** (4 / 8 / 16 / đã nâng) | 4 GB ⇒ **host tự giật**, phải nâng cấp trước khi đo p95 (§53.8). Đây là thứ có thể làm **toàn bộ P0 vô nghĩa** |
+| **Host nối mạng bằng cáp hay Wi-Fi?** | Wi-Fi 1x1 + power save ⇒ spike 20–200 ms; đo trên Wi-Fi rồi kết luận "pipeline trễ" là **sai** (§53.7) |
