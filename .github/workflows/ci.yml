@@ -164,12 +164,25 @@ jobs:
         run: |
           $target = Join-Path $env:RUNNER_TEMP 'gstreamer'
           $out = Join-Path $PWD 'app/target/release/gst'
-          # Ghi cả output ra step summary: annotation chỉ giữ được 1 dòng, mà
-          # log job thì sandbox không tải được (§56.10).
-          $log = pwsh -File scripts/trim-gstreamer.ps1 -Root $target -Out $out 2>&1 | Tee-Object -Variable out2
-          $out2 | Out-String | Write-Host
-          if ($env:GITHUB_STEP_SUMMARY) { $out2 | Out-String | Add-Content -Path $env:GITHUB_STEP_SUMMARY }
-          if ($LASTEXITCODE -ne 0) { exit 1 }
+          # Không đọc được log job từ sandbox và annotation chỉ giữ 1 dòng, nên
+          # chẩn đoán được ghi ra **file**, rồi upload làm artifact — thứ duy
+          # nhất chắc chắn đọc được bằng API.
+          $diag = Join-Path $env:RUNNER_TEMP 'trim-diag.txt'
+          pwsh -File scripts/trim-gstreamer.ps1 -Root $target -Out $out *>&1 | Tee-Object -FilePath $diag
+          $code = $LASTEXITCODE
+          Copy-Item $diag . -Force -ErrorAction SilentlyContinue
+          if ($code -ne 0) {
+            Write-Output "::error::Thu gọn GStreamer thất bại — xem artifact trim-diag"
+            exit 1
+          }
+
+      - name: upload trim diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trim-diag
+          path: trim-diag.txt
+          if-no-files-found: warn
 
       - name: smoke-run the trimmed bundle
         shell: pwsh
