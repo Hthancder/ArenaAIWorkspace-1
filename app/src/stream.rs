@@ -19,12 +19,6 @@ pub const BOUNDARY: &str = "lanternframe";
 pub const DEFAULT_FPS: u8 = 15;
 /// Trần fps cho đường MJPEG. Trên 30 thì JPEG trở thành nút thắt CPU.
 pub const MAX_FPS: u8 = 30;
-/// 1280×720: không phải "cho đẹp" — JPEG 1080p15 tốn ~3× CPU encode mà mắt
-/// không thấy khác khi chỉ để *nhìn*, và 720p đọc được chữ ở mức thu phóng.
-#[cfg_attr(not(windows), allow(dead_code))]
-pub const DEFAULT_WIDTH: u32 = 1280;
-#[cfg_attr(not(windows), allow(dead_code))]
-pub const DEFAULT_HEIGHT: u32 = 720;
 /// Trần monitor index (§41.4 — input từ client phải clamp, kể cả query string).
 pub const MAX_MONITOR: u8 = 8;
 

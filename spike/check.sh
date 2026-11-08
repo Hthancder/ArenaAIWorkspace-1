@@ -38,6 +38,9 @@ cargo test --offline --manifest-path ../app/Cargo.toml
 ../app/target/debug/lantern-mock --check
 echo "   app tests + --check green"
 
+echo "== nhánh Windows biên dịch trên Linux (bắt dead_code/unused_mut trước CI)"
+../scripts/check-windows-shape.py
+
 echo "== web (zero-dep UI syntax + tests)"
 if command -v node >/dev/null 2>&1; then
     node --check ../web/app.js

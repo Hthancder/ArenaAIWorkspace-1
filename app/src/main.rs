@@ -382,8 +382,6 @@ fn stream_live(mut stream: TcpStream, monitor: u8, fps: u8) {
         /// Chờ frame **đầu tiên**. Ngắn hơn bản GStreamer (8 s) vì không có
         /// cold start của pipeline: chỉ là thời gian DXGI trả frame đầu.
         const FIRST_FRAME: Duration = Duration::from_secs(4);
-        /// Nhịp kiểm "tab còn mở không".
-        const POLL: Duration = Duration::from_millis(200);
 
         let mut capture = match capture::Capture::open(monitor) {
             Ok(capture) => capture,

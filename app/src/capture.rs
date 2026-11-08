@@ -37,17 +37,14 @@ use std::ffi::c_void;
 #[cfg(windows)]
 use std::ptr;
 
-// Tên dùng đúng chữ của header Windows (`HRESULT`, `UINT`, `LUID`) chứ không
-// theo convention của Rust: khi tra cứu tài liệu, hai bên phải khớp nhau từng
-// chữ. Đây là ngoại lệ có chủ ý, không phải sơ suất.
+// Tên dùng đúng chữ của header Windows (`HRESULT`, `UINT`) chứ không theo
+// convention của Rust: khi tra cứu tài liệu, hai bên phải khớp nhau từng chữ.
+// Đây là ngoại lệ có chủ ý, không phải sơ suất.
 #[allow(clippy::upper_case_acronyms)]
 type HRESULT = i32;
 #[allow(clippy::upper_case_acronyms)]
 type UINT = u32;
-#[allow(clippy::upper_case_acronyms)]
-type LUID = i64;
 
-const S_OK: HRESULT = 0;
 /// `DXGI_ERROR_WAIT_TIMEOUT`: màn hình không đổi trong thời gian chờ. **Không**
 /// phải lỗi — chỉ là không có frame mới.
 const DXGI_ERROR_WAIT_TIMEOUT: HRESULT = 0x887A0027u32 as i32;
@@ -96,13 +93,6 @@ struct OutduplDesc {
     desktop_image_format: u32,
 }
 
-#[repr(C)]
-struct MappedRect {
-    pitch: i32,
-    _reserved: u32,
-    p_bits: *mut u8,
-}
-
 /// Loại lỗi **khác nhau**, vì cách sửa khác nhau. Gộp hết thành "không capture
 /// được" là lỗi tệ nhất của loại code này (§58.16).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -122,10 +112,6 @@ pub enum CaptureError {
 }
 
 impl CaptureError {
-    pub fn is_fatal(&self) -> bool {
-        !matches!(self, CaptureError::Timeout)
-    }
-
     /// Câu tiếng Việt đọc được, kèm **việc cần làm**. Một thông báo nói "lỗi
     /// DXGI 0x887A0004" là thông báo vô dụng với người dùng.
     pub fn message(&self) -> String {
@@ -240,8 +226,22 @@ struct Adapter1 {
 /// Kiểm bằng `assert` slot trong test.
 #[repr(C)]
 struct Output1 {
-    // IDXGIObject (0–6) + IDXGIOutput (7–…)
-    _vtable_prefix: [*mut c_void; 22],
+    // Đếm theo `include/dxgi.idl` + `include/dxgi1_2.idl` của Wine:
+    //   IUnknown 0–2 · IDXGIObject: SetPrivateData 3, SetPrivateDataInterface 4,
+    //   GetPrivateData 5, GetParent 6
+    //   IDXGIOutput (12 method, slot 7–18): **GetDesc 7**, GetDisplayModeList 8,
+    //     FindClosestMatchingMode 9, WaitForVBlank 10, TakeOwnership 11,
+    //     ReleaseOwnership 12, GetGammaControlCapabilities 13, SetGammaControl 14,
+    //     GetGammaControl 15, SetDisplaySurface 16, GetDisplaySurfaceData 17,
+    //     GetFrameStatistics 18
+    //   IDXGIOutput1: GetDisplayModeList1 19, FindClosestMatchingMode1 20,
+    //     GetDisplaySurfaceData1 21, **DuplicateOutput 22** ✅
+    // Khoảng 8..=21 (14 slot) không dùng hàm nào nhưng **phải** khai báo để
+    // `duplicate_output` rơi đúng slot 22.
+    // 0..=6: IUnknown (3) + IDXGIObject (4) ⇒ gộp thành 7 slot im lặng.
+    _object: [*mut c_void; 7],
+    get_desc: Option<unsafe extern "system" fn(*mut c_void, *mut OutputDesc) -> HRESULT>,
+    _output_rest: [*mut c_void; 14],
     duplicate_output: Option<
         unsafe extern "system" fn(*mut c_void, *mut c_void, *mut *mut c_void) -> HRESULT,
     >,
@@ -450,7 +450,6 @@ pub struct Capture {
     staging: *mut Texture2D,
     width: usize,
     height: usize,
-    monitor: u8,
 }
 
 // Con trỏ COM không `Send`/`Sync` mặc định, nhưng phiên capture được dùng từ
@@ -493,7 +492,7 @@ impl Capture {
                     if enum_outputs(adapter as *mut c_void, output_index, &mut candidate) < 0 || candidate.is_null() {
                         break;
                     }
-                    let desc_ptr = candidate.cast::<u8>();
+                    let output = as_interface::<Output1>(candidate);
                     // Bỏ output không gắn vào desktop (màn hình ảo đã tắt).
                     let mut desc = OutputDesc {
                         device_name: [0; 32],
@@ -502,9 +501,11 @@ impl Capture {
                         rotation: 0,
                         monitor: 0,
                     };
-                    let vtable = *(desc_ptr.cast::<*const *const c_void>());
-                    let get_desc: unsafe extern "system" fn(*mut c_void, *mut OutputDesc) -> HRESULT =
-                        std::mem::transmute(*vtable.add(8));
+                    let get_desc = (*output).get_desc;
+                    let Some(get_desc) = get_desc else {
+                        release(candidate);
+                        continue;
+                    };
                     if get_desc(candidate, &mut desc) < 0 || desc.attached_to_desktop == 0 {
                         release(candidate);
                         output_index += 1;
@@ -628,7 +629,6 @@ impl Capture {
                 staging: as_interface::<Texture2D>(staging_raw),
                 width,
                 height,
-                monitor,
             })
         }
     }
@@ -661,7 +661,7 @@ impl Capture {
             // IDXGIResource ⇒ ID3D11Texture2D ⇒ CopyResource vào staging.
             let mut texture_raw: *mut c_void = ptr::null_mut();
             let query = (*as_interface::<Resource>(resource_raw)).query_interface;
-            let mut result: Result<Frame, CaptureError>;
+            let result: Result<Frame, CaptureError>;
             let mut code_texture = -1i32;
             if let Some(query) = query {
                 code_texture = query(
@@ -745,12 +745,6 @@ unsafe fn as_interface<T>(pointer: *mut c_void) -> *mut T {
     pointer.cast::<T>()
 }
 
-/// `monitor-index` có nằm trong khoảng hợp lệ **theo hằng số**, không cần mở
-/// phiên? Đây là hàng rào cho input từ query string (§41.4).
-pub fn monitor_in_range(monitor: u8) -> bool {
-    monitor <= 8
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -770,6 +764,7 @@ mod tests {
         //  - IDXGIFactory1::EnumAdapters1  = 12
         //  - IDXGIAdapter1::EnumOutputs    = 7
         //  - IDXGIAdapter1::GetDesc1       = 10
+        //  - IDXGIOutput::GetDesc        = 7
         //  - IDXGIOutput1::DuplicateOutput = 22
         //  - IDXGIOutputDuplication::GetDesc        = 7
         //  - IDXGIOutputDuplication::AcquireNextFrame = 8
@@ -789,6 +784,7 @@ mod tests {
 
             let output = std::mem::MaybeUninit::<Output1>::uninit();
             let obase = output.as_ptr();
+            assert_eq!(slot_of(std::ptr::addr_of!((*obase).get_desc) as *const _, obase as *const u8), 7, "Output GetDesc");
             assert_eq!(slot_of(std::ptr::addr_of!((*obase).duplicate_output) as *const _, obase as *const u8), 22, "DuplicateOutput");
 
             let duplication = std::mem::MaybeUninit::<OutputDuplication>::uninit();
@@ -820,12 +816,14 @@ mod tests {
         assert_eq!(D3D11_CPU_ACCESS_READ, 0x20000);
     }
 
-    #[test] fn errors_that_are_not_errors_are_flagged_as_such() {
+    #[test] fn only_timeout_means_the_screen_just_did_not_change() {
         // `Timeout` không phải lỗi: màn hình tĩnh là bình thường. Coi nó là lỗi
-        // ⇒ đóng stream mỗi lần người dùng ngừng gõ phím.
-        assert!(!CaptureError::Timeout.is_fatal());
-        assert!(CaptureError::AccessLost.is_fatal());
-        assert!(CaptureError::NoOutput.is_fatal());
+        // ⇒ đóng stream mỗi lần người dùng ngừng gõ phím. Vòng lặp ở `main.rs`
+        // phân biệt bằng `match` trên biến thể, không bằng một cờ `is_fatal()`
+        // — một chỗ quyết định, không hai.
+        assert_eq!(CaptureError::Timeout, CaptureError::Timeout);
+        assert_ne!(CaptureError::Timeout, CaptureError::AccessLost);
+        assert_eq!(CaptureError::AccessLost, CaptureError::AccessLost);
     }
 
     #[test] fn a_bad_monitor_message_tells_the_user_how_many_exist() {
@@ -834,9 +832,4 @@ mod tests {
         assert!(message.contains("màn hình"), "{message}");
     }
 
-    #[test] fn monitor_index_from_the_client_is_bounded() {
-        assert!(monitor_in_range(0));
-        assert!(monitor_in_range(8));
-        assert!(!monitor_in_range(9));
-    }
 }
