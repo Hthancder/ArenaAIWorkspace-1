@@ -6741,7 +6741,7 @@ Bản này **chỉ có hình**. Không tiếng, không điều khiển, không W
 
 > **`probe_live_status()` là chỗ đáng chú ý:** nó biến "nút bấm được nhưng lỗi" thành "nút mờ + nói lý do cụ thể". Một app nói *"Chưa có GStreamer trong PATH"* tốt hơn một app hiện khung đen, và tốt hơn nhiều lần một app không có nút đó.
 
-Bản v3.30 thêm **bốn test HTTP thật** — dựng server trên cổng ngẫu nhiên, đóng vai trình duyệt bằng `TcpStream`, và dùng một `gst-launch-1.0` giả (`LANTERN_GST`) để điều khiển pipeline. Chúng **không** mock `stream_live()`: request đi qua đúng `handle()`, đúng socket, đúng `ChildGuard`.
+Bản v3.30 thêm **ba test HTTP thật + 2 test trực tiếp** — dựng server trên cổng ngẫu nhiên, đóng vai trình duyệt bằng `TcpStream`, và dùng một `gst-launch-1.0` giả (`LANTERN_GST`) để điều khiển pipeline. Chúng **không** mock `stream_live()`: request đi qua đúng `handle()`, đúng socket, đúng `ChildGuard`.
 
 | Test | Giữ cái gì | Lỗi nó bắt được |
 |---|---|---|
