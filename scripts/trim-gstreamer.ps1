@@ -26,8 +26,14 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 
-function Fail($message) { Write-Output "::error::$message"; exit 1 }
+function Fail($message) {
+    # Nhiều dòng ⇒ nhiều annotation. Log job không tải được từ sandbox (§56.10)
+    # nên annotation là **kênh duy nhất** để biết chuyện gì đã xảy ra.
+    foreach ($line in ($message -split "`n")) { Write-Output "::error::$line" }
+    exit 1
+}
 
+try {
 $Root = (Resolve-Path $Root).Path
 $bin = Join-Path $Root 'bin'
 $plugins = Join-Path $Root 'lib/gstreamer-1.0'
@@ -67,7 +73,11 @@ foreach ($element in $required.Keys) {
             break
         }
     }
-    if (-not $found) { Fail "Gói GStreamer này thiếu element '$element' (mong ở plugin: $($required[$element] -join ', '))" }
+    if (-not $found) {
+        $sample = ($pluginFiles.GetEnumerator() | Select-Object -First 1)
+        $head = if ($sample) { ($sample.Value -split "`n" | Select-Object -First 12) -join ' / ' } else { '(không đọc được file plugin nào)' }
+        Fail "Gói GStreamer này thiếu element '$element' (mong ở plugin: $($required[$element] -join ', '))`nTìm thấy $($pluginFiles.Count) file .dll trong $plugins`nVí dụ output của $(Split-Path $sample.Key -Leaf): $head"
+    }
 }
 
 # `gst-launch-1.0` cần thêm hai thứ luôn đi cùng bộ core.
@@ -116,3 +126,6 @@ $size = [math]::Round((Get-ChildItem $outRoot -Recurse -File | Measure-Object Le
 $count = (Get-ChildItem $outRoot -Recurse -File).Count
 Write-Output "== xong: $count file, $size MB (bản đầy đủ: $([math]::Round((Get-ChildItem $Root -Recurse -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum / 1MB, 1)) MB)"
 Write-Output "== ở $outRoot"
+} catch {
+    Fail "Lỗi không mong đợi khi thu gọn GStreamer: $($_.Exception.Message)`nTại: $($_.InvocationInfo.PositionMessage)"
+}
