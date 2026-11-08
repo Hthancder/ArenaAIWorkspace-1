@@ -227,7 +227,7 @@ impl InputSanitizer {
     /// `release_all` — **luôn** thành công, **luôn** idempotent (§44.2 bất biến 3).
     /// Trả về danh sách VK cần gửi `KEYUP` (gồm cả modifier cho chắc).
     pub fn release_all(&mut self, now_ms: u64) -> Vec<u16> {
-        let mut ups: Vec<u16> = self.keys_held.drain(..).collect();
+        let mut ups: Vec<u16> = std::mem::take(&mut self.keys_held);
         for mod_vk in [0x11u16, 0x10, 0x12, VK_LWIN, VK_RWIN] {
             // Ctrl, Shift, Alt, LWin, RWin
             if !ups.contains(&mod_vk) {

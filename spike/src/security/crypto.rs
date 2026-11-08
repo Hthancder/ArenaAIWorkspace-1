@@ -37,10 +37,20 @@ pub fn sha256(input: &[u8]) -> [u8; 32] {
     }
     msg.extend_from_slice(&bit_len.to_be_bytes());
 
-    for block in msg.chunks_exact(64) {
+    // `msg.len()` luôn là bội của 64 sau khi padding, nên chỉ số dưới đây an toàn.
+    // (Dùng vòng `for` theo chỉ số thay vì `chunks_exact`: clippy hiện đại khuyên
+    // `as_chunks` cho chunk size hằng, và API đó ổn định từ 1.88 — nhưng chỉ số
+    // thì không phụ thuộc phiên bản toolchain, và ở đây cũng ngắn hơn.)
+    let mut block_start = 0usize;
+    while block_start < msg.len() {
+        let block = &msg[block_start..block_start + 64];
         let mut w = [0u32; 64];
-        for (i, word) in block.chunks_exact(4).enumerate() {
-            w[i] = u32::from_be_bytes([word[0], word[1], word[2], word[3]]);
+        let mut word_index = 0usize;
+        while word_index < 16 {
+            let o = word_index * 4;
+            w[word_index] =
+                u32::from_be_bytes([block[o], block[o + 1], block[o + 2], block[o + 3]]);
+            word_index += 1;
         }
         let mut i = 16usize;
         while i < 64 {
@@ -94,6 +104,7 @@ pub fn sha256(input: &[u8]) -> [u8; 32] {
         h[5] = h[5].wrapping_add(f);
         h[6] = h[6].wrapping_add(g);
         h[7] = h[7].wrapping_add(hh);
+        block_start += 64;
     }
 
     let mut out = [0u8; 32];

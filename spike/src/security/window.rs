@@ -31,6 +31,9 @@ pub struct WindowEntry {
     pub capture_blocked: bool,
 }
 
+/// Lỗi khi kiểm `wid`. Mọi biến thể đều được **đếm** ở
+/// [`WindowRegistry::rejection_count`] để `/diagnostics` thấy được tấn công
+/// thay vì chỉ thấy "không mở được cửa sổ".
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WindowError {
     /// `wid` không có trong snapshot nào còn hạn. Đây là **403**, không phải 404:
@@ -43,8 +46,6 @@ pub enum WindowError {
     /// dấu hiệu của một client không phải của ta.
     HwndNotAccepted,
 }
-/// Đếm mọi lần từ chối, để `/diagnostics` thấy được tấn công thay vì chỉ thấy
-/// "không mở được cửa sổ".
 
 impl WindowError {
     pub fn status(self) -> u16 {
