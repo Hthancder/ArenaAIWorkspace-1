@@ -4,9 +4,12 @@ This is a zero-dependency Rust Windows executable that embeds the browser UI and
 
 ## Download and run
 
-1. Open the GitHub Actions run for the branch and download artifact **`lantern-mock-windows-x64`**.
-2. Extract `lantern-mock.exe` and double-click it. It binds only to `127.0.0.1` on an available port, then opens the browser. If the browser does not open, use the URL printed in the console.
-3. Keep the console window open while testing; close it to stop the server.
+The Windows CI run publishes two Phase 0 preview formats:
+
+- **Portable:** artifact `lantern-phase0-portable-windows-x64` — extract the ZIP and run `lantern-mock.exe`.
+- **Installer:** artifact `lantern-phase0-setup-windows-x64` — run `Lantern-Phase0-Setup.exe`; it installs per-user, adds a Start menu shortcut, and can optionally add a desktop shortcut. Uninstall from Windows Settings → Apps.
+
+Both formats use the same executable. It binds only to `127.0.0.1` on an available port, then opens the browser. If the browser does not open, use the URL printed in the console. Keep the console window open while testing; close it to stop the server. Settings are stored under `%LOCALAPPDATA%\\LanternMock`; uninstall leaves those user settings intact.
 
 Mock settings persist under `%LOCALAPPDATA%\LanternMock\settings.json`.
 
