@@ -15,7 +15,7 @@ tab Chrome — không cài gì trên máy điều khiển.
 | [`mock-server/`](mock-server/) | Backend Node.js không dependency: API cho trạng thái, cài đặt, window picker và vòng đời phiên mock |
 | [`docs/remote-desktop-spec.md`](docs/remote-desktop-spec.md) | **Spec thiết kế, ~6 500 dòng, §1–§56.** Kiến trúc, giao thức, pipeline mã hoá video, UI, bảo mật, edge case |
 | [`docs/remote-hidden-window-guide.md`](docs/remote-hidden-window-guide.md) | Cách chạy một cửa sổ trên máy bị điều khiển mà **màn hình thật ở nhà không thấy** |
-| [`spike/`](spike/) | Rust, **0 dependency**: sinh chuỗi GStreamer (desktop/camera/mic), guard chính sách 3 mức, 16 test |
+| [`spike/`](spike/) | Rust, **0 dependency**: sinh chuỗi GStreamer (desktop/camera/mic), guard chính sách 3 mức, **tầng bảo mật** (`security/`: token, lockout, CSRF, wid, input, cleanup) — **100 test** |
 | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | CI: `clippy -D warnings` → `cargo test` → build `rd.exe` + artifact |
 
 ## Máy đích
@@ -34,10 +34,12 @@ Trên laptop Windows không cần cài Node/Rust: GitHub → **Actions** → run
 ## Chạy kiểm tra
 
 ```sh
-./spike/check.sh          # build -D warnings -> 16 test -> smoke-run, ~3 giây
+./spike/check.sh          # build -D warnings -> 100 test -> smoke-run, ~2 giây
 node --check web/app.js   # kiểm cú pháp JavaScript của mock
-npm test                 # integration test cho API settings/window/session
+npm test                 # integration test API + chặn XSS/innerHTML (T5)
 ```
+
+Phần nào đó là **[CỨNG]** trong spec thì phải có test ở đây — bảng đối chiếu §41.10 → test nằm ở [spec §57.3](docs/remote-desktop-spec.md).
 
 ## Ghi chú bảo mật
 

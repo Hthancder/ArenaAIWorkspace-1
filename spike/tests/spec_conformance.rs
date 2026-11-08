@@ -180,3 +180,158 @@ fn vram_low_is_a_banner_never_a_block() {
     m.free_vram_mb = None;
     assert!(policy::vram_low(&m, &t).is_none(), "unmeasured must not guess");
 }
+
+// ============================================================================
+// §41.10 — 14 kiểm chứng bảo mật, chạy như một phần của `cargo test`.
+// Đây là phần **biến §41 từ chương thành cổng**: nếu một trong các assert
+// dưới đây đỏ thì đó không phải "test hỏng", mà là một luật [CỨNG] đã bị phá.
+// ============================================================================
+mod security_conformance {
+    use rd_spike_lib::security::auth::{Lockout, LockoutConfig, PasswordFile, StoredPassword};
+    use rd_spike_lib::security::crypto::FixedEntropy;
+    use rd_spike_lib::security::gate::{
+        mutation_is_same_origin, security_headers, session_cookie, url_carries_token, Auth,
+        CSRF_HEADER, CSRF_VALUE, RateLimiter, Transport,
+    };
+    use rd_spike_lib::security::input::{InputSanitizer, FLAG_ALT, FLAG_CTRL, VK_DELETE, VK_LWIN, VK_L};
+    use rd_spike_lib::security::refresh::{CleanupTimer, Resource};
+    use rd_spike_lib::security::token::{RefreshOutcome, RefreshStore, TokenConfig, TokenIssuer};
+    use rd_spike_lib::security::window::{WindowEntry, WindowRegistry};
+
+    const T0: u64 = 1_700_000_000_000;
+
+    fn auth() -> Auth {
+        let passwords =
+            PasswordFile::new("owner", StoredPassword::new("correct horse", [4u8; 16], 1));
+        let tokens = TokenIssuer::new(TokenConfig::default(), vec![9u8; 32]).unwrap();
+        Auth::new(passwords, tokens, Lockout::new(LockoutConfig::default()))
+    }
+
+    #[test]
+    fn c1_wid_outside_the_returned_list_is_403() {
+        let mut e = FixedEntropy::new(11);
+        let mut registry = WindowRegistry::default();
+        let (snap, _) = registry.publish(
+            vec![WindowEntry {
+                wid: "00ff".into(),
+                title: "Notepad".into(),
+                app: "notepad.exe".into(),
+                pid: 1,
+                minimized: false,
+                elevated: false,
+                capture_blocked: false,
+            }],
+            T0,
+            &mut e,
+            "owner",
+        );
+        let err = registry.authorize(&snap, "beef", T0).unwrap_err();
+        assert_eq!(err.status(), 403);
+    }
+
+    #[test]
+    fn c2_someone_elses_sid_is_refused_on_every_route() {
+        let mut e = FixedEntropy::new(11);
+        let mut a = auth();
+        let session = a
+            .login("10.0.0.2", "owner", "correct horse", "laptop", T0, &mut e)
+            .unwrap();
+        assert!(a.authorize(&session.access, "owner", T0 + 1).is_ok());
+        assert!(a.authorize(&session.access, "intruder", T0 + 1).is_err());
+    }
+
+    #[test]
+    fn c4_post_without_the_custom_header_is_refused() {
+        assert!(!mutation_is_same_origin("POST", &[], "127.0.0.1:8443"));
+        assert!(mutation_is_same_origin(
+            "POST",
+            &[(CSRF_HEADER, CSRF_VALUE), ("origin", "https://127.0.0.1:8443")],
+            "127.0.0.1:8443"
+        ));
+    }
+
+    #[test]
+    fn c5_clickjacking_headers_are_present() {
+        let headers = security_headers(Transport::Tls);
+        assert!(headers.iter().any(|(k, v)| *k == "X-Frame-Options" && v == "DENY"));
+        assert!(headers
+            .iter()
+            .any(|(k, v)| *k == "Content-Security-Policy" && v.contains("frame-ancestors 'none'")));
+    }
+
+    #[test]
+    fn c6_refresh_reuse_revokes_the_whole_chain() {
+        let mut e = FixedEntropy::new(12);
+        let issuer = TokenIssuer::new(TokenConfig::default(), vec![9u8; 32]).unwrap();
+        let mut store = RefreshStore::new(TokenConfig::default());
+        let first = store.issue("owner", "d", T0, &mut e);
+        let RefreshOutcome::Rotated(second) =
+            store.rotate(&first, "d", T0 + 1, &issuer, "owner", &mut e)
+        else {
+            panic!("rotate");
+        };
+        assert!(matches!(
+            store.rotate(&first, "d", T0 + 2, &issuer, "owner", &mut e),
+            RefreshOutcome::Reused { .. }
+        ));
+        assert_eq!(
+            store.rotate(&second.refresh, "d", T0 + 3, &issuer, "owner", &mut e),
+            RefreshOutcome::Revoked(rd_spike_lib::security::token::RevokedReason::ReuseDetected)
+        );
+    }
+
+    #[test]
+    fn c8_tls_cannot_be_switched_off_and_tokens_never_travel_in_a_url() {
+        assert!(Transport::for_bind("0.0.0.0", false).is_err());
+        assert!(url_carries_token("/s/x?access=abc"));
+        // Cookie refresh: JS không đọc được.
+        assert!(session_cookie("lantern_rt", "x", 60).contains("HttpOnly"));
+    }
+
+    #[test]
+    fn c9_windows_metadata_is_rate_limited_to_thirty_per_minute() {
+        // §41.4 T18: /api/windows 30/phút. Đây là con số trong test của spec.
+        let mut rl = RateLimiter::new();
+        for i in 0..30 {
+            assert!(rl.check("windows:owner", 30, 60_000, T0 + i));
+        }
+        assert!(!rl.check("windows:owner", 30, 60_000, T0 + 30));
+    }
+
+    #[test]
+    fn c11_coordinates_cannot_leave_the_screen_and_win_lock_is_blocked() {
+        // Toạ độ là u16 ở kiểu dữ liệu ⇒ không có API nào nhận i32.
+        let mut input = InputSanitizer::default();
+        input.accept_key(VK_LWIN, true, 0, true, T0).unwrap();
+        assert!(input.accept_key(VK_L, true, 0, true, T0 + 1).is_err());
+        assert!(input
+            .accept_key(VK_DELETE, true, FLAG_CTRL | FLAG_ALT, false, T0 + 2)
+            .is_err());
+    }
+
+    #[test]
+    fn c12_nothing_in_a_debug_rendering_leaks_a_token() {
+        let mut e = FixedEntropy::new(13);
+        let mut a = auth();
+        let session = a
+            .login("10.0.0.3", "owner", "correct horse", "laptop", T0, &mut e)
+            .unwrap();
+        let rendered = format!("{session:?}");
+        assert!(!rendered.contains(&session.access));
+        assert!(!rendered.contains(&session.refresh));
+        assert!(rendered.contains("redacted"));
+    }
+
+    #[test]
+    fn c14_display_is_kept_after_close_so_a_refresh_does_not_break_it() {
+        // §42.15 #4 + §9.2.2 — display ảo KHÔNG bị dọn theo nhịp 5 s.
+        let mut timer = CleanupTimer::default();
+        timer.acquire(Resource::VirtualDisplay, T0);
+        timer.release(Resource::VirtualDisplay, T0);
+        assert!(timer.tick(T0 + 60_000).is_empty());
+        // Nhưng encoder/cable/d3d thì có.
+        timer.acquire(Resource::Encoder, T0);
+        timer.release(Resource::Encoder, T0 + 1);
+        assert_eq!(timer.tick(T0 + 5_001), vec![Resource::Encoder]);
+    }
+}

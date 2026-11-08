@@ -8,13 +8,14 @@ Mục đích: phần **logic** của spec được viết bằng Rust, compile +
 | `src/machine.rs` | hồ sơ máy (adapter/LUID/VRAM/RAM/pin/nhiệt), trần display, phát hiện cross-adapter | §9.4.1, §51.12, §52.7, §53.9 |
 | `src/pipeline.rs` | sinh chuỗi GStreamer: desktop, camera, micro — đúng tham số low-latency | §37, §54.5 |
 | `src/policy.rs` | guard 3 mức Block/Warn/Silent, **mặc định Warn** | §54.1 |
-| `tests/spec_conformance.rs` | spec thành assertion (14 test) | nhiều chương |
+| `src/security/` | **7 file**: SHA-256/HMAC tự viết, lockout, JWT+refresh rotate, CSRF/TLS gate, `wid` registry, input sanitizer, cleanup 5 s | §41, §44, §42.13 |
+| `tests/spec_conformance.rs` | spec thành assertion (**26** test, gồm 10 kiểm chứng §41.10) | nhiều chương |
 
 ## Chạy
 
 ```powershell
-cargo test        # 14 test, không cần GPU
-cargo run -- --demo
+cargo test        # 100 test, không cần GPU
+cargo run -- --demo   # in pipeline + quyết định bảo mật + các "deviation" so với spec
 ```
 
 ## Cái CI **không** làm được
@@ -42,7 +43,13 @@ export PATH="$HOME/.local/rust/bin:$PATH"
 ## Trạng thái đã kiểm (2026-11-08)
 
 - `cargo build` với `RUSTFLAGS=-D warnings`: sạch.
-- `cargo test`: **16/16 pass**.
-- `cargo run -- --demo`: exit 0.
-- `clippy`: **chưa chạy lần nào** (không có trong toolchain npm; chỉ CI, mà CI
-  đang `startup_failure` ở mức repo).
+- `cargo test`: **74 unit + 26 conformance = 100 pass**.
+- `cargo run -- --demo`: exit 0, in cả phần `security` (§57) và các deviation D-1..D-4.
+- `clippy`: **không có trong toolchain npm** của sandbox ⇒ chỉ CI chạy; CI đã xanh
+  ở §56.10 với `clippy -D warnings`.
+
+## Đọc gì trước
+
+1. `security/mod.rs` — bảng 6 luật [CỨNG] + `DEVIATIONS` (code khác spec ở đâu, vì sao, khi nào quay lại).
+2. `security/token.rs` — chỗ dễ sai nhất: rotate, reuse detection, revoke-all.
+3. `security/window.rs` — lỗ hổng leo thang quyền thật (§41.4 T1) nếu bỏ qua.

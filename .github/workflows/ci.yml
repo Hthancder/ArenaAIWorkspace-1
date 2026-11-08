@@ -38,8 +38,14 @@ jobs:
       - name: web mock syntax
         run: node --check ../web/app.js
 
-      - name: mock backend integration
+      - name: mock backend integration (incl. T5 innerHTML guard)
         run: node --test ../mock-server/server.test.js
+
+      # §57: mỗi luật [CỨNG] của §41 phải xuất hiện trong log CI, không chỉ
+      # trong file test. Đọc bằng mắt được ngay trên trang run.
+      - name: security conformance summary
+        run: |
+          cargo test --test spec_conformance 2>&1 | grep -E "security_conformance::" | sed 's/^test security_conformance:://'
 
       - name: standalone exe tests
         run: cargo test --manifest-path ../app/Cargo.toml

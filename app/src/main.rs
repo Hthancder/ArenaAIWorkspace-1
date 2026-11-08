@@ -103,9 +103,18 @@ fn settings_json(settings: &BTreeMap<String, String>) -> String {
 fn session_json(s: &Session) -> String {
     format!("{{\"id\":{},\"mode\":{},\"windowId\":{},\"startedAt\":{},\"audio\":{},\"status\":\"connected\",\"mock\":true}}", json_quote(&s.id), json_quote(&s.mode), json_quote(&s.window_id), s.started_at, s.audio)
 }
-fn response(stream: &mut TcpStream, status: u16, content_type: &str, body: &[u8]) {
+/// Header của **mọi** response. Tách khỏi socket để test được bằng giá trị trả
+/// về, không phải bằng cách bắt chước chuỗi trong test.
+///
+/// §41.5 D4: thiếu hai header đầu thì một trang khác nhúng được app trong iframe
+/// và bấm hộ nút "điều khiển" (clickjacking). Mock cũng phải giữ đúng, vì sản
+/// phẩm thật sẽ bám theo mock.
+fn response_head(status: u16, content_type: &str, content_length: usize) -> String {
     let reason = match status { 200 => "OK", 201 => "Created", 400 => "Bad Request", 404 => "Not Found", 405 => "Method Not Allowed", 409 => "Conflict", 413 => "Payload Too Large", 422 => "Unprocessable Entity", _ => "Internal Server Error" };
-    let head = format!("HTTP/1.1 {status} {reason}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\n\r\n", body.len());
+    format!("HTTP/1.1 {status} {reason}\r\nContent-Type: {content_type}\r\nContent-Length: {content_length}\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nX-Frame-Options: DENY\r\nContent-Security-Policy: default-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'\r\nReferrer-Policy: no-referrer\r\nConnection: close\r\n\r\n")
+}
+fn response(stream: &mut TcpStream, status: u16, content_type: &str, body: &[u8]) {
+    let head = response_head(status, content_type, body.len());
     let _ = stream.write_all(head.as_bytes()); let _ = stream.write_all(body); let _ = stream.flush();
 }
 fn json_response(stream: &mut TcpStream, status: u16, body: String) { response(stream, status, "application/json; charset=utf-8", body.as_bytes()); }
@@ -319,4 +328,17 @@ mod tests {
         assert!(command.ends_with("fakesink"));
     }
     #[test] fn diagnostics_api_is_marked_as_hardware_not_ui_mock() { assert!(run_diagnostics().contains("\"mock\":false")); }
+    #[test] fn responses_carry_clickjacking_headers() {
+        // §41.5 D4 — test trên giá trị thật mà socket sẽ ghi, không phải chuỗi chép tay.
+        let head = response_head(200, "text/html; charset=utf-8", 42);
+        assert!(head.contains("X-Frame-Options: DENY"), "{head}");
+        assert!(head.contains("Content-Security-Policy: default-src 'self'; frame-ancestors 'none'"), "{head}");
+        assert!(head.contains("Referrer-Policy: no-referrer"), "{head}");
+        assert!(head.contains("Content-Length: 42"), "{head}");
+        // Cùng bộ header cho response JSON và lỗi — không có đường nào thiếu.
+        for status in [200u16, 201, 400, 404, 409, 413, 422, 500] {
+            let head = response_head(status, "application/json", 2);
+            assert!(head.contains("X-Frame-Options: DENY"), "status {status}: {head}");
+        }
+    }
 }

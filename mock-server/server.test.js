@@ -56,4 +56,33 @@ test('mock backend serves connected device/window/session/settings flow', async 
   assert.equal((await fetch(`${base}/api/sessions/${session.id}`, { method: 'DELETE' })).status, 200);
   assert.equal((await (await fetch(`${base}/api/sessions/current`)).json()).session, null);
   assert.equal((await fetch(`${base}/`)).status, 200);
+
+  // §41.5 D4: trang không được nhúng vào iframe của người khác.
+  const page = await fetch(`${base}/`);
+  assert.equal(page.headers.get('x-frame-options'), 'DENY');
+  assert.match(page.headers.get('content-security-policy'), /frame-ancestors 'none'/);
+  // §41.5 D4: không bao giờ nhận token qua URL, nên không có Referer để rò.
+  assert.equal(page.headers.get('referrer-policy'), 'no-referrer');
+  const api = await fetch(`${base}/api/health`);
+  assert.equal(api.headers.get('x-frame-options'), 'DENY');
+});
+
+test('the UI never injects server data through innerHTML (spec T5)', () => {
+  // §41.4 T5: tên cửa sổ / output của probe do app bên thứ ba đặt. Một template
+  // string `innerHTML` là đủ để XSS chạy trong origin của app và chiếm phiên.
+  // Luật cụ thể, kiểm được bằng grep:
+  //   · markup tĩnh (không nội suy) → innerHTML được phép;
+  //   · mọi object đến từ server (`item`, `check`, `result`, `report`,
+  //     `device`, `session`, `window`) → KHÔNG BAO GIỜ nội suy vào innerHTML.
+  const source = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
+  const serverData = /\$\{(?:item|check|checks|result|report|diagnosticsReport|device|session|window)\b/;
+  const assignments = [...source.matchAll(/innerHTML\s*=\s*([\s\S]*?);/g)].map(m => m[1]);
+  assert.ok(assignments.length > 0, 'app.js phải còn render gì đó');
+  for (const expression of assignments) {
+    assert.ok(!serverData.test(expression), `innerHTML với dữ liệu server: ${expression.trim().slice(0, 80)}…`);
+  }
+  // Dữ liệu chẩn đoán đi qua hàm an toàn, tạo DOM bằng tay.
+  assert.match(source, /function renderDiagnostics\(/);
+  assert.match(source, /textContent = String\(item\.output/);
+  assert.ok(!/diagnosticsList'\)\.innerHTML\s*=\s*checks\.map/.test(source));
 });

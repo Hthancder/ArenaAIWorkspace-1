@@ -177,6 +177,39 @@
     setToggle($('#micToggle'), state.mic);
     toast(state.mic ? 'Micro mô phỏng đã bật — chưa thu âm thật.' : 'Micro mô phỏng đã tắt.');
   });
+  // §41.4 T5 — output của probe là dữ liệu từ MÁY THẬT (Get-PnpDevice, tên app,
+  // driver, tên Wi-Fi) và có thể chứa bất kỳ ký tự nào. Nó KHÔNG được đi qua
+  // innerHTML: mọi thứ ở đây tạo bằng createElement + textContent. Đổi dòng này
+  // thành template string là mở lại XSS, nên có test grep chặn (server.test.js).
+  function renderDiagnostics(checks) {
+    const list = $('#diagnosticsList');
+    list.replaceChildren();
+    for (const item of checks) {
+      const row = document.createElement('div');
+      row.className = 'diagnostic-row';
+
+      const badge = document.createElement('span');
+      const status = ['pass', 'fail', 'warn'].includes(item.status) ? item.status : 'warn';
+      badge.className = `diagnostic-status ${status}`;
+      badge.textContent = status === 'pass' ? '✓' : status === 'fail' ? '×' : '!';
+
+      const copy = document.createElement('span');
+      copy.className = 'diagnostic-copy';
+      const title = document.createElement('b');
+      title.textContent = String(item.title ?? '');
+      const output = document.createElement('small');
+      output.textContent = String(item.output || item.advice || '');
+      copy.append(title, output);
+      if (item.advice && item.output) {
+        const advice = document.createElement('em');
+        advice.textContent = String(item.advice);
+        copy.append(advice);
+      }
+
+      row.append(badge, copy);
+      list.append(row);
+    }
+  }
   let diagnosticsReport = null;
   $('#runDiagnostics').addEventListener('click', async () => {
     openOverlay('#diagnosticsOverlay');
@@ -188,16 +221,16 @@
       diagnosticsReport = await apiRequest('/api/diagnostics');
       if (diagnosticsReport.mock) {
         $('#diagnosticsIntro').textContent = 'Preview UI không có quyền đọc phần cứng. Dùng exe Windows để chạy probe thật.';
-        $('#diagnosticsList').innerHTML = '<div class="diagnostic-row"><span class="diagnostic-status warn">!</span><span>Chẩn đoán phần cứng chỉ có trong Lantern mock exe.</span></div>';
+        renderDiagnostics([{ status: 'warn', title: 'Chẩn đoán phần cứng chỉ có trong Lantern mock exe.' }]);
         $('#captureProbe').disabled = true;
       } else {
         const checks = diagnosticsReport.checks || [];
         const pass = checks.filter(item => item.status === 'pass').length;
         $('#diagnosticsIntro').textContent = `${pass}/${checks.length} kiểm tra đạt. Không có thay đổi hệ thống nào được thực hiện.`;
-        $('#diagnosticsList').innerHTML = checks.map(item => `<div class="diagnostic-row"><span class="diagnostic-status ${item.status}">${item.status === 'pass' ? '✓' : item.status === 'fail' ? '×' : '!'}</span><span class="diagnostic-copy"><b>${item.title}</b><small>${item.output || item.advice || ''}</small>${item.advice && item.output ? `<em>${item.advice}</em>` : ''}</span></div>`).join('');
+        renderDiagnostics(checks);
         $('#captureProbe').disabled = false;
       }
-    } catch { $('#diagnosticsIntro').textContent = 'Không nhận được báo cáo. Hãy chạy standalone Lantern mock exe trên Windows.'; $('#diagnosticsList').innerHTML = ''; }
+    } catch { $('#diagnosticsIntro').textContent = 'Không nhận được báo cáo. Hãy chạy standalone Lantern mock exe trên Windows.'; $('#diagnosticsList').replaceChildren(); }
   });
   $('#diagnosticsClose').addEventListener('click', () => closeOverlay('#diagnosticsOverlay'));
   $('#diagnosticsDone').addEventListener('click', () => closeOverlay('#diagnosticsOverlay'));
