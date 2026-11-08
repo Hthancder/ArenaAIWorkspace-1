@@ -349,9 +349,9 @@ fn switch_session(
         json_response(stream, 404, "{\"error\":\"session_not_found\"}".into());
         return None;
     }
-    if deny_if_unauthorised(stream, state, headers, Some("local")).is_none() {
-        return None;
-    }
+    // `?` thay vì `if … { return None }`: cùng nghĩa, và clippy đúng khi nói
+    // bản kia là ba dòng cho một phép kiểm.
+    deny_if_unauthorised(stream, state, headers, Some("local"))?;
     let body = match what {
         Switch::Window(b) | Switch::Mode(b) | Switch::Monitor(b) | Switch::Preset(b)
         | Switch::CursorMode(b) | Switch::Permission(b) | Switch::Share(b) => b,
@@ -556,7 +556,13 @@ fn json_response(stream: &mut TcpStream, status: u16, body: String) { response(s
 ///
 /// Tên header được **hạ về chữ thường** để `cookie_value` không phải quan tâm
 /// client viết `Cookie` hay `cookie`.
-fn read_request(stream: &mut TcpStream) -> Option<(String, String, BTreeMap<String, String>, Vec<u8>)> {
+/// Request đã đọc: `(method, path, headers, body nhị phân)`.
+///
+/// `body` là `Vec<u8>` chứ không `String` vì §8.3 gửi message **nhị phân**
+/// (bug #17). Route JSON tự decode, route `/move` đọc thẳng.
+type Request = (String, String, BTreeMap<String, String>, Vec<u8>);
+
+fn read_request(stream: &mut TcpStream) -> Option<Request> {
     stream.set_read_timeout(Some(std::time::Duration::from_secs(3))).ok()?;
     let mut bytes = Vec::new(); let mut chunk = [0u8; 2048]; let header_end;
     loop {
@@ -1161,10 +1167,10 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
                     }
                     // 12 byte mỗi frame ⇒ body response phải **nhỏ**. Trả đủ
                     // số đo cho UI nhưng không thêm gì thừa.
-                    return json_response(&mut stream, 200, format!(
-                        "{{\"ok\":true,\"sent\":{},\"refused\":{}}}", sent, refused));
+                    json_response(&mut stream, 200, format!(
+                        "{{\"ok\":true,\"sent\":{},\"refused\":{}}}", sent, refused))
                 }
-                None => return json_response(&mut stream, 422, "{\"error\":\"invalid_move\"}".into()),
+                None => json_response(&mut stream, 422, "{\"error\":\"invalid_move\"}".into()),
             }
         }
         // ══════════════════════════════════════════════════════════════════
@@ -1201,7 +1207,6 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
             {
                 json_response(&mut stream, status, response);
             }
-            return;
         }
 
         // §8.1 `{sid}/keyframe` — 204, xin IDR mới. Với MJPEG mỗi frame đã
@@ -1215,12 +1220,12 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
             // Đếm để `GET /{sid}` báo được "đã xin keyframe lúc nào" — nếu
             // không, route này là 204 rỗng và không ai biết nó có chạy không.
             s.keyframes += 1;
-            return response(&mut stream, 204, "application/json", b"");
+            response(&mut stream, 204, "application/json", b"")
         }
         // §8.1 `POST /api/sessions/{sid}/takeover` — §6.11.4 / §42.2: thiết bị
         // khác tiếp quản. Bản một-thiết-bị: luôn 409, và nói **vì sao**.
         ("POST", p) if p.starts_with("/api/sessions/") && p.ends_with("/takeover") => {
-            return json_response(&mut stream, 409,
+            json_response(&mut stream, 409,
                 "{\"error\":\"takeover_not_supported\",\"detail\":\"bản một-người-dùng chỉ có một thiết bị; 6.11.4 cần nhiều thiết bị cùng user\"}".into());
         }
         // §8.1 `{sid}/audio {enabled}` — §3 "Opus 48k per-app". Bản này chỉ
@@ -1335,7 +1340,7 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
                     let Some(from) = query_param(&path, "from").and_then(|v| v.parse::<u64>().ok()) else {
                         return true;
                     };
-                    let to = query_param(&route, "to")
+                    let to = query_param(&path, "to")
                         .and_then(|v| v.parse::<u64>().ok())
                         .unwrap_or(u64::MAX);
                     record.ts >= from && record.ts <= to
@@ -1819,8 +1824,7 @@ mod tests {
     /// `Pins` không thấy vì nó không đi qua HTTP. Chỉ `curl` thấy.
     #[test] fn pin_routes_work_over_http_including_delete_with_a_query_string() {
         let (addr, server) = spawn_server();
-        assert_eq!(http(addr, "GET", "/api/pins", "").contains(r#""pins":[]"#), true,
-            "ban đầu phải rỗng");
+        assert!(http(addr, "GET", "/api/pins", "").contains(r#""pins":[]"#), "ban đầu phải rỗng");
 
         let added = http(addr, "POST", "/api/pins", r#"{"wid":"browser","label":"Chrome ở nhà"}"#);
         assert!(added.contains(r#""label":"Chrome ở nhà""#), "thêm ghim: {added}");
