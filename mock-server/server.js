@@ -51,8 +51,17 @@ function loadSettings() {
     return { ...DEFAULTS, ...Object.fromEntries(Object.entries(value).filter(([key, item]) => validSetting(key, item))) };
   } catch { return { ...DEFAULTS }; }
 }
+// §41.5 D4 / §41.4 T6 — mọi response mang cùng bộ header. Mock cũng phải có:
+// sản phẩm thật bám theo mock, nên một mock thiếu header sẽ dạy sai người đọc.
+// `frame-ancestors 'none'` chặn clickjacking nút "cho phép điều khiển".
+const SECURITY_HEADERS = {
+  'x-frame-options': 'DENY',
+  'content-security-policy': "default-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'",
+  'referrer-policy': 'no-referrer',
+  'permissions-policy': 'camera=(), microphone=(), geolocation=()',
+};
 function json(res, status, body) {
-  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+  res.writeHead(status, { ...SECURITY_HEADERS, 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
   res.end(JSON.stringify(body));
 }
 function bodyJson(req) {
@@ -80,7 +89,7 @@ function staticFile(urlPath, res) {
   try { stat = fs.statSync(file); } catch { return json(res, 404, { error: 'not_found' }); }
   if (!stat.isFile()) return json(res, 404, { error: 'not_found' });
   const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml' };
-  res.writeHead(200, { 'content-type': types[path.extname(file)] || 'application/octet-stream', 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff' });
+  res.writeHead(200, { ...SECURITY_HEADERS, 'content-type': types[path.extname(file)] || 'application/octet-stream', 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff' });
   fs.createReadStream(file).pipe(res);
 }
 
@@ -137,4 +146,4 @@ const server = http.createServer(async (req, res) => {
 });
 server.listen(PORT, HOST, () => console.log(`Lantern mock listening at http://${HOST}:${PORT} (no real desktop access)`));
 server.on('close', () => { activeSession = null; });
-module.exports = { server, DEFAULTS, WINDOWS };
+module.exports = { server, DEFAULTS, WINDOWS, SECURITY_HEADERS };

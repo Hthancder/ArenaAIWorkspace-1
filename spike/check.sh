@@ -32,4 +32,24 @@ echo "== smoke-run"
 cargo run --offline --quiet -- --demo >/dev/null
 echo "   rd --demo exited 0"
 
+echo "== app (lantern-mock: the .exe the user actually runs)"
+RUSTFLAGS="-D warnings" cargo build --offline --manifest-path ../app/Cargo.toml
+cargo test --offline --manifest-path ../app/Cargo.toml
+../app/target/debug/lantern-mock --check
+echo "   app tests + --check green"
+
+echo "== nhánh Windows biên dịch trên Linux (bắt dead_code/unused_mut trước CI)"
+../scripts/check-windows-shape.py
+
+echo "== web (zero-dep UI syntax + tests)"
+if command -v node >/dev/null 2>&1; then
+    node --check ../web/app.js
+    ( cd ../ && npm test --silent )
+else
+    echo "   node not installed -> skipped"
+fi
+
+echo "== jpeg (bộ giải mã độc lập, nếu có ImageMagick)"
+../scripts/check-jpeg.sh
+
 echo "== all green"
