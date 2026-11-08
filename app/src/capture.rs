@@ -748,7 +748,6 @@ pub fn monitor_in_range(monitor: u8) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::mem::size_of;
 
     /// Byte offset của một trường trong struct — chính là `slot × 8` của vtable.
     fn slot_of<T>(field: *const T, base: *const u8) -> usize {
@@ -757,8 +756,10 @@ mod tests {
 
     #[test] fn every_method_we_call_sits_at_the_slot_microsoft_documents() {
         // Đây là test quan trọng nhất của module. Sai một slot ⇒ gọi nhầm hàm
-        // ⇒ **crash**, không phải lỗi đọc được. Số slot lấy từ Microsoft Learn
-        // (`pkg.go.dev` của bindings DXGI cũng ghi rõ từng slot):
+        // ⇒ **crash** hoặc đọc rác, không phải lỗi đọc được. Số slot lấy từ
+        // `include/dxgi.idl` + `include/d3d11.idl` của Wine (chép từ header
+        // Microsoft) — nơi method nằm **đúng thứ tự khai báo**. Bảng method
+        // trên learn.microsoft.com xếp theo alphabet: không dùng để đánh số.
         //
         //  - IDXGIFactory1::EnumAdapters1  = 12
         //  - IDXGIAdapter1::EnumOutputs    = 7
