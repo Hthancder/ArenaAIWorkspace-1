@@ -1,7 +1,7 @@
 # SPEC v3.15 — Remote Desktop qua trình duyệt **cho dùng cá nhân**: HVNC + VNC, window picker, âm thanh server-side, trải nghiệm điều khiển đầy đủ
 
-- Phiên bản: **v3.26 — §56.9 tìm ra nguyên nhân thật của `startup_failure`: account bị khoá vì billing, không phải file CI** · trước đó: v3.25 — §56.7 compile thật: 16/16 test xanh, bắt được 3 lỗi · §56.8 GitHub Actions của repo này đang tắt (không phải lỗi file)** · trước đó: v3.24 — §56 code + GitHub Actions · trước đó: **v3.23 — §54 nới lỏng (bỏ luật cứng không cần), §55 camera + micro máy chủ** · trước đó: **v3.22 — §53 host là laptop Dell 7467: QSV trước NVENC, nắp/pin/nhiệt/Wi-Fi 1x1** · trước đó: **v3.21 — §52 máy hybrid iGPU+1050: topology quyết định, DDAPI fail trên GPU rời** · trước đó: **v3.20 — §51.10–14: VRAM 4 GB, trần 1440p, sửa lỗi AdapterRAM** · trước đó: **v3.19 — thêm §51 hồ sơ GTX 1050, bẫy adapter, P0 cụ thể** · trước đó: **v3.18 — thêm §48 mô hình tuỳ chỉnh, §49 chống vỡ UI, §50 tính năng còn thiếu** · trước đó: **v3.17 — thêm §47 khởi động cùng Windows + vòng đời process + trải nghiệm theo thời gian** · trước đó: **v3.16 — thêm §46 "máy có ở đó không" (ngủ/reboot/đổi IP/khoá màn hình)**, lĩnh vực G còn trống · trước đó: **v3.15** — phạm vi thu hẹp về 1–2 người dùng (§0.3). Bản v3.14 là bản "sản phẩm": có cert, EULA, RBAC, accessibility, đóng gói ký số. Tất cả những thứ đó **đã cắt** ở đây — xem §0.3.1 để biết cắt gì và cắt có an toàn không. Lịch sử đầy đủ v1.0→v3.14 ở §0.
-- Trạng thái: **Đề xuất — CHƯA implement, chờ duyệt.** Sau v3.15, spec **không còn chương nào cần viết**; việc tiếp theo là **P0 (đo thật)**, không phải viết thêm.
+- Phiên bản: **v3.27 — §56.10 GitHub Actions đã xanh sau khi user cập nhật billing: clippy + test + Windows build + smoke-run** · trước đó: **v3.26 — §56.9 tìm ra nguyên nhân thật của `startup_failure`: account bị khoá vì billing, không phải file CI** · trước đó: v3.25 — §56.7 compile thật: 16/16 test xanh, bắt được 3 lỗi · §56.8 GitHub Actions của repo này đang tắt (không phải lỗi file)** · trước đó: v3.24 — §56 code + GitHub Actions · trước đó: **v3.23 — §54 nới lỏng (bỏ luật cứng không cần), §55 camera + micro máy chủ** · trước đó: **v3.22 — §53 host là laptop Dell 7467: QSV trước NVENC, nắp/pin/nhiệt/Wi-Fi 1x1** · trước đó: **v3.21 — §52 máy hybrid iGPU+1050: topology quyết định, DDAPI fail trên GPU rời** · trước đó: **v3.20 — §51.10–14: VRAM 4 GB, trần 1440p, sửa lỗi AdapterRAM** · trước đó: **v3.19 — thêm §51 hồ sơ GTX 1050, bẫy adapter, P0 cụ thể** · trước đó: **v3.18 — thêm §48 mô hình tuỳ chỉnh, §49 chống vỡ UI, §50 tính năng còn thiếu** · trước đó: **v3.17 — thêm §47 khởi động cùng Windows + vòng đời process + trải nghiệm theo thời gian** · trước đó: **v3.16 — thêm §46 "máy có ở đó không" (ngủ/reboot/đổi IP/khoá màn hình)**, lĩnh vực G còn trống · trước đó: **v3.15** — phạm vi thu hẹp về 1–2 người dùng (§0.3). Bản v3.14 là bản "sản phẩm": có cert, EULA, RBAC, accessibility, đóng gói ký số. Tất cả những thứ đó **đã cắt** ở đây — xem §0.3.1 để biết cắt gì và cắt có an toàn không. Lịch sử đầy đủ v1.0→v3.14 ở §0.
+- Trạng thái: **Đề xuất — CHƯA implement đầy đủ, chờ duyệt.** Sau v3.15, spec **không còn chương nào cần viết**; việc tiếp theo là **P0 (đo thật)**, không phải viết thêm.
 - Nền tảng: Server **Windows 10 2004+ / Windows 11** · Client **trình duyệt** (không app)
 
 ---
@@ -6492,3 +6492,17 @@ export PATH="$HOME/.local/rust/bin:$PATH"   # rustc 1.95.0 (59807616e 2026-04-14
 
 **Trong lúc chờ, cổng kiểm tra không bị chặn:** `./spike/check.sh` làm đúng 3 bước của job `test` (build `-D warnings` → test → smoke-run) và chạy **3 s ở máy có `cargo`**. Job `build-windows` thì chỉ CI làm được (máy bạn là Windows nhưng cần Rust; nếu muốn, `rustup` trên Windows tải từ `static.rust-lang.org` được — mạng nhà bạn không bị chặn như sandbox).
 > Nói thẳng: **§56 không còn là "CI sẽ chứng minh"**. Bằng chứng hiện có là `check.sh` xanh; CI là bản sao để chạy ở nơi khác *khi bạn bật nó*.
+
+### 56.10 Actions đã chạy xanh sau khi cập nhật billing (2026-11-08)
+
+Người dùng vừa thêm phương thức thanh toán và yêu cầu thử lại. Trigger `workflow_dispatch` trên nhánh `arena/4117a3fc-arenaaiworkspace-1`.
+
+| Run | Kết quả | Bằng chứng |
+|---|---|---|
+| `42451633095` | **success** | `test (ubuntu)` xanh 8 s; `build rd.exe (windows)` xanh 35 s; artifact `rd-windows-x64` được tạo |
+| `42451848287` | **success** | `test (ubuntu)` xanh 18 s: **clippy**, **test**, `print pipelines` đều xanh; `build rd.exe (windows)` xanh 34 s: **build**, **smoke-run**, upload artifact đều xanh |
+
+Run `42451848287` chạy trên commit `8047ed27adec07bea73fa23decb8026bd07e4d4b`. GitHub API xác nhận artifact `rd-windows-x64` tồn tại, 65,563 bytes, chưa hết hạn. Sandbox không tải được ZIP artifact (kết nối tới blob storage trả EOF); tuy vậy workflow log xác nhận build Windows, smoke-run và upload đều thành công. Không tuyên bố đã kiểm tra nhị phân tải về.
+
+**Kết luận cập nhật:** billing đã được xử lý đủ để Actions cấp runner. Bằng chứng compile thật hiện có: CI chạy `clippy -D warnings` + test trên Ubuntu và build + smoke-run `rd.exe` trên Windows thành công. Không cần thay đổi workflow. Còn cảnh báo không chặn build: action `checkout@v4` nhắm Node.js 20 nhưng runner ép Node.js 24; `ubuntu-latest` sẽ chuyển sang Ubuntu 26.
+
