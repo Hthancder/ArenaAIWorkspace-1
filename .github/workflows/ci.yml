@@ -82,35 +82,6 @@ jobs:
       - name: smoke-check Lantern mock app
         run: ..\app\target\release\lantern-mock.exe --check
 
-      - name: prepare portable preview package
-        shell: pwsh
-        run: |
-          $dist = Join-Path $env:GITHUB_WORKSPACE 'app\dist'
-          $portable = Join-Path $dist 'Lantern-Phase0-Portable'
-          New-Item -ItemType Directory -Path $portable -Force | Out-Null
-          Copy-Item '..\app\target\release\lantern-mock.exe' (Join-Path $portable 'lantern-mock.exe')
-          Copy-Item '..\app\README.md' (Join-Path $portable 'README.txt')
-          Compress-Archive -Path (Join-Path $portable '*') -DestinationPath (Join-Path $dist 'Lantern-Phase0-Portable.zip') -Force
-
-      - name: install Inno Setup compiler
-        run: choco install innosetup --yes --no-progress
-
-      - name: build per-user installer
-        shell: pwsh
-        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "..\app\installer\LanternPhase0.iss"'
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: lantern-phase0-portable-windows-x64
-          path: app/dist/Lantern-Phase0-Portable.zip
-          if-no-files-found: error
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: lantern-phase0-setup-windows-x64
-          path: app/dist/Lantern-Phase0-Setup.exe
-          if-no-files-found: error
-
       - uses: actions/upload-artifact@v4
         with:
           name: rd-windows-x64
