@@ -110,8 +110,24 @@ jobs:
       - name: smoke-run
         run: .\target\release\rd.exe --demo
 
+      # §57.9: log không tải được ⇒ đẩy lỗi biên dịch ra annotation.
       - name: build Lantern mock app
-        run: cargo build --manifest-path ..\app\Cargo.toml --release
+        shell: pwsh
+        run: |
+          cargo build --manifest-path ..\app\Cargo.toml --release --message-format=json 2>$null > build.json
+          $status = $LASTEXITCODE
+          if ($status -ne 0) {
+            Get-Content build.json | ForEach-Object {
+              try {
+                $m = $_ | ConvertFrom-Json
+                if ($m.reason -eq 'compiler-message' -and $m.message.level -eq 'error') {
+                  $span = $m.message.spans | Select-Object -First 1
+                  Write-Output "::error::rustc: $($span.file_name):$($span.line_start) $($m.message.message)"
+                }
+              } catch { }
+            }
+          }
+          exit $status
 
       - name: smoke-check Lantern mock app
         run: ..\app\target\release\lantern-mock.exe --check
