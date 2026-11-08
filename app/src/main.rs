@@ -129,6 +129,68 @@ fn read_request(stream: &mut TcpStream) -> Option<(String, String, String)> {
     Some((method, path, body))
 }
 fn now_seconds() -> u64 { SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0) }
+#[derive(Clone)]
+struct ProbeCheck { id: String, title: String, status: String, output: String, advice: String }
+fn clean_output(text: &str) -> String { text.chars().filter(|c| !c.is_control() || *c == '\n' || *c == '\t').take(1400).collect::<String>().trim().to_string() }
+#[cfg(target_os = "windows")]
+fn probe_check(id: &str, title: &str, command: &str, args: &[&str], advice: &str) -> ProbeCheck {
+    match std::process::Command::new(command).args(args).output() {
+        Ok(out) => { let text = clean_output(&format!("{}{}",String::from_utf8_lossy(&out.stdout),String::from_utf8_lossy(&out.stderr))); ProbeCheck { id:id.into(), title:title.into(), status:if out.status.success(){"pass"}else{"warn"}.into(), output:if text.is_empty(){format!("Exit code: {:?}",out.status.code())}else{text}, advice:if out.status.success(){String::new()}else{advice.into()} } },
+        Err(error) => ProbeCheck { id:id.into(), title:title.into(), status:"warn".into(), output:format!("Không chạy được {command}: {error}"), advice:advice.into() },
+    }
+}
+fn check_json(c: &ProbeCheck) -> String { format!("{{\"id\":{},\"title\":{},\"status\":{},\"output\":{},\"advice\":{}}}",json_quote(&c.id),json_quote(&c.title),json_quote(&c.status),json_quote(&c.output),json_quote(&c.advice)) }
+fn run_diagnostics() -> String {
+    let mut checks=Vec::new();
+    #[cfg(target_os = "windows")]
+    {
+        let profile = "$os=Get-CimInstance Win32_OperatingSystem; $sys=Get-CimInstance Win32_ComputerSystem; $gpu=Get-CimInstance Win32_VideoController | Select-Object Name,DriverVersion; $wifi=Get-NetAdapter -Physical | Where-Object {$_.InterfaceDescription -match '8265|Wi-Fi|Wireless'} | Select-Object Name,InterfaceDescription,Status; $mon=Get-PnpDevice -Class Monitor -ErrorAction SilentlyContinue | Select-Object FriendlyName,Status; @{OS=$os.Caption;OSVersion=$os.Version;RAM_GB=[math]::Round($sys.TotalPhysicalMemory/1GB,1);GPU=$gpu;WiFi=$wifi;Monitors=$mon} | ConvertTo-Json -Depth 5 -Compress";
+        checks.push(probe_check("host","Windows · RAM · GPU · Wi-Fi · màn hình","powershell.exe",&["-NoProfile","-NonInteractive","-Command",profile],"Mở PowerShell và kiểm tra WMI/PnP có hoạt động không."));
+        checks.push(probe_check("nvidia","Driver / GTX 1050","nvidia-smi",&["--query-gpu=name,driver_version,memory.total","--format=csv,noheader"],"Cài/cập nhật NVIDIA driver. Phép kiểm tra này không đọc Win32_VideoController.AdapterRAM."));
+        checks.push(probe_check("gstreamer-version","GStreamer runtime","gst-inspect-1.0",&["--version"],"Cài GStreamer MSVC runtime + good/bad/ugly/libav plugin trước khi thử capture."));
+        for (plugin,title) in [("d3d11screencapturesrc","Desktop capture DXGI"),("d3d11download","Download DXGI frames"),("qsvh264enc","Intel QSV encoder"),("nvh264enc","NVIDIA NVENC encoder"),("webrtcbin","WebRTC transport"),("wasapi2src","WASAPI audio capture"),("mfh264enc","Media Foundation fallback")] {
+            checks.push(probe_check(&format!("gst-{plugin}"),title,"gst-inspect-1.0",&[plugin],"Plugin chưa sẵn sàng. Xem đúng GStreamer runtime/plugin version; chưa capture thật."));
+        }
+        let vdd="$m=Get-PnpDevice -Class Monitor -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FriendlyName; $m | ConvertTo-Json -Compress";
+        let mut c=probe_check("display-drivers","Display devices / VDD","powershell.exe",&["-NoProfile","-NonInteractive","-Command",vdd],"Cài VDD đã ký theo hướng dẫn §51.6 rồi chạy lại probe.");
+        if c.status=="pass" && !c.output.to_lowercase().contains("virtual") { c.status="warn".into(); c.advice="Không thấy tên display ảo trong danh sách monitor. Cài/enable VDD đã ký rồi chạy lại.".into(); }
+        checks.push(c);
+    }
+    #[cfg(not(target_os = "windows"))]
+    { checks.push(ProbeCheck{id:"host".into(),title:"Windows hardware probe".into(),status:"warn".into(),output:"Probe này chỉ đọc được trên Windows; UI/server chạy ở chế độ kiểm thử.".into(),advice:"Chạy lantern-mock.exe trên laptop Windows.".into()}); }
+    let body=checks.iter().map(check_json).collect::<Vec<_>>().join(",");
+    format!("{{\"mock\":false,\"checkedAt\":{},\"checks\":[{}]}}",now_seconds(),body)
+}
+fn capture_probe(body: &str) -> (u16, String) {
+    let Some(fields) = parse_flat_object(body) else { return (400, "{\"error\":\"invalid_json\"}".into()); };
+    let monitor = fields.get("monitorIndex").and_then(|v| v.parse::<u8>().ok()).filter(|v| *v <= 8);
+    let Some(monitor) = monitor else { return (422, "{\"error\":\"invalid_monitor_index\"}".into()); };
+    let args = vec!["-e", "-q", "d3d11screencapturesrc", "", "capture-api=dxgi", "num-buffers=150", "!", "video/x-raw,framerate=30/1", "!", "d3d11download", "!", "videoconvert", "!", "fakesink", "sync=true"];
+    let mut owned = args.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    owned[3] = format!("monitor-index={monitor}");
+    let mut cmd = std::process::Command::new("gst-launch-1.0");
+    cmd.args(&owned).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::piped());
+    let mut child = match cmd.spawn() {
+        Ok(child) => child,
+        Err(error) => {
+            let output = format!("Không chạy được gst-launch-1.0: {error}");
+            return (200, format!("{{\"status\":\"warn\",\"output\":{},\"advice\":\"Cài GStreamer runtime để thử capture.\",\"mock\":false}}", json_quote(&output)));
+        }
+    };
+    let start = std::time::Instant::now();
+    let mut timed_out = false;
+    loop {
+        match child.try_wait() { Ok(Some(_)) => break, Ok(None) => {}, Err(_) => break }
+        if start.elapsed() > std::time::Duration::from_secs(12) { timed_out = true; let _ = child.kill(); break; }
+        thread::sleep(std::time::Duration::from_millis(100));
+    }
+    let output = child.wait_with_output().ok();
+    let success = output.as_ref().map(|o| o.status.success()).unwrap_or(false) && !timed_out;
+    let details = output.map(|o| clean_output(&String::from_utf8_lossy(&o.stderr))).unwrap_or_default();
+    let shown = if details.is_empty() { if success { "Đã nhận đủ 150 frame trong giới hạn 12 giây." } else { "gst-launch thất bại hoặc hết giờ." } } else { &details };
+    let advice = if success { "Capture DXGI đã phát đủ 150 frame vào fakesink; không có stream mạng." } else { "Đọc lỗi bên dưới. Kiểm tra monitor-index, VDD, runtime và gst-inspect d3d11screencapturesrc." };
+    (200, format!("{{\"status\":{},\"output\":{},\"advice\":{},\"monitorIndex\":{},\"mock\":false}}", json_quote(if success {"pass"} else {"warn"}), json_quote(shown), json_quote(advice), monitor))
+}
 fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
     let Some((method,path,body)) = read_request(&mut stream) else { return; };
     if body == "__BODY_TOO_LARGE__" { return json_response(&mut stream, 413, "{\"error\":\"body_too_large\"}".into()); }
@@ -136,6 +198,8 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
     if method == "GET" && route == "/" { return response(&mut stream, 200, "text/html; charset=utf-8", INDEX.as_bytes()); }
     if method == "GET" && route == "/styles.css" { return response(&mut stream, 200, "text/css; charset=utf-8", CSS.as_bytes()); }
     if method == "GET" && route == "/app.js" { return response(&mut stream, 200, "text/javascript; charset=utf-8", JS.as_bytes()); }
+    if method == "GET" && route == "/api/diagnostics" { return json_response(&mut stream, 200, run_diagnostics()); }
+    if method == "POST" && route == "/api/diagnostics/capture" { let (status,body)=capture_probe(&body); return json_response(&mut stream,status,body); }
     let mut s = state.lock().unwrap_or_else(|e| e.into_inner());
     match (method.as_str(), route) {
         ("GET", "/api/health") => json_response(&mut stream, 200, "{\"ok\":true,\"app\":\"lantern-mock\",\"mode\":\"mock\"}".into()),
@@ -200,4 +264,6 @@ mod tests {
     #[test] fn parses_patch_and_escapes() { let p=parse_flat_object(r#"{"quality":"smooth","volume":35,"hide-taskbar":true}"#).unwrap(); assert_eq!(p.get("quality").unwrap(),"smooth"); assert_eq!(p.get("volume").unwrap(),"35"); assert!(allowed_value("hide-taskbar",p.get("hide-taskbar").unwrap())); }
     #[test] fn rejects_bad_enum() { assert!(!allowed_value("quality","disable-encryption")); assert!(!allowed_value("volume","101")); }
     #[test] fn serves_embedded_frontend_sources() { assert!(INDEX.contains("Lantern")); assert!(CSS.contains(".app-shell")); assert!(JS.contains("/api/sessions")); }
+    #[test] fn capture_probe_rejects_untrusted_monitor_index() { assert_eq!(capture_probe(r#"{"monitorIndex":99}"#).0,422); }
+    #[test] fn diagnostics_api_is_marked_as_hardware_not_ui_mock() { assert!(run_diagnostics().contains("\"mock\":false")); }
 }

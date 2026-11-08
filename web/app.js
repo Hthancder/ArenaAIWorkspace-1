@@ -169,6 +169,44 @@
     setToggle($('#micToggle'), state.mic);
     toast(state.mic ? 'Micro mô phỏng đã bật — chưa thu âm thật.' : 'Micro mô phỏng đã tắt.');
   });
+  let diagnosticsReport = null;
+  $('#runDiagnostics').addEventListener('click', async () => {
+    openOverlay('#diagnosticsOverlay');
+    $('#diagnosticsIntro').textContent = 'Đang kiểm tra Windows, adapter, GStreamer và display driver…';
+    $('#diagnosticsList').innerHTML = '<div class="diagnostic-row"><span class="diagnostic-status pending">…</span><span>Đang chạy các phép kiểm tra chỉ đọc</span></div>';
+    $('#captureResult').classList.add('hidden');
+    try {
+      diagnosticsReport = await apiRequest('/api/diagnostics');
+      if (diagnosticsReport.mock) {
+        $('#diagnosticsIntro').textContent = 'Preview UI không có quyền đọc phần cứng. Dùng exe Windows để chạy probe thật.';
+        $('#diagnosticsList').innerHTML = '<div class="diagnostic-row"><span class="diagnostic-status warn">!</span><span>Chẩn đoán phần cứng chỉ có trong Lantern mock exe.</span></div>';
+        $('#captureProbe').disabled = true;
+      } else {
+        const checks = diagnosticsReport.checks || [];
+        const pass = checks.filter(item => item.status === 'pass').length;
+        $('#diagnosticsIntro').textContent = `${pass}/${checks.length} kiểm tra đạt. Không có thay đổi hệ thống nào được thực hiện.`;
+        $('#diagnosticsList').innerHTML = checks.map(item => `<div class="diagnostic-row"><span class="diagnostic-status ${item.status}">${item.status === 'pass' ? '✓' : item.status === 'fail' ? '×' : '!'}</span><span class="diagnostic-copy"><b>${item.title}</b><small>${item.output || item.advice || ''}</small>${item.advice && item.output ? `<em>${item.advice}</em>` : ''}</span></div>`).join('');
+        $('#captureProbe').disabled = false;
+      }
+    } catch { $('#diagnosticsIntro').textContent = 'Không nhận được báo cáo. Hãy chạy standalone Lantern mock exe trên Windows.'; $('#diagnosticsList').innerHTML = ''; }
+  });
+  $('#diagnosticsClose').addEventListener('click', () => closeOverlay('#diagnosticsOverlay'));
+  $('#diagnosticsDone').addEventListener('click', () => closeOverlay('#diagnosticsOverlay'));
+  $('#captureProbe').addEventListener('click', async () => {
+    const button = $('#captureProbe'); button.disabled = true; button.textContent = 'Đang capture…';
+    $('#captureResult').classList.remove('hidden'); $('#captureResult').textContent = 'Chạy pipeline DXGI 150 frame…';
+    try {
+      const result = await apiRequest('/api/diagnostics/capture', { method: 'POST', body: { monitorIndex: Number($('#monitorIndex').value) } });
+      diagnosticsReport.capture = result;
+      $('#captureResult').textContent = `${result.status === 'pass' ? 'PASS' : 'WARN'} · ${result.output || result.advice || 'Không có chi tiết.'}`;
+    } catch (error) { $('#captureResult').textContent = `Không chạy được: ${error.message}`; }
+    finally { button.disabled = false; button.textContent = 'Chạy 5 giây'; }
+  });
+  $('#downloadReport').addEventListener('click', () => {
+    if (!diagnosticsReport) return;
+    const blob = new Blob([JSON.stringify(diagnosticsReport, null, 2)], { type: 'application/json' });
+    const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'lantern-p0-report.json'; link.click(); URL.revokeObjectURL(link.href);
+  });
   $('#settingsOpen').addEventListener('click', () => openOverlay('#settingsOverlay'));
   $('#settingsMini').addEventListener('click', () => openOverlay('#settingsOverlay'));
   $('#settingsClose').addEventListener('click', () => closeOverlay('#settingsOverlay'));

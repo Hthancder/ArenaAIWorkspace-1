@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#101614" />
   <title>Lantern — Remote Desktop</title>
-  <link rel="stylesheet" href="./styles.css?v=4" />
+  <link rel="stylesheet" href="./styles.css?v=5" />
 </head>
 <body>
   <div class="app-shell">
@@ -30,7 +30,7 @@
       <div class="page-content">
         <section class="page-heading">
           <div><div class="eyebrow">REMOTE DESKTOP <span>·</span> BẢN MÔ PHỎNG</div><h1>Chào bạn <span class="wave">✳</span></h1><p class="subheading">Kết nối an toàn tới máy tính của bạn, từ bất kỳ đâu.</p></div>
-          <button class="text-button" id="settingsOpen"><span>⚙</span> Tuỳ chỉnh nhanh</button>
+          <div class="heading-actions"><button class="text-button" id="runDiagnostics"><span>⌁</span> Kiểm tra máy thật</button><button class="text-button" id="settingsOpen"><span>⚙</span> Tuỳ chỉnh nhanh</button></div>
         </section>
 
         <section class="connection-card" aria-label="Máy tính có thể kết nối">
@@ -85,8 +85,10 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <div class="overlay hidden" id="dialogOverlay"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialogTitle"><div class="dialog-head"><div><span class="eyebrow">LANTERN · DEMO</span><h2 id="dialogTitle">Chọn cửa sổ</h2></div><button class="icon-button" id="dialogClose" aria-label="Đóng">×</button></div><p class="dialog-description" id="dialogDescription">Chọn nội dung muốn xem trong phiên.</p><div class="window-options" id="windowOptions"><button class="window-option selected" data-window="desktop"><span class="option-icon desktop-option">▦</span><span><b>Toàn bộ màn hình</b><small>Desktop · 1920 × 1080</small></span><span class="option-check">✓</span></button><button class="window-option" data-window="browser"><span class="option-icon browser-option">◉</span><span><b>Trình duyệt</b><small>Chrome · Cửa sổ đang mở</small></span><span class="option-check">✓</span></button><button class="window-option" data-window="notes"><span class="option-icon notes-option">▤</span><span><b>Ghi chú</b><small>Notepad · Cửa sổ đang mở</small></span><span class="option-check">✓</span></button></div><div class="dialog-actions"><button class="secondary-button" id="dialogCancel">Huỷ</button><button class="primary-button" id="dialogConfirm">Chọn cửa sổ</button></div></section></div>
 
+  <div class="overlay hidden" id="diagnosticsOverlay"><section class="dialog diagnostics-dialog" role="dialog" aria-modal="true" aria-labelledby="diagnosticsTitle"><div class="dialog-head"><div><span class="eyebrow">PHASE 0 · READ-ONLY</span><h2 id="diagnosticsTitle">Kiểm tra máy thật</h2></div><button class="icon-button" id="diagnosticsClose" aria-label="Đóng">×</button></div><p class="dialog-description" id="diagnosticsIntro">Đang chuẩn bị kiểm tra…</p><div class="diagnostics-list" id="diagnosticsList"></div><div class="capture-probe"><div><b>Thử capture thật</b><small>Đọc 150 frame bằng DXGI → fakesink. Không gửi hình ra mạng.</small></div><label>Màn hình <select id="monitorIndex"><option value="0">0</option><option value="1">1</option><option value="2">2</option></select></label><button class="secondary-button" id="captureProbe">Chạy 5 giây</button></div><pre class="capture-result hidden" id="captureResult"></pre><div class="dialog-actions"><button class="secondary-button" id="downloadReport">Tải báo cáo JSON</button><button class="primary-button" id="diagnosticsDone">Đóng</button></div></section></div>
+
   <div class="overlay hidden" id="settingsOverlay"><section class="dialog settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settingsTitle"><div class="dialog-head"><div><span class="eyebrow">CÁ NHÂN HOÁ</span><h2 id="settingsTitle">Tuỳ chỉnh phiên</h2></div><button class="icon-button" id="settingsClose" aria-label="Đóng">×</button></div><p class="dialog-description">Tìm theo điều bạn muốn làm. Thay đổi có hiệu lực ngay, trừ mục ghi rõ “phiên sau”.</p><label class="settings-search"><span>⌕</span><input id="settingsSearch" type="search" placeholder="Thử “mờ”, “trễ”, “tiếng”…" autocomplete="off"><kbd>Ctrl K</kbd></label><div class="settings-layout"><nav class="settings-nav" aria-label="Nhóm cài đặt"><button class="selected" data-settings-group="all">Tất cả <span>12</span></button><button data-settings-group="view">Hình ảnh & hiển thị</button><button data-settings-group="input">Điều khiển</button><button data-settings-group="sound">Âm thanh</button><button data-settings-group="device">Thiết bị</button><button class="advanced-nav" data-settings-group="advanced">Nâng cao <span>20</span></button></nav><div class="settings-items" id="settingsItems" aria-live="polite"></div></div><div class="settings-footer"><button class="text-reset" id="resetSettings">↺ Về mặc định</button><span id="settingsSaved">Đã lưu trên thiết bị này</span></div><div class="settings-note"><span>✳</span> Đây là bản mô phỏng. Cài đặt máy chủ chỉ lưu cục bộ, chưa đổi cấu hình Windows.</div><div class="dialog-actions"><button class="primary-button full-button" id="settingsDone">Xong</button></div></section></div>
 
-  <script src="./app.js?v=5"></script>
+  <script src="./app.js?v=6"></script>
 </body>
 </html>

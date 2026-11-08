@@ -10,4 +10,4 @@ This is a zero-dependency Rust Windows executable that embeds the browser UI and
 
 Mock settings persist under `%LOCALAPPDATA%\LanternMock\settings.json`.
 
-**This is not yet the remote desktop implementation.** It does not capture the desktop or windows, send input, access GPU/encoder, camera, microphone or audio, or accept network connections. Do not expose it to the LAN/Internet. The old `rd-windows-x64` artifact is the CLI pipeline spike; choose `lantern-mock-windows-x64` for this browser app.
+**This is not yet the remote desktop implementation.** The “Kiểm tra máy thật” panel reads host/GPU/RAM/Wi-Fi/monitor facts and checks installed GStreamer plugins. Only after you click “Chạy 5 giây”, the exe asks GStreamer to read 150 DXGI frames and discard them into a local `fakesink`; it does not save or transmit the pixels. No WebRTC session, remote input, camera/microphone/audio stream, or LAN/Internet listener is implemented. The normal server binds only loopback. Do not expose it to the LAN/Internet. The old `rd-windows-x64` artifact is the CLI pipeline spike; choose `lantern-mock-windows-x64` for this browser app.

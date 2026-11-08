@@ -39,6 +39,7 @@ test('mock backend serves connected device/window/session/settings flow', async 
   const device = await (await fetch(`${base}/api/device`)).json();
   assert.equal(device.name, 'Inspiron 7467');
   assert.equal((await (await fetch(`${base}/api/windows`)).json()).windows.length, 3);
+  assert.equal((await (await fetch(`${base}/api/diagnostics`)).json()).mock, true);
   assert.equal((await (await fetch(`${base}/api/sessions/current`)).json()).session, null);
 
   const saved = await fetch(`${base}/api/settings`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ quality: 'smooth', volume: 35, unknown: 'bad' }) });

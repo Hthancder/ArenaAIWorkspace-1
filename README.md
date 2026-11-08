@@ -29,7 +29,7 @@ Trên máy phát triển: `npm run mock` → mở `http://127.0.0.1:4173` (Node.
 
 Trên laptop Windows không cần cài Node/Rust: GitHub → **Actions** → run thành công mới nhất → **Artifacts → `lantern-mock-windows-x64`** → giải nén và chạy `lantern-mock.exe`. App tự mở browser, bind loopback và lưu mock settings trong `%LOCALAPPDATA%\\LanternMock`.
 
-Đây là **mock tương tác**, chưa phải remote desktop thật: không capture màn hình/window, không gửi input tới Windows, không dùng GPU/audio/camera/micro và không nhận kết nối LAN/Internet. Artifact `rd-windows-x64` khác là CLI pipeline spike, không phải browser app.
+Đây chưa phải remote desktop hoàn chỉnh. Exe có **probe phần cứng thật**: đọc Windows/GPU/RAM/Wi-Fi/monitor, kiểm tra GStreamer plugins và — khi bạn bấm — capture 150 frame DXGI trong 5 giây rồi huỷ vào fakesink. Frame không lưu hay gửi qua mạng. Chưa có session streaming WebRTC, gửi input, camera/micro/audio phiên hay truy cập LAN/Internet. Artifact `rd-windows-x64` khác là CLI pipeline spike.
 
 ## Chạy kiểm tra
 

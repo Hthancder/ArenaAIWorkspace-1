@@ -92,6 +92,8 @@ const server = http.createServer(async (req, res) => {
     if (route === 'GET /api/device') return json(res, 200, { id: 'inspiron-7467', name: 'Inspiron 7467', status: 'ready', platform: 'Windows 11', location: 'Ở nhà', mock: true });
     if (route === 'GET /api/windows') return json(res, 200, { windows: WINDOWS, mock: true });
     if (route === 'GET /api/settings') return json(res, 200, { settings, mock: true });
+    if (route === 'GET /api/diagnostics') return json(res, 200, { mock: true, checks: [], advice: 'Chạy standalone Windows exe để probe phần cứng.' });
+    if (route === 'POST /api/diagnostics/capture') return json(res, 501, { error: 'hardware_probe_only_available_in_windows_exe' });
     if (route === 'PATCH /api/settings') {
       const patch = await bodyJson(req);
       const accepted = {};
