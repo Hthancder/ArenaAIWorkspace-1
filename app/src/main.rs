@@ -70,7 +70,7 @@ fn now_ms() -> u128 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)
 }
 
-struct State { settings: BTreeMap<String, String>, session: Option<Session>, next_id: u64, data_dir: PathBuf, live_status: Option<(bool, String)>, live_metrics: LiveMetrics, input: input::InputState, move_limiter: input::RateLimiter }
+struct State { settings: BTreeMap<String, String>, session: Option<Session>, next_id: u64, data_dir: PathBuf, live_status: Option<(bool, String)>, live_metrics: LiveMetrics, input: input::InputSanitizer }
 
 fn json_quote(value: &str) -> String {
     let mut out = String::from("\"");
@@ -204,14 +204,6 @@ fn settings_json(settings: &BTreeMap<String, String>) -> String {
         format!("{}:{}", json_quote(k), encoded)
     }).collect::<Vec<_>>().join(","); format!("{{{values}}}")
 }
-fn input_stats_json(stats: &input::InputStats) -> String {
-    format!(
-        "{{\"eventsIn\":{},\"eventsOut\":{},\"rejected\":{},\"oddKeyup\":{},\"surrogateDropped\":{},\"releaseAllCount\":{}}}",
-        stats.events_in, stats.events_out, stats.rejected, stats.odd_keyup,
-        stats.surrogate_dropped, stats.release_all_count
-    )
-}
-
 fn session_json(s: &Session) -> String {
     format!("{{\"id\":{},\"mode\":{},\"windowId\":{},\"startedAt\":{},\"audio\":{},\"status\":\"connected\",\"mock\":true}}", json_quote(&s.id), json_quote(&s.mode), json_quote(&s.window_id), s.started_at, s.audio)
 }
@@ -662,45 +654,35 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
             s.next_id += 1; let session = Session { id: format!("mock-{}",s.next_id), mode: mode.into(), window_id: win.into(), started_at: now_seconds(), audio: input.get("audio").map(|v|v!="false").unwrap_or(true) };
             let result = session_json(&session); s.session = Some(session); json_response(&mut stream, 201, format!("{{\"session\":{},\"mock\":true}}",result))
         }
-        // §8.3 + §44: input. Tách 3 phần rõ ràng:
-        //   1. parse JSON → `input::Event` (dữ liệu hỏng bị loại ở đây)
-        //   2. máy trạng thái quyết định hành động (§44.2)
-        //   3. `inject()` thực thi (chỉ Windows)
-        // Nhờ tách vậy, phần 1+2 có 20 test chạy trên Linux; chỉ phần 3 cần
-        // máy thật — và nó không chứa quyết định nào.
+        // §8.3 + §44: input. Ba tầng, mỗi tầng một việc:
+        //   1. parse JSON → `input::Event`  (dữ liệu hỏng bị loại)
+        //   2. `InputSanitizer` của spec quyết định được phép hay không (§57.1)
+        //   3. `inject()` chỉ thực thi — không tự quyết gì
+        // Tầng 1+2 chạy trên Linux và có test; chỉ tầng 3 cần Windows.
         ("POST", p) if p.starts_with("/api/sessions/") && p.ends_with("/input") => {
             let sid = p.trim_start_matches("/api/sessions/").trim_end_matches("/input");
             if s.session.as_ref().map(|session| session.id.as_str()) != Some(sid) {
                 return json_response(&mut stream, 404, "{\"error\":\"session_not_found\"}".into());
             }
-            let Some(input) = parse_flat_object(&body) else {
+            let Some(fields) = parse_flat_object(&body) else {
                 return json_response(&mut stream, 400, "{\"error\":\"invalid_json\"}".into());
             };
-            let Some(event) = input::parse_event(&input) else {
+            let Some(event) = input::parse_event(&fields) else {
                 return json_response(&mut stream, 422, "{\"error\":\"invalid_input\"}".into());
             };
-            // §44.8: chỉ `move` bị rate limit; click/phím là backpressure.
-            if matches!(event, input::Event::Move { .. } | input::Event::MoveRel { .. })
-                && !s.move_limiter.allow(now_ms())
-            {
-                let stats = s.input.stats;
-                return json_response(&mut stream, 200, format!(
-                    "{{\"dropped\":true,\"reason\":\"input_flood\",\"stats\":{}}}", input_stats_json(&stats)));
-            }
-            let (actions, rejection) = s.input.apply(event, now_ms());
-            let sent = input::inject(&actions);
-            let stats = s.input.stats;
-            // `refused` là lý do từ chối; UI hiện toast khi có phím cấm.
-            let refused = match rejection {
-                Some(input::Rejected::ForbiddenKey) => json_quote("forbidden_key"),
-                Some(input::Rejected::TextTooLong) => json_quote("text_too_long"),
-                Some(input::Rejected::StraySurrogate) => json_quote("bad_unicode"),
-                Some(input::Rejected::TooManyKeys) => json_quote("too_many_keys"),
-                None => "null".to_string(),
-            };
+            let outcome = input::handle(&mut s.input, event, now_ms() as u64, true);
+            let sent = input::inject(&outcome.actions);
+            // `dropped_moves`/`flood_warnings` là số đo của spec (§57.1), giữ tên.
+            let refused = outcome.rejected.map(|r| json_quote(r.code())).unwrap_or_else(|| "null".into());
+            let sankeys = s.input.keys_held().len();
+            let sanbuttons = s.input.buttons_held();
+            let dropped = s.input.dropped_moves;
+            let floods = s.input.flood_warnings;
+            let releases = s.input.release_all_count;
+            let odd = s.input.odd_keyups;
             json_response(&mut stream, 200, format!(
-                "{{\"ok\":true,\"actions\":{},\"sent\":{},\"refused\":{},\"stats\":{}}}",
-                actions.len(), sent, refused, input_stats_json(&stats)))
+                "{{\"ok\":true,\"actions\":{},\"sent\":{},\"refused\":{},\"stats\":{{\"keysHeld\":{},\"buttonsHeld\":{},\"droppedMoves\":{},\"floodWarnings\":{},\"releaseAllCount\":{},\"oddKeyups\":{}}}}}",
+                outcome.actions.len(), sent, refused, sankeys, sanbuttons, dropped, floods, releases, odd))
         }
         // §6.4.7 lớp 3: `sendBeacon` khi đóng tab — không phụ thuộc WS còn sống.
         ("POST", p) if p.starts_with("/api/sessions/") && p.ends_with("/release") => {
@@ -708,7 +690,8 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
             if s.session.as_ref().map(|session| session.id.as_str()) != Some(sid) {
                 return json_response(&mut stream, 404, "{\"error\":\"session_not_found\"}".into());
             }
-            let actions = s.input.release_all();
+            let keys = s.input.release_all(now_ms() as u64);
+            let actions: Vec<input::Action> = keys.into_iter().map(|vk| input::Action::Key { down: false, vk }).collect();
             input::inject(&actions);
             json_response(&mut stream, 200, format!("{{\"released\":{}}}", actions.len()))
         }
@@ -767,7 +750,7 @@ fn main() {
     let data_dir = env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(env::temp_dir).join("LanternMock");
     let mut settings = SETTINGS_DEFAULTS.iter().map(|(k,v)|(k.to_string(),v.to_string())).collect::<BTreeMap<_,_>>();
     if let Ok(text) = fs::read_to_string(data_dir.join("settings.json")) { if let Some(saved)=parse_flat_object(&text) { for (k,v) in saved { if settings.contains_key(&k) && allowed_value(&k,&v) { settings.insert(k,v); } } } }
-    let state=Arc::new(Mutex::new(State{settings,session:None,next_id:0,data_dir,live_status:None,live_metrics:LiveMetrics::default(),input:input::InputState::new(),move_limiter:input::RateLimiter::default()}));
+    let state=Arc::new(Mutex::new(State{settings,session:None,next_id:0,data_dir,live_status:None,live_metrics:LiveMetrics::default(),input:input::InputSanitizer::default()}));
     let url = format!("http://127.0.0.1:{actual}");
     println!("Lantern mock is ready. Open {url} in your browser.");
     println!("Xem màn hình thật: {url}/live  — hoặc bấm nút \"Xem máy thật\" (không cần cài gì).");
@@ -835,8 +818,7 @@ mod tests {
                 data_dir: std::env::temp_dir(),
                 live_status: None,
                 live_metrics: LiveMetrics::default(),
-                input: input::InputState::new(),
-                move_limiter: input::RateLimiter::default(),
+                input: input::InputSanitizer::default(),
             }));
             for stream in listener.incoming().take(8) {
                 if let Ok(stream) = stream {
@@ -916,15 +898,46 @@ mod tests {
         let (addr, server) = spawn_server();
         let created = http(addr, "POST", "/api/sessions", r#"{"mode":"vnc","windowId":"desktop"}"#);
         let sid = created.split("\"id\":\"").nth(1).and_then(|r| r.split('"').next()).expect("sid").to_string();
-        // vk 76 = 'L' ⇒ Win+L bị chặn (§5.8.4).
-        let response = http(
+        // `L` **một mình** phải đi qua: người dùng gõ chữ "l" là chuyện bình
+        // thường. Spec §5.8.4 chỉ chặn `Win+L` (khi Win **đang giữ**).
+        let alone = http(
             addr,
             "POST",
             &format!("/api/sessions/{sid}/input"),
             r#"{"t":"key","down":1,"vk":76}"#,
         );
-        assert!(response.contains("forbidden_key"), "{response}");
-        assert!(response.contains("\"actions\":0"), "{response}");
+        assert!(alone.contains("\"actions\":1"), "chữ 'l' phải gõ được: {alone}");
+
+        // §44.2: auto-repeat (giữ phím) **không** được gửi KEYDOWN lần hai.
+        // Sanitizer không coi đây là lỗi (nó trả Ok), nên tầng trên phải tự
+        // nhận ra — bản đầu bỏ sót và gửi 2 lần xuống Windows.
+        let repeat = http(
+            addr,
+            "POST",
+            &format!("/api/sessions/{sid}/input"),
+            r#"{"t":"key","down":1,"vk":76}"#,
+        );
+        assert!(
+            repeat.contains("\"actions\":0"),
+            "auto-repeat không được gửi lần hai: {repeat}"
+        );
+
+        // Giữ Win trước (0x5B), rồi L ⇒ bị chặn.
+        let win = http(
+            addr,
+            "POST",
+            &format!("/api/sessions/{sid}/input"),
+            r#"{"t":"key","down":1,"vk":91,"mods":0}"#,
+        );
+        assert!(win.contains("\"actions\":1"), "Win phải nhận được: {win}");
+        let combo = http(
+            addr,
+            "POST",
+            &format!("/api/sessions/{sid}/input"),
+            r#"{"t":"key","down":1,"vk":76,"mods":0}"#,
+        );
+        assert!(combo.contains("forbidden_key"), "Win+L phải bị chặn: {combo}");
+        assert!(combo.contains("\"actions\":0"), "{combo}");
         drop(server);
     }
 
