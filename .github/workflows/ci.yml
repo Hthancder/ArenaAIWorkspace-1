@@ -35,6 +35,9 @@ jobs:
       - name: test
         run: cargo test --all-targets
 
+      - name: web mock syntax
+        run: node --check ../web/app.js
+
       - name: print pipelines (reviewable in the log)
         run: cargo run --quiet -- --demo
 

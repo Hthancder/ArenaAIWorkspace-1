@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#101614" />
+  <title>Lantern — Remote Desktop</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Điều hướng chính">
+      <a class="brand" href="#home" aria-label="Lantern home"><span class="brand-mark">✳</span><span>lantern<span class="brand-dot">.</span></span></a>
+      <div class="side-label">WORKSPACE</div>
+      <button class="nav-item active" data-nav="workspace"><span class="nav-icon">▦</span><span>Không gian làm việc</span></button>
+      <button class="nav-item" data-nav="devices"><span class="nav-icon">▣</span><span>Thiết bị</span><span class="nav-count">1</span></button>
+      <div class="side-label recent-label">GẦN ĐÂY</div>
+      <button class="recent-device"><span class="device-dot"></span><span><b>Inspiron 7467</b><small>Máy chủ · Đang online</small></span><span class="more">···</span></button>
+      <div class="sidebar-spacer"></div>
+      <div class="help-card"><span class="help-icon">?</span><div><b>Đang xem bản demo</b><p>Điều khiển từ xa chưa được kết nối.</p></div></div>
+      <button class="profile"><span class="avatar">H</span><span><b>Không gian cá nhân</b><small>Chế độ thử nghiệm</small></span><span class="more">⌄</span></button>
+    </aside>
+
+    <main class="main-area" id="home">
+      <header class="topbar">
+        <div class="breadcrumbs"><span>Workspace</span><span class="crumb-slash">/</span><b>Điều khiển từ xa</b></div>
+        <div class="top-actions"><span class="demo-pill"><i></i> DEMO LOCAL</span><button class="icon-button" id="helpBtn" aria-label="Thông tin demo">?</button><span class="avatar small-avatar">H</span></div>
+      </header>
+
+      <div class="page-content">
+        <section class="page-heading">
+          <div><div class="eyebrow">REMOTE DESKTOP <span>·</span> BẢN MÔ PHỎNG</div><h1>Chào bạn <span class="wave">✳</span></h1><p class="subheading">Kết nối an toàn tới máy tính của bạn, từ bất kỳ đâu.</p></div>
+          <button class="text-button" id="settingsOpen"><span>⚙</span> Tuỳ chỉnh nhanh</button>
+        </section>
+
+        <section class="connection-card" aria-label="Máy tính có thể kết nối">
+          <div class="connection-main">
+            <div class="computer-icon"><span>▱</span><i></i></div>
+            <div class="computer-info"><div class="device-title-row"><h2>Inspiron 7467</h2><span class="online-badge"><i></i> Sẵn sàng</span></div><p>Dell · Windows 11 <span class="separator">·</span> Ở nhà</p><div class="device-specs"><span>⌁ Wi-Fi ổn định</span><span>▣ 1920 × 1080</span><span>◷ Vừa hoạt động</span></div></div>
+          </div>
+          <div class="connection-action"><button class="connect-button" id="connectBtn"><span class="connect-symbol">↗</span><span id="connectLabel">Bắt đầu phiên demo</span></button><small id="connectHint">Mô phỏng cục bộ · không truy cập thiết bị thật</small></div>
+        </section>
+
+        <div class="workspace-grid">
+          <section class="screen-section">
+            <div class="section-head"><div><h2>Màn hình từ xa</h2><p>Chọn cửa sổ hoặc xem toàn bộ màn hình.</p></div><button class="window-picker" id="windowPicker"><span>▣</span><span id="windowLabel">Toàn bộ màn hình</span><span class="chevron">⌄</span></button></div>
+
+            <div class="screen-frame" id="screenFrame">
+              <div class="screen-topline"><div class="screen-status"><span class="live-dot"></span><span id="screenState">Đang chờ phiên demo</span></div><div class="screen-tools"><span class="quality-indicator"><i></i> HD</span><button id="fullscreenBtn" class="screen-tool" title="Phóng to">⛶</button></div></div>
+              <div class="mock-desktop" id="mockDesktop">
+                <div class="desktop-wallpaper"></div>
+                <div class="desktop-taskbar"><span class="win-mark">⊞</span><span class="task-search">Tìm kiếm</span><span class="task-apps"><i>▣</i><i>◉</i><i>▤</i></span><span class="task-clock">10:42<br><small>08/11/2026</small></span></div>
+                <div class="desktop-icons"><div><span class="folder-icon">📁</span><small>Tài liệu</small></div><div><span class="folder-icon blue">▧</span><small>Ảnh</small></div><div><span class="folder-icon">🗑</span><small>Thùng rác</small></div></div>
+                <div class="mock-window" id="mockWindow"><div class="window-title"><span class="app-mark">▣</span><span id="mockWindowTitle">Màn hình nền</span><div class="window-controls"><span>—</span><span>□</span><span>×</span></div></div><div class="window-body"><div class="mock-toolbar"><span>←</span><span>→</span><span>↻</span><div class="address-bar">Máy tính này　›　Trang chủ</div><span>···</span></div><div class="file-grid"><div><span>📁</span><small>Tài liệu</small></div><div><span>🖼</span><small>Ảnh</small></div><div><span>🎵</span><small>Âm thanh</small></div><div><span>⬇</span><small>Tệp tải xuống</small></div></div><div class="mock-message"><span class="message-symbol">✳</span><b id="mockMessageTitle">Phiên demo đã sẵn sàng</b><small id="mockMessageText">Đây là hình ảnh minh hoạ — chưa truyền hình ảnh thật.</small></div></div></div>
+                <div class="cursor-pointer" id="cursorPointer"><span></span></div>
+                <div class="demo-watermark">MOCK SCREEN</div>
+              </div>
+              <div class="screen-bottomline"><span><i class="shield">◆</i> Kết nối mô phỏng được mã hoá</span><span id="screenResolution">1080p · 30 FPS (demo)</span></div>
+            </div>
+
+            <div class="control-bar">
+              <div class="mode-switch" role="group" aria-label="Chế độ xem"><button class="mode-btn active" data-mode="hvnc">Cửa sổ riêng</button><button class="mode-btn" data-mode="vnc">Toàn màn hình</button></div>
+              <span class="control-divider"></span>
+              <button class="control-action" id="roomViewBtn"><span class="ctrl-icon">◉</span><span>Phòng</span><span class="toggle" id="roomToggle"></span></button>
+              <button class="control-action" id="audioBtn"><span class="ctrl-icon">♫</span><span>Âm thanh</span><span class="toggle on" id="audioToggle"></span></button>
+              <button class="control-action" id="micBtn"><span class="ctrl-icon">♩</span><span>Micro</span><span class="toggle" id="micToggle"></span></button>
+              <div class="control-spacer"></div>
+              <button class="icon-button settings-mini" id="settingsMini" aria-label="Cài đặt">⚙</button>
+            </div>
+
+            <div class="room-panel hidden" id="roomPanel"><div class="room-placeholder"><span class="camera-glyph">◉</span><div><b>Xem phòng — bản mô phỏng</b><small>Camera chỉ bật khi được cho phép trong phiên thật.</small></div><span class="mock-tag">MOCK</span></div></div>
+          </section>
+
+          <aside class="detail-column">
+            <section class="detail-card session-card"><div class="detail-title"><h3>Phiên làm việc</h3><span class="more">···</span></div><div class="session-status"><span class="status-icon">⌁</span><div><b id="sessionStatus">Chưa kết nối</b><small id="sessionSubstatus">Bắt đầu để thử giao diện</small></div></div><div class="detail-separator"></div><div class="detail-row"><span>Chế độ</span><b id="sessionMode">Cửa sổ riêng</b></div><div class="detail-row"><span>Độ trễ</span><b class="latency"><i></i><span id="latencyText">—</span></b></div><div class="detail-row"><span>Băng thông</span><b id="bandwidthText">—</b></div></section>
+            <section class="detail-card quick-card"><div class="detail-title"><h3>Điều khiển nhanh</h3><span class="sparkle">✳</span></div><button class="quick-row" id="sendCtrlAltDel"><span class="quick-icon">⌘</span><span><b>Gửi Ctrl + Alt + Del</b><small>Chỉ hoạt động trong phiên thật</small></span><span class="quick-arrow">›</span></button><button class="quick-row" id="blankScreen"><span class="quick-icon moon">◐</span><span><b>Màn hình riêng tư</b><small>Mock — chưa áp dụng lên máy</small></span><span class="quick-arrow">›</span></button></section>
+            <section class="tip-card"><span class="tip-icon">✦</span><div><b>Mọi thứ trong bản này là mô phỏng</b><p>Chưa có kết nối tới máy Windows, camera, micro hay âm thanh thật.</p><button id="aboutMock">Tìm hiểu thêm <span>→</span></button></div></section>
+          </aside>
+        </div>
+        <footer class="page-footer"><span>Lantern <span class="footer-dot">·</span> Bản mock tương tác</span><span>Phục vụ thử luồng giao diện, không điều khiển thiết bị.</span></footer>
+      </div>
+    </main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div class="overlay hidden" id="dialogOverlay"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialogTitle"><div class="dialog-head"><div><span class="eyebrow">LANTERN · DEMO</span><h2 id="dialogTitle">Chọn cửa sổ</h2></div><button class="icon-button" id="dialogClose" aria-label="Đóng">×</button></div><p class="dialog-description" id="dialogDescription">Chọn nội dung muốn xem trong phiên.</p><div class="window-options" id="windowOptions"><button class="window-option selected" data-window="desktop"><span class="option-icon desktop-option">▦</span><span><b>Toàn bộ màn hình</b><small>Desktop · 1920 × 1080</small></span><span class="option-check">✓</span></button><button class="window-option" data-window="browser"><span class="option-icon browser-option">◉</span><span><b>Trình duyệt</b><small>Chrome · Cửa sổ đang mở</small></span><span class="option-check">✓</span></button><button class="window-option" data-window="notes"><span class="option-icon notes-option">▤</span><span><b>Ghi chú</b><small>Notepad · Cửa sổ đang mở</small></span><span class="option-check">✓</span></button></div><div class="dialog-actions"><button class="secondary-button" id="dialogCancel">Huỷ</button><button class="primary-button" id="dialogConfirm">Chọn cửa sổ</button></div></section></div>
+
+  <div class="overlay hidden" id="settingsOverlay"><section class="dialog settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settingsTitle"><div class="dialog-head"><div><span class="eyebrow">CÁ NHÂN HOÁ</span><h2 id="settingsTitle">Tuỳ chỉnh phiên</h2></div><button class="icon-button" id="settingsClose" aria-label="Đóng">×</button></div><p class="dialog-description">Đổi nhanh theo ý bạn. Áp dụng ngay trong demo.</p><label class="setting-row"><span><b>Chất lượng hình ảnh</b><small>Ưu tiên rõ nét hoặc tiết kiệm mạng</small></span><select id="qualitySelect"><option value="balanced">Cân bằng</option><option value="sharp">Rõ nét</option><option value="smooth">Mượt, tiết kiệm mạng</option></select></label><label class="setting-row"><span><b>Kích thước xem</b><small>Độ phân giải mô phỏng</small></span><select id="resolutionSelect"><option value="1080">Tự động · 1080p</option><option value="720">720p · Mạng yếu</option><option value="native">Theo cửa sổ</option></select></label><label class="setting-row"><span><b>Hiển thị con trỏ</b><small>Cho biết vị trí thao tác từ xa</small></span><button class="toggle-setting on" id="cursorSetting" aria-pressed="true"><i></i></button></label><div class="settings-note"><span>✳</span> Các thay đổi chỉ ảnh hưởng bản mô phỏng này.</div><div class="dialog-actions"><button class="primary-button full-button" id="settingsDone">Xong</button></div></section></div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
