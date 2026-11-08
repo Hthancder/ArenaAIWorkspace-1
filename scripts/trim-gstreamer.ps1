@@ -59,28 +59,30 @@ Write-Output "== kiểm tra element trên gói đầy đủ"
 $env:GST_PLUGIN_SYSTEM_PATH_1_0 = $plugins
 $env:GST_PLUGIN_PATH_1_0 = ''
 
-$pluginFiles = @{}
-foreach ($file in Get-ChildItem $plugins -Filter '*.dll') {
-    $inspect = & (Join-Path $bin 'gst-inspect-1.0.exe') $file.FullName 2>&1
-    $text = ($inspect | Out-String)
-    $pluginFiles[$file.FullName] = $text
-}
-
+# Với từng element, hỏi `gst-inspect <element>` xem nó **nằm trong file plugin
+# nào** — đọc dòng "Filename" trong mục Plugin Details. Cách này không phụ thuộc
+# quy ước đặt tên file (`gstjpeg.dll` chứ không phải `libgstjpeg.dll` trên Windows)
+# và không phụ thuộc định dạng mục lục của `gst-inspect <file>`.
+$inspectExe = Join-Path $bin 'gst-inspect-1.0.exe'
 $keep = New-Object System.Collections.Generic.HashSet[string]
 foreach ($element in $required.Keys) {
     $found = $false
-    foreach ($entry in $pluginFiles.GetEnumerator()) {
-        if ($entry.Value -match "(?m)^\s*\S+:\s+$([regex]::Escape($element))\s*:") {
-            [void]$keep.Add($entry.Key)
-            Write-Output "   $element  ->  $(Split-Path $entry.Key -Leaf)"
+    $text = (& $inspectExe $element 2>&1 | Out-String)
+    # `gst-inspect <element>` trả mã khác 0 trên Windows dù in đủ thông tin —
+    # đừng dựa vào exit code, dựa vào nội dung.
+    $match = [regex]::Match($text, '(?m)^\s*Filename\s+(.+?)\s*$')
+    if ($match.Success) {
+        $file = $match.Groups[1].Value.Trim()
+        if (Test-Path $file) {
+            [void]$keep.Add($file)
+            Write-Output "   $element  ->  $(Split-Path $file -Leaf)"
             $found = $true
-            break
         }
     }
     if (-not $found) {
-        $sample = ($pluginFiles.GetEnumerator() | Select-Object -First 1)
-        $head = if ($sample) { ($sample.Value -split "`n" | Select-Object -First 12) -join ' / ' } else { '(không đọc được file plugin nào)' }
-        Fail "Gói GStreamer này thiếu element '$element' (mong ở plugin: $($required[$element] -join ', '))`nTìm thấy $($pluginFiles.Count) file .dll trong $plugins`nVí dụ output của $(Split-Path $sample.Key -Leaf): $head"
+        $count = (Get-ChildItem $plugins -Filter '*.dll').Count
+        $head = ($text -split "`n" | Select-Object -First 10) -join ' / '
+        Fail "Gói GStreamer này thiếu element '$element' (mong ở plugin: $($required[$element] -join ', '))`nCó $count file .dll trong $plugins`nOutput của gst-inspect $element: $head"
     }
 }
 
@@ -121,8 +123,10 @@ Write-Output "== kiểm tra trên bộ đã thu gọn"
 $env:PATH = "$outBin;$env:PATH"
 $env:GST_PLUGIN_SYSTEM_PATH_1_0 = $outPlugins
 foreach ($element in $required.Keys) {
-    & (Join-Path $outBin 'gst-inspect-1.0.exe') $element *> $null
-    if ($LASTEXITCODE -ne 0) { Fail "Bộ thu gọn thiếu '$element' — đừng giao gói này" }
+    # Không dùng exit code: `gst-inspect` trên Windows trả mã khác 0 dù in đủ
+    # thông tin (đã kiểm trong CI). Kiểm **nội dung**: phải có "Factory Details".
+    $check = (& (Join-Path $outBin 'gst-inspect-1.0.exe') $element 2>&1 | Out-String)
+    if ($check -notmatch 'Factory Details') { Fail "Bộ thu gọn thiếu '$element' — đừng giao gói này`n$($check.Substring(0, [Math]::Min(400, $check.Length)))" }
     Write-Output "   ok: $element"
 }
 
