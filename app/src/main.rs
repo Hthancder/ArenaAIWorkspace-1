@@ -8,6 +8,7 @@ mod jpeg;
 mod pins;
 mod session_state;
 mod stream;
+mod windows;
 
 use std::collections::BTreeMap;
 use std::env;
@@ -120,7 +121,7 @@ fn now_ms() -> u128 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)
 }
 
-struct State { settings: BTreeMap<String, String>, session: Option<Session>, next_id: u64, data_dir: PathBuf, live_status: Option<(bool, String)>, live_metrics: LiveMetrics, input: input::InputSanitizer, history: history::History, auth: auth_wire::AuthState, policy: guard::Policy, keyframes: u64, pins: pins::Pins }
+struct State { settings: BTreeMap<String, String>, session: Option<Session>, next_id: u64, data_dir: PathBuf, live_status: Option<(bool, String)>, live_metrics: LiveMetrics, input: input::InputSanitizer, history: history::History, auth: auth_wire::AuthState, policy: guard::Policy, keyframes: u64, pins: pins::Pins, windows: rd_spike_lib::security::window::WindowRegistry }
 
 fn json_quote(value: &str) -> String {
     let mut out = String::from("\"");
@@ -368,9 +369,18 @@ fn switch_session(
             let Some(wid) = fields.get("windowId") else {
                 return Some((400, "{\"error\":\"invalid_json\"}".into()));
             };
-            // §41.3 #3: `wid` phải nằm trong danh sách agent đã trả.
-            if !["desktop", "browser", "notes"].contains(&wid.as_str()) {
-                return Some((422, "{\"error\":\"invalid_window_id\"}".into()));
+            // §41.3 #3: `wid` phải nằm trong danh sách agent đã trả — kiểm qua
+            // `WindowRegistry::authorize`, cùng cổng với tạo phiên.
+            if wid != "desktop" {
+                let snapshot = fields.get("snapshotId").map(String::as_str).unwrap_or("");
+                if let Err(error) = state.windows.authorize(snapshot, wid, now_ms() as u64) {
+                    // Cả `code()` và `status()` đều nhận `self` (move), nên
+                    // phải lấy **cả hai** trước khi dùng cái nào — clippy/rustc
+                    // đúng khi báo "use of moved value" ở bản trước.
+                    let code = error.clone().code();
+                    let status = error.status();
+                    return Some((status, format!("{{\"error\":{}}}", json_quote(code))));
+                }
             }
             session.window_id = wid.clone();
             session.state = "switching";
@@ -1027,7 +1037,48 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
     match (method.as_str(), route) {
         ("GET", "/api/health") => json_response(&mut stream, 200, "{\"ok\":true,\"app\":\"lantern-mock\",\"mode\":\"mock\"}".into()),
         ("GET", "/api/device") => json_response(&mut stream, 200, "{\"id\":\"inspiron-7467\",\"name\":\"Inspiron 7467\",\"status\":\"ready\",\"platform\":\"Windows 11\",\"location\":\"Ở nhà\",\"mock\":true}".into()),
-        ("GET", "/api/windows") => json_response(&mut stream, 200, "{\"windows\":[{\"id\":\"desktop\",\"title\":\"Toàn bộ màn hình\",\"detail\":\"Desktop · 1920 × 1080\",\"mode\":\"screen\"},{\"id\":\"browser\",\"title\":\"Trình duyệt\",\"detail\":\"Chrome · Cửa sổ đang mở\",\"mode\":\"window\"},{\"id\":\"notes\",\"title\":\"Ghi chú\",\"detail\":\"Notepad · Cửa sổ đang mở\",\"mode\":\"window\"}],\"mock\":true}".into()),
+        // §5.4 — `EnumWindows` **thật**. Trước đây route này trả ba cửa sổ viết
+        // cứng ("Trình duyệt", "Ghi chú"), nên trên máy người dùng danh sách
+        // hiện ba thứ không tồn tại. Đó là lý do cảm giác "vẫn là demo": danh
+        // sách cửa sổ là thứ **đầu tiên** người dùng chạm vào.
+        ("GET", "/api/windows") => {
+            // §41.3 #3 / §41.4 T1: **publish** danh sách vào `WindowRegistry`
+            // của spec, rồi trả `snapshotId` cho client. Từ đây client chỉ
+            // tham chiếu được `wid` trong snapshot này (TTL 3 s) — nó không
+            // bao giờ cầm hwnd, nên không mở được cửa sổ mà agent cố ý không
+            // trả về. Đây chính là "lỗ hổng leo thang quyền thật" mà §41.3
+            // gọi tên.
+            let entries = windows::enumerate();
+            let registry_entries = windows::to_registry_entries(&entries);
+            let mut entropy = auth_wire::RealEntropy;
+            let (snapshot_id, published) = s.windows.publish(
+                registry_entries,
+                now_ms() as u64,
+                &mut entropy,
+                "local",
+            );
+            // Ghép `wid` của registry (id hex) với dữ liệu hiển thị, theo
+            // **đúng thứ tự** registry trả (nó đã loại `wid` trùng).
+            let by_wid: BTreeMap<String, usize> = entries
+                .iter()
+                .enumerate()
+                .map(|(index, entry)| (format!("{:016x}", entry.hwnd as u64), index))
+                .collect();
+            let paired: Vec<(String, windows::WindowEntry)> = published
+                .iter()
+                .filter_map(|entry| {
+                    let index = *by_wid.get(&entry.wid)?;
+                    Some((entry.wid.clone(), entries[index].clone()))
+                })
+                .collect();
+            let body = windows::windows_json(&paired);
+            let note = windows::platform_note()
+                .map(|reason| format!(",\"note\":{}", json_quote(reason)))
+                .unwrap_or_default();
+            json_response(&mut stream, 200, format!(
+                "{{\"windows\":{},\"count\":{},\"snapshotId\":{}{}}}",
+                body, paired.len(), json_quote(&snapshot_id), note))
+        }
         ("GET", "/api/settings") => json_response(&mut stream, 200, format!("{{\"settings\":{},\"mock\":true}}", settings_json(&s.settings))),
         ("PATCH", "/api/settings") => {
             let Some(patch) = parse_flat_object(&body) else { return json_response(&mut stream, 400, "{\"error\":\"invalid_json\"}".into()); };
@@ -1065,12 +1116,38 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
             // §41.4 T3: tạo phiên là mutation nguy hiểm nhất — nó sinh ra
             // quyền xem màn hình + điều khiển chuột/bàn phím.
             if deny_if_unauthorised(&mut stream, &s, &req_headers, None).is_none() { return; }
-            if let Some(active) = &s.session { return json_response(&mut stream, 409, format!("{{\"error\":\"session_already_active\",\"session\":{}}}",session_json(active))); }
             let Some(input) = parse_flat_object(&body) else { return json_response(&mut stream, 400, "{\"error\":\"invalid_json\"}".into()); };
+            // **Thứ tự có nghĩa**: kiểm `wid` (§41.3 #3) và tham số **trước**
+            // khi kiểm "đã có phiên". Bản trước kiểm "đã có phiên" trước, nên
+            // trên server đang có phiên thì **mọi** `wid` bịa đều trả 409
+            // `session_already_active` — cổng `wid` trông như có mà không kiểm
+            // gì, và test cũng không thấy. Một client độc gửi `wid` của cửa sổ
+            // nhạy cảm sẽ nhận 409 thay vì 403, tức là nó **không biết** mình
+            // đã bị chặn ở đâu. Kiểm rẻ (parse) trước, kiểm nặng (registry)
+            // sau, kiểm trạng thái (đã có phiên) **cuối**.
             let mode = input.get("mode").map(String::as_str).unwrap_or("hvnc");
+            // §5.4 + §41.3 #3: client gửi `wid` lấy từ snapshot, **không** phải
+            // hwnd. `snapshotId` phải đi kèm; thiếu thì không kiểm được `wid`
+            // có thuộc danh sách agent vừa trả hay không.
             let win = input.get("windowId").map(String::as_str).unwrap_or("desktop");
+            let snapshot = input.get("snapshotId").map(String::as_str).unwrap_or("");
             if !["hvnc","vnc"].contains(&mode) { return json_response(&mut stream, 422, "{\"error\":\"invalid_session_mode\"}".into()); }
-            if !["desktop","browser","notes"].contains(&win) { return json_response(&mut stream, 422, "{\"error\":\"invalid_window_id\"}".into()); }
+            // Cổng **duy nhất** nhận `wid` (spec: `WindowRegistry::authorize`).
+            // `desktop` là cửa sổ đặc biệt (stream cả màn hình, §5.3 VNC), không
+            // cần snapshot vì nó không phải một hwnd nào.
+            if win != "desktop" {
+                match s.windows.authorize(snapshot, win, now_ms() as u64) {
+                    Ok(_) => {}
+                    Err(error) => {
+                        // 403 `window.unknown` khi client bịa `wid`;
+                        // 409 `window.list_stale` khi snapshot quá 3 s.
+                        let code = error.clone().code();
+                        let status = error.status();
+                        return json_response(&mut stream, status,
+                            format!("{{\"error\":{}}}", json_quote(code)));
+                    }
+                }
+            }
             s.next_id += 1;
             // §6.10.1: preset mặc định là "Cân bằng"; `POST /api/sessions`
             // (§8.1) cho chọn ngay từ đầu. Giá trị lạ ⇒ 422, không đoán.
@@ -1085,6 +1162,11 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
                 },
                 None => 0,
             };
+            // Kiểm trạng thái **cuối cùng** — sau khi mọi tham số đã hợp lệ.
+            if let Some(active) = &s.session {
+                return json_response(&mut stream, 409, format!(
+                    "{{\"error\":\"session_already_active\",\"session\":{}}}", session_json(active)));
+            }
             let session = Session {
                 id: format!("mock-{}",s.next_id), mode: mode.into(), window_id: win.into(),
                 started_at: now_seconds(),
@@ -1535,7 +1617,7 @@ fn main() {
     // Dựng trước khi `data_dir` bị move vào `State` — cùng lý do với `history`.
     let history_log = history::History::new(&data_dir);
     let pins_store = pins::Pins::new(&data_dir);
-    let state=Arc::new(Mutex::new(State{settings,session:None,next_id:0,data_dir,live_status:None,live_metrics:LiveMetrics::default(),input:input::InputSanitizer::default(),history:history_log,pins:pins_store,auth:auth_wire::AuthState::default(),policy:guard::Policy::for_bind(&host),keyframes:0}));
+    let state=Arc::new(Mutex::new(State{settings,session:None,next_id:0,data_dir,live_status:None,live_metrics:LiveMetrics::default(),input:input::InputSanitizer::default(),history:history_log,pins:pins_store,auth:auth_wire::AuthState::default(),policy:guard::Policy::for_bind(&host),keyframes:0,windows:rd_spike_lib::security::window::WindowRegistry::default()}));
     let url = format!("http://127.0.0.1:{actual}");
     println!("Lantern mock is ready. Open {url} in your browser.");
     println!("Xem màn hình thật: {url}/live  — hoặc bấm nút \"Xem máy thật\" (không cần cài gì).");
@@ -1626,6 +1708,7 @@ mod tests {
                 keyframes: 0,
                 history: history::History::new(&data_dir),
                 pins: pins::Pins::new(&data_dir),
+                windows: rd_spike_lib::security::window::WindowRegistry::default(),
             }));
             // `take(32)`: luồng đăng nhập đầy đủ (§8.1) cần 8 request **chỉ
             // riêng** cho setup/login/refresh/logout; `take(8)` khiến test
@@ -1889,9 +1972,14 @@ mod tests {
         let at = |route: &str| format!("/api/sessions/{sid}/{route}");
 
         // §6.9 window / mode / monitor. Đổi nguồn capture ⇒ keyframe mới.
-        let window = http(addr, "POST", &at("window"), r#"{"windowId":"notes"}"#);
+        // `desktop` là cửa sổ đặc biệt (§5.3 VNC — stream cả màn hình), không
+        // cần snapshot vì nó không phải hwnd nào. Một `wid` cụ thể phải có
+        // snapshot hợp lệ — và trên Linux `EnumWindows` trả rỗng (§58.3),
+        // nên test này dùng `desktop` thay vì bịa `"notes"` như bản trước
+        // (bản trước qua được chỉ vì code cũng bịa danh sách).
+        let window = http(addr, "POST", &at("window"), r#"{"windowId":"desktop"}"#);
         assert!(window.starts_with("HTTP/1.1 200"), "window: {window}");
-        assert!(window.contains(r#""windowId":"notes""#), "phải áp dụng: {window}");
+        assert!(window.contains(r#""windowId":"desktop""#), "phải áp dụng: {window}");
 
         let mode = http(addr, "POST", &at("mode"), r#"{"mode":"hvnc"}"#);
         assert!(mode.starts_with("HTTP/1.1 200"), "mode: {mode}");
@@ -1962,15 +2050,82 @@ mod tests {
     /// bao giờ quyết định hwnd. Đây là lỗ hổng leo thang quyền **thật** mà
     /// spec gọi tên, nên nó cần test ở tầng route, không chỉ ở `guard`.
     #[test] fn a_client_cannot_pick_an_arbitrary_window_id() {
+        // §41.3 #3: client **không bao giờ** cầm hwnd. Hai kiểu tấn công khác
+        // nhau, và spec cho hai mã khác nhau:
+        //
+        // * gửi hwnd thô (`"0x000A0B0C"`, số) ⇒ 400 `window.hwnd_not_accepted`
+        //   — "dấu hiệu của một client không phải của ta", từ chối thẳng.
+        // * gửi `wid` mà không có/không đúng snapshot ⇒ 403 `window.unknown`.
         let (addr, server) = spawn_server();
         let created = http(addr, "POST", "/api/sessions", r#"{"mode":"vnc","windowId":"desktop"}"#);
         let sid = created.split("\"id\":\"").nth(1).and_then(|r| r.split('"').next())
             .expect("sid").to_string();
-        for bad in [r#"{"windowId":"0x000A0B0C"}"#, r#"{"windowId":"123456"}"#, r#"{"windowId":""}"#] {
-            let out = http(addr, "POST", &format!("/api/sessions/{sid}/window"), bad);
-            assert!(out.starts_with("HTTP/1.1 422"),
-                "wid lạ phải bị từ chối ({bad}): {out}");
+        // `HwndNotAccepted` = **định dạng** sai (`0x…` có chữ `x`, dấu `-`,
+        // hoặc >32 ký tự). `"123456"` **không** thuộc nhóm này: nó là chuỗi
+        // hex hợp lệ, nên rơi vào `window.unknown` (403) — đó mới là phân biệt
+        // đúng của spec, và test này từng viết sai chỗ đó.
+        for malformed in [
+            r#"{"windowId":"0x000A0B0C"}"#,
+            r#"{"windowId":"-140000"}"#,
+            r#"{"windowId":"   "}"#,
+            r#"{"windowId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"#,
+        ] {
+            let out = http(addr, "POST", &format!("/api/sessions/{sid}/window"), malformed);
+            assert!(out.starts_with("HTTP/1.1 400"), "định dạng hwnd ⇒ 400 ({malformed}): {out}");
+            assert!(out.contains("hwnd_not_accepted"), "phải nói rõ vì sao: {out}");
         }
+        // Chuỗi hex hợp lệ nhưng không thuộc snapshot nào ⇒ 403.
+        let hex_but_unknown = http(addr, "POST", &format!("/api/sessions/{sid}/window"),
+            r#"{"windowId":"123456","snapshotId":"ws1x"}"#);
+        assert!(hex_but_unknown.starts_with("HTTP/1.1 403"),
+            "hex hợp lệ nhưng lạ ⇒ 403: {hex_but_unknown}");
+        // `wid` giống id hex nhưng không có trong snapshot nào.
+        let guessed = http(addr, "POST", &format!("/api/sessions/{sid}/window"),
+            r#"{"windowId":"00000000deadbeef","snapshotId":"ws1abc"}"#);
+        assert!(guessed.starts_with("HTTP/1.1 403"), "wid bịa ⇒ 403: {guessed}");
+        assert!(guessed.contains("window.unknown"), "{guessed}");
+        drop(server);
+    }
+
+    /// §41.3 #3 / §41.4 T1 — **lỗ hổng leo thang quyền thật** mà spec gọi tên.
+    ///
+    /// Kịch bản: người dùng mở app, `GET /api/windows` trả 5 cửa sổ. Client bịa
+    /// ra một `wid` khác (cửa sổ ngân hàng họ không cho xem) ⇒ nếu agent không
+    /// kiểm, nó stream cửa sổ đó. Đây không phải tấn công lý thuyết: client
+    /// **không được tin** (§41.3), và một extension độc (§41.2 P5) sửa được
+    /// request.
+    #[test] fn a_wid_outside_the_published_snapshot_is_refused() {
+        let (addr, server) = spawn_server();
+        // Liệt kê trên Linux trả rỗng (§58.3: không bịa), nên snapshot có 0
+        // mục — đó cũng là trường hợp đúng để kiểm: `wid` nào cũng ngoài.
+        let listed = http(addr, "GET", "/api/windows", "");
+        assert!(listed.starts_with("HTTP/1.1 200"), "{listed}");
+        // Phải có `snapshotId` để client tham chiếu — thiếu nó thì `wid` không
+        // kiểm được, và một danh sách không kiểm được là danh sách vô dụng.
+        assert!(listed.contains("snapshotId"), "phải trả snapshotId: {listed}");
+
+        let sid_of = |response: &str| {
+            response.split("\"id\":\"").nth(1).and_then(|r| r.split('"').next())
+                .map(str::to_string)
+        };
+        let created = http(addr, "POST", "/api/sessions", r#"{"mode":"vnc","windowId":"desktop"}"#);
+        let _sid = sid_of(&created).or_else(|| {
+            // Phiên có thể đã tồn tại từ test khác trong cùng server.
+            let current = http(addr, "GET", "/api/sessions/current", "");
+            sid_of(&current)
+        });
+
+        // Kiểm **thứ tự**: `wid` phải bị từ chối **trước** khi kiểm "đã có
+        // phiên". Nếu ngược lại thì trên một server đã có phiên, mọi `wid` bịa
+        // đều trả 409 `session_already_active` và **không ai biết** có cổng
+        // `wid` hay không — cổng trông như có mà không kiểm gì.
+        let stolen = http(addr, "POST", "/api/sessions",
+            r#"{"mode":"vnc","windowId":"00000000000a0b0c","snapshotId":"ws1aaaaaaaaaaaa"}"#);
+        assert!(
+            stolen.starts_with("HTTP/1.1 403"),
+            "wid ngoài snapshot phải là 403 window.unknown, không phải \"đã có phiên\": {stolen}"
+        );
+        assert!(stolen.contains("window.unknown"), "{stolen}");
         drop(server);
     }
 
