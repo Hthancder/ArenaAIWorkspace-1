@@ -27,9 +27,13 @@ param(
 $ErrorActionPreference = 'Stop'
 
 function Fail($message) {
-    # Nhiều dòng ⇒ nhiều annotation. Log job không tải được từ sandbox (§56.10)
-    # nên annotation là **kênh duy nhất** để biết chuyện gì đã xảy ra.
-    foreach ($line in ($message -split "`n")) { Write-Output "::error::$line" }
+    # Log job không tải được từ sandbox (§56.10), và GitHub chỉ giữ **một**
+    # annotation lỗi mỗi step. Step summary thì đọc được đầy đủ qua API
+    # (`/check-runs/<id>` → `output.summary`), nên chẩn đoán đi đường đó.
+    if ($env:GITHUB_STEP_SUMMARY) {
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## Thu gọn GStreamer thất bại`n`n$message"
+    }
+    Write-Output "::error::$($message -split "`n" | Select-Object -First 1)"
     exit 1
 }
 

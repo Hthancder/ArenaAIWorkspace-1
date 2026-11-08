@@ -164,11 +164,12 @@ jobs:
         run: |
           $target = Join-Path $env:RUNNER_TEMP 'gstreamer'
           $out = Join-Path $PWD 'app/target/release/gst'
-          pwsh -File scripts/trim-gstreamer.ps1 -Root $target -Out $out
-          if ($LASTEXITCODE -ne 0) {
-            Write-Output "::error::Thu gọn GStreamer thất bại (xem log bước này)"
-            exit 1
-          }
+          # Ghi cả output ra step summary: annotation chỉ giữ được 1 dòng, mà
+          # log job thì sandbox không tải được (§56.10).
+          $log = pwsh -File scripts/trim-gstreamer.ps1 -Root $target -Out $out 2>&1 | Tee-Object -Variable out2
+          $out2 | Out-String | Write-Host
+          if ($env:GITHUB_STEP_SUMMARY) { $out2 | Out-String | Add-Content -Path $env:GITHUB_STEP_SUMMARY }
+          if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: smoke-run the trimmed bundle
         shell: pwsh
