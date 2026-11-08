@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#101614" />
   <title>Lantern — Remote Desktop</title>
-  <link rel="stylesheet" href="./styles.css?v=5" />
+  <link rel="stylesheet" href="./styles.css?v=6" />
 </head>
 <body>
   <div class="app-shell">
@@ -62,7 +62,8 @@
               <div class="mode-switch" role="group" aria-label="Chế độ xem"><button class="mode-btn active" data-mode="hvnc">Cửa sổ riêng</button><button class="mode-btn" data-mode="vnc">Toàn màn hình</button></div>
               <span class="control-divider"></span>
               <button class="control-action" id="roomViewBtn"><span class="ctrl-icon">◉</span><span>Phòng</span><span class="toggle" id="roomToggle"></span></button>
-              <button class="control-action" id="audioBtn"><span class="ctrl-icon">♫</span><span>Âm thanh</span><span class="toggle on" id="audioToggle"></span></button>
+              <button class="control-action" id="audioBtn" aria-label="Bật hoặc tắt âm thanh phiên"><span class="ctrl-icon">♫</span><span>Âm thanh</span><span class="toggle on" id="audioToggle"></span></button>
+              <label class="volume-control" for="audioVolume"><span>Âm lượng</span><input id="audioVolume" type="range" min="0" max="100" value="80" aria-label="Âm lượng loa từ xa"><output id="audioVolumeValue" for="audioVolume">80%</output></label>
               <button class="control-action" id="micBtn"><span class="ctrl-icon">♩</span><span>Micro</span><span class="toggle" id="micToggle"></span></button>
               <div class="control-spacer"></div>
               <button class="icon-button settings-mini" id="settingsMini" aria-label="Cài đặt">⚙</button>
@@ -89,6 +90,6 @@
 
   <div class="overlay hidden" id="settingsOverlay"><section class="dialog settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settingsTitle"><div class="dialog-head"><div><span class="eyebrow">CÁ NHÂN HOÁ</span><h2 id="settingsTitle">Tuỳ chỉnh phiên</h2></div><button class="icon-button" id="settingsClose" aria-label="Đóng">×</button></div><p class="dialog-description">Tìm theo điều bạn muốn làm. Thay đổi có hiệu lực ngay, trừ mục ghi rõ “phiên sau”.</p><label class="settings-search"><span>⌕</span><input id="settingsSearch" type="search" placeholder="Thử “mờ”, “trễ”, “tiếng”…" autocomplete="off"><kbd>Ctrl K</kbd></label><div class="settings-layout"><nav class="settings-nav" aria-label="Nhóm cài đặt"><button class="selected" data-settings-group="all">Tất cả <span>12</span></button><button data-settings-group="view">Hình ảnh & hiển thị</button><button data-settings-group="input">Điều khiển</button><button data-settings-group="sound">Âm thanh</button><button data-settings-group="device">Thiết bị</button><button class="advanced-nav" data-settings-group="advanced">Nâng cao <span>20</span></button></nav><div class="settings-items" id="settingsItems" aria-live="polite"></div></div><div class="settings-footer"><button class="text-reset" id="resetSettings">↺ Về mặc định</button><span id="settingsSaved">Đã lưu trên thiết bị này</span></div><div class="settings-note"><span>✳</span> Đây là bản mô phỏng. Cài đặt máy chủ chỉ lưu cục bộ, chưa đổi cấu hình Windows.</div><div class="dialog-actions"><button class="primary-button full-button" id="settingsDone">Xong</button></div></section></div>
 
-  <script src="./app.js?v=7"></script>
+  <script src="./app.js?v=9"></script>
 </body>
 </html>

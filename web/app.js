@@ -164,6 +164,14 @@
     setToggle($('#audioToggle'), state.audio);
     toast(state.audio ? 'Âm thanh mô phỏng đã bật.' : 'Âm thanh mô phỏng đã tắt.');
   });
+  function syncQuickVolume(value) {
+    const volume = Math.max(0, Math.min(100, Number(value) || 0));
+    $('#audioVolume').value = String(volume);
+    $('#audioVolumeValue').value = `${volume}%`;
+    $('#audioVolumeValue').textContent = `${volume}%`;
+  }
+  $('#audioVolume').addEventListener('input', event => syncQuickVolume(event.currentTarget.value));
+  $('#audioVolume').addEventListener('change', event => saveSetting('volume', Number(event.currentTarget.value)));
   $('#micBtn').addEventListener('click', () => {
     state.mic = !state.mic;
     setToggle($('#micToggle'), state.mic);
@@ -256,7 +264,7 @@
       $('.quality-indicator').innerHTML = `<i></i> ${value === 'sharp' ? 'Nét' : value === 'smooth' ? 'Mượt' : 'HD'}`;
       state.quality = value;
     }
-    if (id === 'volume') toast(`Âm lượng nghe: ${value}%.`);
+    if (id === 'volume') { syncQuickVolume(value); toast(`Âm lượng nghe: ${value}%.`); }
     if (id === 'audio') { state.audio = value !== 'off'; setToggle($('#audioToggle'), state.audio); }
     if (id === 'cursor-mode') { state.cursor = value !== 'local'; $('#cursorPointer').classList.toggle('hidden', !state.connected || !state.cursor); }
     if (id === 'hide-taskbar') $('.desktop-taskbar').classList.toggle('hidden', Boolean(value));
@@ -281,6 +289,7 @@
     try { localStorage.removeItem('lantern-mock-settings'); } catch {}
     state.audio = true; state.cursor = true;
     setToggle($('#audioToggle'), true);
+    syncQuickVolume(settingDefaults.volume);
     document.body.dataset.theme = 'light';
     $('.desktop-taskbar').classList.remove('hidden');
     $('#screenResolution').textContent = '1080p · 30 FPS (demo)';
@@ -292,6 +301,7 @@
   renderSettings();
   state.audio = settings.audio !== 'off';
   setToggle($('#audioToggle'), state.audio);
+  syncQuickVolume(settings.volume);
   state.cursor = settings['cursor-mode'] !== 'local';
   $('.desktop-taskbar').classList.toggle('hidden', Boolean(settings['hide-taskbar']));
   document.body.dataset.theme = settings.theme;
@@ -305,6 +315,7 @@
         apiRequest('/api/health'), apiRequest('/api/settings'), apiRequest('/api/device'), apiRequest('/api/windows'), apiRequest('/api/sessions/current')
       ]);
       settings = { ...stored.settings, ...settings };
+      syncQuickVolume(settings.volume);
       try { localStorage.setItem('lantern-mock-settings', JSON.stringify(settings)); } catch {}
       renderSettings();
       state.audio = settings.audio !== 'off'; state.cursor = settings['cursor-mode'] !== 'local';
