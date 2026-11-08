@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#101614" />
   <title>Lantern — Remote Desktop</title>
-  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./styles.css?v=3" />
 </head>
 <body>
   <div class="app-shell">
@@ -87,6 +87,6 @@
 
   <div class="overlay hidden" id="settingsOverlay"><section class="dialog settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settingsTitle"><div class="dialog-head"><div><span class="eyebrow">CÁ NHÂN HOÁ</span><h2 id="settingsTitle">Tuỳ chỉnh phiên</h2></div><button class="icon-button" id="settingsClose" aria-label="Đóng">×</button></div><p class="dialog-description">Tìm theo điều bạn muốn làm. Thay đổi có hiệu lực ngay, trừ mục ghi rõ “phiên sau”.</p><label class="settings-search"><span>⌕</span><input id="settingsSearch" type="search" placeholder="Thử “mờ”, “trễ”, “tiếng”…" autocomplete="off"><kbd>Ctrl K</kbd></label><div class="settings-layout"><nav class="settings-nav" aria-label="Nhóm cài đặt"><button class="selected" data-settings-group="all">Tất cả <span>12</span></button><button data-settings-group="view">Hình ảnh & hiển thị</button><button data-settings-group="input">Điều khiển</button><button data-settings-group="sound">Âm thanh</button><button data-settings-group="device">Thiết bị</button></nav><div class="settings-items" id="settingsItems" aria-live="polite"></div></div><div class="settings-footer"><button class="text-reset" id="resetSettings">↺ Về mặc định</button><span id="settingsSaved">Đã lưu trên thiết bị này</span></div><div class="settings-note"><span>✳</span> Đây là bản mô phỏng. Cài đặt máy chủ chỉ lưu cục bộ, chưa đổi cấu hình Windows.</div><div class="dialog-actions"><button class="primary-button full-button" id="settingsDone">Xong</button></div></section></div>
 
-  <script src="./app.js"></script>
+  <script src="./app.js?v=3"></script>
 </body>
 </html>
