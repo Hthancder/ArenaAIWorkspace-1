@@ -25,11 +25,11 @@ Intel 8265. Encoder mặc định là **QSV** (iGPU), dGPU để nguội.
 
 ## Chạy app mock đầu-cuối
 
-```sh
-npm run mock
-```
+Trên máy phát triển: `npm run mock` → mở `http://127.0.0.1:4173` (Node.js, không cần package install).
 
-Mở `http://127.0.0.1:4173`. Không cần cài package. Backend phục vụ UI và API cùng origin; settings được lưu trong `.mock-data/`. Chỉ là mock cục bộ — chưa kết nối máy Windows, chưa capture camera/micro/âm thanh và không gửi input tới hệ điều hành.
+Trên laptop Windows không cần cài Node/Rust: GitHub → **Actions** → run thành công mới nhất → **Artifacts → `lantern-mock-windows-x64`** → giải nén và chạy `lantern-mock.exe`. App tự mở browser, bind loopback và lưu mock settings trong `%LOCALAPPDATA%\\LanternMock`.
+
+Đây là **mock tương tác**, chưa phải remote desktop thật: không capture màn hình/window, không gửi input tới Windows, không dùng GPU/audio/camera/micro và không nhận kết nối LAN/Internet. Artifact `rd-windows-x64` khác là CLI pipeline spike, không phải browser app.
 
 ## Chạy kiểm tra
 

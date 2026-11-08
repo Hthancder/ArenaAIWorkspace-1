@@ -41,6 +41,15 @@ jobs:
       - name: mock backend integration
         run: node --test ../mock-server/server.test.js
 
+      - name: standalone exe tests
+        run: cargo test --manifest-path ../app/Cargo.toml
+
+      - name: standalone exe clippy
+        run: cargo clippy --manifest-path ../app/Cargo.toml --all-targets -- -D warnings
+
+      - name: standalone exe smoke check
+        run: cargo run --manifest-path ../app/Cargo.toml -- --check
+
       - name: print pipelines (reviewable in the log)
         run: cargo run --quiet -- --demo
 
@@ -67,8 +76,20 @@ jobs:
       - name: smoke-run
         run: .\target\release\rd.exe --demo
 
+      - name: build Lantern mock app
+        run: cargo build --manifest-path ..\app\Cargo.toml --release
+
+      - name: smoke-check Lantern mock app
+        run: ..\app\target\release\lantern-mock.exe --check
+
       - uses: actions/upload-artifact@v4
         with:
           name: rd-windows-x64
           path: spike/target/release/rd.exe
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lantern-mock-windows-x64
+          path: app/target/release/lantern-mock.exe
           if-no-files-found: error

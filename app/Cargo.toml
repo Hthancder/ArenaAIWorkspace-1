@@ -1,0 +1,8 @@
+[package]
+name = "lantern-mock"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "lantern-mock"
+path = "src/main.rs"
