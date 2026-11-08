@@ -115,49 +115,77 @@ jobs:
           path: spike/target/release/rd.exe
           if-no-files-found: error
 
-      # §58.13: tải sẵn GStreamer runtime + gói vào **cùng** artifact. Người
-      # dùng cuối không phải cài gì, không phải sửa PATH — giải nén là chạy.
-      # Bản cài trong máy (nếu có) không bị dùng tới, nên không có chuyện
-      # "GStreamer cũ trong PATH làm thiếu plugin".
-      - name: download GStreamer runtime (MSVC 64-bit)
+      # §58.13: GStreamer vào thẳng artifact, người dùng không phải cài gì.
+      #
+      # Sự thật đã kiểm, sau một lần CI đỏ vì đoán sai:
+      #   - GStreamer **không phát hành file zip** cho Windows (bản 1.24.10 tôi
+      #     từng hard-code không tồn tại; dòng 1.24 chỉ có 1.24.13).
+      #   - Bản MSVC 64-bit là **installer Inno Setup** 517 MB — cùng một file
+      #     chứa mọi plugin. Không có "bản Complete" để chọn: "Complete" là một
+      #     trang trong wizard, không phải gói khác.
+      # ⇒ Cài im lặng rồi **thu gọn** bằng scripts/trim-gstreamer.ps1, script này
+      # hỏi `gst-inspect` từng file plugin chứ không đoán tên file.
+      - name: install GStreamer (silent)
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $ProgressPreference = 'SilentlyContinue'
-          $version = '1.24.10'
-          $url = "https://gstreamer.freedesktop.org/data/pkg/windows/$version/msvc/gstreamer-1.0-msvc-x86_64-$version.zip"
-          $zip = Join-Path $env:RUNNER_TEMP 'gstreamer.zip'
+          $version = '1.28.8'
+          $url = "https://gstreamer.freedesktop.org/data/pkg/windows/$version/msvc/gstreamer-1.0-msvc-x86_64-$version.exe"
+          $exe = Join-Path $env:RUNNER_TEMP 'gstreamer.exe'
           Write-Host "Tải $url"
           try {
-            Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+            Invoke-WebRequest -Uri $url -OutFile $exe -UseBasicParsing
           } catch {
-            # Log job không tải được từ sandbox (§56.10) ⇒ đẩy lỗi ra annotation,
-            # nếu không thì chỉ đọc được "exit code 1".
+            # Log job không tải được từ sandbox (§56.10) ⇒ đẩy lỗi ra annotation.
             Write-Output "::error::GStreamer download: $($_.Exception.Message)"
             exit 1
           }
-          $size = (Get-Item $zip).Length
-          Write-Host "Đã tải $([math]::Round($size / 1MB, 1)) MB"
-          $gst = 'app/target/release/gst'
-          New-Item -ItemType Directory -Force -Path $gst | Out-Null
-          tar -xf $zip -C $gst
-          $exe = Join-Path $gst 'bin/gst-launch-1.0.exe'
-          if (-not (Test-Path $exe)) { throw "Gói tải về không có bin/gst-launch-1.0.exe" }
-          # Kiểm **ngay trong CI** rằng bản đóng gói có plugin d3d11 — nếu không
-          # thì ta sẽ giao một artifact hỏng mà không ai biết cho tới khi bạn bấm nút.
-          Push-Location (Join-Path $gst 'bin')
-          $env:GST_PLUGIN_SYSTEM_PATH_1_0 = Join-Path $gst 'lib/gstreamer-1.0'
-          $env:GST_PLUGIN_PATH_1_0 = ''
-          ./gst-inspect-1.0.exe d3d11screencapturesrc | Select-Object -First 6
-          if ($LASTEXITCODE -ne 0) { throw "Bản đóng gói thiếu plugin d3d11screencapturesrc" }
-          ./gst-inspect-1.0.exe jpegenc | Select-Object -First 3
-          if ($LASTEXITCODE -ne 0) { throw "Bản đóng gói thiếu jpegenc" }
-          Pop-Location
-          # Bỏ thư mục dev không cần cho chạy: giảm ~50% kích thước artifact.
-          foreach ($drop in @('lib/gstreamer-1.0/gst-plugin-scanner.exe', 'share', 'include')) {
-            Remove-Item -Recurse -Force (Join-Path $gst $drop) -ErrorAction SilentlyContinue
+          Write-Host "Đã tải $([math]::Round((Get-Item $exe).Length / 1MB, 1)) MB"
+          $target = Join-Path $env:RUNNER_TEMP 'gstreamer'
+          # Inno Setup: /VERYSILENT /SUPPRESSMSGBOXES /NORESTART. `/CURRENTUSER` để
+          # không cần quyền admin trên runner, `/DIR` để không đụng chỗ cài chuẩn.
+          $proc = Start-Process -FilePath $exe -Wait -PassThru -ArgumentList @(
+            '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER',
+            "/DIR=$target"
+          )
+          if ($proc.ExitCode -ne 0) {
+            Write-Output "::error::GStreamer installer exit $($proc.ExitCode)"
+            exit 1
           }
-          Write-Host "Kích thước gst: $([math]::Round((Get-ChildItem $gst -Recurse | Measure-Object Length -Sum).Sum / 1MB, 1)) MB"
+          if (-not (Test-Path (Join-Path $target 'bin/gst-launch-1.0.exe'))) {
+            Write-Output "::error::Cài xong nhưng không thấy bin/gst-launch-1.0.exe trong $target"
+            exit 1
+          }
+          Write-Host "== cài xong vào $target"
+
+      - name: trim GStreamer to the 6 elements this app uses
+        shell: pwsh
+        run: |
+          $target = Join-Path $env:RUNNER_TEMP 'gstreamer'
+          $out = Join-Path $PWD 'app/target/release/gst'
+          pwsh -File scripts/trim-gstreamer.ps1 -Root $target -Out $out
+          if ($LASTEXITCODE -ne 0) {
+            Write-Output "::error::Thu gọn GStreamer thất bại (xem log bước này)"
+            exit 1
+          }
+
+      - name: smoke-run the trimmed bundle
+        shell: pwsh
+        run: |
+          # Chạy `gst-launch-1.0` **chỉ với** bộ đã thu gọn, trên pipeline thật
+          # nhưng thay capture bằng videotestsrc — runner không có desktop để
+          # capture, nhưng mọi plugin còn lại (videoconvert, jpegenc,
+          # multipartmux, fdsink) đều được chạm tới.
+          $gst = 'app/target/release/gst'
+          $env:GST_PLUGIN_SYSTEM_PATH_1_0 = Join-Path $PWD "$gst/lib/gstreamer-1.0"
+          $env:GST_PLUGIN_PATH_1_0 = ''
+          $out = Join-Path $env:RUNNER_TEMP 'frame.mjpg'
+          & "$PWD/$gst/bin/gst-launch-1.0.exe" -q videotestsrc num-buffers=3 '!' video/x-raw,framerate=15/1 '!' videoconvert '!' jpegenc quality=70 '!' multipartmux boundary=lanternframe '!' filesink location=$out
+          if ($LASTEXITCODE -ne 0) { Write-Output "::error::Bộ thu gọn không chạy được pipeline MJPEG"; exit 1 }
+          $bytes = (Get-Item $out).Length
+          if ($bytes -lt 200) { Write-Output "::error::Pipeline chạy nhưng chỉ ra $bytes byte"; exit 1 }
+          Write-Host "== pipeline MJPEG chạy được với bộ thu gọn ($bytes byte, 3 frame)"
 
       - uses: actions/upload-artifact@v4
         with:
