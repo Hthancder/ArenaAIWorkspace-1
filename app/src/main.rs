@@ -537,12 +537,15 @@ fn main() {
         // Đường "xem máy thật" phải tồn tại trong bản build này, không chỉ trong docs.
         assert!(stream::mjpeg_content_type().contains(stream::BOUNDARY));
         // Không còn GStreamer: đường capture phải nằm **trong** binary này.
+        //
+        // Gọi **đúng một lần**: mỗi lần gọi là một phiên DXGI thật, và lần thứ
+        // hai trong cùng process thường bị `E_ACCESSDENIED` (duplication chỉ cho
+        // một phiên) ⇒ `--check` báo đỏ trên máy có GPU, trong khi capture tốt.
         let (available, detail) = probe_live_status();
         println!("capture: available={available} — {detail}");
         // §58.8: in rõ vì sao nút "Xem máy thật" có thể bị xám — nếu không,
         // trên Linux/CI người đọc chỉ thấy "live route ready" và tưởng capture
-        // hỏng, trong khi thực tế là thiếu GStreamer.
-        let (available, detail) = probe_live_status();
+        // hỏng, trong khi thực tế không có desktop để capture.
         println!(
             "Lantern mock assets embedded; API routes ready; live MJPEG route ready (capture available: {available} — {detail})."
         );
