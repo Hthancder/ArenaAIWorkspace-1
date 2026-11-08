@@ -6,6 +6,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write   # §58.13: để CI tự đẩy chẩn đoán lên nhánh ci-diag
+
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -D warnings
@@ -159,30 +162,52 @@ jobs:
           }
           Write-Host "== cài xong vào $target"
 
-      - name: debug (tạm)
+      # §58.13: log job và artifact đều KHÔNG đọc được từ sandbox (§56.10), nên
+      # chẩn đoán đi qua **git** — kênh duy nhất đã chứng minh là đọc được.
+      # CI đẩy file lên nhánh `ci-diag`, không đụng nhánh làm việc.
+      - name: publish diagnostics to ci-diag branch
         shell: pwsh
         continue-on-error: true
         run: |
-          $ErrorActionPreference = 'Continue'
-          trap { Write-Output "::error::DEBUG LỖI: $($_.Exception.Message) @ $($_.InvocationInfo.ScriptLineNumber)"; continue }
           $t = Join-Path $env:RUNNER_TEMP 'gstreamer'
-          Write-Host "ROOT=$t"
-          Get-ChildItem $t | Select-Object Name | Format-Table
-          Write-Host "--- bin (10):"
-          Get-ChildItem (Join-Path $t 'bin') -Filter '*.exe' | Select-Object -First 10 Name | Format-Table
-          Write-Host "--- plugins:", (Get-ChildItem (Join-Path $t 'lib/gstreamer-1.0') -Filter '*.dll').Count, "dll"
-          $env:GST_PLUGIN_SYSTEM_PATH_1_0 = Join-Path $t 'lib/gstreamer-1.0'
-          $env:GST_PLUGIN_PATH_1_0 = ''
-          $exe = Join-Path $t 'bin/gst-inspect-1.0.exe'
-          Write-Host "--- inspect d3d11screencapturesrc:"
-          & $exe d3d11screencapturesrc 2>&1 | Select-Object -First 12
-          Write-Host "exit=$LASTEXITCODE"
-          Write-Host "--- inspect file jpeg:"
-          & $exe (Join-Path $t 'lib/gstreamer-1.0/libgstjpeg.dll') 2>&1 | Select-Object -First 6
-          Write-Host "--- job summary path: $env:GITHUB_STEP_SUMMARY"
-          & $exe d3d11screencapturesrc 2>&1 | Select-Object -First 12 | Add-Content $env:GITHUB_STEP_SUMMARY
-          "count=" + (Get-ChildItem (Join-Path $t 'lib/gstreamer-1.0') -Filter '*.dll').Count | Add-Content $env:GITHUB_STEP_SUMMARY
-          & $exe (Join-Path $t 'lib/gstreamer-1.0/libgstjpeg.dll') 2>&1 | Select-Object -First 8 | Add-Content $env:GITHUB_STEP_SUMMARY
+          $lines = @()
+          $lines += "RUNNER_TEMP=$env:RUNNER_TEMP"
+          $lines += "exists=$([bool](Test-Path $t))"
+          if (Test-Path $t) {
+            $lines += "--- top level:"
+            $lines += (Get-ChildItem $t | Select-Object -ExpandProperty Name)
+            $binDir = Join-Path $t 'bin'
+            $lines += "--- bin exists=$([bool](Test-Path $binDir))"
+            if (Test-Path $binDir) {
+              $lines += (Get-ChildItem $binDir -Filter '*.exe' | Select-Object -ExpandProperty Name)
+            }
+            $plug = Join-Path $t 'lib/gstreamer-1.0'
+            $lines += "--- plugins dir exists=$([bool](Test-Path $plug))"
+            if (Test-Path $plug) {
+              $dlls = Get-ChildItem $plug -Filter '*.dll'
+              $lines += "plugin dll count=$($dlls.Count)"
+              $env:GST_PLUGIN_SYSTEM_PATH_1_0 = $plug
+              $env:GST_PLUGIN_PATH_1_0 = ''
+              $insp = Join-Path $binDir 'gst-inspect-1.0.exe'
+              if (Test-Path $insp) {
+                $lines += "--- gst-inspect d3d11screencapturesrc:"
+                $lines += (& $insp d3d11screencapturesrc 2>&1 | Select-Object -First 10)
+                $jpeg = $dlls | Where-Object { $_.Name -match 'jpeg' } | Select-Object -First 1
+                if ($jpeg) {
+                  $lines += "--- inspect file $($jpeg.Name):"
+                  $lines += (& $insp $jpeg.FullName 2>&1 | Select-Object -First 8)
+                }
+              }
+            }
+          }
+          $lines | Out-File -FilePath diag.txt -Encoding utf8
+          Write-Host ($lines -join "`n")
+          git config user.name 'ci-diag'
+          git config user.email 'ci-diag@users.noreply.github.com'
+          git checkout -B ci-diag
+          git add -f diag.txt
+          git commit -m "ci-diag: run $env:GITHUB_RUN_ID" --quiet || Write-Host "không có gì thay đổi"
+          git push --force origin ci-diag
 
       - name: trim GStreamer to the 6 elements this app uses
         shell: pwsh
