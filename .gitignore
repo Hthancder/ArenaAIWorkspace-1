@@ -1,0 +1,24 @@
+# --- Bí mật: những thứ KHÔNG BAO GIỜ được commit (repo này là public) ---
+# App sẽ sinh ra config.json chứa argon2 hash + refresh token hash (§26.7).
+config.json
+config.*.json
+*.env
+.env*
+secrets/
+*.key
+*.pem
+*.pfx
+*.p12
+*.crt
+*.log
+*.bak
+
+# Hồ sơ máy thật: chứa hostname/IP/MAC — dán vào issue công khai là tự khai báo
+# cấu hình nhà mình. Giữ ở máy, không commit.
+report-*.json
+diagnostics-*.json
+
+# --- Build ---
+target/
+spike/target/
+**/node_modules/
