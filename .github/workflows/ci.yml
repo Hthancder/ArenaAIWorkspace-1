@@ -137,14 +137,28 @@ jobs:
           $url = "https://gstreamer.freedesktop.org/data/pkg/windows/$version/msvc/gstreamer-1.0-msvc-x86_64-$version.exe"
           $exe = Join-Path $env:RUNNER_TEMP 'gstreamer.exe'
           Write-Host "Tải $url"
-          try {
-            Invoke-WebRequest -Uri $url -OutFile $exe -UseBasicParsing
-          } catch {
-            # Log job không tải được từ sandbox (§56.10) ⇒ đẩy lỗi ra annotation.
-            Write-Output "::error::GStreamer download: $($_.Exception.Message)"
-            exit 1
+          # 517 MB: một lần đứt là hỏng cả job (đã xảy ra). Thử 3 lần, mỗi lần
+          # kiểm kích thước tối thiểu để phân biệt "tải xong" với "tải một nửa".
+          $attempt = 0
+          $ok = $false
+          while ($attempt -lt 3 -and -not $ok) {
+            $attempt++
+            try {
+              if (Test-Path $exe) { Remove-Item $exe -Force }
+              Invoke-WebRequest -Uri $url -OutFile $exe -UseBasicParsing -TimeoutSec 900
+              $mb = [math]::Round((Get-Item $exe).Length / 1MB, 1)
+              if ($mb -lt 400) { throw "chỉ tải được $mb MB (mong > 400)" }
+              $ok = $true
+              Write-Host "Đã tải $mb MB (lần $attempt)"
+            } catch {
+              Write-Output "::warning::GStreamer download lần ${attempt}: $($_.Exception.Message)"
+              if ($attempt -ge 3) {
+                Write-Output "::error::GStreamer download thất bại sau 3 lần: $($_.Exception.Message)"
+                exit 1
+              }
+              Start-Sleep -Seconds 10
+            }
           }
-          Write-Host "Đã tải $([math]::Round((Get-Item $exe).Length / 1MB, 1)) MB"
           $target = Join-Path $env:RUNNER_TEMP 'gstreamer'
           # Inno Setup: /VERYSILENT /SUPPRESSMSGBOXES /NORESTART. `/CURRENTUSER` để
           # không cần quyền admin trên runner, `/DIR` để không đụng chỗ cài chuẩn.
