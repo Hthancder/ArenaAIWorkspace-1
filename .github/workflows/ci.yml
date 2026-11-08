@@ -128,7 +128,14 @@ jobs:
           $url = "https://gstreamer.freedesktop.org/data/pkg/windows/$version/msvc/gstreamer-1.0-msvc-x86_64-$version.zip"
           $zip = Join-Path $env:RUNNER_TEMP 'gstreamer.zip'
           Write-Host "Tải $url"
-          Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+          try {
+            Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+          } catch {
+            # Log job không tải được từ sandbox (§56.10) ⇒ đẩy lỗi ra annotation,
+            # nếu không thì chỉ đọc được "exit code 1".
+            Write-Output "::error::GStreamer download: $($_.Exception.Message)"
+            exit 1
+          }
           $size = (Get-Item $zip).Length
           Write-Host "Đã tải $([math]::Round($size / 1MB, 1)) MB"
           $gst = 'app/target/release/gst'
