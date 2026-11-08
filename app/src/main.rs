@@ -820,10 +820,8 @@ mod tests {
                 live_metrics: LiveMetrics::default(),
                 input: input::InputSanitizer::default(),
             }));
-            for stream in listener.incoming().take(8) {
-                if let Ok(stream) = stream {
-                    handle(stream, Arc::clone(&state));
-                }
+            for stream in listener.incoming().take(8).flatten() {
+                handle(stream, Arc::clone(&state));
             }
         });
         (addr, handle)

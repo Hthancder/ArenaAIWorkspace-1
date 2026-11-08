@@ -33,10 +33,7 @@ struct RateLimiter {
 
 impl RateLimiter {
     fn check(&mut self, key: &'static str, max: u32, window_ms: u64, now_ms: u64) -> bool {
-        let times = match key {
-            "move" => &mut self.move_times,
-            _ => &mut self.ctrl_times,
-        };
+        let times = if key == "move" { &mut self.move_times } else { &mut self.ctrl_times };
         times.retain(|t| now_ms.saturating_sub(*t) < window_ms);
         if times.len() as u32 >= max {
             return false;
