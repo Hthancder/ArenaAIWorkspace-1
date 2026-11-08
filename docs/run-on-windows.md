@@ -162,7 +162,16 @@ bình thường".
 Đọc để không kỳ vọng sai:
 
 - ❌ **Không có tiếng** (chưa nối `wasapi2src`/Opus — §40, §55). `/api/sessions/{sid}/audio` trả `available:false` thay vì giả vờ.
-- ⚠️ **Điều khiển: nửa đường.** Server đã có (§44: `InputSanitizer` của spec + `SendInput`, 12 test, xác minh qua HTTP thật — kể cả chặn `Win+L` và auto-repeat). Nhưng **không có client JS nào gửi sự kiện**, nên nhìn từ trình duyệt thì vẫn chỉ xem được.
+- ⚠️ **Điều khiển: có đường, chưa tiện.** Đã có cả hai đầu:
+  - Server: §44 `InputSanitizer` + `SendInput`, `POST /{sid}/input` (JSON) và
+    `POST /{sid}/move` (**nhị phân 12 byte**, §8.3) — xác minh bằng curl, kể cả
+    chặn `Win+L`, auto-repeat, và gói `up` nhả đúng nút.
+  - Client: `web/input.js` gửi `pointermove/down/up`, wheel, keydown/up; gộp
+    move theo rAF latest-wins (§6.4.3); down/up gửi **ngay** (§6.4.7); giữ
+    pointer capture; `sendBeacon` khi đóng tab. 17 test `npm test`.
+  - **Còn thiếu**: trang `/live` phải **bấm vào khung** một lần để cắm; chưa có
+    pointer lock (§6.4.6, cần cho game); chưa có bàn phím ảo cho điện thoại
+    (§6.6); chưa có toggle "chỉ xem".
 - ❌ **Không phải WebRTC** (chưa có `webrtcbin`, SDP, ICE, DTLS — §37, §10.2)
 - ✅ **Có đăng nhập** (§41/§8.1): `POST /api/setup` → `/api/login` (401/409/423/429) → cookie `HttpOnly` → `/api/refresh` rotate + reuse-detection → `/api/logout` giết cả chuỗi. **Chưa có trang đăng nhập trong UI** — gọi bằng `curl` được, bấm trong trình duyệt thì chưa.
 - ❌ **Không click được cửa sổ** (chỉ xem cả màn hình; window picker vẫn là mock — §41.4 T1 có registry, chưa nối `EnumWindows`)

@@ -66,6 +66,97 @@ pub struct Outcome {
     pub rejected: Option<Reject>,
 }
 
+/// §8.3 message `move` — **12 byte nhị phân**, giải mã thành 0–2 [`Event`].
+///
+/// ```text
+/// |u16 nx|u16 ny|u8 type|u8 flags|i16 wheel|u16 pad|
+/// type:  1=move_abs  2=move_rel  3=down  4=up  5=wheel  6=touch_down 7=touch_up
+/// flags: bit0..4 = left,right,middle,back,forward; bit5..7 = ctrl,shift,alt
+/// ```
+///
+/// # Vì sao trả `Vec<Event>` chứ không một `Event`
+///
+/// Một gói mang **ba** thứ cùng lúc: vị trí, nút đang giữ, và wheel. Nếu chỉ
+/// trả một, phải chọn bỏ hai — và bỏ cái nào cũng thành bug:
+///
+/// * bỏ vị trí ⇒ click xảy ra ở toạ độ cũ (người dùng thấy "click lệch")
+/// * bỏ nút ⇒ không có cú click nào, hoặc nút kẹt
+/// * bỏ wheel ⇒ cuộn không chạy (đúng lỗi tôi vừa sửa ở `web/input.js`)
+///
+/// Trả `None` khi không đúng 12 byte hoặc `type` không thuộc 1–7: một gói dị
+/// dạng mà **đoán** thành `move_abs` sẽ làm con trỏ nhảy về (0,0).
+pub fn parse_move(bytes: &[u8]) -> Option<Vec<Event>> {
+    // **Spec tự mâu thuẫn**: §8.3 viết "binary 12 B" nhưng layout
+    // `|u16 nx|u16 ny|u8 type|u8 flags|i16 wheel|u16 pad|` cộng lại chỉ **10**
+    // byte (2+2+1+1+2+2). Không có cách đọc nào vừa đúng layout vừa đúng 12.
+    //
+    // Quyết định: **chấp nhận cả hai**. Layout là thứ quyết định vị trí byte
+    // (và đó là thứ client/server phải khớp); 2 byte dư ở cuối là `pad` mở
+    // rộng, bỏ qua. Như vậy:
+    //
+    //   * client theo đúng layout (10 B) chạy được,
+    //   * client theo con số "12 B" trong tiêu đề (10 + 2 pad) chạy được,
+    //   * và không bản nào phải đoán.
+    //
+    // Ghi lại ở đây thay vì im lặng chọn một bên: nếu sau này có client khác
+    // đọc spec, họ cần biết cả hai đều hợp lệ.
+    if bytes.len() != 10 && bytes.len() != 12 {
+        return None;
+    }
+    let nx = u16::from_le_bytes([bytes[0], bytes[1]]);
+    let ny = u16::from_le_bytes([bytes[2], bytes[3]]);
+    let kind = bytes[4];
+    let flags = bytes[5];
+    let wheel = i16::from_le_bytes([bytes[6], bytes[7]]);
+    // `bytes[8..10]` = pad; bỏ qua nhưng **không** từ chối nếu khác 0: một
+    // client tương lai có thể dùng nó, và ta không phụ thuộc vào nó.
+
+    let mut events = Vec::with_capacity(2);
+    match kind {
+        // §8.3: `move_abs` / `move_rel`. `move_rel` dùng `nx`/`ny` như `i16`
+        // (delta), đó là cách duy nhất nhét delta vào cùng khung 12 byte.
+        1 => events.push(Event::Move { nx, ny }),
+        2 => events.push(Event::MoveRel {
+            dx: nx as i16 as i32,
+            dy: ny as i16 as i32,
+        }),
+        3 | 4 => {
+            // Down/up: gói mang **toạ độ cuối cùng** (§8.3 `btn` ghi "kèm toạ
+            // độ cuối cùng đã gửi"), nên phải move trước rồi mới bấm — ngược
+            // lại là click ở chỗ cũ.
+            events.push(Event::Move { nx, ny });
+            // §6.4.1: mỗi cú bấm là **một** nút. Nếu `flags` có nhiều bit (đang
+            // giữ trái, vừa bấm thêm phải) thì bit nào vừa đổi là do
+            // `InputSanitizer` + trạng thái `buttons_held` quyết định; ở đây
+            // gửi nút có **thứ tự ưu tiên** cố định và để sanitizer kiểm.
+            let button = lowest_button_bit(flags)?;
+            events.push(Event::Button { down: kind == 3, button });
+        }
+        5 => {
+            events.push(Event::Move { nx, ny });
+            // §8.3: `wheel` dấu dương = lên, khớp `MOUSEEVENTF_WHEEL`.
+            events.push(Event::Wheel { vertical: true, delta: wheel as i32 });
+        }
+        // `touch_down`/`touch_up` (6/7): bản này chưa có touch (§6.6 cần
+        // pointer events + `INPUT` API của Windows). Trả `None` để **không
+        // giả vờ** — một touch giả thành click sẽ bấm nhầm chỗ.
+        _ => return None,
+    }
+    Some(events)
+}
+
+/// Bit nút **thấp nhất** đang bật, theo thứ tự §8.3 (bit0 = trái).
+///
+/// Trả `None` khi `flags` không có bit nút nào: gói down/up mà không nói nút
+/// nào là gói hỏng, không phải "nút trái".
+fn lowest_button_bit(flags: u8) -> Option<u8> {
+    let buttons = flags & 0b0001_1111;
+    if buttons == 0 {
+        return None;
+    }
+    Some(buttons.trailing_zeros() as u8)
+}
+
 /// Dựng [`Event`] từ JSON phẳng (`main::parse_flat_object`).
 ///
 /// Trả `None` khi thiếu trường bắt buộc. **Không** đoán: một `move` thiếu
@@ -364,4 +455,110 @@ pub fn watchdog(sanitizer: &mut InputSanitizer, now_ms: u64) -> Option<Vec<Actio
         actions.push(Action::Button { down: false, bit });
     }
     Some(actions)
+}
+
+// ---------- §8.3 message `move` 12 byte ----------
+
+    /// Dựng gói 12 byte đúng định dạng §8.3.
+    #[cfg(test)]
+    fn packet(nx: u16, ny: u16, kind: u8, flags: u8, wheel: i16) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(12);
+        bytes.extend_from_slice(&nx.to_le_bytes());
+        bytes.extend_from_slice(&ny.to_le_bytes());
+        bytes.push(kind);
+        bytes.push(flags);
+        bytes.extend_from_slice(&wheel.to_le_bytes());
+        bytes.extend_from_slice(&[0, 0]);
+        assert_eq!(bytes.len(), 10, "layout §8.3 cộng lại **10** byte, không phải 12");
+        bytes
+    }
+
+    #[test] fn a_wrong_length_is_refused_not_guessed() {
+        // Đoán một gói ngắn thành `move_abs` sẽ làm con trỏ nhảy về (0,0) —
+        // người dùng thấy chuột tự chạy.
+        assert!(parse_move(&[]).is_none());
+        assert!(parse_move(&[0u8; 9]).is_none());
+        assert!(parse_move(&[0u8; 11]).is_none(), "11 không phải layout lẫn tiêu đề");
+        assert!(parse_move(&[0u8; 13]).is_none());
+    }
+
+    #[test] fn both_readings_of_the_specs_move_size_are_accepted() {
+        // §8.3 ghi "12 B" nhưng layout cộng lại 10. Đây là mâu thuẫn của spec,
+        // không phải của client. Chấp nhận **cả hai** để bản nào theo spec
+        // cũng chạy — và ghi lại thay vì im lặng chọn một bên.
+        let ten = packet(100, 200, 1, 0, 0);
+        assert_eq!(ten.len(), 10);
+        let mut twelve = ten.clone();
+        twelve.extend_from_slice(&[0, 0]);
+        for bytes in [ten, twelve] {
+            let events = parse_move(&bytes).expect("cả 10 và 12 byte phải đọc được");
+            assert!(matches!(events[0], Event::Move { nx: 100, ny: 200 }));
+        }
+    }
+
+    #[test] fn move_abs_and_move_rel_use_the_same_fields_differently() {
+        let abs = parse_move(&packet(1000, 2000, 1, 0, 0)).unwrap();
+        assert_eq!(abs.len(), 1);
+        assert!(matches!(abs[0], Event::Move { nx: 1000, ny: 2000 }));
+
+        // `move_rel` đọc cùng 16 bit như **số có dấu** (§8.3 chỉ có 12 byte
+        // cho cả hai).
+        let rel = parse_move(&packet(0xFFFF, 0xFFFE, 2, 0, 0)).unwrap();
+        assert!(matches!(rel[0], Event::MoveRel { dx: -1, dy: -2 }), "{rel:?}");
+    }
+
+    #[test] fn a_click_moves_first_then_presses() {
+        // §8.3 `btn` ghi "kèm toạ độ cuối cùng đã gửi". Nếu bấm trước rồi
+        // move, cú click xảy ra ở toạ độ **cũ** — người dùng thấy click lệch,
+        // đây là lỗi kinh điển của remote desktop.
+        for (kind, down) in [(3u8, true), (4u8, false)] {
+            let events = parse_move(&packet(300, 400, kind, 0b0000_0001, 0)).unwrap();
+            assert_eq!(events.len(), 2, "move + button");
+            assert!(matches!(events[0], Event::Move { nx: 300, ny: 400 }), "move phải đứng trước");
+            assert!(matches!(events[1], Event::Button { down: d, button: 0 } if d == down), "{events:?}");
+        }
+    }
+
+    #[test] fn every_button_bit_of_the_spec_maps_to_its_index() {
+        // §8.3 bit0..4 = trái, phải, giữa, back, forward.
+        for bit in 0..5u8 {
+            let events = parse_move(&packet(0, 0, 3, 1 << bit, 0)).unwrap();
+            assert!(
+                matches!(events[1], Event::Button { down: true, button } if button == bit),
+                "bit {bit} ⇒ button {bit}: {events:?}"
+            );
+        }
+    }
+
+    #[test] fn a_button_packet_with_no_button_bit_is_refused() {
+        // Gói down mà không nói nút nào là gói hỏng. Mặc định "nút trái" nghĩa
+        // là một gói mạng hỏng thành một cú click thật.
+        assert!(parse_move(&packet(0, 0, 3, 0, 0)).is_none());
+        assert!(parse_move(&packet(0, 0, 4, 0b1110_0000, 0)).is_none(), "chỉ có bit phím bổ trợ");
+    }
+
+    #[test] fn a_wheel_packet_carries_move_and_signed_delta() {
+        let events = parse_move(&packet(500, 600, 5, 0, -120)).unwrap();
+        assert_eq!(events.len(), 2);
+        assert!(matches!(events[0], Event::Move { nx: 500, ny: 600 }));
+        assert!(matches!(events[1], Event::Wheel { vertical: true, delta: -120 }), "{events:?}");
+        // Dương = cuộn lên (cùng chiều `MOUSEEVENTF_WHEEL`).
+        let up = parse_move(&packet(0, 0, 5, 0, 120)).unwrap();
+        assert!(matches!(up[1], Event::Wheel { delta: 120, .. }));
+    }
+
+    #[test] fn touch_and_unknown_types_are_refused_rather_than_faked() {
+        // §6.6 (touch) chưa làm. Một touch giả thành click là bấm nhầm chỗ.
+        for kind in [0u8, 6, 7, 8, 255] {
+            assert!(parse_move(&packet(0, 0, kind, 0b1, 0)).is_none(), "type {kind} phải bị từ chối");
+        }
+    }
+
+    #[test] fn out_of_range_coordinates_are_clamped_by_the_sanitizer_not_here() {
+        // Parser **không** clamp: nó chỉ giải mã. Việc clamp là của
+        // `InputSanitizer` (§44.2), một chỗ duy nhất — nếu parser cũng clamp
+        // thì có hai bản luật và chúng sẽ lệch.
+        let events = parse_move(&packet(65535, 65535, 1, 0, 0)).unwrap();
+        assert!(matches!(events[0], Event::Move { nx: 65535, ny: 65535 }));
+
 }

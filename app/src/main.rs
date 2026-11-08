@@ -20,6 +20,10 @@ use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const INDEX: &str = include_str!("../../web/index.html");
+/// §6.4/§6.5 — client gửi sự kiện. Tách file để test được (xem `web/input.test.js`).
+const INPUT_JS: &str = include_str!("../../web/input.js");
+/// §6.4/§6.5 — cắm `input.js` vào trang `/live`.
+const LIVE_JS: &str = include_str!("../../web/live.js");
 const CSS: &str = include_str!("../../web/styles.css");
 const JS: &str = include_str!("../../web/app.js");
 const SETTINGS_DEFAULTS: &[(&str, &str)] = &[
@@ -552,7 +556,7 @@ fn json_response(stream: &mut TcpStream, status: u16, body: String) { response(s
 ///
 /// Tên header được **hạ về chữ thường** để `cookie_value` không phải quan tâm
 /// client viết `Cookie` hay `cookie`.
-fn read_request(stream: &mut TcpStream) -> Option<(String, String, BTreeMap<String, String>, String)> {
+fn read_request(stream: &mut TcpStream) -> Option<(String, String, BTreeMap<String, String>, Vec<u8>)> {
     stream.set_read_timeout(Some(std::time::Duration::from_secs(3))).ok()?;
     let mut bytes = Vec::new(); let mut chunk = [0u8; 2048]; let header_end;
     loop {
@@ -574,10 +578,18 @@ fn read_request(stream: &mut TcpStream) -> Option<(String, String, BTreeMap<Stri
         // Header trùng tên: giữ cái đầu, đúng như HTTP cho phép gộp.
         headers.entry(name).or_insert(value);
     }
-    if length > 8192 { return Some((method, path, headers, "__BODY_TOO_LARGE__".into())); }
+    if length > 8192 { return Some((method, path, headers, b"__BODY_TOO_LARGE__".to_vec())); }
     while bytes.len() < header_end + length { let n = stream.read(&mut chunk).ok()?; if n == 0 { return None; } bytes.extend_from_slice(&chunk[..n]); }
-    let body = String::from_utf8(bytes[header_end..header_end+length].to_vec()).ok()?;
-    Some((method, path, headers, body))
+    // §8.3 message `move` là **12 byte nhị phân** — không phải UTF-8. Bản
+    // trước dùng `String::from_utf8(..).ok()?`, nên bất kỳ body nào có byte
+    // không hợp lệ UTF-8 làm cả request biến mất (trả `None` ⇒ không response).
+    // Đó là lý do §8.3 "không chạy" dù server có `SendInput`: frame `move` đầu
+    // tiên có `nx=0..255` ở byte 0 và một toạ độ ngẫu nhiên ở byte 1 — xác
+    // suất gặp byte >0x7F là rất cao.
+    //
+    // Giờ body nhị phân được giữ nguyên; nơi gọi tự quyết decode thành chuỗi
+    // (route JSON) hay đọc thẳng (route `/move` của §8.3).
+    Some((method, path, headers, bytes[header_end..header_end + length].to_vec()))
 }
 fn now_seconds() -> u64 { SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0) }
 #[derive(Clone)]
@@ -951,12 +963,25 @@ fn stream_live(
 }
 
 fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
-    let Some((method,path,req_headers,body)) = read_request(&mut stream) else { return; };
-    if body == "__BODY_TOO_LARGE__" { return json_response(&mut stream, 413, "{\"error\":\"body_too_large\"}".into()); }
+    let Some((method, path, req_headers, body_bytes)) = read_request(&mut stream) else { return; };
+    if body_bytes == b"__BODY_TOO_LARGE__" {
+        return json_response(&mut stream, 413, "{\"error\":\"body_too_large\"}".into());
+    }
+    // Body JSON: đọc best-effort. Route nhị phân (`/move` của §8.3) dùng
+    // `body_bytes` trực tiếp và **không** đụng `body`.
+    let body = String::from_utf8(body_bytes.clone()).unwrap_or_default();
     let route = path.split('?').next().unwrap_or("/");
     if method == "GET" && route == "/" { return response(&mut stream, 200, "text/html; charset=utf-8", INDEX.as_bytes()); }
     if method == "GET" && route == "/styles.css" { return response(&mut stream, 200, "text/css; charset=utf-8", CSS.as_bytes()); }
     if method == "GET" && route == "/app.js" { return response(&mut stream, 200, "text/javascript; charset=utf-8", JS.as_bytes()); }
+    // §6.4/§6.5: bộ điều khiển chuột/bàn phím của client. Một file riêng (không
+    // nhúng vào `live_page`) để `npm test` chạy được từng luật spec — throttle
+    // latest-wins, down/up không gộp, `sendBeacon` lúc unload.
+    if method == "GET" && route == "/input.js" { return response(&mut stream, 200, "text/javascript; charset=utf-8", INPUT_JS.as_bytes()); }
+    // Trang `/live` cần script **file riêng**: CSP `default-src 'self'` chặn
+    // inline script (§41.4 T5), nên nhúng JS vào HTML thì trang tải được mà
+    // không có dòng nào chạy — lỗi im lặng.
+    if method == "GET" && route == "/live.js" { return response(&mut stream, 200, "text/javascript; charset=utf-8", LIVE_JS.as_bytes()); }
     if method == "GET" && route == "/api/diagnostics" { return json_response(&mut stream, 200, run_diagnostics()); }
     // Nhìn thấy màn hình thật trong trình duyệt, không cần WebRTC (§58).
     // `GET /live` là trang tối giản cho điện thoại; `GET /api/live.mjpg` là stream.
@@ -1102,6 +1127,46 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
                 outcome.actions.len(), sent, refused, sankeys, sanbuttons, dropped, floods, releases, odd))
         }
         // ══════════════════════════════════════════════════════════════════
+        // ══════════════════════════════════════════════════════════════════
+        // §8.3 **message `move` nhị phân 12 byte** — đường đi chuột thật của
+        // Tier 1. `|u16 nx|u16 ny|u8 type|u8 flags|i16 wheel|u16 pad|`
+        //
+        // Đây là route duy nhất nhận body **không** phải JSON, và đó là lý do
+        // `read_request` phải giữ `body_bytes` (bug #17: bản trước decode cả
+        // body thành `String`, body nhị phân làm request biến mất).
+        //
+        // Luật vẫn là của spec: `InputSanitizer` clamp `nx,ny ∈ [0,65535]`,
+        // `wheel ∈ [-2400,2400]`, và từ chối khi vượt 120/s (§8.3).
+        ("POST", p) if p.starts_with("/api/sessions/") && p.ends_with("/move") => {
+            let sid = p.trim_start_matches("/api/sessions/").trim_end_matches("/move");
+            if s.session.as_ref().map(|session| session.id.as_str()) != Some(sid) {
+                return json_response(&mut stream, 404, "{\"error\":\"session_not_found\"}".into());
+            }
+            if deny_if_unauthorised(&mut stream, &s, &req_headers, Some("local")).is_none() { return; }
+            match input::parse_move(&body_bytes) {
+                Some(events) => {
+                    // Một gói `move` mang vị trí + nút + wheel (§8.3). Áp **lần
+                    // lượt** qua cùng `handle` để mọi luật (clamp, rate limit,
+                    // `MAX_KEYS_HELD`) chạy cho từng phần — không có đường tắt
+                    // nào cho gói nhị phân.
+                    let now = now_ms() as u64;
+                    let mut sent = 0usize;
+                    let mut refused = "null".to_string();
+                    for event in events {
+                        let outcome = input::handle(&mut s.input, event, now, true);
+                        sent += input::inject(&outcome.actions) as usize;
+                        if let Some(reject) = outcome.rejected {
+                            refused = json_quote(reject.code());
+                        }
+                    }
+                    // 12 byte mỗi frame ⇒ body response phải **nhỏ**. Trả đủ
+                    // số đo cho UI nhưng không thêm gì thừa.
+                    return json_response(&mut stream, 200, format!(
+                        "{{\"ok\":true,\"sent\":{},\"refused\":{}}}", sent, refused));
+                }
+                None => return json_response(&mut stream, 422, "{\"error\":\"invalid_move\"}".into()),
+            }
+        }
         // ══════════════════════════════════════════════════════════════════
         // §6.9 — đổi nguồn capture **giữa phiên**. Điểm của cả mục này: KHÔNG
         // đóng phiên, KHÔNG mất peer/DTLS. v2.1 làm ngược lại (5–8 s màn hình
@@ -1573,6 +1638,21 @@ mod tests {
         http_with(addr, method, path, body, &[])
     }
 
+    /// Như [`http`] nhưng gửi **body nhị phân** — cần cho §8.3.
+    fn http_bytes(addr: std::net::SocketAddr, method: &str, path: &str, body: &[u8]) -> String {
+        use std::io::Write;
+        let mut stream = TcpStream::connect(addr).expect("connect");
+        let head = format!(
+            "{method} {path} HTTP/1.1\r\nHost: test\r\nContent-Type: application/octet-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            body.len()
+        );
+        stream.write_all(head.as_bytes()).expect("write head");
+        stream.write_all(body).expect("write body");
+        let mut out = String::new();
+        let _ = stream.read_to_string(&mut out);
+        out
+    }
+
     /// Như [`http`] nhưng gửi thêm header — cần cho `Cookie`, vì refresh token
     /// (§41.6) chỉ đi bằng cookie chứ không nằm trong body.
     fn http_with(
@@ -1672,6 +1752,60 @@ mod tests {
             &[("Cookie", &format!("lantern_refresh={second}"))]);
         assert!(after.starts_with("HTTP/1.1 401"), "family đã bị thu hồi: {after}");
 
+        drop(server);
+    }
+
+    /// §8.3 **message `move` 12 byte nhị phân**, qua socket thật.
+    ///
+    /// # Bug #17 mà test này tồn tại để bắt
+    ///
+    /// `read_request` từng làm `String::from_utf8(body).ok()?` — body nhị phân
+    /// **không** hợp lệ UTF-8 (gần như chắc chắn: byte 0 là nửa thấp của `nx`,
+    /// byte 1 là nửa cao) làm cả request biến mất, không response nào. Đó là lý
+    /// do §8.3 "không chạy" dù server đã có `SendInput`.
+    ///
+    /// `sent` là **0** trên Linux (stub của `inject`); trên Windows nó là số
+    /// sự kiện `SendInput` thật. Test này khoá phần **giải mã + quyền**, không
+    /// khoá phần Windows.
+    #[test] fn a_binary_move_packet_survives_the_http_layer() {
+        let (addr, server) = spawn_server();
+        let created = http(addr, "POST", "/api/sessions", r#"{"mode":"vnc","windowId":"desktop"}"#);
+        let sid = created.split("\"id\":\"").nth(1).and_then(|r| r.split('"').next())
+            .expect("sid").to_string();
+
+        // §8.3: 10 byte layout + 2 pad (xem `input::parse_move` về mâu thuẫn
+        // "12 B" vs layout 10 B trong spec).
+        let packet = |nx: u16, ny: u16, kind: u8, flags: u8, wheel: i16| {
+            let mut bytes = Vec::new();
+            bytes.extend_from_slice(&nx.to_le_bytes());
+            bytes.extend_from_slice(&ny.to_le_bytes());
+            bytes.push(kind);
+            bytes.push(flags);
+            bytes.extend_from_slice(&wheel.to_le_bytes());
+            bytes.extend_from_slice(&[0, 0, 0, 0]);
+            bytes
+        };
+
+        let path = format!("/api/sessions/{sid}/move");
+        // Byte 0xFF ở đây là byte **không hợp lệ UTF-8** đứng một mình — đúng
+        // thứ làm body hỏng nếu server decode cả body thành `String`.
+        let moved = http_bytes(addr, "POST", &path, &packet(0xFF, 0x00FF, 1, 0, 0));
+        assert!(moved.starts_with("HTTP/1.1 200"), "move nhị phân phải qua được: {moved}");
+        assert!(moved.contains(r#""ok":true"#), "{moved}");
+
+        // Cả chuỗi click: down rồi up, mỗi gói nêu **nút của nó** (§8.3).
+        for kind in [3u8, 4u8] {
+            let out = http_bytes(addr, "POST", &path, &packet(1000, 1000, kind, 1, 0));
+            assert!(out.starts_with("HTTP/1.1 200"), "kind {kind}: {out}");
+        }
+
+        // Gói hỏng phải là 422 cụ thể, không im lặng bỏ qua và không 500.
+        assert!(http_bytes(addr, "POST", &path, &packet(1, 1, 6, 1, 0)).starts_with("HTTP/1.1 422"),
+            "touch chưa có ⇒ 422");
+        assert!(http_bytes(addr, "POST", &path, &[0u8; 11]).starts_with("HTTP/1.1 422"),
+            "11 byte ⇒ 422");
+        assert!(http_bytes(addr, "POST", &path, &packet(1, 1, 3, 0, 0)).starts_with("HTTP/1.1 422"),
+            "down không nêu nút ⇒ 422");
         drop(server);
     }
 

@@ -93,12 +93,6 @@ impl Pins {
         Self { path, items }
     }
 
-    /// Chỉ để test: đường dẫn file.
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-
     /// Chỉ test dùng: `GET /api/pins` đi qua [`Pins::json`] để một chỗ duy nhất
     /// quyết định hình dạng JSON.
     #[cfg_attr(not(test), allow(dead_code))]

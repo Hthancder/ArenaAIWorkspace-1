@@ -5,6 +5,6 @@
   "description": "Runnable local mock for browser remote desktop flows",
   "scripts": {
     "mock": "node mock-server/server.js",
-    "test": "node --test mock-server/server.test.js"
+    "test": "node --test mock-server/server.test.js web/input.test.js"
   }
 }

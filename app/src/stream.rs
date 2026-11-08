@@ -94,12 +94,15 @@ pub fn live_page(monitor: u8, fps: u8) -> String {
 <title>Lantern · màn hình trực tiếp</title>
 <style>
 html,body{{margin:0;height:100%;background:#000;overflow:hidden}}
-img{{width:100%;height:100%;object-fit:contain;display:block}}
+img{{width:100%;height:100%;object-fit:contain;display:block;touch-action:none}}
 p{{position:fixed;left:8px;bottom:6px;margin:0;font:11px/1.4 system-ui,sans-serif;color:#9fb3a8;opacity:.75}}
+#hint{{position:fixed;right:8px;bottom:6px;margin:0;font:11px/1.4 system-ui,sans-serif;color:#9fb3a8;opacity:.75}}
 </style></head>
 <body>
-<img src="/api/live.mjpg?monitor={monitor}&amp;fps={fps}" alt="Màn hình trực tiếp">
-<p>monitor {monitor} · {fps} fps · MJPEG (chưa có âm thanh/điều khiển)</p>
+<img id="screen" src="/api/live.mjpg?monitor={monitor}&amp;fps={fps}" alt="Màn hình trực tiếp" tabindex="0">
+<p>monitor {monitor} · {fps} fps · MJPEG · chưa có âm thanh</p>
+<p id="hint">bấm vào khung để điều khiển</p>
+<script type="module" src="/live.js"></script>
 </body></html>"#
     )
 }
@@ -163,7 +166,26 @@ mod tests {
         // Chỉ hai số đã clamp vào HTML ⇒ không có đường chèn markup (§41.4 T5).
         let page = live_page(9, 255);
         assert!(page.contains("monitor=8&amp;fps=30"), "phải clamp trước khi in");
-        assert!(!page.contains("<script"));
         assert!(!page.contains("monitor=9"));
+    }
+
+    #[test]
+    fn the_live_page_has_no_inline_script() {
+        // §41.4 T5: CSP `default-src 'self'` **chặn** inline script. Nhúng JS
+        // vào HTML nghĩa là trang hiện khung hình mà **không có dòng nào
+        // chạy** — lỗi im lặng tệ nhất, vì bấm vào không có gì xảy ra và
+        // không có lỗi nào trong console lẫn server.
+        //
+        // Test cũ khẳng định `!page.contains("<script")` vì lúc đó trang chưa
+        // có script. Giờ có, nhưng phải là `src=` — và chính ràng buộc đó mới
+        // là thứ cần khoá, không phải "không có thẻ script".
+        let page = live_page(0, 15);
+        assert!(!page.contains("<script>"), "không được có script inline");
+        assert!(!page.contains("<script type=\"module\">"), "không được có script inline");
+        assert!(page.contains(r#"<script type="module" src="/live.js">"#), "phải nạp qua src");
+        // Và id mà `live.js` tìm phải có thật, nếu không `getElementById` trả
+        // `null` và cả bộ điều khiển im lặng không cắm.
+        assert!(page.contains(r#"id="screen""#), "live.js cần #screen");
+        assert!(page.contains(r#"id="hint""#), "live.js cần #hint");
     }
 }
