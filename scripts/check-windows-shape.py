@@ -26,14 +26,37 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = pathlib.Path(tmp)
         shutil.copytree(ROOT / "app", tmp_path / "app", dirs_exist_ok=True)
+        # `app` có path dependency `../spike` (dùng lại thư viện luật của spec
+        # thay vì chép — §57.1). Chỉ copy `app` thì cargo không resolve được
+        # `rd-spike` và script báo "không biên dịch sạch" trong khi code sạch:
+        # đó là script sai, không phải code sai.
+        shutil.copytree(
+            ROOT / "spike",
+            tmp_path / "spike",
+            dirs_exist_ok=True,
+            ignore=shutil.ignore_patterns("target"),
+        )
         shutil.copytree(WEB, tmp_path / "web", dirs_exist_ok=True)
         for path in (tmp_path / "app" / "src").glob("*.rs"):
             text = path.read_text()
+            # Giữ `#[cfg(unix)]` nguyên: bỏ nó đi thì hai hàm `os_random`
+            # (unix + windows) cùng tồn tại và báo E0428 — script tự tạo ra
+            # lỗi của chính nó. Chỉ bỏ `#[cfg(windows)]`, phần còn lại vẫn
+            # được biên dịch đúng một lần.
+            # Nhánh unix phải **tắt**, không phải giữ: trên Linux `cfg(unix)`
+            # đúng, nên giữ lại thì `os_random` được định nghĩa hai lần (unix
+            # + windows) và script tự tạo ra E0428. Script này mô phỏng *hình
+            # dạng* code Windows, nên chỉ nhánh Windows được sống.
+            text = re.sub(r"#\[cfg\(unix\)\]", "#[cfg(any())]", text)
             text = text.replace("#[cfg(windows)]", "")
             text = re.sub(r"#\[cfg\(not\(windows\)\)\]", "#[cfg(any())]", text)
             text = text.replace("#![cfg_attr(not(windows), allow(dead_code))]", "")
-            text = text.replace('#[link(name = "kernel32")]', "")
-            text = text.replace('#[link(name="kernel32")]', "")
+            # Mọi `#[link(name = ...)]` đều phải bỏ: trên Linux không có
+            # `kernel32`/`advapi32`, và mục đích của script này là kiểm **hình
+            # dạng** code Windows (dead_code, unused_mut), không phải link.
+            # Bản đầu chỉ xoá `kernel32` nên `advapi32` (thêm cùng `RealEntropy`
+            # trong `auth_wire.rs`) làm script báo đỏ trong khi code đúng.
+            text = re.sub(r'#\[link\(\s*name\s*=\s*"[^"]+"\s*\)\]', "", text)
             path.write_text(text)
         result = subprocess.run(
             ["cargo", "check", "--offline", "--all-targets"],

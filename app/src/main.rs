@@ -1,3 +1,5 @@
+mod auth_wire;
+mod guard;
 mod capture;
 #[allow(dead_code)] // dùng trong nhánh #[cfg(windows)] của stream_live
 mod history;
@@ -71,7 +73,7 @@ fn now_ms() -> u128 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)
 }
 
-struct State { settings: BTreeMap<String, String>, session: Option<Session>, next_id: u64, data_dir: PathBuf, live_status: Option<(bool, String)>, live_metrics: LiveMetrics, input: input::InputSanitizer, history: history::History }
+struct State { settings: BTreeMap<String, String>, session: Option<Session>, next_id: u64, data_dir: PathBuf, live_status: Option<(bool, String)>, live_metrics: LiveMetrics, input: input::InputSanitizer, history: history::History, auth: auth_wire::AuthState, policy: guard::Policy }
 
 fn json_quote(value: &str) -> String {
     let mut out = String::from("\"");
@@ -215,15 +217,89 @@ fn session_json(s: &Session) -> String {
 /// và bấm hộ nút "điều khiển" (clickjacking). Mock cũng phải giữ đúng, vì sản
 /// phẩm thật sẽ bám theo mock.
 fn response_head(status: u16, content_type: &str, content_length: usize) -> String {
-    let reason = match status { 200 => "OK", 201 => "Created", 400 => "Bad Request", 404 => "Not Found", 405 => "Method Not Allowed", 409 => "Conflict", 413 => "Payload Too Large", 422 => "Unprocessable Entity", _ => "Internal Server Error" };
+    // Mã nào không có ở đây sẽ rơi vào "Internal Server Error" — và một `401`
+    // in ra "Internal Server Error" là bug thật, không phải chuyện hình thức:
+    // người đọc log tưởng server hỏng trong khi thực tế là token bị từ chối,
+    // và client dựa vào dòng status để phân loại lỗi.
+    let reason = match status {
+        200 => "OK", 201 => "Created", 204 => "No Content",
+        400 => "Bad Request", 401 => "Unauthorized", 403 => "Forbidden", 404 => "Not Found",
+        405 => "Method Not Allowed", 409 => "Conflict", 412 => "Precondition Failed",
+        413 => "Payload Too Large", 422 => "Unprocessable Entity", 423 => "Locked",
+        429 => "Too Many Requests",
+        _ => "Internal Server Error",
+    };
     format!("HTTP/1.1 {status} {reason}\r\nContent-Type: {content_type}\r\nContent-Length: {content_length}\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nX-Frame-Options: DENY\r\nContent-Security-Policy: default-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'\r\nReferrer-Policy: no-referrer\r\nConnection: close\r\n\r\n")
 }
 fn response(stream: &mut TcpStream, status: u16, content_type: &str, body: &[u8]) {
     let head = response_head(status, content_type, body.len());
     let _ = stream.write_all(head.as_bytes()); let _ = stream.write_all(body); let _ = stream.flush();
 }
+/// Như [`response`] nhưng thêm header — cần cho `Set-Cookie` (§41.6: refresh
+/// token chỉ được đi bằng cookie `HttpOnly`, không vào body).
+///
+/// Dựng trên [`response_head`] thay vì tự ghép chuỗi: header bảo mật
+/// (`nosniff`, `X-Frame-Options`, CSP) đã có ở đó, và một bản sao là một chỗ
+/// nữa để quên cập nhật.
+fn json_response_with_headers(
+    stream: &mut TcpStream,
+    status: u16,
+    body: &str,
+    extra: &[(&str, String)],
+) {
+    let head = response_head(status, "application/json; charset=utf-8", body.len());
+    // Chèn trước dòng trống cuối cùng của head.
+    let mut head = head.trim_end_matches("\r\n\r\n").to_string();
+    for (name, value) in extra {
+        head.push_str(&format!("\r\n{name}: {value}"));
+    }
+    head.push_str("\r\n\r\n");
+    let _ = stream.write_all(head.as_bytes());
+    let _ = stream.write_all(body.as_bytes());
+    let _ = stream.flush();
+}
+/// Chạy cổng quyền cho một mutation. `None` = được đi tiếp; `Some(_)` = đã
+/// trả response và route phải dừng.
+///
+/// Viết thành hàm để **mọi** route gọi cùng một câu, thay vì mỗi route tự
+/// nhớ. `sid_owner` là `None` cho route không gắn phiên.
+fn deny_if_unauthorised(
+    stream: &mut TcpStream,
+    state: &State,
+    headers: &BTreeMap<String, String>,
+    sid_owner: Option<&str>,
+) -> Option<Option<String>> {
+    match guard::require_token(
+        state.policy,
+        headers,
+        state.auth.auth.as_ref(),
+        sid_owner,
+        now_ms() as u64,
+    ) {
+        // Trả `sub` cho nơi gọi: §41.4 T3 cần biết **ai** đang gọi, không chỉ
+        // "được phép". Bỏ `sub` đi là mở lại đúng lỗ hổng đó.
+        guard::Verdict::Allowed(claims) => Some(claims.map(|c| c.sub)),
+        guard::Verdict::Denied { status, code } => {
+            json_response(stream, status, format!("{{\"error\":{}}}", json_quote(code)));
+            None
+        }
+    }
+}
+
 fn json_response(stream: &mut TcpStream, status: u16, body: String) { response(stream, status, "application/json; charset=utf-8", body.as_bytes()); }
-fn read_request(stream: &mut TcpStream) -> Option<(String, String, String)> {
+/// Đọc một request HTTP/1.1: `(method, path, headers, body)`.
+///
+/// # Vì sao trả `headers`
+///
+/// Bản trước chỉ trả `(method, path, body)` và **vứt** header sau khi dùng
+/// `Content-Length`. Hệ quả: không route nào đọc được `Cookie`, nên refresh
+/// token (§41.6 — nằm trong cookie `HttpOnly`, **không** trong body) không có
+/// đường nào tới server. §8.1 `/api/refresh` không thể chạy nếu header bị vứt
+/// ở tầng đọc.
+///
+/// Tên header được **hạ về chữ thường** để `cookie_value` không phải quan tâm
+/// client viết `Cookie` hay `cookie`.
+fn read_request(stream: &mut TcpStream) -> Option<(String, String, BTreeMap<String, String>, String)> {
     stream.set_read_timeout(Some(std::time::Duration::from_secs(3))).ok()?;
     let mut bytes = Vec::new(); let mut chunk = [0u8; 2048]; let header_end;
     loop {
@@ -236,11 +312,19 @@ fn read_request(stream: &mut TcpStream) -> Option<(String, String, String)> {
     let mut lines = header.split("\r\n"); let mut request = lines.next()?.split_whitespace();
     let method = request.next()?.to_string(); let path = request.next()?.to_string();
     let mut length = 0usize;
-    for line in lines { if let Some((name,value)) = line.split_once(':') { if name.eq_ignore_ascii_case("content-length") { length = value.trim().parse().ok()?; } } }
-    if length > 8192 { return Some((method, path, "__BODY_TOO_LARGE__".into())); }
+    let mut headers = BTreeMap::new();
+    for line in lines {
+        let Some((name, value)) = line.split_once(':') else { continue };
+        let name = name.trim().to_ascii_lowercase();
+        let value = value.trim().to_string();
+        if name == "content-length" { length = value.parse().ok()?; }
+        // Header trùng tên: giữ cái đầu, đúng như HTTP cho phép gộp.
+        headers.entry(name).or_insert(value);
+    }
+    if length > 8192 { return Some((method, path, headers, "__BODY_TOO_LARGE__".into())); }
     while bytes.len() < header_end + length { let n = stream.read(&mut chunk).ok()?; if n == 0 { return None; } bytes.extend_from_slice(&chunk[..n]); }
     let body = String::from_utf8(bytes[header_end..header_end+length].to_vec()).ok()?;
-    Some((method, path, body))
+    Some((method, path, headers, body))
 }
 fn now_seconds() -> u64 { SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0) }
 #[derive(Clone)]
@@ -345,32 +429,43 @@ fn capture_probe(body: &str) -> (u16, String) {
 /// Kiểm tra **một lần** xem đường live có chạy được không: có `gst-launch-1.0`
 /// trong PATH và có plugin `d3d11screencapturesrc`. Trả về `(available, detail)`
 /// với `detail` là câu **người dùng đọc được**, không phải mã lỗi.
-/// Có được bind ra ngoài loopback không? **Chưa** — binary này không có TLS và
-/// chưa có đăng nhập, nên bind LAN nghĩa là ai trong cùng Wi-Fi cũng xem được
-/// màn hình của bạn (§54.5 #1, §41.5 D4).
+/// Có được bind ra ngoài loopback không?
 ///
-/// Hàm này tồn tại vì tài liệu **từng nói** app "từ chối" `HOST=0.0.0.0` trong
-/// khi code không kiểm tra gì — đó là kiểu sai tệ nhất: tuyên bố an toàn mà
-/// không có gì bảo vệ. Giờ lời hứa và code là một.
+/// Luật là của **spec**: `security::gate::Transport::for_bind` (§41.5 D4,
+/// §54.5 #1 — "không có biến thể tắt"). Bản đầu của hàm này tự viết lại luật
+/// đó với danh sách loopback riêng, và doc của nó nói "chưa có đăng nhập" —
+/// câu vừa trở thành sai khi `/api/login` có thật.
 ///
 /// Trả `(được_bind, lý_do)`.
 fn allowed_bind_host(requested: &str) -> (String, Option<String>) {
-    // `LANTERN_ALLOW_LAN=1` chỉ để tự kiểm trên máy mình, có cảnh báo rõ ràng.
-    let forced = env::var("LANTERN_ALLOW_LAN").map(|value| value == "1").unwrap_or(false);
     let loopback_only = ["127.0.0.1", "localhost", "::1"].contains(&requested);
     if loopback_only {
         // Bind `127.0.0.1` thay vì để OS quyết: "localhost" có thể ra ::1 rồi
         // trình duyệt lại gõ 127.0.0.1 và không vào được.
         return ("127.0.0.1".to_string(), None);
     }
+    // Hỏi spec trước. `has_cert = false`: bản này chưa có TLS, nên spec sẽ từ
+    // chối mọi địa chỉ không-loopback — đó là điều ta muốn.
+    let spec_allows = auth_wire::bind_is_allowed(requested, false).is_ok();
+    let forced = env::var("LANTERN_ALLOW_LAN").map(|value| value == "1").unwrap_or(false);
     if forced {
         // Cờ ghi đè phải **thật sự** ghi đè, nếu không nó chỉ là lời nói suông.
+        if !spec_allows {
+            eprintln!(
+                "CẢNH BÁO: bind {requested} không có TLS — chỉ vì LANTERN_ALLOW_LAN=1. \
+                 Nội dung màn hình và điều khiển chuột/bàn phím đi qua mạng dạng rõ (§41.4 T4)."
+            );
+        }
+        return (requested.to_string(), None);
+    }
+    if spec_allows {
         return (requested.to_string(), None);
     }
     (
         "127.0.0.1".to_string(),
         Some(format!(
-            "Từ chối bind {requested}: bản này chưa có TLS và chưa có đăng nhập. Đang bind 127.0.0.1 thay thế. Muốn tự chịu rủi ro trên LAN: đặt LANTERN_ALLOW_LAN=1 (không khuyến khích)."
+            "Từ chối bind {requested}: chưa có TLS (§54.5 #1). Đang bind 127.0.0.1 thay thế. \
+             Muốn tự chịu rủi ro trên LAN: đặt LANTERN_ALLOW_LAN=1 (không khuyến khích)."
         )),
     )
 }
@@ -603,7 +698,7 @@ fn stream_live(
 }
 
 fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
-    let Some((method,path,body)) = read_request(&mut stream) else { return; };
+    let Some((method,path,req_headers,body)) = read_request(&mut stream) else { return; };
     if body == "__BODY_TOO_LARGE__" { return json_response(&mut stream, 413, "{\"error\":\"body_too_large\"}".into()); }
     let route = path.split('?').next().unwrap_or("/");
     if method == "GET" && route == "/" { return response(&mut stream, 200, "text/html; charset=utf-8", INDEX.as_bytes()); }
@@ -660,6 +755,9 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
         }
         ("GET", "/api/sessions/current") => json_response(&mut stream, 200, format!("{{\"session\":{},\"mock\":true}}",s.session.as_ref().map(session_json).unwrap_or_else(||"null".into()))),
         ("POST", "/api/sessions") => {
+            // §41.4 T3: tạo phiên là mutation nguy hiểm nhất — nó sinh ra
+            // quyền xem màn hình + điều khiển chuột/bàn phím.
+            if deny_if_unauthorised(&mut stream, &s, &req_headers, None).is_none() { return; }
             if let Some(active) = &s.session { return json_response(&mut stream, 409, format!("{{\"error\":\"session_already_active\",\"session\":{}}}",session_json(active))); }
             let Some(input) = parse_flat_object(&body) else { return json_response(&mut stream, 400, "{\"error\":\"invalid_json\"}".into()); };
             let mode = input.get("mode").map(String::as_str).unwrap_or("hvnc");
@@ -679,6 +777,10 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
             if s.session.as_ref().map(|session| session.id.as_str()) != Some(sid) {
                 return json_response(&mut stream, 404, "{\"error\":\"session_not_found\"}".into());
             }
+            // §41.4 T2/T3: kiểm **sau** khi biết phiên có thật (để route không
+            // lộ "phiên có tồn tại hay không" qua mã 401), **trước** khi chạm
+            // vào `SendInput`. Ở loopback cổng này mở; bind LAN thì đóng.
+            if deny_if_unauthorised(&mut stream, &s, &req_headers, Some("local")).is_none() { return; }
             let Some(fields) = parse_flat_object(&body) else {
                 return json_response(&mut stream, 400, "{\"error\":\"invalid_json\"}".into());
             };
@@ -747,6 +849,137 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
             json_response(&mut stream, 200, format!(
                 "{{\"history\":[{}],\"count\":{}}}", items.join(","), records.len()))
         }
+        // §7.1 `SETUP ──lưu config──► IDLE`: lần đầu chưa có mật khẩu thì phải
+        // đặt được, nếu không server vĩnh viễn không có đường vào.
+        ("POST", "/api/setup") => {
+            let Some(fields) = parse_flat_object(&body) else {
+                return json_response(&mut stream, 400, "{\"error\":\"invalid_json\"}".into());
+            };
+            let (Some(user), Some(password)) = (fields.get("u"), fields.get("p")) else {
+                return json_response(&mut stream, 400, "{\"error\":\"invalid_credentials_shape\"}".into());
+            };
+            let user = user.clone();
+            let password = password.clone();
+            match s.auth.setup(&user, &password, now_ms() as u64) {
+                auth_wire::SetupOutcome::Created => {
+                    json_response(&mut stream, 200, "{\"ok\":true}".into())
+                }
+                auth_wire::SetupOutcome::AlreadyConfigured => {
+                    // 409 chứ không 403: không phải "bạn không có quyền" mà
+                    // "trạng thái đã khác" — UI cần hiện màn hình đăng nhập.
+                    json_response(&mut stream, 409, "{\"error\":\"already_configured\"}".into())
+                }
+                auth_wire::SetupOutcome::WeakPassword => json_response(
+                    &mut stream,
+                    422,
+                    // 12 là độ dài tối thiểu của §4373. Không export hằng từ
+                    // `spike` chỉ để in ra đây; nếu spec đổi, test
+                    // `a_short_password_is_rejected_by_the_spec_policy` bắt.
+                    "{\"error\":\"weak_password\",\"minLen\":12}".to_string(),
+                ),
+            }
+        }
+        // §8.1 + §57: đăng nhập. Đây là chỗ `security::gate::Auth` (100 test
+        // trong `spike`) lần đầu có tác dụng thật.
+        ("POST", "/api/login") => {
+            let Some(fields) = parse_flat_object(&body) else {
+                return json_response(&mut stream, 400, "{\"error\":\"invalid_json\"}".into());
+            };
+            let (Some(user), Some(password)) = (fields.get("u"), fields.get("p")) else {
+                return json_response(&mut stream, 400, "{\"error\":\"invalid_credentials_shape\"}".into());
+            };
+            match &mut s.auth.auth {
+                Some(_) => {}
+                None => {
+                    // §41.6: chưa đặt mật khẩu ⇒ không có đường đăng nhập nào.
+                    // Trả 412 để UI biết cần chạy bước đặt mật khẩu, không
+                    // phải hiện "sai mật khẩu" gây hoang mang.
+                    return json_response(&mut stream, 412, "{\"error\":\"no_password_set\"}".into());
+                }
+            }
+            let auth = s.auth.auth.as_mut().expect("vừa kiểm ở trên");
+            // Mật khẩu để trong `BTreeMap<String,String>` chỉ vì đây là client
+            // tối giản; nó không bao giờ được ghi ra đĩa hay log.
+            let password = password.clone();
+            let user = user.clone();
+            let mut entropy = auth_wire::RealEntropy;
+            match auth.login("127.0.0.1", &user, &password, "local-device", now_ms() as u64, &mut entropy) {
+                Ok(session) => {
+                    // Refresh token đi bằng cookie HttpOnly, KHÔNG vào body.
+                    let body_out = auth_wire::login_body(&session, 900);
+                    let cookie = rd_spike_lib::security::gate::session_cookie(
+                        "lantern_refresh", &session.refresh, 7 * 24 * 3600);
+                    let headers = [("Set-Cookie", cookie)];
+                    json_response_with_headers(&mut stream, 200, &body_out, &headers)
+                }
+                Err(error) => {
+                    let (status, code) = auth_wire::login_error_response(&error);
+                    json_response(&mut stream, status, format!("{{\"error\":{}}}", json_quote(code)))
+                }
+            }
+        }
+        // §8.1 `/api/refresh`: rotate refresh token, phát access mới.
+        //
+        // §41.6 "reuse detection": dùng lại refresh cũ ⇒ **cả family** bị thu
+        // hồi. Đó là lý do route này không thể chỉ là "phát access mới" — nó
+        // là nơi phát hiện bị đánh cắp.
+        ("POST", "/api/refresh") => {
+            let Some(auth) = s.auth.auth.as_mut() else {
+                return json_response(&mut stream, 412, "{\"error\":\"no_password_set\"}".into());
+            };
+            let Some(refresh_token) = auth_wire::cookie_value(&req_headers, "lantern_refresh") else {
+                return json_response(&mut stream, 401, "{\"error\":\"no_refresh_cookie\"}".into());
+            };
+            let refresh_token = refresh_token.to_string();
+            let mut entropy = auth_wire::RealEntropy;
+            match auth.refresh_session(&refresh_token, "local-device", now_ms() as u64, &mut entropy) {
+                Some(rotated) => {
+                    // Cookie được **thay** ở mỗi lần rotate: nếu không, token
+                    // cũ vẫn nằm trong trình duyệt và reuse-detection vô nghĩa.
+                    let cookie = rd_spike_lib::security::gate::session_cookie(
+                        "lantern_refresh", &rotated.refresh, 7 * 24 * 3600);
+                    let body_out = format!(
+                        "{{\"access\":{},\"expiresIn\":900}}",
+                        json_quote(&rotated.access)
+                    );
+                    let mut extra = vec![("Set-Cookie", cookie)];
+                    if rotated.device_mismatch {
+                        // §41.6: lệch thiết bị ⇒ **cảnh báo, không chặn**.
+                        extra.push(("X-Lantern-Device-Mismatch", "1".to_string()));
+                    }
+                    json_response_with_headers(&mut stream, 200, &body_out, &extra)
+                }
+                // `None` = token đã dùng/không tồn tại/hết hạn/hết chuỗi. Tất
+                // cả đều 401 và cookie bị xoá: đây là lúc chuỗi đã chết.
+                None => {
+                    let cleared = rd_spike_lib::security::gate::session_cookie(
+                        "lantern_refresh", "", 0);
+                    json_response_with_headers(
+                        &mut stream, 401,
+                        "{\"error\":\"refresh_rejected\"}",
+                        &[("Set-Cookie", cleared)],
+                    )
+                }
+            }
+        }
+        // §8.1: 204, **kill mọi phiên của user** — không chỉ xoá cookie của
+        // trình duyệt này. `revoke_all` của spec đặt watermark `revoked_before`
+        // nên access token 15 phút cũng chết ngay, không phải chờ hết hạn.
+        ("POST", "/api/logout") => {
+            // Không có `sub` trong request (204 không trả body, access token
+            // có thể đã hết hạn) ⇒ thu hồi theo user đã đăng nhập duy nhất.
+            // §0.3.1 #4: tối đa 2 tài khoản, cả hai cùng quyền.
+            if let Some(auth) = s.auth.auth.as_mut() {
+                for user in ["local"] {
+                    auth.refresh.revoke_all(user, now_ms() as u64);
+                }
+            }
+            let cleared = rd_spike_lib::security::gate::session_cookie("lantern_refresh", "", 0);
+            json_response_with_headers(
+                &mut stream, 204, "",
+                &[("Set-Cookie", cleared)],
+            )
+        }
         ("GET", p) if p.starts_with("/api/") => json_response(&mut stream, 404, "{\"error\":\"not_found\"}".into()),
         _ => json_response(&mut stream, 405, "{\"error\":\"method_not_allowed\"}".into()),
     }
@@ -797,7 +1030,7 @@ fn main() {
     let mut settings = SETTINGS_DEFAULTS.iter().map(|(k,v)|(k.to_string(),v.to_string())).collect::<BTreeMap<_,_>>();
     if let Ok(text) = fs::read_to_string(data_dir.join("settings.json")) { if let Some(saved)=parse_flat_object(&text) { for (k,v) in saved { if settings.contains_key(&k) && allowed_value(&k,&v) { settings.insert(k,v); } } } }
     let history_log = history::History::new(&data_dir);
-    let state=Arc::new(Mutex::new(State{settings,session:None,next_id:0,data_dir,live_status:None,live_metrics:LiveMetrics::default(),input:input::InputSanitizer::default(),history:history_log}));
+    let state=Arc::new(Mutex::new(State{settings,session:None,next_id:0,data_dir,live_status:None,live_metrics:LiveMetrics::default(),input:input::InputSanitizer::default(),history:history_log,auth:auth_wire::AuthState::default(),policy:guard::Policy::for_bind(&host)}));
     let url = format!("http://127.0.0.1:{actual}");
     println!("Lantern mock is ready. Open {url} in your browser.");
     println!("Xem màn hình thật: {url}/live  — hoặc bấm nút \"Xem máy thật\" (không cần cài gì).");
@@ -854,6 +1087,13 @@ mod tests {
     /// dưới đây nằm ở **chỗ nối** giữa socket, `read_request` và
     /// `parse_flat_object` — gọi hàm trực tiếp sẽ bỏ qua đúng chỗ hỏng.
     fn spawn_server() -> (std::net::SocketAddr, std::thread::JoinHandle<()>) {
+        spawn_server_with(guard::Policy::Loopback)
+    }
+
+    /// Như [`spawn_server`] nhưng chọn chính sách — cần để chứng minh cổng
+    /// **thật sự đóng** khi bind LAN, không chỉ đóng trong unit test của
+    /// `guard`.
+    fn spawn_server_with(policy: guard::Policy) -> (std::net::SocketAddr, std::thread::JoinHandle<()>) {
         use std::net::TcpListener;
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
         let addr = listener.local_addr().expect("addr");
@@ -876,9 +1116,15 @@ mod tests {
                 live_status: None,
                 live_metrics: LiveMetrics::default(),
                 input: input::InputSanitizer::default(),
+                auth: auth_wire::AuthState::default(),
+                policy,
                 history: history::History::new(&data_dir),
             }));
-            for stream in listener.incoming().take(8).flatten() {
+            // `take(32)`: luồng đăng nhập đầy đủ (§8.1) cần 8 request **chỉ
+            // riêng** cho setup/login/refresh/logout; `take(8)` khiến test
+            // chết ở `ConnectionRefused` chứ không phải ở logic — một kiểu
+            // hỏng rất dễ đọc sai.
+            for stream in listener.incoming().take(32).flatten() {
                 handle(stream, Arc::clone(&state));
             }
         });
@@ -887,16 +1133,170 @@ mod tests {
 
     /// Gửi một request HTTP thô, trả toàn bộ response (header + body).
     fn http(addr: std::net::SocketAddr, method: &str, path: &str, body: &str) -> String {
+        http_with(addr, method, path, body, &[])
+    }
+
+    /// Như [`http`] nhưng gửi thêm header — cần cho `Cookie`, vì refresh token
+    /// (§41.6) chỉ đi bằng cookie chứ không nằm trong body.
+    fn http_with(
+        addr: std::net::SocketAddr,
+        method: &str,
+        path: &str,
+        body: &str,
+        extra: &[(&str, &str)],
+    ) -> String {
         use std::io::Write;
         let mut stream = TcpStream::connect(addr).expect("connect");
-        let request = format!(
-            "{method} {path} HTTP/1.1\r\nHost: test\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        let mut head = format!(
+            "{method} {path} HTTP/1.1\r\nHost: test\r\nContent-Length: {}\r\nConnection: close\r\n",
             body.len()
         );
+        for (name, value) in extra {
+            head.push_str(&format!("{name}: {value}\r\n"));
+        }
+        head.push_str("\r\n");
+        let request = format!("{head}{body}");
         stream.write_all(request.as_bytes()).expect("write");
         let mut out = String::new();
         stream.read_to_string(&mut out).expect("read");
         out
+    }
+
+    /// Lấy giá trị cookie từ response (dòng `Set-Cookie:`).
+    fn set_cookie(response: &str, name: &str) -> Option<String> {
+        for line in response.lines() {
+            let line = line.trim();
+            if let Some(rest) = line.strip_prefix("Set-Cookie: ") {
+                if let Some(value) = rest.strip_prefix(&format!("{name}=")) {
+                    return Some(value.split(';').next()?.to_string());
+                }
+            }
+        }
+        None
+    }
+
+    /// §8.1 + §7.1 + §41.6, chạy qua **socket thật**.
+    ///
+    /// # Vì sao test này đi qua HTTP chứ không gọi `AuthState` trực tiếp
+    ///
+    /// `auth_wire` đã có 9 unit test cho `Auth`, và `spike` có 100 test cho
+    /// luật. Nhưng cả hai đều **không** chứng minh nối được: bản trước
+    /// `read_request` vứt toàn bộ header, nên refresh token không có đường nào
+    /// tới server — và không unit test nào thấy, vì không có unit test nào đi
+    /// qua `read_request`.
+    ///
+    /// Bài học đã trả giá ở `history` (ts tính bằng giây, rotate so bằng ms):
+    /// **unit test xanh không có nghĩa là tính năng chạy.** Test này là bằng
+    /// chứng cho chuỗi setup → login → refresh → logout.
+    #[test] fn the_whole_login_chain_works_over_real_http() {
+        let (addr, server) = spawn_server();
+
+        // §7.1: chưa SETUP thì chưa có đường vào.
+        let early = http(addr, "POST", "/api/login", r#"{"u":"local","p":"mat-khau-rat-dai-2026"}"#);
+        assert!(early.starts_with("HTTP/1.1 412"), "chưa đặt mật khẩu ⇒ 412: {early}");
+
+        // §4373: 12 ký tự tối thiểu, danh sách phổ biến bị chặn.
+        let weak = http(addr, "POST", "/api/setup", r#"{"u":"local","p":"abc"}"#);
+        assert!(weak.starts_with("HTTP/1.1 422"), "mật khẩu yếu ⇒ 422: {weak}");
+
+        let setup = http(addr, "POST", "/api/setup", r#"{"u":"local","p":"mat-khau-rat-dai-2026"}"#);
+        assert!(setup.contains("\"ok\":true"), "setup: {setup}");
+
+        // Không cho đặt lại: nếu cho, ai mở được URL cũng chiếm máy được.
+        let again = http(addr, "POST", "/api/setup", r#"{"u":"local","p":"mat-khau-khac-2026"}"#);
+        assert!(again.starts_with("HTTP/1.1 409"), "setup lần 2 ⇒ 409: {again}");
+
+        let bad = http(addr, "POST", "/api/login", r#"{"u":"local","p":"sai-mat-khau"}"#);
+        assert!(bad.starts_with("HTTP/1.1 401"), "sai mật khẩu ⇒ 401: {bad}");
+
+        let login = http_with(addr, "POST", "/api/login",
+            r#"{"u":"local","p":"mat-khau-rat-dai-2026"}"#, &[]);
+        assert!(login.starts_with("HTTP/1.1 200"), "login: {login}");
+        // §41.6: refresh **chỉ** trong cookie, không trong body.
+        assert!(!login.lines().last().unwrap_or("").contains("rt."), "body không được có refresh token");
+        let first = set_cookie(&login, "lantern_refresh").expect("phải có Set-Cookie");
+        assert!(login.contains("HttpOnly"), "cookie phải HttpOnly: {login}");
+
+        // §8.1 `/api/refresh`: rotate ⇒ cookie mới khác cookie cũ.
+        let refreshed = http_with(addr, "POST", "/api/refresh", "",
+            &[("Cookie", &format!("lantern_refresh={first}"))]);
+        assert!(refreshed.starts_with("HTTP/1.1 200"), "refresh: {refreshed}");
+        let second = set_cookie(&refreshed, "lantern_refresh").expect("refresh phải phát cookie mới");
+        assert_ne!(first, second, "rotate phải đổi token, không phát lại cái cũ");
+
+        // §41.6 reuse detection: dùng lại cái **cũ** ⇒ chết cả family.
+        let reused = http_with(addr, "POST", "/api/refresh", "",
+            &[("Cookie", &format!("lantern_refresh={first}"))]);
+        assert!(reused.starts_with("HTTP/1.1 401"), "dùng lại refresh cũ phải bị từ chối: {reused}");
+        assert!(!reused.contains("Internal Server Error"), "401 phải có tên đúng: {reused}");
+
+        // Mã 401 không được in thành "Internal Server Error" (bug #15).
+        let after = http_with(addr, "POST", "/api/refresh", "",
+            &[("Cookie", &format!("lantern_refresh={second}"))]);
+        assert!(after.starts_with("HTTP/1.1 401"), "family đã bị thu hồi: {after}");
+
+        drop(server);
+    }
+
+    /// §41.3 #3 / §41.4 T3: bind ra LAN thì **không ai** tạo được phiên mà
+    /// không có token.
+    ///
+    /// Đây là test quan trọng nhất của `guard`. Unit test trong `guard` chỉ
+    /// chứng minh hàm trả `Denied`; nó **không** chứng minh route gọi hàm đó.
+    /// Bản đầu của `/api/sessions` không gọi, và không unit test nào thấy.
+    #[test] fn on_lan_nobody_can_create_a_session_without_a_token() {
+        let (addr, server) = spawn_server_with(guard::Policy::Lan);
+        let denied = http(addr, "POST", "/api/sessions", r#"{"mode":"vnc","windowId":"desktop"}"#);
+        assert!(denied.starts_with("HTTP/1.1 401"), "LAN không token ⇒ 401: {denied}");
+        assert!(denied.contains("missing_token"), "phải nói rõ thiếu gì: {denied}");
+
+        // Có token nhưng server **chưa** setup ⇒ 401 `auth_not_configured`.
+        // Đây là nhánh dễ viết sai nhất: `Option<Auth>::is_some()` gộp nó với
+        // "không gửi token", và gộp nhầm thì thành cho qua.
+        let no_auth = http_with(addr, "POST", "/api/sessions",
+            r#"{"mode":"vnc","windowId":"desktop"}"#,
+            &[("Authorization", "Bearer khong.phai.token")]);
+        assert!(no_auth.starts_with("HTTP/1.1 401"), "chưa setup ⇒ 401: {no_auth}");
+        assert!(no_auth.contains("auth_not_configured"), "phải nói rõ: {no_auth}");
+
+        // Đã setup xong thì token rác bị phân loại cụ thể, không thành 500.
+        let _ = http(addr, "POST", "/api/setup", r#"{"u":"local","p":"mat-khau-rat-dai-2026"}"#);
+        let garbage = http_with(addr, "POST", "/api/sessions",
+            r#"{"mode":"vnc","windowId":"desktop"}"#,
+            &[("Authorization", "Bearer khong.phai.token")]);
+        assert!(garbage.starts_with("HTTP/1.1 401"), "token rác ⇒ 401: {garbage}");
+        assert!(garbage.contains("malformed_token"), "phải phân loại được: {garbage}");
+        drop(server);
+    }
+
+    #[test] fn on_loopback_the_gate_stays_open_for_the_single_local_user() {
+        // Cùng route, cùng request: khác **chính sách** thì khác kết quả. Nếu
+        // test này đỏ thì hoặc ta chặn chính mình, hoặc `Policy` không được
+        // truyền vào thật.
+        let (addr, server) = spawn_server_with(guard::Policy::Loopback);
+        let ok = http(addr, "POST", "/api/sessions", r#"{"mode":"vnc","windowId":"desktop"}"#);
+        assert!(ok.contains("\"id\""), "loopback phải tạo được phiên: {ok}");
+        drop(server);
+    }
+
+    #[test] fn logout_kills_every_session_of_the_user_not_just_the_cookie() {
+        // §8.1 ghi "204, kill mọi phiên của user". Nếu chỉ xoá cookie trình
+        // duyệt thì một kẻ đã copy refresh token vẫn dùng được sau khi bạn
+        // bấm "đăng xuất mọi nơi" — đúng thứ §41.3 P3 cảnh báo.
+        let (addr, server) = spawn_server();
+        let _ = http(addr, "POST", "/api/setup", r#"{"u":"local","p":"mat-khau-rat-dai-2026"}"#);
+        let login = http(addr, "POST", "/api/login", r#"{"u":"local","p":"mat-khau-rat-dai-2026"}"#);
+        let token = set_cookie(&login, "lantern_refresh").expect("cookie");
+        let cookie = format!("lantern_refresh={token}");
+
+        let out = http_with(addr, "POST", "/api/logout", "", &[("Cookie", &cookie)]);
+        assert!(out.starts_with("HTTP/1.1 204"), "logout ⇒ 204: {out}");
+        assert!(!out.contains("Internal Server Error"), "204 phải có tên đúng");
+
+        // Cookie cũ giờ vô dụng.
+        let after = http_with(addr, "POST", "/api/refresh", "", &[("Cookie", &cookie)]);
+        assert!(after.starts_with("HTTP/1.1 401"), "logout phải giết refresh: {after}");
+        drop(server);
     }
 
     /// **Lỗi thật**: `parse_json_string` cũ làm `out.push(b as char)` — mỗi

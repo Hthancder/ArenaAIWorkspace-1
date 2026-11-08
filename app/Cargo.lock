@@ -5,3 +5,10 @@ version = 4
 [[package]]
 name = "lantern-mock"
 version = "0.1.0"
+dependencies = [
+ "rd-spike",
+]
+
+[[package]]
+name = "rd-spike"
+version = "0.1.0"

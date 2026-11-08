@@ -3,6 +3,20 @@ name = "lantern-mock"
 version = "0.1.0"
 edition = "2021"
 
+# Dùng lại `rd_spike_lib` thay vì chép code.
+#
+# `spike` là crate **logic của spec** (§56.1): 0 dependency, 100 test bảo mật,
+# `machine/pipeline/policy`. `app` là thứ người dùng chạy.
+#
+# Bản trước tôi chép `InputSanitizer` từ `spike` sang `app` — đúng loại lỗi
+# mà §41 cảnh báo: hai bản luật cho cùng một thứ. Khai báo path dependency thì
+# chỉ có **một** bản, và mọi test của nó chạy cho cả hai.
+[dependencies]
+# Tên **package** là `rd-spike`; `rd_spike_lib` chỉ là tên `[lib]`.
+# Khai báo sai ở đây thì cargo báo "no matching package", không phải
+# "sai tên lib" — nên ghi lại để lần sau khỏi mất thời gian.
+rd-spike = { path = "../spike" }
+
 [[bin]]
 name = "lantern-mock"
 path = "src/main.rs"
