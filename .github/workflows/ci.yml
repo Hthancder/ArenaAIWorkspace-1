@@ -154,15 +154,27 @@ jobs:
       - name: verify the exe is self-contained
         shell: pwsh
         run: |
-          $exe = 'app/target/release/lantern-mock.exe'
+          # Chú ý: job này chạy với working-directory = spike, nên đường dẫn
+          # tới app phải có ".." — thiếu nó thì Get-Item ném lỗi, step đỏ mà
+          # không in ra ::error:: nào (đã xảy ra 2 vòng CI liên tiếp).
+          $exe = '..\app\target\release\lantern-mock.exe'
+          if (-not (Test-Path $exe)) { Write-Output "::error::Không thấy $exe"; exit 1 }
           $size = [math]::Round((Get-Item $exe).Length / 1MB, 2)
           Write-Host "== lantern-mock.exe: $size MB (không kèm runtime nào)"
           # Không được có thư mục gst/ bên cạnh — nếu có nghĩa là ta lại quay
           # về hướng "tải 517 MB", thứ vừa bị bỏ.
-          if (Test-Path 'app/target/release/gst') { Write-Output "::error::Còn thư mục gst/ — artifact lại phình to"; exit 1 }
+          if (Test-Path '..\app\target\release\gst') { Write-Output "::error::Còn thư mục gst/ — artifact lại phình to"; exit 1 }
           & $exe --check
           if ($LASTEXITCODE -ne 0) { Write-Output "::error::--check thất bại"; exit 1 }
           Write-Host "== exe tự kiểm xong (capture + JPEG nằm trong binary)"
+
+      # Đẩy cả kích thước ra annotation để đọc được mà không cần tải log
+      # (log của job Windows không tải được trong sandbox).
+      - name: report exe size
+        shell: pwsh
+        run: |
+          $bytes = (Get-Item '..\app\target\release\lantern-mock.exe').Length
+          Write-Output "::notice::lantern-mock.exe = $([math]::Round($bytes/1KB)) KB ($([math]::Round($bytes/1MB,2)) MB), không cần cài gì"
 
       - uses: actions/upload-artifact@v4
         with:
