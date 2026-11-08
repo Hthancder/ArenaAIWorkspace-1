@@ -132,8 +132,8 @@ bình thường".
 |---|---|---|
 | **Chỉ bind `127.0.0.1`** | chưa có TLS trong binary; §54.5 #1 cấm bind LAN không TLS | SSH tunnel / Tailscale + bước thêm (chưa làm) |
 | Không có tiếng | MJPEG không mang audio; WASAPI loopback là §40, chưa nối | — |
-| Không điều khiển được | `SendInput` + DataChannel là §44, chưa nối | — |
-| Không có xác thực | app chưa có `/api/login`; chỉ loopback nên chưa cần | **không** đổi `HOST` |
+| Điều khiển chưa dùng được | §44 **server** đã có (`SendInput` sau `InputSanitizer`, xác minh bằng `curl`), nhưng **client JS chưa gửi gì** — chưa có client | — |
+| Đăng nhập chỉ bảo vệ khi bind LAN | §41/§8.1 đã nối: `/api/login`, `/api/refresh`, `/api/logout`, `/api/setup`. Ở loopback cổng mở (một người dùng, một máy); bind LAN thì **mọi** mutation đòi token | đặt mật khẩu qua `POST /api/setup` trước khi đổi `HOST` |
 | Hình đứng thì phải tắt/bật lại | pipeline không tự restart (chưa có watchdog) | bấm Dừng rồi Xem lại |
 | Đổi monitor khi đang xem | phiên capture được mở lại từ đầu — mất < 1 s | bình thường |
 | Trình duyệt cũ không hỗ trợ MJPEG | `multipart/x-mixed-replace` cần Chrome/Edge/Firefox/Safari bản còn được cập nhật | dùng Chrome hoặc Edge |
@@ -161,10 +161,10 @@ bình thường".
 
 Đọc để không kỳ vọng sai:
 
-- ❌ **Không có tiếng** (chưa nối `wasapi2src`/Opus — §40, §55)
-- ❌ **Không điều khiển được** (chưa có `SendInput`, chưa có DataChannel — §44)
+- ❌ **Không có tiếng** (chưa nối `wasapi2src`/Opus — §40, §55). `/api/sessions/{sid}/audio` trả `available:false` thay vì giả vờ.
+- ⚠️ **Điều khiển: nửa đường.** Server đã có (§44: `InputSanitizer` của spec + `SendInput`, 12 test, xác minh qua HTTP thật — kể cả chặn `Win+L` và auto-repeat). Nhưng **không có client JS nào gửi sự kiện**, nên nhìn từ trình duyệt thì vẫn chỉ xem được.
 - ❌ **Không phải WebRTC** (chưa có `webrtcbin`, SDP, ICE, DTLS — §37, §10.2)
-- ❌ **Không có đăng nhập** (chưa có `/api/login`; §57 có code nhưng chưa nối)
+- ✅ **Có đăng nhập** (§41/§8.1): `POST /api/setup` → `/api/login` (401/409/423/429) → cookie `HttpOnly` → `/api/refresh` rotate + reuse-detection → `/api/logout` giết cả chuỗi. **Chưa có trang đăng nhập trong UI** — gọi bằng `curl` được, bấm trong trình duyệt thì chưa.
 - ❌ **Không click được cửa sổ** (chỉ xem cả màn hình; window picker vẫn là mock — §41.4 T1 có registry, chưa nối `EnumWindows`)
 - ❌ **Không chạy ngoài LAN** mà không có tunnel
 

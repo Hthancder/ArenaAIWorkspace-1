@@ -5,6 +5,7 @@ mod capture;
 mod history;
 mod input;
 mod jpeg;
+mod session_state;
 mod stream;
 
 use std::collections::BTreeMap;
@@ -32,7 +33,29 @@ const SETTINGS_DEFAULTS: &[(&str, &str)] = &[
 ];
 
 #[derive(Clone)]
-struct Session { id: String, mode: String, window_id: String, started_at: u64, audio: bool }
+/// Một phiên đang sống. Các trường **đổi được giữa phiên** là của §6.9:
+/// `window_id` (`/{sid}/window`), `mode` (`/{sid}/mode`), `monitor`
+/// (`/{sid}/monitor`), `preset` (`/{sid}/preset`, bảng §6.10.1),
+/// `cursor_mode` và `view_only` (`/{sid}/cursor_mode`, `/{sid}/permission`).
+struct Session {
+    id: String,
+    mode: String,
+    window_id: String,
+    started_at: u64,
+    audio: bool,
+    /// §6.9 đổi monitor **không** tạo phiên mới.
+    monitor: u32,
+    /// §6.10.1 — id của preset, xem `session_state::PRESETS`.
+    preset: String,
+    /// §8.1 `/{sid}/cursor_mode`.
+    cursor_mode: session_state::CursorMode,
+    /// §8.1 `/{sid}/permission {view_only}`. T2: xem được mà không điều khiển.
+    view_only: bool,
+    /// §6.9: `switching` trong lúc đổi nguồn, `active` khi xong.
+    state: &'static str,
+    /// §8.1 `/{sid}/share`: TTL của link xem tạm, `None` = không chia sẻ.
+    share_ttl_min: Option<u32>,
+}
 /// Số đo **thật** của phiên stream đang chạy, để UI không phải bịa.
 /// `None` = chưa từng stream. Mọi trường đều đo từ vòng lặp ở `stream_live`.
 #[derive(Clone, Default)]
@@ -48,6 +71,25 @@ struct LiveMetrics {
     /// Độ phân giải thật của frame gần nhất.
     width: usize,
     height: usize,
+}
+
+impl LiveMetrics {
+    /// `(fps, kbps)` suy ra từ số đo thật. Chưa stream lần nào ⇒ `(0.0, 0.0)`.
+    ///
+    /// Không lưu `fps`/`kbps` trực tiếp: hai đại lượng đó **phụ thuộc thời
+    /// điểm đọc**, và lưu lại thì phải cập nhật ở mọi chỗ tăng `frames` — một
+    /// trong số đó sẽ bị quên.
+    fn summary(&self) -> (f64, f64) {
+        let elapsed_ms = now_ms().saturating_sub(self.started_ms);
+        if self.frames == 0 || elapsed_ms == 0 {
+            return (0.0, 0.0);
+        }
+        let seconds = elapsed_ms as f64 / 1000.0;
+        let fps = self.frames as f64 / seconds;
+        let kbps = (self.jpeg_bytes as f64 * 8.0) / seconds / 1000.0;
+        // Làm tròn 1 chữ số: hiển thị `58.3` thay vì `58.31489123` trong JSON.
+        ((fps * 10.0).round() / 10.0, (kbps * 10.0).round() / 10.0)
+    }
 }
 
 impl LiveMetrics {
@@ -73,7 +115,7 @@ fn now_ms() -> u128 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)
 }
 
-struct State { settings: BTreeMap<String, String>, session: Option<Session>, next_id: u64, data_dir: PathBuf, live_status: Option<(bool, String)>, live_metrics: LiveMetrics, input: input::InputSanitizer, history: history::History, auth: auth_wire::AuthState, policy: guard::Policy }
+struct State { settings: BTreeMap<String, String>, session: Option<Session>, next_id: u64, data_dir: PathBuf, live_status: Option<(bool, String)>, live_metrics: LiveMetrics, input: input::InputSanitizer, history: history::History, auth: auth_wire::AuthState, policy: guard::Policy, keyframes: u64 }
 
 fn json_quote(value: &str) -> String {
     let mut out = String::from("\"");
@@ -208,7 +250,15 @@ fn settings_json(settings: &BTreeMap<String, String>) -> String {
     }).collect::<Vec<_>>().join(","); format!("{{{values}}}")
 }
 fn session_json(s: &Session) -> String {
-    format!("{{\"id\":{},\"mode\":{},\"windowId\":{},\"startedAt\":{},\"audio\":{},\"status\":\"connected\",\"mock\":true}}", json_quote(&s.id), json_quote(&s.mode), json_quote(&s.window_id), s.started_at, s.audio)
+    // §8.1 `GET /api/sessions/{sid}` ghi `{state,stats,audio,view_only,warnings,
+    // cursor_mode}`. `stats` đến từ `LiveMetrics` ở route, không phải ở đây —
+    // hàm này chỉ mô tả phiên.
+    format!(
+        "{{\"id\":{},\"mode\":{},\"windowId\":{},\"startedAt\":{},\"audio\":{},\"status\":\"connected\",\"state\":\"{}\",\"monitor\":{},\"preset\":{},\"cursorMode\":\"{}\",\"viewOnly\":{},\"share\":{},\"mock\":true}}",
+        json_quote(&s.id), json_quote(&s.mode), json_quote(&s.window_id), s.started_at, s.audio,
+        s.state, s.monitor, json_quote(&s.preset), s.cursor_mode.as_str(), s.view_only,
+        s.share_ttl_min.map(|m| m.to_string()).unwrap_or_else(|| "null".into())
+    )
 }
 /// Header của **mọi** response. Tách khỏi socket để test được bằng giá trị trả
 /// về, không phải bằng cách bắt chước chuỗi trong test.
@@ -258,6 +308,191 @@ fn json_response_with_headers(
     let _ = stream.write_all(body.as_bytes());
     let _ = stream.flush();
 }
+
+/// §6.9 — một lần "đổi thứ gì đó trong phiên đang sống".
+///
+/// # Vì sao đây là **một** hàm cho 7 route
+///
+/// Cả 7 route của §8.1 (`window`, `mode`, `monitor`, `preset`, `cursor_mode`,
+/// `permission`, `share`) có cùng hình dạng: tìm phiên → kiểm quyền → kiểm
+/// giá trị → áp → trả trạng thái mới. Viết rời thì có 7 bản của "kiểm quyền"
+/// và 7 cơ hội quên một cái — đúng loại lỗi tôi vừa sửa ở `guard`.
+///
+/// Trả `None` = đã trả response (lỗi); `Some((status, body))` = để nơi gọi
+/// ghi response.
+enum Switch<'a> {
+    Window(&'a str),
+    Mode(&'a str),
+    Monitor(&'a str),
+    Preset(&'a str),
+    CursorMode(&'a str),
+    Permission(&'a str),
+    Share(&'a str),
+}
+
+fn switch_session(
+    stream: &mut TcpStream,
+    state: &mut State,
+    sid: &str,
+    headers: &BTreeMap<String, String>,
+    what: Switch<'_>,
+) -> Option<(u16, String)> {
+    let exists = state.session.as_ref().map(|session| session.id.as_str()) == Some(sid);
+    if !exists {
+        // Kiểm phiên **trước** quyền: trả 401 cho một `sid` không tồn tại thì
+        // kẻ dò `sid` (§41.2 P2) biết được cái nào có thật.
+        json_response(stream, 404, "{\"error\":\"session_not_found\"}".into());
+        return None;
+    }
+    if deny_if_unauthorised(stream, state, headers, Some("local")).is_none() {
+        return None;
+    }
+    let body = match what {
+        Switch::Window(b) | Switch::Mode(b) | Switch::Monitor(b) | Switch::Preset(b)
+        | Switch::CursorMode(b) | Switch::Permission(b) | Switch::Share(b) => b,
+    };
+    let fields = parse_flat_object(body).unwrap_or_default();
+
+    // Giữ giá trị cũ để §6.9 biết **có đổi nguồn capture hay không** (chỉ lúc
+    // đó mới cần release_all + keyframe; đổi preset thì không).
+    let session = state.session.as_mut().expect("vừa kiểm ở trên bằng `exists`");
+    let old_mode = session.mode.clone();
+
+    match what {
+        Switch::Window(_) => {
+            let Some(wid) = fields.get("windowId") else {
+                return Some((400, "{\"error\":\"invalid_json\"}".into()));
+            };
+            // §41.3 #3: `wid` phải nằm trong danh sách agent đã trả.
+            if !["desktop", "browser", "notes"].contains(&wid.as_str()) {
+                return Some((422, "{\"error\":\"invalid_window_id\"}".into()));
+            }
+            session.window_id = wid.clone();
+            session.state = "switching";
+        }
+        Switch::Mode(_) => {
+            let Some(mode) = fields.get("mode") else {
+                return Some((400, "{\"error\":\"invalid_json\"}".into()));
+            };
+            // §6.9: "Cho phép (v2.1 cấm) — chỉ là thay nguồn capture".
+            if !["hvnc", "vnc"].contains(&mode.as_str()) {
+                return Some((422, "{\"error\":\"invalid_session_mode\"}".into()));
+            }
+            let new_mode = mode.clone();
+            session.mode = new_mode.clone();
+            session.state = "switching";
+        }
+        Switch::Monitor(_) => {
+            let index = fields.get("index").and_then(|v| v.parse::<u32>().ok());
+            let Some(index) = index.and_then(|i| session_state::valid_monitor(i).ok()) else {
+                return Some((422, "{\"error\":\"invalid_monitor\"}".into()));
+            };
+            session.monitor = index;
+            // §6.9: đổi monitor cũng là đổi nguồn capture ⇒ keyframe mới.
+            session.state = "switching";
+        }
+        Switch::Preset(_) => {
+            let Some(id) = fields.get("preset") else {
+                return Some((400, "{\"error\":\"invalid_json\"}".into()));
+            };
+            let Ok(preset) = session_state::resolve_preset(id) else {
+                return Some((422, "{\"error\":\"invalid_preset\"}".into()));
+            };
+            session.preset = preset.id.to_string();
+            // §6.10.1: "Đổi preset = đổi encoder config, **không** đổi màn hình
+            // ảo (tránh move cửa sổ lần 2)" ⇒ cố ý **không** gọi
+            // `apply_switch`: không release_all, không xin keyframe.
+            return Some((200, format!(
+                "{{\"preset\":{},\"fps\":{},\"mbps\":{},\"adaptive\":{}}}",
+                json_quote(preset.id), preset.fps, preset.mbps, preset.adaptive)));
+        }
+        Switch::CursorMode(_) => {
+            let Some(mode) = fields.get("mode") else {
+                return Some((400, "{\"error\":\"invalid_json\"}".into()));
+            };
+            let Ok(parsed) = session_state::CursorMode::parse(mode) else {
+                return Some((422, "{\"error\":\"invalid_cursor_mode\"}".into()));
+            };
+            session.cursor_mode = parsed;
+            return Some((200, format!("{{\"cursorMode\":\"{}\"}}", parsed.as_str())));
+        }
+        Switch::Permission(_) => {
+            let Some(raw) = fields.get("view_only") else {
+                return Some((400, "{\"error\":\"invalid_json\"}".into()));
+            };
+            session.view_only = raw == "true";
+            let now_view_only = session.view_only;
+            // T2: bật view_only thì phím/chuột đang giữ phải được nhả **ngay**,
+            // nếu không người dùng đổi quyền mà vẫn còn Ctrl đang giữ.
+            //
+            // `session` không được dùng lại sau đây, nên borrow kết thúc (NLL)
+            // và `release_all_input(state)` mượn được `state`. Không cần
+            // `drop(session)`: clippy đúng khi nói `drop` trên `&mut` là no-op
+            // — bản trước của tôi có nó và CI bắt được.
+            if now_view_only {
+                release_all_input(state);
+            }
+            return Some((200, format!("{{\"viewOnly\":{}}}", now_view_only)));
+        }
+        Switch::Share(_) => {
+            let minutes = fields.get("ttl_min").and_then(|v| v.parse::<u32>().ok());
+            let Some(minutes) = minutes.and_then(|m| session_state::valid_share_ttl(m).ok()) else {
+                return Some((422, "{\"error\":\"invalid_ttl\"}".into()));
+            };
+            session.share_ttl_min = Some(minutes);
+            // §21.6: link chia sẻ là view-only. Chia sẻ chế độ điều khiển được
+            // là trao toàn quyền máy cho người nhận link — spec không cho.
+            session.view_only = true;
+            let session_id = session.id.clone();
+            // Cùng lý do: hết dùng `session` ⇒ borrow tự nhả.
+            release_all_input(state);
+            return Some((200, format!(
+                "{{\"ttlMin\":{},\"viewOnly\":true,\"url\":{}}}",
+                minutes, json_quote(&format!("/s/{}?t={}", session_id, minutes)))));
+        }
+    }
+
+    // Ba route đổi nguồn capture (`window`/`mode`/`monitor`) đã set
+    // `state = "switching"` ở trên. Bước (3)–(5) của §6.9 phải chạy **sau khi
+    // nhả borrow** trên `state.session` (chúng cần `state.input`), nên tách ra
+    // đây thay vì gọi trong match — borrow checker nói đúng chỗ này.
+    let _ = session;
+    let target_mode = state.session.as_ref().map(|s| s.mode.clone()).unwrap_or_default();
+    apply_switch(&old_mode, &target_mode, state);
+    let session = state.session.as_mut().expect("vừa kiểm");
+    session.state = "active";
+    // Trả **cả** trạng thái mới để client không phải gọi lại `GET /{sid}`.
+    let snapshot = session_json(session);
+    Some((200, format!("{{\"session\":{},\"state\":\"active\"}}", snapshot)))
+}
+
+/// §6.9 bước (1)–(5), theo đúng danh sách `session_state::switch_plan` đã
+/// kiểm thứ tự. **Không** đụng peer/DTLS — với MJPEG thì "peer" là kết nối
+/// HTTP của client, và nó sống ngoài hàm này.
+fn apply_switch(old_mode: &str, new_mode: &str, state: &mut State) {
+    for step in session_state::switch_plan(old_mode, new_mode) {
+        match step {
+            // Mock không có cửa sổ thật để restore/move; nhưng bước release và
+            // keyframe là thật, và đó là hai bước **có tác dụng phụ**.
+            session_state::SwitchStep::RestoreOldWindow
+            | session_state::SwitchStep::MoveNewWindow
+            | session_state::SwitchStep::KeepPeer => {}
+            session_state::SwitchStep::ReleaseInput => { release_all_input(state); }
+            session_state::SwitchStep::RequestKeyframe => { state.keyframes += 1; }
+        }
+    }
+}
+
+/// Nhả mọi phím/chuột đang giữ qua `SendInput`, **không** đụng máy nếu không
+/// có gì để nhả. §6.4.7 lớp 3 + §6.9 bước (3).
+fn release_all_input(state: &mut State) -> usize {
+    let keys = state.input.release_all(now_ms() as u64);
+    let actions: Vec<input::Action> = keys.into_iter().map(|vk| input::Action::Key { down: false, vk }).collect();
+    let sent = input::inject(&actions);
+    let _ = sent;
+    actions.len()
+}
+
 /// Chạy cổng quyền cho một mutation. `None` = được đi tiếp; `Some(_)` = đã
 /// trả response và route phải dừng.
 ///
@@ -754,6 +989,29 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
             json_response(&mut stream, 200, format!("{{\"settings\":{},\"updated\":[{}],\"mock\":true}}",settings_json(&s.settings),changed.join(",")))
         }
         ("GET", "/api/sessions/current") => json_response(&mut stream, 200, format!("{{\"session\":{},\"mock\":true}}",s.session.as_ref().map(session_json).unwrap_or_else(||"null".into()))),
+        // §6.11.1 / §8.1 `GET /api/sessions/mine` — "phiên còn sống trong grace
+        // (resume)". Mục đích: reload trang (§50.1 #3) không phải tạo phiên
+        // mới. Đặt **trước** nhánh `/{sid}` bên dưới, nếu không `mine` bị đọc
+        // thành một `sid` và trả 404 — đúng lỗi thứ tự route đã có tiền lệ.
+        ("GET", "/api/sessions/mine") => {
+            let live = s.session.as_ref().map(session_json).unwrap_or_else(|| "null".into());
+            json_response(&mut stream, 200, format!("{{\"sessions\":{}}}", if live == "null" { "[]".to_string() } else { format!("[{live}]") }))
+        }
+        // §8.1 `GET /api/sessions/{sid}` → `{state,stats,audio,view_only,warnings,cursor_mode}`.
+        // `stats` là số đo **thật** của `LiveMetrics`, không phải số bịa.
+        ("GET", p) if p.starts_with("/api/sessions/") && !p.contains("/input") => {
+            let sid = p.trim_start_matches("/api/sessions/");
+            let Some(session) = s.session.as_ref().filter(|session| session.id == sid) else {
+                return json_response(&mut stream, 404, "{\"error\":\"session_not_found\"}".into());
+            };
+            let metrics = &s.live_metrics;
+            let (fps, kbps) = metrics.summary();
+            json_response(&mut stream, 200, format!(
+                "{{\"session\":{},\"state\":\"{}\",\"stats\":{{\"fps\":{},\"kbps\":{},\"frames\":{},\"width\":{},\"height\":{}}},\"audio\":{{\"enabled\":{},\"available\":false}},\"viewOnly\":{},\"warnings\":[],\"cursorMode\":\"{}\",\"keyframes\":{}}}",
+                session_json(session), session.state, fps, kbps, metrics.frames, metrics.width, metrics.height,
+                session.audio, session.view_only, session.cursor_mode.as_str(), s.keyframes
+            ))
+        }
         ("POST", "/api/sessions") => {
             // §41.4 T3: tạo phiên là mutation nguy hiểm nhất — nó sinh ra
             // quyền xem màn hình + điều khiển chuột/bàn phím.
@@ -764,7 +1022,31 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
             let win = input.get("windowId").map(String::as_str).unwrap_or("desktop");
             if !["hvnc","vnc"].contains(&mode) { return json_response(&mut stream, 422, "{\"error\":\"invalid_session_mode\"}".into()); }
             if !["desktop","browser","notes"].contains(&win) { return json_response(&mut stream, 422, "{\"error\":\"invalid_window_id\"}".into()); }
-            s.next_id += 1; let session = Session { id: format!("mock-{}",s.next_id), mode: mode.into(), window_id: win.into(), started_at: now_seconds(), audio: input.get("audio").map(|v|v!="false").unwrap_or(true) };
+            s.next_id += 1;
+            // §6.10.1: preset mặc định là "Cân bằng"; `POST /api/sessions`
+            // (§8.1) cho chọn ngay từ đầu. Giá trị lạ ⇒ 422, không đoán.
+            let preset = input.get("preset").map(String::as_str).unwrap_or(session_state::DEFAULT_PRESET);
+            let Ok(preset) = session_state::resolve_preset(preset) else {
+                return json_response(&mut stream, 422, "{\"error\":\"invalid_preset\"}".into());
+            };
+            let monitor = match input.get("monitor") {
+                Some(raw) => match raw.parse::<u32>().ok().and_then(|index| session_state::valid_monitor(index).ok()) {
+                    Some(index) => index,
+                    None => return json_response(&mut stream, 422, "{\"error\":\"invalid_monitor\"}".into()),
+                },
+                None => 0,
+            };
+            let session = Session {
+                id: format!("mock-{}",s.next_id), mode: mode.into(), window_id: win.into(),
+                started_at: now_seconds(),
+                audio: input.get("audio").map(|v|v!="false").unwrap_or(true),
+                monitor,
+                preset: preset.id.to_string(),
+                cursor_mode: session_state::CursorMode::Local,
+                view_only: input.get("view_only").map(|v| v=="true").unwrap_or(false),
+                state: "active",
+                share_ttl_min: None,
+            };
             let result = session_json(&session); s.session = Some(session); json_response(&mut stream, 201, format!("{{\"session\":{},\"mock\":true}}",result))
         }
         // §8.3 + §44: input. Ba tầng, mỗi tầng một việc:
@@ -800,6 +1082,105 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
             json_response(&mut stream, 200, format!(
                 "{{\"ok\":true,\"actions\":{},\"sent\":{},\"refused\":{},\"stats\":{{\"keysHeld\":{},\"buttonsHeld\":{},\"droppedMoves\":{},\"floodWarnings\":{},\"releaseAllCount\":{},\"oddKeyups\":{}}}}}",
                 outcome.actions.len(), sent, refused, sankeys, sanbuttons, dropped, floods, releases, odd))
+        }
+        // ══════════════════════════════════════════════════════════════════
+        // §6.9 — đổi nguồn capture **giữa phiên**. Điểm của cả mục này: KHÔNG
+        // đóng phiên, KHÔNG mất peer/DTLS. v2.1 làm ngược lại (5–8 s màn hình
+        // đen), nên các route dưới đây là thứ khiến §6.9 có nghĩa.
+        // ══════════════════════════════════════════════════════════════════
+        ("POST", p) if p.starts_with("/api/sessions/") && p.ends_with("/window") => {
+            let sid = p.trim_start_matches("/api/sessions/").trim_end_matches("/window");
+            // §41.3 #3: `wid` **phải** nằm trong danh sách agent vừa trả. Ở đây
+            // danh sách là 3 cửa sổ của mock, nhưng luật được viết đúng chỗ:
+            // client không bao giờ quyết định hwnd.
+            match switch_session(&mut stream, &mut s, sid, &req_headers, Switch::Window(&body)) {
+                Some(response) => return json_response(&mut stream, response.0, response.1),
+                None => return,
+            }
+        }
+        ("POST", p) if p.starts_with("/api/sessions/") && p.ends_with("/mode") => {
+            let sid = p.trim_start_matches("/api/sessions/").trim_end_matches("/mode");
+            match switch_session(&mut stream, &mut s, sid, &req_headers, Switch::Mode(&body)) {
+                Some(response) => return json_response(&mut stream, response.0, response.1),
+                None => return,
+            }
+        }
+        ("POST", p) if p.starts_with("/api/sessions/") && p.ends_with("/monitor") => {
+            let sid = p.trim_start_matches("/api/sessions/").trim_end_matches("/monitor");
+            match switch_session(&mut stream, &mut s, sid, &req_headers, Switch::Monitor(&body)) {
+                Some(response) => return json_response(&mut stream, response.0, response.1),
+                None => return,
+            }
+        }
+        // §6.10.1: đổi preset = đổi encoder config, **không** đổi màn hình ảo.
+        ("POST", p) if p.starts_with("/api/sessions/") && p.ends_with("/preset") => {
+            let sid = p.trim_start_matches("/api/sessions/").trim_end_matches("/preset");
+            match switch_session(&mut stream, &mut s, sid, &req_headers, Switch::Preset(&body)) {
+                Some(response) => return json_response(&mut stream, response.0, response.1),
+                None => return,
+            }
+        }
+        // §8.1 `{sid}/cursor_mode` — `local|remote|auto`.
+        ("POST", p) if p.starts_with("/api/sessions/") && p.ends_with("/cursor_mode") => {
+            let sid = p.trim_start_matches("/api/sessions/").trim_end_matches("/cursor_mode");
+            match switch_session(&mut stream, &mut s, sid, &req_headers, Switch::CursorMode(&body)) {
+                Some(response) => return json_response(&mut stream, response.0, response.1),
+                None => return,
+            }
+        }
+        // §8.1 `{sid}/permission {view_only}` — T2: xem mà không điều khiển.
+        ("POST", p) if p.starts_with("/api/sessions/") && p.ends_with("/permission") => {
+            let sid = p.trim_start_matches("/api/sessions/").trim_end_matches("/permission");
+            match switch_session(&mut stream, &mut s, sid, &req_headers, Switch::Permission(&body)) {
+                Some(response) => return json_response(&mut stream, response.0, response.1),
+                None => return,
+            }
+        }
+        // §21.6: link xem tạm, view-only. §8.1 ghi `{ttl_min}`.
+        ("POST", p) if p.starts_with("/api/sessions/") && p.ends_with("/share") => {
+            let sid = p.trim_start_matches("/api/sessions/").trim_end_matches("/share");
+            match switch_session(&mut stream, &mut s, sid, &req_headers, Switch::Share(&body)) {
+                Some(response) => return json_response(&mut stream, response.0, response.1),
+                None => return,
+            }
+        }
+        // §8.1 `{sid}/keyframe` — 204, xin IDR mới. Với MJPEG mỗi frame đã
+        // độc lập nên không có gì để làm; route vẫn phải tồn tại vì client
+        // (§6.9 bước 5) gọi nó và không được nhận 404.
+        ("POST", p) if p.starts_with("/api/sessions/") && p.ends_with("/keyframe") && !p.ends_with("/keyframes") => {
+            let sid = p.trim_start_matches("/api/sessions/").trim_end_matches("/keyframe");
+            if s.session.as_ref().map(|session| session.id.as_str()) != Some(sid) {
+                return response(&mut stream, 404, "application/json", b"{\"error\":\"session_not_found\"}");
+            }
+            // Đếm để `GET /{sid}` báo được "đã xin keyframe lúc nào" — nếu
+            // không, route này là 204 rỗng và không ai biết nó có chạy không.
+            s.keyframes += 1;
+            return response(&mut stream, 204, "application/json", b"");
+        }
+        // §8.1 `POST /api/sessions/{sid}/takeover` — §6.11.4 / §42.2: thiết bị
+        // khác tiếp quản. Bản một-thiết-bị: luôn 409, và nói **vì sao**.
+        ("POST", p) if p.starts_with("/api/sessions/") && p.ends_with("/takeover") => {
+            return json_response(&mut stream, 409,
+                "{\"error\":\"takeover_not_supported\",\"detail\":\"bản một-người-dùng chỉ có một thiết bị; 6.11.4 cần nhiều thiết bị cùng user\"}".into());
+        }
+        // §8.1 `{sid}/audio {enabled}` — §3 "Opus 48k per-app". Bản này chỉ
+        // MJPEG nên `enabled` được ghi lại và báo trung thực là chưa có tiếng
+        // (§58.3: không giả vờ).
+        ("POST", p) if p.starts_with("/api/sessions/") && p.ends_with("/audio") => {
+            let sid = p.trim_start_matches("/api/sessions/").trim_end_matches("/audio");
+            let Some(fields) = parse_flat_object(&body) else {
+                return json_response(&mut stream, 400, "{\"error\":\"invalid_json\"}".into());
+            };
+            let enabled = fields.get("enabled").map(|v| v == "true").unwrap_or(false);
+            let mut applied = false;
+            if let Some(session) = s.session.as_mut() {
+                if session.id == sid { session.audio = enabled; applied = true; }
+            }
+            if !applied {
+                return json_response(&mut stream, 404, "{\"error\":\"session_not_found\"}".into());
+            }
+            json_response(&mut stream, 200, format!(
+                "{{\"enabled\":{},\"available\":false,\"reason\":\"audio_not_implemented\"}}", enabled))
         }
         // §6.4.7 lớp 3: `sendBeacon` khi đóng tab — không phụ thuộc WS còn sống.
         ("POST", p) if p.starts_with("/api/sessions/") && p.ends_with("/release") => {
@@ -1030,7 +1411,7 @@ fn main() {
     let mut settings = SETTINGS_DEFAULTS.iter().map(|(k,v)|(k.to_string(),v.to_string())).collect::<BTreeMap<_,_>>();
     if let Ok(text) = fs::read_to_string(data_dir.join("settings.json")) { if let Some(saved)=parse_flat_object(&text) { for (k,v) in saved { if settings.contains_key(&k) && allowed_value(&k,&v) { settings.insert(k,v); } } } }
     let history_log = history::History::new(&data_dir);
-    let state=Arc::new(Mutex::new(State{settings,session:None,next_id:0,data_dir,live_status:None,live_metrics:LiveMetrics::default(),input:input::InputSanitizer::default(),history:history_log,auth:auth_wire::AuthState::default(),policy:guard::Policy::for_bind(&host)}));
+    let state=Arc::new(Mutex::new(State{settings,session:None,next_id:0,data_dir,live_status:None,live_metrics:LiveMetrics::default(),input:input::InputSanitizer::default(),history:history_log,auth:auth_wire::AuthState::default(),policy:guard::Policy::for_bind(&host),keyframes:0}));
     let url = format!("http://127.0.0.1:{actual}");
     println!("Lantern mock is ready. Open {url} in your browser.");
     println!("Xem màn hình thật: {url}/live  — hoặc bấm nút \"Xem máy thật\" (không cần cài gì).");
@@ -1118,6 +1499,7 @@ mod tests {
                 input: input::InputSanitizer::default(),
                 auth: auth_wire::AuthState::default(),
                 policy,
+                keyframes: 0,
                 history: history::History::new(&data_dir),
             }));
             // `take(32)`: luồng đăng nhập đầy đủ (§8.1) cần 8 request **chỉ
@@ -1235,6 +1617,106 @@ mod tests {
             &[("Cookie", &format!("lantern_refresh={second}"))]);
         assert!(after.starts_with("HTTP/1.1 401"), "family đã bị thu hồi: {after}");
 
+        drop(server);
+    }
+
+    /// §6.9 + §6.10.1 + §8.1: 9 route "đổi thứ gì đó trong phiên" chạy được.
+    ///
+    /// Đi qua socket vì lý do quen thuộc: `session_state` đã có 9 unit test cho
+    /// **luật** (bảng preset, thứ tự switch), nhưng luật đúng mà route không
+    /// gọi thì tính năng vẫn chết. Chưa có test nào từng gọi các route này —
+    /// chúng vừa mới tồn tại.
+    #[test] fn every_in_session_switch_route_of_the_spec_works() {
+        let (addr, server) = spawn_server();
+        let created = http(addr, "POST", "/api/sessions",
+            r#"{"mode":"vnc","windowId":"desktop"}"#);
+        let sid = created.split("\"id\":\"").nth(1).and_then(|r| r.split('"').next())
+            .expect("sid").to_string();
+        let at = |route: &str| format!("/api/sessions/{sid}/{route}");
+
+        // §6.9 window / mode / monitor. Đổi nguồn capture ⇒ keyframe mới.
+        let window = http(addr, "POST", &at("window"), r#"{"windowId":"notes"}"#);
+        assert!(window.starts_with("HTTP/1.1 200"), "window: {window}");
+        assert!(window.contains(r#""windowId":"notes""#), "phải áp dụng: {window}");
+
+        let mode = http(addr, "POST", &at("mode"), r#"{"mode":"hvnc"}"#);
+        assert!(mode.starts_with("HTTP/1.1 200"), "mode: {mode}");
+        assert!(mode.contains(r#""mode":"hvnc""#), "mode phải đổi: {mode}");
+
+        let monitor = http(addr, "POST", &at("monitor"), r#"{"index":2}"#);
+        assert!(monitor.starts_with("HTTP/1.1 200"), "monitor: {monitor}");
+        assert!(monitor.contains(r#""monitor":2"#), "monitor phải đổi: {monitor}");
+
+        // §6.10.1: đổi preset trả đúng số của bảng, và **không** xin keyframe.
+        let before = http(addr, "GET", &format!("/api/sessions/{sid}"), "");
+        let kf_before = before.split(r#""keyframes":"#).nth(1)
+            .and_then(|r| r.trim_start_matches(' ').split(|c: char| !c.is_ascii_digit()).next())
+            .and_then(|n| n.parse::<u64>().ok()).unwrap_or(0);
+        let preset = http(addr, "POST", &at("preset"), r#"{"preset":"low"}"#);
+        assert!(preset.contains(r#""fps":30"#), "low = 30 fps: {preset}");
+        assert!(preset.contains(r#""mbps":1.5"#), "low = 1.5 Mbps: {preset}");
+        let after = http(addr, "GET", &format!("/api/sessions/{sid}"), "");
+        let kf_after = after.split(r#""keyframes":"#).nth(1)
+            .and_then(|r| r.trim_start_matches(' ').split(|c: char| !c.is_ascii_digit()).next())
+            .and_then(|n| n.parse::<u64>().ok()).unwrap_or(0);
+        assert_eq!(kf_before, kf_after,
+            "§6.10.1: đổi preset KHÔNG đổi nguồn capture ⇒ không xin keyframe ({kf_before}→{kf_after})");
+
+        // §8.1 cursor_mode / permission / share / keyframe / takeover / audio.
+        let cursor = http(addr, "POST", &at("cursor_mode"), r#"{"mode":"remote"}"#);
+        assert!(cursor.contains(r#""cursorMode":"remote""#), "cursor_mode: {cursor}");
+
+        let permission = http(addr, "POST", &at("permission"), r#"{"view_only":true}"#);
+        assert!(permission.contains(r#""viewOnly":true"#), "permission: {permission}");
+
+        let share = http(addr, "POST", &at("share"), r#"{"ttl_min":30}"#);
+        assert!(share.contains(r#""ttlMin":30"#), "share: {share}");
+        assert!(share.contains(r#""viewOnly":true"#), "§21.6: link chia sẻ là view-only: {share}");
+
+        let keyframe = http(addr, "POST", &at("keyframe"), "");
+        assert!(keyframe.starts_with("HTTP/1.1 204"), "keyframe ⇒ 204: {keyframe}");
+
+        let takeover = http(addr, "POST", &at("takeover"), "");
+        assert!(takeover.starts_with("HTTP/1.1 409"), "takeover chưa hỗ trợ ⇒ 409: {takeover}");
+
+        let audio = http(addr, "POST", &at("audio"), r#"{"enabled":false}"#);
+        assert!(audio.contains(r#""enabled":false"#), "audio: {audio}");
+        // §58.3: không giả vờ có tiếng khi chưa có.
+        assert!(audio.contains(r#""available":false"#), "phải nói thật là chưa có tiếng: {audio}");
+        drop(server);
+    }
+
+    /// §6.9 ghi rõ: "**Cho phép** (v2.1 cấm)" đổi HVNC↔VNC giữa phiên.
+    /// v2.1 phải đóng rồi mở phiên mới (5–8 s màn hình đen); §6.9 giữ nguyên
+    /// `sid`. Test này khoá rằng `sid` **không** đổi — nếu đổi thì toàn bộ điểm
+    /// của §6.9 mất.
+    #[test] fn switching_mode_keeps_the_same_session_id() {
+        let (addr, server) = spawn_server();
+        let created = http(addr, "POST", "/api/sessions", r#"{"mode":"vnc","windowId":"desktop"}"#);
+        let sid = created.split("\"id\":\"").nth(1).and_then(|r| r.split('"').next())
+            .expect("sid").to_string();
+        let switched = http(addr, "POST", &format!("/api/sessions/{sid}/mode"), r#"{"mode":"hvnc"}"#);
+        assert!(switched.contains(&format!(r#""id":"{sid}""#)),
+            "§6.9: cùng một phiên, không tạo phiên mới: {switched}");
+        // Và phiên cũ vẫn là phiên duy nhất.
+        let mine = http(addr, "GET", "/api/sessions/mine", "");
+        assert_eq!(mine.matches(r#""id":"#).count(), 1, "chỉ được có 1 phiên: {mine}");
+        drop(server);
+    }
+
+    /// §41.3 #3: `wid` phải nằm trong danh sách agent đã trả — client không
+    /// bao giờ quyết định hwnd. Đây là lỗ hổng leo thang quyền **thật** mà
+    /// spec gọi tên, nên nó cần test ở tầng route, không chỉ ở `guard`.
+    #[test] fn a_client_cannot_pick_an_arbitrary_window_id() {
+        let (addr, server) = spawn_server();
+        let created = http(addr, "POST", "/api/sessions", r#"{"mode":"vnc","windowId":"desktop"}"#);
+        let sid = created.split("\"id\":\"").nth(1).and_then(|r| r.split('"').next())
+            .expect("sid").to_string();
+        for bad in [r#"{"windowId":"0x000A0B0C"}"#, r#"{"windowId":"123456"}"#, r#"{"windowId":""}"#] {
+            let out = http(addr, "POST", &format!("/api/sessions/{sid}/window"), bad);
+            assert!(out.starts_with("HTTP/1.1 422"),
+                "wid lạ phải bị từ chối ({bad}): {out}");
+        }
         drop(server);
     }
 
