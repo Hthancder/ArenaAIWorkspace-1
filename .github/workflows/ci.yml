@@ -170,7 +170,7 @@ jobs:
           $diag = Join-Path $env:RUNNER_TEMP 'trim-diag.txt'
           pwsh -File scripts/trim-gstreamer.ps1 -Root $target -Out $out *>&1 | Tee-Object -FilePath $diag
           $code = $LASTEXITCODE
-          Copy-Item $diag . -Force -ErrorAction SilentlyContinue
+          Copy-Item $diag (Join-Path $env:GITHUB_WORKSPACE 'trim-diag.txt') -Force -ErrorAction SilentlyContinue
           if ($code -ne 0) {
             Write-Output "::error::Thu gọn GStreamer thất bại — xem artifact trim-diag"
             exit 1
@@ -181,7 +181,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: trim-diag
-          path: trim-diag.txt
+          path: ${{ github.workspace }}/trim-diag.txt
           if-no-files-found: warn
 
       - name: smoke-run the trimmed bundle
