@@ -190,7 +190,7 @@ fn parse_line(line: &str) -> Option<Record> {
             let end = stripped.find('"')?;
             Some(stripped[..end].to_string())
         } else {
-            let end = rest.find(|c: char| c == ',' || c == '}')?;
+            let end = rest.find([',', '}'])?;
             Some(rest[..end].to_string())
         }
     };
@@ -272,7 +272,7 @@ mod tests {
         let now = 1_700_000_000_000u64;
         let day = 24 * 60 * 60 * 1000u64;
         history.append(&record(now - 8 * day, "cũ"), now - 8 * day).unwrap();
-        history.append(&record(now - 1 * day, "mới"), now - 1 * day).unwrap();
+        history.append(&record(now - day, "mới"), now - day).unwrap();
         // Xoay theo `now`, không theo lúc ghi.
         history.rotate(now).unwrap();
         let read = history.read();

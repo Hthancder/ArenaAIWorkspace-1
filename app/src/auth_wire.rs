@@ -75,17 +75,12 @@ fn os_random(out: &mut [u8]) -> std::io::Result<()> {
 /// Không phải `Option<Auth>` trần vì còn phải nhớ **đang dùng mật khẩu nào**:
 /// chưa ai đặt ⇒ `/api/login` trả 412, và UI hiện màn hình `/setup` (§7.1
 /// `SETUP ──lưu config──► IDLE`).
+#[derive(Default)]
 pub struct AuthState {
     /// `None` cho tới khi có mật khẩu (§7.1 SETUP chưa xong).
     pub auth: Option<Auth>,
     /// Số lần `/api/setup` được gọi — để test và log biết, không lộ ra ngoài.
     pub setup_calls: u32,
-}
-
-impl Default for AuthState {
-    fn default() -> Self {
-        Self { auth: None, setup_calls: 0 }
-    }
 }
 
 /// Kết quả `/api/setup`.

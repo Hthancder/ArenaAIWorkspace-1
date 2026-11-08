@@ -1347,13 +1347,15 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
         // trình duyệt này. `revoke_all` của spec đặt watermark `revoked_before`
         // nên access token 15 phút cũng chết ngay, không phải chờ hết hạn.
         ("POST", "/api/logout") => {
-            // Không có `sub` trong request (204 không trả body, access token
-            // có thể đã hết hạn) ⇒ thu hồi theo user đã đăng nhập duy nhất.
-            // §0.3.1 #4: tối đa 2 tài khoản, cả hai cùng quyền.
+            // Không có `sub` trong request (204 không trả body, access token có
+            // thể đã hết hạn) ⇒ thu hồi theo user **thật** mà server được cấu
+            // hình, không phải chuỗi `"local"` viết cứng: nếu ai đặt tài khoản
+            // tên khác thì `revoke_all("local")` không thu hồi gì, và nút
+            // "đăng xuất mọi nơi" im lặng không làm gì.
+            // §0.3.1 #4: tối đa 2 tài khoản, cả hai cùng quyền ⇒ đúng một tên.
             if let Some(auth) = s.auth.auth.as_mut() {
-                for user in ["local"] {
-                    auth.refresh.revoke_all(user, now_ms() as u64);
-                }
+                let user = auth.passwords.user().to_string();
+                auth.refresh.revoke_all(&user, now_ms() as u64);
             }
             let cleared = rd_spike_lib::security::gate::session_cookie("lantern_refresh", "", 0);
             json_response_with_headers(
@@ -1617,6 +1619,31 @@ mod tests {
             &[("Cookie", &format!("lantern_refresh={second}"))]);
         assert!(after.starts_with("HTTP/1.1 401"), "family đã bị thu hồi: {after}");
 
+        drop(server);
+    }
+
+    /// §8.1 `/api/logout` phải thu hồi theo **tên tài khoản thật**.
+    ///
+    /// Bản trước dùng `for user in ["local"]` — chạy đúng với mật khẩu mặc
+    /// định, và **im lặng không làm gì** nếu ai đặt tài khoản tên khác. Clippy
+    /// chỉ bắt được "for loop over a single element" (chuyện hình thức); test
+    /// này bắt được chuyện thật.
+    #[test] fn logout_revokes_the_configured_user_not_a_hardcoded_name() {
+        let (addr, server) = spawn_server();
+        // Tài khoản tên KHÁC "local".
+        let setup = http(addr, "POST", "/api/setup", r#"{"u":"ba-toi","p":"mat-khau-rat-dai-2026"}"#);
+        assert!(setup.contains(r#""ok":true"#), "setup với tên khác: {setup}");
+        let login = http(addr, "POST", "/api/login", r#"{"u":"ba-toi","p":"mat-khau-rat-dai-2026"}"#);
+        assert!(login.starts_with("HTTP/1.1 200"), "login: {login}");
+        let token = set_cookie(&login, "lantern_refresh").expect("cookie");
+        let cookie = format!("lantern_refresh={token}");
+
+        let out = http_with(addr, "POST", "/api/logout", "", &[("Cookie", &cookie)]);
+        assert!(out.starts_with("HTTP/1.1 204"), "logout: {out}");
+
+        let after = http_with(addr, "POST", "/api/refresh", "", &[("Cookie", &cookie)]);
+        assert!(after.starts_with("HTTP/1.1 401"),
+            "logout phải giết refresh của user thật, không chỉ của \"local\": {after}");
         drop(server);
     }
 
