@@ -29,8 +29,17 @@ jobs:
         with:
           workspaces: spike
 
+      # §57.9: log của job này **không tải được** trong sandbox (blob storage bị
+      # chặn, xem §56.10), nên lỗi clippy được phát lại dưới dạng *annotation*
+      # — thứ đọc được qua api.github.com. Không đổi ngữ nghĩa: vẫn `-D warnings`.
       - name: clippy
-        run: cargo clippy --all-targets -- -D warnings
+        run: |
+          set +e
+          cargo clippy --all-targets --message-format=json -- -D warnings > /tmp/clippy.json
+          status=$?
+          set -e
+          jq -r 'select(.reason=="compiler-message") | .message | select(.level=="error") | "\(.spans[0].file_name // "?"):\(.spans[0].line_start // 0): \(.message)"' /tmp/clippy.json 2>/dev/null | sort -u | head -40 | while IFS= read -r line; do echo "::error::clippy: $line"; done
+          exit $status
 
       - name: test
         run: cargo test --all-targets
