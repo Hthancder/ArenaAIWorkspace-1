@@ -1,5 +1,6 @@
 mod capture;
 #[allow(dead_code)] // dùng trong nhánh #[cfg(windows)] của stream_live
+mod history;
 mod input;
 mod jpeg;
 mod stream;
@@ -70,7 +71,7 @@ fn now_ms() -> u128 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)
 }
 
-struct State { settings: BTreeMap<String, String>, session: Option<Session>, next_id: u64, data_dir: PathBuf, live_status: Option<(bool, String)>, live_metrics: LiveMetrics, input: input::InputSanitizer }
+struct State { settings: BTreeMap<String, String>, session: Option<Session>, next_id: u64, data_dir: PathBuf, live_status: Option<(bool, String)>, live_metrics: LiveMetrics, input: input::InputSanitizer, history: history::History }
 
 fn json_quote(value: &str) -> String {
     let mut out = String::from("\"");
@@ -542,6 +543,11 @@ fn stream_live(
         let budget = Duration::from_micros(1_000_000 / u64::from(fps.max(1)));
         let mut previous = first.bgra;
         let mut next_due = Instant::now() + budget;
+        // §6.4.7 lớp 4: watchdog 3 s. Client mất mạng khi đang giữ Ctrl ⇒
+        // không bao giờ gửi `key up` ⇒ máy thật kẹt Ctrl tới khi reboot. Đây
+        // là lưới **duy nhất** bắt được trường hợp đó, vì nó không phụ thuộc
+        // client còn sống.
+        let mut last_watchdog = Instant::now();
         loop {
             if peer_closed(&stream) {
                 return;
@@ -578,6 +584,15 @@ fn stream_live(
             // Giới hạn tốc độ: DXGI có thể trả frame nhanh hơn `fps` khi có
             // chuyển động mạnh (con trỏ, video). Không giới hạn thì ta nén
             // nhiều hơn mức người xem nhận được.
+            // 1 Hz là đủ (§44.2 nói watchdog 3 s).
+            if last_watchdog.elapsed() >= Duration::from_secs(1) {
+                last_watchdog = Instant::now();
+                let mut s = state.lock().unwrap_or_else(|e| e.into_inner());
+                if let Some(actions) = input::watchdog(&mut s.input, now_ms() as u64) {
+                    drop(s);
+                    input::inject(&actions);
+                }
+            }
             let now = Instant::now();
             if next_due > now {
                 std::thread::sleep(next_due - now);
@@ -698,8 +713,39 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
         ("DELETE", _) if route.starts_with("/api/sessions/") => {
             let id = route.trim_start_matches("/api/sessions/");
             if s.session.as_ref().map(|session| session.id.as_str()) != Some(id) { return json_response(&mut stream, 404, "{\"error\":\"session_not_found\"}".into()); }
-            let ended = s.session.take().map(|session|session_json(&session)).unwrap_or_else(||"null".into());
+            let ended_session = s.session.take();
+            let ended = ended_session.as_ref().map(session_json).unwrap_or_else(||"null".into());
+            // §50.2: một dòng / phiên. Ghi **sau** khi phiên đã đóng, và
+            // không để lỗi ghi đĩa làm hỏng response — lịch sử là phụ.
+            if let Some(session) = &ended_session {
+                // `session.started_at` là **giây** (`now_seconds`), còn
+                // `History` so mốc bằng **mili** (`now_ms`). Lệch 1000× ⇒
+                // mọi dòng bị coi là quá 7 ngày và bị `rotate` xoá ngay sau
+                // khi ghi: lịch sử **luôn rỗng** mà không báo lỗi gì.
+                let record = history::Record {
+                    ts: session.started_at.saturating_mul(1_000),
+                    sid: session.id.clone(),
+                    user: "local".into(),
+                    app: session.window_id.clone(),
+                    title_hash: history::title_hash(&session.window_id),
+                    mode: session.mode.clone(),
+                    duration_s: now_seconds().saturating_sub(session.started_at),
+                    end_reason: "closed".into(),
+                    bytes_out: s.live_metrics.jpeg_bytes,
+                };
+                if let Err(error) = s.history.append(&record, now_ms() as u64) {
+                    eprintln!("history: không ghi được ({error}) — phiên vẫn đóng bình thường");
+                }
+            }
             json_response(&mut stream, 200, format!("{{\"session\":{},\"stopped\":true,\"mock\":true}}",ended))
+        }
+        // §8.1 + §50.2: lịch sử, **mới nhất trước**, tối đa 500 dòng, không
+        // phân trang. Không có route ghi: client không được tạo lịch sử.
+        ("GET", "/api/history") => {
+            let records = s.history.read();
+            let items: Vec<String> = records.iter().map(history::Record::to_json).collect();
+            json_response(&mut stream, 200, format!(
+                "{{\"history\":[{}],\"count\":{}}}", items.join(","), records.len()))
         }
         ("GET", p) if p.starts_with("/api/") => json_response(&mut stream, 404, "{\"error\":\"not_found\"}".into()),
         _ => json_response(&mut stream, 405, "{\"error\":\"method_not_allowed\"}".into()),
@@ -750,7 +796,8 @@ fn main() {
     let data_dir = env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(env::temp_dir).join("LanternMock");
     let mut settings = SETTINGS_DEFAULTS.iter().map(|(k,v)|(k.to_string(),v.to_string())).collect::<BTreeMap<_,_>>();
     if let Ok(text) = fs::read_to_string(data_dir.join("settings.json")) { if let Some(saved)=parse_flat_object(&text) { for (k,v) in saved { if settings.contains_key(&k) && allowed_value(&k,&v) { settings.insert(k,v); } } } }
-    let state=Arc::new(Mutex::new(State{settings,session:None,next_id:0,data_dir,live_status:None,live_metrics:LiveMetrics::default(),input:input::InputSanitizer::default()}));
+    let history_log = history::History::new(&data_dir);
+    let state=Arc::new(Mutex::new(State{settings,session:None,next_id:0,data_dir,live_status:None,live_metrics:LiveMetrics::default(),input:input::InputSanitizer::default(),history:history_log}));
     let url = format!("http://127.0.0.1:{actual}");
     println!("Lantern mock is ready. Open {url} in your browser.");
     println!("Xem màn hình thật: {url}/live  — hoặc bấm nút \"Xem máy thật\" (không cần cài gì).");
@@ -811,14 +858,25 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
         let addr = listener.local_addr().expect("addr");
         let handle = std::thread::spawn(move || {
+            // Thư mục riêng cho mỗi lần `spawn_server`: dùng chung
+            // `temp_dir()` thì các test thấy `history.jsonl` của nhau và
+            // `count` không bao giờ đúng. Lỗi của test, không phải của code —
+            // nhưng nếu không sửa thì test này test nhầm thứ.
+            let data_dir = std::env::temp_dir().join(format!(
+                "lantern-test-{}-{:?}",
+                std::process::id(),
+                std::thread::current().id()
+            ));
+            let _ = std::fs::remove_dir_all(&data_dir);
             let state = Arc::new(Mutex::new(State {
                 settings: BTreeMap::new(),
                 session: None,
                 next_id: 0,
-                data_dir: std::env::temp_dir(),
+                data_dir: data_dir.clone(),
                 live_status: None,
                 live_metrics: LiveMetrics::default(),
                 input: input::InputSanitizer::default(),
+                history: history::History::new(&data_dir),
             }));
             for stream in listener.incoming().take(8).flatten() {
                 handle(stream, Arc::clone(&state));
@@ -881,6 +939,23 @@ mod tests {
             r#"{"t":"text","s":"\ud83d\ude00"}"#,
         );
         assert!(response.contains("\"actions\":2"), "emoji phải là 2 code unit: {response}");
+        drop(server);
+    }
+
+    /// §50.2 + §8.1: kết thúc phiên ⇒ **một** dòng lịch sử, đọc lại được.
+    #[test] fn closing_a_session_writes_exactly_one_history_line() {
+        let (addr, server) = spawn_server();
+        let created = http(addr, "POST", "/api/sessions", r#"{"mode":"vnc","windowId":"desktop"}"#);
+        let sid = created.split("\"id\":\"").nth(1).and_then(|r| r.split('"').next()).expect("sid").to_string();
+        let closed = http(addr, "DELETE", &format!("/api/sessions/{sid}"), "");
+        assert!(closed.contains("\"stopped\":true"), "{closed}");
+
+        let history = http(addr, "GET", "/api/history", "");
+        assert!(history.contains("\"count\":1"), "phải có đúng 1 dòng: {history}");
+        assert!(history.contains("\"mode\":\"vnc\""), "{history}");
+        assert!(history.contains("\"end_reason\":\"closed\""), "{history}");
+        // §41: không lưu tiêu đề, chỉ hash.
+        assert!(!history.contains("Trình duyệt"), "không lưu tiêu đề: {history}");
         drop(server);
     }
 

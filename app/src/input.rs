@@ -71,6 +71,7 @@ pub const FLAG_MIDDLE: u8 = 1 << 2;
 pub const FLAG_BACK: u8 = 1 << 3;
 pub const FLAG_FORWARD: u8 = 1 << 4;
 pub const FLAG_CTRL: u8 = 1 << 5;
+#[allow(dead_code)] // §8.3 / §44.2 — API đầy đủ, chưa dùng hết
 pub const FLAG_SHIFT: u8 = 1 << 6;
 pub const FLAG_ALT: u8 = 1 << 7;
 
@@ -83,6 +84,7 @@ pub const MAX_CTRL_PER_SEC: u32 = 100;
 /// `text` ≤ 256 code unit / message (§44.8).
 pub const MAX_TEXT_UNITS: usize = 256;
 /// Watchdog: im 3 s mà còn giữ gì đó ⇒ release.
+#[allow(dead_code)] // §8.3 / §44.2 — API đầy đủ, chưa dùng hết
 pub const STUCK_RELEASE_MS: u64 = 3_000;
 /// `wheel` biên (§8.3 clamp).
 pub const MAX_WHEEL: i32 = 2_400;
@@ -98,6 +100,9 @@ pub enum Reject {
     /// `keys_held` vượt 16 ⇒ release + reset.
     TooManyKeysHeld,
     /// Surrogate lẻ (dữ liệu hỏng). Bỏ, không crash.
+    /// Chưa nối: `accept_text` hiện dùng `from_utf16_lossy` nên hiếm khi
+    /// tạo ra; giữ lại vì spec §44.2 bất biến #5 cần mã lỗi này.
+    #[allow(dead_code)]
     SurrogateOrphan,
 }
 
@@ -117,6 +122,10 @@ impl Reject {
 /// nếu xếp sau 60 event move, người dùng đã nhả chuột 100 ms trước mà máy vẫn
 /// đang drag.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+/// §44.7 — thứ tự hàng đợi. Chưa nối: đường HTTP hiện đồng bộ từng
+/// request, nên "nhảy hàng" đã đúng theo tự nhiên. Giữ vì §44.7 yêu cầu và
+/// `drain_order` có test.
+#[allow(dead_code)]
 pub enum Priority {
     /// Số càng nhỏ càng sớm.
     ReleaseAll = 0,
@@ -126,6 +135,7 @@ pub enum Priority {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)] // §8.3 — bitmask client; chưa dùng vì HTTP gửi từng event
 pub struct Held {
     pub left: bool,
     pub right: bool,
@@ -135,6 +145,7 @@ pub struct Held {
     pub alt: bool,
 }
 
+#[allow(dead_code)]
 impl Held {
     pub fn from_flags(flags: u8) -> Self {
         Self {
@@ -287,6 +298,7 @@ impl InputSanitizer {
 
     /// Watchdog §6.4.7 lớp 4: im `STUCK_RELEASE_MS` mà còn giữ ⇒ release.
     /// Gọi từ vòng lặp 1 Hz là đủ.
+    #[allow(dead_code)] // gọi qua `watchdog()` tự do bên dưới
     pub fn watchdog(&mut self, now_ms: u64) -> Option<Vec<u16>> {
         let holding = !self.keys_held.is_empty() || self.buttons_held != 0;
         if !holding {
@@ -314,6 +326,7 @@ pub fn clamp_wheel(delta: i32) -> i32 {
 }
 
 /// Thứ tự hàng đợi theo §44.7: trả index sắp xử lý.
+#[allow(dead_code)] // §44.7, có test riêng
 pub fn drain_order(events: &[Priority]) -> Vec<usize> {
     let mut order: Vec<usize> = (0..events.len()).collect();
     order.sort_by_key(|i| (events[*i], *i)); // ổn định: cùng mức thì giữ thứ tự đến
@@ -456,7 +469,12 @@ pub fn handle(sanitizer: &mut InputSanitizer, event: Event, now_ms: u64, block_w
         Event::Button { down, button } => sanitizer.accept_button(down, button, now_ms).err(),
         Event::Key { down, vk, mods } => sanitizer.accept_key(vk, down, mods, block_win_lock, now_ms).err(),
         Event::Wheel { .. } => None,
-        Event::Text { .. } => None,
+        // §44.8: `text` >256 unit phải bị từ chối **trước** khi thành Action.
+        // Bản đầu bỏ qua `accept_text` nên giới hạn đó không bao giờ chạy.
+        Event::Text { ref units } => {
+            let text: String = String::from_utf16_lossy(units);
+            sanitizer.accept_text(&text).err()
+        }
         Event::ReleaseAll | Event::Blur => unreachable!("đã xử lý ở trên"),
     };
 
@@ -635,4 +653,21 @@ pub fn inject(actions: &[Action]) -> u32 {
 #[cfg(not(windows))]
 pub fn inject(_actions: &[Action]) -> u32 {
     0
+}
+
+/// §6.4.7 lớp 4: gọi từ vòng lặp 1 Hz. Trả danh sách KEYUP cần gửi nếu
+/// watchdog kích hoạt (client im ≥3 s mà còn phím/nút đang giữ).
+///
+/// Vì sao phải có hàm này ở đây chứ không để `main` tự gọi `sanitizer.watchdog`:
+/// `main` phải **gửi** chuỗi KEYUP đó xuống Win32, và việc dịch VK → `Action`
+/// chỉ nên nằm ở một chỗ.
+/// Chỉ dùng từ nhánh Windows của `stream_live` (nơi có phiên capture thật).
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn watchdog(sanitizer: &mut InputSanitizer, now_ms: u64) -> Option<Vec<Action>> {
+    let keys = sanitizer.watchdog(now_ms)?;
+    let mut actions: Vec<Action> = keys.into_iter().map(|vk| Action::Key { down: false, vk }).collect();
+    for bit in [FLAG_LEFT, FLAG_RIGHT, FLAG_MIDDLE, FLAG_BACK, FLAG_FORWARD] {
+        actions.push(Action::Button { down: false, bit });
+    }
+    Some(actions)
 }
