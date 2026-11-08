@@ -7,6 +7,7 @@ mod input;
 mod jpeg;
 mod pins;
 mod session_state;
+mod advice;
 mod stream;
 mod windows;
 
@@ -1037,6 +1038,24 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
     match (method.as_str(), route) {
         ("GET", "/api/health") => json_response(&mut stream, 200, "{\"ok\":true,\"app\":\"lantern-mock\",\"mode\":\"mock\"}".into()),
         ("GET", "/api/device") => json_response(&mut stream, 200, "{\"id\":\"inspiron-7467\",\"name\":\"Inspiron 7467\",\"status\":\"ready\",\"platform\":\"Windows 11\",\"location\":\"Ở nhà\",\"mock\":true}".into()),
+        // §6.10.2 câu 2: *"hoặc hiện ước lượng ~8 Mbps trước khi bấm Start"*.
+        // Route này tồn tại để UI hiện con số **trước** khi tạo phiên — nếu
+        // không, người dùng chỉ biết mình dùng bao nhiêu băng thông sau khi đã
+        // dùng. Số đo là của phiên trước, nên nó có thể `null`.
+        ("GET", "/api/advice") => {
+            let elapsed = now_ms().saturating_sub(s.live_metrics.started_ms);
+            let measured = if s.live_metrics.frames >= 10 && elapsed >= advice::MIN_SAMPLE_MS {
+                let mbps = s.live_metrics.mbps(elapsed);
+                (mbps.is_finite() && mbps > 0.0).then_some(mbps)
+            } else {
+                None
+            };
+            let recommended = advice::recommend(measured);
+            let (estimate_mbps, estimate_label) = advice::estimate_before_start();
+            json_response(&mut stream, 200, format!(
+                "{{\"recommendation\":{},\"estimate\":{{\"mbps\":{},\"preset\":\"{}\"}}}}",
+                advice::advice_json(&recommended), estimate_mbps, estimate_label))
+        }
         // §5.4 — `EnumWindows` **thật**. Trước đây route này trả ba cửa sổ viết
         // cứng ("Trình duyệt", "Ghi chú"), nên trên máy người dùng danh sách
         // hiện ba thứ không tồn tại. Đó là lý do cảm giác "vẫn là demo": danh
@@ -1167,6 +1186,21 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
                 return json_response(&mut stream, 409, format!(
                     "{{\"error\":\"session_already_active\",\"session\":{}}}", session_json(active)));
             }
+            // §6.10.2: **trước khi bắt đầu** — đề nghị preset từ số đo phiên
+            // trước (5 s gần nhất, hoặc cả phiên nếu ngắn hơn), để người dùng
+            // không phải đoán. Người dùng đã chọn `preset` rõ ràng thì đề nghị
+            // chỉ để tham khảo: `preset` của họ thắng.
+            let measured = {
+                let (_, _) = s.live_metrics.summary();
+                let elapsed = now_ms().saturating_sub(s.live_metrics.started_ms);
+                if s.live_metrics.frames >= 10 && elapsed >= advice::MIN_SAMPLE_MS {
+                    let mbps = s.live_metrics.mbps(now_ms().saturating_sub(s.live_metrics.started_ms));
+                    (mbps.is_finite() && mbps > 0.0).then_some(mbps)
+                } else {
+                    None
+                }
+            };
+            let recommended = advice::recommend(measured);
             let session = Session {
                 id: format!("mock-{}",s.next_id), mode: mode.into(), window_id: win.into(),
                 started_at: now_seconds(),
@@ -1178,7 +1212,19 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
                 state: "active",
                 share_ttl_min: None,
             };
-            let result = session_json(&session); s.session = Some(session); json_response(&mut stream, 201, format!("{{\"session\":{},\"mock\":true}}",result))
+            let result = session_json(&session);
+            // Luật §6.10.1: người dùng **chọn tay** thì preset của họ thắng —
+            // đề nghị là để tham khảo, và phải nói được là nó khác lựa chọn.
+            let taken_from_user = input.contains_key("preset");
+            let advice_json = advice::advice_json(&recommended);
+            let hint = if taken_from_user && recommended.recommended.id != session.preset {
+                format!(",\"advice_conflict\":true")
+            } else {
+                String::new()
+            };
+            s.session = Some(session);
+            json_response(&mut stream, 201, format!(
+                "{{\"session\":{},\"advice\":{}{},\"mock\":true}}", result, advice_json, hint))
         }
         // §8.3 + §44: input. Ba tầng, mỗi tầng một việc:
         //   1. parse JSON → `input::Event`  (dữ liệu hỏng bị loại)
@@ -2094,6 +2140,43 @@ mod tests {
     /// kiểm, nó stream cửa sổ đó. Đây không phải tấn công lý thuyết: client
     /// **không được tin** (§41.3), và một extension độc (§41.2 P5) sửa được
     /// request.
+    /// §6.10.2 — *"Kiểm tra băng thông trước khi bắt đầu"*.
+    ///
+    /// Spec cho hai cách: `POST /api/sessions` trả `recommended_preset`, **hoặc**
+    /// hiện ước lượng "~8 Mbps" trước khi bấm Start. Bản này làm cả hai; test
+    /// này khoá cả hai đường, vì một route tồn tại mà không ai gọi thì cũng như
+    /// không có.
+    #[test] fn bandwidth_advice_is_available_before_and_at_session_start() {
+        let (addr, server) = spawn_server();
+        let before = http(addr, "GET", "/api/advice", "");
+        assert!(before.starts_with("HTTP/1.1 200"), "{before}");
+        assert!(before.contains(r#""recommended_preset":"auto""#), "{before}");
+        assert!(before.contains(r#""measured_mbps":null"#), "chưa stream ⇒ null, không phải 0: {before}");
+        assert!(before.contains(r#""mbps":8"#), "§6.10.2 ghi ~8 Mbps: {before}");
+
+        // `DELETE` nhận **id thật** (không có route `/current`). Lấy id từ
+        // `GET /api/sessions/current`, hoặc bỏ qua nếu chưa có phiên nào.
+        let sid_of = |response: &str| {
+            response.split("\"id\":\"").nth(1).and_then(|rest| rest.split('"').next()).map(str::to_string)
+        };
+        let end_current = |addr: std::net::SocketAddr| {
+            let current = http(addr, "GET", "/api/sessions/current", "");
+            if let Some(id) = sid_of(&current) { http(addr, "DELETE", &format!("/api/sessions/{id}"), ""); }
+        };
+        end_current(addr);
+        let created = http(addr, "POST", "/api/sessions", r#"{"mode":"vnc","windowId":"desktop"}"#);
+        assert!(created.starts_with("HTTP/1.1 201"), "{created}");
+        assert!(created.contains(r#""recommended_preset""#), "thiếu đề nghị: {created}");
+
+        // Người dùng chọn tay ⇒ lựa chọn của họ thắng, và phải biết là nó
+        // **khác** đề nghị (nếu không UI im lặng làm theo một preset tệ).
+        end_current(addr);
+        let forced = http(addr, "POST", "/api/sessions", r#"{"mode":"vnc","windowId":"desktop","preset":"sharp"}"#);
+        assert!(forced.contains(r#""preset":"sharp""#), "lựa chọn tay phải thắng: {forced}");
+        assert!(forced.contains(r#""advice_conflict":true"#), "phải báo lệch: {forced}");
+        drop(server);
+    }
+
     #[test] fn a_wid_outside_the_published_snapshot_is_refused() {
         let (addr, server) = spawn_server();
         // Liệt kê trên Linux trả rỗng (§58.3: không bịa), nên snapshot có 0
