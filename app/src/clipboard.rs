@@ -285,7 +285,6 @@ pub fn content_json(content: Option<&ClipboardContent>) -> String {
 /// được và đi tìm lỗi ở chỗ khác.
 #[cfg(windows)]
 pub fn apply(content: &ClipboardContent) -> bool {
-    use std::ffi::c_void;
     #[allow(non_snake_case)]
     mod win {
         use std::ffi::c_void;
@@ -359,7 +358,6 @@ pub fn apply(content: &ClipboardContent) -> bool {
 /// "có chuỗi rỗng", và UI cần phân biệt để hiện "không có gì để dán".
 #[cfg(windows)]
 pub fn read() -> Option<ClipboardContent> {
-    use std::ffi::c_void;
     #[allow(non_snake_case)]
     mod win {
         use std::ffi::c_void;
