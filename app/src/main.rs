@@ -1268,7 +1268,7 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
             let taken_from_user = input.contains_key("preset");
             let advice_json = advice::advice_json(&recommended);
             let hint = if taken_from_user && recommended.recommended.id != session.preset {
-                format!(",\"advice_conflict\":true")
+                ",\"advice_conflict\":true".to_string()
             } else {
                 String::new()
             };
@@ -1467,7 +1467,8 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
                         restore_ms, applied, injected))
                 }
                 Err(error) => {
-                    let code = error.clone().code();
+                    // `ClipboardError` là `Copy`, nên không cần clone.
+                    let code = error.code();
                     let status = error.status();
                     json_response(&mut stream, status, format!("{{\"error\":{}}}", json_quote(code)))
                 }

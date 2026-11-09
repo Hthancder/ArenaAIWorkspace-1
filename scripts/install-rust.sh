@@ -54,14 +54,25 @@ for pkg in rustc-linux-x64 cargo-linux-x64 rust-std-linux-x64; do
     tar xzf "$TMP/$pkg.tgz" -C "$TMP/x"
 done
 
+echo "Tải clippy (CI chạy \`cargo clippy -- -D warnings\`)…"
+curl -sL --fail -o "$TMP/clippy-linux-x64.tgz" \
+    "https://registry.npmjs.org/@rusttonpm/clippy-linux-x64/-/clippy-linux-x64-$VERSION.tgz"
+tar xzf "$TMP/clippy-linux-x64.tgz" -C "$TMP/x"
+
 echo "Cài vào $ROOT …"
 rm -rf "$ROOT"
-mkdir -p "$ROOT/bin"
+mkdir -p "$ROOT/bin" "$ROOT/lib"
 
 # Binary **thật** của rustc/cargo (không phải wrapper `package/bin/*`: wrapper
 # gọi `../vendor/rustc/bin/rustc` và đường đó không tồn tại sau khi cài kiểu này).
 cp "$TMP/x/package/vendor/rustc/bin/rustc" "$ROOT/bin/"
 cp "$TMP/x/package/vendor/cargo/bin/cargo" "$ROOT/bin/"
+
+# clippy: `cargo clippy` gọi hai binary này. Không có chúng thì bước CI
+# "standalone exe clippy" (`-- -D warnings`) không chạy được ở máy, và ta chỉ
+# biết mình vi phạm lint **sau khi** push.
+cp "$TMP/x/package/vendor/clippy-preview/bin/cargo-clippy" "$ROOT/bin/"
+cp "$TMP/x/package/vendor/clippy-preview/bin/clippy-driver" "$ROOT/bin/"
 
 # Driver + LLVM: rustc là binary nhỏ, phần thân ở `lib/*.so`.
 cp "$TMP/x/package/vendor/rustc/lib/"*.so* "$ROOT/lib/"
@@ -72,14 +83,20 @@ cp -r "$TMP/x/package/vendor/rust-std-x86_64-unknown-linux-gnu/lib/rustlib/x86_6
     "$ROOT/lib/rustlib/x86_64-unknown-linux-gnu/" 2>/dev/null || true
 
 # Linker self-contained: rustc 1.92 tìm `ld.lld` trong `bin/gcc-ld/` của sysroot.
-# Gói npm không đóng gói nó, nên dùng `rust-lld` làm cả hai tên.
-if [ ! -x "$ROOT/lib/rustlib/x86_64-unknown-linux-gnu/bin/gcc-ld/ld.lld" ]; then
-    mkdir -p "$ROOT/lib/rustlib/x86_64-unknown-linux-gnu/bin/gcc-ld"
-    # `rust-lld` có trong gói rustc-linux-x64 ở `lib/rustlib/<target>/bin/`.
-    if [ -x "$ROOT/lib/rustlib/x86_64-unknown-linux-gnu/bin/rust-lld" ]; then
-        cp "$ROOT/lib/rustlib/x86_64-unknown-linux-gnu/bin/rust-lld" \
-            "$ROOT/lib/rustlib/x86_64-unknown-linux-gnu/bin/gcc-ld/ld.lld"
-    fi
+# Gói npm **không** đóng gói nó, nên mượn `rust-lld` của gói rustc (nó cũng
+# trong `lib/rustlib/<target>/bin/`) và đặt dưới cả hai tên.
+TARGET_BIN="$ROOT/lib/rustlib/x86_64-unknown-linux-gnu/bin"
+# `rust-lld` nằm trong gói **rustc** ở `lib/rustlib/<target>/bin/`, không phải
+# trong gói rust-std. Chép nó sang nếu bước trên không mang theo.
+SRC_BIN="$TMP/x/package/vendor/rustc/lib/rustlib/x86_64-unknown-linux-gnu/bin"
+if [ ! -x "$TARGET_BIN/rust-lld" ] && [ -x "$SRC_BIN/rust-lld" ]; then
+    mkdir -p "$TARGET_BIN"
+    cp "$SRC_BIN/rust-lld" "$TARGET_BIN/rust-lld"
+fi
+if [ -x "$TARGET_BIN/rust-lld" ]; then
+    mkdir -p "$TARGET_BIN/gcc-ld"
+    cp "$TARGET_BIN/rust-lld" "$TARGET_BIN/gcc-ld/ld.lld"
+    cp "$TARGET_BIN/rust-lld" "$TARGET_BIN/gcc-ld/lld"
 fi
 
 chmod +x "$ROOT/bin/"* 2>/dev/null || true
