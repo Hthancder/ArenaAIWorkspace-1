@@ -239,3 +239,35 @@ test('chuông không bịa: im lặng phải nói ra (§50.1 #5)', () => {
   // Autoplay bị chặn tới khi có tương tác: phải mở khoá ở tương tác đầu tiên.
   assert.ok(app.includes('pointerdown'), 'phải mở khoá AudioContext ở tương tác đầu');
 });
+
+// §50.1 #6 (P2) — chế độ "mạng rất yếu": 1 fps + **chỉ bàn phím**.
+// Ở 1 fps, bấm chuột bằng ảnh cũ là bấm vào chỗ nút đó nằm ở một giây trước —
+// nguy hiểm hơn không làm gì. Bàn phím không có vấn đề đó.
+test('chế độ mạng yếu là 1 fps và tắt chuột, không chỉ hạ fps (§50.1 #6)', () => {
+  assert.ok(html.includes('liveWeakNet'), 'phải có nút bật chế độ');
+  assert.ok(/live\.weakNet \? 1 :/.test(app), 'fps phải là 1 ở chế độ yếu');
+  assert.ok(app.includes('setPointerEnabled'), 'phải tắt đường chuột');
+  // Chặn ở **một** chỗ trong controller, không rải rác từng handler.
+  const input = fs.readFileSync(require('node:path').join(__dirname, 'input.js'), 'utf8');
+  // Kiểm **thứ tự trong hàm `pointer`**, không khớp nguyên văn: bản đầu của test
+  // này giả định đúng một dòng comment và đỏ khi comment dài hai dòng. Test khớp
+  // hình dạng quá cụ thể sẽ đỏ mỗi lần sửa lời văn — và người ta sẽ nới nó thay
+  // vì hiểu nó.
+  const pointerBody = input.slice(
+    input.indexOf('pointer(event, type) {'),
+    input.indexOf('pointer(event, type) {') + 1200
+  );
+  const guardAt = pointerBody.indexOf('if (!this.pointerEnabled) return false;');
+  const computeAt = pointerBody.indexOf('toNormalised(');
+  assert.ok(guardAt >= 0, 'pointer() phải có cờ chặn');
+  assert.ok(guardAt < computeAt, 'cờ chặn phải **trước** khi tính toạ độ và gửi');
+  assert.ok(input.includes("releaseAll('pointer-disabled')"),
+    'tắt chuột phải nhả nút đang giữ (nếu không nút ở lại down trên máy thật)');
+});
+
+test('chế độ mạng yếu không đổi FPS người dùng đã chọn (§50.1 #6)', () => {
+  // Như tab ẩn: ghi vào `live.fps` thì slider nhảy, và tắt chế độ yếu xong FPS
+  // của người dùng đã bị đổi mà không biết.
+  assert.ok(!/live\.fps\s*=\s*1\b/.test(code(app)), 'không được gán live.fps = 1');
+  assert.ok(/live\.weakNet\s*=\s*enabled/.test(app), 'phải dùng cờ riêng');
+});

@@ -200,7 +200,9 @@
     // `live.fps` là **lựa chọn của người dùng** (hiện trên slider). Tab ẩn dùng
     // `live.hiddenFps` riêng: sửa `live.fps` sẽ làm slider nhảy về 5, và người
     // dùng quay lại thấy lựa chọn của mình bị đổi mà không hiểu vì sao.
-    const fps = live.hiddenFps || live.fps;
+    // Thứ tự ưu tiên: chế độ yếu (1 fps) > tab ẩn (5 fps) > lựa chọn người dùng.
+    // Chế độ yếu thắng vì nó là hành động **có chủ ý** của người dùng.
+    const fps = live.weakNet ? 1 : (live.hiddenFps || live.fps);
     return `/api/live.mjpg?monitor=${live.monitor}&fps=${fps}`;
   }
   /**
@@ -736,6 +738,51 @@
   });
   $('#liveBtn').addEventListener('click', toggleLive);
   $('#liveInstall').addEventListener('click', installGstreamer);
+  /**
+   * §50.1 #6 (P2) — chế độ "mạng rất yếu": **1 fps, chỉ bàn phím**.
+   *
+   * # Vì sao tắt chuột chứ không chỉ hạ fps
+   *
+   * Ở 1 fps, hình cập nhật mỗi giây một lần. Bấm chuột bằng **ảnh cũ** là bấm
+   * vào chỗ một giây trước nút đó nằm ở đâu — thao tác nguy hiểm hơn không làm
+   * gì. Bàn phím thì khác: gõ chữ không phụ thuộc việc bạn thấy con trỏ ở đâu.
+   * Spec ghi đúng cặp đó: *"1 fps + chỉ bàn phím"*.
+   *
+   * # Không đổi lựa chọn của người dùng
+   *
+   * Dùng `live.weakNet` như `live.hiddenFps`: slider fps phải giữ nguyên giá trị
+   * người dùng chọn, nếu không tắt chế độ yếu xong thì FPS của họ đã bị đổi mà
+   * không biết.
+   */
+  async function setWeakNet(enabled) {
+    live.weakNet = enabled;
+    const button = $('#liveWeakNet');
+    button.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+    button.classList.toggle('on', enabled);
+
+    if (liveController) {
+      // §50.1 #6: chỉ bàn phím ⇒ tắt đường chuột của **cùng** controller, không
+      // tạo controller thứ hai (hai controller cùng gửi input là hai nguồn sự
+      // thật, và `releaseAll` của cái này không biết cái kia đang giữ gì).
+      liveController.setPointerEnabled(!enabled);
+    }
+
+    if (!live.active) return;
+    // Đổi fps ⇒ mở lại response với fps mới. `dataset.src` phải cập nhật cùng
+    // lúc, nếu không `renderLive` tưởng chưa đổi.
+    const img = $('#liveImage');
+    const url = liveUrl();
+    img.dataset.src = url;
+    img.src = url;
+    $('#liveMeta').textContent = enabled
+      ? 'Mạng rất yếu · 1 fps · chỉ bàn phím (chuột tắt để không bấm nhầm vào ảnh cũ)'
+      : `MJPEG thật · màn hình ${live.monitor} · tối đa ${live.fps} fps · bấm để điều khiển · không có tiếng`;
+  }
+
+  $('#liveWeakNet').addEventListener('click', () => {
+    setWeakNet(!live.weakNet).catch(() => {});
+  });
+
   $('#liveFullscreen').addEventListener('click', async () => {
     try {
       if (!document.fullscreenElement) await $('#screenFrame').requestFullscreen();

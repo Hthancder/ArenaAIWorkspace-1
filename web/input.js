@@ -209,6 +209,9 @@ export class InputController {
     // click** qua hàm, không chụp lại lúc tạo: người dùng đổi chế độ giữa phiên
     // là chuyện thường, và một giá trị chụp lại sẽ làm mọi click sau đó lệch.
     this.mode = mode;
+    // §50.1 #6: `true` mặc định. `setPointerEnabled(false)` tắt **đường chuột**
+    // (move/down/up/wheel) mà vẫn giữ bàn phím.
+    this.pointerEnabled = true;
     this.now = now;
     this.threshold = threshold;
     this.held = 0;
@@ -235,6 +238,10 @@ export class InputController {
 
   /** Chuyển một `PointerEvent` thành message `move` (§6.4.1). */
   pointer(event, type) {
+    // §50.1 #6: chặn ở **một** chỗ, không ở từng handler. Nếu chặn rải rác thì
+    // thêm một đường chuột mới (hoặc một handler mới) sẽ quên, và chế độ "chỉ
+    // bàn phím" âm thầm gửi chuột — đúng thứ nó tồn tại để tránh.
+    if (!this.pointerEnabled) return false;
     const { x, y } = toNormalised(event.clientX, event.clientY, this.element.getBoundingClientRect(), this.frame(), this.mode());
     // §6.4.1: giữ phím bổ trợ trong cùng `flags` byte.
     const mods =
@@ -269,6 +276,31 @@ export class InputController {
       } catch {
         // Trình duyệt không cho (đã nhả capture) — không phải lý do để bỏ click.
       }
+    }
+  }
+
+  /**
+   * §50.1 #6 — bật/tắt đường **chuột** mà không gỡ controller.
+   *
+   * # Vì sao tắt được chuột là một yêu cầu thật
+   *
+   * Ở chế độ "mạng rất yếu" (1 fps), hình cập nhật mỗi giây một lần. Bấm chuột
+   * bằng **ảnh cũ** nghĩa là bấm vào chỗ nút đó nằm ở một giây trước — nguy
+   * hiểm hơn không làm gì. Bàn phím không có vấn đề đó: gõ chữ không phụ thuộc
+   * việc bạn thấy con trỏ ở đâu.
+   *
+   * # Vì sao không gỡ rồi gắn lại controller
+   *
+   * Hai controller cùng tồn tại là hai nguồn sự thật: `releaseAll` của cái này
+   * không biết cái kia đang giữ phím nào. Một cờ ở đây rẻ hơn và đúng hơn.
+   *
+   * Tắt chuột thì phải **nhả** nút đang giữ trước: nếu người dùng đang kéo một
+   * cửa sổ rồi bật chế độ yếu, nút chuột ở lại down trên máy thật.
+   */
+  setPointerEnabled(enabled) {
+    this.pointerEnabled = enabled;
+    if (!enabled) {
+      try { this.releaseAll('pointer-disabled'); } catch { /* chưa có gì để nhả */ }
     }
   }
 

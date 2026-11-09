@@ -74,6 +74,10 @@
                 <span class="live-metrics" id="liveMetrics"></span>
                 <label>Màn hình <select id="liveMonitor"><option value="0">0 (chính)</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></label>
                 <label>FPS <select id="liveFps"><option value="5">5</option><option value="10">10</option><option value="15" selected>15</option><option value="30">30</option></select></label>
+                <!-- §50.1 #6: chế độ "mạng rất yếu" — 1 fps + chỉ bàn phím. Khi mạng chỉ còn
+                     vài chục Kbit/s, hình 15 fps làm mọi thứ đứng; 1 fps vẫn cho
+                     biết màn hình đang ở đâu và bàn phím vẫn dùng được. -->
+                <button class="screen-tool" id="liveWeakNet" title="Mạng rất yếu (1 fps, chỉ bàn phím)" aria-pressed="false">🐢</button>
                 <button class="screen-tool" id="liveFullscreen" title="Toàn màn hình">⛶</button>
                 <button class="screen-tool" id="liveOpen" title="Mở tab riêng cho điện thoại">↗</button>
               </div>
