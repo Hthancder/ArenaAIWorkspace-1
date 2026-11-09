@@ -314,3 +314,22 @@ test('cảnh báo cửa sổ admin **trước** khi tạo phiên (§6.13)', () =
   assert.ok(/UIPI|không điều\s*\n?'?\s*khiển/.test(before) || before.includes('UIPI'),
     'cảnh báo phải nói rõ hệ quả');
 });
+
+// §50.4 — ba việc "gần như miễn phí": tiêu đề tab, favicon, HUD.
+// Mở 5 tab thì "Lantern" ở cả 5 không nói được tab nào đang xem màn hình; và khi
+// phiên đứt, tab bar là chỗ **duy nhất** người dùng còn nhìn khi ở tab khác.
+test('tiêu đề tab nói đang xem cửa sổ nào (§50.4)', () => {
+  assert.ok(app.includes('document.title'), 'phải đặt tiêu đề tab');
+  assert.ok(/`\$\{short\} · Lantern`/.test(app), 'tiêu đề phải có tên cửa sổ, không chỉ tên app');
+  // Tên cửa sổ dài bị tab bar cắt từ cuối ⇒ phải tự cắt trước.
+  assert.ok(/slice\(0, 39\)/.test(app), 'phải cắt tên dài trước khi vào tiêu đề');
+});
+
+test('favicon đổi màu theo trạng thái (§50.4)', () => {
+  assert.ok(app.includes('setFavicon'), 'phải có hàm đổi favicon');
+  assert.ok(/idle:|live:|error:/.test(app), 'phải có ≥3 trạng thái');
+  // SVG inline qua `data:` — một file `.ico` là thêm một asset, một route, một
+  // chỗ có thể 404 im lặng.
+  assert.ok(app.includes('data:image/svg+xml'), 'favicon phải là SVG inline, không phải file');
+  assert.ok(app.includes("setFavicon('error')"), 'mất hình phải báo đỏ sớm');
+});

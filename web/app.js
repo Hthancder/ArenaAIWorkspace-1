@@ -292,6 +292,9 @@
     $('#liveBtn').classList.toggle('on', live.active);
     $('#liveBar').classList.toggle('hidden', !live.active);
     $('#liveBtnLabel').textContent = live.active ? 'Dừng xem máy thật' : 'Xem máy thật';
+    // §50.4: tab bar là chỗ **duy nhất** người dùng còn nhìn khi họ ở tab khác —
+    // và đó chính là lúc họ cần biết phiên đang chạy hay đã đứt.
+    setTabTitle(live.active);
     if (!live.active) {
       // Tắt hẳn thì xoá cờ "đã thấy frame": lần Start sau là một stream mới,
       // và một ảnh lỗi ngay lập tức phải báo lý do thay vì đếm ngược 60 giây.
@@ -808,6 +811,64 @@
       : `MJPEG thật · màn hình ${live.monitor} · tối đa ${live.fps} fps · bấm để điều khiển · không có tiếng`;
   }
 
+  /**
+   * §50.4 — tiêu đề tab = tên cửa sổ đang xem; favicon đổi màu theo trạng thái.
+   *
+   * # Vì sao đáng làm dù chỉ vài dòng
+   *
+   * Mở 5 tab (workspace, `/live`, tài liệu, tab của tab…) thì "Lantern" ở cả 5
+   * không nói được tab nào là cái đang xem màn hình. Và khi phiên đứt, tab bar là
+   * chỗ **duy nhất** người dùng còn nhìn — nếu họ đang ở tab khác.
+   *
+   * Favicon vẽ bằng SVG inline (`data:`), không phải file `.ico`: một asset nữa
+   * là một route nữa là một chỗ có thể 404 im lặng (§58.15 bài học).
+   */
+  const FAVICON_COLOURS = {
+    idle: '#8b9a92',    // xám: chưa có phiên
+    live: '#3fa06a',    // xanh: đang xem máy thật
+    error: '#d0453e',   // đỏ: mất kết nối / lỗi
+  };
+
+  function setFavicon(stateName) {
+    const colour = FAVICON_COLOURS[stateName] || FAVICON_COLOURS.idle;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">`
+      + `<rect width="32" height="32" rx="7" fill="${colour}"/>`
+      + `<rect x="8" y="10" width="16" height="10" rx="1.5" fill="#fff"/>`
+      + `<rect x="13" y="21" width="6" height="2" fill="#fff"/></svg>`;
+    let link = document.querySelector('link[rel="icon"]');
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      document.head.appendChild(link);
+    }
+    // `encodeURIComponent` chứ không base64: SVG đọc được khi mở devtools, và
+    // không có rủi ro encoding của base64 với ký tự UTF-8 trong tương lai.
+    link.href = `data:image/svg+xml,${encodeURIComponent(svg)}`;
+  }
+
+  /**
+   * §50.4: tiêu đề tab nói **đang xem cửa sổ nào**.
+   *
+   * Bỏ tên app dài dòng khi chưa có phiên: tab bar cắt còn 20 ký tự, nên phần
+   * đầu phải là thứ phân biệt được, không phải "Lantern — Điều khiển từ xa".
+   */
+  function setTabTitle(active) {
+    if (!active) {
+      document.title = 'Lantern';
+      setFavicon('idle');
+      return;
+    }
+    const picked = (realWindows || []).find(win => win.wid === state.selectedWindow);
+    const where = !picked
+      ? (state.selectedWindow === 'desktop' ? 'Toàn màn hình' : state.selectedWindow)
+      : (picked.title || picked.app || picked.wid);
+    // Cắt tên cửa sổ: tiêu đề tab dài bị cắt từ **cuối**, nên tên app ở cuối
+    // biến mất trước — đúng phần ít thông tin hơn.
+    const short = where.length > 40 ? `${where.slice(0, 39)}…` : where;
+    document.title = `${short} · Lantern`;
+    setFavicon(live.active ? 'live' : 'idle');
+  }
+
   $('#liveWeakNet').addEventListener('click', () => {
     setWeakNet(!live.weakNet).catch(() => {});
   });
@@ -960,6 +1021,9 @@
     }
     if (!reconnectStartedAt) reconnectStartedAt = Date.now();
     showReconnecting();
+    // §50.4: đỏ ở tab bar **trước** khi hết 60 giây — đây là tín hiệu sớm nhất
+    // mà người dùng ở tab khác nhận được.
+    setFavicon('error');
     if (reconnectTimer) return;
     reconnectTimer = setInterval(() => {
       if (!live.active) { clearInterval(reconnectTimer); reconnectTimer = null; return; }
