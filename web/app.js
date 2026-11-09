@@ -32,7 +32,7 @@
   async function refreshMetrics() {
     if (!live.active) { renderMetrics(); return; }
     try {
-      const response = await fetch('/api/live/status', { cache: 'no-store' });
+      const response = await authorisedFetch('/api/live/status', { cache: 'no-store' });
       const status = await response.json();
       live.metrics = status.metrics || { frames: 0 };
     } catch { /* giữ số cũ; không bịa số mới */ }
@@ -94,8 +94,21 @@
   let inputModule = null;
   let toastTimer;
   let currentSessionId = null;
+  // §7.1: đã đặt mật khẩu thì **mọi** route cần quyền đòi token, và token phải
+  // đi kèm mỗi request. Dùng `authFetch` (nạp động) chứ không `fetch` trần:
+  // `fetch` trần chỉ hoạt động khi máy chưa có mật khẩu — tức là app chạy được
+  // ở lần chạy đầu và **hỏng sau khi người dùng đặt mật khẩu**, đúng lúc họ
+  // tưởng mọi thứ đã xong.
+  let authFetchModule = null;
+  const authorisedFetch = async (path, options = {}) => {
+    if (!authFetchModule) {
+      authFetchModule = import('./auth.js').then((module) => module.authFetch).catch(() => null);
+    }
+    const send = await authFetchModule;
+    return (send || fetch)(path, options);
+  };
   const apiRequest = async (path, options = {}) => {
-    const response = await fetch(path, { ...options, headers: { ...(options.body ? { 'content-type': 'application/json' } : {}), ...options.headers }, body: options.body ? JSON.stringify(options.body) : undefined });
+    const response = await authorisedFetch(path, { ...options, headers: { ...(options.body ? { 'content-type': 'application/json' } : {}), ...options.headers }, body: options.body ? JSON.stringify(options.body) : undefined });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || `http_${response.status}`);
     return payload;
@@ -207,7 +220,7 @@
     if (!img) return;
     const sessionId = currentSessionId || await (async () => {
       try {
-        const response = await fetch('/api/sessions/current', { cache: 'no-store' });
+        const response = await authorisedFetch('/api/sessions/current', { cache: 'no-store' });
         const data = await response.json();
         return data.session ? data.session.id : '';
       } catch { return ''; }
@@ -313,7 +326,7 @@
   // Hỏi server một chỗ duy nhất: nút có dùng được không, và nếu không thì vì sao.
   async function refreshLiveStatus() {
     try {
-      const response = await fetch('/api/live/status');
+      const response = await authorisedFetch('/api/live/status');
       if (!response.ok) return;
       const status = await response.json();
       if (typeof status.available !== 'boolean') return;

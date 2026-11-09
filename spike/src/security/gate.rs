@@ -216,11 +216,32 @@ impl Auth {
     /// Kiểm access token cho một request **có** `sid`. `expected_sub` không phải
     /// tuỳ chọn — nó chính là §41.4 T3.
     pub fn authorize(&self, jwt: &str, sid_owner: &str, now_ms: u64) -> Result<super::token::Claims, super::token::TokenError> {
+        self.authorize_maybe_scoped(jwt, Some(sid_owner), now_ms)
+    }
+
+    /// Như `authorize`, nhưng cho route **không gắn với phiên nào**.
+    ///
+    /// # Vì sao `None` cần thiết, không chỉ là tiện
+    ///
+    /// §8.2 áp `sid.owner == token.sub` cho message **trên một phiên**. Route
+    /// như `/api/windows` hay `/api/settings` không có `sid` nào để so; gọi
+    /// `authorize` với một chuỗi giả (`"*"`, `""`) nghĩa là so `sub` với chuỗi
+    /// đó — và **mọi** token đều bị `wrong_subject`. Đó là app tự khoá cứng ngay
+    /// khi người dùng đặt mật khẩu.
+    ///
+    /// `None` = "không có phạm vi phiên" ⇒ `verify` bỏ phép so `sub`, vẫn kiểm
+    /// chữ ký, hạn, issuer, audience. Không nới lỏng gì ngoài phạm vi phiên.
+    pub fn authorize_maybe_scoped(
+        &self,
+        jwt: &str,
+        sid_owner: Option<&str>,
+        now_ms: u64,
+    ) -> Result<super::token::Claims, super::token::TokenError> {
         self.tokens.verify(
             jwt,
             now_ms,
-            Some(sid_owner),
-            self.refresh.revoked_before(sid_owner),
+            sid_owner,
+            sid_owner.and_then(|owner| self.refresh.revoked_before(owner)),
         )
     }
 }
@@ -381,6 +402,28 @@ mod tests {
             .login("10.0.0.1", "owner", "correct horse", "laptop", T0, &mut e)
             .expect("login");
         assert_eq!(a.authorize(&session.access, "owner", T0 + 1).map(|c| c.sub), Ok("owner".to_string()));
+        // Route không gắn phiên: `None` phải qua với token hợp lệ. Trước bản này
+        // người gọi phải truyền một chuỗi giả, và token nào cũng bị
+        // `wrong_subject` — nghĩa là bật mật khẩu là app khoá cứng.
+        assert_eq!(
+            a.authorize_maybe_scoped(&session.access, None, T0 + 1).map(|c| c.sub),
+            Ok("owner".to_string()),
+            "None phải bỏ kiểm sub, không phải từ chối"
+        );
+        // Nhưng vẫn từ chối token hết hạn: bỏ *phạm vi phiên* không phải bỏ *hạn*.
+        //
+        // Dùng hạn **thật** của token chứ không đoán một con số: bản đầu của test
+        // này đoán 10 phút và đỏ, vì `access_ttl_ms` của cấu hình test ngắn hơn.
+        // Một test đoán hạn sẽ đỏ mỗi lần ai đổi TTL, và lúc đó người ta sẽ nới
+        // test thay vì hiểu nó — đúng thứ làm test mất giá trị.
+        // §41.6 cho phép **skew ±60 s** (chỉ cho `iat/exp`, không cho chữ ký),
+        // nên `exp + 1` vẫn còn trong dung sai và **đúng là** phải qua. Vượt hẳn
+        // skew mới là quá hạn thật.
+        let expires_at = session.claims.exp_ms;
+        assert!(
+            a.authorize_maybe_scoped(&session.access, None, expires_at + 61_000).is_err(),
+            "quá hạn thật (ngoài skew ±60 s) phải bị từ chối dù không kiểm sub"
+        );
         // `sid` của người khác ⇒ WrongSubject, không phải "dùng được".
         assert_eq!(
             a.authorize(&session.access, "guest", T0 + 1),

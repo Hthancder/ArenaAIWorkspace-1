@@ -2,7 +2,10 @@
 
 > Mục tiêu của file này: **5 phút**, kết thúc bằng một tab trình duyệt (trên laptop hoặc trên điện thoại cùng Wi-Fi) hiện **màn hình thật** của laptop Windows.
 >
-> Đây **chưa phải** bản remote desktop hoàn chỉnh. Nó **chỉ có hình**. Không có tiếng, không điều khiển được chuột/bàn phím, và không phải WebRTC. Nói rõ để bạn không chờ đợi sai: xem §"Nó chưa làm được gì" ở cuối.
+> Đây **chưa phải** bản remote desktop hoàn chỉnh: **có** hình, **có** chuột/bàn phím,
+> **chưa có** tiếng, và **không phải** WebRTC. §6.4 (điều khiển trên trang chính) và
+> §5.4 (stream một cửa sổ) đã xong; §52.4 (H.264/Opus) chưa. Xem §"Nó chưa làm được
+> gì" ở cuối.
 
 ---
 
@@ -48,6 +51,25 @@ App sẽ:
 - bind **chỉ `127.0.0.1`** (không mở ra LAN — §41.5 D4/§54.5 #1),
 - tự mở trình duyệt,
 - in ra console 2 địa chỉ: trang chính và `/live`.
+
+---
+
+## 2b. Đặt mật khẩu (lần chạy đầu, ~20 giây)
+
+Lần đầu mở, trang hiện **màn hình khoá** hỏi đặt mật khẩu. Đây không phải bước
+tuỳ chọn: app chạy được nhưng bất kỳ process nào trên máy — kể cả một tab web bạn
+đang mở — cũng gọi được `http://127.0.0.1:<port>/api/live.mjpg` để **xem màn hình
+của bạn**.
+
+- Mật khẩu tối thiểu **12 ký tự** (§4373). Ngắn hơn thì app từ chối và nói rõ.
+- Tên đăng nhập mặc định `local`, giữ nguyên được.
+- Mật khẩu lưu **trên máy bạn** dưới dạng hash Argon2. Không gửi đi đâu.
+- Đặt xong là vào luôn, không phải gõ lại.
+
+Từ lần chạy sau, trang hiện form đăng nhập. Quên mật khẩu thì xoá file trong
+thư mục dữ liệu của app (`%LOCALAPPDATA%\lantern\` trên Windows) rồi chạy lại —
+app cho đặt mật khẩu mới. **Không có đường khôi phục**, vì đó là toàn bộ mật
+khẩu của bạn.
 
 ---
 

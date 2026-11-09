@@ -30,6 +30,10 @@ const INPUT_JS: &str = include_str!("../../web/input.js");
 /// §6.4/§6.5 — cắm `input.js` vào trang `/live`.
 const LIVE_JS: &str = include_str!("../../web/live.js");
 const CSS: &str = include_str!("../../web/styles.css");
+
+/// §7.1 — màn hình khoá. Đăng ký như **mọi** asset khác: `include_str!` để file
+/// nằm trong exe (không đọc đĩa lúc chạy), và route riêng vì CSP chặn inline.
+const AUTH_JS: &str = include_str!("../../web/auth.js");
 const JS: &str = include_str!("../../web/app.js");
 const SETTINGS_DEFAULTS: &[(&str, &str)] = &[
     ("quality", "auto"), ("display", "real"), ("aspect", "fit"), ("touch", "scroll"),
@@ -127,7 +131,7 @@ fn now_ms() -> u128 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)
 }
 
-struct State { settings: BTreeMap<String, String>, session: Option<Session>, next_id: u64, data_dir: PathBuf, live_status: Option<(bool, String)>, live_metrics: LiveMetrics, input: input::InputSanitizer, history: history::History, auth: auth_wire::AuthState, policy: guard::Policy, keyframes: u64, pins: pins::Pins, windows: rd_spike_lib::security::window::WindowRegistry,
+struct State { settings: BTreeMap<String, String>, session: Option<Session>, next_id: u64, data_dir: PathBuf, live_status: Option<(bool, String)>, live_metrics: LiveMetrics, input: input::InputSanitizer, history: history::History, auth: auth_wire::AuthState, policy: guard::Policy, loopback_trusted: bool, keyframes: u64, pins: pins::Pins, windows: rd_spike_lib::security::window::WindowRegistry,
     /// §5.4 — gốc toạ độ của frame đang stream, tính theo pixel màn hình.
     /// `(0,0)` khi stream cả màn hình; `(left,top)` của cửa sổ khi crop.
     /// `inject` **phải** cộng giá trị này, nếu không click lệch đúng bằng vị
@@ -544,6 +548,30 @@ fn query_param(route: &str, name: &str) -> Option<String> {
 ///
 /// Viết thành hàm để **mọi** route gọi cùng một câu, thay vì mỗi route tự
 /// nhớ. `sid_owner` là `None` cho route không gắn phiên.
+/// Policy **hiệu lực** tại thời điểm gọi.
+///
+/// # Vì sao không dùng `state.policy` trực tiếp
+///
+/// `Policy::Loopback` được tính **một lần lúc khởi động** từ địa chỉ bind. Nghĩa
+/// là đặt mật khẩu sau đó không đổi được gì: máy đã có mật khẩu mà
+/// `/api/windows`, `/api/live.mjpg`, `/move` vẫn mở cho **mọi** process trên máy.
+/// Đã kiểm bằng curl: `setup` → 200, rồi `GET /api/windows` **không cookie** →
+/// 200. Người dùng đặt mật khẩu, tưởng đã khoá, và thực ra không khoá gì.
+///
+/// Luật đúng: `Loopback` chỉ miễn token khi **chưa có gì để bảo vệ** — tức là
+/// chưa có mật khẩu. Có mật khẩu ⇒ mọi request cần token, kể cả từ loopback.
+///
+/// Khi bind ra ngoài loopback (`policy` khác `Loopback`), giữ nguyên: đã cần
+/// token từ trước.
+fn effective_policy(state: &State) -> guard::Policy {
+    if state.loopback_trusted && state.auth.auth.is_some() {
+        // Đã có mật khẩu ⇒ đòi token dù bind loopback.
+        guard::Policy::Lan
+    } else {
+        state.policy
+    }
+}
+
 fn deny_if_unauthorised(
     stream: &mut TcpStream,
     state: &State,
@@ -551,7 +579,7 @@ fn deny_if_unauthorised(
     sid_owner: Option<&str>,
 ) -> Option<Option<String>> {
     match guard::require_token(
-        state.policy,
+        effective_policy(state),
         headers,
         state.auth.auth.as_ref(),
         sid_owner,
@@ -1102,6 +1130,10 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
     if method == "GET" && route == "/" { return response(&mut stream, 200, "text/html; charset=utf-8", INDEX.as_bytes()); }
     if method == "GET" && route == "/styles.css" { return response(&mut stream, 200, "text/css; charset=utf-8", CSS.as_bytes()); }
     if method == "GET" && route == "/app.js" { return response(&mut stream, 200, "text/javascript; charset=utf-8", JS.as_bytes()); }
+    // Thiếu route này thì `auth.js` 404 ⇒ màn hình khoá **không bao giờ mở**,
+    // và app trông như treo ở màn hình đăng nhập. Đúng loại lỗi im lặng đã gặp
+    // với `/live.js`: asset khai báo trong HTML mà không có route.
+    if method == "GET" && route == "/auth.js" { return response(&mut stream, 200, "text/javascript; charset=utf-8", AUTH_JS.as_bytes()); }
     // §6.4/§6.5: bộ điều khiển chuột/bàn phím của client. Một file riêng (không
     // nhúng vào `live_page`) để `npm test` chạy được từng luật spec — throttle
     // latest-wins, down/up không gộp, `sendBeacon` lúc unload.
@@ -1141,6 +1173,62 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
         let (monitor, fps) = stream::parse_live_query(query);
         if route == "/live" {
             return response(&mut stream, 200, "text/html; charset=utf-8", stream::live_page(monitor, fps).as_bytes());
+        }
+        // §41.4 T1: **kiểm quyền trước khi làm gì khác.** Đặt sau bước probe
+        // capture thì máy không capture được trả `503` cho cả người lạ **và**
+        // người có token — nhìn như lỗi môi trường, thực ra là chưa đăng nhập.
+        // Kiểm trước cũng tránh khởi tạo DXGI cho request không có quyền.
+        // §41.4 T1: **kiểm quyền trước khi làm gì khác.** Đặt sau bước probe
+        // capture thì máy không capture được trả `503` cho cả người lạ **và**
+        // người có token — nhìn như lỗi môi trường, thực ra là chưa đăng nhập.
+        //
+        // # `<img src>` không gửi được `Authorization`
+        //
+        // Thẻ `<img>` tải stream và **không có cách nào** gắn header. Đòi bearer
+        // token ở đây thì sau khi đăng nhập khung hình **đen vĩnh viễn** — lỗi
+        // tệ hơn cả không có auth, vì nó chỉ xuất hiện sau khi người dùng làm
+        // đúng mọi bước.
+        //
+        // Nên route này nhận thêm **cookie** `lantern_refresh` (HttpOnly, JS
+        // không đọc được) làm bằng chứng: trình duyệt tự gửi nó cho request
+        // cùng origin. `SameSite=Strict` của cookie chặn trang khác lợi dụng.
+        //
+        // Không hạ yêu cầu bảo mật: vẫn là token đã ký, vẫn qua
+        // `authorize_maybe_scoped` (chữ ký + hạn + issuer + audience + revoke).
+        // Chỉ **nguồn** token khác — cookie thay vì header — vì `<img>` không
+        // cho chọn.
+        {
+            let mut s = state.lock().unwrap_or_else(|e| e.into_inner());
+            // Đổi cookie → access token **một lần**, ngay tại đây, rồi đi qua
+            // đúng một hàm kiểm quyền như mọi route khác. Hai nhánh kiểm quyền
+            // là hai cơ hội để sai.
+            let from_cookie = match auth_wire::cookie_value(&req_headers, "lantern_refresh") {
+                Some(refresh) => {
+                    let now = now_ms() as u64;
+                    match s.auth.auth.as_mut() {
+                        Some(auth) => auth
+                            .refresh_session(refresh, "local-device", now, &mut auth_wire::RealEntropy)
+                            .map(|rotated| rotated.access),
+                        None => None,
+                    }
+                }
+                None => None,
+            };
+            let verdict = guard::require_token_with_refresh(
+                effective_policy(&s),
+                &req_headers,
+                s.auth.auth.as_ref(),
+                from_cookie.as_deref(),
+                None,
+                now_ms() as u64,
+            );
+            match verdict {
+                guard::Verdict::Allowed(_) => {}
+                guard::Verdict::Denied { status, code } => {
+                    json_response(&mut stream, status, format!("{{\"error\":{}}}", json_quote(code)));
+                    return;
+                }
+            }
         }
         // §5.4: cửa sổ của **phiên đang chạy** quyết định có crop hay không.
         // Trước bản này `window_id` được lưu, kiểm quyền, trả về UI — và
@@ -1189,6 +1277,14 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
         // hiện ba thứ không tồn tại. Đó là lý do cảm giác "vẫn là demo": danh
         // sách cửa sổ là thứ **đầu tiên** người dùng chạm vào.
         ("GET", "/api/windows") => {
+            // §41.3 #3: danh sách cửa sổ là **thông tin về máy đang chạy** —
+            // tên app và tiêu đề tài liệu người dùng đang mở. Đã đặt mật khẩu
+            // thì nó cần token như mọi thứ khác; trước bản này route không gọi
+            // `deny_if_unauthorised`, nên đặt mật khẩu xong vẫn đọc được danh
+            // sách **không cần đăng nhập** (đã kiểm bằng curl: 200).
+            if deny_if_unauthorised(&mut stream, &s, &req_headers, None).is_none() {
+                return;
+            }
             // §41.3 #3 / §41.4 T1: **publish** danh sách vào `WindowRegistry`
             // của spec, rồi trả `snapshotId` cho client. Từ đây client chỉ
             // tham chiếu được `wid` trong snapshot này (TTL 3 s) — nó không
@@ -1785,6 +1881,19 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
             json_response(&mut stream, 200, format!(
                 "{{\"history\":[{}],\"count\":{}}}", items.join(","), records.len()))
         }
+        // §7.1: `/auth.js` cần biết **một** điều trước khi vẽ form: máy này đã
+        // có mật khẩu chưa? Route công khai (không có bí mật nào trong câu trả
+        // lời — chỉ một boolean), vì form đăng nhập phải hiện được **trước** khi
+        // đăng nhập.
+        //
+        // Không dò bằng cách gọi `/api/login` với mật khẩu giả: mỗi lần tải
+        // trang sẽ tính là một lần sai và tự khoá mình sau 5 lần (§41.2 P4).
+        ("GET", "/api/auth/state") => {
+            let configured = s.auth.auth.is_some();
+            json_response(&mut stream, 200, format!(
+                "{{\"configured\":{configured},\"user\":{}}}",
+                json_quote(if configured { "local" } else { "" })))
+        }
         // §7.1 `SETUP ──lưu config──► IDLE`: lần đầu chưa có mật khẩu thì phải
         // đặt được, nếu không server vĩnh viễn không có đường vào.
         ("POST", "/api/setup") => {
@@ -1970,7 +2079,7 @@ fn main() {
     // Dựng trước khi `data_dir` bị move vào `State` — cùng lý do với `history`.
     let history_log = history::History::new(&data_dir);
     let pins_store = pins::Pins::new(&data_dir);
-    let state=Arc::new(Mutex::new(State{settings,session:None,next_id:0,data_dir,live_status:None,live_metrics:LiveMetrics::default(),input:input::InputSanitizer::default(),history:history_log,pins:pins_store,auth:auth_wire::AuthState::default(),policy:guard::Policy::for_bind(&host),keyframes:0,windows:rd_spike_lib::security::window::WindowRegistry::default(),capture_offset:(0,0)}));
+    let state=Arc::new(Mutex::new(State{settings,session:None,next_id:0,data_dir,live_status:None,live_metrics:LiveMetrics::default(),input:input::InputSanitizer::default(),history:history_log,pins:pins_store,auth:auth_wire::AuthState::default(),policy:guard::Policy::for_bind(&host),loopback_trusted:matches!(guard::Policy::for_bind(&host), guard::Policy::Loopback),keyframes:0,windows:rd_spike_lib::security::window::WindowRegistry::default(),capture_offset:(0,0)}));
     let url = format!("http://127.0.0.1:{actual}");
     println!("Lantern mock is ready. Open {url} in your browser.");
     println!("Xem màn hình thật: {url}/live  — hoặc bấm nút \"Xem máy thật\" (không cần cài gì).");
@@ -2058,6 +2167,7 @@ mod tests {
                 input: input::InputSanitizer::default(),
                 auth: auth_wire::AuthState::default(),
                 policy,
+                loopback_trusted: matches!(policy, guard::Policy::Loopback),
                 keyframes: 0,
                 history: history::History::new(&data_dir),
                 pins: pins::Pins::new(&data_dir),
@@ -2106,6 +2216,74 @@ mod tests {
         let mut out = String::new();
         let _ = stream.read_to_string(&mut out);
         out
+    }
+
+    // # Lỗ hổng thật: đặt mật khẩu xong app vẫn mở
+    //
+    // Phát hiện bằng curl, không phải bằng đọc code: `setup` → 200, rồi
+    // `GET /api/windows` **không cookie** → 200. Người dùng đặt mật khẩu, tưởng
+    // đã khoá máy, và bất kỳ process nào trên máy cũng đọc được danh sách cửa
+    // sổ + tiêu đề tài liệu đang mở. Tệ hơn: `/api/live.mjpg` cho xem **màn
+    // hình** mà không cần đăng nhập.
+    //
+    // Ba nguyên nhân độc lập, mỗi cái đủ để mở toang:
+    //  1. `Policy::Loopback` miễn token **vĩnh viễn** (tính một lần lúc khởi
+    //     động, không biết về việc đặt mật khẩu sau đó).
+    //  2. `/api/windows` và `/api/live.mjpg` **không gọi** `deny_if_unauthorised`.
+    //  3. Route không gắn phiên truyền `sid_owner = "*"` ⇒ mọi token bị
+    //     `wrong_subject` ⇒ bật mật khẩu lên là app khoá cứng.
+    //
+    // Test này khoá cả ba: trước khi đặt mật khẩu thì mở (đường dùng bình
+    // thường), sau khi đặt thì **đóng**, và token hợp lệ thì **mở lại được**
+    // (nếu thiếu vế cuối, "bảo mật" chỉ là app hỏng).
+    #[test]
+    fn setting_a_password_actually_locks_the_app_and_a_token_unlocks_it() {
+        let (addr, handle) = spawn_server_with(guard::Policy::Loopback);
+        let password = "mat-khau-rat-dai-2026";
+
+        // Trước khi có mật khẩu: loopback được dùng bình thường. Đây là đường
+        // của người dùng lần đầu mở app — nếu nó đòi token thì không ai vào được.
+        let before = http(addr, "GET", "/api/windows", "");
+        assert!(before.starts_with("HTTP/1.1 200"), "lần đầu phải mở: {before}");
+
+        let setup = http(addr, "POST", "/api/setup",
+            &format!(r#"{{"u":"local","p":"{password}"}}"#));
+        assert!(setup.starts_with("HTTP/1.1 200"), "setup: {setup}");
+
+        // Vế 1: danh sách cửa sổ phải **đóng**.
+        let locked = http(addr, "GET", "/api/windows", "");
+        assert!(
+            locked.starts_with("HTTP/1.1 401"),
+            "đã có mật khẩu mà vẫn đọc được danh sách cửa sổ: {locked}"
+        );
+        // Vế 2: xem màn hình phải **đóng**. Đây là vế quan trọng nhất — nó là
+        // toàn bộ mục đích của app.
+        let hidden = http(addr, "GET", "/api/live.mjpg", "");
+        assert!(
+            hidden.starts_with("HTTP/1.1 401"),
+            "đã có mật khẩu mà vẫn xem được màn hình: {hidden}"
+        );
+
+        // Vế 3: token hợp lệ phải mở lại được. Không có vế này thì "bảo mật"
+        // chỉ là app hỏng — đúng trạng thái trước khi sửa `sid_owner`.
+        let login = http(addr, "POST", "/api/login",
+            &format!(r#"{{"u":"local","p":"{password}"}}"#));
+        assert!(login.starts_with("HTTP/1.1 200"), "login: {login}");
+        let body = login.split_once("\r\n\r\n").map(|(_, b)| b).unwrap_or("");
+        let access = body
+            .split_once("\"access\":\"")
+            .and_then(|(_, rest)| rest.split_once('"'))
+            .map(|(token, _)| token.to_string())
+            .unwrap_or_else(|| panic!("không thấy access trong: {body}"));
+        let bearer = format!("Bearer {access}");
+        let opened = http_with(addr, "GET", "/api/windows", "",
+            &[("authorization", bearer.as_str())]);
+        assert!(
+            opened.starts_with("HTTP/1.1 200"),
+            "token hợp lệ phải mở được danh sách cửa sổ (nếu 401 wrong_subject thì \
+             route không gắn phiên đang bị kiểm sub sai): {opened}"
+        );
+        drop(handle);
     }
 
     /// Như [`http`] nhưng gửi thêm header — cần cho `Cookie`, vì refresh token

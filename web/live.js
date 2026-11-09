@@ -21,9 +21,20 @@ let sessionId = '';
 
 // §41.3: server là nơi quyết định `sid` — client chỉ hỏi. Không đoán, không
 // tự sinh.
+// §7.1: đã có mật khẩu thì route đòi token. Nạp `authFetch` một lần; nếu
+// `auth.js` không tải được (server cũ) thì rơi về `fetch` trần — chế độ chưa
+// đặt mật khẩu vẫn chạy.
+let authorisedFetchPromise = null;
+function authorisedFetch(path, options) {
+  if (!authorisedFetchPromise) {
+    authorisedFetchPromise = import('./auth.js').then((m) => m.authFetch).catch(() => fetch);
+  }
+  return authorisedFetchPromise.then((send) => send(path, options));
+}
+
 async function currentSession() {
   try {
-    const response = await fetch('/api/sessions/current', { cache: 'no-store' });
+    const response = await authorisedFetch('/api/sessions/current', { cache: 'no-store' });
     const data = await response.json();
     return data.session ? data.session.id : '';
   } catch { return ''; }
@@ -32,7 +43,7 @@ async function currentSession() {
 async function post(path, body) {
   // `Blob` (message `move` 12 byte của §8.3) đi thẳng không qua JSON.
   const isBinary = body instanceof Blob;
-  await fetch(path, {
+  await authorisedFetch(path, {
     method: 'POST',
     headers: isBinary ? { 'content-type': 'application/octet-stream' } : { 'content-type': 'application/json' },
     body: isBinary ? body : JSON.stringify(body),

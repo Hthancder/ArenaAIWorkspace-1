@@ -70,3 +70,62 @@ test('dòng mô tả không nói sai là "không điều khiển được"', () 
   assert.ok(!/không có tiếng\/điều khiển/.test(visible),
     'điều khiển đã có, đừng nói là không có trong UI');
 });
+
+// §7.1 — màn hình khoá. Không có nó thì "dùng thật" không bắt đầu được: server
+// từ chối mọi thao tác (đã có mật khẩu) mà UI không có chỗ nào để đăng nhập.
+const auth = fs.readFileSync(require('node:path').join(__dirname, 'auth.js'), 'utf8');
+
+test('màn hình khoá nạp được và có cả hai chế độ (§7.1)', () => {
+  assert.ok(html.includes('auth.js'), 'index.html phải nạp auth.js');
+  assert.ok(/id="authOverlay"/.test(html), 'phải có overlay khoá');
+  assert.ok(/id="authForm"/.test(html), 'phải có form');
+  // Chế độ "đặt mật khẩu" là đường vào lần đầu; thiếu nó thì lần chạy đầu
+  // không có cách nào tạo mật khẩu ⇒ app vĩnh viễn không dùng được.
+  assert.ok(auth.includes("'/api/setup'"), 'phải gọi /api/setup khi chưa có mật khẩu');
+  assert.ok(auth.includes("'/api/login'"), 'phải gọi /api/login');
+});
+
+test('mật khẩu không được lưu ở đâu (§41.6)', () => {
+  // Refresh token nằm trong cookie HttpOnly — JS không đọc được, cũng không
+  // được ghi. Access token ở trong biến closure, không `localStorage`: XSS đọc
+  // được `localStorage` còn closure thì không.
+  assert.ok(!/localStorage|sessionStorage/.test(code(auth)),
+    'auth.js không được dùng localStorage/sessionStorage cho token');
+  assert.ok(!/document\.cookie/.test(code(auth)),
+    'auth.js không được đọc/ghi document.cookie');
+});
+
+test('mọi request cần quyền đều đi qua authFetch (§7.1)', () => {
+  // Bug sẽ xảy ra nếu quên: app chạy được ở lần chạy đầu (chưa có mật khẩu) và
+  // **hỏng sau khi người dùng đặt mật khẩu** — đúng lúc họ tưởng đã xong.
+  assert.ok(app.includes('authorisedFetch'),
+    'app.js phải có lớp gắn Authorization');
+  const bare = code(app).match(/await fetch\('\/api\/(windows|sessions|settings|live)/g) || [];
+  assert.deepEqual(bare, [],
+    `còn fetch trần tới route cần quyền: ${bare.join(', ')}`);
+  assert.ok(jsLiveIncludesAuthorisedFetch(), 'live.js phải gắn Authorization khi gửi input');
+});
+
+/**
+ * Bỏ comment trước khi kiểm.
+ *
+ * Đây là bẫy đã gặp **hai lần**: test grep chuỗi trong source sẽ khớp cả câu
+ * giải thích. Lần đầu là "bấm để điều khiển" nằm trong comment; lần này là
+ * `localStorage` được nhắc trong chính comment nói *không* dùng nó. Sửa test
+ * cho đúng, đừng xoá test.
+ */
+function code(file) {
+  return file.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+}
+
+function jsLiveIncludesAuthorisedFetch() {
+  const live = fs.readFileSync(require('node:path').join(__dirname, 'live.js'), 'utf8');
+  return live.includes('authorisedFetch');
+}
+
+test('auth.js tự refresh một lần, không lặp vô hạn (§41.6)', () => {
+  // Refresh lặp khi token mới vẫn bị từ chối sẽ đốt lockout và tạo vòng vô hạn.
+  const refreshed = auth.match(/refreshAccess\(\)/g) || [];
+  assert.ok(refreshed.length >= 2, 'phải có hàm refresh và chỗ gọi');
+  assert.ok(/refreshing/.test(auth), 'phải gộp các lần refresh đồng thời');
+});

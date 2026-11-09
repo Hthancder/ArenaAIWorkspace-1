@@ -85,10 +85,44 @@ pub fn require_token(
     sid_owner: Option<&str>,
     now_ms: u64,
 ) -> Verdict {
-    let token = bearer(headers);
+    require_token_with_refresh(policy, headers, auth, None, sid_owner, now_ms)
+}
+
+/// Như `require_token`, nhưng cho phép **refresh token** thay cho access token.
+///
+/// # Chỉ dùng cho đường mà trình duyệt không gắn được header
+///
+/// `<img src="/api/live.mjpg">` không có cách nào gửi `Authorization`; nó gửi
+/// cookie. Nếu route đó chỉ nhận bearer thì khung hình **đen vĩnh viễn** sau khi
+/// đăng nhập — lỗi chỉ xuất hiện khi người dùng làm đúng mọi bước, nên là loại
+/// lỗi tệ nhất để phát hiện muộn.
+///
+/// `refresh_in_header`: giá trị đến từ cookie `lantern_refresh`, đã được đổi
+/// thành access token **trước** khi tới đây (xem `live_headers_with_cookie`).
+/// Hàm này không tự đổi: đổi token là việc của tầng auth, và nó cần `&mut`.
+pub fn require_token_with_refresh(
+    policy: Policy,
+    headers: &BTreeMap<String, String>,
+    auth: Option<&rd_spike_lib::security::gate::Auth>,
+    access_from_cookie: Option<&str>,
+    sid_owner: Option<&str>,
+    now_ms: u64,
+) -> Verdict {
+    let token = bearer(headers).or(access_from_cookie);
     match (policy, token) {
-        // Loopback, không gửi token: cho qua, không có `claims`.
-        (Policy::Loopback, None) => Verdict::Allowed(None),
+        // # Loopback **chỉ** miễn token khi máy chưa có mật khẩu
+        //
+        // Đây là bug bảo mật thật, phát hiện bằng curl: đặt mật khẩu xong,
+        // `/api/windows` vẫn trả **200 không cần cookie**. Người dùng đặt mật
+        // khẩu, tưởng đã khoá máy, và bất kỳ trang web nào mở trên máy cũng
+        // gọi được `http://127.0.0.1:<port>/api/live.mjpg` để xem màn hình —
+        // vì loopback miễn token vĩnh viễn.
+        //
+        // Đúng luật: `Policy::Loopback` nghĩa là "chưa có gì để bảo vệ". Đã có
+        // mật khẩu nghĩa là người dùng **muốn** có cổng, nên nhánh miễn token
+        // phải tắt. Không dựa vào cookie/địa chỉ IP: cookie `HttpOnly` không
+        // chống được trang cùng máy, chỉ có kiểm token mới chống được.
+        (Policy::Loopback, None) if auth.is_none() => Verdict::Allowed(None),
         (_, None) => Verdict::Denied { status: 401, code: "missing_token" },
         (_, Some(jwt)) => {
             let Some(auth) = auth else {
@@ -98,8 +132,21 @@ pub fn require_token(
             };
             // `authorize` của spec gộp verify chữ ký + hạn + `sub` + revoke.
             // Không tự ghép lại từ `verify` — một lần nữa, luật nằm một chỗ.
-            let owner = sid_owner.unwrap_or("*");
-            match auth.authorize(jwt, owner, now_ms) {
+            //
+            // # `None` khác `"*"` — đây là bug đã có thật
+            //
+            // §8.2 chỉ áp `sid.owner == token.sub` cho route **gắn với một
+            // phiên**. Route không gắn phiên (`/api/windows`, `/api/settings`)
+            // không có `sid` nào để so, nên truyền `None`.
+            //
+            // Bản trước thay `None` bằng `"*"` với ý "không ràng buộc". Sai:
+            // `authorize` so `sub == "*"`, không token nào có `sub` là `"*"`, nên
+            // **mọi** request có token đều bị `401 wrong_subject`. Nghĩa là bật
+            // mật khẩu lên là app khoá cứng — không phải bảo mật, mà là hỏng.
+            // (Test cũ không bắt được vì chưa có test nào đi qua đường
+            // "đã cấu hình auth" từ đầu tới cuối.)
+            let owner = sid_owner;
+            match auth.authorize_maybe_scoped(jwt, owner, now_ms) {
                 Ok(claims) => Verdict::Allowed(Some(claims)),
                 Err(error) => Verdict::Denied { status: 401, code: token_error_code(&error) },
             }
