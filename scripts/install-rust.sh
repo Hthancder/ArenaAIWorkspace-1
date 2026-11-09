@@ -127,10 +127,10 @@ echo
 echo "Trước khi build, luôn export:"
 echo "  export PATH=\"$ROOT/bin:\$PATH\""
 echo "  export LD_LIBRARY_PATH=\"$ROOT/lib\""
-echo "  export RUSTFLAGS=\"-C link-self-contained=no -C link-arg=-fuse-ld=gold\""
+echo "  export RUSTFLAGS=\"-C link-self-contained=no -C link-arg=-fuse-ld=bfd\""
 echo
 echo "RUSTFLAGS là bắt buộc: gói npm 1.99 không kèm linker self-contained, và"
-echo "sandbox không có \`ld.lld\` — nó có \`ld.gold\`. Thiếu RUSTFLAGS thì mọi build"
+echo "sandbox không có \`ld.lld\` — nó có \`ld.bfd\`. Thiếu RUSTFLAGS thì mọi build"
 echo "chết ở khâu link với \"self-contained linker was requested\"."
 echo
 echo "LƯU Ý: \"$ROOT\" bị dọn giữa các lệnh bash trong sandbox này (chỉ file"

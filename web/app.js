@@ -87,6 +87,11 @@
   // đây chính là chỗ người dùng thấy "bấm không được".
   let windowSnapshot = '';
   let realWindows = [];
+  // §6.4 — bộ điều khiển cắm vào khung hình live. `null` = chưa cắm (chưa có
+  // phiên, hoặc tính năng tắt). Đây là thứ khiến "xem" thành "dùng được".
+  let liveController = null;
+  let liveFrame = { width: 0, height: 0 };
+  let inputModule = null;
   let toastTimer;
   let currentSessionId = null;
   const apiRequest = async (path, options = {}) => {
@@ -181,6 +186,68 @@
   function liveUrl() {
     return `/api/live.mjpg?monitor=${live.monitor}&fps=${live.fps}`;
   }
+  /**
+   * §6.4 + §6.5 — cắm chuột/bàn phím vào khung hình **live** trên trang chính.
+   *
+   * Trước bản này, điều khiển chỉ có ở trang `/live` (mở tab riêng). Người
+   * dùng xem màn hình thật trên trang chính và **bấm không có gì xảy ra** —
+   * với họ đó là "app hỏng", không phải "tính năng ở tab khác". Đây là mảnh
+   * biến bản xem thành bản dùng được.
+   *
+   * Nạp `input.js` **động**: nó là ES module, và `app.js` là script cổ điển.
+   * Nạp tĩnh sẽ đổi `app.js` thành module và `npm test` đọc nó như text sẽ
+   * không còn phản ánh đúng — tách đường nạp để hai bài test độc lập nhau.
+   */
+  async function attachLiveInput() {
+    if (liveController || !live.ready) return;
+    try {
+      inputModule = inputModule || await import('/input.js');
+    } catch { return; }
+    const img = $('#liveImage');
+    if (!img) return;
+    const sessionId = currentSessionId || await (async () => {
+      try {
+        const response = await fetch('/api/sessions/current', { cache: 'no-store' });
+        const data = await response.json();
+        return data.session ? data.session.id : '';
+      } catch { return ''; }
+    })();
+    if (!sessionId) return;
+    const post = async (path, body) => {
+      const isBinary = body instanceof Blob;
+      await fetch(path, {
+        method: 'POST',
+        headers: isBinary ? { 'content-type': 'application/octet-stream' }
+                          : { 'content-type': 'application/json' },
+        body: isBinary ? body : JSON.stringify(body),
+        cache: 'no-store',
+      });
+    };
+    const attached = inputModule.attach(img, {
+      sid: sessionId,
+      post,
+      // §6.10.3: toạ độ chuẩn hoá theo **khung hình**, nên phải là kích thước
+      // thật của frame MJPEG vừa vẽ, không phải kích thước thẻ <img>.
+      frame: () => liveFrame,
+    });
+    liveController = attached.controller;
+    inputModule.installUnloadRelease(liveController, {
+      beacon: (path, body) => navigator.sendBeacon(path, body),
+      addEventListener: (name, fn) => window.addEventListener(name, fn),
+    });
+    return liveController;
+  }
+
+  function detachLiveInput() {
+    if (!liveController) return;
+    // §6.4.7: nhả **mọi** phím/chuột trước khi gỡ. Nếu không, phím đang giữ
+    // (Ctrl, Shift) ở lại trạng thái down trên máy remote và mọi thao tác sau
+    // đều sai — bug đã gặp ở trang /live.
+    try { liveController.releaseAll('detach'); } catch {}
+    try { liveController.detach(); } catch {}
+    liveController = null;
+  }
+
   function renderLive() {
     const img = $('#liveImage');
     const holder = $('#liveView');
@@ -193,19 +260,38 @@
     $('#liveBtn').classList.toggle('on', live.active);
     $('#liveBar').classList.toggle('hidden', !live.active);
     $('#liveBtnLabel').textContent = live.active ? 'Dừng xem máy thật' : 'Xem máy thật';
+    // Trước bản này dòng này ghi "không có tiếng/điều khiển" — đúng lúc đó,
+    // nhưng giờ điều khiển **có**. Ghi sai sự thật ở đây tệ hơn không ghi gì:
+    // người dùng đọc "không điều khiển được" rồi không thử bấm.
     $('#liveMeta').textContent = live.active
-      ? `MJPEG thật · màn hình ${live.monitor} · tối đa ${live.fps} fps · không có tiếng/điều khiển`
+      ? `MJPEG thật · màn hình ${live.monitor} · tối đa ${live.fps} fps · bấm để điều khiển · không có tiếng`
       : '';
     renderMetrics();
     if (live.active) {
       if (img.dataset.src !== liveUrl()) { img.dataset.src = liveUrl(); img.src = liveUrl(); }
+      // Cắm điều khiển **sau** khi ảnh có src: `attach` cần phần tử đã tồn tại
+      // trong layout để tính toạ độ. Không `await` — đây là render, và nạp
+      // module không được chặn vẽ khung hình.
+      attachLiveInput();
     } else if (img.dataset.src) {
+      detachLiveInput();
       // Bỏ `src` là cách duy nhất để trình duyệt **đóng kết nối** stream;
       // nếu chỉ ẩn ảnh thì pipeline vẫn chạy và vẫn nóng máy.
       img.removeAttribute('src');
       img.dataset.src = '';
     }
   }
+  // `naturalWidth/Height` là kích thước **thật** của frame MJPEG vừa vẽ — dùng
+  // để chuẩn hoá toạ độ (§6.10.3). Không dùng `getBoundingClientRect()`: khung
+  // hình bị co giãn theo CSS, nên toạ độ pixel màn hình không bằng toạ độ chuột.
+  document.addEventListener('DOMContentLoaded', () => {
+    const img = $('#liveImage');
+    if (!img) return;
+    img.addEventListener('load', () => {
+      liveFrame = { width: img.naturalWidth, height: img.naturalHeight };
+    });
+  });
+
   let metricsTimer = 0;
   function startMetricsPolling() {
     clearInterval(metricsTimer);

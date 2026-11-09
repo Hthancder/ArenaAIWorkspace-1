@@ -37,3 +37,36 @@ test('tạo phiên gửi kèm snapshotId (§41.3 #3)', () => {
   assert.ok(post.slice(0, 300).includes('snapshotId'),
     'thiếu snapshotId ⇒ server trả 403 window.unknown');
 });
+
+// §6.4 — điều khiển phải có trên **trang chính**, không chỉ ở tab `/live`.
+//
+// Bug đã xảy ra thật: xem màn hình thật trên trang chính, bấm chuột → không có
+// gì xảy ra. Với người dùng đó là "app hỏng", không phải "tính năng ở tab
+// khác". Điều khiển chỉ tồn tại trong `live.js` (trang `/live`) suốt một thời
+// gian dài, và không test nào bắt được vì cả hai phía đều "đúng".
+test('trang chính cắm bộ điều khiển vào khung hình live (§6.4)', () => {
+  assert.ok(/attachLiveInput/.test(app), 'phải có hàm cắm điều khiển');
+  assert.ok(/import\('\/input\.js'\)|import\("\/input\.js"\)/.test(app),
+    'phải nạp input.js (động, vì app.js là script cổ điển)');
+  assert.ok(/inputModule\.attach\(/.test(app), 'phải gọi attach');
+  // `frame` phải là kích thước **thật** của frame, không phải thẻ <img>.
+  assert.ok(/frame:\s*\(\)\s*=>\s*liveFrame/.test(app), 'frame phải lấy từ liveFrame');
+  assert.ok(/naturalWidth/.test(app), 'liveFrame phải lấy naturalWidth của ảnh');
+});
+
+test('gỡ điều khiển phải nhả mọi phím trước (§6.4.7)', () => {
+  const detach = app.slice(app.indexOf('function detachLiveInput'), app.indexOf('function renderLive'));
+  assert.ok(detach.includes('releaseAll'), 'phím đang giữ phải được nhả');
+  // Thứ tự: nhả trước, gỡ sau. Gỡ trước thì không còn controller để nhả.
+  assert.ok(detach.indexOf('releaseAll') < detach.indexOf('.detach()'),
+    'releaseAll phải chạy **trước** detach');
+});
+
+test('dòng mô tả không nói sai là "không điều khiển được"', () => {
+  // Nếu câu này quay lại trong **chuỗi hiển thị**, người dùng đọc rồi không thử
+  // bấm — tệ hơn không ghi. Chỉ kiểm chuỗi trong template literal (bỏ comment,
+  // vì comment có thể nhắc lại câu cũ để giải thích lịch sử).
+  const visible = app.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.ok(!/không có tiếng\/điều khiển/.test(visible),
+    'điều khiển đã có, đừng nói là không có trong UI');
+});
