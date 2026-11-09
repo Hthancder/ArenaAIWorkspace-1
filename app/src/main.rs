@@ -8,6 +8,7 @@ mod jpeg;
 mod pins;
 mod session_state;
 mod advice;
+mod clipboard;
 mod stream;
 mod windows;
 
@@ -573,6 +574,31 @@ fn json_response(stream: &mut TcpStream, status: u16, body: String) { response(s
 /// (bug #17). Route JSON tự decode, route `/move` đọc thẳng.
 type Request = (String, String, BTreeMap<String, String>, Vec<u8>);
 
+/// Giới hạn body theo route. Đủ lớn cho thứ spec cho phép, đủ nhỏ để một
+/// request hỏng không ăn hết RAM.
+///
+/// # Vì sao `8192` không dùng được cho tất cả
+///
+/// §9.9 cho phép text 256 KB và ảnh 8 MB; §50.3 cho phép upload 50 MB. Một
+/// giới hạn chung 8 KB làm **cả hai** tính năng đó không thể chạy, và triệu
+/// chứng không phải "413" mà là "connection reset" — khó đoán hơn nhiều.
+fn body_limit_for(path: &str) -> usize {
+    let route = path.split('?').next().unwrap_or(path);
+    if route.ends_with("/clipboard") {
+        // Base64 của 8 MB là ~10.7 MB, cộng JSON overhead. `clipboard::validate`
+        // vẫn kiểm lại cap thật sau khi decode — đây chỉ là chặn thô.
+        12 * 1024 * 1024
+    } else if route == "/api/upload" {
+        // §50.3: multipart ≤ 50 MB. Multipart có boundary + header phần, nên
+        // cho dư 1 MB.
+        51 * 1024 * 1024
+    } else {
+        // Input, settings, session: JSON nhỏ. 256 KB đủ cho mọi route còn lại
+        // (kể cả `preset` + `snapshotId` + payload lạ).
+        256 * 1024
+    }
+}
+
 fn read_request(stream: &mut TcpStream) -> Option<Request> {
     stream.set_read_timeout(Some(std::time::Duration::from_secs(3))).ok()?;
     let mut bytes = Vec::new(); let mut chunk = [0u8; 2048]; let header_end;
@@ -595,7 +621,20 @@ fn read_request(stream: &mut TcpStream) -> Option<Request> {
         // Header trùng tên: giữ cái đầu, đúng như HTTP cho phép gộp.
         headers.entry(name).or_insert(value);
     }
-    if length > 8192 { return Some((method, path, headers, b"__BODY_TOO_LARGE__".to_vec())); }
+    // Giới hạn body **theo route**, không phải một con số cho tất cả.
+    //
+    // Bản trước chặn ở 8192 byte cho mọi request. Hệ quả thật:
+    //
+    // * §9.9 clipboard cho phép text **256 KB** ⇒ mọi lần dán một đoạn văn dài
+    //   hơn 8 KB nhận "connection reset" (server trả 413 rồi đóng, nhưng client
+    //   còn đang gửi body nên thấy reset chứ không thấy 413). Người dùng kết
+    //   luận "paste không chạy" và không có thông báo nào.
+    // * §50.3 `/api/upload` cho phép **50 MB** ⇒ route đó đơn giản không thể
+    //   hoạt động, dù spec ghi nó là tính năng.
+    //
+    // Đọc trước `path` ở đây là chấp nhận được: nó nằm trong header đã parse.
+    let limit = body_limit_for(&path);
+    if length > limit { return Some((method, path, headers, b"__BODY_TOO_LARGE__".to_vec())); }
     while bytes.len() < header_end + length { let n = stream.read(&mut chunk).ok()?; if n == 0 { return None; } bytes.extend_from_slice(&chunk[..n]); }
     // §8.3 message `move` là **12 byte nhị phân** — không phải UTF-8. Bản
     // trước dùng `String::from_utf8(..).ok()?`, nên bất kỳ body nào có byte
@@ -1118,7 +1157,18 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
         }
         // §8.1 `GET /api/sessions/{sid}` → `{state,stats,audio,view_only,warnings,cursor_mode}`.
         // `stats` là số đo **thật** của `LiveMetrics`, không phải số bịa.
-        ("GET", p) if p.starts_with("/api/sessions/") && !p.contains("/input") => {
+        // `GET /api/sessions/{sid}` — **chỉ** đúng một segment.
+        //
+        // Bản trước dùng `p.starts_with("/api/sessions/") && !p.contains("/input")`,
+        // nên nó nuốt **mọi** GET con: `/api/sessions/x/clipboard`,
+        // `/api/sessions/x/events`, `/api/sessions/x/mine`… Tất cả trả 404
+        // `session_not_found` vì `sid` hoá ra là `"x/clipboard"`. Đó là lý do
+        // route clipboard thêm vào vẫn không chạy, dù nó khai báo "trước" trong
+        // `match` — guard của route này **rộng hơn** và đứng trước.
+        //
+        // Đếm số `/` là cách kiểm rẻ và không phải bảo trì danh sách loại trừ:
+        // thêm một route con nữa sẽ tự động không bị nuốt.
+        ("GET", p) if p.starts_with("/api/sessions/") && p.matches('/').count() == 3 => {
             let sid = p.trim_start_matches("/api/sessions/");
             let Some(session) = s.session.as_ref().filter(|session| session.id == sid) else {
                 return json_response(&mut stream, 404, "{\"error\":\"session_not_found\"}".into());
@@ -1374,6 +1424,64 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
             }
             json_response(&mut stream, 200, format!(
                 "{{\"enabled\":{},\"available\":false,\"reason\":\"audio_not_implemented\"}}", enabled))
+        }
+        // §9.9 — `clipboard` (T2), **chỉ explicit**.
+        //
+        // Không có route nào ở đây chạy theo lịch. Đó là điểm chính của §9.9:
+        // auto-sync hai chiều (a) gây vòng lặp và (b) rò dữ liệu riêng tư của
+        // người ngồi máy — họ copy mật khẩu, và nó sang tab browser. Muốn có
+        // nội dung thì phải bấm nút, và mỗi lần bấm là một request.
+        ("POST", p) if p.starts_with("/api/sessions/") && p.ends_with("/clipboard") => {
+            let sid = p.trim_start_matches("/api/sessions/").trim_end_matches("/clipboard");
+            let Some(session) = s.session.as_ref().filter(|session| session.id == sid) else {
+                return json_response(&mut stream, 404, "{\"error\":\"session_not_found\"}".into());
+            };
+            let view_only = session.view_only;
+            let Some(input) = parse_flat_object(&body) else {
+                return json_response(&mut stream, 400, "{\"error\":\"invalid_json\"}".into());
+            };
+            let text = input.get("text").map(String::as_str);
+            let image = input.get("image_b64").map(String::as_str);
+            match clipboard::validate(text, image, view_only) {
+                Ok(content) => {
+                    // `paste_to_remote = true`: ta **mượn** clipboard của máy
+                    // người dùng để chuyển dữ liệu vào phiên, nên phải trả lại
+                    // sau 300 ms (§9.9) — nếu không, clipboard của họ bị ghi đè
+                    // vĩnh viễn bằng nội dung từ xa.
+                    let policy = clipboard::restore_policy(true);
+                    let restore_ms = match policy {
+                        clipboard::RestorePolicy::RestoreAfter(ms) => ms,
+                        clipboard::RestorePolicy::Keep => 0,
+                    };
+                    // Chạy trọn "Paste to remote": lưu clipboard cũ → ghi mới
+                    // → `Ctrl+V` → trả lại sau 300 ms. Ba bước phải đi cùng
+                    // nhau; gửi `Ctrl+V` một mình là paste **nội dung cũ** của
+                    // máy remote vào tài liệu người dùng.
+                    let injected = clipboard::paste_to_remote(&content);
+                    // `injected == 0` trên Linux (stub) **hoặc** khi không ghi
+                    // được clipboard. Hai nguyên nhân khác nhau nhưng cùng hệ
+                    // quả với người dùng: chưa có gì được paste. Nói thật.
+                    let applied = injected > 0;
+                    json_response(&mut stream, 200, format!(
+                        "{{\"ok\":true,\"restore_after_ms\":{},\"applied\":{},\"keys\":{}}}",
+                        restore_ms, applied, injected))
+                }
+                Err(error) => {
+                    let code = error.clone().code();
+                    let status = error.status();
+                    json_response(&mut stream, status, format!("{{\"error\":{}}}", json_quote(code)))
+                }
+            }
+        }
+        // "Copy from remote" — client đọc clipboard của agent rồi tự
+        // `navigator.clipboard.writeText` (nút bấm = gesture, §9.9).
+        ("GET", p) if p.starts_with("/api/sessions/") && p.ends_with("/clipboard") => {
+            let sid = p.trim_start_matches("/api/sessions/").trim_end_matches("/clipboard");
+            if s.session.as_ref().map(|session| session.id.as_str()) != Some(sid) {
+                return json_response(&mut stream, 404, "{\"error\":\"session_not_found\"}".into());
+            }
+            let content = clipboard::read();
+            json_response(&mut stream, 200, clipboard::content_json(content.as_ref()))
         }
         // §6.4.7 lớp 3: `sendBeacon` khi đóng tab — không phụ thuộc WS còn sống.
         ("POST", p) if p.starts_with("/api/sessions/") && p.ends_with("/release") => {
@@ -2146,6 +2254,53 @@ mod tests {
     /// hiện ước lượng "~8 Mbps" trước khi bấm Start. Bản này làm cả hai; test
     /// này khoá cả hai đường, vì một route tồn tại mà không ai gọi thì cũng như
     /// không có.
+    /// §9.9 — clipboard **chỉ explicit**, và cap phải chặn ở **server**.
+    ///
+    /// Client là bên không được tin (§41.3): cap ở `web/app.js` chỉ là tiện cho
+    /// người dùng, không phải hàng rào. 100 MB clipboard là cách làm treo agent.
+    #[test] fn clipboard_is_explicit_checked_at_the_server_and_capped() {
+        let (addr, server) = spawn_server();
+        // Tạo phiên **trước**, rồi mới có `sid` để gọi route. Bản trước đọc
+        // `current` trước khi tạo, nên `sid` là phiên cũ (hoặc không có) và
+        // route trả 404 — đúng hành vi, sai thứ tự test.
+        let created = http(addr, "POST", "/api/sessions", r#"{"mode":"vnc","windowId":"desktop"}"#);
+        let current = http(addr, "GET", "/api/sessions/current", "");
+        let sid = created
+            .split("\"id\":\"").nth(1)
+            .or_else(|| current.split("\"id\":\"").nth(1))
+            .and_then(|r| r.split('"').next())
+            .expect("phải có phiên để test clipboard")
+            .to_string();
+        let route = format!("/api/sessions/{sid}/clipboard");
+
+        // Text hợp lệ ⇒ 200, và **phải nói** là chưa inject được trên Linux.
+        let ok = http(addr, "POST", &route, r#"{"text":"xin chào"}"#);
+        assert!(ok.starts_with("HTTP/1.1 200"), "{ok}");
+        assert!(ok.contains(r#""restore_after_ms":300"#), "§9.9 ghi 300 ms: {ok}");
+        assert!(ok.contains(r#""applied":false"#), "Linux không có clipboard Windows — nói thật: {ok}");
+
+        // Rỗng và mập mờ: hai lỗi khác nhau, hai mã khác nhau.
+        assert!(http(addr, "POST", &route, r#"{"text":"   "}"#).contains("clipboard.empty"));
+        assert!(http(addr, "POST", &route, r#"{"text":"a","image_b64":"aGk="}"#)
+            .contains("clipboard.ambiguous"));
+
+        // Vượt cap 256 KB ⇒ 422 **tại server**, không phải chỉ ở client.
+        let big = "a".repeat(256 * 1024 + 1);
+        let refused = http(addr, "POST", &route, &format!(r#"{{"text":"{big}"}}"#));
+        assert!(refused.starts_with("HTTP/1.1 422"), "{refused}");
+        assert!(refused.contains("clipboard.text_too_large"), "{refused}");
+
+        // GET = "copy from remote"; trên Linux clipboard trống ⇒ null, không lỗi.
+        let read = http(addr, "GET", &route, "");
+        assert!(read.starts_with("HTTP/1.1 200"), "{read}");
+        assert!(read.contains(r#""text":null"#), "{read}");
+
+        // Phiên lạ ⇒ 404, không phải 200 rỗng (nếu không client tưởng đã copy).
+        let unknown = http(addr, "POST", "/api/sessions/khong-co/clipboard", r#"{"text":"a"}"#);
+        assert!(unknown.starts_with("HTTP/1.1 404"), "{unknown}");
+        drop(server);
+    }
+
     #[test] fn bandwidth_advice_is_available_before_and_at_session_start() {
         let (addr, server) = spawn_server();
         let before = http(addr, "GET", "/api/advice", "");
