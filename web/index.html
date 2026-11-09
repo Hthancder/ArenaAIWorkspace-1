@@ -53,6 +53,30 @@
                      đếm giây. Không thay ảnh bằng spinner: ảnh đứng yên trông
                      giống app treo, còn ảnh + đồng hồ nói rõ "đang thử lại". -->
                 <div class="live-reconnect hidden" id="liveReconnect" role="status" aria-live="polite"></div>
+                <!-- §30.7: hàng chip **sticky modifier** cho điện thoại. Chỉ 1 hàng
+                     36 px — các phím khác dùng bàn phím ảo của hệ điều hành (đúng
+                     ngôn ngữ, đúng IME, không phải tự vẽ). Chạm = sáng, áp dụng
+                     cho phím kế tiếp rồi tự nhả; chạm 2 lần = khoá. -->
+                <div class="chip-row hidden" id="chipRow" role="toolbar" aria-label="Phím bổ trợ">
+                  <button type="button" class="chip" data-mod="ctrl" aria-pressed="false">Ctrl</button>
+                  <button type="button" class="chip" data-mod="alt" aria-pressed="false">Alt</button>
+                  <button type="button" class="chip" data-mod="shift" aria-pressed="false">⇧</button>
+                  <button type="button" class="chip" data-key="escape" aria-label="Esc">Esc</button>
+                  <button type="button" class="chip" data-key="tab" aria-label="Tab">Tab</button>
+                  <button type="button" class="chip" data-key="backspace" aria-label="Xoá lùi">⌫</button>
+                  <button type="button" class="chip" data-arrow="up" aria-label="Lên">↑</button>
+                  <button type="button" class="chip" data-arrow="down" aria-label="Xuống">↓</button>
+                  <button type="button" class="chip" data-arrow="left" aria-label="Trái">←</button>
+                  <button type="button" class="chip" data-arrow="right" aria-label="Phải">→</button>
+                  <button type="button" class="chip chip-done" id="chipDone" aria-label="Ẩn bàn phím">Ẩn</button>
+                </div>
+                <!-- §30.7: phần tử nhận phím. `inputmode` để bàn phím HĐH mở đúng
+                     loại. `position:absolute` + `opacity:0` để nó không chiếm chỗ
+                     trong layout (nếu không nó đẩy video — đúng thứ spec cấm).
+                     `aria-hidden` KHÔNG đặt: trình đọc màn hình cần bỏ qua nó, và
+                     `opacity:0` đã đủ để nó vô hình với mắt. -->
+                <textarea class="keyboard-sink" id="keyboardSink" aria-label="Gõ phím cho máy đích"
+                  autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" rows="1"></textarea>
                 <div class="live-empty" id="liveEmpty">
                   <b>Chưa bật xem máy thật</b>
                   <!-- Sửa câu cũ "chưa điều khiển được": §6.4 đã xong. Một câu
@@ -67,7 +91,10 @@
                 <div class="desktop-icons"><div><span class="folder-icon">📁</span><small>Tài liệu</small></div><div><span class="folder-icon blue">▧</span><small>Ảnh</small></div><div><span class="folder-icon">🗑</span><small>Thùng rác</small></div></div>
                 <div class="mock-window" id="mockWindow"><div class="window-title"><span class="app-mark">▣</span><span id="mockWindowTitle">Màn hình nền</span><div class="window-controls"><span>—</span><span>□</span><span>×</span></div></div><div class="window-body"><div class="mock-toolbar"><span>←</span><span>→</span><span>↻</span><div class="address-bar">Máy tính này　›　Trang chủ</div><span>···</span></div><div class="file-grid"><div><span>📁</span><small>Tài liệu</small></div><div><span>🖼</span><small>Ảnh</small></div><div><span>🎵</span><small>Âm thanh</small></div><div><span>⬇</span><small>Tệp tải xuống</small></div></div><div class="mock-message"><span class="message-symbol">✳</span><b id="mockMessageTitle">Phiên demo đã sẵn sàng</b><small id="mockMessageText">Đây là hình ảnh minh hoạ — chưa truyền hình ảnh thật.</small></div></div></div>
                 <div class="cursor-pointer" id="cursorPointer"><span></span></div>
-                <div class="demo-watermark">MOCK SCREEN</div>
+                <!-- §58: watermark này chỉ có nghĩa khi desktop giả đang hiện. Trên bản
+                     thật, `applyNativeLabels()` đổi chữ thành màn hình thật; ở đây để trống
+                     hẳn thay vì hét "MOCK" lên một sản phẩm chạy thật. -->
+                <div class="demo-watermark" id="mockWatermark">KHUNG XEM TRƯỚC</div>
               </div>
               <div class="live-bar hidden" id="liveBar">
                 <span id="liveMeta"></span>
@@ -104,10 +131,10 @@
           <aside class="detail-column">
             <section class="detail-card session-card"><div class="detail-title"><h3>Phiên làm việc</h3><span class="more">···</span></div><div class="session-status"><span class="status-icon">⌁</span><div><b id="sessionStatus">Chưa kết nối</b><small id="sessionSubstatus">Bắt đầu để thử giao diện</small></div></div><div class="detail-separator"></div><div class="detail-row"><span>Chế độ</span><b id="sessionMode">Cửa sổ riêng</b></div><div class="detail-row"><span>Độ trễ</span><b class="latency"><i></i><span id="latencyText">—</span></b></div><div class="detail-row"><span>Băng thông</span><b id="bandwidthText">—</b></div></section>
             <section class="detail-card quick-card"><div class="detail-title"><h3>Điều khiển nhanh</h3><span class="sparkle">✳</span></div><button class="quick-row" id="sendCtrlAltDel"><span class="quick-icon">⌘</span><span><b>Gửi Ctrl + Alt + Del</b><small>Chỉ hoạt động trong phiên thật</small></span><span class="quick-arrow">›</span></button><button class="quick-row" id="blankScreen"><span class="quick-icon moon">◐</span><span><b>Màn hình riêng tư</b><small>Mock — chưa áp dụng lên máy</small></span><span class="quick-arrow">›</span></button></section>
-            <section class="tip-card"><span class="tip-icon">✦</span><div><b>Hình màn hình là thật; phần còn lại là mô phỏng</b><p>Nút <b>Xem máy thật</b> phát MJPEG từ chính exe này (không cần cài gì). Chuột, bàn phím, âm thanh và chọn cửa sổ thì <b>chưa có</b> — chúng vẫn là demo.</p><button id="aboutMock">Tìm hiểu thêm <span>→</span></button></div></section>
+            <section class="tip-card"><span class="tip-icon">✦</span><div><b id="tipTitle">Hình màn hình và điều khiển đều thật</b><p id="tipCardBody">DXGI chụp màn hình, JPEG nén trong tiến trình, <code>SendInput</code> gửi chuột/bàn phím — tất cả trong cùng một exe, không cần cài gì. <b>Chưa có</b>: tiếng (H.264/Opus, §52.4) và WebRTC (§37).</p><button id="aboutMock">Tìm hiểu thêm <span>→</span></button></div></section>
           </aside>
         </div>
-        <footer class="page-footer"><span>Lantern <span class="footer-dot">·</span> Bản mock tương tác</span><span>Xem được màn hình thật · điều khiển được chuột/bàn phím · chưa có tiếng.</span></footer>
+        <footer class="page-footer"><span>Lantern <span class="footer-dot">·</span> <span id="footerMode">Bản mock tương tác</span></span><span>Xem được màn hình thật · điều khiển được chuột/bàn phím · chưa có tiếng.</span></footer>
       </div>
     </main>
   </div>

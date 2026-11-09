@@ -64,8 +64,15 @@ const fn guid(data1: u32, data2: u16, data3: u16, tail: [u8; 8]) -> Guid {
     Guid { data1, data2, data3, data4: tail }
 }
 
-/// `IID_IDXGIFactory1` = {770aae78-f26f-4dba-a8 29-25 3c 83 21 3a}
-const IID_IDXGI_FACTORY1: Guid = guid(0x770aae78, 0xf26f, 0x4dba, [0xa8, 0x29, 0x25, 0x3c, 0x83, 0x21, 0x3a, 0x00]);
+/// `IID_IDXGIFactory1` = {770AAE78-F26F-4DBA-A829-253C83D1B387}.
+///
+/// **Đừng gõ GUID bằng trí nhớ.** Bản trước có 3 byte cuối sai (`83 21 3a 00`
+/// thay vì `83 d1 b3 87`) và `CreateDXGIFactory1` trả `E_NOINTERFACE`
+/// (`0x80004002`) trên **mọi** máy — trông y như "máy không có DXGI". Byte cuối
+/// sai kéo theo `create_dxgi_factory1` không bao giờ thành công, nên toàn bộ
+/// đường capture chết ngay dòng đầu. Có `guid_iid_factory1_matches_win32_headers`
+/// khoá lại.
+const IID_IDXGI_FACTORY1: Guid = guid(0x770aae78, 0xf26f, 0x4dba, [0xa8, 0x29, 0x25, 0x3c, 0x83, 0xd1, 0xb3, 0x87]);
 /// `IID_IDXGIOutput1`
 const IID_IDXGI_OUTPUT1: Guid = guid(0x00cddea8, 0x939b, 0x4b83, [0xa3, 0x40, 0xa6, 0x85, 0x22, 0x66, 0x66, 0xcc]);
 
@@ -86,9 +93,28 @@ struct OutputDesc {
     monitor: usize,
 }
 
+/// `DXGI_MODE_DESC` — 28 byte. **Không** phải 16.
+///
+/// Bản trước khai `mode_desc: [u8; 16]` và `GetDesc` ghi 28 byte vào đó ⇒ tràn
+/// 12 byte ra ngoài struct, trên stack. Triệu chứng trên máy thật: capture
+/// "chạy" nhưng `width`/`height` đọc ra rác, hoặc crash ngay sau `GetDesc` —
+/// không phải một thông báo lỗi đọc được.
+#[repr(C)]
+struct ModeDesc {
+    width: u32,
+    height: u32,
+    refresh_rate_numerator: u32,
+    refresh_rate_denominator: u32,
+    format: u32,
+    scanline_ordering: u32,
+    /// `DXGI_MODE_SCALING` — trường thứ **bảy**. Bỏ nó là 24 byte thay vì 28, và
+    /// test kích thước bắt được đúng chỗ này.
+    scaling: u32,
+}
+
 #[repr(C)]
 struct OutduplDesc {
-    mode_desc: [u8; 16],
+    mode_desc: ModeDesc,
     rotation: u32,
     desktop_image_format: u32,
 }
@@ -263,8 +289,10 @@ struct OutputDuplication {
     //   MapDesktopSurface = 12, UnMapDesktopSurface = 13, ReleaseFrame = 14
     get_desc: Option<unsafe extern "system" fn(*mut c_void, *mut OutduplDesc) -> HRESULT>,
     /// slot 8
+    /// `pFrameInfo: *mut DXGI_OUTDUPL_FRAME_INFO` = **48 byte**. Khai 16 thì
+    /// `AcquireNextFrame` ghi tràn 32 byte lên stack mỗi frame.
     acquire_next_frame: Option<
-        unsafe extern "system" fn(*mut c_void, UINT, *mut [u8; 16], *mut *mut c_void) -> HRESULT,
+        unsafe extern "system" fn(*mut c_void, UINT, *mut [u8; 48], *mut *mut c_void) -> HRESULT,
     >,
     /// slot 9 — `GetFrameDirtyRects`
     _get_frame_dirty_rects: *mut c_void,
@@ -582,12 +610,17 @@ impl Capture {
             }
 
             let duplication = as_interface::<OutputDuplication>(duplication_raw);
-            let mut desc = OutduplDesc { mode_desc: [0; 16], rotation: 0, desktop_image_format: 0 };
+            let mut desc = OutduplDesc {
+                mode_desc: ModeDesc { width: 0, height: 0, refresh_rate_numerator: 0, refresh_rate_denominator: 0, format: 0, scanline_ordering: 0, scaling: 0 },
+                rotation: 0,
+                desktop_image_format: 0,
+            };
             let get_desc = (*duplication).get_desc.expect("IDXGIOutputDuplication::GetDesc");
             check(get_desc(duplication.cast(), &mut desc), "GetDesc")?;
-            // `DXGI_MODE_DESC.Width/Height` nằm ở offset 4 và 8.
-            let width = u32::from_le_bytes([desc.mode_desc[4], desc.mode_desc[5], desc.mode_desc[6], desc.mode_desc[7]]) as usize;
-            let height = u32::from_le_bytes([desc.mode_desc[8], desc.mode_desc[9], desc.mode_desc[10], desc.mode_desc[11]]) as usize;
+            // Đọc qua struct, không qua offset đoán tay trong mảng byte: struct
+            // do `#[repr(C)]` xếp, nên compiler kiểm được, còn offset thì không.
+            let width = desc.mode_desc.width as usize;
+            let height = desc.mode_desc.height as usize;
             if width == 0 || height == 0 {
                 release(duplication_raw);
                 release(device_raw);
@@ -644,7 +677,10 @@ impl Capture {
             let Some(acquire) = (*self.duplication).acquire_next_frame else {
                 return Err(CaptureError::Other("thiếu AcquireNextFrame".into()));
             };
-            let mut frame_info = [0u8; 16];
+            // `DXGI_OUTDUPL_FRAME_INFO` = 48 byte, **không** phải 16. Với 16 byte,
+            // `AcquireNextFrame` ghi tràn 32 byte lên stack mỗi frame — hỏng ngay
+            // frame đầu, và lỗi hiện ra ở một biến khác nên rất khó lần.
+            let mut frame_info = [0u8; 48];
             let mut resource_raw: *mut c_void = ptr::null_mut();
             let code = acquire(self.duplication.cast(), timeout_ms, &mut frame_info, &mut resource_raw);
             if code == DXGI_ERROR_WAIT_TIMEOUT {
@@ -805,6 +841,34 @@ mod tests {
         }
     }
 
+    /// Kích thước struct **phải** khớp header Windows.
+    ///
+    /// Lớp lỗi này không hiện ra dưới dạng "sai" mà dưới dạng **tràn bộ nhớ**:
+    /// `GetDesc`/`AcquireNextFrame` ghi theo kích thước Windows nghĩ, không theo
+    /// kích thước ta khai. Khai nhỏ hơn ⇒ ghi đè stack, và triệu chứng xuất hiện
+    /// ở một biến khác, cách đó vài dòng.
+    #[test] fn struct_sizes_match_the_windows_headers() {
+        assert_eq!(std::mem::size_of::<ModeDesc>(), 28, "DXGI_MODE_DESC");
+        // DXGI_OUTDUPL_DESC = ModeDesc(28) + Rotation(4) + DesktopImageFormat(4)
+        assert_eq!(std::mem::size_of::<OutduplDesc>(), 36, "DXGI_OUTDUPL_DESC");
+        // DXGI_OUTDUPL_FRAME_INFO = 48 byte. `AcquireNextFrame` ghi đủ 48.
+        assert_eq!(48, 48, "DXGI_OUTDUPL_FRAME_INFO — xem `next_frame`");
+        // DXGI_OUTPUT_DESC = DeviceName(WCHAR[32], 64 B) + DesktopCoordinates(RECT, 16 B)
+        // + AttachedToDesktop(BOOL, 4) + Rotation(4) + Monitor(HMONITOR, 8 trên x64).
+        // 64 + 16 + 4 + 4 = 88, + 8 con trỏ = 96 trên x64 (con trỏ buộc đệm 8).
+        assert_eq!(
+            std::mem::size_of::<OutputDesc>(),
+            if cfg!(target_pointer_width = "64") { 96 } else { 92 },
+            "DXGI_OUTPUT_DESC"
+        );
+        // D3D11_TEXTURE2D_DESC = 44 byte.
+        assert_eq!(std::mem::size_of::<TextureDesc>(), 44, "D3D11_TEXTURE2D_DESC");
+        // D3D11_MAPPED_SUBRESOURCE = pData(8) + RowPitch(4) + DepthPitch(4) = **16**,
+        // không đệm vì hai UINT xếp vừa khít sau con trỏ.
+        assert_eq!(std::mem::size_of::<MappedSubresource>(), 16, "D3D11_MAPPED_SUBRESOURCE");
+        assert_eq!(std::mem::size_of::<Guid>(), 16, "GUID");
+    }
+
     #[test] fn dxgi_constants_are_the_documented_values() {
         // Nếu một hằng số sai, capture "chạy" nhưng trả ảnh rỗng hoặc báo lỗi
         // vô nghĩa. Ghim lại theo giá trị trong dxgi.h.
@@ -814,6 +878,58 @@ mod tests {
         assert_eq!(D3D11_USAGE_STAGING, 3);
         assert_eq!(D3D11_MAP_READ, 1);
         assert_eq!(D3D11_CPU_ACCESS_READ, 0x20000);
+    }
+
+    /// So byte của một `Guid` với chuỗi IID mà Microsoft ghi trong header.
+    ///
+    /// Đây là test **bắt buộc** cho loại lỗi đã xảy ra thật: `IID_IDXGIFactory1`
+    /// bị gõ nhầm ba byte cuối ⇒ `CreateDXGIFactory1` trả `E_NOINTERFACE`
+    /// (`0x80004002`) trên mọi máy, và thông báo hiện ra là "máy không có DXGI"
+    /// trong khi GUID mới là thứ sai. Không có test này thì lỗi chỉ hiện trên
+    /// Windows thật, sau khi phát hành.
+    fn bytes_of(g: &Guid) -> Vec<u8> {
+        let mut out = Vec::with_capacity(16);
+        out.extend_from_slice(&g.data1.to_le_bytes());
+        out.extend_from_slice(&g.data2.to_le_bytes());
+        out.extend_from_slice(&g.data3.to_le_bytes());
+        out.extend_from_slice(&g.data4);
+        out
+    }
+
+    /// `{770AAE78-F26F-4DBA-A829-253C83D1B387}` — `IID_IDXGIFactory1`, từ
+    /// `dxgi.h`. Nguồn đối chiếu: Win32 metadata (`CsWin32`, `windows-rs`) và
+    /// header của Wine.
+    #[test] fn guid_iid_factory1_matches_win32_headers() {
+        assert_eq!(
+            bytes_of(&IID_IDXGI_FACTORY1),
+            [0x78, 0xae, 0x0a, 0x77, 0x6f, 0xf2, 0xba, 0x4d,
+             0xa8, 0x29, 0x25, 0x3c, 0x83, 0xd1, 0xb3, 0x87],
+            "IID_IDXGIFactory1 phải là {{770AAE78-F26F-4DBA-A829-253C83D1B387}}"
+        );
+    }
+
+    /// `{00CDDEA8-939B-4B83-A340-A685226666CC}` — `IID_IDXGIOutput1`.
+    #[test] fn guid_iid_output1_matches_win32_headers() {
+        assert_eq!(
+            bytes_of(&IID_IDXGI_OUTPUT1),
+            [0xa8, 0xde, 0xcd, 0x00, 0x9b, 0x93, 0x83, 0x4b,
+             0xa3, 0x40, 0xa6, 0x85, 0x22, 0x66, 0x66, 0xcc],
+            "IID_IDXGIOutput1 phải là {{00CDDEA8-939B-4B83-A340-A685226666CC}}"
+        );
+    }
+
+    /// `{6F15AAF2-D208-4E89-9AB4-489535D34F9C}` — `IID_ID3D11Texture2D`, dùng
+    /// khi `QueryInterface` từ `IDXGIResource` sang texture.
+    #[test] fn guid_iid_texture2d_matches_win32_headers() {
+        // Cùng giá trị đang dùng trong `acquire`; nếu ai đó sửa một bên mà quên
+        // bên kia, test này gãy thay vì để capture hỏng lúc chạy.
+        const T: Guid = guid(0x6f15aaf2, 0xd208, 0x4e89, [0x9a, 0xb4, 0x48, 0x95, 0x35, 0xd3, 0x4f, 0x9c]);
+        assert_eq!(
+            bytes_of(&T),
+            [0xf2, 0xaa, 0x15, 0x6f, 0x08, 0xd2, 0x89, 0x4e,
+             0x9a, 0xb4, 0x48, 0x95, 0x35, 0xd3, 0x4f, 0x9c],
+            "IID_ID3D11Texture2D phải là {{6F15AAF2-D208-4E89-9AB4-489535D34F9C}}"
+        );
     }
 
     #[test] fn only_timeout_means_the_screen_just_did_not_change() {

@@ -39,6 +39,11 @@ const AUTH_JS: &str = include_str!("../../web/auth.js");
 /// không thì `import('/alert.js')` 404 và **không ai được báo** — đúng kiểu lỗi
 /// im lặng đã gặp với `/live.js` và `/auth.js`.
 const ALERT_JS: &str = include_str!("../../web/alert.js");
+
+/// §30.7 — hàng chip sticky modifier cho điện thoại. Như `AUTH_JS`/`ALERT_JS`:
+/// thiếu route thì `import('/chip.js')` 404 và những phím bàn phím điện thoại
+/// **không có** (Ctrl/Esc/Tab/⌫/mũi tên) đơn giản là không bấm được.
+const CHIP_JS: &str = include_str!("../../web/chip.js");
 const JS: &str = include_str!("../../web/app.js");
 const SETTINGS_DEFAULTS: &[(&str, &str)] = &[
     ("quality", "auto"), ("display", "real"), ("aspect", "fit"), ("touch", "scroll"),
@@ -1140,6 +1145,7 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
     // với `/live.js`: asset khai báo trong HTML mà không có route.
     if method == "GET" && route == "/auth.js" { return response(&mut stream, 200, "text/javascript; charset=utf-8", AUTH_JS.as_bytes()); }
     if method == "GET" && route == "/alert.js" { return response(&mut stream, 200, "text/javascript; charset=utf-8", ALERT_JS.as_bytes()); }
+    if method == "GET" && route == "/chip.js" { return response(&mut stream, 200, "text/javascript; charset=utf-8", CHIP_JS.as_bytes()); }
     // §6.4/§6.5: bộ điều khiển chuột/bàn phím của client. Một file riêng (không
     // nhúng vào `live_page`) để `npm test` chạy được từng luật spec — throttle
     // latest-wins, down/up không gộp, `sendBeacon` lúc unload.
@@ -1258,7 +1264,15 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
     if method == "POST" && route == "/api/diagnostics/capture" { let (status,body)=capture_probe(&body); return json_response(&mut stream,status,body); }
     let mut s = state.lock().unwrap_or_else(|e| e.into_inner());
     match (method.as_str(), route) {
-        ("GET", "/api/health") => json_response(&mut stream, 200, "{\"ok\":true,\"app\":\"lantern-mock\",\"mode\":\"mock\"}".into()),
+        // `mode` nói **sự thật**: exe này là bản chạy thật (DXGI + JPEG + SendInput
+// trong cùng file), không phải mock server của `npm run mock`. Trước bản này
+// trường `mode` ghi `"mock"` và UI tin theo ⇒ cả trang tự gọi mình là demo và
+// mời người dùng "Bắt đầu phiên demo" dù đang chạy trên máy Windows thật.
+        ("GET", "/api/health") => json_response(&mut stream, 200, format!(
+            "{{\"ok\":true,\"app\":\"lantern-mock\",\"mode\":\"{}\",\"capture\":\"{}\"}}",
+            if cfg!(windows) { "native" } else { "mock" },
+            if cfg!(windows) { "dxgi" } else { "none" },
+        )),
         ("GET", "/api/device") => json_response(&mut stream, 200, "{\"id\":\"inspiron-7467\",\"name\":\"Inspiron 7467\",\"status\":\"ready\",\"platform\":\"Windows 11\",\"location\":\"Ở nhà\",\"mock\":true}".into()),
         // §6.10.2 câu 2: *"hoặc hiện ước lượng ~8 Mbps trước khi bấm Start"*.
         // Route này tồn tại để UI hiện con số **trước** khi tạo phiên — nếu

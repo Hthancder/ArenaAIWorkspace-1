@@ -7,6 +7,10 @@
   // `metrics` chỉ chứa số **đo được** từ server. `frames === 0` ⇒ hiện "—",
   // không ước lượng, không nội suy. Sai một lần nữa là mất lòng tin.
   const live = { active: false, monitor: 0, fps: 15, startedAt: 0, ready: false, metrics: { frames: 0 } };
+  // `native` = exe thật (DXGI trong cùng file). `false` = `npm run mock`.
+  // Đây là thứ duy nhất quyết định trang này tự gọi mình là "demo" hay là app
+  // thật; trước bản này nó luôn gọi mình là demo dù chạy trên máy Windows thật.
+  let nativeApp = false;
 
   function renderMetrics() {
     const m = live.metrics || { frames: 0 };
@@ -261,6 +265,9 @@
     // theo trạng thái thật, nếu không nó nói "đang bật" sau khi đã tắt.
     attached.controller.onLockChange = renderRelativeLock;
     liveController = attached.controller;
+    // §30.7: bàn phím điện thoại chỉ có nghĩa khi đã có controller (nó gửi qua
+    // cùng đường phím).
+    attachChips().catch(() => {});
     inputModule.installUnloadRelease(liveController, {
       beacon: (path, body) => navigator.sendBeacon(path, body),
       addEventListener: (name, fn) => window.addEventListener(name, fn),
@@ -273,6 +280,9 @@
     // §6.4.7: nhả **mọi** phím/chuột trước khi gỡ. Nếu không, phím đang giữ
     // (Ctrl, Shift) ở lại trạng thái down trên máy remote và mọi thao tác sau
     // đều sai — bug đã gặp ở trang /live.
+    // §30.7: nhả chip **trước** — `releaseAll` của controller không biết
+    // `ChipState` đang giữ Ctrl, nên Ctrl đó sẽ sống qua lần kết nối sau.
+    detachChips();
     try { liveController.releaseAll('detach'); } catch {}
     try { liveController.detach(); } catch {}
     liveController = null;
@@ -348,6 +358,63 @@
     metricsTimer = 0;
   }
 
+  /**
+   * Bật đường xem màn hình thật.
+   *
+   * **Hàm này từng không tồn tại** trong khi `offerResume()` gọi nó trong
+   * `try { await startLive(); } catch {}`. Kết quả: bấm "Tiếp tục" ở hộp thoại
+   * nối lại phiên **không làm gì cả** — `ReferenceError` bị `catch` rỗng nuốt,
+   * `live.active` vẫn `false`, và trang vẫn hiện desktop giả trong khi một phiên
+   * thật đang mở trên máy. Không có lỗi nào hiện ra, nên không ai lần được.
+   */
+  async function startLive({ notify = false } = {}) {
+    if (live.active) return;
+    // Hỏi lại server: trạng thái có thể đã đổi (driver vừa nạp, vừa cắm màn
+    // hình thứ hai). Rẻ — một request — và tránh bật một khung hình sẽ lỗi.
+    await refreshLiveStatus();
+    if (!live.ready) {
+      toast($('#liveBtn').title || 'Chưa xem được màn hình thật trên máy này.');
+      return;
+    }
+    live.active = true;
+    live.startedAt = Date.now();
+    live.firstFrameSeen = false;
+    startMetricsPolling();
+    setTimeout(refreshMetrics, 300);
+    renderLive();
+    if (notify) toast('Đang xem màn hình thật.');
+  }
+
+  /**
+   * Đổi mọi nhãn "demo / mô phỏng" thành nhãn thật khi chạy trong `exe`.
+   *
+   * Danh sách này cố ý **liệt kê từng chỗ** thay vì tìm-thay chuỗi: mỗi câu là
+   * một lời hứa với người dùng, và câu sai ở đây là câu nói "sản phẩm này
+   * không thật" ngay trên sản phẩm thật.
+   */
+  function applyNativeLabels() {
+    const pill = $('.demo-pill');
+    if (pill) pill.innerHTML = '<i></i> LANTERN · ĐANG CHẠY';
+    const connect = $('#connectLabel');
+    if (connect && !state.connected) connect.textContent = 'Bắt đầu phiên';
+    const hint = $('#connectHint');
+    if (hint && !state.connected) hint.textContent = 'Chạy trên máy này · DXGI + JPEG trong exe';
+    const state_ = $('#screenState');
+    if (state_ && !live.active) state_.textContent = 'Sẵn sàng xem màn hình';
+    const sub = $('#sessionSubstatus');
+    if (sub && !state.connected) sub.textContent = 'Bấm để bắt đầu';
+    const note = $('#connectionNote');
+    if (note) note.textContent = 'Kết nối cục bộ · không qua mạng ngoài';
+    const tipTitle = $('#tipTitle');
+    if (tipTitle) tipTitle.textContent = 'Màn hình thật, điều khiển thật';
+    const tip = $('#tipCardBody');
+    if (tip) tip.textContent = 'Phiên chạy ngay trong exe này: DXGI chụp màn hình, JPEG nén trong tiến trình, SendInput điều khiển chuột/bàn phím. Không cần cài GStreamer hay driver nào. Chưa có tiếng và WebRTC (§52.4, §37).';
+    const footer = $('#footerMode');
+    if (footer) footer.textContent = 'Bản chạy thật · DXGI + JPEG trong exe';
+    const watermark = $('#mockWatermark');
+    if (watermark) watermark.textContent = '';
+  }
+
   function stopLive(notify = false) {
     if (!live.active) return;
     live.active = false;
@@ -403,17 +470,23 @@
   function setConnected(active, notify = true) {
     state.connected = active;
     $('#connectBtn').classList.toggle('connected', active);
-    $('#connectLabel').textContent = active ? 'Kết thúc phiên demo' : 'Bắt đầu phiên demo (mô phỏng)';
-    $('#connectHint').textContent = active ? 'Đang mô phỏng · dữ liệu không rời trình duyệt' : 'Mô phỏng cục bộ · không truy cập thiết bị thật';
-    $('#screenState').textContent = active ? 'Phiên demo đang hoạt động' : 'Đang chờ phiên demo';
-    $('#sessionStatus').textContent = active ? 'Đã kết nối · demo' : 'Chưa kết nối';
-    $('#sessionSubstatus').textContent = active ? 'Thiết bị mô phỏng · vừa bắt đầu' : 'Bắt đầu để thử giao diện';
+    const real = nativeApp;
+    $('#connectLabel').textContent = active ? 'Kết thúc phiên' : (real ? 'Bắt đầu phiên' : 'Bắt đầu phiên demo (mô phỏng)');
+    $('#connectHint').textContent = active
+      ? (real ? 'Đang chạy · phiên trên máy này' : 'Đang mô phỏng · dữ liệu không rời trình duyệt')
+      : (real ? 'Chạy trên máy này · DXGI + JPEG trong exe' : 'Mô phỏng cục bộ · không truy cập thiết bị thật');
+    $('#screenState').textContent = active ? (real ? 'Phiên đang hoạt động' : 'Phiên demo đang hoạt động')
+                                           : (real ? 'Sẵn sàng xem màn hình' : 'Đang chờ phiên demo');
+    $('#sessionStatus').textContent = active ? (real ? 'Đã kết nối' : 'Đã kết nối · demo') : 'Chưa kết nối';
+    $('#sessionSubstatus').textContent = active
+      ? (real ? 'Đang chạy trên máy này · vừa bắt đầu' : 'Thiết bị mô phỏng · vừa bắt đầu')
+      : (real ? 'Bấm để bắt đầu' : 'Bắt đầu để thử giao diện');
     // Không đặt số ở đây: `24 ms` / `2.4 Mbps` từng là hằng số viết cứng, hiện
     // ra như số đo thật. Số giờ lấy từ `renderMetrics()` — đo trong server.
     $('.latency').classList.toggle('good', active && live.metrics.frames > 0);
     $('#mockMessageTitle').textContent = active ? 'Phiên demo đang hoạt động' : ({ desktop: 'Phiên demo đã sẵn sàng', browser: 'Trình duyệt đã được chọn', notes: 'Ghi chú đang mở' }[state.selectedWindow]);
     $('#cursorPointer').classList.toggle('hidden', !active || !state.cursor);
-    if (notify && active) toast('Phiên mô phỏng bắt đầu. Muốn xem màn hình thật thì bấm "Xem máy thật".');
+    if (notify && active) toast(nativeApp ? 'Phiên đã bắt đầu. Bấm "Xem máy thật" để thấy màn hình.' : 'Phiên mô phỏng bắt đầu. Muốn xem màn hình thật thì bấm "Xem máy thật".');
     else if (notify) toast('Phiên mock đã kết thúc.');
   }
   function openOverlay(id) {
@@ -743,7 +816,22 @@
         state.selectedWindow = current.session.windowId;
         syncMode(); updateMockWindow(); setConnected(true, false);
       }
+      // §58: trên bản thật, **màn hình phải là màn hình thật ngay khi mở trang**.
+      //
+      // Trước bản này, trang mở ra với một desktop giả vẽ bằng CSS — người dùng
+      // đang chạy exe trên chính máy đó nhưng thấy một cửa sổ Explorer giả, và
+      // phải đi tìm một nút nhỏ ở góc mới thấy được màn hình của mình. Không có
+      // lý do nào để bản thật lại mặc định hiện thứ giả.
+      if (nativeApp && health.capture !== 'none') {
+        startLive().catch(() => {});
+      }
       document.documentElement.dataset.api = health.ok ? 'online' : 'offline';
+      // §58: server nói nó là bản gì. `native` ⇒ trang này là app thật, và mọi
+      // nhãn "demo/mô phỏng" phải biến mất — chúng nói sai về sản phẩm đang
+      // chạy và khiến người dùng không dám bấm.
+      nativeApp = health.mode === 'native';
+      document.documentElement.dataset.native = nativeApp ? 'true' : 'false';
+      if (nativeApp) applyNativeLabels();
     } catch {
       $('.demo-pill').innerHTML = '<i></i> LOCAL MOCK';
       document.documentElement.dataset.api = 'offline';
@@ -1011,6 +1099,97 @@
    * server vẫn chạy. Nạp lại `<img src>` là đủ để tiếp tục — không cần tạo
    * phiên mới. Chỉ báo thất bại thật khi đã thử quá `RECONNECT_GIVE_UP_MS`.
    */
+  /**
+   * §30.7 — bàn phím cho điện thoại: hàng chip sticky modifier + phần tử nhận
+   * phím.
+   *
+   * # Vì sao có một `<textarea>` 1×1 px
+   *
+   * Bàn phím của hệ điều hành chỉ mở khi một phần tử **nhập được** có focus.
+   * Khung hình là `<img>`, không nhập được. Nên cần một phần tử nhập thật, nhưng
+   * nó phải **không chiếm layout** — nếu không nó đẩy video xuống, đúng thứ §30.7
+   * cấm.
+   *
+   * Ta không lấy nội dung của `<textarea>`: mỗi `keydown` đi qua đường phím bình
+   * thường (§6.5) và **chặn** ký tự mặc định, nên nó không bao giờ tích luỹ chữ.
+   * Cách này đúng hơn đọc `value`: IME tiếng Việt tạo chuỗi nhiều bước, và đọc
+   * `value` sẽ gửi cả cụm thay vì từng phím như bàn phím thật.
+   */
+  let chipModule = null;
+  let chipController = null;
+  let keyboardWatcher = null;
+
+  async function attachChips() {
+    if (!liveController || chipController) return;
+    try {
+      chipModule = chipModule || await import('/chip.js');
+    } catch {
+      // Server cũ: không có `/chip.js`. Chip không hoạt động, và đó là tất cả —
+      // không được làm hỏng phần điều khiển chuột/bàn phím đã có.
+      return;
+    }
+    const row = $('#chipRow');
+    chipController = chipModule.attachChips(row, {
+      send: (vk, down, mods) => {
+        // Gửi qua **cùng** đường phím của `input.js` (§6.5): `{t:"key",down,vk,mods}`.
+        // Không có đường thứ hai — hai đường là hai bộ luật.
+        liveController?.sendKey?.(vk, down === 1, mods);
+      },
+    });
+    row.classList.remove('hidden');
+
+    // §30.7: video **co lại** khi bàn phím mở, không bị che.
+    const view = $('#liveView');
+    keyboardWatcher = chipModule.watchKeyboard(
+      typeof window !== 'undefined' ? window.visualViewport : null,
+      (inset) => view.style.setProperty('--keyboard-inset', `${inset}px`),
+    );
+  }
+
+  function detachChips() {
+    if (chipController) {
+      // Nhả modifier trước khi gỡ: Ctrl "khoá" còn sống qua lần mở sau là Ctrl
+      // vô hình đang bật, và người dùng không hiểu vì sao gõ chữ ra lệnh.
+      chipController.reset();
+      chipController.detach();
+      chipController = null;
+    }
+    if (keyboardWatcher) { keyboardWatcher(); keyboardWatcher = null; }
+    $('#chipRow')?.classList.add('hidden');
+  }
+
+  /**
+   * §30.7: mở bàn phím HĐH. Chỉ gọi **từ một gesture** — trình duyệt chặn
+   * `focus()` ngoài gesture, và trên iOS nó im lặng không mở.
+   */
+  function openKeyboard() {
+    const sink = $('#keyboardSink');
+    if (!sink) return false;
+    try {
+      sink.focus({ preventScroll: true });
+      return document.activeElement === sink;
+    } catch {
+      return false;
+    }
+  }
+
+  function closeKeyboard() {
+    // Nhả modifier **trước** khi mất focus: nếu không, `ChipState` còn Ctrl và
+    // lần mở bàn phím sau gõ chữ đầu tiên ra lệnh.
+    chipController?.reset();
+    const sink = $('#keyboardSink');
+    if (sink) sink.blur();
+  }
+
+  $('#chipDone').addEventListener('click', () => closeKeyboard());
+  // §30.7: *"Không tự đóng bàn phím khi chạm video (gây ức chế) — chỉ đóng khi
+  // bấm Ẩn hoặc vuốt xuống."* Nên KHÔNG có handler đóng nào trên khung hình.
+  // Mở thì có: chạm vào khung hình là mở để gõ.
+  $('#liveImage').addEventListener('click', () => {
+    if (!live.active || !liveController) return;
+    openKeyboard();
+  });
+
   // §50.1 #5: báo bằng tiếng/rung khi phiên bắt đầu và kết thúc. Nạp động và
   // **không** chặn render: tính năng báo hiệu không được làm chậm việc vẽ hình.
   let alertModule = null;

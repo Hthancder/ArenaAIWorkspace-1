@@ -91,3 +91,34 @@ body.locked { overflow: hidden; }
   border:1px solid rgba(220,170,90,.5);border-radius:6px;padding:6px 12px;
   pointer-events:none;white-space:nowrap}
 .live-reconnect.hidden{display:none}
+
+/* §30.7 — hàng chip sticky modifier (chỉ 1 hàng 36 px).
+   Sticky **theo chiều dọc** ở đáy khung hình, nên khi bàn phím hệ điều hành mở,
+   nó nằm ngay trên bàn phím. Không 3 hàng: spec nói rõ "chỉ 1 hàng", vì mỗi hàng
+   thêm là 36 px mất của vùng nhìn. */
+.chip-row{position:absolute;left:0;right:0;bottom:0;z-index:4;display:flex;gap:4px;
+  align-items:center;justify-content:center;height:36px;padding:0 6px;
+  background:rgba(10,22,17,.86);border-top:1px solid rgba(150,190,170,.22);
+  overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}
+.chip-row.hidden{display:none}
+.chip{flex:0 0 auto;min-width:34px;height:26px;padding:0 8px;border-radius:5px;cursor:pointer;
+  font:11px 'DM Sans',sans-serif;color:#d7e8df;background:rgba(255,255,255,.09);
+  border:1px solid rgba(160,200,180,.24);-webkit-user-select:none;user-select:none}
+.chip[aria-pressed="true"]{background:#3fa06a;border-color:#4fc07f;color:#fff;font-weight:700}
+/* Chạm 2 lần = khoá: khác màu để phân biệt được bằng mắt khi đang gõ. */
+.chip[aria-pressed="locked"]{background:#2b7bc4;border-color:#4a9be4;color:#fff;font-weight:700}
+.chip-done{margin-left:auto;background:rgba(255,255,255,.16)}
+
+/* §30.7 — *"Video KHÔNG bị che — nó co lại"*.
+   `--keyboard-inset` do JS đặt từ `visualViewport` (chiều cao bàn phím thật trên
+   thiết bị thật). Dùng `padding-bottom` trên khung chứa thay vì `height` để
+   `object-fit` vẫn tính đúng tỉ lệ (đổi `height` sẽ làm ảnh bị kéo méo nếu ai đó
+   đổi `object-fit` sau này). */
+.live-view{transition:padding-bottom .12s ease-out;padding-bottom:var(--keyboard-inset,0)}
+/* Phần tử nhận phím: phải **thật** focus được nhưng không chiếm layout, nếu không
+   nó đẩy video — đúng thứ §30.7 cấm. `1px` chứ không `display:none`: phần tử
+   `display:none` không nhận được focus trong mọi trình duyệt. */
+.keyboard-sink{position:absolute;left:0;bottom:0;width:1px;height:1px;padding:0;
+  border:0;outline:0;resize:none;overflow:hidden;opacity:0;pointer-events:none;
+  font-size:16px} /* 16px: nhỏ hơn thì iOS tự phóng to trang khi focus */
+@media (prefers-reduced-motion: reduce){.live-view{transition:none}}

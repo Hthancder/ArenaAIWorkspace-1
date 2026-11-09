@@ -284,6 +284,33 @@ export class InputController {
   }
 
   /**
+   * §30.7 — gửi một phím **theo VK**, cho hàng chip trên điện thoại.
+   *
+   * # Vì sao phải có đường này
+   *
+   * Chip không có `KeyboardEvent`: nó là `<button>`, và `event.keyCode` của một
+   * cú click là `0`. Gửi `keyEvent(clickEvent)` sẽ gửi `vk: 0` — server từ chối
+   * hoặc gửi phím vô nghĩa.
+   *
+   * # Vì sao `mods` được truyền vào chứ không đọc từ `event`
+   *
+   * Modifier ở đây là trạng thái **sticky** của chip (§30.7: chạm Ctrl → sáng →
+   * áp cho phím kế tiếp → tự nhả), không phải `event.ctrlKey` của cú click trên
+   * điện thoại (luôn là `false` — không có phím Ctrl vật lý).
+   */
+  sendKey(vk, down, mods = 0) {
+    if (!vk) return false;
+    this.post(`/api/sessions/${this.sid}/input`, {
+      t: 'key',
+      down: down ? 1 : 0,
+      vk,
+      mods,
+      ts: this.now(),
+    });
+    return true;
+  }
+
+  /**
    * §6.4.6 — move **tương đối** (`MOUSEEVENTF_MOVE`, không `ABSOLUTE`).
    *
    * # Vì sao phải có đường riêng
