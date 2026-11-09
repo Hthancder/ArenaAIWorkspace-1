@@ -448,6 +448,15 @@ struct TextureDesc {
 const D3D11_USAGE_STAGING: UINT = 3;
 const D3D11_CPU_ACCESS_READ: UINT = 0x20000;
 const DXGI_FORMAT_B8G8R8A8_UNORM: UINT = 87;
+/// `DXGI_FORMAT_R32G32B32A32_FLOAT` — desktop 32-bit float. Đây là format mà
+/// **WARP / desktop tổng hợp** trả về (runner CI headless, phiên RDP không có
+/// GPU): 4 kênh × 32 bit = **16 byte/pixel**.
+const DXGI_FORMAT_R32G32B32A32_FLOAT: UINT = 2;
+/// `DXGI_FORMAT_R10G10B10A2_UNORM` — 10 bit/kênh, 4 byte/pixel. Desktop HDR
+/// thường ở format này.
+const DXGI_FORMAT_R10G10B10A2_UNORM: UINT = 24;
+/// `DXGI_FORMAT_R16G16B16A16_FLOAT` — HDR half-float, 8 byte/pixel.
+const DXGI_FORMAT_R16G16B16A16_FLOAT: UINT = 10;
 const D3D11_MAP_READ: UINT = 1;
 
 // Nạp DLL hệ thống bằng `LoadLibraryW` để **không** cần import library lúc
@@ -536,6 +545,9 @@ pub struct Capture {
     staging: *mut Texture2D,
     width: usize,
     height: usize,
+    /// Format **của desktop**, không phải format ta muốn. Staging phải cùng
+    /// format thì `CopyResource` mới chép; việc đổi sang BGRA làm trên CPU.
+    desktop_format: UINT,
 }
 
 // Con trỏ COM không `Send`/`Sync` mặc định, nhưng phiên capture được dùng từ
@@ -625,20 +637,27 @@ impl Capture {
                 return Err(CaptureError::NoOutput);
             }
 
-            // **Format phải bằng format của desktop.** `CopyResource` đòi hai
-            // resource cùng kiểu và cùng kích thước; khác là nó chỉ ghi cảnh báo
-            // vào debug layer rồi **không làm gì**, và ta đọc texture rỗng —
-            // khung hình đen, không có lỗi.
+            // **Staging phải cùng format với desktop.** `CopyResource` đòi hai
+            // resource cùng kiểu; khác là nó chỉ ghi cảnh báo vào debug layer
+            // rồi **không làm gì**, và ta đọc texture rỗng — khung hình đen,
+            // không có lỗi.
             //
-            // Desktop HDR (`DXGI_FORMAT_R16G16B16A16_FLOAT`, bật "HDR" trong
-            // Windows Settings) là trường hợp thật trên laptop màn 4K. Ta chỉ
-            // biết chắc `B8G8R8A8_UNORM` (4 byte/pixel, thứ tự BGRA) là đọc
-            // được, nên format khác thì báo lỗi **đọc được** kèm tên format thay
-            // vì gửi ảnh đen. HDR→SDR là việc của một bản riêng (§52.4).
-            if desc.desktop_image_format != DXGI_FORMAT_B8G8R8A8_UNORM {
+            // Bản trước từ chối mọi format khác BGRA 8-bit. Nhưng desktop
+            // **tổng hợp** (WARP, runner headless, phiên RDP không GPU) trả
+            // `R32G32B32A32_FLOAT`, và desktop HDR trả `R10G10B10A2_UNORM` hoặc
+            // `R16G16B16A16_FLOAT` — từ chối chúng nghĩa là app **không chạy
+            // được** trên những máy đó, dù chỉ cần đổi sang BGRA. Việc đổi làm
+            // trên CPU sau `Map` (`to_bgra`), và đường đó test được trên Linux.
+            if !matches!(
+                desc.desktop_image_format,
+                DXGI_FORMAT_B8G8R8A8_UNORM
+                    | DXGI_FORMAT_R32G32B32A32_FLOAT
+                    | DXGI_FORMAT_R10G10B10A2_UNORM
+                    | DXGI_FORMAT_R16G16B16A16_FLOAT
+            ) {
                 return Err(CaptureError::Other(format!(
-                    "Desktop đang ở format {} (không phải BGRA 8-bit). Tắt HDR trong \
-                     Windows Settings → Display, hoặc chọn màn hình khác.",
+                    "Desktop ở format {} — chưa hỗ trợ chuyển sang BGRA. \
+                     Đổi độ sâu màu của màn hình trong Windows Settings → Display.",
                     desc.desktop_image_format
                 )));
             }
@@ -649,7 +668,8 @@ impl Capture {
                 height: height as UINT,
                 mip_levels: 1,
                 array_size: 1,
-                format: DXGI_FORMAT_B8G8R8A8_UNORM,
+                // Cùng format với desktop — điều kiện của `CopyResource`.
+                format: desc.desktop_image_format,
                 sample_desc: [1, 0],
                 usage: D3D11_USAGE_STAGING,
                 bind_flags: 0,
@@ -676,6 +696,7 @@ impl Capture {
                 staging: as_interface::<Texture2D>(staging_raw),
                 width,
                 height,
+                desktop_format: desc.desktop_image_format,
             })
         }
     }
@@ -873,9 +894,26 @@ impl Capture {
         let mut bgra = vec![0u8; self.width * self.height * 4];
         let pitch = mapped.row_pitch as usize;
         let row_bytes = self.width * 4;
+        let bpp = bytes_per_pixel(self.desktop_format).unwrap_or(4);
+        let src_row_bytes = self.width * bpp;
         for (y, row) in bgra.chunks_mut(row_bytes).enumerate() {
             let src = (mapped.p_data as *const u8).add(y * pitch);
-            ptr::copy_nonoverlapping(src, row.as_mut_ptr(), row_bytes);
+            if self.desktop_format == DXGI_FORMAT_B8G8R8A8_UNORM {
+                // Đường nhanh, phổ biến: đã đúng thứ tự BGRA, chép nguyên dòng.
+                ptr::copy_nonoverlapping(src, row.as_mut_ptr(), row_bytes);
+            } else {
+                // Desktop tổng hợp / HDR: cùng một lần đọc, đổi kênh trên CPU.
+                let slice = std::slice::from_raw_parts(src, src_row_bytes);
+                if !to_bgra_row(slice, self.desktop_format, self.width, row) {
+                    if let Some(unmap) = self.context.as_ref().and_then(|context| context.unmap) {
+                        unmap(self.context.cast(), self.staging.cast(), 0);
+                    }
+                    return Err(CaptureError::Other(format!(
+                        "không đổi được format {} sang BGRA",
+                        self.desktop_format
+                    )));
+                }
+            }
         }
         if let Some(unmap) = self.context.as_ref().and_then(|context| context.unmap) {
             unmap(self.context.cast(), self.staging.cast(), 0);
@@ -903,6 +941,103 @@ impl Drop for Capture {
 /// `Sized`) — lỗi này không xuất hiện khi biên dịch trên Linux vì cả module
 /// `capture` bị `#[cfg(windows)]`. Chỉ CI Windows mới thấy. Một helper để mọi
 /// chỗ đều đi qua đúng một đường.
+/// `bytes_per_pixel` của một format desktop ta hỗ trợ.
+fn bytes_per_pixel(format: UINT) -> Option<usize> {
+    match format {
+        DXGI_FORMAT_B8G8R8A8_UNORM => Some(4),
+        DXGI_FORMAT_R32G32B32A32_FLOAT => Some(16),
+        DXGI_FORMAT_R16G16B16A16_FLOAT => Some(8),
+        DXGI_FORMAT_R10G10B10A2_UNORM => Some(4),
+        _ => None,
+    }
+}
+
+/// Đổi **một dòng** pixel của desktop sang BGRA 8-bit.
+///
+/// Hàm thuần, không COM, nên test được trên Linux — đúng chỗ dễ sai nhất (hệ số
+/// float, thứ tự kênh, tràn số) và là chỗ duy nhất biết về format.
+///
+/// `BGRA` là thứ `jpeg::encode` nhận: byte thứ tự B, G, R, A.
+fn to_bgra_row(row: &[u8], format: UINT, width: usize, out: &mut [u8]) -> bool {
+    let Some(bpp) = bytes_per_pixel(format) else { return false };
+    if row.len() < width * bpp || out.len() < width * 4 {
+        return false;
+    }
+    for x in 0..width {
+        let src = &row[x * bpp..x * bpp + bpp];
+        let (r, g, b) = match format {
+            DXGI_FORMAT_B8G8R8A8_UNORM => (src[2], src[1], src[0]),
+            // 4 kênh float32. Desktop tổng hợp (WARP / headless / RDP).
+            //
+            // `0.5 + v * 255.0` rồi `clamp(0..255)`: giá trị float có thể ngoài
+            // [0,1] trên desktop HDR (đơn vị nit), và `as u8` của Rust **bão
+            // hoà** — nhưng bão hoà *sau* khi đã nhân thì vẫn đúng; viết rõ để
+            // người sau không tưởng là thiếu.
+            DXGI_FORMAT_R32G32B32A32_FLOAT => (
+                f32_to_u8(f32::from_le_bytes(src[0..4].try_into().unwrap())),
+                f32_to_u8(f32::from_le_bytes(src[4..8].try_into().unwrap())),
+                f32_to_u8(f32::from_le_bytes(src[8..12].try_into().unwrap())),
+            ),
+            // Half-float qua `f16` thủ công: `f32::from_bits` không nhận 16 bit.
+            DXGI_FORMAT_R16G16B16A16_FLOAT => (
+                f32_to_u8(half_to_f32(u16::from_le_bytes(src[0..2].try_into().unwrap()))),
+                f32_to_u8(half_to_f32(u16::from_le_bytes(src[2..4].try_into().unwrap()))),
+                f32_to_u8(half_to_f32(u16::from_le_bytes(src[4..6].try_into().unwrap()))),
+            ),
+            // 10 bit/kênh, đóng gói trong một u32 little-endian: R ở bit 0,
+            // G bit 10, B bit 20, A bit 30.
+            DXGI_FORMAT_R10G10B10A2_UNORM => {
+                let v = u32::from_le_bytes(src[0..4].try_into().unwrap());
+                let expand = |bits: u32| ((bits * 255) / 1023) as u8;
+                (expand(v & 0x3ff), expand((v >> 10) & 0x3ff), expand((v >> 20) & 0x3ff))
+            }
+            _ => return false,
+        };
+        out[x * 4] = b;
+        out[x * 4 + 1] = g;
+        out[x * 4 + 2] = r;
+        out[x * 4 + 3] = 255;
+    }
+    true
+}
+
+fn f32_to_u8(value: f32) -> u8 {
+    // `NaN` không so sánh được với gì, nên phải kiểm riêng: nếu không,
+    // `NaN.clamp(0.0, 1.0)` trả `NaN` và `as u8` cho 0 — đen, im lặng.
+    if value.is_nan() {
+        return 0;
+    }
+    (value.clamp(0.0, 1.0) * 255.0 + 0.5) as u8
+}
+
+/// IEEE 754 half (binary16) → f32. Không có kiểu `f16` ổn định trong std.
+fn half_to_f32(half: u16) -> f32 {
+    let sign = ((half >> 15) & 1) as u32;
+    let exponent = ((half >> 10) & 0x1f) as u32;
+    let mantissa = (half & 0x3ff) as u32;
+    let bits = match (exponent, mantissa) {
+        // Zero và subnormal.
+        (0, m) => {
+            if m == 0 {
+                sign << 31
+            } else {
+                // Chuẩn hoá lại: dịch mantissa tới khi bit 10 bật.
+                let mut e = 0i32;
+                let mut m = m;
+                while m & 0x400 == 0 {
+                    m <<= 1;
+                    e -= 1;
+                }
+                (sign << 31) | (((127 - 15 + 1 + e) as u32) << 23) | ((m & 0x3ff) << 13)
+            }
+        }
+        // Inf / NaN.
+        (0x1f, m) => (sign << 31) | (0xff << 23) | (m << 13),
+        (e, m) => (sign << 31) | ((e + (127 - 15)) << 23) | (m << 13),
+    };
+    f32::from_bits(bits)
+}
+
 unsafe fn as_interface<T>(pointer: *mut c_void) -> *mut T {
     pointer.cast::<T>()
 }
@@ -989,6 +1124,97 @@ mod tests {
             let dev = device.as_ptr();
             assert_eq!(slot_of(std::ptr::addr_of!((*dev).create_texture2d) as *const _, dev as *const u8), 5, "CreateTexture2D");
         }
+    }
+
+    /// `R32G32B32A32_FLOAT` → BGRA: format mà WARP / desktop tổng hợp trả về.
+    ///
+    /// Đây là đường làm runner CI headless chuyển từ "từ chối capture" sang
+    /// "capture được", nên nó phải đúng — và nó là toán học thuần nên test được
+    /// trên Linux, không cần GPU.
+    #[test] fn float32_desktop_becomes_bgra() {
+        let pixels: [(f32, f32, f32, f32); 3] = [
+            (1.0, 0.0, 0.0, 1.0),   // đỏ
+            (0.0, 1.0, 0.0, 1.0),   // lục
+            (0.0, 0.0, 1.0, 1.0),   // lam
+        ];
+        let mut row = Vec::new();
+        for (r, g, b, a) in pixels {
+            row.extend_from_slice(&r.to_le_bytes());
+            row.extend_from_slice(&g.to_le_bytes());
+            row.extend_from_slice(&b.to_le_bytes());
+            row.extend_from_slice(&a.to_le_bytes());
+        }
+        let mut out = [0u8; 12];
+        assert!(to_bgra_row(&row, DXGI_FORMAT_R32G32B32A32_FLOAT, 3, &mut out));
+        // BGRA: byte 0 = B, 1 = G, 2 = R, 3 = A.
+        assert_eq!(&out[0..4], &[0, 0, 255, 255], "đỏ ⇒ B=0 G=0 R=255");
+        assert_eq!(&out[4..8], &[0, 255, 0, 255], "lục ⇒ B=0 G=255 R=0");
+        assert_eq!(&out[8..12], &[255, 0, 0, 255], "lam ⇒ B=255 G=0 R=0");
+    }
+
+    /// Float ngoài [0,1] và `NaN` phải bão hoà, không được bọc vòng.
+    ///
+    /// `as u8` của Rust bão hoà, nhưng `NaN as u8` cho 0 — và desktop HDR có
+    /// giá trị >1 thật (đơn vị nit). Bọc vòng thì vùng sáng thành đen.
+    #[test] fn out_of_range_floats_saturate_instead_of_wrapping() {
+        assert_eq!(f32_to_u8(2.0), 255, ">1 phải thành trắng, không bọc thành 0");
+        assert_eq!(f32_to_u8(-1.0), 0, "<0 phải thành đen");
+        assert_eq!(f32_to_u8(f32::NAN), 0, "NaN ⇒ 0, không phải rác");
+        assert_eq!(f32_to_u8(f32::INFINITY), 255, "+∞ ⇒ trắng");
+        assert_eq!(f32_to_u8(0.5), 128, "0.5 ⇒ 128 (làm tròn, không cắt)");
+    }
+
+    /// Half-float → f32. Bảng các giá trị mốc, tính tay từ IEEE 754 binary16.
+    #[test] fn half_floats_convert_to_the_right_float() {
+        assert_eq!(half_to_f32(0x0000), 0.0, "0");
+        assert_eq!(half_to_f32(0x8000), -0.0, "-0");
+        assert_eq!(half_to_f32(0x3C00), 1.0, "1.0 = 0x3C00");
+        assert_eq!(half_to_f32(0xBC00), -1.0, "-1.0");
+        assert_eq!(half_to_f32(0x3800), 0.5, "0.5 = 0x3800");
+        assert_eq!(half_to_f32(0x7BFF), 65504.0, "giá trị lớn nhất của half");
+        assert!(half_to_f32(0x7C00).is_infinite(), "+∞");
+        assert!(half_to_f32(0xFC00).is_infinite() && half_to_f32(0xFC00) < 0.0, "-∞");
+        assert!(half_to_f32(0x7E00).is_nan(), "NaN");
+        // Subnormal nhỏ nhất: 2^-24 ≈ 5.96e-8.
+        let smallest = half_to_f32(0x0001);
+        assert!((smallest - 5.9604645e-8).abs() < 1e-14, "subnormal nhỏ nhất: {smallest}");
+    }
+
+    /// `R10G10B10A2` → BGRA, và thứ tự bit phải đúng (R ở bit 0).
+    ///
+    /// Đóng gói nhầm thứ tự bit thì ảnh ra đổi màu — đỏ thành lam — và đó là
+    /// kiểu lỗi trông như "encoder sai" trong khi encoder đúng.
+    #[test] fn ten_bit_desktop_unpacks_in_the_right_order() {
+        // Ghép thẳng bằng phép dịch, viết rõ vị trí từng kênh — clippy cảnh báo
+        // `x << 0` là "no effect", nhưng ở đây nó **là** tài liệu: bốn kênh nằm
+        // ở bit 0/10/20/30 và đó chính là thứ test này kiểm.
+        #[allow(clippy::identity_op, clippy::eq_op)]
+        let red = 1023u32 | (0 << 10) | (0 << 20) | (3 << 30);
+        let mut out = [0u8; 4];
+        assert!(to_bgra_row(&red.to_le_bytes(), DXGI_FORMAT_R10G10B10A2_UNORM, 1, &mut out));
+        assert_eq!(&out[..3], &[0, 0, 255], "đỏ ⇒ B=0 G=0 R=255");
+        // Xanh lam hết cỡ.
+        #[allow(clippy::identity_op)]
+        let blue = 0u32 | (0 << 10) | (1023 << 20) | (3 << 30);
+        assert!(to_bgra_row(&blue.to_le_bytes(), DXGI_FORMAT_R10G10B10A2_UNORM, 1, &mut out));
+        assert_eq!(&out[..3], &[255, 0, 0], "lam ⇒ B=255 G=0 R=0");
+    }
+
+    /// Dòng quá ngắn phải bị từ chối, không đọc tràn.
+    #[test] fn a_short_row_is_refused_not_read_past_the_end() {
+        let mut out = [0u8; 4];
+        assert!(!to_bgra_row(&[0u8; 3], DXGI_FORMAT_B8G8R8A8_UNORM, 1, &mut out));
+        assert!(!to_bgra_row(&[0u8; 16], DXGI_FORMAT_R32G32B32A32_FLOAT, 2, &mut out), "cần 32 byte cho 2 pixel");
+    }
+
+    /// `bytes_per_pixel` là nguồn duy nhất của con số đó — sai ở đây thì
+    /// `read_staging` đọc lệch mỗi dòng và ảnh bị nghiêng.
+    #[test] fn bytes_per_pixel_matches_the_format_table() {
+        assert_eq!(bytes_per_pixel(DXGI_FORMAT_B8G8R8A8_UNORM), Some(4));
+        assert_eq!(bytes_per_pixel(DXGI_FORMAT_R10G10B10A2_UNORM), Some(4));
+        assert_eq!(bytes_per_pixel(DXGI_FORMAT_R16G16B16A16_FLOAT), Some(8));
+        assert_eq!(bytes_per_pixel(DXGI_FORMAT_R32G32B32A32_FLOAT), Some(16));
+        assert_eq!(bytes_per_pixel(1), None, "format lạ phải trả None, không đoán");
     }
 
     /// `vtbl()` phải đọc **một lớp**: object → vtable, không phải đọc thẳng field.
