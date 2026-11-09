@@ -293,3 +293,24 @@ test('không có handler nào gắn vào id không tồn tại (§58.15 hậu qu
     `app.js gắn handler vào id không có trong index.html: ${missing.join(', ')}. ` +
     'Đây là TypeError lúc chạy, và nó giết mọi handler phía sau.');
 });
+
+// §6.13 — giới hạn trung thực: phải nói **trước**, không để người dùng tự phát hiện.
+test('Ctrl+Alt+Del không giả vờ gửi được (§6.13)', () => {
+  // Windows chặn SAS từ Vista. "Giả vờ gửi" là nói dối đúng chỗ nguy hiểm:
+  // người dùng bấm rồi chờ một màn hình khoá không bao giờ hiện.
+  const codeApp = code(app);
+  assert.ok(!/Phím tắt đang được mô phỏng/.test(codeApp), 'còn toast giả vờ gửi');
+  assert.ok(/SA?S\b|Secure Attention/.test(codeApp), 'phải giải thích lý do thật');
+  assert.ok(/Win\+L/.test(codeApp), 'phải gợi ý đường thay thế hoạt động được');
+});
+
+test('cảnh báo cửa sổ admin **trước** khi tạo phiên (§6.13)', () => {
+  const start = app.indexOf("apiRequest('/api/sessions', { method: 'POST'");
+  assert.ok(start > 0, 'phải tìm thấy chỗ tạo phiên');
+  const before = app.slice(Math.max(0, start - 1400), start);
+  // UIPI: xem được nhưng không điều khiển được. Phát hiện **sau** khi đã bắt
+  // đầu là trải nghiệm tệ nhất — người dùng tưởng app hỏng.
+  assert.ok(/elevated/.test(before), 'phải kiểm cửa sổ elevated trước khi tạo phiên');
+  assert.ok(/UIPI|không điều\s*\n?'?\s*khiển/.test(before) || before.includes('UIPI'),
+    'cảnh báo phải nói rõ hệ quả');
+});

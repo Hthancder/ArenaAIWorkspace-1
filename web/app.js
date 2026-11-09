@@ -430,6 +430,24 @@
     try {
       if (!state.connected) {
         stopLive(); // một bề mặt tại một thời điểm (§49.3)
+        // §6.13: *"App chạy quyền admin (nếu server không elevated) | UIPI |
+        // Cảnh báo **trước** khi bắt đầu"*.
+        //
+        // Picker đã ghi "quyền admin — chỉ xem được" cạnh cửa sổ, nhưng người
+        // dùng có thể đã chọn từ trước đó và không đọc lại. Bắt đầu một phiên
+        // mà **không điều khiển được** rồi mới phát hiện là trải nghiệm tệ nhất
+        // trong danh sách: họ tưởng app hỏng.
+        //
+        // Hỏi, không chặn: xem được vẫn có ích (đọc số liệu, chụp lại).
+        const picked = (realWindows || []).find(win => win.wid === state.selectedWindow);
+        if (picked && picked.elevated) {
+          const proceed = window.confirm(
+            'Cửa sổ này chạy quyền admin. Windows chặn gửi chuột/bàn phím vào nó từ '
+            + 'một app không elevated (UIPI), nên bạn sẽ **xem được nhưng không điều '
+            + 'khiển được**.\n\nVẫn bắt đầu?'
+          );
+          if (!proceed) return;
+        }
         // §41.3 #3: `snapshotId` **phải** đi kèm `wid`, nếu không server không
         // kiểm được `wid` có thuộc danh sách vừa trả hay không ⇒ 403.
         const result = await apiRequest('/api/sessions', { method: 'POST', body: { mode: state.mode, windowId: state.selectedWindow, snapshotId: windowSnapshot, audio: state.audio } });
@@ -1050,7 +1068,20 @@
     offerResume().catch(() => {});
   }
 
-  $('#sendCtrlAltDel').addEventListener('click', () => toast(state.connected ? 'Phím tắt đang được mô phỏng; chưa gửi tới máy.' : 'Hãy bắt đầu phiên demo trước.'));
+  // §6.13 — `Ctrl+Alt+Del`: **không gửi được**, và phải nói thật.
+  //
+  // Windows chặn tổ hợp này từ Vista (SAS chỉ dành cho đường bảo mật của hệ
+  // điều hành). `SendInput` gửi được ba phím đó nhưng Windows **bỏ qua** khi nó
+  // tạo SAS — nên "giả vờ gửi" là nói dối đúng chỗ nguy hiểm: người dùng bấm
+  // rồi chờ một màn hình khoá không bao giờ hiện.
+  //
+  // Spec nói: *"Ẩn phím; tooltip giải thích"*. Nút vẫn ở đó (không xoá: người
+  // dùng cần biết **vì sao** thiếu), nhưng bấm vào thì giải thích, và nó không
+  // giả vờ là đã gửi.
+  $('#sendCtrlAltDel').addEventListener('click', () => toast(
+    'Windows chặn Ctrl+Alt+Del từ Vista (Secure Attention Sequence). '
+    + 'Muốn khoá máy: dùng nút Start trên máy thật, hoặc gửi Win+L (không bị chặn).'
+  ));
   $('#blankScreen').addEventListener('click', () => toast('Màn hình riêng tư chưa được kết nối với máy thật.'));
   $('#helpBtn').addEventListener('click', () => toast('Bản mock tương tác: mọi thao tác chỉ thay đổi giao diện này.'));
   $('#aboutMock').addEventListener('click', () => toast('Chưa có truyền hình ảnh, camera, micro hay lệnh tới máy thật.'));
