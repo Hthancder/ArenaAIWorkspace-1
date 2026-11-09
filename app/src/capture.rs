@@ -196,6 +196,57 @@ unsafe fn release<T>(object: *mut T) {
     }
 }
 
+/// Một con trỏ COM **sở hữu** một tham chiếu, tự nhả khi ra khỏi scope.
+///
+/// # Vì sao phải có kiểu này
+///
+/// `Capture::open` gọi `IDXGIFactory1` → adapter → output, mỗi bước có 4–6 nhánh
+/// `return Err`. Viết tay `release(x)` ở từng nhánh thì **sớm muộn cũng sai** —
+/// và đã sai thật hai lần trong một buổi:
+///
+/// * `release(candidate)` hai lần trên cùng object khi `QueryInterface` lỗi
+///   ⇒ refcount xuống dưới 0 ⇒ `--check` crash trên runner Windows.
+/// * `ReleaseFrame` bị bỏ ở nhánh `CopyResource == None` ⇒ stream chết.
+///
+/// Kiểu này biến "nhớ nhả đúng một lần" từ việc **con người phải nhớ** thành
+/// việc **compiler kiểm**.
+struct Com<T> {
+    raw: *mut T,
+}
+
+impl<T> Com<T> {
+    /// Nhận sở hữu. `raw` null ⇒ wrapper rỗng, `release` không làm gì.
+    fn new(raw: *mut T) -> Self {
+        Self { raw }
+    }
+    fn as_ptr(&self) -> *mut T {
+        self.raw
+    }
+    /// Lấy con trỏ ra mà vẫn để wrapper sở hữu — dùng khi chỉ mượn.
+    fn cast<U>(&self) -> *mut U {
+        self.raw.cast::<U>()
+    }
+    /// Chuyển sở hữu ra ngoài (dùng khi nhét vào `Capture`).
+    ///
+    /// `mem::forget` để `Drop` của wrapper không nhả — người nhận giờ chịu
+    /// trách nhiệm. Không có hàm này thì `Ok(Self { … })` sẽ nhả ngay khi hàm
+    /// trả về và `Capture` giữ con trỏ chết.
+    fn into_raw(self) -> *mut T {
+        let raw = self.raw;
+        std::mem::forget(self);
+        raw
+    }
+}
+
+impl<T> Drop for Com<T> {
+    fn drop(&mut self) {
+        unsafe { release(self.raw) };
+        self.raw = std::ptr::null_mut();
+    }
+}
+
+unsafe impl<T> Send for Com<T> {}
+
 /// `IDXGIFactory1` — ta chỉ cần `EnumAdapters1` (slot 12) và `Release`.
 /// Slot 0–2 = IUnknown, 3–4 = IDXGIObject (SetPrivateData, SetPrivateDataInterface),
 /// 5–6 = GetPrivateData, SetPrivateDataInterface... Thứ tự chính xác theo dxgi.h.
@@ -497,6 +548,11 @@ unsafe impl Send for Capture {}
 
 impl Capture {
     /// Mở phiên capture cho `monitor` (0-based, theo thứ tự DXGI).
+    ///
+    /// Mọi con trỏ COM ở đây là `Com<…>` (sở hữu, tự nhả). Trước bản này là
+    /// `release(x)` viết tay ở từng nhánh — và đã sai hai lần: một lần nhả hai
+    /// lần (refcount âm), một lần quên nhả khi `CopyResource` thiếu. `Com`
+    /// biến việc đó thành thứ compiler kiểm.
     #[cfg(windows)]
     pub fn open(monitor: u8) -> Result<Self, CaptureError> {
         let api = Api::load()?;
@@ -504,107 +560,25 @@ impl Capture {
             let mut factory_raw: *mut c_void = ptr::null_mut();
             let code = (api.create_dxgi_factory1)(&IID_IDXGI_FACTORY1, &mut factory_raw);
             check(code, "CreateDXGIFactory1")?;
-            let factory = as_interface::<Factory1>(factory_raw);
+            let factory = Com::new(as_interface::<Factory1>(factory_raw));
 
-            // Duyệt adapter rồi output, đếm theo **thứ tự DXGI** — đúng thứ mà
-            // người dùng thấy trong `gst-inspect` trước đây và trong Windows
-            // Settings sau này. Đếm để báo lỗi kèm số màn hình thật.
-            let mut seen = 0u32;
-            let mut output_raw: *mut c_void = ptr::null_mut();
-            // Adapter **của output đã chọn**, không phải adapter 0. Khai ngoài
-            // vòng lặp vì `DuplicateOutput` cần một device tạo trên chính nó.
-            let mut adapter_raw: *mut c_void = ptr::null_mut();
-            let mut adapter_index = 0u32;
-            while output_raw.is_null() {
-                adapter_raw = ptr::null_mut();
-                let enum_adapters1 = (*factory).enum_adapters1;
-                let Some(enum_adapters1) = enum_adapters1 else {
-                    release(factory);
-                    return Err(CaptureError::NoDevice("IDXGIFactory1 quá cũ".into()));
-                };
-                if enum_adapters1(factory as *mut c_void, adapter_index, &mut adapter_raw) < 0 || adapter_raw.is_null() {
-                    break;
-                }
-                let adapter = as_interface::<Adapter1>(adapter_raw);
-                let mut output_index = 0u32;
-                loop {
-                    let mut candidate: *mut c_void = ptr::null_mut();
-                    let enum_outputs = (*adapter).enum_outputs;
-                    let Some(enum_outputs) = enum_outputs else { break };
-                    if enum_outputs(adapter as *mut c_void, output_index, &mut candidate) < 0 || candidate.is_null() {
-                        break;
-                    }
-                    let output = as_interface::<Output1>(candidate);
-                    // Bỏ output không gắn vào desktop (màn hình ảo đã tắt).
-                    let mut desc = OutputDesc {
-                        device_name: [0; 32],
-                        desktop_coordinates: Rect { left: 0, top: 0, right: 0, bottom: 0 },
-                        attached_to_desktop: 0,
-                        rotation: 0,
-                        monitor: 0,
-                    };
-                    let get_desc = (*output).get_desc;
-                    let Some(get_desc) = get_desc else {
-                        release(candidate);
-                        continue;
-                    };
-                    if get_desc(candidate, &mut desc) < 0 || desc.attached_to_desktop == 0 {
-                        release(candidate);
-                        output_index += 1;
-                        continue;
-                    }
-                    if seen == monitor as u32 {
-                        let mut output1: *mut c_void = ptr::null_mut();
-                        let query = (*as_interface::<Unknown>(candidate)).query_interface;
-                        let code = match query {
-                            Some(query) => query(candidate, &IID_IDXGI_OUTPUT1, &mut output1),
-                            None => -1,
-                        };
-                        release(candidate);
-                        if code >= 0 && !output1.is_null() {
-                            output_raw = output1;
-                            break;
-                        }
-                    }
-                    release(candidate);
-                    seen += 1;
-                    output_index += 1;
-                }
-                if output_raw.is_null() {
-                    release(adapter_raw);
-                    adapter_index += 1;
-                    if adapter_index > 8 {
-                        break;
-                    }
-                }
-                // `output_raw` khác null ⇒ thoát vòng `while` với `adapter_raw`
-                // **còn sống**: device phải được tạo trên chính adapter này.
-            }
-            if output_raw.is_null() {
-                release(factory);
-                return Err(if seen == 0 {
-                    CaptureError::NoOutput
-                } else {
-                    CaptureError::BadMonitor { requested: monitor, available: seen }
-                });
-            }
+            let (output, adapter) = Self::find_output(&factory, monitor)?;
 
             // Device **trên adapter của output**, không phải adapter mặc định.
             //
             // `IDXGIOutput1::DuplicateOutput` từ chối (`E_INVALIDARG`) một device
             // không được tạo trên adapter mà output gắn vào. Trên laptop hybrid
             // như Inspiron 7467 (HD 630 + GTX 1050), `D3D11CreateDevice(NULL,
-            // HARDWARE, …)` thường chọn GPU rời, trong khi màn hình hình gắn vào
-            // iGPU ⇒ capture **không bao giờ** mở được trên đúng loại máy mà
-            // §53.4 nói tới. Thông báo duy nhất người dùng thấy là "máy không
-            // capture được", không có gì chỉ ra adapter.
+            // HARDWARE, …)` thường chọn GPU rời trong khi màn hình gắn vào iGPU
+            // ⇒ capture **không bao giờ** mở được trên đúng loại máy §53.4 nói
+            // tới, và thông báo duy nhất là "máy không capture được".
             //
             // `D3D_DRIVER_TYPE_UNKNOWN` là **bắt buộc** khi truyền `pAdapter`
             // (HARDWARE + adapter ⇒ `E_INVALIDARG`).
             let mut device_raw: *mut c_void = ptr::null_mut();
             let mut context_raw: *mut c_void = ptr::null_mut();
             let code = (api.d3d11_create_device)(
-                adapter_raw,
+                adapter.cast(),
                 D3D_DRIVER_TYPE_UNKNOWN,
                 ptr::null_mut(),
                 0,
@@ -616,85 +590,64 @@ impl Capture {
                 &mut context_raw,
             );
             if code < 0 || device_raw.is_null() {
-                release(adapter_raw);
-                release(output_raw);
-                release(factory);
                 return Err(CaptureError::NoDevice(format!(
                     "D3D11CreateDevice trên adapter của màn hình → {}",
                     hresult(code)
                 )));
             }
+            let device = Com::new(as_interface::<D3D11Device>(device_raw));
+            let context = Com::new(as_interface::<D3D11Context>(context_raw));
 
-            let output1 = as_interface::<Output1>(output_raw);
-            let duplicate = (*output1).duplicate_output;
-            let mut duplication_raw: *mut c_void = ptr::null_mut();
-            let code = match duplicate {
-                Some(duplicate) => duplicate(output_raw, device_raw, &mut duplication_raw),
-                None => -1,
+            let duplicate = match (*output.as_ptr()).duplicate_output {
+                Some(f) => f,
+                None => return Err(CaptureError::Other("IDXGIOutput1 quá cũ".into())),
             };
-            release(output_raw);
-            release(factory);
-            // Device đã được tạo **từ** adapter này nên giữ tham chiếu riêng; nhả
-            // ở đây, cả nhánh lỗi lẫn nhánh thành công. Thiếu một nhánh ⇒ rò một
-            // tham chiếu COM mỗi lần mở stream, và DXGI giới hạn số duplication
-            // đồng thời ⇒ lần mở thứ N hỏng mà không rõ vì sao.
-            release(adapter_raw);
+            let mut duplication_raw: *mut c_void = ptr::null_mut();
+            let code = duplicate(output.cast(), device.cast(), &mut duplication_raw);
             if code < 0 || duplication_raw.is_null() {
-                release(device_raw);
-                release(context_raw);
                 return Err(CaptureError::Other(format!(
                     "DuplicateOutput → {} (cần device trên đúng adapter của màn hình)",
                     hresult(code)
                 )));
             }
+            let duplication = Com::new(as_interface::<OutputDuplication>(duplication_raw));
 
-            let duplication = as_interface::<OutputDuplication>(duplication_raw);
+            // Kích thước **và** format của desktop đang chia sẻ.
             let mut desc = OutduplDesc {
                 mode_desc: ModeDesc { width: 0, height: 0, refresh_rate_numerator: 0, refresh_rate_denominator: 0, format: 0, scanline_ordering: 0, scaling: 0 },
                 rotation: 0,
                 desktop_image_format: 0,
             };
-            let get_desc = (*duplication).get_desc.expect("IDXGIOutputDuplication::GetDesc");
+            let get_desc = match (*duplication.as_ptr()).get_desc {
+                Some(f) => f,
+                None => return Err(CaptureError::Other("thiếu GetDesc".into())),
+            };
             check(get_desc(duplication.cast(), &mut desc), "GetDesc")?;
-            // Đọc qua struct, không qua offset đoán tay trong mảng byte: struct
-            // do `#[repr(C)]` xếp, nên compiler kiểm được, còn offset thì không.
             let width = desc.mode_desc.width as usize;
             let height = desc.mode_desc.height as usize;
             if width == 0 || height == 0 {
-                release(duplication_raw);
-                release(device_raw);
-                release(context_raw);
                 return Err(CaptureError::NoOutput);
             }
 
-            // Texture staging: nơi GPU ghi bản copy mà CPU đọc được.
-            //
             // **Format phải bằng format của desktop.** `CopyResource` đòi hai
-            // resource cùng kiểu và cùng kích thước; khác là `CopyResource` chỉ
-            // ghi cảnh báo vào debug layer rồi **không làm gì**, và ta đọc
-            // texture rỗng — khung hình đen, không có lỗi.
+            // resource cùng kiểu và cùng kích thước; khác là nó chỉ ghi cảnh báo
+            // vào debug layer rồi **không làm gì**, và ta đọc texture rỗng —
+            // khung hình đen, không có lỗi.
             //
             // Desktop HDR (`DXGI_FORMAT_R16G16B16A16_FLOAT`, bật "HDR" trong
-            // Windows Settings) là trường hợp thật trên laptop màn 4K. Rơi về
-            // `B8G8R8A8_UNORM` cố định thì stream đen trên đúng máy đó.
-            //
-            // Ta chỉ biết chắc `B8G8R8A8_UNORM` là đọc được (4 byte/pixel, thứ tự
-            // BGRA); format khác thì báo lỗi **đọc được** kèm tên format, thay vì
-            // gửi ảnh đen. Chuyển đổi HDR→SDR là việc của một bản riêng.
+            // Windows Settings) là trường hợp thật trên laptop màn 4K. Ta chỉ
+            // biết chắc `B8G8R8A8_UNORM` (4 byte/pixel, thứ tự BGRA) là đọc
+            // được, nên format khác thì báo lỗi **đọc được** kèm tên format thay
+            // vì gửi ảnh đen. HDR→SDR là việc của một bản riêng (§52.4).
             if desc.desktop_image_format != DXGI_FORMAT_B8G8R8A8_UNORM {
-                release(duplication_raw);
-                release(device_raw);
-                release(context_raw);
-                // **Không** `release(adapter_raw)` ở đây: đã nhả ngay sau
-                // `DuplicateOutput` (dòng trên). Nhả hai lần làm refcount xuống
-                // dưới 0 và COM trả object cho pool khi vẫn còn người dùng.
-                release(factory);
                 return Err(CaptureError::Other(format!(
                     "Desktop đang ở format {} (không phải BGRA 8-bit). Tắt HDR trong \
                      Windows Settings → Display, hoặc chọn màn hình khác.",
                     desc.desktop_image_format
                 )));
             }
+
+            // Texture staging: nơi GPU ghi bản copy mà CPU đọc được.
             let texture_desc = TextureDesc {
                 width: width as UINT,
                 height: height as UINT,
@@ -708,28 +661,132 @@ impl Capture {
                 misc_flags: 0,
             };
             let mut staging_raw: *mut c_void = ptr::null_mut();
-            let create_texture2d = (*as_interface::<D3D11Device>(device_raw)).create_texture2d;
-            let code = match create_texture2d {
-                Some(create) => create(device_raw, &texture_desc, ptr::null(), &mut staging_raw),
-                None => -1,
+            let create_texture2d = match (*device.as_ptr()).create_texture2d {
+                Some(f) => f,
+                None => return Err(CaptureError::Other("thiếu CreateTexture2D".into())),
             };
+            let code = create_texture2d(device.cast(), &texture_desc, ptr::null(), &mut staging_raw);
             if code < 0 || staging_raw.is_null() {
-                release(duplication_raw);
-                release(device_raw);
-                release(context_raw);
                 return Err(CaptureError::NoDevice(format!("CreateTexture2D → {}", hresult(code))));
             }
 
+            // Chuyển sở hữu vào `Capture`. `Com` của output/adapter tự nhả khi
+            // ra scope — đúng một lần, không phụ thuộc nhánh nào.
             Ok(Self {
                 api,
-                device: as_interface::<D3D11Device>(device_raw),
-                context: as_interface::<D3D11Context>(context_raw),
-                duplication,
+                device: device.into_raw(),
+                context: context.into_raw(),
+                duplication: duplication.into_raw(),
                 staging: as_interface::<Texture2D>(staging_raw),
                 width,
                 height,
             })
         }
+    }
+
+    /// Tìm output thứ `monitor` (theo thứ tự DXGI) và trả về **output +
+    /// adapter của nó**, cả hai đã `QueryInterface` sang interface cần dùng.
+    ///
+    /// Tách khỏi `open` vì hai lý do:
+    ///
+    /// 1. `DuplicateOutput` cần device tạo **trên chính adapter** của output
+    ///    (Microsoft: *"This device must be created from the adapter to which the
+    ///    output is connected"*). Trả cả hai cùng lúc buộc người gọi không thể
+    ///    quên lấy adapter.
+    /// 2. Mọi nhánh `return Err` ở đây dùng `Com` nên **không** cần `release`
+    ///    tay. Đó chính là chỗ đã sai hai lần (double-release và bỏ sót
+    ///    `ReleaseFrame`).
+    #[cfg(windows)]
+    unsafe fn find_output(
+        factory: &Com<Factory1>,
+        monitor: u8,
+    ) -> Result<(Com<Output1>, Com<Adapter1>), CaptureError> {
+        // Đếm theo **thứ tự DXGI** — đúng thứ người dùng thấy trong Windows
+        // Settings. Đếm để báo lỗi kèm số màn hình thật khi `monitor` vượt.
+        let mut seen = 0u32;
+        let mut adapter_index = 0u32;
+
+        while adapter_index <= 8 {
+            let mut adapter_raw: *mut c_void = ptr::null_mut();
+            let enum_adapters1 = match (*factory.as_ptr()).enum_adapters1 {
+                Some(f) => f,
+                None => return Err(CaptureError::NoDevice("IDXGIFactory1 quá cũ".into())),
+            };
+            if enum_adapters1(factory.cast(), adapter_index, &mut adapter_raw) < 0
+                || adapter_raw.is_null()
+            {
+                break;
+            }
+            // Sở hữu ngay: từ đây mọi đường thoát tự nhả.
+            let adapter = Com::new(as_interface::<Adapter1>(adapter_raw));
+
+            let mut output_index = 0u32;
+            loop {
+                let mut candidate_raw: *mut c_void = ptr::null_mut();
+                let enum_outputs = match (*adapter.as_ptr()).enum_outputs {
+                    Some(f) => f,
+                    None => break,
+                };
+                if enum_outputs(adapter.cast(), output_index, &mut candidate_raw) < 0
+                    || candidate_raw.is_null()
+                {
+                    break;
+                }
+                let candidate = Com::new(as_interface::<Output1>(candidate_raw));
+
+                // Bỏ output không gắn vào desktop (màn hình ảo đã tắt) — nếu
+                // không, chỉ số `monitor` lệch so với Windows Settings.
+                let mut desc = OutputDesc {
+                    device_name: [0; 32],
+                    desktop_coordinates: Rect { left: 0, top: 0, right: 0, bottom: 0 },
+                    attached_to_desktop: 0,
+                    rotation: 0,
+                    monitor: 0,
+                };
+                let attached = match (*candidate.as_ptr()).get_desc {
+                    Some(get_desc) => {
+                        get_desc(candidate.cast(), &mut desc) >= 0 && desc.attached_to_desktop != 0
+                    }
+                    None => false,
+                };
+                if !attached {
+                    output_index += 1;
+                    continue;
+                }
+                if seen != monitor as u32 {
+                    seen += 1;
+                    output_index += 1;
+                    continue;
+                }
+
+                // Đúng màn hình: nâng lên `IDXGIOutput1` (cần cho
+                // `DuplicateOutput`, có từ DXGI 1.2 / Windows 8).
+                let mut output1_raw: *mut c_void = ptr::null_mut();
+                let code = match (*as_interface::<Unknown>(candidate.cast())).query_interface {
+                    Some(query) => query(candidate.cast(), &IID_IDXGI_OUTPUT1, &mut output1_raw),
+                    None => -1,
+                };
+                if code < 0 || output1_raw.is_null() {
+                    // Màn hình này không có `IDXGIOutput1` ⇒ thử màn hình kế.
+                    seen += 1;
+                    output_index += 1;
+                    continue;
+                }
+                // `adapter` được **chuyển** ra ngoài, không tạo wrapper thứ hai:
+                // hai `Com` cùng giữ một con trỏ = hai lần `Release` = refcount
+                // âm. Đây đúng là lỗi vừa sửa, nên viết rõ ra.
+                return Ok((Com::new(as_interface::<Output1>(output1_raw)), adapter));
+            }
+            // Hết output của adapter này ⇒ nhả adapter rồi sang adapter kế.
+            // (Không cần gọi: `adapter` tự nhả khi lặp tiếp.)
+            adapter_index += 1;
+        }
+
+        Err(if seen == 0 {
+            CaptureError::NoOutput
+        } else {
+            CaptureError::BadMonitor { requested: monitor, available: seen }
+        })
     }
 
     pub fn size(&self) -> (usize, usize) {
