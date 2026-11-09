@@ -234,11 +234,10 @@ pub fn parse_multipart(body: &[u8], boundary: &str) -> Result<Vec<Part>, UploadE
 
     let mut parts = Vec::new();
     let mut cursor = 0usize;
-    loop {
-        // Tìm phần mở đầu.
-        let Some(start) = find(&body[cursor..], &delimiter) else {
-            break;
-        };
+    // `while let` thay `loop { let Some(..) = .. else { break } }`: CI dùng
+    // clippy stable còn bản nightly ở sandbox không báo, nhưng cả hai đều nói
+    // cùng một điều — đây là mẫu `while let` viết dài.
+    while let Some(start) = find(&body[cursor..], &delimiter) {
         let after = cursor + start + delimiter.len();
         // `--` ngay sau boundary = phần kết thúc.
         if body.get(after..after + 2) == Some(b"--") {

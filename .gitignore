@@ -25,3 +25,7 @@ diagnostics-*.json
 target/
 spike/target/
 **/node_modules/
+
+# Toolchain Rust dựng bởi scripts/install-rust.sh (sandbox không có
+# static.rust-lang.org). Không commit: ~500 MB binary, và dựng lại mất ~10 s.
+rust-toolchain/
