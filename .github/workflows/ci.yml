@@ -23,11 +23,17 @@ jobs:
       - name: Cache
         uses: Swatinem/rust-cache@v2
 
-      - name: Chạy test
-        run: cargo test --verbose
-
-      - name: Build Release
-        run: cargo build --release
+      - name: Test + Build Release
+        id: build
+        shell: bash
+        run: |
+          set -o pipefail
+          status=0
+          echo "===== cargo test =====" | tee ci-log.txt
+          cargo test --verbose 2>&1 | tee -a ci-log.txt || status=1
+          echo "===== cargo build --release =====" | tee -a ci-log.txt
+          cargo build --release 2>&1 | tee -a ci-log.txt || status=1
+          exit $status
 
       - name: Đổi tên file exe
         shell: pwsh
@@ -48,3 +54,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "$env:GITHUB_REF_NAME" Taskora.exe --generate-notes
         shell: pwsh
+
+      # Đẩy log lỗi về một branch để đọc qua git (log Actions dùng Azure blob – không truy cập được từ sandbox)
+      - name: Đẩy log lỗi (nếu fail)
+        if: failure()
+        shell: bash
+        run: |
+          git config user.name "Taskora CI"
+          git config user.email "ci@taskora.local"
+          git checkout -B ci-logs
+          cp ci-log.txt ci-errors.txt 2>/dev/null || echo "no log" > ci-errors.txt
+          git add ci-errors.txt
+          git commit -m "CI error log ${GITHUB_RUN_ID}" || true
+          git push -f origin ci-logs
