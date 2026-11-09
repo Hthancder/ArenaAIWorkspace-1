@@ -428,7 +428,14 @@ type D3D11CreateDeviceFn = unsafe extern "system" fn(
 ) -> HRESULT;
 
 const D3D11_SDK_VERSION: UINT = 7;
-const D3D_DRIVER_TYPE_HARDWARE: UINT = 1;
+/// `D3D_DRIVER_TYPE_UNKNOWN` — **bắt buộc** khi `pAdapter` khác NULL.
+///
+/// Microsoft: *"If you set the pAdapter parameter to a non-NULL value, you must
+/// also set the DriverType parameter to the D3D_DRIVER_TYPE_UNKNOWN value"*, và
+/// truyền HARDWARE cùng một adapter ⇒ `E_INVALIDARG`. Đây đúng là điều
+/// `IDXGIOutput1::DuplicateOutput` đòi: *"This device must be created from the
+/// adapter to which the output is connected"*.
+const D3D_DRIVER_TYPE_UNKNOWN: UINT = 0;
 
 /// Các hàm nạp động, nạp **một lần**.
 struct Api {
@@ -500,9 +507,12 @@ impl Capture {
             // Settings sau này. Đếm để báo lỗi kèm số màn hình thật.
             let mut seen = 0u32;
             let mut output_raw: *mut c_void = ptr::null_mut();
+            // Adapter **của output đã chọn**, không phải adapter 0. Khai ngoài
+            // vòng lặp vì `DuplicateOutput` cần một device tạo trên chính nó.
+            let mut adapter_raw: *mut c_void = ptr::null_mut();
             let mut adapter_index = 0u32;
             while output_raw.is_null() {
-                let mut adapter_raw: *mut c_void = ptr::null_mut();
+                adapter_raw = ptr::null_mut();
                 let enum_adapters1 = (*factory).enum_adapters1;
                 let Some(enum_adapters1) = enum_adapters1 else {
                     release(factory);
@@ -563,6 +573,8 @@ impl Capture {
                         break;
                     }
                 }
+                // `output_raw` khác null ⇒ thoát vòng `while` với `adapter_raw`
+                // **còn sống**: device phải được tạo trên chính adapter này.
             }
             if output_raw.is_null() {
                 release(factory);
@@ -573,12 +585,23 @@ impl Capture {
                 });
             }
 
-            // D3D11 device trên adapter mặc định (HD 630 trên laptop hybrid).
+            // Device **trên adapter của output**, không phải adapter mặc định.
+            //
+            // `IDXGIOutput1::DuplicateOutput` từ chối (`E_INVALIDARG`) một device
+            // không được tạo trên adapter mà output gắn vào. Trên laptop hybrid
+            // như Inspiron 7467 (HD 630 + GTX 1050), `D3D11CreateDevice(NULL,
+            // HARDWARE, …)` thường chọn GPU rời, trong khi màn hình hình gắn vào
+            // iGPU ⇒ capture **không bao giờ** mở được trên đúng loại máy mà
+            // §53.4 nói tới. Thông báo duy nhất người dùng thấy là "máy không
+            // capture được", không có gì chỉ ra adapter.
+            //
+            // `D3D_DRIVER_TYPE_UNKNOWN` là **bắt buộc** khi truyền `pAdapter`
+            // (HARDWARE + adapter ⇒ `E_INVALIDARG`).
             let mut device_raw: *mut c_void = ptr::null_mut();
             let mut context_raw: *mut c_void = ptr::null_mut();
             let code = (api.d3d11_create_device)(
-                ptr::null_mut(),
-                D3D_DRIVER_TYPE_HARDWARE,
+                adapter_raw,
+                D3D_DRIVER_TYPE_UNKNOWN,
                 ptr::null_mut(),
                 0,
                 ptr::null(),
@@ -589,9 +612,13 @@ impl Capture {
                 &mut context_raw,
             );
             if code < 0 || device_raw.is_null() {
+                release(adapter_raw);
                 release(output_raw);
                 release(factory);
-                return Err(CaptureError::NoDevice(hresult(code)));
+                return Err(CaptureError::NoDevice(format!(
+                    "D3D11CreateDevice trên adapter của màn hình → {}",
+                    hresult(code)
+                )));
             }
 
             let output1 = as_interface::<Output1>(output_raw);
@@ -603,10 +630,18 @@ impl Capture {
             };
             release(output_raw);
             release(factory);
+            // Device đã được tạo **từ** adapter này nên giữ tham chiếu riêng; nhả
+            // ở đây, cả nhánh lỗi lẫn nhánh thành công. Thiếu một nhánh ⇒ rò một
+            // tham chiếu COM mỗi lần mở stream, và DXGI giới hạn số duplication
+            // đồng thời ⇒ lần mở thứ N hỏng mà không rõ vì sao.
+            release(adapter_raw);
             if code < 0 || duplication_raw.is_null() {
                 release(device_raw);
                 release(context_raw);
-                return Err(CaptureError::Other(format!("DuplicateOutput → {}", hresult(code))));
+                return Err(CaptureError::Other(format!(
+                    "DuplicateOutput → {} (cần device trên đúng adapter của màn hình)",
+                    hresult(code)
+                )));
             }
 
             let duplication = as_interface::<OutputDuplication>(duplication_raw);

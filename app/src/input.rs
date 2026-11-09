@@ -305,35 +305,59 @@ pub fn handle(sanitizer: &mut InputSanitizer, event: Event, now_ms: u64, block_w
 
 /// `INPUT` của Win32 — phải khớp layout **tuyệt đối**.
 ///
-/// Sai layout ⇒ `SendInput` trả 0 và không nói vì sao. Đó là kiểu lỗi im
-/// lặng nhất trong toàn bộ file này, nên layout được khai báo tường minh
-/// (không dùng `union` của Rust) và có test `size_of` bên dưới.
-#[cfg(windows)]
+/// Sai layout ⇒ `SendInput` trả 0 và không nói vì sao (`cbSize` sai là "the
+/// function fails", không có mã lỗi riêng). Đó là kiểu lỗi im lặng nhất trong
+/// toàn bộ file này: chuột và bàn phím **không làm gì cả**, không thông báo.
+///
+/// # Layout trên x64
+///
+/// ```c
+/// typedef struct tagINPUT {
+///   DWORD type;            // offset 0
+///   DWORD Padding;         // offset 4 — **đệm 4 byte**, không phải phần của union
+///   union { MOUSEINPUT mi; KEYBDINPUT ki; HARDWAREINPUT hi; };  // offset 8
+/// } INPUT;                 // sizeof = 40
+/// ```
+///
+/// Bản trước khai `payload` ngay sau `input_type` ⇒ payload ở offset **4**,
+/// `size_of` = **36**. `SendInput` kiểm `cbSize != sizeof(INPUT)` và từ chối
+/// **mọi** lời gọi: người dùng bấm chuột, gõ phím, không có gì xảy ra. Test
+/// `win32_input_matches_the_windows_layout` khoá cả offset lẫn kích thước.
+#[cfg_attr(not(windows), allow(dead_code))]
 #[repr(C)]
 pub struct Win32Input {
     input_type: u32,
+    /// `DWORD Padding` — Windows căn union lên 8, nên có 4 byte chết ở đây.
+    /// Không được bỏ: bỏ là union tụt về offset 4 và `cbSize` sai.
+    _padding: u32,
     /// `union { MOUSEINPUT, KEYBDINPUT, HARDWAREINPUT }` — kiểu lớn nhất là
-    /// `MOUSEINPUT`: i32+i32+u32+u32+u32+usize = 28 byte, căn 8 ⇒ **32**.
+    /// `MOUSEINPUT`: i32+i32+u32+u32+u32+u32+usize = 28 byte nội dung, căn 8
+    /// ⇒ **32** byte trong `INPUT`.
     #[allow(dead_code)]
     payload: [u8; 32],
 }
 
-#[cfg(windows)]
+#[cfg_attr(not(windows), allow(dead_code))]
 impl Win32Input {
+    /// `MOUSEINPUT`: dx(0) dy(4) mouseData(8) dwFlags(12) time(16) dwExtraInfo(24).
+    ///
+    /// `time = 0` để Windows tự đóng dấu thời gian; `dwExtraInfo = 0` vì ta
+    /// không cần phân biệt nguồn.
     fn mouse(flags: u32, dx: i32, dy: i32, data: u32) -> Self {
         let mut payload = [0u8; 32];
         payload[0..4].copy_from_slice(&dx.to_ne_bytes());
         payload[4..8].copy_from_slice(&dy.to_ne_bytes());
         payload[8..12].copy_from_slice(&data.to_ne_bytes());
         payload[12..16].copy_from_slice(&flags.to_ne_bytes());
-        Self { input_type: 0, payload }
+        Self { input_type: 0, _padding: 0, payload }
     }
+    /// `KEYBDINPUT`: wVk(0) wScan(2) dwFlags(4) time(8) dwExtraInfo(16).
     fn key(flags: u32, vk: u16, scan: u16) -> Self {
         let mut payload = [0u8; 32];
         payload[0..2].copy_from_slice(&vk.to_ne_bytes());
         payload[2..4].copy_from_slice(&scan.to_ne_bytes());
         payload[4..8].copy_from_slice(&flags.to_ne_bytes());
-        Self { input_type: 1, payload }
+        Self { input_type: 1, _padding: 0, payload }
     }
 }
 
@@ -459,8 +483,18 @@ pub fn watchdog(sanitizer: &mut InputSanitizer, now_ms: u64) -> Option<Vec<Actio
 
 // ---------- §8.3 message `move` 12 byte ----------
 
-    /// Dựng gói 12 byte đúng định dạng §8.3.
-    #[cfg(test)]
+/// Test của module này.
+///
+/// Khối `mod tests` từng **bị xoá** trong một lần sửa, để lại các `fn` test
+/// nằm rời ở cấp module. Chúng vẫn biên dịch và vẫn chạy (nhờ `#[test]` ở cấp
+/// module), nhưng `packet()` có `#[cfg(test)]` thì không — nên `packet` biến
+/// mất khỏi bản không-test, và mọi thứ trông vẫn ổn cho tới khi ai đó thêm một
+/// test mới ở cuối file và nhận `unexpected closing delimiter`.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Dựng gói đúng định dạng §8.3.
     fn packet(nx: u16, ny: u16, kind: u8, flags: u8, wheel: i16) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(12);
         bytes.extend_from_slice(&nx.to_le_bytes());
@@ -560,5 +594,63 @@ pub fn watchdog(sanitizer: &mut InputSanitizer, now_ms: u64) -> Option<Vec<Actio
         // thì có hai bản luật và chúng sẽ lệch.
         let events = parse_move(&packet(65535, 65535, 1, 0, 0)).unwrap();
         assert!(matches!(events[0], Event::Move { nx: 65535, ny: 65535 }));
+    }
 
+    /// `INPUT` của Windows **phải** khớp từng byte.
+    ///
+    /// Comment ở `Win32Input` từng ghi *"có test `size_of` bên dưới"* — và
+    /// **không có test nào**. Đó là lý do một struct 36 byte (đúng phải là 40)
+    /// sống được trong repo: mọi test đều xanh vì không test nào chạm tới layout.
+    ///
+    /// `SendInput` kiểm `cbSize == sizeof(INPUT)`; sai thì **mọi** lời gọi bị từ
+    /// chối và trả 0, không có mã lỗi riêng. Người dùng bấm chuột, gõ phím,
+    /// không có gì xảy ra, và không có thông báo nào để lần.
+    ///
+    /// Struct biên dịch trên **mọi** nền tảng (không `#[cfg(windows)]`) chính
+    /// là để test này chạy trên CI Linux, nơi vòng lặp phản hồi tính bằng giây.
+    #[test] fn win32_input_matches_the_windows_layout() {
+        // Trên x64: type(4) + Padding(4) + union(32) = 40.
+        // Trên x86: type(4) + union(28) = 32, và không có đệm.
+        let expected = if std::mem::size_of::<usize>() == 8 { 40 } else { 32 };
+        assert_eq!(
+            std::mem::size_of::<Win32Input>(), expected,
+            "sizeof(INPUT) của Windows phải là {expected} byte; `SendInput` từ chối mọi \
+             lời gọi nếu `cbSize` khác giá trị này"
+        );
+    }
+
+    /// Offset của union là **8** trên x64, không phải 4.
+    ///
+    /// Đây là nửa còn lại của cùng lỗi: giữ đúng `size_of` 40 mà đặt payload ở
+    /// offset 4 vẫn hỏng, vì Windows sẽ đọc `mi.dx` từ byte 8 còn ta ghi `dx`
+    /// vào byte 4 — chuột nhảy sai chỗ thay vì không nhảy.
+    #[test] fn the_input_union_starts_at_offset_eight_on_x64() {
+        if std::mem::size_of::<usize>() != 8 {
+            return; // x86: union ở offset 4, không đệm.
+        }
+        let probe = Win32Input::mouse(0, 1, 2, 3);
+        let base = &probe as *const Win32Input as usize;
+        let payload = probe.payload.as_ptr() as usize;
+        assert_eq!(payload - base, 8, "union của INPUT phải bắt đầu ở byte 8");
+    }
+
+    /// `MOUSEINPUT` và `KEYBDINPUT` phải ghi đúng trường, đúng thứ tự.
+    ///
+    /// `SendInput` không kiểm nội dung union; nó tin ta. Ghi `dx` vào chỗ của
+    /// `mouseData` thì chuột di chuyển 0 pixel và không có lỗi nào.
+    #[test] fn mouse_and_key_payloads_use_the_documented_offsets() {
+        let m = Win32Input::mouse(0x0001_0002, -30, 42, 0xdead_beef);
+        assert_eq!(i32::from_ne_bytes(m.payload[0..4].try_into().unwrap()), -30, "dx");
+        assert_eq!(i32::from_ne_bytes(m.payload[4..8].try_into().unwrap()), 42, "dy");
+        assert_eq!(u32::from_ne_bytes(m.payload[8..12].try_into().unwrap()), 0xdead_beef, "mouseData");
+        assert_eq!(u32::from_ne_bytes(m.payload[12..16].try_into().unwrap()), 0x0001_0002, "dwFlags");
+        assert_eq!(u32::from_ne_bytes(m.payload[16..20].try_into().unwrap()), 0, "time = 0 ⇒ Windows tự đóng dấu");
+        assert_eq!(m.input_type, 0, "INPUT_MOUSE");
+
+        let k = Win32Input::key(0x0004, 0x41, 0x1e);
+        assert_eq!(u16::from_ne_bytes(k.payload[0..2].try_into().unwrap()), 0x41, "wVk");
+        assert_eq!(u16::from_ne_bytes(k.payload[2..4].try_into().unwrap()), 0x1e, "wScan");
+        assert_eq!(u32::from_ne_bytes(k.payload[4..8].try_into().unwrap()), 0x0004, "dwFlags");
+        assert_eq!(k.input_type, 1, "INPUT_KEYBOARD");
+    }
 }
