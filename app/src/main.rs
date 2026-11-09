@@ -10,6 +10,7 @@ mod session_state;
 mod advice;
 mod clipboard;
 mod stream;
+mod upload;
 mod windows;
 
 use std::collections::BTreeMap;
@@ -38,6 +39,8 @@ const SETTINGS_DEFAULTS: &[(&str, &str)] = &[
     ("resolution", "auto"), ("dpi", "100"), ("monitor", "primary"), ("keyboard-layout", "system"),
     ("input-rate", "60"), ("block-win-lock", "on"), ("listen-port", "8443"), ("certificate", "self"),
     ("stun-turn", "auto"), ("latency-hud", "off"), ("log-level", "normal"), ("encoder", "auto"),
+    // §50.3: mặc định **tắt** — §8.1 "chỉ khi bật", và spec để người dùng quyết.
+    ("upload", "off"),
 ];
 
 #[derive(Clone)]
@@ -247,7 +250,10 @@ fn allowed_value(key: &str, value: &str) -> bool {
         "dpi" => &["100","125","150"], "monitor" => &["primary","2"], "keyboard-layout" => &["system","vi","en"],
         "input-rate" => &["60","100"], "block-win-lock" => &["on","off"], "listen-port" => &["8443","443"],
         "certificate" => &["self","custom"], "stun-turn" => &["auto","tailnet"], "latency-hud" => &["off","on"],
-        "log-level" => &["normal","verbose"], "encoder" => &["auto","qsv","nvenc"], _ => &[],
+        "log-level" => &["normal","verbose"], "encoder" => &["auto","qsv","nvenc"],
+        // §50.3 — mục **duy nhất** trong spec mà tác giả để người dùng quyết.
+        // Mặc định `off` (§8.1 "chỉ khi bật"); bật thì `on`.
+        "upload" => &["off","on"], _ => &[],
     };
     choices.contains(&value)
 }
@@ -1141,7 +1147,19 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
         ("PATCH", "/api/settings") => {
             let Some(patch) = parse_flat_object(&body) else { return json_response(&mut stream, 400, "{\"error\":\"invalid_json\"}".into()); };
             let mut changed = Vec::new();
-            for (key,value) in patch { if s.settings.contains_key(&key) { if !allowed_value(&key,&value) { return json_response(&mut stream, 422, format!("{{\"error\":\"invalid_setting_value\",\"field\":{}}}",json_quote(&key))); } s.settings.insert(key.clone(),value); changed.push(json_quote(&key)); } }
+            // Bản trước chỉ nhận key **đã có** trong map: `if s.settings.contains_key(&key)`.
+            // Hệ quả thật: thêm một setting mới (như §50.3 `upload`) thì nó
+            // **không bật được** — `PATCH` trả 200, `updated:[]`, và UI trông
+            // như đã lưu. Người dùng bật "gửi file" rồi upload vẫn 403.
+            //
+            // Giờ: bất kỳ key nào `allowed_value` chấp nhận đều ghi được. Key
+            // lạ (không có trong bảng) vẫn bị bỏ qua — đó là hành vi đúng, vì
+            // chấp nhận key tuỳ ý là mở đường cho client ghi rác vào cài đặt.
+            for (key, value) in patch {
+                if !allowed_value(&key, &value) { continue; }
+                s.settings.insert(key.clone(), value);
+                changed.push(json_quote(&key));
+            }
             let _ = fs::create_dir_all(&s.data_dir);
             let _ = fs::write(s.data_dir.join("settings.json"), settings_json(&s.settings));
             json_response(&mut stream, 200, format!("{{\"settings\":{},\"updated\":[{}],\"mock\":true}}",settings_json(&s.settings),changed.join(",")))
@@ -1483,6 +1501,79 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
             }
             let content = clipboard::read();
             json_response(&mut stream, 200, clipboard::content_json(content.as_ref()))
+        }
+        // §50.3 — gửi **1 file, một chiều** client → server. §8.1: "chỉ khi bật".
+        //
+        // Đây là mục **duy nhất** trong spec mà tác giả khuyên "tuỳ bạn", và
+        // người dùng đã chọn bật (xem `settings`). Tắt thì route trả 403
+        // `upload.disabled`, không phải 404 — route tồn tại, tính năng đang tắt.
+        ("POST", "/api/upload") => {
+            if deny_if_unauthorised(&mut stream, &s, &req_headers, None).is_none() { return; }
+            // §8.1: "**chỉ khi bật**" ⇒ mặc định tắt. Đọc đúng key trong bảng
+            // `allowed_value`: bản trước tự đặt `upload-enabled`, key đó không
+            // được bảng cho phép nên `PATCH /api/settings` **lặng lẽ bỏ qua**
+            // và route luôn 403 — người dùng bật trong UI mà không có gì xảy ra.
+            let enabled = s.settings.get("upload").map(|value| value == "on").unwrap_or(false);
+            if !enabled {
+                return json_response(&mut stream, 403, "{\"error\":\"upload.disabled\"}".into());
+            }
+            let Some(content_type) = req_headers.get("content-type") else {
+                return json_response(&mut stream, 422, "{\"error\":\"upload.malformed\"}".into());
+            };
+            let Some(boundary) = upload::boundary_of(content_type) else {
+                return json_response(&mut stream, 422, "{\"error\":\"upload.malformed\"}".into());
+            };
+            let parts = match upload::parse_multipart(&body_bytes, &boundary) {
+                Ok(parts) => parts,
+                Err(error) => {
+                    let code = error.code();
+                    return json_response(&mut stream, error.status(),
+                        format!("{{\"error\":{}}}", json_quote(code)));
+                }
+            };
+            // Phần có `filename` là file; phần khác là field phụ (bỏ qua, đúng
+            // như form HTML gửi kèm).
+            let Some(part) = parts.into_iter().find(|part| part.filename.is_some()) else {
+                return json_response(&mut stream, 422, "{\"error\":\"upload.malformed\"}".into());
+            };
+            let filename = part.filename.unwrap_or_default();
+            match upload::validate(true, &filename, part.body) {
+                Ok(file) => {
+                    let home = std::env::var_os("USERPROFILE")
+                        .or_else(|| std::env::var_os("HOME"))
+                        .map(std::path::PathBuf::from)
+                        .unwrap_or_else(|| std::path::PathBuf::from("."));
+                    let dir = upload::upload_dir(&home);
+                    match upload::write(&file, &dir) {
+                        Ok((path, size, sha256)) => {
+                            // §50.3: **không** tự mở file. Trả đường dẫn để UI
+                            // **hiện** cho người dùng xác nhận, không để mở.
+                            json_response(&mut stream, 201, upload::upload_json(&path, size, &sha256))
+                        }
+                        Err(error) => {
+                            // Lỗi ghi đĩa là lỗi server, không phải lỗi client —
+                            // nhưng vẫn phải nói **lý do**, không chỉ "500".
+                            json_response(&mut stream, 500, format!(
+                                "{{\"error\":\"upload.write_failed\",\"detail\":{}}}",
+                                json_quote(&error.to_string())))
+                        }
+                    }
+                }
+                Err(error) => {
+                    // Lý do cụ thể cho `blocked_extension`: người dùng cần biết
+                    // **đuôi nào** bị chặn, không chỉ "không được". Lấy trước
+                    // khi `code`/`status` move `error`.
+                    let detail = match &error {
+                        upload::UploadError::BlockedExtension(extension) => format!(
+                            ",\"extension\":{}", json_quote(extension)),
+                        _ => String::new(),
+                    };
+                    let code = error.code();
+                    let status = error.status();
+                    json_response(&mut stream, status, format!(
+                        "{{\"error\":{}{}}}", json_quote(code), detail))
+                }
+            }
         }
         // §6.4.7 lớp 3: `sendBeacon` khi đóng tab — không phụ thuộc WS còn sống.
         ("POST", p) if p.starts_with("/api/sessions/") && p.ends_with("/release") => {
@@ -1883,10 +1974,23 @@ mod tests {
 
     /// Như [`http`] nhưng gửi **body nhị phân** — cần cho §8.3.
     fn http_bytes(addr: std::net::SocketAddr, method: &str, path: &str, body: &[u8]) -> String {
+        http_bytes_typed(addr, method, path, body, "application/octet-stream")
+    }
+
+    /// Như [`http_bytes`] nhưng đặt `Content-Type` — bắt buộc cho multipart
+    /// (§50.3), vì boundary nằm **trong** header đó; thiếu nó thì server không
+    /// thể tách phần file và mọi upload sẽ là `upload.malformed`.
+    fn http_bytes_typed(
+        addr: std::net::SocketAddr,
+        method: &str,
+        path: &str,
+        body: &[u8],
+        content_type: &str,
+    ) -> String {
         use std::io::Write;
         let mut stream = TcpStream::connect(addr).expect("connect");
         let head = format!(
-            "{method} {path} HTTP/1.1\r\nHost: test\r\nContent-Type: application/octet-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            "{method} {path} HTTP/1.1\r\nHost: test\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
             body.len()
         );
         stream.write_all(head.as_bytes()).expect("write head");
@@ -2259,6 +2363,63 @@ mod tests {
     ///
     /// Client là bên không được tin (§41.3): cap ở `web/app.js` chỉ là tiện cho
     /// người dùng, không phải hàng rào. 100 MB clipboard là cách làm treo agent.
+    /// §50.3 — gửi 1 file, **một chiều**, "chỉ khi bật".
+    ///
+    /// Test này dựng multipart **thật** (không gọi hàm nội bộ), vì bug đã gặp
+    /// là route trả 403 dù PATCH cài đặt trả 200 — chỉ HTTP mới thấy.
+    #[test] fn upload_is_off_by_default_then_writes_one_file_and_refuses_exe() {
+        let (addr, server) = spawn_server();
+        let boundary = "BNDtestbnd";
+        let multipart = |filename: &str, content: &[u8]| {
+            let mut body = Vec::new();
+            body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+            body.extend_from_slice(format!(
+                "Content-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\n").as_bytes());
+            body.extend_from_slice(b"Content-Type: application/octet-stream\r\n\r\n");
+            body.extend_from_slice(content);
+            body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+            body
+        };
+
+        // §8.1: "**chỉ khi bật**" ⇒ mặc định 403, không phải 404 (route có thật).
+        let off = http_bytes_typed(addr, "POST", "/api/upload", &multipart("a.txt", b"hello"),
+            &format!("multipart/form-data; boundary={boundary}"));
+        assert!(off.starts_with("HTTP/1.1 403"), "{off}");
+        assert!(off.contains("upload.disabled"), "{off}");
+
+        // Bật qua PATCH — và **kiểm** là nó thật sự bật. Bug đã gặp: PATCH trả
+        // 200 nhưng chỉ nhận key đã có trong map, nên setting mới không bao giờ
+        // có tác dụng.
+        let patched = http(addr, "PATCH", "/api/settings", r#"{"upload":"on"}"#);
+        assert!(patched.contains(r#""upload":"on""#), "PATCH phải áp dụng: {patched}");
+
+        let on = http_bytes_typed(addr, "POST", "/api/upload", &multipart("a.txt", b"hello"),
+            &format!("multipart/form-data; boundary={boundary}"));
+        assert!(on.starts_with("HTTP/1.1 201"), "{on}");
+        assert!(on.contains(r#""sha256":"2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824""#), "{on}");
+        // giá trị người dùng không kiểm được, tệ hơn không trả gì.
+        assert!(on.contains(r#""sha256":"2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824""#), "{on}");
+        assert!(on.contains(r#""size":5"#), "{on}");
+        assert!(on.contains("Downloads/RD"), "§50.3 ghi `Downloads\\RD\\`: {on}");
+        // §50.3: **không** tự mở.
+        assert!(!on.contains("launch"), "{on}");
+
+        // §50.3 chặn `exe/ps1/bat/scr/lnk` — và nói **đuôi nào**.
+        let blocked = http_bytes_typed(addr, "POST", "/api/upload", &multipart("payload.exe", b"MZ"),
+            &format!("multipart/form-data; boundary={boundary}"));
+        assert!(blocked.starts_with("HTTP/1.1 422"), "{blocked}");
+        assert!(blocked.contains("upload.blocked_extension"), "{blocked}");
+        assert!(blocked.contains(r#""extension":"exe""#), "{blocked}");
+
+        // Tên chứa đường dẫn không được ghi ra ngoài thư mục đích.
+        let traversal = http_bytes_typed(addr, "POST", "/api/upload",
+            &multipart(r"..\..\thoat.txt", b"x"),
+            &format!("multipart/form-data; boundary={boundary}"));
+        assert!(traversal.starts_with("HTTP/1.1 201"), "{traversal}");
+        assert!(!traversal.contains(".."), "không được có `..` trong đường dẫn: {traversal}");
+        drop(server);
+    }
+
     #[test] fn clipboard_is_explicit_checked_at_the_server_and_capped() {
         let (addr, server) = spawn_server();
         // Tạo phiên **trước**, rồi mới có `sid` để gọi route. Bản trước đọc
