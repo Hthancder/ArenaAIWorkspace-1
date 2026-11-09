@@ -191,7 +191,7 @@ unsafe fn release<T>(object: *mut T) {
         return;
     }
     let unknown = object.cast::<Unknown>();
-    if let Some(release) = (*unknown).release {
+    if let Some(release) = (*vtbl(unknown)).release {
         release(object as *mut c_void);
     }
 }
@@ -361,13 +361,9 @@ struct OutputDuplication {
     release_frame: Option<unsafe extern "system" fn(*mut c_void) -> HRESULT>,
 }
 
-/// `IDXGIResource` — chỉ cần `QueryInterface` để lấy `ID3D11Texture2D`.
-#[repr(C)]
-struct Resource {
-    query_interface: Option<QueryInterfaceFn>,
-    add_ref: Option<AddRefFn>,
-    release: Option<ReleaseFn>,
-}
+// `IDXGIResource` không cần struct riêng nữa: `QueryInterface` lấy qua `Unknown`
+// (3 slot đầu của **mọi** interface COM). Struct cũ chỉ khai đúng ba slot đó
+// nên nó không thêm thông tin gì — và `vtbl` giờ làm việc đọc vtable.
 
 /// `ID3D11Texture2D` — cần `GetDesc`? Không: ta chỉ dùng nó làm nguồn copy.
 /// Nhưng `CopyResource` cần con trỏ tới interface, không cần gọi hàm nào khác.
@@ -598,7 +594,7 @@ impl Capture {
             let device = Com::new(as_interface::<D3D11Device>(device_raw));
             let context = Com::new(as_interface::<D3D11Context>(context_raw));
 
-            let duplicate = match (*output.as_ptr()).duplicate_output {
+            let duplicate = match (*vtbl(output.as_ptr())).duplicate_output {
                 Some(f) => f,
                 None => return Err(CaptureError::Other("IDXGIOutput1 quá cũ".into())),
             };
@@ -618,7 +614,7 @@ impl Capture {
                 rotation: 0,
                 desktop_image_format: 0,
             };
-            let get_desc = match (*duplication.as_ptr()).get_desc {
+            let get_desc = match (*vtbl(duplication.as_ptr())).get_desc {
                 Some(f) => f,
                 None => return Err(CaptureError::Other("thiếu GetDesc".into())),
             };
@@ -661,7 +657,7 @@ impl Capture {
                 misc_flags: 0,
             };
             let mut staging_raw: *mut c_void = ptr::null_mut();
-            let create_texture2d = match (*device.as_ptr()).create_texture2d {
+            let create_texture2d = match (*vtbl(device.as_ptr())).create_texture2d {
                 Some(f) => f,
                 None => return Err(CaptureError::Other("thiếu CreateTexture2D".into())),
             };
@@ -708,7 +704,7 @@ impl Capture {
 
         while adapter_index <= 8 {
             let mut adapter_raw: *mut c_void = ptr::null_mut();
-            let enum_adapters1 = match (*factory.as_ptr()).enum_adapters1 {
+            let enum_adapters1 = match (*vtbl(factory.as_ptr())).enum_adapters1 {
                 Some(f) => f,
                 None => return Err(CaptureError::NoDevice("IDXGIFactory1 quá cũ".into())),
             };
@@ -723,7 +719,7 @@ impl Capture {
             let mut output_index = 0u32;
             loop {
                 let mut candidate_raw: *mut c_void = ptr::null_mut();
-                let enum_outputs = match (*adapter.as_ptr()).enum_outputs {
+                let enum_outputs = match (*vtbl(adapter.as_ptr())).enum_outputs {
                     Some(f) => f,
                     None => break,
                 };
@@ -743,7 +739,7 @@ impl Capture {
                     rotation: 0,
                     monitor: 0,
                 };
-                let attached = match (*candidate.as_ptr()).get_desc {
+                let attached = match (*vtbl(candidate.as_ptr())).get_desc {
                     Some(get_desc) => {
                         get_desc(candidate.cast(), &mut desc) >= 0 && desc.attached_to_desktop != 0
                     }
@@ -762,7 +758,7 @@ impl Capture {
                 // Đúng màn hình: nâng lên `IDXGIOutput1` (cần cho
                 // `DuplicateOutput`, có từ DXGI 1.2 / Windows 8).
                 let mut output1_raw: *mut c_void = ptr::null_mut();
-                let code = match (*as_interface::<Unknown>(candidate.cast())).query_interface {
+                let code = match (*vtbl(as_interface::<Unknown>(candidate.cast()))).query_interface {
                     Some(query) => query(candidate.cast(), &IID_IDXGI_OUTPUT1, &mut output1_raw),
                     None => -1,
                 };
@@ -797,7 +793,7 @@ impl Capture {
     #[cfg(windows)]
     pub fn next_frame(&mut self, timeout_ms: u32) -> Result<Frame, CaptureError> {
         unsafe {
-            let Some(acquire) = (*self.duplication).acquire_next_frame else {
+            let Some(acquire) = (*vtbl(self.duplication)).acquire_next_frame else {
                 return Err(CaptureError::Other("thiếu AcquireNextFrame".into()));
             };
             // `DXGI_OUTDUPL_FRAME_INFO` = 48 byte, **không** phải 16. Với 16 byte,
@@ -819,7 +815,7 @@ impl Capture {
 
             // IDXGIResource ⇒ ID3D11Texture2D ⇒ CopyResource vào staging.
             let mut texture_raw: *mut c_void = ptr::null_mut();
-            let query = (*as_interface::<Resource>(resource_raw)).query_interface;
+            let query = (*vtbl(as_interface::<Unknown>(resource_raw))).query_interface;
             let result: Result<Frame, CaptureError>;
             let mut code_texture = -1i32;
             if let Some(query) = query {
@@ -857,7 +853,7 @@ impl Capture {
             // Cũng đúng thứ tự: `ReleaseFrame` **sau** khi đã copy xong texture.
             // Nhả trước khi copy thì DXGI thu hồi surface và `CopyResource` đọc
             // rác.
-            if let Some(release_frame) = (*self.duplication).release_frame {
+            if let Some(release_frame) = (*vtbl(self.duplication)).release_frame {
                 let _ = release_frame(self.duplication.cast());
             }
             result
@@ -909,6 +905,30 @@ impl Drop for Capture {
 /// chỗ đều đi qua đúng một đường.
 unsafe fn as_interface<T>(pointer: *mut c_void) -> *mut T {
     pointer.cast::<T>()
+}
+
+/// Đọc **vtable** của một object COM.
+///
+/// # Đây là lỗi đã làm `--check` chết với `0xC0000005`
+///
+/// Các struct `Factory1`, `Adapter1`, `Output1`… trong file này mô tả **hình
+/// dạng của vtable**, không phải hình dạng của object. Một con trỏ COM trỏ tới
+/// object, và **field đầu tiên** của object là con trỏ tới vtable:
+///
+/// ```text
+/// p ──► [ vtbl ──► [ QueryInterface, AddRef, Release, … ] ]
+///       [ dữ liệu riêng của object … ]
+/// ```
+///
+/// `(*p).enum_adapters1` đọc ở offset `12 × 8 = 96` **trong thân object**, tức
+/// là dữ liệu riêng — đọc ra rác rồi **gọi như con trỏ hàm**. Trên Linux cả
+/// module bị `#[cfg(not(windows))]` loại bỏ nên không lộ; trên Windows nó là
+/// `0xC0000005` (access violation) ngay dòng đầu. `catch_unwind` **không** bắt
+/// được: đây không phải panic mà là vi phạm bộ nhớ.
+///
+/// Đúng phải là `(*vtbl(p)).enum_adapters1`.
+unsafe fn vtbl<T>(object: *mut T) -> *mut T {
+    *(object as *const *mut T)
 }
 
 #[cfg(test)]
@@ -968,6 +988,41 @@ mod tests {
             let device = std::mem::MaybeUninit::<D3D11Device>::uninit();
             let dev = device.as_ptr();
             assert_eq!(slot_of(std::ptr::addr_of!((*dev).create_texture2d) as *const _, dev as *const u8), 5, "CreateTexture2D");
+        }
+    }
+
+    /// `vtbl()` phải đọc **một lớp**: object → vtable, không phải đọc thẳng field.
+    ///
+    /// Test này dựng một object COM giả: một con trỏ duy nhất trỏ tới mảng vtable
+    /// mà ta kiểm soát. Nếu ai đó lại viết `(*p).field` thay vì
+    /// `(*vtbl(p)).field`, giá trị đọc ra sẽ là **địa chỉ của vtable** (hoặc rác
+    /// trong thân object), không phải giá trị ta cài vào vtable — và test đỏ.
+    ///
+    /// Đây đúng là lỗi làm `--check` chết với `0xC0000005` trên Windows: 11 chỗ
+    /// trong file dùng `(*p).method` với `p` là con trỏ tới **object**, nên đọc
+    /// field ở offset `slot × 8` bên trong thân object rồi gọi như con trỏ hàm.
+    #[test] fn vtbl_goes_through_one_pointer_indirection() {
+        // Bố cục giả của `Unknown`: 3 con trỏ hàm.
+        let mut table: [usize; 3] = [0x1111, 0x2222, 0x3333];
+        // Object COM: field đầu là con trỏ tới vtable; sau đó là "dữ liệu riêng"
+        // — đúng như object thật, và đúng chỗ code cũ đọc nhầm.
+        let mut object: [usize; 4] = [table.as_mut_ptr() as usize, 0xdead, 0xbeef, 0xcafe];
+
+        unsafe {
+            let p = object.as_mut_ptr() as *mut Unknown;
+            // Đường đúng.
+            assert_eq!((*vtbl(p)).query_interface.map_or(0, |_| 1), 1, "vtbl đọc ra con trỏ hàm khác null");
+            assert_eq!(
+                (*vtbl(p)).query_interface.unwrap() as usize, 0x1111,
+                "QueryInterface phải là slot 0 của vtable"
+            );
+            assert_eq!((*vtbl(p)).add_ref.unwrap() as usize, 0x2222, "AddRef = slot 1");
+            assert_eq!((*vtbl(p)).release.unwrap() as usize, 0x3333, "Release = slot 2");
+
+            // Đường **sai** phải cho kết quả khác — nếu nó tình cờ bằng, test
+            // này không chứng minh được gì và ta sẽ tưởng mình đã kiểm.
+            let wrong = (*p).query_interface.map_or(0, |f| f as usize);
+            assert_ne!(wrong, 0x1111, "(*p).field đọc từ thân object ⇒ không phải slot vtable");
         }
     }
 
