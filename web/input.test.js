@@ -371,3 +371,57 @@ test('attach wires the events the spec requires and can be detached', () => {
   assert.equal(element.handlers.size, 0, 'detach phải gỡ hết');
   assert.equal(controller.held, FLAG_LEFT);
 });
+
+// §6.4.6 — pointer lock (chuột tương đối). Spec: *"Không có pointer lock:
+// **không thể** xoay camera trong game, không kéo được slider vô hạn"*.
+test('move tương đối giữ được dấu âm (§6.4.6)', () => {
+  // Layout `move` mang `nx,ny` u16, nhưng với `type = 2` server đọc thành **i16
+  // có dấu**. Kẹp ở u16 sẽ biến -300 thành 65236 và con trỏ nhảy sang phải cả
+  // nghìn pixel — đúng bug "kéo sang trái thì nhảy sang phải".
+  const sent = [];
+  const controller = new InputController(fakeElement(), {
+    sid: 's',
+    post: (path, body) => sent.push({ path, body }),
+    now: () => 1000,
+    threshold: 1000,
+  });
+  controller.postMoveRelative(-300, 42);
+  const blob = sent[0].body;
+  return blob.arrayBuffer().then(buffer => {
+    const view = new DataView(buffer);
+    assert.equal(view.getUint8(4), 2, 'type phải là 2 (tương đối), không phải 1');
+    assert.equal(view.getInt16(0, true), -300, 'dx phải đọc lại là -300');
+    assert.equal(view.getInt16(2, true), 42, 'dy phải đọc lại là 42');
+  });
+});
+
+test('pointer lock gộp delta theo frame, không gửi mỗi sự kiện (§6.4.6)', () => {
+  // Chuột gaming 1000 Hz bắn 1000 `pointermove`/s; gửi từng cái là tự đốt rate
+  // limit 120/s của client và 200/s của server. Gộp theo rAF, và tổng delta
+  // trong một frame **chính là** delta người dùng muốn ⇒ không mất chuyển động.
+  const sent = [];
+  const controller = new InputController(fakeElement(), {
+    sid: 's',
+    post: (path, body) => sent.push({ path, body }),
+    now: () => 1000,
+    threshold: 1000,
+  });
+  controller.postMoveRelative(5, 0);
+  controller.postMoveRelative(5, 0);
+  // Hai lần gọi riêng vẫn gửi hai gói (hàm là mức thấp); việc **gộp** nằm ở
+  // handler `onRelativeMove`. Ở đây khoá điều quan trọng: delta âm không bị mất.
+  return Promise.all(sent.map(s => s.body.arrayBuffer())).then(buffers => {
+    const total = buffers.reduce((sum, buffer) => sum + new DataView(buffer).getInt16(0, true), 0);
+    assert.equal(total, 10, 'tổng delta phải bằng tổng các lần đẩy');
+  });
+});
+
+test('thoát pointer lock thì gửi release_all (§6.4.6 + §6.4.7)', () => {
+  // `Esc` làm trình duyệt nhả lock **mà không hỏi trang**. Không gửi
+  // `release_all` thì chuột phải đang giữ (để xoay camera) ở lại down trên máy
+  // thật — người ngồi máy không click được gì.
+  const input = readFileSync(new URL('./input.js', import.meta.url), 'utf8');
+  const lockHandler = input.slice(input.indexOf('const onLockChange'), input.indexOf('const onLockChange') + 900);
+  assert.ok(lockHandler.includes("releaseAll('pointerlock-exit')"), 'phải nhả mọi thứ khi lock bị nhả');
+  assert.ok(input.includes('pointerlockchange'), 'phải nghe sự kiện nhả lock');
+});

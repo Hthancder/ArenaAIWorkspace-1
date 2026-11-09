@@ -212,6 +212,10 @@ export class InputController {
     // §50.1 #6: `true` mặc định. `setPointerEnabled(false)` tắt **đường chuột**
     // (move/down/up/wheel) mà vẫn giữ bàn phím.
     this.pointerEnabled = true;
+    // §6.4.6: delta cộng dồn trong một frame khi pointer lock bật.
+    this.relative = { dx: 0, dy: 0, flags: 0, frame: 0 };
+    // `true` khi con trỏ đang bị khoá (chế độ game).
+    this.locked = false;
     this.now = now;
     this.threshold = threshold;
     this.held = 0;
@@ -276,6 +280,73 @@ export class InputController {
       } catch {
         // Trình duyệt không cho (đã nhả capture) — không phải lý do để bỏ click.
       }
+    }
+  }
+
+  /**
+   * §6.4.6 — move **tương đối** (`MOUSEEVENTF_MOVE`, không `ABSOLUTE`).
+   *
+   * # Vì sao phải có đường riêng
+   *
+   * Ở chế độ tuyệt đối, con trỏ đi tới một điểm trên màn hình. Game xoay camera
+   * bằng **delta**: giữ chuột phải rồi đẩy 10 px ⇒ camera quay 10 độ. Không có
+   * delta thật thì:
+   *
+   * - đẩy chuột tới mép màn hình là **hết** đường — camera dừng dù tay vẫn đẩy
+   *   (đây là lý do "không xoay được camera trong game" mà spec nói);
+   * - kéo slider vô hạn (volume, zoom bản đồ) không được: con trỏ chạm biên rồi
+   *   không đi tiếp.
+   *
+   * # Vì sao cộng dồn bằng rAF
+   *
+   * `pointermove` dưới pointer lock bắn mỗi lần chuột nhích — chuột gaming
+   * 1000 Hz ⇒ 1000 sự kiện/s. Gửi từng cái là tự đốt rate limit (server drop
+   * >200/s, client tự chặn 120/s). Gộp theo `requestAnimationFrame` và cộng
+   * `movementX/Y` — tổng delta trong một frame **chính là** delta người dùng
+   * muốn, nên không mất chuyển động.
+   */
+  postMoveRelative(dx, dy, flags = 0) {
+    const ts = this.now();
+    if (ts - this.moveRate.windowStart >= 1000) {
+      this.moveRate = { windowStart: ts, count: 0 };
+    }
+    if (this.moveRate.count >= this.threshold) return false;
+    this.moveRate.count += 1;
+    // Layout `move` (§8.3) mang `nx,ny` là u16. Với `type = 2` server đọc chúng
+    // thành **i16 có dấu** (`parse_move` dòng `nx as i16`), nên -300 đi qua đây
+    // mà không mất dấu. Kẹp ở i16 chứ không ở u16: kẹp ở u16 sẽ biến -300 thành
+    // 65236 và con trỏ nhảy sang phải nghìn pixel.
+    const nx = Math.max(-32768, Math.min(32767, Math.round(dx)));
+    const ny = Math.max(-32768, Math.min(32767, Math.round(dy)));
+    const bytes = encodeMove({ x: nx & 0xffff, y: ny & 0xffff, flags, type: 2 });
+    this.post(`/api/sessions/${this.sid}/move`, new Blob([bytes], { type: 'application/octet-stream' }));
+    return true;
+  }
+
+  /**
+   * §6.4.6 — bật/tắt **pointer lock** (chế độ "chuột tương đối (game)").
+   *
+   * `element.requestPointerLock()` phải gọi trong một gesture; nếu trình duyệt
+   * từ chối thì trả `false` để nơi gọi nói được lý do thay vì im lặng.
+   */
+  requestRelativePointer() {
+    const target = this.element;
+    if (typeof target.requestPointerLock !== 'function') return false;
+    try {
+      // `unadjustedMovement` tắt gia tốc của hệ điều hành — cần cho game, và
+      // trình duyệt cũ bỏ qua option này thay vì ném.
+      const result = target.requestPointerLock({ unadjustedMovement: true });
+      if (result && typeof result.catch === 'function') result.catch(() => {});
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** §6.4.6: thoát pointer lock (nút bấm, hoặc `Esc` của trình duyệt). */
+  exitRelativePointer() {
+    if (typeof document !== 'undefined' && typeof document.exitPointerLock === 'function') {
+      try { document.exitPointerLock(); } catch { /* chưa lock */ }
     }
   }
 
@@ -392,6 +463,63 @@ export function attach(element, options) {
   // `removeEventListener` không bao giờ gỡ được hai cái này — rò rỉ cho tới
   // khi trang đóng, và trên trang điều khiển thì đó là rò **hành vi**:
   // một phiên đã tách vẫn nhả phím của phiên mới.
+  /**
+   * §6.4.6 — move tương đối dưới pointer lock.
+   *
+   * Chỉ chạy khi `locked`: ngoài lock vẫn dùng đường **tuyệt đối** ở `onMove`,
+   * vì ngoài lock toạ độ con trỏ mới là thứ người dùng thấy.
+   *
+   * Cộng dồn vào `relative` rồi xả trong một `requestAnimationFrame`: chuột
+   * 1000 Hz bắn 1000 sự kiện/s, gửi từng cái là tự đốt rate limit 120/s.
+   */
+  const onRelativeMove = (event) => {
+    if (!controller.locked || !controller.pointerEnabled) return;
+    controller.relative.dx += event.movementX || 0;
+    controller.relative.dy += event.movementY || 0;
+    controller.relative.flags =
+      (event.ctrlKey ? FLAG_CTRL : 0) |
+      (event.shiftKey ? FLAG_SHIFT : 0) |
+      (event.altKey ? FLAG_ALT : 0);
+    if (controller.relative.frame) return;
+    const schedule = typeof requestAnimationFrame === 'function'
+      ? requestAnimationFrame
+      : (cb) => setTimeout(cb, 16);
+    controller.relative.frame = schedule(() => {
+      controller.relative.frame = 0;
+      const { dx, dy, flags } = controller.relative;
+      if (!dx && !dy) return;
+      controller.relative.dx = 0;
+      controller.relative.dy = 0;
+      controller.postMoveRelative(dx, dy, flags);
+    });
+  };
+  element.addEventListener('pointermove', onRelativeMove);
+
+  /**
+   * §6.4.6: *"`Esc` của browser tự nhả lock → client bắt `pointerlockchange` →
+   * gửi `release_all`"*.
+   *
+   * `Esc` **không** tới được trang (trình duyệt dùng nó để nhả lock), nên đây là
+   * tín hiệu duy nhất cho biết người dùng đã rời chế độ game. Không gửi
+   * `release_all` thì chuột phải đang giữ (để xoay camera) ở lại down trên máy
+   * thật — bug §6.4.7 loại 2 lần nữa, lần này do **chính** trình duyệt nhả lock.
+   */
+  const onLockChange = () => {
+    const wasLocked = controller.locked;
+    controller.locked = document.pointerLockElement === element;
+    controller.relative.dx = 0;
+    controller.relative.dy = 0;
+    if (wasLocked && !controller.locked) {
+      controller.releaseAll('pointerlock-exit');
+      // Báo ra ngoài để UI tắt nhãn "chuột tương đối" — người dùng cần biết
+      // mình đã thoát chế độ game, không phải chế độ tự tắt.
+      if (typeof controller.onLockChange === 'function') controller.onLockChange(false);
+    } else if (!wasLocked && controller.locked) {
+      if (typeof controller.onLockChange === 'function') controller.onLockChange(true);
+    }
+  };
+  if (typeof document !== 'undefined') document.addEventListener('pointerlockchange', onLockChange);
+
   const onCancel = () => controller.releaseAll('pointercancel');
   const onLostCapture = () => controller.releaseAll('lostcapture');
   element.addEventListener('pointercancel', onCancel);
@@ -403,6 +531,9 @@ export function attach(element, options) {
     controller,
     detach() {
       element.removeEventListener('pointermove', onMove);
+      element.removeEventListener('pointermove', onRelativeMove);
+      if (typeof document !== 'undefined') document.removeEventListener('pointerlockchange', onLockChange);
+      controller.exitRelativePointer();
       element.removeEventListener('pointerdown', onDown);
       element.removeEventListener('pointerup', onUp);
       element.removeEventListener('pointercancel', onCancel);

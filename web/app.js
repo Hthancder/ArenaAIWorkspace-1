@@ -257,6 +257,9 @@
       // phiên là chuyện thường, và giá trị chụp lại sẽ làm mọi click sau đó lệch.
       mode: () => $('#mockDesktop').dataset.aspect || 'fit',
     });
+    // §6.4.6: `Esc` làm trình duyệt nhả lock **mà không hỏi trang**; nhãn UI phải
+    // theo trạng thái thật, nếu không nó nói "đang bật" sau khi đã tắt.
+    attached.controller.onLockChange = renderRelativeLock;
     liveController = attached.controller;
     inputModule.installUnloadRelease(liveController, {
       beacon: (path, body) => navigator.sendBeacon(path, body),
@@ -867,6 +870,43 @@
     const short = where.length > 40 ? `${where.slice(0, 39)}…` : where;
     document.title = `${short} · Lantern`;
     setFavicon(live.active ? 'live' : 'idle');
+  }
+
+  /**
+   * §6.4.6 — nút "chuột tương đối (game)".
+   *
+   * Bật ⇒ xin pointer lock trên **khung hình**. Trình duyệt chỉ cho xin trong
+   * một gesture, nên phải gọi ngay trong handler click — không `await` gì trước.
+   *
+   * Nhãn trạng thái đổi qua `controller.onLockChange` chứ không phải sau khi gọi
+   * `requestPointerLock()`: hàm đó **trả về trước** khi lock được cấp, và có thể
+   * bị từ chối. Đặt nhãn theo kết quả thật, không theo ý định.
+   */
+  $('#liveRelative').addEventListener('click', () => {
+    if (!liveController) {
+      toast('Bật "Xem máy thật" trước, rồi bấm lại.');
+      return;
+    }
+    if (liveController.locked) {
+      liveController.exitRelativePointer();
+      return;
+    }
+    const started = liveController.requestRelativePointer();
+    if (!started) {
+      // Nói rõ vì sao: Safari/Firefox cũ không hỗ trợ, và iOS **không có** —
+      // spec ghi đúng điều đó (§6.4.6: "iOS: không có, dùng touch mode").
+      toast('Trình duyệt này không hỗ trợ chuột tương đối. Trên điện thoại hãy dùng chạm.');
+    }
+  });
+
+  function renderRelativeLock(locked) {
+    const button = $('#liveRelative');
+    if (!button) return;
+    button.setAttribute('aria-pressed', locked ? 'true' : 'false');
+    button.classList.toggle('on', locked);
+    if (locked) {
+      toast('Chuột tương đối đang bật. Bấm Esc để thoát.');
+    }
   }
 
   $('#liveWeakNet').addEventListener('click', () => {
