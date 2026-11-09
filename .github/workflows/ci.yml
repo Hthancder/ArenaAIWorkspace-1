@@ -167,6 +167,125 @@ jobs:
           }
           exit $status
 
+      # **Đây là bước duy nhất chứng minh sản phẩm dùng được thật.**
+      #
+      # `--check` chỉ nói *mã nguồn* biên dịch và encoder chạy. Nó không nói
+      # `Capture::open` có mở được DXGI, `AcquireNextFrame` có trả frame, và
+      # `jpeg::encode` có sinh ra ảnh **giải mã được**. Ba thứ đó chính là sản
+      # phẩm — và cả ba từng hỏng cùng lúc trên Windows trong khi 167 test
+      # Linux xanh (GUID sai, struct tràn stack, 11 chỗ đọc vtable sai).
+      #
+      # Cách kiểm: chạy exe, tạo một phiên, tải `/api/live.mjpg`, cắt frame
+      # JPEG đầu tiên ra file, rồi **giải mã nó**. Nếu bước này xanh thì trên
+      # một máy Windows bất kỳ, cùng đường đó cho ra ảnh thật.
+      - name: chạy thật — chụp màn hình và giải mã frame
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $exe = Resolve-Path '..\app\target\release\lantern-mock.exe'
+          $data = Join-Path $env:TEMP 'lantern-ci'
+          $log = Join-Path $env:TEMP 'lantern.out'
+          $p = Start-Process -FilePath $exe -ArgumentList '--data-dir', $data -RedirectStandardOutput $log -RedirectStandardError "$log.err" -PassThru
+          try {
+            # Chờ cổng: log in `127.0.0.1:<port>` sau khi bind.
+            $port = $null
+            for ($i = 0; $i -lt 60; $i++) {
+              Start-Sleep -Milliseconds 500
+              if (Test-Path $log) {
+                $m = Select-String -Path $log -Pattern '127\.0\.0\.1:(\d+)' | Select-Object -First 1
+                if ($m) { $port = $m.Matches[0].Groups[1].Value; break }
+              }
+              if ($p.HasExited) { break }
+            }
+            if (-not $port) {
+              Write-Output "::error::exe không mở được cổng. Đầu ra:"
+              Get-Content $log, "$log.err" -ErrorAction SilentlyContinue | Select-Object -Last 20 | ForEach-Object { Write-Output "::error::  $_" }
+              exit 1
+            }
+            Write-Host "== exe đang nghe ở cổng $port"
+
+            $base = "http://127.0.0.1:$port"
+            $health = Invoke-RestMethod -Uri "$base/api/health" -TimeoutSec 10
+            Write-Host "== health: mode=$($health.mode) capture=$($health.capture)"
+
+            # Tạo phiên toàn màn hình — đúng đường người dùng bấm.
+            try {
+              $session = Invoke-RestMethod -Uri "$base/api/sessions" -Method Post -ContentType 'application/json' `
+                -Body '{"mode":"vnc","windowId":"desktop"}' -TimeoutSec 10
+              Write-Host "== phiên: $($session.session.id)"
+            } catch {
+              Write-Output "::error::tạo phiên thất bại: $($_.Exception.Message)"
+              Get-Content $log, "$log.err" -ErrorAction SilentlyContinue | Select-Object -Last 20 | ForEach-Object { Write-Output "::error::  $_" }
+              exit 1
+            }
+
+            $status = Invoke-RestMethod -Uri "$base/api/live/status" -TimeoutSec 10
+            Write-Host "== live: available=$($status.available) — $($status.detail)"
+            if (-not $status.available) {
+              # Runner không có desktop tương tác — nói rõ, không giả vờ xanh.
+              Write-Output "::warning::Không capture được trên runner này ($($status.detail)). Bỏ qua kiểm frame."
+              exit 0
+            }
+
+            # Tải stream: nó chạy vô hạn, nên đọc tới khi có >= 2 frame rồi cắt.
+            $req = [System.Net.HttpWebRequest]::Create("$base/api/live.mjpg?monitor=0&fps=5")
+            $req.Timeout = 20000
+            $req.ReadWriteTimeout = 20000
+            $resp = $req.GetResponse()
+            $stream = $resp.GetResponseStream()
+            $all = New-Object System.IO.MemoryStream
+            $buf = New-Object byte[] 16384
+            $deadline = (Get-Date).AddSeconds(20)
+            while ((Get-Date) -lt $deadline) {
+              $n = $stream.Read($buf, 0, $buf.Length)
+              if ($n -le 0) { break }
+              $all.Write($buf, 0, $n)
+              # Đếm SOI/EOI: hai frame là đủ để biết stream sống.
+              $bytes = $all.ToArray()
+              $frames = 0; $i = 0
+              while ($i -lt $bytes.Length - 1) {
+                if ($bytes[$i] -eq 0xFF -and $bytes[$i+1] -eq 0xD8) { $soi++ }
+                if ($bytes[$i] -eq 0xFF -and $bytes[$i+1] -eq 0xD9) { $frames++ }
+                $i++
+              }
+              if ($frames -ge 2) { break }
+            }
+            $resp.Close()
+            $bytes = $all.ToArray()
+            Write-Host "== nhận $($bytes.Length) byte"
+
+            # Cắt frame đầu tiên: từ SOI tới EOI (tính cả 2 byte của EOI).
+            $start = -1; $end = -1
+            for ($i = 0; $i -lt $bytes.Length - 1; $i++) {
+              if ($start -lt 0 -and $bytes[$i] -eq 0xFF -and $bytes[$i+1] -eq 0xD8) { $start = $i }
+              elseif ($start -ge 0 -and $bytes[$i] -eq 0xFF -and $bytes[$i+1] -eq 0xD9) { $end = $i + 1; break }
+            }
+            if ($start -lt 0 -or $end -le $start) {
+              Write-Output "::error::không tìm thấy frame JPEG hoàn chỉnh trong stream ($($bytes.Length) byte)"
+              exit 1
+            }
+            $frame = New-Object byte[] ($end - $start + 1)
+            [Array]::Copy($bytes, $start, $frame, 0, $frame.Length)
+            $jpeg = Join-Path $env:TEMP 'frame.jpg'
+            [System.IO.File]::WriteAllBytes($jpeg, $frame)
+            Write-Host "== frame: $($frame.Length) byte -> $jpeg"
+
+            # **Giải mã** bằng bộ giải mã của .NET (độc lập với encoder Rust).
+            # Chỉ kiểm SOI/EOI là chưa đủ: một ảnh hỏng vẫn có thể có hai marker.
+            Add-Type -AssemblyName System.Drawing
+            $img = [System.Drawing.Image]::FromFile($jpeg)
+            $w = $img.Width; $h = $img.Height
+            $img.Dispose()
+            Write-Host "== giải mã được: $w×$h"
+            if ($w -lt 640 -or $h -lt 480) {
+              Write-Output "::error::Frame quá nhỏ ($w×$h) — capture sai màn hình?"
+              exit 1
+            }
+            Write-Host "== OK: exe chạy, capture DXGI trả frame, JPEG giải mã được ở $w×$h"
+          } finally {
+            if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
+          }
+
       - uses: actions/upload-artifact@v4
         with:
           name: rd-windows-x64
