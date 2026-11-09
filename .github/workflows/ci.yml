@@ -222,9 +222,15 @@ jobs:
             $status = Invoke-RestMethod -Uri "$base/api/live/status" -TimeoutSec 10
             Write-Host "== live: available=$($status.available) — $($status.detail)"
             if (-not $status.available) {
-              # Runner không có desktop tương tác — nói rõ, không giả vờ xanh.
-              Write-Output "::warning::SKIPPED — không capture được trên runner này ($($status.detail))."
-              exit 0
+              # **Đỏ, không bỏ qua.** Bản trước `exit 0` ở đây, nên "success" có
+              # thể nghĩa là "chưa từng chạy": đúng loại xanh giả mà cả phiên này
+              # đang sửa. Runner Windows của GitHub **có** desktop tổng hợp và
+              # DXGI duplicate được trên đó (đã xác nhận: format typeless, tức là
+              # `DuplicateOutput` thành công). Nếu giờ không capture được thì đó
+              # là hồi quy thật, và phải đỏ.
+              Write-Output "::error::capture không khả dụng trên runner: $($status.detail)"
+              Get-Content $log, "$log.err" -ErrorAction SilentlyContinue | Select-Object -Last 20 | ForEach-Object { Write-Output "::error::  $_" }
+              exit 1
             }
 
             # Tải stream: nó chạy vô hạn, nên đọc tới khi có >= 2 frame rồi cắt.
