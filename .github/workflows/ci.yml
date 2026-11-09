@@ -223,7 +223,7 @@ jobs:
             Write-Host "== live: available=$($status.available) — $($status.detail)"
             if (-not $status.available) {
               # Runner không có desktop tương tác — nói rõ, không giả vờ xanh.
-              Write-Output "::warning::Không capture được trên runner này ($($status.detail)). Bỏ qua kiểm frame."
+              Write-Output "::warning::SKIPPED — không capture được trên runner này ($($status.detail))."
               exit 0
             }
 
@@ -281,7 +281,9 @@ jobs:
               Write-Output "::error::Frame quá nhỏ ($w×$h) — capture sai màn hình?"
               exit 1
             }
-            Write-Host "== OK: exe chạy, capture DXGI trả frame, JPEG giải mã được ở $w×$h"
+            # Đưa kết quả ra annotation để đọc được từ sandbox (log job không tải
+            # được). Không có dòng này thì "success" có thể là "đã bỏ qua".
+            Write-Output "::notice::FRAME THẬT: $($frame.Length) byte, giải mã $w×$h, mode=$($health.mode), capture=$($health.capture)"
           } finally {
             if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
           }

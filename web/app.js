@@ -6,7 +6,7 @@
   // của phiên mock để không trộn hai thứ có vòng đời khác nhau.
   // `metrics` chỉ chứa số **đo được** từ server. `frames === 0` ⇒ hiện "—",
   // không ước lượng, không nội suy. Sai một lần nữa là mất lòng tin.
-  const live = { active: false, monitor: 0, fps: 15, startedAt: 0, ready: false, metrics: { frames: 0 } };
+  const live = { active: false, monitor: 0, fps: 15, startedAt: 0, ready: false, viewOnly: false, metrics: { frames: 0 } };
   // `native` = exe thật (DXGI trong cùng file). `false` = `npm run mock`.
   // Đây là thứ duy nhất quyết định trang này tự gọi mình là "demo" hay là app
   // thật; trước bản này nó luôn gọi mình là demo dù chạy trên máy Windows thật.
@@ -999,6 +999,42 @@
 
   $('#liveWeakNet').addEventListener('click', () => {
     setWeakNet(!live.weakNet).catch(() => {});
+  });
+
+  /**
+   * §10.1 #2 + §8.1 `POST /api/sessions/{sid}/permission {view_only}`.
+   *
+   * "Chỉ xem" **không** phải ẩn con trỏ trong CSS: nếu chỉ ẩn thì `input.js`
+   * vẫn gửi sự kiện và chuột trên máy đích vẫn nhảy — người dùng bật "chỉ xem"
+   * để đưa máy cho người khác nhìn, rồi thấy con trỏ của họ chạy lung tung.
+   * Phải chặn ở đúng chỗ gửi: `setEnabled(false)` của controller, **và** nói
+   * với server để nó từ chối ở phía nó nữa (§44.2 — hai lớp, không tin client).
+   */
+  async function setViewOnly(next) {
+    if (!currentSessionId) { toast('Chưa có phiên đang chạy.'); return; }
+    await authorisedFetch(`/api/sessions/${currentSessionId}/permission`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ view_only: Boolean(next) }),
+    });
+    live.viewOnly = Boolean(next);
+    if (liveController) liveController.setEnabled(!live.viewOnly);
+    renderViewOnly();
+    toast(live.viewOnly ? 'Chỉ xem: đã tắt gửi chuột và bàn phím.' : 'Đã bật lại điều khiển.');
+  }
+
+  function renderViewOnly() {
+    const button = $('#liveViewOnly');
+    if (!button) return;
+    button.setAttribute('aria-pressed', live.viewOnly ? 'true' : 'false');
+    button.title = live.viewOnly ? 'Chỉ xem — bấm để bật lại điều khiển' : 'Chỉ xem — không gửi chuột/bàn phím';
+    button.classList.toggle('on', live.viewOnly);
+  }
+
+  $('#liveViewOnly').addEventListener('click', () => {
+    // Không có phiên thì không có gì để tắt — và `currentSessionId` rỗng làm
+    // `setViewOnly` gọi một route sai. `startLive` tạo phiên nếu cần.
+    setViewOnly(!live.viewOnly).catch(() => toast('Không đổi được chế độ chỉ xem.'));
   });
 
   $('#liveFullscreen').addEventListener('click', async () => {

@@ -212,6 +212,10 @@ export class InputController {
     // §50.1 #6: `true` mặc định. `setPointerEnabled(false)` tắt **đường chuột**
     // (move/down/up/wheel) mà vẫn giữ bàn phím.
     this.pointerEnabled = true;
+    // §10.1 #2 "chỉ xem": tắt **mọi** đường gửi, không chỉ đường chuột.
+    // `pointerEnabled` một mình là chưa đủ — bàn phím vẫn gửi, nên người dùng
+    // bật "chỉ xem" rồi gõ vào máy đích mà không biết.
+    this.enabled = true;
     // §6.4.6: delta cộng dồn trong một frame khi pointer lock bật.
     this.relative = { dx: 0, dy: 0, flags: 0, frame: 0 };
     // `true` khi con trỏ đang bị khoá (chế độ game).
@@ -299,7 +303,10 @@ export class InputController {
    * điện thoại (luôn là `false` — không có phím Ctrl vật lý).
    */
   sendKey(vk, down, mods = 0) {
-    if (!vk) return false;
+    // §10.1 #2: "chỉ xem" chặn **cả** chip bàn phím ảo (§30.7). Chip gọi thẳng
+    // `sendKey`, không đi qua `onKeyDown` của bàn phím vật lý, nên thiếu dòng
+    // này thì bật "chỉ xem" vẫn gõ được bằng chip.
+    if (!this.enabled || !vk) return false;
     this.post(`/api/sessions/${this.sid}/input`, {
       t: 'key',
       down: down ? 1 : 0,
@@ -395,6 +402,23 @@ export class InputController {
    * Tắt chuột thì phải **nhả** nút đang giữ trước: nếu người dùng đang kéo một
    * cửa sổ rồi bật chế độ yếu, nút chuột ở lại down trên máy thật.
    */
+  /**
+   * §10.1 #2 — "chỉ xem": tắt **cả** chuột và bàn phím.
+   *
+   * Tắt thì phải **nhả** trước: người dùng đang giữ Ctrl (hoặc đang kéo cửa sổ)
+   * rồi bật chỉ-xem, không nhả thì Ctrl ở lại down trên máy thật và mọi thao tác
+   * sau đó của họ đều sai. Server cũng nhận `release_all` riêng khi client chết
+   * (§6.4.7), nhưng ở đây ta **còn sống** nên phải tự nhả ngay.
+   */
+  setEnabled(enabled) {
+    this.enabled = enabled;
+    this.pointerEnabled = enabled;
+    if (!enabled) {
+      try { this.releaseAll('view-only'); } catch { /* chưa có gì để nhả */ }
+      try { this.exitRelativePointer?.(); } catch { /* chưa vào lock */ }
+    }
+  }
+
   setPointerEnabled(enabled) {
     this.pointerEnabled = enabled;
     if (!enabled) {
@@ -414,7 +438,7 @@ export class InputController {
 
   /** §6.5: `{t:"text",s:"ế"}` — UTF-16, surrogate pair OK (§8.3). */
   text(value) {
-    if (!value) return false;
+    if (!this.enabled || !value) return false;
     this.post(`/api/sessions/${this.sid}/input`, { t: 'text', s: value });
     return true;
   }
@@ -470,6 +494,7 @@ export function attach(element, options) {
     controller.wheel(event);
   };
   const onKeyDown = (event) => {
+    if (!controller.enabled) return;
     // §6.5: phím do ô nhập khác xử lý thì không cướp.
     if (event.target && event.target.dataset && event.target.dataset.remoteInput === 'off') return;
     controller.post(`/api/sessions/${controller.sid}/input`, keyEvent(event));
@@ -479,7 +504,10 @@ export function attach(element, options) {
     // chắn thuộc về phiên.
     if (['Tab', 'Backspace', 'F5'].includes(event.key)) event.preventDefault();
   };
-  const onKeyUp = (event) => controller.post(`/api/sessions/${controller.sid}/input`, keyEvent(event));
+  const onKeyUp = (event) => {
+    if (!controller.enabled) return;
+    controller.post(`/api/sessions/${controller.sid}/input`, keyEvent(event));
+  };
 
   // §6.4.3: `pointermove` **kể cả khi không bấm** — nếu không, tooltip/menu
   // hover không bao giờ mở và người dùng thấy "app không phản hồi".

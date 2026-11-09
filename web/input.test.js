@@ -425,3 +425,57 @@ test('thoát pointer lock thì gửi release_all (§6.4.6 + §6.4.7)', () => {
   assert.ok(lockHandler.includes("releaseAll('pointerlock-exit')"), 'phải nhả mọi thứ khi lock bị nhả');
   assert.ok(input.includes('pointerlockchange'), 'phải nghe sự kiện nhả lock');
 });
+
+test('"chỉ xem" chặn **mọi** đường gửi, không chỉ chuột (§10.1 #2)', () => {
+  // Lỗi dễ mắc: chỉ ẩn con trỏ trong CSS, hoặc chỉ tắt `pointerEnabled`. Khi đó
+  // người dùng bật "chỉ xem" để đưa máy cho người khác nhìn, rồi thấy con trỏ
+  // của họ chạy trên máy đích — hoặc tệ hơn, gõ được phím vào máy người ta.
+  const sent = [];
+  const element = fakeElement();
+  const controller = new InputController(element, {
+    sid: 's1',
+    post: async (path, body) => { sent.push({ path, body }); },
+    frame: () => ({ width: 1600, height: 900 }),
+  });
+
+  // Trước khi tắt: mọi đường đều gửi.
+  assert.equal(controller.sendKey(9, 1, 0), true, 'đang bật thì gửi được phím');
+  assert.equal(controller.text('a'), true, 'đang bật thì gửi được chữ');
+  assert.notEqual(controller.pointer({ clientX: 10, clientY: 10, ctrlKey: false }, 1), false, 'đang bật thì gửi được chuột');
+
+  const before = sent.length;
+  controller.setEnabled(false);
+
+  // §6.4.7: tắt thì phải **nhả** trước — nếu đang giữ phím/nút thì nó sẽ kẹt
+  // trên máy thật. `release_all` là đường duy nhất nhả được.
+  controller.held = 0; // (nhả đã xảy ra ở trên; dọn để không đếm nhầm lần sau)
+
+  assert.equal(controller.sendKey(9, 1, 0), false, 'chip bàn phím ảo phải bị chặn');
+  assert.equal(controller.text('a'), false, 'gửi chữ phải bị chặn');
+  assert.equal(controller.pointer({ clientX: 10, clientY: 10, ctrlKey: false }, 1), false, 'chuột phải bị chặn');
+
+  // Và phải nói được **vì sao** không gửi gì — một cờ, không phải bốn chỗ.
+  const afterToggle = sent.slice(before).filter(m => !(m.body && m.body.t === 'release_all'));
+  assert.deepEqual(afterToggle, [], 'sau khi bật "chỉ xem" không được gửi gì khác ngoài release_all');
+
+  // Bật lại thì gửi được — nếu không, người dùng bấm lần hai và app "hỏng".
+  controller.setEnabled(true);
+  assert.equal(controller.sendKey(9, 1, 0), true, 'bật lại phải gửi được');
+});
+
+test('"chỉ xem" nhả phím đang giữ trước khi tắt (§6.4.7)', () => {
+  // Không nhả thì Ctrl đang giữ ở lại down trên máy thật: người dùng bật
+  // "chỉ xem", rồi mọi cú click sau đó trên máy đích thành Ctrl+click.
+  const sent = [];
+  const controller = new InputController(fakeElement(), {
+    sid: 's1',
+    post: async (path, body) => { sent.push({ path, body }); },
+    frame: () => ({ width: 1600, height: 900 }),
+  });
+  controller.held = 0b1; // đang giữ phím/nút
+  controller.setEnabled(false);
+  const release = sent.find(m => m.body && m.body.t === 'release_all');
+  assert.ok(release, 'phải gửi release_all khi tắt');
+  assert.equal(release.body.reason, 'view-only', 'lý do phải đọc được trong log server');
+  assert.equal(controller.held, 0, 'cờ giữ phải về 0');
+});
