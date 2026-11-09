@@ -159,3 +159,33 @@ test('hộp resume không giẫm lên window picker (§6.11.1 + §5.4)', () => {
     'phải trả lại trạng thái sau khi dùng xong');
   assert.ok(app.includes("dataset.action === 'resume'"), 'handler chọn cửa sổ phải bỏ qua khi đang resume');
 });
+
+// §50.1 #3 (P1) — mất kết nối: giữ ảnh cuối + đồng hồ "đã mất N giây".
+// Bản trước tắt `live.active` ngay khi `<img>` báo lỗi: một nhịp mạng 2 giây
+// xoá toàn bộ khung hình và hiện "Chưa bật xem máy thật" — người dùng tưởng app
+// chết, bấm Start lại, tự tạo phiên thứ hai hoặc nhận 409.
+test('mất hình thì giữ ảnh cuối và đếm giây, không xoá trắng (§50.1 #3)', () => {
+  assert.ok(html.includes('liveReconnect'), 'phải có banner trạng thái mất hình');
+  assert.ok(/Mất hình \$\{seconds\} giây/.test(app), 'banner phải đếm giây thật');
+  const start = app.indexOf("$('#liveImage').addEventListener('error'");
+  const errorHandler = app.slice(start, app.indexOf('§50.1 #3: ảnh cuối hiện lại', start));
+  assert.ok(errorHandler.length > 400, 'phải tìm thấy handler');
+  // Có **hai** nhánh: lỗi ngay lần đầu (báo lý do) và đứt giữa chừng (đếm
+  // ngược + thử lại). Kiểm cái quan trọng: nhánh đứt giữa chừng **không** tắt
+  // stream — tắt là xoá ảnh cuối, đúng cái spec cấm.
+  const afterRetry = errorHandler.slice(errorHandler.indexOf('showReconnecting();'));
+  assert.ok(!/live\.active = false;\s*renderLive\(\);\s*toast\('Không xem/.test(afterRetry),
+    'đứt giữa chừng không được tắt stream');
+  assert.ok(errorHandler.includes('firstFrameSeen'), 'phải phân biệt "lỗi ngay" với "đứt giữa chừng"');
+  assert.ok(/img\.src = .*Date\.now\(\)/.test(app), 'phải nạp lại có cache-bust');
+});
+
+test('không còn câu nào nói "chưa điều khiển được" (§6.4 đã xong)', () => {
+  // Câu sai ở đúng chỗ người dùng đọc trước khi bấm là lý do họ không bấm —
+  // và là lý do họ tin app yếu hơn thực tế.
+  // Bỏ **comment HTML** trước khi kiểm: comment giải thích "đã sửa câu chưa
+  // điều khiển được" chứa đúng chuỗi đó — bẫy đã gặp ba lần với test grep.
+  const visibleHtml = html.replace(/<!--[\s\S]*?-->/g, '');
+  const stale = /chưa điều khiển được|không điều khiển được/i.exec(visibleHtml);
+  assert.equal(stale, null, `index.html còn câu sai: ${stale && stale[0]}`);
+});

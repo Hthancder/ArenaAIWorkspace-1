@@ -83,3 +83,11 @@ body.locked { overflow: hidden; }
 .auth-error { margin: 0 0 12px; font-size: 13px; color: #d0453e; }
 .auth-error.hidden { display: none; }
 .auth-note { margin: 14px 0 0; font-size: 11.5px; line-height: 1.5; color: var(--muted, #8b9a92); }
+
+/* §50.1 #3: banner "mất hình N giây". Đặt trên ảnh cuối, **không** che ảnh:
+   người dùng cần thấy ảnh cuối để biết app đang thử lại chứ không phải đã chết. */
+.live-reconnect{position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:3;
+  font:10px 'DM Sans',sans-serif;color:#ffe9c7;background:rgba(84,52,8,.86);
+  border:1px solid rgba(220,170,90,.5);border-radius:6px;padding:6px 12px;
+  pointer-events:none;white-space:nowrap}
+.live-reconnect.hidden{display:none}

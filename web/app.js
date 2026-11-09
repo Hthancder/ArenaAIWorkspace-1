@@ -286,6 +286,14 @@
     $('#liveBtn').classList.toggle('on', live.active);
     $('#liveBar').classList.toggle('hidden', !live.active);
     $('#liveBtnLabel').textContent = live.active ? 'Dừng xem máy thật' : 'Xem máy thật';
+    if (!live.active) {
+      // Tắt hẳn thì xoá cờ "đã thấy frame": lần Start sau là một stream mới,
+      // và một ảnh lỗi ngay lập tức phải báo lý do thay vì đếm ngược 60 giây.
+      live.firstFrameSeen = false;
+      reconnectStartedAt = 0;
+      if (reconnectTimer) { clearInterval(reconnectTimer); reconnectTimer = null; }
+      $('#liveReconnect')?.classList.add('hidden');
+    }
     // Trước bản này dòng này ghi "không có tiếng/điều khiển" — đúng lúc đó,
     // nhưng giờ điều khiển **có**. Ghi sai sự thật ở đây tệ hơn không ghi gì:
     // người dùng đọc "không điều khiển được" rồi không thử bấm.
@@ -735,13 +743,79 @@
     live.fps = Math.max(1, Math.min(30, Number(event.target.value) || 15));
     renderLive();
   });
+  /**
+   * §50.1 #3 — mất kết nối: **giữ ảnh cuối + đồng hồ "đã mất N giây"**.
+   *
+   * # Vì sao không tắt `live.active`
+   *
+   * Bản trước đặt `live.active = false` ngay khi `<img>` báo lỗi. Hệ quả: một
+   * nhịp mạng mất 2 giây xoá **toàn bộ** khung hình và hiện màn hình trắng +
+   * "Chưa bật xem máy thật" — người dùng tưởng app chết, bấm Start lại, và tự
+   * tạo cho mình phiên thứ hai (hoặc nhận 409). Spec gọi đúng trạng thái này:
+   * *"màn hình trắng + spinner làm bạn tưởng app chết; ảnh cuối + đồng hồ cho
+   * biết **đang thử lại**, không phải đã chết"*.
+   *
+   * # Vì sao tự thử lại
+   *
+   * MJPEG là một HTTP response dài. Rớt Wi-Fi 3 giây thì response chết, nhưng
+   * server vẫn chạy. Nạp lại `<img src>` là đủ để tiếp tục — không cần tạo
+   * phiên mới. Chỉ báo thất bại thật khi đã thử quá `RECONNECT_GIVE_UP_MS`.
+   */
+  const RECONNECT_GIVE_UP_MS = 60_000;
+  let reconnectTimer = null;
+  let reconnectStartedAt = 0;
+
+  function showReconnecting() {
+    const banner = $('#liveReconnect');
+    if (!banner) return;
+    banner.classList.remove('hidden');
+    const seconds = Math.max(0, Math.round((Date.now() - reconnectStartedAt) / 1000));
+    // Đồng hồ là thứ **chứng minh** app còn sống. Không có nó, một ảnh đứng
+    // yên và một app treo trông giống hệt nhau.
+    banner.textContent = `Mất hình ${seconds} giây — đang thử lại…`;
+  }
+
   $('#liveImage').addEventListener('error', () => {
-    // Ảnh MJPEG lỗi (pipeline chết, GStreamer thiếu) ⇒ dừng trạng thái để người
-    // dùng thấy thông báo thật thay vì một khung đen im lặng.
     if (!live.active) return;
-    live.active = false;
-    renderLive();
-    toast('Không xem được màn hình thật: kiểm tra GStreamer và monitor index trong bảng chẩn đoán.');
+    // `dataset.src` đang được đặt ⇒ ảnh lỗi ngay lần đầu, tức là stream **chưa
+    // từng** chạy (thiếu quyền, không capture được). Trường hợp này phải báo
+    // ngay bằng lý do thật, không đếm ngược 60 giây cho một thứ sẽ không bao
+    // giờ thành công.
+    if (!live.firstFrameSeen) {
+      live.active = false;
+      renderLive();
+      toast('Không xem được màn hình thật. Mở bảng chẩn đoán để xem lý do cụ thể.');
+      return;
+    }
+    if (!reconnectStartedAt) reconnectStartedAt = Date.now();
+    showReconnecting();
+    if (reconnectTimer) return;
+    reconnectTimer = setInterval(() => {
+      if (!live.active) { clearInterval(reconnectTimer); reconnectTimer = null; return; }
+      showReconnecting();
+      if (Date.now() - reconnectStartedAt > RECONNECT_GIVE_UP_MS) {
+        clearInterval(reconnectTimer);
+        reconnectTimer = null;
+        reconnectStartedAt = 0;
+        live.active = false;
+        renderLive();
+        toast('Mất hình quá 60 giây. Bấm "Xem máy thật" để thử lại.');
+        return;
+      }
+      // `cache-bust`: cùng URL thì trình duyệt có thể dùng response đã chết
+      // trong cache thay vì mở kết nối mới.
+      const img = $('#liveImage');
+      if (img) img.src = `${liveUrl()}&r=${Date.now()}`;
+    }, 1000);
+  });
+
+  // §50.1 #3: ảnh cuối hiện lại ⇒ tắt banner và xoá đồng hồ. Không làm thì
+  // banner "đang thử lại" nằm trên hình đang chạy bình thường.
+  $('#liveImage').addEventListener('load', () => {
+    live.firstFrameSeen = true;
+    if (reconnectTimer) { clearInterval(reconnectTimer); reconnectTimer = null; }
+    reconnectStartedAt = 0;
+    $('#liveReconnect')?.classList.add('hidden');
   });
   /**
    * §6.11.1 — "Tiếp tục phiên đang mở?" sau khi tải lại trang.

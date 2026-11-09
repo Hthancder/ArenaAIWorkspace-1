@@ -49,9 +49,16 @@
               <div class="screen-topline"><div class="screen-status"><span class="live-dot"></span><span id="screenState">Đang chờ phiên demo</span></div><div class="screen-tools"><span class="quality-indicator"><i></i> HD</span><button id="fullscreenBtn" class="screen-tool" title="Phóng to">⛶</button></div></div>
               <div class="live-view hidden" id="liveView">
                 <img id="liveImage" alt="Màn hình thật của máy Windows" />
+                <!-- §50.1 #3: khi mất hình, ảnh cuối **vẫn hiện** và banner này
+                     đếm giây. Không thay ảnh bằng spinner: ảnh đứng yên trông
+                     giống app treo, còn ảnh + đồng hồ nói rõ "đang thử lại". -->
+                <div class="live-reconnect hidden" id="liveReconnect" role="status" aria-live="polite"></div>
                 <div class="live-empty" id="liveEmpty">
                   <b>Chưa bật xem máy thật</b>
-                  <small>Bấm “Xem máy thật”. Đường này dùng MJPEG: chỉ hình, chưa có tiếng và chưa điều khiển được.</small>
+                  <!-- Sửa câu cũ "chưa điều khiển được": §6.4 đã xong. Một câu
+                       sai ở đúng chỗ người dùng đọc trước khi bấm là lý do họ
+                       không thử bấm — và là lý do họ tin app yếu hơn thực tế. -->
+                  <small>Bấm “Xem máy thật”. Đường này dùng MJPEG: có hình và điều khiển được chuột/bàn phím, chưa có tiếng.</small>
                 </div>
               </div>
               <div class="mock-desktop" id="mockDesktop">
@@ -93,7 +100,7 @@
             <section class="tip-card"><span class="tip-icon">✦</span><div><b>Hình màn hình là thật; phần còn lại là mô phỏng</b><p>Nút <b>Xem máy thật</b> phát MJPEG từ chính exe này (không cần cài gì). Chuột, bàn phím, âm thanh và chọn cửa sổ thì <b>chưa có</b> — chúng vẫn là demo.</p><button id="aboutMock">Tìm hiểu thêm <span>→</span></button></div></section>
           </aside>
         </div>
-        <footer class="page-footer"><span>Lantern <span class="footer-dot">·</span> Bản mock tương tác</span><span>Xem được màn hình thật · chưa điều khiển được.</span></footer>
+        <footer class="page-footer"><span>Lantern <span class="footer-dot">·</span> Bản mock tương tác</span><span>Xem được màn hình thật · điều khiển được chuột/bàn phím · chưa có tiếng.</span></footer>
       </div>
     </main>
   </div>
