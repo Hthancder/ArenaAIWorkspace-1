@@ -1,0 +1,23 @@
+[package]
+name = "taskora"
+version = "0.1.0"
+edition = "2021"
+description = "Taskora - Ứng dụng quản lý công việc (to-do) đẹp và đầy đủ tính năng cho Windows"
+license = "MIT"
+repository = "https://github.com/Hthancder/ArenaAIWorkspace-1"
+
+[dependencies]
+eframe = { version = "=0.31.1" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4.45", features = ["serde"] }
+
+[[bin]]
+name = "Taskora"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
