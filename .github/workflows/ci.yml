@@ -120,17 +120,32 @@ jobs:
       - name: build Lantern mock app
         shell: pwsh
         run: |
-          cargo build --manifest-path ..\app\Cargo.toml --release --message-format=json 2>$null > build.json
+          # `2>$null` từng nuốt **toàn bộ** stderr, gồm cả lỗi linker và lỗi
+          # "failed to run custom build command" — những thứ không xuất hiện dưới
+          # dạng `compiler-message` trong JSON. Kết quả: step đỏ, log không tải
+          # được từ sandbox, và annotation rỗng ⇒ **không có cách nào biết lỗi
+          # gì** trong 3 vòng CI liền. Giờ giữ stderr vào file và in ra.
+          cargo build --manifest-path ..\app\Cargo.toml --release --message-format=json > build.json 2> build.err
           $status = $LASTEXITCODE
           if ($status -ne 0) {
-            Get-Content build.json | ForEach-Object {
+            $reported = 0
+            Get-Content build.json -ErrorAction SilentlyContinue | ForEach-Object {
               try {
                 $m = $_ | ConvertFrom-Json
                 if ($m.reason -eq 'compiler-message' -and $m.message.level -eq 'error') {
                   $span = $m.message.spans | Select-Object -First 1
                   Write-Output "::error::rustc: $($span.file_name):$($span.line_start) $($m.message.message)"
+                  $reported++
                 }
               } catch { }
+            }
+            # Không có compiler-message nào ⇒ lỗi ở tầng khác (linker, build
+            # script, cargo). In 25 dòng stderr cuối: đủ để thấy lý do thật.
+            if ($reported -eq 0 -and (Test-Path build.err)) {
+              $lines = Get-Content build.err | Select-Object -Last 25
+              foreach ($line in $lines) {
+                Write-Output "::error::build: $line"
+              }
             }
           }
           exit $status
