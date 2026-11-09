@@ -343,8 +343,12 @@ struct D3D11Device {
     create_texture2d: Option<
         unsafe extern "system" fn(*mut c_void, *const TextureDesc, *const c_void, *mut *mut c_void) -> HRESULT,
     >,
-    _rest: [*mut c_void; 40],
-    get_immediate_context: Option<unsafe extern "system" fn(*mut c_void, *mut *mut c_void) -> ()>,
+    /// Slot 6–46. `GetImmediateContext` nằm ở slot 40, **không** phải 46 (bản
+    /// trước khai `[*mut c_void; 40]` = 40 slot ⇒ 46, sai 6 slot). Ta không cần
+    /// nó — `context` lấy trực tiếp từ `D3D11CreateDevice` — nên trường đó đã bị
+    /// xoá thay vì sửa: một trường sai slot mà không ai gọi thì vô hại, nhưng
+    /// người sau sẽ tin nó và gọi.
+    _rest: [*mut c_void; 41],
 }
 
 #[repr(C)]
@@ -664,6 +668,33 @@ impl Capture {
             }
 
             // Texture staging: nơi GPU ghi bản copy mà CPU đọc được.
+            //
+            // **Format phải bằng format của desktop.** `CopyResource` đòi hai
+            // resource cùng kiểu và cùng kích thước; khác là `CopyResource` chỉ
+            // ghi cảnh báo vào debug layer rồi **không làm gì**, và ta đọc
+            // texture rỗng — khung hình đen, không có lỗi.
+            //
+            // Desktop HDR (`DXGI_FORMAT_R16G16B16A16_FLOAT`, bật "HDR" trong
+            // Windows Settings) là trường hợp thật trên laptop màn 4K. Rơi về
+            // `B8G8R8A8_UNORM` cố định thì stream đen trên đúng máy đó.
+            //
+            // Ta chỉ biết chắc `B8G8R8A8_UNORM` là đọc được (4 byte/pixel, thứ tự
+            // BGRA); format khác thì báo lỗi **đọc được** kèm tên format, thay vì
+            // gửi ảnh đen. Chuyển đổi HDR→SDR là việc của một bản riêng.
+            if desc.desktop_image_format != DXGI_FORMAT_B8G8R8A8_UNORM {
+                release(duplication_raw);
+                release(device_raw);
+                release(context_raw);
+                // **Không** `release(adapter_raw)` ở đây: đã nhả ngay sau
+                // `DuplicateOutput` (dòng trên). Nhả hai lần làm refcount xuống
+                // dưới 0 và COM trả object cho pool khi vẫn còn người dùng.
+                release(factory);
+                return Err(CaptureError::Other(format!(
+                    "Desktop đang ở format {} (không phải BGRA 8-bit). Tắt HDR trong \
+                     Windows Settings → Display, hoặc chọn màn hình khác.",
+                    desc.desktop_image_format
+                )));
+            }
             let texture_desc = TextureDesc {
                 width: width as UINT,
                 height: height as UINT,
@@ -749,9 +780,6 @@ impl Capture {
                     Some(copy) => {
                         copy(self.context.cast(), self.staging.cast(), texture_raw);
                         release(texture_raw);
-                        if let Some(release_frame) = (*self.duplication).release_frame {
-                            let _ = release_frame(self.duplication.cast());
-                        }
                         result = self.read_staging();
                     }
                     None => {
@@ -760,10 +788,20 @@ impl Capture {
                     }
                 }
             }
-            if result.is_err() {
-                if let Some(release_frame) = (*self.duplication).release_frame {
-                    let _ = release_frame(self.duplication.cast());
-                }
+            // `ReleaseFrame` đúng **một lần**, sau mọi đường thoát.
+            //
+            // Bản trước nhả ở hai nhánh (thành công, và `result.is_err()`), còn
+            // nhánh `None` của `CopyResource` **không** nhả ⇒ `AcquireNextFrame`
+            // kế tiếp trả `DXGI_ERROR_INVALID_CALL` mãi mãi và stream đứng yên
+            // cho tới khi tab đóng. Kiểu lỗi này chỉ hiện khi thiếu `CopyResource`
+            // — tức là trên máy có driver lạ — nên gần như không tái hiện được ở
+            // máy dev.
+            //
+            // Cũng đúng thứ tự: `ReleaseFrame` **sau** khi đã copy xong texture.
+            // Nhả trước khi copy thì DXGI thu hồi surface và `CopyResource` đọc
+            // rác.
+            if let Some(release_frame) = (*self.duplication).release_frame {
+                let _ = release_frame(self.duplication.cast());
             }
             result
         }
