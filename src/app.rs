@@ -2,10 +2,10 @@
 
 use std::time::{Duration, Instant};
 
-use chrono::Local;
+use chrono::{Local, NaiveDate};
 use eframe::egui::{self, Align, Key, Layout, RichText};
 
-use crate::models::{today, Repeat, SortMode, Store, SubTask, Task, TaskId, View};
+use crate::models::{today, Priority, Repeat, SortMode, Store, SubTask, Task, TaskId, View};
 use crate::parser;
 use crate::storage;
 use crate::ui::theme;
@@ -52,12 +52,17 @@ pub enum Act {
     AddSubtask(TaskId),
     ClearCompleted,
     FilterTag(String),
+    SetDue(TaskId, Option<NaiveDate>),
+    SetPriority(TaskId, Priority),
+    PurgeAllTrash,
+    DeferOverdue(NaiveDate),
 }
 
 /// Trạng thái phím tắt (tính trong một lần đọc input).
 struct Sc {
     ctrl_n: bool,
     ctrl_f: bool,
+    ctrl_k: bool,
     ctrl_d: bool,
     ctrl_z: bool,
     ctrl_y: bool,
@@ -83,6 +88,7 @@ pub struct TaskoraApp {
     pub search: String,
     pub quick_add: String,
     pub tag_filter: Option<String>,
+    pub prio_filter: Option<crate::models::Priority>,
 
     pub focus_quick: bool,
     pub focus_search: bool,
@@ -116,6 +122,10 @@ pub struct TaskoraApp {
     pub last_save: Option<Instant>,
     pub saved_label: String,
     pub flash: Option<(String, Instant)>,
+    /// Bộ đệm tiêu đề cửa sổ (tránh gửi ViewportCommand mỗi frame).
+    pub title_cache: String,
+    /// ID việc cần cuộn vào khung nhìn (set khi Select, dọn sau khi render).
+    pub scroll_to: Option<crate::models::TaskId>,
 }
 
 impl TaskoraApp {
@@ -131,6 +141,7 @@ impl TaskoraApp {
             search: String::new(),
             quick_add: String::new(),
             tag_filter: None,
+            prio_filter: None,
             focus_quick: false,
             focus_search: false,
             show_cal: false,
@@ -153,6 +164,8 @@ impl TaskoraApp {
             last_save: None,
             saved_label: "—".to_string(),
             flash: None,
+            title_cache: String::new(),
+            scroll_to: None,
         }
     }
 
@@ -207,6 +220,7 @@ impl TaskoraApp {
         match act {
             Act::Select(id) => {
                 self.selected = Some(id);
+                self.scroll_to = Some(id);
             }
             Act::Toggle(id) => self.toggle_done(id),
             Act::Star(id) => {
@@ -270,6 +284,61 @@ impl TaskoraApp {
                 let n = before - self.store.tasks.len();
                 self.keep_selection_valid();
                 self.flash(format!("Đã xóa {n} việc hoàn thành"));
+            }
+            Act::SetDue(id, due) => {
+                self.push_undo();
+                if let Some(t) = self.store.tasks.iter_mut().find(|t| t.id == id) {
+                    t.due = due;
+                }
+                self.flash(match due {
+                    Some(d) => format!("Hạn chót: {}", d.format("%d/%m/%Y")),
+                    None => "Đã bỏ hạn chót".to_string(),
+                });
+            }
+            Act::SetPriority(id, p) => {
+                self.push_undo();
+                if let Some(t) = self.store.tasks.iter_mut().find(|t| t.id == id) {
+                    t.priority = p;
+                }
+                self.flash(format!("Ưu tiên: {}", p.label()));
+            }
+            Act::PurgeAllTrash => {
+                let n = self.store.tasks.iter().filter(|t| t.is_deleted()).count();
+                if n == 0 {
+                    self.flash("Thùng rác đã trống");
+                    return;
+                }
+                self.push_undo();
+                self.store.tasks.retain(|t| !t.is_deleted());
+                self.keep_selection_valid();
+                self.flash(format!("Đã xóa vĩnh viễn {n} việc trong thùng rác"));
+            }
+            Act::DeferOverdue(target) => {
+                let t = today();
+                let n = self
+                    .store
+                    .tasks
+                    .iter()
+                    .filter(|x| x.is_active() && x.due.map(|d| d < t).unwrap_or(false))
+                    .count();
+                if n == 0 {
+                    self.flash("Không có việc quá hạn nào");
+                    return;
+                }
+                self.push_undo();
+                for task in self
+                    .store
+                    .tasks
+                    .iter_mut()
+                    .filter(|x| x.is_active() && x.due.map(|d| d < t).unwrap_or(false))
+                {
+                    task.due = Some(target);
+                }
+                self.flash(format!(
+                    "Đã đổi hạn {} việc quá hạn → {}",
+                    n,
+                    target.format("%d/%m/%Y")
+                ));
             }
         }
     }
@@ -350,7 +419,7 @@ impl TaskoraApp {
         let sort = self.store.settings.sort;
         let hide = self.store.settings.hide_completed;
         let tag = self.tag_filter.clone();
-        let mut vis = self.store.visible(&view, &search, sort, hide, tag.as_deref());
+        let mut vis = self.store.visible(&view, &search, sort, hide, tag.as_deref(), self.prio_filter);
         f(&mut vis);
         for (i, id) in vis.iter().enumerate() {
             if let Some(t) = self.store.tasks.iter_mut().find(|t| t.id == *id) {
@@ -473,6 +542,7 @@ impl TaskoraApp {
         self.view = v;
         self.selected = None;
         self.tag_filter = None;
+        self.prio_filter = None;
         self.show_cal = false;
     }
 
@@ -483,6 +553,7 @@ impl TaskoraApp {
         let sc = ctx.input(|i| Sc {
             ctrl_n: i.key_pressed(Key::N) && i.modifiers.command,
             ctrl_f: i.key_pressed(Key::F) && i.modifiers.command,
+            ctrl_k: i.key_pressed(Key::K) && i.modifiers.command,
             ctrl_d: i.key_pressed(Key::D) && i.modifiers.command,
             ctrl_z: i.key_pressed(Key::Z) && i.modifiers.command,
             ctrl_y: i.key_pressed(Key::Y) && i.modifiers.command,
@@ -507,7 +578,7 @@ impl TaskoraApp {
             }
             self.focus_quick = true;
         }
-        if sc.ctrl_f {
+        if sc.ctrl_f || sc.ctrl_k {
             self.focus_search = true;
         }
         if sc.ctrl_d {
@@ -549,8 +620,14 @@ impl TaskoraApp {
                 self.help_open = false;
                 self.import_open = false;
                 self.export_msg = None;
-            } else if self.selected.is_some() {
-                self.selected = None;
+            } else if !typing {
+                if self.tag_filter.is_some() || self.prio_filter.is_some() {
+                    self.tag_filter = None;
+                    self.prio_filter = None;
+                    self.flash("Đã bỏ bộ lọc");
+                } else if self.selected.is_some() {
+                    self.selected = None;
+                }
             }
         }
 
@@ -562,7 +639,7 @@ impl TaskoraApp {
                 let sort = self.store.settings.sort;
                 let hide = self.store.settings.hide_completed;
                 let tag = self.tag_filter.clone();
-                let vis = self.store.visible(&view, &search, sort, hide, tag.as_deref());
+                let vis = self.store.visible(&view, &search, sort, hide, tag.as_deref(), self.prio_filter);
                 if let Some(i) = vis.iter().position(|&x| x == sel) {
                     if sc.alt_up || sc.alt_down {
                         self.shift_task(sel, sc.alt_up);
@@ -591,6 +668,23 @@ impl TaskoraApp {
 
     fn update_ui(&mut self, ctx: &egui::Context) {
         self.handle_shortcuts(ctx);
+
+        // ----- tiêu đề cửa sổ động: "Taskora · 7 việc · 2 quá hạn" -----
+        let c_now = self.store.counts(today());
+        let title = if c_now.overdue > 0 {
+            format!(
+                "Taskora · {} việc · {} quá hạn",
+                c_now.active, c_now.overdue
+            )
+        } else if c_now.active > 0 {
+            format!("Taskora · {} việc", c_now.active)
+        } else {
+            "Taskora".to_string()
+        };
+        if title != self.title_cache {
+            self.title_cache = title.clone();
+            ctx.send_viewport_cmd(egui::ViewportCommand::Title(title));
+        }
 
         egui::TopBottomPanel::top("topbar").show(ctx, |ui| {
             self.top_bar(ui);
@@ -670,17 +764,30 @@ impl TaskoraApp {
     fn top_bar(&mut self, ui: &mut egui::Ui) {
         let today_c = today();
         let c = self.store.counts(today_c);
+        ui.add_space(2.0);
         ui.horizontal(|ui| {
+            // ----- logo + tên + view -----
             let (r, _) = ui.allocate_exact_size(egui::vec2(28.0, 28.0), egui::Sense::hover());
             theme::paint_logo(ui, r);
-            ui.add_space(4.0);
-            ui.label(
-                theme::bold_text("Taskora", 17.0, ui.visuals().text_color()),
+            ui.add_space(6.0);
+            ui.label(theme::bold_text("Taskora", 17.0, ui.visuals().text_color()));
+            ui.add_space(10.0);
+            // ngăn cách mảnh
+            let sep_x = ui.cursor().left();
+            let y0 = ui.cursor().top();
+            let h = ui.spacing().interact_size.y;
+            ui.painter().line_segment(
+                [
+                    egui::pos2(sep_x, y0 + 2.0),
+                    egui::pos2(sep_x, y0 + h - 2.0),
+                ],
+                egui::Stroke::new(1.0f32, ui.visuals().widgets.noninteractive.bg_stroke.color),
             );
-            ui.add_space(8.0);
-            let title = self.view.title(&self.store.lists);
-            ui.label(RichText::new(title).size(14.0).color(theme::ACCENT_SOFT));
+            ui.add_space(10.0);
             ui.weak(format!("· {} việc đang làm", c.active));
+            if c.overdue > 0 {
+                ui.colored_label(theme::DANGER, format!("· {} quá hạn", c.overdue));
+            }
 
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 // menu ⋯
@@ -721,8 +828,30 @@ impl TaskoraApp {
                     }
                 });
 
+                // undo / redo
+                let can_undo = !self.undo_stack.is_empty();
+                let can_redo = !self.redo_stack.is_empty();
+                if ui
+                    .add_enabled(can_undo, egui::Button::new("↶"))
+                    .on_hover_text("Hoàn tác (Ctrl+Z)")
+                    .clicked()
+                {
+                    self.undo();
+                }
+                if ui
+                    .add_enabled(can_redo, egui::Button::new("↷"))
+                    .on_hover_text("Làm lại (Ctrl+Y)")
+                    .clicked()
+                {
+                    self.redo();
+                }
+
                 // theme
-                let label = if self.store.settings.dark { "Sáng ☀" } else { "Tối ☾" };
+                let label = if self.store.settings.dark {
+                    "Sáng ☀"
+                } else {
+                    "Tối ☾"
+                };
                 if ui
                     .small_button(label)
                     .on_hover_text("Đổi giao diện (Ctrl+D)")
@@ -731,20 +860,23 @@ impl TaskoraApp {
                     self.toggle_theme(ui.ctx());
                 }
 
-                // thống kê nhanh
+                // thêm việc nhanh (nút chủ đạo)
                 if ui
-                    .small_button("Thống kê")
-                    .on_hover_text("Xem biểu đồ (view Thống kê)")
+                    .add(theme::primary_button("＋ Thêm việc"))
+                    .on_hover_text("Thêm việc nhanh (Ctrl+N)")
                     .clicked()
                 {
-                    self.set_view(View::Stats);
+                    if !self.view.allows_quick_add() {
+                        self.set_view(View::Inbox);
+                    }
+                    self.focus_quick = true;
                 }
 
                 // tìm kiếm
-                let w = 230.0;
+                let w = 240.0;
                 let resp = ui.add(
                     egui::TextEdit::singleline(&mut self.search)
-                        .hint_text("Tìm kiếm… (Ctrl+F)")
+                        .hint_text("Tìm việc… (Ctrl+F / Ctrl+K)")
                         .desired_width(w),
                 );
                 if resp.has_focus() && ui.input(|i| i.key_pressed(Key::Escape)) {
@@ -754,9 +886,10 @@ impl TaskoraApp {
                 if std::mem::take(&mut self.focus_search) {
                     resp.request_focus();
                 }
-                ui.add_space(4.0);
+                ui.add_space(2.0);
             });
         });
+        ui.add_space(2.0);
     }
 
     // ------------------------------------------------------------------ status bar
@@ -774,8 +907,21 @@ impl TaskoraApp {
             if c.done_today > 0 {
                 ui.colored_label(theme::OK, format!("● {} xong hôm nay", c.done_today));
             }
+            // tiến độ hôm nay (thanh mini)
+            let today_total = c.done_today + c.today;
+            if today_total > 0 {
+                let frac = c.done_today as f32 / today_total as f32;
+                ui.add(
+                    egui::ProgressBar::new(frac)
+                        .desired_height(7.0)
+                        .desired_width(90.0)
+                        .fill(theme::OK)
+                        .corner_radius(egui::CornerRadius::same(4)),
+                );
+                ui.weak(format!("{}/{} hôm nay", c.done_today, today_total));
+            }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                ui.weak("Ctrl+N thêm · Space đánh dấu · Ctrl+Z hoàn tác");
+                ui.weak("Ctrl+N thêm · Ctrl+K tìm · Space đánh dấu · Ctrl+Z hoàn tác");
                 let f = self
                     .flash
                     .as_ref()
@@ -1060,7 +1206,8 @@ impl TaskoraApp {
                         .show(ui, |ui| {
                             let rows: &[(&str, &str)] = &[
                                 ("Ctrl + N", "Thêm việc nhanh"),
-                                ("Ctrl + F", "Tìm kiếm"),
+                                ("Ctrl + F / Ctrl + K", "Tìm kiếm nhanh"),
+                                ("Chuột phải", "Menu ngữ cảnh: hạn chót, ưu tiên…"),
                                 ("Ctrl + D", "Đổi giao diện Tối/Sáng"),
                                 ("Ctrl + Z / Ctrl + Y", "Hoàn tác / Làm lại"),
                                 ("Ctrl + 1…6", "Chuyển view nhanh"),
@@ -1068,7 +1215,7 @@ impl TaskoraApp {
                                 ("Delete", "Xóa (vào thùng rác)"),
                                 ("↑ / ↓", "Chọn việc kế trước / kế sau"),
                                 ("Alt + ↑ / ↓", "Đổi thứ tự (khi sắp Thủ công)"),
-                                ("Esc", "Đóng panel / hộp thoại"),
+                                ("Esc", "Đóng panel / hộp thoại / bỏ bộ lọc"),
                                 ("Enter", "Xác nhận trong ô nhập"),
                             ];
                             for (k, v) in rows {

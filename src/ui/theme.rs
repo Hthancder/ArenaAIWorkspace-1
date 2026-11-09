@@ -71,6 +71,66 @@ pub fn bold(size: f32, color: Color32) -> egui::RichText {
         .family(FontFamily::Name("strong".into()))
 }
 
+/// Khung thẻ thống nhất (nền + viền + bo góc + lề trong).
+pub fn card_frame(ui: &egui::Ui) -> egui::Frame {
+    egui::Frame::new()
+        .fill(card_fill(ui))
+        .stroke(card_stroke(ui))
+        .corner_radius(CornerRadius::same(12))
+        .inner_margin(Margin {
+            left: 14,
+            right: 14,
+            top: 12,
+            bottom: 12,
+        })
+}
+
+/// Nhãn mục nhỏ chữ hoa mờ (HẠN CHÓT, GHI CHÚ…).
+pub fn section_label(ui: &mut egui::Ui, text: &str) {
+    ui.label(
+        egui::RichText::new(text)
+            .size(10.5)
+            .color(ui.visuals().weak_text_color())
+            .family(FontFamily::Name("strong".into())),
+    );
+}
+
+/// Nút bấm "chủ đạo" (nền accent, chữ trắng đậm).
+pub fn primary_button(text: impl Into<String>) -> egui::Button {
+    egui::Button::new(
+        egui::RichText::new(text.into())
+            .color(Color32::WHITE)
+            .family(FontFamily::Name("strong".into())),
+    )
+    .fill(ACCENT)
+    .corner_radius(CornerRadius::same(8))
+}
+
+/// Badge đếm tròn bên phải hàng sidebar.
+pub fn count_pill(ui: &mut egui::Ui, n: usize, active: bool, dot: Color32) {
+    if n == 0 {
+        return;
+    }
+    let fill = if active {
+        dot.gamma_multiply(if ui.visuals().dark_mode { 0.35 } else { 0.25 })
+    } else {
+        badge_bg(ui, dot)
+    };
+    egui::Frame::new()
+        .fill(fill)
+        .corner_radius(CornerRadius::same(9))
+        .inner_margin(Margin {
+            left: 7,
+            right: 7,
+            top: 1,
+            bottom: 1,
+        })
+        .show(ui, |ui| {
+            let c = if active { Color32::WHITE } else { dot };
+            ui.label(bold_text(n.to_string(), 11.0, c));
+        });
+}
+
 pub fn bold_text(s: impl Into<String>, size: f32, color: Color32) -> egui::RichText {
     egui::RichText::new(s.into())
         .size(size)
@@ -202,6 +262,20 @@ pub fn build_visuals(dark: bool) -> egui::Visuals {
     v.window_corner_radius = CornerRadius::same(12);
     v.window_stroke = Stroke::new(1.0f32, border);
     v.menu_corner_radius = CornerRadius::same(10);
+
+    // bóng mềm cho cửa sổ / popup
+    v.window_shadow = egui::Shadow {
+        offset: [0, 8],
+        blur: 24,
+        spread: 0,
+        color: Color32::from_black_alpha(if dark { 100 } else { 36 }),
+    };
+    v.popup_shadow = egui::Shadow {
+        offset: [0, 4],
+        blur: 14,
+        spread: 0,
+        color: Color32::from_black_alpha(if dark { 90 } else { 30 }),
+    };
     v.hyperlink_color = ACCENT_SOFT;
     v.faint_bg_color = faint;
     v.extreme_bg_color = extreme;
@@ -293,7 +367,8 @@ pub fn build_visuals(dark: bool) -> egui::Visuals {
 /// Vẽ logo mini (rounded + dấu tick) vào một rect.
 pub fn paint_logo(ui: &egui::Ui, rect: egui::Rect) {
     let p = ui.painter();
-    p.rect_filled(rect, CornerRadius::same(7), ACCENT);
+    let radius = ((rect.height() * 7.0 / 26.0) as u8).max(4);
+    p.rect_filled(rect, CornerRadius::same(radius), ACCENT);
     let (cx, cy) = (rect.center().x, rect.center().y);
     let s = rect.height() / 26.0;
     let a = egui::pos2(cx - 6.0 * s, cy + 0.5 * s);

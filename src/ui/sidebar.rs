@@ -4,6 +4,7 @@ use eframe::egui::{self, Align, Color32, Layout, Sense};
 
 use crate::app::{ListDialog, TaskoraApp};
 use crate::models::{today, Counts, View};
+use crate::ui::theme;
 
 impl TaskoraApp {
     pub fn render_sidebar(&mut self, ui: &mut egui::Ui) {
@@ -36,7 +37,7 @@ impl TaskoraApp {
 
                 // header DANH SÁCH
                 ui.horizontal(|ui| {
-                    ui.weak(egui::RichText::new("DANH SÁCH").small());
+                    theme::section_label(ui, "DANH SÁCH");
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                         if ui
                             .small_button("+")
@@ -136,6 +137,43 @@ impl TaskoraApp {
                     });
                 }
 
+                // ----- thẻ tiến độ hôm nay -----
+                ui.add_space(8.0);
+                let denom = c.done_today + c.today;
+                let frac = if denom == 0 {
+                    0.0
+                } else {
+                    c.done_today as f32 / denom as f32
+                };
+                egui::Frame::new()
+                    .fill(theme::card_fill(ui))
+                    .stroke(theme::card_stroke(ui))
+                    .corner_radius(egui::CornerRadius::same(10))
+                    .inner_margin(egui::Margin::symmetric(10, 8))
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.weak("Hôm nay");
+                            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                ui.label(
+                                    egui::RichText::new(format!("{}/{}", c.done_today, denom))
+                                        .size(11.5)
+                                        .strong(),
+                                );
+                            });
+                        });
+                        ui.add_space(4.0);
+                        ui.add(
+                            egui::ProgressBar::new(frac)
+                                .desired_height(6.0)
+                                .fill(if frac >= 1.0 {
+                                    theme::OK
+                                } else {
+                                    theme::ACCENT
+                                })
+                                .corner_radius(egui::CornerRadius::same(3)),
+                        );
+                    });
+
                 ui.add_space(8.0);
                 ui.weak(
                     egui::RichText::new("Dữ liệu được lưu tự động\nvào thư mục Taskora")
@@ -177,6 +215,15 @@ impl TaskoraApp {
                 egui::CornerRadius::same(8),
                 visuals.selection.bg_fill,
             );
+            // thanh accent bên phải (đọc từ phải sang giống tab browser)
+            ui.painter().rect_filled(
+                egui::Rect::from_min_size(
+                    egui::pos2(rect.right() - 3.0, rect.top() + 6.0),
+                    egui::vec2(3.0, rect.height() - 12.0),
+                ),
+                egui::CornerRadius::same(2),
+                theme::ACCENT,
+            );
         } else if resp.hovered() {
             ui.painter().rect_filled(
                 rect,
@@ -201,9 +248,7 @@ impl TaskoraApp {
                     ui.weak(e);
                 }
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if count > 0 {
-                        ui.weak(count.to_string());
-                    }
+                    theme::count_pill(ui, count, selected, dot);
                 });
             });
         });

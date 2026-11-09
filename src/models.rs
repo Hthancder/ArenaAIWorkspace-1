@@ -589,6 +589,7 @@ impl Store {
         sort: SortMode,
         hide_completed: bool,
         tag: Option<&str>,
+        prio: Option<Priority>,
     ) -> Vec<TaskId> {
         let t = today();
         let q = search.trim().to_lowercase();
@@ -615,6 +616,10 @@ impl Store {
             .filter(|task| task.matches_query(&q))
             .filter(|task| match tag {
                 Some(tg) => task.tags.iter().any(|x| x == tg),
+                None => true,
+            })
+            .filter(|task| match prio {
+                Some(p) => task.priority == p,
                 None => true,
             })
             .collect();
@@ -758,17 +763,17 @@ mod tests {
     fn visible_filters_and_sorts() {
         let mut s = Store::seed();
         let t = today();
-        let ids = s.visible(&View::Today, "", SortMode::Due, true, None);
+        let ids = s.visible(&View::Today, "", SortMode::Due, true, None, None);
         assert!(!ids.is_empty());
         // tìm kiếm
-        let hit = s.visible(&View::Inbox, "chào", SortMode::Title, true, None);
+        let hit = s.visible(&View::Inbox, "chào", SortMode::Title, true, None, None);
         assert_eq!(hit.len(), 1);
         // ẩn đã hoàn thành
         s.tasks[0].completed_at = Some(Utc::now());
-        let inbox = s.visible(&View::Inbox, "", SortMode::Manual, true, None);
+        let inbox = s.visible(&View::Inbox, "", SortMode::Manual, true, None, None);
         assert!(!inbox.contains(&s.tasks[0].id));
         // tag
-        let tagged = s.visible(&View::Inbox, "", SortMode::Manual, false, Some("hướng-dẫn"));
+        let tagged = s.visible(&View::Inbox, "", SortMode::Manual, false, Some("hướng-dẫn"), None);
         assert!(tagged.iter().all(|id| {
             s.tasks
                 .iter()

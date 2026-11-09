@@ -18,6 +18,11 @@ struct Stats {
     series: Vec<(NaiveDate, i64)>,
     /// theo danh sách: (tên, màu, xong, tổng)
     lists: Vec<(String, Color32, usize, usize)>,
+    /// theo thẻ: (tên thẻ, số việc đang làm)
+    tags: Vec<(String, usize)>,
+    /// tổng việc đã xong / tổng việc (không tính thùng rác)
+    done_all: usize,
+    total_all: usize,
 }
 
 fn compute(store: &Store, t: NaiveDate) -> Stats {
@@ -104,6 +109,27 @@ fn compute(store: &Store, t: NaiveDate) -> Stats {
         ));
     }
 
+    // theo thẻ (chỉ việc đang làm, không tính rác/hoàn thành)
+    let mut tag_map: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    for task in &store.tasks {
+        if !task.is_active() {
+            continue;
+        }
+        for tg in &task.tags {
+            *tag_map.entry(tg.clone()).or_insert(0) += 1;
+        }
+    }
+    let mut tags: Vec<(String, usize)> = tag_map.into_iter().collect();
+    tags.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+    tags.truncate(8);
+
+    let done_all = store
+        .tasks
+        .iter()
+        .filter(|x| !x.is_deleted() && x.is_completed())
+        .count();
+    let total_all = store.tasks.iter().filter(|x| !x.is_deleted()).count();
+
     Stats {
         active,
         done_today,
@@ -111,6 +137,9 @@ fn compute(store: &Store, t: NaiveDate) -> Stats {
         streak,
         series,
         lists,
+        tags,
+        done_all,
+        total_all,
     }
 }
 
@@ -154,6 +183,52 @@ impl TaskoraApp {
                             });
                     }
                 });
+
+                ui.add_space(14.0);
+
+                // ----- dải tiến độ tổng hợp -----
+                let done_total = s.done_all;
+                let grand = s.total_all;
+                let rate = if grand == 0 {
+                    0.0
+                } else {
+                    done_total as f32 / grand as f32
+                };
+                Frame::new()
+                    .fill(theme::card_fill(ui))
+                    .stroke(theme::card_stroke(ui))
+                    .corner_radius(CornerRadius::same(12))
+                    .inner_margin(Margin {
+                        left: 16,
+                        right: 16,
+                        top: 12,
+                        bottom: 12,
+                    })
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(theme::bold_text(
+                                "Tổng thể",
+                                14.0,
+                                ui.visuals().text_color(),
+                            ));
+                            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                ui.label(theme::bold_text(
+                                    format!("{:.0}%", rate * 100.0),
+                                    16.0,
+                                    theme::ACCENT_SOFT,
+                                ));
+                                ui.weak(format!("{done_total}/{grand} việc đã xong"));
+                            });
+                        });
+                        ui.add_space(6.0);
+                        ui.add(
+                            ProgressBar::new(rate)
+                                .desired_height(9.0)
+                                .fill(theme::ACCENT)
+                                .corner_radius(CornerRadius::same(4))
+                                .animate(true),
+                        );
+                    });
 
                 ui.add_space(14.0);
 
@@ -315,6 +390,50 @@ impl TaskoraApp {
 
                 ui.add_space(14.0);
 
+                // ----- theo thẻ -----
+                if !s.tags.is_empty() {
+                    Frame::new()
+                        .fill(theme::card_fill(ui))
+                        .stroke(theme::card_stroke(ui))
+                        .corner_radius(CornerRadius::same(12))
+                        .inner_margin(Margin {
+                            left: 16,
+                            right: 16,
+                            top: 12,
+                            bottom: 12,
+                        })
+                        .show(ui, |ui| {
+                            ui.label(theme::bold_text(
+                                "Việc đang làm theo thẻ",
+                                14.0,
+                                ui.visuals().text_color(),
+                            ));
+                            ui.add_space(6.0);
+                            let max_n = s.tags.iter().map(|(_, n)| *n).max().unwrap_or(1).max(1);
+                            for (i, (name, n)) in s.tags.iter().enumerate() {
+                                let hue = (i as f32 * 47.0 + 210.0) % 360.0;
+                                let color = hsl_to_rgb(hue, 0.62, 0.62);
+                                ui.horizontal(|ui| {
+                                    let (dr, _) =
+                                        ui.allocate_exact_size(egui::vec2(9.0, 9.0), egui::Sense::hover());
+                                    ui.painter().circle_filled(dr.center(), 4.5, color);
+                                    ui.label(format!("#{name}"));
+                                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                        ui.weak(format!("{n}"));
+                                    });
+                                });
+                                ui.add(
+                                    ProgressBar::new(*n as f32 / max_n as f32)
+                                        .desired_height(6.0)
+                                        .fill(color)
+                                        .corner_radius(CornerRadius::same(3)),
+                                );
+                                ui.add_space(4.0);
+                            }
+                        });
+                    ui.add_space(14.0);
+                }
+
                 // ----- sự thật nhỏ -----
                 let tip = match t.weekday().num_days_from_monday() {
                     0 => "Đầu tuần rồi – lên kế hoạch thôi!",
@@ -328,4 +447,25 @@ impl TaskoraApp {
                 });
             });
     }
+}
+
+/// HSL (0..360, 0..1, 0..1) → Color32.
+fn hsl_to_rgb(h: f32, s: f32, l: f32) -> Color32 {
+    let c = (1.0 - (2.0 * l - 1.0).abs()) * s;
+    let hp = (h.rem_euclid(360.0)) / 60.0;
+    let x = c * (1.0 - (hp % 2.0 - 1.0).abs());
+    let (r, g, b) = match hp as i32 {
+        0 => (c, x, 0.0),
+        1 => (x, c, 0.0),
+        2 => (0.0, c, x),
+        3 => (0.0, x, c),
+        4 => (x, 0.0, c),
+        _ => (c, 0.0, x),
+    };
+    let m = l - c / 2.0;
+    Color32::from_rgb(
+        ((r + m) * 255.0).clamp(0.0, 255.0) as u8,
+        ((g + m) * 255.0).clamp(0.0, 255.0) as u8,
+        ((b + m) * 255.0).clamp(0.0, 255.0) as u8,
+    )
 }

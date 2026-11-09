@@ -148,6 +148,17 @@ impl TaskoraApp {
                 task.due = None;
                 self.show_cal = false;
             }
+            if task.due.is_some()
+                && ui
+                    .small_button("+1 ngày")
+                    .on_hover_text("Đẩy hạn chót thêm 1 ngày")
+                    .clicked()
+            {
+                task.due = task
+                    .due
+                    .and_then(|d| d.checked_add_signed(chrono::TimeDelta::days(1)));
+                self.show_cal = false;
+            }
         });
 
         if self.show_cal {
@@ -333,6 +344,17 @@ impl TaskoraApp {
                 }
             });
         });
+        if !task.subtasks.is_empty() {
+            let d = task.subtasks.iter().filter(|s| s.done).count();
+            let all = task.subtasks.len();
+            ui.add(
+                egui::ProgressBar::new(d as f32 / all as f32)
+                    .desired_height(6.0)
+                    .fill(if d == all { theme::OK } else { theme::ACCENT })
+                    .corner_radius(egui::CornerRadius::same(3)),
+            );
+            ui.add_space(6.0);
+        }
         let mut rm_sid: Option<TaskId> = None;
         for st in task.subtasks.iter_mut() {
             ui.horizontal(|ui| {

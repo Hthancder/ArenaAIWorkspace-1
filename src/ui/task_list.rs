@@ -1,6 +1,6 @@
 //! View trung tâm: ô thêm việc nhanh, thanh công cụ, danh sách việc.
 
-use chrono::{Datelike, NaiveDate};
+use chrono::{Datelike, NaiveDate, TimeDelta};
 use eframe::egui::{
     self, Align, Color32, ComboBox, CornerRadius, Frame, Key, Layout, Margin, RichText, Sense,
     Stroke, TextEdit,
@@ -8,7 +8,7 @@ use eframe::egui::{
 
 use crate::app::{Act, TaskoraApp};
 use crate::models::{
-    due_state, today, DueState, Priority, Repeat, SortMode, Task, View, VN_WEEKDAYS,
+    due_state, today, Counts, DueState, Priority, Repeat, SortMode, Task, View, VN_WEEKDAYS,
 };
 use crate::parser;
 use crate::ui::theme;
@@ -17,9 +17,21 @@ const ROW_H: f32 = 46.0;
 
 impl TaskoraApp {
     pub fn render_task_view(&mut self, ui: &mut egui::Ui) {
+        let t0 = today();
+        let c0 = self.store.counts(t0);
+        let mut pre: Vec<Act> = Vec::new();
+
+        // ----- header view -----
+        self.view_header(ui, &mut pre, &c0);
+
         // ----- thêm việc nhanh -----
         if self.view.allows_quick_add() {
             self.quick_add_bar(ui);
+        }
+
+        // ----- banner quá hạn (Today) -----
+        if self.view == View::Today && c0.overdue > 0 {
+            self.overdue_banner(ui, &mut pre, &c0);
         }
 
         let view = self.view;
@@ -27,13 +39,14 @@ impl TaskoraApp {
         let sort = self.store.settings.sort;
         let hide = self.store.settings.hide_completed;
         let tag = self.tag_filter.clone();
+        let prio = self.prio_filter;
         let ids = self
             .store
-            .visible(&view, &search, sort, hide, tag.as_deref());
+            .visible(&view, &search, sort, hide, tag.as_deref(), prio);
 
         self.toolbar(ui, ids.len());
 
-        let mut acts: Vec<Act> = Vec::new();
+        let mut acts: Vec<Act> = pre;
         let manual = sort == SortMode::Manual;
 
         egui::ScrollArea::vertical()
@@ -57,13 +70,122 @@ impl TaskoraApp {
                         }
                     }
                     self.task_row(ui, task, manual, &mut acts);
-                    ui.add_space(2.0);
+                    ui.add_space(5.0);
                 }
             });
 
+        // dọn cờ scroll trước khi apply (apply có thể set lại cho frame sau)
+        self.scroll_to = None;
         for a in acts {
             self.apply(a);
         }
+    }
+
+    // ------------------------------------------------------------------ header view
+
+    fn view_header(&mut self, ui: &mut egui::Ui, acts: &mut Vec<Act>, c: &Counts) {
+        let view = self.view;
+        let title = view.title(&self.store.lists);
+        let vc = theme::view_color(view);
+        let n = match view {
+            View::Inbox => c.inbox,
+            View::Today => c.today,
+            View::Upcoming => c.upcoming,
+            View::Starred => c.starred,
+            View::Completed => c.completed,
+            View::Trash => c.trash,
+            View::List(id) => c
+                .by_list
+                .iter()
+                .find(|(l, _)| *l == id)
+                .map(|(_, n)| *n)
+                .unwrap_or(0),
+            View::Stats => 0,
+        };
+        let sub: &str = match view {
+            View::Inbox => "Việc chưa phân vào danh sách nào",
+            View::Today => "Đến hạn hôm nay và các việc quá hạn",
+            View::Upcoming => "Hạn chót trong những ngày tới",
+            View::Starred => "Những việc bạn ghim để ưu tiên",
+            View::Completed => "Lịch sử những việc đã làm xong",
+            View::Trash => "Việc đã xóa — xóa vĩnh viễn sẽ không khôi phục được",
+            View::List(_) => "Danh sách của bạn",
+            View::Stats => "",
+        };
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            let (dr, _) = ui.allocate_exact_size(egui::vec2(13.0, 13.0), egui::Sense::hover());
+            ui.painter().circle_filled(dr.center(), 6.5, vc);
+            ui.add_space(7.0);
+            ui.label(theme::bold_text(title, 21.0, ui.visuals().text_color()));
+            ui.add_space(6.0);
+            theme::count_pill(ui, n, false, vc);
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                match view {
+                    View::Trash if c.trash > 0 => {
+                        if ui
+                            .small_button("Dọn thùng rác")
+                            .on_hover_text("Xóa vĩnh viễn tất cả — không thể hoàn tác")
+                            .clicked()
+                        {
+                            acts.push(Act::PurgeAllTrash);
+                        }
+                    }
+                    View::Completed if c.completed > 0 => {
+                        if ui.small_button("Xóa tất cả hoàn thành").clicked() {
+                            acts.push(Act::ClearCompleted);
+                        }
+                    }
+                    _ => {}
+                }
+            });
+        });
+        if !sub.is_empty() {
+            ui.weak(sub);
+        }
+        ui.add_space(4.0);
+    }
+
+    // ------------------------------------------------------------------ banner quá hạn
+
+    fn overdue_banner(&self, ui: &mut egui::Ui, acts: &mut Vec<Act>, c: &Counts) {
+        let t = today();
+        Frame::new()
+            .fill(theme::badge_bg(ui, theme::DANGER))
+            .stroke(Stroke::new(1.0f32, theme::DANGER.gamma_multiply(0.5)))
+            .corner_radius(CornerRadius::same(10))
+            .inner_margin(Margin {
+                left: 12,
+                right: 12,
+                top: 8,
+                bottom: 8,
+            })
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.colored_label(
+                        theme::DANGER,
+                        RichText::new(format!("● {} việc quá hạn", c.overdue)).strong(),
+                    );
+                    ui.weak("Cần xử lý sớm");
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        if ui
+                            .small_button("Hoãn hết đến ngày mai")
+                            .on_hover_text("Đẩy tất cả việc quá hạn sang ngày mai")
+                            .clicked()
+                        {
+                            acts.push(Act::DeferOverdue(t.succ_opt().unwrap_or(t)));
+                        }
+                        if ui
+                            .small_button("Đưa về hôm nay")
+                            .on_hover_text("Đặt lại hạn chót của việc quá hạn = hôm nay")
+                            .clicked()
+                        {
+                            acts.push(Act::DeferOverdue(t));
+                        }
+                    });
+                });
+            });
+        ui.add_space(4.0);
     }
 
     // ------------------------------------------------------------------ quick add
@@ -102,6 +224,22 @@ impl TaskoraApp {
                         resp.request_focus();
                     }
                 });
+
+                // chips ví dụ khi ô trống (bấm để điền nhanh)
+                if self.quick_add.trim().is_empty() {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.weak("Thử ngay:");
+                        for ex in [
+                            "Mua sữa ngày mai #nhà !p1",
+                            "Báo cáo thứ 6 17h #cv !p2",
+                            "Tập gym *hàng tuần 6h30",
+                        ] {
+                            if ui.small_button(ex).clicked() {
+                                self.quick_add = ex.to_string();
+                            }
+                        }
+                    });
+                }
 
                 // xem trước phân tích
                 if !self.quick_add.trim().is_empty() {
@@ -202,6 +340,30 @@ impl TaskoraApp {
                 self.tag_filter = None;
             }
 
+            // chips lọc ưu tiên P1–P4
+            ui.separator();
+            ui.weak("Ưu tiên:");
+            for p in Priority::all() {
+                let sel = self.prio_filter == Some(p);
+                let (r, g, b) = p.color_rgb();
+                let col = Color32::from_rgb(r, g, b);
+                let label = RichText::new(p.short())
+                    .size(11.5)
+                    .color(if sel { Color32::WHITE } else { col });
+                let resp = ui.add(
+                    egui::Button::new(label)
+                        .fill(if sel { col } else { theme::badge_bg(ui, col) })
+                        .corner_radius(CornerRadius::same(7))
+                        .min_size(egui::vec2(34.0, 21.0)),
+                );
+                if resp.clicked() {
+                    self.prio_filter = if sel { None } else { Some(p) };
+                }
+            }
+            if self.prio_filter.is_some() && ui.small_button("× Ưu tiên").clicked() {
+                self.prio_filter = None;
+            }
+
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 ui.weak(format!("{count} việc"));
             });
@@ -268,25 +430,51 @@ impl TaskoraApp {
         let t = today();
         let w = ui.available_width();
         let selected = self.selected == Some(task.id);
+        let active = task.is_active();
         let (rect, resp) = ui.allocate_exact_size(egui::vec2(w, ROW_H), Sense::click());
 
-        // nền
+        // ----- card-style: nền card + viền mảnh -----
         let visuals_dark = ui.visuals().dark_mode;
+        let base = theme::card_fill(ui);
         let bg = if selected {
-            theme::ACCENT.gamma_multiply(if visuals_dark { 0.20 } else { 0.12 })
+            theme::ACCENT.gamma_multiply(if visuals_dark { 0.22 } else { 0.13 })
         } else if resp.hovered() {
-            ui.visuals().faint_bg_color
+            theme::mix(base, theme::ACCENT, if visuals_dark { 0.16 } else { 0.07 })
         } else {
-            Color32::TRANSPARENT
+            base
         };
-        if bg != Color32::TRANSPARENT {
-            ui.painter().rect_filled(rect, CornerRadius::same(9), bg);
+        ui.painter().rect_filled(rect, CornerRadius::same(10), bg);
+        ui.painter().rect_stroke(
+            rect,
+            CornerRadius::same(10),
+            Stroke::new(
+                1.0f32,
+                if selected {
+                    theme::ACCENT.gamma_multiply(0.7)
+                } else {
+                    theme::card_stroke(ui).color
+                },
+            ),
+            egui::StrokeKind::Middle,
+        );
+        // thanh màu ưu tiên bên trái
+        if active {
+            let (r, g, b) = task.priority.color_rgb();
+            ui.painter().rect_filled(
+                egui::Rect::from_min_size(
+                    egui::pos2(rect.left() + 4.0, rect.top() + 7.0),
+                    egui::vec2(3.0, rect.height() - 14.0),
+                ),
+                CornerRadius::same(2),
+                Color32::from_rgb(r, g, b),
+            );
         }
+        // chip trạng thái khi chọn (gạch bên trái cũ đã đổi thành viền)
         if selected {
             ui.painter().rect_filled(
                 egui::Rect::from_min_size(
-                    egui::pos2(rect.left(), rect.top() + 8.0),
-                    egui::vec2(3.0, rect.height() - 16.0),
+                    egui::pos2(rect.left(), rect.top() + 10.0),
+                    egui::vec2(3.0, rect.height() - 20.0),
                 ),
                 CornerRadius::same(2),
                 theme::ACCENT,
@@ -328,6 +516,10 @@ impl TaskoraApp {
         if resp.clicked() {
             acts.push(Act::Select(task.id));
         }
+        // cuộn mượt đến việc vừa chọn
+        if self.scroll_to == Some(task.id) {
+            resp.scroll_to_me(Some(Align::Center));
+        }
 
         // menu chuột phải
         let view = self.view;
@@ -360,6 +552,49 @@ impl TaskoraApp {
                 }
             }
             if !matches!(view, View::Trash | View::Completed) {
+                ui.separator();
+                ui.menu_button("Hạn chót ▸", |ui| {
+                    if ui.button("Hôm nay").clicked() {
+                        acts.push(Act::SetDue(task.id, Some(t)));
+                        ui.close_menu();
+                    }
+                    if ui.button("Ngày mai").clicked() {
+                        acts.push(Act::SetDue(task.id, t.succ_opt()));
+                        ui.close_menu();
+                    }
+                    if ui.button("Tuần sau").clicked() {
+                        acts.push(Act::SetDue(
+                            task.id,
+                            t.checked_add_signed(TimeDelta::days(7)),
+                        ));
+                        ui.close_menu();
+                    }
+                    if task.due.is_some() && ui.button("Bỏ hạn chót").clicked() {
+                        acts.push(Act::SetDue(task.id, None));
+                        ui.close_menu();
+                    }
+                });
+                ui.menu_button("Ưu tiên ▸", |ui| {
+                    for p in Priority::all() {
+                        let (r, g, b) = p.color_rgb();
+                        let sel = task.priority == p;
+                        if ui
+                            .selectable_label(
+                                sel,
+                                RichText::new(p.label()).color(if sel {
+                                    ui.visuals().text_color()
+                                } else {
+                                    Color32::from_rgb(r, g, b)
+                                }),
+                            )
+                            .clicked()
+                        {
+                            acts.push(Act::SetPriority(task.id, p));
+                            ui.close_menu();
+                        }
+                    }
+                });
+                ui.separator();
                 ui.menu_button("Chuyển đến…", |ui| {
                     if ui.button("Hộp thư").clicked() {
                         acts.push(Act::MoveToList(task.id, None));
@@ -500,15 +735,31 @@ impl TaskoraApp {
 
                 self.checkbox_circle(ui, task, acts);
 
-                // tiêu đề
-                let mut rt = RichText::new(task.title.clone()).size(14.0);
-                if done {
-                    rt = rt.color(ui.visuals().weak_text_color()).strikethrough();
+                // tiêu đề (tô sáng khớp từ khoá tìm kiếm)
+                let base_color = if done {
+                    ui.visuals().weak_text_color()
                 } else if task.priority != Priority::P4 {
                     let pr = task.priority.color_rgb();
-                    rt = rt.color(Color32::from_rgb(pr.0, pr.1, pr.2));
-                }
-                let label = ui.add(egui::Label::new(rt).truncate().sense(Sense::click()));
+                    Color32::from_rgb(pr.0, pr.1, pr.2)
+                } else {
+                    ui.visuals().text_color()
+                };
+                let title_w = if self.search.trim().is_empty() {
+                    let mut rt = RichText::new(task.title.clone()).size(14.0).color(base_color);
+                    if done {
+                        rt = rt.strikethrough();
+                    }
+                    egui::WidgetText::from(rt)
+                } else {
+                    egui::WidgetText::from(hl_job(
+                        &task.title,
+                        &self.search,
+                        14.0,
+                        base_color,
+                        done,
+                    ))
+                };
+                let label = ui.add(egui::Label::new(title_w).truncate().sense(Sense::click()));
                 if label.clicked() {
                     acts.push(Act::Select(task.id));
                 }
@@ -561,4 +812,54 @@ impl TaskoraApp {
         }
         resp.on_hover_text(if done { "Bỏ hoàn thành" } else { "Đánh dấu hoàn thành (Space)" });
     }
+}
+
+/// Tạo LayoutJob với nền tím cho các khớp của từ khoá tìm kiếm (không phân biệt hoa/thường).
+fn hl_job(title: &str, q: &str, size: f32, color: Color32, strike: bool) -> egui::text::LayoutJob {
+    use egui::text::{LayoutJob, TextFormat};
+    let font = egui::FontId::new(size, egui::FontFamily::Proportional);
+    let base = TextFormat {
+        font_id: font.clone(),
+        color,
+        strikethrough: if strike {
+            Stroke::new(1.0f32, color)
+        } else {
+            Stroke::NONE
+        },
+        ..Default::default()
+    };
+    let mut job = LayoutJob::default();
+    let ql = q.trim().to_lowercase();
+    if ql.is_empty() {
+        job.append(title, 0.0, base);
+        return job;
+    }
+    let tl = title.to_lowercase();
+    // guard: lowercase có thể đổi độ dài byte (vd. 'İ') — nếu lệch thì bỏ highlight
+    if tl.len() != title.len() {
+        job.append(title, 0.0, base);
+        return job;
+    }
+    let mut last = 0usize;
+    let mut idx = 0usize;
+    while let Some(rel) = tl[idx..].find(&ql) {
+        let start = idx + rel;
+        let end = start + ql.len();
+        if !title.is_char_boundary(start) || !title.is_char_boundary(end) {
+            job.append(&title[last..], 0.0, base);
+            return job;
+        }
+        if start > last {
+            job.append(&title[last..start], 0.0, base.clone());
+        }
+        let mut hl = base.clone();
+        hl.background = Color32::from_rgba_unmultiplied(129, 140, 248, 90);
+        job.append(&title[start..end], 0.0, hl);
+        last = end;
+        idx = end;
+    }
+    if last < title.len() {
+        job.append(&title[last..], 0.0, base);
+    }
+    job
 }
