@@ -271,3 +271,25 @@ test('chế độ mạng yếu không đổi FPS người dùng đã chọn (§5
   assert.ok(!/live\.fps\s*=\s*1\b/.test(code(app)), 'không được gán live.fps = 1');
   assert.ok(/live\.weakNet\s*=\s*enabled/.test(app), 'phải dùng cờ riêng');
 });
+
+// # Mọi `$('#id')` phải trỏ tới một id **có thật** trong HTML
+//
+// Lỗi đã xảy ra và đã nằm trong repo: `$('#liveInstall').addEventListener(...,
+// installGstreamer)` — cả id lẫn hàm **không tồn tại** (GStreamer bị bỏ ở
+// §58.15 nhưng dòng này ở lại). `$()` trả `null`, `.addEventListener` ném
+// `TypeError` **ngay lúc chạy**, và toàn bộ code sau dòng đó không bao giờ thực
+// thi. Đó là lý do nhiều tính năng "đã viết" không có tác dụng trong trình duyệt.
+//
+// Không công cụ nào bắt được: `node --check` chỉ kiểm cú pháp, còn
+// `$('#liveInstall')` là biểu thức hợp lệ. Chỉ có kiểm chéo HTML ↔ JS mới thấy.
+test('không có handler nào gắn vào id không tồn tại (§58.15 hậu quả)', () => {
+  const htmlIds = new Set([...html.matchAll(/id="([^"]+)"/g)].map(m => m[1]));
+  // Bỏ comment rồi lấy mọi `$('#...')` không chứa dấu cách (chuỗi có dấu cách là
+  // selector lồng, không phải id).
+  const codeApp = code(app);
+  const refs = [...codeApp.matchAll(/\$\('#([^'\s]+)'\)/g)].map(m => m[1]);
+  const missing = [...new Set(refs)].filter(id => !htmlIds.has(id));
+  assert.deepEqual(missing, [],
+    `app.js gắn handler vào id không có trong index.html: ${missing.join(', ')}. ` +
+    'Đây là TypeError lúc chạy, và nó giết mọi handler phía sau.');
+});

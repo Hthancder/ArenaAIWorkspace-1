@@ -181,22 +181,40 @@ bình thường".
 
 ## 8. Nó **chưa** làm được gì
 
-Đọc để không kỳ vọng sai:
+Đọc để không kỳ vọng sai. Mỗi dòng ghi **kèm mục spec** để bạn tra được.
 
-- ❌ **Không có tiếng** (chưa nối `wasapi2src`/Opus — §40, §55). `/api/sessions/{sid}/audio` trả `available:false` thay vì giả vờ.
-- ⚠️ **Điều khiển: có đường, chưa tiện.** Đã có cả hai đầu:
-  - Server: §44 `InputSanitizer` + `SendInput`, `POST /{sid}/input` (JSON) và
-    `POST /{sid}/move` (**nhị phân 12 byte**, §8.3) — xác minh bằng curl, kể cả
-    chặn `Win+L`, auto-repeat, và gói `up` nhả đúng nút.
-  - Client: `web/input.js` gửi `pointermove/down/up`, wheel, keydown/up; gộp
-    move theo rAF latest-wins (§6.4.3); down/up gửi **ngay** (§6.4.7); giữ
-    pointer capture; `sendBeacon` khi đóng tab. 17 test `npm test`.
-  - **Còn thiếu**: trang `/live` phải **bấm vào khung** một lần để cắm; chưa có
-    pointer lock (§6.4.6, cần cho game); chưa có bàn phím ảo cho điện thoại
-    (§6.6); chưa có toggle "chỉ xem".
-- ❌ **Không phải WebRTC** (chưa có `webrtcbin`, SDP, ICE, DTLS — §37, §10.2)
-- ✅ **Có đăng nhập** (§41/§8.1): `POST /api/setup` → `/api/login` (401/409/423/429) → cookie `HttpOnly` → `/api/refresh` rotate + reuse-detection → `/api/logout` giết cả chuỗi. **Chưa có trang đăng nhập trong UI** — gọi bằng `curl` được, bấm trong trình duyệt thì chưa.
-- ❌ **Không click được cửa sổ** (chỉ xem cả màn hình; window picker vẫn là mock — §41.4 T1 có registry, chưa nối `EnumWindows`)
-- ❌ **Không chạy ngoài LAN** mà không có tunnel
+### Đã xong (trước đây từng nằm trong danh sách này)
 
-Đây là **bước 1**: chứng minh **đường capture → trình duyệt chạy trên máy bạn**. Mỗi ❌ ở trên là một chương spec đã có thiết kế, chưa có code — theo đúng thứ tự §57.8: `config.rs` → `signaling.rs` → client shell.
+- ✅ **Xem màn hình thật** — DXGI Desktop Duplication + JPEG trong chính exe,
+  không cần cài gì (§58.15).
+- ✅ **Đăng nhập**: màn hình khoá đặt mật khẩu lần đầu + đăng nhập
+  (`web/auth.js`, §7.1/§41). Mật khẩu lưu dạng hash Argon2 **trên máy bạn**;
+  access token ở bộ nhớ JS, refresh token ở cookie `HttpOnly`.
+- ✅ **Điều khiển chuột/bàn phím trên trang chính** (§6.4) — không phải mở tab
+  phụ. Bấm vào khung hình là điều khiển được.
+- ✅ **Xem và điều khiển một cửa sổ** (§5.4) — window picker liệt kê cửa sổ
+  **thật** bằng `EnumWindows`, và stream **crop** đúng cửa sổ đó.
+- ✅ **Hiển thị Fit / Fill / 1:1** (§6.10.3) — toạ độ chuột đổi theo từng chế độ.
+- ✅ **Tiếp tục phiên sau khi tải lại trang** (§6.11.1).
+- ✅ **Mất hình thì giữ ảnh cuối + đếm giây + tự thử lại** (§50.1 #3).
+- ✅ **Chuyển tab trên điện thoại không kẹt phím** (§50.1 #4): nhả phím ngay,
+  hạ 5 fps sau 10 giây, quay lại thì khôi phục.
+- ✅ **Chuông/rung báo khi phiên bắt đầu và kết thúc** (§50.1 #5).
+- ✅ **Chế độ mạng rất yếu** (§50.1 #6): 1 fps, chỉ bàn phím.
+
+### Còn thiếu thật
+
+- ❌ **Không có tiếng** (chưa nối `wasapi2src`/Opus — §40, §55).
+  `/api/sessions/{sid}/audio` trả `available:false` thay vì giả vờ.
+- ❌ **Không phải WebRTC** (chưa có SDP/ICE/DTLS — §37, §10.2). Đường hiện tại
+  là MJPEG: đơn giản, chạy được, nhưng tốn băng thông hơn H.264 nhiều.
+- ❌ **Chưa có pointer lock** (§6.4.6 — cần cho game, không cần cho dùng thường).
+- ❌ **Chưa có bàn phím ảo cho điện thoại** (§6.6).
+- ❌ **Chưa có toggle "chỉ xem"** (§6.13) — hiện luôn điều khiển được.
+- ❌ **Stream một cửa sổ là crop, chưa phải WGC window item** (§5.5.1 ghi nguồn
+  T3 là WGC). Hệ quả cụ thể: cửa sổ **di chuyển** thì vùng crop không bám theo —
+  phải bấm "Xem lại" để lấy khung mới. Cửa sổ bị che vẫn hiện phần bị che.
+- ❌ **Không chạy ngoài LAN** mà không có tunnel (§54).
+
+Đường còn lại theo spec (§57.8): `config.rs` → `signaling.rs` → WebRTC, và
+H.264/Opus (§52.4). Không có bước nào trong số đó cần bạn cài thêm phần mềm.

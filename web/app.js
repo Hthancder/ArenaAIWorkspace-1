@@ -538,7 +538,9 @@
   let diagnosticsReport = null;
   $('#runDiagnostics').addEventListener('click', async () => {
     openOverlay('#diagnosticsOverlay');
-    $('#diagnosticsIntro').textContent = 'Đang kiểm tra Windows, adapter, GStreamer và display driver…';
+    // Không nhắc GStreamer: chữ đó khiến người dùng đi cài một thứ app không
+    // còn dùng (§58.15). Kiểm cái **thật sự** quyết định đường này.
+    $('#diagnosticsIntro').textContent = 'Đang kiểm tra Windows, adapter đồ hoạ và display driver…';
     $('#diagnosticsList').innerHTML = '<div class="diagnostic-row"><span class="diagnostic-status pending">…</span><span>Đang chạy các phép kiểm tra chỉ đọc</span></div>';
     $('#captureResult').classList.add('hidden');
     $('#captureProbe').disabled = true;
@@ -737,7 +739,16 @@
     $('#cursorPointer').style.top = `${Math.max(4, Math.min(90, (event.clientY - rect.top) / rect.height * 100))}%`;
   });
   $('#liveBtn').addEventListener('click', toggleLive);
-  $('#liveInstall').addEventListener('click', installGstreamer);
+  // # Dòng chết đã xoá: `$('#liveInstall').addEventListener('click', installGstreamer)`
+  //
+  // Cả `#liveInstall` lẫn `installGstreamer` **không tồn tại** ở đâu trong repo
+  // (đã grep). `$('#liveInstall')` trả `null` ⇒ `.addEventListener` ném
+  // `TypeError` ngay lúc chạy ⇒ **mọi dòng sau nó không được thực thi**.
+  //
+  // Đó là lý do một loạt tính năng "đã viết xong" không có tác dụng trong trình
+  // duyệt: handler của chúng nằm sau dòng này. Không test tĩnh nào bắt được —
+  // `node --check` chỉ kiểm cú pháp, và chuỗi `#liveInstall` là hợp lệ.
+  // §58.15 đã bỏ GStreamer, nên nút cài đó không còn lý do tồn tại.
   /**
    * §50.1 #6 (P2) — chế độ "mạng rất yếu": **1 fps, chỉ bàn phím**.
    *
