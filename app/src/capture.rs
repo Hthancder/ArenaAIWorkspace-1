@@ -452,6 +452,17 @@ const DXGI_FORMAT_B8G8R8A8_UNORM: UINT = 87;
 /// **WARP / desktop tổng hợp** trả về (runner CI headless, phiên RDP không có
 /// GPU): 4 kênh × 32 bit = **16 byte/pixel**.
 const DXGI_FORMAT_R32G32B32A32_FLOAT: UINT = 2;
+/// **Typeless** variants — cùng bố cục bit, khác cách diễn giải.
+///
+/// Runner CI trả `DXGI_FORMAT_R32G32B32A32_TYPELESS` (**1**), không phải
+/// `_FLOAT` (2): desktop tổng hợp của WARP không cam kết kiểu diễn giải. Ta biết
+/// bố cục bit (4 × f32) nên đọc được như `_FLOAT` — nhưng phải **nhận ra** nó,
+/// nếu không thì đúng cái máy không có GPU lại là máy duy nhất không capture
+/// được.
+const DXGI_FORMAT_R32G32B32A32_TYPELESS: UINT = 1;
+const DXGI_FORMAT_R16G16B16A16_TYPELESS: UINT = 9;
+const DXGI_FORMAT_R10G10B10A2_TYPELESS: UINT = 23;
+const DXGI_FORMAT_B8G8R8A8_TYPELESS: UINT = 90;
 /// `DXGI_FORMAT_R10G10B10A2_UNORM` — 10 bit/kênh, 4 byte/pixel. Desktop HDR
 /// thường ở format này.
 const DXGI_FORMAT_R10G10B10A2_UNORM: UINT = 24;
@@ -650,10 +661,10 @@ impl Capture {
             // trên CPU sau `Map` (`to_bgra`), và đường đó test được trên Linux.
             if !matches!(
                 desc.desktop_image_format,
-                DXGI_FORMAT_B8G8R8A8_UNORM
-                    | DXGI_FORMAT_R32G32B32A32_FLOAT
-                    | DXGI_FORMAT_R10G10B10A2_UNORM
-                    | DXGI_FORMAT_R16G16B16A16_FLOAT
+                DXGI_FORMAT_B8G8R8A8_UNORM | DXGI_FORMAT_B8G8R8A8_TYPELESS
+                    | DXGI_FORMAT_R32G32B32A32_FLOAT | DXGI_FORMAT_R32G32B32A32_TYPELESS
+                    | DXGI_FORMAT_R10G10B10A2_UNORM | DXGI_FORMAT_R10G10B10A2_TYPELESS
+                    | DXGI_FORMAT_R16G16B16A16_FLOAT | DXGI_FORMAT_R16G16B16A16_TYPELESS
             ) {
                 return Err(CaptureError::Other(format!(
                     "Desktop ở format {} — chưa hỗ trợ chuyển sang BGRA. \
@@ -898,7 +909,7 @@ impl Capture {
         let src_row_bytes = self.width * bpp;
         for (y, row) in bgra.chunks_mut(row_bytes).enumerate() {
             let src = (mapped.p_data as *const u8).add(y * pitch);
-            if self.desktop_format == DXGI_FORMAT_B8G8R8A8_UNORM {
+            if matches!(self.desktop_format, DXGI_FORMAT_B8G8R8A8_UNORM | DXGI_FORMAT_B8G8R8A8_TYPELESS) {
                 // Đường nhanh, phổ biến: đã đúng thứ tự BGRA, chép nguyên dòng.
                 ptr::copy_nonoverlapping(src, row.as_mut_ptr(), row_bytes);
             } else {
@@ -944,10 +955,10 @@ impl Drop for Capture {
 /// `bytes_per_pixel` của một format desktop ta hỗ trợ.
 fn bytes_per_pixel(format: UINT) -> Option<usize> {
     match format {
-        DXGI_FORMAT_B8G8R8A8_UNORM => Some(4),
-        DXGI_FORMAT_R32G32B32A32_FLOAT => Some(16),
-        DXGI_FORMAT_R16G16B16A16_FLOAT => Some(8),
-        DXGI_FORMAT_R10G10B10A2_UNORM => Some(4),
+        DXGI_FORMAT_B8G8R8A8_UNORM | DXGI_FORMAT_B8G8R8A8_TYPELESS
+        | DXGI_FORMAT_R10G10B10A2_UNORM | DXGI_FORMAT_R10G10B10A2_TYPELESS => Some(4),
+        DXGI_FORMAT_R16G16B16A16_FLOAT | DXGI_FORMAT_R16G16B16A16_TYPELESS => Some(8),
+        DXGI_FORMAT_R32G32B32A32_FLOAT | DXGI_FORMAT_R32G32B32A32_TYPELESS => Some(16),
         _ => None,
     }
 }
@@ -966,27 +977,27 @@ fn to_bgra_row(row: &[u8], format: UINT, width: usize, out: &mut [u8]) -> bool {
     for x in 0..width {
         let src = &row[x * bpp..x * bpp + bpp];
         let (r, g, b) = match format {
-            DXGI_FORMAT_B8G8R8A8_UNORM => (src[2], src[1], src[0]),
+            DXGI_FORMAT_B8G8R8A8_UNORM | DXGI_FORMAT_B8G8R8A8_TYPELESS => (src[2], src[1], src[0]),
             // 4 kênh float32. Desktop tổng hợp (WARP / headless / RDP).
             //
             // `0.5 + v * 255.0` rồi `clamp(0..255)`: giá trị float có thể ngoài
             // [0,1] trên desktop HDR (đơn vị nit), và `as u8` của Rust **bão
             // hoà** — nhưng bão hoà *sau* khi đã nhân thì vẫn đúng; viết rõ để
             // người sau không tưởng là thiếu.
-            DXGI_FORMAT_R32G32B32A32_FLOAT => (
+            DXGI_FORMAT_R32G32B32A32_FLOAT | DXGI_FORMAT_R32G32B32A32_TYPELESS => (
                 f32_to_u8(f32::from_le_bytes(src[0..4].try_into().unwrap())),
                 f32_to_u8(f32::from_le_bytes(src[4..8].try_into().unwrap())),
                 f32_to_u8(f32::from_le_bytes(src[8..12].try_into().unwrap())),
             ),
             // Half-float qua `f16` thủ công: `f32::from_bits` không nhận 16 bit.
-            DXGI_FORMAT_R16G16B16A16_FLOAT => (
+            DXGI_FORMAT_R16G16B16A16_FLOAT | DXGI_FORMAT_R16G16B16A16_TYPELESS => (
                 f32_to_u8(half_to_f32(u16::from_le_bytes(src[0..2].try_into().unwrap()))),
                 f32_to_u8(half_to_f32(u16::from_le_bytes(src[2..4].try_into().unwrap()))),
                 f32_to_u8(half_to_f32(u16::from_le_bytes(src[4..6].try_into().unwrap()))),
             ),
             // 10 bit/kênh, đóng gói trong một u32 little-endian: R ở bit 0,
             // G bit 10, B bit 20, A bit 30.
-            DXGI_FORMAT_R10G10B10A2_UNORM => {
+            DXGI_FORMAT_R10G10B10A2_UNORM | DXGI_FORMAT_R10G10B10A2_TYPELESS => {
                 let v = u32::from_le_bytes(src[0..4].try_into().unwrap());
                 let expand = |bits: u32| ((bits * 255) / 1023) as u8;
                 (expand(v & 0x3ff), expand((v >> 10) & 0x3ff), expand((v >> 20) & 0x3ff))
@@ -1152,6 +1163,31 @@ mod tests {
         assert_eq!(&out[8..12], &[255, 0, 0, 255], "lam ⇒ B=255 G=0 R=0");
     }
 
+    /// Bốn cặp typeless/non-typeless phải đọc **giống hệt** nhau.
+    ///
+    /// Runner CI trả `R32G32B32A32_TYPELESS` (1) chứ không phải `_FLOAT` (2):
+    /// desktop tổng hợp của WARP không cam kết cách diễn giải, và chính đúng máy
+    /// **không có GPU** là máy code cũ từ chối. Bố cục bit giống nhau nên đọc
+    /// được — nhưng phải nhận ra cả hai mã.
+    #[test] fn typeless_and_typed_formats_decode_identically() {
+        for (typed, typeless) in [
+            (DXGI_FORMAT_R32G32B32A32_FLOAT, DXGI_FORMAT_R32G32B32A32_TYPELESS),
+            (DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_R16G16B16A16_TYPELESS),
+            (DXGI_FORMAT_R10G10B10A2_UNORM, DXGI_FORMAT_R10G10B10A2_TYPELESS),
+            (DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_B8G8R8A8_TYPELESS),
+        ] {
+            assert_eq!(bytes_per_pixel(typed), bytes_per_pixel(typeless), "cùng số byte/pixel");
+            // Dựng 2 pixel có giá trị khác nhau, giải mã bằng cả hai mã.
+            let bpp = bytes_per_pixel(typed).unwrap();
+            let row: Vec<u8> = (0..bpp * 2).map(|i| (i * 37 % 256) as u8).collect();
+            let mut a = vec![0u8; 8];
+            let mut b = vec![0u8; 8];
+            assert!(to_bgra_row(&row, typed, 2, &mut a), "typed decode được");
+            assert!(to_bgra_row(&row, typeless, 2, &mut b), "typeless decode được");
+            assert_eq!(a, b, "hai mã phải cho cùng kết quả (typed={typed}, typeless={typeless})");
+        }
+    }
+
     /// Float ngoài [0,1] và `NaN` phải bão hoà, không được bọc vòng.
     ///
     /// `as u8` của Rust bão hoà, nhưng `NaN as u8` cho 0 — và desktop HDR có
@@ -1214,7 +1250,15 @@ mod tests {
         assert_eq!(bytes_per_pixel(DXGI_FORMAT_R10G10B10A2_UNORM), Some(4));
         assert_eq!(bytes_per_pixel(DXGI_FORMAT_R16G16B16A16_FLOAT), Some(8));
         assert_eq!(bytes_per_pixel(DXGI_FORMAT_R32G32B32A32_FLOAT), Some(16));
-        assert_eq!(bytes_per_pixel(1), None, "format lạ phải trả None, không đoán");
+        // Typeless của cùng bố cục bit: cùng số byte.
+        assert_eq!(bytes_per_pixel(DXGI_FORMAT_R32G32B32A32_TYPELESS), Some(16));
+        assert_eq!(bytes_per_pixel(DXGI_FORMAT_R16G16B16A16_TYPELESS), Some(8));
+        assert_eq!(bytes_per_pixel(DXGI_FORMAT_R10G10B10A2_TYPELESS), Some(4));
+        assert_eq!(bytes_per_pixel(DXGI_FORMAT_B8G8R8A8_TYPELESS), Some(4));
+        // Format **lạ** phải trả `None`, không đoán — đoán sai kích thước pixel
+        // là đọc lệch mỗi dòng và ảnh bị nghiêng.
+        assert_eq!(bytes_per_pixel(0), None, "UNKNOWN");
+        assert_eq!(bytes_per_pixel(28), None, "R8G8B8A8_UNORM (thứ tự kênh khác)");
     }
 
     /// `vtbl()` phải đọc **một lớp**: object → vtable, không phải đọc thẳng field.
