@@ -65,17 +65,28 @@ def main() -> int:
             text=True,
         )
         output = (result.stdout + result.stderr).strip()
-        # Chỉ quan tâm dòng chẩn đoán; "Checking"/"Finished"/"generated N
-        # warnings" là nhiễu tổng kết.
-        lines = [
-            line
-            for line in output.splitlines()
-            if line.startswith(("warning:", "error:")) and "generated" not in line
-            or line.strip().startswith("--> ")
-        ]
-        if lines or result.returncode != 0:
-            print("\n".join(lines[:60]))
+        if result.returncode != 0:
+            # # In **nguyên văn** khi thất bại, đừng lọc theo tiền tố
+            #
+            # Bộ lọc cũ chỉ giữ dòng bắt đầu bằng "error:"/"warning:" hoặc "-->".
+            # Nhưng rustc in chẩn đoán là `error[E0277]: ...` — **không** khớp
+            # tiền tố "error:", nên dòng thông báo bị bỏ và chỉ còn lại
+            # `--> src/x.rs:12:5`. Người đọc thấy vị trí mà **không biết lỗi gì**,
+            # và ba vòng CI liền không chẩn đoán được. Một bộ lọc làm mất thông
+            # tin còn tệ hơn không lọc.
+            print(output[:8000])
             print("\n✗ nhánh Windows không biên dịch sạch trên Linux", file=sys.stderr)
+            return 1
+        # Thành công: vẫn phải **không** có warning nào (cargo check đã chạy với
+        # `-D warnings` qua `RUSTFLAGS`? Không — script này không đặt; nên kiểm
+        # warning bằng tay để dead_code của nhánh Windows không lọt.)
+        warnings = [
+            line for line in output.splitlines()
+            if line.startswith("warning:") and "generated" not in line
+        ]
+        if warnings:
+            print("\n".join(warnings[:60]))
+            print("\n✗ nhánh Windows có warning (dead_code/unused) trên Linux", file=sys.stderr)
             return 1
         print("ok — nhánh #[cfg(windows)] biên dịch sạch (dead_code, unused_mut, kiểu dữ liệu)")
         return 0

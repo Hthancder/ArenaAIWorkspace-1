@@ -203,6 +203,31 @@ pub fn pick(windows: &[RawWindow]) -> Vec<WindowEntry> {
         .collect()
 }
 
+/// Đếm số cửa sổ bị loại theo lý do, để UI/người dùng biết **vì sao** danh sách
+/// ngắn hơn số cửa sổ họ đang mở.
+///
+/// # Vì sao cần
+///
+/// §5.4 loại cửa sổ theo 7 lý do (tool window, cloaked, không có tiêu đề…). Nếu
+/// danh sách chỉ ngắn hơn mà không nói gì, người dùng kết luận "picker hỏng" —
+/// cùng loại nhầm lẫn như "stream không có hình" khi thật ra là chưa đăng nhập.
+/// Trả số đếm chứ **không** trả danh sách: tiêu đề cửa sổ bị loại có thể chứa
+/// thông tin nhạy cảm (ví dụ popup của trình quản lý mật khẩu).
+#[cfg_attr(not(windows), allow(dead_code, reason = "chỉ nhánh Windows có RawWindow"))]
+pub fn exclusion_summary(windows: &[RawWindow]) -> Vec<(&'static str, usize)> {
+    let mut counts: Vec<(&'static str, usize)> = Vec::new();
+    for raw in windows {
+        if let Err(reason) = classify(raw) {
+            let code = reason.code();
+            match counts.iter_mut().find(|(existing, _)| *existing == code) {
+                Some((_, count)) => *count += 1,
+                None => counts.push((code, 1)),
+            }
+        }
+    }
+    counts
+}
+
 /// Chuyển sang `security::window::WindowEntry` của spec để **publish** vào
 /// `WindowRegistry` (§41.3 #3). Từ đây `hwnd` không đi ra ngoài nữa; `wid` là
 /// id hex do registry sinh.
@@ -360,15 +385,20 @@ fn json_quote(value: &str) -> String {
 // Tầng Win32 — chỉ **thu** dữ liệu, không quyết định gì.
 // ══════════════════════════════════════════════════════════════════════════
 
+/// Như `enumerate`, nhưng kèm **lý do loại** (`§5.4` có 7 lý do).
+///
+/// Một lần `EnumWindows` cho cả hai thứ: quét hai lần vừa đắt vừa có thể cho
+/// hai kết quả khác nhau (cửa sổ đóng giữa hai lần quét ⇒ danh sách và số đếm
+/// không khớp, người dùng thấy "1 cửa sổ bị loại" mà không cửa sổ nào biến mất).
 #[cfg(windows)]
-pub fn enumerate() -> Vec<WindowEntry> {
+pub fn enumerate_with_summary() -> (Vec<WindowEntry>, Vec<(&'static str, usize)>) {
     let raw = unsafe { enumerate_raw() };
-    pick(&raw)
+    (pick(&raw), exclusion_summary(&raw))
 }
 
 #[cfg(not(windows))]
-pub fn enumerate() -> Vec<WindowEntry> {
-    Vec::new()
+pub fn enumerate_with_summary() -> (Vec<WindowEntry>, Vec<(&'static str, usize)>) {
+    (Vec::new(), Vec::new())
 }
 
 /// UTF-16 → `String`, không cần `std::os::windows::ffi::OsStringExt`.

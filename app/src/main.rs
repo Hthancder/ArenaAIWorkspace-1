@@ -1291,7 +1291,7 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
             // bao giờ cầm hwnd, nên không mở được cửa sổ mà agent cố ý không
             // trả về. Đây chính là "lỗ hổng leo thang quyền thật" mà §41.3
             // gọi tên.
-            let entries = windows::enumerate();
+            let (entries, excluded) = windows::enumerate_with_summary();
             let registry_entries = windows::to_registry_entries(&entries);
             let mut entropy = auth_wire::RealEntropy;
             let (snapshot_id, published) = s.windows.publish(
@@ -1318,9 +1318,17 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
             let note = windows::platform_note()
                 .map(|reason| format!(",\"note\":{}", json_quote(reason)))
                 .unwrap_or_default();
+            // Vì sao danh sách có thể ngắn hơn số cửa sổ đang mở (§5.4 loại 7
+            // kiểu). Chỉ **số đếm** theo lý do, không tiêu đề: cửa sổ bị loại
+            // có thể là popup của trình quản lý mật khẩu.
+            let excluded_json = excluded
+                .iter()
+                .map(|(code, count)| format!("{{\"code\":{},\"count\":{count}}}", json_quote(code)))
+                .collect::<Vec<_>>()
+                .join(",");
             json_response(&mut stream, 200, format!(
-                "{{\"windows\":{},\"count\":{},\"snapshotId\":{}{}}}",
-                body, paired.len(), json_quote(&snapshot_id), note))
+                "{{\"windows\":{},\"count\":{},\"snapshotId\":{},\"excluded\":[{excluded_json}]{note}}}",
+                body, paired.len(), json_quote(&snapshot_id)))
         }
         ("GET", "/api/settings") => json_response(&mut stream, 200, format!("{{\"settings\":{},\"mock\":true}}", settings_json(&s.settings))),
         ("PATCH", "/api/settings") => {
