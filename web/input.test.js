@@ -37,6 +37,12 @@ import {
   toNormalised,
 } from '../web/input.js';
 
+// `app.js` chỉ để khoá **dây nối**: toạ độ đúng mà `mode` không được truyền từ
+// chế độ hiển thị thật thì vẫn lệch. Test hành vi của `toNormalised` ở trên
+// không bắt được lỗi "quên nối".
+import { readFileSync } from 'node:fs';
+const app = readFileSync(new URL('./app.js', import.meta.url), 'utf8');
+
 /** Phần tử giả: chỉ đủ cho `getBoundingClientRect` + capture. */
 function fakeElement(rect = { left: 0, top: 0, width: 1600, height: 900 }) {
   const handlers = new Map();
@@ -107,6 +113,63 @@ test('toNormalised removes the letterbox of object-fit: contain', () => {
   assert.equal(Math.round(leftEdge.x), 0, 'mép trái khung ⇒ 0');
   const outside = toNormalised(0, 0, rect, frame);
   assert.equal(Math.round(outside.x), 0, 'viền trái bị kẹp về 0');
+});
+
+test('fill mode: click ở mép khung phải rơi đúng mép ảnh, không phải giữa ảnh', () => {
+  // §6.10.3 — bug "click lệch" lần thứ hai. Ở `cover`, ảnh **lớn hơn** khung
+  // và bị cắt hai bên. Dùng phép đổi của `contain` (mặc định cũ) thì bấm mép
+  // trái khung ra 0.4 thay vì 0.33, và tệ nhất là bấm mép **ảnh** lại rơi ra
+  // ngoài khoảng 0..1 rồi bị kẹp — click dồn hết về một bên.
+  const rect = { left: 0, top: 0, width: 1600, height: 900 };
+  const frame = { width: 1024, height: 768 }; // 4:3
+  // cover: scale = max(1600/1024, 900/768) = max(1.5625, 1.171875) = 1.5625
+  // shown = 1600 × 1200 ⇒ tràn 300 px theo chiều dọc, cắt 150 mỗi bên.
+  const centre = toNormalised(800, 450, rect, frame, 'fill');
+  assert.equal(Math.round(centre.x), 32768, 'tâm vẫn là tâm');
+  assert.equal(Math.round(centre.y), 32768, 'tâm dọc vẫn là tâm');
+  // Mép trên khung = mép trên **ảnh bị cắt** ⇒ y = 150/1200 = 0.125.
+  const top = toNormalised(800, 0, rect, frame, 'fill');
+  assert.equal(Math.round(top.y), Math.round(0.125 * 65535), 'mép trên khung');
+  // Khác hẳn `fit` ở cùng điểm — đó chính là bug nếu quên truyền mode.
+  const topFit = toNormalised(800, 0, rect, frame, 'fit');
+  assert.notEqual(Math.round(topFit.y), Math.round(top.y),
+    'fit và fill phải cho kết quả khác nhau; nếu giống nhau thì mode bị bỏ qua');
+});
+
+test('1:1 mode: một pixel ảnh là một pixel CSS, không có viền căn giữa', () => {
+  // §6.10.3 — 1:1 dùng để kiểm tra UI chính xác, nên phép đổi phải tuyệt đối
+  // thẳng: pixel thứ N của ảnh đúng là pixel thứ N trên màn hình.
+  const rect = { left: 0, top: 0, width: 1600, height: 900 };
+  const frame = { width: 1024, height: 768 };
+  const topLeft = toNormalised(0, 0, rect, frame, '100');
+  assert.equal(Math.round(topLeft.x), 0);
+  assert.equal(Math.round(topLeft.y), 0);
+  // Pixel (512, 384) của ảnh = tâm ⇒ 0.5.
+  const centre = toNormalised(512, 384, rect, frame, '100');
+  assert.equal(Math.round(centre.x), 32768);
+  assert.equal(Math.round(centre.y), 32768);
+  // Pixel (1024, 768) = mép phải-dưới ⇒ 65535.
+  const bottomRight = toNormalised(1024, 768, rect, frame, '100');
+  assert.equal(Math.round(bottomRight.x), 65535);
+  assert.equal(Math.round(bottomRight.y), 65535);
+});
+
+test('mặc định là fit, để không phá chỗ gọi cũ (§6.10.3)', () => {
+  // Tham số `mode` có giá trị mặc định: mọi chỗ gọi chưa biết về chế độ hiển
+  // thị vẫn cho toạ độ đúng của chế độ mặc định.
+  const rect = { left: 0, top: 0, width: 1600, height: 900 };
+  const frame = { width: 1024, height: 768 };
+  assert.deepEqual(
+    toNormalised(800, 450, rect, frame),
+    toNormalised(800, 450, rect, frame, 'fit')
+  );
+});
+
+test('app.js truyền chế độ hiển thị hiện tại, không chụp lại lúc tạo (§6.10.3)', () => {
+  // Đọc `data-aspect` **mỗi lần click**: đổi Fit→Fill giữa phiên là chuyện
+  // thường, và một giá trị chụp lại sẽ làm mọi click sau đó lệch.
+  assert.ok(/mode:\s*\(\)\s*=>/.test(app), 'mode phải là hàm, không phải giá trị');
+  assert.ok(app.includes('dataset.aspect'), 'mode phải đọc từ data-aspect của khung xem');
 });
 
 test('the move throttle keeps only the newest position (§6.4.3)', () => {

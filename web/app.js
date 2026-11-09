@@ -228,7 +228,11 @@
     if (!sessionId) return;
     const post = async (path, body) => {
       const isBinary = body instanceof Blob;
-      await fetch(path, {
+      // §7.1: phải qua `authFetch`. Đây là đường **gửi chuột/bàn phím** — nếu nó
+      // dùng `fetch` trần thì sau khi đặt mật khẩu, hình vẫn chạy mà **không
+      // điều khiển được**, và không có lỗi nào hiện ra vì `post` không kiểm
+      // `response.ok` (gói `move` 12 byte, không ai đọc body).
+      await authorisedFetch(path, {
         method: 'POST',
         headers: isBinary ? { 'content-type': 'application/octet-stream' }
                           : { 'content-type': 'application/json' },
@@ -242,6 +246,10 @@
       // §6.10.3: toạ độ chuẩn hoá theo **khung hình**, nên phải là kích thước
       // thật của frame MJPEG vừa vẽ, không phải kích thước thẻ <img>.
       frame: () => liveFrame,
+      // §6.10.3: chế độ hiển thị đổi phép quy đổi toạ độ. Đọc từ **DOM** mỗi
+      // lần click (qua dataset) thay vì chụp lại: người dùng đổi Fit→Fill giữa
+      // phiên là chuyện thường, và giá trị chụp lại sẽ làm mọi click sau đó lệch.
+      mode: () => $('#mockDesktop').dataset.aspect || 'fit',
     });
     liveController = attached.controller;
     inputModule.installUnloadRelease(liveController, {
@@ -266,6 +274,11 @@
     const holder = $('#liveView');
     const empty = $('#liveEmpty');
     const frame = $('#screenFrame');
+    // §6.10.3: chế độ hiển thị áp lên **khung hình live**, không chỉ lên
+    // `.mock-desktop` (bản giả trước khi có stream thật). Trước bản này setting
+    // đổi `data-aspect` của desktop giả, nên đổi Fit→Fill **không ảnh hưởng gì**
+    // tới hình thật — người dùng bấm và không thấy gì xảy ra.
+    holder.dataset.aspect = $('#mockDesktop').dataset.aspect || 'fit';
     holder.classList.toggle('hidden', !live.active);
     empty.classList.toggle('hidden', live.active);
     frame.classList.toggle('live', live.active);
@@ -584,7 +597,12 @@
     if (id === 'hide-taskbar') $('.desktop-taskbar').classList.toggle('hidden', Boolean(value));
     if (id === 'theme') document.body.dataset.theme = value;
     if (id === 'display') $('#screenResolution').textContent = `${value === 'large-text' ? 'Chữ to' : value === 'comfortable' ? 'Vừa mắt' : value === 'sharp' ? 'Nét' : '1920 × 1080'} · demo`;
-    if (id === 'aspect') $('#mockDesktop').dataset.aspect = value;
+    if (id === 'aspect') {
+      $('#mockDesktop').dataset.aspect = value;
+      // §6.10.3: khung hình **live** là thứ người dùng thật sự nhìn. Đổi setting
+      // mà chỉ áp lên desktop giả nghĩa là bấm không thấy gì xảy ra.
+      $('#liveView').dataset.aspect = value;
+    }
     if (id === 'touch') $('#mockDesktop').dataset.touch = value;
     renderSettings();
     const changed = allSettingDefs.find(def => def.id === id);
@@ -624,6 +642,7 @@
   $('.quality-indicator').innerHTML = `<i></i> ${settings.quality === 'sharp' ? 'Nét' : settings.quality === 'smooth' ? 'Mượt' : 'HD'}`;
   $('#screenResolution').textContent = `${settings.display === 'large-text' ? 'Chữ to' : settings.display === 'comfortable' ? 'Vừa mắt' : settings.display === 'sharp' ? 'Nét' : '1920 × 1080'} · demo`;
   $('#mockDesktop').dataset.aspect = settings.aspect;
+  $('#liveView').dataset.aspect = settings.aspect;
   $('#mockDesktop').dataset.touch = settings.touch;
   async function hydrateMockApi() {
     // Nút "Xem máy thật" mặc định ẩn. Chỉ hiện khi **cả hai** đúng: server này có

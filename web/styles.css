@@ -24,7 +24,25 @@ body[data-theme="dark"] .volume-control,body[data-theme="dark"] .volume-control 
 /* §58 — đường xem màn hình thật (MJPEG). Không lớp phủ nào lên video: hình là thứ
    người dùng cần thấy, mọi thứ khác đi vào thanh dưới (§49.2 thang lớp). */
 .live-view{position:absolute;inset:0;display:grid;place-items:center;background:#0b1210;overflow:hidden}
+/* §6.10.3: ba chế độ hiển thị, và **mỗi chế độ có phép đổi toạ độ riêng** ở
+   `input.js` (`toNormalised` nhận `mode`). Đổi CSS mà quên đổi phép đổi toạ độ
+   thì click lệch — bug đã xảy ra hai lần trong dự án (crop cửa sổ ở server, và
+   chỗ này).
+   - `fit` (contain): letterbox, luôn thấy toàn bộ khung.
+   - `fill` (cover): phủ kín, mép bị cắt — dùng cho điện thoại để chữ to hơn.
+   - `100` (1:1): pixel thật, cuộn được — để kiểm tra UI chính xác. */
 .live-view img{width:100%;height:100%;object-fit:contain;display:block}
+.live-view[data-aspect="fill"] img{object-fit:cover}
+.live-view[data-aspect="100"]{overflow:auto;place-items:start}
+.live-view[data-aspect="100"] img{width:auto;height:auto;object-fit:none;max-width:none;max-height:none}
+/* Nhãn "đang phóng to" — §6.10.3 yêu cầu nói rõ khi không ở chế độ thường, để
+   người dùng không tưởng app cắt mất một phần màn hình của họ. */
+.live-view[data-aspect="fill"]::after,
+.live-view[data-aspect="100"]::after{position:absolute;left:10px;bottom:10px;z-index:2;
+  font:9px 'DM Sans',sans-serif;color:#e7f3ec;background:rgba(12,26,20,.72);
+  border:1px solid rgba(160,200,180,.3);border-radius:5px;padding:3px 7px;pointer-events:none}
+.live-view[data-aspect="fill"]::after{content:"Đang phủ kín — mép bị cắt"}
+.live-view[data-aspect="100"]::after{content:"1:1 — cuộn để xem phần còn lại"}
 .live-empty{position:absolute;left:16px;right:16px;bottom:56px;display:grid;gap:3px;color:#cfe0d6;font-size:10px;text-align:center;pointer-events:none}
 .live-empty small{color:#8fa398;font-size:8px;line-height:1.5}
 .live-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:7px 10px;border-top:1px solid #e6ece9;background:#f7faf8;color:#6c7d73;font-size:9px}

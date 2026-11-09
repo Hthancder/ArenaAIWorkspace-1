@@ -124,15 +124,50 @@ export function encodeMove({ x, y, flags = 0, type = 1, wheel = 0 }) {
  * click lệch. Đây là lỗi hay gặp." `object-fit: contain` để lại letterbox, nên
  * phải trừ nó đi trước khi chia — nếu không thì click ở mép dưới luôn lệch.
  */
-export function toNormalised(clientX, clientY, rect, frame) {
+export function toNormalised(clientX, clientY, rect, frame, mode = 'fit') {
   const frameW = frame.width || rect.width;
   const frameH = frame.height || rect.height;
-  // Tỉ lệ `contain`: cạnh nào chạm trước thì nó quyết định.
-  const scale = Math.min(rect.width / frameW, rect.height / frameH);
-  const shownW = frameW * scale;
-  const shownH = frameH * scale;
-  const offsetX = (rect.width - shownW) / 2;
-  const offsetY = (rect.height - shownH) / 2;
+
+  // # Ba chế độ hiển thị, ba phép đổi toạ độ khác nhau (§6.10.3)
+  //
+  // Đây là chỗ bug "click lệch" sinh ra lần thứ hai trong dự án: lần đầu là
+  // crop cửa sổ ở server (§5.4), lần này là `object-fit` ở client. Dùng một
+  // phép đổi cho cả ba chế độ thì **hai trong ba** chế độ bấm sai chỗ, và chế
+  // độ đúng lại là chế độ mặc định — nên bug chỉ hiện khi người dùng đổi sang
+  // Fill hoặc 1:1, tức là sau khi họ đã tin app chạy được.
+  //
+  // - `fit` (contain): letterbox hai bên. Trừ offset, chia cho cạnh hiển thị.
+  // - `fill` (cover): ảnh phủ kín, **mép bị cắt**. Không có offset, nhưng phần
+  //   tràn phải cộng vào — nếu không, click mép trái lại rơi vào giữa ảnh.
+  // - `100` (1:1): một pixel ảnh là một pixel CSS, có thể cuộn. Toạ độ đi
+  //   thẳng từ mép ảnh, phép chia là 1.
+  let shownW;
+  let shownH;
+  let offsetX;
+  let offsetY;
+  if (mode === 'fill') {
+    // `cover`: cạnh nào **vượt** thì cạnh đó quyết định tỉ lệ.
+    const scale = Math.max(rect.width / frameW, rect.height / frameH);
+    shownW = frameW * scale;
+    shownH = frameH * scale;
+    // Phần tràn bị cắt đều hai bên ⇒ offset **âm** (ảnh bắt đầu trước khung).
+    offsetX = (rect.width - shownW) / 2;
+    offsetY = (rect.height - shownH) / 2;
+  } else if (mode === '100') {
+    shownW = frameW;
+    shownH = frameH;
+    // 1:1 không căn giữa: ảnh bắt đầu ở góc khung và cuộn được. Thẻ `<img>` đã
+    // nằm đúng gốc khi `object-fit:none`, nên offset bằng 0.
+    offsetX = 0;
+    offsetY = 0;
+  } else {
+    const scale = Math.min(rect.width / frameW, rect.height / frameH);
+    shownW = frameW * scale;
+    shownH = frameH * scale;
+    offsetX = (rect.width - shownW) / 2;
+    offsetY = (rect.height - shownH) / 2;
+  }
+
   const x = (clientX - rect.left - offsetX) / shownW;
   const y = (clientY - rect.top - offsetY) / shownH;
   return {
@@ -165,11 +200,15 @@ export function keyEvent(event) {
  * WebSocket (§8.2) sau này là đổi **một** hàm, không phải 10 chỗ `fetch`.
  */
 export class InputController {
-  constructor(element, { sid, post, frame = () => ({ width: 0, height: 0 }), now = () => Date.now(), threshold = 120 }) {
+  constructor(element, { sid, post, frame = () => ({ width: 0, height: 0 }), mode = () => 'fit', now = () => Date.now(), threshold = 120 }) {
     this.element = element;
     this.sid = sid;
     this.post = post;
     this.frame = frame;
+    // §6.10.3: chế độ hiển thị hiện tại (`fit`/`fill`/`100`). Đọc **mỗi lần
+    // click** qua hàm, không chụp lại lúc tạo: người dùng đổi chế độ giữa phiên
+    // là chuyện thường, và một giá trị chụp lại sẽ làm mọi click sau đó lệch.
+    this.mode = mode;
     this.now = now;
     this.threshold = threshold;
     this.held = 0;
@@ -196,7 +235,7 @@ export class InputController {
 
   /** Chuyển một `PointerEvent` thành message `move` (§6.4.1). */
   pointer(event, type) {
-    const { x, y } = toNormalised(event.clientX, event.clientY, this.element.getBoundingClientRect(), this.frame());
+    const { x, y } = toNormalised(event.clientX, event.clientY, this.element.getBoundingClientRect(), this.frame(), this.mode());
     // §6.4.1: giữ phím bổ trợ trong cùng `flags` byte.
     const mods =
       (event.ctrlKey ? FLAG_CTRL : 0) |
@@ -255,7 +294,7 @@ export class InputController {
     const dx = event.deltaX || 0;
     const dy = event.deltaY || 0;
     if (dx === 0 && dy === 0) return;
-    const { x, y } = toNormalised(event.clientX, event.clientY, this.element.getBoundingClientRect(), this.frame());
+    const { x, y } = toNormalised(event.clientX, event.clientY, this.element.getBoundingClientRect(), this.frame(), this.mode());
     // §8.3 clamp `wheel ∈ [-2400,2400]`; dấu dy của trình duyệt cùng chiều với
     // `MOUSEEVENTF_WHEEL` (dương = lên), nên không đảo.
     this.throttle.flush(x, y, this.held, 5, Math.max(-2400, Math.min(2400, -dy)));
