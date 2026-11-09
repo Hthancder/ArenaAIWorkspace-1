@@ -210,3 +210,32 @@ test('hạ fps khi ẩn tab không đổi lựa chọn của người dùng (§5
   const hiddenAssign = app.match(/live\.fps\s*=\s*5/);
   assert.equal(hiddenAssign, null, 'không được gán live.fps = 5 (đó là lựa chọn của người dùng)');
 });
+
+// §50.1 #5 (P2) — báo khi phiên bắt đầu & kết thúc. Người dùng bật phiên rồi
+// **rời màn hình**; đó là toàn bộ mục đích của remote desktop. Khi phiên đứt họ
+// không biết cho tới lần sau nhìn vào.
+test('phiên bắt đầu/kết thúc thì báo được (§50.1 #5)', () => {
+  assert.ok(app.includes("import('/alert.js')"), 'phải nạp module báo hiệu');
+  assert.ok(html.includes('/alert.js') || app.includes("import('/alert.js')"),
+    'alert.js phải được tham chiếu');
+  // Ba đường báo: bấm Start/Dừng, mất hình quá 60 s, và dừng có chủ ý.
+  // Đếm **lời gọi** theo dòng, không bằng regex một dòng: lời gọi quan trọng
+  // nhất (`toggleLive`) là ternary, nên một regex `announce('end')` bỏ sót nó.
+  // Bẫy grep đã gặp nhiều lần — test phải khớp hình dạng code thật.
+  const callLines = app
+    .split('\n')
+    .filter(line => /\bannounce\(/.test(line) && !/function announce/.test(line));
+  assert.ok(callLines.length >= 3, `phải báo ở ≥3 chỗ, thấy ${callLines.length}: ${callLines.map(l => l.trim()).join(' | ')}`);
+  assert.ok(app.includes("announce(live.active ? 'start' : 'end')"), 'bấm Start/Dừng phải báo');
+});
+
+test('chuông không bịa: im lặng phải nói ra (§50.1 #5)', () => {
+  const alert = fs.readFileSync(require('node:path').join(__dirname, 'alert.js'), 'utf8');
+  // `notify` trả `boolean` để nơi gọi biết đã báo được hay chưa — nếu nó luôn
+  // trả `true` thì app nói "đã báo" trong khi không có gì kêu.
+  assert.ok(/export function notify/.test(alert), 'phải export notify');
+  assert.ok(/return false/.test(alert), 'phải có đường trả false khi không báo được');
+  assert.ok(alert.includes('vibrate'), 'phải có rung làm dự phòng (rung không bị chặn autoplay)');
+  // Autoplay bị chặn tới khi có tương tác: phải mở khoá ở tương tác đầu tiên.
+  assert.ok(app.includes('pointerdown'), 'phải mở khoá AudioContext ở tương tác đầu');
+});

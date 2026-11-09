@@ -34,6 +34,11 @@ const CSS: &str = include_str!("../../web/styles.css");
 /// §7.1 — màn hình khoá. Đăng ký như **mọi** asset khác: `include_str!` để file
 /// nằm trong exe (không đọc đĩa lúc chạy), và route riêng vì CSP chặn inline.
 const AUTH_JS: &str = include_str!("../../web/auth.js");
+
+/// §50.1 #5 — báo khi phiên bắt đầu/kết thúc. Như `AUTH_JS`: phải có route, nếu
+/// không thì `import('/alert.js')` 404 và **không ai được báo** — đúng kiểu lỗi
+/// im lặng đã gặp với `/live.js` và `/auth.js`.
+const ALERT_JS: &str = include_str!("../../web/alert.js");
 const JS: &str = include_str!("../../web/app.js");
 const SETTINGS_DEFAULTS: &[(&str, &str)] = &[
     ("quality", "auto"), ("display", "real"), ("aspect", "fit"), ("touch", "scroll"),
@@ -1134,6 +1139,7 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
     // và app trông như treo ở màn hình đăng nhập. Đúng loại lỗi im lặng đã gặp
     // với `/live.js`: asset khai báo trong HTML mà không có route.
     if method == "GET" && route == "/auth.js" { return response(&mut stream, 200, "text/javascript; charset=utf-8", AUTH_JS.as_bytes()); }
+    if method == "GET" && route == "/alert.js" { return response(&mut stream, 200, "text/javascript; charset=utf-8", ALERT_JS.as_bytes()); }
     // §6.4/§6.5: bộ điều khiển chuột/bàn phím của client. Một file riêng (không
     // nhúng vào `live_page`) để `npm test` chạy được từng luật spec — throttle
     // latest-wins, down/up không gộp, `sendBeacon` lúc unload.

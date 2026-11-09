@@ -343,6 +343,9 @@
   function stopLive(notify = false) {
     if (!live.active) return;
     live.active = false;
+    // §50.1 #5: người dùng có thể đã chuyển sang app khác. Dừng do **họ bấm**
+    // thì không cần chuông (họ đang ở đây), nhưng dừng vì mất kết nối thì cần.
+    if (notify) announce('end').catch(() => {});
     stopMetricsPolling();
     live.metrics = { frames: 0 };
     renderLive();
@@ -379,6 +382,10 @@
     live.active = !live.active;
     if (live.active) { live.startedAt = Date.now(); startMetricsPolling(); setTimeout(refreshMetrics, 300); }
     else stopMetricsPolling();
+    // §50.1 #5: báo bằng tiếng/rung. `toggleLive` chạy **từ một click**, nên
+    // `AudioContext` đã được mở khoá ở `pointerdown` ngay trước đó — đây là thời
+    // điểm duy nhất trong luồng mà tiếng chuông chắc chắn kêu được.
+    announce(live.active ? 'start' : 'end').catch(() => {});
     renderLive();
     toast(live.active
       ? 'Đang xem màn hình thật (MJPEG). Đóng tab hoặc bấm Dừng để tắt capture.'
@@ -827,6 +834,28 @@
    * server vẫn chạy. Nạp lại `<img src>` là đủ để tiếp tục — không cần tạo
    * phiên mới. Chỉ báo thất bại thật khi đã thử quá `RECONNECT_GIVE_UP_MS`.
    */
+  // §50.1 #5: báo bằng tiếng/rung khi phiên bắt đầu và kết thúc. Nạp động và
+  // **không** chặn render: tính năng báo hiệu không được làm chậm việc vẽ hình.
+  let alertModule = null;
+  const alertReady = () => {
+    if (!alertModule) {
+      alertModule = import('/alert.js').catch(() => null);
+    }
+    return alertModule;
+  };
+  /** `true` nếu đã báo được bằng tiếng hoặc rung. */
+  async function announce(kind) {
+    const module = await alertReady();
+    if (!module) return false;
+    try { return module.notify(kind); } catch { return false; }
+  }
+  // Trình duyệt chặn âm thanh tới khi có tương tác — mở khoá ở lần đầu.
+  const primeAlert = () => {
+    alertReady().then(module => { try { module?.prime(); } catch {} });
+  };
+  document.addEventListener('pointerdown', primeAlert, { once: true });
+  document.addEventListener('keydown', primeAlert, { once: true });
+
   const RECONNECT_GIVE_UP_MS = 60_000;
   let reconnectTimer = null;
   let reconnectStartedAt = 0;
@@ -865,6 +894,10 @@
         reconnectStartedAt = 0;
         live.active = false;
         renderLive();
+        // §50.1 #5: đây là trường hợp chuông **quan trọng nhất** — phiên đứt
+        // trong khi người dùng đã rời màn hình. Báo tiếng trước, rồi toast:
+        // người dùng có thể không ở tab này để đọc toast.
+        announce('end').catch(() => {});
         toast('Mất hình quá 60 giây. Bấm "Xem máy thật" để thử lại.');
         return;
       }
