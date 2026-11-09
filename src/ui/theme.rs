@@ -46,7 +46,7 @@ pub fn card_stroke(ui: &egui::Ui) -> Stroke {
     } else {
         Color32::from_rgb(226, 230, 238)
     };
-    Stroke::new(1.0, c)
+    Stroke::new(1.0f32, c)
 }
 
 /// Trộn hai màu (theo gamma).
@@ -200,7 +200,7 @@ pub fn build_visuals(dark: bool) -> egui::Visuals {
     v.panel_fill = panel;
     v.window_fill = window;
     v.window_corner_radius = CornerRadius::same(12);
-    v.window_stroke = Stroke::new(1.0, border);
+    v.window_stroke = Stroke::new(1.0f32, border);
     v.menu_corner_radius = CornerRadius::same(10);
     v.hyperlink_color = ACCENT_SOFT;
     v.faint_bg_color = faint;
@@ -216,7 +216,7 @@ pub fn build_visuals(dark: bool) -> egui::Visuals {
     } else {
         ACCENT.gamma_multiply(0.30)
     };
-    v.selection.stroke = Stroke::new(1.0, ACCENT_SOFT);
+    v.selection.stroke = Stroke::new(1.0f32, ACCENT_SOFT);
 
     // ----- Widgets -----
     let corner = CornerRadius::same(7);
@@ -224,9 +224,9 @@ pub fn build_visuals(dark: bool) -> egui::Visuals {
         let w = &mut v.widgets.noninteractive;
         w.bg_fill = faint;
         w.weak_bg_fill = faint;
-        w.bg_stroke = Stroke::new(1.0, border);
+        w.bg_stroke = Stroke::new(1.0f32, border);
         w.corner_radius = corner;
-        w.fg_stroke = Stroke::new(1.0, text);
+        w.fg_stroke = Stroke::new(1.0f32, text);
         w.expansion = 0.0;
     }
     {
@@ -241,9 +241,9 @@ pub fn build_visuals(dark: bool) -> egui::Visuals {
         } else {
             Color32::from_rgb(246, 247, 250)
         };
-        w.bg_stroke = Stroke::new(1.0, border);
+        w.bg_stroke = Stroke::new(1.0f32, border);
         w.corner_radius = corner;
-        w.fg_stroke = Stroke::new(1.0, text);
+        w.fg_stroke = Stroke::new(1.0f32, text);
         w.expansion = 0.0;
     }
     {
@@ -254,9 +254,9 @@ pub fn build_visuals(dark: bool) -> egui::Visuals {
             Color32::from_rgb(238, 241, 248)
         };
         w.weak_bg_fill = w.bg_fill;
-        w.bg_stroke = Stroke::new(1.0, if dark { ACCENT } else { ACCENT_SOFT });
+        w.bg_stroke = Stroke::new(1.0f32, if dark { ACCENT } else { ACCENT_SOFT });
         w.corner_radius = corner;
-        w.fg_stroke = Stroke::new(1.0, text);
+        w.fg_stroke = Stroke::new(1.0f32, text);
         w.expansion = 0.5;
     }
     {
@@ -267,9 +267,9 @@ pub fn build_visuals(dark: bool) -> egui::Visuals {
             Color32::from_rgb(228, 232, 242)
         };
         w.weak_bg_fill = w.bg_fill;
-        w.bg_stroke = Stroke::new(1.0, ACCENT);
+        w.bg_stroke = Stroke::new(1.0f32, ACCENT);
         w.corner_radius = corner;
-        w.fg_stroke = Stroke::new(1.0, text);
+        w.fg_stroke = Stroke::new(1.0f32, text);
         w.expansion = 0.5;
     }
     {
@@ -280,9 +280,9 @@ pub fn build_visuals(dark: bool) -> egui::Visuals {
             Color32::from_rgb(228, 232, 242)
         };
         w.weak_bg_fill = w.bg_fill;
-        w.bg_stroke = Stroke::new(1.5, ACCENT);
+        w.bg_stroke = Stroke::new(1.5f32, ACCENT);
         w.corner_radius = corner;
-        w.fg_stroke = Stroke::new(1.0, text);
+        w.fg_stroke = Stroke::new(1.0f32, text);
         w.expansion = 0.0;
     }
 

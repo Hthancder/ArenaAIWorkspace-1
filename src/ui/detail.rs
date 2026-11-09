@@ -494,7 +494,7 @@ fn calendar_widget(
                         if is_sel {
                             btn = btn.fill(theme::ACCENT);
                         } else if is_today {
-                            btn = btn.stroke(Stroke::new(1.4, theme::ACCENT_SOFT));
+                            btn = btn.stroke(Stroke::new(1.4f32, theme::ACCENT_SOFT));
                         }
                         let r = ui.add(btn);
                         if r.clicked() {

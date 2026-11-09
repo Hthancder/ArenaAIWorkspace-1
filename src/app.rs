@@ -837,7 +837,7 @@ impl TaskoraApp {
                             ui.painter().rect_stroke(
                                 r.shrink(2.0),
                                 egui::CornerRadius::same(4),
-                                egui::Stroke::new(2.0, ui.visuals().text_color()),
+                                egui::Stroke::new(2.0f32, ui.visuals().text_color()),
                                 egui::StrokeKind::Outside,
                             );
                         }
@@ -903,6 +903,7 @@ impl TaskoraApp {
         // ---- xuất thành công ----
         if let Some(path) = self.export_msg.clone() {
             let mut open = true;
+            let mut close = false;
             egui::Window::new("Xuất bản sao lưu thành công ✓")
                 .id(egui::Id::new("export_done"))
                 .open(&mut open)
@@ -919,10 +920,13 @@ impl TaskoraApp {
                             storage::open_data_dir();
                         }
                         if ui.button("Đóng").clicked() {
-                            open = false;
+                            close = true;
                         }
                     });
                 });
+            if close {
+                open = false;
+            }
             if !open {
                 self.export_msg = None;
             }
@@ -931,6 +935,7 @@ impl TaskoraApp {
         // ---- nhập dữ liệu ----
         if self.import_open {
             let mut open = true;
+            let mut close = false;
             let mut do_import = false;
             egui::Window::new("Nhập dữ liệu từ bản sao lưu")
                 .id(egui::Id::new("import_dialog"))
@@ -988,7 +993,7 @@ impl TaskoraApp {
                             self.backups = storage::list_backups();
                         }
                         if ui.button("Hủy").clicked() {
-                            open = false;
+                            close = true;
                         }
                     });
                     if custom_go {
@@ -1003,7 +1008,7 @@ impl TaskoraApp {
                                     self.keep_selection_valid();
                                     theme::set_active_theme(ui.ctx(), self.store.settings.dark);
                                     self.flash("Đã nhập dữ liệu thành công ✓");
-                                    open = false;
+                                    close = true;
                                 }
                                 Err(e) => {
                                     self.import_err = Some(format!("Không đọc được tệp: {e}"));
@@ -1012,6 +1017,9 @@ impl TaskoraApp {
                         }
                     }
                 });
+            if close {
+                open = false;
+            }
             if do_import {
                 if let Some(p) = self.backups.get(self.import_sel).cloned() {
                     match storage::import_backup(&p) {

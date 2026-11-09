@@ -193,7 +193,7 @@ impl TaskoraApp {
                                 egui::pos2(rect.left(), baseline),
                                 egui::pos2(rect.right(), baseline),
                             ],
-                            Stroke::new(1.0, theme::card_stroke(ui).color),
+                            Stroke::new(1.0f32, theme::card_stroke(ui).color),
                         );
 
                         for (i, (d, v)) in s.series.iter().enumerate() {

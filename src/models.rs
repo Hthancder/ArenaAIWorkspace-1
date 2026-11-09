@@ -656,7 +656,7 @@ pub fn due_state(due: Option<NaiveDate>, today: NaiveDate) -> DueState {
         None => DueState::None,
         Some(d) if d < today => DueState::Overdue,
         Some(d) if d == today => DueState::Today,
-        Some(d) if d == today.succ_opt() => DueState::Tomorrow,
+        Some(d) if Some(d) == today.succ_opt() => DueState::Tomorrow,
         Some(_) => DueState::Later,
     }
 }

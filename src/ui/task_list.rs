@@ -69,7 +69,6 @@ impl TaskoraApp {
     // ------------------------------------------------------------------ quick add
 
     fn quick_add_bar(&mut self, ui: &mut egui::Ui) {
-        let w = ui.available_width();
         Frame::new()
             .fill(theme::badge_bg(ui, theme::ACCENT))
             .corner_radius(CornerRadius::same(12))
@@ -79,7 +78,7 @@ impl TaskoraApp {
                 top: 9,
                 bottom: 9,
             })
-            .stroke(Stroke::new(1.0, theme::ACCENT.gamma_multiply(0.45)))
+            .stroke(Stroke::new(1.0f32, theme::ACCENT.gamma_multiply(0.45)))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.label(RichText::new("+").size(20.0).color(theme::ACCENT));
@@ -217,7 +216,7 @@ impl TaskoraApp {
         let text = match due {
             None => "Không hạn".to_string(),
             Some(d) if d == t => "Hôm nay".to_string(),
-            Some(d) if d == t.succ_opt() => "Ngày mai".to_string(),
+            Some(d) if Some(d) == t.succ_opt() => "Ngày mai".to_string(),
             Some(d) if d < t => {
                 format!("Quá hạn · {}", d.format("%d/%m/%Y"))
             }
@@ -308,7 +307,7 @@ impl TaskoraApp {
                         egui::pos2(rect.left() + 6.0, y),
                         egui::pos2(rect.right() - 6.0, y),
                     ],
-                    Stroke::new(2.0, theme::ACCENT),
+                    Stroke::new(2.0f32, theme::ACCENT),
                 );
             }
         }
@@ -458,14 +457,12 @@ impl TaskoraApp {
                 if !task.subtasks.is_empty() {
                     let d = task.subtasks.iter().filter(|s| s.done).count();
                     let all = task.subtasks.len();
-                    let r = ui
-                        .add(
-                            RichText::new(format!("{d}/{all}"))
-                                .size(11.0)
-                                .color(theme::ACCENT_SOFT),
-                        )
-                        .on_hover_text("Tiến độ việc nhỏ");
-                    let _ = r;
+                    ui.label(
+                        RichText::new(format!("{d}/{all}"))
+                            .size(11.0)
+                            .color(theme::ACCENT_SOFT),
+                    )
+                    .on_hover_text("Tiến độ việc nhỏ");
                 }
 
                 // sao
@@ -544,20 +541,20 @@ impl TaskoraApp {
                     egui::pos2(c.x - s, c.y + 0.5),
                     egui::pos2(c.x - s * 0.2, c.y + s * 0.75),
                 ],
-                Stroke::new(2.2, Color32::WHITE),
+                Stroke::new(2.2f32, Color32::WHITE),
             );
             painter.line_segment(
                 [
                     egui::pos2(c.x - s * 0.2, c.y + s * 0.75),
                     egui::pos2(c.x + s * 0.9, c.y - s * 0.7),
                 ],
-                Stroke::new(2.2, Color32::WHITE),
+                Stroke::new(2.2f32, Color32::WHITE),
             );
         } else {
             if resp.hovered() {
                 painter.circle_filled(c, rad, ring.gamma_multiply(0.15));
             }
-            painter.circle_stroke(c, rad, Stroke::new(1.7, ring));
+            painter.circle_stroke(c, rad, Stroke::new(1.7f32, ring));
         }
         if resp.clicked() {
             acts.push(Act::Toggle(task.id));

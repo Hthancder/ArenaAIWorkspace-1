@@ -72,7 +72,7 @@ impl TaskoraApp {
                     let v = View::List(id);
                     let sel = self.view == v;
                     let col = Color32::from_rgb(color[0], color[1], color[2]);
-                    let resp = self.sidebar_row_alloc(ui, sel, &name, n, col);
+                    let resp = self.sidebar_row_alloc(ui, sel, &name, n, col, None);
                     resp.context_menu(|ui| {
                         if ui.button("Đổi tên / đổi màu…").clicked() {
                             let idx = crate::app::LIST_PALETTE
