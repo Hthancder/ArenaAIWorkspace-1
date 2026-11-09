@@ -440,12 +440,22 @@
     $$('.window-option').forEach(option => option.classList.toggle('selected', option === btn));
   });
   $('#dialogConfirm').addEventListener('click', () => {
+    // §6.11.1: cùng một nút, hai ý nghĩa khác nhau tuỳ overlay đang hỏi gì.
+    // Không kiểm thì bấm "Tiếp tục" sẽ **đồng thời** chọn cửa sổ giả: hai
+    // handler chạy, và người dùng thấy toast "Đã chọn: …" sau khi nối lại
+    // phiên — sai và khó hiểu.
+    if ($('#dialogConfirm').dataset.action === 'resume') return;
     updateMockWindow();
     closeOverlay('#dialogOverlay');
     toast(`Đã chọn: ${labels[state.selectedWindow] || state.selectedWindow}.`);
   });
   $('#dialogClose').addEventListener('click', () => closeOverlay('#dialogOverlay'));
-  $('#dialogCancel').addEventListener('click', () => closeOverlay('#dialogOverlay'));
+  $('#dialogCancel').addEventListener('click', () => {
+    // Hộp "Tiếp tục phiên" dùng chung overlay: trả `action` về rỗng khi huỷ,
+    // nếu không nút "Chọn cửa sổ" ở lần sau sẽ im lặng không làm gì.
+    delete $('#dialogConfirm').dataset.action;
+    closeOverlay('#dialogOverlay');
+  });
 
   $('#roomViewBtn').addEventListener('click', () => {
     state.room = !state.room;
@@ -733,6 +743,82 @@
     renderLive();
     toast('Không xem được màn hình thật: kiểm tra GStreamer và monitor index trong bảng chẩn đoán.');
   });
+  /**
+   * §6.11.1 — "Tiếp tục phiên đang mở?" sau khi tải lại trang.
+   *
+   * # Vấn đề thật
+   *
+   * Phiên nằm ở **server**, không ở tab. F5 (hoặc đóng tab nhầm, hoặc tab
+   * crash) làm mất toàn bộ trạng thái client trong khi server vẫn đang chạy
+   * phiên. Người dùng thấy "Chưa kết nối", bấm Start, và nhận
+   * `409 session_already_active` — hoặc tệ hơn, phải đi tìm cách tắt phiên cũ
+   * mà UI không có nút đó.
+   *
+   * Spec nói rõ: **hỏi** "Tiếp tục phiên đang mở? [Tiếp tục] [Huỷ]", không tự
+   * chiếm lại. Lý do: phiên cũ có thể đang được tab khác dùng thật; tự động
+   * chiếm sẽ đá người đang xem ra mà không nói gì.
+   *
+   * Chỉ chạy khi **đã đăng nhập** — trước đó request trả 401 và hộp hỏi sẽ
+   * hiện lên trên màn hình khoá, che mất form đăng nhập.
+   */
+  async function offerResume() {
+    let sessions;
+    try {
+      const data = await apiRequest('/api/sessions/mine');
+      sessions = data.sessions || [];
+    } catch {
+      return; // chưa đăng nhập, hoặc server cũ: không có gì để tiếp tục
+    }
+    if (!sessions.length || state.connected) return;
+    const session = sessions[0];
+    // Không có `sid` thì không tiếp tục được — bỏ qua thay vì hỏi rồi lỗi.
+    if (!session.id) return;
+
+    const title = $('#dialogTitle');
+    const body = $('#dialogDescription');
+    const confirm = $('#dialogConfirm');
+    if (!title || !body || !confirm) return;
+
+    // Nói rõ **cửa sổ nào** đang được chia sẻ: người dùng cần biết mình sắp mở
+    // lại thứ gì trước khi đồng ý, nhất là khi phiên được tạo từ thiết bị khác.
+    //
+    // Trường thật của `session_json` là `windowId` (đã kiểm bằng curl); bản đầu
+    // của đoạn này đọc `windowTitle`/`window` — hai tên **không tồn tại** — nên
+    // hộp hỏi luôn nói "màn hình" kể cả khi phiên đang chia sẻ một cửa sổ cụ
+    // thể. Một `||` nối ba tên đoán là ba cơ hội để nói sai.
+    const where = session.windowId === 'desktop' || !session.windowId
+      ? 'toàn màn hình'
+      : `cửa sổ ${session.windowId}`;
+    title.textContent = 'Tiếp tục phiên đang mở?';
+    body.textContent = `Máy vẫn đang chia sẻ ${where} từ một tab khác hoặc từ trước khi tải lại trang. Tiếp tục để dùng lại phiên đó, hoặc huỷ và tạo phiên mới.`;
+    confirm.textContent = 'Tiếp tục';
+    confirm.dataset.action = 'resume';
+    openOverlay('#dialogOverlay');
+
+    const resume = async () => {
+      confirm.removeEventListener('click', resume);
+      // Trả `action` về rỗng, nếu không thì **mọi** lần mở picker sau đó đều
+      // bị handler cũ bỏ qua và nút "Chọn cửa sổ" không làm gì nữa.
+      delete confirm.dataset.action;
+      closeOverlay('#dialogOverlay');
+      currentSessionId = session.id;
+      // §6.11.1: giữ nguyên `sid`. Không tạo phiên mới — phiên cũ vẫn còn
+      // capture đang chạy, tạo mới sẽ bị `409 session_already_active`.
+      setConnected(true, false);
+      $('#connectLabel').textContent = 'Kết thúc phiên';
+      toast('Đã nối lại phiên đang mở.');
+      try { await startLive(); } catch { /* stream có lỗi riêng của nó */ }
+    };
+    confirm.addEventListener('click', resume);
+  }
+
+  // §7.1: chỉ hỏi sau khi mở khoá, không chồng lên màn hình đăng nhập.
+  window.addEventListener('lantern:unlocked', () => { offerResume().catch(() => {}); }, { once: true });
+  // Đã đăng nhập sẵn (cookie còn hạn) thì không có sự kiện nào bắn ra.
+  if (!$('#authOverlay') || $('#authOverlay').classList.contains('hidden')) {
+    offerResume().catch(() => {});
+  }
+
   $('#sendCtrlAltDel').addEventListener('click', () => toast(state.connected ? 'Phím tắt đang được mô phỏng; chưa gửi tới máy.' : 'Hãy bắt đầu phiên demo trước.'));
   $('#blankScreen').addEventListener('click', () => toast('Màn hình riêng tư chưa được kết nối với máy thật.'));
   $('#helpBtn').addEventListener('click', () => toast('Bản mock tương tác: mọi thao tác chỉ thay đổi giao diện này.'));

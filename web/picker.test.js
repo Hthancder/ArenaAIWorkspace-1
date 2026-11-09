@@ -129,3 +129,33 @@ test('auth.js tự refresh một lần, không lặp vô hạn (§41.6)', () => 
   assert.ok(refreshed.length >= 2, 'phải có hàm refresh và chỗ gọi');
   assert.ok(/refreshing/.test(auth), 'phải gộp các lần refresh đồng thời');
 });
+
+// §6.11.1 — resume sau reload. Phiên nằm ở **server**, tab chỉ giữ trạng thái.
+// F5 làm mất trạng thái client trong khi server vẫn chạy phiên: người dùng thấy
+// "Chưa kết nối", bấm Start, nhận `409 session_already_active`, và không có nút
+// nào để lấy lại phiên cũ.
+test('tải lại trang có hỏi tiếp tục phiên đang mở (§6.11.1)', () => {
+  assert.ok(app.includes('/api/sessions/mine'), 'phải hỏi danh sách phiên còn sống');
+  assert.ok(app.includes('Tiếp tục phiên đang mở'), 'phải hỏi bằng chữ, không tự chiếm');
+  // Spec: **hỏi**, không tự động. Tự chiếm sẽ đá tab khác đang xem ra.
+  assert.ok(!/currentSessionId\s*=\s*session\.id;\s*setConnected\(true\);/.test(code(app)),
+    'không được tự nối lại mà không hỏi');
+});
+
+test('hộp resume không chạy trên màn hình khoá (§7.1)', () => {
+  // Nếu chạy trước khi đăng nhập: request 401, và hộp hỏi hiện **trên** form
+  // đăng nhập — người dùng không đăng nhập được.
+  assert.ok(/lantern:unlocked/.test(app), 'phải chờ sự kiện mở khoá');
+  assert.ok(/authOverlay.*hidden|hidden.*authOverlay/s.test(app),
+    'phải kiểm màn hình khoá đã ẩn trước khi hỏi');
+});
+
+test('hộp resume không giẫm lên window picker (§6.11.1 + §5.4)', () => {
+  // Hai tính năng dùng chung `#dialogOverlay`/`#dialogConfirm`. Thiếu `action`
+  // thì bấm "Tiếp tục" chạy **cả** handler chọn cửa sổ; thiếu reset thì nút
+  // "Chọn cửa sổ" sau đó im lặng không làm gì.
+  assert.ok(/dataset\.action\s*=\s*'resume'/.test(app), 'phải đánh dấu overlay đang ở chế độ resume');
+  assert.ok(/delete\s+confirm\.dataset\.action|delete\s+\$\('#dialogConfirm'\)\.dataset\.action/.test(app),
+    'phải trả lại trạng thái sau khi dùng xong');
+  assert.ok(app.includes("dataset.action === 'resume'"), 'handler chọn cửa sổ phải bỏ qua khi đang resume');
+});
