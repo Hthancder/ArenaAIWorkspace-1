@@ -197,7 +197,11 @@
   // Trên `npm run mock` nó tự ẩn, vì để một nút luôn lỗi còn tệ hơn không có nút.
   // ---------------------------------------------------------------------
   function liveUrl() {
-    return `/api/live.mjpg?monitor=${live.monitor}&fps=${live.fps}`;
+    // `live.fps` là **lựa chọn của người dùng** (hiện trên slider). Tab ẩn dùng
+    // `live.hiddenFps` riêng: sửa `live.fps` sẽ làm slider nhảy về 5, và người
+    // dùng quay lại thấy lựa chọn của mình bị đổi mà không hiểu vì sao.
+    const fps = live.hiddenFps || live.fps;
+    return `/api/live.mjpg?monitor=${live.monitor}&fps=${fps}`;
   }
   /**
    * §6.4 + §6.5 — cắm chuột/bàn phím vào khung hình **live** trên trang chính.
@@ -743,6 +747,68 @@
     live.fps = Math.max(1, Math.min(30, Number(event.target.value) || 15));
     renderLive();
   });
+  /**
+   * §50.1 #4 (P1) + §6.11.2 — "Tab ẩn >10 s ⇒ server hạ 5 fps" và **không kẹt
+   * phím** khi rời tab.
+   *
+   * # Vì sao `visibilitychange` chứ không chỉ `blur`
+   *
+   * `blur` bắn khi **cửa sổ** mất focus — trên desktop, bấm sang app khác.
+   * Nhưng trên **điện thoại**, chuyển sang Zalo rồi quay lại **không** làm mất
+   * focus theo cách đó: trang chỉ chuyển sang hidden. Không có `visibilitychange`
+   * thì phím đang giữ (Ctrl, Shift, một phím chữ) **ở lại trạng thái down** trên
+   * máy thật. Người dùng quay lại, gõ một chữ, và nhận Ctrl+chữ — đúng bug
+   * §50.1 #4 mô tả: *"phải **không** mất phiên và **không** kẹt phím"*.
+   *
+   * # Vì sao hạ fps thay vì dừng
+   *
+   * Spec §6.11.2: *"Tab ẩn >10 s | server giảm 60→5 fps, **giữ** kết nối"*.
+   * Dừng hẳn thì quay lại phải nạp lại stream từ đầu (mất vài giây, và với
+   * MJPEG là mở HTTP response mới). Hạ fps giữ kết nối và ngừng đốt CPU.
+   *
+   * Độ trễ 10 s: người dùng chuyển tab **1 giây** để tra gì đó rồi quay lại thì
+   * không nên thấy hình đổi độ mượt. Đây đúng con số spec ghi.
+   */
+  const HIDDEN_DELAY_MS = 10_000;
+  let hiddenTimer = null;
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      // Nhả phím/chuột **ngay**, không chờ 10 s: một phím giữ 10 giây trên máy
+      // thật đã đủ để tự lặp (auto-repeat) và gõ vào cửa sổ người dùng đang mở.
+      if (liveController) {
+        try { liveController.releaseAll('hidden'); } catch { /* đã gỡ */ }
+      }
+      if (hiddenTimer) clearTimeout(hiddenTimer);
+      hiddenTimer = setTimeout(() => {
+        hiddenTimer = null;
+        // Không kiểm `document.hidden` lần nữa: nếu người dùng đã quay lại thì
+        // handler `else` bên dưới đã huỷ timer này.
+        if (!live.active) return;
+        live.hiddenFps = 5;
+        // Đặt `src` mới **một lần**, không mỗi frame: đây là open lại response
+        // với fps thấp hơn. `dataset.src` phải cập nhật cùng lúc, nếu không
+        // `renderLive` tưởng chưa đổi và không làm gì.
+        const img = $('#liveImage');
+        const url = liveUrl();
+        img.dataset.src = url;
+        img.src = url;
+      }, HIDDEN_DELAY_MS);
+    } else {
+      if (hiddenTimer) { clearTimeout(hiddenTimer); hiddenTimer = null; }
+      if (!live.active) return;
+      // Quay lại: khôi phục fps đã chọn. Nếu chưa bị hạ thì không làm gì —
+      // không reload stream cho một lần chuyển tab 1 giây.
+      if (live.hiddenFps) {
+        live.hiddenFps = 0;
+        const img = $('#liveImage');
+        const url = liveUrl();
+        img.dataset.src = url;
+        img.src = url;
+      }
+    }
+  });
+
   /**
    * §50.1 #3 — mất kết nối: **giữ ảnh cuối + đồng hồ "đã mất N giây"**.
    *

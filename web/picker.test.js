@@ -189,3 +189,24 @@ test('không còn câu nào nói "chưa điều khiển được" (§6.4 đã xo
   const stale = /chưa điều khiển được|không điều khiển được/i.exec(visibleHtml);
   assert.equal(stale, null, `index.html còn câu sai: ${stale && stale[0]}`);
 });
+
+// §50.1 #4 (P1) + §6.11.2 — chuyển sang app khác trên điện thoại.
+// Spec: *"phải **không** mất phiên và **không** kẹt phím"*.
+test('tab ẩn thì nhả phím ngay và hạ fps sau 10 giây (§50.1 #4)', () => {
+  // `blur` không bắt được trường hợp điện thoại chuyển app: trang chỉ chuyển
+  // sang hidden. Thiếu `visibilitychange` thì phím đang giữ ở lại down trên máy
+  // thật, và quay lại gõ một chữ nhận Ctrl+chữ.
+  assert.ok(app.includes("addEventListener('visibilitychange'"), 'phải nghe visibilitychange');
+  assert.ok(/releaseAll\('hidden'\)/.test(app), 'phải nhả phím ngay khi tab ẩn');
+  assert.ok(app.includes('HIDDEN_DELAY_MS'), 'phải có độ trễ 10 s theo spec');
+  assert.ok(/HIDDEN_DELAY_MS\s*=\s*10_000/.test(app), 'độ trễ phải là 10 giây, không phải giá trị khác');
+  assert.ok(/live\.hiddenFps\s*=\s*5/.test(app), 'phải hạ về 5 fps như §6.11.2');
+});
+
+test('hạ fps khi ẩn tab không đổi lựa chọn của người dùng (§50.1 #4)', () => {
+  // Nếu ghi vào `live.fps` thì slider nhảy về 5 và người dùng quay lại thấy lựa
+  // chọn của mình bị đổi mà không hiểu vì sao. Dùng trường riêng.
+  assert.ok(app.includes('live.hiddenFps'), 'phải có trường fps riêng cho trạng thái ẩn');
+  const hiddenAssign = app.match(/live\.fps\s*=\s*5/);
+  assert.equal(hiddenAssign, null, 'không được gán live.fps = 5 (đó là lựa chọn của người dùng)');
+});
