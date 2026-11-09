@@ -150,8 +150,22 @@ jobs:
           }
           exit $status
 
+      # Log của job không tải được từ sandbox, nên mọi thứ cần đọc phải đi qua
+      # `::error::`. Bản trước chỉ có `--check` và khi nó trả 1 thì annotation
+      # duy nhất là "Process completed with exit code 1" — không nói được
+      # *dòng nào*, và đã tốn hai vòng CI đoán mò.
       - name: smoke-check Lantern mock app
-        run: ..\app\target\release\lantern-mock.exe --check
+        shell: pwsh
+        run: |
+          ..\app\target\release\lantern-mock.exe --check *>&1 | Tee-Object -FilePath check.out
+          $status = $LASTEXITCODE
+          if ($status -ne 0) {
+            Write-Output "::error::--check trả $status"
+            Get-Content check.out -ErrorAction SilentlyContinue | Select-Object -Last 40 | ForEach-Object {
+              Write-Output "::error::check: $_"
+            }
+          }
+          exit $status
 
       - uses: actions/upload-artifact@v4
         with:

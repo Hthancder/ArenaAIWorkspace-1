@@ -2070,7 +2070,20 @@ fn main() {
         // Gọi **đúng một lần**: mỗi lần gọi là một phiên DXGI thật, và lần thứ
         // hai trong cùng process thường bị `E_ACCESSDENIED` (duplication chỉ cho
         // một phiên) ⇒ `--check` báo đỏ trên máy có GPU, trong khi capture tốt.
-        let (available, detail) = probe_live_status();
+        // Không bao giờ để `--check` chết **trước** khi in được lý do.
+        //
+        // CI Windows đỏ hai vòng liền ở bước `smoke-check` với đầu ra rỗng:
+        // `--check` panic trước `println!` đầu tiên, nên log không nói được gì
+        // ngoài "exit code 1". Người đọc log (là tôi) phải đoán. `catch_unwind`
+        // biến "panic ở đâu đó trong DXGI" thành một dòng đọc được.
+        //
+        // `--check` vẫn trả mã **khác 0** khi panic — đây là bước CI dùng để
+        // chặn artifact hỏng, không phải để che lỗi.
+        let probe = std::panic::catch_unwind(probe_live_status);
+        let (available, detail) = match probe {
+            Ok(pair) => pair,
+            Err(_) => (false, "probe capture panic — xem dòng panic phía trên".to_string()),
+        };
         println!("capture: available={available} — {detail}");
 
         // Kiểm encoder **thật** khi khởi động, không chỉ trong `#[cfg(test)]`.
