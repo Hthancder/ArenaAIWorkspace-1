@@ -9,6 +9,7 @@ mod pins;
 mod session_state;
 mod advice;
 mod clipboard;
+mod crop;
 mod stream;
 mod upload;
 mod windows;
@@ -126,7 +127,12 @@ fn now_ms() -> u128 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)
 }
 
-struct State { settings: BTreeMap<String, String>, session: Option<Session>, next_id: u64, data_dir: PathBuf, live_status: Option<(bool, String)>, live_metrics: LiveMetrics, input: input::InputSanitizer, history: history::History, auth: auth_wire::AuthState, policy: guard::Policy, keyframes: u64, pins: pins::Pins, windows: rd_spike_lib::security::window::WindowRegistry }
+struct State { settings: BTreeMap<String, String>, session: Option<Session>, next_id: u64, data_dir: PathBuf, live_status: Option<(bool, String)>, live_metrics: LiveMetrics, input: input::InputSanitizer, history: history::History, auth: auth_wire::AuthState, policy: guard::Policy, keyframes: u64, pins: pins::Pins, windows: rd_spike_lib::security::window::WindowRegistry,
+    /// §5.4 — gốc toạ độ của frame đang stream, tính theo pixel màn hình.
+    /// `(0,0)` khi stream cả màn hình; `(left,top)` của cửa sổ khi crop.
+    /// `inject` **phải** cộng giá trị này, nếu không click lệch đúng bằng vị
+    /// trí cửa sổ.
+    capture_offset: (i32, i32) }
 
 fn json_quote(value: &str) -> String {
     let mut out = String::from("\"");
@@ -885,6 +891,10 @@ fn stream_live(
     mut stream: TcpStream,
     monitor: u8,
     fps: u8,
+    // §5.4: `None` = cả màn hình; `Some(hwnd)` = crop theo cửa sổ đã chọn.
+    // Trên Linux không có nhánh nào dùng (không có DXGI), nên phải `allow`.
+    #[cfg_attr(not(windows), allow(unused_variables, reason = "chỉ nhánh Windows crop"))]
+    window: Option<i64>,
     state: &Arc<Mutex<State>>,
 ) {
     #[cfg(not(windows))]
@@ -909,6 +919,29 @@ fn stream_live(
         /// Chờ frame **đầu tiên**. Ngắn hơn bản GStreamer (8 s) vì không có
         /// cold start của pipeline: chỉ là thời gian DXGI trả frame đầu.
         const FIRST_FRAME: Duration = Duration::from_secs(4);
+
+        // §5.4/§5.5.1: cửa sổ đã chọn. Lấy rect **một lần** khi bắt đầu — cửa
+        // sổ di chuyển giữa stream thì vùng cắt phải bám theo, nhưng làm vậy
+        // mỗi frame tốn một `DwmGetWindowAttribute` (~50 µs) và ảnh sẽ "trượt"
+        // dưới con trỏ. Bản này cố định vùng cắt và ghi rõ giới hạn đó.
+        let window_rect = window.and_then(|hwnd| {
+            let rect = windows::extended_frame_bounds(hwnd)?;
+            if rect.is_empty() { None } else { Some(rect) }
+        });
+        // Nếu client đã chọn một cửa sổ mà không lấy được rect (cửa sổ vừa
+        // đóng), nói thật thay vì lặng lẽ stream cả màn hình — người dùng sẽ
+        // tưởng window picker không có tác dụng.
+        if window.is_some() && window_rect.is_none() {
+            return response(&mut stream, 409, "text/plain; charset=utf-8",
+                "Cửa sổ đã chọn không còn tồn tại (có thể vừa đóng). Hãy chọn lại.".as_bytes());
+        }
+        // Ghi offset để `inject` cộng vào toạ độ: gốc frame là góc cửa sổ,
+        // không phải góc màn hình. Không cộng thì bấm giữa cửa sổ sẽ bấm giữa
+        // màn hình — lệch đúng bằng vị trí cửa sổ.
+        {
+            let mut s = state.lock().unwrap_or_else(|e| e.into_inner());
+            s.capture_offset = window_rect.map(|rect| (rect.left, rect.top)).unwrap_or((0, 0));
+        }
 
         let mut capture = match capture::Capture::open(monitor) {
             Ok(capture) => capture,
@@ -942,6 +975,23 @@ fn stream_live(
 
         // Header chỉ đi **sau** khi đã có frame thật (§58.3 #2).
         let encode_started = Instant::now();
+        // §5.4: crop theo `EXTENDED_FRAME_BOUNDS` (đã kẹp vào frame). Không
+        // crop được thì stream cả frame — và nói lý do ở stderr, không im lặng.
+        let first = match window_rect {
+            Some(rect) => match crop::plan(
+                crop::Rect { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom },
+                first.width, first.height) {
+                Some(plan) => {
+                    let bgra = crop::extract(&first.bgra, first.width, plan);
+                    capture::Frame { width: plan.width, height: plan.height, bgra }
+                }
+                None => {
+                    return response(&mut stream, 409, "text/plain; charset=utf-8",
+                        "Cửa sổ đã chọn nằm ngoài màn hình đang chia sẻ. Chọn cửa sổ khác hoặc chuyển sang chế độ toàn màn hình.".as_bytes());
+                }
+            },
+            None => first,
+        };
         let first_jpeg = jpeg::encode(&first.bgra, first.width, first.height, JPEG_QUALITY);
         let first_encode_us = encode_started.elapsed().as_micros() as u64;
         {
@@ -976,6 +1026,22 @@ fn stream_live(
             }
             match capture.next_frame(0) {
                 Ok(frame) => {
+                    // Crop **trước** khi so sánh: chuyển động ở phần màn hình
+                    // ngoài cửa sổ không được làm ta nén lại frame.
+                    let frame = match window_rect {
+                        Some(rect) => match crop::plan(
+                            crop::Rect { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom },
+                            frame.width, frame.height) {
+                            Some(plan) => {
+                                let bgra = crop::extract(&frame.bgra, frame.width, plan);
+                                capture::Frame { width: plan.width, height: plan.height, bgra }
+                            }
+                            // Cửa sổ ra ngoài: giữ nguyên frame trước, đừng gửi
+                            // ảnh rác.
+                            None => continue,
+                        },
+                        None => frame,
+                    };
                     if frame.bgra != previous {
                         let started = Instant::now();
                         let jpeg = jpeg::encode(&frame.bgra, frame.width, frame.height, JPEG_QUALITY);
@@ -1076,7 +1142,24 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
         if route == "/live" {
             return response(&mut stream, 200, "text/html; charset=utf-8", stream::live_page(monitor, fps).as_bytes());
         }
-        return stream_live(stream, monitor, fps, &state);
+        // §5.4: cửa sổ của **phiên đang chạy** quyết định có crop hay không.
+        // Trước bản này `window_id` được lưu, kiểm quyền, trả về UI — và
+        // **không ảnh hưởng gì** tới hình. Người dùng chọn "Ghi chú" rồi vẫn
+        // thấy cả màn hình: window picker không có tác dụng thật.
+        //
+        // `desktop` = cửa sổ đặc biệt "toàn màn hình" (§5.3 VNC), không phải
+        // hwnd, nên không crop.
+        let window = {
+            let s = state.lock().unwrap_or_else(|e| e.into_inner());
+            s.session.as_ref().and_then(|session| {
+                if session.window_id == "desktop" {
+                    None
+                } else {
+                    windows::hwnd_from_wid(&session.window_id)
+                }
+            })
+        };
+        return stream_live(stream, monitor, fps, window, &state);
     }
     if method == "POST" && route == "/api/diagnostics/capture" { let (status,body)=capture_probe(&body); return json_response(&mut stream,status,body); }
     let mut s = state.lock().unwrap_or_else(|e| e.into_inner());
@@ -1219,6 +1302,20 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
             let win = input.get("windowId").map(String::as_str).unwrap_or("desktop");
             let snapshot = input.get("snapshotId").map(String::as_str).unwrap_or("");
             if !["hvnc","vnc"].contains(&mode) { return json_response(&mut stream, 422, "{\"error\":\"invalid_session_mode\"}".into()); }
+            // §5.4: cửa sổ phải **crop được** ngay bây giờ. Kiểm trước khi tạo
+            // phiên, để người dùng nhận lỗi rõ ràng thay vì tạo phiên rồi thấy
+            // stream cả màn hình (hoặc 409 giữa chừng).
+            if win != "desktop" {
+                let hwnd = windows::hwnd_from_wid(win);
+                let rect = hwnd.and_then(windows::extended_frame_bounds);
+                if hwnd.is_none() || rect.is_none() {
+                    // Nói **vì sao**: cửa sổ vừa đóng, hoặc DWM không trả
+                    // bounds. Không nói thì người dùng chỉ thấy "lỗi".
+                    return json_response(&mut stream, 409,
+                        "{\"error\":\"window.unavailable\",\"detail\":\"Cửa sổ vừa đóng hoặc không lấy được khung hình. Hãy liệt kê lại.\"}"
+                            .to_string());
+                }
+            }
             // Cổng **duy nhất** nhận `wid` (spec: `WindowRegistry::authorize`).
             // `desktop` là cửa sổ đặc biệt (stream cả màn hình, §5.3 VNC), không
             // cần snapshot vì nó không phải một hwnd nào.
@@ -1356,7 +1453,17 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<State>>) {
                     let mut refused = "null".to_string();
                     for event in events {
                         let outcome = input::handle(&mut s.input, event, now, true);
-                        sent += input::inject(&outcome.actions) as usize;
+                        // §5.4 + §8.3: khi stream đang crop một cửa sổ, toạ độ
+                        // client gửi là theo **ảnh** (một phần màn hình). Đổi
+                        // về toạ độ virtual desktop trước khi inject — không
+                        // đổi thì bấm giữa cửa sổ lại bấm giữa màn hình.
+                        let actions = crop::remap_actions(
+                            outcome.actions,
+                            s.capture_offset,
+                            s.live_metrics.width,
+                            s.live_metrics.height,
+                        );
+                        sent += input::inject(&actions) as usize;
                         if let Some(reject) = outcome.rejected {
                             refused = json_quote(reject.code());
                         }
@@ -1863,7 +1970,7 @@ fn main() {
     // Dựng trước khi `data_dir` bị move vào `State` — cùng lý do với `history`.
     let history_log = history::History::new(&data_dir);
     let pins_store = pins::Pins::new(&data_dir);
-    let state=Arc::new(Mutex::new(State{settings,session:None,next_id:0,data_dir,live_status:None,live_metrics:LiveMetrics::default(),input:input::InputSanitizer::default(),history:history_log,pins:pins_store,auth:auth_wire::AuthState::default(),policy:guard::Policy::for_bind(&host),keyframes:0,windows:rd_spike_lib::security::window::WindowRegistry::default()}));
+    let state=Arc::new(Mutex::new(State{settings,session:None,next_id:0,data_dir,live_status:None,live_metrics:LiveMetrics::default(),input:input::InputSanitizer::default(),history:history_log,pins:pins_store,auth:auth_wire::AuthState::default(),policy:guard::Policy::for_bind(&host),keyframes:0,windows:rd_spike_lib::security::window::WindowRegistry::default(),capture_offset:(0,0)}));
     let url = format!("http://127.0.0.1:{actual}");
     println!("Lantern mock is ready. Open {url} in your browser.");
     println!("Xem màn hình thật: {url}/live  — hoặc bấm nút \"Xem máy thật\" (không cần cài gì).");
@@ -1955,6 +2062,7 @@ mod tests {
                 history: history::History::new(&data_dir),
                 pins: pins::Pins::new(&data_dir),
                 windows: rd_spike_lib::security::window::WindowRegistry::default(),
+                capture_offset: (0, 0),
             }));
             // `take(32)`: luồng đăng nhập đầy đủ (§8.1) cần 8 request **chỉ
             // riêng** cho setup/login/refresh/logout; `take(8)` khiến test
@@ -2519,13 +2627,31 @@ mod tests {
         // phiên". Nếu ngược lại thì trên một server đã có phiên, mọi `wid` bịa
         // đều trả 409 `session_already_active` và **không ai biết** có cổng
         // `wid` hay không — cổng trông như có mà không kiểm gì.
+        // Thứ tự kiểm là **có nghĩa**, và test này khoá nó:
+        //
+        // 1. `wid` có trỏ tới cửa sổ **thật, crop được** không (`409
+        //    window.unavailable`)? Một cửa sổ không tồn tại thì không có gì để
+        //    cấp quyền — kiểm quyền trước là kiểm một thứ trừu tượng.
+        // 2. `wid` có nằm trong snapshot agent vừa trả không (`403
+        //    window.unknown`)?
+        // 3. Đã có phiên chưa (`409 session_already_active`)?
+        //
+        // Trên Linux `extended_frame_bounds` luôn `None` ⇒ mọi `wid` dừng ở (1).
+        // Đó **không** phải là cổng bị vô hiệu hoá: trên Windows cùng đoạn code
+        // này đi tiếp tới (2), và test `a_client_cannot_pick_an_arbitrary_window_id`
+        // kiểm (2) ở tầng `authorize` trực tiếp.
         let stolen = http(addr, "POST", "/api/sessions",
             r#"{"mode":"vnc","windowId":"00000000000a0b0c","snapshotId":"ws1aaaaaaaaaaaa"}"#);
         assert!(
-            stolen.starts_with("HTTP/1.1 403"),
-            "wid ngoài snapshot phải là 403 window.unknown, không phải \"đã có phiên\": {stolen}"
+            stolen.starts_with("HTTP/1.1 409"),
+            "cửa sổ không tồn tại ⇒ 409 window.unavailable: {stolen}"
         );
-        assert!(stolen.contains("window.unknown"), "{stolen}");
+        assert!(
+            stolen.contains("window.unavailable"),
+            "phải nói rõ lý do, không phải \"đã có phiên\": {stolen}"
+        );
+        // Và **không** được tạo phiên.
+        assert!(!stolen.contains("\"session\""), "{stolen}");
         drop(server);
     }
 

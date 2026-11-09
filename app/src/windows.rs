@@ -228,6 +228,67 @@ pub fn to_registry_entries(entries: &[WindowEntry]) -> Vec<rd_spike_lib::securit
         .collect()
 }
 
+/// `EXTENDED_FRAME_BOUNDS` của một cửa sổ, theo pixel màn hình.
+///
+/// §5.4: **KHÔNG** `GetWindowRect` — dính viền vô hình DWM/UWP, lệch 7–8 px mỗi
+/// cạnh ở Win10 ⇒ click sai mép và crop cắt mất viền.
+///
+/// `None` = cửa sổ không còn (vừa đóng) hoặc DWM không trả bounds. Trả `None`
+/// thay vì rect 0×0 để người gọi **nói** được lý do với người dùng; một rect
+/// rỗng lặng lẽ biến thành "stream cả màn hình" và người dùng tưởng window
+/// picker không có tác dụng.
+#[cfg(windows)]
+pub fn extended_frame_bounds(hwnd: i64) -> Option<crate::crop::Rect> {
+    use std::ffi::c_void;
+    #[allow(non_snake_case)]
+    mod dwm {
+        use std::ffi::c_void;
+        extern "system" {
+            pub fn DwmGetWindowAttribute(
+                hwnd: *mut c_void,
+                attribute: u32,
+                out: *mut c_void,
+                size: u32,
+            ) -> i32;
+        }
+    }
+    const DWMWA_EXTENDED_FRAME_BOUNDS: u32 = 9;
+    #[repr(C)]
+    #[derive(Default)]
+    struct WinRect {
+        left: i32,
+        top: i32,
+        right: i32,
+        bottom: i32,
+    }
+    let mut rect = WinRect::default();
+    let ok = unsafe {
+        dwm::DwmGetWindowAttribute(
+            hwnd as *mut c_void,
+            DWMWA_EXTENDED_FRAME_BOUNDS,
+            &mut rect as *mut WinRect as *mut c_void,
+            std::mem::size_of::<WinRect>() as u32,
+        )
+    } == 0;
+    if !ok {
+        return None;
+    }
+    Some(crate::crop::Rect {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+    })
+}
+
+/// Linux/macOS: không có cửa sổ Win32 để hỏi.
+///
+/// `None` để người gọi trả `409` kèm lý do, thay vì crop một vùng bịa.
+#[cfg(not(windows))]
+pub fn extended_frame_bounds(_hwnd: i64) -> Option<crate::crop::Rect> {
+    None
+}
+
 /// Tra ngược `wid` (hex) → `hwnd`. Cần khi đã có snapshot hợp lệ và phải
 /// capture/đổi cửa sổ thật.
 ///
