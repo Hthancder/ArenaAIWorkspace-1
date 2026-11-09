@@ -26,7 +26,7 @@
 > (installer GStreamer) — với một người dùng cá nhân, đó là cái giá sai cho một
 > việc chỉ cần hai thứ: một frame ảnh, và một hàm nén JPEG.
 >
-> Giờ cả hai nằm **trong `lantern-mock.exe`** (514 KB): app tự gọi DXGI Desktop
+> Giờ cả hai nằm **trong `lantern-mock.exe`** (~400 KB): app tự gọi DXGI Desktop
 > Duplication qua COM và tự nén JPEG. Không DLL, không PATH, không installer,
 > không bước cài nào. Xem `docs/remote-desktop-spec.md` §58.15.
 
@@ -201,6 +201,16 @@ bình thường".
   hạ 5 fps sau 10 giây, quay lại thì khôi phục.
 - ✅ **Chuông/rung báo khi phiên bắt đầu và kết thúc** (§50.1 #5).
 - ✅ **Chế độ mạng rất yếu** (§50.1 #6): 1 fps, chỉ bàn phím.
+- ✅ **Chuột tương đối / pointer lock** cho game và 3D (§6.4.6): bấm 🖱, `Esc`
+  để thoát; bật/tắt được giữa phiên.
+- ✅ **Bàn phím ảo cho điện thoại** (§6.6/§30.7): một hàng chip sticky
+  (Ctrl/Alt/⇧/Esc/Tab/⌫/mũi tên) + bàn phím hệ điều hành cho chữ; video co lại
+  chứ không bị che.
+- ✅ **Toggle "chỉ xem"** (§10.1 #2 + §8.1 `permission`): nút 👁 tắt **cả** chuột
+  và bàn phím ở cả client lẫn server.
+- ✅ **Mọi độ sâu màu của desktop** (§52.4): BGRA 8-bit, 10-bit, half-float HDR,
+  và cả biến thể `typeless` mà desktop tổng hợp (WARP / RDP không GPU) trả về.
+  Trước bản này app chỉ chạy được trên desktop BGRA thuần.
 
 ### Còn thiếu thật
 
@@ -208,13 +218,26 @@ bình thường".
   `/api/sessions/{sid}/audio` trả `available:false` thay vì giả vờ.
 - ❌ **Không phải WebRTC** (chưa có SDP/ICE/DTLS — §37, §10.2). Đường hiện tại
   là MJPEG: đơn giản, chạy được, nhưng tốn băng thông hơn H.264 nhiều.
-- ❌ **Chưa có pointer lock** (§6.4.6 — cần cho game, không cần cho dùng thường).
-- ❌ **Chưa có bàn phím ảo cho điện thoại** (§6.6).
-- ❌ **Chưa có toggle "chỉ xem"** (§6.13) — hiện luôn điều khiển được.
 - ❌ **Stream một cửa sổ là crop, chưa phải WGC window item** (§5.5.1 ghi nguồn
   T3 là WGC). Hệ quả cụ thể: cửa sổ **di chuyển** thì vùng crop không bám theo —
   phải bấm "Xem lại" để lấy khung mới. Cửa sổ bị che vẫn hiện phần bị che.
 - ❌ **Không chạy ngoài LAN** mà không có tunnel (§54).
+
+### Cách biết những điều trên là **thật**, không phải "đã viết xong"
+
+CI chạy trên Windows thật và, ngoài unit test, còn **chạy exe**:
+
+1. khởi động `lantern-mock.exe`, chờ nó mở cổng;
+2. `POST /api/sessions` — tạo phiên thật;
+3. tải `/api/live.mjpg` và chờ ít nhất hai frame;
+4. cắt frame JPEG đầu tiên ra file;
+5. **giải mã nó** bằng `System.Drawing` của .NET — bộ giải mã độc lập với
+   encoder Rust trong exe — và khẳng định ảnh ≥ 640×480.
+
+Bước này **đỏ** nếu không capture được. Trước khi nó được thêm vào, 167 test
+Linux xanh trong khi `Capture::open` hỏng trên **mọi** máy Windows (GUID sai,
+ba struct tràn stack, 11 chỗ đọc vtable sai) — vì nhánh `#[cfg(windows)]`
+không được chạy ở đâu cả.
 
 Đường còn lại theo spec (§57.8): `config.rs` → `signaling.rs` → WebRTC, và
 H.264/Opus (§52.4). Không có bước nào trong số đó cần bạn cài thêm phần mềm.
