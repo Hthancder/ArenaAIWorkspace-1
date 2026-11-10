@@ -46,6 +46,14 @@
 - **Tự phát hiện di chuyển**: nếu Taskora.exe bị copy lẻ sang chỗ trống, app hỏi chuyển dữ liệu portable cũ sang. Nếu bạn chạy ở nơi khác mà `%APPDATA%` còn dữ liệu v1/v2.0 cũ, app hỏi **gộp** (id-union, không trùng lặp).
 - **Khôi phục view đang mở** giữa các lần chạy; toast hành động kèm nút **Hoàn tác** sau mỗi thao tác.
 
+**Chế độ ADHD — dành riêng cho não ADHD (v2.3.0)**
+- **Một việc tại một thời điểm**: thẻ **TIẾP THEO** ghim đầu danh sách — chỉ hiện việc kế tiếp (tôn trọng sort/filter đang dùng), hai nút: **Tập trung 25′** và **Xong**. Hết việc → dòng dịu "Không còn việc nào — nghỉ xíu đi." Không bắt bạn chọn giữa 20 việc; triệt tiêu decision paralysis.
+- **Phiên tập trung 25 phút** (Esc để dừng, Space = tạm dừng/tiếp tục): vòng tròn đếm ngược SVG trực quan (chống time blindness), chỉ 1 việc trên màn hình, copy luôn ấm — hết giờ có màn celebrate và lựa chọn **Nghỉ 5 phút** hoặc **Việc tiếp theo**. "Dừng lại — không sao" nghĩa là dừng lại thì chẳng sao cả.
+- **Thưởng tức thì**: confetti nổ ngay khi hoàn thành việc (mọi đường: bấm checkbox, Space, thẻ TIẾP THEO) + câu cổ vũ ngẫu nhiên — phần thưởng đến đúng "now", không cần streak. Không có streak nào bị đứt, không có điểm nào bị trừ: **không thể gây shame**.
+- **Ngôn ngữ không phán xét**: banner quá hạn chuyển hổ phách, "Chưa kịp lần này — N việc chờ tới lúc bạn sẵn sàng"; mọi copy mới đều ấm.
+- **Giao diện dịu**: tắt hạt nhiễu nền, vùng bấm lớn hơn, focus ring rõ hơn. Quick-add placeholder xoay vòng gợi ý "chỉ cần 1 việc nhỏ nhất".
+- Bật trong **Cài đặt → Giao diện → Chế độ ADHD**. Chi tiết thiết kế: [specs/adhd-mode.md](specs/adhd-mode.md).
+
 **Trong suốt theo đúng điều kiện Windows (v2.2.4)**
 - **Biết lý do trong suốt không hiện**: Taskora đọc công tắc **Transparency effects** của Windows (registry `HKCU\…\Personalize\EnableTransparency`). Thiếu điều kiện này thì Acrylic không thể hiển thị — trước đây app không nói gì, giờ thì nói rõ.
 - **Bật trong suốt thì điều kiện phải được đảm bảo**: khi bạn gạt "Trong suốt Acrylic" mà Transparency effects đang TẮT, Taskora hiện hộp thoại hỏi bạn cho phép bật giúp (chỉ ảnh hưởng tài khoản Windows hiện tại). **Từ chối → Taskora tự chuyển về nền đặc**, không giữ "trong suốt" khi không dùng được. Từ chối/mất điều kiện ở mọi thời điểm (kể cả lúc khởi động) đều được ép về nền đặc.

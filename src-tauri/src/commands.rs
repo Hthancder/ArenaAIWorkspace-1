@@ -877,6 +877,7 @@ pub struct SettingsPatch {
     pub remind_today: Option<bool>,
     pub backup_on_exit: Option<bool>,
     pub perf_mode: Option<bool>,
+    pub adhd_mode: Option<bool>,
 }
 
 fn valid_accent(s: &str) -> bool {
@@ -911,6 +912,7 @@ pub fn update_settings(
         if let Some(v) = patch.remind_today { s.remind_today = v; }
         if let Some(v) = patch.backup_on_exit { s.backup_on_exit = v; }
         if let Some(v) = patch.perf_mode { s.perf_mode = v; }
+        if let Some(v) = patch.adhd_mode { s.adhd_mode = v; }
     }
     AppState::commit(&mut i);
     if effect_changed {

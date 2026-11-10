@@ -70,7 +70,7 @@
       <img class="brand-logo" src="assets/logo.png" alt="Taskora" />
       <div class="brand-text">
         <span class="brand-name">Taskora</span>
-        <span class="brand-ver">v2.2.4</span>
+        <span class="brand-ver">v2.3.0</span>
       </div>
     </div>
 
@@ -209,6 +209,8 @@
         <button class="icon-text-btn" id="btn-bulk" title="Chế độ chọn nhiều"><svg class="ic"><use href="#i-check-square"/></svg><span>Chọn</span></button>
         <button class="icon-text-btn danger-ghost" id="btn-clear-completed" title="Xóa tất cả việc đã hoàn thành"><svg class="ic"><use href="#i-trash-simple"/></svg><span class="hide-sm">Dọn việc xong</span></button>
       </div>
+
+      <div id="adhd-next" class="adhd-next" hidden></div>
 
       <div class="bulkbar" id="bulkbar" hidden>
         <span class="bulkbar-count" id="bulk-count">0 đã chọn</span>
@@ -373,6 +375,14 @@
             </div>
             <label class="toggle-wrap"><input type="checkbox" id="set-perf" /><span class="toggle-ui"></span></label>
           </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-title"><svg class="ic small accent-ic" style="vertical-align:-2px;margin-right:6px"><use href="#i-lightning"/></svg>Chế độ ADHD</div>
+              <div class="setting-hint">Một việc tại một thời điểm · phiên tập trung đếm ngược · thưởng tức thì · không phán xét — thiết kế riêng cho não ADHD</div>
+            </div>
+            <label class="toggle-wrap"><input type="checkbox" id="set-adhd" /><span class="toggle-ui"></span></label>
+          </div>
         </div>
 
         <!-- ═══ VIỆC & DANH SÁCH ═══ -->
@@ -485,7 +495,7 @@
         </div>
 
         <div class="settings-foot">
-          <span>Taskora v2.2.4</span>
+          <span>Taskora v2.3.0</span>
           <button class="linklike" id="set-open-help" type="button">Phím tắt</button>
           <span class="settings-dot">·</span>
           <button class="linklike" id="set-open-about" type="button">Giới thiệu</button>
@@ -601,6 +611,34 @@
       </div>
       <div id="palette-results" class="palette-results g-scroll"></div>
       <div class="palette-foot"><span><kbd>↑↓</kbd> di chuyển</span><span><kbd>Enter</kbd> chọn</span><span><kbd>Esc</kbd> đóng</span></div>
+    </div>
+  </div>
+
+  <!-- ═══════════ PHIÊN TẬP TRUNG (Chế độ ADHD) ═══════════ -->
+  <div id="focus-overlay" class="overlay focus-overlay" hidden>
+    <div class="focus-panel">
+      <div class="focus-hint" id="focus-hint">Đúng việc này thôi — mọi thứ khác có thể đợi</div>
+      <div class="focus-ring-wrap">
+        <svg class="focus-ring" viewBox="0 0 120 120" role="timer" aria-live="polite">
+          <circle class="focus-track" cx="60" cy="60" r="52"></circle>
+          <circle class="focus-prog" id="focus-prog" cx="60" cy="60" r="52"></circle>
+        </svg>
+        <div class="focus-time" id="focus-time">25:00</div>
+      </div>
+      <div class="focus-title" id="focus-title"></div>
+      <div class="focus-controls" id="focus-controls">
+        <button class="btn-ghost" id="focus-pause" type="button">Tạm dừng</button>
+        <button class="btn-cancel" id="focus-stop" type="button">Dừng lại — không sao</button>
+      </div>
+      <div class="focus-done" id="focus-done" hidden>
+        <svg class="ic focus-done-ic"><use href="#i-check-circle-fill"/></svg>
+        <h2>Xong một phiên! Bạn làm được.</h2>
+        <p id="focus-done-sub">Nghỉ 5 phút — đứng dậy, uống nước, nhìn ra xa</p>
+        <div class="modal-actions" style="justify-content:center">
+          <button class="btn-ghost" id="focus-break" type="button">Nghỉ 5:00</button>
+          <button class="btn-save" id="focus-next" type="button">Việc tiếp theo →</button>
+        </div>
+      </div>
     </div>
   </div>
 

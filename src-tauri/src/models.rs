@@ -282,6 +282,9 @@ pub struct Settings {
     /// Chế độ hiệu năng: tắt blur/backdrop-filter/animation (máy yếu).
     #[serde(default)]
     pub perf_mode: bool,
+    /// Chế độ ADHD: một việc tại một thời điểm, thưởng tức thì, không phán xét.
+    #[serde(default)]
+    pub adhd_mode: bool,
     /// View đang mở lần cuối ("inbox"…"list:3") — khôi phục khi mở app.
     #[serde(default)]
     pub last_view: String,
@@ -317,6 +320,7 @@ impl Default for Settings {
             remind_today: true,
             backup_on_exit: false,
             perf_mode: false,
+            adhd_mode: false,
             last_view: String::new(),
         }
     }
