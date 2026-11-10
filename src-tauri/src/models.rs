@@ -248,7 +248,7 @@ impl SortMode {
 }
 
 /// Thiết đặt được lưu cùng dữ liệu.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Settings {
     #[serde(default = "default_dark")]
     pub dark: bool,
@@ -256,6 +256,29 @@ pub struct Settings {
     pub sort: SortMode,
     #[serde(default = "default_true")]
     pub hide_completed: bool,
+    // ----- v2.1: tùy chỉnh giao diện -----
+    /// Trong suốt Acrylic — thấy màn hình desktop phía sau cửa sổ.
+    #[serde(default = "default_true")]
+    pub transparent: bool,
+    /// Độ phủ màu của lớp Acrylic (40–170; thấp = trong hơn).
+    #[serde(default = "default_alpha")]
+    pub acrylic_alpha: u8,
+    /// Màu nhấn tùy chỉnh (hex, vd "#6366f1").
+    #[serde(default = "default_accent")]
+    pub accent: String,
+    /// Giảm hiệu ứng chuyển động (trợ năng).
+    #[serde(default)]
+    pub reduce_motion: bool,
+    // ----- v2.1: hành vi -----
+    /// Hiện gợi ý phân tích khi gõ ở ô thêm nhanh.
+    #[serde(default = "default_true")]
+    pub qa_preview: bool,
+    /// Toast nhắc số việc hôm nay mỗi lần mở app.
+    #[serde(default = "default_true")]
+    pub remind_today: bool,
+    /// Tự tạo bản sao lưu khi thoát.
+    #[serde(default)]
+    pub backup_on_exit: bool,
 }
 
 fn default_dark() -> bool {
@@ -264,6 +287,31 @@ fn default_dark() -> bool {
 
 fn default_true() -> bool {
     true
+}
+
+fn default_alpha() -> u8 {
+    110
+}
+
+fn default_accent() -> String {
+    "#6366f1".to_string()
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            dark: true,
+            sort: SortMode::default(),
+            hide_completed: true,
+            transparent: true,
+            acrylic_alpha: default_alpha(),
+            accent: default_accent(),
+            reduce_motion: false,
+            qa_preview: true,
+            remind_today: true,
+            backup_on_exit: false,
+        }
+    }
 }
 
 /// Giao diện đang xem.

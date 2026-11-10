@@ -41,6 +41,7 @@ const VIEW_META = {
   completed: { icon: "check-circle", title: "Đã hoàn thành", sub: "Việc đã xong — bấm để mở lại nếu cần" },
   trash: { icon: "trash", title: "Thùng rác", sub: "Việc đã xóa — khôi phục hoặc xóa vĩnh viễn" },
   stats: { icon: "chart-bar", title: "Thống kê", sub: "Bức tranh hoạt động của bạn" },
+  settings: { icon: "gear", title: "Cài đặt", sub: "Tùy chỉnh giao diện, hành vi và dữ liệu" },
 };
 const PRIO_LABEL = { P1: "P1", P2: "P2", P3: "P3", P4: "P4" };
 
@@ -82,6 +83,7 @@ function tagsMeta(t) {
 
 /* ─────────── toast + lưu snapshot ─────────── */
 let toastTimer = null;
+let remindShown = false;
 function toast(msg, kind) {
   const el = $("#toast");
   el.textContent = msg;
@@ -96,6 +98,49 @@ function applyTheme(dark) {
   $("#theme-icon-use")?.setAttribute("href", dark ? "#i-sun" : "#i-moon");
 }
 
+/* ── màu: đổi HEX bất kỳ → bộ biến accent đồng bộ toàn app ── */
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const hexToRgb = hex => { const n = parseInt(String(hex).replace("#", ""), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+function rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn, l = (mx + mn) / 2;
+  let h = 0, s = 0;
+  if (d) {
+    s = d / (1 - Math.abs(2 * l - 1));
+    if (mx === r) h = ((g - b) / d) % 6; else if (mx === g) h = (b - r) / d + 2; else h = (r - g) / d + 4;
+    h *= 60; if (h < 0) h += 360;
+  }
+  return [h, s * 100, l * 100];
+}
+function hslToHex(h, s, l) {
+  s /= 100; l /= 100;
+  const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
+  let r, g, b;
+  if (h < 60) { r = c; g = x; b = 0; } else if (h < 120) { r = x; g = c; b = 0; } else if (h < 180) { r = 0; g = c; b = x; }
+  else if (h < 240) { r = 0; g = x; b = c; } else if (h < 300) { r = x; g = 0; b = c; } else { r = c; g = 0; b = x; }
+  const to = v => Math.round((v + m) * 255).toString(16).padStart(2, "0");
+  return "#" + to(r) + to(g) + to(b);
+}
+function applyAccent(hex) {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(String(hex || "").trim());
+  if (!m) return;
+  const v = "#" + m[1].toLowerCase();
+  const [r, g, b] = hexToRgb(v);
+  const [h, s, l] = rgbToHsl(r, g, b);
+  const dark = document.documentElement.dataset.theme !== "light";
+  const accent2 = hslToHex(h, clamp(s + 4, 8, 100), clamp(l + 12, 12, 88));
+  const accentDeep = hslToHex(h, clamp(s + 10, 8, 100), clamp(l - 12, 6, 80));
+  const ink = dark ? hslToHex(h, clamp(s, 10, 100), clamp(l + 40, 30, 90)) : hslToHex(h, clamp(s, 10, 100), clamp(l - 30, 10, 45));
+  const [r2, g2, b2] = hexToRgb(accent2);
+  const el = document.documentElement;
+  el.style.setProperty("--accent", v);
+  el.style.setProperty("--accent-2", accent2);
+  el.style.setProperty("--accent-deep", accentDeep);
+  el.style.setProperty("--accent-rgb", `${r},${g},${b}`);
+  el.style.setProperty("--accent-2-rgb", `${r2},${g2},${b2}`);
+  el.style.setProperty("--accent-ink", ink);
+}
+
 /* Hậu xử lý sau MỖI lần snapshot (kể cả từ IPC bất kỳ) */
 function postSnap(snap) {
   S.snap = snap;
@@ -104,6 +149,15 @@ function postSnap(snap) {
   S.sort = s.settings.sort;
   S.hideDone = s.settings.hide_completed;
   applyTheme(s.settings.dark);
+  applyAccent(s.settings.accent);
+  document.documentElement.toggleAttribute("data-transparent", !!s.settings.transparent);
+  document.body.classList.toggle("reduce-motion", !!s.settings.reduce_motion);
+  syncSettingsControls(s);
+  // nhắc số việc hôm nay — chỉ một lần mỗi phiên mở app
+  if (!remindShown && s.settings.remind_today && s.counts && s.counts.today > 0) {
+    remindShown = true;
+    setTimeout(() => toast(`Hôm nay bạn có ${s.counts.today} việc đến hạn`), 650);
+  }
   // view mồ côi (danh sách đã bị xóa) → về Hộp thư
   if (S.view.type === "list" && !s.lists.some(l => l.id === S.view.id)) {
     S.view = { type: "inbox" };
@@ -194,10 +248,14 @@ function crumbFor(view) {
 
 function renderViewHead() {
   const view = S.view;
-  const stats = view.type === "stats";
-  $("#view-tasks").classList.toggle("active", !stats);
-  $("#view-stats").classList.toggle("active", stats);
-  if (stats) { setCrumb("chart-bar", "Thống kê", S.snap.counts.active); return; }
+  const isStats = view.type === "stats";
+  const isSettings = view.type === "settings";
+  const full = isStats || isSettings;
+  $("#view-tasks").classList.toggle("active", !full);
+  $("#view-stats").classList.toggle("active", isStats);
+  $("#view-settings").classList.toggle("active", isSettings);
+  if (isStats) { setCrumb("chart-bar", "Thống kê", S.snap.counts.active); return; }
+  if (isSettings) { setCrumb("gear", "Cài đặt", ""); return; }
   const meta = crumbFor(view);
   $("#crumb-use").setAttribute("href", "#i-" + meta.icon);
   $("#crumb-text").textContent = meta.title;
@@ -214,10 +272,30 @@ function renderViewHead() {
   $("#overdue-banner").hidden = !showBanner;
   if (showBanner) $("#overdue-text").textContent = `${S.snap.counts.overdue} việc quá hạn`;
   // quick add chỉ cho phép ở các view có ý nghĩa
-  const allowQuick = !["completed", "trash", "stats"].includes(view.type);
+  const allowQuick = !["completed", "trash", "stats", "settings"].includes(view.type);
   $("#quickadd").style.display = allowQuick ? "" : "none";
   // bulk ẩn khi rời khỏi view
   $("#bulkbar").hidden = !S.bulk;
+}
+
+function syncSettingsControls(s) {
+  const st = s.settings;
+  if (!st || !$("#view-settings")) return;
+  $$("#set-theme button").forEach(b => b.classList.toggle("on", (b.dataset.dark === "1") === !!st.dark));
+  $$("#accent-swatches .swatch").forEach(b => b.classList.toggle("on", String(b.dataset.accent || "").toLowerCase() === String(st.accent || "").toLowerCase()));
+  const hexEl = $("#accent-hex");
+  if (document.activeElement !== hexEl) hexEl.value = String(st.accent || "").replace(/^#/, "");
+  const pk = $("#accent-picker");
+  if (pk && document.activeElement !== pk && /^#[0-9a-fA-F]{6}$/.test(st.accent || "")) pk.value = st.accent;
+  $("#set-transparent").checked = !!st.transparent;
+  const alpha = st.acrylic_alpha ?? 110;
+  $("#set-alpha").value = alpha; $("#set-alpha-val").textContent = alpha;
+  $("#set-reduce-motion").checked = !!st.reduce_motion;
+  $("#set-sort").value = st.sort;
+  $("#set-hide-done").checked = !!st.hide_completed;
+  $("#set-qa-preview").checked = !!st.qa_preview;
+  $("#set-remind-today").checked = !!st.remind_today;
+  $("#set-backup-on-exit").checked = !!st.backup_on_exit;
 }
 
 function setCrumb(icon, title, count) {
@@ -248,7 +326,7 @@ function setView(view) {
 async function renderTaskList() {
   if (!S.snap) return;
   const listEl = $("#tasklist");
-  if (S.view.type === "stats") { listEl.innerHTML = ""; $("#empty-state").hidden = true; return; }
+  if (S.view.type === "stats" || S.view.type === "settings") { listEl.innerHTML = ""; $("#empty-state").hidden = true; return; }
   const q = S.search.trim();
   S.visibleIds = await invoke("visible_ids", {
     view: S.view, search: S.search, tag: S.tag, prio: S.prio,
@@ -431,6 +509,7 @@ function updateQaPreview() {
   const v = $("#quickadd-input").value.trim();
   $("#qa-examples").hidden = v.length > 0;
   const prev = $("#qa-preview");
+  if (S.snap && S.snap.settings && !S.snap.settings.qa_preview) { prev.hidden = true; prev.innerHTML = ""; return; }
   if (!v) { prev.hidden = true; prev.innerHTML = ""; return; }
   // phân tích xem trước (debounce nhẹ qua rAF-style)
   invoke("preview_parse", { input: v }).then(p => {
@@ -561,7 +640,8 @@ function openHelp() {
     ["↑ ↓", "Di chuyển chọn việc"],
     ["Alt + ↑ ↓", "Đổi thứ tự việc (Thủ công)"],
     ["Delete", "Xóa việc đang chọn"],
-    ["Ctrl + 1…6", "Hộp thư · Hôm nay · Sắp tới · Ghim · Hoàn thành · Thùng rác"],
+    ["Ctrl + 1…7", "Hộp thư · Hôm nay · Sắp tới · Ghim · Hoàn thành · Thùng rác · Thống kê"],
+    ["Ctrl + 8", "Cài đặt"],
     ["Esc", "Đóng bảng / bỏ chọn / bỏ bộ lọc"],
   ];
   openModal(`<h2><svg class="ic accent-ic"><use href="#i-keyboard"/></svg>Phím tắt</h2>
@@ -570,7 +650,7 @@ function openHelp() {
 }
 function openAbout() {
   openModal(`<div class="about-center"><img class="about-logo" src="assets/logo.png" alt="Taskora" />
-      <h2 style="justify-content:center">Taskora <span style="color:var(--text-faint);font-weight:500">v2.0.0</span></h2>
+      <h2 style="justify-content:center">Taskora <span style="color:var(--text-faint);font-weight:500">v2.1.0</span></h2>
       <p>Quản lý công việc cho Windows — nhẹ, nhanh, đẹp.<br>Viết bằng Rust + Tauri, giao diện liquid glass.</p>
       <p>Font <strong>Be Vietnam Pro</strong> (OFL) · Icon <strong>Phosphor</strong> (MIT)</p>
       <p style="color:var(--text-faint)">MIT License © Hthancder</p>
@@ -587,6 +667,7 @@ const PALETTE_ACTIONS = [
   { icon: "check-circle", label: "Đi tới: Đã hoàn thành", hint: "Ctrl+5", run: () => setView({ type: "completed" }) },
   { icon: "trash", label: "Đi tới: Thùng rác", hint: "Ctrl+6", run: () => setView({ type: "trash" }) },
   { icon: "chart-bar", label: "Đi tới: Thống kê", hint: "Ctrl+7", run: () => setView({ type: "stats" }) },
+  { icon: "gear", label: "Đi tới: Cài đặt", hint: "Ctrl+8", run: () => setView({ type: "settings" }) },
   { icon: "plus", label: "Thêm việc mới", hint: "Ctrl+N", run: () => { setView(S.view.type === "stats" || S.view.type === "trash" || S.view.type === "completed" ? { type: "inbox" } : S.view); setTimeout(() => $("#quickadd-input").focus(), 60); } },
   { icon: "sun", label: "Bật/tắt giao diện tối–sáng", hint: "Ctrl+D", run: () => go(invoke("toggle_dark")) },
   { icon: "archive", label: "Xuất bản sao lưu", hint: "", run: async () => { try { const name = await invoke("export_backup"); toast("Đã xuất " + name); } catch (e) { toast("Xuất thất bại", "err"); } } },
@@ -662,7 +743,7 @@ function bindEvents() {
   $("#btn-undo").addEventListener("click", () => go(invoke("undo")));
   $("#btn-redo").addEventListener("click", () => go(invoke("redo")));
   $("#btn-add-top").addEventListener("click", () => {
-    if (["stats", "trash", "completed"].includes(S.view.type)) setView({ type: "inbox" });
+    if (["stats", "settings", "trash", "completed"].includes(S.view.type)) setView({ type: "inbox" });
     setTimeout(() => $("#quickadd-input").focus(), 60);
   });
   $("#btn-menu").addEventListener("click", e => { e.stopPropagation(); $("#main-menu").hidden = !$("#main-menu").hidden; });
@@ -863,6 +944,47 @@ function bindEvents() {
     if (inp && S.selected != null) go(invoke("set_subtask_title", { id: S.selected, sid: Number(inp.dataset.stTitle), title: inp.value }));
   });
 
+  /* cài đặt v2.1 */
+  const patchSettings = p => go(invoke("update_settings", { patch: p }));
+  const ACCENTS = ["#6366f1", "#8b5cf6", "#3b82f6", "#06b6d4", "#10b981", "#f43f5e", "#f59e0b", "#64748b"];
+  const swWrap = $("#accent-swatches");
+  swWrap.innerHTML = ACCENTS.map(c => `<button class="swatch" data-accent="${c}" style="background:${c}" title="${c}" aria-label="Màu ${c}"></button>`).join("");
+  swWrap.addEventListener("click", e => { const b = e.target.closest("[data-accent]"); if (b) patchSettings({ accent: b.dataset.accent }); });
+  $("#accent-picker").addEventListener("input", e => applyAccent(e.target.value));
+  $("#accent-picker").addEventListener("change", e => patchSettings({ accent: e.target.value }));
+  let hexTimer = null;
+  $("#accent-hex").addEventListener("input", e => {
+    const raw = e.target.value.trim().replace(/^#/, "");
+    const ok = /^[0-9a-fA-F]{6}$/.test(raw);
+    e.target.closest(".hex-wrap").classList.toggle("bad", !ok && raw.length > 0);
+    $("#accent-hex-ok").hidden = !ok;
+    if (!ok) return;
+    const v = "#" + raw.toLowerCase();
+    applyAccent(v);
+    clearTimeout(hexTimer);
+    hexTimer = setTimeout(() => patchSettings({ accent: v }), 350);
+  });
+  $$("#set-theme button").forEach(b => b.addEventListener("click", () => patchSettings({ dark: b.dataset.dark === "1" })));
+  $("#set-transparent").addEventListener("change", e => patchSettings({ transparent: e.target.checked }));
+  $("#set-alpha").addEventListener("input", e => $("#set-alpha-val").textContent = e.target.value);
+  $("#set-alpha").addEventListener("change", e => patchSettings({ acrylic_alpha: Number(e.target.value) }));
+  $("#set-reduce-motion").addEventListener("change", e => patchSettings({ reduce_motion: e.target.checked }));
+  $("#set-sort").addEventListener("change", e => patchSettings({ sort: e.target.value }));
+  $("#set-hide-done").addEventListener("change", e => patchSettings({ hide_completed: e.target.checked }));
+  $("#set-qa-preview").addEventListener("change", e => patchSettings({ qa_preview: e.target.checked }));
+  $("#set-remind-today").addEventListener("change", e => patchSettings({ remind_today: e.target.checked }));
+  $("#set-backup-on-exit").addEventListener("change", e => patchSettings({ backup_on_exit: e.target.checked }));
+  $("#set-export").addEventListener("click", async () => { try { const name = await invoke("export_backup"); toast("Đã xuất " + name); } catch { toast("Xuất thất bại", "err"); } });
+  $("#set-import").addEventListener("click", openBackups);
+  $("#set-open-dir").addEventListener("click", () => invoke("open_data_dir"));
+  $("#set-reset").addEventListener("click", () => {
+    openModal(`<h2><svg class="ic danger"><use href="#i-warning"/></svg>Đặt lại toàn bộ cài đặt?</h2>
+      <p>Mọi tùy chỉnh giao diện và hành vi sẽ trở về mặc định. Việc làm, danh sách và thẻ của bạn được giữ nguyên.</p>
+      <div class="modal-actions"><button class="btn-cancel" data-close-modal="1">Hủy</button><button class="btn-danger" id="confirm-reset-settings">Đặt lại cài đặt</button></div>`);
+  });
+  $("#set-open-help").addEventListener("click", openHelp);
+  $("#set-open-about").addEventListener("click", openAbout);
+
   /* ───────── modal actions (delegation) ───────── */
   $("#modal").addEventListener("click", async e => {
     if (e.target.closest("[data-close-modal]")) { closeModal(); return; }
@@ -879,6 +1001,8 @@ function bindEvents() {
     if (confirmDel) { closeModal(); go(invoke("delete_list", { id: Number(confirmDel.dataset.id) })); return; }
     const confirmTrash = e.target.closest("#confirm-empty-trash");
     if (confirmTrash) { closeModal(); go(invoke("act", { action: { type: "purge_trash" }, view: S.view })); return; }
+    const confirmReset = e.target.closest("#confirm-reset-settings");
+    if (confirmReset) { closeModal(); go(invoke("reset_settings")); return; }
     const exportBtn = e.target.closest("#do-export");
     if (exportBtn) { try { const name = await invoke("export_backup"); toast("Đã xuất " + name); } catch (err) { toast("Xuất thất bại", "err"); } return; }
     const restoreBtn = e.target.closest("[data-restore-backup]");
@@ -933,7 +1057,7 @@ function globalKeys(e) {
   if (mod && key === "f" && !typing) { e.preventDefault(); $("#search-input").focus(); return; }
   if (mod && key === "n") {
     e.preventDefault();
-    if (["stats", "trash", "completed"].includes(S.view.type)) setView({ type: "inbox" });
+    if (["stats", "settings", "trash", "completed"].includes(S.view.type)) setView({ type: "inbox" });
     $("#quickadd-input")?.focus();
     return;
   }
@@ -945,9 +1069,9 @@ function globalKeys(e) {
     if (key === "y" || e.shiftKey) go(invoke("redo")); else go(invoke("undo"));
     return;
   }
-  if (mod && /^[1-7]$/.test(key)) {
+  if (mod && /^[1-8]$/.test(key)) {
     e.preventDefault();
-    const views = ["inbox", "today", "upcoming", "starred", "completed", "trash", "stats"];
+    const views = ["inbox", "today", "upcoming", "starred", "completed", "trash", "stats", "settings"];
     setView({ type: views[Number(key) - 1] });
     return;
   }

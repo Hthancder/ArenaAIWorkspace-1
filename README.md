@@ -29,12 +29,19 @@
 - Ô thêm nhanh có **tia sáng lướt** khi nhập; nút chủ đạo glow indigo; shimmer trên thẻ "Tổng thể".
 - Chế độ **Tối / Sáng** đầy đủ (Ctrl+D).
 
+**Cài đặt & cá nhân hóa (v2.1)**
+- Tab **Cài đặt** (Ctrl+8): toàn bộ tùy chỉnh gom một chỗ — không cần sửa code hay file cấu hình.
+- **Màu nhấn tùy chọn**: 8 swatches dựng sẵn + **chọn màu bất kỳ** + nhập **mã hex** (#rrggbb) — nút, tiến trình, biểu đồ, điểm nhấn khắp app đổi theo tức thì.
+- **Cửa sổ trong suốt Acrylic thật** (Windows): thấy và làm mờ màn hình desktop phía sau cửa sổ như liquid glass thật sự, chỉnh **độ phủ màu** (40–170).
+- **Giảm hiệu ứng chuyển động** (trợ năng), **xem trước phân tích** khi thêm nhanh, **nhắc việc hôm nay** khi mở app, **tự sao lưu khi thoát**.
+- **Đặt lại cài đặt gốc** một chạm (giữ nguyên dữ liệu việc làm).
+
 **Trải nghiệm**
 - **Tìm kiếm** toàn bộ (Ctrl+K mở bảng lệnh nhanh: điều hướng + tìm việc), lọc theo **thẻ**, lọc Ưu tiên P1–P4, ẩn/hiện đã hoàn thành, 5 kiểu sắp xếp.
 - **Hoàn tác / Làm lại** (Ctrl+Z / Ctrl+Y) tới 80 bước.
 - **Thống kê**: việc đang làm, xong hôm nay, quá hạn, chuỗi ngày liên tiếp, biểu đồ cột 14 ngày, tiến độ theo danh sách, theo thẻ.
 - **Lưu tự động** vào `%APPDATA%\Taskora\data.json`; **xuất / nhập bản sao lưu** một chạm; mở thẳng thư mục dữ liệu.
-- Phím tắt: `Ctrl+N` thêm · `Space` đánh dấu xong · `↑↓` chọn · `Alt+↑↓` đổi thứ tự · `Esc` đóng · `Ctrl+1…7` chuyển view.
+- Phím tắt: `Ctrl+N` thêm · `Space` đánh dấu xong · `↑↓` chọn · `Alt+↑↓` đổi thứ tự · `Esc` đóng · `Ctrl+1…8` chuyển view.
 - **Icon Phosphor** (MIT), font **Be Vietnam Pro** (OFL) nhúng sẵn.
 
 ## 🛠️ Xây dựng từ nguồn

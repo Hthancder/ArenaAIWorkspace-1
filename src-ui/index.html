@@ -68,7 +68,7 @@
       <img class="brand-logo" src="assets/logo.png" alt="Taskora" />
       <div class="brand-text">
         <span class="brand-name">Taskora</span>
-        <span class="brand-ver">v2.0.0</span>
+        <span class="brand-ver">v2.1.0</span>
       </div>
     </div>
 
@@ -88,6 +88,7 @@
     <div id="list-nav" class="list-nav"></div>
 
     <button class="nav-item nav-item-stats" data-view="stats" id="nav-stats"><svg class="ic"><use href="#i-chart-bar"/></svg><span class="nav-label">Thống kê</span></button>
+    <button class="nav-item nav-item-stats" data-view="settings" id="nav-settings"><svg class="ic"><use href="#i-gear"/></svg><span class="nav-label">Cài đặt</span></button>
 
     <div class="today-card glass-card">
       <div class="today-card-top">
@@ -269,6 +270,173 @@
             <div class="panel-card-head"><svg class="ic accent-ic"><use href="#i-hash"/></svg><h3>Việc đang làm theo thẻ</h3></div>
             <div id="stat-tags" class="stat-tags"></div>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────── VIEW: CÀI ĐẶT ───────── -->
+    <section id="view-settings" class="view">
+      <div class="page-head">
+        <div class="page-head-left">
+          <svg class="ic page-ic"><use href="#i-gear"/></svg>
+          <div>
+            <h1>Cài đặt</h1>
+            <p>Tùy chỉnh giao diện, hành vi và dữ liệu</p>
+          </div>
+        </div>
+      </div>
+      <div class="settings-scroll">
+
+        <!-- ═══ GIAO DIỆN ═══ -->
+        <div class="panel-card glass-card settings-card">
+          <div class="panel-card-head"><svg class="ic accent-ic"><use href="#i-sun"/></svg><h3>Giao diện</h3></div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-title">Chế độ sáng / tối</div>
+              <div class="setting-hint">Chuyển nhanh bằng Ctrl+D bất cứ lúc nào</div>
+            </div>
+            <div class="seg" id="set-theme" role="group" aria-label="Chế độ sáng tối">
+              <button data-dark="1" type="button">Tối</button>
+              <button data-dark="0" type="button">Sáng</button>
+            </div>
+          </div>
+
+          <div class="setting-row col">
+            <div class="setting-info">
+              <div class="setting-title">Màu nhấn</div>
+              <div class="setting-hint">Đồng bộ nút, tiến trình, biểu đồ và mọi điểm nhấn trong app</div>
+            </div>
+            <div class="accent-row">
+              <div class="swatches" id="accent-swatches"></div>
+              <label class="swatch swatch-custom" id="accent-custom-wrap" title="Màu tùy ý — bấm để chọn">
+                <input type="color" id="accent-picker" value="#6366f1" aria-label="Chọn màu tùy ý" />
+                <svg class="ic small"><use href="#i-plus"/></svg>
+              </label>
+              <div class="hex-wrap" title="Mã màu hex">
+                <span class="hex-hash">#</span>
+                <input id="accent-hex" type="text" maxlength="6" spellcheck="false" autocomplete="off" placeholder="6366f1" aria-label="Mã màu hex" />
+                <span class="hex-ok" id="accent-hex-ok" hidden><svg class="ic tiny"><use href="#i-check"/></svg></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-title">Trong suốt Acrylic</div>
+              <div class="setting-hint">Thấy và làm mờ màn hình desktop phía sau cửa sổ — liquid glass thật sự</div>
+            </div>
+            <label class="toggle-wrap"><input type="checkbox" id="set-transparent" checked /><span class="toggle-ui"></span></label>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-title">Độ phủ màu Acrylic</div>
+              <div class="setting-hint">Thấp hơn = trong hơn, nhìn thấu desktop rõ hơn</div>
+            </div>
+            <div class="alpha-wrap">
+              <input type="range" id="set-alpha" min="40" max="170" step="2" value="110" />
+              <span class="alpha-val" id="set-alpha-val">110</span>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-title">Giảm hiệu ứng chuyển động</div>
+              <div class="setting-hint">Tắt animation và mờ nền — nhẹ mắt, phù hợp khi cần tập trung</div>
+            </div>
+            <label class="toggle-wrap"><input type="checkbox" id="set-reduce-motion" /><span class="toggle-ui"></span></label>
+          </div>
+        </div>
+
+        <!-- ═══ VIỆC & DANH SÁCH ═══ -->
+        <div class="panel-card glass-card settings-card">
+          <div class="panel-card-head"><svg class="ic accent-ic"><use href="#i-list-checks"/></svg><h3>Việc &amp; danh sách</h3></div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-title">Sắp xếp mặc định</div>
+              <div class="setting-hint">Áp dụng cho danh sách việc và được nhớ giữa các lần mở</div>
+            </div>
+            <label class="sort-wrap">
+              <svg class="ic small"><use href="#i-sort-descending"/></svg>
+              <select id="set-sort">
+                <option value="Manual">Thủ công</option>
+                <option value="Due">Hạn chót</option>
+                <option value="Priority">Ưu tiên</option>
+                <option value="Title">Tên A→Z</option>
+                <option value="Created">Mới tạo</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-title">Ẩn việc đã hoàn thành</div>
+              <div class="setting-hint">Bỏ các việc đã xong khỏi danh sách chính</div>
+            </div>
+            <label class="toggle-wrap"><input type="checkbox" id="set-hide-done" checked /><span class="toggle-ui"></span></label>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-title">Xem trước phân tích khi thêm nhanh</div>
+              <div class="setting-hint">Hiện ngày, ưu tiên, thẻ… nhận ra được trước khi bạn nhấn Enter</div>
+            </div>
+            <label class="toggle-wrap"><input type="checkbox" id="set-qa-preview" checked /><span class="toggle-ui"></span></label>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-title">Nhắc việc hôm nay khi mở app</div>
+              <div class="setting-hint">Toast nhắc số việc đến hạn — chỉ hiện khi mở Taskora</div>
+            </div>
+            <label class="toggle-wrap"><input type="checkbox" id="set-remind-today" checked /><span class="toggle-ui"></span></label>
+          </div>
+        </div>
+
+        <!-- ═══ DỮ LIỆU ═══ -->
+        <div class="panel-card glass-card settings-card">
+          <div class="panel-card-head"><svg class="ic accent-ic"><use href="#i-archive"/></svg><h3>Dữ liệu</h3></div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-title">Sao lưu &amp; khôi phục</div>
+              <div class="setting-hint">Xuất bản sao lưu dạng JSON hoặc khôi phục từ bản đã lưu</div>
+            </div>
+            <div class="setting-actions">
+              <button class="btn-ghost small-btn" id="set-export"><svg class="ic small"><use href="#i-archive"/></svg>Xuất</button>
+              <button class="btn-ghost small-btn" id="set-import"><svg class="ic small"><use href="#i-arrow-counter-clockwise"/></svg>Khôi phục…</button>
+              <button class="btn-ghost small-btn" id="set-open-dir"><svg class="ic small"><use href="#i-folder"/></svg>Thư mục</button>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-title">Tự sao lưu khi thoát</div>
+              <div class="setting-hint">Mỗi lần đóng app, một bản sao lưu được tạo trong thư mục backups</div>
+            </div>
+            <label class="toggle-wrap"><input type="checkbox" id="set-backup-on-exit" /><span class="toggle-ui"></span></label>
+          </div>
+        </div>
+
+        <!-- ═══ KHÁC ═══ -->
+        <div class="panel-card glass-card settings-card">
+          <div class="panel-card-head"><svg class="ic accent-ic"><use href="#i-dots-three-vertical"/></svg><h3>Khác</h3></div>
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-title">Đặt lại cài đặt gốc</div>
+              <div class="setting-hint">Mọi tùy chỉnh trở về mặc định — dữ liệu việc làm của bạn được giữ nguyên</div>
+            </div>
+            <button class="btn-danger small-btn" id="set-reset"><svg class="ic small"><use href="#i-arrow-counter-clockwise"/></svg>Đặt lại</button>
+          </div>
+        </div>
+
+        <div class="settings-foot">
+          <span>Taskora v2.1.0</span>
+          <button class="linklike" id="set-open-help" type="button">Phím tắt</button>
+          <span class="settings-dot">·</span>
+          <button class="linklike" id="set-open-about" type="button">Giới thiệu</button>
         </div>
       </div>
     </section>

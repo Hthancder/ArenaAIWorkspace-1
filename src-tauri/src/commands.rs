@@ -855,3 +855,83 @@ pub fn save_now(app: AppHandle, state: State<'_, AppState>) -> Snapshot {
     set_flash(&mut i, "Đã lưu ✓");
     finish(&app, &mut i)
 }
+
+// ------------------------------------------------------------------ cài đặt v2.1
+
+/// Gói cập nhật cài đặt — mọi trường đều tùy chọn, thiếu = giữ nguyên.
+#[derive(Deserialize)]
+#[serde(default)]
+pub struct SettingsPatch {
+    pub dark: Option<bool>,
+    pub sort: Option<SortMode>,
+    pub hide_completed: Option<bool>,
+    pub transparent: Option<bool>,
+    pub acrylic_alpha: Option<u8>,
+    pub accent: Option<String>,
+    pub reduce_motion: Option<bool>,
+    pub qa_preview: Option<bool>,
+    pub remind_today: Option<bool>,
+    pub backup_on_exit: Option<bool>,
+}
+
+fn valid_accent(s: &str) -> bool {
+    let b = s.as_bytes();
+    b.len() == 7 && b[0] == b'#' && b[1..].iter().all(|c| c.is_ascii_hexdigit())
+}
+
+#[tauri::command]
+pub fn update_settings(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    patch: SettingsPatch,
+) -> Snapshot {
+    let mut i = state.lock();
+    let new_transparent = patch.transparent.unwrap_or(i.store.settings.transparent);
+    let new_alpha = patch.acrylic_alpha.unwrap_or(i.store.settings.acrylic_alpha);
+    let effect_changed = new_transparent != i.store.settings.transparent
+        || new_alpha != i.store.settings.acrylic_alpha;
+    {
+        let s = &mut i.store.settings;
+        if let Some(v) = patch.dark { s.dark = v; }
+        if let Some(v) = patch.sort { s.sort = v; }
+        if let Some(v) = patch.hide_completed { s.hide_completed = v; }
+        if let Some(v) = patch.transparent { s.transparent = v; }
+        if let Some(v) = patch.acrylic_alpha { s.acrylic_alpha = v.clamp(40, 170); }
+        if let Some(v) = patch.accent {
+            let v = v.trim().to_lowercase();
+            if valid_accent(&v) { s.accent = v; }
+        }
+        if let Some(v) = patch.reduce_motion { s.reduce_motion = v; }
+        if let Some(v) = patch.qa_preview { s.qa_preview = v; }
+        if let Some(v) = patch.remind_today { s.remind_today = v; }
+        if let Some(v) = patch.backup_on_exit { s.backup_on_exit = v; }
+    }
+    AppState::commit(&mut i);
+    if effect_changed {
+        if let Some(w) = app.get_webview_window("main") {
+            let (t, a) = {
+                let s = &i.store.settings;
+                (s.transparent, s.acrylic_alpha)
+            };
+            if let Err(e) = crate::fx::apply_effect(&w, t, a) {
+                eprintln!("[Taskora] Không đổi được hiệu ứng: {e}");
+            }
+        }
+    }
+    finish(&app, &mut i)
+}
+
+/// Đặt lại toàn bộ cài đặt về mặc định (giữ nguyên dữ liệu).
+#[tauri::command]
+pub fn reset_settings(app: AppHandle, state: State<'_, AppState>) -> Snapshot {
+    let mut i = state.lock();
+    i.store.settings = crate::models::Settings::default();
+    AppState::commit(&mut i);
+    if let Some(w) = app.get_webview_window("main") {
+        if let Err(e) = crate::fx::apply_effect(&w, true, 110) {
+            eprintln!("[Taskora] Không bật lại Acrylic: {e}");
+        }
+    }
+    set_flash(&mut i, "Đã đặt lại cài đặt gốc");
+    finish(&app, &mut i)
+}
