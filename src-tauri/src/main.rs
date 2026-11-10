@@ -64,6 +64,7 @@ fn main() {
             commands::storage_merge_legacy,
             commands::storage_import_orphan,
             commands::storage_dismiss,
+            commands::fx_status,
         ])
         .build(tauri::generate_context!())
         .expect("không khởi động được Taskora")

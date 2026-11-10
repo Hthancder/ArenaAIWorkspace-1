@@ -392,6 +392,9 @@ pub fn import_from(src_dir: &Path) -> Result<(), String> {
     if src_dir == dst {
         return Ok(());
     }
+    if dst.join(DATA_FILE).exists() {
+        return Err("Thư mục hiện tại đã có dữ liệu — hãy dùng chức năng Gộp thay vì Chuyển.".to_string());
+    }
     copy_data_file(src_dir, &dst)?;
     copy_backups(&src_dir.join("backups"), &dst.join("backups"))?;
     Ok(())

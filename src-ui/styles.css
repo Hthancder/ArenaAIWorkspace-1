@@ -14,6 +14,7 @@
 :root {
   --accent:#6366f1; --accent-2:#818cf8; --accent-deep:#4f46e5; --violet:#8b5cf6;
   --accent-rgb:99,102,241; --accent-2-rgb:129,140,248; --accent-ink:#c7cbff;
+  --bg-h:239; --bg-s:64%; --bg-ds:42%;
   --star:#facc15; --danger:#ef4444; --warn:#f59e0b; --ok:#10b981; --blue:#3b82f6;
   --text:#e9ebf5; --text-weak:#9ba3ba; --text-faint:#666e85;
   --stroke:rgba(255,255,255,.14); --stroke-strong:rgba(255,255,255,.30);
@@ -53,22 +54,22 @@ body {
   font-family:"Be Vietnam Pro", system-ui, sans-serif;
   font-size:13px; color:var(--text);
   background:
-    radial-gradient(1150px 720px at 9% -14%, rgba(129,101,255,.34), transparent 62%),
-    radial-gradient(920px 640px at 105% 10%, rgba(79,117,244,.30), transparent 60%),
-    radial-gradient(900px 830px at 84% 113%, rgba(28,165,232,.27), transparent 62%),
-    radial-gradient(780px 720px at -5% 97%, rgba(197,74,222,.25), transparent 60%),
-    linear-gradient(163deg, #1e1a3f 0%, #161334 46%, #0c0f24 100%);
-  background-color:#0c0f24;
+    radial-gradient(1150px 720px at 9% -14%, hsla(calc(var(--bg-h) + 18), var(--bg-s), 66%, .37), transparent 62%),
+    radial-gradient(920px 640px at 105% 10%, hsla(calc(var(--bg-h) - 16), var(--bg-s), 60%, .32), transparent 60%),
+    radial-gradient(900px 830px at 84% 113%, hsla(calc(var(--bg-h) + 34), var(--bg-s), 55%, .29), transparent 62%),
+    radial-gradient(780px 720px at -5% 97%, hsla(calc(var(--bg-h) - 32), var(--bg-s), 68%, .27), transparent 60%),
+    linear-gradient(163deg, hsl(var(--bg-h), var(--bg-ds), 19%) 0%, hsl(var(--bg-h), var(--bg-ds), 12.5%) 46%, hsl(var(--bg-h), var(--bg-ds), 8%) 100%);
+  background-color:hsl(var(--bg-h), var(--bg-ds), 8%);
   user-select:none; -webkit-user-select:none;
 }
 html[data-theme="light"] body {
   background:
-    radial-gradient(1150px 720px at 9% -14%, rgba(150,124,255,.28), transparent 62%),
-    radial-gradient(920px 640px at 105% 10%, rgba(125,160,255,.26), transparent 60%),
-    radial-gradient(900px 830px at 84% 113%, rgba(96,196,244,.24), transparent 62%),
-    radial-gradient(780px 720px at -5% 97%, rgba(236,148,222,.22), transparent 60%),
-    linear-gradient(163deg, #fbfaff 0%, #eef0fa 46%, #e6e9f6 100%);
-  background-color:#e9ecf6;
+    radial-gradient(1150px 720px at 9% -14%, hsla(calc(var(--bg-h) + 18), 72%, 74%, .40), transparent 62%),
+    radial-gradient(920px 640px at 105% 10%, hsla(calc(var(--bg-h) - 16), 74%, 72%, .35), transparent 60%),
+    radial-gradient(900px 830px at 84% 113%, hsla(calc(var(--bg-h) + 34), 72%, 74%, .33), transparent 62%),
+    radial-gradient(780px 720px at -5% 97%, hsla(calc(var(--bg-h) - 32), 76%, 76%, .31), transparent 60%),
+    linear-gradient(163deg, hsl(var(--bg-h), 44%, 98.5%) 0%, hsl(var(--bg-h), 36%, 95%) 46%, hsl(var(--bg-h), 30%, 91.5%) 100%);
+  background-color:hsl(var(--bg-h), 30%, 92%);
 }
 /* hạt nhiễu — loại bỏ banding của gradient lớn */
 body::after {
@@ -586,25 +587,27 @@ textarea::-webkit-scrollbar-thumb { background:rgba(255,255,255,.16); border-rad
 /* ═══════════════ TRONG SUỐT ACRYLIC — desktop hiện phía sau ═══════════════ */
 html[data-transparent] body {
   background:
-    radial-gradient(1150px 720px at 9% -14%, rgba(129,101,255,.26), transparent 62%),
-    radial-gradient(920px 640px at 105% 10%, rgba(79,117,244,.23), transparent 60%),
-    radial-gradient(900px 830px at 84% 113%, rgba(28,165,232,.20), transparent 62%),
-    radial-gradient(780px 720px at -5% 97%, rgba(197,74,222,.18), transparent 60%),
-    linear-gradient(163deg, rgba(30,26,63,.66) 0%, rgba(22,19,52,.60) 46%, rgba(12,15,36,.72) 100%);
+    radial-gradient(1150px 720px at 9% -14%, hsla(calc(var(--bg-h) + 18), var(--bg-s), 66%, .30), transparent 62%),
+    radial-gradient(920px 640px at 105% 10%, hsla(calc(var(--bg-h) - 16), var(--bg-s), 60%, .26), transparent 60%),
+    radial-gradient(900px 830px at 84% 113%, hsla(calc(var(--bg-h) + 34), var(--bg-s), 55%, .23), transparent 62%),
+    radial-gradient(780px 720px at -5% 97%, hsla(calc(var(--bg-h) - 32), var(--bg-s), 68%, .21), transparent 60%),
+    linear-gradient(163deg, hsla(var(--bg-h), var(--bg-ds), 21%, .46) 0%, hsla(var(--bg-h), var(--bg-ds), 13%, .40) 46%, hsla(var(--bg-h), var(--bg-ds), 8%, .52) 100%);
   background-color: transparent;
 }
 html[data-transparent][data-theme="light"] body {
   background:
-    radial-gradient(1150px 720px at 9% -14%, rgba(150,124,255,.30), transparent 62%),
-    radial-gradient(920px 640px at 105% 10%, rgba(125,160,255,.28), transparent 60%),
-    radial-gradient(900px 830px at 84% 113%, rgba(96,196,244,.26), transparent 62%),
-    radial-gradient(780px 720px at -5% 97%, rgba(236,148,222,.24), transparent 60%),
-    linear-gradient(163deg, rgba(251,250,255,.82) 0%, rgba(238,240,250,.76) 46%, rgba(230,233,246,.84) 100%);
+    radial-gradient(1150px 720px at 9% -14%, hsla(calc(var(--bg-h) + 18), 72%, 74%, .30), transparent 62%),
+    radial-gradient(920px 640px at 105% 10%, hsla(calc(var(--bg-h) - 16), 74%, 72%, .26), transparent 60%),
+    radial-gradient(900px 830px at 84% 113%, hsla(calc(var(--bg-h) + 34), 72%, 74%, .25), transparent 62%),
+    radial-gradient(780px 720px at -5% 97%, hsla(calc(var(--bg-h) - 32), 76%, 76%, .24), transparent 60%),
+    linear-gradient(163deg, hsla(var(--bg-h), 44%, 98.5%, .74) 0%, hsla(var(--bg-h), 34%, 94.5%, .68) 46%, hsla(var(--bg-h), 28%, 90.5%, .77) 100%);
   background-color: transparent;
 }
-/* trong suốt: panel bớt đục một nhịp để kính hòa với desktop */
-html[data-transparent] { --panel:linear-gradient(168deg, rgba(31,35,64,.55), rgba(23,26,49,.48) 46%, rgba(28,32,56,.52)); }
-html[data-transparent][data-theme="light"] { --panel:linear-gradient(168deg, rgba(255,255,255,.66), rgba(250,250,255,.54) 46%, rgba(255,255,255,.62)); }
+/* trong suốt: panel kính hơn nữa để desktop nhìn xuyên qua rõ rệt */
+html[data-transparent] { --panel:linear-gradient(168deg, rgba(31,35,64,.44), rgba(23,26,49,.36) 46%, rgba(28,32,56,.42)); --panel-strong:linear-gradient(168deg, rgba(34,38,70,.56), rgba(26,29,54,.48) 46%, rgba(31,35,61,.54)); }
+html[data-transparent] .glass-card { background:linear-gradient(158deg, rgba(255,255,255,.085), rgba(255,255,255,.028) 44%, rgba(255,255,255,.06)); }
+html[data-transparent][data-theme="light"] { --panel:linear-gradient(168deg, rgba(255,255,255,.56), rgba(250,250,255,.45) 46%, rgba(255,255,255,.53)); --panel-strong:linear-gradient(168deg, rgba(255,255,255,.74), rgba(252,252,255,.64) 46%, rgba(255,255,255,.70)); }
+html[data-transparent][data-theme="light"] .glass-card { background:linear-gradient(158deg, rgba(255,255,255,.64), rgba(255,255,255,.38) 44%, rgba(255,255,255,.56)); }
 
 /* giảm hiệu ứng chuyển động */
 body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after {
@@ -643,6 +646,7 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 .hex-wrap input { flex:1; min-width:0; background:none; border:none; outline:none; font-size:12.5px; font-weight:600; letter-spacing:1.5px; color:var(--text); text-transform:lowercase; }
 .hex-ok { color:var(--ok); display:flex; flex:none; }
 
+.fx-status { font-size:11px; color:var(--text-weak); max-width:280px; text-align:right; line-height:1.45; }
 .alpha-wrap { display:flex; align-items:center; gap:10px; flex:none; }
 .alpha-val { font-size:11px; font-weight:700; color:var(--text-weak); width:28px; text-align:right; font-variant-numeric:tabular-nums; }
 input[type="range"] { -webkit-appearance:none; appearance:none; width:150px; height:4px; border-radius:99px; background:linear-gradient(90deg,var(--accent-2),var(--accent-deep)); outline:none; cursor:pointer; }

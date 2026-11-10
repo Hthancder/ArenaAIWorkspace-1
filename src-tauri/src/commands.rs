@@ -33,6 +33,9 @@ pub enum ViewWire {
     Trash,
     Stats,
     List { id: u64 },
+    /// Mọi view lạ (vd "settings") → hành xử như Hộp thư (an toàn).
+    #[serde(other)]
+    Unknown,
 }
 
 impl From<ViewWire> for View {
@@ -46,6 +49,7 @@ impl From<ViewWire> for View {
             ViewWire::Trash => View::Trash,
             ViewWire::Stats => View::Stats,
             ViewWire::List { id } => View::List(id),
+            ViewWire::Unknown => View::Inbox,
         }
     }
 }
@@ -1146,4 +1150,11 @@ pub fn set_last_view(state: State<'_, AppState>, view: String) {
     let mut i = state.lock();
     i.store.settings.last_view = view;
     AppState::commit(&mut i);
+}
+
+
+/// Trạng thái hiệu ứng cửa sổ gần nhất (chuỗi hiển thị trong Cài đặt).
+#[tauri::command]
+pub fn fx_status() -> String {
+    crate::fx::status()
 }

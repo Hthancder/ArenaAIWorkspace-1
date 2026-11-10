@@ -1,6 +1,9 @@
 /* Taskora v2 — IPC (Tauri core) + toàn bộ hành vi UI */
 "use strict";
 const invoke = (cmd, args) => window.__TAURI__.core.invoke(cmd, args);
+/// View gửi lên backend — backend không biết "stats"/"settings" cho các lệnh act/…
+/// → quy về inbox (đếm theo view không ảnh hưởng).
+const viewWire = v => (v && (v.type === "stats" || v.type === "settings")) ? { type: "inbox" } : v;
 const $ = (sel, root) => (root || document).querySelector(sel);
 const $$ = (sel, root) => [...(root || document).querySelectorAll(sel)];
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -159,6 +162,10 @@ function applyAccent(hex) {
   el.style.setProperty("--accent-rgb", `${r},${g},${b}`);
   el.style.setProperty("--accent-2-rgb", `${r2},${g2},${b2}`);
   el.style.setProperty("--accent-ink", ink);
+  // nền aurora đi theo hue của màu nhấn (sáng + nền sâu)
+  el.style.setProperty("--bg-h", String(Math.round(h)));
+  el.style.setProperty("--bg-s", clamp(s, 35, 78).toFixed(1) + "%");
+  el.style.setProperty("--bg-ds", clamp(s * 0.55, 22, 48).toFixed(1) + "%");
 }
 
 /* ─────────── thanh cuộn tự ẩn (g-scroll): hiện khi lăn chuột hoặc rê vào lề ─────────── */
@@ -193,6 +200,16 @@ document.addEventListener("mousemove", e => {
 }, { passive: true });
 document.addEventListener("mouseleave", () => G_SCROLLS().forEach(el => el.classList.remove("edge")));
 
+/* trạng thái hiệu ứng Acrylic/Blur (chỉ hiển thị trong Cài đặt) */
+let fxStatusTimer = null;
+function refreshFxStatus() {
+  const el = $("#fx-status"); if (!el) return;
+  clearTimeout(fxStatusTimer);
+  fxStatusTimer = setTimeout(async () => {
+    try { el.textContent = await invoke("fx_status"); } catch { el.textContent = ""; }
+  }, 350);
+}
+
 /* Hậu xử lý sau MỖI lần snapshot (kể cả từ IPC bất kỳ) */
 function postSnap(snap) {
   S.snap = snap;
@@ -206,6 +223,7 @@ function postSnap(snap) {
   document.body.classList.toggle("reduce-motion", !!s.settings.reduce_motion);
   document.body.classList.toggle("perf", !!s.settings.perf_mode);
   syncSettingsControls(s);
+  refreshFxStatus();
   // nhắc số việc hôm nay — chỉ một lần mỗi phiên mở app
   if (!remindShown && s.settings.remind_today && s.counts && s.counts.today > 0) {
     remindShown = true;
@@ -509,7 +527,7 @@ async function renderTaskList() {
   if (S.view.type === "stats" || S.view.type === "settings") { listEl.innerHTML = ""; $("#empty-state").hidden = true; return; }
   const q = S.search.trim();
   S.visibleIds = await invoke("visible_ids", {
-    view: S.view, search: S.search, tag: S.tag, prio: S.prio,
+    view: viewWire(S.view), search: S.search, tag: S.tag, prio: S.prio,
     sort: S.sort, hideCompleted: S.hideDone,
   });
   const rows = S.visibleIds.map(id => rowHtml(taskById(id), q)).filter(Boolean).join("");
@@ -709,7 +727,7 @@ async function submitQuick() {
   const v = input.value.trim();
   if (!v) return;
   try {
-    const snap = await invoke("quick_add", { input: v, view: S.view });
+    const snap = await invoke("quick_add", { input: v, view: viewWire(S.view) });
     input.value = "";
     updateQaPreview();
     postSnap(snap);
@@ -967,7 +985,7 @@ function bindEvents() {
   }));
   $("#prio-clear").addEventListener("click", () => { S.prio = null; $$("#prio-filter .prio-chip").forEach(x => x.classList.remove("on")); $("#prio-clear").hidden = true; renderTaskList(); });
   $("#tag-chip").addEventListener("click", () => { S.tag = null; $("#tag-chip").hidden = true; renderTaskList(); });
-  $("#btn-clear-completed").addEventListener("click", () => go(invoke("act", { action: { type: "clear_completed" }, view: S.view })));
+  $("#btn-clear-completed").addEventListener("click", () => go(invoke("act", { action: { type: "clear_completed" }, view: viewWire(S.view) })));
   $("#btn-bulk").addEventListener("click", () => {
     S.bulk = !S.bulk; S.bulkSel.clear();
     $("#btn-bulk").classList.toggle("active-mode", S.bulk);
@@ -976,16 +994,16 @@ function bindEvents() {
 
   /* bulk bar */
   $("#bulk-exit").addEventListener("click", () => { S.bulk = false; S.bulkSel.clear(); $("#btn-bulk").classList.remove("active-mode"); updateBulkUI(); renderTaskList(); });
-  $("#bulk-complete").addEventListener("click", () => { if (!S.bulkSel.size) return; go(invoke("act", { action: { type: "bulk_complete", ids: [...S.bulkSel] }, view: S.view })); S.bulkSel.clear(); updateBulkUI(); });
-  $("#bulk-star").addEventListener("click", () => { if (!S.bulkSel.size) return; go(invoke("act", { action: { type: "bulk_star", ids: [...S.bulkSel] }, view: S.view })); S.bulkSel.clear(); updateBulkUI(); });
-  $("#bulk-delete").addEventListener("click", () => { if (!S.bulkSel.size) return; go(invoke("act", { action: { type: "bulk_delete", ids: [...S.bulkSel] }, view: S.view })); S.bulkSel.clear(); updateBulkUI(); });
+  $("#bulk-complete").addEventListener("click", () => { if (!S.bulkSel.size) return; go(invoke("act", { action: { type: "bulk_complete", ids: [...S.bulkSel] }, view: viewWire(S.view) })); S.bulkSel.clear(); updateBulkUI(); });
+  $("#bulk-star").addEventListener("click", () => { if (!S.bulkSel.size) return; go(invoke("act", { action: { type: "bulk_star", ids: [...S.bulkSel] }, view: viewWire(S.view) })); S.bulkSel.clear(); updateBulkUI(); });
+  $("#bulk-delete").addEventListener("click", () => { if (!S.bulkSel.size) return; go(invoke("act", { action: { type: "bulk_delete", ids: [...S.bulkSel] }, view: viewWire(S.view) })); S.bulkSel.clear(); updateBulkUI(); });
 
   /* banner quá hạn */
-  $("#overdue-today").addEventListener("click", () => go(invoke("act", { action: { type: "defer_overdue", target: S.snap ? S.snap.today : "" }, view: S.view })));
+  $("#overdue-today").addEventListener("click", () => go(invoke("act", { action: { type: "defer_overdue", target: S.snap ? S.snap.today : "" }, view: viewWire(S.view) })));
   $("#overdue-tomorrow").addEventListener("click", () => {
     const t = new Date(parseYmd(S.snap.today) + 86400000 + 12 * 3600 * 1000);
     const iso = t.toISOString().slice(0, 10);
-    go(invoke("act", { action: { type: "defer_overdue", target: iso }, view: S.view }));
+    go(invoke("act", { action: { type: "defer_overdue", target: iso }, view: viewWire(S.view) }));
   });
 
   /* danh sách: thêm */
@@ -999,7 +1017,7 @@ function bindEvents() {
       const id = Number(toggle.dataset.toggle);
       const t = taskById(id);
       S.pendingPop = { id, kind: t && isCompleted(t) ? "undone" : "done" };
-      go(invoke("act", { action: { type: "toggle", id }, view: S.view }));
+      go(invoke("act", { action: { type: "toggle", id }, view: viewWire(S.view) }));
       return;
     }
     const bulkbox = e.target.closest("[data-bulkbox]");
@@ -1012,15 +1030,15 @@ function bindEvents() {
     if (star) {
       const id = Number(star.dataset.star);
       S.pendingStar = id;
-      go(invoke("act", { action: { type: "star", id }, view: S.view }));
+      go(invoke("act", { action: { type: "star", id }, view: viewWire(S.view) }));
       return;
     }
     const dup = e.target.closest("[data-duplicate]");
-    if (dup) { go(invoke("act", { action: { type: "duplicate", id: Number(dup.dataset.duplicate) }, view: S.view })); return; }
+    if (dup) { go(invoke("act", { action: { type: "duplicate", id: Number(dup.dataset.duplicate) }, view: viewWire(S.view) })); return; }
     const del = e.target.closest("[data-delete]");
-    if (del) { go(invoke("act", { action: { type: "delete", id: Number(del.dataset.delete) }, view: S.view })); return; }
+    if (del) { go(invoke("act", { action: { type: "delete", id: Number(del.dataset.delete) }, view: viewWire(S.view) })); return; }
     const res = e.target.closest("[data-restore]");
-    if (res) { go(invoke("act", { action: { type: "restore", id: Number(res.dataset.restore) }, view: S.view })); return; }
+    if (res) { go(invoke("act", { action: { type: "restore", id: Number(res.dataset.restore) }, view: viewWire(S.view) })); return; }
     const row = e.target.closest(".task-row[data-id]");
     if (row) {
       const id = Number(row.dataset.id);
@@ -1072,7 +1090,7 @@ function bindEvents() {
     if (dstId === S.dragId) return;
     const r = row.getBoundingClientRect();
     const before = (e.clientY - r.top) < r.height / 2;
-    go(invoke("act", { action: { type: "drop", src: S.dragId, dst: dstId, before }, view: S.view }));
+    go(invoke("act", { action: { type: "drop", src: S.dragId, dst: dstId, before }, view: viewWire(S.view) }));
     S.dragId = null;
   });
 
@@ -1086,13 +1104,13 @@ function bindEvents() {
     if (move) {
       const v = move.dataset.ctxMove;
       const listId = v === "inbox" ? null : Number(v);
-      go(invoke("act", { action: { type: "move_to_list", id, list: listId }, view: S.view }));
+      go(invoke("act", { action: { type: "move_to_list", id, list: listId }, view: viewWire(S.view) }));
       return;
     }
     if (!item) return;
     const k = item.dataset.ctx;
     const map = { toggle: "toggle", star: "star", duplicate: "duplicate", delete: "delete", restore: "restore" };
-    if (map[k]) go(invoke("act", { action: { type: map[k], id }, view: S.view }));
+    if (map[k]) go(invoke("act", { action: { type: map[k], id }, view: viewWire(S.view) }));
   });
   document.addEventListener("click", e => { if (!e.target.closest("#ctx-menu")) closeCtxMenu(); }, true);
 
@@ -1104,18 +1122,18 @@ function bindEvents() {
     if (S.selected == null) return;
     const t = taskById(S.selected);
     S.pendingPop = { id: S.selected, kind: t && isCompleted(t) ? "undone" : "done" };
-    go(invoke("act", { action: { type: "toggle", id: S.selected }, view: S.view }));
+    go(invoke("act", { action: { type: "toggle", id: S.selected }, view: viewWire(S.view) }));
   });
-  $("#d-star").addEventListener("click", () => { if (S.selected != null) go(invoke("act", { action: { type: "star", id: S.selected }, view: S.view })); });
-  $("#d-restore").addEventListener("click", () => { if (S.selected != null) go(invoke("act", { action: { type: "restore", id: S.selected }, view: S.view })); });
-  $("#d-duplicate").addEventListener("click", () => { if (S.selected != null) go(invoke("act", { action: { type: "duplicate", id: S.selected }, view: S.view })); });
-  $("#d-delete").addEventListener("click", () => { if (S.selected != null) go(invoke("act", { action: { type: "delete", id: S.selected }, view: S.view })); });
+  $("#d-star").addEventListener("click", () => { if (S.selected != null) go(invoke("act", { action: { type: "star", id: S.selected }, view: viewWire(S.view) })); });
+  $("#d-restore").addEventListener("click", () => { if (S.selected != null) go(invoke("act", { action: { type: "restore", id: S.selected }, view: viewWire(S.view) })); });
+  $("#d-duplicate").addEventListener("click", () => { if (S.selected != null) go(invoke("act", { action: { type: "duplicate", id: S.selected }, view: viewWire(S.view) })); });
+  $("#d-delete").addEventListener("click", () => { if (S.selected != null) go(invoke("act", { action: { type: "delete", id: S.selected }, view: viewWire(S.view) })); });
   $("#d-due-btn").addEventListener("click", () => $("#d-due-input").classList.toggle("show"));
-  $("#d-due-input").addEventListener("change", e => { if (S.selected != null && e.target.value) { go(invoke("act", { action: { type: "set_due", id: S.selected, due: e.target.value }, view: S.view })); e.target.classList.remove("show"); } });
-  $("#d-due-clear").addEventListener("click", () => { if (S.selected != null) go(invoke("act", { action: { type: "set_due", id: S.selected, due: null }, view: S.view })); });
-  $$("#d-prio .prio-chip").forEach(b => b.addEventListener("click", () => { if (S.selected != null) go(invoke("act", { action: { type: "set_priority", id: S.selected, priority: b.dataset.prio }, view: S.view })); }));
+  $("#d-due-input").addEventListener("change", e => { if (S.selected != null && e.target.value) { go(invoke("act", { action: { type: "set_due", id: S.selected, due: e.target.value }, view: viewWire(S.view) })); e.target.classList.remove("show"); } });
+  $("#d-due-clear").addEventListener("click", () => { if (S.selected != null) go(invoke("act", { action: { type: "set_due", id: S.selected, due: null }, view: viewWire(S.view) })); });
+  $$("#d-prio .prio-chip").forEach(b => b.addEventListener("click", () => { if (S.selected != null) go(invoke("act", { action: { type: "set_priority", id: S.selected, priority: b.dataset.prio }, view: viewWire(S.view) })); }));
   $("#d-repeat").addEventListener("change", e => { if (S.selected != null) go(invoke("set_task_repeat", { id: S.selected, repeat: e.target.value })); });
-  $("#d-list").addEventListener("change", e => { if (S.selected != null) { const v = e.target.value; go(invoke("act", { action: { type: "move_to_list", id: S.selected, list: v === "" ? null : Number(v) }, view: S.view })); $("#d-list").dataset.built = "0"; } });
+  $("#d-list").addEventListener("change", e => { if (S.selected != null) { const v = e.target.value; go(invoke("act", { action: { type: "move_to_list", id: S.selected, list: v === "" ? null : Number(v) }, view: viewWire(S.view) })); $("#d-list").dataset.built = "0"; } });
   $("#d-tag-input").addEventListener("keydown", e => {
     if (e.key === "Enter" && S.selected != null) {
       e.preventDefault();
@@ -1127,7 +1145,7 @@ function bindEvents() {
     const btn = e.target.closest("[data-untag]");
     if (btn && S.selected != null) go(invoke("remove_task_tag", { id: S.selected, tag: btn.dataset.untag }));
   });
-  $("#d-add-subtask").addEventListener("click", () => { if (S.selected != null) go(invoke("act", { action: { type: "add_subtask", id: S.selected }, view: S.view })); });
+  $("#d-add-subtask").addEventListener("click", () => { if (S.selected != null) go(invoke("act", { action: { type: "add_subtask", id: S.selected }, view: viewWire(S.view) })); });
   $("#d-subtasks").addEventListener("click", e => {
     if (S.selected == null) return;
     const tg = e.target.closest("[data-st-toggle]");
@@ -1204,7 +1222,7 @@ function bindEvents() {
     const confirmDel = e.target.closest("#confirm-del-list");
     if (confirmDel) { closeModal(); go(invoke("delete_list", { id: Number(confirmDel.dataset.id) })); return; }
     const confirmTrash = e.target.closest("#confirm-empty-trash");
-    if (confirmTrash) { closeModal(); go(invoke("act", { action: { type: "purge_trash" }, view: S.view })); return; }
+    if (confirmTrash) { closeModal(); go(invoke("act", { action: { type: "purge_trash" }, view: viewWire(S.view) })); return; }
     const confirmReset = e.target.closest("#confirm-reset-settings");
     if (confirmReset) { closeModal(); go(invoke("reset_settings")); return; }
     const browseBtn = e.target.closest("#storage-custom-browse");
@@ -1301,15 +1319,15 @@ function globalKeys(e) {
     return;
   }
   if (typing) return;
-  if (key === " " && S.selected != null) { e.preventDefault(); go(invoke("act", { action: { type: "toggle", id: S.selected }, view: S.view })); return; }
-  if ((key === "delete" || key === "backspace") && S.selected != null) { e.preventDefault(); go(invoke("act", { action: { type: "delete", id: S.selected }, view: S.view })); return; }
+  if (key === " " && S.selected != null) { e.preventDefault(); go(invoke("act", { action: { type: "toggle", id: S.selected }, view: viewWire(S.view) })); return; }
+  if ((key === "delete" || key === "backspace") && S.selected != null) { e.preventDefault(); go(invoke("act", { action: { type: "delete", id: S.selected }, view: viewWire(S.view) })); return; }
   if (key === "arrowup" || key === "arrowdown") {
     if (!S.visibleIds.length) return;
     e.preventDefault();
     const cur = S.selected != null ? S.visibleIds.indexOf(S.selected) : -1;
     let next;
     if (e.altKey) {
-      if (S.selected != null) go(invoke("act", { action: { type: key === "arrowup" ? "move_up" : "move_down", id: S.selected }, view: S.view }));
+      if (S.selected != null) go(invoke("act", { action: { type: key === "arrowup" ? "move_up" : "move_down", id: S.selected }, view: viewWire(S.view) }));
       return;
     }
     if (key === "arrowup") next = cur <= 0 ? 0 : cur - 1;

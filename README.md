@@ -46,6 +46,11 @@
 - **Tự phát hiện di chuyển**: nếu Taskora.exe bị copy lẻ sang chỗ trống, app hỏi chuyển dữ liệu portable cũ sang. Nếu bạn chạy ở nơi khác mà `%APPDATA%` còn dữ liệu v1/v2.0 cũ, app hỏi **gộp** (id-union, không trùng lặp).
 - **Khôi phục view đang mở** giữa các lần chạy; toast hành động kèm nút **Hoàn tác** sau mỗi thao tác.
 
+**Trong suốt & màu sắc (v2.2.2)**
+- **Nền aurora đi theo màu nhấn**: đổi Màu nhấn là toàn bộ nền (gradient, aurora tối/sáng) đổi theo hue tương ứng — không chỉ nút bấm nữa.
+- **Acrylic trong suốt thật sự trong hơn hẳn**: lớp nền và panel giảm alpha mạnh (nhìn xuyên qua desktop rõ rệt), thêm dòng **Trạng thái hiệu ứng** trong Cài đặt cho biết DWM trên máy bạn đã bật Acrylic/Blur thành công hay chưa (tiện tự chẩn đoán).
+- Sửa triệt để hành vi IPC khi đang ở view Cài đặt/Thống kê (một số lệnh gửi `view` không hợp lệ khiến backend báo lỗi).
+
 **Hoàn thiện (v2.2.1)**
 - **Sửa triệt để card Cài đặt/Thống kê bị ép co & cắt cụt nội dung** (flex children mặc định `flex-shrink:1` trong container co giãn).
 - **Hiệu ứng hoàn thành việc**: checkbox pop nảy lò xo + vòng xanh tỏa ra, gạch ngang chữ quét từ trái sang, flash xanh nhạt cả hàng; thả ghim ★ cũng bật pop.

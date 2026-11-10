@@ -1,6 +1,6 @@
 [package]
 name = "taskora"
-version = "2.2.1"
+version = "2.2.2"
 description = "Taskora — ứng dụng quản lý công việc Windows (Tauri + Rust)"
 authors = ["Hthancder"]
 license = "MIT"
