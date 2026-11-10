@@ -201,14 +201,40 @@ document.addEventListener("mousemove", e => {
 }, { passive: true });
 document.addEventListener("mouseleave", () => G_SCROLLS().forEach(el => el.classList.remove("edge")));
 
+/* OS transparency: kiểm một lần mỗi phiên — không đảm bảo được thì không cho dùng nền trong suốt */
+let osTransparencyVerified = false;
+
 /* trạng thái hiệu ứng Acrylic/Blur (chỉ hiển thị trong Cài đặt) */
 let fxStatusTimer = null;
 function refreshFxStatus() {
   const el = $("#fx-status"); if (!el) return;
   clearTimeout(fxStatusTimer);
   fxStatusTimer = setTimeout(async () => {
-    try { el.textContent = await invoke("fx_status"); } catch { el.textContent = ""; }
+    try {
+      el.textContent = await invoke("fx_status");
+      refreshOsTransparency();
+    } catch { el.textContent = ""; }
   }, 350);
+}
+
+/* công tắc Transparency effects của Windows (dòng riêng + nút Bật/Tắt) */
+async function refreshOsTransparency() {
+  const row = $("#os-transparency-row"); if (!row) return;
+  let st = null;
+  try { st = await invoke("transparency_status"); } catch { row.hidden = true; return; }
+  row.hidden = !st.supported;
+  const pill = $("#os-transparency-state"), btn = $("#os-transparency-btn");
+  if (st.enabled === true) { pill.textContent = "BẬT"; pill.className = "fx-pill on"; btn.textContent = "Tắt"; }
+  else if (st.enabled === false) { pill.textContent = "TẮT"; pill.className = "fx-pill off"; btn.textContent = "Bật"; }
+  else { pill.textContent = "Không rõ"; pill.className = "fx-pill unknown"; btn.textContent = "Bật"; }
+}
+
+/* hỏi người dùng bật Transparency effects (điều kiện bắt buộc để Acrylic hiển thị) */
+function openTransparencyDialog() {
+  openModal(`<h2><svg class="ic accent-ic"><use href="#i-sun"/></svg>Cần bật Transparency effects</h2>
+    <p>Để cửa sổ Taskora nhìn xuyên được, Windows cần công tắc <strong>Transparency effects</strong> (Settings → Personalization → Colors) được bật. Hiện nó đang tắt nên Acrylic không thể hiển thị.</p>
+    <p style="margin-top:8px;color:var(--text-weak)">Taskora có thể bật giúp bạn ngay — chỉ ảnh hưởng tài khoản Windows hiện tại, tắt lại được bất cứ lúc nào (nút ngay trong Cài đặt → Giao diện).</p>
+    <div class="modal-actions"><button class="btn-cancel" id="os-tr-decline">Không, dùng nền đặc</button><button class="btn-save" id="os-tr-enable">Bật ngay</button></div>`);
 }
 
 /* Hậu xử lý sau MỖI lần snapshot (kể cả từ IPC bất kỳ) */
@@ -226,6 +252,18 @@ function postSnap(snap) {
   document.body.classList.toggle("perf", !!s.settings.perf_mode);
   syncSettingsControls(s);
   refreshFxStatus();
+  if (!osTransparencyVerified) {
+    osTransparencyVerified = true;
+    (async () => {
+      try {
+        const os = await invoke("transparency_status");
+        if (os.supported && os.enabled === false && S.snap && S.snap.settings.transparent) {
+          go(invoke("update_settings", { patch: { transparent: false } }));
+          toast("Transparency effects đang TẮT — Taskora chuyển nền đặc. Bật lại trong Cài đặt → Giao diện để dùng trong suốt.");
+        }
+      } catch { /* không đọc được → giữ nguyên lựa chọn của người dùng */ }
+    })();
+  }
   // nhắc số việc hôm nay — chỉ một lần mỗi phiên mở app
   if (!remindShown && s.settings.remind_today && s.counts && s.counts.today > 0) {
     remindShown = true;
@@ -850,7 +888,7 @@ function openHelp() {
 }
 function openAbout() {
   openModal(`<div class="about-center"><img class="about-logo" src="assets/logo.png" alt="Taskora" />
-      <h2 style="justify-content:center">Taskora <span style="color:var(--text-faint);font-weight:500">v2.2.1</span></h2>
+      <h2 style="justify-content:center">Taskora <span style="color:var(--text-faint);font-weight:500">v2.2.4</span></h2>
       <p>Quản lý công việc cho Windows — nhẹ, nhanh, đẹp.<br>Viết bằng Rust + Tauri, giao diện liquid glass.</p>
       <p>Font <strong>Be Vietnam Pro</strong> (OFL) · Icon <strong>Phosphor</strong> (MIT)</p>
       <p style="color:var(--text-faint)">MIT License © Hthancder</p>
@@ -1181,7 +1219,32 @@ function bindEvents() {
     hexTimer = setTimeout(() => patchSettings({ accent: v }), 350);
   });
   $$("#set-theme button").forEach(b => b.addEventListener("click", () => patchSettings({ dark: b.dataset.dark === "1" })));
-  $("#set-transparent").addEventListener("change", e => patchSettings({ transparent: e.target.checked }));
+  $("#os-transparency-btn").addEventListener("click", async () => {
+    let st = null;
+    try { st = await invoke("transparency_status"); } catch { toast("Không đọc được Transparency effects", "err"); return; }
+    const on = !(st && st.enabled === true);
+    try {
+      const snap = await invoke("set_transparency", { on });
+      postSnap(snap);
+      toast(on ? "Đã bật Transparency effects — Acrylic có thể hiển thị" : "Đã tắt Transparency effects — Taskora chuyển nền đặc");
+    } catch (err) { toast(String(err && err.message ? err.message : err), "err"); }
+    refreshOsTransparency();
+  });
+  $("#set-transparent").addEventListener("change", async e => {
+    const want = e.target.checked;
+    if (!want) { patchSettings({ transparent: false }); return; }
+    let os = null;
+    try { os = await invoke("transparency_status"); } catch { os = null; }
+    if (os && os.supported && os.enabled === false) {
+      e.target.checked = false; // chưa được phép bật — hỏi người dùng trước
+      openTransparencyDialog();
+      return;
+    }
+    patchSettings({ transparent: true });
+    if (os && os.supported && os.enabled == null) {
+      toast("Không đọc được Transparency effects — nếu nền vẫn đục, hãy kiểm tra Settings → Personalization → Colors");
+    }
+  });
   $("#set-alpha").addEventListener("input", e => { $("#set-alpha-val").textContent = e.target.value; document.documentElement.style.setProperty("--cov", covOf(e.target.value).toFixed(3)); });
   $("#set-alpha").addEventListener("change", e => patchSettings({ acrylic_alpha: Number(e.target.value) }));
   $("#set-reduce-motion").addEventListener("change", e => patchSettings({ reduce_motion: e.target.checked }));
@@ -1225,6 +1288,25 @@ function bindEvents() {
     if (confirmDel) { closeModal(); go(invoke("delete_list", { id: Number(confirmDel.dataset.id) })); return; }
     const confirmTrash = e.target.closest("#confirm-empty-trash");
     if (confirmTrash) { closeModal(); go(invoke("act", { action: { type: "purge_trash" }, view: viewWire(S.view) })); return; }
+    const osEnable = e.target.closest("#os-tr-enable");
+    if (osEnable) {
+      closeModal();
+      try {
+        const snap = await invoke("set_transparency", { on: true });
+        postSnap(snap);
+        patchSettings({ transparent: true }); // chỉ bật trong suốt SAU khi điều kiện được đảm bảo
+        refreshOsTransparency(); // cập nhật pill/nút ngay, không đợi debounce
+        toast("Đã bật Transparency effects — Acrylic đang hoạt động");
+      } catch (err) { toast(String(err && err.message ? err.message : err), "err"); }
+      return;
+    }
+    const osDecline = e.target.closest("#os-tr-decline");
+    if (osDecline) {
+      closeModal();
+      patchSettings({ transparent: false }); // từ chối → tuyệt đối không dùng nền trong suốt
+      toast("Taskora giữ nền đặc — bật lại bất cứ lúc nào trong Cài đặt → Giao diện.");
+      return;
+    }
     const confirmReset = e.target.closest("#confirm-reset-settings");
     if (confirmReset) { closeModal(); go(invoke("reset_settings")); return; }
     const browseBtn = e.target.closest("#storage-custom-browse");

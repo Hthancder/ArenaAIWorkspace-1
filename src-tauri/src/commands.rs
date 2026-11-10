@@ -1156,5 +1156,71 @@ pub fn set_last_view(state: State<'_, AppState>, view: String) {
 /// Trạng thái hiệu ứng cửa sổ gần nhất (chuỗi hiển thị trong Cài đặt).
 #[tauri::command]
 pub fn fx_status() -> String {
-    crate::fx::status()
+    let mut s = crate::fx::status();
+    match crate::transparency::read() {
+        Some(true) => s.push_str(" · Transparency effects: BẬT"),
+        Some(false) => s.push_str(" · Transparency effects: TẮT"),
+        None => s.push_str(" · Transparency effects: không đọc được"),
+    }
+    s
+}
+
+/// Báo cáo trạng thái công tắc Transparency effects của Windows.
+#[derive(Serialize)]
+pub struct TransparencyReport {
+    /// Windows hay không (nơi công tắc này có ý nghĩa)
+    pub supported: bool,
+    /// true = BẬT · false = TẮT · null = không đọc được
+    pub enabled: Option<bool>,
+    /// App hiện có đang áp dụng trong suốt không
+    pub acrylic: bool,
+}
+
+/// Đọc trạng thái Transparency effects (chỉ Windows có ý nghĩa).
+#[tauri::command]
+pub fn transparency_status(state: State<'_, AppState>) -> TransparencyReport {
+    let enabled = crate::transparency::read();
+    let acrylic = state.lock().store.settings.transparent;
+    TransparencyReport {
+        supported: cfg!(windows),
+        enabled,
+        acrylic,
+    }
+}
+
+/// Bật/tắt công tắc Transparency effects của Windows (toàn tài khoản hiện tại).
+///
+/// Hành vi khi TẮT (đúng yêu cầu sản phẩm): app bắt buộc rời chế độ Trong suốt —
+/// không được giữ "trong suốt" khi điều kiện hệ thống không còn được đảm bảo.
+/// Khi BẬT lại: nếu cài đặt Trong suốt đang bật thì áp lại acrylic ngay.
+#[tauri::command]
+pub fn set_transparency(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    on: bool,
+) -> Result<Snapshot, String> {
+    #[cfg(windows)]
+    {
+        crate::transparency::set(on)?;
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = on;
+        return Err("Chỉ hỗ trợ trên Windows".to_string());
+    }
+    let mut i = state.lock();
+    if !on && i.store.settings.transparent {
+        i.store.settings.transparent = false;
+        AppState::commit(&mut i);
+        if let Some(w) = app.get_webview_window("main") {
+            let _ = crate::fx::apply_effect(&w, false, i.store.settings.acrylic_alpha);
+        }
+        set_flash(&mut i, "Đã tắt Transparency effects — Taskora chuyển nền đặc");
+    } else if on && i.store.settings.transparent {
+        let a = i.store.settings.acrylic_alpha;
+        if let Some(w) = app.get_webview_window("main") {
+            let _ = crate::fx::apply_effect(&w, true, a);
+        }
+    }
+    Ok(finish(&app, &mut i))
 }

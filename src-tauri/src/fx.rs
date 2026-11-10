@@ -1,11 +1,11 @@
-//! Hiệu ứng cửa sổ — Acrylic thật, chỉnh được độ phủ trên MỌI bản Windows.
+//! Hiệu ứng cửa sổ — Acrylic native.
 //!
-//! Vì sao không giao hết cho window-vibrancy:
-//! trên Windows 11 22H2+ (build ≥ 22523) apply_acrylic() gọi DWMSBT_TRANSIENTWINDOW
-//! (DWM system backdrop) — DWM hoàn toàn BỎ QUA màu/alpha tint, nên thanh
-//! "Độ phủ Acrylic" không bao giờ có tác dụng. Ở đây ta tự gọi
-//! SetWindowCompositionAttribute(ACCENT_ENABLE_ACRYLICBLURBEHIND) — undocumented nhưng ổn định
-//! từ Win10 1803 tới Win11 hiện tại — với tint lấy thẳng từ slider (BGRA, alpha byte cao).
+//! Hai đường, chọn theo máy (tự thích ứng qua HRESULT, không cần dò build):
+//!  1) Windows 11 22H2+ (build ≥ 22523): DWMSBT_TRANSIENTWINDOW — DWM tự xử lý,
+//!     GPU-composited, KHÔNG bị khựng khi kéo cửa sổ (đường được Microsoft khuyến nghị).
+//!     Tint bị DWM bỏ qua — độ "trong" do thanh Độ phủ điều khiển lớp giao diện (--cov).
+//!  2) Windows cũ hơn: SWCA ACCENT_ENABLE_ACRYLICBLURBEHIND với tint theo slider —
+//!     undocumented nhưng ổn định từ Win10 1803; có thể khựng khi kéo (giới hạn của MS).
 #![allow(dead_code)]
 
 use std::sync::{Mutex, OnceLock};
@@ -26,7 +26,40 @@ fn set_status(s: impl Into<String>) {
 }
 
 #[cfg(windows)]
-mod win {
+mod dwm {
+    use std::ffi::c_void;
+
+    #[link(name = "dwmapi")]
+    extern "system" {
+        fn DwmSetWindowAttribute(
+            hwnd: *mut c_void,
+            dwAttribute: u32,
+            pvAttribute: *const c_void,
+            cbAttribute: u32,
+        ) -> i32;
+    }
+
+    const DWMWA_SYSTEMBACKDROP_TYPE: u32 = 38;
+    const DWMSBT_DISABLE: u32 = 1;
+    const DWMSBT_TRANSIENTWINDOW: u32 = 3; // Acrylic
+
+    /// Trả về true nếu DWM chấp nhận thuộc tính (Win11 22H2+), false nếu build không hỗ trợ.
+    pub fn set_backdrop(hwnd: *mut c_void, transient: bool) -> bool {
+        let backdrop: u32 = if transient { DWMSBT_TRANSIENTWINDOW } else { DWMSBT_DISABLE };
+        let hr = unsafe {
+            DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_SYSTEMBACKDROP_TYPE,
+                &backdrop as *const u32 as *const c_void,
+                4,
+            )
+        };
+        hr == 0
+    }
+}
+
+#[cfg(windows)]
+mod swca {
     use std::ffi::c_void;
 
     #[repr(C)]
@@ -61,7 +94,7 @@ mod win {
         s.encode_utf16().chain(std::iter::once(0)).collect()
     }
 
-    /// Gọi SetWindowCompositionAttribute với ACCENT_POLICY. Trả về false nếu API không tồn tại.
+    /// Trả về false nếu API không tồn tại trên máy này.
     pub fn set_accent(hwnd: *mut c_void, state: u32, rgba: Option<(u8, u8, u8, u8)>) -> bool {
         let lib = unsafe { LoadLibraryW(wide("user32.dll").as_ptr()) };
         if lib.is_null() {
@@ -76,7 +109,7 @@ mod win {
         let mut policy = AccentPolicy {
             accent_state: state,
             accent_flags: 0, // 0 = acrylic (2 = blur)
-            // BGRA, alpha ở byte cao — đúng định dạng API mong đợi
+            // BGRA, alpha ở byte cao
             gradient_color: (r as u32)
                 | ((g as u32) << 8)
                 | ((b as u32) << 16)
@@ -100,46 +133,46 @@ fn hwnd_ptr(window: &tauri::WebviewWindow) -> Option<*mut std::ffi::c_void> {
 #[cfg(windows)]
 pub fn apply_effect(window: &tauri::WebviewWindow, transparent: bool, alpha: u8) -> Result<(), String> {
     let hwnd = hwnd_ptr(window);
+
     if transparent {
-        // vỏ màu xanh-than (giữ đúng tinh thần bản cũ), độ phủ = alpha từ slider
+        // Đường 1: DWMSBT_TRANSIENTWINDOW (Win11 22H2+) — DWM xử lý, không khựng khi kéo
+        let dwm_ok = hwnd.map(|h| dwm::set_backdrop(h, true)).unwrap_or(false);
+        if dwm_ok {
+            // Vô hiệu hóa SWCA để không xung đột với backdrop của DWM
+            if let Some(h) = hwnd {
+                let _ = swca::set_accent(h, swca::ACCENT_DISABLED, None);
+            }
+            set_status("Acrylic đang bật (DWM) — mượt khi kéo cửa sổ".to_string());
+            return Ok(());
+        }
+        // Đường 2 (fallback): SWCA acrylic — có tint theo thanh Độ phủ
         let tint = Some((16u8, 19u8, 37u8, alpha.clamp(10, 250)));
         let swca_ok = hwnd
-            .map(|h| win::set_accent(h, win::ACCENT_ENABLE_ACRYLICBLURBEHIND, tint))
+            .map(|h| swca::set_accent(h, swca::ACCENT_ENABLE_ACRYLICBLURBEHIND, tint))
             .unwrap_or(false);
         if swca_ok {
             set_status(format!(
-                "Acrylic đang bật — độ phủ theo thanh trượt ({alpha})"
+                "Acrylic đang bật (SWCA) — độ phủ theo thanh trượt ({alpha}); có thể khựng khi kéo (giới hạn của Windows này)"
             ));
-            Ok(())
-        } else {
-            // Fallback hiếm gặp: API không tồn tại → để hệ thống tự quyết định
-            match window_vibrancy::apply_acrylic(window, tint) {
-                Ok(()) => {
-                    set_status(
-                        "Acrylic hệ thống (DWM) đang bật — độ phủ do Windows quyết định"
-                            .to_string(),
-                    );
-                    Ok(())
-                }
-                Err(e_acrylic) => match window_vibrancy::apply_blur(window, tint) {
-                    Ok(()) => {
-                        set_status(format!("Acrylic không khả dụng, đang dùng Blur. ({e_acrylic})"));
-                        Ok(())
-                    }
-                    Err(e_blur) => {
-                        set_status(format!(
-                            "Không bật được trong suốt: {e_blur}. (Acrylic: {e_acrylic})"
-                        ));
-                        Err(format!("Acrylic: {e_acrylic} | Blur: {e_blur}"))
-                    }
-                },
+            return Ok(());
+        }
+        // Đường 3: blur thường làm chốt chặn cuối
+        match window_vibrancy::apply_blur(window, tint) {
+            Ok(()) => {
+                set_status("Acrylic không khả dụng, đang dùng Blur — có thể khựng khi kéo".to_string());
+                Ok(())
+            }
+            Err(e) => {
+                set_status(format!("Không bật được trong suốt: {e}"));
+                Err(format!("Trong suốt thất bại: {e}"))
             }
         }
     } else {
         if let Some(h) = hwnd {
-            let _ = win::set_accent(h, win::ACCENT_DISABLED, None);
+            let _ = dwm::set_backdrop(h, false); // DWMSBT_DISABLE
+            let _ = swca::set_accent(h, swca::ACCENT_DISABLED, None);
         }
-        let _ = window_vibrancy::clear_acrylic(window); // dọn DWMSBT nếu bản cũ đã đặt
+        let _ = window_vibrancy::clear_acrylic(window);
         let _ = window_vibrancy::clear_blur(window);
         set_status("Đang tắt trong suốt (nền đặc)");
         Ok(())

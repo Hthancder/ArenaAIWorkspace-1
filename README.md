@@ -46,6 +46,13 @@
 - **Tự phát hiện di chuyển**: nếu Taskora.exe bị copy lẻ sang chỗ trống, app hỏi chuyển dữ liệu portable cũ sang. Nếu bạn chạy ở nơi khác mà `%APPDATA%` còn dữ liệu v1/v2.0 cũ, app hỏi **gộp** (id-union, không trùng lặp).
 - **Khôi phục view đang mở** giữa các lần chạy; toast hành động kèm nút **Hoàn tác** sau mỗi thao tác.
 
+**Trong suốt theo đúng điều kiện Windows (v2.2.4)**
+- **Biết lý do trong suốt không hiện**: Taskora đọc công tắc **Transparency effects** của Windows (registry `HKCU\…\Personalize\EnableTransparency`). Thiếu điều kiện này thì Acrylic không thể hiển thị — trước đây app không nói gì, giờ thì nói rõ.
+- **Bật trong suốt thì điều kiện phải được đảm bảo**: khi bạn gạt "Trong suốt Acrylic" mà Transparency effects đang TẮT, Taskora hiện hộp thoại hỏi bạn cho phép bật giúp (chỉ ảnh hưởng tài khoản Windows hiện tại). **Từ chối → Taskora tự chuyển về nền đặc**, không giữ "trong suốt" khi không dùng được. Từ chối/mất điều kiện ở mọi thời điểm (kể cả lúc khởi động) đều được ép về nền đặc.
+- **Trong Cài đặt → Giao diện có dòng "Transparency effects (Windows)"** với pill BẬT/TẮT/Không rõ và nút **Bật/Tắt** toàn hệ thống — tắt tại đây thì Taskora tự rời nền trong suốt; bật lại thì acrylic được áp ngay.
+- **Kéo cửa sổ hết khựng/delay**: trên Windows 11 22H2+ app dùng `DWMSBT_TRANSIENTWINDOW` (DWM tự xử lý, GPU-composited — không còn khựng); Windows cũ hơn tự fallback SWCA (có thể khựng — giới hạn của Windows). Trước đây v2.2.3 luôn dùng SWCA nên kéo bị lag.
+- Trạng thái hiệu ứng hiển thị luôn tình trạng Transparency effects (BẬT/TẮT/không đọc được).
+
 **Độ phủ Acrylic chỉnh được thật sự (v2.2.3)**
 - **Thanh trượt "Độ phủ màu Acrylic" giờ có tác dụng trên mọi bản Windows** — app tự gọi `SetWindowCompositionAttribute(ACCENT_ENABLE_ACRYLICBLURBEHIND)` với tint lấy từ slider. Trước đây trên Windows 11 22H2+, DWM bỏ qua tint hoàn toàn nên kéo slider không thấy gì.
 - Thanh trượt đồng thời điều khiển **độ đục của lớp nền và panel** (biến `--cov`): kéo là nền mờ dần ngay khi đang trong chế độ Trong suốt, không cần đợi DWM.

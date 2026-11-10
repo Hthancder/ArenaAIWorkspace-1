@@ -647,6 +647,10 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 .hex-ok { color:var(--ok); display:flex; flex:none; }
 
 .fx-status { font-size:11px; color:var(--text-weak); max-width:280px; text-align:right; line-height:1.45; }
+.fx-pill { display:inline-block; vertical-align:1px; margin-left:6px; font-size:9.5px; font-weight:800; letter-spacing:.6px; padding:2px 8px 3px; border-radius:99px; color:var(--text-faint); background:rgba(255,255,255,.06); border:1px solid var(--stroke); }
+.fx-pill.on { color:#a7f3d0; background:rgba(16,185,129,.18); border-color:rgba(52,211,153,.45); }
+.fx-pill.off { color:#fda4af; background:rgba(244,63,94,.16); border-color:rgba(251,113,133,.4); }
+.fx-pill.unknown { color:#fde68a; background:rgba(245,158,11,.14); border-color:rgba(251,191,36,.4); }
 .alpha-wrap { display:flex; align-items:center; gap:10px; flex:none; }
 .alpha-val { font-size:11px; font-weight:700; color:var(--text-weak); width:28px; text-align:right; font-variant-numeric:tabular-nums; }
 input[type="range"] { -webkit-appearance:none; appearance:none; width:150px; height:4px; border-radius:99px; background:linear-gradient(90deg,var(--accent-2),var(--accent-deep)); outline:none; cursor:pointer; }

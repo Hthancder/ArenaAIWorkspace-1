@@ -9,6 +9,7 @@ mod parser;
 mod state;
 mod stats;
 mod storage;
+mod transparency;
 
 use tauri::Manager;
 
@@ -65,6 +66,8 @@ fn main() {
             commands::storage_import_orphan,
             commands::storage_dismiss,
             commands::fx_status,
+            commands::transparency_status,
+            commands::set_transparency,
         ])
         .build(tauri::generate_context!())
         .expect("không khởi động được Taskora")

@@ -70,7 +70,7 @@
       <img class="brand-logo" src="assets/logo.png" alt="Taskora" />
       <div class="brand-text">
         <span class="brand-name">Taskora</span>
-        <span class="brand-ver">v2.2.3</span>
+        <span class="brand-ver">v2.2.4</span>
       </div>
     </div>
 
@@ -326,7 +326,7 @@
           <div class="setting-row">
             <div class="setting-info">
               <div class="setting-title">Trong suốt Acrylic</div>
-              <div class="setting-hint">Nhìn xuyên qua cửa sổ và thấy mờ desktop phía sau — cần DWM của Windows 10/11</div>
+              <div class="setting-hint">Nhìn xuyên qua cửa sổ và thấy mờ desktop phía sau — cần Transparency effects của Windows (Taskora sẽ hỏi trước khi tự bật)</div>
             </div>
             <label class="toggle-wrap"><input type="checkbox" id="set-transparent" checked /><span class="toggle-ui"></span></label>
           </div>
@@ -345,9 +345,17 @@
           <div class="setting-row">
             <div class="setting-info">
               <div class="setting-title">Trạng thái hiệu ứng</div>
-              <div class="setting-hint">Cho biết DWM có bật được Acrylic/Blur trên máy này không</div>
+              <div class="setting-hint">Đường Acrylic đang dùng (DWM/SWCA) và tình trạng Transparency effects</div>
             </div>
             <div class="fx-status" id="fx-status">Đang kiểm tra…</div>
+          </div>
+
+          <div class="setting-row" id="os-transparency-row" hidden>
+            <div class="setting-info">
+              <div class="setting-title">Transparency effects (Windows) <span class="fx-pill" id="os-transparency-state">…</span></div>
+              <div class="setting-hint">Công tắc toàn hệ thống của tài khoản Windows hiện tại — bắt buộc phải BẬT để Acrylic hiển thị. Tắt tại đây thì Taskora tự rời nền trong suốt</div>
+            </div>
+            <button class="btn-ghost small-btn" id="os-transparency-btn" type="button">Bật</button>
           </div>
 
           <div class="setting-row">
@@ -477,7 +485,7 @@
         </div>
 
         <div class="settings-foot">
-          <span>Taskora v2.2.3</span>
+          <span>Taskora v2.2.4</span>
           <button class="linklike" id="set-open-help" type="button">Phím tắt</button>
           <span class="settings-dot">·</span>
           <button class="linklike" id="set-open-about" type="button">Giới thiệu</button>
