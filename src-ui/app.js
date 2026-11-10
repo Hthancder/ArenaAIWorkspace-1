@@ -176,14 +176,20 @@ document.addEventListener("scroll", e => {
   const t = e.target;
   if (t && t.classList && t.classList.contains("g-scroll")) markScrollOn(t);
 }, true);
+let edgeRaf = null;
 document.addEventListener("mousemove", e => {
-  for (const el of G_SCROLLS()) {
-    if (!el.offsetParent) { el.classList.remove("edge"); continue; }
-    const r = el.getBoundingClientRect();
-    const insideY = e.clientY >= r.top && e.clientY <= r.bottom;
-    const nearRight = insideY && e.clientX >= r.right - 22 && e.clientX <= r.right + 6 && e.clientX >= r.left - 4;
-    el.classList.toggle("edge", !!nearRight);
-  }
+  if (edgeRaf) return;
+  const x = e.clientX, y = e.clientY;
+  edgeRaf = requestAnimationFrame(() => {
+    edgeRaf = null;
+    for (const el of G_SCROLLS()) {
+      if (!el.offsetParent) { el.classList.remove("edge"); continue; }
+      const r = el.getBoundingClientRect();
+      const insideY = y >= r.top && y <= r.bottom;
+      const nearRight = insideY && x >= r.right - 22 && x <= r.right + 6 && x >= r.left - 4;
+      el.classList.toggle("edge", !!nearRight);
+    }
+  });
 }, { passive: true });
 document.addEventListener("mouseleave", () => G_SCROLLS().forEach(el => el.classList.remove("edge")));
 
@@ -208,6 +214,22 @@ function postSnap(snap) {
   // view mồ côi (danh sách đã bị xóa) → về Hộp thư
   if (S.view.type === "list" && !s.lists.some(l => l.id === S.view.id)) {
     S.view = { type: "inbox" };
+  }
+  // hiệu ứng thỏa mãn: pop checkbox / strike-through / star sau khi render lại
+  if (S.pendingPop || S.pendingStar != null) {
+    const pop = S.pendingPop, starId = S.pendingStar;
+    S.pendingPop = null; S.pendingStar = null;
+    requestAnimationFrame(() => {
+      if (pop) {
+        const row = document.querySelector(`.task-row[data-id="${pop.id}"]`);
+        if (row) { row.classList.add(pop.kind === "done" ? "just-done" : "just-undone"); setTimeout(() => row.classList.remove("just-done", "just-undone"), 750); }
+      }
+      if (starId != null) {
+        const btn = document.querySelector(`.tstar[data-star="${starId}"]`);
+        const row = btn && btn.closest(".task-row");
+        if (row) { row.classList.add("just-starred"); setTimeout(() => row.classList.remove("just-starred"), 650); }
+      }
+    });
   }
   $("#sort-select").value = S.sort;
   $("#hide-done").checked = S.hideDone;
@@ -449,7 +471,9 @@ async function checkStoragePrompts() {
 function setCrumb(icon, title, count) {
   $("#crumb-use").setAttribute("href", "#i-" + icon);
   $("#crumb-text").textContent = title;
-  $("#crumb-count").textContent = count;
+  const pill = $("#crumb-count");
+  pill.textContent = count;
+  pill.hidden = count === "" || count == null;
 }
 
 function viewKey(v) { return v.type === "list" ? `list:${v.id}` : v.type; }
@@ -806,7 +830,7 @@ function openHelp() {
 }
 function openAbout() {
   openModal(`<div class="about-center"><img class="about-logo" src="assets/logo.png" alt="Taskora" />
-      <h2 style="justify-content:center">Taskora <span style="color:var(--text-faint);font-weight:500">v2.2.0</span></h2>
+      <h2 style="justify-content:center">Taskora <span style="color:var(--text-faint);font-weight:500">v2.2.1</span></h2>
       <p>Quản lý công việc cho Windows — nhẹ, nhanh, đẹp.<br>Viết bằng Rust + Tauri, giao diện liquid glass.</p>
       <p>Font <strong>Be Vietnam Pro</strong> (OFL) · Icon <strong>Phosphor</strong> (MIT)</p>
       <p style="color:var(--text-faint)">MIT License © Hthancder</p>
@@ -971,7 +995,13 @@ function bindEvents() {
   const list = $("#tasklist");
   list.addEventListener("click", e => {
     const toggle = e.target.closest("[data-toggle]");
-    if (toggle) { go(invoke("act", { action: { type: "toggle", id: Number(toggle.dataset.toggle) }, view: S.view })); return; }
+    if (toggle) {
+      const id = Number(toggle.dataset.toggle);
+      const t = taskById(id);
+      S.pendingPop = { id, kind: t && isCompleted(t) ? "undone" : "done" };
+      go(invoke("act", { action: { type: "toggle", id }, view: S.view }));
+      return;
+    }
     const bulkbox = e.target.closest("[data-bulkbox]");
     if (bulkbox) {
       const id = Number(bulkbox.dataset.bulkbox);
@@ -979,7 +1009,12 @@ function bindEvents() {
       updateBulkUI(); return;
     }
     const star = e.target.closest("[data-star]");
-    if (star) { go(invoke("act", { action: { type: "star", id: Number(star.dataset.star) }, view: S.view })); return; }
+    if (star) {
+      const id = Number(star.dataset.star);
+      S.pendingStar = id;
+      go(invoke("act", { action: { type: "star", id }, view: S.view }));
+      return;
+    }
     const dup = e.target.closest("[data-duplicate]");
     if (dup) { go(invoke("act", { action: { type: "duplicate", id: Number(dup.dataset.duplicate) }, view: S.view })); return; }
     const del = e.target.closest("[data-delete]");
@@ -1065,7 +1100,12 @@ function bindEvents() {
   $("#detail-close").addEventListener("click", () => { $("#detail").classList.remove("open"); S.selected = null; $$(".task-row.selected").forEach(r => r.classList.remove("selected")); });
   $("#d-title").addEventListener("change", e => { const v = e.target.value.trim(); if (v && S.selected != null) go(invoke("set_task_title", { id: S.selected, title: v })); });
   $("#d-notes").addEventListener("change", e => { if (S.selected != null) go(invoke("set_task_notes", { id: S.selected, notes: e.target.value })); });
-  $("#d-complete").addEventListener("click", () => { if (S.selected != null) go(invoke("act", { action: { type: "toggle", id: S.selected }, view: S.view })); });
+  $("#d-complete").addEventListener("click", () => {
+    if (S.selected == null) return;
+    const t = taskById(S.selected);
+    S.pendingPop = { id: S.selected, kind: t && isCompleted(t) ? "undone" : "done" };
+    go(invoke("act", { action: { type: "toggle", id: S.selected }, view: S.view }));
+  });
   $("#d-star").addEventListener("click", () => { if (S.selected != null) go(invoke("act", { action: { type: "star", id: S.selected }, view: S.view })); });
   $("#d-restore").addEventListener("click", () => { if (S.selected != null) go(invoke("act", { action: { type: "restore", id: S.selected }, view: S.view })); });
   $("#d-duplicate").addEventListener("click", () => { if (S.selected != null) go(invoke("act", { action: { type: "duplicate", id: S.selected }, view: S.view })); });

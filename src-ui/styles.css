@@ -700,3 +700,42 @@ html[data-theme="light"] body.perf .hero-card {
 html[data-theme="light"] .storage-path { background:rgba(255,255,255,.6); }
 .storage-warn { display:flex; gap:6px; align-items:flex-start; font-size:10px; color:#fbbf24; line-height:1.5; margin-top:6px; }
 .storage-warn .ic { flex:none; margin-top:1px; }
+
+/* ═══════════ FIX v2.2.1: con của flex scroll-container không bị ép co ═══════════ */
+.settings-scroll > *, .stats-scroll > *, .detail-scroll > *, .list-nav > *,
+.backup-list > *, .shortcut-list > *, .d-subtasks > *, .palette-results > *,
+.stat-lists > *, .stat-tags > * { flex-shrink: 0; }
+
+/* ═══════════ Hoàn thành việc — hiệu ứng thỏa mãn ═══════════ */
+.task-row.just-done { animation: row-flash .6s ease; }
+@keyframes row-flash {
+  0% { box-shadow: inset 0 0 0 999px rgba(16,185,129,.18); }
+  100% { box-shadow: inset 0 0 0 999px transparent; }
+}
+.task-row.just-done .tcheck {
+  animation: tcheck-pop .52s cubic-bezier(.34,1.56,.64,1);
+  border-color:#10b981; background:linear-gradient(160deg,#34d399,#059669); color:#fff;
+}
+@keyframes tcheck-pop {
+  0% { transform:scale(.5); box-shadow:0 0 0 0 rgba(16,185,129,.45); }
+  45% { transform:scale(1.45); box-shadow:0 0 0 9px rgba(16,185,129,.16); }
+  78% { transform:scale(.92); box-shadow:0 0 0 4px rgba(16,185,129,.08); }
+  100% { transform:scale(1); box-shadow:0 0 0 0 rgba(16,185,129,0); }
+}
+.task-row.just-done .ttitle {
+  background-image:linear-gradient(currentColor,currentColor); background-repeat:no-repeat;
+  background-position:0 56%; background-size:0% 1.6px; animation: title-strike .36s .1s ease forwards;
+}
+@keyframes title-strike { from { background-size:0% 1.6px; } to { background-size:100% 1.6px; } }
+.task-row.just-undone .tcheck { animation: tcheck-undone .35s cubic-bezier(.34,1.4,.64,1); }
+@keyframes tcheck-undone { 0% { transform:scale(1.35); } 100% { transform:scale(1); } }
+.task-row.just-starred .tstar svg { animation: star-pop .46s cubic-bezier(.34,1.56,.64,1); }
+@keyframes star-pop {
+  0% { transform:scale(.3) rotate(-40deg); }
+  55% { transform:scale(1.55) rotate(8deg); }
+  100% { transform:scale(1) rotate(0deg); }
+}
+.icon-btn:active { transform:scale(.88); }
+.chip-btn:active, .btn-ghost:active, .btn-save:active, .btn-danger:active, .btn-primary:active { transform:scale(.96); }
+
+.crumb-count[hidden] { display:none; }

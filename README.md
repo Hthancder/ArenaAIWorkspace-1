@@ -46,6 +46,12 @@
 - **Tự phát hiện di chuyển**: nếu Taskora.exe bị copy lẻ sang chỗ trống, app hỏi chuyển dữ liệu portable cũ sang. Nếu bạn chạy ở nơi khác mà `%APPDATA%` còn dữ liệu v1/v2.0 cũ, app hỏi **gộp** (id-union, không trùng lặp).
 - **Khôi phục view đang mở** giữa các lần chạy; toast hành động kèm nút **Hoàn tác** sau mỗi thao tác.
 
+**Hoàn thiện (v2.2.1)**
+- **Sửa triệt để card Cài đặt/Thống kê bị ép co & cắt cụt nội dung** (flex children mặc định `flex-shrink:1` trong container co giãn).
+- **Hiệu ứng hoàn thành việc**: checkbox pop nảy lò xo + vòng xanh tỏa ra, gạch ngang chữ quét từ trái sang, flash xanh nhạt cả hàng; thả ghim ★ cũng bật pop.
+- Font được **preload**, logo About lazy-load, edge-hover thanh cuộn được throttle bằng rAF.
+- Hỗ trợ GPU sẵn có: WebView2 (Chromium) render bằng DirectComposition/ANGLE trên GPU, Acrylic do DWM Windows xử lý — không cần cờ gì thêm.
+
 **Trải nghiệm**
 - **Tìm kiếm** toàn bộ (Ctrl+K mở bảng lệnh nhanh: điều hướng + tìm việc), lọc theo **thẻ**, lọc Ưu tiên P1–P4, ẩn/hiện đã hoàn thành, 5 kiểu sắp xếp.
 - **Hoàn tác / Làm lại** (Ctrl+Z / Ctrl+Y) tới 80 bước.
