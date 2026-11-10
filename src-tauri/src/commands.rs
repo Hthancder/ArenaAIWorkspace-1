@@ -642,7 +642,8 @@ pub fn remove_task_tag(
 pub fn undo(app: AppHandle, state: State<'_, AppState>) -> Snapshot {
     let mut i = state.lock();
     if let Some(prev) = i.undo_stack.pop() {
-        i.redo_stack.push(i.store.clone());
+        let cur = i.store.clone();
+        i.redo_stack.push(cur);
         i.store = prev;
         set_flash(&mut i, "Đã hoàn tác");
         AppState::commit(&mut i);
@@ -654,7 +655,8 @@ pub fn undo(app: AppHandle, state: State<'_, AppState>) -> Snapshot {
 pub fn redo(app: AppHandle, state: State<'_, AppState>) -> Snapshot {
     let mut i = state.lock();
     if let Some(next) = i.redo_stack.pop() {
-        i.undo_stack.push(i.store.clone());
+        let cur = i.store.clone();
+        i.undo_stack.push(cur);
         i.store = next;
         set_flash(&mut i, "Đã làm lại");
         AppState::commit(&mut i);
@@ -692,14 +694,12 @@ pub fn set_hide_completed(
 pub fn toggle_dark(app: AppHandle, state: State<'_, AppState>) -> Snapshot {
     let mut i = state.lock();
     i.store.settings.dark = !i.store.settings.dark;
-    set_flash(
-        &mut i,
-        if i.store.settings.dark {
-            "Đã bật giao diện tối"
-        } else {
-            "Đã bật giao diện sáng"
-        },
-    );
+    let msg = if i.store.settings.dark {
+        "Đã bật giao diện tối"
+    } else {
+        "Đã bật giao diện sáng"
+    };
+    set_flash(&mut i, msg);
     AppState::commit(&mut i);
     finish(&app, &mut i)
 }
