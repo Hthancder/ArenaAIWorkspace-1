@@ -1,6 +1,6 @@
 //! Mô hình dữ liệu cốt lõi: Task, List, Store, View và các tiện ích ngày tháng.
 
-use chrono::{DateTime, Datelike, Local, Months, NaiveDate, TimeDelta, Utc, Weekday};
+use chrono::{DateTime, Datelike, Local, Months, NaiveDate, TimeDelta, Utc};
 use serde::{Deserialize, Serialize};
 
 pub type TaskId = u64;

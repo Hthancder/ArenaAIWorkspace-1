@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use eframe::egui::{self, Color32, CornerRadius, FontFamily, Stroke, TextStyle};
+use eframe::egui::{self, Color32, CornerRadius, FontFamily, Margin, Stroke, TextStyle};
 
 // ------- Bảng màu dùng chung -------
 pub const ACCENT: Color32 = Color32::from_rgb(99, 102, 241); // indigo 500
@@ -96,7 +96,7 @@ pub fn section_label(ui: &mut egui::Ui, text: &str) {
 }
 
 /// Nút bấm "chủ đạo" (nền accent, chữ trắng đậm).
-pub fn primary_button(text: impl Into<String>) -> egui::Button {
+pub fn primary_button(text: impl Into<String>) -> egui::Button<'static> {
     egui::Button::new(
         egui::RichText::new(text.into())
             .color(Color32::WHITE)

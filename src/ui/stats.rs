@@ -2,7 +2,7 @@
 
 use chrono::{Datelike, Duration as ChronoDuration, Local, NaiveDate};
 use eframe::egui::{
-    self, Align, Color32, CornerRadius, Frame, Layout, Margin, ProgressBar, RichText, Stroke,
+    self, Align, Color32, CornerRadius, Frame, Layout, Margin, ProgressBar, Stroke,
 };
 
 use crate::app::TaskoraApp;
