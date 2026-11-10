@@ -859,7 +859,7 @@ pub fn save_now(app: AppHandle, state: State<'_, AppState>) -> Snapshot {
 // ------------------------------------------------------------------ cài đặt v2.1
 
 /// Gói cập nhật cài đặt — mọi trường đều tùy chọn, thiếu = giữ nguyên.
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 #[serde(default)]
 pub struct SettingsPatch {
     pub dark: Option<bool>,

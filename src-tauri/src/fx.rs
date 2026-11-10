@@ -9,8 +9,8 @@ pub fn apply_effect(window: &tauri::WebviewWindow, transparent: bool, alpha: u8)
             .or_else(|_| window_vibrancy::apply_blur(window, tint))
             .map_err(|e| format!("Acrylic/Blur không được hệ thống hỗ trợ: {e}"))
     } else {
-        let _ = window_vibrancy::clear_acrylic(window, Some((12, 15, 34, 255)));
-        let _ = window_vibrancy::clear_blur(window, Some((12, 15, 34, 255)));
+        let _ = window_vibrancy::clear_acrylic(window);
+        let _ = window_vibrancy::clear_blur(window);
         Ok(())
     }
 }
