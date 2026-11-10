@@ -376,9 +376,16 @@ impl TaskoraApp {
                 let sel = self.prio_filter == Some(p);
                 let (r, g, b) = p.color_rgb();
                 let col = Color32::from_rgb(r, g, b);
+                let dark_pq = ui.visuals().dark_mode;
                 let label = RichText::new(p.short())
                     .size(11.5)
-                    .color(if sel { Color32::WHITE } else { col });
+                    .color(if sel {
+                        Color32::WHITE
+                    } else if dark_pq {
+                        theme::mix(col, Color32::WHITE, 0.35)
+                    } else {
+                        col
+                    });
                 let resp = ui.add(
                     egui::Button::new(label)
                         .fill(if sel { col } else { theme::badge_bg(ui, col) })
@@ -433,7 +440,7 @@ impl TaskoraApp {
     fn empty_state(&self, ui: &mut egui::Ui) {
         ui.with_layout(Layout::top_down(Align::Center), |ui| {
             ui.add_space(50.0);
-            ui.label(theme::ic(icons::SEAL).size(52.0).weak());
+            ui.label(theme::ic(icons::SEAL).size(44.0).weak());
             ui.add_space(10.0);
             let (h, sub) = match self.view {
                 View::Inbox => ("Hộp thư trống", "Thêm việc đầu tiên bằng ô phía trên (Ctrl+N)"),

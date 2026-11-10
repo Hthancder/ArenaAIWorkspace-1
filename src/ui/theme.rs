@@ -57,7 +57,7 @@ pub fn mix(a: Color32, b: Color32, t: f32) -> Color32 {
 /// Nền badge màu trên nền tối/sáng.
 pub fn badge_bg(ui: &egui::Ui, color: Color32) -> Color32 {
     if ui.visuals().dark_mode {
-        color.gamma_multiply(0.17)
+        color.gamma_multiply(0.32)
     } else {
         mix(color, Color32::WHITE, 0.84)
     }
@@ -205,18 +205,18 @@ pub fn icf(text: &str) -> egui::RichText {
 /// Nền glass trong suốt theo theme.
 pub fn glass_fill(dark: bool) -> Color32 {
     if dark {
-        Color32::from_rgba_unmultiplied(15, 17, 26, 172)
+        Color32::from_rgba_unmultiplied(19, 22, 39, 214)
     } else {
-        Color32::from_rgba_unmultiplied(255, 255, 255, 178)
+        Color32::from_rgba_unmultiplied(255, 255, 255, 204)
     }
 }
 
 /// Nền glass đục hơn (panel chi tiết — cần đọc nhiều chữ).
 pub fn glass_fill_strong(dark: bool) -> Color32 {
     if dark {
-        Color32::from_rgba_unmultiplied(13, 15, 23, 222)
+        Color32::from_rgba_unmultiplied(17, 20, 36, 233)
     } else {
-        Color32::from_rgba_unmultiplied(255, 255, 255, 232)
+        Color32::from_rgba_unmultiplied(255, 255, 255, 235)
     }
 }
 
@@ -246,6 +246,24 @@ pub fn paint_glass(p: &egui::Painter, rect: egui::Rect, radius: CornerRadius, da
         sw: radius.sw,
         se: radius.se,
     };
+    // ánh sáng khuếch tán từ đỉnh xuống (inner glow gradient)
+    {
+        let mut m = egui::Mesh::default();
+        let n = m.vertices.len() as u32;
+        let a_top = if dark { 26u8 } else { 132u8 };
+        let top_c = Color32::from_white_alpha(a_top);
+        let bot_c = Color32::from_white_alpha(0);
+        let hgt = (rect.height() * 0.38).min(46.0);
+        let top_rect = egui::Rect::from_min_size(rect.min, egui::vec2(rect.width(), hgt));
+        m.colored_vertex(top_rect.left_top(), top_c);
+        m.colored_vertex(top_rect.right_top(), top_c);
+        m.colored_vertex(top_rect.right_bottom(), bot_c);
+        m.colored_vertex(top_rect.left_bottom(), bot_c);
+        m.add_triangle(n, n + 1, n + 2);
+        m.add_triangle(n, n + 2, n + 3);
+        // xén theo bo góc: đủ dùng với rect_stroke kẻ viền đè lên
+        p.with_clip_rect(rect).add(egui::Shape::mesh(m));
+    }
     // ánh sáng phía trên (specular)
     p.rect_filled(
         egui::Rect::from_min_size(
@@ -341,39 +359,64 @@ pub fn shimmer(ui: &egui::Ui, rect: egui::Rect, t: f32, dark: bool) {
     ui.ctx().request_repaint();
 }
 
-/// Đám mây gradient tròn (các vòng đồng tâm, alpha tăng dần vào tâm).
-fn blob(p: &egui::Painter, c: egui::Pos2, r: f32, rgb: [u8; 3], a: u8) {
-    for i in 0..6 {
-        let k = i as f32 / 5.0;
-        let rr = r * (1.0 - 0.70 * k);
-        let aa = (a as f32 * (0.20 + 0.22 * k)).round().min(255.0) as u8;
-        p.circle_filled(c, rr, Color32::from_rgba_unmultiplied(rgb[0], rgb[1], rgb[2], aa));
+/// Mesh gradient dọc (4 đỉnh, 2 tam giác) — mượt tuyệt đối, không vệt.
+fn vgrad(p: &egui::Painter, rect: egui::Rect, top: Color32, bottom: Color32) {
+    let mut m = egui::Mesh::default();
+    let n = m.vertices.len() as u32;
+    m.colored_vertex(rect.left_top(), top);
+    m.colored_vertex(rect.right_top(), top);
+    m.colored_vertex(rect.right_bottom(), bottom);
+    m.colored_vertex(rect.left_bottom(), bottom);
+    m.add_triangle(n, n + 1, n + 2);
+    m.add_triangle(n, n + 2, n + 3);
+    p.add(egui::Shape::mesh(m));
+}
+
+/// Đám mây sáng tỏa tròn (48 tam giác màu nội suy về trong suốt) — không vệt.
+fn radial(p: &egui::Painter, c: egui::Pos2, r: f32, rgb: [u8; 3], a: u8) {
+    const SEG: u32 = 48;
+    let mut m = egui::Mesh::default();
+    m.colored_vertex(
+        c,
+        Color32::from_rgba_unmultiplied(rgb[0], rgb[1], rgb[2], a),
+    );
+    for i in 0..=SEG {
+        let ang = i as f32 / SEG as f32 * std::f32::consts::TAU;
+        let pos = c + egui::vec2(ang.cos() * r, ang.sin() * r);
+        m.colored_vertex(pos, Color32::from_rgba_unmultiplied(rgb[0], rgb[1], rgb[2], 0));
     }
+    for i in 1..=SEG {
+        m.add_triangle(0, i, i + 1);
+    }
+    p.add(egui::Shape::mesh(m));
 }
 
 /// Nền aurora toàn cửa sổ — vẽ ở layer Background, các panel kính mờ nằm đè lên.
+/// Tông tím–lam–hồng trên nền navy sâu; panel glass (đục hơn) nằm đè.
 pub fn paint_wallpaper(ctx: &egui::Context, rect: egui::Rect) {
     if rect.width() < 4.0 || rect.height() < 4.0 {
         return;
     }
     let style = ctx.style();
     let dark = style.visuals.dark_mode;
-    let base = style.visuals.panel_fill;
     let p = ctx.layer_painter(egui::LayerId::background());
-    p.rect_filled(rect, CornerRadius::ZERO, base);
     let w = rect.width();
     let h = rect.height();
     let pt = |fx: f32, fy: f32| egui::pos2(rect.min.x + w * fx, rect.min.y + h * fy);
     if dark {
-        blob(&p, pt(0.10, 0.05), w * 0.34, [99, 102, 241], 52);
-        blob(&p, pt(0.93, 0.24), w * 0.30, [129, 140, 248], 40);
-        blob(&p, pt(0.74, 0.97), w * 0.36, [56, 189, 248], 30);
-        blob(&p, pt(0.15, 0.90), w * 0.26, [244, 114, 182], 24);
+        // nền dọc sâu dần — tránh đen đặc làm panel "chìm"
+        vgrad(&p, rect, Color32::from_rgb(30, 26, 58), Color32::from_rgb(13, 15, 31));
+        radial(&p, pt(0.06, -0.14), w * 0.60, [104, 94, 255], 96);
+        radial(&p, pt(1.04, 0.16), w * 0.52, [64, 92, 226], 82);
+        radial(&p, pt(0.80, 1.10), w * 0.60, [24, 148, 212], 86);
+        radial(&p, pt(0.02, 0.94), w * 0.50, [172, 62, 190], 76);
+        radial(&p, pt(0.48, 0.38), w * 0.95, [44, 34, 104], 64);
     } else {
-        blob(&p, pt(0.10, 0.05), w * 0.34, [99, 102, 241], 26);
-        blob(&p, pt(0.93, 0.24), w * 0.30, [129, 140, 248], 22);
-        blob(&p, pt(0.74, 0.97), w * 0.36, [56, 189, 248], 17);
-        blob(&p, pt(0.15, 0.90), w * 0.26, [244, 114, 182], 14);
+        vgrad(&p, rect, Color32::from_rgb(253, 253, 255), Color32::from_rgb(233, 236, 247));
+        radial(&p, pt(0.06, -0.14), w * 0.60, [120, 110, 250], 46);
+        radial(&p, pt(1.04, 0.16), w * 0.52, [110, 140, 250], 38);
+        radial(&p, pt(0.80, 1.10), w * 0.60, [86, 180, 236], 36);
+        radial(&p, pt(0.02, 0.94), w * 0.50, [238, 148, 214], 34);
     }
 }
 
@@ -512,9 +555,9 @@ pub fn build_visuals(dark: bool) -> egui::Visuals {
         Color32::from_rgb(242, 244, 248)
     };
     let extreme = if dark {
-        Color32::from_rgb(10, 13, 18)
+        Color32::from_rgba_unmultiplied(255, 255, 255, 22)
     } else {
-        Color32::from_rgb(236, 239, 245)
+        Color32::from_rgba_unmultiplied(255, 255, 255, 214)
     };
 
     v.panel_fill = panel;
