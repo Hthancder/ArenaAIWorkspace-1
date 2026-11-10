@@ -1006,7 +1006,7 @@ pub struct StorageChangePayload {
     pub info: StorageInfoView,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 #[serde(default)]
 pub struct StorageSwitchReq {
     /// "default" | "portable" | "custom"

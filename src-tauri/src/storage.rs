@@ -8,8 +8,6 @@ use chrono::Local;
 use crate::bootstrap;
 use crate::models::Store;
 
-pub use crate::bootstrap::APP_DIR_NAME;
-
 fn err(e: std::io::Error) -> String {
     e.to_string()
 }
