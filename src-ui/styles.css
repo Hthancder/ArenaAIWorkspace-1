@@ -44,6 +44,8 @@ html[data-theme="light"] {
 }
 
 * { margin:0; padding:0; box-sizing:border-box; }
+/* BẮT BUỘC: hidden phải thắng mọi display class (.overlay,.empty-state,.bulkbar…) */
+[hidden] { display:none !important; }
 html, body { height:100%; overflow:hidden; }
 body {
   font-family:"Be Vietnam Pro", system-ui, sans-serif;
