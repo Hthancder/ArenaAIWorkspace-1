@@ -123,6 +123,7 @@ function applyTheme(dark) {
 
 /* ── màu: đổi HEX bất kỳ → bộ biến accent đồng bộ toàn app ── */
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const covOf = a => clamp((Number(a ?? 110) - 40) / 130, 0, 1); // 0 = trong suốt nhất, 1 = phủ kín nhất
 const hexToRgb = hex => { const n = parseInt(String(hex).replace("#", ""), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 function rgbToHsl(r, g, b) {
   r /= 255; g /= 255; b /= 255;
@@ -220,6 +221,7 @@ function postSnap(snap) {
   applyTheme(s.settings.dark);
   applyAccent(s.settings.accent);
   document.documentElement.toggleAttribute("data-transparent", !!s.settings.transparent);
+  document.documentElement.style.setProperty("--cov", covOf(s.settings.acrylic_alpha).toFixed(3));
   document.body.classList.toggle("reduce-motion", !!s.settings.reduce_motion);
   document.body.classList.toggle("perf", !!s.settings.perf_mode);
   syncSettingsControls(s);
@@ -1180,7 +1182,7 @@ function bindEvents() {
   });
   $$("#set-theme button").forEach(b => b.addEventListener("click", () => patchSettings({ dark: b.dataset.dark === "1" })));
   $("#set-transparent").addEventListener("change", e => patchSettings({ transparent: e.target.checked }));
-  $("#set-alpha").addEventListener("input", e => $("#set-alpha-val").textContent = e.target.value);
+  $("#set-alpha").addEventListener("input", e => { $("#set-alpha-val").textContent = e.target.value; document.documentElement.style.setProperty("--cov", covOf(e.target.value).toFixed(3)); });
   $("#set-alpha").addEventListener("change", e => patchSettings({ acrylic_alpha: Number(e.target.value) }));
   $("#set-reduce-motion").addEventListener("change", e => patchSettings({ reduce_motion: e.target.checked }));
   $("#set-sort").addEventListener("change", e => patchSettings({ sort: e.target.value }));

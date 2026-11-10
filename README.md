@@ -46,6 +46,11 @@
 - **Tự phát hiện di chuyển**: nếu Taskora.exe bị copy lẻ sang chỗ trống, app hỏi chuyển dữ liệu portable cũ sang. Nếu bạn chạy ở nơi khác mà `%APPDATA%` còn dữ liệu v1/v2.0 cũ, app hỏi **gộp** (id-union, không trùng lặp).
 - **Khôi phục view đang mở** giữa các lần chạy; toast hành động kèm nút **Hoàn tác** sau mỗi thao tác.
 
+**Độ phủ Acrylic chỉnh được thật sự (v2.2.3)**
+- **Thanh trượt "Độ phủ màu Acrylic" giờ có tác dụng trên mọi bản Windows** — app tự gọi `SetWindowCompositionAttribute(ACCENT_ENABLE_ACRYLICBLURBEHIND)` với tint lấy từ slider. Trước đây trên Windows 11 22H2+, DWM bỏ qua tint hoàn toàn nên kéo slider không thấy gì.
+- Thanh trượt đồng thời điều khiển **độ đục của lớp nền và panel** (biến `--cov`): kéo là nền mờ dần ngay khi đang trong chế độ Trong suốt, không cần đợi DWM.
+- Dọn DWMSBT cũ còn sót từ các bản trước khi tắt Trong suốt.
+
 **Trong suốt & màu sắc (v2.2.2)**
 - **Nền aurora đi theo màu nhấn**: đổi Màu nhấn là toàn bộ nền (gradient, aurora tối/sáng) đổi theo hue tương ứng — không chỉ nút bấm nữa.
 - **Acrylic trong suốt thật sự trong hơn hẳn**: lớp nền và panel giảm alpha mạnh (nhìn xuyên qua desktop rõ rệt), thêm dòng **Trạng thái hiệu ứng** trong Cài đặt cho biết DWM trên máy bạn đã bật Acrylic/Blur thành công hay chưa (tiện tự chẩn đoán).
