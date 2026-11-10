@@ -68,7 +68,7 @@
       <img class="brand-logo" src="assets/logo.png" alt="Taskora" />
       <div class="brand-text">
         <span class="brand-name">Taskora</span>
-        <span class="brand-ver">v2.1.0</span>
+        <span class="brand-ver">v2.1.1</span>
       </div>
     </div>
 
@@ -85,7 +85,7 @@
       <span>DANH SÁCH</span>
       <button class="icon-btn tiny" id="btn-new-list" title="Danh sách mới"><svg class="ic"><use href="#i-plus"/></svg></button>
     </div>
-    <div id="list-nav" class="list-nav"></div>
+    <div id="list-nav" class="list-nav g-scroll"></div>
 
     <button class="nav-item nav-item-stats" data-view="stats" id="nav-stats"><svg class="ic"><use href="#i-chart-bar"/></svg><span class="nav-label">Thống kê</span></button>
     <button class="nav-item nav-item-stats" data-view="settings" id="nav-settings"><svg class="ic"><use href="#i-gear"/></svg><span class="nav-label">Cài đặt</span></button>
@@ -216,7 +216,7 @@
         <button class="chip-btn ghost" id="bulk-exit">Bỏ chọn</button>
       </div>
 
-      <div id="tasklist" class="tasklist"></div>
+      <div id="tasklist" class="tasklist g-scroll"></div>
 
       <div id="empty-state" class="empty-state" hidden>
         <svg class="ic empty-seal"><use href="#i-seal-check-fill"/></svg>
@@ -236,7 +236,7 @@
           </div>
         </div>
       </div>
-      <div class="stats-scroll">
+      <div class="stats-scroll g-scroll">
         <div class="hero-card glass-card" id="hero-card">
           <div class="hero-shine"></div>
           <div class="hero-main">
@@ -285,7 +285,7 @@
           </div>
         </div>
       </div>
-      <div class="settings-scroll">
+      <div class="settings-scroll g-scroll">
 
         <!-- ═══ GIAO DIỆN ═══ -->
         <div class="panel-card glass-card settings-card">
@@ -433,7 +433,7 @@
         </div>
 
         <div class="settings-foot">
-          <span>Taskora v2.1.0</span>
+          <span>Taskora v2.1.1</span>
           <button class="linklike" id="set-open-help" type="button">Phím tắt</button>
           <span class="settings-dot">·</span>
           <button class="linklike" id="set-open-about" type="button">Giới thiệu</button>
@@ -459,7 +459,7 @@
       <h2>Chi tiết</h2>
       <button class="icon-btn" id="detail-close" title="Đóng (Esc)"><svg class="ic"><use href="#i-x"/></svg></button>
     </div>
-    <div class="detail-scroll" id="detail-scroll">
+    <div class="detail-scroll g-scroll" id="detail-scroll">
       <input id="d-title" class="d-title" type="text" spellcheck="false" placeholder="Tiêu đề việc…" />
 
       <div class="d-row">
@@ -547,7 +547,7 @@
         <input id="palette-input" type="text" autocomplete="off" spellcheck="false" placeholder="Gõ lệnh hoặc tìm việc…" />
         <kbd>Esc</kbd>
       </div>
-      <div id="palette-results" class="palette-results"></div>
+      <div id="palette-results" class="palette-results g-scroll"></div>
       <div class="palette-foot"><span><kbd>↑↓</kbd> di chuyển</span><span><kbd>Enter</kbd> chọn</span><span><kbd>Esc</kbd> đóng</span></div>
     </div>
   </div>

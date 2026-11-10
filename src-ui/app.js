@@ -93,8 +93,18 @@ function toast(msg, kind) {
   toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
 }
 
+let lastTheme = null;
+let themeAnimT = null;
 function applyTheme(dark) {
-  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  const t = dark ? "dark" : "light";
+  if (lastTheme && lastTheme !== t) {
+    const el = document.documentElement;
+    el.classList.add("theme-anim");
+    clearTimeout(themeAnimT);
+    themeAnimT = setTimeout(() => el.classList.remove("theme-anim"), 480);
+  }
+  lastTheme = t;
+  document.documentElement.dataset.theme = t;
   $("#theme-icon-use")?.setAttribute("href", dark ? "#i-sun" : "#i-moon");
 }
 
@@ -140,6 +150,32 @@ function applyAccent(hex) {
   el.style.setProperty("--accent-2-rgb", `${r2},${g2},${b2}`);
   el.style.setProperty("--accent-ink", ink);
 }
+
+/* ─────────── thanh cuộn tự ẩn (g-scroll): hiện khi lăn chuột hoặc rê vào lề ─────────── */
+const G_SCROLLS = () => [...document.querySelectorAll(".g-scroll")];
+function markScrollOn(el) {
+  el.classList.add("scroll-on");
+  clearTimeout(el._hideT);
+  el._hideT = setTimeout(() => el.classList.remove("scroll-on"), 900);
+}
+document.addEventListener("wheel", e => {
+  const sc = e.target && e.target.closest ? e.target.closest(".g-scroll") : null;
+  if (sc) markScrollOn(sc);
+}, { passive: true });
+document.addEventListener("scroll", e => {
+  const t = e.target;
+  if (t && t.classList && t.classList.contains("g-scroll")) markScrollOn(t);
+}, true);
+document.addEventListener("mousemove", e => {
+  for (const el of G_SCROLLS()) {
+    if (!el.offsetParent) { el.classList.remove("edge"); continue; }
+    const r = el.getBoundingClientRect();
+    const insideY = e.clientY >= r.top && e.clientY <= r.bottom;
+    const nearRight = insideY && e.clientX >= r.right - 22 && e.clientX <= r.right + 6 && e.clientX >= r.left - 4;
+    el.classList.toggle("edge", !!nearRight);
+  }
+}, { passive: true });
+document.addEventListener("mouseleave", () => G_SCROLLS().forEach(el => el.classList.remove("edge")));
 
 /* Hậu xử lý sau MỖI lần snapshot (kể cả từ IPC bất kỳ) */
 function postSnap(snap) {
@@ -619,7 +655,7 @@ async function openBackups() {
     </div>`).join("") : `<p>Chưa có bản sao lưu nào. Bấm “Xuất bản sao lưu” để tạo.</p>`;
   openModal(`<h2><svg class="ic accent-ic"><use href="#i-archive"/></svg>Bản sao lưu</h2>
     <div class="modal-actions" style="justify-content:flex-start"><button class="btn-save" id="do-export"><svg class="ic small"><use href="#i-archive"/></svg>&nbsp;Xuất bản sao lưu ngay</button></div>
-    <div class="backup-list">${rows}</div>
+    <div class="backup-list g-scroll">${rows}</div>
     <div class="modal-actions"><button class="btn-cancel" data-close-modal="1">Đóng</button></div>`);
 }
 function openConfirmEmptyTrash() {
@@ -645,12 +681,12 @@ function openHelp() {
     ["Esc", "Đóng bảng / bỏ chọn / bỏ bộ lọc"],
   ];
   openModal(`<h2><svg class="ic accent-ic"><use href="#i-keyboard"/></svg>Phím tắt</h2>
-    <div class="shortcut-list">${rows.map(([k, d]) => `<div class="shortcut-row"><kbd class="modal-kbd">${k}</kbd><span class="b-meta" style="font-size:12px">${d}</span></div>`).join("")}</div>
+    <div class="shortcut-list g-scroll">${rows.map(([k, d]) => `<div class="shortcut-row"><kbd class="modal-kbd">${k}</kbd><span class="b-meta" style="font-size:12px">${d}</span></div>`).join("")}</div>
     <div class="modal-actions"><button class="btn-save" data-close-modal="1">Xong</button></div>`);
 }
 function openAbout() {
   openModal(`<div class="about-center"><img class="about-logo" src="assets/logo.png" alt="Taskora" />
-      <h2 style="justify-content:center">Taskora <span style="color:var(--text-faint);font-weight:500">v2.1.0</span></h2>
+      <h2 style="justify-content:center">Taskora <span style="color:var(--text-faint);font-weight:500">v2.1.1</span></h2>
       <p>Quản lý công việc cho Windows — nhẹ, nhanh, đẹp.<br>Viết bằng Rust + Tauri, giao diện liquid glass.</p>
       <p>Font <strong>Be Vietnam Pro</strong> (OFL) · Icon <strong>Phosphor</strong> (MIT)</p>
       <p style="color:var(--text-faint)">MIT License © Hthancder</p>

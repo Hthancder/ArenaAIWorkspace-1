@@ -35,6 +35,9 @@
 - **Cửa sổ trong suốt Acrylic thật** (Windows): thấy và làm mờ màn hình desktop phía sau cửa sổ như liquid glass thật sự, chỉnh **độ phủ màu** (40–170).
 - **Giảm hiệu ứng chuyển động** (trợ năng), **xem trước phân tích** khi thêm nhanh, **nhắc việc hôm nay** khi mở app, **tự sao lưu khi thoát**.
 - **Đặt lại cài đặt gốc** một chạm (giữ nguyên dữ liệu việc làm).
+- **Thanh cuộn liquid glass tự ẩn** — chỉ hiện khi rê chuột vào lề phải hoặc khi lăn con lăn; mượt, viền kính, có đổ sáng.
+- Chuyển **Tối/Sáng** và đổi **màu nhấn** giờ chuyển mượt toàn cục (kể cả gradient) — không giật, không nhấp nháy.
+- Sửa menu ⋮ bị nội dung trang phủ lên (topbar luôn nằm trên vùng nội dung).
 
 **Trải nghiệm**
 - **Tìm kiếm** toàn bộ (Ctrl+K mở bảng lệnh nhanh: điều hướng + tìm việc), lọc theo **thẻ**, lọc Ưu tiên P1–P4, ẩn/hiện đã hoàn thành, 5 kiểu sắp xếp.
