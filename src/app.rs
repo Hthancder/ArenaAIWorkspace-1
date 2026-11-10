@@ -8,7 +8,7 @@ use eframe::egui::{self, Align, Key, Layout, RichText};
 use crate::models::{today, Priority, Repeat, SortMode, Store, SubTask, Task, TaskId, View};
 use crate::parser;
 use crate::storage;
-use crate::ui::theme;
+use crate::ui::{icons, theme};
 
 /// Bảng màu danh sách cho hộp thoại tạo/đổi tên danh sách.
 pub const LIST_PALETTE: [[u8; 3]; 8] = [
@@ -132,6 +132,8 @@ pub struct TaskoraApp {
     pub sidebar_sel_rect: Option<egui::Rect>,
     /// Pulse xanh lá khi vừa đánh dấu xong: (id việc, thời điểm).
     pub done_pulse: Option<(TaskId, Instant)>,
+    /// Thời điểm khởi động — làm mốc cho shimmer lặp.
+    pub boot: Instant,
 }
 
 impl TaskoraApp {
@@ -175,6 +177,7 @@ impl TaskoraApp {
             view_entered: Instant::now(),
             sidebar_sel_rect: None,
             done_pulse: None,
+            boot: Instant::now(),
         }
     }
 
@@ -733,18 +736,30 @@ impl TaskoraApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title));
         }
 
-        egui::TopBottomPanel::top("topbar").show(ctx, |ui| {
-            self.top_bar(ui);
-        });
-        egui::TopBottomPanel::bottom("statusbar").show(ctx, |ui| {
-            self.status_bar(ui);
-        });
+        // ----- nền aurora (layer Background — panel kính mờ nằm đè lên) -----
+        let dark = ctx.style().visuals.dark_mode;
+        theme::paint_wallpaper(ctx, ctx.screen_rect());
+
+        egui::TopBottomPanel::top("topbar")
+            .frame(theme::glass_frame(dark, false))
+            .show(ctx, |ui| {
+                theme::paint_glass(ui.painter(), ui.max_rect(), egui::CornerRadius::ZERO, dark);
+                self.top_bar(ui);
+            });
+        egui::TopBottomPanel::bottom("statusbar")
+            .frame(theme::glass_frame(dark, false))
+            .show(ctx, |ui| {
+                theme::paint_glass(ui.painter(), ui.max_rect(), egui::CornerRadius::ZERO, dark);
+                self.status_bar(ui);
+            });
         egui::SidePanel::left("sidebar")
             .resizable(true)
             .default_width(224.0)
             .min_width(180.0)
             .max_width(320.0)
+            .frame(theme::glass_frame(dark, false))
             .show(ctx, |ui| {
+                theme::paint_glass(ui.painter(), ui.max_rect(), egui::CornerRadius::ZERO, dark);
                 self.render_sidebar(ui);
             });
 
@@ -754,15 +769,19 @@ impl TaskoraApp {
                 .default_width(330.0)
                 .min_width(260.0)
                 .max_width(460.0)
+                .frame(theme::glass_frame(dark, true))
                 .show(ctx, |ui| {
+                    theme::paint_glass(ui.painter(), ui.max_rect(), egui::CornerRadius::ZERO, dark);
                     self.render_detail(ui);
                 });
         }
 
-        egui::CentralPanel::default().show(ctx, |ui| match self.view {
-            View::Stats => self.render_stats(ui),
-            _ => self.render_task_view(ui),
-        });
+        egui::CentralPanel::default()
+            .frame(egui::Frame::new().fill(egui::Color32::TRANSPARENT))
+            .show(ctx, |ui| match self.view {
+                View::Stats => self.render_stats(ui),
+                _ => self.render_task_view(ui),
+            });
 
         self.render_dialogs(ctx);
 
@@ -838,7 +857,7 @@ impl TaskoraApp {
 
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 // menu ⋯
-                ui.menu_button(RichText::new("•••").size(15.0), |ui| {
+                ui.menu_button(theme::ic(icons::DOTS_THREE_VERTICAL).size(15.0), |ui| {
                     if ui.button("Xuất bản sao lưu…").clicked() {
                         match storage::export_backup(&self.store) {
                             Ok(p) => {
@@ -879,37 +898,43 @@ impl TaskoraApp {
                 let can_undo = !self.undo_stack.is_empty();
                 let can_redo = !self.redo_stack.is_empty();
                 if ui
-                    .add_enabled(can_undo, egui::Button::new("↶"))
+                    .add_enabled(
+                        can_undo,
+                        egui::Button::new(theme::ic(icons::ARROW_COUNTER_CLOCKWISE).size(15.0)),
+                    )
                     .on_hover_text("Hoàn tác (Ctrl+Z)")
                     .clicked()
                 {
                     self.undo();
                 }
                 if ui
-                    .add_enabled(can_redo, egui::Button::new("↷"))
+                    .add_enabled(
+                        can_redo,
+                        egui::Button::new(theme::ic(icons::ARROW_CLOCKWISE).size(15.0)),
+                    )
                     .on_hover_text("Làm lại (Ctrl+Y)")
                     .clicked()
                 {
                     self.redo();
                 }
 
-                // theme
-                let label = if self.store.settings.dark {
-                    "Sáng ☀"
+                // theme (icon mặt trời / mặt trăng)
+                let (glyph, tip) = if self.store.settings.dark {
+                    (icons::SUN, "Chuyển giao diện Sáng (Ctrl+D)")
                 } else {
-                    "Tối ☾"
+                    (icons::MOON, "Chuyển giao diện Tối (Ctrl+D)")
                 };
                 if ui
-                    .small_button(label)
-                    .on_hover_text("Đổi giao diện (Ctrl+D)")
+                    .small_button(theme::ic(glyph).size(14.0))
+                    .on_hover_text(tip)
                     .clicked()
                 {
                     self.toggle_theme(ui.ctx());
                 }
 
-                // thêm việc nhanh (nút chủ đạo)
+                // thêm việc nhanh (nút chủ đạo, có icon)
                 if ui
-                    .add(theme::primary_button("＋ Thêm việc"))
+                    .add(theme::primary_button_icon(icons::PLUS, "Thêm việc"))
                     .on_hover_text("Thêm việc nhanh (Ctrl+N)")
                     .clicked()
                 {
@@ -919,13 +944,27 @@ impl TaskoraApp {
                     self.focus_quick = true;
                 }
 
-                // tìm kiếm
+                // tìm kiếm (icon kính lú + vòng sáng khi đang nhập)
                 let w = 240.0;
+                let weak_c = ui.visuals().weak_text_color();
+                ui.label(
+                    theme::ic(icons::MAGNIFYING_GLASS)
+                        .size(13.0)
+                        .color(weak_c),
+                );
                 let resp = ui.add(
                     egui::TextEdit::singleline(&mut self.search)
                         .hint_text("Tìm việc… (Ctrl+F / Ctrl+K)")
                         .desired_width(w),
                 );
+                if resp.has_focus() {
+                    ui.painter().rect_stroke(
+                        resp.rect.expand(3.0),
+                        egui::CornerRadius::same(9),
+                        egui::Stroke::new(1.4f32, theme::ACCENT.gamma_multiply(0.55)),
+                        egui::StrokeKind::Outside,
+                    );
+                }
                 if resp.has_focus() && ui.input(|i| i.key_pressed(Key::Escape)) {
                     self.search.clear();
                     resp.surrender_focus();
@@ -945,14 +984,27 @@ impl TaskoraApp {
         let t = today();
         let c = self.store.counts(t);
         ui.horizontal(|ui| {
-            ui.weak(format!("● {} đang làm", c.active));
-            if c.overdue > 0 {
-                ui.colored_label(theme::DANGER, format!("● {} quá hạn", c.overdue));
-            } else {
-                ui.weak("● 0 quá hạn");
-            }
+            let weak_c = ui.visuals().weak_text_color();
+            ui.scope(|ui| {
+                ui.spacing_mut().item_spacing.x = 4.0;
+                ui.label(theme::ic(icons::LIGHTNING).size(12.0).color(weak_c));
+                ui.weak(format!("{} đang làm", c.active));
+            });
+            ui.scope(|ui| {
+                ui.spacing_mut().item_spacing.x = 4.0;
+                ui.label(theme::ic(icons::WARNING).size(12.0).color(theme::DANGER));
+                if c.overdue > 0 {
+                    ui.colored_label(theme::DANGER, format!("{} quá hạn", c.overdue));
+                } else {
+                    ui.weak("0 quá hạn");
+                }
+            });
             if c.done_today > 0 {
-                ui.colored_label(theme::OK, format!("● {} xong hôm nay", c.done_today));
+                ui.scope(|ui| {
+                    ui.spacing_mut().item_spacing.x = 4.0;
+                    ui.label(theme::ic(icons::CHECK_CIRCLE).size(12.0).color(theme::OK));
+                    ui.colored_label(theme::OK, format!("{} xong hôm nay", c.done_today));
+                });
             }
             // tiến độ hôm nay (thanh mini)
             let today_total = c.done_today + c.today;
@@ -978,7 +1030,11 @@ impl TaskoraApp {
                 if let Some(m) = f {
                     ui.colored_label(theme::ACCENT_SOFT, m);
                 } else {
-                    ui.weak(format!("✓ Đã lưu {}", self.saved_label));
+                    ui.scope(|ui| {
+                        ui.spacing_mut().item_spacing.x = 4.0;
+                        ui.label(theme::ic(icons::CHECK).size(12.0).color(theme::OK));
+                        ui.weak(format!("Đã lưu {}", self.saved_label));
+                    });
                 }
             });
         });
@@ -1050,7 +1106,7 @@ impl TaskoraApp {
                         .map(|d| !d.name.trim().is_empty())
                         .unwrap_or(false);
                     if ui
-                        .add_enabled(can_create, egui::Button::new("Lưu"))
+                        .add_enabled(can_create, theme::primary_button("Lưu"))
                         .clicked()
                     {
                         accepted = true;

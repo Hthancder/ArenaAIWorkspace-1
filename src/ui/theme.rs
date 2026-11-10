@@ -106,6 +106,56 @@ pub fn primary_button(text: impl Into<String>) -> egui::Button<'static> {
     .corner_radius(CornerRadius::same(8))
 }
 
+/// Ghép icon Phosphor + chữ thành 1 LayoutJob (dùng cho button/label trộn font).
+pub fn ic_job(glyph: &str, label: &str, color: Color32) -> egui::text::LayoutJob {
+    let mut job = egui::text::LayoutJob::default();
+    job.append(
+        glyph.to_owned(),
+        0.0,
+        egui::TextFormat {
+            font_id: egui::FontId::new(14.0, FontFamily::Name("icons".into())),
+            color,
+            ..Default::default()
+        },
+    );
+    job.append(
+        format!(" {label}"),
+        0.0,
+        egui::TextFormat {
+            font_id: egui::FontId::new(13.0, FontFamily::Name("strong".into())),
+            color,
+            ..Default::default()
+        },
+    );
+    job
+}
+
+/// Nút chủ đạo có icon Phosphor + nhãn (2 font trong cùng 1 dòng).
+pub fn primary_button_icon(glyph: &str, label: &str) -> egui::Button<'static> {
+    let mut job = egui::text::LayoutJob::default();
+    job.append(
+        glyph.to_owned(),
+        0.0,
+        egui::TextFormat {
+            font_id: egui::FontId::new(14.0, FontFamily::Name("icons".into())),
+            color: Color32::WHITE,
+            ..Default::default()
+        },
+    );
+    job.append(
+        format!(" {label}"),
+        0.0,
+        egui::TextFormat {
+            font_id: egui::FontId::new(13.0, FontFamily::Name("strong".into())),
+            color: Color32::WHITE,
+            ..Default::default()
+        },
+    );
+    egui::Button::new(job)
+        .fill(ACCENT)
+        .corner_radius(CornerRadius::same(8))
+}
+
 /// Badge đếm tròn bên phải hàng sidebar.
 pub fn count_pill(ui: &mut egui::Ui, n: usize, active: bool, dot: Color32) {
     if n == 0 {
@@ -138,6 +188,195 @@ pub fn bold_text(s: impl Into<String>, size: f32, color: Color32) -> egui::RichT
         .family(FontFamily::Name("strong".into()))
 }
 
+// ================================================================
+//  Icon + Liquid glass (Phosphor / gradient / shimmer)
+// ================================================================
+
+/// Chữ icon Phosphor nét thường.
+pub fn ic(text: &str) -> egui::RichText {
+    egui::RichText::new(text).family(FontFamily::Name("icons".into()))
+}
+
+/// Chữ icon Phosphor nét đặc (fill).
+pub fn icf(text: &str) -> egui::RichText {
+    egui::RichText::new(text).family(FontFamily::Name("icons-fill".into()))
+}
+
+/// Nền glass trong suốt theo theme.
+pub fn glass_fill(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgba_unmultiplied(15, 17, 26, 172)
+    } else {
+        Color32::from_rgba_unmultiplied(255, 255, 255, 178)
+    }
+}
+
+/// Nền glass đục hơn (panel chi tiết — cần đọc nhiều chữ).
+pub fn glass_fill_strong(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgba_unmultiplied(13, 15, 23, 222)
+    } else {
+        Color32::from_rgba_unmultiplied(255, 255, 255, 232)
+    }
+}
+
+/// Frame kính mờ cho panel.
+pub fn glass_frame(dark: bool, strong: bool) -> egui::Frame {
+    egui::Frame::new().fill(if strong {
+        glass_fill_strong(dark)
+    } else {
+        glass_fill(dark)
+    })
+}
+
+/// Vẽ hiệu ứng kính lên rect: viền phản quang, sáng ở cạnh trên, bóng ở cạnh dưới.
+pub fn paint_glass(p: &egui::Painter, rect: egui::Rect, radius: CornerRadius, dark: bool) {
+    if rect.width() < 8.0 || rect.height() < 8.0 {
+        return;
+    }
+    let top = CornerRadius {
+        nw: radius.nw,
+        ne: radius.ne,
+        sw: 0,
+        se: 0,
+    };
+    let bot = CornerRadius {
+        nw: 0,
+        ne: 0,
+        sw: radius.sw,
+        se: radius.se,
+    };
+    // ánh sáng phía trên (specular)
+    p.rect_filled(
+        egui::Rect::from_min_size(
+            egui::pos2(rect.min.x + 5.0, rect.min.y),
+            egui::vec2(rect.width() - 10.0, 1.0),
+        ),
+        top,
+        Color32::from_white_alpha(if dark { 92 } else { 240 }),
+    );
+    p.rect_filled(
+        egui::Rect::from_min_size(
+            egui::pos2(rect.min.x + 14.0, rect.min.y + 1.5),
+            egui::vec2(rect.width() - 28.0, 1.0),
+        ),
+        CornerRadius::ZERO,
+        Color32::from_white_alpha(if dark { 44 } else { 156 }),
+    );
+    // bóng dưới
+    p.rect_filled(
+        egui::Rect::from_min_size(
+            egui::pos2(rect.min.x + 8.0, rect.max.y - 2.0),
+            egui::vec2(rect.width() - 16.0, 2.0),
+        ),
+        bot,
+        Color32::from_black_alpha(if dark { 78 } else { 30 }),
+    );
+    // viền quanh
+    p.rect_stroke(
+        rect,
+        radius,
+        Stroke::new(
+            1.0f32,
+            Color32::from_white_alpha(if dark { 34 } else { 140 }),
+        ),
+        egui::StrokeKind::Inside,
+    );
+}
+
+/// Đường sáng trên đỉnh card — strength 0..1 (tăng khi hover).
+pub fn paint_specular(p: &egui::Painter, rect: egui::Rect, radius: CornerRadius, strength: f32) {
+    if strength <= 0.02 || rect.width() < 12.0 {
+        return;
+    }
+    let top = CornerRadius {
+        nw: radius.nw,
+        ne: radius.ne,
+        sw: 0,
+        se: 0,
+    };
+    for (dy, a) in [(0.0f32, 98u8), (1.3, 54), (2.6, 22)] {
+        let a = (a as f32 * strength).round().clamp(1.0, 255.0) as u8;
+        p.rect_filled(
+            egui::Rect::from_min_size(
+                egui::pos2(rect.min.x + 7.0, rect.min.y + dy),
+                egui::vec2(rect.width() - 14.0, 1.0),
+            ),
+            top,
+            Color32::from_white_alpha(a),
+        );
+    }
+}
+
+/// Dải sáng lướt ngang (tính bằng giây — truyền `self.boot.elapsed()`).
+pub fn shimmer(ui: &egui::Ui, rect: egui::Rect, t: f32, dark: bool) {
+    let w = rect.width();
+    if w < 60.0 || rect.height() < 8.0 {
+        return;
+    }
+    let period = 3.6_f32;
+    let phase = (t % period) / period;
+    let bw = (w * 0.34).min(170.0);
+    let x = rect.min.x - bw + phase * (w + 2.0 * bw);
+    let a0 = if dark { 20.0f32 } else { 60.0 };
+    let steps = 10;
+    let p = ui.painter().with_clip_rect(rect.expand(-1.0));
+    for i in 0..steps {
+        let f = i as f32 / steps as f32;
+        let shape = (1.0 - (2.0 * f - 1.0).abs().powf(1.5)).max(0.0);
+        let a = (a0 * shape).round() as u8;
+        if a == 0 {
+            continue;
+        }
+        p.rect_filled(
+            egui::Rect::from_min_size(
+                egui::pos2(x + f * bw, rect.min.y),
+                egui::vec2(bw / steps as f32 + 0.6, rect.height()),
+            ),
+            CornerRadius::ZERO,
+            Color32::from_white_alpha(a),
+        );
+    }
+    // giữ animation chạy khi còn nhìn thấy shimmer
+    ui.ctx().request_repaint();
+}
+
+/// Đám mây gradient tròn (các vòng đồng tâm, alpha tăng dần vào tâm).
+fn blob(p: &egui::Painter, c: egui::Pos2, r: f32, rgb: [u8; 3], a: u8) {
+    for i in 0..6 {
+        let k = i as f32 / 5.0;
+        let rr = r * (1.0 - 0.70 * k);
+        let aa = (a as f32 * (0.20 + 0.22 * k)).round().min(255.0) as u8;
+        p.circle_filled(c, rr, Color32::from_rgba_unmultiplied(rgb[0], rgb[1], rgb[2], aa));
+    }
+}
+
+/// Nền aurora toàn cửa sổ — vẽ ở layer Background, các panel kính mờ nằm đè lên.
+pub fn paint_wallpaper(ctx: &egui::Context, rect: egui::Rect) {
+    if rect.width() < 4.0 || rect.height() < 4.0 {
+        return;
+    }
+    let style = ctx.style();
+    let dark = style.visuals.dark_mode;
+    let base = style.visuals.panel_fill;
+    let p = ctx.layer_painter(egui::LayerId::background());
+    p.rect_filled(rect, CornerRadius::ZERO, base);
+    let w = rect.width();
+    let h = rect.height();
+    let pt = |fx: f32, fy: f32| egui::pos2(rect.min.x + w * fx, rect.min.y + h * fy);
+    if dark {
+        blob(&p, pt(0.10, 0.05), w * 0.34, [99, 102, 241], 52);
+        blob(&p, pt(0.93, 0.24), w * 0.30, [129, 140, 248], 40);
+        blob(&p, pt(0.74, 0.97), w * 0.36, [56, 189, 248], 30);
+        blob(&p, pt(0.15, 0.90), w * 0.26, [244, 114, 182], 24);
+    } else {
+        blob(&p, pt(0.10, 0.05), w * 0.34, [99, 102, 241], 26);
+        blob(&p, pt(0.93, 0.24), w * 0.30, [129, 140, 248], 22);
+        blob(&p, pt(0.74, 0.97), w * 0.36, [56, 189, 248], 17);
+        blob(&p, pt(0.15, 0.90), w * 0.26, [244, 114, 182], 14);
+    }
+}
+
 /// Cài font + style + visuals một lần khi khởi động.
 pub fn install(ctx: &egui::Context, dark: bool) {
     // ----- Font: Be Vietnam Pro (chuẩn cho tiếng Việt) -----
@@ -154,6 +393,19 @@ pub fn install(ctx: &egui::Context, dark: bool) {
             "../../assets/fonts/BeVietnamPro-SemiBold.ttf"
         ))),
     );
+    // bộ icon Phosphor (MIT) — nét thường + nét đặc
+    fonts.font_data.insert(
+        "Phosphor".to_owned(),
+        Arc::new(egui::FontData::from_static(include_bytes!(
+            "../../assets/fonts/Phosphor-Regular.ttf"
+        ))),
+    );
+    fonts.font_data.insert(
+        "Phosphor-Fill".to_owned(),
+        Arc::new(egui::FontData::from_static(include_bytes!(
+            "../../assets/fonts/Phosphor-Fill.ttf"
+        ))),
+    );
     if let Some(v) = fonts.families.get_mut(&FontFamily::Proportional) {
         v.insert(0, "BVP-Regular".to_owned());
     }
@@ -167,6 +419,14 @@ pub fn install(ctx: &egui::Context, dark: bool) {
                 "emoji-icon-font".to_owned(),
             ]
         });
+    fonts
+        .families
+        .entry(FontFamily::Name("icons".into()))
+        .or_insert_with(|| vec!["Phosphor".to_owned()]);
+    fonts
+        .families
+        .entry(FontFamily::Name("icons-fill".into()))
+        .or_insert_with(|| vec!["Phosphor-Fill".to_owned()]);
     ctx.set_fonts(fonts);
 
     // ----- Spacing + text styles (áp cho cả 2 theme) -----

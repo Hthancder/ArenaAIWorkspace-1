@@ -8,7 +8,7 @@ use eframe::egui::{
 
 use crate::app::{Act, TaskoraApp};
 use crate::models::{due_state, today, DueState, Priority, Repeat, TaskId, VN_WEEKDAYS};
-use crate::ui::theme;
+use crate::ui::{icons, theme};
 
 impl TaskoraApp {
     pub fn render_detail(&mut self, ui: &mut egui::Ui) {
@@ -25,7 +25,11 @@ impl TaskoraApp {
             let tc = ui.visuals().text_color();
             ui.label(theme::bold_text("Chi tiết", 16.0, tc));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if ui.small_button("✕").on_hover_text("Đóng panel (Esc)").clicked() {
+                if ui
+                    .small_button(theme::ic(icons::X).size(13.0))
+                    .on_hover_text("Đóng panel (Esc)")
+                    .clicked()
+                {
                     self.selected = None;
                 }
             });
@@ -64,16 +68,22 @@ impl TaskoraApp {
                 acts.push(Act::Toggle(id));
             }
             let star_on = task.starred;
-            let lbl = if star_on {
-                RichText::new("★ Đã ghim").color(theme::STAR)
+            let star_c = if star_on {
+                theme::STAR
             } else {
-                RichText::new("☆ Ghim việc").color(ui.visuals().weak_text_color())
+                ui.visuals().weak_text_color()
             };
+            let lbl = theme::ic_job(icons::STAR, if star_on { "Đã ghim" } else { "Ghim việc" }, star_c);
             if ui.button(lbl).clicked() {
                 acts.push(Act::Star(id));
             }
             if task.repeat != Repeat::None {
-                ui.weak("↻ lặp lại");
+                let rc = ui.visuals().weak_text_color();
+                ui.scope(|ui| {
+                    ui.spacing_mut().item_spacing.x = 3.0;
+                    ui.label(theme::ic(icons::REPEAT).size(12.0).color(rc));
+                    ui.weak("lặp lại");
+                });
             }
         });
 
@@ -369,7 +379,11 @@ impl TaskoraApp {
                         .hint_text("Việc nhỏ…")
                         .desired_width((sw - 34.0).max(60.0)),
                 );
-                if ui.small_button("×").on_hover_text("Xóa việc nhỏ").clicked() {
+                if ui
+                    .small_button(theme::ic(icons::X).size(11.0))
+                    .on_hover_text("Xóa việc nhỏ")
+                    .clicked()
+                {
                     rm_sid = Some(st.id);
                 }
             });
@@ -377,7 +391,11 @@ impl TaskoraApp {
         if let Some(sid) = rm_sid {
             task.subtasks.retain(|s| s.id != sid);
         }
-        if ui.small_button("＋ Thêm việc nhỏ").clicked() {
+        let tc_st = ui.visuals().text_color();
+        if ui
+            .button(theme::ic_job(icons::PLUS, "Thêm việc nhỏ", tc_st))
+            .clicked()
+        {
             acts.push(Act::AddSubtask(id));
         }
 
@@ -440,7 +458,7 @@ fn calendar_widget(
         .show(ui, |ui| {
             // header tháng
             ui.horizontal(|ui| {
-                if ui.small_button("‹").clicked() {
+                if ui.small_button(theme::ic(icons::CARET_LEFT).size(12.0)).clicked() {
                     if nav.1 == 1 {
                         nav.1 = 12;
                         nav.0 -= 1;
@@ -456,7 +474,7 @@ fn calendar_widget(
                         nav.0 = t.year();
                         nav.1 = t.month();
                     }
-                    if ui.small_button("›").clicked() {
+                    if ui.small_button(theme::ic(icons::CARET_RIGHT).size(12.0)).clicked() {
                         if nav.1 == 12 {
                             nav.1 = 1;
                             nav.0 += 1;

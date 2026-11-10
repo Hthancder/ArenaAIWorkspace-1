@@ -4,7 +4,7 @@ use eframe::egui::{self, Align, Color32, Layout, Sense};
 
 use crate::app::{ListDialog, TaskoraApp};
 use crate::models::{today, Counts, View};
-use crate::ui::theme;
+use crate::ui::{icons, theme};
 
 impl TaskoraApp {
     pub fn render_sidebar(&mut self, ui: &mut egui::Ui) {
@@ -16,18 +16,19 @@ impl TaskoraApp {
             .id_salt("sidebar_scroll")
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                let smart: [(View, &str, usize); 6] = [
-                    (View::Inbox, "Hộp thư", c.inbox),
-                    (View::Today, "Hôm nay", c.today),
-                    (View::Upcoming, "Sắp tới", c.upcoming),
-                    (View::Starred, "Đã ghim", c.starred),
-                    (View::Completed, "Đã hoàn thành", c.completed),
-                    (View::Trash, "Thùng rác", c.trash),
+                let smart: [(View, &str, usize, &str); 6] = [
+                    (View::Inbox, "Hộp thư", c.inbox, icons::TRAY),
+                    (View::Today, "Hôm nay", c.today, icons::CALENDAR_BLANK),
+                    (View::Upcoming, "Sắp tới", c.upcoming, icons::CALENDAR),
+                    (View::Starred, "Đã ghim", c.starred, icons::STAR),
+                    (View::Completed, "Đã hoàn thành", c.completed, icons::CHECK_CIRCLE),
+                    (View::Trash, "Thùng rác", c.trash, icons::TRASH),
                 ];
-                for (v, label, n) in smart {
+                for (v, label, n, glyph) in smart {
                     let sel = self.view == v;
-                    let resp =
-                        self.sidebar_row_alloc(ui, sel, label, n, theme::view_color(v), None);
+                    let resp = self.sidebar_row_alloc(
+                        ui, sel, label, n, theme::view_color(v), Some(glyph),
+                    );
                     if sel {
                         self.sidebar_sel_rect = Some(resp.rect);
                     }
@@ -45,7 +46,7 @@ impl TaskoraApp {
                     theme::section_label(ui, "DANH SÁCH");
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                         if ui
-                            .small_button("+")
+                            .small_button(theme::ic(icons::PLUS).size(13.0))
                             .on_hover_text("Tạo danh sách mới")
                             .clicked()
                         {
@@ -128,7 +129,9 @@ impl TaskoraApp {
 
                 // Thống kê
                 let sel = self.view == View::Stats;
-                let resp = self.sidebar_row_alloc(ui, sel, "Thống kê", 0, theme::ACCENT, None);
+                let resp = self.sidebar_row_alloc(
+                    ui, sel, "Thống kê", 0, theme::ACCENT, Some(icons::CHART_BAR),
+                );
                 if sel {
                     self.sidebar_sel_rect = Some(resp.rect);
                 }
@@ -138,7 +141,7 @@ impl TaskoraApp {
 
                 ui.add_space(6.0);
                 if ui
-                    .button("＋ Danh sách mới…")
+                    .button("Danh sách mới…")
                     .on_hover_text("Tạo danh sách (Ctrl+N để thêm việc)")
                     .clicked()
                 {
@@ -157,13 +160,23 @@ impl TaskoraApp {
                 } else {
                     c.done_today as f32 / denom as f32
                 };
-                egui::Frame::new()
-                    .fill(theme::card_fill(ui))
-                    .stroke(theme::card_stroke(ui))
+                let dark_f = ui.visuals().dark_mode;
+                let card_rsp = egui::Frame::new()
+                    .fill(if dark_f {
+                        Color32::from_white_alpha(14)
+                    } else {
+                        Color32::from_white_alpha(150)
+                    })
+                    .stroke(egui::Stroke::new(
+                        1.0f32,
+                        Color32::from_white_alpha(if dark_f { 30 } else { 180 }),
+                    ))
                     .corner_radius(egui::CornerRadius::same(10))
                     .inner_margin(egui::Margin::symmetric(10, 8))
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
+                            let wc = ui.visuals().weak_text_color();
+                            ui.label(theme::ic(icons::SUN).size(13.0).color(wc));
                             ui.weak("Hôm nay");
                             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                                 ui.label(
@@ -186,6 +199,12 @@ impl TaskoraApp {
                                 .animate(true),
                         );
                     });
+                theme::paint_glass(
+                    ui.painter(),
+                    card_rsp.response.rect,
+                    egui::CornerRadius::same(10),
+                    dark_f,
+                );
 
                 ui.add_space(8.0);
                 ui.weak(
@@ -220,7 +239,7 @@ impl TaskoraApp {
         label: &str,
         count: usize,
         dot: Color32,
-        extra: Option<&str>,
+        glyph: Option<&str>,
     ) -> egui::Response {
         let w = ui.available_width();
         let h = 30.0;
@@ -242,8 +261,15 @@ impl TaskoraApp {
         let r = rect.shrink2(egui::vec2(8.0, 4.0));
         ui.allocate_ui_at_rect(r, |ui| {
             ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                let (dr, _) = ui.allocate_exact_size(egui::vec2(9.0, 9.0), Sense::hover());
-                ui.painter().circle_filled(dr.center(), 4.5, dot);
+                match glyph {
+                    Some(g) => {
+                        ui.label(theme::ic(g).size(15.0).color(dot));
+                    }
+                    None => {
+                        let (dr, _) = ui.allocate_exact_size(egui::vec2(9.0, 9.0), Sense::hover());
+                        ui.painter().circle_filled(dr.center(), 4.5, dot);
+                    }
+                }
                 ui.add_space(6.0);
                 let tc = ui.visuals().text_color();
                 let rt = if selected {
@@ -252,9 +278,6 @@ impl TaskoraApp {
                     egui::RichText::new(label).size(13.0)
                 };
                 ui.label(rt);
-                if let Some(e) = extra {
-                    ui.weak(e);
-                }
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     theme::count_pill(ui, count, selected, dot);
                 });

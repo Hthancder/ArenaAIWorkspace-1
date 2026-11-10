@@ -11,7 +11,7 @@ use crate::models::{
     due_state, today, Counts, DueState, Priority, Repeat, SortMode, Task, View, VN_WEEKDAYS,
 };
 use crate::parser;
-use crate::ui::theme;
+use crate::ui::{icons, theme};
 
 const ROW_H: f32 = 46.0;
 
@@ -165,9 +165,10 @@ impl TaskoraApp {
             })
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
+                    ui.label(theme::ic(icons::WARNING).size(14.0).color(theme::DANGER));
                     ui.colored_label(
                         theme::DANGER,
-                        RichText::new(format!("● {} việc quá hạn", c.overdue)).strong(),
+                        RichText::new(format!("{} việc quá hạn", c.overdue)).strong(),
                     );
                     ui.weak("Cần xử lý sớm");
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -194,8 +195,14 @@ impl TaskoraApp {
     // ------------------------------------------------------------------ quick add
 
     fn quick_add_bar(&mut self, ui: &mut egui::Ui) {
-        Frame::new()
-            .fill(theme::badge_bg(ui, theme::ACCENT))
+        let dark_q = ui.visuals().dark_mode;
+        let mut q_focus = false;
+        let rsp = Frame::new()
+            .fill(if dark_q {
+                Color32::from_rgba_unmultiplied(99, 102, 241, 58)
+            } else {
+                Color32::from_rgba_unmultiplied(255, 255, 255, 214)
+            })
             .corner_radius(CornerRadius::same(12))
             .inner_margin(Margin {
                 left: 12,
@@ -203,10 +210,13 @@ impl TaskoraApp {
                 top: 9,
                 bottom: 9,
             })
-            .stroke(Stroke::new(1.0f32, theme::ACCENT.gamma_multiply(0.45)))
+            .stroke(Stroke::new(
+                1.0f32,
+                theme::ACCENT.gamma_multiply(if dark_q { 0.55 } else { 0.38 }),
+            ))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new("+").size(20.0).color(theme::ACCENT));
+                    ui.label(theme::ic(icons::PLUS).size(17.0).color(theme::ACCENT));
                     let iw = ui.available_width();
                     let resp = ui.add(
                         TextEdit::singleline(&mut self.quick_add)
@@ -214,6 +224,7 @@ impl TaskoraApp {
                             .desired_width(iw)
                             .font(egui::FontId::new(14.0, egui::FontFamily::Proportional)),
                     );
+                    q_focus = resp.has_focus();
                     let enter = ui.input(|i| i.key_pressed(Key::Enter));
                     if enter && (resp.has_focus() || resp.lost_focus()) {
                         if self.quick_add.trim().is_empty() {
@@ -248,7 +259,8 @@ impl TaskoraApp {
                 if !self.quick_add.trim().is_empty() {
                     let p = parser::parse(&self.quick_add, today());
                     ui.horizontal_wrapped(|ui| {
-                        ui.weak("→");
+                        let wc = ui.visuals().weak_text_color();
+                        ui.label(theme::ic(icons::ARROW_RIGHT).size(12.0).color(wc));
                         if p.title.is_empty() {
                             ui.weak("(chưa có tiêu đề)");
                         } else {
@@ -272,6 +284,16 @@ impl TaskoraApp {
                     });
                 }
             });
+        // ----- liquid glass + shimmer khi đang nhập -----
+        theme::paint_glass(
+            ui.painter(),
+            rsp.response.rect,
+            CornerRadius::same(12),
+            dark_q,
+        );
+        if q_focus {
+            theme::shimmer(ui, rsp.response.rect, self.boot.elapsed().as_secs_f32(), dark_q);
+        }
     }
 
     fn chip(&self, ui: &mut egui::Ui, text: &str, color: Color32) {
@@ -294,6 +316,8 @@ impl TaskoraApp {
     fn toolbar(&mut self, ui: &mut egui::Ui, count: usize) {
         ui.add_space(6.0);
         ui.horizontal_wrapped(|ui| {
+            let wc = ui.visuals().weak_text_color();
+            ui.label(theme::ic(icons::SORT_DESCENDING).size(13.0).color(wc));
             let sort_label = self.store.settings.sort.label();
             ComboBox::from_id_salt("sort_combo")
                 .selected_text(format!("Sắp: {sort_label}"))
@@ -321,6 +345,7 @@ impl TaskoraApp {
                 Some(t) => format!("Thẻ: #{t}"),
                 None => "Thẻ: tất cả".to_string(),
             };
+            ui.label(theme::ic(icons::HASH).size(13.0).color(wc));
             ComboBox::from_id_salt("tag_combo")
                 .selected_text(cur_label)
                 .width(150.0)
@@ -345,6 +370,7 @@ impl TaskoraApp {
 
             // chips lọc ưu tiên P1–P4
             ui.separator();
+            ui.label(theme::ic(icons::FLAG_BANNER).size(13.0).color(wc));
             ui.weak("Ưu tiên:");
             for p in Priority::all() {
                 let sel = self.prio_filter == Some(p);
@@ -407,7 +433,7 @@ impl TaskoraApp {
     fn empty_state(&self, ui: &mut egui::Ui) {
         ui.with_layout(Layout::top_down(Align::Center), |ui| {
             ui.add_space(50.0);
-            ui.label(RichText::new("○").size(56.0).weak());
+            ui.label(theme::ic(icons::SEAL).size(52.0).weak());
             ui.add_space(10.0);
             let (h, sub) = match self.view {
                 View::Inbox => ("Hộp thư trống", "Thêm việc đầu tiên bằng ô phía trên (Ctrl+N)"),
@@ -478,6 +504,13 @@ impl TaskoraApp {
                 );
             }
         }
+        // ánh sáng trên đỉnh card khi hover/chọn (liquid glass)
+        theme::paint_specular(
+            ui.painter(),
+            rect,
+            CornerRadius::same(10),
+            t_hov * 0.85 + t_sel * 0.5,
+        );
         // thanh màu ưu tiên bên trái
         if active {
             let (r, g, b) = task.priority.color_rgb();
@@ -670,7 +703,12 @@ impl TaskoraApp {
                 if done {
                     if let Some(ca) = task.completed_at {
                         let hh = ca.with_timezone(&chrono::Local).format("%H:%M").to_string();
-                        ui.weak(format!("✓ {hh}"));
+                        let wc2 = ui.visuals().weak_text_color();
+                        ui.scope(|ui| {
+                            ui.spacing_mut().item_spacing.x = 3.0;
+                            ui.label(theme::ic(icons::CHECK).size(11.0).color(wc2));
+                            ui.weak(hh);
+                        });
                     }
                 } else {
                     match due_state(task.due, t) {
@@ -724,9 +762,14 @@ impl TaskoraApp {
                 // sao
                 let star_on = task.starred;
                 let star_color = if star_on { theme::STAR } else { ui.visuals().weak_text_color() };
+                let star_rt = if star_on {
+                    theme::icf(icons::STAR)
+                } else {
+                    theme::ic(icons::STAR)
+                };
                 let star = ui
                     .add(
-                        egui::Label::new(RichText::new(if star_on { "★" } else { "☆" }).size(15.0).color(star_color))
+                        egui::Label::new(star_rt.size(15.0).color(star_color))
                             .sense(Sense::click()),
                     )
                     .on_hover_text(if star_on { "Bỏ ghim" } else { "Ghim việc" });

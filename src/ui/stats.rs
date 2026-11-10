@@ -7,7 +7,7 @@ use eframe::egui::{
 
 use crate::app::TaskoraApp;
 use crate::models::{today, Store};
-use crate::ui::theme;
+use crate::ui::{icons, theme};
 
 struct Stats {
     active: usize,
@@ -154,7 +154,11 @@ impl TaskoraApp {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 ui.add_space(10.0);
-                ui.label(theme::bold_text("Thống kê", 20.0, ui.visuals().text_color()));
+                let tc_h = ui.visuals().text_color();
+                ui.horizontal(|ui| {
+                    ui.label(theme::ic(icons::CHART_BAR).size(19.0).color(theme::ACCENT));
+                    ui.label(theme::bold_text("Thống kê", 20.0, tc_h));
+                });
                 ui.weak("Bức tranh hoạt động của bạn");
                 ui.add_space(12.0);
 
@@ -167,7 +171,7 @@ impl TaskoraApp {
                         ("Chuỗi ngày", format!("{} ngày", s.streak), theme::STAR),
                     ];
                     for (col, (title, value, color)) in cols.iter_mut().zip(cards) {
-                        Frame::new()
+                        let crsp = Frame::new()
                             .fill(theme::card_fill(col))
                             .stroke(theme::card_stroke(col))
                             .corner_radius(CornerRadius::same(12))
@@ -182,6 +186,13 @@ impl TaskoraApp {
                                 ui.add_space(2.0);
                                 ui.label(theme::bold_text(value, 24.0, color));
                             });
+                        // ánh sáng nhẹ trên đỉnh thẻ số
+                        theme::paint_specular(
+                            col.painter(),
+                            crsp.response.rect,
+                            CornerRadius::same(12),
+                            0.55,
+                        );
                     }
                 });
 
@@ -195,9 +206,17 @@ impl TaskoraApp {
                 } else {
                     done_total as f32 / grand as f32
                 };
-                Frame::new()
-                    .fill(theme::card_fill(ui))
-                    .stroke(theme::card_stroke(ui))
+                let dark_h = ui.visuals().dark_mode;
+                let hero_rsp = Frame::new()
+                    .fill(if dark_h {
+                        Color32::from_rgba_unmultiplied(99, 102, 241, 52)
+                    } else {
+                        Color32::from_rgba_unmultiplied(255, 255, 255, 224)
+                    })
+                    .stroke(egui::Stroke::new(
+                        1.0f32,
+                        Color32::from_white_alpha(if dark_h { 40 } else { 190 }),
+                    ))
                     .corner_radius(CornerRadius::same(12))
                     .inner_margin(Margin {
                         left: 16,
@@ -207,11 +226,9 @@ impl TaskoraApp {
                     })
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
-                            ui.label(theme::bold_text(
-                                "Tổng thể",
-                                14.0,
-                                ui.visuals().text_color(),
-                            ));
+                            let tc_h2 = ui.visuals().text_color();
+                            ui.label(theme::ic(icons::STACK).size(15.0).color(theme::ACCENT));
+                            ui.label(theme::bold_text("Tổng thể", 14.0, tc_h2));
                             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                                 ui.label(theme::bold_text(
                                     format!("{:.0}%", rate * 100.0),
@@ -230,6 +247,19 @@ impl TaskoraApp {
                                 .animate(true),
                         );
                     });
+                // liquid glass + shimmer chạy quanh thẻ tổng
+                theme::paint_glass(
+                    ui.painter(),
+                    hero_rsp.response.rect,
+                    CornerRadius::same(12),
+                    dark_h,
+                );
+                theme::shimmer(
+                    ui,
+                    hero_rsp.response.rect,
+                    self.boot.elapsed().as_secs_f32(),
+                    dark_h,
+                );
 
                 ui.add_space(14.0);
 
@@ -245,11 +275,11 @@ impl TaskoraApp {
                         bottom: 12,
                     })
                     .show(ui, |ui| {
-                        ui.label(theme::bold_text(
-                            "Việc hoàn thành · 14 ngày qua",
-                            14.0,
-                            ui.visuals().text_color(),
-                        ));
+                        let tc1 = ui.visuals().text_color();
+                        ui.horizontal(|ui| {
+                            ui.label(theme::ic(icons::CHART_LINE_UP).size(14.0).color(theme::OK));
+                            ui.label(theme::bold_text("Việc hoàn thành · 14 ngày qua", 14.0, tc1));
+                        });
                         ui.add_space(8.0);
                         let chart_w = ui.available_width();
                         let chart_h = 170.0;
@@ -358,11 +388,11 @@ impl TaskoraApp {
                         bottom: 12,
                     })
                     .show(ui, |ui| {
-                        ui.label(theme::bold_text(
-                            "Theo danh sách",
-                            14.0,
-                            ui.visuals().text_color(),
-                        ));
+                        let tc2 = ui.visuals().text_color();
+                        ui.horizontal(|ui| {
+                            ui.label(theme::ic(icons::FOLDER).size(14.0).color(theme::ACCENT_SOFT));
+                            ui.label(theme::bold_text("Theo danh sách", 14.0, tc2));
+                        });
                         ui.add_space(6.0);
                         if s.lists.is_empty() {
                             ui.weak("Chưa có danh sách nào.");
@@ -411,11 +441,11 @@ impl TaskoraApp {
                             bottom: 12,
                         })
                         .show(ui, |ui| {
-                            ui.label(theme::bold_text(
-                                "Việc đang làm theo thẻ",
-                                14.0,
-                                ui.visuals().text_color(),
-                            ));
+                            let tc3 = ui.visuals().text_color();
+                            ui.horizontal(|ui| {
+                                ui.label(theme::ic(icons::HASH).size(14.0).color(theme::ACCENT_SOFT));
+                                ui.label(theme::bold_text("Việc đang làm theo thẻ", 14.0, tc3));
+                            });
                             ui.add_space(6.0);
                             let max_n = s.tags.iter().map(|(_, n)| *n).max().unwrap_or(1).max(1);
                             for (i, (name, n)) in s.tags.iter().enumerate() {

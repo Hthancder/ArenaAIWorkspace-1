@@ -24,6 +24,9 @@
 - **Kéo thả** đổi thứ tự (chế độ sắp xếp Thủ công), menu chuột phải đầy đủ: hoàn thành, chuyển danh sách, nhân bản, xóa/có thùng rác.
 
 **Trải nghiệm**
+- **Liquid glass**: nền aurora gradient, panel kính mờ (viền phản quang + bóng dưới), thẻ "Tổng thể" & ô thêm việc nhanh có dải sáng lướt (shimmer), đường sáng trên đỉnh card khi hover.
+- **Hiệu ứng mượt**: fade khi chuyển trang, thanh accent sidebar trượt, hover/chọn việc chuyển màu dần, pulse xanh lá khi đánh dấu xong, thanh tiến độ & cột biểu đồ.animate.
+- **Bộ icon Phosphor** (MIT) nhúng sẵn: sidebar, toolbar, nút bút / sao / lịch… thay ký tự text.
 - Giao diện **Tối/Sáng** tinh chỉnh riêng, font **Be Vietnam Pro** (chuẩn tiếng Việt, nhúng sẵn trong exe).
 - **Tìm kiếm** toàn bộ (Ctrl+F), lọc theo **thẻ**, ẩn/hiện đã hoàn thành, 5 kiểu sắp xếp.
 - **Hoàn tác / Làm lại** (Ctrl+Z / Ctrl+Y) tới 80 bước.
@@ -49,21 +52,26 @@ CI (**GitHub Actions**, `windows-latest`) chạy test + build release ở **mọ
 | UI | [`eframe/egui 0.31.1`](https://github.com/emilk/egui) – immediate mode, không webview |
 | Ngày giờ | `chrono` |
 | Lưu dữ liệu | `serde` + `serde_json` (JSON trong `%APPDATA%`) |
-| Font | Be Vietnam Pro (nhúng `include_bytes!`) |
+| Font | Be Vietnam Pro (OFL) + Phosphor Icons (MIT) – nhúng `include_bytes!` |
 | CI | GitHub Actions → artifact + Release khi push tag `v*` |
 
 ## 📁 Cấu trúc
 
 ```
-assets/fonts/         ← Be Vietnam Pro (Regular, SemiBold, Medium)
+assets/fonts/         ← Be Vietnam Pro + Phosphor (Regular, Fill)
 src/main.rs           ← điểm vào, tạo icon cửa sổ
 src/app.rs            ← App, phím tắt, hành động (Act), lưu tự động
 src/models.rs         ← Store / Task / List / View / Priority / Repeat
 src/parser.rs         ← phân tích thêm việc nhanh (có unit-test)
 src/storage.rs        ← load/save JSON, sao lưu, khôi phục
-src/ui/               ← theme, sidebar, task_list, detail, stats
+src/ui/               ← theme, icons (bảng glyph), sidebar, task_list, detail, stats
 .github/workflows/    ← pipeline build Windows
 ```
+
+## 🙏 Nguồn tài nguyên
+
+- [**Be Vietnam Pro**](https://fonts.google.com/specimen/Be+Vietnam+Pro) – font tiếng Việt (SIL Open Font License).
+- [**Phosphor Icons**](https://phosphoricons.com) – bộ icon (MIT), nhúng qua `assets/fonts/Phosphor*.ttf`.
 
 ## 📄 License
 
