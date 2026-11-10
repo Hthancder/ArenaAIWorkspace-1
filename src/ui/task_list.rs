@@ -17,6 +17,7 @@ const ROW_H: f32 = 46.0;
 
 impl TaskoraApp {
     pub fn render_task_view(&mut self, ui: &mut egui::Ui) {
+        let (p_in, vr_in) = self.view_enter_head(ui);
         let t0 = today();
         let c0 = self.store.counts(t0);
         let mut pre: Vec<Act> = Vec::new();
@@ -79,6 +80,8 @@ impl TaskoraApp {
         for a in acts {
             self.apply(a);
         }
+        // lớp phủ fade-in khi vừa chuyển view
+        self.view_enter_fade(ui, p_in, vr_in);
     }
 
     // ------------------------------------------------------------------ header view
@@ -433,30 +436,48 @@ impl TaskoraApp {
         let active = task.is_active();
         let (rect, resp) = ui.allocate_exact_size(egui::vec2(w, ROW_H), Sense::click());
 
-        // ----- card-style: nền card + viền mảnh -----
+        // ----- card-style: nền card + viền mảnh, fade mượt khi hover/chọn -----
         let visuals_dark = ui.visuals().dark_mode;
         let base = theme::card_fill(ui);
-        let bg = if selected {
-            theme::ACCENT.gamma_multiply(if visuals_dark { 0.22 } else { 0.13 })
-        } else if resp.hovered() {
-            theme::mix(base, theme::ACCENT, if visuals_dark { 0.16 } else { 0.07 })
-        } else {
-            base
-        };
+        let hover_c = theme::mix(base, theme::ACCENT, if visuals_dark { 0.16 } else { 0.07 });
+        let sel_c = theme::ACCENT.gamma_multiply(if visuals_dark { 0.22 } else { 0.13 });
+        let t_hov = ui.ctx().animate_value_with_time(
+            egui::Id::new(("rhov", task.id)),
+            if resp.hovered() && !selected { 1.0 } else { 0.0 },
+            0.10,
+        );
+        let t_sel = ui.ctx().animate_value_with_time(
+            egui::Id::new(("rsel", task.id)),
+            if selected { 1.0 } else { 0.0 },
+            0.15,
+        );
+        let bg = theme::mix(theme::mix(base, hover_c, t_hov), sel_c, t_sel);
         ui.painter().rect_filled(rect, CornerRadius::same(10), bg);
         ui.painter().rect_stroke(
             rect,
             CornerRadius::same(10),
             Stroke::new(
                 1.0f32,
-                if selected {
-                    theme::ACCENT.gamma_multiply(0.7)
-                } else {
-                    theme::card_stroke(ui).color
-                },
+                theme::mix(
+                    theme::card_stroke(ui).color,
+                    theme::ACCENT.gamma_multiply(0.7),
+                    t_sel,
+                ),
             ),
             egui::StrokeKind::Middle,
         );
+        // pulse xanh lá khi vừa đánh dấu xong
+        if let Some((pid, at)) = self.done_pulse {
+            let age = at.elapsed().as_secs_f32();
+            if pid == task.id && age < 0.45 {
+                let k = 1.0 - age / 0.45;
+                ui.painter().rect_filled(
+                    rect,
+                    CornerRadius::same(10),
+                    theme::OK.gamma_multiply(0.32 * k),
+                );
+            }
+        }
         // thanh màu ưu tiên bên trái
         if active {
             let (r, g, b) = task.priority.color_rgb();

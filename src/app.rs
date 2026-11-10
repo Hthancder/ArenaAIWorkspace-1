@@ -126,6 +126,12 @@ pub struct TaskoraApp {
     pub title_cache: String,
     /// ID việc cần cuộn vào khung nhìn (set khi Select, dọn sau khi render).
     pub scroll_to: Option<crate::models::TaskId>,
+    /// Thời điểm chuyển view gần nhất — hiệu ứng fade/slide khi vào trang.
+    pub view_entered: Instant,
+    /// Rect của row sidebar đang chọn (tọa độ nội dung) — để thanh accent trượt.
+    pub sidebar_sel_rect: Option<egui::Rect>,
+    /// Pulse xanh lá khi vừa đánh dấu xong: (id việc, thời điểm).
+    pub done_pulse: Option<(TaskId, Instant)>,
 }
 
 impl TaskoraApp {
@@ -166,6 +172,9 @@ impl TaskoraApp {
             flash: None,
             title_cache: String::new(),
             scroll_to: None,
+            view_entered: Instant::now(),
+            sidebar_sel_rect: None,
+            done_pulse: None,
         }
     }
 
@@ -210,6 +219,7 @@ impl TaskoraApp {
         if let View::List(id) = self.view {
             if !self.store.lists.iter().any(|l| l.id == id) {
                 self.view = View::Inbox;
+                self.view_entered = Instant::now();
             }
         }
     }
@@ -350,6 +360,7 @@ impl TaskoraApp {
             return;
         };
         let was_done = self.store.tasks[idx].completed_at.is_some();
+        self.done_pulse = Some((id, Instant::now()));
         if was_done {
             self.store.tasks[idx].completed_at = None;
             return;
@@ -539,11 +550,37 @@ impl TaskoraApp {
     }
 
     pub fn set_view(&mut self, v: View) {
-        self.view = v;
+        if self.view != v {
+            self.view = v;
+            self.view_entered = Instant::now();
+        }
         self.selected = None;
         self.tag_filter = None;
         self.prio_filter = None;
         self.show_cal = false;
+    }
+
+    /// Đầu frame chuyển trang: trả progress 0..1 (1 = xong), thêm lề trượt nhẹ.
+    pub(crate) fn view_enter_head(&self, ui: &mut egui::Ui) -> (f32, egui::Rect) {
+        let vr = ui.available_rect_before_wrap();
+        let p = (self.view_entered.elapsed().as_secs_f32() / 0.20).clamp(0.0, 1.0);
+        if p < 1.0 {
+            ui.add_space((14.0 * (1.0 - p)).round());
+        }
+        (p, vr)
+    }
+
+    /// Cuối frame chuyển trang: lớp phủ cùng màu nền đang dần trong suốt (fade-in).
+    pub(crate) fn view_enter_fade(&self, ui: &egui::Ui, p: f32, vr: egui::Rect) {
+        if p < 1.0 {
+            let [r, g, b, _] = ui.visuals().panel_fill.to_array();
+            let a = ((1.0 - p) * 215.0).round() as u8;
+            ui.painter().rect_filled(
+                vr,
+                egui::CornerRadius::ZERO,
+                egui::Color32::from_rgba_unmultiplied(r, g, b, a),
+            );
+        }
     }
 
     // ------------------------------------------------------------------ phím tắt
@@ -667,6 +704,16 @@ impl TaskoraApp {
     // ------------------------------------------------------------------ vòng lặp
 
     fn update_ui(&mut self, ctx: &egui::Context) {
+        // ----- giữ frame chạy trong lúc animation entrance/pulse còn sống -----
+        if self.view_entered.elapsed().as_secs_f32() < 0.35 {
+            ctx.request_repaint();
+        }
+        match self.done_pulse {
+            Some((_, at)) if at.elapsed().as_secs_f32() > 0.5 => self.done_pulse = None,
+            Some(_) => ctx.request_repaint(),
+            None => {}
+        }
+
         self.handle_shortcuts(ctx);
 
         // ----- tiêu đề cửa sổ động: "Taskora · 7 việc · 2 quá hạn" -----
@@ -916,7 +963,8 @@ impl TaskoraApp {
                         .desired_height(7.0)
                         .desired_width(90.0)
                         .fill(theme::OK)
-                        .corner_radius(egui::CornerRadius::same(4)),
+                        .corner_radius(egui::CornerRadius::same(4))
+                        .animate(true),
                 );
                 ui.weak(format!("{}/{} hôm nay", c.done_today, today_total));
             }

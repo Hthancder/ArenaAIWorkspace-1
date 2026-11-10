@@ -145,6 +145,7 @@ fn compute(store: &Store, t: NaiveDate) -> Stats {
 
 impl TaskoraApp {
     pub fn render_stats(&mut self, ui: &mut egui::Ui) {
+        let (p_in, vr_in) = self.view_enter_head(ui);
         let t = today();
         let s = compute(&self.store, t);
 
@@ -274,7 +275,13 @@ impl TaskoraApp {
                         for (i, (d, v)) in s.series.iter().enumerate() {
                             let x = rect.left() + gap + i as f32 * (bar_w + gap);
                             let frac = *v as f32 / max_v as f32;
-                            let h = (baseline - top) * frac;
+                            let h_target = (baseline - top) * frac;
+                            // cột mọc dần khi mở/thay đổi thống kê
+                            let h = ui.ctx().animate_value_with_time(
+                                egui::Id::new(("statbar", d.num_days_from_ce())),
+                                h_target,
+                                0.40,
+                            );
                             let is_last = i + 1 == s.series.len();
                             let color = if *v == 0 {
                                 ui.visuals().extreme_bg_color
@@ -382,7 +389,8 @@ impl TaskoraApp {
                                 ProgressBar::new(frac)
                                     .desired_height(7.0)
                                     .desired_width(ui.available_width())
-                                    .fill(*color),
+                                    .fill(*color)
+                                    .animate(true),
                             );
                             ui.add_space(6.0);
                         }
@@ -426,7 +434,8 @@ impl TaskoraApp {
                                     ProgressBar::new(*n as f32 / max_n as f32)
                                         .desired_height(6.0)
                                         .fill(color)
-                                        .corner_radius(CornerRadius::same(3)),
+                                        .corner_radius(CornerRadius::same(3))
+                                        .animate(true),
                                 );
                                 ui.add_space(4.0);
                             }
@@ -446,6 +455,9 @@ impl TaskoraApp {
                     ui.add_space(10.0);
                 });
             });
+
+        // lớp phủ fade-in khi vừa chuyển view
+        self.view_enter_fade(ui, p_in, vr_in);
     }
 }
 

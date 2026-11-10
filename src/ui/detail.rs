@@ -351,7 +351,8 @@ impl TaskoraApp {
                 egui::ProgressBar::new(d as f32 / all as f32)
                     .desired_height(6.0)
                     .fill(if d == all { theme::OK } else { theme::ACCENT })
-                    .corner_radius(egui::CornerRadius::same(3)),
+                    .corner_radius(egui::CornerRadius::same(3))
+                    .animate(true),
             );
             ui.add_space(6.0);
         }

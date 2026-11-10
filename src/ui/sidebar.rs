@@ -26,7 +26,12 @@ impl TaskoraApp {
                 ];
                 for (v, label, n) in smart {
                     let sel = self.view == v;
-                    if self.sidebar_row(ui, sel, label, n, crate::ui::theme::view_color(v), None) {
+                    let resp =
+                        self.sidebar_row_alloc(ui, sel, label, n, theme::view_color(v), None);
+                    if sel {
+                        self.sidebar_sel_rect = Some(resp.rect);
+                    }
+                    if resp.clicked() {
                         self.set_view(v);
                     }
                 }
@@ -74,6 +79,9 @@ impl TaskoraApp {
                     let sel = self.view == v;
                     let col = Color32::from_rgb(color[0], color[1], color[2]);
                     let resp = self.sidebar_row_alloc(ui, sel, &name, n, col, None);
+                    if sel {
+                        self.sidebar_sel_rect = Some(resp.rect);
+                    }
                     resp.context_menu(|ui| {
                         if ui.button("Đổi tên / đổi màu…").clicked() {
                             let idx = crate::app::LIST_PALETTE
@@ -120,7 +128,11 @@ impl TaskoraApp {
 
                 // Thống kê
                 let sel = self.view == View::Stats;
-                if self.sidebar_row(ui, sel, "Thống kê", 0, crate::ui::theme::ACCENT, None) {
+                let resp = self.sidebar_row_alloc(ui, sel, "Thống kê", 0, theme::ACCENT, None);
+                if sel {
+                    self.sidebar_sel_rect = Some(resp.rect);
+                }
+                if resp.clicked() {
                     self.set_view(View::Stats);
                 }
 
@@ -170,7 +182,8 @@ impl TaskoraApp {
                                 } else {
                                     theme::ACCENT
                                 })
-                                .corner_radius(egui::CornerRadius::same(3)),
+                                .corner_radius(egui::CornerRadius::same(3))
+                                .animate(true),
                         );
                     });
 
@@ -179,21 +192,25 @@ impl TaskoraApp {
                     egui::RichText::new("Dữ liệu được lưu tự động\nvào thư mục Taskora")
                         .small(),
                 );
-            });
-    }
 
-    /// Một hàng điều hướng; trả về `true` nếu được bấm.
-    fn sidebar_row(
-        &self,
-        ui: &mut egui::Ui,
-        selected: bool,
-        label: &str,
-        count: usize,
-        dot: Color32,
-        extra: Option<&str>,
-    ) -> bool {
-        let resp = self.sidebar_row_alloc(ui, selected, label, count, dot, extra);
-        resp.clicked()
+                // ----- thanh accent trượt theo selection -----
+                if let Some(t) = self.sidebar_sel_rect {
+                    let yc = ui.ctx().animate_value_with_time(
+                        egui::Id::new("sidebar_slide"),
+                        t.center().y,
+                        0.18,
+                    );
+                    let r = egui::Rect::from_center_size(egui::pos2(t.center().x, yc), t.size());
+                    ui.painter().rect_filled(
+                        egui::Rect::from_min_size(
+                            egui::pos2(r.right() - 3.0, r.top() + 6.0),
+                            egui::vec2(3.0, r.height() - 12.0),
+                        ),
+                        egui::CornerRadius::same(2),
+                        theme::ACCENT,
+                    );
+                }
+            });
     }
 
     fn sidebar_row_alloc(
@@ -209,27 +226,18 @@ impl TaskoraApp {
         let h = 30.0;
         let (rect, resp) = ui.allocate_exact_size(egui::vec2(w, h), Sense::click());
         let visuals = ui.visuals();
-        if selected {
-            ui.painter().rect_filled(
-                rect,
-                egui::CornerRadius::same(8),
-                visuals.selection.bg_fill,
-            );
-            // thanh accent bên phải (đọc từ phải sang giống tab browser)
-            ui.painter().rect_filled(
-                egui::Rect::from_min_size(
-                    egui::pos2(rect.right() - 3.0, rect.top() + 6.0),
-                    egui::vec2(3.0, rect.height() - 12.0),
-                ),
-                egui::CornerRadius::same(2),
-                theme::ACCENT,
-            );
-        } else if resp.hovered() {
-            ui.painter().rect_filled(
-                rect,
-                egui::CornerRadius::same(8),
-                visuals.faint_bg_color,
-            );
+        // nền selection fade mượt (thanh accent trượt riêng ở cuối scroll)
+        let t_sel = ui.ctx().animate_value_with_time(
+            egui::Id::new(("sbsel", label)),
+            if selected { 1.0 } else { 0.0 },
+            0.14,
+        );
+        let mut bg = theme::mix(Color32::TRANSPARENT, visuals.selection.bg_fill, t_sel);
+        if !selected && resp.hovered() {
+            bg = visuals.faint_bg_color;
+        }
+        if bg != Color32::TRANSPARENT {
+            ui.painter().rect_filled(rect, egui::CornerRadius::same(8), bg);
         }
         let r = rect.shrink2(egui::vec2(8.0, 4.0));
         ui.allocate_ui_at_rect(r, |ui| {
