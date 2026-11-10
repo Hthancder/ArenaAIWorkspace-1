@@ -39,6 +39,13 @@
 - Chuyển **Tối/Sáng** và đổi **màu nhấn** giờ chuyển mượt toàn cục (kể cả gradient) — không giật, không nhấp nháy.
 - Sửa menu ⋮ bị nội dung trang phủ lên (topbar luôn nằm trên vùng nội dung).
 
+**Hiệu năng & nơi lưu dữ liệu (v2.2)**
+- **Cuộn được ở mọi tab** — sửa triệt để layout chiều cao (hàng grid `100vh` + `min-height:0`) trước đây khiến nội dung Cài đặt/Thống kê bị cắt cụt.
+- **Nhẹ hơn đáng kể**: task row chỉ render khi gần trong khung nhìn (`content-visibility`), và **Chế độ hiệu năng** (Cài đặt → Giao diện) tắt toàn bộ blur/animation/hạt nhiễu cho máy yếu.
+- **Tuỳ chỉnh nơi lưu dữ liệu** (Cài đặt → Nơi lưu dữ liệu): mặc định `%APPDATA%\Taskora`, thư mục tuỳ chọn, hoặc **portable** (mọi thứ lưu cạnh file thực thi — hợp USB/đồng bộ đám mây).
+- **Tự phát hiện di chuyển**: nếu Taskora.exe bị copy lẻ sang chỗ trống, app hỏi chuyển dữ liệu portable cũ sang. Nếu bạn chạy ở nơi khác mà `%APPDATA%` còn dữ liệu v1/v2.0 cũ, app hỏi **gộp** (id-union, không trùng lặp).
+- **Khôi phục view đang mở** giữa các lần chạy; toast hành động kèm nút **Hoàn tác** sau mỗi thao tác.
+
 **Trải nghiệm**
 - **Tìm kiếm** toàn bộ (Ctrl+K mở bảng lệnh nhanh: điều hướng + tìm việc), lọc theo **thẻ**, lọc Ưu tiên P1–P4, ẩn/hiện đã hoàn thành, 5 kiểu sắp xếp.
 - **Hoàn tác / Làm lại** (Ctrl+Z / Ctrl+Y) tới 80 bước.

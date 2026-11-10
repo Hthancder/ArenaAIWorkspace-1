@@ -1,35 +1,29 @@
-//! Lưu / nạp dữ liệu JSON vào thư mục người dùng, xuất–nhập bản sao lưu.
+//! Lưu / nạp dữ liệu JSON vào thư mục đã chọn (bootstrap), xuất–nhập bản sao lưu.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use chrono::Local;
 
+use crate::bootstrap;
 use crate::models::Store;
 
-pub const APP_DIR_NAME: &str = "Taskora";
+pub use crate::bootstrap::APP_DIR_NAME;
 
 fn err(e: std::io::Error) -> String {
     e.to_string()
 }
 
-/// `%APPDATA%\Taskora` trên Windows, `~/.local/taskora` trên hệ thống khác.
 pub fn data_dir() -> PathBuf {
-    let base = std::env::var_os("APPDATA")
-        .map(PathBuf::from)
-        .or_else(|| {
-            std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local").join("share"))
-        })
-        .unwrap_or_else(|| PathBuf::from("."));
-    base.join(APP_DIR_NAME)
+    bootstrap::data_dir()
 }
 
 pub fn data_file() -> PathBuf {
-    data_dir().join("data.json")
+    bootstrap::data_file()
 }
 
 pub fn backups_dir() -> PathBuf {
-    data_dir().join("backups")
+    bootstrap::backups_dir()
 }
 
 /// Ghi đè file dữ liệu chính (ghi tạm rồi đổi tên để tránh hỏng giữa chừng).
@@ -46,16 +40,12 @@ pub fn save(store: &Store) -> Result<(), String> {
 
 /// Nạp dữ liệu; lỗi hoặc thiếu file → dữ liệu mẫu.
 pub fn load() -> Store {
-    match fs::read_to_string(data_file()) {
-        Ok(s) => match serde_json::from_str::<Store>(&s) {
-            Ok(mut st) => {
-                st.sanitize();
-                st
-            }
-            Err(_) => Store::seed(),
-        },
-        Err(_) => Store::seed(),
-    }
+    load_from(&data_dir()).unwrap_or_else(|_| Store::seed())
+}
+
+/// Nạp từ một thư mục cụ thể; thiếu file → Store mặc định (trống).
+pub fn load_from(dir: &Path) -> Result<Store, String> {
+    bootstrap::load_from(dir)
 }
 
 /// Xuất một bản sao lưu có timestamp.
@@ -122,5 +112,16 @@ mod tests {
     #[test]
     fn load_does_not_panic() {
         let _ = load();
+    }
+
+    #[test]
+    fn merge_is_id_union() {
+        let a = Store::seed();
+        let b = a.clone();
+        let mut dst = a.clone();
+        crate::bootstrap::merge_into(&mut dst, &b);
+        assert_eq!(dst.tasks.len(), a.tasks.len());
+        assert_eq!(dst.lists, a.lists);
+        assert!(dst.next_id >= a.next_id);
     }
 }

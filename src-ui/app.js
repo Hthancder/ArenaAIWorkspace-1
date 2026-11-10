@@ -84,13 +84,23 @@ function tagsMeta(t) {
 /* ─────────── toast + lưu snapshot ─────────── */
 let toastTimer = null;
 let remindShown = false;
-function toast(msg, kind) {
+function toast(msg, kind, action) {
   const el = $("#toast");
-  el.textContent = msg;
+  el.textContent = "";
+  const span = document.createElement("span");
+  span.textContent = msg;
+  el.appendChild(span);
+  if (action && action.label) {
+    const btn = document.createElement("button");
+    btn.className = "toast-btn";
+    btn.textContent = action.label;
+    btn.addEventListener("click", () => { el.classList.remove("show"); try { action.onClick(); } catch (e) { console.error(e); } });
+    el.appendChild(btn);
+  }
   el.classList.toggle("err", kind === "err");
   el.classList.add("show");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
+  toastTimer = setTimeout(() => el.classList.remove("show"), action ? 6000 : 2600);
 }
 
 let lastTheme = null;
@@ -181,13 +191,14 @@ document.addEventListener("mouseleave", () => G_SCROLLS().forEach(el => el.class
 function postSnap(snap) {
   S.snap = snap;
   const s = snap;
-  if (s.flash) toast(s.flash);
+  if (s.flash) toast(s.flash, undefined, s.undo_len ? { label: "Hoàn tác", onClick: () => go(invoke("undo")) } : null);
   S.sort = s.settings.sort;
   S.hideDone = s.settings.hide_completed;
   applyTheme(s.settings.dark);
   applyAccent(s.settings.accent);
   document.documentElement.toggleAttribute("data-transparent", !!s.settings.transparent);
   document.body.classList.toggle("reduce-motion", !!s.settings.reduce_motion);
+  document.body.classList.toggle("perf", !!s.settings.perf_mode);
   syncSettingsControls(s);
   // nhắc số việc hôm nay — chỉ một lần mỗi phiên mở app
   if (!remindShown && s.settings.remind_today && s.counts && s.counts.today > 0) {
@@ -291,7 +302,7 @@ function renderViewHead() {
   $("#view-stats").classList.toggle("active", isStats);
   $("#view-settings").classList.toggle("active", isSettings);
   if (isStats) { setCrumb("chart-bar", "Thống kê", S.snap.counts.active); return; }
-  if (isSettings) { setCrumb("gear", "Cài đặt", ""); return; }
+  if (isSettings) { setCrumb("gear", "Cài đặt", ""); refreshStoragePanel(); return; }
   const meta = crumbFor(view);
   $("#crumb-use").setAttribute("href", "#i-" + meta.icon);
   $("#crumb-text").textContent = meta.title;
@@ -332,6 +343,107 @@ function syncSettingsControls(s) {
   $("#set-qa-preview").checked = !!st.qa_preview;
   $("#set-remind-today").checked = !!st.remind_today;
   $("#set-backup-on-exit").checked = !!st.backup_on_exit;
+  $("#set-perf").checked = !!st.perf_mode;
+}
+
+/* ─────────── NƠI LƯU DỮ LIỆU ─────────── */
+let storageInfo = null;
+
+async function refreshStoragePanel() {
+  try { storageInfo = await invoke("storage_info"); } catch { return; }
+  renderStoragePanel(storageInfo);
+}
+function renderStoragePanel(info) {
+  if (!info || !$("#storage-mode")) return;
+  const badge = $("#storage-mode");
+  badge.textContent = info.mode === "portable" ? "Portable" : info.mode === "custom" ? "Tùy chỉnh" : "Mặc định";
+  badge.classList.toggle("portable", info.mode === "portable");
+  badge.classList.toggle("custom", info.mode === "custom");
+  $("#storage-path").textContent = info.dir;
+  $("#storage-warn").hidden = info.exe_dir_writable;
+  const toggle = $("#set-portable");
+  toggle.checked = !!info.portable;
+  toggle.disabled = !info.exe_dir_writable && !info.portable;
+  $("#storage-default").hidden = info.mode === "default";
+}
+const pickFolder = async () => {
+  try {
+    const sel = await window.__TAURI__?.dialog?.open?.({ directory: true, multiple: false, title: "Chọn thư mục lưu dữ liệu" });
+    return typeof sel === "string" ? sel : null;
+  } catch { return null; }
+};
+function openStorageConfirm(choice, customPath) {
+  const dest = choice === "portable" ? "thư mục chứa Taskora.exe" : choice === "default" ? "%APPDATA%\\Taskora" : (customPath || "");
+  openModal(`<h2><svg class="ic accent-ic"><use href="#i-folder"/></svg>Chuyển nơi lưu dữ liệu?</h2>
+    <p>Taskora sẽ lưu dữ liệu tại:</p>
+    <div class="storage-path">${esc(dest)}</div>
+    <p style="margin-top:10px">Bạn muốn xử lý dữ liệu hiện tại thế nào?</p>
+    <div class="modal-actions"><button class="btn-cancel" data-close-modal="1">Hủy</button>
+      <button class="btn-ghost" id="storage-fresh">Bắt đầu mới trống</button>
+      <button class="btn-save" id="storage-migrate"><svg class="ic small"><use href="#i-archive"/></svg>Chuyển dữ liệu sang</button></div>`);
+  S.storagePending = { choice, custom_path: customPath || null };
+}
+function openStorageCustomModal() {
+  openModal(`<h2><svg class="ic accent-ic"><use href="#i-folder"/></svg>Đổi thư mục lưu</h2>
+    <p>Nhập đường dẫn thư mục — Taskora sẽ tự tạo nếu chưa tồn tại.</p>
+    <input class="modal-input" id="storage-custom-input" type="text" spellcheck="false" placeholder="D:\\TaskoraData" autocomplete="off" />
+    <div class="modal-actions"><button class="btn-cancel" data-close-modal="1">Hủy</button>
+      <button class="btn-ghost" id="storage-custom-browse"><svg class="ic small"><use href="#i-folder"/></svg>Duyệt…</button>
+      <button class="btn-save" id="storage-custom-next">Tiếp tục</button></div>`);
+  setTimeout(() => $("#storage-custom-input")?.focus(), 60);
+}
+async function runStorageSwitch(migrate) {
+  const p = S.storagePending; if (!p) return;
+  closeModal();
+  try {
+    const res = await invoke("storage_switch", { req: { choice: p.choice, custom_path: p.custom_path, migrate } });
+    postSnap(res.snapshot);
+    renderStoragePanel(res.info);
+  } catch (err) {
+    toast(typeof err === "string" ? err : "Không đổi được nơi lưu", "err");
+    refreshStoragePanel();
+  }
+}
+async function runStorageMergeLegacy() {
+  closeModal();
+  try {
+    const res = await invoke("storage_merge_legacy");
+    postSnap(res.snapshot);
+    renderStoragePanel(res.info);
+  } catch (err) { toast(typeof err === "string" ? err : "Gộp thất bại", "err"); }
+}
+async function runStorageImportOrphan() {
+  closeModal();
+  try {
+    const res = await invoke("storage_import_orphan");
+    postSnap(res.snapshot);
+    renderStoragePanel(res.info);
+  } catch (err) { toast(typeof err === "string" ? err : "Chuyển thất bại", "err"); }
+}
+async function checkStoragePrompts() {
+  if (S._storagePromptDone) return;
+  S._storagePromptDone = true;
+  let info;
+  try { info = await invoke("storage_startup"); } catch { return; }
+  renderStoragePanel(info);
+  if (info.moved) toast("Taskora đã được di chuyển — dữ liệu vẫn đi theo file thực thi");
+  if (info.orphan_portable) {
+    S._orphanDir = info.orphan_portable;
+    openModal(`<h2><svg class="ic accent-ic"><use href="#i-folder"/></svg>Taskora đã được di chuyển?</h2>
+      <p>Phát hiện dữ liệu portable tại:</p>
+      <div class="storage-path">${esc(info.orphan_portable)}</div>
+      <p style="margin-top:10px">Chuyển toàn bộ dữ liệu sang vị trí mới (cạnh file thực thi hiện tại)?</p>
+      <div class="modal-actions"><button class="btn-cancel" data-close-modal="1">Để sau</button>
+        <button class="btn-save" id="orphan-import"><svg class="ic small"><use href="#i-archive"/></svg>Chuyển dữ liệu sang đây</button></div>`);
+    return;
+  }
+  if (info.legacy_dir) {
+    S._legacyDir = info.legacy_dir;
+    openModal(`<h2><svg class="ic accent-ic"><use href="#i-archive"/></svg>Phát hiện dữ liệu cũ</h2>
+      <p>Tìm thấy <strong>${info.legacy_tasks} việc</strong> · <strong>${info.legacy_lists} danh sách</strong> tại <code>%APPDATA%\Taskora</code>, trong khi bạn đang dùng nơi lưu khác.</p>
+      <div class="modal-actions"><button class="btn-cancel" id="legacy-keep">Giữ riêng</button>
+        <button class="btn-save" id="legacy-merge"><svg class="ic small"><use href="#i-arrow-counter-clockwise"/></svg>Gộp vào dữ liệu hiện tại</button></div>`);
+  }
 }
 
 function setCrumb(icon, title, count) {
@@ -340,8 +452,16 @@ function setCrumb(icon, title, count) {
   $("#crumb-count").textContent = count;
 }
 
+function viewKey(v) { return v.type === "list" ? `list:${v.id}` : v.type; }
+function parseViewKey(k) {
+  if (!k) return null;
+  if (k.startsWith("list:")) { const id = Number(k.slice(5)); return Number.isFinite(id) ? { type: "list", id } : null; }
+  return ["inbox", "today", "upcoming", "starred", "completed", "trash", "stats", "settings"].includes(k) ? { type: k } : null;
+}
+
 function setView(view) {
   S.view = view;
+  invoke("set_last_view", { view: viewKey(view) }).catch(() => {});
   S.selected = null;
   S.tag = null;
   S.prio = null;
@@ -686,7 +806,7 @@ function openHelp() {
 }
 function openAbout() {
   openModal(`<div class="about-center"><img class="about-logo" src="assets/logo.png" alt="Taskora" />
-      <h2 style="justify-content:center">Taskora <span style="color:var(--text-faint);font-weight:500">v2.1.1</span></h2>
+      <h2 style="justify-content:center">Taskora <span style="color:var(--text-faint);font-weight:500">v2.2.0</span></h2>
       <p>Quản lý công việc cho Windows — nhẹ, nhanh, đẹp.<br>Viết bằng Rust + Tauri, giao diện liquid glass.</p>
       <p>Font <strong>Be Vietnam Pro</strong> (OFL) · Icon <strong>Phosphor</strong> (MIT)</p>
       <p style="color:var(--text-faint)">MIT License © Hthancder</p>
@@ -1020,10 +1140,18 @@ function bindEvents() {
   });
   $("#set-open-help").addEventListener("click", openHelp);
   $("#set-open-about").addEventListener("click", openAbout);
+  $("#set-perf").addEventListener("change", e => patchSettings({ perf_mode: e.target.checked }));
+  $("#storage-open").addEventListener("click", () => invoke("open_data_dir"));
+  $("#storage-browse").addEventListener("click", openStorageCustomModal);
+  $("#storage-default").addEventListener("click", () => openStorageConfirm("default", null));
+  $("#set-portable").addEventListener("change", e => {
+    const want = e.target.checked;
+    openStorageConfirm(want ? "portable" : "default", null);
+  });
 
   /* ───────── modal actions (delegation) ───────── */
   $("#modal").addEventListener("click", async e => {
-    if (e.target.closest("[data-close-modal]")) { closeModal(); return; }
+    if (e.target.closest("[data-close-modal]")) { closeModal(); if ($("#view-settings")?.classList.contains("active")) refreshStoragePanel(); return; }
     if (e.target.closest("#list-save")) {
       const name = ($("#list-name")?.value || "").trim();
       if (!name) { toast("Nhập tên danh sách", "err"); return; }
@@ -1039,6 +1167,27 @@ function bindEvents() {
     if (confirmTrash) { closeModal(); go(invoke("act", { action: { type: "purge_trash" }, view: S.view })); return; }
     const confirmReset = e.target.closest("#confirm-reset-settings");
     if (confirmReset) { closeModal(); go(invoke("reset_settings")); return; }
+    const browseBtn = e.target.closest("#storage-custom-browse");
+    if (browseBtn) {
+      const picked = await pickFolder();
+      if (picked) { const inp = $("#storage-custom-input"); if (inp) inp.value = picked; }
+      else toast("Không mở được hộp chọn thư mục — hãy nhập đường dẫn", "err");
+      return;
+    }
+    const customNext = e.target.closest("#storage-custom-next");
+    if (customNext) {
+      const p = ($("#storage-custom-input")?.value || "").trim();
+      if (!p) { toast("Nhập đường dẫn thư mục", "err"); return; }
+      closeModal();
+      openStorageConfirm("custom", p);
+      return;
+    }
+    if (e.target.closest("#storage-migrate")) { runStorageSwitch(true); return; }
+    if (e.target.closest("#storage-fresh")) { runStorageSwitch(false); return; }
+    if (e.target.closest("#orphan-import")) { runStorageImportOrphan(); return; }
+    if (e.target.closest("#legacy-merge")) { runStorageMergeLegacy(); return; }
+    const legacyKeep = e.target.closest("#legacy-keep");
+    if (legacyKeep) { closeModal(); if (S._legacyDir) invoke("storage_dismiss", { kind: "merge", src_dir: S._legacyDir }).catch(() => {}); return; }
     const exportBtn = e.target.closest("#do-export");
     if (exportBtn) { try { const name = await invoke("export_backup"); toast("Đã xuất " + name); } catch (err) { toast("Xuất thất bại", "err"); } return; }
     const restoreBtn = e.target.closest("[data-restore-backup]");
@@ -1136,6 +1285,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.addEventListener("keydown", globalKeys);
   try {
     await refresh();
+    const lv = S.snap?.settings?.last_view;
+    const parsed = parseViewKey(lv);
+    if (parsed) {
+      if (parsed.type === "list" && !(S.snap.lists || []).some(l => l.id === parsed.id)) setView({ type: "inbox" });
+      else if (viewKey(S.view) !== viewKey(parsed)) setView(parsed);
+    }
+    checkStoragePrompts();
   } catch (e) {
     console.error(e);
     document.body.insertAdjacentHTML("afterbegin", `<div class="fatal">Không tải được dữ liệu: ${esc(String(e))}</div>`);

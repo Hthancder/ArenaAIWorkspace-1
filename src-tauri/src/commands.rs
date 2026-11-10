@@ -872,6 +872,7 @@ pub struct SettingsPatch {
     pub qa_preview: Option<bool>,
     pub remind_today: Option<bool>,
     pub backup_on_exit: Option<bool>,
+    pub perf_mode: Option<bool>,
 }
 
 fn valid_accent(s: &str) -> bool {
@@ -905,6 +906,7 @@ pub fn update_settings(
         if let Some(v) = patch.qa_preview { s.qa_preview = v; }
         if let Some(v) = patch.remind_today { s.remind_today = v; }
         if let Some(v) = patch.backup_on_exit { s.backup_on_exit = v; }
+        if let Some(v) = patch.perf_mode { s.perf_mode = v; }
     }
     AppState::commit(&mut i);
     if effect_changed {
@@ -934,4 +936,214 @@ pub fn reset_settings(app: AppHandle, state: State<'_, AppState>) -> Snapshot {
     }
     set_flash(&mut i, "Đã đặt lại cài đặt gốc");
     finish(&app, &mut i)
+}
+
+// ------------------------------------------------------------------ nơi lưu dữ liệu v2.2
+
+#[derive(Serialize)]
+pub struct StorageInfoView {
+    /// "default" | "portable" | "custom"
+    pub mode: String,
+    pub dir: String,
+    pub default_dir: String,
+    pub exe_path: Option<String>,
+    pub exe_dir_writable: bool,
+    pub portable: bool,
+    pub moved: bool,
+    pub orphan_portable: Option<String>,
+    pub legacy_dir: Option<String>,
+    pub legacy_tasks: usize,
+    pub legacy_lists: usize,
+}
+
+fn storage_info_view() -> StorageInfoView {
+    let rep = crate::bootstrap::startup();
+    let exe_dir_writable = rep
+        .exe_path
+        .as_deref()
+        .and_then(|e| std::path::Path::new(e).parent().map(|d| d.to_path_buf()))
+        .map(|d| crate::bootstrap::probe_writable(&d))
+        .unwrap_or(false);
+    let mode = match rep.mode {
+        crate::bootstrap::Mode::Default => "default",
+        crate::bootstrap::Mode::Portable => "portable",
+        crate::bootstrap::Mode::Custom => "custom",
+    }
+    .to_string();
+    let (legacy_dir, legacy_tasks, legacy_lists) = rep
+        .legacy
+        .clone()
+        .map(|l| (Some(l.dir), l.tasks, l.lists))
+        .unwrap_or((None, 0, 0));
+    StorageInfoView {
+        mode: mode.clone(),
+        dir: rep.dir,
+        default_dir: rep.default_dir,
+        exe_path: rep.exe_path,
+        exe_dir_writable,
+        portable: mode == "portable",
+        moved: rep.moved,
+        orphan_portable: rep.orphan_portable,
+        legacy_dir,
+        legacy_tasks,
+        legacy_lists,
+    }
+}
+
+#[tauri::command]
+pub fn storage_info() -> StorageInfoView {
+    storage_info_view()
+}
+
+#[tauri::command]
+pub fn storage_startup() -> StorageInfoView {
+    storage_info_view()
+}
+
+#[derive(Serialize)]
+pub struct StorageChangePayload {
+    pub snapshot: Snapshot,
+    pub info: StorageInfoView,
+}
+
+#[derive(Deserialize)]
+#[serde(default)]
+pub struct StorageSwitchReq {
+    /// "default" | "portable" | "custom"
+    pub choice: String,
+    pub custom_path: Option<String>,
+    /// true = chuyển dữ liệu hiện tại sang; false = bắt đầu mới (trống)
+    pub migrate: bool,
+}
+
+#[tauri::command]
+pub fn storage_switch(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    req: StorageSwitchReq,
+) -> Result<StorageChangePayload, String> {
+    let mut i = state.lock();
+    let old_dir = storage::data_dir();
+    let portable = req.choice == "portable";
+    let custom: Option<String> = if req.choice == "custom" {
+        Some(req.custom_path.clone().unwrap_or_default())
+    } else {
+        None
+    };
+    let target = if portable {
+        std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+            .ok_or_else(|| "Không xác định được đường dẫn exe".to_string())?
+    } else if let Some(c) = &custom {
+        std::path::PathBuf::from(c)
+    } else {
+        crate::bootstrap::default_dir()
+    };
+    if target == old_dir {
+        let snapshot = finish(&app, &mut i);
+        return Ok(StorageChangePayload { snapshot, info: storage_info_view() });
+    }
+    if req.migrate {
+        crate::bootstrap::move_data_into(&target)?;
+    }
+    crate::bootstrap::set_location(portable, custom.as_deref())?;
+    i.store = if req.migrate {
+        storage::load()
+    } else {
+        Store::default()
+    };
+    i.undo_stack.clear();
+    i.redo_stack.clear();
+    if req.migrate {
+        set_flash(&mut i, "Đã chuyển dữ liệu sang thư mục mới");
+    } else {
+        set_flash(&mut i, "Đã bắt đầu với thư mục mới (trống)");
+    }
+    AppState::commit(&mut i);
+    let snapshot = finish(&app, &mut i);
+    Ok(StorageChangePayload { snapshot, info: storage_info_view() })
+}
+
+/// Gộp dữ liệu cũ ở %APPDATA% vào dữ liệu hiện tại (nơi đang dùng).
+#[tauri::command]
+pub fn storage_merge_legacy(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<StorageChangePayload, String> {
+    let mut i = state.lock();
+    let default = crate::bootstrap::default_dir();
+    if storage::data_dir() == default {
+        return Err("Đang dùng thư mục mặc định — không có dữ liệu cũ để gộp.".to_string());
+    }
+    let raw = std::fs::read_to_string(default.join("data.json"))
+        .map_err(|e| format!("Không đọc được dữ liệu cũ: {e}"))?;
+    let legacy: Store =
+        serde_json::from_str(&raw).map_err(|e| format!("Dữ liệu cũ không hợp lệ: {e}"))?;
+    // sao lưu an toàn hai phía trước khi gộp
+    let _ = storage::export_backup(&i.store);
+    let bdir = storage::backups_dir();
+    let _ = std::fs::create_dir_all(&bdir);
+    let stash = bdir.join(format!(
+        "legacy-{}.json",
+        chrono::Local::now().format("%Y%m%d-%H%M%S")
+    ));
+    let _ = std::fs::copy(default.join("data.json"), &stash);
+    let before = i.store.tasks.len();
+    crate::bootstrap::merge_into(&mut i.store, &legacy);
+    let added = i.store.tasks.len().saturating_sub(before);
+    crate::bootstrap::dismiss("merge", &default.to_string_lossy());
+    set_flash(&mut i, format!("Đã gộp {added} việc từ dữ liệu cũ"));
+    AppState::commit(&mut i);
+    let snapshot = finish(&app, &mut i);
+    Ok(StorageChangePayload { snapshot, info: storage_info_view() })
+}
+
+/// Chuyển dữ liệu từ thư mục portable cũ (exe bị copy lẻ) vào nơi hiện tại.
+#[tauri::command]
+pub fn storage_import_orphan(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<StorageChangePayload, String> {
+    let mut i = state.lock();
+    let rep = crate::bootstrap::startup();
+    let src = rep
+        .orphan_portable
+        .clone()
+        .ok_or_else(|| "Không tìm thấy thư mục portable cũ.".to_string())?;
+    let src_path = std::path::PathBuf::from(&src);
+    if storage::data_dir() == src_path {
+        return Err("Đang dùng chính thư mục portable cũ.".to_string());
+    }
+    // đang trống ở nơi mới → sao chép nguyên vẹn (không cần gộp)
+    crate::bootstrap::import_from(&src_path)?;
+    i.store = storage::load();
+    i.undo_stack.clear();
+    i.redo_stack.clear();
+    crate::bootstrap::dismiss("move", &src);
+    set_flash(&mut i, "Đã chuyển dữ liệu portable sang vị trí mới");
+    AppState::commit(&mut i);
+    let snapshot = finish(&app, &mut i);
+    Ok(StorageChangePayload { snapshot, info: storage_info_view() })
+}
+
+/// Bỏ qua lời nhắc (gộp / chuyển) vĩnh viễn.
+#[tauri::command]
+pub fn storage_dismiss(kind: String, src_dir: String) {
+    crate::bootstrap::dismiss(&kind, &src_dir);
+}
+
+/// Ghi nhớ view đang mở (khôi phục lần sau).
+#[tauri::command]
+pub fn set_last_view(state: State<'_, AppState>, view: String) {
+    let ok = matches!(
+        view.as_str(),
+        "inbox" | "today" | "upcoming" | "starred" | "completed" | "trash" | "stats" | "settings"
+    ) || view.starts_with("list:");
+    if !ok {
+        return;
+    }
+    let mut i = state.lock();
+    i.store.settings.last_view = view;
+    AppState::commit(&mut i);
 }

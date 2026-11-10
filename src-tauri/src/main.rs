@@ -1,6 +1,7 @@
 //! Taskora v2 — Rust + Tauri, giao diện liquid glass (xem src-ui/).
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod bootstrap;
 mod commands;
 mod fx;
 mod models;
@@ -12,7 +13,9 @@ mod storage;
 use tauri::Manager;
 
 fn main() {
-    tauri::Builder::default()
+    // Xác định nơi lưu dữ liệu TRƯỚC khi nạp store
+    bootstrap::init();
+    tauri::Builder::default().plugin(tauri_plugin_dialog::init())
         .manage(state::AppState::new())
         .setup(|app| {
             // Áp dụng Acrylic/Blur theo cài đặt đã lưu (Windows)
@@ -54,6 +57,13 @@ fn main() {
             commands::save_now,
             commands::update_settings,
             commands::reset_settings,
+            commands::set_last_view,
+            commands::storage_info,
+            commands::storage_startup,
+            commands::storage_switch,
+            commands::storage_merge_legacy,
+            commands::storage_import_orphan,
+            commands::storage_dismiss,
         ])
         .build(tauri::generate_context!())
         .expect("không khởi động được Taskora")

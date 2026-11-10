@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Quyền mặc định của cửa sổ chính Taskora",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "dialog:allow-open"]
 }

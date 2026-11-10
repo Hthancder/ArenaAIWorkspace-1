@@ -68,7 +68,7 @@
       <img class="brand-logo" src="assets/logo.png" alt="Taskora" />
       <div class="brand-text">
         <span class="brand-name">Taskora</span>
-        <span class="brand-ver">v2.1.1</span>
+        <span class="brand-ver">v2.2.0</span>
       </div>
     </div>
 
@@ -347,6 +347,14 @@
             </div>
             <label class="toggle-wrap"><input type="checkbox" id="set-reduce-motion" /><span class="toggle-ui"></span></label>
           </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-title">Chế độ hiệu năng</div>
+              <div class="setting-hint">Tắt toàn bộ blur nền, hạt nhiễu và animation — giao diện phẳng, tối ưu cho máy yếu. Vẫn mượt, chỉ bớt "kính"</div>
+            </div>
+            <label class="toggle-wrap"><input type="checkbox" id="set-perf" /><span class="toggle-ui"></span></label>
+          </div>
         </div>
 
         <!-- ═══ VIỆC & DANH SÁCH ═══ -->
@@ -420,6 +428,32 @@
           </div>
         </div>
 
+        <!-- ═══ NƠI LƯU DỮ LIỆU ═══ -->
+        <div class="panel-card glass-card settings-card">
+          <div class="panel-card-head"><svg class="ic accent-ic"><use href="#i-folder"/></svg><h3>Nơi lưu dữ liệu</h3><span class="mode-badge" id="storage-mode">Mặc định</span></div>
+
+          <div class="setting-row col">
+            <div class="setting-info">
+              <div class="setting-title">Thư mục hiện tại</div>
+              <div class="storage-path" id="storage-path">…</div>
+              <div class="storage-warn" id="storage-warn" hidden><svg class="ic small"><use href="#i-warning"/></svg><span>Thư mục đặt Taskora.exe không cho phép ghi — chế độ portable sẽ không hoạt động ở đây.</span></div>
+            </div>
+            <div class="setting-actions">
+              <button class="btn-ghost small-btn" id="storage-open"><svg class="ic small"><use href="#i-folder"/></svg>Mở thư mục</button>
+              <button class="btn-ghost small-btn" id="storage-browse"><svg class="ic small"><use href="#i-pencil-simple"/></svg>Đổi thư mục…</button>
+              <button class="btn-ghost small-btn" id="storage-default" hidden><svg class="ic small"><use href="#i-arrow-counter-clockwise"/></svg>Về mặc định</button>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-title">Chế độ portable</div>
+              <div class="setting-hint">Mọi thứ (dữ liệu, sao lưu) lưu <strong>cạnh file thực thi</strong> — hợp USB / đồng bộ đám mây. Khi di chuyển cả thư mục, dữ liệu đi theo.</div>
+            </div>
+            <label class="toggle-wrap"><input type="checkbox" id="set-portable" /><span class="toggle-ui"></span></label>
+          </div>
+        </div>
+
         <!-- ═══ KHÁC ═══ -->
         <div class="panel-card glass-card settings-card">
           <div class="panel-card-head"><svg class="ic accent-ic"><use href="#i-dots-three-vertical"/></svg><h3>Khác</h3></div>
@@ -433,7 +467,7 @@
         </div>
 
         <div class="settings-foot">
-          <span>Taskora v2.1.1</span>
+          <span>Taskora v2.2.0</span>
           <button class="linklike" id="set-open-help" type="button">Phím tắt</button>
           <span class="settings-dot">·</span>
           <button class="linklike" id="set-open-about" type="button">Giới thiệu</button>

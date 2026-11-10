@@ -279,6 +279,12 @@ pub struct Settings {
     /// Tự tạo bản sao lưu khi thoát.
     #[serde(default)]
     pub backup_on_exit: bool,
+    /// Chế độ hiệu năng: tắt blur/backdrop-filter/animation (máy yếu).
+    #[serde(default)]
+    pub perf_mode: bool,
+    /// View đang mở lần cuối ("inbox"…"list:3") — khôi phục khi mở app.
+    #[serde(default)]
+    pub last_view: String,
 }
 
 fn default_dark() -> bool {
@@ -310,6 +316,8 @@ impl Default for Settings {
             qa_preview: true,
             remind_today: true,
             backup_on_exit: false,
+            perf_mode: false,
+            last_view: String::new(),
         }
     }
 }
