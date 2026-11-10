@@ -110,7 +110,7 @@ pub fn primary_button(text: impl Into<String>) -> egui::Button<'static> {
 pub fn ic_job(glyph: &str, label: &str, color: Color32) -> egui::text::LayoutJob {
     let mut job = egui::text::LayoutJob::default();
     job.append(
-        glyph.to_owned(),
+        glyph,
         0.0,
         egui::TextFormat {
             font_id: egui::FontId::new(14.0, FontFamily::Name("icons".into())),
@@ -119,7 +119,7 @@ pub fn ic_job(glyph: &str, label: &str, color: Color32) -> egui::text::LayoutJob
         },
     );
     job.append(
-        format!(" {label}"),
+        &format!(" {label}"),
         0.0,
         egui::TextFormat {
             font_id: egui::FontId::new(13.0, FontFamily::Name("strong".into())),
@@ -134,7 +134,7 @@ pub fn ic_job(glyph: &str, label: &str, color: Color32) -> egui::text::LayoutJob
 pub fn primary_button_icon(glyph: &str, label: &str) -> egui::Button<'static> {
     let mut job = egui::text::LayoutJob::default();
     job.append(
-        glyph.to_owned(),
+        glyph,
         0.0,
         egui::TextFormat {
             font_id: egui::FontId::new(14.0, FontFamily::Name("icons".into())),
@@ -143,7 +143,7 @@ pub fn primary_button_icon(glyph: &str, label: &str) -> egui::Button<'static> {
         },
     );
     job.append(
-        format!(" {label}"),
+        &format!(" {label}"),
         0.0,
         egui::TextFormat {
             font_id: egui::FontId::new(13.0, FontFamily::Name("strong".into())),
