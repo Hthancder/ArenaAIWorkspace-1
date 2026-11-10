@@ -17,43 +17,55 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Node 20 (cho Tauri CLI)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
       - name: Rust (stable)
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cache
         uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
 
-      - name: Test + Build Release
+      - name: Test (Rust core) + Build Release (Tauri)
         id: build
         shell: bash
         run: |
           set -o pipefail
           status=0
           echo "===== cargo test =====" | tee ci-log.txt
-          cargo test --verbose 2>&1 | tee -a ci-log.txt || status=1
-          echo "===== cargo build --release =====" | tee -a ci-log.txt
-          cargo build --release 2>&1 | tee -a ci-log.txt || status=1
+          cargo test --manifest-path src-tauri/Cargo.toml 2>&1 | tee -a ci-log.txt || status=1
+          if [ $status -ne 0 ]; then exit $status; fi
+          echo "===== npm i -g @tauri-apps/cli =====" | tee -a ci-log.txt
+          npm install -g "@tauri-apps/cli@^2" 2>&1 | tee -a ci-log.txt || status=1
+          echo "===== tauri build =====" | tee -a ci-log.txt
+          tauri build --bundles nsis 2>&1 | tee -a ci-log.txt || status=1
           exit $status
 
-      - name: Đổi tên file exe
-        shell: pwsh
+      - name: Chuẩn bị artifact
+        shell: bash
         run: |
-          Copy-Item target\release\Taskora.exe Taskora.exe
-          Get-Item Taskora.exe | Select-Object Name, Length
+          mkdir -p out
+          cp "src-tauri/target/release/Taskora.exe" "out/Taskora.exe"
+          cp src-tauri/target/release/bundle/nsis/*-setup.exe out/Taskora-Setup-x64.exe 2>/dev/null || cp src-tauri/target/release/bundle/nsis/*.exe out/Taskora-Setup-x64.exe
+          ls -la out/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: Taskora-Windows-x64
-          path: Taskora.exe
+          path: out/
           if-no-files-found: error
 
       - name: Tạo GitHub Release (khi push tag v*)
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$env:GITHUB_REF_NAME" Taskora.exe --generate-notes
         shell: pwsh
+        run: gh release create "$env:GITHUB_REF_NAME" out/Taskora.exe out/Taskora-Setup-x64.exe --generate-notes
 
       # Đẩy log lỗi về một branch để đọc qua git (log Actions dùng Azure blob – không truy cập được từ sandbox)
       - name: Đẩy log lỗi (nếu fail)

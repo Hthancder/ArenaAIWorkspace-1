@@ -1,0 +1,857 @@
+//! Toàn bộ lệnh IPC từ frontend — port nguyên logic từ bản egui (app.rs).
+
+use chrono::{DateTime, NaiveDate, Utc};
+use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Manager, State};
+
+use crate::models::{
+    today, Priority, Repeat, SortMode, Store, SubTask, Task, View,
+};
+use crate::parser;
+use crate::state::{make_snapshot, AppState, Inner, Snapshot, LIST_PALETTE};
+use crate::stats::{self, StatsPayload};
+use crate::storage;
+
+// ------------------------------------------------------------------ helpers
+
+fn set_flash(i: &mut Inner, msg: impl Into<String>) {
+    i.flash = Some(msg.into());
+}
+
+fn parse_date(s: &str) -> Result<NaiveDate, String> {
+    NaiveDate::parse_from_str(s, "%Y-%m-%d").map_err(|_| "Ngày không hợp lệ (cần yyyy-mm-dd)".to_string())
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ViewWire {
+    Inbox,
+    Today,
+    Upcoming,
+    Starred,
+    Completed,
+    Trash,
+    Stats,
+    List { id: u64 },
+}
+
+impl From<ViewWire> for View {
+    fn from(v: ViewWire) -> Self {
+        match v {
+            ViewWire::Inbox => View::Inbox,
+            ViewWire::Today => View::Today,
+            ViewWire::Upcoming => View::Upcoming,
+            ViewWire::Starred => View::Starred,
+            ViewWire::Completed => View::Completed,
+            ViewWire::Trash => View::Trash,
+            ViewWire::Stats => View::Stats,
+            ViewWire::List { id } => View::List(id),
+        }
+    }
+}
+
+/// Áp dụng mutation + tạo snapshot, đồng thời cập nhật tiêu đề cửa sổ.
+fn finish(app: &AppHandle, i: &mut Inner) -> Snapshot {
+    let snap = make_snapshot(i);
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.set_title(&format!("Taskora — {} việc đang làm", snap.counts.active));
+    }
+    snap
+}
+
+/// Hoàn thành / bỏ hoàn thành; việc lặp lại tự sinh lần kế tiếp.
+fn toggle_done(i: &mut Inner, id: u64) {
+    AppState::push_undo(i);
+    let Some(idx) = i.store.tasks.iter().position(|t| t.id == id) else {
+        return;
+    };
+    if i.store.tasks[idx].completed_at.is_some() {
+        i.store.tasks[idx].completed_at = None;
+        return;
+    }
+    let snap_task = i.store.tasks[idx].clone();
+    i.store.tasks[idx].completed_at = Some(Utc::now());
+    if snap_task.repeat != Repeat::None {
+        let base = snap_task.due.unwrap_or_else(today);
+        if let Some(next) = snap_task.repeat.next_after(base) {
+            let mut nt = snap_task;
+            nt.id = i.store.new_id();
+            nt.due = Some(next);
+            nt.completed_at = None;
+            nt.deleted_at = None;
+            nt.created_at = Utc::now();
+            nt.starred = false;
+            for s in &mut nt.subtasks {
+                s.done = false;
+            }
+            nt.order = i.store.tasks[idx].order.saturating_add(1);
+            i.store.tasks.push(nt);
+            set_flash(i, format!("Lặp lại: hẹn gặp {}", next.format("%d/%m/%Y")));
+        }
+    }
+}
+
+fn delete_task(i: &mut Inner, id: u64, in_trash: bool) {
+    if in_trash {
+        // xóa vĩnh viễn
+        AppState::push_undo(i);
+        i.store.tasks.retain(|t| t.id != id);
+        set_flash(i, "Đã xóa vĩnh viễn");
+        return;
+    }
+    AppState::push_undo(i);
+    if let Some(t) = i.store.tasks.iter_mut().find(|t| t.id == id) {
+        t.deleted_at = Some(Utc::now());
+    }
+    set_flash(i, "Đã chuyển vào thùng rác (Ctrl+Z hoàn tác)");
+}
+
+fn duplicate_task(i: &mut Inner, id: u64) {
+    AppState::push_undo(i);
+    let Some(idx) = i.store.tasks.iter().position(|t| t.id == id) else {
+        return;
+    };
+    let mut nt = i.store.tasks[idx].clone();
+    nt.id = i.store.new_id();
+    nt.title = format!("{} (bản sao)", nt.title);
+    nt.completed_at = None;
+    nt.deleted_at = None;
+    nt.created_at = Utc::now();
+    for s in &mut nt.subtasks {
+        s.id = i.store.new_id();
+        s.done = false;
+    }
+    nt.order = i.store.tasks[idx].order;
+    i.store.tasks.insert(idx + 1, nt);
+    set_flash(i, "Đã nhân bản việc");
+}
+
+/// Sắp xếp lại `order` theo thứ tự hiển thị của view (chỉ chế độ Thủ công).
+fn reorder_with(i: &mut Inner, view: &View, f: impl FnOnce(&mut Vec<u64>)) {
+    let mut vis = i
+        .store
+        .visible(view, "", i.store.settings.sort, false, None, None);
+    f(&mut vis);
+    for (idx, id) in vis.iter().enumerate() {
+        if let Some(t) = i.store.tasks.iter_mut().find(|t| t.id == *id) {
+            t.order = idx as u32;
+        }
+    }
+}
+
+fn shift_task(i: &mut Inner, view: &View, id: u64, up: bool) {
+    if i.store.settings.sort != SortMode::Manual {
+        set_flash(i, "Chỉ sắp xếp được khi chọn thứ tự Thủ công");
+        return;
+    }
+    AppState::push_undo(i);
+    reorder_with(i, view, |vis| {
+        if let Some(pos) = vis.iter().position(|&x| x == id) {
+            if up && pos > 0 {
+                vis.swap(pos, pos - 1);
+            } else if !up && pos + 1 < vis.len() {
+                vis.swap(pos, pos + 1);
+            }
+        }
+    });
+}
+
+fn drop_task(i: &mut Inner, view: &View, src: u64, dst: u64, before: bool) {
+    if i.store.settings.sort != SortMode::Manual || src == dst {
+        return;
+    }
+    AppState::push_undo(i);
+    reorder_with(i, view, |vis| {
+        if let Some(si) = vis.iter().position(|&x| x == src) {
+            let item = vis.remove(si);
+            if let Some(di) = vis.iter().position(|&x| x == dst) {
+                let at = if before { di } else { di + 1 };
+                vis.insert(at, item);
+            } else {
+                vis.insert(si, item);
+            }
+        }
+    });
+    set_flash(i, "Đã đổi thứ tự");
+}
+
+// ------------------------------------------------------------------ act enum
+
+/// Wire format cho hành động (frontend gửi `{ "type": "toggle", "id": 3 }`).
+#[derive(Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum Act {
+    Toggle { id: u64 },
+    Star { id: u64 },
+    Delete { id: u64 },
+    Restore { id: u64 },
+    Purge { id: u64 },
+    Duplicate { id: u64 },
+    MoveUp { id: u64 },
+    MoveDown { id: u64 },
+    MoveToList { id: u64, list: Option<u64> },
+    Drop { src: u64, dst: u64, before: bool },
+    AddSubtask { id: u64 },
+    ClearCompleted,
+    SetDue { id: u64, due: Option<String> },
+    SetPriority { id: u64, priority: Priority },
+    PurgeTrash,
+    DeferOverdue { target: String },
+    BulkComplete { ids: Vec<u64> },
+    BulkStar { ids: Vec<u64> },
+    BulkDelete { ids: Vec<u64> },
+}
+
+// ------------------------------------------------------------------ lệnh snapshot
+
+#[tauri::command]
+pub fn snapshot(app: AppHandle, state: State<'_, AppState>) -> Snapshot {
+    let mut i = state.lock();
+    finish(&app, &mut i)
+}
+
+// ------------------------------------------------------------------ lệnh act
+
+#[tauri::command]
+pub fn act(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    action: Act,
+    view: ViewWire,
+) -> Result<Snapshot, String> {
+    let view = View::from(view);
+    let in_trash = matches!(view, View::Trash);
+    let mut i = state.lock();
+    match action {
+        Act::Toggle { id } => toggle_done(&mut i, id),
+        Act::Star { id } => {
+            if let Some(t) = i.store.tasks.iter_mut().find(|t| t.id == id) {
+                t.starred = !t.starred;
+            }
+        }
+        Act::Delete { id } => delete_task(&mut i, id, in_trash),
+        Act::Restore { id } => {
+            AppState::push_undo(&mut i);
+            if let Some(t) = i.store.tasks.iter_mut().find(|t| t.id == id) {
+                t.deleted_at = None;
+                t.completed_at = None;
+            }
+            set_flash(&mut i, "Đã khôi phục việc");
+        }
+        Act::Purge { id } => {
+            AppState::push_undo(&mut i);
+            i.store.tasks.retain(|t| t.id != id);
+            set_flash(&mut i, "Đã xóa vĩnh viễn");
+        }
+        Act::Duplicate { id } => duplicate_task(&mut i, id),
+        Act::MoveUp { id } => shift_task(&mut i, &view, id, true),
+        Act::MoveDown { id } => shift_task(&mut i, &view, id, false),
+        Act::MoveToList { id, list } => {
+            AppState::push_undo(&mut i);
+            if let Some(t) = i.store.tasks.iter_mut().find(|t| t.id == id) {
+                t.list_id = list;
+            }
+            set_flash(&mut i, "Đã chuyển việc");
+        }
+        Act::Drop { src, dst, before } => drop_task(&mut i, &view, src, dst, before),
+        Act::AddSubtask { id } => {
+            AppState::push_undo(&mut i);
+            let sid = i.store.new_id();
+            if let Some(t) = i.store.tasks.iter_mut().find(|t| t.id == id) {
+                t.subtasks.push(SubTask {
+                    id: sid,
+                    title: String::new(),
+                    done: false,
+                });
+            }
+        }
+        Act::ClearCompleted => {
+            AppState::push_undo(&mut i);
+            let before = i.store.tasks.len();
+            i.store
+                .tasks
+                .retain(|t| !(t.is_completed() && !t.is_deleted()));
+            let n = before - i.store.tasks.len();
+            set_flash(&mut i, format!("Đã xóa {n} việc hoàn thành"));
+        }
+        Act::SetDue { id, due } => {
+            let due = due.as_deref().map(parse_date).transpose()?;
+            AppState::push_undo(&mut i);
+            if let Some(t) = i.store.tasks.iter_mut().find(|t| t.id == id) {
+                t.due = due;
+            }
+            set_flash(
+                &mut i,
+                match due {
+                    Some(d) => format!("Hạn chót: {}", d.format("%d/%m/%Y")),
+                    None => "Đã bỏ hạn chót".to_string(),
+                },
+            );
+        }
+        Act::SetPriority { id, priority } => {
+            AppState::push_undo(&mut i);
+            if let Some(t) = i.store.tasks.iter_mut().find(|t| t.id == id) {
+                t.priority = priority;
+            }
+            set_flash(&mut i, format!("Ưu tiên: {}", priority.label()));
+        }
+        Act::PurgeTrash => {
+            let n = i.store.tasks.iter().filter(|t| t.is_deleted()).count();
+            if n == 0 {
+                set_flash(&mut i, "Thùng rác đã trống");
+                return Ok(finish(&app, &mut i));
+            }
+            AppState::push_undo(&mut i);
+            i.store.tasks.retain(|t| !t.is_deleted());
+            set_flash(&mut i, format!("Đã xóa vĩnh viễn {n} việc trong thùng rác"));
+        }
+        Act::BulkComplete { ids } => {
+            if ids.is_empty() {
+                // không có gì để làm
+            } else {
+                AppState::push_undo(&mut i);
+                let mut n = 0usize;
+                for t in i.store.tasks.iter_mut() {
+                    if ids.contains(&t.id) && t.completed_at.is_none() && t.deleted_at.is_none() {
+                        t.completed_at = Some(Utc::now());
+                        n += 1;
+                    }
+                }
+                set_flash(&mut i, format!("Đã hoàn thành {n} việc"));
+            }
+        }
+        Act::BulkStar { ids } => {
+            let mut n = 0usize;
+            for t in i.store.tasks.iter_mut() {
+                if ids.contains(&t.id) && !t.starred {
+                    t.starred = true;
+                    n += 1;
+                }
+            }
+            set_flash(&mut i, format!("Đã ghim {n} việc"));
+        }
+        Act::BulkDelete { ids } => {
+            if ids.is_empty() {
+                // không có gì để làm
+            } else if in_trash {
+                AppState::push_undo(&mut i);
+                i.store.tasks.retain(|t| !ids.contains(&t.id));
+                set_flash(&mut i, format!("Đã xóa vĩnh viễn {} việc", ids.len()));
+            } else {
+                AppState::push_undo(&mut i);
+                let mut n = 0usize;
+                let now = Utc::now();
+                for t in i.store.tasks.iter_mut() {
+                    if ids.contains(&t.id) && t.deleted_at.is_none() {
+                        t.deleted_at = Some(now);
+                        n += 1;
+                    }
+                }
+                set_flash(&mut i, format!("Đã chuyển {n} việc vào thùng rác"));
+            }
+        }
+        Act::DeferOverdue { target } => {
+            let target = parse_date(&target)?;
+            let t = today();
+            let n = i
+                .store
+                .tasks
+                .iter()
+                .filter(|x| x.is_active() && x.due.map(|d| d < t).unwrap_or(false))
+                .count();
+            if n == 0 {
+                set_flash(&mut i, "Không có việc quá hạn nào");
+                return Ok(finish(&app, &mut i));
+            }
+            AppState::push_undo(&mut i);
+            for task in i
+                .store
+                .tasks
+                .iter_mut()
+                .filter(|x| x.is_active() && x.due.map(|d| d < t).unwrap_or(false))
+            {
+                task.due = Some(target);
+            }
+            set_flash(
+                &mut i,
+                format!("Đã đổi hạn {n} việc quá hạn → {}", target.format("%d/%m/%Y")),
+            );
+        }
+    }
+    AppState::commit(&mut i);
+    Ok(finish(&app, &mut i))
+}
+
+// ------------------------------------------------------------------ quick add
+
+#[tauri::command]
+pub fn quick_add(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: String,
+    view: ViewWire,
+) -> Result<Snapshot, String> {
+    let input = input.trim().to_string();
+    if input.is_empty() {
+        return Err("Nội dung trống".to_string());
+    }
+    let p = parser::parse(&input, today());
+    if p.title.trim().is_empty() {
+        return Err("Không nhận diện được nội dung việc cần làm".to_string());
+    }
+    let view = View::from(view);
+    let mut i = state.lock();
+    AppState::push_undo(&mut i);
+    let mut due = p.due;
+    let mut list_id = None;
+    let mut starred = false;
+    match view {
+        View::Today => {
+            due.get_or_insert_with(today);
+        }
+        View::Upcoming => {
+            let t = today();
+            due.get_or_insert_with(|| t.succ_opt().unwrap_or(t));
+        }
+        View::Starred => starred = true,
+        View::List(id) => list_id = Some(id),
+        _ => {}
+    }
+    let order = i
+        .store
+        .tasks
+        .iter()
+        .filter(|t| t.list_id == list_id)
+        .map(|t| t.order)
+        .min()
+        .unwrap_or(0);
+    let id = i.store.new_id();
+    i.store.tasks.insert(
+        0,
+        Task {
+            id,
+            title: p.title,
+            notes: String::new(),
+            list_id,
+            priority: p.priority.unwrap_or_default(),
+            due,
+            repeat: p.repeat.unwrap_or(Repeat::None),
+            tags: p.tags,
+            subtasks: Vec::new(),
+            starred,
+            order: order.saturating_sub(1),
+            created_at: Utc::now(),
+            completed_at: None,
+            deleted_at: None,
+        },
+    );
+    set_flash(&mut i, "Đã thêm việc ✓");
+    i.last_added = Some(id);
+    AppState::commit(&mut i);
+    Ok(finish(&app, &mut i))
+}
+
+/// Phân tích xem trước (hiển thị chip gợi ý khi đang gõ).
+#[derive(Serialize)]
+pub struct Preview {
+    pub title: String,
+    pub due: Option<String>,
+    pub tags: Vec<String>,
+    pub priority: Option<String>,
+    pub repeat: Option<String>,
+}
+
+#[tauri::command]
+pub fn preview_parse(input: String) -> Preview {
+    let p = parser::parse(input.trim(), today());
+    Preview {
+        title: p.title,
+        due: p.due.map(|d| d.format("%d/%m/%Y").to_string()),
+        tags: p.tags,
+        priority: p.priority.map(|x| x.short().to_string()),
+        repeat: p.repeat.map(|x| x.label().to_string()),
+    }
+}
+
+// ------------------------------------------------------------------ lọc / xóa
+
+#[tauri::command]
+pub fn visible_ids(
+    state: State<'_, AppState>,
+    view: ViewWire,
+    search: String,
+    tag: Option<String>,
+    prio: Option<Priority>,
+    sort: SortMode,
+    hide_completed: bool,
+) -> Vec<u64> {
+    let i = state.lock();
+    i.store.visible(
+        &View::from(view),
+        &search,
+        sort,
+        hide_completed,
+        tag.as_deref(),
+        prio,
+    )
+}
+
+// ------------------------------------------------------------------ chi tiết việc
+
+#[tauri::command]
+pub fn set_task_title(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: u64,
+    title: String,
+) -> Snapshot {
+    let title = title.trim().to_string();
+    let mut i = state.lock();
+    if !title.is_empty() {
+        if let Some(t) = i.store.tasks.iter_mut().find(|t| t.id == id) {
+            t.title = title;
+        }
+        AppState::commit(&mut i);
+    }
+    finish(&app, &mut i)
+}
+
+#[tauri::command]
+pub fn set_task_notes(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: u64,
+    notes: String,
+) -> Snapshot {
+    let mut i = state.lock();
+    if let Some(t) = i.store.tasks.iter_mut().find(|t| t.id == id) {
+        t.notes = notes;
+    }
+    AppState::commit(&mut i);
+    finish(&app, &mut i)
+}
+
+#[tauri::command]
+pub fn set_task_repeat(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: u64,
+    repeat: Repeat,
+) -> Snapshot {
+    let mut i = state.lock();
+    AppState::push_undo(&mut i);
+    if let Some(t) = i.store.tasks.iter_mut().find(|t| t.id == id) {
+        t.repeat = repeat;
+    }
+    AppState::commit(&mut i);
+    finish(&app, &mut i)
+}
+
+#[tauri::command]
+pub fn toggle_subtask(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: u64,
+    sid: u64,
+) -> Snapshot {
+    let mut i = state.lock();
+    if let Some(t) = i.store.tasks.iter_mut().find(|t| t.id == id) {
+        if let Some(s) = t.subtasks.iter_mut().find(|s| s.id == sid) {
+            s.done = !s.done;
+        }
+    }
+    AppState::commit(&mut i);
+    finish(&app, &mut i)
+}
+
+#[tauri::command]
+pub fn set_subtask_title(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: u64,
+    sid: u64,
+    title: String,
+) -> Snapshot {
+    let mut i = state.lock();
+    if let Some(t) = i.store.tasks.iter_mut().find(|t| t.id == id) {
+        if let Some(s) = t.subtasks.iter_mut().find(|s| s.id == sid) {
+            s.title = title;
+        }
+    }
+    AppState::commit(&mut i);
+    finish(&app, &mut i)
+}
+
+#[tauri::command]
+pub fn remove_subtask(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: u64,
+    sid: u64,
+) -> Snapshot {
+    let mut i = state.lock();
+    if let Some(t) = i.store.tasks.iter_mut().find(|t| t.id == id) {
+        t.subtasks.retain(|s| s.id != sid);
+    }
+    AppState::commit(&mut i);
+    finish(&app, &mut i)
+}
+
+#[tauri::command]
+pub fn add_task_tag(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: u64,
+    tag: String,
+) -> Snapshot {
+    let tag = tag.trim().trim_start_matches('#').to_lowercase();
+    if tag.is_empty() {
+        let mut i = state.lock();
+        return finish(&app, &mut i);
+    }
+    let mut i = state.lock();
+    AppState::push_undo(&mut i);
+    if let Some(t) = i.store.tasks.iter_mut().find(|t| t.id == id) {
+        if !t.tags.iter().any(|x| x == &tag) {
+            t.tags.push(tag);
+        }
+    }
+    AppState::commit(&mut i);
+    finish(&app, &mut i)
+}
+
+#[tauri::command]
+pub fn remove_task_tag(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: u64,
+    tag: String,
+) -> Snapshot {
+    let mut i = state.lock();
+    AppState::push_undo(&mut i);
+    if let Some(t) = i.store.tasks.iter_mut().find(|t| t.id == id) {
+        t.tags.retain(|x| x != &tag);
+    }
+    AppState::commit(&mut i);
+    finish(&app, &mut i)
+}
+
+// ------------------------------------------------------------------ undo/redo
+
+#[tauri::command]
+pub fn undo(app: AppHandle, state: State<'_, AppState>) -> Snapshot {
+    let mut i = state.lock();
+    if let Some(prev) = i.undo_stack.pop() {
+        i.redo_stack.push(i.store.clone());
+        i.store = prev;
+        set_flash(&mut i, "Đã hoàn tác");
+        AppState::commit(&mut i);
+    }
+    finish(&app, &mut i)
+}
+
+#[tauri::command]
+pub fn redo(app: AppHandle, state: State<'_, AppState>) -> Snapshot {
+    let mut i = state.lock();
+    if let Some(next) = i.redo_stack.pop() {
+        i.undo_stack.push(i.store.clone());
+        i.store = next;
+        set_flash(&mut i, "Đã làm lại");
+        AppState::commit(&mut i);
+    }
+    finish(&app, &mut i)
+}
+
+// ------------------------------------------------------------------ cài đặt
+
+#[tauri::command]
+pub fn set_sort(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    mode: SortMode,
+) -> Snapshot {
+    let mut i = state.lock();
+    i.store.settings.sort = mode;
+    AppState::commit(&mut i);
+    finish(&app, &mut i)
+}
+
+#[tauri::command]
+pub fn set_hide_completed(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    hide: bool,
+) -> Snapshot {
+    let mut i = state.lock();
+    i.store.settings.hide_completed = hide;
+    AppState::commit(&mut i);
+    finish(&app, &mut i)
+}
+
+#[tauri::command]
+pub fn toggle_dark(app: AppHandle, state: State<'_, AppState>) -> Snapshot {
+    let mut i = state.lock();
+    i.store.settings.dark = !i.store.settings.dark;
+    set_flash(
+        &mut i,
+        if i.store.settings.dark {
+            "Đã bật giao diện tối"
+        } else {
+            "Đã bật giao diện sáng"
+        },
+    );
+    AppState::commit(&mut i);
+    finish(&app, &mut i)
+}
+
+// ------------------------------------------------------------------ danh sách
+
+#[tauri::command]
+pub fn create_list(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    name: String,
+    color_idx: usize,
+) -> Snapshot {
+    let name = name.trim().to_string();
+    let mut i = state.lock();
+    if name.is_empty() {
+        return finish(&app, &mut i);
+    }
+    AppState::push_undo(&mut i);
+    let id = i.store.new_id();
+    let color = LIST_PALETTE[color_idx.min(LIST_PALETTE.len() - 1)];
+    i.store.lists.push(crate::models::List { id, name, color });
+    set_flash(&mut i, "Đã tạo danh sách");
+    AppState::commit(&mut i);
+    finish(&app, &mut i)
+}
+
+#[tauri::command]
+pub fn rename_list(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: u64,
+    name: String,
+    color_idx: usize,
+) -> Snapshot {
+    let name = name.trim().to_string();
+    let mut i = state.lock();
+    if name.is_empty() {
+        return finish(&app, &mut i);
+    }
+    AppState::push_undo(&mut i);
+    let color = LIST_PALETTE[color_idx.min(LIST_PALETTE.len() - 1)];
+    if let Some(l) = i.store.lists.iter_mut().find(|l| l.id == id) {
+        l.name = name;
+        l.color = color;
+    }
+    AppState::commit(&mut i);
+    finish(&app, &mut i)
+}
+
+/// Xóa danh sách — việc trong danh sách trở về Hộp thư.
+#[tauri::command]
+pub fn delete_list(app: AppHandle, state: State<'_, AppState>, id: u64) -> Snapshot {
+    let mut i = state.lock();
+    AppState::push_undo(&mut i);
+    for t in i.store.tasks.iter_mut() {
+        if t.list_id == Some(id) {
+            t.list_id = None;
+        }
+    }
+    i.store.lists.retain(|l| l.id != id);
+    set_flash(&mut i, "Đã xóa danh sách (việc về Hộp thư)");
+    AppState::commit(&mut i);
+    finish(&app, &mut i)
+}
+
+// ------------------------------------------------------------------ thống kê
+
+#[tauri::command]
+pub fn stats(state: State<'_, AppState>) -> StatsPayload {
+    let i = state.lock();
+    stats::compute(&i.store)
+}
+
+// ------------------------------------------------------------------ sao lưu
+
+#[derive(Serialize)]
+pub struct BackupInfo {
+    pub name: String,
+    pub size: u64,
+    /// Ngày sửa đổi (yyyy-mm-dd HH:MM).
+    pub modified: String,
+}
+
+#[tauri::command]
+pub fn export_backup(state: State<'_, AppState>) -> Result<String, String> {
+    let i = state.lock();
+    let path = storage::export_backup(&i.store)?;
+    Ok(path
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "taskora-backup.json".to_string()))
+}
+
+#[tauri::command]
+pub fn list_backups() -> Vec<BackupInfo> {
+    storage::list_backups()
+        .into_iter()
+        .map(|p| {
+            let meta = std::fs::metadata(&p);
+            let size = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+            let modified = meta
+                .and_then(|m| m.modified())
+                .map(|t| {
+                    let dt: DateTime<Utc> = t.into();
+                    dt.format("%Y-%m-%d %H:%M").to_string()
+                })
+                .unwrap_or_else(|_| "—".to_string());
+            BackupInfo {
+                name: p
+                    .file_name()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_default(),
+                size,
+                modified,
+            }
+        })
+        .collect()
+}
+
+#[tauri::command]
+pub fn import_backup(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    name: String,
+) -> Result<Snapshot, String> {
+    if name.contains(['/', '\\']) || name.is_empty() {
+        return Err("Tên bản sao lưu không hợp lệ".to_string());
+    }
+    let path = storage::backups_dir().join(&name);
+    let mut i = state.lock();
+    AppState::push_undo(&mut i);
+    let mut st = storage::import_backup(&path)?;
+    st.sanitize();
+    i.store = st;
+    set_flash(&mut i, "Đã khôi phục bản sao lưu");
+    AppState::commit(&mut i);
+    Ok(finish(&app, &mut i))
+}
+
+#[tauri::command]
+pub fn open_data_dir() {
+    storage::open_data_dir();
+}
+
+/// Lưu ngay lập tức (Ctrl+S).
+#[tauri::command]
+pub fn save_now(app: AppHandle, state: State<'_, AppState>) -> Snapshot {
+    let i = state.lock();
+    drop(i);
+    state.flush();
+    let mut i = state.lock();
+    set_flash(&mut i, "Đã lưu ✓");
+    finish(&app, &mut i)
+}

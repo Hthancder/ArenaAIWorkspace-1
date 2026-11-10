@@ -307,7 +307,7 @@ impl View {
 }
 
 /// Bộ đếm cho thanh bên / thanh trạng thái.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct Counts {
     pub inbox: usize,
     pub today: usize,

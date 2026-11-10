@@ -2,3 +2,9 @@
 *.pdb
 *.log
 .DS_Store
+
+# Tauri / v2
+src-tauri/target/
+src-tauri/gen/
+out/
+node_modules/
