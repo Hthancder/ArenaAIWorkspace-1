@@ -568,6 +568,30 @@ pub struct Settings {
     /// Chime nhẹ khi kết thúc phiên tập trung / giờ nghỉ.
     #[serde(default = "default_true")]
     pub sound_on: bool,
+    /// Thời lượng phiên tập trung (phút, 5–180).
+    #[serde(default = "default_focus_min")]
+    pub focus_min: u32,
+    /// Thời lượng nghỉ ngắn (phút, 1–60).
+    #[serde(default = "default_break_min")]
+    pub break_min: u32,
+    /// Thời lượng nghỉ dài (phút, 5–60).
+    #[serde(default = "default_long_break_min")]
+    pub long_break_min: u32,
+    /// Nghỉ dài sau mỗi N phiên focus (0 = tắt nghỉ dài).
+    #[serde(default = "default_long_break_every")]
+    pub long_break_every: u32,
+    /// Tự bắt đầu nghỉ ngay khi hết giờ phiên (mặc định tắt — không ép nhịp).
+    #[serde(default)]
+    pub auto_start_break: bool,
+    /// Tự bắt đầu lại cùng việc sau khi nghỉ xong (mặc định tắt).
+    #[serde(default)]
+    pub auto_start_focus: bool,
+    /// Nhắc nghỉ mắt 20-20-20 mỗi 20 phút tập trung.
+    #[serde(default = "default_true")]
+    pub eye_reminder: bool,
+    /// Kiểu chuông cuối phiên: "soft" (3 nốt) · "wind" (chuông gió) · "none".
+    #[serde(default = "default_chime")]
+    pub chime: String,
     /// View đang mở lần cuối ("inbox"…"list:3") — khôi phục khi mở app.
     #[serde(default)]
     pub last_view: String,
@@ -579,6 +603,26 @@ fn default_dark() -> bool {
 
 fn default_true() -> bool {
     true
+}
+
+fn default_focus_min() -> u32 {
+    25
+}
+
+fn default_break_min() -> u32 {
+    5
+}
+
+fn default_long_break_min() -> u32 {
+    15
+}
+
+fn default_long_break_every() -> u32 {
+    4
+}
+
+fn default_chime() -> String {
+    "soft".to_string()
 }
 
 fn default_alpha() -> u8 {
@@ -605,6 +649,14 @@ impl Default for Settings {
             perf_mode: false,
             adhd_mode: false,
             sound_on: true,
+            focus_min: default_focus_min(),
+            break_min: default_break_min(),
+            long_break_min: default_long_break_min(),
+            long_break_every: default_long_break_every(),
+            auto_start_break: false,
+            auto_start_focus: false,
+            eye_reminder: true,
+            chime: default_chime(),
             last_view: String::new(),
         }
     }

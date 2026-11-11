@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 
+use crate::focus::FocusState;
 use crate::models::{today, Store};
 use crate::storage;
 
@@ -29,6 +30,8 @@ pub struct Inner {
     pub flash: Option<String>,
     /// Id việc vừa thêm (frontend tự chọn khi nhận snapshot).
     pub last_added: Option<u64>,
+    /// Phiên tập trung hiện tại (runtime — không lưu vào data.json).
+    pub focus: FocusState,
 }
 
 pub struct AppState {
@@ -83,6 +86,7 @@ impl AppState {
                 dirty: false,
                 flash,
                 last_added: None,
+                focus: FocusState::default(),
             }),
         }
     }

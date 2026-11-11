@@ -19,7 +19,7 @@ const fmtViTime = d => d.toLocaleString("vi-VN", { day: "2-digit", month: "2-dig
 const strip = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
 /* Chế độ ADHD — trạng thái phiên tập trung (không persist) */
-const F = { active: false, mode: "focus", taskId: null, total: 1500, remaining: 1500, paused: false, timer: null, eyeShown: false };
+const F = { active: false, mode: "focus", taskId: null, taskTitle: "", totalSecs: 1500, endsAtMs: null, remainingSecs: 1500, paused: false, phaseDone: false, cycleCount: 0, nextBreakLong: false, soundOn: true, chime: "soft", timer: null, eyeShown: false, completing: false, breakDoneFlag: false };
 const ADHD_QA = ["Chỉ cần 1 việc nhỏ nhất thôi…", "Viết 1 dòng — cứ ngắn và xấu cũng được", "Việc 2 phút cũng đáng kể", "Ném vào đây rồi tính sau"];
 const ADHD_PRAISE = ["Xong rồi! Một điểm cộng nữa ✦", "Tốt! Bạn đang lấy đà.", "Thêm một việc được xử đẹp.", "Đã xong — thưởng cho mình một hơi thở sâu.", "Tuyệt, việc tiếp theo thôi."];
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
@@ -505,6 +505,21 @@ function syncSettingsControls(s) {
   $("#set-perf").checked = !!st.perf_mode;
   $("#set-adhd").checked = !!st.adhd_mode;
   const snd = $("#set-sound"); if (snd) snd.checked = st.sound_on !== false;
+  const fm = $("#set-focus-min"); if (fm) fm.value = st.focus_min ?? 25;
+  syncMinuteChips("focus", st.focus_min ?? 25);
+  const brm = $("#set-break-min"); if (brm) brm.value = st.break_min ?? 5;
+  syncMinuteChips("break", st.break_min ?? 5);
+  const lbm = $("#set-long-break-min"); if (lbm) lbm.value = st.long_break_min ?? 15;
+  syncMinuteChips("long", st.long_break_min ?? 15);
+  const lbe = $("#set-long-break-every"); if (lbe) lbe.value = String(st.long_break_every ?? 4);
+  const asb = $("#set-auto-start-break"); if (asb) asb.checked = !!st.auto_start_break;
+  const asf = $("#set-auto-start-focus"); if (asf) asf.checked = !!st.auto_start_focus;
+  const er = $("#set-eye-reminder"); if (er) er.checked = st.eye_reminder !== false;
+  $$("#set-chime button").forEach(b => b.classList.toggle("on", (st.chime || "soft") === b.dataset.chime));
+}
+
+function syncMinuteChips(group, val) {
+  $$(`.minute-chip[data-group="${group}"]`).forEach(b => b.classList.toggle("on", Number(b.dataset.value) === Number(val)));
 }
 
 /* ─────────── NƠI LƯU DỮ LIỆU ─────────── */
@@ -1035,6 +1050,7 @@ function openHelp() {
     ["Ctrl + 8", "Cài đặt"],
     ["Esc", "Đóng bảng / bỏ chọn / bỏ bộ lọc"],
     ["Space (phiên ADHD)", "Tạm dừng / tiếp tục phiên tập trung"],
+    ["R (phiên ADHD)", "Bắt đầu lại đồng hồ"],
   ];
   openModal(`<h2><svg class="ic accent-ic"><use href="#i-keyboard"/></svg>Phím tắt & mẹo</h2>
     <div class="shortcut-list g-scroll">${rows.map(([k, d]) => `<div class="shortcut-row"><kbd class="modal-kbd">${k}</kbd><span class="b-meta" style="font-size:12px">${d}</span></div>`).join("")}</div>
@@ -1048,7 +1064,7 @@ function openHelp() {
 }
 function openAbout() {
   openModal(`<div class="about-center"><img class="about-logo" src="assets/logo.png" alt="Taskora" />
-      <h2 style="justify-content:center">Taskora <span style="color:var(--text-faint);font-weight:500">v2.8.0</span></h2>
+      <h2 style="justify-content:center">Taskora <span style="color:var(--text-faint);font-weight:500">v2.10.0</span></h2>
       <p>Quản lý công việc cho Windows — nhẹ, nhanh, đẹp.<br>Viết bằng Rust + Tauri, giao diện liquid glass.</p>
       <p>Font <strong>Be Vietnam Pro</strong> (OFL) · Icon <strong>Phosphor</strong> (MIT)</p>
       <p style="color:var(--text-faint)">MIT License © Hthancder</p>
@@ -1067,6 +1083,7 @@ const PALETTE_ACTIONS = [
   { icon: "chart-bar", label: "Đi tới: Thống kê", hint: "Ctrl+7", run: () => setView({ type: "stats" }) },
   { icon: "gear", label: "Đi tới: Cài đặt", hint: "Ctrl+8", run: () => setView({ type: "settings" }) },
   { icon: "repeat", label: "Lặp lại… (việc đang chọn)", hint: "", run: () => { if (S.selected != null) openRecurrenceModal(S.selected); else toast("Chọn một việc trước đã"); } },
+  { icon: "clock", label: "Mở cửa sổ đồng hồ", hint: "", run: () => invoke("focus_open_timer").catch(() => toast("Không mở được cửa sổ đồng hồ", "err")) },
   { icon: "note-pencil", label: "Brain-dump — đổ việc nhanh", hint: "Ctrl+Shift+N", run: openBrainDump },
   { icon: "plus", label: "Thêm việc mới", hint: "Ctrl+N", run: () => { setView(S.view.type === "stats" || S.view.type === "trash" || S.view.type === "completed" ? { type: "inbox" } : S.view); setTimeout(() => $("#quickadd-input").focus(), 60); } },
   { icon: "sun", label: "Bật/tắt giao diện tối–sáng", hint: "Ctrl+D", run: () => go(invoke("toggle_dark")) },
@@ -1458,6 +1475,40 @@ function bindEvents() {
     patchSettings({ adhd_mode: e.target.checked });
     toast(e.target.checked ? "Chế độ ADHD bật — một việc tại một thời điểm ✦" : "Chế độ ADHD tắt");
   });
+
+  /* ───────── Nhóm TẬP TRUNG (v2.10.0) ───────── */
+  const minuteCfg = [
+    { group: "focus", input: "#set-focus-min", key: "focus_min", min: 5, max: 180 },
+    { group: "break", input: "#set-break-min", key: "break_min", min: 1, max: 60 },
+    { group: "long", input: "#set-long-break-min", key: "long_break_min", min: 5, max: 60 },
+  ];
+  for (const c of minuteCfg) {
+    const input = $(c.input);
+    if (input) input.addEventListener("change", () => {
+      let v = Math.round(Number(input.value) || 0);
+      v = Math.min(c.max, Math.max(c.min, v));
+      input.value = String(v);
+      syncMinuteChips(c.group, v);
+      patchSettings({ [c.key]: v });
+    });
+  }
+  $$(".minute-chip").forEach(b => b.addEventListener("click", () => {
+    const c = minuteCfg.find(x => x.group === b.dataset.group);
+    if (!c) return;
+    const v = Number(b.dataset.value);
+    const input = $(c.input); if (input) input.value = String(v);
+    syncMinuteChips(c.group, v);
+    patchSettings({ [c.key]: v });
+  }));
+  $("#set-long-break-every")?.addEventListener("change", e => patchSettings({ long_break_every: Number(e.target.value) }));
+  $("#set-auto-start-break")?.addEventListener("change", e => patchSettings({ auto_start_break: e.target.checked }));
+  $("#set-auto-start-focus")?.addEventListener("change", e => patchSettings({ auto_start_focus: e.target.checked }));
+  $("#set-eye-reminder")?.addEventListener("change", e => patchSettings({ eye_reminder: e.target.checked }));
+  $$("#set-chime button").forEach(b => b.addEventListener("click", () => patchSettings({ chime: b.dataset.chime })));
+  $("#set-chime-test")?.addEventListener("click", () => {
+    const sel = ($$("#set-chime button.on")[0] || {}).dataset?.chime || (S.snap?.settings?.chime) || "soft";
+    playChime(sel, true);
+  });
   $("#storage-open").addEventListener("click", () => invoke("open_data_dir"));
   $("#storage-browse").addEventListener("click", openStorageCustomModal);
   $("#storage-default").addEventListener("click", () => openStorageConfirm("default", null));
@@ -1582,6 +1633,7 @@ function globalKeys(e) {
   if (focusOpen) {
     if (key === "escape") { e.preventDefault(); focusStop(); return; }
     if (key === " ") { e.preventDefault(); if (F.mode === "focus") focusTogglePause(); return; }
+    if (key === "r") { e.preventDefault(); focusReset(); return; }
     return; // đang tập trung — chặn mọi phím tắt khác
   }
 
@@ -1639,6 +1691,10 @@ function globalKeys(e) {
 /* ─────────── INIT ─────────── */
 document.addEventListener("DOMContentLoaded", async () => {
   bindEvents();
+  try {
+    window.__TAURI__?.event?.listen?.("focus:change", e => applyFocusPayload(e.payload));
+  } catch { /* môi trường không hỗ trợ event — overlay vẫn tự sync qua invoke */ }
+  focusTickStart();
   document.addEventListener("keydown", globalKeys);
   try {
     await refresh();
@@ -1690,7 +1746,8 @@ function renderNextUp() {
   if (!s_isAdhd() || !["inbox", "today", "upcoming", "starred", "list"].includes(S.view.type)) { el.hidden = true; return; }
   const doneToday = (S.snap && S.snap.counts && S.snap.counts.done_today) || 0;
   const focusToday = (S.snap && S.snap.counts && S.snap.counts.focus_today) || 0;
-  const focusSuffix = focusToday > 0 ? ` · ${focusToday} phiên 25′` : "";
+  const focusMin = (S.snap && S.snap.settings && S.snap.settings.focus_min) || 25;
+  const focusSuffix = focusToday > 0 ? ` · ${focusToday} phiên` : "";
   const t = nextAdhdTask();
   el.hidden = false;
   if (!t) {
@@ -1706,7 +1763,7 @@ function renderNextUp() {
     <div class="adhd-hero-title">${esc(t.title)}</div>
     <div class="adhd-next-meta">${dueChip(t)}${repeatMeta(t)}${subtaskMeta(t)}${tagsMeta(t)}</div>
     <div class="adhd-hero-actions">
-      <button class="adhd-cta" data-adhd-focus="${t.id}"><svg class="ic"><use href="#i-clock"/></svg>Tập trung 25 phút</button>
+      <button class="adhd-cta" data-adhd-focus="${t.id}"><svg class="ic"><use href="#i-clock"/></svg>Tập trung ${focusMin} phút</button>
       <button class="btn-adhd-done xl" data-adhd-done="${t.id}" title="Xong luôn việc này"><svg class="ic"><use href="#i-check"/></svg>Xong</button>
     </div>
     <div class="adhd-done-line"><svg class="ic tiny"><use href="#i-check-circle"/></svg><span>Hôm nay đã xong <b>${doneToday}</b> việc${focusSuffix}</span></div>`;
@@ -1735,102 +1792,176 @@ function confettiBurst(x, y) {
   }
 }
 
-function drawFocusRing() {
-  const p = $("#focus-prog");
+function applyFocusPayload(p) {
   if (!p) return;
-  p.style.strokeDasharray = String(CIRC);
-  const frac = F.total > 0 ? F.remaining / F.total : 0;
-  p.style.strokeDashoffset = String(CIRC * (1 - frac));
-  const m = Math.floor(F.remaining / 60), r = F.remaining % 60;
-  $("#focus-time").textContent = `${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
+  F.active = !!p.active;
+  F.mode = p.mode || "focus";
+  F.taskId = p.taskId ?? null;
+  F.taskTitle = p.taskTitle || "";
+  F.totalSecs = p.totalSecs || 1500;
+  F.endsAtMs = p.endsAtMs ?? null;
+  F.remainingSecs = p.remainingSecs ?? F.totalSecs;
+  F.paused = !!p.paused;
+  F.phaseDone = !!p.phaseDone;
+  F.cycleCount = p.cycleCount || 0;
+  F.nextBreakLong = !!p.nextBreakLong;
+  F.soundOn = p.soundOn !== false;
+  F.chime = p.chime || "soft";
+  renderFocus();
+}
+
+function focusRemainingNow() {
+  if (F.endsAtMs == null) return F.remainingSecs;
+  return Math.max(0, Math.ceil((F.endsAtMs - Date.now()) / 1000));
+}
+
+function drawFocusRing(rem) {
+  rem = rem ?? focusRemainingNow();
+  const p = $("#focus-prog");
+  const total = F.totalSecs || 1;
+  if (p) {
+    p.style.strokeDasharray = String(CIRC);
+    p.style.strokeDashoffset = String(CIRC * (1 - Math.max(0, Math.min(1, rem / total))));
+  }
+  const m = Math.floor(rem / 60), r = rem % 60;
+  const t = $("#focus-time"); if (t) t.textContent = `${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
   const nowEl = $("#focus-now");
   if (nowEl) nowEl.textContent = `Bây giờ là ${new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}`;
+}
+
+const focusEyeHide = () => { const e = $("#eye-pill"); if (e) e.hidden = true; clearInterval(eyeTimer); };
+
+function renderFocus() {
+  const s = S.snap && S.snap.settings ? S.snap.settings : {};
+  const focusMin = s.focus_min ?? 25, breakMin = s.break_min ?? 5, longBreakMin = s.long_break_min ?? 15;
+  const every = s.long_break_every ?? 4;
+  const isBreak = F.mode !== "focus";
+  const rem = focusRemainingNow();
+  drawFocusRing(rem);
+  /* vòng ring ↔ vòng thở */
+  const ringWrap = document.querySelector(".focus-ring-wrap");
+  const breath = $("#focus-breath");
+  if (isBreak) {
+    if (ringWrap) ringWrap.style.display = "none";
+    if (breath) breath.hidden = false;
+    startBreath();
+  } else {
+    if (ringWrap) ringWrap.style.display = "";
+    if (breath) breath.hidden = true;
+    stopBreath();
+  }
+  const hint = $("#focus-hint"), title = $("#focus-title");
+  const pauseBtn = $("#focus-pause"), stopBtn = $("#focus-stop"), resetBtn = $("#focus-reset");
+  const controls = $("#focus-controls"), done = $("#focus-done");
+  const doneSub = $("#focus-done-sub"), breakBtn = $("#focus-break");
+  if (isBreak) {
+    if (hint) hint.textContent = "Nghỉ thật — đứng dậy, uống nước, nhìn xa";
+    if (title) title.textContent = F.mode === "break_long" ? `Nghỉ dài ${longBreakMin} phút` : `Nghỉ ngắn ${breakMin} phút`;
+    if (controls) controls.hidden = false;
+    if (done) done.hidden = true;
+    if (pauseBtn) pauseBtn.hidden = true;
+    if (stopBtn) stopBtn.textContent = "Bỏ qua nghỉ →";
+    if (resetBtn) resetBtn.hidden = false;
+  } else if (F.phaseDone) {
+    if (hint) hint.textContent = `${focusMin} phút tập trung — não bạn xứng đáng được nghỉ`;
+    if (title) title.textContent = F.taskTitle;
+    if (controls) controls.hidden = true;
+    if (done) done.hidden = false;
+    if (breakBtn) {
+      const long = F.nextBreakLong;
+      breakBtn.textContent = long ? `Nghỉ dài ${longBreakMin}:00` : `Nghỉ ${breakMin}:00`;
+      breakBtn.classList.toggle("btn-save", long);
+      breakBtn.classList.toggle("btn-ghost", !long);
+    }
+    if (doneSub) doneSub.textContent = F.nextBreakLong
+      ? `Xong ${every} phiên rồi — nghỉ dài xứng đáng`
+      : `Nghỉ ${breakMin} phút — đứng dậy, uống nước, nhìn ra xa`;
+  } else {
+    if (hint) hint.textContent = "Đúng việc này thôi — mọi thứ khác có thể đợi";
+    if (title) title.textContent = F.taskTitle;
+    if (controls) controls.hidden = false;
+    if (done) done.hidden = true;
+    if (pauseBtn) { pauseBtn.hidden = false; pauseBtn.textContent = F.paused ? "Tiếp tục" : "Tạm dừng"; }
+    if (stopBtn) stopBtn.textContent = "Dừng lại — không sao";
+    if (resetBtn) resetBtn.hidden = false;
+  }
+  /* overlay đóng/mở theo engine */
+  const ov = $("#focus-overlay");
+  const show = F.active || F.phaseDone;
+  if (ov) {
+    if (show && ov.hidden) ov.hidden = false;
+    else if (!show && !ov.hidden) ov.hidden = true;
+  }
+  /* nghỉ xong → toast + dừng engine (overlay đóng ở cả hai cửa sổ qua event) */
+  const breakDone = F.phaseDone && F.mode !== "focus";
+  if (breakDone && !F.breakDoneFlag) {
+    F.breakDoneFlag = true;
+    toast("Nghỉ xong rồi — việc tiếp theo nhé ✦");
+    focusStop(true);
+  } else if (!breakDone) {
+    F.breakDoneFlag = false;
+  }
 }
 
 function focusTickStart() {
   clearInterval(F.timer);
   F.timer = setInterval(() => {
-    if (F.paused || !F.active) return;
-    F.remaining = Math.max(0, F.remaining - 1);
-    drawFocusRing();
-    const elapsed = F.total - F.remaining;
-    if (F.mode === "focus" && !F.eyeShown && elapsed >= 1200) showEyePill();
-    if (F.remaining === 0) focusPhaseDone();
-  }, 1000);
+    if (!F.active) return;
+    const rem = focusRemainingNow();
+    const ov = $("#focus-overlay");
+    if (ov && !ov.hidden) drawFocusRing(rem);
+    const s = S.snap && S.snap.settings ? S.snap.settings : {};
+    if (F.mode === "focus" && !F.eyeShown && !F.paused && s.eye_reminder !== false && (F.totalSecs - rem) >= 1200) showEyePill();
+    if (rem <= 0 && !F.phaseDone && F.endsAtMs != null && !F.completing) {
+      F.completing = true;
+      invoke("focus_complete")
+        .then(p => {
+          applyFocusPayload(p);
+          if (p && p.transitioned) {
+            playChime(p.chime, p.soundOn !== false);
+            if (p.completedFocus) { refresh(); if (s_isAdhd()) confettiBurst(window.innerWidth / 2, Math.max(120, window.innerHeight / 2 - 80)); }
+          }
+        })
+        .catch(() => {})
+        .finally(() => { F.completing = false; });
+    }
+  }, 500);
 }
 
-function focusStart(taskId) {
+const focusSync = () => invoke("focus_state").then(applyFocusPayload).catch(() => {});
+
+async function focusStart(taskId) {
   const t = taskById(taskId);
   if (!t) return;
-  F.active = true; F.mode = "focus"; F.taskId = taskId;
-  F.total = 1500; F.remaining = 1500; F.paused = false; F.eyeShown = false;
-  const eye = $("#eye-pill"); if (eye) eye.hidden = true;
-  $("#focus-hint").textContent = "Đúng việc này thôi — mọi thứ khác có thể đợi";
-  $("#focus-title").textContent = t.title;
-  $("#focus-controls").hidden = false;
-  $("#focus-pause").hidden = false;
-  $("#focus-pause").textContent = "Tạm dừng";
-  $("#focus-stop").textContent = "Dừng lại — không sao";
-  $("#focus-done").hidden = true;
-  $("#focus-breath").hidden = true;
-  document.querySelector(".focus-ring-wrap").style.display = "";
-  stopBreath();
-  $("#focus-overlay").hidden = false;
-  drawFocusRing();
+  F.eyeShown = false;
+  focusEyeHide();
+  try { postSnap(await invoke("focus_start", { taskId })); }
+  catch { toast("Không bắt đầu được phiên tập trung", "err"); return; }
+  focusSync();
   focusTickStart();
 }
 
-function focusPhaseDone() {
-  clearInterval(F.timer); F.timer = null;
-  clearInterval(eyeTimer);
-  const eye = $("#eye-pill"); if (eye) eye.hidden = true;
-  playChime();
-  if (F.mode === "focus") {
-    F.mode = "done";
-    go(invoke("log_focus_session"));
-    stopBreath();
-    $("#focus-breath").hidden = true;
-    document.querySelector(".focus-ring-wrap").style.display = "";
-    $("#focus-hint").textContent = "25 phút tập trung — não bạn xứng đáng được nghỉ";
-    $("#focus-controls").hidden = true;
-    $("#focus-done").hidden = false;
-    confettiBurst(window.innerWidth / 2, Math.max(120, window.innerHeight / 2 - 80));
-  } else {
-    focusStop();
-    toast("Nghỉ xong rồi — việc tiếp theo nhé ✦");
-  }
+function focusStop(silent) {
+  const wasBreak = F.mode !== "focus";
+  focusEyeHide();
+  invoke("focus_stop").then(s => { postSnap(s); focusSync(); }).catch(() => {});
+  if (wasBreak && !silent) toast("Về lại việc thôi ✦");
 }
 
 function focusTogglePause() {
+  if (!F.active || F.phaseDone) return;
+  invoke("focus_pause_toggle").then(applyFocusPayload).catch(() => {});
+}
+
+function focusReset() {
   if (!F.active) return;
-  F.paused = !F.paused;
-  $("#focus-pause").textContent = F.paused ? "Tiếp tục" : "Tạm dừng";
+  F.eyeShown = false;
+  focusEyeHide();
+  invoke("focus_reset").then(applyFocusPayload).catch(() => {});
 }
 
 function focusBreakStart() {
-  F.mode = "break"; F.total = 300; F.remaining = 300; F.paused = false;
-  $("#focus-hint").textContent = "Nghỉ thật — đứng dậy, uống nước, nhìn xa";
-  $("#focus-title").textContent = "Nghỉ 5 phút";
-  $("#focus-done").hidden = true;
-  $("#focus-controls").hidden = false;
-  $("#focus-pause").hidden = true;
-  $("#focus-stop").textContent = "Bỏ qua nghỉ →";
-  document.querySelector(".focus-ring-wrap").style.display = "none";
-  $("#focus-breath").hidden = false;
-  startBreath();
-  drawFocusRing();
-  focusTickStart();
-}
-
-function focusStop() {
-  F.active = false; F.paused = false; F.mode = "focus";
-  clearInterval(F.timer); F.timer = null;
-  clearInterval(eyeTimer);
-  const eye = $("#eye-pill"); if (eye) eye.hidden = true;
-  stopBreath();
-  const br = $("#focus-breath"); if (br) br.hidden = true;
-  const rw = document.querySelector(".focus-ring-wrap"); if (rw) rw.style.display = "";
-  const ov = $("#focus-overlay"); if (ov) ov.hidden = true;
+  invoke("focus_break_start").then(applyFocusPayload).catch(() => {});
 }
 
 function bindAdhd() {
@@ -1915,7 +2046,9 @@ function bindAdhd() {
     }
   });
   $("#focus-pause")?.addEventListener("click", focusTogglePause);
-  $("#focus-stop")?.addEventListener("click", () => { const wasBreak = F.mode === "break"; focusStop(); if (wasBreak) toast("Về lại việc thôi ✦"); });
+  $("#focus-reset")?.addEventListener("click", focusReset);
+  $("#focus-open-timer")?.addEventListener("click", () => invoke("focus_open_timer").catch(() => toast("Không mở được cửa sổ đồng hồ", "err")));
+  $("#focus-stop")?.addEventListener("click", focusStop);
   $("#focus-break")?.addEventListener("click", focusBreakStart);
   $("#focus-next")?.addEventListener("click", focusStop);
 }
@@ -1948,23 +2081,28 @@ function stopBreath() { clearInterval(breathTimer); breathTimer = null; }
 /* ═══════════ v2.5–v2.8.0 — Brain-dump · Chia nhỏ · Chime · 20-20-20 · Agenda/Lặp lại ═══════════ */
 
 /* Chime 3 nốt nhẹ nhàng — Web Audio, offline, không cần file */
-function playChime() {
-  if (S.snap && S.snap.settings && S.snap.settings.sound_on === false) return;
+function playChime(style, on) {
+  if (on === false) return;
+  style = style || (S.snap && S.snap.settings && S.snap.settings.chime) || "soft";
+  if (style === "none") return;
+  if (on === undefined && S.snap && S.snap.settings && S.snap.settings.sound_on === false) return;
   try {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return;
     const ctx = playChime._ctx || (playChime._ctx = new Ctx());
-    const notes = [784, 659.25, 523.25]; // G5 → E5 → C5
+    const wind = style === "wind";
+    const notes = wind ? [1318.51, 1567.98, 2093.0] : [784, 659.25, 523.25]; // wind: E6 → G6 → C7
     const t0 = ctx.currentTime + 0.01;
     notes.forEach((f, idx) => {
       const o = ctx.createOscillator(), g = ctx.createGain();
       o.type = "sine"; o.frequency.value = f;
-      const t = t0 + idx * 0.32;
+      const t = t0 + idx * (wind ? 0.38 : 0.32);
+      const peak = wind ? 0.15 : 0.22, tail = wind ? 1.5 : 0.55;
       g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(0.22, t + 0.03);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
+      g.gain.exponentialRampToValueAtTime(peak, t + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + tail);
       o.connect(g).connect(ctx.destination);
-      o.start(t); o.stop(t + 0.6);
+      o.start(t); o.stop(t + tail + 0.05);
     });
   } catch { /* môi trường không hỗ trợ âm thanh — im lặng là được */ }
 }

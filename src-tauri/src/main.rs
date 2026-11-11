@@ -3,6 +3,7 @@
 
 mod bootstrap;
 mod commands;
+mod focus;
 mod fx;
 mod models;
 mod parser;
@@ -34,6 +35,17 @@ fn main() {
             commands::quick_add,
             commands::brain_dump,
             commands::log_focus_session,
+            commands::focus_start,
+            commands::focus_stop,
+            commands::focus_pause_toggle,
+            commands::focus_reset,
+            commands::focus_break_start,
+            commands::focus_complete,
+            commands::focus_state,
+            commands::focus_open_timer,
+            commands::focus_timer_close,
+            commands::focus_timer_pin,
+            commands::focus_open_main,
             commands::save_step_preset,
             commands::delete_step_preset,
             commands::preview_parse,

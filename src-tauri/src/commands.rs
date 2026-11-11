@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::models::{
     occurrences_after, next_after, today, EndSpec, Priority, RecurrenceRule, Repeat,
@@ -639,6 +639,119 @@ pub fn log_focus_session(app: AppHandle, state: State<'_, AppState>) -> Snapshot
     finish(&app, &mut i)
 }
 
+/* ─── FOCUS ENGINE (v2.10.0) — thời gian nằm ở Rust, wall-clock ─── */
+
+#[tauri::command]
+pub fn focus_start(app: AppHandle, state: State<'_, AppState>, task_id: Option<u64>) -> Snapshot {
+    let mut i = state.lock();
+    let title = task_id
+        .and_then(|id| i.store.tasks.iter().find(|t| t.id == id))
+        .map(|t| t.title.clone())
+        .unwrap_or_else(|| "Phiên tập trung".to_string());
+    crate::focus::start(&mut i, task_id, title);
+    let payload = crate::focus::payload(&i, false, false);
+    let _ = app.emit("focus:change", payload);
+    finish(&app, &mut i)
+}
+
+#[tauri::command]
+pub fn focus_stop(app: AppHandle, state: State<'_, AppState>) -> Snapshot {
+    let mut i = state.lock();
+    crate::focus::stop(&mut i);
+    let payload = crate::focus::payload(&i, false, false);
+    let _ = app.emit("focus:change", payload);
+    finish(&app, &mut i)
+}
+
+#[tauri::command]
+pub fn focus_pause_toggle(app: AppHandle, state: State<'_, AppState>) -> crate::focus::FocusPayload {
+    let mut i = state.lock();
+    let p = crate::focus::pause_toggle(&mut i);
+    let _ = app.emit("focus:change", p.clone());
+    p
+}
+
+#[tauri::command]
+pub fn focus_reset(app: AppHandle, state: State<'_, AppState>) -> crate::focus::FocusPayload {
+    let mut i = state.lock();
+    let p = crate::focus::reset(&mut i);
+    let _ = app.emit("focus:change", p.clone());
+    p
+}
+
+#[tauri::command]
+pub fn focus_break_start(app: AppHandle, state: State<'_, AppState>) -> crate::focus::FocusPayload {
+    let mut i = state.lock();
+    let p = crate::focus::break_start(&mut i);
+    let _ = app.emit("focus:change", p.clone());
+    p
+}
+
+#[tauri::command]
+pub fn focus_complete(app: AppHandle, state: State<'_, AppState>) -> crate::focus::FocusPayload {
+    let mut i = state.lock();
+    let p = crate::focus::complete(&mut i);
+    if p.transitioned && p.completed_focus {
+        AppState::commit(&mut i);
+    }
+    let _ = app.emit("focus:change", p.clone());
+    p
+}
+
+#[tauri::command]
+pub fn focus_state(state: State<'_, AppState>) -> crate::focus::FocusPayload {
+    let i = state.lock();
+    crate::focus::payload(&i, false, false)
+}
+
+/// Mở (hoặc focus) cửa sổ Đồng hồ — mini window luôn nổi.
+#[tauri::command]
+pub fn focus_open_timer(app: AppHandle) -> Result<(), String> {
+    if let Some(w) = app.get_webview_window("timer") {
+        let _ = w.set_focus();
+        return Ok(());
+    }
+    tauri::WebviewWindowBuilder::new(&app, "timer", tauri::WebviewUrl::App("timer.html".into()))
+        .title("Taskora — Đồng hồ")
+        .inner_size(340.0, 420.0)
+        .min_inner_size(300.0, 380.0)
+        .decorations(false)
+        .transparent(true)
+        .always_on_top(true)
+        .resizable(true)
+        .build()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn focus_timer_close(app: AppHandle) -> Result<(), String> {
+    if let Some(w) = app.get_webview_window("timer") {
+        w.close().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn focus_timer_pin(app: AppHandle, state: State<'_, AppState>) -> Result<bool, String> {
+    let pinned = {
+        let mut i = state.lock();
+        crate::focus::timer_pin_toggle(&mut i)
+    };
+    if let Some(w) = app.get_webview_window("timer") {
+        w.set_always_on_top(pinned).map_err(|e| e.to_string())?;
+    }
+    Ok(pinned)
+}
+
+#[tauri::command]
+pub fn focus_open_main(app: AppHandle) -> Result<(), String> {
+    if let Some(w) = app.get_webview_window("main") {
+        w.set_focus().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 /// Phân tích xem trước (hiển thị chip gợi ý khi đang gõ).
 #[derive(Serialize)]
 pub struct Preview {
@@ -1183,6 +1296,14 @@ pub struct SettingsPatch {
     pub perf_mode: Option<bool>,
     pub adhd_mode: Option<bool>,
     pub sound_on: Option<bool>,
+    pub focus_min: Option<u32>,
+    pub break_min: Option<u32>,
+    pub long_break_min: Option<u32>,
+    pub long_break_every: Option<u32>,
+    pub auto_start_break: Option<bool>,
+    pub auto_start_focus: Option<bool>,
+    pub eye_reminder: Option<bool>,
+    pub chime: Option<String>,
 }
 
 fn valid_accent(s: &str) -> bool {
@@ -1219,6 +1340,17 @@ pub fn update_settings(
         if let Some(v) = patch.perf_mode { s.perf_mode = v; }
         if let Some(v) = patch.adhd_mode { s.adhd_mode = v; }
         if let Some(v) = patch.sound_on { s.sound_on = v; }
+        if let Some(v) = patch.focus_min { s.focus_min = v.clamp(5, 180); }
+        if let Some(v) = patch.break_min { s.break_min = v.clamp(1, 60); }
+        if let Some(v) = patch.long_break_min { s.long_break_min = v.clamp(5, 60); }
+        if let Some(v) = patch.long_break_every { s.long_break_every = v.min(12); }
+        if let Some(v) = patch.auto_start_break { s.auto_start_break = v; }
+        if let Some(v) = patch.auto_start_focus { s.auto_start_focus = v; }
+        if let Some(v) = patch.eye_reminder { s.eye_reminder = v; }
+        if let Some(v) = patch.chime {
+            let v = v.trim().to_lowercase();
+            if matches!(v.as_str(), "soft" | "wind" | "none") { s.chime = v; }
+        }
     }
     AppState::commit(&mut i);
     if effect_changed {
