@@ -223,7 +223,9 @@ impl RecurrenceRule {
 
     /// Kiểm hợp lệ cho rule NGƯỜI DÙNG TẠO (không dùng cho rule legacy nạp từ file).
     pub fn validate(&self) -> Result<(), String> {
-        if self.freq == Freq::Week && self.by_day.unwrap_or(0) == 0 {
+        // Week + None = hợp lệ (trùng thứ với hạn chót — nâng cấp legacy Weekly);
+        // Week + Some(0) = người dùng chưa chọn thứ nào → chặn lưu.
+        if self.freq == Freq::Week && matches!(self.by_day, Some(0)) {
             return Err("Chọn ít nhất 1 thứ trong tuần".to_string());
         }
         if let EndSpec::Until { date } = &self.ends {
