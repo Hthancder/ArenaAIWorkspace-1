@@ -617,7 +617,7 @@ impl Store {
             if *day == today_key {
                 c.focus_today = *n as usize;
             }
-            if *day >= week_start.as_str() && *day <= today_key.as_str() {
+            if day.as_str() >= week_start.as_str() && day.as_str() <= today_key.as_str() {
                 c.focus_week += *n as usize;
             }
         }

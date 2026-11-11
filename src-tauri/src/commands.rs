@@ -320,9 +320,9 @@ pub fn act(
                 .take(12)
                 .collect();
             let mut added = 0usize;
+            let sids: Vec<u64> = (0..cleaned.len()).map(|_| i.store.new_id()).collect();
             if let Some(t) = i.store.tasks.iter_mut().find(|t| t.id == id) {
-                for title in cleaned {
-                    let sid = i.store.new_id();
+                for (title, sid) in cleaned.into_iter().zip(sids) {
                     t.subtasks.push(SubTask { id: sid, title, done: false });
                     added += 1;
                 }
