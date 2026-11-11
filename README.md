@@ -6,8 +6,8 @@
 
 ## ⬇️ Tải file .exe
 
-1. Vào tab **[Actions](https://github.com/Hthancder/ArenaAIWorkspace-1/actions)** → chọn bản build gần nhất (workflow **Build**).
-2. Tải `Taskora-Windows-x64` → có cả `Taskora.exe` (chạy ngay) lẫn `Taskora-Setup-x64.exe` (bản cài đặt NSIS).
+1. Vào tab **[Releases](https://github.com/Hthancder/ArenaAIWorkspace-1/releases/latest)** → tải `Taskora.exe` (chạy ngay) hoặc `Taskora-Setup-x64.exe` (bản cài đặt NSIS) của bản mới nhất.
+2. (Hoặc: tab **[Actions](https://github.com/Hthancder/ArenaAIWorkspace-1/actions)** → chọn bản build gần nhất → artifact `Taskora-Windows-x64`.)
 3. Chạy thôi – không cần cài đặt. Windows 10/11 đã có sẵn **WebView2** qua Edge; bản cài NSIS sẽ tự tải WebView2 nếu thiếu.
 4. Dữ liệu cũ từ v1.x được **giữ nguyên** (`data.json` cùng đường dẫn `%APPDATA%\Taskora`).
 
