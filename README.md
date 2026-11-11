@@ -46,11 +46,20 @@
 - **Tự phát hiện di chuyển**: nếu Taskora.exe bị copy lẻ sang chỗ trống, app hỏi chuyển dữ liệu portable cũ sang. Nếu bạn chạy ở nơi khác mà `%APPDATA%` còn dữ liệu v1/v2.0 cũ, app hỏi **gộp** (id-union, không trùng lặp).
 - **Khôi phục view đang mở** giữa các lần chạy; toast hành động kèm nút **Hoàn tác** sau mỗi thao tác.
 
+**Việc lặp lại hạng nhất (v2.9.0 — đang hoàn thiện, chưa phát hành)**
+- **Quy tắc đầy đủ**: tần suất **Ngày / Tuần / Tháng / Năm** · khoảng lặp tuỳ ý (`*mỗi 3 ngày`, `*mỗi 2 tuần`, `*mỗi 6 tháng`, `*mỗi 2 năm`) · chọn thứ trong tuần (tuần) · ngày trong tháng gồm **“ngày cuối cùng”** · kết thúc: **Không bao giờ / Đến ngày / Sau N lần hoàn thành**.
+- **Bảng lịch xem trước (ghost calendar)** ngay trong hộp thoại “Lặp lại” (Chi tiết → **Chỉnh…**): chấm tím ở mọi ngày việc sẽ xuất hiện; **bấm vào ngày để đặt ngày kết thúc**; chip nhanh **+1 / +3 / +6 tháng** và **Cuối năm**; đếm **“≈ N lần nữa”**; đầy đủ bằng bàn phím (lưới `role=grid`).
+- **Câu tóm tắt tiếng Việt cập nhật trực tiếp**: *“Mỗi 2 tuần · T2 & T5 · đến 31/12/2026”* — preview lấy 100% từ cùng thuật toán với bản chạy thật (Rust), không mô phỏng bằng JS.
+- **“Bỏ qua lần này”** một chạm (nghỉ ốm, bận việc) — dời lần lặp tới, hoàn tác được; **“Dừng lặp lại”** giữ nguyên như v2.8.0. Việc lặp đã hết hạn (đến ngày / đủ N lần) mà chưa xong sẽ tự thành việc thường.
+- **Quick-add hiểu khoảng lặp**: `*mỗi 3 ngày`, `*mỗi 2 tuần`, `*mỗi 6 tháng`, `*mỗi 2 năm` (cũng hiểu *mỗi tuần, *every 3 days; thiếu số = 1).
+- **Tương thích ngược**: việc lặp cũ (`*hàng ngày`…) tự nâng cấp sang rule mới khi mở file — giữ nguyên dữ liệu, mở bằng build cũ không sinh bản sao sai.
+- Thiết kế đầy đủ: [specs/v2.9.0-recurring-tasks.md](specs/v2.9.0-recurring-tasks.md).
+
 **Tuỳ chỉnh cao — seed không còn hành vi ẩn (v2.8.0)**
 - **Sửa parser cho cú pháp lặp tiếng Việt**: `*hàng ngày` / `*hàng tuần` / `*hàng tháng` (kể cả `*hang tuan`) giờ được hiểu đúng — tiêu đề KHÔNG dính chữ rác `*hàng` nữa. (Đây là lý do bản v2.7.0 in hướng dẫn `*hàng ngày` mà gõ vào lại ra việc tên "Tập gym *hàng".)
 - **Việc mẫu "Tập thể dục 30 phút" giờ là việc thường** — hoàn thành KHÔNG tự sinh việc mới; mọi việc mẫu xoá/sửa/nhân bản bình thường. Việc lặp chỉ xảy ra khi *bạn* chủ động gõ cú pháp lặp hoặc chọn trong ô **Lặp lại**.
 - **Nút "Dừng lặp lại" một chạm** ngay dòng ghi chú dưới ô Lặp lại — dừng việc lặp không cần mò ô chọn.
-- Tro giúp thêm mục dọn các lần lặp cũ: tab **Đã hoàn thành** → **Chọn** → tick → **Xóa**.
+- Trợ giúp thêm mục dọn các lần lặp cũ: tab **Đã hoàn thành** → **Chọn** → tick → **Xóa**.
 - Chi tiết: [specs/v2.8.0-customizability.md](specs/v2.8.0-customizability.md).
 
 **Việc lặp lại & Sắp tới — thiết kế chỉn chu (v2.7.0)**

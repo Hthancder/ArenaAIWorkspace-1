@@ -132,6 +132,280 @@ impl Repeat {
     }
 }
 
+// ------------------------------------------------------------------ lặp lại hạng nhất (v2.9.0)
+
+/// Tần suất lặp.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Freq {
+    Day,
+    Week,
+    Month,
+    Year,
+}
+
+/// Cách kết thúc chuỗi lặp.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum EndSpec {
+    Never,
+    /// NGÀY CUỐI CÙNG việc có thể xuất hiện (due == until vẫn hợp lệ).
+    Until { date: NaiveDate },
+    /// total = số lần Hoàn thành cần có (sau khi đặt rule); done = số lần đã bấm.
+    After { total: u32, done: u32 },
+}
+
+impl Default for EndSpec {
+    fn default() -> Self {
+        EndSpec::Never
+    }
+}
+
+const WD_BITS_WEEKDAYS: u8 = 0b001_1111; // T2..T6 (bit0 = Thứ Hai … bit6 = Chủ Nhật)
+
+/// Quy tắc lặp hạng nhất. `Repeat` cũ chỉ còn vai trò shadow (downgrade an toàn).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RecurrenceRule {
+    pub freq: Freq,
+    #[serde(default = "one")]
+    pub interval: u32, // 1..=99 (kẹp)
+    /// Week: bitmask T2..CN. None = trùng thứ với hạn chót của việc.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub by_day: Option<u8>,
+    /// Month/Year: ngày trong tháng 1..=31, -1 = ngày cuối cùng của tháng.
+    /// Luôn được đóng băng (anchor) ngay khi tạo/nạp — xem `freeze_anchor`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub month_day: Option<i8>,
+    #[serde(default)]
+    pub ends: EndSpec,
+}
+
+fn one() -> u32 {
+    1
+}
+
+impl RecurrenceRule {
+    pub fn new(freq: Freq) -> Self {
+        Self { freq, interval: 1, by_day: None, month_day: None, ends: EndSpec::Never }
+    }
+
+    /// Kẹp + chuẩn hoá (không bao giờ để rule hỏng vào file).
+    pub fn clamped(mut self) -> Self {
+        self.interval = self.interval.clamp(1, 99);
+        match self.freq {
+            Freq::Week => {
+                self.month_day = None;
+                // mask giữ nguyên (mask rỗng = không có ngày nào → validate() sẽ chặn khi lưu;
+                // next_date_only gặp mask 0 → None → sanitize gỡ thành việc thường, an toàn).
+                self.by_day = self.by_day.map(|m| m & 0b111_1111);
+            }
+            Freq::Month | Freq::Year => {
+                self.by_day = None;
+                if let Some(d) = self.month_day {
+                    self.month_day = Some(if d == -1 { -1 } else { d.clamp(1, 31) });
+                }
+            }
+            Freq::Day => {
+                // Day + mask = kiểu “các ngày trong tuần” (Weekdays legacy) — mask giữ nguyên;
+                // interval vô nghĩa khi có mask → ép 1.
+                self.month_day = None;
+                self.by_day = self.by_day.map(|m| m & 0b111_1111);
+                if self.by_day.is_some() {
+                    self.interval = 1;
+                }
+            }
+        }
+        if let EndSpec::After { total, done } = &mut self.ends {
+            *total = (*total).clamp(1, 999);
+            *done = (*done).min(*total);
+        }
+        self
+    }
+
+    /// Kiểm hợp lệ cho rule NGƯỜI DÙNG TẠO (không dùng cho rule legacy nạp từ file).
+    pub fn validate(&self) -> Result<(), String> {
+        if self.freq == Freq::Week && self.by_day.unwrap_or(0) == 0 {
+            return Err("Chọn ít nhất 1 thứ trong tuần".to_string());
+        }
+        if let EndSpec::Until { date } = &self.ends {
+            if *date < today() {
+                return Err("Ngày kết thúc phải ở tương lai".to_string());
+            }
+        }
+        Ok(())
+    }
+
+    /// Shadow về `Repeat` cũ — rule custom (interval>1, mask, until/after) → `None`
+    /// để build cũ mở file thấy "Không lặp" nhưng tuyệt đối không nhân bản loạn.
+    pub fn shadow(&self) -> Repeat {
+        if !matches!(self.ends, EndSpec::Never) {
+            return Repeat::None;
+        }
+        match self.freq {
+            Freq::Day => match self.by_day {
+                None if self.interval == 1 => Repeat::Daily,
+                Some(m) if self.interval == 1 && m == WD_BITS_WEEKDAYS => Repeat::Weekdays,
+                _ => Repeat::None,
+            },
+            Freq::Week => match self.by_day {
+                None if self.interval == 1 => Repeat::Weekly,
+                _ => Repeat::None,
+            },
+            Freq::Month if self.interval == 1 => Repeat::Monthly,
+            _ => Repeat::None,
+        }
+    }
+
+    /// Đóng băng anchor (month_day) cho Month/Year khi còn thiếu.
+    pub fn freeze_anchor(&mut self, due: Option<NaiveDate>) {
+        if matches!(self.freq, Freq::Month | Freq::Year) && self.month_day.is_none() {
+            let d = due.map(|d| d.day() as i8).unwrap_or_else(|| today().day() as i8);
+            self.month_day = Some(d);
+        }
+    }
+}
+
+/// Nâng `Repeat` legacy lên rule hạng nhất (dùng khi nạp file cũ trong sanitize).
+pub fn rule_from_repeat(r: Repeat, due: Option<NaiveDate>) -> Option<RecurrenceRule> {
+    let day = due.map(|d| d.day() as i8).unwrap_or_else(|| today().day() as i8);
+    Some(match r {
+        Repeat::None => return None,
+        Repeat::Daily => RecurrenceRule { freq: Freq::Day, interval: 1, by_day: None, month_day: None, ends: EndSpec::Never },
+        Repeat::Weekdays => RecurrenceRule { freq: Freq::Day, interval: 1, by_day: Some(WD_BITS_WEEKDAYS), month_day: None, ends: EndSpec::Never },
+        Repeat::Weekly => RecurrenceRule { freq: Freq::Week, interval: 1, by_day: None, month_day: None, ends: EndSpec::Never },
+        Repeat::Monthly => RecurrenceRule { freq: Freq::Month, interval: 1, by_day: None, month_day: Some(day), ends: EndSpec::Never },
+    })
+}
+
+fn last_day_of_month(y: i32, m: u32) -> u32 {
+    let (ny, nm) = if m == 12 { (y + 1, 1) } else { (y, m + 1) };
+    NaiveDate::from_ymd_opt(ny, nm, 1).unwrap().pred_opt().unwrap().day()
+}
+
+/// Cộng tháng trên **field tháng** (không trôi ngày): (y*12 + m - 1) + delta.
+fn add_months_fields(y: i32, m: u32, delta: u32) -> (i32, u32) {
+    let total = y as i64 * 12 + (m as i64 - 1) + delta as i64;
+    ((total.div_euclid(12)) as i32, (total.rem_euclid(12) + 1) as u32)
+}
+
+/// Đầu tuần (Thứ Hai) chứa `d`.
+pub fn week_start(d: NaiveDate) -> NaiveDate {
+    d - TimeDelta::days(d.weekday().num_days_from_monday() as i64)
+}
+
+/// Ngày lặp kế tiếp SAU `from` — thuần ngày tháng + `Until`; KHÔNG xét bộ đếm `After`.
+/// Dùng chung cho mọi thứ; bộ đếm After được cộng thêm ở `next_after` / `occurrences_after`.
+pub fn next_date_only(rule: &RecurrenceRule, from: NaiveDate) -> Option<NaiveDate> {
+    let rule = rule.clone().clamped();
+    let interval = rule.interval;
+    let base = match rule.freq {
+        Freq::Day => match rule.by_day {
+            // Day + mask = “các ngày trong tuần” (nâng cấp Weekdays legacy)
+            Some(mask) => {
+                if mask == 0 {
+                    return None;
+                }
+                let mut d = from;
+                for _ in 0..8 {
+                    d = d.checked_add_signed(TimeDelta::days(1))?;
+                    if mask & (1u8 << d.weekday().num_days_from_monday()) != 0 {
+                        break;
+                    }
+                }
+                Some(d)
+            }
+            None => from.checked_add_signed(TimeDelta::days(interval as i64)),
+        }
+        Freq::Week => match rule.by_day {
+            Some(mask) => {
+                if mask == 0 {
+                    return None;
+                }
+                let aw = week_start(from);
+                let mut d = from;
+                for _ in 0..(interval as i64 * 7 + 14) {
+                    d = d.checked_add_signed(TimeDelta::days(1))?;
+                    let bit = 1u8 << d.weekday().num_days_from_monday();
+                    if mask & bit != 0 && ((week_start(d) - aw).num_days() / 7) % interval as i64 == 0 {
+                        return Some(d).filter(|x| match &rule.ends {
+                            EndSpec::Until { date } => *x <= *date,
+                            _ => true,
+                        });
+                    }
+                }
+                None
+            }
+            None => from.checked_add_signed(TimeDelta::days(7 * interval as i64)),
+        },
+        Freq::Month => {
+            let (ty, tm) = add_months_fields(from.year(), from.month(), interval);
+            let dim = last_day_of_month(ty, tm);
+            let anchor = rule.month_day.unwrap_or(from.day() as i8);
+            let day = if anchor == -1 {
+                dim
+            } else {
+                (anchor.max(1) as u32).min(dim)
+            };
+            NaiveDate::from_ymd_opt(ty, tm, day)
+        }
+        Freq::Year => {
+            let ty = from.year().checked_add(interval as i32)?;
+            let dim = last_day_of_month(ty, from.month());
+            let anchor = rule.month_day.unwrap_or(from.day() as i8);
+            let day = if anchor == -1 {
+                dim
+            } else {
+                (anchor.max(1) as u32).min(dim)
+            };
+            NaiveDate::from_ymd_opt(ty, from.month(), day)
+        }
+    };
+    base.filter(|b| match &rule.ends {
+        EndSpec::Until { date } => *b <= *date,
+        _ => true,
+    })
+}
+
+/// Ngày lặp kế tiếp SAU `from` — đầy đủ (kể cả trần After).
+pub fn next_after(rule: &RecurrenceRule, from: NaiveDate) -> Option<NaiveDate> {
+    if let EndSpec::After { total, done } = &rule.ends {
+        if done >= total {
+            return None;
+        }
+    }
+    next_date_only(rule, from)
+}
+
+/// Mọi occurrence sau `from` (tối đa `limit`, ≤200).
+/// After: budget = `total - done - 1` (số bản sao còn sinh sau lần hiện tại) —
+/// UI tự ghép thêm lần hiện tại (task.due) để ra "≈ N lần nữa" = `total - done`.
+pub fn occurrences_after(rule: &RecurrenceRule, from: NaiveDate, limit: u32) -> Vec<NaiveDate> {
+    let limit = limit.clamp(1, 200) as usize;
+    let mut out = Vec::new();
+    let mut cur = from;
+    let mut remaining: Option<u32> = match &rule.ends {
+        EndSpec::After { total, done } => Some(total.saturating_sub(*done).saturating_sub(1)),
+        _ => None,
+    };
+    while out.len() < limit {
+        if let Some(r) = remaining {
+            if r == 0 {
+                break;
+            }
+        }
+        match next_date_only(rule, cur) {
+            Some(d) => {
+                out.push(d);
+                cur = d;
+                if let Some(r) = &mut remaining {
+                    *r -= 1;
+                }
+            }
+            None => break,
+        }
+    }
+    out
+}
+
 /// Việc nhỏ (subtask).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SubTask {
@@ -156,6 +430,9 @@ pub struct Task {
     pub due: Option<NaiveDate>,
     #[serde(default)]
     pub repeat: Repeat,
+    /// v2.9.0 — rule lặp hạng nhất (khi có, ưu tiên hơn `repeat`). `repeat` là shadow cho build cũ.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recurrence: Option<RecurrenceRule>,
     #[serde(default)]
     pub tags: Vec<String>,
     #[serde(default)]
@@ -418,6 +695,9 @@ pub struct Store {
     /// Mẫu chia nhỏ do người dùng tự tạo.
     #[serde(default)]
     pub step_presets: Vec<StepPreset>,
+    /// In-memory only (không serialize): việc vừa bị sanitize gỡ rule lặp hết hạn — để flash 1 lần lúc mở app.
+    #[serde(skip)]
+    pub sanitize_notes: Vec<String>,
 }
 
 fn current_version() -> u32 {
@@ -438,6 +718,7 @@ impl Default for Store {
             settings: Settings::default(),
             focus_days: HashMap::new(),
             step_presets: Vec::new(),
+            sanitize_notes: Vec::new(),
         }
     }
 }
@@ -449,8 +730,55 @@ impl Store {
         id
     }
 
+    /// Gỡ rule lặp hết hạn còn trên **việc chưa xong** → việc thường.
+    /// Trả về tiêu đề các việc bị gỡ (để flash 1 lần). Một predicate duy nhất — dùng chung
+    /// cho nạp file (sanitize) và lưu rule (set_task_recurrence).
+    pub fn strip_exhausted_recurrences(&mut self) -> Vec<String> {
+        let tdy = today();
+        let mut stripped = Vec::new();
+        for t in &mut self.tasks {
+            if t.completed_at.is_some() || t.deleted_at.is_some() {
+                continue; // instance lịch sử giữ rule làm lịch sử
+            }
+            let Some(rule) = &t.recurrence else { continue };
+            // "Còn occurrence nào từ hôm nay trở đi không?" — chuỗi until đã trôi qua hết
+            // sẽ không sinh thêm việc ma quá khứ nữa, dù due gốc còn nằm trước until.
+            let from = t.due.unwrap_or(tdy).max(tdy);
+            if next_after(rule, from).is_none() {
+                t.recurrence = None;
+                t.repeat = Repeat::None;
+                stripped.push(t.title.clone());
+            }
+        }
+        stripped
+    }
+
+    /// Nâng cấp legacy Repeat → recurrence; đóng băng anchor; ghi shadow; gỡ rule hết hạn.
+    /// Ghi chú các việc bị gỡ rule vào `sanitize_notes` (in-memory) cho flash lúc mở app.
+    fn migrate_recurrences(&mut self) {
+        for t in &mut self.tasks {
+            // 1) upgrade: recurrence == None && repeat != None
+            if t.recurrence.is_none() && t.repeat != Repeat::None {
+                t.recurrence = rule_from_repeat(t.repeat, t.due);
+            }
+            // 2) đóng băng anchor (Month/Year)
+            if let Some(r) = &mut t.recurrence {
+                r.freeze_anchor(t.due);
+                *r = r.clone().clamped();
+            }
+            // 3) shadow cho build cũ
+            t.repeat = match &t.recurrence {
+                Some(r) => r.shadow(),
+                None => Repeat::None,
+            };
+        }
+        // 4) gỡ rule hết hạn trên việc chưa xong + ghi chú
+        self.sanitize_notes = self.strip_exhausted_recurrences();
+    }
+
     /// Sửa dữ liệu sau khi nạp từ đĩa (hợp lệ hóa id, danh sách mồ côi...).
     pub fn sanitize(&mut self) {
+        self.migrate_recurrences();
         let mut max_id = 0u64;
         for t in &self.tasks {
             max_id = max_id.max(t.id);
@@ -553,12 +881,13 @@ impl Store {
                 created_at: now,
                 completed_at: if completed { Some(now) } else { None },
                 deleted_at: None,
+                recurrence: None,
             });
         };
         mk(
             &mut store,
             "Chào mừng bạn đến với Taskora 👋",
-            "Đây là ứng dụng quản lý công việc được viết bằng Rust.\n\n• Bấm vòng tròn để hoàn thành việc\n• Chuột phải để mở menu nhanh\n• Ctrl+N thêm việc · Ctrl+F tìm kiếm · Ctrl+D đổi giao diện\n• Việc lặp lại: gõ \'Tập gym *hàng ngày\' (hoặc \'hàng tuần\' bare, \'*daily\'…). Việc lặp chỉ hiện 1 lần; hoàn thành sẽ tự tạo lần tiếp theo. Muốn dừng: mở Chi tiết → ô Lặp lại → \'Không lặp\' (hoặc bấm nút \'Dừng lặp lại\' cạnh dòng ghi chú).\n• Việc của bạn tự động lưu vào thư mục dữ liệu",
+            "Đây là ứng dụng quản lý công việc được viết bằng Rust.\n\n• Bấm vòng tròn để hoàn thành việc\n• Chuột phải để mở menu nhanh\n• Ctrl+N thêm việc · Ctrl+F tìm kiếm · Ctrl+D đổi giao diện\n• Việc lặp lại: gõ \'Tập gym *hàng ngày\' (hoặc \'*mỗi 3 ngày\', \'*mỗi 2 tuần\'…). Việc lặp chỉ hiện 1 lần; hoàn thành sẽ tự tạo lần tiếp theo. Mở Chi tiết → \'Chỉnh…\' để đặt thứ trong tuần, ngày kết thúc — có lịch xem trước. Muốn dừng: Chi tiết → \'Dừng lặp lại\'.\n• Việc của bạn tự động lưu vào thư mục dữ liệu",
             None,
             Priority::P2,
             Some(t),
@@ -571,7 +900,7 @@ impl Store {
         mk(
             &mut store,
             "Thử thêm việc nhanh: 'Mua cà phê ngày mai #cá- nhân !p1'",
-            "Ô nhập ở trên cùng hiểu ngôn ngữ tự nhiên: ngày tháng, thẻ #, ưu tiên !p1–!p4. Lặp lại: gõ \'*hàng ngày\' hoặc \'*hàng tuần\' (cũng hiểu *daily / *weekly).",
+            "Ô nhập ở trên cùng hiểu ngôn ngữ tự nhiên: ngày tháng, thẻ #, ưu tiên !p1–!p4. Lặp lại: gõ \'*hàng ngày\', \'*mỗi 3 ngày\', \'*mỗi 2 tuần\' (cũng hiểu *daily / *weekly / *mỗi 6 tháng / *mỗi 2 năm).",
             None,
             Priority::P4,
             Some(t),
@@ -826,7 +1155,279 @@ mod tests {
         assert!(s.next_id > s.tasks.len() as u64);
     }
 
+    fn rule(freq: Freq, interval: u32, by_day: Option<u8>, month_day: Option<i8>, ends: EndSpec) -> RecurrenceRule {
+        RecurrenceRule { freq, interval, by_day, month_day, ends }
+    }
+
+    fn d(y: i32, m: u32, day: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(y, m, day).unwrap()
+    }
+
+    // ---------- occurrence math: Day ----------
     #[test]
+    fn rec_day_interval() {
+        let r = rule(Freq::Day, 3, None, None, EndSpec::Never);
+        assert_eq!(next_after(&r, d(2026, 11, 9)), Some(d(2026, 11, 12)));
+        let r1 = rule(Freq::Day, 1, None, None, EndSpec::Never);
+        assert_eq!(next_after(&r1, d(2026, 12, 31)), Some(d(2027, 1, 1)));
+    }
+
+    // ---------- Week không mask (trùng thứ) & interval ----------
+    #[test]
+    fn rec_week_no_mask() {
+        let r = rule(Freq::Week, 2, None, None, EndSpec::Never);
+        assert_eq!(next_after(&r, d(2026, 11, 9)), Some(d(2026, 11, 23)));
+    }
+
+    // ---------- Week mask {T2,T5}, interval 1 ----------
+    #[test]
+    fn rec_week_mask() {
+        // bit0=T2 … bit6=CN; mask T2+T5 (bit0 + bit3) = 0b0001001
+        let r = rule(Freq::Week, 1, Some(0b000_1001), None, EndSpec::Never);
+        let mut cur = d(2026, 11, 9); // Thứ Hai
+        let mut got = Vec::new();
+        for _ in 0..4 {
+            cur = next_after(&r, cur).unwrap();
+            got.push(cur);
+        }
+        assert_eq!(got, vec![d(2026, 11, 12), d(2026, 11, 16), d(2026, 11, 19), d(2026, 11, 23)]);
+    }
+
+    // ---------- Week mask interval 2 (anchor vào tuần của due) ----------
+    #[test]
+    fn rec_week_mask_interval2() {
+        // mask T2; due Thứ Hai 09/11/2026 (tuần chẵn anchor)
+        let r = rule(Freq::Week, 2, Some(0b000_0001), None, EndSpec::Never);
+        assert_eq!(next_after(&r, d(2026, 11, 9)), Some(d(2026, 11, 23)));
+        assert_eq!(next_after(&r, d(2026, 11, 23)), Some(d(2026, 12, 7)));
+        // mask T5 cùng anchor — trong tuần của due vẫn ra T5 (0 % 2 == 0)
+        let r5 = rule(Freq::Week, 2, Some(0b000_1000), None, EndSpec::Never);
+        assert_eq!(next_after(&r5, d(2026, 11, 9)), Some(d(2026, 11, 12)));
+        assert_eq!(next_after(&r5, d(2026, 11, 12)), Some(d(2026, 11, 26)));
+    }
+
+    // ---------- Week mask 0 → không occurrence ----------
+    #[test]
+    fn rec_week_empty_mask_none() {
+        let r = rule(Freq::Week, 1, Some(0), None, EndSpec::Never);
+        assert_eq!(next_after(&r, d(2026, 11, 9)), None);
+    }
+
+    // ---------- Month anchor 31 (chống trôi 31/1→28/2→28/3) ----------
+    #[test]
+    fn rec_month_anchor31_no_drift() {
+        let r = rule(Freq::Month, 1, None, Some(31), EndSpec::Never);
+        let a = next_after(&r, d(2026, 1, 31)).unwrap();
+        assert_eq!(a, d(2026, 2, 28));
+        let b = next_after(&r, a).unwrap();
+        assert_eq!(b, d(2026, 3, 31)); // KHÔNG trôi về 28/3
+        let c = next_after(&r, b).unwrap();
+        assert_eq!(c, d(2026, 4, 30));
+    }
+
+    // ---------- Month anchor -1 (ngày cuối) ----------
+    #[test]
+    fn rec_month_anchor_last_day() {
+        let r = rule(Freq::Month, 1, None, Some(-1), EndSpec::Never);
+        assert_eq!(next_after(&r, d(2026, 1, 31)), Some(d(2026, 2, 28)));
+        assert_eq!(next_after(&r, d(2026, 2, 28)), Some(d(2026, 3, 31)));
+        assert_eq!(next_after(&r, d(2026, 3, 31)), Some(d(2026, 4, 30)));
+    }
+
+    // ---------- Month anchor 30 trong tháng 2 ----------
+    #[test]
+    fn rec_month_anchor30_february() {
+        let r = rule(Freq::Month, 1, None, Some(30), EndSpec::Never);
+        assert_eq!(next_after(&r, d(2026, 1, 30)), Some(d(2026, 2, 28)));
+        assert_eq!(next_after(&r, d(2026, 2, 28)), Some(d(2026, 3, 30)));
+    }
+
+    // ---------- Month interval 3 ----------
+    #[test]
+    fn rec_month_interval3() {
+        let r = rule(Freq::Month, 3, None, Some(15), EndSpec::Never);
+        assert_eq!(next_after(&r, d(2026, 11, 15)), Some(d(2027, 2, 15)));
+        assert_eq!(next_after(&r, d(2026, 12, 15)), Some(d(2027, 3, 15)));
+    }
+
+    // ---------- Year: 29/2 → 28/2 năm thường → 29/2 năm nhuận ----------
+    #[test]
+    fn rec_year_leap() {
+        let r = rule(Freq::Year, 1, None, Some(29), EndSpec::Never);
+        let from = d(2028, 2, 29);
+        assert_eq!(next_after(&r, from), Some(d(2029, 2, 28)));
+        assert_eq!(next_after(&r, d(2029, 2, 28)), Some(d(2030, 2, 28)));
+        assert_eq!(next_after(&r, d(2031, 2, 28)), Some(d(2032, 2, 29)));
+        // anchor = ngày thường
+        let r2 = rule(Freq::Year, 2, None, Some(15), EndSpec::Never);
+        assert_eq!(next_after(&r2, d(2026, 8, 15)), Some(d(2028, 8, 15)));
+    }
+
+    // ---------- Until: đúng ngày OK, sau 1 ngày hết ----------
+    #[test]
+    fn rec_until_boundary() {
+        let r = rule(Freq::Day, 1, None, None, EndSpec::Until { date: d(2026, 11, 12) });
+        assert_eq!(next_after(&r, d(2026, 11, 11)), Some(d(2026, 11, 12)));
+        assert_eq!(next_after(&r, d(2026, 11, 12)), None);
+    }
+
+    // ---------- After: trần total/done ----------
+    #[test]
+    fn rec_after_cap() {
+        let r = rule(Freq::Day, 1, None, None, EndSpec::After { total: 3, done: 3 });
+        assert_eq!(next_after(&r, d(2026, 11, 9)), None);
+        let r2 = rule(Freq::Day, 1, None, None, EndSpec::After { total: 3, done: 2 });
+        assert_eq!(next_after(&r2, d(2026, 11, 9)), Some(d(2026, 11, 10)));
+        // occurrences_after chỉ sinh (total - done - 1) bản sao sau lần hiện tại
+        let occ = occurrences_after(&r2, d(2026, 11, 9), 200);
+        assert_eq!(occ.len(), 0);
+        let r3 = rule(Freq::Day, 1, None, None, EndSpec::After { total: 5, done: 1 });
+        let occ3 = occurrences_after(&r3, d(2026, 11, 9), 200);
+        assert_eq!(occ3.len(), 3); // 11, 12, 13 — lần hiện tại (9) không tính
+    }
+
+    // ---------- validate ----------
+    #[test]
+    fn rec_validate_week_needs_mask() {
+        let bad = rule(Freq::Week, 1, None, None, EndSpec::Never);
+        // Week không mask = hợp lệ (trùng thứ); Week mask rỗng = lỗi
+        assert!(bad.validate().is_ok());
+        let bad2 = rule(Freq::Week, 1, Some(0), None, EndSpec::Never);
+        assert!(bad2.validate().is_err());
+        let bad3 = rule(Freq::Month, 1, None, None, EndSpec::Until { date: d(2020, 1, 1) });
+        assert!(bad3.validate().is_err());
+    }
+
+    // ---------- shadow ----------
+    #[test]
+    fn rec_shadow_mapping() {
+        assert_eq!(rule(Freq::Day, 1, None, None, EndSpec::Never).shadow(), Repeat::Daily);
+        assert_eq!(rule(Freq::Day, 1, Some(0b001_1111), None, EndSpec::Never).shadow(), Repeat::Weekdays);
+        assert_eq!(rule(Freq::Week, 1, None, None, EndSpec::Never).shadow(), Repeat::Weekly);
+        assert_eq!(rule(Freq::Month, 1, None, Some(15), EndSpec::Never).shadow(), Repeat::Monthly);
+        assert_eq!(rule(Freq::Day, 3, None, None, EndSpec::Never).shadow(), Repeat::None);
+        assert_eq!(rule(Freq::Day, 1, None, None, EndSpec::Until { date: d(2030, 1, 1) }).shadow(), Repeat::None);
+        assert_eq!(rule(Freq::Year, 1, None, Some(1), EndSpec::Never).shadow(), Repeat::None);
+    }
+
+    // ---------- sanitize: upgrade legacy + freeze + shadow ----------
+    #[test]
+    fn rec_sanitize_upgrades_legacy() {
+        let mut s = Store::default();
+        let t = today();
+        let task = Task {
+            id: 1,
+            title: "Tập gym".into(),
+            notes: String::new(),
+            list_id: None,
+            priority: Priority::P4,
+            due: Some(d(2026, 1, 31)),
+            repeat: Repeat::Monthly,
+            recurrence: None,
+            tags: vec![],
+            subtasks: vec![],
+            starred: false,
+            order: 1,
+            created_at: Utc::now(),
+            completed_at: None,
+            deleted_at: None,
+        };
+        s.tasks.push(task);
+        s.next_id = 2;
+        s.sanitize();
+        let got = &s.tasks[0].recurrence.clone().unwrap();
+        assert_eq!(got.freq, Freq::Month);
+        assert_eq!(got.month_day, Some(31)); // anchor đóng băng từ due
+        assert_eq!(s.tasks[0].repeat, Repeat::Monthly); // shadow giữ nguyên (đơn)
+        let _ = t;
+    }
+
+    #[test]
+    fn rec_sanitize_custom_shadow_none() {
+        let mut s = Store::default();
+        let task = Task {
+            id: 1,
+            title: "X".into(),
+            notes: String::new(),
+            list_id: None,
+            priority: Priority::P4,
+            due: Some(d(2026, 11, 9)),
+            repeat: Repeat::None,
+            recurrence: Some(rule(Freq::Day, 3, None, None, EndSpec::Never)),
+            tags: vec![],
+            subtasks: vec![],
+            starred: false,
+            order: 1,
+            created_at: Utc::now(),
+            completed_at: None,
+            deleted_at: None,
+        };
+        s.tasks.push(task);
+        s.next_id = 2;
+        s.sanitize();
+        assert_eq!(s.tasks[0].repeat, Repeat::None); // downgrade an toàn
+    }
+
+    // ---------- sanitize: rule hết hạn trên việc CHƯA xong → việc thường + note ----------
+    #[test]
+    fn rec_sanitize_strips_exhausted() {
+        let mut s = Store::default();
+        let task = Task {
+            id: 1,
+            title: "Sắp hết hạn".into(),
+            notes: String::new(),
+            list_id: None,
+            priority: Priority::P4,
+            due: Some(d(2026, 11, 1)),
+            repeat: Repeat::None,
+            recurrence: Some(rule(Freq::Day, 1, None, None, EndSpec::Until { date: d(2026, 11, 5) })),
+            tags: vec![],
+            subtasks: vec![],
+            starred: false,
+            order: 1,
+            created_at: Utc::now(),
+            completed_at: None,
+            deleted_at: None,
+        };
+        s.tasks.push(task);
+        s.next_id = 2;
+        s.sanitize();
+        assert!(s.tasks[0].recurrence.is_none());
+        assert_eq!(s.tasks[0].repeat, Repeat::None);
+        assert_eq!(s.sanitize_notes, vec!["Sắp hết hạn".to_string()]);
+    }
+
+    // ---------- until = đúng hôm nay vẫn giữ (việc hôm nay) ----------
+    #[test]
+    fn rec_sanitize_until_today_strips_to_plain() {
+        let mut s = Store::default();
+        let tdy = today();
+        let task = Task {
+            id: 1,
+            title: "Hôm nay còn".into(),
+            notes: String::new(),
+            list_id: None,
+            priority: Priority::P4,
+            due: Some(tdy),
+            repeat: Repeat::None,
+            recurrence: Some(rule(Freq::Day, 1, None, None, EndSpec::Until { date: tdy })),
+            tags: vec![],
+            subtasks: vec![],
+            starred: false,
+            order: 1,
+            created_at: Utc::now(),
+            completed_at: None,
+            deleted_at: None,
+        };
+        s.tasks.push(task);
+        s.next_id = 2;
+        s.sanitize();
+        // from == until == today: occurrence kế tiếp (> from) đã vượt until → gỡ rule.
+        // Bản thân việc (due = hôm nay) vẫn hiện trong Hôm nay như việc thường — đúng luật.
+        assert!(s.tasks[0].recurrence.is_none());
+    }
+
+        #[test]
     fn repeat_daily_next() {
         let d = NaiveDate::from_ymd_opt(2026, 11, 9).unwrap();
         assert_eq!(

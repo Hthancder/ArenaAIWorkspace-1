@@ -568,14 +568,18 @@
         </div>
         <div class="d-field">
           <label><svg class="ic tiny"><use href="#i-repeat"/></svg>Lặp lại</label>
-          <select id="d-repeat" class="d-select">
-            <option value="None">Không lặp</option>
-            <option value="Daily">Hàng ngày</option>
-            <option value="Weekdays">Ngày trong tuần (T2–T6)</option>
-            <option value="Weekly">Hàng tuần</option>
-            <option value="Monthly">Hàng tháng</option>
-          </select>
+          <div class="d-recur-row">
+            <button class="d-recur-summary" id="d-recur" type="button" title="Xem &amp; chỉnh lặp lại">
+              <span class="d-recur-title" id="d-recur-title">Không lặp</span>
+              <span class="d-recur-sub" id="d-recur-sub" hidden></span>
+            </button>
+            <button class="d-chip-btn accent" id="d-recur-edit" type="button">Chỉnh…</button>
+          </div>
           <p class="d-repeat-hint" id="d-repeat-hint" hidden></p>
+          <div class="d-recur-actions" id="d-recur-actions" hidden>
+            <button class="d-chip-btn" id="d-recur-skip" type="button" title="Bỏ qua lần sắp tới, giữ chuỗi (Ctrl+Z hoàn tác được)">Bỏ qua lần này</button>
+            <button class="d-chip-btn danger-ghost" id="d-recur-stop" type="button" title="Dừng hẳn việc lặp lại (giữ việc, Ctrl+Z hoàn tác được)">Dừng lặp lại</button>
+          </div>
         </div>
         <div class="d-field">
           <label><svg class="ic tiny"><use href="#i-folder"/></svg>Danh sách</label>

@@ -89,36 +89,60 @@ function splitISOLocal(iso) { const [y, m, d] = String(iso).slice(0, 10).split("
 function makeISOLocal(y, m0, d) { return `${y}-${String(m0 + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`; }
 function addDaysLocalISO(iso, n) { const { y, m, d } = splitISOLocal(iso); const dt = new Date(y, m - 1, d + n); return makeISOLocal(dt.getFullYear(), dt.getMonth(), dt.getDate()); }
 function lastDayOfMonth(y, m0) { return new Date(y, m0 + 1, 0).getDate(); }
-function monthsClampedISO(iso, n) {
-  const { y, m, d } = splitISOLocal(iso);
-  const target = new Date(y, m - 1 + n, 1);
-  const day = Math.min(d, lastDayOfMonth(target.getFullYear(), target.getMonth()));
-  return makeISOLocal(target.getFullYear(), target.getMonth(), day);
-}
 function localISODate() { const n = new Date(); return makeISOLocal(n.getFullYear(), n.getMonth(), n.getDate()); }
 function viDayMonth(iso) { const { y, m, d } = splitISOLocal(iso); return `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`; }
 function viDowShort(iso) { const { y, m, d } = splitISOLocal(iso); return VI_DOW_SHORT[new Date(y, m - 1, d).getDay()]; }
 function viFullDayMonth(iso) { const { y, m, d } = splitISOLocal(iso); return `${VI_DOW_FULL[new Date(y, m - 1, d).getDay()]}, ${viDayMonth(iso)}`; }
 
-/* ngày lần lặp tiếp theo — khớp luật backend Repeat::next_after */
-function nextRepeatDate(repeat, dueIso) {
-  const base = dueIso ? String(dueIso).slice(0, 10) : localISODate();
-  if (repeat === "Daily") return addDaysLocalISO(base, 1);
-  if (repeat === "Weekly") return addDaysLocalISO(base, 7);
-  if (repeat === "Monthly") return monthsClampedISO(base, 1);
-  if (repeat === "Weekdays") {
-    let d = base;
-    for (let k = 0; k < 8; k++) {
-      d = addDaysLocalISO(d, 1);
-      const { y, m, d: day } = splitISOLocal(d);
-      const wd = new Date(y, m - 1, day).getDay();
-      if (wd >= 1 && wd <= 5) return d;
-    }
+/* ─────────── lặp lại hạng nhất (v2.9.0) ─────────── */
+const DOW_LETTERS = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"]; // bit0..bit6 (Mon..Sun)
+const WD_WEEKDAYS_MASK = 0b0011111;
+
+function ruleDowLetters(mask) {
+  const out = [];
+  for (let b = 0; b < 7; b++) if (mask & (1 << b)) out.push(DOW_LETTERS[b]);
+  return out;
+}
+
+/** Tóm tắt rule cho UI (hiển thị, không phải thuật toán). Trả {main, endTxt} hoặc null. */
+function summarizeRule(rule, dueIso) {
+  if (!rule) return null;
+  const iv = Math.max(1, Math.min(99, Number(rule.interval) || 1));
+  const unitName = f => ({ Day: "ngày", Week: "tuần", Month: "tháng", Year: "năm" }[f] || "ngày");
+  const everyN = f => (iv === 1 ? `Mỗi ${unitName(f)}` : `Mỗi ${iv} ${unitName(f)}`);
+  let main = everyN(rule.freq);
+  if (rule.freq === "Day" && rule.by_day) {
+    main = rule.by_day === WD_WEEKDAYS_MASK ? "Mỗi ngày trong tuần (T2–T6)" : `Mỗi ngày vào ${ruleDowLetters(rule.by_day).join(" & ")}`;
+  } else if (rule.freq === "Week" && rule.by_day) {
+    main += ` · ${ruleDowLetters(rule.by_day).join(" & ")}`;
+  } else if (rule.freq === "Month") {
+    if (rule.month_day === -1) main += " · ngày cuối tháng";
+    else if (rule.month_day) main += ` · ngày ${rule.month_day}`;
+  } else if (rule.freq === "Year") {
+    const { m } = dueIso ? splitISOLocal(dueIso) : { m: 1 };
+    if (rule.month_day === -1) main += ` · cuối tháng ${m}`;
+    else if (rule.month_day) main += ` · ${rule.month_day}/${String(m).padStart(2, "0")}`;
   }
-  return base;
+  const ends = rule.ends || { kind: "never" };
+  let endTxt = "";
+  if (ends.kind === "until" && ends.date) endTxt = `đến ${viDayMonth(ends.date)}`;
+  else if (ends.kind === "after") {
+    const left = Math.max(0, (ends.total || 0) - (ends.done || 0));
+    endTxt = `${left}/${ends.total || 0} lần còn lại`;
+  }
+  return { main, endTxt };
+}
+function summarizeRuleLine(rule, dueIso) {
+  const s = summarizeRule(rule, dueIso);
+  if (!s) return "";
+  return s.endTxt ? `${s.main} · ${s.endTxt}` : s.main;
 }
 
 function repeatMeta(t) {
+  if (t.recurrence) {
+    const line = summarizeRuleLine(t.recurrence, t.due);
+    return `<span class="meta-chip repeat-chip"><svg class="ic"><use href="#i-repeat"/></svg>${esc(line)}</span>`;
+  }
   if (!t.repeat || t.repeat === "None") return "";
   return `<span class="meta-chip repeat-chip"><svg class="ic"><use href="#i-repeat"/></svg>Lặp: ${REPEAT_LABELS[t.repeat] || t.repeat}</span>`;
 }
@@ -739,22 +763,46 @@ function renderDetail() {
   $("#d-star").classList.toggle("on", !!t.starred);
   $("#d-star-use").setAttribute("href", t.starred ? "#i-star-fill" : "#i-star");
   $("#d-star-text").textContent = t.starred ? "Đã ghim" : "Ghim việc";
-  // lặp lại flag + select
-  const rep = (t.repeat && t.repeat !== "None") ? t.repeat : null;
+  // lặp lại — panel tóm tắt (v2.9.0)
+  const rule = t.recurrence || null;
   const flag = $("#d-repeat-flag");
-  flag.hidden = !rep;
-  if (rep) {
-    $("#d-repeat-flag-text").textContent = `Lặp: ${REPEAT_LABELS[rep] || rep}`;
-    flag.title = "Bấm để đổi tần suất — chọn 'Không lặp' để dừng hẳn việc này\nHoàn thành xong sẽ tự tạo lần tiếp theo (Ctrl+Z hủy cả hoàn thành lẫn lần vừa tạo)";
-  }
+  const sumEl = $("#d-recur-title");
+  const subEl = $("#d-recur-sub");
+  const actionsEl = $("#d-recur-actions");
   const repHint = $("#d-repeat-hint");
-  if (rep) {
-    repHint.innerHTML = `Hoàn thành xong → lần tiếp theo: <b>${esc(viFullDayMonth(nextRepeatDate(rep, t.due)))}</b> · <button class="d-repeat-stop" id="d-repeat-stop" type="button">Dừng lặp lại</button> <span class="hint-dim">(Ctrl+Z hủy cả hoàn thành lẫn lần vừa tạo)</span>`;
+  if (rule) {
+    const { main, endTxt } = summarizeRule(rule, t.due);
+    sumEl.textContent = `↻ ${main}`;
+    subEl.textContent = endTxt || "";
+    subEl.hidden = !endTxt;
+    flag.hidden = false;
+    $("#d-repeat-flag-text").textContent = `Lặp: ${main}`;
+    flag.title = "Bấm để chỉnh lặp lại\nHoàn thành xong sẽ tự tạo lần tiếp theo (Ctrl+Z hủy cả hoàn thành lẫn lần vừa tạo)";
+    actionsEl.hidden = false;
+    repHint.innerHTML = `Hoàn thành xong → lần tiếp theo: <b>…</b>`;
     repHint.hidden = false;
+    const myId = t.id;
+    const fromIso = t.due || localISODate();
+    invoke("next_occurrence", { rule, from: fromIso }).then(iso => {
+      if (S.selected !== myId) return; // đã chọn việc khác
+      const hint = $("#d-repeat-hint");
+      const skipBtn = $("#d-recur-skip");
+      if (!hint) return;
+      if (iso) {
+        hint.innerHTML = `Hoàn thành xong → lần tiếp theo: <b>${esc(viFullDayMonth(iso))}</b> <span class="hint-dim">(Ctrl+Z hủy cả hoàn thành lẫn lần vừa tạo)</span>`;
+        if (skipBtn) { skipBtn.disabled = false; skipBtn.title = "Bỏ qua lần sắp tới, giữ chuỗi (Ctrl+Z hoàn tác được)"; }
+      } else {
+        hint.innerHTML = `<span class="hint-dim">Chuỗi lặp đã kết thúc — việc này sẽ không sinh thêm lần nào</span>`;
+        if (skipBtn) { skipBtn.disabled = true; skipBtn.title = "Sắp hết lặp — không còn lần nào để bỏ qua"; }
+      }
+    }).catch(() => { const hint = $("#d-repeat-hint"); if (hint) hint.hidden = true; });
   } else {
+    sumEl.textContent = "Không lặp";
+    subEl.hidden = true;
+    actionsEl.hidden = true;
     repHint.hidden = true;
+    flag.hidden = true;
   }
-  setVal("#d-repeat", t.repeat || "None");
   // hạn chót
   const dueTxt = $("#d-due-text");
   if (t.due) {
@@ -859,7 +907,8 @@ function updateQaPreview() {
     const chips = [];
     if (p.due) chips.push(`<span class="qa-prev-chip due"><svg class="ic small"><use href="#i-calendar"/></svg>${esc(p.due)}</span>`);
     if (p.priority) chips.push(`<span class="qa-prev-chip prio"><svg class="ic small"><use href="#i-flag-banner"/></svg>${esc(p.priority)}</span>`);
-    if (p.repeat) chips.push(`<span class="qa-prev-chip rep"><svg class="ic small"><use href="#i-repeat"/></svg>${esc(REPEAT_LABELS[p.repeat] || p.repeat)}</span>`);
+    if (p.recurrence) chips.push(`<span class="qa-prev-chip rep"><svg class="ic small"><use href="#i-repeat"/></svg>${esc(summarizeRuleLine(p.recurrence))}</span>`);
+    else if (p.repeat) chips.push(`<span class="qa-prev-chip rep"><svg class="ic small"><use href="#i-repeat"/></svg>${esc(REPEAT_LABELS[p.repeat] || p.repeat)}</span>`);
     for (const t of p.tags.slice(0, 4)) chips.push(`<span class="qa-prev-chip"><svg class="ic small"><use href="#i-hash"/></svg>${esc(t)}</span>`);
     prev.innerHTML = chips.join("") + (p.title ? `<span class="qa-title-preview">“${esc(p.title)}”</span>` : "");
     prev.hidden = chips.length === 0 && !p.title;
@@ -990,7 +1039,7 @@ function openHelp() {
   openModal(`<h2><svg class="ic accent-ic"><use href="#i-keyboard"/></svg>Phím tắt & mẹo</h2>
     <div class="shortcut-list g-scroll">${rows.map(([k, d]) => `<div class="shortcut-row"><kbd class="modal-kbd">${k}</kbd><span class="b-meta" style="font-size:12px">${d}</span></div>`).join("")}</div>
     <div class="help-tip"><div class="help-tip-title"><svg class="ic small"><use href="#i-repeat"/></svg>Việc lặp lại</div>
-      <p>Gõ <kbd class="modal-kbd">*hàng ngày</kbd> hoặc <kbd class="modal-kbd">*hàng tuần</kbd> khi thêm nhanh (cũng hiểu <em>*daily / *weekly</em>, <em>*hàng tháng</em>). Việc lặp chỉ hiện <strong>một lần</strong> — hoàn thành xong sẽ tự tạo lần tiếp theo vào đúng ngày.</p>
+      <p>Gõ <kbd class="modal-kbd">*hàng ngày</kbd> hoặc <kbd class="modal-kbd">*hàng tuần</kbd> khi thêm nhanh (cũng hiểu <em>*daily / *weekly</em>, <em>*hàng tháng</em>). Muốn <strong>khoảng lặp tùy ý</strong>: <kbd class="modal-kbd">*mỗi 3 ngày</kbd> · <kbd class="modal-kbd">*mỗi 2 tuần</kbd> · <kbd class="modal-kbd">*mỗi 6 tháng</kbd> · <kbd class="modal-kbd">*mỗi 2 năm</kbd> (thiếu số = 1). Nhấn <strong>Chỉnh…</strong> trong Chi tiết để đặt thứ trong tuần, ngày trong tháng, kết thúc (đến ngày / sau N lần) và xem trước lịch lặp. Việc lặp chỉ hiện <strong>một lần</strong> — hoàn thành xong sẽ tự tạo lần tiếp theo vào đúng ngày.</p>
       <p>Đổi tần suất / dừng hẳn: panel chi tiết việc → ô <strong>Lặp lại</strong> → chọn tần suất khác hoặc <strong>“Không lặp”</strong>. Ctrl+Z hủy cả hoàn thành lẫn lần vừa tạo.</p>
       <p>View <strong>Sắp tới</strong> gom việc theo từng ngày (agenda) — việc quá hạn nằm ở <strong>Hôm nay</strong>.</p>
       <p>Dọn các lần lặp cũ đã hoàn thành: tab <strong>Đã hoàn thành</strong> → nút <strong>Chọn</strong> → tick các dòng → <strong>Xóa</strong>.</p>
@@ -1017,6 +1066,7 @@ const PALETTE_ACTIONS = [
   { icon: "trash", label: "Đi tới: Thùng rác", hint: "Ctrl+6", run: () => setView({ type: "trash" }) },
   { icon: "chart-bar", label: "Đi tới: Thống kê", hint: "Ctrl+7", run: () => setView({ type: "stats" }) },
   { icon: "gear", label: "Đi tới: Cài đặt", hint: "Ctrl+8", run: () => setView({ type: "settings" }) },
+  { icon: "repeat", label: "Lặp lại… (việc đang chọn)", hint: "", run: () => { if (S.selected != null) openRecurrenceModal(S.selected); else toast("Chọn một việc trước đã"); } },
   { icon: "note-pencil", label: "Brain-dump — đổ việc nhanh", hint: "Ctrl+Shift+N", run: openBrainDump },
   { icon: "plus", label: "Thêm việc mới", hint: "Ctrl+N", run: () => { setView(S.view.type === "stats" || S.view.type === "trash" || S.view.type === "completed" ? { type: "inbox" } : S.view); setTimeout(() => $("#quickadd-input").focus(), 60); } },
   { icon: "sun", label: "Bật/tắt giao diện tối–sáng", hint: "Ctrl+D", run: () => go(invoke("toggle_dark")) },
@@ -1307,13 +1357,11 @@ function bindEvents() {
   $("#d-due-input").addEventListener("change", e => { if (S.selected != null && e.target.value) { go(invoke("act", { action: { type: "set_due", id: S.selected, due: e.target.value }, view: viewWire(S.view) })); e.target.classList.remove("show"); } });
   $("#d-due-clear").addEventListener("click", () => { if (S.selected != null) go(invoke("act", { action: { type: "set_due", id: S.selected, due: null }, view: viewWire(S.view) })); });
   $$("#d-prio .prio-chip").forEach(b => b.addEventListener("click", () => { if (S.selected != null) go(invoke("act", { action: { type: "set_priority", id: S.selected, priority: b.dataset.prio }, view: viewWire(S.view) })); }));
-  $("#d-repeat").addEventListener("change", e => { if (S.selected != null) go(invoke("set_task_repeat", { id: S.selected, repeat: e.target.value })); });
-  $("#d-repeat-flag").addEventListener("click", () => { $("#d-repeat")?.focus(); });
-  $("#d-repeat-hint")?.addEventListener("click", e => {
-    if (e.target.closest("#d-repeat-stop") && S.selected != null) {
-      go(invoke("set_task_repeat", { id: S.selected, repeat: "None" }));
-    }
-  });
+  $("#d-recur").addEventListener("click", () => { if (S.selected != null) openRecurrenceModal(S.selected); });
+  $("#d-recur-edit").addEventListener("click", () => { if (S.selected != null) openRecurrenceModal(S.selected); });
+  $("#d-repeat-flag").addEventListener("click", () => { if (S.selected != null) openRecurrenceModal(S.selected); });
+  $("#d-recur-skip").addEventListener("click", () => { if (S.selected != null) go(invoke("skip_occurrence", { id: S.selected })); });
+  $("#d-recur-stop").addEventListener("click", () => { if (S.selected != null) go(invoke("set_task_recurrence", { id: S.selected, rule: null })); });
   $("#d-list").addEventListener("change", e => { if (S.selected != null) { const v = e.target.value; go(invoke("act", { action: { type: "move_to_list", id: S.selected, list: v === "" ? null : Number(v) }, view: viewWire(S.view) })); $("#d-list").dataset.built = "0"; } });
   $("#d-tag-input").addEventListener("keydown", e => {
     if (e.key === "Enter" && S.selected != null) {
@@ -1490,6 +1538,18 @@ function bindEvents() {
   });
   $("#modal").addEventListener("keydown", e => {
     if (e.key === "Enter" && e.target.matches(".modal-input")) { e.preventDefault(); $("#list-save")?.click(); }
+    // Ctrl+Enter = lưu (modal Lặp lại)
+    if (e.ctrlKey && e.key === "Enter" && $("#rm-save")) { e.preventDefault(); $("#rm-save").click(); return; }
+    // focus trap: Tab chuyển vòng trong modal
+    if (e.key === "Tab" && !$("#modal").hidden) {
+      const panel = $("#modal .modal-panel");
+      if (!panel) return;
+      const focusables = [...panel.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])')].filter(el => el.offsetParent !== null || el === document.activeElement);
+      if (!focusables.length) return;
+      const idx = focusables.indexOf(document.activeElement);
+      if (e.shiftKey) { if (idx <= 0) { e.preventDefault(); focusables[focusables.length - 1].focus(); } }
+      else if (idx === focusables.length - 1 || idx === -1) { e.preventDefault(); focusables[0].focus(); }
+    }
   });
 
   /* ───────── palette ───────── */
@@ -2020,4 +2080,395 @@ function renumberSplitRows(box) {
 
 function wireSplitSuggest(task) {
   renderSplitSuggest(splitSteps(task.title).slice());
+}
+
+/* ─────────── modal Lặp lại (v2.9.0) — ghost calendar, until/after, preview từ Rust ─────────── */
+const RM_WEEKDAYS = [["T2", 0], ["T3", 1], ["T4", 2], ["T5", 3], ["T6", 4], ["T7", 5], ["CN", 6]];
+const RM_UNIT = { Day: "ngày", Week: "tuần", Month: "tháng", Year: "năm" };
+const RM_FREQ_LABEL = { Day: "Ngày", Week: "Tuần", Month: "Tháng", Year: "Năm" };
+
+/** ISO cộng n tháng, kẹp theo ngày cuối tháng (an toàn trong JS, chỉ hiển thị/đặt until). */
+function addMonthsClampedISO(iso, n) {
+  const { y, m, d } = splitISOLocal(iso);
+  const total = y * 12 + (m - 1) + n;
+  const ty = Math.floor(total / 12), tm = ((total % 12) + 12) % 12;
+  const dim = new Date(ty, tm + 1, 0).getDate();
+  return makeISOLocal(ty, tm, Math.min(d, dim));
+}
+
+function openRecurrenceModal(taskId) {
+  const t = taskById(taskId);
+  if (!t) return;
+  const dueIso = t.due ? String(t.due).slice(0, 10) : localISODate();
+  const r = t.recurrence || null;
+  const endsKind = r?.ends?.kind === "until" ? "until" : r?.ends?.kind === "after" ? "after" : "never";
+  const draft = r ? {
+    freq: r.freq,
+    interval: r.interval || 1,
+    by_day: r.by_day ?? null,
+    month_day: r.month_day ?? null,
+    endsKind,
+    until: r.ends?.kind === "until" ? String(r.ends.date).slice(0, 10) : "",
+    afterTotal: r.ends?.kind === "after" ? r.ends.total : 10,
+    afterDone: r.ends?.kind === "after" ? (r.ends.done || 0) : 0,
+  } : {
+    freq: "Day", interval: 1, by_day: null, month_day: null,
+    endsKind: "never", until: "", afterTotal: 10, afterDone: 0,
+  };
+  const vm = splitISOLocal(dueIso);
+  S.rm = { taskId, title: t.title, dueIso, draft, viewY: vm.y, viewM: vm.m, occurrences: new Set(), timer: null, previewSeq: 0 };
+  renderRecurrenceModal();
+}
+
+function rmDraftError() {
+  const d = S.rm.draft;
+  const tdy = localISODate();
+  if (d.freq === "Week" && !d.by_day) return "Chọn ít nhất 1 thứ trong tuần";
+  if (d.endsKind === "until") {
+    if (!d.until) return "Chọn ngày kết thúc (hoặc bấm vào lịch bên dưới)";
+    if (d.until < tdy) return "Ngày kết thúc phải ở tương lai";
+  }
+  if (d.endsKind === "after" && (!(d.afterTotal >= 1))) return "Sau ít nhất 1 lần hoàn thành";
+  return "";
+}
+
+/** Rule từ draft — gửi cho backend. month_day null ⇒ backend đóng băng từ due (anchor ổn định). */
+function rmRule() {
+  const d = S.rm.draft;
+  const rule = { freq: d.freq, interval: Math.max(1, Math.min(99, Number(d.interval) || 1)) };
+  if (d.freq === "Week") rule.by_day = d.by_day == null ? 0 : d.by_day;
+  if (d.freq === "Month" || d.freq === "Year") rule.month_day = d.month_day == null ? undefined : d.month_day;
+  if (d.endsKind === "until") rule.ends = d.until ? { kind: "until", date: d.until } : { kind: "never" };
+  else if (d.endsKind === "after") rule.ends = { kind: "after", total: Math.max(1, Number(d.afterTotal) || 1), done: d.afterDone || 0 };
+  else rule.ends = { kind: "never" };
+  return rule;
+}
+
+function rmWarningHtml(d) {
+  if (d.freq !== "Week" || !d.by_day || !S.rm?.dueIso) return "";
+  const { y, m, d: dd } = splitISOLocal(S.rm.dueIso);
+  const bit = (new Date(y, m - 1, dd).getDay() + 6) % 7; // JS 0=CN → bit0=T2
+  if (d.by_day & (1 << bit)) return "";
+  const name = ["Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy", "Chủ Nhật"][bit];
+  return `<div class="rm-warn">Lần hiện tại (${name}) không nằm trong lịch lặp — chuỗi bắt đầu từ lần sau.</div>`;
+}
+
+function rmMonthDayHtml(d, base) {
+  let opts = "";
+  for (let i = 1; i <= 31; i++) opts += `<option value="${i}" ${d.month_day === i ? "selected" : ""}>Ngày ${i}</option>`;
+  opts += `<option value="-1" ${d.month_day === -1 ? "selected" : ""}>Ngày cuối cùng</option>`;
+  const kind = d.freq === "Month" ? "tháng" : "năm";
+  let hint = "";
+  if (d.month_day == null) hint = `<div class="rm-hint-line">Mặc định: ngày ${base.d} (đóng băng theo hạn chót khi lưu)</div>`;
+  else if (d.freq === "Year") hint = `<div class="rm-hint-line">Mỗi ${kind} vào ngày ${d.month_day === -1 ? `cuối tháng ${base.m}` : `${d.month_day} tháng ${base.m}`}</div>`;
+  return `<div class="rm-block">
+    <div class="rm-label">Ngày trong ${kind}</div>
+    <select id="rm-monthday" class="d-select rm-monthday-select">${opts}</select>
+    ${hint}
+  </div>`;
+}
+
+function ghostCalendarHtml(rm) {
+  const { viewY, viewM } = rm;
+  const tdy = localISODate();
+  const startDow = (new Date(viewY, viewM - 1, 1).getDay() + 6) % 7; // Monday-first
+  const start = new Date(viewY, viewM - 1, 1 - startDow);
+  const until = rm.draft.endsKind === "until" ? rm.draft.until : "";
+  let cells = "";
+  for (let i = 0; i < 42; i++) {
+    const dt = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+    const iso = makeISOLocal(dt.getFullYear(), dt.getMonth(), dt.getDate());
+    const other = dt.getMonth() !== viewM - 1;
+    const isToday = iso === tdy;
+    const isPast = iso < tdy;
+    const isUntil = !!until && iso === until;
+    const isAfterUntil = !!until && iso > until;
+    const isOcc = rm.occurrences.has(iso);
+    const cls = ["gcal-cell"];
+    if (other) cls.push("other");
+    if (isPast && !isToday) cls.push("past");
+    if (isToday) cls.push("today");
+    if (isUntil) cls.push("until");
+    else if (isAfterUntil) cls.push("after-until");
+    if (isOcc) cls.push("occ");
+    const label = esc(viFullDayMonth(iso));
+    cells += `<button class="${cls.join(" ")}" data-iso="${iso}" role="gridcell" type="button" style="--d:${i * 6}ms" aria-label="${label}${isOcc ? " — sẽ xuất hiện" : ""}" aria-selected="${isUntil ? "true" : "false"}" title="${isOcc ? `Sẽ xuất hiện vào ${label}` : label}"><span class="gcal-num">${dt.getDate()}</span><span class="gcal-dot" aria-hidden="true"></span></button>`;
+  }
+  const cur = splitISOLocal(tdy);
+  const prevDisabled = viewY < cur.y || (viewY === cur.y && viewM <= cur.m);
+  const maxDt = new Date(cur.y, cur.m - 1 + 24, 1);
+  let nextDisabled = new Date(viewY, viewM - 1, 1) >= maxDt;
+  if (until) {
+    const u = splitISOLocal(until);
+    if (new Date(viewY, viewM - 1, 1) >= new Date(u.y, u.m - 1, 1)) nextDisabled = true;
+  }
+  return `<div class="gcal" id="gcal">
+    <div class="gcal-head">
+      <button class="icon-btn tiny gcal-nav" id="gcal-prev" type="button" ${prevDisabled ? "disabled" : ""} aria-label="Tháng trước">‹</button>
+      <div class="gcal-title">tháng ${viewM} / ${viewY}</div>
+      <button class="icon-btn tiny gcal-nav" id="gcal-next" type="button" ${nextDisabled ? "disabled" : ""} aria-label="Tháng sau">›</button>
+    </div>
+    <div class="gcal-dow" aria-hidden="true">${["T2", "T3", "T4", "T5", "T6", "T7", "CN"].map(x => `<span>${x}</span>`).join("")}</div>
+    <div class="gcal-grid" id="gcal-grid" role="grid" aria-label="Lịch lặp — chấm tím là ngày việc sẽ xuất hiện">${cells}</div>
+  </div>`;
+}
+
+function renderRecurrenceModal() {
+  const rm = S.rm;
+  if (!rm) return;
+  const d = rm.draft;
+  const err = rmDraftError();
+  const base = splitISOLocal(rm.dueIso);
+  const tdy = localISODate();
+  const defUntil = addMonthsClampedISO(tdy, 1);
+  const html = `
+  <div class="rm-head">
+    <h2><svg class="ic accent-ic"><use href="#i-repeat"/></svg>Lặp lại: “${esc(String(rm.title).slice(0, 60))}”</h2>
+    <button class="icon-btn" data-close-modal="1" aria-label="Đóng" type="button"><svg class="ic"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="rm-summary" id="rm-summary" aria-live="polite"><span class="rm-summary-main" id="rm-summary-main"></span><span class="rm-summary-count" id="rm-summary-count"></span></div>
+  <div class="rm-body g-scroll">
+    <div class="rm-block">
+      <div class="rm-label">Tần suất</div>
+      <div class="rm-seg" id="rm-freq" role="group" aria-label="Tần suất lặp">
+        ${["Day", "Week", "Month", "Year"].map(f => `<button class="rm-seg-btn${f === d.freq ? " on" : ""}" data-freq="${f}" type="button" aria-pressed="${f === d.freq}">${RM_FREQ_LABEL[f]}</button>`).join("")}
+      </div>
+    </div>
+    <div class="rm-block rm-interval-row">
+      <div class="rm-label">Lặp mỗi</div>
+      <div class="stepper">
+        <button class="step-btn" id="rm-int-minus" type="button" aria-label="Giảm">−</button>
+        <input class="step-input" id="rm-int" type="number" min="1" max="99" value="${d.interval}" inputmode="numeric" aria-label="Khoảng lặp">
+        <button class="step-btn" id="rm-int-plus" type="button" aria-label="Tăng">+</button>
+      </div>
+      <span class="rm-unit">${RM_UNIT[d.freq]}</span>
+    </div>
+    ${d.freq === "Week" ? `
+    <div class="rm-block">
+      <div class="rm-label">Lặp vào <span class="rm-label-dim">(chọn ít nhất 1 thứ)</span></div>
+      <div class="rm-dows" id="rm-dows">
+        ${RM_WEEKDAYS.map(([lb, bit]) => `<button class="rm-dow${d.by_day & (1 << bit) ? " on" : ""}" data-bit="${bit}" type="button" aria-pressed="${!!(d.by_day & (1 << bit))}">${lb}</button>`).join("")}
+      </div>
+      ${rmWarningHtml(d)}
+    </div>` : ""}
+    ${(d.freq === "Month" || d.freq === "Year") ? rmMonthDayHtml(d, base) : ""}
+    <div class="rm-block">
+      <div class="rm-label">Lịch lặp <span class="rm-label-dim">(chấm tím = ngày việc xuất hiện${d.endsKind === "until" ? " — bấm vào ngày để đặt ngày kết thúc" : ""})</span></div>
+      ${ghostCalendarHtml(rm)}
+      <div class="rm-cal-foot"><span id="rm-count"></span></div>
+    </div>
+    <div class="rm-block">
+      <div class="rm-label">Kết thúc</div>
+      <label class="rm-radio"><input type="radio" name="rm-ends" value="never" ${d.endsKind === "never" ? "checked" : ""}> <span>Không bao giờ</span></label>
+      <label class="rm-radio"><input type="radio" name="rm-ends" value="until" ${d.endsKind === "until" ? "checked" : ""}> <span>Đến ngày</span>
+        <span class="rm-until-row">
+          <input type="date" id="rm-until" class="rm-until-input" value="${esc(d.until || (d.endsKind === "until" ? defUntil : ""))}" min="${tdy}" aria-label="Ngày kết thúc">
+          <span class="rm-chips">
+            <button class="rm-chip" data-addmonths="1" type="button">+1 tháng</button>
+            <button class="rm-chip" data-addmonths="3" type="button">+3 tháng</button>
+            <button class="rm-chip" data-addmonths="6" type="button">+6 tháng</button>
+            <button class="rm-chip" data-yearend="1" type="button">Cuối năm</button>
+          </span>
+        </span>
+      </label>
+      <label class="rm-radio"><input type="radio" name="rm-ends" value="after" ${d.endsKind === "after" ? "checked" : ""}> <span>Sau</span>
+        <span class="stepper small">
+          <button class="step-btn" id="rm-after-minus" type="button" aria-label="Giảm">−</button>
+          <input class="step-input" id="rm-after" type="number" min="1" max="999" value="${d.afterTotal}" inputmode="numeric" aria-label="Số lần hoàn thành">
+          <button class="step-btn" id="rm-after-plus" type="button" aria-label="Tăng">+</button>
+        </span>
+        <span>lần hoàn thành</span>
+      </label>
+    </div>
+  </div>
+  <div class="rm-foot">
+    <div class="rm-error" id="rm-error" role="alert">${esc(err)}</div>
+    <div class="rm-foot-btns">
+      <button class="btn-cancel" data-close-modal="1" type="button">Hủy</button>
+      <button class="btn-save" id="rm-save" type="button" ${err ? "disabled" : ""}><svg class="ic small"><use href="#i-repeat"/></svg>&nbsp;Lưu lặp lại</button>
+    </div>
+  </div>`;
+  openModal(html);
+  bindRecurrenceModal();
+  updateLiveSummary(null);
+  schedulePreview();
+}
+
+function bindRecurrenceModal() {
+  const rm = S.rm;
+  if (!rm) return;
+  const d = rm.draft;
+  const tdy = localISODate();
+  const rerender = () => renderRecurrenceModal();
+
+  $("#rm-freq").addEventListener("click", e => {
+    const b = e.target.closest("[data-freq]");
+    if (!b) return;
+    d.freq = b.dataset.freq;
+    rerender();
+  });
+  const clampInt = v => Math.max(1, Math.min(99, Number(v) || 1));
+  $("#rm-int").addEventListener("change", e => { d.interval = clampInt(e.target.value); rerender(); });
+  $("#rm-int-minus").addEventListener("click", () => { d.interval = clampInt((Number(d.interval) || 1) - 1); rerender(); });
+  $("#rm-int-plus").addEventListener("click", () => { d.interval = clampInt((Number(d.interval) || 1) + 1); rerender(); });
+
+  $("#rm-dows")?.addEventListener("click", e => {
+    const b = e.target.closest("[data-bit]");
+    if (!b) return;
+    const bit = 1 << Number(b.dataset.bit);
+    const cur = d.by_day || 0;
+    d.by_day = (cur & bit) ? (cur & ~bit) : (cur | bit);
+    rerender();
+  });
+
+  $("#rm-monthday")?.addEventListener("change", e => { d.month_day = Number(e.target.value); rerender(); });
+
+  // ends radios
+  $$('#modal input[name="rm-ends"]').forEach(radio => {
+    radio.addEventListener("change", () => {
+      d.endsKind = radio.value;
+      if (d.endsKind === "until" && !d.until) d.until = addMonthsClampedISO(tdy, 1);
+      rerender();
+    });
+  });
+  $("#rm-until")?.addEventListener("change", e => { d.until = e.target.value; rerender(); });
+  $$("#modal .rm-until-row .rm-chip[data-addmonths]").forEach(btn => {
+    btn.addEventListener("click", () => { d.endsKind = "until"; d.until = addMonthsClampedISO(tdy, Number(btn.dataset.addmonths)); rerender(); });
+  });
+  $$("#modal .rm-until-row .rm-chip[data-yearend]").forEach(btn => {
+    btn.addEventListener("click", () => { d.endsKind = "until"; d.until = `${tdy.slice(0, 4)}-12-31`; rerender(); });
+  });
+  const clampAfter = v => Math.max(1, Math.min(999, Number(v) || 1));
+  $("#rm-after")?.addEventListener("change", e => { d.afterTotal = clampAfter(e.target.value); rerender(); });
+  $("#rm-after-minus")?.addEventListener("click", () => { d.afterTotal = clampAfter(d.afterTotal - 1); rerender(); });
+  $("#rm-after-plus")?.addEventListener("click", () => { d.afterTotal = clampAfter(d.afterTotal + 1); rerender(); });
+
+  // ghost calendar nav
+  $("#gcal-prev")?.addEventListener("click", () => {
+    const t = new Date(rm.viewY, rm.viewM - 2, 1);
+    rm.viewY = t.getFullYear(); rm.viewM = t.getMonth() + 1;
+    rerender();
+  });
+  $("#gcal-next")?.addEventListener("click", () => {
+    const t = new Date(rm.viewY, rm.viewM, 1);
+    rm.viewY = t.getFullYear(); rm.viewM = t.getMonth() + 1;
+    rerender();
+  });
+  const setUntilFromCell = iso => { if (d.endsKind === "until") { d.until = iso; rerender(); } };
+  $("#gcal-grid")?.addEventListener("click", e => {
+    const cell = e.target.closest(".gcal-cell");
+    if (cell && cell.dataset.iso) setUntilFromCell(cell.dataset.iso);
+  });
+  $("#gcal-grid")?.addEventListener("keydown", e => {
+    const cell = e.target.closest(".gcal-cell");
+    if (!cell) return;
+    const iso = cell.dataset.iso;
+    const move = deltaDays => {
+      e.preventDefault();
+      const target = addDaysLocalISO(iso, deltaDays);
+      const tCell = $(`#gcal-grid .gcal-cell[data-iso="${target}"]`);
+      if (tCell) tCell.focus();
+      else {
+        // đi qua mốc tháng → đổi view rồi focus lại
+        const t = splitISOLocal(target);
+        rm.viewY = t.y; rm.viewM = t.m;
+        rerender();
+        setTimeout(() => $(`#gcal-grid .gcal-cell[data-iso="${target}"]`)?.focus(), 0);
+      }
+    };
+    switch (e.key) {
+      case "ArrowLeft": move(-1); break;
+      case "ArrowRight": move(1); break;
+      case "ArrowUp": move(-7); break;
+      case "ArrowDown": move(7); break;
+      case "Home": e.preventDefault(); move(-((new Date(splitISOLocal(iso).y, splitISOLocal(iso).m - 1, splitISOLocal(iso).d).getDay() + 6) % 7)); break;
+      case "End": e.preventDefault(); { const wd = (new Date(splitISOLocal(iso).y, splitISOLocal(iso).m - 1, splitISOLocal(iso).d).getDay() + 6) % 7; move(6 - wd); break; }
+      case "PageUp": e.preventDefault(); { const t = new Date(rm.viewY, rm.viewM - 2, 1); rm.viewY = t.getFullYear(); rm.viewM = t.getMonth() + 1; rerender(); break; }
+      case "PageDown": e.preventDefault(); { const t = new Date(rm.viewY, rm.viewM, 1); rm.viewY = t.getFullYear(); rm.viewM = t.getMonth() + 1; rerender(); break; }
+      case "Enter": case " ": e.preventDefault(); setUntilFromCell(iso); break;
+    }
+  });
+
+  $("#rm-save").addEventListener("click", saveRecurrenceModal);
+}
+
+function schedulePreview() {
+  const rm = S.rm;
+  if (!rm) return;
+  clearTimeout(rm.timer);
+  rm.timer = setTimeout(fetchOccurrences, 120);
+}
+
+async function fetchOccurrences() {
+  const rm = S.rm;
+  if (!rm) return;
+  const seq = ++rm.previewSeq;
+  const d = rm.draft;
+  const rule = rmRule();
+  const withoutUntil = d.endsKind === "until" && !d.until;
+  try {
+    if (withoutUntil || (d.freq === "Week" && !d.by_day)) throw new Error("chưa đủ thông tin");
+    const list = await invoke("preview_occurrences", { rule, from: rm.dueIso, max: 200 });
+    if (!S.rm || S.rm.previewSeq !== seq) return;
+    rm.occurrences = new Set(list || []);
+    if (rm.dueIso) rm.occurrences.add(rm.dueIso);
+    paintOccurrences();
+    updateLiveSummary(rm.occurrences.size >= 200 ? 200 : rm.occurrences.size);
+    const countEl = $("#rm-count");
+    if (countEl) countEl.textContent = rm.occurrences.size >= 200 ? "≈ 200+ lần nữa trong 24 tháng tới" : `≈ ${rm.occurrences.size} lần nữa`;
+  } catch (_) {
+    if (!S.rm || S.rm.previewSeq !== seq) return;
+    rm.occurrences = new Set(rm.dueIso ? [rm.dueIso] : []);
+    paintOccurrences();
+    updateLiveSummary(null);
+    const countEl = $("#rm-count");
+    if (countEl) countEl.textContent = "";
+  }
+}
+
+function paintOccurrences() {
+  const rm = S.rm;
+  if (!rm) return;
+  $$("#gcal-grid .gcal-cell").forEach(cell => {
+    cell.classList.toggle("occ", rm.occurrences.has(cell.dataset.iso));
+  });
+}
+
+function updateLiveSummary(count) {
+  const rm = S.rm;
+  if (!rm) return;
+  const rule = rmRule();
+  const s = summarizeRule(rule, rm.dueIso);
+  const mainEl = $("#rm-summary-main");
+  const countEl = $("#rm-summary-count");
+  const d = rm.draft;
+  if (mainEl) {
+    let line = s ? s.main : "";
+    if (d.endsKind === "until" && d.until) line += ` · đến ${viDayMonth(d.until)}`;
+    else if (d.endsKind === "after") line += ` · tối đa ${Math.max(1, d.afterTotal)} lần`;
+    mainEl.textContent = line;
+  }
+  if (countEl) countEl.textContent = count == null ? "" : count >= 200 ? "≈ 200+ lần nữa" : `≈ ${count} lần nữa`;
+}
+
+async function saveRecurrenceModal() {
+  const rm = S.rm;
+  if (!rm) return;
+  const err = rmDraftError();
+  if (err) {
+    const errEl = $("#rm-error");
+    if (errEl) errEl.textContent = err;
+    return;
+  }
+  const rule = rmRule();
+  if (rule.month_day === undefined) delete rule.month_day;
+  try {
+    const snap = await invoke("set_task_recurrence", { id: rm.taskId, rule });
+    S.rm = null;
+    closeModal();
+    postSnap(snap);
+  } catch (e) {
+    const errEl = $("#rm-error");
+    if (errEl) errEl.textContent = typeof e === "string" ? e : "Không lưu được — kiểm tra lại thiết lập";
+  }
 }

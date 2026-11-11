@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
 use crate::models::{
-    today, Priority, Repeat, SortMode, StepPreset, Store, SubTask, Task, View,
+    occurrences_after, next_after, today, EndSpec, Priority, RecurrenceRule, Repeat,
+    SortMode, StepPreset, Store, SubTask, Task, View,
 };
 use crate::parser;
 use crate::state::{make_snapshot, AppState, Inner, Snapshot, LIST_PALETTE};
@@ -38,7 +39,16 @@ fn insert_parsed_task(i: &mut Inner, p: parser::Parsed, view: &View) -> u64 {
             list_id,
             priority: p.priority.unwrap_or_default(),
             due,
-            repeat: p.repeat.unwrap_or(Repeat::None),
+            repeat: p
+                .recurrence
+                .as_ref()
+                .map(|r| r.shadow())
+                .unwrap_or_else(|| p.repeat.unwrap_or(Repeat::None)),
+            recurrence: p.recurrence.as_ref().map(|r| {
+                let mut r = r.clone().clamped();
+                r.freeze_anchor(due);
+                r
+            }),
             tags: p.tags,
             subtasks: Vec::new(),
             starred,
@@ -116,22 +126,73 @@ fn toggle_done(i: &mut Inner, id: u64) {
     }
     let snap_task = i.store.tasks[idx].clone();
     i.store.tasks[idx].completed_at = Some(Utc::now());
-    if snap_task.repeat != Repeat::None {
-        let base = snap_task.due.unwrap_or_else(today);
-        if let Some(next) = snap_task.repeat.next_after(base) {
-            let mut nt = snap_task;
-            nt.id = i.store.new_id();
-            nt.due = Some(next);
-            nt.completed_at = None;
-            nt.deleted_at = None;
-            nt.created_at = Utc::now();
-            nt.starred = false;
-            for s in &mut nt.subtasks {
-                s.done = false;
+    match snap_task.recurrence.clone() {
+        Some(rule) => {
+            let base = snap_task.due.unwrap_or_else(today);
+            // Hết chuỗi ở thời điểm hoàn thành:
+            //  - After với done+1 >= total → dừng (đúng N lần bấm)
+            //  - không còn occurrence nào từ hôm nay trở đi (until đã trôi qua) → dừng + flash
+            let after_exhausted = matches!(&rule.ends, EndSpec::After { total, done } if done + 1 >= *total);
+            let future_exhausted = next_after(&rule, base.max(today())).is_none();
+            let next = if after_exhausted || future_exhausted {
+                None
+            } else {
+                next_after(&rule, base) // ngày sinh = theo due (giữ thứ tự chuỗi catch-up quá hạn)
+            };
+            match next {
+                Some(next) => {
+                    let mut rule2 = rule.clone();
+                    if let EndSpec::After { done, .. } = &mut rule2.ends {
+                        *done += 1; // đếm trên CLONE; instance vừa xong giữ `done` cũ (lịch sử nhất quán, undo free)
+                    }
+                    let mut nt = snap_task;
+                    nt.id = i.store.new_id();
+                    nt.due = Some(next);
+                    nt.recurrence = Some(rule2.clone());
+                    nt.repeat = rule2.shadow();
+                    nt.completed_at = None;
+                    nt.deleted_at = None;
+                    nt.created_at = Utc::now();
+                    nt.starred = false;
+                    for s in &mut nt.subtasks {
+                        s.done = false;
+                    }
+                    nt.order = i.store.tasks[idx].order.saturating_add(1);
+                    i.store.tasks.push(nt);
+                    set_flash(i, format!("✓ Xong — lần tiếp theo: {}, {}", crate::models::weekday_name(next), next.format("%d/%m/%Y")));
+                }
+                None => match &rule.ends {
+                    EndSpec::After { total, .. } => {
+                        set_flash(i, format!("✓ Xong — đủ {total} lần như đã hẹn"))
+                    }
+                    _ => set_flash(i, "✓ Xong — chuỗi lặp đã kết thúc".to_string()),
+                },
             }
-            nt.order = i.store.tasks[idx].order.saturating_add(1);
-            i.store.tasks.push(nt);
-            set_flash(i, format!("✓ Xong — lần tiếp theo: {}, {}", crate::models::weekday_name(next), next.format("%d/%m/%Y")));
+        }
+        None => {
+            // Lưới an toàn: file chưa sanitize có repeat mà thiếu recurrence → nâng cấp tại chỗ.
+            if snap_task.repeat != Repeat::None {
+                let base = snap_task.due.unwrap_or_else(today);
+                if let Some(rule) = crate::models::rule_from_repeat(snap_task.repeat, Some(base)) {
+                    if let Some(next) = next_after(&rule, base) {
+                        let mut nt = snap_task;
+                        nt.id = i.store.new_id();
+                        nt.due = Some(next);
+                        nt.recurrence = Some(rule.clone());
+                        nt.repeat = rule.shadow();
+                        nt.completed_at = None;
+                        nt.deleted_at = None;
+                        nt.created_at = Utc::now();
+                        nt.starred = false;
+                        for s in &mut nt.subtasks {
+                            s.done = false;
+                        }
+                        nt.order = i.store.tasks[idx].order.saturating_add(1);
+                        i.store.tasks.push(nt);
+                        set_flash(i, format!("✓ Xong — lần tiếp theo: {}, {}", crate::models::weekday_name(next), next.format("%d/%m/%Y")));
+                    }
+                }
+            }
         }
     }
 }
@@ -586,6 +647,7 @@ pub struct Preview {
     pub tags: Vec<String>,
     pub priority: Option<String>,
     pub repeat: Option<String>,
+    pub recurrence: Option<RecurrenceRule>,
 }
 
 #[tauri::command]
@@ -597,6 +659,7 @@ pub fn preview_parse(input: String) -> Preview {
         tags: p.tags,
         priority: p.priority.map(|x| x.short().to_string()),
         repeat: p.repeat.map(|x| x.label().to_string()),
+        recurrence: p.recurrence,
     }
 }
 
@@ -658,6 +721,121 @@ pub fn set_task_notes(
     finish(&app, &mut i)
 }
 
+/// Áp dụng rule mới (hoặc gỡ) cho một việc: clamp + validate + ghi shadow + gỡ rule hết hạn.
+/// Dùng chung cho set_task_recurrence / set_task_repeat. Một đường duy nhất.
+fn apply_recurrence(
+    i: &mut Inner,
+    id: u64,
+    rule: Option<RecurrenceRule>,
+) -> Result<Option<String>, String> {
+    // validate TRƯỚC khi đụng undo stack / dữ liệu
+    let rule = match rule {
+        Some(r) => {
+            let r = r.clamped();
+            r.validate()?;
+            Some(r)
+        }
+        None => None,
+    };
+    AppState::push_undo(i);
+    if let Some(t) = i.store.tasks.iter_mut().find(|t| t.id == id) {
+        match rule {
+            Some(mut r) => {
+                r.freeze_anchor(t.due);
+                t.repeat = r.shadow();
+                t.recurrence = Some(r);
+            }
+            None => {
+                t.repeat = Repeat::None;
+                t.recurrence = None;
+            }
+        }
+    }
+    let stripped = i.store.strip_exhausted_recurrences();
+    Ok(stripped.into_iter().next())
+}
+
+#[tauri::command]
+pub fn set_task_recurrence(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: u64,
+    rule: Option<RecurrenceRule>,
+) -> Result<Snapshot, String> {
+    let mut i = state.lock();
+    let stripped = apply_recurrence(&mut i, id, rule)?;
+    if let Some(title) = stripped {
+        set_flash(&mut i, format!("Đã chuyển “{title}” thành việc thường (lặp đã hết hạn)"));
+    } else {
+        set_flash(&mut i, "Đã cập nhật lặp lại".to_string());
+    }
+    AppState::commit(&mut i);
+    Ok(finish(&app, &mut i))
+}
+
+#[tauri::command]
+pub fn skip_occurrence(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: u64,
+) -> Result<Snapshot, String> {
+    let mut i = state.lock();
+    // validate trước khi push undo
+    let (due, rule) = {
+        let Some(t) = i.store.tasks.iter().find(|t| t.id == id) else {
+            return Ok(finish(&app, &mut i));
+        };
+        let Some(rule) = t.recurrence.clone() else {
+            return Err("Việc này không lặp lại".to_string());
+        };
+        (t.due, rule)
+    };
+    let base = due.unwrap_or_else(today).max(today());
+    let Some(next) = next_after(&rule, base) else {
+        return Err("Sắp hết lặp — không còn lần nào để bỏ qua".to_string());
+    };
+    AppState::push_undo(&mut i);
+    if let Some(t) = i.store.tasks.iter_mut().find(|t| t.id == id) {
+        t.due = Some(next);
+    }
+    set_flash(&mut i, format!("Đã bỏ qua — chuyển sang {}, {}", crate::models::weekday_name(next), next.format("%d/%m/%Y")));
+    AppState::commit(&mut i);
+    Ok(finish(&app, &mut i))
+}
+
+/// Lịch các occurrence sau `from` (ISO yyyy-mm-dd). Nguồn thuật toán DUY NHẤT (Rust) —
+/// ghost calendar và hint đều dùng lệnh này, không mô phỏng bằng JS.
+#[tauri::command]
+pub fn preview_occurrences(
+    rule: RecurrenceRule,
+    from: Option<String>,
+    max: Option<u32>,
+) -> Result<Vec<String>, String> {
+    let rule = rule.clamped();
+    rule.validate()?;
+    let from = from
+        .as_deref()
+        .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
+        .unwrap_or_else(|| today().pred_opt().unwrap_or_else(today));
+    let limit = max.unwrap_or(200).clamp(1, 200);
+    Ok(occurrences_after(&rule, from, limit)
+        .into_iter()
+        .map(|d| d.format("%Y-%m-%d").to_string())
+        .collect())
+}
+
+/// Occurrence kế tiếp (cho hint "lần tiếp theo: …").
+#[tauri::command]
+pub fn next_occurrence(rule: RecurrenceRule, from: Option<String>) -> Result<Option<String>, String> {
+    let rule = rule.clamped();
+    rule.validate()?;
+    let from = from
+        .as_deref()
+        .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
+        .unwrap_or_else(today);
+    Ok(next_after(&rule, from).map(|d| d.format("%Y-%m-%d").to_string()))
+}
+
 #[tauri::command]
 pub fn set_task_repeat(
     app: AppHandle,
@@ -666,9 +844,12 @@ pub fn set_task_repeat(
     repeat: Repeat,
 ) -> Snapshot {
     let mut i = state.lock();
-    AppState::push_undo(&mut i);
-    if let Some(t) = i.store.tasks.iter_mut().find(|t| t.id == id) {
-        t.repeat = repeat;
+    // Đi qua đường recurrence (một đường duy nhất): legacy enum → rule tương đương.
+    let due = i.store.tasks.iter().find(|t| t.id == id).and_then(|t| t.due);
+    let rule = crate::models::rule_from_repeat(repeat, due);
+    match apply_recurrence(&mut i, id, rule) {
+        Ok(_) => {}
+        Err(e) => set_flash(&mut i, e),
     }
     AppState::commit(&mut i);
     finish(&app, &mut i)

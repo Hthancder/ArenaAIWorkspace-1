@@ -68,6 +68,12 @@ pub struct Snapshot {
 impl AppState {
     pub fn new() -> Self {
         let store = storage::load();
+        // Flash 1 lần cho các việc vừa bị gỡ rule lặp hết hạn khi sanitize lúc nạp file
+        let flash = match store.sanitize_notes.len() {
+            0 => None,
+            1 => Some(format!("Đã chuyển “{}” thành việc thường (lặp đã hết hạn)", store.sanitize_notes[0])),
+            n => Some(format!("Đã chuyển {n} việc thành việc thường (lặp đã hết hạn)")),
+        };
         Self {
             inner: Mutex::new(Inner {
                 store,
@@ -75,7 +81,7 @@ impl AppState {
                 redo_stack: Vec::new(),
                 last_saved: Instant::now(),
                 dirty: false,
-                flash: None,
+                flash,
                 last_added: None,
             }),
         }

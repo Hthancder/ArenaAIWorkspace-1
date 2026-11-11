@@ -7,7 +7,8 @@
 use chrono::{Datelike, NaiveDate, TimeDelta};
 
 use crate::models::{
-    next_weekday, weekday_from_name, weekday_from_number, Priority, Repeat,
+    next_weekday, weekday_from_name, weekday_from_number, EndSpec, Freq, Priority,
+    RecurrenceRule, Repeat,
 };
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -18,6 +19,8 @@ pub struct Parsed {
     pub priority: Option<Priority>,
     pub tags: Vec<String>,
     pub repeat: Option<Repeat>,
+    /// v2.9.0 — rule lặp hạng nhất (khi parser hiểu được, vd `*mỗi 3 ngày`).
+    pub recurrence: Option<RecurrenceRule>,
 }
 
 fn repeat_from_word(s: &str) -> Option<Repeat> {
@@ -27,6 +30,28 @@ fn repeat_from_word(s: &str) -> Option<Repeat> {
         "monthly" | "tháng" | "thang" | "hang thang" | "hàng tháng" => Repeat::Monthly,
         "weekdays" | "weekday" | "ngay trong tuan" => Repeat::Weekdays,
         "none" | "off" | "khong" | "không" => Repeat::None,
+        _ => return None,
+    })
+}
+
+/// Rule legacy tương đương (shadow nhất quán cho parser cũ).
+fn legacy_rule(r: Repeat) -> Option<RecurrenceRule> {
+    Some(match r {
+        Repeat::None => return None,
+        Repeat::Daily => RecurrenceRule::new(Freq::Day),
+        Repeat::Weekdays => RecurrenceRule { freq: Freq::Day, interval: 1, by_day: Some(0b001_1111), month_day: None, ends: EndSpec::Never },
+        Repeat::Weekly => RecurrenceRule::new(Freq::Week),
+        Repeat::Monthly => RecurrenceRule::new(Freq::Month),
+    })
+}
+
+/// Đơn vị lặp (VI + EN, có/không dấu).
+fn unit_from_word(s: &str) -> Option<Freq> {
+    Some(match s {
+        "ngày" | "ngay" | "day" | "days" => Freq::Day,
+        "tuần" | "tuan" | "week" | "weeks" => Freq::Week,
+        "tháng" | "thang" | "month" | "months" => Freq::Month,
+        "năm" | "nam" | "year" | "years" => Freq::Year,
         _ => return None,
     })
 }
@@ -110,15 +135,40 @@ pub fn parse(input: &str, today: NaiveDate) -> Parsed {
             let first = &lower[1..];
             if let Some(r) = repeat_from_word(first) {
                 out.repeat = Some(r);
+                out.recurrence = legacy_rule(r);
                 consumed[i] = true;
             } else if first == "hàng" || first == "hang" {
                 // "*hàng ngày/tuần/tháng" — 2 token liền nhau
                 if let Some(p) = peek(i + 1) {
                     if let Some(r) = repeat_from_word(&p) {
                         out.repeat = Some(r);
+                        out.recurrence = legacy_rule(r);
                         consumed[i] = true;
                         consumed[i + 1] = true;
                         i += 1;
+                    }
+                }
+            } else if first == "mỗi" || first == "moi" || first == "every" {
+                // "*mỗi N ngày|tuần|tháng|năm" (thiếu N → 1): "*mỗi 3 ngày", "*mỗi tuần", "*every 2 weeks"
+                let mut interval: u32 = 1;
+                let mut unit_idx = i + 1;
+                if let Some(p) = peek(i + 1) {
+                    if let Ok(n) = p.parse::<u32>() {
+                        interval = n.clamp(1, 99);
+                        unit_idx = i + 2;
+                    }
+                }
+                if let Some(p2) = peek(unit_idx) {
+                    if let Some(freq) = unit_from_word(&p2) {
+                        let mut rule = RecurrenceRule { freq, interval, by_day: None, month_day: None, ends: EndSpec::Never };
+                        rule = rule.clamped();
+                        out.recurrence = Some(rule);
+                        out.repeat = Some(rule.shadow());
+                        for k in 0..=(unit_idx - i) {
+                            consumed[i + k] = true;
+                        }
+                        i = unit_idx + 1;
+                        continue;
                     }
                 }
             }
@@ -183,6 +233,7 @@ pub fn parse(input: &str, today: NaiveDate) -> Parsed {
                 if let Some(p) = peek(i + 1) {
                     if let Some(r) = repeat_from_word(&p) {
                         out.repeat = Some(r);
+                        out.recurrence = legacy_rule(r);
                         consumed[i] = true;
                         consumed[i + 1] = true;
                         i += 2;
@@ -238,6 +289,7 @@ pub fn parse(input: &str, today: NaiveDate) -> Parsed {
                 }
                 "weekdays" => {
                     out.repeat = Some(Repeat::Weekdays);
+                    out.recurrence = legacy_rule(Repeat::Weekdays);
                     consumed[i] = true;
                     i += 1;
                     continue;
