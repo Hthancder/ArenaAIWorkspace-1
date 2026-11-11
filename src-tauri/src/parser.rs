@@ -162,8 +162,8 @@ pub fn parse(input: &str, today: NaiveDate) -> Parsed {
                     if let Some(freq) = unit_from_word(&p2) {
                         let mut rule = RecurrenceRule { freq, interval, by_day: None, month_day: None, ends: EndSpec::Never };
                         rule = rule.clamped();
-                        out.recurrence = Some(rule);
                         out.repeat = Some(rule.shadow());
+                        out.recurrence = Some(rule);
                         for k in 0..=(unit_idx - i) {
                             consumed[i + k] = true;
                         }

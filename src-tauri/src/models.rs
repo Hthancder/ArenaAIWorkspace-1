@@ -144,7 +144,7 @@ pub enum Freq {
 }
 
 /// Cách kết thúc chuỗi lặp.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum EndSpec {
     Never,
@@ -163,7 +163,7 @@ impl Default for EndSpec {
 const WD_BITS_WEEKDAYS: u8 = 0b001_1111; // T2..T6 (bit0 = Thứ Hai … bit6 = Chủ Nhật)
 
 /// Quy tắc lặp hạng nhất. `Repeat` cũ chỉ còn vai trò shadow (downgrade an toàn).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RecurrenceRule {
     pub freq: Freq,
     #[serde(default = "one")]
@@ -827,6 +827,7 @@ impl Store {
             settings: Settings::default(),
             focus_days: HashMap::new(),
             step_presets: Vec::new(),
+            sanitize_notes: Vec::new(),
         };
         let lists = [
             ("Công việc", [99, 102, 241]),
