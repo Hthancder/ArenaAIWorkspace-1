@@ -46,6 +46,13 @@
 - **Tự phát hiện di chuyển**: nếu Taskora.exe bị copy lẻ sang chỗ trống, app hỏi chuyển dữ liệu portable cũ sang. Nếu bạn chạy ở nơi khác mà `%APPDATA%` còn dữ liệu v1/v2.0 cũ, app hỏi **gộp** (id-union, không trùng lặp).
 - **Khôi phục view đang mở** giữa các lần chạy; toast hành động kèm nút **Hoàn tác** sau mỗi thao tác.
 
+**Giao diện ADHD thiết kế riêng (v2.4.0)**
+- **Thẻ TIẾP THEO giờ là hero**: tiêu đề 22px, đồng **live HH:MM** ngay trong thẻ (mỏ neo thời gian — chống time blindness), nút **Tập trung 25 phút** to 50px chiếm chỗ chính, nút **Xong**; dòng tiến độ tích lũy *"Hôm nay đã xong N việc"* (chỉ cộng, không bao giờ trừ/về 0 — không streak, không quota).
+- **Giao diện bớt lựa chọn**: ẩn hàng chip ví dụ "Thử ngay…", thanh công cụ mờ còn 55% (trở lại rõ khi rê chuột), chữ việc lớn hơn, nút menu to hơn dễ bấm.
+- **Hai trạng thái phiên khác nhau hẳn**: phiên tập trung có dòng *"Bây giờ là HH:MM"*; khi nghỉ 5 phút, vòng đếm ngược **biến mất** và nhường chỗ cho **vòng thở** ("Hít vào… 4 giây / Thở ra… thật chậm 6 giây") — focus là làm, break là điều tiết thần kinh.
+- **Empty-state dịu**: *"Xong hết rồi ✦ — Nghỉ thật sự, không còn gì chờ bạn"*.
+- Chi tiết: [specs/adhd-mode.md](specs/adhd-mode.md) (mục 7).
+
 **Chế độ ADHD — dành riêng cho não ADHD (v2.3.0)**
 - **Một việc tại một thời điểm**: thẻ **TIẾP THEO** ghim đầu danh sách — chỉ hiện việc kế tiếp (tôn trọng sort/filter đang dùng), hai nút: **Tập trung 25′** và **Xong**. Hết việc → dòng dịu "Không còn việc nào — nghỉ xíu đi." Không bắt bạn chọn giữa 20 việc; triệt tiêu decision paralysis.
 - **Phiên tập trung 25 phút** (Esc để dừng, Space = tạm dừng/tiếp tục): vòng tròn đếm ngược SVG trực quan (chống time blindness), chỉ 1 việc trên màn hình, copy luôn ấm — hết giờ có màn celebrate và lựa chọn **Nghỉ 5 phút** hoặc **Việc tiếp theo**. "Dừng lại — không sao" nghĩa là dừng lại thì chẳng sao cả.

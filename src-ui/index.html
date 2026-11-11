@@ -70,7 +70,7 @@
       <img class="brand-logo" src="assets/logo.png" alt="Taskora" />
       <div class="brand-text">
         <span class="brand-name">Taskora</span>
-        <span class="brand-ver">v2.3.0</span>
+        <span class="brand-ver">v2.4.0</span>
       </div>
     </div>
 
@@ -495,7 +495,7 @@
         </div>
 
         <div class="settings-foot">
-          <span>Taskora v2.3.0</span>
+          <span>Taskora v2.4.0</span>
           <button class="linklike" id="set-open-help" type="button">Phím tắt</button>
           <span class="settings-dot">·</span>
           <button class="linklike" id="set-open-about" type="button">Giới thiệu</button>
@@ -618,12 +618,17 @@
   <div id="focus-overlay" class="overlay focus-overlay" hidden>
     <div class="focus-panel">
       <div class="focus-hint" id="focus-hint">Đúng việc này thôi — mọi thứ khác có thể đợi</div>
+      <div class="focus-now" id="focus-now"></div>
       <div class="focus-ring-wrap">
         <svg class="focus-ring" viewBox="0 0 120 120" role="timer" aria-live="polite">
           <circle class="focus-track" cx="60" cy="60" r="52"></circle>
           <circle class="focus-prog" id="focus-prog" cx="60" cy="60" r="52"></circle>
         </svg>
         <div class="focus-time" id="focus-time">25:00</div>
+      </div>
+      <div class="focus-breath" id="focus-breath" hidden>
+        <div class="breath-circle"></div>
+        <div class="focus-breath-text" id="focus-breath-text">Hít vào… (4 giây)</div>
       </div>
       <div class="focus-title" id="focus-title"></div>
       <div class="focus-controls" id="focus-controls">

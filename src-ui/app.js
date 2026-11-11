@@ -258,6 +258,7 @@ function postSnap(snap) {
   document.body.classList.toggle("perf", !!s.settings.perf_mode);
   document.body.classList.toggle("adhd", !!s.settings.adhd_mode);
   if (!s.settings.adhd_mode && F.active) focusStop();
+  if (s.settings.adhd_mode) startAdhdClock(); else stopAdhdClock();
   setupAdhdPlaceholder();
   syncSettingsControls(s);
   refreshFxStatus();
@@ -594,7 +595,8 @@ async function renderTaskList() {
   const empty = S.visibleIds.length === 0;
   $("#empty-state").hidden = !empty;
   if (empty) {
-    const meta = S.view.type === "list" ? { title: "Danh sách trống", sub: "Thêm việc nhanh ở ô phía trên" } : {
+    const actionable = ["inbox", "today", "upcoming", "starred", "list"].includes(S.view.type);
+    const meta = (s_isAdhd() && actionable) ? ["Xong hết rồi ✦", "Nghỉ thật sự — không còn gì chờ bạn"] : S.view.type === "list" ? { title: "Danh sách trống", sub: "Thêm việc nhanh ở ô phía trên" } : {
       inbox: ["Hộp thư trống", "Thêm việc đầu tiên bằng ô phía trên (Ctrl+N)"],
       today: ["Không có việc nào hôm nay", "Việc quá hạn cũng sẽ hiển thị ở đây"],
       upcoming: ["Chưa có việc sắp tới", "Đặt hạn chót để xuất hiện trong view này"],
@@ -602,8 +604,8 @@ async function renderTaskList() {
       completed: ["Chưa có việc hoàn thành", "Hoàn thành việc để xem tại đây"],
       trash: ["Thùng rác trống", "Việc đã xóa sẽ nằm ở đây trước khi xóa vĩnh viễn"],
     }[S.view.type] || ["Trống", ""];
-    $("#empty-title").textContent = meta[0];
-    $("#empty-sub").textContent = meta[1];
+    $("#empty-title").textContent = Array.isArray(meta) ? meta[0] : meta.title;
+    $("#empty-sub").textContent = Array.isArray(meta) ? meta[1] : meta.sub;
   }
   // khôi phục trạng thái chọn
   if (S.selected != null) {
@@ -901,6 +903,7 @@ function openHelp() {
     ["Ctrl + 1…7", "Hộp thư · Hôm nay · Sắp tới · Ghim · Hoàn thành · Thùng rác · Thống kê"],
     ["Ctrl + 8", "Cài đặt"],
     ["Esc", "Đóng bảng / bỏ chọn / bỏ bộ lọc"],
+    ["Space (phiên ADHD)", "Tạm dừng / tiếp tục phiên tập trung"],
   ];
   openModal(`<h2><svg class="ic accent-ic"><use href="#i-keyboard"/></svg>Phím tắt</h2>
     <div class="shortcut-list g-scroll">${rows.map(([k, d]) => `<div class="shortcut-row"><kbd class="modal-kbd">${k}</kbd><span class="b-meta" style="font-size:12px">${d}</span></div>`).join("")}</div>
@@ -908,7 +911,7 @@ function openHelp() {
 }
 function openAbout() {
   openModal(`<div class="about-center"><img class="about-logo" src="assets/logo.png" alt="Taskora" />
-      <h2 style="justify-content:center">Taskora <span style="color:var(--text-faint);font-weight:500">v2.3.0</span></h2>
+      <h2 style="justify-content:center">Taskora <span style="color:var(--text-faint);font-weight:500">v2.4.0</span></h2>
       <p>Quản lý công việc cho Windows — nhẹ, nhanh, đẹp.<br>Viết bằng Rust + Tauri, giao diện liquid glass.</p>
       <p>Font <strong>Be Vietnam Pro</strong> (OFL) · Icon <strong>Phosphor</strong> (MIT)</p>
       <p style="color:var(--text-faint)">MIT License © Hthancder</p>
@@ -1473,6 +1476,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 /* ─────────── CHẾ ĐỘ ADHD — một việc một lúc, thưởng tức thì, không phán xét ─────────── */
 const s_isAdhd = () => !!(S.snap && S.snap.settings && S.snap.settings.adhd_mode);
+const adhdHm = () => new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
 const CIRC = 2 * Math.PI * 52;
 let qaTimer = null, qaIdx = 0;
 
@@ -1503,25 +1507,27 @@ function renderNextUp() {
   const el = $("#adhd-next");
   if (!el) return;
   if (!s_isAdhd() || !["inbox", "today", "upcoming", "starred", "list"].includes(S.view.type)) { el.hidden = true; return; }
+  const doneToday = (S.snap && S.snap.counts && S.snap.counts.done_today) || 0;
   const t = nextAdhdTask();
   el.hidden = false;
   if (!t) {
-    el.innerHTML = `<div class="adhd-next-label"><svg class="ic tiny"><use href="#i-lightning"/></svg>TIẾP THEO</div>
-      <div class="adhd-next-row"><div class="adhd-next-main"><div class="adhd-next-title" style="color:var(--text-weak);font-weight:500">Không còn việc nào — nghỉ xíu đi.</div></div>
-      <div class="adhd-next-actions"><svg class="ic" style="color:var(--ok)"><use href="#i-check-circle"/></svg></div></div>`;
+    el.innerHTML = `<div class="adhd-hero-top"><span class="adhd-next-label"><svg class="ic tiny"><use href="#i-lightning"/></svg>TIẾP THEO</span><span class="adhd-clock" id="adhd-clock">${adhdHm()}</span></div>
+      <div class="adhd-hero-empty"><svg class="ic adhd-hero-empty-ic"><use href="#i-seal-check-fill"/></svg>
+        <div class="adhd-hero-empty-title">Xong hết rồi ✦</div>
+        <div class="adhd-hero-empty-sub">Nghỉ thật sự — không còn gì chờ bạn</div>
+      </div>`;
+    startAdhdClock();
     return;
   }
-  el.innerHTML = `<div class="adhd-next-label"><svg class="ic tiny"><use href="#i-lightning"/></svg>TIẾP THEO — CHỈ MỘT VIỆC NÀY</div>
-    <div class="adhd-next-row">
-      <div class="adhd-next-main">
-        <div class="adhd-next-title">${esc(t.title)}</div>
-        <div class="adhd-next-meta">${dueChip(t)}${repeatMeta(t)}${subtaskMeta(t)}${tagsMeta(t)}</div>
-      </div>
-      <div class="adhd-next-actions">
-        <button class="btn-primary" data-adhd-focus="${t.id}"><svg class="ic small"><use href="#i-clock"/></svg>Tập trung 25′</button>
-        <button class="btn-adhd-done" data-adhd-done="${t.id}" title="Xong luôn việc này"><svg class="ic small"><use href="#i-check"/></svg>Xong</button>
-      </div>
-    </div>`;
+  el.innerHTML = `<div class="adhd-hero-top"><span class="adhd-next-label"><svg class="ic tiny"><use href="#i-lightning"/></svg>VIỆC TIẾP THEO — CHỈ MỘT VIỆC NÀY</span><span class="adhd-clock" id="adhd-clock">${adhdHm()}</span></div>
+    <div class="adhd-hero-title">${esc(t.title)}</div>
+    <div class="adhd-next-meta">${dueChip(t)}${repeatMeta(t)}${subtaskMeta(t)}${tagsMeta(t)}</div>
+    <div class="adhd-hero-actions">
+      <button class="adhd-cta" data-adhd-focus="${t.id}"><svg class="ic"><use href="#i-clock"/></svg>Tập trung 25 phút</button>
+      <button class="btn-adhd-done xl" data-adhd-done="${t.id}" title="Xong luôn việc này"><svg class="ic"><use href="#i-check"/></svg>Xong</button>
+    </div>
+    <div class="adhd-done-line"><svg class="ic tiny"><use href="#i-check-circle"/></svg><span>Hôm nay đã xong <b>${doneToday}</b> việc</span></div>`;
+  startAdhdClock();
 }
 
 function confettiBurst(x, y) {
@@ -1554,6 +1560,8 @@ function drawFocusRing() {
   p.style.strokeDashoffset = String(CIRC * (1 - frac));
   const m = Math.floor(F.remaining / 60), r = F.remaining % 60;
   $("#focus-time").textContent = `${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
+  const nowEl = $("#focus-now");
+  if (nowEl) nowEl.textContent = `Bây giờ là ${new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}`;
 }
 
 function focusTickStart() {
@@ -1578,6 +1586,9 @@ function focusStart(taskId) {
   $("#focus-pause").textContent = "Tạm dừng";
   $("#focus-stop").textContent = "Dừng lại — không sao";
   $("#focus-done").hidden = true;
+  $("#focus-breath").hidden = true;
+  document.querySelector(".focus-ring-wrap").style.display = "";
+  stopBreath();
   $("#focus-overlay").hidden = false;
   drawFocusRing();
   focusTickStart();
@@ -1587,6 +1598,9 @@ function focusPhaseDone() {
   clearInterval(F.timer); F.timer = null;
   if (F.mode === "focus") {
     F.mode = "done";
+    stopBreath();
+    $("#focus-breath").hidden = true;
+    document.querySelector(".focus-ring-wrap").style.display = "";
     $("#focus-hint").textContent = "25 phút tập trung — não bạn xứng đáng được nghỉ";
     $("#focus-controls").hidden = true;
     $("#focus-done").hidden = false;
@@ -1611,6 +1625,9 @@ function focusBreakStart() {
   $("#focus-controls").hidden = false;
   $("#focus-pause").hidden = true;
   $("#focus-stop").textContent = "Bỏ qua nghỉ →";
+  document.querySelector(".focus-ring-wrap").style.display = "none";
+  $("#focus-breath").hidden = false;
+  startBreath();
   drawFocusRing();
   focusTickStart();
 }
@@ -1618,6 +1635,9 @@ function focusBreakStart() {
 function focusStop() {
   F.active = false; F.paused = false; F.mode = "focus";
   clearInterval(F.timer); F.timer = null;
+  stopBreath();
+  const br = $("#focus-breath"); if (br) br.hidden = true;
+  const rw = document.querySelector(".focus-ring-wrap"); if (rw) rw.style.display = "";
   const ov = $("#focus-overlay"); if (ov) ov.hidden = true;
 }
 
@@ -1639,3 +1659,28 @@ function bindAdhd() {
   $("#focus-break")?.addEventListener("click", focusBreakStart);
   $("#focus-next")?.addEventListener("click", focusStop);
 }
+
+/* ĐỒNG HỒ LIVE (mỏ neo thời gian — chống time blindness) */
+let clockTimer = null;
+function startAdhdClock() {
+  if (clockTimer) return;
+  const tick = () => {
+    const now = new Date();
+    const hm = now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+    const el = $("#adhd-clock"); if (el) el.textContent = hm;
+    const fn = $("#focus-now"); if (fn && F.active) fn.textContent = `Bây giờ là ${hm}`;
+  };
+  tick();
+  clockTimer = setInterval(tick, 1000);
+}
+function stopAdhdClock() { clearInterval(clockTimer); clockTimer = null; }
+
+/* VÒNG THỞ khi nghỉ — điều tiết thần kinh, không phải đếm ngược */
+let breathTimer = null, breathInhale = true;
+function startBreath() {
+  stopBreath(); breathInhale = true;
+  const set = () => { const el = $("#focus-breath-text"); if (el) el.textContent = breathInhale ? "Hít vào… (4 giây)" : "Thở ra… thật chậm (6 giây)"; };
+  set();
+  breathTimer = setInterval(() => { breathInhale = !breathInhale; set(); }, 5000);
+}
+function stopBreath() { clearInterval(breathTimer); breathTimer = null; }

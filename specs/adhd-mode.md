@@ -1,4 +1,4 @@
-# Chế độ ADHD — Đặc tả thiết kế (v2.3.0)
+# Chế độ ADHD — Đặc tả thiết kế (v2.3.0 · bổ sung v2.4.0 ở mục 7)
 
 > Thiết kế dựa trên nghiên cứu về ADHD (executive dysfunction, time blindness, dopamine
 > reward, rejection-sensitive dysphoria) và các nguyên tắc thiết kế cho não ADHD đã
@@ -95,3 +95,61 @@ Settings.adhd_mode (Rust, serde default false)
 4. Toggle ADHD tắt → thẻ ẩn, overlay đóng, banner đỏ trở lại như cũ; không side-effect nào khi ADHD tắt.
 5. Reset cài đặt → ADHD tắt.
 6. Harness jsdom: bật/tắt ADHD, thẻ tiếp theo, overlay mở/đóng, quick-add placeholder đổi — tất cả PASS.
+
+---
+
+# 7. Giao diện riêng cho ADHD (v2.4.0) — "một việc tại một thời điểm", dịu, to, thở
+
+> **Vấn đề với v2.3.0:** tính năng đã ADHD nhưng giao diện vẫn là UI người bình thường cộng thêm
+> thẻ TIẾP THEO — vẫn 13px chữ, toolbar 5 lựa chọn, hàng chip ví dụ, không có mỏ neo thời gian,
+> break giống hệt focus (một vòng tròn đếm ngược nữa). Thiếu: *giao diện chuyên biệt*.
+
+## 7.1 Thiết kế lại thẻ TIẾP THEO thành HERO
+
+Cấu trúc mới (thay toàn bộ nội dung renderNextUp):
+
+```
+┌──────────────────────────────────────────────────┐
+│ ⚡ VIỆC TIẾP THEO — CHỈ MỘT VIỆC NÀY      14:32  │ ← label nhỏ + ĐỒNG LIVE (mỏ neo thời gian, chống time blindness)
+│                                                  │
+│  Tiêu đề việc — lớn 22px, đậm, tối đa 2 dòng     │
+│  [Hôm nay 09/11]  [Hàng tuần]  #nhà              │ ← chips giữ nguyên (thông tin, không quyết định)
+│                                                  │
+│  ┌─────────────────────────────┐ ┌────────────┐  │
+│  │ ▶  Tập trung 25 phút        │ │ ✓  Xong    │  │ ← nút cao 48px, CTA chiếm chỗ nhiều nhất
+│  └─────────────────────────────┘ └────────────┘  │
+│  ✓ Hôm nay đã xong 3 việc                        │ ← tiến độ tích lũy (KHÔNG goal/streak/quota)
+└──────────────────────────────────────────────────┘
+```
+
+- **Đồng live** (`#adhd-clock`): HH:MM, cập nhật 1s — giữ người dùng neo trong thời gian thật.
+- **Dòng tiến độ tích lũy**: "Hôm nay đã xong N việc" từ `counts.done_today` — chỉ cộng dồn, không bao giờ trừ/về 0.
+- Empty state: khổ to hơn, icon seal-check, *"Xong hết rồi ✦ — Nghỉ thật sự, không còn gì chờ bạn"*.
+
+## 7.2 Bớt lựa chọn ở chrome (decision reduction)
+
+- Ẩn hàng chip ví dụ `#qa-examples` ("Thử ngay…") — ô nhập chỉ còn đúng một placeholder coaching.
+- Toolbar: `opacity:.55`, `saturate(.75)`, trở lại bình thường khi hover/focus-within — vẫn dùng được, chỉ không còn hét vào mặt.
+- Chữ task row `.ttitle` 13px→15.5px; hero giữ tỷ lệ tương ứng. Sidebar nav item nở ra dễ bấm hơn.
+
+## 7.3 Focus overlay — hai trạng thái khác nhau hẳn
+
+- Thêm dòng nhỏ **"Bây giờ là HH:MM"** (`#focus-now`) dưới câu nhắc — mỏ neo thời gian khi đang ngâm 25 phút.
+- **Break mode khác hẳn focus mode**: ẩn vòng đếm ngược, hiện **vòng thở** (`.breath-circle`, keyframes 5s alternate, tôn trọng prefers-reduced-motion và Chế độ hiệu năng) + dòng nhắc đổi qua lại *"Hít vào… (4 giây)"* / *"Thở ra… thật chậm (6 giây)"* (`#focus-breath-text`, interval 5s). Focus = làm; Break = điều tiết thần kinh. Không dùng chung một giao diện.
+
+## 7.4 Empty-state dịu hơn ở ADHD mode
+
+Khi listable view không còn việc và ADHD bật: tiêu đề "Xong hết rồi ✦", sub "Nghỉ thật sự — không còn gì chờ bạn".
+
+## 7.5 Scope v2.4.0
+
+Trong: hero redesign (clock + cumulative line), chrome de-emphasis, type bump, focus-now, breathing break, empty-state copy, light-theme overrides.
+Ngoài (phase sau): auto-collapse sidebar, time-block calendar, âm thanh kết thúc phiên, ngưỡng nhắc nghỉ mắt 20-20-20.
+
+## 7.6 Tiêu chí nghiệm thu
+
+1. Bật ADHD → hero hiện đồng live (HH:MM), dòng "Hôm nay đã xong N việc", CTA 25 phút chiếm không gian chính.
+2. `#qa-examples` không hiển thị; toolbar mờ còn 55% khi không hover.
+3. Overlay focus có dòng "Bây giờ là HH:MM"; bấm "Nghỉ 5:00" → vòng đếm giờ biến mất, vòng thở xuất hiện; Escape/bỏ qua → về lại danh sách.
+4. ADHD tắt → mọi thứ trở lại như cũ (hero ẩn, toolbar rõ nét, đồng hồ dừng).
+5. Harness: clock format, done-line, breath hidden/shown theo mode, CSS rules tồn tại.
