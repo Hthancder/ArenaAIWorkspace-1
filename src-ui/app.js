@@ -69,7 +69,7 @@ function dueChip(t) {
   const diff = dueDiffDays(t.due);
   const [, m, d] = t.due.slice(0, 10).split("-").map(Number);
   const md = d.toString().padStart(2, "0") + "/" + m.toString().padStart(2, "0");
-  if (diff < 0) return `<span class="meta-chip due-overdue"><svg class="ic"><use href="#i-warning"/></svg>${md} · quá hạn ${-diff}n</span>`;
+  if (diff < 0) return `<span class="meta-chip due-overdue"><svg class="ic"><use href="#i-warning"/></svg>${md} · quá hạn ${-diff} ngày</span>`;
   if (diff === 0) return `<span class="meta-chip due-today"><svg class="ic"><use href="#i-calendar-check"/></svg>Hôm nay</span>`;
   if (diff === 1) return `<span class="meta-chip due-upcoming"><svg class="ic"><use href="#i-calendar-blank"/></svg>Mai · ${md}</span>`;
   return `<span class="meta-chip due-upcoming"><svg class="ic"><use href="#i-calendar"/></svg>${md}</span>`;
@@ -81,10 +81,46 @@ function subtaskMeta(t) {
   const pct = Math.round((done / n) * 100);
   return `<span class="subtask-mini"><svg class="ic"><use href="#i-list-checks"/></svg>${done}/${n}<span class="mini-track"><span class="mini-fill" style="width:${pct}%"></span></span></span>`;
 }
+const REPEAT_LABELS = { Daily: "Hàng ngày", Weekdays: "T2–T6", Weekly: "Hàng tuần", Monthly: "Hàng tháng" };
+const VI_DOW_SHORT = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"]; // Date.getDay(): 0=CN
+const VI_DOW_FULL = ["Chủ Nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"];
+
+function splitISOLocal(iso) { const [y, m, d] = String(iso).slice(0, 10).split("-").map(Number); return { y, m, d }; }
+function makeISOLocal(y, m0, d) { return `${y}-${String(m0 + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`; }
+function addDaysLocalISO(iso, n) { const { y, m, d } = splitISOLocal(iso); const dt = new Date(y, m - 1, d + n); return makeISOLocal(dt.getFullYear(), dt.getMonth(), dt.getDate()); }
+function lastDayOfMonth(y, m0) { return new Date(y, m0 + 1, 0).getDate(); }
+function monthsClampedISO(iso, n) {
+  const { y, m, d } = splitISOLocal(iso);
+  const target = new Date(y, m - 1 + n, 1);
+  const day = Math.min(d, lastDayOfMonth(target.getFullYear(), target.getMonth()));
+  return makeISOLocal(target.getFullYear(), target.getMonth(), day);
+}
+function localISODate() { const n = new Date(); return makeISOLocal(n.getFullYear(), n.getMonth(), n.getDate()); }
+function viDayMonth(iso) { const { y, m, d } = splitISOLocal(iso); return `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`; }
+function viDowShort(iso) { const { y, m, d } = splitISOLocal(iso); return VI_DOW_SHORT[new Date(y, m - 1, d).getDay()]; }
+function viFullDayMonth(iso) { const { y, m, d } = splitISOLocal(iso); return `${VI_DOW_FULL[new Date(y, m - 1, d).getDay()]}, ${viDayMonth(iso)}`; }
+
+/* ngày lần lặp tiếp theo — khớp luật backend Repeat::next_after */
+function nextRepeatDate(repeat, dueIso) {
+  const base = dueIso ? String(dueIso).slice(0, 10) : localISODate();
+  if (repeat === "Daily") return addDaysLocalISO(base, 1);
+  if (repeat === "Weekly") return addDaysLocalISO(base, 7);
+  if (repeat === "Monthly") return monthsClampedISO(base, 1);
+  if (repeat === "Weekdays") {
+    let d = base;
+    for (let k = 0; k < 8; k++) {
+      d = addDaysLocalISO(d, 1);
+      const { y, m, d: day } = splitISOLocal(d);
+      const wd = new Date(y, m - 1, day).getDay();
+      if (wd >= 1 && wd <= 5) return d;
+    }
+  }
+  return base;
+}
+
 function repeatMeta(t) {
   if (!t.repeat || t.repeat === "None") return "";
-  const labels = { Daily: "Hàng ngày", Weekdays: "T2–T6", Weekly: "Hàng tuần", Monthly: "Hàng tháng" };
-  return `<span class="meta-chip"><svg class="ic"><use href="#i-repeat"/></svg>${labels[t.repeat] || t.repeat}</span>`;
+  return `<span class="meta-chip repeat-chip"><svg class="ic"><use href="#i-repeat"/></svg>Lặp: ${REPEAT_LABELS[t.repeat] || t.repeat}</span>`;
 }
 function tagsMeta(t) {
   return (t.tags || []).slice(0, 4).map(g => `<span class="meta-tag">#${esc(g)}</span>`).join("");
@@ -582,17 +618,45 @@ function setView(view) {
 }
 
 /* ─────────── TASK LIST ─────────── */
+function agendaHtml(tasks, q) {
+  // gom theo hạn chót; view Sắp tới luôn có hạn nên an toàn.
+  // trong ngày giữ nguyên thứ tự từ visible_ids (tức là sort đang chọn).
+  const byDay = new Map();
+  for (const t of tasks) {
+    const key = (t.due || "9999").slice(0, 10);
+    if (!byDay.has(key)) byDay.set(key, []);
+    byDay.get(key).push(t);
+  }
+  const days = [...byDay.keys()].sort();
+  const tomorrow = addDaysLocalISO(localISODate(), 1);
+  let out = "";
+  for (const key of days) {
+    const group = byDay.get(key);
+    const label = key === tomorrow ? `Ngày mai · ${viDayMonth(key)}` : `${viDowShort(key)} · ${viDayMonth(key)}`;
+    out += `<div class="agenda-day"><span class="agenda-day-label">${esc(label)}</span><span class="agenda-day-count">${group.length} việc</span></div>`;
+    out += group.map(t => rowHtml(t, q, { draggable: false })).join("");
+  }
+  return out;
+}
+
 async function renderTaskList() {
   if (!S.snap) return;
   const listEl = $("#tasklist");
-  if (S.view.type === "stats" || S.view.type === "settings") { listEl.innerHTML = ""; $("#empty-state").hidden = true; S.visibleIds = []; renderNextUp(); return; }
+  if (S.view.type === "stats" || S.view.type === "settings") { listEl.innerHTML = ""; $("#empty-state").hidden = true; const note = $("#agenda-note"); if (note) note.hidden = true; S.visibleIds = []; renderNextUp(); return; }
   const q = S.search.trim();
   S.visibleIds = await invoke("visible_ids", {
     view: viewWire(S.view), search: S.search, tag: S.tag, prio: S.prio,
     sort: S.sort, hideCompleted: S.hideDone,
   });
-  const rows = S.visibleIds.map(id => rowHtml(taskById(id), q)).filter(Boolean).join("");
-  listEl.innerHTML = rows;
+  const visibleTasks = S.visibleIds.map(id => taskById(id)).filter(Boolean);
+  const isAgenda = S.view.type === "upcoming";
+  listEl.innerHTML = isAgenda ? agendaHtml(visibleTasks, q) : visibleTasks.map(t => rowHtml(t, q)).join("");
+  // dòng chú thích cho view có việc lặp lại
+  const note = $("#agenda-note");
+  if (note) {
+    const hasRepeat = visibleTasks.some(t => t.repeat && t.repeat !== "None");
+    note.hidden = !((S.view.type === "today" || S.view.type === "upcoming") && hasRepeat);
+  }
   const empty = S.visibleIds.length === 0;
   $("#empty-state").hidden = !empty;
   if (empty) {
@@ -616,8 +680,9 @@ async function renderTaskList() {
   updateBulkUI();
 }
 
-function rowHtml(t, q) {
+function rowHtml(t, q, opts = {}) {
   if (!t) return "";
+  const draggable = opts.draggable != null ? opts.draggable : S.sort === "Manual";
   const done = isCompleted(t);
   const pr = t.priority || "P4";
   const star = `<button class="tstar${t.starred ? " on" : ""}" data-star="${t.id}" title="${t.starred ? "Bỏ ghim" : "Ghim việc"}"><svg class="ic"><use href="#i-star${t.starred ? "-fill" : ""}"/></svg></button>`;
@@ -626,7 +691,7 @@ function rowHtml(t, q) {
   const restore = isDeleted(t)
     ? `<button class="icon-btn" data-restore="${t.id}" title="Khôi phục"><svg class="ic"><use href="#i-arrow-counter-clockwise"/></svg></button>`
     : "";
-  return `<div class="task-row ${prioCls}${done ? " done" : ""}${S.bulk && S.bulkSel.has(t.id) ? " bulk-sel" : ""}" data-id="${t.id}" draggable="${S.sort === "Manual"}">
+  return `<div class="task-row ${prioCls}${done ? " done" : ""}${S.bulk && S.bulkSel.has(t.id) ? " bulk-sel" : ""}" data-id="${t.id}" draggable="${draggable}">
     ${S.bulk ? bulkBox : `<button class="tcheck" data-toggle="${t.id}" title="Bật/tắt hoàn thành (Space)"><svg class="ic tiny"><use href="#i-check"/></svg></button>`}
     <div class="tmain">
       <div class="tline"><span class="ttitle">${hi(t.title, q)}</span>${star}</div>
@@ -675,7 +740,20 @@ function renderDetail() {
   $("#d-star-use").setAttribute("href", t.starred ? "#i-star-fill" : "#i-star");
   $("#d-star-text").textContent = t.starred ? "Đã ghim" : "Ghim việc";
   // lặp lại flag + select
-  $("#d-repeat-flag").hidden = !t.repeat || t.repeat === "None";
+  const rep = (t.repeat && t.repeat !== "None") ? t.repeat : null;
+  const flag = $("#d-repeat-flag");
+  flag.hidden = !rep;
+  if (rep) {
+    $("#d-repeat-flag-text").textContent = `Lặp: ${REPEAT_LABELS[rep] || rep}`;
+    flag.title = "Bấm để đổi tần suất — chọn 'Không lặp' để dừng hẳn việc này\nHoàn thành xong sẽ tự tạo lần tiếp theo (Ctrl+Z hủy cả hoàn thành lẫn lần vừa tạo)";
+  }
+  const repHint = $("#d-repeat-hint");
+  if (rep) {
+    repHint.innerHTML = `Hoàn thành xong → lần tiếp theo: <b>${esc(viFullDayMonth(nextRepeatDate(rep, t.due)))}</b> · dừng bằng cách chọn “Không lặp” <span class="hint-dim">— Ctrl+Z hủy cả hai</span>`;
+    repHint.hidden = false;
+  } else {
+    repHint.hidden = true;
+  }
   setVal("#d-repeat", t.repeat || "None");
   // hạn chót
   const dueTxt = $("#d-due-text");
@@ -781,7 +859,7 @@ function updateQaPreview() {
     const chips = [];
     if (p.due) chips.push(`<span class="qa-prev-chip due"><svg class="ic small"><use href="#i-calendar"/></svg>${esc(p.due)}</span>`);
     if (p.priority) chips.push(`<span class="qa-prev-chip prio"><svg class="ic small"><use href="#i-flag-banner"/></svg>${esc(p.priority)}</span>`);
-    if (p.repeat) chips.push(`<span class="qa-prev-chip rep"><svg class="ic small"><use href="#i-repeat"/></svg>${esc(p.repeat)}</span>`);
+    if (p.repeat) chips.push(`<span class="qa-prev-chip rep"><svg class="ic small"><use href="#i-repeat"/></svg>${esc(REPEAT_LABELS[p.repeat] || p.repeat)}</span>`);
     for (const t of p.tags.slice(0, 4)) chips.push(`<span class="qa-prev-chip"><svg class="ic small"><use href="#i-hash"/></svg>${esc(t)}</span>`);
     prev.innerHTML = chips.join("") + (p.title ? `<span class="qa-title-preview">“${esc(p.title)}”</span>` : "");
     prev.hidden = chips.length === 0 && !p.title;
@@ -909,13 +987,18 @@ function openHelp() {
     ["Esc", "Đóng bảng / bỏ chọn / bỏ bộ lọc"],
     ["Space (phiên ADHD)", "Tạm dừng / tiếp tục phiên tập trung"],
   ];
-  openModal(`<h2><svg class="ic accent-ic"><use href="#i-keyboard"/></svg>Phím tắt</h2>
+  openModal(`<h2><svg class="ic accent-ic"><use href="#i-keyboard"/></svg>Phím tắt & mẹo</h2>
     <div class="shortcut-list g-scroll">${rows.map(([k, d]) => `<div class="shortcut-row"><kbd class="modal-kbd">${k}</kbd><span class="b-meta" style="font-size:12px">${d}</span></div>`).join("")}</div>
+    <div class="help-tip"><div class="help-tip-title"><svg class="ic small"><use href="#i-repeat"/></svg>Việc lặp lại</div>
+      <p>Gõ <kbd class="modal-kbd">*hàng ngày</kbd> hoặc <kbd class="modal-kbd">*hàng tuần</kbd> khi thêm nhanh (cũng hiểu <em>*daily / *weekly</em>, <em>*hàng tháng</em>). Việc lặp chỉ hiện <strong>một lần</strong> — hoàn thành xong sẽ tự tạo lần tiếp theo vào đúng ngày.</p>
+      <p>Đổi tần suất / dừng hẳn: panel chi tiết việc → ô <strong>Lặp lại</strong> → chọn tần suất khác hoặc <strong>“Không lặp”</strong>. Ctrl+Z hủy cả hoàn thành lẫn lần vừa tạo.</p>
+      <p>View <strong>Sắp tới</strong> gom việc theo từng ngày (agenda) — việc quá hạn nằm ở <strong>Hôm nay</strong>.</p>
+    </div>
     <div class="modal-actions"><button class="btn-save" data-close-modal="1">Xong</button></div>`);
 }
 function openAbout() {
   openModal(`<div class="about-center"><img class="about-logo" src="assets/logo.png" alt="Taskora" />
-      <h2 style="justify-content:center">Taskora <span style="color:var(--text-faint);font-weight:500">v2.6.0</span></h2>
+      <h2 style="justify-content:center">Taskora <span style="color:var(--text-faint);font-weight:500">v2.7.0</span></h2>
       <p>Quản lý công việc cho Windows — nhẹ, nhanh, đẹp.<br>Viết bằng Rust + Tauri, giao diện liquid glass.</p>
       <p>Font <strong>Be Vietnam Pro</strong> (OFL) · Icon <strong>Phosphor</strong> (MIT)</p>
       <p style="color:var(--text-faint)">MIT License © Hthancder</p>
@@ -1224,6 +1307,7 @@ function bindEvents() {
   $("#d-due-clear").addEventListener("click", () => { if (S.selected != null) go(invoke("act", { action: { type: "set_due", id: S.selected, due: null }, view: viewWire(S.view) })); });
   $$("#d-prio .prio-chip").forEach(b => b.addEventListener("click", () => { if (S.selected != null) go(invoke("act", { action: { type: "set_priority", id: S.selected, priority: b.dataset.prio }, view: viewWire(S.view) })); }));
   $("#d-repeat").addEventListener("change", e => { if (S.selected != null) go(invoke("set_task_repeat", { id: S.selected, repeat: e.target.value })); });
+  $("#d-repeat-flag").addEventListener("click", () => { $("#d-repeat")?.focus(); });
   $("#d-list").addEventListener("change", e => { if (S.selected != null) { const v = e.target.value; go(invoke("act", { action: { type: "move_to_list", id: S.selected, list: v === "" ? null : Number(v) }, view: viewWire(S.view) })); $("#d-list").dataset.built = "0"; } });
   $("#d-tag-input").addEventListener("keydown", e => {
     if (e.key === "Enter" && S.selected != null) {
@@ -1795,7 +1879,7 @@ function startBreath() {
 }
 function stopBreath() { clearInterval(breathTimer); breathTimer = null; }
 
-/* ═══════════ v2.5.0/v2.6.0 — Brain-dump · Chia nhỏ · Chime · 20-20-20 ═══════════ */
+/* ═══════════ v2.5–v2.7.0 — Brain-dump · Chia nhỏ · Chime · 20-20-20 · Agenda/Lặp lại ═══════════ */
 
 /* Chime 3 nốt nhẹ nhàng — Web Audio, offline, không cần file */
 function playChime() {

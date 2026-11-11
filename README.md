@@ -46,6 +46,15 @@
 - **Tự phát hiện di chuyển**: nếu Taskora.exe bị copy lẻ sang chỗ trống, app hỏi chuyển dữ liệu portable cũ sang. Nếu bạn chạy ở nơi khác mà `%APPDATA%` còn dữ liệu v1/v2.0 cũ, app hỏi **gộp** (id-union, không trùng lặp).
 - **Khôi phục view đang mở** giữa các lần chạy; toast hành động kèm nút **Hoàn tác** sau mỗi thao tác.
 
+**Việc lặp lại & Sắp tới — thiết kế chỉn chu (v2.7.0)**
+- **Hiểu ngay việc lặp lại là gì**: hàng việc hiện chip *"Lặp: Hàng ngày"* (tông tím); panel chi tiết có cờ bấm được *"Lặp: …"* (bấm → focus ô **Lặp lại**).
+- **Biết lần tiếp theo là ngày nào**: dòng ghi chú ngay dưới ô Lặp lại — *"Hoàn thành xong → lần tiếp theo: Thứ Hai, 17/11/2026 · dừng bằng cách chọn “Không lặp”"* (khớp đúng quy tắc của app; Ctrl+Z hủy cả hoàn thành lẫn lần vừa tạo).
+- **Hoàn thành xong**: toast *"✓ Xong — lần tiếp theo: Thứ Hai, 17/11/2026"* — không còn ai phải đoán tại sao việc lại quay về.
+- **View Sắp tới thành agenda theo ngày**: header gom nhóm ("Ngày mai · 12/11/2026", "T6 · 14/11/2026") kèm số việc mỗi nhóm (khi sắp xếp theo hạn chót).
+- **Dòng chú thích** nhắc việc lặp lại chỉ hiện một lần (Hôm nay / Sắp tới).
+- Sửa kèm: nút hành động trên hàng việc (nhân bản/xóa) giờ hiện cả khi **Tab tới bàn phím**; chip "quá hạn" viết rõ số ngày ("quá hạn 5 ngày"); việc mẫu "Tập thể dục 30 phút" tự giải thích là ví dụ việc lặp lại.
+- Chi tiết: [specs/v2.7.0-recurring-upcoming.md](specs/v2.7.0-recurring-upcoming.md).
+
 **Sửa lỗi theo phản hồi + mẫu riêng của bạn (v2.6.0)**
 - **Mọi hộp thoại bấm được rồi**: nút trong Brain-dump / xác nhận xóa / đổi cài đặt… — trước đây click vào trong modal có thể bị lớp nền nuốt mất (modal đóng ngay, không lưu được). Sửa triệt để: panel nổi trên backdrop, chỉ bấm ra ngoài (backdrop) hoặc nút đóng mới đóng.
 - **"Xóa vĩnh viễn" trong Thùng rác giờ luôn hoạt động**: bấm ở panel chi tiết (và ở nút hàng, menu chuột phải) → hộp xác nhận rõ ràng → xóa hẳn (vẫn hoàn tác Ctrl+Z được ngay sau đó). Việc thường vẫn đi vào Thùng rác như cũ.

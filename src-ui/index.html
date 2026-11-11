@@ -70,7 +70,7 @@
       <img class="brand-logo" src="assets/logo.png" alt="Taskora" />
       <div class="brand-text">
         <span class="brand-name">Taskora</span>
-        <span class="brand-ver">v2.6.0</span>
+        <span class="brand-ver">v2.7.0</span>
       </div>
     </div>
 
@@ -222,6 +222,7 @@
       </div>
 
       <div id="tasklist" class="tasklist g-scroll"></div>
+      <div id="agenda-note" class="agenda-note" hidden><svg class="ic tiny"><use href="#i-repeat"/></svg><span>Việc lặp lại chỉ hiện một lần — hoàn thành sẽ tự tạo lần tiếp theo</span></div>
 
       <div id="empty-state" class="empty-state" hidden>
         <svg class="ic empty-seal"><use href="#i-seal-check-fill"/></svg>
@@ -506,7 +507,7 @@
         </div>
 
         <div class="settings-foot">
-          <span>Taskora v2.6.0</span>
+          <span>Taskora v2.7.0</span>
           <button class="linklike" id="set-open-help" type="button">Phím tắt</button>
           <span class="settings-dot">·</span>
           <button class="linklike" id="set-open-about" type="button">Giới thiệu</button>
@@ -544,7 +545,7 @@
           <svg class="ic"><use href="#i-star" id="d-star-use"/></svg>
           <span id="d-star-text">Ghim việc</span>
         </button>
-        <span class="d-repeat-flag" id="d-repeat-flag" hidden><svg class="ic tiny"><use href="#i-repeat"/></svg>lặp lại</span>
+        <button class="d-repeat-flag" id="d-repeat-flag" hidden title="Bấm để đổi tần suất lặp lại"><svg class="ic tiny"><use href="#i-repeat"/></svg><span id="d-repeat-flag-text">Lặp lại</span></button>
       </div>
 
       <div class="d-meta-grid">
@@ -574,6 +575,7 @@
             <option value="Weekly">Hàng tuần</option>
             <option value="Monthly">Hàng tháng</option>
           </select>
+          <p class="d-repeat-hint" id="d-repeat-hint" hidden></p>
         </div>
         <div class="d-field">
           <label><svg class="ic tiny"><use href="#i-folder"/></svg>Danh sách</label>

@@ -558,7 +558,7 @@ impl Store {
         mk(
             &mut store,
             "Chào mừng bạn đến với Taskora 👋",
-            "Đây là ứng dụng quản lý công việc được viết bằng Rust.\n\n• Bấm vòng tròn để hoàn thành việc\n• Chuột phải để mở menu nhanh\n• Ctrl+N thêm việc · Ctrl+F tìm kiếm · Ctrl+D đổi giao diện\n• Việc của bạn tự động lưu vào thư mục dữ liệu",
+            "Đây là ứng dụng quản lý công việc được viết bằng Rust.\n\n• Bấm vòng tròn để hoàn thành việc\n• Chuột phải để mở menu nhanh\n• Ctrl+N thêm việc · Ctrl+F tìm kiếm · Ctrl+D đổi giao diện\n• Việc lặp lại: gõ \'*hàng ngày\' (hoặc \'*hàng tuần\') — ví dụ \'Tập gym *hàng ngày\'. Việc lặp chỉ hiện 1 lần; hoàn thành sẽ tự tạo lần tiếp theo.\n• Việc của bạn tự động lưu vào thư mục dữ liệu",
             None,
             Priority::P2,
             Some(t),
@@ -571,7 +571,7 @@ impl Store {
         mk(
             &mut store,
             "Thử thêm việc nhanh: 'Mua cà phê ngày mai #cá- nhân !p1'",
-            "Ô nhập ở trên cùng hiểu ngôn ngữ tự nhiên: ngày tháng, thẻ #, ưu tiên !p1–!p4 và lặp lại *daily/*weekly.",
+            "Ô nhập ở trên cùng hiểu ngôn ngữ tự nhiên: ngày tháng, thẻ #, ưu tiên !p1–!p4. Lặp lại: gõ \'*hàng ngày\' hoặc \'*hàng tuần\' (cũng hiểu *daily / *weekly).",
             None,
             Priority::P4,
             Some(t),
@@ -597,7 +597,7 @@ impl Store {
         mk(
             &mut store,
             "Tập thể dục 30 phút",
-            "",
+            "Đây là VÍ DỤ việc lặp lại HÀNG NGÀY: khi bạn hoàn thành, lần kế tiếp tự được tạo (nhìn chip \'Lặp: Hàng ngày\' trên hàng việc). Đổi tần suất hoặc dừng: mở Chi tiết → ô Lặp lại → chọn tần suất cho vừa ý, hoặc \'Không lặp\' để dừng hẳn việc này.",
             Some(list_ids[1]),
             Priority::P3,
             Some(t),

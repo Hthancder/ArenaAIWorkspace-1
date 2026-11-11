@@ -131,7 +131,7 @@ fn toggle_done(i: &mut Inner, id: u64) {
             }
             nt.order = i.store.tasks[idx].order.saturating_add(1);
             i.store.tasks.push(nt);
-            set_flash(i, format!("Lặp lại: hẹn gặp {}", next.format("%d/%m/%Y")));
+            set_flash(i, format!("✓ Xong — lần tiếp theo: {}, {}", crate::models::weekday_name(next), next.format("%d/%m/%Y")));
         }
     }
 }
