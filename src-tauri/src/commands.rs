@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
 use crate::models::{
-    today, Priority, Repeat, SortMode, Store, SubTask, Task, View,
+    today, Priority, Repeat, SortMode, StepPreset, Store, SubTask, Task, View,
 };
 use crate::parser;
 use crate::state::{make_snapshot, AppState, Inner, Snapshot, LIST_PALETTE};
@@ -315,7 +315,7 @@ pub fn act(
             AppState::push_undo(&mut i);
             let cleaned: Vec<String> = titles
                 .iter()
-                .map(|t| t.trim().to_string())
+                .map(|t| t.trim().chars().take(140).collect::<String>().trim().to_string())
                 .filter(|t| !t.is_empty())
                 .take(12)
                 .collect();
@@ -471,6 +471,57 @@ pub fn quick_add(
     i.last_added = Some(id);
     AppState::commit(&mut i);
     Ok(finish(&app, &mut i))
+}
+
+/// Lưu mẫu chia nhỏ do người dùng tự tạo (trùng tên → ghi đè).
+#[tauri::command]
+pub fn save_step_preset(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    name: String,
+    steps: Vec<String>,
+) -> Result<Snapshot, String> {
+    let name = name.trim().to_string();
+    if name.is_empty() {
+        return Err("Đặt tên cho mẫu đã".to_string());
+    }
+    if name.chars().count() > 40 {
+        return Err("Tên mẫu tối đa 40 ký tự".to_string());
+    }
+    let steps: Vec<String> = steps
+        .iter()
+        .map(|s| s.trim().chars().take(140).collect::<String>().trim().to_string())
+        .filter(|s| !s.is_empty())
+        .take(12)
+        .collect();
+    if steps.is_empty() {
+        return Err("Mẫu phải có ít nhất 1 bước".to_string());
+    }
+    let mut i = state.lock();
+    if let Some(p) = i
+        .store
+        .step_presets
+        .iter_mut()
+        .find(|p| p.name.to_lowercase() == name.to_lowercase())
+    {
+        p.steps = steps;
+        set_flash(&mut i, "Đã cập nhật mẫu ✓");
+    } else {
+        let id = i.store.new_id();
+        i.store.step_presets.push(StepPreset { id, name, steps });
+        set_flash(&mut i, "Đã lưu mẫu ✓");
+    }
+    AppState::commit(&mut i);
+    Ok(finish(&app, &mut i))
+}
+
+/// Xóa một mẫu chia nhỏ tự tạo.
+#[tauri::command]
+pub fn delete_step_preset(app: AppHandle, state: State<'_, AppState>, id: u64) -> Snapshot {
+    let mut i = state.lock();
+    i.store.step_presets.retain(|p| p.id != id);
+    AppState::commit(&mut i);
+    finish(&app, &mut i)
 }
 
 /// Brain-dump — đổ hàng loạt suy nghĩ vào Hộp thư, mỗi dòng một việc.

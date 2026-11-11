@@ -46,6 +46,12 @@
 - **Tự phát hiện di chuyển**: nếu Taskora.exe bị copy lẻ sang chỗ trống, app hỏi chuyển dữ liệu portable cũ sang. Nếu bạn chạy ở nơi khác mà `%APPDATA%` còn dữ liệu v1/v2.0 cũ, app hỏi **gộp** (id-union, không trùng lặp).
 - **Khôi phục view đang mở** giữa các lần chạy; toast hành động kèm nút **Hoàn tác** sau mỗi thao tác.
 
+**Sửa lỗi theo phản hồi + mẫu riêng của bạn (v2.6.0)**
+- **Mọi hộp thoại bấm được rồi**: nút trong Brain-dump / xác nhận xóa / đổi cài đặt… — trước đây click vào trong modal có thể bị lớp nền nuốt mất (modal đóng ngay, không lưu được). Sửa triệt để: panel nổi trên backdrop, chỉ bấm ra ngoài (backdrop) hoặc nút đóng mới đóng.
+- **"Xóa vĩnh viễn" trong Thùng rác giờ luôn hoạt động**: bấm ở panel chi tiết (và ở nút hàng, menu chuột phải) → hộp xác nhận rõ ràng → xóa hẳn (vẫn hoàn tác Ctrl+Z được ngay sau đó). Việc thường vẫn đi vào Thùng rác như cũ.
+- **Mẫu chia nhỏ tự tạo**: phần "Chia nhỏ: bước tiếp theo" giờ là **ô sửa được** — sửa từng bước, xóa dòng, thêm dòng (tối đa 12). Lưu bộ bước hiện tại thành **mẫu riêng** (ví dụ "Viết báo cáo tuần"), bấm chip để áp dụng lại bất cứ lúc nào, nút × để xóa mẫu (có **Hoàn tác**). Mẫu được lưu theo dữ liệu app, đi theo bản sao lưu/xuất. Không cần AI.
+- Chi tiết: [specs/v2.6.0-fixes.md](specs/v2.6.0-fixes.md).
+
 **Hoàn thiện app To-do (v2.5.0)**
 - **Brain-dump**: nút bút chì cạnh ô thêm nhanh (hoặc **Ctrl+Shift+N**, hoặc palette "Brain-dump") — mở ô nhập lớn, **mỗi dòng một việc**, không cần sắp xếp. Ctrl+Enter để đổ vào Hộp thư: parser tự nhận diện ngày/#tag/!p1/lịch lặp cho từng dòng. **Một thao tác hoàn tác** xóa sạch cả mẻ đổ.
 - **Bước nhỏ nhất tiếp theo** (không cần AI): trong panel chi tiết việc → **"Chia nhỏ: bước tiếp theo"** — từ điển tiếng Việt cục bộ tự gợi ý 3–6 micro-step (ví dụ "viết báo cáo" → mở file → dàn ý 3 mục → viết mục 1…). Thêm vào "việc nhỏ" bằng 1 bấm, một thao tác hoàn tác.

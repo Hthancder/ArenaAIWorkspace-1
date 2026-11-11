@@ -34,6 +34,8 @@ fn main() {
             commands::quick_add,
             commands::brain_dump,
             commands::log_focus_session,
+            commands::save_step_preset,
+            commands::delete_step_preset,
             commands::preview_parse,
             commands::visible_ids,
             commands::set_task_title,

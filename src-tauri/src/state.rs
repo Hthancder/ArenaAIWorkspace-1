@@ -62,6 +62,7 @@ pub struct Snapshot {
     pub redo_len: usize,
     pub flash: Option<String>,
     pub last_added: Option<u64>,
+    pub step_presets: Vec<crate::models::StepPreset>,
 }
 
 impl AppState {
@@ -119,5 +120,6 @@ pub fn make_snapshot(i: &mut Inner) -> Snapshot {
         redo_len: i.redo_stack.len(),
         flash: i.flash.take(),
         last_added: i.last_added.take(),
+        step_presets: i.store.step_presets.clone(),
     }
 }

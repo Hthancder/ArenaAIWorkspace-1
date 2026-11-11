@@ -371,6 +371,17 @@ impl View {
     }
 }
 
+/// Mẫu chia nhỏ do người dùng tự tạo (đặt trên Store).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StepPreset {
+    #[serde(default)]
+    pub id: u64,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub steps: Vec<String>,
+}
+
 /// Bộ đếm cho thanh bên / thanh trạng thái.
 #[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct Counts {
@@ -404,6 +415,9 @@ pub struct Store {
     /// Số phiên tập trung 25′ hoàn thành mỗi ngày (khóa ISO "yyyy-mm-dd").
     #[serde(default)]
     pub focus_days: HashMap<String, u64>,
+    /// Mẫu chia nhỏ do người dùng tự tạo.
+    #[serde(default)]
+    pub step_presets: Vec<StepPreset>,
 }
 
 fn current_version() -> u32 {
@@ -423,6 +437,7 @@ impl Default for Store {
             lists: Vec::new(),
             settings: Settings::default(),
             focus_days: HashMap::new(),
+            step_presets: Vec::new(),
         }
     }
 }
@@ -449,6 +464,18 @@ impl Store {
         for l in &self.lists {
             max_id = max_id.max(l.id);
         }
+        for p in &mut self.step_presets {
+            max_id = max_id.max(p.id);
+            p.name = p.name.trim().to_string();
+            p.steps = p
+                .steps
+                .iter()
+                .map(|x| x.trim().chars().take(140).collect::<String>().trim().to_string())
+                .filter(|x| !x.is_empty())
+                .take(12)
+                .collect();
+        }
+        self.step_presets.retain(|p| !p.name.is_empty() && !p.steps.is_empty());
         self.next_id = self.next_id.max(max_id + 1);
         let list_ids: Vec<TaskId> = self.lists.iter().map(|l| l.id).collect();
         for t in &mut self.tasks {
@@ -471,6 +498,7 @@ impl Store {
             lists: Vec::new(),
             settings: Settings::default(),
             focus_days: HashMap::new(),
+            step_presets: Vec::new(),
         };
         let lists = [
             ("Công việc", [99, 102, 241]),

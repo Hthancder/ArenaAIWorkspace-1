@@ -915,7 +915,7 @@ function openHelp() {
 }
 function openAbout() {
   openModal(`<div class="about-center"><img class="about-logo" src="assets/logo.png" alt="Taskora" />
-      <h2 style="justify-content:center">Taskora <span style="color:var(--text-faint);font-weight:500">v2.5.0</span></h2>
+      <h2 style="justify-content:center">Taskora <span style="color:var(--text-faint);font-weight:500">v2.6.0</span></h2>
       <p>Quản lý công việc cho Windows — nhẹ, nhanh, đẹp.<br>Viết bằng Rust + Tauri, giao diện liquid glass.</p>
       <p>Font <strong>Be Vietnam Pro</strong> (OFL) · Icon <strong>Phosphor</strong> (MIT)</p>
       <p style="color:var(--text-faint)">MIT License © Hthancder</p>
@@ -1112,7 +1112,13 @@ function bindEvents() {
     const dup = e.target.closest("[data-duplicate]");
     if (dup) { go(invoke("act", { action: { type: "duplicate", id: Number(dup.dataset.duplicate) }, view: viewWire(S.view) })); return; }
     const del = e.target.closest("[data-delete]");
-    if (del) { go(invoke("act", { action: { type: "delete", id: Number(del.dataset.delete) }, view: viewWire(S.view) })); return; }
+    if (del) {
+      const id = Number(del.dataset.delete);
+      const t = taskById(id);
+      if (t && isDeleted(t)) { openPurgeConfirm(t); return; }
+      go(invoke("act", { action: { type: "delete", id }, view: viewWire(S.view) }));
+      return;
+    }
     const res = e.target.closest("[data-restore]");
     if (res) { go(invoke("act", { action: { type: "restore", id: Number(res.dataset.restore) }, view: viewWire(S.view) })); return; }
     const row = e.target.closest(".task-row[data-id]");
@@ -1185,6 +1191,10 @@ function bindEvents() {
     }
     if (!item) return;
     const k = item.dataset.ctx;
+    if (k === "delete") {
+      const t = taskById(id);
+      if (t && isDeleted(t)) { openPurgeConfirm(t); return; }
+    }
     const map = { toggle: "toggle", star: "star", duplicate: "duplicate", delete: "delete", restore: "restore" };
     if (map[k]) go(invoke("act", { action: { type: map[k], id }, view: viewWire(S.view) }));
   });
@@ -1203,7 +1213,12 @@ function bindEvents() {
   $("#d-star").addEventListener("click", () => { if (S.selected != null) go(invoke("act", { action: { type: "star", id: S.selected }, view: viewWire(S.view) })); });
   $("#d-restore").addEventListener("click", () => { if (S.selected != null) go(invoke("act", { action: { type: "restore", id: S.selected }, view: viewWire(S.view) })); });
   $("#d-duplicate").addEventListener("click", () => { if (S.selected != null) go(invoke("act", { action: { type: "duplicate", id: S.selected }, view: viewWire(S.view) })); });
-  $("#d-delete").addEventListener("click", () => { if (S.selected != null) go(invoke("act", { action: { type: "delete", id: S.selected }, view: viewWire(S.view) })); });
+  $("#d-delete").addEventListener("click", () => {
+    if (S.selected == null) return;
+    const t = taskById(S.selected);
+    if (t && isDeleted(t)) { openPurgeConfirm(t); return; }
+    go(invoke("act", { action: { type: "delete", id: S.selected }, view: viewWire(S.view) }));
+  });
   $("#d-due-btn").addEventListener("click", () => $("#d-due-input").classList.toggle("show"));
   $("#d-due-input").addEventListener("change", e => { if (S.selected != null && e.target.value) { go(invoke("act", { action: { type: "set_due", id: S.selected, due: e.target.value }, view: viewWire(S.view) })); e.target.classList.remove("show"); } });
   $("#d-due-clear").addEventListener("click", () => { if (S.selected != null) go(invoke("act", { action: { type: "set_due", id: S.selected, due: null }, view: viewWire(S.view) })); });
@@ -1327,6 +1342,8 @@ function bindEvents() {
     }
     const confirmDel = e.target.closest("#confirm-del-list");
     if (confirmDel) { closeModal(); go(invoke("delete_list", { id: Number(confirmDel.dataset.id) })); return; }
+    const confirmPurge = e.target.closest("#confirm-purge");
+    if (confirmPurge) { const id = Number(confirmPurge.dataset.id); closeModal(); go(invoke("act", { action: { type: "purge", id }, view: viewWire(S.view) })); return; }
     const confirmTrash = e.target.closest("#confirm-empty-trash");
     if (confirmTrash) { closeModal(); go(invoke("act", { action: { type: "purge_trash" }, view: viewWire(S.view) })); return; }
     const osEnable = e.target.closest("#os-tr-enable");
@@ -1615,6 +1632,8 @@ function focusStart(taskId) {
 
 function focusPhaseDone() {
   clearInterval(F.timer); F.timer = null;
+  clearInterval(eyeTimer);
+  const eye = $("#eye-pill"); if (eye) eye.hidden = true;
   playChime();
   if (F.mode === "focus") {
     F.mode = "done";
@@ -1656,6 +1675,8 @@ function focusBreakStart() {
 function focusStop() {
   F.active = false; F.paused = false; F.mode = "focus";
   clearInterval(F.timer); F.timer = null;
+  clearInterval(eyeTimer);
+  const eye = $("#eye-pill"); if (eye) eye.hidden = true;
   stopBreath();
   const br = $("#focus-breath"); if (br) br.hidden = true;
   const rw = document.querySelector(".focus-ring-wrap"); if (rw) rw.style.display = "";
@@ -1663,6 +1684,74 @@ function focusStop() {
 }
 
 function bindAdhd() {
+  /* hộp Chia nhỏ — delegation cho toàn bộ nút/ô bên trong (render lại nhiều lần) */
+  $("#d-split-suggest")?.addEventListener("click", e => {
+    const box = $("#d-split-suggest");
+    if (!box) return;
+    const taskId = S.selected;
+    const t = taskId != null ? taskById(taskId) : null;
+
+    if (e.target.closest("#split-close")) { box.hidden = true; return; }
+
+    const delRow = e.target.closest(".split-row-del");
+    if (delRow) { delRow.closest(".split-row").remove(); renumberSplitRows(box); return; }
+
+    if (e.target.closest("#split-add-row")) {
+      const rows = box.querySelector("#split-rows");
+      if (rows.children.length >= 12) { toast("Tối đa 12 bước nhỏ", "err"); return; }
+      rows.insertAdjacentHTML("beforeend", splitRowHtml("", rows.children.length));
+      renumberSplitRows(box);
+      rows.lastElementChild.querySelector(".split-suggest-input").focus();
+      return;
+    }
+
+    const presetDel = e.target.closest("[data-preset-del]");
+    if (presetDel) {
+      e.stopPropagation();
+      const delId = Number(presetDel.dataset.presetDel);
+      const deleted = (S.snap.step_presets || []).find(x => x.id === delId);
+      go(invoke("delete_step_preset", { id: delId })).then(() => {
+        if (t) renderSplitSuggest(splitRows(box) || []);
+        if (deleted) toast(`Đã xóa mẫu “${deleted.name}”`, undefined, { label: "Hoàn tác", onClick: () => { go(invoke("save_step_preset", { name: deleted.name, steps: deleted.steps.slice() })).then(() => t && renderSplitSuggest(splitRows(box) || [])); } });
+      });
+      return;
+    }
+    const presetChip = e.target.closest("[data-preset-id]");
+    if (presetChip && t) {
+      const p = (S.snap.step_presets || []).find(x => x.id === Number(presetChip.dataset.presetId));
+      if (p) renderSplitSuggest(p.steps.slice());
+      return;
+    }
+    if (e.target.closest('[data-preset="__dict__"]') && t) { renderSplitSuggest(splitSteps(t.title).slice()); return; }
+
+    if (e.target.closest("#split-save-preset")) {
+      const wrap = box.querySelector("#split-preset-save");
+      if (wrap) { wrap.hidden = false; box.querySelector("#split-preset-name")?.focus(); }
+      return;
+    }
+    if (e.target.closest("#split-preset-save-cancel")) { const wrap = box.querySelector("#split-preset-save"); if (wrap) wrap.hidden = true; return; }
+    if (e.target.closest("#split-preset-save-btn") && t) {
+      const nameInput = box.querySelector("#split-preset-name");
+      const name = (nameInput?.value || "").trim();
+      const steps = splitRows(box);
+      if (!name) { toast("Đặt tên cho mẫu đã", "err"); return; }
+      if (!steps.length) { toast("Mẫu phải có ít nhất 1 bước", "err"); return; }
+      go(invoke("save_step_preset", { name, steps })).then(() => renderSplitSuggest(steps));
+      return;
+    }
+
+    if (e.target.closest("#split-add") && t) {
+      const titles = splitRows(box);
+      if (!titles.length) { toast("Ít nhất 1 bước nhỏ", "err"); return; }
+      box.hidden = true;
+      go(invoke("act", { action: { type: "add_subtasks", id: t.id, titles }, view: viewWire(S.view) }));
+      return;
+    }
+  });
+  /* đếm ngược số bước ngay khi gõ/sửa */
+  $("#d-split-suggest")?.addEventListener("input", e => {
+    if (e.target.closest(".split-suggest-input")) renumberSplitRows($("#d-split-suggest"));
+  });
   document.addEventListener("click", e => {
     const f = e.target.closest("[data-adhd-focus]");
     if (f) { focusStart(Number(f.dataset.adhdFocus)); return; }
@@ -1706,7 +1795,7 @@ function startBreath() {
 }
 function stopBreath() { clearInterval(breathTimer); breathTimer = null; }
 
-/* ═══════════ v2.5.0 — Brain-dump · Chia nhỏ · Chime · 20-20-20 ═══════════ */
+/* ═══════════ v2.5.0/v2.6.0 — Brain-dump · Chia nhỏ · Chime · 20-20-20 ═══════════ */
 
 /* Chime 3 nốt nhẹ nhàng — Web Audio, offline, không cần file */
 function playChime() {
@@ -1778,7 +1867,14 @@ Gọi cho sếp về hợp đồng
   });
 }
 
-/* Chia nhỏ việc — từ điển pattern cục bộ, KHÔNG AI */
+/* Hộp xác nhận xóa vĩnh viễn (dùng chung: detail + menu chuột phải + nút hàng) */
+function openPurgeConfirm(task) {
+  openModal(`<h2><svg class="ic danger"><use href="#i-warning"/></svg>Xóa vĩnh viễn?</h2>
+    <p>“${esc(task.title)}” sẽ bị xóa khỏi thùng rác. Vẫn có thể bấm <strong>Ctrl+Z</strong> ngay sau đó để lấy lại — nhưng đừng tin vào may mắn.</p>
+    <div class="modal-actions"><button class="btn-cancel" data-close-modal="1">Hủy</button><button class="btn-danger" id="confirm-purge" data-id="${task.id}">Xóa vĩnh viễn</button></div>`);
+}
+
+/* Chia nhỏ việc — từ điển pattern cục bộ (KHÔNG AI) + mẫu riêng của người dùng */
 function splitSteps(title) {
   const t = strip(String(title || ""));
   const dict = [
@@ -1797,16 +1893,41 @@ function splitSteps(title) {
   return ["Mở đúng tài liệu/phần mềm cần dùng", "Làm 5 phút xấu nhất chấp nhận được", "Bật Tập trung 25′ (thẻ TIẾP THEO)", "Đánh dấu bước kế tiếp khi dừng"];
 }
 
-function wireSplitSuggest(task) {
+const splitRowHtml = (text, idx) => `<div class="split-row"><span class="split-num">${idx + 1}</span><input type="text" class="split-suggest-input" value="${esc(text)}" maxlength="140" autocomplete="off" spellcheck="false" /><button class="split-row-del" type="button" title="Bỏ bước này"><svg class="ic tiny"><use href="#i-x"/></svg></button></div>`;
+const splitRows = box => [...box.querySelectorAll(".split-suggest-input")].map(i => i.value.trim()).filter(Boolean);
+
+function renderSplitSuggest(steps) {
   const box = $("#d-split-suggest");
   if (!box) return;
-  const steps = splitSteps(task.title);
-  box.innerHTML = `<ol>${steps.map(x => `<li>${esc(x)}</li>`).join("")}</ol>
-    <div class="split-actions"><button class="btn-cancel" id="split-close" type="button">Thôi</button><button class="btn-save" id="split-add" type="button">Thêm ${steps.length} bước nhỏ này</button></div>`;
+  const presets = (S.snap && S.snap.step_presets) || [];
+  const cleanSteps = steps.length ? steps : ["", "", ""];
+  box.innerHTML = `
+    <div class="split-head"><span>Bước nhỏ gợi ý — sửa gì cũng được</span><button class="icon-btn tiny" id="split-close" title="Đóng"><svg class="ic tiny"><use href="#i-x"/></svg></button></div>
+    <div class="split-chips">
+      <button class="split-chip" data-preset="__dict__" title="Theo từ điển dựng sẵn khớp với tên việc">Tự động</button>
+      ${presets.map(p => `<button class="split-chip user" data-preset-id="${p.id}" title="Mẫu của bạn — bấm để áp dụng">${esc(p.name)}<span class="split-chip-del" data-preset-del="${p.id}" title="Xóa mẫu này"><svg class="ic tiny"><use href="#i-x"/></svg></span></button>`).join("")}
+    </div>
+    <div class="split-rows" id="split-rows">${cleanSteps.map((x, i) => splitRowHtml(x, i)).join("")}</div>
+    <button class="split-add-row" id="split-add-row" type="button"><svg class="ic tiny"><use href="#i-plus"/></svg>Thêm dòng</button>
+    <div class="split-preset-save" id="split-preset-save" hidden>
+      <input type="text" id="split-preset-name" maxlength="40" placeholder="Tên mẫu… ví dụ: Viết báo cáo" autocomplete="off" spellcheck="false" />
+      <button class="btn-save small" id="split-preset-save-btn" type="button">Lưu mẫu</button>
+      <button class="btn-cancel small" id="split-preset-save-cancel" type="button">Thôi</button>
+    </div>
+    <div class="split-actions">
+      <button class="btn-ghost small" id="split-save-preset" type="button"><svg class="ic small"><use href="#i-star"/></svg>Lưu thành mẫu riêng</button>
+      <button class="btn-save" id="split-add" type="button">Thêm ${cleanSteps.length} bước nhỏ này</button>
+    </div>`;
   box.hidden = false;
-  $("#split-close").addEventListener("click", () => { box.hidden = true; });
-  $("#split-add").addEventListener("click", () => {
-    box.hidden = true;
-    go(invoke("act", { action: { type: "add_subtasks", id: task.id, titles: steps }, view: viewWire(S.view) }));
-  });
+}
+
+function renumberSplitRows(box) {
+  const inputs = [...box.querySelectorAll(".split-row")];
+  inputs.forEach((row, i) => { const n = row.querySelector(".split-num"); if (n) n.textContent = String(i + 1); });
+  const save = box.querySelector("#split-add");
+  if (save) save.textContent = `Thêm ${splitRows(box).length} bước nhỏ này`;
+}
+
+function wireSplitSuggest(task) {
+  renderSplitSuggest(splitSteps(task.title).slice());
 }
