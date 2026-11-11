@@ -749,7 +749,7 @@ function renderDetail() {
   }
   const repHint = $("#d-repeat-hint");
   if (rep) {
-    repHint.innerHTML = `Hoàn thành xong → lần tiếp theo: <b>${esc(viFullDayMonth(nextRepeatDate(rep, t.due)))}</b> · dừng bằng cách chọn “Không lặp” <span class="hint-dim">— Ctrl+Z hủy cả hai</span>`;
+    repHint.innerHTML = `Hoàn thành xong → lần tiếp theo: <b>${esc(viFullDayMonth(nextRepeatDate(rep, t.due)))}</b> · <button class="d-repeat-stop" id="d-repeat-stop" type="button">Dừng lặp lại</button> <span class="hint-dim">(Ctrl+Z hủy cả hoàn thành lẫn lần vừa tạo)</span>`;
     repHint.hidden = false;
   } else {
     repHint.hidden = true;
@@ -993,12 +993,13 @@ function openHelp() {
       <p>Gõ <kbd class="modal-kbd">*hàng ngày</kbd> hoặc <kbd class="modal-kbd">*hàng tuần</kbd> khi thêm nhanh (cũng hiểu <em>*daily / *weekly</em>, <em>*hàng tháng</em>). Việc lặp chỉ hiện <strong>một lần</strong> — hoàn thành xong sẽ tự tạo lần tiếp theo vào đúng ngày.</p>
       <p>Đổi tần suất / dừng hẳn: panel chi tiết việc → ô <strong>Lặp lại</strong> → chọn tần suất khác hoặc <strong>“Không lặp”</strong>. Ctrl+Z hủy cả hoàn thành lẫn lần vừa tạo.</p>
       <p>View <strong>Sắp tới</strong> gom việc theo từng ngày (agenda) — việc quá hạn nằm ở <strong>Hôm nay</strong>.</p>
+      <p>Dọn các lần lặp cũ đã hoàn thành: tab <strong>Đã hoàn thành</strong> → nút <strong>Chọn</strong> → tick các dòng → <strong>Xóa</strong>.</p>
     </div>
     <div class="modal-actions"><button class="btn-save" data-close-modal="1">Xong</button></div>`);
 }
 function openAbout() {
   openModal(`<div class="about-center"><img class="about-logo" src="assets/logo.png" alt="Taskora" />
-      <h2 style="justify-content:center">Taskora <span style="color:var(--text-faint);font-weight:500">v2.7.0</span></h2>
+      <h2 style="justify-content:center">Taskora <span style="color:var(--text-faint);font-weight:500">v2.8.0</span></h2>
       <p>Quản lý công việc cho Windows — nhẹ, nhanh, đẹp.<br>Viết bằng Rust + Tauri, giao diện liquid glass.</p>
       <p>Font <strong>Be Vietnam Pro</strong> (OFL) · Icon <strong>Phosphor</strong> (MIT)</p>
       <p style="color:var(--text-faint)">MIT License © Hthancder</p>
@@ -1308,6 +1309,11 @@ function bindEvents() {
   $$("#d-prio .prio-chip").forEach(b => b.addEventListener("click", () => { if (S.selected != null) go(invoke("act", { action: { type: "set_priority", id: S.selected, priority: b.dataset.prio }, view: viewWire(S.view) })); }));
   $("#d-repeat").addEventListener("change", e => { if (S.selected != null) go(invoke("set_task_repeat", { id: S.selected, repeat: e.target.value })); });
   $("#d-repeat-flag").addEventListener("click", () => { $("#d-repeat")?.focus(); });
+  $("#d-repeat-hint")?.addEventListener("click", e => {
+    if (e.target.closest("#d-repeat-stop") && S.selected != null) {
+      go(invoke("set_task_repeat", { id: S.selected, repeat: "None" }));
+    }
+  });
   $("#d-list").addEventListener("change", e => { if (S.selected != null) { const v = e.target.value; go(invoke("act", { action: { type: "move_to_list", id: S.selected, list: v === "" ? null : Number(v) }, view: viewWire(S.view) })); $("#d-list").dataset.built = "0"; } });
   $("#d-tag-input").addEventListener("keydown", e => {
     if (e.key === "Enter" && S.selected != null) {
@@ -1879,7 +1885,7 @@ function startBreath() {
 }
 function stopBreath() { clearInterval(breathTimer); breathTimer = null; }
 
-/* ═══════════ v2.5–v2.7.0 — Brain-dump · Chia nhỏ · Chime · 20-20-20 · Agenda/Lặp lại ═══════════ */
+/* ═══════════ v2.5–v2.8.0 — Brain-dump · Chia nhỏ · Chime · 20-20-20 · Agenda/Lặp lại ═══════════ */
 
 /* Chime 3 nốt nhẹ nhàng — Web Audio, offline, không cần file */
 function playChime() {

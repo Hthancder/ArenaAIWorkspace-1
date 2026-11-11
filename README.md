@@ -46,6 +46,13 @@
 - **Tự phát hiện di chuyển**: nếu Taskora.exe bị copy lẻ sang chỗ trống, app hỏi chuyển dữ liệu portable cũ sang. Nếu bạn chạy ở nơi khác mà `%APPDATA%` còn dữ liệu v1/v2.0 cũ, app hỏi **gộp** (id-union, không trùng lặp).
 - **Khôi phục view đang mở** giữa các lần chạy; toast hành động kèm nút **Hoàn tác** sau mỗi thao tác.
 
+**Tuỳ chỉnh cao — seed không còn hành vi ẩn (v2.8.0)**
+- **Sửa parser cho cú pháp lặp tiếng Việt**: `*hàng ngày` / `*hàng tuần` / `*hàng tháng` (kể cả `*hang tuan`) giờ được hiểu đúng — tiêu đề KHÔNG dính chữ rác `*hàng` nữa. (Đây là lý do bản v2.7.0 in hướng dẫn `*hàng ngày` mà gõ vào lại ra việc tên "Tập gym *hàng".)
+- **Việc mẫu "Tập thể dục 30 phút" giờ là việc thường** — hoàn thành KHÔNG tự sinh việc mới; mọi việc mẫu xoá/sửa/nhân bản bình thường. Việc lặp chỉ xảy ra khi *bạn* chủ động gõ cú pháp lặp hoặc chọn trong ô **Lặp lại**.
+- **Nút "Dừng lặp lại" một chạm** ngay dòng ghi chú dưới ô Lặp lại — dừng việc lặp không cần mò ô chọn.
+- Tro giúp thêm mục dọn các lần lặp cũ: tab **Đã hoàn thành** → **Chọn** → tick → **Xóa**.
+- Chi tiết: [specs/v2.8.0-customizability.md](specs/v2.8.0-customizability.md).
+
 **Việc lặp lại & Sắp tới — thiết kế chỉn chu (v2.7.0)**
 - **Hiểu ngay việc lặp lại là gì**: hàng việc hiện chip *"Lặp: Hàng ngày"* (tông tím); panel chi tiết có cờ bấm được *"Lặp: …"* (bấm → focus ô **Lặp lại**).
 - **Biết lần tiếp theo là ngày nào**: dòng ghi chú ngay dưới ô Lặp lại — *"Hoàn thành xong → lần tiếp theo: Thứ Hai, 17/11/2026 · dừng bằng cách chọn “Không lặp”"* (khớp đúng quy tắc của app; Ctrl+Z hủy cả hoàn thành lẫn lần vừa tạo).

@@ -107,9 +107,20 @@ pub fn parse(input: &str, today: NaiveDate) -> Parsed {
 
         // ----- lặp lại -----
         if lower.starts_with('*') {
-            if let Some(r) = repeat_from_word(&lower[1..]) {
+            let first = &lower[1..];
+            if let Some(r) = repeat_from_word(first) {
                 out.repeat = Some(r);
                 consumed[i] = true;
+            } else if first == "hàng" || first == "hang" {
+                // "*hàng ngày/tuần/tháng" — 2 token liền nhau
+                if let Some(p) = peek(i + 1) {
+                    if let Some(r) = repeat_from_word(&p) {
+                        out.repeat = Some(r);
+                        consumed[i] = true;
+                        consumed[i + 1] = true;
+                        i += 1;
+                    }
+                }
             }
             i += 1;
             continue;
@@ -336,6 +347,34 @@ mod tests {
         let p = parse("Fix bug in 3 days", d(2026, 11, 9));
         assert_eq!(p.due, Some(d(2026, 11, 12)));
         assert_eq!(p.title, "Fix bug");
+    }
+
+    #[test]
+    fn repeat_asterisk_vi_bigram() {
+        // tài liệu (README/trợ giúp/release notes) hướng dẫn "*hàng ngày" — tiêu đề không được dính rác
+        let p = parse("Tập gym *hàng ngày", d(2026, 11, 9));
+        assert_eq!(p.title, "Tập gym");
+        assert_eq!(p.repeat, Some(Repeat::Daily));
+        let p = parse("Báo cáo *hàng tuần", d(2026, 11, 9));
+        assert_eq!(p.title, "Báo cáo");
+        assert_eq!(p.repeat, Some(Repeat::Weekly));
+        let p = parse("Đóng tiền *hàng tháng", d(2026, 11, 9));
+        assert_eq!(p.title, "Đóng tiền");
+        assert_eq!(p.repeat, Some(Repeat::Monthly));
+        let p = parse("Review *hang tuan #việc", d(2026, 11, 9));
+        assert_eq!(p.title, "Review");
+        assert_eq!(p.repeat, Some(Repeat::Weekly));
+        assert_eq!(p.tags, vec!["việc".to_string()]);
+    }
+
+    #[test]
+    fn repeat_asterisk_vi_single_token() {
+        let p = parse("Tập gym *ngày", d(2026, 11, 9));
+        assert_eq!(p.title, "Tập gym");
+        assert_eq!(p.repeat, Some(Repeat::Daily));
+        let p = parse("Tập gym *tuần", d(2026, 11, 9));
+        assert_eq!(p.title, "Tập gym");
+        assert_eq!(p.repeat, Some(Repeat::Weekly));
     }
 
     #[test]
