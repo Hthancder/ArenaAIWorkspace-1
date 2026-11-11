@@ -1,6 +1,7 @@
 //! Mô hình dữ liệu cốt lõi: Task, List, Store, View và các tiện ích ngày tháng.
 
 use chrono::{DateTime, Datelike, Local, Months, NaiveDate, TimeDelta, Utc};
+use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 pub type TaskId = u64;
@@ -285,6 +286,9 @@ pub struct Settings {
     /// Chế độ ADHD: một việc tại một thời điểm, thưởng tức thì, không phán xét.
     #[serde(default)]
     pub adhd_mode: bool,
+    /// Chime nhẹ khi kết thúc phiên tập trung / giờ nghỉ.
+    #[serde(default = "default_true")]
+    pub sound_on: bool,
     /// View đang mở lần cuối ("inbox"…"list:3") — khôi phục khi mở app.
     #[serde(default)]
     pub last_view: String,
@@ -321,6 +325,7 @@ impl Default for Settings {
             backup_on_exit: false,
             perf_mode: false,
             adhd_mode: false,
+            sound_on: true,
             last_view: String::new(),
         }
     }
@@ -378,6 +383,8 @@ pub struct Counts {
     pub active: usize,
     pub overdue: usize,
     pub done_today: usize,
+    pub focus_today: usize,
+    pub focus_week: usize,
     pub by_list: Vec<(TaskId, usize)>,
 }
 
@@ -394,6 +401,9 @@ pub struct Store {
     pub lists: Vec<List>,
     #[serde(default)]
     pub settings: Settings,
+    /// Số phiên tập trung 25′ hoàn thành mỗi ngày (khóa ISO "yyyy-mm-dd").
+    #[serde(default)]
+    pub focus_days: HashMap<String, u64>,
 }
 
 fn current_version() -> u32 {
@@ -412,6 +422,7 @@ impl Default for Store {
             tasks: Vec::new(),
             lists: Vec::new(),
             settings: Settings::default(),
+            focus_days: HashMap::new(),
         }
     }
 }
@@ -459,6 +470,7 @@ impl Store {
             tasks: Vec::new(),
             lists: Vec::new(),
             settings: Settings::default(),
+            focus_days: HashMap::new(),
         };
         let lists = [
             ("Công việc", [99, 102, 241]),
@@ -599,6 +611,16 @@ impl Store {
     /// Thống kê nhanh.
     pub fn counts(&self, today: NaiveDate) -> Counts {
         let mut c = Counts::default();
+        let today_key = today.format("%Y-%m-%d").to_string();
+        let week_start = (today - TimeDelta::days(6)).format("%Y-%m-%d").to_string();
+        for (day, n) in &self.focus_days {
+            if *day == today_key {
+                c.focus_today = *n as usize;
+            }
+            if *day >= week_start.as_str() && *day <= today_key.as_str() {
+                c.focus_week += *n as usize;
+            }
+        }
         for t in &self.tasks {
             if t.is_deleted() {
                 c.trash += 1;

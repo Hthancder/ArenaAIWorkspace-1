@@ -19,7 +19,7 @@ const fmtViTime = d => d.toLocaleString("vi-VN", { day: "2-digit", month: "2-dig
 const strip = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
 /* Chế độ ADHD — trạng thái phiên tập trung (không persist) */
-const F = { active: false, mode: "focus", taskId: null, total: 1500, remaining: 1500, paused: false, timer: null };
+const F = { active: false, mode: "focus", taskId: null, total: 1500, remaining: 1500, paused: false, timer: null, eyeShown: false };
 const ADHD_QA = ["Chỉ cần 1 việc nhỏ nhất thôi…", "Viết 1 dòng — cứ ngắn và xấu cũng được", "Việc 2 phút cũng đáng kể", "Ném vào đây rồi tính sau"];
 const ADHD_PRAISE = ["Xong rồi! Một điểm cộng nữa ✦", "Tốt! Bạn đang lấy đà.", "Thêm một việc được xử đẹp.", "Đã xong — thưởng cho mình một hơi thở sâu.", "Tuyệt, việc tiếp theo thôi."];
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
@@ -444,6 +444,7 @@ function syncSettingsControls(s) {
   $("#set-backup-on-exit").checked = !!st.backup_on_exit;
   $("#set-perf").checked = !!st.perf_mode;
   $("#set-adhd").checked = !!st.adhd_mode;
+  const snd = $("#set-sound"); if (snd) snd.checked = st.sound_on !== false;
 }
 
 /* ─────────── NƠI LƯU DỮ LIỆU ─────────── */
@@ -656,6 +657,7 @@ function selectTask(id, { openDetail = true } = {}) {
 
 /* ─────────── DETAIL PANEL ─────────── */
 function renderDetail() {
+  const ss = $("#d-split-suggest"); if (ss) ss.hidden = true;
   const panel = $("#detail");
   const t = S.selected != null ? taskById(S.selected) : null;
   if (!t) { panel.classList.remove("open"); return; }
@@ -735,6 +737,8 @@ async function renderStats(force) {
     $("#st-done-today").textContent = st.done_today;
     $("#st-overdue").textContent = st.overdue;
     $("#st-streak").textContent = st.streak;
+    const sft = $("#st-focus-today"); if (sft) sft.textContent = st.focus_today ?? 0;
+    const sfw = $("#st-focus-week"); if (sfw) sfw.textContent = st.focus_week ?? 0;
     $("#stat-rate").textContent = Math.round(st.rate * 100) + "%";
     $("#stat-done-total").textContent = `${st.done_all}/${st.total_all} việc đã xong`;
     // thanh tiến độ hero (animate qua rAF)
@@ -911,7 +915,7 @@ function openHelp() {
 }
 function openAbout() {
   openModal(`<div class="about-center"><img class="about-logo" src="assets/logo.png" alt="Taskora" />
-      <h2 style="justify-content:center">Taskora <span style="color:var(--text-faint);font-weight:500">v2.4.0</span></h2>
+      <h2 style="justify-content:center">Taskora <span style="color:var(--text-faint);font-weight:500">v2.5.0</span></h2>
       <p>Quản lý công việc cho Windows — nhẹ, nhanh, đẹp.<br>Viết bằng Rust + Tauri, giao diện liquid glass.</p>
       <p>Font <strong>Be Vietnam Pro</strong> (OFL) · Icon <strong>Phosphor</strong> (MIT)</p>
       <p style="color:var(--text-faint)">MIT License © Hthancder</p>
@@ -929,6 +933,7 @@ const PALETTE_ACTIONS = [
   { icon: "trash", label: "Đi tới: Thùng rác", hint: "Ctrl+6", run: () => setView({ type: "trash" }) },
   { icon: "chart-bar", label: "Đi tới: Thống kê", hint: "Ctrl+7", run: () => setView({ type: "stats" }) },
   { icon: "gear", label: "Đi tới: Cài đặt", hint: "Ctrl+8", run: () => setView({ type: "settings" }) },
+  { icon: "note-pencil", label: "Brain-dump — đổ việc nhanh", hint: "Ctrl+Shift+N", run: openBrainDump },
   { icon: "plus", label: "Thêm việc mới", hint: "Ctrl+N", run: () => { setView(S.view.type === "stats" || S.view.type === "trash" || S.view.type === "completed" ? { type: "inbox" } : S.view); setTimeout(() => $("#quickadd-input").focus(), 60); } },
   { icon: "sun", label: "Bật/tắt giao diện tối–sáng", hint: "Ctrl+D", run: () => go(invoke("toggle_dark")) },
   { icon: "archive", label: "Xuất bản sao lưu", hint: "", run: async () => { try { const name = await invoke("export_backup"); toast("Đã xuất " + name); } catch (e) { toast("Xuất thất bại", "err"); } } },
@@ -998,6 +1003,13 @@ function bindEvents() {
       openModal(`<h2><svg class="ic accent-ic"><use href="#i-folder"/></svg>Xóa danh sách?</h2><p>Các việc trong danh sách sẽ trở về <strong>Hộp thư</strong> (không mất việc). Thao tác này có thể hoàn tác bằng Ctrl+Z.</p><div class="modal-actions"><button class="btn-cancel" data-close-modal="1">Hủy</button><button class="btn-danger" id="confirm-del-list" data-id="${id}">Xóa danh sách</button></div>`);
       return;
     }
+  });
+
+  $("#qa-dump")?.addEventListener("click", openBrainDump);
+  $("#d-split")?.addEventListener("click", () => {
+    if (S.selected == null) return;
+    const t = taskById(S.selected);
+    if (t) wireSplitSuggest(t);
   });
 
   /* topbar */
@@ -1288,6 +1300,7 @@ function bindEvents() {
   $("#set-open-help").addEventListener("click", openHelp);
   $("#set-open-about").addEventListener("click", openAbout);
   $("#set-perf").addEventListener("change", e => patchSettings({ perf_mode: e.target.checked }));
+  $("#set-sound").addEventListener("change", e => { patchSettings({ sound_on: e.target.checked }); toast(e.target.checked ? "Âm thanh bật" : "Âm thanh tắt"); });
   $("#set-adhd").addEventListener("change", e => {
     patchSettings({ adhd_mode: e.target.checked });
     toast(e.target.checked ? "Chế độ ADHD bật — một việc tại một thời điểm ✦" : "Chế độ ADHD tắt");
@@ -1416,6 +1429,7 @@ function globalKeys(e) {
   }
   if (mod && key === "k") { e.preventDefault(); paletteOpen ? closePalette() : openPalette(); return; }
   if (mod && key === "f" && !typing) { e.preventDefault(); $("#search-input").focus(); return; }
+  if (mod && e.shiftKey && key === "n") { e.preventDefault(); openBrainDump(); return; }
   if (mod && key === "n") {
     e.preventDefault();
     if (["stats", "settings", "trash", "completed"].includes(S.view.type)) setView({ type: "inbox" });
@@ -1508,6 +1522,8 @@ function renderNextUp() {
   if (!el) return;
   if (!s_isAdhd() || !["inbox", "today", "upcoming", "starred", "list"].includes(S.view.type)) { el.hidden = true; return; }
   const doneToday = (S.snap && S.snap.counts && S.snap.counts.done_today) || 0;
+  const focusToday = (S.snap && S.snap.counts && S.snap.counts.focus_today) || 0;
+  const focusSuffix = focusToday > 0 ? ` · ${focusToday} phiên 25′` : "";
   const t = nextAdhdTask();
   el.hidden = false;
   if (!t) {
@@ -1526,7 +1542,7 @@ function renderNextUp() {
       <button class="adhd-cta" data-adhd-focus="${t.id}"><svg class="ic"><use href="#i-clock"/></svg>Tập trung 25 phút</button>
       <button class="btn-adhd-done xl" data-adhd-done="${t.id}" title="Xong luôn việc này"><svg class="ic"><use href="#i-check"/></svg>Xong</button>
     </div>
-    <div class="adhd-done-line"><svg class="ic tiny"><use href="#i-check-circle"/></svg><span>Hôm nay đã xong <b>${doneToday}</b> việc</span></div>`;
+    <div class="adhd-done-line"><svg class="ic tiny"><use href="#i-check-circle"/></svg><span>Hôm nay đã xong <b>${doneToday}</b> việc${focusSuffix}</span></div>`;
   startAdhdClock();
 }
 
@@ -1570,6 +1586,8 @@ function focusTickStart() {
     if (F.paused || !F.active) return;
     F.remaining = Math.max(0, F.remaining - 1);
     drawFocusRing();
+    const elapsed = F.total - F.remaining;
+    if (F.mode === "focus" && !F.eyeShown && elapsed >= 1200) showEyePill();
     if (F.remaining === 0) focusPhaseDone();
   }, 1000);
 }
@@ -1578,7 +1596,8 @@ function focusStart(taskId) {
   const t = taskById(taskId);
   if (!t) return;
   F.active = true; F.mode = "focus"; F.taskId = taskId;
-  F.total = 1500; F.remaining = 1500; F.paused = false;
+  F.total = 1500; F.remaining = 1500; F.paused = false; F.eyeShown = false;
+  const eye = $("#eye-pill"); if (eye) eye.hidden = true;
   $("#focus-hint").textContent = "Đúng việc này thôi — mọi thứ khác có thể đợi";
   $("#focus-title").textContent = t.title;
   $("#focus-controls").hidden = false;
@@ -1596,8 +1615,10 @@ function focusStart(taskId) {
 
 function focusPhaseDone() {
   clearInterval(F.timer); F.timer = null;
+  playChime();
   if (F.mode === "focus") {
     F.mode = "done";
+    go(invoke("log_focus_session"));
     stopBreath();
     $("#focus-breath").hidden = true;
     document.querySelector(".focus-ring-wrap").style.display = "";
@@ -1684,3 +1705,108 @@ function startBreath() {
   breathTimer = setInterval(() => { breathInhale = !breathInhale; set(); }, 5000);
 }
 function stopBreath() { clearInterval(breathTimer); breathTimer = null; }
+
+/* ═══════════ v2.5.0 — Brain-dump · Chia nhỏ · Chime · 20-20-20 ═══════════ */
+
+/* Chime 3 nốt nhẹ nhàng — Web Audio, offline, không cần file */
+function playChime() {
+  if (S.snap && S.snap.settings && S.snap.settings.sound_on === false) return;
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = playChime._ctx || (playChime._ctx = new Ctx());
+    const notes = [784, 659.25, 523.25]; // G5 → E5 → C5
+    const t0 = ctx.currentTime + 0.01;
+    notes.forEach((f, idx) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = "sine"; o.frequency.value = f;
+      const t = t0 + idx * 0.32;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.22, t + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
+      o.connect(g).connect(ctx.destination);
+      o.start(t); o.stop(t + 0.6);
+    });
+  } catch { /* môi trường không hỗ trợ âm thanh — im lặng là được */ }
+}
+
+/* 20-20-20 — một lần mỗi phiên, đúng mốc 20:00 */
+let eyeTimer = null;
+function showEyePill() {
+  F.eyeShown = true;
+  const pill = $("#eye-pill"), countEl = $("#eye-count");
+  if (!pill || !countEl) return;
+  let left = 20;
+  countEl.textContent = String(left);
+  pill.hidden = false;
+  clearInterval(eyeTimer);
+  eyeTimer = setInterval(() => {
+    left -= 1;
+    countEl.textContent = String(Math.max(0, left));
+    if (left <= 0) { clearInterval(eyeTimer); pill.hidden = true; }
+  }, 1000);
+  playChime();
+}
+
+/* Brain-dump — mỗi dòng một việc, parse chung parser quick-add */
+function openBrainDump() {
+  openModal(`<h2><svg class="ic accent-ic"><use href="#i-note-pencil"/></svg>Brain-dump — cứ đổ ra đi</h2>
+    <p>Mỗi dòng một thứ. Không cần đẹp, không cần đúng, không cần sắp xếp — giống viết riêng cho mình.</p>
+    <textarea id="dump-area" class="dump-area" rows="8" autocomplete="off" spellcheck="false" placeholder="Mua sữa ngày mai #nhà !p2
+Gọi cho sếp về hợp đồng
+Ý tưởng: làm dashboard sáng tạo
+Đọc 10 trang sách — bước hồi phục
+"></textarea>
+    <div class="dump-foot"><span id="dump-count"><b>0</b> việc</span><span class="dump-hint">Mỗi dòng = 1 việc · nhận diện ngày/#tag/!p1</span></div>
+    <div class="modal-actions"><button class="btn-cancel" data-close-modal="1">Hủy</button><button class="btn-save" id="dump-save">Đổ vào Hộp thư</button></div>`);
+  const area = $("#dump-area");
+  const countEl = $("#dump-count");
+  const update = () => { const n = area.value.split(/\n/).map(l => l.trim()).filter(Boolean).length; countEl.innerHTML = `<b>${n}</b> việc`; };
+  area.addEventListener("input", update);
+  area.addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); $("#dump-save").click(); } });
+  area.focus();
+  $("#dump-save").addEventListener("click", async () => {
+    const input = area.value;
+    const n = input.split(/\n/).map(l => l.trim()).filter(Boolean).length;
+    if (!n) { toast("Chưa có gì để đổ ra — viết mỗi dòng một việc", "err"); return; }
+    try {
+      const snap = await invoke("brain_dump", { input, view: viewWire(S.view) });
+      closeModal();
+      postSnap(snap);
+      if (S.snap.settings.adhd_mode) confettiBurst(window.innerWidth / 2, window.innerHeight / 2 - 60);
+    } catch (e) { toast(String(e), "err"); }
+  });
+}
+
+/* Chia nhỏ việc — từ điển pattern cục bộ, KHÔNG AI */
+function splitSteps(title) {
+  const t = strip(String(title || ""));
+  const dict = [
+    [/(viet|lam|soan).{0,24}(bao cao|report)/, ["Mở file báo cáo và đặt tên", "Ghi dàn ý 3 mục chính", "Viết mục 1 — chỉ cần ra chữ, chưa cần hay", "Viết mục 2", "Viết mục 3", "Đọc lại 5 phút và sửa"]],
+    [/(hoc|on).{0,16}(thi|kiem tra|deadline)?/, ["Chuẩn bị tài liệu và bàn học", "Chọn 1 chương nhỏ nhất để bắt đầu", "Học 25 phút tập trung", "Tự kiểm tra / làm 2 câu hỏi", "Ghi lại chỗ chưa hiểu hỏi ai đó"]],
+    [/(goi|dien thoai)/, ["Tìm số điện thoại", "Viết 3 ý chính cần nói", "Gọi ngay", "Ghi lại kết quả trong 1 dòng"]],
+    [/(mua|sam)/, ["Liệt kê những gì cần mua", "Kiểm tra đã có gì ở nhà", "Chọn nơi mua gần nhất", "Mua xong — cất đúng chỗ"]],
+    [/(email|mail)/, ["Viết tiêu đề rõ ràng", "Viết 1 câu hỏi/trả lời chính", "Đọc lại, sửa lỗi chính tả", "Gửi và đóng tab"]],
+    [/(nop|gui).{0,12}(file|tai lieu|bai|ho so)/, ["Kiểm tra lại yêu cầu nộp", "Chuẩn bị file/tài liệu đúng định dạng", "Nộp xong — xác nhận lại"]],
+    [/(hop|meeting)/, ["Viết agenda 3 ý", "Chuẩn bị số liệu/tài liệu mang theo", "Vào họp đúng giờ", "Ghi biên bản 3 dòng + ai làm gì"]],
+    [/doc/, ["Chọn tài liệu và trang bắt đầu", "Tắt mọi thứ khác 25 phút", "Đọc 10 trang", "Ghi 2 dòng tóm tắt"]],
+    [/(don|quet|don dep|don nha)/, ["Chọn góc nhỏ nhất để bắt đầu", "Dọn 15 phút — thôi", "Bỏ rác / đồ không cần", "Chụp ảnh kết quả (động lực)"]],
+    [/(review|xem lai|check)/, ["Biết mình cần tìm gì khi review", "Review từng phần nhỏ, đánh dấu chỗ nghi vấn", "Ghi lại 3 vấn đề cần sửa", "Sửa hoặc báo cáo lại"]],
+  ];
+  for (const [re, steps] of dict) if (re.test(t)) return steps;
+  return ["Mở đúng tài liệu/phần mềm cần dùng", "Làm 5 phút xấu nhất chấp nhận được", "Bật Tập trung 25′ (thẻ TIẾP THEO)", "Đánh dấu bước kế tiếp khi dừng"];
+}
+
+function wireSplitSuggest(task) {
+  const box = $("#d-split-suggest");
+  if (!box) return;
+  const steps = splitSteps(task.title);
+  box.innerHTML = `<ol>${steps.map(x => `<li>${esc(x)}</li>`).join("")}</ol>
+    <div class="split-actions"><button class="btn-cancel" id="split-close" type="button">Thôi</button><button class="btn-save" id="split-add" type="button">Thêm ${steps.length} bước nhỏ này</button></div>`;
+  box.hidden = false;
+  $("#split-close").addEventListener("click", () => { box.hidden = true; });
+  $("#split-add").addEventListener("click", () => {
+    box.hidden = true;
+    go(invoke("act", { action: { type: "add_subtasks", id: task.id, titles: steps }, view: viewWire(S.view) }));
+  });
+}

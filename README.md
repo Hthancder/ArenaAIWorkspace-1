@@ -46,6 +46,14 @@
 - **Tự phát hiện di chuyển**: nếu Taskora.exe bị copy lẻ sang chỗ trống, app hỏi chuyển dữ liệu portable cũ sang. Nếu bạn chạy ở nơi khác mà `%APPDATA%` còn dữ liệu v1/v2.0 cũ, app hỏi **gộp** (id-union, không trùng lặp).
 - **Khôi phục view đang mở** giữa các lần chạy; toast hành động kèm nút **Hoàn tác** sau mỗi thao tác.
 
+**Hoàn thiện app To-do (v2.5.0)**
+- **Brain-dump**: nút bút chì cạnh ô thêm nhanh (hoặc **Ctrl+Shift+N**, hoặc palette "Brain-dump") — mở ô nhập lớn, **mỗi dòng một việc**, không cần sắp xếp. Ctrl+Enter để đổ vào Hộp thư: parser tự nhận diện ngày/#tag/!p1/lịch lặp cho từng dòng. **Một thao tác hoàn tác** xóa sạch cả mẻ đổ.
+- **Bước nhỏ nhất tiếp theo** (không cần AI): trong panel chi tiết việc → **"Chia nhỏ: bước tiếp theo"** — từ điển tiếng Việt cục bộ tự gợi ý 3–6 micro-step (ví dụ "viết báo cáo" → mở file → dàn ý 3 mục → viết mục 1…). Thêm vào "việc nhỏ" bằng 1 bấm, một thao tác hoàn tác.
+- **Thống kê phiên tập trung**: app đếm số phiên 25′ bạn hoàn thành mỗi ngày (lưu trong dữ liệu app); xem ở **Thống kê** ("Phiên tập trung hôm nay" / "7 ngày qua") và ở thẻ TIẾP THEO ADHD ("Hôm nay đã xong N việc · M phiên 25′").
+- **Âm thanh khi hết giờ phiên**: chime 3 nốt nhẹ (Web Audio, offline). Bật/tắt trong **Cài đặt → Âm thanh khi hết giờ phiên** (mặc định bật).
+- **Nhắc nghỉ mắt 20-20-20**: trong phiên tập trung, đúng mốc trôi 20 phút → pill nhắc *"nhìn xa ~6m · 20 giây"* hiện một lần (đếm ngược 20→0, không chặn gì, tôn trọng reduce-motion).
+- Chi tiết: [specs/v2.5.0-features.md](specs/v2.5.0-features.md). Tầm nhìn Hub all-in-one (roadmap, **chưa làm**): [specs/hub-vision.md](specs/hub-vision.md).
+
 **Giao diện ADHD thiết kế riêng (v2.4.0)**
 - **Thẻ TIẾP THEO giờ là hero**: tiêu đề 22px, đồng **live HH:MM** ngay trong thẻ (mỏ neo thời gian — chống time blindness), nút **Tập trung 25 phút** to 50px chiếm chỗ chính, nút **Xong**; dòng tiến độ tích lũy *"Hôm nay đã xong N việc"* (chỉ cộng, không bao giờ trừ/về 0 — không streak, không quota).
 - **Giao diện bớt lựa chọn**: ẩn hàng chip ví dụ "Thử ngay…", thanh công cụ mờ còn 55% (trở lại rõ khi rê chuột), chữ việc lớn hơn, nút menu to hơn dễ bấm.

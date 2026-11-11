@@ -32,6 +32,8 @@ pub struct TagStat {
 pub struct StatsPayload {
     pub active: usize,
     pub done_today: usize,
+    pub focus_today: usize,
+    pub focus_week: usize,
     pub overdue: usize,
     pub streak: usize,
     pub done_all: usize,
@@ -45,6 +47,16 @@ pub struct StatsPayload {
 
 pub fn compute(store: &Store) -> StatsPayload {
     let t = today();
+    let today_key = t.format("%Y-%m-%d").to_string();
+    let week_start = (t - chrono::TimeDelta::days(6)).format("%Y-%m-%d").to_string();
+    let mut focus_today = 0usize;
+    let mut focus_week = 0usize;
+    for (day, n) in &store.focus_days {
+        if *day == today_key { focus_today = *n as usize; }
+        if day.as_str() >= week_start.as_str() && day.as_str() <= today_key.as_str() {
+            focus_week += *n as usize;
+        }
+    }
     let mut active = 0usize;
     let mut done_today = 0usize;
     let mut overdue = 0usize;
@@ -165,6 +177,8 @@ pub fn compute(store: &Store) -> StatsPayload {
     StatsPayload {
         active,
         done_today,
+        focus_today,
+        focus_week,
         overdue,
         streak,
         done_all,

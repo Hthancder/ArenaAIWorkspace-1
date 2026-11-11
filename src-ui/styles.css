@@ -818,3 +818,23 @@ html[data-theme="light"] .focus-overlay { background:rgba(238,240,250,.66); }
 html[data-theme="light"] body.adhd .overdue-banner { color:#78350f; background:linear-gradient(90deg, rgba(245,158,11,.28), rgba(245,158,11,.12)); border-color:rgba(217,119,6,.4); }
 html[data-theme="light"] body.adhd .overdue-banner .ic, html[data-theme="light"] body.adhd .overdue-banner .chip-btn { color:#92400e; }
 html[data-theme="light"] body.adhd .overdue-banner .chip-btn { background:rgba(245,158,11,.25); border-color:rgba(217,119,6,.4); }
+
+/* ═══════════ v2.5.0 — Brain-dump · Chia nhỏ · 20-20-20 · Phiên tập trung ═══════════ */
+.qa-dump { background:linear-gradient(160deg, rgba(var(--accent-rgb),.32), rgba(var(--accent-rgb),.18)); border:1px solid rgba(var(--accent-2-rgb),.45); color:var(--accent-ink); }
+.dump-area { width:100%; min-height:170px; resize:vertical; border-radius:14px; border:1px solid var(--stroke-strong); background:rgba(10,12,28,.45); color:var(--text); font-size:13.5px; line-height:1.75; padding:12px 14px; outline:none; font-family:inherit; }
+.dump-area:focus { border-color:rgba(var(--accent-2-rgb),.6); box-shadow:0 0 0 3px rgba(var(--accent-rgb),.18); }
+.dump-area::placeholder { color:var(--text-faint); }
+.dump-foot { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:8px; font-size:11.5px; color:var(--text-weak); }
+.dump-foot b { color:var(--accent-ink); }
+.dump-hint { opacity:.75; }
+.split-suggest { margin-top:8px; border:1px solid rgba(var(--accent-2-rgb),.4); border-radius:12px; background:rgba(var(--accent-rgb),.10); padding:10px 12px; }
+.split-suggest ol { margin:0 0 8px 18px; padding:0; font-size:12.5px; line-height:1.9; }
+.split-suggest .split-actions { display:flex; gap:8px; justify-content:flex-end; }
+.split-suggest .split-actions button { height:30px; padding:0 12px; font-size:12px; }
+.eye-pill { display:flex; align-items:center; gap:8px; justify-content:center; margin:4px auto 2px; width:max-content; padding:7px 16px; border-radius:99px; font-size:12px; color:#bae6fd; background:rgba(56,189,248,.14); border:1px solid rgba(125,211,252,.4); animation:eye-in .35s ease; }
+.eye-pill b { font-variant-numeric:tabular-nums; }
+@keyframes eye-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+body.perf .eye-pill { animation:none; }
+@media (prefers-reduced-motion: reduce) { .eye-pill { animation:none; } }
+html[data-theme="light"] .dump-area { background:rgba(255,255,255,.85); }
+html[data-theme="light"] .eye-pill { color:#075985; background:rgba(56,189,248,.18); }

@@ -32,6 +32,8 @@ fn main() {
             commands::snapshot,
             commands::act,
             commands::quick_add,
+            commands::brain_dump,
+            commands::log_focus_session,
             commands::preview_parse,
             commands::visible_ids,
             commands::set_task_title,

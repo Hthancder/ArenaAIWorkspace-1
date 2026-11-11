@@ -9,6 +9,47 @@ use crate::models::{
 };
 use crate::parser;
 use crate::state::{make_snapshot, AppState, Inner, Snapshot, LIST_PALETTE};
+
+/// Chèn một task đã parse vào store (dùng chung cho quick-add và brain-dump).
+/// Trả về id việc mới. Không push undo (bên gọi quyết định).
+fn insert_parsed_task(i: &mut Inner, p: parser::Parsed, view: &View) -> u64 {
+    let mut due = p.due;
+    let mut list_id = None;
+    let mut starred = false;
+    match view {
+        View::Today => { due.get_or_insert_with(today); }
+        View::Upcoming => { let t = today(); due.get_or_insert_with(|| t.succ_opt().unwrap_or(t)); }
+        View::Starred => starred = true,
+        View::List(id) => list_id = Some(*id),
+        _ => {}
+    }
+    let order = i.store.tasks.iter()
+        .filter(|t| t.list_id == list_id)
+        .map(|t| t.order)
+        .min()
+        .unwrap_or(0);
+    let id = i.store.new_id();
+    i.store.tasks.insert(
+        0,
+        Task {
+            id,
+            title: p.title,
+            notes: String::new(),
+            list_id,
+            priority: p.priority.unwrap_or_default(),
+            due,
+            repeat: p.repeat.unwrap_or(Repeat::None),
+            tags: p.tags,
+            subtasks: Vec::new(),
+            starred,
+            order: order.saturating_sub(1),
+            created_at: Utc::now(),
+            completed_at: None,
+            deleted_at: None,
+        },
+    );
+    id
+}
 use crate::stats::{self, StatsPayload};
 use crate::storage;
 
@@ -196,6 +237,7 @@ pub enum Act {
     MoveToList { id: u64, list: Option<u64> },
     Drop { src: u64, dst: u64, before: bool },
     AddSubtask { id: u64 },
+    AddSubtasks { id: u64, titles: Vec<String> },
     ClearCompleted,
     SetDue { id: u64, due: Option<String> },
     SetPriority { id: u64, priority: Priority },
@@ -268,6 +310,24 @@ pub fn act(
                     done: false,
                 });
             }
+        }
+        Act::AddSubtasks { id, titles } => {
+            AppState::push_undo(&mut i);
+            let cleaned: Vec<String> = titles
+                .iter()
+                .map(|t| t.trim().to_string())
+                .filter(|t| !t.is_empty())
+                .take(12)
+                .collect();
+            let mut added = 0usize;
+            if let Some(t) = i.store.tasks.iter_mut().find(|t| t.id == id) {
+                for title in cleaned {
+                    let sid = i.store.new_id();
+                    t.subtasks.push(SubTask { id: sid, title, done: false });
+                    added += 1;
+                }
+            }
+            set_flash(&mut i, format!("Đã thêm {added} bước nhỏ ✓"));
         }
         Act::ClearCompleted => {
             AppState::push_undo(&mut i);
@@ -406,53 +466,65 @@ pub fn quick_add(
     let view = View::from(view);
     let mut i = state.lock();
     AppState::push_undo(&mut i);
-    let mut due = p.due;
-    let mut list_id = None;
-    let mut starred = false;
-    match view {
-        View::Today => {
-            due.get_or_insert_with(today);
-        }
-        View::Upcoming => {
-            let t = today();
-            due.get_or_insert_with(|| t.succ_opt().unwrap_or(t));
-        }
-        View::Starred => starred = true,
-        View::List(id) => list_id = Some(id),
-        _ => {}
-    }
-    let order = i
-        .store
-        .tasks
-        .iter()
-        .filter(|t| t.list_id == list_id)
-        .map(|t| t.order)
-        .min()
-        .unwrap_or(0);
-    let id = i.store.new_id();
-    i.store.tasks.insert(
-        0,
-        Task {
-            id,
-            title: p.title,
-            notes: String::new(),
-            list_id,
-            priority: p.priority.unwrap_or_default(),
-            due,
-            repeat: p.repeat.unwrap_or(Repeat::None),
-            tags: p.tags,
-            subtasks: Vec::new(),
-            starred,
-            order: order.saturating_sub(1),
-            created_at: Utc::now(),
-            completed_at: None,
-            deleted_at: None,
-        },
-    );
+    let id = insert_parsed_task(&mut i, p, &view);
     set_flash(&mut i, "Đã thêm việc ✓");
     i.last_added = Some(id);
     AppState::commit(&mut i);
     Ok(finish(&app, &mut i))
+}
+
+/// Brain-dump — đổ hàng loạt suy nghĩ vào Hộp thư, mỗi dòng một việc.
+#[tauri::command]
+pub fn brain_dump(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: String,
+    view: ViewWire,
+) -> Result<Snapshot, String> {
+    let lines: Vec<&str> = input
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .take(100)
+        .collect();
+    if lines.is_empty() {
+        return Err("Chưa có gì để đổ ra — viết mỗi dòng một việc".to_string());
+    }
+    let view = View::from(view);
+    // Parse trước khi push undo — dòng rác không để lại undo trống
+    let parsed: Vec<parser::Parsed> = lines
+        .iter()
+        .map(|l| parser::parse(l, today()))
+        .filter(|p| !p.title.trim().is_empty())
+        .collect();
+    if parsed.is_empty() {
+        return Err("Không dòng nào nhận diện được việc".to_string());
+    }
+    let skipped = lines.len() - parsed.len();
+    let mut i = state.lock();
+    AppState::push_undo(&mut i);
+    let added = parsed.len();
+    for p in parsed {
+        insert_parsed_task(&mut i, p, &view);
+    }
+    let msg = if skipped > 0 {
+        format!("Đã đổ {added} việc vào Hộp thư ✓ (bỏ qua {skipped} dòng)")
+    } else {
+        format!("Đã đổ {added} việc vào Hộp thư ✓")
+    };
+    set_flash(&mut i, msg);
+    AppState::commit(&mut i);
+    Ok(finish(&app, &mut i))
+}
+
+/// Ghi nhận một phiên tập trung 25′ đã hoàn thành (không undo-able).
+#[tauri::command]
+pub fn log_focus_session(app: AppHandle, state: State<'_, AppState>) -> Snapshot {
+    let mut i = state.lock();
+    let key = today().format("%Y-%m-%d").to_string();
+    *i.store.focus_days.entry(key).or_insert(0) += 1;
+    AppState::commit(&mut i);
+    finish(&app, &mut i)
 }
 
 /// Phân tích xem trước (hiển thị chip gợi ý khi đang gõ).
@@ -878,6 +950,7 @@ pub struct SettingsPatch {
     pub backup_on_exit: Option<bool>,
     pub perf_mode: Option<bool>,
     pub adhd_mode: Option<bool>,
+    pub sound_on: Option<bool>,
 }
 
 fn valid_accent(s: &str) -> bool {
@@ -913,6 +986,7 @@ pub fn update_settings(
         if let Some(v) = patch.backup_on_exit { s.backup_on_exit = v; }
         if let Some(v) = patch.perf_mode { s.perf_mode = v; }
         if let Some(v) = patch.adhd_mode { s.adhd_mode = v; }
+        if let Some(v) = patch.sound_on { s.sound_on = v; }
     }
     AppState::commit(&mut i);
     if effect_changed {

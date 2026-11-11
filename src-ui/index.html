@@ -70,7 +70,7 @@
       <img class="brand-logo" src="assets/logo.png" alt="Taskora" />
       <div class="brand-text">
         <span class="brand-name">Taskora</span>
-        <span class="brand-ver">v2.4.0</span>
+        <span class="brand-ver">v2.5.0</span>
       </div>
     </div>
 
@@ -168,6 +168,7 @@
           <svg class="ic qa-plus"><use href="#i-plus"/></svg>
           <input id="quickadd-input" type="text" autocomplete="off" spellcheck="false"
                  placeholder="Thêm việc… ví dụ: “Mua sữa ngày mai #nhà !p1”" />
+          <button id="qa-dump" class="qa-enter qa-dump" title="Brain-dump — đổ hết suy nghĩ ra đây (Ctrl+Shift+N)"><svg class="ic"><use href="#i-note-pencil"/></svg></button>
           <button id="quickadd-enter" class="qa-enter" title="Thêm (Enter)"><svg class="ic"><use href="#i-check"/></svg></button>
         </div>
         <div class="qa-foot" id="qa-examples">
@@ -258,6 +259,8 @@
           <div class="stat-tile glass-card"><div class="tile-ic t-green"><svg class="ic"><use href="#i-check-circle-fill"/></svg></div><div class="tile-body"><div class="tile-num" id="st-done-today">0</div><div class="tile-label">Xong hôm nay</div></div></div>
           <div class="stat-tile glass-card"><div class="tile-ic t-red"><svg class="ic"><use href="#i-warning"/></svg></div><div class="tile-body"><div class="tile-num" id="st-overdue">0</div><div class="tile-label">Quá hạn</div></div></div>
           <div class="stat-tile glass-card"><div class="tile-ic t-gold"><svg class="ic"><use href="#i-lightning"/></svg></div><div class="tile-body"><div class="tile-num" id="st-streak">0</div><div class="tile-label">Chuỗi ngày liên tiếp</div></div></div>
+          <div class="stat-tile glass-card"><div class="tile-ic t-indigo"><svg class="ic"><use href="#i-clock"/></svg></div><div class="tile-body"><div class="tile-num" id="st-focus-today">0</div><div class="tile-label">Phiên tập trung hôm nay</div></div></div>
+          <div class="stat-tile glass-card"><div class="tile-ic t-green"><svg class="ic"><use href="#i-calendar-check"/></svg></div><div class="tile-body"><div class="tile-num" id="st-focus-week">0</div><div class="tile-label">Phiên tập trung · 7 ngày</div></div></div>
         </div>
 
         <div class="panel-card glass-card">
@@ -383,6 +386,14 @@
             </div>
             <label class="toggle-wrap"><input type="checkbox" id="set-adhd" /><span class="toggle-ui"></span></label>
           </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-title">Âm thanh khi hết giờ phiên</div>
+              <div class="setting-hint">Chime 3 nốt nhẹ nhàng khi phiên tập trung kết thúc (và khi giờ nghỉ kết thúc)</div>
+            </div>
+            <label class="toggle-wrap"><input type="checkbox" id="set-sound" /><span class="toggle-ui"></span></label>
+          </div>
         </div>
 
         <!-- ═══ VIỆC & DANH SÁCH ═══ -->
@@ -495,7 +506,7 @@
         </div>
 
         <div class="settings-foot">
-          <span>Taskora v2.4.0</span>
+          <span>Taskora v2.5.0</span>
           <button class="linklike" id="set-open-help" type="button">Phím tắt</button>
           <span class="settings-dot">·</span>
           <button class="linklike" id="set-open-about" type="button">Giới thiệu</button>
@@ -580,6 +591,10 @@
         <label><svg class="ic tiny"><use href="#i-list-checks"/></svg>Việc nhỏ<span class="d-sub-progress" id="d-sub-progress">0/0</span></label>
         <div class="progress-track"><div class="progress-fill" id="d-sub-bar" style="width:0%"></div></div>
         <div id="d-subtasks" class="d-subtasks"></div>
+        <div class="d-split-wrap">
+          <button class="dashed-btn" id="d-split"><svg class="ic small"><use href="#i-list-checks"/></svg>Chia nhỏ: bước tiếp theo</button>
+          <div class="split-suggest" id="d-split-suggest" hidden></div>
+        </div>
         <button class="dashed-btn" id="d-add-subtask"><svg class="ic small"><use href="#i-plus"/></svg>Thêm việc nhỏ</button>
       </div>
 
@@ -631,6 +646,7 @@
         <div class="focus-breath-text" id="focus-breath-text">Hít vào… (4 giây)</div>
       </div>
       <div class="focus-title" id="focus-title"></div>
+      <div id="eye-pill" class="eye-pill" hidden><svg class="ic small"><use href="#i-clock"/></svg><span>20-20-20 — nhìn xa ~6m · <b id="eye-count">20</b>s</span></div>
       <div class="focus-controls" id="focus-controls">
         <button class="btn-ghost" id="focus-pause" type="button">Tạm dừng</button>
         <button class="btn-cancel" id="focus-stop" type="button">Dừng lại — không sao</button>
