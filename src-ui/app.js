@@ -154,6 +154,9 @@ function tagsMeta(t) {
 let toastTimer = null;
 let remindShown = false;
 function toast(msg, kind, action) {
+  /* action: hoặc { label, onClick } (nút), hoặc số (ms thời lượng) */
+  let duration = null;
+  if (typeof action === "number") { duration = action; action = null; }
   const el = $("#toast");
   el.textContent = "";
   const span = document.createElement("span");
@@ -169,7 +172,7 @@ function toast(msg, kind, action) {
   el.classList.toggle("err", kind === "err");
   el.classList.add("show");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove("show"), action ? 6000 : 2600);
+  toastTimer = setTimeout(() => el.classList.remove("show"), duration ?? (action ? 6000 : 2600));
 }
 
 let lastTheme = null;
@@ -1083,7 +1086,7 @@ const PALETTE_ACTIONS = [
   { icon: "chart-bar", label: "Đi tới: Thống kê", hint: "Ctrl+7", run: () => setView({ type: "stats" }) },
   { icon: "gear", label: "Đi tới: Cài đặt", hint: "Ctrl+8", run: () => setView({ type: "settings" }) },
   { icon: "repeat", label: "Lặp lại… (việc đang chọn)", hint: "", run: () => { if (S.selected != null) openRecurrenceModal(S.selected); else toast("Chọn một việc trước đã"); } },
-  { icon: "clock", label: "Mở cửa sổ đồng hồ", hint: "", run: () => invoke("focus_open_timer").catch(() => toast("Không mở được cửa sổ đồng hồ", "err")) },
+  { icon: "clock", label: "Mở cửa sổ đồng hồ", hint: "", run: () => invoke("focus_open_timer").catch(e => { const msg = typeof e === "string" ? e : (e && (e.message || e.toString())) || "không rõ lý do"; toast("Không mở được cửa sổ Đồng hồ: " + msg, "err", 6000); }) },
   { icon: "note-pencil", label: "Brain-dump — đổ việc nhanh", hint: "Ctrl+Shift+N", run: openBrainDump },
   { icon: "plus", label: "Thêm việc mới", hint: "Ctrl+N", run: () => { setView(S.view.type === "stats" || S.view.type === "trash" || S.view.type === "completed" ? { type: "inbox" } : S.view); setTimeout(() => $("#quickadd-input").focus(), 60); } },
   { icon: "sun", label: "Bật/tắt giao diện tối–sáng", hint: "Ctrl+D", run: () => go(invoke("toggle_dark")) },
@@ -2057,7 +2060,10 @@ function bindAdhd() {
   });
   $("#focus-pause")?.addEventListener("click", focusTogglePause);
   $("#focus-reset")?.addEventListener("click", focusReset);
-  $("#focus-open-timer")?.addEventListener("click", () => invoke("focus_open_timer").catch(() => toast("Không mở được cửa sổ đồng hồ", "err")));
+  $("#focus-open-timer")?.addEventListener("click", () => invoke("focus_open_timer").catch(e => {
+    const msg = typeof e === "string" ? e : (e && (e.message || e.toString())) || "không rõ lý do";
+    toast("Không mở được cửa sổ Đồng hồ: " + msg, "err", 6000);
+  }));
   $("#focus-stop")?.addEventListener("click", focusStop);
   $("#focus-break")?.addEventListener("click", focusBreakStart);
   $("#focus-next")?.addEventListener("click", focusStop);
