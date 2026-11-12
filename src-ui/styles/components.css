@@ -252,11 +252,6 @@ html[data-theme="light"] .d-select option { background:#fff; color:#1e2230; }
 .about-center { text-align:center; display:flex; flex-direction:column; gap:6px; }
 .about-center p { font-size:11px; }
 
-/* toast */
-.toast { position:fixed; z-index:90; bottom:52px; left:50%; transform:translate(-50%, 16px); opacity:0; pointer-events:none; transition:all .25s ease; padding:8px 10px 8px 16px; border-radius:99px; font-size:12px; font-weight:600; color:#e6ffef; background:rgba(16,32,26,.88); border:1px solid rgba(52,211,153,.45); box-shadow:0 10px 30px rgba(0,0,0,.4); backdrop-filter:blur(8px); display:flex; align-items:center; gap:12px; max-width:min(520px, 92vw); }
-.toast.show { opacity:1; transform:translate(-50%, 0); pointer-events:auto; }
-.toast-btn { flex:none; height:26px; padding:0 12px; border-radius:99px; font-size:11px; font-weight:700; color:#0b3b2e; background:#34d399; border:none; cursor:pointer; box-shadow:0 2px 8px rgba(52,211,153,.4); transition:transform .15s ease, filter .15s ease; }
-.toast-btn:hover { transform:translateY(-1px); filter:brightness(1.06); }
 
 /* context menu */
 .ctx-menu { position:fixed; z-index:85; min-width:200px; padding:6px; border-radius:14px; background:var(--panel-strong); backdrop-filter:blur(var(--blur)) saturate(160%); border:1px solid var(--stroke-strong); box-shadow:var(--shadow-pop); animation:menu-in .16s ease; }

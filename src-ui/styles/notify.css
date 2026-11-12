@@ -1,0 +1,105 @@
+/* Taskora — Thẻ thông báo đẩy (#focus-chip nằm ở focus.css; accordion ở settings.css)
+   Dùng lại toàn bộ biến của app — theme/accent/acrylic/perf/reduce-motion đều khớp tự động. */
+
+#notify-stack {
+  position: fixed;
+  right: 18px;
+  bottom: 58px; /* trên statusbar */
+  z-index: 95;
+  display: flex;
+  flex-direction: column-reverse; /* thẻ mới nhất ở trên cùng */
+  gap: 10px;
+  width: 340px;
+  max-width: min(340px, calc(100vw - 36px));
+  pointer-events: none;
+}
+
+.notify-card {
+  pointer-events: auto;
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px 14px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--stroke-strong);
+  background: var(--panel-strong);
+  backdrop-filter: blur(18px) saturate(1.15);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  box-shadow: var(--shadow-pop);
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity .18s ease, transform .18s ease;
+}
+.notify-card.notify-in {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity .26s cubic-bezier(.16,.84,.3,1), transform .26s cubic-bezier(.16,.84,.3,1);
+}
+.notify-card.notify-out {
+  opacity: 0 !important;
+  transform: translateY(6px) !important;
+  transition: opacity .18s ease, transform .18s ease !important;
+}
+
+.notify-ic {
+  flex: none;
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  background: rgba(var(--accent-rgb), .14);
+  color: var(--accent-2);
+  border: 1px solid rgba(var(--accent-rgb), .28);
+}
+.notify-error .notify-ic, .notify-storage_error .notify-ic {
+  background: rgba(239, 68, 68, .13);
+  color: #fda4a4;
+  border-color: rgba(239, 68, 68, .35);
+}
+.notify-body { flex: 1 1 auto; min-width: 0; }
+.notify-title { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.35; }
+.notify-text {
+  margin-top: 2px; font-size: 12px; color: var(--text-weak); line-height: 1.4;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.notify-actions { display: flex; gap: 8px; margin-top: 8px; }
+.notify-action {
+  height: 26px; padding: 0 12px; border-radius: 99px;
+  border: 1px solid rgba(var(--accent-rgb), .40);
+  background: rgba(var(--accent-rgb), .14);
+  color: var(--accent-ink);
+  font-size: 11px; font-weight: 700; cursor: pointer;
+  transition: filter .15s ease, transform .15s ease;
+}
+.notify-action:hover { filter: brightness(1.12); transform: translateY(-1px); }
+
+.notify-x {
+  flex: none;
+  width: 26px; height: 26px; border-radius: 8px;
+  border: none; background: transparent; color: var(--text-faint);
+  cursor: pointer; display: grid; place-items: center;
+  transition: background .15s ease, color .15s ease;
+}
+.notify-x:hover { background: var(--row-hover); color: var(--text); }
+
+.notify-progress {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+  background: rgba(var(--accent-rgb), .16);
+}
+.notify-progress > i {
+  display: block; height: 100%; width: 100%;
+  background: linear-gradient(90deg, var(--accent-2), var(--accent));
+  transform-origin: left center;
+  transform: scaleX(1);
+}
+
+body.perf .notify-card { backdrop-filter: none; -webkit-backdrop-filter: none;  }
+body.reduce-motion .notify-card,
+body.reduce-motion .notify-card.notify-in,
+body.reduce-motion .notify-card.notify-out { transition-duration: .12s !important; transform: none !important; }
+body.reduce-motion .notify-progress { display: none; }
+
+html[data-theme="light"] .notify-card { border-color: rgba(30,34,48,.16); }
+html[data-theme="light"] .notify-error .notify-ic,
+html[data-theme="light"] .notify-storage_error .notify-ic { color: #b91c1c; background: rgba(239,68,68,.12); }

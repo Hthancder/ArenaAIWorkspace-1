@@ -8,3 +8,6 @@ src-tauri/target/
 src-tauri/gen/
 out/
 node_modules/
+
+# Harnesses cục bộ (jsdom, không commit)
+.scratch/

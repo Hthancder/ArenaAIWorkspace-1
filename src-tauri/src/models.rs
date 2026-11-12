@@ -592,9 +592,31 @@ pub struct Settings {
     /// Kiểu chuông cuối phiên: "soft" (3 nốt) · "wind" (chuông gió) · "none".
     #[serde(default = "default_chime")]
     pub chime: String,
-    /// Tự mở cửa sổ Đồng hồ (always-on-top) khi bắt đầu phiên focus.
+    /// Tự mở cửa sổ Đồng hồ (always-on-top) khi bắt đầu phiên focus. (legacy — dùng focus_clock_display)
     #[serde(default = "default_true")]
     pub focus_auto_open_timer: bool,
+    /// Đồng hồ hiển thị ở đâu: "window" (mặc định — chỉ cửa sổ Đồng hồ) · "overlay" (chỉ overlay trong app) · "both" (cả hai).
+    /// None = chưa chọn → suy từ legacy focus_auto_open_timer (false ⇒ overlay).
+    #[serde(default)]
+    pub focus_clock_display: Option<String>,
+    /// Bật/tắt toàn bộ thông báo.
+    #[serde(default = "default_true")]
+    pub notify_enabled: bool,
+    /// Tự ẩn thông báo sau notify_hide_secs giây.
+    #[serde(default = "default_true")]
+    pub notify_autohide: bool,
+    /// Số giây tự ẩn (chỉ nhận 3|5|8|10 — ngoài ra frontend/patch tự nắn về 5).
+    #[serde(default = "default_notify_hide_secs")]
+    pub notify_hide_secs: u8,
+    /// Bật/tắt âm thanh thông báo (tách khỏi sound_on của phiên focus).
+    #[serde(default = "default_true")]
+    pub notify_sound_on: bool,
+    /// Preferences theo loại thông báo (opaque map phía Rust — xem js/notify.js NOTIFY_KINDS).
+    #[serde(default)]
+    pub notify_prefs: std::collections::BTreeMap<String, NotifyPref>,
+    /// Âm tùy chỉnh theo loại: kind → data URI base64 (đã validate khi patch; ≤ 4 mục).
+    #[serde(default)]
+    pub notify_custom_sounds: std::collections::BTreeMap<String, String>,
     /// View đang mở lần cuối ("inbox"…"list:3") — khôi phục khi mở app.
     #[serde(default)]
     pub last_view: String,
@@ -622,6 +644,25 @@ fn default_long_break_min() -> u32 {
 
 fn default_long_break_every() -> u32 {
     4
+}
+
+/// Cấu hình một loại thông báo.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct NotifyPref {
+    pub on: bool,
+    /// "default" | "soft" | "wind" | "none" | "custom"
+    pub sound: String,
+}
+
+impl Default for NotifyPref {
+    fn default() -> Self {
+        Self { on: true, sound: "default".to_string() }
+    }
+}
+
+fn default_notify_hide_secs() -> u8 {
+    5
 }
 
 fn default_chime() -> String {
@@ -661,6 +702,13 @@ impl Default for Settings {
             eye_reminder: true,
             chime: default_chime(),
             focus_auto_open_timer: true,
+            focus_clock_display: None,
+            notify_enabled: true,
+            notify_autohide: true,
+            notify_hide_secs: default_notify_hide_secs(),
+            notify_sound_on: true,
+            notify_prefs: std::collections::BTreeMap::new(),
+            notify_custom_sounds: std::collections::BTreeMap::new(),
             last_view: String::new(),
         }
     }

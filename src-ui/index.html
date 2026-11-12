@@ -14,6 +14,7 @@
 <link rel="stylesheet" href="styles/settings.css" />
 <link rel="stylesheet" href="styles/adhd.css" />
 <link rel="stylesheet" href="styles/focus.css" />
+<link rel="stylesheet" href="styles/notify.css" />
 </head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
@@ -44,6 +45,8 @@
 <symbol id="i-arrow-clockwise" viewBox="0 0 256 256" fill="currentColor"><path d="M240,56v48a8,8,0,0,1-8,8H184a8,8,0,0,1,0-16H211.4L184.81,71.64l-.25-.24a80,80,0,1,0-1.67,114.78,8,8,0,0,1,11,11.63A95.44,95.44,0,0,1,128,224h-1.32A96,96,0,1,1,195.75,60L224,85.8V56a8,8,0,1,1,16,0Z"/></symbol>
 <symbol id="i-warning" viewBox="0 0 256 256" fill="currentColor"><path d="M236.8,188.09,149.35,36.22h0a24.76,24.76,0,0,0-42.7,0L19.2,188.09a23.51,23.51,0,0,0,0,23.72A24.35,24.35,0,0,0,40.55,224h174.9a24.35,24.35,0,0,0,21.33-12.19A23.51,23.51,0,0,0,236.8,188.09ZM222.93,203.8a8.5,8.5,0,0,1-7.48,4.2H40.55a8.5,8.5,0,0,1-7.48-4.2,7.59,7.59,0,0,1,0-7.72L120.52,44.21a8.75,8.75,0,0,1,15,0l87.45,151.87A7.59,7.59,0,0,1,222.93,203.8ZM120,144V104a8,8,0,0,1,16,0v40a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,180Z"/></symbol>
 <symbol id="i-lightning" viewBox="0 0 256 256" fill="currentColor"><path d="M215.79,118.17a8,8,0,0,0-5-5.66L153.18,90.9l14.66-73.33a8,8,0,0,0-13.69-7l-112,120a8,8,0,0,0,3,13l57.63,21.61L88.16,238.43a8,8,0,0,0,13.69,7l112-120A8,8,0,0,0,215.79,118.17ZM109.37,214l10.47-52.38a8,8,0,0,0-5-9.06L62,132.71l84.62-90.66L136.16,94.43a8,8,0,0,0,5,9.06l52.8,19.8Z"/></symbol>
+<symbol id="i-bell" viewBox="0 0 256 256" fill="currentColor"><path d="M128 20a74 74 0 0 0-74 74v44L30.6 167a18 18 0 0 0 16.7 22.9h161.4a18 18 0 0 0 16.7-22.9L202 138V94a74 74 0 0 0-74-74Zm0 216a30 30 0 0 0 29.3-24H98.7A30 30 0 0 0 128 236Z"/></symbol>
+<symbol id="i-speaker-high" viewBox="0 0 256 256" fill="currentColor"><path d="M152 36.1a9.8 9.8 0 0 0-17-6.6l-64.3 54A16 16 0 0 1 60.3 88H32a16 16 0 0 0-16 16v48a16 16 0 0 0 16 16h28.3a16 16 0 0 1 10.4 4.5l64.3 54A9.8 9.8 0 0 0 152 219.9Z"/><path d="M190.4 77.2a10 10 0 0 1 0 14.1 50 50 0 0 1 0 73.3 10 10 0 1 1-14.1-14.1 30 30 0 0 0 0-45 10 10 0 0 1 14.1-14.1Z"/><path d="M218 49.6a10 10 0 0 1 0 14.1 92 92 0 0 1 0 128.6 10 10 0 1 1-14.1-14.1 72 72 0 0 0 0-100.4 10 10 0 0 1 14.1-14.1Z"/></symbol>
 <symbol id="i-dots-three-vertical" viewBox="0 0 256 256" fill="currentColor"><path d="M140,128a12,12,0,1,1-12-12A12,12,0,0,1,140,128ZM128,72a12,12,0,1,0-12-12A12,12,0,0,0,128,72Zm0,112a12,12,0,1,0,12,12A12,12,0,0,0,128,184Z"/></symbol>
 <symbol id="i-pencil-simple" viewBox="0 0 256 256" fill="currentColor"><path d="M227.31,73.37,182.63,28.68a16,16,0,0,0-22.63,0L36.69,152A15.86,15.86,0,0,0,32,163.31V208a16,16,0,0,0,16,16H92.69A15.86,15.86,0,0,0,104,219.31L227.31,96a16,16,0,0,0,0-22.63ZM92.69,208H48V163.31l88-88L180.69,120ZM192,108.68,147.31,64l24-24L216,84.68Z"/></symbol>
 <symbol id="i-repeat" viewBox="0 0 256 256" fill="currentColor"><path d="M24,128A72.08,72.08,0,0,1,96,56H204.69L194.34,45.66a8,8,0,0,1,11.32-11.32l24,24a8,8,0,0,1,0,11.32l-24,24a8,8,0,0,1-11.32-11.32L204.69,72H96a56.06,56.06,0,0,0-56,56,8,8,0,0,1-16,0Zm200-8a8,8,0,0,0-8,8,56.06,56.06,0,0,1-56,56H51.31l10.35-10.34a8,8,0,0,0-11.32-11.32l-24,24a8,8,0,0,0,0,11.32l24,24a8,8,0,0,0,11.32-11.32L51.31,200H160a72.08,72.08,0,0,0,72-72A8,8,0,0,0,224,120Z"/></symbol>
@@ -76,7 +79,7 @@
       <img class="brand-logo" src="assets/logo.png" alt="Taskora" />
       <div class="brand-text">
         <span class="brand-name">Taskora</span>
-        <span class="brand-ver">v2.8.0</span>
+        <span class="brand-ver">v2.11.0</span>
       </div>
     </div>
 
@@ -129,6 +132,7 @@
         <button class="kbd-pill" id="search-clear" title="Xóa tìm kiếm" style="display:none"><svg class="ic small"><use href="#i-x"/></svg></button>
       </div>
       <div class="tb-right">
+        <button id="focus-chip" class="focus-chip" type="button" hidden title="Đang có phiên tập trung — bấm để hiện cửa sổ Đồng hồ" aria-label="Phiên tập trung đang chạy"><span id="focus-chip-text" class="focus-chip-text">● 25:00</span></button>
         <button class="icon-btn" id="btn-theme" title="Đổi giao diện Tối/Sáng (Ctrl+D)"><svg class="ic"><use href="#i-sun" id="theme-icon-use"/></svg></button>
         <button class="btn-primary" id="btn-add-top"><svg class="ic"><use href="#i-plus"/></svg><span>Thêm việc</span></button>
         <div class="menu-wrap">
@@ -302,8 +306,15 @@
       <div class="settings-scroll g-scroll">
 
         <!-- ═══ GIAO DIỆN ═══ -->
-        <div class="panel-card glass-card settings-card">
-          <div class="panel-card-head"><svg class="ic accent-ic"><use href="#i-sun"/></svg><h3>Giao diện</h3></div>
+        <section class="panel-card glass-card settings-card settings-group" id="sg-appearance">
+          <button class="settings-group-head" type="button" aria-expanded="true" aria-controls="sg-appearance-body" id="sg-appearance-head">
+            <svg class="ic accent-ic"><use href="#i-sun"/></svg>
+            <span class="settings-group-title">Giao diện</span>
+            <span class="settings-group-count"></span>
+            <svg class="ic chev"><use href="#i-caret-down"/></svg>
+          </button>
+          <div class="settings-group-body" id="sg-appearance-body" role="region" aria-labelledby="sg-appearance-head">
+            <div class="settings-group-inner">
 
           <div class="setting-row">
             <div class="setting-info">
@@ -401,16 +412,25 @@
             </div>
             <label class="toggle-wrap"><input type="checkbox" id="set-sound" /><span class="toggle-ui"></span></label>
           </div>
-        </div>
+            </div>
+          </div>
+        </section>
 
         <!-- ═══ TẬP TRUNG ═══ -->
-        <div class="panel-card glass-card settings-card">
-          <div class="panel-card-head"><svg class="ic accent-ic"><use href="#i-clock"/></svg><h3>Tập trung</h3></div>
+        <section class="panel-card glass-card settings-card settings-group" id="sg-focus">
+          <button class="settings-group-head" type="button" aria-expanded="true" aria-controls="sg-focus-body" id="sg-focus-head">
+            <svg class="ic accent-ic"><use href="#i-clock"/></svg>
+            <span class="settings-group-title">Tập trung</span>
+            <span class="settings-group-count"></span>
+            <svg class="ic chev"><use href="#i-caret-down"/></svg>
+          </button>
+          <div class="settings-group-body" id="sg-focus-body" role="region" aria-labelledby="sg-focus-head">
+            <div class="settings-group-inner">
 
           <div class="setting-row">
             <div class="setting-info">
               <div class="setting-title">Thời lượng phiên</div>
-              <div class="setting-hint">Mặc định 25 phút — chọn nhanh hoặc gõ số phút bất kỳ (5–180). Cửa sổ <strong>Đồng hồ</strong> luôn nổi: <strong>tự mở khi bắt đầu phiên</strong> (mặc định bật — xem công tắc bên dưới), hoặc mở thủ công từ nút “↗ Đồng hồ” trên overlay / <kbd>Ctrl</kbd>+<kbd>K</kbd> → “Mở cửa sổ đồng hồ”</div>
+              <div class="setting-hint">Mặc định 25 phút — chọn nhanh hoặc gõ số phút bất kỳ (5–180). Cửa sổ <strong>Đồng hồ</strong> luôn nổi và <strong>tự mở khi bắt đầu phiên</strong> — nơi đồng hồ xuất hiện do công tắc “Hiển thị đồng hồ” bên dưới quyết định</div>
             </div>
             <div class="minute-control">
               <button class="minute-chip" type="button" data-group="focus" data-value="15">15</button>
@@ -494,10 +514,17 @@
 
           <div class="setting-row">
             <div class="setting-info">
-              <div class="setting-title">Tự mở cửa sổ Đồng hồ khi bắt đầu phiên</div>
-              <div class="setting-hint">Bấm “Tập trung” → cửa sổ Đồng hồ luôn nổi tự hiện ở góc màn hình. Mặc định bật — tắt nếu chỉ thích đồng hồ trong overlay</div>
+              <div class="setting-title">Hiển thị đồng hồ</div>
+              <div class="setting-hint">Mặc định <strong>chỉ ở cửa sổ riêng</strong> (luôn nổi, góc màn hình — tự mở khi bắt đầu phiên). “Trên app chính” = overlay toàn màn như trước · “Cả hai” = hiện ở cả hai nơi</div>
             </div>
-            <label class="toggle-wrap"><input type="checkbox" id="set-auto-open-timer" checked /><span class="toggle-ui"></span></label>
+            <label class="sort-wrap">
+              <svg class="ic small"><use href="#i-clock"/></svg>
+              <select id="focus-clock-display" aria-label="Hiển thị đồng hồ">
+                <option value="window" selected>Chỉ cửa sổ riêng</option>
+                <option value="overlay">Trên app chính (overlay)</option>
+                <option value="both">Cả hai</option>
+              </select>
+            </label>
           </div>
 
           <div class="setting-row">
@@ -514,11 +541,69 @@
               <button class="btn-ghost small-btn" id="set-chime-test" type="button"><svg class="ic small"><use href="#i-clock"/></svg>Nghe thử</button>
             </div>
           </div>
-        </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══ THÔNG BÁO (v2.11.0) ═══ -->
+        <section class="panel-card glass-card settings-card settings-group" id="sg-notify">
+          <button class="settings-group-head" type="button" aria-expanded="true" aria-controls="sg-notify-body" id="sg-notify-head">
+            <svg class="ic accent-ic"><use href="#i-bell"/></svg>
+            <span class="settings-group-title">Thông báo</span>
+            <span class="settings-group-count"></span>
+            <svg class="ic chev"><use href="#i-caret-down"/></svg>
+          </button>
+          <div class="settings-group-body" id="sg-notify-body" role="region" aria-labelledby="sg-notify-head">
+            <div class="settings-group-inner">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <div class="setting-title">Bật thông báo</div>
+                  <div class="setting-hint">Tắt hết mọi thẻ thông báo của Taskora (hành động vẫn chạy bình thường)</div>
+                </div>
+                <label class="toggle-wrap"><input type="checkbox" id="notify-enabled" checked /><span class="toggle-ui"></span></label>
+              </div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <div class="setting-title">Tự ẩn thông báo</div>
+                  <div class="setting-hint">Sau bao lâu thẻ tự mờ dần. Tắt ⇒ thẻ chỉ đóng bằng nút ✕ hoặc nút hành động</div>
+                </div>
+                <label class="toggle-wrap"><input type="checkbox" id="notify-autohide" checked /><span class="toggle-ui"></span></label>
+              </div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <div class="setting-title">Số giây tự ẩn</div>
+                  <div class="setting-hint">Chỉ áp dụng khi “Tự ẩn thông báo” đang bật</div>
+                </div>
+                <div class="notify-hide-secs" id="notify-hide-secs" role="group" aria-label="Số giây tự ẩn">
+                  <button type="button" data-secs="3">3s</button>
+                  <button type="button" data-secs="5" class="on">5s</button>
+                  <button type="button" data-secs="8">8s</button>
+                  <button type="button" data-secs="10">10s</button>
+                </div>
+              </div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <div class="setting-title">Âm thanh thông báo</div>
+                  <div class="setting-hint">Tách riêng khỏi chuông cuối phiên. Tắt ⇒ mọi thẻ im lặng nhưng vẫn hiện</div>
+                </div>
+                <label class="toggle-wrap"><input type="checkbox" id="notify-sound" checked /><span class="toggle-ui"></span></label>
+              </div>
+              <div class="notify-kind-rows" id="notify-kind-rows"></div>
+              <button class="btn-ghost small-btn notify-test-btn" id="notify-test" type="button"><svg class="ic small"><use href="#i-bell"/></svg>Gửi thông báo thử</button>
+            </div>
+          </div>
+        </section>
 
         <!-- ═══ VIỆC & DANH SÁCH ═══ -->
-        <div class="panel-card glass-card settings-card">
-          <div class="panel-card-head"><svg class="ic accent-ic"><use href="#i-list-checks"/></svg><h3>Việc &amp; danh sách</h3></div>
+        <section class="panel-card glass-card settings-card settings-group" id="sg-tasks">
+          <button class="settings-group-head" type="button" aria-expanded="true" aria-controls="sg-tasks-body" id="sg-tasks-head">
+            <svg class="ic accent-ic"><use href="#i-list-checks"/></svg>
+            <span class="settings-group-title">Việc &amp; danh sách</span>
+            <span class="settings-group-count"></span>
+            <svg class="ic chev"><use href="#i-caret-down"/></svg>
+          </button>
+          <div class="settings-group-body" id="sg-tasks-body" role="region" aria-labelledby="sg-tasks-head">
+            <div class="settings-group-inner">
 
           <div class="setting-row">
             <div class="setting-info">
@@ -552,19 +637,20 @@
             </div>
             <label class="toggle-wrap"><input type="checkbox" id="set-qa-preview" checked /><span class="toggle-ui"></span></label>
           </div>
-
-          <div class="setting-row">
-            <div class="setting-info">
-              <div class="setting-title">Nhắc việc hôm nay khi mở app</div>
-              <div class="setting-hint">Toast nhắc số việc đến hạn — chỉ hiện khi mở Taskora</div>
             </div>
-            <label class="toggle-wrap"><input type="checkbox" id="set-remind-today" checked /><span class="toggle-ui"></span></label>
           </div>
-        </div>
+        </section>
 
         <!-- ═══ DỮ LIỆU ═══ -->
-        <div class="panel-card glass-card settings-card">
-          <div class="panel-card-head"><svg class="ic accent-ic"><use href="#i-archive"/></svg><h3>Dữ liệu</h3></div>
+        <section class="panel-card glass-card settings-card settings-group" id="sg-data">
+          <button class="settings-group-head" type="button" aria-expanded="true" aria-controls="sg-data-body" id="sg-data-head">
+            <svg class="ic accent-ic"><use href="#i-archive"/></svg>
+            <span class="settings-group-title">Dữ liệu</span>
+            <span class="settings-group-count"></span>
+            <svg class="ic chev"><use href="#i-caret-down"/></svg>
+          </button>
+          <div class="settings-group-body" id="sg-data-body" role="region" aria-labelledby="sg-data-head">
+            <div class="settings-group-inner">
 
           <div class="setting-row">
             <div class="setting-info">
@@ -585,11 +671,21 @@
             </div>
             <label class="toggle-wrap"><input type="checkbox" id="set-backup-on-exit" /><span class="toggle-ui"></span></label>
           </div>
-        </div>
+            </div>
+          </div>
+        </section>
 
         <!-- ═══ NƠI LƯU DỮ LIỆU ═══ -->
-        <div class="panel-card glass-card settings-card">
-          <div class="panel-card-head"><svg class="ic accent-ic"><use href="#i-folder"/></svg><h3>Nơi lưu dữ liệu</h3><span class="mode-badge" id="storage-mode">Mặc định</span></div>
+        <section class="panel-card glass-card settings-card settings-group" id="sg-storage">
+          <button class="settings-group-head" type="button" aria-expanded="true" aria-controls="sg-storage-body" id="sg-storage-head">
+            <svg class="ic accent-ic"><use href="#i-folder"/></svg>
+            <span class="settings-group-title">Nơi lưu dữ liệu</span>
+            <span class="mode-badge" id="storage-mode">Mặc định</span>
+            <span class="settings-group-count"></span>
+            <svg class="ic chev"><use href="#i-caret-down"/></svg>
+          </button>
+          <div class="settings-group-body" id="sg-storage-body" role="region" aria-labelledby="sg-storage-head">
+            <div class="settings-group-inner">
 
           <div class="setting-row col">
             <div class="setting-info">
@@ -611,11 +707,20 @@
             </div>
             <label class="toggle-wrap"><input type="checkbox" id="set-portable" /><span class="toggle-ui"></span></label>
           </div>
-        </div>
+            </div>
+          </div>
+        </section>
 
         <!-- ═══ KHÁC ═══ -->
-        <div class="panel-card glass-card settings-card">
-          <div class="panel-card-head"><svg class="ic accent-ic"><use href="#i-dots-three-vertical"/></svg><h3>Khác</h3></div>
+        <section class="panel-card glass-card settings-card settings-group" id="sg-more">
+          <button class="settings-group-head" type="button" aria-expanded="true" aria-controls="sg-more-body" id="sg-more-head">
+            <svg class="ic accent-ic"><use href="#i-dots-three-vertical"/></svg>
+            <span class="settings-group-title">Khác</span>
+            <span class="settings-group-count"></span>
+            <svg class="ic chev"><use href="#i-caret-down"/></svg>
+          </button>
+          <div class="settings-group-body" id="sg-more-body" role="region" aria-labelledby="sg-more-head">
+            <div class="settings-group-inner">
           <div class="setting-row">
             <div class="setting-info">
               <div class="setting-title">Đặt lại cài đặt gốc</div>
@@ -623,10 +728,12 @@
             </div>
             <button class="btn-danger small-btn" id="set-reset"><svg class="ic small"><use href="#i-arrow-counter-clockwise"/></svg>Đặt lại</button>
           </div>
-        </div>
+            </div>
+          </div>
+        </section>
 
         <div class="settings-foot">
-          <span>Taskora v2.8.0</span>
+          <span>Taskora v2.11.0</span>
           <button class="linklike" id="set-open-help" type="button">Phím tắt</button>
           <span class="settings-dot">·</span>
           <button class="linklike" id="set-open-about" type="button">Giới thiệu</button>
@@ -793,9 +900,8 @@
   <!-- ═══════════ MODALS ═══════════ -->
   <div id="modal" class="overlay" hidden></div>
 
-  <div id="toast" class="toast" role="status"></div>
   <div id="ctx-menu" class="ctx-menu" hidden></div>
 </div>
-<script src="app.js"></script>
+<script type="module" src="js/main.js"></script>
 </body>
 </html>

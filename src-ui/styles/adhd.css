@@ -71,3 +71,14 @@ html[data-theme="light"] .adhd-clock { background:rgba(255,255,255,.7); }
 .btn-save.small, .btn-cancel.small, .btn-ghost.small { height:26px; padding:0 10px; font-size:11px; border-radius:8px; }
 .split-suggest .split-actions { display:flex; gap:8px; justify-content:flex-end; }
 .split-suggest .split-actions button { height:30px; padding:0 12px; font-size:12px; }
+
+/* ═══════════ CTA trạng thái đang chạy (v2.11.0) ═══════════ */
+.adhd-cta.is-running { opacity: .75; cursor: default; }
+.btn-adhd-open {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 40px; padding: 0 16px; border-radius: 12px;
+  border: 1px solid var(--stroke-strong); background: var(--chip);
+  color: var(--accent-ink); font-size: 12.5px; font-weight: 600; cursor: pointer;
+  transition: border-color .18s ease, background .18s ease;
+}
+.btn-adhd-open:hover { border-color: var(--accent); background: rgba(var(--accent-rgb), .16); }

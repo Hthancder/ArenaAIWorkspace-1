@@ -130,7 +130,6 @@ textarea::-webkit-scrollbar-thumb { background:rgba(255,255,255,.16); border-rad
 
 .bulk-box { cursor:pointer; }
 .bulk-box.bulk-on { background:var(--accent); border-color:var(--accent-2); color:#fff; box-shadow:0 0 12px rgba(var(--accent-rgb),.5); }
-.toast.err { border-color:rgba(248,113,113,.5); color:#ffe1e1; background:rgba(46,14,14,.88); }
 .modal-backdrop { position:absolute; inset:0; z-index:0; }
 #modal { z-index:70; }
 .empty-inline { color:var(--text-weak); font-size:12px; padding:10px 2px; }

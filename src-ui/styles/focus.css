@@ -62,3 +62,37 @@ html[data-theme="light"] .eye-pill { color:#075985; background:rgba(56,189,248,.
 
 /* nút Bắt đầu lại — cùng hàng với Tạm dừng / Dừng */
 .focus-reset-btn { display:inline-flex; align-items:center; gap:7px; }
+
+/* ═══════════ Chip phiên trên topbar (v2.11.0 — A.2) ═══════════ */
+.focus-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 34px; padding: 0 14px;
+  border-radius: 99px;
+  border: 1px solid var(--stroke-strong);
+  background: var(--chip);
+  color: var(--text);
+  font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums;
+  cursor: pointer; white-space: nowrap;
+  transition: border-color .18s ease, background .18s ease, color .18s ease;
+}
+.focus-chip:hover { border-color: var(--accent); background: rgba(var(--accent-rgb), .16); }
+.focus-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.focus-chip[hidden] { display: none; }
+.focus-chip::before {
+  content: ""; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent-2);
+  box-shadow: 0 0 0 0 rgba(var(--accent-rgb), .5);
+  animation: focus-chip-pulse 2s ease-out infinite;
+}
+.focus-chip.is-paused { border-color: rgba(245, 158, 11, .45); color: #fbd38d; }
+.focus-chip.is-paused::before { background: var(--warn); animation: none; box-shadow: none; }
+.focus-chip.is-done { border-color: rgba(16, 185, 129, .5); color: #6ee7b7; }
+.focus-chip.is-done::before { background: var(--ok); animation: none; box-shadow: none; }
+@keyframes focus-chip-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(var(--accent-rgb), .45); }
+  70% { box-shadow: 0 0 0 7px rgba(var(--accent-rgb), 0); }
+  100% { box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0); }
+}
+body.reduce-motion .focus-chip::before { animation: none; }
+html[data-theme="light"] .focus-chip.is-paused { color: #b45309; }
+html[data-theme="light"] .focus-chip.is-done { color: #047857; }

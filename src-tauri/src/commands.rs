@@ -1311,6 +1311,13 @@ pub struct SettingsPatch {
     pub auto_start_focus: Option<bool>,
     pub eye_reminder: Option<bool>,
     pub chime: Option<String>,
+    pub focus_clock_display: Option<String>,
+    pub notify_enabled: Option<bool>,
+    pub notify_autohide: Option<bool>,
+    pub notify_hide_secs: Option<u8>,
+    pub notify_sound_on: Option<bool>,
+    pub notify_prefs: Option<std::collections::BTreeMap<String, crate::models::NotifyPref>>,
+    pub notify_custom_sounds: Option<std::collections::BTreeMap<String, String>>,
 }
 
 fn valid_accent(s: &str) -> bool {
@@ -1357,6 +1364,42 @@ pub fn update_settings(
         if let Some(v) = patch.chime {
             let v = v.trim().to_lowercase();
             if matches!(v.as_str(), "soft" | "wind" | "none") { s.chime = v; }
+        }
+        if let Some(v) = patch.focus_clock_display {
+            let v = v.trim().to_lowercase();
+            if matches!(v.as_str(), "window" | "overlay" | "both") { s.focus_clock_display = Some(v); }
+        }
+        if let Some(v) = patch.notify_enabled { s.notify_enabled = v; }
+        if let Some(v) = patch.notify_autohide { s.notify_autohide = v; }
+        if let Some(v) = patch.notify_hide_secs {
+            // chỉ nhận 3|5|8|10 — nắn về mốc gần nhất, ngoài mọi biên → 5
+            let n = [3u8, 5, 8, 10];
+            s.notify_hide_secs = *n.iter().min_by_key(|m| (**m as i32 - v as i32).abs()).unwrap_or(&5);
+        }
+        if let Some(v) = patch.notify_sound_on { s.notify_sound_on = v; }
+        if let Some(v) = patch.notify_prefs {
+            // chỉ nhận kind đã biết + sound hợp lệ — chống rác vào data.json
+            const KINDS: [&str; 8] = ["focus_done", "break_done", "due_today", "overdue", "storage_error", "import_merged", "info", "error"];
+            const SOUNDS: [&str; 5] = ["default", "soft", "wind", "none", "custom"];
+            s.notify_prefs = v
+                .into_iter()
+                .filter(|(k, _)| KINDS.contains(&k.as_str()))
+                .map(|(k, mut p)| {
+                    let snd = p.sound.trim().to_lowercase();
+                    p.sound = if SOUNDS.contains(&snd.as_str()) { snd } else { "default".into() };
+                    (k, p)
+                })
+                .collect();
+        }
+        if let Some(v) = patch.notify_custom_sounds {
+            // tối đa 4 âm tùy chỉnh, mỗi cái là data URI audio ≤ ~360k ký tự (≈ 256 KB)
+            const KINDS: [&str; 8] = ["focus_done", "break_done", "due_today", "overdue", "storage_error", "import_merged", "info", "error"];
+            let ok = v
+                .into_iter()
+                .filter(|(k, uri)| KINDS.contains(&k.as_str()) && uri.starts_with("data:audio/") && uri.len() <= 360_000)
+                .take(4)
+                .collect();
+            s.notify_custom_sounds = ok;
         }
     }
     AppState::commit(&mut i);

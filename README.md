@@ -66,6 +66,16 @@
 - Đồng hồ trong app chính và cửa sổ Đồng hồ **không thể lệch bản ghi đè cũ**: mọi chuyển phase đọc lại trạng thái thật từ engine (wall-clock), kể cả khi bạn bấm Reset đúng khoảnh khắc đồng hồ về 0.
 - **Nhắc mắt 20-20-20 cũng hiện trong cửa sổ Đồng hồ** (pill nổi, tự ẩn, tôn trọng tuỳ chọn chuông) — không chỉ trong overlay chính.
 
+**v2.11.0 — Thông báo của Taskora & tách mã nguồn**
+- **Thông báo đẩy (push notification) kiểu Taskora** thay thế hoàn toàn toast cũ: thẻ nổi góc dưới-phải (tối đa 3 thẻ, dư thì xếp hàng), nền kính mờ đục, viền sáng, icon theo loại; **tự ẩn sau N giây** với thanh tiến trình — **rê chuột vào để giữ lại** (hết giờ tự ẩn trở lại sau khi rời chuột); tắt tự ẩn được để thông báo bám màn hình cho tới khi bạn đóng.
+- **8 loại thông báo, tùy chỉnh từng loại** (Cài đặt → **Thông báo**): phiên tập trung xong · nghỉ xong · việc đến hạn hôm nay · việc quá hạn · lỗi lưu trữ · hợp nhất dữ liệu · thông tin · lỗi. Mỗi loại bật/tắt riêng và chọn âm thanh riêng: **3 nốt / Chuông gió / Không / Âm tự chọn** (tối đa 4 file âm thanh tuỳ chỉnh, mỗi file ≤ 256 KB, lưu trong data.json) — có nút *Nghe thử* cho từng loại và nút **Gửi thử thông báo** để kiểm tra toàn bộ.
+- **Tắt/bật toàn cục**: “Bật thông báo” và “Bật âm thanh thông báo” — khi tắt âm vẫn hiện thẻ, khi tắt hẳn thì không hiện gì. Tôn trọng **Giảm chuyển động** và **Chế độ hiệu năng** của app.
+- **Đồng hồ phiên tập trung giờ mặc định chỉ nằm ở cửa sổ Đồng hồ riêng** (luôn nổi, kéo được, đóng được nhưng phiên vẫn chạy) — chọn **Cài đặt → Tập trung → “Đồng hồ hiển thị ở đâu”**: *Cửa sổ Đồng hồ (mặc định)* · *Trên app chính (overlay)* · *Cả hai*. Khi phiên đang chạy, topbar hiện **chip đếm ngược** (chấm tím nhấp nháy, tạm dừng thì hổ phách, xong phiên thì xanh lá) — bấm chip để gọi lại cửa sổ Đồng hồ.
+- **Cài đặt chia nhóm thu gọn (accordion)**: Giao diện · Tập trung · Thông báo · Việc & danh sách · Dữ liệu & sao lưu · Nơi lưu dữ liệu · Khác — mỗi nhóm mở/đóng độc lập, app nhớ trạng thái thu gọn giữa các lần mở.
+- **Tách mã nguồn**: monolith `app.js` đã được tách thành 13 module ES (`js/`) + CSS theo từng phần (`styles/`) — mã nguồn dễ đọc, dễ bảo trì hơn nhiều; **không giữ shim** cho `app.js` cũ.
+- Tương thích dữ liệu tuyệt đối: backup cũ mở bằng v2.11.0 không đổi gì (field mới có `serde(default)`); build cũ bỏ qua field lạ.
+- Thiết kế đầy đủ: [specs/v2.11.0-notifications-and-architecture.md](specs/v2.11.0-notifications-and-architecture.md).
+
 **Vá v2.10.5 — Đồng hồ phiên tập trung ra giữa cửa sổ & to hơn**
 - Màn phiên toàn màn trong app chính (overlay) trước giờ bị **dính mép trái** do `.overlay` không căn giữa — giờ **căn giữa hoàn toàn** (ngang + dọc).
 - Vòng đồng hồ **216 → 308px**, số phút **44 → 62px**, tên việc to hơn, vòng thở 138 → 172px — đúng như chế độ tập trung toàn màn phải có.
@@ -78,8 +88,6 @@
 - **“25 phút” không còn hard-code**: nút hero ADHD, overlay, dòng kết thúc phiên, cửa sổ đồng hồ đều lấy theo cấu hình; dòng tiến độ “Hôm nay đã xong N việc · M phiên”.
 - Dữ liệu cũ hoàn toàn tương thích: backup v2.8.0/v2.9.0 mở bằng v2.10.0 không đổi gì (các field mới có `serde(default)`); build cũ bỏ qua field lạ, chỉ mất hiệu lực 8 tinh chỉnh mới.
 - Thiết kế đầy đủ: [specs/v2.10.0-focus-customization.md](specs/v2.10.0-focus-customization.md).
-
-*Đang thiết kế (chưa triển khai): [specs/v2.11.0-notifications-and-architecture.md](specs/v2.11.0-notifications-and-architecture.md) — thông báo đẩy theo phong cách app (auto-hide fade, âm thanh tuỳ chỉnh, nhóm setting thu gọn), đồng hồ CHỈ ở cửa sổ Đồng hồ riêng, tách mã nguồn.*
 
 **Việc lặp lại hạng nhất (v2.9.0 — đã phát hành)**
 - **Quy tắc đầy đủ**: tần suất **Ngày / Tuần / Tháng / Năm** · khoảng lặp tuỳ ý (`*mỗi 3 ngày`, `*mỗi 2 tuần`, `*mỗi 6 tháng`, `*mỗi 2 năm`) · chọn thứ trong tuần (tuần) · ngày trong tháng gồm **“ngày cuối cùng”** · kết thúc: **Không bao giờ / Đến ngày / Sau N lần hoàn thành**.
