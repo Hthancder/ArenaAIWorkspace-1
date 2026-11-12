@@ -1,4 +1,4 @@
-# Tabspace 0.12 — bản thử nghiệm
+# Tabspace 0.13 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,6 +7,7 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
+- Trong **Nhóm đã lưu**, **Phiên đã lưu** và **Thùng rác**, chọn bằng checkbox hoặc “Chọn mục đang thấy”; kiểm tra bản xem trước trước khi thao tác hàng loạt. Nhóm đã chọn bao gồm các tab bên trong khi chuyển thùng rác. Tab trong thùng rác chỉ khôi phục được khi nhóm gốc tồn tại.
 - Trong **Tab trùng**, xem các tab http/https có URL giống hệt trên nhiều cửa sổ. Không tự chọn hoặc đóng; bạn có thể chọn tab và lưu hoặc lưu & đóng sau xác nhận. Tab cùng URL có thể chứa nội dung hoặc biểu mẫu khác nhau.
 - Popup ưu tiên hiển thị tab ở cuối thanh tab của cửa sổ hiện tại, sau đó đến các cửa sổ khác; đây là vị trí trên thanh tab, không phải thời gian truy cập gần nhất. Nhấn Xem thêm để xem từng lượt sáu tab, hoặc Thu gọn để trở về sáu tab đầu. Popup hỗ trợ lưu bản sao, chuyển sang màn hình xác nhận lưu & đóng, tìm/chuyển tab, cho tab nền đủ điều kiện nghỉ sau xác nhận và truy cập nhanh ba preset mới tạo. Tab đang hiển thị trong mỗi cửa sổ, ghim hoặc phát âm thanh không được cho nghỉ từ popup.
 - Chọn **Tìm tất cả** để tìm đồng thời tab đang mở, nhóm, tab đã lưu, phiên và preset. Chọn **Tag** để xem số nhóm và tab gắn mỗi tag. Tab không tự kế thừa tag của nhóm; nội dung trang không được tìm kiếm.

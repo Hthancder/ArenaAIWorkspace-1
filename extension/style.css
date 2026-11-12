@@ -25,3 +25,5 @@ dialog{max-height:calc(100vh - 32px);overflow:auto}.preset-advanced{margin:14px 
 .popup-pagination{display:flex;justify-content:flex-end;gap:3px}.popup-pagination .pop-link{padding:7px 5px}.rowurl time:focus-visible,small time:focus-visible,p time:focus-visible{outline:2px solid #a99bef;outline-offset:2px;border-radius:2px}
 
 time[data-full]:focus::after{content:attr(data-full);position:fixed;z-index:15;left:16px;bottom:16px;max-width:calc(100vw - 32px);white-space:normal;background:#303342;color:#fff;border-radius:7px;padding:9px 12px;box-shadow:0 4px 18px #0003;font-size:12px;font-weight:400}
+
+#bulkBar{flex-wrap:wrap;gap:8px;margin:0 0 18px}#bulkBar span{min-width:85px}#bulkBar button{white-space:nowrap}.grouphead input[type=checkbox]{accent-color:#7564d6;width:15px;height:15px;flex-shrink:0}
