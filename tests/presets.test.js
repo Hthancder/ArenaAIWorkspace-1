@@ -1,0 +1,17 @@
+const assert=require('node:assert/strict');
+const P=require('../extension/presets.js');
+assert.equal(P.normalizeDomain('GitHub.COM'),'github.com');
+assert.equal(P.normalizeDomain('bücher.de'),'xn--bcher-kva.de');
+for(const bad of ['https://github.com','github.com/path','*.github.com','github.com:443','user@github.com','github.com?x']) assert.throws(()=>P.normalizeDomain(bad));
+assert(P.matches('https://github.com/a',['github.com'],false));
+assert(!P.matches('https://notgithub.com',['github.com'],true));
+assert(!P.matches('https://sub.github.com',['github.com'],false));
+assert(P.matches('https://sub.github.com',['github.com'],true));
+assert(!P.matches('chrome://github.com',['github.com'],true));
+assert.equal(P.reason({active:true}),'Đang xem');
+assert.equal(P.reason({pinned:true}),'Đã ghim');
+assert.equal(P.reason({audible:true}),'Đang phát âm thanh');
+assert.equal(P.reason({incognito:true}),'Ẩn danh');
+const [p]=P.validate([{name:'Work',domains:['github.com'],groupId:'old'}],()=> 'new',new Map([['old','mapped']]));assert.equal(p.groupId,'mapped');
+assert.equal(P.validate([{name:'X',domains:['x.com'],groupId:'missing'}],()=> 'new',new Map())[0].groupId,null);
+console.log('Preset matching, protections and import: OK');
