@@ -58,20 +58,9 @@ export function buildEspFrame(mapping, players, config, width, height, target = 
     const offscreen = screen.x < 0 || screen.x > width || screen.y < 0 || screen.y > height;
     const edge = offscreen && config.espOffscreen ? edgeIndicator(screen, width, height) : null;
     if (offscreen && !edge) { reject(); continue; }
-    const selected = config.espHighlightTarget !== false && player === target && relation.kind === 'enemy';
-    const title = relation.kind === 'ally' ? relation.squad ? 'SQUAD' : 'ALLY' : relation.kind === 'enemy' ? 'ENEMY' : 'UNKNOWN';
-    const parts = [title];
-    if (config.nametags) { const name = playerName(player); if (name) parts.push(name); }
-    if (downed) parts.push('DOWNED');
-    if (!layerMatch) parts.push(knownLayer ? 'OTHER LAYER' : 'LAYER ?');
-    if (config.espDistance) parts.push(`${Math.round(distance)} wu`);
-    if (config.espWeapons) {
-      const weapon = safeLabel(at(player, [mapping.schema.netKey, mapping.schema.weaponKey]), 20);
-      if (weapon) parts.push(weapon);
-    }
-    rows.push({ player, relation: relation.kind, squad: relation.squad, selected, downed, offscreen, layerMatch, screen: edge || screen,
-      color: espColor(relation.kind, config, selected), dash: !layerMatch ? [7, 4] : relation.kind === 'unknown' ? [2, 4] : downed ? [3, 2] : [],
-      distance, label: parts.join(' · ') });
+    rows.push({ player, relation: relation.kind, squad: relation.squad, selected: false, downed, offscreen, layerMatch, screen: edge || screen,
+      color: espColor(relation.kind, config, false), dash: !layerMatch ? [7, 4] : relation.kind === 'unknown' ? [2, 4] : downed ? [3, 2] : [],
+      distance, label: '' });
     stats.drawn++; stats[relation.kind]++; if (downed) stats.downed++; if (!layerMatch) stats.otherLayer++; if (offscreen) stats.offscreen++;
   }
   if (players.length > 256) stats.culled += players.length - 256;
@@ -116,16 +105,6 @@ export class EspRenderer {
       ctx.font = `${fontSize}px system-ui, sans-serif`; ctx.textBaseline = 'top'; ctx.textAlign = 'left';
       ctx.globalAlpha = (finite(config.espOpacity) ? config.espOpacity : 85) / 100;
       ctx.lineWidth = finite(config.espLineWidth) ? config.espLineWidth : 1.5;
-      // Reserve legend space before laying out player labels.
-      if (config.espLegend) {
-        const items = [['enemy', 'ENEMY'], ['ally', 'ALLY / SQUAD'], ['unknown', 'UNKNOWN']];
-        let y = 12;
-        for (const [kind, text] of items) {
-          const label = `${text}: ${frame.stats[kind]}`, w = this.measure(ctx, label) + 12, h = fontSize + 6;
-          occupied.push({ x: 12, y, w, h });
-          ctx.fillStyle = '#081b2b'; ctx.fillRect(12, y, w, h); ctx.fillStyle = espColor(kind, config); ctx.fillText(label, 18, y + 3); y += h + 2;
-        }
-      }
       // Stable priority gives the current enemy target first choice of label space.
       const rows = [...frame.rows].sort((a, b) => Number(b.selected) - Number(a.selected) || a.distance - b.distance);
       for (const row of rows) {
@@ -142,13 +121,7 @@ export class EspRenderer {
         } else if (config.espMarkers) {
           ctx.beginPath(); ctx.arc(p.x, p.y, row.selected ? 11 : 7, 0, Math.PI * 2); ctx.stroke();
         }
-        if (config.espLabels) {
-          const w = this.measure(ctx, row.label) + 10, h = fontSize + 8;
-          const box = placeLabel(p, w, h, width, height, occupied);
-          if (!box) { frame.stats.labelsSkipped++; continue; }
-          ctx.fillStyle = '#081b2b'; ctx.fillRect(box.x, box.y, box.w, box.h);
-          ctx.fillStyle = row.color; ctx.fillText(row.label, box.x + 5, box.y + 4); frame.stats.labels++;
-        }
+
       }
       frame.stats.state = 'drawn';
       return frame.stats;

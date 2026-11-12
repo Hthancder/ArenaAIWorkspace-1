@@ -64,14 +64,13 @@ test('a new relation pass observes team recomputation and reused player ids with
   assert.equal(teamRelations(mapping.barn, 1).classify(2).kind, 'unknown');
 });
 
-test('ESP labels, colors and counts preserve team identity for other layers and downed players', () => {
+test('ESP removes labels and keeps colors and counts preserve team identity for other layers and downed players', () => {
   const { mapping, players, config } = fixture(); players[3].layer = 1; players[3].downed = true;
   const frame = buildEspFrame(mapping, players, config, 800, 600);
   assert.deepEqual(frame.rows.map(r => r.relation), ['ally', 'ally', 'enemy', 'unknown']);
-  assert.match(frame.rows[0].label, /^SQUAD/); assert.match(frame.rows[1].label, /^ALLY/);
-  assert.match(frame.rows[2].label, /^ENEMY.*DOWNED.*OTHER LAYER/);
+  assert.ok(frame.rows.every(row => row.label === ''), 'No tags, status boxes or names duplicated on canvas');
   assert.equal(frame.rows[2].color, config.espEnemyColor); assert.deepEqual(frame.rows[2].dash, [7, 4]);
-  assert.match(frame.rows[3].label, /^UNKNOWN/); assert.equal(frame.rows[3].color, config.espUnknownColor);
+  assert.equal(frame.rows[3].label, ''); assert.equal(frame.rows[3].color, config.espUnknownColor);
   assert.deepEqual(frame.rows[3].dash, [2, 4]);
   assert.equal(frame.stats.ally, 2); assert.equal(frame.stats.enemy, 1); assert.equal(frame.stats.unknown, 1);
 });
@@ -92,7 +91,7 @@ test('ESP filters ally/enemy/unknown, dead/inactive/downed, layer and max range 
 test('target highlight applies to enemies only and does not reveal unknown/ally as enemy', () => {
   const { mapping, players, config } = fixture();
   let frame = buildEspFrame(mapping, players, config, 800, 600, players[3]);
-  assert.equal(frame.rows[2].selected, true); assert.equal(frame.rows[2].color, config.espTargetColor);
+  assert.equal(frame.rows[2].selected, false); assert.equal(frame.rows[2].color, config.espEnemyColor);
   frame = buildEspFrame(mapping, players, config, 800, 600, players[1]); assert.equal(frame.rows[0].selected, false);
   frame = buildEspFrame(mapping, players, config, 800, 600, players[4]); assert.equal(frame.rows[3].selected, false);
 });
@@ -104,9 +103,9 @@ test('labels sanitize control/bidi characters, bound Unicode length and never in
   Object.defineProperty(players[3].nameText, 'text', { get() { throw Error('unsafe getter'); } });
   players[3].nameText._text = 'masked name'; players[3].n.weapon = 'mp5\u202e\n';
   const row = buildEspFrame(mapping, players, config, 800, 600).rows[2];
-  assert.match(row.label, /masked name/); assert.match(row.label, /6 wu.*mp5$/);
+  assert.equal(row.label, '', 'Legacy weapon/name flags cannot resurrect duplicate tags');
   config.nametags = false; config.espWeapons = false; config.espDistance = false;
-  assert.equal(buildEspFrame(mapping, players, config, 800, 600).rows[2].label, 'ENEMY');
+  assert.equal(buildEspFrame(mapping, players, config, 800, 600).rows[2].label, '');
 });
 
 test('off-screen arrows cover horizontal/vertical directions and only opted-in received entities', () => {
@@ -141,14 +140,14 @@ test('DPR backing size is capped while CSS and drawing coordinates remain unchan
   assert.equal(prepareOverlay(canvas, ctx, NaN, 600), false);
 });
 
-test('renderer uses relation colors/patterns, labels/legend and restores context state', () => {
+test('renderer uses optional relation lines, never labels/legend and restores context state', () => {
   const { mapping, players, config } = fixture(), ctx = context(), renderer = new EspRenderer();
-  players[3].layer = 1;
+  players[3].layer = 1; config.lines = true;
   const frame = buildEspFrame(mapping, players, config, 800, 600); renderer.draw(ctx, frame, config, 800, 600);
   assert.ok(ctx.calls.some(c => c[0] === 'stroke' && c[1] === config.espEnemyColor && c[2].join() === '7,4'));
   assert.ok(ctx.calls.some(c => c[0] === 'stroke' && c[1] === config.espUnknownColor && c[2].join() === '2,4'));
-  assert.ok(ctx.calls.some(c => c[0] === 'text' && c[1].startsWith('ENEMY')));
-  assert.equal(frame.stats.state, 'drawn'); assert.ok(frame.stats.labels > 0);
+  assert.equal(ctx.calls.some(c => c[0] === 'text'), false);
+  assert.equal(frame.stats.state, 'drawn'); assert.equal(frame.stats.labels, 0);
   assert.equal(ctx.globalAlpha, 1); assert.equal(ctx.lineWidth, 1); assert.deepEqual(ctx.dash, []);
 });
 
@@ -156,7 +155,7 @@ test('text measurement cache is bounded, resets, and context restores even on re
   const renderer = new EspRenderer(), ctx = context();
   for (let i = 0; i < 400; i++) renderer.measure(ctx, String(i));
   assert.equal(renderer.widths.size, 256); renderer.reset(); assert.equal(renderer.widths.size, 0);
-  const { mapping, players, config } = fixture(); ctx.fillText = () => { throw Error('render failed'); };
+  const { mapping, players, config } = fixture(); config.lines = true; ctx.stroke = () => { throw Error('render failed'); };
   assert.throws(() => renderer.draw(ctx, buildEspFrame(mapping, players, config, 800, 600), config, 800, 600));
   assert.equal(ctx.globalAlpha, 1); assert.equal(ctx.lineWidth, 1);
 });

@@ -21,7 +21,7 @@ class Camera {
 class Player {
   constructor(id, pos = { x: 10, y: 20 }) {
     this.__id = id; this.__type = 1; this.active = true; this.layer = 0;
-    this.container = {}; this.nameText = { visible: false }; this.p = pos; this.d = { x: 1, y: 0 };
+    this.container = {}; this.nameText = { visible: false, style: { fill: 65535 } }; this.p = pos; this.d = { x: 1, y: 0 };
     this.n = { weapon: 'mp5', dead: false, downed: false };
     this.l = { zoom: 48, index: 0, weapons: [{ type: 'mp5', ammo: 20 }, { type: 'mp5', ammo: 20 }, { type: 'fists', ammo: 0 }, { type: 'frag', ammo: 1 }] };
   }
@@ -42,9 +42,9 @@ class Game {
     this.enemy = undefined; // Only one direct game-owned player reference, as in the source.
     this.barn = { playerIds: [1, 2], teamInfo: { 10: { playerIds: [1] }, 20: { playerIds: [2] } }, playerPool: { list: [this.hero, new Player(2, { x: 12, y: 20 })] } };
     this.ui = { spectating: false, setSpectating(value) { this.spectating = value; } };
-    this.touch = new Touch(); this.binds = new Binds(input); this.sent = [];
+    this.timeout = 1; this.touch = new Touch(); this.binds = new Binds(input); this.sent = [];
   }
-  update(dt) { this.camera.zoom = lerp(dt, this.camera.zoom, this.camera.target); }
+  update(dt) { this.camera.zoom = lerp(dt, this.camera.zoom, this.camera.target); this.timeout -= dt; if (this.timeout < 0) this.timeout = 1; }
   transmit(type, data, size = 128) { const stream = { serializeMsg() {} }; stream.serializeMsg(type, data); this.sent.push({ type, data, size }); return 'forwarded'; }
   unrelated(a, b, c) { return a; }
 }
@@ -231,8 +231,9 @@ test('aim transaction restores physical mouse before flush and resets on match e
   const dom = env(), win = dom.window, app = fixture(), errors = [];
   app.input.mouseButtons[0] = true;
   const originalPos = { ...app.input.mousePos };
-  const engine = new Features(win, app, { ...DEFAULTS, aim: true, wallcheck: false, smoothEnabled: false }, (level, message) => { if (level === 'error') errors.push(message); }, defs);
-  engine.pre(); assert.equal(app.input.mousePos.x, 464); assert.ok(engine.target);
+  const engine = new Features(win, app, { ...DEFAULTS, aim: true, predict: false, wallcheck: false, smoothEnabled: false }, (level, message) => { if (level === 'error') errors.push(message); }, defs);
+  app.game.transmit(1, new JoinMsg());
+  engine.pre(); assert.equal(app.input.mousePos.x, 440); assert.ok(engine.target);
   app.input.flush(); assert.deepEqual(app.input.mousePos, originalPos); assert.equal(app.input.mouseButtonsOld[0], true);
   app.game.initialized = false; engine.pre(); assert.equal(engine.mapping, null); assert.equal(engine.target, null);
   assert.deepEqual(errors, []); engine.dispose(); dom.window.close();
@@ -342,7 +343,7 @@ test('visual effects use reversible properties and promptly prune disabled keys'
   app.game.map = { mapTexture: null, getGroundSurface() {}, pool: { list: [tree, { imgs: [img] }] } };
   const engine = new Features(dom.window, app, config, () => {}, defs); engine.post();
   assert.equal(tree.sprite.alpha, .5); assert.equal(img.sprite.visible, false);
-  assert.equal(app.game.barn.playerPool.list[1].nameText.visible, false);
+  assert.equal(app.game.barn.playerPool.list[1].nameText.visible, true);
   tree.sprite.alpha = .8; assert.equal(tree.sprite.alpha, .5);
   config.xray = false; config.esp = false; engine.lastVisual = -Infinity; engine.post();
   assert.equal(tree.sprite.alpha, .8); assert.equal(img.sprite.visible, true);
@@ -407,7 +408,7 @@ test('ESP uses interpolated visual positions while the tracker retains network-p
   engine.canvas = { width: dom.window.innerWidth, height: dom.window.innerHeight, remove() {} }; engine.ctx = ctx;
   engine.draw(players);
   assert.deepEqual(lines, players.map(p => project(engine.mapping.camera, p.v)));
-  engine.pre(); assert.deepEqual(engine.tracker.states.get(players[1]).pos, players[1].p);
+  engine.pre(); assert.equal(engine.tracker.states.get(players[1]), undefined, 'Render/pre frames never fabricate network samples');
   engine.ctx = null; engine.dispose(); dom.window.close();
 });
 
@@ -509,7 +510,7 @@ test('diagnostics distinguish capture, mapping and protocol without leaking game
 
 test('distributed userscript retains readable function names and source-module sections', () => {
   const script = readFileSync(new URL('../userscripts/duality-reborn.user.js', import.meta.url), 'utf8');
-  assert.match(script, /@version\s+0\.4\.0/);
+  assert.match(script, /@version\s+0\.5\.0-preview\.1/);
   assert.match(script, /function captureApplication\(/);
   assert.match(script, /function start\(win\)/);
   assert.match(script, /\/\/ src\/main\.mjs/);
@@ -542,29 +543,33 @@ test('mobile mode reports pending / forwarded / off-next-join instead of implyin
 test('aim input stays player-relative when the visual/shaken camera center differs from network position', () => {
   const dom = env(), app = fixture(); app.game.camera.p = { x: 9, y: 18 };
   app.input.mouseButtons[0] = true;
-  const engine = new Features(dom.window, app, { ...DEFAULTS, aim: true, wallcheck: false, smoothEnabled: false }, () => {}, defs);
+  const engine = new Features(dom.window, app, { ...DEFAULTS, aim: true, predict: false, wallcheck: false, smoothEnabled: false }, () => {}, defs);
   const camera = engine.mapping.camera;
   assert.deepEqual(project(camera, { x: 12, y: 20 }), { x: 496, y: 236 });
   assert.deepEqual(aimPoint(camera, { x: 12, y: 20 }, { x: 10, y: 20 }), { x: 464, y: 300 });
-  engine.pre(); assert.deepEqual(app.input.mousePos, { x: 464, y: 300 }); assert.equal(engine.stats.aimState, 'applied');
+  app.game.transmit(1, new JoinMsg());
+  engine.pre(); assert.deepEqual(app.input.mousePos, { x: 440, y: 300 });
+  const native = new InputMsg(); native.toMouseLen = 1.25;
+  app.game.transmit(3, native); assert.equal(engine.stats.aimState, 'input-applied');
+  assert.deepEqual(app.game.sent.at(-1).data.toMouseDir, { x: 1, y: 0 });
   app.input.flush(); assert.deepEqual(app.input.mousePos, { x: 440, y: 300 });
   engine.dispose(); dom.window.close();
 });
 
 test('aim uses physical Fire fallback only if binds are missing, not to override an explicit released bind', () => {
   const dom = env(), app = fixture(); app.input.mouseButtons[0] = true; app.game.binds = null;
-  const engine = new Features(dom.window, app, { ...DEFAULTS, aim: true, wallcheck: false }, () => {}, defs);
-  app.game.transmit(1, new JoinMsg()); engine.pre(); assert.equal(engine.stats.aimState, 'applied');
+  const engine = new Features(dom.window, app, { ...DEFAULTS, aim: true, predict: false, wallcheck: false }, () => {}, defs);
+  app.game.transmit(1, new JoinMsg()); engine.pre(); assert.equal(engine.stats.aimState, 'ready-to-send');
   app.game.binds = new Binds(app.input); app.game.binds.isBindDown = () => false;
-  engine.reconcile(true); engine.pre(); assert.equal(engine.stats.aimState, 'fire-not-held');
+  engine.reconcile(true); engine.pre(); assert.equal(engine.stats.aimState, 'waiting-activation');
   engine.dispose(); dom.window.close();
 });
 
 test('aim explains wallcheck, unknown teams and FOV rejection without exposing player identity or positions', () => {
-  const dom = env(), app = fixture(), config = { ...DEFAULTS, aim: true, wallcheck: true };
+  const dom = env(), app = fixture(), config = { ...DEFAULTS, aim: true, predict: false, wallcheck: true };
   app.input.mouseButtons[0] = true;
   const engine = new Features(dom.window, app, config, () => {}, defs);
-  engine.pre(); assert.equal(engine.stats.aimState, 'wallcheck-unavailable');
+  app.game.transmit(1, new JoinMsg()); engine.pre(); assert.equal(engine.stats.aimState, 'wallcheck-unavailable');
   config.wallcheck = false; delete app.game.barn.teamInfo[20]; engine.pre();
   assert.equal(engine.stats.aimState, 'no-candidate'); assert.equal(engine.stats.aimRejections.unknownTeam, 1);
   app.game.barn.teamInfo[20] = { playerIds: [2] }; app.game.barn.playerPool.list[1].p = { x: 100, y: 100 }; engine.pre();
@@ -658,38 +663,39 @@ test('Help offers a local selectable JSON fallback when clipboard access is unav
   menu.dispose(); dom.window.close();
 });
 
-test('ESP native name suppression honors filters and restores latest game writes when disabled', () => {
+test('ESP native name colors honors filters and restores latest game writes when disabled', () => {
   const dom = env(), app = fixture(), config = { ...DEFAULTS, esp: true };
   const enemy = app.game.barn.playerPool.list[1]; enemy.nameText.text = 'fixture'; enemy.nameText.visible = true;
   const engine = new Features(dom.window, app, config, () => {}, defs);
   engine.attachCanvas(dom.window.document.createElement('canvas')); engine.post();
-  assert.equal(enemy.nameText.visible, false); assert.equal(engine.stats.esp.enemy, 1);
+  assert.equal(enemy.nameText.visible, true); assert.equal(engine.stats.esp.enemy, 1);
   assert.equal(typeof Object.getOwnPropertyDescriptor(enemy.nameText, 'visible').get, 'function');
-  enemy.nameText.visible = true; assert.equal(enemy.nameText.visible, false);
-  config.espShowEnemies = false; engine.lastVisual = -Infinity; engine.post();
+  enemy.nameText.visible = false; assert.equal(enemy.nameText.visible, true);
+  assert.equal(enemy.nameText.style.fill, '#ff6262');
+  enemy.nameText.visible = true; config.espShowEnemies = false; engine.lastVisual = -Infinity; engine.post();
   assert.equal(enemy.nameText.visible, true); assert.equal(engine.stats.esp.enemy, 0);
-  config.espShowEnemies = true; engine.lastVisual = -Infinity; engine.post(); assert.equal(enemy.nameText.visible, false);
+  config.espShowEnemies = true; engine.lastVisual = -Infinity; engine.post(); assert.equal(enemy.nameText.visible, true);
   config.esp = false; engine.lastVisual = -Infinity; engine.post();
   assert.equal(enemy.nameText.visible, true); assert.equal(engine.stats.esp.state, 'disabled');
   engine.dispose(); dom.window.close();
 });
 
-test('ESP rendering failures restore native properties and expose error state instead of leaving hidden labels', () => {
-  const dom = env(), app = fixture(), engine = new Features(dom.window, app, { ...DEFAULTS, esp: true }, () => {}, defs);
+test('ESP rendering failures isolate Canvas error state without hiding native names', () => {
+  const dom = env(), app = fixture(), engine = new Features(dom.window, app, { ...DEFAULTS, esp: true, lines: true }, () => {}, defs);
   const enemy = app.game.barn.playerPool.list[1]; enemy.nameText.visible = true;
-  engine.attachCanvas(dom.window.document.createElement('canvas')); engine.ctx.fillText = () => { throw Error('canvas test'); };
+  engine.attachCanvas(dom.window.document.createElement('canvas')); engine.ctx.stroke = () => { throw Error('canvas test'); };
   engine.guard('visual-frame', () => engine.post());
   assert.equal(enemy.nameText.visible, true); assert.equal(engine.stats.esp.state, 'error'); assert.equal(engine.overrides.records.size, 0);
   engine.dispose(); dom.window.close();
 });
 
-test('missing Canvas2D does not break input features or force native names', () => {
+test('missing Canvas2D does not break input features or native colored names', () => {
   const dom = env(), app = fixture(), reports = [];
   app.input.mouseButtons[0] = true;
-  const engine = new Features(dom.window, app, { ...DEFAULTS, esp: true, aim: true, wallcheck: false }, (level, message) => reports.push({ level, message }), defs);
+  const engine = new Features(dom.window, app, { ...DEFAULTS, esp: true, aim: true, predict: false, wallcheck: false }, (level, message) => reports.push({ level, message }), defs);
   engine.attachCanvas({ getContext() { throw Error('unsupported'); } });
-  engine.pre(); engine.post(); assert.equal(engine.stats.aimState, 'applied'); assert.equal(engine.stats.esp.state, 'no-canvas');
-  assert.equal(app.game.barn.playerPool.list[1].nameText.visible, false);
+  app.game.transmit(1, new JoinMsg()); engine.pre(); engine.post(); assert.equal(engine.stats.aimState, 'ready-to-send'); assert.equal(engine.stats.esp.state, 'no-canvas');
+  assert.equal(app.game.barn.playerPool.list[1].nameText.visible, true);
   assert.ok(reports.some(r => r.level === 'warning')); engine.dispose(); dom.window.close();
 });
 
@@ -698,13 +704,13 @@ test('ESP controls persist team filters and validated colors without changing ta
   const menu = createMenu(dom.window, config, { onChange(key) { changes.push(key); }, retry() {}, stop() {}, diagnostics: () => ({}) });
   menu.capabilities({ visuals: true });
   [...menu.root.querySelectorAll('.nav button')].find(b => b.textContent === 'Visuals').click();
-  const row = [...menu.root.querySelectorAll('label')].find(n => n.textContent.includes('Show allies / squad'));
+  const row = [...menu.root.querySelectorAll('label')].find(n => n.textContent.includes('Allies (blue)'));
   row.querySelector('input').click(); assert.equal(config.espShowAllies, false);
-  const color = menu.root.querySelector('input[type=color]'); color.value = '#12ab34'; color.dispatchEvent(new dom.window.Event('change'));
-  assert.equal(config.espEnemyColor, '#12ab34'); assert.ok(changes.includes('espEnemyColor'));
+  assert.equal(menu.root.querySelector('input[type=color]'), null, 'Names have fixed blue/red identity, no selected color');
+  assert.ok(changes.includes('espShowAllies'));
   assert.deepEqual([...menu.root.querySelectorAll('.nav button')].map(b => b.textContent), ['Main', 'Visuals', 'Misc', 'Keybinds', 'Help']);
   menu.dispose(); const saved = JSON.parse(dom.window.localStorage.getItem(STORAGE_KEY));
-  assert.equal(saved.espShowAllies, false); assert.equal(saved.espEnemyColor, '#12ab34'); dom.window.close();
+  assert.equal(saved.espShowAllies, false); assert.equal(saved.espEnemyColor, DEFAULTS.espEnemyColor); dom.window.close();
 });
 
 test('ESP diagnostics contain aggregate counts only and reset on match exit', () => {
@@ -743,7 +749,8 @@ test('Auto Melee selects melee slot only for a nearby enemy while Fire is held',
   const engine = new Features(dom.window, app, config, () => {}, localDefs); app.game.transmit(1, new JoinMsg());
   engine.pre(); assert.equal(engine.switchSlot, null);
   app.input.mouseButtons[0] = true; engine.pre(); assert.equal(engine.switchSlot, 2); assert.ok(engine.meleeDirection);
-  assert.equal(app.game.binds.isBindPressed(13), true);
+  const native = new InputMsg(); app.game.transmit(3, native);
+  assert.ok(app.game.sent.at(-1).data.inputs.includes(13)); assert.equal(native.inputs.length, 0);
   app.game.barn.playerPool.list[1].p = { x: 30, y: 20 }; engine.pre(); assert.equal(engine.switchSlot, null);
   engine.dispose(); dom.window.close();
 });
@@ -775,4 +782,135 @@ test('all restored feature settings are exposed as real validated controls, not 
   const normalized = normalizeConfig({ layerKey: 'KeyY', movementSmooth: 1000, autoMelee: true, darkerSmokes: false, useOneGun: true });
   assert.equal(normalized.layerKey, 'KeyY'); assert.equal(normalized.movementSmooth, 100); assert.equal(normalized.useOneGun, true); assert.equal(normalized.darkerSmokes, false);
   menu.dispose(); dom.window.close();
+});
+
+// Final-output arbitration checks. Native scheduling/wire quantization is tested
+// separately by scripts/check-upstream.mjs using extracted upstream methods.
+function coordinated(config = {}) {
+  const dom = env(), app = fixture(); let clock = 1000;
+  Object.defineProperty(dom.window.performance, 'now', { value: () => clock, configurable: true });
+  const cfg = { ...DEFAULTS, aim: true, predict: false, wallcheck: false, smoothEnabled: false, ...config };
+  const engine = new Features(dom.window, app, cfg, () => {}, { ...defs, fists: { type: 'melee', attack: { offset: { x: 1.35, y: 0 }, rad: .9, cooldownTime: .25 } } });
+  app.game.transmit(1, new JoinMsg()); app.input.mouseButtons[0] = true;
+  const send = (inputs = []) => { engine.pre(); const native = new InputMsg(); native.toMouseLen = 1.25; native.shootHold = app.input.mouseButtons[0]; native.inputs = inputs; app.game.transmit(3, native); return { native, wire: app.game.sent.at(-1).data }; };
+  return { dom, app, cfg, engine, send, advance(ms = 17) { clock += ms; }, close() { engine.dispose(); dom.window.close(); } };
+}
+
+test('Aim+Semi+Switch preserve physical Fire/movement and consume one equip; manual scopes do not cancel, slot swaps do', () => {
+  const f = coordinated({ semi: true, autoSwitch: true });
+  try {
+    f.send(); f.app.input.flush(); f.advance(120);
+    f.app.game.hero.l.weapons[0].ammo--;
+    const { native, wire } = f.send([10]);
+    assert.equal(wire.shootHold, true); assert.equal(wire.shootStart, native.shootStart);
+    assert.equal(wire.moveRight, native.moveRight); assert.equal(wire.moveUp, native.moveUp);
+    assert.ok(wire.inputs.includes(10)); assert.ok(wire.inputs.includes(12)); assert.deepEqual(native.inputs, [10]);
+    f.advance(300); f.app.game.hero.l.weapons[0].ammo--; f.send([21]);
+    assert.equal(f.engine.manualEquipHeld, false, 'Scope selection is not a weapon change');
+    f.advance(300); f.app.game.hero.l.weapons[0].ammo--; const manual = f.send([28]);
+    assert.deepEqual(manual.wire.inputs, [28]); assert.equal(f.engine.weaponSwitch.pending, null);
+    assert.equal(f.engine.manualEquipHeld, true);
+  } finally { f.close(); }
+});
+
+test('Melee wins equip/movement over Switch+Mobile, no repeated equip while awaiting confirmation, manual equip holds authority', () => {
+  const f = coordinated({ melee: true, autoMelee: true, autoSwitch: true, mobileMovement: true });
+  try {
+    f.send(); f.app.game.hero.l.weapons[0].ammo--; f.advance();
+    const { wire } = f.send();
+    assert.ok(!wire.inputs.includes(12)); assert.equal(wire.touchMoveActive, true); assert.deepEqual(wire.touchMoveDir, { x: 1, y: 0 });
+    assert.ok(!wire.inputs.includes(13), 'Already requested melee equip, await actual confirmation');
+    assert.equal(f.engine.weaponSwitch.pending, null);
+    f.advance(); const manual = f.send([12]); assert.deepEqual(manual.wire.inputs, [12]);
+    f.advance(); const next = f.send(); assert.ok(!next.wire.inputs.includes(13), 'Do not fight manual equip while same Fire hold continues');
+    f.app.input.mouseButtons[0] = false; f.send(); assert.equal(f.engine.manualEquipHeld, false);
+    f.app.input.mouseButtons[0] = true; f.advance(); assert.ok(f.send().wire.inputs.includes(13));
+  } finally { f.close(); }
+});
+
+test('Aim+Zoom+ESP+XRay share source layer and input; visual exception never blocks subsequent sender', () => {
+  const f = coordinated({ zoom: true, esp: true, lines: true, xray: true, layerSpoofer: true });
+  try {
+    f.engine.attachCanvas(f.dom.window.document.createElement('canvas')); f.engine.post();
+    assert.equal(f.app.game.hero.l.zoom, 72);
+    f.dom.window.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { code: 'KeyT' }));
+    const { wire } = f.send(); assert.deepEqual(wire.toMouseDir, { x: 1, y: 0 });
+    assert.equal(f.app.game.hero.layer, 1); assert.equal(f.engine.sourceLayer(f.app.game.hero), 0);
+    f.engine.ctx.stroke = () => { throw Error('preview only'); }; f.engine.lastVisual = -Infinity;
+    f.engine.guard('visual-frame', () => f.engine.post()); assert.ok(f.engine.failed.has('overlay-render'));
+    assert.equal(f.app.game.hero.l.zoom,72,'Canvas fault does not revoke zoom');
+    assert.equal(f.app.game.barn.playerPool.list[1].nameText.style.fill,'#ff6262','Names independent of Canvas');
+    f.advance(); assert.deepEqual(f.send().wire.toMouseDir, { x: 1, y: 0 }); assert.equal(f.engine.stats.aimState, 'input-applied');
+    assert.ok(!f.engine.failed.has('input-frame'));
+  } finally { f.close(); }
+});
+
+test('Fire/key/both activation, blur/typing/emote/death pause automation without rewriting native Fire', () => {
+  const f = coordinated({ aimActivation: 'both', semi: true, mobileMovement: true });
+  try {
+    f.send(); assert.equal(f.engine.stats.aimState, 'waiting-activation');
+    f.engine.holdAim = true; f.send(); assert.equal(f.engine.stats.aimState, 'input-applied');
+    f.dom.window.dispatchEvent(new f.dom.window.Event('blur')); f.advance();
+    let result = f.send(); assert.equal(result.wire, result.native); assert.equal(result.wire.shootHold, true);
+    f.dom.window.dispatchEvent(new f.dom.window.Event('focus')); f.engine.holdAim = true;
+    const input = f.dom.window.document.createElement('input'); f.dom.window.document.body.append(input); input.focus();
+    f.advance(); result = f.send(); assert.equal(result.wire, result.native); input.blur();
+    f.app.game.emotes = { wheelDisplayed: true }; f.advance(); result = f.send(); assert.equal(result.wire, result.native);
+    f.app.game.emotes.wheelDisplayed = false; f.app.game.hero.n.dead = true; f.advance(); result = f.send(); assert.equal(result.wire, result.native);
+    assert.equal(f.engine.aimController.time, null); assert.equal(f.engine.weaponSwitch.pending, null);
+  } finally { f.close(); }
+});
+
+test('Snapshot boundary samples only position-bearing updated IDs, invalidates delete/reuse and never samples render frames', () => {
+  const f = coordinated();
+  try {
+    f.engine.pre(); const enemy = f.app.game.barn.playerPool.list[1]; enemy.n.sourcePos = { ...enemy.p };
+    f.engine.sourceFields = { pos: 'sourcePos' };
+    f.engine.observeUpdate({ ack: 0, fullObjects: [], partObjects: [{ __id: 2, dir: { x: 1, y: 0 } }], delObjIds: [] });
+    assert.equal(f.engine.tracker.states.get(enemy), undefined);
+    f.engine.observeUpdate({ ack: 0, fullObjects: [], partObjects: [{ __id: 2, pos: enemy.n.sourcePos }], delObjIds: [] });
+    assert.deepEqual(f.engine.tracker.states.get(enemy).pos, enemy.p);
+    const time = f.engine.tracker.states.get(enemy).time; f.advance(); f.engine.pre();
+    assert.equal(f.engine.tracker.states.get(enemy).time, time);
+    f.engine.observeUpdate({ ack: 0, fullObjects: [], partObjects: [], delObjIds: [2] });
+    assert.equal(f.engine.tracker.states.get(enemy), undefined);
+    enemy.__id = 99; assert.equal(f.engine.tracker.estimate(enemy, time), null);
+  } finally { f.close(); }
+});
+
+test('Mode groups are conditional; range adjustment keeps focus/DOM and open state, legacy tags never surface', () => {
+  const dom = env(), config = { ...DEFAULTS, aim: true, aimMode: 'assist' };
+  const menu = createMenu(dom.window, config, { retry() {}, stop() {}, diagnostics: () => ({}) });
+  try {
+    menu.capabilities({ aim: true, prediction: true });
+    assert.ok(menu.root.querySelector('[data-config=assistStrength]')); assert.equal(menu.root.querySelector('[data-config=smooth]'), null);
+    const slider = menu.root.querySelector('[data-config=assistStrength]'); slider.focus(); slider.value = 55; slider.dispatchEvent(new dom.window.Event('input'));
+    assert.equal(menu.root.activeElement, slider); assert.equal(menu.root.querySelector('[data-config=assistStrength]'), slider); assert.equal(config.assistStrength, 55);
+    const details = slider.closest('details'); details.open = true; details.dispatchEvent(new dom.window.Event('toggle'));
+    const mode = menu.root.querySelector('[data-config=aimMode]'); mode.value = 'lock'; mode.dispatchEvent(new dom.window.Event('change'));
+    assert.equal(menu.root.querySelector('[data-config=assistStrength]'), null); assert.ok(menu.root.querySelector('[data-config=smooth]')); assert.equal(menu.root.querySelector('details').open, true);
+    mode.value = 'off'; // old disconnected control must not be used after rerender
+    const currentMode = menu.root.querySelector('[data-config=aimMode]'); currentMode.value = 'off'; currentMode.dispatchEvent(new dom.window.Event('change')); assert.equal(config.aim, false);
+    assert.ok(!/SQUAD|ENEMY|legend/.test(menu.root.querySelector('#ui').textContent));
+  } finally { menu.dispose(); dom.window.close(); }
+});
+
+test('Final configuration is equivalent across unrelated visual toggle orders; sticky survives nearest-target crossover', () => {
+  const outputs = [];
+  for (const order of [['esp', 'xray', 'zoom'], ['zoom', 'esp', 'xray']]) {
+    const f = coordinated({ sticky: true });
+    try {
+      f.engine.attachCanvas(f.dom.window.document.createElement('canvas'));
+      const second = new Player(3, { x: 12, y: 20.2 });
+      f.app.game.barn.playerPool.list.push(second); f.app.game.barn.teamInfo[20].playerIds.push(3);
+      for (const key of order) { f.cfg[key] = true; f.engine.configurationChanged(key); f.engine.post(); }
+      f.send(); const target = f.engine.target;
+      second.p = { x: 11.25, y: 20 }; f.advance();
+      const result = f.send(); assert.equal(f.engine.target, target, 'Sticky does not churn merely because another enemy becomes nearer to physical cursor');
+      outputs.push({ dir: result.wire.toMouseDir, zoom: f.app.game.hero.l.zoom, name: target.nameText.style.fill, targetId: target.__id });
+      f.cfg.esp = false; f.engine.lastVisual = -Infinity; f.engine.post();
+      assert.equal(f.app.game.hero.l.zoom, 72, 'Disabling names does not clear unrelated zoom');
+    } finally { f.close(); }
+  }
+  assert.deepEqual(outputs[0], outputs[1]);
 });

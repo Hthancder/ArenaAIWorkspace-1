@@ -8,8 +8,13 @@ import { RepeatFire } from './repeat-fire.mjs';
 import { MapHighlights } from './map-highlights.mjs';
 import { WeaponSwitch } from './weapon-switch.mjs';
 import { MovementSmoother, throwPreview, traceShot } from './previews.mjs';
+import { AimController, SnapshotTracker, modeOf, predictShot, unit, weaponProfile, angleDelta } from './aim.mjs';
+import { discoverInputTimeout, discoverUpdateReceiver, discoverSourceFields, NetworkTiming } from './aim-adapters.mjs';
+import { clippedMuzzle, shotLayer } from './aim-geometry.mjs';
+import { NativeNames } from './native-names.mjs';
 
 export const VERIFIED_PROTOCOL = 1028;
+export const isManualEquip = code => code >= 11 && code <= 20 || code === 27 || code === 28;
 export const equipInput = slot => Number.isInteger(slot) && slot >= 0 && slot <= 3 ? 11 + slot : null;
 export function meleeReach(def) {
   const attack = def?.attack;
@@ -104,7 +109,12 @@ export function modifyMessage(data, config, context) {
   if (config.melee && context.meleeDirection && vec(context.meleeDirection)) {
     copy.touchMoveActive = true; copy.touchMoveLen = 255; copy.touchMoveDir = point(context.meleeDirection);
   }
-  const equip = equipInput(context.switchSlot);
+  if (context.aimOutput && vec(context.aimOutput.dir)) {
+    copy.toMouseDir = point(context.aimOutput.dir);
+    if (context.aimOutput.toMouseHit) copy.toMouseLen = clamp(context.aimOutput.distance, 0, 64);
+  }
+  const manualEquip = data.inputs.some(isManualEquip);
+  const equip = manualEquip ? null : equipInput(context.switchSlot);
   if (equip !== null) copy.addInput(equip);
   return copy;
 }
@@ -113,7 +123,8 @@ export class Features {
   constructor(win, app, config, report, definitions = null) {
     this.win = win; this.app = app; this.config = config; this.report = report; this.definitions = definitions;
     this.hooks = new Disposables(); this.matchHooks = new Disposables(); this.overrides = new Overrides();
-    this.tracker = new Tracker(); this.protocol = null; this.mapping = null; this.local = null;
+    this.tracker = new SnapshotTracker(); this.aimController = new AimController(); this.timing = new NetworkTiming(); this.names = new NativeNames(); this.lastAimSent = null; this.aimOutput = null; this.sourceFields = null; this.observedEntities = new Map(); this.focusBlocked = false; this.protocol = null; this.mapping = null; this.local = null;
+    this.meleeEquip = null; this.manualEquipHeld = false; this.actualWeapon = null;
     this.target = null; this.dot = null; this.restoreMouse = null; this.lastMap = -Infinity;
     this.lastVisual = -Infinity; this.lastInput = -Infinity; this.lastScan = -Infinity;
     this.effects = []; this.lastGame = null; this.lastPool = null; this.lastActive = null; this.lastActiveId = null;
@@ -139,9 +150,11 @@ export class Features {
     win.addEventListener('keydown', event => {
       if (event.repeat || event.defaultPrevented || event.composedPath().some(n => ['INPUT', 'TEXTAREA', 'SELECT'].includes(n.tagName) || n.isContentEditable)) return;
       if (event.code === this.config.layerKey && this.config.layerSpoofer) this.layerHeld = true;
+      if (event.code === this.config.aimKey) this.holdAim = true;
     }, { signal: controller.signal });
-    win.addEventListener('keyup', event => { if (event.code === this.config.layerKey) releaseLayer(); }, { signal: controller.signal });
-    win.addEventListener('blur', releaseLayer, { signal: controller.signal });
+    win.addEventListener('keyup', event => { if (event.code === this.config.layerKey) releaseLayer(); if (event.code === this.config.aimKey) this.holdAim = false; }, { signal: controller.signal });
+    win.addEventListener('blur', () => { releaseLayer(); this.focusBlocked = true; this.holdAim = false; this.aimController.reset(); }, { signal: controller.signal });
+    win.addEventListener('focus', () => { this.focusBlocked = false; }, { signal: controller.signal });
     win.document.addEventListener('visibilitychange', () => { if (win.document.hidden) releaseLayer(); }, { signal: controller.signal });
     this.reconcile(true);
   }
@@ -150,8 +163,10 @@ export class Features {
     try { fn(); }
     catch (e) {
       this.failed.add(name); this.stats.lastError = `${name}: ${e.message}`;
-      if (name === 'visual-frame') this.stats.esp = emptyEspStats('error');
-      this.restoreInput(); this.overrides.clear(); this.layerOverrides.clear(); this.clearCanvas();
+      if (name === 'visual-frame' || name === 'overlay-render') this.stats.esp = emptyEspStats('error');
+      if (name === 'overlay-render') this.clearCanvas();
+      if (name === 'visual-frame') { this.overrides.clear(); this.names.clear(); this.clearCanvas(); }
+      if (name === 'input-frame') { this.aimController.reset(); this.aimOutput = null; this.layerOverrides.clear(); }
       this.report('error', this.stats.lastError);
     }
   }
@@ -175,8 +190,8 @@ export class Features {
     }
   }
   releaseMatch() {
-    this.restoreInput(); this.matchHooks.clear(); this.overrides.clear(); this.tracker.reset();
-    this.target = null; this.dot = null; this.meleeDirection = null; this.switchSlot = null;
+    this.restoreInput(); this.matchHooks.clear(); this.overrides.clear(); this.names.clear(); this.tracker.reset(); this.aimController.reset(); this.lastAimSent = null; this.aimOutput = null; this.sourceFields = null; this.observedEntities.clear(); this.timing.reset();
+    this.target = null; this.dot = null; this.meleeDirection = null; this.switchSlot = null; this.meleeEquip = null; this.manualEquipHeld = false; this.actualWeapon = null;
     this.local = null; this.mapping = null; this.effects = [];
     this.lootSource = null; this.pickupPulse = false; this.pickupAttempt = null; this.nextPickup = 0;
     this.binds = null; this.bindsInstalled = false; this.stickyId = null; this.lastInput = -Infinity;
@@ -186,6 +201,14 @@ export class Features {
   }
   installSender(game) {
     const key = discoverSender(game);
+    this.timeoutKey = discoverInputTimeout(game); this.receiverKey = discoverUpdateReceiver(game);
+    if (this.receiverKey) {
+      const self = this;
+      patchMethod(game, this.receiverKey, original => function (msg) {
+        const result = Reflect.apply(original, this, arguments);
+        self.observeUpdate(msg); return result;
+      }, this.gameHooks);
+    }
     this.senderReady = false;
     if (!key) return;
     const self = this;
@@ -204,16 +227,32 @@ export class Features {
           self.report('protocol', `Join protocol ${self.protocol}; mobile loot ${self.config.autoLoot && self.config.lootMode === 'mobile' ? 'yêu cầu bật' : 'tắt'}.`);
         }
         if (type === 3 && !self.stopped && self.mapping?.ui?.spectating === false) {
+          if (!inputShape(data)) return Reflect.apply(original, this, arguments);
+          const manualEquip = data.inputs.some(isManualEquip);
+          if (manualEquip) { self.weaponSwitch.reset(); self.switchSlot = null; self.manualEquipHeld = true; }
+          if (!self.inputReady()) { self.aimOutput = null; self.aimController.reset(); self.weaponSwitch.reset(); self.movement.reset(); self.switchSlot = null; self.meleeDirection = null; }
+          else self.aimOutput = self.processAim(data, true);
+          if (manualEquip) { self.weaponSwitch.reset(); self.switchSlot = null; self.manualEquipHeld = true; }
           self.moveDirection = self.config.mobileMovement && inputShape(data) ? self.movement.sample(data, self.config.movementSmooth, self.win.performance.now()) : null;
           if (!self.config.mobileMovement) self.movement.reset();
-          outgoing = modifyMessage(data, self.config, self);
+          outgoing = self.inputReady() ? modifyMessage(data, self.config, self) : data;
+          if (self.meleeDirection && self.switchSlot === 2 && outgoing !== data && outgoing.inputs.includes(13)) self.meleeEquip = { id: self.target?.__id, until: self.win.performance.now() + 1000 };
           self.switchSlot = null;
         }
       } catch (e) { self.report('warning', `Input bypassed: ${e.message}`); outgoing = data; }
       const result = Reflect.apply(original, this, [type, outgoing, ...rest]);
+      if (type === 3 && inputShape(outgoing)) { self.lastAimSent = self.aimOutput ? point(outgoing.toMouseDir) : null; self.timing.sent(outgoing, self.win.performance.now()); }
       if (joinRecord) joinRecord.forwarded = true; // Forwarded to native sender; not a server acknowledgement.
       return result;
     }, this.gameHooks);
+  }
+  configurationChanged(key) {
+    this.lastVisual = -Infinity;
+    if (key === 'layerKey' || key === 'layerSpoofer') { this.layerHeld = false; this.layerOverrides.clear(); }
+    if (['aim', 'aimMode', 'aimActivation'].includes(key)) { this.aimController.reset(); this.stickyId = null; }
+    if (['autoSwitch', 'useOneGun', 'autoMelee', 'melee'].includes(key)) { this.weaponSwitch.reset(); this.meleeEquip = null; }
+    if (['mapHighlights', 'smallerTrees'].includes(key)) this.mapHighlights.sync(this.app.game, this.mapping?.map);
+    // A slider changes policy, not source contracts: do not force AST discovery.
   }
   reconcile(force = false) {
     const now = this.win.performance.now(), game = this.app.game;
@@ -238,6 +277,7 @@ export class Features {
     }
     this.mapping = next;
     this.mapHighlights.sync(game, next.map);
+    if (next.active && next.schema) this.sourceFields = discoverSourceFields(next.active, next.schema);
     if (next.active && !this.local) this.local = localDataSchema(game, next.active);
     const nextBinds = this.findBinds();
     if (this.binds && this.binds !== nextBinds) {
@@ -250,9 +290,9 @@ export class Features {
     const ready = !!(next.schema && next.camera && next.barn && next.pool && next.active?.active);
     this.capabilities = {
       visuals: ready, interpolatedOverlay: ready && !!next.visualPosKey,
-      grenadeZones: ready && !!this.definitions && !!next.registryKey && this.protocol === VERIFIED_PROTOCOL, aim: ready && this.flushReady && !!next.ui,
+      grenadeZones: ready && !!this.definitions && !!next.registryKey && this.protocol === VERIFIED_PROTOCOL, aim: ready && this.senderReady && !!this.timeoutKey && !!next.ui && this.protocol === VERIFIED_PROTOCOL,
       autoPickup: ready && !!next.ui && !!this.lootSource && !!this.binds && !!this.definitions && this.protocol === VERIFIED_PROTOCOL,
-      previews: ready && !!this.definitions && this.protocol === VERIFIED_PROTOCOL, prediction: ready && !!this.definitions, wallcheck: !!next.creator && !!next.registryKey,
+      previews: ready && !!this.definitions && this.protocol === VERIFIED_PROTOCOL, prediction: ready && !!this.definitions && !!this.receiverKey && !!this.sourceFields?.pos, wallcheck: !!next.creator && !!next.registryKey,
       xray: !!next.map || this.smokeSources.length > 0, mapHighlights: this.mapHighlights.available, layer: ready && [0, 1].includes(this.layerOverrides.getRaw(next.active, 'layer')),
       zoom: !!this.local?.zoomKey, semi: !!this.binds && !!this.definitions && this.protocol === VERIFIED_PROTOCOL,
       sender: this.senderReady, mobile: this.senderReady && this.protocol === VERIFIED_PROTOCOL,
@@ -273,14 +313,12 @@ export class Features {
       const actual = Reflect.apply(original, this, arguments);
       if (code === 10 && self.pickupPulse && !self.stopped && !self.failed.has('input-frame')
         && self.config.autoLoot && self.config.lootMode === 'nearby' && self.protocol === VERIFIED_PROTOCOL
-        && self.mapping?.ui?.spectating === false && !self.win.document.hidden) return true;
-      if (self.protocol === VERIFIED_PROTOCOL && (self.config.autoSwitch || self.config.melee && self.config.autoMelee) && self.switchSlot !== null
-        && self.mapping?.ui?.spectating === false && code === equipInput(self.switchSlot)) return true;
+        && self.inputReady()) return true;
       if (code !== 4) return actual;
       const m = self.mapping, weapon = localWeapon(m), def = self.definitions?.[weapon];
       const pulse = self.repeatFire.sample({ frame: self.frameId, now: self.win.performance.now(), weapon, def,
         held: !!this.isBindDown(4), enabled: self.config.semi, protocolMatches: self.protocol === VERIFIED_PROTOCOL,
-        paused: self.stopped || self.failed.has('input-frame') || self.win.document.hidden || !m?.active?.active
+        paused: !self.inputReady() || self.emoteOpen() || !m?.active?.active
           || !m.schema || m.ui?.spectating !== false || m.active.downed === true || !!at(m.active, [m.schema.netKey, m.schema.deadKey]),
       });
       self.stats.semi = { state: self.repeatFire.state, pulses: self.repeatFire.pulses };
@@ -291,7 +329,9 @@ export class Features {
   blocked(from, to, bulletPath = true) {
     if (!this.config.wallcheck) return false;
     if (!this.capabilities.wallcheck) return true;
-    return this.mapping.obstacles().some(o => !read(o, 'dead') && read(o, 'collidable')
+    const obstacles = this.mapping.obstacles();
+    if (obstacles.length > 1024) return true;
+    return obstacles.some(o => !read(o, 'dead') && read(o, 'collidable')
       && !(bulletPath && this.protocol === VERIFIED_PROTOCOL && finite(read(o, 'height')) && read(o, 'height') < BULLET_HEIGHT)
       && (!finite(read(o, 'layer')) || sameLayer(read(o, 'layer'), from.layer)) && segmentBlocked(from.pos, to.pos, read(o, 'collider')));
   }
@@ -307,87 +347,127 @@ export class Features {
     this.reconcile(!!staleIdentity);
     this.updateLayer();
     this.updateLoot();
-    const m = this.mapping, cfg = this.config;
-    this.target = null; this.dot = null; this.meleeDirection = null; this.switchSlot = null;
-    this.stats.aimRejections = {};
-    this.stats.aimState = cfg.aim || cfg.melee ? 'waiting-mapping' : 'disabled';
-    if (!cfg.aim && !cfg.melee && !cfg.autoSwitch) return;
-    if (!m?.schema || !m.active?.active) return;
-    if (m.ui?.spectating !== false) { this.stats.aimState = m.ui ? 'spectating' : 'missing-spectator-contract'; return; }
-    if (this.win.document.hidden) { this.stats.aimState = 'page-hidden'; return; }
-    const now = this.win.performance.now(), self = m.active, schema = m.schema;
-    const pos = read(self, schema.posKey), mouse = this.app.input?.mousePos;
-    if (!vec(pos) || !vec(mouse)) { this.stats.aimState = 'invalid-input-position'; return; }
-    if (at(self, [schema.netKey, schema.deadKey])) { this.stats.aimState = 'dead'; return; }
-    this.updateSwitch();
-    if (!cfg.aim && !cfg.melee) return;
-    const relations = teamRelations(m.barn, self.__id);
-    if (!relations.ready) { this.stats.aimState = 'missing-own-team'; return; }
-    const players = m.players();
-    for (const p of players) {
-      const v = read(p, schema.posKey);
-      if (vec(v)) this.tracker.update(p, v, now);
+    this.switchSlot = null;
+    if (this.inputReady()) this.updateSwitch(); else this.weaponSwitch.reset();
+    const plan = this.processAim(null, false);
+    this.aimPlan = plan;
+    const needsRestore = !plan && this.lastAimSent;
+    const needsAim = plan && (!this.lastAimSent || Math.abs(angleDelta(Math.atan2(this.lastAimSent.y, this.lastAimSent.x), Math.atan2(plan.dir.y, plan.dir.x))) > Math.PI / 1800 || plan.toMouseHit && Math.abs((this.lastAimDistance || 0) - plan.distance) > .5);
+    if (this.timeoutKey && (needsAim || needsRestore || this.switchSlot !== null) && this.app.game?.initialized && this.mapping?.ui?.spectating === false) {
+      const d = Object.getOwnPropertyDescriptor(this.app.game, this.timeoutKey);
+      if (d && 'value' in d && d.writable) this.app.game[this.timeoutKey] = 0;
     }
-    const bindDown = this.protocol === VERIFIED_PROTOCOL && this.binds
-      ? this.binds.isBindDown(4) : !!this.app.input.mouseButtons?.[0];
-    const firing = !!bindDown;
-    const currentDef = this.definitions?.[localWeapon(m)], localSlot = this.local?.data?.[this.local.slotKey];
-    const meleeSlot = this.local?.data?.[this.local.weaponsKey]?.[2];
-    const autoMelee = cfg.autoMelee && [0, 1].includes(localSlot) && currentDef?.type === 'gun';
-    const meleeDef = currentDef?.type === 'melee' ? currentDef : autoMelee ? this.definitions?.[meleeSlot?.type] : null;
-    const reach = meleeReach(meleeDef);
-    const wantMelee = cfg.melee && this.capabilities.mobile && firing && reach !== null;
-    if ((!cfg.aim || !this.capabilities.aim || !firing) && !wantMelee) {
-      this.stats.aimState = !firing ? 'fire-not-held' : 'missing-aim-contract'; return;
-    }
-    if (cfg.wallcheck && !this.capabilities.wallcheck) { this.stats.aimState = 'wallcheck-unavailable'; return; }
-    const candidates = [], rejected = this.stats.aimRejections;
-    const reject = reason => { rejected[reason] = (rejected[reason] || 0) + 1; };
-    for (const p of players) {
-      if (p === self) continue;
-      if (at(p, [schema.netKey, schema.deadKey])) { reject('dead'); continue; }
+  }
+  observeUpdate(msg) {
+    this.guard('snapshot-update', () => {
+      this.reconcile();
+      const m = this.mapping, fields = this.sourceFields, now = this.win.performance.now();
+      this.timing.received(msg, now);
+      if (!m?.schema || !fields?.pos) return;
+      for (const id of msg.delObjIds || []) {
+        const old = this.observedEntities.get(id); if (old) this.tracker.forget(old);
+        this.observedEntities.delete(id);
+      }
+      const ids = new Set([...(msg.fullObjects || []), ...(msg.partObjects || [])].filter(o => vec(o.pos)).map(o => o.__id));
+      const players = m.players(), live = new Set(players);
+      for (const [id, p] of this.observedEntities) if (!live.has(p) || p.__id !== id) { this.tracker.forget(p); this.observedEntities.delete(id); }
+      for (const p of players) if (ids.has(p.__id)) {
+        const old = this.observedEntities.get(p.__id); if (old && old !== p) this.tracker.forget(old);
+        this.observedEntities.set(p.__id, p);
+        this.tracker.observe(p, at(p, [m.schema.netKey, fields.pos]), now, this.sourceLayer(p));
+      }
+    });
+  }
+  sourcePos(p) { return at(p, [this.mapping?.schema?.netKey, this.sourceFields?.pos]) || read(p, this.mapping?.schema?.posKey); }
+  sourceLayer(p) { return at(p, [this.mapping?.schema?.netKey, this.sourceFields?.layer]) ?? this.layerOverrides.getRaw(p, 'layer'); }
+  inputReady() {
+    const m = this.mapping, doc = this.win.document; let el = doc.activeElement;
+    const menuFocused = el?.id === 'duality-reborn-host' && !el.shadowRoot?.querySelector('#ui')?.hidden;
+    while (el?.shadowRoot?.activeElement) el = el.shadowRoot.activeElement;
+    return !!(this.app.game?.initialized && m?.schema && m.active?.active && m.ui?.spectating === false
+      && !m.active.downed && !at(m.active, [m.schema.netKey, m.schema.deadKey]) && !doc.hidden && !this.focusBlocked
+      && !['INPUT', 'TEXTAREA', 'SELECT'].includes(el?.tagName) && !el?.isContentEditable && !menuFocused && !this.binds?.menuHovered
+      && !this.emoteOpen() && !this.failed.has('input-frame') && this.protocol === VERIFIED_PROTOCOL);
+  }
+  emoteOpen() { return entries(this.app.game).some(([, child]) => read(child, 'wheelDisplayed') === true); }
+  processAim(native, advance) {
+    const m = this.mapping, cfg = this.config, mode = modeOf(cfg), now = this.win.performance.now();
+    this.target = null; this.dot = null; this.meleeDirection = null; this.stats.aimRejections = {};
+    const fail = state => { this.stats.aimState = state; this.aimController.reset(); this.stickyId = null; return null; };
+    if (!this.inputReady() || this.emoteOpen()) return fail('paused-or-missing-contract');
+    const pos = this.sourcePos(m.active), mouse = this.app.input?.mousePos, camera = m.camera;
+    if (!vec(pos) || !vec(mouse) || !camera) return fail('invalid-input-position');
+    const physical = native?.toMouseDir || unit({ x: mouse.x - read(camera.camera, camera.widthKey) / 2, y: read(camera.camera, camera.heightKey) / 2 - mouse.y });
+    if (!unit(physical)) return fail('invalid-direction');
+    const actualWeapon = localWeapon(m);
+    if (actualWeapon !== this.actualWeapon) { this.aimController.reset(); this.actualWeapon = actualWeapon; }
+    const firing = this.binds ? !!this.binds.isBindDown(4) : !!this.app.input.mouseButtons?.[0];
+    if (!firing) { this.manualEquipHeld = false; this.meleeEquip = null; }
+    const trigger = cfg.aimActivation === 'key' ? this.holdAim : cfg.aimActivation === 'both' ? this.holdAim && firing : firing;
+    const gun = this.definitions?.[localWeapon(m)], slot = this.local?.data[this.local.slotKey];
+    const meleeDef = gun?.type === 'melee' ? gun : cfg.autoMelee && [0, 1].includes(slot) ? this.definitions?.[this.local?.data[this.local.weaponsKey]?.[2]?.type] : null;
+    const reach = meleeReach(meleeDef), melee = !!(cfg.melee && !this.manualEquipHeld && this.capabilities.mobile && firing && reach);
+    if ((!trigger || mode === 'off' || !this.capabilities.aim) && !melee) return fail(mode === 'off' ? 'disabled' : !trigger ? 'waiting-activation' : 'missing-input-scheduler');
+    if (mode === 'assist' && cfg.assistStrength === 0 && !melee) return fail('assist-zero');
+    const relations = teamRelations(m.barn, m.active.__id);
+    if (!relations.ready) return fail('missing-own-team');
+    if (cfg.wallcheck && !this.capabilities.wallcheck) return fail('wallcheck-unavailable');
+    const scale = read(camera.camera, camera.scaleKeys[0]) * read(camera.camera, camera.scaleKeys[1]);
+    const inputCursor = native ? { x: read(camera.camera, camera.widthKey) / 2 + physical.x * native.toMouseLen * scale,
+      y: read(camera.camera, camera.heightKey) / 2 - physical.y * native.toMouseLen * scale } : mouse;
+    const rawLayer = this.sourceLayer(m.active), selfRadius = at(m.active, [m.schema.netKey, this.sourceFields?.scale]) || 1;
+    const structures = entries(read(m.creator, m.registryKey)).map(([, o]) => o).filter(o => Array.isArray(read(o, 'stairs')));
+    const obstacles = m.obstacles().slice(0, 1024);
+    const layerFor = dir => shotLayer(pos, dir, rawLayer, selfRadius, structures);
+    const candidates = [], reject = key => { this.stats.aimRejections[key] = (this.stats.aimRejections[key] || 0) + 1; };
+    for (const p of m.players().slice(0, 256)) {
+      if (p === m.active || at(p, [m.schema.netKey, m.schema.deadKey])) continue;
       if (!cfg.knocked && p.downed) { reject('downed'); continue; }
-      if (!sameLayer(p.layer, self.layer)) { reject('otherLayer'); continue; }
-      const relation = relations.classify(p.__id), targetPos = read(p, schema.posKey);
-      if (relation.kind === 'unknown') { reject('unknownTeam'); continue; }
-      if (relation.kind !== 'enemy') { reject('teammate'); continue; }
-      if (!vec(targetPos)) { reject('invalidPosition'); continue; }
-      const screen = project(m.camera, targetPos);
-      if (!screen) { reject('invalidProjection'); continue; }
-      const distance = wantMelee ? Math.hypot(pos.x - targetPos.x, pos.y - targetPos.y) : Math.hypot(screen.x - mouse.x, screen.y - mouse.y);
-      if (distance > (wantMelee ? reach : cfg.fov)) { reject('outsideFov'); continue; }
-      if (this.blocked({ pos, layer: self.layer }, { pos: targetPos }, !wantMelee)) { reject('wall'); continue; }
-      candidates.push({ p, pos: targetPos, screen, distance });
+      if (!sameLayer(this.sourceLayer(p), layerFor(unit({ x: this.sourcePos(p)?.x - pos.x, y: this.sourcePos(p)?.y - pos.y }) || physical))) { reject('otherLayer'); continue; }
+      const relation = relations.classify(p.__id).kind;
+      if (relation !== 'enemy') { reject(relation === 'unknown' ? 'unknownTeam' : 'teammate'); continue; }
+      const target = this.sourcePos(p), screen = aimPoint(camera, target, pos); if (!screen) continue;
+      const distance = melee ? Math.hypot(target.x - pos.x, target.y - pos.y) : Math.hypot(screen.x - inputCursor.x, screen.y - inputCursor.y);
+      const radius = melee ? reach : cfg.fov * (cfg.sticky && p.__id === this.stickyId ? 1.15 : 1);
+      if (distance > radius) { reject('outsideFov'); continue; }
+      candidates.push({ p, pos: target, distance });
     }
     candidates.sort((a, b) => a.distance - b.distance);
-    let target = cfg.sticky && this.stickyId !== null ? candidates.find(c => c.p.__id === this.stickyId) : null;
-    target ||= candidates[0];
-    if (!target) { this.stickyId = null; this.stats.aimState = 'no-candidate'; return; }
-    this.stickyId = target.p.__id;
-    let world = point(target.pos);
-    if (cfg.predict && this.capabilities.prediction && !wantMelee) {
-      const gun = this.definitions[localWeapon(m)], bullet = this.definitions[gun?.bulletType];
-      const track = this.tracker.states.get(target.p);
-      if (track && bullet?.speed > 0) {
-        const relative = { x: target.pos.x - pos.x, y: target.pos.y - pos.y };
-        const time = intercept(relative, { x: track.vx, y: track.vy }, bullet.speed);
-        // No arbitrary multiplicative coefficients or mixed world/screen units.
-        if (time !== null) world = { x: world.x + track.vx * time, y: world.y + track.vy * time };
+    const sticky = cfg.sticky && candidates.find(c => c.p.__id === this.stickyId);
+    const ordered = sticky ? [sticky, ...candidates.filter(c => c !== sticky)] : candidates;
+    const perks = at(m.active, [m.schema.netKey, this.sourceFields?.perks]) || [];
+    const profile = weaponProfile(this.definitions, localWeapon(m), perks);
+    for (const candidate of ordered.slice(0, 6)) {
+      let shot;
+      if (melee) shot = { dir: unit({ x: candidate.pos.x - pos.x, y: candidate.pos.y - pos.y }), world: candidate.pos, muzzle: pos, distance: Math.hypot(candidate.pos.x - pos.x, candidate.pos.y - pos.y), state: 'melee' };
+      else {
+        if (!profile) return fail('unsupported-weapon-profile');
+        if (cfg.predict && !this.capabilities.prediction) return fail('missing-snapshot-contract');
+        const track = this.tracker.estimate(candidate.p, now);
+        if (cfg.predict && this.capabilities.prediction && !track) { reject('staleOrMissingSnapshot'); continue; }
+        shot = predictShot({ origin: pos, target: candidate.pos, track: cfg.predict && this.capabilities.prediction ? track : null, profile,
+          latency: cfg.predict && cfg.latencyCompensation ? this.timing.transit() : 0, lead: (cfg.leadAdjustment ?? 100) / 100,
+          radius: at(candidate.p, [m.schema.netKey, this.sourceFields?.scale]) || 1,
+          muzzleFor: (origin, dir, model) => clippedMuzzle(origin, dir, model, obstacles, layerFor(dir), rawLayer & 1, selfRadius) });
       }
+      if (!shot.dir) { reject(shot.state); continue; }
+      if (layerFor(shot.dir) === null || !sameLayer(layerFor(shot.dir), this.sourceLayer(candidate.p))) { reject('aimLayer'); continue; }
+      if (this.blocked({ pos: shot.muzzle, layer: layerFor(shot.dir) }, { pos: shot.world }, !melee)) { reject('wall'); continue; }
+      this.target = candidate.p; this.stickyId = candidate.p.__id;
+      this.stats.aimState = advance ? 'input-applied' : 'ready-to-send'; this.stats.predictionState = shot.state;
+      this.stats.aimApproximate = !!shot.approximate;
+      const dir = advance ? this.aimController.step(physical, shot.dir, { mode: melee ? 'lock' : mode, strength: cfg.assistStrength ?? 35,
+        smooth: melee || !cfg.smoothEnabled ? 0 : cfg.smooth, now, target: candidate.p }) : !melee && mode === 'assist' ? this.aimController.step(physical, shot.dir, { mode, strength: cfg.assistStrength ?? 35, now, target: candidate.p }) : shot.dir;
+      this.dot = project(camera, shot.world);
+      if (melee) {
+        this.meleeDirection = shot.dir; this.weaponSwitch.reset(); this.switchSlot = null;
+        if (slot !== 2 && cfg.autoMelee && (!this.meleeEquip || this.meleeEquip.id !== candidate.p.__id || now > this.meleeEquip.until)) this.switchSlot = 2;
+      } else this.meleeEquip = null;
+      const outputDistance = profile?.toMouseHit && !melee ? shot.mouseLen : shot.distance;
+      if (advance) this.lastAimDistance = outputDistance;
+      return { dir, distance: outputDistance, toMouseHit: !!profile?.toMouseHit && !melee };
     }
-    const screen = aimPoint(m.camera, world, pos);
-    if (!screen || !this.flushReady) { this.stats.aimState = 'missing-input-contract'; return; }
-    const dt = clamp((now - this.lastInput) / 1000, .001, .05); this.lastInput = now;
-    const gain = cfg.smoothEnabled ? 1 - Math.exp(-dt / (.015 + cfg.smooth / 500)) : 1;
-    const x = mouse.x + (screen.x - mouse.x) * gain, y = mouse.y + (screen.y - mouse.y) * gain;
-    this.restoreMouse = { owner: mouse, x: mouse.x, y: mouse.y, appliedX: x, appliedY: y };
-    mouse.x = x; mouse.y = y;
-    this.target = target.p; this.dot = { x, y }; this.stats.aimState = 'applied';
-    if (wantMelee) {
-      if (autoMelee) this.switchSlot = 2;
-      const dx = target.pos.x - pos.x, dy = target.pos.y - pos.y, len = Math.hypot(dx, dy);
-      if (len > .1) this.meleeDirection = { x: dx / len, y: dy / len };
-    }
+    return fail('no-candidate');
   }
   updateLayer() {
     const m = this.mapping, active = m?.active;
@@ -439,25 +519,17 @@ export class Features {
     this.clearCanvas();
     this.stats.esp = emptyEspStats(cfg.esp ? this.win.document.hidden ? 'page-hidden' : this.ctx ? 'waiting-mapping' : 'no-canvas' : 'disabled');
     this.stats.xray = emptyXrayStats(cfg.xray ? 'waiting-contract' : 'disabled');
-    if (!this.app.game?.initialized || this.win.document.hidden) { this.overrides.clear(); return; }
+    if (!this.app.game?.initialized || this.win.document.hidden) { this.overrides.clear(); this.names.clear(); return; }
     const playerReady = !!(m?.schema && m.active?.active && this.capabilities.visuals);
-    if (!(cfg.esp || cfg.xray || cfg.zoom || cfg.aim || cfg.melee || cfg.ownFlashlight || cfg.othersFlashlight || cfg.bulletTrajectory || cfg.grenadeTrajectory || cfg.grenadeZones)) {
+    if (!(cfg.esp || cfg.lines || cfg.xray || cfg.zoom || cfg.aim || cfg.melee || cfg.ownFlashlight || cfg.othersFlashlight || cfg.bulletTrajectory || cfg.grenadeTrajectory || cfg.grenadeZones)) {
       if (this.overrides.records.size) this.overrides.clear();
-      return;
+      this.names.clear(); return;
     }
     const players = playerReady ? m.players() : [];
-    const espFrame = playerReady && cfg.esp && this.ctx ? buildEspFrame(m, players, cfg, this.win.innerWidth, this.win.innerHeight, this.target) : null;
-    const espPlayers = new Set(espFrame?.rows.filter(row => !row.offscreen).map(row => row.player));
+    const espFrame = playerReady && (cfg.esp || cfg.lines) && this.ctx ? buildEspFrame(m, players, cfg, this.win.innerWidth, this.win.innerHeight, this.target) : null;
+    this.names.sync(m, players, cfg);
     const keep = new Map();
     const want = (owner, key) => { if (!keep.has(owner)) keep.set(owner, new Set()); keep.get(owner).add(key); };
-    for (const p of players) {
-      if (!p.nameText || p === m.active || at(p, [m.schema.netKey, m.schema.deadKey])) continue;
-      if (cfg.esp && cfg.nametags && espPlayers.has(p)) {
-        // Canvas labels carry relation colors; suppress duplicate native text only
-        // while the corresponding overlay is rendered. Legacy label-only mode stays reversible.
-        this.overrides.set(p.nameText, 'visible', () => !cfg.espLabels); want(p.nameText, 'visible');
-      }
-    }
     if (cfg.xray && now - this.lastScan > 500) { this.scanEffects(); this.lastScan = now; }
     for (const effect of cfg.xray ? this.effects : []) {
       const { owner, kind, entity } = effect;
@@ -481,7 +553,8 @@ export class Features {
       this.overrides.set(data, zoomKey, raw => raw * cfg.zoomFactor); want(data, zoomKey);
     }
     this.overrides.prune((owner, key) => keep.get(owner)?.has(key));
-    if (playerReady) this.draw(players, espFrame);
+    if (playerReady) this.guard('overlay-render', () => this.draw(players, espFrame));
+    if (this.failed.has('overlay-render')) this.stats.esp = emptyEspStats('error');
     this.stats.featureMs = this.win.performance.now() - start;
   }
   attachCanvas(canvas) {
@@ -489,7 +562,7 @@ export class Features {
     try { this.ctx = canvas.getContext('2d'); } catch { this.ctx = null; }
     if (!this.ctx) this.report('warning', 'Canvas 2D không khả dụng: overlay bị khóa, input features không bị dừng.');
   }
-  clearCanvas() { if (this.ctx && this.canvas) this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height); }
+  clearCanvas() { try { if (this.ctx && this.canvas) this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height); } catch { /* Lost canvas must not revoke names, zoom or input authority. */ } }
   draw(players, espFrame = null) {
     const ctx = this.ctx, canvas = this.canvas, m = this.mapping, cfg = this.config;
     if (!ctx || !canvas) return;
@@ -504,7 +577,7 @@ export class Features {
     if (cfg.showDot && this.dot) { ctx.fillStyle = '#f95353'; ctx.beginPath(); ctx.arc(this.dot.x, this.dot.y, 4, 0, Math.PI * 2); ctx.fill(); }
     const selfPos = overlayPosition(m.active, m), origin = project(m.camera, selfPos);
     if (!origin) { if (cfg.esp) this.stats.esp = emptyEspStats('invalid-projection'); return; }
-    if (cfg.esp) {
+    if (cfg.esp || cfg.lines) {
       espFrame ||= buildEspFrame(m, players, cfg, width, height, this.target);
       this.stats.esp = this.espRenderer.draw(ctx, espFrame, cfg, width, height);
     }
@@ -525,11 +598,11 @@ export class Features {
     const cfg = this.config, m = this.mapping, ctx = this.ctx, schema = m.schema;
     this.stats.previews = { cones: 0, bulletPaths: 0, throwPaths: 0, unsupportedColliders: 0, ricochetDefinitions: !!this.mapDefinitions };
     if (this.protocol !== VERIFIED_PROTOCOL || !this.definitions || !(cfg.ownFlashlight || cfg.othersFlashlight || cfg.bulletTrajectory || cfg.grenadeTrajectory)) return;
-    const selfPos = read(m.active, schema.posKey), inputOrigin = aimPoint(m.camera, selfPos, selfPos), aim = this.dot || this.app.input.mousePos;
+    const selfPos = this.sourcePos(m.active), inputOrigin = aimPoint(m.camera, selfPos, selfPos), aim = this.dot || this.app.input.mousePos;
     if (!inputOrigin || !vec(aim)) return;
     const scale = read(m.camera.camera, m.camera.scaleKeys[0]) * read(m.camera.camera, m.camera.scaleKeys[1]);
     if (!(scale > 0)) return;
-    const ownDirection = { x: aim.x - inputOrigin.x, y: inputOrigin.y - aim.y };
+    const ownDirection = this.lastAimSent || { x: this.app.input.mousePos.x - inputOrigin.x, y: inputOrigin.y - this.app.input.mousePos.y };
     const allObstacles = m.obstacles(), truncated = allObstacles.length > 256;
     const obstacles = allObstacles.slice(0, 256), relations = teamRelations(m.barn, m.active.__id);
     this.stats.previews.truncatedObstacles = truncated;
@@ -541,7 +614,7 @@ export class Features {
     let cones = 0;
     for (const player of [m.active, ...players.filter(p => p !== m.active)]) {
       const own = player === m.active;
-      if (!player.active || at(player, [schema.netKey, schema.deadKey]) || !sameLayer(player.layer, m.active.layer)) continue;
+      if (!player.active || at(player, [schema.netKey, schema.deadKey]) || !sameLayer(player.layer, this.sourceLayer(m.active))) continue;
       if (!own && (!cfg.othersFlashlight || relations.classify(player.__id).kind !== 'enemy')) continue;
       const gun = this.definitions[at(player, [schema.netKey, schema.weaponKey])], bullet = this.definitions[gun?.bulletType];
       const pos = overlayPosition(player, m), direction = own ? ownDirection : read(player, schema.dirKey);
@@ -582,11 +655,10 @@ export class Features {
     if (!this.config.autoLoot || this.config.lootMode === 'mobile') return;
     const m = this.mapping, now = this.win.performance.now();
     if (!this.capabilities.autoPickup || !this.bindsInstalled) { this.stats.lootState = 'missing-pickup-contract'; return; }
-    if (this.win.document.hidden || m.ui?.spectating !== false || !m.active?.active
-      || m.active.downed || at(m.active, [m.schema.netKey, m.schema.deadKey])) { this.stats.lootState = 'paused'; return; }
-    const loot = read(this.lootSource.owner, this.lootSource.key), pos = read(m.active, m.schema.posKey);
+    if (!this.inputReady()) { this.stats.lootState = 'paused'; return; }
+    const loot = read(this.lootSource.owner, this.lootSource.key), pos = this.sourcePos(m.active);
     if (read(loot, '__type') !== 3 || read(loot, 'active') !== true || !vec(read(loot, 'pos')) || !vec(pos)
-      || !sameLayer(read(loot, 'layer'), m.active.layer) || !finite(read(loot, 'rad')) || loot.rad <= 0
+      || !sameLayer(read(loot, 'layer'), this.sourceLayer(m.active)) || !finite(read(loot, 'rad')) || loot.rad <= 0
       || !(loot.ownerId === 0 || loot.ownerId === m.active.__id)
       || Math.hypot(loot.pos.x - pos.x, loot.pos.y - pos.y) >= loot.rad) {
       this.stats.lootState = 'no-nearby-loot'; this.pickupAttempt = null; this.nextPickup = 0; return;
@@ -619,11 +691,11 @@ export class Features {
       initialized: !!this.app.game?.initialized,
       playerBarn: !!m?.barn, playerPool: !!m?.poolKey, activePlayer: !!m?.active,
       playerSchema: !!m?.schema, camera: !!m?.camera, spectatorUI: !!m?.ui,
-      inputFlush: !!this.flushReady, sender: !!this.senderReady,
+      snapshotReceiver: !!this.receiverKey, inputScheduler: !!this.timeoutKey, inputFlush: !!this.flushReady, sender: !!this.senderReady,
       canvasRenderer: !!this.ctx, mapDefinitions: !!this.mapDefinitions, smokeSource: this.smokeSources.length > 0, definitions: !!this.definitions, lootSource: !!this.lootSource, localData: !!this.local, binds: !!this.binds,
       protocolObserved: this.protocol !== null, protocolMatches: this.protocol === VERIFIED_PROTOCOL,
     };
-    return { version: '0.4.0', protocol: this.protocol, sourceProtocol: VERIFIED_PROTOCOL,
+    return { version: '0.5.0-preview.1', protocol: this.protocol, sourceProtocol: VERIFIED_PROTOCOL,
       initialized: checks.initialized, checks,
       autoLoot: { state: this.autoLootStatus(), mode: this.config.lootMode, ...this.joinState },
       mapHighlights: { ...this.mapHighlights.stats },
@@ -633,6 +705,7 @@ export class Features {
   }
   dispose() {
     if (this.stopped) return;
+    if (this.lastAimSent && this.timeoutKey && this.app.game?.initialized) this.app.game[this.timeoutKey] = 0;
     this.stopped = true; this.releaseMatch(); this.gameHooks?.clear(); this.hooks.clear();
     // The menu owns this canvas. Retry replaces the engine, not the menu DOM.
     // releaseMatch() already cleared it; only menu.dispose() should remove it.
