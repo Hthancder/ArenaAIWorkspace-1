@@ -75,6 +75,8 @@
 - Dữ liệu cũ hoàn toàn tương thích: backup v2.8.0/v2.9.0 mở bằng v2.10.0 không đổi gì (các field mới có `serde(default)`); build cũ bỏ qua field lạ, chỉ mất hiệu lực 8 tinh chỉnh mới.
 - Thiết kế đầy đủ: [specs/v2.10.0-focus-customization.md](specs/v2.10.0-focus-customization.md).
 
+*Đang thiết kế (chưa triển khai): [specs/v2.11.0-notifications-and-architecture.md](specs/v2.11.0-notifications-and-architecture.md) — thông báo đẩy theo phong cách app (auto-hide fade, âm thanh tuỳ chỉnh, nhóm setting thu gọn), đồng hồ CHỈ ở cửa sổ Đồng hồ riêng, tách mã nguồn.*
+
 **Việc lặp lại hạng nhất (v2.9.0 — đã phát hành)**
 - **Quy tắc đầy đủ**: tần suất **Ngày / Tuần / Tháng / Năm** · khoảng lặp tuỳ ý (`*mỗi 3 ngày`, `*mỗi 2 tuần`, `*mỗi 6 tháng`, `*mỗi 2 năm`) · chọn thứ trong tuần (tuần) · ngày trong tháng gồm **“ngày cuối cùng”** · kết thúc: **Không bao giờ / Đến ngày / Sau N lần hoàn thành**.
 - **Bảng lịch xem trước (ghost calendar)** ngay trong hộp thoại “Lặp lại” (Chi tiết → **Chỉnh…**): chấm tím ở mọi ngày việc sẽ xuất hiện; **bấm vào ngày để đặt ngày kết thúc**; chip nhanh **+1 / +3 / +6 tháng** và **Cuối năm**; đếm **“≈ N lần nữa”**; đầy đủ bằng bàn phím (lưới `role=grid`).
