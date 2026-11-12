@@ -1,0 +1,10 @@
+const assert=require('node:assert/strict');const {format}=require('../extension/time.js');
+const now=new Date(2026,0,1,15,0);
+assert.equal(format(new Date(2026,0,1,14,36),now).short,'14:36');
+assert.equal(format(new Date(2025,11,31,14,36),now).short,'Hôm qua · 14:36');
+assert.match(format(new Date(2025,11,29,14,36),now).short,/2025/);
+assert(!format(new Date(2026,0,3,14,36),now).short.includes('2026'));
+assert.equal(format('bad',now),null);assert.equal(format(null,now),null);
+assert.equal(format(new Date(2026,0,1,14,36),now).iso,new Date(2026,0,1,14,36).toISOString());
+assert(format(new Date(2026,0,1,14,36),now).full.length>10);
+console.log('Timestamp today, yesterday, year change and invalid: OK');
