@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Duality Client Reborn (compatibility preview)
 // @namespace    arena.survev.reborn
-// @version      0.5.0-preview.3
+// @version      0.5.0-preview.4
 // @description  Lightweight menu, validated semantic discovery, bounded hooks and reversible features. Live compatibility unverified.
 // @match        https://survev.io/*
 // @match        https://*.survev.io/*
@@ -5739,8 +5739,10 @@ THE SOFTWARE.
   }
   __name(methods, "methods");
   var astCache = /* @__PURE__ */ new WeakMap();
+  var ownedOriginals = /* @__PURE__ */ new WeakMap();
   function ast(fn) {
     if (typeof fn !== "function") return null;
+    if (ownedOriginals.has(fn)) return ast(ownedOriginals.get(fn));
     if (astCache.has(fn)) return astCache.get(fn);
     let tree = null;
     try {
@@ -5959,11 +5961,12 @@ THE SOFTWARE.
   }
   __name(discoverPlayerSchema, "discoverPlayerSchema");
   function discoverObjectRegistry(game) {
-    const native = [];
+    const native = [], visited = /* @__PURE__ */ new Set();
     for (const [, owner] of entries(game)) {
-      if (!object(owner) || Array.isArray(owner)) continue;
-      const gets = /* @__PURE__ */ new Set(), deletes = /* @__PURE__ */ new Set();
-      for (const [, fn] of methods(owner)) {
+      if (!object(owner) || Array.isArray(owner) || visited.has(owner)) continue;
+      visited.add(owner);
+      const gets = /* @__PURE__ */ new Set(), deletes = /* @__PURE__ */ new Map();
+      for (const [method, fn] of methods(owner)) {
         const tree = ast(fn), id = tree?.params?.[0]?.name;
         if (!id) continue;
         const table = /* @__PURE__ */ __name((n) => {
@@ -5978,13 +5981,38 @@ THE SOFTWARE.
           }
           if (n.type === "UnaryExpression" && n.operator === "delete") {
             const key = table(n.argument);
-            if (key) deletes.add(key);
+            if (key) {
+              if (!deletes.has(key)) deletes.set(key, /* @__PURE__ */ new Set());
+              deletes.get(key).add(method);
+            }
           }
         });
       }
-      for (const key of gets) if (deletes.has(key) && object(read(owner, key)) && !Array.isArray(read(owner, key))) native.push({ creator: owner, registryKey: key });
+      for (const key of gets) if (deletes.has(key) && object(read(owner, key)) && !Array.isArray(read(owner, key))) native.push({ creator: owner, registryKey: key, deleteMethods: deletes.get(key) });
     }
-    if (native.length) return native.length === 1 ? { ...native[0], registryState: "native-id-table" } : { creator: null, registryKey: null, registryState: "ambiguous-native-id-table" };
+    const anchored = /* @__PURE__ */ new Set();
+    for (const [, fn] of methods(game)) {
+      const tree = ast(fn), root = tree?.params?.[0]?.name;
+      if (!root) continue;
+      const refs = new Set(paths(tree, root).map((p) => p[0]));
+      if (!["fullObjects", "partObjects", "delObjIds", "activePlayerData"].every((k) => refs.has(k))) continue;
+      walk(tree, (n) => {
+        if (n.type !== "CallExpression") return;
+        const callee = path(n.callee);
+        if (callee?.length !== 2 || !n.arguments.some((arg) => paths(arg, root).some((p) => p[0] === "delObjIds"))) return;
+        const owner = read(game, callee[0]);
+        for (const candidate of native) if (candidate.creator === owner && candidate.deleteMethods.has(callee[1])) anchored.add(candidate);
+      });
+    }
+    const result = /* @__PURE__ */ __name((candidate, state) => ({
+      creator: candidate?.creator ?? null,
+      registryKey: candidate?.registryKey ?? null,
+      registryState: state,
+      registryEvidence: { nativeCandidates: native.length, receiverCandidates: anchored.size }
+    }), "result");
+    if (anchored.size === 1) return result([...anchored][0], "snapshot-id-table");
+    if (anchored.size > 1) return result(null, "ambiguous-snapshot-id-table");
+    if (native.length) return result(native.length === 1 ? native[0] : null, native.length === 1 ? "native-id-table" : "ambiguous-native-id-table");
     const shapes = [];
     for (const [, owner] of entries(game)) if (object(owner) && !Array.isArray(owner)) {
       for (const [key, table] of entries(owner)) if (object(table) && !Array.isArray(table) && entries(table).some(([, entity]) => finite(read(entity, "__id")) && finite(read(entity, "__type")))) shapes.push({ creator: owner, registryKey: key });
@@ -6007,12 +6035,12 @@ THE SOFTWARE.
     const schema = active ? discoverPlayerSchema(active) : null;
     const ui = unique(objects.filter(([, v]) => typeof readMethod(v, "setSpectating") === "function" && typeof read(v, "spectating") === "boolean").map(([, v]) => v));
     const map = unique(objects.filter(([, v]) => entries(v).some(([k]) => k === "mapTexture") && typeof readMethod(v, "getGroundSurface") === "function").map(([, v]) => v));
-    const { creator, registryKey, registryState } = discoverObjectRegistry(game);
+    const { creator, registryKey, registryState, registryEvidence } = discoverObjectRegistry(game);
     const obstacles = /* @__PURE__ */ __name(() => entries(read(creator, registryKey)).map(([, v]) => v).filter((v) => object(read(v, "collider")) && typeof read(v, "collidable") === "boolean"), "obstacles");
     const activeKey = unique(objects.filter(([, value]) => value === active).map(([key]) => key));
     const camera = discoverCamera(game);
     const visualPosKey = active && camera ? discoverVisualPosition(active, camera.method) : null;
-    return { game, barn, barnKey: barns.length === 1 ? barns[0][0] : null, pool, poolKey, players, active, activeKey, schema, ui, map, camera, visualPosKey, obstacles, creator, registryKey, registryState };
+    return { game, barn, barnKey: barns.length === 1 ? barns[0][0] : null, pool, poolKey, players, active, activeKey, schema, ui, map, camera, visualPosKey, obstacles, creator, registryKey, registryState, registryEvidence };
   }
   __name(discover, "discover");
   function discoverLootSource(game) {
@@ -6138,6 +6166,8 @@ THE SOFTWARE.
     const descriptor = Object.getOwnPropertyDescriptor(owner, key);
     if (descriptor && !descriptor.configurable && !descriptor.writable) return false;
     const wrapper = makeWrapper(original);
+    if (typeof wrapper !== "function" || wrapper === original) return false;
+    ownedOriginals.set(wrapper, original);
     try {
       Object.defineProperty(owner, key, { configurable: true, enumerable: descriptor?.enumerable ?? false, writable: true, value: wrapper });
     } catch {
@@ -8397,7 +8427,7 @@ THE SOFTWARE.
         protocolMatches: this.protocol === VERIFIED_PROTOCOL
       };
       return {
-        version: "0.5.0-preview.3",
+        version: "0.5.0-preview.4",
         protocol: this.protocol,
         sourceProtocol: VERIFIED_PROTOCOL,
         initialized: checks.initialized,
@@ -8406,7 +8436,7 @@ THE SOFTWARE.
         mapHighlights: { ...this.mapHighlights.stats },
         nativeNames: { ...this.names.stats },
         inputBlockReason: this.inputBlockReason(),
-        registry: { state: m?.registryState ?? "waiting-mapping" },
+        registry: { state: m?.registryState ?? "waiting-mapping", ...m?.registryEvidence },
         aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict },
         aimEvidence: this.aimEvidence.snapshot(this.win.performance.now()),
         missingContracts: Object.keys(checks).filter((key) => !checks[key]),
@@ -8585,7 +8615,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
     canvas.setAttribute("aria-hidden", "true");
     const shell = el("section", { id: "ui" });
     shell.setAttribute("aria-label", "Duality Client Reborn");
-    const brand = el("div", { class: "brand", text: "Duality Client" }, el("div", { class: "version", text: "Reborn 0.5.0-preview.3 • readable debug" }));
+    const brand = el("div", { class: "brand", text: "Duality Client" }, el("div", { class: "version", text: "Reborn 0.5.0-preview.4 • readable debug" }));
     const nav = el("nav", { class: "nav" });
     nav.setAttribute("aria-label", "Menu tabs");
     const content = el("main", { class: "content" });
@@ -8902,7 +8932,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
     let menu = null, engine = null, defs = null, mapDefs = null, cancelCapture = null, alive = true;
     let status = "Đang chờ Application…", lastWarning = "", captured = false, captureState = "waiting";
     const startedAt = win.performance.now();
-    win.console?.info?.("[Duality Reborn 0.5.0-preview.3] Script đã chạy. Nếu không có menu, gửi dòng lỗi Console sau thông báo này.");
+    win.console?.info?.("[Duality Reborn 0.5.0-preview.4] Script đã chạy. Nếu không có menu, gửi dòng lỗi Console sau thông báo này.");
     const report = /* @__PURE__ */ __name((level, message) => {
       if (!alive) return;
       if (level === "error" || level === "warning") {
@@ -8912,7 +8942,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
       status = message;
     }, "report");
     const diagnostics = /* @__PURE__ */ __name(() => ({
-      version: "0.5.0-preview.3",
+      version: "0.5.0-preview.4",
       captured,
       captureState,
       status,

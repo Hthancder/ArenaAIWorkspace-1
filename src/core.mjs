@@ -34,8 +34,11 @@ export function methods(o) {
   return [...found];
 }
 const astCache = new WeakMap();
+// Only wrappers installed by this module: never trust a public .original field.
+const ownedOriginals = new WeakMap();
 export function ast(fn) {
   if (typeof fn !== 'function') return null;
+  if (ownedOriginals.has(fn)) return ast(ownedOriginals.get(fn));
   if (astCache.has(fn)) return astCache.get(fn);
   let tree = null;
   try {
@@ -237,11 +240,12 @@ export function discoverPlayerSchema(player) {
 // Source Creator keeps one table shared by get-by-ID and delete-by-ID.
 // Prefer that proven role over unrelated nested dictionaries containing entities.
 export function discoverObjectRegistry(game) {
-  const native = [];
+  const native = [], visited = new Set();
   for (const [, owner] of entries(game)) {
-    if (!object(owner) || Array.isArray(owner)) continue;
-    const gets = new Set(), deletes = new Set();
-    for (const [, fn] of methods(owner)) {
+    if (!object(owner) || Array.isArray(owner) || visited.has(owner)) continue;
+    visited.add(owner);
+    const gets = new Set(), deletes = new Map();
+    for (const [method, fn] of methods(owner)) {
       const tree = ast(fn), id = tree?.params?.[0]?.name;
       if (!id) continue;
       const table = n => {
@@ -250,12 +254,39 @@ export function discoverObjectRegistry(game) {
       };
       walk(tree, n => {
         if (n.type === 'ReturnStatement') { const key = table(n.argument); if (key) gets.add(key); }
-        if (n.type === 'UnaryExpression' && n.operator === 'delete') { const key = table(n.argument); if (key) deletes.add(key); }
+        if (n.type === 'UnaryExpression' && n.operator === 'delete') {
+          const key = table(n.argument);
+          if (key) {
+            if (!deletes.has(key)) deletes.set(key, new Set());
+            deletes.get(key).add(method);
+          }
+        }
       });
     }
-    for (const key of gets) if (deletes.has(key) && object(read(owner, key)) && !Array.isArray(read(owner, key))) native.push({ creator: owner, registryKey: key });
+    for (const key of gets) if (deletes.has(key) && object(read(owner, key)) && !Array.isArray(read(owner, key))) native.push({ creator: owner, registryKey: key, deleteMethods: deletes.get(key) });
   }
-  if (native.length) return native.length === 1 ? { ...native[0], registryState: 'native-id-table' } : { creator: null, registryKey: null, registryState: 'ambiguous-native-id-table' };
+  // A get/delete dictionary is not unique to world objects. Bind its delete
+  // method to delObjIds in the actual snapshot receiver, NOT deletedPlayerIds.
+  // This is the same public message contract used by discoverUpdateReceiver.
+  const anchored = new Set();
+  for (const [, fn] of methods(game)) {
+    const tree = ast(fn), root = tree?.params?.[0]?.name;
+    if (!root) continue;
+    const refs = new Set(paths(tree, root).map(p => p[0]));
+    if (!['fullObjects', 'partObjects', 'delObjIds', 'activePlayerData'].every(k => refs.has(k))) continue;
+    walk(tree, n => {
+      if (n.type !== 'CallExpression') return;
+      const callee = path(n.callee);
+      if (callee?.length !== 2 || !n.arguments.some(arg => paths(arg, root).some(p => p[0] === 'delObjIds'))) return;
+      const owner = read(game, callee[0]);
+      for (const candidate of native) if (candidate.creator === owner && candidate.deleteMethods.has(callee[1])) anchored.add(candidate);
+    });
+  }
+  const result = (candidate, state) => ({ creator: candidate?.creator ?? null, registryKey: candidate?.registryKey ?? null,
+    registryState: state, registryEvidence: { nativeCandidates: native.length, receiverCandidates: anchored.size } });
+  if (anchored.size === 1) return result([...anchored][0], 'snapshot-id-table');
+  if (anchored.size > 1) return result(null, 'ambiguous-snapshot-id-table');
+  if (native.length) return result(native.length === 1 ? native[0] : null, native.length === 1 ? 'native-id-table' : 'ambiguous-native-id-table');
   // Compatibility fallback for smaller/older clients without both native methods.
   const shapes = [];
   for (const [, owner] of entries(game)) if (object(owner) && !Array.isArray(owner)) {
@@ -280,12 +311,12 @@ export function discover(game) {
   const schema = active ? discoverPlayerSchema(active) : null;
   const ui = unique(objects.filter(([, v]) => typeof readMethod(v, 'setSpectating') === 'function' && typeof read(v, 'spectating') === 'boolean').map(([, v]) => v));
   const map = unique(objects.filter(([, v]) => entries(v).some(([k]) => k === 'mapTexture') && typeof readMethod(v, 'getGroundSurface') === 'function').map(([, v]) => v));
-  const { creator, registryKey, registryState } = discoverObjectRegistry(game);
+  const { creator, registryKey, registryState, registryEvidence } = discoverObjectRegistry(game);
   const obstacles = () => entries(read(creator, registryKey)).map(([, v]) => v).filter(v => object(read(v, 'collider')) && typeof read(v, 'collidable') === 'boolean');
   const activeKey = unique(objects.filter(([, value]) => value === active).map(([key]) => key));
   const camera = discoverCamera(game);
   const visualPosKey = active && camera ? discoverVisualPosition(active, camera.method) : null;
-  return { game, barn, barnKey: barns.length === 1 ? barns[0][0] : null, pool, poolKey, players, active, activeKey, schema, ui, map, camera, visualPosKey, obstacles, creator, registryKey, registryState };
+  return { game, barn, barnKey: barns.length === 1 ? barns[0][0] : null, pool, poolKey, players, active, activeKey, schema, ui, map, camera, visualPosKey, obstacles, creator, registryKey, registryState, registryEvidence };
 }
 // The public LootBarn getter returns one own field. Read that field ourselves;
 // never execute an unknown getter or choose the first loot-like object.
@@ -423,6 +454,8 @@ export function patchMethod(owner, key, makeWrapper, bag) {
   const descriptor = Object.getOwnPropertyDescriptor(owner, key);
   if (descriptor && !descriptor.configurable && !descriptor.writable) return false;
   const wrapper = makeWrapper(original);
+  if (typeof wrapper !== 'function' || wrapper === original) return false;
+  ownedOriginals.set(wrapper, original);
   try {
     Object.defineProperty(owner, key, { configurable: true, enumerable: descriptor?.enumerable ?? false, writable: true, value: wrapper });
   } catch { return false; }

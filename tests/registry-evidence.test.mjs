@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { transformSync } from 'esbuild';
-import { discoverObjectRegistry } from '../src/core.mjs';
+import { discoverObjectRegistry, patchMethod, Disposables } from '../src/core.mjs';
 import { AimEvidence } from '../src/aim-evidence.mjs';
 
 test('native get/delete table beats unrelated entity dictionaries, including empty native registry', () => {
@@ -49,4 +49,71 @@ test('last live attempt/correction survive death/menu and exported history is bo
   const json = JSON.stringify(evidence.snapshot(1700));
   for (const field of ['toMouseDir', 'playerId', 'joinToken', 'pos', 'shootHold']) assert.ok(!json.includes(`"${field}"`));
   evidence.reset(); assert.equal(evidence.snapshot(1800).lastCorrection, null);
+});
+
+test('snapshot delObjIds disambiguates native tables without mistaking deletedPlayerIds', () => {
+  const make = () => ({ table: {}, get(id) { return this.table[id]; }, remove(id) { delete this.table[id]; } });
+  const game = { world: make(), metadata: make(), receive(msg) {
+    for (let i = 0; i < msg.delObjIds.length; i++) this.world.remove(msg.delObjIds[i]);
+    for (let i = 0; i < msg.deletedPlayerIds.length; i++) this.metadata.remove(msg.deletedPlayerIds[i]);
+    void msg.fullObjects; void msg.partObjects; void msg.activePlayerData;
+  } };
+  const result = discoverObjectRegistry(game);
+  assert.equal(result.creator, game.world); assert.equal(result.registryState, 'snapshot-id-table');
+  assert.deepEqual(result.registryEvidence, { nativeCandidates: 2, receiverCandidates: 1 });
+  // Do not execute unknown code while identifying a role.
+  assert.deepEqual(game.world.table, {});
+});
+
+test('duplicate references to one owner are not independent registry candidates', () => {
+  const owner = { table: {}, get(id) { return this.table[id]; }, remove(id) { delete this.table[id]; } };
+  const result = discoverObjectRegistry({ first: owner, alias: owner });
+  assert.equal(result.creator, owner); assert.equal(result.registryState, 'native-id-table');
+  assert.equal(result.registryEvidence.nativeCandidates, 1);
+});
+
+test('snapshot registry selection withstands rename/minification and refuses two true anchors', () => {
+  const source = `const make=()=>({m_table:{},m_get(id){return this.m_table[id]},m_remove(id){delete this.m_table[id]}});
+    globalThis.g={m_world:make(),m_metadata:make(),m_receive(msg){
+      for(let i=0;i<msg.delObjIds.length;i++)this.m_world.m_remove(msg.delObjIds[i]);
+      for(let i=0;i<msg.deletedPlayerIds.length;i++)this.m_metadata.m_remove(msg.deletedPlayerIds[i]);
+      globalThis.refs=[msg.fullObjects,msg.partObjects,msg.activePlayerData];
+    }};g.m_alias=g.m_world;`;
+  for (const minify of [false, true]) {
+    const code = transformSync(source, { minify, ...(minify ? { mangleProps: /^m_/, mangleQuoted: true } : {}) }).code;
+    const context = vm.createContext({}); vm.runInContext(code, context);
+    const result = discoverObjectRegistry(context.g);
+    assert.equal(result.registryState, 'snapshot-id-table'); assert.equal(result.registryEvidence.nativeCandidates, 2);
+  }
+  const make = () => ({ table: {}, get(id) { return this.table[id]; }, remove(id) { delete this.table[id]; } });
+  const game = { a: make(), b: make(), receive(msg) {
+    this.a.remove(msg.delObjIds[0]); this.b.remove(msg.delObjIds[0]);
+    void msg.fullObjects; void msg.partObjects; void msg.activePlayerData;
+  } };
+  assert.equal(discoverObjectRegistry(game).registryState, 'ambiguous-snapshot-id-table');
+  assert.equal(discoverObjectRegistry(game).creator, null);
+});
+
+test('a non-snapshot method using delObjIds does not override registry ambiguity', () => {
+  const make = () => ({ table: {}, get(id) { return this.table[id]; }, remove(id) { delete this.table[id]; } });
+  const game = { a: make(), b: make(), fake(msg) { this.a.remove(msg.delObjIds[0]); } };
+  assert.equal(discoverObjectRegistry(game).registryState, 'ambiguous-native-id-table');
+});
+
+
+test('owned receiver wrapper retains source role during remapping and cleanup', () => {
+  const make = () => ({ table: {}, get(id) { return this.table[id]; }, remove(id) { delete this.table[id]; } });
+  const game = { a: make(), b: make(), receive(msg) {
+    this.a.remove(msg.delObjIds[0]);
+    void msg.fullObjects; void msg.partObjects; void msg.activePlayerData;
+  } };
+  const original = game.receive, bag = new Disposables();
+  assert.ok(patchMethod(game, 'receive', original => function (msg) { return Reflect.apply(original, this, arguments); }, bag));
+  assert.equal(discoverObjectRegistry(game).registryState, 'snapshot-id-table');
+  assert.equal(discoverObjectRegistry(game).creator, game.a);
+  bag.clear(); assert.equal(game.receive, original);
+  assert.equal(discoverObjectRegistry(game).registryState, 'snapshot-id-table');
+  // A public field on an unknown wrapper must never be treated as trusted source.
+  game.receive = function () {}; game.receive.original = original;
+  assert.equal(discoverObjectRegistry(game).registryState, 'ambiguous-native-id-table');
 });

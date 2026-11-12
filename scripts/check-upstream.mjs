@@ -57,7 +57,7 @@ const classes = [
   sourceClass('client/src/objects/objectPool.ts', 'Creator', ['m_getObjById', 'm_deleteObj', 'm_updateObjPart']),
   sourceClass('client/src/camera.ts', 'Camera', ['m_z', 'm_pixels', 'm_pointToScreen', 'm_screenToPoint']),
   sourceClass('client/src/objects/player.ts', 'Player', ['selectIdlePose', 'canInteract', 'getMeleeCollider', 'm_getZoom', 'render', 'm_updateData']),
-  sourceClass('client/src/objects/player.ts', 'PlayerBarn', ['getPlayerById', 'getPlayerInfo', 'recomputeTeamData']),
+  sourceClass('client/src/objects/player.ts', 'PlayerBarn', ['getPlayerById', 'getPlayerInfo', 'deletePlayerInfo', 'recomputeTeamData']),
   sourceClass('client/src/game.ts', 'Game', ['tryJoinGame', 'm_sendMessage', 'update', 'm_processGameUpdate']),
   sourceClass('client/src/inputBinds.ts', 'InputBinds', ['isBindDown', 'isBindPressed', 'preventMenuBind']),
   sourceClass('client/src/ui/touch.ts', 'Touch', ['getAimMovement']),
@@ -105,9 +105,10 @@ const game=Object.assign(new Game(),{initialized:true,connecting:false,connected
  m_uiManager:{spectating:false,setSpectating(){},updateMapIndicators(){}},m_inputMsgTimeout:1,m_prevInputMsg:new InputMsg(),seq:0,seqInFlight:false,m_activeId:1,m_localId:1,lastUpdateTime:0,pings:[],updateIntervals:[],m_map:{factionMode:false},m_renderer:{setActiveLayer(){},setUnderground(){}},m_audioManager:{},m_planeBarn:{updatePlanes(){}},debugHUD:{pingGraph:{addEntry(){}},updateIntervalGraph:{addEntry(){}}},m_config:{get(k){return k==='playerName'?'source-fixture':{outfit:'',melee:'',heal:'',boost:'',emotes:[]}}},m_sendMessageImpl(){},
  m_smokeBarn:Object.assign(new SmokeBarn(),{m_particles:[],zIdx:2147483647}),m_emoteBarn:{wheelDisplayed:false},m_lootBarn:Object.assign(new LootBarn(),{closestLoot:{__id:7,__type:3,active:true,type:'9mm',count:30,layer:0,pos:{x:10,y:20},rad:2,ownerId:0}})});
 game.m_objectCreator=Object.assign(new Creator(),{m_idToObj:{1:hero,2:enemy,3:ally,4:unknown},m_types:{}});
-// A second entity-shaped dictionary reproduces ambiguity of the old shape-only
-// discovery; only the actual source Creator has shared native get/delete flow.
-game.m_decoy={mirror:{2:enemy}};
+// Both tables have native get/delete flow, reproducing preview.3 ambiguity.
+// Only the actual Creator receives world delObjIds in the source snapshot receiver.
+game.m_decoy={mirror:{2:enemy},get(id){return this.mirror[id]},remove(id){delete this.mirror[id]}};
+game.m_creatorAlias=game.m_objectCreator;
 Game.prototype.nativeInputFrame=function(dt){${aimExpressions} const inputMsg=new InputMsg();inputMsg.seq=this.seq;${desktopStatements}${normalizeStatements}${diffStatements}return inputMsg;};
 Game.prototype.readInputAim=function(){${aimExpressions} return {toMouseDir,toMouseLen};};
 const callbacks=[];
@@ -144,7 +145,9 @@ for (const renamed of [false, true]) for (const lootMode of ['mobile', 'nearby']
     context.result.receive({x:12,y:20});
     engine.pre();
     assert.equal(engine.capabilities.wallcheck,true,'Native Creator remains identifiable with an entity-shaped decoy');
-    assert.equal(engine.mapping.registryState,'native-id-table');
+    assert.equal(engine.mapping.registryState,'snapshot-id-table');
+    assert.equal(engine.mapping.registryEvidence.nativeCandidates,2);
+    assert.equal(engine.mapping.registryEvidence.receiverCandidates,1);
     assert.equal(frameInput().inputs.includes(10), lootMode === 'nearby', 'Nearby pickup reaches the native binds/InputMsg path');
     assert.ok(engine.target, 'Select a target through upstream methods and renamed properties');
     assert.equal(engine.target.__id, 2, 'Aim excludes faction ally and unknown membership');
