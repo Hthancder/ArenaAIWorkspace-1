@@ -1,4 +1,4 @@
-# Tabspace 0.15 — bản thử nghiệm
+# Tabspace 0.16 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,6 +7,7 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
+- Nhóm có ghi chú, nút yêu thích và thu gọn/mở rộng; nhóm yêu thích được ưu tiên ở sidebar. Khi tìm kiếm, nhóm được mở tạm thời để thấy kết quả. Các mục đã chọn nhưng bị ẩn vẫn được tính trong thao tác hàng loạt và được báo ở thanh chọn.
 - Trong **Nhóm đã lưu**, dùng ↑/↓ để sắp xếp nhóm và tab. Kéo tay nắm ⠿ của tab lên một tab khác để đặt trước, hoặc thả vào tiêu đề nhóm để chuyển về cuối nhóm. Xóa từ khóa tìm kiếm trước khi sắp xếp; tag và ghi chú được giữ nguyên.
 - Trong **Nhóm đã lưu**, **Phiên đã lưu** và **Thùng rác**, chọn bằng checkbox hoặc “Chọn mục đang thấy”; kiểm tra bản xem trước trước khi thao tác hàng loạt. Có thể mở nhiều tab đã lưu hoặc thêm/gỡ tag hàng loạt. Tag nhóm và tab được sửa riêng. Nhóm đã chọn bao gồm các tab bên trong khi mở hoặc chuyển thùng rác. Tab trong thùng rác chỉ khôi phục được khi nhóm gốc tồn tại.
 - Trong **Tab trùng**, xem các tab http/https có URL giống hệt trên nhiều cửa sổ. Không tự chọn hoặc đóng; bạn có thể chọn tab và lưu hoặc lưu & đóng sau xác nhận. Tab cùng URL có thể chứa nội dung hoặc biểu mẫu khác nhau.

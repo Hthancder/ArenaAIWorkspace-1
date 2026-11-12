@@ -7,3 +7,4 @@ r=S.find({...data,query:'learn ux'});assert.equal(r.items.length,1);assert.equal
 r=S.find({...data,query:''});assert.equal(Object.values(r).flat().length,0);
 let tags=S.collectTags(data.groups);assert.equal(tags.find(t=>t.name==='Design').groups,1);assert.equal(tags.find(t=>t.name==='Design').items,1);
 console.log('Global search, tag matching and privacy: OK');
+const noted={tabs:[],groups:[{id:'g',name:'Group',note:'Important research',tags:[],items:[]}],snapshots:[],presets:[]};assert.equal(S.find({...noted,query:'important'}).groups.length,1);console.log('Group notes are searchable: OK');

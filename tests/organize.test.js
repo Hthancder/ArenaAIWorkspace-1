@@ -24,3 +24,7 @@ assert.equal(O.reorderItem(ordered,'g1','a','g2','d'),true);assert.deepEqual(ord
 assert.throws(()=>O.reorderItem(ordered,'g1','b','g2','missing'));assert.deepEqual(ordered[0].items.map(x=>x.id),['c','b']);
 assert.equal(O.reorderGroup(ordered,'g1',-1),false);assert.equal(O.reorderGroup(ordered,'g1',1),true);assert.deepEqual(ordered.map(x=>x.id),['g2','g1']);assert.throws(()=>O.stepItem(ordered,'g1','b',0));
 console.log('Group and saved tab ordering: OK');
+const groupBackup={format:'tabspace-backup',version:2,groups:[{name:'Research',tags:['science'],note:'Read later',favorite:true,collapsed:true,items:[]}]};
+const restoredGroup=ctx.validateImport(groupBackup)[0];assert.equal(restoredGroup.note,'Read later');assert.equal(restoredGroup.favorite,true);assert.equal(restoredGroup.collapsed,true);
+const legacy=ctx.validateImport({format:'tabspace-backup',version:1,groups:[{name:'Old',items:[]}]})[0];assert.equal(legacy.favorite,false);assert.equal(legacy.collapsed,false);assert.equal(legacy.note,'');
+console.log('Group metadata survives backup and old imports: OK');

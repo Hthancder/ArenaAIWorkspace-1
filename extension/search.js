@@ -6,7 +6,7 @@ const SearchTools = (()=>{
  function find({query,tabs=[],groups=[],snapshots=[],presets=[]}){
   const q=String(query||'').trim();if(!q)return {open:[],groups:[],items:[],sessions:[],presets:[]};
   const open=tabs.filter(t=>!t.incognito&&textMatch(q,t.title,t.url));
-  const foundGroups=groups.filter(g=>textMatch(q,g.name)||tagMatch(q,g.tags));
+  const foundGroups=groups.filter(g=>textMatch(q,g.name,g.note)||tagMatch(q,g.tags));
   const items=groups.flatMap(g=>g.items.filter(item=>textMatch(q,item.title,item.url,item.note)||tagMatch(q,item.tags)).map(item=>({group:g,item})));
   const sessions=snapshots.filter(s=>textMatch(q,s.name)||s.windows.some(w=>w.some(t=>textMatch(q,t.title,t.url))));
   const foundPresets=presets.filter(p=>textMatch(q,p.name,...p.domains,...(p.paths||[]),...(p.exactUrls||[]),...(p.excludeDomains||[]),...(p.excludePaths||[]),...(p.excludeUrls||[])));
