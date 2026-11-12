@@ -1,0 +1,9 @@
+const assert=require('node:assert/strict');
+const S=require('../extension/search.js');
+const data={tabs:[{id:1,title:'GitHub',url:'https://github.com'},{id:2,title:'Private GitHub',url:'https://github.com',incognito:true}],groups:[{id:'a',name:'Work',tags:['Design','design'],items:[{title:'Mockup',url:'https://example.com',tags:['Design'],note:'Learn UX'},{title:'Other',url:'https://other.com',tags:['designer']}]}],snapshots:[{name:'Research',windows:[[{title:'GitHub docs',url:'https://github.com/docs'}]]}],presets:[{name:'Work',domains:['github.com']}]};
+let r=S.find({...data,query:'github'});assert.equal(r.open.length,1);assert.equal(r.sessions.length,1);assert.equal(r.presets.length,1);
+r=S.find({...data,query:'#design'});assert.equal(r.groups.length,1);assert.equal(r.items.length,1);assert.equal(r.items[0].item.title,'Mockup');
+r=S.find({...data,query:'learn ux'});assert.equal(r.items.length,1);assert.equal(r.groups.length,0);
+r=S.find({...data,query:''});assert.equal(Object.values(r).flat().length,0);
+let tags=S.collectTags(data.groups);assert.equal(tags.find(t=>t.name==='Design').groups,1);assert.equal(tags.find(t=>t.name==='Design').items,1);
+console.log('Global search, tag matching and privacy: OK');
