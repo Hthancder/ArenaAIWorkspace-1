@@ -17,3 +17,10 @@ const restored=ctx.validateImport({format:'tabspace-backup',version:1,groups:[{n
 assert.equal(restored[0].tags[0],'group');assert.equal(restored[0].items[0].tags[0],'tab');assert.equal(restored[0].items[0].note,'My note');
 const old=ctx.validateImport({format:'tabspace-backup',version:1,groups:[{name:'Old',items:[{url:'https://example.com',title:'T'}]}]});assert.equal(old[0].items[0].note,'');
 console.log('Backup import preserves tags and notes: OK');
+const ordered=[{id:'g1',items:[{id:'a',note:'A',tags:['t']},{id:'b'},{id:'c'}]},{id:'g2',items:[{id:'d'}]}];
+assert.equal(O.stepItem(ordered,'g1','a',-1),false);assert.equal(O.stepItem(ordered,'g1','a',1),true);assert.deepEqual(ordered[0].items.map(x=>x.id),['b','a','c']);
+assert.equal(O.reorderItem(ordered,'g1','c','g1','b'),true);assert.deepEqual(ordered[0].items.map(x=>x.id),['c','b','a']);
+assert.equal(O.reorderItem(ordered,'g1','a','g2','d'),true);assert.deepEqual(ordered[1].items.map(x=>x.id),['a','d']);assert.equal(ordered[1].items[0].note,'A');assert.deepEqual(ordered[1].items[0].tags,['t']);
+assert.throws(()=>O.reorderItem(ordered,'g1','b','g2','missing'));assert.deepEqual(ordered[0].items.map(x=>x.id),['c','b']);
+assert.equal(O.reorderGroup(ordered,'g1',-1),false);assert.equal(O.reorderGroup(ordered,'g1',1),true);assert.deepEqual(ordered.map(x=>x.id),['g2','g1']);assert.throws(()=>O.stepItem(ordered,'g1','b',0));
+console.log('Group and saved tab ordering: OK');
