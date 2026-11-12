@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Tabspace — Quản lý tab",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Lưu, tìm và quản lý tab Chrome một cách gọn gàng.",
   "permissions": ["tabs", "storage", "tabGroups"],
   "action": { "default_title": "Tabspace", "default_popup": "popup.html" },
