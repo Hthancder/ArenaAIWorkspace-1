@@ -1,4 +1,4 @@
-# Tabspace 0.5 — bản thử nghiệm
+# Tabspace 0.6 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,7 +7,7 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
-- Chọn các tab đang mở, dùng **Lưu đã chọn** để lưu bản sao hoặc **Lưu & đóng đã chọn** để lưu trước rồi đóng. Tạo/chỉnh nhóm, mở từng tab hoặc cả nhóm, thêm tag cho tab đã lưu, tìm kiếm.
+- Chọn các tab đang mở, dùng **Lưu đã chọn** để lưu bản sao hoặc **Lưu & đóng đã chọn** để lưu trước rồi đóng. Tạo/chỉnh nhóm, mở từng tab hoặc cả nhóm, thêm tag cho nhóm và tab, ghi chú cho tab, chuyển bản lưu giữa các nhóm và tìm kiếm theo tag/ghi chú.
 - Nút **Nghỉ** cho tab nền (không ghim, không phát âm thanh) vào trạng thái discard sau xác nhận. Chrome có thể từ chối; trang sẽ tải lại khi mở và trạng thái chưa lưu có thể mất.
 - Trong **Thùng rác**, khôi phục hoặc xóa vĩnh viễn nhóm, tab đã lưu và phiên đã xóa từ phiên bản này. Không tự xóa theo thời gian và không được đưa vào file sao lưu; hãy khôi phục dữ liệu cần giữ trước khi xuất. Nếu nhóm gốc bị xóa, khôi phục nhóm trước khi khôi phục tab.
 - Trong **Lịch sử dọn**, xem kết quả các lượt lưu & đóng mới và mở lại các tab xác nhận đã đóng. Nhật ký lưu cục bộ, không được xuất trong JSON. Trạng thái không rõ cần kiểm tra thủ công; không thực hiện cùng lúc trên hai cửa sổ Tabspace.
