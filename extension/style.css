@@ -31,3 +31,7 @@ time[data-full]:focus::after{content:attr(data-full);position:fixed;z-index:15;l
 .drag-handle{border:0;background:transparent;color:#a8a5b4;cursor:grab;font-size:18px;padding:5px;line-height:1}.drag-handle:active{cursor:grabbing}.drag-handle[draggable=false]{opacity:.35;cursor:not-allowed}.order-actions button:disabled{opacity:.3;cursor:not-allowed}.drop-target{box-shadow:inset 0 2px 0 #8a76e3;background:#f8f7ff}.sort-hint{font-size:11px;color:#8f90a0;margin:-8px 0 14px}.grouphead,.row{min-width:0}@media(max-width:850px){.grouphead{flex-wrap:wrap}.order-actions{flex-wrap:wrap}}
 
 .collapse-group{border:0;background:transparent;color:#8a83ab;font-size:16px;cursor:pointer;padding:5px;border-radius:5px}.collapse-group:hover{background:#f2f0fb}.collapse-group:disabled{opacity:.5;cursor:not-allowed}.order-actions button[aria-pressed="true"]{color:#bc9b43}.sidegroup{position:relative}
+
+.native-badge{border:0;cursor:pointer;max-width:150px;overflow:hidden;text-overflow:ellipsis}.native-badge:hover{text-decoration:underline}.selection{flex-wrap:wrap}.selection button{white-space:nowrap}
+
+.native-grey{color:#606875;background:#eef0f2}.native-blue{color:#2863ac;background:#e6f0ff}.native-red{color:#ad4444;background:#fceaea}.native-yellow{color:#8d6d0a;background:#fff6d8}.native-green{color:#267448;background:#e4f5e9}.native-pink{color:#a44479;background:#fae7f1}.native-purple{color:#7048a9;background:#f1eafa}.native-cyan{color:#247986;background:#e0f4f5}.native-orange{color:#a45316;background:#fff0e2}
