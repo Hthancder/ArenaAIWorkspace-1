@@ -1,4 +1,4 @@
-import { ast, at, clamp, discover, discoverSender, Disposables, entries, finite, intercept, isPlayer,
+import { aimPoint, ast, at, clamp, discover, discoverLootSource, discoverSender, Disposables, entries, finite, intercept, isPlayer,
   localWeapon, methods, object, overlayPosition, patchMethod, paths, point, project, read, readMethod, sameLayer,
   segmentBlocked, teamOf, Tracker, unique, vec, walk } from './core.mjs';
 
@@ -105,8 +105,11 @@ export class Features {
     this.effects = []; this.lastGame = null; this.lastPool = null; this.lastActive = null; this.lastActiveId = null;
     this.stopped = false; this.keys = new Set(); this.holdAim = false;
     this.nextSemi = 0; this.frameId = 0; this.semiFrame = -1; this.semiValue = false; this.nextSwitch = 0; this.switchSlot = null; this.meleeDirection = null;
-    this.lastAmmo = null; this.stats = { frames: 0, mappingRuns: 0, featureMs: 0, lastError: null };
+    this.lastAmmo = null; this.stats = { frames: 0, mappingRuns: 0, featureMs: 0, lastError: null, aimState: 'disabled', aimRejections: {} };
+    this.joinState = { observed: false, forwarded: false, mobile: null, requested: false };
     this.capabilities = {}; this.failed = new Set();
+    this.lootSource = null; this.pickupPulse = false; this.nextPickup = 0; this.pickupAttempt = null;
+    this.stats.lootState = 'disabled'; this.stats.pickupPulses = 0;
     this.installFlush();
     const ticker = app.pixi.ticker;
     const pre = () => this.guard('input-frame', () => this.pre());
@@ -147,6 +150,7 @@ export class Features {
     this.restoreInput(); this.matchHooks.clear(); this.overrides.clear(); this.tracker.reset();
     this.target = null; this.dot = null; this.meleeDirection = null; this.switchSlot = null;
     this.lastAmmo = null; this.local = null; this.mapping = null; this.effects = [];
+    this.lootSource = null; this.pickupPulse = false; this.pickupAttempt = null; this.nextPickup = 0;
     this.binds = null; this.bindsInstalled = false; this.stickyId = null; this.lastInput = -Infinity;
     this.clearCanvas();
   }
@@ -156,23 +160,27 @@ export class Features {
     if (!key) return;
     const self = this;
     this.senderReady = patchMethod(game, key, original => function (type, data, ...rest) {
-      let outgoing = data;
+      let outgoing = data, joinRecord = null;
       try {
         if (type === 1 && Number.isInteger(data?.protocol) && typeof data.name === 'string'
-          && typeof data.joinToken === 'string' && typeof data.isMobile === 'boolean'
+          && typeof data.joinToken === 'string' && (typeof data.isMobile === 'boolean' || data.isMobile === undefined)
           && typeof data.useTouch === 'boolean' && typeof data.serialize === 'function') {
-          self.protocol = data.protocol;
-          if (self.protocol === VERIFIED_PROTOCOL && self.config.autoLoot) {
+          self.protocol = data.protocol; self.lastMap = -Infinity;
+          if (self.protocol === VERIFIED_PROTOCOL && self.config.autoLoot && self.config.lootMode === 'mobile') {
             outgoing = Object.assign(Object.create(Object.getPrototypeOf(data)), data, { isMobile: true });
           }
-          self.report('protocol', `Join protocol ${self.protocol}; mobile loot ${self.config.autoLoot ? 'yêu cầu bật' : 'tắt'}.`);
+          joinRecord = { observed: true, forwarded: false, mobile: !!outgoing.isMobile, requested: !!self.config.autoLoot && self.config.lootMode === 'mobile' };
+          self.joinState = joinRecord;
+          self.report('protocol', `Join protocol ${self.protocol}; mobile loot ${self.config.autoLoot && self.config.lootMode === 'mobile' ? 'yêu cầu bật' : 'tắt'}.`);
         }
         if (type === 3 && !self.stopped && self.mapping?.ui?.spectating === false) {
           outgoing = modifyMessage(data, self.config, self);
           self.switchSlot = null;
         }
       } catch (e) { self.report('warning', `Input bypassed: ${e.message}`); outgoing = data; }
-      return Reflect.apply(original, this, [type, outgoing, ...rest]);
+      const result = Reflect.apply(original, this, [type, outgoing, ...rest]);
+      if (joinRecord) joinRecord.forwarded = true; // Forwarded to native sender; not a server acknowledgement.
+      return result;
     }, this.gameHooks);
   }
   reconcile(force = false) {
@@ -180,6 +188,7 @@ export class Features {
     if (game !== this.lastGame) {
       this.releaseMatch(); this.gameHooks?.clear(); this.gameHooks = new Disposables();
       this.lastGame = game; this.protocol = null; this.lastPool = null; this.lastActive = null;
+      this.joinState = { observed: false, forwarded: false, mobile: null, requested: false };
       if (game) this.installSender(game);
     }
     if (!game?.initialized) {
@@ -197,11 +206,18 @@ export class Features {
     }
     this.mapping = next;
     if (next.active && !this.local) this.local = localDataSchema(game, next.active);
-    this.binds = this.findBinds();
+    const nextBinds = this.findBinds();
+    if (this.binds && this.binds !== nextBinds) {
+      this.matchHooks.clear(); this.bindsInstalled = false;
+      this.nextSemi = 0; this.semiFrame = -1;
+    }
+    this.binds = nextBinds;
+    this.lootSource = discoverLootSource(game);
     const ready = !!(next.schema && next.camera && next.barn && next.pool && next.active?.active);
     this.capabilities = {
       visuals: ready, interpolatedOverlay: ready && !!next.visualPosKey,
       grenadeZones: ready && !!this.definitions && !!next.registryKey && this.protocol === VERIFIED_PROTOCOL, aim: ready && this.flushReady && !!next.ui,
+      autoPickup: ready && !!next.ui && !!this.lootSource && !!this.binds && !!this.definitions && this.protocol === VERIFIED_PROTOCOL,
       prediction: ready && !!this.definitions, wallcheck: !!next.creator && !!next.registryKey,
       zoom: !!this.local?.zoomKey, semi: !!this.binds && !!this.definitions && this.protocol === VERIFIED_PROTOCOL,
       sender: this.senderReady, mobile: this.senderReady && this.protocol === VERIFIED_PROTOCOL,
@@ -220,6 +236,9 @@ export class Features {
     const self = this;
     this.bindsInstalled = patchMethod(binds, 'isBindPressed', original => function (code) {
       const actual = Reflect.apply(original, this, arguments);
+      if (code === 10 && self.pickupPulse && !self.stopped && !self.failed.has('input-frame')
+        && self.config.autoLoot && self.config.lootMode === 'nearby' && self.protocol === VERIFIED_PROTOCOL
+        && self.mapping?.ui?.spectating === false && !self.win.document.hidden) return true;
       if (self.protocol === VERIFIED_PROTOCOL && self.config.autoSwitch && self.switchSlot !== null
         && self.mapping?.ui?.spectating === false && code === (self.switchSlot === 0 ? 11 : 12)) return true;
       if (code !== 4 || self.failed.has('input-frame') || !self.config.semi || self.protocol !== VERIFIED_PROTOCOL || !self.mapping?.active || self.mapping.ui?.spectating !== false) return actual;
@@ -254,41 +273,58 @@ export class Features {
       || (this.local && this.mapping.active[this.local.dataKey] !== this.local.data));
     if (staleIdentity) { this.releaseMatch(); this.lastActive = null; }
     this.reconcile(!!staleIdentity);
+    this.updateLoot();
     const m = this.mapping, cfg = this.config;
     this.target = null; this.dot = null; this.meleeDirection = null;
-    if (!m?.schema || !m.active?.active || m.ui?.spectating !== false || this.win.document.hidden) return;
+    this.stats.aimRejections = {};
+    this.stats.aimState = cfg.aim || cfg.melee ? 'waiting-mapping' : 'disabled';
+    if (!cfg.aim && !cfg.melee && !cfg.autoSwitch) return;
+    if (!m?.schema || !m.active?.active) return;
+    if (m.ui?.spectating !== false) { this.stats.aimState = m.ui ? 'spectating' : 'missing-spectator-contract'; return; }
+    if (this.win.document.hidden) { this.stats.aimState = 'page-hidden'; return; }
     const now = this.win.performance.now(), self = m.active, schema = m.schema;
     const pos = read(self, schema.posKey), mouse = this.app.input?.mousePos;
-    if (!vec(pos) || !vec(mouse) || at(self, [schema.netKey, schema.deadKey])) return;
+    if (!vec(pos) || !vec(mouse)) { this.stats.aimState = 'invalid-input-position'; return; }
+    if (at(self, [schema.netKey, schema.deadKey])) { this.stats.aimState = 'dead'; return; }
     this.updateSwitch();
     if (!cfg.aim && !cfg.melee) return;
     const ownTeam = teamOf(m.barn, self.__id);
-    if (ownTeam === null) return;
+    if (ownTeam === null) { this.stats.aimState = 'missing-own-team'; return; }
     const players = m.players();
     for (const p of players) {
       const v = read(p, schema.posKey);
       if (vec(v)) this.tracker.update(p, v, now);
     }
-    const bindDown = this.protocol === VERIFIED_PROTOCOL ? this.binds?.isBindDown(4) : !!this.app.input.mouseButtons?.[0];
+    const bindDown = this.protocol === VERIFIED_PROTOCOL && this.binds
+      ? this.binds.isBindDown(4) : !!this.app.input.mouseButtons?.[0];
     const firing = !!bindDown;
     const wantMelee = cfg.melee && this.capabilities.mobile && firing && this.definitions?.[localWeapon(m)]?.type === 'melee';
-    if ((!cfg.aim || !this.capabilities.aim || !firing) && !wantMelee) return;
-    const candidates = [];
+    if ((!cfg.aim || !this.capabilities.aim || !firing) && !wantMelee) {
+      this.stats.aimState = !firing ? 'fire-not-held' : 'missing-aim-contract'; return;
+    }
+    if (cfg.wallcheck && !this.capabilities.wallcheck) { this.stats.aimState = 'wallcheck-unavailable'; return; }
+    const candidates = [], rejected = this.stats.aimRejections;
+    const reject = reason => { rejected[reason] = (rejected[reason] || 0) + 1; };
     for (const p of players) {
-      if (p === self || at(p, [schema.netKey, schema.deadKey]) || (!cfg.knocked && p.downed) || !sameLayer(p.layer, self.layer)) continue;
+      if (p === self) continue;
+      if (at(p, [schema.netKey, schema.deadKey])) { reject('dead'); continue; }
+      if (!cfg.knocked && p.downed) { reject('downed'); continue; }
+      if (!sameLayer(p.layer, self.layer)) { reject('otherLayer'); continue; }
       const team = teamOf(m.barn, p.__id), targetPos = read(p, schema.posKey);
-      if (team === null || team === ownTeam || !vec(targetPos)) continue;
+      if (team === null) { reject('unknownTeam'); continue; }
+      if (team === ownTeam) { reject('teammate'); continue; }
+      if (!vec(targetPos)) { reject('invalidPosition'); continue; }
       const screen = project(m.camera, targetPos);
-      if (!screen) continue;
+      if (!screen) { reject('invalidProjection'); continue; }
       const distance = wantMelee ? Math.hypot(pos.x - targetPos.x, pos.y - targetPos.y) : Math.hypot(screen.x - mouse.x, screen.y - mouse.y);
-      if (distance > (wantMelee ? 5.5 : cfg.fov)) continue;
-      if (this.blocked({ pos, layer: self.layer }, { pos: targetPos }, !wantMelee)) continue;
+      if (distance > (wantMelee ? 5.5 : cfg.fov)) { reject('outsideFov'); continue; }
+      if (this.blocked({ pos, layer: self.layer }, { pos: targetPos }, !wantMelee)) { reject('wall'); continue; }
       candidates.push({ p, pos: targetPos, screen, distance });
     }
     candidates.sort((a, b) => a.distance - b.distance);
     let target = cfg.sticky && this.stickyId !== null ? candidates.find(c => c.p.__id === this.stickyId) : null;
     target ||= candidates[0];
-    if (!target) { this.stickyId = null; return; }
+    if (!target) { this.stickyId = null; this.stats.aimState = 'no-candidate'; return; }
     this.stickyId = target.p.__id;
     let world = point(target.pos);
     if (cfg.predict && this.capabilities.prediction && !wantMelee) {
@@ -301,14 +337,14 @@ export class Features {
         if (time !== null) world = { x: world.x + track.vx * time, y: world.y + track.vy * time };
       }
     }
-    const screen = project(m.camera, world);
-    if (!screen || !this.flushReady) return;
+    const screen = aimPoint(m.camera, world, pos);
+    if (!screen || !this.flushReady) { this.stats.aimState = 'missing-input-contract'; return; }
     const dt = clamp((now - this.lastInput) / 1000, .001, .05); this.lastInput = now;
     const gain = cfg.smoothEnabled ? 1 - Math.exp(-dt / (.015 + cfg.smooth / 500)) : 1;
     const x = mouse.x + (screen.x - mouse.x) * gain, y = mouse.y + (screen.y - mouse.y) * gain;
     this.restoreMouse = { owner: mouse, x: mouse.x, y: mouse.y, appliedX: x, appliedY: y };
     mouse.x = x; mouse.y = y;
-    this.target = target.p; this.dot = { x, y };
+    this.target = target.p; this.dot = { x, y }; this.stats.aimState = 'applied';
     if (wantMelee) {
       const dx = target.pos.x - pos.x, dy = target.pos.y - pos.y, len = Math.hypot(dx, dy);
       if (len > .1) this.meleeDirection = { x: dx / len, y: dy / len };
@@ -439,6 +475,41 @@ export class Features {
       }
     }
   }
+  updateLoot() {
+    this.pickupPulse = false;
+    if (!this.config.autoLoot || this.config.lootMode === 'mobile') return;
+    const m = this.mapping, now = this.win.performance.now();
+    if (!this.capabilities.autoPickup || !this.bindsInstalled) { this.stats.lootState = 'missing-pickup-contract'; return; }
+    if (this.win.document.hidden || m.ui?.spectating !== false || !m.active?.active
+      || m.active.downed || at(m.active, [m.schema.netKey, m.schema.deadKey])) { this.stats.lootState = 'paused'; return; }
+    const loot = read(this.lootSource.owner, this.lootSource.key), pos = read(m.active, m.schema.posKey);
+    if (read(loot, '__type') !== 3 || read(loot, 'active') !== true || !vec(read(loot, 'pos')) || !vec(pos)
+      || !sameLayer(read(loot, 'layer'), m.active.layer) || !finite(read(loot, 'rad')) || loot.rad <= 0
+      || !(loot.ownerId === 0 || loot.ownerId === m.active.__id)
+      || Math.hypot(loot.pos.x - pos.x, loot.pos.y - pos.y) >= loot.rad) {
+      this.stats.lootState = 'no-nearby-loot'; this.pickupAttempt = null; this.nextPickup = 0; return;
+    }
+    const def = this.definitions?.[read(loot, 'type')];
+    if (!['ammo', 'heal', 'boost', 'throwable'].includes(def?.type)) { this.stats.lootState = 'skip-non-supply'; return; }
+    // Never synthesize Interact/Use: they can open doors or revive. Native Loot
+    // goes through normal InputMsg diff detection and the server's pickup checks.
+    const previous = this.pickupAttempt;
+    const unchanged = previous?.entity === loot && previous.id === loot.__id && previous.count === loot.count;
+    if (!unchanged) this.nextPickup = 0;
+    if (now < this.nextPickup) { this.stats.lootState = 'pickup-backoff'; return; }
+    const attempts = unchanged ? previous.attempts + 1 : 1;
+    this.pickupAttempt = { entity: loot, id: loot.__id, count: loot.count, attempts };
+    this.nextPickup = now + Math.min(2000, 350 * 2 ** Math.min(attempts - 1, 3));
+    this.pickupPulse = true; this.stats.pickupPulses++; this.stats.lootState = 'loot-input-ready';
+  }
+  autoLootStatus() {
+    if (!this.config.autoLoot) return this.joinState.mobile && this.joinState.forwarded ? 'off-next-join' : 'disabled';
+    if (this.config.lootMode === 'nearby') return this.stats.lootState;
+    if (!this.senderReady) return 'missing-sender';
+    if (this.protocol !== null && this.protocol !== VERIFIED_PROTOCOL) return 'unsupported-protocol';
+    if (!this.joinState.observed || !this.joinState.mobile) return 'pending-next-join';
+    return this.joinState.forwarded ? 'mobile-join-forwarded' : 'join-not-forwarded';
+  }
   diagnostics() {
     const m = this.mapping;
     // Report contracts, never game references, player state or message contents.
@@ -447,11 +518,12 @@ export class Features {
       playerBarn: !!m?.barn, playerPool: !!m?.poolKey, activePlayer: !!m?.active,
       playerSchema: !!m?.schema, camera: !!m?.camera, spectatorUI: !!m?.ui,
       inputFlush: !!this.flushReady, sender: !!this.senderReady,
-      definitions: !!this.definitions, localData: !!this.local, binds: !!this.binds,
+      definitions: !!this.definitions, lootSource: !!this.lootSource, localData: !!this.local, binds: !!this.binds,
       protocolObserved: this.protocol !== null, protocolMatches: this.protocol === VERIFIED_PROTOCOL,
     };
-    return { version: '0.1.2', protocol: this.protocol, sourceProtocol: VERIFIED_PROTOCOL,
+    return { version: '0.2.0', protocol: this.protocol, sourceProtocol: VERIFIED_PROTOCOL,
       initialized: checks.initialized, checks,
+      autoLoot: { state: this.autoLootStatus(), mode: this.config.lootMode, ...this.joinState },
       missingContracts: Object.keys(checks).filter(key => !checks[key]),
       capabilities: { ...this.capabilities },
       stats: { ...this.stats }, failed: [...this.failed], overrides: this.overrides.records.size };

@@ -178,6 +178,14 @@ export function project(mapping, world) {
   if (!vec(center) || !finite(width) || !finite(height) || width <= 0 || height <= 0 || !finite(scale) || scale <= 0) return null;
   return { x: width * .5 + (world.x - center.x) * scale, y: height * .5 - (world.y - center.y) * scale };
 }
+// Game.update derives desktop input relative to the active network position and
+// viewport midpoint, NOT the (interpolated/shaken) camera center used by render.
+export function aimPoint(camera, world, playerPos) {
+  const target = project(camera, world), origin = project(camera, playerPos);
+  if (!target || !origin) return null;
+  return { x: read(camera.camera, camera.widthKey) * .5 + target.x - origin.x,
+    y: read(camera.camera, camera.heightKey) * .5 + target.y - origin.y };
+}
 // Match the rendered position by data flow, not vector names or declaration order.
 // Public Player.render: const screen = camera.<projection>(this.<visual>);
 // this.container.position.set(screen.x, screen.y). Never execute render to probe it.
@@ -249,6 +257,19 @@ export function discover(game) {
   const camera = discoverCamera(game);
   const visualPosKey = active && camera ? discoverVisualPosition(active, camera.method) : null;
   return { game, barn, barnKey: barns.length === 1 ? barns[0][0] : null, pool, poolKey, players, active, activeKey, schema, ui, map, camera, visualPosKey, obstacles, creator, registryKey };
+}
+// The public LootBarn getter returns one own field. Read that field ourselves;
+// never execute an unknown getter or choose the first loot-like object.
+export function discoverLootSource(game) {
+  const found = [];
+  for (const [, owner] of entries(game)) {
+    const tree = ast(readMethod(owner, 'getClosestLoot'));
+    const body = tree?.body?.body;
+    if (body?.length !== 1 || body[0].type !== 'ReturnStatement') continue;
+    const p = path(body[0].argument);
+    if (p?.length === 1 && (read(owner, p[0]) === null || object(read(owner, p[0])))) found.push({ owner, key: p[0] });
+  }
+  return found.length === 1 ? found[0] : null;
 }
 export function teamOf(barn, id) {
   return unique(entries(read(barn, 'teamInfo')).filter(([, team]) => Array.isArray(read(team, 'playerIds')) && read(team, 'playerIds').includes(id)).map(([key]) => key));

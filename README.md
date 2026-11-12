@@ -2,7 +2,7 @@
 
 Bản userscript viết lại từ mục tiêu của mẫu người dùng cung cấp, với menu nhẹ và discovery có kiểm chứng. **Đây là bản thử nghiệm đã test offline, chưa xác nhận hoạt động trên build live của survev.io.** Không bảo đảm tương thích mọi update hoặc tránh phát hiện. Việc dùng trên máy chủ công cộng có thể vi phạm điều khoản của game.
 
-Bản hiện tại: **0.1.2 — readable debug**. Người dùng đã báo bản trước không hoạt động trên live; lỗi live **chưa được tái hiện hoặc xác định nguyên nhân**. 47 tests offline chỉ kiểm tra các trường hợp mô phỏng, không xác nhận game live. Xem [đợt đối chiếu source lần 2](docs/survev-source-pass-2.vi.md) để biết nguồn tham khảo.
+Bản hiện tại: **0.2.0 — core fixes / readable preview**. Đã tái hiện và sửa lỗi nhận diện desktop Join bằng method source public, tách phép chiếu aim/input khỏi render và thêm native nearby pickup. **Chưa có xác nhận đã giải quyết báo lỗi trên live của người dùng; chưa gọi là “reborn hoàn toàn”.** Kết quả: 59 tests offline + 4 kịch bản method-level từ source public. [Chi tiết 0.2.0 và checklist test lại](docs/reborn-0.2.0.vi.md).
 
 ## File để cài
 
@@ -13,10 +13,17 @@ Bản hiện tại: **0.1.2 — readable debug**. Người dùng đã báo bản
 3. Script phải chạy ở **page/main world**, tại **document-start**. Metadata có `@sandbox raw` và `@inject-into page`; mức hỗ trợ tùy manager/trình duyệt. Không chạy như đoạn console muộn sau khi trang đã load.
 4. Reload `https://survev.io/`. Mở menu bằng **Right Shift**. Các tính năng gameplay mặc định **tắt**.
 5. Chờ trạng thái capture/mapping. Checkbox bị khóa nghĩa là chưa đủ contract trên build đó, không phải tính năng đã hoạt động.
-6. Nếu có menu nhưng tính năng không chạy: vào trận → **Help → Refresh diagnostics**, gửi JSON diagnostics. Các trường `captureState`, `checks`, `missingContracts`, `lastWarning` phân biệt capture/mapping/protocol; diagnostics không chứa token Join, tên/vị trí người chơi hoặc game object.
-7. Nếu **không có menu**: mở Console, tìm thông báo `[Duality Reborn 0.1.2] Script đã chạy` và gửi dòng lỗi màu đỏ đầu tiên nếu có. Cho biết trình duyệt và userscript manager. Không có thông báo này chưa đủ để kết luận lỗi game: có thể script chưa được inject, bị chặn hoặc lỗi trước bootstrap. Không gửi cookie/token hay dump toàn bộ game state.
+6. Nếu có menu nhưng tính năng không chạy: vào trận → **Help → Copy diagnostics**, gửi JSON diagnostics. Các trường `captureState`, `checks`, `missingContracts`, `lastWarning` phân biệt capture/mapping/protocol; diagnostics không chứa token Join, tên/vị trí người chơi hoặc game object.
+7. Nếu **không có menu**: mở Console, tìm thông báo `[Duality Reborn 0.2.0] Script đã chạy` và gửi dòng lỗi màu đỏ đầu tiên nếu có. Cho biết trình duyệt và userscript manager. Không có thông báo này chưa đủ để kết luận lỗi game: có thể script chưa được inject, bị chặn hoặc lỗi trước bootstrap. Không gửi cookie/token hay dump toàn bộ game state.
 
 **Retry capture** chỉ thử lại bắt Application trong 15 giây. Nếu đã lỡ thời điểm khởi tạo item DB/Join, cần reload. **Stop / cleanup** gỡ hook của bản này, trả property về giá trị game ghi gần nhất và bỏ menu/overlay. Muốn bật lại sau Stop: reload.
+
+## Test lại hai tính năng chính (0.2.0)
+
+- **Auto Loot:** Misc → Auto Loot → Enabled → **Nearby supplies (now)**. Dùng ngay trong trận khi đủ contract/protocol; chỉ ammo/heal/boost/throwable. Không tự đổi súng/gear. Có backoff nếu loot không đổi, không giả xác nhận inventory tăng. Cấu hình cũ thiếu pickup mode sẽ dùng nearby mode.
+- **Mobile loot / doors:** chọn mode này nếu muốn hành vi Join cũ; phải bật **trước khi Join trận mới**. Đã sửa desktop Join có `isMobile === undefined` khiến bản trước bỏ qua cả protocol và mobile flag. Chuyển/tắt giữa trận không hoàn tác server-mobile state đã gửi.
+- **Aimbot:** Enabled, giữ nút/phím Fire và đưa con trỏ gần đối thủ trong FOV. Phép chiếu input nay tách khỏi ESP để không lệch theo camera interpolation/shake. Trạng thái `Aim` và `Loot` hiển thị riêng; nếu chưa tác động, gửi Help → Copy diagnostics thay vì chỉ screenshot checkbox.
+- `wallcheck-unavailable` nghĩa là bạn đang yêu cầu wallcheck nhưng registry/collider contract chưa đủ. Script không âm thầm bỏ qua wallcheck. Nearby loot cũng không chạy khi thiếu item DB hoặc chưa thấy Join khớp protocol.
 
 ## Sửa riêng trong 0.1.2
 
@@ -55,7 +62,7 @@ Tất cả dòng “đã viết lại” dưới đây là trạng thái impleme
 | Zoom | Có giới hạn 1–3× | Dò local zoom bằng semantic anchor; đổi phạm vi camera không tạo enemy state mới. |
 | Own flashlight | Range/spread preview | Dùng base defs, chưa tính movement/recoil/perk modifiers; không phải raycast/ricochet chính xác hoặc flashlight đối thủ. |
 | Grenade nominal radius | Preview | Chỉ active projectile, cùng layer, defs/registry + protocol khớp; không nhận nhầm loot. Không có fuse/landing prediction/occlusion/shrapnel; không phải ranh giới an toàn. |
-| Auto Loot | Mobile Join mode | Trận tiếp theo; loot theo điều kiện server, có cả mở cửa; còn ảnh hưởng scope/mobile behavior. Chỉ protocol xác nhận, không phải field autoLoot riêng. |
+| Auto Loot | Hai mode | Nearby supplies phát native Loot trong trận, chỉ stackable supplies, có backoff; mobile loot/doors cần Join mới. Cả hai vẫn chịu điều kiện server, không có pickup acknowledgement. |
 | Mobile Movement | Đã viết lại | Vector chuẩn hóa, touchMoveLen số 255, không boolean. |
 | Layer Spoofer / Map Highlights | **Chưa port** | Ghi rõ trong menu; không fake trạng thái thành công. |
 | Grenade trajectory / ricochet / other flashlights | **Chưa port** | Cần đối chiếu physics và collision build live, không giữ approximation sai từ bản cũ. |
@@ -79,7 +86,7 @@ npm ci
 npm run check
 ```
 
-`pretest` build lại artifact trước khi chạy tests. Test gồm JS semantics, semantic discovery, mutation qua minify/rename, timeout/cleanup, message clone, pool lifecycle, input flush, menu/jsdom và bootstrap end-to-end với **fixture giả**. Không có end-to-end test với browser game live, anti-cheat hay benchmark FPS.
+`pretest` build lại artifact trước khi chạy tests. Test offline (59 cases) gồm JS semantics, semantic discovery, mutation qua minify/rename, timeout/cleanup, message clone, pool lifecycle, input flush, menu/jsdom và bootstrap end-to-end với **fixture giả**. Không có end-to-end test với browser game live, anti-cheat hay benchmark FPS.
 
 - `src/core.mjs`: safe descriptor traversal, AST roles, bootstrap, math, cleanup.
 - `src/features.mjs`: feature runtime, capability gates, lifecycle, input và visual overrides.
@@ -87,6 +94,8 @@ npm run check
 - `src/main.mjs`: userscript lifecycle/controller.
 - `scripts/build.mjs`: metadata và bundle.
 - `tests/`: offline regression tests.
+- `scripts/check-upstream.mjs`: kiểm tra method-level từ checkout source public riêng; chạy `npm run check:upstream -- /path/to/survev-checkout`, HEAD phải đúng source pin. Chạy 4 kịch bản (2 kiểu transform × 2 loot mode), không phải full game hoặc Codefend/live E2E.
+- `docs/reborn-0.2.0.vi.md`: bằng chứng lỗi Join/input, native pickup và checklist live.
 - `docs/survev-technique-review.vi.md`: phân tích ba mẫu ban đầu.
 
 Parser Acorn dùng MIT license; thông báo license được nhúng vào artifact `.user.js` khi build.

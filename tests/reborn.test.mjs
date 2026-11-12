@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import { JSDOM } from 'jsdom';
 import { readFileSync } from 'node:fs';
 import { ast, captureApplication, captureDefinitions, discover, discoverCamera, discoverPlayerSchema,
-  discoverSender, discoverVisualPosition, overlayPosition, Disposables, entries, intercept, patchMethod, project, read, segmentBlocked,
+  discoverSender, discoverVisualPosition, discoverLootSource, aimPoint, overlayPosition, Disposables, entries, intercept, patchMethod, project, read, segmentBlocked,
   teamOf, Tracker } from '../src/core.mjs';
 import { Features, grenadeZone, inputShape, localDataSchema, modifyMessage, Overrides, VERIFIED_PROTOCOL } from '../src/features.mjs';
 import { createMenu, DEFAULTS, loadConfig, normalizeConfig, STORAGE_KEY } from '../src/menu.mjs';
@@ -219,7 +219,7 @@ test('definition capture restores Object.keys and forwards invalid input errors'
 test('features capture protocol, clone join, and dispose all ticker/method ownership', () => {
   const dom = env(), win = dom.window, app = fixture();
   const originalSender = app.game.transmit, originalFlush = app.input.flush;
-  const engine = new Features(win, app, { ...DEFAULTS, autoLoot: true }, () => {}, defs);
+  const engine = new Features(win, app, { ...DEFAULTS, autoLoot: true, lootMode: 'mobile' }, () => {}, defs);
   const join = new JoinMsg(); assert.equal(app.game.transmit(1, join), 'forwarded');
   assert.equal(app.game.sent[0].data.isMobile, true); assert.equal(join.isMobile, false);
   assert.equal(engine.protocol, VERIFIED_PROTOCOL); assert.equal(app.callbacks.length, 2);
@@ -360,7 +360,7 @@ test('pool/active reference replacement is detected without waiting for the one-
 });
 
 test('unknown Join protocol does not change mobile flag or activate enum-dependent input features', () => {
-  const dom = env(), app = fixture(), engine = new Features(dom.window, app, { ...DEFAULTS, autoLoot: true, mobileMovement: true, semi: true }, () => {}, defs);
+  const dom = env(), app = fixture(), engine = new Features(dom.window, app, { ...DEFAULTS, autoLoot: true, lootMode: 'mobile', mobileMovement: true, semi: true }, () => {}, defs);
   const join = new JoinMsg(9999); app.game.transmit(1, join); engine.reconcile(true);
   assert.equal(app.game.sent[0].data, join); assert.equal(join.isMobile, false);
   assert.equal(engine.capabilities.mobile, false); assert.equal(engine.capabilities.semi, false);
@@ -509,9 +509,151 @@ test('diagnostics distinguish capture, mapping and protocol without leaking game
 
 test('distributed userscript retains readable function names and source-module sections', () => {
   const script = readFileSync(new URL('../userscripts/duality-reborn.user.js', import.meta.url), 'utf8');
-  assert.match(script, /@version\s+0\.1\.2/);
+  assert.match(script, /@version\s+0\.2\.0/);
   assert.match(script, /function captureApplication\(/);
   assert.match(script, /function start\(win\)/);
   assert.match(script, /\/\/ src\/main\.mjs/);
   assert.ok(script.split('\n').length > 500);
+});
+
+test('desktop Join accepts an undefined mobile flag and forwards a prototype-preserving mobile clone', () => {
+  const dom = env(), app = fixture(), config = { ...DEFAULTS, autoLoot: true, lootMode: 'mobile' };
+  const engine = new Features(dom.window, app, config, () => {}, defs), join = new JoinMsg();
+  join.isMobile = undefined;
+  app.game.transmit(1, join);
+  const sent = app.game.sent[0].data;
+  assert.equal(engine.protocol, VERIFIED_PROTOCOL); assert.equal(sent.isMobile, true);
+  assert.equal(join.isMobile, undefined); assert.equal(Object.getPrototypeOf(sent), JoinMsg.prototype);
+  assert.equal(engine.autoLootStatus(), 'mobile-join-forwarded');
+  engine.dispose(); dom.window.close();
+});
+
+test('mobile mode reports pending / forwarded / off-next-join instead of implying immediate pickup', () => {
+  const dom = env(), app = fixture(), config = { ...DEFAULTS, lootMode: 'mobile' };
+  const engine = new Features(dom.window, app, config, () => {}, defs);
+  app.game.transmit(1, new JoinMsg()); config.autoLoot = true;
+  assert.equal(engine.autoLootStatus(), 'pending-next-join');
+  app.game.transmit(1, new JoinMsg()); assert.equal(engine.autoLootStatus(), 'mobile-join-forwarded');
+  config.autoLoot = false; assert.equal(engine.autoLootStatus(), 'off-next-join');
+  app.game.transmit(1, new JoinMsg()); assert.equal(engine.autoLootStatus(), 'disabled');
+  engine.dispose(); dom.window.close();
+});
+
+test('aim input stays player-relative when the visual/shaken camera center differs from network position', () => {
+  const dom = env(), app = fixture(); app.game.camera.p = { x: 9, y: 18 };
+  app.input.mouseButtons[0] = true;
+  const engine = new Features(dom.window, app, { ...DEFAULTS, aim: true, wallcheck: false, smoothEnabled: false }, () => {}, defs);
+  const camera = engine.mapping.camera;
+  assert.deepEqual(project(camera, { x: 12, y: 20 }), { x: 496, y: 236 });
+  assert.deepEqual(aimPoint(camera, { x: 12, y: 20 }, { x: 10, y: 20 }), { x: 464, y: 300 });
+  engine.pre(); assert.deepEqual(app.input.mousePos, { x: 464, y: 300 }); assert.equal(engine.stats.aimState, 'applied');
+  app.input.flush(); assert.deepEqual(app.input.mousePos, { x: 440, y: 300 });
+  engine.dispose(); dom.window.close();
+});
+
+test('aim uses physical Fire fallback only if binds are missing, not to override an explicit released bind', () => {
+  const dom = env(), app = fixture(); app.input.mouseButtons[0] = true; app.game.binds = null;
+  const engine = new Features(dom.window, app, { ...DEFAULTS, aim: true, wallcheck: false }, () => {}, defs);
+  app.game.transmit(1, new JoinMsg()); engine.pre(); assert.equal(engine.stats.aimState, 'applied');
+  app.game.binds = new Binds(app.input); app.game.binds.isBindDown = () => false;
+  engine.reconcile(true); engine.pre(); assert.equal(engine.stats.aimState, 'fire-not-held');
+  engine.dispose(); dom.window.close();
+});
+
+test('aim explains wallcheck, unknown teams and FOV rejection without exposing player identity or positions', () => {
+  const dom = env(), app = fixture(), config = { ...DEFAULTS, aim: true, wallcheck: true };
+  app.input.mouseButtons[0] = true;
+  const engine = new Features(dom.window, app, config, () => {}, defs);
+  engine.pre(); assert.equal(engine.stats.aimState, 'wallcheck-unavailable');
+  config.wallcheck = false; delete app.game.barn.teamInfo[20]; engine.pre();
+  assert.equal(engine.stats.aimState, 'no-candidate'); assert.equal(engine.stats.aimRejections.unknownTeam, 1);
+  app.game.barn.teamInfo[20] = { playerIds: [2] }; app.game.barn.playerPool.list[1].p = { x: 100, y: 100 }; engine.pre();
+  assert.equal(engine.stats.aimRejections.outsideFov, 1);
+  const text = JSON.stringify(engine.diagnostics()); assert.ok(!text.includes('playerIds')); assert.ok(!text.includes('mousePos'));
+  engine.dispose(); dom.window.close();
+});
+
+function pickupFixture() {
+  const dom = env(), app = fixture();
+  const loot = { __id: 9, __type: 3, active: true, type: '9mm', count: 30, pos: { x: 10, y: 20 }, rad: 2, ownerId: 0, layer: 0 };
+  app.game.lootBarn = { closestLoot: loot, getClosestLoot() { return this.closestLoot; } };
+  const config = { ...DEFAULTS, autoLoot: true, lootMode: 'nearby' }, definitions = { ...defs, '9mm': { type: 'ammo' } };
+  const engine = new Features(dom.window, app, config, () => {}, definitions);
+  return { dom, app, loot, config, engine };
+}
+
+test('loot source discovery rejects ambiguity and does not execute candidate methods', () => {
+  const app = fixture();
+  app.game.lootBarn = { candidate: null, getClosestLoot() { return this.candidate; } };
+  assert.deepEqual(discoverLootSource(app.game), { owner: app.game.lootBarn, key: 'candidate' });
+  app.game.otherLoot = { candidate: null, getClosestLoot() { return this.candidate; } };
+  assert.equal(discoverLootSource(app.game), null);
+  delete app.game.otherLoot;
+  app.game.lootBarn.getClosestLoot = function () { throw Error('must not run'); };
+  assert.equal(discoverLootSource(app.game), null);
+});
+
+test('nearby supplies work in the current match through native Loot binds without changing Join mobile mode', () => {
+  const { dom, app, engine } = pickupFixture();
+  app.game.transmit(1, new JoinMsg()); engine.pre();
+  assert.equal(app.game.sent[0].data.isMobile, false); assert.equal(engine.capabilities.autoPickup, true);
+  assert.equal(app.game.binds.isBindPressed(10), true); assert.equal(app.game.binds.isBindPressed(10), true);
+  assert.equal(engine.autoLootStatus(), 'loot-input-ready');
+  const msg = new InputMsg(); if (app.game.binds.isBindPressed(10)) msg.addInput(10);
+  app.game.transmit(3, msg); assert.deepEqual(app.game.sent[1].data.inputs, [10]);
+  engine.pre(); assert.equal(app.game.binds.isBindPressed(10), false); assert.equal(engine.stats.lootState, 'pickup-backoff');
+  engine.dispose(); assert.equal(app.game.binds.isBindPressed(10), false); dom.window.close();
+});
+
+test('nearby pickup skips weapons, gear, inactive/foreign/out-of-range loot and pauses when downed', () => {
+  const { dom, app, loot, engine } = pickupFixture(); app.game.transmit(1, new JoinMsg());
+  for (const patch of [{ type: 'mp5' }, { type: 'unknown' }, { active: false }, { ownerId: 555 }, { layer: 1 }, { pos: { x: 20, y: 20 } }, { __type: 9 }]) {
+    const original = { ...loot }; Object.assign(loot, patch); engine.pre();
+    assert.equal(app.game.binds.isBindPressed(10), false, JSON.stringify(patch)); Object.assign(loot, original);
+  }
+  app.game.hero.downed = true; engine.pre(); assert.equal(engine.stats.lootState, 'paused');
+  app.game.hero.downed = false; app.game.ui.spectating = true; engine.pre(); assert.equal(engine.stats.lootState, 'paused');
+  engine.dispose(); dom.window.close();
+});
+
+test('unchanged loot backs off, count/id changes reset retry and unknown Join never enables native pickup', () => {
+  const { dom, app, loot, engine } = pickupFixture();
+  app.game.transmit(1, new JoinMsg(9999)); engine.pre(); assert.equal(engine.pickupPulse, false);
+  app.game.transmit(1, new JoinMsg()); engine.pre(); assert.equal(engine.pickupAttempt.attempts, 1);
+  engine.nextPickup = -Infinity; engine.pre(); assert.equal(engine.pickupAttempt.attempts, 2);
+  loot.count--; engine.pre(); assert.equal(engine.pickupAttempt.attempts, 1); assert.equal(engine.pickupPulse, true);
+  loot.__id++; engine.pre(); assert.equal(engine.pickupAttempt.attempts, 1);
+  engine.dispose(); dom.window.close();
+});
+
+test('replacement bind instances get a fresh native pickup hook and old instance is restored', () => {
+  const { dom, app, engine } = pickupFixture(); app.game.transmit(1, new JoinMsg()); engine.pre();
+  const old = app.game.binds; app.game.binds = new Binds(app.input); engine.nextPickup = -Infinity;
+  engine.reconcile(true); engine.pre();
+  assert.equal(old.isBindPressed(10), false); assert.equal(app.game.binds.isBindPressed(10), true);
+  engine.dispose(); dom.window.close();
+});
+
+test('pickup-mode select validates storage and updates config through the existing Misc tab', () => {
+  assert.equal(normalizeConfig({ lootMode: 'invalid' }).lootMode, 'nearby');
+  assert.equal(normalizeConfig({ lootMode: 'mobile' }).lootMode, 'mobile');
+  const dom = env(), config = { ...DEFAULTS }, menu = createMenu(dom.window, config, { onChange() {}, retry() {}, stop() {}, diagnostics: () => ({}) });
+  menu.capabilities({ sender: true });
+  [...menu.root.querySelectorAll('.nav button')].find(b => b.textContent === 'Misc').click();
+  const select = menu.root.querySelector('select'); assert.equal(select.value, 'nearby');
+  select.value = 'mobile'; select.dispatchEvent(new dom.window.Event('change')); assert.equal(config.lootMode, 'mobile');
+  menu.dispose(); dom.window.close();
+});
+
+test('Help offers a local selectable JSON fallback when clipboard access is unavailable', async () => {
+  const dom = env(), menu = createMenu(dom.window, { ...DEFAULTS }, {
+    onChange() {}, retry() {}, stop() {}, diagnostics: () => ({ captureState: 'captured', stats: { aimState: 'fire-not-held' } }),
+  });
+  [...menu.root.querySelectorAll('.nav button')].find(b => b.textContent === 'Help').click();
+  [...menu.root.querySelectorAll('button')].find(b => b.textContent === 'Copy diagnostics').click();
+  await Promise.resolve();
+  const field = menu.root.querySelector('textarea'); assert.ok(field.readOnly);
+  assert.equal(JSON.parse(field.value).stats.aimState, 'fire-not-held');
+  assert.equal(field.selectionEnd, field.value.length);
+  menu.dispose(); dom.window.close();
 });

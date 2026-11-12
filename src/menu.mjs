@@ -6,7 +6,7 @@ export const DEFAULTS = Object.freeze({
   melee: false, autoSwitch: false, semi: false, xray: false, ceilings: true,
   smokeOpacity: 50, treeOpacity: 50, esp: false, nametags: true, lines: true,
   ownFlashlight: false, grenadeZones: false, zoom: false, zoomFactor: 1.5,
-  autoLoot: false, mobileMovement: false, menuKey: 'ShiftRight', aimKey: 'KeyB', stickyKey: 'KeyN', holdAim: false,
+  autoLoot: false, lootMode: 'nearby', mobileMovement: false, menuKey: 'ShiftRight', aimKey: 'KeyB', stickyKey: 'KeyN', holdAim: false,
 });
 export const STORAGE_KEY = 'duality-reborn.config.v1';
 const ranges = { smooth: [0, 100], fov: [50, 400], smokeOpacity: [0, 100], treeOpacity: [0, 100], zoomFactor: [1, 3] };
@@ -20,6 +20,7 @@ export function normalizeConfig(saved) {
     if (['menuKey', 'aimKey', 'stickyKey'].includes(key) && typeof value === 'string'
       && /^(Key[A-Z]|Digit[0-9]|Shift(Left|Right)|Control(Left|Right)|Alt(Left|Right)|F([1-9]|1[0-2]))$/.test(value)) result[key] = value;
   }
+  if (['nearby', 'mobile'].includes(saved.lootMode)) result.lootMode = saved.lootMode;
   result.version = 1;
   return result;
 }
@@ -30,7 +31,7 @@ export function loadConfig(storage) {
 
 const CSS = `
 :host{all:initial;position:fixed;inset:0;z-index:2147483646;pointer-events:none;color:#eaf6ff;font:13px system-ui,sans-serif}
-*{box-sizing:border-box}button,input{font:inherit}button{cursor:pointer;color:inherit;background:#17334c;border:1px solid #365168;border-radius:5px;padding:7px 10px}button:hover{background:#23425b}button:disabled,input:disabled{cursor:not-allowed;opacity:.45}button:focus-visible,input:focus-visible{outline:2px solid #7dc5ff;outline-offset:2px}
+*{box-sizing:border-box}button,input,select{font:inherit}select{max-width:200px;color:inherit;background:#17334c;border:1px solid #365168;padding:5px}button{cursor:pointer;color:inherit;background:#17334c;border:1px solid #365168;border-radius:5px;padding:7px 10px}button:hover{background:#23425b}button:disabled,input:disabled{cursor:not-allowed;opacity:.45}button:focus-visible,input:focus-visible{outline:2px solid #7dc5ff;outline-offset:2px}
 canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;top:24px;display:flex;width:720px;max-width:calc(100vw - 24px);max-height:85vh;border:1px solid #365168;border-radius:10px;background:#0c2335;pointer-events:auto;overflow:hidden}
 .sidebar{width:180px;flex-shrink:0;padding:16px;background:#102a40;display:flex;flex-direction:column;gap:10px}.brand{font-weight:750;padding:6px 0 16px;cursor:move;touch-action:none;user-select:none}.version{font-size:11px;color:#91adc5;margin-top:6px}.nav{display:flex;flex-direction:column;gap:7px}.nav button{text-align:left;border-color:transparent;background:transparent}.nav button.active{background:#245377;border-color:#4076a0}.footer{margin-top:auto;display:flex;flex-direction:column;gap:8px}.content{min-width:0;flex:1;padding:20px;overflow-y:auto;overscroll-behavior:contain}h2{font-size:15px;margin:0 0 10px}fieldset{border:1px solid #29465d;border-radius:6px;margin:0 0 16px;padding:12px}legend{font-weight:650;padding:0 5px}.row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:9px 0;min-height:24px}.row span{min-width:0}.row input[type=checkbox]{width:17px;height:17px;flex-shrink:0;accent-color:#65b7ef}.row input[type=range]{width:130px;accent-color:#65b7ef}.row output{width:36px;text-align:right}.hint{font-size:11px;color:#a3b9ca;line-height:1.6}#status{white-space:pre-wrap;word-break:break-word;font-size:11px;line-height:1.5;background:#081b2b;padding:10px;margin-bottom:14px;border:1px solid #29465d;border-radius:5px}p{line-height:1.6}a{color:#80c4ff}pre{white-space:pre-wrap;word-break:break-word;font-size:11px}.toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}[hidden]{display:none!important}@media(max-width:600px){#ui{left:12px;top:12px}.sidebar{width:122px;padding:10px}.content{padding:12px}.row{gap:6px}.row input[type=range]{width:85px}}
 `;
@@ -53,7 +54,7 @@ const GROUPS = {
   ],
   Misc: [
     ['Map Highlights', [[null, 'Chưa port: không hook Array.sort toàn trang']]],
-    ['Auto Loot', [['autoLoot', 'Mobile loot / doors on next join', 'sender']]],
+    ['Auto Loot', [['autoLoot', 'Enabled', 'sender'], ['lootMode', 'Pickup mode', 'sender'], [null, 'Nearby: ammo / heal / boost / throwable; bỏ qua súng và gear. Mobile: cần Join mới, có cả mở cửa.']]],
     ['Mobile Movement', [['mobileMovement', 'Enabled', 'mobile']]],
   ],
 };
@@ -73,7 +74,7 @@ export function createMenu(win, config, { onChange, retry, stop, diagnostics, on
   const style = el('style', { text: CSS });
   const canvas = el('canvas'); canvas.setAttribute('aria-hidden', 'true');
   const shell = el('section', { id: 'ui' }); shell.setAttribute('aria-label', 'Duality Client Reborn');
-  const brand = el('div', { class: 'brand', text: 'Duality Client' }, el('div', { class: 'version', text: 'Reborn 0.1.2 • readable debug' }));
+  const brand = el('div', { class: 'brand', text: 'Duality Client' }, el('div', { class: 'version', text: 'Reborn 0.2.0 • readable debug' }));
   const nav = el('nav', { class: 'nav' }); nav.setAttribute('aria-label', 'Menu tabs');
   const content = el('main', { class: 'content' });
   const status = el('div', { id: 'status', text: 'Đang chờ Application…' }); status.setAttribute('role', 'status');
@@ -101,12 +102,16 @@ export function createMenu(win, config, { onChange, retry, stop, diagnostics, on
   const row = ([key, label, capability]) => {
     if (key === null) return el('div', { class: 'hint', text: label });
     const title = el('span', { text: label }), labelEl = el('label', { class: 'row' }, title);
-    const input = el('input', { type: ranges[key] ? 'range' : 'checkbox' });
+    const input = key === 'lootMode' ? el('select') : el('input', { type: ranges[key] ? 'range' : 'checkbox' });
+    if (key === 'lootMode') {
+      for (const [value, text] of [['nearby', 'Nearby supplies (now)'], ['mobile', 'Mobile loot / doors (next join)']]) input.append(el('option', { value, text }));
+      input.value = config.lootMode; input.onchange = () => set(key, input.value);
+    }
     if (capability && !caps[capability]) {
       input.disabled = true;
       labelEl.title = `Đang chờ contract: ${capability}. Chưa xác nhận trên build này.`;
     }
-    if (ranges[key]) {
+    if (key === 'lootMode') { labelEl.append(input); } else if (ranges[key]) {
       [input.min, input.max] = ranges[key]; input.step = key === 'zoomFactor' ? .1 : 1; input.value = config[key];
       const output = el('output', { text: String(config[key]) });
       input.oninput = () => { const value = Number(input.value); set(key, value); output.textContent = String(value); };
@@ -122,7 +127,8 @@ export function createMenu(win, config, { onChange, retry, stop, diagnostics, on
     for (const button of nav.children) { button.classList.toggle('active', button.textContent === tab); button.setAttribute('aria-pressed', String(button.textContent === tab)); }
     if (GROUPS[tab]) {
       for (const [name, rows] of GROUPS[tab]) panel.append(el('fieldset', {}, el('legend', { text: name }), ...rows.map(row)));
-      if (tab === 'Misc') panel.append(el('p', { class: 'hint', text: 'Auto Loot dùng isMobile trong Join, chỉ có hiệu lực khi vào trận tiếp theo. Thay đổi mobile mode còn có thể ảnh hưởng scope; không sửa raw WebSocket packet.' }));
+      if (tab === 'Main') panel.append(el('p', { class: 'hint', text: 'Aim chỉ tác động khi giữ nút bắn và có đối thủ trong FOV quanh con trỏ. Trạng thái Aim ở trên cho biết vì sao đang chờ; wallcheck thiếu contract sẽ không âm thầm bị bỏ qua.' }));
+      if (tab === 'Misc') panel.append(el('p', { class: 'hint', text: 'Nearby supplies hoạt động trong trận sau khi đủ contract; không tự đổi súng/gear và không giả nhặt thành công. Mobile mode dùng isMobile trong Join mới, có thể ảnh hưởng scope và tự mở cửa.' }));
       return;
     }
     if (tab === 'Keybinds') {
@@ -142,8 +148,23 @@ export function createMenu(win, config, { onChange, retry, stop, diagnostics, on
       el('p', { class: 'hint', text: 'Chỉ hiển thị dữ liệu client nhận được. Không bảo đảm tương thích mọi update hay tránh phát hiện. Những mục chưa port được ghi rõ, không giả vờ đang hoạt động.' }));
     const pre = el('pre', { text: JSON.stringify(diagnostics(), null, 2) });
     const refresh = el('button', { text: 'Refresh diagnostics' }); refresh.onclick = () => { pre.textContent = JSON.stringify(diagnostics(), null, 2); };
+    const copy = el('button', { text: 'Copy diagnostics' });
+    copy.onclick = async () => {
+      const text = JSON.stringify(diagnostics(), null, 2); pre.textContent = text;
+      try {
+        if (!win.navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+        await win.navigator.clipboard.writeText(text);
+        if (!dead && copy.isConnected) copy.textContent = 'Copied';
+      } catch {
+        if (dead || !copy.isConnected) return;
+        const field = el('textarea', { value: text, readOnly: true, rows: 10 });
+        field.setAttribute('aria-label', 'Diagnostics JSON — Ctrl+C to copy');
+        field.style.width = '100%'; pre.replaceChildren(field); field.focus(); field.select();
+        copy.textContent = 'Nhấn Ctrl+C để copy JSON';
+      }
+    };
     const reset = el('button', { text: 'Reset config' }); reset.onclick = () => { Object.assign(config, DEFAULTS); persist(); onChange('reset'); render(); };
-    panel.append(el('div', { class: 'toolbar' }, refresh, reset), pre);
+    panel.append(el('div', { class: 'toolbar' }, refresh, copy, reset), pre);
   };
   for (const name of ['Main', 'Visuals', 'Misc', 'Keybinds', 'Help']) {
     const button = el('button', { text: name }); button.onclick = () => { tab = name; render(); }; nav.append(button);
