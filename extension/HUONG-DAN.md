@@ -1,4 +1,4 @@
-# Tabspace 0.11 — bản thử nghiệm
+# Tabspace 0.11.1 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -8,7 +8,7 @@
 
 ## Kiểm thử
 - Trong **Tab trùng**, xem các tab http/https có URL giống hệt trên nhiều cửa sổ. Không tự chọn hoặc đóng; bạn có thể chọn tab và lưu hoặc lưu & đóng sau xác nhận. Tab cùng URL có thể chứa nội dung hoặc biểu mẫu khác nhau.
-- Popup hỗ trợ lưu bản sao, chuyển sang màn hình xác nhận lưu & đóng, tìm/chuyển tab, cho tab nền đủ điều kiện nghỉ sau xác nhận và truy cập nhanh ba preset mới tạo. Tab đang hiển thị trong mỗi cửa sổ, ghim hoặc phát âm thanh không được cho nghỉ từ popup.
+- Popup ưu tiên hiển thị tab ở cuối thanh tab của cửa sổ hiện tại, sau đó đến các cửa sổ khác; đây là vị trí trên thanh tab, không phải thời gian truy cập gần nhất. Popup hỗ trợ lưu bản sao, chuyển sang màn hình xác nhận lưu & đóng, tìm/chuyển tab, cho tab nền đủ điều kiện nghỉ sau xác nhận và truy cập nhanh ba preset mới tạo. Tab đang hiển thị trong mỗi cửa sổ, ghim hoặc phát âm thanh không được cho nghỉ từ popup.
 - Chọn **Tìm tất cả** để tìm đồng thời tab đang mở, nhóm, tab đã lưu, phiên và preset. Chọn **Tag** để xem số nhóm và tab gắn mỗi tag. Tab không tự kế thừa tag của nhóm; nội dung trang không được tìm kiếm.
 - Chọn các tab đang mở, dùng **Lưu đã chọn** để lưu bản sao hoặc **Lưu & đóng đã chọn** để lưu trước rồi đóng. Tạo/chỉnh nhóm, mở từng tab hoặc cả nhóm, thêm tag cho nhóm và tab, ghi chú cho tab, chuyển bản lưu giữa các nhóm và tìm kiếm theo tag/ghi chú.
 - Nút **Nghỉ** cho tab nền (không ghim, không phát âm thanh) vào trạng thái discard sau xác nhận. Chrome có thể từ chối; trang sẽ tải lại khi mở và trạng thái chưa lưu có thể mất.
