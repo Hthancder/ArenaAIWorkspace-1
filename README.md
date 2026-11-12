@@ -66,6 +66,10 @@
 - Đồng hồ trong app chính và cửa sổ Đồng hồ **không thể lệch bản ghi đè cũ**: mọi chuyển phase đọc lại trạng thái thật từ engine (wall-clock), kể cả khi bạn bấm Reset đúng khoảnh khắc đồng hồ về 0.
 - **Nhắc mắt 20-20-20 cũng hiện trong cửa sổ Đồng hồ** (pill nổi, tự ẩn, tôn trọng tuỳ chọn chuông) — không chỉ trong overlay chính.
 
+**Vá v2.10.5 — Đồng hồ phiên tập trung ra giữa cửa sổ & to hơn**
+- Màn phiên toàn màn trong app chính (overlay) trước giờ bị **dính mép trái** do `.overlay` không căn giữa — giờ **căn giữa hoàn toàn** (ngang + dọc).
+- Vòng đồng hồ **216 → 308px**, số phút **44 → 62px**, tên việc to hơn, vòng thở 138 → 172px — đúng như chế độ tập trung toàn màn phải có.
+
 **Phiên tập trung của bạn — tuỳ biến tận gốc (v2.10.0)**
 - **Mọi con số quanh phiên tập trung đều chỉnh được** (Cài đặt → **Tập trung**, nhóm mới): thời lượng phiên 5–180′ (chip nhanh 15/25/45/50/90 + gõ tự do, mặc định 25) · nghỉ ngắn 1–60′ · nghỉ dài 5–60′ · **chu kỳ pomodoro** “nghỉ dài sau mỗi N phiên” (mặc định 4, chọn Tắt nếu không muốn) · **tự bắt đầu nghỉ khi hết giờ** và **tự bắt đầu lại cùng việc sau khi nghỉ** (mặc định **TẮT** — không ép nhịp) · nhắc nghỉ mắt **20-20-20** tắt/bật được · kiểu chuông cuối phiên: **3 nốt / Chuông gió / Không** (có nút *Nghe thử*).
 - **Nút “Bắt đầu lại” (Reset)** ngay trên đồng hồ — về đầy thời gian, giữ việc + chế độ + chu kỳ, không ghi nhận phiên; phím **R** làm y vậy. Không còn phải thoát hẳn khi lỡ nhịp.
