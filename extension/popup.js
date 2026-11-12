@@ -1,0 +1,5 @@
+const $ = s => document.querySelector(s);
+async function counts(){ const tabs=await chrome.tabs.query({}); const {groups=[]}=await chrome.storage.local.get('groups'); $('#openCount').textContent=tabs.length; $('#savedCount').textContent=groups.reduce((n,g)=>n+g.items.length,0); }
+$('#openApp').onclick=()=>chrome.tabs.create({url:chrome.runtime.getURL('dashboard.html')});
+$('#saveCurrent').onclick=async()=>{try{const [tab]=await chrome.tabs.query({active:true,currentWindow:true}); if(!tab?.url||!/^https?:\/\//i.test(tab.url)) throw Error('Chỉ có thể lưu trang web http hoặc https.'); const data=await chrome.storage.local.get('groups'); const groups=data.groups||[]; let inbox=groups.find(g=>g.id==='inbox'); if(!inbox){inbox={id:'inbox',name:'Để sau',icon:'✦',color:'#7771df',createdAt:Date.now(),items:[]};groups.unshift(inbox)} inbox.items.unshift({id:crypto.randomUUID(),url:tab.url,title:tab.title||tab.url,createdAt:Date.now(),tags:[]}); await chrome.storage.local.set({groups}); $('#message').textContent='Đã lưu bản sao vào Để sau. Tab vẫn đang mở.'; await counts();}catch(e){$('#message').textContent=e.message}};
+counts();
