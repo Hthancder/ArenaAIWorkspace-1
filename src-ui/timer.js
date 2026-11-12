@@ -141,6 +141,11 @@ $("#t-pin").addEventListener("click", async () => {
   } catch {}
 });
 
+/* Escape — đóng cửa sổ Đồng hồ (phiên vẫn chạy) */
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") { e.preventDefault(); invoke("focus_timer_close").catch(() => {}); }
+});
+
 /* khởi động: theme + state hiện tại */
 (async () => {
   try {

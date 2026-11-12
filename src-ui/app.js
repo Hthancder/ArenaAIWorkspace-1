@@ -518,6 +518,7 @@ function syncSettingsControls(s) {
   const asb = $("#set-auto-start-break"); if (asb) asb.checked = !!st.auto_start_break;
   const asf = $("#set-auto-start-focus"); if (asf) asf.checked = !!st.auto_start_focus;
   const er = $("#set-eye-reminder"); if (er) er.checked = st.eye_reminder !== false;
+  const aot = $("#set-auto-open-timer"); if (aot) aot.checked = st.focus_auto_open_timer !== false;
   $$("#set-chime button").forEach(b => b.classList.toggle("on", (st.chime || "soft") === b.dataset.chime));
 }
 
@@ -1067,7 +1068,7 @@ function openHelp() {
 }
 function openAbout() {
   openModal(`<div class="about-center"><img class="about-logo" src="assets/logo.png" alt="Taskora" />
-      <h2 style="justify-content:center">Taskora <span style="color:var(--text-faint);font-weight:500">v2.10.1</span></h2>
+      <h2 style="justify-content:center">Taskora <span style="color:var(--text-faint);font-weight:500">v2.10.2</span></h2>
       <p>Quản lý công việc cho Windows — nhẹ, nhanh, đẹp.<br>Viết bằng Rust + Tauri, giao diện liquid glass.</p>
       <p>Font <strong>Be Vietnam Pro</strong> (OFL) · Icon <strong>Phosphor</strong> (MIT)</p>
       <p style="color:var(--text-faint)">MIT License © Hthancder</p>
@@ -1517,6 +1518,7 @@ function bindEvents() {
   $("#set-auto-start-break")?.addEventListener("change", e => patchSettings({ auto_start_break: e.target.checked }));
   $("#set-auto-start-focus")?.addEventListener("change", e => patchSettings({ auto_start_focus: e.target.checked }));
   $("#set-eye-reminder")?.addEventListener("change", e => patchSettings({ eye_reminder: e.target.checked }));
+  $("#set-auto-open-timer")?.addEventListener("change", e => { patchSettings({ focus_auto_open_timer: e.target.checked }); toast(e.target.checked ? "Tự mở cửa sổ Đồng hồ: bật" : "Tự mở cửa sổ Đồng hồ: tắt"); });
   $$("#set-chime button").forEach(b => b.addEventListener("click", () => patchSettings({ chime: b.dataset.chime })));
   $("#set-chime-test")?.addEventListener("click", () => {
     const sel = ($$("#set-chime button.on")[0] || {}).dataset?.chime || (S.snap?.settings?.chime) || "soft";
@@ -1952,6 +1954,14 @@ async function focusStart(taskId) {
   catch { toast("Không bắt đầu được phiên tập trung", "err"); return; }
   focusSync();
   focusTickStart();
+  /* mặc định: tự mở cửa sổ Đồng hồ (always-on-top) khi bắt đầu phiên */
+  const _st = S.snap && S.snap.settings;
+  if (!_st || _st.focus_auto_open_timer !== false) {
+    invoke("focus_open_timer").catch(e => {
+      const msg = typeof e === "string" ? e : (e && (e.message || e.toString())) || "không rõ lý do";
+      toast("Không mở được cửa sổ Đồng hồ: " + msg, "err", 6000);
+    });
+  }
 }
 
 function focusStop(silent) {

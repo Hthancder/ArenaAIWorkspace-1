@@ -52,6 +52,10 @@
 - Thêm dòng gợi ý trong Cài đặt: mở cửa sổ Đồng hồ từ overlay hoặc Ctrl+K → “Mở cửa sổ đồng hồ”; quyền `start-dragging` để kéo cửa sổ Đồng hồ chắc chắn hoạt động.
 - Nếu cửa sổ Đồng hồ không mở được, toast hiện **lý do lỗi thật** (để báo lại dễ dàng).
 
+**Vá v2.10.2 — cửa sổ Đồng hồ hoạt động thật & tự mở khi bắt đầu phiên**
+- Sửa gốc lỗi “cửa sổ trắng, treo, không đóng được”: cửa sổ Đồng hồ giờ là **cửa sổ đục (opaque) có khung native** thay vì frameless trong suốt — tránh lỗi compositing của WebView2 trên Windows (cửa sổ trong suốt thứ hai không paint được). Khung native luôn có nút **Đóng** (Alt+F4 cũng hoạt động), `Escape` đóng đồng hồ (phiên vẫn chạy).
+- **Mặc định tự mở cửa sổ Đồng hồ khi bạn bấm “Tập trung”** — always-on-top, tách riêng khỏi cửa sổ chính; tắt được trong Cài đặt → Tập trung → “Tự mở cửa sổ Đồng hồ khi bắt đầu phiên”.
+
 **Phiên tập trung của bạn — tuỳ biến tận gốc (v2.10.0)**
 - **Mọi con số quanh phiên tập trung đều chỉnh được** (Cài đặt → **Tập trung**, nhóm mới): thời lượng phiên 5–180′ (chip nhanh 15/25/45/50/90 + gõ tự do, mặc định 25) · nghỉ ngắn 1–60′ · nghỉ dài 5–60′ · **chu kỳ pomodoro** “nghỉ dài sau mỗi N phiên” (mặc định 4, chọn Tắt nếu không muốn) · **tự bắt đầu nghỉ khi hết giờ** và **tự bắt đầu lại cùng việc sau khi nghỉ** (mặc định **TẮT** — không ép nhịp) · nhắc nghỉ mắt **20-20-20** tắt/bật được · kiểu chuông cuối phiên: **3 nốt / Chuông gió / Không** (có nút *Nghe thử*).
 - **Nút “Bắt đầu lại” (Reset)** ngay trên đồng hồ — về đầy thời gian, giữ việc + chế độ + chu kỳ, không ghi nhận phiên; phím **R** làm y vậy. Không còn phải thoát hẳn khi lỡ nhịp.

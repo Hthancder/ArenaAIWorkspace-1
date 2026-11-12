@@ -404,7 +404,7 @@
           <div class="setting-row">
             <div class="setting-info">
               <div class="setting-title">Thời lượng phiên</div>
-              <div class="setting-hint">Mặc định 25 phút — chọn nhanh hoặc gõ số phút bất kỳ (5–180). Cửa sổ <strong>Đồng hồ</strong> luôn nổi: mở từ nút “↗ Đồng hồ” trên overlay phiên, hoặc <kbd>Ctrl</kbd>+<kbd>K</kbd> → “Mở cửa sổ đồng hồ”</div>
+              <div class="setting-hint">Mặc định 25 phút — chọn nhanh hoặc gõ số phút bất kỳ (5–180). Cửa sổ <strong>Đồng hồ</strong> luôn nổi: <strong>tự mở khi bắt đầu phiên</strong> (mặc định bật — xem công tắc bên dưới), hoặc mở thủ công từ nút “↗ Đồng hồ” trên overlay / <kbd>Ctrl</kbd>+<kbd>K</kbd> → “Mở cửa sổ đồng hồ”</div>
             </div>
             <div class="minute-control">
               <button class="minute-chip" type="button" data-group="focus" data-value="15">15</button>
@@ -484,6 +484,14 @@
               <div class="setting-hint">Cứ 20 phút tập trung — pill nhắc nhìn xa ~6m trong 20 giây (đếm ngược, không chặn gì)</div>
             </div>
             <label class="toggle-wrap"><input type="checkbox" id="set-eye-reminder" checked /><span class="toggle-ui"></span></label>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-title">Tự mở cửa sổ Đồng hồ khi bắt đầu phiên</div>
+              <div class="setting-hint">Bấm “Tập trung” → cửa sổ Đồng hồ luôn nổi tự hiện ở góc màn hình. Mặc định bật — tắt nếu chỉ thích đồng hồ trong overlay</div>
+            </div>
+            <label class="toggle-wrap"><input type="checkbox" id="set-auto-open-timer" checked /><span class="toggle-ui"></span></label>
           </div>
 
           <div class="setting-row">

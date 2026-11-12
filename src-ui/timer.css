@@ -28,7 +28,7 @@ html[data-theme="light"] {
 html, body { height:100%; }
 body {
   font-family:"Be Vietnam Pro", system-ui, sans-serif;
-  background:transparent;
+  background:var(--bg-solid);
   color:var(--text);
   overflow:hidden;
   -webkit-user-select:none; user-select:none;

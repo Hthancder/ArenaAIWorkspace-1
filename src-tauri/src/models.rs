@@ -592,6 +592,9 @@ pub struct Settings {
     /// Kiểu chuông cuối phiên: "soft" (3 nốt) · "wind" (chuông gió) · "none".
     #[serde(default = "default_chime")]
     pub chime: String,
+    /// Tự mở cửa sổ Đồng hồ (always-on-top) khi bắt đầu phiên focus.
+    #[serde(default = "default_true")]
+    pub focus_auto_open_timer: bool,
     /// View đang mở lần cuối ("inbox"…"list:3") — khôi phục khi mở app.
     #[serde(default)]
     pub last_view: String,
@@ -657,6 +660,7 @@ impl Default for Settings {
             auto_start_focus: false,
             eye_reminder: true,
             chime: default_chime(),
+            focus_auto_open_timer: true,
             last_view: String::new(),
         }
     }
