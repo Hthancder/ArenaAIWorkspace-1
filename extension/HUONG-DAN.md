@@ -1,4 +1,4 @@
-# Tabspace 0.17 — bản thử nghiệm
+# Tabspace 0.18 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -22,6 +22,8 @@
 - Trong **Cài đặt & sao lưu**, xuất JSON; nhập để gộp hoặc thay thế. File chứa nhóm, phiên, preset, thùng rác, lịch sử và có thể chứa URL hoặc dữ liệu nhạy cảm. Chế độ thay thế giữ lịch sử và thùng rác cũ rồi thêm từ file. Sao lưu ra ngoài Chrome profile.
 
 - Thời gian trong giao diện hiển thị giờ cho hôm nay, “Hôm qua” cho ngày trước đó và ngày cho những ngày khác. Di chuột hoặc dùng bàn phím focus để xem ngày giờ đầy đủ theo múi giờ thiết bị.
+
+Các thao tác ghi dữ liệu của các trang Tabspace và popup dùng cùng một khóa: nếu đang có thao tác khác, hãy chờ rồi thử lại. Nếu biểu mẫu nhóm, tag/ghi chú tab hoặc preset đã bị sửa ở nơi khác, hãy đóng và mở lại biểu mẫu để tránh ghi đè. Không hỗ trợ các phiên bản extension cũ đang cùng hoạt động.
 
 ## Giới hạn quan trọng
 Đây là bản thử nghiệm đầu tiên, không phải bản hoàn chỉnh theo tài liệu thiết kế. Chưa có preset tự động, lịch, tự động đóng, workspace, snapshot tự động, âm thanh tùy chỉnh, thông báo nền, đồng bộ hoặc bảo vệ tùy chỉnh. Xóa vĩnh viễn trong thùng rác không thể hoàn tác. Chỉ lưu URL http/https; Chrome có thể không cho mở hoặc thao tác một số tab. Lưu & đóng không bảo toàn nội dung chưa lưu hay trạng thái trang; chỉ dùng với trang bạn biết an toàn. Việc nhập thay thế sẽ xóa dữ liệu đang lưu. Không dùng extension làm bản sao lưu duy nhất.
