@@ -1,8 +1,8 @@
 const assert=require('node:assert/strict');
 const O=require('../extension/organize.js');
 assert.deepEqual(O.tags(' #work, design, #work, , #learn '),['work','design','learn']);
-assert.deepEqual(O.importTags(['one',null,5,'two']),['one','two']);
-assert.equal(O.note('a'.repeat(5000)).length,4000);
+assert.throws(()=>O.importTags(['one',null,5,'two']));
+assert.throws(()=>O.note('a'.repeat(5000)));
 const groups=[{id:'a',items:[{id:'1',title:'Title',tags:['work'],note:'remember'}]},{id:'b',items:[]}];
 O.move(groups,'a','1','b');assert.equal(groups[0].items.length,0);assert.equal(groups[1].items[0].note,'remember');assert.deepEqual(groups[1].items[0].tags,['work']);
 assert.throws(()=>O.move(groups,'b','1','b'));assert.throws(()=>O.move(groups,'a','1','b'));assert.throws(()=>O.move(groups,'b','1','missing'));assert.equal(groups[1].items.length,1);
@@ -28,3 +28,6 @@ const groupBackup={format:'tabspace-backup',version:2,groups:[{name:'Research',t
 const restoredGroup=ctx.validateImport(groupBackup)[0];assert.equal(restoredGroup.note,'Read later');assert.equal(restoredGroup.favorite,true);assert.equal(restoredGroup.collapsed,true);
 const legacy=ctx.validateImport({format:'tabspace-backup',version:1,groups:[{name:'Old',items:[]}]})[0];assert.equal(legacy.favorite,false);assert.equal(legacy.collapsed,false);assert.equal(legacy.note,'');
 console.log('Group metadata survives backup and old imports: OK');
+assert.throws(()=>O.tags('x'.repeat(81)),/80/);assert.throws(()=>O.tags(Array.from({length:51},(_,i)=>'tag'+i).join(',')),/50/);assert.equal(O.tags('Design, design').length,1);
+assert.throws(()=>O.importTags(['a'.repeat(81)]));assert.throws(()=>ctx.validateImport({format:'tabspace-backup',version:2,groups:[{name:'G',items:[{title:'A',url:'https://a',note:'x'.repeat(4001)}]}]}));
+console.log('Oversized metadata is rejected rather than silently truncated: OK');

@@ -12,7 +12,7 @@ const BatchTools = (() => {
       let tab;try{tab=await api.tabs.get(e.tabId)}catch{item.status='skipped';try{await write(api,batch)}catch{stopped=true;break}continue}
       if(tab.url!==e.url || !eligible(tab)){item.status='skipped';try{await write(api,batch)}catch{stopped=true;break}continue}
       item.status='closing';try{await write(api,batch)}catch{stopped=true;break}
-      try{await api.tabs.remove(e.tabId);item.status='closed'}catch{item.status='close_failed'}
+      try{await api.tabs.remove(e.tabId);item.status='closed'}catch{item.status='closing'}
       try{await write(api,batch)}catch{stopped=true;break}
     }
     return {batch,stopped};
@@ -22,7 +22,7 @@ const BatchTools = (() => {
     let opened=0,failed=0,stopped=false;
     for(const i of indexes){const item=batch.items[i];if(!item||item.status!=='closed')continue;
       item.status='opening';try{await write(api,batch)}catch{stopped=true;break}
-      try{await api.tabs.create({url:item.url,active:false});item.status='opened';opened++}catch{item.status='open_failed';failed++}
+      try{await api.tabs.create({url:item.url,active:false});item.status='opened';opened++}catch{item.status='opening';failed++}
       try{await write(api,batch)}catch{stopped=true;break}
     }
     return {opened,failed,stopped};

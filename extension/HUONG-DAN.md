@@ -1,4 +1,4 @@
-# Tabspace 0.19.1 — bản thử nghiệm
+# Tabspace 0.20 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,6 +7,7 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
+- Chọn nhiều tab đang mở và dùng **Cho tab nghỉ** để xem trước, bỏ chọn và chạy. Tab đang xem, ghim, đang phát âm thanh và đã nghỉ được bỏ qua; kết quả liệt kê từng tab.
 - Chọn tab đang mở và dùng **Tạo nhóm Chrome** hoặc **Bỏ nhóm Chrome**. Tạo nhóm chỉ áp dụng một cửa sổ, bỏ qua tab ghim; tab đã thuộc nhóm khác có thể được chuyển. Nhấn nhãn nhóm ở hàng tab để chỉnh tên, màu và thu gọn. Nhóm Chrome khác nhóm đã lưu Tabspace; màu Chrome dùng bảng màu cố định.
 - Nhóm có ghi chú, nút yêu thích và thu gọn/mở rộng; nhóm yêu thích được ưu tiên ở sidebar. Khi tìm kiếm, nhóm được mở tạm thời để thấy kết quả. Các mục đã chọn nhưng bị ẩn vẫn được tính trong thao tác hàng loạt và được báo ở thanh chọn.
 - Trong **Nhóm đã lưu**, dùng ↑/↓ để sắp xếp nhóm và tab. Kéo tay nắm ⠿ của tab lên một tab khác để đặt trước, hoặc thả vào tiêu đề nhóm để chuyển về cuối nhóm. Xóa từ khóa tìm kiếm trước khi sắp xếp; tag và ghi chú được giữ nguyên.
@@ -25,6 +26,8 @@
 - Thời gian trong giao diện hiển thị giờ cho hôm nay, “Hôm qua” cho ngày trước đó và ngày cho những ngày khác. Di chuột hoặc dùng bàn phím focus để xem ngày giờ đầy đủ theo múi giờ thiết bị.
 
 Các thao tác ghi dữ liệu của các trang Tabspace và popup dùng cùng một khóa: nếu đang có thao tác khác, hãy chờ rồi thử lại. Nếu biểu mẫu nhóm, tag/ghi chú tab hoặc preset đã bị sửa ở nơi khác, hãy đóng và mở lại biểu mẫu để tránh ghi đè. Không hỗ trợ các phiên bản extension cũ đang cùng hoạt động.
+
+Favicon dùng API favicon của Chrome (quyền `favicon`); giao diện không tải trực tiếp URL favicon của website. Icon có thể dùng biểu tượng mặc định khi Chrome không có trong cache.
 
 ## Giới hạn quan trọng
 Đây là bản thử nghiệm đầu tiên, không phải bản hoàn chỉnh theo tài liệu thiết kế. Chưa có preset tự động, lịch, tự động đóng, workspace, snapshot tự động, âm thanh tùy chỉnh, thông báo nền, đồng bộ hoặc bảo vệ tùy chỉnh. Xóa vĩnh viễn trong thùng rác không thể hoàn tác. Chỉ lưu URL http/https; Chrome có thể không cho mở hoặc thao tác một số tab. Lưu & đóng không bảo toàn nội dung chưa lưu hay trạng thái trang; chỉ dùng với trang bạn biết an toàn. Việc nhập thay thế sẽ xóa dữ liệu đang lưu. Không dùng extension làm bản sao lưu duy nhất.
