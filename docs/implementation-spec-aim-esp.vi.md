@@ -361,7 +361,7 @@ Giữ Main / Visuals / Misc / Keybinds / Help. DOM thuần; nhóm `<details>` ho
 - [x] **P2:** snapshot adapter/estimator, weapon profile/modifiers/muzzle và source gameplay state.
 - [ ] **P3:** core integration và movement-general benchmark đã chạy; CHƯA nghiệm thu đủ. Held-out benchmark còn median start-stop/p95 đảo hướng kém legacy; recovery mới là proxy, chưa đo churn/stale-decision đa mục tiêu hoặc browser feature-frame cost. Không lấy kết quả trung bình để đóng mục này.
 - [x] **P4:** arbitration/ownership/fault isolation, menu grouping/migration và combination/lifecycle tests.
-- [ ] **P5:** check/source scenarios và report đã có; chỉ đóng sau khi chạy final checks, commit/push/present preview. Đóng packaging không đồng nghĩa nghiệm thu P3.
+- [x] **P5 (packaging preview):** final `npm run check` 122/122, source runner 4/4, `git diff --check` pass; artifact readable/version0.5.0-preview.1, reference SHA256 không đổi. Implementation commit `702e80a` đã push current branch và `.user.js` đã present. Đóng packaging preview không đồng nghĩa nghiệm thu P3 hoặc live.
 
 Khi triển khai, cập nhật các checkbox cùng bằng chứng và phạm vi thực sự đạt. Không đánh dấu một mục hoàn tất chỉ vì đã tạo module/setting. Nếu đổi quyết định kỹ thuật, ghi lý do/source/test ở phần dưới thay vì để spec và code mâu thuẫn.
 
