@@ -1,0 +1,13 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const source=fs.readFileSync('extension/popup.js','utf8');
+const start=source.indexOf('async function discardTab('),end=source.indexOf('\nfunction renderTabs(',start);assert(start>=0&&end>start);
+let current, calls, msg, confirmed;
+const ctx={chrome:{tabs:{async get(){return {...current}},async discard(){calls++;current.discarded=true}}},showMessage:s=>{msg=s},refresh:async()=>{},confirm:()=>confirmed};
+vm.runInNewContext(source.slice(start,end),ctx);
+(async()=>{const tab={id:1,url:'https://example.com',active:false,pinned:false,audible:false,discarded:false};
+ current={...tab};calls=0;confirmed=false;await ctx.discardTab(tab);assert.equal(calls,0);
+ current={...tab,pinned:true};calls=0;confirmed=true;await ctx.discardTab(tab);assert.equal(calls,0);assert.match(msg,/bỏ qua/);
+ current={...tab};calls=0;await ctx.discardTab(tab);assert.equal(calls,1);assert.match(msg,/đã nghỉ/);
+ current={...tab,url:'https://changed.example'};calls=0;await ctx.discardTab(tab);assert.equal(calls,0);assert.match(msg,/thay đổi/);
+ console.log('Popup discard confirmation and protections: OK');
+})().catch(e=>{console.error(e);process.exitCode=1});
