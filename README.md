@@ -56,6 +56,10 @@
 - Sửa gốc lỗi “cửa sổ trắng, treo, không đóng được”: cửa sổ Đồng hồ giờ là **cửa sổ đục (opaque) có khung native** thay vì frameless trong suốt — tránh lỗi compositing của WebView2 trên Windows (cửa sổ trong suốt thứ hai không paint được). Khung native luôn có nút **Đóng** (Alt+F4 cũng hoạt động), `Escape` đóng đồng hồ (phiên vẫn chạy).
 - **Mặc định tự mở cửa sổ Đồng hồ khi bạn bấm “Tập trung”** — always-on-top, tách riêng khỏi cửa sổ chính; tắt được trong Cài đặt → Tập trung → “Tự mở cửa sổ Đồng hồ khi bắt đầu phiên”.
 
+**Vá v2.10.3 — FIX GỐC lỗi cửa sổ Đồng hồ trắng/treo**
+- Nguyên nhân đúng (theo tài liệu WebView2/Tauri): tạo cửa sổ web mới bên trong **command đồng bộ** ⇒ deadlock vòng lặp thông điệp WebView2 trên Windows ⇒ cửa sổ trắng không vẽ được gì, ứng dụng đơ, khung đóng cũng vô hiệu.
+- `focus_open_timer` giờ là **async command** (chạy trên thread riêng) — cửa sổ Đồng hồ được tạo như tài liệu Tauri khuyến nghị; vẫn là cửa sổ đục + khung native luôn đóng được.
+
 **Phiên tập trung của bạn — tuỳ biến tận gốc (v2.10.0)**
 - **Mọi con số quanh phiên tập trung đều chỉnh được** (Cài đặt → **Tập trung**, nhóm mới): thời lượng phiên 5–180′ (chip nhanh 15/25/45/50/90 + gõ tự do, mặc định 25) · nghỉ ngắn 1–60′ · nghỉ dài 5–60′ · **chu kỳ pomodoro** “nghỉ dài sau mỗi N phiên” (mặc định 4, chọn Tắt nếu không muốn) · **tự bắt đầu nghỉ khi hết giờ** và **tự bắt đầu lại cùng việc sau khi nghỉ** (mặc định **TẮT** — không ép nhịp) · nhắc nghỉ mắt **20-20-20** tắt/bật được · kiểu chuông cuối phiên: **3 nốt / Chuông gió / Không** (có nút *Nghe thử*).
 - **Nút “Bắt đầu lại” (Reset)** ngay trên đồng hồ — về đầy thời gian, giữ việc + chế độ + chu kỳ, không ghi nhận phiên; phím **R** làm y vậy. Không còn phải thoát hẳn khi lỡ nhịp.

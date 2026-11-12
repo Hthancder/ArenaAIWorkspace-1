@@ -705,8 +705,10 @@ pub fn focus_state(state: State<'_, AppState>) -> crate::focus::FocusPayload {
 }
 
 /// Mở (hoặc focus) cửa sổ Đồng hồ — mini window luôn nổi.
+/// QUAN TRỌNG (Windows): phải là `async` — trên Windows, tạo webview mới bên trong
+/// command đồng bộ gây deadlock vòng lặp WebView2 ⇒ cửa sổ trắng, ứng dụng treo.
 #[tauri::command]
-pub fn focus_open_timer(app: AppHandle) -> Result<(), String> {
+pub async fn focus_open_timer(app: AppHandle) -> Result<(), String> {
     if let Some(w) = app.get_webview_window("timer") {
         let _ = w.set_focus();
         return Ok(());
