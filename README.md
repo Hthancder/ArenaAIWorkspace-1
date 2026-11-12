@@ -46,7 +46,13 @@
 - **Tự phát hiện di chuyển**: nếu Taskora.exe bị copy lẻ sang chỗ trống, app hỏi chuyển dữ liệu portable cũ sang. Nếu bạn chạy ở nơi khác mà `%APPDATA%` còn dữ liệu v1/v2.0 cũ, app hỏi **gộp** (id-union, không trùng lặp).
 - **Khôi phục view đang mở** giữa các lần chạy; toast hành động kèm nút **Hoàn tác** sau mỗi thao tác.
 
-**Phiên tập trung của bạn — tuỳ biến tận gốc (v2.10.0 — đang hoàn thiện, chưa phát hành)**
+**Vá v2.10.1 — dễ thấy & dễ chỉnh**
+- Nút mở **cửa sổ Đồng hồ** trên overlay giờ là pill có chữ “↗ Đồng hồ” (trước là icon đơn độc, dễ bị bỏ lỡ).
+- Ô phút trong Cài đặt → Tập trung **áp dụng ngay khi gõ** (không cần rời khỏi ô/Enter); chip bấm vẫn ăn ngay.
+- Thêm dòng gợi ý trong Cài đặt: mở cửa sổ Đồng hồ từ overlay hoặc Ctrl+K → “Mở cửa sổ đồng hồ”; quyền `start-dragging` để kéo cửa sổ Đồng hồ chắc chắn hoạt động.
+- Nếu cửa sổ Đồng hồ không mở được, toast hiện **lý do lỗi thật** (để báo lại dễ dàng).
+
+**Phiên tập trung của bạn — tuỳ biến tận gốc (v2.10.0)**
 - **Mọi con số quanh phiên tập trung đều chỉnh được** (Cài đặt → **Tập trung**, nhóm mới): thời lượng phiên 5–180′ (chip nhanh 15/25/45/50/90 + gõ tự do, mặc định 25) · nghỉ ngắn 1–60′ · nghỉ dài 5–60′ · **chu kỳ pomodoro** “nghỉ dài sau mỗi N phiên” (mặc định 4, chọn Tắt nếu không muốn) · **tự bắt đầu nghỉ khi hết giờ** và **tự bắt đầu lại cùng việc sau khi nghỉ** (mặc định **TẮT** — không ép nhịp) · nhắc nghỉ mắt **20-20-20** tắt/bật được · kiểu chuông cuối phiên: **3 nốt / Chuông gió / Không** (có nút *Nghe thử*).
 - **Nút “Bắt đầu lại” (Reset)** ngay trên đồng hồ — về đầy thời gian, giữ việc + chế độ + chu kỳ, không ghi nhận phiên; phím **R** làm y vậy. Không còn phải thoát hẳn khi lỡ nhịp.
 - **Cửa sổ “Đồng hồ” riêng, luôn nổi** (mở từ nút ↗ trên overlay, hoặc Ctrl+K → “Mở cửa sổ đồng hồ”): đếm ngược sống ở góc màn hình trong khi bạn làm việc khác; có nút ghim always-on-top, nút đóng (phiên vẫn chạy), kéo cửa sổ bằng thanh tiêu đề. Overlay và cửa sổ đồng hồ **luôn khớp tuyệt đối** — thời gian do Rust tính theo đồng hồ thật (wall-clock), không phải đếm lùi bằng setInterval.
@@ -55,7 +61,7 @@
 - Dữ liệu cũ hoàn toàn tương thích: backup v2.8.0/v2.9.0 mở bằng v2.10.0 không đổi gì (các field mới có `serde(default)`); build cũ bỏ qua field lạ, chỉ mất hiệu lực 8 tinh chỉnh mới.
 - Thiết kế đầy đủ: [specs/v2.10.0-focus-customization.md](specs/v2.10.0-focus-customization.md).
 
-**Việc lặp lại hạng nhất (v2.9.0 — đang hoàn thiện, chưa phát hành)**
+**Việc lặp lại hạng nhất (v2.9.0 — đã phát hành)**
 - **Quy tắc đầy đủ**: tần suất **Ngày / Tuần / Tháng / Năm** · khoảng lặp tuỳ ý (`*mỗi 3 ngày`, `*mỗi 2 tuần`, `*mỗi 6 tháng`, `*mỗi 2 năm`) · chọn thứ trong tuần (tuần) · ngày trong tháng gồm **“ngày cuối cùng”** · kết thúc: **Không bao giờ / Đến ngày / Sau N lần hoàn thành**.
 - **Bảng lịch xem trước (ghost calendar)** ngay trong hộp thoại “Lặp lại” (Chi tiết → **Chỉnh…**): chấm tím ở mọi ngày việc sẽ xuất hiện; **bấm vào ngày để đặt ngày kết thúc**; chip nhanh **+1 / +3 / +6 tháng** và **Cuối năm**; đếm **“≈ N lần nữa”**; đầy đủ bằng bàn phím (lưới `role=grid`).
 - **Câu tóm tắt tiếng Việt cập nhật trực tiếp**: *“Mỗi 2 tuần · T2 & T5 · đến 31/12/2026”* — preview lấy 100% từ cùng thuật toán với bản chạy thật (Rust), không mô phỏng bằng JS.
