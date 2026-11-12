@@ -1,0 +1,22 @@
+// Regression: cancelling a dialog must bypass native required-field validation.
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const source = fs.readFileSync('extension/dashboard.js', 'utf8');
+const start = source.indexOf('function showDialog(');
+const end = source.indexOf('\nfunction groupDialog(', start);
+assert(start >= 0 && end > start);
+const cancel = {formNoValidate: false};
+const body = {innerHTML: '', querySelector: () => cancel};
+const dialog = {open: false, showModal(){this.open = true}, close(){this.open = false}};
+const form = {};
+const context = {$: s => ({'#dialogBody':body, '#dialog':dialog, '#dialogForm':form}[s]), FormData: class {}, notify: () => {}};
+vm.runInNewContext(source.slice(start,end), context);
+let submitted = false;
+context.showDialog('<input required><button value="cancel">Hủy</button>', () => {submitted = true});
+assert.equal(cancel.formNoValidate, true, 'Cancel must bypass browser form validation');
+assert.equal(dialog.open, true);
+form.onsubmit({preventDefault(){}, submitter:{value:'cancel'}, currentTarget:form});
+assert.equal(dialog.open, false, 'Cancel must close dialog');
+assert.equal(submitted, false, 'Cancel must not perform action');
+console.log('Dialog cancel regression: OK');
