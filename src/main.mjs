@@ -1,0 +1,91 @@
+import { captureApplication, captureDefinitions, Disposables } from './core.mjs';
+import { Features } from './features.mjs';
+import { createMenu, loadConfig } from './menu.mjs';
+
+export function start(win) {
+  const key = Symbol.for('duality.reborn.controller.v1');
+  win[key]?.dispose?.();
+  const bag = new Disposables();
+  let config;
+  try { config = loadConfig(win.localStorage); } catch { config = loadConfig(null); }
+  let menu = null, engine = null, defs = null, cancelCapture = null, alive = true;
+  let status = 'Đang chờ Application…', lastWarning = '', captured = false, captureState = 'waiting';
+  const startedAt = win.performance.now();
+  win.console?.info?.('[Duality Reborn 0.1.2] Script đã chạy. Nếu không có menu, gửi dòng lỗi Console sau thông báo này.');
+  const report = (level, message) => {
+    if (!alive) return;
+    if (level === 'error' || level === 'warning') {
+      lastWarning = message;
+      win.console?.warn?.('[Duality Reborn]', message);
+    }
+    status = message;
+  };
+  const diagnostics = () => ({
+    version: '0.1.2', captured, captureState, status, lastWarning,
+    menuMounted: !!menu?.host.isConnected, documentReadyState: win.document.readyState,
+    definitionsCaptured: !!defs, elapsedMs: Math.round(win.performance.now() - startedAt),
+    ...(engine?.diagnostics() || {}),
+  });
+  const controller = {
+    diagnostics,
+    retry() {
+      if (!alive) return;
+      cancelCapture?.(); engine?.dispose(); engine = null; captured = false; captureState = 'waiting';
+      menu?.capabilities({});
+      status = 'Capture có timeout 15 giây. Nếu không bắt được, reload với userscript bật từ document-start.';
+      cancelCapture = captureApplication(win, app => {
+        if (!alive) return;
+        captured = true; captureState = 'captured';
+        try {
+          engine = new Features(win, app, config, report, defs);
+          if (menu) engine.attachCanvas(menu.canvas);
+          status = 'Đã bắt Application; chờ trạng thái trận và contract.';
+        } catch (e) {
+          engine?.dispose(); engine = null; captureState = 'error';
+          report('error', `Không khởi tạo được: ${e.message}`);
+        }
+      }, { timeout: 15000, onTimeout: () => {
+        captureState = 'timeout';
+        report('warning', 'Không bắt được Application trong 15 giây; hook đã gỡ. Có thể sai page-world, lỡ bootstrap hoặc contract không khớp. Gửi diagnostics; chưa xác định nguyên nhân.');
+      } });
+    },
+    dispose() {
+      if (!alive) return;
+      alive = false; cancelCapture?.(); engine?.dispose(); menu?.dispose(); bag.clear();
+      if (win[key] === controller) delete win[key];
+    },
+  };
+  win[key] = controller;
+  bag.add(captureDefinitions(win, value => { defs = value; if (engine) { engine.definitions = defs; engine.lastMap = -Infinity; } }));
+  const makeMenu = () => {
+    if (!alive || menu) return;
+    menu = createMenu(win, config, {
+      onChange: key => {
+        engine?.restoreInput();
+        if (engine) { engine.overrides.clear(); engine.lastMap = -Infinity; engine.stickyId = null; }
+        if (key === 'autoLoot') status = 'Auto Loot: cần vào trận mới; không thay đổi packet đã gửi.';
+      },
+      retry: () => controller.retry(), stop: () => controller.dispose(), diagnostics,
+    });
+    if (engine) engine.attachCanvas(menu.canvas);
+  };
+  if (win.document.body) makeMenu();
+  else {
+    win.document.addEventListener('DOMContentLoaded', makeMenu, { once: true });
+    bag.add(() => win.document.removeEventListener('DOMContentLoaded', makeMenu));
+  }
+  const timer = win.setInterval(() => {
+    if (!menu) return;
+    menu.capabilities(engine?.capabilities || {});
+    const d = diagnostics();
+    menu.status(`${status}\nProtocol: ${d.protocol ?? 'chưa quan sát Join'} • ${d.initialized ? 'trong trận' : 'chờ trận'}\n${d.stats ? `Discovery: ${d.stats.mappingRuns} • visual tick: ${d.stats.featureMs.toFixed(2)} ms (không phải FPS benchmark)` : ''}${d.missingContracts?.length ? `\nThiếu contract: ${d.missingContracts.join(', ')}` : ''}${lastWarning ? `\nChú ý: ${lastWarning}` : ''}`);
+  }, 1000);
+  bag.add(() => win.clearInterval(timer));
+  const onPageHide = () => controller.dispose();
+  win.addEventListener('pagehide', onPageHide, { once: true });
+  bag.add(() => win.removeEventListener('pagehide', onPageHide));
+  controller.retry();
+  return controller;
+}
+
+if (typeof window !== 'undefined') start(window);
