@@ -6,14 +6,17 @@ export function discoverInputTimeout(game) {
   for (const [, fn] of methods(game)) {
     const tree = ast(fn), tested = new Set(), reset = new Set(), decremented = new Set();
     walk(tree, n => {
-      if (n.type === 'IfStatement') walk(n.test, t => {
-        const p = path(t.left);
-        if (t.type === 'BinaryExpression' && t.operator === '<' && t.right?.value === 0 && p?.length === 1) tested.add(p[0]);
-      });
+      // Production minifiers turn `if (diff || timer < 0)` into a logical
+      // expression. Inspect the comparison itself, independent of statement shape.
+      if (n.type === 'BinaryExpression') {
+        const left = path(n.left), right = path(n.right);
+        if (n.operator === '<' && n.right?.value === 0 && left?.length === 1) tested.add(left[0]);
+        if (n.operator === '>' && n.left?.value === 0 && right?.length === 1) tested.add(right[0]);
+      }
       if (n.type === 'AssignmentExpression') {
         const p = path(n.left); if (p?.length !== 1) return;
         if (n.operator === '=' && n.right?.value === 1) reset.add(p[0]);
-        if (n.operator === '-=') decremented.add(p[0]);
+        if (n.operator === '-=' || n.operator === '=' && n.right?.type === 'BinaryExpression' && n.right.operator === '-' && path(n.right.left)?.join('.') === p.join('.')) decremented.add(p[0]);
       }
     });
     for (const key of tested) if (reset.has(key) && decremented.has(key)) found.push(key);

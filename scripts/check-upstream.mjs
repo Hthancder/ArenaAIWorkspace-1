@@ -8,6 +8,8 @@ import vm from 'node:vm';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { JSDOM } from 'jsdom';
+import { Container as PixiContainer } from '@pixi/display';
+import { TextStyle as PixiTextStyle } from '@pixi/text';
 import { Features, VERIFIED_PROTOCOL } from '../src/features.mjs';
 import { discover, discoverSender } from '../src/core.mjs';
 import { DEFAULTS } from '../src/menu.mjs';
@@ -46,6 +48,11 @@ const meleeTree = parse(meleeJS, { ecmaVersion: 'latest', sourceType: 'module' }
 const baseDefs = meleeTree.body.find(n => n.type === 'VariableDeclaration' && n.declarations[0].id.name === 'BaseDefs').declarations[0].init;
 const fistsNode = baseDefs.properties.find(n => n.key.name === 'fists').value;
 const fistsSource = meleeJS.slice(fistsNode.start, fistsNode.end);
+const playerJS = transformSync(readFileSync(resolve(root, 'client/src/objects/player.ts'), 'utf8'), { loader: 'ts', target: 'es2022' }).code;
+const playerTree = parse(playerJS, { ecmaVersion: 'latest', sourceType: 'module' });
+const nativeNameFactory = playerTree.body.find(n => n.type === 'FunctionDeclaration' && n.id.name === 'createPlayerNameText');
+assert.ok(nativeNameFactory, 'source native name factory');
+const nameFactorySource = playerJS.slice(nativeNameFactory.start, nativeNameFactory.end);
 const classes = [
   sourceClass('client/src/camera.ts', 'Camera', ['m_z', 'm_pixels', 'm_pointToScreen', 'm_screenToPoint']),
   sourceClass('client/src/objects/player.ts', 'Player', ['selectIdlePose', 'canInteract', 'getMeleeCollider', 'm_getZoom', 'render', 'm_updateData']),
@@ -70,7 +77,9 @@ const assert=(value,message)=>{if(!value)throw Error(message||'source assert')};
 const util={random:(a,b)=>(a+b)/2,randomItem:a=>a[0],hsvToRgb:()=>({}),rgbToInt:()=>0xeeeeee,sameLayer:(a,b)=>(a&1)===(b&1)||!!((a&2)&&(b&2))};
 const particles=['part-smoke-02.img','part-smoke-03.img'];
 class Sprite { constructor(){this.alpha=1;this.visible=false;this._destroyed=false;this.anchor={set(){}};this.position={set(){}};this.scale={set(){}};this._tintValue=0xffffff;} get tint(){return this._tintValue} set tint(v){this._tintValue=v;} }
-const PIXI={Sprite:{from(){return new Sprite()}}};
+class NativeText extends PixiContainer { constructor(text,style){super();this._text=text;this._style=new PixiTextStyle(style);this.anchor={set(){}};}get style(){return this._style;}get text(){return this._text;}set text(v){this._text=v;} }
+const PIXI={Text:NativeText,Sprite:{from(){return new Sprite()}}};
+${nameFactorySource}
 const fistsDef=${fistsSource}; const GameObjectDefs={typeToId(){return 0},idToType(){return ''},typeToDef(){return fistsDef}};
 const sharedShapes=[{color:123,scale:3,collider:{type:0,pos:{x:0,y:0},rad:1}}];
 const MapObjectDefs={typeToDef(){return {type:'obstacle',img:{zIdx:1},map:{shapes:sharedShapes}}}}; const nativeMap=new Map();
@@ -82,7 +91,7 @@ const net={JoinMsg,InputMsg,Constants, MsgType:{Join:1,Input:3}, MsgStream:class
  if(type===1)data.serialize(stream); let decoded=null;if(type===3){const buf=new ArrayBuffer(128);data.serialize(new BitStream(buf));decoded=new InputMsg();decoded.deserialize(new BitStream(buf));decoded.toMouseDir=v2.normalizeSafe(decoded.toMouseDir);} globalThis.sent.push({type,data,booleans,decoded}); }}};
 class WebsocketConnection { constructor(){} }
 const camera = Object.assign(new Camera(),{m_pos:{x:9,y:18},m_ppu:16,m_zoom:2,m_targetZoom:2,m_screenWidth:800,m_screenHeight:600});
-function player(id,pos){return Object.assign(new Player(),{__id:id,__type:1,active:true,layer:0,downed:false,container:{},nameText:{visible:false},
+function player(id,pos){return Object.assign(new Player(),{__id:id,__type:1,active:true,layer:0,downed:false,container:{},nameText:Object.assign(createPlayerNameText(),{text:'native-'+id}),
   m_pos:pos,m_dir:{x:1,y:0},m_visualPos:pos,m_visualPosOld:pos,m_visualDirOld:{x:1,y:0},m_setLocalData(){},isUnderground(){return false},m_netData:{m_pos:pos,m_layer:0,m_perks:[],m_activeWeapon:'mp5',m_dead:false,m_scale:1,m_role:''},
   m_localData:{m_zoom:48,m_curWeapIdx:0,m_weapons:[{type:'mp5',ammo:20},{type:'mp5',ammo:20},{type:'fists',ammo:0},{type:'frag',ammo:1}]}});}
 const hero=player(1,{x:10,y:20}),enemy=player(2,{x:12,y:20}),ally=player(3,{x:11,y:20}),unknown=player(4,{x:11.5,y:20});
@@ -115,7 +124,7 @@ globalThis.result={setZoom:z=>{camera.m_zoom=z;camera.m_targetZoom=z;},nativePre
 for (const renamed of [false, true]) for (const lootMode of ['mobile', 'nearby']) {
   const code = transformSync(bbCode + classes + fixture, { target: 'es2022', minify: renamed,
     ...(renamed ? { mangleProps: /^m(_[a-zA-Z0-9]+)+$/, mangleQuoted: true } : {}) }).code;
-  const context = vm.createContext({ sent: [], TextEncoder, TextDecoder }); vm.runInContext(code, context);
+  const context = vm.createContext({ sent: [], TextEncoder, TextDecoder, PixiContainer, PixiTextStyle }); vm.runInContext(code, context);
   const { app, join, readInputAim, frameInput } = context.result;
   const dom = new JSDOM('<body></body>', { url: 'https://survev.io', pretendToBeVisual: true });
   let clock = 1000; Object.defineProperty(dom.window.performance, 'now', { value: () => clock, configurable: true });
@@ -147,6 +156,19 @@ for (const renamed of [false, true]) for (const lootMode of ['mobile', 'nearby']
     assert.ok(context.sent.length>count, 'Stationary physical mouse still sends corrected direction through timeout');
     wire=context.sent.at(-1).decoded;assert.ok(wire.toMouseDir.y>.1, 'Correct aim on wire after target moves');
     assert.equal(context.result.nativePrevious().toMouseDir.y,0,'Source prevInput retains native intent, not cloned correction');
+    const savedDefs=engine.definitions;
+    engine.definitions=null;engine.config.esp=true;engine.config.nametags=false;engine.lastVisual=-Infinity;
+    clock+=17;engine.pre();context.result.nativeFrame(1/60);engine.post();
+    wire=context.sent.at(-1).decoded;
+    assert.equal(engine.stats.predictionState,'direct-missing-definitions','Missing item capture does not disable native gun-slot direct aim');
+    assert.ok(Math.abs(Math.atan2(wire.toMouseDir.y,wire.toMouseDir.x)-Math.atan2(.4,2))<.005,'Direct fallback still reaches source serializer');
+    const sourcePlayers=engine.mapping.players(), namedEnemy=sourcePlayers.find(p=>p.__id===2), namedAlly=sourcePlayers.find(p=>p.__id===3), namedUnknown=sourcePlayers.find(p=>p.__id===4);
+    assert.equal(namedEnemy.nameText.style.fill,'#ff6262');assert.equal(namedAlly.nameText.style.fill,'#56b6ff');assert.equal(namedUnknown.nameText.style.fill,'#00ffff');
+    assert.equal(namedEnemy.nameText.visible,true);namedEnemy.nameText.visible=false;assert.equal(namedEnemy.nameText.visible,true,'Native visibility writes cannot hide active ESP');
+    assert.equal(namedEnemy.nameText.text,'native-2','Source-created name content preserved');assert.equal(engine.names.stats.colored,2);
+    engine.config.esp=false;engine.lastVisual=-Infinity;engine.post();
+    assert.equal(namedEnemy.nameText.style.fill,'#00ffff');assert.equal(namedEnemy.nameText.visible,false,'Disable restores actual PIXI state');
+    engine.definitions=savedDefs;
     engine.config.aim=false;engine.pre();context.result.nativeFrame(1/60);
     assert.ok(Math.abs(context.sent.at(-1).decoded.toMouseDir.y)<.003, 'Disable sends native direction back despite unchanged cursor');
     engine.config.aim=true;

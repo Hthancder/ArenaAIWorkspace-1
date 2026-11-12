@@ -1,6 +1,6 @@
 {
   "name": "survev-duality-reborn",
-  "version": "0.5.0-preview.1",
+  "version": "0.5.0-preview.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,6 +15,8 @@
     "acorn": "8.15.0"
   },
   "devDependencies": {
+    "@pixi/display": "7.4.3",
+    "@pixi/text": "7.4.3",
     "esbuild": "0.25.12",
     "jsdom": "26.1.0"
   }

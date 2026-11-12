@@ -35,6 +35,7 @@ export function normalizeConfig(saved) {
   for (const key of ['espLegend', 'espLabels', 'espDistance', 'espWeapons', 'espHighlightTarget', 'espMarkers', 'espOffscreen']) result[key] = false;
   if (saved.version !== 2) { result.lines = false; result.showDot = false; }
   if (result.aimMode === 'off') result.aim = false;
+  result.nametags = true; // obsolete hidden master switch: esp now owns native names
   result.version = 2;
   return result;
 }
@@ -53,6 +54,7 @@ const GROUPS = {
   Main: [
     ['Aim — Mode & activation', [['aimMode', 'Mode', 'aim'], ['aimActivation', 'Activate when'], ['assistStrength', 'Assist strength (%)', 'aim'], ['smoothEnabled', 'Smooth Lock', 'aim'], ['smooth', 'Lock smooth', 'aim']]],
     ['Aim — Target selection', [['fov', 'FOV radius (input pixels)'], ['sticky', 'Keep target', 'aim'], ['knocked', 'Include downed', 'aim'], ['wallcheck', 'Wallcheck', 'wallcheck']]],
+    ['Aim — Hỗ trợ ngắm', [['showFov', 'FOV circle'], ['showDot', 'Predicted point (optional)']]],
     ['Aim — Prediction', [['predict', 'Auto prediction', 'prediction']]],
     ['Aim — Advanced prediction', [['latencyCompensation', 'Estimated latency compensation', 'prediction'], ['leadAdjustment', 'Lead adjustment (%)', 'prediction'], [null, 'Auto dùng snapshot và weapon defs; dữ liệu stale/không chắc sẽ nhường input. Không biết trước thao tác tương lai.']]],
     ['Melee Lock', [['melee', 'Enabled', 'mobile'], ['autoMelee', 'Auto Melee (from gun, while firing)', 'switch']]],
@@ -62,9 +64,8 @@ const GROUPS = {
   Visuals: [
     ['X-Ray', [['xray', 'Enabled', 'xray'], ['ceilings', 'Remove Ceilings', 'xray'], ['darkerSmokes', 'Darker Smokes', 'xray'], ['smokeOpacity', 'Smoke Opacity (legacy scale)', 'xray'], ['treeOpacity', 'Tree / Bush Opacity', 'xray'], [null, 'Khói: giá trị 50 = alpha tối đa 0.05 mỗi particle như bản gốc; 0 = ẩn, 100 = 0.1. Tắt X-Ray để trả opacity game.']]],
     ['Layer Spoofer', [['layerSpoofer', 'Hold layer key to preview other floor', 'layer'], [null, 'Chỉ đổi layer client 0/1, không đổi tầng server hoặc cho bắn xuyên tầng. Thả phím/blur khôi phục giá trị mới nhất.']]],
-    ['Player names', [['esp', 'Enable team-colored names', 'visuals'], ['espShowEnemies', 'Enemies (red)', 'visuals'], ['espShowAllies', 'Allies (blue)', 'visuals'], [null, 'Chỉ đổi màu tên native. Không tag, bảng nền, HUD squad hoặc màu vàng cho target; unknown giữ native.']]],
+    ['Player names', [['esp', 'ESP — Native names', 'names'], ['espShowEnemies', 'Enemies (red)', 'names'], ['espShowAllies', 'Allies (blue)', 'names'], [null, 'Chỉ đổi màu tên native. Không tag, bảng nền, HUD squad hoặc màu vàng cho target; unknown giữ native.']]],
     ['Player lines', [['lines', 'Player lines (optional)', 'visuals'], ['espOpacity', 'Line opacity', 'visuals'], ['espLineWidth', 'Line width', 'visuals']]],
-    ['Aim helpers', [['showFov', 'FOV circle'], ['showDot', 'Predicted point (optional)']]],
     ['Grenades', [['grenadeZones', 'Nominal Explosion Radius', 'grenadeZones'], ['grenadeTrajectory', 'Throw preview (open-air estimate)', 'grenadeZones'], [null, 'Nét đứt = ước lượng vật lý không khí/drag; không biết fuse còn lại, perk, va chạm tương lai hoặc điểm nổ chắc chắn.']]],
     ['Flashlights', [['ownFlashlight', 'Own spread cone', 'previews'], ['othersFlashlight', 'Enemy spread cones', 'previews'], ['bulletTrajectory', 'Bullet path + nominal ricochets', 'previews'], [null, 'Circle/AABB; tối đa 3 phản xạ khi bắt được map defs, 8 cone / 256 obstacles. Không biết kết quả server hoặc mọi perk; thiếu collider hiển thị nét đứt.']]],
     ['Infinite Zoom', [['zoom', 'Enabled (bounded 1–3×)', 'zoom'], ['zoomFactor', 'Zoom Out', 'zoom']]],
@@ -91,12 +92,13 @@ export function createMenu(win, config, { onChange = () => {}, retry, stop, diag
   const style = el('style', { text: CSS });
   const canvas = el('canvas'); canvas.setAttribute('aria-hidden', 'true');
   const shell = el('section', { id: 'ui' }); shell.setAttribute('aria-label', 'Duality Client Reborn');
-  const brand = el('div', { class: 'brand', text: 'Duality Client' }, el('div', { class: 'version', text: 'Reborn 0.5.0-preview.1 • readable debug' }));
+  const brand = el('div', { class: 'brand', text: 'Duality Client' }, el('div', { class: 'version', text: 'Reborn 0.5.0-preview.2 • readable debug' }));
   const nav = el('nav', { class: 'nav' }); nav.setAttribute('aria-label', 'Menu tabs');
   const content = el('main', { class: 'content' });
   const status = el('div', { id: 'status', text: 'Đang chờ Application…' }); status.setAttribute('role', 'status');
   const panel = el('div');
-  const close = el('button', { text: 'Close' }); close.onclick = () => { shell.hidden = true; };
+  const hideMenu = () => { root.activeElement?.blur(); shell.hidden = true; };
+  const close = el('button', { text: 'Close' }); close.onclick = hideMenu;
   const retryButton = el('button', { text: 'Retry capture' }); retryButton.onclick = retry;
   const stopButton = el('button', { text: 'Stop / cleanup' }); stopButton.onclick = stop;
   const sidebar = el('aside', { class: 'sidebar' }, brand, nav, el('div', { class: 'footer' }, close, retryButton, stopButton));
@@ -135,7 +137,7 @@ export function createMenu(win, config, { onChange = () => {}, retry, stop, diag
       input.value = key === 'aimMode' && !config.aim ? 'off' : config[key]; input.onchange = () => { set(key, input.value); if (key === 'aimMode') { set('aim', input.value !== 'off'); render(); } };
     }
     if (capability && !caps[capability]) {
-      input.disabled = key !== 'aimMode';
+      input.disabled = key !== 'aimMode' && !(typeof config[key] === 'boolean' && config[key]);
       if (key === 'aimMode') for (const option of input.options) option.disabled = option.value !== 'off';
       labelEl.title = `Đang chờ contract: ${capability}. Chưa xác nhận trên build này.`;
     }
@@ -147,7 +149,7 @@ export function createMenu(win, config, { onChange = () => {}, retry, stop, diag
       input.oninput = () => { const value = Number(input.value); set(key, value); output.textContent = String(value); };
       labelEl.append(input, output);
     } else {
-      input.checked = config[key]; input.onchange = () => set(key, input.checked); labelEl.append(input);
+      input.checked = config[key]; input.onchange = () => { set(key, input.checked); if (capability && !caps[capability]) input.disabled = !input.checked; }; labelEl.append(input);
     }
     return labelEl;
   };
@@ -218,8 +220,14 @@ export function createMenu(win, config, { onChange = () => {}, retry, stop, diag
       }
       cancelKey(); render(); return;
     }
-    if (event.repeat || typing(event)) return;
-    if (event.code === config.menuKey) { shell.hidden = !shell.hidden; event.preventDefault(); }
+    if (event.repeat) return;
+    // The menu key must also close our own focused slider/select, not get
+    // swallowed by the generic typing guard and leave gameplay paused.
+    if (event.code === config.menuKey && (!typing(event) || doc.activeElement === host)) {
+      if (shell.hidden) shell.hidden = false; else hideMenu();
+      event.preventDefault(); return;
+    }
+    if (typing(event)) return;
     if (event.code === config.aimKey && config.aimActivation === 'fire') {
       if (config.holdAim) { if (holdPrevious === null) { holdPrevious = config.aim; holdMode = config.aimMode; } if (config.aimMode === 'off') config.aimMode = 'lock'; config.aim = true; onAimHold(true); onChange('aim', true); }
       else { if (config.aimMode === 'off') set('aimMode', 'lock'); set('aim', !config.aim); }

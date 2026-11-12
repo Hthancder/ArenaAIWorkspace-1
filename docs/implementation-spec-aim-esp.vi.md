@@ -1,6 +1,6 @@
 # SPEC TRIỂN KHAI — Aim, prediction, ESP tối giản và phối hợp feature
 
-**Trạng thái:** ĐÃ CHỐT và ĐANG TRIỂN KHAI; đã có bản `0.5.0-preview.1`, chưa nghiệm thu toàn bộ P3/prediction. Xem tiến độ/bằng chứng ở §12 và `docs/reborn-0.5.0.vi.md`.
+**Trạng thái:** ĐÃ CHỐT và ĐANG TRIỂN KHAI; đã có bản `0.5.0-preview.2` (hotfix sau báo lỗi live), chưa nghiệm thu toàn bộ P3/prediction. Xem tiến độ/bằng chứng ở §12 và `docs/reborn-0.5.0.vi.md`.
 **Ngày ghi:** 2026-11-12.
 **Baseline:** v0.4.0, commit `1431fec`.
 **Branch phiên làm việc:** `arena/ee4a4f64-arenaaiworkspace-1`. Không tạo/chuyển branch khác.
@@ -375,3 +375,7 @@ Khi triển khai, cập nhật các checkbox cùng bằng chứng và phạm vi 
 - Quyết định confidence sau diagnostic seeds 7301/99173/441019: tách fit residual (wu) và slope error (wu/s). Slope uncertainty lớn dùng fallback giảm flight lead, có state `reduced-lead-uncertainty` và solve lại flight time vật lý, KHÔNG cắt TOF. Stale age >150ms nhường native. Không thêm acceleration hoặc maneuver classifier. Final frozen holdout dùng seed 1847/82031/517991, report lưu riêng.
 - P4: sender là nơi thêm equip; manual enum11–20/27/28 thắng (21/22 là scope, không weapon). Melee hủy Switch, tránh lặp equip khi chờ confirm; manual equip khóa auto-melee tới release Fire. Semi giữ physical activation riêng. Layer/loot/wallcheck dùng source layer; overlay fault riêng không clear names/zoom/input. Mode-dependent controls, collapsible advanced, slider focus/open-state tests.
 - Bằng chứng preview: 122 offline tests; 4 expanded source-method scenarios; 12 movement families × 3 held-out seeds × 3 render rates × 2 snapshot cadences. Chi tiết/limitations ở `docs/reborn-0.5.0.vi.md` và `docs/aim-benchmark.vi.md`. Không live-tested. Những phase đã check là phạm vi implementation/tests nêu trên, không chứng minh tất cả tổ hợp client/server hoặc không có regression.
+
+- 2026-11-12, hotfix `0.5.0-preview.2` sau phản hồi ESP/aim không hoạt động: tái hiện scheduler minified logical/comma không có IfStatement, hidden legacy nametags gate, names phụ thuộc aim/camera schema, optional prediction chặn direct aim và menu focus/unsupported wallcheck toggle. Đã sửa và thêm 7 regression tests (129/129), source-native scenarios4/4 được mở rộng bằng source name factory + PIXI7 Container/TextStyle thật và direct fallback trên serialized input. Không có runtime capture từ người dùng nên không khẳng định đây là toàn bộ nguyên nhân live. Xem `docs/hotfix-0.5.0-preview.2.vi.md`.
+- Quyết định fallback mới: thiếu optional prediction contract/history ban đầu dùng vị trí hiện có (state explicit); thiếu definitions chỉ direct aim khi actual gun slot0/1 đã xác minh. Không đoán ballistics/unknown weapon. Known-stale history, protocol/team/layer/wallcheck/lifecycle guards vẫn giữ. Đây là sửa tính sẵn sàng cơ bản, không đóng P3 quality hoặc thay benchmark solver.
+- Menu: toàn bộ Aim Assist/hỗ trợ ngắm ở Main; Visuals chỉ giữ visual features. Names có capability/status/count riêng không phụ thuộc Canvas/camera/weapon discovery, không tái thêm HUD/tag.

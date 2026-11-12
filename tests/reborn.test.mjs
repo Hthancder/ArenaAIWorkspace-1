@@ -510,7 +510,8 @@ test('diagnostics distinguish capture, mapping and protocol without leaking game
 
 test('distributed userscript retains readable function names and source-module sections', () => {
   const script = readFileSync(new URL('../userscripts/duality-reborn.user.js', import.meta.url), 'utf8');
-  assert.match(script, /@version\s+0\.5\.0-preview\.1/);
+  const version = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
+  assert.ok(script.includes(`// @version      ${version}`));
   assert.match(script, /function captureApplication\(/);
   assert.match(script, /function start\(win\)/);
   assert.match(script, /\/\/ src\/main\.mjs/);
@@ -702,7 +703,7 @@ test('missing Canvas2D does not break input features or native colored names', (
 test('ESP controls persist team filters and validated colors without changing tab layout', () => {
   const dom = env(), config = { ...DEFAULTS }, changes = [];
   const menu = createMenu(dom.window, config, { onChange(key) { changes.push(key); }, retry() {}, stop() {}, diagnostics: () => ({}) });
-  menu.capabilities({ visuals: true });
+  menu.capabilities({ visuals: true, names: true });
   [...menu.root.querySelectorAll('.nav button')].find(b => b.textContent === 'Visuals').click();
   const row = [...menu.root.querySelectorAll('label')].find(n => n.textContent.includes('Allies (blue)'));
   row.querySelector('input').click(); assert.equal(config.espShowAllies, false);
@@ -913,4 +914,62 @@ test('Final configuration is equivalent across unrelated visual toggle orders; s
     } finally { f.close(); }
   }
   assert.deepEqual(outputs[0], outputs[1]);
+});
+
+test('native ESP survives missing aim/camera schema and legacy hidden name setting, with observable applied counts', () => {
+  const f = coordinated({ esp: true, nametags: false });
+  try {
+    f.app.game.hero.selectIdlePose = function () { return 1; }; f.app.game.camera.forward = function () { return null; }; f.engine.reconcile(true);
+    assert.equal(f.engine.capabilities.visuals, false); assert.equal(f.engine.capabilities.names, true);
+    f.engine.post();
+    const enemy = f.app.game.barn.playerPool.list[1];
+    assert.equal(enemy.nameText.visible, true); assert.equal(enemy.nameText.style.fill, '#ff6262');
+    assert.equal(f.engine.diagnostics().nativeNames.colored, 1); assert.equal(f.engine.diagnostics().nativeNames.state, 'native-names-active');
+  } finally { f.close(); }
+});
+
+test('basic aim still reaches outgoing clone without optional prediction contract/definitions; non-gun and protocol guards remain', () => {
+  const f = coordinated({ predict: true });
+  try {
+    f.engine.definitions = null; f.engine.reconcile(true);
+    const enemy = f.app.game.barn.playerPool.list[1]; enemy.p = { x: 12, y: 20.4 };
+    let result = f.send();
+    assert.equal(f.engine.stats.aimState, 'input-applied'); assert.equal(f.engine.stats.predictionState, 'direct-missing-definitions');
+    assert.ok(result.wire.toMouseDir.y > .19); assert.equal(result.native.toMouseDir.y, 0);
+    assert.equal(result.wire.shootHold, true); assert.equal(result.wire.moveRight, result.native.moveRight);
+    f.engine.definitions = defs; f.engine.reconcile(true); f.advance(); result = f.send();
+    assert.equal(f.engine.stats.predictionState, 'direct-prediction-unavailable'); assert.ok(result.wire.toMouseDir.y > .19);
+    f.app.game.hero.l.index = 3; f.app.game.hero.n.weapon = 'frag'; f.advance(); result = f.send();
+    assert.equal(f.engine.stats.aimState, 'unsupported-weapon-profile'); assert.deepEqual(result.wire.toMouseDir, result.native.toMouseDir);
+    f.engine.protocol = VERIFIED_PROTOCOL + 1; f.advance(); result = f.send();
+    assert.equal(f.engine.stats.aimState, 'unsupported-protocol'); assert.equal(result.wire, result.native);
+  } finally { f.close(); }
+});
+
+test('Aim helpers live in Main; menu key closes focused settings and gameplay aim resumes after hide', () => {
+  const f = coordinated({ aimMode: 'assist', assistStrength: 35 });
+  const menu = createMenu(f.dom.window, f.cfg, { onChange: key => f.engine.configurationChanged(key), retry() {}, stop() {}, diagnostics: () => ({}) });
+  try {
+    menu.capabilities({ aim: true, names: true });
+    assert.ok(menu.root.querySelector('[data-config=showFov]')); assert.ok(menu.root.querySelector('[data-config=showDot]'));
+    const slider = menu.root.querySelector('[data-config=assistStrength]'); slider.focus(); f.send();
+    assert.equal(f.engine.stats.aimState, 'menu-open');
+    slider.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { code: f.cfg.menuKey, bubbles: true, composed: true }));
+    assert.equal(menu.root.querySelector('#ui').hidden, true); assert.notEqual(menu.root.activeElement, slider);
+    f.advance(); f.send(); assert.equal(f.engine.stats.aimState, 'input-applied');
+    [...menu.root.querySelectorAll('.nav button')].find(b => b.textContent === 'Visuals').click();
+    assert.equal(menu.root.querySelector('[data-config=assistStrength]'), null); assert.equal(menu.root.querySelector('[data-config=showFov]'), null);
+    assert.ok(menu.root.querySelector('[data-config=esp]'));
+  } finally { menu.dispose(); f.close(); }
+});
+
+test('missing wallcheck contract cannot trap saved enabled control: user can turn it off without disabling native guards', () => {
+  const dom = env(), config = { ...DEFAULTS, aim: true, wallcheck: true };
+  const menu = createMenu(dom.window, config, { retry() {}, stop() {}, diagnostics: () => ({}) });
+  try {
+    menu.capabilities({ aim: true, wallcheck: false });
+    const wall = menu.root.querySelector('[data-config=wallcheck]');
+    assert.equal(wall.checked, true); assert.equal(wall.disabled, false);
+    wall.click(); assert.equal(config.wallcheck, false); assert.equal(wall.disabled, true);
+  } finally { menu.dispose(); dom.window.close(); }
 });

@@ -1,6 +1,14 @@
-# Duality Client Reborn — 0.5.0-preview.1
+# Duality Client Reborn — 0.5.0-preview.2
 
 Userscript readable cho survev.io, menu DOM nhẹ, source-backed adapters và cleanup có ownership. **Đã kiểm thử offline/source-method; chưa xác nhận trong gameplay live.** Không bảo đảm tương thích mọi update, tránh phát hiện hoặc bắn trúng. Dùng trên máy chủ công cộng có thể vi phạm điều khoản game.
+
+## Hotfix sau báo lỗi ESP/aim
+
+Bản `0.5.0-preview.2` sửa những đường lỗi đã tái hiện: scheduler bị minify thành `&&`, cờ legacy `nametags=false` còn chặn ESP nhưng không có control, names bị phụ thuộc aim/camera schema, và prediction optional khóa cả direct aim. **Đây chưa phải xác nhận đã giải quyết đúng mọi nguyên nhân trên máy người dùng.** [Chi tiết hotfix và kiểm chứng](docs/hotfix-0.5.0-preview.2.vi.md).
+
+- Toàn bộ hỗ trợ ngắm (Assist strength, FOV circle, predicted dot) ở **Main**, không nằm trong Visuals.
+- **Visuals → Player names → ESP — Native names** là switch duy nhất cho tên; không cần bật lines hoặc prediction.
+- Status trong menu phân biệt lý do aim bị chặn, prediction fallback và số tên thực sự được đổi màu. Không thêm HUD ngoài game.
 
 ## File để cài
 
@@ -10,7 +18,7 @@ Userscript readable cho survev.io, menu DOM nhẹ, source-backed adapters và cl
 2. Dán toàn bộ `.user.js` vào Tampermonkey/Violentmonkey. Chạy ở **page/main world**, **document-start**; metadata gồm `@sandbox raw` và `@inject-into page`.
 3. Reload survev.io; **Right Shift** mở/đóng menu. Gameplay features mặc định tắt.
 4. Chọn mode/feature trong trận. Control bị khóa nghĩa là chưa đủ contract, không phải đã hoạt động.
-5. **Help → Copy diagnostics** khi cần; diagnostics không xuất token Join, tên/vị trí người chơi hoặc object game. Nếu không có menu, tìm boot log `[Duality Reborn 0.5.0-preview.1]` và lỗi Console đầu tiên.
+5. **Help → Copy diagnostics** khi cần; diagnostics không xuất token Join, tên/vị trí người chơi hoặc object game. Nếu không có menu, tìm boot log `[Duality Reborn 0.5.0-preview.2]` và lỗi Console đầu tiên.
 
 **Retry capture:** bắt lại Application trong 15 giây; nếu lỡ bootstrap item DB/Join thì cần reload. **Stop / cleanup:** gỡ hooks/overrides do bản này sở hữu, yêu cầu lượt input native để trả hướng nếu còn session; không phát network ngoài native. Reload để chạy lại sau Stop.
 
@@ -24,9 +32,9 @@ Userscript readable cho survev.io, menu DOM nhẹ, source-backed adapters và cl
 - FOV là bán kính **input pixels**, dùng intent chưa sửa; sticky có biên hysteresis. Unknown/allies không thành target.
 - Một coordinator sửa **bản clone InputMsg giữ prototype**, không sửa physical mouse hoặc current/old input. Native timeout yêu cầu gửi khi hướng cần đổi/restore; native diff/prevInput vẫn giữ intent gốc.
 - Recompute cuối ở sender bằng source state. Camera shake/offset hoặc zoom đổi giữa pre/native input không tạo phép chiếu aim lệch.
-- Predict Auto lấy full/partial snapshots đã apply, không lấy render frames làm observation. Bounded weighted fit, reset identity/layer/gap, xử lý packet bunching. Không fit riêng zigzag hoặc biết trước movement.
+- Predict Auto lấy full/partial snapshots đã apply, không lấy render frames làm observation. Thiếu optional prediction contract thì direct aim dùng vị trí hiện có với trạng thái rõ ràng; thiếu definitions chỉ cho direct fallback khi đã xác minh actual gun slot0/1. Không tự đoán bullet speed hoặc weapon type. Bounded weighted fit, reset identity/layer/gap, xử lý packet bunching. Không fit riêng zigzag hoặc biết trước movement.
 - Profile từ actual equipped gun/bullet/perks; effective speed/variance, range margin, muzzle/clipping, stair aim-layer và toMouseHit. Dual offhand/random spread/empowered effects không được giả là biết trước.
-- Advanced prediction mặc định đóng: latency Auto/Off (RTT/2 heuristic có giới hạn), lead adjustment 100%. Slope uncertainty cao dùng trạng thái **`reduced-lead-uncertainty`**; stale snapshot nhường native input. Không cắt flight time vật lý thành trust horizon.
+- Advanced prediction mặc định đóng: latency Auto/Off (RTT/2 heuristic có giới hạn), lead adjustment 100%. Slope uncertainty cao dùng trạng thái **`reduced-lead-uncertainty`**; stale snapshot đã quan sát nhưng stale nhường native input. Không cắt flight time vật lý thành trust horizon.
 
 ### ESP — Visuals
 
@@ -51,8 +59,8 @@ X-Ray giữ smoke alpha legacy (`50 → 0.05` mỗi particle), darker smoke/ceil
 
 ## Bằng chứng và giới hạn
 
-- **122 tests offline**: controller/solver/tracker, adapters, ownership, migration/menu, phối hợp input, lifecycle, smoke/melee/map và các regression cũ đã chuyển sang semantics mới.
-- **4 source-method scenarios**: bản thường/minify + đổi tên `m_*` × 2 loot mode; chạy actual source snapshot receiver, native input expressions/normalization/diff/prevInput/timeout/send, InputMsg serialize/deserialize bằng BitStream và normalize hướng như server. Có stationary-cursor moving-target, disable restore, post-pre zoom, Lock convergence, Assist strength/no-extra-send; smoke update, server melee cooldown và minimap vẫn chạy.
+- **129 tests offline**: controller/solver/tracker, adapters, ownership, migration/menu, phối hợp input, lifecycle, smoke/melee/map và các regression cũ đã chuyển sang semantics mới.
+- **4 source-method scenarios**: bản thường/minify + đổi tên `m_*` × 2 loot mode; chạy actual source snapshot receiver, native input expressions/normalization/diff/prevInput/timeout/send, InputMsg serialize/deserialize bằng BitStream và normalize hướng như server. Có stationary-cursor moving-target, disable restore, post-pre zoom, Lock convergence, Assist strength/no-extra-send, missing-definitions direct wire fallback và native name factory với PIXI7 Container/TextStyle thật; smoke update, server melee cooldown và minimap vẫn chạy.
 - **[Benchmark đa chuyển động](docs/aim-benchmark.vi.md)**: 12 nhóm × 3 held-out seeds × render 30/60/144Hz × regular/jitter-gap snapshots; so legacy-render, no-predict, simple CV. Có median/p95 miss, collider miss, overshoot, recovery proxy, fallback và solver CPU. **Không phải gameplay hitrate hoặc FPS.**
 - Benchmark mới cải thiện straight/diagonal/curve/speed-change, không thắng mọi metric: median start-stop và một số p95 đảo hướng vẫn kém legacy. Không tuyên bố đã nghiệm thu toàn bộ yêu cầu prediction; chi tiết và phần còn mở trong [báo cáo triển khai](docs/reborn-0.5.0.vi.md) và [SPEC](docs/implementation-spec-aim-esp.vi.md).
 

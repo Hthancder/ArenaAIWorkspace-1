@@ -134,3 +134,46 @@ test('Slope uncertainty reduces flight lead explicitly, without clipping physica
   for (let i = 0; i < 12; i++) t.observe(p, { x: 1.5 + i * .3, y: 0 }, 400 + i * .1);
   const state = t.estimate(p, 402); assert.ok(Number.isFinite(state.vx)); assert.ok(Math.abs(state.vx) <= 80); assert.ok(state.samples.length <= 6);
 });
+
+test('production logical/comma scheduler and reversed zero comparison retain timeout discovery', async () => {
+  const { transformSync } = await import('esbuild');
+  const vm = await import('node:vm');
+  const code = transformSync('globalThis.g={tick(dt){this.timer-=dt;if(diff||this.timer<0){this.send();this.timer=1;this.prev=msg}}}', { minify: true }).code;
+  assert.ok(!code.includes('if('), 'Exercise the logical-expression shape actually emitted by minification');
+  const context = vm.createContext({}); vm.runInContext(code, context);
+  assert.equal(discoverInputTimeout(context.g), 'timer');
+  const explicit = { tick(dt) { this.clock = this.clock - dt; (changed || 0 > this.clock) && (this.clock = 1); } };
+  assert.equal(discoverInputTimeout(explicit), 'clock');
+  explicit.unrelated = function (dt) { this.counter -= dt; if (this.counter < 0) this.counter = 1; };
+  assert.equal(discoverInputTimeout(explicit), null, 'Ambiguity still fails closed');
+});
+
+test('ESP ignores obsolete nametags flag and does not require aim schema/camera', () => {
+  const names = new NativeNames(), self = { __id: 1 }, enemy = { __id: 2, active: true, nameText: { visible: false, _style: { fill: 65535 }, _text: 'unchanged' } };
+  const mapping = { active: self, barn: { teamInfo: { 1: { playerIds: [1] }, 2: { playerIds: [2] } } } };
+  const config = normalizeConfig({ version: 2, esp: true, nametags: false });
+  assert.equal(config.nametags, true);
+  names.sync(mapping, [self, enemy], { ...config, nametags: false });
+  assert.equal(enemy.nameText.visible, true); assert.equal(enemy.nameText._style.fill, '#ff6262');
+  assert.equal(names.stats.state, 'native-names-active'); assert.equal(names.stats.colored, 1);
+  assert.equal(enemy.nameText._text, 'unchanged');
+  names.clear(); assert.equal(enemy.nameText.visible, false); assert.equal(enemy.nameText._style.fill, 65535);
+});
+
+test('ESP supports actual PIXI7 Container visibility and inherited TextStyle API without reconstructing styles', async () => {
+  const { Container } = await import('@pixi/display');
+  const { TextStyle } = await import('@pixi/text');
+  class NativeText extends Container {
+    constructor() { super(); this._style = new TextStyle({ fill: 65535 }); this._text = 'native'; this.visible = false; }
+    get style() { return this._style; }
+  }
+  const text = new NativeText(), style = text.style, nativeFill = style.fill, names = new NativeNames();
+  const self = { __id: 1 }, enemy = { __id: 2, active: true, nameText: text };
+  const m = { active: self, barn: { teamInfo: { 1: { playerIds: [1] }, 2: { playerIds: [2] } } } };
+  names.sync(m, [enemy], { ...DEFAULTS, esp: true });
+  assert.equal(text.visible, true); assert.equal(text.style.fill, '#ff6262'); const styleID = style.styleID;
+  text.visible = false; names.sync(m, [enemy], { ...DEFAULTS, esp: true });
+  assert.equal(text.visible, true); assert.equal(text.style, style); assert.equal(style.styleID, styleID);
+  names.clear(); assert.equal(text.style.fill, nativeFill); assert.equal(text.visible, false);
+  text.destroy();
+});

@@ -230,7 +230,7 @@ export class Features {
           if (!inputShape(data)) return Reflect.apply(original, this, arguments);
           const manualEquip = data.inputs.some(isManualEquip);
           if (manualEquip) { self.weaponSwitch.reset(); self.switchSlot = null; self.manualEquipHeld = true; }
-          if (!self.inputReady()) { self.aimOutput = null; self.aimController.reset(); self.weaponSwitch.reset(); self.movement.reset(); self.switchSlot = null; self.meleeDirection = null; }
+          if (!self.inputReady()) { self.stats.aimState = self.inputBlockReason(); self.aimOutput = null; self.aimController.reset(); self.weaponSwitch.reset(); self.movement.reset(); self.switchSlot = null; self.meleeDirection = null; }
           else self.aimOutput = self.processAim(data, true);
           if (manualEquip) { self.weaponSwitch.reset(); self.switchSlot = null; self.manualEquipHeld = true; }
           self.moveDirection = self.config.mobileMovement && inputShape(data) ? self.movement.sample(data, self.config.movementSmooth, self.win.performance.now()) : null;
@@ -289,6 +289,7 @@ export class Features {
     this.smokeSources = discoverSmokeSources(game);
     const ready = !!(next.schema && next.camera && next.barn && next.pool && next.active?.active);
     this.capabilities = {
+      names: !!(next.barn && next.pool && next.active?.active),
       visuals: ready, interpolatedOverlay: ready && !!next.visualPosKey,
       grenadeZones: ready && !!this.definitions && !!next.registryKey && this.protocol === VERIFIED_PROTOCOL, aim: ready && this.senderReady && !!this.timeoutKey && !!next.ui && this.protocol === VERIFIED_PROTOCOL,
       autoPickup: ready && !!next.ui && !!this.lootSource && !!this.binds && !!this.definitions && this.protocol === VERIFIED_PROTOCOL,
@@ -380,21 +381,35 @@ export class Features {
   }
   sourcePos(p) { return at(p, [this.mapping?.schema?.netKey, this.sourceFields?.pos]) || read(p, this.mapping?.schema?.posKey); }
   sourceLayer(p) { return at(p, [this.mapping?.schema?.netKey, this.sourceFields?.layer]) ?? this.layerOverrides.getRaw(p, 'layer'); }
-  inputReady() {
+  inputBlockReason() {
     const m = this.mapping, doc = this.win.document; let el = doc.activeElement;
     const menuFocused = el?.id === 'duality-reborn-host' && !el.shadowRoot?.querySelector('#ui')?.hidden;
     while (el?.shadowRoot?.activeElement) el = el.shadowRoot.activeElement;
-    return !!(this.app.game?.initialized && m?.schema && m.active?.active && m.ui?.spectating === false
-      && !m.active.downed && !at(m.active, [m.schema.netKey, m.schema.deadKey]) && !doc.hidden && !this.focusBlocked
-      && !['INPUT', 'TEXTAREA', 'SELECT'].includes(el?.tagName) && !el?.isContentEditable && !menuFocused && !this.binds?.menuHovered
-      && !this.emoteOpen() && !this.failed.has('input-frame') && this.protocol === VERIFIED_PROTOCOL);
+    if (!this.app.game?.initialized) return 'not-in-game';
+    if (!m?.schema || !m.active?.active) return 'missing-player-mapping';
+    if (!m.ui) return 'missing-spectator-contract';
+    if (m.ui.spectating !== false) return 'spectating';
+    if (m.active.downed) return 'downed';
+    if (at(m.active, [m.schema.netKey, m.schema.deadKey])) return 'dead';
+    if (doc.hidden) return 'page-hidden';
+    if (this.focusBlocked) return 'blurred';
+    if (menuFocused) return 'menu-open';
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(el?.tagName) || el?.isContentEditable) return 'typing';
+    if (this.binds?.menuHovered) return 'native-menu-hovered';
+    if (this.emoteOpen()) return 'emote-open';
+    if (this.failed.has('input-frame')) return 'input-frame-error';
+    if (this.protocol === null) return 'awaiting-join-protocol';
+    if (this.protocol !== VERIFIED_PROTOCOL) return 'unsupported-protocol';
+    return null;
   }
+  inputReady() { return this.inputBlockReason() === null; }
   emoteOpen() { return entries(this.app.game).some(([, child]) => read(child, 'wheelDisplayed') === true); }
   processAim(native, advance) {
     const m = this.mapping, cfg = this.config, mode = modeOf(cfg), now = this.win.performance.now();
-    this.target = null; this.dot = null; this.meleeDirection = null; this.stats.aimRejections = {};
+    this.target = null; this.dot = null; this.meleeDirection = null; this.stats.aimRejections = {}; this.stats.predictionState = null; this.stats.aimApproximate = false;
     const fail = state => { this.stats.aimState = state; this.aimController.reset(); this.stickyId = null; return null; };
-    if (!this.inputReady() || this.emoteOpen()) return fail('paused-or-missing-contract');
+    const blockedInput = this.inputBlockReason();
+    if (blockedInput) return fail(blockedInput);
     const pos = this.sourcePos(m.active), mouse = this.app.input?.mousePos, camera = m.camera;
     if (!vec(pos) || !vec(mouse) || !camera) return fail('invalid-input-position');
     const physical = native?.toMouseDir || unit({ x: mouse.x - read(camera.camera, camera.widthKey) / 2, y: read(camera.camera, camera.heightKey) / 2 - mouse.y });
@@ -441,14 +456,22 @@ export class Features {
       let shot;
       if (melee) shot = { dir: unit({ x: candidate.pos.x - pos.x, y: candidate.pos.y - pos.y }), world: candidate.pos, muzzle: pos, distance: Math.hypot(candidate.pos.x - pos.x, candidate.pos.y - pos.y), state: 'melee' };
       else {
-        if (!profile) return fail('unsupported-weapon-profile');
-        if (cfg.predict && !this.capabilities.prediction) return fail('missing-snapshot-contract');
-        const track = this.tracker.estimate(candidate.p, now);
-        if (cfg.predict && this.capabilities.prediction && !track) { reject('staleOrMissingSnapshot'); continue; }
-        shot = predictShot({ origin: pos, target: candidate.pos, track: cfg.predict && this.capabilities.prediction ? track : null, profile,
-          latency: cfg.predict && cfg.latencyCompensation ? this.timing.transit() : 0, lead: (cfg.leadAdjustment ?? 100) / 100,
-          radius: at(candidate.p, [m.schema.netKey, this.sourceFields?.scale]) || 1,
-          muzzleFor: (origin, dir, model) => clippedMuzzle(origin, dir, model, obstacles, layerFor(dir), rawLayer & 1, selfRadius) });
+        // Prediction is an enhancement, not a second hidden master switch for
+        // basic aim. Never fabricate velocity, bullet speed or gun identity.
+        if (!profile && !([0, 1].includes(slot) && !gun)) return fail('unsupported-weapon-profile');
+        const predictionReady = !!(cfg.predict && profile && this.capabilities.prediction);
+        const track = predictionReady ? this.tracker.estimate(candidate.p, now) : null;
+        if (predictionReady && !track && this.tracker.states.has(candidate.p)) { reject('staleSnapshot'); continue; }
+        if (!profile) {
+          shot = { dir: unit({ x: candidate.pos.x - pos.x, y: candidate.pos.y - pos.y }), world: candidate.pos, muzzle: pos,
+            distance: Math.hypot(candidate.pos.x - pos.x, candidate.pos.y - pos.y), state: 'direct-missing-definitions', approximate: true };
+        } else {
+          shot = predictShot({ origin: pos, target: candidate.pos, track, profile,
+            latency: track && cfg.latencyCompensation ? this.timing.transit() : 0, lead: (cfg.leadAdjustment ?? 100) / 100,
+            radius: at(candidate.p, [m.schema.netKey, this.sourceFields?.scale]) || 1,
+            muzzleFor: (origin, dir, model) => clippedMuzzle(origin, dir, model, obstacles, layerFor(dir), rawLayer & 1, selfRadius) });
+          if (shot.dir && cfg.predict && !track) { shot.state = predictionReady ? 'direct-awaiting-snapshot' : 'direct-prediction-unavailable'; shot.approximate = true; }
+        }
       }
       if (!shot.dir) { reject(shot.state); continue; }
       if (layerFor(shot.dir) === null || !sameLayer(layerFor(shot.dir), this.sourceLayer(candidate.p))) { reject('aimLayer'); continue; }
@@ -525,9 +548,10 @@ export class Features {
       if (this.overrides.records.size) this.overrides.clear();
       this.names.clear(); return;
     }
-    const players = playerReady ? m.players() : [];
+    const namePlayers = m?.barn && m.active?.active ? m.players() : [];
+    const players = playerReady ? namePlayers : [];
     const espFrame = playerReady && (cfg.esp || cfg.lines) && this.ctx ? buildEspFrame(m, players, cfg, this.win.innerWidth, this.win.innerHeight, this.target) : null;
-    this.names.sync(m, players, cfg);
+    this.names.sync(m, namePlayers, cfg);
     const keep = new Map();
     const want = (owner, key) => { if (!keep.has(owner)) keep.set(owner, new Set()); keep.get(owner).add(key); };
     if (cfg.xray && now - this.lastScan > 500) { this.scanEffects(); this.lastScan = now; }
@@ -695,10 +719,12 @@ export class Features {
       canvasRenderer: !!this.ctx, mapDefinitions: !!this.mapDefinitions, smokeSource: this.smokeSources.length > 0, definitions: !!this.definitions, lootSource: !!this.lootSource, localData: !!this.local, binds: !!this.binds,
       protocolObserved: this.protocol !== null, protocolMatches: this.protocol === VERIFIED_PROTOCOL,
     };
-    return { version: '0.5.0-preview.1', protocol: this.protocol, sourceProtocol: VERIFIED_PROTOCOL,
+    return { version: '0.5.0-preview.2', protocol: this.protocol, sourceProtocol: VERIFIED_PROTOCOL,
       initialized: checks.initialized, checks,
       autoLoot: { state: this.autoLootStatus(), mode: this.config.lootMode, ...this.joinState },
       mapHighlights: { ...this.mapHighlights.stats },
+      nativeNames: { ...this.names.stats },
+      inputBlockReason: this.inputBlockReason(),
       missingContracts: Object.keys(checks).filter(key => !checks[key]),
       capabilities: { ...this.capabilities },
       stats: { ...this.stats }, failed: [...this.failed], overrides: this.overrides.records.size + this.layerOverrides.records.size };
