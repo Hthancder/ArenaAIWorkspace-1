@@ -1068,7 +1068,7 @@ function openHelp() {
 }
 function openAbout() {
   openModal(`<div class="about-center"><img class="about-logo" src="assets/logo.png" alt="Taskora" />
-      <h2 style="justify-content:center">Taskora <span style="color:var(--text-faint);font-weight:500">v2.10.3</span></h2>
+      <h2 style="justify-content:center">Taskora <span style="color:var(--text-faint);font-weight:500">v2.10.4</span></h2>
       <p>Quản lý công việc cho Windows — nhẹ, nhanh, đẹp.<br>Viết bằng Rust + Tauri, giao diện liquid glass.</p>
       <p>Font <strong>Be Vietnam Pro</strong> (OFL) · Icon <strong>Phosphor</strong> (MIT)</p>
       <p style="color:var(--text-faint)">MIT License © Hthancder</p>
@@ -1931,11 +1931,11 @@ function focusTickStart() {
       F.completing = true;
       invoke("focus_complete")
         .then(p => {
-          applyFocusPayload(p);
           if (p && p.transitioned) {
             playChime(p.chime, p.soundOn !== false);
             if (p.completedFocus) { refresh(); if (s_isAdhd()) confettiBurst(window.innerWidth / 2, Math.max(120, window.innerHeight / 2 - 80)); }
           }
+          focusSync(); /* đọc lại trạng thái thật mới nhất — tránh payload cũ ghi đè nếu user vừa bấm Reset */
         })
         .catch(() => {})
         .finally(() => { F.completing = false; });

@@ -35,12 +35,22 @@ body {
 }
 
 .tcard {
+  position:relative;
   height:100vh; display:flex; flex-direction:column;
   background:var(--bg);
   border:1px solid var(--line);
   border-radius:18px;
   box-shadow:var(--shadow);
   overflow:hidden;
+}
+
+/* pill 20-20-20 — nổi giữa, không chặn gì */
+.teye {
+  position:absolute; top:46px; left:50%; transform:translateX(-50%);
+  z-index:6; pointer-events:none; white-space:nowrap;
+  font-size:12px; font-weight:600; color:#fff;
+  background:rgba(99,102,241,.94); border:1px solid rgba(255,255,255,.3);
+  padding:6px 14px; border-radius:999px; box-shadow:0 10px 26px rgba(99,102,241,.45);
 }
 
 /* ── thanh tiêu đề ── */

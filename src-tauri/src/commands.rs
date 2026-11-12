@@ -660,6 +660,10 @@ pub fn focus_stop(app: AppHandle, state: State<'_, AppState>) -> Snapshot {
     crate::focus::stop(&mut i);
     let payload = crate::focus::payload(&i, false, false);
     let _ = app.emit("focus:change", payload);
+    // Dừng đồng hồ ⇒ cửa sổ Đồng hồ đóng theo (đóng ở CẢ khi bấm Dừng trong cửa sổ nhỏ lẫn ở overlay)
+    if let Some(w) = app.get_webview_window("timer") {
+        let _ = w.close();
+    }
     finish(&app, &mut i)
 }
 

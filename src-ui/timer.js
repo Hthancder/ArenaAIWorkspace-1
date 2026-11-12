@@ -68,9 +68,34 @@ function render() {
   }
 }
 
+/* 20-20-20 — một lần mỗi phiên, đúng mốc 20:00 (như overlay chính) */
+let eyeShown = false, eyeTimer = null;
+function maybeShowEye() {
+  if (!T || T.mode !== "focus" || !T.active || T.phaseDone || T.paused) return;
+  if (T.totalSecs - remainingNow() < 1200) return;
+  if (eyeShown) return;
+  eyeShown = true;
+  const pill = $("#t-eye"), countEl = $("#t-eye-count");
+  if (!pill || !countEl) return;
+  let left = 20;
+  countEl.textContent = String(left);
+  pill.hidden = false;
+  clearInterval(eyeTimer);
+  eyeTimer = setInterval(() => {
+    left -= 1;
+    countEl.textContent = String(Math.max(0, left));
+    if (left <= 0) { clearInterval(eyeTimer); pill.hidden = true; }
+  }, 1000);
+  playChime(T.chime, T.soundOn !== false);
+}
+
 /* tick hiển thị — thời gian vẫn lấy từ endsAtMs (wall-clock) */
 setInterval(() => {
-  if (T && T.active && !T.phaseDone) renderRingOnly();
+  if (T && T.active && !T.phaseDone) {
+    renderRingOnly();
+    if (T.totalSecs - remainingNow() < 2) eyeShown = false; /* đồng hồ vừa (chạy lại) từ đầu */
+    maybeShowEye();
+  }
 }, 500);
 function renderRingOnly() {
   const isBreak = T.mode !== "focus";
@@ -116,7 +141,7 @@ async function completeTick() {
   try {
     const p = await invoke("focus_complete");
     if (p && p.transitioned) playChime(p.chime, p.soundOn !== false);
-    applyPayload(p);
+    try { applyPayload(await invoke("focus_state")); } catch { applyPayload(p); }
   } catch { /* bỏ qua */ }
 }
 setInterval(completeTick, 500);

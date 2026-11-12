@@ -190,13 +190,18 @@ pub fn reset(i: &mut Inner) -> FocusPayload {
     {
         let f = &mut i.focus;
         if f.active {
+            let was_done = f.phase_done;
             f.remaining_secs = f.total_secs;
             f.phase_done = false;
-            f.ends_at_ms = if f.paused {
-                None
+            if was_done {
+                // Màn "xong" để paused=true — reset ở đây phải CHẠY LẠI ngay, không bắt tạm dừng
+                f.paused = false;
+                f.ends_at_ms = Some(now + f.total_secs as i64 * 1000);
+            } else if f.paused {
+                f.ends_at_ms = None; // giữ nguyên trạng thái tạm dừng như cũ
             } else {
-                Some(now + f.total_secs as i64 * 1000)
-            };
+                f.ends_at_ms = Some(now + f.total_secs as i64 * 1000);
+            }
         }
     }
     payload(i, false, false)
@@ -370,6 +375,20 @@ mod tests {
         assert!(!p.phase_done);
         // Không ghi nhận phiên nào
         assert!(i.store.focus_days.is_empty());
+    }
+
+    #[test]
+    fn reset_from_done_screen_starts_fresh_immediately() {
+        let mut i = test_inner();
+        i.store.settings.focus_min = 25;
+        start(&mut i, None, "x".to_string());
+        i.focus.ends_at_ms = Some(now_ms() - 1000); // giả lập hết giờ
+        let p = complete(&mut i);
+        assert!(p.phase_done && p.paused); // engine để tạm dừng ở màn xong
+        let p = reset(&mut i);
+        assert!(!p.phase_done && !p.paused);
+        assert!(p.ends_at_ms.is_some());
+        assert_eq!(p.remaining_secs, 25 * 60);
     }
 
     #[test]

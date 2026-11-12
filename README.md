@@ -60,6 +60,12 @@
 - Nguyên nhân đúng (theo tài liệu WebView2/Tauri): tạo cửa sổ web mới bên trong **command đồng bộ** ⇒ deadlock vòng lặp thông điệp WebView2 trên Windows ⇒ cửa sổ trắng không vẽ được gì, ứng dụng đơ, khung đóng cũng vô hiệu.
 - `focus_open_timer` giờ là **async command** (chạy trên thread riêng) — cửa sổ Đồng hồ được tạo như tài liệu Tauri khuyến nghị; vẫn là cửa sổ đục + khung native luôn đóng được.
 
+**Vá v2.10.4 — đồng bộ cửa sổ Đồng hồ & rà logic**
+- **Bấm “Dừng” → cửa sổ Đồng hồ đóng theo**, dù bấm từ overlay trong app chính hay từ ngay trong cửa sổ Đồng hồ.
+- **“Bắt đầu lại” ngay trên màn “Xong” chạy lại phiên mới ngay** (trước bị kẹt ở trạng thái tạm dừng với đồng hồ đầy — bấm không thấy gì xảy ra).
+- Đồng hồ trong app chính và cửa sổ Đồng hồ **không thể lệch bản ghi đè cũ**: mọi chuyển phase đọc lại trạng thái thật từ engine (wall-clock), kể cả khi bạn bấm Reset đúng khoảnh khắc đồng hồ về 0.
+- **Nhắc mắt 20-20-20 cũng hiện trong cửa sổ Đồng hồ** (pill nổi, tự ẩn, tôn trọng tuỳ chọn chuông) — không chỉ trong overlay chính.
+
 **Phiên tập trung của bạn — tuỳ biến tận gốc (v2.10.0)**
 - **Mọi con số quanh phiên tập trung đều chỉnh được** (Cài đặt → **Tập trung**, nhóm mới): thời lượng phiên 5–180′ (chip nhanh 15/25/45/50/90 + gõ tự do, mặc định 25) · nghỉ ngắn 1–60′ · nghỉ dài 5–60′ · **chu kỳ pomodoro** “nghỉ dài sau mỗi N phiên” (mặc định 4, chọn Tắt nếu không muốn) · **tự bắt đầu nghỉ khi hết giờ** và **tự bắt đầu lại cùng việc sau khi nghỉ** (mặc định **TẮT** — không ép nhịp) · nhắc nghỉ mắt **20-20-20** tắt/bật được · kiểu chuông cuối phiên: **3 nốt / Chuông gió / Không** (có nút *Nghe thử*).
 - **Nút “Bắt đầu lại” (Reset)** ngay trên đồng hồ — về đầy thời gian, giữ việc + chế độ + chu kỳ, không ghi nhận phiên; phím **R** làm y vậy. Không còn phải thoát hẳn khi lỡ nhịp.
