@@ -1,0 +1,12 @@
+const assert=require('node:assert/strict');const fs=require('node:fs');const vm=require('node:vm');
+const B=require('../extension/backup.js'),O=require('../extension/organize.js'),S=require('../extension/snapshots.js');
+let count=0;const id=()=>`new-${++count}`;const src=fs.readFileSync('extension/dashboard.js','utf8');const start=src.indexOf('function validateImport('),end=src.indexOf('\ndocument.addEventListener',start);const ctx={OrganizeTools:O,id,validUrl:u=>/^https?:\/\//i.test(u)};vm.runInNewContext(src.slice(start,end),ctx);const validate=ctx.validateImport;
+const group={id:'g1',name:'Work',items:[{id:'t1',title:'Kept',url:'https://example.com',tags:['x'],note:'note'}]};
+const deletedGroup={id:'g2',name:'Deleted',items:[]};
+const state={groups:[group],snapshots:[],presets:[], 'tabspace:trash:a':{id:'a',type:'group',value:deletedGroup,index:1,deletedAt:1},'tabspace:trash:b':{id:'b',type:'item',groupId:'g2',value:{id:'t2',title:'Deleted tab',url:'https://example.com/2'},index:0,deletedAt:2},'tabspace:batch:c':{id:'c',source:'Manual',items:[{title:'T',url:'https://example.com',status:'closed'}]}};
+const backup=B.exportData(state);assert.equal(backup.version,2);assert.equal(backup.trash.length,2);assert.equal(backup.batches.length,1);
+const imported=validate(backup),extra=B.extras(backup,imported,id,validate,list=>S.validate(list,id));const entries=Object.values(extra.records);const tg=entries.find(x=>x.type==='group'),ti=entries.find(x=>x.type==='item'),history=entries.find(x=>x.imported);assert.equal(ti.groupId,tg.value.id);assert.equal(imported[0].items[0].note,'note');assert.equal(history.items[0].status,'closed');assert.equal(history.imported,true);
+const old={format:'tabspace-backup',version:1,groups:[group]};assert.equal(B.extras(old,validate(old),id,validate,list=>S.validate(list,id)).trashCount,0);
+const bad={...backup,batches:[{source:'Bad',items:[{title:'X',url:'javascript:alert(1)',status:'closed'}]}]};assert.throws(()=>B.extras(bad,validate(bad),id,validate,list=>S.validate(list,id)));
+const duplicates={...backup,groups:[group,group]};assert.throws(()=>B.extras(duplicates,validate(duplicates),id,validate,list=>S.validate(list,id)),/trùng/);
+console.log('Backup compatibility, trash relationships and validation: OK');
