@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Quyền mặc định của cửa sổ chính Taskora",
   "windows": ["main", "timer"],
-  "permissions": ["core:default", "dialog:allow-open"]
+  "permissions": ["core:default", "core:window:allow-start-dragging", "dialog:allow-open"]
 }

@@ -1484,12 +1484,22 @@ function bindEvents() {
   ];
   for (const c of minuteCfg) {
     const input = $(c.input);
-    if (input) input.addEventListener("change", () => {
+    if (!input) continue;
+    const apply = () => {
       let v = Math.round(Number(input.value) || 0);
       v = Math.min(c.max, Math.max(c.min, v));
       input.value = String(v);
       syncMinuteChips(c.group, v);
       patchSettings({ [c.key]: v });
+    };
+    input.addEventListener("change", apply);
+    /* gõ tới đâu vá tới đó — không cần blur mới có tác dụng */
+    let debounce = null;
+    input.addEventListener("input", () => {
+      const v = Math.round(Number(input.value) || 0);
+      if (v < c.min || v > c.max) { syncMinuteChips(c.group, -1); return; }
+      clearTimeout(debounce);
+      debounce = setTimeout(apply, 450);
     });
   }
   $$(".minute-chip").forEach(b => b.addEventListener("click", () => {

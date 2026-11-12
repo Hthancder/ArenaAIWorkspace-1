@@ -1011,10 +1011,11 @@ html[data-theme="light"] .rm-chip { color:#7c3aed; border-color:rgba(124,58,237,
 
 /* nút mở cửa sổ đồng hồ trên overlay — góc trên phải */
 .focus-open-timer {
-  position:absolute; top:14px; right:14px; width:36px; height:36px;
-  display:grid; place-items:center; border-radius:12px;
+  position:absolute; top:14px; right:14px; height:34px; padding:0 12px;
+  display:inline-flex; align-items:center; gap:7px; border-radius:999px;
   border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.05); color:var(--text-weak);
   cursor:pointer; transition:all .18s ease; z-index:2;
+  font-family:inherit; font-size:12px; font-weight:600; letter-spacing:.02em;
 }
 .focus-open-timer:hover { color:#fff; border-color:rgba(var(--accent-2-rgb),.6); background:rgba(var(--accent-rgb),.18); transform:translateY(-1px); }
 .focus-open-timer:focus-visible { outline:2px solid var(--accent-2); outline-offset:2px; }
