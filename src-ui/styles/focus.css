@@ -1,0 +1,64 @@
+.focus-overlay { z-index:300; justify-content:center; align-items:center; background:rgba(7,8,20,.66); backdrop-filter:blur(20px) saturate(1.15); -webkit-backdrop-filter:blur(20px) saturate(1.15); }
+.focus-panel { position:relative; text-align:center; max-width:640px; padding:24px 20px; }
+.focus-hint { color:var(--text-weak); font-size:12px; letter-spacing:.2px; margin-bottom:16px; }
+.focus-ring-wrap { position:relative; width:308px; height:308px; margin:0 auto; }
+.focus-ring { width:308px; height:308px; transform:rotate(-90deg); }
+.focus-track { stroke:rgba(255,255,255,.09); stroke-width:9; fill:none; }
+.focus-prog { stroke:var(--accent-2); stroke-width:9; fill:none; stroke-linecap:round; filter:drop-shadow(0 0 14px rgba(var(--accent-rgb),.6)); transition:stroke-dashoffset .9s linear; }
+.focus-time { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:62px; font-weight:600; letter-spacing:1px; font-variant-numeric:tabular-nums; }
+.focus-title { margin:20px auto 17px; font-size:19px; font-weight:600; max-width:44ch; line-height:1.5; }
+.focus-controls { display:flex; gap:10px; justify-content:center; }
+.focus-now { margin-top:9px; font-size:11.5px; color:var(--text-faint); font-variant-numeric:tabular-nums; letter-spacing:.4px; }
+.focus-breath { padding:14px 0 4px; }
+.breath-circle { width:172px; height:172px; margin:0 auto; border-radius:50%;
+  background:radial-gradient(circle at 50% 42%, rgba(165,180,252,.85), rgba(99,102,241,.35) 58%, rgba(99,102,241,.06) 78%, transparent 82%);
+  animation:breath 5s ease-in-out infinite alternate; box-shadow:0 0 60px rgba(129,140,248,.35); }
+@keyframes breath { from { transform:scale(.68); opacity:.7; } to { transform:scale(1); opacity:1; } }
+.focus-breath-text { margin-top:14px; font-size:13.5px; color:var(--accent-ink); letter-spacing:.3px; }
+body.perf .breath-circle { animation:none; }
+@media (prefers-reduced-motion: reduce) { .breath-circle { animation:none; } }
+
+.focus-done-ic { width:74px; height:74px; color:var(--ok); filter:drop-shadow(0 6px 22px rgba(16,185,129,.5)); margin-bottom:10px; }
+.focus-done h2 { font-size:24px; letter-spacing:-.3px; }
+.focus-done p { color:var(--text-weak); margin:8px 0 16px; font-size:13px; }
+html[data-theme="light"] .focus-overlay { background:rgba(238,240,250,.66); }
+.eye-pill { display:flex; align-items:center; gap:8px; justify-content:center; margin:4px auto 2px; width:max-content; padding:7px 16px; border-radius:99px; font-size:12px; color:#bae6fd; background:rgba(56,189,248,.14); border:1px solid rgba(125,211,252,.4); animation:eye-in .35s ease; }
+.eye-pill b { font-variant-numeric:tabular-nums; }
+@keyframes eye-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+body.perf .eye-pill { animation:none; }
+@media (prefers-reduced-motion: reduce) { .eye-pill { animation:none; } }
+html[data-theme="light"] .dump-area { background:rgba(255,255,255,.85); }
+html[data-theme="light"] .split-suggest-input { background:rgba(255,255,255,.92); }
+html[data-theme="light"] .eye-pill { color:#075985; background:rgba(56,189,248,.18); }
+
+/* ───────── v2.10.0 — nhóm TẬP TRUNG & cửa sổ Đồng hồ ───────── */
+.minute-control { display:flex; gap:6px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
+.minute-chip {
+  height:30px; min-width:38px; padding:0 10px; border-radius:9px;
+  border:1px solid var(--stroke); background:var(--chip); color:var(--text-weak);
+  font-size:12.5px; font-weight:600; cursor:pointer; font-family:inherit;
+  transition:all .18s ease; font-variant-numeric:tabular-nums;
+}
+.minute-chip:hover { color:var(--text); border-color:rgba(var(--accent-2-rgb),.5); transform:translateY(-1px); }
+.minute-chip.on { background:linear-gradient(165deg,var(--accent-2),var(--accent-deep)); color:#fff; border-color:transparent; box-shadow:0 4px 12px rgba(var(--accent-rgb),.4); }
+.minute-input { display:inline-flex; align-items:center; gap:5px; height:30px; border-radius:9px; border:1px solid var(--stroke); background:var(--chip); padding:0 8px; }
+.minute-input input { width:48px; border:none; background:transparent; color:var(--text); font:600 12.5px inherit; text-align:right; outline:none; -moz-appearance:textfield; }
+.minute-input input::-webkit-outer-spin-button, .minute-input input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+.minute-input em { font-style:normal; font-size:11px; color:var(--text-faint); }
+.minute-input:focus-within { border-color:var(--accent-2); box-shadow:0 0 0 3px rgba(var(--accent-rgb),.25); }
+
+.chime-control { display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
+
+/* nút mở cửa sổ đồng hồ trên overlay — góc trên phải */
+.focus-open-timer {
+  position:absolute; top:14px; right:14px; height:34px; padding:0 12px;
+  display:inline-flex; align-items:center; gap:7px; border-radius:999px;
+  border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.05); color:var(--text-weak);
+  cursor:pointer; transition:all .18s ease; z-index:2;
+  font-family:inherit; font-size:12px; font-weight:600; letter-spacing:.02em;
+}
+.focus-open-timer:hover { color:#fff; border-color:rgba(var(--accent-2-rgb),.6); background:rgba(var(--accent-rgb),.18); transform:translateY(-1px); }
+.focus-open-timer:focus-visible { outline:2px solid var(--accent-2); outline-offset:2px; }
+
+/* nút Bắt đầu lại — cùng hàng với Tạm dừng / Dừng */
+.focus-reset-btn { display:inline-flex; align-items:center; gap:7px; }
