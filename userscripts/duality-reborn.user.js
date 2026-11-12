@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Duality Client Reborn (compatibility preview)
 // @namespace    arena.survev.reborn
-// @version      0.3.0
+// @version      0.4.0
 // @description  Lightweight menu, validated semantic discovery, bounded hooks and reversible features. Live compatibility unverified.
 // @match        https://survev.io/*
 // @match        https://*.survev.io/*
@@ -6198,9 +6198,9 @@ THE SOFTWARE.
     return cancel;
   }
   __name(captureApplication, "captureApplication");
-  function captureDefinitions(win, onDefs, timeout = 15e3) {
+  function captureDefinitions(win, onDefs, timeout = 15e3, onMapDefs = null) {
     const bag = new Disposables(), apply = win.Reflect.apply;
-    let busy = false, done = false;
+    let busy = false, done = false, gameFound = false, mapFound = false;
     const cancel = /* @__PURE__ */ __name(() => {
       done = true;
       bag.clear();
@@ -6209,10 +6209,15 @@ THE SOFTWARE.
       if (!done && !busy) {
         busy = true;
         try {
-          if (read(read(value, "mp5"), "type") === "gun" && read(read(value, "bullet_mp5"), "type") === "bullet" && read(read(value, "frag"), "type") === "throwable" && read(read(value, "explosion_frag"), "type") === "explosion") {
-            cancel();
+          if (!gameFound && read(read(value, "mp5"), "type") === "gun" && read(read(value, "bullet_mp5"), "type") === "bullet" && read(read(value, "frag"), "type") === "throwable" && read(read(value, "explosion_frag"), "type") === "explosion") {
+            gameFound = true;
             win.queueMicrotask(() => onDefs(value));
           }
+          if (onMapDefs && !mapFound && ["tree_01", "stone_01"].every((key) => read(read(value, key), "type") === "obstacle" && typeof read(read(value, key), "reflectBullets") === "boolean" && object(read(read(value, key), "collision")))) {
+            mapFound = true;
+            win.queueMicrotask(() => onMapDefs(value));
+          }
+          if (gameFound && (!onMapDefs || mapFound)) cancel();
         } catch {
         } finally {
           busy = false;
@@ -6468,8 +6473,434 @@ THE SOFTWARE.
     }
   };
 
+  // src/effects.mjs
+  function discoverSmokeSources(game) {
+    const sources = [];
+    for (const [, barn] of entries(game)) {
+      if (!object(barn) || !entries(barn).some(([, value]) => Array.isArray(value))) continue;
+      const candidates = /* @__PURE__ */ new Map();
+      for (const [method, fn] of methods(barn)) {
+        const tree = ast(fn);
+        walk(tree, (n) => {
+          if (n.type !== "VariableDeclarator" || n.id?.type !== "Identifier" || n.init?.type !== "MemberExpression" || !n.init.computed) return;
+          const arrayPath = path(n.init.object), root = n.id.name;
+          if (arrayPath?.length !== 1 || !Array.isArray(read(barn, arrayPath[0]))) return;
+          const refs = paths(tree, root).map((p) => p.join("."));
+          if (!["fadeTicker", "fadeDuration", "posTarget", "radTarget"].every((p) => refs.includes(p))) return;
+          const writes = /* @__PURE__ */ new Set();
+          walk(tree, (assignment) => {
+            if (assignment.type === "AssignmentExpression") {
+              const p = path(assignment.left, root);
+              if (p) writes.add(p.join("."));
+            }
+          });
+          if (!["sprite.alpha", "sprite.tint", "sprite.visible"].every((p) => writes.has(p))) return;
+          candidates.set(arrayPath[0], { barn, key: arrayPath[0], method });
+        });
+      }
+      if (candidates.size === 1) sources.push([...candidates.values()][0]);
+    }
+    return sources;
+  }
+  __name(discoverSmokeSources, "discoverSmokeSources");
+  function smokeParticles(sources) {
+    const found = [], seen = /* @__PURE__ */ new Set();
+    for (const { barn, key } of sources) {
+      const list = read(barn, key);
+      if (!Array.isArray(list)) continue;
+      for (const particle of list.slice(0, 2048)) {
+        if (seen.has(particle)) continue;
+        seen.add(particle);
+        if (read(particle, "active") !== true || !object(read(particle, "sprite")) || !finite(read(particle, "fadeTicker")) || !finite(read(particle, "fadeDuration")) || !vec(read(particle, "posTarget")) || !finite(read(particle, "radTarget")) || read(read(particle, "sprite"), "_destroyed") === true) continue;
+        found.push(particle);
+      }
+    }
+    return found;
+  }
+  __name(smokeParticles, "smokeParticles");
+  function smokeAlpha(raw, setting) {
+    return finite(raw) && finite(setting) ? Math.min(Math.max(0, raw), Math.max(0, Math.min(100, setting)) / 1e3) : raw;
+  }
+  __name(smokeAlpha, "smokeAlpha");
+  var emptyXrayStats = /* @__PURE__ */ __name((state = "disabled") => ({ state, smokeSources: 0, smokeActive: 0, smokeModified: 0, smokeUnsupported: 0, darkened: 0, ceilings: 0, vegetation: 0 }), "emptyXrayStats");
+
+  // src/repeat-fire.mjs
+  function repeatFirePolicy(def) {
+    if (def?.type === "melee") {
+      if (def.autoAttack === true) return { state: "native-auto", interval: null };
+      if (finite(def.attack?.cooldownTime) && def.attack.cooldownTime > 0) {
+        return { state: "melee-repeat", interval: Math.min(50, def.attack.cooldownTime * 1e3) };
+      }
+    }
+    if (def?.type === "gun") {
+      if (def.fireMode === "auto" || def.fireMode === "burst") return { state: "native-auto", interval: null };
+      if (def.fireMode === "single" && finite(def.fireDelay) && def.fireDelay > 0) return { state: "single-repeat", interval: Math.max(50, def.fireDelay * 1e3) };
+    }
+    return { state: def?.type === "throwable" ? "throwable-excluded" : "unsupported-weapon", interval: null };
+  }
+  __name(repeatFirePolicy, "repeatFirePolicy");
+  var RepeatFire = class {
+    static {
+      __name(this, "RepeatFire");
+    }
+    reset() {
+      this.next = 0;
+      this.frame = -1;
+      this.value = false;
+      this.weapon = null;
+      this.state = "disabled";
+    }
+    constructor() {
+      this.reset();
+      this.pulses = 0;
+    }
+    sample({ frame, now, weapon, def, held, enabled, paused, protocolMatches }) {
+      if (!enabled || paused || !protocolMatches || !held) {
+        this.reset();
+        this.state = !enabled ? "disabled" : paused ? "paused" : !protocolMatches ? "waiting-protocol" : "fire-not-held";
+        return false;
+      }
+      if (weapon !== this.weapon) {
+        this.reset();
+        this.weapon = weapon;
+      }
+      const policy = repeatFirePolicy(def);
+      this.state = policy.state;
+      if (policy.interval === null) return false;
+      if (this.frame === frame) return this.value;
+      this.frame = frame;
+      this.value = now >= this.next;
+      if (this.value) {
+        this.next = now + policy.interval;
+        this.pulses++;
+      }
+      return this.value;
+    }
+  };
+
+  // src/map-highlights.mjs
+  var MAP_MARKERS = Object.freeze({
+    container_06: [14074643, 1],
+    barn_01: [6959775, 1],
+    stone_02: [1646367, 6],
+    tree_03: [16777215, 8],
+    tree_03sp: [255, 8],
+    stone_04: [15406938, 6],
+    stone_05: [15406938, 6],
+    crate_03: [5342557, 1.8],
+    bunker_storm_01: [6959775, 1.75],
+    bunker_hydra_01: [10030546, 1.75],
+    bunker_crossing_stairs_01b: [13571226, 2],
+    bunker_crossing_stairs_01: [13571226, 2]
+  });
+  function highlightMinimap(result, config) {
+    if (!config.mapHighlights || !object(result) || !Array.isArray(read(result, "shapes")) || typeof read(read(result, "obj"), "type") !== "string") return result;
+    const type = result.obj.type, marker = MAP_MARKERS[type], tree = config.smallerTrees && /^tree[_-]/.test(type);
+    if (!marker && !tree) return result;
+    const shapes = result.shapes.map((shape) => {
+      if (!object(shape) || !object(read(shape, "collider")) || !finite(read(shape, "color"))) return shape;
+      const originalScale = finite(read(shape, "scale")) ? shape.scale : 1;
+      return { ...shape, ...marker ? { color: marker[0], scale: marker[1] } : { scale: Math.min(originalScale, 1.8) } };
+    });
+    return { ...result, zIdx: marker ? 999 : result.zIdx, shapes };
+  }
+  __name(highlightMinimap, "highlightMinimap");
+  function mapHighlightCompatible(map) {
+    let returnsShape = false;
+    const getter = ast(readMethod(map, "getMinimapRender")), render = ast(readMethod(map, "renderMap"));
+    walk(getter, (n) => {
+      if (n.type !== "ReturnStatement" || n.argument?.type !== "ObjectExpression") return;
+      const names = n.argument.properties.map((p) => p.key?.name ?? p.key?.value);
+      if (["obj", "shapes", "zIdx"].every((key) => names.includes(key))) returnsShape = true;
+    });
+    let consumesGetter = false, sorts = false;
+    walk(render, (n) => {
+      if (n.type !== "CallExpression") return;
+      const key = n.callee?.property?.name ?? n.callee?.property?.value;
+      if (key === "getMinimapRender") consumesGetter = true;
+      if (key === "sort") sorts = true;
+    });
+    return returnsShape && consumesGetter && sorts;
+  }
+  __name(mapHighlightCompatible, "mapHighlightCompatible");
+  function discoverMapRedraw(game, map) {
+    const candidates = [];
+    for (const [, fn] of methods(game)) walk(ast(fn), (n) => {
+      if (n.type !== "CallExpression" || n.arguments.length !== 2) return;
+      const p = path(n.callee);
+      if (p?.length !== 2 || p[1] !== "renderMap" || at2(game, [p[0]]) !== map) return;
+      const renderer = at2(game, path(n.arguments[0]) || []), canvasMode = at2(game, path(n.arguments[1]) || []);
+      if (object(renderer) && typeof canvasMode === "boolean" && typeof renderer.render === "function") candidates.push({ renderer, canvasMode });
+    });
+    if (!candidates.length || candidates.some((v) => v.renderer !== candidates[0].renderer || v.canvasMode !== candidates[0].canvasMode)) return null;
+    return candidates[0];
+  }
+  __name(discoverMapRedraw, "discoverMapRedraw");
+  var MapHighlights = class {
+    static {
+      __name(this, "MapHighlights");
+    }
+    constructor(config, report) {
+      this.config = config;
+      this.report = report;
+      this.hooks = new Disposables();
+      this.map = null;
+      this.enabled = false;
+      this.dirty = false;
+      this.signature = null;
+      this.stats = { state: "disabled", marked: 0, redraws: 0 };
+    }
+    sync(game, map) {
+      if (map !== this.map) {
+        this.dispose();
+        this.map = map;
+        this.signature = null;
+        if (map && mapHighlightCompatible(map)) {
+          const self = this;
+          this.installed = patchMethod(map, "getMinimapRender", (original) => function() {
+            const result = Reflect.apply(original, this, arguments);
+            if (!self.enabled) return result;
+            const marked = highlightMinimap(result, self.config);
+            if (marked !== result) {
+              self.stats.marked++;
+              self.dirty = true;
+            }
+            return marked;
+          }, this.hooks);
+        }
+      }
+      this.redrawArgs ||= map ? discoverMapRedraw(game, map) : null;
+      this.available = !!(this.installed && this.redrawArgs);
+      this.enabled = !!this.config.mapHighlights;
+      if (!this.available || !read(map, "mapLoaded")) {
+        this.stats.state = this.enabled ? "waiting-map-contract" : "disabled";
+        return;
+      }
+      const signature = JSON.stringify([this.enabled, !!this.config.smallerTrees]);
+      if (signature === this.signature) return;
+      this.signature = signature;
+      if (this.enabled || this.dirty) this.redraw();
+      else this.stats.state = "disabled";
+    }
+    redraw() {
+      if (!this.map || !this.redrawArgs || !read(this.map, "mapLoaded")) return;
+      try {
+        this.stats.marked = 0;
+        Reflect.apply(readMethod(this.map, "renderMap"), this.map, [this.redrawArgs.renderer, this.redrawArgs.canvasMode]);
+        this.stats.redraws++;
+        this.dirty = this.enabled;
+        this.stats.state = this.enabled ? this.stats.marked ? "redrawn-markers" : "no-matching-map-objects" : "disabled";
+      } catch (error) {
+        this.stats.state = "redraw-error";
+        this.report("warning", `Map redraw: ${error.message}`);
+      }
+    }
+    dispose() {
+      this.enabled = false;
+      if (this.dirty) this.redraw();
+      this.hooks.clear();
+      this.map = null;
+      this.installed = false;
+      this.available = false;
+      this.dirty = false;
+      this.signature = null;
+      this.redrawArgs = null;
+    }
+  };
+
+  // src/weapon-switch.mjs
+  var WeaponSwitch = class {
+    static {
+      __name(this, "WeaponSwitch");
+    }
+    constructor() {
+      this.reset();
+    }
+    reset() {
+      this.last = null;
+      this.pending = null;
+      this.next = 0;
+      this.state = "disabled";
+    }
+    sample({ enabled, ready, slot, weapons, definitions, held, oneGun, now }) {
+      if (!enabled || !ready) {
+        this.reset();
+        this.state = enabled ? "waiting-contract" : "disabled";
+        return null;
+      }
+      const eligible = /* @__PURE__ */ __name((weapon) => weapon?.type && definitions?.[weapon.type]?.type === "gun" && ["single", "burst"].includes(definitions[weapon.type].fireMode), "eligible");
+      const current2 = weapons?.[slot];
+      if (this.pending) {
+        const p = this.pending;
+        if (now > p.expires || !held || !weapons?.[p.returnSlot] || weapons[p.returnSlot].type !== p.type || ![p.via, p.returnSlot].includes(slot)) this.pending = null;
+        else if (slot === p.via && now >= p.at) {
+          this.pending = null;
+          this.last = null;
+          this.state = "return-requested";
+          return p.returnSlot;
+        } else {
+          this.state = "waiting-equip";
+          return null;
+        }
+      }
+      if (![0, 1].includes(slot) || !eligible(current2)) {
+        this.last = null;
+        this.state = "unsupported-weapon";
+        return null;
+      }
+      const prior = this.last;
+      this.last = { slot, type: current2.type, ammo: current2.ammo };
+      const shot = prior?.slot === slot && prior.type === current2.type && (current2.ammo < prior.ammo || held && prior.ammo === 0 && current2.ammo > 0);
+      this.state = "watching-ammo";
+      if (!held || !shot || now < this.next) return null;
+      const other = weapons[1 - slot];
+      if (!oneGun && eligible(other) && other.ammo > 0) {
+        this.next = now + 200;
+        this.state = "other-gun-requested";
+        return 1 - slot;
+      }
+      const via = other?.type ? 1 - slot : weapons[2]?.type ? 2 : null;
+      if (via === null) {
+        this.state = "no-secondary-slot";
+        return null;
+      }
+      this.pending = { via, returnSlot: slot, type: current2.type, at: now + 100, expires: now + 1e3 };
+      this.next = now + 250;
+      this.state = "cycle-requested";
+      return via;
+    }
+  };
+
+  // src/previews.mjs
+  function rayHit(start2, dir, distance, shape) {
+    if (!vec(start2) || !vec(dir) || !finite(distance) || distance <= 0) return null;
+    let t, normal;
+    if (read(shape, "type") === 0 && vec(read(shape, "pos")) && finite(read(shape, "rad")) && shape.rad > 0) {
+      const x = start2.x - shape.pos.x, y = start2.y - shape.pos.y;
+      const b = x * dir.x + y * dir.y, c = x * x + y * y - shape.rad * shape.rad;
+      const det = b * b - c;
+      if (det < 0) return null;
+      t = -b - Math.sqrt(det);
+      if (t < 0) {
+        if (c <= 0) t = 0;
+        else return null;
+      }
+      const nx = start2.x + dir.x * t - shape.pos.x, ny = start2.y + dir.y * t - shape.pos.y, len = Math.hypot(nx, ny);
+      normal = len ? { x: nx / len, y: ny / len } : { x: -dir.x, y: -dir.y };
+    } else if (read(shape, "type") === 1 && vec(read(shape, "min")) && vec(read(shape, "max"))) {
+      let lo = 0, hi = distance;
+      normal = { x: -dir.x, y: -dir.y };
+      for (const axis of ["x", "y"]) {
+        if (Math.abs(dir[axis]) < 1e-10) {
+          if (start2[axis] < shape.min[axis] || start2[axis] > shape.max[axis]) return null;
+          continue;
+        }
+        const a = (shape.min[axis] - start2[axis]) / dir[axis], b = (shape.max[axis] - start2[axis]) / dir[axis];
+        const enter = Math.min(a, b);
+        if (enter > lo) {
+          lo = enter;
+          normal = { x: 0, y: 0 };
+          normal[axis] = dir[axis] > 0 ? -1 : 1;
+        }
+        hi = Math.min(hi, Math.max(a, b));
+        if (lo > hi) return null;
+      }
+      t = lo;
+    } else return null;
+    return t >= 0 && t <= distance ? { distance: t, pos: { x: start2.x + dir.x * t, y: start2.y + dir.y * t }, normal } : null;
+  }
+  __name(rayHit, "rayHit");
+  function traceShot(start2, direction, distance, obstacles, layer, definitions, maxReflections = 0) {
+    const length = Math.hypot(direction?.x, direction?.y);
+    if (!vec(start2) || !finite(length) || length < 1e-3 || !finite(distance) || distance <= 0) return null;
+    let from = { ...start2 }, dir = { x: direction.x / length, y: direction.y / length }, left = Math.min(distance, 500);
+    const points = [from];
+    let unsupported = 0, collisions = 0;
+    const solid = obstacles.slice(0, 1024).filter((o) => o.active === true && o.dead !== true && o.collidable !== false && (!finite(o.height) || o.height >= 0.25) && sameLayer(o.layer, layer) && o.collider);
+    for (let bounce = 0; bounce <= Math.min(maxReflections, 3); bounce++) {
+      let best = null;
+      for (const obstacle of solid) {
+        if (![0, 1].includes(read(obstacle.collider, "type"))) {
+          unsupported++;
+          continue;
+        }
+        const hit = rayHit(from, dir, left, obstacle.collider);
+        if (hit && (!best || hit.distance < best.distance)) best = { ...hit, obstacle };
+      }
+      if (!best) {
+        points.push({ x: from.x + dir.x * left, y: from.y + dir.y * left });
+        break;
+      }
+      points.push(best.pos);
+      collisions++;
+      left -= best.distance;
+      if (!definitions?.[best.obstacle.type]?.reflectBullets || bounce === maxReflections || left <= 0.02) break;
+      const dot = dir.x * best.normal.x + dir.y * best.normal.y;
+      dir = { x: dir.x - 2 * dot * best.normal.x, y: dir.y - 2 * dot * best.normal.y };
+      from = { x: best.pos.x + dir.x * 0.02, y: best.pos.y + dir.y * 0.02 };
+      left -= 0.02;
+    }
+    return { points, collisions, unsupported };
+  }
+  __name(traceShot, "traceShot");
+  function throwPreview(def, start2, direction, mouseDistance) {
+    const physics = def?.throwPhysics, len = Math.hypot(direction?.x, direction?.y);
+    if (def?.type !== "throwable" || !vec(start2) || !finite(len) || len < 1e-3 || !finite(mouseDistance) || !finite(physics?.speed) || !finite(physics?.velZ) || physics.speed < 0) return null;
+    const dir = { x: direction.x / len, y: direction.y / len };
+    let speed = physics.speed * (def.forceMaxThrowDistance ? 1 : clamp(mouseDistance / 18, 0, 1));
+    let height = 0.5, vz = physics.velZ, pos = { x: start2.x + 0.5 * dir.x + dir.y, y: start2.y + 0.5 * dir.y - dir.x };
+    const points = [pos], dt = 1 / 60;
+    for (let i = 0; i < 180; i++) {
+      if (height <= 0) speed /= 1 + dt * 2.3;
+      pos = { x: pos.x + dir.x * speed * dt, y: pos.y + dir.y * speed * dt };
+      vz -= 10.5 * dt;
+      height = Math.max(0, height + vz * dt);
+      if (i % 6 === 5) points.push(pos);
+      if (height === 0 && speed < 0.25) break;
+    }
+    return { points, end: pos, nominal: true };
+  }
+  __name(throwPreview, "throwPreview");
+  var MovementSmoother = class {
+    static {
+      __name(this, "MovementSmoother");
+    }
+    reset() {
+      this.direction = null;
+      this.time = null;
+    }
+    constructor() {
+      this.reset();
+    }
+    sample(data2, smooth, now) {
+      const x = Number(!!data2.moveRight) - Number(!!data2.moveLeft), y = Number(!!data2.moveUp) - Number(!!data2.moveDown), len = Math.hypot(x, y);
+      if (!len) {
+        this.reset();
+        return null;
+      }
+      const target = { x: x / len, y: y / len };
+      const dt = this.time === null ? 0 : clamp((now - this.time) / 1e3, 0, 0.1);
+      this.time = now;
+      if (!this.direction || !finite(smooth) || smooth <= 0) this.direction = target;
+      else {
+        const gain = 1 - Math.exp(-dt / (0.02 + clamp(smooth, 0, 100) / 500));
+        const next = { x: this.direction.x + (target.x - this.direction.x) * gain, y: this.direction.y + (target.y - this.direction.y) * gain };
+        const n = Math.hypot(next.x, next.y);
+        this.direction = n > 0.05 ? { x: next.x / n, y: next.y / n } : target;
+        if (this.direction.x * target.x + this.direction.y * target.y < -0.95) this.direction = target;
+      }
+      return { ...this.direction };
+    }
+  };
+
   // src/features.mjs
   var VERIFIED_PROTOCOL = 1028;
+  var equipInput = /* @__PURE__ */ __name((slot) => Number.isInteger(slot) && slot >= 0 && slot <= 3 ? 11 + slot : null, "equipInput");
+  function meleeReach(def) {
+    const attack = def?.attack;
+    return def?.type === "melee" && vec(attack?.offset) && finite(attack?.rad) && attack.rad > 0 ? Math.hypot(attack.offset.x, attack.offset.y) + attack.rad + 1 : null;
+  }
+  __name(meleeReach, "meleeReach");
   var PROJECTILE_TYPE = 9;
   var BULLET_HEIGHT = 0.25;
   function grenadeZone(entity, definitions, layer, protocol) {
@@ -6573,7 +7004,7 @@ THE SOFTWARE.
       if (len) {
         copy.touchMoveActive = true;
         copy.touchMoveLen = 255;
-        copy.touchMoveDir = { x: x / len, y: y / len };
+        copy.touchMoveDir = vec(context.moveDirection) ? point(context.moveDirection) : { x: x / len, y: y / len };
       }
     }
     if (config.melee && context.meleeDirection && vec(context.meleeDirection)) {
@@ -6581,7 +7012,8 @@ THE SOFTWARE.
       copy.touchMoveLen = 255;
       copy.touchMoveDir = point(context.meleeDirection);
     }
-    if (context.switchSlot !== null && context.switchSlot !== void 0) copy.addInput(context.switchSlot === 0 ? 11 : 12);
+    const equip = equipInput(context.switchSlot);
+    if (equip !== null) copy.addInput(equip);
     return copy;
   }
   __name(modifyMessage, "modifyMessage");
@@ -6617,14 +7049,14 @@ THE SOFTWARE.
       this.stopped = false;
       this.keys = /* @__PURE__ */ new Set();
       this.holdAim = false;
-      this.nextSemi = 0;
+      this.movement = new MovementSmoother();
+      this.weaponSwitch = new WeaponSwitch();
+      this.layerOverrides = new Overrides();
+      this.layerHeld = false;
+      this.repeatFire = new RepeatFire();
       this.frameId = 0;
-      this.semiFrame = -1;
-      this.semiValue = false;
-      this.nextSwitch = 0;
       this.switchSlot = null;
       this.meleeDirection = null;
-      this.lastAmmo = null;
       this.stats = { frames: 0, mappingRuns: 0, featureMs: 0, lastError: null, aimState: "disabled", aimRejections: {} };
       this.joinState = { observed: false, forwarded: false, mobile: null, requested: false };
       this.capabilities = {};
@@ -6637,6 +7069,10 @@ THE SOFTWARE.
       this.stats.pickupPulses = 0;
       this.espRenderer = new EspRenderer();
       this.stats.esp = emptyEspStats();
+      this.smokeSources = [];
+      this.stats.xray = emptyXrayStats();
+      this.stats.semi = { state: "disabled", pulses: 0 };
+      this.mapHighlights = new MapHighlights(config, report);
       this.installFlush();
       const ticker = app.pixi.ticker;
       const pre = /* @__PURE__ */ __name(() => this.guard("input-frame", () => this.pre()), "pre");
@@ -6645,6 +7081,23 @@ THE SOFTWARE.
       ticker.add(post, null, -20);
       this.hooks.add(() => ticker.remove(pre, null));
       this.hooks.add(() => ticker.remove(post, null));
+      const controller = new win.AbortController();
+      this.hooks.add(() => controller.abort());
+      const releaseLayer = /* @__PURE__ */ __name(() => {
+        this.layerHeld = false;
+        this.layerOverrides.clear();
+      }, "releaseLayer");
+      win.addEventListener("keydown", (event) => {
+        if (event.repeat || event.defaultPrevented || event.composedPath().some((n) => ["INPUT", "TEXTAREA", "SELECT"].includes(n.tagName) || n.isContentEditable)) return;
+        if (event.code === this.config.layerKey && this.config.layerSpoofer) this.layerHeld = true;
+      }, { signal: controller.signal });
+      win.addEventListener("keyup", (event) => {
+        if (event.code === this.config.layerKey) releaseLayer();
+      }, { signal: controller.signal });
+      win.addEventListener("blur", releaseLayer, { signal: controller.signal });
+      win.document.addEventListener("visibilitychange", () => {
+        if (win.document.hidden) releaseLayer();
+      }, { signal: controller.signal });
       this.reconcile(true);
     }
     guard(name, fn) {
@@ -6657,6 +7110,7 @@ THE SOFTWARE.
         if (name === "visual-frame") this.stats.esp = emptyEspStats("error");
         this.restoreInput();
         this.overrides.clear();
+        this.layerOverrides.clear();
         this.clearCanvas();
         this.report("error", this.stats.lastError);
       }
@@ -6688,7 +7142,6 @@ THE SOFTWARE.
       this.dot = null;
       this.meleeDirection = null;
       this.switchSlot = null;
-      this.lastAmmo = null;
       this.local = null;
       this.mapping = null;
       this.effects = [];
@@ -6700,8 +7153,20 @@ THE SOFTWARE.
       this.bindsInstalled = false;
       this.stickyId = null;
       this.lastInput = -Infinity;
+      this.repeatFire.reset();
+      this.movement.reset();
+      this.weaponSwitch.reset();
+      this.layerOverrides.clear();
+      this.layerHeld = false;
+      this.mapHighlights.dispose();
+      this.smokeSources = [];
+      this.stats.xray = emptyXrayStats("waiting-contract");
       this.espRenderer.reset();
       this.stats.esp = emptyEspStats("waiting-mapping");
+      this.stats.semi = { state: "waiting-contract", pulses: this.repeatFire.pulses };
+      this.stats.switchState = "waiting-contract";
+      this.stats.layerState = "disabled";
+      this.stats.previews = { cones: 0, bulletPaths: 0, throwPaths: 0, unsupportedColliders: 0 };
       this.clearCanvas();
     }
     installSender(game) {
@@ -6723,6 +7188,8 @@ THE SOFTWARE.
             self.report("protocol", `Join protocol ${self.protocol}; mobile loot ${self.config.autoLoot && self.config.lootMode === "mobile" ? "yêu cầu bật" : "tắt"}.`);
           }
           if (type === 3 && !self.stopped && self.mapping?.ui?.spectating === false) {
+            self.moveDirection = self.config.mobileMovement && inputShape(data2) ? self.movement.sample(data2, self.config.movementSmooth, self.win.performance.now()) : null;
+            if (!self.config.mobileMovement) self.movement.reset();
             outgoing = modifyMessage(data2, self.config, self);
             self.switchSlot = null;
           }
@@ -6765,16 +7232,17 @@ THE SOFTWARE.
         this.lastActiveId = next.active?.__id;
       }
       this.mapping = next;
+      this.mapHighlights.sync(game, next.map);
       if (next.active && !this.local) this.local = localDataSchema(game, next.active);
       const nextBinds = this.findBinds();
       if (this.binds && this.binds !== nextBinds) {
         this.matchHooks.clear();
         this.bindsInstalled = false;
-        this.nextSemi = 0;
-        this.semiFrame = -1;
+        this.repeatFire.reset();
       }
       this.binds = nextBinds;
       this.lootSource = discoverLootSource(game);
+      this.smokeSources = discoverSmokeSources(game);
       const ready = !!(next.schema && next.camera && next.barn && next.pool && next.active?.active);
       this.capabilities = {
         visuals: ready,
@@ -6782,8 +7250,12 @@ THE SOFTWARE.
         grenadeZones: ready && !!this.definitions && !!next.registryKey && this.protocol === VERIFIED_PROTOCOL,
         aim: ready && this.flushReady && !!next.ui,
         autoPickup: ready && !!next.ui && !!this.lootSource && !!this.binds && !!this.definitions && this.protocol === VERIFIED_PROTOCOL,
+        previews: ready && !!this.definitions && this.protocol === VERIFIED_PROTOCOL,
         prediction: ready && !!this.definitions,
         wallcheck: !!next.creator && !!next.registryKey,
+        xray: !!next.map || this.smokeSources.length > 0,
+        mapHighlights: this.mapHighlights.available,
+        layer: ready && [0, 1].includes(this.layerOverrides.getRaw(next.active, "layer")),
         zoom: !!this.local?.zoomKey,
         semi: !!this.binds && !!this.definitions && this.protocol === VERIFIED_PROTOCOL,
         sender: this.senderReady,
@@ -6803,25 +7275,21 @@ THE SOFTWARE.
       this.bindsInstalled = patchMethod(binds, "isBindPressed", (original) => function(code) {
         const actual = Reflect.apply(original, this, arguments);
         if (code === 10 && self.pickupPulse && !self.stopped && !self.failed.has("input-frame") && self.config.autoLoot && self.config.lootMode === "nearby" && self.protocol === VERIFIED_PROTOCOL && self.mapping?.ui?.spectating === false && !self.win.document.hidden) return true;
-        if (self.protocol === VERIFIED_PROTOCOL && self.config.autoSwitch && self.switchSlot !== null && self.mapping?.ui?.spectating === false && code === (self.switchSlot === 0 ? 11 : 12)) return true;
-        if (code !== 4 || self.failed.has("input-frame") || !self.config.semi || self.protocol !== VERIFIED_PROTOCOL || !self.mapping?.active || self.mapping.ui?.spectating !== false) return actual;
-        const gun = self.definitions?.[localWeapon(self.mapping)];
-        if (gun?.type !== "gun" || gun.fireMode !== "single") return actual;
-        if (!this.isBindDown(4)) {
-          self.nextSemi = 0;
-          self.semiFrame = -1;
-          return actual;
-        }
-        if (self.semiFrame === self.frameId) return actual || self.semiValue;
-        self.semiFrame = self.frameId;
-        self.semiValue = false;
-        const now = self.win.performance.now();
-        if (now >= self.nextSemi) {
-          self.nextSemi = now + Math.max(50, (gun.fireDelay || 0.1) * 1e3);
-          self.semiValue = true;
-          return true;
-        }
-        return actual;
+        if (self.protocol === VERIFIED_PROTOCOL && (self.config.autoSwitch || self.config.melee && self.config.autoMelee) && self.switchSlot !== null && self.mapping?.ui?.spectating === false && code === equipInput(self.switchSlot)) return true;
+        if (code !== 4) return actual;
+        const m = self.mapping, weapon = localWeapon(m), def = self.definitions?.[weapon];
+        const pulse = self.repeatFire.sample({
+          frame: self.frameId,
+          now: self.win.performance.now(),
+          weapon,
+          def,
+          held: !!this.isBindDown(4),
+          enabled: self.config.semi,
+          protocolMatches: self.protocol === VERIFIED_PROTOCOL,
+          paused: self.stopped || self.failed.has("input-frame") || self.win.document.hidden || !m?.active?.active || !m.schema || m.ui?.spectating !== false || m.active.downed === true || !!at2(m.active, [m.schema.netKey, m.schema.deadKey])
+        });
+        self.stats.semi = { state: self.repeatFire.state, pulses: self.repeatFire.pulses };
+        return actual || pulse;
       }, this.matchHooks);
       if (this.bindsInstalled) this.matchHooks.add(() => {
         this.bindsInstalled = false;
@@ -6841,11 +7309,13 @@ THE SOFTWARE.
         this.lastActive = null;
       }
       this.reconcile(!!staleIdentity);
+      this.updateLayer();
       this.updateLoot();
       const m = this.mapping, cfg = this.config;
       this.target = null;
       this.dot = null;
       this.meleeDirection = null;
+      this.switchSlot = null;
       this.stats.aimRejections = {};
       this.stats.aimState = cfg.aim || cfg.melee ? "waiting-mapping" : "disabled";
       if (!cfg.aim && !cfg.melee && !cfg.autoSwitch) return;
@@ -6882,7 +7352,12 @@ THE SOFTWARE.
       }
       const bindDown = this.protocol === VERIFIED_PROTOCOL && this.binds ? this.binds.isBindDown(4) : !!this.app.input.mouseButtons?.[0];
       const firing = !!bindDown;
-      const wantMelee = cfg.melee && this.capabilities.mobile && firing && this.definitions?.[localWeapon(m)]?.type === "melee";
+      const currentDef = this.definitions?.[localWeapon(m)], localSlot = this.local?.data?.[this.local.slotKey];
+      const meleeSlot = this.local?.data?.[this.local.weaponsKey]?.[2];
+      const autoMelee = cfg.autoMelee && [0, 1].includes(localSlot) && currentDef?.type === "gun";
+      const meleeDef = currentDef?.type === "melee" ? currentDef : autoMelee ? this.definitions?.[meleeSlot?.type] : null;
+      const reach = meleeReach(meleeDef);
+      const wantMelee = cfg.melee && this.capabilities.mobile && firing && reach !== null;
       if ((!cfg.aim || !this.capabilities.aim || !firing) && !wantMelee) {
         this.stats.aimState = !firing ? "fire-not-held" : "missing-aim-contract";
         return;
@@ -6928,7 +7403,7 @@ THE SOFTWARE.
           continue;
         }
         const distance = wantMelee ? Math.hypot(pos.x - targetPos.x, pos.y - targetPos.y) : Math.hypot(screen2.x - mouse.x, screen2.y - mouse.y);
-        if (distance > (wantMelee ? 5.5 : cfg.fov)) {
+        if (distance > (wantMelee ? reach : cfg.fov)) {
           reject("outsideFov");
           continue;
         }
@@ -6973,33 +7448,41 @@ THE SOFTWARE.
       this.dot = { x, y };
       this.stats.aimState = "applied";
       if (wantMelee) {
+        if (autoMelee) this.switchSlot = 2;
         const dx = target.pos.x - pos.x, dy = target.pos.y - pos.y, len = Math.hypot(dx, dy);
         if (len > 0.1) this.meleeDirection = { x: dx / len, y: dy / len };
       }
     }
+    updateLayer() {
+      const m = this.mapping, active = m?.active;
+      const desired = /* @__PURE__ */ new Map();
+      const raw = active && this.layerOverrides.getRaw(active, "layer");
+      const ready = this.config.layerSpoofer && this.layerHeld && !this.win.document.hidden && active?.active && m.ui?.spectating === false && !active.downed && !at2(active, [m.schema?.netKey, m.schema?.deadKey]);
+      if (ready && [0, 1].includes(raw) && this.layerOverrides.set(active, "layer", (value) => value === 0 ? 1 : value === 1 ? 0 : value)) {
+        desired.set(active, /* @__PURE__ */ new Set(["layer"]));
+        if (active.container && this.layerOverrides.set(active.container, "alpha", (value) => Math.min(value, 0.5))) desired.set(active.container, /* @__PURE__ */ new Set(["alpha"]));
+        this.stats.layerState = "local-render-spoof";
+      } else this.stats.layerState = !this.config.layerSpoofer ? "disabled" : !this.layerHeld ? "key-not-held" : "unsupported-layer";
+      this.layerOverrides.prune((owner, key) => desired.get(owner)?.has(key));
+    }
     updateSwitch() {
-      if (!this.config.autoSwitch || !this.capabilities.switch || !this.local) return;
-      const { data: data2, slotKey, weaponsKey } = this.local;
-      const slot = data2[slotKey], weapons = data2[weaponsKey], current2 = weapons?.[slot];
-      if (![0, 1].includes(slot) || !current2) {
-        this.lastAmmo = null;
-        return;
-      }
-      const def = this.definitions[current2.type], now = this.win.performance.now();
-      if (def?.type === "gun" && def.fireMode === "single" && this.lastAmmo?.slot === slot && this.lastAmmo.type === current2.type && current2.ammo < this.lastAmmo.ammo && now >= this.nextSwitch) {
-        const other = weapons[1 - slot];
-        if (other?.ammo > 0 && this.definitions[other.type]?.type === "gun") {
-          this.switchSlot = 1 - slot;
-          this.nextSwitch = now + 200;
-        }
-      }
-      this.lastAmmo = { slot, ammo: current2.ammo, type: current2.type };
+      const local = this.local;
+      this.switchSlot = this.weaponSwitch.sample({
+        enabled: this.config.autoSwitch,
+        ready: !!(this.capabilities.switch && local),
+        slot: local?.data[local.slotKey],
+        weapons: local?.data[local.weaponsKey],
+        definitions: this.definitions,
+        held: !!this.binds?.isBindDown(4),
+        oneGun: this.config.useOneGun,
+        now: this.win.performance.now()
+      });
+      this.stats.switchState = this.weaponSwitch.state;
     }
     scanEffects() {
       const m = this.mapping, out = [], seen = /* @__PURE__ */ new Set();
       if (!m) return;
-      const roots = [m.map, ...entries(this.app.game).map(([, v]) => v).filter((v) => typeof readMethod(v, "m_allocParticle") === "function")];
-      roots.push(...entries(this.app.game).map(([, v]) => v).filter((v) => entries(v).some(([, a]) => Array.isArray(a) && a.some((p) => read(read(p, "sprite"), "texture") || read(p, "fadeTicker") !== void 0))));
+      const roots = [m.map];
       let budget = 12e3;
       const visit = /* @__PURE__ */ __name((o, depth) => {
         if (!object(o) || depth < 0 || seen.has(o) || --budget < 0) return;
@@ -7007,7 +7490,6 @@ THE SOFTWARE.
         const sprite = read(o, "sprite");
         if (sprite && typeof read(o, "type") === "string" && /^(tree|bush|table|stairs)[_-]/.test(read(o, "type"))) out.push({ owner: sprite, kind: "tree", entity: o });
         if (read(o, "isCeiling") === true && sprite) out.push({ owner: sprite, kind: "ceiling", entity: o });
-        if (sprite && finite(read(o, "fadeTicker")) && finite(read(o, "fadeDuration")) && vec(read(o, "posTarget"))) out.push({ owner: sprite, kind: "smoke", entity: o });
         for (const [k, v] of entries(o)) {
           if (["parent", "children", "container", "sprite", "texture", "_texture", "game", "renderer"].includes(k)) continue;
           if (Array.isArray(v)) {
@@ -7027,16 +7509,18 @@ THE SOFTWARE.
       const start2 = now, m = this.mapping, cfg = this.config;
       this.clearCanvas();
       this.stats.esp = emptyEspStats(cfg.esp ? this.win.document.hidden ? "page-hidden" : this.ctx ? "waiting-mapping" : "no-canvas" : "disabled");
-      if (!this.app.game?.initialized || !m?.schema || !m.active?.active || !this.capabilities.visuals || this.win.document.hidden) {
+      this.stats.xray = emptyXrayStats(cfg.xray ? "waiting-contract" : "disabled");
+      if (!this.app.game?.initialized || this.win.document.hidden) {
         this.overrides.clear();
         return;
       }
-      if (!(cfg.esp || cfg.xray || cfg.zoom || cfg.aim || cfg.melee || cfg.ownFlashlight || cfg.grenadeZones)) {
+      const playerReady = !!(m?.schema && m.active?.active && this.capabilities.visuals);
+      if (!(cfg.esp || cfg.xray || cfg.zoom || cfg.aim || cfg.melee || cfg.ownFlashlight || cfg.othersFlashlight || cfg.bulletTrajectory || cfg.grenadeTrajectory || cfg.grenadeZones)) {
         if (this.overrides.records.size) this.overrides.clear();
         return;
       }
-      const players = m.players();
-      const espFrame = cfg.esp && this.ctx ? buildEspFrame(m, players, cfg, this.win.innerWidth, this.win.innerHeight, this.target) : null;
+      const players = playerReady ? m.players() : [];
+      const espFrame = playerReady && cfg.esp && this.ctx ? buildEspFrame(m, players, cfg, this.win.innerWidth, this.win.innerHeight, this.target) : null;
       const espPlayers = new Set(espFrame?.rows.filter((row) => !row.offscreen).map((row) => row.player));
       const keep = /* @__PURE__ */ new Map();
       const want = /* @__PURE__ */ __name((owner, key) => {
@@ -7058,25 +7542,41 @@ THE SOFTWARE.
         const { owner, kind, entity } = effect;
         if (read(entity, "active") === false || owner.destroyed) continue;
         if (kind === "ceiling" && cfg.ceilings && read(entity, "isCeiling") === true) {
-          this.overrides.set(owner, "visible", () => false);
-          want(owner, "visible");
+          if (this.overrides.set(owner, "visible", () => false)) {
+            want(owner, "visible");
+            this.stats.xray.ceilings++;
+          }
         }
         if (kind === "tree" && /^(tree|bush|table|stairs)[_-]/.test(read(entity, "type") || "")) {
-          this.overrides.set(owner, "alpha", (raw) => Math.min(raw, cfg.treeOpacity / 100));
-          want(owner, "alpha");
-        }
-        if (kind === "smoke") {
-          this.overrides.set(owner, "alpha", (raw) => raw * cfg.smokeOpacity / 100);
-          want(owner, "alpha");
+          if (this.overrides.set(owner, "alpha", (raw) => Math.min(raw, cfg.treeOpacity / 100))) {
+            want(owner, "alpha");
+            this.stats.xray.vegetation++;
+          }
         }
       }
-      if (cfg.zoom && this.local?.zoomKey) {
+      if (cfg.xray) {
+        const smoke = smokeParticles(this.smokeSources), stats = this.stats.xray;
+        stats.smokeSources = this.smokeSources.length;
+        stats.smokeActive = smoke.length;
+        for (const particle of smoke) {
+          if (this.overrides.set(particle.sprite, "alpha", (raw) => smokeAlpha(raw, cfg.smokeOpacity))) {
+            want(particle.sprite, "alpha");
+            stats.smokeModified++;
+          } else stats.smokeUnsupported++;
+          if (cfg.darkerSmokes && this.overrides.set(particle, "tint", () => 2105376)) {
+            want(particle, "tint");
+            stats.darkened++;
+          }
+        }
+        stats.state = stats.smokeModified || stats.ceilings || stats.vegetation ? "overrides-active" : stats.smokeSources ? "waiting-particles" : "no-effect-contract";
+      }
+      if (playerReady && cfg.zoom && this.local?.zoomKey) {
         const { data: data2, zoomKey } = this.local;
         this.overrides.set(data2, zoomKey, (raw) => raw * cfg.zoomFactor);
         want(data2, zoomKey);
       }
       this.overrides.prune((owner, key) => keep.get(owner)?.has(key));
-      this.draw(players, espFrame);
+      if (playerReady) this.draw(players, espFrame);
       this.stats.featureMs = this.win.performance.now() - start2;
     }
     attachCanvas(canvas) {
@@ -7121,21 +7621,7 @@ THE SOFTWARE.
         espFrame ||= buildEspFrame(m, players, cfg, width, height, this.target);
         this.stats.esp = this.espRenderer.draw(ctx, espFrame, cfg, width, height);
       }
-      if (cfg.ownFlashlight && this.definitions) {
-        const gun = this.definitions[localWeapon(m)], bullet = this.definitions[gun?.bulletType];
-        const aim = this.dot || mouse;
-        if (gun?.type === "gun" && bullet?.distance > 0 && vec(aim)) {
-          const angle = Math.atan2(aim.y - origin.y, aim.x - origin.x);
-          const scale = read(m.camera.camera, m.camera.scaleKeys[0]) * read(m.camera.camera, m.camera.scaleKeys[1]);
-          ctx.fillStyle = "#88caff18";
-          ctx.beginPath();
-          ctx.moveTo(origin.x, origin.y);
-          const spread = clamp(gun.shotSpread || 0, 1, 90) * Math.PI / 180;
-          ctx.arc(origin.x, origin.y, bullet.distance * scale, angle - spread / 2, angle + spread / 2);
-          ctx.closePath();
-          ctx.fill();
-        }
-      }
+      this.drawPreviews(players);
       if (cfg.grenadeZones && this.capabilities.grenadeZones) {
         for (const [, entity] of entries(read(m.creator, m.registryKey))) {
           const zone = grenadeZone(entity, this.definitions, m.active.layer, this.protocol);
@@ -7148,6 +7634,86 @@ THE SOFTWARE.
           ctx.beginPath();
           ctx.arc(center.x, center.y, radius * scale, 0, Math.PI * 2);
           ctx.stroke();
+        }
+      }
+    }
+    drawPreviews(players) {
+      const cfg = this.config, m = this.mapping, ctx = this.ctx, schema = m.schema;
+      this.stats.previews = { cones: 0, bulletPaths: 0, throwPaths: 0, unsupportedColliders: 0, ricochetDefinitions: !!this.mapDefinitions };
+      if (this.protocol !== VERIFIED_PROTOCOL || !this.definitions || !(cfg.ownFlashlight || cfg.othersFlashlight || cfg.bulletTrajectory || cfg.grenadeTrajectory)) return;
+      const selfPos = read(m.active, schema.posKey), inputOrigin = aimPoint(m.camera, selfPos, selfPos), aim = this.dot || this.app.input.mousePos;
+      if (!inputOrigin || !vec(aim)) return;
+      const scale = read(m.camera.camera, m.camera.scaleKeys[0]) * read(m.camera.camera, m.camera.scaleKeys[1]);
+      if (!(scale > 0)) return;
+      const ownDirection = { x: aim.x - inputOrigin.x, y: inputOrigin.y - aim.y };
+      const allObstacles = m.obstacles(), truncated = allObstacles.length > 256;
+      const obstacles = allObstacles.slice(0, 256), relations = teamRelations(m.barn, m.active.__id);
+      this.stats.previews.truncatedObstacles = truncated;
+      const line = /* @__PURE__ */ __name((points, color, dashed = false) => {
+        const projected = points.map((p) => project(m.camera, p));
+        if (projected.some((p) => !p)) return;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash(dashed ? [5, 4] : []);
+        ctx.beginPath();
+        projected.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }, "line");
+      let cones = 0;
+      for (const player of [m.active, ...players.filter((p) => p !== m.active)]) {
+        const own = player === m.active;
+        if (!player.active || at2(player, [schema.netKey, schema.deadKey]) || !sameLayer(player.layer, m.active.layer)) continue;
+        if (!own && (!cfg.othersFlashlight || relations.classify(player.__id).kind !== "enemy")) continue;
+        const gun = this.definitions[at2(player, [schema.netKey, schema.weaponKey])], bullet = this.definitions[gun?.bulletType];
+        const pos = overlayPosition(player, m), direction = own ? ownDirection : read(player, schema.dirKey);
+        if (gun?.type !== "gun" || !(bullet?.distance > 0) || !pos || !vec(direction) || Math.hypot(direction.x, direction.y) < 1e-3) continue;
+        const angle = Math.atan2(direction.y, direction.x), origin = project(m.camera, pos);
+        if (!origin || origin.x < -100 || origin.x > this.win.innerWidth + 100 || origin.y < -100 || origin.y > this.win.innerHeight + 100) continue;
+        if ((own && cfg.ownFlashlight || !own) && cones < 8) {
+          const half = clamp(gun.shotSpread || 0, 1, 90) * Math.PI / 360, ends = [];
+          for (let i = 0; i < 7; i++) {
+            const a = angle - half + 2 * half * i / 6;
+            const trace = traceShot(pos, { x: Math.cos(a), y: Math.sin(a) }, bullet.distance, obstacles, player.layer, this.mapDefinitions);
+            if (!trace) continue;
+            this.stats.previews.unsupportedColliders += trace.unsupported;
+            ends.push(project(m.camera, trace.points.at(-1)));
+          }
+          if (ends.length && ends.every(Boolean)) {
+            ctx.fillStyle = own ? "#88caff20" : "#ff626218";
+            ctx.beginPath();
+            ctx.moveTo(origin.x, origin.y);
+            for (const end of ends) ctx.lineTo(end.x, end.y);
+            ctx.closePath();
+            ctx.fill();
+            cones++;
+            this.stats.previews.cones++;
+          }
+        }
+        if (own && cfg.bulletTrajectory) {
+          const trace = traceShot(pos, direction, bullet.distance, obstacles, player.layer, this.mapDefinitions, 3);
+          if (trace) {
+            line(trace.points, "#ffdf91bb", trace.unsupported > 0 || truncated || !this.mapDefinitions);
+            this.stats.previews.bulletPaths++;
+            this.stats.previews.unsupportedColliders += trace.unsupported;
+          }
+        }
+      }
+      if (cfg.grenadeTrajectory && this.protocol === VERIFIED_PROTOCOL && this.local?.data[this.local.slotKey] === 3) {
+        const type = this.local.data[this.local.weaponsKey]?.[3]?.type, def = this.definitions[type];
+        const preview = throwPreview(def, selfPos, ownDirection, Math.hypot(ownDirection.x, ownDirection.y) / scale);
+        if (preview) {
+          line(preview.points, "#80ffb5aa", true);
+          this.stats.previews.throwPaths++;
+          const center = project(m.camera, preview.end), explosion = this.definitions[def.explosionType];
+          if (center && explosion?.rad?.max > 0) {
+            ctx.strokeStyle = "#80ffb577";
+            ctx.setLineDash([5, 4]);
+            ctx.beginPath();
+            ctx.arc(center.x, center.y, explosion.rad.max * scale, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+          }
         }
       }
     }
@@ -7210,6 +7776,8 @@ THE SOFTWARE.
         inputFlush: !!this.flushReady,
         sender: !!this.senderReady,
         canvasRenderer: !!this.ctx,
+        mapDefinitions: !!this.mapDefinitions,
+        smokeSource: this.smokeSources.length > 0,
         definitions: !!this.definitions,
         lootSource: !!this.lootSource,
         localData: !!this.local,
@@ -7218,17 +7786,18 @@ THE SOFTWARE.
         protocolMatches: this.protocol === VERIFIED_PROTOCOL
       };
       return {
-        version: "0.3.0",
+        version: "0.4.0",
         protocol: this.protocol,
         sourceProtocol: VERIFIED_PROTOCOL,
         initialized: checks.initialized,
         checks,
         autoLoot: { state: this.autoLootStatus(), mode: this.config.lootMode, ...this.joinState },
+        mapHighlights: { ...this.mapHighlights.stats },
         missingContracts: Object.keys(checks).filter((key) => !checks[key]),
         capabilities: { ...this.capabilities },
         stats: { ...this.stats },
         failed: [...this.failed],
-        overrides: this.overrides.records.size
+        overrides: this.overrides.records.size + this.layerOverrides.records.size
       };
     }
     dispose() {
@@ -7255,10 +7824,17 @@ THE SOFTWARE.
     wallcheck: true,
     predict: true,
     melee: false,
+    autoMelee: false,
     autoSwitch: false,
+    useOneGun: false,
+    layerSpoofer: false,
+    layerKey: "KeyT",
     semi: false,
     xray: false,
+    darkerSmokes: true,
     ceilings: true,
+    mapHighlights: false,
+    smallerTrees: true,
     smokeOpacity: 50,
     treeOpacity: 50,
     esp: false,
@@ -7285,19 +7861,23 @@ THE SOFTWARE.
     espUnknownColor: ESP_PALETTE.unknown,
     espTargetColor: ESP_PALETTE.target,
     ownFlashlight: false,
+    othersFlashlight: false,
+    bulletTrajectory: false,
+    grenadeTrajectory: false,
     grenadeZones: false,
     zoom: false,
     zoomFactor: 1.5,
     autoLoot: false,
     lootMode: "nearby",
     mobileMovement: false,
+    movementSmooth: 50,
     menuKey: "ShiftRight",
     aimKey: "KeyB",
     stickyKey: "KeyN",
     holdAim: false
   });
   var STORAGE_KEY = "duality-reborn.config.v1";
-  var ranges = { smooth: [0, 100], fov: [50, 400], smokeOpacity: [0, 100], treeOpacity: [0, 100], zoomFactor: [1, 3], espMaxDistance: [10, 500], espFontSize: [10, 18], espOpacity: [10, 100], espLineWidth: [0.5, 3] };
+  var ranges = { movementSmooth: [0, 100], smooth: [0, 100], fov: [50, 400], smokeOpacity: [0, 100], treeOpacity: [0, 100], zoomFactor: [1, 3], espMaxDistance: [10, 500], espFontSize: [10, 18], espOpacity: [10, 100], espLineWidth: [0.5, 3] };
   var colors = /* @__PURE__ */ new Set(["espEnemyColor", "espAllyColor", "espUnknownColor", "espTargetColor"]);
   function normalizeConfig(saved) {
     const result = { ...DEFAULTS };
@@ -7307,7 +7887,7 @@ THE SOFTWARE.
       if (typeof defaultValue === "boolean" && typeof value === "boolean") result[key] = value;
       if (colors.has(key) && colorValue(value)) result[key] = value.toLowerCase();
       if (ranges[key] && finite(value)) result[key] = clamp(value, ...ranges[key]);
-      if (["menuKey", "aimKey", "stickyKey"].includes(key) && typeof value === "string" && /^(Key[A-Z]|Digit[0-9]|Shift(Left|Right)|Control(Left|Right)|Alt(Left|Right)|F([1-9]|1[0-2]))$/.test(value)) result[key] = value;
+      if (["menuKey", "aimKey", "stickyKey", "layerKey"].includes(key) && typeof value === "string" && /^(Key[A-Z]|Digit[0-9]|Shift(Left|Right)|Control(Left|Right)|Alt(Left|Right)|F([1-9]|1[0-2]))$/.test(value)) result[key] = value;
     }
     if (["nearby", "mobile"].includes(saved.lootMode)) result.lootMode = saved.lootMode;
     result.version = 1;
@@ -7342,13 +7922,13 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
         ["wallcheck", "Wallcheck", "wallcheck"],
         ["predict", "Prediction", "prediction"]
       ]],
-      ["Melee Lock", [["melee", "Enabled", "mobile"]]],
-      ["Auto Switch", [["autoSwitch", "Enabled (two guns)", "switch"]]],
-      ["Semi Auto", [["semi", "Enabled", "semi"]]]
+      ["Melee Lock", [["melee", "Enabled", "mobile"], ["autoMelee", "Auto Melee (from gun, while firing)", "switch"]]],
+      ["Auto Switch", [["autoSwitch", "Enabled", "switch"], ["useOneGun", "Use One Gun (switch away then return)", "switch"], [null, "Ammo single/burst; equip từng frame, chờ slot cập nhật. Không bỏ qua cooldown server."]]],
+      ["Semi Auto", [["semi", "Held Fire: single guns + fists / melee", "semi"], [null, "Giữ nút Fire để lặp; auto/burst dùng shootHold gốc; không lặp lựu đạn. Server vẫn quyết định cooldown."]]]
     ],
     Visuals: [
-      ["X-Ray", [["xray", "Enabled", "visuals"], ["ceilings", "Remove Ceilings", "visuals"], ["smokeOpacity", "Smoke Opacity", "visuals"], ["treeOpacity", "Tree / Bush Opacity", "visuals"]]],
-      ["Layer Spoofer", [[null, "Chưa port: cần kiểm chứng layer semantics"]]],
+      ["X-Ray", [["xray", "Enabled", "xray"], ["ceilings", "Remove Ceilings", "xray"], ["darkerSmokes", "Darker Smokes", "xray"], ["smokeOpacity", "Smoke Opacity (legacy scale)", "xray"], ["treeOpacity", "Tree / Bush Opacity", "xray"], [null, "Khói: giá trị 50 = alpha tối đa 0.05 mỗi particle như bản gốc; 0 = ẩn, 100 = 0.1. Tắt X-Ray để trả opacity game."]]],
+      ["Layer Spoofer", [["layerSpoofer", "Hold layer key to preview other floor", "layer"], [null, "Chỉ đổi layer client 0/1, không đổi tầng server hoặc cho bắn xuyên tầng. Thả phím/blur khôi phục giá trị mới nhất."]]],
       ["ESP / Teams", [
         ["esp", "Enabled", "visuals"],
         ["espShowEnemies", "Show enemies", "visuals"],
@@ -7374,14 +7954,14 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
         ["espLineWidth", "Line width", "visuals"]
       ]],
       ["ESP / Colors", [["espEnemyColor", "Enemy", "visuals"], ["espAllyColor", "Ally / squad", "visuals"], ["espUnknownColor", "Unknown", "visuals"], ["espTargetColor", "Current enemy target", "visuals"]]],
-      ["Grenades", [["grenadeZones", "Nominal Explosion Radius", "grenadeZones"], [null, "Không phải vùng sát thương chắc chắn; chưa có fuse / trajectory"]]],
-      ["Flashlights", [["ownFlashlight", "Own Range / Spread Preview", "prediction"], [null, "Others / Ricochet: chưa port"]]],
+      ["Grenades", [["grenadeZones", "Nominal Explosion Radius", "grenadeZones"], ["grenadeTrajectory", "Throw preview (open-air estimate)", "grenadeZones"], [null, "Nét đứt = ước lượng vật lý không khí/drag; không biết fuse còn lại, perk, va chạm tương lai hoặc điểm nổ chắc chắn."]]],
+      ["Flashlights", [["ownFlashlight", "Own spread cone", "previews"], ["othersFlashlight", "Enemy spread cones", "previews"], ["bulletTrajectory", "Bullet path + nominal ricochets", "previews"], [null, "Circle/AABB; tối đa 3 phản xạ khi bắt được map defs, 8 cone / 256 obstacles. Không biết kết quả server hoặc mọi perk; thiếu collider hiển thị nét đứt."]]],
       ["Infinite Zoom", [["zoom", "Enabled (bounded 1–3×)", "zoom"], ["zoomFactor", "Zoom Out", "zoom"]]]
     ],
     Misc: [
-      ["Map Highlights", [[null, "Chưa port: không hook Array.sort toàn trang"]]],
+      ["Map Highlights", [["mapHighlights", "Special map markers", "mapHighlights"], ["smallerTrees", "Smaller minimap trees", "mapHighlights"], [null, "Clone shape khi render minimap; chỉ redraw khi đổi setting/map. Không hook Array.sort hoặc đổi collider."]]],
       ["Auto Loot", [["autoLoot", "Enabled", "sender"], ["lootMode", "Pickup mode", "sender"], [null, "Nearby: ammo / heal / boost / throwable; bỏ qua súng và gear. Mobile: cần Join mới, có cả mở cửa."]]],
-      ["Mobile Movement", [["mobileMovement", "Enabled", "mobile"]]]
+      ["Mobile Movement", [["mobileMovement", "Enabled", "mobile"], ["movementSmooth", "Direction Smooth", "mobile"], [null, "Làm mượt đổi hướng khi giữ phím; nhả phím dừng ngay, không ghi đè input gốc."]]]
     ]
   };
   function createMenu(win, config, { onChange, retry, stop, diagnostics, onAimHold = /* @__PURE__ */ __name(() => {
@@ -7404,7 +7984,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
     canvas.setAttribute("aria-hidden", "true");
     const shell = el("section", { id: "ui" });
     shell.setAttribute("aria-label", "Duality Client Reborn");
-    const brand = el("div", { class: "brand", text: "Duality Client" }, el("div", { class: "version", text: "Reborn 0.3.0 • readable debug" }));
+    const brand = el("div", { class: "brand", text: "Duality Client" }, el("div", { class: "version", text: "Reborn 0.4.0 • readable debug" }));
     const nav = el("nav", { class: "nav" });
     nav.setAttribute("aria-label", "Menu tabs");
     const content = el("main", { class: "content" });
@@ -7451,6 +8031,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
       if (key === null) return el("div", { class: "hint", text: label });
       const title = el("span", { text: label }), labelEl = el("label", { class: "row" }, title);
       const input = key === "lootMode" ? el("select") : el("input", { type: colors.has(key) ? "color" : ranges[key] ? "range" : "checkbox" });
+      input.dataset.config = key;
       if (key === "lootMode") {
         for (const [value, text] of [["nearby", "Nearby supplies (now)"], ["mobile", "Mobile loot / doors (next join)"]]) input.append(el("option", { value, text }));
         input.value = config.lootMode;
@@ -7501,7 +8082,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
         return;
       }
       if (tab === "Keybinds") {
-        for (const [key, label] of [["menuKey", "Toggle Menu"], ["aimKey", "Aimbot"], ["stickyKey", "Sticky Target"]]) {
+        for (const [key, label] of [["menuKey", "Toggle Menu"], ["aimKey", "Aimbot"], ["stickyKey", "Sticky Target"], ["layerKey", "Layer Spoofer (hold)"]]) {
           const button = el("button", { text: config[key] });
           button.onclick = () => {
             cancelKey();
@@ -7521,7 +8102,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
       panel.append(
         el("h2", { text: "Controls & Information" }),
         el("p", { text: "Bản viết lại độc lập. Menu giữ Main / Visuals / Misc / Keybinds / Help; không tải font, ảnh hay thư viện UI từ bên ngoài." }),
-        el("p", { class: "hint", text: "ESP: màu + nhãn địch/ta/unknown; nét đứt cho layer khác / downed / unknown. Không suy đoán HP/armor của đối thủ. Layer Spoofer, Map Highlights và grenade trajectory vẫn chưa port. Chỉ hiển thị dữ liệu client nhận được. Không bảo đảm tương thích mọi update hay tránh phát hiện. Những mục chưa port được ghi rõ, không giả vờ đang hoạt động." })
+        el("p", { class: "hint", text: "ESP: màu + nhãn địch/ta/unknown; nét đứt cho layer khác / downed / unknown. Không suy đoán HP/armor của đối thủ. Layer Spoofer chỉ đổi render client; trajectory là preview có giới hạn, không phải kết quả server. Map Highlights chỉ đánh dấu minimap theo native renderer. Chỉ hiển thị dữ liệu client nhận được. Không bảo đảm tương thích mọi update hay tránh phát hiện. Feature thiếu contract sẽ bị khóa; có code không đồng nghĩa đã xác nhận trên live." })
       );
       const pre = el("pre", { text: JSON.stringify(diagnostics(), null, 2) });
       const refresh = el("button", { text: "Refresh diagnostics" });
@@ -7675,10 +8256,10 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
     } catch {
       config = loadConfig(null);
     }
-    let menu = null, engine = null, defs = null, cancelCapture = null, alive = true;
+    let menu = null, engine = null, defs = null, mapDefs = null, cancelCapture = null, alive = true;
     let status = "Đang chờ Application…", lastWarning = "", captured = false, captureState = "waiting";
     const startedAt = win.performance.now();
-    win.console?.info?.("[Duality Reborn 0.3.0] Script đã chạy. Nếu không có menu, gửi dòng lỗi Console sau thông báo này.");
+    win.console?.info?.("[Duality Reborn 0.4.0] Script đã chạy. Nếu không có menu, gửi dòng lỗi Console sau thông báo này.");
     const report = /* @__PURE__ */ __name((level, message) => {
       if (!alive) return;
       if (level === "error" || level === "warning") {
@@ -7688,7 +8269,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
       status = message;
     }, "report");
     const diagnostics = /* @__PURE__ */ __name(() => ({
-      version: "0.3.0",
+      version: "0.4.0",
       captured,
       captureState,
       status,
@@ -7696,6 +8277,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
       menuMounted: !!menu?.host.isConnected,
       documentReadyState: win.document.readyState,
       definitionsCaptured: !!defs,
+      mapDefinitionsCaptured: !!mapDefs,
       elapsedMs: Math.round(win.performance.now() - startedAt),
       ...engine?.diagnostics() || {}
     }), "diagnostics");
@@ -7716,6 +8298,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
           captureState = "captured";
           try {
             engine = new Features(win, app, config, report, defs);
+            engine.mapDefinitions = mapDefs;
             if (menu) engine.attachCanvas(menu.canvas);
             status = "Đã bắt Application; chờ trạng thái trận và contract.";
           } catch (e) {
@@ -7746,13 +8329,18 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
         engine.definitions = defs;
         engine.lastMap = -Infinity;
       }
+    }, 15e3, (value) => {
+      mapDefs = value;
+      if (engine) engine.mapDefinitions = value;
     }));
     const makeMenu = /* @__PURE__ */ __name(() => {
       if (!alive || menu) return;
       menu = createMenu(win, config, {
         onChange: /* @__PURE__ */ __name((key2) => {
           engine?.restoreInput();
+          engine?.layerOverrides.clear();
           if (engine) {
+            if (key2 === "layerKey" || key2 === "layerSpoofer") engine.layerHeld = false;
             engine.overrides.clear();
             engine.lastMap = -Infinity;
             engine.stickyId = null;
@@ -7777,6 +8365,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
       menu.status(`${status}
 Aim: ${d.stats?.aimState ?? "chưa mapping"} • Loot: ${d.autoLoot?.state ?? "chưa mapping"}
 ESP: ${d.stats?.esp?.state ?? "chưa mapping"}${d.stats?.esp ? ` • địch ${d.stats.esp.enemy} / ta ${d.stats.esp.ally} / chưa rõ ${d.stats.esp.unknown}` : ""}
+Semi: ${d.stats?.semi?.state ?? "chưa mapping"} • X-Ray: ${d.stats?.xray?.state ?? "chưa mapping"}${d.stats?.xray ? ` (smoke ${d.stats.xray.smokeModified}/${d.stats.xray.smokeActive})` : ""}
 Protocol: ${d.protocol ?? "chưa quan sát Join"} • ${d.initialized ? "trong trận" : "chờ trận"}
 ${d.stats ? `Discovery: ${d.stats.mappingRuns} • visual tick: ${d.stats.featureMs.toFixed(2)} ms (không phải FPS benchmark)` : ""}${d.missingContracts?.length ? `
 Thiếu contract: ${d.missingContracts.join(", ")}` : ""}${lastWarning ? `

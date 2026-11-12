@@ -3,8 +3,19 @@ import { aimPoint, ast, at, clamp, discover, discoverLootSource, discoverSender,
   segmentBlocked, teamRelations, Tracker, unique, vec, walk } from './core.mjs';
 
 import { buildEspFrame, emptyEspStats, EspRenderer, prepareOverlay } from './esp.mjs';
+import { discoverSmokeSources, emptyXrayStats, smokeAlpha, smokeParticles } from './effects.mjs';
+import { RepeatFire } from './repeat-fire.mjs';
+import { MapHighlights } from './map-highlights.mjs';
+import { WeaponSwitch } from './weapon-switch.mjs';
+import { MovementSmoother, throwPreview, traceShot } from './previews.mjs';
 
 export const VERIFIED_PROTOCOL = 1028;
+export const equipInput = slot => Number.isInteger(slot) && slot >= 0 && slot <= 3 ? 11 + slot : null;
+export function meleeReach(def) {
+  const attack = def?.attack;
+  return def?.type === 'melee' && vec(attack?.offset) && finite(attack?.rad) && attack.rad > 0
+    ? Math.hypot(attack.offset.x, attack.offset.y) + attack.rad + 1 : null;
+}
 // Constants tied to the audited protocol; never apply enum/height assumptions to unknown Join versions.
 const PROJECTILE_TYPE = 9;
 const BULLET_HEIGHT = .25;
@@ -88,12 +99,13 @@ export function modifyMessage(data, config, context) {
   if (config.mobileMovement) {
     const x = Number(data.moveRight) - Number(data.moveLeft), y = Number(data.moveUp) - Number(data.moveDown);
     const len = Math.hypot(x, y);
-    if (len) { copy.touchMoveActive = true; copy.touchMoveLen = 255; copy.touchMoveDir = { x: x / len, y: y / len }; }
+    if (len) { copy.touchMoveActive = true; copy.touchMoveLen = 255; copy.touchMoveDir = vec(context.moveDirection) ? point(context.moveDirection) : { x: x / len, y: y / len }; }
   }
   if (config.melee && context.meleeDirection && vec(context.meleeDirection)) {
     copy.touchMoveActive = true; copy.touchMoveLen = 255; copy.touchMoveDir = point(context.meleeDirection);
   }
-  if (context.switchSlot !== null && context.switchSlot !== undefined) copy.addInput(context.switchSlot === 0 ? 11 : 12);
+  const equip = equipInput(context.switchSlot);
+  if (equip !== null) copy.addInput(equip);
   return copy;
 }
 
@@ -106,19 +118,31 @@ export class Features {
     this.lastVisual = -Infinity; this.lastInput = -Infinity; this.lastScan = -Infinity;
     this.effects = []; this.lastGame = null; this.lastPool = null; this.lastActive = null; this.lastActiveId = null;
     this.stopped = false; this.keys = new Set(); this.holdAim = false;
-    this.nextSemi = 0; this.frameId = 0; this.semiFrame = -1; this.semiValue = false; this.nextSwitch = 0; this.switchSlot = null; this.meleeDirection = null;
-    this.lastAmmo = null; this.stats = { frames: 0, mappingRuns: 0, featureMs: 0, lastError: null, aimState: 'disabled', aimRejections: {} };
+    this.movement = new MovementSmoother(); this.weaponSwitch = new WeaponSwitch(); this.layerOverrides = new Overrides(); this.layerHeld = false;
+    this.repeatFire = new RepeatFire(); this.frameId = 0; this.switchSlot = null; this.meleeDirection = null;
+    this.stats = { frames: 0, mappingRuns: 0, featureMs: 0, lastError: null, aimState: 'disabled', aimRejections: {} };
     this.joinState = { observed: false, forwarded: false, mobile: null, requested: false };
     this.capabilities = {}; this.failed = new Set();
     this.lootSource = null; this.pickupPulse = false; this.nextPickup = 0; this.pickupAttempt = null;
     this.stats.lootState = 'disabled'; this.stats.pickupPulses = 0;
     this.espRenderer = new EspRenderer(); this.stats.esp = emptyEspStats();
+    this.smokeSources = []; this.stats.xray = emptyXrayStats(); this.stats.semi = { state: 'disabled', pulses: 0 };
+    this.mapHighlights = new MapHighlights(config, report);
     this.installFlush();
     const ticker = app.pixi.ticker;
     const pre = () => this.guard('input-frame', () => this.pre());
     const post = () => this.guard('visual-frame', () => this.post());
     ticker.add(pre, null, 10); ticker.add(post, null, -20);
     this.hooks.add(() => ticker.remove(pre, null)); this.hooks.add(() => ticker.remove(post, null));
+    const controller = new win.AbortController(); this.hooks.add(() => controller.abort());
+    const releaseLayer = () => { this.layerHeld = false; this.layerOverrides.clear(); };
+    win.addEventListener('keydown', event => {
+      if (event.repeat || event.defaultPrevented || event.composedPath().some(n => ['INPUT', 'TEXTAREA', 'SELECT'].includes(n.tagName) || n.isContentEditable)) return;
+      if (event.code === this.config.layerKey && this.config.layerSpoofer) this.layerHeld = true;
+    }, { signal: controller.signal });
+    win.addEventListener('keyup', event => { if (event.code === this.config.layerKey) releaseLayer(); }, { signal: controller.signal });
+    win.addEventListener('blur', releaseLayer, { signal: controller.signal });
+    win.document.addEventListener('visibilitychange', () => { if (win.document.hidden) releaseLayer(); }, { signal: controller.signal });
     this.reconcile(true);
   }
   guard(name, fn) {
@@ -127,7 +151,7 @@ export class Features {
     catch (e) {
       this.failed.add(name); this.stats.lastError = `${name}: ${e.message}`;
       if (name === 'visual-frame') this.stats.esp = emptyEspStats('error');
-      this.restoreInput(); this.overrides.clear(); this.clearCanvas();
+      this.restoreInput(); this.overrides.clear(); this.layerOverrides.clear(); this.clearCanvas();
       this.report('error', this.stats.lastError);
     }
   }
@@ -153,10 +177,11 @@ export class Features {
   releaseMatch() {
     this.restoreInput(); this.matchHooks.clear(); this.overrides.clear(); this.tracker.reset();
     this.target = null; this.dot = null; this.meleeDirection = null; this.switchSlot = null;
-    this.lastAmmo = null; this.local = null; this.mapping = null; this.effects = [];
+    this.local = null; this.mapping = null; this.effects = [];
     this.lootSource = null; this.pickupPulse = false; this.pickupAttempt = null; this.nextPickup = 0;
     this.binds = null; this.bindsInstalled = false; this.stickyId = null; this.lastInput = -Infinity;
-    this.espRenderer.reset(); this.stats.esp = emptyEspStats('waiting-mapping');
+    this.repeatFire.reset(); this.movement.reset(); this.weaponSwitch.reset(); this.layerOverrides.clear(); this.layerHeld = false; this.mapHighlights.dispose(); this.smokeSources = []; this.stats.xray = emptyXrayStats('waiting-contract');
+    this.espRenderer.reset(); this.stats.esp = emptyEspStats('waiting-mapping'); this.stats.semi = { state: 'waiting-contract', pulses: this.repeatFire.pulses }; this.stats.switchState = 'waiting-contract'; this.stats.layerState = 'disabled'; this.stats.previews = { cones: 0, bulletPaths: 0, throwPaths: 0, unsupportedColliders: 0 };
     this.clearCanvas();
   }
   installSender(game) {
@@ -179,6 +204,8 @@ export class Features {
           self.report('protocol', `Join protocol ${self.protocol}; mobile loot ${self.config.autoLoot && self.config.lootMode === 'mobile' ? 'yêu cầu bật' : 'tắt'}.`);
         }
         if (type === 3 && !self.stopped && self.mapping?.ui?.spectating === false) {
+          self.moveDirection = self.config.mobileMovement && inputShape(data) ? self.movement.sample(data, self.config.movementSmooth, self.win.performance.now()) : null;
+          if (!self.config.mobileMovement) self.movement.reset();
           outgoing = modifyMessage(data, self.config, self);
           self.switchSlot = null;
         }
@@ -210,20 +237,23 @@ export class Features {
       this.lastPool = next.pool; this.lastActive = next.active; this.lastActiveId = next.active?.__id;
     }
     this.mapping = next;
+    this.mapHighlights.sync(game, next.map);
     if (next.active && !this.local) this.local = localDataSchema(game, next.active);
     const nextBinds = this.findBinds();
     if (this.binds && this.binds !== nextBinds) {
       this.matchHooks.clear(); this.bindsInstalled = false;
-      this.nextSemi = 0; this.semiFrame = -1;
+      this.repeatFire.reset();
     }
     this.binds = nextBinds;
     this.lootSource = discoverLootSource(game);
+    this.smokeSources = discoverSmokeSources(game);
     const ready = !!(next.schema && next.camera && next.barn && next.pool && next.active?.active);
     this.capabilities = {
       visuals: ready, interpolatedOverlay: ready && !!next.visualPosKey,
       grenadeZones: ready && !!this.definitions && !!next.registryKey && this.protocol === VERIFIED_PROTOCOL, aim: ready && this.flushReady && !!next.ui,
       autoPickup: ready && !!next.ui && !!this.lootSource && !!this.binds && !!this.definitions && this.protocol === VERIFIED_PROTOCOL,
-      prediction: ready && !!this.definitions, wallcheck: !!next.creator && !!next.registryKey,
+      previews: ready && !!this.definitions && this.protocol === VERIFIED_PROTOCOL, prediction: ready && !!this.definitions, wallcheck: !!next.creator && !!next.registryKey,
+      xray: !!next.map || this.smokeSources.length > 0, mapHighlights: this.mapHighlights.available, layer: ready && [0, 1].includes(this.layerOverrides.getRaw(next.active, 'layer')),
       zoom: !!this.local?.zoomKey, semi: !!this.binds && !!this.definitions && this.protocol === VERIFIED_PROTOCOL,
       sender: this.senderReady, mobile: this.senderReady && this.protocol === VERIFIED_PROTOCOL,
       switch: !!this.local && !!this.definitions && this.protocol === VERIFIED_PROTOCOL,
@@ -244,20 +274,17 @@ export class Features {
       if (code === 10 && self.pickupPulse && !self.stopped && !self.failed.has('input-frame')
         && self.config.autoLoot && self.config.lootMode === 'nearby' && self.protocol === VERIFIED_PROTOCOL
         && self.mapping?.ui?.spectating === false && !self.win.document.hidden) return true;
-      if (self.protocol === VERIFIED_PROTOCOL && self.config.autoSwitch && self.switchSlot !== null
-        && self.mapping?.ui?.spectating === false && code === (self.switchSlot === 0 ? 11 : 12)) return true;
-      if (code !== 4 || self.failed.has('input-frame') || !self.config.semi || self.protocol !== VERIFIED_PROTOCOL || !self.mapping?.active || self.mapping.ui?.spectating !== false) return actual;
-      const gun = self.definitions?.[localWeapon(self.mapping)];
-      if (gun?.type !== 'gun' || gun.fireMode !== 'single') return actual;
-      if (!this.isBindDown(4)) { self.nextSemi = 0; self.semiFrame = -1; return actual; }
-      if (self.semiFrame === self.frameId) return actual || self.semiValue;
-      self.semiFrame = self.frameId; self.semiValue = false;
-      const now = self.win.performance.now();
-      if (now >= self.nextSemi) {
-        self.nextSemi = now + Math.max(50, (gun.fireDelay || .1) * 1000);
-        self.semiValue = true; return true;
-      }
-      return actual;
+      if (self.protocol === VERIFIED_PROTOCOL && (self.config.autoSwitch || self.config.melee && self.config.autoMelee) && self.switchSlot !== null
+        && self.mapping?.ui?.spectating === false && code === equipInput(self.switchSlot)) return true;
+      if (code !== 4) return actual;
+      const m = self.mapping, weapon = localWeapon(m), def = self.definitions?.[weapon];
+      const pulse = self.repeatFire.sample({ frame: self.frameId, now: self.win.performance.now(), weapon, def,
+        held: !!this.isBindDown(4), enabled: self.config.semi, protocolMatches: self.protocol === VERIFIED_PROTOCOL,
+        paused: self.stopped || self.failed.has('input-frame') || self.win.document.hidden || !m?.active?.active
+          || !m.schema || m.ui?.spectating !== false || m.active.downed === true || !!at(m.active, [m.schema.netKey, m.schema.deadKey]),
+      });
+      self.stats.semi = { state: self.repeatFire.state, pulses: self.repeatFire.pulses };
+      return actual || pulse;
     }, this.matchHooks);
     if (this.bindsInstalled) this.matchHooks.add(() => { this.bindsInstalled = false; });
   }
@@ -278,9 +305,10 @@ export class Features {
       || (this.local && this.mapping.active[this.local.dataKey] !== this.local.data));
     if (staleIdentity) { this.releaseMatch(); this.lastActive = null; }
     this.reconcile(!!staleIdentity);
+    this.updateLayer();
     this.updateLoot();
     const m = this.mapping, cfg = this.config;
-    this.target = null; this.dot = null; this.meleeDirection = null;
+    this.target = null; this.dot = null; this.meleeDirection = null; this.switchSlot = null;
     this.stats.aimRejections = {};
     this.stats.aimState = cfg.aim || cfg.melee ? 'waiting-mapping' : 'disabled';
     if (!cfg.aim && !cfg.melee && !cfg.autoSwitch) return;
@@ -303,7 +331,12 @@ export class Features {
     const bindDown = this.protocol === VERIFIED_PROTOCOL && this.binds
       ? this.binds.isBindDown(4) : !!this.app.input.mouseButtons?.[0];
     const firing = !!bindDown;
-    const wantMelee = cfg.melee && this.capabilities.mobile && firing && this.definitions?.[localWeapon(m)]?.type === 'melee';
+    const currentDef = this.definitions?.[localWeapon(m)], localSlot = this.local?.data?.[this.local.slotKey];
+    const meleeSlot = this.local?.data?.[this.local.weaponsKey]?.[2];
+    const autoMelee = cfg.autoMelee && [0, 1].includes(localSlot) && currentDef?.type === 'gun';
+    const meleeDef = currentDef?.type === 'melee' ? currentDef : autoMelee ? this.definitions?.[meleeSlot?.type] : null;
+    const reach = meleeReach(meleeDef);
+    const wantMelee = cfg.melee && this.capabilities.mobile && firing && reach !== null;
     if ((!cfg.aim || !this.capabilities.aim || !firing) && !wantMelee) {
       this.stats.aimState = !firing ? 'fire-not-held' : 'missing-aim-contract'; return;
     }
@@ -322,7 +355,7 @@ export class Features {
       const screen = project(m.camera, targetPos);
       if (!screen) { reject('invalidProjection'); continue; }
       const distance = wantMelee ? Math.hypot(pos.x - targetPos.x, pos.y - targetPos.y) : Math.hypot(screen.x - mouse.x, screen.y - mouse.y);
-      if (distance > (wantMelee ? 5.5 : cfg.fov)) { reject('outsideFov'); continue; }
+      if (distance > (wantMelee ? reach : cfg.fov)) { reject('outsideFov'); continue; }
       if (this.blocked({ pos, layer: self.layer }, { pos: targetPos }, !wantMelee)) { reject('wall'); continue; }
       candidates.push({ p, pos: targetPos, screen, distance });
     }
@@ -351,32 +384,36 @@ export class Features {
     mouse.x = x; mouse.y = y;
     this.target = target.p; this.dot = { x, y }; this.stats.aimState = 'applied';
     if (wantMelee) {
+      if (autoMelee) this.switchSlot = 2;
       const dx = target.pos.x - pos.x, dy = target.pos.y - pos.y, len = Math.hypot(dx, dy);
       if (len > .1) this.meleeDirection = { x: dx / len, y: dy / len };
     }
   }
+  updateLayer() {
+    const m = this.mapping, active = m?.active;
+    const desired = new Map();
+    const raw = active && this.layerOverrides.getRaw(active, 'layer');
+    const ready = this.config.layerSpoofer && this.layerHeld && !this.win.document.hidden && active?.active
+      && m.ui?.spectating === false && !active.downed && !at(active, [m.schema?.netKey, m.schema?.deadKey]);
+    if (ready && [0, 1].includes(raw) && this.layerOverrides.set(active, 'layer', value => value === 0 ? 1 : value === 1 ? 0 : value)) {
+      desired.set(active, new Set(['layer']));
+      if (active.container && this.layerOverrides.set(active.container, 'alpha', value => Math.min(value, .5))) desired.set(active.container, new Set(['alpha']));
+      this.stats.layerState = 'local-render-spoof';
+    } else this.stats.layerState = !this.config.layerSpoofer ? 'disabled' : !this.layerHeld ? 'key-not-held' : 'unsupported-layer';
+    this.layerOverrides.prune((owner, key) => desired.get(owner)?.has(key));
+  }
   updateSwitch() {
-    if (!this.config.autoSwitch || !this.capabilities.switch || !this.local) return;
-    const { data, slotKey, weaponsKey } = this.local;
-    const slot = data[slotKey], weapons = data[weaponsKey], current = weapons?.[slot];
-    if (![0, 1].includes(slot) || !current) { this.lastAmmo = null; return; }
-    const def = this.definitions[current.type], now = this.win.performance.now();
-    if (def?.type === 'gun' && def.fireMode === 'single' && this.lastAmmo?.slot === slot
-      && this.lastAmmo.type === current.type && current.ammo < this.lastAmmo.ammo && now >= this.nextSwitch) {
-      const other = weapons[1 - slot];
-      if (other?.ammo > 0 && this.definitions[other.type]?.type === 'gun') {
-        this.switchSlot = 1 - slot; this.nextSwitch = now + 200;
-      }
-    }
-    this.lastAmmo = { slot, ammo: current.ammo, type: current.type };
+    const local = this.local;
+    this.switchSlot = this.weaponSwitch.sample({ enabled: this.config.autoSwitch, ready: !!(this.capabilities.switch && local),
+      slot: local?.data[local.slotKey], weapons: local?.data[local.weaponsKey], definitions: this.definitions,
+      held: !!this.binds?.isBindDown(4), oneGun: this.config.useOneGun, now: this.win.performance.now() });
+    this.stats.switchState = this.weaponSwitch.state;
   }
   scanEffects() {
     const m = this.mapping, out = [], seen = new Set();
     if (!m) return;
     // Bounded shallow traversal of known map/barn owners, not arbitrary window/DOM graphs.
-    const roots = [m.map, ...entries(this.app.game).map(([, v]) => v).filter(v => typeof readMethod(v, 'm_allocParticle') === 'function')];
-    // Particle allocator may be renamed: identify actual arrays of smoke particles by texture.
-    roots.push(...entries(this.app.game).map(([, v]) => v).filter(v => entries(v).some(([, a]) => Array.isArray(a) && a.some(p => read(read(p, 'sprite'), 'texture') || read(p, 'fadeTicker') !== undefined))));
+    const roots = [m.map];
     let budget = 12000;
     const visit = (o, depth) => {
       if (!object(o) || depth < 0 || seen.has(o) || --budget < 0) return;
@@ -384,7 +421,6 @@ export class Features {
       const sprite = read(o, 'sprite');
       if (sprite && typeof read(o, 'type') === 'string' && /^(tree|bush|table|stairs)[_-]/.test(read(o, 'type'))) out.push({ owner: sprite, kind: 'tree', entity: o });
       if (read(o, 'isCeiling') === true && sprite) out.push({ owner: sprite, kind: 'ceiling', entity: o });
-      if (sprite && finite(read(o, 'fadeTicker')) && finite(read(o, 'fadeDuration')) && vec(read(o, 'posTarget'))) out.push({ owner: sprite, kind: 'smoke', entity: o });
       for (const [k, v] of entries(o)) {
         if (['parent', 'children', 'container', 'sprite', 'texture', '_texture', 'game', 'renderer'].includes(k)) continue;
         if (Array.isArray(v)) { for (const child of v.slice(0, 2048)) visit(child, depth - 1); }
@@ -402,13 +438,15 @@ export class Features {
     const start = now, m = this.mapping, cfg = this.config;
     this.clearCanvas();
     this.stats.esp = emptyEspStats(cfg.esp ? this.win.document.hidden ? 'page-hidden' : this.ctx ? 'waiting-mapping' : 'no-canvas' : 'disabled');
-    if (!this.app.game?.initialized || !m?.schema || !m.active?.active || !this.capabilities.visuals || this.win.document.hidden) { this.overrides.clear(); return; }
-    if (!(cfg.esp || cfg.xray || cfg.zoom || cfg.aim || cfg.melee || cfg.ownFlashlight || cfg.grenadeZones)) {
+    this.stats.xray = emptyXrayStats(cfg.xray ? 'waiting-contract' : 'disabled');
+    if (!this.app.game?.initialized || this.win.document.hidden) { this.overrides.clear(); return; }
+    const playerReady = !!(m?.schema && m.active?.active && this.capabilities.visuals);
+    if (!(cfg.esp || cfg.xray || cfg.zoom || cfg.aim || cfg.melee || cfg.ownFlashlight || cfg.othersFlashlight || cfg.bulletTrajectory || cfg.grenadeTrajectory || cfg.grenadeZones)) {
       if (this.overrides.records.size) this.overrides.clear();
       return;
     }
-    const players = m.players();
-    const espFrame = cfg.esp && this.ctx ? buildEspFrame(m, players, cfg, this.win.innerWidth, this.win.innerHeight, this.target) : null;
+    const players = playerReady ? m.players() : [];
+    const espFrame = playerReady && cfg.esp && this.ctx ? buildEspFrame(m, players, cfg, this.win.innerWidth, this.win.innerHeight, this.target) : null;
     const espPlayers = new Set(espFrame?.rows.filter(row => !row.offscreen).map(row => row.player));
     const keep = new Map();
     const want = (owner, key) => { if (!keep.has(owner)) keep.set(owner, new Set()); keep.get(owner).add(key); };
@@ -424,16 +462,26 @@ export class Features {
     for (const effect of cfg.xray ? this.effects : []) {
       const { owner, kind, entity } = effect;
       if (read(entity, 'active') === false || owner.destroyed) continue;
-      if (kind === 'ceiling' && cfg.ceilings && read(entity, 'isCeiling') === true) { this.overrides.set(owner, 'visible', () => false); want(owner, 'visible'); }
-      if (kind === 'tree' && /^(tree|bush|table|stairs)[_-]/.test(read(entity, 'type') || '')) { this.overrides.set(owner, 'alpha', raw => Math.min(raw, cfg.treeOpacity / 100)); want(owner, 'alpha'); }
-      if (kind === 'smoke') { this.overrides.set(owner, 'alpha', raw => raw * cfg.smokeOpacity / 100); want(owner, 'alpha'); }
+      if (kind === 'ceiling' && cfg.ceilings && read(entity, 'isCeiling') === true) { if (this.overrides.set(owner, 'visible', () => false)) { want(owner, 'visible'); this.stats.xray.ceilings++; } }
+      if (kind === 'tree' && /^(tree|bush|table|stairs)[_-]/.test(read(entity, 'type') || '')) { if (this.overrides.set(owner, 'alpha', raw => Math.min(raw, cfg.treeOpacity / 100))) { want(owner, 'alpha'); this.stats.xray.vegetation++; } }
     }
-    if (cfg.zoom && this.local?.zoomKey) {
+    if (cfg.xray) {
+      const smoke = smokeParticles(this.smokeSources), stats = this.stats.xray;
+      stats.smokeSources = this.smokeSources.length; stats.smokeActive = smoke.length;
+      for (const particle of smoke) {
+        if (this.overrides.set(particle.sprite, 'alpha', raw => smokeAlpha(raw, cfg.smokeOpacity))) {
+          want(particle.sprite, 'alpha'); stats.smokeModified++;
+        } else stats.smokeUnsupported++;
+        if (cfg.darkerSmokes && this.overrides.set(particle, 'tint', () => 0x202020)) { want(particle, 'tint'); stats.darkened++; }
+      }
+      stats.state = stats.smokeModified || stats.ceilings || stats.vegetation ? 'overrides-active' : stats.smokeSources ? 'waiting-particles' : 'no-effect-contract';
+    }
+    if (playerReady && cfg.zoom && this.local?.zoomKey) {
       const { data, zoomKey } = this.local;
       this.overrides.set(data, zoomKey, raw => raw * cfg.zoomFactor); want(data, zoomKey);
     }
     this.overrides.prune((owner, key) => keep.get(owner)?.has(key));
-    this.draw(players, espFrame);
+    if (playerReady) this.draw(players, espFrame);
     this.stats.featureMs = this.win.performance.now() - start;
   }
   attachCanvas(canvas) {
@@ -460,17 +508,7 @@ export class Features {
       espFrame ||= buildEspFrame(m, players, cfg, width, height, this.target);
       this.stats.esp = this.espRenderer.draw(ctx, espFrame, cfg, width, height);
     }
-    if (cfg.ownFlashlight && this.definitions) {
-      const gun = this.definitions[localWeapon(m)], bullet = this.definitions[gun?.bulletType];
-      const aim = this.dot || mouse;
-      if (gun?.type === 'gun' && bullet?.distance > 0 && vec(aim)) {
-        const angle = Math.atan2(aim.y - origin.y, aim.x - origin.x);
-        const scale = read(m.camera.camera, m.camera.scaleKeys[0]) * read(m.camera.camera, m.camera.scaleKeys[1]);
-        ctx.fillStyle = '#88caff18'; ctx.beginPath(); ctx.moveTo(origin.x, origin.y);
-        const spread = clamp(gun.shotSpread || 0, 1, 90) * Math.PI / 180;
-        ctx.arc(origin.x, origin.y, bullet.distance * scale, angle - spread / 2, angle + spread / 2); ctx.closePath(); ctx.fill();
-      }
-    }
+    this.drawPreviews(players);
     if (cfg.grenadeZones && this.capabilities.grenadeZones) {
       for (const [, entity] of entries(read(m.creator, m.registryKey))) {
         const zone = grenadeZone(entity, this.definitions, m.active.layer, this.protocol);
@@ -480,6 +518,62 @@ export class Features {
         if (!center) continue;
         const scale = read(m.camera.camera, m.camera.scaleKeys[0]) * read(m.camera.camera, m.camera.scaleKeys[1]);
         ctx.strokeStyle = '#ff744a99'; ctx.beginPath(); ctx.arc(center.x, center.y, radius * scale, 0, Math.PI * 2); ctx.stroke();
+      }
+    }
+  }
+  drawPreviews(players) {
+    const cfg = this.config, m = this.mapping, ctx = this.ctx, schema = m.schema;
+    this.stats.previews = { cones: 0, bulletPaths: 0, throwPaths: 0, unsupportedColliders: 0, ricochetDefinitions: !!this.mapDefinitions };
+    if (this.protocol !== VERIFIED_PROTOCOL || !this.definitions || !(cfg.ownFlashlight || cfg.othersFlashlight || cfg.bulletTrajectory || cfg.grenadeTrajectory)) return;
+    const selfPos = read(m.active, schema.posKey), inputOrigin = aimPoint(m.camera, selfPos, selfPos), aim = this.dot || this.app.input.mousePos;
+    if (!inputOrigin || !vec(aim)) return;
+    const scale = read(m.camera.camera, m.camera.scaleKeys[0]) * read(m.camera.camera, m.camera.scaleKeys[1]);
+    if (!(scale > 0)) return;
+    const ownDirection = { x: aim.x - inputOrigin.x, y: inputOrigin.y - aim.y };
+    const allObstacles = m.obstacles(), truncated = allObstacles.length > 256;
+    const obstacles = allObstacles.slice(0, 256), relations = teamRelations(m.barn, m.active.__id);
+    this.stats.previews.truncatedObstacles = truncated;
+    const line = (points, color, dashed = false) => {
+      const projected = points.map(p => project(m.camera, p)); if (projected.some(p => !p)) return;
+      ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.setLineDash(dashed ? [5, 4] : []); ctx.beginPath();
+      projected.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke(); ctx.setLineDash([]);
+    };
+    let cones = 0;
+    for (const player of [m.active, ...players.filter(p => p !== m.active)]) {
+      const own = player === m.active;
+      if (!player.active || at(player, [schema.netKey, schema.deadKey]) || !sameLayer(player.layer, m.active.layer)) continue;
+      if (!own && (!cfg.othersFlashlight || relations.classify(player.__id).kind !== 'enemy')) continue;
+      const gun = this.definitions[at(player, [schema.netKey, schema.weaponKey])], bullet = this.definitions[gun?.bulletType];
+      const pos = overlayPosition(player, m), direction = own ? ownDirection : read(player, schema.dirKey);
+      if (gun?.type !== 'gun' || !(bullet?.distance > 0) || !pos || !vec(direction) || Math.hypot(direction.x, direction.y) < .001) continue;
+      const angle = Math.atan2(direction.y, direction.x), origin = project(m.camera, pos);
+      if (!origin || origin.x < -100 || origin.x > this.win.innerWidth + 100 || origin.y < -100 || origin.y > this.win.innerHeight + 100) continue;
+      if ((own && cfg.ownFlashlight || !own) && cones < 8) {
+        const half = clamp(gun.shotSpread || 0, 1, 90) * Math.PI / 360, ends = [];
+        for (let i = 0; i < 7; i++) {
+          const a = angle - half + 2 * half * i / 6;
+          const trace = traceShot(pos, { x: Math.cos(a), y: Math.sin(a) }, bullet.distance, obstacles, player.layer, this.mapDefinitions);
+          if (!trace) continue;
+          this.stats.previews.unsupportedColliders += trace.unsupported;
+          ends.push(project(m.camera, trace.points.at(-1)));
+        }
+        if (ends.length && ends.every(Boolean)) {
+          ctx.fillStyle = own ? '#88caff20' : '#ff626218'; ctx.beginPath(); ctx.moveTo(origin.x, origin.y);
+          for (const end of ends) ctx.lineTo(end.x, end.y); ctx.closePath(); ctx.fill(); cones++; this.stats.previews.cones++;
+        }
+      }
+      if (own && cfg.bulletTrajectory) {
+        const trace = traceShot(pos, direction, bullet.distance, obstacles, player.layer, this.mapDefinitions, 3);
+        if (trace) { line(trace.points, '#ffdf91bb', trace.unsupported > 0 || truncated || !this.mapDefinitions); this.stats.previews.bulletPaths++; this.stats.previews.unsupportedColliders += trace.unsupported; }
+      }
+    }
+    if (cfg.grenadeTrajectory && this.protocol === VERIFIED_PROTOCOL && this.local?.data[this.local.slotKey] === 3) {
+      const type = this.local.data[this.local.weaponsKey]?.[3]?.type, def = this.definitions[type];
+      const preview = throwPreview(def, selfPos, ownDirection, Math.hypot(ownDirection.x, ownDirection.y) / scale);
+      if (preview) {
+        line(preview.points, '#80ffb5aa', true); this.stats.previews.throwPaths++;
+        const center = project(m.camera, preview.end), explosion = this.definitions[def.explosionType];
+        if (center && explosion?.rad?.max > 0) { ctx.strokeStyle = '#80ffb577'; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.arc(center.x, center.y, explosion.rad.max * scale, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
       }
     }
   }
@@ -526,15 +620,16 @@ export class Features {
       playerBarn: !!m?.barn, playerPool: !!m?.poolKey, activePlayer: !!m?.active,
       playerSchema: !!m?.schema, camera: !!m?.camera, spectatorUI: !!m?.ui,
       inputFlush: !!this.flushReady, sender: !!this.senderReady,
-      canvasRenderer: !!this.ctx, definitions: !!this.definitions, lootSource: !!this.lootSource, localData: !!this.local, binds: !!this.binds,
+      canvasRenderer: !!this.ctx, mapDefinitions: !!this.mapDefinitions, smokeSource: this.smokeSources.length > 0, definitions: !!this.definitions, lootSource: !!this.lootSource, localData: !!this.local, binds: !!this.binds,
       protocolObserved: this.protocol !== null, protocolMatches: this.protocol === VERIFIED_PROTOCOL,
     };
-    return { version: '0.3.0', protocol: this.protocol, sourceProtocol: VERIFIED_PROTOCOL,
+    return { version: '0.4.0', protocol: this.protocol, sourceProtocol: VERIFIED_PROTOCOL,
       initialized: checks.initialized, checks,
       autoLoot: { state: this.autoLootStatus(), mode: this.config.lootMode, ...this.joinState },
+      mapHighlights: { ...this.mapHighlights.stats },
       missingContracts: Object.keys(checks).filter(key => !checks[key]),
       capabilities: { ...this.capabilities },
-      stats: { ...this.stats }, failed: [...this.failed], overrides: this.overrides.records.size };
+      stats: { ...this.stats }, failed: [...this.failed], overrides: this.overrides.records.size + this.layerOverrides.records.size };
   }
   dispose() {
     if (this.stopped) return;

@@ -509,7 +509,7 @@ test('diagnostics distinguish capture, mapping and protocol without leaking game
 
 test('distributed userscript retains readable function names and source-module sections', () => {
   const script = readFileSync(new URL('../userscripts/duality-reborn.user.js', import.meta.url), 'utf8');
-  assert.match(script, /@version\s+0\.3\.0/);
+  assert.match(script, /@version\s+0\.4\.0/);
   assert.match(script, /function captureApplication\(/);
   assert.match(script, /function start\(win\)/);
   assert.match(script, /\/\/ src\/main\.mjs/);
@@ -715,4 +715,64 @@ test('ESP diagnostics contain aggregate counts only and reset on match exit', ()
   assert.ok(!JSON.stringify(snapshot).includes('private-fixture-name')); assert.equal(snapshot.stats.esp.rows, undefined);
   app.game.initialized = false; engine.pre(); assert.equal(engine.stats.esp.enemy, 0);
   engine.dispose(); assert.equal(engine.espRenderer.widths.size, 0); dom.window.close();
+});
+
+test('held layer preview tracks native writes and restores on key release, blur, disable and dispose', () => {
+  const dom = env(), app = fixture(), config = { ...DEFAULTS, layerSpoofer: true }, engine = new Features(dom.window, app, config, () => {}, defs);
+  const hero = app.game.hero; hero.container.alpha = .8;
+  dom.window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { code: 'KeyT' })); engine.pre();
+  assert.equal(hero.layer, 1); assert.equal(hero.container.alpha, .5);
+  hero.layer = 1; hero.container.alpha = .6; assert.equal(hero.layer, 0);
+  dom.window.dispatchEvent(new dom.window.KeyboardEvent('keyup', { code: 'KeyT' })); assert.equal(hero.layer, 1); assert.equal(hero.container.alpha, .6);
+  hero.layer = 0; dom.window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { code: 'KeyT' })); engine.pre();
+  dom.window.dispatchEvent(new dom.window.Event('blur')); assert.equal(hero.layer, 0);
+  dom.window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { code: 'KeyT' })); engine.pre(); config.layerSpoofer = false; engine.pre(); assert.equal(hero.layer, 0);
+  config.layerSpoofer = true; engine.pre(); engine.dispose(); assert.equal(hero.layer, 0); assert.equal(hero.container.alpha, .6); dom.window.close();
+});
+test('layer key ignores typing and refuses unsupported layer descriptors', () => {
+  const dom = env(), app = fixture(), config = { ...DEFAULTS, layerSpoofer: true }, engine = new Features(dom.window, app, config, () => {}, defs);
+  const input = dom.window.document.createElement('input'); dom.window.document.body.append(input);
+  input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { code: 'KeyT', bubbles: true })); engine.pre(); assert.equal(app.game.hero.layer, 0);
+  Object.defineProperty(app.game.hero, 'layer', { value: 0, writable: true, configurable: false });
+  dom.window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { code: 'KeyT' })); engine.pre(); assert.equal(app.game.hero.layer, 0);
+  engine.dispose(); dom.window.close();
+});
+test('Auto Melee selects melee slot only for a nearby enemy while Fire is held', () => {
+  const dom = env(), app = fixture(), config = { ...DEFAULTS, melee: true, autoMelee: true, wallcheck: false, smoothEnabled: false };
+  const localDefs = { ...defs, fists: { type: 'melee', attack: { cooldownTime: .25, offset: { x: 1.35, y: 0 }, rad: .9 } } };
+  const engine = new Features(dom.window, app, config, () => {}, localDefs); app.game.transmit(1, new JoinMsg());
+  engine.pre(); assert.equal(engine.switchSlot, null);
+  app.input.mouseButtons[0] = true; engine.pre(); assert.equal(engine.switchSlot, 2); assert.ok(engine.meleeDirection);
+  assert.equal(app.game.binds.isBindPressed(13), true);
+  app.game.barn.playerPool.list[1].p = { x: 30, y: 20 }; engine.pre(); assert.equal(engine.switchSlot, null);
+  engine.dispose(); dom.window.close();
+});
+test('all preview controls execute through Canvas with enemy filtering and source weapon direction', () => {
+  const dom = env(), app = fixture(), config = { ...DEFAULTS, ownFlashlight: true, othersFlashlight: true, bulletTrajectory: true, grenadeTrajectory: true };
+  const localDefs = { ...defs, frag: { type: 'throwable', throwPhysics: { speed: 20, velZ: 5 }, explosionType: 'explosion_frag' }, explosion_frag: { type: 'explosion', rad: { max: 13 } } };
+  const engine = new Features(dom.window, app, config, () => {}, localDefs); engine.attachCanvas(dom.window.document.createElement('canvas')); app.game.transmit(1, new JoinMsg());
+  engine.post(); assert.equal(engine.stats.previews.cones, 2); assert.equal(engine.stats.previews.bulletPaths, 1);
+  app.game.hero.n.weapon = 'frag'; app.game.hero.l.index = 3; engine.lastVisual = -Infinity; engine.post();
+  assert.equal(engine.stats.previews.throwPaths, 1);
+  engine.dispose(); dom.window.close();
+});
+test('captureDefinitions can collect game and map registers in either order and restores its global hook', async () => {
+  const dom = env(), win = dom.window, original = win.Object.keys, game = { mp5: { type: 'gun' }, bullet_mp5: { type: 'bullet' }, frag: { type: 'throwable' }, explosion_frag: { type: 'explosion' } };
+  const map = { tree_01: { type: 'obstacle', collision: {}, reflectBullets: false }, stone_01: { type: 'obstacle', collision: {}, reflectBullets: true } };
+  let foundGame, foundMap; const cancel = captureDefinitions(win, v => { foundGame = v; }, 1000, v => { foundMap = v; });
+  win.Object.keys(map); assert.notEqual(win.Object.keys, original); win.Object.keys(game);
+  await Promise.resolve(); assert.equal(foundGame, game); assert.equal(foundMap, map); assert.equal(win.Object.keys, original); cancel(); dom.window.close();
+});
+
+test('all restored feature settings are exposed as real validated controls, not placeholder hints', () => {
+  const dom = env(), config = { ...DEFAULTS }, menu = createMenu(dom.window, config, {});
+  const root = menu.host.shadowRoot, seen = new Set();
+  for (const title of ['Main', 'Visuals', 'Misc']) {
+    [...root.querySelectorAll('button')].find(button => button.textContent === title).click();
+    for (const node of root.querySelectorAll('[data-config]')) seen.add(node.dataset.config);
+  }
+  for (const key of ['autoMelee', 'useOneGun', 'darkerSmokes', 'layerSpoofer', 'mapHighlights', 'smallerTrees', 'ownFlashlight', 'othersFlashlight', 'bulletTrajectory', 'grenadeZones', 'grenadeTrajectory', 'mobileMovement', 'movementSmooth', 'semi']) assert.ok(seen.has(key), key);
+  const normalized = normalizeConfig({ layerKey: 'KeyY', movementSmooth: 1000, autoMelee: true, darkerSmokes: false, useOneGun: true });
+  assert.equal(normalized.layerKey, 'KeyY'); assert.equal(normalized.movementSmooth, 100); assert.equal(normalized.useOneGun, true); assert.equal(normalized.darkerSmokes, false);
+  menu.dispose(); dom.window.close();
 });

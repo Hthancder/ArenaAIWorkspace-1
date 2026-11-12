@@ -430,18 +430,23 @@ export function captureApplication(win, onApp, { timeout = 15000, onTimeout = ()
   bag.add(() => win.clearTimeout(timer));
   return cancel;
 }
-export function captureDefinitions(win, onDefs, timeout = 15000) {
+export function captureDefinitions(win, onDefs, timeout = 15000, onMapDefs = null) {
   const bag = new Disposables(), apply = win.Reflect.apply;
-  let busy = false, done = false;
+  let busy = false, done = false, gameFound = false, mapFound = false;
   const cancel = () => { done = true; bag.clear(); };
   patchMethod(win.Object, 'keys', original => function (value) {
     if (!done && !busy) {
       busy = true;
       try {
-        if (read(read(value, 'mp5'), 'type') === 'gun' && read(read(value, 'bullet_mp5'), 'type') === 'bullet'
+        if (!gameFound && read(read(value, 'mp5'), 'type') === 'gun' && read(read(value, 'bullet_mp5'), 'type') === 'bullet'
           && read(read(value, 'frag'), 'type') === 'throwable' && read(read(value, 'explosion_frag'), 'type') === 'explosion') {
-          cancel(); win.queueMicrotask(() => onDefs(value));
+          gameFound = true; win.queueMicrotask(() => onDefs(value));
         }
+        if (onMapDefs && !mapFound && ['tree_01', 'stone_01'].every(key => read(read(value, key), 'type') === 'obstacle'
+          && typeof read(read(value, key), 'reflectBullets') === 'boolean' && object(read(read(value, key), 'collision')))) {
+          mapFound = true; win.queueMicrotask(() => onMapDefs(value));
+        }
+        if (gameFound && (!onMapDefs || mapFound)) cancel();
       } catch { /* Cannot classify => don't touch. */ }
       finally { busy = false; }
     }

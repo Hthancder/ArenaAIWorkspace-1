@@ -8,10 +8,10 @@ export function start(win) {
   const bag = new Disposables();
   let config;
   try { config = loadConfig(win.localStorage); } catch { config = loadConfig(null); }
-  let menu = null, engine = null, defs = null, cancelCapture = null, alive = true;
+  let menu = null, engine = null, defs = null, mapDefs = null, cancelCapture = null, alive = true;
   let status = 'Đang chờ Application…', lastWarning = '', captured = false, captureState = 'waiting';
   const startedAt = win.performance.now();
-  win.console?.info?.('[Duality Reborn 0.3.0] Script đã chạy. Nếu không có menu, gửi dòng lỗi Console sau thông báo này.');
+  win.console?.info?.('[Duality Reborn 0.4.0] Script đã chạy. Nếu không có menu, gửi dòng lỗi Console sau thông báo này.');
   const report = (level, message) => {
     if (!alive) return;
     if (level === 'error' || level === 'warning') {
@@ -21,9 +21,9 @@ export function start(win) {
     status = message;
   };
   const diagnostics = () => ({
-    version: '0.3.0', captured, captureState, status, lastWarning,
+    version: '0.4.0', captured, captureState, status, lastWarning,
     menuMounted: !!menu?.host.isConnected, documentReadyState: win.document.readyState,
-    definitionsCaptured: !!defs, elapsedMs: Math.round(win.performance.now() - startedAt),
+    definitionsCaptured: !!defs, mapDefinitionsCaptured: !!mapDefs, elapsedMs: Math.round(win.performance.now() - startedAt),
     ...(engine?.diagnostics() || {}),
   });
   const controller = {
@@ -37,7 +37,7 @@ export function start(win) {
         if (!alive) return;
         captured = true; captureState = 'captured';
         try {
-          engine = new Features(win, app, config, report, defs);
+          engine = new Features(win, app, config, report, defs); engine.mapDefinitions = mapDefs;
           if (menu) engine.attachCanvas(menu.canvas);
           status = 'Đã bắt Application; chờ trạng thái trận và contract.';
         } catch (e) {
@@ -56,13 +56,13 @@ export function start(win) {
     },
   };
   win[key] = controller;
-  bag.add(captureDefinitions(win, value => { defs = value; if (engine) { engine.definitions = defs; engine.lastMap = -Infinity; } }));
+  bag.add(captureDefinitions(win, value => { defs = value; if (engine) { engine.definitions = defs; engine.lastMap = -Infinity; } }, 15000, value => { mapDefs = value; if (engine) engine.mapDefinitions = value; }));
   const makeMenu = () => {
     if (!alive || menu) return;
     menu = createMenu(win, config, {
       onChange: key => {
-        engine?.restoreInput();
-        if (engine) { engine.overrides.clear(); engine.lastMap = -Infinity; engine.stickyId = null; }
+        engine?.restoreInput(); engine?.layerOverrides.clear();
+        if (engine) { if (key === 'layerKey' || key === 'layerSpoofer') engine.layerHeld = false; engine.overrides.clear(); engine.lastMap = -Infinity; engine.stickyId = null; }
         if (key === 'autoLoot' || key === 'lootMode') status = config.lootMode === 'mobile'
           ? 'Mobile loot: cần Join mới. Bật/tắt giữa trận không đổi mobile mode server đã nhận.'
           : 'Nearby supplies: dùng input Loot trong trận khi đủ contract; không tự đổi súng/gear.';
@@ -80,7 +80,7 @@ export function start(win) {
     if (!menu) return;
     menu.capabilities(engine?.capabilities || {});
     const d = diagnostics();
-    menu.status(`${status}\nAim: ${d.stats?.aimState ?? 'chưa mapping'} • Loot: ${d.autoLoot?.state ?? 'chưa mapping'}\nESP: ${d.stats?.esp?.state ?? 'chưa mapping'}${d.stats?.esp ? ` • địch ${d.stats.esp.enemy} / ta ${d.stats.esp.ally} / chưa rõ ${d.stats.esp.unknown}` : ''}\nProtocol: ${d.protocol ?? 'chưa quan sát Join'} • ${d.initialized ? 'trong trận' : 'chờ trận'}\n${d.stats ? `Discovery: ${d.stats.mappingRuns} • visual tick: ${d.stats.featureMs.toFixed(2)} ms (không phải FPS benchmark)` : ''}${d.missingContracts?.length ? `\nThiếu contract: ${d.missingContracts.join(', ')}` : ''}${lastWarning ? `\nChú ý: ${lastWarning}` : ''}`);
+    menu.status(`${status}\nAim: ${d.stats?.aimState ?? 'chưa mapping'} • Loot: ${d.autoLoot?.state ?? 'chưa mapping'}\nESP: ${d.stats?.esp?.state ?? 'chưa mapping'}${d.stats?.esp ? ` • địch ${d.stats.esp.enemy} / ta ${d.stats.esp.ally} / chưa rõ ${d.stats.esp.unknown}` : ''}\nSemi: ${d.stats?.semi?.state ?? 'chưa mapping'} • X-Ray: ${d.stats?.xray?.state ?? 'chưa mapping'}${d.stats?.xray ? ` (smoke ${d.stats.xray.smokeModified}/${d.stats.xray.smokeActive})` : ''}\nProtocol: ${d.protocol ?? 'chưa quan sát Join'} • ${d.initialized ? 'trong trận' : 'chờ trận'}\n${d.stats ? `Discovery: ${d.stats.mappingRuns} • visual tick: ${d.stats.featureMs.toFixed(2)} ms (không phải FPS benchmark)` : ''}${d.missingContracts?.length ? `\nThiếu contract: ${d.missingContracts.join(', ')}` : ''}${lastWarning ? `\nChú ý: ${lastWarning}` : ''}`);
   }, 1000);
   bag.add(() => win.clearInterval(timer));
   const onPageHide = () => controller.dispose();

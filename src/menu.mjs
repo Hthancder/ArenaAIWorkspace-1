@@ -4,7 +4,7 @@ import { colorValue, ESP_PALETTE } from './esp.mjs';
 export const DEFAULTS = Object.freeze({
   version: 1, aim: false, smoothEnabled: true, smooth: 50, knocked: false, sticky: true,
   showDot: true, fov: 100, showFov: true, wallcheck: true, predict: true,
-  melee: false, autoSwitch: false, semi: false, xray: false, ceilings: true,
+  melee: false, autoMelee: false, autoSwitch: false, useOneGun: false, layerSpoofer: false, layerKey: 'KeyT', semi: false, xray: false, darkerSmokes: true, ceilings: true, mapHighlights: false, smallerTrees: true,
   smokeOpacity: 50, treeOpacity: 50, esp: false, nametags: true, lines: true,
   espShowAllies: true, espShowEnemies: true, espShowUnknown: true, espShowDowned: true,
   espSameLayerOnly: false, espLabels: true, espDistance: true, espWeapons: false,
@@ -12,11 +12,11 @@ export const DEFAULTS = Object.freeze({
   espMaxDistance: 200, espFontSize: 12, espOpacity: 85, espLineWidth: 1.5,
   espEnemyColor: ESP_PALETTE.enemy, espAllyColor: ESP_PALETTE.ally,
   espUnknownColor: ESP_PALETTE.unknown, espTargetColor: ESP_PALETTE.target,
-  ownFlashlight: false, grenadeZones: false, zoom: false, zoomFactor: 1.5,
-  autoLoot: false, lootMode: 'nearby', mobileMovement: false, menuKey: 'ShiftRight', aimKey: 'KeyB', stickyKey: 'KeyN', holdAim: false,
+  ownFlashlight: false, othersFlashlight: false, bulletTrajectory: false, grenadeTrajectory: false, grenadeZones: false, zoom: false, zoomFactor: 1.5,
+  autoLoot: false, lootMode: 'nearby', mobileMovement: false, movementSmooth: 50, menuKey: 'ShiftRight', aimKey: 'KeyB', stickyKey: 'KeyN', holdAim: false,
 });
 export const STORAGE_KEY = 'duality-reborn.config.v1';
-const ranges = { smooth: [0, 100], fov: [50, 400], smokeOpacity: [0, 100], treeOpacity: [0, 100], zoomFactor: [1, 3], espMaxDistance: [10, 500], espFontSize: [10, 18], espOpacity: [10, 100], espLineWidth: [.5, 3] };
+const ranges = { movementSmooth: [0, 100], smooth: [0, 100], fov: [50, 400], smokeOpacity: [0, 100], treeOpacity: [0, 100], zoomFactor: [1, 3], espMaxDistance: [10, 500], espFontSize: [10, 18], espOpacity: [10, 100], espLineWidth: [.5, 3] };
 const colors = new Set(['espEnemyColor', 'espAllyColor', 'espUnknownColor', 'espTargetColor']);
 export function normalizeConfig(saved) {
   const result = { ...DEFAULTS };
@@ -26,7 +26,7 @@ export function normalizeConfig(saved) {
     if (typeof defaultValue === 'boolean' && typeof value === 'boolean') result[key] = value;
     if (colors.has(key) && colorValue(value)) result[key] = value.toLowerCase();
     if (ranges[key] && finite(value)) result[key] = clamp(value, ...ranges[key]);
-    if (['menuKey', 'aimKey', 'stickyKey'].includes(key) && typeof value === 'string'
+    if (['menuKey', 'aimKey', 'stickyKey', 'layerKey'].includes(key) && typeof value === 'string'
       && /^(Key[A-Z]|Digit[0-9]|Shift(Left|Right)|Control(Left|Right)|Alt(Left|Right)|F([1-9]|1[0-2]))$/.test(value)) result[key] = value;
   }
   if (['nearby', 'mobile'].includes(saved.lootMode)) result.lootMode = saved.lootMode;
@@ -49,13 +49,13 @@ const GROUPS = {
     ['Aimbot', [['aim', 'Enabled', 'aim'], ['smoothEnabled', 'Use Smooth', 'aim'], ['smooth', 'Smooth', 'aim'],
       ['knocked', 'Target Knocked', 'aim'], ['sticky', 'Sticky Target', 'aim'], ['showDot', 'Aimbot Dot'],
       ['fov', 'FOV'], ['showFov', 'Show FOV Circle'], ['wallcheck', 'Wallcheck', 'wallcheck'], ['predict', 'Prediction', 'prediction']]],
-    ['Melee Lock', [['melee', 'Enabled', 'mobile']]],
-    ['Auto Switch', [['autoSwitch', 'Enabled (two guns)', 'switch']]],
-    ['Semi Auto', [['semi', 'Enabled', 'semi']]],
+    ['Melee Lock', [['melee', 'Enabled', 'mobile'], ['autoMelee', 'Auto Melee (from gun, while firing)', 'switch']]],
+    ['Auto Switch', [['autoSwitch', 'Enabled', 'switch'], ['useOneGun', 'Use One Gun (switch away then return)', 'switch'], [null, 'Ammo single/burst; equip từng frame, chờ slot cập nhật. Không bỏ qua cooldown server.']]],
+    ['Semi Auto', [['semi', 'Held Fire: single guns + fists / melee', 'semi'], [null, 'Giữ nút Fire để lặp; auto/burst dùng shootHold gốc; không lặp lựu đạn. Server vẫn quyết định cooldown.']]],
   ],
   Visuals: [
-    ['X-Ray', [['xray', 'Enabled', 'visuals'], ['ceilings', 'Remove Ceilings', 'visuals'], ['smokeOpacity', 'Smoke Opacity', 'visuals'], ['treeOpacity', 'Tree / Bush Opacity', 'visuals']]],
-    ['Layer Spoofer', [[null, 'Chưa port: cần kiểm chứng layer semantics']]],
+    ['X-Ray', [['xray', 'Enabled', 'xray'], ['ceilings', 'Remove Ceilings', 'xray'], ['darkerSmokes', 'Darker Smokes', 'xray'], ['smokeOpacity', 'Smoke Opacity (legacy scale)', 'xray'], ['treeOpacity', 'Tree / Bush Opacity', 'xray'], [null, 'Khói: giá trị 50 = alpha tối đa 0.05 mỗi particle như bản gốc; 0 = ẩn, 100 = 0.1. Tắt X-Ray để trả opacity game.']]],
+    ['Layer Spoofer', [['layerSpoofer', 'Hold layer key to preview other floor', 'layer'], [null, 'Chỉ đổi layer client 0/1, không đổi tầng server hoặc cho bắn xuyên tầng. Thả phím/blur khôi phục giá trị mới nhất.']]],
     ['ESP / Teams', [['esp', 'Enabled', 'visuals'], ['espShowEnemies', 'Show enemies', 'visuals'], ['espShowAllies', 'Show allies / squad', 'visuals'],
       ['espShowUnknown', 'Show unknown team', 'visuals'], ['espShowDowned', 'Show downed', 'visuals'], ['espSameLayerOnly', 'Same layer only', 'visuals'],
       ['espMaxDistance', 'Max range (world units)', 'visuals'], [null, 'ENEMY / ALLY / SQUAD / UNKNOWN theo teamInfo và groupInfo. Không mặc định unknown là địch.']]],
@@ -64,14 +64,14 @@ const GROUPS = {
       ['espOffscreen', 'Off-screen arrows (received entities only)', 'visuals'], ['espHighlightTarget', 'Highlight current enemy target', 'visuals'], ['espLegend', 'Color legend / counts', 'visuals'],
       ['espFontSize', 'Label size', 'visuals'], ['espOpacity', 'Overlay opacity', 'visuals'], ['espLineWidth', 'Line width', 'visuals']]],
     ['ESP / Colors', [['espEnemyColor', 'Enemy', 'visuals'], ['espAllyColor', 'Ally / squad', 'visuals'], ['espUnknownColor', 'Unknown', 'visuals'], ['espTargetColor', 'Current enemy target', 'visuals']]],
-    ['Grenades', [['grenadeZones', 'Nominal Explosion Radius', 'grenadeZones'], [null, 'Không phải vùng sát thương chắc chắn; chưa có fuse / trajectory']]],
-    ['Flashlights', [['ownFlashlight', 'Own Range / Spread Preview', 'prediction'], [null, 'Others / Ricochet: chưa port']]],
+    ['Grenades', [['grenadeZones', 'Nominal Explosion Radius', 'grenadeZones'], ['grenadeTrajectory', 'Throw preview (open-air estimate)', 'grenadeZones'], [null, 'Nét đứt = ước lượng vật lý không khí/drag; không biết fuse còn lại, perk, va chạm tương lai hoặc điểm nổ chắc chắn.']]],
+    ['Flashlights', [['ownFlashlight', 'Own spread cone', 'previews'], ['othersFlashlight', 'Enemy spread cones', 'previews'], ['bulletTrajectory', 'Bullet path + nominal ricochets', 'previews'], [null, 'Circle/AABB; tối đa 3 phản xạ khi bắt được map defs, 8 cone / 256 obstacles. Không biết kết quả server hoặc mọi perk; thiếu collider hiển thị nét đứt.']]],
     ['Infinite Zoom', [['zoom', 'Enabled (bounded 1–3×)', 'zoom'], ['zoomFactor', 'Zoom Out', 'zoom']]],
   ],
   Misc: [
-    ['Map Highlights', [[null, 'Chưa port: không hook Array.sort toàn trang']]],
+    ['Map Highlights', [['mapHighlights', 'Special map markers', 'mapHighlights'], ['smallerTrees', 'Smaller minimap trees', 'mapHighlights'], [null, 'Clone shape khi render minimap; chỉ redraw khi đổi setting/map. Không hook Array.sort hoặc đổi collider.']]],
     ['Auto Loot', [['autoLoot', 'Enabled', 'sender'], ['lootMode', 'Pickup mode', 'sender'], [null, 'Nearby: ammo / heal / boost / throwable; bỏ qua súng và gear. Mobile: cần Join mới, có cả mở cửa.']]],
-    ['Mobile Movement', [['mobileMovement', 'Enabled', 'mobile']]],
+    ['Mobile Movement', [['mobileMovement', 'Enabled', 'mobile'], ['movementSmooth', 'Direction Smooth', 'mobile'], [null, 'Làm mượt đổi hướng khi giữ phím; nhả phím dừng ngay, không ghi đè input gốc.']]],
   ],
 };
 export function createMenu(win, config, { onChange, retry, stop, diagnostics, onAimHold = () => {} }) {
@@ -90,7 +90,7 @@ export function createMenu(win, config, { onChange, retry, stop, diagnostics, on
   const style = el('style', { text: CSS });
   const canvas = el('canvas'); canvas.setAttribute('aria-hidden', 'true');
   const shell = el('section', { id: 'ui' }); shell.setAttribute('aria-label', 'Duality Client Reborn');
-  const brand = el('div', { class: 'brand', text: 'Duality Client' }, el('div', { class: 'version', text: 'Reborn 0.3.0 • readable debug' }));
+  const brand = el('div', { class: 'brand', text: 'Duality Client' }, el('div', { class: 'version', text: 'Reborn 0.4.0 • readable debug' }));
   const nav = el('nav', { class: 'nav' }); nav.setAttribute('aria-label', 'Menu tabs');
   const content = el('main', { class: 'content' });
   const status = el('div', { id: 'status', text: 'Đang chờ Application…' }); status.setAttribute('role', 'status');
@@ -119,6 +119,7 @@ export function createMenu(win, config, { onChange, retry, stop, diagnostics, on
     if (key === null) return el('div', { class: 'hint', text: label });
     const title = el('span', { text: label }), labelEl = el('label', { class: 'row' }, title);
     const input = key === 'lootMode' ? el('select') : el('input', { type: colors.has(key) ? 'color' : ranges[key] ? 'range' : 'checkbox' });
+    input.dataset.config = key;
     if (key === 'lootMode') {
       for (const [value, text] of [['nearby', 'Nearby supplies (now)'], ['mobile', 'Mobile loot / doors (next join)']]) input.append(el('option', { value, text }));
       input.value = config.lootMode; input.onchange = () => set(key, input.value);
@@ -150,7 +151,7 @@ export function createMenu(win, config, { onChange, retry, stop, diagnostics, on
       return;
     }
     if (tab === 'Keybinds') {
-      for (const [key, label] of [['menuKey', 'Toggle Menu'], ['aimKey', 'Aimbot'], ['stickyKey', 'Sticky Target']]) {
+      for (const [key, label] of [['menuKey', 'Toggle Menu'], ['aimKey', 'Aimbot'], ['stickyKey', 'Sticky Target'], ['layerKey', 'Layer Spoofer (hold)']]) {
         const button = el('button', { text: config[key] });
         button.onclick = () => {
           cancelKey(); captureKey = { key, button }; button.textContent = 'Press key / Esc';
@@ -163,7 +164,7 @@ export function createMenu(win, config, { onChange, retry, stop, diagnostics, on
       return;
     }
     panel.append(el('h2', { text: 'Controls & Information' }), el('p', { text: 'Bản viết lại độc lập. Menu giữ Main / Visuals / Misc / Keybinds / Help; không tải font, ảnh hay thư viện UI từ bên ngoài.' }),
-      el('p', { class: 'hint', text: 'ESP: màu + nhãn địch/ta/unknown; nét đứt cho layer khác / downed / unknown. Không suy đoán HP/armor của đối thủ. Layer Spoofer, Map Highlights và grenade trajectory vẫn chưa port. Chỉ hiển thị dữ liệu client nhận được. Không bảo đảm tương thích mọi update hay tránh phát hiện. Những mục chưa port được ghi rõ, không giả vờ đang hoạt động.' }));
+      el('p', { class: 'hint', text: 'ESP: màu + nhãn địch/ta/unknown; nét đứt cho layer khác / downed / unknown. Không suy đoán HP/armor của đối thủ. Layer Spoofer chỉ đổi render client; trajectory là preview có giới hạn, không phải kết quả server. Map Highlights chỉ đánh dấu minimap theo native renderer. Chỉ hiển thị dữ liệu client nhận được. Không bảo đảm tương thích mọi update hay tránh phát hiện. Feature thiếu contract sẽ bị khóa; có code không đồng nghĩa đã xác nhận trên live.' }));
     const pre = el('pre', { text: JSON.stringify(diagnostics(), null, 2) });
     const refresh = el('button', { text: 'Refresh diagnostics' }); refresh.onclick = () => { pre.textContent = JSON.stringify(diagnostics(), null, 2); };
     const copy = el('button', { text: 'Copy diagnostics' });

@@ -2,7 +2,7 @@
 
 Bản userscript viết lại từ mục tiêu của mẫu người dùng cung cấp, với menu nhẹ và discovery có kiểm chứng. **Đây là bản thử nghiệm đã test offline, chưa xác nhận hoạt động trên build live của survev.io.** Không bảo đảm tương thích mọi update hoặc tránh phát hiện. Việc dùng trên máy chủ công cộng có thể vi phạm điều khoản của game.
 
-Bản hiện tại: **0.3.0 — team-aware ESP / readable preview**. ESP có phân biệt ENEMY / ALLY / SQUAD / UNKNOWN, filter, màu tùy chỉnh, label, distance/weapon, marker và off-screen arrows; aim dùng chung logic team. Giữ fixes Join/aim/native pickup của 0.2.0. **Chưa xác nhận live và chưa gọi là “reborn hoàn toàn”.** Kết quả: 79 tests offline + 4 kịch bản method-level từ source public. [Chi tiết ESP 0.3.0, phạm vi còn mở và checklist](docs/reborn-0.3.0.vi.md).
+Bản hiện tại: **0.4.0 — held melee / smoke fixes + original-feature restoration preview**. Sửa Semi cho fists/melee và bắt pool khói bằng data-flow của `SmokeBarn`, đúng alpha gốc (`50 → 0.05`). Bổ sung Auto Melee, Use One Gun, Darker Smokes, Layer Spoofer, Map Highlights, enemy flashlights, bullet/throw previews và smooth mobile movement. **Có implementation cho các nhóm tính năng gốc, nhưng chưa xác nhận đủ parity trên live; không gọi là “reborn hoàn toàn đã hoạt động”.** Kết quả: **102 tests offline + 4 kịch bản method-level** (có native smoke update và server melee cooldown). [Checklist đối chiếu từng feature, bằng chứng và giới hạn](docs/reborn-0.4.0.vi.md).
 
 ## File để cài
 
@@ -14,7 +14,7 @@ Bản hiện tại: **0.3.0 — team-aware ESP / readable preview**. ESP có ph�
 4. Reload `https://survev.io/`. Mở menu bằng **Right Shift**. Các tính năng gameplay mặc định **tắt**.
 5. Chờ trạng thái capture/mapping. Checkbox bị khóa nghĩa là chưa đủ contract trên build đó, không phải tính năng đã hoạt động.
 6. Nếu có menu nhưng tính năng không chạy: vào trận → **Help → Copy diagnostics**, gửi JSON diagnostics. Các trường `captureState`, `checks`, `missingContracts`, `lastWarning` phân biệt capture/mapping/protocol; diagnostics không chứa token Join, tên/vị trí người chơi hoặc game object.
-7. Nếu **không có menu**: mở Console, tìm thông báo `[Duality Reborn 0.3.0] Script đã chạy` và gửi dòng lỗi màu đỏ đầu tiên nếu có. Cho biết trình duyệt và userscript manager. Không có thông báo này chưa đủ để kết luận lỗi game: có thể script chưa được inject, bị chặn hoặc lỗi trước bootstrap. Không gửi cookie/token hay dump toàn bộ game state.
+7. Nếu **không có menu**: mở Console, tìm thông báo `[Duality Reborn 0.4.0] Script đã chạy` và gửi dòng lỗi màu đỏ đầu tiên nếu có. Cho biết trình duyệt và userscript manager. Không có thông báo này chưa đủ để kết luận lỗi game: có thể script chưa được inject, bị chặn hoặc lỗi trước bootstrap. Không gửi cookie/token hay dump toàn bộ game state.
 
 **Retry capture** chỉ thử lại bắt Application trong 15 giây. Nếu đã lỡ thời điểm khởi tạo item DB/Join, cần reload. **Stop / cleanup** gỡ hook của bản này, trả property về giá trị game ghi gần nhất và bỏ menu/overlay. Muốn bật lại sau Stop: reload.
 
@@ -65,18 +65,20 @@ Tất cả dòng “đã viết lại” dưới đây là trạng thái impleme
 | Aimbot, smooth, FOV, sticky, aim dot | Đã viết lại | Player/camera/input-flush/team/spectator contract; giữ nút bắn. Unknown team bị bỏ qua. |
 | Prediction | Đã viết lại | Cần item DB; constant-velocity intercept, time-aware EMA; dùng base bullet speed, chưa tính perk modifiers hoặc toàn bộ netcode/physics. |
 | Wallcheck | Bảo thủ | Segment circle/AABB cùng layer; bỏ obstacle thấp hơn bullet height khi protocol khớp. Chưa mô phỏng muzzle/aimLayer trên cầu thang, xuyên phá/ricochet. |
-| Melee Lock | Bản cơ bản | Aim trong 5.5 world units + mobile direction; cần protocol xác nhận và DB. Không có Auto Melee switch. |
-| Semi Auto | Đã viết lại | Held single-fire, theo fireDelay; không tuyên bố vượt cooldown server. |
-| Auto Switch | Bản cơ bản hai súng | Quan sát ammo giảm, chuyển sang slot súng khác nếu còn đạn. Không có one-gun swap/reset trick. |
-| ESP / labels / player lines | Team-aware 0.3.0 | Địch/ally/squad/unknown, filter, tùy chỉnh màu; downed/layer/distance/weapon, markers/legend và arrows opt-in. Chỉ active entities đã nhận; vị trí render nếu nhận diện được, fallback mạng; không giả HP hoặc đổi TextStyle liên tục. |
-| Ceiling / tree / bush opacity / smoke | Đã viết lại | Scan có budget, property override có restore; không dark-tint smoke trực tiếp vào field private. |
-| Zoom | Có giới hạn 1–3× | Dò local zoom bằng semantic anchor; đổi phạm vi camera không tạo enemy state mới. |
-| Own flashlight | Range/spread preview | Dùng base defs, chưa tính movement/recoil/perk modifiers; không phải raycast/ricochet chính xác hoặc flashlight đối thủ. |
-| Grenade nominal radius | Preview | Chỉ active projectile, cùng layer, defs/registry + protocol khớp; không nhận nhầm loot. Không có fuse/landing prediction/occlusion/shrapnel; không phải ranh giới an toàn. |
-| Auto Loot | Hai mode | Nearby supplies phát native Loot trong trận, chỉ stackable supplies, có backoff; mobile loot/doors cần Join mới. Cả hai vẫn chịu điều kiện server, không có pickup acknowledgement. |
-| Mobile Movement | Đã viết lại | Vector chuẩn hóa, touchMoveLen số 255, không boolean. |
-| Layer Spoofer / Map Highlights | **Chưa port** | Ghi rõ trong menu; không fake trạng thái thành công. |
-| Grenade trajectory / ricochet / other flashlights | **Chưa port** | Cần đối chiếu physics và collision build live, không giữ approximation sai từ bản cũ. |
+| Melee Lock / Auto Melee | Có implementation | Reach từ attack offset/rad; giữ Fire, chọn enemy gần và gửi native EquipMelee khi đang cầm gun. Không tự quay lại gun sau melee. |
+| Semi Auto | Sửa ở 0.4.0 | Held single-fire + non-auto melee/fists; frame-stable, không sửa physical current/old input. Auto/burst dùng native hold; throwable bị loại. Server vẫn áp cooldown/animation. |
+| Auto Switch / Use One Gun | Có implementation | Theo ammo single/burst; một equip mỗi frame, chờ slot cập nhật trước khi quay về. Không reset cooldown server. |
+| ESP / labels / player lines | Team-aware | Địch/ally/squad/unknown, filters, màu, distance/weapon, markers/legend/arrows; chỉ entity nhận được, không giả HP. |
+| X-Ray / ceiling / vegetation / darker smoke | Sửa ở 0.4.0 | SmokeBarn data-flow kể cả pool rỗng; smoke alpha cap = setting/1000, vegetation /100; restore latest native value. Ceiling theo building imgs, không dò texture getter tùy tiện. |
+| Layer Spoofer | Local preview | Giữ T mặc định; đổi client layer 0/1, alpha .5; release/blur/disable/Stop trả state mới nhất. Không đổi tầng server hoặc cho bắn xuyên tầng. |
+| Zoom | Có giới hạn 1–3× | Không phục hồi zoom vô hạn; camera xa hơn không tạo thêm entity server chưa gửi. |
+| Own / enemy flashlights + bullet trajectory | Nominal preview | Collider circle/AABB, tối đa 3 phản xạ theo captured map defs; 8 cones/256 obstacles, không mô phỏng mọi perk/muzzle/target motion. |
+| Grenade radius / throw trajectory | Nominal preview | Radius từ explosion defs, throw estimate theo source strength/gravity/drag; không biết fuse còn lại, va chạm tương lai, perk/player velocity. Không phải ranh giới an toàn hoặc điểm nổ chắc chắn. |
+| Map Highlights / Smaller Trees | Scoped native minimap render | Clone records/shapes; không sửa shared defs/collider hoặc hook global Array.sort. Redraw khi config/map đổi, không per frame. |
+| Auto Loot | Hai mode | Nearby supplies dùng native Loot + backoff; mobile loot/doors cần Join mới. Không có pickup acknowledgement. |
+| Mobile Movement / Smooth | Có implementation | Vector chuẩn hóa, touchMoveLen 255; easing đổi hướng có dt, nhả phím dừng ngay. |
+
+Các khác biệt chủ đích so với gốc (giới hạn zoom, nominal trajectories, key/cleanup an toàn, không giả cooldown/HP) được liệt kê trong [checklist 0.4.0](docs/reborn-0.4.0.vi.md). Không có checkbox placeholder cho những nhóm vừa bổ sung; thiếu contract vẫn khóa control thay vì báo giả thành công.
 
 ## Các giới hạn tương thích quan trọng
 
@@ -97,16 +99,21 @@ npm ci
 npm run check
 ```
 
-`pretest` build lại artifact trước khi chạy tests. Test offline (79 cases) gồm JS semantics, semantic discovery, mutation qua minify/rename, timeout/cleanup, message clone, pool lifecycle, input flush, menu/jsdom và bootstrap end-to-end với **fixture giả**. Không có end-to-end test với browser game live, anti-cheat hay benchmark FPS.
+`pretest` build lại artifact trước khi chạy tests. Test offline (102 cases) gồm JS semantics, semantic discovery, mutation qua minify/rename, timeout/cleanup, message clone, pool lifecycle, input flush, menu/jsdom và bootstrap end-to-end với **fixture giả**. Không có end-to-end test với browser game live, anti-cheat hay benchmark FPS.
 
 - `src/core.mjs`: safe descriptor traversal, AST roles, bootstrap, math, cleanup.
 - `src/features.mjs`: feature runtime, capability gates, lifecycle, input và visual overrides.
 - `src/esp.mjs`: ESP frame model, relation/color/filter/labels, bounded Canvas2D renderer và DPR handling.
+- `src/effects.mjs`: SmokeBarn source discovery, active particle validation và legacy alpha scale.
+- `src/repeat-fire.mjs`, `src/weapon-switch.mjs`: repeat/equip state machines.
+- `src/map-highlights.mjs`: scoped map record cloning và config-triggered redraw.
+- `src/previews.mjs`: bounded ray/throw previews và mobile direction smoother.
 - `src/menu.mjs`: DOM menu, config validation/storage và keybinds.
 - `src/main.mjs`: userscript lifecycle/controller.
 - `scripts/build.mjs`: metadata và bundle.
 - `tests/`: offline regression tests.
-- `scripts/check-upstream.mjs`: kiểm tra method-level từ checkout source public riêng; chạy `npm run check:upstream -- /path/to/survev-checkout`, HEAD phải đúng source pin. Chạy 4 kịch bản (2 kiểu transform × 2 loot mode), không phải full game hoặc Codefend/live E2E.
+- `scripts/check-upstream.mjs`: kiểm tra method-level từ checkout source public riêng; chạy `npm run check:upstream -- /path/to/survev-checkout`, HEAD phải đúng source pin. Chạy 4 kịch bản (2 kiểu transform × 2 loot mode), gồm smoke renderer, held fists qua native server cooldown và minimap contract; không phải full game hoặc Codefend/live E2E.
+- `docs/reborn-0.4.0.vi.md`: checklist đầy đủ gốc → mới, smoke/melee evidence và live verification.
 - `docs/reborn-0.3.0.vi.md`: ESP/team semantics, tests và phạm vi còn mở.
 - `docs/reborn-0.2.0.vi.md`: bằng chứng lỗi Join/input, native pickup và checklist live.
 - `docs/survev-technique-review.vi.md`: phân tích ba mẫu ban đầu.
