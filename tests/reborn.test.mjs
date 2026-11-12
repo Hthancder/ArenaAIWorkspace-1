@@ -973,3 +973,39 @@ test('missing wallcheck contract cannot trap saved enabled control: user can tur
     wall.click(); assert.equal(config.wallcheck, false); assert.equal(wall.disabled, true);
   } finally { menu.dispose(); dom.window.close(); }
 });
+
+test('diagnostics distinguish current dead/menu state from live Lock forwards, including wallcheck block before registry recovery', () => {
+  const f = coordinated({ wallcheck: true });
+  try {
+    f.send(); assert.equal(f.engine.stats.aimState, 'wallcheck-unavailable');
+    f.app.game.hero.n.dead = true; f.advance(); f.send();
+    let d = f.engine.diagnostics(); assert.equal(d.inputBlockReason, 'dead');
+    assert.equal(d.aimEvidence.lastLiveAttempt.state, 'wallcheck-unavailable');
+    assert.equal(d.aimEvidence.lastLiveAttempt.wallcheckRequested, true); assert.equal(d.aimEvidence.lastCorrection, null);
+    const enemy = f.app.game.barn.playerPool.list[1]; enemy.p = { x: 12, y: 20.4 };
+    f.app.game.creator = { table: { 1: f.app.game.hero, 2: enemy }, get(id) { return this.table[id]; }, remove(id) { delete this.table[id]; } };
+    f.app.game.mirror = { cache: { 2: enemy } };
+    f.app.game.hero.n.dead = false; f.engine.reconcile(true); f.advance(); f.send();
+    d = f.engine.diagnostics(); assert.equal(d.capabilities.wallcheck, true); assert.equal(d.checks.objectRegistry, true);
+    assert.equal(d.registry.state, 'native-id-table'); assert.equal(d.aimEvidence.lastLiveAttempt.state, 'input-applied');
+    assert.ok(d.aimEvidence.lastCorrection.correctionDegrees > 10); assert.equal(d.aimEvidence.lastCorrection.firePreserved, true);
+    f.app.game.hero.n.dead = true; f.advance(100); f.send(); d = f.engine.diagnostics();
+    assert.equal(d.stats.aimState, 'dead'); assert.equal(d.aimEvidence.lastLiveAttempt.state, 'input-applied');
+    assert.ok(d.aimEvidence.lastCorrection.correctionDegrees > 10); assert.ok(d.aimEvidence.lastCorrection.ageMs >= 100);
+    assert.equal(d.checks.objectRegistry, true);
+  } finally { f.close(); }
+});
+
+test('far map objects cannot exhaust wallcheck or hide a nearby blocker beyond the old first-1024 slice', () => {
+  const f = coordinated({ wallcheck: true });
+  try {
+    const table = {};
+    for (let i = 0; i < 1100; i++) table[i + 10] = { __id: i + 10, __type: 2, active: true, collidable: true, dead: false, layer: 0, height: 1,
+      collider: { type: 0, pos: { x: 500 + i, y: 500 }, rad: 1 } };
+    f.app.game.creator = { table, get(id) { return this.table[id]; }, remove(id) { delete this.table[id]; } };
+    f.engine.reconcile(true); f.send(); assert.equal(f.engine.stats.aimState, 'input-applied');
+    table[9999] = { __id: 9999, __type: 2, active: true, collidable: true, dead: false, layer: 0, height: 1,
+      collider: { type: 0, pos: { x: 11, y: 20 }, rad: .3 } };
+    f.advance(); f.send(); assert.equal(f.engine.stats.aimRejections.wall, 1);
+  } finally { f.close(); }
+});

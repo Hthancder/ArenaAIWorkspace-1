@@ -47,3 +47,19 @@ export function clippedMuzzle(pos, dir, profile, obstacles, layer, collisionLaye
   const length = nearest.distance + (dot < -1e-5 ? .01 / dot : 0) - .1;
   return { x: gunPos.x + dir.x * length, y: gunPos.y + dir.y * length };
 }
+
+// Broadphase only: far map objects must not consume the narrow-phase budget.
+// Unsupported/invalid shapes stay relevant so wallcheck still fails closed.
+export function segmentCandidates(obstacles, from, to, padding = 0) {
+  const minX = Math.min(from.x, to.x) - padding, maxX = Math.max(from.x, to.x) + padding;
+  const minY = Math.min(from.y, to.y) - padding, maxY = Math.max(from.y, to.y) + padding;
+  return obstacles.filter(o => {
+    const c = read(o, 'collider'); let left, right, bottom, top;
+    if (read(c, 'type') === 0 && vec(read(c, 'pos')) && finite(read(c, 'rad')) && c.rad >= 0) {
+      left = c.pos.x - c.rad; right = c.pos.x + c.rad; bottom = c.pos.y - c.rad; top = c.pos.y + c.rad;
+    } else if (read(c, 'type') === 1 && vec(read(c, 'min')) && vec(read(c, 'max'))) {
+      left = c.min.x; right = c.max.x; bottom = c.min.y; top = c.max.y;
+    } else return true;
+    return right >= minX && left <= maxX && top >= minY && bottom <= maxY;
+  });
+}

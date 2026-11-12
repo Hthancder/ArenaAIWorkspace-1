@@ -11,7 +11,7 @@ export function start(win) {
   let menu = null, engine = null, defs = null, mapDefs = null, cancelCapture = null, alive = true;
   let status = 'Đang chờ Application…', lastWarning = '', captured = false, captureState = 'waiting';
   const startedAt = win.performance.now();
-  win.console?.info?.('[Duality Reborn 0.5.0-preview.2] Script đã chạy. Nếu không có menu, gửi dòng lỗi Console sau thông báo này.');
+  win.console?.info?.('[Duality Reborn 0.5.0-preview.3] Script đã chạy. Nếu không có menu, gửi dòng lỗi Console sau thông báo này.');
   const report = (level, message) => {
     if (!alive) return;
     if (level === 'error' || level === 'warning') {
@@ -21,7 +21,7 @@ export function start(win) {
     status = message;
   };
   const diagnostics = () => ({
-    version: '0.5.0-preview.2', captured, captureState, status, lastWarning,
+    version: '0.5.0-preview.3', captured, captureState, status, lastWarning,
     menuMounted: !!menu?.host.isConnected, documentReadyState: win.document.readyState,
     definitionsCaptured: !!defs, mapDefinitionsCaptured: !!mapDefs, elapsedMs: Math.round(win.performance.now() - startedAt),
     ...(engine?.diagnostics() || {}),
@@ -79,7 +79,8 @@ export function start(win) {
     if (!menu) return;
     menu.capabilities(engine?.capabilities || {});
     const d = diagnostics();
-    menu.status(`Aim: ${d.stats?.aimState ?? 'chờ mapping'}${d.stats?.predictionState ? ` • ${d.stats.predictionState}` : ''}\nESP: ${d.nativeNames?.state ?? 'chờ mapping'} • ${d.nativeNames?.colored ?? 0} tên${lastWarning ? '\nXem Help / diagnostics' : ''}`);
+    const lastLive = d.aimEvidence?.lastLiveAttempt;
+    menu.status(`Aim: ${d.stats?.aimState ?? 'chờ mapping'}${lastLive && lastLive.state !== d.stats?.aimState ? ` • lúc còn điều khiển: ${lastLive.state}` : ''}${d.stats?.predictionState ? ` • ${d.stats.predictionState}` : ''}\nNative input đã hiệu chỉnh: ${d.aimEvidence?.correctedGameplayInputs ?? 0} (không phải ACK)\nESP: ${d.nativeNames?.state ?? 'chờ mapping'} • ${d.nativeNames?.colored ?? 0} tên${lastWarning ? '\nXem Help / diagnostics' : ''}`);
   }, 1000);
   bag.add(() => win.clearInterval(timer));
   const onPageHide = () => controller.dispose();

@@ -234,6 +234,37 @@ export function discoverPlayerSchema(player) {
   if (!netPath || !deadPath || netPath[0] !== deadPath[0] || !posKey) return null;
   return { netKey: netPath[0], weaponKey: netPath[1], deadKey: deadPath[1], posKey, dirKey: unique([...dirs]) };
 }
+// Source Creator keeps one table shared by get-by-ID and delete-by-ID.
+// Prefer that proven role over unrelated nested dictionaries containing entities.
+export function discoverObjectRegistry(game) {
+  const native = [];
+  for (const [, owner] of entries(game)) {
+    if (!object(owner) || Array.isArray(owner)) continue;
+    const gets = new Set(), deletes = new Set();
+    for (const [, fn] of methods(owner)) {
+      const tree = ast(fn), id = tree?.params?.[0]?.name;
+      if (!id) continue;
+      const table = n => {
+        if (n?.type !== 'MemberExpression' || !n.computed || n.property?.type !== 'Identifier' || n.property.name !== id) return null;
+        const p = path(n.object); return p?.length === 1 ? p[0] : null;
+      };
+      walk(tree, n => {
+        if (n.type === 'ReturnStatement') { const key = table(n.argument); if (key) gets.add(key); }
+        if (n.type === 'UnaryExpression' && n.operator === 'delete') { const key = table(n.argument); if (key) deletes.add(key); }
+      });
+    }
+    for (const key of gets) if (deletes.has(key) && object(read(owner, key)) && !Array.isArray(read(owner, key))) native.push({ creator: owner, registryKey: key });
+  }
+  if (native.length) return native.length === 1 ? { ...native[0], registryState: 'native-id-table' } : { creator: null, registryKey: null, registryState: 'ambiguous-native-id-table' };
+  // Compatibility fallback for smaller/older clients without both native methods.
+  const shapes = [];
+  for (const [, owner] of entries(game)) if (object(owner) && !Array.isArray(owner)) {
+    for (const [key, table] of entries(owner)) if (object(table) && !Array.isArray(table)
+      && entries(table).some(([, entity]) => finite(read(entity, '__id')) && finite(read(entity, '__type')))) shapes.push({ creator: owner, registryKey: key });
+  }
+  return shapes.length === 1 ? { ...shapes[0], registryState: 'entity-table-fallback' }
+    : { creator: null, registryKey: null, registryState: shapes.length ? 'ambiguous-entity-tables' : 'missing-id-table' };
+}
 export function discover(game) {
   const objects = entries(game).filter(([, v]) => object(v) && !Array.isArray(v));
   const barns = objects.filter(([, v]) => object(read(v, 'teamInfo')) && Array.isArray(read(v, 'playerIds')) && object(read(v, 'playerPool')));
@@ -249,14 +280,12 @@ export function discover(game) {
   const schema = active ? discoverPlayerSchema(active) : null;
   const ui = unique(objects.filter(([, v]) => typeof readMethod(v, 'setSpectating') === 'function' && typeof read(v, 'spectating') === 'boolean').map(([, v]) => v));
   const map = unique(objects.filter(([, v]) => entries(v).some(([k]) => k === 'mapTexture') && typeof readMethod(v, 'getGroundSurface') === 'function').map(([, v]) => v));
-  const creators = objects.filter(([, v]) => entries(v).some(([, x]) => object(x) && !Array.isArray(x) && entries(x).some(([, entity]) => finite(read(entity, '__id')) && finite(read(entity, '__type')))));
-  const creator = creators.length === 1 ? creators[0][1] : null;
-  const registryKey = unique(entries(creator).filter(([, x]) => object(x) && !Array.isArray(x) && entries(x).some(([, e]) => finite(read(e, '__id')) && finite(read(e, '__type')))).map(([k]) => k));
+  const { creator, registryKey, registryState } = discoverObjectRegistry(game);
   const obstacles = () => entries(read(creator, registryKey)).map(([, v]) => v).filter(v => object(read(v, 'collider')) && typeof read(v, 'collidable') === 'boolean');
   const activeKey = unique(objects.filter(([, value]) => value === active).map(([key]) => key));
   const camera = discoverCamera(game);
   const visualPosKey = active && camera ? discoverVisualPosition(active, camera.method) : null;
-  return { game, barn, barnKey: barns.length === 1 ? barns[0][0] : null, pool, poolKey, players, active, activeKey, schema, ui, map, camera, visualPosKey, obstacles, creator, registryKey };
+  return { game, barn, barnKey: barns.length === 1 ? barns[0][0] : null, pool, poolKey, players, active, activeKey, schema, ui, map, camera, visualPosKey, obstacles, creator, registryKey, registryState };
 }
 // The public LootBarn getter returns one own field. Read that field ourselves;
 // never execute an unknown getter or choose the first loot-like object.

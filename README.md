@@ -1,8 +1,14 @@
-# Duality Client Reborn — 0.5.0-preview.2
+# Duality Client Reborn — 0.5.0-preview.3
 
 Userscript readable cho survev.io, menu DOM nhẹ, source-backed adapters và cleanup có ownership. **Đã kiểm thử offline/source-method; chưa xác nhận trong gameplay live.** Không bảo đảm tương thích mọi update, tránh phát hiện hoặc bắn trúng. Dùng trên máy chủ công cộng có thể vi phạm điều khoản game.
 
-## Hotfix sau báo lỗi ESP/aim
+## Hotfix theo diagnostics Lock vẫn không tác động
+
+Bản **0.5.0-preview.3**: sửa nhận diện object registry theo native Creator get/delete cùng ID table, thay vì phụ thuộc các dictionary có hình dạng giống entity. Wallcheck và muzzle budget chỉ xét vật cản liên quan, không khóa toàn bộ aim vì hơn1024 vật thể ở xa. Giữ nguyên kiểm tra vật cản, không tự tắt wallcheck.
+
+Thêm `aimEvidence.lastLiveAttempt`, `lastGameplayForward`, `lastCorrection` và cấu hình aim chọn lọc trong diagnostics. Chúng giữ được bằng chứng native sender trước lúc chết/mở Help, không lưu tọa độ/tên/token và **không phải server ACK**. [Phân tích diagnostics người dùng và hotfix](docs/hotfix-0.5.0-preview.3.vi.md). Chưa kết luận nguyên nhân duy nhất của lỗi live vì JSON cũ thiếu lựa chọn Wallcheck và lịch sử khi còn sống.
+
+## Hotfix trước đó sau báo lỗi ESP/aim
 
 Bản `0.5.0-preview.2` sửa những đường lỗi đã tái hiện: scheduler bị minify thành `&&`, cờ legacy `nametags=false` còn chặn ESP nhưng không có control, names bị phụ thuộc aim/camera schema, và prediction optional khóa cả direct aim. **Đây chưa phải xác nhận đã giải quyết đúng mọi nguyên nhân trên máy người dùng.** [Chi tiết hotfix và kiểm chứng](docs/hotfix-0.5.0-preview.2.vi.md).
 
@@ -18,7 +24,7 @@ Bản `0.5.0-preview.2` sửa những đường lỗi đã tái hiện: schedule
 2. Dán toàn bộ `.user.js` vào Tampermonkey/Violentmonkey. Chạy ở **page/main world**, **document-start**; metadata gồm `@sandbox raw` và `@inject-into page`.
 3. Reload survev.io; **Right Shift** mở/đóng menu. Gameplay features mặc định tắt.
 4. Chọn mode/feature trong trận. Control bị khóa nghĩa là chưa đủ contract, không phải đã hoạt động.
-5. **Help → Copy diagnostics** khi cần; diagnostics không xuất token Join, tên/vị trí người chơi hoặc object game. Nếu không có menu, tìm boot log `[Duality Reborn 0.5.0-preview.2]` và lỗi Console đầu tiên.
+5. **Help → Copy diagnostics** khi cần; diagnostics không xuất token Join, tên/vị trí người chơi hoặc object game. Nếu không có menu, tìm boot log `[Duality Reborn 0.5.0-preview.3]` và lỗi Console đầu tiên.
 
 **Retry capture:** bắt lại Application trong 15 giây; nếu lỡ bootstrap item DB/Join thì cần reload. **Stop / cleanup:** gỡ hooks/overrides do bản này sở hữu, yêu cầu lượt input native để trả hướng nếu còn session; không phát network ngoài native. Reload để chạy lại sau Stop.
 
@@ -59,7 +65,7 @@ X-Ray giữ smoke alpha legacy (`50 → 0.05` mỗi particle), darker smoke/ceil
 
 ## Bằng chứng và giới hạn
 
-- **129 tests offline**: controller/solver/tracker, adapters, ownership, migration/menu, phối hợp input, lifecycle, smoke/melee/map và các regression cũ đã chuyển sang semantics mới.
+- **135 tests offline**: controller/solver/tracker, adapters, ownership, migration/menu, phối hợp input, lifecycle, smoke/melee/map và các regression cũ đã chuyển sang semantics mới.
 - **4 source-method scenarios**: bản thường/minify + đổi tên `m_*` × 2 loot mode; chạy actual source snapshot receiver, native input expressions/normalization/diff/prevInput/timeout/send, InputMsg serialize/deserialize bằng BitStream và normalize hướng như server. Có stationary-cursor moving-target, disable restore, post-pre zoom, Lock convergence, Assist strength/no-extra-send, missing-definitions direct wire fallback và native name factory với PIXI7 Container/TextStyle thật; smoke update, server melee cooldown và minimap vẫn chạy.
 - **[Benchmark đa chuyển động](docs/aim-benchmark.vi.md)**: 12 nhóm × 3 held-out seeds × render 30/60/144Hz × regular/jitter-gap snapshots; so legacy-render, no-predict, simple CV. Có median/p95 miss, collider miss, overshoot, recovery proxy, fallback và solver CPU. **Không phải gameplay hitrate hoặc FPS.**
 - Benchmark mới cải thiện straight/diagonal/curve/speed-change, không thắng mọi metric: median start-stop và một số p95 đảo hướng vẫn kém legacy. Không tuyên bố đã nghiệm thu toàn bộ yêu cầu prediction; chi tiết và phần còn mở trong [báo cáo triển khai](docs/reborn-0.5.0.vi.md) và [SPEC](docs/implementation-spec-aim-esp.vi.md).

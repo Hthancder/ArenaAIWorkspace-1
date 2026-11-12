@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Duality Client Reborn (compatibility preview)
 // @namespace    arena.survev.reborn
-// @version      0.5.0-preview.2
+// @version      0.5.0-preview.3
 // @description  Lightweight menu, validated semantic discovery, bounded hooks and reversible features. Live compatibility unverified.
 // @match        https://survev.io/*
 // @match        https://*.survev.io/*
@@ -5958,6 +5958,40 @@ THE SOFTWARE.
     return { netKey: netPath[0], weaponKey: netPath[1], deadKey: deadPath[1], posKey, dirKey: unique([...dirs]) };
   }
   __name(discoverPlayerSchema, "discoverPlayerSchema");
+  function discoverObjectRegistry(game) {
+    const native = [];
+    for (const [, owner] of entries(game)) {
+      if (!object(owner) || Array.isArray(owner)) continue;
+      const gets = /* @__PURE__ */ new Set(), deletes = /* @__PURE__ */ new Set();
+      for (const [, fn] of methods(owner)) {
+        const tree = ast(fn), id = tree?.params?.[0]?.name;
+        if (!id) continue;
+        const table = /* @__PURE__ */ __name((n) => {
+          if (n?.type !== "MemberExpression" || !n.computed || n.property?.type !== "Identifier" || n.property.name !== id) return null;
+          const p = path(n.object);
+          return p?.length === 1 ? p[0] : null;
+        }, "table");
+        walk(tree, (n) => {
+          if (n.type === "ReturnStatement") {
+            const key = table(n.argument);
+            if (key) gets.add(key);
+          }
+          if (n.type === "UnaryExpression" && n.operator === "delete") {
+            const key = table(n.argument);
+            if (key) deletes.add(key);
+          }
+        });
+      }
+      for (const key of gets) if (deletes.has(key) && object(read(owner, key)) && !Array.isArray(read(owner, key))) native.push({ creator: owner, registryKey: key });
+    }
+    if (native.length) return native.length === 1 ? { ...native[0], registryState: "native-id-table" } : { creator: null, registryKey: null, registryState: "ambiguous-native-id-table" };
+    const shapes = [];
+    for (const [, owner] of entries(game)) if (object(owner) && !Array.isArray(owner)) {
+      for (const [key, table] of entries(owner)) if (object(table) && !Array.isArray(table) && entries(table).some(([, entity]) => finite(read(entity, "__id")) && finite(read(entity, "__type")))) shapes.push({ creator: owner, registryKey: key });
+    }
+    return shapes.length === 1 ? { ...shapes[0], registryState: "entity-table-fallback" } : { creator: null, registryKey: null, registryState: shapes.length ? "ambiguous-entity-tables" : "missing-id-table" };
+  }
+  __name(discoverObjectRegistry, "discoverObjectRegistry");
   function discover(game) {
     const objects = entries(game).filter(([, v]) => object(v) && !Array.isArray(v));
     const barns = objects.filter(([, v]) => object(read(v, "teamInfo")) && Array.isArray(read(v, "playerIds")) && object(read(v, "playerPool")));
@@ -5973,14 +6007,12 @@ THE SOFTWARE.
     const schema = active ? discoverPlayerSchema(active) : null;
     const ui = unique(objects.filter(([, v]) => typeof readMethod(v, "setSpectating") === "function" && typeof read(v, "spectating") === "boolean").map(([, v]) => v));
     const map = unique(objects.filter(([, v]) => entries(v).some(([k]) => k === "mapTexture") && typeof readMethod(v, "getGroundSurface") === "function").map(([, v]) => v));
-    const creators = objects.filter(([, v]) => entries(v).some(([, x]) => object(x) && !Array.isArray(x) && entries(x).some(([, entity]) => finite(read(entity, "__id")) && finite(read(entity, "__type")))));
-    const creator = creators.length === 1 ? creators[0][1] : null;
-    const registryKey = unique(entries(creator).filter(([, x]) => object(x) && !Array.isArray(x) && entries(x).some(([, e]) => finite(read(e, "__id")) && finite(read(e, "__type")))).map(([k]) => k));
+    const { creator, registryKey, registryState } = discoverObjectRegistry(game);
     const obstacles = /* @__PURE__ */ __name(() => entries(read(creator, registryKey)).map(([, v]) => v).filter((v) => object(read(v, "collider")) && typeof read(v, "collidable") === "boolean"), "obstacles");
     const activeKey = unique(objects.filter(([, value]) => value === active).map(([key]) => key));
     const camera = discoverCamera(game);
     const visualPosKey = active && camera ? discoverVisualPosition(active, camera.method) : null;
-    return { game, barn, barnKey: barns.length === 1 ? barns[0][0] : null, pool, poolKey, players, active, activeKey, schema, ui, map, camera, visualPosKey, obstacles, creator, registryKey };
+    return { game, barn, barnKey: barns.length === 1 ? barns[0][0] : null, pool, poolKey, players, active, activeKey, schema, ui, map, camera, visualPosKey, obstacles, creator, registryKey, registryState };
   }
   __name(discover, "discover");
   function discoverLootSource(game) {
@@ -7109,6 +7141,90 @@ THE SOFTWARE.
     return { x: gunPos.x + dir.x * length, y: gunPos.y + dir.y * length };
   }
   __name(clippedMuzzle, "clippedMuzzle");
+  function segmentCandidates(obstacles, from, to, padding = 0) {
+    const minX = Math.min(from.x, to.x) - padding, maxX = Math.max(from.x, to.x) + padding;
+    const minY = Math.min(from.y, to.y) - padding, maxY = Math.max(from.y, to.y) + padding;
+    return obstacles.filter((o) => {
+      const c = read(o, "collider");
+      let left, right, bottom, top;
+      if (read(c, "type") === 0 && vec(read(c, "pos")) && finite(read(c, "rad")) && c.rad >= 0) {
+        left = c.pos.x - c.rad;
+        right = c.pos.x + c.rad;
+        bottom = c.pos.y - c.rad;
+        top = c.pos.y + c.rad;
+      } else if (read(c, "type") === 1 && vec(read(c, "min")) && vec(read(c, "max"))) {
+        left = c.min.x;
+        right = c.max.x;
+        bottom = c.min.y;
+        top = c.max.y;
+      } else return true;
+      return right >= minX && left <= maxX && top >= minY && bottom <= maxY;
+    });
+  }
+  __name(segmentCandidates, "segmentCandidates");
+
+  // src/aim-evidence.mjs
+  var AimEvidence = class {
+    static {
+      __name(this, "AimEvidence");
+    }
+    constructor() {
+      this.reset();
+    }
+    reset() {
+      this.requests = 0;
+      this.forwarded = 0;
+      this.corrected = 0;
+      this.lastLiveAttempt = null;
+      this.lastGameplayForward = null;
+      this.lastCorrection = null;
+      this.transitions = [];
+    }
+    attempt(state, controls, rejections, now, live) {
+      if (!live) return;
+      const record = { time: now, state, ...controls, rejections: { ...rejections } };
+      this.lastLiveAttempt = record;
+      if (this.transitions.at(-1)?.state !== state) {
+        this.transitions.push({ time: now, state });
+        this.transitions = this.transitions.slice(-12);
+      }
+    }
+    sent(native, output, applied, now, live) {
+      this.forwarded++;
+      if (!live) return;
+      const a = native.toMouseDir, b = output.toMouseDir;
+      const degrees = Math.abs(Math.atan2(a.x * b.y - a.y * b.x, a.x * b.x + a.y * b.y)) * 180 / Math.PI;
+      const record = {
+        time: now,
+        aimApplied: !!applied,
+        correctionDegrees: finite(degrees) ? Math.round(degrees * 1e3) / 1e3 : 0,
+        firePreserved: native.shootStart === output.shootStart && native.shootHold === output.shootHold,
+        movementPreserved: ["moveLeft", "moveRight", "moveUp", "moveDown"].every((k) => native[k] === output[k])
+      };
+      this.lastGameplayForward = record;
+      if (record.aimApplied && degrees > 0.01) {
+        this.corrected++;
+        this.lastCorrection = { ...record };
+      }
+    }
+    snapshot(now) {
+      const stamp = /* @__PURE__ */ __name((value) => {
+        if (!value) return null;
+        const { time, ...rest } = value;
+        return { ...rest, ...rest.rejections ? { rejections: { ...rest.rejections } } : {}, ageMs: Math.max(0, Math.round(now - time)) };
+      }, "stamp");
+      return {
+        schedulerRequests: this.requests,
+        forwardedInputs: this.forwarded,
+        correctedGameplayInputs: this.corrected,
+        lastLiveAttempt: stamp(this.lastLiveAttempt),
+        lastGameplayForward: stamp(this.lastGameplayForward),
+        lastCorrection: stamp(this.lastCorrection),
+        transitions: this.transitions.map(stamp),
+        meaning: "Observed native sender forwards only; not a server acknowledgement or proof of hit."
+      };
+    }
+  };
 
   // src/native-names.mjs
   var NativeNames = class {
@@ -7330,6 +7446,7 @@ THE SOFTWARE.
       this.aimController = new AimController();
       this.timing = new NetworkTiming();
       this.names = new NativeNames();
+      this.aimEvidence = new AimEvidence();
       this.lastAimSent = null;
       this.aimOutput = null;
       this.sourceFields = null;
@@ -7522,6 +7639,7 @@ THE SOFTWARE.
         let outgoing = data2, joinRecord = null;
         try {
           if (type === 1 && Number.isInteger(data2?.protocol) && typeof data2.name === "string" && typeof data2.joinToken === "string" && (typeof data2.isMobile === "boolean" || data2.isMobile === void 0) && typeof data2.useTouch === "boolean" && typeof data2.serialize === "function") {
+            self.aimEvidence.reset();
             self.protocol = data2.protocol;
             self.lastMap = -Infinity;
             if (self.protocol === VERIFIED_PROTOCOL && self.config.autoLoot && self.config.lootMode === "mobile") {
@@ -7565,6 +7683,7 @@ THE SOFTWARE.
         }
         const result = Reflect.apply(original, this, [type, outgoing, ...rest]);
         if (type === 3 && inputShape(outgoing)) {
+          self.aimEvidence.sent(data2, outgoing, !!self.aimOutput, self.win.performance.now(), self.inputReady());
           self.lastAimSent = self.aimOutput ? point(outgoing.toMouseDir) : null;
           self.timing.sent(outgoing, self.win.performance.now());
         }
@@ -7595,6 +7714,7 @@ THE SOFTWARE.
         this.gameHooks?.clear();
         this.gameHooks = new Disposables();
         this.lastGame = game;
+        this.aimEvidence.reset();
         this.protocol = null;
         this.lastPool = null;
         this.lastActive = null;
@@ -7682,12 +7802,13 @@ THE SOFTWARE.
         this.bindsInstalled = false;
       });
     }
-    blocked(from, to, bulletPath = true) {
+    blocked(from, to, bulletPath = true, source = null) {
       if (!this.config.wallcheck) return false;
       if (!this.capabilities.wallcheck) return true;
-      const obstacles = this.mapping.obstacles();
-      if (obstacles.length > 1024) return true;
-      return obstacles.some((o) => !read(o, "dead") && read(o, "collidable") && !(bulletPath && this.protocol === VERIFIED_PROTOCOL && finite(read(o, "height")) && read(o, "height") < BULLET_HEIGHT) && (!finite(read(o, "layer")) || sameLayer(read(o, "layer"), from.layer)) && segmentBlocked(from.pos, to.pos, read(o, "collider")));
+      const eligible = (source || this.mapping.obstacles()).filter((o) => read(o, "active") !== false && !read(o, "dead") && read(o, "collidable") && !(bulletPath && this.protocol === VERIFIED_PROTOCOL && finite(read(o, "height")) && read(o, "height") < BULLET_HEIGHT) && (!finite(read(o, "layer")) || sameLayer(read(o, "layer"), from.layer)));
+      const relevant = segmentCandidates(eligible, from.pos, to.pos);
+      if (relevant.length > 1024) return true;
+      return relevant.some((o) => segmentBlocked(from.pos, to.pos, read(o, "collider")));
     }
     pre() {
       this.frameId++;
@@ -7709,7 +7830,10 @@ THE SOFTWARE.
       const needsAim = plan && (!this.lastAimSent || Math.abs(angleDelta(Math.atan2(this.lastAimSent.y, this.lastAimSent.x), Math.atan2(plan.dir.y, plan.dir.x))) > Math.PI / 1800 || plan.toMouseHit && Math.abs((this.lastAimDistance || 0) - plan.distance) > 0.5);
       if (this.timeoutKey && (needsAim || needsRestore || this.switchSlot !== null) && this.app.game?.initialized && this.mapping?.ui?.spectating === false) {
         const d = Object.getOwnPropertyDescriptor(this.app.game, this.timeoutKey);
-        if (d && "value" in d && d.writable) this.app.game[this.timeoutKey] = 0;
+        if (d && "value" in d && d.writable) {
+          this.app.game[this.timeoutKey] = 0;
+          this.aimEvidence.requests++;
+        }
       }
     }
     observeUpdate(msg) {
@@ -7779,13 +7903,21 @@ THE SOFTWARE.
       this.stats.aimRejections = {};
       this.stats.predictionState = null;
       this.stats.aimApproximate = false;
+      const blockedInput = this.inputBlockReason();
+      const note = /* @__PURE__ */ __name((state) => this.aimEvidence.attempt(state, {
+        mode,
+        activation: cfg.aimActivation,
+        wallcheckRequested: !!cfg.wallcheck,
+        wallcheckAvailable: !!this.capabilities.wallcheck,
+        predictionRequested: !!cfg.predict
+      }, this.stats.aimRejections, now, !blockedInput), "note");
       const fail = /* @__PURE__ */ __name((state) => {
         this.stats.aimState = state;
         this.aimController.reset();
         this.stickyId = null;
+        note(state);
         return null;
       }, "fail");
-      const blockedInput = this.inputBlockReason();
       if (blockedInput) return fail(blockedInput);
       const pos = this.sourcePos(m.active), mouse = this.app.input?.mousePos, camera = m.camera;
       if (!vec(pos) || !vec(mouse) || !camera) return fail("invalid-input-position");
@@ -7817,7 +7949,7 @@ THE SOFTWARE.
       } : mouse;
       const rawLayer = this.sourceLayer(m.active), selfRadius = at2(m.active, [m.schema.netKey, this.sourceFields?.scale]) || 1;
       const structures = entries(read(m.creator, m.registryKey)).map(([, o]) => o).filter((o) => Array.isArray(read(o, "stairs")));
-      const obstacles = m.obstacles().slice(0, 1024);
+      const obstacles = m.obstacles();
       const layerFor = /* @__PURE__ */ __name((dir) => shotLayer(pos, dir, rawLayer, selfRadius, structures), "layerFor");
       const candidates = [], reject = /* @__PURE__ */ __name((key) => {
         this.stats.aimRejections[key] = (this.stats.aimRejections[key] || 0) + 1;
@@ -7852,6 +7984,8 @@ THE SOFTWARE.
       const ordered = sticky ? [sticky, ...candidates.filter((c) => c !== sticky)] : candidates;
       const perks = at2(m.active, [m.schema.netKey, this.sourceFields?.perks]) || [];
       const profile = weaponProfile(this.definitions, localWeapon(m), perks);
+      const muzzleObstacles = profile ? segmentCandidates(obstacles, pos, pos, Math.abs(profile.offset) + profile.barrel + 1.5) : [];
+      if (profile && muzzleObstacles.length > 1024) return fail("muzzle-obstacle-budget");
       for (const candidate of ordered.slice(0, 6)) {
         let shot;
         if (melee) shot = { dir: unit({ x: candidate.pos.x - pos.x, y: candidate.pos.y - pos.y }), world: candidate.pos, muzzle: pos, distance: Math.hypot(candidate.pos.x - pos.x, candidate.pos.y - pos.y), state: "melee" };
@@ -7881,7 +8015,7 @@ THE SOFTWARE.
               latency: track && cfg.latencyCompensation ? this.timing.transit() : 0,
               lead: (cfg.leadAdjustment ?? 100) / 100,
               radius: at2(candidate.p, [m.schema.netKey, this.sourceFields?.scale]) || 1,
-              muzzleFor: /* @__PURE__ */ __name((origin, dir2, model) => clippedMuzzle(origin, dir2, model, obstacles, layerFor(dir2), rawLayer & 1, selfRadius), "muzzleFor")
+              muzzleFor: /* @__PURE__ */ __name((origin, dir2, model) => clippedMuzzle(origin, dir2, model, muzzleObstacles, layerFor(dir2), rawLayer & 1, selfRadius), "muzzleFor")
             });
             if (shot.dir && cfg.predict && !track) {
               shot.state = predictionReady ? "direct-awaiting-snapshot" : "direct-prediction-unavailable";
@@ -7897,7 +8031,7 @@ THE SOFTWARE.
           reject("aimLayer");
           continue;
         }
-        if (this.blocked({ pos: shot.muzzle, layer: layerFor(shot.dir) }, { pos: shot.world }, !melee)) {
+        if (this.blocked({ pos: shot.muzzle, layer: layerFor(shot.dir) }, { pos: shot.world }, !melee, obstacles)) {
           reject("wall");
           continue;
         }
@@ -7922,6 +8056,7 @@ THE SOFTWARE.
         } else this.meleeEquip = null;
         const outputDistance = profile?.toMouseHit && !melee ? shot.mouseLen : shot.distance;
         if (advance2) this.lastAimDistance = outputDistance;
+        note(this.stats.aimState);
         return { dir, distance: outputDistance, toMouseHit: !!profile?.toMouseHit && !melee };
       }
       return fail("no-candidate");
@@ -8243,6 +8378,7 @@ THE SOFTWARE.
         playerBarn: !!m?.barn,
         playerPool: !!m?.poolKey,
         activePlayer: !!m?.active,
+        objectRegistry: !!m?.creator && !!m?.registryKey,
         playerSchema: !!m?.schema,
         camera: !!m?.camera,
         spectatorUI: !!m?.ui,
@@ -8261,7 +8397,7 @@ THE SOFTWARE.
         protocolMatches: this.protocol === VERIFIED_PROTOCOL
       };
       return {
-        version: "0.5.0-preview.2",
+        version: "0.5.0-preview.3",
         protocol: this.protocol,
         sourceProtocol: VERIFIED_PROTOCOL,
         initialized: checks.initialized,
@@ -8270,6 +8406,9 @@ THE SOFTWARE.
         mapHighlights: { ...this.mapHighlights.stats },
         nativeNames: { ...this.names.stats },
         inputBlockReason: this.inputBlockReason(),
+        registry: { state: m?.registryState ?? "waiting-mapping" },
+        aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict },
+        aimEvidence: this.aimEvidence.snapshot(this.win.performance.now()),
         missingContracts: Object.keys(checks).filter((key) => !checks[key]),
         capabilities: { ...this.capabilities },
         stats: { ...this.stats },
@@ -8446,7 +8585,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
     canvas.setAttribute("aria-hidden", "true");
     const shell = el("section", { id: "ui" });
     shell.setAttribute("aria-label", "Duality Client Reborn");
-    const brand = el("div", { class: "brand", text: "Duality Client" }, el("div", { class: "version", text: "Reborn 0.5.0-preview.2 • readable debug" }));
+    const brand = el("div", { class: "brand", text: "Duality Client" }, el("div", { class: "version", text: "Reborn 0.5.0-preview.3 • readable debug" }));
     const nav = el("nav", { class: "nav" });
     nav.setAttribute("aria-label", "Menu tabs");
     const content = el("main", { class: "content" });
@@ -8763,7 +8902,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
     let menu = null, engine = null, defs = null, mapDefs = null, cancelCapture = null, alive = true;
     let status = "Đang chờ Application…", lastWarning = "", captured = false, captureState = "waiting";
     const startedAt = win.performance.now();
-    win.console?.info?.("[Duality Reborn 0.5.0-preview.2] Script đã chạy. Nếu không có menu, gửi dòng lỗi Console sau thông báo này.");
+    win.console?.info?.("[Duality Reborn 0.5.0-preview.3] Script đã chạy. Nếu không có menu, gửi dòng lỗi Console sau thông báo này.");
     const report = /* @__PURE__ */ __name((level, message) => {
       if (!alive) return;
       if (level === "error" || level === "warning") {
@@ -8773,7 +8912,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
       status = message;
     }, "report");
     const diagnostics = /* @__PURE__ */ __name(() => ({
-      version: "0.5.0-preview.2",
+      version: "0.5.0-preview.3",
       captured,
       captureState,
       status,
@@ -8859,7 +8998,9 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
       if (!menu) return;
       menu.capabilities(engine?.capabilities || {});
       const d = diagnostics();
-      menu.status(`Aim: ${d.stats?.aimState ?? "chờ mapping"}${d.stats?.predictionState ? ` • ${d.stats.predictionState}` : ""}
+      const lastLive = d.aimEvidence?.lastLiveAttempt;
+      menu.status(`Aim: ${d.stats?.aimState ?? "chờ mapping"}${lastLive && lastLive.state !== d.stats?.aimState ? ` • lúc còn điều khiển: ${lastLive.state}` : ""}${d.stats?.predictionState ? ` • ${d.stats.predictionState}` : ""}
+Native input đã hiệu chỉnh: ${d.aimEvidence?.correctedGameplayInputs ?? 0} (không phải ACK)
 ESP: ${d.nativeNames?.state ?? "chờ mapping"} • ${d.nativeNames?.colored ?? 0} tên${lastWarning ? "\nXem Help / diagnostics" : ""}`);
     }, 1e3);
     bag.add(() => win.clearInterval(timer));

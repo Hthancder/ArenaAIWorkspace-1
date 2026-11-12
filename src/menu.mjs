@@ -92,7 +92,7 @@ export function createMenu(win, config, { onChange = () => {}, retry, stop, diag
   const style = el('style', { text: CSS });
   const canvas = el('canvas'); canvas.setAttribute('aria-hidden', 'true');
   const shell = el('section', { id: 'ui' }); shell.setAttribute('aria-label', 'Duality Client Reborn');
-  const brand = el('div', { class: 'brand', text: 'Duality Client' }, el('div', { class: 'version', text: 'Reborn 0.5.0-preview.2 • readable debug' }));
+  const brand = el('div', { class: 'brand', text: 'Duality Client' }, el('div', { class: 'version', text: 'Reborn 0.5.0-preview.3 • readable debug' }));
   const nav = el('nav', { class: 'nav' }); nav.setAttribute('aria-label', 'Menu tabs');
   const content = el('main', { class: 'content' });
   const status = el('div', { id: 'status', text: 'Đang chờ Application…' }); status.setAttribute('role', 'status');

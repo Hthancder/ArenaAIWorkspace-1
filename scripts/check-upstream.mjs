@@ -54,6 +54,7 @@ const nativeNameFactory = playerTree.body.find(n => n.type === 'FunctionDeclarat
 assert.ok(nativeNameFactory, 'source native name factory');
 const nameFactorySource = playerJS.slice(nativeNameFactory.start, nativeNameFactory.end);
 const classes = [
+  sourceClass('client/src/objects/objectPool.ts', 'Creator', ['m_getObjById', 'm_deleteObj', 'm_updateObjPart']),
   sourceClass('client/src/camera.ts', 'Camera', ['m_z', 'm_pixels', 'm_pointToScreen', 'm_screenToPoint']),
   sourceClass('client/src/objects/player.ts', 'Player', ['selectIdlePose', 'canInteract', 'getMeleeCollider', 'm_getZoom', 'render', 'm_updateData']),
   sourceClass('client/src/objects/player.ts', 'PlayerBarn', ['getPlayerById', 'getPlayerInfo', 'recomputeTeamData']),
@@ -103,7 +104,10 @@ const binds=Object.assign(new InputBinds(),{input,isKeyBound(){return false},bin
 const game=Object.assign(new Game(),{initialized:true,connecting:false,connected:false,m_input:input,m_camera:camera,m_activePlayer:hero,m_playerBarn:barn,m_inputBinds:binds,m_touch:Object.assign(new Touch(),{shotDetected:false}),
  m_uiManager:{spectating:false,setSpectating(){},updateMapIndicators(){}},m_inputMsgTimeout:1,m_prevInputMsg:new InputMsg(),seq:0,seqInFlight:false,m_activeId:1,m_localId:1,lastUpdateTime:0,pings:[],updateIntervals:[],m_map:{factionMode:false},m_renderer:{setActiveLayer(){},setUnderground(){}},m_audioManager:{},m_planeBarn:{updatePlanes(){}},debugHUD:{pingGraph:{addEntry(){}},updateIntervalGraph:{addEntry(){}}},m_config:{get(k){return k==='playerName'?'source-fixture':{outfit:'',melee:'',heal:'',boost:'',emotes:[]}}},m_sendMessageImpl(){},
  m_smokeBarn:Object.assign(new SmokeBarn(),{m_particles:[],zIdx:2147483647}),m_emoteBarn:{wheelDisplayed:false},m_lootBarn:Object.assign(new LootBarn(),{closestLoot:{__id:7,__type:3,active:true,type:'9mm',count:30,layer:0,pos:{x:10,y:20},rad:2,ownerId:0}})});
-game.m_objectCreator={registry:{1:hero,2:enemy,3:ally,4:unknown},m_getObjById(id){return this.registry[id]},m_updateObjPart(id,data){this.registry[id].m_updateData(data,false,false,{});}};
+game.m_objectCreator=Object.assign(new Creator(),{m_idToObj:{1:hero,2:enemy,3:ally,4:unknown},m_types:{}});
+// A second entity-shaped dictionary reproduces ambiguity of the old shape-only
+// discovery; only the actual source Creator has shared native get/delete flow.
+game.m_decoy={mirror:{2:enemy}};
 Game.prototype.nativeInputFrame=function(dt){${aimExpressions} const inputMsg=new InputMsg();inputMsg.seq=this.seq;${desktopStatements}${normalizeStatements}${diffStatements}return inputMsg;};
 Game.prototype.readInputAim=function(){${aimExpressions} return {toMouseDir,toMouseLen};};
 const callbacks=[];
@@ -112,7 +116,7 @@ const serverPlayer={animType:0,animTicker:0,shootStart:false,shootHold:false,dow
  cancelAction(){},playAnim(type,duration){this.animType=type;this.animTicker=duration;this.swings++;}};
 const serverWeapon=Object.assign(new WeaponManager(),{player:serverPlayer,curWeapIdx:0,weapons:[{type:'fists',cooldown:-1,recoilTime:0}],
  meleeAttacks:[],meleeAnimCooldown:0,throwableCooldown:0,meleeDamage(){}});
-globalThis.result={setZoom:z=>{camera.m_zoom=z;camera.m_targetZoom=z;},nativePrevious:()=>game.m_prevInputMsg,nativeFrame:dt=>game.nativeInputFrame(dt),receive:pos=>game.m_processGameUpdate({ack:game.seq,playerInfos:[],deletedPlayerIds:[],delObjIds:[],fullObjects:[],partObjects:[{__id:2,__type:1,pos,dir:{x:1,y:0}}],activePlayerData:{},bullets:[],explosions:[],emotes:[],planes:[],airstrikeZones:[],mapIndicators:[]}),app,callbacks,fistsDef,nativeMap,readInputAim:()=>game.readInputAim(),
+globalThis.result={setWall:on=>{if(on)game.m_objectCreator.m_idToObj[99]={__id:99,__type:2,active:true,collidable:true,dead:false,height:1,layer:0,collider:{type:0,pos:{x:11.5,y:20.2},rad:.25}};else delete game.m_objectCreator.m_idToObj[99];},setZoom:z=>{camera.m_zoom=z;camera.m_targetZoom=z;},nativePrevious:()=>game.m_prevInputMsg,nativeFrame:dt=>game.nativeInputFrame(dt),receive:pos=>game.m_processGameUpdate({ack:game.seq,playerInfos:[],deletedPlayerIds:[],delObjIds:[],fullObjects:[],partObjects:[{__id:2,__type:1,pos,dir:{x:1,y:0}}],activePlayerData:{},bullets:[],explosions:[],emotes:[],planes:[],airstrikeZones:[],mapIndicators:[]}),app,callbacks,fistsDef,nativeMap,readInputAim:()=>game.readInputAim(),
  frameInput:()=>{const msg=new InputMsg();msg.shootStart=!!binds.isBindPressed(4);msg.shootHold=!!binds.isBindDown(4);if(binds.isBindPressed(10))msg.addInput(10);return msg;},
  setMelee:()=>{hero.m_netData.m_activeWeapon='fists';hero.m_localData.m_curWeapIdx=2;input.mouseButtonsOld[0]=true;},
  serverTick:(msg,dt)=>{serverPlayer.animTicker-=dt;if(serverPlayer.animTicker<=0)serverPlayer.animType=0;serverPlayer.shootStart=msg.shootStart;serverPlayer.shootHold=msg.shootHold;serverWeapon.update(dt);return serverPlayer.swings;},
@@ -131,7 +135,7 @@ for (const renamed of [false, true]) for (const lootMode of ['mobile', 'nearby']
   const m = discover(app.game);
   assert.ok(m.schema, `source player schema (${renamed ? 'minified+renamed' : 'unminified'})`);
   assert.ok(m.camera, 'source camera'); assert.ok(m.barn, 'source barn'); assert.ok(discoverSender(app.game), 'source sender');
-  const engine = new Features(dom.window, app, { ...DEFAULTS, aim: true, autoLoot: true, lootMode, wallcheck: false, smoothEnabled: false }, () => {}, { '9mm': { type: 'ammo' }, fists: context.result.fistsDef,mp5:{type:'gun',bulletType:'bullet_mp5',ammo:'9mm',barrelLength:1,barrelOffset:0},bullet_mp5:{type:'bullet',speed:85,distance:100,variance:0} });
+  const engine = new Features(dom.window, app, { ...DEFAULTS, aim: true, autoLoot: true, lootMode, wallcheck: true, smoothEnabled: false }, () => {}, { '9mm': { type: 'ammo' }, fists: context.result.fistsDef,mp5:{type:'gun',bulletType:'bullet_mp5',ammo:'9mm',barrelLength:1,barrelOffset:0},bullet_mp5:{type:'bullet',speed:85,distance:100,variance:0} });
   try {
     join();
     assert.equal(engine.protocol, VERIFIED_PROTOCOL, 'Observe desktop Join when device.mobile is false and window.mobile is absent');
@@ -139,6 +143,8 @@ for (const renamed of [false, true]) for (const lootMode of ['mobile', 'nearby']
     assert.equal(context.sent[0].booleans[1], lootMode === 'mobile', 'Actual upstream JoinMsg.serialize writes the requested boolean');
     context.result.receive({x:12,y:20});
     engine.pre();
+    assert.equal(engine.capabilities.wallcheck,true,'Native Creator remains identifiable with an entity-shaped decoy');
+    assert.equal(engine.mapping.registryState,'native-id-table');
     assert.equal(frameInput().inputs.includes(10), lootMode === 'nearby', 'Nearby pickup reaches the native binds/InputMsg path');
     assert.ok(engine.target, 'Select a target through upstream methods and renamed properties');
     assert.equal(engine.target.__id, 2, 'Aim excludes faction ally and unknown membership');
@@ -187,6 +193,12 @@ for (const renamed of [false, true]) for (const lootMode of ['mobile', 'nearby']
     assert.equal(context.sent.length,stable,'Assist does not force extra packets merely for preview');
     engine.config.aimMode='lock';engine.config.smoothEnabled=false;context.result.setZoom(2);
     app.input.flush(); assert.equal(app.input.mousePos.x, 440, 'Physical input restored');
+    engine.config.wallcheck=true;context.result.setWall(true);clock+=17;engine.pre();context.result.nativeFrame(1/60);
+    assert.equal(engine.stats.aimRejections.wall,1,'Known source registry obstacle still blocks aim; no wallcheck bypass');
+    context.result.setWall(false);clock+=17;engine.pre();context.result.nativeFrame(1/60);
+    assert.ok(context.sent.at(-1).decoded.toMouseDir.y>.1,'Lock reaches native wire with default wallcheck after obstacle removal');
+    const liveEvidence=engine.diagnostics().aimEvidence;
+    assert.ok(liveEvidence.lastCorrection.correctionDegrees>1);assert.equal(liveEvidence.lastGameplayForward.firePreserved,true);
     // Exercise the actual smoke renderer every frame; the adapter must work with an
     // initially empty m_* array and survive native alpha/tint rewrites.
     assert.equal(engine.smokeSources.length, 1, 'Identify source smoke array before first spawn');
