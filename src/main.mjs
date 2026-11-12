@@ -11,7 +11,7 @@ export function start(win) {
   let menu = null, engine = null, defs = null, cancelCapture = null, alive = true;
   let status = 'Đang chờ Application…', lastWarning = '', captured = false, captureState = 'waiting';
   const startedAt = win.performance.now();
-  win.console?.info?.('[Duality Reborn 0.2.0] Script đã chạy. Nếu không có menu, gửi dòng lỗi Console sau thông báo này.');
+  win.console?.info?.('[Duality Reborn 0.3.0] Script đã chạy. Nếu không có menu, gửi dòng lỗi Console sau thông báo này.');
   const report = (level, message) => {
     if (!alive) return;
     if (level === 'error' || level === 'warning') {
@@ -21,7 +21,7 @@ export function start(win) {
     status = message;
   };
   const diagnostics = () => ({
-    version: '0.2.0', captured, captureState, status, lastWarning,
+    version: '0.3.0', captured, captureState, status, lastWarning,
     menuMounted: !!menu?.host.isConnected, documentReadyState: win.document.readyState,
     definitionsCaptured: !!defs, elapsedMs: Math.round(win.performance.now() - startedAt),
     ...(engine?.diagnostics() || {}),
@@ -80,7 +80,7 @@ export function start(win) {
     if (!menu) return;
     menu.capabilities(engine?.capabilities || {});
     const d = diagnostics();
-    menu.status(`${status}\nAim: ${d.stats?.aimState ?? 'chưa mapping'} • Loot: ${d.autoLoot?.state ?? 'chưa mapping'}\nProtocol: ${d.protocol ?? 'chưa quan sát Join'} • ${d.initialized ? 'trong trận' : 'chờ trận'}\n${d.stats ? `Discovery: ${d.stats.mappingRuns} • visual tick: ${d.stats.featureMs.toFixed(2)} ms (không phải FPS benchmark)` : ''}${d.missingContracts?.length ? `\nThiếu contract: ${d.missingContracts.join(', ')}` : ''}${lastWarning ? `\nChú ý: ${lastWarning}` : ''}`);
+    menu.status(`${status}\nAim: ${d.stats?.aimState ?? 'chưa mapping'} • Loot: ${d.autoLoot?.state ?? 'chưa mapping'}\nESP: ${d.stats?.esp?.state ?? 'chưa mapping'}${d.stats?.esp ? ` • địch ${d.stats.esp.enemy} / ta ${d.stats.esp.ally} / chưa rõ ${d.stats.esp.unknown}` : ''}\nProtocol: ${d.protocol ?? 'chưa quan sát Join'} • ${d.initialized ? 'trong trận' : 'chờ trận'}\n${d.stats ? `Discovery: ${d.stats.mappingRuns} • visual tick: ${d.stats.featureMs.toFixed(2)} ms (không phải FPS benchmark)` : ''}${d.missingContracts?.length ? `\nThiếu contract: ${d.missingContracts.join(', ')}` : ''}${lastWarning ? `\nChú ý: ${lastWarning}` : ''}`);
   }, 1000);
   bag.add(() => win.clearInterval(timer));
   const onPageHide = () => controller.dispose();

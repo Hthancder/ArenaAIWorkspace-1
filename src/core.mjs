@@ -274,6 +274,39 @@ export function discoverLootSource(game) {
 export function teamOf(barn, id) {
   return unique(entries(read(barn, 'teamInfo')).filter(([, team]) => Array.isArray(read(team, 'playerIds')) && read(team, 'playerIds').includes(id)).map(([key]) => key));
 }
+// One index per feature pass, shared by ESP and aim. Conflicting or missing
+// membership is unknown, never an implicit enemy. Group/squad is NOT the team.
+function membershipIndex(table) {
+  const index = new Map(); let budget = 8192;
+  const records = entries(table);
+  if (records.length > 1024) return new Map();
+  for (const [key, group] of records) {
+    const ids = read(group, 'playerIds');
+    if (!Array.isArray(ids)) continue;
+    for (const id of ids) {
+      if (--budget < 0) return new Map();
+      if (!Number.isInteger(id) || id < 0) continue;
+      if (!index.has(id)) index.set(id, key);
+      else if (index.get(id) !== key) index.set(id, null);
+    }
+  }
+  return index;
+}
+export function teamRelations(barn, ownId) {
+  const teams = membershipIndex(read(barn, 'teamInfo'));
+  const groups = membershipIndex(read(barn, 'groupInfo'));
+  const ownTeam = teams.get(ownId), ownGroup = groups.get(ownId);
+  return {
+    ready: ownTeam !== undefined && ownTeam !== null,
+    classify(id) {
+      if (id === ownId) return { kind: 'self', squad: false };
+      const team = teams.get(id), group = groups.get(id);
+      if (ownTeam === undefined || ownTeam === null || team === undefined || team === null) return { kind: 'unknown', squad: false };
+      const ally = team === ownTeam;
+      return { kind: ally ? 'ally' : 'enemy', squad: ally && ownGroup !== undefined && ownGroup !== null && group === ownGroup };
+    },
+  };
+}
 export function localWeapon(mapping) {
   const { active, schema } = mapping || {};
   return active && schema ? at(active, [schema.netKey, schema.weaponKey]) : null;

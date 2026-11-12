@@ -1,21 +1,30 @@
 import { clamp, finite } from './core.mjs';
+import { colorValue, ESP_PALETTE } from './esp.mjs';
 
 export const DEFAULTS = Object.freeze({
   version: 1, aim: false, smoothEnabled: true, smooth: 50, knocked: false, sticky: true,
   showDot: true, fov: 100, showFov: true, wallcheck: true, predict: true,
   melee: false, autoSwitch: false, semi: false, xray: false, ceilings: true,
   smokeOpacity: 50, treeOpacity: 50, esp: false, nametags: true, lines: true,
+  espShowAllies: true, espShowEnemies: true, espShowUnknown: true, espShowDowned: true,
+  espSameLayerOnly: false, espLabels: true, espDistance: true, espWeapons: false,
+  espMarkers: true, espOffscreen: false, espHighlightTarget: true, espLegend: true,
+  espMaxDistance: 200, espFontSize: 12, espOpacity: 85, espLineWidth: 1.5,
+  espEnemyColor: ESP_PALETTE.enemy, espAllyColor: ESP_PALETTE.ally,
+  espUnknownColor: ESP_PALETTE.unknown, espTargetColor: ESP_PALETTE.target,
   ownFlashlight: false, grenadeZones: false, zoom: false, zoomFactor: 1.5,
   autoLoot: false, lootMode: 'nearby', mobileMovement: false, menuKey: 'ShiftRight', aimKey: 'KeyB', stickyKey: 'KeyN', holdAim: false,
 });
 export const STORAGE_KEY = 'duality-reborn.config.v1';
-const ranges = { smooth: [0, 100], fov: [50, 400], smokeOpacity: [0, 100], treeOpacity: [0, 100], zoomFactor: [1, 3] };
+const ranges = { smooth: [0, 100], fov: [50, 400], smokeOpacity: [0, 100], treeOpacity: [0, 100], zoomFactor: [1, 3], espMaxDistance: [10, 500], espFontSize: [10, 18], espOpacity: [10, 100], espLineWidth: [.5, 3] };
+const colors = new Set(['espEnemyColor', 'espAllyColor', 'espUnknownColor', 'espTargetColor']);
 export function normalizeConfig(saved) {
   const result = { ...DEFAULTS };
   if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return result;
   for (const [key, defaultValue] of Object.entries(DEFAULTS)) {
     const value = saved[key];
     if (typeof defaultValue === 'boolean' && typeof value === 'boolean') result[key] = value;
+    if (colors.has(key) && colorValue(value)) result[key] = value.toLowerCase();
     if (ranges[key] && finite(value)) result[key] = clamp(value, ...ranges[key]);
     if (['menuKey', 'aimKey', 'stickyKey'].includes(key) && typeof value === 'string'
       && /^(Key[A-Z]|Digit[0-9]|Shift(Left|Right)|Control(Left|Right)|Alt(Left|Right)|F([1-9]|1[0-2]))$/.test(value)) result[key] = value;
@@ -31,9 +40,9 @@ export function loadConfig(storage) {
 
 const CSS = `
 :host{all:initial;position:fixed;inset:0;z-index:2147483646;pointer-events:none;color:#eaf6ff;font:13px system-ui,sans-serif}
-*{box-sizing:border-box}button,input,select{font:inherit}select{max-width:200px;color:inherit;background:#17334c;border:1px solid #365168;padding:5px}button{cursor:pointer;color:inherit;background:#17334c;border:1px solid #365168;border-radius:5px;padding:7px 10px}button:hover{background:#23425b}button:disabled,input:disabled{cursor:not-allowed;opacity:.45}button:focus-visible,input:focus-visible{outline:2px solid #7dc5ff;outline-offset:2px}
+*{box-sizing:border-box}button,input,select{font:inherit}select{max-width:200px;color:inherit;background:#17334c;border:1px solid #365168;padding:5px}button{cursor:pointer;color:inherit;background:#17334c;border:1px solid #365168;border-radius:5px;padding:7px 10px}button:hover{background:#23425b}button:disabled,input:disabled,select:disabled{cursor:not-allowed;opacity:.45}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #7dc5ff;outline-offset:2px}
 canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;top:24px;display:flex;width:720px;max-width:calc(100vw - 24px);max-height:85vh;border:1px solid #365168;border-radius:10px;background:#0c2335;pointer-events:auto;overflow:hidden}
-.sidebar{width:180px;flex-shrink:0;padding:16px;background:#102a40;display:flex;flex-direction:column;gap:10px}.brand{font-weight:750;padding:6px 0 16px;cursor:move;touch-action:none;user-select:none}.version{font-size:11px;color:#91adc5;margin-top:6px}.nav{display:flex;flex-direction:column;gap:7px}.nav button{text-align:left;border-color:transparent;background:transparent}.nav button.active{background:#245377;border-color:#4076a0}.footer{margin-top:auto;display:flex;flex-direction:column;gap:8px}.content{min-width:0;flex:1;padding:20px;overflow-y:auto;overscroll-behavior:contain}h2{font-size:15px;margin:0 0 10px}fieldset{border:1px solid #29465d;border-radius:6px;margin:0 0 16px;padding:12px}legend{font-weight:650;padding:0 5px}.row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:9px 0;min-height:24px}.row span{min-width:0}.row input[type=checkbox]{width:17px;height:17px;flex-shrink:0;accent-color:#65b7ef}.row input[type=range]{width:130px;accent-color:#65b7ef}.row output{width:36px;text-align:right}.hint{font-size:11px;color:#a3b9ca;line-height:1.6}#status{white-space:pre-wrap;word-break:break-word;font-size:11px;line-height:1.5;background:#081b2b;padding:10px;margin-bottom:14px;border:1px solid #29465d;border-radius:5px}p{line-height:1.6}a{color:#80c4ff}pre{white-space:pre-wrap;word-break:break-word;font-size:11px}.toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}[hidden]{display:none!important}@media(max-width:600px){#ui{left:12px;top:12px}.sidebar{width:122px;padding:10px}.content{padding:12px}.row{gap:6px}.row input[type=range]{width:85px}}
+.sidebar{width:180px;flex-shrink:0;padding:16px;background:#102a40;display:flex;flex-direction:column;gap:10px}.brand{font-weight:750;padding:6px 0 16px;cursor:move;touch-action:none;user-select:none}.version{font-size:11px;color:#91adc5;margin-top:6px}.nav{display:flex;flex-direction:column;gap:7px}.nav button{text-align:left;border-color:transparent;background:transparent}.nav button.active{background:#245377;border-color:#4076a0}.footer{margin-top:auto;display:flex;flex-direction:column;gap:8px}.content{min-width:0;flex:1;padding:20px;overflow-y:auto;overscroll-behavior:contain}h2{font-size:15px;margin:0 0 10px}fieldset{border:1px solid #29465d;border-radius:6px;margin:0 0 16px;padding:12px}legend{font-weight:650;padding:0 5px}.row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:9px 0;min-height:24px}.row span{min-width:0}.row input[type=checkbox]{width:17px;height:17px;flex-shrink:0;accent-color:#65b7ef}.row input[type=color]{width:44px;height:26px;padding:1px;border:1px solid #365168;background:#17334c}.row input[type=range]{width:130px;accent-color:#65b7ef}.row output{width:36px;text-align:right}.hint{font-size:11px;color:#a3b9ca;line-height:1.6}#status{white-space:pre-wrap;word-break:break-word;font-size:11px;line-height:1.5;background:#081b2b;padding:10px;margin-bottom:14px;border:1px solid #29465d;border-radius:5px}p{line-height:1.6}a{color:#80c4ff}pre{white-space:pre-wrap;word-break:break-word;font-size:11px}.toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}[hidden]{display:none!important}@media(max-width:600px){#ui{left:12px;top:12px}.sidebar{width:122px;padding:10px}.content{padding:12px}.row{gap:6px}.row input[type=range]{width:85px}}
 `;
 const GROUPS = {
   Main: [
@@ -47,7 +56,14 @@ const GROUPS = {
   Visuals: [
     ['X-Ray', [['xray', 'Enabled', 'visuals'], ['ceilings', 'Remove Ceilings', 'visuals'], ['smokeOpacity', 'Smoke Opacity', 'visuals'], ['treeOpacity', 'Tree / Bush Opacity', 'visuals']]],
     ['Layer Spoofer', [[null, 'Chưa port: cần kiểm chứng layer semantics']]],
-    ['ESP', [['esp', 'Enabled', 'visuals'], ['nametags', 'Visible Nametags', 'visuals'], ['lines', 'Player Lines', 'visuals']]],
+    ['ESP / Teams', [['esp', 'Enabled', 'visuals'], ['espShowEnemies', 'Show enemies', 'visuals'], ['espShowAllies', 'Show allies / squad', 'visuals'],
+      ['espShowUnknown', 'Show unknown team', 'visuals'], ['espShowDowned', 'Show downed', 'visuals'], ['espSameLayerOnly', 'Same layer only', 'visuals'],
+      ['espMaxDistance', 'Max range (world units)', 'visuals'], [null, 'ENEMY / ALLY / SQUAD / UNKNOWN theo teamInfo và groupInfo. Không mặc định unknown là địch.']]],
+    ['ESP / Display', [['lines', 'Player lines', 'visuals'], ['espMarkers', 'Player markers', 'visuals'], ['espLabels', 'Relation / status labels', 'visuals'],
+      ['nametags', 'Player names', 'visuals'], ['espDistance', 'Distance (world units)', 'visuals'], ['espWeapons', 'Equipped weapon', 'visuals'],
+      ['espOffscreen', 'Off-screen arrows (received entities only)', 'visuals'], ['espHighlightTarget', 'Highlight current enemy target', 'visuals'], ['espLegend', 'Color legend / counts', 'visuals'],
+      ['espFontSize', 'Label size', 'visuals'], ['espOpacity', 'Overlay opacity', 'visuals'], ['espLineWidth', 'Line width', 'visuals']]],
+    ['ESP / Colors', [['espEnemyColor', 'Enemy', 'visuals'], ['espAllyColor', 'Ally / squad', 'visuals'], ['espUnknownColor', 'Unknown', 'visuals'], ['espTargetColor', 'Current enemy target', 'visuals']]],
     ['Grenades', [['grenadeZones', 'Nominal Explosion Radius', 'grenadeZones'], [null, 'Không phải vùng sát thương chắc chắn; chưa có fuse / trajectory']]],
     ['Flashlights', [['ownFlashlight', 'Own Range / Spread Preview', 'prediction'], [null, 'Others / Ricochet: chưa port']]],
     ['Infinite Zoom', [['zoom', 'Enabled (bounded 1–3×)', 'zoom'], ['zoomFactor', 'Zoom Out', 'zoom']]],
@@ -74,7 +90,7 @@ export function createMenu(win, config, { onChange, retry, stop, diagnostics, on
   const style = el('style', { text: CSS });
   const canvas = el('canvas'); canvas.setAttribute('aria-hidden', 'true');
   const shell = el('section', { id: 'ui' }); shell.setAttribute('aria-label', 'Duality Client Reborn');
-  const brand = el('div', { class: 'brand', text: 'Duality Client' }, el('div', { class: 'version', text: 'Reborn 0.2.0 • readable debug' }));
+  const brand = el('div', { class: 'brand', text: 'Duality Client' }, el('div', { class: 'version', text: 'Reborn 0.3.0 • readable debug' }));
   const nav = el('nav', { class: 'nav' }); nav.setAttribute('aria-label', 'Menu tabs');
   const content = el('main', { class: 'content' });
   const status = el('div', { id: 'status', text: 'Đang chờ Application…' }); status.setAttribute('role', 'status');
@@ -102,7 +118,7 @@ export function createMenu(win, config, { onChange, retry, stop, diagnostics, on
   const row = ([key, label, capability]) => {
     if (key === null) return el('div', { class: 'hint', text: label });
     const title = el('span', { text: label }), labelEl = el('label', { class: 'row' }, title);
-    const input = key === 'lootMode' ? el('select') : el('input', { type: ranges[key] ? 'range' : 'checkbox' });
+    const input = key === 'lootMode' ? el('select') : el('input', { type: colors.has(key) ? 'color' : ranges[key] ? 'range' : 'checkbox' });
     if (key === 'lootMode') {
       for (const [value, text] of [['nearby', 'Nearby supplies (now)'], ['mobile', 'Mobile loot / doors (next join)']]) input.append(el('option', { value, text }));
       input.value = config.lootMode; input.onchange = () => set(key, input.value);
@@ -111,8 +127,10 @@ export function createMenu(win, config, { onChange, retry, stop, diagnostics, on
       input.disabled = true;
       labelEl.title = `Đang chờ contract: ${capability}. Chưa xác nhận trên build này.`;
     }
-    if (key === 'lootMode') { labelEl.append(input); } else if (ranges[key]) {
-      [input.min, input.max] = ranges[key]; input.step = key === 'zoomFactor' ? .1 : 1; input.value = config[key];
+    if (colors.has(key)) {
+      input.value = config[key]; input.onchange = () => { if (colorValue(input.value)) set(key, input.value.toLowerCase()); }; labelEl.append(input);
+    } else if (key === 'lootMode') { labelEl.append(input); } else if (ranges[key]) {
+      [input.min, input.max] = ranges[key]; input.step = key === 'zoomFactor' ? .1 : key === 'espLineWidth' ? .5 : 1; input.value = config[key];
       const output = el('output', { text: String(config[key]) });
       input.oninput = () => { const value = Number(input.value); set(key, value); output.textContent = String(value); };
       labelEl.append(input, output);
@@ -145,7 +163,7 @@ export function createMenu(win, config, { onChange, retry, stop, diagnostics, on
       return;
     }
     panel.append(el('h2', { text: 'Controls & Information' }), el('p', { text: 'Bản viết lại độc lập. Menu giữ Main / Visuals / Misc / Keybinds / Help; không tải font, ảnh hay thư viện UI từ bên ngoài.' }),
-      el('p', { class: 'hint', text: 'Chỉ hiển thị dữ liệu client nhận được. Không bảo đảm tương thích mọi update hay tránh phát hiện. Những mục chưa port được ghi rõ, không giả vờ đang hoạt động.' }));
+      el('p', { class: 'hint', text: 'ESP: màu + nhãn địch/ta/unknown; nét đứt cho layer khác / downed / unknown. Không suy đoán HP/armor của đối thủ. Layer Spoofer, Map Highlights và grenade trajectory vẫn chưa port. Chỉ hiển thị dữ liệu client nhận được. Không bảo đảm tương thích mọi update hay tránh phát hiện. Những mục chưa port được ghi rõ, không giả vờ đang hoạt động.' }));
     const pre = el('pre', { text: JSON.stringify(diagnostics(), null, 2) });
     const refresh = el('button', { text: 'Refresh diagnostics' }); refresh.onclick = () => { pre.textContent = JSON.stringify(diagnostics(), null, 2); };
     const copy = el('button', { text: 'Copy diagnostics' });

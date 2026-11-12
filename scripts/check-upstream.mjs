@@ -11,6 +11,7 @@ import { JSDOM } from 'jsdom';
 import { Features, VERIFIED_PROTOCOL } from '../src/features.mjs';
 import { discover, discoverSender } from '../src/core.mjs';
 import { DEFAULTS } from '../src/menu.mjs';
+import { buildEspFrame } from '../src/esp.mjs';
 
 const root = resolve(process.argv[2] || '../survev-reference');
 const pin = '3edee7e8bd07fda8a63905aab4c45b595b684a80';
@@ -57,8 +58,8 @@ const camera = Object.assign(new Camera(),{m_pos:{x:9,y:18},m_ppu:16,m_zoom:2,m_
 function player(id,pos){return Object.assign(new Player(),{__id:id,__type:1,active:true,layer:0,downed:false,container:{},nameText:{visible:false},
   m_pos:pos,m_dir:{x:1,y:0},m_visualPos:pos,m_netData:{m_activeWeapon:'mp5',m_dead:false,m_scale:1,m_role:''},
   m_localData:{m_zoom:48,m_curWeapIdx:0,m_weapons:[{type:'mp5',ammo:20},{type:'mp5',ammo:20},{type:'fists',ammo:0},{type:'frag',ammo:1}]}});}
-const hero=player(1,{x:10,y:20}),enemy=player(2,{x:12,y:20});
-const barn=Object.assign(new PlayerBarn(),{playerPool:{m_pool:[hero,enemy]},playerIds:[1,2],teamInfo:{},groupInfo:{},playerInfo:{1:{playerId:1,teamId:10,groupId:10},2:{playerId:2,teamId:20,groupId:20}}});
+const hero=player(1,{x:10,y:20}),enemy=player(2,{x:12,y:20}),ally=player(3,{x:11,y:20}),unknown=player(4,{x:11.5,y:20});
+const barn=Object.assign(new PlayerBarn(),{playerPool:{m_pool:[hero,enemy,ally,unknown]},playerIds:[1,2,3,4],teamInfo:{},groupInfo:{},playerInfo:{1:{playerId:1,teamId:10,groupId:10},2:{playerId:2,teamId:20,groupId:20},3:{playerId:3,teamId:10,groupId:30}}});
 barn.recomputeTeamData();
 const input={mousePos:{x:440,y:300},mouseButtons:{0:true},mouseButtonsOld:{},flush(){this.mouseButtonsOld={...this.mouseButtons};},
  isInputValueDown(b){return !!this.mouseButtons[b.code]},isInputValuePressed(b){return !!this.mouseButtons[b.code]&&!this.mouseButtonsOld[b.code]}};
@@ -88,6 +89,12 @@ for (const renamed of [false, true]) for (const lootMode of ['mobile', 'nearby']
     assert.equal(context.sent[0].booleans[1], lootMode === 'mobile', 'Actual upstream JoinMsg.serialize writes the requested boolean');
     engine.pre();
     assert.ok(engine.target, 'Select a target through upstream methods and renamed properties');
+    assert.equal(engine.target.__id, 2, 'Aim excludes faction ally and unknown membership');
+    const frame = buildEspFrame(engine.mapping, engine.mapping.players(), { ...DEFAULTS, esp: true }, 800, 600);
+    assert.equal(frame.rows.find(row => row.player.__id === 2).relation, 'enemy');
+    const allyRow = frame.rows.find(row => row.player.__id === 3);
+    assert.equal(allyRow.relation, 'ally'); assert.equal(allyRow.squad, false, 'Different groups within a team remain faction allies');
+    assert.equal(frame.rows.find(row => row.player.__id === 4).relation, 'unknown');
     assert.equal(app.input.mousePos.x, 464, 'Aim uses player-relative input projection, not the offset camera center');
     const aim = readInputAim(); assert.ok(Math.abs(aim.toMouseDir.x - 1) < 1e-12 && Math.abs(aim.toMouseDir.y) < 1e-12, 'Actual Game.update expressions yield the target direction');
     assert.equal(frameInput().inputs.includes(10), lootMode === 'nearby', 'Nearby pickup reaches the native binds/InputMsg path');

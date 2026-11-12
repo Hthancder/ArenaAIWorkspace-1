@@ -2,7 +2,7 @@
 
 Bản userscript viết lại từ mục tiêu của mẫu người dùng cung cấp, với menu nhẹ và discovery có kiểm chứng. **Đây là bản thử nghiệm đã test offline, chưa xác nhận hoạt động trên build live của survev.io.** Không bảo đảm tương thích mọi update hoặc tránh phát hiện. Việc dùng trên máy chủ công cộng có thể vi phạm điều khoản của game.
 
-Bản hiện tại: **0.2.0 — core fixes / readable preview**. Đã tái hiện và sửa lỗi nhận diện desktop Join bằng method source public, tách phép chiếu aim/input khỏi render và thêm native nearby pickup. **Chưa có xác nhận đã giải quyết báo lỗi trên live của người dùng; chưa gọi là “reborn hoàn toàn”.** Kết quả: 59 tests offline + 4 kịch bản method-level từ source public. [Chi tiết 0.2.0 và checklist test lại](docs/reborn-0.2.0.vi.md).
+Bản hiện tại: **0.3.0 — team-aware ESP / readable preview**. ESP có phân biệt ENEMY / ALLY / SQUAD / UNKNOWN, filter, màu tùy chỉnh, label, distance/weapon, marker và off-screen arrows; aim dùng chung logic team. Giữ fixes Join/aim/native pickup của 0.2.0. **Chưa xác nhận live và chưa gọi là “reborn hoàn toàn”.** Kết quả: 79 tests offline + 4 kịch bản method-level từ source public. [Chi tiết ESP 0.3.0, phạm vi còn mở và checklist](docs/reborn-0.3.0.vi.md).
 
 ## File để cài
 
@@ -14,9 +14,20 @@ Bản hiện tại: **0.2.0 — core fixes / readable preview**. Đã tái hiệ
 4. Reload `https://survev.io/`. Mở menu bằng **Right Shift**. Các tính năng gameplay mặc định **tắt**.
 5. Chờ trạng thái capture/mapping. Checkbox bị khóa nghĩa là chưa đủ contract trên build đó, không phải tính năng đã hoạt động.
 6. Nếu có menu nhưng tính năng không chạy: vào trận → **Help → Copy diagnostics**, gửi JSON diagnostics. Các trường `captureState`, `checks`, `missingContracts`, `lastWarning` phân biệt capture/mapping/protocol; diagnostics không chứa token Join, tên/vị trí người chơi hoặc game object.
-7. Nếu **không có menu**: mở Console, tìm thông báo `[Duality Reborn 0.2.0] Script đã chạy` và gửi dòng lỗi màu đỏ đầu tiên nếu có. Cho biết trình duyệt và userscript manager. Không có thông báo này chưa đủ để kết luận lỗi game: có thể script chưa được inject, bị chặn hoặc lỗi trước bootstrap. Không gửi cookie/token hay dump toàn bộ game state.
+7. Nếu **không có menu**: mở Console, tìm thông báo `[Duality Reborn 0.3.0] Script đã chạy` và gửi dòng lỗi màu đỏ đầu tiên nếu có. Cho biết trình duyệt và userscript manager. Không có thông báo này chưa đủ để kết luận lỗi game: có thể script chưa được inject, bị chặn hoặc lỗi trước bootstrap. Không gửi cookie/token hay dump toàn bộ game state.
 
 **Retry capture** chỉ thử lại bắt Application trong 15 giây. Nếu đã lỡ thời điểm khởi tạo item DB/Join, cần reload. **Stop / cleanup** gỡ hook của bản này, trả property về giá trị game ghi gần nhất và bỏ menu/overlay. Muốn bật lại sau Stop: reload.
+
+## ESP phân biệt địch–ta (0.3.0)
+
+**Visuals → ESP / Teams → Enabled**. Mặc định địch **đỏ**, đồng minh/cùng squad **xanh**, chưa rõ team **xám**. Khác squad nhưng cùng phe vẫn là ALLY, không phải địch. Membership thiếu/xung đột luôn UNKNOWN và không trở thành mục tiêu aim.
+
+- **Teams:** lọc enemy/ally/unknown/downed, cùng layer, max range theo world units.
+- **Display:** lines, marker, role/status labels, tên, distance, weapon, off-screen arrows opt-in, current enemy target highlight và legend/counts.
+- **Colors:** màu riêng cho enemy/ally/unknown/target; font size, opacity và line width có giới hạn.
+- Label dùng Canvas2D và text game đã đặt, không đổi TextStyle mỗi frame. Tránh text trùng bằng native-name override có restore. Filter áp dụng overlay, không xóa UI đồng đội vốn thuộc game.
+- Không dựng HP/armor/ammo giả. Off-screen arrows chỉ dùng active entities client đã nhận. Đường/marker là ký hiệu, không phải hitbox hay collision visibility.
+- DPR cap 2×, tối đa 30 Hz / 256 entities và cache 256 measurements; chưa có FPS benchmark.
 
 ## Test lại hai tính năng chính (0.2.0)
 
@@ -57,7 +68,7 @@ Tất cả dòng “đã viết lại” dưới đây là trạng thái impleme
 | Melee Lock | Bản cơ bản | Aim trong 5.5 world units + mobile direction; cần protocol xác nhận và DB. Không có Auto Melee switch. |
 | Semi Auto | Đã viết lại | Held single-fire, theo fireDelay; không tuyên bố vượt cooldown server. |
 | Auto Switch | Bản cơ bản hai súng | Quan sát ammo giảm, chuyển sang slot súng khác nếu còn đạn. Không có one-gun swap/reset trick. |
-| Player lines / visible nametags | Đã viết lại | Chỉ player active client đã nhận; không có toàn bộ state ngoài vùng replication. Đường ESP dùng vị trí render nội suy nếu nhận diện được, fallback vị trí mạng; không thay nametag style liên tục. |
+| ESP / labels / player lines | Team-aware 0.3.0 | Địch/ally/squad/unknown, filter, tùy chỉnh màu; downed/layer/distance/weapon, markers/legend và arrows opt-in. Chỉ active entities đã nhận; vị trí render nếu nhận diện được, fallback mạng; không giả HP hoặc đổi TextStyle liên tục. |
 | Ceiling / tree / bush opacity / smoke | Đã viết lại | Scan có budget, property override có restore; không dark-tint smoke trực tiếp vào field private. |
 | Zoom | Có giới hạn 1–3× | Dò local zoom bằng semantic anchor; đổi phạm vi camera không tạo enemy state mới. |
 | Own flashlight | Range/spread preview | Dùng base defs, chưa tính movement/recoil/perk modifiers; không phải raycast/ricochet chính xác hoặc flashlight đối thủ. |
@@ -86,15 +97,17 @@ npm ci
 npm run check
 ```
 
-`pretest` build lại artifact trước khi chạy tests. Test offline (59 cases) gồm JS semantics, semantic discovery, mutation qua minify/rename, timeout/cleanup, message clone, pool lifecycle, input flush, menu/jsdom và bootstrap end-to-end với **fixture giả**. Không có end-to-end test với browser game live, anti-cheat hay benchmark FPS.
+`pretest` build lại artifact trước khi chạy tests. Test offline (79 cases) gồm JS semantics, semantic discovery, mutation qua minify/rename, timeout/cleanup, message clone, pool lifecycle, input flush, menu/jsdom và bootstrap end-to-end với **fixture giả**. Không có end-to-end test với browser game live, anti-cheat hay benchmark FPS.
 
 - `src/core.mjs`: safe descriptor traversal, AST roles, bootstrap, math, cleanup.
 - `src/features.mjs`: feature runtime, capability gates, lifecycle, input và visual overrides.
+- `src/esp.mjs`: ESP frame model, relation/color/filter/labels, bounded Canvas2D renderer và DPR handling.
 - `src/menu.mjs`: DOM menu, config validation/storage và keybinds.
 - `src/main.mjs`: userscript lifecycle/controller.
 - `scripts/build.mjs`: metadata và bundle.
 - `tests/`: offline regression tests.
 - `scripts/check-upstream.mjs`: kiểm tra method-level từ checkout source public riêng; chạy `npm run check:upstream -- /path/to/survev-checkout`, HEAD phải đúng source pin. Chạy 4 kịch bản (2 kiểu transform × 2 loot mode), không phải full game hoặc Codefend/live E2E.
+- `docs/reborn-0.3.0.vi.md`: ESP/team semantics, tests và phạm vi còn mở.
 - `docs/reborn-0.2.0.vi.md`: bằng chứng lỗi Join/input, native pickup và checklist live.
 - `docs/survev-technique-review.vi.md`: phân tích ba mẫu ban đầu.
 

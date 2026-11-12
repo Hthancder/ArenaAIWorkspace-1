@@ -1,6 +1,8 @@
 import { aimPoint, ast, at, clamp, discover, discoverLootSource, discoverSender, Disposables, entries, finite, intercept, isPlayer,
   localWeapon, methods, object, overlayPosition, patchMethod, paths, point, project, read, readMethod, sameLayer,
-  segmentBlocked, teamOf, Tracker, unique, vec, walk } from './core.mjs';
+  segmentBlocked, teamRelations, Tracker, unique, vec, walk } from './core.mjs';
+
+import { buildEspFrame, emptyEspStats, EspRenderer, prepareOverlay } from './esp.mjs';
 
 export const VERIFIED_PROTOCOL = 1028;
 // Constants tied to the audited protocol; never apply enum/height assumptions to unknown Join versions.
@@ -110,6 +112,7 @@ export class Features {
     this.capabilities = {}; this.failed = new Set();
     this.lootSource = null; this.pickupPulse = false; this.nextPickup = 0; this.pickupAttempt = null;
     this.stats.lootState = 'disabled'; this.stats.pickupPulses = 0;
+    this.espRenderer = new EspRenderer(); this.stats.esp = emptyEspStats();
     this.installFlush();
     const ticker = app.pixi.ticker;
     const pre = () => this.guard('input-frame', () => this.pre());
@@ -123,6 +126,7 @@ export class Features {
     try { fn(); }
     catch (e) {
       this.failed.add(name); this.stats.lastError = `${name}: ${e.message}`;
+      if (name === 'visual-frame') this.stats.esp = emptyEspStats('error');
       this.restoreInput(); this.overrides.clear(); this.clearCanvas();
       this.report('error', this.stats.lastError);
     }
@@ -152,6 +156,7 @@ export class Features {
     this.lastAmmo = null; this.local = null; this.mapping = null; this.effects = [];
     this.lootSource = null; this.pickupPulse = false; this.pickupAttempt = null; this.nextPickup = 0;
     this.binds = null; this.bindsInstalled = false; this.stickyId = null; this.lastInput = -Infinity;
+    this.espRenderer.reset(); this.stats.esp = emptyEspStats('waiting-mapping');
     this.clearCanvas();
   }
   installSender(game) {
@@ -288,8 +293,8 @@ export class Features {
     if (at(self, [schema.netKey, schema.deadKey])) { this.stats.aimState = 'dead'; return; }
     this.updateSwitch();
     if (!cfg.aim && !cfg.melee) return;
-    const ownTeam = teamOf(m.barn, self.__id);
-    if (ownTeam === null) { this.stats.aimState = 'missing-own-team'; return; }
+    const relations = teamRelations(m.barn, self.__id);
+    if (!relations.ready) { this.stats.aimState = 'missing-own-team'; return; }
     const players = m.players();
     for (const p of players) {
       const v = read(p, schema.posKey);
@@ -310,9 +315,9 @@ export class Features {
       if (at(p, [schema.netKey, schema.deadKey])) { reject('dead'); continue; }
       if (!cfg.knocked && p.downed) { reject('downed'); continue; }
       if (!sameLayer(p.layer, self.layer)) { reject('otherLayer'); continue; }
-      const team = teamOf(m.barn, p.__id), targetPos = read(p, schema.posKey);
-      if (team === null) { reject('unknownTeam'); continue; }
-      if (team === ownTeam) { reject('teammate'); continue; }
+      const relation = relations.classify(p.__id), targetPos = read(p, schema.posKey);
+      if (relation.kind === 'unknown') { reject('unknownTeam'); continue; }
+      if (relation.kind !== 'enemy') { reject('teammate'); continue; }
       if (!vec(targetPos)) { reject('invalidPosition'); continue; }
       const screen = project(m.camera, targetPos);
       if (!screen) { reject('invalidProjection'); continue; }
@@ -396,18 +401,23 @@ export class Features {
     this.lastVisual = now;
     const start = now, m = this.mapping, cfg = this.config;
     this.clearCanvas();
+    this.stats.esp = emptyEspStats(cfg.esp ? this.win.document.hidden ? 'page-hidden' : this.ctx ? 'waiting-mapping' : 'no-canvas' : 'disabled');
     if (!this.app.game?.initialized || !m?.schema || !m.active?.active || !this.capabilities.visuals || this.win.document.hidden) { this.overrides.clear(); return; }
     if (!(cfg.esp || cfg.xray || cfg.zoom || cfg.aim || cfg.melee || cfg.ownFlashlight || cfg.grenadeZones)) {
       if (this.overrides.records.size) this.overrides.clear();
       return;
     }
     const players = m.players();
+    const espFrame = cfg.esp && this.ctx ? buildEspFrame(m, players, cfg, this.win.innerWidth, this.win.innerHeight, this.target) : null;
+    const espPlayers = new Set(espFrame?.rows.filter(row => !row.offscreen).map(row => row.player));
     const keep = new Map();
     const want = (owner, key) => { if (!keep.has(owner)) keep.set(owner, new Set()); keep.get(owner).add(key); };
     for (const p of players) {
       if (!p.nameText || p === m.active || at(p, [m.schema.netKey, m.schema.deadKey])) continue;
-      if (cfg.esp && cfg.nametags) {
-        this.overrides.set(p.nameText, 'visible', () => true); want(p.nameText, 'visible');
+      if (cfg.esp && cfg.nametags && espPlayers.has(p)) {
+        // Canvas labels carry relation colors; suppress duplicate native text only
+        // while the corresponding overlay is rendered. Legacy label-only mode stays reversible.
+        this.overrides.set(p.nameText, 'visible', () => !cfg.espLabels); want(p.nameText, 'visible');
       }
     }
     if (cfg.xray && now - this.lastScan > 500) { this.scanEffects(); this.lastScan = now; }
@@ -423,16 +433,21 @@ export class Features {
       this.overrides.set(data, zoomKey, raw => raw * cfg.zoomFactor); want(data, zoomKey);
     }
     this.overrides.prune((owner, key) => keep.get(owner)?.has(key));
-    this.draw(players);
+    this.draw(players, espFrame);
     this.stats.featureMs = this.win.performance.now() - start;
   }
-  attachCanvas(canvas) { this.canvas = canvas; this.ctx = canvas.getContext('2d'); }
+  attachCanvas(canvas) {
+    this.canvas = canvas;
+    try { this.ctx = canvas.getContext('2d'); } catch { this.ctx = null; }
+    if (!this.ctx) this.report('warning', 'Canvas 2D không khả dụng: overlay bị khóa, input features không bị dừng.');
+  }
   clearCanvas() { if (this.ctx && this.canvas) this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height); }
-  draw(players) {
+  draw(players, espFrame = null) {
     const ctx = this.ctx, canvas = this.canvas, m = this.mapping, cfg = this.config;
     if (!ctx || !canvas) return;
     const width = this.win.innerWidth, height = this.win.innerHeight;
-    if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
+    if (!prepareOverlay(canvas, ctx, width, height, this.win.devicePixelRatio)) return;
+    ctx.globalAlpha = 1; ctx.setLineDash([]);
     const mouse = this.app.input?.mousePos;
     if (cfg.aim && cfg.showFov && vec(mouse)) {
       ctx.strokeStyle = '#ffffff44'; ctx.lineWidth = 1;
@@ -440,17 +455,10 @@ export class Features {
     }
     if (cfg.showDot && this.dot) { ctx.fillStyle = '#f95353'; ctx.beginPath(); ctx.arc(this.dot.x, this.dot.y, 4, 0, Math.PI * 2); ctx.fill(); }
     const selfPos = overlayPosition(m.active, m), origin = project(m.camera, selfPos);
-    if (!origin) return;
-    const ownTeam = teamOf(m.barn, m.active.__id);
-    if (cfg.esp && cfg.lines) {
-      for (const p of players) {
-        if (p === m.active || at(p, [m.schema.netKey, m.schema.deadKey])) continue;
-        const target = project(m.camera, overlayPosition(p, m));
-        if (!target || Math.abs(target.x) > width * 4 || Math.abs(target.y) > height * 4) continue;
-        const team = teamOf(m.barn, p.__id);
-        ctx.strokeStyle = ownTeam !== null && team === ownTeam ? '#398cff99' : sameLayer(p.layer, m.active.layer) ? '#fb555599' : '#ffffff55';
-        ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(origin.x, origin.y); ctx.lineTo(target.x, target.y); ctx.stroke();
-      }
+    if (!origin) { if (cfg.esp) this.stats.esp = emptyEspStats('invalid-projection'); return; }
+    if (cfg.esp) {
+      espFrame ||= buildEspFrame(m, players, cfg, width, height, this.target);
+      this.stats.esp = this.espRenderer.draw(ctx, espFrame, cfg, width, height);
     }
     if (cfg.ownFlashlight && this.definitions) {
       const gun = this.definitions[localWeapon(m)], bullet = this.definitions[gun?.bulletType];
@@ -518,10 +526,10 @@ export class Features {
       playerBarn: !!m?.barn, playerPool: !!m?.poolKey, activePlayer: !!m?.active,
       playerSchema: !!m?.schema, camera: !!m?.camera, spectatorUI: !!m?.ui,
       inputFlush: !!this.flushReady, sender: !!this.senderReady,
-      definitions: !!this.definitions, lootSource: !!this.lootSource, localData: !!this.local, binds: !!this.binds,
+      canvasRenderer: !!this.ctx, definitions: !!this.definitions, lootSource: !!this.lootSource, localData: !!this.local, binds: !!this.binds,
       protocolObserved: this.protocol !== null, protocolMatches: this.protocol === VERIFIED_PROTOCOL,
     };
-    return { version: '0.2.0', protocol: this.protocol, sourceProtocol: VERIFIED_PROTOCOL,
+    return { version: '0.3.0', protocol: this.protocol, sourceProtocol: VERIFIED_PROTOCOL,
       initialized: checks.initialized, checks,
       autoLoot: { state: this.autoLootStatus(), mode: this.config.lootMode, ...this.joinState },
       missingContracts: Object.keys(checks).filter(key => !checks[key]),

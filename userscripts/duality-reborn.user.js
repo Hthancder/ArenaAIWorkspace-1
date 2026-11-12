@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Duality Client Reborn (compatibility preview)
 // @namespace    arena.survev.reborn
-// @version      0.2.0
+// @version      0.3.0
 // @description  Lightweight menu, validated semantic discovery, bounded hooks and reversible features. Live compatibility unverified.
 // @match        https://survev.io/*
 // @match        https://*.survev.io/*
@@ -5995,10 +5995,40 @@ THE SOFTWARE.
     return found.length === 1 ? found[0] : null;
   }
   __name(discoverLootSource, "discoverLootSource");
-  function teamOf(barn, id) {
-    return unique(entries(read(barn, "teamInfo")).filter(([, team]) => Array.isArray(read(team, "playerIds")) && read(team, "playerIds").includes(id)).map(([key]) => key));
+  function membershipIndex(table) {
+    const index = /* @__PURE__ */ new Map();
+    let budget = 8192;
+    const records = entries(table);
+    if (records.length > 1024) return /* @__PURE__ */ new Map();
+    for (const [key, group] of records) {
+      const ids = read(group, "playerIds");
+      if (!Array.isArray(ids)) continue;
+      for (const id of ids) {
+        if (--budget < 0) return /* @__PURE__ */ new Map();
+        if (!Number.isInteger(id) || id < 0) continue;
+        if (!index.has(id)) index.set(id, key);
+        else if (index.get(id) !== key) index.set(id, null);
+      }
+    }
+    return index;
   }
-  __name(teamOf, "teamOf");
+  __name(membershipIndex, "membershipIndex");
+  function teamRelations(barn, ownId) {
+    const teams = membershipIndex(read(barn, "teamInfo"));
+    const groups = membershipIndex(read(barn, "groupInfo"));
+    const ownTeam = teams.get(ownId), ownGroup = groups.get(ownId);
+    return {
+      ready: ownTeam !== void 0 && ownTeam !== null,
+      classify(id) {
+        if (id === ownId) return { kind: "self", squad: false };
+        const team = teams.get(id), group = groups.get(id);
+        if (ownTeam === void 0 || ownTeam === null || team === void 0 || team === null) return { kind: "unknown", squad: false };
+        const ally = team === ownTeam;
+        return { kind: ally ? "ally" : "enemy", squad: ally && ownGroup !== void 0 && ownGroup !== null && group === ownGroup };
+      }
+    };
+  }
+  __name(teamRelations, "teamRelations");
   function localWeapon(mapping) {
     const { active, schema } = mapping || {};
     return active && schema ? at2(active, [schema.netKey, schema.weaponKey]) : null;
@@ -6196,6 +6226,248 @@ THE SOFTWARE.
   }
   __name(captureDefinitions, "captureDefinitions");
 
+  // src/esp.mjs
+  var ESP_PALETTE = Object.freeze({ enemy: "#ff6262", ally: "#56b6ff", unknown: "#b9bfc9", target: "#ffd166" });
+  var colorValue = /* @__PURE__ */ __name((value) => typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value), "colorValue");
+  function safeLabel(value, limit = 24) {
+    if (typeof value !== "string") return "";
+    return [...value.replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, "").replace(/\s+/g, " ").trim()].slice(0, limit).join("");
+  }
+  __name(safeLabel, "safeLabel");
+  function playerName(player) {
+    const text = read(player, "nameText");
+    return safeLabel(read(text, "text") ?? read(text, "_text"));
+  }
+  __name(playerName, "playerName");
+  function espColor(kind, config, selected = false) {
+    const key = selected ? "target" : kind;
+    const custom = config[{ enemy: "espEnemyColor", ally: "espAllyColor", unknown: "espUnknownColor", target: "espTargetColor" }[key]];
+    return colorValue(custom) ? custom : ESP_PALETTE[key] || ESP_PALETTE.unknown;
+  }
+  __name(espColor, "espColor");
+  function edgeIndicator(point2, width, height, margin = 18) {
+    if (!vec(point2) || !finite(width) || !finite(height) || width <= margin * 2 || height <= margin * 2) return null;
+    const cx = width / 2, cy = height / 2, dx = point2.x - cx, dy = point2.y - cy;
+    const tx = dx ? (cx - margin) / Math.abs(dx) : Infinity;
+    const ty = dy ? (cy - margin) / Math.abs(dy) : Infinity;
+    const t = Math.min(tx, ty);
+    if (!finite(t)) return null;
+    return { x: cx + dx * t, y: cy + dy * t, angle: Math.atan2(dy, dx) };
+  }
+  __name(edgeIndicator, "edgeIndicator");
+  function emptyEspStats(state = "disabled") {
+    return { state, considered: 0, drawn: 0, enemy: 0, ally: 0, unknown: 0, downed: 0, otherLayer: 0, offscreen: 0, labels: 0, labelsSkipped: 0, culled: 0 };
+  }
+  __name(emptyEspStats, "emptyEspStats");
+  function buildEspFrame(mapping, players, config, width, height, target = null) {
+    const stats = emptyEspStats("ready"), rows = [];
+    if (!mapping?.active || !mapping.schema || !mapping.camera) return { origin: null, rows, stats: { ...stats, state: "waiting-mapping" } };
+    const ownPos = overlayPosition(mapping.active, mapping), origin = project(mapping.camera, ownPos);
+    if (!origin || !vec(ownPos)) return { origin: null, rows, stats: { ...stats, state: "invalid-projection" } };
+    const relations = teamRelations(mapping.barn, mapping.active.__id);
+    const reject = /* @__PURE__ */ __name(() => {
+      stats.culled++;
+    }, "reject");
+    const maxDistance = finite(config.espMaxDistance) ? config.espMaxDistance : 200;
+    for (const player of players.slice(0, 256)) {
+      if (player === mapping.active) continue;
+      stats.considered++;
+      if (read(player, "active") !== true || at2(player, [mapping.schema.netKey, mapping.schema.deadKey])) {
+        reject();
+        continue;
+      }
+      const relation = relations.classify(read(player, "__id"));
+      if (relation.kind === "self") {
+        reject();
+        continue;
+      }
+      if (relation.kind === "ally" && config.espShowAllies === false || relation.kind === "enemy" && config.espShowEnemies === false || relation.kind === "unknown" && config.espShowUnknown === false) {
+        reject();
+        continue;
+      }
+      const downed = read(player, "downed") === true;
+      if (downed && config.espShowDowned === false) {
+        reject();
+        continue;
+      }
+      const knownLayer = finite(read(player, "layer")) && finite(read(mapping.active, "layer"));
+      const layerMatch = knownLayer && sameLayer(player.layer, mapping.active.layer);
+      if (!layerMatch && config.espSameLayerOnly) {
+        reject();
+        continue;
+      }
+      const pos = overlayPosition(player, mapping), screen = project(mapping.camera, pos);
+      if (!screen || !vec(pos)) {
+        reject();
+        continue;
+      }
+      const distance = Math.hypot(pos.x - ownPos.x, pos.y - ownPos.y);
+      if (!finite(distance) || distance > maxDistance) {
+        reject();
+        continue;
+      }
+      const offscreen = screen.x < 0 || screen.x > width || screen.y < 0 || screen.y > height;
+      const edge = offscreen && config.espOffscreen ? edgeIndicator(screen, width, height) : null;
+      if (offscreen && !edge) {
+        reject();
+        continue;
+      }
+      const selected = config.espHighlightTarget !== false && player === target && relation.kind === "enemy";
+      const title = relation.kind === "ally" ? relation.squad ? "SQUAD" : "ALLY" : relation.kind === "enemy" ? "ENEMY" : "UNKNOWN";
+      const parts = [title];
+      if (config.nametags) {
+        const name = playerName(player);
+        if (name) parts.push(name);
+      }
+      if (downed) parts.push("DOWNED");
+      if (!layerMatch) parts.push(knownLayer ? "OTHER LAYER" : "LAYER ?");
+      if (config.espDistance) parts.push(`${Math.round(distance)} wu`);
+      if (config.espWeapons) {
+        const weapon = safeLabel(at2(player, [mapping.schema.netKey, mapping.schema.weaponKey]), 20);
+        if (weapon) parts.push(weapon);
+      }
+      rows.push({
+        player,
+        relation: relation.kind,
+        squad: relation.squad,
+        selected,
+        downed,
+        offscreen,
+        layerMatch,
+        screen: edge || screen,
+        color: espColor(relation.kind, config, selected),
+        dash: !layerMatch ? [7, 4] : relation.kind === "unknown" ? [2, 4] : downed ? [3, 2] : [],
+        distance,
+        label: parts.join(" · ")
+      });
+      stats.drawn++;
+      stats[relation.kind]++;
+      if (downed) stats.downed++;
+      if (!layerMatch) stats.otherLayer++;
+      if (offscreen) stats.offscreen++;
+    }
+    if (players.length > 256) stats.culled += players.length - 256;
+    return { origin, rows, stats };
+  }
+  __name(buildEspFrame, "buildEspFrame");
+  function prepareOverlay(canvas, ctx, width, height, devicePixelRatio = 1) {
+    const dpr = finite(devicePixelRatio) ? clamp(devicePixelRatio, 1, 2) : 1;
+    if (!finite(width) || !finite(height) || width <= 0 || height <= 0) return false;
+    const w = Math.round(width * dpr), h = Math.round(height * dpr);
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+    if (canvas.style) {
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return true;
+  }
+  __name(prepareOverlay, "prepareOverlay");
+  function overlaps(a, b) {
+    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+  }
+  __name(overlaps, "overlaps");
+  function placeLabel(anchor, w, h, width, height, occupied) {
+    if (w > width - 8 || h > height - 8) return null;
+    for (const [dx, dy] of [[12, -h - 6], [12, 8], [-w - 12, -h - 6], [-w - 12, 8]]) {
+      const box = { x: clamp(anchor.x + dx, 4, width - w - 4), y: clamp(anchor.y + dy, 4, height - h - 4), w, h };
+      if (!occupied.some((other) => overlaps(box, other))) {
+        occupied.push(box);
+        return box;
+      }
+    }
+    return null;
+  }
+  __name(placeLabel, "placeLabel");
+  var EspRenderer = class {
+    static {
+      __name(this, "EspRenderer");
+    }
+    widths = /* @__PURE__ */ new Map();
+    reset() {
+      this.widths.clear();
+    }
+    measure(ctx, text) {
+      const key = `${ctx.font}\0${text}`;
+      if (!this.widths.has(key)) {
+        if (this.widths.size >= 256) this.widths.delete(this.widths.keys().next().value);
+        this.widths.set(key, ctx.measureText(text).width);
+      }
+      return this.widths.get(key);
+    }
+    draw(ctx, frame, config, width, height) {
+      if (!frame.origin) return frame.stats;
+      const occupied = [], fontSize = finite(config.espFontSize) ? config.espFontSize : 12;
+      ctx.save();
+      try {
+        ctx.font = `${fontSize}px system-ui, sans-serif`;
+        ctx.textBaseline = "top";
+        ctx.textAlign = "left";
+        ctx.globalAlpha = (finite(config.espOpacity) ? config.espOpacity : 85) / 100;
+        ctx.lineWidth = finite(config.espLineWidth) ? config.espLineWidth : 1.5;
+        if (config.espLegend) {
+          const items = [["enemy", "ENEMY"], ["ally", "ALLY / SQUAD"], ["unknown", "UNKNOWN"]];
+          let y = 12;
+          for (const [kind, text] of items) {
+            const label = `${text}: ${frame.stats[kind]}`, w = this.measure(ctx, label) + 12, h = fontSize + 6;
+            occupied.push({ x: 12, y, w, h });
+            ctx.fillStyle = "#081b2b";
+            ctx.fillRect(12, y, w, h);
+            ctx.fillStyle = espColor(kind, config);
+            ctx.fillText(label, 18, y + 3);
+            y += h + 2;
+          }
+        }
+        const rows = [...frame.rows].sort((a, b) => Number(b.selected) - Number(a.selected) || a.distance - b.distance);
+        for (const row of rows) {
+          const p = row.screen;
+          ctx.strokeStyle = row.color;
+          ctx.fillStyle = row.color;
+          ctx.setLineDash(row.dash);
+          if (config.lines) {
+            ctx.beginPath();
+            ctx.moveTo(frame.origin.x, frame.origin.y);
+            ctx.lineTo(p.x, p.y);
+            ctx.stroke();
+          }
+          if (row.offscreen) {
+            const a = p.angle, cos = Math.cos(a), sin = Math.sin(a);
+            ctx.beginPath();
+            ctx.moveTo(p.x + cos * 8, p.y + sin * 8);
+            ctx.lineTo(p.x - cos * 6 - sin * 5, p.y - sin * 6 + cos * 5);
+            ctx.lineTo(p.x - cos * 6 + sin * 5, p.y - sin * 6 - cos * 5);
+            ctx.closePath();
+            ctx.stroke();
+          } else if (config.espMarkers) {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, row.selected ? 11 : 7, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          if (config.espLabels) {
+            const w = this.measure(ctx, row.label) + 10, h = fontSize + 8;
+            const box = placeLabel(p, w, h, width, height, occupied);
+            if (!box) {
+              frame.stats.labelsSkipped++;
+              continue;
+            }
+            ctx.fillStyle = "#081b2b";
+            ctx.fillRect(box.x, box.y, box.w, box.h);
+            ctx.fillStyle = row.color;
+            ctx.fillText(row.label, box.x + 5, box.y + 4);
+            frame.stats.labels++;
+          }
+        }
+        frame.stats.state = "drawn";
+        return frame.stats;
+      } finally {
+        ctx.restore();
+      }
+    }
+  };
+
   // src/features.mjs
   var VERIFIED_PROTOCOL = 1028;
   var PROJECTILE_TYPE = 9;
@@ -6363,6 +6635,8 @@ THE SOFTWARE.
       this.pickupAttempt = null;
       this.stats.lootState = "disabled";
       this.stats.pickupPulses = 0;
+      this.espRenderer = new EspRenderer();
+      this.stats.esp = emptyEspStats();
       this.installFlush();
       const ticker = app.pixi.ticker;
       const pre = /* @__PURE__ */ __name(() => this.guard("input-frame", () => this.pre()), "pre");
@@ -6380,6 +6654,7 @@ THE SOFTWARE.
       } catch (e) {
         this.failed.add(name);
         this.stats.lastError = `${name}: ${e.message}`;
+        if (name === "visual-frame") this.stats.esp = emptyEspStats("error");
         this.restoreInput();
         this.overrides.clear();
         this.clearCanvas();
@@ -6425,6 +6700,8 @@ THE SOFTWARE.
       this.bindsInstalled = false;
       this.stickyId = null;
       this.lastInput = -Infinity;
+      this.espRenderer.reset();
+      this.stats.esp = emptyEspStats("waiting-mapping");
       this.clearCanvas();
     }
     installSender(game) {
@@ -6593,8 +6870,8 @@ THE SOFTWARE.
       }
       this.updateSwitch();
       if (!cfg.aim && !cfg.melee) return;
-      const ownTeam = teamOf(m.barn, self.__id);
-      if (ownTeam === null) {
+      const relations = teamRelations(m.barn, self.__id);
+      if (!relations.ready) {
         this.stats.aimState = "missing-own-team";
         return;
       }
@@ -6632,12 +6909,12 @@ THE SOFTWARE.
           reject("otherLayer");
           continue;
         }
-        const team = teamOf(m.barn, p.__id), targetPos = read(p, schema.posKey);
-        if (team === null) {
+        const relation = relations.classify(p.__id), targetPos = read(p, schema.posKey);
+        if (relation.kind === "unknown") {
           reject("unknownTeam");
           continue;
         }
-        if (team === ownTeam) {
+        if (relation.kind !== "enemy") {
           reject("teammate");
           continue;
         }
@@ -6749,6 +7026,7 @@ THE SOFTWARE.
       this.lastVisual = now;
       const start2 = now, m = this.mapping, cfg = this.config;
       this.clearCanvas();
+      this.stats.esp = emptyEspStats(cfg.esp ? this.win.document.hidden ? "page-hidden" : this.ctx ? "waiting-mapping" : "no-canvas" : "disabled");
       if (!this.app.game?.initialized || !m?.schema || !m.active?.active || !this.capabilities.visuals || this.win.document.hidden) {
         this.overrides.clear();
         return;
@@ -6758,6 +7036,8 @@ THE SOFTWARE.
         return;
       }
       const players = m.players();
+      const espFrame = cfg.esp && this.ctx ? buildEspFrame(m, players, cfg, this.win.innerWidth, this.win.innerHeight, this.target) : null;
+      const espPlayers = new Set(espFrame?.rows.filter((row) => !row.offscreen).map((row) => row.player));
       const keep = /* @__PURE__ */ new Map();
       const want = /* @__PURE__ */ __name((owner, key) => {
         if (!keep.has(owner)) keep.set(owner, /* @__PURE__ */ new Set());
@@ -6765,8 +7045,8 @@ THE SOFTWARE.
       }, "want");
       for (const p of players) {
         if (!p.nameText || p === m.active || at2(p, [m.schema.netKey, m.schema.deadKey])) continue;
-        if (cfg.esp && cfg.nametags) {
-          this.overrides.set(p.nameText, "visible", () => true);
+        if (cfg.esp && cfg.nametags && espPlayers.has(p)) {
+          this.overrides.set(p.nameText, "visible", () => !cfg.espLabels);
           want(p.nameText, "visible");
         }
       }
@@ -6796,24 +7076,28 @@ THE SOFTWARE.
         want(data2, zoomKey);
       }
       this.overrides.prune((owner, key) => keep.get(owner)?.has(key));
-      this.draw(players);
+      this.draw(players, espFrame);
       this.stats.featureMs = this.win.performance.now() - start2;
     }
     attachCanvas(canvas) {
       this.canvas = canvas;
-      this.ctx = canvas.getContext("2d");
+      try {
+        this.ctx = canvas.getContext("2d");
+      } catch {
+        this.ctx = null;
+      }
+      if (!this.ctx) this.report("warning", "Canvas 2D không khả dụng: overlay bị khóa, input features không bị dừng.");
     }
     clearCanvas() {
       if (this.ctx && this.canvas) this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     }
-    draw(players) {
+    draw(players, espFrame = null) {
       const ctx = this.ctx, canvas = this.canvas, m = this.mapping, cfg = this.config;
       if (!ctx || !canvas) return;
       const width = this.win.innerWidth, height = this.win.innerHeight;
-      if (canvas.width !== width || canvas.height !== height) {
-        canvas.width = width;
-        canvas.height = height;
-      }
+      if (!prepareOverlay(canvas, ctx, width, height, this.win.devicePixelRatio)) return;
+      ctx.globalAlpha = 1;
+      ctx.setLineDash([]);
       const mouse = this.app.input?.mousePos;
       if (cfg.aim && cfg.showFov && vec(mouse)) {
         ctx.strokeStyle = "#ffffff44";
@@ -6829,21 +7113,13 @@ THE SOFTWARE.
         ctx.fill();
       }
       const selfPos = overlayPosition(m.active, m), origin = project(m.camera, selfPos);
-      if (!origin) return;
-      const ownTeam = teamOf(m.barn, m.active.__id);
-      if (cfg.esp && cfg.lines) {
-        for (const p of players) {
-          if (p === m.active || at2(p, [m.schema.netKey, m.schema.deadKey])) continue;
-          const target = project(m.camera, overlayPosition(p, m));
-          if (!target || Math.abs(target.x) > width * 4 || Math.abs(target.y) > height * 4) continue;
-          const team = teamOf(m.barn, p.__id);
-          ctx.strokeStyle = ownTeam !== null && team === ownTeam ? "#398cff99" : sameLayer(p.layer, m.active.layer) ? "#fb555599" : "#ffffff55";
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.moveTo(origin.x, origin.y);
-          ctx.lineTo(target.x, target.y);
-          ctx.stroke();
-        }
+      if (!origin) {
+        if (cfg.esp) this.stats.esp = emptyEspStats("invalid-projection");
+        return;
+      }
+      if (cfg.esp) {
+        espFrame ||= buildEspFrame(m, players, cfg, width, height, this.target);
+        this.stats.esp = this.espRenderer.draw(ctx, espFrame, cfg, width, height);
       }
       if (cfg.ownFlashlight && this.definitions) {
         const gun = this.definitions[localWeapon(m)], bullet = this.definitions[gun?.bulletType];
@@ -6933,6 +7209,7 @@ THE SOFTWARE.
         spectatorUI: !!m?.ui,
         inputFlush: !!this.flushReady,
         sender: !!this.senderReady,
+        canvasRenderer: !!this.ctx,
         definitions: !!this.definitions,
         lootSource: !!this.lootSource,
         localData: !!this.local,
@@ -6941,7 +7218,7 @@ THE SOFTWARE.
         protocolMatches: this.protocol === VERIFIED_PROTOCOL
       };
       return {
-        version: "0.2.0",
+        version: "0.3.0",
         protocol: this.protocol,
         sourceProtocol: VERIFIED_PROTOCOL,
         initialized: checks.initialized,
@@ -6987,6 +7264,26 @@ THE SOFTWARE.
     esp: false,
     nametags: true,
     lines: true,
+    espShowAllies: true,
+    espShowEnemies: true,
+    espShowUnknown: true,
+    espShowDowned: true,
+    espSameLayerOnly: false,
+    espLabels: true,
+    espDistance: true,
+    espWeapons: false,
+    espMarkers: true,
+    espOffscreen: false,
+    espHighlightTarget: true,
+    espLegend: true,
+    espMaxDistance: 200,
+    espFontSize: 12,
+    espOpacity: 85,
+    espLineWidth: 1.5,
+    espEnemyColor: ESP_PALETTE.enemy,
+    espAllyColor: ESP_PALETTE.ally,
+    espUnknownColor: ESP_PALETTE.unknown,
+    espTargetColor: ESP_PALETTE.target,
     ownFlashlight: false,
     grenadeZones: false,
     zoom: false,
@@ -7000,13 +7297,15 @@ THE SOFTWARE.
     holdAim: false
   });
   var STORAGE_KEY = "duality-reborn.config.v1";
-  var ranges = { smooth: [0, 100], fov: [50, 400], smokeOpacity: [0, 100], treeOpacity: [0, 100], zoomFactor: [1, 3] };
+  var ranges = { smooth: [0, 100], fov: [50, 400], smokeOpacity: [0, 100], treeOpacity: [0, 100], zoomFactor: [1, 3], espMaxDistance: [10, 500], espFontSize: [10, 18], espOpacity: [10, 100], espLineWidth: [0.5, 3] };
+  var colors = /* @__PURE__ */ new Set(["espEnemyColor", "espAllyColor", "espUnknownColor", "espTargetColor"]);
   function normalizeConfig(saved) {
     const result = { ...DEFAULTS };
     if (!saved || typeof saved !== "object" || Array.isArray(saved)) return result;
     for (const [key, defaultValue] of Object.entries(DEFAULTS)) {
       const value = saved[key];
       if (typeof defaultValue === "boolean" && typeof value === "boolean") result[key] = value;
+      if (colors.has(key) && colorValue(value)) result[key] = value.toLowerCase();
       if (ranges[key] && finite(value)) result[key] = clamp(value, ...ranges[key]);
       if (["menuKey", "aimKey", "stickyKey"].includes(key) && typeof value === "string" && /^(Key[A-Z]|Digit[0-9]|Shift(Left|Right)|Control(Left|Right)|Alt(Left|Right)|F([1-9]|1[0-2]))$/.test(value)) result[key] = value;
     }
@@ -7025,9 +7324,9 @@ THE SOFTWARE.
   __name(loadConfig, "loadConfig");
   var CSS = `
 :host{all:initial;position:fixed;inset:0;z-index:2147483646;pointer-events:none;color:#eaf6ff;font:13px system-ui,sans-serif}
-*{box-sizing:border-box}button,input,select{font:inherit}select{max-width:200px;color:inherit;background:#17334c;border:1px solid #365168;padding:5px}button{cursor:pointer;color:inherit;background:#17334c;border:1px solid #365168;border-radius:5px;padding:7px 10px}button:hover{background:#23425b}button:disabled,input:disabled{cursor:not-allowed;opacity:.45}button:focus-visible,input:focus-visible{outline:2px solid #7dc5ff;outline-offset:2px}
+*{box-sizing:border-box}button,input,select{font:inherit}select{max-width:200px;color:inherit;background:#17334c;border:1px solid #365168;padding:5px}button{cursor:pointer;color:inherit;background:#17334c;border:1px solid #365168;border-radius:5px;padding:7px 10px}button:hover{background:#23425b}button:disabled,input:disabled,select:disabled{cursor:not-allowed;opacity:.45}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #7dc5ff;outline-offset:2px}
 canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;top:24px;display:flex;width:720px;max-width:calc(100vw - 24px);max-height:85vh;border:1px solid #365168;border-radius:10px;background:#0c2335;pointer-events:auto;overflow:hidden}
-.sidebar{width:180px;flex-shrink:0;padding:16px;background:#102a40;display:flex;flex-direction:column;gap:10px}.brand{font-weight:750;padding:6px 0 16px;cursor:move;touch-action:none;user-select:none}.version{font-size:11px;color:#91adc5;margin-top:6px}.nav{display:flex;flex-direction:column;gap:7px}.nav button{text-align:left;border-color:transparent;background:transparent}.nav button.active{background:#245377;border-color:#4076a0}.footer{margin-top:auto;display:flex;flex-direction:column;gap:8px}.content{min-width:0;flex:1;padding:20px;overflow-y:auto;overscroll-behavior:contain}h2{font-size:15px;margin:0 0 10px}fieldset{border:1px solid #29465d;border-radius:6px;margin:0 0 16px;padding:12px}legend{font-weight:650;padding:0 5px}.row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:9px 0;min-height:24px}.row span{min-width:0}.row input[type=checkbox]{width:17px;height:17px;flex-shrink:0;accent-color:#65b7ef}.row input[type=range]{width:130px;accent-color:#65b7ef}.row output{width:36px;text-align:right}.hint{font-size:11px;color:#a3b9ca;line-height:1.6}#status{white-space:pre-wrap;word-break:break-word;font-size:11px;line-height:1.5;background:#081b2b;padding:10px;margin-bottom:14px;border:1px solid #29465d;border-radius:5px}p{line-height:1.6}a{color:#80c4ff}pre{white-space:pre-wrap;word-break:break-word;font-size:11px}.toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}[hidden]{display:none!important}@media(max-width:600px){#ui{left:12px;top:12px}.sidebar{width:122px;padding:10px}.content{padding:12px}.row{gap:6px}.row input[type=range]{width:85px}}
+.sidebar{width:180px;flex-shrink:0;padding:16px;background:#102a40;display:flex;flex-direction:column;gap:10px}.brand{font-weight:750;padding:6px 0 16px;cursor:move;touch-action:none;user-select:none}.version{font-size:11px;color:#91adc5;margin-top:6px}.nav{display:flex;flex-direction:column;gap:7px}.nav button{text-align:left;border-color:transparent;background:transparent}.nav button.active{background:#245377;border-color:#4076a0}.footer{margin-top:auto;display:flex;flex-direction:column;gap:8px}.content{min-width:0;flex:1;padding:20px;overflow-y:auto;overscroll-behavior:contain}h2{font-size:15px;margin:0 0 10px}fieldset{border:1px solid #29465d;border-radius:6px;margin:0 0 16px;padding:12px}legend{font-weight:650;padding:0 5px}.row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:9px 0;min-height:24px}.row span{min-width:0}.row input[type=checkbox]{width:17px;height:17px;flex-shrink:0;accent-color:#65b7ef}.row input[type=color]{width:44px;height:26px;padding:1px;border:1px solid #365168;background:#17334c}.row input[type=range]{width:130px;accent-color:#65b7ef}.row output{width:36px;text-align:right}.hint{font-size:11px;color:#a3b9ca;line-height:1.6}#status{white-space:pre-wrap;word-break:break-word;font-size:11px;line-height:1.5;background:#081b2b;padding:10px;margin-bottom:14px;border:1px solid #29465d;border-radius:5px}p{line-height:1.6}a{color:#80c4ff}pre{white-space:pre-wrap;word-break:break-word;font-size:11px}.toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}[hidden]{display:none!important}@media(max-width:600px){#ui{left:12px;top:12px}.sidebar{width:122px;padding:10px}.content{padding:12px}.row{gap:6px}.row input[type=range]{width:85px}}
 `;
   var GROUPS = {
     Main: [
@@ -7050,7 +7349,31 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
     Visuals: [
       ["X-Ray", [["xray", "Enabled", "visuals"], ["ceilings", "Remove Ceilings", "visuals"], ["smokeOpacity", "Smoke Opacity", "visuals"], ["treeOpacity", "Tree / Bush Opacity", "visuals"]]],
       ["Layer Spoofer", [[null, "Chưa port: cần kiểm chứng layer semantics"]]],
-      ["ESP", [["esp", "Enabled", "visuals"], ["nametags", "Visible Nametags", "visuals"], ["lines", "Player Lines", "visuals"]]],
+      ["ESP / Teams", [
+        ["esp", "Enabled", "visuals"],
+        ["espShowEnemies", "Show enemies", "visuals"],
+        ["espShowAllies", "Show allies / squad", "visuals"],
+        ["espShowUnknown", "Show unknown team", "visuals"],
+        ["espShowDowned", "Show downed", "visuals"],
+        ["espSameLayerOnly", "Same layer only", "visuals"],
+        ["espMaxDistance", "Max range (world units)", "visuals"],
+        [null, "ENEMY / ALLY / SQUAD / UNKNOWN theo teamInfo và groupInfo. Không mặc định unknown là địch."]
+      ]],
+      ["ESP / Display", [
+        ["lines", "Player lines", "visuals"],
+        ["espMarkers", "Player markers", "visuals"],
+        ["espLabels", "Relation / status labels", "visuals"],
+        ["nametags", "Player names", "visuals"],
+        ["espDistance", "Distance (world units)", "visuals"],
+        ["espWeapons", "Equipped weapon", "visuals"],
+        ["espOffscreen", "Off-screen arrows (received entities only)", "visuals"],
+        ["espHighlightTarget", "Highlight current enemy target", "visuals"],
+        ["espLegend", "Color legend / counts", "visuals"],
+        ["espFontSize", "Label size", "visuals"],
+        ["espOpacity", "Overlay opacity", "visuals"],
+        ["espLineWidth", "Line width", "visuals"]
+      ]],
+      ["ESP / Colors", [["espEnemyColor", "Enemy", "visuals"], ["espAllyColor", "Ally / squad", "visuals"], ["espUnknownColor", "Unknown", "visuals"], ["espTargetColor", "Current enemy target", "visuals"]]],
       ["Grenades", [["grenadeZones", "Nominal Explosion Radius", "grenadeZones"], [null, "Không phải vùng sát thương chắc chắn; chưa có fuse / trajectory"]]],
       ["Flashlights", [["ownFlashlight", "Own Range / Spread Preview", "prediction"], [null, "Others / Ricochet: chưa port"]]],
       ["Infinite Zoom", [["zoom", "Enabled (bounded 1–3×)", "zoom"], ["zoomFactor", "Zoom Out", "zoom"]]]
@@ -7081,7 +7404,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
     canvas.setAttribute("aria-hidden", "true");
     const shell = el("section", { id: "ui" });
     shell.setAttribute("aria-label", "Duality Client Reborn");
-    const brand = el("div", { class: "brand", text: "Duality Client" }, el("div", { class: "version", text: "Reborn 0.2.0 • readable debug" }));
+    const brand = el("div", { class: "brand", text: "Duality Client" }, el("div", { class: "version", text: "Reborn 0.3.0 • readable debug" }));
     const nav = el("nav", { class: "nav" });
     nav.setAttribute("aria-label", "Menu tabs");
     const content = el("main", { class: "content" });
@@ -7127,7 +7450,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
     const row = /* @__PURE__ */ __name(([key, label, capability]) => {
       if (key === null) return el("div", { class: "hint", text: label });
       const title = el("span", { text: label }), labelEl = el("label", { class: "row" }, title);
-      const input = key === "lootMode" ? el("select") : el("input", { type: ranges[key] ? "range" : "checkbox" });
+      const input = key === "lootMode" ? el("select") : el("input", { type: colors.has(key) ? "color" : ranges[key] ? "range" : "checkbox" });
       if (key === "lootMode") {
         for (const [value, text] of [["nearby", "Nearby supplies (now)"], ["mobile", "Mobile loot / doors (next join)"]]) input.append(el("option", { value, text }));
         input.value = config.lootMode;
@@ -7137,11 +7460,17 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
         input.disabled = true;
         labelEl.title = `Đang chờ contract: ${capability}. Chưa xác nhận trên build này.`;
       }
-      if (key === "lootMode") {
+      if (colors.has(key)) {
+        input.value = config[key];
+        input.onchange = () => {
+          if (colorValue(input.value)) set(key, input.value.toLowerCase());
+        };
+        labelEl.append(input);
+      } else if (key === "lootMode") {
         labelEl.append(input);
       } else if (ranges[key]) {
         [input.min, input.max] = ranges[key];
-        input.step = key === "zoomFactor" ? 0.1 : 1;
+        input.step = key === "zoomFactor" ? 0.1 : key === "espLineWidth" ? 0.5 : 1;
         input.value = config[key];
         const output = el("output", { text: String(config[key]) });
         input.oninput = () => {
@@ -7192,7 +7521,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
       panel.append(
         el("h2", { text: "Controls & Information" }),
         el("p", { text: "Bản viết lại độc lập. Menu giữ Main / Visuals / Misc / Keybinds / Help; không tải font, ảnh hay thư viện UI từ bên ngoài." }),
-        el("p", { class: "hint", text: "Chỉ hiển thị dữ liệu client nhận được. Không bảo đảm tương thích mọi update hay tránh phát hiện. Những mục chưa port được ghi rõ, không giả vờ đang hoạt động." })
+        el("p", { class: "hint", text: "ESP: màu + nhãn địch/ta/unknown; nét đứt cho layer khác / downed / unknown. Không suy đoán HP/armor của đối thủ. Layer Spoofer, Map Highlights và grenade trajectory vẫn chưa port. Chỉ hiển thị dữ liệu client nhận được. Không bảo đảm tương thích mọi update hay tránh phát hiện. Những mục chưa port được ghi rõ, không giả vờ đang hoạt động." })
       );
       const pre = el("pre", { text: JSON.stringify(diagnostics(), null, 2) });
       const refresh = el("button", { text: "Refresh diagnostics" });
@@ -7349,7 +7678,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
     let menu = null, engine = null, defs = null, cancelCapture = null, alive = true;
     let status = "Đang chờ Application…", lastWarning = "", captured = false, captureState = "waiting";
     const startedAt = win.performance.now();
-    win.console?.info?.("[Duality Reborn 0.2.0] Script đã chạy. Nếu không có menu, gửi dòng lỗi Console sau thông báo này.");
+    win.console?.info?.("[Duality Reborn 0.3.0] Script đã chạy. Nếu không có menu, gửi dòng lỗi Console sau thông báo này.");
     const report = /* @__PURE__ */ __name((level, message) => {
       if (!alive) return;
       if (level === "error" || level === "warning") {
@@ -7359,7 +7688,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
       status = message;
     }, "report");
     const diagnostics = /* @__PURE__ */ __name(() => ({
-      version: "0.2.0",
+      version: "0.3.0",
       captured,
       captureState,
       status,
@@ -7447,6 +7776,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
       const d = diagnostics();
       menu.status(`${status}
 Aim: ${d.stats?.aimState ?? "chưa mapping"} • Loot: ${d.autoLoot?.state ?? "chưa mapping"}
+ESP: ${d.stats?.esp?.state ?? "chưa mapping"}${d.stats?.esp ? ` • địch ${d.stats.esp.enemy} / ta ${d.stats.esp.ally} / chưa rõ ${d.stats.esp.unknown}` : ""}
 Protocol: ${d.protocol ?? "chưa quan sát Join"} • ${d.initialized ? "trong trận" : "chờ trận"}
 ${d.stats ? `Discovery: ${d.stats.mappingRuns} • visual tick: ${d.stats.featureMs.toFixed(2)} ms (không phải FPS benchmark)` : ""}${d.missingContracts?.length ? `
 Thiếu contract: ${d.missingContracts.join(", ")}` : ""}${lastWarning ? `

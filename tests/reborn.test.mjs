@@ -66,7 +66,7 @@ function fixture() {
 }
 function env() {
   const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://survev.io/', pretendToBeVisual: true, runScripts: 'outside-only' });
-  dom.window.HTMLCanvasElement.prototype.getContext = () => ({ clearRect() {}, beginPath() {}, arc() {}, stroke() {}, fill() {}, moveTo() {}, lineTo() {}, closePath() {} });
+  dom.window.HTMLCanvasElement.prototype.getContext = () => ({ save() {}, restore() {}, setTransform() {}, setLineDash() {}, fillRect() {}, fillText() {}, measureText(text) { return { width: text.length * 6 }; }, clearRect() {}, beginPath() {}, arc() {}, stroke() {}, fill() {}, moveTo() {}, lineTo() {}, closePath() {} });
   return dom;
 }
 
@@ -342,7 +342,7 @@ test('visual effects use reversible properties and promptly prune disabled keys'
   app.game.map = { mapTexture: null, getGroundSurface() {}, pool: { list: [tree, { imgs: [img] }] } };
   const engine = new Features(dom.window, app, config, () => {}, defs); engine.post();
   assert.equal(tree.sprite.alpha, .5); assert.equal(img.sprite.visible, false);
-  assert.equal(app.game.barn.playerPool.list[1].nameText.visible, true);
+  assert.equal(app.game.barn.playerPool.list[1].nameText.visible, false);
   tree.sprite.alpha = .8; assert.equal(tree.sprite.alpha, .5);
   config.xray = false; config.esp = false; engine.lastVisual = -Infinity; engine.post();
   assert.equal(tree.sprite.alpha, .8); assert.equal(img.sprite.visible, true);
@@ -401,9 +401,9 @@ test('ESP uses interpolated visual positions while the tracker retains network-p
     p.v = { x: p.p.x - 1, y: p.p.y - 2 };
     p.render = function (camera) { const screen = camera.forward(this.v); this.container.position.set(screen.x, screen.y); };
   }
-  const engine = new Features(dom.window, app, { ...DEFAULTS, esp: true, lines: true, aim: true }, () => {}, defs);
+  const engine = new Features(dom.window, app, { ...DEFAULTS, esp: true, lines: true, aim: true, espLabels: false, espMarkers: false, espLegend: false }, () => {}, defs);
   assert.equal(engine.mapping.visualPosKey, 'v'); assert.equal(engine.capabilities.interpolatedOverlay, true);
-  const lines = [], ctx = { beginPath() {}, arc() {}, stroke() {}, moveTo(x, y) { lines.push({ x, y }); }, lineTo(x, y) { lines.push({ x, y }); } };
+  const lines = [], ctx = { save() {}, restore() {}, setTransform() {}, setLineDash() {}, beginPath() {}, arc() {}, stroke() {}, moveTo(x, y) { lines.push({ x, y }); }, lineTo(x, y) { lines.push({ x, y }); } };
   engine.canvas = { width: dom.window.innerWidth, height: dom.window.innerHeight, remove() {} }; engine.ctx = ctx;
   engine.draw(players);
   assert.deepEqual(lines, players.map(p => project(engine.mapping.camera, p.v)));
@@ -509,7 +509,7 @@ test('diagnostics distinguish capture, mapping and protocol without leaking game
 
 test('distributed userscript retains readable function names and source-module sections', () => {
   const script = readFileSync(new URL('../userscripts/duality-reborn.user.js', import.meta.url), 'utf8');
-  assert.match(script, /@version\s+0\.2\.0/);
+  assert.match(script, /@version\s+0\.3\.0/);
   assert.match(script, /function captureApplication\(/);
   assert.match(script, /function start\(win\)/);
   assert.match(script, /\/\/ src\/main\.mjs/);
@@ -656,4 +656,63 @@ test('Help offers a local selectable JSON fallback when clipboard access is unav
   assert.equal(JSON.parse(field.value).stats.aimState, 'fire-not-held');
   assert.equal(field.selectionEnd, field.value.length);
   menu.dispose(); dom.window.close();
+});
+
+test('ESP native name suppression honors filters and restores latest game writes when disabled', () => {
+  const dom = env(), app = fixture(), config = { ...DEFAULTS, esp: true };
+  const enemy = app.game.barn.playerPool.list[1]; enemy.nameText.text = 'fixture'; enemy.nameText.visible = true;
+  const engine = new Features(dom.window, app, config, () => {}, defs);
+  engine.attachCanvas(dom.window.document.createElement('canvas')); engine.post();
+  assert.equal(enemy.nameText.visible, false); assert.equal(engine.stats.esp.enemy, 1);
+  assert.equal(typeof Object.getOwnPropertyDescriptor(enemy.nameText, 'visible').get, 'function');
+  enemy.nameText.visible = true; assert.equal(enemy.nameText.visible, false);
+  config.espShowEnemies = false; engine.lastVisual = -Infinity; engine.post();
+  assert.equal(enemy.nameText.visible, true); assert.equal(engine.stats.esp.enemy, 0);
+  config.espShowEnemies = true; engine.lastVisual = -Infinity; engine.post(); assert.equal(enemy.nameText.visible, false);
+  config.esp = false; engine.lastVisual = -Infinity; engine.post();
+  assert.equal(enemy.nameText.visible, true); assert.equal(engine.stats.esp.state, 'disabled');
+  engine.dispose(); dom.window.close();
+});
+
+test('ESP rendering failures restore native properties and expose error state instead of leaving hidden labels', () => {
+  const dom = env(), app = fixture(), engine = new Features(dom.window, app, { ...DEFAULTS, esp: true }, () => {}, defs);
+  const enemy = app.game.barn.playerPool.list[1]; enemy.nameText.visible = true;
+  engine.attachCanvas(dom.window.document.createElement('canvas')); engine.ctx.fillText = () => { throw Error('canvas test'); };
+  engine.guard('visual-frame', () => engine.post());
+  assert.equal(enemy.nameText.visible, true); assert.equal(engine.stats.esp.state, 'error'); assert.equal(engine.overrides.records.size, 0);
+  engine.dispose(); dom.window.close();
+});
+
+test('missing Canvas2D does not break input features or force native names', () => {
+  const dom = env(), app = fixture(), reports = [];
+  app.input.mouseButtons[0] = true;
+  const engine = new Features(dom.window, app, { ...DEFAULTS, esp: true, aim: true, wallcheck: false }, (level, message) => reports.push({ level, message }), defs);
+  engine.attachCanvas({ getContext() { throw Error('unsupported'); } });
+  engine.pre(); engine.post(); assert.equal(engine.stats.aimState, 'applied'); assert.equal(engine.stats.esp.state, 'no-canvas');
+  assert.equal(app.game.barn.playerPool.list[1].nameText.visible, false);
+  assert.ok(reports.some(r => r.level === 'warning')); engine.dispose(); dom.window.close();
+});
+
+test('ESP controls persist team filters and validated colors without changing tab layout', () => {
+  const dom = env(), config = { ...DEFAULTS }, changes = [];
+  const menu = createMenu(dom.window, config, { onChange(key) { changes.push(key); }, retry() {}, stop() {}, diagnostics: () => ({}) });
+  menu.capabilities({ visuals: true });
+  [...menu.root.querySelectorAll('.nav button')].find(b => b.textContent === 'Visuals').click();
+  const row = [...menu.root.querySelectorAll('label')].find(n => n.textContent.includes('Show allies / squad'));
+  row.querySelector('input').click(); assert.equal(config.espShowAllies, false);
+  const color = menu.root.querySelector('input[type=color]'); color.value = '#12ab34'; color.dispatchEvent(new dom.window.Event('change'));
+  assert.equal(config.espEnemyColor, '#12ab34'); assert.ok(changes.includes('espEnemyColor'));
+  assert.deepEqual([...menu.root.querySelectorAll('.nav button')].map(b => b.textContent), ['Main', 'Visuals', 'Misc', 'Keybinds', 'Help']);
+  menu.dispose(); const saved = JSON.parse(dom.window.localStorage.getItem(STORAGE_KEY));
+  assert.equal(saved.espShowAllies, false); assert.equal(saved.espEnemyColor, '#12ab34'); dom.window.close();
+});
+
+test('ESP diagnostics contain aggregate counts only and reset on match exit', () => {
+  const dom = env(), app = fixture(), engine = new Features(dom.window, app, { ...DEFAULTS, esp: true }, () => {}, defs);
+  app.game.barn.playerPool.list[1].nameText.text = 'private-fixture-name';
+  engine.attachCanvas(dom.window.document.createElement('canvas')); engine.post();
+  const snapshot = engine.diagnostics(); assert.equal(snapshot.stats.esp.enemy, 1);
+  assert.ok(!JSON.stringify(snapshot).includes('private-fixture-name')); assert.equal(snapshot.stats.esp.rows, undefined);
+  app.game.initialized = false; engine.pre(); assert.equal(engine.stats.esp.enemy, 0);
+  engine.dispose(); assert.equal(engine.espRenderer.widths.size, 0); dom.window.close();
 });
