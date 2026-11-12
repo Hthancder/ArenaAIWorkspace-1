@@ -1,4 +1,4 @@
-# Tabspace 0.19 — bản thử nghiệm
+# Tabspace 0.19.1 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
