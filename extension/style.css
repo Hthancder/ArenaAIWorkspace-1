@@ -16,3 +16,5 @@ dialog{padding:30px;border:1px solid #e9e7f4} dialog h2{letter-spacing:-.35px} d
 .field textarea{width:100%;display:block;margin-top:7px;border:1px solid #e2e3eb;border-radius:8px;padding:10px;background:white;font:inherit;line-height:1.5;resize:vertical}.field textarea:focus-visible{outline:3px solid #b8aef9;outline-offset:2px}.field small{color:#949baa;font-weight:400}.checkline{display:flex;gap:9px;align-items:center;color:#626a79;font-size:12px}.checkline input{accent-color:#7564d6} .danger-soft:disabled{opacity:.45;cursor:not-allowed}
 
 .item-note{font-size:11px;color:#778091;margin-top:7px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.4}.rowtext .tags{white-space:normal}
+
+dialog{max-height:calc(100vh - 32px);overflow:auto}.preset-advanced{margin:14px 0;padding:12px;border:1px solid #ebeaf3;border-radius:9px}.preset-advanced summary{cursor:pointer;font-size:12px;font-weight:650;color:#626a79}.preset-advanced summary span{font-weight:400;color:#a0a5b4}.preset-advanced p{font-size:11px}.preset-advanced .field{margin:12px 0}

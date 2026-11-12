@@ -1,4 +1,4 @@
-# Tabspace 0.8 — bản thử nghiệm
+# Tabspace 0.9 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -12,7 +12,7 @@
 - Nút **Nghỉ** cho tab nền (không ghim, không phát âm thanh) vào trạng thái discard sau xác nhận. Chrome có thể từ chối; trang sẽ tải lại khi mở và trạng thái chưa lưu có thể mất.
 - Trong **Thùng rác**, khôi phục hoặc xóa vĩnh viễn nhóm, tab đã lưu và phiên đã xóa từ phiên bản này. Không tự xóa theo thời gian; dữ liệu có trong file sao lưu. Nếu nhóm gốc bị xóa, khôi phục nhóm trước khi khôi phục tab.
 - Trong **Lịch sử dọn**, xem kết quả các lượt lưu & đóng mới và mở lại các tab xác nhận đã đóng. Nhật ký được xuất trong JSON; lịch sử nhập lại có thể trỏ tới các trang đã mở trên thiết bị khác. Trạng thái không rõ cần kiểm tra thủ công; không thực hiện cùng lúc trên hai cửa sổ Tabspace.
-- Trong **Preset dọn tab**, tạo preset với tên miền và nhóm đích, sau đó xem trước và chọn tab để lưu & đóng. Tab đang xem, ghim, phát âm thanh hoặc ẩn danh được bỏ qua. Không phân biệt tài khoản theo URL; Chrome không cho biết chắc tab có dữ liệu chưa lưu.
+- Trong **Preset dọn tab**, tạo preset với tên miền, URL chính xác hoặc đường dẫn và nhóm đích; mục URL và ngoại lệ cho phép loại trừ, sau đó xem trước và chọn tab để lưu & đóng. Tab đang xem, ghim, phát âm thanh hoặc ẩn danh được bỏ qua. Đường dẫn khớp theo từng đoạn, phân biệt scheme và cổng, bỏ qua query và fragment; URL chính xác xét cả query và fragment. Tên miền con áp dụng cho cả bao gồm và loại trừ tên miền. Không phân biệt tài khoản theo URL; Chrome không cho biết chắc tab có dữ liệu chưa lưu.
 - Trong **Phiên đã lưu**, lưu thủ công các tab web trong cửa sổ thường; chọn từng tab để mở lại trong cửa sổ mới. Bản lưu không chứa nội dung form, lịch sử điều hướng hoặc nhóm Chrome; các trang có thể tải ngay.
 - Trong **Cài đặt & sao lưu**, xuất JSON; nhập để gộp hoặc thay thế. File chứa nhóm, phiên, preset, thùng rác, lịch sử và có thể chứa URL hoặc dữ liệu nhạy cảm. Chế độ thay thế giữ lịch sử và thùng rác cũ rồi thêm từ file. Sao lưu ra ngoài Chrome profile.
 
