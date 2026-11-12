@@ -1,4 +1,4 @@
-# Tabspace 0.16 — bản thử nghiệm
+# Tabspace 0.17 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -18,7 +18,7 @@
 - Trong **Thùng rác**, khôi phục hoặc xóa vĩnh viễn nhóm, tab đã lưu và phiên đã xóa từ phiên bản này. Không tự xóa theo thời gian; dữ liệu có trong file sao lưu. Nếu nhóm gốc bị xóa, khôi phục nhóm trước khi khôi phục tab.
 - Trong **Lịch sử dọn**, xem kết quả các lượt lưu & đóng mới và mở lại các tab xác nhận đã đóng. Nhật ký được xuất trong JSON; lịch sử nhập lại có thể trỏ tới các trang đã mở trên thiết bị khác. Trạng thái không rõ cần kiểm tra thủ công; không thực hiện cùng lúc trên hai cửa sổ Tabspace.
 - Trong **Preset dọn tab**, tạo preset với tên miền, URL chính xác hoặc đường dẫn và nhóm đích; mục URL và ngoại lệ cho phép loại trừ, sau đó xem trước và chọn tab để lưu & đóng. Tab đang xem, ghim, phát âm thanh hoặc ẩn danh được bỏ qua. Đường dẫn khớp theo từng đoạn, phân biệt scheme và cổng, bỏ qua query và fragment; URL chính xác xét cả query và fragment. Tên miền con áp dụng cho cả bao gồm và loại trừ tên miền. Không phân biệt tài khoản theo URL; Chrome không cho biết chắc tab có dữ liệu chưa lưu.
-- Trong **Phiên đã lưu**, lưu thủ công các tab web trong cửa sổ thường; chọn từng tab để mở lại trong cửa sổ mới. Bản lưu không chứa nội dung form, lịch sử điều hướng hoặc nhóm Chrome; các trang có thể tải ngay.
+- Trong **Phiên đã lưu**, lưu thủ công các tab web trong cửa sổ thường; chọn từng tab để mở lại trong cửa sổ mới. Phiên mới lưu có thể bao gồm tên, màu, trạng thái thu gọn của nhóm Chrome; chọn có tạo lại nhóm khi mở hay không. Phiên cũ không có thông tin nhóm. Bản lưu không chứa form hoặc lịch sử điều hướng; các trang có thể tải ngay. Giữ trang Tabspace mở cho đến khi có kết quả; nếu bị gián đoạn, kiểm tra tab đã mở trước khi thử lại.
 - Trong **Cài đặt & sao lưu**, xuất JSON; nhập để gộp hoặc thay thế. File chứa nhóm, phiên, preset, thùng rác, lịch sử và có thể chứa URL hoặc dữ liệu nhạy cảm. Chế độ thay thế giữ lịch sử và thùng rác cũ rồi thêm từ file. Sao lưu ra ngoài Chrome profile.
 
 - Thời gian trong giao diện hiển thị giờ cho hôm nay, “Hôm qua” cho ngày trước đó và ngày cho những ngày khác. Di chuột hoặc dùng bàn phím focus để xem ngày giờ đầy đủ theo múi giờ thiết bị.
