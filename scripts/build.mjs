@@ -3,7 +3,7 @@ import { mkdir, readFile } from 'node:fs/promises';
 const metadata = `// ==UserScript==
 // @name         Duality Client Reborn (compatibility preview)
 // @namespace    arena.survev.reborn
-// @version      0.5.0-preview.4
+// @version      0.5.0-preview.5
 // @description  Lightweight menu, validated semantic discovery, bounded hooks and reversible features. Live compatibility unverified.
 // @match        https://survev.io/*
 // @match        https://*.survev.io/*

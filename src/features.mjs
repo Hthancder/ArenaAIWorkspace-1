@@ -12,6 +12,7 @@ import { AimController, SnapshotTracker, modeOf, predictShot, unit, weaponProfil
 import { discoverInputTimeout, discoverUpdateReceiver, discoverSourceFields, NetworkTiming } from './aim-adapters.mjs';
 import { clippedMuzzle, shotLayer, segmentCandidates } from './aim-geometry.mjs';
 import { AimEvidence } from './aim-evidence.mjs';
+import { MouseInputFrame } from './mouse-input.mjs';
 import { NativeNames } from './native-names.mjs';
 
 export const VERIFIED_PROTOCOL = 1028;
@@ -126,7 +127,7 @@ export class Features {
     this.hooks = new Disposables(); this.matchHooks = new Disposables(); this.overrides = new Overrides();
     this.tracker = new SnapshotTracker(); this.aimController = new AimController(); this.timing = new NetworkTiming(); this.names = new NativeNames(); this.aimEvidence = new AimEvidence(); this.lastAimSent = null; this.aimOutput = null; this.sourceFields = null; this.observedEntities = new Map(); this.focusBlocked = false; this.protocol = null; this.mapping = null; this.local = null;
     this.meleeEquip = null; this.manualEquipHeld = false; this.actualWeapon = null;
-    this.target = null; this.dot = null; this.restoreMouse = null; this.lastMap = -Infinity;
+    this.target = null; this.dot = null; this.mouseInput = new MouseInputFrame(); this.aimFrame = 0; this.aimPlanFrame = -1; this.aimPlanDirect = false; this.lastMap = -Infinity;
     this.lastVisual = -Infinity; this.lastInput = -Infinity; this.lastScan = -Infinity;
     this.effects = []; this.lastGame = null; this.lastPool = null; this.lastActive = null; this.lastActiveId = null;
     this.stopped = false; this.keys = new Set(); this.holdAim = false;
@@ -154,9 +155,9 @@ export class Features {
       if (event.code === this.config.aimKey) this.holdAim = true;
     }, { signal: controller.signal });
     win.addEventListener('keyup', event => { if (event.code === this.config.layerKey) releaseLayer(); if (event.code === this.config.aimKey) this.holdAim = false; }, { signal: controller.signal });
-    win.addEventListener('blur', () => { releaseLayer(); this.focusBlocked = true; this.holdAim = false; this.aimController.reset(); }, { signal: controller.signal });
+    win.addEventListener('blur', () => { releaseLayer(); this.restoreInput(); this.focusBlocked = true; this.holdAim = false; this.aimController.reset(); }, { signal: controller.signal });
     win.addEventListener('focus', () => { this.focusBlocked = false; }, { signal: controller.signal });
-    win.document.addEventListener('visibilitychange', () => { if (win.document.hidden) releaseLayer(); }, { signal: controller.signal });
+    win.document.addEventListener('visibilitychange', () => { if (win.document.hidden) { releaseLayer(); this.restoreInput(); } }, { signal: controller.signal });
     this.reconcile(true);
   }
   guard(name, fn) {
@@ -167,7 +168,7 @@ export class Features {
       if (name === 'visual-frame' || name === 'overlay-render') this.stats.esp = emptyEspStats('error');
       if (name === 'overlay-render') this.clearCanvas();
       if (name === 'visual-frame') { this.overrides.clear(); this.names.clear(); this.clearCanvas(); }
-      if (name === 'input-frame') { this.aimController.reset(); this.aimOutput = null; this.layerOverrides.clear(); }
+      if (name === 'input-frame') { this.restoreInput(); this.aimController.reset(); this.aimOutput = null; this.layerOverrides.clear(); }
       this.report('error', this.stats.lastError);
     }
   }
@@ -181,15 +182,7 @@ export class Features {
     }, this.hooks)) this.report('warning', 'Không có flush contract: aim input bị khóa.');
     else this.flushReady = true;
   }
-  restoreInput() {
-    if (this.restoreMouse) {
-      const { owner, x, y } = this.restoreMouse;
-      // Only undo values still owned by this frame; don't clobber a later writer.
-      if (owner.x === this.restoreMouse.appliedX) owner.x = x;
-      if (owner.y === this.restoreMouse.appliedY) owner.y = y;
-      this.restoreMouse = null;
-    }
-  }
+  restoreInput() { this.mouseInput.restore(); }
   releaseMatch() {
     this.restoreInput(); this.matchHooks.clear(); this.overrides.clear(); this.names.clear(); this.tracker.reset(); this.aimController.reset(); this.lastAimSent = null; this.aimOutput = null; this.sourceFields = null; this.observedEntities.clear(); this.timing.reset();
     this.target = null; this.dot = null; this.meleeDirection = null; this.switchSlot = null; this.meleeEquip = null; this.manualEquipHeld = false; this.actualWeapon = null;
@@ -214,7 +207,7 @@ export class Features {
     if (!key) return;
     const self = this;
     this.senderReady = patchMethod(game, key, original => function (type, data, ...rest) {
-      let outgoing = data, joinRecord = null;
+      let outgoing = data, joinRecord = null, intent = data;
       try {
         if (type === 1 && Number.isInteger(data?.protocol) && typeof data.name === 'string'
           && typeof data.joinToken === 'string' && (typeof data.isMobile === 'boolean' || data.isMobile === undefined)
@@ -229,25 +222,28 @@ export class Features {
         }
         if (type === 3 && !self.stopped && self.mapping?.ui?.spectating === false) {
           if (!inputShape(data)) return Reflect.apply(original, this, arguments);
+          intent = self.mouseInput.intent(self.app.input, self.mapping?.camera, data);
           const manualEquip = data.inputs.some(isManualEquip);
           if (manualEquip) { self.weaponSwitch.reset(); self.switchSlot = null; self.manualEquipHeld = true; }
           if (!self.inputReady()) { self.stats.aimState = self.inputBlockReason(); self.aimOutput = null; self.aimController.reset(); self.weaponSwitch.reset(); self.movement.reset(); self.switchSlot = null; self.meleeDirection = null; }
-          else self.aimOutput = self.processAim(data, true);
+          else self.aimOutput = self.aimPlanFrame === self.aimFrame && self.aimPlanDirect ? self.aimPlan : self.processAim(intent, true);
           if (manualEquip) { self.weaponSwitch.reset(); self.switchSlot = null; self.manualEquipHeld = true; }
           self.moveDirection = self.config.mobileMovement && inputShape(data) ? self.movement.sample(data, self.config.movementSmooth, self.win.performance.now()) : null;
           if (!self.config.mobileMovement) self.movement.reset();
-          outgoing = self.inputReady() ? modifyMessage(data, self.config, self) : data;
+          outgoing = self.inputReady() ? modifyMessage(intent, self.config, self) : intent;
+          if (!self.aimOutput) self.restoreInput();
           if (self.meleeDirection && self.switchSlot === 2 && outgoing !== data && outgoing.inputs.includes(13)) self.meleeEquip = { id: self.target?.__id, until: self.win.performance.now() + 1000 };
           self.switchSlot = null;
         }
-      } catch (e) { self.report('warning', `Input bypassed: ${e.message}`); outgoing = data; }
+      } catch (e) { self.report('warning', `Input bypassed: ${e.message}`); self.aimOutput = null; self.restoreInput(); outgoing = intent; }
       const result = Reflect.apply(original, this, [type, outgoing, ...rest]);
-      if (type === 3 && inputShape(outgoing)) { self.aimEvidence.sent(data, outgoing, !!self.aimOutput, self.win.performance.now(), self.inputReady()); self.lastAimSent = self.aimOutput ? point(outgoing.toMouseDir) : null; self.timing.sent(outgoing, self.win.performance.now()); }
+      if (type === 3 && inputShape(outgoing)) { self.aimEvidence.sent(intent, outgoing, !!self.aimOutput, self.win.performance.now(), self.inputReady()); self.lastAimSent = self.aimOutput ? point(outgoing.toMouseDir) : null; self.timing.sent(outgoing, self.win.performance.now()); }
       if (joinRecord) joinRecord.forwarded = true; // Forwarded to native sender; not a server acknowledgement.
       return result;
     }, this.gameHooks);
   }
   configurationChanged(key) {
+    this.restoreInput(); this.aimPlanFrame = -1; this.aimPlanDirect = false;
     this.lastVisual = -Infinity;
     if (key === 'layerKey' || key === 'layerSpoofer') { this.layerHeld = false; this.layerOverrides.clear(); }
     if (['aim', 'aimMode', 'aimActivation'].includes(key)) { this.aimController.reset(); this.stickyId = null; }
@@ -352,8 +348,9 @@ export class Features {
     this.updateLoot();
     this.switchSlot = null;
     if (this.inputReady()) this.updateSwitch(); else this.weaponSwitch.reset();
-    const plan = this.processAim(null, false);
-    this.aimPlan = plan;
+    const aimFrame = ++this.aimFrame, directMouse = this.config.directMouseInput !== false && !!this.flushReady;
+    const plan = this.processAim(null, directMouse, directMouse);
+    this.aimPlan = plan; this.aimPlanFrame = aimFrame; this.aimPlanDirect = directMouse;
     const needsRestore = !plan && this.lastAimSent;
     const needsAim = plan && (!this.lastAimSent || Math.abs(angleDelta(Math.atan2(this.lastAimSent.y, this.lastAimSent.x), Math.atan2(plan.dir.y, plan.dir.x))) > Math.PI / 1800 || plan.toMouseHit && Math.abs((this.lastAimDistance || 0) - plan.distance) > .5);
     if (this.timeoutKey && (needsAim || needsRestore || this.switchSlot !== null) && this.app.game?.initialized && this.mapping?.ui?.spectating === false) {
@@ -406,7 +403,7 @@ export class Features {
   }
   inputReady() { return this.inputBlockReason() === null; }
   emoteOpen() { return entries(this.app.game).some(([, child]) => read(child, 'wheelDisplayed') === true); }
-  processAim(native, advance) {
+  processAim(native, advance, applyDirect = false) {
     const m = this.mapping, cfg = this.config, mode = modeOf(cfg), now = this.win.performance.now();
     this.target = null; this.dot = null; this.meleeDirection = null; this.stats.aimRejections = {}; this.stats.predictionState = null; this.stats.aimApproximate = false;
     const blockedInput = this.inputBlockReason();
@@ -414,7 +411,7 @@ export class Features {
       wallcheckAvailable: !!this.capabilities.wallcheck, predictionRequested: !!cfg.predict }, this.stats.aimRejections, now, !blockedInput);
     const fail = state => { this.stats.aimState = state; this.aimController.reset(); this.stickyId = null; note(state); return null; };
     if (blockedInput) return fail(blockedInput);
-    const pos = this.sourcePos(m.active), mouse = this.app.input?.mousePos, camera = m.camera;
+    const pos = this.sourcePos(m.active), mouse = this.mouseInput.physical(this.app.input), camera = m.camera;
     if (!vec(pos) || !vec(mouse) || !camera) return fail('invalid-input-position');
     const physical = native?.toMouseDir || unit({ x: mouse.x - read(camera.camera, camera.widthKey) / 2, y: read(camera.camera, camera.heightKey) / 2 - mouse.y });
     if (!unit(physical)) return fail('invalid-direction');
@@ -483,7 +480,7 @@ export class Features {
       if (layerFor(shot.dir) === null || !sameLayer(layerFor(shot.dir), this.sourceLayer(candidate.p))) { reject('aimLayer'); continue; }
       if (this.blocked({ pos: shot.muzzle, layer: layerFor(shot.dir) }, { pos: shot.world }, !melee, obstacles)) { reject('wall'); continue; }
       this.target = candidate.p; this.stickyId = candidate.p.__id;
-      this.stats.aimState = advance ? 'input-applied' : 'ready-to-send'; this.stats.predictionState = shot.state;
+      this.stats.predictionState = shot.state;
       this.stats.aimApproximate = !!shot.approximate;
       const dir = advance ? this.aimController.step(physical, shot.dir, { mode: melee ? 'lock' : mode, strength: cfg.assistStrength ?? 35,
         smooth: melee || !cfg.smoothEnabled ? 0 : cfg.smooth, now, target: candidate.p }) : !melee && mode === 'assist' ? this.aimController.step(physical, shot.dir, { mode, strength: cfg.assistStrength ?? 35, now, target: candidate.p }) : shot.dir;
@@ -493,6 +490,9 @@ export class Features {
         if (slot !== 2 && cfg.autoMelee && (!this.meleeEquip || this.meleeEquip.id !== candidate.p.__id || now > this.meleeEquip.until)) this.switchSlot = 2;
       } else this.meleeEquip = null;
       const outputDistance = profile?.toMouseHit && !melee ? shot.mouseLen : shot.distance;
+      const directInput = applyDirect && this.config.directMouseInput !== false && !!this.flushReady;
+      const directApplied = directInput ? this.mouseInput.apply(this.app.input, camera, { dir, distance: outputDistance, toMouseHit: !!profile?.toMouseHit && !melee }) : false;
+      this.stats.aimState = directInput && !directApplied ? 'ready-to-send' : advance ? 'input-applied' : 'ready-to-send';
       if (advance) this.lastAimDistance = outputDistance;
       note(this.stats.aimState);
       return { dir, distance: outputDistance, toMouseHit: !!profile?.toMouseHit && !melee };
@@ -541,7 +541,7 @@ export class Features {
     this.effects = out;
   }
   post() {
-    this.restoreInput();
+    this.restoreInput(); this.aimPlanFrame = -1; this.aimPlanDirect = false;
     const now = this.win.performance.now(); this.stats.frames++;
     if (now - this.lastVisual < 1000 / 30) return;
     this.lastVisual = now;
@@ -727,12 +727,13 @@ export class Features {
       canvasRenderer: !!this.ctx, mapDefinitions: !!this.mapDefinitions, smokeSource: this.smokeSources.length > 0, definitions: !!this.definitions, lootSource: !!this.lootSource, localData: !!this.local, binds: !!this.binds,
       protocolObserved: this.protocol !== null, protocolMatches: this.protocol === VERIFIED_PROTOCOL,
     };
-    return { version: '0.5.0-preview.4', protocol: this.protocol, sourceProtocol: VERIFIED_PROTOCOL,
+    return { version: '0.5.0-preview.5', protocol: this.protocol, sourceProtocol: VERIFIED_PROTOCOL,
       initialized: checks.initialized, checks,
       autoLoot: { state: this.autoLootStatus(), mode: this.config.lootMode, ...this.joinState },
       mapHighlights: { ...this.mapHighlights.stats },
       nativeNames: { ...this.names.stats },
       inputBlockReason: this.inputBlockReason(),
+      mouseInput: { enabled: this.config.directMouseInput !== false, flushReady: !!this.flushReady, ...this.mouseInput.snapshot() },
       registry: { state: m?.registryState ?? 'waiting-mapping', ...m?.registryEvidence },
       aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict },
       aimEvidence: this.aimEvidence.snapshot(this.win.performance.now()),

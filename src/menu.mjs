@@ -2,7 +2,7 @@ import { clamp, finite } from './core.mjs';
 import { colorValue, ESP_PALETTE } from './esp.mjs';
 
 export const DEFAULTS = Object.freeze({
-  version: 2, aim: false, aimMode: 'lock', aimActivation: 'fire', assistStrength: 35, latencyCompensation: true, leadAdjustment: 100, smoothEnabled: true, smooth: 50, knocked: false, sticky: true,
+  version: 2, aim: false, aimMode: 'lock', aimActivation: 'fire', directMouseInput: true, assistStrength: 35, latencyCompensation: true, leadAdjustment: 100, smoothEnabled: true, smooth: 50, knocked: false, sticky: true,
   showDot: false, fov: 100, showFov: true, wallcheck: true, predict: true,
   melee: false, autoMelee: false, autoSwitch: false, useOneGun: false, layerSpoofer: false, layerKey: 'KeyT', semi: false, xray: false, darkerSmokes: true, ceilings: true, mapHighlights: false, smallerTrees: true,
   smokeOpacity: 50, treeOpacity: 50, esp: false, nametags: true, lines: false,
@@ -52,7 +52,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
 `;
 const GROUPS = {
   Main: [
-    ['Aim — Mode & activation', [['aimMode', 'Mode', 'aim'], ['aimActivation', 'Activate when'], ['assistStrength', 'Assist strength (%)', 'aim'], ['smoothEnabled', 'Smooth Lock', 'aim'], ['smooth', 'Lock smooth', 'aim']]],
+    ['Aim — Mode & activation', [['aimMode', 'Mode', 'aim'], ['aimActivation', 'Activate when'], ['directMouseInput', 'Direct native mouse input', 'aim'], ['assistStrength', 'Assist strength (%)', 'aim'], ['smoothEnabled', 'Smooth Lock', 'aim'], ['smooth', 'Lock smooth', 'aim']]],
     ['Aim — Target selection', [['fov', 'FOV radius (input pixels)'], ['sticky', 'Keep target', 'aim'], ['knocked', 'Include downed', 'aim'], ['wallcheck', 'Wallcheck', 'wallcheck']]],
     ['Aim — Hỗ trợ ngắm', [['showFov', 'FOV circle'], ['showDot', 'Predicted point (optional)']]],
     ['Aim — Prediction', [['predict', 'Auto prediction', 'prediction']]],
@@ -92,7 +92,7 @@ export function createMenu(win, config, { onChange = () => {}, retry, stop, diag
   const style = el('style', { text: CSS });
   const canvas = el('canvas'); canvas.setAttribute('aria-hidden', 'true');
   const shell = el('section', { id: 'ui' }); shell.setAttribute('aria-label', 'Duality Client Reborn');
-  const brand = el('div', { class: 'brand', text: 'Duality Client' }, el('div', { class: 'version', text: 'Reborn 0.5.0-preview.4 • readable debug' }));
+  const brand = el('div', { class: 'brand', text: 'Duality Client' }, el('div', { class: 'version', text: 'Reborn 0.5.0-preview.5 • readable debug' }));
   const nav = el('nav', { class: 'nav' }); nav.setAttribute('aria-label', 'Menu tabs');
   const content = el('main', { class: 'content' });
   const status = el('div', { id: 'status', text: 'Đang chờ Application…' }); status.setAttribute('role', 'status');

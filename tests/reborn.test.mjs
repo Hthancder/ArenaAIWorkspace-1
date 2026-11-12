@@ -557,10 +557,42 @@ test('aim input stays player-relative when the visual/shaken camera center diffe
   engine.dispose(); dom.window.close();
 });
 
+test('direct native mouse route advances Lock once per frame and keeps the real cursor radius', () => {
+  const f = coordinated({ smooth: 90 });
+  const originalStep = f.engine.aimController.step.bind(f.engine.aimController);
+  let steps = 0; f.engine.aimController.step = (...args) => { steps++; return originalStep(...args); };
+  try {
+    f.app.game.transmit(1, new JoinMsg());
+    f.app.game.barn.playerPool.list[1].p = { x: 12, y: 20.4 };
+    f.engine.pre();
+    assert.equal(steps, 1);
+    assert.notDeepEqual(f.app.input.mousePos, { x: 440, y: 300 });
+    assert.ok(Math.abs(Math.hypot(f.app.input.mousePos.x - 400, 300 - f.app.input.mousePos.y) - 40) < 1e-9);
+    f.app.game.transmit(3, (() => { const m = new InputMsg(); m.shootHold = true; m.toMouseLen = 1.25; return m; })());
+    assert.equal(steps, 1, 'Sender reuses the direct-frame plan instead of advancing Lock twice');
+    assert.equal(f.engine.stats.aimState, 'input-applied');
+    assert.equal(f.engine.diagnostics().mouseInput.enabled, true);
+    assert.ok(f.engine.diagnostics().mouseInput.appliedFrames >= 1);
+    f.app.input.flush(); assert.deepEqual(f.app.input.mousePos, { x: 440, y: 300 });
+    const d = f.engine.diagnostics().mouseInput; assert.equal(d.active, false);
+  } finally { f.close(); }
+});
+
+test('Direct native mouse input can be opted out without disabling sender correction', () => {
+  const f = coordinated({ directMouseInput: false });
+  try {
+    f.app.game.transmit(1, new JoinMsg());
+    f.engine.pre(); assert.deepEqual(f.app.input.mousePos, { x: 440, y: 300 }); assert.equal(f.engine.stats.aimState, 'ready-to-send');
+    f.app.game.transmit(3, (() => { const m = new InputMsg(); m.shootHold = true; m.toMouseLen = 1.25; return m; })());
+    assert.equal(f.engine.stats.aimState, 'input-applied'); assert.deepEqual(f.app.input.mousePos, { x: 440, y: 300 });
+    assert.equal(f.engine.diagnostics().mouseInput.enabled, false);
+  } finally { f.close(); }
+});
+
 test('aim uses physical Fire fallback only if binds are missing, not to override an explicit released bind', () => {
   const dom = env(), app = fixture(); app.input.mouseButtons[0] = true; app.game.binds = null;
   const engine = new Features(dom.window, app, { ...DEFAULTS, aim: true, predict: false, wallcheck: false }, () => {}, defs);
-  app.game.transmit(1, new JoinMsg()); engine.pre(); assert.equal(engine.stats.aimState, 'ready-to-send');
+  app.game.transmit(1, new JoinMsg()); engine.pre(); assert.equal(engine.stats.aimState, 'input-applied');
   app.game.binds = new Binds(app.input); app.game.binds.isBindDown = () => false;
   engine.reconcile(true); engine.pre(); assert.equal(engine.stats.aimState, 'waiting-activation');
   engine.dispose(); dom.window.close();
@@ -695,7 +727,7 @@ test('missing Canvas2D does not break input features or native colored names', (
   app.input.mouseButtons[0] = true;
   const engine = new Features(dom.window, app, { ...DEFAULTS, esp: true, aim: true, predict: false, wallcheck: false }, (level, message) => reports.push({ level, message }), defs);
   engine.attachCanvas({ getContext() { throw Error('unsupported'); } });
-  app.game.transmit(1, new JoinMsg()); engine.pre(); engine.post(); assert.equal(engine.stats.aimState, 'ready-to-send'); assert.equal(engine.stats.esp.state, 'no-canvas');
+  app.game.transmit(1, new JoinMsg()); engine.pre(); engine.post(); assert.equal(engine.stats.aimState, 'input-applied'); assert.equal(engine.stats.esp.state, 'no-canvas');
   assert.equal(app.game.barn.playerPool.list[1].nameText.visible, true);
   assert.ok(reports.some(r => r.level === 'warning')); engine.dispose(); dom.window.close();
 });

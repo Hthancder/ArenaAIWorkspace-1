@@ -56,7 +56,7 @@ const nameFactorySource = playerJS.slice(nativeNameFactory.start, nativeNameFact
 const classes = [
   sourceClass('client/src/objects/objectPool.ts', 'Creator', ['m_getObjById', 'm_deleteObj', 'm_updateObjPart']),
   sourceClass('client/src/camera.ts', 'Camera', ['m_z', 'm_pixels', 'm_pointToScreen', 'm_screenToPoint']),
-  sourceClass('client/src/objects/player.ts', 'Player', ['selectIdlePose', 'canInteract', 'getMeleeCollider', 'm_getZoom', 'render', 'm_updateData']),
+  sourceClass('client/src/objects/player.ts', 'Player', ['selectIdlePose', 'canInteract', 'getMeleeCollider', 'm_getZoom', 'render', 'm_updateData', 'updateRotation']),
   sourceClass('client/src/objects/player.ts', 'PlayerBarn', ['getPlayerById', 'getPlayerInfo', 'deletePlayerInfo', 'recomputeTeamData']),
   sourceClass('client/src/game.ts', 'Game', ['tryJoinGame', 'm_sendMessage', 'update', 'm_processGameUpdate']),
   sourceClass('client/src/inputBinds.ts', 'InputBinds', ['isBindDown', 'isBindPressed', 'preventMenuBind']),
@@ -84,17 +84,20 @@ ${nameFactorySource}
 const fistsDef=${fistsSource}; const GameObjectDefs={typeToId(){return 0},idToType(){return ''},typeToDef(){return fistsDef}};
 const sharedShapes=[{color:123,scale:3,collider:{type:0,pos:{x:0,y:0},rad:1}}];
 const MapObjectDefs={typeToDef(){return {type:'obstacle',img:{zIdx:1},map:{shapes:sharedShapes}}}}; const nativeMap=new Map();
-const device = {mobile:false,touch:false}; const window = {};
+const device = {mobile:false,touch:false}; const window = {innerWidth:800,innerHeight:600};
+const Bones={HandL:0,HandR:1,FootL:2,FootR:3}; const Anim={Revive:99};
 const GameConfig={protocolVersion:${VERIFIED_PROTOCOL}, WeaponSlot:{Throwable:3},Anim:{Melee:1,Cook:2}};
 const Input={MoveLeft:0,MoveRight:1,MoveUp:2,MoveDown:3,Fire:4}; const Key={Left:37,Right:39,Up:38,Down:40};
 const net={JoinMsg,InputMsg,Constants, MsgType:{Join:1,Input:3}, MsgStream:class {constructor(){} serializeMsg(type,data){
  const booleans=[]; const stream={writeUint32(){},writeString(){},writeBoolean(v){booleans.push(!!v)},writeGameType(){},writeArray(){}};
  if(type===1)data.serialize(stream); let decoded=null;if(type===3){const buf=new ArrayBuffer(128);data.serialize(new BitStream(buf));decoded=new InputMsg();decoded.deserialize(new BitStream(buf));decoded.toMouseDir=v2.normalizeSafe(decoded.toMouseDir);} globalThis.sent.push({type,data,booleans,decoded}); }}};
 class WebsocketConnection { constructor(){} }
-const camera = Object.assign(new Camera(),{m_pos:{x:9,y:18},m_ppu:16,m_zoom:2,m_targetZoom:2,m_screenWidth:800,m_screenHeight:600});
+const camera = Object.assign(new Camera(),{m_pos:{x:9,y:18},m_ppu:16,m_zoom:2,m_targetZoom:2,m_screenWidth:800,m_screenHeight:600,m_localRotationEnabled:true});
 function player(id,pos){return Object.assign(new Player(),{__id:id,__type:1,active:true,layer:0,downed:false,container:{},nameText:Object.assign(createPlayerNameText(),{text:'native-'+id}),
   m_pos:pos,m_dir:{x:1,y:0},m_visualPos:pos,m_visualPosOld:pos,m_visualDirOld:{x:1,y:0},m_setLocalData(){},isUnderground(){return false},m_netData:{m_pos:pos,m_layer:0,m_perks:[],m_activeWeapon:'mp5',m_dead:false,m_scale:1,m_role:''},
   m_localData:{m_zoom:48,m_curWeapIdx:0,m_weapons:[{type:'mp5',ammo:20},{type:'mp5',ammo:20},{type:'fists',ammo:0},{type:'frag',ammo:1}]}});}
+const rotationSubject={m_netData:{m_activeWeapon:'fists'},downed:false,currentAnim(){return 0},gunRecoilL:0,gunRecoilR:0,bodyContainer:{rotation:0},m_visualDir:{x:1,y:0},bones:Array.from({length:4},()=>({pos:{x:0,y:0},pivot:{x:0,y:0},rot:0}))};
+for(const key of ['handLContainer','handRContainer','footLContainer','footRContainer'])rotationSubject[key]={position:{set(){}},pivot:{set(){}}};
 const hero=player(1,{x:10,y:20}),enemy=player(2,{x:12,y:20}),ally=player(3,{x:11,y:20}),unknown=player(4,{x:11.5,y:20});
 const barn=Object.assign(new PlayerBarn(),{playerPool:{m_pool:[hero,enemy,ally,unknown],m_getPool(){return this.m_pool}},playerIds:[1,2,3,4],teamInfo:{},groupInfo:{},playerInfo:{1:{playerId:1,teamId:10,groupId:10},2:{playerId:2,teamId:20,groupId:20},3:{playerId:3,teamId:10,groupId:30}}});
 barn.recomputeTeamData();
@@ -117,7 +120,7 @@ const serverPlayer={animType:0,animTicker:0,shootStart:false,shootHold:false,dow
  cancelAction(){},playAnim(type,duration){this.animType=type;this.animTicker=duration;this.swings++;}};
 const serverWeapon=Object.assign(new WeaponManager(),{player:serverPlayer,curWeapIdx:0,weapons:[{type:'fists',cooldown:-1,recoilTime:0}],
  meleeAttacks:[],meleeAnimCooldown:0,throwableCooldown:0,meleeDamage(){}});
-globalThis.result={setWall:on=>{if(on)game.m_objectCreator.m_idToObj[99]={__id:99,__type:2,active:true,collidable:true,dead:false,height:1,layer:0,collider:{type:0,pos:{x:11.5,y:20.2},rad:.25}};else delete game.m_objectCreator.m_idToObj[99];},setZoom:z=>{camera.m_zoom=z;camera.m_targetZoom=z;},nativePrevious:()=>game.m_prevInputMsg,nativeFrame:dt=>game.nativeInputFrame(dt),receive:pos=>game.m_processGameUpdate({ack:game.seq,playerInfos:[],deletedPlayerIds:[],delObjIds:[],fullObjects:[],partObjects:[{__id:2,__type:1,pos,dir:{x:1,y:0}}],activePlayerData:{},bullets:[],explosions:[],emotes:[],planes:[],airstrikeZones:[],mapIndicators:[]}),app,callbacks,fistsDef,nativeMap,readInputAim:()=>game.readInputAim(),
+globalThis.result={localRotation:()=>{Player.prototype.updateRotation.call(rotationSubject,input,camera,true,false,false);return rotationSubject.bodyContainer.rotation;},setWall:on=>{if(on)game.m_objectCreator.m_idToObj[99]={__id:99,__type:2,active:true,collidable:true,dead:false,height:1,layer:0,collider:{type:0,pos:{x:11.5,y:20.2},rad:.25}};else delete game.m_objectCreator.m_idToObj[99];},setZoom:z=>{camera.m_zoom=z;camera.m_targetZoom=z;},nativePrevious:()=>game.m_prevInputMsg,nativeFrame:dt=>game.nativeInputFrame(dt),receive:pos=>game.m_processGameUpdate({ack:game.seq,playerInfos:[],deletedPlayerIds:[],delObjIds:[],fullObjects:[],partObjects:[{__id:2,__type:1,pos,dir:{x:1,y:0}}],activePlayerData:{},bullets:[],explosions:[],emotes:[],planes:[],airstrikeZones:[],mapIndicators:[]}),app,callbacks,fistsDef,nativeMap,readInputAim:()=>game.readInputAim(),
  frameInput:()=>{const msg=new InputMsg();msg.shootStart=!!binds.isBindPressed(4);msg.shootHold=!!binds.isBindDown(4);if(binds.isBindPressed(10))msg.addInput(10);return msg;},
  setMelee:()=>{hero.m_netData.m_activeWeapon='fists';hero.m_localData.m_curWeapIdx=2;input.mouseButtonsOld[0]=true;},
  serverTick:(msg,dt)=>{serverPlayer.animTicker-=dt;if(serverPlayer.animTicker<=0)serverPlayer.animType=0;serverPlayer.shootStart=msg.shootStart;serverPlayer.shootHold=msg.shootHold;serverWeapon.update(dt);return serverPlayer.swings;},
@@ -161,10 +164,17 @@ for (const renamed of [false, true]) for (const lootMode of ['mobile', 'nearby']
     let wire=context.sent.at(-1).decoded;
     assert.ok(wire && Math.abs(wire.toMouseDir.x-1)<1e-4 && Math.abs(wire.toMouseDir.y)<.003, 'Actual source native diff/send and BitStream roundtrip');
     const count=context.sent.length;
-    clock += 34; context.result.receive({x:12,y:20.4});engine.pre();context.result.nativeFrame(1/60);
+    clock += 34; context.result.receive({x:12,y:20.4});engine.pre();
+    const mouseDirection=context.result.readInputAim().toMouseDir;
+    assert.ok(mouseDirection.y>.1,'Mouse hook changes actual native desktop aim expressions before the sender');
+    assert.ok(Math.abs(context.result.localRotation()+Math.atan2(mouseDirection.y,mouseDirection.x))<1e-8,'Actual Player.updateRotation reads the same corrected mouse direction');
+    context.result.nativeFrame(1/60);
     assert.ok(context.sent.length>count, 'Stationary physical mouse still sends corrected direction through timeout');
     wire=context.sent.at(-1).decoded;assert.ok(wire.toMouseDir.y>.1, 'Correct aim on wire after target moves');
-    assert.equal(context.result.nativePrevious().toMouseDir.y,0,'Source prevInput retains native intent, not cloned correction');
+    assert.ok(context.result.nativePrevious().toMouseDir.y>.1,'Direct mouse path reaches native input construction and prevInput before sender correction');
+    assert.ok(app.input.mousePos.y<300,'Native mouse input vector is corrected during the frame');
+    app.input.flush(); assert.equal(app.input.mousePos.y,300,'Real mouse intent restored before native flush');
+    assert.equal(context.result.localRotation(),0,'Actual local rotation returns to real mouse when the transaction ends');
     const savedDefs=engine.definitions;
     engine.definitions=null;engine.config.esp=true;engine.config.nametags=false;engine.lastVisual=-Infinity;
     clock+=17;engine.pre();context.result.nativeFrame(1/60);engine.post();

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Duality Client Reborn (compatibility preview)
 // @namespace    arena.survev.reborn
-// @version      0.5.0-preview.4
+// @version      0.5.0-preview.5
 // @description  Lightweight menu, validated semantic discovery, bounded hooks and reversible features. Live compatibility unverified.
 // @match        https://survev.io/*
 // @match        https://*.survev.io/*
@@ -7256,6 +7256,76 @@ THE SOFTWARE.
     }
   };
 
+  // src/mouse-input.mjs
+  var MouseInputFrame = class {
+    static {
+      __name(this, "MouseInputFrame");
+    }
+    constructor() {
+      this.record = null;
+      this.appliedFrames = 0;
+      this.skippedFrames = 0;
+    }
+    physical(input) {
+      const mouse = read(input, "mousePos"), r = this.record;
+      if (!vec(mouse)) return null;
+      if (!r || mouse !== r.owner) return point(mouse);
+      return { x: mouse.x === r.applied.x ? r.raw.x : mouse.x, y: mouse.y === r.applied.y ? r.raw.y : mouse.y };
+    }
+    apply(input, camera, plan) {
+      this.restore();
+      const mouse = read(input, "mousePos"), raw = this.physical(input);
+      const width = read(camera?.camera, camera?.widthKey), height = read(camera?.camera, camera?.heightKey);
+      const scale = read(camera?.camera, camera?.scaleKeys?.[0]) * read(camera?.camera, camera?.scaleKeys?.[1]);
+      const dx = mouse && Object.getOwnPropertyDescriptor(mouse, "x"), dy = mouse && Object.getOwnPropertyDescriptor(mouse, "y");
+      if (!raw || !vec(plan?.dir) || !dx || !dy || !("value" in dx) || !("value" in dy) || !dx.writable || !dy.writable || !finite(width) || !finite(height) || width <= 0 || height <= 0 || !finite(scale) || scale <= 0) {
+        this.skippedFrames++;
+        return false;
+      }
+      const length = plan.toMouseHit ? Math.min(64, Math.max(0, plan.distance)) * scale : Math.hypot(raw.x - width / 2, raw.y - height / 2);
+      const applied = { x: width / 2 + plan.dir.x * length, y: height / 2 - plan.dir.y * length };
+      if (!vec(applied)) {
+        this.skippedFrames++;
+        return false;
+      }
+      this.record = { owner: mouse, raw, applied };
+      try {
+        mouse.x = applied.x;
+        mouse.y = applied.y;
+      } catch {
+        this.restore();
+        this.skippedFrames++;
+        return false;
+      }
+      this.appliedFrames++;
+      return true;
+    }
+    // Reconstruct desktop native intent at the CURRENT zoom, before sender safety
+    // recomputation. Never blend a second time from the already corrected vector.
+    intent(input, camera, native) {
+      if (!this.record || read(input, "mousePos") !== this.record.owner) return native;
+      const mouse = this.physical(input);
+      const scale = read(camera?.camera, camera?.scaleKeys?.[0]) * read(camera?.camera, camera?.scaleKeys?.[1]);
+      const x = mouse && mouse.x - read(camera?.camera, camera?.widthKey) / 2;
+      const y = mouse && read(camera?.camera, camera?.heightKey) / 2 - mouse.y;
+      const length = Math.hypot(x, y);
+      if (!mouse || !finite(scale) || scale <= 0 || !finite(length)) return native;
+      return Object.assign(Object.create(Object.getPrototypeOf(native)), native, { toMouseDir: length > 1e-5 * scale ? { x: x / length, y: y / length } : { x: 1, y: 0 }, toMouseLen: Math.min(64, length / scale) });
+    }
+    restore() {
+      const r = this.record;
+      this.record = null;
+      if (!r) return;
+      for (const key of ["x", "y"]) {
+        const d = Object.getOwnPropertyDescriptor(r.owner, key);
+        if (d && "value" in d && d.writable && d.value === r.applied[key]) r.owner[key] = r.raw[key];
+      }
+    }
+    snapshot() {
+      return { active: !!this.record, appliedFrames: this.appliedFrames, skippedFrames: this.skippedFrames };
+    }
+  };
+
   // src/native-names.mjs
   var NativeNames = class {
     static {
@@ -7490,7 +7560,10 @@ THE SOFTWARE.
       this.actualWeapon = null;
       this.target = null;
       this.dot = null;
-      this.restoreMouse = null;
+      this.mouseInput = new MouseInputFrame();
+      this.aimFrame = 0;
+      this.aimPlanFrame = -1;
+      this.aimPlanDirect = false;
       this.lastMap = -Infinity;
       this.lastVisual = -Infinity;
       this.lastInput = -Infinity;
@@ -7552,6 +7625,7 @@ THE SOFTWARE.
       }, { signal: controller.signal });
       win.addEventListener("blur", () => {
         releaseLayer();
+        this.restoreInput();
         this.focusBlocked = true;
         this.holdAim = false;
         this.aimController.reset();
@@ -7560,7 +7634,10 @@ THE SOFTWARE.
         this.focusBlocked = false;
       }, { signal: controller.signal });
       win.document.addEventListener("visibilitychange", () => {
-        if (win.document.hidden) releaseLayer();
+        if (win.document.hidden) {
+          releaseLayer();
+          this.restoreInput();
+        }
       }, { signal: controller.signal });
       this.reconcile(true);
     }
@@ -7579,6 +7656,7 @@ THE SOFTWARE.
           this.clearCanvas();
         }
         if (name === "input-frame") {
+          this.restoreInput();
           this.aimController.reset();
           this.aimOutput = null;
           this.layerOverrides.clear();
@@ -7597,12 +7675,7 @@ THE SOFTWARE.
       else this.flushReady = true;
     }
     restoreInput() {
-      if (this.restoreMouse) {
-        const { owner, x, y } = this.restoreMouse;
-        if (owner.x === this.restoreMouse.appliedX) owner.x = x;
-        if (owner.y === this.restoreMouse.appliedY) owner.y = y;
-        this.restoreMouse = null;
-      }
+      this.mouseInput.restore();
     }
     releaseMatch() {
       this.restoreInput();
@@ -7666,7 +7739,7 @@ THE SOFTWARE.
       if (!key) return;
       const self = this;
       this.senderReady = patchMethod(game, key, (original) => function(type, data2, ...rest) {
-        let outgoing = data2, joinRecord = null;
+        let outgoing = data2, joinRecord = null, intent = data2;
         try {
           if (type === 1 && Number.isInteger(data2?.protocol) && typeof data2.name === "string" && typeof data2.joinToken === "string" && (typeof data2.isMobile === "boolean" || data2.isMobile === void 0) && typeof data2.useTouch === "boolean" && typeof data2.serialize === "function") {
             self.aimEvidence.reset();
@@ -7681,6 +7754,7 @@ THE SOFTWARE.
           }
           if (type === 3 && !self.stopped && self.mapping?.ui?.spectating === false) {
             if (!inputShape(data2)) return Reflect.apply(original, this, arguments);
+            intent = self.mouseInput.intent(self.app.input, self.mapping?.camera, data2);
             const manualEquip = data2.inputs.some(isManualEquip);
             if (manualEquip) {
               self.weaponSwitch.reset();
@@ -7695,7 +7769,7 @@ THE SOFTWARE.
               self.movement.reset();
               self.switchSlot = null;
               self.meleeDirection = null;
-            } else self.aimOutput = self.processAim(data2, true);
+            } else self.aimOutput = self.aimPlanFrame === self.aimFrame && self.aimPlanDirect ? self.aimPlan : self.processAim(intent, true);
             if (manualEquip) {
               self.weaponSwitch.reset();
               self.switchSlot = null;
@@ -7703,17 +7777,20 @@ THE SOFTWARE.
             }
             self.moveDirection = self.config.mobileMovement && inputShape(data2) ? self.movement.sample(data2, self.config.movementSmooth, self.win.performance.now()) : null;
             if (!self.config.mobileMovement) self.movement.reset();
-            outgoing = self.inputReady() ? modifyMessage(data2, self.config, self) : data2;
+            outgoing = self.inputReady() ? modifyMessage(intent, self.config, self) : intent;
+            if (!self.aimOutput) self.restoreInput();
             if (self.meleeDirection && self.switchSlot === 2 && outgoing !== data2 && outgoing.inputs.includes(13)) self.meleeEquip = { id: self.target?.__id, until: self.win.performance.now() + 1e3 };
             self.switchSlot = null;
           }
         } catch (e) {
           self.report("warning", `Input bypassed: ${e.message}`);
-          outgoing = data2;
+          self.aimOutput = null;
+          self.restoreInput();
+          outgoing = intent;
         }
         const result = Reflect.apply(original, this, [type, outgoing, ...rest]);
         if (type === 3 && inputShape(outgoing)) {
-          self.aimEvidence.sent(data2, outgoing, !!self.aimOutput, self.win.performance.now(), self.inputReady());
+          self.aimEvidence.sent(intent, outgoing, !!self.aimOutput, self.win.performance.now(), self.inputReady());
           self.lastAimSent = self.aimOutput ? point(outgoing.toMouseDir) : null;
           self.timing.sent(outgoing, self.win.performance.now());
         }
@@ -7722,6 +7799,9 @@ THE SOFTWARE.
       }, this.gameHooks);
     }
     configurationChanged(key) {
+      this.restoreInput();
+      this.aimPlanFrame = -1;
+      this.aimPlanDirect = false;
       this.lastVisual = -Infinity;
       if (key === "layerKey" || key === "layerSpoofer") {
         this.layerHeld = false;
@@ -7854,8 +7934,11 @@ THE SOFTWARE.
       this.switchSlot = null;
       if (this.inputReady()) this.updateSwitch();
       else this.weaponSwitch.reset();
-      const plan = this.processAim(null, false);
+      const aimFrame = ++this.aimFrame, directMouse = this.config.directMouseInput !== false && !!this.flushReady;
+      const plan = this.processAim(null, directMouse, directMouse);
       this.aimPlan = plan;
+      this.aimPlanFrame = aimFrame;
+      this.aimPlanDirect = directMouse;
       const needsRestore = !plan && this.lastAimSent;
       const needsAim = plan && (!this.lastAimSent || Math.abs(angleDelta(Math.atan2(this.lastAimSent.y, this.lastAimSent.x), Math.atan2(plan.dir.y, plan.dir.x))) > Math.PI / 1800 || plan.toMouseHit && Math.abs((this.lastAimDistance || 0) - plan.distance) > 0.5);
       if (this.timeoutKey && (needsAim || needsRestore || this.switchSlot !== null) && this.app.game?.initialized && this.mapping?.ui?.spectating === false) {
@@ -7925,7 +8008,7 @@ THE SOFTWARE.
     emoteOpen() {
       return entries(this.app.game).some(([, child]) => read(child, "wheelDisplayed") === true);
     }
-    processAim(native, advance2) {
+    processAim(native, advance2, applyDirect = false) {
       const m = this.mapping, cfg = this.config, mode = modeOf(cfg), now = this.win.performance.now();
       this.target = null;
       this.dot = null;
@@ -7949,7 +8032,7 @@ THE SOFTWARE.
         return null;
       }, "fail");
       if (blockedInput) return fail(blockedInput);
-      const pos = this.sourcePos(m.active), mouse = this.app.input?.mousePos, camera = m.camera;
+      const pos = this.sourcePos(m.active), mouse = this.mouseInput.physical(this.app.input), camera = m.camera;
       if (!vec(pos) || !vec(mouse) || !camera) return fail("invalid-input-position");
       const physical = native?.toMouseDir || unit({ x: mouse.x - read(camera.camera, camera.widthKey) / 2, y: read(camera.camera, camera.heightKey) / 2 - mouse.y });
       if (!unit(physical)) return fail("invalid-direction");
@@ -8067,7 +8150,6 @@ THE SOFTWARE.
         }
         this.target = candidate.p;
         this.stickyId = candidate.p.__id;
-        this.stats.aimState = advance2 ? "input-applied" : "ready-to-send";
         this.stats.predictionState = shot.state;
         this.stats.aimApproximate = !!shot.approximate;
         const dir = advance2 ? this.aimController.step(physical, shot.dir, {
@@ -8085,6 +8167,9 @@ THE SOFTWARE.
           if (slot !== 2 && cfg.autoMelee && (!this.meleeEquip || this.meleeEquip.id !== candidate.p.__id || now > this.meleeEquip.until)) this.switchSlot = 2;
         } else this.meleeEquip = null;
         const outputDistance = profile?.toMouseHit && !melee ? shot.mouseLen : shot.distance;
+        const directInput = applyDirect && this.config.directMouseInput !== false && !!this.flushReady;
+        const directApplied = directInput ? this.mouseInput.apply(this.app.input, camera, { dir, distance: outputDistance, toMouseHit: !!profile?.toMouseHit && !melee }) : false;
+        this.stats.aimState = directInput && !directApplied ? "ready-to-send" : advance2 ? "input-applied" : "ready-to-send";
         if (advance2) this.lastAimDistance = outputDistance;
         note(this.stats.aimState);
         return { dir, distance: outputDistance, toMouseHit: !!profile?.toMouseHit && !melee };
@@ -8140,6 +8225,8 @@ THE SOFTWARE.
     }
     post() {
       this.restoreInput();
+      this.aimPlanFrame = -1;
+      this.aimPlanDirect = false;
       const now = this.win.performance.now();
       this.stats.frames++;
       if (now - this.lastVisual < 1e3 / 30) return;
@@ -8427,7 +8514,7 @@ THE SOFTWARE.
         protocolMatches: this.protocol === VERIFIED_PROTOCOL
       };
       return {
-        version: "0.5.0-preview.4",
+        version: "0.5.0-preview.5",
         protocol: this.protocol,
         sourceProtocol: VERIFIED_PROTOCOL,
         initialized: checks.initialized,
@@ -8436,6 +8523,7 @@ THE SOFTWARE.
         mapHighlights: { ...this.mapHighlights.stats },
         nativeNames: { ...this.names.stats },
         inputBlockReason: this.inputBlockReason(),
+        mouseInput: { enabled: this.config.directMouseInput !== false, flushReady: !!this.flushReady, ...this.mouseInput.snapshot() },
         registry: { state: m?.registryState ?? "waiting-mapping", ...m?.registryEvidence },
         aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict },
         aimEvidence: this.aimEvidence.snapshot(this.win.performance.now()),
@@ -8463,6 +8551,7 @@ THE SOFTWARE.
     aim: false,
     aimMode: "lock",
     aimActivation: "fire",
+    directMouseInput: true,
     assistStrength: 35,
     latencyCompensation: true,
     leadAdjustment: 100,
@@ -8570,7 +8659,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
 `;
   var GROUPS = {
     Main: [
-      ["Aim — Mode & activation", [["aimMode", "Mode", "aim"], ["aimActivation", "Activate when"], ["assistStrength", "Assist strength (%)", "aim"], ["smoothEnabled", "Smooth Lock", "aim"], ["smooth", "Lock smooth", "aim"]]],
+      ["Aim — Mode & activation", [["aimMode", "Mode", "aim"], ["aimActivation", "Activate when"], ["directMouseInput", "Direct native mouse input", "aim"], ["assistStrength", "Assist strength (%)", "aim"], ["smoothEnabled", "Smooth Lock", "aim"], ["smooth", "Lock smooth", "aim"]]],
       ["Aim — Target selection", [["fov", "FOV radius (input pixels)"], ["sticky", "Keep target", "aim"], ["knocked", "Include downed", "aim"], ["wallcheck", "Wallcheck", "wallcheck"]]],
       ["Aim — Hỗ trợ ngắm", [["showFov", "FOV circle"], ["showDot", "Predicted point (optional)"]]],
       ["Aim — Prediction", [["predict", "Auto prediction", "prediction"]]],
@@ -8615,7 +8704,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
     canvas.setAttribute("aria-hidden", "true");
     const shell = el("section", { id: "ui" });
     shell.setAttribute("aria-label", "Duality Client Reborn");
-    const brand = el("div", { class: "brand", text: "Duality Client" }, el("div", { class: "version", text: "Reborn 0.5.0-preview.4 • readable debug" }));
+    const brand = el("div", { class: "brand", text: "Duality Client" }, el("div", { class: "version", text: "Reborn 0.5.0-preview.5 • readable debug" }));
     const nav = el("nav", { class: "nav" });
     nav.setAttribute("aria-label", "Menu tabs");
     const content = el("main", { class: "content" });
@@ -8932,7 +9021,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
     let menu = null, engine = null, defs = null, mapDefs = null, cancelCapture = null, alive = true;
     let status = "Đang chờ Application…", lastWarning = "", captured = false, captureState = "waiting";
     const startedAt = win.performance.now();
-    win.console?.info?.("[Duality Reborn 0.5.0-preview.4] Script đã chạy. Nếu không có menu, gửi dòng lỗi Console sau thông báo này.");
+    win.console?.info?.("[Duality Reborn 0.5.0-preview.5] Script đã chạy. Nếu không có menu, gửi dòng lỗi Console sau thông báo này.");
     const report = /* @__PURE__ */ __name((level, message) => {
       if (!alive) return;
       if (level === "error" || level === "warning") {
@@ -8942,7 +9031,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
       status = message;
     }, "report");
     const diagnostics = /* @__PURE__ */ __name(() => ({
-      version: "0.5.0-preview.4",
+      version: "0.5.0-preview.5",
       captured,
       captureState,
       status,
