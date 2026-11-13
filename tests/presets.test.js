@@ -32,3 +32,5 @@ assert.throws(()=>P.normalizeUrl('https://user:pass@example.com/'));
 const rules=P.validate([{name:'URLs',domains:[],exactUrls:['https://x.test/?a=1','https://x.test/?a=2'],paths:['https://x.test/work'],excludePaths:['https://x.test/work/private'],groupId:'g'}],()=> 'new',new Map([['g','dest']]));
 assert.equal(rules[0].exactUrls.length,2);assert.equal(rules[0].excludePaths.length,1);assert.equal(rules[0].groupId,'dest');
 console.log('Preset URL rules, boundaries and exclusions: OK');
+const presets=[{id:'one',name:'One',domains:['example.com'],subdomains:true},{id:'two',name:'Two',domains:['example.com'],subdomains:true,excludePaths:['https://example.com/private']},{id:'three',name:'Three',domains:['elsewhere.test']}];
+assert.deepEqual(P.overlaps('https://example.com/work',presets,'one').map(x=>x.id),['two']);assert.deepEqual(P.overlaps('https://example.com/private/x',presets,'one'),[]);assert.deepEqual(P.overlaps('https://notexample.com/work',presets,'one'),[]);console.log('Preset overlap honors per-preset exclusions: OK');
