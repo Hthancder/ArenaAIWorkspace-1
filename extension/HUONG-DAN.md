@@ -1,4 +1,4 @@
-# Tabspace 0.31 — bản thử nghiệm
+# Tabspace 0.32 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,6 +7,7 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
+- Mở **Theo tên miền** ở sidebar để xem các tab đã lưu từ mọi nhóm theo hostname. Đây chỉ là góc nhìn: các bản lưu vẫn thuộc nhóm gốc, URL trùng không bị gộp; http/https và các cổng của cùng hostname hiển thị chung. Có thể tìm, chọn nhiều để mở, sửa tag, chuyển nhóm, sao chép hoặc chuyển vào thùng rác.
 - Trong **Tìm tất cả**, tìm cả lịch sử dọn theo nguồn, tiêu đề hoặc URL của tab; kết quả lịch sử có nhãn riêng và mở chi tiết lượt, không tự mở tab. Thao tác tìm không đọc nội dung trang.
 - Trong bản xem trước preset, tab cũng khớp preset khác được ghi rõ tên các preset liên quan (có xét ngoại lệ của từng preset). Chọn nhóm đích khác cho một lượt nếu muốn; cài đặt preset gốc không thay đổi. Đây là lượt thủ công, không có tự động chọn preset hoặc tự đóng. Nếu preset hoặc tên/biểu tượng nhóm đích thay đổi khi đang xem, mở lại bản xem trước.
 - Khi nhấn **Mở tất cả** ở một nhóm đã lưu, có thể tùy chọn tạo nhóm tab Chrome cho các tab mở thành công; chọn tên và một trong các màu Chrome. Nhóm Chrome độc lập với nhóm Tabspace, không sao chép icon hoặc màu tùy chỉnh. Tab đã mở nhưng bị đổi URL, ghim, chuyển cửa sổ/nhóm hoặc không xác định được ID sẽ bỏ qua. Xem kết quả tạo nhóm riêng với kết quả mở tab; không bật tùy chọn này mặc định.
