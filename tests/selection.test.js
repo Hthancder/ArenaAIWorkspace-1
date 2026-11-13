@@ -1,0 +1,2 @@
+const assert=require('node:assert/strict'),S=require('../extension/selection.js');
+assert.deepEqual(S.range(['a','b','c','d'],'a','c'),['a','b','c']);assert.deepEqual(S.range(['a','b','c','d'],'d','b'),['b','c','d']);assert.deepEqual(S.range(['a','b'],'missing','b'),['b']);assert.deepEqual(S.range(['a','b'],null,'b'),['b']);assert.deepEqual(S.range(['a','b'],'a','missing'),[]);console.log('Selection range handles both directions and missing anchors: OK');

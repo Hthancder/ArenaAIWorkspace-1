@@ -1,4 +1,4 @@
-# Tabspace 0.27 — bản thử nghiệm
+# Tabspace 0.28 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,6 +7,7 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
+- Trong trang quản lý, nhấn nút **?** hoặc phím `?` (khi không nhập văn bản) để xem hướng dẫn. Nhấn `/` để tìm; dùng Tab/Shift+Tab và Space để thao tác ô chọn. Giữ Shift khi chọn hoặc bỏ chọn một ô để áp dụng cho dải ô đang thấy từ lần chọn trước; mục bị ẩn vẫn giữ lựa chọn, hãy xem số mục ẩn trước khi thao tác. Phím mở Tabspace có thể chỉnh trong `chrome://extensions/shortcuts`.
 - Trong **Cài đặt & sao lưu → Bảo vệ website**, nhập tên miền (mỗi dòng một tên). Tabspace sẽ không đóng hoặc cho nghỉ các tab khớp, kể cả tên miền con và thao tác thủ công; muốn xử lý phải sửa danh sách. Lưu bản sao vẫn được. Tính năng không can thiệp Chrome hoặc tiện ích khác, không phát hiện biểu mẫu chưa lưu. Khi nhập sao lưu có danh sách này, mặc định giữ danh sách hiện tại; chỉ thay thế nếu chọn rõ.
 - Khi mở nhiều tab hoặc mở cả nhóm đã lưu, chọn từng tab và cửa sổ chứa Tabspace hoặc cửa sổ mới trong bản xem trước. Bản lưu không bị xóa; Chrome có thể tải ngay. Giữ Tabspace mở đến khi có kết quả. Nếu bị gián đoạn hoặc trạng thái không xác định, hãy kiểm tra Chrome trước khi thử lại để tránh mở trùng.
 - Trong **Cài đặt & sao lưu**, chọn giao diện theo hệ thống/sáng/tối và mật độ thoáng/gọn; áp dụng cho cả trang quản lý lẫn popup. Có thể khôi phục mặc định. Sao lưu mới chứa giao diện nếu đã thiết lập; khi nhập, chọn riêng có áp dụng giao diện từ file hay không (mặc định giữ thiết lập hiện tại). File cũ không có mục này vẫn nhập được.

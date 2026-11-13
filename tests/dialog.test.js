@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const source = fs.readFileSync('extension/dashboard.js', 'utf8');
 const start = source.indexOf('function showDialog(');
-const end = source.indexOf('\nfunction groupDialog(', start);
+const end = source.indexOf('\nfunction keyboardHelp(', start);
 assert(start >= 0 && end > start);
 const cancel = {formNoValidate: false};
 const body = {innerHTML: '', querySelector: () => cancel};
