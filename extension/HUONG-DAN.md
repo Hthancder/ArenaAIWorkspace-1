@@ -1,4 +1,4 @@
-# Tabspace 0.70 — bản thử nghiệm
+# Tabspace 0.71 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,6 +7,7 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
+- **Mở lại từ lịch sử:** các lượt đóng mới ghi trạng thái ghim khi Chrome cung cấp; có thể chọn khôi phục ghim khi mở lại. Nếu không xác nhận được ghim, kiểm tra Chrome. Lượt cũ có thể không có thông tin; mở lại vào cửa sổ hiện tại, không khôi phục nhóm/vị trí/cửa sổ cũ hoặc nội dung chưa lưu. Thông tin ghim trong lịch sử được giữ khi xuất/nhập.
 - **Đóng nhiều tab không lưu:** chọn tab rồi bấm Đóng đã chọn. Xem trước gồm cả lựa chọn ẩn; tab đang xem, ghim hoặc phát âm thanh mặc định bỏ chọn, chỉ đóng nếu bạn đánh dấu. Website/URL được bảo vệ và trang không phải web bị bỏ qua; tab chuyển sang đang xem, ghim hoặc phát âm thanh sau xem trước được giữ lại. Ghi nhật ký trước khi đóng, không tạo bản lưu nhóm hay điểm khôi phục; kết quả không rõ cần kiểm tra Chrome trước khi thử lại. Mở lại URL không khôi phục nội dung chưa lưu.
 - **Đóng một tab:** tab web đóng thủ công không được lưu thành bản sao, nhưng Tabspace ghi URL vào Lịch sử dọn trước khi yêu cầu đóng; chỉ URL được xác nhận đóng có thể mở lại. Nếu không ghi được nhật ký thì không đóng; nếu kết quả không rõ, kiểm tra Chrome trước khi thử lại. Tab không phải http/https không được ghi lịch sử này. Mở lại không phục hồi form hoặc trạng thái trang.
 - **Ưu tiên preset:** trong phần nâng cao của từng preset, đặt số nguyên từ -1000 đến 1000 (mặc định 0). Khi độ cụ thể như nhau, báo cáo chồng lấn xếp số lớn hơn trước; nếu vẫn bằng, báo chưa phân định. Đây chỉ là giải thích, không tự chạy và không bỏ qua bảo vệ; ưu tiên được lưu trong sao lưu.

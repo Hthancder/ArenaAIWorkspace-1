@@ -31,7 +31,7 @@ const BackupTools=(()=>{
    const key=makeId();records[trashPrefix+key]={id:key,type:t.type,value,groupId,index:Number.isSafeInteger(t.index)&&t.index>=0?t.index:0,deletedAt:Number(t.deletedAt)||Date.now()};
   }
   const allowed=new Set(['queued','closing','closed','close_failed','skipped','opening','opened','open_failed']);
-  for(const b of backup.batches){if(!b||typeof b.source!=='string'||!Array.isArray(b.items)||b.items.length>100000)throw Error('Lịch sử dọn không hợp lệ.');const items=b.items.map(x=>{if(!x||typeof x.title!=='string'||typeof x.url!=='string'||!/^https?:\/\//i.test(x.url)||!allowed.has(x.status))throw Error('Tab trong lịch sử không hợp lệ.');return {title:x.title,url:x.url,status:x.status}});const key=makeId();records[batchPrefix+key]={id:key,source:b.source,createdAt:Number(b.createdAt)||Date.now(),items,imported:true};}
+  for(const b of backup.batches){if(!b||typeof b.source!=='string'||!Array.isArray(b.items)||b.items.length>100000)throw Error('Lịch sử dọn không hợp lệ.');const items=b.items.map(x=>{if(!x||typeof x.title!=='string'||typeof x.url!=='string'||!/^https?:\/\//i.test(x.url)||!allowed.has(x.status))throw Error('Tab trong lịch sử không hợp lệ.');if(x.pinned!==undefined&&typeof x.pinned!=='boolean')throw Error('Trạng thái ghim trong lịch sử không hợp lệ.');return {title:x.title,url:x.url,status:x.status,...(x.pinned!==undefined?{pinned:x.pinned}:{})}});const key=makeId();records[batchPrefix+key]={id:key,source:b.source,createdAt:Number(b.createdAt)||Date.now(),items,imported:true};}
   return {records,groupMap,trashCount:backup.trash.length,batchCount:backup.batches.length};
  }
  return {exportData,extras,mergeGroups};
