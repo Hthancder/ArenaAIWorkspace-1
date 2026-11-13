@@ -1,4 +1,4 @@
-# Tabspace 0.53 — bản thử nghiệm
+# Tabspace 0.54 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,6 +7,7 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
+- Trong Nhóm đã lưu, nút **Workspace** cho phép thêm/gỡ nhóm khỏi nhiều workspace cùng lúc mà không di chuyển hay đóng tab. Tại mục Workspace, checkbox hỗ trợ chọn và chuyển nhiều workspace vào thùng rác; các lựa chọn đang ẩn vẫn được tính và được nêu trong xác nhận.
 - Tìm tất cả và bảng lệnh tìm workspace theo tên workspace hoặc tên nhóm được tham chiếu; không tự mở tab. Tại Nhóm đã lưu, mỗi nhóm hiển thị tối đa ba workspace liên quan và số còn lại; nhấn tên để xem trong mục Workspace.
 - **Workspace cá nhân:** tạo workspace và chọn các nhóm đã lưu; một nhóm có thể thuộc nhiều workspace mà không sao chép tab. Có thể xem và mở các tab trong nhóm sau bước xác nhận; không tự đóng hoặc cô lập tab Chrome. Workspace xóa được chuyển vào thùng rác và có trong sao lưu. Nếu nhóm bị xóa, tham chiếu được giữ và báo không khả dụng để có thể khôi phục nhóm.
 - Trong Phiên đã lưu, chọn **So sánh hai phiên**. Kết quả đối chiếu số lượng URL nguyên văn, kể cả query/fragment và tab trùng; không xác định tab nào di chuyển hoặc thay đổi nội dung. Mỗi mục hiển thị tối đa 200 URL và sáu vị trí mỗi URL; không mở, xóa hay thay đổi tab.

@@ -6,7 +6,7 @@ const BulkTools=(()=>{
   const selected=keys.map(decode).filter(Boolean),groupIds=new Set(selected.filter(([type])=>type==='group').map(([,id])=>id)),itemIds=new Set(selected.filter(([type])=>type==='item').map(([,id])=>id));
   const result=[];for(const group of groups){if(groupIds.has(group.id)&&group.id!=='inbox'){result.push({type:'group',id:group.id,name:group.name+' ('+group.items.length+' tab, gồm cả tab không hiển thị)'});continue}for(const item of group.items)if(itemIds.has(item.id))result.push({type:'item',id:item.id,groupId:group.id,name:item.title||item.url})}return result;
  }
- function trashPlan(trash,keys){const ids=new Set(keys.map(decode).filter(x=>x&&x[0]==='trash').map(x=>x[1]));const rank={group:0,session:1,item:2};return trash.filter(x=>ids.has(x.id)).slice().sort((a,b)=>(rank[a.type]??3)-(rank[b.type]??3));}
+ function trashPlan(trash,keys){const ids=new Set(keys.map(decode).filter(x=>x&&x[0]==='trash').map(x=>x[1]));const rank={group:0,session:1,workspace:1,item:2};return trash.filter(x=>ids.has(x.id)).slice().sort((a,b)=>(rank[a.type]??3)-(rank[b.type]??3));}
  function selectedIds(keys,type){return keys.map(decode).filter(x=>x&&x[0]===type).map(x=>x[1]);}
  function tagPlan(groups,keys){
   const gs=new Set(selectedIds(keys,'group')),items=new Set(selectedIds(keys,'item'));const result=[];
