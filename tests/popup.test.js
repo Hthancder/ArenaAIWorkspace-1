@@ -2,7 +2,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('nod
 const source=fs.readFileSync('extension/popup.js','utf8');
 const start=source.indexOf('async function discardTab('),end=source.indexOf('\nfunction renderTabs(',start);assert(start>=0&&end>start);
 let current, calls, msg, confirmed;
-const ctx={DiscardTools:require('../extension/discard.js'),chrome:{tabs:{async get(){return {...current}},async discard(){calls++;current.discarded=true}}},showMessage:s=>{msg=s},refresh:async()=>{},confirm:()=>confirmed};
+const ctx={Protection:{check:async()=>false},MutationLock:{run:async f=>f()},DiscardTools:require('../extension/discard.js'),chrome:{tabs:{async get(){return {...current}},async discard(){calls++;current.discarded=true}}},showMessage:s=>{msg=s},refresh:async()=>{},confirm:()=>confirmed};
 vm.runInNewContext(source.slice(start,end),ctx);
 (async()=>{const tab={id:1,windowId:1,url:'https://example.com',active:false,pinned:false,audible:false,discarded:false};
  current={...tab};calls=0;confirmed=false;await ctx.discardTab(tab);assert.equal(calls,0);

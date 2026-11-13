@@ -10,8 +10,13 @@ const BatchTools = (() => {
     for(let i=0;i<entries.length;i++){
       const e=entries[i], item=batch.items[i];
       let tab;try{tab=await api.tabs.get(e.tabId)}catch{item.status='skipped';try{await write(api,batch)}catch{stopped=true;break}continue}
-      if(tab.url!==e.url || !eligible(tab)){item.status='skipped';try{await write(api,batch)}catch{stopped=true;break}continue}
+      let permitted;try{permitted=tab.url===e.url&&await eligible(tab)}catch{stopped=true;break}
+      if(!permitted){item.status='skipped';try{await write(api,batch)}catch{stopped=true;break}continue}
       item.status='closing';try{await write(api,batch)}catch{stopped=true;break}
+      // Revalidate after writing the journal: a tab may have navigated or gained protection meanwhile.
+      let finalTab;try{finalTab=await api.tabs.get(e.tabId)}catch{item.status='skipped';try{await write(api,batch)}catch{stopped=true;break}continue}
+      try{permitted=finalTab.url===e.url&&await eligible(finalTab)}catch{stopped=true;break}
+      if(!permitted){item.status='skipped';try{await write(api,batch)}catch{stopped=true;break}continue}
       try{await api.tabs.remove(e.tabId);item.status='closed'}catch{item.status='closing'}
       try{await write(api,batch)}catch{stopped=true;break}
     }

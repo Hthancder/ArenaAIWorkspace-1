@@ -2,7 +2,7 @@
 const BackupTools=(()=>{
  const trashPrefix='tabspace:trash:',batchPrefix='tabspace:batch:';
  function exportData(storage){
-  return {format:'tabspace-backup',version:2,exportedAt:new Date().toISOString(),groups:storage.groups||[],snapshots:storage.snapshots||[],presets:storage.presets||[],trash:Object.entries(storage).filter(([k])=>k.startsWith(trashPrefix)).map(([,v])=>v),batches:Object.entries(storage).filter(([k])=>k.startsWith(batchPrefix)).map(([,v])=>v),...(storage.appearance?{appearance:storage.appearance}:{})};
+  return {format:'tabspace-backup',version:2,exportedAt:new Date().toISOString(),groups:storage.groups||[],snapshots:storage.snapshots||[],presets:storage.presets||[],trash:Object.entries(storage).filter(([k])=>k.startsWith(trashPrefix)).map(([,v])=>v),batches:Object.entries(storage).filter(([k])=>k.startsWith(batchPrefix)).map(([,v])=>v),...(storage.appearance?{appearance:storage.appearance}:{}),...(storage.protectedDomains!==undefined?{protectedDomains:storage.protectedDomains}:{})};
  }
  function mergeGroups(existing, imported){
   if(existing.filter(g=>g.id==='inbox').length>1||imported.filter(g=>g.id==='inbox').length>1)throw Error('Có nhiều Hộp để sau; không thể nhập an toàn.');
