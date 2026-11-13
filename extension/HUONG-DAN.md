@@ -1,4 +1,4 @@
-# Tabspace 0.54 — bản thử nghiệm
+# Tabspace 0.55 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,6 +7,7 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
+- **Điểm khôi phục (thử nghiệm):** Cài đặt → Điểm khôi phục cho phép bật snapshot trước mỗi lượt lưu & đóng thủ công hoặc preset. Mặc định tắt. Nếu đạt giới hạn hoặc không xác nhận được snapshot, lượt đóng dừng; không tự xóa phiên. Snapshot lưu URL/metadata của cửa sổ thường và popup, không gồm ẩn danh hay trang Chrome; popup được mở lại như cửa sổ thường, form/trạng thái không được bảo đảm. Cài đặt không có trong sao lưu; các phiên nhập từ file trở thành phiên thường.
 - Trong Nhóm đã lưu, nút **Workspace** cho phép thêm/gỡ nhóm khỏi nhiều workspace cùng lúc mà không di chuyển hay đóng tab. Tại mục Workspace, checkbox hỗ trợ chọn và chuyển nhiều workspace vào thùng rác; các lựa chọn đang ẩn vẫn được tính và được nêu trong xác nhận.
 - Tìm tất cả và bảng lệnh tìm workspace theo tên workspace hoặc tên nhóm được tham chiếu; không tự mở tab. Tại Nhóm đã lưu, mỗi nhóm hiển thị tối đa ba workspace liên quan và số còn lại; nhấn tên để xem trong mục Workspace.
 - **Workspace cá nhân:** tạo workspace và chọn các nhóm đã lưu; một nhóm có thể thuộc nhiều workspace mà không sao chép tab. Có thể xem và mở các tab trong nhóm sau bước xác nhận; không tự đóng hoặc cô lập tab Chrome. Workspace xóa được chuyển vào thùng rác và có trong sao lưu. Nếu nhóm bị xóa, tham chiếu được giữ và báo không khả dụng để có thể khôi phục nhóm.
