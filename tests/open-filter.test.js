@@ -1,0 +1,3 @@
+const assert=require('node:assert/strict'),F=require('../extension/open-filter.js');
+const tabs=[{id:1,windowId:9,active:true,pinned:true,discarded:false},{id:2,windowId:9,audible:true,discarded:true},{id:3,windowId:5,discarded:false}];
+assert.deepEqual(F.windowIds(tabs),[9,5]);const ids=(w,s)=>tabs.filter(t=>F.matches(t,w,s)).map(t=>t.id);assert.deepEqual(ids('','all'),[1,2,3]);assert.deepEqual(ids('9','active'),[1]);assert.deepEqual(ids('9','pinned'),[1]);assert.deepEqual(ids('','audible'),[2]);assert.deepEqual(ids('','discarded'),[2]);assert.deepEqual(ids('5','not-discarded'),[3]);assert.deepEqual(ids('123','all'),[]);assert.deepEqual(ids('','invalid'),[]);console.log('Open tab filters and combinations: OK');
