@@ -1,4 +1,4 @@
-# Tabspace 0.50 — bản thử nghiệm
+# Tabspace 0.51 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,6 +7,7 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
+- Trong Phiên đã lưu, chọn **So sánh hai phiên**. Kết quả đối chiếu số lượng URL nguyên văn, kể cả query/fragment và tab trùng; không xác định tab nào di chuyển hoặc thay đổi nội dung. Mỗi mục hiển thị tối đa 200 URL và sáu vị trí mỗi URL; không mở, xóa hay thay đổi tab.
 - **Snapshot tự động (thử nghiệm):** vào Cài đặt → Snapshot tự động để bật, chọn khoảng cách 1–168 giờ và tối đa 1–50 bản. Chỉ lưu URL/metadata các tab web trong cửa sổ thông thường, không đóng tab; bỏ qua ẩn danh, popup và trang Chrome. Đạt giới hạn thì dừng tạo, không tự xóa phiên nào. Lịch bị lỡ không chạy bù; xem kết quả gần nhất ở Cài đặt. Cài đặt chỉ lưu trên thiết bị, không sao lưu; snapshot nhập từ file thành phiên thường, không tính giới hạn tự động. Không dùng thay sao lưu ngoài Chrome.
 - **Lịch nhắc preset (thử nghiệm):** mở mục Preset → Lịch nhắc, chọn ngày, giờ theo múi giờ máy và bật. Chrome cần đang chạy; quyền `alarms` dùng để kiểm tra lịch mỗi phút. Lời nhắc xuất hiện trong Tabspace và không tự lưu hoặc đóng. Bạn có thể bật thông báo hệ điều hành riêng tại mục Preset; Chrome sẽ hỏi quyền tùy chọn. Thông báo chỉ có nội dung chung, không chứa tên preset hoặc URL; bấm vào để mở mục Preset, không xác nhận dọn. Tắt thông báo trong Tabspace không thu hồi quyền Chrome. Có Xem & dọn, Nhắc lại 15 phút và Bỏ qua; có nút tạm dừng/tiếp tục toàn bộ lịch nhắc. Lịch bị lỡ hoặc trễ quá một phút sẽ không chạy bù; Chrome ngủ/đóng, đổi múi giờ, giờ mùa hè hoặc thiếu tài nguyên có thể khiến lời nhắc không xuất hiện. Khi nhập sao lưu, lịch preset mặc định tắt; lời nhắc chờ, trạng thái tạm dừng và tùy chọn thông báo hệ điều hành không được xuất.
 - Trong Preset dọn tab, chọn **Tạo từ tab đang mở** để lấy quy tắc tên miền, đường dẫn hoặc URL chính xác từ các tab được chọn. Tabspace chỉ tạo bản nháp; bạn cần xem lại, đặt tên, chọn nhóm và lưu. Tên miền có thể khớp nhiều tài khoản; URL chính xác có thể chứa dữ liệu nhạy cảm. Không tự chạy hoặc đóng tab.
