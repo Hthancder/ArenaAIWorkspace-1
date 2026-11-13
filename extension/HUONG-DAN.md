@@ -1,4 +1,4 @@
-# Tabspace 0.28 — bản thử nghiệm
+# Tabspace 0.29 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,6 +7,7 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
+- Khi nhấn **Mở tất cả** ở một nhóm đã lưu, có thể tùy chọn tạo nhóm tab Chrome cho các tab mở thành công; chọn tên và một trong các màu Chrome. Nhóm Chrome độc lập với nhóm Tabspace, không sao chép icon hoặc màu tùy chỉnh. Tab đã mở nhưng bị đổi URL, ghim, chuyển cửa sổ/nhóm hoặc không xác định được ID sẽ bỏ qua. Xem kết quả tạo nhóm riêng với kết quả mở tab; không bật tùy chọn này mặc định.
 - Trong trang quản lý, nhấn nút **?** hoặc phím `?` (khi không nhập văn bản) để xem hướng dẫn. Nhấn `/` để tìm; dùng Tab/Shift+Tab và Space để thao tác ô chọn. Giữ Shift khi chọn hoặc bỏ chọn một ô để áp dụng cho dải ô đang thấy từ lần chọn trước; mục bị ẩn vẫn giữ lựa chọn, hãy xem số mục ẩn trước khi thao tác. Phím mở Tabspace có thể chỉnh trong `chrome://extensions/shortcuts`.
 - Trong **Cài đặt & sao lưu → Bảo vệ website**, nhập tên miền (mỗi dòng một tên). Tabspace sẽ không đóng hoặc cho nghỉ các tab khớp, kể cả tên miền con và thao tác thủ công; muốn xử lý phải sửa danh sách. Lưu bản sao vẫn được. Tính năng không can thiệp Chrome hoặc tiện ích khác, không phát hiện biểu mẫu chưa lưu. Khi nhập sao lưu có danh sách này, mặc định giữ danh sách hiện tại; chỉ thay thế nếu chọn rõ.
 - Khi mở nhiều tab hoặc mở cả nhóm đã lưu, chọn từng tab và cửa sổ chứa Tabspace hoặc cửa sổ mới trong bản xem trước. Bản lưu không bị xóa; Chrome có thể tải ngay. Giữ Tabspace mở đến khi có kết quả. Nếu bị gián đoạn hoặc trạng thái không xác định, hãy kiểm tra Chrome trước khi thử lại để tránh mở trùng.
