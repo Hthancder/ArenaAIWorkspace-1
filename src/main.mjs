@@ -11,7 +11,7 @@ export function start(win) {
   let menu = null, engine = null, defs = null, mapDefs = null, cancelCapture = null, alive = true;
   let status = 'Đang chờ Application…', lastWarning = '', captured = false, captureState = 'waiting';
   const startedAt = win.performance.now();
-  win.console?.info?.('[Duality Reborn 0.5.0-preview.5] Script đã chạy. Nếu không có menu, gửi dòng lỗi Console sau thông báo này.');
+  win.console?.info?.('[Duality Reborn 0.5.0-preview.6] Script đã chạy. Nếu không có menu, gửi dòng lỗi Console sau thông báo này.');
   const report = (level, message) => {
     if (!alive) return;
     if (level === 'error' || level === 'warning') {
@@ -21,7 +21,7 @@ export function start(win) {
     status = message;
   };
   const diagnostics = () => ({
-    version: '0.5.0-preview.5', captured, captureState, status, lastWarning,
+    version: '0.5.0-preview.6', captured, captureState, status, lastWarning,
     menuMounted: !!menu?.host.isConnected, documentReadyState: win.document.readyState,
     definitionsCaptured: !!defs, mapDefinitionsCaptured: !!mapDefs, elapsedMs: Math.round(win.performance.now() - startedAt),
     ...(engine?.diagnostics() || {}),

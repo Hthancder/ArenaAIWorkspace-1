@@ -139,7 +139,7 @@ for (const renamed of [false, true]) for (const lootMode of ['mobile', 'nearby']
   const m = discover(app.game);
   assert.ok(m.schema, `source player schema (${renamed ? 'minified+renamed' : 'unminified'})`);
   assert.ok(m.camera, 'source camera'); assert.ok(m.barn, 'source barn'); assert.ok(discoverSender(app.game), 'source sender');
-  const engine = new Features(dom.window, app, { ...DEFAULTS, aim: true, autoLoot: true, lootMode, wallcheck: true, smoothEnabled: false }, () => {}, { '9mm': { type: 'ammo' }, fists: context.result.fistsDef,mp5:{type:'gun',bulletType:'bullet_mp5',ammo:'9mm',barrelLength:1,barrelOffset:0},bullet_mp5:{type:'bullet',speed:85,distance:100,variance:0} });
+  const engine = new Features(dom.window, app, { ...DEFAULTS, aim: true, autoLoot: true, lootMode, wallcheck: true, humanLikeAim: false }, () => {}, { '9mm': { type: 'ammo' }, fists: context.result.fistsDef,mp5:{type:'gun',bulletType:'bullet_mp5',ammo:'9mm',barrelLength:1,barrelOffset:0},bullet_mp5:{type:'bullet',speed:85,distance:100,variance:0} });
   try {
     join();
     assert.equal(engine.protocol, VERIFIED_PROTOCOL, 'Observe desktop Join when device.mobile is false and window.mobile is absent');
@@ -192,11 +192,11 @@ for (const renamed of [false, true]) for (const lootMode of ['mobile', 'nearby']
     assert.ok(Math.abs(context.sent.at(-1).decoded.toMouseDir.y)<.003, 'Disable sends native direction back despite unchanged cursor');
     engine.config.aim=true;
     // Native camera zoom can update between our pre plan and source input creation.
-    engine.config.predict=false; engine.config.fov=400; engine.config.smoothEnabled=false;
+    engine.config.predict=false; engine.config.fov=400; engine.config.humanLikeAim=false;
     engine.pre(); context.result.setZoom(4); context.result.nativeFrame(1/60);
     wire=context.sent.at(-1).decoded; assert.ok(Math.abs(Math.atan2(wire.toMouseDir.y,wire.toMouseDir.x)-Math.atan2(.4,2))<.004, 'Final sender solves world direction after native zoom update');
     assert.equal(wire.shootHold,true,'Aim preserves native Fire'); assert.equal(wire.moveRight,false,'Aim preserves native movement');
-    app.input.flush(); engine.config.aim=false;engine.pre();context.result.nativeFrame(1/60);app.input.flush();engine.config.aim=true;engine.config.smoothEnabled=true; engine.config.smooth=50; engine.aimController.reset();
+    app.input.flush(); engine.config.aim=false;engine.pre();context.result.nativeFrame(1/60);app.input.flush();engine.config.aim=true;engine.config.humanLikeAim=true; engine.config.smooth=50; engine.aimController.reset();
     for(let i=0;i<60;i++){clock+=1000/60;engine.pre();context.result.nativeFrame(1/60);app.input.flush();}
     wire=context.sent.at(-1).decoded;assert.ok(Math.abs(Math.atan2(wire.toMouseDir.y,wire.toMouseDir.x)-Math.atan2(.4,2))<.005, 'Lock converges on source wire, fixed cursor');
     engine.config.aimMode='assist';engine.config.assistStrength=35;clock+=17;engine.pre();context.result.nativeFrame(1/60);app.input.flush();
@@ -204,7 +204,7 @@ for (const renamed of [false, true]) for (const lootMode of ['mobile', 'nearby']
     const stable=context.sent.length;
     for(let i=0;i<10;i++){clock+=17;engine.pre();context.result.nativeFrame(1/60);app.input.flush();}
     assert.equal(context.sent.length,stable,'Assist does not force extra packets merely for preview');
-    engine.config.aimMode='lock';engine.config.smoothEnabled=false;context.result.setZoom(2);
+    engine.config.aimMode='lock';engine.config.humanLikeAim=false;context.result.setZoom(2);
     app.input.flush(); assert.equal(app.input.mousePos.x, 440, 'Physical input restored');
     engine.config.wallcheck=true;context.result.setWall(true);clock+=17;engine.pre();context.result.nativeFrame(1/60);
     assert.equal(engine.stats.aimRejections.wall,1,'Known source registry obstacle still blocks aim; no wallcheck bypass');

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Duality Client Reborn (compatibility preview)
 // @namespace    arena.survev.reborn
-// @version      0.5.0-preview.5
+// @version      0.5.0-preview.6
 // @description  Lightweight menu, validated semantic discovery, bounded hooks and reversible features. Live compatibility unverified.
 // @match        https://survev.io/*
 // @match        https://*.survev.io/*
@@ -8155,7 +8155,7 @@ THE SOFTWARE.
         const dir = advance2 ? this.aimController.step(physical, shot.dir, {
           mode: melee ? "lock" : mode,
           strength: cfg.assistStrength ?? 35,
-          smooth: melee || !cfg.smoothEnabled ? 0 : cfg.smooth,
+          smooth: melee || !cfg.humanLikeAim ? 0 : cfg.smooth,
           now,
           target: candidate.p
         }) : !melee && mode === "assist" ? this.aimController.step(physical, shot.dir, { mode, strength: cfg.assistStrength ?? 35, now, target: candidate.p }) : shot.dir;
@@ -8514,7 +8514,7 @@ THE SOFTWARE.
         protocolMatches: this.protocol === VERIFIED_PROTOCOL
       };
       return {
-        version: "0.5.0-preview.5",
+        version: "0.5.0-preview.6",
         protocol: this.protocol,
         sourceProtocol: VERIFIED_PROTOCOL,
         initialized: checks.initialized,
@@ -8525,7 +8525,7 @@ THE SOFTWARE.
         inputBlockReason: this.inputBlockReason(),
         mouseInput: { enabled: this.config.directMouseInput !== false, flushReady: !!this.flushReady, ...this.mouseInput.snapshot() },
         registry: { state: m?.registryState ?? "waiting-mapping", ...m?.registryEvidence },
-        aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict },
+        aimControls: { mode: modeOf(this.config), activation: this.config.aimActivation, wallcheckRequested: !!this.config.wallcheck, predictionRequested: !!this.config.predict, latencyCompensation: !!this.config.latencyCompensation, leadAdjustment: this.config.leadAdjustment ?? 100, humanLikeAim: !!this.config.humanLikeAim },
         aimEvidence: this.aimEvidence.snapshot(this.win.performance.now()),
         missingContracts: Object.keys(checks).filter((key) => !checks[key]),
         capabilities: { ...this.capabilities },
@@ -8547,7 +8547,7 @@ THE SOFTWARE.
 
   // src/menu.mjs
   var DEFAULTS = Object.freeze({
-    version: 2,
+    version: 3,
     aim: false,
     aimMode: "lock",
     aimActivation: "fire",
@@ -8555,7 +8555,7 @@ THE SOFTWARE.
     assistStrength: 35,
     latencyCompensation: true,
     leadAdjustment: 100,
-    smoothEnabled: true,
+    humanLikeAim: false,
     smooth: 50,
     knocked: false,
     sticky: true,
@@ -8618,7 +8618,7 @@ THE SOFTWARE.
     holdAim: false
   });
   var STORAGE_KEY = "duality-reborn.config.v1";
-  var ranges = { assistStrength: [0, 100], leadAdjustment: [50, 150], movementSmooth: [0, 100], smooth: [0, 100], fov: [50, 400], smokeOpacity: [0, 100], treeOpacity: [0, 100], zoomFactor: [1, 3], espMaxDistance: [10, 500], espFontSize: [10, 18], espOpacity: [10, 100], espLineWidth: [0.5, 3] };
+  var ranges = { assistStrength: [0, 100], leadAdjustment: [50, 200], movementSmooth: [0, 100], smooth: [0, 100], fov: [50, 400], smokeOpacity: [0, 100], treeOpacity: [0, 100], zoomFactor: [1, 3], espMaxDistance: [10, 500], espFontSize: [10, 18], espOpacity: [10, 100], espLineWidth: [0.5, 3] };
   var colors = /* @__PURE__ */ new Set(["espEnemyColor", "espAllyColor", "espUnknownColor", "espTargetColor"]);
   function normalizeConfig(saved) {
     const result = { ...DEFAULTS };
@@ -8637,9 +8637,10 @@ THE SOFTWARE.
       result.lines = false;
       result.showDot = false;
     }
+    result.humanLikeAim = typeof saved.humanLikeAim === "boolean" ? saved.humanLikeAim : false;
     if (result.aimMode === "off") result.aim = false;
     result.nametags = true;
-    result.version = 2;
+    result.version = 3;
     return result;
   }
   __name(normalizeConfig, "normalizeConfig");
@@ -8659,11 +8660,11 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
 `;
   var GROUPS = {
     Main: [
-      ["Aim — Mode & activation", [["aimMode", "Mode", "aim"], ["aimActivation", "Activate when"], ["directMouseInput", "Direct native mouse input", "aim"], ["assistStrength", "Assist strength (%)", "aim"], ["smoothEnabled", "Smooth Lock", "aim"], ["smooth", "Lock smooth", "aim"]]],
+      ["Aim — Mode & activation", [["aimMode", "Mode", "aim"], ["aimActivation", "Activate when"], ["directMouseInput", "Direct native mouse input", "aim"], ["assistStrength", "Assist strength (%)", "aim"], ["humanLikeAim", "Human-like aim (Lock)", "aim"], ["smooth", "Human-like amount (0–100)", "aim"]]],
       ["Aim — Target selection", [["fov", "FOV radius (input pixels)"], ["sticky", "Keep target", "aim"], ["knocked", "Include downed", "aim"], ["wallcheck", "Wallcheck", "wallcheck"]]],
       ["Aim — Hỗ trợ ngắm", [["showFov", "FOV circle"], ["showDot", "Predicted point (optional)"]]],
       ["Aim — Prediction", [["predict", "Auto prediction", "prediction"]]],
-      ["Aim — Advanced prediction", [["latencyCompensation", "Estimated latency compensation", "prediction"], ["leadAdjustment", "Lead adjustment (%)", "prediction"], [null, "Auto dùng snapshot và weapon defs; dữ liệu stale/không chắc sẽ nhường input. Không biết trước thao tác tương lai."]]],
+      ["Aim — Advanced prediction", [["latencyCompensation", "Estimated latency compensation", "prediction"], ["leadAdjustment", "Lead adjustment (%)", "prediction"], [null, "Lead = vị trí tương lai theo tốc độ đạn/snapshot. Assist strength là lực kéo; 100% gần Lock. Shotgun vẫn chịu random pellet spread."]]],
       ["Melee Lock", [["melee", "Enabled", "mobile"], ["autoMelee", "Auto Melee (from gun, while firing)", "switch"]]],
       ["Auto Switch", [["autoSwitch", "Enabled", "switch"], ["useOneGun", "Use One Gun (switch away then return)", "switch"], [null, "Ammo single/burst; equip từng frame, chờ slot cập nhật. Không bỏ qua cooldown server."]]],
       ["Semi Auto", [["semi", "Held Fire: single guns + fists / melee", "semi"], [null, "Giữ nút Fire để lặp; auto/burst dùng shootHold gốc; không lặp lựu đạn. Server vẫn quyết định cooldown."]]]
@@ -8704,7 +8705,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
     canvas.setAttribute("aria-hidden", "true");
     const shell = el("section", { id: "ui" });
     shell.setAttribute("aria-label", "Duality Client Reborn");
-    const brand = el("div", { class: "brand", text: "Duality Client" }, el("div", { class: "version", text: "Reborn 0.5.0-preview.5 • readable debug" }));
+    const brand = el("div", { class: "brand", text: "Duality Client" }, el("div", { class: "version", text: "Reborn 0.5.0-preview.6 • readable debug" }));
     const nav = el("nav", { class: "nav" });
     nav.setAttribute("aria-label", "Menu tabs");
     const content = el("main", { class: "content" });
@@ -8742,7 +8743,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
       }, 200);
     }, "persist");
     const refreshRows = /* @__PURE__ */ __name(() => {
-      const parents = { smooth: "smoothEnabled", useOneGun: "autoSwitch", autoMelee: "melee", smokeOpacity: "xray", treeOpacity: "xray", ceilings: "xray", darkerSmokes: "xray", zoomFactor: "zoom", movementSmooth: "mobileMovement", lootMode: "autoLoot", espOpacity: "lines", espLineWidth: "lines", espShowEnemies: "esp", espShowAllies: "esp", smallerTrees: "mapHighlights", latencyCompensation: "predict", leadAdjustment: "predict" };
+      const parents = { smooth: "humanLikeAim", useOneGun: "autoSwitch", autoMelee: "melee", smokeOpacity: "xray", treeOpacity: "xray", ceilings: "xray", darkerSmokes: "xray", zoomFactor: "zoom", movementSmooth: "mobileMovement", lootMode: "autoLoot", espOpacity: "lines", espLineWidth: "lines", espShowEnemies: "esp", espShowAllies: "esp", smallerTrees: "mapHighlights", latencyCompensation: "predict", leadAdjustment: "predict" };
       for (const input of panel.querySelectorAll("[data-config]")) {
         const parent = parents[input.dataset.config];
         if (parent) input.closest("label").hidden = !config[parent];
@@ -8820,14 +8821,14 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
       if (GROUPS[tab]) {
         for (const [name, rows] of GROUPS[tab]) {
           const details = el("details");
-          details.open = openGroups.get(name) ?? name.includes("Mode");
+          details.open = openGroups.get(name) ?? (name.includes("Mode") || name === "Aim — Prediction");
           details.ontoggle = () => openGroups.set(name, details.open);
-          const visible = rows.filter(([key]) => key !== "assistStrength" || config.aim && config.aimMode === "assist").filter(([key]) => !["smoothEnabled", "smooth"].includes(key) || config.aim && config.aimMode === "lock");
+          const visible = rows.filter(([key]) => key !== "assistStrength" || config.aim && config.aimMode === "assist");
           details.append(el("summary", { text: name }), ...visible.map(row));
           panel.append(details);
         }
         refreshRows();
-        if (tab === "Main") panel.append(el("p", { class: "hint", text: "Aim theo activation đã chọn; Assist strength0 không can thiệp. FOV theo input chưa hiệu chỉnh. Trạng thái Aim ở trên cho biết vì sao đang chờ; wallcheck thiếu contract sẽ không âm thầm bị bỏ qua." }));
+        if (tab === "Main") panel.append(el("p", { class: "hint", text: "Assist: Assist strength là lực kéo; 100% gần như Lock. Lock: Human-like aim mặc định tắt nên không làm trễ. Prediction giữ aim ở vị trí tương lai theo snapshot/vận tốc đạn, không chỉ “dính” vào mục tiêu hiện tại. FOV theo input chưa hiệu chỉnh; shotgun vẫn chịu random spread." }));
         if (tab === "Misc") panel.append(el("p", { class: "hint", text: "Nearby supplies hoạt động trong trận sau khi đủ contract; không tự đổi súng/gear và không giả nhặt thành công. Mobile mode dùng isMobile trong Join mới, có thể ảnh hưởng scope và tự mở cửa." }));
         return;
       }
@@ -9021,7 +9022,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
     let menu = null, engine = null, defs = null, mapDefs = null, cancelCapture = null, alive = true;
     let status = "Đang chờ Application…", lastWarning = "", captured = false, captureState = "waiting";
     const startedAt = win.performance.now();
-    win.console?.info?.("[Duality Reborn 0.5.0-preview.5] Script đã chạy. Nếu không có menu, gửi dòng lỗi Console sau thông báo này.");
+    win.console?.info?.("[Duality Reborn 0.5.0-preview.6] Script đã chạy. Nếu không có menu, gửi dòng lỗi Console sau thông báo này.");
     const report = /* @__PURE__ */ __name((level, message) => {
       if (!alive) return;
       if (level === "error" || level === "warning") {
@@ -9031,7 +9032,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
       status = message;
     }, "report");
     const diagnostics = /* @__PURE__ */ __name(() => ({
-      version: "0.5.0-preview.5",
+      version: "0.5.0-preview.6",
       captured,
       captureState,
       status,

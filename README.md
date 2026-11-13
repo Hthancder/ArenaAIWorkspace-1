@@ -1,12 +1,12 @@
-# Duality Client Reborn — 0.5.0-preview.5
+# Duality Client Reborn — 0.5.0-preview.6
 
 Userscript readable cho survev.io, menu DOM nhẹ, source-backed adapters và cleanup có ownership. **Đã kiểm thử offline/source-method; chưa xác nhận trong gameplay live.** Không bảo đảm tương thích mọi update, tránh phát hiện hoặc bắn trúng. Dùng trên máy chủ công cộng có thể vi phạm điều khoản game.
 
 ## Hotfix theo diagnostics Lock vẫn không tác động
 
-Bản **0.5.0-preview.5** hook trực tiếp native `input.mousePos` theo frame để hướng nhìn/súng dùng cùng aim plan, giữ nguyên bán kính cursor vật lý, khôi phục trước native flush/menu/dispose; sender vẫn là lớp sửa cuối. Bản **0.5.0-preview.4** sửa ambiguity đã thấy trong diagnostics preview.3: khi Fire, `wallcheck-unavailable`, `ambiguous-native-id-table`, không có native input correction. Discovery mới dùng data flow `delObjIds` trong actual snapshot receiver để phân biệt world-object registry với các get/delete dictionary khác; deduplicate owner aliases. Không tắt Wallcheck, không chọn table đầu tiên, không giả xoay súng thay cho input.
+Bản **0.5.0-preview.6** thêm **Human-like aim** thành toggle riêng mặc định tắt: Lock mặc định không bị giới hạn/làm chậm như mô phỏng người; prediction được giữ cho vị trí tương lai thay vì “đạn bám vào địch rồi trượt”. Giữ direct native mouse hook từ preview.5. Bản **0.5.0-preview.4** sửa ambiguity đã thấy trong diagnostics preview.3: khi Fire, `wallcheck-unavailable`, `ambiguous-native-id-table`, không có native input correction. Discovery mới dùng data flow `delObjIds` trong actual snapshot receiver để phân biệt world-object registry với các get/delete dictionary khác; deduplicate owner aliases. Không tắt Wallcheck, không chọn table đầu tiên, không giả xoay súng thay cho input.
 
-Giữ bounded live evidence sau chết/mở Help, thêm số native/receiver candidates. Source integration có hai native get/delete tables và alias thật, Wallcheck bật, kiểm tra vật cản chặn rồi native serialized correction khi bỏ vật cản. [Hotfix registry preview.4](docs/hotfix-0.5.0-preview.4.vi.md) · [Direct mouse preview.5](docs/direct-native-mouse-0.5.0-preview.5.vi.md). **Chưa xác nhận trên phiên live người dùng**; direct input có thể làm native gun/player rotation phản ánh correction hơn trước, competing table cụ thể trong live chưa được xác định từ JSON.
+Giữ bounded live evidence sau chết/mở Help, thêm số native/receiver candidates. Source integration có hai native get/delete tables và alias thật, Wallcheck bật, kiểm tra vật cản chặn rồi native serialized correction khi bỏ vật cản. [Hotfix registry preview.4](docs/hotfix-0.5.0-preview.4.vi.md) · [Direct mouse](docs/direct-native-mouse-0.5.0-preview.5.vi.md) · [Human-like aim / lead preview.6](docs/human-like-aim-lead-0.5.0-preview.6.vi.md). **Chưa xác nhận trên phiên live người dùng**; direct input có thể làm native gun/player rotation phản ánh correction hơn trước, competing table cụ thể trong live chưa được xác định từ JSON.
 
 Bản preview.3 trước đó thêm broadphase wall/muzzle và `aimEvidence`; [phân tích cũ](docs/hotfix-0.5.0-preview.3.vi.md) là lịch sử, không phải bằng chứng đã sửa ambiguity.
 
@@ -26,7 +26,7 @@ Bản `0.5.0-preview.2` sửa những đường lỗi đã tái hiện: schedule
 2. Dán toàn bộ `.user.js` vào Tampermonkey/Violentmonkey. Chạy ở **page/main world**, **document-start**; metadata gồm `@sandbox raw` và `@inject-into page`.
 3. Reload survev.io; **Right Shift** mở/đóng menu. Gameplay features mặc định tắt.
 4. Chọn mode/feature trong trận. Control bị khóa nghĩa là chưa đủ contract, không phải đã hoạt động.
-5. **Help → Copy diagnostics** khi cần; diagnostics không xuất token Join, tên/vị trí người chơi hoặc object game. Nếu không có menu, tìm boot log `[Duality Reborn 0.5.0-preview.5]` và lỗi Console đầu tiên.
+5. **Help → Copy diagnostics** khi cần; diagnostics không xuất token Join, tên/vị trí người chơi hoặc object game. Nếu không có menu, tìm boot log `[Duality Reborn 0.5.0-preview.6]` và lỗi Console đầu tiên.
 
 **Retry capture:** bắt lại Application trong 15 giây; nếu lỡ bootstrap item DB/Join thì cần reload. **Stop / cleanup:** gỡ hooks/overrides do bản này sở hữu, yêu cầu lượt input native để trả hướng nếu còn session; không phát network ngoài native. Reload để chạy lại sau Stop.
 
@@ -36,13 +36,13 @@ Bản `0.5.0-preview.2` sửa những đường lỗi đã tái hiện: schedule
 
 - **Off / Aim Assist / Aim Lock** độc quyền. Activation riêng: Fire, giữ aim key hoặc cả hai. Trong activation Fire, phím B giữ/toggle bật aim theo cấu hình Keybinds.
 - **Assist strength 0%:** không sửa hướng. Tăng strength tăng lượng correction theo intent native; không có memory kéo ngược khi người dùng thoát FOV.
-- **Lock:** controller giữ hướng qua nhiều lượt gửi, hội tụ theo thời gian; không lặp một partial blend từ chuột gốc như trước. Smooth chỉ hiện cho Lock.
+- **Lock:** mặc định chọn/kéo đến điểm lead ngay; không còn “Human-like aim” mặc định làm trễ. Human-like aim là toggle riêng, chỉ làm Lock mượt/chậm khi bật. Assist strength quyết định lực kéo của Aim Assist; 100% là gần Lock.
 - FOV là bán kính **input pixels**, dùng intent chưa sửa; sticky có biên hysteresis. Unknown/allies không thành target.
 - **Direct native mouse input** mặc định bật: trong một frame, script ghi vector native tạm thời theo cùng aim plan để Game/Player update đọc được; restore trước native flush, menu/blur/hidden, config change và Stop. FOV/selection vẫn dùng intent vật lý chưa sửa; không tạo DOM mouse event, không warp OS cursor, không thay Fire/movement. Native sender vẫn là lớp sửa cuối và giữ physical Fire/movement. Nếu không có `flush` contract, native mouse không bị khóa; sender correction vẫn chạy.
 - Sender dùng cùng plan của frame nếu direct route đã chạy, tránh Lock tiến hai lần và tránh lệch giữa gun animation/hướng thật. Khi zoom native đổi trước thời điểm tạo InputMsg, sender vẫn có quyền cuối trên world direction và clone giữ prototype/prevInput. AimEvidence là forward evidence, không phải server ACK.
 - Predict Auto lấy full/partial snapshots đã apply, không lấy render frames làm observation. Thiếu optional prediction contract thì direct aim dùng vị trí hiện có với trạng thái rõ ràng; thiếu definitions chỉ cho direct fallback khi đã xác minh actual gun slot0/1. Không tự đoán bullet speed hoặc weapon type. Bounded weighted fit, reset identity/layer/gap, xử lý packet bunching. Không fit riêng zigzag hoặc biết trước movement.
 - Profile từ actual equipped gun/bullet/perks; effective speed/variance, range margin, muzzle/clipping, stair aim-layer và toMouseHit. Dual offhand/random spread/empowered effects không được giả là biết trước.
-- Advanced prediction mặc định đóng: latency Auto/Off (RTT/2 heuristic có giới hạn), lead adjustment 100%. Slope uncertainty cao dùng trạng thái **`reduced-lead-uncertainty`**; stale snapshot đã quan sát nhưng stale nhường native input. Không cắt flight time vật lý thành trust horizon.
+- Prediction Auto dùng snapshot/weapon defs, tắt được bằng Predict. Lead adjustment mặc định 100%, tối đa 200%; latency Auto dùng RTT/2 heuristic có giới hạn. Slope uncertainty cao dùng trạng thái **`reduced-lead-uncertainty`**; stale snapshot đã quan sát nhưng stale nhường native input. Không cắt flight time vật lý thành trust horizon.
 
 ### ESP — Visuals
 

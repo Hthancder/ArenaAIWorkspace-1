@@ -122,6 +122,9 @@ test('Legacy migration removes clutter and exclusive Off cannot accidentally ena
   assert.equal(c.aimMode, 'lock'); assert.equal(c.aim, true); assert.equal(c.lines, false); assert.equal(c.showDot, false); assert.equal(c.espLegend, false); assert.equal(c.espLabels, false);
   assert.equal(normalizeConfig({ version: 2, aim: true, aimMode: 'off' }).aim, false);
   assert.equal(normalizeConfig({ aim: false }).aim, false);
+  assert.equal(normalizeConfig({}).humanLikeAim, false);
+  assert.equal(normalizeConfig({ version: 2, smoothEnabled: true }).humanLikeAim, false, 'legacy Smooth Lock does not silently retain human-like limiting');
+  assert.equal(normalizeConfig({ humanLikeAim: true }).humanLikeAim, true);
 });
 
 test('Slope uncertainty reduces flight lead explicitly, without clipping physical TOF; burst of coalesced samples stays finite', () => {

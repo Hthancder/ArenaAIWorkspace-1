@@ -2,7 +2,7 @@ import { clamp, finite } from './core.mjs';
 import { colorValue, ESP_PALETTE } from './esp.mjs';
 
 export const DEFAULTS = Object.freeze({
-  version: 2, aim: false, aimMode: 'lock', aimActivation: 'fire', directMouseInput: true, assistStrength: 35, latencyCompensation: true, leadAdjustment: 100, smoothEnabled: true, smooth: 50, knocked: false, sticky: true,
+  version: 3, aim: false, aimMode: 'lock', aimActivation: 'fire', directMouseInput: true, assistStrength: 35, latencyCompensation: true, leadAdjustment: 100, humanLikeAim: false, smooth: 50, knocked: false, sticky: true,
   showDot: false, fov: 100, showFov: true, wallcheck: true, predict: true,
   melee: false, autoMelee: false, autoSwitch: false, useOneGun: false, layerSpoofer: false, layerKey: 'KeyT', semi: false, xray: false, darkerSmokes: true, ceilings: true, mapHighlights: false, smallerTrees: true,
   smokeOpacity: 50, treeOpacity: 50, esp: false, nametags: true, lines: false,
@@ -16,7 +16,7 @@ export const DEFAULTS = Object.freeze({
   autoLoot: false, lootMode: 'nearby', mobileMovement: false, movementSmooth: 50, menuKey: 'ShiftRight', aimKey: 'KeyB', stickyKey: 'KeyN', holdAim: false,
 });
 export const STORAGE_KEY = 'duality-reborn.config.v1';
-const ranges = { assistStrength: [0, 100], leadAdjustment: [50, 150], movementSmooth: [0, 100], smooth: [0, 100], fov: [50, 400], smokeOpacity: [0, 100], treeOpacity: [0, 100], zoomFactor: [1, 3], espMaxDistance: [10, 500], espFontSize: [10, 18], espOpacity: [10, 100], espLineWidth: [.5, 3] };
+const ranges = { assistStrength: [0, 100], leadAdjustment: [50, 200], movementSmooth: [0, 100], smooth: [0, 100], fov: [50, 400], smokeOpacity: [0, 100], treeOpacity: [0, 100], zoomFactor: [1, 3], espMaxDistance: [10, 500], espFontSize: [10, 18], espOpacity: [10, 100], espLineWidth: [.5, 3] };
 const colors = new Set(['espEnemyColor', 'espAllyColor', 'espUnknownColor', 'espTargetColor']);
 export function normalizeConfig(saved) {
   const result = { ...DEFAULTS };
@@ -34,9 +34,12 @@ export function normalizeConfig(saved) {
   // Removed HUD/tag fields never reappear, including old saved configurations.
   for (const key of ['espLegend', 'espLabels', 'espDistance', 'espWeapons', 'espHighlightTarget', 'espMarkers', 'espOffscreen']) result[key] = false;
   if (saved.version !== 2) { result.lines = false; result.showDot = false; }
+  // v3 separates human-like movement limiting from combat-effective Lock.
+  // Old Smooth Lock installs do not silently keep slowing aim after the upgrade.
+  result.humanLikeAim = typeof saved.humanLikeAim === 'boolean' ? saved.humanLikeAim : false;
   if (result.aimMode === 'off') result.aim = false;
   result.nametags = true; // obsolete hidden master switch: esp now owns native names
-  result.version = 2;
+  result.version = 3;
   return result;
 }
 export function loadConfig(storage) {
@@ -52,11 +55,11 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
 `;
 const GROUPS = {
   Main: [
-    ['Aim — Mode & activation', [['aimMode', 'Mode', 'aim'], ['aimActivation', 'Activate when'], ['directMouseInput', 'Direct native mouse input', 'aim'], ['assistStrength', 'Assist strength (%)', 'aim'], ['smoothEnabled', 'Smooth Lock', 'aim'], ['smooth', 'Lock smooth', 'aim']]],
+    ['Aim — Mode & activation', [['aimMode', 'Mode', 'aim'], ['aimActivation', 'Activate when'], ['directMouseInput', 'Direct native mouse input', 'aim'], ['assistStrength', 'Assist strength (%)', 'aim'], ['humanLikeAim', 'Human-like aim (Lock)', 'aim'], ['smooth', 'Human-like amount (0–100)', 'aim']]],
     ['Aim — Target selection', [['fov', 'FOV radius (input pixels)'], ['sticky', 'Keep target', 'aim'], ['knocked', 'Include downed', 'aim'], ['wallcheck', 'Wallcheck', 'wallcheck']]],
     ['Aim — Hỗ trợ ngắm', [['showFov', 'FOV circle'], ['showDot', 'Predicted point (optional)']]],
     ['Aim — Prediction', [['predict', 'Auto prediction', 'prediction']]],
-    ['Aim — Advanced prediction', [['latencyCompensation', 'Estimated latency compensation', 'prediction'], ['leadAdjustment', 'Lead adjustment (%)', 'prediction'], [null, 'Auto dùng snapshot và weapon defs; dữ liệu stale/không chắc sẽ nhường input. Không biết trước thao tác tương lai.']]],
+    ['Aim — Advanced prediction', [['latencyCompensation', 'Estimated latency compensation', 'prediction'], ['leadAdjustment', 'Lead adjustment (%)', 'prediction'], [null, 'Lead = vị trí tương lai theo tốc độ đạn/snapshot. Assist strength là lực kéo; 100% gần Lock. Shotgun vẫn chịu random pellet spread.']]],
     ['Melee Lock', [['melee', 'Enabled', 'mobile'], ['autoMelee', 'Auto Melee (from gun, while firing)', 'switch']]],
     ['Auto Switch', [['autoSwitch', 'Enabled', 'switch'], ['useOneGun', 'Use One Gun (switch away then return)', 'switch'], [null, 'Ammo single/burst; equip từng frame, chờ slot cập nhật. Không bỏ qua cooldown server.']]],
     ['Semi Auto', [['semi', 'Held Fire: single guns + fists / melee', 'semi'], [null, 'Giữ nút Fire để lặp; auto/burst dùng shootHold gốc; không lặp lựu đạn. Server vẫn quyết định cooldown.']]],
@@ -92,7 +95,7 @@ export function createMenu(win, config, { onChange = () => {}, retry, stop, diag
   const style = el('style', { text: CSS });
   const canvas = el('canvas'); canvas.setAttribute('aria-hidden', 'true');
   const shell = el('section', { id: 'ui' }); shell.setAttribute('aria-label', 'Duality Client Reborn');
-  const brand = el('div', { class: 'brand', text: 'Duality Client' }, el('div', { class: 'version', text: 'Reborn 0.5.0-preview.5 • readable debug' }));
+  const brand = el('div', { class: 'brand', text: 'Duality Client' }, el('div', { class: 'version', text: 'Reborn 0.5.0-preview.6 • readable debug' }));
   const nav = el('nav', { class: 'nav' }); nav.setAttribute('aria-label', 'Menu tabs');
   const content = el('main', { class: 'content' });
   const status = el('div', { id: 'status', text: 'Đang chờ Application…' }); status.setAttribute('role', 'status');
@@ -118,7 +121,7 @@ export function createMenu(win, config, { onChange = () => {}, retry, stop, diag
     }, 200);
   };
   const refreshRows = () => {
-    const parents = { smooth: 'smoothEnabled', useOneGun: 'autoSwitch', autoMelee: 'melee', smokeOpacity: 'xray', treeOpacity: 'xray', ceilings: 'xray', darkerSmokes: 'xray', zoomFactor: 'zoom', movementSmooth: 'mobileMovement', lootMode: 'autoLoot', espOpacity: 'lines', espLineWidth: 'lines', espShowEnemies: 'esp', espShowAllies: 'esp', smallerTrees: 'mapHighlights', latencyCompensation: 'predict', leadAdjustment: 'predict' };
+    const parents = { smooth: 'humanLikeAim', useOneGun: 'autoSwitch', autoMelee: 'melee', smokeOpacity: 'xray', treeOpacity: 'xray', ceilings: 'xray', darkerSmokes: 'xray', zoomFactor: 'zoom', movementSmooth: 'mobileMovement', lootMode: 'autoLoot', espOpacity: 'lines', espLineWidth: 'lines', espShowEnemies: 'esp', espShowAllies: 'esp', smallerTrees: 'mapHighlights', latencyCompensation: 'predict', leadAdjustment: 'predict' };
     for (const input of panel.querySelectorAll('[data-config]')) {
       const parent = parents[input.dataset.config];
       if (parent) input.closest('label').hidden = !config[parent];
@@ -159,14 +162,13 @@ export function createMenu(win, config, { onChange = () => {}, retry, stop, diag
     for (const button of nav.children) { button.classList.toggle('active', button.textContent === tab); button.setAttribute('aria-pressed', String(button.textContent === tab)); }
     if (GROUPS[tab]) {
       for (const [name, rows] of GROUPS[tab]) {
-        const details = el('details'); details.open = openGroups.get(name) ?? name.includes('Mode');
+        const details = el('details'); details.open = openGroups.get(name) ?? (name.includes('Mode') || name === 'Aim — Prediction');
         details.ontoggle = () => openGroups.set(name, details.open);
-        const visible = rows.filter(([key]) => key !== 'assistStrength' || config.aim && config.aimMode === 'assist')
-          .filter(([key]) => !['smoothEnabled', 'smooth'].includes(key) || config.aim && config.aimMode === 'lock');
+        const visible = rows.filter(([key]) => key !== 'assistStrength' || config.aim && config.aimMode === 'assist');
         details.append(el('summary', { text: name }), ...visible.map(row)); panel.append(details);
       }
       refreshRows();
-      if (tab === 'Main') panel.append(el('p', { class: 'hint', text: 'Aim theo activation đã chọn; Assist strength0 không can thiệp. FOV theo input chưa hiệu chỉnh. Trạng thái Aim ở trên cho biết vì sao đang chờ; wallcheck thiếu contract sẽ không âm thầm bị bỏ qua.' }));
+      if (tab === 'Main') panel.append(el('p', { class: 'hint', text: 'Assist: Assist strength là lực kéo; 100% gần như Lock. Lock: Human-like aim mặc định tắt nên không làm trễ. Prediction giữ aim ở vị trí tương lai theo snapshot/vận tốc đạn, không chỉ “dính” vào mục tiêu hiện tại. FOV theo input chưa hiệu chỉnh; shotgun vẫn chịu random spread.' }));
       if (tab === 'Misc') panel.append(el('p', { class: 'hint', text: 'Nearby supplies hoạt động trong trận sau khi đủ contract; không tự đổi súng/gear và không giả nhặt thành công. Mobile mode dùng isMobile trong Join mới, có thể ảnh hưởng scope và tự mở cửa.' }));
       return;
     }

@@ -231,7 +231,7 @@ test('aim transaction restores physical mouse before flush and resets on match e
   const dom = env(), win = dom.window, app = fixture(), errors = [];
   app.input.mouseButtons[0] = true;
   const originalPos = { ...app.input.mousePos };
-  const engine = new Features(win, app, { ...DEFAULTS, aim: true, predict: false, wallcheck: false, smoothEnabled: false }, (level, message) => { if (level === 'error') errors.push(message); }, defs);
+  const engine = new Features(win, app, { ...DEFAULTS, aim: true, predict: false, wallcheck: false, humanLikeAim: false }, (level, message) => { if (level === 'error') errors.push(message); }, defs);
   app.game.transmit(1, new JoinMsg());
   engine.pre(); assert.equal(app.input.mousePos.x, 440); assert.ok(engine.target);
   app.input.flush(); assert.deepEqual(app.input.mousePos, originalPos); assert.equal(app.input.mouseButtonsOld[0], true);
@@ -544,7 +544,7 @@ test('mobile mode reports pending / forwarded / off-next-join instead of implyin
 test('aim input stays player-relative when the visual/shaken camera center differs from network position', () => {
   const dom = env(), app = fixture(); app.game.camera.p = { x: 9, y: 18 };
   app.input.mouseButtons[0] = true;
-  const engine = new Features(dom.window, app, { ...DEFAULTS, aim: true, predict: false, wallcheck: false, smoothEnabled: false }, () => {}, defs);
+  const engine = new Features(dom.window, app, { ...DEFAULTS, aim: true, predict: false, wallcheck: false, humanLikeAim: false }, () => {}, defs);
   const camera = engine.mapping.camera;
   assert.deepEqual(project(camera, { x: 12, y: 20 }), { x: 496, y: 236 });
   assert.deepEqual(aimPoint(camera, { x: 12, y: 20 }, { x: 10, y: 20 }), { x: 464, y: 300 });
@@ -777,7 +777,7 @@ test('layer key ignores typing and refuses unsupported layer descriptors', () =>
   engine.dispose(); dom.window.close();
 });
 test('Auto Melee selects melee slot only for a nearby enemy while Fire is held', () => {
-  const dom = env(), app = fixture(), config = { ...DEFAULTS, melee: true, autoMelee: true, wallcheck: false, smoothEnabled: false };
+  const dom = env(), app = fixture(), config = { ...DEFAULTS, melee: true, autoMelee: true, wallcheck: false, humanLikeAim: false };
   const localDefs = { ...defs, fists: { type: 'melee', attack: { cooldownTime: .25, offset: { x: 1.35, y: 0 }, rad: .9 } } };
   const engine = new Features(dom.window, app, config, () => {}, localDefs); app.game.transmit(1, new JoinMsg());
   engine.pre(); assert.equal(engine.switchSlot, null);
@@ -822,7 +822,7 @@ test('all restored feature settings are exposed as real validated controls, not 
 function coordinated(config = {}) {
   const dom = env(), app = fixture(); let clock = 1000;
   Object.defineProperty(dom.window.performance, 'now', { value: () => clock, configurable: true });
-  const cfg = { ...DEFAULTS, aim: true, predict: false, wallcheck: false, smoothEnabled: false, ...config };
+  const cfg = { ...DEFAULTS, aim: true, predict: false, wallcheck: false, humanLikeAim: false, ...config };
   const engine = new Features(dom.window, app, cfg, () => {}, { ...defs, fists: { type: 'melee', attack: { offset: { x: 1.35, y: 0 }, rad: .9, cooldownTime: .25 } } });
   app.game.transmit(1, new JoinMsg()); app.input.mouseButtons[0] = true;
   const send = (inputs = []) => { engine.pre(); const native = new InputMsg(); native.toMouseLen = 1.25; native.shootHold = app.input.mouseButtons[0]; native.inputs = inputs; app.game.transmit(3, native); return { native, wire: app.game.sent.at(-1).data }; };
@@ -916,12 +916,13 @@ test('Mode groups are conditional; range adjustment keeps focus/DOM and open sta
   const menu = createMenu(dom.window, config, { retry() {}, stop() {}, diagnostics: () => ({}) });
   try {
     menu.capabilities({ aim: true, prediction: true });
-    assert.ok(menu.root.querySelector('[data-config=assistStrength]')); assert.equal(menu.root.querySelector('[data-config=smooth]'), null);
+    assert.ok(menu.root.querySelector('[data-config=assistStrength]')); assert.equal(menu.root.querySelector('[data-config=smooth]').closest('label').hidden, true); assert.ok(menu.root.querySelector('[data-config=humanLikeAim]'));
     const slider = menu.root.querySelector('[data-config=assistStrength]'); slider.focus(); slider.value = 55; slider.dispatchEvent(new dom.window.Event('input'));
     assert.equal(menu.root.activeElement, slider); assert.equal(menu.root.querySelector('[data-config=assistStrength]'), slider); assert.equal(config.assistStrength, 55);
     const details = slider.closest('details'); details.open = true; details.dispatchEvent(new dom.window.Event('toggle'));
     const mode = menu.root.querySelector('[data-config=aimMode]'); mode.value = 'lock'; mode.dispatchEvent(new dom.window.Event('change'));
-    assert.equal(menu.root.querySelector('[data-config=assistStrength]'), null); assert.ok(menu.root.querySelector('[data-config=smooth]')); assert.equal(menu.root.querySelector('details').open, true);
+    assert.equal(menu.root.querySelector('[data-config=assistStrength]'), null); assert.ok(menu.root.querySelector('[data-config=humanLikeAim]')); assert.equal(menu.root.querySelector('[data-config=smooth]').closest('label').hidden, true, 'Smooth stays hidden until human-like aim is enabled'); assert.equal(menu.root.querySelector('details').open, true);
+    const human = menu.root.querySelector('[data-config=humanLikeAim]'); human.click(); assert.equal(menu.root.querySelector('[data-config=smooth]').closest('label').hidden, false);
     mode.value = 'off'; // old disconnected control must not be used after rerender
     const currentMode = menu.root.querySelector('[data-config=aimMode]'); currentMode.value = 'off'; currentMode.dispatchEvent(new dom.window.Event('change')); assert.equal(config.aim, false);
     assert.ok(!/SQUAD|ENEMY|legend/.test(menu.root.querySelector('#ui').textContent));
