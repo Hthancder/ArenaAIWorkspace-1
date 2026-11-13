@@ -19,6 +19,7 @@ fn main() {
     bootstrap::init();
     tauri::Builder::default().plugin(tauri_plugin_dialog::init())
         .manage(state::AppState::new())
+        .manage(commands::NotifyState::default())
         .setup(|app| {
             // Áp dụng Acrylic/Blur theo cài đặt đã lưu (Windows)
             let settings = app.state::<state::AppState>().lock().store.settings.clone();
@@ -46,6 +47,12 @@ fn main() {
             commands::focus_timer_close,
             commands::focus_timer_pin,
             commands::focus_open_main,
+            commands::notify_push,
+            commands::notify_ready,
+            commands::notify_layout,
+            commands::notify_prefs,
+            commands::notify_action,
+            commands::notify_clear,
             commands::save_step_preset,
             commands::delete_step_preset,
             commands::preview_parse,

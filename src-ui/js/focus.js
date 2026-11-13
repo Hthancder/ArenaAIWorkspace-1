@@ -109,7 +109,7 @@ export function renderFocus() {
     else if (!show && !ov.hidden) ov.hidden = true;
   }
   renderFocusChip();
-  /* nghỉ xong → toast + dừng engine (overlay đóng ở cả hai cửa sổ qua event) */
+  /* nghỉ xong → thông báo + dừng engine (overlay đóng ở cả hai cửa sổ qua event) */
   const breakDone = F.phaseDone && F.mode !== "focus";
   if (breakDone && !F.breakDoneFlag) {
     F.breakDoneFlag = true;

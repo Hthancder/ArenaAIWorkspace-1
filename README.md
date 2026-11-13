@@ -66,6 +66,12 @@
 - Đồng hồ trong app chính và cửa sổ Đồng hồ **không thể lệch bản ghi đè cũ**: mọi chuyển phase đọc lại trạng thái thật từ engine (wall-clock), kể cả khi bạn bấm Reset đúng khoảnh khắc đồng hồ về 0.
 - **Nhắc mắt 20-20-20 cũng hiện trong cửa sổ Đồng hồ** (pill nổi, tự ẩn, tôn trọng tuỳ chọn chuông) — không chỉ trong overlay chính.
 
+**v2.11.1 — Thông báo tách khỏi cửa sổ app chính**
+- **Cửa sổ THÔNG BÁO riêng** thay cho thẻ nằm trong cửa sổ app chính: cửa sổ frameless, trong suốt, luôn nổi ở góc dưới-phải màn hình — thông báo đến ngay cả khi cửa sổ Taskora đang thu nhỏ hoặc bị che. Không chiếm taskbar, không cướp focus; kích thước tự co giãn theo số thẻ và tự ẩn hẳn khi hết thông báo.
+- Nút hành động trong thẻ (ví dụ **Hoàn tác**) vẫn chạy đúng lệnh ở cửa sổ chính — chỉ id đi qua IPC, closure không rời cửa sổ chính.
+- Vá thêm: âm thanh tùy chỉnh (data URI) giờ thực sự phát được — CSP thiếu `media-src data:` ở bản v2.11.0 chặn im lặng loại âm này.
+- Thanh trạng thái/tiến trình thẻ, hover tạm dừng, tự ẩn 3/5/8/10s, mọi cấu hình “Cài đặt → Thông báo” giữ nguyên — chỉ đổi *nơi hiển thị*.
+
 **v2.11.0 — Thông báo của Taskora & tách mã nguồn**
 - **Thông báo đẩy (push notification) kiểu Taskora** thay thế hoàn toàn toast cũ: thẻ nổi góc dưới-phải (tối đa 3 thẻ, dư thì xếp hàng), nền kính mờ đục, viền sáng, icon theo loại; **tự ẩn sau N giây** với thanh tiến trình — **rê chuột vào để giữ lại** (hết giờ tự ẩn trở lại sau khi rời chuột); tắt tự ẩn được để thông báo bám màn hình cho tới khi bạn đóng.
 - **8 loại thông báo, tùy chỉnh từng loại** (Cài đặt → **Thông báo**): phiên tập trung xong · nghỉ xong · việc đến hạn hôm nay · việc quá hạn · lỗi lưu trữ · hợp nhất dữ liệu · thông tin · lỗi. Mỗi loại bật/tắt riêng và chọn âm thanh riêng: **3 nốt / Chuông gió / Không / Âm tự chọn** (tối đa 4 file âm thanh tuỳ chỉnh, mỗi file ≤ 256 KB, lưu trong data.json) — có nút *Nghe thử* cho từng loại và nút **Gửi thử thông báo** để kiểm tra toàn bộ.

@@ -493,7 +493,9 @@ export function globalKeys(e) {
 }
 
 /* ─────────── INIT ─────────── */
-document.addEventListener("DOMContentLoaded", async () => {
+/* Module scripts chạy trước DOMContentLoaded trong trình duyệt thật; trong
+   harness (import sau khi parse xong) DCL có thể đã bắn — nên xử lý cả hai. */
+async function boot() {
   bindEvents();
   try {
     window.__TAURI__?.event?.listen?.("focus:change", e => applyFocusPayload(e.payload));
@@ -513,4 +515,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     console.error(e);
     document.body.insertAdjacentHTML("afterbegin", `<div class="fatal">Không tải được dữ liệu: ${esc(String(e))}</div>`);
   }
-});
+}
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+else boot();

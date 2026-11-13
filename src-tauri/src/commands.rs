@@ -751,6 +751,208 @@ pub fn focus_timer_pin(app: AppHandle, state: State<'_, AppState>) -> Result<boo
     Ok(pinned)
 }
 
+// ─────────────────────────────────────────────────────────────
+// Cửa sổ THÔNG BÁO riêng — tách khỏi cửa sổ app chính (frameless,
+// trong suốt, luôn nổi, kích thước tự co theo số thẻ).
+// Luồng: main window invoke("notify_push") → Rust đảm bảo cửa sổ tồn tại →
+//   - chưa sẵn sàng: xếp vào pending (tối đa 10, FIFO)
+//   - sẵn sàng: emit "notify:arrival" (cửa sổ Thông báo đang nghe)
+// Cửa sổ Thông báo: đọc prefs mới nhất qua notify_prefs, vẽ thẻ, tự đo chiều
+// cao → notify_layout (thu/phóng/ẩn cửa sổ). Bấm nút hành động → notify_action
+// → Rust emit "notify:action" → main window chạy closure (undo…).
+// ─────────────────────────────────────────────────────────────
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct NotifyAction {
+    pub id: u64,
+    pub label: String,
+}
+
+#[derive(Clone, serde::Serialize)]
+pub struct NotifyItem {
+    pub kind: String,
+    pub title: String,
+    pub body: String,
+    pub actions: Vec<NotifyAction>,
+    /// true = thẻ yên lặng (caller truyền sound: "none") — vẫn hiện, không kêu
+    #[serde(default)]
+    pub silent: bool,
+}
+
+#[derive(serde::Serialize)]
+pub struct NotifyPrefsPayload {
+    pub dark: bool,
+    pub accent: String,
+    pub perf_mode: bool,
+    pub reduce_motion: bool,
+    pub acrylic_alpha: u8,
+    pub notify_enabled: bool,
+    pub notify_autohide: bool,
+    pub notify_hide_secs: u8,
+    pub notify_sound_on: bool,
+    pub chime: String,
+    pub notify_prefs: std::collections::BTreeMap<String, crate::models::NotifyPref>,
+    pub notify_custom_sounds: std::collections::BTreeMap<String, String>,
+}
+
+/// Trạng thái vòng đời cửa sổ Thông báo (không thuộc store — chỉ là plumbing).
+#[derive(Default)]
+pub struct NotifyState {
+    ready: std::sync::atomic::AtomicBool,
+    pending: std::sync::Mutex<Vec<NotifyItem>>,
+}
+
+const NOTIFY_PUSH_KINDS: [&str; 8] = ["focus_done", "break_done", "due_today", "overdue", "storage_error", "import_merged", "info", "error"];
+
+fn truncate_chars(s: &str, max: usize) -> String {
+    s.chars().take(max).collect()
+}
+
+/// Tạo cửa sổ Thông báo nếu chưa có (frameless · trong suốt · always-on-top ·
+/// không taskbar · không focus). Gọi từ async command — tạo webview trong
+/// command đồng bộ trên Windows gây deadlock WebView2 (xem focus_open_timer).
+pub async fn ensure_notify_window(app: &AppHandle) -> Result<(), String> {
+    if app.get_webview_window("notify").is_some() {
+        return Ok(());
+    }
+    tauri::WebviewWindowBuilder::new(app, "notify", tauri::WebviewUrl::App("notify.html".into()))
+        .title("Taskora — Thông báo")
+        .inner_size(376.0, 96.0)
+        .decorations(false)
+        .transparent(true)
+        .always_on_top(true)
+        .resizable(false)
+        .skip_taskbar(true)
+        .focused(false)
+        .visible(false)
+        .shadow(false)
+        .build()
+        .map(|_| ())
+        .or_else(|e| {
+            // race hai push cùng lúc — cửa sổ có thể vừa được tạo bởi lần gọi kia
+            if app.get_webview_window("notify").is_some() { Ok(()) } else { Err(e.to_string()) }
+        })
+}
+
+#[tauri::command]
+pub async fn notify_push(
+    app: AppHandle,
+    state: State<'_, NotifyState>,
+    kind: String,
+    title: String,
+    body: String,
+    actions: Option<Vec<NotifyAction>>,
+    sound: Option<String>,
+) -> Result<(), String> {
+    let silent = matches!(sound.as_deref(), Some("none"));
+    let kind = if NOTIFY_PUSH_KINDS.contains(&kind.trim().to_lowercase().as_str()) {
+        kind.trim().to_lowercase()
+    } else {
+        "info".to_string()
+    };
+    let actions = actions
+        .unwrap_or_default()
+        .into_iter()
+        .take(4)
+        .map(|a| NotifyAction { id: a.id, label: truncate_chars(a.label.trim(), 48) })
+        .filter(|a| !a.label.is_empty())
+        .collect();
+    let item = NotifyItem { kind, title: truncate_chars(title.trim(), 140), body: truncate_chars(body.trim(), 320), actions, silent };
+    // Nhiều push bất ngờ: mọi mục đều cũng được đẩy vào pending khi cửa sổ chưa sẵn sàng
+    let fresh = app.get_webview_window("notify").is_some();
+    if !fresh {
+        // cửa sổ bị đóng/recreate → đánh dấu chưa sẵn sàng để instance mới drain pending
+        state.ready.store(false, std::sync::atomic::Ordering::SeqCst);
+        ensure_notify_window(&app).await?;
+    }
+    if state.ready.load(std::sync::atomic::Ordering::SeqCst) {
+        let _ = app.emit("notify:arrival", item);
+    } else {
+        let mut pending = state.pending.lock().map_err(|e| e.to_string())?;
+        if pending.len() >= 10 { pending.remove(0); }
+        pending.push(item);
+    }
+    Ok(())
+}
+
+/// Cửa sổ Thông báo gọi sau khi đã gắn listener — xả pending (nếu có) và sẵn sàng nhận trực tiếp.
+#[tauri::command]
+pub fn notify_ready(app: AppHandle, state: State<'_, NotifyState>) -> Result<usize, String> {
+    state.ready.store(true, std::sync::atomic::Ordering::SeqCst);
+    let drained = std::mem::take(&mut *state.pending.lock().map_err(|e| e.to_string())?);
+    let n = drained.len();
+    for item in drained {
+        let _ = app.emit("notify:arrival", item);
+    }
+    Ok(n)
+}
+
+/// Cửa sổ Thông báo báo chiều cao mới của chồng thẻ — Rust tự thu/phóng/ẩn cửa sổ,
+/// neo đáy phải vùng làm việc (workArea) của màn hình chứa cửa sổ chính.
+#[tauri::command]
+pub fn notify_layout(app: AppHandle, height: f64) -> Result<(), String> {
+    let Some(w) = app.get_webview_window("notify") else { return Ok(()) };
+    let h = height.clamp(0.0, 480.0);
+    if h < 24.0 {
+        let _ = w.hide();
+        return Ok(());
+    }
+    let main = app.get_webview_window("main");
+    let monitor = main
+        .as_ref()
+        .and_then(|m| m.current_monitor().ok().flatten())
+        .or_else(|| app.primary_monitor().ok().flatten());
+    let Some(m) = monitor else {
+        // không lấy được màn hình — chỉ hiện, giữ vị trí cũ
+        w.show().map_err(|e| e.to_string())?;
+        return Ok(());
+    };
+    let scale = m.scale_factor();
+    let wa = m.work_area();
+    let wp = &wa.position; let ws = &wa.size;
+    let w_phys = (376.0 * scale).round() as u32;
+    let h_phys = (h * scale).round() as u32;
+    let off = (14.0 * scale).round() as i32;
+    let x = wp.x + ws.width as i32 - w_phys as i32 - off;
+    let y = wp.y + ws.height as i32 - h_phys as i32 - off;
+    w.set_size(tauri::Size::Physical(tauri::PhysicalSize::new(w_phys, h_phys))).map_err(|e| e.to_string())?;
+    w.set_position(tauri::PhysicalPosition::new(x, y)).map_err(|e| e.to_string())?;
+    w.show().map_err(|e| e.to_string())
+}
+
+/// Prefs + trạng thái theme mới nhất cho cửa sổ Thông báo (đọc tươi từ store mỗi lần).
+#[tauri::command]
+pub fn notify_prefs(state: State<'_, AppState>) -> NotifyPrefsPayload {
+    let i = state.lock();
+    let s = &i.store.settings;
+    NotifyPrefsPayload {
+        dark: s.dark,
+        accent: s.accent.clone(),
+        perf_mode: s.perf_mode,
+        reduce_motion: s.reduce_motion,
+        acrylic_alpha: s.acrylic_alpha,
+        notify_enabled: s.notify_enabled,
+        notify_autohide: s.notify_autohide,
+        notify_hide_secs: s.notify_hide_secs,
+        notify_sound_on: s.notify_sound_on,
+        chime: s.chime.clone(),
+        notify_prefs: s.notify_prefs.clone(),
+        notify_custom_sounds: s.notify_custom_sounds.clone(),
+    }
+}
+
+/// Nút hành động trong thẻ → main window nhận "notify:action" và chạy closure tương ứng (undo…).
+#[tauri::command]
+pub fn notify_action(app: AppHandle, id: u64) {
+    let _ = app.emit("notify:action", serde_json::json!({ "id": id }));
+}
+
+/// Xóa mọi thẻ đang hiện (main window gọi khi reset cài đặt…).
+#[tauri::command]
+pub fn notify_clear(app: AppHandle) {
+    let _ = app.emit("notify:clear", ());
+}
+
 #[tauri::command]
 pub fn focus_open_main(app: AppHandle) -> Result<(), String> {
     if let Some(w) = app.get_webview_window("main") {

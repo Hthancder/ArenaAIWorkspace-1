@@ -1,17 +1,25 @@
-/* Taskora — Thẻ thông báo đẩy (#focus-chip nằm ở focus.css; accordion ở settings.css)
-   Dùng lại toàn bộ biến của app — theme/accent/acrylic/perf/reduce-motion đều khớp tự động. */
+/* Taskora — Thẻ thông báo đẩy · cửa sổ THÔNG BÁO riêng (notify.html)
+   Cửa sổ frameless, trong suốt, luôn nổi, không taskbar — vẽ đúng phong cách app
+   (biến var — theme/accent/acrylic/perf/reduce-motion đều tự khớp).
+   #notify-stack đổ đầy cửa sổ; JS (notify-window.js) tự đo chiều cao và gọi
+   notify_layout để Rust thu/phóng/giấu cửa sổ theo số thẻ. */
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+}
 
 #notify-stack {
-  position: fixed;
-  right: 18px;
-  bottom: 58px; /* trên statusbar */
-  z-index: 95;
+  position: absolute;
+  inset: 0;
+  padding: 10px; /* viền đệm trong suốt — đổ bóng thẻ không bị cắt */
   display: flex;
-  flex-direction: column-reverse; /* thẻ mới nhất ở trên cùng */
+  flex-direction: column-reverse; /* thẻ mới nhất ở dưới cùng (gần mép màn hình) */
   gap: 10px;
-  width: 340px;
-  max-width: min(340px, calc(100vw - 36px));
-  pointer-events: none;
+  align-items: stretch;
+  pointer-events: none; /* vùng đệm không nuốt chuột — chỉ thẻ mới nhận sự kiện */
 }
 
 .notify-card {
@@ -94,7 +102,7 @@
   transform: scaleX(1);
 }
 
-body.perf .notify-card { backdrop-filter: none; -webkit-backdrop-filter: none;  }
+body.perf .notify-card { backdrop-filter: none; -webkit-backdrop-filter: none; }
 body.reduce-motion .notify-card,
 body.reduce-motion .notify-card.notify-in,
 body.reduce-motion .notify-card.notify-out { transition-duration: .12s !important; transform: none !important; }
@@ -103,3 +111,9 @@ body.reduce-motion .notify-progress { display: none; }
 html[data-theme="light"] .notify-card { border-color: rgba(30,34,48,.16); }
 html[data-theme="light"] .notify-error .notify-ic,
 html[data-theme="light"] .notify-storage_error .notify-ic { color: #b91c1c; background: rgba(239,68,68,.12); }
+
+/* Cửa sổ trong suốt — base.css tô nền aurora (kể cả bản light/transparent), nó KHÔNG được
+   phép phủ lên cửa sổ Thông báo, nếu không thẻ sẽ nằm trên một "tấm nền" che mất desktop */
+html body, html[data-theme="light"] body, html[data-transparent] body, html[data-transparent][data-theme="light"] body {
+  background: transparent !important;
+}

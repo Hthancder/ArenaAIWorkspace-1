@@ -126,7 +126,7 @@ export function tagsMeta(t) {
   return (t.tags || []).slice(0, 4).map(g => `<span class="meta-tag">#${esc(g)}</span>`).join("");
 }
 
-/* ─────────── toast + lưu snapshot ─────────── */
+/* ─────────── thông báo + lưu snapshot ─────────── */
 
 /* Đồng hồ hiển thị ở đâu — suy từ focus_clock_display; legacy: focus_auto_open_timer=false ⇒ overlay */
 export function clockDisplay() {
