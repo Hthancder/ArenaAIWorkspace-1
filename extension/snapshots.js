@@ -27,13 +27,15 @@ const SnapshotTools = (() => {
     });
   }
   async function restore(api,windows,restoreGroups=true){
-    const result={opened:0,failed:0,pinFailed:0,groupFailed:0,details:[]};
+    const result={opened:0,unknown:0,notAttempted:0,pinFailed:0,groupFailed:0,details:[]};let stopped=false;
     for(let i=0;i<windows.length;i++){
-      const items=windows[i];if(!items.length)continue;const grouped=new Map();let win;
+      const items=windows[i];if(!items.length)continue;if(stopped){result.notAttempted+=items.length;continue}const grouped=new Map();let win;
       const remember=(item,tab)=>{if(!restoreGroups||!item.chromeGroup)return;if(!Number.isInteger(tab?.id)){result.groupFailed++;result.details.push(`Cửa sổ ${i+1}: không xác định được tab để tạo nhóm ${item.chromeGroup.title||'(không tên)'}.`);return}const g=item.chromeGroup;if(!grouped.has(g.key))grouped.set(g.key,{meta:g,ids:[]});grouped.get(g.key).ids.push(tab.id)};
-      try{win=await api.windows.create({url:items[0].url});result.opened++;remember(items[0],win.tabs?.[0]);if(items[0].pinned&&Number.isInteger(win.tabs?.[0]?.id)){try{await api.tabs.update(win.tabs[0].id,{pinned:true})}catch{result.pinFailed++;result.details.push(`Không ghim được: ${items[0].title}`)}}else if(items[0].pinned){result.pinFailed++;result.details.push(`Không xác định được tab để ghim: ${items[0].title}`)}}catch(e){result.failed+=items.length;result.details.push(`Không tạo được cửa sổ ${i+1}: ${e.message}`);continue}
-      for(const item of items.slice(1)){try{const tab=await api.tabs.create({windowId:win.id,url:item.url,active:false,pinned:item.pinned});result.opened++;remember(item,tab)}catch(e){result.failed++;result.details.push(`Không mở được ${item.title}: ${e.message}`)}}
-      for(const {meta,ids} of grouped.values()){try{const groupId=await api.tabs.group({tabIds:ids,createProperties:{windowId:win.id}});try{await api.tabGroups.update(groupId,{title:meta.title,color:meta.color,collapsed:meta.collapsed})}catch(e){result.groupFailed++;result.details.push(`Đã tạo nhóm ${meta.title||'(không tên)'} nhưng không đặt được tên, màu hoặc trạng thái: ${e.message}`)}}catch(e){result.groupFailed++;result.details.push(`Không tạo được nhóm ${meta.title||'(không tên)'}: ${e.message}`)}}
+      try{win=await api.windows.create({url:items[0].url});result.opened++;remember(items[0],win.tabs?.[0]);if(items[0].pinned&&Number.isInteger(win.tabs?.[0]?.id)){try{await api.tabs.update(win.tabs[0].id,{pinned:true})}catch{result.pinFailed++;result.details.push(`Không xác nhận được ghim: ${items[0].title}`)}}else if(items[0].pinned){result.pinFailed++;result.details.push(`Không xác định được tab để ghim: ${items[0].title}`)}}catch(e){result.unknown++;result.notAttempted+=items.length-1;stopped=true;result.details.push(`Cửa sổ ${i+1}: không xác nhận được tab đầu tiên đã mở. Kiểm tra Chrome trước khi thử lại.`);continue}
+      if(!Number.isInteger(win?.id)){stopped=true;result.details.push(`Cửa sổ ${i+1}: không xác định được ID cửa sổ; dừng mở tiếp. Kiểm tra Chrome trước khi thử lại.`)}
+      for(let j=1;j<items.length;j++){const item=items[j];if(stopped){result.notAttempted++;continue}try{const tab=await api.tabs.create({windowId:win.id,url:item.url,active:false,pinned:item.pinned});result.opened++;remember(item,tab)}catch(e){result.unknown++;stopped=true;result.details.push(`Không xác nhận được tab đã mở: ${item.title}. Kiểm tra Chrome trước khi thử lại.`)}}
+      if(!Number.isInteger(win?.id)){result.groupFailed+=grouped.size;continue}
+      for(const {meta,ids} of grouped.values()){try{const groupId=await api.tabs.group({tabIds:ids,createProperties:{windowId:win.id}});try{await api.tabGroups.update(groupId,{title:meta.title,color:meta.color,collapsed:meta.collapsed})}catch(e){result.groupFailed++;result.details.push(`Đã tạo nhóm ${meta.title||'(không tên)'} nhưng không xác nhận được tên, màu hoặc trạng thái: ${e.message}`)}}catch(e){result.groupFailed++;result.details.push(`Không xác nhận được việc tạo nhóm ${meta.title||'(không tên)'}: ${e.message}`)}}
     }
     return result;
   }
