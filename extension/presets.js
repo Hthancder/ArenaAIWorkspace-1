@@ -36,12 +36,19 @@ const PresetTools = (() => {
   }
   function overlaps(url,list,currentId){return list.filter(p=>p&&p.id!==currentId&&matchesPreset(url,p));}
   function reason(tab) { if(tab.incognito)return 'Ẩn danh'; if(tab.active)return 'Đang xem'; if(tab.pinned)return 'Đã ghim'; if(tab.audible)return 'Đang phát âm thanh'; return ''; }
+  function ruleFromUrl(url,mode){
+    const normalized=normalizeUrl(url);const parsed=new URL(normalized);
+    if(mode==='domain')return normalizeDomain(parsed.hostname);
+    if(mode==='path'){parsed.search='';parsed.hash='';return normalizeUrl(parsed.href,true)}
+    if(mode==='exact')return normalized;
+    throw Error('Kiểu quy tắc không hợp lệ.');
+  }
   function maxPerRun(value){if(value===undefined)return 0;if(!Number.isInteger(value)||value<0||value>10000)throw Error('Giới hạn preset phải là số nguyên từ 0 đến 10.000.');return value}
   function validate(list, makeId, mapping) {
     if (!Array.isArray(list) || list.length>10000) throw Error('Danh sách preset không hợp lệ.');
     function arr(p,key,fn){const v=p[key]??[];if(!Array.isArray(v)||v.length>1000)throw Error('Quy tắc preset không hợp lệ.');return [...new Set(v.map(x=>fn(x)))]}
     return list.map(p=>{if(!p||typeof p.name!=='string')throw Error('Preset không hợp lệ.');const domains=arr(p,'domains',normalizeDomain),paths=arr(p,'paths',x=>normalizeUrl(x,true)),exactUrls=arr(p,'exactUrls',normalizeUrl);if(!domains.length&&!paths.length&&!exactUrls.length)throw Error('Preset cần ít nhất một quy tắc bao gồm.');return {id:makeId(),name:p.name.slice(0,80),domains,paths,exactUrls,excludeDomains:arr(p,'excludeDomains',normalizeDomain),excludePaths:arr(p,'excludePaths',x=>normalizeUrl(x,true)),excludeUrls:arr(p,'excludeUrls',normalizeUrl),subdomains:!!p.subdomains,maxPerRun:maxPerRun(p.maxPerRun),groupId:mapping.get(p.groupId)||null,createdAt:Number(p.createdAt)||Date.now()}});
   }
-  return {normalizeDomain,normalizeUrl,matches:domainMatch,included,excluded,matchesPreset,explain,overlaps,reason,maxPerRun,validate};
+  return {normalizeDomain,normalizeUrl,matches:domainMatch,included,excluded,matchesPreset,explain,overlaps,reason,ruleFromUrl,maxPerRun,validate};
 })();
 if(typeof module!=='undefined')module.exports=PresetTools;

@@ -1,4 +1,4 @@
-# Tabspace 0.46 — bản thử nghiệm
+# Tabspace 0.47 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,6 +7,7 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
+- Trong Preset dọn tab, chọn **Tạo từ tab đang mở** để lấy quy tắc tên miền, đường dẫn hoặc URL chính xác từ các tab được chọn. Tabspace chỉ tạo bản nháp; bạn cần xem lại, đặt tên, chọn nhóm và lưu. Tên miền có thể khớp nhiều tài khoản; URL chính xác có thể chứa dữ liệu nhạy cảm. Không tự chạy hoặc đóng tab.
 - Trong preset, mục **Giới hạn lượt dọn** đặt số tab tối đa mỗi lượt thủ công (preset mới mặc định 20; 0 là không giới hạn). Preset cũ giữ không giới hạn. Nếu chọn quá mức, cần bỏ bớt tab trước khi xác nhận; Tabspace không tự chọn thay. Giới hạn được lưu trong sao lưu; không bật tự động hóa.
 - Lưu phiên có bản xem trước để chọn từng tab hoặc cả cửa sổ. Tab ẩn danh, trang Chrome và các URL không hỗ trợ không xuất hiện; tab mới không tự thêm. Tab đã đổi URL, chuyển cửa sổ hoặc đóng sau xem trước được bỏ qua; việc lưu không đóng tab.
 - Khi lưu & đóng nhiều tab, nếu Chrome không xác nhận được một lệnh đóng, lượt dọn dừng ngay; kiểm tra tab và Lịch sử dọn trước khi xử lý tiếp. Khi đóng thủ công, tab chưa đang xem lúc xem trước sẽ được giữ lại nếu đang xem lúc kiểm tra đóng; tab đã đang xem nhưng được chọn rõ ràng vẫn có thể đóng. Bản sao đã lưu được giữ.
