@@ -1,4 +1,4 @@
-# Tabspace 0.39 — bản thử nghiệm
+# Tabspace 0.40 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,6 +7,7 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
+- Khi xem và mở lại phiên, chọn hoặc bỏ chọn toàn bộ từng cửa sổ bằng checkbox ở đầu cửa sổ; checkbox hiển thị trạng thái chọn một phần. Bộ đếm cho biết số tab và cửa sổ được chọn. Tab ghim được đánh dấu trong bản xem trước; thao tác chọn chưa mở tab.
 - Khi mở lại phiên, nếu Chrome không xác nhận được việc tạo tab hoặc cửa sổ, Tabspace dừng mở tiếp và phân biệt tab không xác định với tab chưa thử. Kiểm tra cửa sổ Chrome trước khi thử lại để tránh mở trùng. Phiên thay đổi hoặc bị xóa trong lúc xem trước cần được mở xem lại.
 - Bản xem trước preset giải thích các quy tắc bao gồm và ngoại lệ khớp từng tab (tối đa ba quy tắc mỗi loại cùng số lượng còn lại). Ngoại lệ thắng quy tắc bao gồm; tab được bảo vệ vẫn bị bỏ qua. Giải thích chỉ phản ánh lượt xem trước thủ công, không tự chọn hay chạy preset.
 - Trong trang quản lý, nhấn **⌘** ở thanh trên hoặc `Alt+K` để mở bảng lệnh; gõ từ khóa, dùng ↑/↓ và Enter. Kết quả phân biệt chuyển đến tab đang mở và mở bản lưu (có thể tải trang); cũng có lệnh đi đến khu vực, tag, nhóm, preset, phiên và lịch sử. Chỉ tối đa sáu kết quả mỗi loại, gõ cụ thể hơn khi danh sách bị cắt. Phím này chỉ hoạt động trong trang Tabspace và có thể bị Chrome/hệ điều hành giữ.
