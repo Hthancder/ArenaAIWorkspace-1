@@ -1,4 +1,4 @@
-# Tabspace 0.22 — bản thử nghiệm
+# Tabspace 0.23 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,6 +7,8 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
+- Mở **Hộp để sau** ở sidebar để xem riêng các tab đã lưu nhanh. Chọn tab để mở, gắn tag, chuyển sang nhóm khác hoặc chuyển vào thùng rác; cũng có thể thao tác trong Nhóm đã lưu. Popup lưu bản sao của tab hiện tại vào hộp này.
+- Khi nhập sao lưu chứa Hộp để sau, chế độ thêm gộp các tab vào hộp hiện có (giữ tên và thiết lập của hộp hiện có, không tự loại tab trùng); chế độ thay thế dùng hộp từ file. Những nhóm Để sau đã được nhập thành nhóm thường trong phiên bản trước không tự chuyển vào hộp: hãy chuyển tab thủ công nếu muốn.
 - Trong **Tab đang mở**, lọc theo cửa sổ và trạng thái; kết hợp được với tìm kiếm. Bộ lọc chỉ áp dụng cho màn hình này và giữ trong lúc trang quản lý còn mở. Số thứ tự cửa sổ có thể đổi khi cửa sổ đóng. Tab đã chọn nhưng bị lọc ẩn vẫn được tính trong thao tác hàng loạt; kiểm tra số tab ẩn và bản xem trước. Xóa bộ lọc không xóa lựa chọn.
 - Ghim hoặc bỏ ghim từng tab trong danh sách, hoặc chọn nhiều tab rồi xem trước và bỏ chọn trong hộp thoại. Tab đã chọn nhưng bị tìm kiếm ẩn vẫn được tính. Chrome có thể đổi vị trí tab; khi ghim tab trong nhóm Chrome, tab có thể bị đưa ra khỏi nhóm. Trạng thái được kiểm tra lại trước khi thao tác.
 - Chọn nhiều tab đang mở và dùng **Cho tab nghỉ** để xem trước, bỏ chọn và chạy. Tab đang xem, ghim, đang phát âm thanh và đã nghỉ được bỏ qua; kết quả liệt kê từng tab.
