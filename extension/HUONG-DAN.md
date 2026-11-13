@@ -1,4 +1,4 @@
-# Tabspace 0.42 — bản thử nghiệm
+# Tabspace 0.43 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,6 +7,7 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
+- Bản xem trước preset gom tab đủ điều kiện theo cửa sổ Chrome; chọn hoặc bỏ chọn từng cửa sổ, hoặc từng tab, và xem bộ đếm. Lựa chọn này chỉ dành cho lượt thủ công hiện tại; các tab bị bảo vệ hoặc loại trừ không được chọn.
 - Lịch sử dọn có checkbox và chọn/xóa nhiều lượt. Xác nhận nêu cả lựa chọn ẩn và số tab còn có thể mở lại; xóa lịch sử không xóa nhóm đã lưu hay tab đang mở, nhưng mất khả năng mở lại từ lịch sử đó. Nếu lịch sử thay đổi, xem lại xác nhận; nếu kết quả xóa không rõ, kiểm tra trước khi thử lại.
 - Mở lại từ lịch sử dọn chỉ áp dụng cho tab xác nhận đã đóng. Nếu lịch sử thay đổi trong lúc xem trước, mở lại chi tiết; nếu Chrome không xác nhận được tab đã mở, Tabspace dừng lượt và giữ trạng thái không rõ. Kiểm tra Chrome và lịch sử trước khi thử tiếp để tránh mở trùng.
 - Khi xem và mở lại phiên, chọn hoặc bỏ chọn toàn bộ từng cửa sổ bằng checkbox ở đầu cửa sổ; checkbox hiển thị trạng thái chọn một phần. Bộ đếm cho biết số tab và cửa sổ được chọn. Tab ghim được đánh dấu trong bản xem trước; thao tác chọn chưa mở tab.
