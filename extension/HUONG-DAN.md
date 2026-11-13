@@ -1,4 +1,4 @@
-# Tabspace 0.47 — bản thử nghiệm
+# Tabspace 0.48 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,6 +7,7 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
+- **Lịch nhắc preset (thử nghiệm):** mở mục Preset → Lịch nhắc, chọn ngày, giờ theo múi giờ máy và bật. Chrome cần đang chạy; quyền `alarms` dùng để kiểm tra lịch mỗi phút. Lời nhắc chỉ xuất hiện trong Tabspace, không có thông báo hệ điều hành, không tự lưu hoặc đóng. Có Xem & dọn, Nhắc lại 15 phút và Bỏ qua; có nút tạm dừng/tiếp tục toàn bộ lịch nhắc. Lịch bị lỡ hoặc trễ quá một phút sẽ không chạy bù; Chrome ngủ/đóng, đổi múi giờ, giờ mùa hè hoặc thiếu tài nguyên có thể khiến lời nhắc không xuất hiện. Khi nhập sao lưu, lịch preset mặc định tắt; lời nhắc chờ và trạng thái tạm dừng toàn cục không được xuất.
 - Trong Preset dọn tab, chọn **Tạo từ tab đang mở** để lấy quy tắc tên miền, đường dẫn hoặc URL chính xác từ các tab được chọn. Tabspace chỉ tạo bản nháp; bạn cần xem lại, đặt tên, chọn nhóm và lưu. Tên miền có thể khớp nhiều tài khoản; URL chính xác có thể chứa dữ liệu nhạy cảm. Không tự chạy hoặc đóng tab.
 - Trong preset, mục **Giới hạn lượt dọn** đặt số tab tối đa mỗi lượt thủ công (preset mới mặc định 20; 0 là không giới hạn). Preset cũ giữ không giới hạn. Nếu chọn quá mức, cần bỏ bớt tab trước khi xác nhận; Tabspace không tự chọn thay. Giới hạn được lưu trong sao lưu; không bật tự động hóa.
 - Lưu phiên có bản xem trước để chọn từng tab hoặc cả cửa sổ. Tab ẩn danh, trang Chrome và các URL không hỗ trợ không xuất hiện; tab mới không tự thêm. Tab đã đổi URL, chuyển cửa sổ hoặc đóng sau xem trước được bỏ qua; việc lưu không đóng tab.
