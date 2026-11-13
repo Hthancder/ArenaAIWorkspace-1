@@ -6,6 +6,14 @@ const ReminderTools=(()=>{
   if(typeof schedule!=='object'||typeof schedule.enabled!=='boolean'||!Array.isArray(schedule.days)||!schedule.days.length||schedule.days.length>7||schedule.days.some(n=>!Number.isInteger(n)||n<0||n>6)||new Set(schedule.days).size!==schedule.days.length||typeof schedule.time!=='string'||!/^([01]\d|2[0-3]):[0-5]\d$/.test(schedule.time))throw Error('Lịch nhắc không hợp lệ.');
   return {enabled:schedule.enabled,days:[...schedule.days].sort((a,b)=>a-b),time:schedule.time};
  }
+ function validateQuiet(value){
+  if(value===undefined)return {enabled:false,start:'22:00',end:'07:00'};
+  if(!value||typeof value!=='object'||Array.isArray(value)||typeof value.enabled!=='boolean'||typeof value.start!=='string'||typeof value.end!=='string'||!/^([01]\d|2[0-3]):[0-5]\d$/.test(value.start)||!/^([01]\d|2[0-3]):[0-5]\d$/.test(value.end)||value.start===value.end)throw Error('Giờ yên lặng không hợp lệ; thông báo hệ điều hành bị tạm giữ.');
+  return {enabled:value.enabled,start:value.start,end:value.end};
+ }
+ function isQuiet(value,now){
+  const config=validateQuiet(value);if(!config.enabled)return false;const minutes=s=>Number(s.slice(0,2))*60+Number(s.slice(3));const a=minutes(config.start),b=minutes(config.end),date=new Date(now),time=date.getHours()*60+date.getMinutes();if(!Number.isFinite(time))throw Error('Không xác định được giờ máy.');return a<b?time>=a&&time<b:time>=a||time<b;
+ }
  function tick(presets,state,paused,now){
   const next={...(state&&typeof state==='object'&&!Array.isArray(state)?state:{})};let changed=false;
   if(paused)return {state:next,changed};
@@ -18,6 +26,6 @@ const ReminderTools=(()=>{
   }
   return {state:next,changed};
  }
- return {alarmName,validate,tick};
+ return {alarmName,validate,validateQuiet,isQuiet,tick};
 })();
 if(typeof module!=='undefined')module.exports=ReminderTools;
