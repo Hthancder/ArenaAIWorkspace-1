@@ -22,13 +22,15 @@ const BatchTools = (() => {
     }
     return {batch,stopped};
   }
-  async function reopen(api, key, indexes){
+  async function reopen(api, key, indexes, expected){
     const data=await api.storage.local.get(key),batch=data[key];if(!batch)throw Error('Lượt này không còn tồn tại.');
+    if(expected&&JSON.stringify(batch)!==JSON.stringify(expected))throw Error('Lượt dọn đã thay đổi; hãy mở lại chi tiết trước khi tiếp tục.');
     let opened=0,failed=0,stopped=false;
     for(const i of indexes){const item=batch.items[i];if(!item||item.status!=='closed')continue;
       item.status='opening';try{await write(api,batch)}catch{stopped=true;break}
       try{await api.tabs.create({url:item.url,active:false});item.status='opened';opened++}catch{item.status='opening';failed++}
       try{await write(api,batch)}catch{stopped=true;break}
+      if(failed){stopped=true;break}
     }
     return {opened,failed,stopped};
   }
