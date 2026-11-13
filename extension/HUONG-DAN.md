@@ -1,4 +1,4 @@
-# Tabspace 0.66 — bản thử nghiệm
+# Tabspace 0.67 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,6 +7,7 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
+- **Thử preset trước khi lưu:** trong form tạo/sửa preset, nút thử quy tắc cho biết tab đang mở khớp, loại trừ, bảo vệ và preset chồng lấn, không ghi hay đóng tab. Kết quả chỉ là ảnh chụp tại thời điểm thử. Báo cáo chồng lấn bổ sung so sánh độ cụ thể; đồng mức chưa phân định, chưa áp dụng ưu tiên người dùng hay tự động hóa.
 - **Bảo vệ URL chính xác:** ngoài tên miền, có thể bảo vệ từng URL http/https trong Cài đặt. URL được chuẩn hóa, xét query và fragment; thay đổi URL có thể không còn khớp, không phân biệt được tài khoản hoặc bảo đảm dữ liệu chưa lưu. Quy tắc ngăn Tabspace đóng/nghỉ, không ngăn Chrome hay extension khác; danh sách URL có thể chứa dữ liệu nhạy cảm và được xuất vào sao lưu.
 - **Badge và popup:** trong Cài đặt có thể bật badge đếm lời nhắc preset đang chờ (mặc định tắt, chỉ hiển thị số, không hiện tên/URL). Popup hiển thị số lời nhắc và nút tới Cần chú ý ngay cả khi badge tắt. Icon Chrome có thể bị ẩn; badge không thay thế thông báo khác và thiết lập không được sao lưu.
 - **Toàn màn hình:** thông báo hệ điều hành của lời nhắc mặc định được trì hoãn khi phát hiện một cửa sổ Chrome toàn màn hình hoặc không đọc được trạng thái cửa sổ. Có thể tắt trong Giờ yên lặng; lời nhắc vẫn ở Tabspace. Khi trạng thái cho phép, cố gửi một thông báo tổng hợp nếu còn lời nhắc. Không đảm bảo nhận biết video toàn màn hình, ứng dụng khác hoặc chế độ tập trung hệ điều hành.
