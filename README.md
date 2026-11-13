@@ -66,6 +66,13 @@
 - Đồng hồ trong app chính và cửa sổ Đồng hồ **không thể lệch bản ghi đè cũ**: mọi chuyển phase đọc lại trạng thái thật từ engine (wall-clock), kể cả khi bạn bấm Reset đúng khoảnh khắc đồng hồ về 0.
 - **Nhắc mắt 20-20-20 cũng hiện trong cửa sổ Đồng hồ** (pill nổi, tự ẩn, tôn trọng tuỳ chọn chuông) — không chỉ trong overlay chính.
 
+**v2.11.2 — Vá 4 lỗi trải nghiệm: focus treo, thông báo chồng & chậm, việc lặp nhảy hero**
+- **Dừng Đồng hồ ở cửa sổ Đồng hồ giờ cập nhật ngay mọi nơi** — hero “Việc tiếp theo” không còn đông cứng ở giây bị dừng; chip trên topbar và overlay cũng đồng bộ theo engine (mọi thay đổi focus phát sự kiện `taskora:focus` cho cả app).
+- **Thông báo không còn chồng/bóp lên nhau** — thẻ không cho co trong container đo lường và cửa sổ Thông báo tự đo lại chiều cao tức thì (không phụ thuộc vòng vẽ của cửa sổ ẩn) nên nhiều thẻ hiện cùng lúc luôn tách rõ, nội dung không bị cắt.
+- **Thông báo đến gần như ngay** — cửa sổ Thông báo được tạo sẵn (ẩn) lúc khởi động; thẻ gắn hiệu ứng hiện bằng flush style đồng bộ và tự ẩn luôn có bộ đếm dự phòng — không còn cảnh đợi vài giây mới thấy.
+- **Bấm “Xong” trên việc lặp hằng tháng trong Hộp thư không còn “nhảy thẳng sang tháng sau”** — hero bỏ qua việc hẹn tương lai (instance lặp kế tiếp nằm ở Sắp tới như đúng vị trí), hero tự chuyển sang việc khả dụng tiếp theo hoặc trạng thái trống.
+- Chi tiết kỹ thuật & CI: commit vá trên nhánh `arena/07cb4854-arenaaiworkspace-1`.
+
 **v2.11.1 — Thông báo tách khỏi cửa sổ app chính**
 - **Cửa sổ THÔNG BÁO riêng** thay cho thẻ nằm trong cửa sổ app chính: cửa sổ frameless, trong suốt, luôn nổi ở góc dưới-phải màn hình — thông báo đến ngay cả khi cửa sổ Taskora đang thu nhỏ hoặc bị che. Không chiếm taskbar, không cướp focus; kích thước tự co giãn theo số thẻ và tự ẩn hẳn khi hết thông báo.
 - Nút hành động trong thẻ (ví dụ **Hoàn tác**) vẫn chạy đúng lệnh ở cửa sổ chính — chỉ id đi qua IPC, closure không rời cửa sổ chính.
