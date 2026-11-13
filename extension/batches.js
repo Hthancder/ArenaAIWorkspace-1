@@ -34,6 +34,12 @@ const BatchTools = (() => {
     }
     return {opened,failed,stopped};
   }
-  return {prefix,closeSaved,reopen};
+  async function deleteSelected(api, batches){
+    const keys=batches.map(b=>prefix+b.id),current=await api.storage.local.get(keys);
+    if(batches.some((b,i)=>!current[keys[i]]||JSON.stringify(current[keys[i]])!==JSON.stringify(b)))throw Error('Lịch sử đã thay đổi hoặc không còn tồn tại; hãy mở lại bản xác nhận.');
+    let deleted=0,unknown=0;for(const key of keys){try{await api.storage.local.remove(key);deleted++}catch{unknown=1;break}}
+    return {deleted,unknown,notAttempted:keys.length-deleted-unknown};
+  }
+  return {prefix,closeSaved,reopen,deleteSelected};
 })();
 if(typeof module!=='undefined')module.exports=BatchTools;
