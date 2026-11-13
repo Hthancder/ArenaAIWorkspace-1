@@ -1,4 +1,4 @@
-# Tabspace 0.44 — bản thử nghiệm
+# Tabspace 0.45 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,6 +7,7 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
+- Lưu phiên có bản xem trước để chọn từng tab hoặc cả cửa sổ. Tab ẩn danh, trang Chrome và các URL không hỗ trợ không xuất hiện; tab mới không tự thêm. Tab đã đổi URL, chuyển cửa sổ hoặc đóng sau xem trước được bỏ qua; việc lưu không đóng tab.
 - Khi lưu & đóng nhiều tab, nếu Chrome không xác nhận được một lệnh đóng, lượt dọn dừng ngay; kiểm tra tab và Lịch sử dọn trước khi xử lý tiếp. Khi đóng thủ công, tab chưa đang xem lúc xem trước sẽ được giữ lại nếu đang xem lúc kiểm tra đóng; tab đã đang xem nhưng được chọn rõ ràng vẫn có thể đóng. Bản sao đã lưu được giữ.
 - Bản xem trước preset gom tab đủ điều kiện theo cửa sổ Chrome; chọn hoặc bỏ chọn từng cửa sổ, hoặc từng tab, và xem bộ đếm. Lựa chọn này chỉ dành cho lượt thủ công hiện tại; các tab bị bảo vệ hoặc loại trừ không được chọn.
 - Lịch sử dọn có checkbox và chọn/xóa nhiều lượt. Xác nhận nêu cả lựa chọn ẩn và số tab còn có thể mở lại; xóa lịch sử không xóa nhóm đã lưu hay tab đang mở, nhưng mất khả năng mở lại từ lịch sử đó. Nếu lịch sử thay đổi, xem lại xác nhận; nếu kết quả xóa không rõ, kiểm tra trước khi thử lại.
