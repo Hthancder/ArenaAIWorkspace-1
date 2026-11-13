@@ -1,4 +1,4 @@
-# Tabspace 0.37 — bản thử nghiệm
+# Tabspace 0.38 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,6 +7,7 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
+- Bản xem trước preset giải thích các quy tắc bao gồm và ngoại lệ khớp từng tab (tối đa ba quy tắc mỗi loại cùng số lượng còn lại). Ngoại lệ thắng quy tắc bao gồm; tab được bảo vệ vẫn bị bỏ qua. Giải thích chỉ phản ánh lượt xem trước thủ công, không tự chọn hay chạy preset.
 - Trong trang quản lý, nhấn **⌘** ở thanh trên hoặc `Alt+K` để mở bảng lệnh; gõ từ khóa, dùng ↑/↓ và Enter. Kết quả phân biệt chuyển đến tab đang mở và mở bản lưu (có thể tải trang); cũng có lệnh đi đến khu vực, tag, nhóm, preset, phiên và lịch sử. Chỉ tối đa sáu kết quả mỗi loại, gõ cụ thể hơn khi danh sách bị cắt. Phím này chỉ hoạt động trong trang Tabspace và có thể bị Chrome/hệ điều hành giữ.
 - Trong **Tab đang mở**, dùng **Chọn cả cửa sổ** hoặc **Chọn nhóm** ở hàng tab thuộc nhóm Chrome để chọn nhanh các tab của cửa sổ/nhóm. Lựa chọn gồm cả tab bị tìm kiếm hoặc bộ lọc ẩn và được báo số lượng; chọn không lưu hay đóng ngay. Sau đó dùng **Lưu đã chọn** hoặc **Lưu & đóng đã chọn**, rồi kiểm tra checkbox ở bản xem trước. Tab ẩn danh và trang quản lý Tabspace không nằm trong lựa chọn.
 - Khi **Lưu đã chọn** hoặc **Lưu & đóng đã chọn**, chọn lại từng tab trong bản xem trước; tab bỏ chọn vẫn được chọn ở danh sách. Tab không phải http/https được liệt kê là bỏ qua. Tab chuyển cửa sổ hoặc đổi URL trước khi xử lý sẽ bị bỏ qua; tab thuộc website bảo vệ chỉ được lưu bản sao, không đóng.
