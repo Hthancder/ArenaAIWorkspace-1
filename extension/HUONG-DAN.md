@@ -1,4 +1,4 @@
-# Tabspace 0.35 — bản thử nghiệm
+# Tabspace 0.36 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,6 +7,7 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
+- Trong **Tab đang mở**, dùng **Chọn cả cửa sổ** hoặc **Chọn nhóm** ở hàng tab thuộc nhóm Chrome để chọn nhanh các tab của cửa sổ/nhóm. Lựa chọn gồm cả tab bị tìm kiếm hoặc bộ lọc ẩn và được báo số lượng; chọn không lưu hay đóng ngay. Sau đó dùng **Lưu đã chọn** hoặc **Lưu & đóng đã chọn**, rồi kiểm tra checkbox ở bản xem trước. Tab ẩn danh và trang quản lý Tabspace không nằm trong lựa chọn.
 - Khi **Lưu đã chọn** hoặc **Lưu & đóng đã chọn**, chọn lại từng tab trong bản xem trước; tab bỏ chọn vẫn được chọn ở danh sách. Tab không phải http/https được liệt kê là bỏ qua. Tab chuyển cửa sổ hoặc đổi URL trước khi xử lý sẽ bị bỏ qua; tab thuộc website bảo vệ chỉ được lưu bản sao, không đóng.
 - Popup phân biệt số tab đang mở, tab đã nghỉ (nằm trong số tab đang mở) và số bản lưu (có thể trùng tab còn mở). Không tính tab ẩn danh hoặc trang quản lý Tabspace; popup tự làm mới khi các tab thay đổi.
 - Trong **Tab đang mở**, lọc thêm theo nhóm Chrome hoặc tab không có nhóm, và sắp xếp trong từng cửa sổ theo vị trí thanh tab, tiêu đề hoặc tên miền. Sắp xếp chỉ thay đổi danh sách Tabspace, không đổi vị trí thật của tab. Có thể kết hợp các bộ lọc; nếu không còn kết quả, bấm **Đặt lại**. Những tab đã chọn nhưng bị ẩn vẫn được tính trong thao tác hàng loạt.
