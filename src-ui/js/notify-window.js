@@ -86,9 +86,16 @@ function playSound(p, kind, silent) {
   try { const a = new Audio(snd.custom); a.volume = 0.9; const pr = a.play && a.play(); if (pr && pr.catch) pr.catch(() => {}); } catch { /* bỏ qua */ }
 }
 
-/* ── đo chồng thẻ → báo Rust co/phóng/ẩn cửa sổ ── */
+/* ── đo chồng thẻ → báo Rust co/phóng/ẩn cửa sổ ──
+   KHÔNG dùng RAF ở đây: cửa sổ ẩn/occluded có thể bị WebView2 hãm RAF ⇒ layout
+   không bao giờ chạy ⇒ cửa sổ kẹt 96px, thẻ chồng clip lẫn nhau + thông báo hiện chậm.
+   Đo đồng bộ (getBoundingClientRect ép reflow) trong microtask là đủ và luôn chạy. */
+let layoutQueued = false;
 function syncLayout() {
-  requestAnimationFrame(() => {
+  if (layoutQueued) return;
+  layoutQueued = true;
+  queueMicrotask(() => {
+    layoutQueued = false;
     const cards = [...document.querySelectorAll(".notify-card")];
     let h = 20; // đệm 10px trên + dưới
     if (cards.length) {
@@ -138,9 +145,14 @@ function spawnCard(item) {
   const close = () => {
     if (card.dataset.closed === "1") return;
     card.dataset.closed = "1";
+    clearTimeout(hideTimer);
     visible = Math.max(0, visible - 1);
     dismiss(card, () => pumpQueue());
   };
+  /* Fallback cứng cho tự ẩn: cửa sổ ẩn/occluded có thể hoãn RAF vô tỉ —
+     setTimeout vẫn chạy ⇒ thẻ không kẹt vĩnh viễn nếu nhịp vẽ bị hãm. */
+  let hideTimer = null;
+  const armHideTimer = ms => { clearTimeout(hideTimer); if (Number.isFinite(ms)) hideTimer = setTimeout(() => close(), ms + 250); };
   card.querySelector(".notify-x").addEventListener("click", close);
   (item.actions || []).forEach((a, i) => {
     card.querySelector(`.notify-action[data-i="${i}"]`)?.addEventListener("click", () => {
@@ -160,11 +172,14 @@ function spawnCard(item) {
     }
     raf = requestAnimationFrame(tick);
   };
-  card.addEventListener("mouseenter", () => { hidden = true; cancelAnimationFrame(raf); card.classList.add("notify-hover"); });
-  card.addEventListener("mouseleave", () => { if (hidden) { hidden = false; last = null; raf = requestAnimationFrame(tick); } card.classList.remove("notify-hover"); });
-  if (Number.isFinite(dur)) raf = requestAnimationFrame(tick); else if (bar) bar.style.transform = "scaleX(1)";
+  card.addEventListener("mouseenter", () => { hidden = true; cancelAnimationFrame(raf); clearTimeout(hideTimer); card.classList.add("notify-hover"); });
+  card.addEventListener("mouseleave", () => { if (hidden) { hidden = false; last = null; raf = requestAnimationFrame(tick); armHideTimer(remaining); } card.classList.remove("notify-hover"); });
+  if (Number.isFinite(dur)) { raf = requestAnimationFrame(tick); armHideTimer(dur); } else if (bar) bar.style.transform = "scaleX(1)";
 
-  requestAnimationFrame(() => card.classList.add("notify-in"));
+  /* KHÔNG dùng RAF cho bước vào: cửa sổ ẩn/occluded có thể không chạy RAF ngay ⇒
+     thẻ nằm mãi ở opacity:0 (thông báo "chậm"). Ép flush style đồng bộ rồi gắn class. */
+  void card.getBoundingClientRect();
+  card.classList.add("notify-in");
   playSound(p, item.kind, item.silent);
   visible += 1;
   syncLayout();

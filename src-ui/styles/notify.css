@@ -27,6 +27,7 @@ html, body {
   position: relative;
   display: flex;
   align-items: flex-start;
+  flex: none; /* không cho flex-shrink: cửa sổ cao chưa kịp đo → thẻ bị bóp + clip */
   gap: 12px;
   padding: 12px 14px 14px 12px;
   border-radius: 14px;

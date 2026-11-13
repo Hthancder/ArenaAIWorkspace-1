@@ -28,6 +28,13 @@ fn main() {
                     eprintln!("[Taskora] Không bật được hiệu ứng Acrylic: {e}");
                 }
             }
+            // Pre-tạo cửa sổ THÔNG BÁO (ẩn) — thông báo đầu tiên không phải chờ tạo webview
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = commands::ensure_notify_window(&handle).await {
+                    eprintln!("[Taskora] Không tạo được cửa sổ Thông báo (sẽ thử lại khi cần): {e}");
+                }
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

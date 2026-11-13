@@ -24,9 +24,14 @@ export function setupAdhdPlaceholder() {
 
 export function nextAdhdTask() {
   if (!["inbox", "today", "upcoming", "starred", "list"].includes(S.view.type)) return null;
+  const todayIso = (S.snap && S.snap.today) || "";
   for (const id of S.visibleIds) {
     const t = taskById(id);
-    if (t && !isCompleted(t) && !isDeleted(t)) return t;
+    if (!t || isCompleted(t) || isDeleted(t)) continue;
+    /* việc hẹn tương lai (vd. việc lặp vừa sinh lần kế tiếp) không phải "việc tiếp theo" —
+       nó thuộc về Sắp tới, không nhồi vào hero lúc này */
+    if (todayIso && t.due && t.due > todayIso) continue;
+    return t;
   }
   return null;
 }
@@ -75,6 +80,8 @@ export function renderNextUp() {
 }
 
 export function bindAdhd() {
+  /* engine focus đổi ở bất kỳ cửa sổ nào (Đồng hồ/overlay/toast hành động) → hero render lại */
+  document.addEventListener("taskora:focus", () => renderNextUp());
   /* hộp Chia nhỏ — delegation cho toàn bộ nút/ô bên trong (render lại nhiều lần) */
   $("#d-split-suggest")?.addEventListener("click", e => {
     const box = $("#d-split-suggest");

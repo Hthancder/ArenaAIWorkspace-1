@@ -23,6 +23,9 @@ export function applyFocusPayload(p) {
   F.soundOn = p.soundOn !== false;
   F.chime = p.chime || "soft";
   renderFocus();
+  /* engine đổi từ BẤT CỨ cửa sổ nào (kể cả Đồng hồ) — báo hero ADHD/CTA render lại,
+     tránh CTA "Đang tập trung · mm:ss" đông cứng vĩnh viễn khi phiên kết thúc/dừng từ nơi khác */
+  try { document.dispatchEvent(new CustomEvent("taskora:focus")); } catch { /* bỏ qua */ }
 }
 
 export function focusRemainingNow() {
