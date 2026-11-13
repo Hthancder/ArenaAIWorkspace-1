@@ -1,4 +1,4 @@
-# Tabspace 0.30 — bản thử nghiệm
+# Tabspace 0.31 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,6 +7,7 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
+- Trong **Tìm tất cả**, tìm cả lịch sử dọn theo nguồn, tiêu đề hoặc URL của tab; kết quả lịch sử có nhãn riêng và mở chi tiết lượt, không tự mở tab. Thao tác tìm không đọc nội dung trang.
 - Trong bản xem trước preset, tab cũng khớp preset khác được ghi rõ tên các preset liên quan (có xét ngoại lệ của từng preset). Chọn nhóm đích khác cho một lượt nếu muốn; cài đặt preset gốc không thay đổi. Đây là lượt thủ công, không có tự động chọn preset hoặc tự đóng. Nếu preset hoặc tên/biểu tượng nhóm đích thay đổi khi đang xem, mở lại bản xem trước.
 - Khi nhấn **Mở tất cả** ở một nhóm đã lưu, có thể tùy chọn tạo nhóm tab Chrome cho các tab mở thành công; chọn tên và một trong các màu Chrome. Nhóm Chrome độc lập với nhóm Tabspace, không sao chép icon hoặc màu tùy chỉnh. Tab đã mở nhưng bị đổi URL, ghim, chuyển cửa sổ/nhóm hoặc không xác định được ID sẽ bỏ qua. Xem kết quả tạo nhóm riêng với kết quả mở tab; không bật tùy chọn này mặc định.
 - Trong trang quản lý, nhấn nút **?** hoặc phím `?` (khi không nhập văn bản) để xem hướng dẫn. Nhấn `/` để tìm; dùng Tab/Shift+Tab và Space để thao tác ô chọn. Giữ Shift khi chọn hoặc bỏ chọn một ô để áp dụng cho dải ô đang thấy từ lần chọn trước; mục bị ẩn vẫn giữ lựa chọn, hãy xem số mục ẩn trước khi thao tác. Phím mở Tabspace có thể chỉnh trong `chrome://extensions/shortcuts`.
@@ -25,7 +26,7 @@
 - Trong **Nhóm đã lưu**, **Phiên đã lưu** và **Thùng rác**, chọn bằng checkbox hoặc “Chọn mục đang thấy”; kiểm tra bản xem trước trước khi thao tác hàng loạt. Có thể mở nhiều tab đã lưu hoặc thêm/gỡ tag hàng loạt. Tag nhóm và tab được sửa riêng. Nhóm đã chọn bao gồm các tab bên trong khi mở hoặc chuyển thùng rác. Tab trong thùng rác chỉ khôi phục được khi nhóm gốc tồn tại.
 - Trong **Tab trùng**, xem các tab http/https có URL giống hệt trên nhiều cửa sổ. Không tự chọn hoặc đóng; bạn có thể chọn tab và lưu hoặc lưu & đóng sau xác nhận. Tab cùng URL có thể chứa nội dung hoặc biểu mẫu khác nhau.
 - Popup ưu tiên hiển thị tab ở cuối thanh tab của cửa sổ hiện tại, sau đó đến các cửa sổ khác; đây là vị trí trên thanh tab, không phải thời gian truy cập gần nhất. Nhấn Xem thêm để xem từng lượt sáu tab, hoặc Thu gọn để trở về sáu tab đầu. Popup hỗ trợ lưu bản sao, chuyển sang màn hình xác nhận lưu & đóng, tìm/chuyển tab, cho tab nền đủ điều kiện nghỉ sau xác nhận và truy cập nhanh ba preset mới tạo. Tab đang hiển thị trong mỗi cửa sổ, ghim hoặc phát âm thanh không được cho nghỉ từ popup.
-- Chọn **Tìm tất cả** để tìm đồng thời tab đang mở, nhóm, tab đã lưu, phiên và preset. Chọn **Tag** để xem số nhóm và tab gắn mỗi tag. Tab không tự kế thừa tag của nhóm; nội dung trang không được tìm kiếm.
+- Chọn **Tìm tất cả** để tìm đồng thời tab đang mở, nhóm, tab đã lưu, phiên, preset và lịch sử dọn. Chọn **Tag** để xem số nhóm và tab gắn mỗi tag. Tab không tự kế thừa tag của nhóm; nội dung trang không được tìm kiếm.
 - Chọn các tab đang mở, dùng **Lưu đã chọn** để lưu bản sao hoặc **Lưu & đóng đã chọn** để lưu trước rồi đóng. Tạo/chỉnh nhóm, mở từng tab hoặc cả nhóm, thêm tag cho nhóm và tab, ghi chú cho tab, chuyển bản lưu giữa các nhóm và tìm kiếm theo tag/ghi chú.
 - Nút **Nghỉ** cho tab nền (không ghim, không phát âm thanh) vào trạng thái discard sau xác nhận. Chrome có thể từ chối; trang sẽ tải lại khi mở và trạng thái chưa lưu có thể mất.
 - Trong **Thùng rác**, khôi phục hoặc xóa vĩnh viễn nhóm, tab đã lưu và phiên đã xóa từ phiên bản này. Không tự xóa theo thời gian; dữ liệu có trong file sao lưu. Nếu nhóm gốc bị xóa, khôi phục nhóm trước khi khôi phục tab.
