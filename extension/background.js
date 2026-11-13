@@ -31,3 +31,12 @@ chrome.commands.onCommand.addListener(command=>{if(command==='open-dashboard')ch
 let reminderClickBound=false;
 function bindReminderClick(){if(reminderClickBound||!chrome.notifications?.onClicked)return;chrome.notifications.onClicked.addListener(notificationId=>{if(notificationId==='tabspace-reminders')void chrome.tabs.create({url:chrome.runtime.getURL('dashboard.html?view=presets')})});reminderClickBound=true}
 bindReminderClick();chrome.permissions.onAdded.addListener(added=>{if(added.permissions?.includes('notifications'))bindReminderClick()});
+
+// Serialize refreshes so a slow earlier read cannot overwrite a newer badge state.
+let badgeRefresh=Promise.resolve();
+function refreshReminderBadge(){
+ if(!chrome.action?.setBadgeText)return;
+ badgeRefresh=badgeRefresh.catch(()=>{}).then(async()=>{const data=await chrome.storage.local.get(['presets','reminderState','reminderBadgeEnabled']);const count=data.reminderBadgeEnabled===true?ReminderTools.pendingCount(data.presets,data.reminderState):0;await chrome.action.setBadgeText({text:count?(count>99?'99+':String(count)):''})}).catch(e=>console.error('Cannot update reminder badge',e));
+}
+chrome.storage?.onChanged?.addListener((changes,area)=>{if(area==='local'&&(changes.presets||changes.reminderState||changes.reminderBadgeEnabled))refreshReminderBadge()});
+refreshReminderBadge();

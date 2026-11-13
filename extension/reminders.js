@@ -1,6 +1,10 @@
 'use strict';
 const ReminderTools=(()=>{
  const alarmName='tabspace:reminder-tick';
+ function pendingCount(presets,state){
+  if(!Array.isArray(presets)||!state||typeof state!=='object'||Array.isArray(state))return 0;
+  return presets.filter(p=>p&&typeof p.id==='string'&&p.schedule?.enabled===true&&Number.isFinite(state[p.id]?.pendingAt)&&state[p.id].pendingAt>0).length;
+ }
  function validate(schedule){
   if(schedule===undefined||schedule===null)return null;
   if(typeof schedule!=='object'||typeof schedule.enabled!=='boolean'||!Array.isArray(schedule.days)||!schedule.days.length||schedule.days.length>7||schedule.days.some(n=>!Number.isInteger(n)||n<0||n>6)||new Set(schedule.days).size!==schedule.days.length||typeof schedule.time!=='string'||!/^([01]\d|2[0-3]):[0-5]\d$/.test(schedule.time))throw Error('Lịch nhắc không hợp lệ.');
@@ -31,6 +35,6 @@ const ReminderTools=(()=>{
   }
   return {state:next,changed};
  }
- return {alarmName,validate,validateQuiet,isQuiet,deferFullscreen,tick};
+ return {alarmName,pendingCount,validate,validateQuiet,isQuiet,deferFullscreen,tick};
 })();
 if(typeof module!=='undefined')module.exports=ReminderTools;
