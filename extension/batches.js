@@ -24,18 +24,29 @@ const BatchTools = (() => {
     return {batch,stopped};
   }
   async function reopen(api, key, indexes, expected, options={}){
+    const destination=options.destination??'current';if(!['current','new'].includes(destination))throw Error('Nơi mở lại không hợp lệ.');
     const data=await api.storage.local.get(key),batch=data[key];if(!batch)throw Error('Lượt này không còn tồn tại.');
     if(expected&&JSON.stringify(batch)!==JSON.stringify(expected))throw Error('Lượt dọn đã thay đổi; hãy mở lại chi tiết trước khi tiếp tục.');
     if(indexes.some(i=>batch.items[i]?.pinned!==undefined&&typeof batch.items[i].pinned!=='boolean'))throw Error('Thông tin ghim trong lịch sử không hợp lệ; chưa mở tab.');
-    let opened=0,failed=0,pinUnconfirmed=0,stopped=false;
+    let opened=0,failed=0,pinUnconfirmed=0,stopped=false,windowId=null;
     for(const i of indexes){const item=batch.items[i];if(!item||item.status!=='closed')continue;
       item.status='opening';try{await write(api,batch)}catch{stopped=true;break}
-      try{const pin=options.restorePinned===true&&item.pinned===true;const tab=await api.tabs.create({url:item.url,active:false,...(pin?{pinned:true}:{})});if(pin&&tab?.pinned!==true)pinUnconfirmed++;item.status='opened';opened++}catch{item.status='opening';failed++}
+      const pin=options.restorePinned===true&&item.pinned===true;let firstTab=null,firstInNew=false;
+      try{
+        if(destination==='new'&&windowId===null){const win=await api.windows.create({url:item.url,incognito:false});if(!Number.isInteger(win?.id)||win.id<0)throw Error('Không xác định được cửa sổ.');windowId=win.id;firstInNew=true;firstTab=win.tabs?.[0]}
+        else{const tab=await api.tabs.create({url:item.url,active:false,...(destination==='new'?{windowId}:{}),...(pin?{pinned:true}:{})});if(pin&&tab?.pinned!==true)pinUnconfirmed++}
+        item.status='opened';opened++;
+      }catch{item.status='opening';failed++}
       try{await write(api,batch)}catch{stopped=true;break}
       if(failed){stopped=true;break}
+      // The first new-window tab is journaled as opened before attempting optional pinning.
+      if(firstInNew&&pin){
+        try{if(!Number.isInteger(firstTab?.id)||firstTab.id<0)throw Error('Không có ID tab.');const fresh=await api.tabs.get(firstTab.id);if(fresh.incognito||fresh.windowId!==windowId||(fresh.url!==item.url&&fresh.pendingUrl!==item.url))throw Error('Tab đã thay đổi.');const updated=await api.tabs.update(firstTab.id,{pinned:true});if(updated?.pinned!==true)throw Error('Không xác nhận ghim.')}catch{pinUnconfirmed++}
+      }
     }
     return {opened,failed,pinUnconfirmed,stopped};
   }
+
   async function deleteSelected(api, batches){
     const keys=batches.map(b=>prefix+b.id),current=await api.storage.local.get(keys);
     if(batches.some((b,i)=>!current[keys[i]]||JSON.stringify(current[keys[i]])!==JSON.stringify(b)))throw Error('Lịch sử đã thay đổi hoặc không còn tồn tại; hãy mở lại bản xác nhận.');
