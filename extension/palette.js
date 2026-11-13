@@ -10,6 +10,7 @@ const PaletteTools=(()=>{
   const found=search.find({...state,query:input});
   add('tabs',found.open,t=>({type:'tab',id:t.id,windowId:t.windowId,url:t.url,label:t.title||t.url||'Tab',detail:'Chuyển đến tab đang mở · '+(t.url||'URL không rõ')}));
   add('items',found.items,({group,item})=>({type:'item',id:item.id,groupId:group.id,url:item.url,label:item.title||item.url,detail:'Mở bản lưu · '+group.name+' · '+item.url}));
+  add('workspaces',found.workspaces,w=>({type:'workspace',id:w.id,label:w.name,detail:'Xem workspace và nhóm đã lưu'}));
   add('groups',found.groups,g=>({type:'group',id:g.id,label:g.name,detail:'Tìm nhóm theo tên trong Nhóm đã lưu'}));
   add('sessions',found.sessions,s=>({type:'session',id:s.id,label:s.name,detail:'Xem phiên đã lưu'}));
   add('presets',found.presets,p=>({type:'preset',id:p.id,label:p.name,detail:'Xem trước preset'}));

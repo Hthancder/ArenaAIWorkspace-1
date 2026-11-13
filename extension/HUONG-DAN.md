@@ -1,4 +1,4 @@
-# Tabspace 0.52 — bản thử nghiệm
+# Tabspace 0.53 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,6 +7,7 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
+- Tìm tất cả và bảng lệnh tìm workspace theo tên workspace hoặc tên nhóm được tham chiếu; không tự mở tab. Tại Nhóm đã lưu, mỗi nhóm hiển thị tối đa ba workspace liên quan và số còn lại; nhấn tên để xem trong mục Workspace.
 - **Workspace cá nhân:** tạo workspace và chọn các nhóm đã lưu; một nhóm có thể thuộc nhiều workspace mà không sao chép tab. Có thể xem và mở các tab trong nhóm sau bước xác nhận; không tự đóng hoặc cô lập tab Chrome. Workspace xóa được chuyển vào thùng rác và có trong sao lưu. Nếu nhóm bị xóa, tham chiếu được giữ và báo không khả dụng để có thể khôi phục nhóm.
 - Trong Phiên đã lưu, chọn **So sánh hai phiên**. Kết quả đối chiếu số lượng URL nguyên văn, kể cả query/fragment và tab trùng; không xác định tab nào di chuyển hoặc thay đổi nội dung. Mỗi mục hiển thị tối đa 200 URL và sáu vị trí mỗi URL; không mở, xóa hay thay đổi tab.
 - **Snapshot tự động (thử nghiệm):** vào Cài đặt → Snapshot tự động để bật, chọn khoảng cách 1–168 giờ và tối đa 1–50 bản. Chỉ lưu URL/metadata các tab web trong cửa sổ thông thường, không đóng tab; bỏ qua ẩn danh, popup và trang Chrome. Đạt giới hạn thì dừng tạo, không tự xóa phiên nào. Lịch bị lỡ không chạy bù; xem kết quả gần nhất ở Cài đặt. Cài đặt chỉ lưu trên thiết bị, không sao lưu; snapshot nhập từ file thành phiên thường, không tính giới hạn tự động. Không dùng thay sao lưu ngoài Chrome.
