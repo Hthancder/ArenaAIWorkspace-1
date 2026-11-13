@@ -1,4 +1,4 @@
-# Tabspace 0.68 — bản thử nghiệm
+# Tabspace 0.69 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,6 +7,7 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
+- **Đóng một tab:** tab web đóng thủ công không được lưu thành bản sao, nhưng Tabspace ghi URL vào Lịch sử dọn trước khi yêu cầu đóng; chỉ URL được xác nhận đóng có thể mở lại. Nếu không ghi được nhật ký thì không đóng; nếu kết quả không rõ, kiểm tra Chrome trước khi thử lại. Tab không phải http/https không được ghi lịch sử này. Mở lại không phục hồi form hoặc trạng thái trang.
 - **Ưu tiên preset:** trong phần nâng cao của từng preset, đặt số nguyên từ -1000 đến 1000 (mặc định 0). Khi độ cụ thể như nhau, báo cáo chồng lấn xếp số lớn hơn trước; nếu vẫn bằng, báo chưa phân định. Đây chỉ là giải thích, không tự chạy và không bỏ qua bảo vệ; ưu tiên được lưu trong sao lưu.
 - **Thử preset trước khi lưu:** trong form tạo/sửa preset, nút thử quy tắc cho biết tab đang mở khớp, loại trừ, bảo vệ và preset chồng lấn, không ghi hay đóng tab. Kết quả chỉ là ảnh chụp tại thời điểm thử. Báo cáo chồng lấn so sánh độ cụ thể rồi ưu tiên; đồng mức cả hai chưa phân định và không tự động hóa.
 - **Bảo vệ URL chính xác:** ngoài tên miền, có thể bảo vệ từng URL http/https trong Cài đặt. URL được chuẩn hóa, xét query và fragment; thay đổi URL có thể không còn khớp, không phân biệt được tài khoản hoặc bảo đảm dữ liệu chưa lưu. Quy tắc ngăn Tabspace đóng/nghỉ, không ngăn Chrome hay extension khác; danh sách URL có thể chứa dữ liệu nhạy cảm và được xuất vào sao lưu.
