@@ -38,3 +38,31 @@ time[data-full]:focus::after{content:attr(data-full);position:fixed;z-index:15;l
 @media(max-width:700px){.row{flex-wrap:wrap}.rowtext{flex:1 1 50%}.rowactions{flex:1 1 100%;justify-content:flex-end}.selection span{flex-basis:100%}}
 
 .open-filters{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin:-10px 0 20px;color:#626a79;font-size:12px}.open-filters label{display:flex;align-items:center;gap:7px;font-weight:600}.open-filters select{border:1px solid #e2e3eb;border-radius:8px;padding:8px;background:#fff;color:#454d5b;max-width:100%}
+/* Appearance: retained locally and shared by dashboard and popup. */
+.appearance-settings{display:flex;gap:16px;flex-wrap:wrap}.appearance-settings .field{min-width:190px;flex:1;max-width:300px}
+:root[data-density="compact"] .row{min-height:48px;padding:7px 12px;gap:9px}
+:root[data-density="compact"] .grouphead{padding:10px 14px}
+:root[data-density="compact"] .popup-tab-info{padding:5px 3px}
+:root[data-density="compact"] .session-window{padding:8px 15px}
+:root[data-theme="dark"]{color-scheme:dark;color:#e4e6f1;background:#171923}
+:root[data-theme="dark"] body,:root[data-theme="dark"] .main{background:#171923;color:#e4e6f1}
+:root[data-theme="dark"] .sidebar,:root[data-theme="dark"] .topbar,:root[data-theme="dark"] .card,:root[data-theme="dark"] .session-intro,:root[data-theme="dark"] .empty,:root[data-theme="dark"] .popup{background:#232632;border-color:#383d4c;color:#e4e6f1}
+:root[data-theme="dark"] .heading h1,:root[data-theme="dark"] .rowtitle,:root[data-theme="dark"] .grouphead .rowtext b,:root[data-theme="dark"] .empty b,:root[data-theme="dark"] .popup-tab-info b,:root[data-theme="dark"] .breadcrumb b{color:#e4e6f1}
+:root[data-theme="dark"] .heading p,:root[data-theme="dark"] .rowurl,:root[data-theme="dark"] .grouphead small,:root[data-theme="dark"] .session-intro p,:root[data-theme="dark"] .settingscard p,:root[data-theme="dark"] .muted,:root[data-theme="dark"] .popup-tab-info small,:root[data-theme="dark"] .sort-hint,:root[data-theme="dark"] .item-note{color:#b1b7c7}
+:root[data-theme="dark"] .row,:root[data-theme="dark"] .grouphead,:root[data-theme="dark"] .session-window,:root[data-theme="dark"] .popup-tab,:root[data-theme="dark"] .dialogactions{border-color:#383d4c}
+:root[data-theme="dark"] .row:hover,:root[data-theme="dark"] .row:focus-within{background:#2d303f}
+:root[data-theme="dark"] .overview,:root[data-theme="dark"] .quick-card,:root[data-theme="dark"] .selection,:root[data-theme="dark"] .privacy{background:#302d46;border-color:#48415f;box-shadow:none;color:#d4cafc}
+:root[data-theme="dark"] .overview-copy b,:root[data-theme="dark"] .overview-stat b,:root[data-theme="dark"] .pop-counter b{color:#d4cafc}
+:root[data-theme="dark"] .overview-copy p,:root[data-theme="dark"] .overview-stat span,:root[data-theme="dark"] .privacy small,:root[data-theme="dark"] .quick-caption{color:#bcb4ce}
+:root[data-theme="dark"] .overview-icon,:root[data-theme="dark"] .favicon,:root[data-theme="dark"] .groupicon{background:#373349;color:#c6baf7}
+:root[data-theme="dark"] .nav,:root[data-theme="dark"] .sidegroup,:root[data-theme="dark"] .sideadd,:root[data-theme="dark"] .rowactions button,:root[data-theme="dark"] .textbutton,:root[data-theme="dark"] .open-filters,:root[data-theme="dark"] .field,:root[data-theme="dark"] .checkline{color:#c0c5d4}
+:root[data-theme="dark"] .nav.active,:root[data-theme="dark"] .nav:hover,:root[data-theme="dark"] .rowactions button:hover,:root[data-theme="dark"] .collapse-group:hover{background:#39344e;color:#ded6ff}
+:root[data-theme="dark"] .search,:root[data-theme="dark"] .popup-search,:root[data-theme="dark"] .field input,:root[data-theme="dark"] .field select,:root[data-theme="dark"] .field textarea,:root[data-theme="dark"] .open-filters select,:root[data-theme="dark"] .secondary,:root[data-theme="dark"] .iconbtn,:root[data-theme="dark"] .popup-row-btn,:root[data-theme="dark"] .popup-preset{background:#303441;border-color:#505566;color:#e4e6f1}
+:root[data-theme="dark"] .search input,:root[data-theme="dark"] .popup-search input{color:#e4e6f1}
+:root[data-theme="dark"] dialog{background:#292c39;color:#eef0fa;border-color:#4b4e61}
+:root[data-theme="dark"] dialog p,:root[data-theme="dark"] .field small,:root[data-theme="dark"] .session-picker label small,:root[data-theme="dark"] .preset-advanced summary{color:#bbc0cf}
+:root[data-theme="dark"] .dialoglist{background:#343744;color:#e2e4ef}
+:root[data-theme="dark"] .session-picker b{color:#e2e4ef}
+:root[data-theme="dark"] .badge:not([class*="native-"]){background:#474160;color:#e4dfff}
+:root[data-theme="dark"] .pop-link,:root[data-theme="dark"] .popup-message,:root[data-theme="dark"] .tags{color:#c8b9ff}
+:root[data-theme="dark"] .danger-soft{background:#513638;color:#ffcbc5}
