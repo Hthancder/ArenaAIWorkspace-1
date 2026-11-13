@@ -35,6 +35,9 @@ const PresetTools = (() => {
     return {included:collect(p.domains,p.paths,p.exactUrls),excluded:collect(p.excludeDomains,p.excludePaths,p.excludeUrls)};
   }
   function overlaps(url,list,currentId){return list.filter(p=>p&&p.id!==currentId&&matchesPreset(url,p));}
+  function overlapReport(tabs,presets){
+    const results=[];for(const tab of tabs){if(tab.incognito||typeof tab.url!=='string'||!/^https?:\/\//i.test(tab.url))continue;const matching=presets.filter(p=>p&&matchesPreset(tab.url,p));if(matching.length>1)results.push({tab,presets:matching})}return results;
+  }
   function reason(tab) { if(tab.incognito)return 'Ẩn danh'; if(tab.active)return 'Đang xem'; if(tab.pinned)return 'Đã ghim'; if(tab.audible)return 'Đang phát âm thanh'; return ''; }
   function ruleFromUrl(url,mode){
     const normalized=normalizeUrl(url);const parsed=new URL(normalized);
@@ -50,6 +53,6 @@ const PresetTools = (() => {
     function arr(p,key,fn){const v=p[key]??[];if(!Array.isArray(v)||v.length>1000)throw Error('Quy tắc preset không hợp lệ.');return [...new Set(v.map(x=>fn(x)))]}
     return list.map(p=>{if(!p||typeof p.name!=='string')throw Error('Preset không hợp lệ.');const domains=arr(p,'domains',normalizeDomain),paths=arr(p,'paths',x=>normalizeUrl(x,true)),exactUrls=arr(p,'exactUrls',normalizeUrl);if(!domains.length&&!paths.length&&!exactUrls.length)throw Error('Preset cần ít nhất một quy tắc bao gồm.');return {id:makeId(),name:p.name.slice(0,80),domains,paths,exactUrls,excludeDomains:arr(p,'excludeDomains',normalizeDomain),excludePaths:arr(p,'excludePaths',x=>normalizeUrl(x,true)),excludeUrls:arr(p,'excludeUrls',normalizeUrl),subdomains:!!p.subdomains,maxPerRun:maxPerRun(p.maxPerRun),...(p.schedule?{schedule:{...reminderTools.validate(p.schedule),enabled:false}}:{}),groupId:mapping.get(p.groupId)||null,createdAt:Number(p.createdAt)||Date.now()}});
   }
-  return {normalizeDomain,normalizeUrl,matches:domainMatch,included,excluded,matchesPreset,explain,overlaps,reason,ruleFromUrl,maxPerRun,validate};
+  return {normalizeDomain,normalizeUrl,matches:domainMatch,included,excluded,matchesPreset,explain,overlaps,overlapReport,reason,ruleFromUrl,maxPerRun,validate};
 })();
 if(typeof module!=='undefined')module.exports=PresetTools;

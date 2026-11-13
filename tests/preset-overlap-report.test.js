@@ -1,0 +1,4 @@
+const assert=require('node:assert/strict'),P=require('../extension/presets.js');
+const presets=[{id:'a',domains:['example.com'],subdomains:true},{id:'b',paths:['https://example.com/work'],excludeUrls:['https://example.com/work/private']},{id:'c',exactUrls:['https://example.com/work/1']}];
+const tabs=[{id:1,url:'https://example.com/work/1'},{id:2,url:'https://example.com/work/private'},{id:3,url:'https://example.com/work/1',incognito:true},{id:4,url:'chrome://settings'},{id:5,url:'https://example.com/work'}];
+const result=P.overlapReport(tabs,presets);assert.deepEqual(result.map(x=>x.tab.id),[1,5]);assert.deepEqual(result[0].presets.map(p=>p.id),['a','b','c']);assert.deepEqual(result[1].presets.map(p=>p.id),['a','b']);assert.deepEqual(P.overlapReport(tabs,[]),[]);console.log('Preset overlap report checks each exception and excludes private tabs: OK');
