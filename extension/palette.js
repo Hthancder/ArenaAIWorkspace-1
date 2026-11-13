@@ -1,6 +1,6 @@
 'use strict';
 const PaletteTools=(()=>{
- const commands=[['workspaces','Workspace'],['open','Tab đang mở'],['inbox','Hộp để sau'],['saved','Nhóm đã lưu'],['domains','Theo tên miền'],['smart','Nhóm thông minh'],['search','Tìm tất cả'],['tags','Tag'],['duplicates','Tab trùng'],['old-tabs','Lâu chưa truy cập'],['saved-open','Đã lưu còn mở'],['sessions','Phiên đã lưu'],['presets','Preset dọn tab'],['history','Lịch sử dọn'],['trash','Thùng rác'],['settings','Cài đặt & sao lưu']];
+ const commands=[['workspaces','Workspace'],['open','Tab đang mở'],['inbox','Hộp để sau'],['saved','Nhóm đã lưu'],['domains','Theo tên miền'],['smart','Nhóm thông minh'],['search','Tìm tất cả'],['tags','Tag'],['duplicates','Tab trùng'],['old-tabs','Lâu chưa truy cập'],['saved-open','Đã lưu còn mở'],['sessions','Phiên đã lưu'],['attention','Cần chú ý'],['presets','Preset dọn tab'],['history','Lịch sử dọn'],['trash','Thùng rác'],['settings','Cài đặt & sao lưu']];
  const norm=s=>String(s??'').normalize('NFKC').toLocaleLowerCase('vi').trim();
  function find(input,state,search){
   const q=norm(input),items=[];let truncated=false;

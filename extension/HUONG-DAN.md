@@ -1,4 +1,4 @@
-# Tabspace 0.61 — bản thử nghiệm
+# Tabspace 0.62 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,6 +7,7 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
+- **Cần chú ý:** tổng hợp lời nhắc preset đang chờ và lịch sử dọn có mục chưa xử lý/lỗi/không rõ. Có thể xem trước, nhắc lại, bỏ từng lời nhắc hoặc chọn bỏ nhiều lời nhắc đang thấy; không tự đóng tab hay tắt lịch tương lai. Lượt đang chạy cũng có thể xuất hiện, và cần kiểm tra Chrome khi trạng thái không rõ. Đây chưa phải lịch sử của mọi thông báo.
 - **Kiểm tra preset chồng lấn:** trong Preset, xem các tab web hiện mở khớp nhiều preset sau khi xét ngoại lệ từng preset, quy tắc và nhóm đích. Danh sách có cả preset chưa bật lịch hoặc thiếu nhóm; không chọn preset thắng hay tự dọn. Chỉ xét tab đang mở, không phải phân tích toàn bộ xung đột tương lai.
 - **Xem chuyển workspace:** xem nhóm đích và gợi ý tab đang mở có URL không nằm trong các nhóm đích. Chọn thủ công để tới bước lưu & đóng riêng, rồi dùng Xem & mở để chọn tab workspace cần mở; không tự đóng/mở. Đây là gợi ý theo URL, không chứng minh tab thuộc workspace nào; trạng thái trang chưa lưu có thể mất. Tab đang xem, ghim, phát âm thanh và website được bảo vệ bị giữ lại ở bước gợi ý.
 - **Lâu chưa truy cập:** lọc tab web theo thời gian kích hoạt gần nhất do Chrome cung cấp, với ngưỡng 1–365 ngày. Tab không có thời gian hợp lệ bị bỏ qua và được đếm; thời gian không chứng minh tab an toàn để đóng/nghỉ hoặc trang không hoạt động. Không tự chọn hay xử lý tab. Ngưỡng chỉ giữ trong lần mở trang quản lý.
