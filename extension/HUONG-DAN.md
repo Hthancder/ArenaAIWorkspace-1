@@ -1,4 +1,4 @@
-# Tabspace 0.49 — bản thử nghiệm
+# Tabspace 0.50 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,6 +7,7 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
+- **Snapshot tự động (thử nghiệm):** vào Cài đặt → Snapshot tự động để bật, chọn khoảng cách 1–168 giờ và tối đa 1–50 bản. Chỉ lưu URL/metadata các tab web trong cửa sổ thông thường, không đóng tab; bỏ qua ẩn danh, popup và trang Chrome. Đạt giới hạn thì dừng tạo, không tự xóa phiên nào. Lịch bị lỡ không chạy bù; xem kết quả gần nhất ở Cài đặt. Cài đặt chỉ lưu trên thiết bị, không sao lưu; snapshot nhập từ file thành phiên thường, không tính giới hạn tự động. Không dùng thay sao lưu ngoài Chrome.
 - **Lịch nhắc preset (thử nghiệm):** mở mục Preset → Lịch nhắc, chọn ngày, giờ theo múi giờ máy và bật. Chrome cần đang chạy; quyền `alarms` dùng để kiểm tra lịch mỗi phút. Lời nhắc xuất hiện trong Tabspace và không tự lưu hoặc đóng. Bạn có thể bật thông báo hệ điều hành riêng tại mục Preset; Chrome sẽ hỏi quyền tùy chọn. Thông báo chỉ có nội dung chung, không chứa tên preset hoặc URL; bấm vào để mở mục Preset, không xác nhận dọn. Tắt thông báo trong Tabspace không thu hồi quyền Chrome. Có Xem & dọn, Nhắc lại 15 phút và Bỏ qua; có nút tạm dừng/tiếp tục toàn bộ lịch nhắc. Lịch bị lỡ hoặc trễ quá một phút sẽ không chạy bù; Chrome ngủ/đóng, đổi múi giờ, giờ mùa hè hoặc thiếu tài nguyên có thể khiến lời nhắc không xuất hiện. Khi nhập sao lưu, lịch preset mặc định tắt; lời nhắc chờ, trạng thái tạm dừng và tùy chọn thông báo hệ điều hành không được xuất.
 - Trong Preset dọn tab, chọn **Tạo từ tab đang mở** để lấy quy tắc tên miền, đường dẫn hoặc URL chính xác từ các tab được chọn. Tabspace chỉ tạo bản nháp; bạn cần xem lại, đặt tên, chọn nhóm và lưu. Tên miền có thể khớp nhiều tài khoản; URL chính xác có thể chứa dữ liệu nhạy cảm. Không tự chạy hoặc đóng tab.
 - Trong preset, mục **Giới hạn lượt dọn** đặt số tab tối đa mỗi lượt thủ công (preset mới mặc định 20; 0 là không giới hạn). Preset cũ giữ không giới hạn. Nếu chọn quá mức, cần bỏ bớt tab trước khi xác nhận; Tabspace không tự chọn thay. Giới hạn được lưu trong sao lưu; không bật tự động hóa.
@@ -59,4 +60,4 @@ Các thao tác ghi dữ liệu của các trang Tabspace và popup dùng cùng m
 Favicon dùng API favicon của Chrome (quyền `favicon`); giao diện không tải trực tiếp URL favicon của website. Icon có thể dùng biểu tượng mặc định khi Chrome không có trong cache.
 
 ## Giới hạn quan trọng
-Đây là bản thử nghiệm đầu tiên, không phải bản hoàn chỉnh theo tài liệu thiết kế. Chưa có preset tự động, tự động đóng, workspace, snapshot tự động, âm thanh tùy chỉnh, thông báo phủ trang web, đồng bộ hoặc các mức bảo vệ nâng cao ngoài danh sách website. Xóa vĩnh viễn trong thùng rác không thể hoàn tác. Chỉ lưu URL http/https; Chrome có thể không cho mở hoặc thao tác một số tab. Lưu & đóng không bảo toàn nội dung chưa lưu hay trạng thái trang; chỉ dùng với trang bạn biết an toàn. Việc nhập thay thế sẽ xóa dữ liệu đang lưu. Không dùng extension làm bản sao lưu duy nhất.
+Đây là bản thử nghiệm đầu tiên, không phải bản hoàn chỉnh theo tài liệu thiết kế. Chưa có preset tự động, tự động đóng, workspace, âm thanh tùy chỉnh, thông báo phủ trang web, đồng bộ hoặc các mức bảo vệ nâng cao ngoài danh sách website. Xóa vĩnh viễn trong thùng rác không thể hoàn tác. Chỉ lưu URL http/https; Chrome có thể không cho mở hoặc thao tác một số tab. Lưu & đóng không bảo toàn nội dung chưa lưu hay trạng thái trang; chỉ dùng với trang bạn biết an toàn. Việc nhập thay thế sẽ xóa dữ liệu đang lưu. Không dùng extension làm bản sao lưu duy nhất.
