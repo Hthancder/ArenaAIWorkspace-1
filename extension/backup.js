@@ -2,7 +2,7 @@
 const BackupTools=(()=>{
  const trashPrefix='tabspace:trash:',batchPrefix='tabspace:batch:';
  function exportData(storage){
-  return {format:'tabspace-backup',version:2,exportedAt:new Date().toISOString(),groups:storage.groups||[],snapshots:storage.snapshots||[],presets:storage.presets||[],trash:Object.entries(storage).filter(([k])=>k.startsWith(trashPrefix)).map(([,v])=>v),batches:Object.entries(storage).filter(([k])=>k.startsWith(batchPrefix)).map(([,v])=>v),...(storage.appearance?{appearance:storage.appearance}:{}),...(storage.protectedDomains!==undefined?{protectedDomains:storage.protectedDomains}:{})};
+  return {format:'tabspace-backup',version:2,exportedAt:new Date().toISOString(),groups:storage.groups||[],workspaces:storage.workspaces||[],snapshots:storage.snapshots||[],presets:storage.presets||[],trash:Object.entries(storage).filter(([k])=>k.startsWith(trashPrefix)).map(([,v])=>v),batches:Object.entries(storage).filter(([k])=>k.startsWith(batchPrefix)).map(([,v])=>v),...(storage.appearance?{appearance:storage.appearance}:{}),...(storage.protectedDomains!==undefined?{protectedDomains:storage.protectedDomains}:{})};
  }
  function mergeGroups(existing, imported){
   if(existing.filter(g=>g.id==='inbox').length>1||imported.filter(g=>g.id==='inbox').length>1)throw Error('Có nhiều Hộp để sau; không thể nhập an toàn.');
@@ -20,14 +20,14 @@ const BackupTools=(()=>{
   for(const t of backup.trash)if(t?.type==='group'){if(t.value?.id==='inbox')throw Error('Hộp để sau không thể nằm trong thùng rác.');mapId(groupMap,t.value?.id)}
   const records={};
   for(const t of backup.trash){
-   if(!t||!['group','item','session'].includes(t.type)||!t.value)throw Error('Mục thùng rác không hợp lệ.');
+   if(!t||!['group','item','session','workspace'].includes(t.type)||!t.value)throw Error('Mục thùng rác không hợp lệ.');
    let value,groupId=null;
    if(t.type==='group'){
     value=validateGroups({format:'tabspace-backup',version:1,groups:[t.value]})[0];value.id=mapId(groupMap,t.value.id);
     t.value.items.forEach((x,i)=>{value.items[i].id=mapId(itemMap,x.id)});
    }else if(t.type==='item'){
     value=validateGroups({format:'tabspace-backup',version:1,groups:[{name:'Temp',items:[t.value]}]})[0].items[0];value.id=mapId(itemMap,t.value.id);groupId=typeof t.groupId==='string'?groupMap.get(t.groupId)||null:null;
-   }else value=validateSessions([t.value])[0];
+   }else if(t.type==='session')value=validateSessions([t.value])[0];else{const tools=typeof module!=='undefined'?require('./workspaces.js'):WorkspaceTools;value=tools.validate([t.value],makeId,groupMap)[0]}
    const key=makeId();records[trashPrefix+key]={id:key,type:t.type,value,groupId,index:Number.isSafeInteger(t.index)&&t.index>=0?t.index:0,deletedAt:Number(t.deletedAt)||Date.now()};
   }
   const allowed=new Set(['queued','closing','closed','close_failed','skipped','opening','opened','open_failed']);

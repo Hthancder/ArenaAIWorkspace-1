@@ -1,6 +1,6 @@
 'use strict';
 const PaletteTools=(()=>{
- const commands=[['open','Tab đang mở'],['inbox','Hộp để sau'],['saved','Nhóm đã lưu'],['domains','Theo tên miền'],['search','Tìm tất cả'],['tags','Tag'],['duplicates','Tab trùng'],['sessions','Phiên đã lưu'],['presets','Preset dọn tab'],['history','Lịch sử dọn'],['trash','Thùng rác'],['settings','Cài đặt & sao lưu']];
+ const commands=[['workspaces','Workspace'],['open','Tab đang mở'],['inbox','Hộp để sau'],['saved','Nhóm đã lưu'],['domains','Theo tên miền'],['search','Tìm tất cả'],['tags','Tag'],['duplicates','Tab trùng'],['sessions','Phiên đã lưu'],['presets','Preset dọn tab'],['history','Lịch sử dọn'],['trash','Thùng rác'],['settings','Cài đặt & sao lưu']];
  const norm=s=>String(s??'').normalize('NFKC').toLocaleLowerCase('vi').trim();
  function find(input,state,search){
   const q=norm(input),items=[];let truncated=false;

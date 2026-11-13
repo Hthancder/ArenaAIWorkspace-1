@@ -2,7 +2,7 @@
 const TrashTools = (()=>{
  const prefix='tabspace:trash:';
  async function move(api,type,objectId,groupId,makeId){
-   const key=type==='session'?'snapshots':'groups';const data=await api.storage.local.get(key);const list=data[key]||[];
+   const key=type==='session'?'snapshots':type==='workspace'?'workspaces':'groups';const data=await api.storage.local.get(key);const list=data[key]||[];
    let value,index,parent;
    if(type==='item'){parent=list.find(g=>g.id===groupId);index=parent?.items.findIndex(x=>x.id===objectId)??-1;if(index<0)throw Error('Tab đã lưu không còn tồn tại.');value=parent.items[index]}
    else {index=list.findIndex(x=>x.id===objectId);if(index<0)throw Error('Dữ liệu không còn tồn tại.');value=list[index]}
@@ -14,13 +14,13 @@ const TrashTools = (()=>{
    return entry;
  }
  async function restore(api,trashId){
-   const trashKey=prefix+trashId,data=await api.storage.local.get([trashKey,'groups','snapshots']),entry=data[trashKey];if(!entry)throw Error('Mục trong thùng rác không còn tồn tại.');
-   const key=entry.type==='session'?'snapshots':'groups',list=data[key]||[];
+   const trashKey=prefix+trashId,data=await api.storage.local.get([trashKey,'groups','snapshots','workspaces']),entry=data[trashKey];if(!entry)throw Error('Mục trong thùng rác không còn tồn tại.');
+   const key=entry.type==='session'?'snapshots':entry.type==='workspace'?'workspaces':'groups',list=data[key]||[];
    if(entry.type==='item'){
      const group=list.find(x=>x.id===entry.groupId);if(!group)throw Error('Nhóm gốc không còn tồn tại. Hãy khôi phục nhóm trước.');
      if(list.some(g=>g.items.some(x=>x.id===entry.value.id)))throw Error('Bản lưu này đã tồn tại. Hãy kiểm tra dữ liệu hiện tại.');
      group.items.splice(Math.min(entry.index,group.items.length),0,entry.value);
-   }else if(entry.type==='group'||entry.type==='session'){
+   }else if(entry.type==='group'||entry.type==='session'||entry.type==='workspace'){
      if(list.some(x=>x.id===entry.value.id))throw Error('Dữ liệu này đã tồn tại. Hãy kiểm tra dữ liệu hiện tại.');
      if(entry.type==='group' && entry.value.items.some(item=>list.some(g=>g.items.some(x=>x.id===item.id))))throw Error('Một tab trong nhóm đã tồn tại ở nhóm khác. Không thể tự khôi phục nhóm.');
      list.splice(Math.min(entry.index,list.length),0,entry.value);

@@ -1,4 +1,4 @@
-# Tabspace 0.51 — bản thử nghiệm
+# Tabspace 0.52 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,6 +7,7 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
+- **Workspace cá nhân:** tạo workspace và chọn các nhóm đã lưu; một nhóm có thể thuộc nhiều workspace mà không sao chép tab. Có thể xem và mở các tab trong nhóm sau bước xác nhận; không tự đóng hoặc cô lập tab Chrome. Workspace xóa được chuyển vào thùng rác và có trong sao lưu. Nếu nhóm bị xóa, tham chiếu được giữ và báo không khả dụng để có thể khôi phục nhóm.
 - Trong Phiên đã lưu, chọn **So sánh hai phiên**. Kết quả đối chiếu số lượng URL nguyên văn, kể cả query/fragment và tab trùng; không xác định tab nào di chuyển hoặc thay đổi nội dung. Mỗi mục hiển thị tối đa 200 URL và sáu vị trí mỗi URL; không mở, xóa hay thay đổi tab.
 - **Snapshot tự động (thử nghiệm):** vào Cài đặt → Snapshot tự động để bật, chọn khoảng cách 1–168 giờ và tối đa 1–50 bản. Chỉ lưu URL/metadata các tab web trong cửa sổ thông thường, không đóng tab; bỏ qua ẩn danh, popup và trang Chrome. Đạt giới hạn thì dừng tạo, không tự xóa phiên nào. Lịch bị lỡ không chạy bù; xem kết quả gần nhất ở Cài đặt. Cài đặt chỉ lưu trên thiết bị, không sao lưu; snapshot nhập từ file thành phiên thường, không tính giới hạn tự động. Không dùng thay sao lưu ngoài Chrome.
 - **Lịch nhắc preset (thử nghiệm):** mở mục Preset → Lịch nhắc, chọn ngày, giờ theo múi giờ máy và bật. Chrome cần đang chạy; quyền `alarms` dùng để kiểm tra lịch mỗi phút. Lời nhắc xuất hiện trong Tabspace và không tự lưu hoặc đóng. Bạn có thể bật thông báo hệ điều hành riêng tại mục Preset; Chrome sẽ hỏi quyền tùy chọn. Thông báo chỉ có nội dung chung, không chứa tên preset hoặc URL; bấm vào để mở mục Preset, không xác nhận dọn. Tắt thông báo trong Tabspace không thu hồi quyền Chrome. Có Xem & dọn, Nhắc lại 15 phút và Bỏ qua; có nút tạm dừng/tiếp tục toàn bộ lịch nhắc. Lịch bị lỡ hoặc trễ quá một phút sẽ không chạy bù; Chrome ngủ/đóng, đổi múi giờ, giờ mùa hè hoặc thiếu tài nguyên có thể khiến lời nhắc không xuất hiện. Khi nhập sao lưu, lịch preset mặc định tắt; lời nhắc chờ, trạng thái tạm dừng và tùy chọn thông báo hệ điều hành không được xuất.
@@ -61,4 +62,4 @@ Các thao tác ghi dữ liệu của các trang Tabspace và popup dùng cùng m
 Favicon dùng API favicon của Chrome (quyền `favicon`); giao diện không tải trực tiếp URL favicon của website. Icon có thể dùng biểu tượng mặc định khi Chrome không có trong cache.
 
 ## Giới hạn quan trọng
-Đây là bản thử nghiệm đầu tiên, không phải bản hoàn chỉnh theo tài liệu thiết kế. Chưa có preset tự động, tự động đóng, workspace, âm thanh tùy chỉnh, thông báo phủ trang web, đồng bộ hoặc các mức bảo vệ nâng cao ngoài danh sách website. Xóa vĩnh viễn trong thùng rác không thể hoàn tác. Chỉ lưu URL http/https; Chrome có thể không cho mở hoặc thao tác một số tab. Lưu & đóng không bảo toàn nội dung chưa lưu hay trạng thái trang; chỉ dùng với trang bạn biết an toàn. Việc nhập thay thế sẽ xóa dữ liệu đang lưu. Không dùng extension làm bản sao lưu duy nhất.
+Đây là bản thử nghiệm đầu tiên, không phải bản hoàn chỉnh theo tài liệu thiết kế. Chưa có preset tự động, tự động đóng, chuyển workspace có dọn tab, âm thanh tùy chỉnh, thông báo phủ trang web, đồng bộ hoặc các mức bảo vệ nâng cao ngoài danh sách website. Xóa vĩnh viễn trong thùng rác không thể hoàn tác. Chỉ lưu URL http/https; Chrome có thể không cho mở hoặc thao tác một số tab. Lưu & đóng không bảo toàn nội dung chưa lưu hay trạng thái trang; chỉ dùng với trang bạn biết an toàn. Việc nhập thay thế sẽ xóa dữ liệu đang lưu. Không dùng extension làm bản sao lưu duy nhất.
