@@ -1,4 +1,4 @@
-# Tabspace 0.59 — bản thử nghiệm
+# Tabspace 0.60 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,6 +7,7 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
+- **Xem chuyển workspace:** xem nhóm đích và gợi ý tab đang mở có URL không nằm trong các nhóm đích. Chọn thủ công để tới bước lưu & đóng riêng, rồi dùng Xem & mở để chọn tab workspace cần mở; không tự đóng/mở. Đây là gợi ý theo URL, không chứng minh tab thuộc workspace nào; trạng thái trang chưa lưu có thể mất. Tab đang xem, ghim, phát âm thanh và website được bảo vệ bị giữ lại ở bước gợi ý.
 - **Lâu chưa truy cập:** lọc tab web theo thời gian kích hoạt gần nhất do Chrome cung cấp, với ngưỡng 1–365 ngày. Tab không có thời gian hợp lệ bị bỏ qua và được đếm; thời gian không chứng minh tab an toàn để đóng/nghỉ hoặc trang không hoạt động. Không tự chọn hay xử lý tab. Ngưỡng chỉ giữ trong lần mở trang quản lý.
 - **Nhóm thông minh:** tạo bộ lọc động theo từ khóa và/hoặc tag chính xác trên tab đã lưu; tag nhóm gốc cũng được tính. Tab không bị sao chép hay di chuyển. Xóa bộ lọc không xóa tab; có thể chọn nhiều kết quả để thao tác. Bộ lọc được xuất/nhập cùng sao lưu; tìm kiếm trên trang này lọc tên và điều kiện bộ lọc.
 - **Đã lưu còn mở:** xem các tab thường có URL web khớp nguyên văn bản lưu trong nhóm, tìm theo tab hoặc tên nhóm, chọn thủ công để xử lý. Chỉ là gợi ý; URL giống nhau không bảo đảm cùng nội dung hay dữ liệu chưa lưu. Không tự đóng, gộp hoặc xóa.
@@ -68,4 +69,4 @@ Các thao tác ghi dữ liệu của các trang Tabspace và popup dùng cùng m
 Favicon dùng API favicon của Chrome (quyền `favicon`); giao diện không tải trực tiếp URL favicon của website. Icon có thể dùng biểu tượng mặc định khi Chrome không có trong cache.
 
 ## Giới hạn quan trọng
-Đây là bản thử nghiệm đầu tiên, không phải bản hoàn chỉnh theo tài liệu thiết kế. Chưa có preset tự động, tự động đóng, chuyển workspace có dọn tab, âm thanh tùy chỉnh, thông báo phủ trang web, đồng bộ hoặc các mức bảo vệ nâng cao ngoài danh sách website. Xóa vĩnh viễn trong thùng rác không thể hoàn tác. Chỉ lưu URL http/https; Chrome có thể không cho mở hoặc thao tác một số tab. Lưu & đóng không bảo toàn nội dung chưa lưu hay trạng thái trang; chỉ dùng với trang bạn biết an toàn. Việc nhập thay thế sẽ xóa dữ liệu đang lưu. Không dùng extension làm bản sao lưu duy nhất.
+Đây là bản thử nghiệm đầu tiên, không phải bản hoàn chỉnh theo tài liệu thiết kế. Chưa có preset tự động, tự động đóng, chuyển workspace tự động trong một lượt, âm thanh tùy chỉnh, thông báo phủ trang web, đồng bộ hoặc các mức bảo vệ nâng cao ngoài danh sách website. Xóa vĩnh viễn trong thùng rác không thể hoàn tác. Chỉ lưu URL http/https; Chrome có thể không cho mở hoặc thao tác một số tab. Lưu & đóng không bảo toàn nội dung chưa lưu hay trạng thái trang; chỉ dùng với trang bạn biết an toàn. Việc nhập thay thế sẽ xóa dữ liệu đang lưu. Không dùng extension làm bản sao lưu duy nhất.
