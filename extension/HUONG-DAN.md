@@ -1,4 +1,4 @@
-# Tabspace 0.65 — bản thử nghiệm
+# Tabspace 0.66 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,6 +7,7 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
+- **Bảo vệ URL chính xác:** ngoài tên miền, có thể bảo vệ từng URL http/https trong Cài đặt. URL được chuẩn hóa, xét query và fragment; thay đổi URL có thể không còn khớp, không phân biệt được tài khoản hoặc bảo đảm dữ liệu chưa lưu. Quy tắc ngăn Tabspace đóng/nghỉ, không ngăn Chrome hay extension khác; danh sách URL có thể chứa dữ liệu nhạy cảm và được xuất vào sao lưu.
 - **Badge và popup:** trong Cài đặt có thể bật badge đếm lời nhắc preset đang chờ (mặc định tắt, chỉ hiển thị số, không hiện tên/URL). Popup hiển thị số lời nhắc và nút tới Cần chú ý ngay cả khi badge tắt. Icon Chrome có thể bị ẩn; badge không thay thế thông báo khác và thiết lập không được sao lưu.
 - **Toàn màn hình:** thông báo hệ điều hành của lời nhắc mặc định được trì hoãn khi phát hiện một cửa sổ Chrome toàn màn hình hoặc không đọc được trạng thái cửa sổ. Có thể tắt trong Giờ yên lặng; lời nhắc vẫn ở Tabspace. Khi trạng thái cho phép, cố gửi một thông báo tổng hợp nếu còn lời nhắc. Không đảm bảo nhận biết video toàn màn hình, ứng dụng khác hoặc chế độ tập trung hệ điều hành.
 - **Giờ yên lặng:** tùy chọn mặc định tắt, chỉ áp dụng thông báo hệ điều hành của lời nhắc preset. Lời nhắc vẫn có trong Tabspace. Sau giờ yên lặng, cố gửi một thông báo tổng hợp nếu còn lời nhắc chờ, Chrome đang chạy và quyền được bật; thông báo có thể trễ, bị bỏ qua hoặc hệ điều hành chặn. Theo giờ máy, không bao gồm trong sao lưu.
@@ -74,4 +75,4 @@ Các thao tác ghi dữ liệu của các trang Tabspace và popup dùng cùng m
 Favicon dùng API favicon của Chrome (quyền `favicon`); giao diện không tải trực tiếp URL favicon của website. Icon có thể dùng biểu tượng mặc định khi Chrome không có trong cache.
 
 ## Giới hạn quan trọng
-Đây là bản thử nghiệm đầu tiên, không phải bản hoàn chỉnh theo tài liệu thiết kế. Chưa có preset tự động, tự động đóng, chuyển workspace tự động trong một lượt, âm thanh tùy chỉnh, thông báo phủ trang web, đồng bộ hoặc các mức bảo vệ nâng cao ngoài danh sách website. Xóa vĩnh viễn trong thùng rác không thể hoàn tác. Chỉ lưu URL http/https; Chrome có thể không cho mở hoặc thao tác một số tab. Lưu & đóng không bảo toàn nội dung chưa lưu hay trạng thái trang; chỉ dùng với trang bạn biết an toàn. Việc nhập thay thế sẽ xóa dữ liệu đang lưu. Không dùng extension làm bản sao lưu duy nhất.
+Đây là bản thử nghiệm đầu tiên, không phải bản hoàn chỉnh theo tài liệu thiết kế. Chưa có preset tự động, tự động đóng, chuyển workspace tự động trong một lượt, âm thanh tùy chỉnh, thông báo phủ trang web, đồng bộ hoặc các mức bảo vệ nâng cao ngoài danh sách tên miền/URL. Xóa vĩnh viễn trong thùng rác không thể hoàn tác. Chỉ lưu URL http/https; Chrome có thể không cho mở hoặc thao tác một số tab. Lưu & đóng không bảo toàn nội dung chưa lưu hay trạng thái trang; chỉ dùng với trang bạn biết an toàn. Việc nhập thay thế sẽ xóa dữ liệu đang lưu. Không dùng extension làm bản sao lưu duy nhất.
