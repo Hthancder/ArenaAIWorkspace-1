@@ -1,4 +1,4 @@
-# Tabspace 0.20 — bản thử nghiệm
+# Tabspace 0.21 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,6 +7,7 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
+- Ghim hoặc bỏ ghim từng tab trong danh sách, hoặc chọn nhiều tab rồi xem trước và bỏ chọn trong hộp thoại. Tab đã chọn nhưng bị tìm kiếm ẩn vẫn được tính. Chrome có thể đổi vị trí tab; khi ghim tab trong nhóm Chrome, tab có thể bị đưa ra khỏi nhóm. Trạng thái được kiểm tra lại trước khi thao tác.
 - Chọn nhiều tab đang mở và dùng **Cho tab nghỉ** để xem trước, bỏ chọn và chạy. Tab đang xem, ghim, đang phát âm thanh và đã nghỉ được bỏ qua; kết quả liệt kê từng tab.
 - Chọn tab đang mở và dùng **Tạo nhóm Chrome** hoặc **Bỏ nhóm Chrome**. Tạo nhóm chỉ áp dụng một cửa sổ, bỏ qua tab ghim; tab đã thuộc nhóm khác có thể được chuyển. Nhấn nhãn nhóm ở hàng tab để chỉnh tên, màu và thu gọn. Nhóm Chrome khác nhóm đã lưu Tabspace; màu Chrome dùng bảng màu cố định.
 - Nhóm có ghi chú, nút yêu thích và thu gọn/mở rộng; nhóm yêu thích được ưu tiên ở sidebar. Khi tìm kiếm, nhóm được mở tạm thời để thấy kết quả. Các mục đã chọn nhưng bị ẩn vẫn được tính trong thao tác hàng loạt và được báo ở thanh chọn.

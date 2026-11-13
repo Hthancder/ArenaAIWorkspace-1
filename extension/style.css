@@ -35,3 +35,4 @@ time[data-full]:focus::after{content:attr(data-full);position:fixed;z-index:15;l
 .native-badge{border:0;cursor:pointer;max-width:150px;overflow:hidden;text-overflow:ellipsis}.native-badge:hover{text-decoration:underline}.selection{flex-wrap:wrap}.selection button{white-space:nowrap}
 
 .native-grey{color:#606875;background:#eef0f2}.native-blue{color:#2863ac;background:#e6f0ff}.native-red{color:#ad4444;background:#fceaea}.native-yellow{color:#8d6d0a;background:#fff6d8}.native-green{color:#267448;background:#e4f5e9}.native-pink{color:#a44479;background:#fae7f1}.native-purple{color:#7048a9;background:#f1eafa}.native-cyan{color:#247986;background:#e0f4f5}.native-orange{color:#a45316;background:#fff0e2}
+@media(max-width:700px){.row{flex-wrap:wrap}.rowtext{flex:1 1 50%}.rowactions{flex:1 1 100%;justify-content:flex-end}.selection span{flex-basis:100%}}
