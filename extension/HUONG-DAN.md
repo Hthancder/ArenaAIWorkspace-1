@@ -1,4 +1,4 @@
-# Tabspace 0.25 — bản thử nghiệm
+# Tabspace 0.26 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,6 +7,7 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
+- Khi mở nhiều tab hoặc mở cả nhóm đã lưu, chọn từng tab và cửa sổ chứa Tabspace hoặc cửa sổ mới trong bản xem trước. Bản lưu không bị xóa; Chrome có thể tải ngay. Giữ Tabspace mở đến khi có kết quả. Nếu bị gián đoạn hoặc trạng thái không xác định, hãy kiểm tra Chrome trước khi thử lại để tránh mở trùng.
 - Trong **Cài đặt & sao lưu**, chọn giao diện theo hệ thống/sáng/tối và mật độ thoáng/gọn; áp dụng cho cả trang quản lý lẫn popup. Có thể khôi phục mặc định. Sao lưu mới chứa giao diện nếu đã thiết lập; khi nhập, chọn riêng có áp dụng giao diện từ file hay không (mặc định giữ thiết lập hiện tại). File cũ không có mục này vẫn nhập được.
 - Trong **Hộp để sau** hoặc **Nhóm đã lưu**, dùng **Sao chép** trên từng tab hoặc chọn nhiều tab rồi sao chép. Chọn nhóm đích và những tab muốn xử lý trong bản xem trước. Bản gốc được giữ; bản sao có ID và ngày lưu mới, giữ URL, tiêu đề, tag và ghi chú. Có thể sao chép vào cùng nhóm, không tự gộp URL trùng.
 - Mở **Hộp để sau** ở sidebar để xem riêng các tab đã lưu nhanh. Chọn tab để mở, gắn tag, chuyển sang nhóm khác hoặc chuyển vào thùng rác; cũng có thể thao tác trong Nhóm đã lưu. Popup lưu bản sao của tab hiện tại vào hộp này.
