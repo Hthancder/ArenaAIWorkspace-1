@@ -1,9 +1,9 @@
 'use strict';
-importScripts('mutation-lock.js','reminders.js','snapshots.js','auto-snapshot.js','open-grace.js','presets.js','protection.js','automation-preview.js','scheduled-rehearsal.js');
+importScripts('mutation-lock.js','reminders.js','snapshots.js','auto-snapshot.js','open-grace.js','presets.js','protection.js','automation-preview.js','scheduled-rehearsal.js','recovery-point.js','batches.js','auto-close.js');
 async function ensureReminderAlarm(){try{if(!await chrome.alarms.get(ReminderTools.alarmName))await chrome.alarms.create(ReminderTools.alarmName,{periodInMinutes:1})}catch(e){console.error('Cannot schedule reminder alarm',e)}}
 chrome.runtime.onInstalled.addListener(()=>{void ensureReminderAlarm()});
 chrome.runtime.onStartup.addListener(()=>{void (async()=>{try{await chrome.alarms.clear(ReminderTools.alarmName);await ensureReminderAlarm()}catch(e){console.error('Cannot reset reminder alarm',e)}})()});
-chrome.alarms.onAlarm.addListener(alarm=>{if(alarm.name!==ReminderTools.alarmName)return;const now=Date.now();if(now-alarm.scheduledTime>=60000)return;void MutationLock.run(async()=>{
+chrome.alarms.onAlarm.addListener(alarm=>{if(alarm.name!==ReminderTools.alarmName)return;const now=Date.now();if(!Number.isFinite(alarm.scheduledTime)||now<alarm.scheduledTime||now-alarm.scheduledTime>=60000)return;void MutationLock.run(async()=>{
  // Unknown pause state is treated as paused. Read under the same lock as UI writes.
  const pauseState=await chrome.storage.local.get('automationPaused');if(pauseState.automationPaused!==undefined&&pauseState.automationPaused!==false)return;
  try{
@@ -21,11 +21,12 @@ chrome.alarms.onAlarm.addListener(alarm=>{if(alarm.name!==ReminderTools.alarmNam
    else{
    // Consume before sending: an ambiguous notification result must not be replayed every minute.
    if(deferred)await chrome.storage.local.set({quietReminderPending:false});
-   try{if(await chrome.permissions.contains({permissions:['notifications']}))await chrome.notifications.create('tabspace-reminders',{type:'basic',iconUrl:chrome.runtime.getURL('reminder-icon.png'),title:'Tabspace',message:'Có lời nhắc dọn tab. Mở Tabspace để xem và quyết định.',silent:true})}catch(e){console.error('Reminder notification unavailable',e)}
+   try{if(await chrome.permissions.contains({permissions:['notifications']}))await chrome.notifications.create('tabspace-reminders',{type:'basic',iconUrl:chrome.runtime.getURL('reminder-icon.png'),title:'Tabspace',message:'Có lời nhắc dọn tab. Mở Tabspace để kiểm tra.',silent:true})}catch(e){console.error('Reminder notification unavailable',e)}
    }
   }
  }catch(e){console.error('Reminder tick failed',e)}
  try{await AutoSnapshot.tick(chrome,now,()=>crypto.randomUUID())}catch(e){console.error('Auto snapshot tick failed',e)}
+ try{const autoNow=Date.now();if(autoNow>=alarm.scheduledTime&&autoNow-alarm.scheduledTime<60000&&typeof AutoClose!=='undefined')await AutoClose.tick(chrome,autoNow,()=>crypto.randomUUID(),{schedule:ScheduledRehearsal,reminders:ReminderTools,grace:OpenGrace,preview:AutomationPreview,presets:PresetTools,protection:Protection,batches:BatchTools,recovery:RecoveryPoint})}catch(e){console.error('Scheduled auto-close failed',e)}
  try{if(typeof ScheduledRehearsal!=='undefined')await ScheduledRehearsal.tick(chrome,now,()=>crypto.randomUUID(),{reminders:ReminderTools,grace:OpenGrace,preview:AutomationPreview,presets:PresetTools,protection:Protection})}catch(e){console.error('Scheduled rehearsal failed',e)}
  }).catch(e=>console.error('Scheduled task skipped',e))});
 void ensureReminderAlarm();
