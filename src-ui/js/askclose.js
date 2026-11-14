@@ -4,6 +4,7 @@ import { S } from "./state.js";
 import { notify } from "./notify.js";
 import { setView } from "./tasks.js";
 import { patchSettings } from "./settings.js";
+import { postSnap } from "./snapshot.js";
 
 export let askCloseOpen = false; // chặn double-emit main:ask-close
 
@@ -35,7 +36,7 @@ export async function chooseAskClose(choice) {
   const remember = ($("#ask-remember") && $("#ask-remember").checked) === true;
   const c = choice === "exit" ? "exit" : "tray";
   if (remember) {
-    try { const snap = await invoke("set_close_behavior", { behavior: c }); S.snap = snap; }
+    try { const snap = await invoke("set_close_behavior", { behavior: c }); postSnap(snap); }
     catch (err) { notify({ kind: "error", title: "Không lưu được lựa chọn", body: String(err && err.message ? err.message : err) }); /* vẫn thực thi đóng */ }
   }
   closeModal();

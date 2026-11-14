@@ -101,9 +101,9 @@ export function renderHotkeyStatusFromCmd(st, toggleEvent) {
   $("#set-hotkey-row").classList.toggle("is-off", !st.enabled);
   const hb = $("#set-hotkey-reset"); if (hb) hb.hidden = (st.hotkey || "Ctrl+Alt+T") === "Ctrl+Alt+T";
   const el = $("#hotkey-status"); if (el) {
-    if (!st.enabled) { el.textContent = "Đã tắt"; el.className = "hotkey-status is-off"; }
-    else if (st.active) { el.textContent = "Đang hoạt động"; el.className = "hotkey-status is-ok"; }
-    else { el.textContent = "Bị phần mềm khác chiếm"; el.className = "hotkey-status is-bad"; }
+    if (!st.enabled) { el.textContent = "Đã tắt"; el.className = "fx-pill hotkey-status is-off"; }
+    else if (st.active) { el.textContent = "Đang hoạt động"; el.className = "fx-pill hotkey-status is-ok"; }
+    else { el.textContent = "Bị phần mềm khác chiếm"; el.className = "fx-pill hotkey-status is-bad"; }
   }
   if (toggleEvent && !st.enabled && toggleEvent.target.checked) {
     notify({ kind: "error", title: "Không bật được phím tắt toàn cục", body: "Tổ hợp đang bị phần mềm khác chiếm" });
@@ -112,6 +112,11 @@ export function renderHotkeyStatusFromCmd(st, toggleEvent) {
 
 /** Áp tổ hợp mới — backend rollback + báo lỗi nếu bị chiếm. */
 export async function applyHotkeyChange(spec) {
+  if ($("#set-hotkey-enabled") && $("#set-hotkey-enabled").checked === false) {
+    notify({ kind: "info", title: "Phím tắt toàn cục đang tắt", body: "Bật toggle “Phím tắt toàn cục” trước khi đổi tổ hợp", sound: "none" });
+    cancelHotkeyCapture();
+    return;
+  }
   cancelHotkeyCapture();
   try { const st = await invoke("set_global_hotkey", { spec }); renderHotkeyStatusFromCmd(st, null); }
   catch (err) {
@@ -122,6 +127,10 @@ export async function applyHotkeyChange(spec) {
 
 function startHotkeyCapture() {
   const btn = $("#set-hotkey-change"); if (!btn) return;
+  if ($("#set-hotkey-enabled") && $("#set-hotkey-enabled").checked === false) {
+    notify({ kind: "info", title: "Phím tắt toàn cục đang tắt", body: "Bật toggle “Phím tắt toàn cục” trước khi đổi tổ hợp", sound: "none" });
+    return;
+  }
   cancelHotkeyCapture();
   btn.textContent = "Nhấn tổ hợp… (Esc để hủy)";
   const onKey = ev => {
@@ -225,11 +234,11 @@ export async function syncHotkeyStatus(silent) {
   const hb = $("#set-hotkey-reset"); if (hb) hb.hidden = (st.hotkey || "Ctrl+Alt+T") === "Ctrl+Alt+T";
   const el = $("#hotkey-status"); if (!el) return;
   if (!st.enabled) {
-    el.textContent = "Đã tắt"; el.className = "hotkey-status is-off";
+    el.textContent = "Đã tắt"; el.className = "fx-pill hotkey-status is-off";
   } else if (st.active) {
-    el.textContent = "Đang hoạt động"; el.className = "hotkey-status is-ok";
+    el.textContent = "Đang hoạt động"; el.className = "fx-pill hotkey-status is-ok";
   } else {
-    el.textContent = "Bị phần mềm khác chiếm"; el.className = "hotkey-status is-bad";
+    el.textContent = "Bị phần mềm khác chiếm"; el.className = "fx-pill hotkey-status is-bad";
   }
 }
 
