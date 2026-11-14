@@ -23,7 +23,7 @@ fn main() {
     let minimized = std::env::args().any(|a| a == "--minimized");
     tauri::Builder::default().plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--minimized"])))
-        .plugin(tauri_plugin_global_shortcut::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(commands::HotkeyState(std::sync::atomic::AtomicBool::new(false)))
         .manage(state::AppState::new())
         .manage(commands::NotifyState::default())
