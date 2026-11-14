@@ -136,3 +136,6 @@ Trong **Cài đặt & sao lưu → Giao diện**, chọn chuyển động theo h
 
 ### Chuyển workspace an toàn và chọn hàng loạt (0.88)
 Bản xem trước chuyển workspace có nút chọn/bỏ chọn toàn bộ cho từng danh sách cùng số lượng được chọn; tab bị bảo vệ hoặc không xác định trạng thái vẫn bị vô hiệu hóa. Tab cũ vẫn không được chọn mặc định. Cả chuyển một lượt và bước lưu & đóng hai bước đều kiểm tra lại trạng thái bảo vệ, URL đang tải và thông tin workspace; nếu dữ liệu thay đổi hoặc không xác định được kết quả, dừng và kiểm tra nhóm, Lịch sử dọn và Chrome trước khi thử lại. Việc lưu URL không bảo toàn nội dung trang chưa lưu; Chrome vẫn có thể thay đổi trạng thái ngoài Tabspace.
+
+### Làm mới khi nhiều tab thay đổi (0.89)
+Trang quản lý và popup gộp các sự kiện thay đổi gần nhau để giảm số lần đọc dữ liệu và vẽ lại; vẫn làm mới tiếp khi có sự kiện mới trong lúc đang tải. Màn hình có thể cập nhật chậm một chút, đặc biệt nếu Chrome đang bận. Các thao tác quan trọng vẫn kiểm tra dữ liệu trực tiếp trước khi thực hiện. Khi danh sách được vẽ lại, Tabspace cố giữ focus bàn phím nếu cùng nút/ô vẫn còn và xác định rõ, giữ vị trí cuộn danh sách popup; thanh nhóm không bị dựng lại nếu không đổi. Không đảm bảo luôn giữ focus nếu mục biến mất hoặc thay đổi.

@@ -320,3 +320,6 @@ Bổ sung lựa chọn theo hệ thống/bật/giảm, có hiệu ứng xuất h
 
 ### Tiến độ 0.88 — rà soát chuyển workspace
 Thêm chọn/bỏ chọn hàng loạt riêng cho tab cũ và bản lưu đích; tab cũ mặc định bỏ chọn, mục không đủ điều kiện bị khóa. Không đóng nếu không xác định rõ trạng thái tab; kiểm tra pending URL, workspace và nhóm đích ở bước hai và ngay trước đóng. Không khẳng định loại bỏ được mọi race của Chrome hay bảo toàn nội dung chưa lưu.
+
+### Tiến độ 0.89 — hiệu năng và trạng thái giao diện
+Gộp sự kiện tab/nhóm/storage trong trang quản lý và popup, giới hạn thời gian chờ trong đợt sự kiện và chạy tiếp khi có sự kiện trong lúc đang tải; thao tác chủ động vẫn đọc và kiểm tra lại ngay. Tối ưu lọc lựa chọn tab, tránh dựng lại sidebar không đổi, cố giữ focus khi xác định được mục tương đương và vị trí cuộn popup. Cần kiểm thử thủ công Chrome với danh sách lớn và bàn phím; chưa có benchmark trên trình duyệt.
