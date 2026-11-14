@@ -42,14 +42,21 @@ fn main() {
                     eprintln!("[Taskora] Không tạo được cửa sổ Thông báo (sẽ thử lại khi cần): {e}");
                 }
             });
+            // Khay hệ thống (tray) — luôn hiện (đặt TRƯỚC quyết định ẩn-when-autostart và trước event loop)
+            if let Err(e) = tray::setup(app.handle()) {
+                eprintln!("[Taskora] Không tạo được tray (ẩn vào khay sẽ thoái hoá thành thoát hẳn): {e}");
+            }
             // Tự khởi động cùng Windows: nếu người dùng chọn "Mở ẩn trong khay" thì ẩn cửa sổ ngay (trước event loop).
             // Arg `--minimized` luôn được đăng ký khi autostart — quyết định thật nằm ở cài đặt hidden_on_autostart.
+            // Chỉ ẩn khi tray ĐÃ tạo được — không thì cửa sổ giữ nguyên (không bao giờ để tiến trình vô hình).
             if minimized {
                 let hidden = app.state::<state::AppState>().lock().store.settings.hidden_on_autostart;
-                if hidden {
+                if hidden && tray::tray_ready(app.handle()) {
                     if let Some(w) = app.get_webview_window("main") {
                         let _ = w.hide();
                     }
+                } else if hidden {
+                    eprintln!("[Taskora] Tray chưa sẵn sàng — không ẩn cửa sổ khi tự khởi động (tránh tiến trình vô hình)");
                 }
             }
             // Autostart tự chữa đường dẫn: luôn enable() lại lúc khởi động (exe có thể đã di chuyển)
@@ -59,10 +66,6 @@ fn main() {
                 if al.is_enabled().unwrap_or(false) {
                     let _ = al.enable();
                 }
-            }
-            // Khay hệ thống (tray) — luôn hiện
-            if let Err(e) = tray::setup(app.handle()) {
-                eprintln!("[Taskora] Không tạo được tray (app vẫn chạy bình thường): {e}");
             }
             // Phím tắt toàn cục theo cấu hình đang lưu
             {
@@ -93,7 +96,11 @@ fn main() {
                 api.prevent_close();
                 match behavior.as_str() {
                     "tray" => {
-                        let _ = window.hide();
+                        if tray::tray_ready(window.app_handle()) {
+                            let _ = window.hide();
+                        } else {
+                            window.app_handle().exit(0);
+                        }
                     }
                     "exit" => {
                         window.app_handle().exit(0);

@@ -3,6 +3,7 @@
 //! (header “Taskora — N việc hôm nay[ · M quá hạn]” · Việc hôm nay · Mở Taskora · Thoát).
 //! Header/tooltip cùng nguồn dữ liệu với topbar — cập nhật trong `finish()`.
 use crate::models::Counts;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{
     menu::{Menu, MenuItem, MenuItemBuilder, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent},
@@ -15,6 +16,16 @@ const ID_TODAY: &str = "taskora-today";
 const ID_OPEN: &str = "taskora-open";
 const ID_QUIT: &str = "taskora-quit";
 const TRAY_ID: &str = "taskora-tray";
+
+/// Khay đã tạo thành công? — MỌI quyết định “ẩn vào khay” phải qua kiểm tra này.
+/// Nếu tray fail (setup lỗi) mà vẫn `hide()` cửa sổ chính → tiến trình chạy vô hình
+/// (không cửa sổ, không tray) = zombie process.
+pub struct TrayReady(pub AtomicBool);
+
+/// true = có khay → được phép ẩn cửa sổ; false = bắt buộc thoát hẳn.
+pub fn tray_ready(app: &AppHandle) -> bool {
+    app.try_state::<TrayReady>().map(|s| s.0.load(Ordering::SeqCst)).unwrap_or(false)
+}
 
 /// Handle của item header — lưu lúc setup để `refresh` cập nhật văn bản.
 pub struct TrayState {
@@ -31,6 +42,7 @@ pub fn header_text(counts: &Counts) -> String {
 }
 
 pub fn setup(app: &AppHandle) -> tauri::Result<()> {
+    app.manage(TrayReady(AtomicBool::new(false)));
     let header = MenuItemBuilder::with_id(ID_HEADER, "Taskora").enabled(false).build(app)?;
     let today = MenuItemBuilder::with_id(ID_TODAY, "Việc hôm nay").build(app)?;
     let open = MenuItemBuilder::with_id(ID_OPEN, "Mở Taskora").build(app)?;
@@ -64,6 +76,9 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
     let tray = builder.build(app)?;
 
     app.manage(TrayState { header, tray });
+    if let Some(r) = app.try_state::<TrayReady>() {
+        r.0.store(true, Ordering::SeqCst);
+    }
     Ok(())
 }
 

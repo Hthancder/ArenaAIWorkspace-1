@@ -1343,9 +1343,14 @@ pub fn set_close_behavior(app: AppHandle, state: State<'_, AppState>, behavior: 
 pub fn close_choice(app: AppHandle, choice: String) -> Result<(), String> {
     match choice.trim().to_lowercase().as_str() {
         "tray" => {
-            if let Some(w) = app.get_webview_window("main") {
-                w.hide().map_err(|e| e.to_string())?;
+            if crate::tray::tray_ready(&app) {
+                if let Some(w) = app.get_webview_window("main") {
+                    w.hide().map_err(|e| e.to_string())?;
+                }
+                return Ok(());
             }
+            // Tray hỏng/chưa tạo — ẩn vào khay không khả thi: thoát hẳn thay vì để tiến trình vô hình
+            app.exit(0);
             Ok(())
         }
         "exit" => {

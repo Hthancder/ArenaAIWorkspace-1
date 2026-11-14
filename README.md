@@ -66,6 +66,11 @@
 - Đồng hồ trong app chính và cửa sổ Đồng hồ **không thể lệch bản ghi đè cũ**: mọi chuyển phase đọc lại trạng thái thật từ engine (wall-clock), kể cả khi bạn bấm Reset đúng khoảnh khắc đồng hồ về 0.
 - **Nhắc mắt 20-20-20 cũng hiện trong cửa sổ Đồng hồ** (pill nổi, tự ẩn, tôn trọng tuỳ chọn chuông) — không chỉ trong overlay chính.
 
+**v2.12.1 — Vá triệt để “bấm X xong còn tiến trình chạy” (lỗi từ trước v2.12.0)**
+- Nguyên nhân gốc: mọi lần chạy đều **tạo sẵn một cửa sổ Thông báo ẩn** (luôn sống để gửi thông báo tức thì). Bản ≤ v2.11.x khi bấm X thì cửa sổ chính **bị đóng/destroy**, còn cửa sổ Thông báo ẩn giữ event-loop sống → `Taskora.exe` chạy ngầm, không cửa sổ, không icon. v2.12.0 đã đổi X sang hỏi/tray/thoát nhưng vẫn còn lỗ hổng: **tray hỏng/không tạo được mà vẫn hide cửa sổ** (kể cả khi tự khởi động ẩn).
+- Bản vá: **mọi quyết định “ẩn vào khay” đều bắt buộc qua kiểm tra tray đã tạo thành công** — X (“Thu vào khay”), nút "Thu vào khay" trong modal hỏi, và “Mở ẩn trong khay khi tự khởi động”. Tray không sẵn sàng ⇒ **thoát hẳn thay vì ẩn**; tự khởi động ẩn không áp dụng ⇒ cửa sổ chính hiện ra bình thường. Không bao giờ còn tiến trình Taskora chạy vô hình.
+- Chi tiết kỹ thuật & nghiệm thu: `specs/v2.12.1-hotfix-zombie.md`.
+
 **v2.12.0 — Sống ở khay hệ thống, tự khởi động, phím tắt toàn cục**
 - **Icon khay luôn hiện** (liquid glass, menu chuẩn): click trái bật/tắt cửa sổ chính; chuột phải mở menu — header `Taskora — N việc hôm nay[ · M quá hạn]`, **Việc hôm nay** (chuyển thẳng view Hôm nay), **Mở Taskora**, separator, **Thoát**.
 - **Bấm nút X không còn thoát cứng**: lần đầu hỏi “Đóng Taskora?” (Thu vào khay / Thoát hẳn, **Ghi nhớ** mặc định tick, focus khởi đầu ở **Thu vào khay**; Esc/backdrop = đóng modal, không làm gì). Đổi lại bất cứ lúc nào: **Cài đặt → Giao diện → Khi đóng cửa sổ chính** (Hỏi · Thu vào khay · Thoát).
