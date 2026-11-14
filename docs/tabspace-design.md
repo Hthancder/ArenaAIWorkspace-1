@@ -323,3 +323,6 @@ Thêm chọn/bỏ chọn hàng loạt riêng cho tab cũ và bản lưu đích; 
 
 ### Tiến độ 0.89 — hiệu năng và trạng thái giao diện
 Gộp sự kiện tab/nhóm/storage trong trang quản lý và popup, giới hạn thời gian chờ trong đợt sự kiện và chạy tiếp khi có sự kiện trong lúc đang tải; thao tác chủ động vẫn đọc và kiểm tra lại ngay. Tối ưu lọc lựa chọn tab, tránh dựng lại sidebar không đổi, cố giữ focus khi xác định được mục tương đương và vị trí cuộn popup. Cần kiểm thử thủ công Chrome với danh sách lớn và bàn phím; chưa có benchmark trên trình duyệt.
+
+### Tiến độ 0.90 — khôi phục phiên
+Bổ sung chọn/bỏ chọn toàn bộ, tùy chọn bỏ URL đã mở hoặc trùng trong lượt (đều mặc định tắt), xác thực danh sách trước khi mở, kiểm tra lại tab trước ghim và tạo nhóm, và dừng khi trạng thái mở không rõ. Bản tóm tắt phân biệt tab bị bỏ qua, không thử, chưa xác nhận và nhóm bị bỏ qua; không tự thử lại. Cửa sổ/nhóm có thể thay đổi nếu bỏ trùng; vẫn không phục hồi nội dung trang chưa lưu.

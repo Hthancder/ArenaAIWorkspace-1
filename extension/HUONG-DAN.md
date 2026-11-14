@@ -139,3 +139,6 @@ Bản xem trước chuyển workspace có nút chọn/bỏ chọn toàn bộ cho
 
 ### Làm mới khi nhiều tab thay đổi (0.89)
 Trang quản lý và popup gộp các sự kiện thay đổi gần nhau để giảm số lần đọc dữ liệu và vẽ lại; vẫn làm mới tiếp khi có sự kiện mới trong lúc đang tải. Màn hình có thể cập nhật chậm một chút, đặc biệt nếu Chrome đang bận. Các thao tác quan trọng vẫn kiểm tra dữ liệu trực tiếp trước khi thực hiện. Khi danh sách được vẽ lại, Tabspace cố giữ focus bàn phím nếu cùng nút/ô vẫn còn và xác định rõ, giữ vị trí cuộn danh sách popup; thanh nhóm không bị dựng lại nếu không đổi. Không đảm bảo luôn giữ focus nếu mục biến mất hoặc thay đổi.
+
+### Mở lại phiên và chọn hàng loạt (0.90)
+Khi lưu hoặc mở lại phiên, có thể chọn/bỏ chọn tất cả tab hoặc chọn theo cửa sổ. Trong **Xem & mở lại phiên**, tùy chọn bỏ qua URL đã mở/đang tải hoặc URL trùng trong lượt mặc định tắt để giữ cấu trúc phiên; bật khi cần giảm tab trùng. So sánh URL nguyên văn gồm query và fragment, không xét ẩn danh; việc bỏ qua có thể làm số cửa sổ, thứ tự hoặc nhóm khác phiên gốc và không ngăn mọi trùng do Chrome thay đổi đồng thời. Tabspace kiểm tra lại tab trước khi ghim tab đầu và tạo nhóm Chrome; nếu trạng thái không rõ, dừng mở tiếp, không tiếp tục nhóm, hiển thị kết quả và yêu cầu kiểm tra Chrome trước khi thử lại. Phiên chỉ lưu URL/metadata, không khôi phục form chưa lưu.
