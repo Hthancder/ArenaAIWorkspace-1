@@ -1,5 +1,5 @@
 'use strict';
-importScripts('mutation-lock.js','reminders.js','snapshots.js','auto-snapshot.js','open-grace.js','presets.js','protection.js','automation-preview.js','scheduled-rehearsal.js','recovery-point.js','batches.js','auto-close.js','auto-notifications.js');
+importScripts('mutation-lock.js','reminders.js','snapshots.js','auto-snapshot.js','open-grace.js','presets.js','protection.js','automation-preview.js','scheduled-rehearsal.js','recovery-point.js','batches.js','auto-close.js','auto-notifications.js','page-notice.js');
 async function ensureReminderAlarm(){try{if(!await chrome.alarms.get(ReminderTools.alarmName))await chrome.alarms.create(ReminderTools.alarmName,{periodInMinutes:1})}catch(e){console.error('Cannot schedule reminder alarm',e)}}
 chrome.runtime.onInstalled.addListener(()=>{void ensureReminderAlarm()});
 chrome.runtime.onStartup.addListener(()=>{void (async()=>{try{await chrome.alarms.clear(ReminderTools.alarmName);await ensureReminderAlarm()}catch(e){console.error('Cannot reset reminder alarm',e)}})()});
@@ -11,6 +11,7 @@ chrome.alarms.onAlarm.addListener(alarm=>{if(alarm.name!==ReminderTools.alarmNam
   const presets=Array.isArray(data.presets)?data.presets:[],out=ReminderTools.tick(presets,data.reminderState,data.remindersPaused===true,now);
   if(out.changed)await chrome.storage.local.set({reminderState:out.state});
   const hasNew=Object.keys(out.state).some(k=>out.state[k]?.pendingAt&&!data.reminderState?.[k]?.pendingAt);
+  if(hasNew&&typeof PageNotice!=='undefined')try{await PageNotice.deliver(chrome,'reminders',Date.now(),ReminderTools)}catch(e){console.error('Page notice unavailable',e)}
   const hasPending=presets.some(p=>p?.schedule?.enabled&&out.state[p.id]?.pendingAt);
   let quiet;try{quiet=ReminderTools.isQuiet(data.quietHours,now)}catch{quiet=true}
   const deferred=data.quietReminderPending===true;
@@ -26,7 +27,7 @@ chrome.alarms.onAlarm.addListener(alarm=>{if(alarm.name!==ReminderTools.alarmNam
   }
  }catch(e){console.error('Reminder tick failed',e)}
  try{await AutoSnapshot.tick(chrome,now,()=>crypto.randomUUID())}catch(e){console.error('Auto snapshot tick failed',e)}
- try{const autoNow=Date.now();if(autoNow>=alarm.scheduledTime&&autoNow-alarm.scheduledTime<60000&&typeof AutoClose!=='undefined')await AutoClose.tick(chrome,autoNow,()=>crypto.randomUUID(),{schedule:ScheduledRehearsal,reminders:ReminderTools,grace:OpenGrace,preview:AutomationPreview,presets:PresetTools,protection:Protection,batches:BatchTools,recovery:RecoveryPoint})}catch(e){console.error('Scheduled auto-close failed',e)}
+ try{const autoNow=Date.now();if(autoNow>=alarm.scheduledTime&&autoNow-alarm.scheduledTime<60000&&typeof AutoClose!=='undefined'){let before;try{before=await chrome.storage.local.get('autoCloseRuns')}catch{}await AutoClose.tick(chrome,autoNow,()=>crypto.randomUUID(),{schedule:ScheduledRehearsal,reminders:ReminderTools,grace:OpenGrace,preview:AutomationPreview,presets:PresetTools,protection:Protection,batches:BatchTools,recovery:RecoveryPoint});try{const after=await chrome.storage.local.get('autoCloseRuns');if(before&&(before.autoCloseRuns===undefined||Array.isArray(before.autoCloseRuns))&&typeof PageNotice!=='undefined'&&Array.isArray(after.autoCloseRuns)&&after.autoCloseRuns.some(r=>r&&['complete','blocked','uncertain'].includes(r.status)&&!before.autoCloseRuns?.some(old=>old?.id===r.id)))await PageNotice.deliver(chrome,'results',Date.now(),ReminderTools)}catch(e){console.error('Page notice unavailable',e)}}}catch(e){console.error('Scheduled auto-close failed',e)}
  try{if(typeof AutoNotifications!=='undefined')await AutoNotifications.deliver(chrome,Date.now(),ReminderTools)}catch(e){console.error('Auto-close notification failed',e)}
  try{if(typeof ScheduledRehearsal!=='undefined')await ScheduledRehearsal.tick(chrome,now,()=>crypto.randomUUID(),{reminders:ReminderTools,grace:OpenGrace,preview:AutomationPreview,presets:PresetTools,protection:Protection})}catch(e){console.error('Scheduled rehearsal failed',e)}
  }).catch(e=>console.error('Scheduled task skipped',e))});

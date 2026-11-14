@@ -1,10 +1,11 @@
 {
   "manifest_version": 3,
   "name": "Tabspace — Quản lý tab",
-  "version": "0.84.0",
+  "version": "0.85.0",
   "description": "Lưu, tìm và quản lý tab Chrome một cách gọn gàng.",
-  "permissions": ["tabs", "storage", "tabGroups", "favicon", "alarms"],
+  "permissions": ["tabs", "storage", "tabGroups", "favicon", "alarms", "scripting"],
   "optional_permissions": ["notifications"],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
   "action": { "default_title": "Tabspace", "default_popup": "popup.html" },
   "commands": { "open-dashboard": { "suggested_key": { "default": "Alt+Shift+T" }, "description": "Mở Tabspace" } },
   "background": { "service_worker": "background.js" }

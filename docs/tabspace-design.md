@@ -308,3 +308,6 @@ Tôn trọng `prefers-reduced-motion`: bỏ hoặc giảm chuyển động khôn
 
 ### Tiến độ 0.84 — âm báo thử nghiệm
 Âm báo tùy chọn cho kết quả tự động đóng, chỉ trong trang quản lý đang mở; không phát lại hoặc mở tài liệu nền. Giờ yên lặng và toàn màn hình làm bỏ qua, giới hạn tần suất và ghi dấu trước khi thử phát. Âm tùy chỉnh tối đa 1 MB/5 giây, kiểm tra giải mã, lưu cục bộ, không xuất sao lưu. Chrome có thể chặn âm. Âm cho lời nhắc và thông báo phủ trang vẫn chưa triển khai.
+
+### Tiến độ 0.85 — thông báo website thử nghiệm
+Opt-in, xin quyền Chrome riêng theo website, danh sách tối đa 20 origin; thử hiển thị bản tin chung cho lời nhắc mới và kết quả dọn tự động trên tab thường đang xem. Không phát bù, có giới hạn tần suất, tránh giờ yên lặng và toàn màn hình, không có thao tác nguy hiểm. Tắt/bỏ website không thu hồi quyền; website có thể quan sát DOM. Các kênh chưa dùng hệ thống trạng thái đọc chung; đây chưa phải trung tâm thông báo đầy đủ.
