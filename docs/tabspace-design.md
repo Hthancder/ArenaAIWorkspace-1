@@ -317,3 +317,6 @@ Lời nhắc đang chờ được định danh theo preset và thời điểm ch
 
 ### Tiến độ 0.87 — chuyển động và cửa sổ hẹp
 Bổ sung lựa chọn theo hệ thống/bật/giảm, có hiệu ứng xuất hiện ngắn cho hộp thoại và toast; chế độ bật là ghi đè rõ ràng. Lựa chọn cùng giao diện được xuất/nhập, tương thích sao lưu cũ. Điều hướng cửa sổ hẹp giữ nhãn và nhóm bằng hàng cuộn ngang. Chưa thay thế kiểm thử thủ công Chrome, bàn phím, zoom và đọc màn hình.
+
+### Tiến độ 0.88 — rà soát chuyển workspace
+Thêm chọn/bỏ chọn hàng loạt riêng cho tab cũ và bản lưu đích; tab cũ mặc định bỏ chọn, mục không đủ điều kiện bị khóa. Không đóng nếu không xác định rõ trạng thái tab; kiểm tra pending URL, workspace và nhóm đích ở bước hai và ngay trước đóng. Không khẳng định loại bỏ được mọi race của Chrome hay bảo toàn nội dung chưa lưu.

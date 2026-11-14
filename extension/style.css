@@ -120,3 +120,5 @@ time[data-full]:focus::after{content:attr(data-full);position:fixed;z-index:15;l
  .sidebottom .privacy{display:none}
 }
 @media(max-width:480px){.row{flex-wrap:wrap}.rowtext{min-width:0}.rowactions{flex-basis:100%;justify-content:flex-end}.dialogactions{flex-wrap:wrap}}
+
+.workspace-picker-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}.workspace-picker-actions button{padding:8px 10px}.workspace-picker-actions span{font-size:12px;color:#687184}:root[data-theme="dark"] .workspace-picker-actions span{color:#c4c8d7}

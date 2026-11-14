@@ -133,3 +133,6 @@ Trong **Cần chú ý**, đánh dấu đã đọc/chưa đọc từng lời nh�
 
 ### Chuyển động và cửa sổ hẹp (0.87)
 Trong **Cài đặt & sao lưu → Giao diện**, chọn chuyển động theo hệ thống (mặc định), bật hiệu ứng nhẹ hoặc giảm chuyển động. Khi chọn bật, Tabspace ghi đè tùy chọn giảm chuyển động của hệ điều hành; chọn theo hệ thống để tự thích ứng. Áp dụng cho trang quản lý và popup, lưu cùng giao diện trong sao lưu. Bản sao lưu cũ không có tùy chọn này mặc định theo hệ thống. Ở cửa sổ quản lý hẹp, thanh điều hướng và lối tắt nhóm được bố trí thành hàng cuộn ngang, vẫn giữ tên và nút tạo nhóm.
+
+### Chuyển workspace an toàn và chọn hàng loạt (0.88)
+Bản xem trước chuyển workspace có nút chọn/bỏ chọn toàn bộ cho từng danh sách cùng số lượng được chọn; tab bị bảo vệ hoặc không xác định trạng thái vẫn bị vô hiệu hóa. Tab cũ vẫn không được chọn mặc định. Cả chuyển một lượt và bước lưu & đóng hai bước đều kiểm tra lại trạng thái bảo vệ, URL đang tải và thông tin workspace; nếu dữ liệu thay đổi hoặc không xác định được kết quả, dừng và kiểm tra nhóm, Lịch sử dọn và Chrome trước khi thử lại. Việc lưu URL không bảo toàn nội dung trang chưa lưu; Chrome vẫn có thể thay đổi trạng thái ngoài Tabspace.
