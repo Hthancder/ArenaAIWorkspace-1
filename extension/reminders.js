@@ -28,7 +28,7 @@ const ReminderTools=(()=>{
   if(paused)return {state:next,changed};
   for(const p of presets){let schedule;try{schedule=validate(p.schedule)}catch{continue}if(!schedule?.enabled||typeof p.id!=='string')continue;
    const prior=next[p.id]&&typeof next[p.id]==='object'?next[p.id]:{},entry={...prior};let dirty=false;
-   if(Number.isFinite(entry.snoozeUntil)&&now>=entry.snoozeUntil){if(now-entry.snoozeUntil<60000){entry.pendingAt=now;dirty=true}delete entry.snoozeUntil;dirty=true}
+   if(Number.isFinite(entry.snoozeUntil)&&now>=entry.snoozeUntil){if(!entry.pendingAt){entry.pendingAt=entry.snoozeUntil;dirty=true}delete entry.snoozeUntil;dirty=true}
    const d=new Date(now),[hour,minute]=schedule.time.split(':').map(Number),due=new Date(d.getFullYear(),d.getMonth(),d.getDate(),hour,minute,0,0),key=`${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}-${schedule.time}`;
    if(schedule.days.includes(d.getDay())&&due.getHours()===hour&&due.getMinutes()===minute&&now>=due.getTime()&&now-due.getTime()<60000&&entry.lastDue!==key){entry.lastDue=key;dirty=true;if(!entry.pendingAt&&!entry.snoozeUntil)entry.pendingAt=now}
    if(dirty){next[p.id]=entry;changed=true}
