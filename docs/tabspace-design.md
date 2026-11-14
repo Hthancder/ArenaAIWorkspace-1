@@ -326,3 +326,6 @@ Gộp sự kiện tab/nhóm/storage trong trang quản lý và popup, giới h�
 
 ### Tiến độ 0.90 — khôi phục phiên
 Bổ sung chọn/bỏ chọn toàn bộ, tùy chọn bỏ URL đã mở hoặc trùng trong lượt (đều mặc định tắt), xác thực danh sách trước khi mở, kiểm tra lại tab trước ghim và tạo nhóm, và dừng khi trạng thái mở không rõ. Bản tóm tắt phân biệt tab bị bỏ qua, không thử, chưa xác nhận và nhóm bị bỏ qua; không tự thử lại. Cửa sổ/nhóm có thể thay đổi nếu bỏ trùng; vẫn không phục hồi nội dung trang chưa lưu.
+
+### Tiến độ 0.91 — thời hạn thùng rác và lịch sử
+Cấu hình cục bộ để gợi ý quá hạn; mặc định tắt, hiện tại chỉ dọn bằng xem trước/chọn/xác nhận, không tự xóa. Giới hạn 200 mục cũ nhất mỗi lượt, loại trừ lịch sử không hoàn tất/không rõ và lượt được báo cáo tự động tham chiếu; kiểm tra lại từng mục, dừng khi trạng thái thay đổi hoặc xóa không xác nhận. Tự động hết hạn chưa triển khai.
