@@ -314,3 +314,6 @@ Opt-in, xin quyền Chrome riêng theo website, danh sách tối đa 20 origin; 
 
 ### Tiến độ 0.86 — trạng thái đọc dùng chung từng phần
 Lời nhắc đang chờ được định danh theo preset và thời điểm chờ, kết quả theo mã lượt tự động; trong Cần chú ý có đánh dấu từng mục hoặc tất cả. Đã đọc tách biệt với xử lý và badge. Lọc thông báo hệ điều hành đang chờ và âm kết quả chưa phát; không thu hồi thứ đã gửi, không phát lại khi đánh dấu chưa đọc, kênh có thể chạy đồng thời. Chưa có lịch sử thông báo tổng quát hoặc trạng thái đọc cho các loại khác.
+
+### Tiến độ 0.87 — chuyển động và cửa sổ hẹp
+Bổ sung lựa chọn theo hệ thống/bật/giảm, có hiệu ứng xuất hiện ngắn cho hộp thoại và toast; chế độ bật là ghi đè rõ ràng. Lựa chọn cùng giao diện được xuất/nhập, tương thích sao lưu cũ. Điều hướng cửa sổ hẹp giữ nhãn và nhóm bằng hàng cuộn ngang. Chưa thay thế kiểm thử thủ công Chrome, bàn phím, zoom và đọc màn hình.
