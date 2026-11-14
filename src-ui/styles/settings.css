@@ -135,3 +135,16 @@ body.reduce-motion .settings-group-head .chev { transition: none !important; }
   .notify-preview-btn { grid-column: 3; grid-row: 2; justify-self: end; }
   .notify-kind-row .toggle-wrap { grid-column: 3; grid-row: 1; }
 }
+
+
+/* v2.12.0 — phím tắt toàn cục */
+.hotkey-caps { display:flex; gap:6px; margin:6px 0 4px; flex-wrap:wrap; }
+.hotkey-status { font-size:11px; color:var(--text-weak); min-height:16px; }
+.hotkey-status.is-ok { color:#34d399; }
+.hotkey-status.is-off { color:var(--text-faint, var(--text-weak)); }
+.hotkey-status.is-bad { color:#f87171; }
+.hotkey-actions { display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex:none; }
+#set-hotkey-row.is-off .hotkey-caps, #set-hotkey-row.is-off .hotkey-actions { opacity:.45; pointer-events:none; }
+.fx-pill.is-ok { color:var(--accent-2); border-color:rgba(var(--accent-rgb),.4); }
+.fx-pill.is-bad { color:#f87171; border-color:rgba(248,113,113,.4); }
+.fx-pill.is-off { color:var(--text-faint); }

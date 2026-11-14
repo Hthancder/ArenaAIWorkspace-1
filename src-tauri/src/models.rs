@@ -620,6 +620,22 @@ pub struct Settings {
     /// View đang mở lần cuối ("inbox"…"list:3") — khôi phục khi mở app.
     #[serde(default)]
     pub last_view: String,
+    // ----- v2.12.0: khay hệ thống / vòng đời cửa sổ -----
+    /// Khi đóng cửa sổ chính: "ask" (hỏi mỗi lần — mặc định) · "tray" (thu vào khay) · "exit" (thoát hẳn).
+    #[serde(default = "default_close_behavior")]
+    pub close_behavior: String,
+    /// Khi tự khởi động cùng Windows: mở ẩn vào khay.
+    #[serde(default = "default_true")]
+    pub hidden_on_autostart: bool,
+    /// Tổ hợp phím toàn cục chuẩn hoá (xem normalize_hotkey_spec).
+    #[serde(default = "default_global_hotkey")]
+    pub global_hotkey: String,
+    /// Bật/tắt phím tắt toàn cục.
+    #[serde(default = "default_true")]
+    pub global_hotkey_enabled: bool,
+    /// Đã hiện thông báo "đang chạy ở khay" một lần (không bắn lại).
+    #[serde(default)]
+    pub close_hint_shown: bool,
 }
 
 fn default_dark() -> bool {
@@ -644,6 +660,78 @@ fn default_long_break_min() -> u32 {
 
 fn default_long_break_every() -> u32 {
     4
+}
+
+/// Chuẩn hoá tổ hợp "Ctrl+Alt+T" từ input người dùng (bảng token tường minh).
+/// Trả None nếu không hợp lệ: cần ≥ 1 modifier (Ctrl/Alt/Shift/Win) + đúng 1 phím chính
+/// trong A–Z | 0–9 | F1–F12. Thứ tự chuẩn: Ctrl → Alt → Shift → Win → KEY.
+pub fn normalize_hotkey_spec(raw: &str) -> Option<String> {
+    let mut mods: Vec<&'static str> = Vec::new();
+    let mut key: Option<String> = None;
+    for part in raw.split('+') {
+        let t = part.trim();
+        if t.is_empty() {
+            continue;
+        }
+        let u = t.to_ascii_uppercase();
+        let m: Option<&'static str> = match u.as_str() {
+            "CTRL" | "CONTROL" => Some("Ctrl"),
+            "ALT" => Some("Alt"),
+            "SHIFT" => Some("Shift"),
+            "WIN" | "SUPER" | "CMD" | "COMMAND" => Some("Win"),
+            _ => None,
+        };
+        if let Some(m) = m {
+            if !mods.contains(&m) {
+                mods.push(m);
+            }
+            continue;
+        }
+        let k = normalize_hotkey_key(&u)?;
+        if key.is_some() {
+            return None; // hai phím chính — không hợp lệ
+        }
+        key = Some(k);
+    }
+    if mods.is_empty() {
+        return None;
+    }
+    let key = key?;
+    mods.sort_by_key(|m| ["Ctrl", "Alt", "Shift", "Win"].iter().position(|x| x == m).unwrap_or(99));
+    let mut out = mods.join("+");
+    out.push('+');
+    out.push_str(&key);
+    Some(out)
+}
+
+/// Phím chính: "A".."Z", "0".."9" hoặc "F1".."F12" — chữ thường thành HOA.
+fn normalize_hotkey_key(u: &str) -> Option<String> {
+    let b = u.as_bytes();
+    if b.len() == 1 {
+        let c = b[0];
+        if c.is_ascii_alphanumeric() {
+            return Some(u.to_string());
+        }
+        return None;
+    }
+    if b.len() == 2 || b.len() == 3 {
+        if let Some(rest) = u.strip_prefix('F') {
+            if let Ok(n) = rest.parse::<u32>() {
+                if (1..=12).contains(&n) {
+                    return Some(format!("F{n}"));
+                }
+            }
+        }
+    }
+    None
+}
+
+fn default_close_behavior() -> String {
+    "ask".to_string()
+}
+
+fn default_global_hotkey() -> String {
+    "Ctrl+Alt+T".to_string()
 }
 
 /// Cấu hình một loại thông báo.
@@ -710,6 +798,11 @@ impl Default for Settings {
             notify_prefs: std::collections::BTreeMap::new(),
             notify_custom_sounds: std::collections::BTreeMap::new(),
             last_view: String::new(),
+            close_behavior: default_close_behavior(),
+            hidden_on_autostart: true,
+            global_hotkey: default_global_hotkey(),
+            global_hotkey_enabled: true,
+            close_hint_shown: false,
         }
     }
 }
@@ -911,6 +1004,14 @@ impl Store {
         }
         self.step_presets.retain(|p| !p.name.is_empty() && !p.steps.is_empty());
         self.next_id = self.next_id.max(max_id + 1);
+        /* v2.12.0 — settings không bao giờ phá app vì giá trị lạ */
+        if !matches!(self.settings.close_behavior.as_str(), "ask" | "tray" | "exit") {
+            self.settings.close_behavior = default_close_behavior();
+        }
+        match normalize_hotkey_spec(&self.settings.global_hotkey) {
+            Some(n) => self.settings.global_hotkey = n,
+            None => self.settings.global_hotkey = default_global_hotkey(),
+        }
         let list_ids: Vec<TaskId> = self.lists.iter().map(|l| l.id).collect();
         for t in &mut self.tasks {
             if let Some(lid) = t.list_id {
@@ -1260,6 +1361,45 @@ mod tests {
         assert!(s.tasks.len() >= 5);
         assert_eq!(s.lists.len(), 3);
         assert!(s.next_id > s.tasks.len() as u64);
+    }
+
+    // ---------- v2.12.0: normalize_hotkey_spec ----------
+    #[test]
+    fn hotkey_spec_basic() {
+        assert_eq!(normalize_hotkey_spec("ctrl+alt+t").as_deref(), Some("Ctrl+Alt+T"));
+        assert_eq!(normalize_hotkey_spec("Shift+Ctrl+A").as_deref(), Some("Ctrl+Shift+A"));
+        assert_eq!(normalize_hotkey_spec("WIN+SHIFT+f3").as_deref(), Some("Shift+Win+F3"));
+        assert_eq!(normalize_hotkey_spec("Alt + 5").as_deref(), Some("Alt+5"));
+        assert_eq!(normalize_hotkey_spec("CONTROL+SHIFT+1").as_deref(), Some("Ctrl+Shift+1"));
+        assert_eq!(normalize_hotkey_spec("Cmd+P").as_deref(), Some("Win+P"));
+        assert_eq!(normalize_hotkey_spec("command+F12").as_deref(), Some("Win+F12"));
+        assert_eq!(normalize_hotkey_spec("super+K").as_deref(), Some("Win+K"));
+    }
+
+    #[test]
+    fn hotkey_spec_reject() {
+        assert_eq!(normalize_hotkey_spec(""), None);
+        assert_eq!(normalize_hotkey_spec("T"), None);          // thiếu modifier
+        assert_eq!(normalize_hotkey_spec("Ctrl+A+B"), None);   // hai phím chính
+        assert_eq!(normalize_hotkey_spec("Ctrl+F13"), None);   // ngoài F1..F12
+        assert_eq!(normalize_hotkey_spec("Ctrl+D1"), None);    // "D1" không hợp lệ
+        assert_eq!(normalize_hotkey_spec("Ctrl+Space"), None); // phím ngoài phạm vi
+        assert_eq!(normalize_hotkey_spec("++"), None);
+    }
+
+    #[test]
+    fn hotkey_spec_roundtrip_sanitize() {
+        let mut s = Store::default();
+        s.settings.close_behavior = "weird".to_string();
+        s.settings.global_hotkey = "bogus".to_string();
+        s.sanitize();
+        assert_eq!(s.settings.close_behavior, "ask");
+        assert_eq!(s.settings.global_hotkey, "Ctrl+Alt+T");
+        s.settings.close_behavior = "tray".to_string();
+        s.settings.global_hotkey = "shift+win+f5".to_string();
+        s.sanitize();
+        assert_eq!(s.settings.close_behavior, "tray");
+        assert_eq!(s.settings.global_hotkey, "Shift+Win+F5");
     }
 
     fn rule(freq: Freq, interval: u32, by_day: Option<u8>, month_day: Option<i8>, ends: EndSpec) -> RecurrenceRule {

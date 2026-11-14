@@ -8,6 +8,7 @@ import { openRecurrenceModal } from "./recurrence.js";
 import { applyFocusPayload, focusReset, focusStop, focusTickStart, focusTogglePause } from "./focus.js";
 import { bindAdhd, openBrainDump, openPurgeConfirm, wireSplitSuggest } from "./adhd.js";
 import { go, postSnap, refresh } from "./snapshot.js";
+import { chooseAskClose, initAskCloseBridge } from "./askclose.js";
 
 
 /* ─────────── QUICK ADD + PREVIEW ─────────── */
@@ -329,6 +330,8 @@ export function bindEvents() {
   bindSettingsEvents();
 
   $("#modal").addEventListener("click", async e => {
+    const askChoice = e.target.closest("[data-ask-choice]");
+    if (askChoice) { chooseAskClose(askChoice.dataset.askChoice); return; }
     if (e.target.closest("[data-close-modal]")) { closeModal(); if ($("#view-settings")?.classList.contains("active")) refreshStoragePanel(); return; }
     if (e.target.closest("#list-save")) {
       const name = ($("#list-name")?.value || "").trim();
@@ -497,6 +500,7 @@ export function globalKeys(e) {
    harness (import sau khi parse xong) DCL có thể đã bắn — nên xử lý cả hai. */
 async function boot() {
   bindEvents();
+  initAskCloseBridge();
   try {
     window.__TAURI__?.event?.listen?.("focus:change", e => applyFocusPayload(e.payload));
   } catch { /* môi trường không hỗ trợ event — overlay vẫn tự sync qua invoke */ }

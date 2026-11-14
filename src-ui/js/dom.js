@@ -37,5 +37,11 @@ export function openModal(html) {
   m.innerHTML = `<div class="modal-backdrop" data-close-modal="1"></div><div class="modal-panel">${html}</div>`;
   // lớp phủ nền mờ phía sau (giữ .overlay flex center)
   m.hidden = false;
+  // modal bất kỳ đang mở → mọi nơi đang chờ phím (vd. đổi phím tắt toàn cục) hủy chế độ chờ
+  try { document.dispatchEvent(new CustomEvent("taskora:modal-open")); } catch { /* bỏ qua */ }
 }
-export function closeModal() { const m = $("#modal"); m.hidden = true; m.innerHTML = ""; }
+export function closeModal() {
+  const m = $("#modal");
+  m.hidden = true; m.innerHTML = "";
+  try { document.dispatchEvent(new CustomEvent("taskora:modal-close")); } catch { /* bỏ qua */ }
+}

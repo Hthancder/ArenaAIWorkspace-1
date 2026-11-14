@@ -5,22 +5,29 @@ mod bootstrap;
 mod commands;
 mod focus;
 mod fx;
+mod hotkey;
 mod models;
 mod parser;
 mod state;
 mod stats;
 mod storage;
 mod transparency;
+mod tray;
 
 use tauri::Manager;
 
 fn main() {
     // Xác định nơi lưu dữ liệu TRƯỚC khi nạp store
     bootstrap::init();
+    // `--minimized`: được truyền khi app tự khởi động cùng Windows (autostart) — mở ẩn vào khay
+    let minimized = std::env::args().any(|a| a == "--minimized");
     tauri::Builder::default().plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--minimized"])))
+        .plugin(tauri_plugin_global_shortcut::init())
+        .manage(commands::HotkeyState(std::sync::atomic::AtomicBool::new(false)))
         .manage(state::AppState::new())
         .manage(commands::NotifyState::default())
-        .setup(|app| {
+        .setup(move |app| {
             // Áp dụng Acrylic/Blur theo cài đặt đã lưu (Windows)
             let settings = app.state::<state::AppState>().lock().store.settings.clone();
             if let Some(w) = app.get_webview_window("main") {
@@ -35,7 +42,67 @@ fn main() {
                     eprintln!("[Taskora] Không tạo được cửa sổ Thông báo (sẽ thử lại khi cần): {e}");
                 }
             });
+            // Tự khởi động cùng Windows: nếu người dùng chọn "Mở ẩn trong khay" thì ẩn cửa sổ ngay (trước event loop).
+            // Arg `--minimized` luôn được đăng ký khi autostart — quyết định thật nằm ở cài đặt hidden_on_autostart.
+            if minimized {
+                let hidden = app.state::<state::AppState>().lock().store.settings.hidden_on_autostart;
+                if hidden {
+                    if let Some(w) = app.get_webview_window("main") {
+                        let _ = w.hide();
+                    }
+                }
+            }
+            // Autostart tự chữa đường dẫn: luôn enable() lại lúc khởi động (exe có thể đã di chuyển)
+            {
+                use tauri_plugin_autostart::ManagerExt;
+                let al = app.autolaunch();
+                if al.is_enabled().unwrap_or(false) {
+                    let _ = al.enable();
+                }
+            }
+            // Khay hệ thống (tray) — luôn hiện
+            if let Err(e) = tray::setup(&handle) {
+                eprintln!("[Taskora] Không tạo được tray (app vẫn chạy bình thường): {e}");
+            }
+            // Phím tắt toàn cục theo cấu hình đang lưu
+            {
+                let (spec, enabled) = {
+                    let st = app.state::<state::AppState>().lock();
+                    (st.store.settings.global_hotkey.clone(), st.store.settings.global_hotkey_enabled)
+                };
+                if enabled {
+                    match hotkey::register(&handle, &spec) {
+                        Ok(()) => app.state::<commands::HotkeyState>().0.store(true, std::sync::atomic::Ordering::SeqCst),
+                        Err(e) => eprintln!("[Taskora] Không đăng ký được phím tắt toàn cục '{spec}' (có thể bị app khác chiếm): {e}"),
+                    }
+                }
+            }
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if window.label() != "main" {
+                return;
+            }
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let behavior = window
+                    .app_handle()
+                    .try_state::<state::AppState>()
+                    .map(|s| s.lock().store.settings.close_behavior.clone())
+                    .unwrap_or_else(|| "ask".to_string());
+                api.prevent_close();
+                match behavior.as_str() {
+                    "tray" => {
+                        let _ = window.hide();
+                    }
+                    "exit" => {
+                        window.app_handle().exit(0);
+                    }
+                    _ => {
+                        use tauri::Emitter;
+                        let _ = window.app_handle().emit("main:ask-close", ());
+                    }
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             commands::snapshot,
@@ -60,6 +127,13 @@ fn main() {
             commands::notify_prefs,
             commands::notify_action,
             commands::notify_clear,
+            commands::set_close_behavior,
+            commands::close_choice,
+            commands::autostart_get,
+            commands::autostart_set,
+            commands::set_global_hotkey,
+            commands::set_global_hotkey_enabled,
+            commands::global_hotkey_status,
             commands::save_step_preset,
             commands::delete_step_preset,
             commands::preview_parse,

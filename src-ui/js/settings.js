@@ -5,6 +5,7 @@ import { playChime } from "./chime.js";
 import { NOTIFY_KINDS, notify, previewNotifySound } from "./notify.js";
 import { openAbout, openBackups, openHelp } from "./tasks.js";
 import { go, postSnap } from "./snapshot.js";
+import { comboFromEvent } from "./hotkey.js";
 
 
 export let lastTheme = null;
@@ -87,6 +88,62 @@ export async function refreshOsTransparency() {
 }
 
 /* hỏi người dùng bật Transparency effects (điều kiện bắt buộc để Acrylic hiển thị) */
+/** Đọc trạng thái autostart THẬT từ OS và đồng bộ UI (gọi khi mở màn Cài đặt). */
+export async function syncAutostartControl() {
+  try { _autostartOn = await invoke("autostart_get"); } catch { _autostartOn = false; }
+  const cb = $("#set-autostart"); if (cb) cb.checked = !!_autostartOn;
+  const row = $("#set-hidden-autostart-row"); if (row) row.hidden = !_autostartOn;
+}
+
+export function renderHotkeyStatusFromCmd(st, toggleEvent) {
+  renderHotkeyCaps(st.hotkey || "Ctrl+Alt+T");
+  $("#set-hotkey-enabled").checked = !!st.enabled;
+  $("#set-hotkey-row").classList.toggle("is-off", !st.enabled);
+  const hb = $("#set-hotkey-reset"); if (hb) hb.hidden = (st.hotkey || "Ctrl+Alt+T") === "Ctrl+Alt+T";
+  const el = $("#hotkey-status"); if (el) {
+    if (!st.enabled) { el.textContent = "Đã tắt"; el.className = "hotkey-status is-off"; }
+    else if (st.active) { el.textContent = "Đang hoạt động"; el.className = "hotkey-status is-ok"; }
+    else { el.textContent = "Bị phần mềm khác chiếm"; el.className = "hotkey-status is-bad"; }
+  }
+  if (toggleEvent && !st.enabled && toggleEvent.target.checked) {
+    notify({ kind: "error", title: "Không bật được phím tắt toàn cục", body: "Tổ hợp đang bị phần mềm khác chiếm" });
+  }
+}
+
+/** Áp tổ hợp mới — backend rollback + báo lỗi nếu bị chiếm. */
+export async function applyHotkeyChange(spec) {
+  cancelHotkeyCapture();
+  try { const st = await invoke("set_global_hotkey", { spec }); renderHotkeyStatusFromCmd(st, null); }
+  catch (err) {
+    notify({ kind: "error", title: "Không dùng được tổ hợp này", body: String(err && err.message ? err.message : err) });
+    syncHotkeyStatus(true);
+  }
+}
+
+function startHotkeyCapture() {
+  const btn = $("#set-hotkey-change"); if (!btn) return;
+  cancelHotkeyCapture();
+  btn.textContent = "Nhấn tổ hợp… (Esc để hủy)";
+  const onKey = ev => {
+    ev.preventDefault(); ev.stopPropagation();
+    const keyName = ev.key;
+    if (keyName === "Escape") { cancelHotkeyCapture(); return; }
+    if (keyName === "Backspace" || keyName === "Delete") { applyHotkeyChange("Ctrl+Alt+T"); return; }
+    const combo = comboFromEvent(ev);
+    if (!combo) return;             // chỉ modifier / phím ngoài phạm vi → chờ tiếp
+    if (combo.error === "modifier") { notify({ kind: "info", title: "Cần ít nhất một phím Ctrl, Alt, Shift hoặc Win", sound: "none" }); return; }
+    applyHotkeyChange(combo.spec);
+  };
+  hotkeyCapture = { onKey };
+  document.addEventListener("keydown", onKey, true);
+}
+
+/* modal mở bất kỳ ⇒ hủy chế độ chờ tổ hợp (tránh nuốt phím) */
+document.addEventListener("taskora:modal-open", () => cancelHotkeyCapture());
+/* rời màn hoặc cửa sổ mất focus ⇒ hủy chế độ chờ */
+document.addEventListener("visibilitychange", () => { if (document.hidden) cancelHotkeyCapture(); });
+window.addEventListener("blur", () => cancelHotkeyCapture());
+
 export function openTransparencyDialog() {
   openModal(`<h2><svg class="ic accent-ic"><use href="#i-sun"/></svg>Cần bật Transparency effects</h2>
     <p>Để cửa sổ Taskora nhìn xuyên được, Windows cần công tắc <strong>Transparency effects</strong> (Settings → Personalization → Colors) được bật. Hiện nó đang tắt nên Acrylic không thể hiển thị.</p>
@@ -132,6 +189,57 @@ export function syncSettingsControls(s) {
     patchSettings({ focus_clock_display: st.focus_auto_open_timer === false ? "overlay" : "window" });
   }
   $$("#set-chime button").forEach(b => b.classList.toggle("on", (st.chime || "soft") === b.dataset.chime));
+  /* v2.12.0 — Nhóm 0 */
+  const cb = st.close_behavior || "ask";
+  $$("#set-close-behavior button").forEach(b => b.classList.toggle("on", b.dataset.behavior === cb));
+  $("#set-hidden-autostart").checked = st.hidden_on_autostart !== false;
+  $("#set-hidden-autostart-row").hidden = !_autostartOn; // ẩn nếu autostart đang tắt (hoặc chưa đọc được trạng thái thật)
+  const hkEnabled = st.global_hotkey_enabled !== false;
+  $("#set-hotkey-enabled").checked = hkEnabled;
+  const hkSpec = st.global_hotkey || "Ctrl+Alt+T";
+  renderHotkeyCaps(hkSpec);
+  $("#set-hotkey-row").classList.toggle("is-off", !hkEnabled);
+  const hb = $("#set-hotkey-reset"); if (hb) hb.hidden = hkSpec === "Ctrl+Alt+T";
+  syncHotkeyStatus(true);
+}
+
+/* ─────────── v2.12.0 — phím tắt toàn cục ─────────── */
+let _hotkeyStatusReq = 0;
+let hotkeyCapture = null; // { onKey } khi đang chờ tổ hợp mới
+let _autostartOn = false;
+
+export function renderHotkeyCaps(spec) {
+  const el = $("#hotkey-caps"); if (!el) return;
+  const parts = String(spec || "Ctrl+Alt+T").split("+");
+  el.innerHTML = parts.map(p => `<kbd class="modal-kbd">${esc(p)}</kbd>`).join("");
+}
+
+export async function syncHotkeyStatus(silent) {
+  const req = ++_hotkeyStatusReq;
+  let st = null;
+  try { st = await invoke("global_hotkey_status"); } catch { return; }
+  if (req !== _hotkeyStatusReq) return;
+  renderHotkeyCaps(st.hotkey || "Ctrl+Alt+T");
+  $("#set-hotkey-enabled").checked = !!st.enabled;
+  $("#set-hotkey-row").classList.toggle("is-off", !st.enabled);
+  const hb = $("#set-hotkey-reset"); if (hb) hb.hidden = (st.hotkey || "Ctrl+Alt+T") === "Ctrl+Alt+T";
+  const el = $("#hotkey-status"); if (!el) return;
+  if (!st.enabled) {
+    el.textContent = "Đã tắt"; el.className = "hotkey-status is-off";
+  } else if (st.active) {
+    el.textContent = "Đang hoạt động"; el.className = "hotkey-status is-ok";
+  } else {
+    el.textContent = "Bị phần mềm khác chiếm"; el.className = "hotkey-status is-bad";
+  }
+}
+
+export function cancelHotkeyCapture() {
+  if (hotkeyCapture) {
+    const hk = $("#set-hotkey-change");
+    if (hk) hk.textContent = "Đổi…";
+    document.removeEventListener("keydown", hotkeyCapture.onKey, true);
+    hotkeyCapture = null;
+  }
 }
 
 export function syncMinuteChips(group, val) {
@@ -500,6 +608,32 @@ export function bindSettingsEvents() {
     patchSettings({ adhd_mode: e.target.checked });
     notify({ kind: "info", title: e.target.checked ? "Chế độ ADHD bật — một việc tại một thời điểm ✦" : "Chế độ ADHD tắt", sound: "none" });
   });
+
+  /* ───────── Nhóm GIAO DIỆN (v2.12.0 — Nhóm 0) ───────── */
+  $$("#set-close-behavior button").forEach(btn => btn.addEventListener("click", async () => {
+    const v = btn.dataset.behavior;
+    try { const snap = await invoke("set_close_behavior", { behavior: v }); postSnap(snap); }
+    catch (err) { notify({ kind: "error", title: String(err && err.message ? err.message : err) }); }
+  }));
+  $("#set-autostart")?.addEventListener("change", async e => {
+    const want = e.target.checked;
+    try {
+      _autostartOn = await invoke("autostart_set", { enabled: want });
+    } catch (err) {
+      _autostartOn = !want; // rollback hiển thị
+      notify({ kind: "error", title: "Không đổi được tự khởi động", body: String(err && err.message ? err.message : err) });
+    }
+    e.target.checked = _autostartOn;
+    const row = $("#set-hidden-autostart-row"); if (row) row.hidden = !_autostartOn;
+    notify({ kind: "info", title: _autostartOn ? "Taskora sẽ mở cùng Windows" : "Taskora sẽ không tự mở cùng Windows", sound: "none" });
+  });
+  $("#set-hidden-autostart")?.addEventListener("change", e => patchSettings({ hidden_on_autostart: e.target.checked }));
+  $("#set-hotkey-enabled")?.addEventListener("change", async e => {
+    try { const st = await invoke("set_global_hotkey_enabled", { enabled: e.target.checked }); renderHotkeyStatusFromCmd(st, e); }
+    catch (err) { e.target.checked = false; notify({ kind: "error", title: String(err && err.message ? err.message : err) }); syncHotkeyStatus(true); }
+  });
+  $("#set-hotkey-change")?.addEventListener("click", startHotkeyCapture);
+  $("#set-hotkey-reset")?.addEventListener("click", () => applyHotkeyChange("Ctrl+Alt+T"));
 
   /* ───────── Nhóm TẬP TRUNG (v2.10.0) ───────── */
   const minuteCfg = [

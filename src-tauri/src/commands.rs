@@ -105,12 +105,13 @@ impl From<ViewWire> for View {
     }
 }
 
-/// Áp dụng mutation + tạo snapshot, đồng thời cập nhật tiêu đề cửa sổ.
+/// Áp dụng mutation + tạo snapshot, đồng thời cập nhật tiêu đề cửa sổ + tray.
 fn finish(app: &AppHandle, i: &mut Inner) -> Snapshot {
     let snap = make_snapshot(i);
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.set_title(&format!("Taskora — {} việc đang làm", snap.counts.active));
     }
+    crate::tray::refresh(app, &snap.counts);
     snap
 }
 
@@ -1294,6 +1295,160 @@ pub fn redo(app: AppHandle, state: State<'_, AppState>) -> Snapshot {
     finish(&app, &mut i)
 }
 
+/// Trạng thái phím tắt toàn cục trả về cho frontend (camelCase).
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HotkeyStatus {
+    pub enabled: bool,
+    pub hotkey: String,
+    pub active: bool,
+}
+
+/// Ghi nhận đăng ký thành công/thất bại của phím tắt toàn cục (không đọc được từ plugin).
+pub struct HotkeyState(pub std::sync::atomic::AtomicBool);
+
+fn hotkey_status(app: &AppHandle, i: &Inner) -> HotkeyStatus {
+    let active = app
+        .try_state::<HotkeyState>()
+        .map(|s| s.0.load(std::sync::atomic::Ordering::SeqCst))
+        .unwrap_or(false);
+    HotkeyStatus {
+        enabled: i.store.settings.global_hotkey_enabled,
+        hotkey: i.store.settings.global_hotkey.clone(),
+        active,
+    }
+}
+
+fn set_hotkey_active(app: &AppHandle, on: bool) {
+    if let Some(s) = app.try_state::<HotkeyState>() {
+        s.0.store(on, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+/// Khi đóng cửa sổ chính: lưu lựa chọn (không thực thi — mọi thực thi đi qua `close_choice`).
+#[tauri::command]
+pub fn set_close_behavior(app: AppHandle, state: State<'_, AppState>, behavior: String) -> Result<Snapshot, String> {
+    let v = behavior.trim().to_lowercase();
+    if !matches!(v.as_str(), "ask" | "tray" | "exit") {
+        return Err("Giá trị không hợp lệ".to_string());
+    }
+    let mut i = state.lock();
+    i.store.settings.close_behavior = v;
+    AppState::commit(&mut i);
+    Ok(finish(&app, &mut i))
+}
+
+/// Thực thi đóng theo lựa chọn của người dùng trong modal hỏi.
+#[tauri::command]
+pub fn close_choice(app: AppHandle, choice: String) -> Result<(), String> {
+    match choice.trim().to_lowercase().as_str() {
+        "tray" => {
+            if let Some(w) = app.get_webview_window("main") {
+                w.hide().map_err(|e| e.to_string())?;
+            }
+            Ok(())
+        }
+        "exit" => {
+            app.exit(0);
+            Ok(())
+        }
+        _ => Err("Lựa chọn không hợp lệ".to_string()),
+    }
+}
+
+/// Trạng thái autostart thật từ OS (nguồn sự thật = registry).
+#[tauri::command]
+pub fn autostart_get(app: AppHandle) -> Result<bool, String> {
+    use tauri_plugin_autostart::ManagerExt;
+    app.autolaunch().is_enabled().map_err(|e| e.to_string())
+}
+
+/// Bật/tắt autostart — trả trạng thái thực sau khi ghi.
+#[tauri::command]
+pub fn autostart_set(app: AppHandle, enabled: bool) -> Result<bool, String> {
+    use tauri_plugin_autostart::ManagerExt;
+    let al = app.autolaunch();
+    if enabled {
+        al.enable().map_err(|e| e.to_string())?;
+    } else {
+        al.disable().map_err(|e| e.to_string())?;
+    }
+    al.is_enabled().map_err(|e| e.to_string())
+}
+
+/// Đổi tổ hợp phím toàn cục — rollback về phím cũ nếu tổ hợp mới bị chiếm.
+#[tauri::command]
+pub fn set_global_hotkey(app: AppHandle, state: State<'_, AppState>, spec: String) -> Result<HotkeyStatus, String> {
+    let spec = crate::models::normalize_hotkey_spec(&spec)
+        .ok_or_else(|| "Tổ hợp không hợp lệ — cần ít nhất một phím Ctrl/Alt/Shift/Win và một phím A–Z, 0–9 hoặc F1–F12".to_string())?;
+    let old_spec = {
+        let i = state.lock();
+        i.store.settings.global_hotkey.clone()
+    };
+    crate::hotkey::unregister(&app, &old_spec);
+    match crate::hotkey::register(&app, &spec) {
+        Ok(()) => {
+            let mut i = state.lock();
+            i.store.settings.global_hotkey = spec.clone();
+            i.store.settings.global_hotkey_enabled = true;
+            AppState::commit(&mut i);
+            set_hotkey_active(&app, true);
+            Ok(hotkey_status(&app, &i))
+        }
+        Err(_) => {
+            // rollback — phím cũ tiếp tục sống; nếu cũng không đăng ký lại được thì báo thật
+            let rolled_back = crate::hotkey::register(&app, &old_spec).is_ok();
+            set_hotkey_active(&app, rolled_back);
+            if rolled_back {
+                Err(format!("Tổ hợp {spec} bị phần mềm khác chiếm"))
+            } else {
+                Err(format!("Tổ hợp {spec} bị phần mềm khác chiếm — và không thể khôi phục {old_spec}"))
+            }
+        }
+    }
+}
+
+/// Bật/tắt phím tắt toàn cục (tắt = unregister; bật = register lại spec đang lưu).
+/// Bật thất bại ⇒ persist `enabled=false` + trạng thái thật (không nói dối người dùng).
+#[tauri::command]
+pub fn set_global_hotkey_enabled(app: AppHandle, state: State<'_, AppState>, enabled: bool) -> Result<HotkeyStatus, String> {
+    let spec = {
+        let i = state.lock();
+        i.store.settings.global_hotkey.clone()
+    };
+    if !enabled {
+        crate::hotkey::unregister(&app, &spec);
+        let mut i = state.lock();
+        i.store.settings.global_hotkey_enabled = false;
+        AppState::commit(&mut i);
+        set_hotkey_active(&app, false);
+        return Ok(hotkey_status(&app, &i));
+    }
+    match crate::hotkey::register(&app, &spec) {
+        Ok(()) => {
+            let mut i = state.lock();
+            i.store.settings.global_hotkey_enabled = true;
+            AppState::commit(&mut i);
+            set_hotkey_active(&app, true);
+            Ok(hotkey_status(&app, &i))
+        }
+        Err(_) => {
+            let mut i = state.lock();
+            i.store.settings.global_hotkey_enabled = false; // persist tắt — hiển thị thật
+            AppState::commit(&mut i);
+            set_hotkey_active(&app, false);
+            Ok(hotkey_status(&app, &i))
+        }
+    }
+}
+
+/// Trạng thái thật cho Cài đặt — không tin cache phía JS.
+#[tauri::command]
+pub fn global_hotkey_status(app: AppHandle, state: State<'_, AppState>) -> HotkeyStatus {
+    let i = state.lock();
+    hotkey_status(&app, &i)
+}
+
 // ------------------------------------------------------------------ cài đặt
 
 #[tauri::command]
@@ -1520,6 +1675,8 @@ pub struct SettingsPatch {
     pub notify_sound_on: Option<bool>,
     pub notify_prefs: Option<std::collections::BTreeMap<String, crate::models::NotifyPref>>,
     pub notify_custom_sounds: Option<std::collections::BTreeMap<String, String>>,
+    pub hidden_on_autostart: Option<bool>,
+    pub close_hint_shown: Option<bool>,
 }
 
 fn valid_accent(s: &str) -> bool {
@@ -1593,6 +1750,8 @@ pub fn update_settings(
                 })
                 .collect();
         }
+        if let Some(v) = patch.hidden_on_autostart { s.hidden_on_autostart = v; }
+        if let Some(v) = patch.close_hint_shown { s.close_hint_shown = v; }
         if let Some(v) = patch.notify_custom_sounds {
             // tối đa 4 âm tùy chỉnh, mỗi cái là data URI audio ≤ ~360k ký tự (≈ 256 KB)
             const KINDS: [&str; 8] = ["focus_done", "break_done", "due_today", "overdue", "storage_error", "import_merged", "info", "error"];

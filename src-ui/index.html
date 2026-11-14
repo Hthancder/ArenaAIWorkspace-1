@@ -78,7 +78,7 @@
       <img class="brand-logo" src="assets/logo.png" alt="Taskora" />
       <div class="brand-text">
         <span class="brand-name">Taskora</span>
-        <span class="brand-ver">v2.11.2</span>
+        <span class="brand-ver">v2.12.0</span>
       </div>
     </div>
 
@@ -411,6 +411,53 @@
             </div>
             <label class="toggle-wrap"><input type="checkbox" id="set-sound" /><span class="toggle-ui"></span></label>
           </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-title">Khi đóng cửa sổ chính</div>
+              <div class="setting-hint">Thu vào khay giữ app chạy nền — nhận nhắc việc đúng giờ (v2.13.0). Thoát là đóng mọi cửa sổ.</div>
+            </div>
+            <div class="seg" id="set-close-behavior" role="group" aria-label="Khi đóng cửa sổ chính">
+              <button data-behavior="ask" type="button">Hỏi</button>
+              <button data-behavior="tray" type="button">Thu vào khay</button>
+              <button data-behavior="exit" type="button">Thoát</button>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-title">Khởi động cùng Windows</div>
+              <div class="setting-hint">Taskora tự chạy khi đăng nhập — mặc định TẮT</div>
+            </div>
+            <label class="toggle-wrap"><input type="checkbox" id="set-autostart" /><span class="toggle-ui"></span></label>
+          </div>
+
+          <div class="setting-row" id="set-hidden-autostart-row" hidden>
+            <div class="setting-info">
+              <div class="setting-title">Mở ẩn trong khay khi tự khởi động</div>
+              <div class="setting-hint">Không hiện cửa sổ lúc đăng nhập — chỉ icon khay + phím tắt toàn cục</div>
+            </div>
+            <label class="toggle-wrap"><input type="checkbox" id="set-hidden-autostart" checked /><span class="toggle-ui"></span></label>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-title">Phím tắt toàn cục</div>
+              <div class="setting-hint">Hiện/ẩn cửa sổ chính từ mọi ứng dụng — mặc định Ctrl + Alt + T</div>
+            </div>
+            <label class="toggle-wrap"><input type="checkbox" id="set-hotkey-enabled" checked /><span class="toggle-ui"></span></label>
+          </div>
+          <div class="setting-row" id="set-hotkey-row">
+            <div class="setting-info">
+              <div class="setting-hint">Tổ hợp hiện tại</div>
+              <div class="hotkey-caps" id="hotkey-caps"><kbd class="modal-kbd">Ctrl</kbd><kbd class="modal-kbd">Alt</kbd><kbd class="modal-kbd">T</kbd></div>
+              <div class="hotkey-status" id="hotkey-status">Đang hoạt động</div>
+            </div>
+            <div class="hotkey-actions">
+              <button class="btn-ghost small-btn" id="set-hotkey-change" type="button">Đổi…</button>
+              <button class="linklike" id="set-hotkey-reset" type="button" hidden>Khôi phục mặc định (Ctrl + Alt + T)</button>
+            </div>
+          </div>
             </div>
           </div>
         </section>
@@ -732,7 +779,7 @@
         </section>
 
         <div class="settings-foot">
-          <span>Taskora v2.11.2</span>
+          <span>Taskora v2.12.0</span>
           <button class="linklike" id="set-open-help" type="button">Phím tắt</button>
           <span class="settings-dot">·</span>
           <button class="linklike" id="set-open-about" type="button">Giới thiệu</button>

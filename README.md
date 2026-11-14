@@ -66,6 +66,13 @@
 - Đồng hồ trong app chính và cửa sổ Đồng hồ **không thể lệch bản ghi đè cũ**: mọi chuyển phase đọc lại trạng thái thật từ engine (wall-clock), kể cả khi bạn bấm Reset đúng khoảnh khắc đồng hồ về 0.
 - **Nhắc mắt 20-20-20 cũng hiện trong cửa sổ Đồng hồ** (pill nổi, tự ẩn, tôn trọng tuỳ chọn chuông) — không chỉ trong overlay chính.
 
+**v2.12.0 — Sống ở khay hệ thống, tự khởi động, phím tắt toàn cục**
+- **Icon khay luôn hiện** (liquid glass, menu chuẩn): click trái bật/tắt cửa sổ chính; chuột phải mở menu — header `Taskora — N việc hôm nay[ · M quá hạn]`, **Việc hôm nay** (chuyển thẳng view Hôm nay), **Mở Taskora**, separator, **Thoát**.
+- **Bấm nút X không còn thoát cứng**: lần đầu hỏi “Đóng Taskora?” (Thu vào khay / Thoát hẳn, **Ghi nhớ** mặc định tick, focus khởi đầu ở **Thu vào khay**; Esc/backdrop = đóng modal, không làm gì). Đổi lại bất cứ lúc nào: **Cài đặt → Giao diện → Khi đóng cửa sổ chính** (Hỏi · Thu vào khay · Thoát).
+- **Tự khởi động cùng Windows** (mặc định TẮT) — tự chữa đường dẫn khi exe di chuyển; sub-toggle **“Mở ẩn trong khay khi tự khởi động”** (mặc định BẬT, chỉ hiện khi autostart bật).
+- **Phím tắt toàn cục Ctrl + Alt + T** (đổi được, khớp mọi layout bàn phím): hiện/ẩn cửa sổ chính từ mọi ứng dụng. Tổ hợp hợp lệ = ít nhất 1 phím Ctrl/Alt/Shift/Win + một phím A–Z/0–9/F1–F12; Backspace/Delete khôi phục mặc định; Esc hủy; tổ hợp bị app khác chiếm sẽ tự quay về phím cũ và báo lỗi. Bật/tắt riêng qua toggle **Phím tắt toàn cục**.
+- Thoát hẳn vẫn đảm bảo sao lưu (nếu bật “Tự sao lưu khi thoát”) trước khi đóng — mọi cổng thoát đều đi qua một đường duy nhất.
+
 **v2.11.2 — Vá 4 lỗi trải nghiệm: focus treo, thông báo chồng & chậm, việc lặp nhảy hero**
 - **Dừng Đồng hồ ở cửa sổ Đồng hồ giờ cập nhật ngay mọi nơi** — hero “Việc tiếp theo” không còn đông cứng ở giây bị dừng; chip trên topbar và overlay cũng đồng bộ theo engine (mọi thay đổi focus phát sự kiện `taskora:focus` cho cả app).
 - **Thông báo không còn chồng/bóp lên nhau** — thẻ không cho co trong container đo lường và cửa sổ Thông báo tự đo lại chiều cao tức thì (không phụ thuộc vòng vẽ của cửa sổ ẩn) nên nhiều thẻ hiện cùng lúc luôn tách rõ, nội dung không bị cắt.

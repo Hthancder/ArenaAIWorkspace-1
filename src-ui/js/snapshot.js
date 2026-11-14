@@ -5,7 +5,7 @@ import { notify } from "./notify.js";
 import { confettiBurst } from "./fx.js";
 import { renderStats } from "./stats.js";
 import { applyAccent, covOf } from "./accent.js";
-import { applyTheme, markTransparencyChecked, refreshFxStatus, syncSettingsControls } from "./settings.js";
+import { applyTheme, markTransparencyChecked, refreshFxStatus, syncAutostartControl, syncSettingsControls } from "./settings.js";
 import { renderCounts, renderDetail, renderSidebar, renderTaskList, renderViewHead, setView } from "./tasks.js";
 import { focusStop, renderFocus } from "./focus.js";
 import { setupAdhdPlaceholder, startAdhdClock, stopAdhdClock } from "./adhd.js";
@@ -30,6 +30,7 @@ export function postSnap(snap) {
   if (s.settings.adhd_mode) startAdhdClock(); else stopAdhdClock();
   setupAdhdPlaceholder();
   syncSettingsControls(s);
+  syncAutostartControl();
   refreshFxStatus();
   if (markTransparencyChecked()) {
     (async () => {
