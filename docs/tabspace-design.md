@@ -305,3 +305,6 @@ Tôn trọng `prefers-reduced-motion`: bỏ hoặc giảm chuyển động khôn
 - Toàn màn hình Chrome, video/fullscreen trong trang, ứng dụng khác toàn màn hình và chế độ tập trung: kiểm tra từng nền tảng/phiên bản Chrome; ghi nhận trường hợp không thể phát hiện hoặc hiển thị thay vì tuyên bố hỗ trợ tuyệt đối.
 - Âm thanh tắt, giờ yên lặng, tệp lỗi/quá lớn, âm tùy chỉnh thiếu sau nhập, playback bị chặn và nhiều sự kiện đồng thời: không phát dồn và không ảnh hưởng tác vụ chính.
 - Toast hết hạn vẫn tìm được hoàn tác theo chính sách; lỗi một phần không bị thông báo thành công che lấp. Kiểm thử đọc màn hình, bàn phím, zoom và giảm chuyển động.
+
+### Tiến độ 0.84 — âm báo thử nghiệm
+Âm báo tùy chọn cho kết quả tự động đóng, chỉ trong trang quản lý đang mở; không phát lại hoặc mở tài liệu nền. Giờ yên lặng và toàn màn hình làm bỏ qua, giới hạn tần suất và ghi dấu trước khi thử phát. Âm tùy chỉnh tối đa 1 MB/5 giây, kiểm tra giải mã, lưu cục bộ, không xuất sao lưu. Chrome có thể chặn âm. Âm cho lời nhắc và thông báo phủ trang vẫn chưa triển khai.
