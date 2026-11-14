@@ -1,0 +1,5 @@
+{
+  "type": "module",
+  "private": true,
+  "description": "Đánh dấu thư mục ES modules cho Node (harness kiểm thử). WebView2/Tauri nạp qua <script type=\"module\"> — file này không ảnh hưởng app."
+}

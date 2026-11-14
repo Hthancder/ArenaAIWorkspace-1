@@ -1,0 +1,84 @@
+/* ═══════════ CHẾ ĐỘ ADHD — một việc một lúc, thưởng tức thì, không phán xét ═══════════ */
+body.adhd::after { display:none; }                          /* tắt hạt nhiễu — bớt kích thích */
+body.adhd .tcheck { width:24px; height:24px; }              /* vùng bấm lớn hơn */
+body.adhd .task-row { padding:13px 15px; }
+body.adhd :focus-visible { outline-width:3px; outline-offset:3px; }
+body.adhd .overdue-banner { background:linear-gradient(90deg, rgba(245,158,11,.22), rgba(245,158,11,.08)); border-color:rgba(251,191,36,.42); color:#fde68a; }
+body.adhd .overdue-banner .ic { color:#fbbf24; }
+body.adhd .overdue-banner .chip-btn { background:rgba(245,158,11,.18); border-color:rgba(251,191,36,.4); color:#fde68a; }
+body.adhd .stat-pill { border-color:rgba(251,191,36,.4); }
+body.adhd #qa-examples { display:none; }
+body.adhd .toolbar { opacity:.55; filter:saturate(.75); transition:opacity .2s ease, filter .2s ease; }
+body.adhd .toolbar:hover, body.adhd .toolbar:focus-within { opacity:1; filter:none; }
+body.adhd .ttitle { font-size:15.5px; }
+body.adhd .nav-item { padding-top:10px; padding-bottom:10px; }
+
+.adhd-next { margin:0 26px 14px; border-radius:22px; padding:15px 18px 14px;
+  background:linear-gradient(160deg, rgba(var(--accent-rgb),.32), rgba(var(--accent-rgb),.16) 45%, rgba(250,204,21,.13));
+  border:1px solid rgba(var(--accent-2-rgb),.5);
+  box-shadow:0 20px 50px rgba(74,72,219,.38), inset 0 1px 0 rgba(255,255,255,.3);
+  backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); }
+.adhd-hero-top { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
+.adhd-next-label { display:flex; align-items:center; gap:7px; font-size:9.5px; font-weight:800; letter-spacing:1.5px; color:var(--accent-ink); }
+.adhd-clock { font-size:15px; font-weight:600; font-variant-numeric:tabular-nums; letter-spacing:.5px; color:var(--accent-ink); background:rgba(255,255,255,.07); border:1px solid var(--stroke); padding:4px 13px; border-radius:99px; }
+.adhd-hero-title { font-size:22px; font-weight:650; line-height:1.35; letter-spacing:-.25px; }
+.adhd-next-meta { margin-top:8px; display:flex; align-items:center; gap:9px; font-size:11px; color:var(--text-weak); flex-wrap:wrap; }
+.adhd-hero-actions { display:flex; gap:10px; margin-top:14px; align-items:stretch; }
+.adhd-cta { flex:1; height:50px; border-radius:15px; display:inline-flex; align-items:center; justify-content:center; gap:10px;
+  font-size:15.5px; font-weight:750; letter-spacing:.2px; color:#fff;
+  background:linear-gradient(165deg,#6d6cf0,#4f46e5 55%,#4438ca); border:1px solid rgba(255,255,255,.28);
+  box-shadow:0 12px 30px rgba(79,70,229,.45), inset 0 1px 0 rgba(255,255,255,.4); transition:transform .12s ease, filter .15s ease; }
+.adhd-cta:hover { filter:brightness(1.08); }
+.adhd-cta:active { transform:scale(.97); }
+.btn-adhd-done.xl { height:auto; min-width:108px; padding:0 20px; font-size:15px; border-radius:15px; justify-content:center; }
+.adhd-done-line { margin-top:12px; font-size:11.5px; color:var(--text-weak); display:flex; align-items:center; gap:7px; opacity:.95; }
+.adhd-done-line b { color:var(--accent-ink); }
+.adhd-hero-empty { text-align:center; padding:10px 0 6px; }
+.adhd-hero-empty-ic { width:52px; height:52px; color:var(--ok); filter:drop-shadow(0 6px 18px rgba(16,185,129,.45)); }
+.adhd-hero-empty-title { font-size:19px; font-weight:650; margin-top:10px; letter-spacing:-.2px; }
+.adhd-hero-empty-sub { color:var(--text-weak); font-size:12.5px; margin-top:4px; }
+
+.confetti-piece { position:fixed; top:0; left:0; width:7px; height:12px; border-radius:2px; pointer-events:none; z-index:400; }
+html[data-theme="light"] .adhd-next { background:linear-gradient(160deg, rgba(var(--accent-rgb),.20), rgba(var(--accent-rgb),.10) 45%, rgba(234,179,8,.14)); border-color:rgba(var(--accent-rgb),.38); box-shadow:0 18px 44px rgba(80,80,180,.22), inset 0 1px 0 rgba(255,255,255,.95); }
+html[data-theme="light"] .adhd-clock { background:rgba(255,255,255,.7); }
+/* ═══════════ v2.5.0 — Brain-dump · Chia nhỏ · 20-20-20 · Phiên tập trung ═══════════ */
+.qa-dump { background:linear-gradient(160deg, rgba(var(--accent-rgb),.32), rgba(var(--accent-rgb),.18)); border:1px solid rgba(var(--accent-2-rgb),.45); color:var(--accent-ink); }
+.dump-area { width:100%; min-height:170px; resize:vertical; border-radius:14px; border:1px solid var(--stroke-strong); background:rgba(10,12,28,.45); color:var(--text); font-size:13.5px; line-height:1.75; padding:12px 14px; outline:none; font-family:inherit; }
+.dump-area:focus { border-color:rgba(var(--accent-2-rgb),.6); box-shadow:0 0 0 3px rgba(var(--accent-rgb),.18); }
+.dump-area::placeholder { color:var(--text-faint); }
+.dump-foot { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:8px; font-size:11.5px; color:var(--text-weak); }
+.dump-foot b { color:var(--accent-ink); }
+.dump-hint { opacity:.75; }
+.split-suggest { margin-top:8px; border:1px solid rgba(var(--accent-2-rgb),.4); border-radius:12px; background:rgba(var(--accent-rgb),.10); padding:10px 12px; }
+.split-head { display:flex; align-items:center; justify-content:space-between; font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--text-faint); font-weight:700; margin-bottom:6px; }
+.split-chips { display:flex; flex-wrap:wrap; gap:5px; margin:0 0 8px; }
+.split-chip { display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:99px; font-size:10.5px; font-weight:600; border:1px solid rgba(var(--accent-2-rgb),.35); background:rgba(var(--accent-rgb),.14); color:var(--accent-ink); cursor:pointer; transition:all .16s ease; }
+.split-chip:hover { border-color:rgba(var(--accent-2-rgb),.6); }
+.split-chip.user { background:transparent; border-style:dashed; }
+.split-chip-del { display:inline-flex; opacity:.65; border-radius:99px; padding:1px; }
+.split-chip-del:hover { opacity:1; color:#f87171; }
+.split-rows { display:flex; flex-direction:column; gap:6px; margin:0 0 8px; max-height:196px; overflow-y:auto; scrollbar-width:thin; }
+.split-row { display:flex; align-items:center; gap:8px; }
+.split-num { flex:none; width:17px; text-align:right; font-size:10.5px; color:var(--text-faint); font-variant-numeric:tabular-nums; }
+.split-suggest-input { flex:1; min-width:0; height:28px; padding:0 8px; font-size:12.5px; color:var(--text); background:rgba(10,12,28,.35); border:1px solid var(--stroke-strong); border-radius:8px; outline:none; font-family:inherit; transition:border-color .16s ease, box-shadow .16s ease; }
+.split-suggest-input:focus { border-color:rgba(var(--accent-2-rgb),.6); box-shadow:0 0 0 2px rgba(var(--accent-rgb),.18); }
+.split-row-del { flex:none; opacity:.5; padding:4px; }
+.split-row-del:hover { opacity:1; color:#f87171; }
+.split-add-row { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; color:var(--text-weak); background:none; border:none; padding:3px 6px; border-radius:6px; cursor:pointer; margin-bottom:8px; }
+.split-add-row:hover { color:var(--text); background:var(--chip); }
+.split-preset-save { display:flex; gap:6px; align-items:center; margin:4px 0 8px; padding:8px; border-radius:10px; background:var(--chip); border:1px dashed var(--stroke-strong); }
+.split-preset-save input { flex:1; min-width:0; border:none; outline:none; background:transparent; color:var(--text); font-size:12px; font-family:inherit; }
+.btn-save.small, .btn-cancel.small, .btn-ghost.small { height:26px; padding:0 10px; font-size:11px; border-radius:8px; }
+.split-suggest .split-actions { display:flex; gap:8px; justify-content:flex-end; }
+.split-suggest .split-actions button { height:30px; padding:0 12px; font-size:12px; }
+
+/* ═══════════ CTA trạng thái đang chạy (v2.11.0) ═══════════ */
+.adhd-cta.is-running { opacity: .75; cursor: default; }
+.btn-adhd-open {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 40px; padding: 0 16px; border-radius: 12px;
+  border: 1px solid var(--stroke-strong); background: var(--chip);
+  color: var(--accent-ink); font-size: 12.5px; font-weight: 600; cursor: pointer;
+  transition: border-color .18s ease, background .18s ease;
+}
+.btn-adhd-open:hover { border-color: var(--accent); background: rgba(var(--accent-rgb), .16); }
