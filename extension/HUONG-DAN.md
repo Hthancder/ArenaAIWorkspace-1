@@ -1,4 +1,4 @@
-# Tabspace 0.73 — bản thử nghiệm
+# Tabspace 0.74 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -7,6 +7,7 @@
 4. Ghim Tabspace trên thanh công cụ; nhấn icon để mở popup, chọn **Mở không gian quản lý**. Có thể chỉnh phím tắt tại `chrome://extensions/shortcuts`.
 
 ## Kiểm thử
+- **Lối tắt mở lại:** sau khi đóng thành công tab web, thông báo hoặc bảng kết quả có nút Xem mở lại. Nút chỉ mở chi tiết lịch sử để bạn chọn và xác nhận; không tự mở tab. Khi thông báo biến mất, vẫn có thể tìm lượt trong Lịch sử dọn, trừ khi đã xóa lịch sử. Mở lại không khôi phục nội dung chưa lưu.
 - **Nhóm Chrome trong lịch sử:** các lượt đóng mới cố ghi tên/màu/trạng thái thu gọn của nhóm nếu Chrome cung cấp. Khi mở lại, tùy chọn tạo nhóm mới mặc định tắt; chỉ nhóm các tab mới mở còn đúng URL, không ghim và chưa thuộc nhóm. Có thể bỏ qua tab đã thay đổi hoặc không xác nhận được việc tạo nhóm; hãy kiểm tra Chrome. Lượt cũ không có metadata, nhóm gốc không bị thay đổi; không khôi phục vị trí, cửa sổ cũ hay nội dung trang chưa lưu.
 - **Mở lại lịch sử trong cửa sổ mới:** chọn đích tại Chi tiết lượt dọn. Các tab đã chọn mở cùng một cửa sổ mới, không tái tạo các cửa sổ gốc. Nếu không xác nhận được tạo cửa sổ hoặc mở tab, lượt dừng; kiểm tra Chrome trước khi thử lại để tránh mở trùng.
 - **Mở lại từ lịch sử:** các lượt đóng mới ghi trạng thái ghim khi Chrome cung cấp; có thể chọn khôi phục ghim khi mở lại. Nếu không xác nhận được ghim, kiểm tra Chrome. Lượt cũ có thể không có thông tin; chọn mở vào cửa sổ hiện tại hoặc cửa sổ mới, có thể chọn tạo lại nhóm Chrome nếu có metadata, nhưng không khôi phục vị trí/cửa sổ cũ hoặc nội dung chưa lưu. Thông tin ghim trong lịch sử được giữ khi xuất/nhập.
