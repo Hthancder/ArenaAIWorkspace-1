@@ -41,7 +41,7 @@ const AutoClose=(()=>{
     if(outcome.stopped||outcome.batch.items.some(x=>!['closed','skipped'].includes(x.status))){run.status='uncertain';run.reason='Lượt đóng bị gián đoạn hoặc kết quả không rõ. Kiểm tra lịch sử và Chrome.'}else{run.status='complete';run.reason=`Đã lưu ${run.saved}, xác nhận đóng ${run.closed}; tab thay đổi hoặc được bảo vệ được giữ lại.`}
    }
   }catch(e){run.status=phase==='before-save'?'blocked':'uncertain';run.reason=phase==='before-save'?'Đã dừng trước khi lưu hoặc đóng: '+String(e.message||'không xác định được trạng thái.'):'Không xác nhận được lưu hoặc đóng. Kiểm tra nhóm, lịch sử và Chrome.'}
-  const fresh=await api.storage.local.get('autoCloseRuns');if(!Array.isArray(fresh.autoCloseRuns))return;const i=fresh.autoCloseRuns.findIndex(r=>r?.id===runId&&JSON.stringify(r)===reserved);if(i<0)return;fresh.autoCloseRuns[i]=run;await api.storage.local.set({autoCloseRuns:fresh.autoCloseRuns});
+  const fresh=await api.storage.local.get(['autoCloseRuns','autoCloseNotifications','autoCloseNoticePending']);if(!Array.isArray(fresh.autoCloseRuns))return;const i=fresh.autoCloseRuns.findIndex(r=>r?.id===runId&&JSON.stringify(r)===reserved);if(i<0)return;fresh.autoCloseRuns[i]=run;await api.storage.local.set({autoCloseRuns:fresh.autoCloseRuns,...(fresh.autoCloseNotifications===true?{autoCloseNoticePending:{ids:[...new Set([...(Array.isArray(fresh.autoCloseNoticePending?.ids)?fresh.autoCloseNoticePending.ids.filter(x=>typeof x==='string'):[]),runId])].slice(-limit)}}:{})});
  }
  return {limit,validate,tick};
 })();

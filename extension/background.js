@@ -1,5 +1,5 @@
 'use strict';
-importScripts('mutation-lock.js','reminders.js','snapshots.js','auto-snapshot.js','open-grace.js','presets.js','protection.js','automation-preview.js','scheduled-rehearsal.js','recovery-point.js','batches.js','auto-close.js');
+importScripts('mutation-lock.js','reminders.js','snapshots.js','auto-snapshot.js','open-grace.js','presets.js','protection.js','automation-preview.js','scheduled-rehearsal.js','recovery-point.js','batches.js','auto-close.js','auto-notifications.js');
 async function ensureReminderAlarm(){try{if(!await chrome.alarms.get(ReminderTools.alarmName))await chrome.alarms.create(ReminderTools.alarmName,{periodInMinutes:1})}catch(e){console.error('Cannot schedule reminder alarm',e)}}
 chrome.runtime.onInstalled.addListener(()=>{void ensureReminderAlarm()});
 chrome.runtime.onStartup.addListener(()=>{void (async()=>{try{await chrome.alarms.clear(ReminderTools.alarmName);await ensureReminderAlarm()}catch(e){console.error('Cannot reset reminder alarm',e)}})()});
@@ -27,13 +27,14 @@ chrome.alarms.onAlarm.addListener(alarm=>{if(alarm.name!==ReminderTools.alarmNam
  }catch(e){console.error('Reminder tick failed',e)}
  try{await AutoSnapshot.tick(chrome,now,()=>crypto.randomUUID())}catch(e){console.error('Auto snapshot tick failed',e)}
  try{const autoNow=Date.now();if(autoNow>=alarm.scheduledTime&&autoNow-alarm.scheduledTime<60000&&typeof AutoClose!=='undefined')await AutoClose.tick(chrome,autoNow,()=>crypto.randomUUID(),{schedule:ScheduledRehearsal,reminders:ReminderTools,grace:OpenGrace,preview:AutomationPreview,presets:PresetTools,protection:Protection,batches:BatchTools,recovery:RecoveryPoint})}catch(e){console.error('Scheduled auto-close failed',e)}
+ try{if(typeof AutoNotifications!=='undefined')await AutoNotifications.deliver(chrome,Date.now(),ReminderTools)}catch(e){console.error('Auto-close notification failed',e)}
  try{if(typeof ScheduledRehearsal!=='undefined')await ScheduledRehearsal.tick(chrome,now,()=>crypto.randomUUID(),{reminders:ReminderTools,grace:OpenGrace,preview:AutomationPreview,presets:PresetTools,protection:Protection})}catch(e){console.error('Scheduled rehearsal failed',e)}
  }).catch(e=>console.error('Scheduled task skipped',e))});
 void ensureReminderAlarm();
 chrome.commands.onCommand.addListener(command=>{if(command==='open-dashboard')chrome.tabs.create({url:chrome.runtime.getURL('dashboard.html')})});
 
 let reminderClickBound=false;
-function bindReminderClick(){if(reminderClickBound||!chrome.notifications?.onClicked)return;chrome.notifications.onClicked.addListener(notificationId=>{if(notificationId==='tabspace-reminders')void chrome.tabs.create({url:chrome.runtime.getURL('dashboard.html?view=presets')})});reminderClickBound=true}
+function bindReminderClick(){if(reminderClickBound||!chrome.notifications?.onClicked)return;chrome.notifications.onClicked.addListener(notificationId=>{if(notificationId==='tabspace-reminders'||notificationId==='tabspace-auto-close')void chrome.tabs.create({url:chrome.runtime.getURL('dashboard.html?view=presets')})});reminderClickBound=true}
 bindReminderClick();chrome.permissions.onAdded.addListener(added=>{if(added.permissions?.includes('notifications'))bindReminderClick()});
 
 // Serialize refreshes so a slow earlier read cannot overwrite a newer badge state.
