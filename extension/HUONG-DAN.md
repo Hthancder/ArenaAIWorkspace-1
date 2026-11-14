@@ -1,4 +1,4 @@
-# Tabspace 0.78 — bản thử nghiệm
+# Tabspace 0.79 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -96,3 +96,8 @@ Trong màn hình chọn mở nhóm, workspace hoặc nhiều bản lưu, có th�
 
 ### Chuyển workspace trong một lượt (thử nghiệm)
 Ở Workspace chọn **Chuyển một lượt…**. Chọn tab cũ muốn lưu & đóng (mặc định không chọn), chọn nhóm lưu nằm ngoài workspace đích, rồi chọn bản lưu đích muốn mở và xác nhận. Có thể chỉ thực hiện một trong hai bước. Tab đang xem, ghim, phát âm thanh, website được bảo vệ và tab đã thay đổi được giữ lại. Nếu thiếu nhóm đích hoặc bước đóng không hoàn tất/không rõ, không mở workspace đích. Tabspace lưu bản sao và nhật ký trước khi đóng; có thể xem lại trong Lịch sử dọn. Không khôi phục nội dung trang chưa lưu. Chỉ so sánh URL nguyên văn; workspace không cô lập tab. Không đóng hoặc mở tự động theo lịch. Kiểm tra kết quả và Chrome trước khi thử lại khi kết quả không rõ. Lối chuyển từng bước vẫn có sẵn.
+
+### Mô phỏng điều phối và tạm dừng tự động hóa
+Trong Preset, chọn **Mô phỏng tự động…** để giả lập nhiều preset cùng khớp. Xem preset được chọn hoặc lý do bỏ qua: xung đột, giới hạn, tab đang xem/ghim/âm thanh, bảo vệ website, thời gian truy cập, toàn màn hình hoặc cấu hình đích. Đây chỉ là mô phỏng tức thời: không lưu, đóng, nghỉ tab hay bật tự động. Thời gian miễn sau mở lại và mọi trạng thái chưa lưu chưa được mô hình hóa; không coi kết quả là bảo đảm an toàn.
+
+Trong Cài đặt, nút **Tạm dừng tự động hóa** dừng nhắc lịch, thông báo lịch và snapshot tự động, không xóa cài đặt hay lời nhắc đang chờ và không ảnh hưởng thao tác thủ công. Lịch định kỳ bị lỡ không chạy bù; lời nhắc đã hoãn có thể trở lại khi tiếp tục. Công tắc không nằm trong file sao lưu. Bản này chưa có preset tự động đóng tab.

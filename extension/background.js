@@ -4,6 +4,8 @@ async function ensureReminderAlarm(){try{if(!await chrome.alarms.get(ReminderToo
 chrome.runtime.onInstalled.addListener(()=>{void ensureReminderAlarm()});
 chrome.runtime.onStartup.addListener(()=>{void (async()=>{try{await chrome.alarms.clear(ReminderTools.alarmName);await ensureReminderAlarm()}catch(e){console.error('Cannot reset reminder alarm',e)}})()});
 chrome.alarms.onAlarm.addListener(alarm=>{if(alarm.name!==ReminderTools.alarmName)return;const now=Date.now();if(now-alarm.scheduledTime>=60000)return;void MutationLock.run(async()=>{
+ // Unknown pause state is treated as paused. Read under the same lock as UI writes.
+ const pauseState=await chrome.storage.local.get('automationPaused');if(pauseState.automationPaused!==undefined&&pauseState.automationPaused!==false)return;
  try{
   const data=await chrome.storage.local.get(['presets','reminderState','remindersPaused','reminderNotifications','quietHours','quietReminderPending','deferFullscreenNotifications']);
   const presets=Array.isArray(data.presets)?data.presets:[],out=ReminderTools.tick(presets,data.reminderState,data.remindersPaused===true,now);
