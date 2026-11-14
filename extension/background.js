@@ -1,5 +1,5 @@
 'use strict';
-importScripts('mutation-lock.js','reminders.js','snapshots.js','auto-snapshot.js');
+importScripts('mutation-lock.js','reminders.js','snapshots.js','auto-snapshot.js','open-grace.js');
 async function ensureReminderAlarm(){try{if(!await chrome.alarms.get(ReminderTools.alarmName))await chrome.alarms.create(ReminderTools.alarmName,{periodInMinutes:1})}catch(e){console.error('Cannot schedule reminder alarm',e)}}
 chrome.runtime.onInstalled.addListener(()=>{void ensureReminderAlarm()});
 chrome.runtime.onStartup.addListener(()=>{void (async()=>{try{await chrome.alarms.clear(ReminderTools.alarmName);await ensureReminderAlarm()}catch(e){console.error('Cannot reset reminder alarm',e)}})()});
@@ -42,3 +42,12 @@ function refreshReminderBadge(){
 }
 chrome.storage?.onChanged?.addListener((changes,area)=>{if(area==='local'&&(changes.presets||changes.reminderState||changes.reminderBadgeEnabled))refreshReminderBadge()});
 refreshReminderBadge();
+
+// Keep creation/removal for one tab ordered even when storage operations overlap.
+const openGraceQueue=new Map();
+function queueOpenGrace(id,work){const prior=openGraceQueue.get(id)||Promise.resolve(),next=prior.catch(()=>{}).then(work);openGraceQueue.set(id,next);void next.catch(()=>{}).finally(()=>{if(openGraceQueue.get(id)===next)openGraceQueue.delete(id)})}
+chrome.tabs?.onCreated?.addListener(tab=>{const now=Date.now();if(Number.isInteger(tab?.id))queueOpenGrace(tab.id,()=>OpenGrace.created(chrome,tab,now))});
+chrome.tabs?.onRemoved?.addListener(id=>{if(Number.isInteger(id))queueOpenGrace(id,()=>OpenGrace.removed(chrome,id))});
+
+// On service-worker startup, conservatively start a full grace period for unknown tabs.
+if(typeof OpenGrace!=='undefined')void OpenGrace.seed(chrome).catch(()=>{});
