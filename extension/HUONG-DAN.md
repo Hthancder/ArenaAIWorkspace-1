@@ -1,4 +1,4 @@
-# Tabspace 0.76 — bản thử nghiệm
+# Tabspace 0.77 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -90,3 +90,6 @@ Trong Lịch sử dọn, lọc các lượt còn tab mở lại, cần kiểm tr
 
 ### Hoãn lời nhắc
 Chọn thời gian nhắc lại từ 1 phút đến 7 ngày, cho từng lời nhắc hoặc nhiều lời nhắc trong Cần chú ý. Xem các lời nhắc đã hoãn ở mục Preset; có thể đưa về đang chờ hoặc bỏ lời nhắc. Nếu Chrome đóng hoặc lịch nhắc tạm dừng, lời nhắc đã hoãn trở lại sau khi Chrome/lịch hoạt động và xử lý alarm tiếp theo; có thể trễ. Không phản hồi không có nghĩa đồng ý, và không có tab tự đóng. Giờ nhắc lịch định kỳ bị lỡ vẫn không chạy bù.
+
+### Tránh mở trùng khi mở bản lưu
+Trong màn hình chọn mở nhóm, workspace hoặc nhiều bản lưu, có thể chọn bỏ qua URL đã mở và/hoặc chỉ mở một lần mỗi URL trong lượt. Mặc định cả hai tắt. So sánh nguyên văn cả query và fragment, chỉ xét cửa sổ thông thường; tab ẩn danh không được xét. Tab có thể thay đổi đồng thời nên không bảo đảm loại bỏ mọi tab trùng. Nếu không đọc được tab đang mở khi bật kiểm tra, lượt dừng an toàn. Kết quả ghi rõ từng mục bỏ qua, lỗi hoặc đã mở; kiểm tra Chrome trước khi thử lại mục không xác định.
