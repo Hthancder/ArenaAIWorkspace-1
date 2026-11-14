@@ -61,17 +61,18 @@ fn main() {
                 }
             }
             // Khay hệ thống (tray) — luôn hiện
-            if let Err(e) = tray::setup(&handle) {
+            if let Err(e) = tray::setup(app.handle()) {
                 eprintln!("[Taskora] Không tạo được tray (app vẫn chạy bình thường): {e}");
             }
             // Phím tắt toàn cục theo cấu hình đang lưu
             {
                 let (spec, enabled) = {
-                    let st = app.state::<state::AppState>().lock();
-                    (st.store.settings.global_hotkey.clone(), st.store.settings.global_hotkey_enabled)
+                    let st = app.state::<state::AppState>();
+                    let l = st.lock();
+                    (l.store.settings.global_hotkey.clone(), l.store.settings.global_hotkey_enabled)
                 };
                 if enabled {
-                    match hotkey::register(&handle, &spec) {
+                    match hotkey::register(app.handle(), &spec) {
                         Ok(()) => app.state::<commands::HotkeyState>().0.store(true, std::sync::atomic::Ordering::SeqCst),
                         Err(e) => eprintln!("[Taskora] Không đăng ký được phím tắt toàn cục '{spec}' (có thể bị app khác chiếm): {e}"),
                     }
