@@ -69,6 +69,7 @@
 **v2.12.1 — Vá triệt để “bấm X xong còn tiến trình chạy” (lỗi từ trước v2.12.0)**
 - Nguyên nhân gốc: mọi lần chạy đều **tạo sẵn một cửa sổ Thông báo ẩn** (luôn sống để gửi thông báo tức thì). Bản ≤ v2.11.x khi bấm X thì cửa sổ chính **bị đóng/destroy**, còn cửa sổ Thông báo ẩn giữ event-loop sống → `Taskora.exe` chạy ngầm, không cửa sổ, không icon. v2.12.0 đã đổi X sang hỏi/tray/thoát nhưng vẫn còn lỗ hổng: **tray hỏng/không tạo được mà vẫn hide cửa sổ** (kể cả khi tự khởi động ẩn).
 - Bản vá: **mọi quyết định “ẩn vào khay” đều bắt buộc qua kiểm tra tray đã tạo thành công** — X (“Thu vào khay”), nút "Thu vào khay" trong modal hỏi, và “Mở ẩn trong khay khi tự khởi động”. Tray không sẵn sàng ⇒ **thoát hẳn thay vì ẩn**; tự khởi động ẩn không áp dụng ⇒ cửa sổ chính hiện ra bình thường. Không bao giờ còn tiến trình Taskora chạy vô hình.
+- **Cài đặt gọn hơn**: tách **“Khay hệ thống & phím tắt”** thành nhóm accordion riêng (sau nhóm Giao diện) — Giao diện còn 8 dòng, nhóm Khay gom Đóng cửa sổ chính · Tự khởi động · Phím tắt toàn cục; “Chế độ ADHD” và “Âm thanh khi hết giờ phiên” chuyển sang nhóm **Tập trung**. Không đổi id/hành vi, badge “N dòng” tự tính lại.
 - Chi tiết kỹ thuật & nghiệm thu: `specs/v2.12.1-hotfix-zombie.md`.
 
 **v2.12.0 — Sống ở khay hệ thống, tự khởi động, phím tắt toàn cục**
