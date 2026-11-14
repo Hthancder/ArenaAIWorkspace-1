@@ -8,9 +8,10 @@ const BatchTools = (() => {
     if(!Number.isInteger(tab.groupId)||tab.groupId<0)return null;
     try{const g=await api.tabGroups.get(tab.groupId);if(g.id!==tab.groupId||g.windowId!==tab.windowId||!Number.isInteger(tab.windowId)||tab.windowId<0||tab.pinned!==false)throw Error('group changed');return validateGroup({key:`${tab.windowId}:${tab.groupId}`,title:typeof g.title==='string'?g.title:'',color:g.color,collapsed:!!g.collapsed})}catch{return null}
   }
+  function matchesTabUrl(tab,url){return tab.pendingUrl ? tab.pendingUrl===url : tab.url===url}
   async function restoreGroups(api,items){
     const buckets=new Map(),seen=new Set();let skipped=0,failed=0,created=0;
-    async function eligible(item,tab){try{const fresh=await api.tabs.get(tab.id);return fresh.id===tab.id&&!fresh.incognito&&fresh.windowId===tab.windowId&&fresh.pinned===false&&Number.isInteger(fresh.groupId)&&fresh.groupId<0&&(fresh.url===item.url||fresh.pendingUrl===item.url)}catch{return false}}
+    async function eligible(item,tab){try{const fresh=await api.tabs.get(tab.id);return fresh.id===tab.id&&!fresh.incognito&&fresh.windowId===tab.windowId&&fresh.pinned===false&&Number.isInteger(fresh.groupId)&&fresh.groupId<0&&matchesTabUrl(fresh,item.url)}catch{return false}}
     for(const {item,tab} of items){
       if(!Number.isInteger(tab?.id)||!Number.isInteger(tab?.windowId)||tab.id<0||tab.windowId<0||seen.has(tab.id)){skipped++;continue}seen.add(tab.id);
       if(!await eligible(item,tab)){skipped++;continue}
@@ -64,7 +65,7 @@ const BatchTools = (() => {
       if(options.restoreGroups===true&&item.chromeGroup)toGroup.push({item,tab:openedTab});
       // The first new-window tab is journaled as opened before attempting optional pinning.
       if(firstInNew&&pin){
-        try{if(!Number.isInteger(firstTab?.id)||firstTab.id<0)throw Error('Không có ID tab.');const fresh=await api.tabs.get(firstTab.id);if(fresh.incognito||fresh.windowId!==windowId||(fresh.url!==item.url&&fresh.pendingUrl!==item.url))throw Error('Tab đã thay đổi.');const updated=await api.tabs.update(firstTab.id,{pinned:true});if(updated?.pinned!==true)throw Error('Không xác nhận ghim.')}catch{pinUnconfirmed++}
+        try{if(!Number.isInteger(firstTab?.id)||firstTab.id<0)throw Error('Không có ID tab.');const fresh=await api.tabs.get(firstTab.id);if(fresh.incognito||fresh.windowId!==windowId||!matchesTabUrl(fresh,item.url))throw Error('Tab đã thay đổi.');const updated=await api.tabs.update(firstTab.id,{pinned:true});if(updated?.pinned!==true)throw Error('Không xác nhận ghim.')}catch{pinUnconfirmed++}
       }
     }
     const grouped=options.restoreGroups===true?await restoreGroups(api,toGroup):{skipped:0,failed:0,created:0};

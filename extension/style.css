@@ -93,3 +93,5 @@ time[data-full]:focus::after{content:attr(data-full);position:fixed;z-index:15;l
 .toast-action{display:block;margin-top:10px;background:#fff;color:#40366f;border:0;border-radius:7px;padding:7px 10px;font-weight:700;font-size:12px}.toast-action:disabled{opacity:.55}
 
 @media(max-width:480px){.toast{right:16px;max-width:calc(100vw - 32px)}}
+
+.history-filter{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 16px;color:#697181;font-size:12px}.history-filter label{font-weight:650}.history-filter select{border:1px solid #e2e3eb;border-radius:8px;padding:8px;background:var(--surface,#fff);color:inherit}.history-filter span{color:#858b98}

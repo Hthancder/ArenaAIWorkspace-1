@@ -1,4 +1,4 @@
-# Tabspace 0.74 — bản thử nghiệm
+# Tabspace 0.75 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -84,3 +84,6 @@ Favicon dùng API favicon của Chrome (quyền `favicon`); giao diện không t
 
 ## Giới hạn quan trọng
 Đây là bản thử nghiệm đầu tiên, không phải bản hoàn chỉnh theo tài liệu thiết kế. Chưa có preset tự động, tự động đóng, chuyển workspace tự động trong một lượt, âm thanh tùy chỉnh, thông báo phủ trang web, đồng bộ hoặc các mức bảo vệ nâng cao ngoài danh sách tên miền/URL. Xóa vĩnh viễn trong thùng rác không thể hoàn tác. Chỉ lưu URL http/https; Chrome có thể không cho mở hoặc thao tác một số tab. Lưu & đóng không bảo toàn nội dung chưa lưu hay trạng thái trang; chỉ dùng với trang bạn biết an toàn. Việc nhập thay thế sẽ xóa dữ liệu đang lưu. Không dùng extension làm bản sao lưu duy nhất.
+
+### Lọc lịch sử đóng tab
+Trong Lịch sử dọn, lọc các lượt còn tab mở lại, cần kiểm tra hoặc nhập từ sao lưu; bộ lọc kết hợp với tìm kiếm. Lựa chọn hàng loạt đang ẩn vẫn được giữ và có số đếm; hãy xem kỹ trước khi xóa. “Cần kiểm tra” gồm mục chưa xử lý hoặc trạng thái/lỗi chưa rõ, không tự thử lại.
