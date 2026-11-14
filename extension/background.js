@@ -1,5 +1,5 @@
 'use strict';
-importScripts('mutation-lock.js','reminders.js','snapshots.js','auto-snapshot.js','open-grace.js','presets.js','protection.js','automation-preview.js','scheduled-rehearsal.js','recovery-point.js','batches.js','auto-close.js','auto-notifications.js','page-notice.js');
+importScripts('mutation-lock.js','reminders.js','snapshots.js','auto-snapshot.js','open-grace.js','presets.js','protection.js','automation-preview.js','scheduled-rehearsal.js','recovery-point.js','batches.js','auto-close.js','auto-notifications.js','page-notice.js','notice-state.js');
 async function ensureReminderAlarm(){try{if(!await chrome.alarms.get(ReminderTools.alarmName))await chrome.alarms.create(ReminderTools.alarmName,{periodInMinutes:1})}catch(e){console.error('Cannot schedule reminder alarm',e)}}
 chrome.runtime.onInstalled.addListener(()=>{void ensureReminderAlarm()});
 chrome.runtime.onStartup.addListener(()=>{void (async()=>{try{await chrome.alarms.clear(ReminderTools.alarmName);await ensureReminderAlarm()}catch(e){console.error('Cannot reset reminder alarm',e)}})()});
@@ -7,15 +7,16 @@ chrome.alarms.onAlarm.addListener(alarm=>{if(alarm.name!==ReminderTools.alarmNam
  // Unknown pause state is treated as paused. Read under the same lock as UI writes.
  const pauseState=await chrome.storage.local.get('automationPaused');if(pauseState.automationPaused!==undefined&&pauseState.automationPaused!==false)return;
  try{
-  const data=await chrome.storage.local.get(['presets','reminderState','remindersPaused','reminderNotifications','quietHours','quietReminderPending','deferFullscreenNotifications']);
+  const data=await chrome.storage.local.get(['presets','reminderState','remindersPaused','reminderNotifications','quietHours','quietReminderPending','deferFullscreenNotifications','noticeRead']);
   const presets=Array.isArray(data.presets)?data.presets:[],out=ReminderTools.tick(presets,data.reminderState,data.remindersPaused===true,now);
   if(out.changed)await chrome.storage.local.set({reminderState:out.state});
   const hasNew=Object.keys(out.state).some(k=>out.state[k]?.pendingAt&&!data.reminderState?.[k]?.pendingAt);
   if(hasNew&&typeof PageNotice!=='undefined')try{await PageNotice.deliver(chrome,'reminders',Date.now(),ReminderTools)}catch(e){console.error('Page notice unavailable',e)}
   const hasPending=presets.some(p=>p?.schedule?.enabled&&out.state[p.id]?.pendingAt);
+  let hasUnread=hasPending;try{if(typeof NoticeState!=='undefined')hasUnread=presets.some(p=>p?.schedule?.enabled&&out.state[p.id]?.pendingAt&&!NoticeState.isRead(data.noticeRead,NoticeState.reminderId(p.id,out.state[p.id].pendingAt)))}catch{hasUnread=false}
   let quiet;try{quiet=ReminderTools.isQuiet(data.quietHours,now)}catch{quiet=true}
   const deferred=data.quietReminderPending===true;
-  if(data.reminderNotifications!==true||!hasPending){if(deferred)await chrome.storage.local.set({quietReminderPending:false})}
+  if(data.reminderNotifications!==true||!hasUnread){if(deferred)await chrome.storage.local.set({quietReminderPending:false})}
   else if(hasNew||deferred){
    const hold=quiet||await ReminderTools.deferFullscreen(chrome,data.deferFullscreenNotifications);
    if(hold){if(!deferred)await chrome.storage.local.set({quietReminderPending:true})}

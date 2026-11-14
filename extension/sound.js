@@ -28,12 +28,13 @@ const SoundTools=(()=>{
  async function handle(api,change,locks,reminders,makeAudio,now=Date.now()){
   const event=eventFromChange(change?.oldValue,change?.newValue);if(!event||!locks||typeof locks.request!=='function')return 'ignored';
   return locks.request('tabspace:sound-event',{ifAvailable:true},async lock=>{
-   if(!lock)return 'busy';let data;try{data=await api.storage.local.get(['soundConfig','soundState','autoCloseRuns','quietHours','deferFullscreenNotifications','automationPaused'])}catch{return 'unavailable'}let c;try{c=validate(data.soundConfig)}catch{return 'invalid'}
+   if(!lock)return 'busy';let data;try{data=await api.storage.local.get(['soundConfig','soundState','autoCloseRuns','quietHours','deferFullscreenNotifications','automationPaused','noticeRead'])}catch{return 'unavailable'}let c;try{c=validate(data.soundConfig)}catch{return 'invalid'}
+   try{if(typeof NoticeState!=='undefined'&&NoticeState.isRead(data.noticeRead,NoticeState.resultId(event.id)))return 'handled'}catch{return 'invalid'}
    if(!c.enabled||!c[event.kind]||data.automationPaused!==undefined&&data.automationPaused!==false)return 'disabled';
    if(!Array.isArray(data.autoCloseRuns)||!data.autoCloseRuns.some(r=>r?.id===event.id&&r.status===event.status))return 'handled';
    const previous=data.soundState;if(previous!==undefined&&(!previous||typeof previous!=='object'||typeof previous.id!=='string'||!Number.isFinite(previous.at)||previous.at>now))return 'invalid';if(previous?.id===event.id||previous&&now-previous.at<cooldown)return 'duplicate';
    let quiet;try{quiet=reminders.isQuiet(data.quietHours,now)}catch{quiet=true}if(quiet||await reminders.deferFullscreen(api,data.deferFullscreenNotifications))return 'quiet';
-   let latest;try{latest=await api.storage.local.get(['soundConfig','autoCloseRuns','quietHours','deferFullscreenNotifications','automationPaused'])}catch{return 'unavailable'}if(['soundConfig','quietHours','deferFullscreenNotifications','automationPaused'].some(k=>JSON.stringify(latest[k])!==JSON.stringify(data[k]))||!Array.isArray(latest.autoCloseRuns)||!latest.autoCloseRuns.some(r=>r?.id===event.id&&r.status===event.status))return 'changed';
+   let latest;try{latest=await api.storage.local.get(['soundConfig','autoCloseRuns','quietHours','deferFullscreenNotifications','automationPaused','noticeRead'])}catch{return 'unavailable'}if(['soundConfig','quietHours','deferFullscreenNotifications','automationPaused','noticeRead'].some(k=>JSON.stringify(latest[k])!==JSON.stringify(data[k]))||!Array.isArray(latest.autoCloseRuns)||!latest.autoCloseRuns.some(r=>r?.id===event.id&&r.status===event.status))return 'changed';
    try{await api.storage.local.set({soundState:{id:event.id,at:now}})}catch{return 'unavailable'}
    try{await play(c,api,makeAudio);return 'played'}catch{return 'blocked'}
   });

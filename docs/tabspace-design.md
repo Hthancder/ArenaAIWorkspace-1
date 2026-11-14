@@ -311,3 +311,6 @@ Tôn trọng `prefers-reduced-motion`: bỏ hoặc giảm chuyển động khôn
 
 ### Tiến độ 0.85 — thông báo website thử nghiệm
 Opt-in, xin quyền Chrome riêng theo website, danh sách tối đa 20 origin; thử hiển thị bản tin chung cho lời nhắc mới và kết quả dọn tự động trên tab thường đang xem. Không phát bù, có giới hạn tần suất, tránh giờ yên lặng và toàn màn hình, không có thao tác nguy hiểm. Tắt/bỏ website không thu hồi quyền; website có thể quan sát DOM. Các kênh chưa dùng hệ thống trạng thái đọc chung; đây chưa phải trung tâm thông báo đầy đủ.
+
+### Tiến độ 0.86 — trạng thái đọc dùng chung từng phần
+Lời nhắc đang chờ được định danh theo preset và thời điểm chờ, kết quả theo mã lượt tự động; trong Cần chú ý có đánh dấu từng mục hoặc tất cả. Đã đọc tách biệt với xử lý và badge. Lọc thông báo hệ điều hành đang chờ và âm kết quả chưa phát; không thu hồi thứ đã gửi, không phát lại khi đánh dấu chưa đọc, kênh có thể chạy đồng thời. Chưa có lịch sử thông báo tổng quát hoặc trạng thái đọc cho các loại khác.
