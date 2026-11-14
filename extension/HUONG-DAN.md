@@ -1,4 +1,4 @@
-# Tabspace 0.77 — bản thử nghiệm
+# Tabspace 0.78 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -83,7 +83,7 @@ Các thao tác ghi dữ liệu của các trang Tabspace và popup dùng cùng m
 Favicon dùng API favicon của Chrome (quyền `favicon`); giao diện không tải trực tiếp URL favicon của website. Icon có thể dùng biểu tượng mặc định khi Chrome không có trong cache.
 
 ## Giới hạn quan trọng
-Đây là bản thử nghiệm đầu tiên, không phải bản hoàn chỉnh theo tài liệu thiết kế. Chưa có preset tự động, tự động đóng, chuyển workspace tự động trong một lượt, âm thanh tùy chỉnh, thông báo phủ trang web, đồng bộ hoặc các mức bảo vệ nâng cao ngoài danh sách tên miền/URL. Xóa vĩnh viễn trong thùng rác không thể hoàn tác. Chỉ lưu URL http/https; Chrome có thể không cho mở hoặc thao tác một số tab. Lưu & đóng không bảo toàn nội dung chưa lưu hay trạng thái trang; chỉ dùng với trang bạn biết an toàn. Việc nhập thay thế sẽ xóa dữ liệu đang lưu. Không dùng extension làm bản sao lưu duy nhất.
+Đây là bản thử nghiệm đầu tiên, không phải bản hoàn chỉnh theo tài liệu thiết kế. Chưa có preset tự động, tự động đóng, chuyển workspace không cần xác nhận, âm thanh tùy chỉnh, thông báo phủ trang web, đồng bộ hoặc các mức bảo vệ nâng cao ngoài danh sách tên miền/URL. Xóa vĩnh viễn trong thùng rác không thể hoàn tác. Chỉ lưu URL http/https; Chrome có thể không cho mở hoặc thao tác một số tab. Lưu & đóng không bảo toàn nội dung chưa lưu hay trạng thái trang; chỉ dùng với trang bạn biết an toàn. Việc nhập thay thế sẽ xóa dữ liệu đang lưu. Không dùng extension làm bản sao lưu duy nhất.
 
 ### Lọc lịch sử đóng tab
 Trong Lịch sử dọn, lọc các lượt còn tab mở lại, cần kiểm tra hoặc nhập từ sao lưu; bộ lọc kết hợp với tìm kiếm. Lựa chọn hàng loạt đang ẩn vẫn được giữ và có số đếm; hãy xem kỹ trước khi xóa. “Cần kiểm tra” gồm mục chưa xử lý hoặc trạng thái/lỗi chưa rõ, không tự thử lại.
@@ -93,3 +93,6 @@ Chọn thời gian nhắc lại từ 1 phút đến 7 ngày, cho từng lời nh
 
 ### Tránh mở trùng khi mở bản lưu
 Trong màn hình chọn mở nhóm, workspace hoặc nhiều bản lưu, có thể chọn bỏ qua URL đã mở và/hoặc chỉ mở một lần mỗi URL trong lượt. Mặc định cả hai tắt. So sánh nguyên văn cả query và fragment, chỉ xét cửa sổ thông thường; tab ẩn danh không được xét. Tab có thể thay đổi đồng thời nên không bảo đảm loại bỏ mọi tab trùng. Nếu không đọc được tab đang mở khi bật kiểm tra, lượt dừng an toàn. Kết quả ghi rõ từng mục bỏ qua, lỗi hoặc đã mở; kiểm tra Chrome trước khi thử lại mục không xác định.
+
+### Chuyển workspace trong một lượt (thử nghiệm)
+Ở Workspace chọn **Chuyển một lượt…**. Chọn tab cũ muốn lưu & đóng (mặc định không chọn), chọn nhóm lưu nằm ngoài workspace đích, rồi chọn bản lưu đích muốn mở và xác nhận. Có thể chỉ thực hiện một trong hai bước. Tab đang xem, ghim, phát âm thanh, website được bảo vệ và tab đã thay đổi được giữ lại. Nếu thiếu nhóm đích hoặc bước đóng không hoàn tất/không rõ, không mở workspace đích. Tabspace lưu bản sao và nhật ký trước khi đóng; có thể xem lại trong Lịch sử dọn. Không khôi phục nội dung trang chưa lưu. Chỉ so sánh URL nguyên văn; workspace không cô lập tab. Không đóng hoặc mở tự động theo lịch. Kiểm tra kết quả và Chrome trước khi thử lại khi kết quả không rõ. Lối chuyển từng bước vẫn có sẵn.
