@@ -65,6 +65,7 @@ pub fn toggle_main(app: &AppHandle) {
             }
             _ => {
                 let _ = w.show();
+                let _ = w.unminimize();
                 let _ = w.set_focus();
             }
         }

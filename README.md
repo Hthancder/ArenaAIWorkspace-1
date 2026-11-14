@@ -205,6 +205,7 @@
 ```bash
 # Yêu cầu: Rust stable + Node 20 + Tauri CLI
 cargo test --manifest-path src-tauri/Cargo.toml   # test parser + model + storage
+npm i --no-save jsdom@24 && node scripts/smoke.mjs  # smoke frontend (jsdom, 26 assertion)
 npm install -g @tauri-apps/cli@^2
 tauri dev          # chạy thử (hot reload frontend)
 tauri build        # → src-tauri/target/release/Taskora.exe (+ NSIS installer)

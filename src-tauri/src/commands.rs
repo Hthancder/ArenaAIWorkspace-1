@@ -1787,8 +1787,15 @@ pub fn update_settings(
 #[tauri::command]
 pub fn reset_settings(app: AppHandle, state: State<'_, AppState>) -> Snapshot {
     let mut i = state.lock();
+    let old_spec = i.store.settings.global_hotkey.clone(); // chụp trước khi ghi đè
     i.store.settings = crate::models::Settings::default();
     AppState::commit(&mut i);
+    // Phím tắt toàn cục: đồng bộ LẠI với OS theo mặc định — không để UI nói dối
+    // (settings mặc định enabled=true/Ctrl+Alt+T nhưng registry vẫn giữ tổ hợp cũ).
+    crate::hotkey::unregister(&app, &old_spec);
+    let default_spec = i.store.settings.global_hotkey.clone();
+    let ok = crate::hotkey::register(&app, &default_spec).is_ok();
+    set_hotkey_active(&app, ok);
     if let Some(w) = app.get_webview_window("main") {
         if let Err(e) = crate::fx::apply_effect(&w, true, 110) {
             eprintln!("[Taskora] Không bật lại Acrylic: {e}");

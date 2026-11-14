@@ -3,7 +3,7 @@ import { $, $$, addDaysLocalISO, esc, fmtViDate, fmtViTime, hi, invoke, localISO
 import { F, S, VIEW_META, dueChip, dueDiffDays, isCompleted, isDeleted, repeatMeta, s_isAdhd, subtaskMeta, summarizeRule, tagsMeta, taskById, viewKey } from "./state.js";
 import { notify } from "./notify.js";
 import { renderStats } from "./stats.js";
-import { refreshStoragePanel } from "./settings.js";
+import { refreshStoragePanel, syncAutostartControl } from "./settings.js";
 import { openRecurrenceModal } from "./recurrence.js";
 import { openBrainDump, renderNextUp } from "./adhd.js";
 import { go } from "./snapshot.js";
@@ -80,7 +80,7 @@ export function renderViewHead() {
   $("#view-stats").classList.toggle("active", isStats);
   $("#view-settings").classList.toggle("active", isSettings);
   if (isStats) { setCrumb("chart-bar", "Thống kê", S.snap.counts.active); return; }
-  if (isSettings) { setCrumb("gear", "Cài đặt", ""); refreshStoragePanel(); return; }
+  if (isSettings) { setCrumb("gear", "Cài đặt", ""); refreshStoragePanel(); syncAutostartControl(); return; }
   const meta = crumbFor(view);
   $("#crumb-use").setAttribute("href", "#i-" + meta.icon);
   $("#crumb-text").textContent = meta.title;

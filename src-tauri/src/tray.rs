@@ -96,8 +96,6 @@ pub fn refresh(app: &AppHandle, counts: &Counts) {
     let text = header_text(counts);
     if let Some(state) = app.try_state::<TrayState>() {
         let _ = state.header.set_text(&text);
-    }
-    if let Some(state) = app.try_state::<TrayState>() {
         let _ = state.tray.set_tooltip(Some(text.as_str()));
     }
 }

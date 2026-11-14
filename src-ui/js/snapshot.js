@@ -30,7 +30,8 @@ export function postSnap(snap) {
   if (s.settings.adhd_mode) startAdhdClock(); else stopAdhdClock();
   setupAdhdPlaceholder();
   syncSettingsControls(s);
-  syncAutostartControl();
+  // registry autostart là OS-backed — chỉ đọc khi màn Cài đặt đang mở (đọc theo mỗi mutation tốn IPC)
+  if (S.view && S.view.type === "settings") syncAutostartControl();
   refreshFxStatus();
   if (markTransparencyChecked()) {
     (async () => {
