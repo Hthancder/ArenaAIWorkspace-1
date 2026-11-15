@@ -66,6 +66,12 @@
 - Đồng hồ trong app chính và cửa sổ Đồng hồ **không thể lệch bản ghi đè cũ**: mọi chuyển phase đọc lại trạng thái thật từ engine (wall-clock), kể cả khi bạn bấm Reset đúng khoảnh khắc đồng hồ về 0.
 - **Nhắc mắt 20-20-20 cũng hiện trong cửa sổ Đồng hồ** (pill nổi, tự ẩn, tôn trọng tuỳ chọn chuông) — không chỉ trong overlay chính.
 
+**v2.12.2 — Vá “nhóm Cài đặt thu gọn vẫn hở ~20px”**
+- Nguyên nhân gốc: lớp `.settings-group-inner` trước đây có **padding dọc 6px+12px** và **border-top 1px** nằm trong hộp `box-sizing: border-box`. Khi thu gọn (`grid-template-rows: 0fr`), chiều cao tối thiểu của hộp bị “sàn” ở padding+border ≈ **19–20px** (track `0fr` có min `auto` = phần đóng góp tối thiểu của item) ⇒ nhóm đóng nhưng **vẫn lộ một khe ~20px** — thấy phần trên của dòng đầu tiên (tiêu đề dòng + mép nút chọn). Áp dụng cho **mọi nhóm Cài đặt**, không riêng “Khay hệ thống & phím tắt”.
+- Bản vá: khi `is-collapsed`, `.settings-group-inner` về **padding dọc = 0, border-width = 0** (chuyển động cùng `grid-template-rows`, tôn trọng `prefers-reduced-motion`) ⇒ nhóm đóng **khít hoàn toàn** với tiêu đề, nền kính liền một khối. Không đổi cấu trúc HTML, không đổi hành vi click.
+- Ghi chú kiểm chứng: cơ chế CSS đã được phân tích và đo trên bản dựng; phần nghiệm thu hình ảnh thực tế cần máy Windows có WebView2 mới (nút thu gọn/mở rộng từng nhóm).
+- Chi tiết: `specs/v2.12.2-accordion-sliver.md`.
+
 **v2.12.1 — Vá triệt để “bấm X xong còn tiến trình chạy” (lỗi từ trước v2.12.0)**
 - Nguyên nhân gốc: mọi lần chạy đều **tạo sẵn một cửa sổ Thông báo ẩn** (luôn sống để gửi thông báo tức thì). Bản ≤ v2.11.x khi bấm X thì cửa sổ chính **bị đóng/destroy**, còn cửa sổ Thông báo ẩn giữ event-loop sống → `Taskora.exe` chạy ngầm, không cửa sổ, không icon. v2.12.0 đã đổi X sang hỏi/tray/thoát nhưng vẫn còn lỗ hổng: **tray hỏng/không tạo được mà vẫn hide cửa sổ** (kể cả khi tự khởi động ẩn).
 - Bản vá: **mọi quyết định “ẩn vào khay” đều bắt buộc qua kiểm tra tray đã tạo thành công** — X (“Thu vào khay”), nút "Thu vào khay" trong modal hỏi, và “Mở ẩn trong khay khi tự khởi động”. Tray không sẵn sàng ⇒ **thoát hẳn thay vì ẩn**; tự khởi động ẩn không áp dụng ⇒ cửa sổ chính hiện ra bình thường. Không bao giờ còn tiến trình Taskora chạy vô hình.

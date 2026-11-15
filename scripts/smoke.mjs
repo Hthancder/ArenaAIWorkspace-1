@@ -76,7 +76,7 @@ const ok = (name, cond) => { console.log((cond ? "PASS" : "FAIL") + " " + name);
 
 ok("không có .fatal overlay", !$(".fatal"));
 ok("snapshot đã được gọi", calls.some(([c]) => c === "snapshot"));
-ok("brand-ver = v2.12.1", ($(".brand-ver")?.textContent || "") === "v2.12.1");
+ok("brand-ver = v2.12.2", ($(".brand-ver")?.textContent || "") === "v2.12.2");
 const trayGroup = document.querySelector("#sg-tray");
 ok("nhóm Khay & phím tắt tồn tại", !!trayGroup);
 ok("nhóm Khay chứa seg đóng cửa sổ chính", !!trayGroup?.contains(document.querySelector("#set-close-behavior")));
