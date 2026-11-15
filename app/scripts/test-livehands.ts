@@ -391,5 +391,101 @@ console.log('free play: neutral pose hands appear with no motion at all')
   check('hands leave when idle', p.L === null && p.R === null)
 }
 
+console.log('expression: velocity depth, accent roll, rolled chords (opts.expression)')
+{
+  liveHands.reset()
+  const tpl = posesOf()
+  const p = posesOf()
+  const r = p.R!
+  const refresh = () => {
+    refreshPose(p.L!, tpl.L!)
+    refreshPose(r, tpl.R!)
+  }
+  const ex = baseOpts({ expression: 1 })
+  const zOfPressed = () => {
+    let f = -1
+    for (let i = 0; i < 5; i++) if (r.press[i] > 0.5) f = i
+    return f >= 0 ? r.fingers[f][3][2] : NaN
+  }
+
+  // Velocity depth: a soft press sinks less than a hard press.
+  const soft = audioEngine.triggerKey(72, 0.25)
+  frames(p, 30, ex, refresh)
+  const zSoft = zOfPressed()
+  soft?.release()
+  frames(p, 70, ex, refresh)
+  const hard = audioEngine.triggerKey(72, 0.95)
+  frames(p, 30, ex, refresh)
+  const zHard = zOfPressed()
+  hard?.release()
+  check('hard press sinks deeper than soft', zHard < zSoft - 0.02, `${zHard} vs ${zSoft}`)
+
+  // Accent roll: on a strong note the palm rotates around the forearm
+  // axis (bases move relative to the wrist; lengths unchanged).
+  frames(p, 70, ex, refresh)
+  const wrist0 = [...r.wrist]
+  const rel0 = [tpl.R!.bases[2][0] - tpl.R!.wrist[0], tpl.R!.bases[2][1] - tpl.R!.wrist[1], tpl.R!.bases[2][2] - tpl.R!.wrist[2]]
+  const acc = audioEngine.triggerKey(72, 0.95)
+  frames(p, 14, ex, refresh)
+  const rel1 = [r.bases[2][0] - wrist0[0], r.bases[2][1] - wrist0[1], r.bases[2][2] - wrist0[2]]
+  acc?.release()
+  const dot = rel0[0] * rel1[0] + rel0[1] * rel1[1] + rel0[2] * rel1[2]
+  const m0 = Math.hypot(...rel0)
+  const m1 = Math.hypot(...rel1)
+  check('accent rolls the hand (palm rotates)', Math.abs(dot / (m0 * m1) - 1) > 1e-5 && m1 > 0.5 * m0, `cos=${dot / (m0 * m1)}`)
+  const bonesA = boneLengths(r)
+  let rollErr = 0
+  bonesA.forEach((b, i) => {
+    const ref = boneLengths(tpl.R!)[i]
+    rollErr = Math.max(rollErr, Math.abs(b - ref) / ref)
+  })
+  check('roll preserves bone lengths', rollErr < 0.01, `${(rollErr * 100).toFixed(2)}%`)
+
+  // Rolled chord: the second finger of a near-simultaneous pair strikes later.
+  liveHands.reset()
+  const p2 = posesOf()
+  const r2 = p2.R!
+  const refresh2 = () => {
+    refreshPose(p2.L!, tpl.L!)
+    refreshPose(r2, tpl.R!)
+  }
+  const c1 = audioEngine.triggerKey(67, 0.8)
+  const c2 = audioEngine.triggerKey(72, 0.8) // same tick → rolled
+  frames(p2, 3, ex, refresh2)
+  const deep = r2.press.map((v, i) => (v > 0.5 ? r2.fingers[i][3][2] : NaN))
+  const pressed = deep.filter((z) => Number.isFinite(z)).sort((a, b) => a - b)
+  c1?.release()
+  c2?.release()
+  check('rolled chord: two fingers strike', pressed.length === 2, JSON.stringify(deep))
+  if (pressed.length === 2) {
+    check('second finger strikes after the first', pressed[1] - pressed[0] > 0.015, `${pressed[1] - pressed[0]}`)
+  }
+
+  // Playback expression: the model's own press dips deeper on loud notes.
+  liveHands.reset()
+  const p3 = posesOf()
+  const r3 = p3.R!
+  const demand = () => {
+    refreshPose(p3.L!, tpl.L!)
+    refreshPose(r3, tpl.R!)
+    r3.press[2] = 1 // the model plays finger 2
+  }
+  const loud = baseOpts({ playing: true, expression: 1, expressAt: () => 0.95 })
+  frames(p3, 40, loud, demand)
+  const zLoud = r3.fingers[2][3][2]
+  liveHands.reset()
+  const p4 = posesOf()
+  const r4 = p4.R!
+  const demand4 = () => {
+    refreshPose(p4.L!, tpl.L!)
+    refreshPose(r4, tpl.R!)
+    r4.press[2] = 1
+  }
+  const softPlay = baseOpts({ playing: true, expression: 1, expressAt: () => 0.2 })
+  frames(p4, 40, softPlay, demand4)
+  const zSoftPlay = r4.fingers[2][3][2]
+  check('playback accent presses deeper', zLoud < zSoftPlay - 0.02, `${zLoud} vs ${zSoftPlay}`)
+}
+
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} FAILURES`)
 process.exit(failures === 0 ? 0 : 1)

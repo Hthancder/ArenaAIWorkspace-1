@@ -148,7 +148,8 @@
     "handsSmoothness": "Smoothness",
     "handsMicroMotion": "Micro-motion",
     "handsFollowInput": "Hands follow your playing",
-    "handsKeystrike": "Keystrike tap"
+    "handsKeystrike": "Keystrike tap",
+    "handsExpression": "Expression"
   },
   "particleBlending": {
     "alpha": "Normal",

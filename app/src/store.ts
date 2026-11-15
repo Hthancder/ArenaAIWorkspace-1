@@ -435,6 +435,9 @@ export type Settings = {
   handsFollowInput: boolean
   // Strength of the per-press strike tap (0..1).
   handsKeystrike: number
+  // Expression layer ("có hồn", controlled): velocity-scaled strikes,
+  // accent arm roll, rolled chords, register posture. 0 = off.
+  handsExpression: number
   keyLabelsEnabled: boolean
   keyLabelsMode: 'c' | 'white' | 'all'   // which keys carry a label
   keyLabelFormat: PitchLabelFormat
@@ -787,6 +790,7 @@ export const defaultSettings: Settings = {
   handsMicroMotion: 0.5,
   handsFollowInput: true,
   handsKeystrike: 0.6,
+  handsExpression: 0.65,
   keyLabelsEnabled: false,
   keyLabelsMode: 'c',
   keyLabelFormat: 'letterOctave',

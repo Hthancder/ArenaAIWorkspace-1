@@ -35,18 +35,21 @@ export type HandsTimeMap = {
 /**
  * The song's notes on the TIMELINE clock (`audioEngine.currentSongTime()`): note times go through the speed map and the
  * clip offset, notes outside the trim window are dropped, pitches get the global transpose. A note's own hand / finger
- * (selection card) is passed on and kept; the rest are planned by the runtime.
+ * (selection card) is passed on and kept; the rest are planned by the runtime. Velocity rides along for the expression
+ * layer (accents press harder) — the runtime's synth ignores it.
  */
-export function songHandNotes(song: ParsedSong, map: HandsTimeMap): HandsNote[] {
+export type SongHandsNote = HandsNote & { velocity: number }
+
+export function songHandNotes(song: ParsedSong, map: HandsTimeMap): SongHandsNote[] {
   const tl = (t: number) => map.midiOffsetSec + midiToTimeline(map.speedMap, t)
-  const notes: HandsNote[] = []
+  const notes: SongHandsNote[] = []
   for (const n of song.notes) {
     if (n.time < map.trimStartSec || n.time >= map.trimEndSec) continue
     const midi = n.midi + map.transpose
     if (midi < MIDI_MIN || midi > MIDI_MAX) continue
     const on = tl(n.time)
     const off = Math.max(on, tl(Math.min(n.time + n.duration, map.trimEndSec)))
-    notes.push({ midi, on, off, hand: n.hand ?? null, finger: n.finger ?? null })
+    notes.push({ midi, on, off, hand: n.hand ?? null, finger: n.finger ?? null, velocity: n.velocity })
   }
   notes.sort((a, b) => a.on - b.on || a.midi - b.midi)
   return notes

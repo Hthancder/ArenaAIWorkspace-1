@@ -832,6 +832,7 @@ _PRACTICE = {
     "Micro-motion": "Chuyển động vi mô",
     "Hands follow your playing": "Tay bám theo bạn chơi",
     "Keystrike tap": "Nhát gõ phím",
+    "Expression": "Biểu cảm",
 }
 for _k, _v in _PRACTICE.items():
     T.setdefault(_k, _v)

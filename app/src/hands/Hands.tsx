@@ -39,6 +39,7 @@ const HAND_KEYS = [
   'handsMicroMotion',
   'handsFollowInput',
   'handsKeystrike',
+  'handsExpression',
   'bloomEnabled',
   'midiOffsetSec',
   'midiSpeedAutomation',
@@ -176,27 +177,54 @@ export function Hands() {
       const opts: LiveHandsOpts = {
         playing,
         keystrike: s.handsKeystrike,
+        expression: s.handsExpression,
         // Natural fingering: the motion plan's (hand, finger) for the
-        // song note nearest this key and the playhead.
+        // matching song note. Falls are adapted to — an IMMINENT note
+        // ("nốt đang rơi") wins over one just passed, so the fingers
+        // prepare for what is coming.
         resolvePlan: (midi) => {
           const rm = motionRef.current
           if (!rm || !rm.motion.plan) return null
-          let best = -1
-          let bestD = Infinity
+          let soon = -1
+          let soonD = Infinity
+          let any = -1
+          let anyD = Infinity
           for (let i = 0; i < rm.notes.length; i++) {
             const n = rm.notes[i]
             if (n.midi !== midi) continue
             const d = Math.abs(n.on - t)
-            if (d < bestD) {
-              bestD = d
-              best = i
+            const imminent = n.on >= t - 0.35 && n.on <= t + 1.4
+            if (imminent && d < soonD) {
+              soonD = d
+              soon = i
+            }
+            if (d < anyD) {
+              anyD = d
+              any = i
             }
           }
-          if (best < 0 || bestD > 2.5) return null
-          const hand = rm.motion.plan.hand[best]
-          const finger = rm.motion.plan.finger[best]
+          const idx = soon >= 0 ? soon : anyD <= 2.5 ? any : -1
+          if (idx < 0) return null
+          const hand = rm.motion.plan.hand[idx]
+          const finger = rm.motion.plan.finger[idx]
           if (!hand || !(finger >= 1 && finger <= 5)) return null
           return { hand, finger: finger - 1 }
+        },
+        // Expression: the velocity of the song note this finger plays
+        // right now — accents press deeper, with a touch of arm roll.
+        expressAt: (hand, finger) => {
+          const rm = motionRef.current
+          if (!rm) return null
+          let best: number | null = null
+          for (let i = 0; i < rm.notes.length; i++) {
+            const n = rm.notes[i]
+            if (t < n.on - 0.08 || t > n.off + 0.05) continue
+            const h = rm.motion.plan.hand[i] ?? n.hand
+            const fg = rm.motion.plan.finger[i] ?? n.finger
+            if (h !== hand || fg !== finger + 1) continue
+            best = best === null ? n.velocity : Math.max(best, n.velocity)
+          }
+          return best
         },
         // A hand that is off stage (runtime: "rests in the lap") comes up
         // from a mid-run pose sample of that hand when the user needs it.

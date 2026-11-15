@@ -148,7 +148,8 @@
     "handsSmoothness": "滑らかさ",
     "handsMicroMotion": "マイクロモーション",
     "handsFollowInput": "手を演奏に合わせる",
-    "handsKeystrike": "キーストローク"
+    "handsKeystrike": "キーストローク",
+    "handsExpression": "表現"
   },
   "particleBlending": {
     "alpha": "通常",
