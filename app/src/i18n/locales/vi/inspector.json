@@ -146,7 +146,8 @@
     "pcGlyphPreset": "Bố cục nhãn phím",
     "handsHumanize": "Chuyển động tự nhiên",
     "handsSmoothness": "Độ mượt",
-    "handsMicroMotion": "Chuyển động vi mô"
+    "handsMicroMotion": "Chuyển động vi mô",
+    "handsFollowInput": "Tay bám theo bạn chơi"
   },
   "particleBlending": {
     "alpha": "Pháp tuyến",

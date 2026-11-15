@@ -58,8 +58,6 @@ class PracticeController {
   private waitTimer: number | null = null
   private calibrationRun: CalibrationRun | null = null
   private calibrationTaps: number[] = []
-  /** True while we trigger preview notes — their live events must not count. */
-  private suppressInput = false
   private rafEndCheck = 0
 
   // ── wait-mode flow clock (TL_audio) ────────────────────────────────
@@ -221,11 +219,12 @@ class PracticeController {
   private freezeStep(): void {
     this.flowFrozen = true
     audioEngine.flowSet(this.flowT)
-    // "Nghe trước": softly sound the required pitches as the stop cue
-    // (the keys also glow via the engine's key listeners).
-    this.suppressInput = true
-    for (const midi of usePractice.getState().wait.required) audioEngine.triggerKey(midi, 0.12)
-    this.suppressInput = false
+    // "Nghe trước": a short audible cue for the required pitches.
+    // `triggerPreview` (NOT `triggerKey`): auto-stops and is not added to
+    // liveNotes — an un-released triggerKey used to hold the key forever,
+    // drawing an ever-growing live bar and piling up sampler voices
+    // (2026-11-15 bug: "phím tự giữ, vệt note dài, lag").
+    for (const midi of usePractice.getState().wait.required) audioEngine.triggerPreview(midi, 0.12, 220)
     this.armAutoAdvance()
   }
 
@@ -306,8 +305,6 @@ class PracticeController {
 
   /** Handle one live note-on (user input). */
   handleNoteOn(midi: number): void {
-    if (this.suppressInput) return
-
     // Calibration capture outranks everything else.
     if (this.calibrationRun) {
       this.calibrationTaps.push(performance.now())

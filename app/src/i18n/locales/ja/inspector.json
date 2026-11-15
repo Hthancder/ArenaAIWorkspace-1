@@ -146,7 +146,8 @@
     "pcGlyphPreset": "キーラベルの配列",
     "handsHumanize": "モーションを人間らしく",
     "handsSmoothness": "滑らかさ",
-    "handsMicroMotion": "マイクロモーション"
+    "handsMicroMotion": "マイクロモーション",
+    "handsFollowInput": "手を演奏に合わせる"
   },
   "particleBlending": {
     "alpha": "通常",

@@ -146,7 +146,8 @@
     "pcGlyphPreset": "Key label layout",
     "handsHumanize": "Humanize motion",
     "handsSmoothness": "Smoothness",
-    "handsMicroMotion": "Micro-motion"
+    "handsMicroMotion": "Micro-motion",
+    "handsFollowInput": "Hands follow your playing"
   },
   "particleBlending": {
     "alpha": "Normal",

@@ -1520,6 +1520,7 @@ function LookPanel({ leaving }: { leaving: boolean }) {
                 <BoundSwitchRow label={t('row.handsHumanize')} settingKey="handsHumanizeEnabled" />
                 <BoundSliderRow label={t('row.handsSmoothness')} settingKey="handsSmoothness" min={0} max={1} step={0.01} />
                 <BoundSliderRow label={t('row.handsMicroMotion')} settingKey="handsMicroMotion" min={0} max={1} step={0.01} />
+                <BoundSwitchRow label={t('row.handsFollowInput')} settingKey="handsFollowInput" />
                 <BoundSwitchRow label={t('row.handsMotionBlur')} settingKey="handsMotionBlur" />
                 <BoundSliderRow label={t('row.handsBlurSamples')} settingKey="handsBlurSamples" min={2} max={16} step={1} />
               </Section>

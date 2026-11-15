@@ -429,6 +429,10 @@ export type Settings = {
   handsHumanizeEnabled: boolean
   handsSmoothness: number
   handsMicroMotion: number
+  // Hands follow the user's manual playing (mouse / PC keyboard / MIDI):
+  // fingers tap the pressed keys, the wrist drifts toward them. Live-only
+  // (exports always render the pure song motion).
+  handsFollowInput: boolean
   keyLabelsEnabled: boolean
   keyLabelsMode: 'c' | 'white' | 'all'   // which keys carry a label
   keyLabelFormat: PitchLabelFormat
@@ -779,6 +783,7 @@ export const defaultSettings: Settings = {
   handsHumanizeEnabled: true,
   handsSmoothness: 0.5,
   handsMicroMotion: 0.5,
+  handsFollowInput: true,
   keyLabelsEnabled: false,
   keyLabelsMode: 'c',
   keyLabelFormat: 'letterOctave',

@@ -14,6 +14,7 @@ import {
   type HumanizeParams,
   type HumanizeScratch,
 } from './humanize'
+import { liveHands } from './liveHands'
 import { getExportFps } from '../scene/exportBridge'
 import {
   BLUR_MIN_PX, BLUR_PX_STEP, BLUR_SHUTTER, HandsBlurPass, PREVIEW_FRAME_SECONDS, blurBridge, blurOffsets, getMotionBlur, handBounds,
@@ -35,6 +36,7 @@ const HAND_KEYS = [
   'handsHumanizeEnabled',
   'handsSmoothness',
   'handsMicroMotion',
+  'handsFollowInput',
   'bloomEnabled',
   'midiOffsetSec',
   'midiSpeedAutomation',
@@ -78,6 +80,7 @@ export function Hands() {
   }
 
   useEffect(() => retainHandsRuntime(), [])
+  useEffect(() => liveHands.attach(), [])
 
   useEffect(() => {
     const mesh = createMeshHands(group)
@@ -153,6 +156,10 @@ export function Hands() {
     // freezing the whole visual layer.
     try {
       const poses = humanizePoses(src, t, params, scratchAt(0))
+      // Live-input overlay: the hands follow the user's manual playing
+      // (mouse / PC keyboard / MIDI). Live-only state — no-op on exports.
+      const playing = audioEngine.isPlaying()
+      if (s.handsFollowInput) liveHands.update(poses, playing)
       mesh.update(poses, false)
 
       // Motion blur: sub-poses at trailing times of ONE nominal frame of song time (export: 1/fps, preview: 1/60 s, times the
@@ -169,9 +176,12 @@ export function Hands() {
       const px = shift * (SIZE.y / (2 * dist * Math.tan(THREE.MathUtils.degToRad(persp.fov) / 2)))
       if (px < BLUR_MIN_PX) return
       const n = Math.min(Math.round(s.handsBlurSamples), Math.max(2, Math.ceil(px / BLUR_PX_STEP)))
-      const sub: HandPoses[] = blurOffsets(n, BLUR_SHUTTER, dt).map((o, i) =>
-        o === 0 ? poses : humanizePoses(src, Math.max(0, t + o), params, scratchAt(3 + i)),
-      )
+      const sub: HandPoses[] = blurOffsets(n, BLUR_SHUTTER, dt).map((o, i) => {
+        if (o === 0) return poses
+        const sp = humanizePoses(src, Math.max(0, t + o), params, scratchAt(3 + i))
+        if (s.handsFollowInput) liveHands.applyToPoses(sp, playing)
+        return sp
+      })
       camera.updateMatrixWorld()
       blurBridge.plan = {
         count: n,

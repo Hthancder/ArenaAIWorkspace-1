@@ -95,3 +95,14 @@ Triệu chứng: bật bàn tay → tay không hiện, nốt ngừng rơi, phím
 - **Sửa**: allocHand/copyPose/blendHand = 3 thumbRef (fallback `?? bases`), press `?? 0`; sanitize params (NaN → 0.5) chống persisted-settings cũ; **try/catch cuối trong useFrame** của Hands — lỗi thì degrade về pose gốc + console.warn, KHÔNG được để frame loop chết nữa.
 - **Phòng ngừa**: test-humanize mock shape theo runtime thật (thumbRef 3) + contract test `thumbRef[2]` readable trên cả 2 path — ALL TESTS PASSED.
 - Bài học: HAND POSE SHAPE là contract với meshHand — đổi/mới cấp phát buffer phải khớp runtime (`hands.js` handAt) chứ không phải d.ts (d.ts để `Vec3[]` không nêu độ dài).
+
+## Hands follow live input + wait-mode held-key fix (2026-11-15)
+- **Bug "phím tự giữ / vệt note dài / lag" ở Chờ nốt**: preview mỗi bước gọi `triggerKey` KHÔNG bao giờ release → live note vĩnh viễn (key glow giữ, thanh nốt live dài ra vô hạn, voice tích tụ). Sửa: dùng `triggerPreview(midi, 0.12, 220)` (tự nhả, không vào liveNotes, không emit bus).
+- **Tính năng "tay bám theo người dùng"** (`src/hands/liveHands.ts`, toggle `handsFollowInput` mặc định BẬT): mọi thao tác thủ công (chuột trên bàn phím ảo, PC keyboard, MIDI) đi qua `triggerKey` → live bus → overlay:
+  - phím bấm claim (tay, ngón) dính khi giữ; ngón TAP xuống khi bấm, nhấc lên khi nhả;
+  - cổ tay trôi tới trọng tâm các phím đang bấm (clamp ±1.1), khuỷu bám 0.35×;
+  - `press[]`: khi đang phát = song || live; khi KHÔNG phát (Chờ nốt/tạm dừng) = thuần live → ngón "được yêu cầu" (pose frozen có press=1) **lơ lửng trên phím tới khi người dùng bấm thật**;
+  - smoothing frame-rate-independent (1−exp(−dt/τ)) — attack 55ms/release 140ms/wrist 90ms — không nhảy biên (lift cũng smooth, binding chỉ giải phóng khi tap < 0.02);
+  - **EXPORT LUÔN thuần**: update/applyTo no-op + reset khi `isExporting()` (state live là history-dependent — không được vào render pipeline export).
+- Blur sub-poses cũng apply overlay (vệt khớp pose chính).
+- Test: `scripts/test-livehands.ts` (vite-node + shim Web Audio tối giản + fake clock) — 15 checks ALL PASSED; test-practice/test-humanize vẫn ALL PASSED.
