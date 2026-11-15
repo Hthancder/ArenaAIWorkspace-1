@@ -8,8 +8,11 @@ const PopupBulk=(()=>{
  }
  function same(old,current){return !!current&&current.id===old.id&&current.incognito===false&&current.windowId===old.windowId&&current.url===old.url&&(!current.pendingUrl||current.pendingUrl===old.url)}
  function reason(tab){return tab.active?'Đang xem':tab.pinned?'Đã ghim':tab.audible?'Đang phát âm thanh':tab.discarded?'Đã nghỉ':''}
- async function preview(api,raw,protection){
-  const plan=validPlan(raw),out=[];for(const original of plan){let current;try{current=await api.tabs.get(original.id)}catch{out.push({tab:original,reason:'Tab không còn tồn tại'});continue}if(!same(original,current)){out.push({tab:original,reason:'Tab đã thay đổi hoặc không còn khả dụng'});continue}const status=reason(current);if(status){out.push({tab:original,reason:status});continue}if(await protection.check(api,original.url)){out.push({tab:original,reason:'Website được bảo vệ'});continue}out.push({tab:original,reason:''})}return out;
+ // Grace never blocks a manual sleep; it only marks rows that need an explicit check in the preview.
+ async function preview(api,raw,protection,grace){
+  const plan=validPlan(raw),out=[],notes=new Map();
+  if(grace)for(const row of await grace.notes(api,plan,Date.now()))notes.set(row.tab.id,row.note);
+  for(const original of plan){let current;try{current=await api.tabs.get(original.id)}catch{out.push({tab:original,reason:'Tab không còn tồn tại',note:''});continue}if(!same(original,current)){out.push({tab:original,reason:'Tab đã thay đổi hoặc không còn khả dụng',note:''});continue}const status=reason(current);if(status){out.push({tab:original,reason:status,note:''});continue}if(await protection.check(api,original.url)){out.push({tab:original,reason:'Website được bảo vệ',note:''});continue}out.push({tab:original,reason:'',note:notes.get(original.id)||''})}return out;
  }
  async function sleep(api,raw,protection,discard){
   const plan=validPlan(raw),results=[];for(let i=0;i<plan.length;i++){const tab=plan[i];let fresh;try{fresh=await api.tabs.get(tab.id)}catch{results.push({tab,status:'skipped'});continue}if(!same(tab,fresh)||reason(fresh)){results.push({tab,status:'skipped'});continue}
