@@ -1,0 +1,219 @@
+{
+  "confirm": {
+    "defaultConfirm": "続ける",
+    "defaultCancel": "キャンセル"
+  },
+  "alert": {
+    "acknowledge": "閉じる"
+  },
+  "export": {
+    "ariaLabel": "書き出し設定",
+    "title": "書き出し",
+    "unsupported": "このブラウザーでは動画の書き出しを利用できません。音声の書き出しは利用できます。",
+    "format": {
+      "label": "形式",
+      "videoAudio": "動画と音声",
+      "videoOnly": "動画のみ",
+      "audioOnly": "音声のみ"
+    },
+    "resolution": "解像度",
+    "fps": "フレームレート",
+    "fps30": "30 fps",
+    "fps60": "60 fps",
+    "quality": "画質",
+    "estimatedSize": "推定サイズ",
+    "estimatedSizeValue": "約{{mb}} MB",
+    "playSoundOnComplete": "完了したら音を鳴らす",
+    "test": "音を試す",
+    "cancel": "キャンセル",
+    "submit": "書き出す",
+    "codec": {
+      "label": "コーデック",
+      "h264": "H.264 + AAC（MP4）— 互換性が最も高い",
+      "vp9": "VP9 + Opus（WebM）— オープンな形式",
+      "av1": "AV1 + Opus（WebM）— オープン、最小サイズ、低速",
+      "checking": "対応コーデックを確認中"
+    },
+    "preflight": {
+      "noWebCodecs": "動画の書き出しには WebCodecs が必要です（Chrome / Edge / Safari 16.4 以降）。このブラウザーでも「音声のみ（WAV）」は書き出せます。",
+      "videoUnsupported": "このブラウザーでは {{codec}} の映像を {{width}}×{{height}}・{{fps}} fps でエンコードできません。{{alternatives}} を試すか、解像度やフレームレートを下げてください。",
+      "audioUnsupported": "このブラウザーでは、{{codec}} の書き出しに必要な {{audioCodec}} の音声をエンコードできません。{{alternatives}} を試すか、「動画のみ」か「音声のみ（WAV）」で書き出してください。",
+      "or": " または "
+    },
+    "advanced": "詳細設定",
+    "advancedSummaryAudio": "WAV",
+    "qualityHint": "動画ビットレート {{mbps}} Mbps。「高」はエッジと光彩をきれいにするため、ビットレートを1.5倍にします。",
+    "fileFormat": "{{codec}} · {{res}} · {{fps}} fps",
+    "wavMeta": "WAV · 44.1 kHz"
+  },
+  "progress": {
+    "note": "完了するまでこのタブを開いたままにしてください。",
+    "cancel": "書き出しをキャンセル",
+    "eta": "残り{{eta}}",
+    "etaSeconds": "{{count}}秒",
+    "etaMinutes": "{{min}}分{{sec}}秒"
+  },
+  "drop": {
+    "couldNotOpenProjectTitle": "プロジェクトを開けませんでした",
+    "couldNotOpenProjectMessage": "「{{name}}」を読み込めませんでした。\n\n{{detail}}",
+    "couldNotLoadMidiTitle": "MIDIを読み込めませんでした",
+    "couldNotLoadMidiMessage": "「{{name}}」を解析できませんでした。\n\n{{detail}}",
+    "couldNotLoadAudioTitle": "音声を読み込めませんでした",
+    "unsupportedTitle": "未対応のファイル形式です",
+    "unsupportedMessage": "「{{name}}」は対応していない形式です。.nfz プロジェクト、.mid / .midi、または .mp3 / .wav の音声ファイルをドロップしてください。",
+    "title": "ドロップして開く",
+    "hint": "MIDI、notefall のプロジェクト、または伴奏用の音声"
+  },
+  "fastForward": {
+    "rate": "2x"
+  },
+  "shortcut": {
+    "couldNotSaveTitle": "プロジェクトを保存できませんでした",
+    "couldNotOpenFileTitle": "ファイルを開けませんでした"
+  },
+  "actions": {
+    "discardTitle": "保存していない変更を破棄しますか？",
+    "discardMessage": "{{prefix}}保存していない編集内容は失われます。",
+    "cancel": "キャンセル",
+    "discardAndOpen": "破棄して開く",
+    "discardAndLoad": "破棄して読み込む",
+    "discardAndNew": "破棄して新規作成",
+    "openReplace": "ファイルを開くと現在のセッションが置き換えられます。",
+    "openReplaceNamed": "「{{name}}」を開くと現在のセッションが置き換えられます。",
+    "loadDemoReplace": "デモ「{{label}}」を読み込むと現在のセッションが置き換えられます。",
+    "newDiscardTitle": "保存していない変更を破棄しますか？",
+    "newDiscardMessage": "新しいプロジェクトを開始すると現在のセッションが破棄されます。保存していない編集内容は失われます。",
+    "couldNotLoadMidiTitle": "MIDIを読み込めませんでした",
+    "couldNotLoadMidiMessage": "「{{name}}」を解析できませんでした。\n\n{{detail}}",
+    "midiParseFailed": "MIDIの解析に失敗しました: {{detail}}",
+    "couldNotOpenNamed": "「{{name}}」を開けませんでした。ファイルが移動・削除されたか、アクセスが拒否された可能性があります。",
+    "couldNotLoadDemo": "デモを読み込めませんでした: {{detail}}",
+    "unsupportedFileType": "未対応のファイル形式です: 「{{name}}」。.nfz または .mid/.midi ファイルをドロップしてください。",
+    "loadMidiFirstTitle": "先にMIDIファイルを読み込んでください",
+    "loadMidiFirstMessage": "音声はMIDIトラックの伴奏としてのみ読み込めます。音声を読み込む前にMIDIファイルを開くか録音してください。",
+    "couldNotLoadAudioTitle": "音声を読み込めませんでした",
+    "couldNotLoadAudioMessage": "「{{name}}」をデコードできませんでした。\n\n{{detail}}",
+    "notAudioFile": "「{{name}}」はオーディオファイルではありません。MP3・WAV・OGG・M4A・AAC・FLAC・WebM のファイルを選んでください。",
+    "somethingWentWrong": "問題が発生しました"
+  },
+  "feedback": {
+    "ariaLabel": "フィードバックを送る",
+    "title": {
+      "bug": "不具合を報告",
+      "feature": "機能をリクエスト"
+    },
+    "publicNotice": "送信した内容は GitHub の Issue として公開されます。個人情報は書かないでください。",
+    "statusLink": "これまでの報告と対応状況",
+    "kind": "報告の種類",
+    "kinds": {
+      "bug": "不具合",
+      "feature": "機能のリクエスト"
+    },
+    "summary": "概要",
+    "optional": "任意",
+    "fields": {
+      "bug": {
+        "description": "何が起きましたか？",
+        "details": "再現手順",
+        "expected": "本来はどうなるべきでしたか？"
+      },
+      "feature": {
+        "description": "何をしたいですか？",
+        "details": "どんな動きだと嬉しいですか？"
+      }
+    },
+    "placeholders": {
+      "bug": {
+        "summary": "例：ドラッグするとノートが消える",
+        "description": "うまくいかなかったことを書いてください。",
+        "details": "1. プロジェクトを開く\n2. ノートをドラッグする\n3. …"
+      },
+      "feature": {
+        "summary": "例：小節にジャンプしたい",
+        "description": "困っていることや、作りたいものを書いてください。",
+        "details": "動作、画面、ショートカットなど"
+      }
+    },
+    "includeEnv": "端末情報を含める",
+    "send": {
+      "bug": "報告を送る",
+      "feature": "リクエストを送る"
+    },
+    "sending": "送信中",
+    "cancel": "キャンセル",
+    "close": "閉じる",
+    "useGitHub": "代わりに GitHub で報告する",
+    "openGitHub": "GitHub のフォームを開く",
+    "unavailable": "この環境では報告フォームを使えません。",
+    "errors": {
+      "verification": "スパム確認に失敗しました。もう一度お試しください。",
+      "invalid": "概要と内容を入力してください。",
+      "server": "送信できませんでした。",
+      "network": "接続できないため送信できませんでした。"
+    },
+    "sentTitle": {
+      "bug": "報告を送りました",
+      "feature": "リクエストを送りました"
+    },
+    "sentBody": "Issue #{{number}} として登録されました。",
+    "sentLink": "対応状況は GitHub で確認できます（#{{number}}）",
+    "envHint": "書かれている内容がそのまま送られます。共有したくない部分は書き換えたり消したりできます。",
+    "moreDetail": "詳しく書く",
+    "deviceInfo": "端末情報",
+    "deviceIncluded": "含める",
+    "deviceLeftOut": "含めない",
+    "envRestore": "元に戻す"
+  },
+  "shortcuts": {
+    "title": "キーボードショートカット",
+    "close": "閉じる",
+    "playback": "再生",
+    "editing": "編集",
+    "file": "ファイルと録音",
+    "mouse": "ノートのマウス操作",
+    "play": "再生 / 一時停止",
+    "scrub": "シーク（一時停止中）",
+    "scrubKey": "スクロール",
+    "ff": "2倍速で早送り",
+    "ffKey": "画面を長押し",
+    "timeline": "タイムラインの表示切替",
+    "undo": "元に戻す",
+    "redo": "やり直す",
+    "delete": "選択を削除",
+    "clear": "選択を解除",
+    "nudgePitch": "半音ずらす",
+    "nudgeTime": "0.05 秒ずらす",
+    "keyframe": "キーフレームを追加（タイムライン）",
+    "open": "開く",
+    "save": "保存",
+    "saveAs": "名前を付けて保存",
+    "record": "録音",
+    "piano": "音を鳴らす",
+    "pianoKeys": "Z–M、A–J、Q–P、数字キー",
+    "select": "選択して移動",
+    "selectKey": "クリック、ドラッグ",
+    "rangeSelect": "範囲選択",
+    "rangeKey": "ドラッグ",
+    "addSelect": "選択に追加",
+    "split": "ノートを分割",
+    "menu": "ベロシティ・手・指",
+    "menuKey": "ダブルクリック",
+    "del": "ノートを削除",
+    "delKey": "右クリック",
+    "erase": "消しゴム",
+    "eraseKey": "右ドラッグ",
+    "resize": "ノートの長さを変更",
+    "resizeKey": "端をドラッグ",
+    "camera": "カメラをズーム",
+    "cameraKey": "スクロール",
+    "click": "クリック",
+    "dragWord": "ドラッグ",
+    "scroll": "スクロール",
+    "add": "ノートを追加（空いている場所）",
+    "sheet": "このショートカット一覧",
+    "pcGroup": "PCキーで演奏",
+    "octave": "オクターブシフト",
+    "sustain": "サステインペダル（押しっぱなし）",
+    "metronome": "メトロノーム ON/OFF"
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "editor": {
+    "title": "タイムライン",
+    "close": "タイムラインを閉じる",
+    "resizeLanes": "ドラッグでレーンの高さを変更",
+    "resizeAria": "タイムラインエディターの高さを変更"
+  },
+  "follow": {
+    "stop": "再生ヘッドの追従を停止",
+    "start": "再生中に再生ヘッドを追従",
+    "label": "再生ヘッドに追従"
+  },
+  "lane": {
+    "midi": "MIDI",
+    "speed": "速度",
+    "audio": "オーディオ",
+    "options": "レーンのオプション",
+    "mute": "ミュート",
+    "unmute": "ミュート解除",
+    "resizeLanes": "ドラッグでレーンの高さを変更",
+    "decoding": "デコード中…",
+    "addAudio": "オーディオを追加…",
+    "addAudioHint": "または音源ファイルをドラッグ＆ドロップ",
+    "addAudioFailed": "オーディオを読み込めませんでした",
+    "keyframes": "キーフレーム"
+  },
+  "context": {
+    "volume": "音量",
+    "mute": "ミュート",
+    "unmute": "ミュート解除",
+    "resetToUnity": "0 dB にリセット",
+    "removeAudio": "オーディオを削除"
+  },
+  "speed": {
+    "automationAria": "MIDI速度オートメーション",
+    "automationTitle": "クリックでブレークポイントを追加 · ドラッグで移動 · 右クリックで削除 · 中間点上でスクロールしてカーブを調整",
+    "breakpointTitle": "{{time}}秒で {{value}}× — ダブルクリックでリセット · 右クリックで削除",
+    "curveTitle": "カーブ {{curvature}} — ドラッグまたはスクロールで曲げる · 右クリックで直線に戻す"
+  },
+  "trim": {
+    "drag": "ドラッグでトリミング",
+    "midiHead": "MIDIの先頭をトリミング",
+    "midiTail": "MIDIの末尾をトリミング",
+    "audioHead": "オーディオの先頭をトリミング",
+    "audioTail": "オーディオの末尾をトリミング"
+  },
+  "ruler": {
+    "seekAria": "ルーラー — クリックでビュー内をシーク",
+    "seekTitle": "ドラッグでシーク · ダブルクリックでフィット",
+    "resetZoomAria": "ズームをリセット",
+    "resetZoomTitle": "ズームをリセット"
+  },
+  "clip": {
+    "syncTitle": "ドラッグで同期 — オフセット {{offset}}秒"
+  },
+  "minimap": {
+    "panAria": "ミニマップ — ドラッグでパン",
+    "panTitle": "ドラッグで表示範囲をパン",
+    "zoomToEnable": "ズームインするとパンできます",
+    "resizeFromLeft": "表示範囲を左から変更",
+    "resizeFromRight": "表示範囲を右から変更"
+  },
+  "velocityCurve": {
+    "label": "ベロシティカーブ"
+  },
+  "addKeyframe": {
+    "label": "キーフレームを追加",
+    "title": "再生ヘッドの位置にキーフレームを追加"
+  },
+  "keyframe": {
+    "laneAria": "キーフレーム",
+    "laneTitle": "キーフレームはその時点の見た目を記録し、隣り合うキーフレームの間で滑らかに変化します。空きスペースのクリックで追加、キーフレームのクリックで選択してその位置へ移動、ドラッグで移動、右ドラッグで削除。",
+    "markerTitle": "{{time}} のキーフレーム"
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "appName": "Piano",
+  "ok": "OK",
+  "cancel": "Huỷ",
+  "close": "Đóng",
+  "save": "Lưu",
+  "delete": "Xóa",
+  "confirm": "Xác nhận",
+  "retry": "Thử lại",
+  "loading": "Đang tải…",
+  "yes": "Có",
+  "no": "Không",
+  "transport": {
+    "label": "Điều khiển phát",
+    "rewindToStart": "Về đầu bài",
+    "rewind10": "Lùi 10 giây",
+    "forward10": "Tiến 10 giây",
+    "play": "Phát",
+    "pause": "Tạm dừng",
+    "enableLoop": "Lặp bài",
+    "disableLoop": "Ngừng lặp",
+    "volume": "Âm lượng",
+    "mute": "Tắt tiếng",
+    "unmute": "Bật tiếng",
+    "speed": "Tốc độ",
+    "playbackSpeed": "Tốc độ phát",
+    "resetCameraView": "Đặt lại vị trí camera",
+    "enterFullscreen": "Toàn màn hình",
+    "exitFullscreen": "Thoát toàn màn hình",
+    "seek": "Vị trí",
+    "look": "Tùy chỉnh",
+    "timeline": "Dòng thời gian"
+  },
+  "loadingIsland": {
+    "title": "Đang tải tiếng đàn",
+    "handsLoading": "Đang tải chuyển động tay",
+    "handsWorking": "Đang tạo chuyển động tay"
+  },
+  "startCard": {
+    "title": "Bắt đầu với một bản nhạc",
+    "text": "Thả file MIDI hoặc project Piano vào bất kỳ đâu, hoặc chọn một file bên dưới.",
+    "open": "Mở một file…",
+    "demo": "Thử bài demo",
+    "demoMenu": "Bài demo",
+    "record": "Ghi từ bàn phím của bạn",
+    "deviceConnected": "Đã kết nối {{name}}",
+    "note": "Mọi thứ nằm trên máy bạn. Không có gì được tải lên.",
+    "couldNotOpenTitle": "Không mở được file",
+    "dontShowAgain": "Không hiện lại",
+    "couldNotLoadDemoTitle": "Không tải được bài demo"
+  },
+  "pageLoader": {
+    "loading": "Đang tải Piano"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "unsupported": {
+    "title": "Open notefall on a computer",
+    "body": "notefall needs a wider screen: a desktop, or a tablet held sideways. Send yourself the link and open it there.",
+    "copyLink": "Copy link",
+    "copied": "Link copied"
+  },
+  "webgl": {
+    "title": "Hardware acceleration is required",
+    "body": "notefall renders the falling notes with WebGL, which needs your browser's hardware acceleration to be on.",
+    "howToTitle": "How to enable it",
+    "chromeLabel": "Chrome / Edge:",
+    "chromeSetting": "Use graphics acceleration when available",
+    "firefoxLabel": "Firefox:",
+    "firefoxSetting": "Use recommended performance settings",
+    "safariLabel": "Safari:",
+    "safariSetting": "WebGL",
+    "reload": "Reload page",
+    "chromePath": "Settings → System → enable",
+    "chromeAfter": ", then restart the browser.",
+    "firefoxPath": "Settings → General → Performance → enable",
+    "firefoxAfter": ".",
+    "safariPath": "Develop menu → enable",
+    "safariAfter": " (if shown)."
+  }
+}

@@ -1,0 +1,110 @@
+{
+  "file": {
+    "menuButton": "File",
+    "menuLabel": "File",
+    "new": "New",
+    "open": "Open…",
+    "openRecent": "Open recent",
+    "openRecentLabel": "Open recent",
+    "clearRecent": "Clear recent",
+    "save": "Save",
+    "saveAs": "Save as…",
+    "addAudio": "Add audio…",
+    "saveSongAsMidi": "Save song as MIDI…",
+    "export": "Export…",
+    "demoSongs": "Demo songs",
+    "demoSongsLabel": "Demo songs",
+    "exportButton": "Export"
+  },
+  "midi": {
+    "button": "MIDI input",
+    "inputDevices": "Input devices",
+    "noDevices": "No MIDI devices detected. Plug in a USB MIDI device and reopen.",
+    "disconnect": "Disconnect",
+    "connect": "Connect"
+  },
+  "record": {
+    "stop": "Stop recording",
+    "cancelCountIn": "Cancel count-in",
+    "start": "Start recording",
+    "label": "Record",
+    "stopLabel": "Stop",
+    "countIn": "Count-in",
+    "notes_one": "{{count}} note",
+    "notes_other": "{{count}} notes",
+    "cancelLabel": "Cancel",
+    "countInStatus": "Count-in, beat {{beat}} of {{total}}"
+  },
+  "recordings": {
+    "unread": "Unread",
+    "heading": "Takes",
+    "clearAll": "Clear all…",
+    "empty": "No takes yet. Press Record to capture what you play.",
+    "clickToRename": "Click to rename",
+    "pause": "Pause playback",
+    "loadAndPlay": "Load and play",
+    "saveAsMid": "Download as a MIDI file",
+    "delete": "Delete take",
+    "trigger": "Takes and count-in",
+    "triggerWithNew": "Takes and count-in ({{count}} new)",
+    "today": "Today {{time}}",
+    "yesterday": "Yesterday {{time}}",
+    "clearAllTitle": "Clear all takes?",
+    "clearAllMessage_one": "The take is deleted from this browser. This can’t be undone.",
+    "clearAllMessage_other": "All {{count}} takes are deleted from this browser. This can’t be undone.",
+    "clearAllConfirm": "Clear all takes",
+    "deleted": "Deleted {{name}}",
+    "undo": "Undo"
+  },
+  "toast": {
+    "emptyRecording": "No notes captured — recording was empty"
+  },
+  "help": {
+    "reportBug": "Report a bug…",
+    "requestFeature": "Request a feature…",
+    "viewOnGitHub": "View on GitHub",
+    "build": "Build {{commit}}"
+  },
+  "analytics": {
+    "label": "Help improve notefall",
+    "caption": "Anonymous usage only — never your music or files."
+  },
+  "badge": {
+    "unsavedAria": "Unsaved changes"
+  },
+  "projectName": {
+    "aria": "Project name",
+    "rename": "Rename project",
+    "untitled": "Untitled"
+  },
+  "export": {
+    "titleAudio": "Exporting audio",
+    "titleVideo": "Exporting video",
+    "phasePreparing": "Preparing",
+    "phaseLoadingSamples": "Loading samples",
+    "phaseRendering": "Rendering",
+    "phaseRenderingAudio": "Rendering audio",
+    "phaseFinalizing": "Finalizing"
+  },
+  "error": {
+    "couldNotLoadDemo": "Could not load demo",
+    "couldNotOpenFile": "Could not open file",
+    "couldNotSaveProject": "Could not save project",
+    "couldNotLoadAudio": "Could not load audio",
+    "couldNotOpenProject": "Could not open project",
+    "couldNotExportAudio": "Could not export audio",
+    "couldNotExportVideo": "Could not export video",
+    "videoNotSupportedTitle": "Video export not supported",
+    "videoNotSupportedMessage": "Your browser is missing the WebCodecs API. Use Chrome, Edge, or Safari 16.4+ to export video.",
+    "videoNotSupportedShort": "Your browser is missing the WebCodecs API."
+  },
+  "app": {
+    "menuLabel": "notefall menu",
+    "shortcuts": "Keyboard shortcuts",
+    "language": "Language"
+  },
+  "history": {
+    "undo": "Undo",
+    "redo": "Redo"
+  }
+}

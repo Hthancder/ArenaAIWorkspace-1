@@ -1,0 +1,219 @@
+{
+  "confirm": {
+    "defaultConfirm": "Continue",
+    "defaultCancel": "Cancel"
+  },
+  "alert": {
+    "acknowledge": "Close"
+  },
+  "export": {
+    "ariaLabel": "Export settings",
+    "title": "Export",
+    "unsupported": "Video export is unavailable in this browser. Audio export still works.",
+    "format": {
+      "label": "Format",
+      "videoAudio": "Video and audio",
+      "videoOnly": "Video only",
+      "audioOnly": "Audio only"
+    },
+    "resolution": "Resolution",
+    "fps": "Frame rate",
+    "fps30": "30 fps",
+    "fps60": "60 fps",
+    "quality": "Quality",
+    "estimatedSize": "Estimated size",
+    "estimatedSizeValue": "~{{mb}} MB",
+    "playSoundOnComplete": "Play a sound when done",
+    "test": "Preview sound",
+    "cancel": "Cancel",
+    "submit": "Export",
+    "codec": {
+      "label": "Codec",
+      "h264": "H.264 + AAC (MP4), most compatible",
+      "vp9": "VP9 + Opus (WebM), open format",
+      "av1": "AV1 + Opus (WebM), smallest and slow",
+      "checking": "Checking supported codecs"
+    },
+    "preflight": {
+      "noWebCodecs": "Video export needs WebCodecs (Chrome, Edge or Safari 16.4 and later). In this browser you can still export audio only (WAV).",
+      "videoUnsupported": "This browser cannot encode {{codec}} video at {{width}}×{{height}} @ {{fps}} fps. Try {{alternatives}}, or lower the resolution / frame rate.",
+      "audioUnsupported": "This browser cannot encode the {{audioCodec}} audio track that {{codec}} export needs. Try {{alternatives}}, export video only, or export audio only (WAV).",
+      "or": " or "
+    },
+    "advanced": "Advanced",
+    "advancedSummaryAudio": "WAV",
+    "qualityHint": "Video bitrate {{mbps}} Mbps. High uses 1.5× the bitrate for cleaner edges and glow.",
+    "fileFormat": "{{codec}} · {{res}} · {{fps}} fps",
+    "wavMeta": "WAV · 44.1 kHz"
+  },
+  "progress": {
+    "note": "Keep this tab open until it finishes.",
+    "cancel": "Cancel export",
+    "eta": "{{eta}} remaining",
+    "etaSeconds": "{{count}} sec",
+    "etaMinutes": "{{min}} min {{sec}} sec"
+  },
+  "drop": {
+    "couldNotOpenProjectTitle": "Could not open project",
+    "couldNotOpenProjectMessage": "\"{{name}}\" could not be loaded.\n\n{{detail}}",
+    "couldNotLoadMidiTitle": "Could not load MIDI",
+    "couldNotLoadMidiMessage": "\"{{name}}\" could not be parsed.\n\n{{detail}}",
+    "couldNotLoadAudioTitle": "Could not load audio",
+    "unsupportedTitle": "Unsupported file type",
+    "unsupportedMessage": "\"{{name}}\" is not a supported format. Drop a .nfz project, .mid / .midi, or .mp3 / .wav audio file.",
+    "title": "Drop to open",
+    "hint": "MIDI, notefall project, or audio for the accompaniment"
+  },
+  "fastForward": {
+    "rate": "2x"
+  },
+  "shortcut": {
+    "couldNotSaveTitle": "Could not save project",
+    "couldNotOpenFileTitle": "Could not open file"
+  },
+  "actions": {
+    "discardTitle": "Discard unsaved changes?",
+    "discardMessage": "{{prefix}} Unsaved edits will be lost.",
+    "cancel": "Cancel",
+    "discardAndOpen": "Discard and open",
+    "discardAndLoad": "Discard and load",
+    "discardAndNew": "Discard and start new",
+    "openReplace": "Opening a file will replace the current session.",
+    "openReplaceNamed": "Opening \"{{name}}\" will replace the current session.",
+    "loadDemoReplace": "Loading the \"{{label}}\" demo will replace the current session.",
+    "newDiscardTitle": "Discard unsaved changes?",
+    "newDiscardMessage": "Starting a new project will discard the current session. Unsaved edits will be lost.",
+    "couldNotLoadMidiTitle": "Could not load MIDI",
+    "couldNotLoadMidiMessage": "\"{{name}}\" could not be parsed.\n\n{{detail}}",
+    "midiParseFailed": "MIDI parse failed: {{detail}}",
+    "couldNotOpenNamed": "Could not open \"{{name}}\". The file may have been moved, deleted, or permission denied.",
+    "couldNotLoadDemo": "Could not load demo: {{detail}}",
+    "unsupportedFileType": "Unsupported file type: \"{{name}}\". Drop a .nfz or .mid/.midi file.",
+    "loadMidiFirstTitle": "Load a MIDI file first",
+    "loadMidiFirstMessage": "Audio can only be loaded as accompaniment for a MIDI track. Open or record a MIDI file before importing audio.",
+    "couldNotLoadAudioTitle": "Could not load audio",
+    "couldNotLoadAudioMessage": "\"{{name}}\" could not be decoded.\n\n{{detail}}",
+    "notAudioFile": "\"{{name}}\" is not an audio file. Choose an MP3, WAV, OGG, M4A, AAC, FLAC or WebM file.",
+    "somethingWentWrong": "Something went wrong"
+  },
+  "feedback": {
+    "ariaLabel": "Send feedback",
+    "title": {
+      "bug": "Report a bug",
+      "feature": "Request a feature"
+    },
+    "publicNotice": "Your report becomes a public GitHub issue. Please do not include personal information.",
+    "statusLink": "See reports and their status",
+    "kind": "Report type",
+    "kinds": {
+      "bug": "Bug",
+      "feature": "Feature request"
+    },
+    "summary": "Summary",
+    "optional": "optional",
+    "fields": {
+      "bug": {
+        "description": "What happened?",
+        "details": "Steps to reproduce",
+        "expected": "What did you expect?"
+      },
+      "feature": {
+        "description": "What would you like to do?",
+        "details": "How could it work?"
+      }
+    },
+    "placeholders": {
+      "bug": {
+        "summary": "e.g. Notes disappear after dragging",
+        "description": "Describe what went wrong.",
+        "details": "1. Open a project\n2. Drag a note\n3. …"
+      },
+      "feature": {
+        "summary": "e.g. Jump to a bar",
+        "description": "The problem it solves or what you want to make.",
+        "details": "Behaviour, UI, shortcuts…"
+      }
+    },
+    "includeEnv": "Include device info",
+    "send": {
+      "bug": "Send report",
+      "feature": "Send request"
+    },
+    "sending": "Sending",
+    "cancel": "Cancel",
+    "close": "Close",
+    "useGitHub": "Report on GitHub instead",
+    "openGitHub": "Open the GitHub form",
+    "unavailable": "The report form isn't available here.",
+    "errors": {
+      "verification": "The spam check failed — please try again.",
+      "invalid": "Please fill in the summary and description.",
+      "server": "The report couldn't be sent.",
+      "network": "No connection — the report couldn't be sent."
+    },
+    "sentTitle": {
+      "bug": "Report sent",
+      "feature": "Request sent"
+    },
+    "sentBody": "It was filed as issue #{{number}}.",
+    "sentLink": "Follow its status on GitHub (#{{number}})",
+    "envHint": "Sent as written. Edit or delete anything you’d rather not share.",
+    "moreDetail": "More detail",
+    "deviceInfo": "Device info",
+    "deviceIncluded": "included",
+    "deviceLeftOut": "left out",
+    "envRestore": "Restore"
+  },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "close": "Close",
+    "playback": "Playback",
+    "editing": "Editing",
+    "file": "File and recording",
+    "mouse": "Mouse on notes",
+    "play": "Play / pause",
+    "scrub": "Scrub (paused)",
+    "scrubKey": "Scroll",
+    "ff": "Fast-forward 2×",
+    "ffKey": "Hold the picture",
+    "timeline": "Toggle timeline",
+    "undo": "Undo",
+    "redo": "Redo",
+    "delete": "Delete selection",
+    "clear": "Clear selection",
+    "nudgePitch": "Move a semitone",
+    "nudgeTime": "Move 0.05 s earlier / later",
+    "keyframe": "Add keyframe (timeline)",
+    "open": "Open",
+    "save": "Save",
+    "saveAs": "Save as",
+    "record": "Record",
+    "piano": "Play notes",
+    "pianoKeys": "Z–M, A–J, Q–P, digits",
+    "select": "Select and move",
+    "selectKey": "Click, drag",
+    "rangeSelect": "Select a range",
+    "rangeKey": "drag",
+    "addSelect": "Add to selection",
+    "split": "Split note",
+    "menu": "Velocity, hand, finger",
+    "menuKey": "Double-click",
+    "del": "Delete note",
+    "delKey": "Right-click",
+    "erase": "Erase",
+    "eraseKey": "Right-drag",
+    "resize": "Resize note",
+    "resizeKey": "Drag an edge",
+    "camera": "Zoom the camera",
+    "cameraKey": "scroll",
+    "click": "Click",
+    "dragWord": "drag",
+    "scroll": "scroll",
+    "add": "Add a note (empty space)",
+    "sheet": "Show these shortcuts",
+    "pcGroup": "Playing on the computer",
+    "octave": "Octave shift",
+    "sustain": "Sustain pedal (hold)",
+    "metronome": "Metronome on/off"
+  }
+}

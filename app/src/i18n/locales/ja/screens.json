@@ -1,0 +1,26 @@
+{
+  "unsupported": {
+    "title": "パソコンで開いてください",
+    "body": "notefall には広い画面が必要です。パソコン、または横向きのタブレットで開いてください。リンクを自分に送って、そちらで開けます。",
+    "copyLink": "リンクをコピー",
+    "copied": "コピーしました"
+  },
+  "webgl": {
+    "title": "ハードウェアアクセラレーションが必要です",
+    "body": "notefall は落ちてくるノートを WebGL で描画するため、ブラウザのハードウェアアクセラレーションを有効にする必要があります。",
+    "howToTitle": "有効にする方法",
+    "chromeLabel": "Chrome / Edge:",
+    "chromeSetting": "使用可能な場合はグラフィックアクセラレーションを使用する",
+    "firefoxLabel": "Firefox:",
+    "firefoxSetting": "推奨のパフォーマンス設定を使用する",
+    "safariLabel": "Safari:",
+    "safariSetting": "WebGL",
+    "reload": "ページを再読み込み",
+    "chromePath": "設定 → システム →",
+    "chromeAfter": "を有効にして、ブラウザーを再起動してください。",
+    "firefoxPath": "設定 → 一般 → パフォーマンス →",
+    "firefoxAfter": "を有効にしてください。",
+    "safariPath": "「開発」メニュー →",
+    "safariAfter": "を有効にしてください（表示されている場合）。"
+  }
+}

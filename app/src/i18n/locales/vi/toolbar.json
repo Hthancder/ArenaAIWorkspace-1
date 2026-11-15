@@ -1,0 +1,108 @@
+{
+  "file": {
+    "menuButton": "Tệp",
+    "menuLabel": "Tệp",
+    "new": "Mới",
+    "open": "Mở…",
+    "openRecent": "Mở gần đây",
+    "openRecentLabel": "Mở gần đây",
+    "clearRecent": "Xóa danh sách gần đây",
+    "save": "Lưu",
+    "saveAs": "Lưu thành…",
+    "addAudio": "Thêm âm thanh…",
+    "saveSongAsMidi": "Lưu bản nhạc thành MIDI…",
+    "export": "Xuất…",
+    "demoSongs": "Bài demo",
+    "demoSongsLabel": "Bài demo",
+    "exportButton": "Xuất"
+  },
+  "midi": {
+    "button": "Ngõ vào MIDI",
+    "inputDevices": "Thiết bị vào",
+    "noDevices": "Không phát hiện thiết bị MIDI. Cắm thiết bị MIDI USB rồi mở lại.",
+    "disconnect": "Ngắt kết nối",
+    "connect": "Kết nối"
+  },
+  "record": {
+    "stop": "Dừng ghi âm",
+    "cancelCountIn": "Huỷ đếm vào",
+    "start": "Bắt đầu ghi âm",
+    "label": "Ghi âm",
+    "stopLabel": "Dừng",
+    "countIn": "Đếm vào",
+    "notes": "{{count}} nốt",
+    "cancelLabel": "Huỷ",
+    "countInStatus": "Đếm vào, nhịp {{beat}}/{{total}}"
+  },
+  "recordings": {
+    "unread": "Chưa nghe",
+    "heading": "Bản ghi",
+    "clearAll": "Xóa tất cả…",
+    "empty": "Chưa có bản ghi nào. Nhấn Ghi âm để thu lại những gì bạn chơi.",
+    "clickToRename": "Nhấp để đổi tên",
+    "pause": "Tạm dừng phát",
+    "loadAndPlay": "Tải và phát",
+    "saveAsMid": "Tải xuống dạng file MIDI",
+    "delete": "Xóa bản ghi",
+    "trigger": "Bản ghi và đếm vào",
+    "triggerWithNew": "Bản ghi và đếm vào ({{count}} mới)",
+    "today": "Hôm nay {{time}}",
+    "yesterday": "Hôm qua {{time}}",
+    "clearAllTitle": "Xóa tất cả bản ghi?",
+    "clearAllMessage": "Tất cả {{count}} bản ghi sẽ bị xóa khỏi trình duyệt này. Không thể hoàn tác.",
+    "clearAllConfirm": "Xóa tất cả bản ghi",
+    "deleted": "Đã xóa {{name}}",
+    "undo": "Hoàn tác"
+  },
+  "toast": {
+    "emptyRecording": "Không ghi được nốt nào — bản ghi trống"
+  },
+  "help": {
+    "reportBug": "Báo lỗi…",
+    "requestFeature": "Đề xuất tính năng…",
+    "viewOnGitHub": "Xem trên GitHub",
+    "build": "Bản dựng {{commit}}"
+  },
+  "analytics": {
+    "label": "Giúp cải thiện Piano",
+    "caption": "Chỉ dữ liệu sử dụng ẩn danh — không bao giờ là nhạc hay file của bạn."
+  },
+  "badge": {
+    "unsavedAria": "Thay đổi chưa lưu"
+  },
+  "projectName": {
+    "aria": "Tên dự án",
+    "rename": "Đổi tên dự án",
+    "untitled": "Chưa đặt tên"
+  },
+  "export": {
+    "titleAudio": "Đang xuất âm thanh",
+    "titleVideo": "Đang xuất video",
+    "phasePreparing": "Đang chuẩn bị",
+    "phaseLoadingSamples": "Đang tải sample",
+    "phaseRendering": "Đang render",
+    "phaseRenderingAudio": "Đang render âm thanh",
+    "phaseFinalizing": "Đang hoàn tất"
+  },
+  "error": {
+    "couldNotLoadDemo": "Không tải được bài demo",
+    "couldNotOpenFile": "Không mở được file",
+    "couldNotSaveProject": "Không lưu được dự án",
+    "couldNotLoadAudio": "Không tải được âm thanh",
+    "couldNotOpenProject": "Không mở được dự án",
+    "couldNotExportAudio": "Không xuất được âm thanh",
+    "couldNotExportVideo": "Không xuất được video",
+    "videoNotSupportedTitle": "Trình duyệt không hỗ trợ xuất video",
+    "videoNotSupportedMessage": "Trình duyệt của bạn thiếu WebCodecs API. Dùng Chrome, Edge hoặc Safari 16.4+ để xuất video.",
+    "videoNotSupportedShort": "Trình duyệt của bạn thiếu WebCodecs API."
+  },
+  "app": {
+    "menuLabel": "menu Piano",
+    "shortcuts": "Phím tắt",
+    "language": "Ngôn ngữ"
+  },
+  "history": {
+    "undo": "Hoàn tác",
+    "redo": "Làm lại"
+  }
+}

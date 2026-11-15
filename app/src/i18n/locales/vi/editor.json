@@ -1,0 +1,16 @@
+{
+  "selection": {
+    "notes": "{{count}} nốt",
+    "velocity": "Lực phím (velocity)",
+    "velocityRange": "Khoảng velocity",
+    "delete": "Xóa {{count}} nốt",
+    "groupLabel": "{{count}} nốt đã chọn",
+    "hand": "Bàn tay",
+    "finger": "Ngón tay",
+    "mixed": "Trộn lẫn",
+    "hands": {
+      "L": "Trái",
+      "R": "Phải"
+    }
+  }
+}

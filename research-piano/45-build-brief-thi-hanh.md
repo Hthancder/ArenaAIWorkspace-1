@@ -12,13 +12,13 @@ Web app **piano 3D** chạy hoàn toàn trên trình duyệt: mở file MIDI b�
 
 | M | Tên | Trạng thái | Ghi chú |
 |---|---|---|---|
-| M0 | Khung dự án | ☐ | |
-| M1 | Chơi được | ☐ | |
-| M2 | Tuỳ biến & lưu | ☐ | |
-| M3 | Nhập MIDI + timeline | ☐ | |
-| M4 | Sửa & xuất | ☐ | |
-| M5 | Luyện tập | ☐ | |
-| M6 | Đánh bóng & phát hành | ☐ | |
+| M0 | Khung dự án | ☑ | Fork `ekkx/notefall` vào `app/` (2026-11-15); tự host Salamander; vi i18n |
+| M1 | Chơi được | ☑ | Upstream có sẵn + `pcVelocity`, `pcOctaveShift`, pedal Shift, nhãn phím PC, velocity theo vị trí nhấn |
+| M2 | Tuỳ biến & lưu | ☑ | Upstream: ~300 settings, search, `.nfz`, preset… (đủ yêu cầu 45.5) |
+| M3 | Nhập MIDI + timeline | ☑ | Upstream: parse worker, transport, speedMap, keyframes |
+| M4 | Sửa & xuất | ☑ | Upstream: editor trên canvas, undo/50, export WAV/video/MIDI |
+| M5 | Luyện tập | ☐ | Wait mode, chấm điểm, tempo ladder — CHƯA làm |
+| M6 | Đánh bóng & phát hành | ◐ | vi i18n + metronome ✅; PWA/CSP/deploy/video test còn nợ |
 
 Ký hiệu: ☐ chưa · ◐ đang · ☑ xong · ⚠ có nợ kỹ thuật (ghi rõ).
 

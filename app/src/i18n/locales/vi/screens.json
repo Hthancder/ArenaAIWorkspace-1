@@ -1,0 +1,26 @@
+{
+  "unsupported": {
+    "title": "Mở Piano trên máy tính",
+    "body": "Piano cần màn hình rộng hơn: máy tính, hoặc máy tính bảng xoay ngang. Hãy gửi liên kết cho bạn và mở trên đó.",
+    "copyLink": "Sao chép liên kết",
+    "copied": "Đã sao chép liên kết"
+  },
+  "webgl": {
+    "title": "Cần bật tăng tốc phần cứng",
+    "body": "Piano dựng nốt rơi bằng WebGL, nên cần bật tăng tốc phần cứng của trình duyệt.",
+    "howToTitle": "Cách bật",
+    "chromeLabel": "Chrome / Edge:",
+    "chromeSetting": "Dùng tăng tốc đồ họa khi khả dụng",
+    "firefoxLabel": "Firefox:",
+    "firefoxSetting": "Dùng cài đặt hiệu năng đề xuất",
+    "safariLabel": "Safari:",
+    "safariSetting": "WebGL",
+    "reload": "Tải lại trang",
+    "chromePath": "Cài đặt → Hệ thống → bật",
+    "chromeAfter": ", sau đó khởi động lại trình duyệt.",
+    "firefoxPath": "Cài đặt → Chung → Hiệu năng → bật",
+    "firefoxAfter": ".",
+    "safariPath": "menu Develop → bật",
+    "safariAfter": " (nếu có)."
+  }
+}

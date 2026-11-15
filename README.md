@@ -1,10 +1,29 @@
 # ArenaAIWorkspace-1
 
+## App Piano (`app/`) — ĐANG BUILD
+
+Web app piano 3D chạy hoàn toàn trên trình duyệt: chơi bằng bàn phím máy tính / chuột / MIDI USB, phát MIDI với nốt rơi 3D, tuỳ biến hàng trăm thông số, sửa nốt, export video/WAV. **Fork của [NoteFall (ekkx)](https://github.com/ekkx/notefall)** — xem `app/ATTRIBUTIONS.md` (⚠️ PolyForm Shield: chỉ dùng cá nhân/nội bộ nếu chưa xin phép tác giả).
+
+```bash
+cd app
+npm install
+npm run fetch-salamander   # tải 480 sample Salamander (~150 MB, gitignored) — hoặc đã có sẵn
+npm run dev                # http://localhost:5173
+```
+
+**Tính năng mới thêm so với NoteFall (2026-11-15):**
+- Chơi bằng máy tính: chỉnh **velocity** phím máy tính, **dịch quãng tám** (PgUp/PgDn), **pedal giữ âm** (Shift, đổi được), **nhãn phím máy tính** trên bàn phím 3D, velocity theo vị trí nhấn chuột.
+- **Máy đếm nhịp** (40–240 BPM, nhịp mỗi ô, Ctrl/Cmd+M).
+- **Giao diện tiếng Việt** mặc định (đầy đủ, kèm English/Nhật).
+- Tự host sample Salamander (không phụ thuộc CDN của NoteFall).
+
+Nhật ký quyết định: `app/docs/decisions.md` · Ý tưởng để dành: `app/docs/ideas.md`.
+
 ## Nghiên cứu app piano (2026-11-14)
 
-Bộ tài liệu nghiên cứu đầy đủ về các app/dự án chơi piano trên máy tính & điện thoại (không cần đàn piano thật), làm nền cho việc xây app mới dựa trên NoteFall.
+Bộ tài liệu nghiên cứu đầy đủ về các app/dự án chơi piano trên máy tính & điện thoại (không cần đàn piano thật) — nền tảng của app mới.
 
-👉 **Bắt đầu đọc: [`research-piano/00-README.md`](research-piano/00-README.md)**
+👉 **Bắt đầu đọc: [`research-piano/00-README.md`](research-piano/00-README.md)** · Hướng dẫn cho AI: [`research-piano/AI-START-HERE.md`](research-piano/AI-START-HERE.md)
 
 | File | Nội dung |
 |---|---|
@@ -49,18 +68,12 @@ Bộ tài liệu nghiên cứu đầy đủ về các app/dự án chơi piano t
 | `research-piano/38-onboarding-va-giu-chan-nguoi-dung.md` | Onboarding + giữ chân người dùng |
 | `research-piano/39-ra-mat-thi-truong-viet-nam.md` | Ra mắt, kênh, giá cho thị trường VN |
 | `research-piano/40-che-tao-bo-sample.md` | Công thức tự chế bộ sample piano |
-
-### Lớp dành cho AI thi hành (đọc trước khi build)
-
-| File | Nội dung |
-|---|---|
-| `research-piano/41-cach-ai-doc-bo-tai-lieu-nay.md` | Giao thức đọc, 12 luật, thứ quyền, định nghĩa "xong" |
+| `research-piano/41-cach-ai-doc-bo-tai-lieu-nay.md` | Giao thức đọc cho AI: 12 luật, thứ quyền, định nghĩa "xong" |
 | `research-piano/42-dac-ta-giao-dien-tung-man-hinh.md` | Đặc tả S0–S11 + chuỗi UI tiếng Việt |
 | `research-piano/43-he-thong-thiet-ke-chi-tiet.md` | Design system chốt (token, component, motion) |
 | `research-piano/44-hop-dong-du-lieu-va-kien-truc-module.md` | TypeScript contracts + kiến trúc module |
-| `research-piano/45-build-brief-thi-hanh.md` | Milestone M0–M6 + tiêu chí nghiệm thu |
+| `research-piano/45-build-brief-thi-hanh.md` | Milestone M0–M6 + tiêu chí nghiệm thu (kèm trạng thái) |
 | `research-piano/46-audit-nhat-quan-va-khoang-trong.md` | Audit mâu thuẫn/khoảng trống |
 | `research-piano/spec/design-tokens.json` | Token máy đọc |
 | `research-piano/spec/app-spec.json` | Danh sách tính năng máy đọc |
-
-> Giai đoạn hiện tại: **chỉ nghiên cứu**, chưa build app.
+| `research-piano/AI-START-HERE.md` | Bản rút gọn 2 phút cho AI |

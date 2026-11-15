@@ -1,0 +1,219 @@
+{
+  "confirm": {
+    "defaultConfirm": "Tiếp tục",
+    "defaultCancel": "Huỷ"
+  },
+  "alert": {
+    "acknowledge": "Đóng"
+  },
+  "export": {
+    "ariaLabel": "Cài đặt xuất",
+    "title": "Xuất",
+    "unsupported": "Trình duyệt này không xuất được video. Vẫn xuất được âm thanh.",
+    "format": {
+      "label": "Định dạng",
+      "videoAudio": "Video và âm thanh",
+      "videoOnly": "Chỉ video",
+      "audioOnly": "Chỉ âm thanh"
+    },
+    "resolution": "Độ phân giải",
+    "fps": "Tốc độ khung hình",
+    "fps30": "30 fps",
+    "fps60": "60 fps",
+    "quality": "Chất lượng",
+    "estimatedSize": "Dung lượng ước tính",
+    "estimatedSizeValue": "~{{mb}} MB",
+    "playSoundOnComplete": "Phát âm báo khi xong",
+    "test": "Nghe thử",
+    "cancel": "Huỷ",
+    "submit": "Xuất",
+    "codec": {
+      "label": "Codec",
+      "h264": "H.264 + AAC (MP4), tương thích nhất",
+      "vp9": "VP9 + Opus (WebM), định dạng mở",
+      "av1": "AV1 + Opus (WebM), nhỏ nhất và chậm",
+      "checking": "Đang kiểm tra codec được hỗ trợ"
+    },
+    "preflight": {
+      "noWebCodecs": "Xuất video cần WebCodecs (Chrome, Edge hoặc Safari 16.4 trở lên). Trình duyệt này vẫn xuất được âm thanh (WAV).",
+      "videoUnsupported": "Trình duyệt này không mã hóa được video {{codec}} ở {{width}}×{{height}} @ {{fps}} fps. Thử {{alternatives}}, hoặc giảm độ phân giải / tốc độ khung hình.",
+      "audioUnsupported": "Trình duyệt này không mã hóa được track âm thanh {{audioCodec}} mà bản xuất {{codec}} cần. Thử {{alternatives}}, chỉ xuất video, hoặc chỉ xuất âm thanh (WAV).",
+      "or": " hoặc "
+    },
+    "advanced": "Nâng cao",
+    "advancedSummaryAudio": "WAV",
+    "qualityHint": "Bitrate video {{mbps}} Mbps. Mức Cao dùng bitrate gấp 1,5 lần cho nét viền và glow sạch hơn.",
+    "fileFormat": "{{codec}} · {{res}} · {{fps}} fps",
+    "wavMeta": "WAV · 44.1 kHz"
+  },
+  "progress": {
+    "note": "Giữ tab này mở cho tới khi hoàn tất.",
+    "cancel": "Huỷ xuất",
+    "eta": "còn {{eta}}",
+    "etaSeconds": "{{count}} giây",
+    "etaMinutes": "{{min}} phút {{sec}} giây"
+  },
+  "drop": {
+    "couldNotOpenProjectTitle": "Không mở được dự án",
+    "couldNotOpenProjectMessage": "Không tải được \"{{name}}\".\n\n{{detail}}",
+    "couldNotLoadMidiTitle": "Không tải được MIDI",
+    "couldNotLoadMidiMessage": "Không phân tích được \"{{name}}\".\n\n{{detail}}",
+    "couldNotLoadAudioTitle": "Không tải được âm thanh",
+    "unsupportedTitle": "Loại file không hỗ trợ",
+    "unsupportedMessage": "\"{{name}}\" không phải định dạng được hỗ trợ. Thả project .nfz, .mid / .midi, hoặc file âm thanh .mp3 / .wav.",
+    "title": "Thả để mở",
+    "hint": "MIDI, project Piano, hoặc âm thanh đệm"
+  },
+  "fastForward": {
+    "rate": "2x"
+  },
+  "shortcut": {
+    "couldNotSaveTitle": "Không lưu được dự án",
+    "couldNotOpenFileTitle": "Không mở được file"
+  },
+  "actions": {
+    "discardTitle": "Bỏ thay đổi chưa lưu?",
+    "discardMessage": "{{prefix}} Các chỉnh sửa chưa lưu sẽ bị mất.",
+    "cancel": "Huỷ",
+    "discardAndOpen": "Bỏ và mở",
+    "discardAndLoad": "Bỏ và tải",
+    "discardAndNew": "Bỏ và tạo mới",
+    "openReplace": "Mở một file sẽ thay thế phiên hiện tại.",
+    "openReplaceNamed": "Mở \"{{name}}\" sẽ thay thế phiên hiện tại.",
+    "loadDemoReplace": "Tải demo \"{{label}}\" sẽ thay thế phiên hiện tại.",
+    "newDiscardTitle": "Bỏ thay đổi chưa lưu?",
+    "newDiscardMessage": "Tạo dự án mới sẽ bỏ phiên hiện tại. Các chỉnh sửa chưa lưu sẽ bị mất.",
+    "couldNotLoadMidiTitle": "Không tải được MIDI",
+    "couldNotLoadMidiMessage": "Không phân tích được \"{{name}}\".\n\n{{detail}}",
+    "midiParseFailed": "Phân tích MIDI thất bại: {{detail}}",
+    "couldNotOpenNamed": "Không mở được \"{{name}}\". File có thể đã bị di chuyển, xóa, hoặc bị chặn quyền.",
+    "couldNotLoadDemo": "Không tải được bài demo: {{detail}}",
+    "unsupportedFileType": "Loại file không hỗ trợ: \"{{name}}\". Thả file .nfz hoặc .mid/.midi.",
+    "loadMidiFirstTitle": "Hãy tải một file MIDI trước",
+    "loadMidiFirstMessage": "Âm thanh chỉ được tải vào như bản đệm cho track MIDI. Mở hoặc ghi một file MIDI trước khi nhập âm thanh.",
+    "couldNotLoadAudioTitle": "Không tải được âm thanh",
+    "couldNotLoadAudioMessage": "Không giải mã được \"{{name}}\".\n\n{{detail}}",
+    "notAudioFile": "\"{{name}}\" không phải file âm thanh. Chọn file MP3, WAV, OGG, M4A, AAC, FLAC hoặc WebM.",
+    "somethingWentWrong": "Đã xảy ra lỗi"
+  },
+  "feedback": {
+    "ariaLabel": "Góp ý",
+    "title": {
+      "bug": "Báo lỗi",
+      "feature": "Đề xuất tính năng"
+    },
+    "publicNotice": "Báo cáo của bạn sẽ thành issue công khai trên GitHub. Vui lòng không kèm thông tin cá nhân.",
+    "statusLink": "Xem các báo cáo và trạng thái",
+    "kind": "Loại báo cáo",
+    "kinds": {
+      "bug": "Lỗi",
+      "feature": "Đề xuất tính năng"
+    },
+    "summary": "Tóm tắt",
+    "optional": "tùy chọn",
+    "fields": {
+      "bug": {
+        "description": "Chuyện gì đã xảy ra?",
+        "details": "Các bước tái hiện",
+        "expected": "Bạn mong đợi điều gì?"
+      },
+      "feature": {
+        "description": "Bạn muốn làm gì?",
+        "details": "Nó có thể hoạt động ra sao?"
+      }
+    },
+    "placeholders": {
+      "bug": {
+        "summary": "VD: Nốt biến mất sau khi kéo",
+        "description": "Mô tả điều đã xảy ra.",
+        "details": "1. Mở một project\n2. Kéo một nốt\n3. …"
+      },
+      "feature": {
+        "summary": "VD: Nhảy tới một ô nhịp",
+        "description": "Vấn đề nó giải quyết hoặc điều bạn muốn tạo.",
+        "details": "Hành vi, giao diện, phím tắt…"
+      }
+    },
+    "includeEnv": "Kèm thông tin thiết bị",
+    "send": {
+      "bug": "Gửi báo cáo",
+      "feature": "Gửi đề xuất"
+    },
+    "sending": "Đang gửi",
+    "cancel": "Huỷ",
+    "close": "Đóng",
+    "useGitHub": "Báo cáo trên GitHub thay thế",
+    "openGitHub": "Mở biểu mẫu GitHub",
+    "unavailable": "Biểu mẫu báo cáo không khả dụng tại đây.",
+    "errors": {
+      "verification": "Kiểm tra chống spam thất bại — vui lòng thử lại.",
+      "invalid": "Vui lòng điền tóm tắt và mô tả.",
+      "server": "Không gửi được báo cáo.",
+      "network": "Không có mạng — không gửi được báo cáo."
+    },
+    "sentTitle": {
+      "bug": "Đã gửi báo cáo",
+      "feature": "Đã gửi đề xuất"
+    },
+    "sentBody": "Đã được tạo thành issue #{{number}}.",
+    "sentLink": "Theo dõi trạng thái trên GitHub (#{{number}})",
+    "envHint": "Gửi nguyên văn. Hãy sửa hoặc xóa phần bạn không muốn chia sẻ.",
+    "moreDetail": "Chi tiết hơn",
+    "deviceInfo": "Thông tin thiết bị",
+    "deviceIncluded": "đã kèm",
+    "deviceLeftOut": "đã bỏ qua",
+    "envRestore": "Khôi phục"
+  },
+  "shortcuts": {
+    "title": "Phím tắt",
+    "close": "Đóng",
+    "playback": "Phát nhạc",
+    "editing": "Chỉnh sửa",
+    "file": "Tệp và ghi âm",
+    "mouse": "Chuột trên nốt",
+    "play": "Phát / tạm dừng",
+    "scrub": "Tua (khi tạm dừng)",
+    "scrubKey": "Cuộn",
+    "ff": "Tua nhanh 2×",
+    "ffKey": "Giữ hình",
+    "timeline": "Bật/tắt dòng thời gian",
+    "undo": "Hoàn tác",
+    "redo": "Làm lại",
+    "delete": "Xóa vùng chọn",
+    "clear": "Bỏ chọn",
+    "nudgePitch": "Dịch 1 nửa cung",
+    "nudgeTime": "Dịch 0,05 s sớm / muộn hơn",
+    "keyframe": "Thêm keyframe (dòng thời gian)",
+    "open": "Mở",
+    "save": "Lưu",
+    "saveAs": "Lưu thành",
+    "record": "Ghi âm",
+    "piano": "Chơi nốt",
+    "pianoKeys": "Z–M, A–J, Q–P, số",
+    "select": "Chọn và di chuyển",
+    "selectKey": "Nhấp, kéo",
+    "rangeSelect": "Chọn một vùng",
+    "rangeKey": "kéo",
+    "addSelect": "Thêm vào vùng chọn",
+    "split": "Tách nốt",
+    "menu": "Velocity, tay, ngón",
+    "menuKey": "Nhấp đúp",
+    "del": "Xóa nốt",
+    "delKey": "Nhấp phải",
+    "erase": "Xóa vùng",
+    "eraseKey": "Kéo nút phải",
+    "resize": "Đổi độ dài nốt",
+    "resizeKey": "Kéo một cạnh",
+    "camera": "Thu phóng camera",
+    "cameraKey": "cuộn",
+    "click": "Nhấp",
+    "dragWord": "kéo",
+    "scroll": "cuộn",
+    "add": "Thêm một nốt (chỗ trống)",
+    "sheet": "Hiện bảng phím tắt này",
+    "pcGroup": "Chơi bằng máy tính",
+    "octave": "Dịch quãng tám",
+    "sustain": "Pedal giữ âm (nhấn giữ)",
+    "metronome": "Bật/tắt máy đếm nhịp"
+  }
+}

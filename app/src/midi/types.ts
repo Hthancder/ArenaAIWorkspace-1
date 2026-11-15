@@ -1,0 +1,60 @@
+/** Which hand plays a note. */
+export type Hand = 'L' | 'R'
+/** Finger number, thumb = 1 … little finger = 5. */
+export type Finger = 1 | 2 | 3 | 4 | 5
+
+export type NoteEvent = {
+  id: number
+  midi: number
+  time: number
+  duration: number
+  velocity: number
+  track: number
+  /** Set by the user in the selection card; absent = not assigned. Not part of the SMF — saved in the project. */
+  hand?: Hand
+  finger?: Finger
+}
+
+/** Sustain pedal (CC64). `value` is 0..1; partial values are a half pedal. */
+export type PedalEvent = {
+  time: number
+  value: number
+}
+
+/** Sostenuto (CC66) / soft (CC67) pedal CC, kept so they round-trip
+ *  through record / open / save. Playback ignores them. */
+export type ControlEvent = {
+  number: number
+  time: number
+  value: number
+}
+
+/** CC numbers kept in `ParsedSong.controls`. */
+export const KEPT_CONTROLS = [66, 67] as const
+
+/**
+ * Per-track metadata pulled from the SMF. Index in `ParsedSong.tracks`
+ * matches `NoteEvent.track`, so renderers can look up the display name
+ * or per-track color from the track index alone.
+ *
+ * `name` is the SMF track name when present; otherwise a synthetic
+ * "Track N" fallback. We keep the entry even for tracks that contain
+ * no notes (e.g. tempo-only track 0 in Format 1) so the indices
+ * stay in lockstep with `NoteEvent.track`.
+ */
+export type TrackInfo = {
+  name: string
+  /** True when the track contained at least one note. UI hides
+   *  note-less tracks (tempo / meta) from the per-track colour list. */
+  hasNotes: boolean
+}
+
+export type ParsedSong = {
+  name: string
+  duration: number
+  notes: NoteEvent[]
+  pedals: PedalEvent[]
+  /** Optional: absent on songs built before it existed (= none). */
+  controls?: ControlEvent[]
+  tracks: TrackInfo[]
+}

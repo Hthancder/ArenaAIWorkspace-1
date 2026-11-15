@@ -1,0 +1,75 @@
+{
+  "editor": {
+    "title": "Dòng thời gian",
+    "close": "Đóng dòng thời gian",
+    "resizeLanes": "Kéo để đổi chiều cao lane",
+    "resizeAria": "Đổi kích thước trình dòng thời gian"
+  },
+  "follow": {
+    "stop": "Ngừng theo con trỏ phát",
+    "start": "Theo con trỏ phát khi đang phát",
+    "label": "Theo con trỏ phát"
+  },
+  "lane": {
+    "midi": "MIDI",
+    "speed": "Tốc độ",
+    "audio": "Âm thanh",
+    "options": "Tùy chọn lane",
+    "mute": "Tắt tiếng",
+    "unmute": "Bật tiếng",
+    "resizeLanes": "Kéo để đổi chiều cao lane",
+    "decoding": "Đang giải mã…",
+    "addAudio": "Thêm âm thanh…",
+    "addAudioHint": "hoặc thả file âm thanh vào bất kỳ đâu",
+    "addAudioFailed": "Không tải được âm thanh",
+    "keyframes": "Keyframe"
+  },
+  "context": {
+    "volume": "Âm lượng",
+    "mute": "Tắt tiếng",
+    "unmute": "Bật tiếng",
+    "resetToUnity": "Đặt lại về 0 dB",
+    "removeAudio": "Xóa âm thanh"
+  },
+  "speed": {
+    "automationAria": "Tự động đổi tốc độ MIDI",
+    "automationTitle": "Nhấp để thêm điểm gấp · kéo để di chuyển · nhấp phải để xóa · cuộn tại điểm giữa để chỉnh cong",
+    "breakpointTitle": "{{value}}× tại {{time}}s — nhấp đúp để đặt lại · nhấp phải để xóa",
+    "curveTitle": "độ cong {{curvature}} — kéo hoặc cuộn để uốn · nhấp phải để làm thẳng"
+  },
+  "trim": {
+    "drag": "Kéo để cắt",
+    "midiHead": "Cắt đầu MIDI",
+    "midiTail": "Cắt cuối MIDI",
+    "audioHead": "Cắt đầu âm thanh",
+    "audioTail": "Cắt cuối âm thanh"
+  },
+  "ruler": {
+    "seekAria": "Thước — nhấp để tua trong khung nhìn",
+    "seekTitle": "Kéo để tua · nhấp đúp để vừa khung",
+    "resetZoomAria": "Đặt lại thu phóng",
+    "resetZoomTitle": "Đặt lại thu phóng"
+  },
+  "clip": {
+    "syncTitle": "Kéo để đồng bộ — lệch {{offset}}s"
+  },
+  "minimap": {
+    "panAria": "Bản đồ nhỏ — kéo để di chuyển khung nhìn",
+    "panTitle": "Kéo để di chuyển vùng hiển thị",
+    "zoomToEnable": "Phóng to để di chuyển khung nhìn",
+    "resizeFromLeft": "Đổi vùng hiển thị từ trái",
+    "resizeFromRight": "Đổi vùng hiển thị từ phải"
+  },
+  "velocityCurve": {
+    "label": "Đường cong velocity"
+  },
+  "addKeyframe": {
+    "label": "Thêm keyframe",
+    "title": "Thêm keyframe tại con trỏ phát"
+  },
+  "keyframe": {
+    "laneAria": "Keyframe",
+    "laneTitle": "Keyframe ghi lại giao diện tại một thời điểm; cảnh nội suy giữa các keyframe liền kề. Nhấp vào chỗ trống để thêm, nhấp vào keyframe để chọn và nhảy tới, kéo để di chuyển, kéo nút phải để xóa.",
+    "markerTitle": "Keyframe tại {{time}}"
+  }
+}

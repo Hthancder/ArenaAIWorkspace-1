@@ -82,3 +82,12 @@
 | 2026-11-14 | Rà 15 mâu thuẫn (C1–C15) | Đã có quyết định |
 | 2026-11-14 | Thêm lớp "máy đọc": `41`–`45`, `spec/*` | Xong |
 | 2026-11-14 | Xác định 7 câu hỏi chưa chốt (D1–D7) + 10 khoảng trống (G1–G10) | Ghi lại |
+
+## 46.7. CONFLICT phát hiện khi build (2026-11-15)
+
+| Dòng | Mâu thuẫn → Quyết định |
+|---|---|
+| CONFLICT: `20.5` đề xuất `Z`/`X` = octave shift, `M` = metronome, `L` = loop — nhưng `20.4` map Z/X/M/L là phím đàn, và nguyên tắc "chọn phím" của chính `20.5` cấm shortcut không-modifier trên phím đàn → **Quyết:** octave shift = `PgUp`/`PgDn`, metronome = `Ctrl/Cmd+M`, bỏ `L` (loop A–B chưa có). Căn cứ: `41.3` (mâu thuẫn trong cùng file → theo nguyên tắc tổng quát hơn). |
+| CONFLICT: `20.5` nguyên tắc mô tả phím đàn là "A–L, Q–P, số" (kiểu tembrica/Perfect Piano) nhưng map thực tế của nền tảng NoteFall là 2 hàng Z–X–C… / Q–W–E… → **Quyết:** giữ map NoteFall làm mặc định (người dùng chỉ định "lấy all của NoteFall"); remap/preset AZERTY/Dvorak để dành (ideas.md). |
+| TODO(spec): velocity theo vị trí nhấn chuột — tài liệu `09` nói "vị trí click (Y trên phím)" nhưng không nêu min/max → dùng tạm 0.35–1.0 (trước = nhẹ, sau = mạnh). |
+| TODO(spec): metronome 40–240 BPM theo `06`, nhưng chưa rõ có đồng bộ tempo map bài không → hiện là metronome độc lập, mặc định 100 BPM / 4 nhịp (số liệu count-in của NoteFall). |
