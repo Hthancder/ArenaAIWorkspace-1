@@ -377,3 +377,6 @@ Mở rộng nhật ký opt-in với kết quả xử lý thông báo website và
 
 ### Tiến độ 0.107 — sao lưu mặc định riêng và nhật ký âm
 Thêm lựa chọn xuất/nhập ghi đè mặc định mở cho nhóm/workspace đang hoạt động, ánh xạ ID mới, giữ thiết lập Hộp để sau hiện tại khi gộp, kiểm tra thay đổi và giới hạn trước khi ghi; không xuất ghi đè đối tượng trong thùng rác. Bổ sung nhật ký âm opt-in cho kết quả phát/từ chối, dùng khóa ghi chung sau khi nhả khóa âm, không lưu dữ liệu nhạy cảm, không ghi nghe thử hoặc các lượt bỏ qua. Tiếp tục không đảm bảo hiển thị/phát thực tế, không xuất nhật ký; cần kiểm thử Chrome thực tế.
+
+### Tiến độ 0.108 — dữ liệu cá nhân an toàn hơn khi sao lưu
+Thêm xuất/nhập opt-in số ngày nhắc phân loại, nhắc sao lưu và gợi ý thời hạn; nhập tắt nhắc/gợi ý, đặt lại trạng thái hoãn/xác nhận và không nhập tự dọn. Cấu hình thời hạn đổi làm guard tự dọn dừng; kiểm tra cài đặt không đổi trước khi ghi. Khi xuất quá 10 MB yêu cầu xác nhận trước khi tải vì giới hạn nhập, vẫn cho lưu ra ngoài nếu người dùng chủ động chọn. Cần kiểm thử trên Chrome thực tế.
