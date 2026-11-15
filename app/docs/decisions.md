@@ -239,3 +239,34 @@ playing, despite green unit tests:
    keystrike (≈16 mm dip at default 0.6), PECK_LIFT 0.16 windup,
    HOVER_EXTRA 0.14, WRIST_DIP 0.03, clamps [-0.55, 0.35] rad (well
    under a fist). Every press now reads like the MIDI-driven hands.
+
+## 2026-11-15 — tay có hồn (expression layer có kiểm soát)
+
+- Người chơi: chuyển động tay đã tự nhiên, yêu cầu tiếp theo là "có hồn",
+  cảm xúc — nhưng **cân thận, có kiểm soát, không quá đà** (chữ của người
+  chơi). Phối hợp tay–ngón hợp lý, đặt ngón phù hợp, thích nghi nốt đang
+  rơi + nốt đánh thủ công, hành động như pianist thật (bấm mạnh nốt cảm
+  xúc), kèm công tắc/tùy chỉnh.
+- Thiết kế — 5 tín hiệu nhỏ, cộng dồn thành "hồn", tổng được kiểm soát
+  (mọi thành phần tỉ lệ với `expression`, 0 = tắt hoàn toàn = hành vi cũ):
+  1. **Velocity depth**: độ sâu nhát bấm tỉ lệ velocity của nốt đó
+     (live: velocity từ `triggerKey`; playback: velocity của note trong
+     plan) — nốt nhấn chìm sâu hơn, nhẹ nhàng hơn.
+  2. **Accent arm roll**: nốt mạnh (velocity > 0.72) lăn bàn tay quanh
+     trục cẳng tay (xoay quanh wrist, hướng elbow→wrist) — "arm weight",
+     biên ±0.05 rad, đậm dần theo độ mạnh, tay thuận lăn đúng hướng.
+  3. **Rolled chords**: 2 key-down trong cùng ~60 ms → ngón sau bấm trễ
+     hơn ngón trước ~20 ms — hợp âm lướt như pianist, không bấm chùm.
+  4. **Playback dip**: khi phát MIDI, model tự nhấn — nốt mạnh chìm sâu
+     hơn chút (τ vào 0.06 s / ra 0.22 s) — cảm xúc khi nghe.
+  5. **Register posture**: quãng cao tay nhỉnh lên, quãng thấp trầm xuống
+     (chỉ tay synthesised, model hands tự có posture thật).
+- Thích nghi: `resolvePlan` **ưu tiên nốt sắp tới** (on ∈ [t−0.35, t+1.4],
+  chọn gần nhất) thay vì nốt vừa qua — ngón chuẩn bị cho nốt đang rơi;
+  cost claim thêm +0.25 cho ngón cái trên phím đen (đặt ngón hợp lý).
+- **Công tắc/tùy chỉnh**: setting `handsExpression` (mặc định **0.65**,
+  slider "Biểu cảm" trong Hands, 0..1, step 0.01) — tắt = 0. Toàn bộ
+  smoothing/rotation là rigid (bone lengths exact — có test).
+- Test mới (42 checks total): velocity depth (hard < soft −0.02 z),
+  accent roll (palm hướng đổi, lengths giữ), rolled chord stagger,
+  playback dip, expression-off = hành vi cũ (34 test cũ còn xanh).
