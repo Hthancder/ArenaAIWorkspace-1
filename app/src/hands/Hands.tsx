@@ -14,7 +14,7 @@ import {
   type HumanizeParams,
   type HumanizeScratch,
 } from './humanize'
-import { liveHands } from './liveHands'
+import { liveHands, type LiveHandsOpts } from './liveHands'
 import { getExportFps } from '../scene/exportBridge'
 import {
   BLUR_MIN_PX, BLUR_PX_STEP, BLUR_SHUTTER, HandsBlurPass, PREVIEW_FRAME_SECONDS, blurBridge, blurOffsets, getMotionBlur, handBounds,
@@ -37,6 +37,7 @@ const HAND_KEYS = [
   'handsSmoothness',
   'handsMicroMotion',
   'handsFollowInput',
+  'handsKeystrike',
   'bloomEnabled',
   'midiOffsetSec',
   'midiSpeedAutomation',
@@ -68,7 +69,7 @@ export function Hands() {
     return g
   }, [])
   const meshRef = useRef<ReturnType<typeof createMeshHands> | null>(null)
-  const motionRef = useRef<(ReadyMotion & { song: string }) | null>(null)
+  const motionRef = useRef<(ReadyMotion & { song: string; notes: ReturnType<typeof songHandNotes> }) | null>(null)
   // Humanize scratch pool — slot 0 = main pose, 1–2 = blur probes, 3+ =
   // blur sub-poses. Reused across frames (the blur plan is consumed
   // within the same frame it is built).
@@ -118,7 +119,7 @@ export function Hands() {
       }
       synthHandMotion(notes, ctl.signal)
         .then((m) => {
-          motionRef.current = { ...m, song: song.name }
+          motionRef.current = { ...m, song: song.name, notes }
           invalidate()
         })
         .catch(() => {}) // cancelled by a newer request, or failed (the status says so)
@@ -159,7 +160,48 @@ export function Hands() {
       // Live-input overlay: the hands follow the user's manual playing
       // (mouse / PC keyboard / MIDI). Live-only state — no-op on exports.
       const playing = audioEngine.isPlaying()
-      if (s.handsFollowInput) liveHands.update(poses, playing)
+      // Live-input overlay: the hands follow the user's manual playing
+      // (mouse / PC keyboard / MIDI). Live-only state — no-op on exports.
+      const opts: LiveHandsOpts = {
+        playing,
+        keystrike: s.handsKeystrike,
+        // Natural fingering: the motion plan's (hand, finger) for the
+        // song note nearest this key and the playhead.
+        resolvePlan: (midi) => {
+          const rm = motionRef.current
+          if (!rm || !rm.motion.plan) return null
+          let best = -1
+          let bestD = Infinity
+          for (let i = 0; i < rm.notes.length; i++) {
+            const n = rm.notes[i]
+            if (n.midi !== midi) continue
+            const d = Math.abs(n.on - t)
+            if (d < bestD) {
+              bestD = d
+              best = i
+            }
+          }
+          if (best < 0 || bestD > 2.5) return null
+          const hand = rm.motion.plan.hand[best]
+          const finger = rm.motion.plan.finger[best]
+          if (!hand || !(finger >= 1 && finger <= 5)) return null
+          return { hand, finger: finger - 1 }
+        },
+        // A hand that is off stage (runtime: "rests in the lap") comes up
+        // from a mid-run pose sample of that hand when the user needs it.
+        sampleHand: (hand) => {
+          const rm = motionRef.current
+          if (!rm) return null
+          const runs = rm.motion.runs?.[hand] ?? []
+          for (const [a, b] of runs) {
+            const tm = rm.motion.t0 + (a + b) / 2 / rm.motion.fps
+            const p = rm.poseAt(rm.motion, tm)[hand]
+            if (p) return p
+          }
+          return null
+        },
+      }
+      if (s.handsFollowInput) liveHands.update(poses, opts)
       mesh.update(poses, false)
 
       // Motion blur: sub-poses at trailing times of ONE nominal frame of song time (export: 1/fps, preview: 1/60 s, times the
@@ -179,7 +221,7 @@ export function Hands() {
       const sub: HandPoses[] = blurOffsets(n, BLUR_SHUTTER, dt).map((o, i) => {
         if (o === 0) return poses
         const sp = humanizePoses(src, Math.max(0, t + o), params, scratchAt(3 + i))
-        if (s.handsFollowInput) liveHands.applyToPoses(sp, playing)
+        if (s.handsFollowInput) liveHands.applyToPoses(sp, opts, { L: scratchAt(3 + i).L.pose, R: scratchAt(3 + i).R.pose })
         return sp
       })
       camera.updateMatrixWorld()

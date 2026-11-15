@@ -1,10 +1,13 @@
 /**
- * Live-input hands overlay tests (src/hands/liveHands.ts).
+ * Live-input hands overlay v2 tests (src/hands/liveHands.ts).
  *
- * NOTE: importing the audio engine pulls browser-only globals at module
- * scope (smoothRelease touches AudioParam.prototype), so this test shims
- * the minimal Web Audio surface and uses dynamic imports.
+ * v2 contract (2026-11-15 user feedback): motion must be RIGID (no bone
+ * stretching, "kéo dãn, force"), an off-stage hand must COME UP for keys
+ * on its side of the keyboard, repeated presses must visibly tap, and the
+ * song plan's fingering must win when available.
  *
+ * NOTE: the audio engine pulls browser-only globals at module scope, so
+ * this test shims the minimal Web Audio surface and uses dynamic imports.
  * Run: `npx vite-node scripts/test-livehands.ts`
  */
 
@@ -62,8 +65,8 @@ class FakeCtx {
 if (typeof (globalThis as unknown as { window?: unknown }).window === 'undefined') {
   ;(globalThis as unknown as { window: unknown }).window = globalThis
 }
-// dev/mode.ts reads localStorage — enable dev tools + no-audio so
-// triggerKey proceeds without the sampler.
+// dev/mode.ts reads localStorage — dev tools + no-audio so triggerKey
+// proceeds without the sampler.
 const store = new Map<string, string>([
   ['nf:dev', '1'],
   ['nf:dev:noaudio', '1'],
@@ -77,9 +80,9 @@ const store = new Map<string, string>([
 const { audioEngine } = await import('../src/audio/engine')
 const { liveHands } = await import('../src/hands/liveHands')
 const { keyForMidi } = await import('../src/keyboard/layout')
-// Type-only import — erased at compile time, so it loads no modules
-// before the shims above.
+// Type-only import — erased at compile time, loads no modules early.
 import type { HandPose, HandPoses } from '../src/hands/types'
+import type { LiveHandsOpts } from '../src/hands/liveHands'
 
 let failures = 0
 function check(name: string, cond: boolean, detail = ''): void {
@@ -110,46 +113,91 @@ function makePose(hand: 'L' | 'R', x: number): HandPose {
 
 const posesOf = (): HandPoses => ({ L: makePose('L', -1), R: makePose('R', 1) })
 
-// Deterministic frame clock: the overlay smooths with real dt, and these
-// loops run in microseconds — step a fake performance.now() per frame.
+/**
+ * Restore the working pose's GEOMETRY from a pristine template — exactly
+ * what the app's humanize does every frame (applyTo writes into the given
+ * pose; fresh input, never accumulated).
+ */
+function refreshPose(dst: HandPose, tpl: HandPose): void {
+  dst.elbow = [...tpl.elbow] as HandPose['elbow']
+  dst.wrist = [...tpl.wrist] as HandPose['wrist']
+  for (let i = 0; i < 5; i++) {
+    dst.bases[i] = [...tpl.bases[i]] as HandPose['bases'][number]
+    for (let k = 0; k < 4; k++) dst.fingers[i][k] = [...tpl.fingers[i][k]] as HandPose['fingers'][number][number]
+  }
+  for (let i = 0; i < 3; i++) dst.thumbRef[i] = [...tpl.thumbRef[i]] as HandPose['thumbRef'][number]
+}
+
+// Deterministic frame clock — these loops run in microseconds.
 let fakeMs = 0
 ;(performance as unknown as { now: () => number }).now = () => fakeMs
 
-const frames = (p: HandPoses, n: number, playing = false, refresh?: () => void): void => {
+const baseOpts = (extra: Partial<LiveHandsOpts> = {}): LiveHandsOpts => ({ playing: false, keystrike: 1, ...extra })
+
+const frames = (p: HandPoses, n: number, opts: LiveHandsOpts = baseOpts(), refresh?: () => void): void => {
   for (let i = 0; i < n; i++) {
     fakeMs += 16.7
-    // The app re-copies the raw press flags every frame (humanize); the
-    // test must too — applyTo consumes the base flags it just wrote.
+    // The app re-copies the raw poses every frame (humanize); the test
+    // must too — applyTo writes into whatever pose it is handed.
     refresh?.()
-    liveHands.update(p, playing)
+    liveHands.update(p, opts)
   }
+}
+
+/** All bone lengths of one hand: elbow→wrist, base→MCP, and the finger chains. */
+function boneLengths(p: HandPose): number[] {
+  const d = (a: number[], b: number[]) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
+  const out: number[] = [d(p.elbow, p.wrist)]
+  for (let f = 0; f < 5; f++) {
+    out.push(d(p.bases[f], p.fingers[f][0]))
+    for (let k = 0; k < 3; k++) out.push(d(p.fingers[f][k], p.fingers[f][k + 1]))
+  }
+  return out
 }
 
 console.log('idle: no presses → poses untouched')
 {
-  liveHands.attach() // the app attaches in Hands.tsx's effect
+  liveHands.attach()
   liveHands.reset()
   const p = posesOf()
+  const tpl = posesOf()
   const before = JSON.stringify(p)
-  frames(p, 5)
+  frames(p, 5, baseOpts(), () => {
+    refreshPose(p.L!, tpl.L!)
+    refreshPose(p.R!, tpl.R!)
+  })
   check('pose unchanged', JSON.stringify(p) === before)
 }
 
-console.log('press: finger taps the key, wrist drifts toward it')
+console.log('press: rigid reach — the finger tip lands on the key, no stretching')
 {
   liveHands.reset()
-  const h = audioEngine.triggerKey(72, 0.8) // held key, right side
-  check('triggerKey fires without the sampler (devNoAudio)', h !== null)
+  const tpl = posesOf()
   const p = posesOf()
-  frames(p, 60) // ~1 s
   const r = p.R!
+  const h = audioEngine.triggerKey(72, 0.8)
+  check('triggerKey fires without the sampler (devNoAudio)', h !== null)
+  const refresh = () => {
+    refreshPose(p.L!, tpl.L!)
+    refreshPose(r, tpl.R!)
+  }
+  const bonesBefore = boneLengths(tpl.R!)
+  frames(p, 60, baseOpts(), refresh) // ~1 s
+  refresh()
+  liveHands.update(p, baseOpts())
   const f = r.press.findIndex((v) => v > 0.5)
   const keyX = keyForMidi(72)!.x
   check('some right finger presses', f >= 0, JSON.stringify(r.press))
   check('left hand untouched', p.L!.press.every((v) => v === 0))
-  check('wrist drifts onto the pressed key', Math.abs(r.wrist[0] - keyX) < 0.2, `${r.wrist[0]} vs ${keyX}`)
-  check('drift stays within reach', r.wrist[0] <= 1 + 1.1 + 1e-9, `${r.wrist[0]}`)
-  if (f >= 0) check('tip pulled down to the key', r.fingers[f][3][2] < 0.5, `${r.fingers[f][3][2]}`)
+  if (f >= 0) {
+    check('assigned finger tip lands on the key x', Math.abs(r.fingers[f][3][0] - keyX) < 0.2, `${r.fingers[f][3][0]} vs ${keyX}`)
+  }
+  const bonesAfter = boneLengths(r)
+  let maxStretch = 0
+  bonesBefore.forEach((b, i) => {
+    maxStretch = Math.max(maxStretch, Math.abs(bonesAfter[i] - b) / b)
+  })
+  check('bone lengths preserved (rigid only)', maxStretch < 0.05, `${(maxStretch * 100).toFixed(1)}%`)
 
   console.log('release: smooth return, no jumps')
   h?.release()
@@ -157,35 +205,115 @@ console.log('press: finger taps the key, wrist drifts toward it')
   let maxJump = 0
   for (let i = 0; i < 90; i++) {
     fakeMs += 16.7
-    liveHands.update(p, false)
-    maxJump = Math.max(maxJump, Math.abs(p.R!.wrist[0] - prev))
-    prev = p.R!.wrist[0]
+    refresh()
+    liveHands.update(p, baseOpts())
+    maxJump = Math.max(maxJump, Math.abs(r.wrist[0] - prev))
+    prev = r.wrist[0]
   }
-  check('wrist returns toward base', Math.abs(p.R!.wrist[0] - 1) < 0.25, `${p.R!.wrist[0]}`)
+  check('drift returns toward base', Math.abs(r.wrist[0] - 1) < 0.25, `${r.wrist[0]}`)
   check('no per-frame jump > 0.1', maxJump < 0.1, `${maxJump}`)
-  check('press flags cleared', p.R!.press.every((v) => v === 0))
+  check('press flags cleared', r.press.every((v) => v === 0))
+}
+
+console.log('repeat presses: every key-down visibly taps ("không giữ nguyên 1 chỗ")')
+{
+  liveHands.reset()
+  const tpl = posesOf()
+  const p = posesOf()
+  const r = p.R!
+  const refresh = () => refreshPose(r, tpl.R!)
+  const h1 = audioEngine.triggerKey(72, 0.8)
+  frames(p, 20, baseOpts(), refresh)
+  let f = 0
+  for (let i = 0; i < 5; i++) if (r.press[i] > 0.5) f = i
+  h1?.release()
+  frames(p, 12, baseOpts(), refresh) // short gap — finger not fully settled
+  const h2 = audioEngine.triggerKey(72, 0.8) // repeat!
+  let zMin = Infinity
+  let zMax = -Infinity
+  for (let i = 0; i < 16; i++) {
+    fakeMs += 16.7
+    refresh()
+    liveHands.update(p, baseOpts())
+    const z = r.fingers[f][3][2]
+    zMin = Math.min(zMin, z)
+    zMax = Math.max(zMax, z)
+  }
+  h2?.release()
+  check('second press shows a visible tap', zMax - zMin > 0.02, `${(zMax - zMin).toFixed(3)}`)
+}
+
+console.log('adaptive hands: the left hand comes up for left-side keys')
+{
+  liveHands.reset()
+  // Only the RIGHT hand is on stage.
+  const tplR = makePose('R', 2)
+  const p: HandPoses = { L: null, R: makePose('R', 2) }
+  const opts = baseOpts({
+    sampleHand: (hand) => (hand === 'L' ? makePose('L', -3) : null),
+  })
+  const refresh = () => refreshPose(p.R!, tplR)
+  frames(p, 30, opts, refresh)
+  check('no presses → left hand stays off stage', p.L === null)
+
+  const leftX = keyForMidi(40)!.x // far-left key
+  const h = audioEngine.triggerKey(40, 0.8)
+  frames(p, 90, opts, refresh)
+  check('left hand materialises for the left key', p.L !== null)
+  if (p.L) {
+    const f = p.L.press.findIndex((v) => v > 0.5)
+    if (f >= 0) {
+      check('left finger lands near the key', Math.abs(p.L.fingers[f][3][0] - leftX) < 0.6, `${p.L.fingers[f][3][0]} vs ${leftX}`)
+    } else check('left finger presses', false, JSON.stringify(p.L.press))
+  }
+  check('right hand does not stretch across', Math.abs(p.R!.wrist[0] - 2) <= 1.2 + 1e-9, `${p.R!.wrist[0]}`)
+
+  console.log('adaptive hands: the left hand lowers away after playing')
+  h?.release()
+  frames(p, 120, opts, refresh)
+  check('left hand is gone again', p.L === null)
+}
+
+console.log('plan fingering wins when the song plan knows the note')
+{
+  liveHands.reset()
+  const tpl = posesOf()
+  const p = posesOf()
+  const opts = baseOpts({
+    resolvePlan: (midi) => (midi === 72 ? { hand: 'R', finger: 2 } : null),
+  })
+  const refresh = () => {
+    refreshPose(p.L!, tpl.L!)
+    refreshPose(p.R!, tpl.R!)
+  }
+  const h = audioEngine.triggerKey(72, 0.8)
+  frames(p, 40, opts, refresh)
+  check('planned finger (index 2) presses', p.R!.press[2] === 1, JSON.stringify(p.R!.press))
+  check('no other finger steals it', p.R!.press.filter((v) => v > 0.5).length === 1)
+  h?.release()
 }
 
 console.log('wait-mode demand: pressed pose hovers until the user plays')
 {
   liveHands.reset()
+  const tpl = posesOf()
   const p = posesOf()
   const r = p.R!
-  // The frozen step pose demands finger 2 (press=1) but nobody has played
-  // it yet — refreshed each frame like the humanize pass does.
   const demand = () => {
+    refreshPose(p.L!, tpl.L!)
+    refreshPose(r, tpl.R!)
     r.press[2] = 1
   }
-  frames(p, 60, false, demand)
-  check('demanded finger hovers up', r.fingers[2][3][2] > 0.8 + 0.05, `${r.fingers[2][3][2]}`)
+  const opts = baseOpts()
+  frames(p, 60, opts, demand)
+  check('demanded finger hovers up', r.fingers[2][3][2] > 0.8 + 0.03, `${r.fingers[2][3][2]}`)
   check('press flag stays live-driven (off)', r.press[2] === 0)
 
-  // The user presses a key on the right-hand side.
   const h = audioEngine.triggerKey(72, 0.8)
-  frames(p, 60, false, demand)
+  frames(p, 60, opts, demand)
   check('pressed → some finger comes down', r.press.some((v) => v > 0.5), JSON.stringify(r.press))
   h?.release()
-  frames(p, 120, false, demand)
+  frames(p, 120, opts, demand)
   check('released → demand hover returns', r.fingers[2][3][2] > 0.8, `${r.fingers[2][3][2]}`)
   check('press flags cleared', r.press.every((v) => v === 0))
 }

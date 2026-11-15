@@ -147,7 +147,8 @@
     "handsHumanize": "モーションを人間らしく",
     "handsSmoothness": "滑らかさ",
     "handsMicroMotion": "マイクロモーション",
-    "handsFollowInput": "手を演奏に合わせる"
+    "handsFollowInput": "手を演奏に合わせる",
+    "handsKeystrike": "キーストローク"
   },
   "particleBlending": {
     "alpha": "通常",

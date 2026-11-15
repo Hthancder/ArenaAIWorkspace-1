@@ -433,6 +433,8 @@ export type Settings = {
   // fingers tap the pressed keys, the wrist drifts toward them. Live-only
   // (exports always render the pure song motion).
   handsFollowInput: boolean
+  // Strength of the per-press strike tap (0..1).
+  handsKeystrike: number
   keyLabelsEnabled: boolean
   keyLabelsMode: 'c' | 'white' | 'all'   // which keys carry a label
   keyLabelFormat: PitchLabelFormat
@@ -784,6 +786,7 @@ export const defaultSettings: Settings = {
   handsSmoothness: 0.5,
   handsMicroMotion: 0.5,
   handsFollowInput: true,
+  handsKeystrike: 0.6,
   keyLabelsEnabled: false,
   keyLabelsMode: 'c',
   keyLabelFormat: 'letterOctave',

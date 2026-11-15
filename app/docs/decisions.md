@@ -106,3 +106,41 @@ Triệu chứng: bật bàn tay → tay không hiện, nốt ngừng rơi, phím
   - **EXPORT LUÔN thuần**: update/applyTo no-op + reset khi `isExporting()` (state live là history-dependent — không được vào render pipeline export).
 - Blur sub-poses cũng apply overlay (vệt khớp pose chính).
 - Test: `scripts/test-livehands.ts` (vite-node + shim Web Audio tối giản + fake clock) — 15 checks ALL PASSED; test-practice/test-humanize vẫn ALL PASSED.
+
+## 2026-11-15 — hands overlay v2: rigid motion + adaptive hands (user feedback)
+
+Two user complaints about the live hands (v1, 879dc5c): fingers looked
+stretched ("kéo dãn, force"), and the hands were not adaptive — with only
+the right hand on stage, playing left-side keys stretched the right hand
+across ("nhìn giả quá") instead of bringing the LEFT hand up. Plus: a key
+pressed many times must visibly tap every time.
+
+- **Rigid only (no bone stretching).** v1's per-joint tip-lerp (tip moved
+  ~1.1 while DIP ~0.5 → +150% bone) and shear drift (wrist x1.0 vs bases
+  x0.18) are GONE. Every transform is now rigid: `shiftHand` translates
+  ALL joints incl. elbow and thumbRef; `bobFinger` moves joints 1..3 by
+  the SAME dz (proximal change ~dz²/2L ≈ 1%, invisible). No joint is ever
+  moved alone toward a target. The assigned finger's tip lands on the key
+  purely by rigid drift (`keyX − tipX`); the press read comes from the
+  `press` flag + the strike bob. Test asserts bone lengths preserved <5%.
+- **Adaptive hands.** A hand that is off stage (runtime poseAt → null:
+  "rests in the lap") COMES UP when the user plays its side: it is
+  synthesised from a mid-run pose sample (`opts.sampleHand`), fades in
+  from above (ENTER_Z/Y, τ 0.14) and lowers away after playing (τ 0.28,
+  poses[hand] → null). Cost claim: plan fingering first, else reach cost
+  with off-stage bias `1.6+|keyX−side·2.2|·0.35`; on-stage hands clamp at
+  REACH_X=1.2 (a synth hand travels freely — it entered for exactly that).
+- **Fingering from the song plan.** `opts.resolvePlan` maps a live key to
+  the motion plan's (hand, finger) for the song note nearest the playhead
+  (≤2.5 s) — press seen, plan used (2026-11-15 decision). Plan finger
+  takes over early-freed neighbours for a clean hand-off.
+- **Every key-down taps.** `strikeT` resets on each key-down (even
+  repeats) → strike envelope STRIKE_Z·(1−u)² over 0.13 s on joints 1..3,
+  scaled by `handsKeystrike` (new setting, default 0.6). Demand hover
+  (Wait Mode) preserved.
+- The update() contract: input poses are fresh per frame (humanize does
+  this); `update` treats its OWN buffer as "not on stage" so the synth
+  hand keeps fading (poses identity check).
+- Tests (`scripts/test-livehands.ts`, 23 checks): bone lengths, tip lands
+  on key, repeat taps, left hand enters/leaves for left keys, plan
+  fingering, demand hover — ALL PASSED alongside the existing suites.

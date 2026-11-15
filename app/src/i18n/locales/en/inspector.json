@@ -147,7 +147,8 @@
     "handsHumanize": "Humanize motion",
     "handsSmoothness": "Smoothness",
     "handsMicroMotion": "Micro-motion",
-    "handsFollowInput": "Hands follow your playing"
+    "handsFollowInput": "Hands follow your playing",
+    "handsKeystrike": "Keystrike tap"
   },
   "particleBlending": {
     "alpha": "Normal",

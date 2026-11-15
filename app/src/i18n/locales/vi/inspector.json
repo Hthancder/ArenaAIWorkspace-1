@@ -147,7 +147,8 @@
     "handsHumanize": "Chuyển động tự nhiên",
     "handsSmoothness": "Độ mượt",
     "handsMicroMotion": "Chuyển động vi mô",
-    "handsFollowInput": "Tay bám theo bạn chơi"
+    "handsFollowInput": "Tay bám theo bạn chơi",
+    "handsKeystrike": "Nhát gõ phím"
   },
   "particleBlending": {
     "alpha": "Pháp tuyến",
