@@ -65,3 +65,8 @@ Thiết lập riêng lưu cục bộ, không xuất/nhập sao lưu; được gi
 
 ### Chọn nhiều trong bảng lệnh (0.102)
 Mở bảng lệnh bằng **Alt+K**, tìm rồi dùng checkbox hoặc **Ctrl+Space** trên kết quả đang chọn. Có thể đổi từ khóa mà vẫn giữ lựa chọn (tối đa 100 mục); chỉ chọn cùng loại: tab web đang mở, hoặc nhóm/tab đã lưu. Bấm **Xem các mục đã chọn** để chuyển sang danh sách phù hợp; Tabspace kiểm tra lại ID, URL và cửa sổ hoặc bản lưu, bỏ mục đã đổi và thông báo. Bước này không mở, đóng hay thay đổi tab. Nếu trang quản lý đã có lựa chọn, cần xác nhận thay thế. Để dùng Enter thực hiện lệnh khác, hãy áp dụng hoặc bỏ lựa chọn trước. Lựa chọn trong bảng mất khi đóng bảng; một số mục đã chọn có thể nằm trong nhóm đang thu gọn.
+
+### Lọc theo thời gian và nhóm thông minh (0.103)
+Ở **Tab đang mở**, lọc theo lần kích hoạt gần nhất do Chrome cung cấp: trong 7 ngày, từ 7/30/90 ngày hoặc không rõ. Một ngày là 24 giờ; thời gian thiếu hoặc trong tương lai được coi là không rõ. Bộ lọc chỉ là gợi ý, không chứng minh tab an toàn để đóng. Chọn cả cửa sổ hoặc nhóm Chrome vẫn bao gồm tab bị lọc ẩn như nhãn nút nêu rõ.
+
+**Nhóm thông minh** có thể kết hợp từ khóa, tag, tên miền chính xác hoặc gồm tên miền con, và khoảng số ngày đã lưu. Các điều kiện áp dụng đồng thời; tuổi tính theo thời gian tạo bản lưu trong Tabspace, không phải lần truy cập, có thể khác sau nhập hoặc sao chép. Khi dùng lọc tuổi, mục thiếu ngày hoặc có ngày tương lai không khớp. Bộ lọc không di chuyển hay đóng tab, được xuất trong sao lưu. Phiên bản Tabspace cũ có thể bỏ qua các điều kiện mới khi nhập sao lưu, làm kết quả rộng hơn; hãy kiểm tra bộ lọc nếu hạ phiên bản.

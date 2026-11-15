@@ -362,3 +362,6 @@ Bổ sung kế thừa từng lựa chọn nơi mở, bỏ URL đang mở và b�
 
 ### Tiến độ 0.102 — chọn nhiều trong bảng lệnh
 Thêm checkbox và Ctrl+Space cho tab web đang mở hoặc nhóm/tab đã lưu, giữ lựa chọn khi tìm kiếm, tối đa 100, không trộn hai loại. Chuyển lựa chọn sang màn hình tương ứng sau khi đọc lại dữ liệu, xác thực ID/URL/cửa sổ, bỏ mục thay đổi và xác nhận thay lựa chọn cũ. Không mở/đóng ở bước chọn; các thao tác sau vẫn theo xem trước và bảo vệ. Lựa chọn mất khi đóng bảng; cần kiểm thử bàn phím, focus và trình đọc màn hình thực tế trên Chrome.
+
+### Tiến độ 0.103 — lọc tuổi và tên miền
+Tab đang mở có lọc theo lastAccessed Chrome, coi thiếu/tương lai là không rõ; bộ lọc động tab lưu bổ sung tên miền chính xác/bao gồm tên miền con và tuổi bản lưu tối thiểu/tối đa, kết hợp AND với từ khóa/tag. Khoảng thời gian tính 24 giờ, không suy ra mức độ an toàn hoặc lần truy cập từ ngày lưu. Bộ lọc mới có trong sao lưu; phiên bản cũ có thể bỏ qua điều kiện mới. Cần kiểm thử Chrome thực tế.

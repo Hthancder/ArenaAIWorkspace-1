@@ -2,7 +2,8 @@
 const OpenFilter=(()=>{
  const statuses=['all','active','pinned','audible','discarded','not-discarded'];
  const groupKey=tab=>Number.isInteger(tab.groupId)&&tab.groupId>=0&&Number.isInteger(tab.windowId)?`${tab.windowId}:${tab.groupId}`:null;
- function matches(tab,windowId,status,group='all'){
+ function matches(tab,windowId,status,group='all',age='all',now=Date.now()){
+  const known=Number.isFinite(now)&&Number.isFinite(tab.lastAccessed)&&tab.lastAccessed>0&&tab.lastAccessed<=now,elapsed=now-tab.lastAccessed,day=86400000;if(age==='unknown'){if(known)return false}else if(age!=='all'){if(!known)return false;const opts={recent7:elapsed<7*day,older7:elapsed>=7*day,older30:elapsed>=30*day,older90:elapsed>=90*day};if(opts[age]!==true)return false;}
   if(windowId!==''&&String(tab.windowId)!==windowId)return false;
   const key=groupKey(tab);if(group==='ungrouped'&&key!==null)return false;if(group!=='all'&&group!=='ungrouped'&&key!==group)return false;
   switch(status){case 'all':return true;case 'active':return !!tab.active;case 'pinned':return !!tab.pinned;case 'audible':return !!tab.audible;case 'discarded':return !!tab.discarded;case 'not-discarded':return !tab.discarded;default:return false}
