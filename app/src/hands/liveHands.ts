@@ -63,23 +63,23 @@ export type LiveHandsOpts = {
 
 // ---- artistic constants (world units: 1 mm = 0.01; angles in rad) ---------------------------------------------------
 
-/** Swing at rest: the finger hovers, knuckle slightly raised. */
-const SWING_HOVER = 0.05
+/** Swing at rest: the finger hovers, knuckle visibly raised. */
+const SWING_HOVER = 0.12
 /** Swing at contact, keystrike = 1: pressed INTO the key (negative = down). */
-const SWING_PRESS = -0.075
-/** Human MCP flexion limits — "hạn chế chuyển động quá đà". */
-const SWING_MIN = -0.3
-const SWING_MAX = 0.25
+const SWING_PRESS = -0.34
+/** Human MCP flexion limits — "hạn chế chuyển động quá đà" (still < a fist). */
+const SWING_MIN = -0.55
+const SWING_MAX = 0.35
 /** MCP abduction limit (fingers fan toward nearby keys). */
-const ABDUCT_MAX = 0.12
+const ABDUCT_MAX = 0.14
 /** Each key-down sweeps lift → press over this window (visible peck). */
-const PECK_SEC = 0.09
+const PECK_SEC = 0.1
 /** Windup: the finger visibly lifts before every strike (even repeats). */
-const PECK_LIFT = 0.06
+const PECK_LIFT = 0.16
 /** Wait Mode: the demanded finger lifts this much extra. */
-const HOVER_EXTRA = 0.06
+const HOVER_EXTRA = 0.14
 /** Weight cue: the whole hand sinks this far on presses (no elbow). */
-const WRIST_DIP = 0.014
+const WRIST_DIP = 0.03
 /** Max rigid x travel of an on-stage hand toward extra keys. */
 const REACH_X = 1.2
 
@@ -358,11 +358,15 @@ class LiveHandsOverlay {
         s.abduct += (abTarget - s.abduct) * (1 - Math.exp(-dt / TAU_ABDUCT))
 
         if (s.midi !== null && s.held) {
-          cx += s.keyX - (pose.fingers[f][3][0] + st.drift)
+          // Drift: bring the ASSIGNED FINGERS' tips toward their keys —
+          // rigid, so a single press lands exactly, chords compromise at
+          // the centroid. The pose is fresh each frame (no drift baked
+          // in), so `keyX − tipX` is the TOTAL offset for st.drift.
+          cx += s.keyX - pose.fingers[f][3][0]
           cw += 1
         }
         if (s.midi !== null) {
-          tx += s.keyX - (pose.fingers[f][3][0] + st.drift)
+          tx += s.keyX - pose.fingers[f][3][0]
           tw += 1
         }
       }

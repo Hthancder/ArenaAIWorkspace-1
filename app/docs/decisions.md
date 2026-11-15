@@ -220,3 +220,22 @@ Tests: livehands 34 checks (tip dips BELOW rest while held; repeat peck
 lifts before striking and travels ≥3 mm; bones exact <1 %) and humanize
 (bone safety + existing purity/lag/contract) ALL PASSED; practice suite,
 tsc, build green.
+
+## 2026-11-15 — hands v3.1: the press must READ (user: "tay có di chuyển gì đâu, ngón không bấm")
+
+Two real bugs behind "hands don't move, fingers don't press" in manual
+playing, despite green unit tests:
+
+1. **Drift half-travel (v3 regression).** The drift accumulator fed
+   `keyX − (tipX + drift)` — a RESIDUAL — into a VALUE smoother → the
+   equilibrium travelled only D/2. Near keys barely moved the hand. The
+   unit test hid it (C5 is near the test pose's rest tips, and abduction
+   absorbed the remainder). Fixed back to value semantics (`keyX − tipX`
+   = the total offset; the pose is fresh per frame). The free-play
+   landing test tightened 0.6 → 0.25 so it cannot hide again.
+2. **Press amplitude ~4× too small.** swing −0.075 rad = 4° ≈ 4 px of
+   fingertip travel on screen — invisible next to the model's own motion
+   (wrist alone dips ~14 mm). Now: SWING_HOVER 0.12, SWING_PRESS −0.34·
+   keystrike (≈16 mm dip at default 0.6), PECK_LIFT 0.16 windup,
+   HOVER_EXTRA 0.14, WRIST_DIP 0.03, clamps [-0.55, 0.35] rad (well
+   under a fist). Every press now reads like the MIDI-driven hands.

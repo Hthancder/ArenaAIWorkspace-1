@@ -304,7 +304,8 @@ console.log('adaptive hands: the left hand comes up for left-side keys')
   if (p.L) {
     const f = p.L.press.findIndex((v) => v > 0.5)
     if (f >= 0) {
-      check('left finger lands near the key', Math.abs(p.L.fingers[f][3][0] - leftX) < 0.6, `${p.L.fingers[f][3][0]} vs ${leftX}`)
+      // Tight: the synth hand travels all the way (value-target drift).
+      check('left finger lands on the key', Math.abs(p.L.fingers[f][3][0] - leftX) < 0.25, `${p.L.fingers[f][3][0]} vs ${leftX}`)
     } else check('left finger presses', false, JSON.stringify(p.L.press))
   }
   check('right hand does not stretch across', Math.abs(p.R!.wrist[0] - 2) <= 1.2 + 1e-9, `${p.R!.wrist[0]}`)
