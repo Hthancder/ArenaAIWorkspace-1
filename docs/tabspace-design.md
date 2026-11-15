@@ -374,3 +374,6 @@ Bổ sung bỏ chọn riêng phần đang thấy cho tab mở và các danh sác
 
 ### Tiến độ 0.106 — nhật ký kênh website và hệ điều hành
 Mở rộng nhật ký opt-in với kết quả xử lý thông báo website và lần thử gửi hệ điều hành, phân biệt lọc, ghi thời gian/trạng thái và ID ngẫu nhiên băm, không ghi đích hoặc nội dung. Không thay đổi chính sách gửi, không ghi khi tính năng website tắt hoặc khi hệ điều hành chưa thử gửi; lỗi nhật ký không ngăn gửi. Không chứng minh hiển thị, không bao gồm âm và có thể mất khi Chrome gián đoạn. Dữ liệu mới không tương thích trình đọc nhật ký cũ; chưa kiểm thử Chrome thực tế.
+
+### Tiến độ 0.107 — sao lưu mặc định riêng và nhật ký âm
+Thêm lựa chọn xuất/nhập ghi đè mặc định mở cho nhóm/workspace đang hoạt động, ánh xạ ID mới, giữ thiết lập Hộp để sau hiện tại khi gộp, kiểm tra thay đổi và giới hạn trước khi ghi; không xuất ghi đè đối tượng trong thùng rác. Bổ sung nhật ký âm opt-in cho kết quả phát/từ chối, dùng khóa ghi chung sau khi nhả khóa âm, không lưu dữ liệu nhạy cảm, không ghi nghe thử hoặc các lượt bỏ qua. Tiếp tục không đảm bảo hiển thị/phát thực tế, không xuất nhật ký; cần kiểm thử Chrome thực tế.
