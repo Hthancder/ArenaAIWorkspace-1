@@ -26,6 +26,7 @@ Không hứa không bao giờ mất trạng thái trang, ngăn mọi lần tải
 | --- | --- |
 | Tab đang mở | Tab thực trong một cửa sổ Chrome; có thể đang chạy hoặc đã nghỉ. |
 | Tab đã nghỉ | Tab Chrome vẫn tồn tại nhưng nội dung đã bị discard; khi kích hoạt thường sẽ tải lại. Đây không phải tab đã đóng. |
+| Mẫu đo tài nguyên | Giá trị bộ nhớ, CPU hoặc mạng của một **tiến trình** tại một thời điểm, kèm nguồn và thời điểm đo; nhiều tab có thể dùng chung một mẫu. |
 | Mục tab đã lưu | Bản ghi của URL, tiêu đề và metadata có thể thu thập; không phải bản sao trạng thái đầy đủ của trang. |
 | Nhóm đã lưu | Bộ sưu tập mục tab trong Tabspace, có tên, màu, icon, tag, ghi chú và thứ tự. Khác nhóm tab gốc của Chrome. |
 | Tag | Nhãn gắn vào nhóm hoặc mục tab; một mục có thể có nhiều tag. |
@@ -58,6 +59,7 @@ Không hứa không bao giờ mất trạng thái trang, ngăn mọi lần tải
 - Không thể bảo đảm ngăn Chrome bắt đầu tải trang khi khôi phục phiên hoặc khi mở nhiều URL. Không hứa khôi phục tab ở trạng thái chưa tải. Tab đã lưu không tạo yêu cầu mạng cho đến khi người dùng hoặc tự động hóa mở lại; hành vi tải sau khi mở do Chrome quyết định.
 - Mở lại URL không bảo đảm lịch sử back/forward, scroll, form, phiên đăng nhập, trạng thái ứng dụng, nội dung đã thay đổi hoặc cấu trúc Chrome được khôi phục chính xác. Báo kết quả và các giới hạn thay vì gọi đó là khôi phục hoàn hảo.
 - Không đưa ra số RAM tiết kiệm như số đo nếu không có nguồn đáng tin cậy. Hiển thị số tab và trạng thái thực tế.
+- Không có kênh ổn định để đo RAM hoặc CPU của từng tab cho extension trên mọi kênh Chrome; số đo khả dụng là của tiến trình và nhiều tab có thể dùng chung. Không có nguồn tin cậy thì không hiện số và không tự động nghỉ, theo mục 15.
 - Một số URL đặc biệt/nội bộ, file, trang extension, tab bị hạn chế quyền, trang yêu cầu đăng nhập, tab ẩn danh và URL không còn hợp lệ có thể không lưu hoặc mở lại được. Kiểm tra theo khả năng thực tế, hiển thị lý do; không cố vượt bảo vệ của Chrome.
 - Extension có thể bị dừng hoặc lịch báo thức chạy trễ; không bảo đảm chạy đúng từng giây hay khi Chrome đóng. Không dùng thông báo bị bỏ lỡ làm bằng chứng đồng ý.
 
@@ -111,7 +113,7 @@ Nhật ký ghi thời điểm, nguồn kích hoạt, quy tắc áp dụng, kết
 
 ### 5.7 Sức khỏe tab
 
-Gợi ý tab trùng, lâu không truy cập (chỉ khi có dữ liệu), đã lưu nhưng còn mở, quy tắc chồng lấn. Mỗi gợi ý có lý do, xem trước, bỏ qua/tắt; không tự coi tab cũ là rác. Không dùng ước lượng RAM như số đo.
+Gợi ý tab trùng, lâu không truy cập (chỉ khi có dữ liệu), đã lưu nhưng còn mở, quy tắc chồng lấn. Mỗi gợi ý có lý do, xem trước, bỏ qua/tắt; không tự coi tab cũ là rác. Không dùng ước lượng RAM như số đo. Gợi ý theo mức tiêu hao tài nguyên dùng chung khối xem trước và chịu cùng chính sách bảo vệ; điều kiện, nguồn đo và giới hạn ở mục 15.
 
 ## 6. Preset dọn tab
 
@@ -210,7 +212,7 @@ Xuất/nhập phiên bản hóa, xem trước số lượng và lựa chọn g�
 
 **Giai đoạn 2 — cá nhân hóa:** preset thủ công và chạy thử, giải thích/xung đột, phiên/snapshot, nhật ký và thùng rác; sau đó hỏi trước và tự động opt-in khi bộ điều phối và bảo vệ đủ tin cậy.
 
-**Giai đoạn 3 — mở rộng:** workspace, nhóm thông minh, sức khỏe tab, so sánh phiên, tự động hóa nâng cao. Đồng bộ, tìm nội dung trang, AI đề xuất là nghiên cứu tương lai, không phải cam kết.
+**Giai đoạn 3 — mở rộng:** workspace, nhóm thông minh, sức khỏe tab, so sánh phiên, tự động hóa nâng cao, gồm tự động cho nghỉ tab theo mức tiêu hao tài nguyên (mục 15) khi và chỉ khi nguồn đo được kiểm chứng. Đồng bộ, tìm nội dung trang, AI đề xuất là nghiên cứu tương lai, không phải cam kết.
 
 Thứ tự có thể điều chỉnh sau kiểm chứng kỹ thuật; mỗi giai đoạn phải giữ các bất biến an toàn, không bỏ qua chỉ để giao nhanh.
 
@@ -226,6 +228,7 @@ Thứ tự có thể điều chỉnh sau kiểm chứng kỹ thuật; mỗi giai
 - Kiểm tra múi giờ, nửa đêm, năm mới, giờ mùa hè, lịch bị bỏ lỡ và máy ngủ; timestamp có nhãn và thời gian đầy đủ.
 - Kiểm thử nhiều cửa sổ, nhóm Chrome, pinned, audible, discarded, trang hạn chế, URL trùng, ẩn danh bị tắt, quyền bị thu hồi và dữ liệu lớn.
 - Tất cả tác vụ chính dùng được bằng bàn phím; trạng thái có nhãn không phụ thuộc màu; popup/trang quản lý có trạng thái rỗng, lỗi và hiển thị phù hợp màn hình nhỏ.
+- Nguồn đo tài nguyên: không có nguồn đáng tin thì không hiện số và không tự động nghỉ; tab dùng chung tiến trình không bị gán số riêng; mẫu đo cũ hoặc không rõ bị loại; thay đổi cấu hình hoặc cấu hình hỏng giữa lượt có kết quả xác định (15.7).
 
 ## 12. Các điểm cần xác minh trước hoặc trong triển khai
 
@@ -237,6 +240,7 @@ Thứ tự có thể điều chỉnh sau kiểm chứng kỹ thuật; mỗi giai
 6. **Quy mô:** đo hiệu năng tìm kiếm, storage, xuất/nhập và UI với hàng nghìn bản ghi; chọn giới hạn phù hợp sau kiểm thử, không giả định con số.
 7. **Chuẩn URL:** kiểm thử IDN, cổng mặc định, encoding, redirect, fragment và URL đặc biệt; mô tả điều kiện khớp trong UI trước khi bật tự động.
 8. **Thời hạn lưu/khôi phục:** chọn mặc định sau thử nghiệm; phải công bố giới hạn và cho cấu hình thay vì hứa hoàn tác vô hạn.
+9. **Nguồn đo tài nguyên theo tab:** kiểm chứng `chrome.processes` (kênh và nền tảng hỗ trợ, quyền `processes`, độ lệch so với Task Manager, ánh xạ tab ↔ tiến trình, chi phí CPU khi bật `includeMemory`), phạm vi của `chrome.system.memory`, và mức độ khả dụng còn lại của `performance.memory` đã bị deprecated. Chỉ bật Hỏi trước và Tự động sau khi số đo được xác nhận trên từng nền tảng mục tiêu; nếu không xác định được, chọn không đo thay vì đoán.
 
 ## 13. Tham khảo định hướng
 
@@ -249,7 +253,7 @@ Khảo sát ban đầu chỉ mang tính đại diện, không phải đánh giá
 Các phần trên là định hướng sản phẩm và bố cục, **chưa phải bộ mockup, prototype hay design system hoàn chỉnh**. Trước khi triển khai giao diện cần thiết kế và duyệt thêm màn hình thực tế, trạng thái và khả năng tiếp cận; không coi sơ đồ chữ là thiết kế visual cuối cùng.
 
 - **Hệ thống thiết kế:** định nghĩa token cho màu nền/chữ/viền/trạng thái, spacing, typography, bán kính, bóng, icon, focus và độ tương phản trong sáng/tối. Màu nhóm tùy chỉnh phải có cách hiển thị đọc được trên cả hai nền; không phụ thuộc màu để truyền tải trạng thái.
-- **Thành phần thống nhất:** nút chính/phụ/nguy hiểm, trường nhập, bộ lọc, checkbox, menu, dialog, toast, banner, danh sách, tab, bảng tiến trình và trạng thái lỗi/rỗng. Cùng một hành động phải có tên, icon và hậu quả nhất quán ở popup, trang quản lý và command palette.
+- **Thành phần thống nhất:** nút chính/phụ/nguy hiểm, trường nhập, bộ lọc, checkbox, menu, dialog, toast, banner, khối cài đặt thu gọn, danh sách, tab, bảng tiến trình và trạng thái lỗi/rỗng. Cùng một hành động phải có tên, icon và hậu quả nhất quán ở popup, trang quản lý và command palette.
 - **Màn hình cần thiết kế:** onboarding/quyền, popup, tab đang mở, hộp để sau, nhóm/chi tiết nhóm, tìm kiếm, preset/tạo/chạy thử, workspace, phiên/khôi phục, thùng rác, cài đặt thường/nâng cao, xuất/nhập và trung tâm thông báo.
 - **Trạng thái:** trống, tải, rất nhiều dữ liệu, không có kết quả, quyền bị từ chối, lỗi từng phần, xung đột, xác nhận nguy hiểm, đang thực hiện, hoàn tất và hoàn tác. Nút tắt khi không khả dụng phải giải thích lý do; không chỉ dựa vào tooltip để cung cấp thông tin bắt buộc.
 - **Thích ứng:** popup có diện tích giới hạn; trang quản lý có bố cục thay đổi theo chiều rộng và zoom, không cắt hành động quan trọng. Hỗ trợ bàn phím, focus nhìn thấy, tên truy cập và kiểm thử độ tương phản; tôn trọng chế độ giảm chuyển động của hệ điều hành.
@@ -305,6 +309,100 @@ Tôn trọng `prefers-reduced-motion`: bỏ hoặc giảm chuyển động khôn
 - Toàn màn hình Chrome, video/fullscreen trong trang, ứng dụng khác toàn màn hình và chế độ tập trung: kiểm tra từng nền tảng/phiên bản Chrome; ghi nhận trường hợp không thể phát hiện hoặc hiển thị thay vì tuyên bố hỗ trợ tuyệt đối.
 - Âm thanh tắt, giờ yên lặng, tệp lỗi/quá lớn, âm tùy chỉnh thiếu sau nhập, playback bị chặn và nhiều sự kiện đồng thời: không phát dồn và không ảnh hưởng tác vụ chính.
 - Toast hết hạn vẫn tìm được hoàn tác theo chính sách; lỗi một phần không bị thông báo thành công che lấp. Kiểm thử đọc màn hình, bàn phím, zoom và giảm chuyển động.
+
+## 15. Tự động cho nghỉ tab theo mức tiêu hao tài nguyên
+
+**Trạng thái:** đề xuất thiết kế, chưa triển khai. Toàn bộ mục này phụ thuộc một khả năng chưa kiểm chứng (mục 12.9): Chrome không cho extension mọi kênh ổn định để đo tài nguyên của từng tab. Nơi nào không có nguồn đo đáng tin, giao diện nói "không đo được" và tính năng không chạy — không thay bằng số suy đoán.
+
+Mục này chỉ thêm **một nguồn ứng viên mới** cho bộ điều phối: tab đang tiêu hao nhiều (RAM, CPU, mạng) thay vì tab khớp quy tắc URL như preset. Chính sách bảo vệ, phân tầng cài đặt, điều phối, thông báo, giới hạn và xử lý lỗi dùng lại mục 6, 7, 8, 14; không tạo cơ chế thứ hai song song.
+
+### 15.1. Nguồn đo và giới hạn
+
+| Tín hiệu | Nguồn dự kiến | Bản chất và giới hạn |
+| --- | --- | --- |
+| Bộ nhớ | `chrome.processes` → `privateMemory` (qua `getProcessInfo(..., true)` hoặc `onUpdatedWithMemory`) | Cần quyền `processes`; theo tài liệu Chrome, API này chỉ khả dụng trên kênh Dev. Số đo thuộc về **tiến trình renderer**, không phải tab: nhiều tab cùng nguồn gốc có thể chung một tiến trình, nên phải hiển thị "tiến trình chung N tab" thay vì chia đều cho từng tab. |
+| CPU | `chrome.processes` → `cpu` | Tỷ lệ của **một lõi CPU** cho mọi luồng của tiến trình, trên máy nhiều lõi có thể vượt 100%; chỉ có trong sự kiện cập nhật; là giá trị tức thời, không phải trung bình của tab. |
+| Heap JavaScript | `chrome.processes` → `jsMemoryUsed`, hoặc `performance.memory` trong trang | Chỉ tính heap V8, bỏ qua DOM/canvas/GPU nên thường thấp hơn RAM thật nhiều lần; `performance.memory` đã bị deprecated. Được phép hiển thị như **ước lượng**, không là căn cứ cho hành động tự động. |
+| Mạng | `chrome.processes` → `network` (byte/giây) | Là tín hiệu "đang hoạt động", không phải "hao tài nguyên". Giá trị cao thường là lý do **không nên** nghỉ tab. |
+| Áp lực bộ nhớ hệ thống | `chrome.system.memory` (toàn hệ thống, không theo tab) | Chỉ dùng làm điều kiện "khi nào chạy". Không quy cho tab, không hiển thị như số của tab. |
+
+- Không nội suy số tài nguyên từ số tab, tiêu đề, tên miền, favicon hay các API toàn hệ thống. Không có nguồn → không có số.
+- Không gọi `chrome.processes.terminate()`: nó giết cả tiến trình và mọi tab dùng chung. Phạm vi mục này chỉ là `tabs.discard`.
+- Lấy số bộ nhớ làm Chrome tốn thêm CPU, nên Tabspace không đăng ký listener `onUpdatedWithMemory` thường trực: đo theo chu kỳ ở 15.3, chỉ khi tính năng bật, và ngừng ngay khi tắt.
+- Mỗi giá trị đi kèm **nguồn** và **thời điểm đo**. Mẫu đo cũ hơn hai lần chu kỳ đo, tiến trình không đọc được, hoặc tab đã đổi URL/cửa sổ kể từ khi đo → coi là **không rõ** và bị loại khỏi mọi lượt tự động.
+
+### 15.2. Khi nào một tab vào diện sẽ nghỉ
+
+Ứng viên phải đồng thời thỏa: (1) vượt ngưỡng của tài nguyên **được chọn** theo đúng quy tắc kết hợp đã cấu hình; (2) không được xem trong khoảng thời gian chờ; (3) còn tồn tại và giữ nguyên URL, cửa sổ, tiến trình so với mẫu đo, được kiểm tra lại ngay trước khi nghỉ; (4) vượt qua toàn bộ lớp bảo vệ và điều phối ở 6.3, 7.2, 7.3 — tab đang xem, ghim, phát âm thanh, đã nghỉ, website/URL được bảo vệ, tab vừa mở trong thời gian miễn, giờ yên lặng, toàn màn hình, tạm dừng tự động hóa.
+
+- "Vượt ngưỡng" so trên giá trị của lần đo gần nhất; với CPU phải vượt trong **đủ số chu kỳ liên tiếp** đã chọn, để một đợt tải trang ngắn không đủ kích hoạt.
+- Chỉ nguồn đo thật (bảng ở 15.1, cột `chrome.processes`) được phép dẫn tới hành động tự động. Ước lượng heap chỉ dùng cho gợi ý và bản xem trước có nhãn "ước lượng".
+- Không suy ra "có biểu mẫu chưa lưu" hay "đang chạy tác vụ nền" từ tài nguyên; tab CPU thấp vẫn có thể giữ nội dung chưa lưu.
+- Một tab đang nằm trong lượt preset, chuyển workspace hoặc thao tác hàng loạt chưa kết quả thì lượt nghỉ bỏ qua; mỗi tab chỉ do một lượt xử lý, theo 7.3.
+
+### 15.3. Cấu hình
+
+Chỉ những lựa chọn thay đổi hẳn hành vi có mặt ở đây. Danh sách bảo vệ website/URL, thời gian miễn sau mở tab, giờ yên lặng, hoãn khi toàn màn hình, nút tạm dừng toàn bộ tự động hóa, kênh thông báo và âm báo **không** có bản sao riêng cho tính năng này; tất cả kế thừa theo phân tầng ở 7.1 và hiển thị nguồn đang áp dụng.
+
+| Lựa chọn | Mặc định | Giá trị và ý nghĩa |
+| --- | --- | --- |
+| Bật tính năng | Tắt | Khi Chrome không cho nguồn đo thật, khối ghi "Không đo được tài nguyên trên Chrome này" và không cho bật Hỏi trước/Tự động; chỉ còn đường tắt thủ công ở Tab đang mở. |
+| Cách xử lý | Hỏi trước | **Chỉ gợi ý**: hiện trong Sức khỏe tab, không lời nhắc. · **Hỏi trước**: thẻ trong Cần chú ý với Xem & nghỉ, Nhắc lại, Bỏ qua. · **Tự động**: bật riêng, phải xác nhận rủi ro một lần; không hỏi lại từng lượt. Không phản hồi ở Hỏi trước → không nghỉ tab nào. |
+| Tài nguyên được xét | Bộ nhớ, CPU | Chọn rời từng thứ: **Bộ nhớ**, **CPU**, **Heap JavaScript (ước lượng)**, **Mạng/hoạt động nền**. Không gộp thành một điểm số tổng. |
+| Ngưỡng từng tài nguyên | RAM ≥ 500 MB · CPU ≥ 50% một lõi · heap ≥ 200 MB · mạng ≥ 20 MB/phút | RAM 50–10000 MB; CPU 5–800%; heap 50–4000 MB; mạng 1–1000 MB/phút. Tài nguyên không được chọn thì ngưỡng bị ẩn và không tham gia quyết định. |
+| Kết hợp | Một ngưỡng bất kỳ | **Vượt một ngưỡng bất kỳ** hoặc **vượt mọi ngưỡng đã chọn**. |
+| Số chu kỳ liên tiếp (CPU) | 3 | 1–10; chỉ áp dụng cho tài nguyên biến thiên nhanh như CPU. |
+| Chỉ xét tab không được xem trong | 12 giờ | 15 phút – 30 ngày, tính theo `lastAccessed` của Chrome; thiếu hoặc ở tương lai → không rõ → bỏ qua. |
+| Giới hạn mỗi lượt | 10 tab | 1–100. |
+| Chu kỳ đo | 5 phút | 1–60 phút; ngắn hơn làm Chrome tốn thêm CPU. |
+| Chỉ chạy khi hệ thống thiếu bộ nhớ | Tắt | Khi bật, chỉ xử lý nếu RAM khả dụng của hệ thống dưới ngưỡng đã chọn (5–50%). |
+
+- Không có lịch riêng: tính năng chạy theo chu kỳ đo và dùng chung lịch kiểm tra của bộ điều phối; không chạy bù cho chu kỳ bị lỡ (6.2).
+- Không có ghi đè theo từng tab. Ngoại lệ đi qua đường sẵn có: bỏ qua trong bản xem trước cho lượt hiện tại, hoặc thêm website vào danh sách bảo vệ.
+
+### 15.4. Phát hiện, xem trước và kết quả
+
+Mỗi chu kỳ đo tạo một danh sách ứng viên có dấu vết riêng: ID tab, ID cửa sổ, URL, ID tiến trình, giá trị từng tài nguyên đã chọn, thời điểm đo, nguồn. Sau bước lọc ở 15.2:
+
+1. **Chỉ gợi ý:** danh sách hiển thị ở Sức khỏe tab; mỗi hàng nêu lý do ("RAM 1,4 GB · đo 14:32 · tiến trình chung 2 tab"), có Xem & nghỉ, Bỏ qua gợi ý này, Tắt gợi ý. Không tự chọn tab nào.
+2. **Hỏi trước:** một thẻ trong Cần chú ý ("12 tab đang vượt ngưỡng · đo 4 phút trước") với Xem & nghỉ, Nhắc lại, Bỏ qua. Áp dụng 14.3 cho thông báo bị bỏ lỡ, đã đọc hoặc hết hạn: không phản hồi thì không nghỉ tab nào.
+3. **Tự động:** không hỏi, nhưng vẫn dựng bản xem trước nội bộ, áp dụng bảo vệ và giới hạn, ghi kết quả từng tab, báo theo kênh đã bật.
+
+Bản xem trước dùng chung cho cả ba đường và cho nút nghỉ thủ công: nhóm theo cửa sổ, chọn/bỏ chọn từng tab hoặc toàn bộ, mỗi hàng ghi giá trị đo + nguồn + thời điểm; tab không rõ trạng thái bị khóa kèm lý do; tab vừa mở trong thời gian miễn để trống nhưng vẫn được nghỉ nếu người dùng tự đánh dấu rõ (theo 7.2 và mục 16, tiến độ 0.114). Nếu tab hoặc mẫu đo đổi sau bước kiểm tra cuối, tab đó bị bỏ qua; nếu toàn bộ dữ liệu đổi, lượt dừng và yêu cầu xem lại.
+
+Kết quả: **không gọi là hoàn tác.** Tab không bị đóng nên không có bản lưu để khôi phục; tải lại một tab đã nghỉ vẫn làm mất nội dung chưa lưu. Lượt ghi vào nhật ký sự kiện với số đã nghỉ, số bị bỏ qua kèm lý do và số không xác nhận được; mục không xác nhận không tự thử lại.
+
+### 15.5. Khối cài đặt thu gọn
+
+Toàn bộ lựa chọn ở 15.3 nằm trong **một khối thu gọn "Tự động cho nghỉ tab"** tại Cài đặt & sao lưu → Tự động hóa, để không nhô lên màn hình thường dùng:
+
+- Mặc định **thu gọn**. Hàng tiêu đề khi thu gọn phải tự đủ ý: trạng thái (Tắt / Chỉ gợi ý / Hỏi trước / Tự động), số tab đang vượt ngưỡng, tuổi dữ liệu đo, và cảnh báo khi nguồn đo không khả dụng hoặc Chrome không cho phép tự động. Không dùng màu làm tín hiệu duy nhất; có nhãn bằng chữ.
+- Một nút duy nhất mở rộng/thu gọn, có `aria-expanded`; focus trở về nút khi thu gọn; `Esc` chỉ thu gọn khi phần thân đang mở và không có thao tác nào đang chạy; hoạt động đầy đủ bằng bàn phím.
+- Thứ tự bên trong: bật/tắt + cách xử lý → tài nguyên và ngưỡng (mỗi tài nguyên một dòng: ô chọn, ngưỡng, đơn vị) → phạm vi (thời gian im lặng, giới hạn mỗi lượt) → đo (chu kỳ, chỉ khi hệ thống thiếu bộ nhớ) → lối tắt **Xem danh sách tab đang vượt ngưỡng**, **Khôi phục mặc định**, **Giới hạn và rủi ro**.
+- Khi đang thu gọn, trạng thái chạy vẫn cập nhật ở tiêu đề (đang đo, đang chờ phản hồi, lượt cần kiểm tra); dữ liệu mới về trong lúc tải không xóa nội dung cũ.
+- Kiểu khối này là mẫu chung cho các mục nâng cao khác: một hàng tiêu đề có trạng thái, phần thân là biểu mẫu, không hộp thoại lồng trong hộp thoại.
+- Hiệu ứng mở/đóng 120–200 ms, tôn trọng `prefers-reduced-motion` (14.6). Ở cửa sổ hẹp, nhãn xuống dòng dưới trạng thái; không cắt số đếm và nút.
+
+### 15.6. Quyền, dữ liệu và sao lưu
+
+- Quyền mới: `processes` (đọc số đo tiến trình — kèm khả năng dừng cả tiến trình mà Tabspace cam kết không dùng) và `system.memory` (số toàn hệ thống). Cả hai phải được giải thích trước khi xin, nêu lý do và hệ quả, và khi người dùng từ chối thì tính năng tự thu gọn về mức an toàn: mất phần đo, không mất phần quản lý tab.
+- Đường ước lượng từ trong trang (`performance.memory`) là tùy chọn nâng cao riêng, mặc định tắt: cần cấp quyền đọc/thay đổi dữ liệu cho các website cụ thể, chỉ bật cho website người dùng chọn, và không bao giờ đủ điều kiện cho chế độ Tự động.
+- Số đo mới nhất giữ trong `chrome.storage.session` (mất khi Chrome khởi động lại); cấu hình giữ trong `storage.local`. Không ghi số đo vào log công khai, không đưa vào nhật ký thông báo.
+- Sao lưu: cấu hình được phép chọn để xuất như các tính năng khác; khi nhập, tính năng luôn ở trạng thái **tắt** cho tới khi người dùng bật lại tại chỗ, theo 9. Không xuất giá trị đo.
+- Lời nhắc, thông báo hệ điều hành và badge không chứa tên tab hay URL; tên và URL chỉ xuất hiện trong bản xem trước mà người dùng chủ động mở (14.2, 14.3).
+
+### 15.7. Tiêu chí kiểm thử riêng
+
+- Không có `chrome.processes` (kênh ổn định thông thường): khối nêu rõ lý do, không hiện số, không cho bật Hỏi trước/Tự động; các nút nghỉ thủ công vẫn hoạt động.
+- Nhiều tab dùng chung một tiến trình: số đo được gán cho cả nhóm và ghi rõ "tiến trình chung"; không hiển thị số riêng cho từng tab, không suy ra tab nào nặng hơn.
+- Ngưỡng biên (đúng bằng ngưỡng, thấp hơn 1 đơn vị), CPU ở chu kỳ 1/2/3, đổi cấu hình giữa chu kỳ, mẫu đo cũ hơn hai lần chu kỳ, tab đổi URL/cửa sổ/tiến trình sau khi đo: mỗi trường hợp có kết quả xác định.
+- Tab đang xem, ghim, phát âm thanh, đã nghỉ, được bảo vệ, vừa mở trong thời gian miễn, giờ yên lặng, toàn màn hình, tạm dừng tự động hóa: không bị nghỉ ở cả ba chế độ; tab ước lượng không bao giờ bị nghỉ ở chế độ Tự động.
+- Hỏi trước mà không phản hồi, phản hồi trễ, tắt popup, từ chối quyền: không tab nào bị nghỉ; lời nhắc còn tìm lại được.
+- Lượt Tự động đạt giới hạn mỗi lượt, một phần thất bại hoặc không xác nhận: báo đúng số từng loại, không báo thành công toàn bộ, không tự thử lại.
+- Khối thu gọn: đủ nghĩa khi thu gọn, điều hướng bằng bàn phím, `aria-expanded` đúng, tôn trọng giảm chuyển động, không cắt nội dung ở cửa sổ hẹp và khi zoom.
+- Đo không chạy khi tính năng tắt; chu kỳ đo dài nhất và ngắn nhất đều không làm tăng liên tục số listener hoặc bộ đếm đang chờ.
+
+## 16. Nhật ký tiến độ
 
 ### Tiến độ 0.84 — âm báo thử nghiệm
 Âm báo tùy chọn cho kết quả tự động đóng, chỉ trong trang quản lý đang mở; không phát lại hoặc mở tài liệu nền. Giờ yên lặng và toàn màn hình làm bỏ qua, giới hạn tần suất và ghi dấu trước khi thử phát. Âm tùy chỉnh tối đa 1 MB/5 giây, kiểm tra giải mã, lưu cục bộ, không xuất sao lưu. Chrome có thể chặn âm. Âm cho lời nhắc và thông báo phủ trang vẫn chưa triển khai.
