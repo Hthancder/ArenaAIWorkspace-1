@@ -332,3 +332,6 @@ Cấu hình cục bộ để gợi ý quá hạn; mặc định tắt, hiện t�
 
 ### Tiến độ 0.92 — tự dọn quá hạn thử nghiệm
 Bổ sung chế độ riêng opt-in, mặc định tắt, chọn thùng rác và/hoặc lịch sử đủ điều kiện, tối đa 20 mục mỗi 1–30 ngày. Ghi danh sách ứng viên trước khi xóa, xác minh thời hạn/cấu hình và từng mục, ngừng khi thay đổi hoặc kết quả mơ hồ; lượt gián đoạn yêu cầu kiểm tra và xác nhận lại. Không chạy bù và tôn trọng tạm dừng toàn cục. Cảnh báo xóa vĩnh viễn trong popup, banner và cài đặt; tên trong danh sách lượt gần nhất có thể nhạy cảm, không nằm trong sao lưu. Cần kiểm thử Chrome thực tế.
+
+### Tiến độ 0.93 — âm lời nhắc
+Thêm lựa chọn âm riêng cho lời nhắc preset mới, mặc định tắt và tương thích thiết lập cũ. Chỉ thử phát khi trang quản lý đang mở, kiểm tra trạng thái đọc/lịch/tạm dừng và giờ yên lặng, khóa liên trang, giới hạn tần suất chung và ghi dấu trước khi phát. Lời nhắc đồng thời gộp một âm, không phát bù; Chrome có thể chặn. Chưa kiểm thử Chrome thực tế.

@@ -3,12 +3,12 @@
 const SoundTools=(()=>{
  const maxBytes=1024*1024,maxSeconds=5,cooldown=5000;
  const types=new Set(['audio/wav','audio/x-wav','audio/mpeg','audio/ogg','audio/webm','audio/mp4','audio/aac','audio/flac']);
- const defaults={enabled:false,complete:false,warning:false,volume:0.35,choice:'soft',custom:null};
+ const defaults={enabled:false,complete:false,warning:false,reminder:false,volume:0.35,choice:'soft',custom:null};
  function validate(value){
   if(value===undefined)return {...defaults};
-  if(!value||typeof value!=='object'||Array.isArray(value)||typeof value.enabled!=='boolean'||typeof value.complete!=='boolean'||typeof value.warning!=='boolean'||!Number.isFinite(value.volume)||value.volume<0||value.volume>1||!['soft','chime','custom'].includes(value.choice))throw Error('Cấu hình âm báo không hợp lệ.');
+  if(!value||typeof value!=='object'||Array.isArray(value)||typeof value.enabled!=='boolean'||typeof value.complete!=='boolean'||typeof value.warning!=='boolean'||value.reminder!==undefined&&typeof value.reminder!=='boolean'||!Number.isFinite(value.volume)||value.volume<0||value.volume>1||!['soft','chime','custom'].includes(value.choice))throw Error('Cấu hình âm báo không hợp lệ.');
   let custom=null;if(value.custom!==null&&value.custom!==undefined){const c=value.custom;if(!c||typeof c.name!=='string'||!c.name||c.name.length>180||!types.has(c.mime)||!Number.isFinite(c.duration)||c.duration<=0||c.duration>maxSeconds||typeof c.dataUrl!=='string'||c.dataUrl.length>Math.ceil(maxBytes*4/3)+100||!c.dataUrl.startsWith(`data:${c.mime};base64,`)||!/^data:audio\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/]+={0,2}$/.test(c.dataUrl))throw Error('Âm tùy chỉnh không hợp lệ.');custom={name:c.name,mime:c.mime,duration:c.duration,dataUrl:c.dataUrl}}
-  if(value.choice==='custom'&&!custom)throw Error('Chưa có âm tùy chỉnh hợp lệ.');return {enabled:value.enabled,complete:value.complete,warning:value.warning,volume:value.volume,choice:value.choice,custom};
+  if(value.choice==='custom'&&!custom)throw Error('Chưa có âm tùy chỉnh hợp lệ.');return {enabled:value.enabled,complete:value.complete,warning:value.warning,reminder:value.reminder===true,volume:value.volume,choice:value.choice,custom};
  }
  function eventFromChange(oldRuns,newRuns){
   if(!Array.isArray(oldRuns)||!Array.isArray(newRuns))return null;const previous=new Map(oldRuns.filter(r=>r&&typeof r.id==='string').map(r=>[r.id,r]));
@@ -39,6 +39,24 @@ const SoundTools=(()=>{
    try{await play(c,api,makeAudio);return 'played'}catch{return 'blocked'}
   });
  }
- return {defaults,maxBytes,maxSeconds,validate,eventFromChange,readFile,play,handle};
+ function reminderEvents(change){
+  const old=change?.oldValue,newState=change?.newValue;if(old!==undefined&&(!old||typeof old!=='object'||Array.isArray(old))||!newState||typeof newState!=='object'||Array.isArray(newState))return [];
+  return Object.entries(newState).filter(([id,entry])=>typeof id==='string'&&id.length>0&&id.length<=256&&Number.isFinite(entry?.pendingAt)&&entry.pendingAt>0&&old?.[id]?.pendingAt!==entry.pendingAt).map(([id,entry])=>({id,at:entry.pendingAt}));
+ }
+ async function handleReminder(api,change,locks,reminders,makeAudio,now=Date.now()){
+  const events=reminderEvents(change);if(!events.length||!locks||typeof locks.request!=='function')return 'ignored';
+  const notices=typeof module!=='undefined'?require('./notice-state.js'):NoticeState;
+  return locks.request('tabspace:sound-event',{ifAvailable:true},async lock=>{
+   if(!lock)return 'busy';const keys=['soundConfig','soundState','presets','reminderState','remindersPaused','quietHours','deferFullscreenNotifications','automationPaused','noticeRead'];let data,c;try{data=await api.storage.local.get(keys);c=validate(data.soundConfig)}catch{return 'invalid'}
+   if(!c.enabled||!c.reminder||data.automationPaused!==undefined&&data.automationPaused!==false||data.remindersPaused!==undefined&&data.remindersPaused!==false)return 'disabled';
+   if(!Array.isArray(data.presets)||!data.reminderState||typeof data.reminderState!=='object'||Array.isArray(data.reminderState))return 'invalid';
+   let event;try{event=events.find(e=>data.presets.some(p=>p?.id===e.id&&p.schedule?.enabled===true)&&data.reminderState[e.id]?.pendingAt===e.at&&!notices.isRead(data.noticeRead,notices.reminderId(e.id,e.at)))}catch{return 'invalid'}if(!event)return 'handled';
+   const id=notices.reminderId(event.id,event.at);if(!id)return 'invalid';const previous=data.soundState;if(previous!==undefined&&(!previous||typeof previous!=='object'||typeof previous.id!=='string'||!Number.isFinite(previous.at)||previous.at>now))return 'invalid';if(previous?.id===id||previous&&now-previous.at<cooldown)return 'duplicate';
+   let quiet;try{quiet=reminders.isQuiet(data.quietHours,now)}catch{quiet=true}if(quiet||await reminders.deferFullscreen(api,data.deferFullscreenNotifications))return 'quiet';
+   let latest;try{latest=await api.storage.local.get(keys)}catch{return 'unavailable'}if(keys.some(k=>JSON.stringify(latest[k])!==JSON.stringify(data[k])))return 'changed';
+   try{await api.storage.local.set({soundState:{id,at:now}})}catch{return 'unavailable'}try{await play(c,api,makeAudio);return 'played'}catch{return 'blocked'}
+  });
+ }
+ return {defaults,maxBytes,maxSeconds,validate,eventFromChange,readFile,play,handle,reminderEvents,handleReminder};
 })();
 if(typeof module!=='undefined')module.exports=SoundTools;
