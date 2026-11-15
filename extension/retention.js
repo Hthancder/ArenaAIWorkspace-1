@@ -1,5 +1,5 @@
 'use strict';
-// Advisory retention only: no deletion without an explicit, freshly validated selection.
+// Retention candidates are revalidated before each deletion.
 const RetentionTools=(()=>{
  const trashPrefix='tabspace:trash:',batchPrefix='tabspace:batch:',limit=200,day=86400000;
  const defaults=Object.freeze({trashEnabled:false,trashDays:30,historyEnabled:false,historyDays:90});
@@ -18,12 +18,12 @@ const RetentionTools=(()=>{
   return null;
  }
  function plan(data,now){const config=validate(data.retentionConfig);let refs=null,historyBlocked=false;try{refs=references(data.autoCloseRuns)}catch{historyBlocked=true}const items=[];for(const [key,value] of Object.entries(data)){const entry=candidate(key,value,config,now,refs);if(entry)items.push(entry)}items.sort((a,b)=>a.at-b.at||a.key.localeCompare(b.key));return {items:items.slice(0,limit),total:items.length,historyBlocked,config}}
- async function removeSelected(api,selected,configVersion,now){
+ async function removeSelected(api,selected,configVersion,now,guard){
   if(!Array.isArray(selected)||!selected.length||selected.length>limit||new Set(selected.map(x=>x.key)).size!==selected.length)throw Error('Hãy chọn các mục hợp lệ.');
-  const all=await api.storage.local.get(null);if(JSON.stringify(all.retentionConfig??null)!==configVersion)throw Error('Thiết lập thời hạn đã thay đổi; hãy xem trước lại.');const config=validate(all.retentionConfig);let refs;try{refs=references(all.autoCloseRuns)}catch{refs=null}
+  if(guard)await guard();const all=await api.storage.local.get(null);if(JSON.stringify(all.retentionConfig??null)!==configVersion)throw Error('Thiết lập thời hạn đã thay đổi; hãy xem trước lại.');const config=validate(all.retentionConfig);let refs;try{refs=references(all.autoCloseRuns)}catch{refs=null}
   for(const item of selected){const current=candidate(item.key,all[item.key],config,now,refs);if(!current||current.version!==item.version)throw Error('Danh sách hoặc trạng thái mục đã thay đổi; hãy xem trước lại.');}
   let deleted=0,unknown=0,changed=false;
-  for(const item of selected){let fresh;try{fresh=await api.storage.local.get([item.key,'retentionConfig','autoCloseRuns']);if(JSON.stringify(fresh.retentionConfig??null)!==configVersion)throw Error('changed');let refs;try{refs=references(fresh.autoCloseRuns)}catch{refs=null}const current=candidate(item.key,fresh[item.key],validate(fresh.retentionConfig),now,refs);if(!current||current.version!==item.version)throw Error('changed')}catch{changed=true;break}
+  for(const item of selected){let fresh;try{fresh=await api.storage.local.get([item.key,'retentionConfig','autoCloseRuns']);if(JSON.stringify(fresh.retentionConfig??null)!==configVersion)throw Error('changed');let refs;try{refs=references(fresh.autoCloseRuns)}catch{refs=null}const current=candidate(item.key,fresh[item.key],validate(fresh.retentionConfig),now,refs);if(!current||current.version!==item.version)throw Error('changed');if(guard)await guard()}catch{changed=true;break}
    try{await api.storage.local.remove(item.key);deleted++}catch{unknown=1;break}
   }
   return {deleted,unknown,changed,notAttempted:selected.length-deleted-unknown};

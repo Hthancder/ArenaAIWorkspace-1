@@ -329,3 +329,6 @@ Bổ sung chọn/bỏ chọn toàn bộ, tùy chọn bỏ URL đã mở hoặc t
 
 ### Tiến độ 0.91 — thời hạn thùng rác và lịch sử
 Cấu hình cục bộ để gợi ý quá hạn; mặc định tắt, hiện tại chỉ dọn bằng xem trước/chọn/xác nhận, không tự xóa. Giới hạn 200 mục cũ nhất mỗi lượt, loại trừ lịch sử không hoàn tất/không rõ và lượt được báo cáo tự động tham chiếu; kiểm tra lại từng mục, dừng khi trạng thái thay đổi hoặc xóa không xác nhận. Tự động hết hạn chưa triển khai.
+
+### Tiến độ 0.92 — tự dọn quá hạn thử nghiệm
+Bổ sung chế độ riêng opt-in, mặc định tắt, chọn thùng rác và/hoặc lịch sử đủ điều kiện, tối đa 20 mục mỗi 1–30 ngày. Ghi danh sách ứng viên trước khi xóa, xác minh thời hạn/cấu hình và từng mục, ngừng khi thay đổi hoặc kết quả mơ hồ; lượt gián đoạn yêu cầu kiểm tra và xác nhận lại. Không chạy bù và tôn trọng tạm dừng toàn cục. Cảnh báo xóa vĩnh viễn trong popup, banner và cài đặt; tên trong danh sách lượt gần nhất có thể nhạy cảm, không nằm trong sao lưu. Cần kiểm thử Chrome thực tế.
