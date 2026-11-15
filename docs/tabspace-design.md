@@ -338,3 +338,6 @@ Thêm lựa chọn âm riêng cho lời nhắc preset mới, mặc định tắt
 
 ### Tiến độ 0.94 — danh sách thông báo hiện tại
 Gộp lời nhắc preset đang chờ và kết quả đóng tự động theo thời gian; thêm lọc loại/chưa đọc và tìm kiếm kết quả. Giữ các thao tác và trạng thái đọc hiện có; đánh dấu tất cả gồm mục bị lọc ẩn, thao tác hoãn/bỏ nhiều vẫn dựa vào tìm kiếm và chọn trong hộp thoại. Các lượt dọn và tự động chưa hoàn tất vẫn riêng. Đây chưa phải lịch sử thông báo tổng quát, không lưu thêm sự kiện mới. Cần kiểm thử Chrome thực tế.
+
+### Tiến độ 0.95 — bảo vệ mở workspace
+Bổ sung kiểm tra workspace và fingerprint nhóm đích trước từng tab trong cả mở workspace lẫn bước mở sau chuyển; nếu không đọc được hoặc thay đổi thì dừng và báo từng mục, không thu hồi tab đã mở. Bổ sung chọn/bỏ chọn tất cả và số lượng trong hộp mở bản lưu. Theo thiết kế mục 104, chuyển workspace vẫn yêu cầu xem trước và chọn tab, chưa tự đóng không xác nhận. Các kiểm tra không loại bỏ mọi race. Cần kiểm thử Chrome thực tế.

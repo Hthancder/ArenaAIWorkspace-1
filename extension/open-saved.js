@@ -4,6 +4,7 @@ const OpenSaved=(()=>{
  async function execute(api,plan,mode,options={}){
   if(!['current','new'].includes(mode))throw Error('Nơi mở không hợp lệ.');
   if((options.skipOpen!==undefined&&typeof options.skipOpen!=='boolean')||(options.skipDuplicates!==undefined&&typeof options.skipDuplicates!=='boolean'))throw Error('Tùy chọn mở không hợp lệ.');
+  if(options.guard!==undefined&&typeof options.guard!=='function')throw Error('Kiểm tra lượt mở không hợp lệ.');
   let windowId=null,stopped=false;const openedUrls=new Set();
   if(mode==='current'){const win=await api.windows.getCurrent();if(!Number.isInteger(win?.id)||win.id<0||win.incognito)throw Error('Không xác định được cửa sổ Chrome thông thường.');windowId=win.id}
   const results=[];
@@ -16,6 +17,7 @@ const OpenSaved=(()=>{
     let tabs;try{tabs=await api.tabs.query({});if(!Array.isArray(tabs)||tabs.some(t=>!t||typeof t.incognito!=='boolean'||(!t.incognito&&typeof t.url!=='string'&&typeof t.pendingUrl!=='string')))throw Error('Không xác định được tab.')}catch{stopped=true;results.push({name:item.name,error:'Không đọc được tab đang mở; đã dừng trước khi mở mục này.'});continue}
     if(tabs.some(t=>!t.incognito&&(t.url===fresh.url||t.pendingUrl===fresh.url))){results.push({name:item.name,skipped:'URL đã mở hoặc đang tải trong cửa sổ thông thường.'});continue}
    }
+   if(options.guard){try{await options.guard(item)}catch{stopped=true;results.push({name:item.name,error:'Workspace hoặc nhóm đã thay đổi hoặc không đọc được; đã dừng trước khi mở mục này.'});continue}}
    if(mode==='new'&&windowId===null){
     try{const win=await api.windows.create({url:fresh.url,incognito:false});if(!Number.isInteger(win?.id)||win.id<0)throw Error('Không có ID cửa sổ.');windowId=win.id;openedUrls.add(fresh.url);const first=win.tabs?.[0];results.push({name:item.name,windowId,url:fresh.url,...(Number.isInteger(first?.id)&&first.id>=0?{tabId:first.id}:{})})}catch{stopped=true;results.push({name:item.name,error:'Không xác nhận được việc tạo cửa sổ; hãy kiểm tra Chrome trước khi thử lại.'})}
    }else{

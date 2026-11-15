@@ -33,10 +33,10 @@ const WorkspaceSwitch=(()=>{
    const closed=batch.batch.items.filter(t=>t.status==='closed').length;
    if(batch.stopped||closed!==entries.length)return {saved:entries.length,batch:batch.batch,closed,error:'Bước đóng chưa hoàn tất hoặc không rõ; chưa mở workspace đích. Kiểm tra lịch sử và Chrome.'};
    try{await current()}catch{return {saved:entries.length,batch:batch.batch,closed,error:'Workspace hoặc nhóm đích đã thay đổi; chưa mở tab đích. Kiểm tra trước khi tiếp tục.'}}
-   try{return {saved:entries.length,batch:batch.batch,closed,opened:openItems.length?await tools.open(api,openItems,destination,{skipOpen,skipDuplicates}):[]}}
+   try{return {saved:entries.length,batch:batch.batch,closed,opened:openItems.length?await tools.open(api,openItems,destination,{skipOpen,skipDuplicates,guard:current}):[]}}
    catch{return {saved:entries.length,batch:batch.batch,closed,error:'Không xác nhận được bước mở. Kiểm tra Chrome trước khi thử lại.'}}
   }
-  return {saved:0,closed:0,opened:await tools.open(api,openItems,destination,{skipOpen,skipDuplicates})};
+  return {saved:0,closed:0,opened:await tools.open(api,openItems,destination,{skipOpen,skipDuplicates,guard:current})};
  }
  return {run,fingerprint,reason};
 })();

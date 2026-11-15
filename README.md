@@ -35,3 +35,6 @@ Chế độ riêng trong **Cài đặt & sao lưu → Thời hạn lưu dữ li�
 
 ### Danh sách thông báo hiện tại (0.94)
 Trong **Cần chú ý**, lời nhắc preset đang chờ và kết quả tự động được gộp theo thời gian mới nhất, có lọc tất cả/chưa đọc/lời nhắc/kết quả và tìm kiếm. Bộ lọc chỉ thay đổi danh sách, không xóa hay xử lý mục; nút đánh dấu tất cả vẫn bao gồm cả mục bị ẩn. Hoãn/bỏ nhiều lời nhắc dựa vào tìm kiếm, không theo bộ lọc thông báo; hãy kiểm tra các ô trong hộp xác nhận. Các lượt đang xử lý hoặc dọn chưa rõ vẫn nằm ở phần riêng bên dưới. Đây là góc nhìn từ dữ liệu hiện tại, không phải lịch sử vĩnh viễn của mọi kênh: lời nhắc đã bỏ/hoãn và báo cáo đã xóa không còn hiện.
+
+### Mở và chuyển workspace (0.95)
+Khi mở bản lưu, có thể chọn hoặc bỏ chọn tất cả và xem số lượng được chọn. Khi mở workspace hoặc mở đích sau bước chuyển, Tabspace kiểm tra lại workspace và các nhóm đích trước mỗi lần mở; nếu phát hiện thay đổi hoặc không đọc được, dừng các mục tiếp theo và báo kết quả từng mục. Các tab đã mở vẫn giữ nguyên, hãy kiểm tra Chrome trước khi thử lại. Kiểm tra này không ngăn mọi thay đổi đồng thời. Chuyển workspace vẫn cần xem trước và xác nhận, không âm thầm đóng tab.
