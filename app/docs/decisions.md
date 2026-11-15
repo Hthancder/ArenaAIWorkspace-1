@@ -171,3 +171,52 @@ the keys the user plays.
 - Tests: 7 new checks (neutral pose finite, hands appear/leave with NO
   motion, per-side entry) — 30 checks ALL PASSED; humanize/practice
   suites, tsc, build green.
+
+## 2026-11-15 — hands v3: real key-press articulation, bone-exact everywhere
+
+User feedback on v2 + free play: hands freeze ("đơ ra"), fingers don't
+press INTO the keys like when a MIDI plays; complex notes / repeated
+presses with fingers close together look deformed ("méo mó, mềm oặt,
+ảo"); repeats must look like REAL repeated presses ("3D trên mặt phẳng
+2D"), never frozen as if holding. Fix properly ("chỉn chu, không chắp
+vá"), with human joint limits.
+
+Root causes found and fixed at the source:
+
+1. **humanize blended JOINT POSITIONS across time taps** (`mixLagged`)
+   plus per-joint micro noise and per-joint settle — on fast passages
+   (complex notes, fingers close together) the position average WARPS
+   bone chains (a chain's joints move differently → stretch/soften) and
+   per-joint noise shimmered lengths by up to ~10 %. Rebuilt as a
+   per-BONE blend: bone LENGTHS from the centre tap, DIRECTIONS blended
+   (weighted unit vectors + settle overshoot), thumbRef blended on the
+   sphere. Micro-motion = one whole-hand tremor translation + tiny
+   per-finger rotations around their bases + forearm breath — all
+   length-preserving. Regression test: 18 Hz curl flicker keeps every
+   bone within 1 mm of source length (the old blend fails this hard).
+2. **thumbRef are twist DIRECTIONS (unit vectors), not positions** —
+   v2's shiftHand translated them, corrupting thumb orientation on
+   every drift/entrance. `shiftPose` no longer touches them; they
+   rotate (Rodrigues) with the thumb.
+3. **v2's strike bob went UP (+z) and was a 6 mm nudge** — reads as a
+   twitch, never as pressing. v3: a press is an MCP swing around the
+   knuckle (hinge axis from the finger's own geometry): windup lift
+   (PECK_LIFT 0.06 rad) → strike down INTO the key (SWING_PRESS −0.075·
+   keystrike) over PECK_SEC 0.09 s → stays pressed while held → lifts
+   back on release. Every key-down sweeps windup → press, so even
+   millisecond repeats show a full peck ("không được im 1 chỗ"). The
+   whole hand dips 1.4 mm on presses (weight cue), press flags fire at
+   contact.
+4. **Human joint limits**: swing clamped [-0.30, 0.25] rad, MCP
+   abduction ±0.12 rad (fingers fan toward nearby keys — chords, tight
+   repeats — instead of reaching); the claim picks the finger whose TIP
+   is naturally closest to the key; the whole-hand drift serves the
+   centroid. Nothing stretches — motion is translations of whole chains
+   or rotations at real joints only (new shared `src/hands/geom.ts`).
+5. **Free-play hands breathe**: synthised hands get a slow sway (±0.8 mm)
+   + per-finger flutter (±0.012 rad) — never frozen ("tay đơ ra").
+
+Tests: livehands 34 checks (tip dips BELOW rest while held; repeat peck
+lifts before striking and travels ≥3 mm; bones exact <1 %) and humanize
+(bone safety + existing purity/lag/contract) ALL PASSED; practice suite,
+tsc, build green.

@@ -197,7 +197,15 @@ console.log('press: rigid reach — the finger tip lands on the key, no stretchi
   bonesBefore.forEach((b, i) => {
     maxStretch = Math.max(maxStretch, Math.abs(bonesAfter[i] - b) / b)
   })
-  check('bone lengths preserved (rigid only)', maxStretch < 0.05, `${(maxStretch * 100).toFixed(1)}%`)
+  // v3 rotates joints (Rodrigues) — lengths are preserved EXACTLY.
+  check('bone lengths preserved exactly (rotations only)', maxStretch < 0.01, `${(maxStretch * 100).toFixed(2)}%`)
+
+  console.log('press articulation: the finger presses DOWN into the key')
+  {
+    const zRest = tpl.R!.fingers[f][3][2]
+    // While held, the tip must sit BELOW its rest height (v2 bobbed UP).
+    check('tip dips below rest while held', r.fingers[f][3][2] < zRest - 0.01, `${r.fingers[f][3][2]} vs rest ${zRest}`)
+  }
 
   console.log('release: smooth return, no jumps')
   h?.release()
@@ -241,6 +249,39 @@ console.log('repeat presses: every key-down visibly taps ("không giữ nguyên 
   }
   h2?.release()
   check('second press shows a visible tap', zMax - zMin > 0.02, `${(zMax - zMin).toFixed(3)}`)
+
+  console.log('fast repeats: every key-down pecks even mid-press')
+  {
+    // Down → 3 frames → up → 3 frames → down again while still low.
+    liveHands.reset()
+    const tpl2 = posesOf()
+    const p2 = posesOf()
+    const r2 = p2.R!
+    const refresh2 = () => refreshPose(r2, tpl2.R!)
+    const hA = audioEngine.triggerKey(72, 0.8)
+    frames(p2, 3, baseOpts(), refresh2)
+    let f2 = 0
+    for (let i = 0; i < 5; i++) if (r2.press[i] > 0.5) f2 = i
+    hA?.release()
+    frames(p2, 3, baseOpts(), refresh2) // barely recovered — finger still low
+    const zBefore = r2.fingers[f2][3][2]
+    const hB = audioEngine.triggerKey(72, 0.8) // immediate repeat
+    let lo = Infinity
+    let hi = -Infinity
+    for (let i = 0; i < 14; i++) {
+      fakeMs += 16.7
+      refresh2()
+      liveHands.update(p2, baseOpts())
+      const z = r2.fingers[f2][3][2]
+      lo = Math.min(lo, z)
+      hi = Math.max(hi, z)
+    }
+    hB?.release()
+    // The peck sweep lifts the finger up before striking again: the tip
+    // must travel visibly even though it started mid-press.
+    check('repeat peck travels the tip', hi - lo > 0.03, `${(hi - lo).toFixed(3)}`)
+    check('peck lifts before striking', hi > zBefore + 0.005, `${hi} vs ${zBefore}`)
+  }
 }
 
 console.log('adaptive hands: the left hand comes up for left-side keys')

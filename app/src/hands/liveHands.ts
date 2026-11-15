@@ -1,35 +1,42 @@
 /**
- * Live-input hand overlay (v2) — the hands follow the user's MANUAL
+ * Live-input hand overlay (v3) — the hands follow the user's MANUAL
  * playing: on-screen keys (mouse), PC keyboard and physical MIDI devices
  * all feed `audioEngine.triggerKey`, which emits on the live bus.
  *
- * v2 — 2026-11-15, following user feedback on v1 ("ngón tay bị kéo dãn,
- * không tự nhiên, bị force"; "bấm phím bên trái thì tay trái phải lên bấm"):
+ * v3 — 2026-11-15, after user feedback on v2 ("tay đơ ra, ngón không
+ * nhấn vào phím như khi phát MIDI"; "bấm lặp 1 nốt phải trông như đang
+ * bấm thật, không im 1 chỗ"; "hạn chế chuyển động quá đà và ảo của các
+ * khớp"):
  *
- *  - RIGID-ONLY motion. v1 lerped individual finger joints toward the
- *    pressed key and sheared the palm (wrist ×1.0 vs bases ×0.18),
- *    stretching bone chains. Now every transform is a UNIFORM translation
- *    of a joint chain — bone lengths are preserved to within ~1 % (the
- *    tiny proximal-length change of a finger bob is dz²/2L, invisible).
- *    No joint is ever moved toward a target independently of its chain.
+ *  - REAL KEY-PRESS ARTICULATION. A press is an MCP swing of the finger
+ *    around its knuckle (Rodrigues rotation — bone lengths preserved
+ *    EXACTLY): the finger lifts at rest, sweeps down INTO the key on
+ *    every key-down, stays pressed while held, and lifts back on
+ *    release. v2's up-bob (a +z nudge) is gone — that read as a twitch,
+ *    never as pressing a key.
  *
- *  - Adaptive hand presence. A pressed key is played by the hand the
- *    SONG's motion plan assigns to the matching note (natural,
- *    professional fingering), else by the hand that can reach it with the
- *    least travel (the keyboard's left half belongs to the left hand).
- *    If that hand is NOT on stage (the runtime keeps a hand "in the lap"
- *    — poseAt returns null — outside its planned notes) it COMES UP from
- *    a cached pose sample of that hand: it fades in from above while
- *    travelling to the key, and lowers away again when the playing stops,
- *    mirroring the runtime's own enter/exit language.
+ *  - EVERY key-down pecks, even millisecond repeats: for PECK_SEC after
+ *    a key-down the swing target SWEEPS hover → press, so a finger that
+ *    is already down visibly lifts and strikes again ("đừng để im 1
+ *    chỗ"). The whole hand dips ~1.4 mm on presses (weight) and the
+ *    mesh's press squash fires at contact.
  *
- *  - Every key-down kicks a short strike envelope on its finger, so a
- *    note pressed many times visibly taps every time ("phải có chuyển
- *    động trông như bấm chứ không phải giữ nguyên 1 chỗ").
+ *  - HUMAN JOINT LIMITS. Every rotation is clamped (swing ∈ [-0.30,
+ *    0.25] rad, abduction ±0.12 rad) and every motion is a rotation at
+ *    a real joint or a rigid translation — joints never move alone, so
+ *    nothing stretches ("méo mó", "mềm oặt", "ảo"). Nearby keys are
+ *    reached by a limited MCP abduction (fingers fan toward their keys)
+ *    plus whole-hand drift — never by stretching a finger.
  *
- *  - While the transport is NOT playing (Wait Mode / pause) the press
- *    flags are purely live-driven: a finger the frozen pose demands
- *    hovers just above its key until the user actually plays it.
+ *  - Adaptive hand presence (v2): a hand that is off stage comes up from
+ *    a pose sample (mid-run of the song's motion, else the baked neutral
+ *    pose), fades in from above and lowers away when the playing stops.
+ *    Synthesised hands breathe (slow sway + per-finger flutter) so a
+ *    free-play hand is never frozen ("tay đơ ra").
+ *
+ *  - Fingering: the song motion plan first (professional fingering),
+ *    else the finger whose tip is naturally closest to the key. Wait
+ *    Mode demand hover keeps its cue (the demanded finger lifts higher).
  *
  * Export safety: `update`/`applyToPoses` no-op and reset while the
  * exporter's virtual clock owns the engine — live state is
@@ -37,11 +44,12 @@
  */
 import { audioEngine } from '../audio/engine'
 import { keyForMidi } from '../keyboard/layout'
+import { clamp, normalize, rotateAbout, rotateVec, shiftPose } from './geom'
 import type { HandPose, HandPoses, Vec3 } from './types'
 
 export type LiveHandsOpts = {
   playing: boolean
-  /** 0..1 — strength of the per-press strike tap. */
+  /** 0..1 — strength of the per-press strike. */
   keystrike: number
   /**
    * Natural fingering from the song's motion plan: for a pressed key,
@@ -53,15 +61,31 @@ export type LiveHandsOpts = {
   sampleHand?: (hand: 'L' | 'R') => HandPose | null
 }
 
-/** Demand-cue lift above the key (Wait Mode: finger hovers until played). */
-const HOVER_Z = 0.09
-/** Per-press strike amplitude at keystrike = 1 (uniform on the chain). */
-const STRIKE_Z = 0.06
-const STRIKE_SEC = 0.13
+// ---- artistic constants (world units: 1 mm = 0.01; angles in rad) ---------------------------------------------------
+
+/** Swing at rest: the finger hovers, knuckle slightly raised. */
+const SWING_HOVER = 0.05
+/** Swing at contact, keystrike = 1: pressed INTO the key (negative = down). */
+const SWING_PRESS = -0.075
+/** Human MCP flexion limits — "hạn chế chuyển động quá đà". */
+const SWING_MIN = -0.3
+const SWING_MAX = 0.25
+/** MCP abduction limit (fingers fan toward nearby keys). */
+const ABDUCT_MAX = 0.12
+/** Each key-down sweeps lift → press over this window (visible peck). */
+const PECK_SEC = 0.09
+/** Windup: the finger visibly lifts before every strike (even repeats). */
+const PECK_LIFT = 0.06
+/** Wait Mode: the demanded finger lifts this much extra. */
+const HOVER_EXTRA = 0.06
+/** Weight cue: the whole hand sinks this far on presses (no elbow). */
+const WRIST_DIP = 0.014
 /** Max rigid x travel of an on-stage hand toward extra keys. */
 const REACH_X = 1.2
-const TAU_ATTACK = 0.055
-const TAU_RELEASE = 0.14
+
+const TAU_PRESS = 0.04
+const TAU_RELEASE = 0.15
+const TAU_ABDUCT = 0.08
 const TAU_DRIFT = 0.09
 const TAU_DRIFT_TRAVEL = 0.2 // a synthesised hand glides in slower
 const TAU_VIS_IN = 0.14
@@ -70,17 +94,22 @@ const RELEASE_FADE_SEC = 0.35
 /** Synthesised-hand entrance: comes down from above and toward the player. */
 const ENTER_Z = 0.55
 const ENTER_Y = -0.25
+/** Synthesised-hand idle life ("không đơ"): slow sway + finger flutter. */
+const SWAY_AMP = [0.008, 0.005, 0.006] as const
+const FLUTTER = 0.012
 
 type Slot = {
   /** Key bound to this finger while held / fading; null = free. */
   midi: number | null
   /** Key centre x of the bound key. */
   keyX: number
-  /** Smoothed press amount, 0 (up) .. 1 (down). */
+  /** Smoothed press amount, 0 (up) .. 1 (down) — drives the press flag. */
   tap: number
-  /** Smoothed demand-hover lift (rigid on joints 1..3). */
-  lift: number
-  /** Seconds since the last key-down on this finger (strike envelope). */
+  /** Smoothed MCP swing angle (rad): + = lifted, − = pressed down. */
+  swing: number
+  /** Smoothed MCP abduction (rad): lateral fan toward the key. */
+  abduct: number
+  /** Seconds since the last key-down on this finger (peck window). */
   strikeT: number
   /** True while the physical key is down. */
   held: boolean
@@ -99,9 +128,20 @@ type HandState = {
   synth: HandPose | null
   /** Working copy exposed in `poses` when the hand is synthesised. */
   buf: HandPose
+  /** Per-hand phase for the idle sway (stable). */
+  seed: number
 }
 
-const makeSlot = (): Slot => ({ midi: null, keyX: 0, tap: 0, lift: 0, strikeT: 9, held: false, freeAt: 0 })
+const makeSlot = (): Slot => ({
+  midi: null,
+  keyX: 0,
+  tap: 0,
+  swing: 0,
+  abduct: 0,
+  strikeT: 9,
+  held: false,
+  freeAt: 0,
+})
 
 function allocPose(hand: 'L' | 'R'): HandPose {
   return {
@@ -122,6 +162,7 @@ const makeHand = (hand: 'L' | 'R'): HandState => ({
   vis: 0,
   synth: null,
   buf: allocPose(hand),
+  seed: hand === 'L' ? 17.3 : 42.7,
 })
 
 function copyPose(src: HandPose, dst: HandPose): void {
@@ -142,30 +183,44 @@ const copyVec = (a: Vec3, b: Vec3) => {
   b[2] = a[2]
 }
 
-/** Uniform translation of every joint — bone lengths preserved exactly. */
-function shiftHand(p: HandPose, dx: number, dy: number, dz: number): void {
-  const s = (v: Vec3) => {
-    v[0] += dx
-    v[1] += dy
-    v[2] += dz
-  }
-  s(p.elbow)
-  s(p.wrist)
-  for (const b of p.bases) s(b)
-  for (const chain of p.fingers) for (const j of chain) s(j)
-  for (const t of p.thumbRef) s(t)
+const _axis: Vec3 = [0, 0, 0]
+
+/**
+ * MCP swing: rotate the finger chain (joints 1..3) around its knuckle
+ * (joint 0). The hinge axis comes from the finger's own geometry —
+ * `cross(tip − knuckle, up)` — so a positive angle lifts the tip and a
+ * negative one presses it down toward the player. Bone lengths exact.
+ * The thumb's twist references rotate with it (they are directions).
+ */
+function swingFinger(p: HandPose, f: number, theta: number): void {
+  if (Math.abs(theta) < 1e-5) return
+  const chain = p.fingers[f]
+  const r: Vec3 = [chain[3][0] - chain[0][0], chain[3][1] - chain[0][1], chain[3][2] - chain[0][2]]
+  // cross(r, (0,0,1)) = (r.y, −r.x, 0)
+  _axis[0] = r[1]
+  _axis[1] = -r[0]
+  _axis[2] = 0
+  if (Math.hypot(_axis[0], _axis[1]) < 1e-6) {
+    _axis[0] = 1
+    _axis[1] = 0
+    _axis[2] = 0
+  } else normalize(_axis)
+  rotateAbout(chain[0], _axis, theta, [chain[1], chain[2], chain[3]])
+  if (f === 0) for (const t of p.thumbRef) rotateVec(t, _axis, theta)
 }
 
 /**
- * Finger bob: joints 1..3 move by the SAME dz (rigid on the proximal →
- * distal span; the metacarpal length changes by ~dz²/2L ≈ 1 %, invisible).
+ * MCP abduction: the finger chain fans sideways around its knuckle
+ * (axis = up) toward a nearby key. Clamped by the caller to human range.
  */
-function bobFinger(p: HandPose, f: number, dz: number): void {
-  for (let k = 1; k < 4; k++) p.fingers[f][k][2] += dz
-}
-
-function clamp(v: number, m: number): number {
-  return Math.max(-m, Math.min(m, v))
+function abductFinger(p: HandPose, f: number, phi: number): void {
+  if (Math.abs(phi) < 1e-5) return
+  const chain = p.fingers[f]
+  _axis[0] = 0
+  _axis[1] = 0
+  _axis[2] = 1
+  rotateAbout(chain[0], _axis, phi, [chain[1], chain[2], chain[3]])
+  if (f === 0) for (const t of p.thumbRef) rotateVec(t, _axis, phi)
 }
 
 class LiveHandsOverlay {
@@ -218,7 +273,7 @@ class LiveHandsOverlay {
     // Release expired bindings — only once the finger has visually settled.
     for (const h of [this.L, this.R]) {
       for (const s of h.slots) {
-        if (s.midi !== null && !s.held && nowSec >= s.freeAt && s.tap < 0.02 && s.strikeT > STRIKE_SEC) {
+        if (s.midi !== null && !s.held && nowSec >= s.freeAt && s.tap < 0.02 && s.strikeT > PECK_SEC) {
           s.midi = null
           s.keyX = 0
         }
@@ -231,6 +286,8 @@ class LiveHandsOverlay {
       if (k) wanted.push({ midi, keyX: k.x })
     }
     this.bind(wanted, poses, opts, nowSec)
+
+    const k = clamp(Number.isFinite(opts.keystrike) ? opts.keystrike : 1, 0, 1)
 
     for (const hand of ['L', 'R'] as const) {
       const st = this[hand]
@@ -259,7 +316,7 @@ class LiveHandsOverlay {
       }
 
       const pose = poses[hand]!
-      // Slot smoothing: press tap, demand hover, strike envelope.
+      // Slot smoothing: press envelope + MCP swing + abduction targets.
       let cx = 0
       let cw = 0
       let tx = 0
@@ -267,38 +324,62 @@ class LiveHandsOverlay {
       for (let f = 0; f < 5; f++) {
         const s = st.slots[f]
         s.strikeT = Math.min(2, s.strikeT + dt)
-        const target = s.held ? 1 : 0
-        const tau = s.held ? TAU_ATTACK : TAU_RELEASE
-        s.tap += (target - s.tap) * (1 - Math.exp(-dt / tau))
+        const held = s.held ? 1 : 0
+        s.tap += (held - s.tap) * (1 - Math.exp(-dt / (s.held ? TAU_PRESS : TAU_RELEASE)))
         if (s.tap < 0.001 && !s.held && s.midi === null) s.tap = 0
-        const demandHover = !opts.playing && pose.press[f] > 0.5 && !(s.midi !== null && s.tap > 0.5)
-        const liftTarget = demandHover ? HOVER_Z : 0
-        s.lift += (liftTarget - s.lift) * (1 - Math.exp(-dt / TAU_ATTACK))
+
+        // Swing target: at rest the finger hovers (synth hands) or keeps
+        // the base articulation (song hands). Every key-down SWEEPS the
+        // target windup → press over PECK_SEC — the finger visibly lifts
+        // and strikes again even for millisecond repeats ("đừng để im 1
+        // chỗ"); a held key stays pressed INTO the key.
+        const press = SWING_PRESS * k
+        const idle = st.synth ? SWING_HOVER : 0
+        const demand = !opts.playing && pose.press[f] > 0.5 && !(s.midi !== null && s.tap > 0.5)
+        let target = s.held ? press : idle + (demand ? HOVER_EXTRA : 0)
+        let pecking = false
+        if (s.strikeT < PECK_SEC) {
+          const u = s.strikeT / PECK_SEC
+          const e = u * u * (3 - 2 * u)
+          target = idle + PECK_LIFT * (1 - e) + (press - idle) * e + (demand ? HOVER_EXTRA * (1 - e) : 0)
+          pecking = true
+        }
+        target = clamp(target, SWING_MIN, SWING_MAX)
+        const tau = pecking || target < s.swing ? TAU_PRESS : TAU_RELEASE
+        s.swing += (target - s.swing) * (1 - Math.exp(-dt / tau))
+
+        // Abduction: the finger fans toward its key; the whole-hand drift
+        // below takes the mean, this absorbs the per-finger residual.
+        let abTarget = 0
+        if (s.midi !== null && (s.held || s.tap > 0.1)) {
+          const resid = s.keyX - (pose.fingers[f][3][0] + st.drift)
+          abTarget = clamp(resid * 0.6, -ABDUCT_MAX, ABDUCT_MAX)
+        }
+        s.abduct += (abTarget - s.abduct) * (1 - Math.exp(-dt / TAU_ABDUCT))
+
         if (s.midi !== null && s.held) {
-          // Drift: bring the ASSIGNED FINGERS' tips toward their keys —
-          // rigid, so a single press lands exactly, chords compromise at
-          // the centroid.
-          cx += s.keyX - pose.fingers[f][3][0]
+          cx += s.keyX - (pose.fingers[f][3][0] + st.drift)
           cw += 1
         }
         if (s.midi !== null) {
-          tx += s.keyX - pose.fingers[f][3][0]
+          tx += s.keyX - (pose.fingers[f][3][0] + st.drift)
           tw += 1
         }
       }
       // On-stage hands only drift within reach; a travelling synthesised
       // hand goes all the way to its keys (it entered for exactly that).
       const raw = cw > 0 ? cx / cw : tw > 0 ? tx / tw : 0
-      const driftTarget = onStage ? clamp(raw, REACH_X) : raw
+      const driftTarget = onStage ? clamp(raw, -REACH_X, REACH_X) : raw
       const tauD = onStage ? TAU_DRIFT : TAU_DRIFT_TRAVEL
       st.drift += (driftTarget - st.drift) * (1 - Math.exp(-dt / tauD))
 
-      this.applyTo(pose, st, opts)
+      this.applyTo(pose, st, opts, nowSec)
     }
   }
 
   /** Apply the current smoothed state to a full pose pair (blur sub-poses). */
   applyToPoses(poses: HandPoses, opts: LiveHandsOpts, buf?: { L: HandPose; R: HandPose }): void {
+    const nowSec = performance.now() / 1000
     for (const hand of ['L', 'R'] as const) {
       const st = this[hand]
       let pose = poses[hand]
@@ -308,32 +389,48 @@ class LiveHandsOverlay {
         pose = b
         poses[hand] = pose
       }
-      if (pose) this.applyTo(pose, st, opts)
+      if (pose) this.applyTo(pose, st, opts, nowSec)
     }
   }
 
-  /** Rigid transforms + press flags. Never moves one joint alone. */
-  private applyTo(pose: HandPose, st: HandState, opts: LiveHandsOpts): void {
+  /**
+   * Rigid transforms (translations / joint rotations — bone lengths
+   * exact) + press flags. Nothing here ever moves a joint alone.
+   */
+  private applyTo(pose: HandPose, st: HandState, opts: LiveHandsOpts, nowSec: number): void {
     if (audioEngine.isExporting()) return
     // Synthesised-hand entrance (fade down from above, toward the player).
     if (st.synth) {
       const k = 1 - st.vis
-      if (k > 0.001) shiftHand(pose, 0, ENTER_Y * k, ENTER_Z * k)
+      if (k > 0.001) shiftPose(pose, 0, ENTER_Y * k, ENTER_Z * k)
+      // Idle life: slow sway so a free-play hand is never frozen.
+      const t = nowSec
+      shiftPose(
+        pose,
+        SWAY_AMP[0] * Math.sin(0.63 * t + st.seed),
+        SWAY_AMP[1] * Math.sin(0.47 * t + st.seed * 1.7),
+        SWAY_AMP[2] * Math.sin(0.71 * t + st.seed * 0.9),
+      )
     }
     // Rigid travel toward the played keys.
-    if (Math.abs(st.drift) > 0.0005) shiftHand(pose, st.drift, 0, 0)
+    if (Math.abs(st.drift) > 0.0005) shiftPose(pose, st.drift, 0, 0)
+
+    let maxTap = 0
     for (let f = 0; f < 5; f++) {
       const s = st.slots[f]
       const basePress = pose.press[f] > 0.5
       const live = s.midi !== null
       const press = opts.playing ? basePress || (live && s.tap > 0.5) : live && s.tap > 0.5
       pose.press[f] = press ? 1 : 0
-      // Rigid finger bob: demand hover + per-press strike envelope.
-      const u = s.strikeT / STRIKE_SEC
-      const strike = u < 1 ? STRIKE_Z * (1 - u) * (1 - u) * Math.min(1, Math.max(0, opts.keystrike)) : 0
-      const dz = s.lift + strike
-      if (Math.abs(dz) > 0.0005) bobFinger(pose, f, dz)
+      if (s.tap > maxTap) maxTap = s.tap
+      // Finger flutter (synth hands only) keeps idle fingers alive.
+      const flutter = st.synth ? FLUTTER * Math.sin(0.55 * nowSec + f * 1.31 + st.seed) : 0
+      abductFinger(pose, f, s.abduct)
+      swingFinger(pose, f, clamp(s.swing + (s.midi === null ? flutter : 0), SWING_MIN, SWING_MAX))
     }
+    // Weight cue: the hand sinks slightly as the fingers press.
+    const dip = WRIST_DIP * maxTap * clamp(Number.isFinite(opts.keystrike) ? opts.keystrike : 1, 0, 1)
+    if (dip > 0.0005) shiftPose(pose, 0, 0, -dip, false)
   }
 
   /** Bind keys to (hand, finger): plan fingering first, reach otherwise. */
@@ -344,7 +441,7 @@ class LiveHandsOverlay {
       for (const h of [this.L, this.R]) {
         for (const s of h.slots) {
           if (s.midi === w.midi) {
-            if (!s.held) s.strikeT = 0 // every key-down taps, even repeats
+            if (!s.held) s.strikeT = 0 // every key-down pecks, even repeats
             s.held = true
             s.keyX = w.keyX
             bound = true
@@ -382,18 +479,21 @@ class LiveHandsOverlay {
       return
     }
 
-    // 2) Reach-based: the hand that travels least. A hand that is off
-    //    stage may still come up — cheap on its own half of the keyboard.
+    // 2) Reach-based: the finger whose TIP is naturally closest to the
+    //    key plays it ("hạn chế ngón vươn ra không tự nhiên") — the hand
+    //    travels as a whole instead. A hand that is off stage may still
+    //    come up — cheap on its own half of the keyboard.
     type Cand = { hand: 'L' | 'R'; finger: number; cost: number }
     const cands: Cand[] = []
     for (const hand of ['L', 'R'] as const) {
       const st = this[hand]
       const onStage = poses[hand] !== null || st.synth !== null
       const side = hand === 'L' ? -1 : 1
+      const src = poses[hand] ?? st.synth
       for (let f = 0; f < 5; f++) {
         const s = st.slots[f]
-        const baseX = poses[hand] ? poses[hand]!.bases[f][0] : st.synth ? st.synth.bases[f][0] : 0
-        let cost = onStage ? Math.abs(baseX - w.keyX) : 1.6 + Math.abs(w.keyX - side * 2.2) * 0.35
+        const tipX = src ? src.fingers[f][3][0] : side * 1.5
+        let cost = onStage ? Math.abs(tipX - w.keyX) : 1.6 + Math.abs(w.keyX - side * 2.2) * 0.35
         if (s.midi === w.midi) cost -= 0.7 // repeats keep their finger
         else if (s.midi !== null && !s.held && Math.abs(s.keyX - w.keyX) < 1.4) cost -= 0.45 // stepwise continuity
         if (f === 0) cost += 0.12 // keep the thumb in reserve a little
