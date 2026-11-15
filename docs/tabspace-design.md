@@ -350,3 +350,6 @@ Nhắc phân loại là gợi ý opt-in, mặc định tắt, tuổi 1–365 ng�
 
 ### Tiến độ 0.98 — mặc định mở bản lưu và phiên
 Cho cấu hình cửa sổ mở bản lưu, bỏ URL đang mở/trùng cho bản lưu và riêng cho phiên, cùng tùy chọn khôi phục nhóm phiên. Chỉ đặt sẵn hộp xác nhận, sửa được từng lượt; chuyển workspace và lịch sử giữ lựa chọn riêng. Mặc định ban đầu tương thích phiên bản cũ, cấu hình chỉ lưu local, không backup; URL so nguyên văn và bỏ tab có thể thay đổi cấu trúc phiên. Cần kiểm thử Chrome thực tế.
+
+### Tiến độ 0.99 — nhắc sao lưu và dung lượng
+Nhắc sao lưu opt-in, mặc định tắt, chu kỳ 1–365 ngày và hoãn; hiển thị trong trang quản lý khi mở/làm mới và tôn trọng tạm dừng toàn cục. Người dùng tự xác nhận đã kiểm tra, lưu bản sao ngoài profile để đặt lịch mới; không coi thao tác xuất là đã sao lưu thành công. Xem kích thước storage.local do Chrome báo, không giả định đó là kích thước file sao lưu. Trạng thái nhắc chỉ lưu cục bộ, không xuất. Cần kiểm thử Chrome thực tế.

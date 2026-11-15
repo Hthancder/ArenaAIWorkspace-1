@@ -47,3 +47,8 @@ Trong **Hộp để sau → Nhắc phân loại**, có thể bật lời nhắc 
 
 ### Mặc định khi mở (0.98)
 Trong **Cài đặt & sao lưu → Mặc định khi mở**, chọn cửa sổ mặc định và hành vi bỏ URL trùng cho bản lưu, cùng các lựa chọn riêng khi khôi phục phiên. Thiết lập chỉ điền sẵn hộp xem trước; vẫn có thể đổi từng lượt, và bản lưu không bị xóa. Bỏ URL đã mở cũng bỏ URL đã được mở trong cùng lượt; so sánh URL nguyên văn, không xét ẩn danh và không tránh được mọi thay đổi đồng thời. Tùy chọn bỏ trùng có thể thay đổi cấu trúc phiên. Các mặc định này không áp dụng cho hộp chuyển workspace hoặc mở lại lịch sử; lưu trên thiết bị, không nằm trong sao lưu.
+
+### Nhắc sao lưu và dung lượng (0.99)
+Trong **Cài đặt & sao lưu → Nhắc sao lưu**, bật lời nhắc tùy chọn (mặc định tắt), chọn chu kỳ 1–365 ngày hoặc hoãn 1, 7, 30 ngày. Gợi ý xuất hiện trong trang quản lý khi mở hoặc làm mới, không gửi thông báo hệ điều hành và tôn trọng tạm dừng tự động hóa. Sau khi tự xuất, kiểm tra file và lưu ở nơi an toàn ngoài profile Chrome, có thể bấm **Tôi đã sao lưu** để đặt lại lịch; đây chỉ là xác nhận của bạn, Tabspace không thể kiểm tra file hoặc việc tải xuống. Bấm Xuất dữ liệu không tự xác nhận. Thiết lập và thời điểm xác nhận lưu cục bộ, không nằm trong sao lưu.
+
+Nút **Xem dung lượng** cho biết số byte Chrome báo của toàn bộ storage.local của extension tại thời điểm kiểm tra; không phải kích thước file xuất hay toàn bộ profile. Xem dung lượng không xóa dữ liệu.
