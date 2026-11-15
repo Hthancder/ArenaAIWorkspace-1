@@ -27,7 +27,7 @@ type Persisted = {
 }
 
 function loadPersisted(): Persisted {
-  const base: Persisted = { mode: 'off', scoringOffsetMs: 0, waitAutoAdvanceMs: 5000 }
+  const base: Persisted = { mode: 'off', scoringOffsetMs: 0, waitAutoAdvanceMs: 0 }
   try {
     const raw = localStorage.getItem(LS_KEY)
     if (!raw) return base
@@ -35,7 +35,15 @@ function loadPersisted(): Persisted {
     return {
       mode: p.mode === 'wait' || p.mode === 'rhythm' ? p.mode : 'off',
       scoringOffsetMs: typeof p.scoringOffsetMs === 'number' ? p.scoringOffsetMs : 0,
-      waitAutoAdvanceMs: typeof p.waitAutoAdvanceMs === 'number' ? p.waitAutoAdvanceMs : 5000,
+      // 5000 was the old default (auto-advance ON). The flow-and-pause
+      // redesign (2026-11-15) defaults to pure "stop and wait", so
+      // migrate the old default to OFF; any other saved value is kept.
+      waitAutoAdvanceMs:
+        p.waitAutoAdvanceMs === 5000
+          ? 0
+          : typeof p.waitAutoAdvanceMs === 'number'
+            ? p.waitAutoAdvanceMs
+            : 0,
     }
   } catch {
     return base

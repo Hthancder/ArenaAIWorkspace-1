@@ -1655,7 +1655,7 @@ function PracticeSection() {
         step={1}
         format={(v) => (v === 0 ? t('practice.never') : `${v}s`)}
         onChange={(v) => usePractice.getState().setWaitAutoAdvanceMs(v * 1000)}
-        defaultValue={5}
+        defaultValue={0}
       />
       <div className="flex items-center justify-between gap-2 py-1">
         <span className="text-label text-ink">{t('row.calibration')}</span>

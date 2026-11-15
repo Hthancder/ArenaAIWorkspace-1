@@ -877,6 +877,31 @@ export class AudioEngine {
     return this.playing
   }
 
+  /** Playback rate (speed multiplier) — the wait-mode flow clock advances at this rate. */
+  getRate(): number {
+    return this.rate
+  }
+
+  /** True while the exporter's silent pass owns the engine + playhead. */
+  isExporting(): boolean {
+    return this.savedExportState !== null
+  }
+
+  /**
+   * Wait-mode flow control (practice engine, 2026-11-15): pin the frozen
+   * playhead to `tlAudio` exactly — no seek semantics (no note diff, no
+   * voice retrigger, no listener events, no audio). The visual layer
+   * reads `currentSongTime()` and glides frame by frame with the
+   * flow-and-pause loop instead of teleporting between onsets. Two
+   * field writes; the note list is never scanned. No-op during an
+   * export pass — the virtual clock owns the playhead there.
+   */
+  flowSet(tlAudio: number): void {
+    if (this.savedExportState) return
+    this.offsetAtStart = tlAudio
+    this.startedAt = now()
+  }
+
   /**
    * The engine's INTERNAL playback clock — TL_audio. Advances at
    * `rate × wall-clock` from `startedAt`. This is the time axis the

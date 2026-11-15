@@ -5,7 +5,7 @@
  * Run: `npx tsx scripts/test-practice.ts`
  */
 import { timingWindows, onsetStepBeats, bpmAt } from '../src/practice/windows'
-import { groupNotesByOnset } from '../src/practice/steps'
+import { groupNotesByOnset, resolveStepIndex } from '../src/practice/steps'
 import { RhythmMatcher, barIndexAt } from '../src/practice/match'
 import type { NoteEvent } from '../src/midi/types'
 
@@ -149,6 +149,20 @@ console.log('per-bar aggregation')
   check('barIndexAt', barIndexAt([0, 2, 4], 2.5) === 2)
   check('3 bars reported', r.perBar.length === 3, JSON.stringify(r.perBar))
   check('bar3 has the miss', r.perBar[2].correct === 0 && r.perBar[2].expected === 1)
+}
+
+console.log('flow-and-pause step targeting (2026-11-15 redesign)')
+{
+  const steps = groupNotesByOnset([note(0, 60, 1), note(1, 62, 2), note(2, 64, 3), note(3, 65, 5)])
+  const none = { startMidi: null, endMidi: null }
+  check('playhead before a step targets it', resolveStepIndex(steps, 0.2, none) === 0)
+  check('playhead mid-gap targets the next step', resolveStepIndex(steps, 2.5, none) === 2)
+  check('just past an onset grabs that step', resolveStepIndex(steps, 3.03, none) === 2)
+  check('past the end restarts at step 0', resolveStepIndex(steps, 9, none) === 0)
+  const loop = { startMidi: 2, endMidi: 3.5 }
+  check('past the end wraps to the loop head', resolveStepIndex(steps, 9, loop) === 1)
+  check('next step past B wraps to A', resolveStepIndex(steps, 3.1, loop) === 1)
+  check('playhead before B targets the in-range step', resolveStepIndex(steps, 2.2, loop) === 2)
 }
 
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} FAILURES`)

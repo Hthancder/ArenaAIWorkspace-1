@@ -78,3 +78,13 @@ Làm chuyển động bàn tay "người" hơn (`src/hands/humanize.ts`, slider 
 - `press` copy RAW từ mẫu t: key light/kẹp nốt không được trễ tiếng đàn.
 - Amplitude hằng số mang tính nghệ thuật (TODO(spec)): AMP_FINGER 0.011 / AMP_WRIST 0.007 / AMP_ELBOW 0.004 world units tại microMotion = 1.
 - Test: `npx tsx scripts/test-humanize.ts` (purity, lag, bounded tremor, pass-through).
+
+## Wait Mode — flow-and-pause redesign (2026-11-15)
+User: mô hình cũ "dịch chuyển" nốt (seek teleport từng bước) cho trải nghiệm sai + rất lag. Thay bằng:
+- **Trôi + dừng**: flow loop (RAF trong usePracticeEngine) đẩy playhead tới onset của bước hiện tại rồi DỪNG đúng trên đường chạm; chơi xong → trôi tiếp tới nốt kế. Nốt rơi liên tục, không teleport (ngoại trừ nhảy lùi khi wrap loop A–B — giống hành vi loop bình thường).
+- **Cửa sổ chơi** mở 0.75s (TL) trước onset — bấm sớm tự nhiên vẫn tính; sớm hơn bị bỏ qua (không tính sai). Bấm trễ = chờ tới khi bấm. `press` đúng full bộ pitches → sang bước; lặp pitch = retry; sai pitch = wrong (đếm, không chặn) — giữ nguyên bộ đếm M5.
+- **Lag fix**: nguyên nhân = `audioEngine.seek()` mỗi bước (quét note ×2 + re-trigger mọi voice đang vang + ghi store) + auto-advance 5s seek định kỳ cả khi rảnh. Mới: `engine.flowSet(t)` = 2 phép ghi field/th frame — không quét note, không audio, không re-render (zustand chỉ ghi khi đổi bước).
+- **Auto-advance mặc định TẮT (0)** — "dừng chờ đánh" thuần; slider giữ (0 = Không bao giờ); migration: persisted 5000 (default cũ) → 0. Skip button vẫn có.
+- Điểm bắt đầu = playhead hiện tại (bước kế tiếp; hết bài → wrap loop hoặc bước 0). Seek-bar kéo giữa phiên = re-anchor tự động. `engine.flowSet` no-op khi export (virtual clock giữ quyền).
+- Preview pitch ("nghe trước") phát lúc DỪNG (không phải lúc sang bước) — phím sáng lúc chờ.
+- Test: `resolveStepIndex` 7 case trong test-practice.ts — ALL TESTS PASSED.

@@ -29,3 +29,26 @@ export function groupNotesByOnset(
   for (const s of steps) s.pitches.sort((a, b) => a - b)
   return steps
 }
+
+/**
+ * Which step the flow should target when the playhead sits at
+ * `fromMidi` (midi-seconds): the first step at/after the playhead,
+ * grabbing a step the playhead sits just past by ≤ `grabEps`. Past the
+ * loop end (or past the last step) it wraps to the loop head, else the
+ * first step. Pure — the controller owns the store conversions.
+ */
+export function resolveStepIndex(
+  steps: readonly WaitStep[],
+  fromMidi: number,
+  loop: { startMidi: number | null; endMidi: number | null },
+  grabEps = 0.05,
+): number {
+  let index = steps.findIndex((s) => s.time >= fromMidi - grabEps)
+  if (index >= 0 && loop.endMidi !== null && steps[index].time >= loop.endMidi) index = -1
+  if (index < 0) {
+    const from = loop.startMidi ?? 0
+    const found = steps.findIndex((s) => s.time >= from - 1e-9)
+    index = found >= 0 ? found : 0
+  }
+  return index
+}
