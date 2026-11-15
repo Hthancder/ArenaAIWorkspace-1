@@ -367,5 +367,203 @@ console.log('browser chain: hand travel glides (no per-frame snap)')
   check('rate-limit poses stay finite', finite(poses.L) && finite(poses.R))
 }
 
+// ---- 10. S1+S2 — landing has no wobble: the two loops never fight ----
+console.log('stability: steady hold — tip settles, no drift/abduct tug-of-war')
+{
+  liveHands.reset()
+  const opts = browserOpts()
+  for (let i = 0; i < 5; i++) appFrame(opts)
+  const h1 = audioEngine.triggerKey(60, 0.8)
+  const h2 = audioEngine.triggerKey(64, 0.8) // chord → drift mean + per-finger dev
+  let poses: HandPoses = freshSource()
+  for (let i = 0; i < 35; i++) poses = appFrame(opts) // converge
+  const rel = (p: HandPose, f: number) => [p.fingers[f][3][0] - p.wrist[0], p.fingers[f][3][1] - p.wrist[1]]
+  const samples: number[][][] = []
+  for (let i = 0; i < 30; i++) {
+    poses = appFrame(opts)
+    samples.push([rel(poses.R!, 1), rel(poses.R!, 2)])
+  }
+  let maxVar = 0
+  for (let f = 0; f < 2; f++) {
+    for (const axis of [0, 1]) {
+      const vals = samples.map((s) => s[f][axis])
+      maxVar = Math.max(maxVar, Math.max(...vals) - Math.min(...vals))
+    }
+  }
+  check('steady-hold tip variation <= 1 mm', maxVar <= 0.01, `var=${maxVar.toFixed(4)}`)
+  h1?.release()
+  h2?.release()
+}
+
+// ---- 11. S3 — one hinge axis per strike (frozen, no kinks) ----
+console.log('stability: strike axis frozen for the whole press')
+{
+  liveHands.reset()
+  const opts = browserOpts()
+  for (let i = 0; i < 5; i++) appFrame(opts)
+  const h = audioEngine.triggerKey(60, 0.8)
+  const axes: number[][] = []
+  const tips: number[][] = []
+  for (let i = 0; i < 12; i++) {
+    const poses = appFrame(opts)
+    const dbg = liveHands.slotDebug('R', 1)
+    if (dbg.axis) axes.push([...dbg.axis])
+    tips.push([...poses.R!.fingers[1][3]])
+  }
+  h?.release()
+  let maxTurn = 0
+  for (let i = 1; i < axes.length; i++) {
+    const dot = axes[i][0] * axes[i - 1][0] + axes[i][1] * axes[i - 1][1] + axes[i][2] * axes[i - 1][2]
+    maxTurn = Math.max(maxTurn, Math.acos(Math.min(1, Math.max(-1, dot))))
+  }
+  check('axis does not turn during the strike', axes.length >= 8 && maxTurn < 1e-6, `turn=${maxTurn}`)
+  // smooth path: no segment more than 3x the median (a kink = axis jumped)
+  const segs: number[] = []
+  for (let i = 1; i < tips.length; i++) segs.push(Math.hypot(tips[i][0] - tips[i - 1][0], tips[i][1] - tips[i - 1][1], tips[i][2] - tips[i - 1][2]))
+  const med = [...segs].sort((a, b) => a - b)[Math.floor(segs.length / 2)]
+  check('press path smooth (no kink)', med > 0 && Math.max(...segs) <= 3.2 * med, `max=${Math.max(...segs).toFixed(4)} med=${med.toFixed(4)}`)
+}
+
+// ---- 12. S5 — a repeat keeps its hand (no mid-key flip) ----
+console.log('stability: rapid repeats of one key stay on ONE hand')
+{
+  liveHands.reset()
+  const opts = browserOpts({ resolvePlan: undefined })
+  for (let i = 0; i < 5; i++) appFrame(opts)
+  const handsSeen: string[] = []
+  for (let rep = 0; rep < 3; rep++) {
+    const h = audioEngine.triggerKey(62, 0.8) // D4 — near the midline
+    let poses: HandPoses = freshSource()
+    for (let i = 0; i < 8; i++) poses = appFrame(opts)
+    handsSeen.push(poses.R!.press.some((v) => v > 0.5) ? 'R' : 'L')
+    h?.release()
+    for (let i = 0; i < 8; i++) appFrame(opts) // gap < 1.5 s
+  }
+  check('all repeats on the same hand', handsSeen.every((x) => x === handsSeen[0]), JSON.stringify(handsSeen))
+}
+
+// ---- 13. N1 — repetition scaling: fast repeats stay tight ----
+console.log('naturalness: fast repeats lift less than slow ones (10 Hz <= 40% of 2 Hz)')
+{
+  const cycle = (pressF: number, gapF: number): { lift: number; travel: number } => {
+    liveHands.reset()
+    const opts = browserOpts()
+    for (let i = 0; i < 5; i++) appFrame(opts)
+    let lift = 0
+    let travel = 0
+    for (let rep = 0; rep < 3; rep++) {
+      let repLift = 0
+      const restTip = freshSource().R!.fingers[1][3][1] - freshSource().R!.wrist[1]
+      const h = audioEngine.triggerKey(60, 0.8)
+      let lo = 0
+      let hi = 0
+      for (let i = 0; i < pressF; i++) {
+        const p = appFrame(opts)
+        const y = p.R!.fingers[1][3][1] - p.R!.wrist[1] - restTip
+        lo = Math.min(lo, y)
+        hi = Math.max(hi, y)
+        repLift = Math.max(repLift, liveHands.slotDebug('R', 1).lift)
+      }
+      lift = repLift // the LATEST rep reflects the repeat interval
+      travel = Math.max(travel, hi - lo)
+      h?.release()
+      for (let i = 0; i < gapF; i++) appFrame(opts)
+    }
+    return { lift, travel }
+  }
+  const slow = cycle(14, 10) // keydown every ~0.4 s (2.5 Hz) — full windup
+  const fast = cycle(3, 3) // keydown every ~0.1 s (10 Hz) — tight taps
+  check('10 Hz windup lift <= 40% of slow lift', fast.lift <= 0.42 * slow.lift, `slow=${slow.lift.toFixed(4)} fast=${fast.lift.toFixed(4)}`)
+  check('slow repeats keep the full windup', slow.lift >= 0.14, `slow=${slow.lift.toFixed(4)}`)
+  check('fast repeat travel is tighter', fast.travel <= 0.75 * slow.travel, `slow=${slow.travel.toFixed(4)} fast=${fast.travel.toFixed(4)}`)
+}
+
+// ---- 14. N2 — travel arc: the hand lifts while gliding ----
+console.log('naturalness: hand lifts into an arc when travelling far')
+{
+  liveHands.reset()
+  const opts = browserOpts({ resolvePlan: undefined })
+  for (let i = 0; i < 5; i++) appFrame(opts)
+  const restY = freshSource().R!.wrist[1]
+  const h = audioEngine.triggerKey(96, 0.8) // far right → the right hand must travel
+  let poses: HandPoses = freshSource()
+  let peakLift = 0
+  for (let i = 0; i < 50; i++) {
+    poses = appFrame(opts)
+    peakLift = Math.max(peakLift, poses.R!.wrist[1] - restY)
+  }
+  for (let i = 0; i < 60; i++) poses = appFrame(opts)
+  const settle = Math.abs(poses.R!.wrist[1] - restY)
+  h?.release()
+  check('arc lift is real and bounded (1–7 mm)', peakLift >= 0.01 && peakLift <= 0.07, `peak=${peakLift.toFixed(4)}`)
+  check('hand settles back after travel', settle <= 0.012, `settle=${settle.toFixed(4)}`)
+}
+
+// ---- 15. N3 — release rebound: the finger springs back ----
+console.log('naturalness: release overshoots hover a little')
+{
+  liveHands.reset()
+  const opts = browserOpts()
+  for (let i = 0; i < 5; i++) appFrame(opts)
+  const rest = freshSource().R!
+  const restY = rest.fingers[1][3][1] - rest.wrist[1]
+  const h = audioEngine.triggerKey(60, 0.8)
+  let poses: HandPoses = freshSource()
+  for (let i = 0; i < 25; i++) poses = appFrame(opts) // fully pressed
+  h?.release()
+  let over = -Infinity
+  for (let i = 0; i < 24; i++) {
+    poses = appFrame(opts)
+    over = Math.max(over, poses.R!.fingers[1][3][1] - poses.R!.wrist[1] - restY)
+  }
+  check('finger rebounds slightly above rest (0.2–15 mm)', over >= 0.002 && over <= 0.015, `over=${over.toFixed(4)}`)
+}
+
+// ---- 16. N4 — anticipation: a modest lean toward the imminent note ----
+console.log('naturalness: hand leans toward the imminent note (bounded)')
+{
+  liveHands.reset()
+  const opts: LiveHandsOpts = {
+    ...browserOpts({ resolvePlan: undefined }),
+    nextKey: (hand) => (hand === 'R' ? { keyX: 2.6, in: 0.05 } : null),
+  }
+  for (let i = 0; i < 5; i++) appFrame(opts)
+  const restX = freshSource().R!.wrist[0]
+  let poses: HandPoses = freshSource()
+  for (let i = 0; i < 30; i++) poses = appFrame(opts)
+  const lean = poses.R!.wrist[0] - restX
+  const gap = 2.6 - [0, 1, 2, 3, 4].reduce((a, f) => a + freshSource().R!.fingers[f][3][0], 0) / 5
+  check('lean is positive and <= 28% of the gap', lean >= 0.02 && lean <= 0.28 * gap, `lean=${lean.toFixed(4)} gap=${gap.toFixed(3)}`)
+  // While PLAYING along, the motion leads: no extra lean.
+  liveHands.reset()
+  const opts2: LiveHandsOpts = {
+    ...browserOpts({ resolvePlan: undefined, playing: true }),
+    nextKey: () => ({ keyX: 2.6, in: 0.05 }),
+  }
+  for (let i = 0; i < 5; i++) appFrame(opts2)
+  const restX2 = freshSource().R!.wrist[0]
+  for (let i = 0; i < 30; i++) poses = appFrame(opts2)
+  check('no lean while playing along', Math.abs(poses.R!.wrist[0] - restX2) <= 0.012, `d=${(poses.R!.wrist[0] - restX2).toFixed(4)}`)
+}
+
+// ---- 17. N5 — sympathetic coupling: idle neighbours breathe ----
+console.log('naturalness: idle neighbour dips with the strike (tiny)')
+{
+  liveHands.reset()
+  const opts = browserOpts()
+  for (let i = 0; i < 5; i++) appFrame(opts)
+  const rest = freshSource().R!
+  const restY2 = rest.fingers[2][3][1] - rest.wrist[1] // middle finger, idle
+  const h = audioEngine.triggerKey(60, 0.8) // planned: right index
+  let poses: HandPoses = freshSource()
+  let dip = 0
+  for (let i = 0; i < 25; i++) {
+    poses = appFrame(opts)
+    dip = Math.min(dip, poses.R!.fingers[2][3][1] - poses.R!.wrist[1] - restY2)
+  }
+  h?.release()
+  check('neighbour dip is felt but tiny (0.15–12 mm)', dip <= -0.0015 && dip >= -0.012, `dip=${dip.toFixed(4)}`)
+}
+
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} FAILURES`)
 if (failures) process.exit(1)

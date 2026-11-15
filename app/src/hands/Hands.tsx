@@ -7,7 +7,7 @@ import { getResolvedSettings } from '../scene/automatedSettings'
 import { buildSpeedMap } from '../midi/speedMap'
 import { useSettingsSlice, useStore } from '../store'
 import { createMeshHands } from './meshHand'
-import { retainHandsRuntime, songHandNotes, synthHandMotion, trackHandsWork, type ReadyMotion } from './motion'
+import { retainHandsRuntime, songHandNotes, synthHandMotion, trackHandsWork, makeNoteQuery, pooledPoseAt, type NoteQuery, type ReadyMotion } from './motion'
 import {
   createHumanizeScratch,
   humanizePoses,
@@ -74,7 +74,17 @@ export function Hands() {
     return g
   }, [])
   const meshRef = useRef<ReturnType<typeof createMeshHands> | null>(null)
-  const motionRef = useRef<(ReadyMotion & { song: string; notes: ReturnType<typeof songHandNotes> }) | null>(null)
+  const motionRef = useRef<
+    | (ReadyMotion & {
+        song: string
+        notes: ReturnType<typeof songHandNotes>
+        /** Pooled poseAt — the runtime allocates fresh arrays per call. */
+        src: (t: number) => HandPoses
+        /** Binary-search queries over the notes (no per-frame scans). */
+        query: NoteQuery
+      })
+    | null
+  >(null)
   // Humanize scratch pool — slot 0 = main pose, 1–2 = blur probes, 3+ =
   // blur sub-poses. Reused across frames (the blur plan is consumed
   // within the same frame it is built).
@@ -124,7 +134,13 @@ export function Hands() {
       }
       synthHandMotion(notes, ctl.signal)
         .then((m) => {
-          motionRef.current = { ...m, song: song.name, notes }
+          motionRef.current = {
+            ...m,
+            song: song.name,
+            notes,
+            src: pooledPoseAt((tt) => m.poseAt(m.motion, tt)),
+            query: makeNoteQuery(notes, m.motion.plan),
+          }
           invalidate()
         })
         .catch(() => {}) // cancelled by a newer request, or failed (the status says so)
@@ -154,7 +170,7 @@ export function Hands() {
       return
     }
     mesh.setVisible(true)
-    const src = ready ? (tt: number) => ready.poseAt(ready.motion, tt) : () => NO_HANDS
+    const src = ready ? ready.src : () => NO_HANDS
     const t = audioEngine.currentSongTime()
     // Humanized poses — a PURE function of t (see humanize.ts) so the
     // exporter's frame-stepped render matches this preview exactly.
@@ -179,54 +195,27 @@ export function Hands() {
         keystrike: s.handsKeystrike,
         expression: s.handsExpression,
         // Natural fingering: the motion plan's (hand, finger) for the
-        // matching song note. Falls are adapted to — an IMMINENT note
-        // ("nốt đang rơi") wins over one just passed, so the fingers
-        // prepare for what is coming.
+        // matching song note — imminent notes first. Binary search over
+        // the onset-sorted notes (S4), the same semantics as before.
         resolvePlan: (midi) => {
           const rm = motionRef.current
-          if (!rm || !rm.motion.plan) return null
-          let soon = -1
-          let soonD = Infinity
-          let any = -1
-          let anyD = Infinity
-          for (let i = 0; i < rm.notes.length; i++) {
-            const n = rm.notes[i]
-            if (n.midi !== midi) continue
-            const d = Math.abs(n.on - t)
-            const imminent = n.on >= t - 0.35 && n.on <= t + 1.4
-            if (imminent && d < soonD) {
-              soonD = d
-              soon = i
-            }
-            if (d < anyD) {
-              anyD = d
-              any = i
-            }
-          }
-          const idx = soon >= 0 ? soon : anyD <= 2.5 ? any : -1
-          if (idx < 0) return null
-          const hand = rm.motion.plan.hand[idx]
-          const finger = rm.motion.plan.finger[idx]
-          if (!hand || !(finger >= 1 && finger <= 5)) return null
-          return { hand, finger: finger - 1 }
+          if (!rm) return null
+          return rm.query.planFor(midi, t)
         },
         // Expression: the velocity of the song note this finger plays
         // right now — accents press deeper, with a touch of arm roll.
+        // One memoised pass per frame serves all ten fingers (S4).
         expressAt: (hand, finger) => {
           const rm = motionRef.current
           if (!rm) return null
-          const plan = rm.motion.plan
-          let best: number | null = null
-          for (let i = 0; i < rm.notes.length; i++) {
-            const n = rm.notes[i]
-            if (t < n.on - 0.08 || t > n.off + 0.05) continue
-            const h = (plan ? plan.hand[i] : null) ?? n.hand
-            const fg = plan ? plan.finger[i] ?? n.finger : n.finger
-            if (h !== hand || fg !== finger + 1) continue
-            const v = Number.isFinite(n.velocity) ? n.velocity : 0.75
-            best = best === null ? v : Math.max(best, v)
-          }
-          return best
+          return rm.query.activeAt(t)[hand === 'L' ? 0 : 1][finger]
+        },
+        // Anticipation (N4): the hand leans toward the imminent note —
+        // only while not playing along (the motion already leads there).
+        nextKey: (hand) => {
+          const rm = motionRef.current
+          if (!rm) return null
+          return rm.query.nextOn(hand, t)
         },
         // A hand that is off stage (runtime: "rests in the lap") comes up
         // from a mid-run pose sample of that hand when the user needs it.
@@ -246,7 +235,9 @@ export function Hands() {
         },
       }
       if (s.handsFollowInput) liveHands.update(poses, opts)
-      mesh.update(poses, false)
+      // S6 — the synthesised hand fades in/out with its vis (no pop).
+      const vis = s.handsFollowInput ? { L: liveHands.visOf('L'), R: liveHands.visOf('R') } : undefined
+      mesh.update(poses, false, false, vis)
 
       // Motion blur: sub-poses at trailing times of ONE nominal frame of song time (export: 1/fps, preview: 1/60 s, times the
       // playback rate; never the real frame delta), so the picture is a pure function of t. Sample 0 = t.
@@ -273,7 +264,7 @@ export function Hands() {
         count: n,
         rectsFor: (w, h) => handBounds(sub, persp, w, h, 0.5),
         handsRoot: group,
-        drawAt: (i) => mesh.update(sub[i], false),
+        drawAt: (i) => mesh.update(sub[i], false, false, vis),
       }
       if (blurBridge.renderPass) blurBridge.renderPass.enabled = false
       if (blurBridge.pass) blurBridge.pass.enabled = true
@@ -293,7 +284,7 @@ export function Hands() {
             sampleHand: (hand) => neutralHandPose(hand),
           })
         }
-        mesh.update(raw, false)
+        mesh.update(raw, false, false, s.handsFollowInput ? { L: liveHands.visOf('L'), R: liveHands.visOf('R') } : undefined)
       } catch (err2) {
         console.warn('[hands] fallback failed too', err2)
         try {

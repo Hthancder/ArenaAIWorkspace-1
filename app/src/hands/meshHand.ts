@@ -752,7 +752,21 @@ export function createMeshHands(parent: THREE.Object3D) {
       mats.L.color.setHex(SKIN.L).multiplyScalar(brightness); mats.R.color.setHex(SKIN.R).multiplyScalar(brightness)
     },
     stats,
-    update(poses: HandPoses, showForearm: boolean, debug = false) {
+    update(poses: HandPoses, showForearm: boolean, debug = false, vis?: { L: number; R: number }) {
+      // S6 — synthesised-hand fade: opacity follows the overlay's vis so
+      // the hand dissolves in/out instead of popping. Transparent only
+      // while fading (brief), so sorting artifacts stay out of steady frames.
+      const fade = (m: THREE.MeshPhysicalMaterial, v: number) => {
+        const o = Math.max(0, Math.min(1, v))
+        if (m.opacity !== o) m.opacity = o
+        const tr = o < 1
+        if (m.transparent !== tr) {
+          m.transparent = tr
+          m.needsUpdate = true
+        }
+      }
+      fade(mats.L, vis ? vis.L : 1)
+      fade(mats.R, vis ? vis.R : 1)
       hands.L.update(poses.L, stats, showForearm, debug)
       hands.R.update(poses.R, stats, showForearm, debug)
     },

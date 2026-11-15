@@ -309,3 +309,64 @@ playing, despite green unit tests:
 - Test mới `scripts/test-livebrowser.ts` (17 checks — chuỗi trình duyệt thật):
   press travel, repeats, free play, NaN tự phục hồi, hợp âm, không tranh,
   relax fan, chia tay theo vùng, drift rate-limit. Suite cũ (34+18+M5) xanh.
+
+## v3.4 — chuyển động tự nhiên hơn & ổn định hơn (S1–S6, N1–N5), 2026-11-15
+
+Kế hoạch user duyệt trước khi code ("dành thời gian nghĩ là chính"): 5 mục ổn định +
+6 mục tự nhiên, mỗi mục có ngưỡng đo. Đã làm 11/11 mục, mọi ngưỡng đều có test
+(`scripts/test-livebrowser.ts` +16 checks → 33; `scripts/test-notequery.ts` mới, 10 checks).
+
+**Ổn định**
+- **S1 tách vòng lặp (chống wobble đáp phím)**: `update` có pre-pass trên pose tươi —
+  drift = mean(`keyX − tipRaw`) như cũ, nhưng abduction chỉ nhận **độ lệch của ngón so với
+  mean** (`dev = dResid[f] − rawDrift`) thay vì residual đầy đủ → hai vòng lặp không còn
+  đuổi cùng một sai số. `tapNow` là snapshot (không phụ thuộc thứ tự duyệt ngón).
+  Ngưỡng: độ biến thiên tip-rel-wrist khi giữ ổn định ≤ 1 mm (đo 30 frame sau hội tụ) ✓.
+- **S2 deadzone**: drift bỏ qua |err| ≤ 0.002 (2 mm — humanizer rung ±0.7 mm không bị đuổi);
+  abduct bỏ qua |dev| ≤ 0.004. Giảm rung vi mô khi giữ phím.
+- **S3 trục bấm đóng băng**: `swingFinger` nhận `axis` tùy chọn; từ key-down đến hết
+  `held || strikeT < PECK_SEC` trục `cross(tip−knuckle, up)` được **chốt 1 lần**
+  (`fingerAxis`), trả `null` khi idle → mỗi nhát bấm quay quanh **một mặt phẳng**,
+  hết lắc trục theo nhiễu humanizer. Test: `slotDebug().axis` không đổi trong suốt nhát
+  bấm (turn < 1e-6 rad) + đường đi đầu ngón không gãy khúc (max segment ≤ 3.2× median).
+- **S4 truy vấn nốt O(log n)** (`motion.ts`): `makeNoteQuery(notes, plan)` —
+  `planFor` (thay `resolvePlan` scan O(n)/claim), `activeAt` (thay `expressAt` scan
+  O(n)/ngón/frame — memo 1 pass/frame chia sẻ 10 ngón), `nextOn` (cửa sổ 0.4 s cho N4);
+  `notes` sort theo `on` + binary search. `pooledPoseAt` vòng 4: runtime sinh ~30 mảng
+  mới mỗi `poseAt` call × ~18 call/frame khi bật motion blur → giờ reuse. Test:
+  khớp brute-force 200/200 + 1000 `planFor` trên 20k nốt < 80 ms; `activeAt` 600 call < 250 ms.
+- **S5 giữ tay khi lặp**: `recent: Map<midi,{hand,t}>` (1.5 s, prune khi > 48 mục) —
+  `claim` cộng `RECENT_HAND_PENALTY 0.8` nếu tay khác vừa chơi nốt đó → nốt lặp ranh
+  giữa hai tay không đảo tay. Test: 3 lần bấm D4 liên tiếp luôn cùng một tay.
+- **S6 hết pop vào/ra**: `meshHand.update(..., vis?)` — opacity của `MeshPhysicalMaterial`
+  mỗi tay theo `liveHands.visOf(hand)` (tay synth đang vào/ra), `transparent=true` **chỉ**
+  khi opacity < 1 → artifact sorting chỉ xuất hiện trong vài frame chuyển.
+
+**Tự nhiên**
+- **N1 lặp nhanh nhẹ tay**: `s.lift = PECK_LIFT·clamp((now − lastStrikeT)/REPEAT_REF_SEC 0.25,
+  0.25, 1)` thay cho PECK_LIFT cố định trong pha windup → phím gõ 10 Hz nâng tay ≤ 40%
+  biên độ gõ 2.5 Hz (giống ngón thật đánh điệp: phím chưa hồi phục thì ngón chưa nhấc).
+  Test: `slotDebug().lift` của chu kỳ 0.1 s ≤ 0.42× chu kỳ 0.4 s; travel pose ≤ 0.75×.
+- **N2 cung bay khi rê tay**: `st.driftVel` (smoothed τ 0.12) điều khiển `ARC_LIFT 0.04·
+  clamp(|driftVel|/10)` dịch cả bàn tay lên +y trong `applyTo` → tay rê xa đi theo cung
+  3–5 mm rồi hạ xuống, hết "trượt trên ray". Test: cổ tay nhấc 1–7 mm khi tới nốt xa,
+  hội tụ lại ≤ 1.2 mm sau khi tới.
+- **N3 bật ngược khi nhả**: `bind` release đặt `s.rebound = REBOUND_RAD 0.02` (rad swing),
+  decay `exp(−dt/0.35)`; target swing += rebound khi `!held`, và pha rebound dùng
+  `TAU_PRESS` (nhả nhanh như lúc đánh, không lê 0.5 s) → đầu ngón vút lên quá mức nghỉ
+  0.2–1.5 mm rồi lắc về — "ngón bật ngược tự nhiên". Test đo overshoot tip-rel-wrist.
+- **N4 dự báo nốt kế (chỉ khi KHÔNG phát theo)**: `opts.nextKey(hand) → {keyX, in}` từ
+  `query.nextOn` (cửa sổ 0.4 s); drift target pha `ANTICIPATE_W 0.25·(1 − in/0.4)` về
+  phía nốt kế — **≤ 25–28% khoảng cách** (giới hạn trên của plan, test đo cả `gap`);
+  khi `playing` thì motion runtime đã dẫn trước → không lean thêm (test xác nhận).
+- **N5 liên thông ngón**: ngón rảnh (`midi === null`) nhận `couple = −COUPLE_AMP 0.009·
+  max(tapNow[ngón khác])`, smooth τ 0.06 → ngón hàng xóm **hơi chìm theo nhát gõ**
+  (~0.2–0.9 mm, transient) — bàn tay có tính đàn hồi, không còn "mỗi ngón một cục".
+
+Sai lệch trong quá trình làm (đã sửa, xem test): băng ngưỡng mm viết nhầm theo unit
+(1 mm = 0.01 unit trong pose space); `REBOUND_TAU 0.05` decay trước khi ngón kịp lên
+(→ 0.35 + rise nhanh); `COUPLE_AMP 0.02` cho cú chìm 1.7 mm vượt băng plan (→ 0.009);
+test N1 đo max qua mọi chu kỳ nên chu kỳ đầu luôn full lift (→ đo chu kỳ cuối).
+
+Biên độ mọi chuyển động mới ≤ hằng số cũ (arc ≤ 0.04 shift, couple ≤ 0.009 rad,
+rebound ≤ 0.02 rad, lean ≤ 25% gap); không thêm UI; không đổi hành vi khi phát MIDI.
