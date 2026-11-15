@@ -1,0 +1,81 @@
+{
+  "$id": "piano-app/feature-spec",
+  "version": "1.0.0",
+  "product": {
+    "name": "piano-app",
+    "displayName": "Piano",
+    "locale": "vi",
+    "platform": "web",
+    "backend": "none",
+    "telemetry": "none",
+    "license": "MIT (code của mình); xem 35.7 cho asset"
+  },
+  "milestones": [
+    { "id": "M0", "name": "Khung dự án", "days": 1 },
+    { "id": "M1", "name": "Chơi được", "days": 3 },
+    { "id": "M2", "name": "Tuỳ biến & lưu", "days": 3 },
+    { "id": "M3", "name": "Nhập MIDI + timeline", "days": 4 },
+    { "id": "M4", "name": "Sửa & xuất", "days": 5 },
+    { "id": "M5", "name": "Luyện tập", "days": 4 },
+    { "id": "M6", "name": "Đánh bóng & phát hành", "days": 4 }
+  ],
+  "features": [
+    { "id": "F-INPUT-PC", "name": "Bàn phím máy tính", "pri": "P0", "m": "M1", "docs": ["20.5", "02"] },
+    { "id": "F-INPUT-MIDI", "name": "Web MIDI in (CC64, velocity, hot-plug)", "pri": "P0", "m": "M1", "docs": ["08", "22.4"] },
+    { "id": "F-INPUT-ONSCREEN", "name": "Bàn phím on-screen bấm/kéo", "pri": "P0", "m": "M1", "docs": ["03"] },
+    { "id": "F-AUDIO-SAMPLER", "name": "Sampler Salamander theo tầng", "pri": "P0", "m": "M1", "docs": ["22", "34.3", "40"] },
+    { "id": "F-AUDIO-VELOCITY", "name": "Velocity curve + velocity từ phím", "pri": "P0", "m": "M2", "docs": ["22.2"] },
+    { "id": "F-AUDIO-PEDAL", "name": "Pedal CC64 0-127 + half-pedal", "pri": "P0", "m": "M1", "docs": ["22.4", "26"] },
+    { "id": "F-MIDI-PARSE", "name": "Parse MIDI (worker, limits)", "pri": "P0", "m": "M3", "docs": ["19", "27.2", "44.2"] },
+    { "id": "F-MIDI-WRITE", "name": "Export MIDI round-trip", "pri": "P0", "m": "M4", "docs": ["19.9"] },
+    { "id": "F-PLAY-TRANSPORT", "name": "Play/pause/seek/loop/speed", "pri": "P0", "m": "M3", "docs": ["42 S1"] },
+    { "id": "F-PLAY-SPEEDMAP", "name": "Tempo ramp (tích phân speed)", "pri": "P1", "m": "M3", "docs": ["16.2"] },
+    { "id": "F-PLAY-TRACKS", "name": "Volume/mute/solo + tách tay", "pri": "P0", "m": "M3", "docs": ["09 Phần B"] },
+    { "id": "F-VIS-NOTES", "name": "Nốt rơi 3D (instanced)", "pri": "P0", "m": "M1", "docs": ["15.3", "34.2"] },
+    { "id": "F-VIS-CAMERA", "name": "Camera/FOV/tilt/follow", "pri": "P0", "m": "M2", "docs": ["15.4"] },
+    { "id": "F-VIS-COLORS", "name": "5 chế độ màu nốt", "pri": "P0", "m": "M2", "docs": ["09 Phần B"] },
+    { "id": "F-VIS-LABELS", "name": "Nhãn tên nốt 3 hệ", "pri": "P0", "m": "M2", "docs": ["25.2"] },
+    { "id": "F-VIS-BG", "name": "Nền ảnh/video + vignette", "pri": "P1", "m": "M2", "docs": ["09 Phần B"] },
+    { "id": "F-EDIT-ROLL", "name": "Piano roll sửa nốt", "pri": "P0", "m": "M4", "docs": ["37"] },
+    { "id": "F-EDIT-UNDO", "name": "Undo/redo 100 bước (command)", "pri": "P0", "m": "M4", "docs": ["37.5", "44.10"] },
+    { "id": "F-EDIT-TOOLS", "name": "Quantize/transpose/legato", "pri": "P1", "m": "M4", "docs": ["37.6"] },
+    { "id": "F-PROJECT-NFZ", "name": "Save/load .nfz + migrate", "pri": "P0", "m": "M4", "docs": ["33"] },
+    { "id": "F-PROJECT-AUTOSAVE", "name": "Autosave IDB 3 lớp", "pri": "P0", "m": "M4", "docs": ["33.5"] },
+    { "id": "F-EXPORT-WAV", "name": "Export WAV OfflineAudioContext", "pri": "P0", "m": "M4", "docs": ["22.10"] },
+    { "id": "F-EXPORT-VIDEO", "name": "Export MP4 720p30 (WebCodecs)", "pri": "P2", "m": "M6", "docs": ["23", "36.3"] },
+    { "id": "F-PRACTICE-WAIT", "name": "Wait mode", "pri": "P0", "m": "M5", "docs": ["16.1"] },
+    { "id": "F-PRACTICE-SCORE", "name": "Chấm điểm + báo cáo ô nhịp", "pri": "P0", "m": "M5", "docs": ["16.3", "16.4"] },
+    { "id": "F-PRACTICE-CALIB", "name": "Calibration 12 click", "pri": "P1", "m": "M5", "docs": ["16.2"] },
+    { "id": "F-PRACTICE-LADDER", "name": "Tempo ladder", "pri": "P1", "m": "M5", "docs": ["24.4"] },
+    { "id": "F-PRACTICE-LOG", "name": "Log phiên + tiến bộ", "pri": "P1", "m": "M5", "docs": ["24.9"] },
+    { "id": "F-UI-SEARCH", "name": "Search thông số không dấu", "pri": "P1", "m": "M2", "docs": ["25.3"] },
+    { "id": "F-UI-A11Y", "name": "Keyboard nav, aria-live, contrast", "pri": "P0", "m": "M6", "docs": ["20.8", "43.12"] },
+    { "id": "F-UI-I18N", "name": "vi + en", "pri": "P0", "m": "M2", "docs": ["25", "44.12"] },
+    { "id": "F-SHEET", "name": "Sheet PDF + MusicXML (OSMD)", "pri": "P2", "m": "-", "docs": ["32"] },
+    { "id": "F-TRANSCRIBE", "name": "Audio → MIDI (Basic Pitch worker)", "pri": "P2", "m": "-", "docs": ["31"] },
+    { "id": "F-PWA", "name": "PWA + offline shell + sample cache", "pri": "P1", "m": "M6", "docs": ["26.6"] }
+  ],
+  "screens": [
+    "S0", "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9", "S10", "S11"
+  ],
+  "qualityGates": {
+    "typecheck": "tsc -b --noEmit, 0 errors",
+    "unit": "vitest, 100% pass",
+    "coverage": { "midi": 60, "audio": 60, "practice": 60 },
+    "bundleGzMb": 1.2,
+    "lighthouseA11y": 95,
+    "axe": "0 serious/critical",
+    "fps2kNotes": 55
+  },
+  "neverDo": [
+    "backend/auth/analytics",
+    "samples.notefall.app CDN",
+    "code từ repo không LICENSE",
+    "code NoteFall nếu mục tiêu thương mại",
+    "COOP/COEP toàn app",
+    "đổi tên type trong 44",
+    "hard-code chuỗi UI ngoài i18n",
+    "màu ngoài token",
+    "thêm UI kit ngoài"
+  ]
+}
