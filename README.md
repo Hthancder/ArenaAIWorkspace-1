@@ -7,9 +7,11 @@ Web app piano 3D chạy hoàn toàn trên trình duyệt: chơi bằng bàn phí
 ```bash
 cd app
 npm install
-npm run fetch-salamander   # tải 480 sample Salamander (~150 MB, gitignored) — hoặc đã có sẵn
+npm run fetch-salamander   # (tuỳ chọn) tải full sample 156 MB cho chất lượng gốc
 npm run dev                # http://localhost:5173
 ```
+
+**🔴 LIVE trên Vercel:** **https://piano-app-peach.vercel.app** — bộ web sample 27 MB tự host (cache lần tải đầu, sau đó chạy offline-ish). Gói Hobby: chỉ phi thương mại. Muốn deploy lại sau khi sửa code: nói mình chạy deploy thủ công (chưa cài Vercel GitHub App để auto-deploy).
 
 **Tính năng mới thêm so với NoteFall (2026-11-15):**
 - Chơi bằng máy tính: chỉnh **velocity** phím máy tính, **dịch quãng tám** (PgUp/PgDn), **pedal giữ âm** (Shift, đổi được), **nhãn phím máy tính** trên bàn phím 3D, velocity theo vị trí nhấn chuột.

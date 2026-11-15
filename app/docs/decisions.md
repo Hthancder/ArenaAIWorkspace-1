@@ -22,6 +22,7 @@ Mỗi quyết định 1 dòng, mới nhất trước. Tham chiếu tài liệu: 
 - Lệch `40.3.3`: giữ đuôi tới **10 s** thay vì 2–3 s (đây là one-shot, không có release sample; 2–3 s sẽ cắt vụn tiếng khi giữ pedal).
 - `VELOCITY_LAYERS` đọc từ env `VITE_SAMPLE_LAYERS` (mặc định 8) trong `salamanderDescriptor.ts` — dùng full set thì đặt `16` + `VITE_SAMPLES_BASE_URL`.
 - **Vercel**: project `piano-app`, root `app/`, framework vite, build `npm run build` → `dist/`. `vercel.json` theo research 26.3 (SPA rewrite, immutable cho `/assets/` + `/samples/`, `Permissions-Policy: midi=(self)`), thêm header `Content-Type: audio/ogg` cho `/samples/`. Gói Hobby = **chỉ phi thương mại** (research 26.2); băng thông 100 GB/tháng ≈ 3.700 lượt tải bộ sample mới.
+- **Đã deploy production 2026-11-15** (dpl_FtrRt4FTjbU9zfz4XbZVmp4wYmx2, build 58s, PROMOTED): **https://piano-app-peach.vercel.app** (cùng `piano-app-hthancders-projects.vercel.app`). Lưu ý: project setting `gitProviderOptions.createDeployments = disabled` (chưa cài GitHub App của Vercel cho repo) → **push không tự deploy**; gọi `create_deployment` thủ công hoặc cài Vercel GitHub App sau.
 
 ## Còn nợ (TODO)
 
