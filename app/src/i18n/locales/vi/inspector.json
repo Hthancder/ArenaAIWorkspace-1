@@ -143,7 +143,10 @@
     "practiceMode": "Chế độ luyện tập",
     "waitAutoAdvance": "Tự chuyển bước (Chờ nốt)",
     "calibration": "Đo độ trễ",
-    "pcGlyphPreset": "Bố cục nhãn phím"
+    "pcGlyphPreset": "Bố cục nhãn phím",
+    "handsHumanize": "Chuyển động tự nhiên",
+    "handsSmoothness": "Độ mượt",
+    "handsMicroMotion": "Chuyển động vi mô"
   },
   "particleBlending": {
     "alpha": "Pháp tuyến",

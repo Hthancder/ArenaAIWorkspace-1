@@ -143,7 +143,10 @@
     "practiceMode": "Practice mode",
     "waitAutoAdvance": "Auto-advance (wait)",
     "calibration": "Latency calibration",
-    "pcGlyphPreset": "Key label layout"
+    "pcGlyphPreset": "Key label layout",
+    "handsHumanize": "Humanize motion",
+    "handsSmoothness": "Smoothness",
+    "handsMicroMotion": "Micro-motion"
   },
   "particleBlending": {
     "alpha": "Normal",

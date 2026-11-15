@@ -143,7 +143,10 @@
     "practiceMode": "練習モード",
     "waitAutoAdvance": "自動進行（ウェイト）",
     "calibration": "レイテンシ較正",
-    "pcGlyphPreset": "キーラベルの配列"
+    "pcGlyphPreset": "キーラベルの配列",
+    "handsHumanize": "モーションを人間らしく",
+    "handsSmoothness": "滑らかさ",
+    "handsMicroMotion": "マイクロモーション"
   },
   "particleBlending": {
     "alpha": "通常",

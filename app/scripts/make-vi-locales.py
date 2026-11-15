@@ -827,6 +827,9 @@ _PRACTICE = {
     "Skip to next step (wait)": "Bỏ qua bước (Chờ nốt)",
     "Set loop point A": "Đặt điểm lặp A",
     "Set loop point B": "Đặt điểm lặp B",
+    "Humanize motion": "Chuyển động tự nhiên",
+    "Smoothness": "Độ mượt",
+    "Micro-motion": "Chuyển động vi mô",
 }
 for _k, _v in _PRACTICE.items():
     T.setdefault(_k, _v)

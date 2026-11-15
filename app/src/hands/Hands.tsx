@@ -8,6 +8,12 @@ import { buildSpeedMap } from '../midi/speedMap'
 import { useSettingsSlice, useStore } from '../store'
 import { createMeshHands } from './meshHand'
 import { retainHandsRuntime, songHandNotes, synthHandMotion, trackHandsWork, type ReadyMotion } from './motion'
+import {
+  createHumanizeScratch,
+  humanizePoses,
+  type HumanizeParams,
+  type HumanizeScratch,
+} from './humanize'
 import { getExportFps } from '../scene/exportBridge'
 import {
   BLUR_MIN_PX, BLUR_PX_STEP, BLUR_SHUTTER, HandsBlurPass, PREVIEW_FRAME_SECONDS, blurBridge, blurOffsets, getMotionBlur, handBounds,
@@ -26,6 +32,9 @@ const HAND_KEYS = [
   'handsFlashLight',
   'handsMotionBlur',
   'handsBlurSamples',
+  'handsHumanizeEnabled',
+  'handsSmoothness',
+  'handsMicroMotion',
   'bloomEnabled',
   'midiOffsetSec',
   'midiSpeedAutomation',
@@ -58,6 +67,15 @@ export function Hands() {
   }, [])
   const meshRef = useRef<ReturnType<typeof createMeshHands> | null>(null)
   const motionRef = useRef<(ReadyMotion & { song: string }) | null>(null)
+  // Humanize scratch pool — slot 0 = main pose, 1–2 = blur probes, 3+ =
+  // blur sub-poses. Reused across frames (the blur plan is consumed
+  // within the same frame it is built).
+  const scratchRef = useRef<HumanizeScratch[]>([])
+  const scratchAt = (slot: number): HumanizeScratch => {
+    const pool = scratchRef.current
+    while (pool.length <= slot) pool.push(createHumanizeScratch())
+    return pool[slot]
+  }
 
   useEffect(() => retainHandsRuntime(), [])
 
@@ -119,15 +137,23 @@ export function Hands() {
     if (!ready || !mesh.ready) return
     const { motion, poseAt } = ready
     const t = audioEngine.currentSongTime()
-    const poses = poseAt(motion, t)
+    // Humanized poses — a PURE function of t (see humanize.ts) so the
+    // exporter's frame-stepped render matches this preview exactly.
+    const params: HumanizeParams = {
+      enabled: s.handsHumanizeEnabled,
+      smoothness: s.handsSmoothness,
+      microMotion: s.handsMicroMotion,
+    }
+    const src = (tt: number) => poseAt(motion, tt)
+    const poses = humanizePoses(src, t, params, scratchAt(0))
     mesh.update(poses, false)
 
     // Motion blur: sub-poses at trailing times of ONE nominal frame of song time (export: 1/fps, preview: 1/60 s, times the
     // playback rate; never the real frame delta), so the picture is a pure function of t. Sample 0 = t.
     if (!s.handsMotionBlur || blurBridge.consumers < 1 || s.handsBlurSamples < 2) return
     const dt = (getExportFps() ? 1 / getExportFps()! : PREVIEW_FRAME_SECONDS) * (useStore.getState().settings.playbackRate || 1)
-    const far = poseAt(motion, Math.max(0, t - BLUR_SHUTTER * dt))
-    const mid = poseAt(motion, Math.max(0, t - 0.5 * BLUR_SHUTTER * dt))
+    const far = humanizePoses(src, Math.max(0, t - BLUR_SHUTTER * dt), params, scratchAt(1))
+    const mid = humanizePoses(src, Math.max(0, t - 0.5 * BLUR_SHUTTER * dt), params, scratchAt(2))
     const shift = Math.max(maxJointShift(poses, far), maxJointShift(poses, mid))
     const persp = camera as THREE.PerspectiveCamera
     const wr = poses.L?.wrist ?? poses.R?.wrist
@@ -136,7 +162,9 @@ export function Hands() {
     const px = shift * (SIZE.y / (2 * dist * Math.tan(THREE.MathUtils.degToRad(persp.fov) / 2)))
     if (px < BLUR_MIN_PX) return
     const n = Math.min(Math.round(s.handsBlurSamples), Math.max(2, Math.ceil(px / BLUR_PX_STEP)))
-    const sub: HandPoses[] = blurOffsets(n, BLUR_SHUTTER, dt).map((o) => (o === 0 ? poses : poseAt(motion, Math.max(0, t + o))))
+    const sub: HandPoses[] = blurOffsets(n, BLUR_SHUTTER, dt).map((o, i) =>
+      o === 0 ? poses : humanizePoses(src, Math.max(0, t + o), params, scratchAt(3 + i)),
+    )
     camera.updateMatrixWorld()
     blurBridge.plan = {
       count: n,

@@ -422,6 +422,13 @@ export type Settings = {
   // Temporal-supersampling motion blur on the hands only (src/hands/motionBlur.ts). Samples = cap; the actual count adapts to speed.
   handsMotionBlur: boolean
   handsBlurSamples: number
+  // Humanize the planned hand motion (src/hands/humanize.ts): lag +
+  // settle + physiological micro-tremor, all pure in t so exports match
+  // the preview. Smoothness 0..1 = floaty vs snappy; microMotion 0..1 =
+  // tremor amplitude.
+  handsHumanizeEnabled: boolean
+  handsSmoothness: number
+  handsMicroMotion: number
   keyLabelsEnabled: boolean
   keyLabelsMode: 'c' | 'white' | 'all'   // which keys carry a label
   keyLabelFormat: PitchLabelFormat
@@ -769,6 +776,9 @@ export const defaultSettings: Settings = {
   handsFlashLight: 1,
   handsMotionBlur: false,
   handsBlurSamples: 8,
+  handsHumanizeEnabled: true,
+  handsSmoothness: 0.5,
+  handsMicroMotion: 0.5,
   keyLabelsEnabled: false,
   keyLabelsMode: 'c',
   keyLabelFormat: 'letterOctave',

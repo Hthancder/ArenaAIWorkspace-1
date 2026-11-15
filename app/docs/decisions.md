@@ -70,3 +70,11 @@ Mỗi quyết định 1 dòng, mới nhất trước. Tham chiếu tài liệu: 
   hợp âm wait-mode chấp nhận bấm bất kỳ thứ tự nào (16.3.1 "thứ tự bất kỳ").
 - **Test**: `npx tsx scripts/test-practice.ts` — 8 case theo 16.7, ALL PASSED; test
   bắt thật 1 bug (`onsetStepBeats` sập window khi onset trùng) — đã fix.
+
+## Hands motion — humanize (2026-11-15)
+Làm chuyển động bàn tay "người" hơn (`src/hands/humanize.ts`, slider ở Inspector › Hands):
+- **Ràng buộc cứng**: bộ lọc PHẢI là hàm thuần của `t` — exporter render frame-step bằng virtual clock, còn preview dùng clock thật; hai đường chỉ khớp nếu cùng `t` cho ra cùng pose. => cấm mọi filter có state (EMA/spring/bộ nhớ) — đã cân nhắc và loại.
+- Thiết kế: 3 mẫu `src(t), src(t−τ), src(t−2τ)` (τ = `handsSmoothness`·55ms); lag theo nhóm khớp (ngón nhẹ → cổ tay → khuỷu nặng nhất) + term "settle" `β·(vB−vC)` cho độ nảy khi move nhanh rồi ease-in; micro-tremor tất định ~0.3Hz (drift) + ~8.2Hz (physiological tremor), phase từ hash số nguyên của (joint, tay) — không RNG state.
+- `press` copy RAW từ mẫu t: key light/kẹp nốt không được trễ tiếng đàn.
+- Amplitude hằng số mang tính nghệ thuật (TODO(spec)): AMP_FINGER 0.011 / AMP_WRIST 0.007 / AMP_ELBOW 0.004 world units tại microMotion = 1.
+- Test: `npx tsx scripts/test-humanize.ts` (purity, lag, bounded tremor, pass-through).
