@@ -159,3 +159,6 @@ Khi mở bản lưu, có thể chọn hoặc bỏ chọn tất cả và xem số
 
 ### Cảnh báo mở nhiều tab và chọn nhanh (0.96)
 Trong **Cài đặt & sao lưu → Mở nhiều tab**, chỉnh ngưỡng cảnh báo từ 1–500; mặc định hỏi xác nhận thêm khi chọn **hơn 20 tab**. Áp dụng khi mở bản lưu, phiên, mở lại từ lịch sử và chuyển workspace; chuyển workspace hỏi trước cả bước lưu & đóng. Số đếm là số đã chọn trước khi bỏ trùng, vì vậy số thực mở có thể ít hơn. Hủy xác nhận không bắt đầu thao tác; nếu không đọc được cấu hình, lượt mở dừng. Ngưỡng chỉ lưu cục bộ và không xuất sao lưu; không áp dụng cho thao tác ngoài Tabspace hoặc mở một tab đơn lẻ. Hộp lưu tab và mở lại lịch sử có thêm chọn/bỏ chọn tất cả và đếm lựa chọn.
+
+### Nhắc phân loại Hộp để sau (0.97)
+Trong **Hộp để sau → Nhắc phân loại**, có thể bật lời nhắc tùy chọn (mặc định tắt) và đặt tuổi từ 1–365 ngày. Tabspace đếm bản lưu đủ tuổi, kể cả mục bị tìm kiếm ẩn, và hiển thị gợi ý tại Hộp để sau và popup. Có thể hoãn 1, 3, 7 hoặc 30 ngày, hoặc bỏ hoãn. Đây chỉ là gợi ý trên giao diện: không tự mở, chuyển hay xóa và không phát âm hoặc gửi thông báo hệ điều hành. Tạm dừng tự động hóa ẩn lời nhắc; gợi ý được tính lại khi mở hoặc làm mới giao diện, không gửi bù. Mục thiếu thời gian lưu hợp lệ hoặc có thời gian trong tương lai không được tính. Thiết lập và thời gian hoãn lưu cục bộ, không xuất sao lưu.

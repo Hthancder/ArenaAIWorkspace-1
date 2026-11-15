@@ -344,3 +344,6 @@ Bổ sung kiểm tra workspace và fingerprint nhóm đích trước từng tab 
 
 ### Tiến độ 0.96 — cảnh báo số lượng và chọn nhiều
 Ngưỡng mở nhiều tab cấu hình 1–500, mặc định 20; xác nhận bổ sung khi số được chọn vượt ngưỡng, trước thao tác mở bản lưu, khôi phục phiên/lịch sử và trước cả bước đóng của chuyển workspace. Đếm trước bỏ trùng; hủy hoặc không đọc được cấu hình không thực hiện. Ngưỡng lưu cục bộ không backup, không áp dụng ngoài các luồng nêu trên. Thêm chọn/bỏ tất cả và đếm trong hộp lưu tab và khôi phục lịch sử. Cần kiểm thử Chrome thực tế.
+
+### Tiến độ 0.97 — nhắc phân loại Hộp để sau
+Nhắc phân loại là gợi ý opt-in, mặc định tắt, tuổi 1–365 ngày, đếm theo thời gian lưu hợp lệ; hiển thị Hộp để sau và popup, hoãn 1/3/7/30 ngày hoặc bỏ hoãn. Không chuyển/xóa/mở, không âm hoặc thông báo OS; tôn trọng tạm dừng toàn cục và tính lại khi giao diện mở/làm mới. Cấu hình và thời gian hoãn chỉ lưu cục bộ, không backup. Cần kiểm thử Chrome thực tế.
