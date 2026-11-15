@@ -219,3 +219,10 @@ Khi chọn **thay thế**, nếu dữ liệu sẽ bị thay thế đổi trong l
 Trong **Workspace** hoặc **Preset dọn tab**, chọn **Kiểm tra nhóm thiếu** để xem các nhóm không còn hoạt động và số workspace/preset liên quan. Nếu nhóm còn trong thùng rác, bạn có thể khôi phục nhóm gốc; hoặc chọn một hay nhiều dòng để gắn cùng vào nhóm hiện có, hoặc gỡ tham chiếu. Không có dòng nào được chọn sẵn; tối đa 200 dòng hiển thị mỗi lượt. Thao tác không di chuyển, mở, đóng tab hay xóa dữ liệu trong thùng rác.
 
 Preset bị sửa sẽ **tắt lịch nhắc**; tự động đóng liên quan cần kiểm tra và xác nhận lại. Nếu workspace đã chứa nhóm đích, chỉ giữ một tham chiếu. Nếu dữ liệu liên quan thay đổi khi hộp đang mở, thao tác dừng để bạn xem lại. Khi xóa nhóm đơn lẻ hoặc hàng loạt, Tabspace báo số workspace/preset bị ảnh hưởng; xóa vĩnh viễn nhóm trong thùng rác cũng báo tham chiếu liên quan. Các thao tác xóa kiểm tra lại dữ liệu trước khi thực hiện.
+
+### Chọn nhiều tab trong popup (0.111)
+Trong popup, đánh dấu tối đa 100 tab web; có nút chọn/bỏ chọn các tab **đang thấy**, còn lựa chọn bị tìm kiếm hoặc phân trang ẩn vẫn được giữ và có số đếm. Tab thay đổi sau khi chọn được đánh dấu là lựa chọn cũ; có thể bỏ chọn rồi chọn lại.
+
+**Xem & nghỉ** hiển thị danh sách trước, cho bỏ chọn, bỏ qua tab đang xem, ghim, phát âm thanh, đã nghỉ hoặc website được bảo vệ. Sau xác nhận Tabspace kiểm tra lại từng tab và bảo vệ; nếu kết quả không rõ hoặc không đọc được bảo vệ thì dừng phần còn lại, hiển thị kết quả từng mục. Giữ popup mở trong lúc xử lý; nếu đóng popup hoặc kết quả không rõ, hãy kiểm tra Chrome trước khi thử lại. Tab nghỉ sẽ tải lại và có thể mất dữ liệu chưa lưu.
+
+**Xem tại quản lý** chuyển lựa chọn để tiếp tục xem trước lưu, đóng hoặc thao tác khác; bước chuyển không tự mở hay đóng tab. Tab đã đổi URL/cửa sổ hoặc biến mất bị bỏ qua. Lựa chọn truyền tạm qua bộ nhớ phiên của Chrome, chỉ dùng một lần và có hiệu lực tối đa hai phút; nếu trang không nhận được, dữ liệu tạm có thể còn đến khi phiên Chrome kết thúc. Không truyền URL lên máy chủ. Đóng popup trước khi chuyển sẽ mất lựa chọn.

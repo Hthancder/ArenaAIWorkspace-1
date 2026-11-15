@@ -386,3 +386,6 @@ Kiểm tra dữ liệu đích thay thế và thiết lập được chọn khôn
 
 ### Tiến độ 0.110 — quản lý tham chiếu nhóm
 Thêm kiểm tra tham chiếu thiếu từ Workspace/Preset, phát hiện nhóm có bản trong thùng rác, chọn nhiều để gắn lại cùng nhóm hoặc gỡ; không tự khôi phục, di chuyển, mở hay đóng tab. Mỗi lượt hiển thị tối đa 200, không chọn trước, chống thay đổi trong lúc xác nhận; preset đổi đích được tắt lịch, guard phiên bản tự động đóng yêu cầu xác nhận lại. Xóa nhóm đơn/hàng loạt và xóa vĩnh viễn nhóm trong thùng rác báo số workspace/preset liên quan; kiểm tra trạng thái trước thao tác. Xóa preset/workspace và xóa nhiều phiên/nhóm/tab/thùng rác có thêm kiểm tra dữ liệu cũ. Chưa thay thế kiểm thử Chrome, phím và trình đọc màn hình thực tế.
+
+### Tiến độ 0.111 — chọn nhiều và nghỉ nhanh từ popup
+Popup chọn tối đa 100 tab web, chọn/bỏ phần hiển thị, giữ và đếm lựa chọn ẩn; cảnh báo lựa chọn cũ khi tab đổi. Có xem trước cho nghỉ và chọn lại từng mục, kiểm tra bảo vệ và trạng thái trước từng lượt, dừng khi không rõ, báo kết quả từng mục. Chuyển lựa chọn sang trang quản lý qua storage.session, token ngẫu nhiên, một lần, hiệu lực 2 phút, kiểm tra tab hai lần, không tự đóng/mở. Popup bị đóng có thể gián đoạn lượt nghỉ; cần kiểm tra Chrome. Tập tin phiên chưa nhận có thể tồn tại tới khi Chrome kết thúc. Chưa kiểm thử Chrome, popup nhỏ, bàn phím và đọc màn hình thực tế.
