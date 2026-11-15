@@ -341,3 +341,6 @@ Gộp lời nhắc preset đang chờ và kết quả đóng tự động theo t
 
 ### Tiến độ 0.95 — bảo vệ mở workspace
 Bổ sung kiểm tra workspace và fingerprint nhóm đích trước từng tab trong cả mở workspace lẫn bước mở sau chuyển; nếu không đọc được hoặc thay đổi thì dừng và báo từng mục, không thu hồi tab đã mở. Bổ sung chọn/bỏ chọn tất cả và số lượng trong hộp mở bản lưu. Theo thiết kế mục 104, chuyển workspace vẫn yêu cầu xem trước và chọn tab, chưa tự đóng không xác nhận. Các kiểm tra không loại bỏ mọi race. Cần kiểm thử Chrome thực tế.
+
+### Tiến độ 0.96 — cảnh báo số lượng và chọn nhiều
+Ngưỡng mở nhiều tab cấu hình 1–500, mặc định 20; xác nhận bổ sung khi số được chọn vượt ngưỡng, trước thao tác mở bản lưu, khôi phục phiên/lịch sử và trước cả bước đóng của chuyển workspace. Đếm trước bỏ trùng; hủy hoặc không đọc được cấu hình không thực hiện. Ngưỡng lưu cục bộ không backup, không áp dụng ngoài các luồng nêu trên. Thêm chọn/bỏ tất cả và đếm trong hộp lưu tab và khôi phục lịch sử. Cần kiểm thử Chrome thực tế.

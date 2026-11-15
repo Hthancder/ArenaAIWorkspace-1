@@ -38,3 +38,6 @@ Trong **Cần chú ý**, lời nhắc preset đang chờ và kết quả tự đ
 
 ### Mở và chuyển workspace (0.95)
 Khi mở bản lưu, có thể chọn hoặc bỏ chọn tất cả và xem số lượng được chọn. Khi mở workspace hoặc mở đích sau bước chuyển, Tabspace kiểm tra lại workspace và các nhóm đích trước mỗi lần mở; nếu phát hiện thay đổi hoặc không đọc được, dừng các mục tiếp theo và báo kết quả từng mục. Các tab đã mở vẫn giữ nguyên, hãy kiểm tra Chrome trước khi thử lại. Kiểm tra này không ngăn mọi thay đổi đồng thời. Chuyển workspace vẫn cần xem trước và xác nhận, không âm thầm đóng tab.
+
+### Cảnh báo mở nhiều tab và chọn nhanh (0.96)
+Trong **Cài đặt & sao lưu → Mở nhiều tab**, chỉnh ngưỡng cảnh báo từ 1–500; mặc định hỏi xác nhận thêm khi chọn **hơn 20 tab**. Áp dụng khi mở bản lưu, phiên, mở lại từ lịch sử và chuyển workspace; chuyển workspace hỏi trước cả bước lưu & đóng. Số đếm là số đã chọn trước khi bỏ trùng, vì vậy số thực mở có thể ít hơn. Hủy xác nhận không bắt đầu thao tác; nếu không đọc được cấu hình, lượt mở dừng. Ngưỡng chỉ lưu cục bộ và không xuất sao lưu; không áp dụng cho thao tác ngoài Tabspace hoặc mở một tab đơn lẻ. Hộp lưu tab và mở lại lịch sử có thêm chọn/bỏ chọn tất cả và đếm lựa chọn.
