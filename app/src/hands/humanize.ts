@@ -89,7 +89,10 @@ function allocHand(hand: HandPose['hand']): HumanizedHand {
         Array.from({ length: 4 }, () => [0, 0, 0] as Vec3),
       ),
       press: [0, 0, 0, 0, 0],
-      thumbRef: Array.from({ length: 2 }, () => [0, 0, 0] as Vec3),
+      // 3 entries — the runtime emits `fkThumbRefs` = 9 floats and
+      // meshHand reads `thumbRef[Math.min(ci, 2)]` (index 2!). A shorter
+      // array makes meshHand crash the whole frame loop (2026-11-15 bug).
+      thumbRef: Array.from({ length: 3 }, () => [0, 0, 0] as Vec3),
     },
     noise: [0, 0, 0],
   }
@@ -124,7 +127,11 @@ export function humanizePoses(
   const out = scratch.out
   out.L = null
   out.R = null
-  if (!p.enabled || (p.smoothness <= 0 && p.microMotion <= 0)) {
+  // Tolerate missing/NaN settings (older persisted state) — a NaN here
+  // would poison every joint position and nuke the WebGL draw.
+  const sm = Number.isFinite(p.smoothness) ? Math.min(1, Math.max(0, p.smoothness)) : 0.5
+  const microAmt = Number.isFinite(p.microMotion) ? Math.min(1, Math.max(0, p.microMotion)) : 0.5
+  if (!p.enabled || (sm <= 0 && microAmt <= 0)) {
     // Pass-through still goes through the buffer so callers can keep the
     // reference; deep-copy the raw pose.
     const raw = src(t)
@@ -137,8 +144,6 @@ export function humanizePoses(
     return out
   }
 
-  const sm = Math.min(1, Math.max(0, p.smoothness))
-  const microAmt = Math.min(1, Math.max(0, p.microMotion))
   const tau = LAG_WRIST * sm // 0 at sm=0 → taps collapse, zero lag
 
   // Three deterministic taps of the source stream (both hands each).
@@ -177,8 +182,8 @@ function copyPose(src: HandPose, dst: HandPose): void {
     copyVec(src.bases[i], dst.bases[i])
     for (let j = 0; j < 4; j++) copyVec(src.fingers[i][j], dst.fingers[i][j])
   }
-  for (let i = 0; i < 2; i++) copyVec(src.thumbRef[i], dst.thumbRef[i])
-  for (let i = 0; i < 5; i++) dst.press[i] = src.press[i]
+  for (let i = 0; i < 3; i++) copyVec(src.thumbRef[i] ?? src.bases[i], dst.thumbRef[i])
+  for (let i = 0; i < 5; i++) dst.press[i] = src.press[i] ?? 0
 }
 
 const copyVec = (a: Vec3, b: Vec3) => {
@@ -234,8 +239,8 @@ function blendHand(
     micro(t, 400 + f, AMP_FINGER * microAmt * 0.7, dst.noise)
     addVec(pose.bases[f], dst.noise)
   }
-  // Thumb twist references: exactly 2 entries.
-  for (let i = 0; i < 2; i++) {
+  // Thumb twist references: the runtime emits 3 (meshHand reads index 2).
+  for (let i = 0; i < 3; i++) {
     const at = a.thumbRef[i] ?? a.bases[i]
     const bt = b.thumbRef[i] ?? b.bases[i]
     const ct = c.thumbRef[i] ?? c.bases[i]

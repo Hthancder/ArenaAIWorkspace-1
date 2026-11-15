@@ -32,9 +32,12 @@ function makePose(hand: 'L' | 'R', x: number): HandPose {
       Array.from({ length: 4 }, (_, k) => [x + i * 0.1, -1 + k * 0.2, 0.8] as [number, number, number]),
     ),
     press: [0, 0, 0, 0, 0],
+    // 3 twist references — mirrors the real runtime (fkThumbRefs = 9
+    // floats; meshHand reads thumbRef[Math.min(ci, 2)]).
     thumbRef: [
       [x, -1.4, 0.7],
       [x, -1.2, 0.75],
+      [x, -1.0, 0.8],
     ],
   }
 }
@@ -97,6 +100,23 @@ console.log('smoothness 0 → no lag')
   const s = createHumanizeScratch()
   const out = humanizePoses(src, 5, { enabled: true, smoothness: 0, microMotion: 0 }, s)
   check('wrist at the raw position', Math.abs(out.R!.wrist[0] - 5) < 1e-9, `${out.R!.wrist[0]}`)
+}
+
+console.log('meshHand contract: thumbRef must survive the pass')
+{
+  // meshHand reads p.thumbRef[Math.min(e.ci, 2)] — index 2! A shorter
+  // array threw inside mesh.update and froze the whole frame loop
+  // (2026-11-15 incident). Guard the contract on BOTH paths.
+  for (const p of [
+    { enabled: true, smoothness: 1, microMotion: 0.5 },
+    { enabled: false, smoothness: 1, microMotion: 1 },
+  ] as const) {
+    const out = humanizePoses(src, 3.7, p, createHumanizeScratch())
+    const tr = out.R!.thumbRef
+    check(`thumbRef length 3 (enabled=${p.enabled})`, tr.length === 3, `${tr.length}`)
+    check(`thumbRef[2] readable (enabled=${p.enabled})`, !!tr[2] && tr[2].length === 3)
+    check(`press length 5 (enabled=${p.enabled})`, out.R!.press.length === 5)
+  }
 }
 
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} FAILURES`)

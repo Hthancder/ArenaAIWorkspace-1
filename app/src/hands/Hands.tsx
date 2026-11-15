@@ -145,35 +145,47 @@ export function Hands() {
       microMotion: s.handsMicroMotion,
     }
     const src = (tt: number) => poseAt(motion, tt)
-    const poses = humanizePoses(src, t, params, scratchAt(0))
-    mesh.update(poses, false)
+    // Last-resort guard: a throw inside this callback kills every
+    // useFrame subscriber that mounts after us (falling notes freeze, keys
+    // stop glowing) while the background audio ticker keeps the song
+    // playing — the 2026-11-15 incident (meshHand crashed on the
+    // humanizer's short thumbRef array). Degrade to raw poses instead of
+    // freezing the whole visual layer.
+    try {
+      const poses = humanizePoses(src, t, params, scratchAt(0))
+      mesh.update(poses, false)
 
-    // Motion blur: sub-poses at trailing times of ONE nominal frame of song time (export: 1/fps, preview: 1/60 s, times the
-    // playback rate; never the real frame delta), so the picture is a pure function of t. Sample 0 = t.
-    if (!s.handsMotionBlur || blurBridge.consumers < 1 || s.handsBlurSamples < 2) return
-    const dt = (getExportFps() ? 1 / getExportFps()! : PREVIEW_FRAME_SECONDS) * (useStore.getState().settings.playbackRate || 1)
-    const far = humanizePoses(src, Math.max(0, t - BLUR_SHUTTER * dt), params, scratchAt(1))
-    const mid = humanizePoses(src, Math.max(0, t - 0.5 * BLUR_SHUTTER * dt), params, scratchAt(2))
-    const shift = Math.max(maxJointShift(poses, far), maxJointShift(poses, mid))
-    const persp = camera as THREE.PerspectiveCamera
-    const wr = poses.L?.wrist ?? poses.R?.wrist
-    const dist = wr ? camera.position.distanceTo(new THREE.Vector3(wr[0], wr[1], wr[2])) : camera.position.length()
-    gl.getDrawingBufferSize(SIZE)
-    const px = shift * (SIZE.y / (2 * dist * Math.tan(THREE.MathUtils.degToRad(persp.fov) / 2)))
-    if (px < BLUR_MIN_PX) return
-    const n = Math.min(Math.round(s.handsBlurSamples), Math.max(2, Math.ceil(px / BLUR_PX_STEP)))
-    const sub: HandPoses[] = blurOffsets(n, BLUR_SHUTTER, dt).map((o, i) =>
-      o === 0 ? poses : humanizePoses(src, Math.max(0, t + o), params, scratchAt(3 + i)),
-    )
-    camera.updateMatrixWorld()
-    blurBridge.plan = {
-      count: n,
-      rectsFor: (w, h) => handBounds(sub, persp, w, h, 0.5),
-      handsRoot: group,
-      drawAt: (i) => mesh.update(sub[i], false),
+      // Motion blur: sub-poses at trailing times of ONE nominal frame of song time (export: 1/fps, preview: 1/60 s, times the
+      // playback rate; never the real frame delta), so the picture is a pure function of t. Sample 0 = t.
+      if (!s.handsMotionBlur || blurBridge.consumers < 1 || s.handsBlurSamples < 2) return
+      const dt = (getExportFps() ? 1 / getExportFps()! : PREVIEW_FRAME_SECONDS) * (useStore.getState().settings.playbackRate || 1)
+      const far = humanizePoses(src, Math.max(0, t - BLUR_SHUTTER * dt), params, scratchAt(1))
+      const mid = humanizePoses(src, Math.max(0, t - 0.5 * BLUR_SHUTTER * dt), params, scratchAt(2))
+      const shift = Math.max(maxJointShift(poses, far), maxJointShift(poses, mid))
+      const persp = camera as THREE.PerspectiveCamera
+      const wr = poses.L?.wrist ?? poses.R?.wrist
+      const dist = wr ? camera.position.distanceTo(new THREE.Vector3(wr[0], wr[1], wr[2])) : camera.position.length()
+      gl.getDrawingBufferSize(SIZE)
+      const px = shift * (SIZE.y / (2 * dist * Math.tan(THREE.MathUtils.degToRad(persp.fov) / 2)))
+      if (px < BLUR_MIN_PX) return
+      const n = Math.min(Math.round(s.handsBlurSamples), Math.max(2, Math.ceil(px / BLUR_PX_STEP)))
+      const sub: HandPoses[] = blurOffsets(n, BLUR_SHUTTER, dt).map((o, i) =>
+        o === 0 ? poses : humanizePoses(src, Math.max(0, t + o), params, scratchAt(3 + i)),
+      )
+      camera.updateMatrixWorld()
+      blurBridge.plan = {
+        count: n,
+        rectsFor: (w, h) => handBounds(sub, persp, w, h, 0.5),
+        handsRoot: group,
+        drawAt: (i) => mesh.update(sub[i], false),
+      }
+      if (blurBridge.renderPass) blurBridge.renderPass.enabled = false
+      if (blurBridge.pass) blurBridge.pass.enabled = true
+    } catch (err) {
+      console.warn('[hands] pose pass failed — falling back to raw poses', err)
+      resetBlurFrame()
+      mesh.update(src(t), false)
     }
-    if (blurBridge.renderPass) blurBridge.renderPass.enabled = false
-    if (blurBridge.pass) blurBridge.pass.enabled = true
   })
 
   // Hands leaving the tree (or blur turned off) must hand rendering back to the default pipeline.

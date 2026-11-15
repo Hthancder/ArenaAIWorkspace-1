@@ -88,3 +88,10 @@ User: mô hình cũ "dịch chuyển" nốt (seek teleport từng bước) cho t
 - Điểm bắt đầu = playhead hiện tại (bước kế tiếp; hết bài → wrap loop hoặc bước 0). Seek-bar kéo giữa phiên = re-anchor tự động. `engine.flowSet` no-op khi export (virtual clock giữ quyền).
 - Preview pitch ("nghe trước") phát lúc DỪNG (không phải lúc sang bước) — phím sáng lúc chờ.
 - Test: `resolveStepIndex` 7 case trong test-practice.ts — ALL TESTS PASSED.
+
+## BUG FIX — hands crash (2026-11-15, regression do humanize)
+Triệu chứng: bật bàn tay → tay không hiện, nốt ngừng rơi, phím mất glow, nhưng nhạc vẫn phát.
+- **Nguyên nhân**: pose thật của runtime có `thumbRef` = **3** Vec3 (`hands.js` handAt: `thumbRef:[i(75),i(78),i(81)]` = fkThumbRefs 9 float; `meshHand.ts:565` đọc `thumbRef[Math.min(ci,2)]` → index 2). Scratch của humanize chỉ tạo 2 → `r=undefined` → `r[0]` THROW trong `mesh.update` MỖI frame → mọi useFrame đăng ký sau Hands chết (nốt đứng hình, glow chết); audio sống nhờ background worker ticker (25ms) → đúng triệu chứng.
+- **Sửa**: allocHand/copyPose/blendHand = 3 thumbRef (fallback `?? bases`), press `?? 0`; sanitize params (NaN → 0.5) chống persisted-settings cũ; **try/catch cuối trong useFrame** của Hands — lỗi thì degrade về pose gốc + console.warn, KHÔNG được để frame loop chết nữa.
+- **Phòng ngừa**: test-humanize mock shape theo runtime thật (thumbRef 3) + contract test `thumbRef[2]` readable trên cả 2 path — ALL TESTS PASSED.
+- Bài học: HAND POSE SHAPE là contract với meshHand — đổi/mới cấp phát buffer phải khớp runtime (`hands.js` handAt) chứ không phải d.ts (d.ts để `Vec3[]` không nêu độ dài).
