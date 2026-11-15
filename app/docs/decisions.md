@@ -42,6 +42,9 @@ Mỗi quyết định 1 dòng, mới nhất trước. Tham chiếu tài liệu: 
   fetch-hands-db.yml` — runner GitHub với tới CDN, sandbox thì không; trigger
   `push` theo path filter + `workflow_dispatch`); vercel.json + immutable cache
   `/hands/`; xoá proxy `/samples-cdn` vô dụng trong vite.config.
+- Workflow chạy **13s**, commit bot `230e50e` (file 21.744.038 bytes, magic "NFMD");
+  deploy production `dpl_6MEWwDAkLPVWEZWkLEdgYZPauq4f` (PROMOTED, alias
+  piano-app-peach.vercel.app vẫn giữ).
 
 ## M5 — Practice engine (Wait Mode + chấm điểm + Calibration + Loop A–B), 2026-11-15
 
