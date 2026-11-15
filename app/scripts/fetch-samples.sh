@@ -1,12 +1,19 @@
 #!/usr/bin/env bash
-# Fetch the Salamander Grand Piano V3 OGG set into public/samples/ —
-# self-hosting is mandatory for this fork (research 41.1.6: the upstream
-# samples.notefall.app bucket is CORS-locked to notefall.app).
+# Fetch the FULL Salamander Grand Piano V3 OGG set into _local/salamander-full/
+# (~156 MB, gitignored). Research 41.1.6: self-hosting is mandatory for this
+# fork — the upstream samples.notefall.app bucket is CORS-locked.
+#
+# The DEPLOYED sample set (240 files, ~27 MB — research 40 phương án B:
+# 8 velocity layers, trimmed tails, ~100 kbps) is built from these with:
+#
+#   python3 scripts/prepare-samples-web.py      # -> public/samples/salamander-v3-close/
+#
+# and is tracked in git, so a fresh clone already has playable samples.
 #
 # Source: d-buckner/salamander-piano (GitHub), a mirror of the same
 # pre-encoded OGG release NoteFall's own scripts/fetch-salamander.sh
 # prepares: 30 root keys × 16 velocity layers, `A0v1.ogg`-style names
-# ("s" for sharp — `Ds1v1.ogg` = D♯1), ~150 MB.
+# ("s" for sharp — `Ds1v1.ogg` = D♯1).
 #
 # License: Salamander Grand Piano V3 by Alexander Holm, CC BY 3.0 —
 # attribution lives in ATTRIBUTIONS.md. Keep it when redistributing.
@@ -15,12 +22,12 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-OUT="public/samples/salamander-v3-close"
+OUT="_local/salamander-full"
 REPO="d-buckner/salamander-piano"
 BRANCH="main"
 
 if [ -d "$OUT" ] && [ "$(ls "$OUT" | wc -l)" -ge 480 ]; then
-  echo "Samples already present in $OUT ($(ls "$OUT" | wc -l) files) — nothing to do."
+  echo "Full samples already present in $OUT ($(ls "$OUT" | wc -l) files) — nothing to do."
   exit 0
 fi
 
@@ -42,4 +49,5 @@ mkdir -p "$OUT"
 )
 
 echo "Done: $(ls "$OUT" | wc -l) files in $OUT"
-echo "Remember: samples are gitignored (~150 MB). Re-run this script after a fresh clone."
+echo "Full set is gitignored (~156 MB). Build the tracked web set with:"
+echo "  python3 scripts/prepare-samples-web.py"

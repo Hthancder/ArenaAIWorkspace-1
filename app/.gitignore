@@ -4,9 +4,10 @@ dist
 *.local
 *.tsbuildinfo
 _local/
-# Salamander Grand Piano V3 OGGs (~77 MB). Prepared locally via
-# `npm run fetch-salamander`, deployed to R2 in prod.
-public/samples/
+# Salamander samples: the WEB set (240 files, ~27 MB) in
+# `public/samples/salamander-v3-close/` is tracked in git so Vercel
+# deploys are self-contained. The FULL set (~156 MB) lives in `_local/`
+# (ignored) — rebuild via scripts/prepare-samples-web.py.
 # Env overrides — `.env.example` is the documented template.
 .env
 .env.production

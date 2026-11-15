@@ -72,7 +72,18 @@ const SAMPLED_KEYS: ReadonlyArray<readonly [string, number]> = [
   ['C8', 108],
 ]
 
-const VELOCITY_LAYERS = 16
+// Number of velocity layers the deployed sample set carries. The web
+// set built by `scripts/prepare-samples-web.py` (research 40, phương án B)
+// has 8 renumbered layers `v1..v8`; the full Salamander set has 16
+// (`v1..v16`) — to use it, point `VITE_SAMPLES_BASE_URL` at it and set
+// `VITE_SAMPLE_LAYERS=16`.
+const VELOCITY_LAYERS = Math.max(
+  1,
+  Math.min(
+    16,
+    Math.round(Number((import.meta.env.VITE_SAMPLE_LAYERS as string | undefined) ?? '8') || 8),
+  ),
+)
 
 /**
  * For each sampled root, compute the [low, high] MIDI range it covers

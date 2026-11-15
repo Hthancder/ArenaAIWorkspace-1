@@ -15,6 +15,14 @@ Mỗi quyết định 1 dòng, mới nhất trước. Tham chiếu tài liệu: 
 - **i18n**: thêm locale `vi` (đầy đủ 7 namespace, sinh từ `scripts/make-vi-locales.py`), `fallbackLng: 'vi'` — tiếng Việt là ngôn ngữ mặc định (research 41.1.12). Branding hiển thị: "Piano" (research 41.9); en/ja giữ nguyên của upstream.
 - **Vite**: `server.allowedHosts: true` để chạy qua preview proxy của Arena.
 
+## 2026-11-15 — deploy Vercel (web sample set)
+
+- **Bộ sample web** (research 40, phương án B): 30 phím × **8 tầng** (lấy tầng lẻ v1..v15 → đánh số lại v1..v8), **cắt đuôi 10 s** + fade 250 ms, OGG Vorbis ~100 kbps (`compression_level=0.55` — lưu ý libsndfile ĐẢO NGƯỢC: 0.9 = nén mạnh nhất). Kết quả **27.1 MB / 240 file**, tracked trong git để deploy tự chứa. Full set (156 MB) ở `_local/salamander-full/` (gitignored).
+- Lệch công thức `40.3.4`: **không** chuẩn hoá peak từng file về −3 dBFS — Salamander đã ghi nhất quán, biên độ giữa các tầng LÀ động học velocity (upstream cũng không chuẩn hoá). Chống clip nếu cần làm sau.
+- Lệch `40.3.3`: giữ đuôi tới **10 s** thay vì 2–3 s (đây là one-shot, không có release sample; 2–3 s sẽ cắt vụn tiếng khi giữ pedal).
+- `VELOCITY_LAYERS` đọc từ env `VITE_SAMPLE_LAYERS` (mặc định 8) trong `salamanderDescriptor.ts` — dùng full set thì đặt `16` + `VITE_SAMPLES_BASE_URL`.
+- **Vercel**: project `piano-app`, root `app/`, framework vite, build `npm run build` → `dist/`. `vercel.json` theo research 26.3 (SPA rewrite, immutable cho `/assets/` + `/samples/`, `Permissions-Policy: midi=(self)`), thêm header `Content-Type: audio/ogg` cho `/samples/`. Gói Hobby = **chỉ phi thương mại** (research 26.2); băng thông 100 GB/tháng ≈ 3.700 lượt tải bộ sample mới.
+
 ## Còn nợ (TODO)
 
 - Wait mode + chấm điểm (research 16) — milestone M5, chưa làm.

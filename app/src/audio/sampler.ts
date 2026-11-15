@@ -25,7 +25,7 @@ import * as Tone from 'tone'
  * fork. Trailing slashes get stripped so `${base}/A0v1.ogg` always
  * produces a clean URL.
  *
- * Cache Storage (see `sampleCache.ts`) absorbs the one-time ~150 MB
+ * Cache Storage (see `sampleCache.ts`) absorbs the one-time ~27 MB
  * download — subsequent loads return from disk without touching the
  * network, so there's no UX cost to always serving locally on first
  * play.
