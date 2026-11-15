@@ -383,3 +383,6 @@ Thêm xuất/nhập opt-in số ngày nhắc phân loại, nhắc sao lưu và g
 
 ### Tiến độ 0.109 — an toàn nhập dữ liệu
 Kiểm tra dữ liệu đích thay thế và thiết lập được chọn không đổi kể từ khi mở hộp nhập; gộp vẫn dùng dữ liệu mới nhất. Cảnh báo số tham chiếu nhóm workspace/preset không còn hoạt động trước khi nhập, kể cả nhóm trong thùng rác. Từ chối ID phiên/workspace/preset trùng, ID trùng v1 ở nhóm/tab; file cũ thiếu ID vẫn được phép. Tiếp tục dùng khóa dữ liệu chung, không coi đó là giao dịch nguyên tử đối với phần mềm bên ngoài; chưa kiểm thử Chrome thực tế.
+
+### Tiến độ 0.110 — quản lý tham chiếu nhóm
+Thêm kiểm tra tham chiếu thiếu từ Workspace/Preset, phát hiện nhóm có bản trong thùng rác, chọn nhiều để gắn lại cùng nhóm hoặc gỡ; không tự khôi phục, di chuyển, mở hay đóng tab. Mỗi lượt hiển thị tối đa 200, không chọn trước, chống thay đổi trong lúc xác nhận; preset đổi đích được tắt lịch, guard phiên bản tự động đóng yêu cầu xác nhận lại. Xóa nhóm đơn/hàng loạt và xóa vĩnh viễn nhóm trong thùng rác báo số workspace/preset liên quan; kiểm tra trạng thái trước thao tác. Xóa preset/workspace và xóa nhiều phiên/nhóm/tab/thùng rác có thêm kiểm tra dữ liệu cũ. Chưa thay thế kiểm thử Chrome, phím và trình đọc màn hình thực tế.

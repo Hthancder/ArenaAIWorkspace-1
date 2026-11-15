@@ -214,3 +214,8 @@ Khi file xuất vượt **10 MB**, Tabspace hỏi trước khi tải vì phiên 
 Hộp nhập cảnh báo nếu workspace hoặc preset tham chiếu nhóm không có trong danh sách nhóm đang hoạt động của file; nhóm có thể đang ở thùng rác hoặc đã thiếu. Sau nhập cần kiểm tra lại trước khi dùng. File có ID trùng gây mơ hồ trong phiên, workspace hoặc preset sẽ bị từ chối; file cũ không có ID vẫn được hỗ trợ.
 
 Khi chọn **thay thế**, nếu dữ liệu sẽ bị thay thế đổi trong lúc hộp xác nhận mở, Tabspace dừng và yêu cầu mở lại file. Giao diện, bảo vệ và các thiết lập cá nhân được chọn nhập cũng được kiểm tra thay đổi. Chế độ **thêm** vẫn gộp với dữ liệu mới nhất; thùng rác và lịch sử hiện có được giữ trong cả hai chế độ. Hãy tự xuất và kiểm tra bản sao lưu trước khi thay thế.
+
+### Kiểm tra và sửa tham chiếu nhóm (0.110)
+Trong **Workspace** hoặc **Preset dọn tab**, chọn **Kiểm tra nhóm thiếu** để xem các nhóm không còn hoạt động và số workspace/preset liên quan. Nếu nhóm còn trong thùng rác, bạn có thể khôi phục nhóm gốc; hoặc chọn một hay nhiều dòng để gắn cùng vào nhóm hiện có, hoặc gỡ tham chiếu. Không có dòng nào được chọn sẵn; tối đa 200 dòng hiển thị mỗi lượt. Thao tác không di chuyển, mở, đóng tab hay xóa dữ liệu trong thùng rác.
+
+Preset bị sửa sẽ **tắt lịch nhắc**; tự động đóng liên quan cần kiểm tra và xác nhận lại. Nếu workspace đã chứa nhóm đích, chỉ giữ một tham chiếu. Nếu dữ liệu liên quan thay đổi khi hộp đang mở, thao tác dừng để bạn xem lại. Khi xóa nhóm đơn lẻ hoặc hàng loạt, Tabspace báo số workspace/preset bị ảnh hưởng; xóa vĩnh viễn nhóm trong thùng rác cũng báo tham chiếu liên quan. Các thao tác xóa kiểm tra lại dữ liệu trước khi thực hiện.
