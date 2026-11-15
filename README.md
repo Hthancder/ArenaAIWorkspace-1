@@ -57,3 +57,8 @@ Nút **Xem dung lượng** cho biết số byte Chrome báo của toàn bộ sto
 Trong **Cần chú ý → Nhật ký thông báo**, có thể bật ghi sự kiện tùy chọn, mặc định tắt. Nhật ký chỉ ghi lời nhắc preset đến hạn và kết quả đóng tự động mà Tabspace quan sát được sau khi bật; không lưu tên preset, URL hay ID nguồn nguyên văn. Lưu tối đa 200 mục và tự bỏ mục cũ nhất khi đầy. Có lọc loại, tìm kiếm, chọn và xóa nhiều; xóa nhật ký không bỏ lời nhắc, xóa báo cáo hoặc đổi trạng thái đã đọc. Tắt ghi không xóa mục cũ.
 
 Đây **không phải lịch sử đầy đủ mọi kênh** và không xác nhận thông báo hệ điều hành, trang web hay âm thanh đã phát; có thể thiếu sự kiện nếu Chrome gián đoạn hoặc ghi lỗi. Không ghi bù sự kiện trước khi bật. Nhật ký và thiết lập lưu cục bộ, không xuất sao lưu.
+
+### Mặc định mở riêng cho nhóm và workspace (0.101)
+Ở mỗi nhóm hoặc workspace, nút **Mặc định mở…** cho phép từng lựa chọn dùng mặc định chung hoặc ghi đè riêng: cửa sổ mở, bỏ URL đang mở và bỏ URL trùng trong lượt. Thay đổi mặc định chung ảnh hưởng các lựa chọn đang kế thừa; hộp mở cho biết nguồn chung/riêng và vẫn cho sửa từng lượt. Cài đặt nhóm chỉ dùng khi mở cả nhóm; cài đặt workspace chỉ dùng khi **Xem & mở** workspace. Mở nhiều đối tượng, chuyển workspace, mở lại lịch sử và khôi phục phiên vẫn có lựa chọn riêng. Không tự mở hay đóng tab.
+
+Thiết lập riêng lưu cục bộ, không xuất/nhập sao lưu; được giữ cả khi đối tượng vào thùng rác. Có thể đặt từng lựa chọn về dùng mặc định chung hoặc xóa toàn bộ thiết lập riêng trong Cài đặt. Tối đa 1.000 đối tượng có ghi đè; đây mới là kế thừa cho thao tác mở, chưa bao phủ mọi cấp trong thiết kế.

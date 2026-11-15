@@ -356,3 +356,6 @@ Nhắc sao lưu opt-in, mặc định tắt, chu kỳ 1–365 ngày và hoãn; h
 
 ### Tiến độ 0.100 — cụm nhật ký sự kiện thông báo
 Nhật ký cục bộ opt-in, mặc định tắt, cho lời nhắc preset mới và kết quả đóng tự động quan sát được, không ghi tên/URL hay ID nguồn nguyên văn, lưu tối đa 200 và tự bỏ mục cũ nhất. Trong Cần chú ý có lọc, tìm kiếm, xóa nhiều; không đổi trạng thái đã đọc hay nguồn. Ghi best-effort, không làm dừng tính năng chính khi lỗi, không chứng minh thông báo/âm đã phát và chưa là lịch sử mọi loại. Không sao lưu; cần kiểm thử Chrome thực tế.
+
+### Tiến độ 0.101 — kế thừa mặc định mở nhóm/workspace
+Bổ sung kế thừa từng lựa chọn nơi mở, bỏ URL đang mở và bỏ trùng lượt từ thiết lập mở chung, có ghi đè riêng theo nhóm hoặc workspace, hiển thị nguồn và cho đổi từng lượt. Chỉ áp dụng nút mở tương ứng, không áp dụng chuyển workspace, mở nhiều đối tượng, phiên hay lịch sử. Thiết lập cục bộ không sao lưu, giữ khi vào thùng rác, có xóa toàn bộ và giới hạn 1.000 đối tượng. Đây mới là một phần của mô hình kế thừa toàn bộ tính năng; cần kiểm thử Chrome thực tế.

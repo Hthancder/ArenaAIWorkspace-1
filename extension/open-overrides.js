@@ -1,0 +1,11 @@
+'use strict';
+// Per-object defaults affect initial form choices only; they never authorize an action.
+const OpenOverrides=(()=>{
+ const limit=1000,keys=['destination','skipOpen','skipDuplicates'];
+ function entry(v){if(!v||typeof v!=='object'||Array.isArray(v))throw Error('Thiết lập riêng không hợp lệ.');if(![null,'current','new'].includes(v.destination)||![null,true,false].includes(v.skipOpen)||![null,true,false].includes(v.skipDuplicates))throw Error('Thiết lập riêng không hợp lệ.');return {destination:v.destination,skipOpen:v.skipOpen,skipDuplicates:v.skipDuplicates}}
+ function validate(v){if(v===undefined)return {groups:{},workspaces:{}};if(!v||typeof v!=='object'||Array.isArray(v))throw Error('Thiết lập riêng không hợp lệ.');const result={};let total=0;for(const name of ['groups','workspaces']){const map=v[name];if(!map||typeof map!=='object'||Array.isArray(map))throw Error('Thiết lập riêng không hợp lệ.');const out=[];for(const [id,value] of Object.entries(map)){if(!id||id.length>256||++total>limit)throw Error('Quá nhiều thiết lập riêng hoặc ID không hợp lệ.');out.push([id,entry(value)])}result[name]=Object.fromEntries(out)}return result}
+ function resolve(base,raw,context){const maps=validate(raw),map=context&&['group','workspace'].includes(context.type)?maps[context.type==='group'?'groups':'workspaces']:null,over=map&&typeof context.id==='string'&&Object.hasOwn(map,context.id)?map[context.id]:undefined;const chosen=over?entry(over):{destination:null,skipOpen:null,skipDuplicates:null};return {destination:chosen.destination??base.destination,savedSkipOpen:chosen.skipOpen??base.savedSkipOpen,savedSkipDuplicates:chosen.skipDuplicates??base.savedSkipDuplicates,source:Object.fromEntries(keys.map(k=>[k,chosen[k]===null?'inherited':'override']))}}
+ function set(raw,type,id,value){const maps=validate(raw);if(!['group','workspace'].includes(type)||typeof id!=='string'||!id||id.length>256)throw Error('Đối tượng không hợp lệ.');const name=type==='group'?'groups':'workspaces',map=new Map(Object.entries(maps[name])),next=entry(value);if(keys.every(k=>next[k]===null))map.delete(id);else map.set(id,next);maps[name]=Object.fromEntries(map);return validate(maps)}
+ return {limit,entry,validate,resolve,set};
+})();
+if(typeof module!=='undefined')module.exports=OpenOverrides;
