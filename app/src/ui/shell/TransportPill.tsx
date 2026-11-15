@@ -4,10 +4,12 @@ import { useTranslation } from 'react-i18next'
 import { useUNSAFE_PortalContext } from 'react-aria'
 import { Slider, SliderTrack } from 'react-aria-components'
 import clsx from 'clsx'
-import { defaultSettings, useStore } from '../../store'
+import { useStore, defaultSettings } from '../../store'
 import { audioEngine } from '../../audio/engine'
 import { pauseSong, playSong } from '../../audio/playback'
 import { useCurrentTime } from '../../audio/useCurrentTime'
+import { usePractice } from '../../practice/practiceStore'
+import { practiceController } from '../../practice/usePracticeEngine'
 import { Button, Divider, GEOMETRY, Icon, IconButton, KnobThumb, ToggleButton, Tooltip } from '../kit'
 import { useChromeHidden, useIdle } from './idle'
 import { useTakeInProgress } from './takeFocus'
@@ -240,6 +242,10 @@ export function TransportPill() {
   const loading = useStore((s) => s.loadStatus.state === 'loading')
   const loop = useStore((s) => s.loop)
   const setLoop = useStore((s) => s.setLoop)
+  const loopStart = useStore((s) => s.loopStart)
+  const loopEnd = useStore((s) => s.loopEnd)
+  const setLoopRange = useStore((s) => s.setLoopRange)
+  const practiceMode = usePractice((s) => s.mode)
   const volume = useStore((s) => s.settings.volume)
   const playbackRate = useStore((s) => s.settings.playbackRate)
   const timelineOpen = useStore((s) => s.settings.timelineEditorOpen)
@@ -325,6 +331,50 @@ export function TransportPill() {
       >
         <Icon.LoopIcon />
       </IconButton>
+
+      {/* A–B loop points (research 15.4) — set at the current playhead. */}
+      <Button
+        size="sm"
+        aria-pressed={loopStart !== null}
+        aria-label={t('transport.loopA')}
+        className={loopStart !== null ? 'bg-fill-selected' : undefined}
+        isDisabled={!hasSong}
+        onPress={() => setLoopRange(audioEngine.currentSongTime(), loopEnd)}
+      >
+        A
+      </Button>
+      <Button
+        size="sm"
+        aria-pressed={loopEnd !== null}
+        aria-label={t('transport.loopB')}
+        className={loopEnd !== null ? 'bg-fill-selected' : undefined}
+        isDisabled={!hasSong}
+        onPress={() => {
+          setLoopRange(loopStart ?? 0, audioEngine.currentSongTime())
+          if (!loop) setLoop(true)
+        }}
+      >
+        B
+      </Button>
+      {(loopStart !== null || loopEnd !== null) && (
+        <IconButton
+          label={t('transport.clearLoopRange')}
+          onPress={() => setLoopRange(null, null)}
+        >
+          <Icon.CloseIcon />
+        </IconButton>
+      )}
+
+      {/* Practice mode (research 16): off → wait → rhythm. */}
+      <Button
+        size="sm"
+        aria-label={t('practice.title')}
+        className={practiceMode !== 'off' ? 'bg-fill-selected' : undefined}
+        isDisabled={!hasSong}
+        onPress={() => practiceController.cycleMode()}
+      >
+        {t(`practice.mode.${practiceMode}`)}
+      </Button>
 
       <TimeNow />
       <Scrubber duration={duration} enabled={hasSong} label={t('transport.seek')} />

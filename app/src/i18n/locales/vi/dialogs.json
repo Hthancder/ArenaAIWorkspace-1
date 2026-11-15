@@ -214,6 +214,11 @@
     "pcGroup": "Chơi bằng máy tính",
     "octave": "Dịch quãng tám",
     "sustain": "Pedal giữ âm (nhấn giữ)",
-    "metronome": "Bật/tắt máy đếm nhịp"
+    "metronome": "Bật/tắt máy đếm nhịp",
+    "practiceGroup": "Luyện tập & lặp",
+    "practiceMode": "Đổi chế độ luyện tập",
+    "practiceSkip": "Bỏ qua bước (Chờ nốt)",
+    "loopA": "Đặt điểm lặp A",
+    "loopB": "Đặt điểm lặp B"
   }
 }

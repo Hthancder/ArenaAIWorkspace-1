@@ -127,6 +127,8 @@ export class AudioEngine {
   private midiVolume = 1.0
   private midiEnabled = true
   private loop = false
+  private loopStartTl: number | null = null
+  private loopEndTl: number | null = null
   private reverbEnabled = true
   private reverbDry = 1.0
   private reverbWet = 1.0
@@ -648,6 +650,18 @@ export class AudioEngine {
 
   setLoop(loop: boolean): void {
     this.loop = loop
+  }
+
+  /**
+   * Optional A–B loop range in TL_audio seconds (research 15.4).
+   * `end = null` → no range; when `loop` is on and the playhead crosses
+   * `end`, playback snaps back to `start` (default 0) — the classic
+   * "luyện đoạn khó" loop. Whole-song loop (seek 0 at the timeline end)
+   * keeps working when no range is set.
+   */
+  setLoopRange(start: number | null, end: number | null): void {
+    this.loopStartTl = start
+    this.loopEndTl = end
   }
 
   loadSong(song: ParsedSong): void {
@@ -1289,6 +1303,12 @@ export class AudioEngine {
     // ends after the MIDI it must finish playing before we auto-stop,
     // so we take max(song.duration, userAudioEnd) as the end point.
     if (!this.silent) {
+      // A–B loop range wraps BEFORE the end-of-song check can fire, so a
+      // range that ends at the song end behaves like a tight loop.
+      if (this.loop && this.loopEndTl !== null && songTime >= this.loopEndTl) {
+        this.seek(this.loopStartTl ?? 0)
+        return
+      }
       const audioEnd = this.userAudioEndSec()
       // MIDI now starts at `midiOffsetSec` on the timeline, so its end
       // in timeline-time is `songDuration + midiOffsetSec`. Audio end

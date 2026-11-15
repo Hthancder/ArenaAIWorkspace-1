@@ -21,6 +21,8 @@
   --fill-well: rgba(0, 0, 0, 0.32);
   --record: #ff5a4f;
   --danger: #ff8b80;
+  --success: #5ad7a5;
+  --warning: #f5c451;
   --scrim: rgba(5, 6, 10, 0.45);
   --logo-note: #5ad7ff;
   --focus: var(--ink);
@@ -115,6 +117,15 @@
 }
 .nf-tip[data-entering] { animation: nf-pop-in 125ms var(--ease-out); }
 .nf-tip[data-exiting] { animation: nf-fade-out 90ms linear forwards; }
+
+/* Practice verdict flash (research 16.4.4 colors): quick pop, hold, fade. */
+@keyframes nf-verdict {
+  0% { opacity: 0; transform: translateY(4px) scale(0.96); }
+  15% { opacity: 1; transform: translateY(0) scale(1); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-2px); }
+}
+.nf-verdict-flash { animation: nf-verdict 750ms var(--ease-out) forwards; }
 
 /* Modal dialogs stay centred; the scrim fades. */
 .nf-scrim-anim[data-entering] { animation: nf-fade-in 200ms var(--ease-out); }

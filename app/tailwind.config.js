@@ -28,6 +28,8 @@ export default {
         },
         record: 'var(--record)',
         danger: 'var(--danger)',
+        success: 'var(--success)',
+        warning: 'var(--warning)',
         scrim: 'var(--scrim)',
         'logo-note': 'var(--logo-note)',
       },

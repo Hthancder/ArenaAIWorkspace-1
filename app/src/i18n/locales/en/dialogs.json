@@ -214,6 +214,11 @@
     "pcGroup": "Playing on the computer",
     "octave": "Octave shift",
     "sustain": "Sustain pedal (hold)",
-    "metronome": "Metronome on/off"
+    "metronome": "Metronome on/off",
+    "practiceGroup": "Practice & loop",
+    "practiceMode": "Cycle practice mode",
+    "practiceSkip": "Skip to next step (wait)",
+    "loopA": "Set loop point A",
+    "loopB": "Set loop point B"
   }
 }

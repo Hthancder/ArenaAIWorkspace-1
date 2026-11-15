@@ -91,6 +91,7 @@ const KEYBOARD_KEYS = [
   "keyLabelFormat",
   "keyLabelAccidental",
   "pcKeyLabelsEnabled",
+  "pcGlyphPreset",
   "noteColor",
   "octaveLinesEnabled",
   "trackColors",

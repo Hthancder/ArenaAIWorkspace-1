@@ -23,13 +23,16 @@ const DECAY_S = 0.07
 /**
  * Schedule `beats` evenly-spaced clicks at the given BPM, then call
  * `onComplete` immediately after the last beat finishes. `onBeat` fires
- * once per beat (1-indexed) at the audible time of that beat — useful for
- * driving a UI countdown that stays in sync with the audio.
+ * once per beat at the audible time of that beat — useful for driving a
+ * UI countdown that stays in sync with the audio. `beatIndex` is
+ * 1-indexed (matches the record countdown); the second argument is the
+ * beat's AudioContext time (calibration maps it to wall time via
+ * `audibleWallMs`).
  */
 export function scheduleCountIn(
   beats: number,
   bpm: number,
-  onBeat?: (beatIndex: number) => void,
+  onBeat?: (beatIndex: number, ctxTime: number) => void,
   onComplete?: () => void,
 ): CountInHandle {
   const ctx = Tone.getContext().rawContext as unknown as AudioContext
@@ -58,7 +61,7 @@ export function scheduleCountIn(
     if (onBeat) {
       const delayMs = Math.max(0, (time - ctx.currentTime) * 1000)
       timeouts.push(window.setTimeout(() => {
-        if (!cancelled) onBeat(i + 1)
+        if (!cancelled) onBeat(i + 1, time)
       }, delayMs))
     }
   }

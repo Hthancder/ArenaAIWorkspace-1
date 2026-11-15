@@ -21,7 +21,8 @@
     "hands": "Bàn tay (beta)",
     "pcPlay": "Chơi bằng máy tính",
     "pcKeyLabels": "Nhãn phím máy tính",
-    "metronome": "Máy đếm nhịp"
+    "metronome": "Máy đếm nhịp",
+    "practice": "Luyện tập"
   },
   "camera": {
     "distance": "Khoảng cách",
@@ -138,7 +139,11 @@
     "mouseVelocityFromPosition": "Velocity theo vị trí nhấn",
     "pcKeyLabelSize": "Cỡ nhãn phím máy tính",
     "metronomeBpm": "Nhịp độ (BPM)",
-    "metronomeBeatsPerBar": "Nhịp mỗi ô"
+    "metronomeBeatsPerBar": "Nhịp mỗi ô",
+    "practiceMode": "Chế độ luyện tập",
+    "waitAutoAdvance": "Tự chuyển bước (Chờ nốt)",
+    "calibration": "Đo độ trễ",
+    "pcGlyphPreset": "Bố cục nhãn phím"
   },
   "particleBlending": {
     "alpha": "Pháp tuyến",
@@ -473,5 +478,11 @@
   "sustainKey": {
     "shift": "Shift",
     "none": "Tắt"
+  },
+  "practice": {
+    "hint": "Chế độ Chờ nốt dừng ở mỗi nốt cho tới khi bạn bấm đúng; chế độ Theo nhịp chấm điểm thời điểm bấm trong khi bài đang phát.",
+    "never": "Không bao giờ",
+    "offsetValue": "Độ lệch: {{ms}} ms",
+    "calibrate": "Đo"
   }
 }

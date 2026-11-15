@@ -24,6 +24,8 @@ import { PROJECT_FILE_EXTENSION } from '../projects/types'
 import { showAlert } from './confirm'
 import { useGlobalShortcuts } from './useGlobalShortcuts'
 import { useMetronome } from '../audio/useMetronome'
+import { usePracticeEngine } from '../practice/usePracticeEngine'
+import { PracticeHud } from '../practice/PracticeHud'
 
 // Accepted file types. Match case-insensitively so files renamed in
 // uppercase (`.NFZ`, `.MID`) still load.
@@ -76,6 +78,7 @@ export function Layout() {
   const transport = useStore((s) => s.transport)
   useGlobalShortcuts()
   useMetronome()
+  usePracticeEngine()
   useReleaseFocusAfterPointer()
   // Fullscreen takes the whole app root so the floating chrome comes along. react-aria
   // portals into document.body by default, which sits outside the fullscreen element, so
@@ -189,11 +192,15 @@ export function Layout() {
   }, [])
 
   // Loop is a top-level store value (not nested under settings), kept
-  // here as a stand-alone effect.
+  // here as a stand-alone effect. The optional A–B range rides along
+  // (research 15.4).
   const loop = useStore((s) => s.loop)
+  const loopStart = useStore((s) => s.loopStart)
+  const loopEnd = useStore((s) => s.loopEnd)
   useEffect(() => {
     audioEngine.setLoop(loop)
-  }, [loop])
+    audioEngine.setLoopRange(loopStart, loopEnd)
+  }, [loop, loopStart, loopEnd])
 
   // User audio buffer is kept outside the main store (heavy AudioBuffer);
   // subscribe to it directly so Layout doesn't re-render on settings.
@@ -304,6 +311,7 @@ export function Layout() {
       <Inspector />
       <TimelineEditor />
       <StartCard />
+      <PracticeHud />
       <TransportPill />
       <LoadingIsland />
       <ToastHost bottom={GEOMETRY.PILL_BOTTOM + GEOMETRY.PILL + GEOMETRY.GAP} />

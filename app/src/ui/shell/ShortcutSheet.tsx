@@ -38,6 +38,15 @@ export function ShortcutSheet() {
       ],
     },
     {
+      title: t('shortcuts.practiceGroup'),
+      rows: [
+        { label: t('shortcuts.practiceMode'), keys: [MOD, SHIFT, 'P'] },
+        { label: t('shortcuts.practiceSkip'), keys: [MOD, SHIFT, 'N'] },
+        { label: t('shortcuts.loopA'), keys: [MOD, SHIFT, '1'] },
+        { label: t('shortcuts.loopB'), keys: [MOD, SHIFT, '2'] },
+      ],
+    },
+    {
       title: t('shortcuts.editing'),
       rows: [
         { label: t('shortcuts.undo'), keys: [MOD, 'Z'] },

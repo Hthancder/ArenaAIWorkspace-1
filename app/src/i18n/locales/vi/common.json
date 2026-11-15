@@ -29,7 +29,10 @@
     "exitFullscreen": "Thoát toàn màn hình",
     "seek": "Vị trí",
     "look": "Tùy chỉnh",
-    "timeline": "Dòng thời gian"
+    "timeline": "Dòng thời gian",
+    "loopA": "Đặt điểm lặp A tại vị trí phát",
+    "loopB": "Đặt điểm lặp B tại vị trí phát",
+    "clearLoopRange": "Xoá điểm lặp A–B"
   },
   "loadingIsland": {
     "title": "Đang tải tiếng đàn",
@@ -51,5 +54,66 @@
   },
   "pageLoader": {
     "loading": "Đang tải Piano"
+  },
+  "practice": {
+    "title": "Luyện tập",
+    "mode": {
+      "off": "Tắt",
+      "wait": "Chờ nốt",
+      "rhythm": "Theo nhịp"
+    },
+    "finish": "Kết thúc",
+    "close": "Đóng",
+    "retry": "Luyện lại",
+    "cancel": "Huỷ",
+    "verdict": {
+      "perfect": "Hoàn hảo",
+      "good": "Tốt",
+      "early": "Sớm",
+      "late": "Muộn",
+      "miss": "Bỏ lỡ",
+      "extra": "Thừa"
+    },
+    "wait": {
+      "step": "Bước {{current}}/{{total}}",
+      "required": "Cần bấm:",
+      "wrong": "Sai: {{count}}",
+      "skip": "Bỏ qua bước",
+      "auto": "Tự chuyển sau {{seconds}}s"
+    },
+    "rhythm": {
+      "accuracy": "Chính xác",
+      "combo": "Liên tiếp",
+      "best": "kỷ lục"
+    },
+    "summary": {
+      "titleRhythm": "Kết quả luyện tập",
+      "titleWait": "Kết quả chế độ Chờ nốt",
+      "expected": "Nốt",
+      "accuracy": "Đúng nhịp",
+      "perfect": "Hoàn hảo",
+      "good": "Tốt",
+      "earlyLate": "Sớm / muộn",
+      "miss": "Bỏ lỡ",
+      "extra": "Thừa",
+      "perBar": "Theo ô nhịp",
+      "bar": "Ô {{bar}}",
+      "steps": "Số bước",
+      "firstTry": "Đúng ngay",
+      "retries": "Phải thử lại",
+      "wrong": "Nốt bấm sai",
+      "skipped": "Bỏ qua",
+      "duration": "Thời gian"
+    },
+    "calibration": {
+      "title": "Đo độ trễ",
+      "instruction": "Bấm bất kỳ phím đàn nào theo 12 nhát đếm nhịp.",
+      "beat": "Nhát {{beat}}/{{total}}",
+      "result": "Độ trễ đo được: {{ms}} ms",
+      "warn": "Độ trễ quá 120 ms — hãy kiểm tra tai nghe/loa.",
+      "failed": "Bấm chưa đủ nốt để đo. Hãy thử lại.",
+      "again": "Đo lại",
+      "running": "Đang đo…"
+    }
   }
 }

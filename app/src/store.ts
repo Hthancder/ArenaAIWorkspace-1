@@ -551,6 +551,9 @@ export type Settings = {
   pcKeyLabelSize: number
   pcKeyLabelOpacity: number
   pcKeyLabelOffset: number   // world units from the key's front edge
+  // Printed-label preset for the PC-key glyphs (the keymap itself is
+  // physical `e.code` and layout-independent).
+  pcGlyphPreset: 'qwerty' | 'azerty' | 'dvorak'
   // Mouse/touch velocity from the click position along the key length:
   // front = soft, back (fallboard) = loud. Off = fixed `pcVelocity`
   // (research-piano/09: "từ chuột... lấy theo vị trí click (Y trên phím)").
@@ -819,6 +822,7 @@ export const defaultSettings: Settings = {
   pcKeyLabelSize: 1,
   pcKeyLabelOpacity: 1,
   pcKeyLabelOffset: 0.12,
+  pcGlyphPreset: 'qwerty',
   mouseVelocityFromPosition: false,
   metronomeEnabled: false,
   metronomeBpm: 100,
@@ -1105,6 +1109,11 @@ type AppState = {
 
   loop: boolean
   setLoop: (b: boolean) => void
+  // A–B loop range in TL_audio seconds (research 15.4). null = unset.
+  // Song-tied: cleared when a different song loads (like the clip trim).
+  loopStart: number | null
+  loopEnd: number | null
+  setLoopRange: (start: number | null, end: number | null) => void
 
   // True while the user is holding the falling-notes area to fast-forward.
   fastForward: boolean
@@ -1331,6 +1340,8 @@ export const useStore = create<AppState>((set) => ({
         editFuture: [],
         selection: new Set(),
         editingKeyframeTime: null,
+        // A–B loop points are meaningless against a different song.
+        ...(song !== state.song ? { loopStart: null, loopEnd: null } : {}),
         // The freshly loaded MIDI becomes the new dirty baseline:
         // anything from this point reads as dirty, and an edit-then-
         // revert (add + delete, undo, etc.) returns to clean. Loading
@@ -1363,6 +1374,9 @@ export const useStore = create<AppState>((set) => ({
 
   loop: false,
   setLoop: (loop) => set({ loop }),
+  loopStart: null,
+  loopEnd: null,
+  setLoopRange: (loopStart, loopEnd) => set({ loopStart, loopEnd }),
 
   fastForward: false,
   setFastForward: (fastForward) => set({ fastForward }),

@@ -40,6 +40,8 @@ import {
   useStageBackground,
 } from '../scene/stageBackground'
 import { showAlert } from './confirm'
+import { usePractice } from '../practice/practiceStore'
+import { practiceController } from '../practice/usePracticeEngine'
 import {
   GRADIENT_COLOR_KEYS,
   GRADIENT_POS_KEYS,
@@ -1489,6 +1491,7 @@ function LookPanel({ leaving }: { leaving: boolean }) {
                 <BoundSliderRow label={t('row.pcOctaveShift')} settingKey="pcOctaveShift" min={-4} max={4} step={1} />
                 <PcSustainKeyRow />
                 <BoundSwitchRow label={t('row.mouseVelocityFromPosition')} settingKey="mouseVelocityFromPosition" />
+                <PcGlyphPresetRow />
               </Section>
               <Section title={t('section.pcKeyLabels')} enabledKey="pcKeyLabelsEnabled">
                 <BoundSliderRow label={t('row.pcKeyLabelSize')} settingKey="pcKeyLabelSize" min={0.3} max={2} step={0.01} />
@@ -1517,6 +1520,7 @@ function LookPanel({ leaving }: { leaving: boolean }) {
                 <BoundSwitchRow label={t('row.handsMotionBlur')} settingKey="handsMotionBlur" />
                 <BoundSliderRow label={t('row.handsBlurSamples')} settingKey="handsBlurSamples" min={2} max={16} step={1} />
               </Section>
+              <PracticeSection />
             </TabPanel>
 
             <TabPanel title={t('tab.sound')} active={tab === 'sound'}>
@@ -1591,6 +1595,84 @@ function PcSustainKeyRow() {
       defaultValue={def.pcSustainKeyCode}
       scopeKey="pcSustainKeyCode"
     />
+  )
+}
+
+/** Printed-label preset for the PC-key glyphs (Settings.pcGlyphPreset). */
+function PcGlyphPresetRow() {
+  const { t } = useTranslation('inspector')
+  const value = useStore((st) => st.settings.pcGlyphPreset)
+  return (
+    <SelectRow
+      label={t('row.pcGlyphPreset')}
+      value={value}
+      options={[
+        { value: 'qwerty', label: 'QWERTY' },
+        { value: 'azerty', label: 'AZERTY' },
+        { value: 'dvorak', label: 'Dvorak' },
+      ]}
+      onChange={(v) => atomicUpdate({ pcGlyphPreset: v })}
+      defaultValue={def.pcGlyphPreset}
+      scopeKey="pcGlyphPreset"
+    />
+  )
+}
+
+/**
+ * Practice mode (research 16): Wait Mode + play-along scoring +
+ * latency calibration. Session state lives in `practiceStore` (never in
+ * Settings — a practice run must not dirty the project document), so
+ * these rows use the controlled SliderRow/SelectRow variants without
+ * `scopeKey`.
+ */
+function PracticeSection() {
+  const { t } = useTranslation('inspector')
+  const mode = usePractice((s) => s.mode)
+  const autoAdvance = usePractice((s) => s.waitAutoAdvanceMs)
+  const scoringOffsetMs = usePractice((s) => s.scoringOffsetMs)
+  const calStatus = usePractice((s) => s.calibration.status)
+  return (
+    <Section title={t('section.practice')}>
+      <p className="text-caption text-ink-faint">{t('practice.hint')}</p>
+      <SelectRow
+        label={t('row.practiceMode')}
+        value={mode}
+        options={[
+          { value: 'off', label: t('common:practice.mode.off') },
+          { value: 'wait', label: t('common:practice.mode.wait') },
+          { value: 'rhythm', label: t('common:practice.mode.rhythm') },
+        ]}
+        onChange={(v) => practiceController.setMode(v)}
+      />
+      <SliderRow
+        label={t('row.waitAutoAdvance')}
+        value={autoAdvance / 1000}
+        min={0}
+        max={10}
+        step={1}
+        format={(v) => (v === 0 ? t('practice.never') : `${v}s`)}
+        onChange={(v) => usePractice.getState().setWaitAutoAdvanceMs(v * 1000)}
+        defaultValue={5}
+      />
+      <div className="flex items-center justify-between gap-2 py-1">
+        <span className="text-label text-ink">{t('row.calibration')}</span>
+        <span className="flex items-center gap-2">
+          <span className="tabular-nums text-caption text-ink-muted">
+            {t('practice.offsetValue', { ms: Math.round(scoringOffsetMs) })}
+          </span>
+          <Button
+            size="sm"
+            isDisabled={calStatus === 'running'}
+            onPress={() => practiceController.startCalibration()}
+          >
+            {calStatus === 'running' ? t('common:practice.calibration.running') : t('practice.calibrate')}
+          </Button>
+        </span>
+      </div>
+      {Math.abs(scoringOffsetMs) > 120 && (
+        <p className="text-caption text-warning">{t('common:practice.calibration.warn')}</p>
+      )}
+    </Section>
   )
 }
 

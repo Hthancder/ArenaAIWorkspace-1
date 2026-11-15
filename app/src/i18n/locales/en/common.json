@@ -29,7 +29,10 @@
     "exitFullscreen": "Exit fullscreen",
     "seek": "Position",
     "look": "Customize",
-    "timeline": "Timeline"
+    "timeline": "Timeline",
+    "loopA": "Set loop point A at the playhead",
+    "loopB": "Set loop point B at the playhead",
+    "clearLoopRange": "Clear loop points A–B"
   },
   "loadingIsland": {
     "title": "Loading piano sounds",
@@ -51,5 +54,66 @@
   },
   "pageLoader": {
     "loading": "Loading notefall"
+  },
+  "practice": {
+    "title": "Practice",
+    "mode": {
+      "off": "Off",
+      "wait": "Wait",
+      "rhythm": "Rhythm"
+    },
+    "finish": "Finish",
+    "close": "Close",
+    "retry": "Practice again",
+    "cancel": "Cancel",
+    "verdict": {
+      "perfect": "Perfect",
+      "good": "Good",
+      "early": "Early",
+      "late": "Late",
+      "miss": "Missed",
+      "extra": "Extra"
+    },
+    "wait": {
+      "step": "Step {{current}}/{{total}}",
+      "required": "Play:",
+      "wrong": "Wrong: {{count}}",
+      "skip": "Skip step",
+      "auto": "Auto-advance in {{seconds}}s"
+    },
+    "rhythm": {
+      "accuracy": "Accuracy",
+      "combo": "Combo",
+      "best": "best"
+    },
+    "summary": {
+      "titleRhythm": "Practice results",
+      "titleWait": "Wait-mode results",
+      "expected": "Notes",
+      "accuracy": "On time",
+      "perfect": "Perfect",
+      "good": "Good",
+      "earlyLate": "Early / late",
+      "miss": "Missed",
+      "extra": "Extra",
+      "perBar": "By bar",
+      "bar": "Bar {{bar}}",
+      "steps": "Steps",
+      "firstTry": "First try",
+      "retries": "Retries",
+      "wrong": "Wrong notes",
+      "skipped": "Skipped",
+      "duration": "Time"
+    },
+    "calibration": {
+      "title": "Latency calibration",
+      "instruction": "Tap any piano key along with the 12 clicks.",
+      "beat": "Click {{beat}}/{{total}}",
+      "result": "Measured offset: {{ms}} ms",
+      "warn": "Offset over 120 ms — check your speakers/headphones.",
+      "failed": "Not enough taps were detected. Try again.",
+      "again": "Measure again",
+      "running": "Measuring…"
+    }
   }
 }

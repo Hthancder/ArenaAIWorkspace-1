@@ -45,6 +45,39 @@ export async function parseMidi(file: ArrayBuffer, name: string): Promise<Parsed
   pedals.sort((a, b) => a.time - b.time)
   controls.sort((a, b) => a.time - b.time)
 
+  // Tempo map for practice scoring (research 16.4.1). @tonejs/midi
+  // always reports at least the default 120 BPM event.
+  const tempos = [...midi.header.tempos]
+    .sort((a, b) => a.ticks - b.ticks)
+    .map((tp) => ({ time: tp.time ?? midi.header.ticksToSeconds(tp.ticks), bpm: tp.bpm }))
+
+  // Bar boundary times from the time-signature map (research 16.4.4
+  // per-bar report). Each signature starts a run of bars of
+  // (num * 4/denom) quarter-beats; boundaries are converted through
+  // the header's tick→second mapping so tempo changes stay exact.
+  const barTimes: number[] = []
+  try {
+    const ppq = midi.header.ppq
+    const sigs = [...midi.header.timeSignatures].sort((a, b) => a.ticks - b.ticks)
+    const totalTicks = midi.duration > 0 ? midi.header.secondsToTicks(midi.duration) : 0
+    const list =
+      sigs.length > 0
+        ? sigs
+        : [{ ticks: 0, timeSignature: [4, 4] as [number, number], time: 0 }]
+    for (let si = 0; si < list.length; si++) {
+      const ev = list[si]
+      const endTicks = si + 1 < list.length ? list[si + 1].ticks : totalTicks
+      const [num, den] = ev.timeSignature
+      const barTicks = (num * 4) / den * ppq
+      if (!(barTicks > 0)) continue
+      for (let tick = ev.ticks; tick < endTicks && barTimes.length < 20000; tick += barTicks) {
+        barTimes.push(midi.header.ticksToSeconds(tick))
+      }
+    }
+  } catch {
+    // Malformed header — per-bar reporting degrades to totals only.
+  }
+
   return {
     name,
     duration: midi.duration,
@@ -52,5 +85,7 @@ export async function parseMidi(file: ArrayBuffer, name: string): Promise<Parsed
     pedals,
     controls,
     tracks,
+    tempos,
+    barTimes,
   }
 }

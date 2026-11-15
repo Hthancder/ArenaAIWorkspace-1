@@ -766,6 +766,71 @@ T = {
     "Wave": "Sóng",
 }
 
+# ── Practice engine (research 16) + A–B loop (15.4) ─────────────────
+# setdefault: never overwrite a canonical translation already above.
+_PRACTICE = {
+    "Set loop point A at the playhead": "Đặt điểm lặp A tại vị trí phát",
+    "Set loop point B at the playhead": "Đặt điểm lặp B tại vị trí phát",
+    "Clear loop points A–B": "Xoá điểm lặp A–B",
+    "Practice": "Luyện tập",
+    "Wait": "Chờ nốt",
+    "Rhythm": "Theo nhịp",
+    "Finish": "Kết thúc",
+    "Practice again": "Luyện lại",
+    "Perfect": "Hoàn hảo",
+    "Good": "Tốt",
+    "Early": "Sớm",
+    "Late": "Muộn",
+    "Missed": "Bỏ lỡ",
+    "Extra": "Thừa",
+    "Step {{current}}/{{total}}": "Bước {{current}}/{{total}}",
+    "Play:": "Cần bấm:",
+    "Wrong: {{count}}": "Sai: {{count}}",
+    "Skip step": "Bỏ qua bước",
+    "Auto-advance in {{seconds}}s": "Tự chuyển sau {{seconds}}s",
+    "Accuracy": "Chính xác",
+    "Combo": "Liên tiếp",
+    "best": "kỷ lục",
+    "Practice results": "Kết quả luyện tập",
+    "Wait-mode results": "Kết quả chế độ Chờ nốt",
+    "On time": "Đúng nhịp",
+    "Early / late": "Sớm / muộn",
+    "By bar": "Theo ô nhịp",
+    "Bar {{bar}}": "Ô {{bar}}",
+    "Steps": "Số bước",
+    "First try": "Đúng ngay",
+    "Retries": "Phải thử lại",
+    "Wrong notes": "Nốt bấm sai",
+    "Skipped": "Bỏ qua",
+    "Time": "Thời gian",
+    "Latency calibration": "Đo độ trễ",
+    "Tap any piano key along with the 12 clicks.":
+        "Bấm bất kỳ phím đàn nào theo 12 nhát đếm nhịp.",
+    "Click {{beat}}/{{total}}": "Nhát {{beat}}/{{total}}",
+    "Measured offset: {{ms}} ms": "Độ trễ đo được: {{ms}} ms",
+    "Offset over 120 ms — check your speakers/headphones.":
+        "Độ trễ quá 120 ms — hãy kiểm tra tai nghe/loa.",
+    "Not enough taps were detected. Try again.":
+        "Bấm chưa đủ nốt để đo. Hãy thử lại.",
+    "Measure again": "Đo lại",
+    "Measuring…": "Đang đo…",
+    "Practice mode": "Chế độ luyện tập",
+    "Auto-advance (wait)": "Tự chuyển bước (Chờ nốt)",
+    "Key label layout": "Bố cục nhãn phím",
+    "Wait mode pauses at each note until you play it; Rhythm scores your timing while the song plays.":
+        "Chế độ Chờ nốt dừng ở mỗi nốt cho tới khi bạn bấm đúng; chế độ Theo nhịp chấm điểm thời điểm bấm trong khi bài đang phát.",
+    "Never": "Không bao giờ",
+    "Offset: {{ms}} ms": "Độ lệch: {{ms}} ms",
+    "Measure": "Đo",
+    "Practice & loop": "Luyện tập & lặp",
+    "Cycle practice mode": "Đổi chế độ luyện tập",
+    "Skip to next step (wait)": "Bỏ qua bước (Chờ nốt)",
+    "Set loop point A": "Đặt điểm lặp A",
+    "Set loop point B": "Đặt điểm lặp B",
+}
+for _k, _v in _PRACTICE.items():
+    T.setdefault(_k, _v)
+
 def convert(obj, missing, path=""):
     if isinstance(obj, dict):
         out = {}

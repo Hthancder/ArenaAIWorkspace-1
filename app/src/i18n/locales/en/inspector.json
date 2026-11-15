@@ -21,7 +21,8 @@
     "hands": "Hands (beta)",
     "pcPlay": "Playing on the computer",
     "pcKeyLabels": "Computer-key labels",
-    "metronome": "Metronome"
+    "metronome": "Metronome",
+    "practice": "Practice"
   },
   "camera": {
     "distance": "Distance",
@@ -138,7 +139,11 @@
     "mouseVelocityFromPosition": "Velocity from click position",
     "pcKeyLabelSize": "Computer-key label size",
     "metronomeBpm": "Tempo (BPM)",
-    "metronomeBeatsPerBar": "Beats per bar"
+    "metronomeBeatsPerBar": "Beats per bar",
+    "practiceMode": "Practice mode",
+    "waitAutoAdvance": "Auto-advance (wait)",
+    "calibration": "Latency calibration",
+    "pcGlyphPreset": "Key label layout"
   },
   "particleBlending": {
     "alpha": "Normal",
@@ -473,5 +478,11 @@
   "sustainKey": {
     "shift": "Shift",
     "none": "Off"
+  },
+  "practice": {
+    "hint": "Wait mode pauses at each note until you play it; Rhythm scores your timing while the song plays.",
+    "never": "Never",
+    "offsetValue": "Offset: {{ms}} ms",
+    "calibrate": "Measure"
   }
 }

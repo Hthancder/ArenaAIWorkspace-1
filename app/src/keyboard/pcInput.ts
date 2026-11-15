@@ -22,9 +22,14 @@ const PC_KEY_NOTES: Record<string, number> = {
   Digit0: 75, Equal: 78,
 };
 
-// Glyph shown on the on-screen keys for each map entry (QWERTY labels; the
-// map itself is physical `e.code`, so it works on any layout).
-export const PC_KEY_GLYPHS: Record<string, string> = {
+// Glyph shown on the on-screen keys for each map entry. The map itself
+// is physical `e.code`, so playing works on ANY layout; only the printed
+// label differs. Presets cover the common non-QWERTY labelings
+// (research 09 — "preset QWERTY/AZERTY/Dvorak"; per-key remap UI still
+// open, docs/ideas.md).
+export type PcGlyphPreset = "qwerty" | "azerty" | "dvorak";
+
+const QWERTY_GLYPHS: Record<string, string> = {
   KeyZ: "Z", KeyX: "X", KeyC: "C", KeyV: "V", KeyB: "B", KeyN: "N",
   KeyM: "M", Comma: ",", Period: ".", Slash: "/",
   KeyS: "S", KeyD: "D", KeyG: "G", KeyH: "H", KeyJ: "J", KeyL: "L",
@@ -35,6 +40,43 @@ export const PC_KEY_GLYPHS: Record<string, string> = {
   Digit2: "2", Digit3: "3", Digit5: "5", Digit6: "6", Digit7: "7",
   Digit9: "9", Digit0: "0", Equal: "=",
 };
+
+// French AZERTY: physical key positions carry different printed letters
+// (KeyA prints Q, KeyQ prints A, KeyW prints Z, KeyZ prints W, …).
+const AZERTY_GLYPHS: Record<string, string> = {
+  KeyZ: "W", KeyX: "X", KeyC: "C", KeyV: "V", KeyB: "B", KeyN: "N",
+  KeyM: ",", Comma: ";", Period: ":", Slash: "!",
+  KeyA: "Q", KeyS: "S", KeyD: "D", KeyF: "F", KeyG: "G", KeyH: "H",
+  KeyJ: "J", KeyK: "K", KeyL: "L", Semicolon: "M",
+  KeyQ: "A", KeyW: "Z", KeyE: "E", KeyR: "R", KeyT: "T", KeyY: "Y",
+  KeyU: "U", KeyI: "I", KeyO: "O", KeyP: "P",
+  BracketLeft: "^", BracketRight: "$",
+  Digit2: "é", Digit3: "\"", Digit5: "(", Digit6: "-", Digit7: "è",
+  Digit9: "ç", Digit0: "à", Equal: "=",
+};
+
+// US Dvorak letter labeling on QWERTY positions (digit row unchanged).
+const DVORAK_GLYPHS: Record<string, string> = {
+  KeyZ: ";", KeyX: "Q", KeyC: "J", KeyV: "K", KeyB: "X", KeyN: "B",
+  KeyM: "M", Comma: "W", Period: "V", Slash: "Z",
+  KeyA: "A", KeyS: "O", KeyD: "E", KeyF: "U", KeyG: "I", KeyH: "D",
+  KeyJ: "H", KeyK: "T", KeyL: "N", Semicolon: "S",
+  KeyQ: ",", KeyW: ".", KeyE: "P", KeyR: "F", KeyT: "G", KeyY: "Y",
+  KeyU: "C", KeyI: "R", KeyO: "L", KeyP: "/",
+  BracketLeft: "=", BracketRight: "]",
+  Digit2: "2", Digit3: "3", Digit5: "5", Digit6: "6", Digit7: "7",
+  Digit9: "9", Digit0: "0", Equal: "=",
+};
+
+const GLYPH_PRESETS: Record<PcGlyphPreset, Record<string, string>> = {
+  qwerty: QWERTY_GLYPHS,
+  azerty: AZERTY_GLYPHS,
+  dvorak: DVORAK_GLYPHS,
+};
+
+export function pcKeyGlyphs(preset: PcGlyphPreset): Record<string, string> {
+  return GLYPH_PRESETS[preset] ?? QWERTY_GLYPHS;
+}
 
 // Shift+<key> chords owned by global shortcuts (Shift+R record toggle,
 // Shift+K set keyframe). They must not also fire a piano note. Any OTHER
@@ -65,8 +107,10 @@ export function pcKeyToMidi(code: string): number | null {
  */
 export function pcGlyphForMidi(midi: number): string {
   const out: string[] = [];
+  const s = useStore.getState().settings;
+  const glyphs = pcKeyGlyphs(s.pcGlyphPreset);
   for (const code of Object.keys(PC_KEY_NOTES)) {
-    if (pcKeyToMidi(code) === midi) out.push(PC_KEY_GLYPHS[code] ?? code);
+    if (pcKeyToMidi(code) === midi) out.push(glyphs[code] ?? code);
     if (out.length >= 2) break;
   }
   return out.join(" ");

@@ -21,7 +21,8 @@
     "hands": "手（ベータ版）",
     "pcPlay": "PCキーで演奏",
     "pcKeyLabels": "PCキーラベル",
-    "metronome": "メトロノーム"
+    "metronome": "メトロノーム",
+    "practice": "練習"
   },
   "camera": {
     "distance": "距離",
@@ -138,7 +139,11 @@
     "mouseVelocityFromPosition": "クリック位置でベロシティ",
     "pcKeyLabelSize": "PCキーラベルのサイズ",
     "metronomeBpm": "テンポ（BPM）",
-    "metronomeBeatsPerBar": "小節の拍数"
+    "metronomeBeatsPerBar": "小節の拍数",
+    "practiceMode": "練習モード",
+    "waitAutoAdvance": "自動進行（ウェイト）",
+    "calibration": "レイテンシ較正",
+    "pcGlyphPreset": "キーラベルの配列"
   },
   "particleBlending": {
     "alpha": "通常",
@@ -473,5 +478,11 @@
   "sustainKey": {
     "shift": "Shift",
     "none": "オフ"
+  },
+  "practice": {
+    "hint": "ウェイトモードは正しい音を弾くまで各ノートで停止します。リズムモードは演奏しながらタイミングを採点します。",
+    "never": "なし",
+    "offsetValue": "オフセット: {{ms}} ms",
+    "calibrate": "測定"
   }
 }

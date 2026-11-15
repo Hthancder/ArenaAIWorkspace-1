@@ -29,7 +29,10 @@
     "exitFullscreen": "全画面を終了",
     "seek": "再生位置",
     "look": "カスタマイズ",
-    "timeline": "タイムライン"
+    "timeline": "タイムライン",
+    "loopA": "再生位置にループ点Aを設定",
+    "loopB": "再生位置にループ点Bを設定",
+    "clearLoopRange": "ループ点A–Bをクリア"
   },
   "loadingIsland": {
     "title": "ピアノの音を読み込み中",
@@ -51,5 +54,66 @@
   },
   "pageLoader": {
     "loading": "notefall を読み込み中"
+  },
+  "practice": {
+    "title": "練習",
+    "mode": {
+      "off": "オフ",
+      "wait": "ウェイト",
+      "rhythm": "リズム"
+    },
+    "finish": "終了",
+    "close": "閉じる",
+    "retry": "もう一度練習",
+    "cancel": "キャンセル",
+    "verdict": {
+      "perfect": "パーフェクト",
+      "good": "グッド",
+      "early": "早い",
+      "late": "遅い",
+      "miss": "ミス",
+      "extra": "余分"
+    },
+    "wait": {
+      "step": "ステップ {{current}}/{{total}}",
+      "required": "弾く音:",
+      "wrong": "間違い: {{count}}",
+      "skip": "ステップをスキップ",
+      "auto": "{{seconds}}秒後に自動で進みます"
+    },
+    "rhythm": {
+      "accuracy": "正答率",
+      "combo": "コンボ",
+      "best": "最高"
+    },
+    "summary": {
+      "titleRhythm": "練習結果",
+      "titleWait": "ウェイトモードの結果",
+      "expected": "ノート数",
+      "accuracy": "オンタイム",
+      "perfect": "パーフェクト",
+      "good": "グッド",
+      "earlyLate": "早い / 遅い",
+      "miss": "ミス",
+      "extra": "余分",
+      "perBar": "小節ごと",
+      "bar": "小節 {{bar}}",
+      "steps": "ステップ",
+      "firstTry": "一発で正解",
+      "retries": "再挑戦",
+      "wrong": "間違いノート",
+      "skipped": "スキップ",
+      "duration": "時間"
+    },
+    "calibration": {
+      "title": "レイテンシ較正",
+      "instruction": "12回のクリックに合わせて、任意の鍵盤を弾いてください。",
+      "beat": "クリック {{beat}}/{{total}}",
+      "result": "測定されたオフセット: {{ms}} ms",
+      "warn": "オフセットが120 msを超えています。スピーカー／ヘッドフォンを確認してください。",
+      "failed": "有効なタップが足りませんでした。もう一度お試しください。",
+      "again": "再測定",
+      "running": "測定中…"
+    }
   }
 }

@@ -1,0 +1,355 @@
+/**
+ * Practice engine wiring — research-piano/16.3.1 (Wait Mode) + 16.4
+ * (scoring). One controller drives three concerns:
+ *
+ *  - Wait Mode: steps = onset clusters (steps.ts); the engine seeks to
+ *    each step's onset and PAUSES; presses arrive via
+ *    `audioEngine.addLiveListener` (the same bus the recorder uses —
+ *    PC keyboard / on-screen / MIDI device all feed it); when the
+ *    step's pitch set is covered, advance. Wrong pitches are counted,
+ *    never blocked (16.3.1 "Bấm sai" row). Optional auto-advance and
+ *    a Skip action rescue stuck players.
+ *  - Rhythm scoring: play-along against the song; each live note-on is
+ *    matched greedily (match.ts); HUD totals stream into the practice
+ *    store. Finalize on song end or manually.
+ *  - Calibration (16.2): 12 clicks, taps collected the same way.
+ *
+ * Clock discipline (16.1): scoring converts the playhead to "what the
+ * user is hearing" by subtracting output latency, then subtracts the
+ * calibration offset in the matcher.
+ */
+import { useEffect } from 'react'
+import { audioEngine } from '../audio/engine'
+import { pauseSong } from '../audio/playback'
+import { timelineToMidi } from '../midi/speedMap'
+import { outputLatencySec } from './latency'
+import { RhythmMatcher } from './match'
+import { groupNotesByOnset } from './steps'
+import type { TempoPoint } from './windows'
+import {
+  beginCalibration,
+  finishCalibration,
+  type CalibrationRun,
+} from './calibration'
+import { usePractice, waitCloseStep } from './practiceStore'
+import type { PracticeMode, WaitStep, WaitSummary } from './types'
+import { useStore } from '../store'
+
+function seekTo(t: number): void {
+  audioEngine.seek(t)
+  useStore.getState().setCurrentTime(t)
+}
+
+class PracticeController {
+  private matcher: RhythmMatcher | null = null
+  private steps: WaitStep[] = []
+  private waitTimer: number | null = null
+  private calibrationRun: CalibrationRun | null = null
+  private calibrationTaps: number[] = []
+  /** True while we trigger preview notes — their live events must not count. */
+  private suppressInput = false
+  private rafEndCheck = 0
+
+  // ── mode transitions ──────────────────────────────────────────────
+
+  setMode(m: PracticeMode): void {
+    const prev = usePractice.getState().mode
+    if (prev === m) return
+    if (prev === 'wait') this.stopWait(false)
+    if (prev === 'rhythm') this.finishRhythm(true)
+    usePractice.getState().setMode(m)
+    this.reconcile(m)
+  }
+
+  cycleMode(): void {
+    const order: PracticeMode[] = ['off', 'wait', 'rhythm']
+    const cur = usePractice.getState().mode
+    this.setMode(order[(order.indexOf(cur) + 1) % order.length])
+  }
+
+  /** Re-initialize the current mode against the current song. */
+  reconcile(mode: PracticeMode = usePractice.getState().mode): void {
+    const song = useStore.getState().song
+    if (mode === 'wait') {
+      this.steps = song ? groupNotesByOnset(song.notes) : []
+      if (this.steps.length === 0) return
+      usePractice.getState().waitBegin(this.steps)
+      // Wait mode drives the playhead itself — freeze the transport.
+      if (useStore.getState().transport === 'playing') pauseSong()
+      this.enterStep(0)
+    } else if (mode === 'rhythm') {
+      const s = usePractice.getState()
+      s.startSession()
+      this.buildMatcher()
+      this.startEndCheck()
+    }
+  }
+
+  private buildMatcher(): void {
+    const song = useStore.getState().song
+    const ps = usePractice.getState()
+    if (!song) {
+      this.matcher = null
+      return
+    }
+    const tempos: TempoPoint[] | undefined = song.tempos
+    this.matcher = new RhythmMatcher(
+      song.notes,
+      tempos,
+      song.barTimes,
+      ps.scoringOffsetMs,
+    )
+  }
+
+  // ── wait mode ─────────────────────────────────────────────────────
+
+  private enterStep(i: number): void {
+    let index = i
+    // Loop A–B: the spec wraps to the head of the loop, not song start.
+    // The store's loop points are TL_audio (the transport axis); step
+    // times are MIDI-time, so convert through the speed map first.
+    const st = useStore.getState()
+    const toMidi = (tl: number | null): number | null =>
+      tl === null
+        ? null
+        : timelineToMidi(audioEngine.getSpeedMap(), tl - st.settings.midiOffsetSec)
+    const loopEnd = toMidi(st.loopEnd)
+    const loopStart = toMidi(st.loopStart)
+    if (loopEnd !== null && this.steps[index] && this.steps[index].time >= loopEnd) {
+      const from = loopStart ?? 0
+      const found = this.steps.findIndex((s) => s.time >= from - 1e-9)
+      index = found >= 0 ? found : 0
+    }
+    if (index >= this.steps.length) {
+      this.finishWait()
+      return
+    }
+    const step = this.steps[index]
+    // Seek the playhead to the onset so the note sits on the hit line.
+    seekTo(audioEngine.midiTimeToTimeline(step.time))
+    usePractice.getState().waitSetStep(index, step)
+    // Soft preview of the required pitches ("nghe trước", 16.3.1).
+    this.suppressInput = true
+    for (const midi of step.pitches) audioEngine.triggerKey(midi, 0.12)
+    this.suppressInput = false
+    this.armAutoAdvance()
+  }
+
+  private armAutoAdvance(): void {
+    this.clearAutoAdvance()
+    const ms = usePractice.getState().waitAutoAdvanceMs
+    if (ms <= 0) return
+    this.waitTimer = window.setTimeout(() => {
+      const ps = usePractice.getState()
+      if (!ps.wait.active) return
+      ps.waitSkipStep()
+      this.advanceStep(false)
+    }, ms)
+  }
+
+  private clearAutoAdvance(): void {
+    if (this.waitTimer !== null) {
+      window.clearTimeout(this.waitTimer)
+      this.waitTimer = null
+    }
+  }
+
+  skipStep(): void {
+    const ps = usePractice.getState()
+    if (ps.mode !== 'wait' || !ps.wait.active) return
+    ps.waitSkipStep()
+    this.advanceStep(false)
+  }
+
+  private advanceStep(_firstTry: boolean): void {
+    const ps = usePractice.getState()
+    // Classify the step just finished (first-try = one press per pitch,
+    // no wrong presses). Skip-path passes via waitSkipStep instead.
+    if (_firstTry) {
+      const firstTry =
+        ps.wait.attempts === ps.wait.required.length && ps.wait.satisfied.length === ps.wait.required.length
+      waitCloseStep(firstTry)
+    }
+    this.clearAutoAdvance()
+    this.enterStep(ps.wait.stepIndex + 1)
+  }
+
+  private stopWait(makeSummary: boolean): void {
+    this.clearAutoAdvance()
+    const ps = usePractice.getState()
+    if (!ps.wait.active) return
+    if (makeSummary) this.finishWait()
+    else usePractice.setState({ wait: { ...usePractice.getState().wait, active: false, done: true } })
+  }
+
+  private finishWait(): void {
+    this.clearAutoAdvance()
+    const w = usePractice.getState().wait
+    const summary: WaitSummary = {
+      mode: 'wait',
+      startedAt: w.startedAt,
+      durationMs: performance.now() - w.startedAt,
+      steps: w.stepCount,
+      firstTry: w.firstTrySteps,
+      retries: w.retrySteps,
+      wrong: w.wrong,
+      skipped: w.skippedSteps,
+      offsetMs: usePractice.getState().scoringOffsetMs,
+    }
+    usePractice.getState().waitEnd(summary)
+  }
+
+  /** Handle one live note-on (user input). */
+  handleNoteOn(midi: number): void {
+    if (this.suppressInput) return
+
+    // Calibration capture outranks everything else.
+    if (this.calibrationRun) {
+      this.calibrationTaps.push(performance.now())
+      return
+    }
+
+    const ps = usePractice.getState()
+
+    if (ps.mode === 'wait' && ps.wait.active && !ps.wait.done) {
+      const required = ps.wait.required
+      if (required.includes(midi)) {
+        if (!ps.wait.satisfied.includes(midi)) {
+          ps.waitSatisfy(midi)
+          const now = usePractice.getState().wait
+          if (now.satisfied.length >= now.required.length) {
+            this.advanceStep(true)
+          } else {
+            this.armAutoAdvance() // progress keeps the step alive
+          }
+        } else {
+          // Repeated pitch before advancing — counts as a retry press.
+          ps.waitAddAttempt()
+        }
+      } else {
+        ps.waitWrong()
+      }
+      return
+    }
+
+    if (ps.mode === 'rhythm' && ps.sessionActive && this.matcher) {
+      // Only score against a moving playhead — while paused every press
+      // would pile up at the frozen cursor.
+      if (!audioEngine.isPlaying()) return
+      // "What the user is hearing" = playhead minus output latency (16.1).
+      const playedMs = (audioEngine.currentMidiTime() - outputLatencySec()) * 1000
+      const { verdict, deltaMs } = this.matcher.playOn(midi, playedMs)
+      ps.noteVerdict(verdict, deltaMs)
+    }
+  }
+
+  // ── rhythm session lifecycle ──────────────────────────────────────
+
+  private startEndCheck(): void {
+    this.stopEndCheck()
+    const tick = () => {
+      const ps = usePractice.getState()
+      if (ps.mode !== 'rhythm' || !ps.sessionActive) return
+      const st = useStore.getState()
+      if (st.transport === 'playing' && !audioEngine.isPlaying()) {
+        // Engine auto-stopped at end of song → close the session.
+        this.finishRhythm(false)
+        return
+      }
+      this.rafEndCheck = requestAnimationFrame(tick)
+    }
+    this.rafEndCheck = requestAnimationFrame(tick)
+  }
+
+  private stopEndCheck(): void {
+    if (this.rafEndCheck) cancelAnimationFrame(this.rafEndCheck)
+    this.rafEndCheck = 0
+  }
+
+  /** finish=true discards silently (mode switched away); false → summary. */
+  finishRhythm(silent: boolean): void {
+    this.stopEndCheck()
+    const ps = usePractice.getState()
+    if (!ps.sessionActive) return
+    ps.endSession()
+    if (silent) {
+      this.matcher = null
+      return
+    }
+    const summary = this.matcher?.finalize() ?? null
+    this.matcher = null
+    if (summary) ps.setSummary(summary)
+  }
+
+  finishNow(): void {
+    const ps = usePractice.getState()
+    if (ps.mode === 'rhythm') this.finishRhythm(false)
+    else if (ps.mode === 'wait' && ps.wait.active) this.finishWait()
+  }
+
+  // ── calibration (16.2) ────────────────────────────────────────────
+
+  startCalibration(): void {
+    if (this.calibrationRun) return
+    this.calibrationTaps = []
+    const ps = usePractice.getState()
+    ps.calibrationStart()
+    this.calibrationRun = beginCalibration((beat) => {
+      usePractice.getState().calibrationBeat(beat + 1)
+    })
+    // scheduleCountIn fires onComplete after the last click's decay.
+    // Re-schedule completion via the handle's own lifecycle: poll taps
+    // lazily at completion time instead of relying on its callback
+    // (the handle was created without one).
+    const run = this.calibrationRun
+    window.setTimeout(
+      () => {
+        if (this.calibrationRun !== run) return // cancelled
+        const offset = finishCalibration(this.calibrationTaps, run.clickWallMs)
+        this.calibrationRun = null
+        usePractice.getState().calibrationFinish(offset)
+      },
+      (12 * (60 / 80) + 1) * 1000,
+    )
+  }
+
+  cancelCalibration(): void {
+    this.calibrationRun?.handle.cancel()
+    this.calibrationRun = null
+    usePractice.getState().calibrationCancel()
+  }
+
+  /** Song swapped under us — rebuild for the new note list. */
+  onSongChanged(): void {
+    this.clearAutoAdvance()
+    this.stopEndCheck()
+    this.matcher = null
+    usePractice.setState({
+      summary: null,
+      wait: { ...usePractice.getState().wait, active: false },
+    })
+    const mode = usePractice.getState().mode
+    if (mode !== 'off') this.reconcile(mode)
+  }
+}
+
+export const practiceController = new PracticeController()
+
+/**
+ * Mount once (Layout): live-input subscription + song-change reconcile.
+ * The controller owns all logic; the hook only bridges React lifetime.
+ */
+export function usePracticeEngine(): void {
+  useEffect(() => {
+    const unsub = audioEngine.addLiveListener((e) => {
+      if (e.type === 'noteOn') practiceController.handleNoteOn(e.midi)
+    })
+    return unsub
+  }, [])
+
+  const song = useStore((s) => s.song)
+  useEffect(() => {
+    practiceController.onSongChanged()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [song])
+}

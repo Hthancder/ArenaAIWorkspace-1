@@ -214,6 +214,11 @@
     "pcGroup": "PCキーで演奏",
     "octave": "オクターブシフト",
     "sustain": "サステインペダル（押しっぱなし）",
-    "metronome": "メトロノーム ON/OFF"
+    "metronome": "メトロノーム ON/OFF",
+    "practiceGroup": "練習とループ",
+    "practiceMode": "練習モードの切り替え",
+    "practiceSkip": "次のステップへ（ウェイト）",
+    "loopA": "ループ点Aを設定",
+    "loopB": "ループ点Bを設定"
   }
 }

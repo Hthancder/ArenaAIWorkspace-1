@@ -57,4 +57,16 @@ export type ParsedSong = {
   /** Optional: absent on songs built before it existed (= none). */
   controls?: ControlEvent[]
   tracks: TrackInfo[]
+  /**
+   * Tempo map (MIDI-seconds → BPM) from the SMF header. Optional like
+   * `controls`; absent = 120 BPM everywhere. Used by practice scoring
+   * windows (research 16.4.1).
+   */
+  tempos?: { time: number; bpm: number }[]
+  /**
+   * Start time (MIDI-seconds) of every bar from the time-signature map.
+   * Empty/absent when the header carries nothing usable — per-bar
+   * practice reporting degrades to totals only (TODO(spec) in 16.4.4).
+   */
+  barTimes?: number[]
 }

@@ -26,7 +26,32 @@ Mỗi quyết định 1 dòng, mới nhất trước. Tham chiếu tài liệu: 
 
 ## Còn nợ (TODO)
 
-- Wait mode + chấm điểm (research 16) — milestone M5, chưa làm.
-- Remap từng phím PC-key + preset AZERTY/Dvorak (research 09/20.5) — xem `ideas.md`.
-- Metronome theo tempo map của bài; loop A–B (research 15.4).
+- ~~Wait mode + chấm điểm (research 16)~~ ✅ M5 đã làm (2026-11-15) — xem mục dưới.
+- Remap tự do từng phím PC-key (preset AZERTY/Dvorak ✅ có sẵn; remap từng phím còn thiếu) — xem `ideas.md`.
+- Metronome theo tempo map của bài; handle A–B trên timeline (nút A/B ✅ có).
 - SoundFont / đa timbre (research 09 P1); export video test tay; PWA/CSP (M6).
+
+## M5 — Practice engine (Wait Mode + chấm điểm + Calibration + Loop A–B), 2026-11-15
+
+- **Hai chế độ** theo research 16.4.2: `wait` (dừng chờ đúng nốt — 16.3.1, steps =
+  cụm onset 30ms, bấm sai chỉ đếm) và `rhythm` (chấm điểm khi chạy — 16.4, matching
+  greedy). Recital (chấm độ dài nốt) CHƯA làm vì 16.4.3 B4 không có ngưỡng số — TODO(spec).
+- **Cửa sổ thời gian** dùng nguyên công thức 16.4.1 (kiểm chứng đúng bảng 60BPM→400/140,
+  120BPM-eighth→125/75 trong test). Mức chia perfect/good = 50% goodMs — 16.4.3 B2
+  không định nghĩa → **TODO(spec)**. Ngưỡng tối thiểu tap cho calibration = 3/8 — TODO(spec).
+- **Đồng hồ** theo 16.1: điểm bấm quy về "đang nghe" = playhead − (baseLatency +
+  outputLatency); offset calibration (median 16.2) trừ tiếp vào mọi delta. Click
+  calibration tính wall-time qua `getOutputTimestamp` (không lặp "classic mistake").
+- **Practice state NGOÀI Settings** — Settings bị hash vào content hash của project
+  (store.ts `hashSettings`); đưa session vào Settings sẽ đánh dấu project "unsaved"
+  mỗi lần chơi. Prefs (mode, offset, auto-advance) lưu localStorage (browser-local,
+  không backend — hợp rule 41).
+- **Loop A–B**: điểm A/B lưu TL_audio (trục transport), tự bật loop khi đặt B;
+  wait-mode wrap về bước đầu đoạn loop (đổi đơn vị qua speed map).
+- **Per-bar** (16.4.4) cần tempo/TS map — `parse.ts` giờ capture `tempos` + `barTimes`;
+  file không có map → chỉ hiện tổng (không bịa bar).
+- **Giới hạn đã biết**: rhythm + loop → mỗi expected chỉ khớp 1 lần/vòng (TODO(spec)
+  reset matcher khi wrap); preview nốt của wait mode cũng đi vào recorder nếu đang ghi;
+  hợp âm wait-mode chấp nhận bấm bất kỳ thứ tự nào (16.3.1 "thứ tự bất kỳ").
+- **Test**: `npx tsx scripts/test-practice.ts` — 8 case theo 16.7, ALL PASSED; test
+  bắt thật 1 bug (`onsetStepBeats` sập window khi onset trùng) — đã fix.

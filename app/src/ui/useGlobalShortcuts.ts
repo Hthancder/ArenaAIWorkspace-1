@@ -1,10 +1,12 @@
 import { useEffect } from 'react'
 import i18n from '../i18n'
 import { togglePlayback } from '../audio/playback'
+import { audioEngine } from '../audio/engine'
 import { toggleRecord } from '../audio/recordControl'
 import { openProject, saveProject, saveProjectAs } from '../projects/actions'
 import { useStore } from '../store'
 import { deleteNotes, moveNotes } from '../midi/edit'
+import { practiceController } from '../practice/usePracticeEngine'
 import { showAlert } from './confirm'
 import { useShell } from './shell/uiState'
 
@@ -178,6 +180,45 @@ export function useGlobalShortcuts(): void {
       s.updateSettings({ metronomeEnabled: !s.settings.metronomeEnabled })
     }
 
+    // Capture-phase practice + A–B loop shortcuts (research 16 / 15.4).
+    // All Ctrl/Cmd+Shift chords — plain and bare-Shift keys belong to the
+    // piano keymap (20.5), and Ctrl+Shift+digit beats the browser's own
+    // chords (Ctrl+Shift+B = bookmarks bar, so B is out).
+    //   Ctrl/Cmd+Shift+P — cycle practice mode (off → wait → rhythm)
+    //   Ctrl/Cmd+Shift+N — wait mode: skip to the next step
+    //   Ctrl/Cmd+Shift+1 — set loop point A at the playhead
+    //   Ctrl/Cmd+Shift+2 — set loop point B at the playhead (enables loop)
+    const onPracticeCapture = (e: KeyboardEvent) => {
+      if (e.altKey || !e.shiftKey) return
+      if (!(e.metaKey || e.ctrlKey)) return
+      if (isEditable(e.target)) return
+      let handled = true
+      switch (e.code) {
+        case 'KeyP':
+          practiceController.cycleMode()
+          break
+        case 'KeyN':
+          practiceController.skipStep()
+          break
+        case 'Digit1':
+          useStore
+            .getState()
+            .setLoopRange(audioEngine.currentSongTime(), useStore.getState().loopEnd)
+          break
+        case 'Digit2': {
+          const s = useStore.getState()
+          s.setLoopRange(s.loopStart ?? 0, audioEngine.currentSongTime())
+          if (!s.loop) s.setLoop(true)
+          break
+        }
+        default:
+          handled = false
+      }
+      if (!handled) return
+      e.preventDefault()
+      e.stopImmediatePropagation()
+    }
+
     // Warn before navigating away whenever there are unsaved changes —
     // even for unnamed (post-New) sessions, since reloading away from a
     // dirty Untitled project loses the work just as much as a named
@@ -286,6 +327,7 @@ export function useGlobalShortcuts(): void {
     window.addEventListener('keydown', onOpenCapture, true)
     window.addEventListener('keydown', onToggleTimelineEditorCapture, true)
     window.addEventListener('keydown', onMetronomeCapture, true)
+    window.addEventListener('keydown', onPracticeCapture, true)
     window.addEventListener('keydown', onKey)
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => {
@@ -294,6 +336,7 @@ export function useGlobalShortcuts(): void {
       window.removeEventListener('keydown', onOpenCapture, true)
       window.removeEventListener('keydown', onToggleTimelineEditorCapture, true)
       window.removeEventListener('keydown', onMetronomeCapture, true)
+      window.removeEventListener('keydown', onPracticeCapture, true)
       window.removeEventListener('keydown', onKey)
       window.removeEventListener('beforeunload', onBeforeUnload)
     }

@@ -14,7 +14,8 @@ npm run dev                # http://localhost:5173
 **🔴 LIVE trên Vercel:** **https://piano-app-peach.vercel.app** — bộ web sample 27 MB tự host (cache lần tải đầu, sau đó chạy offline-ish). Gói Hobby: chỉ phi thương mại. Muốn deploy lại sau khi sửa code: nói mình chạy deploy thủ công (chưa cài Vercel GitHub App để auto-deploy).
 
 **Tính năng mới thêm so với NoteFall (2026-11-15):**
-- Chơi bằng máy tính: chỉnh **velocity** phím máy tính, **dịch quãng tám** (PgUp/PgDn), **pedal giữ âm** (Shift, đổi được), **nhãn phím máy tính** trên bàn phím 3D, velocity theo vị trí nhấn chuột.
+- **Luyện tập (M5)**: **Wait Mode** (dừng chờ bấm đúng nốt), **chấm điểm theo nhịp** (Perfect/Good/Sớm/Muộn, combo, báo cáo theo ô nhịp), **đo độ trễ** (calibration 12 nhát), **loop A–B** luyện đoạn khó (Ctrl+Shift+1/2).
+- Chơi bằng máy tính: chỉnh **velocity** phím máy tính, **dịch quãng tám** (PgUp/PgDn), **pedal giữ âm** (Shift, đổi được), **nhãn phím máy tính** trên bàn phím 3D (preset QWERTY/AZERTY/Dvorak), velocity theo vị trí nhấn chuột.
 - **Máy đếm nhịp** (40–240 BPM, nhịp mỗi ô, Ctrl/Cmd+M).
 - **Giao diện tiếng Việt** mặc định (đầy đủ, kèm English/Nhật).
 - Tự host sample Salamander (không phụ thuộc CDN của NoteFall).
