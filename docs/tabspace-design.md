@@ -347,3 +347,6 @@ Ngưỡng mở nhiều tab cấu hình 1–500, mặc định 20; xác nhận b�
 
 ### Tiến độ 0.97 — nhắc phân loại Hộp để sau
 Nhắc phân loại là gợi ý opt-in, mặc định tắt, tuổi 1–365 ngày, đếm theo thời gian lưu hợp lệ; hiển thị Hộp để sau và popup, hoãn 1/3/7/30 ngày hoặc bỏ hoãn. Không chuyển/xóa/mở, không âm hoặc thông báo OS; tôn trọng tạm dừng toàn cục và tính lại khi giao diện mở/làm mới. Cấu hình và thời gian hoãn chỉ lưu cục bộ, không backup. Cần kiểm thử Chrome thực tế.
+
+### Tiến độ 0.98 — mặc định mở bản lưu và phiên
+Cho cấu hình cửa sổ mở bản lưu, bỏ URL đang mở/trùng cho bản lưu và riêng cho phiên, cùng tùy chọn khôi phục nhóm phiên. Chỉ đặt sẵn hộp xác nhận, sửa được từng lượt; chuyển workspace và lịch sử giữ lựa chọn riêng. Mặc định ban đầu tương thích phiên bản cũ, cấu hình chỉ lưu local, không backup; URL so nguyên văn và bỏ tab có thể thay đổi cấu trúc phiên. Cần kiểm thử Chrome thực tế.

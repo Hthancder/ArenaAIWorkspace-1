@@ -162,3 +162,6 @@ Trong **Cài đặt & sao lưu → Mở nhiều tab**, chỉnh ngưỡng cảnh 
 
 ### Nhắc phân loại Hộp để sau (0.97)
 Trong **Hộp để sau → Nhắc phân loại**, có thể bật lời nhắc tùy chọn (mặc định tắt) và đặt tuổi từ 1–365 ngày. Tabspace đếm bản lưu đủ tuổi, kể cả mục bị tìm kiếm ẩn, và hiển thị gợi ý tại Hộp để sau và popup. Có thể hoãn 1, 3, 7 hoặc 30 ngày, hoặc bỏ hoãn. Đây chỉ là gợi ý trên giao diện: không tự mở, chuyển hay xóa và không phát âm hoặc gửi thông báo hệ điều hành. Tạm dừng tự động hóa ẩn lời nhắc; gợi ý được tính lại khi mở hoặc làm mới giao diện, không gửi bù. Mục thiếu thời gian lưu hợp lệ hoặc có thời gian trong tương lai không được tính. Thiết lập và thời gian hoãn lưu cục bộ, không xuất sao lưu.
+
+### Mặc định khi mở (0.98)
+Trong **Cài đặt & sao lưu → Mặc định khi mở**, chọn cửa sổ mặc định và hành vi bỏ URL trùng cho bản lưu, cùng các lựa chọn riêng khi khôi phục phiên. Thiết lập chỉ điền sẵn hộp xem trước; vẫn có thể đổi từng lượt, và bản lưu không bị xóa. Bỏ URL đã mở cũng bỏ URL đã được mở trong cùng lượt; so sánh URL nguyên văn, không xét ẩn danh và không tránh được mọi thay đổi đồng thời. Tùy chọn bỏ trùng có thể thay đổi cấu trúc phiên. Các mặc định này không áp dụng cho hộp chuyển workspace hoặc mở lại lịch sử; lưu trên thiết bị, không nằm trong sao lưu.
