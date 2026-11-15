@@ -225,4 +225,11 @@ Trong popup, đánh dấu tối đa 100 tab web; có nút chọn/bỏ chọn cá
 
 **Xem & nghỉ** hiển thị danh sách trước, cho bỏ chọn, bỏ qua tab đang xem, ghim, phát âm thanh, đã nghỉ hoặc website được bảo vệ. Sau xác nhận Tabspace kiểm tra lại từng tab và bảo vệ; nếu kết quả không rõ hoặc không đọc được bảo vệ thì dừng phần còn lại, hiển thị kết quả từng mục. Giữ popup mở trong lúc xử lý; nếu đóng popup hoặc kết quả không rõ, hãy kiểm tra Chrome trước khi thử lại. Tab nghỉ sẽ tải lại và có thể mất dữ liệu chưa lưu.
 
-**Xem tại quản lý** chuyển lựa chọn để tiếp tục xem trước lưu, đóng hoặc thao tác khác; bước chuyển không tự mở hay đóng tab. Tab đã đổi URL/cửa sổ hoặc biến mất bị bỏ qua. Lựa chọn truyền tạm qua bộ nhớ phiên của Chrome, chỉ dùng một lần và có hiệu lực tối đa hai phút; nếu trang không nhận được, dữ liệu tạm có thể còn đến khi phiên Chrome kết thúc. Không truyền URL lên máy chủ. Đóng popup trước khi chuyển sẽ mất lựa chọn.
+**Xem tại quản lý** chuyển lựa chọn để tiếp tục xem trước lưu, đóng hoặc thao tác khác; bước chuyển không tự mở hay đóng tab. Tab đã đổi URL/cửa sổ hoặc biến mất bị bỏ qua. Lựa chọn truyền tạm qua bộ nhớ phiên của Chrome, chỉ dùng một lần và có hiệu lực tối đa hai phút; Tabspace cố dọn dữ liệu tạm khi trang nhận hoặc sau hai phút bằng lịch Chrome; nếu Chrome trì hoãn hoặc dọn lỗi, dữ liệu có thể còn đến khi phiên Chrome kết thúc. Không truyền URL lên máy chủ. Đóng popup trước khi chuyển sẽ mất lựa chọn.
+
+### Lưu nhiều tab ngay trong popup (0.112)
+Chọn các tab web rồi bấm **Xem & lưu**: xem từng tab, bỏ chọn nếu cần và chọn nhóm đích hoặc Hộp để sau. Chỉ tạo bản sao, **không đóng hoặc cho nghỉ tab**; URL trùng vẫn được giữ. Có thể lưu bản sao của tab đang xem, ghim, phát âm thanh hoặc website được bảo vệ.
+
+Tabspace kiểm tra lại tab và nhóm trước khi ghi; tab đã đổi hoặc biến mất được bỏ qua. Nếu nhóm đích đổi thông tin hoặc kết quả ghi không xác nhận được, hãy kiểm tra nhóm trước khi mở lại xem trước; không tự thử lại để tránh tạo bản trùng. Giữ popup mở đến khi thấy kết quả. Không có giao dịch nguyên tử giữa thao tác trong Chrome và bộ nhớ extension, nên vẫn cần kiểm tra khi Chrome gián đoạn.
+
+Dữ liệu chuyển lựa chọn sang trang quản lý được xóa khi nhận; nếu không được nhận, Tabspace cố dọn sau hai phút bằng lịch Chrome và khi service worker khởi động. Chrome có thể trì hoãn lịch hoặc gặp lỗi; dữ liệu còn sót chỉ ở bộ nhớ phiên và sẽ mất khi phiên Chrome kết thúc.
