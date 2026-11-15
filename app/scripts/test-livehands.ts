@@ -318,5 +318,36 @@ console.log('wait-mode demand: pressed pose hovers until the user plays')
   check('press flags cleared', r.press.every((v) => v === 0))
 }
 
+console.log('free play: neutral pose hands appear with no motion at all')
+{
+  liveHands.reset()
+  const { neutralHandPose } = await import('../src/hands/neutralPose')
+  // Sanity: the baked pose is complete and finite.
+  for (const hand of ['L', 'R'] as const) {
+    const np = neutralHandPose(hand)
+    const vecs = [np.elbow, np.wrist, ...np.bases, ...np.fingers.flat(), ...np.thumbRef]
+    check(`neutral ${hand} pose is finite`, vecs.every((v) => v.length === 3 && v.every(Number.isFinite)))
+  }
+  // No motion: every base pose is null; the overlay synthesises on demand.
+  const p: HandPoses = { L: null, R: null }
+  const opts = baseOpts({ sampleHand: (hand) => neutralHandPose(hand) })
+  frames(p, 5, opts)
+  check('nothing pressed → no hands', p.L === null && p.R === null)
+
+  const hR = audioEngine.triggerKey(72, 0.8) // right side
+  frames(p, 60, opts)
+  check('right hand appears in free play', p.R !== null && p.R.press.some((v) => v > 0.5))
+  check('left hand stays out', p.L === null)
+  hR?.release()
+
+  const hL = audioEngine.triggerKey(40, 0.8) // far left
+  frames(p, 60, opts)
+  check('left hand appears in free play', p.L !== null && p.L.press.some((v) => v > 0.5))
+  hL?.release()
+
+  frames(p, 150, opts)
+  check('hands leave when idle', p.L === null && p.R === null)
+}
+
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} FAILURES`)
 process.exit(failures === 0 ? 0 : 1)

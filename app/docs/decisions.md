@@ -144,3 +144,30 @@ pressed many times must visibly tap every time.
 - Tests (`scripts/test-livehands.ts`, 23 checks): bone lengths, tip lands
   on key, repeat taps, left hand enters/leaves for left keys, plan
   fingering, demand hover — ALL PASSED alongside the existing suites.
+
+## 2026-11-15 — free-play hands: "đánh tự do vẫn có tay"
+
+User: hand motion only existed when song notes were falling. Playing
+freely (no song / no falling notes) must still show the hands, pressing
+the keys the user plays.
+
+- **Neutral pose, baked from the real pipeline.** `scripts/extract-
+  neutral-pose.ts` drives `hands-worker.js` + `hands.wasm` + the vendored
+  motion DB in-process under node (deflate-raw via DecompressionStream;
+  the worker accepts a `file` buffer — no browser needed), synthesises one
+  held note per hand at the keyboard centre, and FKs a mid-hold frame
+  exactly like the client's `handAt`. The t=2.5 s frame is rigid-shifted
+  to wrist x = ±1.5 and lifted 8 mm (fingers hover, not press) and baked
+  into `src/hands/neutralPose.ts` (read-only; 502,458 DB entries load in
+  ~5 s in node — the script stays as the provenance/regen path).
+- **Free-play render path** (`Hands.tsx`): when `motionRef` is null the
+  frame no longer bails out — poses = `{L: null, R: null}` and the live
+  overlay synthesises hands from `sampleHand` on demand. `sampleHand`
+  falls back to `neutralHandPose(hand)` when there is no motion, or the
+  motion has no runs for that hand (a right-hand-only song now still gets
+  a left hand for left keys).
+- Export contract kept: a motionless timeline exports no hands
+  (`isExporting()` guard + free-play path disabled while exporting).
+- Tests: 7 new checks (neutral pose finite, hands appear/leave with NO
+  motion, per-side entry) — 30 checks ALL PASSED; humanize/practice
+  suites, tsc, build green.

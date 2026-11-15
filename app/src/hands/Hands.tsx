@@ -15,6 +15,7 @@ import {
   type HumanizeScratch,
 } from './humanize'
 import { liveHands, type LiveHandsOpts } from './liveHands'
+import { neutralHandPose } from './neutralPose'
 import { getExportFps } from '../scene/exportBridge'
 import {
   BLUR_MIN_PX, BLUR_PX_STEP, BLUR_SHUTTER, HandsBlurPass, PREVIEW_FRAME_SECONDS, blurBridge, blurOffsets, getMotionBlur, handBounds,
@@ -50,6 +51,9 @@ const HAND_KEYS = [
 const REBUILD_DEBOUNCE_MS = 150
 
 const SIZE = new THREE.Vector2()
+
+/** Free play: no motion, the live overlay synthesises hands on demand. */
+const NO_HANDS: HandPoses = { L: null, R: null }
 
 function resetBlurFrame() {
   blurBridge.plan = null
@@ -137,9 +141,19 @@ export function Hands() {
     if (!mesh) return
     const ready = motionRef.current
     mesh.setLighting(getResolvedSettings().keyboardBrightness, s.handsBrightness, s.handsFlashLight)
-    mesh.setVisible(!!ready)
-    if (!ready || !mesh.ready) return
-    const { motion, poseAt } = ready
+    if (!mesh.ready) {
+      mesh.setVisible(false)
+      return
+    }
+    // Free play ("đánh tự do"): with no song motion at all the hands still
+    // show up and follow the user's input from neutral poses. Exports of a
+    // motionless timeline draw nothing (pure motion contract).
+    if (!ready && (!s.handsFollowInput || audioEngine.isExporting())) {
+      mesh.setVisible(false)
+      return
+    }
+    mesh.setVisible(true)
+    const src = ready ? (tt: number) => ready.poseAt(ready.motion, tt) : () => NO_HANDS
     const t = audioEngine.currentSongTime()
     // Humanized poses — a PURE function of t (see humanize.ts) so the
     // exporter's frame-stepped render matches this preview exactly.
@@ -148,7 +162,6 @@ export function Hands() {
       smoothness: s.handsSmoothness,
       microMotion: s.handsMicroMotion,
     }
-    const src = (tt: number) => poseAt(motion, tt)
     // Last-resort guard: a throw inside this callback kills every
     // useFrame subscriber that mounts after us (falling notes freeze, keys
     // stop glowing) while the background audio ticker keeps the song
@@ -160,8 +173,6 @@ export function Hands() {
       // Live-input overlay: the hands follow the user's manual playing
       // (mouse / PC keyboard / MIDI). Live-only state — no-op on exports.
       const playing = audioEngine.isPlaying()
-      // Live-input overlay: the hands follow the user's manual playing
-      // (mouse / PC keyboard / MIDI). Live-only state — no-op on exports.
       const opts: LiveHandsOpts = {
         playing,
         keystrike: s.handsKeystrike,
@@ -189,16 +200,19 @@ export function Hands() {
         },
         // A hand that is off stage (runtime: "rests in the lap") comes up
         // from a mid-run pose sample of that hand when the user needs it.
+        // No motion at all (free play) or no runs for this hand: the baked
+        // neutral pose — the hand still shows up and plays.
         sampleHand: (hand) => {
           const rm = motionRef.current
-          if (!rm) return null
-          const runs = rm.motion.runs?.[hand] ?? []
-          for (const [a, b] of runs) {
-            const tm = rm.motion.t0 + (a + b) / 2 / rm.motion.fps
-            const p = rm.poseAt(rm.motion, tm)[hand]
-            if (p) return p
+          if (rm) {
+            const runs = rm.motion.runs?.[hand] ?? []
+            for (const [a, b] of runs) {
+              const tm = rm.motion.t0 + (a + b) / 2 / rm.motion.fps
+              const p = rm.poseAt(rm.motion, tm)[hand]
+              if (p) return p
+            }
           }
-          return null
+          return neutralHandPose(hand)
         },
       }
       if (s.handsFollowInput) liveHands.update(poses, opts)
