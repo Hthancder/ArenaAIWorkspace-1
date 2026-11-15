@@ -91,3 +91,8 @@ Nhật ký thông báo opt-in thêm bộ lọc **Âm báo** cho các lần Chrom
 Khi xuất có thể chọn thêm số ngày nhắc phân loại, chu kỳ nhắc sao lưu và thời hạn gợi ý thùng rác/lịch sử. Khi nhập phải chọn áp dụng riêng: các gợi ý và lời nhắc được đặt **tắt**, thời gian hoãn/lần xác nhận được đặt lại; không nhập hoặc bật tự dọn. Nếu tự dọn hiện đang bật, thay đổi chính sách thời hạn khiến tự dọn dừng đến khi xác nhận lại. Các lựa chọn còn lại, gồm lịch chạy và trạng thái tự động hóa, không được sao lưu.
 
 Khi file xuất vượt **10 MB**, Tabspace hỏi trước khi tải vì phiên bản hiện tại không thể nhập lại file đó. Có thể hủy hoặc vẫn tải để lưu trữ/xử lý bên ngoài; Tabspace không xác minh file tải thành công.
+
+### Kiểm tra trước khi nhập sao lưu (0.109)
+Hộp nhập cảnh báo nếu workspace hoặc preset tham chiếu nhóm không có trong danh sách nhóm đang hoạt động của file; nhóm có thể đang ở thùng rác hoặc đã thiếu. Sau nhập cần kiểm tra lại trước khi dùng. File có ID trùng gây mơ hồ trong phiên, workspace hoặc preset sẽ bị từ chối; file cũ không có ID vẫn được hỗ trợ.
+
+Khi chọn **thay thế**, nếu dữ liệu sẽ bị thay thế đổi trong lúc hộp xác nhận mở, Tabspace dừng và yêu cầu mở lại file. Giao diện, bảo vệ và các thiết lập cá nhân được chọn nhập cũng được kiểm tra thay đổi. Chế độ **thêm** vẫn gộp với dữ liệu mới nhất; thùng rác và lịch sử hiện có được giữ trong cả hai chế độ. Hãy tự xuất và kiểm tra bản sao lưu trước khi thay thế.

@@ -16,3 +16,10 @@ const inboxBackup=B.exportData({groups:[inbox],presets:[],snapshots:[],'tabspace
 const inboxImported=validate(inboxBackup),inboxExtra=B.extras(inboxBackup,inboxImported,id,validate,list=>S.validate(list,id));assert.equal(inboxImported[0].id,'inbox');assert.equal(inboxExtra.groupMap.get('inbox'),'inbox');assert.equal(Object.values(inboxExtra.records)[0].groupId,'inbox');
 const existing={id:'inbox',name:'My inbox',items:[{id:'old'}]}, merged=B.mergeGroups([existing],inboxImported);assert.equal(merged.length,1);assert.equal(merged[0].name,'My inbox');assert.equal(merged[0].items.length,2);assert.equal(existing.items.length,1);assert.equal(B.mergeGroups([],inboxImported)[0].id,'inbox');assert.throws(()=>validate({...inboxBackup,groups:[inbox,inbox]}),/nhiều/);assert.throws(()=>B.extras({...inboxBackup,trash:[{type:'group',value:inbox}]},inboxImported,id,validate,list=>S.validate(list,id)),/không thể/);
 console.log('Inbox backup identity, merge and trash references: OK');
+
+const legacyNoIds={format:'tabspace-backup',version:1,groups:[{name:'Old A',items:[{title:'A',url:'https://a.test'}]},{name:'Old B',items:[]}]};assert.equal(B.extras(legacyNoIds,validate(legacyNoIds),id,validate,list=>S.validate(list,id)).groupMap.size,0);
+const legacyDuplicate={...old,groups:[group,group]};assert.throws(()=>B.extras(legacyDuplicate,validate(legacyDuplicate),id,validate,list=>S.validate(list,id)),/trùng/);
+const legacyDuplicateItem={...old,groups:[{...group,id:'one'},{...group,id:'two'}]};assert.throws(()=>B.extras(legacyDuplicateItem,validate(legacyDuplicateItem),id,validate,list=>S.validate(list,id)),/trùng/);
+console.log('Legacy backups tolerate missing IDs but reject ambiguous duplicate IDs: OK');
+for(const field of ['snapshots','workspaces','presets']){assert.doesNotThrow(()=>B.checkIds({[field]:[{name:'legacy'},{}]}));assert.throws(()=>B.checkIds({[field]:[{id:'repeat'},{id:'repeat'}]}),/trùng/);assert.throws(()=>B.checkIds({[field]:[{id:42}]}),/không hợp lệ/)}
+console.log('Backup checks duplicate IDs in sessions, workspaces and presets before import: OK');

@@ -380,3 +380,6 @@ Thêm lựa chọn xuất/nhập ghi đè mặc định mở cho nhóm/workspace
 
 ### Tiến độ 0.108 — dữ liệu cá nhân an toàn hơn khi sao lưu
 Thêm xuất/nhập opt-in số ngày nhắc phân loại, nhắc sao lưu và gợi ý thời hạn; nhập tắt nhắc/gợi ý, đặt lại trạng thái hoãn/xác nhận và không nhập tự dọn. Cấu hình thời hạn đổi làm guard tự dọn dừng; kiểm tra cài đặt không đổi trước khi ghi. Khi xuất quá 10 MB yêu cầu xác nhận trước khi tải vì giới hạn nhập, vẫn cho lưu ra ngoài nếu người dùng chủ động chọn. Cần kiểm thử trên Chrome thực tế.
+
+### Tiến độ 0.109 — an toàn nhập dữ liệu
+Kiểm tra dữ liệu đích thay thế và thiết lập được chọn không đổi kể từ khi mở hộp nhập; gộp vẫn dùng dữ liệu mới nhất. Cảnh báo số tham chiếu nhóm workspace/preset không còn hoạt động trước khi nhập, kể cả nhóm trong thùng rác. Từ chối ID phiên/workspace/preset trùng, ID trùng v1 ở nhóm/tab; file cũ thiếu ID vẫn được phép. Tiếp tục dùng khóa dữ liệu chung, không coi đó là giao dịch nguyên tử đối với phần mềm bên ngoài; chưa kiểm thử Chrome thực tế.
