@@ -368,3 +368,6 @@ Tab đang mở có lọc theo lastAccessed Chrome, coi thiếu/tương lai là k
 
 ### Tiến độ 0.104 — sao lưu cá nhân tùy chọn
 Bổ sung tùy chọn xuất mặc định mở chung, ngưỡng cảnh báo và thiết lập âm; file âm tùy chỉnh chọn riêng, mặc định không xuất. Có xem trước/lựa chọn áp dụng khi nhập, kiểm tra cấu hình hiện tại chưa thay đổi, giải mã và kiểm tra âm nhập trước khi ghi; âm luôn tắt sau nhập. Nếu không có file âm tùy chỉnh vì được bỏ khỏi bản xuất thì dùng âm mặc định. Không bao gồm ghi đè theo đối tượng hay tự động hóa, giới hạn nhập 10 MB; cần kiểm thử Chrome thực tế.
+
+### Tiến độ 0.105 — chọn hàng loạt và tiếp cận bàn phím
+Bổ sung bỏ chọn riêng phần đang thấy cho tab mở và các danh sách hàng loạt; giữ mục ẩn, làm rõ nút bỏ chọn tất cả, thông báo số lượng và đưa focus về nút chọn khi thanh lựa chọn tab biến mất. Sửa đặt lại bộ lọc còn sót thời gian. Hộp thoại có tên truy cập từ tiêu đề, bộ đếm lựa chọn là vùng thông báo; phím / không chiếm phím khi ô tìm kiếm bị ẩn ở Cài đặt. Chưa thay thế kiểm thử Chrome, zoom hoặc trình đọc màn hình thực tế.
