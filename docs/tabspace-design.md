@@ -371,3 +371,6 @@ Bổ sung tùy chọn xuất mặc định mở chung, ngưỡng cảnh báo và
 
 ### Tiến độ 0.105 — chọn hàng loạt và tiếp cận bàn phím
 Bổ sung bỏ chọn riêng phần đang thấy cho tab mở và các danh sách hàng loạt; giữ mục ẩn, làm rõ nút bỏ chọn tất cả, thông báo số lượng và đưa focus về nút chọn khi thanh lựa chọn tab biến mất. Sửa đặt lại bộ lọc còn sót thời gian. Hộp thoại có tên truy cập từ tiêu đề, bộ đếm lựa chọn là vùng thông báo; phím / không chiếm phím khi ô tìm kiếm bị ẩn ở Cài đặt. Chưa thay thế kiểm thử Chrome, zoom hoặc trình đọc màn hình thực tế.
+
+### Tiến độ 0.106 — nhật ký kênh website và hệ điều hành
+Mở rộng nhật ký opt-in với kết quả xử lý thông báo website và lần thử gửi hệ điều hành, phân biệt lọc, ghi thời gian/trạng thái và ID ngẫu nhiên băm, không ghi đích hoặc nội dung. Không thay đổi chính sách gửi, không ghi khi tính năng website tắt hoặc khi hệ điều hành chưa thử gửi; lỗi nhật ký không ngăn gửi. Không chứng minh hiển thị, không bao gồm âm và có thể mất khi Chrome gián đoạn. Dữ liệu mới không tương thích trình đọc nhật ký cũ; chưa kiểm thử Chrome thực tế.

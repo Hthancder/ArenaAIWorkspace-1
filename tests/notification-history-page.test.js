@@ -1,0 +1,12 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),H=require('../extension/notification-history.js');
+(async()=>{
+ let db={notificationHistoryConfig:{enabled:true}},outcome='sent',calls=0;const api={storage:{local:{get:async()=>structuredClone(db),set:async v=>Object.assign(db,structuredClone(v))}}};
+ const src=fs.readFileSync('extension/background.js','utf8'),a=src.indexOf('async function deliverPageNotice('),b=src.indexOf('async function ensureReminderAlarm()',a);assert(a>=0&&b>a);
+ const ctx={chrome:api,PageNotice:{deliver:async()=>{calls++;return outcome}},ReminderTools:{},NotificationHistory:H,crypto:{randomUUID:()=>`uuid-${calls}`},console:{error(){}}};vm.runInNewContext(src.slice(a,b),ctx);
+ for(const result of ['sent','quiet','cooldown','unavailable','changed','invalid','disabled']){outcome=result;await ctx.deliverPageNotice('reminders',100+calls)}
+ assert.equal(db.notificationHistory.length,6);assert.equal(db.notificationHistory.filter(x=>x.status==='attempted').length,1);assert.equal(db.notificationHistory.filter(x=>x.status==='suppressed').length,2);assert.equal(db.notificationHistory.filter(x=>x.status==='unavailable').length,3);assert(db.notificationHistory.every(x=>x.kind==='pageReminder'&&/^[a-f0-9]{64}$/.test(x.id)));assert(!JSON.stringify(db).includes('uuid'));
+ outcome='sent';await ctx.deliverPageNotice('results',200);assert(db.notificationHistory.some(x=>x.kind==='pageResult'));const existing=structuredClone(db.notificationHistory);db.notificationHistoryConfig.enabled=false;await ctx.deliverPageNotice('results',201);assert.deepEqual(db.notificationHistory,existing);
+ db.notificationHistoryConfig.enabled=true;db.notificationHistory={invalid:true};await ctx.deliverPageNotice('results',202);assert.equal(calls,10);assert.deepEqual(db.notificationHistory,{invalid:true});assert.throws(()=>H.validate([{id:'a'.repeat(64),kind:'pageReminder',at:1,status:'complete'}]));assert.equal(H.pageEvent('reminders','disabled',1,()=>{throw Error('should not be called')}),null);
+ const dashboard=fs.readFileSync('extension/dashboard.js','utf8');assert.match(dashboard,/\['page','Website'\]/);assert.match(dashboard,/notificationHistoryLabel\(r\)/);assert.match(dashboard,/notificationHistoryStatus\(r\)/);assert.match(src,/deliverPageNotice\('reminders'/);assert.match(src,/deliverPageNotice\('results'/);
+ console.log('Website journal outcomes are opt-in, bounded and private; recording failure does not block delivery: OK');
+})().catch(e=>{console.error(e);process.exitCode=1});

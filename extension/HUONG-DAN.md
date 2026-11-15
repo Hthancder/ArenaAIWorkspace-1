@@ -172,7 +172,7 @@ Trong **Cài đặt & sao lưu → Nhắc sao lưu**, bật lời nhắc tùy ch
 Nút **Xem dung lượng** cho biết số byte Chrome báo của toàn bộ storage.local của extension tại thời điểm kiểm tra; không phải kích thước file xuất hay toàn bộ profile. Xem dung lượng không xóa dữ liệu.
 
 ### Nhật ký sự kiện thông báo (0.100)
-Trong **Cần chú ý → Nhật ký thông báo**, có thể bật ghi sự kiện tùy chọn, mặc định tắt. Nhật ký chỉ ghi lời nhắc preset đến hạn và kết quả đóng tự động mà Tabspace quan sát được sau khi bật; không lưu tên preset, URL hay ID nguồn nguyên văn. Lưu tối đa 200 mục và tự bỏ mục cũ nhất khi đầy. Có lọc loại, tìm kiếm, chọn và xóa nhiều; xóa nhật ký không bỏ lời nhắc, xóa báo cáo hoặc đổi trạng thái đã đọc. Tắt ghi không xóa mục cũ.
+Trong **Cần chú ý → Nhật ký thông báo**, có thể bật ghi sự kiện tùy chọn, mặc định tắt. Nhật ký ghi lời nhắc preset đến hạn, kết quả đóng tự động và một số kết quả xử lý thông báo website, lần thử thông báo hệ điều hành mà Tabspace quan sát được sau khi bật; không lưu tên preset, URL hay ID nguồn nguyên văn. Lưu tối đa 200 mục và tự bỏ mục cũ nhất khi đầy. Có lọc loại, tìm kiếm, chọn và xóa nhiều; xóa nhật ký không bỏ lời nhắc, xóa báo cáo hoặc đổi trạng thái đã đọc. Tắt ghi không xóa mục cũ.
 
 Đây **không phải lịch sử đầy đủ mọi kênh** và không xác nhận thông báo hệ điều hành, trang web hay âm thanh đã phát; có thể thiếu sự kiện nếu Chrome gián đoạn hoặc ghi lỗi. Không ghi bù sự kiện trước khi bật. Nhật ký và thiết lập lưu cục bộ, không xuất sao lưu.
 
@@ -196,3 +196,6 @@ Khi nhập, các mục cá nhân phải được chọn riêng để thay thiế
 
 ### Chọn và bỏ chọn theo phần đang thấy (0.105)
 Ở danh sách tab đang mở và các màn hình có chọn hàng loạt, dùng **Bỏ chọn tab/mục đang thấy** để chỉ bỏ những ô hiện diện sau tìm kiếm hoặc lọc; các mục đã chọn nhưng đang ẩn vẫn được giữ. **Bỏ chọn tất cả** xóa cả lựa chọn ẩn. Thanh lựa chọn cho biết số mục ẩn; hãy kiểm tra trước khi thao tác. Có thể dùng Tab và Enter để đến và kích hoạt các nút này. Nút Đặt lại trong bộ lọc tab đang mở đưa cả bộ lọc thời gian về mặc định, không xóa từ khóa tìm kiếm hay lựa chọn.
+
+### Nhật ký kênh thông báo (0.106)
+Khi đã bật nhật ký, Cần chú ý có thêm bộ lọc **Website** và **Hệ điều hành**. Website ghi kết quả xử lý: đã thử, bỏ qua vì giờ yên lặng/giới hạn tần suất, hoặc không khả dụng/không rõ. Hệ điều hành chỉ ghi khi thực sự thử gọi Chrome, không ghi từng lượt đang chờ quyền hay giờ yên lặng. “Đã thử hiển thị” không chứng minh người dùng nhìn thấy; Chrome, website hoặc hệ điều hành có thể chặn. Không ghi tên website, URL, nội dung hoặc ID nguồn nguyên văn; tối đa 200 sự kiện chung, cục bộ và không sao lưu. Chưa ghi lần phát âm, không ghi bù và có thể thiếu khi Chrome gián đoạn hoặc lưu lỗi. Không hạ về bản cũ nếu cần giữ khả năng đọc nhật ký mới.

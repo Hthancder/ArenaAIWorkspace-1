@@ -11,7 +11,7 @@ const AutoNotifications=(()=>{
   let granted;try{granted=await api.permissions.contains({permissions:['notifications']})}catch{return}if(!granted)return;
   // Consume before emitting: ambiguous Chrome results must not be replayed.
   await api.storage.local.set({autoCloseNoticePending:null});
-  try{await api.notifications.create('tabspace-auto-close',{type:'basic',iconUrl:api.runtime.getURL('reminder-icon.png'),title:'Tabspace',message:'Có kết quả dọn tự động. Mở Tabspace để kiểm tra.',silent:true})}catch{}
+  try{await api.notifications.create('tabspace-auto-close',{type:'basic',iconUrl:api.runtime.getURL('reminder-icon.png'),title:'Tabspace',message:'Có kết quả dọn tự động. Mở Tabspace để kiểm tra.',silent:true});return 'attempted'}catch{return 'unavailable'}
  }
  return {deliver};
 })();
