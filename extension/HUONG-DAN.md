@@ -170,3 +170,8 @@ Trong **Cài đặt & sao lưu → Mặc định khi mở**, chọn cửa sổ m
 Trong **Cài đặt & sao lưu → Nhắc sao lưu**, bật lời nhắc tùy chọn (mặc định tắt), chọn chu kỳ 1–365 ngày hoặc hoãn 1, 7, 30 ngày. Gợi ý xuất hiện trong trang quản lý khi mở hoặc làm mới, không gửi thông báo hệ điều hành và tôn trọng tạm dừng tự động hóa. Sau khi tự xuất, kiểm tra file và lưu ở nơi an toàn ngoài profile Chrome, có thể bấm **Tôi đã sao lưu** để đặt lại lịch; đây chỉ là xác nhận của bạn, Tabspace không thể kiểm tra file hoặc việc tải xuống. Bấm Xuất dữ liệu không tự xác nhận. Thiết lập và thời điểm xác nhận lưu cục bộ, không nằm trong sao lưu.
 
 Nút **Xem dung lượng** cho biết số byte Chrome báo của toàn bộ storage.local của extension tại thời điểm kiểm tra; không phải kích thước file xuất hay toàn bộ profile. Xem dung lượng không xóa dữ liệu.
+
+### Nhật ký sự kiện thông báo (0.100)
+Trong **Cần chú ý → Nhật ký thông báo**, có thể bật ghi sự kiện tùy chọn, mặc định tắt. Nhật ký chỉ ghi lời nhắc preset đến hạn và kết quả đóng tự động mà Tabspace quan sát được sau khi bật; không lưu tên preset, URL hay ID nguồn nguyên văn. Lưu tối đa 200 mục và tự bỏ mục cũ nhất khi đầy. Có lọc loại, tìm kiếm, chọn và xóa nhiều; xóa nhật ký không bỏ lời nhắc, xóa báo cáo hoặc đổi trạng thái đã đọc. Tắt ghi không xóa mục cũ.
+
+Đây **không phải lịch sử đầy đủ mọi kênh** và không xác nhận thông báo hệ điều hành, trang web hay âm thanh đã phát; có thể thiếu sự kiện nếu Chrome gián đoạn hoặc ghi lỗi. Không ghi bù sự kiện trước khi bật. Nhật ký và thiết lập lưu cục bộ, không xuất sao lưu.

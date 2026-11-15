@@ -353,3 +353,6 @@ Cho cấu hình cửa sổ mở bản lưu, bỏ URL đang mở/trùng cho bản
 
 ### Tiến độ 0.99 — nhắc sao lưu và dung lượng
 Nhắc sao lưu opt-in, mặc định tắt, chu kỳ 1–365 ngày và hoãn; hiển thị trong trang quản lý khi mở/làm mới và tôn trọng tạm dừng toàn cục. Người dùng tự xác nhận đã kiểm tra, lưu bản sao ngoài profile để đặt lịch mới; không coi thao tác xuất là đã sao lưu thành công. Xem kích thước storage.local do Chrome báo, không giả định đó là kích thước file sao lưu. Trạng thái nhắc chỉ lưu cục bộ, không xuất. Cần kiểm thử Chrome thực tế.
+
+### Tiến độ 0.100 — cụm nhật ký sự kiện thông báo
+Nhật ký cục bộ opt-in, mặc định tắt, cho lời nhắc preset mới và kết quả đóng tự động quan sát được, không ghi tên/URL hay ID nguồn nguyên văn, lưu tối đa 200 và tự bỏ mục cũ nhất. Trong Cần chú ý có lọc, tìm kiếm, xóa nhiều; không đổi trạng thái đã đọc hay nguồn. Ghi best-effort, không làm dừng tính năng chính khi lỗi, không chứng minh thông báo/âm đã phát và chưa là lịch sử mọi loại. Không sao lưu; cần kiểm thử Chrome thực tế.
