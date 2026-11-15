@@ -335,3 +335,6 @@ Bổ sung chế độ riêng opt-in, mặc định tắt, chọn thùng rác và
 
 ### Tiến độ 0.93 — âm lời nhắc
 Thêm lựa chọn âm riêng cho lời nhắc preset mới, mặc định tắt và tương thích thiết lập cũ. Chỉ thử phát khi trang quản lý đang mở, kiểm tra trạng thái đọc/lịch/tạm dừng và giờ yên lặng, khóa liên trang, giới hạn tần suất chung và ghi dấu trước khi phát. Lời nhắc đồng thời gộp một âm, không phát bù; Chrome có thể chặn. Chưa kiểm thử Chrome thực tế.
+
+### Tiến độ 0.94 — danh sách thông báo hiện tại
+Gộp lời nhắc preset đang chờ và kết quả đóng tự động theo thời gian; thêm lọc loại/chưa đọc và tìm kiếm kết quả. Giữ các thao tác và trạng thái đọc hiện có; đánh dấu tất cả gồm mục bị lọc ẩn, thao tác hoãn/bỏ nhiều vẫn dựa vào tìm kiếm và chọn trong hộp thoại. Các lượt dọn và tự động chưa hoàn tất vẫn riêng. Đây chưa phải lịch sử thông báo tổng quát, không lưu thêm sự kiện mới. Cần kiểm thử Chrome thực tế.
