@@ -1,0 +1,18 @@
+'use strict';
+// Optional portable preferences; automation remains off after import.
+const BackupOptions=(()=>{
+ function exportOptions(storage,options,tools){
+  const {preferences=false,sound=false,includeAudio=false}=options||{};if([preferences,sound,includeAudio].some(v=>typeof v!=='boolean')||includeAudio&&!sound)throw Error('Lựa chọn xuất không hợp lệ.');const result={};
+  if(preferences)result.opening={preferences:tools.open.validate(storage.openPreferences),warningLimit:tools.limit.validate(storage.openWarningLimit)};
+  if(sound){const config=tools.sound.validate(storage.soundConfig),omitted=!!config.custom&&!includeAudio;result.sound={config:includeAudio?config:{...config,choice:config.choice==='custom'?'soft':config.choice,custom:null},customOmitted:omitted}}
+  return result;
+ }
+ function opening(value,tools){if(!value||typeof value!=='object'||Array.isArray(value)||value.preferences===undefined||value.warningLimit===undefined)throw Error('Cài đặt mở trong file không hợp lệ.');return {openPreferences:tools.open.validate(value.preferences),openWarningLimit:tools.limit.validate(value.warningLimit)}}
+ async function sound(value,tools,Context=globalThis.AudioContext,decode64=globalThis.atob){
+  if(!value||typeof value!=='object'||Array.isArray(value)||typeof value.customOmitted!=='boolean'||!value.config)throw Error('Cài đặt âm trong file không hợp lệ.');const input=value.customOmitted&&value.config.choice==='custom'&&value.config.custom==null?{...value.config,choice:'soft',custom:null}:value.config;let c=tools.sound.validate(input);if(value.customOmitted&&c.custom)throw Error('Thông tin âm tùy chỉnh không nhất quán.');
+  if(c.custom){if(typeof Context!=='function'||typeof decode64!=='function')throw Error('Không thể kiểm tra file âm trong Chrome; chưa nhập.');let binary;try{binary=decode64(c.custom.dataUrl.slice(c.custom.dataUrl.indexOf(',')+1))}catch{throw Error('File âm trong bản sao lưu không hợp lệ.')}if(!binary.length||binary.length>tools.sound.maxBytes)throw Error('File âm trong bản sao lưu quá lớn hoặc rỗng.');const bytes=Uint8Array.from(binary,x=>x.charCodeAt(0));let context,decoded;try{context=new Context();decoded=await context.decodeAudioData(bytes.buffer.slice(0))}catch{throw Error('Chrome không giải mã được file âm trong bản sao lưu.')}finally{try{await context?.close()}catch{}}if(!Number.isFinite(decoded?.duration)||decoded.duration<=0||decoded.duration>tools.sound.maxSeconds)throw Error('Âm trong bản sao lưu phải dài tối đa 5 giây.');c={...c,custom:{...c.custom,duration:decoded.duration}}}
+  return {soundConfig:{...c,enabled:false}};
+ }
+ return {exportOptions,opening,sound};
+})();
+if(typeof module!=='undefined')module.exports=BackupOptions;

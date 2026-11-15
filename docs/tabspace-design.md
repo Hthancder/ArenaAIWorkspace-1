@@ -365,3 +365,6 @@ Thêm checkbox và Ctrl+Space cho tab web đang mở hoặc nhóm/tab đã lưu,
 
 ### Tiến độ 0.103 — lọc tuổi và tên miền
 Tab đang mở có lọc theo lastAccessed Chrome, coi thiếu/tương lai là không rõ; bộ lọc động tab lưu bổ sung tên miền chính xác/bao gồm tên miền con và tuổi bản lưu tối thiểu/tối đa, kết hợp AND với từ khóa/tag. Khoảng thời gian tính 24 giờ, không suy ra mức độ an toàn hoặc lần truy cập từ ngày lưu. Bộ lọc mới có trong sao lưu; phiên bản cũ có thể bỏ qua điều kiện mới. Cần kiểm thử Chrome thực tế.
+
+### Tiến độ 0.104 — sao lưu cá nhân tùy chọn
+Bổ sung tùy chọn xuất mặc định mở chung, ngưỡng cảnh báo và thiết lập âm; file âm tùy chỉnh chọn riêng, mặc định không xuất. Có xem trước/lựa chọn áp dụng khi nhập, kiểm tra cấu hình hiện tại chưa thay đổi, giải mã và kiểm tra âm nhập trước khi ghi; âm luôn tắt sau nhập. Nếu không có file âm tùy chỉnh vì được bỏ khỏi bản xuất thì dùng âm mặc định. Không bao gồm ghi đè theo đối tượng hay tự động hóa, giới hạn nhập 10 MB; cần kiểm thử Chrome thực tế.
