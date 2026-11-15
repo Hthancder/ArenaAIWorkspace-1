@@ -31,6 +31,18 @@ Mỗi quyết định 1 dòng, mới nhất trước. Tham chiếu tài liệu: 
 - Metronome theo tempo map của bài; handle A–B trên timeline (nút A/B ✅ có).
 - SoundFont / đa timbre (research 09 P1); export video test tay; PWA/CSP (M6).
 
+## Hands motion DB — tự host (fix 2026-11-15)
+
+- Bug user báo: **"không tải được chuyển động tay"** — `hands/motion.ts` vẫn tải
+  `motion.82cbd97028.bin` (~22 MB) từ `samples.notefall.app` (vi phạm rule 41
+  "không dùng CDN", + bucket CORS chỉ cho phép notefall.app → fetch từ
+  domain khác luôn fail).
+- Fix: DB_URL → `/hands/${DB_FILE}` (self-host, `VITE_HANDS_DB_URL` override);
+  file vendored vào `app/public/hands/` qua **GitHub Actions** (`.github/workflows/
+  fetch-hands-db.yml` — runner GitHub với tới CDN, sandbox thì không; trigger
+  `push` theo path filter + `workflow_dispatch`); vercel.json + immutable cache
+  `/hands/`; xoá proxy `/samples-cdn` vô dụng trong vite.config.
+
 ## M5 — Practice engine (Wait Mode + chấm điểm + Calibration + Loop A–B), 2026-11-15
 
 - **Hai chế độ** theo research 16.4.2: `wait` (dừng chờ đúng nốt — 16.3.1, steps =

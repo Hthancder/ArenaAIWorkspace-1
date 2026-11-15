@@ -25,11 +25,15 @@ This app is a fork of **NoteFall** by ekkx — https://github.com/ekkx/notefall
 - To use the samples elsewhere, credit: *“Salamander Grand Piano V3 by
   Alexander Holm (CC BY 3.0)”*.
 
-## Hand models (if you enable Hands)
+## Hand models & motion data (if you enable Hands)
 
-Virtual hand meshes/motion in `src/hands/` are CC0 per upstream NoteFall.
-The motion data download (fetched on first enable) comes from the upstream
-project's CDN and is only available while that endpoint is reachable.
+Virtual hand meshes (`public/hand-models/godot/`, Godot XR Tools hand models
+by Miodrag Sejic, CC0) and the runtime in `src/hands/runtime/` come from
+upstream NoteFall (PolyForm Shield, covered by the notice above). The
+hand-motion database (`public/hands/motion.82cbd97028.bin`, ~22 MB, generated
+by the upstream project, Copyright (c) 2026 ekkx) is **vendored into this
+repo** by `.github/workflows/fetch-hands-db.yml` and served self-hosted —
+we do not depend on `samples.notefall.app` at runtime.
 
 ## UI strings
 

@@ -10,12 +10,18 @@ import wasmUrl from './runtime/hands.wasm?url'
 
 export type { HandsMotion }
 
-/** The motion data on the sample CDN under a content-hashed name (immutable). `VITE_HANDS_DB_URL` overrides; `npm run dev`
- *  goes through Vite's `/samples-cdn` proxy (the bucket's CORS allows only notefall.app, see audio/sampler.ts). */
+/**
+ * The motion data under a content-hashed name (immutable). Self-hosted
+ * in `public/hands/` — the upstream `samples.notefall.app` CDN is off
+ * limits (its bucket CORS only allows notefall.app itself, and the
+ * project rule is no CDN dependency; the file is vendored into the repo
+ * by `.github/workflows/fetch-hands-db.yml`). `VITE_HANDS_DB_URL`
+ * overrides for experiments.
+ */
 const DB_FILE = 'motion.82cbd97028.bin'
 const DB_URL =
   (import.meta.env.VITE_HANDS_DB_URL as string | undefined) ??
-  (import.meta.env.DEV ? `/samples-cdn/hands/${DB_FILE}` : `https://samples.notefall.app/hands/${DB_FILE}`)
+  `${import.meta.env.BASE_URL}hands/${DB_FILE}`
 
 /** How the app places the song on the timeline (the same inputs FallingNotes uses). */
 export type HandsTimeMap = {

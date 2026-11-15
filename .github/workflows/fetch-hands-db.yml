@@ -1,0 +1,48 @@
+# Fetch the hand-motion database (the last artifact still living on the
+# upstream `samples.notefall.app` CDN) and vendor it into the repo at
+# `app/public/hands/`. The sandbox this project is developed in cannot
+# reach the CDN, but a GitHub-hosted runner can; committing the file
+# keeps deploys self-contained (same convention as the Salamander set).
+#
+# Trigger: pushing a change to THIS file (path filter below), or manually
+# via workflow_dispatch / Re-run. The bot's commit touches only the .bin,
+# so the path filter prevents re-trigger loops.
+
+name: fetch-hands-db
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/fetch-hands-db.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Download motion DB from upstream CDN
+        run: |
+          mkdir -p app/public/hands
+          curl -fL --retry 3 --retry-delay 2 \
+            -o app/public/hands/motion.82cbd97028.bin \
+            https://samples.notefall.app/hands/motion.82cbd97028.bin
+          size=$(stat -c%s app/public/hands/motion.82cbd97028.bin)
+          echo "downloaded bytes: $size"
+          # The DB is documented as ~22 MB; refuse to commit junk.
+          test "$size" -gt 20000000
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/public/hands/motion.82cbd97028.bin
+          git commit -m "chore: vendor hands motion DB (22MB) — self-host, drop samples.notefall.app" || exit 0
+          git pull --rebase origin "${GITHUB_REF_NAME}" || true
+          git push origin "HEAD:${GITHUB_REF_NAME}"

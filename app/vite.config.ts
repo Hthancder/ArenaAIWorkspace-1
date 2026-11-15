@@ -32,17 +32,5 @@ export default defineConfig({
     // The Arena preview proxies the app under https://<port>-<sandbox>.e2b.app,
     // so the dev server must accept that Host header (Vite 5.4 host check).
     allowedHosts: true,
-    // Dev-only proxy to the sample CDN. The R2 bucket's CORS allow-list
-    // is locked to https://notefall.app, so a direct fetch from
-    // http://localhost:* is blocked. Routing through the dev server
-    // makes the request same-origin from the browser's perspective.
-    // Production builds go to the CDN directly (no proxy involved).
-    proxy: {
-      '/samples-cdn': {
-        target: 'https://samples.notefall.app',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/samples-cdn/, ''),
-      },
-    },
   },
 })
