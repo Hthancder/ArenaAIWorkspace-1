@@ -119,6 +119,15 @@ const ROLL_TAU_OUT = 0.5
 /** Register posture (synth hands): a touch higher toward the treble. */
 const POSTURE_Z = 0.02
 /** Rolled chords: fingers of a near-simultaneous chord strike staggered. */
+/** Idle fingers fan away from the playing ones (relaxed hand, never cramped). */
+const RELAX_FAN = 0.09
+/** Max hand travel speed (units/s) — drift glides, never snaps ("giật"). */
+const DRIFT_RATE = 10
+/** A far hand must not steal a key the near hand can take ("không tranh"). */
+const CROSS_PENALTY = 2.2
+/** The plan keeps its hand unless the other is this much nearer (slack). */
+const PLAN_HAND_SLACK = 2.0
+
 const CHORD_STAGGER = 0.02
 const CHORD_WINDOW = 0.06
 /** Model-press expression dip (playing case) smoothing. */
@@ -287,7 +296,10 @@ class LiveHandsOverlay {
     const unsub = audioEngine.addLiveListener((e) => {
       if (e.type === 'noteOn') {
         this.held.set(e.midi, (this.held.get(e.midi) ?? 0) + 1)
-        this.heldVel.set(e.midi, e.velocity)
+        // One corrupt velocity (bad mapping, odd pointer event) must never
+        // poison the overlay: a NaN would freeze that finger and collapse
+        // the mesh for the rest of the session ("co rúm", "không bấm").
+        this.heldVel.set(e.midi, Number.isFinite(e.velocity) ? clamp(e.velocity, 0, 1) : 0.75)
       } else if (e.type === 'noteOff') {
         const n = (this.held.get(e.midi) ?? 1) - 1
         if (n <= 0) {
@@ -381,6 +393,20 @@ class LiveHandsOverlay {
       let keyN = 0
       for (let f = 0; f < 5; f++) {
         const s = st.slots[f]
+        // Self-heal: one non-finite value must never freeze this finger for
+        // the session — smoothing propagates NaN forever otherwise.
+        if (!Number.isFinite(s.swing)) s.swing = 0
+        if (!Number.isFinite(s.abduct)) s.abduct = 0
+        if (!Number.isFinite(s.dip)) s.dip = 0
+        if (!Number.isFinite(s.tap)) s.tap = 0
+        if (!Number.isFinite(s.strikeT)) s.strikeT = 2
+        if (!Number.isFinite(s.vel)) s.vel = 0.75
+        if (!Number.isFinite(s.peckDelay)) s.peckDelay = 0
+        if (!Number.isFinite(s.keyX)) {
+          s.keyX = 0
+          s.midi = null
+          s.held = false
+        }
         s.strikeT = Math.min(2, s.strikeT + dt)
         const held = s.held ? 1 : 0
         s.tap += (held - s.tap) * (1 - Math.exp(-dt / (s.held ? TAU_PRESS : TAU_RELEASE)))
@@ -407,12 +433,13 @@ class LiveHandsOverlay {
         }
         // Expression dip: during playback the song's own presses sink a
         // little deeper on loud notes ("bấm mạnh nốt cảm xúc").
-        const mvel = express > 0 && opts.expressAt ? opts.expressAt(hand, f) : null
+        const rawVel = express > 0 && opts.expressAt ? opts.expressAt(hand, f) : null
+        const mvel = rawVel !== null && Number.isFinite(rawVel) ? clamp(rawVel, 0, 1) : null
         const dipTarget =
           pose.press[f] > 0.5 && mvel !== null ? -express * clamp((mvel - 0.5) * 0.24, 0, 0.11) : 0
         s.dip += (dipTarget - s.dip) * (1 - Math.exp(-dt / (dipTarget < s.dip ? DIP_TAU_IN : DIP_TAU_OUT)))
         target += s.dip
-        target = clamp(target, SWING_MIN, SWING_MAX)
+        target = Number.isFinite(target) ? clamp(target, SWING_MIN, SWING_MAX) : 0
         const tau = pecking || target < s.swing ? TAU_PRESS : TAU_RELEASE
         s.swing += (target - s.swing) * (1 - Math.exp(-dt / tau))
 
@@ -421,7 +448,19 @@ class LiveHandsOverlay {
         let abTarget = 0
         if (s.midi !== null && (s.held || s.tap > 0.1)) {
           const resid = s.keyX - (pose.fingers[f][3][0] + st.drift)
-          abTarget = clamp(resid * 0.6, -ABDUCT_MAX, ABDUCT_MAX)
+          abTarget = Number.isFinite(resid) ? clamp(resid * 0.6, -ABDUCT_MAX, ABDUCT_MAX) : 0
+        } else if (s.midi === null && s.tap < 0.05) {
+          // Idle fingers open up a little while the others work, so the
+          // playing finger is never cramped ("quặp vào trong"): they fan
+          // apart — the thumb opens outward — within human range.
+          let busy = 0
+          for (let i = 0; i < 5; i++) {
+            if (i !== f) busy = Math.max(busy, st.slots[i].tap)
+          }
+          if (busy > 0.3) {
+            const fanDir = st.hand === 'R' ? -Math.sign(f - 2) : Math.sign(f - 2)
+            abTarget = RELAX_FAN * fanDir * Math.min(1, (busy - 0.3) / 0.4)
+          }
         }
         s.abduct += (abTarget - s.abduct) * (1 - Math.exp(-dt / TAU_ABDUCT))
 
@@ -437,7 +476,7 @@ class LiveHandsOverlay {
           keyN += 1
         }
 
-        if (s.midi !== null && s.held) {
+        if (s.midi !== null && s.held && Number.isFinite(s.keyX) && Number.isFinite(pose.fingers[f][3][0])) {
           // Drift: bring the ASSIGNED FINGERS' tips toward their keys —
           // rigid, so a single press lands exactly, chords compromise at
           // the centroid. The pose is fresh each frame (no drift baked
@@ -445,24 +484,29 @@ class LiveHandsOverlay {
           cx += s.keyX - pose.fingers[f][3][0]
           cw += 1
         }
-        if (s.midi !== null) {
+        if (s.midi !== null && Number.isFinite(s.keyX) && Number.isFinite(pose.fingers[f][3][0])) {
           tx += s.keyX - pose.fingers[f][3][0]
           tw += 1
         }
       }
       // On-stage hands only drift within reach; a travelling synthesised
       // hand goes all the way to its keys (it entered for exactly that).
-      const raw = cw > 0 ? cx / cw : tw > 0 ? tx / tw : 0
-      const driftTarget = onStage ? clamp(raw, -REACH_X, REACH_X) : raw
+      const rawDrift = cw > 0 ? cx / cw : tw > 0 ? tx / tw : 0
+      const driftTarget = Number.isFinite(rawDrift) ? (onStage ? clamp(rawDrift, -REACH_X, REACH_X) : rawDrift) : 0
       const tauD = onStage ? TAU_DRIFT : TAU_DRIFT_TRAVEL
-      st.drift += (driftTarget - st.drift) * (1 - Math.exp(-dt / tauD))
+      if (!Number.isFinite(st.drift)) st.drift = 0
+      const driftStep = (driftTarget - st.drift) * (1 - Math.exp(-dt / tauD))
+      // Rate limit: hand travel glides — never a snap ("giật").
+      st.drift += clamp(driftStep, -DRIFT_RATE * dt, DRIFT_RATE * dt)
 
       // Accent roll smoothing (recovers slowly when the accents pass).
-      const rollTarget = clamp(rollAcc, -ACCENT_ROLL_MAX, ACCENT_ROLL_MAX)
+      if (!Number.isFinite(st.roll)) st.roll = 0
+      const rollTarget = Number.isFinite(rollAcc) ? clamp(rollAcc, -ACCENT_ROLL_MAX, ACCENT_ROLL_MAX) : 0
       st.roll += (rollTarget - st.roll) * (1 - Math.exp(-dt / (Math.abs(rollTarget) > Math.abs(st.roll) ? ROLL_TAU_IN : ROLL_TAU_OUT)))
 
       // Register posture (synth hands only — the model hands already
       // carry their own): treble a touch higher, bass a touch heavier.
+      if (!Number.isFinite(st.posture)) st.posture = 0
       const postureTarget = st.synth ? express * POSTURE_Z * Math.tanh(keyN ? keySum / keyN / 2.4 : 0) : 0
       st.posture += (postureTarget - st.posture) * (1 - Math.exp(-dt / 0.35))
 
@@ -539,7 +583,7 @@ class LiveHandsOverlay {
   /** Every key-down: peck reset + velocity capture + rolled-chord stagger. */
   private onKeyDown(st: HandState, s: Slot, vel: number, nowSec: number, express: number): void {
     s.strikeT = 0
-    s.vel = vel
+    s.vel = Number.isFinite(vel) ? clamp(vel, 0, 1) : 0.75
     if (nowSec - st.lastKeyT < CHORD_WINDOW) st.chordIdx++
     else st.chordIdx = 0
     st.lastKeyT = nowSec
@@ -587,21 +631,47 @@ class LiveHandsOverlay {
     nowSec: number,
     express: number,
   ): void {
-    // 1) The song's own fingering, when this key is a note near the playhead.
+    // Where each hand actually is (its wrist + accumulated drift). Used
+    // to keep each key on the NEAR hand — the far hand must not reach
+    // over ("tay phải tranh xử lý nốt gần tay trái") and leave its own
+    // keys unplayed.
+    const palmOf = (hand: 'L' | 'R'): number => {
+      const st = this[hand]
+      const src0 = poses[hand] ?? st.synth
+      // st.buf is a working copy at the origin until used — never trust it
+      // for proximity; fall back to the hand's stand anchor instead.
+      const src = src0 && src0 !== st.buf ? src0 : null
+      return (src ? src.wrist[0] : hand === 'L' ? -1.5 : 1.5) + st.drift
+    }
+    const dL = Math.abs(palmOf('L') - w.keyX)
+    const dR = Math.abs(palmOf('R') - w.keyX)
+    const nearer: 'L' | 'R' = dL <= dR ? 'L' : 'R'
+
+    // 1) The song's own fingering, when this key is a note near the
+    //    playhead — unless that hand is clearly farther from the key
+    //    than the other one (which is free to take it).
     const plan = opts.resolvePlan ? opts.resolvePlan(w.midi) : null
     if (plan && plan.finger >= 0 && plan.finger < 5) {
-      const st = this[plan.hand]
-      const s = st.slots[plan.finger]
-      s.midi = w.midi
-      s.keyX = w.keyX
-      s.held = true
-      this.onKeyDown(st, s, w.vel, nowSec, express)
-      // The planned finger takes over: free fading neighbours early so a
-      // fingering change reads as a clean hand-off, not two stuck fingers.
-      for (const o of st.slots) {
-        if (o !== s && o.midi !== null && !o.held && Math.abs(o.keyX - w.keyX) < 1.4) o.freeAt = 0
+      const other = plan.hand === 'L' ? 'R' : 'L'
+      const dPlan = Math.abs(palmOf(plan.hand) - w.keyX)
+      const dOther = Math.abs(palmOf(other) - w.keyX)
+      const otherFree = this[other].slots.some((o) => o.midi === null)
+      if (dPlan <= dOther + PLAN_HAND_SLACK || !otherFree) {
+        const st = this[plan.hand]
+        const s = st.slots[plan.finger]
+        s.midi = w.midi
+        s.keyX = w.keyX
+        s.held = true
+        this.onKeyDown(st, s, w.vel, nowSec, express)
+        // The planned finger takes over: free fading neighbours early so a
+        // fingering change reads as a clean hand-off, not two stuck fingers.
+        for (const o of st.slots) {
+          if (o !== s && o.midi !== null && !o.held && Math.abs(o.keyX - w.keyX) < 1.4) o.freeAt = 0
+        }
+        return
       }
-      return
+      // The plan's hand is clearly farther — fall through to the reach
+      // claim so the nearer hand takes it instead.
     }
 
     // 2) Reach-based: the finger whose TIP is naturally closest to the
@@ -619,6 +689,9 @@ class LiveHandsOverlay {
         const s = st.slots[f]
         const tipX = src ? src.fingers[f][3][0] : side * 1.5
         let cost = onStage ? Math.abs(tipX - w.keyX) : 1.6 + Math.abs(w.keyX - side * 2.2) * 0.35
+        // The near hand owns its keys: the far hand only steps in when the
+        // near one is genuinely busy ("không tranh, không giật").
+        if (hand !== nearer) cost += CROSS_PENALTY
         if (s.midi === w.midi) cost -= 0.7 // repeats keep their finger
         else if (s.midi !== null && !s.held && Math.abs(s.keyX - w.keyX) < 1.4) cost -= 0.45 // stepwise continuity
         if (f === 0) cost += 0.12 // keep the thumb in reserve a little

@@ -215,14 +215,16 @@ export function Hands() {
         expressAt: (hand, finger) => {
           const rm = motionRef.current
           if (!rm) return null
+          const plan = rm.motion.plan
           let best: number | null = null
           for (let i = 0; i < rm.notes.length; i++) {
             const n = rm.notes[i]
             if (t < n.on - 0.08 || t > n.off + 0.05) continue
-            const h = rm.motion.plan.hand[i] ?? n.hand
-            const fg = rm.motion.plan.finger[i] ?? n.finger
+            const h = (plan ? plan.hand[i] : null) ?? n.hand
+            const fg = plan ? plan.finger[i] ?? n.finger : n.finger
             if (h !== hand || fg !== finger + 1) continue
-            best = best === null ? n.velocity : Math.max(best, n.velocity)
+            const v = Number.isFinite(n.velocity) ? n.velocity : 0.75
+            best = best === null ? v : Math.max(best, v)
           }
           return best
         },
@@ -278,7 +280,28 @@ export function Hands() {
     } catch (err) {
       console.warn('[hands] pose pass failed — falling back to raw poses', err)
       resetBlurFrame()
-      mesh.update(src(t), false)
+      // The live overlay must SURVIVE any failure above it: raw poses
+      // without live transforms freeze the manual-play fingers ("không
+      // bấm, không di chuyển") — keep the hands alive with a minimal opts.
+      try {
+        const raw = src(t)
+        if (s.handsFollowInput) {
+          liveHands.update(raw, {
+            playing: audioEngine.isPlaying(),
+            keystrike: s.handsKeystrike,
+            expression: s.handsExpression,
+            sampleHand: (hand) => neutralHandPose(hand),
+          })
+        }
+        mesh.update(raw, false)
+      } catch (err2) {
+        console.warn('[hands] fallback failed too', err2)
+        try {
+          mesh.update(src(t), false)
+        } catch {
+          /* the mesh itself is broken — nothing more to do this frame */
+        }
+      }
     }
   })
 

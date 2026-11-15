@@ -270,3 +270,42 @@ playing, despite green unit tests:
 - Test mới (42 checks total): velocity depth (hard < soft −0.02 z),
   accent roll (palm hướng đổi, lengths giữ), rolled chord stagger,
   playback dip, expression-off = hành vi cũ (34 test cũ còn xanh).
+
+## 2026-11-15 — hands v3.3: nguyên nhân gốc "ngón không bấm" + 4 lỗi người chơi báo
+
+- Người chơi báo 4 vấn đề: (1) hai tay TRANH nốt (tay phải giành nốt gần tay
+  trái → nốt của chính nó trễ → giật); (2) tay giật/co rúm; (3) ngón rảnh
+  quặp vào trong, cần cách ra; (4) **đánh thủ công ngón KHÔNG BẤM, KHÔNG DI
+  CHUYỂN — "tìm nguyên nhân gốc vì mấy lần rồi chưa fix được"**.
+- **Nguyên nhân gốc của (4)+(2) — tìm bằng repro chạy CHUỖI THẬT của app
+  (humanize + pose trung lập + opts đúng Hands.tsx), scripts/test-livebrowser.ts:
+  MỘT GIÁ TRỊ VELOCITY KHÔNG HỮU HẠN (NaN) đầu vào (mapping MIDI/pointer
+  lỗi, persisted setting hỏng) lan qua `press/swing` và **ở lại vĩnh viễn**
+  trong smoothing (`s.swing += (target − s.swing)·…` với s.swing=NaN không
+  bao giờ hồi) → khớp biến NaN → mesh "co rúm", ngón đứng im đến khi tải lại
+  trang. Các lần "fix" trước sửa biên độ/drift nên không chạm nguyên nhân này.
+  Repro bắt được chính xác: triggerKey(60, NaN) → poses NaN vĩnh viễn.
+- **Fix gốc (phòng thủ nhiều lớp)**: (a) guard velocity tại ingest
+  (addLiveListener + onKeyDown: không hữu hạn → 0.75, clamp 0..1); (b) tự
+  phục hồi mọi trạng thái slot/state mỗi frame (swing/abduct/dip/tap/vel/
+  strikeT/keyX/drift/roll/posture); (c) guard resid/target/mvel không hữu
+  hạn; (d) `expressAt` trong Hands.tsx guard plan + velocity; (e) **fallback
+  của try/catch trong useFrame giờ VẪN chạy liveHands overlay trên pose gốc**
+  — một lỗi lạ không bao giờ đóng băng ngón tay nữa.
+- **(1) Không tranh — tay gần nhất xử lý**: `claim()` tính `palmOf(hand)` =
+  wrist + drift (fallback anchor ±1.5 khi chưa có pose thật), tay XA hơn bị
+  phạt CROSS_PENALTY 2.2; plan bị veto khi tay kia gần hơn > PLAN_HAND_SLACK
+  2.0 VÀ còn ngón trống (kế hoạch fingering vượt tay chỉ khi thực cần).
+  Tránh cascade "tay phải lấn sang nửa trái rồi bỏ quên nốt phải".
+- **(2) Không giật**: drift bị giới hạn tốc độ DRIFT_RATE 10 units/s (glide,
+  không snap) + các guard NaN ở trên (co rúm = triệu chứng NaN).
+- **(3) Ngón rảnh mở ra**: ngón không giữ nốt, khi ngón khác đang bấm
+  (tap > 0.3) sẽ FAN ra ngoài RELAX_FAN 0.09 rad (≤ ABDUCT_MAX 0.14 — "trong
+  biên độ hợp lý"): ngón cái mở ra ngoài, các ngón tản theo hướng giải phẫu
+  (R: −sign(f−2), L: +sign(f−2)), tỉ lệ theo mức bấm, mượt τ 0.08.
+- **(4) Bấm thấy rõ**: đo trên hình học THẬT (pose trung lập + humanize):
+  swing travel 0.168 units (~1.7 cm) mỗi nhát, lặp nào cũng peck đủ biên —
+  vấn đề không phải biên độ mà là NaN; test mới chốt chặn mọi đường về lại.
+- Test mới `scripts/test-livebrowser.ts` (17 checks — chuỗi trình duyệt thật):
+  press travel, repeats, free play, NaN tự phục hồi, hợp âm, không tranh,
+  relax fan, chia tay theo vùng, drift rate-limit. Suite cũ (34+18+M5) xanh.
