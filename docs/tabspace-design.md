@@ -359,3 +359,6 @@ Nhật ký cục bộ opt-in, mặc định tắt, cho lời nhắc preset mới
 
 ### Tiến độ 0.101 — kế thừa mặc định mở nhóm/workspace
 Bổ sung kế thừa từng lựa chọn nơi mở, bỏ URL đang mở và bỏ trùng lượt từ thiết lập mở chung, có ghi đè riêng theo nhóm hoặc workspace, hiển thị nguồn và cho đổi từng lượt. Chỉ áp dụng nút mở tương ứng, không áp dụng chuyển workspace, mở nhiều đối tượng, phiên hay lịch sử. Thiết lập cục bộ không sao lưu, giữ khi vào thùng rác, có xóa toàn bộ và giới hạn 1.000 đối tượng. Đây mới là một phần của mô hình kế thừa toàn bộ tính năng; cần kiểm thử Chrome thực tế.
+
+### Tiến độ 0.102 — chọn nhiều trong bảng lệnh
+Thêm checkbox và Ctrl+Space cho tab web đang mở hoặc nhóm/tab đã lưu, giữ lựa chọn khi tìm kiếm, tối đa 100, không trộn hai loại. Chuyển lựa chọn sang màn hình tương ứng sau khi đọc lại dữ liệu, xác thực ID/URL/cửa sổ, bỏ mục thay đổi và xác nhận thay lựa chọn cũ. Không mở/đóng ở bước chọn; các thao tác sau vẫn theo xem trước và bảo vệ. Lựa chọn mất khi đóng bảng; cần kiểm thử bàn phím, focus và trình đọc màn hình thực tế trên Chrome.

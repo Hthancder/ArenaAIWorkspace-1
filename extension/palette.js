@@ -19,6 +19,14 @@ const PaletteTools=(()=>{
   add('tags',tags,t=>({type:'tag',name:t.name,label:'#'+t.name,detail:'Tìm theo tag'}));
   return {items,truncated};
  }
- return {find};
+ function selectionKind(item){if(item?.type==='tab'&&Number.isInteger(item.id)&&Number.isInteger(item.windowId)&&typeof item.url==='string'&&/^https?:\/\//i.test(item.url))return 'open';if(item?.type==='item'&&typeof item.id==='string'&&item.id&&typeof item.groupId==='string'&&item.groupId&&typeof item.url==='string'&&/^https?:\/\//i.test(item.url))return 'saved';if(item?.type==='group'&&typeof item.id==='string'&&item.id&&item.id!=='inbox')return 'saved';return null}
+ function selectionKey(item){return selectionKind(item)?JSON.stringify([item.type,item.id]):null}
+ function revalidateSelection(items,state){
+  if(!Array.isArray(items)||items.length>100||!Array.isArray(state.tabs)||!Array.isArray(state.groups))throw Error('Không đọc được dữ liệu để kiểm tra lựa chọn.');const kind=selectionKind(items[0]);if(!kind||items.some(x=>selectionKind(x)!==kind)||new Set(items.map(selectionKey)).size!==items.length)throw Error('Lựa chọn không hợp lệ.');const valid=[];
+  const tabs=new Map(),groups=new Map(),saved=new Map();function add(map,key,value){if(map.has(key))map.set(key,null);else map.set(key,value)}for(const tab of state.tabs)if(tab&&Number.isInteger(tab.id))add(tabs,tab.id,tab);for(const group of state.groups){if(!group||typeof group.id!=='string')continue;add(groups,group.id,group);if(Array.isArray(group.items))for(const entry of group.items)if(entry&&typeof entry.id==='string')add(saved,entry.id,{group,entry})}
+  for(const item of items){if(item.type==='tab'){const tab=tabs.get(item.id);if(tab&&tab.incognito===false&&tab.windowId===item.windowId&&tab.url===item.url&&(!tab.pendingUrl||tab.pendingUrl===item.url))valid.push(item.id)}else if(item.type==='group'){if(groups.get(item.id))valid.push(['group',item.id])}else{const hit=saved.get(item.id);if(hit&&groups.get(item.groupId)===hit.group&&hit.group.id===item.groupId&&hit.entry.url===item.url)valid.push(['item',item.id])}}
+  return {kind,valid,skipped:items.length-valid.length};
+ }
+ return {find,selectionKind,selectionKey,revalidateSelection};
 })();
 if(typeof module!=='undefined')module.exports=PaletteTools;
