@@ -3,6 +3,10 @@
 const SnapshotTools = (() => {
   const isWebUrl = url => typeof url === 'string' && /^https?:\/\//i.test(url);
   const colors = new Set(['grey','blue','red','yellow','green','pink','purple','cyan','orange']);
+  function sameCaptureTab(before,after){
+    return !!before&&!!after&&Number.isSafeInteger(before.id)&&before.id>=0&&before.id===after.id&&before.incognito===false&&after.incognito===false&&before.windowId===after.windowId&&isWebUrl(before.url)&&before.url===after.url&&(!before.pendingUrl||before.pendingUrl===before.url)&&(!after.pendingUrl||after.pendingUrl===after.url)&&!!before.pinned===!!after.pinned&&(before.groupId??-1)===(after.groupId??-1)&&before.index===after.index;
+  }
+  function groupSignature(group){if(!group||!Number.isInteger(group.id)||!Number.isInteger(group.windowId)||!colors.has(group.color)||typeof group.collapsed!=='boolean'||(group.title!==undefined&&typeof group.title!=='string'))return null;return JSON.stringify([group.id,group.windowId,group.title||'',group.color,group.collapsed])}
   function capture(tabs, name, now, makeId, chromeGroups=[]) {
     const byWindow = new Map(),groupMap=new Map(chromeGroups.map(g=>[g.id,g]));let skipped=0,missingGroups=0;
     for (const tab of tabs) {
@@ -59,6 +63,6 @@ const SnapshotTools = (() => {
     return result;
   }
 
-  return {capture,validate,restore};
+  return {capture,validate,restore,sameCaptureTab,groupSignature};
 })();
 if (typeof module !== 'undefined') module.exports = SnapshotTools;
