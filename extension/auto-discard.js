@@ -2,7 +2,7 @@
 // Resource numbers only pick candidates. Without a real per-tab measurement the feature must stay silent,
 // so every unreadable, stale or changed sample degrades to "unknown" instead of an estimate.
 const AutoDiscard=(()=>{
- const prefix='tabspace:metrics:',settingKey='autoDiscardConfig',runKey='autoDiscardRun',maxSeries=10;
+ const prefix='tabspace:metrics:',settingKey='autoDiscardConfig',runKey='autoDiscardRun',maxSeries=10,maxTrail=20;
  const notMeasurable='Không đo được tài nguyên trên Chrome này';
  const modes=Object.freeze(['suggest','ask','auto']),combines=Object.freeze(['any','all']);
  // `fast` resources need several consecutive cycles; `estimated` ones can never trigger an automatic run.
@@ -197,7 +197,10 @@ async function run(api,now,deps={},options={}){
   // The stored count answers "how many tabs are over the threshold", so it is counted in suggestion mode:
   // policy gates such as the grace window belong to a run, and the run re-checks them anyway.
   const result=plan(normal,records,{...config,mode:'suggest'},now,{protected:kept,note});
-  const summary={at:now,overCount:result.candidates.length,blockedCount:result.rows.length-result.candidates.length,measurable:true,ids:result.chosen.map(r=>r.id),...(missed?{missed:true}:{})};
+  // 15.4 asks for a trail per candidate: which tab, which number crossed, when it was read, where it came from.
+  // Only ids and numbers are stored; a URL or a title would outlive the reason it describes.
+  const trail=result.chosen.slice(0,maxTrail).map(r=>({id:r.id,windowId:r.tab.windowId,processId:r.processId,sharedTabs:r.sharedTabs,at:r.at,values:r.values,triggered:r.triggered,source:r.source}));
+  const summary={at:now,overCount:result.candidates.length,blockedCount:result.rows.length-result.candidates.length,measurable:true,ids:result.chosen.map(r=>r.id),...(trail.length?{trail}:{}),...(result.chosen.length>trail.length?{trailCut:result.chosen.length-trail.length}:{}),...(missed?{missed:true}:{})};
   try{await journal.set({[runKey]:summary})}catch{throw Error('Không xác nhận được việc lưu kết quả đo; hãy kiểm tra rồi thử lại.')}
   return {status:'measured',reason:'',config,plan:result,run:summary};
  }
@@ -279,18 +282,46 @@ async function run(api,now,deps={},options={}){
   const text=names.map(name=>`${meta[name].short} ${valueLabel(name,entry.values[name])}${meta[name].estimated?' (ước lượng)':''}`).join(' · ');
   return `${text} · ${ageLabel(entry.at,now)}${entry.sharedTabs>1?` · tiến trình chung ${entry.sharedTabs} tab`:''}${entry.source?` · nguồn: ${entry.source}`:''}`;
  }
- // 15.4: in "Hỏi trước", the measured candidates become one card in Cần chú ý. A card nobody answers is
- // not consent, and dismissing it lasts only for the measurement it describes, so no suppression list grows.
- function attention(config,run,now){
-  if(!Number.isFinite(now))throw Error('Không xác định được thời gian.');
-  let c;try{c=validate(config)}catch{return null}
-  if(!c.enabled||c.mode!=='ask')return null;
+ // 15.4: every surface reads the same record, so freshness and "did anybody answer" are decided once.
+ // A card nobody answers is not consent, and skipping it lasts only for the measurement it describes.
+ function recent(c,run,now,mode){
+  if(!c.enabled||c.mode!==mode)return null;
   if(!run||run.measurable!==true||!Number.isFinite(run.at)||!(Number.isInteger(run.overCount)&&run.overCount>0))return null;
   // Numbers older than two cycles are already refused as a decision basis, so they must not nag either.
   if(now-run.at>=2*c.everyMinutes*60000)return null;
   const ids=(Array.isArray(run.ids)?run.ids:[]).filter(id=>Number.isInteger(id)&&id>=0);
   if(!ids.length)return null;
-  return {at:run.at,overCount:run.overCount,blockedCount:Number.isInteger(run.blockedCount)?run.blockedCount:0,ids,dismissed:run.dismissedAt===run.at,age:ageLabel(run.at,now)};
+  // Rows whose tab vanished are dropped by the page that shows the tabs, not by the decision.
+  const rows=(Array.isArray(run.trail)?run.trail:[]).filter(r=>ids.includes(r?.id));
+  return {at:run.at,overCount:run.overCount,blockedCount:Number.isInteger(run.blockedCount)?run.blockedCount:0,ids,rows,cut:Number.isInteger(run.trailCut)?run.trailCut:0,dismissed:run.dismissedAt===run.at,age:ageLabel(run.at,now)};
+ }
+ // A bad config or a missing clock is refused the same way on both paths: throw on time, stay silent on policy.
+ function gate(config,now){
+  if(!Number.isFinite(now))throw Error('Không xác định được thời gian.');
+  try{return validate(config)}catch{return null}
+ }
+ function attention(config,run,now){
+  const c=gate(config,now);
+  return c?recent(c,run,now,'ask'):null;
+ }
+ // 5.7: "Chỉ gợi ý" asks nothing and does nothing, so its candidates belong on the health page, not in a card.
+ function suggestions(config,run,now){
+  const c=gate(config,now);
+  return c?recent(c,run,now,'suggest'):null;
+ }
+ // The health page also has to say why it is empty, from the same config and the same record.
+ function health(raw,run,now,context={}){
+  if(!Number.isFinite(now))throw Error('Không xác định được thời gian.');
+  let c;try{c=validate(raw)}catch{return {kind:'error',text:'Cấu hình cho nghỉ theo tài nguyên không hợp lệ; việc đo đã dừng.'}}
+  if(context.measurable!==true)return {kind:'unmeasurable',text:`${notMeasurable}. Tabspace không suy số từ tên miền, tiêu đề hay số lượng tab, nên không có danh sách nào để xem; việc cho nghỉ thủ công ở Tab đang mở vẫn dùng bình thường.`};
+  if(!c.enabled)return {kind:'off',text:'Tính năng đang tắt nên không có lượt đo nào trong nền. Bật lên trong khối Cài đặt & sao lưu rồi đợi một chu kỳ đo.'};
+  if(c.mode==='auto')return {kind:'off',text:'Mức Tự động vẫn chưa có ở bản này: mỗi lượt nền chỉ đo và đếm, không có lệnh nghỉ tab nào được gọi.'};
+  if(c.mode==='ask')return {kind:'ask',text:'Ở mức Hỏi trước, danh sách nằm trong Cần chú ý kèm nút Xem & nghỉ, không ở trang này.'};
+  const list=suggestions(c,run,now);
+  if(list)return {kind:'list',list,text:''};
+  if(!run||!Number.isFinite(run.at))return {kind:'empty',text:'Chưa có lượt đo nào trong phiên Chrome này; số đo chỉ sống cùng phiên, nên khởi động lại Chrome là danh sách trống.'};
+  if(!(Number.isInteger(run.overCount)&&run.overCount>0))return {kind:'empty',text:`Lượt đo ${ageLabel(run.at,now)} không thấy tab nào vượt ngưỡng đã chọn.`};
+  return {kind:'stale',text:`Lượt đo ${ageLabel(run.at,now)} đã quá hai chu kỳ nên không còn được dùng để gợi ý; đo lại để có danh sách mới.`};
  }
  // The note lives on the measurement itself, so the next cycle replaces it instead of hiding future cards.
  async function dismiss(api,at,undo=false){
@@ -315,6 +346,6 @@ async function run(api,now,deps={},options={}){
   const stale=Number.isFinite(context.measuredAt)&&context.measuredAt>0&&Number.isFinite(context.now)&&context.now-context.measuredAt>2*c.everyMinutes*60000;
   return {kind:c.mode,text:`${modeLabel(c.mode)} · xét ${c.resources.map(name=>meta[name].short).join(', ')} · tối đa ${c.maxPerRun} tab mỗi lượt${count}${age}${stale?' · dữ liệu đo đã cũ, hãy đo lại':''}${context.missed===true?' · có chu kỳ đo đã bỏ lỡ, không chạy bù':''}${status}`};
  }
- return {prefix,settingKey,runKey,keys,meta,modes,combines,maxSeries,defaults,notMeasurable,modeLabel,integer,validate,capability,assertUsable,key,record,read,readRecords,recall,forget,remember,measure,prune,run,resource,row,plan,line,attention,dismiss,describe,valueLabel,ageLabel,idleLabel};
+ return {prefix,settingKey,runKey,keys,meta,modes,combines,maxSeries,maxTrail,defaults,notMeasurable,modeLabel,integer,validate,capability,assertUsable,key,record,read,readRecords,recall,forget,remember,measure,prune,run,resource,row,plan,line,attention,suggestions,health,dismiss,describe,valueLabel,ageLabel,idleLabel};
 })();
 if(typeof module!=='undefined')module.exports=AutoDiscard;

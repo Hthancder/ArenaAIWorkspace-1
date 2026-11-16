@@ -29,7 +29,23 @@ assert.match(css,/\.auto-discard-head\{display:flex;align-items:center;gap:12px;
 assert.match(css,/\.auto-discard-head:focus-visible\{outline:3px solid/);
 assert.match(css,/@media\(max-width:600px\)\{\.auto-discard-head\{padding:14px 16px\}\.auto-discard-body\{padding:0 16px 16px\}\.auto-discard-head em\{margin-left:auto\}\}/);
 assert.doesNotMatch(css,/\.auto-discard[a-z-]*\{[^}]*(overflow:hidden|height:\s*\d)/,'nothing clips the block when the window is narrow or zoomed');
-assert.match(dash,/Mức Chỉ gợi ý chỉ đổi cách đếm và cách nhắc: bản này chưa có danh sách riêng ở Sức khỏe tab \(5\.7\)\./);
+// 5.7 exists now, so the select says where the list lives instead of admitting it is missing.
+assert.match(dash,/Mức Chỉ gợi ý chỉ để danh sách ở Sức khỏe tab: không nhắc, không tự chọn tab nào\./);
+assert.doesNotMatch(dash,/chưa có danh sách riêng ở Sức khỏe tab/);
+const palette=fs.readFileSync('extension/palette.js','utf8');
+const health=dash.slice(dash.indexOf('function healthData()'),dash.indexOf('function renderSavedOpen()'));
+assert.ok(health.length>500,'the health view is one contiguous block of the dashboard');
+assert.ok(html.includes('<button class="nav" data-view="health">')&&html.includes('id="sideHealth"'),'the page has its own place in the sidebar');
+assert.match(palette,/\['health','Sức khỏe tab'\],/,'and it is reachable from the command palette');
+assert.match(dash,/else if\(view==='health'\)renderHealth\(\)/);
+assert.match(dash,/,'health':\['Sức khỏe tab',/,'every view needs a title or the page throws');
+assert.ok(dash.includes("$('#sideHealth').textContent=health.list&&!health.list.dismissed?health.list.overCount:''"),'the badge counts the same list the page shows');
+assert.equal((dash.match(/AutoDiscard\.health\(/g)||[]).length,3,'one decision function, three readers, no second opinion');
+for(const action of ['review','dismiss','restore']){
+ assert.ok(health.includes(`data-action="auto-discard-suggest-${action}"`),`the list offers ${action}`);
+ assert.ok(dash.includes(`autoDiscardSuggestAction('${action}')`),`and the page handles ${action}`);
+}
+assert.doesNotMatch(health,/tabs\.discard|data-action="discard"|Cho tab nghỉ|chrome\.|\.set\(|history\.|\"fetch\"/,'the health page reads a record; it never acts on a tab');
 
 // The setting comes from storage.local and the measurement from storage.session, kept fresh in the header.
 assert.match(dash,/chrome\.storage\.session\?\.get\?chrome\.storage\.session\.get\(\[AutoDiscard\.runKey\]\)\.catch\(\(\)=>\(\{\}\)\):Promise\.resolve\(\{\}\)/);
@@ -65,7 +81,12 @@ assert.match(mod,/if\(!Number\.isFinite\(capacity\)\|\|!Number\.isFinite\(free\)
 assert.doesNotMatch(mod,/lowMemoryFloor\s*[<>]/,'no invented comparison against a guessed memory number');
 
 // The measured candidates reach the user as one review card in Cần chú ý, decided by the module.
-assert.match(mod,/function attention\(config,run,now\)\{[\s\S]{0,300}if\(!c\.enabled\|\|c\.mode!=='ask'\)return null/);
+// The card and the 5.7 list read the same record: one freshness gate, one mode each, never a second copy.
+assert.match(mod,/function recent\(c,run,now,mode\)\{[\s\S]{0,240}if\(!c\.enabled\|\|c\.mode!==mode\)return null/);
+assert.match(mod,/function attention\(config,run,now\)\{[^}]*recent\(c,run,now,'ask'\)/);
+assert.match(mod,/function suggestions\(config,run,now\)\{[^}]*recent\(c,run,now,'suggest'\)/);
+assert.equal((mod.match(/now-run\.at>=2\*c\.everyMinutes\*60000/g)||[]).length,1,'the expiry rule exists once for both surfaces');
+assert.equal((mod.match(/c\.mode!==mode/g)||[]).length,1,'the mode gate exists once');
 assert.match(mod,/if\(now-run\.at>=2\*c\.everyMinutes\*60000\)return null;/);
 assert.match(mod,/if\(!run\|\|run\.at!==at\)throw Error\('Lần đo đã thay đổi ở nơi khác/);
 assert.match(mod,/next\.dismissedAt=at;/);
@@ -87,4 +108,4 @@ assert.match(dash,/<div class="auto-discard-body\$\{autoDiscardOpen\?'':' hidden
 assert.match(dash,/Số đo lấy lại theo chu kỳ ở trên, chạy cùng lịch với các việc nền khác; chưa có lượt nghỉ tự động và chưa xin quyền đọc tiến trình/);
 assert.match(css,/@keyframes autoDiscardIn\{from\{opacity:0;transform:translateY\(-3px\)\}to\{opacity:1;transform:none\}\}/);
 assert.match(css,/:root\[data-motion="reduce"\] \*/);
-console.log('Resource measurement shares one entry point, reaches Cần chú ý as a review card, and asks for no new permission: OK');
+console.log('Resource measurement shares one entry point, reaches Cần chú ý as a card and Sức khỏe tab as a list, and asks for no new permission: OK');

@@ -115,7 +115,7 @@ Nhật ký ghi thời điểm, nguồn kích hoạt, quy tắc áp dụng, kết
 
 Gợi ý tab trùng, lâu không truy cập (chỉ khi có dữ liệu), đã lưu nhưng còn mở, quy tắc chồng lấn. Mỗi gợi ý có lý do, xem trước, bỏ qua/tắt; không tự coi tab cũ là rác. Không dùng ước lượng RAM như số đo. Gợi ý theo mức tiêu hao tài nguyên dùng chung khối xem trước và chịu cùng chính sách bảo vệ; điều kiện, nguồn đo và giới hạn ở mục 15.
 
-**Trạng thái (0.121):** cả tab này chưa tồn tại trong ứng dụng. Danh sách "được đề xuất nghỉ" mà mức **Chỉ gợi ý** (15.3) cần nằm ở đây, nên hộp thoại *Thái độ tài nguyên* ghi thẳng giới hạn đó xuống ô **Cách xử lý** thay vì để người dùng đoán.
+**Trạng thái (0.122):** trang **Sức khỏe tab** đã có trong thanh bên và mang danh sách "được đề xuất nghỉ" mà mức **Chỉ gợi ý** (15.3) cần; ba loại gợi ý còn lại vẫn nằm ở trang riêng của chúng và trang này dẫn đường tới đó. **Quy tắc chồng lấn** chưa được tính — trang nói rõ điều đó thay vì để một dòng trống ngụ ý "không có gì". Hộp thoại *Thái độ tài nguyên* không còn phải nhận là thiếu danh sách.
 
 ## 6. Preset dọn tab
 
@@ -314,7 +314,7 @@ Tôn trọng `prefers-reduced-motion`: bỏ hoặc giảm chuyển động khôn
 
 ## 15. Tự động cho nghỉ tab theo mức tiêu hao tài nguyên
 
-**Trạng thái:** đã có nền tảng ở 15.1–15.5 (tiến độ 0.115, bộ đo nền ở 0.116, cửa chặn RAM hệ thống ở 0.117, thẻ Cần chú ý ở 0.118): module `auto-discard.js` quyết định theo ngưỡng rời từng tài nguyên, khối cài đặt thu gọn trong trang quản lý, `AutoDiscard.run()` chạy theo chu kỳ trong service worker với đúng các cổng chặn của một lượt nghỉ — nhưng lượt nền chỉ đo và đếm, không nghỉ tab, và kết quả một lượt hiện thành thẻ trong Cần chú ý ở mức Hỏi trước. Đã xong ở 15.6: quyền vẫn chưa xin (chủ đích), số đo không ra khỏi máy, và cấu hình vào sao lưu theo lựa chọn kèm buộc tắt khi nhập (0.120). **Chưa triển khai:** danh sách gợi ý ở Sức khỏe tab (5.7) — từ 0.121 ngay hộp thoại cài đặt ghi rõ mức **Chỉ gợi ý** chỉ đổi cách đếm và cách nhắc, lượt nghỉ Tự động, quyền `processes`/`system.memory` và đường ước lượng trong trang. Toàn bộ mục này vẫn phụ thuộc một khả năng chưa kiểm chứng (mục 12.9): Chrome không cho extension mọi kênh ổn định để đo tài nguyên của từng tab. Nơi nào không có nguồn đo đáng tin, giao diện nói "không đo được" và tính năng không chạy — không thay bằng số suy đoán.
+**Trạng thái:** đã có nền tảng ở 15.1–15.5 (tiến độ 0.115, bộ đo nền ở 0.116, cửa chặn RAM hệ thống ở 0.117, thẻ Cần chú ý ở 0.118): module `auto-discard.js` quyết định theo ngưỡng rời từng tài nguyên, khối cài đặt thu gọn trong trang quản lý, `AutoDiscard.run()` chạy theo chu kỳ trong service worker với đúng các cổng chặn của một lượt nghỉ — nhưng lượt nền chỉ đo và đếm, không nghỉ tab, và kết quả một lượt hiện thành thẻ trong Cần chú ý ở mức Hỏi trước. Đã xong ở 15.6: quyền vẫn chưa xin (chủ đích), số đo không ra khỏi máy, và cấu hình vào sao lưu theo lựa chọn kèm buộc tắt khi nhập (0.120). **Chưa triển khai:** lượt nghỉ Tự động (kèm hộp xác nhận rủi ro một lần và kết quả từng tab), quyền `processes`/`system.memory` và đường ước lượng trong trang. Toàn bộ mục này vẫn phụ thuộc một khả năng chưa kiểm chứng (mục 12.9): Chrome không cho extension mọi kênh ổn định để đo tài nguyên của từng tab. Nơi nào không có nguồn đo đáng tin, giao diện nói "không đo được" và tính năng không chạy — không thay bằng số suy đoán.
 
 Mục này chỉ thêm **một nguồn ứng viên mới** cho bộ điều phối: tab đang tiêu hao nhiều (RAM, CPU, mạng) thay vì tab khớp quy tắc URL như preset. Chính sách bảo vệ, phân tầng cài đặt, điều phối, thông báo, giới hạn và xử lý lỗi dùng lại mục 6, 7, 8, 14; không tạo cơ chế thứ hai song song.
 
@@ -367,6 +367,7 @@ Chỉ những lựa chọn thay đổi hẳn hành vi có mặt ở đây. Danh 
 Mỗi chu kỳ đo tạo một danh sách ứng viên có dấu vết riêng: ID tab, ID cửa sổ, URL, ID tiến trình, giá trị từng tài nguyên đã chọn, thời điểm đo, nguồn. Sau bước lọc ở 15.2:
 
 1. **Chỉ gợi ý:** danh sách hiển thị ở Sức khỏe tab; mỗi hàng nêu lý do ("RAM 1,4 GB · đo 14:32 · tiến trình chung 2 tab"), có Xem & nghỉ, Bỏ qua gợi ý này, Tắt gợi ý. Không tự chọn tab nào.
+   - Từ 0.122 danh sách đã có ở *Sức khỏe tab*. **Xem & nghỉ** ở đây là nút *Chọn N tab để xem trước*: nó đánh dấu sẵn ở Tab đang mở và việc nghỉ vẫn qua bản xem trước có xác nhận, nên trang không cần một đường nghỉ riêng. **Tắt gợi ý** dẫn sang khối cài đặt thay vì đặt một công tắc thứ hai — mỗi thiết lập chỉ có một nơi bật/tắt. **Bỏ qua gợi ý này** đi theo đúng luật của thẻ Hỏi trước: chỉ có hiệu lực với lượt đo hiện tại.
 2. **Hỏi trước:** một thẻ trong Cần chú ý ("12 tab đang vượt ngưỡng · đo 4 phút trước") với Xem & nghỉ, Nhắc lại, Bỏ qua. Áp dụng 14.3 cho thông báo bị bỏ lỡ, đã đọc hoặc hết hạn: không phản hồi thì không nghỉ tab nào.
 3. **Tự động:** không hỏi, nhưng vẫn dựng bản xem trước nội bộ, áp dụng bảo vệ và giới hạn, ghi kết quả từng tab, báo theo kênh đã bật.
 
@@ -524,7 +525,7 @@ Lựa chọn "Chỉ chạy khi hệ thống thiếu bộ nhớ" trước đây m
 
 Trong khối, thứ tự ô làm theo 15.5: phạm vi (thời gian không được xem, giới hạn mỗi lượt) đứng trước phần đo (chu kỳ đo, số chu kỳ liên tiếp, ngưỡng RAM); không thêm lựa chọn mới. Nút **Giới hạn và rủi ro** ở cuối khối mở hộp giải thích thẳng những gì số đo không chứng minh được: số là của tiến trình renderer chứ không của riêng tab, heap chỉ là ước lượng, tài nguyên không cho biết trang còn nội dung chưa lưu, cho nghỉ tab không tạo bản lưu để khôi phục, và bản này chưa có lượt nghỉ tự động. Hộp chỉ để đọc, không đổi thiết lập và không ghi gì.
 
-Hai phần còn lại của mục 15 được nêu ở bản sau: danh sách **Chỉ gợi ý** cần Sức khỏe tab (mục 5.7 chưa tồn tại trong ứng dụng), và việc đưa cấu hình vào file sao lưu kèm buộc tính năng ở trạng thái tắt khi nhập. **Chưa kiểm thử trên Chrome thực tế**: cần xác nhận `chrome.system.memory.getInfo()` trả số như tài liệu và một chu kỳ bị cửa chặn RAM giữ lại không để lại số mới nào trên tiêu đề khối.
+Hai phần còn lại của mục 15 được nêu ở bản sau: danh sách **Chỉ gợi ý** cần Sức khỏe tab (mục 5.7 lúc đó chưa tồn tại trong ứng dụng; 0.121 ghi rõ điều đó ngay trong hộp thoại cài đặt, và 0.122 đã dựng trang này), và việc đưa cấu hình vào file sao lưu kèm buộc tính năng ở trạng thái tắt khi nhập (đã làm ở 0.120). **Chưa kiểm thử trên Chrome thực tế**: cần xác nhận `chrome.system.memory.getInfo()` trả số như tài liệu và một chu kỳ bị cửa chặn RAM giữ lại không để lại số mới nào trên tiêu đề khối.
 
 ### Thẻ vượt ngưỡng trong Cần chú ý (0.118)
 
@@ -550,3 +551,13 @@ Ba chỉnh sửa còn lại chỉ là kiểm chứng, không đổi hành vi:
 - mỗi chu kỳ **quyết định lại từ chuỗi mẫu hiện hành**, nên đổi ngưỡng hay đổi *Chu kỳ đo* có hiệu lực ngay ở lần chạy kế tiếp (mẫu cũ quá *Chu kỳ đo* thì tab rơi khỏi danh sách ngay chu kỳ sau), không cần nạp lại extension;
 - test mạch báo thức giờ chạy thẳng module thật `AutoDiscard.run` thay vì callback giả: với *Chu kỳ đo* 60 phút, bốn phút tick chỉ hỏi Chrome **một** lần; với 1 phút thì đo cả bốn lần;
 - phần đo không tự thêm `chrome.alarms`/`setTimeout`/`setInterval` nào và không đụng `chrome.tabs` — nếu về sau có ai chèn một lệnh nghỉ tab vào module, test báo đỏ.
+
+### Sức khỏe tab có danh sách "được đề xuất nghỉ" (0.122)
+
+Mức **Chỉ gợi ý** (15.3) cuối cùng cũng có chỗ của nó: trang **Sức khỏe tab** ngay trong thanh bên, gọi được cả bằng bảng lệnh. Trang này là điểm hẹn của các loại gợi ý theo 5.7 — **Tab trùng**, **Lâu chưa truy cập**, **Đã lưu nhưng còn mở** mỗi loại vẫn có trang riêng nên ở đây chỉ là đường dẫn kèm số đếm; dòng **Quy tắc chồng lấn** nói thẳng bản này chưa so sánh preset với nhau, thay vì để trống cho có.
+
+Phần **Được đề xuất nghỉ** liệt kê đúng những gì lượt đo gần nhất đã thấy, mỗi hàng một dòng số đo: `RAM 1,4 GB · đo 14:32 · tiến trình chung 2 tab · nguồn: tiến trình Chrome`.
+
+- Mỗi lượt đo giờ lưu thêm **dấu vết** cho từng ứng viên (ID tab, ID cửa sổ, ID tiến trình, các giá trị vượt ngưỡng, thời điểm, nguồn) trong `chrome.storage.session`, tối đa 20 hàng; nhiều hơn thì trang ghi "N tab khác cũng vượt ngưỡng nhưng không có trong danh sách" thay vì âm thầm cắt. Dấu vết **không chứa URL hay tiêu đề**, nên không có gì để rò rỉ và cũng không sống dai hơn phiên Chrome.
+- Quyết định "có gì để gợi ý không" nằm trong `AutoDiscard.health()`: danh sách, nhãn ở thanh bên và lý do vì sao trang trống đều đọc từ một chỗ đó, nên ba nơi không thể nói khác nhau. Luật hết hạn hai chu kỳ không bị sao chép: ở mức Hỏi trước trang này chỉ đường sang *Cần chú ý*, ở mức Tự động nó báo là bản này chưa làm.
+- **Chọn N tab để xem trước** chỉ đánh dấu ở *Tab đang mở* rồi để bản xem trước quen thuộc xin xác nhận; **Bỏ qua gợi ý này** chỉ ẩn danh sách của lượt đo hiện tại và **Hiện lại gợi ý** bỏ ẩn đó. Không có nút nào cho nghỉ ngay, và cả trang không gọi `chrome.tabs.discard`.

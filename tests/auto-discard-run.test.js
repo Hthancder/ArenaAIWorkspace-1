@@ -77,7 +77,13 @@ const record=box=>box.session()[A.runKey];
  assert.deepEqual(Object.fromEntries(result.plan.counts.map(x=>[x.reason,x.count])),{'Dưới ngưỡng đã chọn':1,'Tab đã ghim':1});
  assert.match(A.line(result.plan.candidates[0],result.config,now),/RAM 2,1 GB · đo ngay bây giờ · nguồn: tiến trình Chrome/);
  assert.ok(Number.isFinite(record(box).at));
- assert.deepEqual(Object.keys(record(box)).sort(),['at','blockedCount','ids','measurable','overCount']);
+ // 15.4: each candidate leaves a trail of its own — ids and numbers, never an address or a title.
+ assert.deepEqual(record(box).trail.map(r=>r.id),[2,1],'the trail keeps the order the cycle chose');
+ assert.deepEqual(Object.keys(record(box).trail[0]).sort(),['at','id','processId','sharedTabs','source','triggered','values','windowId']);
+ assert.deepEqual([record(box).trail[0].values,record(box).trail[0].triggered,record(box).trail[0].sharedTabs],[{memory:2200},['memory'],1]);
+ assert.equal(record(box).trailCut,undefined,'a list the run can carry is not cut');
+ assert.doesNotMatch(JSON.stringify(record(box)),/https?:|example\.com|Tab /);
+ assert.deepEqual(Object.keys(record(box)).sort(),['at','blockedCount','ids','measurable','overCount','trail']);
  assert.equal(db.autoDiscardRun,undefined,'the record is not persisted');
  // The cycle waits for its own schedule, and a cycle missed while Chrome was closed is only reported.
  assert.match((await A.run(box,now+60000,deps(tabs))).reason,/Chưa đến chu kỳ đo; còn khoảng 4 phút/);
@@ -110,6 +116,15 @@ const record=box=>box.session()[A.runKey];
  await assert.rejects(()=>A.dismiss(store(true,{failRecord:true,seed:true}),now),/Không xác nhận được việc ẩn thẻ/);
  await assert.rejects(()=>A.dismiss(store(true,{noJournal:true}),1),/Không đọc được nơi giữ kết quả đo/);
  await assert.rejects(()=>A.dismiss(noteBox),/Không xác định được lần đo cần ẩn/);
+ // A long candidate list keeps a bounded trail, so the record stays a session item and not an archive.
+ db={autoDiscardConfig:{...config,maxPerRun:40}};
+ const many=Array.from({length:25},(_,i)=>tab(i+1));
+ const wide=api();
+ wide.processes={getProcessIdForTab:async id=>10+id,getProcessInfo:async ids=>Object.fromEntries(ids.map(id=>[id,{privateMemory:bytes(1400),cpu:20}]))};
+ const capped=await A.run(wide,now+20*60000,deps(many));
+ assert.deepEqual([capped.run.overCount,capped.run.trail.length,capped.run.trailCut,A.maxTrail],[25,A.maxTrail,5,20]);
+ assert.deepEqual(capped.run.trail.map(r=>r.id),capped.run.ids.slice(0,A.maxTrail),'the rows in front of the list survive, the rest is only counted');
+ assert.deepEqual([db.autoDiscardRun,discards],[undefined,0],'a capped trail is still not persisted and still discards nothing');
  assert.deepEqual([discards,record(noteBox).at,db.autoDiscardRun],[0,now+60000,undefined]);
  console.log('The measurement cycle stays read-only, waits, and admits every way it cannot run: OK');
 })().catch(e=>{console.error(e);process.exitCode=1});

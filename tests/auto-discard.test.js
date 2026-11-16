@@ -159,7 +159,7 @@ assert.deepEqual([A.idleLabel(59),A.idleLabel(90),A.idleLabel(48*60),A.idleLabel
  // The card in Cần chú ý belongs to "Hỏi trước" only, and it expires together with the numbers it reports.
  const card={at:now,overCount:3,blockedCount:2,measurable:true,ids:[7,8,9]};
  const ask={...base,mode:'ask',resources:['memory'],thresholds:{memory:500,cpu:50}};
- assert.deepEqual(A.attention(ask,card,now),{at:now,overCount:3,blockedCount:2,ids:[7,8,9],dismissed:false,age:'đo ngay bây giờ'});
+ assert.deepEqual(A.attention(ask,card,now),{at:now,overCount:3,blockedCount:2,ids:[7,8,9],rows:[],cut:0,dismissed:false,age:'đo ngay bây giờ'});
  assert.equal(A.attention({...ask,mode:'suggest'},card,now),null);
  assert.equal(A.attention({...ask,mode:'auto'},card,now),null);
  assert.equal(A.attention({...ask,enabled:false},card,now),null);
@@ -168,6 +168,29 @@ assert.deepEqual([A.idleLabel(59),A.idleLabel(90),A.idleLabel(48*60),A.idleLabel
  assert.equal(A.attention(ask,{...card,measurable:false},now),null);
  assert.equal(A.attention(ask,{...card,overCount:0},now),null);
  assert.equal(A.attention(ask,{...card,ids:[]},now),null);
+ // 5.7: the same record also feeds the health list, but a suggestion never borrows the card's reminder channel.
+ const withTrail={...card,trail:[{id:7,windowId:1,processId:10,sharedTabs:2,at:now,values:{memory:1400},triggered:['memory'],source:'tiến trình Chrome'},{id:8,windowId:1,processId:11,sharedTabs:1,at:now,values:{memory:900},triggered:['memory'],source:'tiến trình Chrome'}],trailCut:4};
+ const suggest={...base,mode:'suggest',resources:['memory'],thresholds:{memory:500,cpu:50}};
+ assert.equal(A.suggestions(ask,withTrail,now),null,'a card is only ever an ask-mode surface');
+ const list=A.suggestions(suggest,withTrail,now);
+ assert.deepEqual([list.overCount,list.ids.length,list.cut,list.dismissed],[3,3,4,false]);
+ assert.deepEqual(list.rows.map(r=>r.id),[7,8],'only the tabs the cycle left a trail for');
+ assert.match(A.line(list.rows[0],suggest,now),/RAM 1,4 GB · đo ngay bây giờ · tiến trình chung 2 tab · nguồn: tiến trình Chrome/);
+ assert.equal(A.suggestions(suggest,{...withTrail,ids:[42,43]},now).rows.length,0,'a trail with no matching id is no list');
+ assert.equal(A.attention(ask,withTrail,now).rows.length,2,'the card can read the same trail when it needs to');
+ // Every empty state names its own reason, so the page never shows a blank box and never guesses one.
+ assert.match(A.health(suggest,null,now,{measurable:true}).text,/Chưa có lượt đo nào trong phiên Chrome này/);
+ assert.match(A.health(suggest,{at:now-3600000,overCount:2,measurable:true,ids:[1]},now,{measurable:true}).text,/đã quá hai chu kỳ/);
+ assert.match(A.health(suggest,{at:now,overCount:0,measurable:true,ids:[]},now,{measurable:true}).text,/không thấy tab nào vượt ngưỡng/);
+ assert.match(A.health({...suggest,mode:'ask'},withTrail,now,{measurable:true}).text,/Ở mức Hỏi trước, danh sách nằm trong Cần chú ý/);
+ assert.match(A.health({...suggest,mode:'auto'},withTrail,now,{measurable:true}).text,/Mức Tự động vẫn chưa có ở bản này/);
+ assert.match(A.health({...suggest,enabled:false},withTrail,now,{measurable:true}).text,/Tính năng đang tắt/);
+ assert.equal(A.health(suggest,withTrail,now,{measurable:false}).kind,'unmeasurable');
+ assert.match(A.health(suggest,withTrail,now,{measurable:false}).text,/Không đo được tài nguyên trên Chrome này/);
+ assert.match(A.health(suggest,withTrail,now,{}).text,/không suy số từ tên miền/);
+ assert.equal(A.health({enabled:'nope'},withTrail,now,{measurable:true}).kind,'error');
+ assert.throws(()=>A.health(suggest,withTrail,'now',{measurable:true}),/Không xác định được thời gian/);
+ assert.throws(()=>A.suggestions(suggest,withTrail,undefined),/Không xác định được thời gian/);
  assert.equal(A.attention(ask,{...card,ids:['7',-2,1.5,8]},now).ids.join(), '8');
  assert.equal(A.attention({...ask,everyMinutes:5},card,now+9*60000).age,'đo 9 phút trước');
  assert.equal(A.attention({...ask,everyMinutes:5},card,now+10*60000),null);
