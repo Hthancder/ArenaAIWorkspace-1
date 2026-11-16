@@ -5,8 +5,10 @@
 //  Created by 秋星桥 on 2024/8/15.
 //
 
+import Combine
 import MessageUI
 import SwiftUI
+import SwiftUIIntrospect
 
 private enum EndpointSheetMode: Identifiable {
     case add
@@ -39,9 +41,15 @@ struct WriteNowRootView: View {
         case connected
     }
 
+    let scrollViewSubject: CurrentValueSubject<UIScrollView?, Never>?
+
     @StateObject var configuration = Configuration.shared
     @StateObject var configurationViewModel = Configuration.shared.viewModel
     @StateObject var appViewModel = WriteNowAppModel.shared
+
+    init(scrollViewSubject: CurrentValueSubject<UIScrollView?, Never>? = nil) {
+        self.scrollViewSubject = scrollViewSubject
+    }
 
     @State var serviceStatus: ServiceStatus = .disconnected
     @State private var endpointSheet: EndpointSheetMode?
@@ -114,6 +122,12 @@ struct WriteNowRootView: View {
         }
         .navigationTitle(NSLocalizedString("Write Now", bundle: Bundle.wrti_support, comment: ""))
         .accentColor(.accent)
+        .introspect(.list, on: .iOS(.v15)) { tableView in
+            scrollViewSubject?.send(tableView)
+        }
+        .introspect(.list, on: .iOS(.v16, .v17, .v18)) { collectionView in
+            scrollViewSubject?.send(collectionView)
+        }
     }
 
     // MARK: - Sections
