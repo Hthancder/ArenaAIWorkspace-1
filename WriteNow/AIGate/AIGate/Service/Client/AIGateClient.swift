@@ -21,7 +21,7 @@ class AIGateClient {
 
     typealias CommandCompletion = (Data?, Error?) -> Void
 
-    static func executeCommand(_ command: Command, completion: CommandCompletion? = nil) {
+    static func executeCommand(_ command: Command, secret overrideSecret: String? = nil, completion: CommandCompletion? = nil) {
         var comps = URLComponents(url: AIGateConfiguration.listenURL, resolvingAgainstBaseURL: false)!
         comps.path = "/action"
         comps.queryItems = [URLQueryItem(name: "command", value: command.rawValue)]
@@ -33,8 +33,7 @@ class AIGateClient {
         )
         request.httpMethod = "GET"
         request.addValue(command.rawValue, forHTTPHeaderField: CommandHeader.exec.rawValue)
-        Configuration.shared.reloadServiceSecretFromDisk()
-        let secret = Configuration.shared.serviceSecret
+        let secret = overrideSecret ?? GlobalStorage.shared.readDirectValue(forKey: "ServiceSecret") ?? ""
         request.addValue(secret, forHTTPHeaderField: CommandHeader.sect.rawValue)
         request.addValue(secret, forHTTPHeaderField: CommandHeader.gateSecret.rawValue)
 

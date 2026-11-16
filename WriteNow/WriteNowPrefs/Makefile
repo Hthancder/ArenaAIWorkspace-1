@@ -45,6 +45,7 @@ WriteNowPrefs_LDFLAGS += -FLibrary/SwiftUIIntrospect.xcframework/ios-arm64_arm64
 WriteNowPrefs_SWIFTFLAGS += -FLibrary/SwiftUIIntrospect.xcframework/ios-arm64_arm64e -framework SwiftUIIntrospect
 
 WriteNowPrefs_FRAMEWORKS += CoreTelephony
+WriteNowPrefs_FRAMEWORKS += PhotosUI
 WriteNowPrefs_FRAMEWORKS += UIKit
 WriteNowPrefs_PRIVATE_FRAMEWORKS += Preferences
 

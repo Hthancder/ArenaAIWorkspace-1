@@ -37,7 +37,7 @@ extension WritingToolsView {
                     .font(.headline.bold())
                 Text(textCountDescription)
                     .font(.caption2)
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundColor(.white.opacity(0.65))
                     .lineLimit(1)
             }
 
@@ -56,35 +56,18 @@ extension WritingToolsView {
 
     var providerQuickMenu: some View {
         Menu {
-            if let active = cfg.activeEndpoint, active.normalizedModels.count > 1 {
-                Section("Models in \(active.displayName)") {
-                    ForEach(active.normalizedModels, id: \.self) { m in
-                        Button {
-                            switchToEndpoint(active, model: m)
-                        } label: {
-                            if active.model == m {
-                                Label(m, systemImage: "checkmark")
-                            } else {
-                                Text(m)
-                            }
-                        }
-                    }
-                }
-                Divider()
-            }
-
             if !cfg.endpoints.isEmpty {
-                Section("Switch Provider") {
+                Section("Switch Provider / Model") {
                     ForEach(cfg.endpoints) { ep in
-                        let models = ep.normalizedModels
-                        let isEPActive = ep.id == cfg.activatedEndpointID
+                        let models = ep.effectiveModels
+                        let isActiveProvider = ep.id == cfg.activatedEndpointID
                         if models.count > 1 {
                             Menu {
                                 ForEach(models, id: \.self) { m in
                                     Button {
                                         switchToEndpoint(ep, model: m)
                                     } label: {
-                                        if isEPActive && ep.model == m {
+                                        if isActiveProvider && ep.model == m {
                                             Label(m, systemImage: "checkmark")
                                         } else {
                                             Text(m)
@@ -92,19 +75,18 @@ extension WritingToolsView {
                                     }
                                 }
                             } label: {
-                                let label = "\(ep.displayName) (\(models.count))"
-                                if isEPActive {
-                                    Label(label, systemImage: "checkmark")
+                                if isActiveProvider {
+                                    Label("\(ep.displayName) (\(ep.shortModelName))", systemImage: "checkmark")
                                 } else {
-                                    Text(label)
+                                    Text("\(ep.displayName) (\(models.count) models)")
                                 }
                             }
                         } else {
                             Button {
-                                switchToEndpoint(ep, model: ep.model)
+                                switchToEndpoint(ep, model: nil)
                             } label: {
                                 let label = "\(ep.displayName) — \(ep.model)"
-                                if isEPActive {
+                                if isActiveProvider {
                                     Label(label, systemImage: "checkmark")
                                 } else {
                                     Text(label)
@@ -133,7 +115,7 @@ extension WritingToolsView {
             }
             .padding(.horizontal, 9)
             .padding(.vertical, 5)
-            .background(Color.white.opacity(0.14))
+            .background(Color.white.opacity(0.16))
             .clipShape(Capsule())
             .foregroundColor(.white)
         }
@@ -149,7 +131,7 @@ extension WritingToolsView {
             .background(
                 Circle()
                     .foregroundStyle(.white)
-                    .opacity(isClosePressed ? 0.08 : 0.14)
+                    .opacity(isClosePressed ? 0.08 : 0.16)
             )
             .animation(.easeOut(duration: 0.15), value: isClosePressed)
             ._onButtonGesture { isClosePressed = $0 } perform: {
@@ -160,7 +142,7 @@ extension WritingToolsView {
             }
     }
 
-    func switchToEndpoint(_ ep: EndpointItem, model: String? = nil) {
+    func switchToEndpoint(_ ep: EndpointItem, model: String?) {
         cfg.switchEndpoint(id: ep.id, model: model) { ok in
             if ok, shouldShowOutput, !isRunning, !isRetrying {
                 executeCurrentTask()

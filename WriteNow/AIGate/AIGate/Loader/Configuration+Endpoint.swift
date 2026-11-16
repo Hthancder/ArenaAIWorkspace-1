@@ -36,22 +36,6 @@ extension Configuration {
         var useStreaming: Bool
         var timeoutSeconds: Int
 
-        var normalizedModels: [String] {
-            var seen = Set<String>()
-            var result: [String] = []
-            for raw in models {
-                let m = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !m.isEmpty, seen.insert(m).inserted {
-                    result.append(m)
-                }
-            }
-            let active = model.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !active.isEmpty, seen.insert(active).inserted {
-                result.insert(active, at: 0)
-            }
-            return result
-        }
-
         var displayName: String {
             let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmed.isEmpty { return trimmed }
@@ -66,10 +50,33 @@ extension Configuration {
 
         var displayModel: String {
             let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed.isEmpty {
-                return normalizedModels.first ?? "(No Model ID)"
+            return trimmed.isEmpty ? "(No Model ID)" : trimmed
+        }
+
+        var effectiveModels: [String] {
+            Self.normalizeModels(models, active: model)
+        }
+
+        var providerGroupKey: String {
+            let base = EndpointURLHelper.normalizeBaseURL(url.absoluteString)?.absoluteString.lowercased()
+                ?? url.absoluteString.lowercased()
+            return "\(base)||\(token.trimmingCharacters(in: .whitespacesAndNewlines))"
+        }
+
+        static func normalizeModels(_ list: [String], active: String) -> [String] {
+            var seen = Set<String>()
+            var result: [String] = []
+            for item in list {
+                let t = item.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !t.isEmpty, seen.insert(t).inserted {
+                    result.append(t)
+                }
             }
-            return trimmed
+            let activeTrimmed = active.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !activeTrimmed.isEmpty, seen.insert(activeTrimmed).inserted {
+                result.insert(activeTrimmed, at: 0)
+            }
+            return result
         }
 
         init(
@@ -79,7 +86,7 @@ extension Configuration {
             url: URL,
             token: String,
             model: String,
-            models: [String]? = nil,
+            models: [String] = [],
             pathMode: PathMode = .auto,
             customHeaders: [String: String] = [:],
             useStreaming: Bool = true,
@@ -90,20 +97,10 @@ extension Configuration {
             self.name = name
             self.url = url
             self.token = token
-            let active = model.trimmingCharacters(in: .whitespacesAndNewlines)
-            var merged: [String] = []
-            var seen = Set<String>()
-            for raw in (models ?? []) {
-                let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmed.isEmpty, seen.insert(trimmed).inserted {
-                    merged.append(trimmed)
-                }
-            }
-            if !active.isEmpty, seen.insert(active).inserted {
-                merged.insert(active, at: 0)
-            }
-            self.model = active.isEmpty ? (merged.first ?? "") : active
-            self.models = merged
+            let trimmedActive = model.trimmingCharacters(in: .whitespacesAndNewlines)
+            let normalizedList = Self.normalizeModels(models, active: trimmedActive)
+            self.models = normalizedList
+            self.model = trimmedActive.isEmpty ? (normalizedList.first ?? "") : trimmedActive
             self.pathMode = pathMode
             self.customHeaders = customHeaders
             self.useStreaming = useStreaming
@@ -121,21 +118,12 @@ extension Configuration {
             name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
             url = try container.decode(URL.self, forKey: .url)
             token = try container.decodeIfPresent(String.self, forKey: .token) ?? ""
-            let decodedModel = (try container.decodeIfPresent(String.self, forKey: .model) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let decodedModel = (try container.decodeIfPresent(String.self, forKey: .model) ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
             let decodedModels = try container.decodeIfPresent([String].self, forKey: .models) ?? []
-            var merged: [String] = []
-            var seen = Set<String>()
-            for raw in decodedModels {
-                let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmed.isEmpty, seen.insert(trimmed).inserted {
-                    merged.append(trimmed)
-                }
-            }
-            if !decodedModel.isEmpty, seen.insert(decodedModel).inserted {
-                merged.insert(decodedModel, at: 0)
-            }
-            model = decodedModel.isEmpty ? (merged.first ?? "") : decodedModel
-            models = merged
+            let normalizedList = Self.normalizeModels(decodedModels, active: decodedModel)
+            models = normalizedList
+            model = decodedModel.isEmpty ? (normalizedList.first ?? "") : decodedModel
             pathMode = try container.decodeIfPresent(PathMode.self, forKey: .pathMode) ?? .auto
             customHeaders = try container.decodeIfPresent([String: String].self, forKey: .customHeaders) ?? [:]
             useStreaming = try container.decodeIfPresent(Bool.self, forKey: .useStreaming) ?? true
@@ -288,14 +276,15 @@ extension Configuration {
         var autoSelectAllIfEmpty: Bool
         var maskEndpointKeys: Bool
         var recentCustomPrompts: [String]
-        var textAnimationStyle: String
-        var menuThemePreset: String
-        var menuCustomColorHex1: String
-        var menuCustomColorHex2: String
-        var menuBgImageVersion: String
-        var menuBgImageBlur: Double
-        var menuBgImageDim: Double
         var accentColorHex: String
+        var menuThemePreset: String
+        var backgroundMode: String
+        var customThemeColorsHex: [String]
+        var solidBackgroundHex: String
+        var backgroundImageBlur: Double
+        var backgroundImageDim: Double
+        var backgroundImageRevision: String
+        var textReplacementAnimation: String
 
         static let `default` = AppSettings(
             menuTitle: "Write Now",
@@ -310,14 +299,15 @@ extension Configuration {
             autoSelectAllIfEmpty: true,
             maskEndpointKeys: false,
             recentCustomPrompts: [],
-            textAnimationStyle: "shatter",
-            menuThemePreset: "appleIntelligence",
-            menuCustomColorHex1: "#1E3A8A",
-            menuCustomColorHex2: "#0F172A",
-            menuBgImageVersion: "",
-            menuBgImageBlur: 4.0,
-            menuBgImageDim: 0.45,
-            accentColorHex: "#3B82F6"
+            accentColorHex: "#3B82F6",
+            menuThemePreset: "midnight_ocean",
+            backgroundMode: "mesh",
+            customThemeColorsHex: ["#3B82F6", "#8B5CF6", "#06B6D4", "#0F172A"],
+            solidBackgroundHex: "#111827",
+            backgroundImageBlur: 6.0,
+            backgroundImageDim: 0.45,
+            backgroundImageRevision: "",
+            textReplacementAnimation: "scatter_assemble"
         )
 
         init(
@@ -333,14 +323,15 @@ extension Configuration {
             autoSelectAllIfEmpty: Bool = true,
             maskEndpointKeys: Bool = false,
             recentCustomPrompts: [String] = [],
-            textAnimationStyle: String = "shatter",
-            menuThemePreset: String = "appleIntelligence",
-            menuCustomColorHex1: String = "#1E3A8A",
-            menuCustomColorHex2: String = "#0F172A",
-            menuBgImageVersion: String = "",
-            menuBgImageBlur: Double = 4.0,
-            menuBgImageDim: Double = 0.45,
-            accentColorHex: String = "#3B82F6"
+            accentColorHex: String = "#3B82F6",
+            menuThemePreset: String = "midnight_ocean",
+            backgroundMode: String = "mesh",
+            customThemeColorsHex: [String] = ["#3B82F6", "#8B5CF6", "#06B6D4", "#0F172A"],
+            solidBackgroundHex: String = "#111827",
+            backgroundImageBlur: Double = 6.0,
+            backgroundImageDim: Double = 0.45,
+            backgroundImageRevision: String = "",
+            textReplacementAnimation: String = "scatter_assemble"
         ) {
             self.menuTitle = menuTitle
             self.globalSystemPrompt = globalSystemPrompt
@@ -354,22 +345,24 @@ extension Configuration {
             self.autoSelectAllIfEmpty = autoSelectAllIfEmpty
             self.maskEndpointKeys = maskEndpointKeys
             self.recentCustomPrompts = recentCustomPrompts
-            self.textAnimationStyle = textAnimationStyle
-            self.menuThemePreset = menuThemePreset
-            self.menuCustomColorHex1 = menuCustomColorHex1
-            self.menuCustomColorHex2 = menuCustomColorHex2
-            self.menuBgImageVersion = menuBgImageVersion
-            self.menuBgImageBlur = menuBgImageBlur
-            self.menuBgImageDim = menuBgImageDim
             self.accentColorHex = accentColorHex
+            self.menuThemePreset = menuThemePreset
+            self.backgroundMode = backgroundMode
+            self.customThemeColorsHex = customThemeColorsHex
+            self.solidBackgroundHex = solidBackgroundHex
+            self.backgroundImageBlur = backgroundImageBlur
+            self.backgroundImageDim = backgroundImageDim
+            self.backgroundImageRevision = backgroundImageRevision
+            self.textReplacementAnimation = textReplacementAnimation
         }
 
         enum CodingKeys: String, CodingKey {
             case menuTitle, globalSystemPrompt, useFewShotExamples, stripThinkingTags
             case streamingEnabled, requestTimeout, gridColumns, popoverSizePreset
             case animatedBackground, autoSelectAllIfEmpty, maskEndpointKeys, recentCustomPrompts
-            case textAnimationStyle, menuThemePreset, menuCustomColorHex1, menuCustomColorHex2
-            case menuBgImageVersion, menuBgImageBlur, menuBgImageDim, accentColorHex
+            case accentColorHex, menuThemePreset, backgroundMode, customThemeColorsHex
+            case solidBackgroundHex, backgroundImageBlur, backgroundImageDim
+            case backgroundImageRevision, textReplacementAnimation
         }
 
         init(from decoder: Decoder) throws {
@@ -386,14 +379,15 @@ extension Configuration {
             autoSelectAllIfEmpty = try container.decodeIfPresent(Bool.self, forKey: .autoSelectAllIfEmpty) ?? true
             maskEndpointKeys = try container.decodeIfPresent(Bool.self, forKey: .maskEndpointKeys) ?? false
             recentCustomPrompts = try container.decodeIfPresent([String].self, forKey: .recentCustomPrompts) ?? []
-            textAnimationStyle = try container.decodeIfPresent(String.self, forKey: .textAnimationStyle) ?? "shatter"
-            menuThemePreset = try container.decodeIfPresent(String.self, forKey: .menuThemePreset) ?? "appleIntelligence"
-            menuCustomColorHex1 = try container.decodeIfPresent(String.self, forKey: .menuCustomColorHex1) ?? "#1E3A8A"
-            menuCustomColorHex2 = try container.decodeIfPresent(String.self, forKey: .menuCustomColorHex2) ?? "#0F172A"
-            menuBgImageVersion = try container.decodeIfPresent(String.self, forKey: .menuBgImageVersion) ?? ""
-            menuBgImageBlur = try container.decodeIfPresent(Double.self, forKey: .menuBgImageBlur) ?? 4.0
-            menuBgImageDim = try container.decodeIfPresent(Double.self, forKey: .menuBgImageDim) ?? 0.45
             accentColorHex = try container.decodeIfPresent(String.self, forKey: .accentColorHex) ?? "#3B82F6"
+            menuThemePreset = try container.decodeIfPresent(String.self, forKey: .menuThemePreset) ?? "midnight_ocean"
+            backgroundMode = try container.decodeIfPresent(String.self, forKey: .backgroundMode) ?? (animatedBackground ? "mesh" : "gradient")
+            customThemeColorsHex = try container.decodeIfPresent([String].self, forKey: .customThemeColorsHex) ?? ["#3B82F6", "#8B5CF6", "#06B6D4", "#0F172A"]
+            solidBackgroundHex = try container.decodeIfPresent(String.self, forKey: .solidBackgroundHex) ?? "#111827"
+            backgroundImageBlur = try container.decodeIfPresent(Double.self, forKey: .backgroundImageBlur) ?? 6.0
+            backgroundImageDim = try container.decodeIfPresent(Double.self, forKey: .backgroundImageDim) ?? 0.45
+            backgroundImageRevision = try container.decodeIfPresent(String.self, forKey: .backgroundImageRevision) ?? ""
+            textReplacementAnimation = try container.decodeIfPresent(String.self, forKey: .textReplacementAnimation) ?? "scatter_assemble"
         }
     }
 
@@ -561,9 +555,7 @@ enum EndpointURLHelper {
 extension UIColor {
     convenience init?(hexString: String) {
         var hex = hexString.trimmingCharacters(in: .whitespacesAndNewlines)
-        if hex.hasPrefix("#") {
-            hex.removeFirst()
-        }
+        if hex.hasPrefix("#") { hex.removeFirst() }
         guard hex.count == 6 || hex.count == 8, let value = UInt64(hex, radix: 16) else {
             return nil
         }
@@ -581,11 +573,11 @@ extension UIColor {
         }
     }
 
-    var hexRGBString: String {
+    var hexString: String {
         var r: CGFloat = 0
         var g: CGFloat = 0
         var b: CGFloat = 0
-        var a: CGFloat = 0
+        var a: CGFloat = 1
         getRed(&r, green: &g, blue: &b, alpha: &a)
         return String(
             format: "#%02X%02X%02X",
@@ -597,15 +589,13 @@ extension UIColor {
 }
 
 extension Color {
-    init(hexString: String, fallback: Color = .blue) {
-        if let ui = UIColor(hexString: hexString) {
-            self.init(uiColor: ui)
-        } else {
-            self = fallback
-        }
+    init?(hexString: String) {
+        guard let ui = UIColor(hexString: hexString) else { return nil }
+        self.init(uiColor: ui)
     }
 
-    var hexRGBString: String {
-        UIColor(self).hexRGBString
+    var hexString: String {
+        UIColor(self).hexString
     }
 }
+

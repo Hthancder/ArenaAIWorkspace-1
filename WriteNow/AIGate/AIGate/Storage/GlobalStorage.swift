@@ -49,21 +49,27 @@ class GlobalStorage: PersistProvider {
         try? FileManager.default.removeItem(at: path(forKey: forKey))
     }
 
-    private var menuBackgroundImageURL: URL {
+    var backgroundImageURL: URL {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appendingPathComponent("menu_background.jpg")
+        return dir.appendingPathComponent("custom_bg.jpg")
     }
 
-    func saveMenuBackgroundImage(_ data: Data?) {
+    func saveBackgroundImage(_ data: Data?) {
+        let url = backgroundImageURL
         if let data, !data.isEmpty {
-            try? data.write(to: menuBackgroundImageURL, options: .atomic)
+            try? data.write(to: url, options: .atomic)
         } else {
-            try? FileManager.default.removeItem(at: menuBackgroundImageURL)
+            try? FileManager.default.removeItem(at: url)
         }
     }
 
-    func loadMenuBackgroundImage() -> Data? {
-        try? Data(contentsOf: menuBackgroundImageURL)
+    func loadBackgroundImage() -> Data? {
+        try? Data(contentsOf: backgroundImageURL)
+    }
+
+    func readDirectValue<T: Codable>(forKey key: String) -> T? {
+        guard let data = data(forKey: key) else { return nil }
+        return try? JSONDecoder().decode(T.self, from: data)
     }
 }
 

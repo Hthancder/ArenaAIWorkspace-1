@@ -51,6 +51,7 @@ class Configuration: NSObject, ObservableObject {
     var appSettings: AppSettings
 
     var cancellable: Set<AnyCancellable> = []
+    private var isInitializing = true
 
     override init() {
         super.init()
@@ -74,10 +75,17 @@ class Configuration: NSObject, ObservableObject {
             activatedEndpointID = Self.noneActivated
         }
 
+        viewModel.uiActivatedEndpoint = activatedEndpoint
+        viewModel.uiEndpoints = configuredEndpoints.values.sorted { $0.create < $1.create }
+        viewModel.uiPresets = configuredPresets
+        viewModel.uiSettings = appSettings
+        isInitializing = false
+
         objectWillChange
             .throttle(for: .seconds(0.5), scheduler: DispatchQueue.global(qos: .utility), latest: true)
             .sink { [weak self] _ in
-                self?.notifyConfigurationChangeToSystem()
+                guard let self, !self.isInitializing else { return }
+                self.notifyConfigurationChangeToSystem()
             }
             .store(in: &cancellable)
 
@@ -95,7 +103,6 @@ class Configuration: NSObject, ObservableObject {
         viewModel.uiEndpoints = configuredEndpoints.values.sorted { $0.create < $1.create }
         viewModel.uiPresets = configuredPresets
         viewModel.uiSettings = appSettings
-        viewModel.uiAccentColor = Color(hexString: appSettings.accentColorHex)
     }
 
     // MARK: - Endpoints
@@ -145,30 +152,26 @@ class Configuration: NSObject, ObservableObject {
         configuredEndpoints[id]
     }
 
-    func switchModel(forEndpoint id: UUID, model: String, activateEndpoint: Bool = true) {
+    func activateEndpoint(id: UUID, model: String? = nil) {
         guard var ep = configuredEndpoints[id] else { return }
-        let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        ep.model = trimmed
-        var updatedModels = ep.normalizedModels
-        if !updatedModels.contains(trimmed) {
-            updatedModels.insert(trimmed, at: 0)
+        if let model {
+            let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                ep.model = trimmed
+                ep.models = Endpoint.normalizeModels(ep.models, active: trimmed)
+                configuredEndpoints[id] = ep
+            }
         }
-        ep.models = updatedModels
-        configuredEndpoints[id] = ep
-        if activateEndpoint {
-            activatedEndpointID = id
-        }
+        activatedEndpointID = id
         saveNow()
         reloadViewModelOnMain()
     }
 
-    var hasDuplicateProviderGroups: Bool {
+    var hasDuplicateProviderEndpoints: Bool {
         let sorted = allEndpointsSorted
         var seen = Set<String>()
         for ep in sorted {
-            let key = "\(ep.url.absoluteString.lowercased())|\(ep.token)"
-            if !seen.insert(key).inserted {
+            if !seen.insert(ep.providerGroupKey).inserted {
                 return true
             }
         }
@@ -176,17 +179,19 @@ class Configuration: NSObject, ObservableObject {
     }
 
     @discardableResult
-    func mergeDuplicateProviders() -> Int {
+    func groupSameProviderEndpoints() -> Int {
         let sorted = allEndpointsSorted
-        var groups: [String: [Endpoint]] = [:]
-        var orderedKeys: [String] = []
+        guard sorted.count > 1 else { return 0 }
+
+        var groupedOrder: [String] = []
+        var buckets: [String: [Endpoint]] = [:]
         for ep in sorted {
-            let key = "\(ep.url.absoluteString.lowercased())|\(ep.token)"
-            if groups[key] == nil {
-                orderedKeys.append(key)
-                groups[key] = [ep]
+            let key = ep.providerGroupKey
+            if buckets[key] == nil {
+                groupedOrder.append(key)
+                buckets[key] = [ep]
             } else {
-                groups[key]?.append(ep)
+                buckets[key]?.append(ep)
             }
         }
 
@@ -194,57 +199,43 @@ class Configuration: NSObject, ObservableObject {
         var newMap: [Endpoint.ID: Endpoint] = [:]
         var newActivatedID = activatedEndpointID
 
-        for key in orderedKeys {
-            guard let items = groups[key], var primary = items.first else { continue }
-            if items.count > 1 {
-                mergedCount += items.count - 1
+        for key in groupedOrder {
+            guard let items = buckets[key], !items.isEmpty else { continue }
+            if items.count == 1 {
+                let single = items[0]
+                newMap[single.id] = single
+                continue
+            }
+
+            mergedCount += items.count - 1
+            let activeItem = items.first { $0.id == activatedEndpointID }
+            var primary = activeItem ?? items[0]
+            if primary.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                primary.name = items.first(where: { !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })?.name ?? ""
             }
             var combinedModels: [String] = []
-            var seenModels = Set<String>()
             for item in items {
-                for m in item.normalizedModels {
-                    if seenModels.insert(m).inserted {
-                        combinedModels.append(m)
-                    }
-                }
-                if item.id == activatedEndpointID {
-                    newActivatedID = primary.id
-                    if !item.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        primary.model = item.model
-                    }
-                }
-                if primary.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                   !item.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                {
-                    primary.name = item.name
-                }
+                combinedModels.append(contentsOf: item.effectiveModels)
             }
-            primary.models = combinedModels
+            let activeModel = activeItem?.model ?? primary.model
+            primary.models = Endpoint.normalizeModels(combinedModels, active: activeModel)
             if primary.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                primary.model = combinedModels.first ?? ""
+                primary.model = primary.models.first ?? ""
             }
             newMap[primary.id] = primary
+            if items.contains(where: { $0.id == activatedEndpointID }) {
+                newActivatedID = primary.id
+            }
         }
 
         configuredEndpoints = newMap
-        if newMap[newActivatedID] != nil {
-            activatedEndpointID = newActivatedID
-        } else {
-            activatedEndpointID = allEndpointsSorted.first?.id ?? Self.noneActivated
+        if newActivatedID != Self.noneActivated, newMap[newActivatedID] == nil {
+            newActivatedID = newMap.values.sorted { $0.create < $1.create }.first?.id ?? Self.noneActivated
         }
+        activatedEndpointID = newActivatedID
         saveNow()
         reloadViewModelOnMain()
         return mergedCount
-    }
-
-    func saveMenuBackgroundImage(_ data: Data?) {
-        GlobalStorage.shared.saveMenuBackgroundImage(data)
-        updateSettings { settings in
-            settings.menuBgImageVersion = (data != nil && !(data?.isEmpty ?? true)) ? UUID().uuidString : ""
-            if settings.menuBgImageVersion.isEmpty, settings.menuThemePreset == "customImage" {
-                settings.menuThemePreset = "appleIntelligence"
-            }
-        }
     }
 
     // MARK: - Presets
@@ -336,6 +327,21 @@ class Configuration: NSObject, ObservableObject {
         }
     }
 
+    func updateBackgroundImage(_ data: Data?) {
+        GlobalStorage.shared.saveBackgroundImage(data)
+        updateSettings { settings in
+            if data != nil {
+                settings.backgroundImageRevision = UUID().uuidString
+                settings.backgroundMode = "image"
+            } else {
+                settings.backgroundImageRevision = ""
+                if settings.backgroundMode == "image" {
+                    settings.backgroundMode = settings.animatedBackground ? "mesh" : "gradient"
+                }
+            }
+        }
+    }
+
     // MARK: - Backup / Restore
 
     func exportBackupJSON() -> Data? {
@@ -373,7 +379,7 @@ class Configuration: NSObject, ObservableObject {
     // MARK: - Sync & IPC
 
     func notifyConfigurationChangeToSystem() {
-        AIGateClient.executeCommand(.reload)
+        AIGateClient.executeCommand(.reload, secret: serviceSecret)
     }
 
     func saveNow() {
@@ -384,7 +390,7 @@ class Configuration: NSObject, ObservableObject {
         _presetsInitialized.saveNow()
         _configuredPresets.saveNow()
         _appSettings.saveNow()
-        if ProcessInfo.processInfo.environment["BOOT_MODE"] != "ServiceDaemon" {
+        if !isInitializing, ProcessInfo.processInfo.environment["BOOT_MODE"] != "ServiceDaemon" {
             notifyConfigurationChangeToSystem()
         }
     }
@@ -452,6 +458,5 @@ extension Configuration {
         @Published var uiActivatedEndpoint: Configuration.Endpoint?
         @Published var uiPresets: [WritingPreset] = []
         @Published var uiSettings: AppSettings = .default
-        @Published var uiAccentColor: Color = .accent
     }
 }

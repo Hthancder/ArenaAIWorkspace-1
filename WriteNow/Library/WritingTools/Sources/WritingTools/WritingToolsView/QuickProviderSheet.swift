@@ -10,18 +10,18 @@ private struct QuickCommonProvider: Identifiable {
     let name: String
     let url: String
     let defaultModel: String
-    let models: [String]
+    let recommendedModels: [String]
 }
 
 private let quickCommonProviders: [QuickCommonProvider] = [
-    .init(name: "OpenAI", url: "https://api.openai.com/v1", defaultModel: "gpt-4o-mini", models: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"]),
-    .init(name: "DeepSeek", url: "https://api.deepseek.com", defaultModel: "deepseek-chat", models: ["deepseek-chat", "deepseek-reasoner"]),
-    .init(name: "OpenRouter", url: "https://openrouter.ai/api/v1", defaultModel: "openai/gpt-4o-mini", models: ["openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet", "google/gemini-2.5-flash"]),
-    .init(name: "Gemini", url: "https://generativelanguage.googleapis.com/v1beta/openai", defaultModel: "gemini-2.5-flash", models: ["gemini-2.5-flash", "gemini-2.5-pro"]),
-    .init(name: "Groq", url: "https://api.groq.com/openai/v1", defaultModel: "llama-3.3-70b-versatile", models: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]),
-    .init(name: "xAI Grok", url: "https://api.x.ai/v1", defaultModel: "grok-3-mini", models: ["grok-3-mini", "grok-3"]),
-    .init(name: "SiliconFlow", url: "https://api.siliconflow.cn/v1", defaultModel: "Qwen/Qwen2.5-7B-Instruct", models: ["Qwen/Qwen2.5-7B-Instruct", "deepseek-ai/DeepSeek-V3"]),
-    .init(name: "Ollama", url: "http://127.0.0.1:11434/v1", defaultModel: "qwen2.5:7b", models: ["qwen2.5:7b", "llama3.2:latest"]),
+    .init(name: "OpenAI", url: "https://api.openai.com/v1", defaultModel: "gpt-4o-mini", recommendedModels: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"]),
+    .init(name: "DeepSeek", url: "https://api.deepseek.com", defaultModel: "deepseek-chat", recommendedModels: ["deepseek-chat", "deepseek-reasoner"]),
+    .init(name: "OpenRouter", url: "https://openrouter.ai/api/v1", defaultModel: "openai/gpt-4o-mini", recommendedModels: ["openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet", "google/gemini-2.5-flash"]),
+    .init(name: "Gemini", url: "https://generativelanguage.googleapis.com/v1beta/openai", defaultModel: "gemini-2.5-flash", recommendedModels: ["gemini-2.5-flash", "gemini-2.5-pro"]),
+    .init(name: "Groq", url: "https://api.groq.com/openai/v1", defaultModel: "llama-3.3-70b-versatile", recommendedModels: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]),
+    .init(name: "xAI Grok", url: "https://api.x.ai/v1", defaultModel: "grok-3-mini", recommendedModels: ["grok-3-mini", "grok-3"]),
+    .init(name: "SiliconFlow", url: "https://api.siliconflow.cn/v1", defaultModel: "Qwen/Qwen2.5-7B-Instruct", recommendedModels: ["Qwen/Qwen2.5-7B-Instruct", "deepseek-ai/DeepSeek-V3"]),
+    .init(name: "Ollama", url: "http://127.0.0.1:11434/v1", defaultModel: "qwen2.5:7b", recommendedModels: ["qwen2.5:7b", "llama3.2"]),
 ]
 
 struct QuickProviderSheet: View {
@@ -36,7 +36,7 @@ struct QuickProviderSheet: View {
     @State private var token = ""
     @State private var modelID = ""
     @State private var modelsList: [String] = []
-    @State private var newModelDraft = ""
+    @State private var newModelInput = ""
     @State private var pathMode: EndpointItem.PathMode = .auto
     @State private var useStreaming = true
     @State private var timeoutSeconds = 60
@@ -60,20 +60,9 @@ struct QuickProviderSheet: View {
         return fetchedModels.filter { $0.lowercased().contains(q) }
     }
 
-    var effectiveModels: [String] {
-        var result: [String] = []
-        var seen = Set<String>()
-        for m in modelsList {
-            let trimmed = m.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty, seen.insert(trimmed).inserted {
-                result.append(trimmed)
-            }
-        }
-        let active = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !active.isEmpty, seen.insert(active).inserted {
-            result.insert(active, at: 0)
-        }
-        return result
+    private var effectiveActiveModel: String {
+        let trimmed = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? (modelsList.first ?? "") : trimmed
     }
 
     var body: some View {
@@ -102,7 +91,7 @@ struct QuickProviderSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     if isFormVisible {
                         Button("Save") { saveForm() }
-                            .disabled(urlText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || effectiveModels.isEmpty || isSaving)
+                            .disabled(urlText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || effectiveActiveModel.isEmpty || isSaving)
                     } else {
                         Button {
                             beginNew()
@@ -128,10 +117,10 @@ struct QuickProviderSheet: View {
                         .foregroundColor(.secondary)
                 }
             } else {
-                Section("Saved Providers & Models") {
+                Section("Saved Providers (Tap to Activate)") {
                     ForEach(cfg.endpoints) { ep in
                         let isActive = ep.id == cfg.activatedEndpointID
-                        let epModels = ep.normalizedModels
+                        let models = ep.effectiveModels
                         VStack(alignment: .leading, spacing: 6) {
                             HStack(spacing: 10) {
                                 Button {
@@ -146,7 +135,7 @@ struct QuickProviderSheet: View {
                                                 .foregroundColor(.primary)
                                             Text(ep.model)
                                                 .font(.caption)
-                                                .foregroundColor(.secondary)
+                                                .foregroundColor(isActive ? .accentColor : .secondary)
                                                 .lineLimit(1)
                                         }
                                         Spacer()
@@ -165,19 +154,19 @@ struct QuickProviderSheet: View {
                                 .buttonStyle(.borderless)
                             }
 
-                            if epModels.count > 1 {
+                            if models.count > 1 {
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack(spacing: 6) {
-                                        ForEach(epModels, id: \.self) { m in
+                                        ForEach(models, id: \.self) { m in
                                             let selected = isActive && ep.model == m
                                             Button {
                                                 cfg.switchEndpoint(id: ep.id, model: m) { _ in }
                                             } label: {
                                                 Text(m)
-                                                    .font(.system(.caption2, design: .monospaced))
+                                                    .font(.system(size: 11, weight: selected ? .semibold : .regular, design: .monospaced))
                                                     .padding(.horizontal, 8)
                                                     .padding(.vertical, 4)
-                                                    .background(selected ? Color.accentColor.opacity(0.22) : Color.secondary.opacity(0.12))
+                                                    .background(selected ? Color.accentColor.opacity(0.2) : Color.secondary.opacity(0.12))
                                                     .foregroundColor(selected ? .accentColor : .primary)
                                                     .cornerRadius(6)
                                             }
@@ -188,6 +177,7 @@ struct QuickProviderSheet: View {
                                 }
                             }
                         }
+                        .padding(.vertical, 2)
                     }
                     .onDelete { offsets in
                         for idx in offsets where cfg.endpoints.indices.contains(idx) {
@@ -218,9 +208,7 @@ struct QuickProviderSheet: View {
                                     if name.isEmpty { name = p.name }
                                     urlText = p.url
                                     if modelID.isEmpty { modelID = p.defaultModel }
-                                    for m in p.models where !modelsList.contains(m) {
-                                        modelsList.append(m)
-                                    }
+                                    modelsList = EndpointItem.normalizeModels(p.recommendedModels, active: modelID)
                                 } label: {
                                     Text(p.name)
                                         .font(.caption.bold())
@@ -267,35 +255,30 @@ struct QuickProviderSheet: View {
                 }
             }
 
-            Section("Models in Provider") {
+            Section("Models in this Provider") {
                 TextField("Active Model ID (e.g. gpt-4o-mini)", text: $modelID)
                     .autocapitalization(.none)
                     .disableAutocorrection(true)
 
                 HStack {
-                    TextField("Add another model ID...", text: $newModelDraft)
+                    TextField("Add another model...", text: $newModelInput)
                         .autocapitalization(.none)
                         .disableAutocorrection(true)
-                        .onSubmit {
-                            addDraftModel()
-                        }
-                    Button {
-                        addDraftModel()
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
+                    Button("Add") {
+                        addModel(newModelInput, activate: modelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        newModelInput = ""
                     }
-                    .disabled(newModelDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(newModelInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
 
                 ForEach(modelsList, id: \.self) { m in
-                    let isActive = m == modelID.trimmingCharacters(in: .whitespacesAndNewlines)
                     HStack {
                         Button {
                             modelID = m
                         } label: {
                             HStack {
-                                Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
-                                    .foregroundColor(isActive ? .accentColor : .secondary)
+                                Image(systemName: modelID == m ? "checkmark.circle.fill" : "circle")
+                                    .foregroundColor(modelID == m ? .accentColor : .secondary)
                                 Text(m)
                                     .font(.system(.caption, design: .monospaced))
                                     .foregroundColor(.primary)
@@ -304,14 +287,16 @@ struct QuickProviderSheet: View {
                         }
                         .buttonStyle(.plain)
 
-                        Button {
-                            modelsList.removeAll { $0 == m }
-                            if modelID == m { modelID = modelsList.first ?? "" }
-                        } label: {
-                            Image(systemName: "minus.circle")
-                                .foregroundColor(.red)
+                        if modelsList.count > 1 {
+                            Button {
+                                modelsList.removeAll { $0 == m }
+                                if modelID == m { modelID = modelsList.first ?? "" }
+                            } label: {
+                                Image(systemName: "minus.circle.fill")
+                                    .foregroundColor(.red.opacity(0.85))
+                            }
+                            .buttonStyle(.borderless)
                         }
-                        .buttonStyle(.borderless)
                     }
                 }
 
@@ -333,10 +318,9 @@ struct QuickProviderSheet: View {
                         .autocapitalization(.none)
                         .disableAutocorrection(true)
                     ForEach(filteredModels.prefix(60), id: \.self) { m in
-                        let inList = modelsList.contains(m)
+                        let included = modelsList.contains(m) || modelID == m
                         Button {
-                            if !inList { modelsList.append(m) }
-                            modelID = m
+                            addModel(m, activate: true)
                         } label: {
                             HStack {
                                 Text(m)
@@ -344,11 +328,11 @@ struct QuickProviderSheet: View {
                                     .foregroundColor(.primary)
                                 Spacer()
                                 if modelID == m {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(.accentColor)
+                                } else if included {
                                     Image(systemName: "checkmark")
                                         .foregroundColor(.accentColor)
-                                } else if inList {
-                                    Image(systemName: "checkmark.circle")
-                                        .foregroundColor(.secondary)
                                 } else {
                                     Image(systemName: "plus.circle")
                                         .foregroundColor(.secondary)
@@ -372,12 +356,12 @@ struct QuickProviderSheet: View {
                     testConnection()
                 } label: {
                     HStack {
-                        Label("Test Active Model", systemImage: "bolt.horizontal.circle")
+                        Label("Test Connection", systemImage: "bolt.horizontal.circle")
                         Spacer()
                         if isTesting { ProgressView() }
                     }
                 }
-                .disabled(isTesting || effectiveModels.isEmpty)
+                .disabled(isTesting || effectiveActiveModel.isEmpty)
 
                 if !statusMessage.isEmpty {
                     Text(statusMessage)
@@ -401,7 +385,7 @@ struct QuickProviderSheet: View {
                         Spacer()
                     }
                 }
-                .disabled(isSaving || urlText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || effectiveModels.isEmpty)
+                .disabled(isSaving || urlText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || effectiveActiveModel.isEmpty)
 
                 if let target = editingTarget {
                     Button(role: .destructive) {
@@ -421,16 +405,15 @@ struct QuickProviderSheet: View {
         }
     }
 
-    private func addDraftModel() {
-        let trimmed = newModelDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func addModel(_ raw: String, activate: Bool) {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         if !modelsList.contains(trimmed) {
             modelsList.append(trimmed)
         }
-        if modelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if activate {
             modelID = trimmed
         }
-        newModelDraft = ""
     }
 
     private func beginNew() {
@@ -441,7 +424,7 @@ struct QuickProviderSheet: View {
         token = ""
         modelID = ""
         modelsList = []
-        newModelDraft = ""
+        newModelInput = ""
         pathMode = .auto
         useStreaming = true
         timeoutSeconds = cfg.settings.requestTimeout
@@ -458,8 +441,8 @@ struct QuickProviderSheet: View {
         urlText = ep.url.absoluteString
         token = ep.token
         modelID = ep.model
-        modelsList = ep.normalizedModels
-        newModelDraft = ""
+        modelsList = ep.effectiveModels
+        newModelInput = ""
         pathMode = ep.pathMode
         useStreaming = ep.useStreaming
         timeoutSeconds = ep.timeoutSeconds
@@ -485,8 +468,7 @@ struct QuickProviderSheet: View {
                 statusIsError = false
                 statusMessage = "Loaded \(models.count) models."
                 if modelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, let first = models.first {
-                    modelID = first
-                    if !modelsList.contains(first) { modelsList.append(first) }
+                    addModel(first, activate: true)
                 }
             case let .failure(err):
                 statusIsError = true
@@ -496,17 +478,12 @@ struct QuickProviderSheet: View {
     }
 
     private func testConnection() {
-        let testModel = modelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? (effectiveModels.first ?? "")
-            : modelID.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !testModel.isEmpty else { return }
-
         isTesting = true
         statusMessage = ""
         cfg.testEndpointViaDaemon(
             url: urlText,
             token: token,
-            model: testModel,
+            model: effectiveActiveModel,
             pathMode: pathMode,
             customHeaders: editingTarget?.customHeaders ?? [:],
             timeoutSeconds: timeoutSeconds
@@ -518,20 +495,17 @@ struct QuickProviderSheet: View {
     }
 
     private func saveForm() {
-        let finalModels = effectiveModels
-        guard !finalModels.isEmpty else { return }
-        let rawActive = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
-        let activeModel = rawActive.isEmpty ? finalModels[0] : rawActive
-
         isSaving = true
         statusMessage = ""
+        let activeModel = effectiveActiveModel
+        let allModels = EndpointItem.normalizeModels(modelsList, active: activeModel)
         cfg.upsertEndpoint(
             id: editingTarget?.id,
             name: name,
             url: urlText,
             token: token,
             model: activeModel,
-            models: finalModels,
+            models: allModels,
             pathMode: pathMode,
             customHeaders: editingTarget?.customHeaders ?? [:],
             useStreaming: useStreaming,

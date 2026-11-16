@@ -261,30 +261,37 @@ extension WritingToolsView {
     func accept(forceAppend: Bool? = nil) {
         let shouldAppend = forceAppend ?? (currentTask.insertBehavior == .append)
         let finalText = output
-        let captured = TextTransitionAnimator.captureBeforeReplace(context: context)
-        let animatedDisplayText: String
-        if shouldAppend {
-            let existing = context.textProxy.selectedText
-            if existing.isEmpty {
-                animatedDisplayText = finalText
-            } else if existing.hasSuffix("\n") {
-                animatedDisplayText = "\(existing)\(finalText)"
-            } else {
-                animatedDisplayText = "\(existing)\n\n\(finalText)"
-            }
-        } else {
-            animatedDisplayText = finalText
-        }
+        let oldText = context.textProxy.selectedText
+        let selectionRects = context.textProxy.selectionRectsInView
+        let fallbackRect = context.anchorView.frame
+        let attrs = context.textProxy.selectedTextAttribute
+        let targetView = context.targetView
+        let animStyle = cfg.settings.textReplacementAnimation
+        let accentHex = cfg.settings.accentColorHex
 
         dismiss()
+
         if shouldAppend {
             context.textProxy.appendText(with: finalText)
         } else {
             context.textProxy.replaceText(with: finalText)
         }
-        if let captured {
+
+        if animStyle != "none" {
+            let displayedNewText = shouldAppend
+                ? (oldText.isEmpty ? finalText : "\(oldText)\n\n\(finalText)")
+                : finalText
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-                TextTransitionAnimator.play(capture: captured, newText: animatedDisplayText)
+                TextReplacementAnimator.animate(
+                    style: animStyle,
+                    targetView: targetView,
+                    selectionRectsInView: selectionRects,
+                    fallbackRectInTarget: fallbackRect,
+                    oldText: oldText,
+                    newText: displayedNewText,
+                    attributes: attrs,
+                    accentHex: accentHex
+                )
             }
         }
     }

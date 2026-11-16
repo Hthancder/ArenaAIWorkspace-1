@@ -11,15 +11,15 @@ struct EndpointButton: View {
     let endpoint: Configuration.Endpoint
     let onEdit: () -> Void
 
-    @StateObject var configuration = Configuration.shared
-    @StateObject var viewModel = Configuration.shared.viewModel
+    @ObservedObject var configuration = Configuration.shared
+    @ObservedObject var viewModel = Configuration.shared.viewModel
 
     var isActivated: Bool {
         viewModel.uiActivatedEndpoint?.id == endpoint.id
     }
 
-    var models: [String] {
-        endpoint.normalizedModels
+    private var savedModels: [String] {
+        endpoint.effectiveModels
     }
 
     var body: some View {
@@ -28,14 +28,14 @@ struct EndpointButton: View {
                 Button {
                     if isActivated {
                         configuration.activatedEndpointID = Configuration.noneActivated
+                        configuration.saveNow()
                     } else {
-                        configuration.activatedEndpointID = endpoint.id
+                        configuration.activateEndpoint(id: endpoint.id)
                     }
-                    configuration.saveNow()
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: isActivated ? "checkmark.circle.fill" : "circle")
-                            .foregroundColor(isActivated ? viewModel.uiAccentColor : .secondary)
+                            .foregroundColor(isActivated ? .accent : .secondary)
                         VStack(alignment: .leading, spacing: 3) {
                             HStack(spacing: 6) {
                                 Text(endpoint.displayName)
@@ -43,19 +43,19 @@ struct EndpointButton: View {
                                     .fontWeight(.semibold)
                                     .foregroundColor(.primary)
                                     .lineLimit(1)
-                                if models.count > 1 {
-                                    Text("\(models.count) models")
-                                        .font(.caption2.weight(.semibold))
+                                if savedModels.count > 1 {
+                                    Text("\(savedModels.count) models")
+                                        .font(.caption2)
                                         .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(viewModel.uiAccentColor.opacity(0.14))
-                                        .foregroundColor(viewModel.uiAccentColor)
-                                        .cornerRadius(6)
+                                        .padding(.vertical, 1)
+                                        .background(Color.accent.opacity(0.14))
+                                        .foregroundColor(.accent)
+                                        .cornerRadius(5)
                                 }
                             }
                             Text(endpoint.displayModel)
                                 .font(.caption)
-                                .foregroundColor(isActivated ? viewModel.uiAccentColor : .secondary)
+                                .foregroundColor(isActivated ? .accent : .secondary)
                                 .lineLimit(1)
                             Text(endpoint.url.absoluteString)
                                 .font(.caption2)
@@ -73,38 +73,38 @@ struct EndpointButton: View {
                 } label: {
                     Image(systemName: "slider.horizontal.3")
                         .font(.subheadline)
-                        .foregroundColor(viewModel.uiAccentColor)
+                        .foregroundColor(.accent)
                         .padding(6)
                 }
                 .buttonStyle(.borderless)
             }
 
-            if models.count > 1 {
+            if savedModels.count > 1 {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
-                        ForEach(models, id: \.self) { m in
-                            let selected = isActivated && (endpoint.model == m)
-                            let activeInProvider = (endpoint.model == m)
+                        ForEach(savedModels, id: \.self) { m in
+                            let isSelected = isActivated && endpoint.model == m
+                            let isDefaultForProvider = !isActivated && endpoint.model == m
                             Button {
-                                configuration.switchModel(forEndpoint: endpoint.id, model: m, activateEndpoint: true)
+                                configuration.activateEndpoint(id: endpoint.id, model: m)
                             } label: {
                                 HStack(spacing: 4) {
-                                    if selected {
+                                    if isSelected {
                                         Image(systemName: "checkmark")
                                             .font(.system(size: 9, weight: .bold))
                                     }
                                     Text(m)
-                                        .font(.system(.caption2, design: .monospaced))
+                                        .font(.system(size: 11, weight: isSelected ? .semibold : .regular, design: .monospaced))
                                         .lineLimit(1)
                                 }
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
                                 .background(
-                                    selected
-                                        ? viewModel.uiAccentColor.opacity(0.22)
-                                        : (activeInProvider ? Color.secondary.opacity(0.18) : Color.secondary.opacity(0.10))
+                                    isSelected
+                                        ? Color.accent.opacity(0.22)
+                                        : (isDefaultForProvider ? Color.secondary.opacity(0.16) : Color.secondary.opacity(0.09))
                                 )
-                                .foregroundColor(selected ? viewModel.uiAccentColor : .primary)
+                                .foregroundColor(isSelected ? .accent : .primary)
                                 .cornerRadius(7)
                             }
                             .buttonStyle(.borderless)
@@ -119,30 +119,12 @@ struct EndpointButton: View {
             Button {
                 if isActivated {
                     configuration.activatedEndpointID = Configuration.noneActivated
+                    configuration.saveNow()
                 } else {
-                    configuration.activatedEndpointID = endpoint.id
+                    configuration.activateEndpoint(id: endpoint.id)
                 }
-                configuration.saveNow()
             } label: {
                 Label(isActivated ? "Deactivate" : "Activate", systemImage: isActivated ? "xmark.circle" : "checkmark.circle")
-            }
-
-            if models.count > 1 {
-                Menu {
-                    ForEach(models, id: \.self) { m in
-                        Button {
-                            configuration.switchModel(forEndpoint: endpoint.id, model: m, activateEndpoint: true)
-                        } label: {
-                            if isActivated && endpoint.model == m {
-                                Label(m, systemImage: "checkmark")
-                            } else {
-                                Text(m)
-                            }
-                        }
-                    }
-                } label: {
-                    Label("Switch Model", systemImage: "cpu")
-                }
             }
 
             Button {
@@ -157,7 +139,7 @@ struct EndpointButton: View {
                     url: endpoint.url,
                     token: endpoint.token,
                     model: endpoint.model,
-                    models: endpoint.normalizedModels,
+                    models: endpoint.effectiveModels,
                     pathMode: endpoint.pathMode,
                     customHeaders: endpoint.customHeaders,
                     useStreaming: endpoint.useStreaming,

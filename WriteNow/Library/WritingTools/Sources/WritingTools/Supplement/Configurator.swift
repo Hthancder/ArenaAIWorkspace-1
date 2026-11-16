@@ -8,7 +8,6 @@
 import Combine
 import Foundation
 import OpenAI
-import UIKit
 import WritingToolsLocalizable
 
 public struct EndpointItem: Codable, Identifiable, Equatable, Hashable {
@@ -36,22 +35,6 @@ public struct EndpointItem: Codable, Identifiable, Equatable, Hashable {
     public var useStreaming: Bool
     public var timeoutSeconds: Int
 
-    public var normalizedModels: [String] {
-        var seen = Set<String>()
-        var result: [String] = []
-        for raw in models {
-            let m = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !m.isEmpty, seen.insert(m).inserted {
-                result.append(m)
-            }
-        }
-        let active = model.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !active.isEmpty, seen.insert(active).inserted {
-            result.insert(active, at: 0)
-        }
-        return result
-    }
-
     public var displayName: String {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty { return trimmed }
@@ -66,6 +49,26 @@ public struct EndpointItem: Codable, Identifiable, Equatable, Hashable {
         model.components(separatedBy: "/").last?.components(separatedBy: ":").first ?? model
     }
 
+    public var effectiveModels: [String] {
+        Self.normalizeModels(models, active: model)
+    }
+
+    public static func normalizeModels(_ list: [String], active: String) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for item in list {
+            let t = item.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !t.isEmpty, seen.insert(t).inserted {
+                result.append(t)
+            }
+        }
+        let activeTrimmed = active.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !activeTrimmed.isEmpty, seen.insert(activeTrimmed).inserted {
+            result.insert(activeTrimmed, at: 0)
+        }
+        return result
+    }
+
     public init(
         id: UUID = UUID(),
         create: Date = Date(),
@@ -73,7 +76,7 @@ public struct EndpointItem: Codable, Identifiable, Equatable, Hashable {
         url: URL,
         token: String = "",
         model: String = "",
-        models: [String]? = nil,
+        models: [String] = [],
         pathMode: PathMode = .auto,
         customHeaders: [String: String] = [:],
         useStreaming: Bool = true,
@@ -84,20 +87,10 @@ public struct EndpointItem: Codable, Identifiable, Equatable, Hashable {
         self.name = name
         self.url = url
         self.token = token
-        let active = model.trimmingCharacters(in: .whitespacesAndNewlines)
-        var merged: [String] = []
-        var seen = Set<String>()
-        for raw in (models ?? []) {
-            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty, seen.insert(trimmed).inserted {
-                merged.append(trimmed)
-            }
-        }
-        if !active.isEmpty, seen.insert(active).inserted {
-            merged.insert(active, at: 0)
-        }
-        self.model = active.isEmpty ? (merged.first ?? "") : active
-        self.models = merged
+        let trimmedActive = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedList = Self.normalizeModels(models, active: trimmedActive)
+        self.models = normalizedList
+        self.model = trimmedActive.isEmpty ? (normalizedList.first ?? "") : trimmedActive
         self.pathMode = pathMode
         self.customHeaders = customHeaders
         self.useStreaming = useStreaming
@@ -115,21 +108,12 @@ public struct EndpointItem: Codable, Identifiable, Equatable, Hashable {
         name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
         url = try c.decode(URL.self, forKey: .url)
         token = try c.decodeIfPresent(String.self, forKey: .token) ?? ""
-        let decodedModel = (try c.decodeIfPresent(String.self, forKey: .model) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let decodedModel = (try c.decodeIfPresent(String.self, forKey: .model) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         let decodedModels = try c.decodeIfPresent([String].self, forKey: .models) ?? []
-        var merged: [String] = []
-        var seen = Set<String>()
-        for raw in decodedModels {
-            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty, seen.insert(trimmed).inserted {
-                merged.append(trimmed)
-            }
-        }
-        if !decodedModel.isEmpty, seen.insert(decodedModel).inserted {
-            merged.insert(decodedModel, at: 0)
-        }
-        model = decodedModel.isEmpty ? (merged.first ?? "") : decodedModel
-        models = merged
+        let normalizedList = Self.normalizeModels(decodedModels, active: decodedModel)
+        models = normalizedList
+        model = decodedModel.isEmpty ? (normalizedList.first ?? "") : decodedModel
         pathMode = try c.decodeIfPresent(PathMode.self, forKey: .pathMode) ?? .auto
         customHeaders = try c.decodeIfPresent([String: String].self, forKey: .customHeaders) ?? [:]
         useStreaming = try c.decodeIfPresent(Bool.self, forKey: .useStreaming) ?? true
@@ -150,14 +134,15 @@ public struct RuntimeSettings: Codable, Equatable {
     public var autoSelectAllIfEmpty: Bool
     public var maskEndpointKeys: Bool
     public var recentCustomPrompts: [String]
-    public var textAnimationStyle: String
-    public var menuThemePreset: String
-    public var menuCustomColorHex1: String
-    public var menuCustomColorHex2: String
-    public var menuBgImageVersion: String
-    public var menuBgImageBlur: Double
-    public var menuBgImageDim: Double
     public var accentColorHex: String
+    public var menuThemePreset: String
+    public var backgroundMode: String
+    public var customThemeColorsHex: [String]
+    public var solidBackgroundHex: String
+    public var backgroundImageBlur: Double
+    public var backgroundImageDim: Double
+    public var backgroundImageRevision: String
+    public var textReplacementAnimation: String
 
     public static let `default` = RuntimeSettings(
         menuTitle: "Write Now",
@@ -172,22 +157,24 @@ public struct RuntimeSettings: Codable, Equatable {
         autoSelectAllIfEmpty: true,
         maskEndpointKeys: false,
         recentCustomPrompts: [],
-        textAnimationStyle: "shatter",
-        menuThemePreset: "appleIntelligence",
-        menuCustomColorHex1: "#1E3A8A",
-        menuCustomColorHex2: "#0F172A",
-        menuBgImageVersion: "",
-        menuBgImageBlur: 4.0,
-        menuBgImageDim: 0.45,
-        accentColorHex: "#3B82F6"
+        accentColorHex: "#3B82F6",
+        menuThemePreset: "midnight_ocean",
+        backgroundMode: "mesh",
+        customThemeColorsHex: ["#3B82F6", "#8B5CF6", "#06B6D4", "#0F172A"],
+        solidBackgroundHex: "#111827",
+        backgroundImageBlur: 6.0,
+        backgroundImageDim: 0.45,
+        backgroundImageRevision: "",
+        textReplacementAnimation: "scatter_assemble"
     )
 
     enum CodingKeys: String, CodingKey {
         case menuTitle, globalSystemPrompt, useFewShotExamples, stripThinkingTags
         case streamingEnabled, requestTimeout, gridColumns, popoverSizePreset
         case animatedBackground, autoSelectAllIfEmpty, maskEndpointKeys, recentCustomPrompts
-        case textAnimationStyle, menuThemePreset, menuCustomColorHex1, menuCustomColorHex2
-        case menuBgImageVersion, menuBgImageBlur, menuBgImageDim, accentColorHex
+        case accentColorHex, menuThemePreset, backgroundMode, customThemeColorsHex
+        case solidBackgroundHex, backgroundImageBlur, backgroundImageDim
+        case backgroundImageRevision, textReplacementAnimation
     }
 
     public init(
@@ -203,14 +190,15 @@ public struct RuntimeSettings: Codable, Equatable {
         autoSelectAllIfEmpty: Bool = true,
         maskEndpointKeys: Bool = false,
         recentCustomPrompts: [String] = [],
-        textAnimationStyle: String = "shatter",
-        menuThemePreset: String = "appleIntelligence",
-        menuCustomColorHex1: String = "#1E3A8A",
-        menuCustomColorHex2: String = "#0F172A",
-        menuBgImageVersion: String = "",
-        menuBgImageBlur: Double = 4.0,
-        menuBgImageDim: Double = 0.45,
-        accentColorHex: String = "#3B82F6"
+        accentColorHex: String = "#3B82F6",
+        menuThemePreset: String = "midnight_ocean",
+        backgroundMode: String = "mesh",
+        customThemeColorsHex: [String] = ["#3B82F6", "#8B5CF6", "#06B6D4", "#0F172A"],
+        solidBackgroundHex: String = "#111827",
+        backgroundImageBlur: Double = 6.0,
+        backgroundImageDim: Double = 0.45,
+        backgroundImageRevision: String = "",
+        textReplacementAnimation: String = "scatter_assemble"
     ) {
         self.menuTitle = menuTitle
         self.globalSystemPrompt = globalSystemPrompt
@@ -224,14 +212,15 @@ public struct RuntimeSettings: Codable, Equatable {
         self.autoSelectAllIfEmpty = autoSelectAllIfEmpty
         self.maskEndpointKeys = maskEndpointKeys
         self.recentCustomPrompts = recentCustomPrompts
-        self.textAnimationStyle = textAnimationStyle
-        self.menuThemePreset = menuThemePreset
-        self.menuCustomColorHex1 = menuCustomColorHex1
-        self.menuCustomColorHex2 = menuCustomColorHex2
-        self.menuBgImageVersion = menuBgImageVersion
-        self.menuBgImageBlur = menuBgImageBlur
-        self.menuBgImageDim = menuBgImageDim
         self.accentColorHex = accentColorHex
+        self.menuThemePreset = menuThemePreset
+        self.backgroundMode = backgroundMode
+        self.customThemeColorsHex = customThemeColorsHex
+        self.solidBackgroundHex = solidBackgroundHex
+        self.backgroundImageBlur = backgroundImageBlur
+        self.backgroundImageDim = backgroundImageDim
+        self.backgroundImageRevision = backgroundImageRevision
+        self.textReplacementAnimation = textReplacementAnimation
     }
 
     public init(from decoder: Decoder) throws {
@@ -248,14 +237,15 @@ public struct RuntimeSettings: Codable, Equatable {
         autoSelectAllIfEmpty = try c.decodeIfPresent(Bool.self, forKey: .autoSelectAllIfEmpty) ?? true
         maskEndpointKeys = try c.decodeIfPresent(Bool.self, forKey: .maskEndpointKeys) ?? false
         recentCustomPrompts = try c.decodeIfPresent([String].self, forKey: .recentCustomPrompts) ?? []
-        textAnimationStyle = try c.decodeIfPresent(String.self, forKey: .textAnimationStyle) ?? "shatter"
-        menuThemePreset = try c.decodeIfPresent(String.self, forKey: .menuThemePreset) ?? "appleIntelligence"
-        menuCustomColorHex1 = try c.decodeIfPresent(String.self, forKey: .menuCustomColorHex1) ?? "#1E3A8A"
-        menuCustomColorHex2 = try c.decodeIfPresent(String.self, forKey: .menuCustomColorHex2) ?? "#0F172A"
-        menuBgImageVersion = try c.decodeIfPresent(String.self, forKey: .menuBgImageVersion) ?? ""
-        menuBgImageBlur = try c.decodeIfPresent(Double.self, forKey: .menuBgImageBlur) ?? 4.0
-        menuBgImageDim = try c.decodeIfPresent(Double.self, forKey: .menuBgImageDim) ?? 0.45
         accentColorHex = try c.decodeIfPresent(String.self, forKey: .accentColorHex) ?? "#3B82F6"
+        menuThemePreset = try c.decodeIfPresent(String.self, forKey: .menuThemePreset) ?? "midnight_ocean"
+        backgroundMode = try c.decodeIfPresent(String.self, forKey: .backgroundMode) ?? (animatedBackground ? "mesh" : "gradient")
+        customThemeColorsHex = try c.decodeIfPresent([String].self, forKey: .customThemeColorsHex) ?? ["#3B82F6", "#8B5CF6", "#06B6D4", "#0F172A"]
+        solidBackgroundHex = try c.decodeIfPresent(String.self, forKey: .solidBackgroundHex) ?? "#111827"
+        backgroundImageBlur = try c.decodeIfPresent(Double.self, forKey: .backgroundImageBlur) ?? 6.0
+        backgroundImageDim = try c.decodeIfPresent(Double.self, forKey: .backgroundImageDim) ?? 0.45
+        backgroundImageRevision = try c.decodeIfPresent(String.self, forKey: .backgroundImageRevision) ?? ""
+        textReplacementAnimation = try c.decodeIfPresent(String.self, forKey: .textReplacementAnimation) ?? "scatter_assemble"
     }
 }
 
@@ -284,17 +274,15 @@ public class Configurator: ObservableObject {
     public static let shared = Configurator()
 
     private let cachedConfigDefaultsKey = "WriteNowCachedRuntimeConfigV1"
-    private let cachedBgImageDefaultsKey = "WriteNowCachedBgImageDataV1"
-    private let cachedBgImageVersionKey = "WriteNowCachedBgImageVersionV1"
+    private let cachedBgImageKey = "WriteNowCachedBgImageDataV1"
+    private let cachedBgRevKey = "WriteNowCachedBgImageRevV1"
 
     @Published public var endpoints: [EndpointItem] = []
     @Published public var activatedEndpointID: UUID = UUID()
     @Published public var presets: [WritingPresetItem] = WritingPresetItem.defaultPresets
     @Published public var settings: RuntimeSettings = .default
     @Published public var daemonConnected: Bool = true
-    @Published public var customBackgroundImage: UIImage? = nil
-
-    private var loadedBgImageVersion: String = ""
+    @Published public var customBackgroundImageData: Data? = nil
 
     public var activeEndpoint: EndpointItem? {
         endpoints.first { $0.id == activatedEndpointID }
@@ -325,16 +313,11 @@ public class Configurator: ObservableObject {
     }()
 
     private init() {
+        customBackgroundImageData = UserDefaults.standard.data(forKey: cachedBgImageKey)
         if let data = UserDefaults.standard.data(forKey: cachedConfigDefaultsKey),
            let cached = try? JSONDecoder().decode(RuntimeConfig.self, from: data)
         {
             applyRuntimeConfig(cached, cacheToDefaults: false)
-        }
-        if let imgData = UserDefaults.standard.data(forKey: cachedBgImageDefaultsKey),
-           let img = UIImage(data: imgData)
-        {
-            customBackgroundImage = img
-            loadedBgImageVersion = UserDefaults.standard.string(forKey: cachedBgImageVersionKey) ?? ""
         }
     }
 
@@ -353,7 +336,35 @@ public class Configurator: ObservableObject {
             DispatchQueue.main.async {
                 self.daemonConnected = true
                 self.applyRuntimeConfig(decoded, cacheToDefaults: true)
+                self.refreshBackgroundImageIfNeeded(revision: decoded.settings.backgroundImageRevision, mode: decoded.settings.backgroundMode)
                 completion?(decoded)
+            }
+        }.resume()
+    }
+
+    private func refreshBackgroundImageIfNeeded(revision: String, mode: String) {
+        if revision.isEmpty {
+            if customBackgroundImageData != nil {
+                customBackgroundImageData = nil
+                UserDefaults.standard.removeObject(forKey: cachedBgImageKey)
+                UserDefaults.standard.removeObject(forKey: cachedBgRevKey)
+            }
+            return
+        }
+        guard mode == "image" else { return }
+        let cachedRev = UserDefaults.standard.string(forKey: cachedBgRevKey) ?? ""
+        if cachedRev == revision, customBackgroundImageData != nil {
+            return
+        }
+        guard let url = URL(string: "http://127.0.0.1:5540/metrics?query=bg_image") else { return }
+        var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 5)
+        req.httpMethod = "GET"
+        URLSession.shared.dataTask(with: req) { [weak self] data, _, error in
+            guard let self, error == nil, let data, !data.isEmpty else { return }
+            DispatchQueue.main.async {
+                self.customBackgroundImageData = data
+                UserDefaults.standard.set(data, forKey: self.cachedBgImageKey)
+                UserDefaults.standard.set(revision, forKey: self.cachedBgRevKey)
             }
         }.resume()
     }
@@ -368,39 +379,6 @@ public class Configurator: ObservableObject {
         if cacheToDefaults, let data = try? JSONEncoder().encode(cfg) {
             UserDefaults.standard.set(data, forKey: cachedConfigDefaultsKey)
         }
-
-        syncBackgroundImageIfNeeded(version: cfg.settings.menuBgImageVersion)
-    }
-
-    private func syncBackgroundImageIfNeeded(version: String) {
-        if version.isEmpty {
-            if customBackgroundImage != nil || !loadedBgImageVersion.isEmpty {
-                loadedBgImageVersion = ""
-                customBackgroundImage = nil
-                UserDefaults.standard.removeObject(forKey: cachedBgImageDefaultsKey)
-                UserDefaults.standard.removeObject(forKey: cachedBgImageVersionKey)
-            }
-            return
-        }
-        guard version != loadedBgImageVersion || customBackgroundImage == nil else { return }
-        guard let url = URL(string: "http://127.0.0.1:5540/metrics?query=bg_image") else { return }
-        var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 5)
-        req.httpMethod = "GET"
-        URLSession.shared.dataTask(with: req) { [weak self] data, response, error in
-            guard let self,
-                  error == nil,
-                  let http = response as? HTTPURLResponse,
-                  (200 ..< 300).contains(http.statusCode),
-                  let data,
-                  let image = UIImage(data: data)
-            else { return }
-            DispatchQueue.main.async {
-                self.loadedBgImageVersion = version
-                self.customBackgroundImage = image
-                UserDefaults.standard.set(data, forKey: self.cachedBgImageDefaultsKey)
-                UserDefaults.standard.set(version, forKey: self.cachedBgImageVersionKey)
-            }
-        }.resume()
     }
 
     public func switchEndpoint(id: UUID, model: String? = nil, completion: ((Bool) -> Void)? = nil) {
@@ -419,15 +397,9 @@ public class Configurator: ObservableObject {
         }
         var request = URLRequest(url: url, timeoutInterval: 4)
         request.httpMethod = "GET"
-        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+        URLSession.shared.dataTask(with: request) { [weak self] _, response, error in
             let ok = error == nil && ((response as? HTTPURLResponse)?.statusCode == 200)
-            if ok, let data, let cfg = try? JSONDecoder().decode(RuntimeConfig.self, from: data) {
-                DispatchQueue.main.async {
-                    self?.daemonConnected = true
-                    self?.applyRuntimeConfig(cfg, cacheToDefaults: true)
-                    completion?(true)
-                }
-            } else if ok {
+            if ok {
                 self?.refreshRuntimeConfig { _ in
                     completion?(true)
                 }
@@ -443,7 +415,7 @@ public class Configurator: ObservableObject {
         url: String,
         token: String,
         model: String,
-        models: [String]? = nil,
+        models: [String] = [],
         pathMode: EndpointItem.PathMode = .auto,
         customHeaders: [String: String] = [:],
         useStreaming: Bool = true,
@@ -451,20 +423,19 @@ public class Configurator: ObservableObject {
         activate: Bool = true,
         completion: @escaping (Result<RuntimeConfig, Error>) -> Void
     ) {
+        let normalizedModels = EndpointItem.normalizeModels(models, active: model)
         var body: [String: Any] = [
             "name": name,
             "url": url,
             "token": token,
             "model": model,
+            "models": normalizedModels,
             "pathMode": pathMode.rawValue,
             "customHeaders": customHeaders,
             "useStreaming": useStreaming,
             "timeoutSeconds": timeoutSeconds,
             "activate": activate,
         ]
-        if let models {
-            body["models"] = models
-        }
         if let id { body["id"] = id.uuidString }
         performJSONAction(command: "upsert_endpoint", body: body) { result in
             switch result {

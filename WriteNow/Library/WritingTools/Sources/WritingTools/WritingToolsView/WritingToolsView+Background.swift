@@ -11,80 +11,55 @@ import SwiftUI
 import UIKit
 
 extension WritingToolsView {
+    private static let themeHexMap: [String: [String]] = [
+        "midnight_ocean": ["#0EA5E9", "#2563EB", "#1E1B4B", "#0F172A"],
+        "aurora_borealis": ["#10B981", "#06B6D4", "#6366F1", "#0B1120"],
+        "sunset_amber": ["#F97316", "#EF4444", "#DB2777", "#1F1024"],
+        "cyberpunk_neon": ["#06B6D4", "#D946EF", "#7C3AED", "#09091A"],
+        "obsidian_minimal": ["#475569", "#334155", "#1E293B", "#09090B"],
+        "apple_intelligence": ["#F86594", "#A855F7", "#3B82F6", "#181029"],
+    ]
+
     var themeColors: [Color] {
-        switch cfg.settings.menuThemePreset {
-        case "midnightBlue":
-            return [
-                Color(wtHex: "#0F172A"),
-                Color(wtHex: "#1E3A8A"),
-                Color(wtHex: "#0284C7"),
-                Color(wtHex: "#0EA5E9"),
-            ]
-        case "emeraldForest":
-            return [
-                Color(wtHex: "#022C22"),
-                Color(wtHex: "#065F46"),
-                Color(wtHex: "#10B981"),
-                Color(wtHex: "#0D9488"),
-            ]
-        case "sunsetAmber":
-            return [
-                Color(wtHex: "#451A03"),
-                Color(wtHex: "#C2410C"),
-                Color(wtHex: "#F59E0B"),
-                Color(wtHex: "#EA580C"),
-            ]
-        case "obsidianMono":
-            return [
-                Color(wtHex: "#09090B"),
-                Color(wtHex: "#18181B"),
-                Color(wtHex: "#27272A"),
-                Color(wtHex: "#3F3F46"),
-            ]
-        case "sakuraBlossom":
-            return [
-                Color(wtHex: "#4C0519"),
-                Color(wtHex: "#BE185D"),
-                Color(wtHex: "#EC4899"),
-                Color(wtHex: "#9333EA"),
-            ]
-        case "cyberNeon":
-            return [
-                Color(wtHex: "#1E1B4B"),
-                Color(wtHex: "#4338CA"),
-                Color(wtHex: "#06B6D4"),
-                Color(wtHex: "#22C55E"),
-            ]
-        case "customColor":
-            let c1 = Color(wtHex: cfg.settings.menuCustomColorHex1, fallback: Color(wtHex: "#1E3A8A"))
-            let c2 = Color(wtHex: cfg.settings.menuCustomColorHex2, fallback: Color(wtHex: "#0F172A"))
-            return [c1, c2, c1.opacity(0.85), c2.opacity(0.95)]
-        default:
-            return ColorfulPreset.appleIntelligence
-                .colors
-                .map { $0.withAlphaComponent(1.0) }
-                .map { Color($0) }
+        let s = cfg.settings
+        if s.menuThemePreset == "custom_colors" {
+            let parsed = s.customThemeColorsHex.compactMap { Self.color(fromHex: $0) }
+            if parsed.count >= 2 { return parsed }
         }
+        let hexes = Self.themeHexMap[s.menuThemePreset] ?? Self.themeHexMap["midnight_ocean"]!
+        let parsed = hexes.compactMap { Self.color(fromHex: $0) }
+        if !parsed.isEmpty { return parsed }
+        return ColorfulPreset.appleIntelligence
+            .colors
+            .map { $0.withAlphaComponent(1.0) }
+            .map { Color($0) }
     }
 
     @ViewBuilder
     var background: some View {
-        if cfg.settings.menuThemePreset == "customImage", let bgImage = cfg.customBackgroundImage {
-            ZStack {
-                Color.black
-                GeometryReader { geo in
-                    Image(uiImage: bgImage)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .clipped()
-                        .blur(radius: CGFloat(max(0, cfg.settings.menuBgImageBlur)))
-                }
-                Color.black.opacity(min(max(cfg.settings.menuBgImageDim, 0.05), 0.90))
+        let s = cfg.settings
+        if s.backgroundMode == "image",
+           let imgData = cfg.customBackgroundImageData,
+           let uiImage = UIImage(data: imgData)
+        {
+            GeometryReader { geo in
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: geo.size.width + 128, height: geo.size.height + 128)
+                    .clipped()
+                    .blur(radius: CGFloat(s.backgroundImageBlur))
+                    .overlay(Color.black.opacity(min(max(s.backgroundImageDim, 0.0), 0.90)))
+                    .position(x: geo.size.width / 2, y: geo.size.height / 2)
             }
             .ignoresSafeArea()
+            .background(Color.black)
             .padding(-64)
-        } else if cfg.settings.animatedBackground {
+        } else if s.backgroundMode == "solid" {
+            (Self.color(fromHex: s.solidBackgroundHex) ?? Color(red: 0.07, green: 0.09, blue: 0.14))
+                .ignoresSafeArea()
+                .padding(-64)
+        } else if s.backgroundMode == "mesh" && s.animatedBackground {
             ColorfulView(
                 color: .constant(themeColors),
                 speed: .constant(0.25),
@@ -100,29 +75,24 @@ extension WritingToolsView {
             .padding(-64)
         } else {
             LinearGradient(
-                colors: Array(themeColors.prefix(3)),
+                colors: themeColors,
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
             .opacity(0.92)
             .ignoresSafeArea()
-            .background(.black)
+            .background(Color.black)
             .padding(-64)
         }
     }
-}
 
-private extension Color {
-    init(wtHex: String, fallback: Color = .blue) {
-        var hex = wtHex.trimmingCharacters(in: .whitespacesAndNewlines)
+    private static func color(fromHex hexString: String) -> Color? {
+        var hex = hexString.trimmingCharacters(in: .whitespacesAndNewlines)
         if hex.hasPrefix("#") { hex.removeFirst() }
-        guard hex.count == 6, let value = UInt64(hex, radix: 16) else {
-            self = fallback
-            return
-        }
+        guard hex.count == 6, let value = UInt64(hex, radix: 16) else { return nil }
         let r = Double((value >> 16) & 0xFF) / 255.0
         let g = Double((value >> 8) & 0xFF) / 255.0
         let b = Double(value & 0xFF) / 255.0
-        self.init(red: r, green: g, blue: b)
+        return Color(red: r, green: g, blue: b)
     }
 }
