@@ -145,7 +145,16 @@ const AutoDiscard=(()=>{
   return stale.length;
  }
  // Measuring is the only side effect here: candidates are counted and stored, no tab is ever discarded.
- async function run(api,now,deps={},options={}){
+ // chrome.system.memory only gives whole-machine megabytes, so the gate reads it fresh on every cycle.
+async function systemFreePercent(memory){
+ try{
+  const info=await memory?.getInfo?.();
+  const capacity=Number(info?.capacityInMB),free=Number(info?.availableMemoryInMB);
+  if(!Number.isFinite(capacity)||!Number.isFinite(free)||capacity<=0||free<0||free>capacity)return null;
+  return Math.floor(free/capacity*100);
+ }catch{return null}
+}
+async function run(api,now,deps={},options={}){
   if(!Number.isFinite(now)||now<=0)throw Error('Không xác định được thời gian.');
   const data=await api.storage.local.get([settingKey,'automationPaused','protectedDomains','protectedUrls',runKey]);
   let config;try{config=validate(data[settingKey])}catch{return {status:'invalid',reason:'Cấu hình cho nghỉ theo tài nguyên không hợp lệ; việc đo đã dừng.'}}
@@ -153,7 +162,14 @@ const AutoDiscard=(()=>{
   if(!config.enabled&&!options.force)return {status:'off',reason:'Tính năng đang tắt; không đo và không nghỉ tab nào.'};
   if(!options.force&&data.automationPaused!==undefined&&data.automationPaused!==false)return {status:'paused',reason:'Tự động hóa toàn cục đang tạm dừng.'};
   const cap=capability(api);if(!cap.measurable)return {status:'unmeasurable',reason:cap.reason,config};
-  if(config.lowMemoryOnly&&!deps.memory?.getInfo)return {status:'blocked',reason:'Không đọc được bộ nhớ hệ thống; cần nguồn số RAM khả dụng để chạy ở chế độ chỉ khi thiếu bộ nhớ.',config};
+  // 15.3: the low-memory option is a gate on a real system number, never a guess about the machine.
+  if(config.lowMemoryOnly){
+   if(!deps.memory?.getInfo)return {status:'blocked',reason:'Không đọc được bộ nhớ hệ thống; cần nguồn số RAM khả dụng để chạy ở chế độ chỉ khi thiếu bộ nhớ.',config};
+   const free=await systemFreePercent(deps.memory);
+   if(free===null)return {status:'blocked',reason:'Không đọc được số RAM khả dụng của hệ thống; lượt đo dừng thay vì đoán.',config};
+   // A manual measurement still shows the numbers; only the automatic cycle is held back when memory is fine.
+   if(!options.force&&free>=config.lowMemoryFloor)return {status:'waiting',config,reason:`RAM khả dụng còn ${free}%, chưa thấp hơn ngưỡng ${config.lowMemoryFloor}% nên lượt đo bỏ qua.`};
+  }
   const last=Number.isFinite(data[runKey]?.at)?data[runKey].at:0,cycle=config.everyMinutes*60000;
   if(!options.force&&last&&now-last<cycle)return {status:'waiting',config,reason:`Chưa đến chu kỳ đo; còn khoảng ${Math.max(1,Math.ceil((cycle-(now-last))/60000))} phút.`,nextAt:last+cycle};
   // A cycle missed while Chrome was asleep is not caught up; the schedule simply resumes (6.2).

@@ -36,7 +36,19 @@ const deps=(list,extra={})=>({grace:OpenGrace,protection:Protection,tabs:list,..
  // "Only when the system is short of memory" is refused until a system source exists, instead of idling forever.
  db={autoDiscardConfig:{...config,lowMemoryOnly:true,lowMemoryFloor:12}};
  assert.match((await A.run(api(),now,deps(tabs))).reason,/Không đọc được bộ nhớ hệ thống/);
- assert.equal((await A.run(api(),now,deps(tabs,{memory:{getInfo:async()=>({})}}))).status,'measured');
+ assert.throws(()=>A.assertUsable({...config,lowMemoryOnly:true},{measurable:true,systemMemory:false}),/Không đọc được bộ nhớ hệ thống/);
+ // A junk or failing system reading stops the run instead of pretending memory is fine.
+ for(const memory of [{getInfo:async()=>({})},{getInfo:async()=>({capacityInMB:16384,availableMemoryInMB:99999})},{getInfo:async()=>{throw Error('unavailable')}}])
+  assert.match((await A.run(api(),now,deps(tabs,{memory}))).reason,/dừng thay vì đoán/);
+ // With plenty of memory free, the cycle does not measure at all and records nothing.
+ const roomy={memory:{getInfo:async()=>({capacityInMB:16384,availableMemoryInMB:8192})}};
+ result=await A.run(store(),now,deps(tabs,roomy));
+ assert.deepEqual([result.status,result.plan,result.run],['waiting',undefined,undefined]);
+ assert.match(result.reason,/RAM khả dụng còn 50%, chưa thấp hơn ngưỡng 12%/);
+ assert.equal(db.autoDiscardRun,undefined);
+ // Only a memory number under the chosen floor lets the cycle through; an explicit measurement still asks.
+ assert.equal((await A.run(store(),now,deps(tabs,{memory:{getInfo:async()=>({capacityInMB:16384,availableMemoryInMB:1024})}}))).status,'measured');
+ assert.equal((await A.run(store(),now,deps(tabs,roomy),{force:true})).status,'measured');
  assert.throws(()=>A.assertUsable({...config,lowMemoryOnly:true},{measurable:true}),/Không đọc được bộ nhớ hệ thống/);
  assert.equal(A.assertUsable({...config,lowMemoryOnly:true,lowMemoryFloor:12},{measurable:true,systemMemory:true}).lowMemoryFloor,12);
  // A broken protection list stops the run: candidates must never be counted on half a policy.

@@ -129,6 +129,19 @@ assert.doesNotMatch(markup,/data-action="auto-discard-save"/);
  assert.equal(String(els.autoDiscardIdle.value),'720');
  assert.equal(els['autoDiscardThreshold-heap'].disabled,true);
 
+ // The form follows the order of the settings: scope first, then the cadence and its memory gate.
+ const body=ctx.autoDiscardBlock();
+ for(const [before,after] of [['autoDiscardRes-memory','autoDiscardIdle'],['autoDiscardIdle','autoDiscardMax'],['autoDiscardMax','autoDiscardEvery'],['autoDiscardEvery','autoDiscardCycles'],['autoDiscardCycles','autoDiscardLowMemoryFloor'],['autoDiscardLowMemoryFloor','autoDiscardLowMemory']])
+  assert.ok(body.indexOf(`id="${before}"`)<body.indexOf(`id="${after}"`),`${before} comes before ${after}`);
+ assert.match(body,/chu kỳ đo chỉ chạy khi RAM khả dụng thấp hơn mức này\./);
+ // The limits explainer is readable from the block and changes nothing when it is opened and closed.
+ const dbBefore=JSON.stringify(db),loadsBefore=loads;
+ ctx.autoDiscardLimits();
+ for(const phrase of [/tiến trình renderer/,/không chỉ ra được tab nào nặng hơn/,/không tạo bản lưu để khôi phục/,/chưa được đưa vào file sao lưu/])assert.match(dialog.markup,phrase);
+ assert.doesNotMatch(dialog.markup,/example\.com|https?:/);
+ await dialog.handler(new Map(),{close(){closed++}});
+ assert.deepEqual([JSON.stringify(db),loads,closed>0],[dbBefore,loadsBefore,true]);
+
  // Listing without a real source explains itself and touches no tab.
  ctx.autoDiscardOpen=true;
  await ctx.autoDiscardMeasure();

@@ -1,5 +1,5 @@
 const assert=require('node:assert/strict'),fs=require('node:fs');
-const dash=fs.readFileSync('extension/dashboard.js','utf8'),html=fs.readFileSync('extension/dashboard.html','utf8'),background=fs.readFileSync('extension/background.js','utf8'),manifest=JSON.parse(fs.readFileSync('extension/manifest.json','utf8')),css=fs.readFileSync('extension/style.css','utf8');
+const mod=fs.readFileSync('extension/auto-discard.js','utf8'),dash=fs.readFileSync('extension/dashboard.js','utf8'),html=fs.readFileSync('extension/dashboard.html','utf8'),background=fs.readFileSync('extension/background.js','utf8'),manifest=JSON.parse(fs.readFileSync('extension/manifest.json','utf8')),css=fs.readFileSync('extension/style.css','utf8');
 
 // The module is loaded for the settings page and for the shared background cadence, before its callers.
 assert.ok(html.includes('<script src="auto-discard.js"></script><script src="dashboard.js"></script>'),'auto-discard.js is loaded before dashboard.js');
@@ -23,7 +23,7 @@ assert.match(dash,/const next=AutoDiscard\.assertUsable\(patch,autoDiscardContex
 assert.match(dash,/function autoDiscardContext\(\)\{return \{measurable:autoDiscardCapability\(\)\.measurable,systemMemory:chrome\.system\?\.memory\?\.getInfo\?true:false\}\}/);
 assert.match(dash,/const stored=Number\.isFinite\(autoDiscardRun\?\.at\)\?autoDiscardRun:null;/);
 // Every action of the block is reachable from the delegated handler.
-for(const action of ['auto-discard-toggle','auto-discard-save','auto-discard-measure','auto-discard-reset','auto-discard-choose'])assert.ok(dash.includes(`if(b.dataset.action==='${action}')`),`${action} is wired`);
+for(const action of ['auto-discard-toggle','auto-discard-save','auto-discard-measure','auto-discard-reset','auto-discard-choose','auto-discard-limits'])assert.ok(dash.includes(`if(b.dataset.action==='${action}')`),`${action} is wired`);
 assert.match(dash,/if\(b\.dataset\.action==='auto-discard-reset'\)\{resetAutoDiscardForm\(\);return\}/);
 assert.match(dash,/if\(e\.key==='Escape'&&autoDiscardOpen&&!\$\('#dialog'\)\.open&&!\$\('#palette'\)\.open\)\{e\.preventDefault\(\);collapseAutoDiscard\(\);return\}/);
 assert.match(dash,/function collapseAutoDiscard\(\)\{if\(!autoDiscardOpen\|\|autoDiscardBusy\)return;/);
@@ -33,6 +33,12 @@ assert.match(dash,/if\(e\.target\.id\?\.startsWith\('autoDiscardRes-'\)\)\{const
 assert.match(dash,/const result=await AutoDiscard\.run\(chrome,Date\.now\(\),\{grace:OpenGrace,protection:Protection,memory:chrome\.system\?\.memory,tabs\},\{force:true\}\);/);
 assert.doesNotMatch(dash,/async function autoDiscardMeasure\(\)\{[\s\S]{0,6000}tabs\.discard|async function autoDiscardChoose\(\)\{[\s\S]{0,900}tabs\.discard/);
 assert.match(dash,/if\(result\.status!=='measured'\)\{\s*autoDiscardSummary=null;await load\(\);/);
+
+// The memory gate reads a real system number and holds the cycle back when memory is fine.
+assert.match(mod,/const free=await systemFreePercent\(deps\.memory\);/);
+assert.match(mod,/if\(!options\.force&&free>=config\.lowMemoryFloor\)return \{status:'waiting',config,reason:`RAM khả dụng còn \$\{free\}%/);
+assert.match(mod,/if\(!Number\.isFinite\(capacity\)\|\|!Number\.isFinite\(free\)\|\|capacity<=0\|\|free<0\|\|free>capacity\)return null;/);
+assert.doesNotMatch(mod,/lowMemoryFloor\s*[<>]/,'no invented comparison against a guessed memory number');
 
 // The collapsed header is a real toggle, and the animation follows the shared motion settings.
 assert.match(dash,/<button type="button" class="auto-discard-head" id="autoDiscardToggle" aria-expanded="\$\{autoDiscardOpen\?'true':'false'\}" aria-controls="autoDiscardBody">/);
