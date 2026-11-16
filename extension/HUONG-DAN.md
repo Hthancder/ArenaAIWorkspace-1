@@ -1,4 +1,4 @@
-# Tabspace 0.127 — bản thử nghiệm
+# Tabspace 0.128 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -18,6 +18,7 @@
 - **Bảo vệ URL chính xác:** ngoài tên miền, có thể bảo vệ từng URL http/https trong Cài đặt. URL được chuẩn hóa, xét query và fragment; thay đổi URL có thể không còn khớp, không phân biệt được tài khoản hoặc bảo đảm dữ liệu chưa lưu. Quy tắc ngăn Tabspace đóng/nghỉ, không ngăn Chrome hay extension khác; danh sách URL có thể chứa dữ liệu nhạy cảm và được xuất vào sao lưu.
 - **Badge và popup:** trong Cài đặt có thể bật badge đếm lời nhắc preset đang chờ (mặc định tắt, chỉ hiển thị số, không hiện tên/URL). Popup hiển thị số lời nhắc và nút tới Cần chú ý ngay cả khi badge tắt. Icon Chrome có thể bị ẩn; badge không thay thế thông báo khác và thiết lập không được sao lưu.
 - **Toàn màn hình:** thông báo hệ điều hành của lời nhắc mặc định được trì hoãn khi phát hiện một cửa sổ Chrome toàn màn hình hoặc không đọc được trạng thái cửa sổ. Có thể tắt trong Giờ yên lặng; lời nhắc vẫn ở Tabspace. Khi trạng thái cho phép, cố gửi một thông báo tổng hợp nếu còn lời nhắc. Không đảm bảo nhận biết video toàn màn hình, ứng dụng khác hoặc chế độ tập trung hệ điều hành.
+- **Thông báo kết quả lượt tự nghỉ:** trong khối *Tự động cho nghỉ tab theo tài nguyên* có nút *Bật thông báo hệ điều hành…*. Khóa này mặc định tắt và độc lập với thông báo của tự động đóng; khi tắt, mọi thứ vẫn như trước (nhật ký + bản tin trên trang). Bật thì mỗi lượt có kết quả gửi một thông báo, vẫn im lặng trong giờ yên lặng và khi có cửa sổ toàn màn hình; bấm vào thông báo mở Sức khỏe tab.
 - **Quyền đọc tiến trình (tùy chọn):** khối *Tự động cho nghỉ tab theo tài nguyên* có nút **Xin quyền đọc tiến trình** khi Chrome chưa cho số đo. Đây là quyền tùy chọn nên lúc cài extension, Tabspace không xin gì thêm; Chrome chỉ cấp trên kênh Dev, và nếu bị từ chối thì khối vẫn giải thích và để nguyên nút đó cho lần sau.
 - **Giờ yên lặng:** tùy chọn mặc định tắt, áp dụng thông báo hệ điều hành của lời nhắc preset và kết quả tự động đóng; từ 0.124, giờ yên lặng còn giữ lượt Tự động của khối đo tài nguyên (mục 15) — đang yên lặng thì không tab nào bị tự nghỉ, còn việc đo thì vẫn chạy. Lời nhắc vẫn có trong Tabspace. Sau giờ yên lặng, cố gửi một thông báo tổng hợp nếu còn lời nhắc chờ, Chrome đang chạy và quyền được bật; thông báo có thể trễ, bị bỏ qua hoặc hệ điều hành chặn. Theo giờ máy, không bao gồm trong sao lưu.
 - **Cần chú ý:** tổng hợp lời nhắc preset đang chờ và lịch sử dọn có mục chưa xử lý/lỗi/không rõ. Có thể xem trước, nhắc lại, bỏ từng lời nhắc hoặc chọn bỏ nhiều lời nhắc đang thấy; không tự đóng tab hay tắt lịch tương lai. Lượt đang chạy cũng có thể xuất hiện, và cần kiểm tra Chrome khi trạng thái không rõ. Đây chưa phải lịch sử của mọi thông báo.
@@ -370,3 +371,18 @@ Chưa làm: `processes` không phải quyền mặc định (chủ đích) và k
 Những gì bản này không làm, và tài liệu nói đúng như vậy: **không** phát thông báo hệ điều hành cho lượt tự nghỉ (`notifications.create` vẫn chỉ có một chỗ, phục vụ lời nhắc), **không** có hàng đợi riêng kiểu `autoCloseNoticePending`, và **không** tự thử lại khi một kết quả còn mơ hồ. Hộp **Giới hạn và rủi ro** nêu thẳng cả ba.
 
 Hai chi tiết nhỏ nhưng là thứ khiến nó đáng tin: id sự kiện suy ra từ chính lượt đo (`discard:` + id lượt) nên một worker gửi lại cũng không nhân đôi nhật ký; và nếu `NotificationHistory.record` ném lỗi, worker báo đúng một lần `console.error`, bản tin trên trang vẫn đi, lịch rehearsal vẫn chạy.
+
+### Thông báo hệ điều hành cho lượt Tự động nhường, tắt theo mặc định (0.128)
+
+15.4.3 nói "báo theo kênh đã bật". Hai kênh trong ứng dụng đã có ở 0.127; kênh thứ ba — thông báo của hệ điều hành — là thứ 0.127 phải ghi là chưa làm, vì dùng lại `autoCloseNotifications` sẽ là lén nới nghĩa một lựa chọn cũ. Bản này mở kênh đó bằng một công tắc **của riêng nó**:
+
+- khóa `autoDiscardNotifications`, nằm ngoài `autoDiscardConfig`, mặc định tắt, **không** đi theo tệp sao lưu (đã bật `resource` trong tệp cũng không bật được kênh này);
+- nút trong khối: *Bật thông báo hệ điều hành…* / *Tắt thông báo kết quả*, xin quyền `notifications` đúng cách mà lời nhắc và kết quả tự động đóng vẫn xin; từ chối thì kết quả vẫn chỉ nằm trong Tabspace;
+- `AutoDiscard.notify(api,report,now,reminders)` trả về năm câu trả lời và **không** có câu nào im lặng: `silent` (không có kết quả để báo), `disabled` (chưa bật khóa), `held` (giờ yên lặng, toàn màn hình, hoặc không kiểm tra được), `unavailable` (chưa cấp quyền, Chrome không trả lời, hoặc gửi thất bại), `attempted`. `background.js` chỉ ghi `attempted`/`unavailable` vào nhật ký qua `NotificationHistory.osEvent('results',…)` — tức là "đã thử gửi", không phải bằng chứng tab đã đóng;
+- nội dung thông báo là câu chữ cố định, có mỗi số tab, **không** có địa chỉ, tên miền hay tiêu đề trang: thông báo hệ điều hành thì ai ngồi trước máy cũng đọc được;
+- dùng lại đúng cổng giữ đã áp dụng cho lượt nghỉ: `notify` hỏi lại `isQuiet`/`deferFullscreen(api,true)` tại thời điểm gửi, thiếu nguồn kiểm tra hoặc đọc hỏng thì **im lặng** — hướng an toàn luôn là không gửi;
+- không có hàng đợi gửi lại. Kết quả mơ hồ thì đã có nhật ký và khối; gửi lặp một thông báo không chắc chắn là cái giá đắt hơn lợi ích.
+
+id thông báo là `tabspace-auto-discard`; bấm vào nó mở **Sức khỏe tab** (`?view=health`), nơi 0.123 đặt khối "Lượt tự động gần nhất" — không phải trang Preset như hai kênh kia, vì lượt tự nghỉ không thuộc preset nào.
+
+Hai chi tiết ghép nối đáng nói: `notify` đi qua đúng `resultEvent(report)` mà nhật ký dùng, nên một lượt mà nhật ký từ chối ghi thì kênh này cũng không báo; và `.create(` trong `auto-discard.js` chỉ có **một** chỗ (kiểm tra chốt bằng số lần), nên module không tự đặt thêm đồng hồ hay hàng đợi nào.

@@ -15,7 +15,12 @@ assert.match(background,/const measured=await AutoDiscard\.run\(chrome,Date\.now
 assert.match(background,/if\(measured\?\.status==='measured'&&measured\.action\)\{const done=await AutoDiscard\.apply\(chrome,measured,Date\.now\(\),\{discard:DiscardTools,protection:Protection,reminders:ReminderTools\}\)/,'the worker hands the shared hold settings to the run instead of letting the module guess them');
 assert.match(background,/const event=AutoDiscard\.resultEvent\(done\?\.report\)/,'and it books the outcome through the module translation, not words of its own');
 assert.equal((background.match(/notifications\.create/g)||[]).length,1,'the discard path adds no OS notification of its own');
-assert.match(dash,/Tabspace <b>không<\/b> phát thông báo hệ điều hành cho lượt tự nghỉ/,'the limits box says which channels speak and which stays silent');
+assert.match(dash,/Thông báo hệ điều hành cho lượt tự nghỉ là một kênh <b>riêng<\/b> trong khối, mặc định tắt/,'the limits box names the channel and says it starts closed');
+assert.match(dash,/data-action="auto-discard-notifications">\$\{autoDiscardNotifications\?'Tắt thông báo kết quả':'Bật thông báo hệ điều hành…'\}/,'one button, and it says which way it goes');
+assert.equal((dash.match(/chrome\.permissions\.request\(\{permissions:\['notifications'\]\}\)/g)||[]).length,3,'three channels ask for the notice permission and no more');
+assert.doesNotMatch(opts,/autoDiscardNotifications/,'the channel choice is never carried by a backup, so a file cannot turn it on');
+assert.equal((mod.match(/api\.notifications\.create/g)||[]).length,1,'and exactly one send exists in the module');
+assert.equal((background.match(/dashboard\.html\?view=/g)||[]).length,2,'the notice opens the page that holds the result, and nothing else changes');
 assert.match(background,/catch\(e\)\{console\.error\('Automatic discard run failed',e\)\}/,'an action failure is logged, not replayed silently every minute');
 assert.match(background,/importScripts\([^)]*'discard\.js','auto-discard\.js'/,'the shared discard tool is loaded for the worker too');
 assert.doesNotMatch(background,/chrome\.tabs\.discard|tabs\.discard\(|tabs\.remove\(/,'the worker never discards or closes a tab by itself');
@@ -31,8 +36,10 @@ assert.match(opts,/function resource\(value,tools\)\{[\s\S]{0,200}enabled:false,
 assert.doesNotMatch(opts,/storage\.session|runKey|overCount/,'a backup never carries measurement values');
 
 // 15.3/15.7: the block schedules nothing on its own, and the header stays usable without a mouse.
-assert.doesNotMatch(mod,/alarms\.|setTimeout|setInterval|tabs\.discard|\.create\(|removeAlarm/,'the module waits for the shared alarm and never touches a tab');
-assert.equal((background.match(/AutoDiscard\./g)||[]).length,4,'the service worker uses the module in exactly four places: run, apply, forget, and how a finished run gets named');
+assert.doesNotMatch(mod,/alarms\.|setTimeout|setInterval|tabs\.discard|removeAlarm/,'the module waits for the shared alarm and never touches a tab');
+assert.equal((mod.match(/\.create\(/g)||[]).length,1,'and the one thing it ever creates is a notification, never an alarm');
+assert.match(mod,/api\.notifications\.create\(/,'that send goes through the channel the switch owns, behind the permission check');
+assert.equal((background.match(/AutoDiscard\./g)||[]).length,5,'the service worker uses the module in exactly five places: run, apply, forget, how a finished run is named, and whether it may speak');
 assert.match(css,/\.auto-discard-head\{display:flex;align-items:center;gap:12px;flex-wrap:wrap/);
 assert.match(css,/\.auto-discard-head:focus-visible\{outline:3px solid/);
 assert.match(css,/@media\(max-width:600px\)\{\.auto-discard-head\{padding:14px 16px\}\.auto-discard-body\{padding:0 16px 16px\}\.auto-discard-head em\{margin-left:auto\}\}/);
@@ -133,4 +140,4 @@ assert.match(dash,/\[AutoDiscard\.ackKey\]:stamp/,'and it is stored under its ow
 assert.doesNotMatch(dash,/autoDiscardConfig=\{[^}]*ack/,'no ack field can leak into the settings object');
 assert.match(css,/@keyframes autoDiscardIn\{from\{opacity:0;transform:translateY\(-3px\)\}to\{opacity:1;transform:none\}\}/);
 assert.match(css,/:root\[data-motion="reduce"\] \*/);
-console.log('Resource measurement shares one entry point, reaches Cần chú ý as a card and Sức khỏe tab as a list, and only ever asks for process numbers as an optional permission: OK');
+console.log('Resource measurement shares one entry point, asks for process numbers as an optional permission, and reaches the OS channel only through its own switch: OK');

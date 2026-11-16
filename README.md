@@ -243,3 +243,18 @@ Chưa làm: `processes` không phải quyền mặc định (chủ đích) và k
 Những gì bản này không làm, và tài liệu nói đúng như vậy: **không** phát thông báo hệ điều hành cho lượt tự nghỉ (`notifications.create` vẫn chỉ có một chỗ, phục vụ lời nhắc), **không** có hàng đợi riêng kiểu `autoCloseNoticePending`, và **không** tự thử lại khi một kết quả còn mơ hồ. Hộp **Giới hạn và rủi ro** nêu thẳng cả ba.
 
 Hai chi tiết nhỏ nhưng là thứ khiến nó đáng tin: id sự kiện suy ra từ chính lượt đo (`discard:` + id lượt) nên một worker gửi lại cũng không nhân đôi nhật ký; và nếu `NotificationHistory.record` ném lỗi, worker báo đúng một lần `console.error`, bản tin trên trang vẫn đi, lịch rehearsal vẫn chạy.
+
+### Thông báo hệ điều hành cho lượt Tự động nhường, tắt theo mặc định (0.128)
+
+15.4.3 nói "báo theo kênh đã bật". Hai kênh trong ứng dụng đã có ở 0.127; kênh thứ ba — thông báo của hệ điều hành — là thứ 0.127 phải ghi là chưa làm, vì dùng lại `autoCloseNotifications` sẽ là lén nới nghĩa một lựa chọn cũ. Bản này mở kênh đó bằng một công tắc **của riêng nó**:
+
+- khóa `autoDiscardNotifications`, nằm ngoài `autoDiscardConfig`, mặc định tắt, **không** đi theo tệp sao lưu (đã bật `resource` trong tệp cũng không bật được kênh này);
+- nút trong khối: *Bật thông báo hệ điều hành…* / *Tắt thông báo kết quả*, xin quyền `notifications` đúng cách mà lời nhắc và kết quả tự động đóng vẫn xin; từ chối thì kết quả vẫn chỉ nằm trong Tabspace;
+- `AutoDiscard.notify(api,report,now,reminders)` trả về năm câu trả lời và **không** có câu nào im lặng: `silent` (không có kết quả để báo), `disabled` (chưa bật khóa), `held` (giờ yên lặng, toàn màn hình, hoặc không kiểm tra được), `unavailable` (chưa cấp quyền, Chrome không trả lời, hoặc gửi thất bại), `attempted`. `background.js` chỉ ghi `attempted`/`unavailable` vào nhật ký qua `NotificationHistory.osEvent('results',…)` — tức là "đã thử gửi", không phải bằng chứng tab đã đóng;
+- nội dung thông báo là câu chữ cố định, có mỗi số tab, **không** có địa chỉ, tên miền hay tiêu đề trang: thông báo hệ điều hành thì ai ngồi trước máy cũng đọc được;
+- dùng lại đúng cổng giữ đã áp dụng cho lượt nghỉ: `notify` hỏi lại `isQuiet`/`deferFullscreen(api,true)` tại thời điểm gửi, thiếu nguồn kiểm tra hoặc đọc hỏng thì **im lặng** — hướng an toàn luôn là không gửi;
+- không có hàng đợi gửi lại. Kết quả mơ hồ thì đã có nhật ký và khối; gửi lặp một thông báo không chắc chắn là cái giá đắt hơn lợi ích.
+
+id thông báo là `tabspace-auto-discard`; bấm vào nó mở **Sức khỏe tab** (`?view=health`), nơi 0.123 đặt khối "Lượt tự động gần nhất" — không phải trang Preset như hai kênh kia, vì lượt tự nghỉ không thuộc preset nào.
+
+Hai chi tiết ghép nối đáng nói: `notify` đi qua đúng `resultEvent(report)` mà nhật ký dùng, nên một lượt mà nhật ký từ chối ghi thì kênh này cũng không báo; và `.create(` trong `auto-discard.js` chỉ có **một** chỗ (kiểm tra chốt bằng số lần), nên module không tự đặt thêm đồng hồ hay hàng đợi nào.

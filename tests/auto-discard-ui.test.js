@@ -8,7 +8,7 @@ const makeEl=(attrs={})=>({value:'',checked:false,disabled:false,focus(){focuses
 const ctxBase={
  AutoDiscard,OpenGrace,Protection,esc:value=>String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'),
  view:'settings',tabs:[],automationPaused:false,isDashboard:url=>String(url).includes('dashboard.html'),protectionError:false,protectedDomains:[],protectedUrls:[],
- autoDiscardConfig:undefined,autoDiscardRun:undefined,autoDiscardOpen:false,autoDiscardBusy:false,autoDiscardSummary:null,autoDiscardAck:null,autoDiscardAction:null,
+ autoDiscardConfig:undefined,autoDiscardRun:undefined,autoDiscardOpen:false,autoDiscardBusy:false,autoDiscardNotifications:false,autoDiscardSummary:null,autoDiscardAck:null,autoDiscardAction:null,
  query:'x',selected:new Set(),bulkSelected:new Set(),selectionAnchor:1,selectionClick:1,
  render(){rendered.push(ctx.view)},load:async()=>{loads++},notify:message=>notices.push(message),
  $:selector=>els[selector.replace(/^#/,'')],document:{getElementById:id=>els[id]??null},
@@ -137,7 +137,7 @@ assert.doesNotMatch(markup,/data-action="auto-discard-save"/);
  // The limits explainer is readable from the block and changes nothing when it is opened and closed.
  const dbBefore=JSON.stringify(db),loadsBefore=loads;
  ctx.autoDiscardLimits();
- for(const phrase of [/tiến trình renderer/,/không chỉ ra được tab nào nặng hơn/,/không tạo bản lưu để khôi phục/,/luôn ở trạng thái tắt khi nhập/,/giờ yên lặng và toàn màn hình được đọc lại <b>ngay trước khi nghỉ tab<\/b>/,/không cho biết tình trạng cửa sổ/,/không<\/b> mở đường cho lượt tự nghỉ/,/nhật ký sự kiện \(nếu bạn bật nhật ký\)/,/không<\/b> phát thông báo hệ điều hành cho lượt tự nghỉ/])assert.match(dialog.markup,phrase);
+ for(const phrase of [/tiến trình renderer/,/không chỉ ra được tab nào nặng hơn/,/không tạo bản lưu để khôi phục/,/luôn ở trạng thái tắt khi nhập/,/giờ yên lặng và toàn màn hình được đọc lại <b>ngay trước khi nghỉ tab<\/b>/,/không cho biết tình trạng cửa sổ/,/không<\/b> mở đường cho lượt tự nghỉ/,/nhật ký sự kiện \(nếu bạn bật nhật ký\)/,/kênh <b>riêng<\/b> trong khối, mặc định tắt/])assert.match(dialog.markup,phrase);
  assert.doesNotMatch(dialog.markup,/bật lại giờ yên lặng trong khối|đặt giờ yên lặng ở đây/);
  assert.doesNotMatch(dialog.markup,/example\.com|https?:/);
  await dialog.handler(new Map(),{close(){closed++}});
@@ -288,6 +288,10 @@ assert.doesNotMatch(markup,/data-action="auto-discard-save"/);
  // 0.126: the block may ask Chrome for the optional permission, and every answer comes back as a notice.
  ctx.chrome={...chromeless};
  ctx.autoDiscardOpen=true;
+ assert.match(ctx.autoDiscardBlock(),/data-action="auto-discard-notifications">Bật thông báo hệ điều hành…<\/button>/,'the channel is offered whatever the measurement source is');
+ ctx.autoDiscardNotifications=true;
+ assert.match(ctx.autoDiscardBlock(),/data-action="auto-discard-notifications">Tắt thông báo kết quả<\/button>/,'and it turns off from the same place');
+ ctx.autoDiscardNotifications=false;
  assert.match(ctx.autoDiscardBlock(),/data-action="auto-discard-permission">Xin quyền đọc tiến trình<\/button>/,'a build with no numbers offers the one ask that could change that');
  const asks=loads,savedBefore=JSON.stringify(db),before=notices.length;
  await ctx.autoDiscardPermission();

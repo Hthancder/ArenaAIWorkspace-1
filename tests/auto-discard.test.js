@@ -225,5 +225,55 @@ assert.deepEqual([A.notifyStatus({status:'empty'}),A.notifyStatus({status:'compl
 assert.deepEqual(A.resultEvent({id:1234,at:2345,status:'partial',counts:{unconfirmed:2}}),{id:'discard:1234',kind:'result',at:2345,status:'uncertain'},'the event id comes from the run, so a repeated delivery cannot grow the journal');
 assert.deepEqual([A.resultEvent({id:1,at:2,status:'empty'}),A.resultEvent({status:'complete'}),A.resultEvent({id:0,at:1,status:'complete'}),A.resultEvent(undefined)],[null,null,null,null],'no identity or no result means no event at all');
 assert.equal(A.noticePrefix,'discard:','the prefix is a fact of this module, and the page pins it too');
+ // 15.4.3 as an opt-in channel: one switch, five answers, and silence is the default in every direction.
+ const ran={id:9,at:1700000000000,status:'complete',counts:{discarded:2}};
+ function fakeApi({enabled=true,reads='ok',granted=true,sendFails=false}={}){
+  const sent=[];let looked=0;
+  const api={sent,get reads(){return looked},runtime:{getURL:path=>'chrome-extension://x/'+path},
+   storage:{local:{get:async()=>{if(reads==='fail')throw Error('storage unavailable');looked++;return {autoDiscardNotifications:enabled,quietHours:null}}}},
+   notifications:{create:async(id,options)=>{if(sendFails)throw Error('no channel at all');sent.push({id,options});return true}}};
+  if(granted!==undefined)api.permissions={contains:async()=>{if(granted==='fail')throw Error('Chrome said nothing');return granted===true}};
+  return api;
+ }
+ const calm={isQuiet:()=>false,deferFullscreen:async()=>false};
+ assert.equal(A.notifyId,'tabspace-auto-discard','the id is a fact of this module, and the worker opens the same page for it');
+ assert.deepEqual([await A.notify(fakeApi(),{...ran,status:'empty'},1700000000000,calm),await A.notify(fakeApi(),null,1700000000000,calm)],['silent','silent'],'no result, nothing to say');
+ {
+  const api=fakeApi();
+  assert.equal(await A.notify(api,ran,1700000000000,calm),'attempted','switch on, quiet off, permission granted: one notice');
+  assert.equal(api.sent.length,1);
+  const {id,options}=api.sent[0];
+  assert.deepEqual([id,options.type,options.silent,options.title],[A.notifyId,'basic',true,'Tabspace'],'silent flag, fixed title, and only this id to click');
+  assert.match(options.message,/đã cho nghỉ 2 tab/,'the count in the notice is the count in the report');
+  assert.ok(!/https?:\/\/|\.com|tab id/i.test(options.message),'and no address, domain or tab id crosses the OS channel');
+ }
+ {
+  const api=fakeApi({enabled:false});
+  assert.equal(await A.notify(api,ran,1700000000000,calm),'disabled','a build that never turned the channel on stays exactly as quiet as before');
+  assert.equal(api.sent.length,0);
+ }
+ {
+  const api=fakeApi();
+  assert.deepEqual([await A.notify(api,ran,1700000000000,{isQuiet:()=>true,deferFullscreen:async()=>false}),
+   await A.notify(api,ran,1700000000000,{isQuiet:()=>false,deferFullscreen:async()=>true}),
+   await A.notify(api,ran,1700000000000,{}),
+   await A.notify(api,ran,1700000000000,{isQuiet:()=>{throw Error('unreadable')},deferFullscreen:async()=>false})],
+   ['held','held','held','held'],'quiet hours, a presentation, a missing checker and a broken checker all hold');
+  assert.equal(api.sent.length,0,'and holding sends nothing on the way out');
+ }
+ {
+  const api=fakeApi({granted:false});
+  assert.equal(await A.notify(api,ran,1700000000000,calm),'unavailable','no permission is admitted, not guessed at');
+  assert.equal(await A.notify(fakeApi({granted:'fail'}),ran,1700000000000,calm),'unavailable','and a Chrome that will not answer is the same answer');
+  assert.equal(await A.notify(fakeApi({sendFails:true}),ran,1700000000000,calm),'unavailable','a failed send is said once and never queued for replay');
+  const broken=fakeApi({reads:'fail'});
+  assert.equal(await A.notify(broken,ran,1700000000000,calm),'unavailable','even an unreadable setting stops the send rather than assuming yes');
+ }
+ {
+  const api=fakeApi();
+  assert.equal(await A.notify(api,{id:9,at:0,status:'complete',counts:{}},1700000000000,calm),'silent','a run without a clock is not a result to announce');
+  assert.deepEqual([A.notifyMessage({...ran,status:'uncertain'}),A.notifyMessage({...ran,status:'complete',journalFailed:true})].map(x=>/chưa xác nhận|bị chặn/.test(x)),[true,true],'an unclear run and a blocked one say what they are');
+  assert.ok(!/đã cho nghỉ \d+ tab/.test(A.notifyMessage({...ran,status:'partial',counts:{discarded:1,unconfirmed:1}})),'a half-confirmed run never reads as a success');
+ }
 console.log('Resource thresholds, streaks, guards and honest unmeasurable state: OK');
 })().catch(e=>{console.error(e);process.exitCode=1});

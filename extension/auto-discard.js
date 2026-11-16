@@ -370,6 +370,35 @@ async function run(api,now,deps={},options={}){
   if(!status||!at||!id)return null;
   return {id:noticePrefix+id,kind:'result',at,status};
  }
+ // 15.4.3: the one place an automatic run reaches outside the app. The switch is this key alone -
+ // autoCloseNotifications belongs to auto-close and never meant to cover these runs - and it is off
+ // until the block says otherwise, so a build that only got the journal keeps only the journal.
+ const notifyId='tabspace-auto-discard';
+ function notifyMessage(report){
+  const status=notifyStatus(report);if(!status)return '';
+  const n=Number.isFinite(report.counts?.discarded)?report.counts.discarded:null;
+  // Fixed copy, no address and no title: an OS notice is readable by anyone sitting at the machine.
+  if(status==='complete')return `Một lượt Tự động nhường đã cho nghỉ ${n===null?'vài':n} tab. Mở Tabspace để kiểm tra.`;
+  if(status==='uncertain')return 'Một lượt Tự động nhường chưa xác nhận được hết kết quả. Mở Tabspace để xem lại từng tab.';
+  return 'Một lượt Tự động nhường bị chặn trước khi ghi được kết quả; mở Tabspace để xem nhật ký.';
+ }
+ async function notify(api,report,now,reminders){
+  // The journal's own gate, reused: a run it refuses to book is a run this channel does not announce either.
+  if(!resultEvent(report))return 'silent';
+  const message=notifyMessage(report);if(!message||!Number.isFinite(now)||now<=0)return 'silent';
+  let data;try{data=await api.storage.local.get(['autoDiscardNotifications','quietHours'])}catch{return 'unavailable'}
+  if(data.autoDiscardNotifications!==true)return 'disabled';
+  // Asked again here instead of trusted from the run: a notice landing in quiet hours is the exact thing
+  // the setting exists to prevent, and nothing is lost by staying quiet - the journal already has the run.
+  let quiet=true;try{quiet=reminders?.isQuiet?reminders.isQuiet(data.quietHours,now):true}catch{quiet=true}
+  if(quiet)return 'held';
+  try{if(reminders?.deferFullscreen&&await reminders.deferFullscreen(api,true))return 'held'}catch{return 'held'}
+  let granted=false;try{granted=await api.permissions.contains({permissions:['notifications']})}catch{return 'unavailable'}
+  if(!granted||!api.notifications?.create)return 'unavailable';
+  // No retry queue on purpose: an ambiguous send must not be replayed, which is the rule the reminder
+  // channel follows, and the run itself is already recorded in the journal and in the block.
+  try{await api.notifications.create(notifyId,{type:'basic',iconUrl:api.runtime.getURL('reminder-icon.png'),title:'Tabspace',message,silent:true});return 'attempted'}catch{return 'unavailable'}
+ }
 async function apply(api,result,now,deps={}){
   if(!Number.isFinite(now)||now<=0)throw Error('Không xác định được thời gian.');
   if(!result||result.status!=='measured'||!result.action)return {status:'idle',reason:'Không có lượt đo nào được phép tự nghỉ tab; chưa tab nào bị nghỉ.'};
@@ -447,6 +476,6 @@ async function apply(api,result,now,deps={}){
   const stale=Number.isFinite(context.measuredAt)&&context.measuredAt>0&&Number.isFinite(context.now)&&context.now-context.measuredAt>2*c.everyMinutes*60000;
   return {kind:c.mode,text:`${modeLabel(c.mode)} · xét ${c.resources.map(name=>meta[name].short).join(', ')} · tối đa ${c.maxPerRun} tab mỗi lượt${count}${age}${stale?' · dữ liệu đo đã cũ, hãy đo lại':''}${context.missed===true?' · có chu kỳ đo đã bỏ lỡ, không chạy bù':''}${status}${acted}`};
  }
- return {prefix,settingKey,runKey,ackKey,actionKey,keys,meta,modes,combines,maxSeries,maxTrail,uncertainWaitMinutes,defaults,notMeasurable,modeLabel,integer,validate,capability,assertUsable,key,record,read,readRecords,recall,forget,remember,measure,prune,run,apply,actionLabel,ackValid,holdReason,notifyStatus,resultEvent,noticePrefix,resource,row,plan,line,attention,suggestions,health,dismiss,describe,valueLabel,ageLabel,idleLabel};
+ return {prefix,settingKey,runKey,ackKey,actionKey,keys,meta,modes,combines,maxSeries,maxTrail,uncertainWaitMinutes,defaults,notMeasurable,modeLabel,integer,validate,capability,assertUsable,key,record,read,readRecords,recall,forget,remember,measure,prune,run,apply,actionLabel,ackValid,holdReason,notifyStatus,resultEvent,noticePrefix,notify,notifyMessage,notifyId,resource,row,plan,line,attention,suggestions,health,dismiss,describe,valueLabel,ageLabel,idleLabel};
 })();
 if(typeof module!=='undefined')module.exports=AutoDiscard;
