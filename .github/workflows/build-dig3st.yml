@@ -1,0 +1,58 @@
+name: Build dig3st (.deb)
+
+on:
+  push:
+    branches:
+      - arena/55c18ace-arenaaiworkspace-1
+    paths:
+      - '.github/workflows/build-dig3st.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      CI: "1"
+      THEOS: /home/runner/theos
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout uncor3/dig3st
+        uses: actions/checkout@v4
+        with:
+          repository: uncor3/dig3st
+          path: dig3st
+
+      - name: Install Theos, iOS toolchain, and patched SDK
+        run: |
+          bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)"
+          ls -la "$THEOS/sdks"
+          "$THEOS/toolchain/linux/iphone/bin/clang" --version
+
+      - name: Build rootful and rootless .deb packages
+        working-directory: dig3st
+        run: |
+          rm -rf ./packages
+          echo "=== Building rootful ==="
+          THEOS_PACKAGE_SCHEME= make package FINALPACKAGE=1
+          make clean
+          echo "=== Building rootless ==="
+          THEOS_PACKAGE_SCHEME=rootless make package FINALPACKAGE=1
+          make clean
+
+      - name: Inspect built .deb packages
+        working-directory: dig3st
+        run: |
+          ls -lh ./packages/*.deb
+          for f in ./packages/*.deb; do
+            echo "========================================"
+            echo "PACKAGE: $f"
+            dpkg-deb -I "$f"
+            dpkg-deb -c "$f"
+          done
+
+      - name: Upload built .deb artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dig3st-debs
+          path: dig3st/packages/*.deb
