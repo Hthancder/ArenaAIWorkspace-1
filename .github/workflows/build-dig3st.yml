@@ -42,14 +42,15 @@ jobs:
           git apply ../patches/dig3st-fixes.patch
           git diff --stat
 
-      - name: Install Theos, iOS toolchain, and patched SDK
+      - name: Install roothide/theos, iOS toolchain, and patched SDK
         run: |
           set -o pipefail
-          bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)" 2>&1 | tee /tmp/install.log
+          bash -c "$(curl -fsSL https://raw.githubusercontent.com/roothide/theos/master/bin/install-theos)" 2>&1 | tee /tmp/install.log
           ls -la "$THEOS/sdks"
+          ls -la "$THEOS/vendor/lib/iphone/roothide"
           "$THEOS/toolchain/linux/iphone/bin/clang" --version
 
-      - name: Build rootful and rootless .deb packages
+      - name: Build rootful, rootless, and roothide .deb packages
         working-directory: dig3st
         run: |
           set -o pipefail
@@ -60,6 +61,9 @@ jobs:
             make clean
             echo "=== Building rootless (ARCHS=${DIG3ST_ARCHS}) ==="
             THEOS_PACKAGE_SCHEME=rootless make package FINALPACKAGE=1 ARCHS="$DIG3ST_ARCHS"
+            make clean
+            echo "=== Building roothide (ARCHS=${DIG3ST_ARCHS}) ==="
+            THEOS_PACKAGE_SCHEME=roothide make package FINALPACKAGE=1 ARCHS="$DIG3ST_ARCHS"
             make clean
           } 2>&1 | tee /tmp/build.log
 
@@ -74,6 +78,21 @@ jobs:
               dpkg-deb -I "$f"
               dpkg-deb -c "$f"
             done
+            echo "=== Verify RootHide Mach-O linkage ==="
+            rm -rf /tmp/rh-verify && mkdir -p /tmp/rh-verify
+            dpkg-deb -x ./packages/*_iphoneos-arm64e.deb /tmp/rh-verify
+            python3 - <<'PY'
+          import pathlib
+          for bin_path in sorted(pathlib.Path("/tmp/rh-verify").rglob("dig3st*")):
+              if bin_path.is_file() and bin_path.suffix in ("", ".dylib"):
+                  data = bin_path.read_bytes()
+                  has_roothide = b"libroothide.dylib" in data
+                  has_jbroot_rpath = b"@loader_path/.jbroot" in data
+                  has_var_jb = b"/var/jb" in data
+                  print(f"{bin_path}: size={len(data)} libroothide={has_roothide} jbroot_loader={has_jbroot_rpath} var_jb={has_var_jb}")
+                  assert has_roothide and not has_var_jb, f"Unexpected linkage in {bin_path}"
+          PY
+            rm -rf /tmp/rh-verify
           } 2>&1 | tee /tmp/deb-inspect.log
 
       - name: Emit summary annotations

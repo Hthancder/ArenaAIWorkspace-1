@@ -1,3 +1,18 @@
+diff --git a/Makefile b/Makefile
+index 8be5b46..f6fcf7b 100644
+--- a/Makefile
++++ b/Makefile
+@@ -10,6 +10,10 @@ TWEAK_NAME = dig3st
+ dig3st_FILES = src/PushNotification.xm src/Tweak.x src/DigestPrefsManager.m src/Alert.m ./src/OpenAI/OpenAI.m ./src/OpenAI/Config.m ./src/OpenAI/ChatQuery.m ./src/DigestLogger.m
+ dig3st_CFLAGS = -fobjc-arc
+ dig3st_PRIVATE_FRAMEWORKS = UserNotificationsKit
++ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
++dig3st_LDFLAGS += -lroothide
++dig3st_CFLAGS += -DDISABLE_ROOTLESS_COMPAT_WARNING
++endif
+ 
+ include $(THEOS_MAKE_PATH)/tweak.mk
+ SUBPROJECTS += preferences
 diff --git a/headers/OpenAI.h b/headers/OpenAI.h
 index 50e6a38..4027666 100644
 --- a/headers/OpenAI.h
@@ -559,6 +574,27 @@ index bf5f372..ba02a4e 100644
  	[super viewDidLayoutSubviews];
  }
  -(void)push {
+diff --git a/preferences/Makefile b/preferences/Makefile
+index bf06061..04650ec 100644
+--- a/preferences/Makefile
++++ b/preferences/Makefile
+@@ -11,11 +11,12 @@ dig3st_FRAMEWORKS = UIKit
+ dig3st_PRIVATE_FRAMEWORKS = Preferences
+ dig3st_INSTALL_PATH = /Library/PreferenceBundles
+ 
+-ifeq ($(THEOS_PACKAGE_SCHEME),)
+-    PKG = rootful
+-endif
+-
++PKG := $(or $(THEOS_PACKAGE_SCHEME),rootful)
+ 
+ dig3st_CFLAGS = -fobjc-arc -DPACKAGE_VERSION='@"$(THEOS_PACKAGE_BASE_VERSION)"' -DPACKAGE_SCHEME='@"$(PKG)"' -DTHEOS_SCHEMA='@"$(THEOS_SCHEMA)"'
++ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
++dig3st_LDFLAGS += -lroothide
++dig3st_CFLAGS += -DDISABLE_ROOTLESS_COMPAT_WARNING
++endif
+ 
+ include $(THEOS_MAKE_PATH)/bundle.mk
 diff --git a/preferences/Resources/Appearance.plist b/preferences/Resources/Appearance.plist
 new file mode 100644
 index 0000000..7e664ea
