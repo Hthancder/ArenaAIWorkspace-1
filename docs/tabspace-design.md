@@ -1,6 +1,6 @@
 # Tabspace — đặc tả thiết kế sản phẩm
 
-**Trạng thái:** đề xuất thiết kế, chưa triển khai.  
+**Trạng thái:** đặc tả đang được triển khai dần theo từng bản 0.x; mục 16 ghi lại cái gì đã có ở bản nào. Phần **chưa** làm tính đến 0.123: các điểm cần kiểm chứng bằng Chrome thật (mục 12), quyền `processes` cùng thông báo kết quả lượt Tự động theo kênh hệ điều hành (15.1/15.4), so sánh quy tắc chồng lấn ở mức giữa các preset với nhau (5.7/6.3), và bộ mockup/design system hoàn chỉnh (14.1).  
 **Phạm vi:** extension Chrome cho nhu cầu cá nhân; ưu tiên dữ liệu cục bộ.  
 **Mục đích:** là nguồn tham chiếu thống nhất cho thiết kế, triển khai và kiểm thử, hạn chế mất ngữ cảnh giữa các lượt làm việc.
 
@@ -115,7 +115,7 @@ Nhật ký ghi thời điểm, nguồn kích hoạt, quy tắc áp dụng, kết
 
 Gợi ý tab trùng, lâu không truy cập (chỉ khi có dữ liệu), đã lưu nhưng còn mở, quy tắc chồng lấn. Mỗi gợi ý có lý do, xem trước, bỏ qua/tắt; không tự coi tab cũ là rác. Không dùng ước lượng RAM như số đo. Gợi ý theo mức tiêu hao tài nguyên dùng chung khối xem trước và chịu cùng chính sách bảo vệ; điều kiện, nguồn đo và giới hạn ở mục 15.
 
-**Trạng thái (0.122):** trang **Sức khỏe tab** đã có trong thanh bên và mang danh sách "được đề xuất nghỉ" mà mức **Chỉ gợi ý** (15.3) cần; ba loại gợi ý còn lại vẫn nằm ở trang riêng của chúng và trang này dẫn đường tới đó. **Quy tắc chồng lấn** chưa được tính — trang nói rõ điều đó thay vì để một dòng trống ngụ ý "không có gì". Hộp thoại *Thái độ tài nguyên* không còn phải nhận là thiếu danh sách.
+**Trạng thái (0.122):** trang **Sức khỏe tab** đã có trong thanh bên và mang danh sách "được đề xuất nghỉ" mà mức **Chỉ gợi ý** (15.3) cần; ba loại gợi ý còn lại vẫn nằm ở trang riêng của chúng và trang này dẫn đường tới đó. **Quy tắc chồng lấn**: trang không tự đếm; dòng "Quy tắc chồng lấn" nói thẳng là bản này chưa so sánh preset với nhau và dẫn sang trang Preset, nơi đã có *Kiểm tra preset chồng lấn* chạy theo tab đang mở. Còn thiếu là phép so sánh **giữa các quy tắc** (hai preset nào chồng nhau kể cả khi không có tab nào mở), không phải một dòng trống ngụ ý "không có gì". Hộp thoại *Thái độ tài nguyên* không còn phải nhận là thiếu danh sách.
 
 **Trạng thái (0.123):** trang còn là nơi duy nhất để xem kết quả một lượt Tự động: khối "Lượt tự động gần nhất" gọi `AutoDiscard.actionLabel()` và nêu từng tab đã nghỉ hoặc không xác nhận được. Danh sách gợi ý không đổi, và trang vẫn không có nút nghỉ tab nào.
 
@@ -528,7 +528,7 @@ Lựa chọn "Chỉ chạy khi hệ thống thiếu bộ nhớ" trước đây m
 
 Trong khối, thứ tự ô làm theo 15.5: phạm vi (thời gian không được xem, giới hạn mỗi lượt) đứng trước phần đo (chu kỳ đo, số chu kỳ liên tiếp, ngưỡng RAM); không thêm lựa chọn mới. Nút **Giới hạn và rủi ro** ở cuối khối mở hộp giải thích thẳng những gì số đo không chứng minh được: số là của tiến trình renderer chứ không của riêng tab, heap chỉ là ước lượng, tài nguyên không cho biết trang còn nội dung chưa lưu, cho nghỉ tab không tạo bản lưu để khôi phục, và bản này chưa có lượt nghỉ tự động. Hộp chỉ để đọc, không đổi thiết lập và không ghi gì. (Từ 0.123 đoạn đó trong hộp đã nói khác: mức Tự động có đường nghỉ riêng, sau một lần bạn xác nhận rủi ro trên máy này.)
 
-Hai phần còn lại của mục 15 được nêu ở bản sau: danh sách **Chỉ gợi ý** cần Sức khỏe tab (mục 5.7 lúc đó chưa tồn tại trong ứng dụng; 0.121 ghi rõ điều đó ngay trong hộp thoại cài đặt, và 0.122 đã dựng trang này), và việc đưa cấu hình vào file sao lưu kèm buộc tính năng ở trạng thái tắt khi nhập (đã làm ở 0.120). Đường nghỉ Tự động của 15.4.3 có từ 0.123; quyền \`processes\` vẫn chưa xin, chủ đích như vậy. **Chưa kiểm thử trên Chrome thực tế**: cần xác nhận `chrome.system.memory.getInfo()` trả số như tài liệu và một chu kỳ bị cửa chặn RAM giữ lại không để lại số mới nào trên tiêu đề khối.
+Hai phần còn lại của mục 15 được nêu ở bản sau: danh sách **Chỉ gợi ý** cần Sức khỏe tab (mục 5.7 lúc đó chưa tồn tại trong ứng dụng; 0.121 ghi rõ điều đó ngay trong hộp thoại cài đặt, và 0.122 đã dựng trang này), và việc đưa cấu hình vào file sao lưu kèm buộc tính năng ở trạng thái tắt khi nhập (đã làm ở 0.120). Đường nghỉ Tự động của 15.4.3 có từ 0.123; quyền `processes` vẫn chưa xin, chủ đích như vậy. **Chưa kiểm thử trên Chrome thực tế**: cần xác nhận `chrome.system.memory.getInfo()` trả số như tài liệu và một chu kỳ bị cửa chặn RAM giữ lại không để lại số mới nào trên tiêu đề khối.
 
 ### Thẻ vượt ngưỡng trong Cần chú ý (0.118)
 
