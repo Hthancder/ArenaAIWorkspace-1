@@ -7,6 +7,12 @@
 
 import SwiftUI
 
+private struct CustomHeaderRow: Identifiable, Hashable {
+    let id = UUID()
+    var key: String
+    var value: String
+}
+
 struct AddEndpointView: View {
     let editingEndpoint: Configuration.Endpoint?
 
@@ -20,7 +26,7 @@ struct AddEndpointView: View {
     @State private var pathMode: Configuration.Endpoint.PathMode
     @State private var useStreaming: Bool
     @State private var timeoutSeconds: Int
-    @State private var customHeadersList: [(id: UUID, key: String, value: String)]
+    @State private var customHeadersList: [CustomHeaderRow]
 
     @State private var revealKey: Bool
     @State private var showProviderPicker = false
@@ -48,7 +54,7 @@ struct AddEndpointView: View {
         let initialStreaming = editingEndpoint?.useStreaming ?? true
         let initialTimeout = editingEndpoint?.timeoutSeconds ?? Configuration.shared.appSettings.requestTimeout
         let initialHeaders = (editingEndpoint?.customHeaders ?? [:]).sorted { $0.key < $1.key }.map {
-            (id: UUID(), key: $0.key, value: $0.value)
+            CustomHeaderRow(key: $0.key, value: $0.value)
         }
 
         _name = State(initialValue: initialName)
@@ -298,14 +304,14 @@ struct AddEndpointView: View {
                                     .font(.subheadline)
                                 Spacer()
                                 Button {
-                                    customHeadersList.append((id: UUID(), key: "", value: ""))
+                                    customHeadersList.append(CustomHeaderRow(key: "", value: ""))
                                 } label: {
                                     Image(systemName: "plus.circle.fill")
                                         .foregroundColor(.accent)
                                 }
                                 .buttonStyle(.borderless)
                             }
-                            ForEach($customHeadersList, id: \.id) { $pair in
+                            ForEach($customHeadersList) { $pair in
                                 HStack(spacing: 6) {
                                     TextField("Header", text: $pair.key)
                                         .font(.caption)

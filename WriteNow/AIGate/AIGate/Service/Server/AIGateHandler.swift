@@ -353,11 +353,13 @@ class AIGateHandler: ChannelInboundHandler {
 
         Task {
             let result = await EndpointNetworkHelper.fetchModels(baseURL: baseURL, token: token, pathMode: pathMode, customHeaders: customHeaders)
-            switch result {
-            case let .success(models):
-                self.sendJSONDictionary(["models": models], context: context)
-            case let .failure(err):
-                self.sendJSONDictionary(["models": [], "error": err.localizedDescription], context: context)
+            context.eventLoop.execute {
+                switch result {
+                case let .success(models):
+                    self.sendJSONDictionary(["models": models], context: context)
+                case let .failure(err):
+                    self.sendJSONDictionary(["models": [], "error": err.localizedDescription], context: context)
+                }
             }
         }
     }
@@ -393,7 +395,9 @@ class AIGateHandler: ChannelInboundHandler {
             if let code = res.statusCode {
                 payload["statusCode"] = code
             }
-            self.sendJSONDictionary(payload, context: context)
+            context.eventLoop.execute {
+                self.sendJSONDictionary(payload, context: context)
+            }
         }
     }
 
