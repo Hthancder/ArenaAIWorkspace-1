@@ -218,6 +218,11 @@ function blendHand(
   const settleW = SETTLE_WRIST * sm
   const settleF = SETTLE_FINGER * sm
   const wA = 0.35 + 0.65 * (1 - sm) // 1 at sm=0 (snappy) → 0.35 at sm=1
+  // The FINGERS follow the present much more than the wrist does: a real
+  // hand's soft, lagging follow lives in the wrist and forearm, while the
+  // striking fingertip is precise (fast passages used to land 5–11 mm
+  // behind the key — "hụt nhẹ khi nốt liền nhau").
+  const wFinger = wA + (1 - wA) * 0.6
 
   // Wrist — the chain root: its own position blend is safe (translation).
   lagged(b.wrist, c.wrist, pose.wrist, settleW)
@@ -229,9 +234,9 @@ function blendHand(
     // Metacarpal: wrist → base at its true length.
     buildBone(pose.wrist, pose.bases[f], a.wrist, a.bases[f], b.wrist, b.bases[f], c.wrist, c.bases[f], wA * 0.6 + 0.4, settleF * 0.7)
     // Finger chain: each phalanx keeps its length, directions blend.
-    buildBone(pose.bases[f], pose.fingers[f][0], a.bases[f], a.fingers[f][0], b.bases[f], b.fingers[f][0], c.bases[f], c.fingers[f][0], wA, settleF)
+    buildBone(pose.bases[f], pose.fingers[f][0], a.bases[f], a.fingers[f][0], b.bases[f], b.fingers[f][0], c.bases[f], c.fingers[f][0], wFinger, settleF)
     for (let k = 0; k < 3; k++) {
-      buildBone(pose.fingers[f][k], pose.fingers[f][k + 1], a.fingers[f][k], a.fingers[f][k + 1], b.fingers[f][k], b.fingers[f][k + 1], c.fingers[f][k], c.fingers[f][k + 1], wA, settleF)
+      buildBone(pose.fingers[f][k], pose.fingers[f][k + 1], a.fingers[f][k], a.fingers[f][k + 1], b.fingers[f][k], b.fingers[f][k + 1], c.fingers[f][k], c.fingers[f][k + 1], wFinger, settleF)
     }
   }
 
@@ -320,9 +325,9 @@ function buildBone(
     return
   }
   const wB = 1 - wA
-  _mix[0] = wA * _dirA[0] + wB * _dirB[0] + settle * (_dirB[0] - _dirC[0])
-  _mix[1] = wA * _dirA[1] + wB * _dirB[1] + settle * (_dirB[1] - _dirC[1])
-  _mix[2] = wA * _dirA[2] + wB * _dirB[2] + settle * (_dirB[2] - _dirC[2])
+  _mix[0] = wA * _dirA[0] + wB * _dirB[0] + clamp1(settle * (_dirB[0] - _dirC[0]))
+  _mix[1] = wA * _dirA[1] + wB * _dirB[1] + clamp1(settle * (_dirB[1] - _dirC[1]))
+  _mix[2] = wA * _dirA[2] + wB * _dirB[2] + clamp1(settle * (_dirB[2] - _dirC[2]))
   normalize(_mix)
   out1[0] = out0[0] + _mix[0] * len
   out1[1] = out0[1] + _mix[1] * len
@@ -331,11 +336,18 @@ function buildBone(
 
 const _mix: Vec3 = [0, 0, 0]
 
+const SETTLE_CAP = 0 // mm-scale spring, not a jump: ~3 mm max overshoot
+
 const lagged = (b: Vec3, c: Vec3, out: Vec3, settle: number) => {
-  out[0] = b[0] + settle * (b[0] - c[0])
-  out[1] = b[1] + settle * (b[1] - c[1])
-  out[2] = b[2] + settle * (b[2] - c[2])
+  const sx = clamp1(settle * (b[0] - c[0]))
+  const sy = clamp1(settle * (b[1] - c[1]))
+  const sz = clamp1(settle * (b[2] - c[2]))
+  out[0] = b[0] + sx
+  out[1] = b[1] + sy
+  out[2] = b[2] + sz
 }
+
+const clamp1 = (x: number) => (x > SETTLE_CAP ? SETTLE_CAP : x < -SETTLE_CAP ? -SETTLE_CAP : x)
 
 function translateJoints(p: HandPose, n: Vec3): void {
   const add = (v: Vec3) => {

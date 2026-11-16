@@ -65,9 +65,10 @@ console.log('lag: humanized trail the source on a linear move')
 {
   const s = createHumanizeScratch()
   const out = humanizePoses(src, 5, p, s)
-  // Linear motion x(t)=t: B=5−τ, C=5−2τ (τ = 0.055), settle adds
-  // 0.45·(B−C) = 0.45·τ → net lag = τ·(1−0.45) ≈ 0.03025.
-  check('wrist net lag ≈ τ·(1−settle)', Math.abs(out.R!.wrist[0] - (5 - 0.055 * 0.55)) < 0.005, `${out.R!.wrist[0]}`)
+  // Linear motion x(t)=t: B=5−τ, C=5−2τ (τ = 0.055); the settle overshoot
+  // is CAPPED at 3 mm (SETTLE_CAP) so a fast arrival springs, not jumps —
+  // net lag = τ − 0.003.
+  check('wrist net lag ≈ τ − settle cap', Math.abs(out.R!.wrist[0] - (5 - 0.055 + 0.003)) < 0.005, `${out.R!.wrist[0]}`)
   check('finger joints stay fresher than wrist', out.R!.fingers[2][3][0] > out.R!.wrist[0])
 }
 

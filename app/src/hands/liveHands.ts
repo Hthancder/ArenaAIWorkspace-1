@@ -76,7 +76,7 @@ export type LiveHandsOpts = {
    * it starts. The hand leans toward it a little before it is due — only
    * when not playing along with the motion (which already anticipates).
    */
-  nextKey?: (hand: 'L' | 'R') => { keyX: number; in: number } | null
+  nextKey?: (hand: 'L' | 'R') => { keyX: number; in: number; finger?: number } | null
 }
 
 // ---- artistic constants (world units: 1 mm = 0.01; angles in rad) ---------------------------------------------------
@@ -89,7 +89,7 @@ const SWING_PRESS = -0.34
 const SWING_MIN = -0.55
 const SWING_MAX = 0.35
 /** MCP abduction limit (fingers fan toward nearby keys). */
-const ABDUCT_MAX = 0.14
+const ABDUCT_MAX = 0.06 // GĐ 1 — fingers stay straight; the HAND travels (was 0.14)
 /** Each key-down sweeps lift → press over this window (visible peck). */
 const PECK_SEC = 0.1
 /** Windup: the finger visibly lifts before every strike (even repeats). */
@@ -138,7 +138,15 @@ const RECENT_HAND_SEC = 1.5
 const RECENT_HAND_PENALTY = 0.8
 /** Repetition scaling: windup ∝ recovery time (fast repeats = tight taps). */
 const REPEAT_REF_SEC = 0.25
-const REPEAT_MIN = 0.25
+const REPEAT_MIN = 0.55 // GĐ 4 — fast repeats keep ≥55% of the windup so each tap reads
+const PRESS_SHARE = 0.85 // GĐ 1 — how much of an already-pressing source pose we do NOT re-curl
+const TAU_PECK_DOWN = 0.022 // GĐ 4 — the strike's down-stroke is faster than the return
+const ATTACK_DIP = 0.022 // GĐ 4 — wrist micro-dip with each strike (arm weight), z-down
+const TAU_DRIFT_PLAY = 0.045 // GĐ 3 — corrections follow quickly while playing along
+const TAU_REBIND = 0.02 // GĐ 3 — right after a key-down the stale correction dies fast
+const REBIND_SEC = 0.15
+const NEXT_BLEND_SEC = 0.2 // GĐ 3 — feed-forward window before the next key-down
+const LAG_EFF = 0.02 // the fingers' render lag after the wrist/finger split (measured)
 /** Release rebound: a small spring back past hover (rad, ~80 ms). */
 const REBOUND_RAD = 0.02
 const REBOUND_TAU = 0.35
@@ -146,6 +154,7 @@ const REBOUND_TAU = 0.35
 const ARC_LIFT = 0.04
 /** Sympathetic coupling: idle neighbours breathe with the strike (rad). */
 const COUPLE_AMP = 0.009
+const COUPLE_PROX = [1, 0.55, 0.22, 0.08] // GĐ 2 — enslaving by |Δf| (Zatsiorsky proximity)
 const COUPLE_TAU = 0.06
 /** Deadzones: micro-tremor is never chased (units). */
 const DRIFT_DEADZONE = 0.002
@@ -214,6 +223,10 @@ type HandState = {
   posture: number
   /** performance.now()/1000 of the last key-down (chord grouping). */
   lastKeyT: number
+  keyDownT: number
+  attackSm: number
+  lastTipX: number[]
+  tipVelSm: number[]
   /** Running index within the current chord (rolled-chord stagger). */
   chordIdx: number
   /** Smoothed drift speed (units/s) — drives the travel arc (N2). */
@@ -264,6 +277,10 @@ const makeHand = (hand: 'L' | 'R'): HandState => ({
   lastKeyT: -9,
   chordIdx: 0,
   driftVel: 0,
+  keyDownT: -9,
+  attackSm: 0,
+  lastTipX: [0, 0, 0, 0, 0],
+  tipVelSm: [0, 0, 0, 0, 0],
 })
 
 function copyPose(src: HandPose, dst: HandPose): void {
@@ -366,9 +383,9 @@ class LiveHandsOverlay {
   }
 
   /** Test/debug: a copy of one finger slot's motion state. */
-  slotDebug(hand: 'L' | 'R', finger: number): { swing: number; abduct: number; axis: Vec3 | null; lift: number } {
+  slotDebug(hand: 'L' | 'R', finger: number): { swing: number; abduct: number; axis: Vec3 | null; lift: number; couple: number } {
     const s = this[hand].slots[finger]
-    return { swing: s.swing, abduct: s.abduct, axis: s.axis ? ([...s.axis] as Vec3) : null, lift: s.lift }
+    return { swing: s.swing, abduct: s.abduct, axis: s.axis ? ([...s.axis] as Vec3) : null, lift: s.lift, couple: s.couple }
   }
 
   attach(): () => void {
@@ -476,6 +493,12 @@ class LiveHandsOverlay {
       // snapshot so neighbour reads are frame-order independent.
       const tapNow = [0, 1, 2, 3, 4].map((i) => st.slots[i].tap)
       const dResid = [0, 0, 0, 0, 0]
+      // Source-side tips when a sampler is available: the render LAGS the
+      // source (humanizer 3-tap), and its velocity near a strike is a ghost
+      // catch-up, not real travel — predictions must use the real motion.
+      const refPose = opts.sampleHand?.(hand) ?? pose
+      const tipXs = [0, 0, 0, 0, 0]
+      const tipVel = [0, 0, 0, 0, 0]
       let cx = 0
       let cw = 0
       let tx = 0
@@ -483,10 +506,17 @@ class LiveHandsOverlay {
       let tipSum = 0
       for (let f = 0; f < 5; f++) {
         const s = st.slots[f]
-        const tipX = pose.fingers[f][3][0]
+        const tipX = (refPose.fingers[f] ? refPose.fingers[f][3][0] : pose.fingers[f][3][0]) ?? pose.fingers[f][3][0]
         tipSum += tipX
-        if (s.midi !== null && Number.isFinite(s.keyX) && Number.isFinite(tipX)) {
-          dResid[f] = s.keyX - tipX
+        tipXs[f] = tipX
+        if (Number.isFinite(tipX) && Number.isFinite(st.lastTipX[f])) {
+          const rawV = clamp((tipX - st.lastTipX[f]) / Math.max(dt, 1e-4), -3, 3)
+          st.tipVelSm[f] += (rawV - st.tipVelSm[f]) * (1 - Math.exp(-dt / 0.05))
+        }
+        tipVel[f] = st.tipVelSm[f]
+        const renderTipX = pose.fingers[f][3][0]
+        if (s.midi !== null && Number.isFinite(s.keyX) && Number.isFinite(renderTipX)) {
+          dResid[f] = s.keyX - renderTipX
           if (s.held) {
             cx += dResid[f]
             cw += 1
@@ -495,6 +525,7 @@ class LiveHandsOverlay {
           tw += 1
         }
       }
+      if (!Number.isFinite(tipSum)) tipSum = 0
       const rawDrift = cw > 0 ? cx / cw : tw > 0 ? tx / tw : 0
       // Slot smoothing: press envelope + MCP swing + abduction targets.
       let rollAcc = 0
@@ -533,7 +564,17 @@ class LiveHandsOverlay {
         // chỗ"); a held key stays pressed INTO the key. Expression: the
         // strike depth scales with the note's velocity (accents press
         // harder) and rolled chords stagger the fingers' strikes.
-        const press = SWING_PRESS * k * (1 + express * 0.85 * (s.vel - 0.55))
+        // GĐ 1 — anti double-curl: when the source pose already presses
+        // this finger (the motion DB animates real presses), only top it up
+        // a little — the visible stroke comes from the lift-strike cycle,
+        // not from digging past the key (measured: the old layer drove the
+        // tip 12–19 mm through the key surface at hold).
+        const sourcePress = clamp(pose.press[f], 0, 1)
+        // Velocity still reads as depth even when the source pose presses:
+        // a harder strike keeps more of the extra push (share shrinks), a
+        // softer one almost trusts the source animation alone.
+        const share = clamp(PRESS_SHARE * (1 - express * 0.5 * (s.vel - 0.55)), 0, 0.97)
+        const press = SWING_PRESS * k * (1 + express * 0.85 * (s.vel - 0.55)) * (1 - share * sourcePress)
         const idle = st.synth ? SWING_HOVER : 0
         const demand = !opts.playing && pose.press[f] > 0.5 && !(s.midi !== null && s.tap > 0.5)
         let target = s.held ? press : idle + (demand ? HOVER_EXTRA : 0)
@@ -560,8 +601,13 @@ class LiveHandsOverlay {
         // N5 — sympathetic coupling: idle neighbours breathe with the
         // strike (≤0.02 rad flexion, lagged ~30 ms) — never when bound.
         if (s.midi === null) {
+          // GĐ 2 — enslaving (Zatsiorsky proximity): the closer the busy
+          // finger, the more this idle one breathes with its strike.
           let neigh = 0
-          for (let i = 0; i < 5; i++) if (i !== f) neigh = Math.max(neigh, tapNow[i])
+          for (let i = 0; i < 5; i++) {
+            if (i === f) continue
+            neigh = Math.max(neigh, tapNow[i] * (COUPLE_PROX[Math.abs(i - f) - 1] ?? 0))
+          }
           const coupleTarget = -COUPLE_AMP * neigh
           s.couple += (coupleTarget - s.couple) * (1 - Math.exp(-dt / COUPLE_TAU))
           target += s.couple
@@ -572,8 +618,9 @@ class LiveHandsOverlay {
         target = Number.isFinite(target) ? clamp(target, SWING_MIN, SWING_MAX) : 0
         // The spring-back is a fast motion (like the strike); a normal
         // relaxed release is slow. `rebound > 0.004` lasts ~0.5 s (τ 0.35).
-        const tau =
+        let tau =
           pecking || target < s.swing || (s.rebound > 0.004 && target > s.swing) ? TAU_PRESS : TAU_RELEASE
+        if (pecking && target < s.swing) tau = TAU_PECK_DOWN // GĐ 4 — the strike is a fast drop
         s.swing += (target - s.swing) * (1 - Math.exp(-dt / tau))
 
         // Abduction (S1): only the finger's deviation from what drift is
@@ -598,7 +645,9 @@ class LiveHandsOverlay {
             abTarget = RELAX_FAN * fanDir * Math.min(1, (busy - 0.3) / 0.4)
           }
         }
-        s.abduct += (abTarget - s.abduct) * (1 - Math.exp(-dt / TAU_ABDUCT))
+        // GĐ 1/GĐ 3 — after a key-down a stale sideways fan dies fast too.
+        const tauA = nowSec - st.keyDownT < REBIND_SEC ? TAU_REBIND : TAU_ABDUCT
+        s.abduct += (abTarget - s.abduct) * (1 - Math.exp(-dt / tauA))
 
         // Accent roll (arm weight): strong notes roll the hand around the
         // forearm axis — toward the thumb on thumb notes, the other way
@@ -617,6 +666,14 @@ class LiveHandsOverlay {
       // N4 — anticipation: when not playing along (the motion already
       // leads there), lean toward the imminent note, bounded.
       let driftTarget = Number.isFinite(rawDrift) ? (onStage ? clamp(rawDrift, -REACH_X, REACH_X) : rawDrift) : 0
+      // GĐ 3 — a residual against a key the finger has already LEFT is
+      // stale the moment the hand is in transit toward the next one (this
+      // is the pull-back to "nốt vừa qua"; with the motion DB's noisy
+      // frames it reached 14 mm). Drop it unless a key-down is fresh — a
+      // newly pressed key must still be reached.
+      if (onStage && Number.isFinite(rawDrift) && Math.abs(rawDrift) > 0.06 && nowSec - st.keyDownT > 0.3) {
+        driftTarget = 0
+      }
       if (!opts.playing && opts.nextKey) {
         const nk = opts.nextKey(hand)
         if (nk && Number.isFinite(nk.keyX) && nk.in > 0 && nk.in <= ANTICIPATE_SEC) {
@@ -624,8 +681,45 @@ class LiveHandsOverlay {
           const w = ANTICIPATE_W * (1 - nk.in / ANTICIPATE_SEC)
           driftTarget = (1 - w) * driftTarget + w * lean
         }
+      } else if (opts.playing && opts.nextKey) {
+        // GĐ 3 — while playing along, the correction targets THE UPCOMING
+        // KEY, never the stale binding: a finger pre-positioning toward the
+        // next key made the residual against the OLD key grow negative and
+        // the hand visibly pulled back to the previous note (measured: drift
+        // accumulated to −13 mm across four 200 ms notes — the exact
+        // "hụt về nốt vừa qua" symptom). The tip is extrapolated by its
+        // velocity (capped so a decelerating finger is never predicted past
+        // its key), which also pre-absorbs the humanizer's travel lag.
+        const nk = opts.nextKey(hand)
+        if (nk && Number.isFinite(nk.keyX) && nk.in > 0 && nk.in <= NEXT_BLEND_SEC) {
+          const f = nk.finger !== undefined && nk.finger >= 0 && nk.finger < 5 ? nk.finger : 3
+          const dist = nk.keyX - tipXs[f]
+          // Motion semantics (measured in GĐ 0 diagnostics): a finger
+          // TRAVELLING toward its next key arrives there on its own — the
+          // only thing to correct is the render lag, and that correction is
+          // LAG-SIZED (a few mm), never the remaining gap: path-integrating
+          // the gap threw the hand ±20 mm at every strike. A finger resting
+          // at its OWN sounding key is done — `nextKey` already reports the
+          // following note at the strike frame, and dragging the finger to
+          // it early is exactly the "hụt về nốt vừa qua" symptom.
+          const boundX = st.slots[f].keyX
+          const atBound = Number.isFinite(boundX) && Math.abs(boundX - tipXs[f]) < 0.006
+          const toward =
+            Number.isFinite(tipVel[f]) && Math.abs(tipVel[f]) > 0.25 && tipVel[f] * dist > 0
+          if (toward && !atBound) {
+            driftTarget = clamp(tipVel[f] * LAG_EFF, -0.06, 0.06)
+          }
+        }
       }
-      const tauD = onStage ? TAU_DRIFT : TAU_DRIFT_TRAVEL
+      // GĐ 3 — right after a key-down the stale correction dies fast, and
+      // playing along follows quicker than travel glides.
+      let tauD = onStage ? TAU_DRIFT : TAU_DRIFT_TRAVEL
+      if (opts.playing) tauD = Math.min(tauD, TAU_DRIFT_PLAY)
+      if (opts.playing && opts.nextKey) {
+        const nk0 = opts.nextKey(hand)
+        if (nk0 && nk0.in > 0 && nk0.in <= NEXT_BLEND_SEC) tauD = Math.min(tauD, TAU_REBIND)
+      }
+      if (nowSec - st.keyDownT < REBIND_SEC) tauD = Math.min(tauD, TAU_REBIND)
       if (!Number.isFinite(st.drift)) st.drift = 0
       const driftErr = driftTarget - st.drift
       // S2 — deadzone: the humanizer's micro-tremor is breathing, not
@@ -635,6 +729,17 @@ class LiveHandsOverlay {
       const speed = driftStep / Math.max(dt, 1e-4)
       st.driftVel += (speed - st.driftVel) * (1 - Math.exp(-dt / 0.12))
       st.drift += clamp(driftStep, -DRIFT_RATE * dt, DRIFT_RATE * dt)
+
+      // GĐ 4 — attack dip: a quick wrist drop with each key-down (arm
+      // weight), rebounding over ~250 ms. Visible "dồn sức", 2–3 mm.
+      let atk = 0
+      for (const sl of st.slots) {
+        const e = sl.strikeT > 0 && sl.strikeT < 0.35 ? Math.exp(-Math.max(0, sl.strikeT - 0.04) / 0.12) : 0
+        if (e > atk) atk = e
+      }
+      if (!Number.isFinite(st.attackSm)) st.attackSm = 0
+      st.attackSm += (atk - st.attackSm) * (1 - Math.exp(-dt / 0.025))
+      for (let f = 0; f < 5; f++) st.lastTipX[f] = tipXs[f]
 
       // Accent roll smoothing (recovers slowly when the accents pass).
       if (!Number.isFinite(st.roll)) st.roll = 0
@@ -695,6 +800,8 @@ class LiveHandsOverlay {
     // that "flies" instead of sliding on rails.
     const arc = ARC_LIFT * clamp(Math.abs(st.driftVel) / DRIFT_RATE, 0, 1)
     if (arc > 0.0005) shiftPose(pose, 0, arc, 0)
+    // GĐ 4 — the wrist dips into the strike (arm weight) and rebounds.
+    if (st.attackSm > 0.004) shiftPose(pose, 0, 0, -ATTACK_DIP * Math.min(1, st.attackSm))
     // Accent roll: the hand rolls around its forearm axis (arm weight on
     // strong notes). Rotation about the wrist on the forearm axis — bone
     // lengths exact.
@@ -705,6 +812,7 @@ class LiveHandsOverlay {
     }
 
     let maxTap = 0
+    let swingLatX = 0
     for (let f = 0; f < 5; f++) {
       const s = st.slots[f]
       const basePress = pose.press[f] > 0.5
@@ -720,8 +828,23 @@ class LiveHandsOverlay {
       const active = s.held || s.strikeT < PECK_SEC
       if (active && !s.axis) s.axis = fingerAxis(pose, f)
       if (!active && s.axis) s.axis = null
-      swingFinger(pose, f, clamp(s.swing + (s.midi === null ? flutter : 0), SWING_MIN, SWING_MAX), s.axis)
+      const theta = clamp(s.swing + (s.midi === null ? flutter : 0), SWING_MIN, SWING_MAX)
+      // GĐ 1 — the swing arc's LATERAL component slides the tip sideways
+      // (measured ~6 mm at windup) — remember it to cancel below, so the
+      // stroke goes straight into the key.
+      if (Math.abs(theta) > 1e-4) {
+        const chain = pose.fingers[f]
+        const ax = s.axis ?? fingerAxis(pose, f)
+        const rz = chain[3][2] - chain[0][2]
+        const lat = theta * ax[1] * rz // (axis × r).x with axis.z = 0
+        const w = Math.max(s.tap, s.midi !== null ? 0.6 : 0)
+        if (Number.isFinite(lat)) swingLatX += lat * w
+      }
+      swingFinger(pose, f, theta, s.axis)
     }
+    // Cancel the swing's lateral slide — the pressed finger stays over its
+    // key while the stroke reads as vertical travel.
+    if (Math.abs(swingLatX) > 0.0005) shiftPose(pose, -swingLatX, 0, 0)
     // Weight cue: the hand sinks slightly as the fingers press.
     const dip = WRIST_DIP * maxTap * clamp(Number.isFinite(opts.keystrike) ? opts.keystrike : 1, 0, 1)
     if (dip > 0.0005) shiftPose(pose, 0, 0, -dip, false)
@@ -738,6 +861,7 @@ class LiveHandsOverlay {
     s.lift = PECK_LIFT * clamp(sincePrev / REPEAT_REF_SEC, REPEAT_MIN, 1)
     s.axis = null // S3 — freeze a fresh hinge axis for this strike
     s.rebound = 0 // the spring belongs to the previous release
+    st.keyDownT = nowSec // GĐ 3 — stale hand corrections die fast from here
     if (s.midi !== null) this.recent.set(s.midi, { hand: st.hand, t: nowSec })
     if (nowSec - st.lastKeyT < CHORD_WINDOW) st.chordIdx++
     else st.chordIdx = 0

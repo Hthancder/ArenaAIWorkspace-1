@@ -73,7 +73,7 @@ export type NoteQuery = {
   /** The motion plan's (hand, finger 0..4) for the note near this key around `t` (imminent first). */
   planFor(midi: number, t: number): { hand: 'L' | 'R'; finger: number } | null
   /** The nearest note starting on `hand` within the next 0.4 s (anticipation). */
-  nextOn(hand: 'L' | 'R', t: number): { keyX: number; in: number } | null
+  nextOn(hand: 'L' | 'R', t: number): { keyX: number; in: number; finger?: number } | null
 }
 
 export function makeNoteQuery(notes: SongHandsNote[], plan?: HandsMotion['plan'] | null): NoteQuery {
@@ -148,7 +148,8 @@ export function makeNoteQuery(notes: SongHandsNote[], plan?: HandsMotion['plan']
         if (eff !== hand) continue
         const k = keyForMidi(n.midi)
         if (!k) continue
-        return { keyX: k.x, in: n.on - t }
+        const fg = plan ? plan.finger[i] : n.finger
+        return { keyX: k.x, in: n.on - t, finger: fg !== null && fg !== undefined && fg >= 1 && fg <= 5 ? fg - 1 : undefined }
       }
       return null
     },

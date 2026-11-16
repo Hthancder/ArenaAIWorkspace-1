@@ -370,3 +370,52 @@ test N1 đo max qua mọi chu kỳ nên chu kỳ đầu luôn full lift (→ đo
 
 Biên độ mọi chuyển động mới ≤ hằng số cũ (arc ≤ 0.04 shift, couple ≤ 0.009 rad,
 rebound ≤ 0.02 rad, lean ≤ 25% gap); không thêm UI; không đổi hành vi khi phát MIDI.
+
+## hands v3.5 — GĐ 0 chẩn đoán + fix gốc 2 triệu chứng playback (2026-11-15)
+
+**Triệu chứng (user, context=playback)**: (1a) nốt liền nhau — đầu ngón hụt về nốt vừa qua;
+(1b) thân ngón/cổ tay/bàn tay hơi nghiêng, ngón chụm khi 1 ngón đánh; (2) nhấn chưa rõ:
+lặp nhanh ít thấy nhấn, chưa lún sâu, pha nhấc–gõ chưa rõ, "tay bay cao" khi nhấn.
+
+**GĐ 0 — đo bằng harness thật** (`scripts/diag-geometry.ts` dump 120 frame DB thật
+→ `scripts/.diag-frames.json`; `scripts/diag-overlay.ts` chạy full chain humanize+liveHands
+trên frames đó, 3 config). **DB source TỰ NHIÊN** (wristZ 0.31–0.62, tipX err ≤26mm,
+approach 13–41°) → lỗi ở OVERLAY. Hai root cause định lượng:
+
+1. **Double-curl** (triệu chứng 2): swing layer thêm −0.215 rad @hold → tip lún THÊM
+   12–19mm qua mặt phím dù DB đã press (pose.press=1). Config keystrike=0 → hết.
+   "Tay bay cao" là cảm nhận sai từ lún kép + ngón chụm (wristZ thật 3–6cm = bình thường).
+2. **Lệch điểm chạm** (triệu chứng 1a): tipX−keyX @strike tới **−24mm** (hướng nốt trước).
+   NGUỒN = **drift stale**: residual luôn tính theo phím CŨ đang giữ trong khi ngón đã di
+   chuyển sang phím kế (kể cả khi nguồn đứng yên tại phím mới → −27mm; tắt humanize vẫn lệch
+   → KHÔNG phải humanize lag). Kèm: swing arc có thành phần ngang ~6mm, humanize render lag.
+
+**Fix (liveHands.ts + humanize.ts)**:
+- **(a) Anti double-curl**: `press = SWING_PRESS·k·velTerm·(1 − share·pose.press[f])`,
+  share = PRESS_SHARE·(1 − express·0.5·(vel−0.55)) — DB press=1 chỉ cộng thêm ~15–26%
+  (velocity vẫn đọc được: share co giãn theo độ mạnh); peck lift cycle GIỮ NGUYÊN.
+- **(b) Drift semantics (GĐ 3)**: residual = keyX − RENDER tip (tự hốt phần render lag);
+  khi chơi, nếu ngón ĐANG DI CHUYỂN tới nốt kế (source velocity, lấy từ `opts.sampleHand`
+  — KHÔNG dùng render velocity: ghost catch-up) → target = lead cỡ lag (≤6mm, chặn);
+  residual >6mm và quá 0.3s không keydown = ngón đã rời phím → drop (stale);
+  τ: 0.02 trong 0.15s sau keydown, 0.045 khi playing. N4 lean giữ nguyên khi !playing.
+- **(c) Swing lat-cancel (GĐ 1)**: đền bù thành phần ngang của swing arc (θ·a.y·r.z) —
+  bấm thẳng xuống, không trượt ngang 6mm. ABDUCT_MAX 0.14→0.06; abduct τ 0.02 sau keydown.
+- **(d) GĐ 4**: REPEAT_MIN 0.25→0.55 (floor 55% windup); down-stroke τ 0.022;
+  wrist attack dip ~2mm/nhát (ATTACK_DIP, envelope e^{−(t−0.04)/0.12}) + REBOUND giữ.
+- **(e) Couple proximity** [1, 0.55, 0.22, 0.08] theo |Δf| (enslaving proximity hypothesis).
+- **(f) humanize**: tách lag ngón/cổ tay (wFinger = wA + (1−wA)·0.6 — ngón chính xác,
+  cổ tay giữ độ mềm); SETTLE_CAP 3mm (overshoot là "nảy", không phải nhảy).
+  N2 arc y→z đã sửa ở v3.4.
+
+**Đo sau fix (cùng harness)**: double-curl −12..−19mm → **−5..−8mm** ("lún" đúng nghĩa);
+strike err: 4/6 chuyển tiếp ≤2.5mm (cũ 11–32mm), 2 outlier 7.6/14mm nằm đúng frame DB
+nhiễu (65: srcTipZ +0.103 bay cao; 67: wristZ rơi 0.36) — không phải cơ chế.
+Stress test tổng hợp (3cm/200ms, decelerate vào phím, có release thật): worst 3.2mm,
+trung bình <2mm.
+
+**Test**: test-livebrowser 33→**39 checks** (N1 ngưỡng mới 55–62% + travel ≥5mm; no-lean
+dùng source dẫn trước; thêm GĐ1 double-curl ≤8mm, GĐ3 strike ≤3.5mm/mean ≤2mm, GĐ4 dip
+0.8–4.5mm + rebound, GĐ2 couple theo proximity). test-livehands/humanize: 3 ngưỡng đổi
+theo fixture/SETTLE_CAP. **Lỗi test bắt buộc phải sửa**: test cũ giữ phím vĩnh viễn
+(setTimeout không chạy) → slot misallocation; source test teleport (segment kích hoạt muộn).
