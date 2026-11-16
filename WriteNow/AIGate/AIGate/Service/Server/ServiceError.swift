@@ -35,8 +35,7 @@ enum ServiceError: Error, Equatable {
         case .invalidResponse:
             return NSLocalizedString("Invalid Response", comment: "")
         case let .upstreamPassedError(code, detail):
-            let statusDesc = HTTPStatus(rawValue: code)?.description
-                ?? String(format: NSLocalizedString("Status %d", comment: "Unknown HTTP status"), code)
+            let statusDesc = HTTPURLResponse.localizedString(forStatusCode: code).capitalized
             if let detail, !detail.isEmpty {
                 return String(
                     format: NSLocalizedString("Endpoint Error: %d %@", comment: ""),
@@ -92,7 +91,7 @@ extension ChannelHandlerContext {
                 if let jsonData = try? JSONSerialization.data(withJSONObject: payloadDict),
                    let jsonStr = String(data: jsonData, encoding: .utf8)
                 {
-                    let statusText = HTTPStatus(rawValue: code)?.description ?? "Error"
+                    let statusText = HTTPURLResponse.localizedString(forStatusCode: code).capitalized
                     let header = "HTTP/1.1 \(code) \(statusText)\r\nContent-Type: application/json\r\nContent-Length: \(jsonData.count)\r\nConnection: close\r\n\r\n"
                     var buffer = channel.allocator.buffer(capacity: header.utf8.count + jsonData.count)
                     buffer.writeString(header)
@@ -113,7 +112,7 @@ extension ChannelHandlerContext {
                 if let jsonData = try? JSONSerialization.data(withJSONObject: payloadDict),
                    let jsonStr = String(data: jsonData, encoding: .utf8)
                 {
-                    let statusText = HTTPStatus(rawValue: reason.rawCode)?.description ?? "Error"
+                    let statusText = HTTPURLResponse.localizedString(forStatusCode: reason.rawCode).capitalized
                     let header = "HTTP/1.1 \(reason.rawCode) \(statusText)\r\nContent-Type: application/json\r\nContent-Length: \(jsonData.count)\r\nConnection: close\r\n\r\n"
                     var buffer = channel.allocator.buffer(capacity: header.utf8.count + jsonData.count)
                     buffer.writeString(header)

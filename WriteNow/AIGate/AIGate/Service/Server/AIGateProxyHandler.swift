@@ -7,6 +7,7 @@
 
 import Foundation
 import NIO
+import NIOSSL
 
 class AIGateProxyHandler: ChannelInboundHandler {
     typealias InboundIn = ByteBuffer
