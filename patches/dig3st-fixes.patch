@@ -94,7 +94,7 @@ index 062b2a3..03ad3ac 100644
  #import "Notification.h"
  #import "OpenAI.h"
 diff --git a/headers/Notification.h b/headers/Notification.h
-index e8bdc8b..956b752 100644
+index e8bdc8b..202f6c0 100644
 --- a/headers/Notification.h
 +++ b/headers/Notification.h
 @@ -1,6 +1,8 @@
@@ -106,6 +106,43 @@ index e8bdc8b..956b752 100644
  @property (nonatomic, retain) NSString *sectionIdentifier;
  @property (nonatomic, retain) NSObject *content;
  @end
+@@ -9,14 +11,33 @@
+ @property (nonatomic,readonly) UIView * viewForPreview;
+ @end
+ 
+-@interface NCNotificationShortLookViewController : UIViewController
++@interface NCNotificationViewController : UIViewController
++@property (nonatomic,readonly) NCNotificationRequest *notificationRequest;
++- (void)_updatePreferredContentSize;
++@end
++
++@interface NCNotificationShortLookViewController : NCNotificationViewController
+ @property (nonatomic,readonly) NCNotificationShortLookView * viewForPreview;
+-@property (nonatomic,readonly) NCNotificationRequest  * notificationRequest;
+ @property (nonatomic, retain) UIImage *image;
+ @end
+ 
++@protocol DigestBNPresentableContext <NSObject>
++@optional
++- (void)setHostNeedsUpdate;
++@end
++
++@interface NCNotificationPresentableViewController : UIViewController
++@property (nonatomic,readonly) NCNotificationViewController *notificationViewController;
++@property (nonatomic,readonly) id<DigestBNPresentableContext> presentableContext;
++@end
++
++@interface NCExpandedPlatterViewController : UIViewController
++@property (nonatomic,readonly) NCNotificationRequest *notificationRequest;
++- (UIView *)_expandedPlatterViewIfLoaded;
++@end
++
+ @interface NCNotificationSeamlessContentView : UIView
+-- (NCNotificationShortLookViewController *)_viewControllerForAncestor;
++- (UIViewController *)_viewControllerForAncestor;
+ @end
+ 
+ @interface NCNotificationShortLookViewController (Digest)
 diff --git a/headers/OpenAI.h b/headers/OpenAI.h
 index 50e6a38..f5ca835 100644
 --- a/headers/OpenAI.h
@@ -3508,10 +3545,10 @@ index ef8dd7c..1a39af1 100644
      NSString *title = info[@"title"];
      NSString *content = info[@"content"];
 diff --git a/src/Tweak.x b/src/Tweak.x
-index 3a91698..7402a1b 100644
+index 3a91698..5dd1875 100644
 --- a/src/Tweak.x
 +++ b/src/Tweak.x
-@@ -1,14 +1,540 @@
+@@ -1,14 +1,548 @@
  #import <CoreFoundation/CoreFoundation.h>
 +#import <objc/runtime.h>
  #include <substrate.h>
@@ -3820,22 +3857,27 @@ index 3a91698..7402a1b 100644
 +                vc.preferredContentSize = CGSizeMake(w, fit.height);
 +            }
 +        }
-+        if ([vc respondsToSelector:@selector(_updatePreferredContentSize)]) {
-+            [(id)vc _updatePreferredContentSize];
++        if ([vc isKindOfClass:NSClassFromString(@"NCNotificationViewController")] &&
++            [vc respondsToSelector:@selector(_updatePreferredContentSize)]) {
++            [(NCNotificationViewController *)vc _updatePreferredContentSize];
 +        }
 +        UIViewController *parent = vc.parentViewController;
 +        if (parent) {
-+            if (vc.preferredContentSize.height > 0 &&
-+                parent.preferredContentSize.height != vc.preferredContentSize.height &&
-+                [parent isKindOfClass:NSClassFromString(@"NCNotificationPresentableViewController")]) {
-+                parent.preferredContentSize = vc.preferredContentSize;
-+            }
-+            [parent preferredContentSizeDidChangeForChildContentContainer:vc];
-+            if ([parent respondsToSelector:@selector(presentableContext)]) {
-+                id ctx = [(id)parent presentableContext];
-+                if ([ctx respondsToSelector:@selector(setHostNeedsUpdate)]) {
-+                    [(id)ctx setHostNeedsUpdate];
++            if ([parent isKindOfClass:NSClassFromString(@"NCNotificationPresentableViewController")]) {
++                NCNotificationPresentableViewController *pvc = (NCNotificationPresentableViewController *)parent;
++                if (vc.preferredContentSize.height > 0 &&
++                    fabs(pvc.preferredContentSize.height - vc.preferredContentSize.height) > 0.5) {
++                    pvc.preferredContentSize = vc.preferredContentSize;
 +                }
++                [pvc preferredContentSizeDidChangeForChildContentContainer:vc];
++                if ([pvc respondsToSelector:@selector(presentableContext)]) {
++                    id<DigestBNPresentableContext> ctx = pvc.presentableContext;
++                    if ([ctx respondsToSelector:@selector(setHostNeedsUpdate)]) {
++                        [ctx setHostNeedsUpdate];
++                    }
++                }
++            } else {
++                [parent preferredContentSizeDidChangeForChildContentContainer:vc];
 +            }
 +            [parent.view setNeedsLayout];
 +        }
@@ -3849,14 +3891,17 @@ index 3a91698..7402a1b 100644
 +    if (!vc || !showOriginalInExpanded) return;
 +    @try {
 +        NCNotificationRequest *req = nil;
-+        if ([vc respondsToSelector:@selector(notificationRequest)]) {
-+            req = [(id)vc notificationRequest];
++        if ([vc isKindOfClass:NSClassFromString(@"NCExpandedPlatterViewController")]) {
++            req = ((NCExpandedPlatterViewController *)vc).notificationRequest;
++        } else if ([vc isKindOfClass:NSClassFromString(@"NCNotificationViewController")]) {
++            req = ((NCNotificationViewController *)vc).notificationRequest;
 +        }
 +        if (!req || !req.dig3st) return;
 +
 +        UIView *platter = nil;
-+        if ([vc respondsToSelector:@selector(_expandedPlatterViewIfLoaded)]) {
-+            platter = [(id)vc _expandedPlatterViewIfLoaded];
++        if ([vc isKindOfClass:NSClassFromString(@"NCExpandedPlatterViewController")] &&
++            [vc respondsToSelector:@selector(_expandedPlatterViewIfLoaded)]) {
++            platter = [(NCExpandedPlatterViewController *)vc _expandedPlatterViewIfLoaded];
 +        }
 +        if (!platter) {
 +            @try { platter = [vc valueForKey:@"_expandedPlatterView"]; } @catch (NSException *e) {}
@@ -4052,7 +4097,28 @@ index 3a91698..7402a1b 100644
  %end
  
  BOOL isOkToSummarize(NSString *sectionIdentifier) {
-@@ -36,93 +562,206 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
+@@ -27,102 +561,222 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
+ %property (nonatomic, retain) UIImageView *imageView;
+ -(void)setSecondaryText:(NSString *)arg1 {
+     @try {
+-        NCNotificationShortLookViewController *controller = [self _viewControllerForAncestor];
+-        NCNotificationRequest *req = controller.notificationRequest;
+-        //long view
++        UIViewController *controller = [self _viewControllerForAncestor];
++        NCNotificationRequest *req = nil;
++        if ([controller isKindOfClass:NSClassFromString(@"NCExpandedPlatterViewController")]) {
++            req = ((NCExpandedPlatterViewController *)controller).notificationRequest;
++        } else if ([controller isKindOfClass:NSClassFromString(@"NCNotificationViewController")]) {
++            req = ((NCNotificationViewController *)controller).notificationRequest;
++        }
+         if ([controller isKindOfClass:NSClassFromString(@"NCExpandedPlatterViewController")] && req.dig3st) {
+-            %orig([req valueForKey:@"actualMessage"]);
+-        }else{
++            %orig(arg1);
++            if (showOriginalInExpanded) {
++                renderExpandedController(controller);
++            }
++        } else {
              %orig(arg1);
          }
      } @catch(NSException *e) {
@@ -4087,7 +4153,7 @@ index 3a91698..7402a1b 100644
 +    %orig;
 +    @try {
 +        UIView *cv = findContentViewForController(self);
-+        UILabel *lbl = cv ? [cv valueForKey:@"secondaryTextElement"] : nil;
++        UIView *lbl = cv ? [cv valueForKey:@"secondaryTextElement"] : nil;
 +        if (lbl) [DigestBannerAnimator stopForLabel:lbl];
 +    } @catch (NSException *e) {}
 +    if (activeControllers) {
@@ -4154,8 +4220,8 @@ index 3a91698..7402a1b 100644
 +    %orig;
 +    if (activeExpandedControllers) {
 +        [activeExpandedControllers removeObject:self];
-+    }
-+}
+     }
+ }
 +-(void)_updateWithProvidedStaticContent {
 +    %orig;
 +    renderExpandedController(self);
@@ -4164,7 +4230,7 @@ index 3a91698..7402a1b 100644
 +    %orig;
 +    if (activeExpandedControllers) {
 +        [activeExpandedControllers addObject:self];
-     }
++    }
 +    renderExpandedController(self);
 +}
 +%end
@@ -4172,13 +4238,13 @@ index 3a91698..7402a1b 100644
 +%hook NCNotificationPresentableViewController
 +-(BOOL)bn_shouldAnimateViewTransitionToSize:(CGSize)size {
 +    @try {
-+        NCNotificationViewController *nvc = [self valueForKey:@"notificationViewController"];
++        NCNotificationViewController *nvc = self.notificationViewController;
 +        if (nvc.notificationRequest.dig3st) {
 +            return YES;
 +        }
 +    } @catch (NSException *e) {}
 +    return %orig;
- }
++}
  %end
  
  %hook NCNotificationDispatcher
@@ -4200,10 +4266,10 @@ index 3a91698..7402a1b 100644
 +
 +        NSNumber *appCtxOverride = resolveAppTriState(@"appCtx", bundleId);
 +        BOOL effectiveCtxEnabled = appCtxOverride ? [appCtxOverride boolValue] : contextBufferEnabled;
-+
-+        NSNumber *appTransOverride = resolveAppTriState(@"appTrans", bundleId);
  
 -        BOOL contentTooShort = textContent ? textContent.length < minChars  : YES;
++        NSNumber *appTransOverride = resolveAppTriState(@"appTrans", bundleId);
++
 +        NSNumber *appStreamOverride = resolveAppTriState(@"appStream", bundleId);
 +        BOOL effectiveStreamEnabled = appStreamOverride ? [appStreamOverride boolValue] : streamingEnabled;
 +
@@ -4318,7 +4384,7 @@ index 3a91698..7402a1b 100644
          [req setValue:@(NO) forKey:@"dig3st"];
          NSLog(@"exception while fetching ai response : %@", e);
          %orig;
-@@ -131,79 +770,88 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
+@@ -131,79 +785,88 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
  %end
  
  %ctor {
