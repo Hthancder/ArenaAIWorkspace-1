@@ -255,6 +255,8 @@ extension WritingToolsView {
         isRunning = false
         isEditingOutput = false
         showOriginalDiff = false
+        voiceLastTranscript = ""
+        voiceBannerMessage = ""
         output = ""
     }
 

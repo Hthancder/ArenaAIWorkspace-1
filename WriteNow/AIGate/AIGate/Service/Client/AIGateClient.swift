@@ -44,6 +44,114 @@ class AIGateClient {
             completion?(data, error)
         }.resume()
     }
+
+    static func sttStart(completion: @escaping (Bool, String?) -> Void) {
+        postLocalSTTAction(command: "stt_start", body: [:]) { result in
+            switch result {
+            case let .success(dict):
+                let ok = (dict["ok"] as? Bool) ?? true
+                let err = dict["error"] as? String
+                DispatchQueue.main.async { completion(ok, err) }
+            case let .failure(err):
+                DispatchQueue.main.async { completion(false, err.localizedDescription) }
+            }
+        }
+    }
+
+    static func sttCancel(completion: (() -> Void)? = nil) {
+        postLocalSTTAction(command: "stt_cancel", body: [:]) { _ in
+            DispatchQueue.main.async { completion?() }
+        }
+    }
+
+    static func sttStop(
+        mode: String,
+        sourceLanguage: String,
+        targetLanguage: String,
+        completion: @escaping (_ ok: Bool, _ transcript: String, _ finalText: String, _ provider: String, _ errorMessage: String?) -> Void
+    ) {
+        let body: [String: Any] = [
+            "mode": mode,
+            "sourceLanguage": sourceLanguage,
+            "targetLanguage": targetLanguage,
+        ]
+        postLocalSTTAction(command: "stt_stop", body: body, timeout: 65) { result in
+            switch result {
+            case let .success(dict):
+                let ok = (dict["ok"] as? Bool) ?? false
+                let transcript = (dict["transcript"] as? String) ?? ""
+                let finalText = (dict["finalText"] as? String) ?? transcript
+                let provider = (dict["providerUsed"] as? String) ?? ""
+                let err = dict["error"] as? String
+                DispatchQueue.main.async {
+                    completion(ok, transcript, finalText, provider, err)
+                }
+            case let .failure(err):
+                DispatchQueue.main.async {
+                    completion(false, "", "", "", err.localizedDescription)
+                }
+            }
+        }
+    }
+
+    static func fetchSTTStatus(completion: @escaping (_ recording: Bool, _ duration: Double, _ level: Double, _ maxDuration: Double) -> Void) {
+        var comps = URLComponents(url: AIGateConfiguration.listenURL, resolvingAgainstBaseURL: false)!
+        comps.path = "/metrics"
+        comps.queryItems = [URLQueryItem(name: "query", value: "stt_status")]
+        guard let url = comps.url else {
+            DispatchQueue.main.async { completion(false, 0, 0, 60) }
+            return
+        }
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 2)
+        request.httpMethod = "GET"
+        URLSession.shared.dataTask(with: request) { data, _, _ in
+            guard let data,
+                  let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            else {
+                DispatchQueue.main.async { completion(false, 0, 0, 60) }
+                return
+            }
+            let rec = (dict["recording"] as? Bool) ?? false
+            let dur = (dict["duration"] as? Double) ?? 0
+            let lvl = (dict["level"] as? Double) ?? 0
+            let maxD = (dict["maxDuration"] as? Double) ?? 60
+            DispatchQueue.main.async { completion(rec, dur, lvl, maxD) }
+        }.resume()
+    }
+
+    private static func postLocalSTTAction(
+        command: String,
+        body: [String: Any],
+        timeout: TimeInterval = 12,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        var comps = URLComponents(url: AIGateConfiguration.listenURL, resolvingAgainstBaseURL: false)!
+        comps.path = "/action"
+        comps.queryItems = [URLQueryItem(name: "command", value: command)]
+        guard let url = comps.url,
+              let jsonData = try? JSONSerialization.data(withJSONObject: body)
+        else {
+            completion(.failure(EndpointNetworkHelper.NetworkError(message: "Invalid local STT URL")))
+            return
+        }
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: timeout)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = jsonData
+        URLSession.shared.dataTask(with: request) { data, _, error in
+            if let error {
+                completion(.failure(error))
+                return
+            }
+            guard let data,
+                  let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            else {
+                completion(.failure(EndpointNetworkHelper.NetworkError(message: "Invalid daemon response")))
+                return
+            }
+            completion(.success(dict))
+        }.resume()
+    }
 }
 
 extension AIGateClient.Command {
@@ -250,6 +358,118 @@ enum EndpointNetworkHelper {
                 }
             }
         }.resume()
+    }
+
+    static func testSTTEndpoint(
+        baseURL: URL,
+        token: String,
+        model: String,
+        pathMode: Configuration.Endpoint.PathMode = .auto,
+        customHeaders: [String: String] = [:],
+        timeoutSeconds: Int = 30,
+        completion: @escaping (_ ok: Bool, _ statusCode: Int?, _ latencyMs: Int, _ message: String) -> Void
+    ) {
+        guard let url = EndpointURLHelper.audioEndpointURL(baseURL: baseURL, pathMode: pathMode, action: "transcriptions") else {
+            DispatchQueue.main.async {
+                completion(false, nil, 0, "Invalid STT transcription URL")
+            }
+            return
+        }
+        let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedModel.isEmpty else {
+            DispatchQueue.main.async {
+                completion(false, nil, 0, "STT Model ID is empty")
+            }
+            return
+        }
+
+        let boundary = "Boundary-WriteNowSTTTest-\(UUID().uuidString)"
+        let silentWav = makeSilentWavData(durationSeconds: 0.4, sampleRate: 16000)
+
+        var body = Data()
+        func appendField(_ name: String, _ value: String) {
+            body.append(Data("--\(boundary)\r\n".utf8))
+            body.append(Data("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".utf8))
+            body.append(Data("\(value)\r\n".utf8))
+        }
+        appendField("model", trimmedModel)
+        appendField("response_format", "json")
+
+        body.append(Data("--\(boundary)\r\n".utf8))
+        body.append(Data("Content-Disposition: form-data; name=\"file\"; filename=\"test.wav\"\r\n".utf8))
+        body.append(Data("Content-Type: audio/wav\r\n\r\n".utf8))
+        body.append(silentWav)
+        body.append(Data("\r\n--\(boundary)--\r\n".utf8))
+
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: TimeInterval(max(10, timeoutSeconds)))
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        for (k, v) in customHeaders where !k.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            request.setValue(v, forHTTPHeaderField: k)
+        }
+        request.httpBody = body
+
+        let started = Date()
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            let latencyMs = Int(Date().timeIntervalSince(started) * 1000)
+            if let error {
+                DispatchQueue.main.async {
+                    completion(false, nil, latencyMs, error.localizedDescription)
+                }
+                return
+            }
+            guard let http = response as? HTTPURLResponse, let data else {
+                DispatchQueue.main.async {
+                    completion(false, nil, latencyMs, "Invalid HTTP response")
+                }
+                return
+            }
+            if (200 ..< 300).contains(http.statusCode) {
+                DispatchQueue.main.async {
+                    completion(true, http.statusCode, latencyMs, "HTTP \(http.statusCode) STT Ready (\(latencyMs)ms)")
+                }
+            } else {
+                let errMsg = parseErrorMessage(from: data) ?? "HTTP \(http.statusCode)"
+                DispatchQueue.main.async {
+                    completion(false, http.statusCode, latencyMs, "HTTP \(http.statusCode): \(errMsg)")
+                }
+            }
+        }.resume()
+    }
+
+    private static func makeSilentWavData(durationSeconds: Double, sampleRate: Int) -> Data {
+        let numChannels: UInt16 = 1
+        let bitsPerSample: UInt16 = 16
+        let numSamples = max(1600, Int(Double(sampleRate) * durationSeconds))
+        let dataSize = UInt32(numSamples * Int(numChannels) * Int(bitsPerSample / 8))
+        let riffSize = UInt32(36) + dataSize
+        let byteRate = UInt32(sampleRate) * UInt32(numChannels) * UInt32(bitsPerSample / 8)
+        let blockAlign = numChannels * (bitsPerSample / 8)
+
+        var data = Data()
+        func appendLE<T: FixedWidthInteger>(_ val: T) {
+            var le = val.littleEndian
+            data.append(Data(bytes: &le, count: MemoryLayout<T>.size))
+        }
+        data.append(Data("RIFF".utf8))
+        appendLE(riffSize)
+        data.append(Data("WAVE".utf8))
+        data.append(Data("fmt ".utf8))
+        appendLE(UInt32(16))
+        appendLE(UInt16(1))
+        appendLE(numChannels)
+        appendLE(UInt32(sampleRate))
+        appendLE(byteRate)
+        appendLE(blockAlign)
+        appendLE(bitsPerSample)
+        data.append(Data("data".utf8))
+        appendLE(dataSize)
+        data.append(Data(count: Int(dataSize)))
+        return data
     }
 
     private static func parseModelList(from data: Data) -> [String] {

@@ -69,6 +69,7 @@ struct WriteNowRootView: View {
             serviceSection
             endpointsSection
             themeAndEffectsSection
+            sttNavigationSection
             presetsSection
             behaviorSection
             testSceneSection
@@ -276,6 +277,42 @@ struct WriteNowRootView: View {
             Text("Menu Theme & Animations")
         } footer: {
             Text("Customize the WriteNow menu theme, custom photo background, accent color palette, and text replacement animations.")
+        }
+    }
+
+    // MARK: - Speech & Voice (STT) Section
+
+    var sttNavigationSection: some View {
+        let stt = configurationViewModel.uiSettings.stt
+        let engineSummary: String = {
+            if !stt.enabled { return "Disabled" }
+            if stt.providerType == "apple_speech" { return "Apple Speech (Native)" }
+            if stt.presetKind == "reuse_llm" { return "Reuse Active LLM" }
+            return "\(stt.model.isEmpty ? "Whisper" : stt.model)"
+        }()
+
+        return Section {
+            NavigationLink {
+                STTSettingsView()
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "mic.fill")
+                        .foregroundColor(stt.enabled ? Color.accent : .secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Speech & Voice (STT)")
+                            .font(.subheadline.weight(.medium))
+                        Text("\(engineSummary) · \(stt.sourceLanguage.uppercased()) → \(stt.targetLanguage.uppercased())")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
+                    Spacer()
+                }
+            }
+        } header: {
+            Text("Voice Prompt & Dictation")
+        } footer: {
+            Text("Speak prompts, dictate text, or translate speech using Groq/OpenAI Whisper, custom OpenAI-compatible APIs, or Apple Speech.")
         }
     }
 
@@ -2105,5 +2142,737 @@ private final class PreviewContainerView: UIView {
             UIColor.white.setFill()
             ctx.cgContext.fillEllipse(in: CGRect(origin: .zero, size: size))
         }.cgImage
+    }
+}
+
+// MARK: - Speech & Voice (STT) Settings
+
+struct STTSettingsView: View {
+    @ObservedObject var configuration = Configuration.shared
+    @ObservedObject var viewModel = Configuration.shared.viewModel
+
+    @State private var enabled: Bool
+    @State private var providerType: String
+    @State private var presetKind: String
+    @State private var baseURL: String
+    @State private var apiKey: String
+    @State private var showKey: Bool = false
+    @State private var model: String
+    @State private var pathMode: Configuration.Endpoint.PathMode
+    @State private var customHeadersText: String
+    @State private var timeoutSeconds: Int
+
+    @State private var voiceMode: String
+    @State private var sourceLanguage: String
+    @State private var customSourceCode: String
+    @State private var targetLanguage: String
+    @State private var customTargetCode: String
+    @State private var translationStrategy: String
+    @State private var translationStyle: String
+
+    @State private var promptHint: String
+    @State private var temperature: Double
+    @State private var audioFormat: String
+    @State private var maxDurationSeconds: Int
+    @State private var autoSendVoicePrompt: Bool
+    @State private var appleOnDeviceOnly: Bool
+
+    @State private var fetchedModels: [String] = []
+    @State private var isFetchingModels: Bool = false
+    @State private var isTestingAPI: Bool = false
+    @State private var apiStatusText: String = ""
+    @State private var apiStatusOK: Bool = true
+
+    // Live Mic Test
+    @State private var isRecordingTest: Bool = false
+    @State private var isProcessingTest: Bool = false
+    @State private var testDuration: Double = 0
+    @State private var testLevels: [CGFloat] = Array(repeating: 0.12, count: 16)
+    @State private var testTranscript: String = ""
+    @State private var testFinalOutput: String = ""
+    @State private var testProviderUsed: String = ""
+    @State private var testError: String = ""
+    @State private var testPollTimer: Timer? = nil
+
+    private static let languageChoices: [(code: String, name: String)] = [
+        ("auto", "Auto Detect"),
+        ("vi", "Vietnamese (vi)"),
+        ("en", "English (en)"),
+        ("zh", "Chinese (zh)"),
+        ("ja", "Japanese (ja)"),
+        ("ko", "Korean (ko)"),
+        ("fr", "French (fr)"),
+        ("de", "German (de)"),
+        ("es", "Spanish (es)"),
+        ("th", "Thai (th)"),
+        ("custom", "Custom ISO Code..."),
+    ]
+
+    private static let targetChoices: [(code: String, name: String)] = [
+        ("vi", "Vietnamese (vi)"),
+        ("en", "English (en)"),
+        ("zh", "Chinese (zh)"),
+        ("ja", "Japanese (ja)"),
+        ("ko", "Korean (ko)"),
+        ("fr", "French (fr)"),
+        ("de", "German (de)"),
+        ("es", "Spanish (es)"),
+        ("th", "Thai (th)"),
+        ("custom", "Custom Language..."),
+    ]
+
+    init() {
+        let s = Configuration.shared.appSettings.stt
+        _enabled = State(initialValue: s.enabled)
+        _providerType = State(initialValue: s.providerType)
+        _presetKind = State(initialValue: s.presetKind)
+        _baseURL = State(initialValue: s.baseURL)
+        _apiKey = State(initialValue: s.apiKey)
+        _model = State(initialValue: s.model)
+        _pathMode = State(initialValue: s.pathMode)
+        if !s.customHeaders.isEmpty,
+           let d = try? JSONSerialization.data(withJSONObject: s.customHeaders, options: [.prettyPrinted, .sortedKeys]),
+           let str = String(data: d, encoding: .utf8)
+        {
+            _customHeadersText = State(initialValue: str)
+        } else {
+            _customHeadersText = State(initialValue: "")
+        }
+        _timeoutSeconds = State(initialValue: s.timeoutSeconds)
+        _voiceMode = State(initialValue: s.voiceMode)
+
+        let knownSrc = Self.languageChoices.map(\.code).filter { $0 != "custom" }
+        if knownSrc.contains(s.sourceLanguage) {
+            _sourceLanguage = State(initialValue: s.sourceLanguage)
+            _customSourceCode = State(initialValue: "")
+        } else {
+            _sourceLanguage = State(initialValue: "custom")
+            _customSourceCode = State(initialValue: s.sourceLanguage)
+        }
+
+        let knownDst = Self.targetChoices.map(\.code).filter { $0 != "custom" }
+        if knownDst.contains(s.targetLanguage) {
+            _targetLanguage = State(initialValue: s.targetLanguage)
+            _customTargetCode = State(initialValue: "")
+        } else {
+            _targetLanguage = State(initialValue: "custom")
+            _customTargetCode = State(initialValue: s.targetLanguage)
+        }
+
+        _translationStrategy = State(initialValue: s.translationStrategy)
+        _translationStyle = State(initialValue: s.translationStyle)
+        _promptHint = State(initialValue: s.promptHint)
+        _temperature = State(initialValue: s.temperature)
+        _audioFormat = State(initialValue: s.audioFormat)
+        _maxDurationSeconds = State(initialValue: s.maxDurationSeconds)
+        _autoSendVoicePrompt = State(initialValue: s.autoSendVoicePrompt)
+        _appleOnDeviceOnly = State(initialValue: s.appleOnDeviceOnly)
+    }
+
+    private var accentColor: Color {
+        Color(hexString: viewModel.uiSettings.accentColorHex) ?? .accent
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Enable Voice & STT", isOn: $enabled)
+                    .onChange(of: enabled) { _ in commitSTT() }
+
+                Picker("Speech Engine", selection: $providerType) {
+                    Text("OpenAI-Compatible API").tag("openai_compatible")
+                    Text("Apple Speech (Native)").tag("apple_speech")
+                }
+                .onChange(of: providerType) { _ in commitSTT() }
+            } header: {
+                Text("General")
+            } footer: {
+                Text("Adds a Hold/Tap Mic button to Quick Prompts and Follow-up Refinements, plus Dictate & Voice Translate modes.")
+            }
+
+            if providerType == "openai_compatible" {
+                Section {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            presetChip(id: "groq", title: "Groq Whisper", icon: "bolt.fill") {
+                                presetKind = "groq"
+                                baseURL = "https://api.groq.com/openai"
+                                model = "whisper-large-v3-turbo"
+                                pathMode = .auto
+                                commitSTT()
+                            }
+                            presetChip(id: "openai", title: "OpenAI", icon: "sparkles") {
+                                presetKind = "openai"
+                                baseURL = "https://api.openai.com"
+                                model = "whisper-1"
+                                pathMode = .auto
+                                commitSTT()
+                            }
+                            presetChip(id: "reuse_llm", title: "Reuse LLM", icon: "arrow.triangle.2.circlepath") {
+                                presetKind = "reuse_llm"
+                                if model.isEmpty { model = "whisper-1" }
+                                commitSTT()
+                            }
+                            presetChip(id: "custom", title: "Custom", icon: "server.rack") {
+                                presetKind = "custom"
+                                commitSTT()
+                            }
+                        }
+                        .padding(.vertical, 3)
+                    }
+
+                    if presetKind == "reuse_llm" {
+                        if let active = viewModel.uiActivatedEndpoint {
+                            HStack {
+                                Text("Using Active LLM")
+                                Spacer()
+                                Text(active.displayName)
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(1)
+                            }
+                        } else {
+                            Text("No active LLM endpoint configured yet.")
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                        }
+                    } else {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Base URL or Full Audio Endpoint")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            TextField("https://api.groq.com/openai", text: $baseURL)
+                                .textInputAutocapitalization(.never)
+                                .disableAutocorrection(true)
+                                .keyboardType(.URL)
+                                .onChange(of: baseURL) { _ in commitSTT() }
+                        }
+
+                        HStack {
+                            if showKey {
+                                TextField("API Key (optional for local)", text: $apiKey)
+                                    .textInputAutocapitalization(.never)
+                                    .disableAutocorrection(true)
+                                    .onChange(of: apiKey) { _ in commitSTT() }
+                            } else {
+                                SecureField("API Key (optional for local)", text: $apiKey)
+                                    .textInputAutocapitalization(.never)
+                                    .disableAutocorrection(true)
+                                    .onChange(of: apiKey) { _ in commitSTT() }
+                            }
+                            Button {
+                                showKey.toggle()
+                            } label: {
+                                Image(systemName: showKey ? "eye.slash" : "eye")
+                                    .foregroundColor(.secondary)
+                            }
+                            .buttonStyle(.borderless)
+                        }
+
+                        Picker("Path Mode", selection: $pathMode) {
+                            Text("Auto (/v1/audio/...)").tag(Configuration.Endpoint.PathMode.auto)
+                            Text("Raw (exact URL)").tag(Configuration.Endpoint.PathMode.raw)
+                        }
+                        .onChange(of: pathMode) { _ in commitSTT() }
+                    }
+
+                    HStack {
+                        TextField("STT Model (e.g. whisper-large-v3-turbo)", text: $model)
+                            .textInputAutocapitalization(.never)
+                            .disableAutocorrection(true)
+                            .onChange(of: model) { _ in commitSTT() }
+
+                        Button {
+                            fetchSTTModels()
+                        } label: {
+                            if isFetchingModels {
+                                ProgressView()
+                            } else {
+                                Label("Fetch", systemImage: "arrow.clockwise")
+                                    .font(.caption.weight(.semibold))
+                            }
+                        }
+                        .buttonStyle(.borderless)
+                        .disabled(isFetchingModels)
+                    }
+
+                    if !fetchedModels.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 6) {
+                                ForEach(fetchedModels, id: \.self) { m in
+                                    Button {
+                                        model = m
+                                        commitSTT()
+                                    } label: {
+                                        Text(m)
+                                            .font(.caption2.weight(.medium))
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 4)
+                                            .background(model == m ? accentColor.opacity(0.22) : Color.secondary.opacity(0.14))
+                                            .foregroundColor(model == m ? accentColor : .primary)
+                                            .cornerRadius(6)
+                                    }
+                                    .buttonStyle(.borderless)
+                                }
+                            }
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Custom Headers JSON (optional)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        TextEditor(text: $customHeadersText)
+                            .font(.system(.caption, design: .monospaced))
+                            .frame(height: 54)
+                            .onChange(of: customHeadersText) { _ in commitSTT() }
+                    }
+
+                    Stepper("Timeout: \(timeoutSeconds)s", value: $timeoutSeconds, in: 10 ... 180, step: 5)
+                        .onChange(of: timeoutSeconds) { _ in commitSTT() }
+
+                    Button {
+                        testSTTConnection()
+                    } label: {
+                        HStack {
+                            Label("Test STT API Connection", systemImage: "antenna.radiowaves.left.and.right")
+                            Spacer()
+                            if isTestingAPI {
+                                ProgressView()
+                            }
+                        }
+                    }
+                    .disabled(isTestingAPI)
+
+                    if !apiStatusText.isEmpty {
+                        Text(apiStatusText)
+                            .font(.caption)
+                            .foregroundColor(apiStatusOK ? .green : .red)
+                    }
+                } header: {
+                    Text("STT API Provider")
+                } footer: {
+                    Text("Compatible with OpenAI Whisper, Groq Whisper, faster-whisper-server, whisper.cpp server, Speaches, OneAPI, and any /v1/audio/transcriptions endpoint.")
+                }
+            } else {
+                Section {
+                    Toggle("Prefer On-Device Recognition", isOn: $appleOnDeviceOnly)
+                        .onChange(of: appleOnDeviceOnly) { _ in commitSTT() }
+                } header: {
+                    Text("Apple Speech Options")
+                } footer: {
+                    Text("Uses Apple's built-in SFSpeechRecognizer inside the AIGate daemon without needing an external API key.")
+                }
+            }
+
+            Section {
+                Picker("Default Voice Mode", selection: $voiceMode) {
+                    Text("Ask AI Prompt").tag("prompt")
+                    Text("Dictate Text").tag("dictate")
+                    Text("Speak & Translate").tag("translate")
+                }
+                .onChange(of: voiceMode) { _ in commitSTT() }
+
+                Picker("Source Language", selection: $sourceLanguage) {
+                    ForEach(Self.languageChoices, id: \.code) { item in
+                        Text(item.name).tag(item.code)
+                    }
+                }
+                .onChange(of: sourceLanguage) { _ in commitSTT() }
+
+                if sourceLanguage == "custom" {
+                    TextField("Source ISO code (e.g. pt, it, id)", text: $customSourceCode)
+                        .textInputAutocapitalization(.never)
+                        .disableAutocorrection(true)
+                        .onChange(of: customSourceCode) { _ in commitSTT() }
+                }
+
+                Picker("Target Language (Translate)", selection: $targetLanguage) {
+                    ForEach(Self.targetChoices, id: \.code) { item in
+                        Text(item.name).tag(item.code)
+                    }
+                }
+                .onChange(of: targetLanguage) { _ in commitSTT() }
+
+                if targetLanguage == "custom" {
+                    TextField("Target language (e.g. Russian, French)", text: $customTargetCode)
+                        .textInputAutocapitalization(.never)
+                        .disableAutocorrection(true)
+                        .onChange(of: customTargetCode) { _ in commitSTT() }
+                }
+
+                Picker("Translation Engine", selection: $translationStrategy) {
+                    Text("Auto Hybrid (Whisper→EN, LLM→Others)").tag("hybrid")
+                    Text("Always Active LLM (Best Context)").tag("llm")
+                    Text("Whisper /translations Only (EN)").tag("whisper_direct")
+                }
+                .onChange(of: translationStrategy) { _ in commitSTT() }
+
+                Picker("Translation Tone", selection: $translationStyle) {
+                    Text("Natural & Fluent").tag("natural")
+                    Text("Formal & Polite").tag("formal")
+                    Text("Concise").tag("concise")
+                    Text("Literal").tag("literal")
+                }
+                .onChange(of: translationStyle) { _ in commitSTT() }
+            } header: {
+                Text("Languages & Translation")
+            } footer: {
+                Text("You can also switch Prompt / Dictate / Translate and Source → Target languages directly inside the WriteNow popup.")
+            }
+
+            Section {
+                Toggle("Auto-run spoken prompt on stop", isOn: $autoSendVoicePrompt)
+                    .onChange(of: autoSendVoicePrompt) { _ in commitSTT() }
+
+                Picker("Audio Format", selection: $audioFormat) {
+                    Text("M4A AAC 16kHz (Compact)").tag("m4a")
+                    Text("WAV PCM 16kHz (Lossless)").tag("wav")
+                }
+                .onChange(of: audioFormat) { _ in commitSTT() }
+
+                Picker("Max Recording Length", selection: $maxDurationSeconds) {
+                    Text("30 seconds").tag(30)
+                    Text("60 seconds").tag(60)
+                    Text("120 seconds").tag(120)
+                }
+                .onChange(of: maxDurationSeconds) { _ in commitSTT() }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Whisper Prompt Hint (optional)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    TextField("Terms, names, bilingual hints (e.g. iOS, RootHide, WriteNow)", text: $promptHint)
+                        .onChange(of: promptHint) { _ in commitSTT() }
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("Sampling Temperature")
+                        Spacer()
+                        Text(String(format: "%.2f", temperature))
+                            .foregroundColor(.secondary)
+                            .monospacedDigit()
+                    }
+                    Slider(value: $temperature, in: 0.0 ... 0.8, step: 0.05)
+                        .tint(accentColor)
+                        .onChange(of: temperature) { _ in commitSTT() }
+                }
+            } header: {
+                Text("Recording & Recognition Tuning")
+            }
+
+            Section {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 10) {
+                        Button {
+                            if isRecordingTest {
+                                stopLiveMicTest()
+                            } else {
+                                startLiveMicTest()
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: isRecordingTest ? "stop.circle.fill" : "mic.circle.fill")
+                                    .font(.title3)
+                                Text(isRecordingTest ? "Stop & Test" : (isProcessingTest ? "Processing..." : "Tap to Record Test"))
+                                    .font(.subheadline.weight(.semibold))
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(isRecordingTest ? Color.red.opacity(0.18) : accentColor.opacity(0.16))
+                            .foregroundColor(isRecordingTest ? .red : accentColor)
+                            .cornerRadius(10)
+                        }
+                        .buttonStyle(.borderless)
+                        .disabled(isProcessingTest)
+
+                        if isRecordingTest {
+                            Text(String(format: "%.1fs", testDuration))
+                                .font(.caption.monospacedDigit())
+                                .foregroundColor(.secondary)
+
+                            HStack(spacing: 2) {
+                                ForEach(0 ..< testLevels.count, id: \.self) { idx in
+                                    Capsule()
+                                        .fill(accentColor)
+                                        .frame(width: 2.5, height: max(4, testLevels[idx] * 22))
+                                }
+                            }
+                            .frame(height: 24)
+                        } else if isProcessingTest {
+                            ProgressView()
+                        }
+
+                        Spacer()
+
+                        if isRecordingTest {
+                            Button("Cancel") {
+                                cancelLiveMicTest()
+                            }
+                            .font(.caption)
+                            .foregroundColor(.red)
+                            .buttonStyle(.borderless)
+                        }
+                    }
+
+                    if !testError.isEmpty {
+                        Text(testError)
+                            .font(.caption)
+                            .foregroundColor(.red)
+                    }
+
+                    if !testTranscript.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Transcript (\(testProviderUsed))")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundColor(.secondary)
+                            Text(testTranscript)
+                                .font(.footnote)
+                        }
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.secondary.opacity(0.10))
+                        .cornerRadius(8)
+                    }
+
+                    if !testFinalOutput.isEmpty && testFinalOutput != testTranscript {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Translated Output")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundColor(accentColor)
+                            Text(testFinalOutput)
+                                .font(.footnote)
+                        }
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(accentColor.opacity(0.10))
+                        .cornerRadius(8)
+                    }
+                }
+                .padding(.vertical, 4)
+            } header: {
+                Text("Live Microphone & STT Test")
+            } footer: {
+                Text("Tests real microphone recording through the AIGate daemon with your active engine, source, and target language.")
+            }
+        }
+        .listStyle(.insetGrouped)
+        .tint(accentColor)
+        .navigationTitle("Speech & Voice")
+        .navigationBarTitleDisplayMode(.inline)
+        .onDisappear {
+            testPollTimer?.invalidate()
+            testPollTimer = nil
+            if isRecordingTest {
+                AIGateClient.sttCancel()
+            }
+        }
+    }
+
+    private func presetChip(id: String, title: String, icon: String, action: @escaping () -> Void) -> some View {
+        let active = (presetKind == id)
+        return Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.caption2)
+                Text(title)
+                    .font(.caption.weight(.semibold))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(active ? accentColor : Color.secondary.opacity(0.14))
+            .foregroundColor(active ? .white : .primary)
+            .cornerRadius(8)
+        }
+        .buttonStyle(.borderless)
+    }
+
+    private var resolvedSourceLanguage: String {
+        if sourceLanguage == "custom" {
+            let trimmed = customSourceCode.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? "auto" : trimmed
+        }
+        return sourceLanguage
+    }
+
+    private var resolvedTargetLanguage: String {
+        if targetLanguage == "custom" {
+            let trimmed = customTargetCode.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? "vi" : trimmed
+        }
+        return targetLanguage
+    }
+
+    private func parsedHeaders() -> [String: String] {
+        let raw = customHeadersText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty,
+              let data = raw.data(using: .utf8),
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: String]
+        else {
+            return [:]
+        }
+        return dict
+    }
+
+    private func commitSTT() {
+        let headers = parsedHeaders()
+        let src = resolvedSourceLanguage
+        let dst = resolvedTargetLanguage
+        configuration.updateSettings { s in
+            s.stt.enabled = enabled
+            s.stt.providerType = providerType
+            s.stt.presetKind = presetKind
+            s.stt.baseURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            s.stt.apiKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            s.stt.model = model.trimmingCharacters(in: .whitespacesAndNewlines)
+            s.stt.pathMode = pathMode
+            s.stt.customHeaders = headers
+            s.stt.timeoutSeconds = timeoutSeconds
+            s.stt.voiceMode = voiceMode
+            s.stt.sourceLanguage = src
+            s.stt.targetLanguage = dst
+            s.stt.translationStrategy = translationStrategy
+            s.stt.translationStyle = translationStyle
+            s.stt.promptHint = promptHint
+            s.stt.temperature = temperature
+            s.stt.audioFormat = audioFormat
+            s.stt.maxDurationSeconds = maxDurationSeconds
+            s.stt.autoSendVoicePrompt = autoSendVoicePrompt
+            s.stt.appleOnDeviceOnly = appleOnDeviceOnly
+        }
+    }
+
+    private func resolvedConnection() -> (url: URL, token: String, pathMode: Configuration.Endpoint.PathMode, headers: [String: String])? {
+        if presetKind == "reuse_llm", let active = viewModel.uiActivatedEndpoint {
+            return (active.url, active.token, active.pathMode, active.customHeaders)
+        }
+        guard let u = EndpointURLHelper.normalizeBaseURL(baseURL) else { return nil }
+        return (u, apiKey.trimmingCharacters(in: .whitespacesAndNewlines), pathMode, parsedHeaders())
+    }
+
+    private func fetchSTTModels() {
+        guard let conn = resolvedConnection() else {
+            apiStatusOK = false
+            apiStatusText = "Enter a valid Base URL first."
+            return
+        }
+        isFetchingModels = true
+        apiStatusText = ""
+        EndpointNetworkHelper.fetchModels(
+            baseURL: conn.url,
+            token: conn.token,
+            pathMode: conn.pathMode,
+            customHeaders: conn.headers
+        ) { result in
+            isFetchingModels = false
+            switch result {
+            case let .success(models):
+                let audioPreferred = models.filter {
+                    let l = $0.lowercased()
+                    return l.contains("whisper") || l.contains("transcribe") || l.contains("stt") || l.contains("audio")
+                }
+                fetchedModels = audioPreferred.isEmpty ? Array(models.prefix(15)) : audioPreferred
+                if let first = fetchedModels.first, model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    model = first
+                    commitSTT()
+                }
+                apiStatusOK = true
+                apiStatusText = "Fetched \(fetchedModels.count) model(s)."
+            case let .failure(err):
+                apiStatusOK = false
+                apiStatusText = err.localizedDescription
+            }
+        }
+    }
+
+    private func testSTTConnection() {
+        guard let conn = resolvedConnection() else {
+            apiStatusOK = false
+            apiStatusText = "Enter a valid Base URL first."
+            return
+        }
+        isTestingAPI = true
+        apiStatusText = ""
+        EndpointNetworkHelper.testSTTEndpoint(
+            baseURL: conn.url,
+            token: conn.token,
+            model: model,
+            pathMode: conn.pathMode,
+            customHeaders: conn.headers,
+            timeoutSeconds: timeoutSeconds
+        ) { ok, _, _, msg in
+            isTestingAPI = false
+            apiStatusOK = ok
+            apiStatusText = msg
+        }
+    }
+
+    private func startLiveMicTest() {
+        commitSTT()
+        testError = ""
+        testTranscript = ""
+        testFinalOutput = ""
+        testProviderUsed = ""
+        testDuration = 0
+        testLevels = Array(repeating: 0.12, count: 16)
+
+        AIGateClient.sttStart { ok, err in
+            if !ok {
+                isRecordingTest = false
+                testError = err ?? "Could not start microphone on AIGate daemon."
+                return
+            }
+            isRecordingTest = true
+            testPollTimer?.invalidate()
+            testPollTimer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) { _ in
+                guard isRecordingTest else {
+                    testPollTimer?.invalidate()
+                    testPollTimer = nil
+                    return
+                }
+                AIGateClient.fetchSTTStatus { recording, dur, lvl, maxDur in
+                    guard isRecordingTest else { return }
+                    testDuration = dur
+                    var next = testLevels
+                    if !next.isEmpty {
+                        next.removeFirst()
+                        next.append(CGFloat(max(0.08, min(1.0, lvl))))
+                        testLevels = next
+                    }
+                    if !recording && dur >= max(1.0, maxDur - 0.5) {
+                        stopLiveMicTest()
+                    }
+                }
+            }
+        }
+    }
+
+    private func cancelLiveMicTest() {
+        testPollTimer?.invalidate()
+        testPollTimer = nil
+        isRecordingTest = false
+        AIGateClient.sttCancel()
+    }
+
+    private func stopLiveMicTest() {
+        testPollTimer?.invalidate()
+        testPollTimer = nil
+        isRecordingTest = false
+        isProcessingTest = true
+
+        AIGateClient.sttStop(
+            mode: voiceMode,
+            sourceLanguage: resolvedSourceLanguage,
+            targetLanguage: resolvedTargetLanguage
+        ) { ok, transcript, finalText, provider, err in
+            isProcessingTest = false
+            if !ok {
+                testError = err ?? "STT test failed."
+                return
+            }
+            testTranscript = transcript
+            testFinalOutput = finalText
+            testProviderUsed = provider
+        }
     }
 }

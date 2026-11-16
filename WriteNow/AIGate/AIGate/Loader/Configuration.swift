@@ -452,12 +452,16 @@ class Configuration: NSObject, ObservableObject {
     }
 
     func buildRuntimeConfigPayload(redactTokens: Bool = false) -> RuntimeConfigPayload {
-        RuntimeConfigPayload(
+        var sanitizedSettings = appSettings
+        if redactTokens, !sanitizedSettings.stt.apiKey.isEmpty {
+            sanitizedSettings.stt.apiKey = "[********]"
+        }
+        return RuntimeConfigPayload(
             model: activatedEndpoint?.model,
             activated_endpoint_id: activatedEndpointID,
             model_list: endpointHandlerForQuickSwitch(redactTokens: redactTokens),
             presets: configuredPresets,
-            settings: appSettings
+            settings: sanitizedSettings
         )
     }
 

@@ -99,6 +99,21 @@ extension WritingToolsView {
             } else {
                 StickToBottomScrollView {
                     VStack(alignment: .leading, spacing: 10) {
+                        if !voiceLastTranscript.isEmpty {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("SPOKEN (\(WritingVoiceLanguageCatalog.shortLabel(for: voiceSourceLang)))")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.white.opacity(0.55))
+                                Text(voiceLastTranscript)
+                                    .font(.caption)
+                                    .foregroundColor(.white.opacity(0.78))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .padding(8)
+                            .background(Color.white.opacity(0.08))
+                            .cornerRadius(8)
+                        }
+
                         if showOriginalDiff {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("ORIGINAL")
@@ -146,26 +161,61 @@ extension WritingToolsView {
                         }
                     }
 
-                    HStack(spacing: 6) {
-                        TextField("Refine result (e.g. shorter, friendlier)...", text: $followUpPromptInput)
-                            .font(.caption)
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 6)
-                            .background(Color.white.opacity(0.12))
-                            .cornerRadius(9)
-                            .submitLabel(.send)
-                            .onSubmit {
-                                runFollowUp(followUpPromptInput)
+                    if !voiceBannerMessage.isEmpty {
+                        HStack(spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.caption2)
+                                .foregroundColor(.yellow)
+                            Text(voiceBannerMessage)
+                                .font(.caption2)
+                                .foregroundColor(.white.opacity(0.9))
+                                .lineLimit(2)
+                            Spacer()
+                            Button {
+                                voiceBannerMessage = ""
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.white.opacity(0.65))
                             }
-
-                        Button {
-                            runFollowUp(followUpPromptInput)
-                        } label: {
-                            Image(systemName: "arrow.up.circle.fill")
-                                .font(.title3)
-                                .foregroundColor(followUpPromptInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .white.opacity(0.35) : .white)
+                            .buttonStyle(.plain)
                         }
-                        .disabled(followUpPromptInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(Color.black.opacity(0.28))
+                        .cornerRadius(8)
+                    }
+
+                    HStack(spacing: 6) {
+                        if (isRecordingVoice || isProcessingVoice) && voiceTargetIsFollowUp {
+                            liveRecordingStrip
+                        } else {
+                            TextField("Refine result or hold Mic...", text: $followUpPromptInput)
+                                .font(.caption)
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 6)
+                                .background(Color.white.opacity(0.12))
+                                .cornerRadius(9)
+                                .submitLabel(.send)
+                                .onSubmit {
+                                    runFollowUp(followUpPromptInput)
+                                }
+                        }
+
+                        if cfg.settings.stt.enabled {
+                            makeMicButton(isFollowUp: true)
+                        }
+
+                        if !(isRecordingVoice || isProcessingVoice) {
+                            Button {
+                                runFollowUp(followUpPromptInput)
+                            } label: {
+                                Image(systemName: "arrow.up.circle.fill")
+                                    .font(.title3)
+                                    .foregroundColor(followUpPromptInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .white.opacity(0.35) : .white)
+                            }
+                            .disabled(followUpPromptInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        }
                     }
                 }
             }

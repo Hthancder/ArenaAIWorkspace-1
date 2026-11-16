@@ -30,6 +30,11 @@
 	<true/>
 	<key>com.apple.private.security.storage.AppDataContainers</key>
 	<true/>
+	<key>com.apple.private.tcc.allow</key>
+	<array>
+		<string>kTCCServiceMicrophone</string>
+		<string>kTCCServiceSpeechRecognition</string>
+	</array>
 	<key>com.apple.private.xpc.service-configure</key>
 	<true/>
 	<key>com.apple.security.iokit-user-client-class</key>

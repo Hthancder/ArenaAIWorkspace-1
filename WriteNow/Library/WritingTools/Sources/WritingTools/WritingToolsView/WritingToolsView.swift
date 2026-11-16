@@ -34,6 +34,22 @@ struct WritingToolsView: View {
     @State var error: Error? = nil
     @State var activeRequestToken: UUID = UUID()
 
+    // Voice / STT state
+    @State var isRecordingVoice: Bool = false
+    @State var isProcessingVoice: Bool = false
+    @State var voiceHoldActive: Bool = false
+    @State var voiceSlideWillCancel: Bool = false
+    @State var voiceTargetIsFollowUp: Bool = false
+    @State var voiceDuration: Double = 0
+    @State var voiceLevel: Double = 0
+    @State var voiceLevelHistory: [CGFloat] = Array(repeating: 0.12, count: 18)
+    @State var voiceMode: String = Configurator.shared.settings.stt.voiceMode
+    @State var voiceSourceLang: String = Configurator.shared.settings.stt.sourceLanguage
+    @State var voiceTargetLang: String = Configurator.shared.settings.stt.targetLanguage
+    @State var voiceLastTranscript: String = ""
+    @State var voiceBannerMessage: String = ""
+    @State var voicePollTimer: Timer? = nil
+
     @State var initialAnimation: CGFloat = 0
     @State var isClosePressed: Bool = false
 
@@ -82,7 +98,23 @@ struct WritingToolsView: View {
         }
         .onAppear {
             initialAnimation = 1
-            cfg.refreshRuntimeConfig()
+            voiceMode = cfg.settings.stt.voiceMode
+            voiceSourceLang = cfg.settings.stt.sourceLanguage
+            voiceTargetLang = cfg.settings.stt.targetLanguage
+            cfg.refreshRuntimeConfig { updated in
+                if let updated {
+                    voiceMode = updated.settings.stt.voiceMode
+                    voiceSourceLang = updated.settings.stt.sourceLanguage
+                    voiceTargetLang = updated.settings.stt.targetLanguage
+                }
+            }
+        }
+        .onDisappear {
+            voicePollTimer?.invalidate()
+            voicePollTimer = nil
+            if isRecordingVoice {
+                cfg.cancelVoiceRecording()
+            }
         }
         .onChange(of: context.scenePhase) { phase in
             switch phase {

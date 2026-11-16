@@ -7,6 +7,10 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>WriteNow uses the microphone when you dictate prompts or translate speech.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>WriteNow uses Speech Recognition when Apple Speech mode is selected.</string>
 	<key>SBAppTags</key>
 	<array>
 		<string>hidden</string>

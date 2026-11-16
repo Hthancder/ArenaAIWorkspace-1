@@ -21,9 +21,17 @@ extension WritingToolsView {
     @ViewBuilder
     var selectiveButtonPanels: some View {
         VStack(spacing: innerSpacing) {
-            // Quick custom prompt bar
+            // Quick custom prompt + Voice bar
             HStack(spacing: 6) {
-                TextField("Ask AI anything (e.g. Translate to VI)...", text: $customPromptInput)
+                if (isRecordingVoice || isProcessingVoice) && !voiceTargetIsFollowUp {
+                    liveRecordingStrip
+                } else {
+                    TextField(
+                        voiceMode == "dictate"
+                            ? "Tap or hold Mic to dictate..."
+                            : (voiceMode == "translate" ? "Tap or hold Mic to speak & translate..." : "Ask AI anything or hold Mic..."),
+                        text: $customPromptInput
+                    )
                     .font(.footnote)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 8)
@@ -33,15 +41,51 @@ extension WritingToolsView {
                     .onSubmit {
                         runCustomPrompt(customPromptInput)
                     }
-
-                Button {
-                    runCustomPrompt(customPromptInput)
-                } label: {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.title3)
-                        .foregroundColor(customPromptInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .white.opacity(0.35) : .white)
                 }
-                .disabled(customPromptInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                if cfg.settings.stt.enabled {
+                    makeMicButton(isFollowUp: false)
+                }
+
+                if !(isRecordingVoice || isProcessingVoice) {
+                    Button {
+                        runCustomPrompt(customPromptInput)
+                    } label: {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.title3)
+                            .foregroundColor(customPromptInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .white.opacity(0.35) : .white)
+                    }
+                    .disabled(customPromptInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+
+            if cfg.settings.stt.enabled {
+                voiceModeAndLanguageStrip
+            }
+
+            if !voiceBannerMessage.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.caption2)
+                        .foregroundColor(.yellow)
+                    Text(voiceBannerMessage)
+                        .font(.caption2)
+                        .foregroundColor(.white.opacity(0.9))
+                        .lineLimit(2)
+                    Spacer()
+                    Button {
+                        voiceBannerMessage = ""
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.white.opacity(0.65))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(Color.black.opacity(0.28))
+                .cornerRadius(8)
             }
 
             if !cfg.settings.recentCustomPrompts.isEmpty {

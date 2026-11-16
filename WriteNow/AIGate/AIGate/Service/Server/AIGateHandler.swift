@@ -377,6 +377,40 @@ class AIGateHandler: ChannelInboundHandler {
             }
             sendJSONDictionary(["status": "ok"], context: context)
 
+        case "stt_start":
+            STTService.shared.startRecording { ok, err in
+                context.eventLoop.execute {
+                    var payload: [String: Any] = ["ok": ok]
+                    if let err { payload["error"] = err }
+                    self.sendJSONDictionary(payload, context: context)
+                }
+            }
+
+        case "stt_cancel":
+            STTService.shared.cancelRecording {
+                context.eventLoop.execute {
+                    self.sendJSONDictionary(["ok": true], context: context)
+                }
+            }
+
+        case "stt_stop":
+            let dict = (try? JSONSerialization.jsonObject(with: body) as? [String: Any]) ?? [:]
+            let mode = dict["mode"] as? String
+            let source = dict["sourceLanguage"] as? String
+            let target = dict["targetLanguage"] as? String
+            STTService.shared.stopAndProcess(
+                modeOverride: mode,
+                sourceOverride: source,
+                targetOverride: target
+            ) { result in
+                context.eventLoop.execute {
+                    self.sendJSONDictionary(result, context: context)
+                }
+            }
+
+        case "test_stt":
+            handleTestSTTEndpoint(body: body, context: context)
+
         default:
             sendJSONDictionary(["error": "Unsupported command"], statusCode: 400, statusText: "Bad Request", context: context)
         }
@@ -505,6 +539,42 @@ class AIGateHandler: ChannelInboundHandler {
         }
     }
 
+    private func handleTestSTTEndpoint(body: Data, context: ChannelHandlerContext) {
+        guard let dict = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
+              let rawURL = dict["url"] as? String,
+              let baseURL = EndpointURLHelper.normalizeBaseURL(rawURL)
+        else {
+            sendJSONDictionary(["ok": false, "message": "Invalid STT URL"], statusCode: 400, statusText: "Bad Request", context: context)
+            return
+        }
+        let token = (dict["token"] as? String) ?? ""
+        let model = ((dict["model"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let pathMode = Configuration.Endpoint.PathMode(rawValue: (dict["pathMode"] as? String) ?? "auto") ?? .auto
+        let customHeaders = (dict["customHeaders"] as? [String: String]) ?? [:]
+        let timeout = max(10, (dict["timeoutSeconds"] as? Int) ?? 30)
+
+        EndpointNetworkHelper.testSTTEndpoint(
+            baseURL: baseURL,
+            token: token,
+            model: model,
+            pathMode: pathMode,
+            customHeaders: customHeaders,
+            timeoutSeconds: timeout
+        ) { ok, statusCode, latencyMs, message in
+            var payload: [String: Any] = [
+                "ok": ok,
+                "latencyMs": latencyMs,
+                "message": message,
+            ]
+            if let code = statusCode {
+                payload["statusCode"] = code
+            }
+            context.eventLoop.execute {
+                self.sendJSONDictionary(payload, context: context)
+            }
+        }
+    }
+
     private func checkForMetricsEndpoint(from headerString: String, context: ChannelHandlerContext) -> Bool {
         guard let parsed = parseRequestLineAndHeaders(from: headerString),
               parsed.method == "GET",
@@ -545,6 +615,17 @@ class AIGateHandler: ChannelInboundHandler {
             let payload = Configuration.shared.buildRuntimeConfigPayload(redactTokens: redact)
             let data = (try? JSONEncoder().encode(payload)) ?? Data("{}".utf8)
             sendJSONResponse(data, context: context)
+            return true
+
+        case "stt_status":
+            let snap = STTService.shared.statusSnapshot()
+            let dict: [String: Any] = [
+                "recording": snap.recording,
+                "duration": snap.duration,
+                "level": snap.level,
+                "maxDuration": snap.maxDuration,
+            ]
+            sendJSONDictionary(dict, context: context)
             return true
 
         case "bg_image":

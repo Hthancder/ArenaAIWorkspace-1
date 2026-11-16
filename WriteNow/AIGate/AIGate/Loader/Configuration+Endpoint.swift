@@ -285,6 +285,7 @@ extension Configuration {
         var backgroundImageDim: Double
         var backgroundImageRevision: String
         var textReplacementAnimation: String
+        var stt: STTSettings
 
         static let `default` = AppSettings(
             menuTitle: "Write Now",
@@ -307,7 +308,8 @@ extension Configuration {
             backgroundImageBlur: 6.0,
             backgroundImageDim: 0.45,
             backgroundImageRevision: "",
-            textReplacementAnimation: "scatter_assemble"
+            textReplacementAnimation: "scatter_assemble",
+            stt: .default
         )
 
         init(
@@ -331,7 +333,8 @@ extension Configuration {
             backgroundImageBlur: Double = 6.0,
             backgroundImageDim: Double = 0.45,
             backgroundImageRevision: String = "",
-            textReplacementAnimation: String = "scatter_assemble"
+            textReplacementAnimation: String = "scatter_assemble",
+            stt: STTSettings = .default
         ) {
             self.menuTitle = menuTitle
             self.globalSystemPrompt = globalSystemPrompt
@@ -354,6 +357,7 @@ extension Configuration {
             self.backgroundImageDim = backgroundImageDim
             self.backgroundImageRevision = backgroundImageRevision
             self.textReplacementAnimation = textReplacementAnimation
+            self.stt = stt
         }
 
         enum CodingKeys: String, CodingKey {
@@ -362,7 +366,7 @@ extension Configuration {
             case animatedBackground, autoSelectAllIfEmpty, maskEndpointKeys, recentCustomPrompts
             case accentColorHex, menuThemePreset, backgroundMode, customThemeColorsHex
             case solidBackgroundHex, backgroundImageBlur, backgroundImageDim
-            case backgroundImageRevision, textReplacementAnimation
+            case backgroundImageRevision, textReplacementAnimation, stt
         }
 
         init(from decoder: Decoder) throws {
@@ -388,6 +392,128 @@ extension Configuration {
             backgroundImageDim = try container.decodeIfPresent(Double.self, forKey: .backgroundImageDim) ?? 0.45
             backgroundImageRevision = try container.decodeIfPresent(String.self, forKey: .backgroundImageRevision) ?? ""
             textReplacementAnimation = try container.decodeIfPresent(String.self, forKey: .textReplacementAnimation) ?? "scatter_assemble"
+            stt = try container.decodeIfPresent(STTSettings.self, forKey: .stt) ?? .default
+        }
+    }
+
+    struct STTSettings: Codable, Equatable {
+        var enabled: Bool
+        var providerType: String          // "openai_compatible" | "apple_speech"
+        var presetKind: String            // "groq" | "openai" | "reuse_llm" | "custom"
+        var baseURL: String
+        var apiKey: String
+        var model: String
+        var pathMode: Endpoint.PathMode
+        var customHeaders: [String: String]
+        var timeoutSeconds: Int
+        var sourceLanguage: String        // "auto", "vi", "en", "zh", "ja", "ko", ...
+        var targetLanguage: String        // "vi", "en", "zh", "ja", "ko", ...
+        var voiceMode: String             // "prompt" | "dictate" | "translate"
+        var translationStrategy: String   // "hybrid" | "llm" | "whisper_direct"
+        var translationStyle: String      // "natural" | "formal" | "concise" | "literal"
+        var promptHint: String
+        var temperature: Double
+        var audioFormat: String           // "m4a" | "wav"
+        var maxDurationSeconds: Int
+        var autoSendVoicePrompt: Bool
+        var appleOnDeviceOnly: Bool
+
+        static let `default` = STTSettings(
+            enabled: true,
+            providerType: "openai_compatible",
+            presetKind: "groq",
+            baseURL: "https://api.groq.com/openai",
+            apiKey: "",
+            model: "whisper-large-v3-turbo",
+            pathMode: .auto,
+            customHeaders: [:],
+            timeoutSeconds: 35,
+            sourceLanguage: "auto",
+            targetLanguage: "vi",
+            voiceMode: "prompt",
+            translationStrategy: "hybrid",
+            translationStyle: "natural",
+            promptHint: "",
+            temperature: 0.0,
+            audioFormat: "m4a",
+            maxDurationSeconds: 60,
+            autoSendVoicePrompt: true,
+            appleOnDeviceOnly: false
+        )
+
+        init(
+            enabled: Bool = true,
+            providerType: String = "openai_compatible",
+            presetKind: String = "groq",
+            baseURL: String = "https://api.groq.com/openai",
+            apiKey: String = "",
+            model: String = "whisper-large-v3-turbo",
+            pathMode: Endpoint.PathMode = .auto,
+            customHeaders: [String: String] = [:],
+            timeoutSeconds: Int = 35,
+            sourceLanguage: String = "auto",
+            targetLanguage: String = "vi",
+            voiceMode: String = "prompt",
+            translationStrategy: String = "hybrid",
+            translationStyle: String = "natural",
+            promptHint: String = "",
+            temperature: Double = 0.0,
+            audioFormat: String = "m4a",
+            maxDurationSeconds: Int = 60,
+            autoSendVoicePrompt: Bool = true,
+            appleOnDeviceOnly: Bool = false
+        ) {
+            self.enabled = enabled
+            self.providerType = providerType
+            self.presetKind = presetKind
+            self.baseURL = baseURL
+            self.apiKey = apiKey
+            self.model = model
+            self.pathMode = pathMode
+            self.customHeaders = customHeaders
+            self.timeoutSeconds = timeoutSeconds
+            self.sourceLanguage = sourceLanguage
+            self.targetLanguage = targetLanguage
+            self.voiceMode = voiceMode
+            self.translationStrategy = translationStrategy
+            self.translationStyle = translationStyle
+            self.promptHint = promptHint
+            self.temperature = temperature
+            self.audioFormat = audioFormat
+            self.maxDurationSeconds = maxDurationSeconds
+            self.autoSendVoicePrompt = autoSendVoicePrompt
+            self.appleOnDeviceOnly = appleOnDeviceOnly
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case enabled, providerType, presetKind, baseURL, apiKey, model, pathMode
+            case customHeaders, timeoutSeconds, sourceLanguage, targetLanguage, voiceMode
+            case translationStrategy, translationStyle, promptHint, temperature
+            case audioFormat, maxDurationSeconds, autoSendVoicePrompt, appleOnDeviceOnly
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+            providerType = try c.decodeIfPresent(String.self, forKey: .providerType) ?? "openai_compatible"
+            presetKind = try c.decodeIfPresent(String.self, forKey: .presetKind) ?? "groq"
+            baseURL = try c.decodeIfPresent(String.self, forKey: .baseURL) ?? "https://api.groq.com/openai"
+            apiKey = try c.decodeIfPresent(String.self, forKey: .apiKey) ?? ""
+            model = try c.decodeIfPresent(String.self, forKey: .model) ?? "whisper-large-v3-turbo"
+            pathMode = try c.decodeIfPresent(Endpoint.PathMode.self, forKey: .pathMode) ?? .auto
+            customHeaders = try c.decodeIfPresent([String: String].self, forKey: .customHeaders) ?? [:]
+            timeoutSeconds = try c.decodeIfPresent(Int.self, forKey: .timeoutSeconds) ?? 35
+            sourceLanguage = try c.decodeIfPresent(String.self, forKey: .sourceLanguage) ?? "auto"
+            targetLanguage = try c.decodeIfPresent(String.self, forKey: .targetLanguage) ?? "vi"
+            voiceMode = try c.decodeIfPresent(String.self, forKey: .voiceMode) ?? "prompt"
+            translationStrategy = try c.decodeIfPresent(String.self, forKey: .translationStrategy) ?? "hybrid"
+            translationStyle = try c.decodeIfPresent(String.self, forKey: .translationStyle) ?? "natural"
+            promptHint = try c.decodeIfPresent(String.self, forKey: .promptHint) ?? ""
+            temperature = try c.decodeIfPresent(Double.self, forKey: .temperature) ?? 0.0
+            audioFormat = try c.decodeIfPresent(String.self, forKey: .audioFormat) ?? "m4a"
+            maxDurationSeconds = try c.decodeIfPresent(Int.self, forKey: .maxDurationSeconds) ?? 60
+            autoSendVoicePrompt = try c.decodeIfPresent(Bool.self, forKey: .autoSendVoicePrompt) ?? true
+            appleOnDeviceOnly = try c.decodeIfPresent(Bool.self, forKey: .appleOnDeviceOnly) ?? false
         }
     }
 
@@ -434,7 +560,7 @@ enum EndpointURLHelper {
             path.removeLast()
         }
 
-        for suffix in ["/chat/completions", "/completions", "/models"] {
+        for suffix in ["/audio/transcriptions", "/audio/translations", "/chat/completions", "/completions", "/models"] {
             if path.lowercased().hasSuffix(suffix) {
                 path = String(path.dropLast(suffix.count))
                 while path.count > 1, path.hasSuffix("/") {
@@ -540,6 +666,22 @@ enum EndpointURLHelper {
 
     static func chatCompletionsURL(baseURL: URL, pathMode: Configuration.Endpoint.PathMode) -> URL? {
         let uri = buildUpstreamURI(baseURL: baseURL, requestURI: "/v1/chat/completions", pathMode: pathMode)
+        return makeURL(baseURL: baseURL, uri: uri)
+    }
+
+    static func audioEndpointURL(
+        baseURL: URL,
+        pathMode: Configuration.Endpoint.PathMode,
+        action: String
+    ) -> URL? {
+        let safeAction = (action == "translations") ? "translations" : "transcriptions"
+        let lowerPath = baseURL.path.lowercased()
+        if pathMode == .raw {
+            if lowerPath.hasSuffix("/audio/transcriptions") || lowerPath.hasSuffix("/audio/translations") {
+                return baseURL
+            }
+        }
+        let uri = buildUpstreamURI(baseURL: baseURL, requestURI: "/v1/audio/\(safeAction)", pathMode: pathMode)
         return makeURL(baseURL: baseURL, uri: uri)
     }
 

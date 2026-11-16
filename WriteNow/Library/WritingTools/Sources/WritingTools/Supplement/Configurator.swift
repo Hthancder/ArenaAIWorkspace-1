@@ -143,6 +143,7 @@ public struct RuntimeSettings: Codable, Equatable {
     public var backgroundImageDim: Double
     public var backgroundImageRevision: String
     public var textReplacementAnimation: String
+    public var stt: RuntimeSTTSettings
 
     public static let `default` = RuntimeSettings(
         menuTitle: "Write Now",
@@ -165,7 +166,8 @@ public struct RuntimeSettings: Codable, Equatable {
         backgroundImageBlur: 6.0,
         backgroundImageDim: 0.45,
         backgroundImageRevision: "",
-        textReplacementAnimation: "scatter_assemble"
+        textReplacementAnimation: "scatter_assemble",
+        stt: .default
     )
 
     enum CodingKeys: String, CodingKey {
@@ -174,7 +176,7 @@ public struct RuntimeSettings: Codable, Equatable {
         case animatedBackground, autoSelectAllIfEmpty, maskEndpointKeys, recentCustomPrompts
         case accentColorHex, menuThemePreset, backgroundMode, customThemeColorsHex
         case solidBackgroundHex, backgroundImageBlur, backgroundImageDim
-        case backgroundImageRevision, textReplacementAnimation
+        case backgroundImageRevision, textReplacementAnimation, stt
     }
 
     public init(
@@ -198,7 +200,8 @@ public struct RuntimeSettings: Codable, Equatable {
         backgroundImageBlur: Double = 6.0,
         backgroundImageDim: Double = 0.45,
         backgroundImageRevision: String = "",
-        textReplacementAnimation: String = "scatter_assemble"
+        textReplacementAnimation: String = "scatter_assemble",
+        stt: RuntimeSTTSettings = .default
     ) {
         self.menuTitle = menuTitle
         self.globalSystemPrompt = globalSystemPrompt
@@ -221,6 +224,7 @@ public struct RuntimeSettings: Codable, Equatable {
         self.backgroundImageDim = backgroundImageDim
         self.backgroundImageRevision = backgroundImageRevision
         self.textReplacementAnimation = textReplacementAnimation
+        self.stt = stt
     }
 
     public init(from decoder: Decoder) throws {
@@ -246,6 +250,128 @@ public struct RuntimeSettings: Codable, Equatable {
         backgroundImageDim = try c.decodeIfPresent(Double.self, forKey: .backgroundImageDim) ?? 0.45
         backgroundImageRevision = try c.decodeIfPresent(String.self, forKey: .backgroundImageRevision) ?? ""
         textReplacementAnimation = try c.decodeIfPresent(String.self, forKey: .textReplacementAnimation) ?? "scatter_assemble"
+        stt = try c.decodeIfPresent(RuntimeSTTSettings.self, forKey: .stt) ?? .default
+    }
+}
+
+public struct RuntimeSTTSettings: Codable, Equatable {
+    public var enabled: Bool
+    public var providerType: String
+    public var presetKind: String
+    public var baseURL: String
+    public var apiKey: String
+    public var model: String
+    public var pathMode: EndpointItem.PathMode
+    public var customHeaders: [String: String]
+    public var timeoutSeconds: Int
+    public var sourceLanguage: String
+    public var targetLanguage: String
+    public var voiceMode: String
+    public var translationStrategy: String
+    public var translationStyle: String
+    public var promptHint: String
+    public var temperature: Double
+    public var audioFormat: String
+    public var maxDurationSeconds: Int
+    public var autoSendVoicePrompt: Bool
+    public var appleOnDeviceOnly: Bool
+
+    public static let `default` = RuntimeSTTSettings(
+        enabled: true,
+        providerType: "openai_compatible",
+        presetKind: "groq",
+        baseURL: "https://api.groq.com/openai",
+        apiKey: "",
+        model: "whisper-large-v3-turbo",
+        pathMode: .auto,
+        customHeaders: [:],
+        timeoutSeconds: 35,
+        sourceLanguage: "auto",
+        targetLanguage: "vi",
+        voiceMode: "prompt",
+        translationStrategy: "hybrid",
+        translationStyle: "natural",
+        promptHint: "",
+        temperature: 0.0,
+        audioFormat: "m4a",
+        maxDurationSeconds: 60,
+        autoSendVoicePrompt: true,
+        appleOnDeviceOnly: false
+    )
+
+    public init(
+        enabled: Bool = true,
+        providerType: String = "openai_compatible",
+        presetKind: String = "groq",
+        baseURL: String = "https://api.groq.com/openai",
+        apiKey: String = "",
+        model: String = "whisper-large-v3-turbo",
+        pathMode: EndpointItem.PathMode = .auto,
+        customHeaders: [String: String] = [:],
+        timeoutSeconds: Int = 35,
+        sourceLanguage: String = "auto",
+        targetLanguage: String = "vi",
+        voiceMode: String = "prompt",
+        translationStrategy: String = "hybrid",
+        translationStyle: String = "natural",
+        promptHint: String = "",
+        temperature: Double = 0.0,
+        audioFormat: String = "m4a",
+        maxDurationSeconds: Int = 60,
+        autoSendVoicePrompt: Bool = true,
+        appleOnDeviceOnly: Bool = false
+    ) {
+        self.enabled = enabled
+        self.providerType = providerType
+        self.presetKind = presetKind
+        self.baseURL = baseURL
+        self.apiKey = apiKey
+        self.model = model
+        self.pathMode = pathMode
+        self.customHeaders = customHeaders
+        self.timeoutSeconds = timeoutSeconds
+        self.sourceLanguage = sourceLanguage
+        self.targetLanguage = targetLanguage
+        self.voiceMode = voiceMode
+        self.translationStrategy = translationStrategy
+        self.translationStyle = translationStyle
+        self.promptHint = promptHint
+        self.temperature = temperature
+        self.audioFormat = audioFormat
+        self.maxDurationSeconds = maxDurationSeconds
+        self.autoSendVoicePrompt = autoSendVoicePrompt
+        self.appleOnDeviceOnly = appleOnDeviceOnly
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case enabled, providerType, presetKind, baseURL, apiKey, model, pathMode
+        case customHeaders, timeoutSeconds, sourceLanguage, targetLanguage, voiceMode
+        case translationStrategy, translationStyle, promptHint, temperature
+        case audioFormat, maxDurationSeconds, autoSendVoicePrompt, appleOnDeviceOnly
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        providerType = try c.decodeIfPresent(String.self, forKey: .providerType) ?? "openai_compatible"
+        presetKind = try c.decodeIfPresent(String.self, forKey: .presetKind) ?? "groq"
+        baseURL = try c.decodeIfPresent(String.self, forKey: .baseURL) ?? "https://api.groq.com/openai"
+        apiKey = try c.decodeIfPresent(String.self, forKey: .apiKey) ?? ""
+        model = try c.decodeIfPresent(String.self, forKey: .model) ?? "whisper-large-v3-turbo"
+        pathMode = try c.decodeIfPresent(EndpointItem.PathMode.self, forKey: .pathMode) ?? .auto
+        customHeaders = try c.decodeIfPresent([String: String].self, forKey: .customHeaders) ?? [:]
+        timeoutSeconds = try c.decodeIfPresent(Int.self, forKey: .timeoutSeconds) ?? 35
+        sourceLanguage = try c.decodeIfPresent(String.self, forKey: .sourceLanguage) ?? "auto"
+        targetLanguage = try c.decodeIfPresent(String.self, forKey: .targetLanguage) ?? "vi"
+        voiceMode = try c.decodeIfPresent(String.self, forKey: .voiceMode) ?? "prompt"
+        translationStrategy = try c.decodeIfPresent(String.self, forKey: .translationStrategy) ?? "hybrid"
+        translationStyle = try c.decodeIfPresent(String.self, forKey: .translationStyle) ?? "natural"
+        promptHint = try c.decodeIfPresent(String.self, forKey: .promptHint) ?? ""
+        temperature = try c.decodeIfPresent(Double.self, forKey: .temperature) ?? 0.0
+        audioFormat = try c.decodeIfPresent(String.self, forKey: .audioFormat) ?? "m4a"
+        maxDurationSeconds = try c.decodeIfPresent(Int.self, forKey: .maxDurationSeconds) ?? 60
+        autoSendVoicePrompt = try c.decodeIfPresent(Bool.self, forKey: .autoSendVoicePrompt) ?? true
+        appleOnDeviceOnly = try c.decodeIfPresent(Bool.self, forKey: .appleOnDeviceOnly) ?? false
     }
 }
 
@@ -553,6 +679,88 @@ public class Configurator: ObservableObject {
             self.settings.recentCustomPrompts = recent
         }
         performJSONAction(command: "record_quick_prompt", body: ["prompt": trimmed]) { _ in }
+    }
+
+    // MARK: - Voice / STT IPC
+
+    public func startVoiceRecording(completion: @escaping (Bool, String?) -> Void) {
+        performJSONAction(command: "stt_start", body: [:], timeout: 8) { result in
+            switch result {
+            case let .success(data):
+                if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    let ok = (obj["ok"] as? Bool) ?? true
+                    let err = obj["error"] as? String
+                    DispatchQueue.main.async { completion(ok, err) }
+                } else {
+                    DispatchQueue.main.async { completion(false, "Invalid daemon response") }
+                }
+            case let .failure(err):
+                DispatchQueue.main.async { completion(false, err.localizedDescription) }
+            }
+        }
+    }
+
+    public func cancelVoiceRecording() {
+        performJSONAction(command: "stt_cancel", body: [:], timeout: 5) { _ in }
+    }
+
+    public func fetchSTTStatus(completion: @escaping (_ recording: Bool, _ duration: Double, _ level: Double, _ maxDuration: Double) -> Void) {
+        guard let url = URL(string: "http://127.0.0.1:5540/metrics?query=stt_status") else {
+            DispatchQueue.main.async { completion(false, 0, 0, 60) }
+            return
+        }
+        var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 2)
+        req.httpMethod = "GET"
+        URLSession.shared.dataTask(with: req) { data, _, _ in
+            guard let data,
+                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            else {
+                DispatchQueue.main.async { completion(false, 0, 0, 60) }
+                return
+            }
+            let rec = (obj["recording"] as? Bool) ?? false
+            let dur = (obj["duration"] as? Double) ?? 0
+            let lvl = (obj["level"] as? Double) ?? 0
+            let maxD = (obj["maxDuration"] as? Double) ?? 60
+            DispatchQueue.main.async { completion(rec, dur, lvl, maxD) }
+        }.resume()
+    }
+
+    public func stopVoiceRecording(
+        mode: String,
+        sourceLanguage: String,
+        targetLanguage: String,
+        completion: @escaping (_ ok: Bool, _ transcript: String, _ finalText: String, _ provider: String, _ warning: String?, _ errorMessage: String?) -> Void
+    ) {
+        let body: [String: Any] = [
+            "mode": mode,
+            "sourceLanguage": sourceLanguage,
+            "targetLanguage": targetLanguage,
+        ]
+        performJSONAction(command: "stt_stop", body: body, timeout: 65) { result in
+            switch result {
+            case let .success(data):
+                if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    let ok = (obj["ok"] as? Bool) ?? false
+                    let transcript = (obj["transcript"] as? String) ?? ""
+                    let finalText = (obj["finalText"] as? String) ?? transcript
+                    let provider = (obj["providerUsed"] as? String) ?? ""
+                    let warning = obj["warning"] as? String
+                    let err = obj["error"] as? String
+                    DispatchQueue.main.async {
+                        completion(ok, transcript, finalText, provider, warning, err)
+                    }
+                } else {
+                    DispatchQueue.main.async {
+                        completion(false, "", "", "", nil, "Invalid STT response")
+                    }
+                }
+            case let .failure(err):
+                DispatchQueue.main.async {
+                    completion(false, "", "", "", nil, err.localizedDescription)
+                }
+            }
+        }
     }
 
     private func performJSONAction(
