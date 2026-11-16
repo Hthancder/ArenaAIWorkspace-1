@@ -6,7 +6,14 @@ on:
       - arena/55c18ace-arenaaiworkspace-1
     paths:
       - '.github/workflows/build-dig3st.yml'
+      - 'patches/**'
   workflow_dispatch:
+    inputs:
+      archs:
+        description: 'Target architectures (e.g. "arm64 arm64e" or "arm64")'
+        required: false
+        default: 'arm64 arm64e'
+        type: string
 
 jobs:
   build:
@@ -15,13 +22,25 @@ jobs:
       CI: "1"
       THEOS: /home/runner/theos
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      DIG3ST_ARCHS: ${{ inputs.archs || 'arm64 arm64e' }}
 
     steps:
-      - name: Checkout uncor3/dig3st
+      - name: Checkout patch workspace
+        uses: actions/checkout@v4
+
+      - name: Checkout uncor3/dig3st (pinned upstream)
         uses: actions/checkout@v4
         with:
           repository: uncor3/dig3st
+          ref: 28522b9e13837389d83aef14b07fc99e2742fb65
           path: dig3st
+
+      - name: Apply source fixes patch
+        working-directory: dig3st
+        run: |
+          git apply --check ../patches/dig3st-fixes.patch
+          git apply ../patches/dig3st-fixes.patch
+          git diff --stat
 
       - name: Install Theos, iOS toolchain, and patched SDK
         run: |
@@ -36,11 +55,11 @@ jobs:
           set -o pipefail
           rm -rf ./packages
           {
-            echo "=== Building rootful ==="
-            THEOS_PACKAGE_SCHEME= make package FINALPACKAGE=1
+            echo "=== Building rootful (ARCHS=${DIG3ST_ARCHS}) ==="
+            THEOS_PACKAGE_SCHEME= make package FINALPACKAGE=1 ARCHS="$DIG3ST_ARCHS"
             make clean
-            echo "=== Building rootless ==="
-            THEOS_PACKAGE_SCHEME=rootless make package FINALPACKAGE=1
+            echo "=== Building rootless (ARCHS=${DIG3ST_ARCHS}) ==="
+            THEOS_PACKAGE_SCHEME=rootless make package FINALPACKAGE=1 ARCHS="$DIG3ST_ARCHS"
             make clean
           } 2>&1 | tee /tmp/build.log
 
@@ -61,13 +80,33 @@ jobs:
         if: always()
         run: |
           python3 - <<'PY'
-          import os, pathlib
-          for name, path in [("install", "/tmp/install.log"), ("build", "/tmp/build.log"), ("deb", "/tmp/deb-inspect.log")]:
-              p = pathlib.Path(path)
-              if p.exists():
-                  txt = p.read_text(errors="replace")[-3000:]
-                  esc = txt.replace("%", "%25").replace("\r", "").replace("\n", "%0A")
-                  print(f"::notice title={name}::{esc}")
+          import pathlib, re
+
+          def emit(title, text):
+              for idx in range(0, max(1, len(text)), 3000):
+                  chunk = text[idx:idx+3000]
+                  esc = chunk.replace("%", "%25").replace("\r", "").replace("\n", "%0A")
+                  suffix = f"-{(idx // 3000) + 1}" if len(text) > 3000 else ""
+                  print(f"::notice title={title}{suffix}::{esc}")
+
+          install_p = pathlib.Path("/tmp/install.log")
+          if install_p.exists():
+              emit("install", install_p.read_text(errors="replace")[-3000:])
+
+          build_p = pathlib.Path("/tmp/build.log")
+          if build_p.exists():
+              btxt = build_p.read_text(errors="replace")
+              emit("build", btxt[-3000:])
+              interesting = "\n".join(
+                  line for line in btxt.splitlines()
+                  if re.search(r"(warning:|error:|dm\.pl|=== Building)", line, re.I)
+              )
+              if interesting:
+                  emit("build-diag", interesting[-3000:])
+
+          deb_p = pathlib.Path("/tmp/deb-inspect.log")
+          if deb_p.exists():
+              emit("deb", deb_p.read_text(errors="replace"))
           PY
 
       - name: Upload built .deb artifacts

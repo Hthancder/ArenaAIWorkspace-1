@@ -1,0 +1,498 @@
+diff --git a/preferences/DigestAppSelectController.m b/preferences/DigestAppSelectController.m
+index e3804b1..86430a1 100644
+--- a/preferences/DigestAppSelectController.m
++++ b/preferences/DigestAppSelectController.m
+@@ -40,11 +40,12 @@ NSString* isOkToSummarize(NSString *sectionIdentifier) {
+ 				UIImage *icon = [UIImage _applicationIconImageForBundleIdentifier:app.applicationIdentifier format:0 scale:UIScreen.mainScreen.scale];
+ 
+ 				CGImageRef cgIcon = icon.CGImage;
+-				CGFloat scale = (CGImageGetWidth(cgIcon) + CGImageGetHeight(cgIcon)) / (CGFloat)(29 + 29);
+-				UIImage *iconResized = [UIImage imageWithCGImage:cgIcon scale:scale orientation:0];
+-
+-				if (iconResized) {
+-					[specifier setProperty:iconResized forKey:@"iconImage"];
++				if (cgIcon) {
++					CGFloat scale = (CGImageGetWidth(cgIcon) + CGImageGetHeight(cgIcon)) / (CGFloat)(29 + 29);
++					UIImage *iconResized = [UIImage imageWithCGImage:cgIcon scale:scale orientation:0];
++					if (iconResized) {
++						[specifier setProperty:iconResized forKey:@"iconImage"];
++					}
+ 				}
+ 				
+             }
+diff --git a/preferences/DigestEndPointSettingsController.m b/preferences/DigestEndPointSettingsController.m
+index 49ac487..306a0e4 100644
+--- a/preferences/DigestEndPointSettingsController.m
++++ b/preferences/DigestEndPointSettingsController.m
+@@ -28,7 +28,9 @@
+ }
+ 
+ -(void)viewDidLayoutSubviews {
+-	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Save" style:UIBarButtonItemStylePlain target:self action:@selector(save)];
++	if (!self.navigationItem.rightBarButtonItem) {
++		self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Save" style:UIBarButtonItemStylePlain target:self action:@selector(save)];
++	}
+ 	[super viewDidLayoutSubviews];
+ }
+ -(void)save {
+@@ -80,7 +82,7 @@
+ 		}
+ 		NSString *uuid = [[NSUUID UUID] UUIDString];
+ 		endpoint[@"uuid"] = uuid;
+-        NSMutableArray *endpoints = [[manager objectForKey:@"endpoints"] mutableCopy];
++        NSMutableArray *endpoints = [[manager objectForKey:@"endpoints"] mutableCopy] ?: [NSMutableArray new];
+ 		[self.logger log:[NSString stringWithFormat:@"Adding endpoint: %@", endpoint] level:LOGLEVEL_INFO];
+ 		[endpoints addObject:endpoint];
+ 		[manager setObject:endpoints forKey:@"endpoints"];
+diff --git a/preferences/DigestEndpointsController.m b/preferences/DigestEndpointsController.m
+index ba90c44..914348b 100644
+--- a/preferences/DigestEndpointsController.m
++++ b/preferences/DigestEndpointsController.m
+@@ -92,7 +92,8 @@
+ }
+ 
+ - (UITableViewCellEditingStyle)tableView:(UITableView *)tableView editingStyleForRowAtIndexPath:(NSIndexPath *)indexPath {
+-    NSString *uuid = [self.specifiers[indexPath.row + 1] properties][@"endpoint"][@"uuid"];
++    PSSpecifier *specifier = [self specifierAtIndexPath:indexPath];
++    NSString *uuid = specifier.properties[@"endpoint"][@"uuid"];
+ 
+     NSString *activeEndpoint = [self.manager objectForKey:@"activeEndpoint"];
+     BOOL isDeletable = ![uuid isEqualToString:activeEndpoint];
+@@ -106,6 +107,14 @@
+     UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
+     if (cell == nil) {
+         cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:CellIdentifier];
++
++        // Add long press gesture recognizer
++        UILongPressGestureRecognizer *longPressGesture = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(handleLongPress:)];
++        [cell addGestureRecognizer:longPressGesture];
++
++        // Add tap gesture recognizer
++        UITapGestureRecognizer *tapGesture = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTap:)];
++        [cell addGestureRecognizer:tapGesture];
+     }
+     
+     PSSpecifier *specifier = [self specifierAtIndexPath:indexPath];
+@@ -131,14 +140,6 @@
+         cell.accessoryView = nil;
+     }
+ 
+-    // Add long press gesture recognizer
+-    UILongPressGestureRecognizer *longPressGesture = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(handleLongPress:)];
+-    [cell addGestureRecognizer:longPressGesture];
+-
+-    // Add tap gesture recognizer
+-    UITapGestureRecognizer *tapGesture = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTap:)];
+-    [cell addGestureRecognizer:tapGesture];
+-
+     return cell;
+ }
+ 
+diff --git a/preferences/DigestLogLevelController.m b/preferences/DigestLogLevelController.m
+index 0d00746..8106474 100644
+--- a/preferences/DigestLogLevelController.m
++++ b/preferences/DigestLogLevelController.m
+@@ -71,6 +71,10 @@
+     UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
+     if (cell == nil) {
+         cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:CellIdentifier];
++
++        // Add tap gesture recognizer
++        UITapGestureRecognizer *tapGesture = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTap:)];
++        [cell addGestureRecognizer:tapGesture];
+     }
+ 
+     PSSpecifier *specifier = [self specifierAtIndexPath:indexPath];
+@@ -92,10 +96,6 @@
+         cell.accessoryView = nil;
+     }
+ 
+-    // Add tap gesture recognizer
+-    UITapGestureRecognizer *tapGesture = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTap:)];
+-    [cell addGestureRecognizer:tapGesture];
+-
+     return cell;
+ }
+ 
+diff --git a/preferences/DigestRootListController.m b/preferences/DigestRootListController.m
+index 6a5f861..b2546de 100644
+--- a/preferences/DigestRootListController.m
++++ b/preferences/DigestRootListController.m
+@@ -14,8 +14,14 @@
+ -(void)viewDidLayoutSubviews {
+ 	[super viewDidLayoutSubviews];
+ 
+-	[self setupHeader];
+-	[self setupFooterVersion];
++	NSInteger styleTag = (UITraitCollection.currentTraitCollection.userInterfaceStyle == UIUserInterfaceStyleDark) ? 2 : 1;
++	if (!self.table.tableHeaderView || self.table.tableHeaderView.tag != styleTag || ABS(self.table.tableHeaderView.frame.size.width - self.view.frame.size.width) > 1.0) {
++		[self setupHeader];
++		self.table.tableHeaderView.tag = styleTag;
++	}
++	if (!self.table.tableFooterView || ABS(self.table.tableFooterView.frame.size.width - self.view.frame.size.width) > 1.0) {
++		[self setupFooterVersion];
++	}
+ }
+ 
+ -(void)setupHeader {
+@@ -61,22 +67,23 @@
+ 
+ -(void)resetSettings {
+  	[[NSUserDefaults standardUserDefaults] removePersistentDomainForName:@"com.uncore.dig3st"];
+-	NSString *prefsPath = @"/var/mobile/Library/Preferences/com.uncore.dig3st.plist";
+-
+-    NSFileManager *fileManager = [NSFileManager defaultManager];
+-    
+-    if ([fileManager fileExistsAtPath:prefsPath]) {
+-        NSError *error = nil;
+-        [fileManager removeItemAtPath:prefsPath error:&error];
+-        
+-        if (error) {
+-            NSLog(@"Error deleting preferences: %@", error.localizedDescription);
+-        } else {
+-            NSLog(@"Preferences reset successfully.");
+-        }
+-    } else {
+-        NSLog(@"Preferences file does not exist.");
+-    }
++	[[NSUserDefaults standardUserDefaults] synchronize];
++	NSFileManager *fileManager = [NSFileManager defaultManager];
++	NSArray *prefsPaths = @[
++		@"/var/mobile/Library/Preferences/com.uncore.dig3st.plist",
++		ROOT_PATH_NS(@"/var/mobile/Library/Preferences/com.uncore.dig3st.plist")
++	];
++	for (NSString *prefsPath in [NSSet setWithArray:prefsPaths]) {
++		if ([fileManager fileExistsAtPath:prefsPath]) {
++			NSError *error = nil;
++			[fileManager removeItemAtPath:prefsPath error:&error];
++			if (error) {
++				NSLog(@"Error deleting preferences: %@", error.localizedDescription);
++			} else {
++				NSLog(@"Preferences reset successfully.");
++			}
++		}
++	}
+ 	[self reload];
+ 	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Respring" style:UIBarButtonItemStylePlain target:self action:@selector(respring)];
+ 
+diff --git a/preferences/DigestTestingController.m b/preferences/DigestTestingController.m
+index bf5f372..ba02a4e 100644
+--- a/preferences/DigestTestingController.m
++++ b/preferences/DigestTestingController.m
+@@ -26,7 +26,9 @@
+ }
+ 
+ -(void)viewDidLayoutSubviews {
+-	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Push" style:UIBarButtonItemStylePlain target:self action:@selector(push)];
++	if (!self.navigationItem.rightBarButtonItem) {
++		self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Push" style:UIBarButtonItemStylePlain target:self action:@selector(push)];
++	}
+ 	[super viewDidLayoutSubviews];
+ }
+ -(void)push {
+diff --git a/src/OpenAI/OpenAI.m b/src/OpenAI/OpenAI.m
+index 8f8f165..a4980e5 100644
+--- a/src/OpenAI/OpenAI.m
++++ b/src/OpenAI/OpenAI.m
+@@ -43,6 +43,9 @@
+     [self.logger log:[NSString stringWithFormat:@"New System Prompt: %@", self.systemPrompt] level:LOGLEVEL_VERBOSE];
+ 
+     NSInteger timeout = [[self.manager objectForKey:@"timeout"] integerValue];
++    if (timeout <= 0) {
++        timeout = 30;
++    }
+     self.configuration = [[Config alloc] initWithEndpoint:endpoint timeoutInterval:[NSNumber numberWithInteger:timeout]];
+     [self.logger log:[NSString stringWithFormat:@"New Configuration: %@", self.configuration] level:LOGLEVEL_VERBOSE];
+ }
+@@ -52,27 +55,50 @@
+ }
+ 
+ -(NSURL*)urlWithPath:(NSString *)path {
+-    //maybe follow this implementation in the future
+-    // NSString *url = [NSString stringWithFormat:@"%@://%@", self.configuration.scheme, self.configuration.host];
+-    NSString *url = self.configuration.host;
+-    return (NSURL *)[NSURL URLWithString:[url stringByAppendingString:path]];
++    NSString *url = [self.configuration.host stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
++    if (url.length == 0) {
++        return nil;
++    }
++    while ([url hasSuffix:@"/"]) {
++        url = [url substringToIndex:url.length - 1];
++    }
++    return [NSURL URLWithString:[url stringByAppendingString:path]];
+ }
+ 
+ -(void)check:(void (^)(BOOL response))completion {
+-    NSURL *url = [self urlWithPath:@"/chat/completions"];
++    NSURL *url = [self urlWithPath:@"/models"];
++    if (!url) {
++        dispatch_async(dispatch_get_main_queue(), ^{
++            completion(NO);
++        });
++        return;
++    }
++
+     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
+     [request setHTTPMethod:@"GET"];
+-    [request setValue:[NSString stringWithFormat:@"Bearer %@",self.configuration.token] forHTTPHeaderField:@"Authorization"];
+-    
++    if (self.configuration.token.length > 0) {
++        [request setValue:[NSString stringWithFormat:@"Bearer %@",self.configuration.token] forHTTPHeaderField:@"Authorization"];
++    }
++    NSTimeInterval timeout = [self.configuration.timeoutInterval doubleValue];
++    [request setTimeoutInterval:(timeout > 0 ? timeout : 10.0)];
++
+     NSURLSessionDataTask *task = [self.session dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+-        if (error) {
++        if (error || !data) {
+             NSLog(@"Request failed: %@", error.localizedDescription);
+-            completion(NO);
++            dispatch_async(dispatch_get_main_queue(), ^{
++                completion(NO);
++            });
+             return;
+         }
+-        
+-        NSError *jsonError;
+-        NSDictionary *jsonResponse = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonError];
++
++        BOOL statusOK = YES;
++        if ([response isKindOfClass:[NSHTTPURLResponse class]]) {
++            NSInteger statusCode = ((NSHTTPURLResponse *)response).statusCode;
++            statusOK = (statusCode >= 200 && statusCode < 300);
++        }
++
++        NSError *jsonError = nil;
++        id jsonResponse = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonError];
+         if (jsonError) {
+             [self.logger log:[NSString stringWithFormat:@"JSON error while checking the endpoint: %@", jsonError.localizedDescription] level:LOGLEVEL_WARNING];
+             dispatch_async(dispatch_get_main_queue(), ^{
+@@ -80,8 +106,8 @@
+             });
+         } else {
+             @try {
+-                NSDictionary *result = jsonResponse[@"error"];
+-                BOOL isValid = (result == nil);
++                id errorObj = [jsonResponse isKindOfClass:[NSDictionary class]] ? jsonResponse[@"error"] : nil;
++                BOOL isValid = statusOK && (errorObj == nil);
+                 [self.logger log:[NSString stringWithFormat:@"Endpoint is valid: %@", isValid ? @"YES" : @"NO"] level:LOGLEVEL_INFO];
+                 dispatch_async(dispatch_get_main_queue(), ^{
+                     completion(isValid);
+@@ -94,26 +120,32 @@
+             }
+         }
+     }];
+-    
++
+     [task resume];
+ }
+ 
+ -(void)summarize:(ChatQuery*)query completion:(void (^)(NSString *response))completion {
+-    @try { 
++    @try {
+         NSURL *url = [self urlWithPath:@"/chat/completions"];
++        if (!url || self.configuration.model.length == 0) {
++            dispatch_async(dispatch_get_main_queue(), ^{
++                completion(@"");
++            });
++            return;
++        }
+         [self.logger log:[NSString stringWithFormat:@"Endpoint url: %@",url] level:LOGLEVEL_VERBOSE];
+         NSMutableArray *messages = [NSMutableArray array];
+-        
+-        if (self.systemPrompt) {
++
++        if (self.systemPrompt.length > 0) {
+             [messages addObject:@{
+                 @"role": @"system",
+                 @"content": self.systemPrompt
+             }];
+         }
+-        
++
+         [messages addObject:@{
+             @"role": @"user",
+-            @"content": [NSString stringWithFormat:@"%@ %@", self.prompt, query.prompt]
++            @"content": [NSString stringWithFormat:@"%@ %@", self.prompt ?: @"", query.prompt ?: @""]
+         }];
+ 
+         NSDictionary *body = @{
+@@ -121,37 +153,64 @@
+             @"messages" : messages,
+         };
+         [self.logger log:[NSString stringWithFormat:@"Making a post req with body: %@", body] level:LOGLEVEL_VERBOSE];
+-        NSData *jsonData = [NSJSONSerialization dataWithJSONObject:body options:0 error:nil];
+-        
++        NSError *serializeError = nil;
++        NSData *jsonData = [NSJSONSerialization dataWithJSONObject:body options:0 error:&serializeError];
++        if (serializeError || !jsonData) {
++            dispatch_async(dispatch_get_main_queue(), ^{
++                completion(@"");
++            });
++            return;
++        }
++
+         NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
+         [request setHTTPMethod:@"POST"];
+         [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+-        [request setValue:[NSString stringWithFormat:@"Bearer %@",self.configuration.token] forHTTPHeaderField:@"Authorization"];
+-        [request setTimeoutInterval:[self.configuration.timeoutInterval doubleValue]];
++        if (self.configuration.token.length > 0) {
++            [request setValue:[NSString stringWithFormat:@"Bearer %@",self.configuration.token] forHTTPHeaderField:@"Authorization"];
++        }
++        NSTimeInterval timeout = [self.configuration.timeoutInterval doubleValue];
++        [request setTimeoutInterval:(timeout > 0 ? timeout : 30.0)];
+         [request setHTTPBody:jsonData];
+-        
++
+         NSURLSessionDataTask *task = [self.session dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+-            if (error) {
+-                    NSLog(@"Request failed: %@", error.localizedDescription);
+-                    return dispatch_async(dispatch_get_main_queue(), ^{
+-                        completion(@"");
+-                    });                
++            if (error || !data) {
++                NSLog(@"Request failed: %@", error.localizedDescription);
++                return dispatch_async(dispatch_get_main_queue(), ^{
++                    completion(@"");
++                });
+             }
+-            
+-            NSError *jsonError;
++
++            NSError *jsonError = nil;
+             id jsonResponse = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonError];
+             [self.logger log:[NSString stringWithFormat:@"Response body: %@", jsonResponse] level:LOGLEVEL_VERBOSE];
+ 
+             if (jsonError) {
+-                    NSLog(@"JSON error: %@", jsonError.localizedDescription);
++                NSLog(@"JSON error: %@", jsonError.localizedDescription);
++                return dispatch_async(dispatch_get_main_queue(), ^{
++                    completion(@"");
++                });
++            }
++            @try {
++                if (![jsonResponse isKindOfClass:[NSDictionary class]]) {
+                     return dispatch_async(dispatch_get_main_queue(), ^{
+                         completion(@"");
+                     });
+-            }  
+-            @try {
+-                NSString *result = jsonResponse[@"choices"][0][@"message"][@"content"];
+-                // Sometimes the result contains newlines, which we want to remove
+-                NSString *cleanedResult = [result stringByReplacingOccurrencesOfString:@"\n" withString:@""];
++                }
++                id choices = jsonResponse[@"choices"];
++                if (![choices isKindOfClass:[NSArray class]] || [choices count] == 0) {
++                    return dispatch_async(dispatch_get_main_queue(), ^{
++                        completion(@"");
++                    });
++                }
++                id message = choices[0][@"message"];
++                id content = [message isKindOfClass:[NSDictionary class]] ? message[@"content"] : nil;
++                if (![content isKindOfClass:[NSString class]]) {
++                    return dispatch_async(dispatch_get_main_queue(), ^{
++                        completion(@"");
++                    });
++                }
++                NSString *cleanedResult = [[(NSString *)content stringByReplacingOccurrencesOfString:@"\r\n" withString:@" "] stringByReplacingOccurrencesOfString:@"\n" withString:@" "];
++                cleanedResult = [cleanedResult stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+                 return dispatch_async(dispatch_get_main_queue(), ^{
+                     completion(cleanedResult);
+                 });
+@@ -163,9 +222,8 @@
+             }
+         }];
+ 
+-        
+         [task resume];
+-    } @catch (NSException *e) { 
++    } @catch (NSException *e) {
+         dispatch_async(dispatch_get_main_queue(), ^{
+             completion(@"");
+         });
+diff --git a/src/Tweak.x b/src/Tweak.x
+index 3a91698..a6f111c 100644
+--- a/src/Tweak.x
++++ b/src/Tweak.x
+@@ -36,7 +36,8 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
+             %orig(arg1);
+         }
+     } @catch(NSException *e) {
+-        NSLog(@"error: setting long view text %@", e) ;
++        NSLog(@"error: setting long view text %@", e);
++        %orig(arg1);
+     }
+ }
+ %end
+@@ -67,7 +68,9 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
+ 
+                 NSMutableParagraphStyle *paragraphStyle = [[NSMutableParagraphStyle alloc] init];
+                 NSDictionary *attributes = @{NSParagraphStyleAttributeName: paragraphStyle};
+-                NSAttributedString *messageString = [[NSAttributedString alloc] initWithString:[self.notificationRequest.content valueForKey:@"message"] attributes:attributes];
++                NSString *msgText = [self.notificationRequest.content valueForKey:@"message"];
++                if (!msgText) return;
++                NSAttributedString *messageString = [[NSAttributedString alloc] initWithString:msgText attributes:attributes];
+                 
+                 [attributedString appendAttributedString:messageString];
+                 UILabel *message = [seamlessContentView valueForKey:@"secondaryTextElement"];
+@@ -96,13 +99,13 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
+         }
+ 
+         //checks if user set anything for this bundle identifier
+-        id _enabled = [prefsManager objectForKey:req.sectionIdentifier];
++        id _enabled = req.sectionIdentifier.length > 0 ? [prefsManager objectForKey:req.sectionIdentifier] : nil;
+         //if not then use isOkToSummarize else use the user setting
+         BOOL enabled = _enabled != nil ? [_enabled boolValue] : isOkToSummarize(req.sectionIdentifier);
+ 
+         [logger log:[NSString stringWithFormat:@"Will summarize notification with bundle identifier %@ ? %@",req.sectionIdentifier,enabled ? @"yes" : @"no"] level:LOGLEVEL_INFO];
+ 
+-        if (enabled) {
++        if (enabled && openai != nil && openai.configuration.host.length > 0 && openai.configuration.model.length > 0) {
+             ChatQuery *query = [[ChatQuery alloc] initWithPrompt:textContent];
+             [logger log:[NSString stringWithFormat:@"ChatQuery has been created with prompt %@",textContent] level:LOGLEVEL_VERBOSE];
+             [openai summarize:query completion:^(NSString *summary) {
+@@ -145,6 +148,15 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
+             NSArray *endpoints = [prefsManager objectForKey:@"endpoints"];
+             __block NSDictionary *endpoint;
+ 
++            if (uuid.length > 0) {
++                [endpoints enumerateObjectsUsingBlock:^(NSDictionary *p, NSUInteger idx, BOOL *stop) {
++                    if ([p[@"uuid"] isEqualToString:uuid]) {
++                        endpoint = p;
++                        *stop = YES;
++                    }
++                }];
++            }
++
+             if (sanityChecks) {
+                 [logger log:@"Running Sanity Checks" level:LOGLEVEL_INFO];
+ 
+@@ -156,14 +168,6 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
+                     });
+                 }
+ 
+-                [logger log:@"Identifying the endpoint to use" level:LOGLEVEL_INFO];
+-                [endpoints enumerateObjectsUsingBlock:^(NSDictionary *p, NSUInteger idx, BOOL *stop) {
+-                    if ([p[@"uuid"] isEqualToString:uuid]) {
+-                        endpoint = p;
+-                        *stop = YES;
+-                    }
+-                }];
+-
+                 [logger log:[NSString stringWithFormat:@"Chosen endpoint is %@",endpoint] level:LOGLEVEL_INFO];
+ 
+                 if (endpoint == nil) {
+@@ -175,7 +179,11 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
+                     });
+                 }
+             }
+-            Config *config = [[Config alloc] initWithEndpoint:endpoint timeoutInterval:@10];
++            NSInteger timeout = [[prefsManager objectForKey:@"timeout"] integerValue];
++            if (timeout <= 0) {
++                timeout = 30;
++            }
++            Config *config = [[Config alloc] initWithEndpoint:endpoint timeoutInterval:@(timeout)];
+             [logger log:@"Config has been created" level:LOGLEVEL_VERBOSE];
+ 
+             openai = [[OpenAI alloc] initWithConfiguration:config];
