@@ -65,13 +65,13 @@ jobs:
           rm -rf ./packages
           {
             echo "=== Building rootful (ARCHS=${DIG3ST_ARCHS}) ==="
-            THEOS_PACKAGE_SCHEME= make package FINALPACKAGE=1 ARCHS="$DIG3ST_ARCHS"
+            THEOS_PACKAGE_SCHEME= make package FINALPACKAGE=1 SDKVERSION=16.5 ARCHS="$DIG3ST_ARCHS"
             make clean
             echo "=== Building rootless (ARCHS=${DIG3ST_ARCHS}) ==="
-            THEOS_PACKAGE_SCHEME=rootless make package FINALPACKAGE=1 ARCHS="$DIG3ST_ARCHS"
+            THEOS_PACKAGE_SCHEME=rootless make package FINALPACKAGE=1 SDKVERSION=16.5 ARCHS="$DIG3ST_ARCHS"
             make clean
             echo "=== Building roothide (ARCHS=${DIG3ST_ARCHS}) ==="
-            THEOS_PACKAGE_SCHEME=roothide make package FINALPACKAGE=1 ARCHS="$DIG3ST_ARCHS"
+            THEOS_PACKAGE_SCHEME=roothide make package FINALPACKAGE=1 SDKVERSION=16.5 ARCHS="$DIG3ST_ARCHS"
             make clean
           } 2>&1 | tee /tmp/build.log
 
