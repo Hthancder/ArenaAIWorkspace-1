@@ -81,15 +81,18 @@ jobs:
       working-directory: WriteNow
       run: |
         source devkit/roothide.sh
+        set +e
         set -o pipefail
-        if ! make clean package 2>&1 | tee /tmp/build.log; then
-          grep -E "(^|\s)(error:|fatal error:|Undefined symbols|ld:)" /tmp/build.log | head -n 20 | while IFS= read -r line; do
-            echo "::error::$line"
+        make clean package 2>&1 | tee /tmp/build.log
+        STATUS=$?
+        set -e
+        if [ "$STATUS" -ne 0 ]; then
+          tail -n 50 /tmp/build.log | while IFS= read -r line; do
+            if [ -n "$line" ]; then
+              echo "::error::$line"
+            fi
           done
-          tail -n 30 /tmp/build.log | while IFS= read -r line; do
-            echo "::notice::$line"
-          done
-          exit 2
+          exit "$STATUS"
         fi
 
     - name: Read Version
