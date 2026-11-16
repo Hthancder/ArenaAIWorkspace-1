@@ -169,12 +169,16 @@ index 144a510..620e318 100644
      
 diff --git a/preferences/DigestAppDetailController.m b/preferences/DigestAppDetailController.m
 new file mode 100644
-index 0000000..0096afd
+index 0000000..394cc0b
 --- /dev/null
 +++ b/preferences/DigestAppDetailController.m
-@@ -0,0 +1,178 @@
+@@ -0,0 +1,182 @@
 +#import "../headers/HeadersPreferences.h"
 +#import <Preferences/PSListItemsController.h>
++
++@interface PSSpecifier (DigestValues)
++- (void)setValues:(NSArray *)values titles:(NSArray *)titles;
++@end
 +
 +@interface DigestAppDetailController : PSListController
 +@property (nonatomic, copy) NSString *bundleId;
