@@ -334,28 +334,39 @@ async function run(api,now,deps={},options={}){
  }
  // 15.4.3: acting is its own entry point, so every measurement path stays read-only and a stale plan cannot be replayed.
  // The journal is written before a tab is touched: an unrecorded automatic run is worse than a refused one.
- async function apply(api,result,now,deps={}){
+  // 15.3 and 15.7: the two shared "do not disturb" settings, read through the app's own checker and never
+ // re-decided here. Fail-closed in every direction: no checker, an unreadable clock and an unreadable
+ // window state all hold the run, because "unknown" is not evidence that nobody is presenting. The
+ // fullscreen hold deliberately ignores deferFullscreenNotifications - that switch says whether a
+ // notification waits, and auto-close has never let it authorise acting on a tab either.
+ const holdQuiet='Đang giờ yên lặng nên lượt Tự động nhường; chưa tab nào bị nghỉ.';
+ const holdFullscreen='Đang toàn màn hình hoặc không xác định được trạng thái cửa sổ; chưa tab nào bị nghỉ.';
+ const holdBlind='Không có nguồn kiểm tra giờ yên lặng và toàn màn hình nên lượt Tự động nhường; chưa tab nào bị nghỉ.';
+ async function holdReason(api,deps,now,data){
+  if(!deps.reminders?.isQuiet||!deps.reminders?.deferFullscreen)return holdBlind;
+  let quiet=true;
+  try{quiet=deps.reminders.isQuiet(data.quietHours,now)}catch{quiet=true}
+  if(quiet)return holdQuiet;
+  try{if(await deps.reminders.deferFullscreen(api,true))return holdFullscreen}catch{return holdFullscreen}
+  return '';
+ }
+async function apply(api,result,now,deps={}){
   if(!Number.isFinite(now)||now<=0)throw Error('Không xác định được thời gian.');
   if(!result||result.status!=='measured'||!result.action)return {status:'idle',reason:'Không có lượt đo nào được phép tự nghỉ tab; chưa tab nào bị nghỉ.'};
   let config;try{config=validate(result.config)}catch{return {status:'invalid',reason:'Cấu hình cho nghỉ theo tài nguyên không hợp lệ; chưa tab nào bị nghỉ.'}}
   if(!config.enabled||config.mode!=='auto')return {status:'idle',reason:'Chỉ mức Tự động mới được phép nghỉ tab; chưa tab nào bị nghỉ.'};
   if(!Number.isFinite(result.run?.at)||(now-result.run.at)>=2*config.everyMinutes*60000)return {status:'stale',reason:'Số đo của lượt này đã quá hai chu kỳ nên không còn là căn cứ; chưa tab nào bị nghỉ.'};
   if(!deps.discard?.request)return {status:'unmeasurable',reason:'Không có đường cho nghỉ tab ở điểm gọi này; chưa tab nào bị nghỉ.'};
-  const data=await api.storage.local.get(['automationPaused',ackKey,actionKey,'protectedDomains','protectedUrls','quietHours','deferFullscreenNotifications']);
+  const data=await api.storage.local.get(['automationPaused',ackKey,actionKey,'protectedDomains','protectedUrls','quietHours']);
   if(data.automationPaused!==undefined&&data.automationPaused!==false)return {status:'paused',reason:'Tự động hóa toàn cục đang tạm dừng; chưa tab nào bị nghỉ.'};
   if(!ackValid(data[ackKey],now))return {status:'unconfirmed',reason:'Mức Tự động chưa có xác nhận rủi ro trên máy này; chưa tab nào bị nghỉ.'};
   const last=data[actionKey];
   // A previous cycle that could not confirm its own result buys itself ten minutes of quiet, not a retry storm.
   if(last&&(last.status==='running'||last.status==='partial'||last.status==='uncertain'||last.journalFailed===true)&&Number.isFinite(last.at)&&now-last.at<uncertainWaitMinutes*60000)return {status:'waiting',reason:`Lượt tự động trước chưa xác nhận được kết quả nên Tabspace chờ ${uncertainWaitMinutes} phút; chưa tab nào bị nghỉ.`,last};
-  // 15.3: quiet hours and the fullscreen hold belong to the app, not to this block, and the unattended run
-  // honours them like every other automatic path. No ReminderTools at this call site means no claim: nothing here
-  // invents a state, and an unreadable clock or window state holds the run instead of guessing that it is safe.
-  if(deps.reminders){
-   let quiet=true;try{quiet=deps.reminders.isQuiet(data.quietHours,now)}catch{quiet=true}
-   if(quiet)return {status:'waiting',reason:'Đang giờ yên lặng nên lượt Tự động nhường; chưa tab nào bị nghỉ.'};
-   let hold=false;try{hold=await deps.reminders.deferFullscreen(api,data.deferFullscreenNotifications)}catch{hold=true}
-   if(hold)return {status:'waiting',reason:'Đang toàn màn hình hoặc không xác định được trạng thái cửa sổ; chưa tab nào bị nghỉ.'};
-  }
+  // Asked again here rather than trusted from the plan: a presentation can start between the measurement
+  // and this line, and a hold leaves no report behind because nothing about the tabs changed.
+  const held=await holdReason(api,deps,now,data);
+  if(held)return {status:'waiting',reason:held};
   let domains=[],urls=[];
   try{domains=deps.protection?deps.protection.validate(data.protectedDomains):[];urls=deps.protection?deps.protection.validateUrls(data.protectedUrls):[]}catch{return {status:'blocked',reason:'Danh sách bảo vệ không hợp lệ; chưa tab nào bị nghỉ.'}}
   const report={at:result.run.at,id:result.run.at,status:'running',counts:{requested:0,discarded:0,skipped:0,unconfirmed:0,protected:0},results:[]};
@@ -416,6 +427,6 @@ async function run(api,now,deps={},options={}){
   const stale=Number.isFinite(context.measuredAt)&&context.measuredAt>0&&Number.isFinite(context.now)&&context.now-context.measuredAt>2*c.everyMinutes*60000;
   return {kind:c.mode,text:`${modeLabel(c.mode)} · xét ${c.resources.map(name=>meta[name].short).join(', ')} · tối đa ${c.maxPerRun} tab mỗi lượt${count}${age}${stale?' · dữ liệu đo đã cũ, hãy đo lại':''}${context.missed===true?' · có chu kỳ đo đã bỏ lỡ, không chạy bù':''}${status}${acted}`};
  }
- return {prefix,settingKey,runKey,ackKey,actionKey,keys,meta,modes,combines,maxSeries,maxTrail,uncertainWaitMinutes,defaults,notMeasurable,modeLabel,integer,validate,capability,assertUsable,key,record,read,readRecords,recall,forget,remember,measure,prune,run,apply,actionLabel,ackValid,resource,row,plan,line,attention,suggestions,health,dismiss,describe,valueLabel,ageLabel,idleLabel};
+ return {prefix,settingKey,runKey,ackKey,actionKey,keys,meta,modes,combines,maxSeries,maxTrail,uncertainWaitMinutes,defaults,notMeasurable,modeLabel,integer,validate,capability,assertUsable,key,record,read,readRecords,recall,forget,remember,measure,prune,run,apply,actionLabel,ackValid,holdReason,resource,row,plan,line,attention,suggestions,health,dismiss,describe,valueLabel,ageLabel,idleLabel};
 })();
 if(typeof module!=='undefined')module.exports=AutoDiscard;

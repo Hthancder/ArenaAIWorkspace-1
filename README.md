@@ -207,3 +207,15 @@ Bổ sung nằm ngay sau các cổng đồng hồ trong `apply()` và trước k
 - `Đang toàn màn hình hoặc không xác định được trạng thái cửa sổ; chưa tab nào bị nghỉ.` — `ReminderTools.deferFullscreen(api,data.deferFullscreenNotifications)`, tức là cả trường hợp Chrome không cho biết trạng thái cửa sổ cũng **giữ**, giống cách `auto-close.js` đang chặn cứng.
 
 Cả hai trả `status:'waiting'` **trước** khi ghi `autoDiscardAction`, nên một lượt bị giữ không để lại báo cáo giả và cũng không được tính là một lượt đã chạy; không có hoàn tác nào được hứa. Việc đo không bị ảnh hưởng: số đo vẫn lấy theo chu kỳ, **Đo lại ngay** vẫn chạy, vì giữ một hành động khác với giấu một con số. Điểm này có test riêng (`auto-discard-run.test.js`), kể cả hai trường hợp "không đọc được đồng hồ" và "không đọc được cửa sổ" — thà nhường còn hơn đoán là an toàn.
+
+### Lượt Tự động nhường theo cách không đoán già (0.125)
+
+0.124 đã để `apply()` hỏi giờ yên lặng và toàn màn hình, nhưng còn hai chỗ dựa vào điều may mắn: `if(deps.reminders)` nghĩa là **không có** checker thì cổng biến mất, còn `deferFullscreen(api,data.deferFullscreenNotifications)` nghĩa là một **tùy chọn về thông báo** có thể mở đường cho việc nghỉ tab. Bản này siết cả hai:
+
+- phép kiểm tra gộp về một hàm `AutoDiscard.holdReason(api,deps,now,data)` (có trong exports, có test riêng). `apply()` gọi nó ngay trước tab đầu tiên và giữ nguyên hai câu trả lời của 0.124: `Đang giờ yên lặng nên lượt Tự động nhường; chưa tab nào bị nghỉ.` và `Đang toàn màn hình hoặc không xác định được trạng thái cửa sổ; chưa tab nào bị nghỉ.`;
+- thiếu `deps.reminders`, hoặc checker không đủ hai hàm `isQuiet`/`deferFullscreen` → `Không có nguồn kiểm tra giờ yên lặng và toàn màn hình nên lượt Tự động nhường; chưa tab nào bị nghỉ.` Không còn đường nào để "quên mà vẫn chạy";
+- toàn màn hình luôn được hỏi **thắt** (`deferFullscreen(api,true)`) cho đúng như `auto-close.js` vẫn làm: tắt "Trì hoãn khi phát hiện Chrome toàn màn hình" nay chỉ còn nghĩa là thông báo không phải chờ, chứ không phải là tab cứ việc bị nghỉ. Đường này không đọc `deferFullscreenNotifications` nữa;
+- vòng đo **không** bị giữ, và có pin cho cả hai chiều: giờ yên lặng không làm số đo cũ đi, nên khi hết giờ yên lặng chu kỳ kế tiếp vẫn còn streak CPU và danh sách nóng, chứ không phải chờ ba chu kỳ đo lại từ đầu;
+- hộp **Giới hạn và rủi ro** nêu ba trường hợp giữ lượt và nói rõ khối không có công tắc riêng; hộp **Giờ yên lặng & toàn màn hình** không còn nói mình chỉ ảnh hưởng thông báo, mà khai thêm vế về mức Tự động.
+
+Không có quyền mới, không có hoàn tác, không thêm số đo nào rời khỏi máy.

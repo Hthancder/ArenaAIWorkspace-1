@@ -1,4 +1,4 @@
-# Tabspace 0.124 — bản thử nghiệm
+# Tabspace 0.125 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -18,7 +18,7 @@
 - **Bảo vệ URL chính xác:** ngoài tên miền, có thể bảo vệ từng URL http/https trong Cài đặt. URL được chuẩn hóa, xét query và fragment; thay đổi URL có thể không còn khớp, không phân biệt được tài khoản hoặc bảo đảm dữ liệu chưa lưu. Quy tắc ngăn Tabspace đóng/nghỉ, không ngăn Chrome hay extension khác; danh sách URL có thể chứa dữ liệu nhạy cảm và được xuất vào sao lưu.
 - **Badge và popup:** trong Cài đặt có thể bật badge đếm lời nhắc preset đang chờ (mặc định tắt, chỉ hiển thị số, không hiện tên/URL). Popup hiển thị số lời nhắc và nút tới Cần chú ý ngay cả khi badge tắt. Icon Chrome có thể bị ẩn; badge không thay thế thông báo khác và thiết lập không được sao lưu.
 - **Toàn màn hình:** thông báo hệ điều hành của lời nhắc mặc định được trì hoãn khi phát hiện một cửa sổ Chrome toàn màn hình hoặc không đọc được trạng thái cửa sổ. Có thể tắt trong Giờ yên lặng; lời nhắc vẫn ở Tabspace. Khi trạng thái cho phép, cố gửi một thông báo tổng hợp nếu còn lời nhắc. Không đảm bảo nhận biết video toàn màn hình, ứng dụng khác hoặc chế độ tập trung hệ điều hành.
-- **Giờ yên lặng:** tùy chọn mặc định tắt, áp dụng thông báo hệ điều hành của lời nhắc preset và kết quả tự động đóng. Lời nhắc vẫn có trong Tabspace. Sau giờ yên lặng, cố gửi một thông báo tổng hợp nếu còn lời nhắc chờ, Chrome đang chạy và quyền được bật; thông báo có thể trễ, bị bỏ qua hoặc hệ điều hành chặn. Theo giờ máy, không bao gồm trong sao lưu.
+- **Giờ yên lặng:** tùy chọn mặc định tắt, áp dụng thông báo hệ điều hành của lời nhắc preset và kết quả tự động đóng; từ 0.124, giờ yên lặng còn giữ lượt Tự động của khối đo tài nguyên (mục 15) — đang yên lặng thì không tab nào bị tự nghỉ, còn việc đo thì vẫn chạy. Lời nhắc vẫn có trong Tabspace. Sau giờ yên lặng, cố gửi một thông báo tổng hợp nếu còn lời nhắc chờ, Chrome đang chạy và quyền được bật; thông báo có thể trễ, bị bỏ qua hoặc hệ điều hành chặn. Theo giờ máy, không bao gồm trong sao lưu.
 - **Cần chú ý:** tổng hợp lời nhắc preset đang chờ và lịch sử dọn có mục chưa xử lý/lỗi/không rõ. Có thể xem trước, nhắc lại, bỏ từng lời nhắc hoặc chọn bỏ nhiều lời nhắc đang thấy; không tự đóng tab hay tắt lịch tương lai. Lượt đang chạy cũng có thể xuất hiện, và cần kiểm tra Chrome khi trạng thái không rõ. Đây chưa phải lịch sử của mọi thông báo.
 - **Kiểm tra preset chồng lấn:** trong Preset, xem các tab web hiện mở khớp nhiều preset sau khi xét ngoại lệ từng preset, quy tắc và nhóm đích. Danh sách có cả preset chưa bật lịch hoặc thiếu nhóm; không chọn preset thắng hay tự dọn. Chỉ xét tab đang mở, không phải phân tích toàn bộ xung đột tương lai.
 - **Xem chuyển workspace:** xem nhóm đích và gợi ý tab đang mở có URL không nằm trong các nhóm đích. Chọn thủ công để tới bước lưu & đóng riêng, rồi dùng Xem & mở để chọn tab workspace cần mở; không tự đóng/mở. Đây là gợi ý theo URL, không chứng minh tab thuộc workspace nào; trạng thái trang chưa lưu có thể mất. Tab đang xem, ghim, phát âm thanh và website được bảo vệ bị giữ lại ở bước gợi ý.
@@ -333,3 +333,15 @@ Bổ sung nằm ngay sau các cổng đồng hồ trong `apply()` và trước k
 - `Đang toàn màn hình hoặc không xác định được trạng thái cửa sổ; chưa tab nào bị nghỉ.` — `ReminderTools.deferFullscreen(api,data.deferFullscreenNotifications)`, tức là cả trường hợp Chrome không cho biết trạng thái cửa sổ cũng **giữ**, giống cách `auto-close.js` đang chặn cứng.
 
 Cả hai trả `status:'waiting'` **trước** khi ghi `autoDiscardAction`, nên một lượt bị giữ không để lại báo cáo giả và cũng không được tính là một lượt đã chạy; không có hoàn tác nào được hứa. Việc đo không bị ảnh hưởng: số đo vẫn lấy theo chu kỳ, **Đo lại ngay** vẫn chạy, vì giữ một hành động khác với giấu một con số. Điểm này có test riêng (`auto-discard-run.test.js`), kể cả hai trường hợp "không đọc được đồng hồ" và "không đọc được cửa sổ" — thà nhường còn hơn đoán là an toàn.
+
+### Lượt Tự động nhường theo cách không đoán già (0.125)
+
+0.124 đã để `apply()` hỏi giờ yên lặng và toàn màn hình, nhưng còn hai chỗ dựa vào điều may mắn: `if(deps.reminders)` nghĩa là **không có** checker thì cổng biến mất, còn `deferFullscreen(api,data.deferFullscreenNotifications)` nghĩa là một **tùy chọn về thông báo** có thể mở đường cho việc nghỉ tab. Bản này siết cả hai:
+
+- phép kiểm tra gộp về một hàm `AutoDiscard.holdReason(api,deps,now,data)` (có trong exports, có test riêng). `apply()` gọi nó ngay trước tab đầu tiên và giữ nguyên hai câu trả lời của 0.124: `Đang giờ yên lặng nên lượt Tự động nhường; chưa tab nào bị nghỉ.` và `Đang toàn màn hình hoặc không xác định được trạng thái cửa sổ; chưa tab nào bị nghỉ.`;
+- thiếu `deps.reminders`, hoặc checker không đủ hai hàm `isQuiet`/`deferFullscreen` → `Không có nguồn kiểm tra giờ yên lặng và toàn màn hình nên lượt Tự động nhường; chưa tab nào bị nghỉ.` Không còn đường nào để "quên mà vẫn chạy";
+- toàn màn hình luôn được hỏi **thắt** (`deferFullscreen(api,true)`) cho đúng như `auto-close.js` vẫn làm: tắt "Trì hoãn khi phát hiện Chrome toàn màn hình" nay chỉ còn nghĩa là thông báo không phải chờ, chứ không phải là tab cứ việc bị nghỉ. Đường này không đọc `deferFullscreenNotifications` nữa;
+- vòng đo **không** bị giữ, và có pin cho cả hai chiều: giờ yên lặng không làm số đo cũ đi, nên khi hết giờ yên lặng chu kỳ kế tiếp vẫn còn streak CPU và danh sách nóng, chứ không phải chờ ba chu kỳ đo lại từ đầu;
+- hộp **Giới hạn và rủi ro** nêu ba trường hợp giữ lượt và nói rõ khối không có công tắc riêng; hộp **Giờ yên lặng & toàn màn hình** không còn nói mình chỉ ảnh hưởng thông báo, mà khai thêm vế về mức Tự động.
+
+Không có quyền mới, không có hoàn tác, không thêm số đo nào rời khỏi máy.

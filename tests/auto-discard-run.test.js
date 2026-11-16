@@ -1,4 +1,4 @@
-const assert=require('node:assert/strict'),A=require('../extension/auto-discard.js'),OpenGrace=require('../extension/open-grace.js'),Protection=require('../extension/protection.js');
+const assert=require('node:assert/strict'),A=require('../extension/auto-discard.js'),OpenGrace=require('../extension/open-grace.js'),Protection=require('../extension/protection.js'),ReminderTools=require('../extension/reminders.js');
 const now=1700000000000,bytes=megabytes=>megabytes*1048576;
 let db={},tabs=[],discards=0,removed=[];
 const tab=(id,extra={})=>({id,windowId:1,url:`https://example.com/${id}`,title:'Tab '+id,incognito:false,active:false,pinned:false,audible:false,discarded:false,lastAccessed:now-48*3600000,...extra});
@@ -27,6 +27,9 @@ const api=(live=true,extra={})=>{
 const store=(live=true,extra={})=>api(live,extra);
 const deps=(list,extra={})=>({grace:OpenGrace,protection:Protection,tabs:list,...extra});
 const record=box=>box.session()[A.runKey];
+// 0.125: the hold is fail-closed, so every call site that expects an action has to hand over a way to
+// ask about the room. This is that answer for cases that are not about the hold itself.
+const free={isQuiet:()=>false,deferFullscreen:async()=>false};
 
 (async()=>{
  tabs=[tab(1),tab(2),tab(3),tab(4,{pinned:true}),tab(5,{url:'chrome://settings'})];
@@ -137,13 +140,13 @@ const record=box=>box.session()[A.runKey];
  assert.equal((await A.run(autoBox,now,deps(tabs),{force:true})).action,null,'a forced on-demand measurement authorises nothing');
  let requested=[];
  const tool={request:async(api,tab)=>{requested.push(tab.id);return {status:tab.id===2?'discarded':'not-confirmed'}}};
- assert.match((await A.apply(autoBox,autoRun,now,{discard:tool,protection:Protection})).reason,/chưa có xác nhận rủi ro/);
+ assert.match((await A.apply(autoBox,autoRun,now,{discard:tool,protection:Protection,reminders:free})).reason,/chưa có xác nhận rủi ro/);
  assert.deepEqual([requested.length,db.autoDiscardAction,db.autoDiscardAction],[0,undefined,undefined],'an unacknowledged level touches no tab and writes no report');
  assert.match((await A.apply(autoBox,autoRun,now,{})).reason,/Không có đường cho nghỉ tab/);
  db.autoDiscardAck={at:now-1};
- assert.match((await A.apply(autoBox,autoRun,now+30*60000,{discard:tool,protection:Protection})).status,/stale/,'numbers two cycles old are not a basis for acting');
+ assert.match((await A.apply(autoBox,autoRun,now+30*60000,{discard:tool,protection:Protection,reminders:free})).status,/stale/,'numbers two cycles old are not a basis for acting');
  assert.equal(requested.length,0);
- const applied=await A.apply(autoBox,autoRun,now,{discard:tool,protection:Protection});
+ const applied=await A.apply(autoBox,autoRun,now,{discard:tool,protection:Protection,reminders:free});
  assert.deepEqual([applied.status,applied.report.counts],['applied',{requested:2,discarded:1,skipped:0,unconfirmed:1,protected:0}]);
  assert.deepEqual(requested,[2,1],'the heaviest tab is rested first, in the order the cycle chose');
  assert.deepEqual(db.autoDiscardAction.results.map(r=>[r.id,r.status]),[[2,'discarded'],[1,'unconfirmed']]);
@@ -151,25 +154,25 @@ const record=box=>box.session()[A.runKey];
  assert.match(A.actionLabel(db.autoDiscardAction,now).text,/1 tab không xác nhận được/);
  // The next cycle waits while a result is unclear, instead of hammering tabs nobody can account for.
  requested=[];
- assert.match((await A.apply(autoBox,autoRun,now+5*60000,{discard:tool,protection:Protection})).reason,/chờ 10 phút/);
+ assert.match((await A.apply(autoBox,autoRun,now+5*60000,{discard:tool,protection:Protection,reminders:free})).reason,/chờ 10 phút/);
  assert.deepEqual([requested.length,db.autoDiscardAction.status],[0,'partial']);
  requested=[];
  // Protection is checked again at the moment of acting, not only when the list was built.
  const loose=await A.run(autoBox,now+21*60000,{});
  assert.deepEqual(loose.action.chosen.map(r=>r.id),[2,1]);
  db.protectedDomains=['example.com'];
- const late=await A.apply(autoBox,loose,now+21*60000,{discard:tool,protection:Protection});
+ const late=await A.apply(autoBox,loose,now+21*60000,{discard:tool,protection:Protection,reminders:free});
  assert.deepEqual([late.report.counts.protected,late.report.counts.requested,requested.length],[2,0,0],'a domain protected after the measurement is never discarded');
  db.protectedDomains=[];
  // A cycle that found nothing to do is a clean answer, not a reason to hold the next one back.
  db.autoDiscardAction={at:now+21*60000,status:'empty',counts:{requested:0,discarded:0,skipped:0,unconfirmed:0,protected:2},results:[]};
- const nothing=await A.apply(autoBox,{...loose,action:{chosen:[]}},now+21*60000,{discard:tool,protection:Protection});
+ const nothing=await A.apply(autoBox,{...loose,action:{chosen:[]}},now+21*60000,{discard:tool,protection:Protection,reminders:free});
  assert.deepEqual([nothing.status,db.autoDiscardAction.status],['applied','empty']);
  assert.match(A.actionLabel(db.autoDiscardAction,now+21*60000).text,/nghỉ 0 tab/);
  // A run that cannot be journaled is refused before a single tab is touched.
  const blind=store(true,{failWrite:true});
  const before=requested.length;
- assert.match((await A.apply(blind,loose,now+21*60000,{discard:tool,protection:Protection})).reason,/Không ghi được nhật ký/);
+ assert.match((await A.apply(blind,loose,now+21*60000,{discard:tool,protection:Protection,reminders:free})).reason,/Không ghi được nhật ký/);
  assert.equal(requested.length,before,'no unrecorded automatic discard happens');
  // A tab that moved between the measurement and the action is skipped by the shared discard tool, and counted.
  db.protectedDomains=[];
@@ -177,7 +180,7 @@ const record=box=>box.session()[A.runKey];
  const moved=await A.run(movedBox,now+22*60000,deps(tabs));
  db.autoDiscardAck={at:now};
  delete db.autoDiscardAction;
- const movedRun=await A.apply(movedBox,{...moved,action:{chosen:[{tab:{id:9,windowId:1,url:'https://example.com/9'}}]}},now+22*60000,{discard:{request:async()=>({status:'skipped'})},protection:Protection});
+ const movedRun=await A.apply(movedBox,{...moved,action:{chosen:[{tab:{id:9,windowId:1,url:'https://example.com/9'}}]}},now+22*60000,{discard:{request:async()=>({status:'skipped'})},protection:Protection,reminders:free});
  assert.deepEqual([movedRun.report.counts,movedRun.report.status],[{requested:1,discarded:0,skipped:1,unconfirmed:0,protected:0},'complete']);
  assert.match(A.actionLabel(movedRun.report,now).text,/1 tab bị bỏ qua vì đã thay đổi/);
  assert.doesNotMatch(JSON.stringify(db.autoDiscardConfig),/ack|risk/i);
@@ -198,6 +201,30 @@ const record=box=>box.session()[A.runKey];
  const passed=await A.apply(autoBox,{...loose,action:{chosen}},now+22*60000,{discard:{request:async()=>({status:'discarded'})},protection:Protection,reminders:reminders('off','off')});
  assert.deepEqual([passed.status,db.autoDiscardAction.status,db.autoDiscardAction.counts.discarded],['applied','complete',1],'a free moment is not a reason to do nothing');
  db.autoDiscardAction=held;
+ // 0.125: the hold is fail-closed, so a caller that never handed over the checker may not act either.
+ db.autoDiscardAction=held;
+ const blindHold=await A.apply(autoBox,{...loose,action:{chosen}},now+22*60000,{discard:never,protection:Protection});
+ assert.deepEqual([blindHold.status,blindHold.report,db.autoDiscardAction],['waiting',undefined,held],'no checker means no discard and no report');
+ assert.equal(blindHold.reason,'Không có nguồn kiểm tra giờ yên lặng và toàn màn hình nên lượt Tự động nhường; chưa tab nào bị nghỉ.');
+ // Through the app's own window reader, a notification preference unlocks nothing: the hold stays.
+ const fsBox=store();
+ fsBox.windows={getAll:async()=>[{state:'locked-fullscreen'}]};
+ db.autoDiscardAction=held;
+ db.deferFullscreenNotifications=false;
+ const strict=await A.apply(fsBox,{...loose,action:{chosen}},now+22*60000,{discard:never,protection:Protection,reminders:ReminderTools});
+ assert.deepEqual([strict.status,strict.report,db.autoDiscardAction],['waiting',undefined,held],'a switch about deferring notifications does not unlock a discard');
+ assert.equal(strict.reason,'Đang toàn màn hình hoặc không xác định được trạng thái cửa sổ; chưa tab nào bị nghỉ.');
+ // The hold stops the discard and nothing else: a quiet night never makes the numbers go stale.
+ const quietCycle=await A.run(store(),now+40*60000,deps(tabs,{reminders:reminders('on','on')}));
+ assert.equal(quietCycle.status,'measured','quiet hours stop the automatic discard, never the measurement');
+ // holdReason alone, with the real checker behind it.
+ fsBox.windows={getAll:async()=>[{state:'normal'}]};
+ assert.equal(await A.holdReason(fsBox,{reminders:ReminderTools},now,{}),'','a normal window with quiet hours off is a free moment');
+ assert.match(await A.holdReason({},{reminders:ReminderTools},now,{}),/toàn màn hình/,'a build with no windows API is not read as permission to act');
+ assert.match(await A.holdReason(fsBox,{reminders:ReminderTools},now,{quietHours:{enabled:'nope',start:'22:00',end:'07:00'}}),/giờ yên lặng/,'an unreadable quiet-hours value is treated as quiet');
+ assert.equal(await A.holdReason(fsBox,{},now,{}),'Không có nguồn kiểm tra giờ yên lặng và toàn màn hình nên lượt Tự động nhường; chưa tab nào bị nghỉ.');
+ delete db.deferFullscreenNotifications;
+ assert.doesNotMatch(JSON.stringify(db.autoDiscardConfig),/ack|risk|quietHours/i);
  assert.deepEqual([discards,record(noteBox).at,db.autoDiscardRun],[0,now+60000,undefined],'the measurement path still discards nothing');
  console.log('The measurement cycle stays read-only, waits, and admits every way it cannot run: OK');
 })().catch(e=>{console.error(e);process.exitCode=1});

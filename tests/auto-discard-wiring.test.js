@@ -65,6 +65,8 @@ assert.ok(dash.includes('${autoDiscardBlock()}<div class="card settingscard"><h2
 assert.match(dash,/async function saveAutoDiscard\(\)\{\n if\(autoDiscardBusy\)return;autoDiscardBusy=true;\n try\{await saveAutoDiscardOnce\(\)\}\n catch\(error\)\{/);
 assert.match(dash,/async function saveAutoDiscardOnce\(\)\{[\s\S]{0,700}await MutationLock\.run\(async\(\)=>\{/);
 assert.match(dash,/if\(\/xác nhận rủi ro\/\.test\(error\?\.message\|\|''\)\)\{autoDiscardBusy=false;await autoDiscardRiskDialog\(\);return\}/,'the refusal turns into one dialog, never a silent default');
+assert.match(mod,/const held=await holdReason\(api,deps,now,data\);\n  if\(held\)return \{status:'waiting',reason:held\};/,'the room is asked once, in one place, and the answer ends the run');
+assert.doesNotMatch(mod,/deferFullscreen\(api,data\.deferFullscreenNotifications\)/,'a notification preference never unlocks the unattended discard');
 assert.match(dash,/const next=AutoDiscard\.assertUsable\(patch,\{\.\.\.autoDiscardContext\(\),ack:autoDiscardAck\}\);/,'the save hands the acknowledgement to the same gate that refuses without it');
 assert.match(dash,/function autoDiscardContext\(\)\{return \{measurable:autoDiscardCapability\(\)\.measurable,systemMemory:chrome\.system\?\.memory\?\.getInfo\?true:false\}\}/);
 assert.match(dash,/const stored=Number\.isFinite\(autoDiscardRun\?\.at\)\?autoDiscardRun:null;/);
