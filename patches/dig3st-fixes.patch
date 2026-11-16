@@ -1,9 +1,13 @@
 diff --git a/Makefile b/Makefile
-index 8be5b46..f6fcf7b 100644
+index 8be5b46..fa66665 100644
 --- a/Makefile
 +++ b/Makefile
-@@ -10,6 +10,10 @@ TWEAK_NAME = dig3st
- dig3st_FILES = src/PushNotification.xm src/Tweak.x src/DigestPrefsManager.m src/Alert.m ./src/OpenAI/OpenAI.m ./src/OpenAI/Config.m ./src/OpenAI/ChatQuery.m ./src/DigestLogger.m
+@@ -7,9 +7,13 @@ include $(THEOS)/makefiles/common.mk
+ 
+ TWEAK_NAME = dig3st
+ 
+-dig3st_FILES = src/PushNotification.xm src/Tweak.x src/DigestPrefsManager.m src/Alert.m ./src/OpenAI/OpenAI.m ./src/OpenAI/Config.m ./src/OpenAI/ChatQuery.m ./src/DigestLogger.m
++dig3st_FILES = src/PushNotification.xm src/Tweak.x src/DigestPrefsManager.m src/Alert.m ./src/OpenAI/OpenAI.m ./src/OpenAI/Config.m ./src/OpenAI/ChatQuery.m ./src/DigestLogger.m src/DigestBannerAnimator.m
  dig3st_CFLAGS = -fobjc-arc
  dig3st_PRIVATE_FRAMEWORKS = UserNotificationsKit
 +ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
@@ -13,54 +17,402 @@ index 8be5b46..f6fcf7b 100644
  
  include $(THEOS_MAKE_PATH)/tweak.mk
  SUBPROJECTS += preferences
+diff --git a/headers/Digest/DigestBannerAnimator.h b/headers/Digest/DigestBannerAnimator.h
+new file mode 100644
+index 0000000..8cf0b01
+--- /dev/null
++++ b/headers/Digest/DigestBannerAnimator.h
+@@ -0,0 +1,30 @@
++#import <UIKit/UIKit.h>
++
++@interface DigestBannerRenderConfig : NSObject
++@property (nonatomic, copy) NSString *badgeStyle;       // arrow, sparkles, bolt, cpu, text, none
++@property (nonatomic, copy) NSString *prefixText;       // e.g. "[AI]"
++@property (nonatomic, copy) NSString *accentColorKey;   // default, label, blue, purple, teal, orange, red, green
++@property (nonatomic, assign) BOOL boldSummary;
++@property (nonatomic, assign) BOOL showOriginalLine;
++@property (nonatomic, copy) NSString *animationStyle;   // fadeWords, typewriter, shimmer, crossfade, none
++@property (nonatomic, strong) UIImage *arrowImage;
++@end
++
++@interface DigestBannerAnimator : NSObject
+++ (UIColor *)resolveAccentColor:(NSString *)key;
+++ (NSAttributedString *)prefixAttributedStringWithConfig:(DigestBannerRenderConfig *)config
++                                               baseFont:(UIFont *)baseFont
++                                          retainedImage:(UIImage **)outImage;
+++ (void)updateLabel:(UILabel *)label
++        withSummary:(NSString *)summary
++       originalText:(NSString *)originalText
++        isStreaming:(BOOL)isStreaming
++             config:(DigestBannerRenderConfig *)config
++         layoutHost:(UIView *)layoutHost;
+++ (void)renderExpandedToLabel:(UILabel *)label
++                  withSummary:(NSString *)summary
++                 originalText:(NSString *)originalText
++                       config:(DigestBannerRenderConfig *)config
++                   layoutHost:(UIView *)layoutHost;
+++ (void)stopForLabel:(UILabel *)label;
++@end
+diff --git a/headers/HeadersPreferences.h b/headers/HeadersPreferences.h
+index 4d0bb38..09b5f09 100644
+--- a/headers/HeadersPreferences.h
++++ b/headers/HeadersPreferences.h
+@@ -23,5 +23,6 @@
+ #import "Digest/DigestSwitch.h"
+ #import "Digest/UIColor+Digest.h"
+ #import "Digest/DigestEditTextCell.h"
++#import "Digest/DigestBannerAnimator.h"
+ 
+ #define kDigestColor [UIColor colorWithRed:1 green:0 blue:0 alpha:1.0]
+\ No newline at end of file
+diff --git a/headers/HeadersTweak.h b/headers/HeadersTweak.h
+index 062b2a3..03ad3ac 100644
+--- a/headers/HeadersTweak.h
++++ b/headers/HeadersTweak.h
+@@ -12,6 +12,7 @@ void postDebugNotificationWithInfo();
+ #import "Digest/UIColor+Digest.h"
+ #import "Digest/DigestPrefsManager.h"
+ #import "Digest/DigestLogger.h"
++#import "Digest/DigestBannerAnimator.h"
+ #import "Summarize.h"
+ #import "Notification.h"
+ #import "OpenAI.h"
+diff --git a/headers/Notification.h b/headers/Notification.h
+index e8bdc8b..956b752 100644
+--- a/headers/Notification.h
++++ b/headers/Notification.h
+@@ -1,6 +1,8 @@
+ @interface NCNotificationRequest : NSObject
+ @property (nonatomic, assign) BOOL dig3st;
+ @property (nonatomic, retain) NSString * actualMessage;
++@property (nonatomic, assign) BOOL dig3stStreaming;
++@property (nonatomic, retain) NSString * dig3stStreamId;
+ @property (nonatomic, retain) NSString *sectionIdentifier;
+ @property (nonatomic, retain) NSObject *content;
+ @end
 diff --git a/headers/OpenAI.h b/headers/OpenAI.h
-index 50e6a38..4027666 100644
+index 50e6a38..f5ca835 100644
 --- a/headers/OpenAI.h
 +++ b/headers/OpenAI.h
-@@ -11,6 +11,7 @@
+@@ -4,14 +4,22 @@
+ #import "Digest/DigestPrefsManager.h"
+ #import "Digest/DigestLogger.h"
+ 
+-@interface OpenAI : NSObject
++@interface OpenAI : NSObject <NSURLSessionDataDelegate>
+ @property(nonatomic, strong, readonly) NSURLSession *session;
++@property(nonatomic, strong, readonly) NSURLSession *streamSession;
+ @property(nonatomic, strong) Config *configuration;
+ @property(nonatomic, strong) NSString *prompt;
  @property(nonatomic, strong) NSString *systemPrompt;
  @property(nonatomic, strong) DigestPrefsManager *manager;
  @property(nonatomic, strong) DigestLogger *logger;
 +@property(nonatomic, assign) BOOL autoTranslateVN;
  - (instancetype)initWithConfiguration:(Config *)configuration;
  - (void)summarize:(ChatQuery *)query completion:(void (^)(NSString *response))completion;
++- (void)summarize:(ChatQuery *)query
++    autoTranslate:(NSNumber *)autoTranslateOverride
++     customPrompt:(NSString *)customPromptOverride
++       streamMode:(BOOL)streaming
++        onPartial:(void (^)(NSString *partialText))partialBlock
++       completion:(void (^)(NSString *response))completion;
  - (void)check:(void (^)(BOOL response))completion;
-diff --git a/preferences/DigestAppSelectController.m b/preferences/DigestAppSelectController.m
-index e3804b1..02cd3e3 100644
---- a/preferences/DigestAppSelectController.m
-+++ b/preferences/DigestAppSelectController.m
-@@ -8,21 +8,87 @@ NSString* isOkToSummarize(NSString *sectionIdentifier) {
-     return @"1";
+ @end
+diff --git a/preferences/CustomCells/DigestButton.m b/preferences/CustomCells/DigestButton.m
+index f641c72..3d9d2cb 100644
+--- a/preferences/CustomCells/DigestButton.m
++++ b/preferences/CustomCells/DigestButton.m
+@@ -11,7 +11,7 @@
+             UIImage *image = [UIImage systemImageNamed:specifier.properties[@"systemIcon"] withConfiguration:config];
+             [specifier setProperty:image forKey:@"iconImage"];
+ 
+-            self.imageView.tintColor = kDigestColor;
++            self.imageView.tintColor = [specifier.properties[@"isDestructive"] boolValue] ? UIColor.systemRedColor : kDigestColor;
+         }
+ 	}
+ 
+@@ -21,8 +21,9 @@
+ -(void)layoutSubviews {
+     [super layoutSubviews];
+ 
+-    self.textLabel.textColor = UIColor.labelColor;
+-    self.textLabel.highlightedTextColor = UIColor.labelColor;
++    UIColor *txtColor = [self.specifier.properties[@"isDestructive"] boolValue] ? UIColor.systemRedColor : UIColor.labelColor;
++    self.textLabel.textColor = txtColor;
++    self.textLabel.highlightedTextColor = txtColor;
+ 
+     if (self.specifier.properties[@"systemIcon"]) {
+         self.textLabel.frame = CGRectMake(60, self.textLabel.frame.origin.y, self.textLabel.frame.size.width, self.textLabel.frame.size.height);
+diff --git a/preferences/CustomCells/DigestSwitch.m b/preferences/CustomCells/DigestSwitch.m
+index 144a510..620e318 100644
+--- a/preferences/CustomCells/DigestSwitch.m
++++ b/preferences/CustomCells/DigestSwitch.m
+@@ -15,11 +15,19 @@
+ 
+             self.imageView.tintColor = kDigestColor;
+         }
++        if (specifier.properties[@"cellSubtitleText"]) {
++            self.detailTextLabel.text = specifier.properties[@"cellSubtitleText"];
++        }
+ 	}
+ 
+ 	return self;
  }
  
-+@interface DigestAppSelectController () <UISearchResultsUpdating>
-+@property (nonatomic, strong) NSArray<PSSpecifier *> *allAppSpecifiers;
-+@property (nonatomic, strong) UISearchController *searchController;
-+@property (nonatomic, copy) NSString *searchQuery;
++-(void)refreshCellContentsWithSpecifier:(PSSpecifier *)specifier {
++    [super refreshCellContentsWithSpecifier:specifier];
++    self.detailTextLabel.text = specifier.properties[@"cellSubtitleText"];
++}
++
+ -(void)layoutSubviews {
+     [super layoutSubviews];
+     
+diff --git a/preferences/DigestAppDetailController.m b/preferences/DigestAppDetailController.m
+new file mode 100644
+index 0000000..0096afd
+--- /dev/null
++++ b/preferences/DigestAppDetailController.m
+@@ -0,0 +1,178 @@
++#import "../headers/HeadersPreferences.h"
++#import <Preferences/PSListItemsController.h>
++
++@interface DigestAppDetailController : PSListController
++@property (nonatomic, copy) NSString *bundleId;
++@property (nonatomic, copy) NSString *appName;
++@property (nonatomic, assign) BOOL hasAppearedOnce;
 +@end
 +
- @implementation DigestAppSelectController
++static id isAppDefaultEnabled(NSString *bundleId) {
++	NSArray *defaultEnabled = @[@"com.apple.MobileSMS", @"com.apple.news", @"ph.telegra.Telegraph", @"com.apple.mobilemail"];
++	return [defaultEnabled containsObject:bundleId] ? @YES : @NO;
++}
++
++@implementation DigestAppDetailController
++
++- (void)viewDidLoad {
++	[super viewDidLoad];
++	self.title = self.appName.length > 0 ? self.appName : self.bundleId;
++}
++
++- (void)viewWillAppear:(BOOL)animated {
++	[super viewWillAppear:animated];
++	if (self.hasAppearedOnce) {
++		[self reloadSpecifiers];
++	}
++	self.hasAppearedOnce = YES;
++}
++
++- (NSArray *)specifiers {
++	if (!_specifiers && self.bundleId.length > 0) {
++		NSMutableArray *list = [NSMutableArray new];
++
++		PSSpecifier *grp1 = [PSSpecifier groupSpecifierWithName:@"App Summarization"];
++		[grp1 setProperty:@"Override global settings exclusively for this app. Changes apply immediately without respring." forKey:@"footerText"];
++		[list addObject:grp1];
++
++		PSSpecifier *enSp = [PSSpecifier preferenceSpecifierNamed:@"Enable Summarization"
++														   target:self
++															  set:@selector(setPreferenceValue:specifier:)
++															  get:@selector(readPreferenceValue:)
++														   detail:Nil
++															 cell:PSSwitchCell
++															 edit:Nil];
++		[enSp setProperty:self.bundleId forKey:@"key"];
++		[enSp setProperty:NSClassFromString(@"DigestSwitch") forKey:@"cellClass"];
++		[enSp setProperty:@"power" forKey:@"systemIcon"];
++		[list addObject:enSp];
++
++		PSSpecifier *grp2 = [PSSpecifier groupSpecifierWithName:@"Per-App Overrides"];
++		[list addObject:grp2];
++
++		NSArray *triTitles = @[@"Default (Global)", @"Force ON", @"Force OFF"];
++		NSArray *triValues = @[@"default", @"on", @"off"];
++
++		PSSpecifier *ctxSp = [PSSpecifier preferenceSpecifierNamed:@"Context Buffer"
++															target:self
++															   set:@selector(setPreferenceValue:specifier:)
++															   get:@selector(readPreferenceValue:)
++															detail:NSClassFromString(@"PSListItemsController")
++															  cell:PSLinkListCell
++															  edit:Nil];
++		[ctxSp setProperty:[NSString stringWithFormat:@"appCtx_%@", self.bundleId] forKey:@"key"];
++		[ctxSp setProperty:@"default" forKey:@"default"];
++		[ctxSp setProperty:@"com.uncore.dig3st" forKey:@"defaults"];
++		[ctxSp setValues:triValues titles:triTitles];
++		[list addObject:ctxSp];
++
++		PSSpecifier *trSp = [PSSpecifier preferenceSpecifierNamed:@"Auto-Translate to VN"
++														   target:self
++															  set:@selector(setPreferenceValue:specifier:)
++															  get:@selector(readPreferenceValue:)
++														   detail:NSClassFromString(@"PSListItemsController")
++															 cell:PSLinkListCell
++															 edit:Nil];
++		[trSp setProperty:[NSString stringWithFormat:@"appTrans_%@", self.bundleId] forKey:@"key"];
++		[trSp setProperty:@"default" forKey:@"default"];
++		[trSp setProperty:@"com.uncore.dig3st" forKey:@"defaults"];
++		[trSp setValues:triValues titles:triTitles];
++		[list addObject:trSp];
++
++		PSSpecifier *stSp = [PSSpecifier preferenceSpecifierNamed:@"Streaming Text"
++														   target:self
++															  set:@selector(setPreferenceValue:specifier:)
++															  get:@selector(readPreferenceValue:)
++														   detail:NSClassFromString(@"PSListItemsController")
++															 cell:PSLinkListCell
++															 edit:Nil];
++		[stSp setProperty:[NSString stringWithFormat:@"appStream_%@", self.bundleId] forKey:@"key"];
++		[stSp setProperty:@"default" forKey:@"default"];
++		[stSp setProperty:@"com.uncore.dig3st" forKey:@"defaults"];
++		[stSp setValues:triValues titles:triTitles];
++		[list addObject:stSp];
++
++		PSSpecifier *prSp = [PSSpecifier preferenceSpecifierNamed:@"Custom App Prompt"
++														   target:self
++															  set:Nil
++															  get:Nil
++														   detail:NSClassFromString(@"DigestPromptEditorController")
++															 cell:PSLinkCell
++															 edit:Nil];
++		NSString *pKey = [NSString stringWithFormat:@"appPrompt_%@", self.bundleId];
++		DigestPrefsManager *manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
++		[manager synchronize];
++		NSString *rawPrompt = [manager objectForKey:pKey];
++		NSString *curPrompt = ([rawPrompt isKindOfClass:[NSString class]]) ? [[rawPrompt stringByReplacingOccurrencesOfString:@"\r\n" withString:@" "] stringByReplacingOccurrencesOfString:@"\n" withString:@" "] : nil;
++		[prSp setProperty:NSClassFromString(@"DigestSubtitleLinkCell") forKey:@"cellClass"];
++		[prSp setProperty:@"text.bubble" forKey:@"systemIcon"];
++		[prSp setProperty:pKey forKey:@"prefKey"];
++		[prSp setProperty:[NSString stringWithFormat:@"Prompt (%@)", self.appName ?: self.bundleId] forKey:@"editorTitle"];
++		[prSp setProperty:([curPrompt isKindOfClass:[NSString class]] && curPrompt.length > 0) ? curPrompt : @"Using global prompt" forKey:@"cellSubtitleText"];
++		[list addObject:prSp];
++
++		PSSpecifier *grp3 = [PSSpecifier groupSpecifierWithName:@""];
++		[list addObject:grp3];
++
++		PSSpecifier *rstSp = [PSSpecifier preferenceSpecifierNamed:@"Reset App Overrides"
++															target:self
++															   set:Nil
++															   get:Nil
++															detail:Nil
++															  cell:PSButtonCell
++															  edit:Nil];
++		[rstSp setButtonAction:@selector(resetAppOverrides)];
++		[rstSp setProperty:NSClassFromString(@"DigestButton") forKey:@"cellClass"];
++		[rstSp setProperty:@"gobackward" forKey:@"systemIcon"];
++		[rstSp setProperty:@YES forKey:@"isDestructive"];
++		[list addObject:rstSp];
++
++		_specifiers = list;
++	}
++	return _specifiers;
++}
++
++- (id)readPreferenceValue:(PSSpecifier *)specifier {
++	DigestPrefsManager *manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
++	CFPreferencesAppSynchronize(CFSTR("com.uncore.dig3st"));
++	[manager synchronize];
++	NSString *key = specifier.properties[@"key"];
++	id val = [manager objectForKey:key];
++	if (val == nil && [key isEqualToString:self.bundleId]) {
++		return isAppDefaultEnabled(self.bundleId);
++	}
++	return val ?: specifier.properties[@"default"];
++}
++
++- (void)setPreferenceValue:(id)value specifier:(PSSpecifier *)specifier {
++	[super setPreferenceValue:value specifier:specifier];
++	NSString *key = specifier.properties[@"key"];
++	if (key.length > 0) {
++		DigestPrefsManager *manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
++		[manager setObject:value forKey:key];
++		[manager synchronize];
++		CFPreferencesSetAppValue((__bridge CFStringRef)key, (__bridge CFPropertyListRef)value, CFSTR("com.uncore.dig3st"));
++		CFPreferencesAppSynchronize(CFSTR("com.uncore.dig3st"));
++		CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), (CFStringRef)@"com.uncore.dig3st/preferences.changed", NULL, NULL, true);
++	}
++}
++
++- (void)resetAppOverrides {
++	DigestPrefsManager *manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
++	NSArray *keys = @[
++		[NSString stringWithFormat:@"appCtx_%@", self.bundleId],
++		[NSString stringWithFormat:@"appTrans_%@", self.bundleId],
++		[NSString stringWithFormat:@"appStream_%@", self.bundleId],
++		[NSString stringWithFormat:@"appPrompt_%@", self.bundleId]
++	];
++	for (NSString *k in keys) {
++		[manager removeObjectForKey:k];
++		CFPreferencesSetAppValue((__bridge CFStringRef)k, NULL, CFSTR("com.uncore.dig3st"));
++	}
++	[manager synchronize];
++	CFPreferencesAppSynchronize(CFSTR("com.uncore.dig3st"));
++	CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), (CFStringRef)@"com.uncore.dig3st/preferences.changed", NULL, NULL, true);
++	[self reloadSpecifiers];
++}
++
++@end
+diff --git a/preferences/DigestAppSelectController.m b/preferences/DigestAppSelectController.m
+index e3804b1..cd7ecc5 100644
+--- a/preferences/DigestAppSelectController.m
++++ b/preferences/DigestAppSelectController.m
+@@ -1,28 +1,154 @@
+-// https://github.com/NoisyFlake/Velvet2/blob/master/preferences/Velvet2AppSelectController.m
+ #import "../headers/HeadersPreferences.h"
  
+-NSString* isOkToSummarize(NSString *sectionIdentifier) {
+-    if ([sectionIdentifier hasPrefix:@"com.apple"]) {
+-        return @"0";
+-    }
+-    return @"1";
++@interface DigestAppDetailController : PSListController
++@property (nonatomic, copy) NSString *bundleId;
++@property (nonatomic, copy) NSString *appName;
++@end
++
++@interface DigestAppSelectController () <UISearchResultsUpdating>
++@property (nonatomic, strong) NSArray<PSSpecifier *> *allAppSpecifiers;
++@property (nonatomic, copy) NSString *searchQuery;
++@property (nonatomic, strong) UISearchController *searchController;
++@property (nonatomic, assign) BOOL hasAppearedOnce;
++@end
++
++static id isOkToSummarize(NSString *bundleId) {
++	NSArray *defaultEnabled = @[@"com.apple.MobileSMS", @"com.apple.news", @"ph.telegra.Telegraph", @"com.apple.mobilemail"];
++	if ([defaultEnabled containsObject:bundleId]) {
++		return @YES;
++	}
++	return @NO;
+ }
+ 
+ @implementation DigestAppSelectController
++- (instancetype)init {
++    self = [super init];
++    if (self) {
++        self.manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
++    }
++    return self;
++}
++
 +- (void)viewDidLoad {
 +	[super viewDidLoad];
 +
-+	self.searchController = [[UISearchController alloc] initWithSearchResultsController:nil];
-+	self.searchController.searchResultsUpdater = self;
-+	self.searchController.obscuresBackgroundDuringPresentation = NO;
-+	self.searchController.hidesNavigationBarDuringPresentation = NO;
-+	self.searchController.searchBar.placeholder = @"Search name or bundle ID";
-+	self.navigationItem.searchController = self.searchController;
++	UISearchController *sc = [[UISearchController alloc] initWithSearchResultsController:nil];
++	sc.searchResultsUpdater = self;
++	sc.obscuresBackgroundDuringPresentation = NO;
++	sc.searchBar.placeholder = @"Search app name or bundle ID";
++	self.searchController = sc;
++	self.navigationItem.searchController = sc;
 +	self.navigationItem.hidesSearchBarWhenScrolling = NO;
 +	self.definesPresentationContext = YES;
 +
 +	__weak typeof(self) weakSelf = self;
-+	UIAction *enableAll = [UIAction actionWithTitle:@"Enable All / Visible"
++	UIAction *enableAll = [UIAction actionWithTitle:@"Enable All Listed"
 +											  image:[UIImage systemImageNamed:@"checkmark.circle"]
 +										 identifier:nil
 +											handler:^(__kindof UIAction *action) {
 +		[weakSelf setVisibleAppsEnabled:@YES onlyNonApple:NO];
 +	}];
-+	UIAction *disableAll = [UIAction actionWithTitle:@"Disable All / Visible"
++	UIAction *disableAll = [UIAction actionWithTitle:@"Disable All Listed"
 +											   image:[UIImage systemImageNamed:@"xmark.circle"]
 +										  identifier:nil
 +											 handler:^(__kindof UIAction *action) {
@@ -75,6 +427,53 @@ index e3804b1..02cd3e3 100644
 +
 +	UIMenu *menu = [UIMenu menuWithTitle:@"" children:@[enableAll, disableAll, thirdPartyOnly]];
 +	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"ellipsis.circle"] menu:menu];
++}
++
++- (void)viewWillAppear:(BOOL)animated {
++	[super viewWillAppear:animated];
++	if (self.hasAppearedOnce) {
++		[self refreshOverrideSubtitles];
++		[self reloadSpecifiers];
++	}
++	self.hasAppearedOnce = YES;
++}
++
++- (NSString *)overrideSummaryForBundleId:(NSString *)bundleId {
++	if (bundleId.length == 0) return nil;
++	DigestPrefsManager *manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
++	NSMutableArray *parts = [NSMutableArray new];
++	NSString *ctx = [manager objectForKey:[NSString stringWithFormat:@"appCtx_%@", bundleId]];
++	if ([ctx isEqualToString:@"on"]) [parts addObject:@"Context: ON"];
++	else if ([ctx isEqualToString:@"off"]) [parts addObject:@"Context: OFF"];
++
++	NSString *tr = [manager objectForKey:[NSString stringWithFormat:@"appTrans_%@", bundleId]];
++	if ([tr isEqualToString:@"on"]) [parts addObject:@"VN: ON"];
++	else if ([tr isEqualToString:@"off"]) [parts addObject:@"VN: OFF"];
++
++	NSString *st = [manager objectForKey:[NSString stringWithFormat:@"appStream_%@", bundleId]];
++	if ([st isEqualToString:@"on"]) [parts addObject:@"Stream: ON"];
++	else if ([st isEqualToString:@"off"]) [parts addObject:@"Stream: OFF"];
++
++	NSString *pr = [manager objectForKey:[NSString stringWithFormat:@"appPrompt_%@", bundleId]];
++	if ([pr isKindOfClass:[NSString class]] && pr.length > 0) [parts addObject:@"Custom Prompt"];
++
++	return parts.count > 0 ? [parts componentsJoinedByString:@" · "] : nil;
++}
++
++- (void)refreshOverrideSubtitles {
++	DigestPrefsManager *manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
++	CFPreferencesAppSynchronize(CFSTR("com.uncore.dig3st"));
++	[manager synchronize];
++	for (PSSpecifier *sp in self.allAppSpecifiers) {
++		NSString *bid = sp.properties[@"digestKey"];
++		if (!bid) continue;
++		NSString *summary = [self overrideSummaryForBundleId:bid];
++		if (summary) {
++			[sp setProperty:summary forKey:@"cellSubtitleText"];
++		} else {
++			[sp removePropertyForKey:@"cellSubtitleText"];
++		}
++	}
 +}
 +
 +- (void)setVisibleAppsEnabled:(NSNumber *)enabled onlyNonApple:(BOOL)onlyNonApple {
@@ -100,7 +499,7 @@ index e3804b1..02cd3e3 100644
 +		[self reloadSpecifiers];
 +	}
 +}
-+
+ 
  - (NSArray *)specifiers {
 -	if (!_specifiers) {
 -        NSMutableArray *mutableSpecifiers = [NSMutableArray new];
@@ -125,7 +524,7 @@ index e3804b1..02cd3e3 100644
  										target:self
  										set:@selector(setPreferenceValue:specifier:)
  										get:@selector(readPreferenceValue:)
-@@ -31,39 +97,61 @@ NSString* isOkToSummarize(NSString *sectionIdentifier) {
+@@ -31,39 +157,78 @@ NSString* isOkToSummarize(NSString *sectionIdentifier) {
  										edit:Nil];
  
  				[specifier setProperty:app.applicationIdentifier forKey:@"digestKey"];
@@ -152,22 +551,27 @@ index e3804b1..02cd3e3 100644
 +		}
 +		[mutableSpecifiers sortUsingDescriptors:@[[NSSortDescriptor sortDescriptorWithKey:@"name" ascending:YES selector:@selector(caseInsensitiveCompare:)]]];
 +		self.allAppSpecifiers = [mutableSpecifiers copy];
++		[self refreshOverrideSubtitles];
 +	}
++
++	if (!_specifiers) {
++		NSMutableArray *result = [NSMutableArray new];
++		PSSpecifier *hintGroup = [PSSpecifier groupSpecifierWithName:@"Installed Apps"];
++		[hintGroup setProperty:@"Flip switch to Enable/Disable · Tap app name to customize Context, VN Translate, Streaming & Prompt." forKey:@"footerText"];
++		[result addObject:hintGroup];
  
 -				if (iconResized) {
 -					[specifier setProperty:iconResized forKey:@"iconImage"];
-+	if (!_specifiers) {
 +		if (self.searchQuery.length == 0) {
-+			_specifiers = [self.allAppSpecifiers mutableCopy];
++			[result addObjectsFromArray:self.allAppSpecifiers];
 +		} else {
-+			NSMutableArray *filtered = [NSMutableArray new];
 +			NSStringCompareOptions opts = NSCaseInsensitiveSearch | NSDiacriticInsensitiveSearch;
 +			for (PSSpecifier *specifier in self.allAppSpecifiers) {
 +				NSString *name = specifier.name ?: @"";
 +				NSString *bundleId = specifier.properties[@"digestKey"] ?: @"";
 +				if ([name rangeOfString:self.searchQuery options:opts].location != NSNotFound ||
 +					[bundleId rangeOfString:self.searchQuery options:NSCaseInsensitiveSearch].location != NSNotFound) {
-+					[filtered addObject:specifier];
++					[result addObject:specifier];
  				}
 -				
 -            }
@@ -176,12 +580,24 @@ index e3804b1..02cd3e3 100644
 - 
 -        _specifiers = mutableSpecifiers;
 +			}
-+			_specifiers = filtered;
 +		}
++		_specifiers = result;
  	}
  
  	return _specifiers;
  }
++
++- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
++	[tableView deselectRowAtIndexPath:indexPath animated:YES];
++	PSSpecifier *specifier = [self specifierAtIndexPath:indexPath];
++	NSString *bundleId = specifier.properties[@"digestKey"];
++	if (bundleId.length == 0) return;
++
++	DigestAppDetailController *detail = [NSClassFromString(@"DigestAppDetailController") new];
++	detail.bundleId = bundleId;
++	detail.appName = specifier.name;
++	[self.navigationController pushViewController:detail animated:YES];
++}
 +
  - (void)setPreferenceValue:(id)value specifier:(PSSpecifier *)specifier {
  	DigestPrefsManager *manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
@@ -206,15 +622,20 @@ index e3804b1..02cd3e3 100644
  		value = isOkToSummarize(specifier.properties[@"digestKey"]);
 diff --git a/preferences/DigestAppearanceController.m b/preferences/DigestAppearanceController.m
 new file mode 100644
-index 0000000..5081de5
+index 0000000..28d8635
 --- /dev/null
 +++ b/preferences/DigestAppearanceController.m
-@@ -0,0 +1,54 @@
+@@ -0,0 +1,251 @@
 +#import "../headers/HeadersPreferences.h"
 +#import <Preferences/PSListItemsController.h>
 +
 +@interface DigestAppearanceController : PSListController
 +@property (nonatomic, assign) BOOL hasAppearedOnce;
++@property (nonatomic, strong) UILabel *previewBodyLabel;
++@property (nonatomic, strong) UIView *previewCardView;
++@property (nonatomic, strong) UIButton *demoButton;
++@property (nonatomic, strong) UIImage *arrowImage;
++@property (nonatomic, assign) NSUInteger demoGeneration;
 +@end
 +
 +@implementation DigestAppearanceController
@@ -226,17 +647,208 @@ index 0000000..5081de5
 +	return _specifiers;
 +}
 +
++- (void)viewDidLoad {
++	[super viewDidLoad];
++	NSString *arrowPath = [[NSBundle bundleForClass:self.class] pathForResource:@"arrow" ofType:@"png"];
++	if (arrowPath) {
++		self.arrowImage = [UIImage imageWithContentsOfFile:arrowPath];
++	}
++	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(textFieldChanged:) name:UITextFieldTextDidChangeNotification object:nil];
++}
++
++- (void)dealloc {
++	[[NSNotificationCenter defaultCenter] removeObserver:self name:UITextFieldTextDidChangeNotification object:nil];
++	[DigestBannerAnimator stopForLabel:self.previewBodyLabel];
++}
++
 +- (void)viewWillAppear:(BOOL)animated {
 +	[super viewWillAppear:animated];
 +	if (self.hasAppearedOnce) {
 +		[self reloadSpecifiers];
 +	}
 +	self.hasAppearedOnce = YES;
++	[self refreshPreviewBannerStreaming:NO text:nil];
 +}
 +
 +- (void)viewWillDisappear:(BOOL)animated {
 +	[super viewWillDisappear:animated];
++	self.demoGeneration++;
++	[DigestBannerAnimator stopForLabel:self.previewBodyLabel];
 +	[self.view endEditing:YES];
++}
++
++- (void)viewDidLayoutSubviews {
++	[super viewDidLayoutSubviews];
++	if (!self.table.tableHeaderView || ABS(self.table.tableHeaderView.frame.size.width - self.view.frame.size.width) > 1.0) {
++		[self setupPreviewHeader];
++	}
++}
++
++- (void)textFieldChanged:(NSNotification *)note {
++	UITextField *tf = note.object;
++	if (![tf isKindOfClass:[UITextField class]]) return;
++	if (![tf isDescendantOfView:self.table]) return;
++	NSString *txt = tf.text ?: @"";
++	DigestPrefsManager *manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
++	[manager setObject:txt forKey:@"bannerPrefixText"];
++	[manager synchronize];
++	[self refreshPreviewBannerStreaming:NO text:nil];
++}
++
++- (DigestBannerRenderConfig *)currentPreviewConfig {
++	DigestPrefsManager *manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
++	CFPreferencesAppSynchronize(CFSTR("com.uncore.dig3st"));
++	[manager synchronize];
++
++	DigestBannerRenderConfig *cfg = [DigestBannerRenderConfig new];
++	NSString *badge = [manager objectForKey:@"bannerBadgeStyle"];
++	cfg.badgeStyle = ([badge isKindOfClass:[NSString class]] && badge.length > 0) ? badge : @"arrow";
++	NSString *prefix = [manager objectForKey:@"bannerPrefixText"];
++	cfg.prefixText = ([prefix isKindOfClass:[NSString class]] && prefix.length > 0) ? prefix : @"[AI]";
++	NSString *accent = [manager objectForKey:@"bannerAccentColor"];
++	cfg.accentColorKey = ([accent isKindOfClass:[NSString class]] && accent.length > 0) ? accent : @"default";
++	cfg.boldSummary = [[manager objectForKey:@"bannerBoldSummary"] boolValue];
++	cfg.showOriginalLine = [[manager objectForKey:@"bannerShowOriginal"] boolValue];
++	NSString *anim = [manager objectForKey:@"streamAnimationStyle"];
++	cfg.animationStyle = ([anim isKindOfClass:[NSString class]] && anim.length > 0) ? anim : @"fadeWords";
++	cfg.arrowImage = self.arrowImage;
++	return cfg;
++}
++
++- (void)setupPreviewHeader {
++	CGFloat w = self.view.frame.size.width;
++	if (w <= 0) return;
++
++	UIView *container = [[UIView alloc] initWithFrame:CGRectMake(0, 0, w, 152)];
++
++	UIView *card = [UIView new];
++	card.translatesAutoresizingMaskIntoConstraints = NO;
++	card.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];
++	card.layer.cornerRadius = 18.0;
++	card.layer.borderWidth = 0.5;
++	card.layer.borderColor = [UIColor separatorColor].CGColor;
++	card.layer.shadowColor = [UIColor blackColor].CGColor;
++	card.layer.shadowOpacity = 0.08;
++	card.layer.shadowRadius = 10.0;
++	card.layer.shadowOffset = CGSizeMake(0, 4);
++	self.previewCardView = card;
++
++	UIImageView *appIcon = [UIImageView new];
++	appIcon.translatesAutoresizingMaskIntoConstraints = NO;
++	appIcon.image = [UIImage systemImageNamed:@"message.fill"];
++	appIcon.tintColor = [UIColor systemBlueColor];
++	appIcon.contentMode = UIViewContentModeScaleAspectFit;
++
++	UILabel *appLabel = [UILabel new];
++	appLabel.translatesAutoresizingMaskIntoConstraints = NO;
++	appLabel.text = @"LIVE PREVIEW · ZALO";
++	appLabel.font = [UIFont systemFontOfSize:11.0 weight:UIFontWeightSemibold];
++	appLabel.textColor = [UIColor secondaryLabelColor];
++
++	UIButtonConfiguration *bcfg = [UIButtonConfiguration tintedButtonConfiguration];
++	bcfg.title = @"▶ Test Stream";
++	bcfg.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
++	bcfg.contentInsets = NSDirectionalEdgeInsetsMake(4, 10, 4, 10);
++	bcfg.titleTextAttributesTransformer = ^NSDictionary<NSAttributedStringKey, id> *(NSDictionary<NSAttributedStringKey, id> *incoming) {
++		NSMutableDictionary *d = [incoming mutableCopy];
++		d[NSFontAttributeName] = [UIFont systemFontOfSize:11.5 weight:UIFontWeightSemibold];
++		return d;
++	};
++	UIButton *demoBtn = [UIButton buttonWithConfiguration:bcfg primaryAction:nil];
++	demoBtn.translatesAutoresizingMaskIntoConstraints = NO;
++	[demoBtn addTarget:self action:@selector(playStreamDemo) forControlEvents:UIControlEventTouchUpInside];
++	self.demoButton = demoBtn;
++
++	UILabel *titleLbl = [UILabel new];
++	titleLbl.translatesAutoresizingMaskIntoConstraints = NO;
++	titleLbl.text = @"Minh · Nhóm Dự Án";
++	titleLbl.font = [UIFont systemFontOfSize:14.0 weight:UIFontWeightSemibold];
++	titleLbl.textColor = [UIColor labelColor];
++
++	UILabel *bodyLbl = [UILabel new];
++	bodyLbl.translatesAutoresizingMaskIntoConstraints = NO;
++	bodyLbl.font = [UIFont systemFontOfSize:13.5];
++	bodyLbl.textColor = [UIColor labelColor];
++	bodyLbl.numberOfLines = 4;
++	self.previewBodyLabel = bodyLbl;
++
++	[card addSubview:appIcon];
++	[card addSubview:appLabel];
++	[card addSubview:demoBtn];
++	[card addSubview:titleLbl];
++	[card addSubview:bodyLbl];
++	[container addSubview:card];
++
++	[NSLayoutConstraint activateConstraints:@[
++		[card.topAnchor constraintEqualToAnchor:container.topAnchor constant:12.0],
++		[card.bottomAnchor constraintEqualToAnchor:container.bottomAnchor constant:-6.0],
++		[card.leadingAnchor constraintEqualToAnchor:container.leadingAnchor constant:16.0],
++		[card.trailingAnchor constraintEqualToAnchor:container.trailingAnchor constant:-16.0],
++
++		[appIcon.topAnchor constraintEqualToAnchor:card.topAnchor constant:12.0],
++		[appIcon.leadingAnchor constraintEqualToAnchor:card.leadingAnchor constant:14.0],
++		[appIcon.widthAnchor constraintEqualToConstant:16.0],
++		[appIcon.heightAnchor constraintEqualToConstant:16.0],
++
++		[appLabel.centerYAnchor constraintEqualToAnchor:appIcon.centerYAnchor],
++		[appLabel.leadingAnchor constraintEqualToAnchor:appIcon.trailingAnchor constant:6.0],
++
++		[demoBtn.centerYAnchor constraintEqualToAnchor:appIcon.centerYAnchor],
++		[demoBtn.trailingAnchor constraintEqualToAnchor:card.trailingAnchor constant:-12.0],
++
++		[titleLbl.topAnchor constraintEqualToAnchor:appIcon.bottomAnchor constant:6.0],
++		[titleLbl.leadingAnchor constraintEqualToAnchor:card.leadingAnchor constant:14.0],
++		[titleLbl.trailingAnchor constraintEqualToAnchor:card.trailingAnchor constant:-14.0],
++
++		[bodyLbl.topAnchor constraintEqualToAnchor:titleLbl.bottomAnchor constant:3.0],
++		[bodyLbl.leadingAnchor constraintEqualToAnchor:card.leadingAnchor constant:14.0],
++		[bodyLbl.trailingAnchor constraintEqualToAnchor:card.trailingAnchor constant:-14.0],
++		[bodyLbl.bottomAnchor constraintLessThanOrEqualToAnchor:card.bottomAnchor constant:-12.0]
++	]];
++
++	self.table.tableHeaderView = container;
++	[self refreshPreviewBannerStreaming:NO text:nil];
++}
++
++- (void)refreshPreviewBannerStreaming:(BOOL)streaming text:(NSString *)overrideText {
++	if (!self.previewBodyLabel) return;
++	NSString *sampleSummary = overrideText ?: @"Minh hẹn 7h tối nay gặp tại quán cũ Nguyễn Huệ để chốt slide.";
++	NSString *sampleOriginal = @"Ê tối nay rảnh không, tầm 7h qua quán cũ chỗ Nguyễn Huệ ngồi chút nha để mình chốt nốt slide thuyết trình ngày mai luôn.";
++	DigestBannerRenderConfig *cfg = [self currentPreviewConfig];
++	[DigestBannerAnimator updateLabel:self.previewBodyLabel
++						  withSummary:sampleSummary
++						 originalText:sampleOriginal
++						  isStreaming:streaming
++							   config:cfg
++						   layoutHost:self.previewCardView];
++}
++
++- (void)playStreamDemo {
++	self.demoGeneration++;
++	NSUInteger gen = self.demoGeneration;
++	[DigestBannerAnimator stopForLabel:self.previewBodyLabel];
++
++	NSArray<NSString *> *steps = @[
++		@"Minh",
++		@"Minh hẹn 7h",
++		@"Minh hẹn 7h tối nay",
++		@"Minh hẹn 7h tối nay gặp tại",
++		@"Minh hẹn 7h tối nay gặp tại quán cũ",
++		@"Minh hẹn 7h tối nay gặp tại quán cũ Nguyễn Huệ",
++		@"Minh hẹn 7h tối nay gặp tại quán cũ Nguyễn Huệ để chốt slide."
++	];
++
++	__weak typeof(self) weakSelf = self;
++	[self refreshPreviewBannerStreaming:YES text:@"Đang tóm tắt…"];
++	for (NSUInteger i = 0; i < steps.count; i++) {
++		BOOL isLast = (i == steps.count - 1);
++		double delay = 0.25 + (i * 0.22);
++		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
++			__strong typeof(weakSelf) strongSelf = weakSelf;
++			if (!strongSelf || strongSelf.demoGeneration != gen) return;
++			[strongSelf refreshPreviewBannerStreaming:!isLast text:steps[i]];
++		});
++	}
 +}
 +
 +- (id)readPreferenceValue:(PSSpecifier *)specifier {
@@ -261,6 +873,7 @@ index 0000000..5081de5
 +		CFPreferencesAppSynchronize(CFSTR("com.uncore.dig3st"));
 +		CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), (CFStringRef)@"com.uncore.dig3st/preferences.changed", NULL, NULL, true);
 +	}
++	[self refreshPreviewBannerStreaming:NO text:nil];
 +}
 +
 +@end
@@ -408,11 +1021,216 @@ index 0d00746..8106474 100644
      return cell;
  }
  
+diff --git a/preferences/DigestPromptEditorController.m b/preferences/DigestPromptEditorController.m
+new file mode 100644
+index 0000000..86e41c1
+--- /dev/null
++++ b/preferences/DigestPromptEditorController.m
+@@ -0,0 +1,189 @@
++#import "../headers/HeadersPreferences.h"
++
++@interface DigestPromptEditorController : PSViewController <UITextViewDelegate>
++@property (nonatomic, strong) UITextView *textView;
++@property (nonatomic, strong) UILabel *statsLabel;
++@property (nonatomic, strong) UILabel *hintLabel;
++@property (nonatomic, strong) NSLayoutConstraint *bottomConstraint;
++@property (nonatomic, copy) NSString *prefKey;
++@property (nonatomic, copy) NSString *defaultText;
++@end
++
++@implementation DigestPromptEditorController
++
++- (void)viewDidLoad {
++    [super viewDidLoad];
++    self.view.backgroundColor = [UIColor systemGroupedBackgroundColor];
++
++    self.prefKey = self.specifier.properties[@"prefKey"] ?: (self.specifier.properties[@"key"] ?: @"prompt");
++    NSString *title = self.specifier.properties[@"editorTitle"] ?: (self.specifier.name ?: @"Edit Prompt");
++    self.title = title;
++
++    if ([self.prefKey isEqualToString:@"systemPrompt"]) {
++        self.defaultText = @"You are an assistant that summarizes notifications concisely in the same language as the original notification. Output only the summary.";
++    } else if ([self.prefKey hasPrefix:@"appPrompt_"]) {
++        self.defaultText = @"";
++    } else {
++        self.defaultText = @"Summarize this notification concisely in its original language (max 12-15 words). Preserve names, numbers, amounts, codes, and times:";
++    }
++
++    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Save" style:UIBarButtonItemStyleDone target:self action:@selector(saveAndBack)];
++
++    self.hintLabel = [UILabel new];
++    self.hintLabel.translatesAutoresizingMaskIntoConstraints = NO;
++    self.hintLabel.font = [UIFont systemFontOfSize:13.0];
++    self.hintLabel.textColor = [UIColor secondaryLabelColor];
++    self.hintLabel.numberOfLines = 0;
++    if ([self.prefKey hasPrefix:@"appPrompt_"]) {
++        self.hintLabel.text = @"Custom prompt only for this app. Leave empty to use the global prompt.";
++    } else if ([self.prefKey isEqualToString:@"systemPrompt"]) {
++        self.hintLabel.text = @"System instructions defining AI tone, language accuracy, and formatting rules.";
++    } else {
++        self.hintLabel.text = @"Instruction prepended before each notification. Supports multi-line Vietnamese and English.";
++    }
++
++    self.textView = [UITextView new];
++    self.textView.translatesAutoresizingMaskIntoConstraints = NO;
++    self.textView.font = [UIFont systemFontOfSize:15.5];
++    self.textView.textColor = [UIColor labelColor];
++    self.textView.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];
++    self.textView.layer.cornerRadius = 14.0;
++    self.textView.layer.borderWidth = 0.5;
++    self.textView.layer.borderColor = [UIColor separatorColor].CGColor;
++    self.textView.textContainerInset = UIEdgeInsetsMake(14, 12, 14, 12);
++    self.textView.autocorrectionType = UITextAutocorrectionTypeNo;
++    self.textView.delegate = self;
++
++    DigestPrefsManager *manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
++    CFPreferencesAppSynchronize(CFSTR("com.uncore.dig3st"));
++    [manager synchronize];
++    NSString *current = [manager objectForKey:self.prefKey];
++    self.textView.text = [current isKindOfClass:[NSString class]] ? current : @"";
++
++    UIView *bar = [UIView new];
++    bar.translatesAutoresizingMaskIntoConstraints = NO;
++
++    self.statsLabel = [UILabel new];
++    self.statsLabel.translatesAutoresizingMaskIntoConstraints = NO;
++    self.statsLabel.font = [UIFont monospacedDigitSystemFontOfSize:12.0 weight:UIFontWeightMedium];
++    self.statsLabel.textColor = [UIColor secondaryLabelColor];
++
++    UIButton *copyBtn = [UIButton buttonWithType:UIButtonTypeSystem];
++    copyBtn.translatesAutoresizingMaskIntoConstraints = NO;
++    [copyBtn setTitle:@"Copy" forState:UIControlStateNormal];
++    [copyBtn addTarget:self action:@selector(copyText) forControlEvents:UIControlEventTouchUpInside];
++
++    UIButton *clearBtn = [UIButton buttonWithType:UIButtonTypeSystem];
++    clearBtn.translatesAutoresizingMaskIntoConstraints = NO;
++    [clearBtn setTitle:@"Clear" forState:UIControlStateNormal];
++    [clearBtn addTarget:self action:@selector(clearText) forControlEvents:UIControlEventTouchUpInside];
++
++    UIButton *resetBtn = [UIButton buttonWithType:UIButtonTypeSystem];
++    resetBtn.translatesAutoresizingMaskIntoConstraints = NO;
++    [resetBtn setTitle:@"Reset" forState:UIControlStateNormal];
++    [resetBtn setTitleColor:[UIColor systemRedColor] forState:UIControlStateNormal];
++    [resetBtn addTarget:self action:@selector(resetDefault) forControlEvents:UIControlEventTouchUpInside];
++
++    [bar addSubview:self.statsLabel];
++    [bar addSubview:copyBtn];
++    [bar addSubview:clearBtn];
++    [bar addSubview:resetBtn];
++
++    [self.view addSubview:self.hintLabel];
++    [self.view addSubview:self.textView];
++    [self.view addSubview:bar];
++
++    UILayoutGuide *safe = self.view.safeAreaLayoutGuide;
++    self.bottomConstraint = [bar.bottomAnchor constraintEqualToAnchor:safe.bottomAnchor constant:-12.0];
++
++    [NSLayoutConstraint activateConstraints:@[
++        [self.hintLabel.topAnchor constraintEqualToAnchor:safe.topAnchor constant:12.0],
++        [self.hintLabel.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor constant:16.0],
++        [self.hintLabel.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor constant:-16.0],
++
++        [self.textView.topAnchor constraintEqualToAnchor:self.hintLabel.bottomAnchor constant:10.0],
++        [self.textView.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor constant:16.0],
++        [self.textView.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor constant:-16.0],
++        [self.textView.bottomAnchor constraintEqualToAnchor:bar.topAnchor constant:-10.0],
++
++        [bar.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor constant:16.0],
++        [bar.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor constant:-16.0],
++        [bar.heightAnchor constraintEqualToConstant:34.0],
++        self.bottomConstraint,
++
++        [self.statsLabel.leadingAnchor constraintEqualToAnchor:bar.leadingAnchor],
++        [self.statsLabel.centerYAnchor constraintEqualToAnchor:bar.centerYAnchor],
++
++        [resetBtn.trailingAnchor constraintEqualToAnchor:bar.trailingAnchor],
++        [resetBtn.centerYAnchor constraintEqualToAnchor:bar.centerYAnchor],
++
++        [clearBtn.trailingAnchor constraintEqualToAnchor:resetBtn.leadingAnchor constant:-14.0],
++        [clearBtn.centerYAnchor constraintEqualToAnchor:bar.centerYAnchor],
++
++        [copyBtn.trailingAnchor constraintEqualToAnchor:clearBtn.leadingAnchor constant:-14.0],
++        [copyBtn.centerYAnchor constraintEqualToAnchor:bar.centerYAnchor]
++    ]];
++
++    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(keyboardChanged:) name:UIKeyboardWillChangeFrameNotification object:nil];
++    [self updateStats];
++}
++
++- (void)dealloc {
++    [[NSNotificationCenter defaultCenter] removeObserver:self name:UIKeyboardWillChangeFrameNotification object:nil];
++}
++
++- (void)keyboardChanged:(NSNotification *)note {
++    CGRect endFrame = [note.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
++    CGRect converted = [self.view convertRect:endFrame fromView:nil];
++    CGFloat overlap = MAX(0.0, CGRectGetHeight(self.view.bounds) - self.view.safeAreaInsets.bottom - CGRectGetMinY(converted));
++    self.bottomConstraint.constant = -(overlap + 12.0);
++    NSTimeInterval dur = [note.userInfo[UIKeyboardAnimationDurationUserInfoKey] doubleValue];
++    [UIView animateWithDuration:dur animations:^{
++        [self.view layoutIfNeeded];
++    }];
++}
++
++- (void)textViewDidChange:(UITextView *)textView {
++    [self updateStats];
++}
++
++- (void)updateStats {
++    NSString *txt = self.textView.text ?: @"";
++    NSString *trimmed = [txt stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
++    NSUInteger words = trimmed.length > 0
++        ? [[trimmed componentsSeparatedByCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]] filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"length > 0"]].count
++        : 0;
++    self.statsLabel.text = [NSString stringWithFormat:@"%lu chars · %lu words", (unsigned long)txt.length, (unsigned long)words];
++}
++
++- (void)copyText {
++    [UIPasteboard generalPasteboard].string = self.textView.text ?: @"";
++}
++
++- (void)clearText {
++    self.textView.text = @"";
++    [self updateStats];
++}
++
++- (void)resetDefault {
++    self.textView.text = self.defaultText ?: @"";
++    [self updateStats];
++}
++
++- (void)saveAndBack {
++    NSString *val = [self.textView.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]] ?: @"";
++    DigestPrefsManager *manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
++    if (val.length == 0 && [self.prefKey hasPrefix:@"appPrompt_"]) {
++        [manager removeObjectForKey:self.prefKey];
++        CFPreferencesSetAppValue((__bridge CFStringRef)self.prefKey, NULL, CFSTR("com.uncore.dig3st"));
++    } else {
++        [manager setObject:val forKey:self.prefKey];
++        CFPreferencesSetAppValue((__bridge CFStringRef)self.prefKey, (__bridge CFPropertyListRef)val, CFSTR("com.uncore.dig3st"));
++    }
++    [manager synchronize];
++    CFPreferencesAppSynchronize(CFSTR("com.uncore.dig3st"));
++    CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), (CFStringRef)@"com.uncore.dig3st/preferences.changed", NULL, NULL, true);
++    [self.navigationController popViewControllerAnimated:YES];
++}
++
++@end
 diff --git a/preferences/DigestRootListController.m b/preferences/DigestRootListController.m
-index 6a5f861..864c95b 100644
+index 6a5f861..7e97e4d 100644
 --- a/preferences/DigestRootListController.m
 +++ b/preferences/DigestRootListController.m
-@@ -14,8 +14,14 @@
+@@ -11,30 +11,146 @@
+ 	return _specifiers;
+ }
+ 
++- (void)viewWillAppear:(BOOL)animated {
++	[super viewWillAppear:animated];
++	if (self.view.frame.size.width > 0) {
++		[self setupHeader];
++	}
++}
++
  -(void)viewDidLayoutSubviews {
  	[super viewDidLayoutSubviews];
  
@@ -429,7 +1247,142 @@ index 6a5f861..864c95b 100644
  }
  
  -(void)setupHeader {
-@@ -61,22 +67,26 @@
+-	UIView *header = [[UIView alloc] initWithFrame:CGRectMake(0, 0, self.view.frame.size.width, 140)];
+-	NSString *imageToLoad;
+-
+-	if (UITraitCollection.currentTraitCollection.userInterfaceStyle == UIUserInterfaceStyleDark) {
+-		imageToLoad = @"d3-header-dark.png";
+-	} else {
+-		imageToLoad = @"d3-header.png";
++	CGFloat width = self.view.frame.size.width;
++	if (width <= 0) return;
++
++	NSInteger styleTag = (UITraitCollection.currentTraitCollection.userInterfaceStyle == UIUserInterfaceStyleDark) ? 2 : 1;
++	UIView *header = [[UIView alloc] initWithFrame:CGRectMake(0, 0, width, 196)];
++	header.tag = styleTag;
++
++	NSString *imageToLoad = (styleTag == 2) ? @"d3-header-dark.png" : @"d3-header.png";
++	UIImage *image = [UIImage imageNamed:imageToLoad inBundle:[NSBundle bundleForClass:NSClassFromString(@"DigestRootListController")] compatibleWithTraitCollection:nil];
++	UIImageView *imageView = [[UIImageView alloc] initWithFrame:CGRectMake(0, 14, width, 74)];
++	imageView.contentMode = UIViewContentModeScaleAspectFit;
++	[imageView setImage:image];
++	[header addSubview:imageView];
++
++	DigestPrefsManager *manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
++	CFPreferencesAppSynchronize(CFSTR("com.uncore.dig3st"));
++	[manager synchronize];
++
++	BOOL enabled = [[manager objectForKey:@"enabled"] boolValue];
++	BOOL pauseLPM = [[manager objectForKey:@"pauseInLowPowerMode"] boolValue];
++	BOOL isLPM = [[NSProcessInfo processInfo] isLowPowerModeEnabled];
++
++	NSString *uuid = [manager objectForKey:@"activeEndpoint"];
++	NSArray *endpoints = [manager objectForKey:@"endpoints"];
++	NSDictionary *activeEp = nil;
++	for (NSDictionary *ep in endpoints) {
++		if ([ep[@"uuid"] isEqualToString:uuid]) {
++			activeEp = ep;
++			break;
++		}
++	}
++	NSString *epUrl = [activeEp[@"url"] isKindOfClass:[NSString class]] ? activeEp[@"url"] : @"";
++	NSString *epModel = [activeEp[@"model"] isKindOfClass:[NSString class]] ? activeEp[@"model"] : @"";
++	NSString *epLabel = [activeEp[@"label"] isKindOfClass:[NSString class]] ? activeEp[@"label"] : @"endpoint";
++	BOOL epReady = (epUrl.length > 0 && epModel.length > 0);
++
++	UIColor *dotColor = [UIColor systemGrayColor];
++	NSString *statusTitle = @"Disabled · Tap Enable Tweak below";
++	if (enabled) {
++		if (pauseLPM && isLPM) {
++			dotColor = [UIColor systemOrangeColor];
++			statusTitle = @"Paused · Low Power Mode Active";
++		} else if (!epReady) {
++			dotColor = [UIColor systemRedColor];
++			statusTitle = @"Active · Endpoint Missing URL/Model";
++		} else {
++			dotColor = [UIColor systemGreenColor];
++			statusTitle = @"Active · Live Summarization Ready";
++		}
+ 	}
+ 
+-    UIImage *image = [UIImage imageNamed:imageToLoad inBundle:[NSBundle bundleForClass:NSClassFromString(@"DigestRootListController")] compatibleWithTraitCollection:nil];
+-    UIImageView *imageView = [[UIImageView alloc] initWithFrame:CGRectMake(0, 30 - 4, self.view.bounds.size.width, 80)];
+-    imageView.contentMode = UIViewContentModeScaleAspectFit;
+-    [imageView setImage:image];
+- 
+-    [header addSubview:imageView];
++	UIView *card = [[UIView alloc] initWithFrame:CGRectMake(16, 98, width - 32, 86)];
++	card.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];
++	card.layer.cornerRadius = 14.0;
++	card.layer.borderWidth = 0.5;
++	card.layer.borderColor = [UIColor separatorColor].CGColor;
++	card.autoresizingMask = UIViewAutoresizingFlexibleWidth;
++
++	UIView *dot = [[UIView alloc] initWithFrame:CGRectMake(14, 17, 10, 10)];
++	dot.backgroundColor = dotColor;
++	dot.layer.cornerRadius = 5.0;
++	[card addSubview:dot];
++
++	UILabel *statusLbl = [[UILabel alloc] initWithFrame:CGRectMake(32, 11, card.frame.size.width - 44, 21)];
++	statusLbl.text = statusTitle;
++	statusLbl.font = [UIFont systemFontOfSize:13.5 weight:UIFontWeightSemibold];
++	statusLbl.textColor = [UIColor labelColor];
++	statusLbl.autoresizingMask = UIViewAutoresizingFlexibleWidth;
++	[card addSubview:statusLbl];
++
++	UILabel *epLbl = [[UILabel alloc] initWithFrame:CGRectMake(14, 36, card.frame.size.width - 28, 18)];
++	epLbl.text = epReady
++		? [NSString stringWithFormat:@"Model: %@ (%@)", epModel, epLabel]
++		: @"Model: Not configured yet";
++	epLbl.font = [UIFont systemFontOfSize:12.0];
++	epLbl.textColor = [UIColor secondaryLabelColor];
++	epLbl.autoresizingMask = UIViewAutoresizingFlexibleWidth;
++	[card addSubview:epLbl];
++
++	BOOL ctxOn = ([manager objectForKey:@"contextBufferEnabled"] != nil) ? [[manager objectForKey:@"contextBufferEnabled"] boolValue] : YES;
++	BOOL vnOn = ([manager objectForKey:@"autoTranslateVN"] != nil) ? [[manager objectForKey:@"autoTranslateVN"] boolValue] : YES;
++	BOOL strOn = ([manager objectForKey:@"streamingEnabled"] != nil) ? [[manager objectForKey:@"streamingEnabled"] boolValue] : YES;
++
++	UILabel *pillsLbl = [[UILabel alloc] initWithFrame:CGRectMake(14, 57, card.frame.size.width - 28, 18)];
++	pillsLbl.text = [NSString stringWithFormat:@"Context: %@  ·  VN: %@  ·  Stream: %@  ·  Apps: …",
++					 ctxOn ? @"ON" : @"OFF", vnOn ? @"ON" : @"OFF", strOn ? @"ON" : @"OFF"];
++	pillsLbl.font = [UIFont systemFontOfSize:11.5 weight:UIFontWeightMedium];
++	pillsLbl.textColor = [UIColor tertiaryLabelColor];
++	pillsLbl.autoresizingMask = UIViewAutoresizingFlexibleWidth;
++	[card addSubview:pillsLbl];
++
++	[header addSubview:card];
+ 	self.table.tableHeaderView = header;
++
++	__weak UILabel *weakPills = pillsLbl;
++	dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
++		NSInteger enabledCount = 0;
++		@try {
++			LSApplicationWorkspace *ws = [NSClassFromString(@"LSApplicationWorkspace") defaultWorkspace];
++			NSArray *apps = [ws allInstalledApplications];
++			NSDictionary *allPrefs = [manager dictionaryRepresentation];
++			NSArray *defaultEnabled = @[@"com.apple.MobileSMS", @"com.apple.news", @"ph.telegra.Telegraph", @"com.apple.mobilemail"];
++			for (LSApplicationProxy *app in apps) {
++				NSString *bid = app.applicationIdentifier;
++				if (bid.length == 0 || [bid isEqualToString:@"com.apple.webapp"]) continue;
++				if ([app.applicationType isEqual:@"User"] || ([app.applicationType isEqual:@"System"] && ![app.appTags containsObject:@"hidden"] && !app.launchProhibited && !app.placeholder && !app.removedSystemApp)) {
++					id val = allPrefs[bid];
++					BOOL isOn = val ? [val boolValue] : [defaultEnabled containsObject:bid];
++					if (isOn) enabledCount++;
++				}
++			}
++		} @catch (NSException *e) {}
++		dispatch_async(dispatch_get_main_queue(), ^{
++			UILabel *lbl = weakPills;
++			if (!lbl) return;
++			lbl.text = [NSString stringWithFormat:@"Context: %@  ·  VN: %@  ·  Stream: %@  ·  Apps: %ld",
++						ctxOn ? @"ON" : @"OFF", vnOn ? @"ON" : @"OFF", strOn ? @"ON" : @"OFF", (long)enabledCount];
++		});
++	});
+ }
+ 
+ -(void)setupFooterVersion {
+@@ -61,22 +177,26 @@
  
  -(void)resetSettings {
   	[[NSUserDefaults standardUserDefaults] removePersistentDomainForName:@"com.uncore.dig3st"];
@@ -472,7 +1425,7 @@ index 6a5f861..864c95b 100644
  	[self reload];
  	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Respring" style:UIBarButtonItemStylePlain target:self action:@selector(respring)];
  
-@@ -110,8 +120,12 @@
+@@ -110,8 +230,13 @@
  
  -(void)setTweakEnabled:(id)value specifier:(PSSpecifier *)specifier {
  	[self setPreferenceValue:value specifier:specifier];
@@ -484,17 +1437,39 @@ index 6a5f861..864c95b 100644
 +	CFPreferencesSetAppValue(CFSTR("enabled"), (__bridge CFPropertyListRef)value, CFSTR("com.uncore.dig3st"));
 +	CFPreferencesAppSynchronize(CFSTR("com.uncore.dig3st"));
 +	CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), (CFStringRef)@"com.uncore.dig3st/preferences.changed", NULL, NULL, true);
++	[self setupHeader];
  }
  
  -(void)donate {
 diff --git a/preferences/DigestSettingsController.m b/preferences/DigestSettingsController.m
-index 072bf28..57f9a0c 100644
+index 072bf28..0379db9 100644
 --- a/preferences/DigestSettingsController.m
 +++ b/preferences/DigestSettingsController.m
-@@ -35,6 +35,11 @@
+@@ -32,9 +32,32 @@
+ 
+ -(NSMutableArray*)getSpecifiers {
+ 	NSMutableArray *specifiers = [self visibleSpecifiersFromPlist:@"Settings"];
++	DigestPrefsManager *manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
++	CFPreferencesAppSynchronize(CFSTR("com.uncore.dig3st"));
++	[manager synchronize];
++	for (PSSpecifier *sp in specifiers) {
++		NSString *pk = sp.properties[@"prefKey"];
++		if ([pk isEqualToString:@"prompt"] || [pk isEqualToString:@"systemPrompt"]) {
++			NSString *val = [manager objectForKey:pk];
++			if ([val isKindOfClass:[NSString class]] && val.length > 0) {
++				NSString *flat = [[val stringByReplacingOccurrencesOfString:@"\r\n" withString:@" "] stringByReplacingOccurrencesOfString:@"\n" withString:@" "];
++				[sp setProperty:flat forKey:@"cellSubtitleText"];
++			}
++		}
++	}
  	return specifiers;
  }
  
++- (void)viewWillAppear:(BOOL)animated {
++	[super viewWillAppear:animated];
++	[self reloadSpecifiers];
++}
++
 +- (void)viewWillDisappear:(BOOL)animated {
 +	[super viewWillDisappear:animated];
 +	[self.view endEditing:YES];
@@ -503,7 +1478,7 @@ index 072bf28..57f9a0c 100644
  - (void)dealloc { 
      [[NSNotificationCenter defaultCenter] removeObserver:self name:@"com.uncore.dig3st/endpointUpdate" object:nil];
  }
-@@ -45,9 +50,55 @@
+@@ -45,9 +68,55 @@
  
  -(id)readPreferenceValue:(PSSpecifier*)specifier {
  	DigestPrefsManager *manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
@@ -575,10 +1550,16 @@ index bf5f372..ba02a4e 100644
  }
  -(void)push {
 diff --git a/preferences/Makefile b/preferences/Makefile
-index bf06061..04650ec 100644
+index bf06061..a48c2d3 100644
 --- a/preferences/Makefile
 +++ b/preferences/Makefile
-@@ -11,11 +11,12 @@ dig3st_FRAMEWORKS = UIKit
+@@ -6,16 +6,17 @@ include $(THEOS)/makefiles/common.mk
+ 
+ BUNDLE_NAME = dig3st
+ 
+-dig3st_FILES = $(wildcard *.m CustomCells/*.m  ../src/DigestPrefsManager.m  ../src/DigestLogger.m  ../src/Alert.m)
++dig3st_FILES = $(wildcard *.m CustomCells/*.m  ../src/DigestPrefsManager.m  ../src/DigestLogger.m  ../src/Alert.m ../src/DigestBannerAnimator.m)
+ dig3st_FRAMEWORKS = UIKit
  dig3st_PRIVATE_FRAMEWORKS = Preferences
  dig3st_INSTALL_PATH = /Library/PreferenceBundles
  
@@ -597,16 +1578,16 @@ index bf06061..04650ec 100644
  include $(THEOS_MAKE_PATH)/bundle.mk
 diff --git a/preferences/Resources/Appearance.plist b/preferences/Resources/Appearance.plist
 new file mode 100644
-index 0000000..7e664ea
+index 0000000..3512e8c
 --- /dev/null
 +++ b/preferences/Resources/Appearance.plist
-@@ -0,0 +1,67 @@
+@@ -0,0 +1,105 @@
 +{
 +	items = (
 +		{
 +			cell = PSGroupCell;
 +			label = "Badge & Prefix";
-+			footerText = "All visual changes apply immediately to new notifications without respringing.";
++			footerText = "All visual & streaming changes update the Live Preview above and apply immediately without respringing.";
 +		},
 +		{
 +			cell = PSLinkListCell;
@@ -641,6 +1622,33 @@ index 0000000..7e664ea
 +		},
 +		{
 +			cell = PSGroupCell;
++			label = "Streaming & Animation";
++			footerText = "Shows banner immediately and animates tokens live as the AI generates each word.";
++		},
++		{
++			cell = PSSwitchCell;
++			cellClass = DigestSwitch;
++			cellSubtitleText = "Stream summary live on banner";
++			default = 1;
++			defaults = "com.uncore.dig3st";
++			key = streamingEnabled;
++			label = "Streaming Text";
++			systemIcon = "bolt.fill";
++			PostNotification = "com.uncore.dig3st/preferences.changed";
++		},
++		{
++			cell = PSLinkListCell;
++			detail = PSListItemsController;
++			defaults = "com.uncore.dig3st";
++			key = streamAnimationStyle;
++			default = "fadeWords";
++			label = "Stream Animation";
++			validTitles = ("Word Fade-In (Mờ dần từng chữ)", "Typewriter (Gõ từng chữ)", "Shimmer Wave (Sóng sáng)", "Soft Crossfade (Chuyển mờ)", "None (Tức thì)");
++			validValues = ("fadeWords", "typewriter", "shimmer", "crossfade", "none");
++			PostNotification = "com.uncore.dig3st/preferences.changed";
++		},
++		{
++			cell = PSGroupCell;
 +			label = "Summary Layout";
 +		},
 +		{
@@ -663,6 +1671,17 @@ index 0000000..7e664ea
 +			key = bannerShowOriginal;
 +			label = "Show Original Preview Line";
 +			systemIcon = "text.alignleft";
++			PostNotification = "com.uncore.dig3st/preferences.changed";
++		},
++		{
++			cell = PSSwitchCell;
++			cellClass = DigestSwitch;
++			cellSubtitleText = "Show full original message when long-pressing banner";
++			default = 1;
++			defaults = "com.uncore.dig3st";
++			key = showOriginalInExpanded;
++			label = "Full Original on Long-Press";
++			systemIcon = "doc.text";
 +			PostNotification = "com.uncore.dig3st/preferences.changed";
 +		},
 +	);
@@ -784,30 +1803,60 @@ index fd076c1..f12eb2c 100644
  			defaults = "com.uncore.dig3st";
  			key = enabled;
 diff --git a/preferences/Resources/Settings.plist b/preferences/Resources/Settings.plist
-index df1a4a7..852a4d1 100644
+index df1a4a7..6b27f97 100644
 --- a/preferences/Resources/Settings.plist
 +++ b/preferences/Resources/Settings.plist
-@@ -44,6 +44,57 @@
- 			noAutoCorrect = true; 
- 			PostNotification = "com.uncore.dig3st/preferences.changed";
+@@ -27,21 +27,87 @@
+ 			label = "Prompt";
  		},
+ 		{
+-			cell = PSEditTextCell;
++			cell = PSLinkCell;
++			cellClass = DigestSubtitleLinkCell;
++			cellSubtitleText = "Tap to edit multi-line prompt";
++			detail = DigestPromptEditorController;
++			isController = 1;
+ 			label = "Prompt";
+-			placeholder = "Prompt to summarize";
+-			key = prompt;
++			prefKey = prompt;
++			editorTitle = "Edit Prompt";
++			systemIcon = "text.bubble";
++		},
++		{
++			cell = PSLinkCell;
++			cellClass = DigestSubtitleLinkCell;
++			cellSubtitleText = "Tap to edit system instructions";
++			detail = DigestPromptEditorController;
++			isController = 1;
++			label = "System Prompt";
++			prefKey = systemPrompt;
++			editorTitle = "Edit System Prompt";
++			systemIcon = "doc.text";
++		},
 +		{
 +			cell = PSSwitchCell;
 +			cellClass = DigestSwitch;
 +			cellSubtitleText = "Send [App] & Title context to AI";
 +			default = 1;
-+			defaults = "com.uncore.dig3st";
+ 			defaults = "com.uncore.dig3st";
+-			noAutoCorrect = true; 
 +			key = includeContext;
 +			label = "Include App & Title";
 +			systemIcon = "text.bubble";
-+			PostNotification = "com.uncore.dig3st/preferences.changed";
-+		},
-+		{
+ 			PostNotification = "com.uncore.dig3st/preferences.changed";
+ 		},
+ 		{
+-			cell = PSEditTextCell;
+-			label = "System Prompt";
+-			placeholder = "System prompt";
+-			key = systemPrompt;
 +			cell = PSSwitchCell;
 +			cellClass = DigestSwitch;
 +			cellSubtitleText = "Translate non-Vietnamese notifications to Vietnamese";
 +			default = 1;
-+			defaults = "com.uncore.dig3st";
+ 			defaults = "com.uncore.dig3st";
+-			noAutoCorrect = true; 
 +			key = autoTranslateVN;
 +			label = "Auto-Translate to Vietnamese";
 +			systemIcon = "globe";
@@ -836,20 +1885,549 @@ index df1a4a7..852a4d1 100644
 +		{
 +			cell = PSLinkCell;
 +			cellClass = DigestSubtitleLinkCell;
-+			cellSubtitleText = "Customize icon, prefix, color & preview line";
++			cellSubtitleText = "Live preview, streaming animations, badge & long-press";
 +			detail = DigestAppearanceController;
 +			isController = 1;
-+			label = "Banner Appearance";
++			label = "Banner Appearance & Streaming";
 +			systemIcon = "paintbrush";
 +		},
++		{
++			cell = PSSwitchCell;
++			cellClass = DigestSwitch;
++			cellSubtitleText = "Skip AI summarization when iOS Low Power Mode is on";
++			default = 0;
++			defaults = "com.uncore.dig3st";
++			key = pauseInLowPowerMode;
++			label = "Pause in Low Power Mode";
++			systemIcon = "battery.25";
+ 			PostNotification = "com.uncore.dig3st/preferences.changed";
+ 		},
  		{
- 			cell = PSGroupCell;
- 			label = "Misc";
+diff --git a/src/DigestBannerAnimator.m b/src/DigestBannerAnimator.m
+new file mode 100644
+index 0000000..0aeb439
+--- /dev/null
++++ b/src/DigestBannerAnimator.m
+@@ -0,0 +1,514 @@
++#import "../headers/Digest/DigestBannerAnimator.h"
++#import <QuartzCore/QuartzCore.h>
++#import <objc/runtime.h>
++
++@implementation DigestBannerRenderConfig
++@end
++
++@protocol DigestDisplayLinkReceiver <NSObject>
++- (void)handleDisplayLink:(CADisplayLink *)link;
++@end
++
++@interface DigestDisplayLinkProxy : NSObject
++@property (nonatomic, weak) id<DigestDisplayLinkReceiver> target;
++- (void)tick:(CADisplayLink *)link;
++@end
++
++@implementation DigestDisplayLinkProxy
++- (void)tick:(CADisplayLink *)link {
++    id<DigestDisplayLinkReceiver> t = self.target;
++    if (t) {
++        [t handleDisplayLink:link];
++    } else {
++        [link invalidate];
++    }
++}
++@end
++
++@interface DigestLabelAnimState : NSObject <DigestDisplayLinkReceiver>
++@property (nonatomic, weak) UILabel *label;
++@property (nonatomic, weak) UIView *layoutHost;
++@property (nonatomic, copy) NSString *lastRenderKey;
++@property (nonatomic, copy) NSString *targetSummary;
++@property (nonatomic, copy) NSString *originalText;
++@property (nonatomic, assign) BOOL isStreaming;
++@property (nonatomic, strong) DigestBannerRenderConfig *config;
++@property (nonatomic, strong) NSMutableArray<NSString *> *tokens;
++@property (nonatomic, strong) NSMutableArray<NSNumber *> *tokenBirthTimes;
++@property (nonatomic, assign) NSUInteger revealedChars;
++@property (nonatomic, assign) CFTimeInterval streamStartTime;
++@property (nonatomic, assign) CFTimeInterval lastTypeStepTime;
++@property (nonatomic, assign) NSUInteger lastLayoutTokenCount;
++@property (nonatomic, strong) CADisplayLink *displayLink;
++@property (nonatomic, strong) UIImage *retainedBadgeImage;
++- (void)handleDisplayLink:(CADisplayLink *)link;
++- (void)invalidate;
++@end
++
++static void *kDigestAnimStateKey = &kDigestAnimStateKey;
++static void *kDigestExpKey = &kDigestExpKey;
++static void *kDigestExpImg = &kDigestExpImg;
++
++@implementation DigestLabelAnimState
++- (instancetype)init {
++    self = [super init];
++    if (self) {
++        _tokens = [NSMutableArray new];
++        _tokenBirthTimes = [NSMutableArray new];
++    }
++    return self;
++}
++
++- (void)invalidate {
++    if (self.displayLink) {
++        [self.displayLink invalidate];
++        self.displayLink = nil;
++    }
++}
++
++- (void)dealloc {
++    [self invalidate];
++}
++
++- (void)ensureDisplayLink {
++    if (self.displayLink) return;
++    DigestDisplayLinkProxy *proxy = [DigestDisplayLinkProxy new];
++    proxy.target = self;
++    self.displayLink = [CADisplayLink displayLinkWithTarget:proxy selector:@selector(tick:)];
++    [self.displayLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
++}
++
++- (NSArray<NSString *> *)tokenizeText:(NSString *)text {
++    if (text.length == 0) return @[];
++    NSMutableArray<NSString *> *parts = [NSMutableArray new];
++    NSUInteger len = text.length;
++    NSUInteger idx = 0;
++    while (idx < len) {
++        NSUInteger start = idx;
++        while (idx < len && ![[NSCharacterSet whitespaceAndNewlineCharacterSet] characterIsMember:[text characterAtIndex:idx]]) {
++            NSRange seq = [text rangeOfComposedCharacterSequenceAtIndex:idx];
++            idx = NSMaxRange(seq);
++        }
++        while (idx < len && [[NSCharacterSet whitespaceAndNewlineCharacterSet] characterIsMember:[text characterAtIndex:idx]]) {
++            idx++;
++        }
++        [parts addObject:[text substringWithRange:NSMakeRange(start, idx - start)]];
++    }
++    return parts;
++}
++
++- (void)syncTokensForTarget:(NSString *)newText {
++    NSArray<NSString *> *newTokens = [self tokenizeText:newText];
++    CFTimeInterval now = CACurrentMediaTime();
++    NSMutableArray<NSNumber *> *newBirths = [NSMutableArray arrayWithCapacity:newTokens.count];
++
++    NSUInteger commonCount = 0;
++    while (commonCount < self.tokens.count && commonCount < newTokens.count &&
++           [self.tokens[commonCount] isEqualToString:newTokens[commonCount]]) {
++        [newBirths addObject:self.tokenBirthTimes[commonCount]];
++        commonCount++;
++    }
++
++    for (NSUInteger i = commonCount; i < newTokens.count; i++) {
++        CFTimeInterval stagger = (i - commonCount) * 0.035;
++        [newBirths addObject:@(now + stagger)];
++    }
++
++    self.tokens = [newTokens mutableCopy];
++    self.tokenBirthTimes = newBirths;
++}
++
++- (void)handleDisplayLink:(CADisplayLink *)link {
++    UILabel *label = self.label;
++    if (!label) {
++        [self invalidate];
++        return;
++    }
++
++    CFTimeInterval now = CACurrentMediaTime();
++    NSString *anim = self.config.animationStyle ?: @"fadeWords";
++    UIFont *baseFont = label.font ?: [UIFont systemFontOfSize:14.0];
++    UIFont *summaryFont = self.config.boldSummary
++        ? [UIFont systemFontOfSize:baseFont.pointSize weight:UIFontWeightSemibold]
++        : baseFont;
++    UIColor *baseTextColor = [UIColor labelColor];
++    UIColor *accentColor = [DigestBannerAnimator resolveAccentColor:self.config.accentColorKey] ?: [UIColor systemBlueColor];
++
++    UIImage *badgeImg = nil;
++    NSMutableAttributedString *out = [[DigestBannerAnimator prefixAttributedStringWithConfig:self.config baseFont:baseFont retainedImage:&badgeImg] mutableCopy];
++    self.retainedBadgeImage = badgeImg;
++
++    BOOL needsMoreFrames = NO;
++    BOOL needsRelayout = NO;
++
++    if ([anim isEqualToString:@"typewriter"]) {
++        if (self.lastTypeStepTime <= 0) {
++            self.lastTypeStepTime = now;
++        }
++        NSUInteger targetLen = self.targetSummary.length;
++        if (self.revealedChars < targetLen) {
++            CFTimeInterval dt = MAX(0.0, now - self.lastTypeStepTime);
++            NSUInteger remaining = targetLen - self.revealedChars;
++            CGFloat cps = self.isStreaming ? MAX(48.0, MIN(120.0, remaining * 3.5)) : MAX(75.0, remaining * 5.0);
++            NSUInteger step = (NSUInteger)floor(dt * cps);
++            if (step >= 1) {
++                NSUInteger nextIdx = MIN(targetLen, self.revealedChars + step);
++                if (nextIdx < targetLen) {
++                    NSRange seq = [self.targetSummary rangeOfComposedCharacterSequenceAtIndex:nextIdx];
++                    if (seq.location < nextIdx) {
++                        nextIdx = NSMaxRange(seq);
++                    }
++                }
++                self.revealedChars = nextIdx;
++                self.lastTypeStepTime = now;
++                needsRelayout = YES;
++            }
++            if (self.revealedChars < targetLen) {
++                needsMoreFrames = YES;
++            }
++        }
++        NSString *visible = (self.revealedChars >= self.targetSummary.length)
++            ? (self.targetSummary ?: @"")
++            : [self.targetSummary substringToIndex:self.revealedChars];
++
++        if (visible.length > 0) {
++            NSMutableAttributedString *visAttr = [[NSMutableAttributedString alloc] initWithString:visible attributes:@{
++                NSFontAttributeName: summaryFont,
++                NSForegroundColorAttributeName: baseTextColor
++            }];
++            NSUInteger tail = 0;
++            NSUInteger idx = visible.length;
++            while (idx > 0 && tail < 3 && (self.isStreaming || self.revealedChars < self.targetSummary.length)) {
++                NSRange seq = [visible rangeOfComposedCharacterSequenceAtIndex:idx - 1];
++                CGFloat alpha = (tail == 0) ? 0.35 : ((tail == 1) ? 0.65 : 0.88);
++                [visAttr addAttribute:NSForegroundColorAttributeName value:[baseTextColor colorWithAlphaComponent:alpha] range:seq];
++                idx = seq.location;
++                tail++;
++            }
++            [out appendAttributedString:visAttr];
++        }
++        if (self.isStreaming) {
++            CGFloat pulse = 0.35 + 0.65 * (0.5 + 0.5 * sin((now - self.streamStartTime) * 6.5));
++            [out appendAttributedString:[[NSAttributedString alloc] initWithString:@" ▍" attributes:@{
++                NSFontAttributeName: summaryFont,
++                NSForegroundColorAttributeName: [accentColor colorWithAlphaComponent:pulse]
++            }]];
++            needsMoreFrames = YES;
++        }
++    } else if ([anim isEqualToString:@"shimmer"]) {
++        CFTimeInterval elapsed = now - self.streamStartTime;
++        CGFloat phase = (CGFloat)fmod(elapsed * 2.2, 2.0);
++        CGFloat fadeDur = 0.28;
++        for (NSUInteger i = 0; i < self.tokens.count; i++) {
++            NSString *tok = self.tokens[i];
++            CFTimeInterval birth = [self.tokenBirthTimes[i] doubleValue];
++            CGFloat age = (CGFloat)(now - birth);
++            CGFloat fadeAlpha = (age <= 0) ? 0.08 : (age >= fadeDur ? 1.0 : (0.08 + 0.92 * (1.0 - pow(1.0 - (age / fadeDur), 3))));
++            if (age < fadeDur) {
++                needsMoreFrames = YES;
++            }
++            CGFloat shimmerAlpha = 1.0;
++            if (self.isStreaming) {
++                CGFloat normPos = (CGFloat)i / MAX(1.0, (CGFloat)self.tokens.count);
++                CGFloat wave = 0.5 + 0.5 * cos((normPos - phase) * M_PI * 2.0);
++                shimmerAlpha = 0.45 + 0.55 * wave;
++                needsMoreFrames = YES;
++            }
++            UIColor *tokColor = [baseTextColor colorWithAlphaComponent:MIN(1.0, fadeAlpha * shimmerAlpha)];
++            [out appendAttributedString:[[NSAttributedString alloc] initWithString:tok attributes:@{
++                NSFontAttributeName: summaryFont,
++                NSForegroundColorAttributeName: tokColor
++            }]];
++        }
++        if (self.isStreaming) {
++            CGFloat pulse = 0.35 + 0.65 * (0.5 + 0.5 * sin(elapsed * 6.0));
++            [out appendAttributedString:[[NSAttributedString alloc] initWithString:@"●" attributes:@{
++                NSFontAttributeName: [UIFont systemFontOfSize:MAX(9.0, baseFont.pointSize - 3.0)],
++                NSForegroundColorAttributeName: [accentColor colorWithAlphaComponent:pulse]
++            }]];
++        }
++    } else {
++        CFTimeInterval fadeDur = 0.30;
++        for (NSUInteger i = 0; i < self.tokens.count; i++) {
++            NSString *tok = self.tokens[i];
++            CFTimeInterval birth = [self.tokenBirthTimes[i] doubleValue];
++            CGFloat age = (CGFloat)(now - birth);
++            CGFloat alpha;
++            if (age <= 0) {
++                alpha = 0.06;
++                needsMoreFrames = YES;
++            } else if (age >= fadeDur) {
++                alpha = 1.0;
++            } else {
++                CGFloat t = age / fadeDur;
++                CGFloat eased = 1.0 - pow(1.0 - t, 3.0);
++                alpha = 0.06 + 0.94 * eased;
++                needsMoreFrames = YES;
++            }
++            [out appendAttributedString:[[NSAttributedString alloc] initWithString:tok attributes:@{
++                NSFontAttributeName: summaryFont,
++                NSForegroundColorAttributeName: [baseTextColor colorWithAlphaComponent:alpha]
++            }]];
++        }
++        if (self.isStreaming) {
++            CGFloat pulse = 0.30 + 0.70 * (0.5 + 0.5 * sin((now - self.streamStartTime) * 6.0));
++            [out appendAttributedString:[[NSAttributedString alloc] initWithString:@" ●" attributes:@{
++                NSFontAttributeName: [UIFont systemFontOfSize:MAX(9.0, baseFont.pointSize - 3.0)],
++                NSForegroundColorAttributeName: [accentColor colorWithAlphaComponent:pulse]
++            }]];
++            needsMoreFrames = YES;
++        }
++    }
++
++    if (self.config.showOriginalLine && !self.isStreaming && self.originalText.length > 0 && ![self.originalText isEqualToString:self.targetSummary]) {
++        NSString *flatOrig = [[self.originalText stringByReplacingOccurrencesOfString:@"\r\n" withString:@" "] stringByReplacingOccurrencesOfString:@"\n" withString:@" "];
++        if (flatOrig.length > 70) {
++            NSRange safeRange = [flatOrig rangeOfComposedCharacterSequencesForRange:NSMakeRange(0, 70)];
++            flatOrig = [[flatOrig substringWithRange:safeRange] stringByAppendingString:@"…"];
++        }
++        UIFont *origFont = [UIFont systemFontOfSize:MAX(11.0, baseFont.pointSize - 2.0)];
++        [out appendAttributedString:[[NSAttributedString alloc] initWithString:[NSString stringWithFormat:@"\n%@", flatOrig] attributes:@{
++            NSFontAttributeName: origFont,
++            NSForegroundColorAttributeName: [UIColor secondaryLabelColor]
++        }]];
++    }
++
++    label.attributedText = out;
++
++    if (needsRelayout || self.tokens.count != self.lastLayoutTokenCount) {
++        self.lastLayoutTokenCount = self.tokens.count;
++        [label invalidateIntrinsicContentSize];
++        [self.layoutHost setNeedsLayout];
++    }
++
++    if (!needsMoreFrames) {
++        [self invalidate];
++    }
++}
++@end
++
++@implementation DigestBannerAnimator
++
+++ (UIColor *)resolveAccentColor:(NSString *)key {
++    if ([key isEqualToString:@"label"]) return [UIColor labelColor];
++    if ([key isEqualToString:@"blue"]) return [UIColor systemBlueColor];
++    if ([key isEqualToString:@"purple"]) return [UIColor systemPurpleColor];
++    if ([key isEqualToString:@"teal"]) return [UIColor systemTealColor];
++    if ([key isEqualToString:@"orange"]) return [UIColor systemOrangeColor];
++    if ([key isEqualToString:@"red"]) return [UIColor systemRedColor];
++    if ([key isEqualToString:@"green"]) return [UIColor systemGreenColor];
++    return nil;
++}
++
+++ (NSAttributedString *)prefixAttributedStringWithConfig:(DigestBannerRenderConfig *)config
++                                               baseFont:(UIFont *)baseFont
++                                          retainedImage:(UIImage **)outImage {
++    NSMutableAttributedString *prefixAttr = [[NSMutableAttributedString alloc] init];
++    NSString *badgeStyle = config.badgeStyle ?: @"arrow";
++    NSString *prefixText = config.prefixText.length > 0 ? config.prefixText : @"[AI]";
++    UIColor *accent = [self resolveAccentColor:config.accentColorKey];
++
++    if ([badgeStyle isEqualToString:@"text"]) {
++        UIFont *prefixFont = [UIFont systemFontOfSize:baseFont.pointSize weight:UIFontWeightSemibold];
++        [prefixAttr appendAttributedString:[[NSAttributedString alloc] initWithString:[NSString stringWithFormat:@"%@ ", prefixText] attributes:@{
++            NSFontAttributeName: prefixFont,
++            NSForegroundColorAttributeName: (accent ?: [UIColor labelColor])
++        }]];
++    } else if ([badgeStyle isEqualToString:@"sparkles"] || [badgeStyle isEqualToString:@"bolt"] || [badgeStyle isEqualToString:@"cpu"]) {
++        NSString *symbolName = [badgeStyle isEqualToString:@"bolt"] ? @"bolt.fill" : badgeStyle;
++        UIImageSymbolConfiguration *symConfig = [UIImageSymbolConfiguration configurationWithPointSize:MAX(11.0, baseFont.pointSize - 1.0) weight:UIFontWeightSemibold];
++        UIImage *symImg = [UIImage systemImageNamed:symbolName withConfiguration:symConfig];
++        if (symImg) {
++            UIImage *tinted = [symImg imageWithTintColor:(accent ?: [UIColor labelColor]) renderingMode:UIImageRenderingModeAlwaysOriginal];
++            if (outImage) *outImage = tinted;
++            NSTextAttachment *attachment = [[NSTextAttachment alloc] init];
++            attachment.image = tinted;
++            CGFloat h = MAX(12.0, baseFont.pointSize - 1.0);
++            CGFloat w = (tinted.size.height > 0) ? (tinted.size.width / tinted.size.height) * h : h;
++            attachment.bounds = CGRectMake(0, -2.0, w, h);
++            [prefixAttr appendAttributedString:[NSAttributedString attributedStringWithAttachment:attachment]];
++            [prefixAttr appendAttributedString:[[NSAttributedString alloc] initWithString:@" "]];
++        }
++    } else if (![badgeStyle isEqualToString:@"none"]) {
++        UIImage *image = config.arrowImage;
++        if (!image) {
++            UIImageSymbolConfiguration *symConfig = [UIImageSymbolConfiguration configurationWithPointSize:MAX(11.0, baseFont.pointSize - 1.0) weight:UIFontWeightSemibold];
++            image = [UIImage systemImageNamed:@"arrow.turn.down.right" withConfiguration:symConfig];
++        }
++        if (image) {
++            UIImage *finalImg = accent
++                ? [image imageWithTintColor:accent renderingMode:UIImageRenderingModeAlwaysOriginal]
++                : (config.arrowImage ? image : [image imageWithTintColor:[UIColor labelColor] renderingMode:UIImageRenderingModeAlwaysOriginal]);
++            if (outImage) *outImage = finalImg;
++            NSTextAttachment *attachment = [[NSTextAttachment alloc] init];
++            attachment.image = finalImg;
++            attachment.bounds = CGRectMake(0, -1.0, 19, 12);
++            [prefixAttr appendAttributedString:[[NSAttributedString alloc] initWithString:@" "]];
++            [prefixAttr appendAttributedString:[NSAttributedString attributedStringWithAttachment:attachment]];
++            [prefixAttr appendAttributedString:[[NSAttributedString alloc] initWithString:@"  "]];
++        }
++    }
++    return prefixAttr;
++}
++
+++ (void)stopForLabel:(UILabel *)label {
++    if (!label) return;
++    DigestLabelAnimState *state = objc_getAssociatedObject(label, kDigestAnimStateKey);
++    if (state) {
++        [state invalidate];
++        objc_setAssociatedObject(label, kDigestAnimStateKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++    }
++}
++
+++ (void)updateLabel:(UILabel *)label
++        withSummary:(NSString *)summary
++       originalText:(NSString *)originalText
++        isStreaming:(BOOL)isStreaming
++             config:(DigestBannerRenderConfig *)config
++         layoutHost:(UIView *)layoutHost {
++    if (!label || !summary) return;
++
++    NSString *anim = config.animationStyle ?: @"fadeWords";
++    NSString *renderKey = [NSString stringWithFormat:@"%@|%@|%@|%@|%@|%d|%d|%@|%@",
++                           summary, originalText ?: @"", isStreaming ? @"1" : @"0",
++                           config.badgeStyle ?: @"", config.prefixText ?: @"",
++                           config.boldSummary, config.showOriginalLine,
++                           config.accentColorKey ?: @"", anim];
++
++    DigestLabelAnimState *state = objc_getAssociatedObject(label, kDigestAnimStateKey);
++    if (state && [state.lastRenderKey isEqualToString:renderKey]) {
++        return;
++    }
++
++    if (label.numberOfLines > 0 && label.numberOfLines < 4) {
++        label.numberOfLines = 4;
++    }
++
++    if ([anim isEqualToString:@"none"] || [anim isEqualToString:@"crossfade"]) {
++        if (state) {
++            [state invalidate];
++        } else {
++            state = [DigestLabelAnimState new];
++            objc_setAssociatedObject(label, kDigestAnimStateKey, state, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++        }
++        state.label = label;
++        state.layoutHost = layoutHost;
++        state.lastRenderKey = renderKey;
++
++        UIFont *baseFont = label.font ?: [UIFont systemFontOfSize:14.0];
++        UIImage *badgeImg = nil;
++        NSMutableAttributedString *out = [[self prefixAttributedStringWithConfig:config baseFont:baseFont retainedImage:&badgeImg] mutableCopy];
++        state.retainedBadgeImage = badgeImg;
++
++        UIFont *summaryFont = config.boldSummary
++            ? [UIFont systemFontOfSize:baseFont.pointSize weight:UIFontWeightSemibold]
++            : baseFont;
++        [out appendAttributedString:[[NSAttributedString alloc] initWithString:summary attributes:@{
++            NSFontAttributeName: summaryFont,
++            NSForegroundColorAttributeName: [UIColor labelColor]
++        }]];
++
++        if (isStreaming) {
++            UIColor *accent = [self resolveAccentColor:config.accentColorKey] ?: [UIColor systemBlueColor];
++            [out appendAttributedString:[[NSAttributedString alloc] initWithString:@" ●" attributes:@{
++                NSFontAttributeName: [UIFont systemFontOfSize:MAX(9.0, baseFont.pointSize - 3.0)],
++                NSForegroundColorAttributeName: accent
++            }]];
++        } else if (config.showOriginalLine && originalText.length > 0 && ![originalText isEqualToString:summary]) {
++            NSString *flatOrig = [[originalText stringByReplacingOccurrencesOfString:@"\r\n" withString:@" "] stringByReplacingOccurrencesOfString:@"\n" withString:@" "];
++            if (flatOrig.length > 70) {
++                NSRange safeRange = [flatOrig rangeOfComposedCharacterSequencesForRange:NSMakeRange(0, 70)];
++                flatOrig = [[flatOrig substringWithRange:safeRange] stringByAppendingString:@"…"];
++            }
++            UIFont *origFont = [UIFont systemFontOfSize:MAX(11.0, baseFont.pointSize - 2.0)];
++            [out appendAttributedString:[[NSAttributedString alloc] initWithString:[NSString stringWithFormat:@"\n%@", flatOrig] attributes:@{
++                NSFontAttributeName: origFont,
++                NSForegroundColorAttributeName: [UIColor secondaryLabelColor]
++            }]];
++        }
++
++        if ([anim isEqualToString:@"crossfade"]) {
++            [UIView transitionWithView:label duration:0.18 options:UIViewAnimationOptionTransitionCrossDissolve | UIViewAnimationOptionAllowUserInteraction animations:^{
++                label.attributedText = out;
++            } completion:nil];
++        } else {
++            label.attributedText = out;
++        }
++        [label invalidateIntrinsicContentSize];
++        [layoutHost setNeedsLayout];
++        return;
++    }
++
++    if (!state) {
++        state = [DigestLabelAnimState new];
++        state.streamStartTime = CACurrentMediaTime();
++        objc_setAssociatedObject(label, kDigestAnimStateKey, state, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++    }
++
++    BOOL isNewSession = (state.targetSummary.length == 0 ||
++                         (![summary hasPrefix:state.targetSummary] && ![state.targetSummary hasPrefix:summary]));
++    if (isNewSession) {
++        state.tokens = [NSMutableArray new];
++        state.tokenBirthTimes = [NSMutableArray new];
++        state.revealedChars = 0;
++        state.streamStartTime = CACurrentMediaTime();
++        state.lastTypeStepTime = state.streamStartTime;
++    }
++
++    state.label = label;
++    state.layoutHost = layoutHost;
++    state.lastRenderKey = renderKey;
++    state.targetSummary = summary;
++    state.originalText = originalText;
++    state.isStreaming = isStreaming;
++    state.config = config;
++
++    [state syncTokensForTarget:summary];
++    [state ensureDisplayLink];
++    [state handleDisplayLink:state.displayLink];
++}
++
+++ (void)renderExpandedToLabel:(UILabel *)label
++                  withSummary:(NSString *)summary
++                 originalText:(NSString *)originalText
++                       config:(DigestBannerRenderConfig *)config
++                   layoutHost:(UIView *)layoutHost {
++    if (!label || !summary) return;
++    [self stopForLabel:label];
++
++    NSString *renderKey = [NSString stringWithFormat:@"exp|%@|%@|%@|%@",
++                           summary, originalText ?: @"", config.badgeStyle ?: @"", config.accentColorKey ?: @""];
++    NSString *prevKey = objc_getAssociatedObject(label, kDigestExpKey);
++    if ([prevKey isEqualToString:renderKey]) return;
++    objc_setAssociatedObject(label, kDigestExpKey, renderKey, OBJC_ASSOCIATION_COPY_NONATOMIC);
++
++    UIFont *baseFont = label.font ?: [UIFont systemFontOfSize:15.0];
++    UIImage *badgeImg = nil;
++    NSMutableAttributedString *out = [[self prefixAttributedStringWithConfig:config baseFont:baseFont retainedImage:&badgeImg] mutableCopy];
++    objc_setAssociatedObject(label, kDigestExpImg, badgeImg, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++
++    UIFont *summaryFont = [UIFont systemFontOfSize:baseFont.pointSize weight:UIFontWeightSemibold];
++    [out appendAttributedString:[[NSAttributedString alloc] initWithString:summary attributes:@{
++        NSFontAttributeName: summaryFont,
++        NSForegroundColorAttributeName: [UIColor labelColor]
++    }]];
++
++    if (originalText.length > 0 && ![originalText isEqualToString:summary]) {
++        UIFont *dividerFont = [UIFont systemFontOfSize:MAX(11.0, baseFont.pointSize - 3.0) weight:UIFontWeightMedium];
++        [out appendAttributedString:[[NSAttributedString alloc] initWithString:@"\n\n── Nội dung gốc ──\n" attributes:@{
++            NSFontAttributeName: dividerFont,
++            NSForegroundColorAttributeName: [UIColor tertiaryLabelColor]
++        }]];
++        [out appendAttributedString:[[NSAttributedString alloc] initWithString:originalText attributes:@{
++            NSFontAttributeName: baseFont,
++            NSForegroundColorAttributeName: [UIColor secondaryLabelColor]
++        }]];
++    }
++
++    label.numberOfLines = 0;
++    label.attributedText = out;
++    [label invalidateIntrinsicContentSize];
++    [layoutHost setNeedsLayout];
++}
++
++@end
 diff --git a/src/DigestPrefsManager.m b/src/DigestPrefsManager.m
-index f10da7b..c81e803 100644
+index f10da7b..4d905d2 100644
 --- a/src/DigestPrefsManager.m
 +++ b/src/DigestPrefsManager.m
-@@ -23,8 +23,22 @@ static void notificationCallback(CFNotificationCenterRef center, void *observer,
+@@ -23,8 +23,26 @@ static void notificationCallback(CFNotificationCenterRef center, void *observer,
          @"apiChecks": @NO,
          @"sanityChecks": @YES,
          @"logLevel": @"1",
@@ -869,16 +2447,58 @@ index f10da7b..c81e803 100644
 +        @"bannerAccentColor": @"default",
 +        @"bannerBoldSummary": @NO,
 +        @"bannerShowOriginal": @NO,
++        @"showOriginalInExpanded": @YES,
++        @"streamingEnabled": @YES,
++        @"streamAnimationStyle": @"fadeWords",
++        @"pauseInLowPowerMode": @NO,
 +        @"prompt" : @"Summarize this notification concisely in its original language (max 12-15 words). Preserve names, numbers, amounts, codes, and times:",
 +        @"systemPrompt": @"You are an assistant that summarizes notifications concisely in the same language as the original notification. Output only the summary.",
          @"minChars": @"15",
          @"timeout": @"30",
          //some enabled defaults
 diff --git a/src/OpenAI/OpenAI.m b/src/OpenAI/OpenAI.m
-index 8f8f165..aa274b2 100644
+index 8f8f165..9368dca 100644
 --- a/src/OpenAI/OpenAI.m
 +++ b/src/OpenAI/OpenAI.m
-@@ -9,6 +9,8 @@
+@@ -1,4 +1,30 @@
+ #import "../../headers/HeadersTweak.h"
++#import <QuartzCore/QuartzCore.h>
++
++@interface DigestStreamContext : NSObject
++@property(nonatomic, strong) NSMutableData *rawBuffer;
++@property(nonatomic, strong) NSMutableString *accumulatedText;
++@property(nonatomic, copy) void (^partialBlock)(NSString *partialText);
++@property(nonatomic, copy) void (^completionBlock)(NSString *finalText);
++@property(nonatomic, assign) CFTimeInterval lastEmitTime;
++@property(nonatomic, assign) BOOL finished;
++@end
++
++@implementation DigestStreamContext
++- (instancetype)init {
++    self = [super init];
++    if (self) {
++        _rawBuffer = [NSMutableData new];
++        _accumulatedText = [NSMutableString new];
++    }
++    return self;
++}
++@end
++
++@interface OpenAI ()
++@property(nonatomic, strong) NSMutableDictionary<NSNumber *, DigestStreamContext *> *streamContexts;
++@property(nonatomic, strong) NSObject *streamLock;
++@end
+ 
+ @implementation OpenAI
+ - (instancetype)initWithConfiguration:(Config *)configuration {
+@@ -6,9 +32,15 @@
+     if (self) {
+         _configuration = configuration;
+         _session = [NSURLSession sharedSession];
++        _streamLock = [NSObject new];
++        _streamContexts = [NSMutableDictionary new];
++        NSURLSessionConfiguration *streamCfg = [NSURLSessionConfiguration defaultSessionConfiguration];
++        _streamSession = [NSURLSession sessionWithConfiguration:streamCfg delegate:self delegateQueue:nil];
          self.manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
          self.prompt = [self.manager objectForKey:@"prompt"];
          self.systemPrompt = [self.manager objectForKey:@"systemPrompt"];
@@ -887,7 +2507,7 @@ index 8f8f165..aa274b2 100644
          self.logger = [NSClassFromString(@"DigestLogger") sharedInstance];
          [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(update) name:@"com.uncore.dig3st/update" object:nil];
      }
-@@ -17,7 +19,9 @@
+@@ -17,7 +49,9 @@
  
  - (void)update {
      [self.logger log:@"Updating OpenAI instance" level:LOGLEVEL_INFO];
@@ -897,7 +2517,7 @@ index 8f8f165..aa274b2 100644
      NSString *uuid = [manager objectForKey:@"activeEndpoint"];
      NSArray *endpoints = [manager objectForKey:@"endpoints"];
      __block NSDictionary *endpoint;
-@@ -31,10 +35,12 @@
+@@ -31,48 +65,80 @@
      [self.logger log:[NSString stringWithFormat:@"New endpoint %@", endpoint] level:LOGLEVEL_INFO];
      if (endpoint == nil) {
          NSLog(@"Tried to update endpoint with UUID %@ but it was not found", uuid);
@@ -914,7 +2534,8 @@ index 8f8f165..aa274b2 100644
      }
      self.prompt = [self.manager objectForKey:@"prompt"];
      [self.logger log:[NSString stringWithFormat:@"New Prompt: %@", self.prompt] level:LOGLEVEL_VERBOSE];
-@@ -42,7 +48,13 @@
+-    
++
      self.systemPrompt = [self.manager objectForKey:@"systemPrompt"];
      [self.logger log:[NSString stringWithFormat:@"New System Prompt: %@", self.systemPrompt] level:LOGLEVEL_VERBOSE];
  
@@ -928,14 +2549,19 @@ index 8f8f165..aa274b2 100644
      self.configuration = [[Config alloc] initWithEndpoint:endpoint timeoutInterval:[NSNumber numberWithInteger:timeout]];
      [self.logger log:[NSString stringWithFormat:@"New Configuration: %@", self.configuration] level:LOGLEVEL_VERBOSE];
  }
-@@ -52,27 +64,50 @@
+ 
+--(void)dealloc {
++- (void)dealloc {
+     [[NSNotificationCenter defaultCenter] removeObserver:self name:@"com.uncore.dig3st/update" object:nil];
++    [_streamSession finishTasksAndInvalidate];
  }
  
- -(NSURL*)urlWithPath:(NSString *)path {
+--(NSURL*)urlWithPath:(NSString *)path {
 -    //maybe follow this implementation in the future
 -    // NSString *url = [NSString stringWithFormat:@"%@://%@", self.configuration.scheme, self.configuration.host];
 -    NSString *url = self.configuration.host;
 -    return (NSURL *)[NSURL URLWithString:[url stringByAppendingString:path]];
++- (NSURL *)urlWithPath:(NSString *)path {
 +    NSString *url = [self.configuration.host stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 +    if (url.length == 0) {
 +        return nil;
@@ -946,8 +2572,9 @@ index 8f8f165..aa274b2 100644
 +    return [NSURL URLWithString:[url stringByAppendingString:path]];
  }
  
- -(void)check:(void (^)(BOOL response))completion {
+--(void)check:(void (^)(BOOL response))completion {
 -    NSURL *url = [self urlWithPath:@"/chat/completions"];
++- (void)check:(void (^)(BOOL response))completion {
 +    NSURL *url = [self urlWithPath:@"/models"];
 +    if (!url) {
 +        dispatch_async(dispatch_get_main_queue(), ^{
@@ -991,7 +2618,7 @@ index 8f8f165..aa274b2 100644
          if (jsonError) {
              [self.logger log:[NSString stringWithFormat:@"JSON error while checking the endpoint: %@", jsonError.localizedDescription] level:LOGLEVEL_WARNING];
              dispatch_async(dispatch_get_main_queue(), ^{
-@@ -80,8 +115,8 @@
+@@ -80,8 +146,8 @@
              });
          } else {
              @try {
@@ -1002,7 +2629,7 @@ index 8f8f165..aa274b2 100644
                  [self.logger log:[NSString stringWithFormat:@"Endpoint is valid: %@", isValid ? @"YES" : @"NO"] level:LOGLEVEL_INFO];
                  dispatch_async(dispatch_get_main_queue(), ^{
                      completion(isValid);
-@@ -94,26 +129,46 @@
+@@ -94,81 +160,279 @@
              }
          }
      }];
@@ -1011,26 +2638,49 @@ index 8f8f165..aa274b2 100644
      [task resume];
  }
  
- -(void)summarize:(ChatQuery*)query completion:(void (^)(NSString *response))completion {
+--(void)summarize:(ChatQuery*)query completion:(void (^)(NSString *response))completion {
 -    @try { 
++- (NSString *)cleanText:(NSString *)raw trimEnd:(BOOL)trimEnd {
++    if (!raw) return @"";
++    NSString *cleaned = [[raw stringByReplacingOccurrencesOfString:@"\r\n" withString:@" "] stringByReplacingOccurrencesOfString:@"\n" withString:@" "];
++    if (trimEnd) {
++        return [cleaned stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
++    }
++    NSRange nonSpace = [cleaned rangeOfCharacterFromSet:[[NSCharacterSet whitespaceAndNewlineCharacterSet] invertedSet]];
++    if (nonSpace.location == NSNotFound) return @"";
++    return [cleaned substringFromIndex:nonSpace.location];
++}
++
++- (void)summarize:(ChatQuery *)query completion:(void (^)(NSString *response))completion {
++    [self summarize:query autoTranslate:nil customPrompt:nil streamMode:NO onPartial:nil completion:completion];
++}
++
++- (void)summarize:(ChatQuery *)query
++    autoTranslate:(NSNumber *)autoTranslateOverride
++     customPrompt:(NSString *)customPromptOverride
++       streamMode:(BOOL)streaming
++        onPartial:(void (^)(NSString *partialText))partialBlock
++       completion:(void (^)(NSString *response))completion {
 +    @try {
          NSURL *url = [self urlWithPath:@"/chat/completions"];
+-        [self.logger log:[NSString stringWithFormat:@"Endpoint url: %@",url] level:LOGLEVEL_VERBOSE];
 +        if (!url || self.configuration.model.length == 0) {
 +            dispatch_async(dispatch_get_main_queue(), ^{
-+                completion(@"");
++                if (completion) completion(@"");
 +            });
 +            return;
 +        }
-         [self.logger log:[NSString stringWithFormat:@"Endpoint url: %@",url] level:LOGLEVEL_VERBOSE];
++        [self.logger log:[NSString stringWithFormat:@"Endpoint url: %@ (stream=%@)", url, streaming ? @"YES" : @"NO"] level:LOGLEVEL_VERBOSE];
          NSMutableArray *messages = [NSMutableArray array];
 -        
 -        if (self.systemPrompt) {
 +
++        BOOL useAutoTranslate = autoTranslateOverride ? [autoTranslateOverride boolValue] : self.autoTranslateVN;
 +        NSMutableString *effectiveSystemPrompt = [NSMutableString string];
 +        if (self.systemPrompt.length > 0) {
 +            [effectiveSystemPrompt appendString:self.systemPrompt];
 +        }
-+        if (self.autoTranslateVN) {
++        if (useAutoTranslate) {
 +            if (effectiveSystemPrompt.length > 0) {
 +                [effectiveSystemPrompt appendString:@" "];
 +            }
@@ -1045,7 +2695,8 @@ index 8f8f165..aa274b2 100644
          }
 -        
 +
-+        NSString *promptPrefix = [self.prompt stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
++        NSString *chosenPrompt = (customPromptOverride.length > 0) ? customPromptOverride : self.prompt;
++        NSString *promptPrefix = [chosenPrompt stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 +        NSString *userContent = promptPrefix.length > 0
 +            ? [NSString stringWithFormat:@"%@\n\n%@", promptPrefix, query.prompt ?: @""]
 +            : (query.prompt ?: @"");
@@ -1055,18 +2706,25 @@ index 8f8f165..aa274b2 100644
 +            @"content": userContent
          }];
  
-         NSDictionary *body = @{
-@@ -121,37 +176,64 @@
-             @"messages" : messages,
-         };
-         [self.logger log:[NSString stringWithFormat:@"Making a post req with body: %@", body] level:LOGLEVEL_VERBOSE];
+-        NSDictionary *body = @{
++        NSMutableDictionary *body = [@{
+             @"model": self.configuration.model,
+-            @"messages" : messages,
+-        };
+-        [self.logger log:[NSString stringWithFormat:@"Making a post req with body: %@", body] level:LOGLEVEL_VERBOSE];
 -        NSData *jsonData = [NSJSONSerialization dataWithJSONObject:body options:0 error:nil];
 -        
++            @"messages": messages
++        } mutableCopy];
++        if (streaming) {
++            body[@"stream"] = @YES;
++        }
++
 +        NSError *serializeError = nil;
 +        NSData *jsonData = [NSJSONSerialization dataWithJSONObject:body options:0 error:&serializeError];
 +        if (serializeError || !jsonData) {
 +            dispatch_async(dispatch_get_main_queue(), ^{
-+                completion(@"");
++                if (completion) completion(@"");
 +            });
 +            return;
 +        }
@@ -1076,13 +2734,28 @@ index 8f8f165..aa274b2 100644
          [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
 -        [request setValue:[NSString stringWithFormat:@"Bearer %@",self.configuration.token] forHTTPHeaderField:@"Authorization"];
 -        [request setTimeoutInterval:[self.configuration.timeoutInterval doubleValue]];
++        if (streaming) {
++            [request setValue:@"text/event-stream" forHTTPHeaderField:@"Accept"];
++        }
 +        if (self.configuration.token.length > 0) {
-+            [request setValue:[NSString stringWithFormat:@"Bearer %@",self.configuration.token] forHTTPHeaderField:@"Authorization"];
++            [request setValue:[NSString stringWithFormat:@"Bearer %@", self.configuration.token] forHTTPHeaderField:@"Authorization"];
 +        }
 +        NSTimeInterval timeout = [self.configuration.timeoutInterval doubleValue];
 +        [request setTimeoutInterval:(timeout > 0 ? timeout : 30.0)];
          [request setHTTPBody:jsonData];
 -        
++
++        if (streaming) {
++            NSURLSessionDataTask *task = [self.streamSession dataTaskWithRequest:request];
++            DigestStreamContext *ctx = [DigestStreamContext new];
++            ctx.partialBlock = partialBlock;
++            ctx.completionBlock = completion;
++            @synchronized(self.streamLock) {
++                self.streamContexts[@(task.taskIdentifier)] = ctx;
++            }
++            [task resume];
++            return;
++        }
 +
          NSURLSessionDataTask *task = [self.session dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
 -            if (error) {
@@ -1093,7 +2766,7 @@ index 8f8f165..aa274b2 100644
 +            if (error || !data) {
 +                NSLog(@"Request failed: %@", error.localizedDescription);
 +                return dispatch_async(dispatch_get_main_queue(), ^{
-+                    completion(@"");
++                    if (completion) completion(@"");
 +                });
              }
 -            
@@ -1103,17 +2776,19 @@ index 8f8f165..aa274b2 100644
              id jsonResponse = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonError];
              [self.logger log:[NSString stringWithFormat:@"Response body: %@", jsonResponse] level:LOGLEVEL_VERBOSE];
  
-             if (jsonError) {
+-            if (jsonError) {
 -                    NSLog(@"JSON error: %@", jsonError.localizedDescription);
-+                NSLog(@"JSON error: %@", jsonError.localizedDescription);
++            if (jsonError || ![jsonResponse isKindOfClass:[NSDictionary class]]) {
 +                return dispatch_async(dispatch_get_main_queue(), ^{
-+                    completion(@"");
++                    if (completion) completion(@"");
 +                });
 +            }
 +            @try {
-+                if (![jsonResponse isKindOfClass:[NSDictionary class]]) {
++                id choices = jsonResponse[@"choices"];
++                if (![choices isKindOfClass:[NSArray class]] || [choices count] == 0) {
                      return dispatch_async(dispatch_get_main_queue(), ^{
-                         completion(@"");
+-                        completion(@"");
++                        if (completion) completion(@"");
                      });
 -            }  
 -            @try {
@@ -1121,25 +2796,24 @@ index 8f8f165..aa274b2 100644
 -                // Sometimes the result contains newlines, which we want to remove
 -                NSString *cleanedResult = [result stringByReplacingOccurrencesOfString:@"\n" withString:@""];
 +                }
-+                id choices = jsonResponse[@"choices"];
-+                if (![choices isKindOfClass:[NSArray class]] || [choices count] == 0) {
-+                    return dispatch_async(dispatch_get_main_queue(), ^{
-+                        completion(@"");
-+                    });
-+                }
 +                id message = choices[0][@"message"];
 +                id content = [message isKindOfClass:[NSDictionary class]] ? message[@"content"] : nil;
 +                if (![content isKindOfClass:[NSString class]]) {
 +                    return dispatch_async(dispatch_get_main_queue(), ^{
-+                        completion(@"");
++                        if (completion) completion(@"");
 +                    });
 +                }
-+                NSString *cleanedResult = [[(NSString *)content stringByReplacingOccurrencesOfString:@"\r\n" withString:@" "] stringByReplacingOccurrencesOfString:@"\n" withString:@" "];
-+                cleanedResult = [cleanedResult stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
++                NSString *cleanedResult = [self cleanText:(NSString *)content trimEnd:YES];
                  return dispatch_async(dispatch_get_main_queue(), ^{
-                     completion(cleanedResult);
+-                    completion(cleanedResult);
++                    if (completion) completion(cleanedResult);
                  });
-@@ -163,9 +245,8 @@
+             } @catch (NSException *e) {
+                 NSLog(@"Exception: %@", e);
+                 return dispatch_async(dispatch_get_main_queue(), ^{
+-                    completion(@"");
++                    if (completion) completion(@"");
+                 });
              }
          }];
  
@@ -1148,13 +2822,137 @@ index 8f8f165..aa274b2 100644
 -    } @catch (NSException *e) { 
 +    } @catch (NSException *e) {
          dispatch_async(dispatch_get_main_queue(), ^{
-             completion(@"");
+-            completion(@"");
++            if (completion) completion(@"");
          });
+     }
+-}  
++}
++
++#pragma mark - NSURLSessionDataDelegate (SSE Streaming)
++
++- (void)processSSELine:(NSString *)line context:(DigestStreamContext *)ctx {
++    NSString *trimmed = [line stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
++    if (![trimmed hasPrefix:@"data:"]) return;
++    NSString *payload = [[trimmed substringFromIndex:5] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
++    if (payload.length == 0 || [payload isEqualToString:@"[DONE]"]) return;
++
++    NSData *jsonData = [payload dataUsingEncoding:NSUTF8StringEncoding];
++    if (!jsonData) return;
++    id jsonObj = [NSJSONSerialization JSONObjectWithData:jsonData options:0 error:nil];
++    if (![jsonObj isKindOfClass:[NSDictionary class]]) return;
++
++    id choices = jsonObj[@"choices"];
++    if (![choices isKindOfClass:[NSArray class]] || [choices count] == 0) return;
++
++    NSDictionary *choice0 = choices[0];
++    if (![choice0 isKindOfClass:[NSDictionary class]]) return;
++
++    NSString *deltaText = nil;
++    id delta = choice0[@"delta"];
++    if ([delta isKindOfClass:[NSDictionary class]] && [delta[@"content"] isKindOfClass:[NSString class]]) {
++        deltaText = delta[@"content"];
++    } else if ([choice0[@"message"] isKindOfClass:[NSDictionary class]] && [choice0[@"message"][@"content"] isKindOfClass:[NSString class]]) {
++        deltaText = choice0[@"message"][@"content"];
++    }
++    if (deltaText.length > 0) {
++        [ctx.accumulatedText appendString:deltaText];
++    }
++}
++
++- (void)URLSession:(NSURLSession *)session dataTask:(NSURLSessionDataTask *)dataTask didReceiveData:(NSData *)data {
++    DigestStreamContext *ctx = nil;
++    @synchronized(self.streamLock) {
++        ctx = self.streamContexts[@(dataTask.taskIdentifier)];
++    }
++    if (!ctx || ctx.finished || data.length == 0) return;
++
++    [ctx.rawBuffer appendData:data];
++
++    const uint8_t *bytes = (const uint8_t *)ctx.rawBuffer.bytes;
++    NSUInteger length = ctx.rawBuffer.length;
++    NSUInteger lineStart = 0;
++    BOOL appendedAny = NO;
++
++    for (NSUInteger i = 0; i < length; i++) {
++        if (bytes[i] == '\n') {
++            NSData *lineData = [NSData dataWithBytes:(bytes + lineStart) length:(i - lineStart)];
++            NSString *lineStr = [[NSString alloc] initWithData:lineData encoding:NSUTF8StringEncoding];
++            if (lineStr.length > 0) {
++                NSUInteger beforeLen = ctx.accumulatedText.length;
++                [self processSSELine:lineStr context:ctx];
++                if (ctx.accumulatedText.length > beforeLen) {
++                    appendedAny = YES;
++                }
++            }
++            lineStart = i + 1;
++        }
++    }
++
++    if (lineStart > 0) {
++        [ctx.rawBuffer replaceBytesInRange:NSMakeRange(0, lineStart) withBytes:NULL length:0];
++    }
++
++    if (appendedAny && ctx.partialBlock) {
++        CFTimeInterval now = CACurrentMediaTime();
++        if (now - ctx.lastEmitTime >= 0.045) {
++            ctx.lastEmitTime = now;
++            NSString *snapshot = [self cleanText:ctx.accumulatedText trimEnd:NO];
++            if (snapshot.length > 0) {
++                void (^partial)(NSString *) = ctx.partialBlock;
++                dispatch_async(dispatch_get_main_queue(), ^{
++                    partial(snapshot);
++                });
++            }
++        }
++    }
++}
++
++- (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task didCompleteWithError:(NSError *)error {
++    DigestStreamContext *ctx = nil;
++    @synchronized(self.streamLock) {
++        ctx = self.streamContexts[@(task.taskIdentifier)];
++        [self.streamContexts removeObjectForKey:@(task.taskIdentifier)];
++    }
++    if (!ctx || ctx.finished) return;
++    ctx.finished = YES;
++
++    if (ctx.rawBuffer.length > 0) {
++        NSString *tail = [[NSString alloc] initWithData:ctx.rawBuffer encoding:NSUTF8StringEncoding];
++        if (tail.length > 0) {
++            if ([tail containsString:@"data:"]) {
++                for (NSString *line in [tail componentsSeparatedByString:@"\n"]) {
++                    [self processSSELine:line context:ctx];
++                }
++            } else if (ctx.accumulatedText.length == 0) {
++                id jsonResponse = [NSJSONSerialization JSONObjectWithData:ctx.rawBuffer options:0 error:nil];
++                if ([jsonResponse isKindOfClass:[NSDictionary class]]) {
++                    id choices = jsonResponse[@"choices"];
++                    if ([choices isKindOfClass:[NSArray class]] && [choices count] > 0) {
++                        id content = choices[0][@"message"][@"content"];
++                        if ([content isKindOfClass:[NSString class]]) {
++                            [ctx.accumulatedText appendString:content];
++                        }
++                    }
++                }
++            }
++        }
++    }
++
++    NSString *finalResult = (error && ctx.accumulatedText.length == 0)
++        ? @""
++        : [self cleanText:ctx.accumulatedText trimEnd:YES];
++    void (^comp)(NSString *) = ctx.completionBlock;
++    dispatch_async(dispatch_get_main_queue(), ^{
++        if (comp) comp(finalResult);
++    });
++}
+ @end
 diff --git a/src/Tweak.x b/src/Tweak.x
-index 3a91698..42ece55 100644
+index 3a91698..bc86133 100644
 --- a/src/Tweak.x
 +++ b/src/Tweak.x
-@@ -5,6 +5,265 @@
+@@ -5,10 +5,393 @@
  NSData *imgData;
  DigestPrefsManager *prefsManager;
  OpenAI *openai;
@@ -1173,10 +2971,18 @@ index 3a91698..42ece55 100644
 +static NSString *bannerAccentColor = @"default";
 +static BOOL bannerBoldSummary = NO;
 +static BOOL bannerShowOriginal = NO;
++static BOOL showOriginalInExpanded = YES;
++static BOOL streamingEnabled = YES;
++static NSString *streamAnimationStyle = @"fadeWords";
++static BOOL pauseInLowPowerMode = NO;
++static BOOL lowPowerActive = NO;
 +
 +static id prefsUpdateObserver = nil;
++static id powerStateObserver = nil;
 +static NSMutableDictionary<NSString *, NSMutableArray<NSDictionary *> *> *contextBuffer = nil;
 +static NSObject *contextLock = nil;
++static NSHashTable<NCNotificationShortLookViewController *> *activeControllers = nil;
++static UIImage *cachedArrowImage = nil;
 +
 +@interface SBApplication : NSObject
 +- (NSString *)displayName;
@@ -1248,8 +3054,18 @@ index 3a91698..42ece55 100644
 +    return [NSString stringWithFormat:@"-%ldh", (long)hrs];
 +}
 +
-+static NSArray<NSDictionary *> *recordAndFetchContext(NCNotificationRequest *req, NSString *message, BOOL fetchPrior) {
-+    if (!contextBufferEnabled || message.length == 0) return nil;
++static NSNumber *resolveAppTriState(NSString *prefix, NSString *bundleId) {
++    if (!prefsManager || bundleId.length == 0) return nil;
++    NSString *val = [prefsManager objectForKey:[NSString stringWithFormat:@"%@_%@", prefix, bundleId]];
++    if ([val isKindOfClass:[NSString class]]) {
++        if ([val isEqualToString:@"on"]) return @YES;
++        if ([val isEqualToString:@"off"]) return @NO;
++    }
++    return nil;
++}
++
++static NSArray<NSDictionary *> *recordAndFetchContext(NCNotificationRequest *req, NSString *message, BOOL fetchPrior, BOOL effectiveCtxEnabled) {
++    if (!effectiveCtxEnabled || message.length == 0) return nil;
 +    NSString *title = safeKVCString(req.content, @"title");
 +    NSString *convKey = contextKeyForRequest(req, title);
 +    NSDate *now = [NSDate date];
@@ -1363,15 +3179,107 @@ index 3a91698..42ece55 100644
 +    return result;
 +}
 +
-+static UIColor *resolveAccentColor(NSString *key) {
-+    if ([key isEqualToString:@"label"]) return [UIColor labelColor];
-+    if ([key isEqualToString:@"blue"]) return [UIColor systemBlueColor];
-+    if ([key isEqualToString:@"purple"]) return [UIColor systemPurpleColor];
-+    if ([key isEqualToString:@"teal"]) return [UIColor systemTealColor];
-+    if ([key isEqualToString:@"orange"]) return [UIColor systemOrangeColor];
-+    if ([key isEqualToString:@"red"]) return [UIColor systemRedColor];
-+    if ([key isEqualToString:@"green"]) return [UIColor systemGreenColor];
++static DigestBannerRenderConfig *currentBannerRenderConfig(void) {
++    DigestBannerRenderConfig *cfg = [DigestBannerRenderConfig new];
++    cfg.badgeStyle = bannerBadgeStyle;
++    cfg.prefixText = bannerPrefixText;
++    cfg.accentColorKey = bannerAccentColor;
++    cfg.boldSummary = bannerBoldSummary;
++    cfg.showOriginalLine = bannerShowOriginal;
++    cfg.animationStyle = streamAnimationStyle;
++    if (!cachedArrowImage && imgData.length > 0) {
++        cachedArrowImage = [[UIImage alloc] initWithData:imgData scale:[[UIScreen mainScreen] scale]];
++    }
++    cfg.arrowImage = cachedArrowImage;
++    return cfg;
++}
++
++static UIView *findContentViewForController(NCNotificationShortLookViewController *vc) {
++    UIView *preview = (UIView *)vc.viewForPreview;
++    UIView *cv = nil;
++    @try {
++        cv = [preview valueForKey:@"notificationContentView"];
++    } @catch (NSException *e) {}
++    if (cv) return cv;
++
++    NSMutableArray<UIView *> *queue = [NSMutableArray array];
++    if (vc.view) [queue addObject:vc.view];
++    Class seamlessCls = NSClassFromString(@"NCNotificationSeamlessContentView");
++    NSUInteger visited = 0;
++    while (queue.count > 0 && visited < 64) {
++        UIView *v = queue.firstObject;
++        [queue removeObjectAtIndex:0];
++        visited++;
++        if (seamlessCls && [v isKindOfClass:seamlessCls]) {
++            return v;
++        }
++        [queue addObjectsFromArray:v.subviews];
++    }
 +    return nil;
++}
++
++static void renderControllerBanner(NCNotificationShortLookViewController *vc) {
++    if (!vc || !vc.notificationRequest) return;
++    @try {
++        BOOL isExpanded = [vc isKindOfClass:NSClassFromString(@"NCExpandedPlatterViewController")];
++        UIView *seamlessContentView = findContentViewForController(vc);
++        if (!seamlessContentView) return;
++
++        UILabel *messageLabel = nil;
++        @try {
++            messageLabel = [seamlessContentView valueForKey:@"secondaryTextElement"];
++        } @catch (NSException *e) {}
++        NSString *msgText = safeKVCString(vc.notificationRequest.content, @"message");
++        if (!messageLabel || !msgText) return;
++
++        if (!vc.notificationRequest.dig3st) {
++            [DigestBannerAnimator stopForLabel:messageLabel];
++            messageLabel.text = msgText;
++            [messageLabel invalidateIntrinsicContentSize];
++            [seamlessContentView setNeedsLayout];
++            return;
++        }
++
++        NSString *origText = safeKVCString(vc.notificationRequest, @"actualMessage");
++        DigestBannerRenderConfig *cfg = currentBannerRenderConfig();
++
++        if (isExpanded) {
++            if (showOriginalInExpanded) {
++                [DigestBannerAnimator renderExpandedToLabel:messageLabel withSummary:msgText originalText:origText config:cfg layoutHost:seamlessContentView];
++            }
++            return;
++        }
++
++        BOOL isStreaming = NO;
++        @try {
++            isStreaming = [[vc.notificationRequest valueForKey:@"dig3stStreaming"] boolValue];
++        } @catch (NSException *e) {}
++
++        [DigestBannerAnimator updateLabel:messageLabel
++                              withSummary:msgText
++                             originalText:origText
++                              isStreaming:isStreaming
++                                   config:cfg
++                               layoutHost:seamlessContentView];
++    } @catch (NSException *e) {
++        NSLog(@"dig3st render error: %@", e);
++    }
++}
++
++static void updateVisibleControllersForRequest(NCNotificationRequest *targetReq) {
++    if (!targetReq || !activeControllers) return;
++    NSString *targetId = safeKVCString(targetReq, @"notificationIdentifier");
++    for (NCNotificationShortLookViewController *vc in [activeControllers allObjects]) {
++        if (!vc || !vc.notificationRequest) continue;
++        BOOL match = (vc.notificationRequest == targetReq);
++        if (!match && targetId.length > 0) {
++            NSString *vcId = safeKVCString(vc.notificationRequest, @"notificationIdentifier");
++            match = (vcId.length > 0 && [vcId isEqualToString:targetId]);
++        }
++        if (match) {
++            renderControllerBanner(vc);
++        }
++    }
 +}
 +
 +static void clearContextBufferCallback(CFNotificationCenterRef center, void *observer, CFStringRef name, const void *object, CFDictionaryRef userInfo) {
@@ -1416,11 +3324,29 @@ index 3a91698..42ece55 100644
 +    bannerAccentColor = ([accent isKindOfClass:[NSString class]] && accent.length > 0) ? [accent copy] : @"default";
 +    bannerBoldSummary = [[prefsManager objectForKey:@"bannerBoldSummary"] boolValue];
 +    bannerShowOriginal = [[prefsManager objectForKey:@"bannerShowOriginal"] boolValue];
++
++    id expOrig = [prefsManager objectForKey:@"showOriginalInExpanded"];
++    showOriginalInExpanded = expOrig ? [expOrig boolValue] : YES;
++
++    id strEn = [prefsManager objectForKey:@"streamingEnabled"];
++    streamingEnabled = strEn ? [strEn boolValue] : YES;
++
++    NSString *anim = [prefsManager objectForKey:@"streamAnimationStyle"];
++    streamAnimationStyle = ([anim isKindOfClass:[NSString class]] && anim.length > 0) ? [anim copy] : @"fadeWords";
++
++    pauseInLowPowerMode = [[prefsManager objectForKey:@"pauseInLowPowerMode"] boolValue];
++    lowPowerActive = [[NSProcessInfo processInfo] isLowPowerModeEnabled];
 +}
  
  %hook NCNotificationRequest
  %property (nonatomic, assign) BOOL dig3st;
-@@ -36,7 +295,8 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
+ %property (nonatomic, retain) NSString * actualMessage;
++%property (nonatomic, assign) BOOL dig3stStreaming;
++%property (nonatomic, retain) NSString * dig3stStreamId;
+ %end
+ 
+ BOOL isOkToSummarize(NSString *sectionIdentifier) {
+@@ -36,46 +419,44 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
              %orig(arg1);
          }
      } @catch(NSException *e) {
@@ -1430,27 +3356,42 @@ index 3a91698..42ece55 100644
      }
  }
  %end
-@@ -45,35 +305,93 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
+ 
+ %hook NCNotificationShortLookViewController
  %property (nonatomic, retain) UIImage *image;
++-(void)viewDidLoad {
++    %orig;
++    if (activeControllers) {
++        [activeControllers addObject:self];
++    }
++}
++-(void)viewWillAppear:(BOOL)animated {
++    %orig;
++    if (activeControllers) {
++        [activeControllers addObject:self];
++    }
++}
++-(void)viewDidDisappear:(BOOL)animated {
++    %orig;
++    @try {
++        UIView *cv = findContentViewForController(self);
++        UILabel *lbl = cv ? [cv valueForKey:@"secondaryTextElement"] : nil;
++        if (lbl) [DigestBannerAnimator stopForLabel:lbl];
++    } @catch (NSException *e) {}
++    if (activeControllers) {
++        [activeControllers removeObject:self];
++    }
++}
  -(void)viewDidLayoutSubviews  {
      %orig;
 -    @try{
 -        NCNotificationShortLookView *view  = (NCNotificationShortLookView *)self.viewForPreview;
-+    @try {
-+        if ([self isKindOfClass:NSClassFromString(@"NCExpandedPlatterViewController")]) {
-+            return;
-+        }
-+        NCNotificationShortLookView *view = (NCNotificationShortLookView *)self.viewForPreview;
-         if (self.notificationRequest.dig3st) {
+-        if (self.notificationRequest.dig3st) {
 -            UIView *seamlessContentView =  [view valueForKey:@"notificationContentView"];
-+            UIView *seamlessContentView = [view valueForKey:@"notificationContentView"];
-             if (seamlessContentView) {
+-            if (seamlessContentView) {
 -                UIImage *image = [[UIImage alloc] initWithData:imgData scale:[[UIScreen mainScreen] scale]];
 -                self.image = image;
-+                UILabel *messageLabel = [seamlessContentView valueForKey:@"secondaryTextElement"];
-+                NSString *msgText = safeKVCString(self.notificationRequest.content, @"message");
-+                if (!messageLabel || !msgText) return;
- 
+-
 -                NSTextAttachment *attachment = [[NSTextAttachment alloc] init];
 -                attachment.image = image;
 -                attachment.bounds = CGRectMake(0, 0, 19, 12);
@@ -1459,98 +3400,34 @@ index 3a91698..42ece55 100644
 -                NSMutableAttributedString *attributedString = [[NSMutableAttributedString alloc] initWithString:@" "];
 -                
 -                [attributedString appendAttributedString:attachmentString];
-+                UIFont *baseFont = messageLabel.font ?: [UIFont systemFontOfSize:14.0];
-+                UIColor *accent = resolveAccentColor(bannerAccentColor);
-+                NSMutableAttributedString *attributedString = [[NSMutableAttributedString alloc] init];
- 
+-
 -                //space between image and text
 -                [attributedString appendAttributedString:[[NSAttributedString alloc] initWithString:@"  "]];
-+                if ([bannerBadgeStyle isEqualToString:@"text"]) {
-+                    UIFont *prefixFont = [UIFont systemFontOfSize:baseFont.pointSize weight:UIFontWeightSemibold];
-+                    NSDictionary *prefixAttrs = @{
-+                        NSFontAttributeName: prefixFont,
-+                        NSForegroundColorAttributeName: (accent ?: [UIColor labelColor])
-+                    };
-+                    [attributedString appendAttributedString:[[NSAttributedString alloc] initWithString:[NSString stringWithFormat:@"%@ ", bannerPrefixText] attributes:prefixAttrs]];
-+                } else if ([bannerBadgeStyle isEqualToString:@"sparkles"] || [bannerBadgeStyle isEqualToString:@"bolt"] || [bannerBadgeStyle isEqualToString:@"cpu"]) {
-+                    NSString *symbolName = [bannerBadgeStyle isEqualToString:@"bolt"] ? @"bolt.fill" : bannerBadgeStyle;
-+                    UIImageSymbolConfiguration *symConfig = [UIImageSymbolConfiguration configurationWithPointSize:MAX(11.0, baseFont.pointSize - 1.0) weight:UIFontWeightSemibold];
-+                    UIImage *symImg = [UIImage systemImageNamed:symbolName withConfiguration:symConfig];
-+                    if (symImg) {
-+                        UIImage *tinted = [symImg imageWithTintColor:(accent ?: [UIColor labelColor]) renderingMode:UIImageRenderingModeAlwaysOriginal];
-+                        self.image = tinted;
-+                        NSTextAttachment *attachment = [[NSTextAttachment alloc] init];
-+                        attachment.image = tinted;
-+                        CGFloat h = MAX(12.0, baseFont.pointSize - 1.0);
-+                        CGFloat w = (tinted.size.height > 0) ? (tinted.size.width / tinted.size.height) * h : h;
-+                        attachment.bounds = CGRectMake(0, -2.0, w, h);
-+                        [attributedString appendAttributedString:[NSAttributedString attributedStringWithAttachment:attachment]];
-+                        [attributedString appendAttributedString:[[NSAttributedString alloc] initWithString:@" "]];
-+                    }
-+                } else if (![bannerBadgeStyle isEqualToString:@"none"]) {
-+                    UIImage *image = [[UIImage alloc] initWithData:imgData scale:[[UIScreen mainScreen] scale]];
-+                    if (image) {
-+                        if (accent) {
-+                            image = [image imageWithTintColor:accent renderingMode:UIImageRenderingModeAlwaysOriginal];
-+                        }
-+                        self.image = image;
-+                        NSTextAttachment *attachment = [[NSTextAttachment alloc] init];
-+                        attachment.image = image;
-+                        attachment.bounds = CGRectMake(0, -1.0, 19, 12);
-+                        [attributedString appendAttributedString:[[NSAttributedString alloc] initWithString:@" "]];
-+                        [attributedString appendAttributedString:[NSAttributedString attributedStringWithAttachment:attachment]];
-+                        [attributedString appendAttributedString:[[NSAttributedString alloc] initWithString:@"  "]];
-+                    }
-+                }
- 
-+                UIFont *summaryFont = bannerBoldSummary
-+                    ? [UIFont systemFontOfSize:baseFont.pointSize weight:UIFontWeightSemibold]
-+                    : baseFont;
-                 NSMutableParagraphStyle *paragraphStyle = [[NSMutableParagraphStyle alloc] init];
+-
+-                NSMutableParagraphStyle *paragraphStyle = [[NSMutableParagraphStyle alloc] init];
 -                NSDictionary *attributes = @{NSParagraphStyleAttributeName: paragraphStyle};
 -                NSAttributedString *messageString = [[NSAttributedString alloc] initWithString:[self.notificationRequest.content valueForKey:@"message"] attributes:attributes];
 -                
 -                [attributedString appendAttributedString:messageString];
 -                UILabel *message = [seamlessContentView valueForKey:@"secondaryTextElement"];
 -                message.attributedText = attributedString;
-+                NSDictionary *summaryAttrs = @{
-+                    NSParagraphStyleAttributeName: paragraphStyle,
-+                    NSFontAttributeName: summaryFont
-+                };
-+                [attributedString appendAttributedString:[[NSAttributedString alloc] initWithString:msgText attributes:summaryAttrs]];
-+
-+                if (bannerShowOriginal) {
-+                    NSString *origText = safeKVCString(self.notificationRequest, @"actualMessage");
-+                    if (origText.length > 0 && ![origText isEqualToString:msgText]) {
-+                        NSString *flatOrig = [[origText stringByReplacingOccurrencesOfString:@"\r\n" withString:@" "] stringByReplacingOccurrencesOfString:@"\n" withString:@" "];
-+                        if (flatOrig.length > 70) {
-+                            NSRange safeRange = [flatOrig rangeOfComposedCharacterSequencesForRange:NSMakeRange(0, 70)];
-+                            flatOrig = [[flatOrig substringWithRange:safeRange] stringByAppendingString:@"…"];
-+                        }
-+                        UIFont *origFont = [UIFont systemFontOfSize:MAX(11.0, baseFont.pointSize - 2.0)];
-+                        NSDictionary *origAttrs = @{
-+                            NSFontAttributeName: origFont,
-+                            NSForegroundColorAttributeName: [UIColor secondaryLabelColor]
-+                        };
-+                        [attributedString appendAttributedString:[[NSAttributedString alloc] initWithString:[NSString stringWithFormat:@"\n%@", flatOrig] attributes:origAttrs]];
-+                        if (messageLabel.numberOfLines > 0 && messageLabel.numberOfLines < 4) {
-+                            messageLabel.numberOfLines = 4;
-+                        }
-+                    }
-+                }
-+
-+                messageLabel.attributedText = attributedString;
-             }
+-            }
 -        } 
-+        }
-     } @catch(NSException *e) {
-         NSLog(@"error: %@", e);
+-    } @catch(NSException *e) {
+-        NSLog(@"error: %@", e);
++    if (activeControllers) {
++        [activeControllers addObject:self];
++    }
++    if (self.notificationRequest.dig3st) {
++        renderControllerBanner(self);
      }
-@@ -83,28 +401,37 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
+ }
+ %end
+@@ -83,46 +464,110 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
  %hook NCNotificationDispatcher
  -(void)postNotificationWithRequest:(NCNotificationRequest*)req {
      @try {
-+        if (!tweakEnabled) {
++        if (!tweakEnabled || (pauseInLowPowerMode && lowPowerActive)) {
 +            [req setValue:@(NO) forKey:@"dig3st"];
 +            return %orig;
 +        }
@@ -1560,41 +3437,130 @@ index 3a91698..42ece55 100644
          NSInteger minChars = [[prefsManager objectForKey:@"minChars"] integerValue];
  
 -        BOOL contentTooShort = textContent ? textContent.length < minChars  : YES;
-+        //checks if user set anything for this bundle identifier
-+        id _enabled = req.sectionIdentifier.length > 0 ? [prefsManager objectForKey:req.sectionIdentifier] : nil;
-+        //if not then use isOkToSummarize else use the user setting
-+        BOOL enabled = _enabled != nil ? [_enabled boolValue] : isOkToSummarize(req.sectionIdentifier);
++        NSString *bundleId = req.sectionIdentifier ?: @"";
++        id _enabled = bundleId.length > 0 ? [prefsManager objectForKey:bundleId] : nil;
++        BOOL enabled = _enabled != nil ? [_enabled boolValue] : isOkToSummarize(bundleId);
++
++        NSNumber *appCtxOverride = resolveAppTriState(@"appCtx", bundleId);
++        BOOL effectiveCtxEnabled = appCtxOverride ? [appCtxOverride boolValue] : contextBufferEnabled;
++
++        NSNumber *appTransOverride = resolveAppTriState(@"appTrans", bundleId);
++
++        NSNumber *appStreamOverride = resolveAppTriState(@"appStream", bundleId);
++        BOOL effectiveStreamEnabled = appStreamOverride ? [appStreamOverride boolValue] : streamingEnabled;
++
++        NSString *appCustomPrompt = bundleId.length > 0
++            ? [prefsManager objectForKey:[NSString stringWithFormat:@"appPrompt_%@", bundleId]]
++            : nil;
++        if (![appCustomPrompt isKindOfClass:[NSString class]] || appCustomPrompt.length == 0) {
++            appCustomPrompt = nil;
++        }
 +
 +        BOOL contentTooShort = textContent ? (NSInteger)textContent.length < minChars : YES;
          if (contentTooShort) {
-+            if (enabled && contextBufferEnabled && contextRecordShort && textContent.length > 0) {
-+                recordAndFetchContext(req, textContent, NO);
++            if (enabled && effectiveCtxEnabled && contextRecordShort && textContent.length > 0) {
++                recordAndFetchContext(req, textContent, NO, effectiveCtxEnabled);
 +            }
              [logger log:@"Skipping summarization, content is too short" level:LOGLEVEL_WARNING];
              [req setValue:@(NO) forKey:@"dig3st"];
 -            return %orig;        
-+            return %orig;
-         }
- 
+-        }
+-
 -        //checks if user set anything for this bundle identifier
 -        id _enabled = [prefsManager objectForKey:req.sectionIdentifier];
 -        //if not then use isOkToSummarize else use the user setting
 -        BOOL enabled = _enabled != nil ? [_enabled boolValue] : isOkToSummarize(req.sectionIdentifier);
 -
-         [logger log:[NSString stringWithFormat:@"Will summarize notification with bundle identifier %@ ? %@",req.sectionIdentifier,enabled ? @"yes" : @"no"] level:LOGLEVEL_INFO];
- 
+-        [logger log:[NSString stringWithFormat:@"Will summarize notification with bundle identifier %@ ? %@",req.sectionIdentifier,enabled ? @"yes" : @"no"] level:LOGLEVEL_INFO];
+-
 -        if (enabled) {
 -            ChatQuery *query = [[ChatQuery alloc] initWithPrompt:textContent];
 -            [logger log:[NSString stringWithFormat:@"ChatQuery has been created with prompt %@",textContent] level:LOGLEVEL_VERBOSE];
+-            [openai summarize:query completion:^(NSString *summary) {
+-                if (summary.length > 0) {
+-                    [logger log:[NSString stringWithFormat:@"Summary: %@",summary] level:LOGLEVEL_INFO];
+-                    [req setValue:@(YES) forKey:@"dig3st"];
+-                    [req setValue:[req.content valueForKey:@"message"] forKey:@"actualMessage"];
+-                    [req.content setValue:summary forKey:@"message"];
+-                    %orig(req);
+-                } else {
+-                    [req setValue:@(NO) forKey:@"dig3st"];
+-                    %orig(req);
++            return %orig;
++        }
++
++        [logger log:[NSString stringWithFormat:@"Will summarize notification with bundle identifier %@ ? %@", bundleId, enabled ? @"yes" : @"no"] level:LOGLEVEL_INFO];
++
 +        if (enabled && openai != nil && openai.configuration.host.length > 0 && openai.configuration.model.length > 0) {
-+            NSArray<NSDictionary *> *priorContext = recordAndFetchContext(req, textContent, YES);
++            NSArray<NSDictionary *> *priorContext = recordAndFetchContext(req, textContent, YES, effectiveCtxEnabled);
 +            NSString *promptInput = buildContextPrompt(req, textContent, priorContext);
 +            ChatQuery *query = [[ChatQuery alloc] initWithPrompt:promptInput];
-+            [logger log:[NSString stringWithFormat:@"ChatQuery has been created with prompt %@",promptInput] level:LOGLEVEL_VERBOSE];
-             [openai summarize:query completion:^(NSString *summary) {
-                 if (summary.length > 0) {
-                     [logger log:[NSString stringWithFormat:@"Summary: %@",summary] level:LOGLEVEL_INFO];
-@@ -131,79 +458,83 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
++            [logger log:[NSString stringWithFormat:@"ChatQuery created (stream=%@)", effectiveStreamEnabled ? @"YES" : @"NO"] level:LOGLEVEL_VERBOSE];
++
++            if (effectiveStreamEnabled) {
++                NSString *streamId = [NSUUID UUID].UUIDString;
++                [req setValue:textContent forKey:@"actualMessage"];
++                [req setValue:@(YES) forKey:@"dig3st"];
++                [req setValue:@(YES) forKey:@"dig3stStreaming"];
++                [req setValue:streamId forKey:@"dig3stStreamId"];
++                [req.content setValue:@"Đang tóm tắt…" forKey:@"message"];
++                %orig(req);
++
++                [openai summarize:query
++                    autoTranslate:appTransOverride
++                     customPrompt:appCustomPrompt
++                       streamMode:YES
++                        onPartial:^(NSString *partialText) {
++                    if (partialText.length == 0) return;
++                    NSString *curId = nil;
++                    @try { curId = [req valueForKey:@"dig3stStreamId"]; } @catch (NSException *e) {}
++                    if (curId && ![curId isEqualToString:streamId]) return;
++                    [req.content setValue:partialText forKey:@"message"];
++                    updateVisibleControllersForRequest(req);
+                 }
+-            }];
++                       completion:^(NSString *summary) {
++                    [req setValue:@(NO) forKey:@"dig3stStreaming"];
++                    if (summary.length > 0) {
++                        [logger log:[NSString stringWithFormat:@"Stream Summary: %@", summary] level:LOGLEVEL_INFO];
++                        [req.content setValue:summary forKey:@"message"];
++                    } else {
++                        [req setValue:@(NO) forKey:@"dig3st"];
++                        [req.content setValue:textContent forKey:@"message"];
++                    }
++                    updateVisibleControllersForRequest(req);
++                }];
++            } else {
++                [openai summarize:query
++                    autoTranslate:appTransOverride
++                     customPrompt:appCustomPrompt
++                       streamMode:NO
++                        onPartial:nil
++                       completion:^(NSString *summary) {
++                    if (summary.length > 0) {
++                        [logger log:[NSString stringWithFormat:@"Summary: %@", summary] level:LOGLEVEL_INFO];
++                        [req setValue:@(YES) forKey:@"dig3st"];
++                        [req setValue:@(NO) forKey:@"dig3stStreaming"];
++                        [req setValue:textContent forKey:@"actualMessage"];
++                        [req.content setValue:summary forKey:@"message"];
++                        %orig(req);
++                    } else {
++                        [req setValue:@(NO) forKey:@"dig3st"];
++                        %orig(req);
++                    }
++                }];
++            }
+         } else {
+             [logger log:@"Skipping summarization" level:LOGLEVEL_INFO];
+             [req setValue:@(NO) forKey:@"dig3st"];
+             %orig(req);
+         }
+-    } @catch (NSException *e) { 
++    } @catch (NSException *e) {
+         [req setValue:@(NO) forKey:@"dig3st"];
+         NSLog(@"exception while fetching ai response : %@", e);
+         %orig;
+@@ -131,79 +576,87 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
  %end
  
  %ctor {
@@ -1603,11 +3569,15 @@ index 3a91698..42ece55 100644
          NSLog(@"init");
 +        contextLock = [NSObject new];
 +        contextBuffer = [NSMutableDictionary new];
++        activeControllers = [NSHashTable weakObjectsHashTable];
          prefsManager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
 -        BOOL enabled = [[prefsManager objectForKey:@"enabled"] boolValue];
 +        refreshRuntimePrefs();
 +        prefsUpdateObserver = [[NSNotificationCenter defaultCenter] addObserverForName:@"com.uncore.dig3st/update" object:nil queue:nil usingBlock:^(NSNotification *note) {
 +            refreshRuntimePrefs();
++        }];
++        powerStateObserver = [[NSNotificationCenter defaultCenter] addObserverForName:NSProcessInfoPowerStateDidChangeNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
++            lowPowerActive = [[NSProcessInfo processInfo] isLowPowerModeEnabled];
 +        }];
 +        CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, clearContextBufferCallback, CFSTR("com.uncore.dig3st/clearContext"), NULL, CFNotificationSuspensionBehaviorCoalesce);
 +
