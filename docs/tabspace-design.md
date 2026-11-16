@@ -115,6 +115,8 @@ Nhật ký ghi thời điểm, nguồn kích hoạt, quy tắc áp dụng, kết
 
 Gợi ý tab trùng, lâu không truy cập (chỉ khi có dữ liệu), đã lưu nhưng còn mở, quy tắc chồng lấn. Mỗi gợi ý có lý do, xem trước, bỏ qua/tắt; không tự coi tab cũ là rác. Không dùng ước lượng RAM như số đo. Gợi ý theo mức tiêu hao tài nguyên dùng chung khối xem trước và chịu cùng chính sách bảo vệ; điều kiện, nguồn đo và giới hạn ở mục 15.
 
+**Trạng thái (0.121):** cả tab này chưa tồn tại trong ứng dụng. Danh sách "được đề xuất nghỉ" mà mức **Chỉ gợi ý** (15.3) cần nằm ở đây, nên hộp thoại *Thái độ tài nguyên* ghi thẳng giới hạn đó xuống ô **Cách xử lý** thay vì để người dùng đoán.
+
 ## 6. Preset dọn tab
 
 ### 6.1 Cấu hình
@@ -312,7 +314,7 @@ Tôn trọng `prefers-reduced-motion`: bỏ hoặc giảm chuyển động khôn
 
 ## 15. Tự động cho nghỉ tab theo mức tiêu hao tài nguyên
 
-**Trạng thái:** đã có nền tảng ở 15.1–15.5 (tiến độ 0.115, bộ đo nền ở 0.116, cửa chặn RAM hệ thống ở 0.117, thẻ Cần chú ý ở 0.118): module `auto-discard.js` quyết định theo ngưỡng rời từng tài nguyên, khối cài đặt thu gọn trong trang quản lý, `AutoDiscard.run()` chạy theo chu kỳ trong service worker với đúng các cổng chặn của một lượt nghỉ — nhưng lượt nền chỉ đo và đếm, không nghỉ tab, và kết quả một lượt hiện thành thẻ trong Cần chú ý ở mức Hỏi trước. Đã xong ở 15.6: quyền vẫn chưa xin (chủ đích), số đo không ra khỏi máy, và cấu hình vào sao lưu theo lựa chọn kèm buộc tắt khi nhập (0.120). **Chưa triển khai:** danh sách gợi ý ở Sức khỏe tab (5.7), lượt nghỉ Tự động, quyền `processes`/`system.memory` và đường ước lượng trong trang. Toàn bộ mục này vẫn phụ thuộc một khả năng chưa kiểm chứng (mục 12.9): Chrome không cho extension mọi kênh ổn định để đo tài nguyên của từng tab. Nơi nào không có nguồn đo đáng tin, giao diện nói "không đo được" và tính năng không chạy — không thay bằng số suy đoán.
+**Trạng thái:** đã có nền tảng ở 15.1–15.5 (tiến độ 0.115, bộ đo nền ở 0.116, cửa chặn RAM hệ thống ở 0.117, thẻ Cần chú ý ở 0.118): module `auto-discard.js` quyết định theo ngưỡng rời từng tài nguyên, khối cài đặt thu gọn trong trang quản lý, `AutoDiscard.run()` chạy theo chu kỳ trong service worker với đúng các cổng chặn của một lượt nghỉ — nhưng lượt nền chỉ đo và đếm, không nghỉ tab, và kết quả một lượt hiện thành thẻ trong Cần chú ý ở mức Hỏi trước. Đã xong ở 15.6: quyền vẫn chưa xin (chủ đích), số đo không ra khỏi máy, và cấu hình vào sao lưu theo lựa chọn kèm buộc tắt khi nhập (0.120). **Chưa triển khai:** danh sách gợi ý ở Sức khỏe tab (5.7) — từ 0.121 ngay hộp thoại cài đặt ghi rõ mức **Chỉ gợi ý** chỉ đổi cách đếm và cách nhắc, lượt nghỉ Tự động, quyền `processes`/`system.memory` và đường ước lượng trong trang. Toàn bộ mục này vẫn phụ thuộc một khả năng chưa kiểm chứng (mục 12.9): Chrome không cho extension mọi kênh ổn định để đo tài nguyên của từng tab. Nơi nào không có nguồn đo đáng tin, giao diện nói "không đo được" và tính năng không chạy — không thay bằng số suy đoán.
 
 Mục này chỉ thêm **một nguồn ứng viên mới** cho bộ điều phối: tab đang tiêu hao nhiều (RAM, CPU, mạng) thay vì tab khớp quy tắc URL như preset. Chính sách bảo vệ, phân tầng cài đặt, điều phối, thông báo, giới hạn và xử lý lỗi dùng lại mục 6, 7, 8, 14; không tạo cơ chế thứ hai song song.
 
@@ -539,3 +541,12 @@ Bản ghi "lần đo gần nhất" — số tab vượt ngưỡng, số tab bị
 Theo 15.6, hộp **Xuất dữ liệu JSON** có thêm ô chọn "Thêm ngưỡng tài nguyên cho nghỉ tab (khi nhập luôn ở trạng thái tắt)". Chỉ cấu hình đi theo: bật/tắt, cách xử lý, cách kết hợp, ngưỡng rời từng tài nguyên, số chu kỳ liên tiếp, thời gian không được xem, giới hạn mỗi lượt, chu kỳ đo và cửa RAM hệ thống. Không có số đo nào vào file — bản ghi lần đo nằm ở `chrome.storage.session` nên phần xuất không nhìn thấy, và file cũng không chứa tên hay URL tab.
 
 Khi nhập, hộp xem trước chỉ hiện ô "Áp dụng ngưỡng tài nguyên trong file" nếu file có mục đó; không chọn thì cấu hình hiện tại giữ nguyên. Khi chọn, `BackupOptions.resource()` luôn ghi `enabled:false`, và mức **Tự động** trong file bị hạ về **Hỏi trước**, vì lời xác nhận rủi ro ở 15.3 không thể đi nhờ file. Mục này cũng nằm trong danh sách kiểm tra "dữ liệu đã thay đổi ở nơi khác": nếu cấu hình tài nguyên bị sửa lúc hộp nhập đang mở, việc nhập dừng và không ghi gì.
+
+### Chu kỳ đo tự quyết định lại, và nhãn thành thật (0.121)
+
+Bản này ghi thẳng vào hộp thoại **Thái độ tài nguyên** rằng mức **Chỉ gợi ý** chỉ đổi *cách đếm và cách nhắc*: danh sách đề xuất riêng ở *Sức khỏe tab* (5.7) vẫn chưa tồn tại, nên đừng hiểu mức này là một cách an toàn hơn để tab tự nghỉ — muốn tab thật sự nghỉ phải có mức **Tự động**, và mức đó vẫn đang tắt.
+
+Ba chỉnh sửa còn lại chỉ là kiểm chứng, không đổi hành vi:
+- mỗi chu kỳ **quyết định lại từ chuỗi mẫu hiện hành**, nên đổi ngưỡng hay đổi *Chu kỳ đo* có hiệu lực ngay ở lần chạy kế tiếp (mẫu cũ quá *Chu kỳ đo* thì tab rơi khỏi danh sách ngay chu kỳ sau), không cần nạp lại extension;
+- test mạch báo thức giờ chạy thẳng module thật `AutoDiscard.run` thay vì callback giả: với *Chu kỳ đo* 60 phút, bốn phút tick chỉ hỏi Chrome **một** lần; với 1 phút thì đo cả bốn lần;
+- phần đo không tự thêm `chrome.alarms`/`setTimeout`/`setInterval` nào và không đụng `chrome.tabs` — nếu về sau có ai chèn một lệnh nghỉ tab vào module, test báo đỏ.

@@ -1,9 +1,27 @@
-const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),OpenGrace=require('../extension/open-grace.js'),Protection=require('../extension/protection.js');let onAlarm,onUpdated,onRemoved,runCalls=[],forgetCalls=[],order=[],failNext=false;
-const chrome={runtime:{onInstalled:{addListener(){}},onStartup:{addListener(){}},getURL:()=>'chrome-extension://x/'},alarms:{get:async()=>({name:'tick'}),create:async()=>{},onAlarm:{addListener:f=>onAlarm=f}},commands:{onCommand:{addListener(){}}},permissions:{onAdded:{addListener(){}}},tabs:{query:async()=>[],onRemoved:{addListener:f=>onRemoved=f},onUpdated:{addListener:f=>onUpdated=f}},storage:{local:{get:async()=>({}),set:async()=>{}},session:{get:async()=>({}),set:async()=>{},remove:async()=>{}}}};
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),OpenGrace=require('../extension/open-grace.js'),Protection=require('../extension/protection.js'),A=require('../extension/auto-discard.js');let onAlarm,onUpdated,onRemoved,runCalls=[],forgetCalls=[],order=[],failNext=false,listenerAdds=0,alarmCreates=0,timers=0;
+const add=f=>async value=>{listenerAdds++;f(value)};
+const chrome={runtime:{onInstalled:{addListener(){}},onStartup:{addListener(){}},getURL:()=>'chrome-extension://x/'},alarms:{get:async()=>({name:'tick'}),create:async()=>{alarmCreates++},onAlarm:{addListener:add(f=>onAlarm=f)}},commands:{onCommand:{addListener(){}}},permissions:{onAdded:{addListener(){}}},tabs:{query:async()=>[],onCreated:{addListener:()=>{}},onRemoved:{addListener:add(f=>onRemoved=f)},onUpdated:{addListener:add(f=>onUpdated=f)}},storage:{local:{get:async()=>({}),set:async()=>{}},session:{get:async()=>({}),set:async()=>{},remove:async()=>{}}}};
 const AutoDiscard={run:async(api,now,deps)=>{order.push(failNext?'run-fail':'run');runCalls.push({api,now,deps});if(failNext)throw Error('storage unavailable')},forget:async(api,ids)=>{forgetCalls.push(ids);return {ok:true,removed:ids.length}}};
-const ctx={chrome,importScripts(...files){order.push(...files)},console,Date,OpenGrace,Protection,ReminderTools:{alarmName:'tick',tick:()=>({changed:false,state:{}}),isQuiet:()=>true,deferFullscreen:async()=>true},AutoSnapshot:{tick:async()=>{}},MutationLock:{run:async work=>work()},AutomationPreview:{},PresetTools:{},AutoDiscard,ScheduledRehearsal:{tick:async()=>{order.push('rehearsal')}}};
+const ctx={chrome,importScripts(...files){order.push(...files)},console,Date,setTimeout(){timers++},setInterval(){timers++},OpenGrace,Protection,ReminderTools:{alarmName:'tick',tick:()=>({changed:false,state:{}}),isQuiet:()=>true,deferFullscreen:async()=>true},AutoSnapshot:{tick:async()=>{}},MutationLock:{run:async work=>work()},AutomationPreview:{},PresetTools:{},AutoDiscard,ScheduledRehearsal:{tick:async()=>{order.push('rehearsal')}}};
 vm.runInNewContext(fs.readFileSync('extension/background.js','utf8'),ctx);
 const flush=async()=>{for(let i=0;i<8;i++)await new Promise(r=>setImmediate(r))};
+const listenersAfterLoad=listenerAdds;
+// The real module behind the shared alarm: a minute of ticks must not become a measurement per minute.
+function harness(everyMinutes){
+ const now=1700000000000;
+ let queries=0,reads=0,discards=0;
+ const tab={id:1,windowId:1,url:'https://example.com/1',title:'Tab',incognito:false,active:false,pinned:false,audible:false,discarded:false,lastAccessed:now-48*3600000};
+ const store={autoDiscardConfig:{...A.defaults,enabled:true,mode:'ask',resources:['memory'],thresholds:{...A.defaults.thresholds,memory:500},everyMinutes}};
+ const journal={};
+ const pick=(source,keys)=>keys===null?structuredClone(source):Object.fromEntries((Array.isArray(keys)?keys:Object.keys(source)).filter(k=>k in source).map(k=>[k,structuredClone(source[k])]));
+ const api={
+  processes:{getProcessIdForTab:async()=>10,getProcessInfo:async()=>{reads++;return {10:{privateMemory:1048576*1400,cpu:10}}}},
+  storage:{local:{get:async keys=>pick(store,keys),set:async value=>Object.assign(store,structuredClone(value))},
+   session:{get:async keys=>pick(journal,keys),set:async value=>Object.assign(journal,structuredClone(value)),remove:async keys=>{for(const k of (Array.isArray(keys)?keys:[keys]))delete journal[k]}}},
+  tabs:{query:async()=>{queries++;return structuredClone([tab])},discard:async()=>{discards++;throw Error('a measurement must never discard')}},
+ };
+ return {api,now,counts:()=>({queries,reads,discards,store,journal})};
+}
 (async()=>{
  assert(order.indexOf('auto-discard.js')<order.indexOf('scheduled-rehearsal.js'),'the module is loaded before the tick that uses it');
  assert(onAlarm&&onUpdated&&onRemoved);
@@ -24,5 +42,19 @@ const flush=async()=>{for(let i=0;i<8;i++)await new Promise(r=>setImmediate(r))}
  onUpdated(3,{url:'https://example.com/other'});onUpdated(undefined,{url:'https://example.com/x'});await flush();
  // The array is built inside the service-worker realm, so only its ids are compared.
  assert.deepEqual(forgetCalls.map(ids=>[...ids]),[[3]]);
+ // Many ticks, one schedule: no extra listener, alarm or timer appears anywhere.
+ failNext=false;
+ for(let minute=0;minute<5;minute++){onAlarm({name:'tick',scheduledTime:Date.now()});await flush()}
+ assert.deepEqual([listenerAdds,alarmCreates,timers],[listenersAfterLoad,0,0],'the resource cycle schedules nothing of its own');
+ for(const everyMinutes of [1,60]){
+  const box=harness(everyMinutes);
+  for(let minute=0;minute<4;minute++)await A.run(box.api,box.now+minute*60000,{grace:OpenGrace,protection:Protection});
+  const{queries,reads,discards,store,journal}=box.counts();
+  // The shortest cycle measures on every tick; the longest one waits and leaves Chrome alone.
+  assert.deepEqual([queries,reads,discards],[everyMinutes===1?4:1,everyMinutes===1?4:1,0],`everyMinutes ${everyMinutes}`);
+  assert.equal(store.autoDiscardRun,undefined,'the record is never persisted to storage.local');
+  assert.ok(Number.isFinite(journal[A.runKey].at));
+  assert.deepEqual(journal[A.runKey].ids,[1]);
+ }
  console.log('The alarm measures resources through the shared entry point and never lets one failure stop the rest: OK');
 })().catch(e=>{console.error(e);process.exitCode=1});

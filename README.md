@@ -147,7 +147,7 @@ Lựa chọn "Chỉ chạy khi hệ thống thiếu bộ nhớ" trước đây m
 
 Trong khối, thứ tự ô làm theo 15.5: phạm vi (thời gian không được xem, giới hạn mỗi lượt) đứng trước phần đo (chu kỳ đo, số chu kỳ liên tiếp, ngưỡng RAM); không thêm lựa chọn mới. Nút **Giới hạn và rủi ro** ở cuối khối mở hộp giải thích thẳng những gì số đo không chứng minh được: số là của tiến trình renderer chứ không của riêng tab, heap chỉ là ước lượng, tài nguyên không cho biết trang còn nội dung chưa lưu, cho nghỉ tab không tạo bản lưu để khôi phục, và bản này chưa có lượt nghỉ tự động. Hộp chỉ để đọc, không đổi thiết lập và không ghi gì.
 
-Hai phần còn lại của mục 15 được nêu ở bản sau: danh sách **Chỉ gợi ý** cần Sức khỏe tab (mục 5.7 chưa tồn tại trong ứng dụng), và việc đưa cấu hình vào file sao lưu kèm buộc tính năng ở trạng thái tắt khi nhập. **Chưa kiểm thử trên Chrome thực tế**: cần xác nhận `chrome.system.memory.getInfo()` trả số như tài liệu và một chu kỳ bị cửa chặn RAM giữ lại không để lại số mới nào trên tiêu đề khối.
+Hai phần còn lại của mục 15 được nêu ở bản sau: danh sách **Chỉ gợi ý** cần Sức khỏe tab (mục 5.7 chưa tồn tại trong ứng dụng; từ 0.121 hộp thoại cài đặt ghi rõ điều này), và việc đưa cấu hình vào file sao lưu kèm buộc tính năng ở trạng thái tắt khi nhập (đã làm ở 0.120). **Chưa kiểm thử trên Chrome thực tế**: cần xác nhận `chrome.system.memory.getInfo()` trả số như tài liệu và một chu kỳ bị cửa chặn RAM giữ lại không để lại số mới nào trên tiêu đề khối.
 
 ### Thẻ vượt ngưỡng trong Cần chú ý (0.118)
 
@@ -164,3 +164,12 @@ Bản ghi "lần đo gần nhất" — số tab vượt ngưỡng, số tab bị
 Theo 15.6, hộp **Xuất dữ liệu JSON** có thêm ô chọn "Thêm ngưỡng tài nguyên cho nghỉ tab (khi nhập luôn ở trạng thái tắt)". Chỉ cấu hình đi theo: bật/tắt, cách xử lý, cách kết hợp, ngưỡng rời từng tài nguyên, số chu kỳ liên tiếp, thời gian không được xem, giới hạn mỗi lượt, chu kỳ đo và cửa RAM hệ thống. Không có số đo nào vào file — bản ghi lần đo nằm ở `chrome.storage.session` nên phần xuất không nhìn thấy, và file cũng không chứa tên hay URL tab.
 
 Khi nhập, hộp xem trước chỉ hiện ô "Áp dụng ngưỡng tài nguyên trong file" nếu file có mục đó; không chọn thì cấu hình hiện tại giữ nguyên. Khi chọn, `BackupOptions.resource()` luôn ghi `enabled:false`, và mức **Tự động** trong file bị hạ về **Hỏi trước**, vì lời xác nhận rủi ro ở 15.3 không thể đi nhờ file. Mục này cũng nằm trong danh sách kiểm tra "dữ liệu đã thay đổi ở nơi khác": nếu cấu hình tài nguyên bị sửa lúc hộp nhập đang mở, việc nhập dừng và không ghi gì.
+
+### Chu kỳ đo tự quyết định lại, và nhãn thành thật (0.121)
+
+Bản này ghi thẳng vào hộp thoại **Thái độ tài nguyên** rằng mức **Chỉ gợi ý** chỉ đổi *cách đếm và cách nhắc*: danh sách đề xuất riêng ở *Sức khỏe tab* (5.7) vẫn chưa tồn tại, nên đừng hiểu mức này là một cách an toàn hơn để tab tự nghỉ — muốn tab thật sự nghỉ phải có mức **Tự động**, và mức đó vẫn đang tắt.
+
+Ba chỉnh sửa còn lại chỉ là kiểm chứng, không đổi hành vi:
+- mỗi chu kỳ **quyết định lại từ chuỗi mẫu hiện hành**, nên đổi ngưỡng hay đổi *Chu kỳ đo* có hiệu lực ngay ở lần chạy kế tiếp (mẫu cũ quá *Chu kỳ đo* thì tab rơi khỏi danh sách ngay chu kỳ sau), không cần nạp lại extension;
+- test mạch báo thức giờ chạy thẳng module thật `AutoDiscard.run` thay vì callback giả: với *Chu kỳ đo* 60 phút, bốn phút tick chỉ hỏi Chrome **một** lần; với 1 phút thì đo cả bốn lần;
+- phần đo không tự thêm `chrome.alarms`/`setTimeout`/`setInterval` nào và không đụng `chrome.tabs` — nếu về sau có ai chèn một lệnh nghỉ tab vào module, test báo đỏ.

@@ -139,6 +139,15 @@ assert.deepEqual([A.idleLabel(59),A.idleLabel(90),A.idleLabel(48*60),A.idleLabel
  assert.deepEqual([A.plan([],records,base,now).rows,A.plan([tab(1)],{},base,now).rows[0].reason],[[],'Chưa có số đo cho tab này']);
  assert.throws(()=>A.plan([tab(1)],records,base,Number.NaN),/Không xác định được thời gian/);
 
+ // Changing the policy between cycles re-decides from the same samples; nothing is cached from the old numbers.
+ const spike={[A.key(1)]:{windowId:1,processId:10,sharedTabs:1,series:[{at:now,values:{cpu:60}}]}};
+ assert.match(A.plan([tab(1)],spike,{...base,resources:['cpu'],thresholds:{memory:500,cpu:50},cpuCycles:3},now).rows[0].reason,/cpu vượt ngưỡng 1\/3 chu kỳ/);
+ assert.deepEqual(A.plan([tab(1)],spike,{...base,resources:['cpu'],thresholds:{memory:500,cpu:50},cpuCycles:1},now).candidates.map(r=>r.id),[1]);
+ assert.deepEqual(A.plan([tab(1)],records,{...base,thresholds:{memory:1401,cpu:50}},now).candidates.map(r=>r.id),[]);
+ assert.deepEqual(A.plan([tab(1)],records,{...base,thresholds:{memory:1400,cpu:50}},now).candidates.map(r=>r.id),[1]);
+ // Shortening the cycle window turns a sample that was fresh into stale data, so no candidate list is built on it.
+ assert.match(A.plan([tab(1)],{[A.key(1)]:{windowId:1,processId:10,sharedTabs:1,series:[{at:now-9*60000,values:{memory:1400}}]}},{...base,everyMinutes:1},now).rows[0].reason,/đã cũ|Không đọc được/);
+
  // The collapsed header says what the body will do, including the Chrome that cannot measure anything.
  assert.deepEqual(A.describe(undefined,{measurable:true}),{kind:'off',text:'Tự cho nghỉ theo tài nguyên đang tắt. Ngưỡng hiện tại: RAM ≥ 500 MB hoặc CPU ≥ 50% một lõi.'});
  assert.match(A.describe({...base,enabled:false},{measurable:false}).text,/Chỉ còn đường cho nghỉ thủ công/);

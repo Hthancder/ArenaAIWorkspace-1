@@ -22,6 +22,15 @@ assert.match(opts,/if\(resource\)result\.resource=tools\.resource\.validate\(sto
 assert.match(opts,/function resource\(value,tools\)\{[\s\S]{0,200}enabled:false,mode:value\.mode==='auto'\?'ask':value\.mode/);
 assert.doesNotMatch(opts,/storage\.session|runKey|overCount/,'a backup never carries measurement values');
 
+// 15.3/15.7: the block schedules nothing on its own, and the header stays usable without a mouse.
+assert.doesNotMatch(mod,/alarms\.|setTimeout|setInterval|tabs\.discard|\.create\(|removeAlarm/,'the module waits for the shared alarm and never touches a tab');
+assert.equal((background.match(/AutoDiscard\./g)||[]).length,2,'the service worker uses the module in exactly two places');
+assert.match(css,/\.auto-discard-head\{display:flex;align-items:center;gap:12px;flex-wrap:wrap/);
+assert.match(css,/\.auto-discard-head:focus-visible\{outline:3px solid/);
+assert.match(css,/@media\(max-width:600px\)\{\.auto-discard-head\{padding:14px 16px\}\.auto-discard-body\{padding:0 16px 16px\}\.auto-discard-head em\{margin-left:auto\}\}/);
+assert.doesNotMatch(css,/\.auto-discard[a-z-]*\{[^}]*(overflow:hidden|height:\s*\d)/,'nothing clips the block when the window is narrow or zoomed');
+assert.match(dash,/Mức Chỉ gợi ý chỉ đổi cách đếm và cách nhắc: bản này chưa có danh sách riêng ở Sức khỏe tab \(5\.7\)\./);
+
 // The setting comes from storage.local and the measurement from storage.session, kept fresh in the header.
 assert.match(dash,/chrome\.storage\.session\?\.get\?chrome\.storage\.session\.get\(\[AutoDiscard\.runKey\]\)\.catch\(\(\)=>\(\{\}\)\):Promise\.resolve\(\{\}\)/);
 assert.match(dash,/autoDiscardConfig=result\.autoDiscardConfig;autoDiscardRun=measurement\?\.\[AutoDiscard\.runKey\];/);
