@@ -1,25 +1,182 @@
 diff --git a/preferences/DigestAppSelectController.m b/preferences/DigestAppSelectController.m
-index e3804b1..86430a1 100644
+index e3804b1..02cd3e3 100644
 --- a/preferences/DigestAppSelectController.m
 +++ b/preferences/DigestAppSelectController.m
-@@ -40,11 +40,12 @@ NSString* isOkToSummarize(NSString *sectionIdentifier) {
- 				UIImage *icon = [UIImage _applicationIconImageForBundleIdentifier:app.applicationIdentifier format:0 scale:UIScreen.mainScreen.scale];
+@@ -8,21 +8,87 @@ NSString* isOkToSummarize(NSString *sectionIdentifier) {
+     return @"1";
+ }
  
++@interface DigestAppSelectController () <UISearchResultsUpdating>
++@property (nonatomic, strong) NSArray<PSSpecifier *> *allAppSpecifiers;
++@property (nonatomic, strong) UISearchController *searchController;
++@property (nonatomic, copy) NSString *searchQuery;
++@end
++
+ @implementation DigestAppSelectController
+ 
++- (void)viewDidLoad {
++	[super viewDidLoad];
++
++	self.searchController = [[UISearchController alloc] initWithSearchResultsController:nil];
++	self.searchController.searchResultsUpdater = self;
++	self.searchController.obscuresBackgroundDuringPresentation = NO;
++	self.searchController.hidesNavigationBarDuringPresentation = NO;
++	self.searchController.searchBar.placeholder = @"Search name or bundle ID";
++	self.navigationItem.searchController = self.searchController;
++	self.navigationItem.hidesSearchBarWhenScrolling = NO;
++	self.definesPresentationContext = YES;
++
++	__weak typeof(self) weakSelf = self;
++	UIAction *enableAll = [UIAction actionWithTitle:@"Enable All / Visible"
++											  image:[UIImage systemImageNamed:@"checkmark.circle"]
++										 identifier:nil
++											handler:^(__kindof UIAction *action) {
++		[weakSelf setVisibleAppsEnabled:@YES onlyNonApple:NO];
++	}];
++	UIAction *disableAll = [UIAction actionWithTitle:@"Disable All / Visible"
++											   image:[UIImage systemImageNamed:@"xmark.circle"]
++										  identifier:nil
++											 handler:^(__kindof UIAction *action) {
++		[weakSelf setVisibleAppsEnabled:@NO onlyNonApple:NO];
++	}];
++	UIAction *thirdPartyOnly = [UIAction actionWithTitle:@"3rd-Party Only (Skip Apple)"
++												   image:[UIImage systemImageNamed:@"checkmark.shield"]
++											  identifier:nil
++												 handler:^(__kindof UIAction *action) {
++		[weakSelf setVisibleAppsEnabled:@YES onlyNonApple:YES];
++	}];
++
++	UIMenu *menu = [UIMenu menuWithTitle:@"" children:@[enableAll, disableAll, thirdPartyOnly]];
++	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"ellipsis.circle"] menu:menu];
++}
++
++- (void)setVisibleAppsEnabled:(NSNumber *)enabled onlyNonApple:(BOOL)onlyNonApple {
++	DigestPrefsManager *manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
++	NSArray *targets = [self.specifiers copy];
++	for (PSSpecifier *specifier in targets) {
++		NSString *key = specifier.properties[@"digestKey"];
++		if (key.length == 0) continue;
++		NSNumber *valueToSet = onlyNonApple ? ([key hasPrefix:@"com.apple"] ? @NO : @YES) : enabled;
++		[manager setObject:valueToSet forKey:key];
++		CFPreferencesSetAppValue((__bridge CFStringRef)key, (__bridge CFPropertyListRef)valueToSet, CFSTR("com.uncore.dig3st"));
++	}
++	[manager synchronize];
++	CFPreferencesAppSynchronize(CFSTR("com.uncore.dig3st"));
++	CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), (CFStringRef)@"com.uncore.dig3st/preferences.changed", NULL, NULL, true);
++	[self reloadSpecifiers];
++}
++
++- (void)updateSearchResultsForSearchController:(UISearchController *)searchController {
++	NSString *query = [searchController.searchBar.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]] ?: @"";
++	if (![query isEqualToString:(self.searchQuery ?: @"")]) {
++		self.searchQuery = query;
++		[self reloadSpecifiers];
++	}
++}
++
+ - (NSArray *)specifiers {
+-	if (!_specifiers) {
+-        NSMutableArray *mutableSpecifiers = [NSMutableArray new];
+-		
+-        LSApplicationWorkspace *workspace = [NSClassFromString(@"LSApplicationWorkspace") defaultWorkspace];
+-		NSArray *apps = [workspace allInstalledApplications];
++	if (!self.allAppSpecifiers) {
++		NSMutableArray *mutableSpecifiers = [NSMutableArray new];
+ 
+-        for (LSApplicationProxy *app in apps) {
+-            if ([app.applicationType isEqual:@"User"] || ([app.applicationType isEqual:@"System"] && ![app.appTags containsObject:@"hidden"] && !app.launchProhibited && !app.placeholder && !app.removedSystemApp)) {
++		LSApplicationWorkspace *workspace = [NSClassFromString(@"LSApplicationWorkspace") defaultWorkspace];
++		NSArray *apps = [workspace allInstalledApplications];
+ 
++		for (LSApplicationProxy *app in apps) {
++			if ([app.applicationType isEqual:@"User"] || ([app.applicationType isEqual:@"System"] && ![app.appTags containsObject:@"hidden"] && !app.launchProhibited && !app.placeholder && !app.removedSystemApp)) {
++				if (!app.applicationIdentifier || !app.localizedName) continue;
+ 				if ([app.applicationIdentifier isEqual:@"com.apple.webapp"]) continue;
+ 
+-				PSSpecifier* specifier = [PSSpecifier preferenceSpecifierNamed:app.localizedName
++				PSSpecifier *specifier = [PSSpecifier preferenceSpecifierNamed:app.localizedName
+ 										target:self
+ 										set:@selector(setPreferenceValue:specifier:)
+ 										get:@selector(readPreferenceValue:)
+@@ -31,39 +97,61 @@ NSString* isOkToSummarize(NSString *sectionIdentifier) {
+ 										edit:Nil];
+ 
+ 				[specifier setProperty:app.applicationIdentifier forKey:@"digestKey"];
+-				// [specifier setProperty:app.applicationIdentifier forKey:@"key"];
+ 				[specifier setProperty:app.localizedName forKey:@"label"];
+-				// [specifier setProperty:isOkToSummarize(app.applicationIdentifier) forKey:@"default"];
+ 				[specifier setProperty:NSClassFromString(@"DigestSwitch") forKey:@"cellClass"];
+ 				[mutableSpecifiers addObject:specifier];
+-				
+-				UIImage *icon = [UIImage _applicationIconImageForBundleIdentifier:app.applicationIdentifier format:0 scale:UIScreen.mainScreen.scale];
+ 
++				UIImage *icon = [UIImage _applicationIconImageForBundleIdentifier:app.applicationIdentifier format:0 scale:UIScreen.mainScreen.scale];
  				CGImageRef cgIcon = icon.CGImage;
 -				CGFloat scale = (CGImageGetWidth(cgIcon) + CGImageGetHeight(cgIcon)) / (CGFloat)(29 + 29);
 -				UIImage *iconResized = [UIImage imageWithCGImage:cgIcon scale:scale orientation:0];
--
--				if (iconResized) {
--					[specifier setProperty:iconResized forKey:@"iconImage"];
 +				if (cgIcon) {
 +					CGFloat scale = (CGImageGetWidth(cgIcon) + CGImageGetHeight(cgIcon)) / (CGFloat)(29 + 29);
 +					UIImage *iconResized = [UIImage imageWithCGImage:cgIcon scale:scale orientation:0];
 +					if (iconResized) {
 +						[specifier setProperty:iconResized forKey:@"iconImage"];
 +					}
++				}
++			}
++		}
++		[mutableSpecifiers sortUsingDescriptors:@[[NSSortDescriptor sortDescriptorWithKey:@"name" ascending:YES selector:@selector(caseInsensitiveCompare:)]]];
++		self.allAppSpecifiers = [mutableSpecifiers copy];
++	}
+ 
+-				if (iconResized) {
+-					[specifier setProperty:iconResized forKey:@"iconImage"];
++	if (!_specifiers) {
++		if (self.searchQuery.length == 0) {
++			_specifiers = [self.allAppSpecifiers mutableCopy];
++		} else {
++			NSMutableArray *filtered = [NSMutableArray new];
++			NSStringCompareOptions opts = NSCaseInsensitiveSearch | NSDiacriticInsensitiveSearch;
++			for (PSSpecifier *specifier in self.allAppSpecifiers) {
++				NSString *name = specifier.name ?: @"";
++				NSString *bundleId = specifier.properties[@"digestKey"] ?: @"";
++				if ([name rangeOfString:self.searchQuery options:opts].location != NSNotFound ||
++					[bundleId rangeOfString:self.searchQuery options:NSCaseInsensitiveSearch].location != NSNotFound) {
++					[filtered addObject:specifier];
  				}
- 				
-             }
+-				
+-            }
+-        }
+-        [mutableSpecifiers sortUsingDescriptors:@[[NSSortDescriptor sortDescriptorWithKey:@"name" ascending:YES selector:@selector(caseInsensitiveCompare:)]]];
+- 
+-        _specifiers = mutableSpecifiers;
++			}
++			_specifiers = filtered;
++		}
+ 	}
+ 
+ 	return _specifiers;
+ }
++
+ - (void)setPreferenceValue:(id)value specifier:(PSSpecifier *)specifier {
+ 	DigestPrefsManager *manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
+-	[manager setObject:value forKey:specifier.properties[@"digestKey"]];
+-	// [self.manager save];
+-	// [self.manager notify:@"com.uncore.dig3st/update"];
++	NSString *key = specifier.properties[@"digestKey"];
++	if (key.length > 0) {
++		[manager setObject:value forKey:key];
++		[manager synchronize];
++		CFPreferencesSetAppValue((__bridge CFStringRef)key, (__bridge CFPropertyListRef)value, CFSTR("com.uncore.dig3st"));
++		CFPreferencesAppSynchronize(CFSTR("com.uncore.dig3st"));
++		CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), (CFStringRef)@"com.uncore.dig3st/preferences.changed", NULL, NULL, true);
++	}
+ }
++
+ - (id)readPreferenceValue:(PSSpecifier *)specifier {
+ 	DigestPrefsManager *manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
++	[manager synchronize];
+ 	NSString *value = [manager objectForKey:specifier.properties[@"digestKey"]];
+ 	if (value == nil) {
+ 		value = isOkToSummarize(specifier.properties[@"digestKey"]);
 diff --git a/preferences/DigestEndPointSettingsController.m b/preferences/DigestEndPointSettingsController.m
 index 49ac487..306a0e4 100644
 --- a/preferences/DigestEndPointSettingsController.m
@@ -115,7 +272,7 @@ index 0d00746..8106474 100644
  }
  
 diff --git a/preferences/DigestRootListController.m b/preferences/DigestRootListController.m
-index 6a5f861..b2546de 100644
+index 6a5f861..864c95b 100644
 --- a/preferences/DigestRootListController.m
 +++ b/preferences/DigestRootListController.m
 @@ -14,8 +14,14 @@
@@ -135,7 +292,7 @@ index 6a5f861..b2546de 100644
  }
  
  -(void)setupHeader {
-@@ -61,22 +67,23 @@
+@@ -61,22 +67,26 @@
  
  -(void)resetSettings {
   	[[NSUserDefaults standardUserDefaults] removePersistentDomainForName:@"com.uncore.dig3st"];
@@ -156,6 +313,9 @@ index 6a5f861..b2546de 100644
 -        NSLog(@"Preferences file does not exist.");
 -    }
 +	[[NSUserDefaults standardUserDefaults] synchronize];
++	DigestPrefsManager *manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
++	[manager synchronize];
++	CFPreferencesAppSynchronize(CFSTR("com.uncore.dig3st"));
 +	NSFileManager *fileManager = [NSFileManager defaultManager];
 +	NSArray *prefsPaths = @[
 +		@"/var/mobile/Library/Preferences/com.uncore.dig3st.plist",
@@ -175,6 +335,81 @@ index 6a5f861..b2546de 100644
  	[self reload];
  	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Respring" style:UIBarButtonItemStylePlain target:self action:@selector(respring)];
  
+@@ -110,8 +120,12 @@
+ 
+ -(void)setTweakEnabled:(id)value specifier:(PSSpecifier *)specifier {
+ 	[self setPreferenceValue:value specifier:specifier];
+-
+-	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Respring" style:UIBarButtonItemStylePlain target:self action:@selector(respring)];
++	DigestPrefsManager *manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
++	[manager setObject:value forKey:@"enabled"];
++	[manager synchronize];
++	CFPreferencesSetAppValue(CFSTR("enabled"), (__bridge CFPropertyListRef)value, CFSTR("com.uncore.dig3st"));
++	CFPreferencesAppSynchronize(CFSTR("com.uncore.dig3st"));
++	CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), (CFStringRef)@"com.uncore.dig3st/preferences.changed", NULL, NULL, true);
+ }
+ 
+ -(void)donate {
+diff --git a/preferences/DigestSettingsController.m b/preferences/DigestSettingsController.m
+index 072bf28..964b549 100644
+--- a/preferences/DigestSettingsController.m
++++ b/preferences/DigestSettingsController.m
+@@ -45,9 +45,55 @@
+ 
+ -(id)readPreferenceValue:(PSSpecifier*)specifier {
+ 	DigestPrefsManager *manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
++	[manager synchronize];
+ 	return [manager objectForKey:specifier.properties[@"key"]];
+ }
+ 
++-(void)applyPromptPreset:(NSString *)prompt systemPrompt:(NSString *)systemPrompt {
++	DigestPrefsManager *manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
++	[manager setObject:prompt forKey:@"prompt"];
++	[manager setObject:systemPrompt forKey:@"systemPrompt"];
++	[manager synchronize];
++	CFPreferencesSetAppValue(CFSTR("prompt"), (__bridge CFStringRef)prompt, CFSTR("com.uncore.dig3st"));
++	CFPreferencesSetAppValue(CFSTR("systemPrompt"), (__bridge CFStringRef)systemPrompt, CFSTR("com.uncore.dig3st"));
++	CFPreferencesAppSynchronize(CFSTR("com.uncore.dig3st"));
++	CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), (CFStringRef)@"com.uncore.dig3st/preferences.changed", NULL, NULL, true);
++	[self reloadSpecifiers];
++}
++
++-(void)showPromptPresets {
++	UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"Prompt Presets"
++		message:@"Chọn mẫu prompt tối ưu (áp dụng ngay không cần respring)"
++		preferredStyle:UIAlertControllerStyleActionSheet];
++
++	__weak typeof(self) weakSelf = self;
++	[sheet addAction:[UIAlertAction actionWithTitle:@"Tiếng Việt (Chuẩn — giữ số & tên)" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
++		[weakSelf applyPromptPreset:@"Tóm tắt thông báo sau thật ngắn gọn (tối đa 12-15 từ). Giữ nguyên tên người gửi, số tiền, mã số, giờ hẹn và địa điểm nếu có; chỉ trả về câu tóm tắt:"
++			systemPrompt:@"Bạn là trợ lý tóm tắt thông báo ngắn gọn, chính xác. Luôn giữ đúng ngôn ngữ gốc của thông báo (tiếng Việt tự nhiên nếu thông báo là tiếng Việt) và không bịa thêm thông tin."];
++	}]];
++	[sheet addAction:[UIAlertAction actionWithTitle:@"Tiếng Việt (Siêu ngắn — dưới 8 từ)" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
++		[weakSelf applyPromptPreset:@"Rút gọn thông báo sau thành 1 cụm dưới 8 từ, giữ nguyên tên riêng và con số quan trọng, chỉ trả về kết quả:"
++			systemPrompt:@"Bạn là trợ lý tóm tắt thông báo cực ngắn, đúng ngôn ngữ gốc, giữ nguyên tên riêng và con số quan trọng."];
++	}]];
++	[sheet addAction:[UIAlertAction actionWithTitle:@"Multilingual / English (Natural)" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
++		[weakSelf applyPromptPreset:@"Summarize this notification concisely in its original language (max 12-15 words). Preserve names, numbers, amounts, codes, and times:"
++			systemPrompt:@"You are an assistant that summarizes notifications concisely in the same language as the original notification. Output only the summary."];
++	}]];
++	[sheet addAction:[UIAlertAction actionWithTitle:@"Original dig3st Default" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
++		[weakSelf applyPromptPreset:@"Summarize this text as sort as possible only mention about the content do not go in detail,super simple shorten anything you can (urls,numbers),compromise understandability in favor of keeping it short,only keep keywords,if possible fit it in a max a sentence of 5 words"
++			systemPrompt:@"You are an assistant that summarizes notifications."];
++	}]];
++	[sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
++
++	UIPopoverPresentationController *popover = sheet.popoverPresentationController;
++	if (popover) {
++		popover.sourceView = self.view;
++		popover.sourceRect = CGRectMake(CGRectGetMidX(self.view.bounds), CGRectGetMidY(self.view.bounds), 1, 1);
++		popover.permittedArrowDirections = 0;
++	}
++	[self presentViewController:sheet animated:YES completion:nil];
++}
++
+ - (NSMutableArray*)visibleSpecifiersFromPlist:(NSString*)plist {
+ 	return [self loadSpecifiersFromPlistName:plist target:self];
+ }
 diff --git a/preferences/DigestTestingController.m b/preferences/DigestTestingController.m
 index bf5f372..ba02a4e 100644
 --- a/preferences/DigestTestingController.m
@@ -190,11 +425,96 @@ index bf5f372..ba02a4e 100644
  	[super viewDidLayoutSubviews];
  }
  -(void)push {
+diff --git a/preferences/Resources/Root.plist b/preferences/Resources/Root.plist
+index fd076c1..f12eb2c 100644
+--- a/preferences/Resources/Root.plist
++++ b/preferences/Resources/Root.plist
+@@ -3,7 +3,7 @@
+ 		{
+ 			cell = PSSwitchCell;
+ 			cellClass = DigestSwitch;
+-			cellSubtitleText = "Requires a Respring";
++			cellSubtitleText = "Applies immediately (No respring)";
+ 			default = 0;
+ 			defaults = "com.uncore.dig3st";
+ 			key = enabled;
+diff --git a/preferences/Resources/Settings.plist b/preferences/Resources/Settings.plist
+index df1a4a7..a8c6fc7 100644
+--- a/preferences/Resources/Settings.plist
++++ b/preferences/Resources/Settings.plist
+@@ -44,6 +44,24 @@
+ 			noAutoCorrect = true; 
+ 			PostNotification = "com.uncore.dig3st/preferences.changed";
+ 		},
++		{
++			cell = PSSwitchCell;
++			cellClass = DigestSwitch;
++			cellSubtitleText = "Send [App] & Title context to AI";
++			default = 1;
++			defaults = "com.uncore.dig3st";
++			key = includeContext;
++			label = "Include App & Title";
++			systemIcon = "text.bubble";
++			PostNotification = "com.uncore.dig3st/preferences.changed";
++		},
++		{
++			cell = PSButtonCell;
++			cellClass = DigestButton;
++			action = showPromptPresets;
++			label = "Prompt Presets (VN / EN)";
++			systemIcon = "sparkles";
++		},
+ 		{
+ 			cell = PSGroupCell;
+ 			label = "Misc";
+diff --git a/src/DigestPrefsManager.m b/src/DigestPrefsManager.m
+index f10da7b..bdf86a3 100644
+--- a/src/DigestPrefsManager.m
++++ b/src/DigestPrefsManager.m
+@@ -23,8 +23,9 @@ static void notificationCallback(CFNotificationCenterRef center, void *observer,
+         @"apiChecks": @NO,
+         @"sanityChecks": @YES,
+         @"logLevel": @"1",
+-        @"prompt" : @"Summarize this text as sort as possible only mention about the content do not go in detail,super simple shorten anything you can (urls,numbers),compromise understandability in favor of keeping it short,only keep keywords,if possible fit it in a max a sentence of 5 words",
+-        @"systemPrompt": @"You are an assistant that summarizes notifications.",
++        @"includeContext": @YES,
++        @"prompt" : @"Summarize this notification concisely in its original language (max 12-15 words). Preserve names, numbers, amounts, codes, and times:",
++        @"systemPrompt": @"You are an assistant that summarizes notifications concisely in the same language as the original notification. Output only the summary.",
+         @"minChars": @"15",
+         @"timeout": @"30",
+         //some enabled defaults
 diff --git a/src/OpenAI/OpenAI.m b/src/OpenAI/OpenAI.m
-index 8f8f165..a4980e5 100644
+index 8f8f165..f2a53b9 100644
 --- a/src/OpenAI/OpenAI.m
 +++ b/src/OpenAI/OpenAI.m
-@@ -43,6 +43,9 @@
+@@ -17,7 +17,9 @@
+ 
+ - (void)update {
+     [self.logger log:@"Updating OpenAI instance" level:LOGLEVEL_INFO];
++    CFPreferencesAppSynchronize(CFSTR("com.uncore.dig3st"));
+     DigestPrefsManager *manager = [DigestPrefsManager sharedInstance];
++    [manager synchronize];
+     NSString *uuid = [manager objectForKey:@"activeEndpoint"];
+     NSArray *endpoints = [manager objectForKey:@"endpoints"];
+     __block NSDictionary *endpoint;
+@@ -31,10 +33,12 @@
+     [self.logger log:[NSString stringWithFormat:@"New endpoint %@", endpoint] level:LOGLEVEL_INFO];
+     if (endpoint == nil) {
+         NSLog(@"Tried to update endpoint with UUID %@ but it was not found", uuid);
+-
+-        return dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+-            Alert(@"Endpoint is missing", @"Tweak is enabled but the endpoint could not be found. Try resetting the settings and then respring.",nil);
+-        });
++        if ([[manager objectForKey:@"enabled"] boolValue]) {
++            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
++                Alert(@"Endpoint is missing", @"Tweak is enabled but the endpoint could not be found. Try resetting the settings and then respring.",nil);
++            });
++        }
++        return;
+     }
+     self.prompt = [self.manager objectForKey:@"prompt"];
+     [self.logger log:[NSString stringWithFormat:@"New Prompt: %@", self.prompt] level:LOGLEVEL_VERBOSE];
+@@ -43,6 +47,9 @@
      [self.logger log:[NSString stringWithFormat:@"New System Prompt: %@", self.systemPrompt] level:LOGLEVEL_VERBOSE];
  
      NSInteger timeout = [[self.manager objectForKey:@"timeout"] integerValue];
@@ -204,7 +524,7 @@ index 8f8f165..a4980e5 100644
      self.configuration = [[Config alloc] initWithEndpoint:endpoint timeoutInterval:[NSNumber numberWithInteger:timeout]];
      [self.logger log:[NSString stringWithFormat:@"New Configuration: %@", self.configuration] level:LOGLEVEL_VERBOSE];
  }
-@@ -52,27 +55,50 @@
+@@ -52,27 +59,50 @@
  }
  
  -(NSURL*)urlWithPath:(NSString *)path {
@@ -267,7 +587,7 @@ index 8f8f165..a4980e5 100644
          if (jsonError) {
              [self.logger log:[NSString stringWithFormat:@"JSON error while checking the endpoint: %@", jsonError.localizedDescription] level:LOGLEVEL_WARNING];
              dispatch_async(dispatch_get_main_queue(), ^{
-@@ -80,8 +106,8 @@
+@@ -80,8 +110,8 @@
              });
          } else {
              @try {
@@ -278,7 +598,7 @@ index 8f8f165..a4980e5 100644
                  [self.logger log:[NSString stringWithFormat:@"Endpoint is valid: %@", isValid ? @"YES" : @"NO"] level:LOGLEVEL_INFO];
                  dispatch_async(dispatch_get_main_queue(), ^{
                      completion(isValid);
-@@ -94,26 +120,32 @@
+@@ -94,26 +124,36 @@
              }
          }
      }];
@@ -310,14 +630,18 @@ index 8f8f165..a4980e5 100644
          }
 -        
 +
++        NSString *promptPrefix = [self.prompt stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
++        NSString *userContent = promptPrefix.length > 0
++            ? [NSString stringWithFormat:@"%@\n\n%@", promptPrefix, query.prompt ?: @""]
++            : (query.prompt ?: @"");
          [messages addObject:@{
              @"role": @"user",
 -            @"content": [NSString stringWithFormat:@"%@ %@", self.prompt, query.prompt]
-+            @"content": [NSString stringWithFormat:@"%@ %@", self.prompt ?: @"", query.prompt ?: @""]
++            @"content": userContent
          }];
  
          NSDictionary *body = @{
-@@ -121,37 +153,64 @@
+@@ -121,37 +161,64 @@
              @"messages" : messages,
          };
          [self.logger log:[NSString stringWithFormat:@"Making a post req with body: %@", body] level:LOGLEVEL_VERBOSE];
@@ -400,7 +724,7 @@ index 8f8f165..a4980e5 100644
                  return dispatch_async(dispatch_get_main_queue(), ^{
                      completion(cleanedResult);
                  });
-@@ -163,9 +222,8 @@
+@@ -163,9 +230,8 @@
              }
          }];
  
@@ -412,10 +736,92 @@ index 8f8f165..a4980e5 100644
              completion(@"");
          });
 diff --git a/src/Tweak.x b/src/Tweak.x
-index 3a91698..a6f111c 100644
+index 3a91698..21940e0 100644
 --- a/src/Tweak.x
 +++ b/src/Tweak.x
-@@ -36,7 +36,8 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
+@@ -5,6 +5,81 @@
+ NSData *imgData;
+ DigestPrefsManager *prefsManager;
+ OpenAI *openai;
++static BOOL tweakEnabled = NO;
++static BOOL includeContext = YES;
++static id prefsUpdateObserver = nil;
++
++@interface SBApplication : NSObject
++- (NSString *)displayName;
++@end
++
++@interface SBApplicationController : NSObject
+++ (instancetype)sharedInstance;
++- (SBApplication *)applicationWithBundleIdentifier:(NSString *)bundleIdentifier;
++@end
++
++static NSString *safeKVCString(id obj, NSString *key) {
++    if (!obj || key.length == 0) return nil;
++    @try {
++        id value = [obj valueForKey:key];
++        if ([value isKindOfClass:[NSString class]]) {
++            NSString *trimmed = [(NSString *)value stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
++            return trimmed.length > 0 ? trimmed : nil;
++        }
++    } @catch (NSException *e) {
++        return nil;
++    }
++    return nil;
++}
++
++static NSString *resolveAppName(NCNotificationRequest *req) {
++    NSString *header = safeKVCString(req.content, @"header");
++    if (header.length > 0) return header;
++    if (req.sectionIdentifier.length > 0) {
++        @try {
++            Class sbAppCtrl = %c(SBApplicationController);
++            if (sbAppCtrl) {
++                id ctrl = [sbAppCtrl sharedInstance];
++                id app = [ctrl applicationWithBundleIdentifier:req.sectionIdentifier];
++                NSString *displayName = safeKVCString(app, @"displayName");
++                if (displayName.length > 0) return displayName;
++            }
++        } @catch (NSException *e) {}
++        return req.sectionIdentifier;
++    }
++    return nil;
++}
++
++static NSString *buildContextPrompt(NCNotificationRequest *req, NSString *message) {
++    if (!includeContext) return message;
++    NSString *appName = resolveAppName(req);
++    NSString *title = safeKVCString(req.content, @"title");
++    NSString *subtitle = safeKVCString(req.content, @"subtitle");
++
++    NSMutableString *contextHeader = [NSMutableString string];
++    if (appName.length > 0) {
++        [contextHeader appendFormat:@"[%@]", appName];
++    }
++    if (title.length > 0 && (!appName || ![title isEqualToString:appName])) {
++        if (contextHeader.length > 0) [contextHeader appendString:@" "];
++        [contextHeader appendString:title];
++    }
++    if (subtitle.length > 0 && (!title || ![subtitle isEqualToString:title])) {
++        if (contextHeader.length > 0) [contextHeader appendString:@" - "];
++        [contextHeader appendString:subtitle];
++    }
++    if (contextHeader.length == 0) return message;
++    return [NSString stringWithFormat:@"%@: %@", contextHeader, message];
++}
++
++static void refreshRuntimePrefs(void) {
++    if (!prefsManager) return;
++    CFPreferencesAppSynchronize(CFSTR("com.uncore.dig3st"));
++    [prefsManager synchronize];
++    tweakEnabled = [[prefsManager objectForKey:@"enabled"] boolValue];
++    id ctxObj = [prefsManager objectForKey:@"includeContext"];
++    includeContext = ctxObj ? [ctxObj boolValue] : YES;
++}
+ 
+ %hook NCNotificationRequest
+ %property (nonatomic, assign) BOOL dig3st;
+@@ -36,7 +111,8 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
              %orig(arg1);
          }
      } @catch(NSException *e) {
@@ -425,7 +831,7 @@ index 3a91698..a6f111c 100644
      }
  }
  %end
-@@ -67,7 +68,9 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
+@@ -67,7 +143,9 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
  
                  NSMutableParagraphStyle *paragraphStyle = [[NSMutableParagraphStyle alloc] init];
                  NSDictionary *attributes = @{NSParagraphStyleAttributeName: paragraphStyle};
@@ -436,7 +842,18 @@ index 3a91698..a6f111c 100644
                  
                  [attributedString appendAttributedString:messageString];
                  UILabel *message = [seamlessContentView valueForKey:@"secondaryTextElement"];
-@@ -96,13 +99,13 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
+@@ -83,6 +161,10 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
+ %hook NCNotificationDispatcher
+ -(void)postNotificationWithRequest:(NCNotificationRequest*)req {
+     @try {
++        if (!tweakEnabled) {
++            [req setValue:@(NO) forKey:@"dig3st"];
++            return %orig;
++        }
+         DigestLogger *logger = [NSClassFromString(@"DigestLogger") sharedInstance];
+         [logger log:[NSString stringWithFormat:@"Notification received bundle identifier is %@",req.sectionIdentifier] level:LOGLEVEL_VERBOSE];
+         NSString *textContent = [req.content valueForKey:@"message"];
+@@ -96,15 +178,16 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
          }
  
          //checks if user set anything for this bundle identifier
@@ -448,29 +865,61 @@ index 3a91698..a6f111c 100644
          [logger log:[NSString stringWithFormat:@"Will summarize notification with bundle identifier %@ ? %@",req.sectionIdentifier,enabled ? @"yes" : @"no"] level:LOGLEVEL_INFO];
  
 -        if (enabled) {
+-            ChatQuery *query = [[ChatQuery alloc] initWithPrompt:textContent];
+-            [logger log:[NSString stringWithFormat:@"ChatQuery has been created with prompt %@",textContent] level:LOGLEVEL_VERBOSE];
 +        if (enabled && openai != nil && openai.configuration.host.length > 0 && openai.configuration.model.length > 0) {
-             ChatQuery *query = [[ChatQuery alloc] initWithPrompt:textContent];
-             [logger log:[NSString stringWithFormat:@"ChatQuery has been created with prompt %@",textContent] level:LOGLEVEL_VERBOSE];
++            NSString *promptInput = buildContextPrompt(req, textContent);
++            ChatQuery *query = [[ChatQuery alloc] initWithPrompt:promptInput];
++            [logger log:[NSString stringWithFormat:@"ChatQuery has been created with prompt %@",promptInput] level:LOGLEVEL_VERBOSE];
              [openai summarize:query completion:^(NSString *summary) {
-@@ -145,6 +148,15 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
-             NSArray *endpoints = [prefsManager objectForKey:@"endpoints"];
-             __block NSDictionary *endpoint;
+                 if (summary.length > 0) {
+                     [logger log:[NSString stringWithFormat:@"Summary: %@",summary] level:LOGLEVEL_INFO];
+@@ -131,79 +214,80 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
+ %end
  
-+            if (uuid.length > 0) {
-+                [endpoints enumerateObjectsUsingBlock:^(NSDictionary *p, NSUInteger idx, BOOL *stop) {
-+                    if ([p[@"uuid"] isEqualToString:uuid]) {
-+                        endpoint = p;
-+                        *stop = YES;
-+                    }
-+                }];
-+            }
+ %ctor {
+-    @try{    
++    @try {
+         NSLog(@"init");
+         prefsManager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
+-        BOOL enabled = [[prefsManager objectForKey:@"enabled"] boolValue];
++        refreshRuntimePrefs();
++        prefsUpdateObserver = [[NSNotificationCenter defaultCenter] addObserverForName:@"com.uncore.dig3st/update" object:nil queue:nil usingBlock:^(NSNotification *note) {
++            refreshRuntimePrefs();
++        }];
 +
-             if (sanityChecks) {
-                 [logger log:@"Running Sanity Checks" level:LOGLEVEL_INFO];
- 
-@@ -156,14 +168,6 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
-                     });
+         BOOL apiChecks = [[prefsManager objectForKey:@"apiChecks"] boolValue];
+         BOOL sanityChecks = [[prefsManager objectForKey:@"sanityChecks"] boolValue];
+         DigestLogger *logger = [NSClassFromString(@"DigestLogger") sharedInstance];
+-		//maybe register it only if enabled
+         CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, (CFNotificationCallback)postDebugNotificationWithInfo, CFSTR("com.uncore.dig3st/push"), NULL, CFNotificationSuspensionBehaviorCoalesce);
+-        if (enabled) {
+-            NSString *uuid = [prefsManager objectForKey:@"activeEndpoint"];
+-            NSArray *endpoints = [prefsManager objectForKey:@"endpoints"];
+-            __block NSDictionary *endpoint;
+-
+-            if (sanityChecks) {
+-                [logger log:@"Running Sanity Checks" level:LOGLEVEL_INFO];
+-
+-                if (uuid == nil || [uuid isEqualToString:@""]) {
+-                    [logger log:@"UUID was empty please try resetting your settings" level:LOGLEVEL_WARNING];
+-                    //instantly showing the alert results in a crash so delay it
+-                    return dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(20 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+-                        Alert(@"Internal Error", @"UUID was empty please try resetting your settings and then respring",nil);
+-                    });
++
++        NSString *uuid = [prefsManager objectForKey:@"activeEndpoint"];
++        NSArray *endpoints = [prefsManager objectForKey:@"endpoints"];
++        __block NSDictionary *endpoint;
++
++        if ([uuid isKindOfClass:[NSString class]] && uuid.length > 0) {
++            [endpoints enumerateObjectsUsingBlock:^(NSDictionary *p, NSUInteger idx, BOOL *stop) {
++                if ([p[@"uuid"] isEqualToString:uuid]) {
++                    endpoint = p;
++                    *stop = YES;
                  }
++            }];
++        }
  
 -                [logger log:@"Identifying the endpoint to use" level:LOGLEVEL_INFO];
 -                [endpoints enumerateObjectsUsingBlock:^(NSDictionary *p, NSUInteger idx, BOOL *stop) {
@@ -479,20 +928,86 @@ index 3a91698..a6f111c 100644
 -                        *stop = YES;
 -                    }
 -                }];
--
-                 [logger log:[NSString stringWithFormat:@"Chosen endpoint is %@",endpoint] level:LOGLEVEL_INFO];
++        if (tweakEnabled && sanityChecks) {
++            [logger log:@"Running Sanity Checks" level:LOGLEVEL_INFO];
  
++            if (uuid == nil || [uuid isEqualToString:@""]) {
++                [logger log:@"UUID was empty please try resetting your settings" level:LOGLEVEL_WARNING];
++                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(20 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
++                    Alert(@"Internal Error", @"UUID was empty please try resetting your settings and then respring",nil);
++                });
++            } else {
+                 [logger log:[NSString stringWithFormat:@"Chosen endpoint is %@",endpoint] level:LOGLEVEL_INFO];
+-
                  if (endpoint == nil) {
-@@ -175,7 +179,11 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
+                     [logger log:@"Endpoint could not be found" level:LOGLEVEL_WARNING];
+-
+-                    //instantly showing the alert results in a crash so delay it
+-                    return dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(20 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
++                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(20 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                         Alert(@"Endpoint could not be found", @"Tweak is enabled but the endpoint could not be found. Try resetting the settings and then respring.",nil);
                      });
                  }
              }
 -            Config *config = [[Config alloc] initWithEndpoint:endpoint timeoutInterval:@10];
-+            NSInteger timeout = [[prefsManager objectForKey:@"timeout"] integerValue];
-+            if (timeout <= 0) {
-+                timeout = 30;
-+            }
-+            Config *config = [[Config alloc] initWithEndpoint:endpoint timeoutInterval:@(timeout)];
-             [logger log:@"Config has been created" level:LOGLEVEL_VERBOSE];
- 
-             openai = [[OpenAI alloc] initWithConfiguration:config];
+-            [logger log:@"Config has been created" level:LOGLEVEL_VERBOSE];
+-
+-            openai = [[OpenAI alloc] initWithConfiguration:config];
+-            [logger log:@"Openai instance has been created" level:LOGLEVEL_VERBOSE];
+-
+-            NSBundle *bundle = [[NSBundle alloc] initWithPath:ROOT_PATH_NS(@"/Library/PreferenceBundles/dig3st.bundle")];
+-            NSString *imgFile = [bundle pathForResource:@"arrow" ofType:@"png"];
+-
+-            if (apiChecks) {
+-                [logger log:@"Running API Check" level:LOGLEVEL_INFO];
+-                [openai check:^(BOOL success) {
+-                    if (!success) {
+-                        [logger log:@"API request failed disable Check Api in the settings to skip this check and then respring" level:LOGLEVEL_WARNING];
+-                        //instantly showing the alert results in a crash so delay it
+-                        return dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(20 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+-                            Alert(@"API Error", @"API request failed this means the current endpoint might be invalid,disable Check Api in the settings to skip this check and then respring",nil);
+-                        });
+-                    }
+-                }];
+-            }
+-            
+-            imgData = [[NSData alloc] initWithContentsOfFile:imgFile];
+-            [logger log:@"End of ctor block" level:LOGLEVEL_VERBOSE];
+-            %init;
+-        }else {
+-            [logger log:@"End of ctor block, not running (tweak is disabled)" level:LOGLEVEL_WARNING];
+         }
+-    }@catch(NSException *e) {
++
++        NSInteger timeout = [[prefsManager objectForKey:@"timeout"] integerValue];
++        if (timeout <= 0) {
++            timeout = 30;
++        }
++        Config *config = [[Config alloc] initWithEndpoint:endpoint timeoutInterval:@(timeout)];
++        [logger log:@"Config has been created" level:LOGLEVEL_VERBOSE];
++
++        openai = [[OpenAI alloc] initWithConfiguration:config];
++        [logger log:@"Openai instance has been created" level:LOGLEVEL_VERBOSE];
++
++        NSBundle *bundle = [[NSBundle alloc] initWithPath:ROOT_PATH_NS(@"/Library/PreferenceBundles/dig3st.bundle")];
++        NSString *imgFile = [bundle pathForResource:@"arrow" ofType:@"png"];
++        imgData = [[NSData alloc] initWithContentsOfFile:imgFile];
++
++        if (tweakEnabled && apiChecks) {
++            [logger log:@"Running API Check" level:LOGLEVEL_INFO];
++            [openai check:^(BOOL success) {
++                if (!success) {
++                    [logger log:@"API request failed disable Check Api in the settings to skip this check and then respring" level:LOGLEVEL_WARNING];
++                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(20 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
++                        Alert(@"API Error", @"API request failed this means the current endpoint might be invalid,disable Check Api in the settings to skip this check and then respring",nil);
++                    });
++                }
++            }];
++        }
++
++        %init;
++        [logger log:[NSString stringWithFormat:@"End of ctor block (enabled=%@)", tweakEnabled ? @"YES" : @"NO"] level:LOGLEVEL_VERBOSE];
++    } @catch(NSException *e) {
+         NSLog(@"error: %@", e);
+     }
+ }
