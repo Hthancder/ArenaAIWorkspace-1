@@ -196,3 +196,14 @@ Những gì quanh nó:
 - không ghi được nhật ký trước khi hành động thì **từ chối nghỉ tab**, và không có hoàn tác: tab vẫn còn đó, tải lại là mất nội dung chưa lưu.
 
 Chưa làm, và tài liệu không nói là đã làm: thông báo kết quả qua kênh hệ điều hành, cùng quyền `processes`. Chrome ổn định không cho extension số đo theo tab nên ở máy đó mức Tự động vẫn không bật được — `assertUsable` từ chối lưu khi không có nguồn đo, thay vì bật rồi im lặng.
+
+### Lượt Tự động nhường giờ yên lặng và toàn màn hình (0.124)
+
+15.3 ghi rõ khối này **không** có bản sao riêng của giờ yên lặng và "hoãn khi toàn màn hình" — nó dùng cơ chế chung của ứng dụng. Trước bản này điều đó chỉ đúng với lời nhắc, còn lượt nghỉ Tự động thì không: `AutoDiscard.apply()` có thể cho nghỉ tab giữa một buổi trình chiếu. Đây là chỗ tài liệu nói một đường, mã đi một đường, và câu trong khối Cài đặt vẫn cam kết "dùng theo thiết lập chung".
+
+Bổ sung nằm ngay sau các cổng đồng hồ trong `apply()` và trước khi nhật ký được ghi:
+
+- `Đang giờ yên lặng nên lượt Tự động nhường; chưa tab nào bị nghỉ.` — `ReminderTools.isQuiet(data.quietHours,now)`;
+- `Đang toàn màn hình hoặc không xác định được trạng thái cửa sổ; chưa tab nào bị nghỉ.` — `ReminderTools.deferFullscreen(api,data.deferFullscreenNotifications)`, tức là cả trường hợp Chrome không cho biết trạng thái cửa sổ cũng **giữ**, giống cách `auto-close.js` đang chặn cứng.
+
+Cả hai trả `status:'waiting'` **trước** khi ghi `autoDiscardAction`, nên một lượt bị giữ không để lại báo cáo giả và cũng không được tính là một lượt đã chạy; không có hoàn tác nào được hứa. Việc đo không bị ảnh hưởng: số đo vẫn lấy theo chu kỳ, **Đo lại ngay** vẫn chạy, vì giữ một hành động khác với giấu một con số. Điểm này có test riêng (`auto-discard-run.test.js`), kể cả hai trường hợp "không đọc được đồng hồ" và "không đọc được cửa sổ" — thà nhường còn hơn đoán là an toàn.

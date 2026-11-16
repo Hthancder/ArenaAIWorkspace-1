@@ -341,12 +341,21 @@ async function run(api,now,deps={},options={}){
   if(!config.enabled||config.mode!=='auto')return {status:'idle',reason:'Chỉ mức Tự động mới được phép nghỉ tab; chưa tab nào bị nghỉ.'};
   if(!Number.isFinite(result.run?.at)||(now-result.run.at)>=2*config.everyMinutes*60000)return {status:'stale',reason:'Số đo của lượt này đã quá hai chu kỳ nên không còn là căn cứ; chưa tab nào bị nghỉ.'};
   if(!deps.discard?.request)return {status:'unmeasurable',reason:'Không có đường cho nghỉ tab ở điểm gọi này; chưa tab nào bị nghỉ.'};
-  const data=await api.storage.local.get(['automationPaused',ackKey,actionKey,'protectedDomains','protectedUrls']);
+  const data=await api.storage.local.get(['automationPaused',ackKey,actionKey,'protectedDomains','protectedUrls','quietHours','deferFullscreenNotifications']);
   if(data.automationPaused!==undefined&&data.automationPaused!==false)return {status:'paused',reason:'Tự động hóa toàn cục đang tạm dừng; chưa tab nào bị nghỉ.'};
   if(!ackValid(data[ackKey],now))return {status:'unconfirmed',reason:'Mức Tự động chưa có xác nhận rủi ro trên máy này; chưa tab nào bị nghỉ.'};
   const last=data[actionKey];
   // A previous cycle that could not confirm its own result buys itself ten minutes of quiet, not a retry storm.
   if(last&&(last.status==='running'||last.status==='partial'||last.status==='uncertain'||last.journalFailed===true)&&Number.isFinite(last.at)&&now-last.at<uncertainWaitMinutes*60000)return {status:'waiting',reason:`Lượt tự động trước chưa xác nhận được kết quả nên Tabspace chờ ${uncertainWaitMinutes} phút; chưa tab nào bị nghỉ.`,last};
+  // 15.3: quiet hours and the fullscreen hold belong to the app, not to this block, and the unattended run
+  // honours them like every other automatic path. No ReminderTools at this call site means no claim: nothing here
+  // invents a state, and an unreadable clock or window state holds the run instead of guessing that it is safe.
+  if(deps.reminders){
+   let quiet=true;try{quiet=deps.reminders.isQuiet(data.quietHours,now)}catch{quiet=true}
+   if(quiet)return {status:'waiting',reason:'Đang giờ yên lặng nên lượt Tự động nhường; chưa tab nào bị nghỉ.'};
+   let hold=false;try{hold=await deps.reminders.deferFullscreen(api,data.deferFullscreenNotifications)}catch{hold=true}
+   if(hold)return {status:'waiting',reason:'Đang toàn màn hình hoặc không xác định được trạng thái cửa sổ; chưa tab nào bị nghỉ.'};
+  }
   let domains=[],urls=[];
   try{domains=deps.protection?deps.protection.validate(data.protectedDomains):[];urls=deps.protection?deps.protection.validateUrls(data.protectedUrls):[]}catch{return {status:'blocked',reason:'Danh sách bảo vệ không hợp lệ; chưa tab nào bị nghỉ.'}}
   const report={at:result.run.at,id:result.run.at,status:'running',counts:{requested:0,discarded:0,skipped:0,unconfirmed:0,protected:0},results:[]};

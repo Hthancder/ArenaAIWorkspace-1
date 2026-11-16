@@ -10,7 +10,7 @@ assert.ok(![...(manifest.permissions||[]),...(manifest.optional_permissions||[])
 
 // The worker measures, then hands any automatic plan to the module; it keeps no discard call of its own.
 assert.match(background,/const measured=await AutoDiscard\.run\(chrome,Date\.now\(\),\{grace:OpenGrace,protection:Protection,memory:chrome\.system\?\.memory\}\)/);
-assert.match(background,/if\(measured\?\.status==='measured'&&measured\.action\)await AutoDiscard\.apply\(chrome,measured,Date\.now\(\),\{discard:DiscardTools,protection:Protection\}\)/);
+assert.match(background,/if\(measured\?\.status==='measured'&&measured\.action\)await AutoDiscard\.apply\(chrome,measured,Date\.now\(\),\{discard:DiscardTools,protection:Protection,reminders:ReminderTools\}\)/,'the worker hands the shared hold settings to the run instead of letting the module guess them');
 assert.match(background,/catch\(e\)\{console\.error\('Automatic discard run failed',e\)\}/,'an action failure is logged, not replayed silently every minute');
 assert.match(background,/importScripts\([^)]*'discard\.js','auto-discard\.js'/,'the shared discard tool is loaded for the worker too');
 assert.doesNotMatch(background,/chrome\.tabs\.discard|tabs\.discard\(|tabs\.remove\(/,'the worker never discards or closes a tab by itself');

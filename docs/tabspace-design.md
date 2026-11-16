@@ -316,7 +316,7 @@ Tôn trọng `prefers-reduced-motion`: bỏ hoặc giảm chuyển động khôn
 
 ## 15. Tự động cho nghỉ tab theo mức tiêu hao tài nguyên
 
-**Trạng thái:** đã có nền tảng ở 15.1–15.5 (tiến độ 0.115, bộ đo nền ở 0.116, cửa chặn RAM hệ thống ở 0.117, thẻ Cần chú ý ở 0.118, bản ghi lượt ở 0.119, sao lưu ở 0.120, nhãn Chỉ gợi ý ở 0.121, danh sách ở Sức khỏe tab ở 0.122, lượt Tự động ở 0.123): module `auto-discard.js` quyết định theo ngưỡng rời từng tài nguyên, khối cài đặt thu gọn trong trang quản lý, `AutoDiscard.run()` chạy theo chu kỳ trong service worker với đúng các cổng chặn của một lượt nghỉ — và từ 0.123 lượt nền ở mức Tự động có đường nghỉ riêng sau một lần xác nhận rủi ro; hai mức kia vẫn chỉ đo và đếm, kết quả một lượt hiện thành thẻ trong Cần chú ý (0.118) hoặc danh sách ở *Sức khỏe tab* (0.122). Đã xong ở 15.6: quyền vẫn chưa xin (chủ đích), số đo không ra khỏi máy, và cấu hình vào sao lưu theo lựa chọn kèm buộc tắt khi nhập (0.120). **Chưa triển khai:** thông báo kết quả lượt Tự động qua kênh hệ điều hành, quyền `processes`/`system.memory`, và đường ước lượng `performance.memory` trong trang. Toàn bộ mục này vẫn phụ thuộc một khả năng chưa kiểm chứng (mục 12.9): Chrome không cho extension mọi kênh ổn định để đo tài nguyên của từng tab. Nơi nào không có nguồn đo đáng tin, giao diện nói "không đo được" và tính năng không chạy — không thay bằng số suy đoán.
+**Trạng thái:** đã có nền tảng ở 15.1–15.5 (tiến độ 0.115, bộ đo nền ở 0.116, cửa chặn RAM hệ thống ở 0.117, thẻ Cần chú ý ở 0.118, bản ghi lượt ở 0.119, sao lưu ở 0.120, nhãn Chỉ gợi ý ở 0.121, danh sách ở Sức khỏe tab ở 0.122, lượt Tự động ở 0.123, nhường giờ yên lặng và toàn màn hình ở 0.124): module `auto-discard.js` quyết định theo ngưỡng rời từng tài nguyên, khối cài đặt thu gọn trong trang quản lý, `AutoDiscard.run()` chạy theo chu kỳ trong service worker với đúng các cổng chặn của một lượt nghỉ — và từ 0.123 lượt nền ở mức Tự động có đường nghỉ riêng sau một lần xác nhận rủi ro; hai mức kia vẫn chỉ đo và đếm, kết quả một lượt hiện thành thẻ trong Cần chú ý (0.118) hoặc danh sách ở *Sức khỏe tab* (0.122). Đã xong ở 15.6: quyền vẫn chưa xin (chủ đích), số đo không ra khỏi máy, và cấu hình vào sao lưu theo lựa chọn kèm buộc tắt khi nhập (0.120). **Chưa triển khai:** thông báo kết quả lượt Tự động qua kênh hệ điều hành, quyền `processes`/`system.memory`, và đường ước lượng `performance.memory` trong trang. Toàn bộ mục này vẫn phụ thuộc một khả năng chưa kiểm chứng (mục 12.9): Chrome không cho extension mọi kênh ổn định để đo tài nguyên của từng tab. Nơi nào không có nguồn đo đáng tin, giao diện nói "không đo được" và tính năng không chạy — không thay bằng số suy đoán.
 
 Mục này chỉ thêm **một nguồn ứng viên mới** cho bộ điều phối: tab đang tiêu hao nhiều (RAM, CPU, mạng) thay vì tab khớp quy tắc URL như preset. Chính sách bảo vệ, phân tầng cài đặt, điều phối, thông báo, giới hạn và xử lý lỗi dùng lại mục 6, 7, 8, 14; không tạo cơ chế thứ hai song song.
 
@@ -402,7 +402,7 @@ Toàn bộ lựa chọn ở 15.3 nằm trong **một khối thu gọn "Tự đ�
 - Không có `chrome.processes` (kênh ổn định thông thường): khối nêu rõ lý do, không hiện số, không cho bật Hỏi trước/Tự động; các nút nghỉ thủ công vẫn hoạt động.
 - Nhiều tab dùng chung một tiến trình: số đo được gán cho cả nhóm và ghi rõ "tiến trình chung"; không hiển thị số riêng cho từng tab, không suy ra tab nào nặng hơn.
 - Ngưỡng biên (đúng bằng ngưỡng, thấp hơn 1 đơn vị), CPU ở chu kỳ 1/2/3, đổi cấu hình giữa chu kỳ, mẫu đo cũ hơn hai lần chu kỳ, tab đổi URL/cửa sổ/tiến trình sau khi đo: mỗi trường hợp có kết quả xác định.
-- Tab đang xem, ghim, phát âm thanh, đã nghỉ, được bảo vệ, vừa mở trong thời gian miễn, giờ yên lặng, toàn màn hình, tạm dừng tự động hóa: không bị nghỉ ở cả ba chế độ; tab ước lượng không bao giờ bị nghỉ ở chế độ Tự động.
+- Tab đang xem, ghim, phát âm thanh, đã nghỉ, được bảo vệ, vừa mở trong thời gian miễn, giờ yên lặng, toàn màn hình, tạm dừng tự động hóa: không bị nghỉ ở cả ba chế độ (giờ yên lặng và toàn màn hình chỉ thật sự chặn lượt Tự động từ 0.124, chặn trước khi ghi báo cáo, còn việc đo thì không bị giữ); tab ước lượng không bao giờ bị nghỉ ở chế độ Tự động.
 - Hỏi trước mà không phản hồi, phản hồi trễ, tắt popup, từ chối quyền: không tab nào bị nghỉ; lời nhắc còn tìm lại được.
 - Lượt Tự động đạt giới hạn mỗi lượt, một phần thất bại hoặc không xác nhận: báo đúng số từng loại, không báo thành công toàn bộ, không tự thử lại.
 - Khối thu gọn: đủ nghĩa khi thu gọn, điều hướng bằng bàn phím, `aria-expanded` đúng, tôn trọng giảm chuyển động, không cắt nội dung ở cửa sổ hẹp và khi zoom.
@@ -577,3 +577,14 @@ Những gì quanh nó:
 - không ghi được nhật ký trước khi hành động thì **từ chối nghỉ tab**, và không có hoàn tác: tab vẫn còn đó, tải lại là mất nội dung chưa lưu.
 
 Chưa làm, và tài liệu không nói là đã làm: thông báo kết quả qua kênh hệ điều hành, cùng quyền `processes`. Chrome ổn định không cho extension số đo theo tab nên ở máy đó mức Tự động vẫn không bật được — `assertUsable` từ chối lưu khi không có nguồn đo, thay vì bật rồi im lặng.
+
+### Lượt Tự động nhường giờ yên lặng và toàn màn hình (0.124)
+
+15.3 ghi rõ khối này **không** có bản sao riêng của giờ yên lặng và "hoãn khi toàn màn hình" — nó dùng cơ chế chung của ứng dụng. Trước bản này điều đó chỉ đúng với lời nhắc, còn lượt nghỉ Tự động thì không: `AutoDiscard.apply()` có thể cho nghỉ tab giữa một buổi trình chiếu. Đây là chỗ tài liệu nói một đường, mã đi một đường, và câu trong khối Cài đặt vẫn cam kết "dùng theo thiết lập chung".
+
+Bổ sung nằm ngay sau các cổng đồng hồ trong `apply()` và trước khi nhật ký được ghi:
+
+- `Đang giờ yên lặng nên lượt Tự động nhường; chưa tab nào bị nghỉ.` — `ReminderTools.isQuiet(data.quietHours,now)`;
+- `Đang toàn màn hình hoặc không xác định được trạng thái cửa sổ; chưa tab nào bị nghỉ.` — `ReminderTools.deferFullscreen(api,data.deferFullscreenNotifications)`, tức là cả trường hợp Chrome không cho biết trạng thái cửa sổ cũng **giữ**, giống cách `auto-close.js` đang chặn cứng.
+
+Cả hai trả `status:'waiting'` **trước** khi ghi `autoDiscardAction`, nên một lượt bị giữ không để lại báo cáo giả và cũng không được tính là một lượt đã chạy; không có hoàn tác nào được hứa. Việc đo không bị ảnh hưởng: số đo vẫn lấy theo chu kỳ, **Đo lại ngay** vẫn chạy, vì giữ một hành động khác với giấu một con số. Điểm này có test riêng (`auto-discard-run.test.js`), kể cả hai trường hợp "không đọc được đồng hồ" và "không đọc được cửa sổ" — thà nhường còn hơn đoán là an toàn.

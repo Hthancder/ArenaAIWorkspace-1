@@ -181,6 +181,23 @@ const record=box=>box.session()[A.runKey];
  assert.deepEqual([movedRun.report.counts,movedRun.report.status],[{requested:1,discarded:0,skipped:1,unconfirmed:0,protected:0},'complete']);
  assert.match(A.actionLabel(movedRun.report,now).text,/1 tab bị bỏ qua vì đã thay đổi/);
  assert.doesNotMatch(JSON.stringify(db.autoDiscardConfig),/ack|risk/i);
+ // 15.3/15.7: the unattended run yields to the settings the app already has, and holds before any tab is touched.
+ const held={at:now+22*60000,status:'complete',counts:{requested:0,discarded:0,skipped:0,unconfirmed:0,protected:0},results:[]};
+ const never={request:async()=>{throw Error('a held run must not reach the discard tool')}};
+ const chosen=[{tab:{id:9,windowId:1,url:'https://example.com/9'}}];
+ const reminders=(quiet,fullscreen)=>({isQuiet:()=>{if(quiet==='throw')throw Error('no clock');return quiet==='on'},deferFullscreen:async()=>{if(fullscreen==='throw')throw Error('no window state');return fullscreen==='on'}});
+ for(const [name,rem] of [['quiet hours',reminders('on','off')],['fullscreen',reminders('off','on')],['an unreadable clock',reminders('throw','off')],['an unreadable window state',reminders('off','throw')]]){
+  db.autoDiscardAction=held;
+  const heldOut=await A.apply(autoBox,{...loose,action:{chosen}},now+22*60000,{discard:never,protection:Protection,reminders:rem});
+  assert.deepEqual([heldOut.status,heldOut.report,db.autoDiscardAction],['waiting',undefined,held],`a hold for ${name} writes no report and no tab is rested`);
+ }
+ assert.match((await A.apply(autoBox,{...loose,action:{chosen}},now+22*60000,{discard:never,protection:Protection,reminders:reminders('on','off')})).reason,/giờ yên lặng/);
+ assert.match((await A.apply(autoBox,{...loose,action:{chosen}},now+22*60000,{discard:never,protection:Protection,reminders:reminders('off','on')})).reason,/toàn màn hình/);
+ db.autoDiscardAction=held;
+ // The hold is not a blanket excuse: outside quiet hours and not fullscreen, the run acts and says what it did.
+ const passed=await A.apply(autoBox,{...loose,action:{chosen}},now+22*60000,{discard:{request:async()=>({status:'discarded'})},protection:Protection,reminders:reminders('off','off')});
+ assert.deepEqual([passed.status,db.autoDiscardAction.status,db.autoDiscardAction.counts.discarded],['applied','complete',1],'a free moment is not a reason to do nothing');
+ db.autoDiscardAction=held;
  assert.deepEqual([discards,record(noteBox).at,db.autoDiscardRun],[0,now+60000,undefined],'the measurement path still discards nothing');
  console.log('The measurement cycle stays read-only, waits, and admits every way it cannot run: OK');
 })().catch(e=>{console.error(e);process.exitCode=1});

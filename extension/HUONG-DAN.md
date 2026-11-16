@@ -1,4 +1,4 @@
-# Tabspace 0.123 — bản thử nghiệm
+# Tabspace 0.124 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -67,6 +67,7 @@
 - **Nhãn của mức "Chỉ gợi ý":** ngay dưới ô **Cách xử lý** trong hộp thoại *Thái độ tài nguyên* có dòng chữ nói rõ: mức này chỉ đổi cách đếm và cách nhắc, và ở bản 0.121 khi ấy vẫn chưa có nơi xem riêng — chọn nó không làm tab nghỉ nhanh hơn (0.122 đã có trang *Sức khỏe tab*).
 - **Trang Sức khỏe tab:** mục mới trong thanh bên, nơi mức *Chỉ gợi ý* để danh sách "được đề xuất nghỉ" của lượt đo gần nhất (mỗi hàng ghi số đo, thời điểm, nguồn) cùng đường dẫn tới Tab trùng, Lâu chưa truy cập và Đã lưu còn mở. Nút **Chọn N tab để xem trước** chỉ đánh dấu sẵn ở *Tab đang mở* — trang không có nút cho nghỉ, và không tab nào bị nghỉ khi bạn bỏ qua một gợi ý.
 - **Mức Tự động đã chạy được:** nếu Chrome cho số đo thật, Tabspace có thể cho nghỉ tab theo ngưỡng mà không hỏi lại — sau **một** hộp xác nhận rủi ro bạn tự bấm, tối đa theo "Giới hạn mỗi lượt", vẫn bỏ qua tab đang xem/đang ghim/đang phát âm thanh/ẩn danh/tab được bảo vệ, và mỗi lượt để lại một bản ghi kết quả (kèm số tab không xác nhận được) ở trang *Sức khỏe tab* ngay trong tiêu đề khối. Trên Chrome ổn định, nơi không có số đo theo tab, mức này vẫn không bật được.
+- **Lượt Tự động nhường đúng chỗ:** khi đang giờ yên lặng hoặc đang toàn màn hình (kể cả lúc Chrome không cho biết trạng thái cửa sổ), lượt tự nghỉ **không chạy** và nêu lý do, còn việc đo vẫn chạy — bạn có thể bấm **Đo lại và xem danh sách…** bất cứ lúc nào.
 - Trong **Cài đặt & sao lưu**, mở khối **Tự động cho nghỉ tab theo tài nguyên**: thu gọn/mở rộng bằng chuột và bàn phím (Esc chỉ thu gọn khi không có thao tác nào đang chạy), đặt ngưỡng rời từng tài nguyên rồi **Đo lại và xem danh sách…**. Trên Chrome ổn định, khối phải nêu "Không đo được tài nguyên trên Chrome này" và không cho bật; nếu chạy Chrome kênh Dev đã cấp quyền `processes`, kiểm tra số đo có nhãn "tiến trình chung N tab", danh sách không nghỉ tab nào và nút chọn chỉ đánh dấu tab. Bộ đo nền lấy số theo **Chu kỳ đo (phút)** ngay trong tiện ích nhưng chỉ đo và đếm, chưa có lượt nghỉ tự động; sau khi để Chrome chạy nền, kiểm tra tiêu đề khối nêu tuổi dữ liệu đo, hoặc báo "dữ liệu đo đã cũ" hay "có chu kỳ đo đã bỏ lỡ, không chạy bù" thay vì tự nghỉ tab. Bấm **Giới hạn và rủi ro** để đọc hộp giới hạn (chỉ đọc, không đổi thiết lập); nếu bật "Chỉ chạy khi hệ thống thiếu bộ nhớ", kiểm tra chu kỳ bỏ qua khi RAM khả dụng còn cao hơn ngưỡng, tiêu đề khối giữ số cũ và nút Đo lại vẫn cho số.
 - Chọn tab đang mở và dùng **Tạo nhóm Chrome** hoặc **Bỏ nhóm Chrome**. Tạo nhóm chỉ áp dụng một cửa sổ, bỏ qua tab ghim; tab đã thuộc nhóm khác có thể được chuyển. Nhấn nhãn nhóm ở hàng tab để chỉnh tên, màu và thu gọn. Nhóm Chrome khác nhóm đã lưu Tabspace; màu Chrome dùng bảng màu cố định.
 - Nhóm có ghi chú, nút yêu thích và thu gọn/mở rộng; nhóm yêu thích được ưu tiên ở sidebar. Khi tìm kiếm, nhóm được mở tạm thời để thấy kết quả. Các mục đã chọn nhưng bị ẩn vẫn được tính trong thao tác hàng loạt và được báo ở thanh chọn.
@@ -321,3 +322,14 @@ Những gì quanh nó:
 - không ghi được nhật ký trước khi hành động thì **từ chối nghỉ tab**, và không có hoàn tác: tab vẫn còn đó, tải lại là mất nội dung chưa lưu.
 
 Chưa làm, và tài liệu không nói là đã làm: thông báo kết quả qua kênh hệ điều hành, cùng quyền `processes`. Chrome ổn định không cho extension số đo theo tab nên ở máy đó mức Tự động vẫn không bật được — `assertUsable` từ chối lưu khi không có nguồn đo, thay vì bật rồi im lặng.
+
+### Lượt Tự động nhường giờ yên lặng và toàn màn hình (0.124)
+
+15.3 ghi rõ khối này **không** có bản sao riêng của giờ yên lặng và "hoãn khi toàn màn hình" — nó dùng cơ chế chung của ứng dụng. Trước bản này điều đó chỉ đúng với lời nhắc, còn lượt nghỉ Tự động thì không: `AutoDiscard.apply()` có thể cho nghỉ tab giữa một buổi trình chiếu. Đây là chỗ tài liệu nói một đường, mã đi một đường, và câu trong khối Cài đặt vẫn cam kết "dùng theo thiết lập chung".
+
+Bổ sung nằm ngay sau các cổng đồng hồ trong `apply()` và trước khi nhật ký được ghi:
+
+- `Đang giờ yên lặng nên lượt Tự động nhường; chưa tab nào bị nghỉ.` — `ReminderTools.isQuiet(data.quietHours,now)`;
+- `Đang toàn màn hình hoặc không xác định được trạng thái cửa sổ; chưa tab nào bị nghỉ.` — `ReminderTools.deferFullscreen(api,data.deferFullscreenNotifications)`, tức là cả trường hợp Chrome không cho biết trạng thái cửa sổ cũng **giữ**, giống cách `auto-close.js` đang chặn cứng.
+
+Cả hai trả `status:'waiting'` **trước** khi ghi `autoDiscardAction`, nên một lượt bị giữ không để lại báo cáo giả và cũng không được tính là một lượt đã chạy; không có hoàn tác nào được hứa. Việc đo không bị ảnh hưởng: số đo vẫn lấy theo chu kỳ, **Đo lại ngay** vẫn chạy, vì giữ một hành động khác với giấu một con số. Điểm này có test riêng (`auto-discard-run.test.js`), kể cả hai trường hợp "không đọc được đồng hồ" và "không đọc được cửa sổ" — thà nhường còn hơn đoán là an toàn.

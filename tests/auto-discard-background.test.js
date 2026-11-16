@@ -49,6 +49,7 @@ function harness(everyMinutes){
  onAlarm({name:'tick',scheduledTime:Date.now()});await flush();
  assert.deepEqual([applyCalls.length,applyCalls[0].api,applyCalls[0].result,applyCalls[0].deps.discard,applyCalls[0].deps.protection],[1,chrome,runReturns,DiscardTools,Protection],'the worker hands over the plan and the shared tools, nothing else');
  assert.ok(Number.isFinite(applyCalls[0].now),'and a clock the module can compare the samples against');
+ assert.equal(applyCalls[0].deps.reminders,ctx.ReminderTools,'the quiet hours and the fullscreen hold come from the app-wide tools, not from a copy');
  applyFails=true;const applied=applyCalls.length,errorCount=errors.length,realError=console.error;
  console.error=(...a)=>errors.push(a[0]?.message||String(a[0]));
  onAlarm({name:'tick',scheduledTime:Date.now()});await flush();console.error=realError;applyFails=false;
