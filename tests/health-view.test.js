@@ -8,7 +8,7 @@ const config={enabled:true,mode:'suggest',combine:'any',resources:['memory'],thr
 const row=(id,extra={})=>({id,windowId:1,processId:10,sharedTabs:1,at:now,values:{memory:1400},triggered:['memory'],source:'tiến trình Chrome',...extra});
 const ctx={
  $:()=>area,Date:{now:()=>now},esc:value=>String(value).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])),
- TabHealth,DuplicateTools,AutoDiscard:A,oldTabDays:7,groups:[],tabs:[],
+ TabHealth,DuplicateTools,AutoDiscard:A,PresetTools:require('../extension/presets.js'),oldTabDays:7,groups:[],tabs:[],presets:[],
  autoDiscardContext:()=>({measurable:true}),autoDiscardConfig:config,autoDiscardRun:null,autoDiscardAction:null,
 };
 vm.runInNewContext(src.slice(start,end),ctx);
@@ -83,7 +83,16 @@ const render=()=>{ctx.renderHealth();return area.innerHTML};
  assert.match(html,/1 tab không rõ nên không được xét/,'a tab without a usable timestamp is counted as unknown, not as old');
  assert.match(html,/>Lâu chưa truy cập<\/b><div class="rowurl">chỉ tab có thời gian Chrome ghi nhận/);
  assert.match(html,/Đã lưu nhưng còn mở/);
- assert.match(html,/Bản này chưa so sánh preset với nhau/,'the overlapping-rule hint is admitted, not faked');
+ assert.match(html,/Không cặp quy tắc nào trùng miền hay chồng đường dẫn/,'an empty preset list is reported as empty, not as a missing feature');
+ assert.ok(!/chưa so sánh|chưa triển khai/i.test(html),'and the row no longer claims the comparison does not exist');
+ // The row reads the same rule comparison the preset dialog uses: no tab, no alarm, no guess.
+ ctx.presets=[{id:'p1',name:'Work',domains:['github.com']},{id:'p2',name:'Play',domains:['github.com'],subdomains:true}];
+ html=render();
+ assert.match(html,/1 cặp preset cùng khớp một miền hoặc chồng đường dẫn, so từ chính quy tắc nên không cần tab nào đang mở: Work \+ Play/,'the pair is counted and named from the rules alone');
+ ctx.presets=[{id:'p1',name:'A',domains:['a.dev']},{id:'p2',name:'B',domains:['a.dev']},{id:'p3',name:'C',domains:['a.dev']},{id:'p4',name:'D',domains:['a.dev']},{id:'p5',name:'E',domains:['a.dev']},{id:'p6',name:'F',domains:['a.dev']},{id:'p7',name:'G',domains:['a.dev']}];
+ html=render();
+ assert.match(html,/21 cặp preset cùng khớp một miền hoặc chồng đường dẫn[^<]*: A \+ B, A \+ C…/,'seven presets on one host give twenty-one pairs, listed by name with the rest folded away');
+ ctx.presets=[];
  // The view never reaches for a tab: no discard call, no chrome API beyond the storage the record already came from.
  const health=src.slice(start,end);
  assert.doesNotMatch(health,/tabs\.discard|chrome\.tabs|\.remove\(|\.set\(/,'the health page reads a record, it does not write or discard');

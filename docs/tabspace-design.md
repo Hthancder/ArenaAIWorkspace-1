@@ -1,6 +1,6 @@
 # Tabspace — đặc tả thiết kế sản phẩm
 
-**Trạng thái:** đặc tả đang được triển khai dần theo từng bản 0.x; mục 16 ghi lại cái gì đã có ở bản nào. Phần **chưa** làm tính đến 0.128: các điểm cần kiểm chứng bằng Chrome thật (mục 12), và quyền `processes` ở dạng mặc định (0.126 chỉ xin dưới dạng tùy chọn, bấm nút trong khối, còn Chrome kênh ổn định thì không cấp), so sánh quy tắc chồng lấn ở mức giữa các preset với nhau (5.7/6.3), và bộ mockup/design system hoàn chỉnh (14.1).  
+**Trạng thái:** đặc tả đang được triển khai dần theo từng bản 0.x; mục 16 ghi lại cái gì đã có ở bản nào. Phần **chưa** làm tính đến 0.129: các điểm cần kiểm chứng bằng Chrome thật (mục 12), quyền `processes` ở dạng mặc định (0.126 chỉ xin dưới dạng tùy chọn, bấm nút trong khối, còn Chrome kênh ổn định thì không cấp), và bộ mockup/design system hoàn chỉnh (14.1). Phép so sánh quy tắc-đối-quy tắc của 5.7/6.3 đã có từ 0.129.  
 **Phạm vi:** extension Chrome cho nhu cầu cá nhân; ưu tiên dữ liệu cục bộ.  
 **Mục đích:** là nguồn tham chiếu thống nhất cho thiết kế, triển khai và kiểm thử, hạn chế mất ngữ cảnh giữa các lượt làm việc.
 
@@ -115,7 +115,9 @@ Nhật ký ghi thời điểm, nguồn kích hoạt, quy tắc áp dụng, kết
 
 Gợi ý tab trùng, lâu không truy cập (chỉ khi có dữ liệu), đã lưu nhưng còn mở, quy tắc chồng lấn. Mỗi gợi ý có lý do, xem trước, bỏ qua/tắt; không tự coi tab cũ là rác. Không dùng ước lượng RAM như số đo. Gợi ý theo mức tiêu hao tài nguyên dùng chung khối xem trước và chịu cùng chính sách bảo vệ; điều kiện, nguồn đo và giới hạn ở mục 15.
 
-**Trạng thái (0.122):** trang **Sức khỏe tab** đã có trong thanh bên và mang danh sách "được đề xuất nghỉ" mà mức **Chỉ gợi ý** (15.3) cần; ba loại gợi ý còn lại vẫn nằm ở trang riêng của chúng và trang này dẫn đường tới đó. **Quy tắc chồng lấn**: trang không tự đếm; dòng "Quy tắc chồng lấn" nói thẳng là bản này chưa so sánh preset với nhau và dẫn sang trang Preset, nơi đã có *Kiểm tra preset chồng lấn* chạy theo tab đang mở. Còn thiếu là phép so sánh **giữa các quy tắc** (hai preset nào chồng nhau kể cả khi không có tab nào mở), không phải một dòng trống ngụ ý "không có gì". Hộp thoại *Thái độ tài nguyên* không còn phải nhận là thiếu danh sách.
+**Trạng thái (0.122):** trang **Sức khỏe tab** đã có trong thanh bên và mang danh sách "được đề xuất nghỉ" mà mức **Chỉ gợi ý** (15.3) cần; ba loại gợi ý còn lại vẫn nằm ở trang riêng của chúng và trang này dẫn đường tới đó. **Quy tắc chồng lấn**: trang không tự đếm; dòng "Quy tắc chồng lấn" nói thẳng là bản này chưa so sánh preset với nhau và dẫn sang trang Preset, nơi đã có *Kiểm tra preset chồng lấn* chạy theo tab đang mở. Còn thiếu lúc đó là phép so sánh **giữa các quy tắc** (hai preset nào chồng nhau kể cả khi không có tab nào mở), không phải một dòng trống ngụ ý "không có gì" — xem **Trạng thái (0.129)** bên dưới. Hộp thoại *Thái độ tài nguyên* không còn phải nhận là thiếu danh sách.
+
+**Trạng thái (0.129):** phép so sánh giữa các quy tắc mà 0.122 còn thiếu nay có: `PresetTools.ruleOverlaps(presets)` so hai bộ quy tắc với nhau (miền và cây miền con, tiền tố đường dẫn theo ranh giới đoạn, URL chính xác) mà không cần tab nào đang mở. Dòng *Quy tắc chồng lấn* ở trang này đọc từ phép so đó — đếm cặp, gọi tên hai preset, và nói rõ ngoại lệ chưa được xét — còn hộp thoại *Kiểm tra preset chồng lấn* trong trang Preset có thêm mục **So sánh quy tắc với quy tắc** chạy được cả khi không có tab mở.
 
 **Trạng thái (0.123):** trang còn là nơi duy nhất để xem kết quả một lượt Tự động: khối "Lượt tự động gần nhất" gọi `AutoDiscard.actionLabel()` và nêu từng tab đã nghỉ hoặc không xác nhận được. Danh sách gợi ý không đổi, và trang vẫn không có nút nghỉ tab nào.
 
@@ -641,3 +643,20 @@ Hai chi tiết nhỏ nhưng là thứ khiến nó đáng tin: id sự kiện suy
 id thông báo là `tabspace-auto-discard`; bấm vào nó mở **Sức khỏe tab** (`?view=health`), nơi 0.123 đặt khối "Lượt tự động gần nhất" — không phải trang Preset như hai kênh kia, vì lượt tự nghỉ không thuộc preset nào.
 
 Hai chi tiết ghép nối đáng nói: `notify` đi qua đúng `resultEvent(report)` mà nhật ký dùng, nên một lượt mà nhật ký từ chối ghi thì kênh này cũng không báo; và `.create(` trong `auto-discard.js` chỉ có **một** chỗ (kiểm tra chốt bằng số lần), nên module không tự đặt thêm đồng hồ hay hàng đợi nào.
+
+### Hai preset chồng nhau được kể tên mà không cần mở tab nào (0.129)
+
+5.7 liệt kê "quy tắc chồng lấn" như một loại gợi ý, và 6.3 quy định ai thắng khi một tab khớp nhiều preset. Trước bản này, phép kiểm duy nhất chạy **theo tab đang mở**: hai preset cùng lấy `github.com` nhưng không ai mở trang nào thì ứng dụng im lặng, và dòng *Quy tắc chồng lấn* ở Sức khỏe tab phải nhận là chưa so sánh preset với nhau.
+
+`PresetTools.ruleOverlaps(presets)` so trực tiếp hai **bộ quy tắc**, tức là so tập hợp URL:
+
+- một quy tắc tên miền sở hữu đúng một host, hoặc cả cây host bên dưới nếu bật miền con — quan hệ cha/con chỉ có một chiều, `api.github.com` nằm trong `github.com` còn `notgithub.com` thì không;
+- hai quy tắc đường dẫn chồng nhau khi một root là tổ tiên của root kia **theo ranh giới đoạn đường dẫn**: `/work` chạm `/work/shop` nhưng không chạm `/workshop`, đúng hai quy tắc 6.1 đã định;
+- hai URL chính xác trùng nhau khi chuỗi đã chuẩn hóa giống hệt nhau, kể cả query và fragment;
+- và quy tắc miền của bên này thì **nuốt** mọi quy tắc đường dẫn/URL của bên kia trên host đó, nên nhánh kiểm tra này chạy trước so sánh root chứ không phải như phương án dự phòng.
+
+Cài theo host chứ không theo cặp preset: mỗi host được nêu trong danh sách đi bộ tổ tiên của chính nó, nên chi phí tăng theo số quy tắc chứ không phải bình phương danh sách — lý do phép kiểm này gọi được trên toàn bộ preset, ngay trong `healthData()` mỗi lần mở trang. Danh sách cắt ở 200 cặp và nói rõ đã cắt (`truncated`), vì một câu "không có gì" giả vờ còn tệ hơn một câu "nhiều quá, cắt ở 200".
+
+Điều nó **không** nói, và cả hai chỗ hiển thị đều nói thẳng: ngoại lệ của từng preset **không** được xét, nên kết quả là "hai quy tắc này có thể cùng khớp", không phải "hai preset này sẽ xung đột"; phần theo tab vẫn chỉ xét tab hiện có; và preset không có `id` vẫn được so, lấy tên làm định danh — bỏ qua một dòng vì thiếu id sẽ biến "không thấy chồng lấn" thành một lời nói dối.
+
+Nửa mới xuất hiện ở hai chỗ: hộp thoại *Kiểm tra preset chồng lấn* (mục **So sánh quy tắc với quy tắc**, hoạt động cả khi không có tab nào mở) và dòng *Quy tắc chồng lấn* của Sức khỏe tab, giờ đếm và gọi tên cặp thay vì xin lỗi. Cùng một hàm, chốt bằng pin: đúng hai chỗ gọi `PresetTools.ruleOverlaps`.

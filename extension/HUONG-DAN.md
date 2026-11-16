@@ -1,4 +1,4 @@
-# Tabspace 0.128 — bản thử nghiệm
+# Tabspace 0.129 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -22,7 +22,7 @@
 - **Quyền đọc tiến trình (tùy chọn):** khối *Tự động cho nghỉ tab theo tài nguyên* có nút **Xin quyền đọc tiến trình** khi Chrome chưa cho số đo. Đây là quyền tùy chọn nên lúc cài extension, Tabspace không xin gì thêm; Chrome chỉ cấp trên kênh Dev, và nếu bị từ chối thì khối vẫn giải thích và để nguyên nút đó cho lần sau.
 - **Giờ yên lặng:** tùy chọn mặc định tắt, áp dụng thông báo hệ điều hành của lời nhắc preset và kết quả tự động đóng; từ 0.124, giờ yên lặng còn giữ lượt Tự động của khối đo tài nguyên (mục 15) — đang yên lặng thì không tab nào bị tự nghỉ, còn việc đo thì vẫn chạy. Lời nhắc vẫn có trong Tabspace. Sau giờ yên lặng, cố gửi một thông báo tổng hợp nếu còn lời nhắc chờ, Chrome đang chạy và quyền được bật; thông báo có thể trễ, bị bỏ qua hoặc hệ điều hành chặn. Theo giờ máy, không bao gồm trong sao lưu.
 - **Cần chú ý:** tổng hợp lời nhắc preset đang chờ và lịch sử dọn có mục chưa xử lý/lỗi/không rõ. Có thể xem trước, nhắc lại, bỏ từng lời nhắc hoặc chọn bỏ nhiều lời nhắc đang thấy; không tự đóng tab hay tắt lịch tương lai. Lượt đang chạy cũng có thể xuất hiện, và cần kiểm tra Chrome khi trạng thái không rõ. Đây chưa phải lịch sử của mọi thông báo.
-- **Kiểm tra preset chồng lấn:** trong Preset, xem các tab web hiện mở khớp nhiều preset sau khi xét ngoại lệ từng preset, quy tắc và nhóm đích. Danh sách có cả preset chưa bật lịch hoặc thiếu nhóm; không chọn preset thắng hay tự dọn. Chỉ xét tab đang mở, không phải phân tích toàn bộ xung đột tương lai.
+- **Kiểm tra preset chồng lấn:** trong Preset, xem các tab web hiện mở khớp nhiều preset sau khi xét ngoại lệ từng preset, quy tắc và nhóm đích. Danh sách có cả preset chưa bật lịch hoặc thiếu nhóm; không chọn preset thắng hay tự dọn. Phần theo tab chỉ xét tab đang mở; từ 0.129 có thêm mục **So sánh quy tắc với quy tắc** chạy trực tiếp trên hai bộ quy tắc nên không cần tab nào mở, và mục đó chưa xét ngoại lệ.
 - **Xem chuyển workspace:** xem nhóm đích và gợi ý tab đang mở có URL không nằm trong các nhóm đích. Chọn thủ công để tới bước lưu & đóng riêng, rồi dùng Xem & mở để chọn tab workspace cần mở; không tự đóng/mở. Đây là gợi ý theo URL, không chứng minh tab thuộc workspace nào; trạng thái trang chưa lưu có thể mất. Tab đang xem, ghim, phát âm thanh và website được bảo vệ bị giữ lại ở bước gợi ý.
 - **Lâu chưa truy cập:** lọc tab web theo thời gian kích hoạt gần nhất do Chrome cung cấp, với ngưỡng 1–365 ngày. Tab không có thời gian hợp lệ bị bỏ qua và được đếm; thời gian không chứng minh tab an toàn để đóng/nghỉ hoặc trang không hoạt động. Không tự chọn hay xử lý tab. Ngưỡng chỉ giữ trong lần mở trang quản lý.
 - **Nhóm thông minh:** tạo bộ lọc động theo từ khóa và/hoặc tag chính xác trên tab đã lưu; tag nhóm gốc cũng được tính. Tab không bị sao chép hay di chuyển. Xóa bộ lọc không xóa tab; có thể chọn nhiều kết quả để thao tác. Bộ lọc được xuất/nhập cùng sao lưu; tìm kiếm trên trang này lọc tên và điều kiện bộ lọc.
@@ -386,3 +386,20 @@ Hai chi tiết nhỏ nhưng là thứ khiến nó đáng tin: id sự kiện suy
 id thông báo là `tabspace-auto-discard`; bấm vào nó mở **Sức khỏe tab** (`?view=health`), nơi 0.123 đặt khối "Lượt tự động gần nhất" — không phải trang Preset như hai kênh kia, vì lượt tự nghỉ không thuộc preset nào.
 
 Hai chi tiết ghép nối đáng nói: `notify` đi qua đúng `resultEvent(report)` mà nhật ký dùng, nên một lượt mà nhật ký từ chối ghi thì kênh này cũng không báo; và `.create(` trong `auto-discard.js` chỉ có **một** chỗ (kiểm tra chốt bằng số lần), nên module không tự đặt thêm đồng hồ hay hàng đợi nào.
+
+### Hai preset chồng nhau được kể tên mà không cần mở tab nào (0.129)
+
+5.7 liệt kê "quy tắc chồng lấn" như một loại gợi ý, và 6.3 quy định ai thắng khi một tab khớp nhiều preset. Trước bản này, phép kiểm duy nhất chạy **theo tab đang mở**: hai preset cùng lấy `github.com` nhưng không ai mở trang nào thì ứng dụng im lặng, và dòng *Quy tắc chồng lấn* ở Sức khỏe tab phải nhận là chưa so sánh preset với nhau.
+
+`PresetTools.ruleOverlaps(presets)` so trực tiếp hai **bộ quy tắc**, tức là so tập hợp URL:
+
+- một quy tắc tên miền sở hữu đúng một host, hoặc cả cây host bên dưới nếu bật miền con — quan hệ cha/con chỉ có một chiều, `api.github.com` nằm trong `github.com` còn `notgithub.com` thì không;
+- hai quy tắc đường dẫn chồng nhau khi một root là tổ tiên của root kia **theo ranh giới đoạn đường dẫn**: `/work` chạm `/work/shop` nhưng không chạm `/workshop`, đúng hai quy tắc 6.1 đã định;
+- hai URL chính xác trùng nhau khi chuỗi đã chuẩn hóa giống hệt nhau, kể cả query và fragment;
+- và quy tắc miền của bên này thì **nuốt** mọi quy tắc đường dẫn/URL của bên kia trên host đó, nên nhánh kiểm tra này chạy trước so sánh root chứ không phải như phương án dự phòng.
+
+Cài theo host chứ không theo cặp preset: mỗi host được nêu trong danh sách đi bộ tổ tiên của chính nó, nên chi phí tăng theo số quy tắc chứ không phải bình phương danh sách — lý do phép kiểm này gọi được trên toàn bộ preset, ngay trong `healthData()` mỗi lần mở trang. Danh sách cắt ở 200 cặp và nói rõ đã cắt (`truncated`), vì một câu "không có gì" giả vờ còn tệ hơn một câu "nhiều quá, cắt ở 200".
+
+Điều nó **không** nói, và cả hai chỗ hiển thị đều nói thẳng: ngoại lệ của từng preset **không** được xét, nên kết quả là "hai quy tắc này có thể cùng khớp", không phải "hai preset này sẽ xung đột"; phần theo tab vẫn chỉ xét tab hiện có; và preset không có `id` vẫn được so, lấy tên làm định danh — bỏ qua một dòng vì thiếu id sẽ biến "không thấy chồng lấn" thành một lời nói dối.
+
+Nửa mới xuất hiện ở hai chỗ: hộp thoại *Kiểm tra preset chồng lấn* (mục **So sánh quy tắc với quy tắc**, hoạt động cả khi không có tab nào mở) và dòng *Quy tắc chồng lấn* của Sức khỏe tab, giờ đếm và gọi tên cặp thay vì xin lỗi. Cùng một hàm, chốt bằng pin: đúng hai chỗ gọi `PresetTools.ruleOverlaps`.

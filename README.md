@@ -258,3 +258,20 @@ Hai chi tiết nhỏ nhưng là thứ khiến nó đáng tin: id sự kiện suy
 id thông báo là `tabspace-auto-discard`; bấm vào nó mở **Sức khỏe tab** (`?view=health`), nơi 0.123 đặt khối "Lượt tự động gần nhất" — không phải trang Preset như hai kênh kia, vì lượt tự nghỉ không thuộc preset nào.
 
 Hai chi tiết ghép nối đáng nói: `notify` đi qua đúng `resultEvent(report)` mà nhật ký dùng, nên một lượt mà nhật ký từ chối ghi thì kênh này cũng không báo; và `.create(` trong `auto-discard.js` chỉ có **một** chỗ (kiểm tra chốt bằng số lần), nên module không tự đặt thêm đồng hồ hay hàng đợi nào.
+
+### Hai preset chồng nhau được kể tên mà không cần mở tab nào (0.129)
+
+5.7 liệt kê "quy tắc chồng lấn" như một loại gợi ý, và 6.3 quy định ai thắng khi một tab khớp nhiều preset. Trước bản này, phép kiểm duy nhất chạy **theo tab đang mở**: hai preset cùng lấy `github.com` nhưng không ai mở trang nào thì ứng dụng im lặng, và dòng *Quy tắc chồng lấn* ở Sức khỏe tab phải nhận là chưa so sánh preset với nhau.
+
+`PresetTools.ruleOverlaps(presets)` so trực tiếp hai **bộ quy tắc**, tức là so tập hợp URL:
+
+- một quy tắc tên miền sở hữu đúng một host, hoặc cả cây host bên dưới nếu bật miền con — quan hệ cha/con chỉ có một chiều, `api.github.com` nằm trong `github.com` còn `notgithub.com` thì không;
+- hai quy tắc đường dẫn chồng nhau khi một root là tổ tiên của root kia **theo ranh giới đoạn đường dẫn**: `/work` chạm `/work/shop` nhưng không chạm `/workshop`, đúng hai quy tắc 6.1 đã định;
+- hai URL chính xác trùng nhau khi chuỗi đã chuẩn hóa giống hệt nhau, kể cả query và fragment;
+- và quy tắc miền của bên này thì **nuốt** mọi quy tắc đường dẫn/URL của bên kia trên host đó, nên nhánh kiểm tra này chạy trước so sánh root chứ không phải như phương án dự phòng.
+
+Cài theo host chứ không theo cặp preset: mỗi host được nêu trong danh sách đi bộ tổ tiên của chính nó, nên chi phí tăng theo số quy tắc chứ không phải bình phương danh sách — lý do phép kiểm này gọi được trên toàn bộ preset, ngay trong `healthData()` mỗi lần mở trang. Danh sách cắt ở 200 cặp và nói rõ đã cắt (`truncated`), vì một câu "không có gì" giả vờ còn tệ hơn một câu "nhiều quá, cắt ở 200".
+
+Điều nó **không** nói, và cả hai chỗ hiển thị đều nói thẳng: ngoại lệ của từng preset **không** được xét, nên kết quả là "hai quy tắc này có thể cùng khớp", không phải "hai preset này sẽ xung đột"; phần theo tab vẫn chỉ xét tab hiện có; và preset không có `id` vẫn được so, lấy tên làm định danh — bỏ qua một dòng vì thiếu id sẽ biến "không thấy chồng lấn" thành một lời nói dối.
+
+Nửa mới xuất hiện ở hai chỗ: hộp thoại *Kiểm tra preset chồng lấn* (mục **So sánh quy tắc với quy tắc**, hoạt động cả khi không có tab nào mở) và dòng *Quy tắc chồng lấn* của Sức khỏe tab, giờ đếm và gọi tên cặp thay vì xin lỗi. Cùng một hàm, chốt bằng pin: đúng hai chỗ gọi `PresetTools.ruleOverlaps`.
