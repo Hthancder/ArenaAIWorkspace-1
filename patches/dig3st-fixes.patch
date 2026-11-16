@@ -30,10 +30,10 @@ index e48656e..9661bf0 100644
  @end
 diff --git a/headers/Digest/DigestBannerAnimator.h b/headers/Digest/DigestBannerAnimator.h
 new file mode 100644
-index 0000000..6dae33e
+index 0000000..c9a6e7e
 --- /dev/null
 +++ b/headers/Digest/DigestBannerAnimator.h
-@@ -0,0 +1,40 @@
+@@ -0,0 +1,41 @@
 +#import <UIKit/UIKit.h>
 +
 +@interface DigestBannerRenderConfig : NSObject
@@ -53,6 +53,7 @@ index 0000000..6dae33e
 +                                               baseFont:(UIFont *)baseFont
 +                                          retainedImage:(UIImage **)outImage;
 ++ (BOOL)hasActiveAnimationForLabel:(UIView *)textElement;
+++ (NSString *)currentTargetSummaryForLabel:(UIView *)textElement;
 ++ (void)refreshNowForLabel:(UIView *)textElement;
 ++ (void)applyStaticToLabel:(UIView *)textElement
 +               withSummary:(NSString *)summary
@@ -88,11 +89,14 @@ index f7d21e7..e5320d9 100644
  @end
 \ No newline at end of file
 diff --git a/headers/Digest/DigestPrefsManager.h b/headers/Digest/DigestPrefsManager.h
-index a85993c..36785a5 100644
+index a85993c..9aa4759 100644
 --- a/headers/Digest/DigestPrefsManager.h
 +++ b/headers/Digest/DigestPrefsManager.h
-@@ -3,4 +3,8 @@
+@@ -1,6 +1,11 @@
+ #import <UIKit/UIKit.h>
+ 
  @interface DigestPrefsManager : NSUserDefaults
+++ (NSDictionary *)defaultPreferences;
  + (instancetype)sharedInstance;
  - (instancetype)initWithSuiteName:(NSString *)suitename;
 -@end
@@ -336,10 +340,10 @@ index 144a510..8300869 100644
 +@end
 diff --git a/preferences/DigestAppDetailController.m b/preferences/DigestAppDetailController.m
 new file mode 100644
-index 0000000..a57f5e1
+index 0000000..eeaee8f
 --- /dev/null
 +++ b/preferences/DigestAppDetailController.m
-@@ -0,0 +1,182 @@
+@@ -0,0 +1,186 @@
 +#import "../headers/HeadersPreferences.h"
 +#import <Preferences/PSListItemsController.h>
 +
@@ -354,8 +358,15 @@ index 0000000..a57f5e1
 +@end
 +
 +static id isAppDefaultEnabled(NSString *bundleId) {
-+	NSArray *defaultEnabled = @[@"com.apple.MobileSMS", @"com.apple.news", @"ph.telegra.Telegraph", @"com.apple.mobilemail"];
-+	return [defaultEnabled containsObject:bundleId] ? @YES : @NO;
++	if (bundleId.length == 0) return @NO;
++	static NSSet<NSString *> *defaultAppleSet = nil;
++	static dispatch_once_t onceToken;
++	dispatch_once(&onceToken, ^{
++		defaultAppleSet = [NSSet setWithObjects:@"com.apple.MobileSMS", @"com.apple.news", @"com.apple.mobilemail", nil];
++	});
++	if ([defaultAppleSet containsObject:bundleId]) return @YES;
++	if ([bundleId hasPrefix:@"com.apple"]) return @NO;
++	return @YES;
 +}
 +
 +@implementation DigestAppDetailController
@@ -368,6 +379,9 @@ index 0000000..a57f5e1
 +- (void)viewWillAppear:(BOOL)animated {
 +	[super viewWillAppear:animated];
 +	if (self.hasAppearedOnce) {
++		DigestPrefsManager *manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
++		CFPreferencesAppSynchronize(CFSTR("com.uncore.dig3st"));
++		[manager synchronize];
 +		[self reloadSpecifiers];
 +	}
 +	self.hasAppearedOnce = YES;
@@ -409,6 +423,7 @@ index 0000000..a57f5e1
 +		[ctxSp setProperty:[NSString stringWithFormat:@"appCtx_%@", self.bundleId] forKey:@"key"];
 +		[ctxSp setProperty:@"default" forKey:@"default"];
 +		[ctxSp setProperty:@"com.uncore.dig3st" forKey:@"defaults"];
++		[ctxSp setProperty:@"com.uncore.dig3st/preferences.changed" forKey:@"PostNotification"];
 +		[ctxSp setValues:triValues titles:triTitles];
 +		[list addObject:ctxSp];
 +
@@ -422,6 +437,7 @@ index 0000000..a57f5e1
 +		[trSp setProperty:[NSString stringWithFormat:@"appTrans_%@", self.bundleId] forKey:@"key"];
 +		[trSp setProperty:@"default" forKey:@"default"];
 +		[trSp setProperty:@"com.uncore.dig3st" forKey:@"defaults"];
++		[trSp setProperty:@"com.uncore.dig3st/preferences.changed" forKey:@"PostNotification"];
 +		[trSp setValues:triValues titles:triTitles];
 +		[list addObject:trSp];
 +
@@ -435,6 +451,7 @@ index 0000000..a57f5e1
 +		[stSp setProperty:[NSString stringWithFormat:@"appStream_%@", self.bundleId] forKey:@"key"];
 +		[stSp setProperty:@"default" forKey:@"default"];
 +		[stSp setProperty:@"com.uncore.dig3st" forKey:@"defaults"];
++		[stSp setProperty:@"com.uncore.dig3st/preferences.changed" forKey:@"PostNotification"];
 +		[stSp setValues:triValues titles:triTitles];
 +		[list addObject:stSp];
 +
@@ -480,8 +497,6 @@ index 0000000..a57f5e1
 +
 +- (id)readPreferenceValue:(PSSpecifier *)specifier {
 +	DigestPrefsManager *manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
-+	CFPreferencesAppSynchronize(CFSTR("com.uncore.dig3st"));
-+	[manager synchronize];
 +	NSString *key = specifier.properties[@"key"];
 +	id val = [manager safeObjectForKey:key];
 +	if (val == nil && [key isEqualToString:self.bundleId]) {
@@ -495,11 +510,7 @@ index 0000000..a57f5e1
 +	NSString *key = specifier.properties[@"key"];
 +	if (key.length > 0) {
 +		DigestPrefsManager *manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
-+		[manager setObject:value forKey:key];
-+		[manager synchronize];
-+		CFPreferencesSetAppValue((__bridge CFStringRef)key, (__bridge CFPropertyListRef)value, CFSTR("com.uncore.dig3st"));
-+		CFPreferencesAppSynchronize(CFSTR("com.uncore.dig3st"));
-+		CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), (CFStringRef)@"com.uncore.dig3st/preferences.changed", NULL, NULL, true);
++		[manager setSafeObject:value forKey:key notify:YES];
 +	}
 +}
 +
@@ -511,22 +522,19 @@ index 0000000..a57f5e1
 +		[NSString stringWithFormat:@"appStream_%@", self.bundleId],
 +		[NSString stringWithFormat:@"appPrompt_%@", self.bundleId]
 +	];
-+	for (NSString *k in keys) {
-+		[manager removeObjectForKey:k];
-+		CFPreferencesSetAppValue((__bridge CFStringRef)k, NULL, CFSTR("com.uncore.dig3st"));
++	for (NSUInteger i = 0; i < keys.count; i++) {
++		BOOL isLast = (i == keys.count - 1);
++		[manager removeSafeObjectForKey:keys[i] notify:isLast];
 +	}
-+	[manager synchronize];
-+	CFPreferencesAppSynchronize(CFSTR("com.uncore.dig3st"));
-+	CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), (CFStringRef)@"com.uncore.dig3st/preferences.changed", NULL, NULL, true);
 +	[self reloadSpecifiers];
 +}
 +
 +@end
 diff --git a/preferences/DigestAppSelectController.m b/preferences/DigestAppSelectController.m
-index e3804b1..509590e 100644
+index e3804b1..8f9f5ec 100644
 --- a/preferences/DigestAppSelectController.m
 +++ b/preferences/DigestAppSelectController.m
-@@ -1,28 +1,175 @@
+@@ -1,28 +1,178 @@
 -// https://github.com/NoisyFlake/Velvet2/blob/master/preferences/Velvet2AppSelectController.m
  #import "../headers/HeadersPreferences.h"
  
@@ -548,12 +556,15 @@ index e3804b1..509590e 100644
 +@end
 +
 +static BOOL isDefaultEnabledApp(NSString *bundleId) {
-+	static NSSet<NSString *> *defaultSet = nil;
++	if (bundleId.length == 0) return NO;
++	static NSSet<NSString *> *defaultAppleSet = nil;
 +	static dispatch_once_t onceToken;
 +	dispatch_once(&onceToken, ^{
-+		defaultSet = [NSSet setWithObjects:@"com.apple.MobileSMS", @"com.apple.news", @"ph.telegra.Telegraph", @"com.apple.mobilemail", nil];
++		defaultAppleSet = [NSSet setWithObjects:@"com.apple.MobileSMS", @"com.apple.news", @"com.apple.mobilemail", nil];
 +	});
-+	return [defaultSet containsObject:bundleId];
++	if ([defaultAppleSet containsObject:bundleId]) return YES;
++	if ([bundleId hasPrefix:@"com.apple"]) return NO;
++	return YES;
  }
  
  @implementation DigestAppSelectController
@@ -717,7 +728,7 @@ index e3804b1..509590e 100644
  										target:self
  										set:@selector(setPreferenceValue:specifier:)
  										get:@selector(readPreferenceValue:)
-@@ -30,44 +177,101 @@ NSString* isOkToSummarize(NSString *sectionIdentifier) {
+@@ -30,44 +180,101 @@ NSString* isOkToSummarize(NSString *sectionIdentifier) {
  										cell:PSSwitchCell
  										edit:Nil];
  
@@ -848,7 +859,7 @@ index e3804b1..509590e 100644
  @end
 diff --git a/preferences/DigestAppearanceController.m b/preferences/DigestAppearanceController.m
 new file mode 100644
-index 0000000..bded49d
+index 0000000..1862609
 --- /dev/null
 +++ b/preferences/DigestAppearanceController.m
 @@ -0,0 +1,415 @@
@@ -963,21 +974,21 @@ index 0000000..bded49d
 +	}
 +}
 +
-+- (void)commitPrefixTextField:(UITextField *)tf reloadSwitchIfAutoEnabled:(BOOL)reloadSwitch {
++- (void)commitPrefixTextField:(UITextField *)tf reloadSwitchIfAutoEnabled:(BOOL)reloadSwitch notifyRemote:(BOOL)notifyRemote {
 +	if (![tf isKindOfClass:[UITextField class]] || ![tf isDescendantOfView:self.table]) return;
 +	NSString *txt = tf.text ?: @"";
 +	DigestPrefsManager *manager = [self prefs];
-+	[manager setSafeObject:txt forKey:@"bannerPrefixText" notify:NO];
 +
 +	BOOL showPrefix = [[manager safeObjectForKey:@"bannerShowPrefix"] boolValue];
 +	if (txt.length > 0 && !showPrefix) {
-+		[manager setSafeObject:@YES forKey:@"bannerShowPrefix" notify:YES];
++		[manager setSafeObject:txt forKey:@"bannerPrefixText" notify:NO];
++		[manager setSafeObject:@YES forKey:@"bannerShowPrefix" notify:notifyRemote];
 +		if (reloadSwitch) {
 +			PSSpecifier *sp = [self specifierForID:@"bannerShowPrefix"] ?: [self specifierForKey:@"bannerShowPrefix"];
 +			if (sp) [self reloadSpecifier:sp animated:YES];
 +		}
 +	} else {
-+		[manager setSafeObject:txt forKey:@"bannerPrefixText" notify:YES];
++		[manager setSafeObject:txt forKey:@"bannerPrefixText" notify:notifyRemote];
 +	}
 +
 +	[self refreshPreviewBannerStreaming:NO text:nil];
@@ -991,11 +1002,11 @@ index 0000000..bded49d
 +}
 +
 +- (void)textFieldChanged:(NSNotification *)note {
-+	[self commitPrefixTextField:note.object reloadSwitchIfAutoEnabled:YES];
++	[self commitPrefixTextField:note.object reloadSwitchIfAutoEnabled:YES notifyRemote:NO];
 +}
 +
 +- (void)textFieldEnded:(NSNotification *)note {
-+	[self commitPrefixTextField:note.object reloadSwitchIfAutoEnabled:YES];
++	[self commitPrefixTextField:note.object reloadSwitchIfAutoEnabled:YES notifyRemote:YES];
 +}
 +
 +- (DigestBannerRenderConfig *)currentPreviewConfig {
@@ -1313,132 +1324,450 @@ index 0000000..a503857
 +
 +@end
 diff --git a/preferences/DigestEndPointSettingsController.m b/preferences/DigestEndPointSettingsController.m
-index 49ac487..31ed7c7 100644
+index 49ac487..2b54736 100644
 --- a/preferences/DigestEndPointSettingsController.m
 +++ b/preferences/DigestEndPointSettingsController.m
-@@ -28,7 +28,9 @@
+@@ -1,105 +1,172 @@
+ // https://github.com/NoisyFlake/Velvet2/blob/master/preferences/Velvet2SettingsController.m
+ #import "../headers/HeadersPreferences.h"
+ 
++@interface DigestEndpointSettingsController ()
++@property (nonatomic, strong) NSMutableDictionary<NSString *, NSString *> *draftValues;
++@end
++
+ @implementation DigestEndpointSettingsController
+ 
+ - (instancetype)init {
+     self = [super init];
+     if (self) {
+         self.manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
+-		self.logger =[NSClassFromString(@"DigestLogger") sharedInstance];
++        self.logger = [NSClassFromString(@"DigestLogger") sharedInstance];
++        _draftValues = [NSMutableDictionary new];
+     }
+     return self;
  }
  
- -(void)viewDidLayoutSubviews {
--	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Save" style:UIBarButtonItemStylePlain target:self action:@selector(save)];
-+	if (!self.navigationItem.rightBarButtonItem) {
-+		self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Save" style:UIBarButtonItemStylePlain target:self action:@selector(save)];
-+	}
- 	[super viewDidLayoutSubviews];
++- (void)viewDidLoad {
++    [super viewDidLoad];
++    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Save" style:UIBarButtonItemStyleDone target:self action:@selector(save)];
++    if (self.endpoint) {
++        for (NSString *k in @[@"label", @"apiKey", @"model", @"url"]) {
++            id v = self.endpoint[k];
++            if ([v isKindOfClass:[NSString class]]) {
++                self.draftValues[k] = v;
++            }
++        }
++    }
++    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(textFieldUpdated:) name:UITextFieldTextDidChangeNotification object:nil];
++    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(textFieldUpdated:) name:UITextFieldTextDidEndEditingNotification object:nil];
++}
++
++- (void)dealloc {
++    [[NSNotificationCenter defaultCenter] removeObserver:self name:UITextFieldTextDidChangeNotification object:nil];
++    [[NSNotificationCenter defaultCenter] removeObserver:self name:UITextFieldTextDidEndEditingNotification object:nil];
++}
++
++- (void)textFieldUpdated:(NSNotification *)note {
++    UITextField *tf = [note.object isKindOfClass:[UITextField class]] ? (UITextField *)note.object : nil;
++    if (!tf || ![tf isDescendantOfView:self.table]) return;
++    UIView *v = tf.superview;
++    while (v && ![v isKindOfClass:[PSTableCell class]]) {
++        v = v.superview;
++    }
++    if ([v isKindOfClass:[PSTableCell class]]) {
++        PSSpecifier *sp = ((PSTableCell *)v).specifier;
++        NSString *key = sp.properties[@"key"];
++        if (key.length > 0) {
++            self.draftValues[key] = tf.text ?: @"";
++        }
++    }
++}
++
+ - (NSArray *)specifiers {
+-	if (!_specifiers) {
+-	    _specifiers = [self visibleSpecifiersFromPlist:@"Endpoint"];
+-		if (self.titleKey) {
+-			self.title = self.titleKey;
+-		}
+-	}
+-
+-	return _specifiers;
++    if (!_specifiers) {
++        _specifiers = [self visibleSpecifiersFromPlist:@"Endpoint"];
++        if (self.titleKey.length > 0) {
++            self.title = self.titleKey;
++        } else {
++            self.title = self.endpoint ? @"Edit Endpoint" : @"Add Endpoint";
++        }
++    }
++    return _specifiers;
  }
+ 
+ -(void)showController:(id)controller {
+-	return [super showController:controller]; 
++    return [super showController:controller];
+ }
+ 
+--(void)viewDidLayoutSubviews {
+-	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Save" style:UIBarButtonItemStylePlain target:self action:@selector(save)];
+-	[super viewDidLayoutSubviews];
+-}
  -(void)save {
-@@ -43,13 +45,14 @@
- 			PSEditableTableCell *cell = [specifier.properties valueForKey:@"cellObject"];
- 			UITextField *textField = [cell valueForKey:@"textField"]; 
- 			if (textField) {
+-	@try {
+-		BOOL isOkayToSave = YES;
+-		NSMutableDictionary *endpoint = [NSMutableDictionary new];
+-		for (PSSpecifier *specifier in self.specifiers) {
+-			//skip group cell
+-			if ([[specifier.properties valueForKey:@"cell"] isEqual:@"PSGroupCell"] ) continue;
+-			
+-			[self.logger log:[NSString stringWithFormat:@"specifier: %@", specifier.properties] level:LOGLEVEL_VERBOSE];
+-			PSEditableTableCell *cell = [specifier.properties valueForKey:@"cellObject"];
+-			UITextField *textField = [cell valueForKey:@"textField"]; 
+-			if (textField) {
 -				NSString *inputText = textField.text;
 -				if (!inputText || inputText.length == 0) {
-+				NSString *key = specifier.properties[@"key"];
-+				NSString *inputText = [textField.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]] ?: @"";
-+				if (inputText.length == 0 && ![key isEqualToString:@"apiKey"]) {
- 					isOkayToSave = NO;
- 					break;
- 				}
- 
+-					isOkayToSave = NO;
+-					break;
+-				}
+-
 -				endpoint[specifier.properties[@"key"]] = inputText;
-+				endpoint[key] = inputText;
- 				[self.logger log:[NSString stringWithFormat:@"TextField Text: %@", inputText] level:LOGLEVEL_VERBOSE];
- 			} else {
- 				NSLog(@"Failed to access textField.");
-@@ -62,11 +65,11 @@
- 			[self.logger log:[NSString stringWithFormat:@"Updating endpoint: %@", endpoint] level:LOGLEVEL_INFO];
- 			endpoint[@"uuid"] = self.endpoint[@"uuid"];
- 			//find the endpoint and update it
+-				[self.logger log:[NSString stringWithFormat:@"TextField Text: %@", inputText] level:LOGLEVEL_VERBOSE];
+-			} else {
+-				NSLog(@"Failed to access textField.");
+-			}
+-		}
+-		if (!isOkayToSave) return Alert(@"Error", @"Please fill in all fields.",self);
+-
+-		DigestPrefsManager *manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
+-		if (self.endpoint) {
+-			[self.logger log:[NSString stringWithFormat:@"Updating endpoint: %@", endpoint] level:LOGLEVEL_INFO];
+-			endpoint[@"uuid"] = self.endpoint[@"uuid"];
+-			//find the endpoint and update it
 -			NSMutableArray *mutableEndpoints = [[manager objectForKey:@"endpoints"] mutableCopy];
-+			NSMutableArray *mutableEndpoints = [[manager safeObjectForKey:@"endpoints"] mutableCopy];
- 			for (int i = 0; i < mutableEndpoints.count; i++) {
- 				if ([mutableEndpoints[i][@"uuid"] isEqualToString:endpoint[@"uuid"]]) {
- 					[mutableEndpoints replaceObjectAtIndex:i withObject:endpoint];
+-			for (int i = 0; i < mutableEndpoints.count; i++) {
+-				if ([mutableEndpoints[i][@"uuid"] isEqualToString:endpoint[@"uuid"]]) {
+-					[mutableEndpoints replaceObjectAtIndex:i withObject:endpoint];
 -					[manager setObject:mutableEndpoints forKey:@"endpoints"];
-+					[manager setSafeObject:mutableEndpoints forKey:@"endpoints" notify:YES];
- 					break;
- 				}
- 			}
-@@ -80,10 +83,10 @@
- 		}
- 		NSString *uuid = [[NSUUID UUID] UUIDString];
- 		endpoint[@"uuid"] = uuid;
+-					break;
+-				}
+-			}
+-			//update the ui for preferences
+-			[[NSNotificationCenter defaultCenter] postNotificationName:@"com.uncore.dig3st/endpointUpdate" object:nil];
+-			//update the openai endpoint
+-        	CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), (CFStringRef)@"com.uncore.dig3st/preferences.changed", NULL, NULL, true);
+-
+-		    [self.navigationController popViewControllerAnimated:YES];
+-			return;
+-		}
+-		NSString *uuid = [[NSUUID UUID] UUIDString];
+-		endpoint[@"uuid"] = uuid;
 -        NSMutableArray *endpoints = [[manager objectForKey:@"endpoints"] mutableCopy];
-+        NSMutableArray *endpoints = [[manager safeObjectForKey:@"endpoints"] mutableCopy] ?: [NSMutableArray new];
- 		[self.logger log:[NSString stringWithFormat:@"Adding endpoint: %@", endpoint] level:LOGLEVEL_INFO];
- 		[endpoints addObject:endpoint];
+-		[self.logger log:[NSString stringWithFormat:@"Adding endpoint: %@", endpoint] level:LOGLEVEL_INFO];
+-		[endpoints addObject:endpoint];
 -		[manager setObject:endpoints forKey:@"endpoints"];
-+		[manager setSafeObject:endpoints forKey:@"endpoints" notify:YES];
- 		[self.logger log:[NSString stringWithFormat:@"Final endpoints: %@", endpoints] level:LOGLEVEL_VERBOSE];
- 		[[NSNotificationCenter defaultCenter] postNotificationName:@"com.uncore.dig3st/endpointUpdate" object:nil];
-     	[self.navigationController popViewControllerAnimated:YES];
+-		[self.logger log:[NSString stringWithFormat:@"Final endpoints: %@", endpoints] level:LOGLEVEL_VERBOSE];
+-		[[NSNotificationCenter defaultCenter] postNotificationName:@"com.uncore.dig3st/endpointUpdate" object:nil];
+-    	[self.navigationController popViewControllerAnimated:YES];
+-	}@catch(NSException *e) {
+-		NSLog(@"Error: %@", e);
+-		Alert(@"Error", @"An error occurred while saving.",self);
+-	}
++    [self.view endEditing:YES];
++    @try {
++        BOOL isOkayToSave = YES;
++        NSMutableDictionary *endpoint = [NSMutableDictionary new];
++        for (PSSpecifier *specifier in self.specifiers) {
++            if ([[specifier.properties valueForKey:@"cell"] isEqual:@"PSGroupCell"]) continue;
++
++            NSString *key = specifier.properties[@"key"];
++            if (key.length == 0) continue;
++
++            PSEditableTableCell *cell = [specifier.properties valueForKey:@"cellObject"];
++            if (!cell) {
++                NSIndexPath *ip = [self indexPathForSpecifier:specifier];
++                if (ip) {
++                    UITableViewCell *rowCell = [self.table cellForRowAtIndexPath:ip];
++                    if ([rowCell isKindOfClass:[PSEditableTableCell class]]) {
++                        cell = (PSEditableTableCell *)rowCell;
++                    }
++                }
++            }
++            UITextField *textField = cell ? [cell valueForKey:@"textField"] : nil;
++            NSString *rawText = nil;
++            if (textField) {
++                rawText = textField.text;
++            } else if (self.draftValues[key] != nil) {
++                rawText = self.draftValues[key];
++            } else if ([self.endpoint[key] isKindOfClass:[NSString class]]) {
++                rawText = self.endpoint[key];
++            }
++
++            NSString *inputText = [rawText stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]] ?: @"";
++            if (inputText.length == 0 && ![key isEqualToString:@"apiKey"]) {
++                isOkayToSave = NO;
++                break;
++            }
++            endpoint[key] = inputText;
++        }
++        if (!isOkayToSave) {
++            return Alert(@"Error", @"Please fill in Label, Model, and URL.", self);
++        }
++
++        DigestPrefsManager *manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
++        if (self.endpoint) {
++            [self.logger log:[NSString stringWithFormat:@"Updating endpoint: %@", endpoint] level:LOGLEVEL_INFO];
++            NSString *uuid = self.endpoint[@"uuid"];
++            if (![uuid isKindOfClass:[NSString class]] || uuid.length == 0) {
++                uuid = [[NSUUID UUID] UUIDString];
++            }
++            endpoint[@"uuid"] = uuid;
++            NSMutableArray *mutableEndpoints = [[manager safeObjectForKey:@"endpoints"] mutableCopy] ?: [NSMutableArray new];
++            BOOL replaced = NO;
++            for (NSUInteger i = 0; i < mutableEndpoints.count; i++) {
++                NSDictionary *item = mutableEndpoints[i];
++                if ([item isKindOfClass:[NSDictionary class]] && [item[@"uuid"] isEqualToString:uuid]) {
++                    [mutableEndpoints replaceObjectAtIndex:i withObject:[endpoint copy]];
++                    replaced = YES;
++                    break;
++                }
++            }
++            if (!replaced) {
++                [mutableEndpoints addObject:[endpoint copy]];
++                [manager setSafeObject:uuid forKey:@"activeEndpoint" notify:NO];
++            }
++            [manager setSafeObject:mutableEndpoints forKey:@"endpoints" notify:YES];
++            [[NSNotificationCenter defaultCenter] postNotificationName:@"com.uncore.dig3st/endpointUpdate" object:nil];
++            [self.navigationController popViewControllerAnimated:YES];
++            return;
++        }
++
++        NSString *uuid = [[NSUUID UUID] UUIDString];
++        endpoint[@"uuid"] = uuid;
++        NSMutableArray *endpoints = [[manager safeObjectForKey:@"endpoints"] mutableCopy] ?: [NSMutableArray new];
++        [self.logger log:[NSString stringWithFormat:@"Adding endpoint: %@", endpoint] level:LOGLEVEL_INFO];
++        [endpoints addObject:[endpoint copy]];
++        // Automatically activate newly added endpoint and notify SpringBoard
++        [manager setSafeObject:uuid forKey:@"activeEndpoint" notify:NO];
++        [manager setSafeObject:endpoints forKey:@"endpoints" notify:YES];
++        [self.logger log:[NSString stringWithFormat:@"Final endpoints: %@", endpoints] level:LOGLEVEL_VERBOSE];
++        [[NSNotificationCenter defaultCenter] postNotificationName:@"com.uncore.dig3st/endpointUpdate" object:nil];
++        [self.navigationController popViewControllerAnimated:YES];
++    } @catch(NSException *e) {
++        NSLog(@"Error: %@", e);
++        Alert(@"Error", @"An error occurred while saving.", self);
++    }
+ }
+ 
+ -(id)readPreferenceValue:(PSSpecifier*)specifier {
+-	if (!self.endpoint) return nil;
+-
+-	return self.endpoint[specifier.properties[@"key"]];
++    NSString *key = specifier.properties[@"key"];
++    if (key.length == 0) return nil;
++    if (self.draftValues[key] != nil) {
++        return self.draftValues[key];
++    }
++    if (!self.endpoint) return nil;
++    return self.endpoint[key];
+ }
+ 
+ - (NSMutableArray*)visibleSpecifiersFromPlist:(NSString*)plist {
+-	return [self loadSpecifiersFromPlistName:plist target:self];
++    return [self loadSpecifiersFromPlistName:plist target:self];
+ }
+-@end
+\ No newline at end of file
++@end
 diff --git a/preferences/DigestEndpointsController.m b/preferences/DigestEndpointsController.m
-index ba90c44..be46e68 100644
+index ba90c44..2ee626c 100644
 --- a/preferences/DigestEndpointsController.m
 +++ b/preferences/DigestEndpointsController.m
-@@ -30,7 +30,7 @@
- -(NSMutableArray*)getSpecifiers{
+@@ -15,11 +15,15 @@
+     [[NSNotificationCenter defaultCenter] removeObserver:self name:@"com.uncore.dig3st/endpointUpdate" object:nil];
+ }
+ 
++- (void)viewWillAppear:(BOOL)animated {
++    [super viewWillAppear:animated];
++    [self reloadSpecifiers];
++}
++
+ - (NSArray *)specifiers {
+     if (!_specifiers) {
+         _specifiers = [self getSpecifiers];
+     }
+-
+     return _specifiers;
+ }
+ 
+@@ -27,102 +31,109 @@
+     [self reloadSpecifiers];
+ }
+ 
+--(NSMutableArray*)getSpecifiers{
++-(NSMutableArray*)getSpecifiers {
      NSMutableArray *mutableSpecifiers = [NSMutableArray new];
++    PSSpecifier *group = [PSSpecifier groupSpecifierWithName:@"Configured Endpoints"];
++    [group setProperty:@"Tap to activate · Long press to edit API key, model & URL · Swipe left to delete." forKey:@"footerText"];
++    [mutableSpecifiers addObject:group];
++
      DigestPrefsManager *manager = self.manager;
 -    NSMutableArray *endpoints = [manager objectForKey:@"endpoints"];
-+    NSMutableArray *endpoints = [manager safeObjectForKey:@"endpoints"];
-     for (NSDictionary *endpoint in endpoints) {
-         NSString *name = [endpoint objectForKey:@"model"];
-         NSString *label = [endpoint objectForKey:@"label"];
-@@ -73,14 +73,14 @@
+-    for (NSDictionary *endpoint in endpoints) {
+-        NSString *name = [endpoint objectForKey:@"model"];
+-        NSString *label = [endpoint objectForKey:@"label"];
+-
+-        PSSpecifier* specifier = [PSSpecifier preferenceSpecifierNamed:[NSString  stringWithFormat:@"%@/%@",label,name] 
+-                                target:self
+-                                set:@selector(setPreferenceValue:specifier:)
+-                                get:@selector(readPreferenceValue:)
+-                                detail:Nil
+-                                cell:PSListItemCell
+-                                edit:Nil];
+-
+-        [specifier setProperty:Nil forKey:@"default"];
+-        [specifier setProperty:name forKey:@"titleKey"];
+-        [specifier setProperty:endpoint forKey:@"endpoint"];
+-        [specifier setProperty:NSStringFromSelector(@selector(removedSpecifier:)) forKey:PSDeletionActionKey];
+-        [mutableSpecifiers addObject:specifier];
+-        specifier.detailControllerClass = NSClassFromString(@"DigestEndpointSettingsController");
++    NSArray *endpoints = [manager safeObjectForKey:@"endpoints"];
++    if ([endpoints isKindOfClass:[NSArray class]]) {
++        for (NSDictionary *endpoint in endpoints) {
++            if (![endpoint isKindOfClass:[NSDictionary class]]) continue;
++            NSString *name = [endpoint objectForKey:@"model"] ?: @"";
++            NSString *label = [endpoint objectForKey:@"label"] ?: @"";
++
++            PSSpecifier *specifier = [PSSpecifier preferenceSpecifierNamed:[NSString stringWithFormat:@"%@/%@", label, name]
++                                    target:self
++                                    set:@selector(setPreferenceValue:specifier:)
++                                    get:@selector(readPreferenceValue:)
++                                    detail:Nil
++                                    cell:PSListItemCell
++                                    edit:Nil];
++
++            [specifier setProperty:Nil forKey:@"default"];
++            [specifier setProperty:name forKey:@"titleKey"];
++            [specifier setProperty:endpoint forKey:@"endpoint"];
++            [specifier setProperty:NSStringFromSelector(@selector(removedSpecifier:)) forKey:PSDeletionActionKey];
++            specifier.detailControllerClass = NSClassFromString(@"DigestEndpointSettingsController");
++            [mutableSpecifiers addObject:specifier];
++        }
++    }
++
++    if ([self.logger shouldLog:LOGLEVEL_VERBOSE]) {
++        [self.logger log:[NSString stringWithFormat:@"getSpecifiers: %@", mutableSpecifiers] level:LOGLEVEL_VERBOSE];
+     }
+-    
+-    [self.logger log:[NSString stringWithFormat:@"getSpecifiers: %@",mutableSpecifiers] level:LOGLEVEL_VERBOSE];
+ 
+     return mutableSpecifiers;
+ }
+ 
+ -(void)setPreferenceValue:(id)value specifier:(PSSpecifier *)specifier {
+-    [self.logger log:[NSString stringWithFormat:@"setPreferenceValue: %@",value] level:LOGLEVEL_VERBOSE];
+     [super setPreferenceValue:value specifier:specifier];
+ }
+ 
+ -(id)readPreferenceValue:(PSSpecifier *)specifier {
+-    [self.logger log:[NSString stringWithFormat:@"readPreferenceValue: %@",specifier.properties] level:LOGLEVEL_VERBOSE];
+-    return [specifier valueForKey:@"endpoint"][@"uuid"];
++    return specifier.properties[@"endpoint"][@"uuid"];
+ }
+ 
+--(void)removedSpecifier:(PSSpecifier*)specifier{
++-(void)removedSpecifier:(PSSpecifier*)specifier {
+     @try {
+-        [self.logger log:[NSString stringWithFormat:@"removedSpecifier: %@",specifier.properties] level:LOGLEVEL_VERBOSE];
+         NSString *uuid = specifier.properties[@"endpoint"][@"uuid"];
++        if (uuid.length == 0) return;
          DigestPrefsManager *manager = self.manager;
-         //find the endpoint and update it
-         [self.logger log:[NSString stringWithFormat:@"updating endpoint with uuid: %@",uuid] level:LOGLEVEL_VERBOSE];
+-        //find the endpoint and update it
+-        [self.logger log:[NSString stringWithFormat:@"updating endpoint with uuid: %@",uuid] level:LOGLEVEL_VERBOSE];
 -        NSMutableArray *mutableEndpoints = [[manager objectForKey:@"endpoints"] mutableCopy];
-+        NSMutableArray *mutableEndpoints = [[manager safeObjectForKey:@"endpoints"] mutableCopy];
++        NSMutableArray *mutableEndpoints = [[manager safeObjectForKey:@"endpoints"] mutableCopy] ?: [NSMutableArray new];
  
          [mutableEndpoints enumerateObjectsUsingBlock:^(NSDictionary *mutEndpoint, NSUInteger idx, BOOL *stop) {
-             if ([mutEndpoint[@"uuid"] isEqualToString:uuid]) {
+-            if ([mutEndpoint[@"uuid"] isEqualToString:uuid]) {
++            if ([mutEndpoint isKindOfClass:[NSDictionary class]] && [mutEndpoint[@"uuid"] isEqualToString:uuid]) {
                  *stop = YES;
                  [mutableEndpoints removeObjectAtIndex:idx];
-                 [self.logger log:[NSString stringWithFormat:@"removed endpoint: %@",mutEndpoint] level:LOGLEVEL_VERBOSE];
+-                [self.logger log:[NSString stringWithFormat:@"removed endpoint: %@",mutEndpoint] level:LOGLEVEL_VERBOSE];
 -                [manager setObject:mutableEndpoints forKey:@"endpoints"];
 +                [manager setSafeObject:mutableEndpoints forKey:@"endpoints" notify:YES];
              }
          }];
  
-@@ -92,9 +92,10 @@
+         [[NSNotificationCenter defaultCenter] postNotificationName:@"com.uncore.dig3st/endpointUpdate" object:nil];
+-    }@catch(NSException *e) {
++    } @catch(NSException *e) {
+         NSLog(@"Error: %@", e);
+-        Alert(@"Error", @"An error occurred while saving.",self);
++        Alert(@"Error", @"An error occurred while deleting endpoint.", self);
+     }
  }
  
  - (UITableViewCellEditingStyle)tableView:(UITableView *)tableView editingStyleForRowAtIndexPath:(NSIndexPath *)indexPath {
 -    NSString *uuid = [self.specifiers[indexPath.row + 1] properties][@"endpoint"][@"uuid"];
-+    PSSpecifier *specifier = [self specifierAtIndexPath:indexPath];
-+    NSString *uuid = specifier.properties[@"endpoint"][@"uuid"];
- 
+-
 -    NSString *activeEndpoint = [self.manager objectForKey:@"activeEndpoint"];
+-    BOOL isDeletable = ![uuid isEqualToString:activeEndpoint];
+-    [self.logger log:[NSString stringWithFormat:@"isDeletable: %d uuid: %@ activeEndpoint: %@",isDeletable,uuid,activeEndpoint] level:LOGLEVEL_VERBOSE];
+-    if (!isDeletable) return UITableViewCellEditingStyleNone;
+-	return UITableViewCellEditingStyleDelete;
++    PSSpecifier *specifier = [self specifierAtIndexPath:indexPath];
++    NSDictionary *endpoint = specifier.properties[@"endpoint"];
++    if (![endpoint isKindOfClass:[NSDictionary class]]) {
++        return UITableViewCellEditingStyleNone;
++    }
++    NSString *uuid = endpoint[@"uuid"];
 +    NSString *activeEndpoint = [self.manager safeObjectForKey:@"activeEndpoint"];
-     BOOL isDeletable = ![uuid isEqualToString:activeEndpoint];
-     [self.logger log:[NSString stringWithFormat:@"isDeletable: %d uuid: %@ activeEndpoint: %@",isDeletable,uuid,activeEndpoint] level:LOGLEVEL_VERBOSE];
-     if (!isDeletable) return UITableViewCellEditingStyleNone;
-@@ -106,13 +107,21 @@
++    BOOL isDeletable = (uuid.length > 0 && ![uuid isEqualToString:activeEndpoint]);
++    return isDeletable ? UITableViewCellEditingStyleDelete : UITableViewCellEditingStyleNone;
+ }
+ 
+ - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+-    static NSString *CellIdentifier = @"Cell";
++    PSSpecifier *specifier = [self specifierAtIndexPath:indexPath];
++    NSDictionary *endpoint = specifier.properties[@"endpoint"];
++    if (![endpoint isKindOfClass:[NSDictionary class]]) {
++        return [super tableView:tableView cellForRowAtIndexPath:indexPath];
++    }
++
++    static NSString *CellIdentifier = @"DigestEndpointCell";
      UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
      if (cell == nil) {
          cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:CellIdentifier];
-+
-+        // Add long press gesture recognizer
 +        UILongPressGestureRecognizer *longPressGesture = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(handleLongPress:)];
 +        [cell addGestureRecognizer:longPressGesture];
-+
-+        // Add tap gesture recognizer
-+        UITapGestureRecognizer *tapGesture = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTap:)];
-+        [cell addGestureRecognizer:tapGesture];
      }
-     
-     PSSpecifier *specifier = [self specifierAtIndexPath:indexPath];
-     DigestPrefsManager *manager = self.manager;
-     NSDictionary *endpoint = [[specifier properties] objectForKey:@"endpoint"];
-     NSString *uuid = [endpoint objectForKey:@"uuid"];
+-    
+-    PSSpecifier *specifier = [self specifierAtIndexPath:indexPath];
+-    DigestPrefsManager *manager = self.manager;
+-    NSDictionary *endpoint = [[specifier properties] objectForKey:@"endpoint"];
+-    NSString *uuid = [endpoint objectForKey:@"uuid"];
 -    NSString *activeEndpoint = [manager objectForKey:@"activeEndpoint"];
-+    NSString *activeEndpoint = [manager safeObjectForKey:@"activeEndpoint"];
-     NSString *url = [endpoint objectForKey:@"url"];
+-    NSString *url = [endpoint objectForKey:@"url"];
+-
+-    // Set the textLabel to the endpoint label
+-    cell.textLabel.text = [NSString stringWithFormat:@"%@/%@", [endpoint objectForKey:@"label"], [endpoint objectForKey:@"model"]];
+-    
+-    // Set the detailTextLabel to the URL
++
++    NSString *uuid = endpoint[@"uuid"];
++    NSString *activeEndpoint = [self.manager safeObjectForKey:@"activeEndpoint"];
++    NSString *url = endpoint[@"url"] ?: @"";
++
++    cell.textLabel.text = [NSString stringWithFormat:@"%@/%@", endpoint[@"label"] ?: @"", endpoint[@"model"] ?: @""];
+     cell.detailTextLabel.text = url;
  
-     // Set the textLabel to the endpoint label
-@@ -131,14 +140,6 @@
+-    // Set the accessory type to checkmark if the endpoint is active
+-     if ([uuid isEqualToString:activeEndpoint]) {
++    if (uuid.length > 0 && [uuid isEqualToString:activeEndpoint]) {
+         UIImage *checkmarkImage = [UIImage systemImageNamed:@"checkmark.circle.fill"];
+         UIImageView *checkmarkImageView = [[UIImageView alloc] initWithImage:[checkmarkImage imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate]];
+         checkmarkImageView.tintColor = kDigestColor;
+@@ -131,36 +142,25 @@
          cell.accessoryView = nil;
      }
  
@@ -1453,32 +1782,172 @@ index ba90c44..be46e68 100644
      return cell;
  }
  
-@@ -191,8 +192,7 @@
-             NSString *uuid = [endpoint objectForKey:@"uuid"];
-             [self.logger log:[NSString stringWithFormat:@"Activating endpoint: %@",endpoint] level:LOGLEVEL_INFO];
-             // Update the active endpoint
+- -(void)viewDidLoad {
+-    [super viewDidLoad];
++- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
++    [tableView deselectRowAtIndexPath:indexPath animated:YES];
++    if (self.table.isEditing) return;
+ 
+-    // Create and configure the footer label
+-    UILabel *footerLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+-    footerLabel.text = @"Long press on an endpoint to change its settings.";
+-    footerLabel.textAlignment = NSTextAlignmentCenter;
+-    footerLabel.textColor = [UIColor grayColor];
+-    footerLabel.numberOfLines = 0;
+-    footerLabel.font = [UIFont systemFontOfSize:11];
++    PSSpecifier *specifier = [self specifierAtIndexPath:indexPath];
++    NSDictionary *endpoint = specifier.properties[@"endpoint"];
++    if (![endpoint isKindOfClass:[NSDictionary class]]) return;
+ 
+-    // Adjust the size of the label to fit the text
+-    [footerLabel sizeToFit];
++    NSString *uuid = endpoint[@"uuid"];
++    if (uuid.length == 0) return;
+ 
+-    // Set the footer label as the table footer view
+-    self.table.tableFooterView = footerLabel;
++    [self.logger log:[NSString stringWithFormat:@"Activating endpoint: %@", endpoint] level:LOGLEVEL_INFO];
++    [self.manager setSafeObject:uuid forKey:@"activeEndpoint" notify:YES];
++    [tableView reloadData];
+ }
+ 
+-
+ - (void)handleLongPress:(UILongPressGestureRecognizer *)gestureRecognizer {
+     if (gestureRecognizer.state == UIGestureRecognizerStateBegan) {
+         CGPoint point = [gestureRecognizer locationInView:self.table];
+@@ -178,38 +178,14 @@
+     }
+ }
+ 
+-- (void)handleTap:(UITapGestureRecognizer *)gestureRecognizer {
+-    if (self.table.isEditing) return;
+-    if (gestureRecognizer.state == UIGestureRecognizerStateEnded) {
+-        CGPoint point = [gestureRecognizer locationInView:self.table];
+-        NSIndexPath *indexPath = [self.table indexPathForRowAtPoint:point];
+-        if (indexPath) {
+-            DigestPrefsManager *manager = self.manager;
+-            PSSpecifier *specifier = [self specifierAtIndexPath:indexPath];
+-            NSDictionary *endpoint = [[specifier properties] objectForKey:@"endpoint"];
+-
+-            NSString *uuid = [endpoint objectForKey:@"uuid"];
+-            [self.logger log:[NSString stringWithFormat:@"Activating endpoint: %@",endpoint] level:LOGLEVEL_INFO];
+-            // Update the active endpoint
 -            [manager setObject:uuid forKey:@"activeEndpoint"];
 -            CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), (CFStringRef)@"com.uncore.dig3st/preferences.changed", NULL, NULL, true);
-+            [manager setSafeObject:uuid forKey:@"activeEndpoint" notify:YES];
-             // Reload the table view to update the checkmarks
-             [self.table reloadData];
-         }
+-            // Reload the table view to update the checkmarks
+-            [self.table reloadData];
+-        }
+-    }
+-}
+- 
+ -(void)showController:(id)controller {
+-    [self.logger log:[NSString stringWithFormat:@"showController: %@",controller] level:LOGLEVEL_VERBOSE];
+-	if ([controller isKindOfClass:NSClassFromString(@"DigestEndpointSettingsController")]) {
++    if ([controller isKindOfClass:NSClassFromString(@"DigestEndpointSettingsController")]) {
+         NSIndexPath *selectedPath = self.table.indexPathForSelectedRow;
+-        PSTableCell *selectedCell = [self.table cellForRowAtIndexPath:selectedPath];
++        PSTableCell *selectedCell = selectedPath ? [self.table cellForRowAtIndexPath:selectedPath] : nil;
+         PSSpecifier *specifier = selectedCell.specifier;
+-
+         ((DigestEndpointSettingsController *)controller).titleKey = specifier.properties[@"titleKey"];
+         ((DigestEndpointSettingsController *)controller).endpoint = specifier.properties[@"endpoint"];
+-	}
+-
+-	return [super showController:controller]; 
++    }
++    return [super showController:controller];
+ }
+ @end
 diff --git a/preferences/DigestLogLevelController.m b/preferences/DigestLogLevelController.m
-index 0d00746..8106474 100644
+index 0d00746..af3d312 100644
 --- a/preferences/DigestLogLevelController.m
 +++ b/preferences/DigestLogLevelController.m
-@@ -71,6 +71,10 @@
+@@ -11,28 +11,18 @@
+     if (self) {
+         self.manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
+         self.logger = [NSClassFromString(@"DigestLogger") sharedInstance];
+-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(update) name:@"com.uncore.dig3st/endpointUpdate" object:nil];
+     }
+     return self;
+ }
+ 
+-- (void)dealloc {
+-    [[NSNotificationCenter defaultCenter] removeObserver:self name:@"com.uncore.dig3st/endpointUpdate" object:nil];
+-}
+-
+ - (NSArray *)specifiers {
+     if (!_specifiers) {
+         _specifiers = [self getSpecifiers];
+     }
+-
+     return _specifiers;
+ }
+ 
+--(void)update {
+-    [self reloadSpecifiers];
+-}
+-
+--(NSMutableArray*)getSpecifiers{
++-(NSMutableArray*)getSpecifiers {
+     NSMutableArray *mutableSpecifiers = [NSMutableArray new];
+     NSDictionary *logLevels = @{
+         @"Verbose": @10,
+@@ -40,7 +30,6 @@
+         @"Warning": @4,
+         @"Disable Output": @1
+     };
+-    //in objc, dictionaries are not ordered, so we need to order them manually
+     NSArray *orderedKeys = @[
+         @"Disable Output",
+         @"Warning",
+@@ -50,7 +39,7 @@
+ 
+     for (NSString *key in orderedKeys) {
+         NSNumber *value = logLevels[key];
+-        PSSpecifier* specifier = [PSSpecifier preferenceSpecifierNamed:key
++        PSSpecifier *specifier = [PSSpecifier preferenceSpecifierNamed:key
+                                 target:self
+                                 set:@selector(setPreferenceValue:specifier:)
+                                 get:@selector(readPreferenceValue:)
+@@ -59,31 +48,29 @@
+                                 edit:Nil];
+ 
+         [specifier setProperty:value forKey:@"val"];
+-		[specifier setProperty:key forKey:@"label"];
++        [specifier setProperty:key forKey:@"label"];
+         [mutableSpecifiers addObject:specifier];
+     }
+-    
++
+     return mutableSpecifiers;
+ }
+ 
+ - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+-    static NSString *CellIdentifier = @"Cell";
++    static NSString *CellIdentifier = @"DigestLogLevelCell";
      UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
      if (cell == nil) {
          cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:CellIdentifier];
-+
-+        // Add tap gesture recognizer
-+        UITapGestureRecognizer *tapGesture = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTap:)];
-+        [cell addGestureRecognizer:tapGesture];
      }
  
      PSSpecifier *specifier = [self specifierAtIndexPath:indexPath];
-@@ -92,10 +96,6 @@
+-    DigestPrefsManager *manager = self.manager;
+-    NSInteger logLevel = [[manager objectForKey:@"logLevel"] integerValue];
++    NSInteger logLevel = [[self.manager safeObjectForKey:@"logLevel"] integerValue];
++    if (logLevel <= 0) logLevel = 1;
+     NSDictionary *cellProperties = [specifier properties];
+ 
+     BOOL enabled = [cellProperties[@"val"] isEqualToNumber:@(logLevel)];
+-
+     cell.textLabel.text = cellProperties[@"label"];
+ 
+-    // Set the accessory type to checkmark if the endpoint is active
+-     if (enabled) {
++    if (enabled) {
+         UIImage *checkmarkImage = [UIImage systemImageNamed:@"checkmark.circle.fill"];
+         UIImageView *checkmarkImageView = [[UIImageView alloc] initWithImage:[checkmarkImage imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate]];
+         checkmarkImageView.tintColor = kDigestColor;
+@@ -92,46 +79,29 @@
          cell.accessoryView = nil;
      }
  
@@ -1489,6 +1958,51 @@ index 0d00746..8106474 100644
      return cell;
  }
  
+ -(void)viewDidLoad {
+     [super viewDidLoad];
+-
+-    // Create and configure the footer label
+     UILabel *footerLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+-    footerLabel.text = @"Check out my YouTube video if you need help with debugging";
++    footerLabel.text = @"Select log verbosity for Console / syslog debugging";
+     footerLabel.textAlignment = NSTextAlignmentCenter;
+     footerLabel.textColor = [UIColor grayColor];
+     footerLabel.numberOfLines = 0;
+     footerLabel.font = [UIFont systemFontOfSize:11];
+-
+-    // Adjust the size of the label to fit the text
+     [footerLabel sizeToFit];
+-
+-    // Set the footer label as the table footer view
+     self.table.tableFooterView = footerLabel;
+ }
+ 
+-- (void)handleTap:(UITapGestureRecognizer *)gestureRecognizer {
+-    if (gestureRecognizer.state == UIGestureRecognizerStateEnded) {
+-        UITableViewCell *cell = (UITableViewCell *)gestureRecognizer.view;
+-        NSIndexPath *indexPath = [self.table indexPathForCell:cell];
++- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
++    [tableView deselectRowAtIndexPath:indexPath animated:YES];
++    PSSpecifier *specifier = [self specifierAtIndexPath:indexPath];
++    NSNumber *logLevel = [specifier propertyForKey:@"val"];
++    if (!logLevel) return;
+ 
+-        if (indexPath) {
+-            PSSpecifier *specifier = [self specifierAtIndexPath:indexPath];
+-            NSNumber *logLevel = [specifier propertyForKey:@"val"];
+-            [self.logger log:[NSString stringWithFormat:@"Setting log level to %@", logLevel] level:LOGLEVEL_INFO];
+-            DigestPrefsManager *manager = self.manager;
+-            [manager setObject:logLevel forKey:@"logLevel"];
+-            //FIXME: this also updates the OpenAI instance, but it should only update the logger
+-        	CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), (CFStringRef)@"com.uncore.dig3st/preferences.changed", NULL, NULL, true);
+-            [self.table reloadData];
+-        }
+-    }
++    [self.logger log:[NSString stringWithFormat:@"Setting log level to %@", logLevel] level:LOGLEVEL_INFO];
++    [self.manager setSafeObject:logLevel forKey:@"logLevel" notify:YES];
++    [tableView reloadData];
+ }
+ @end
 diff --git a/preferences/DigestPromptEditorController.m b/preferences/DigestPromptEditorController.m
 new file mode 100644
 index 0000000..706fe06
@@ -1694,7 +2208,7 @@ index 0000000..706fe06
 +
 +@end
 diff --git a/preferences/DigestRootListController.m b/preferences/DigestRootListController.m
-index 6a5f861..e69f7de 100644
+index 6a5f861..bfe3ea5 100644
 --- a/preferences/DigestRootListController.m
 +++ b/preferences/DigestRootListController.m
 @@ -1,6 +1,10 @@
@@ -1771,7 +2285,7 @@ index 6a5f861..e69f7de 100644
 +			activeEp = ep;
 +			break;
 +		}
-+	}
+ 	}
 +	NSString *epUrl = [activeEp[@"url"] isKindOfClass:[NSString class]] ? activeEp[@"url"] : @"";
 +	NSString *epModel = [activeEp[@"model"] isKindOfClass:[NSString class]] ? activeEp[@"model"] : @"";
 +	NSString *epLabel = [activeEp[@"label"] isKindOfClass:[NSString class]] ? activeEp[@"label"] : @"endpoint";
@@ -1790,14 +2304,8 @@ index 6a5f861..e69f7de 100644
 +			dotColor = [UIColor systemGreenColor];
 +			statusTitle = @"Active · Live Summarization Ready";
 +		}
- 	}
- 
--    UIImage *image = [UIImage imageNamed:imageToLoad inBundle:[NSBundle bundleForClass:NSClassFromString(@"DigestRootListController")] compatibleWithTraitCollection:nil];
--    UIImageView *imageView = [[UIImageView alloc] initWithFrame:CGRectMake(0, 30 - 4, self.view.bounds.size.width, 80)];
--    imageView.contentMode = UIViewContentModeScaleAspectFit;
--    [imageView setImage:image];
-- 
--    [header addSubview:imageView];
++	}
++
 +	UIView *card = [[UIView alloc] initWithFrame:CGRectMake(16, 98, width - 32, 86)];
 +	card.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];
 +	card.layer.cornerRadius = 14.0;
@@ -1812,7 +2320,13 @@ index 6a5f861..e69f7de 100644
 +	dot.backgroundColor = dotColor;
 +	dot.layer.cornerRadius = 5.0;
 +	[card addSubview:dot];
-+
+ 
+-    UIImage *image = [UIImage imageNamed:imageToLoad inBundle:[NSBundle bundleForClass:NSClassFromString(@"DigestRootListController")] compatibleWithTraitCollection:nil];
+-    UIImageView *imageView = [[UIImageView alloc] initWithFrame:CGRectMake(0, 30 - 4, self.view.bounds.size.width, 80)];
+-    imageView.contentMode = UIViewContentModeScaleAspectFit;
+-    [imageView setImage:image];
+- 
+-    [header addSubview:imageView];
 +	UILabel *statusLbl = [[UILabel alloc] initWithFrame:CGRectMake(32, 11, card.frame.size.width - 44, 21)];
 +	statusLbl.text = statusTitle;
 +	statusLbl.font = [UIFont systemFontOfSize:13.5 weight:UIFontWeightSemibold];
@@ -1850,7 +2364,7 @@ index 6a5f861..e69f7de 100644
 +		@try {
 +			LSApplicationWorkspace *ws = [NSClassFromString(@"LSApplicationWorkspace") defaultWorkspace];
 +			NSArray *apps = [ws allInstalledApplications];
-+			NSSet *defaultEnabled = [NSSet setWithObjects:@"com.apple.MobileSMS", @"com.apple.news", @"ph.telegra.Telegraph", @"com.apple.mobilemail", nil];
++			NSSet *defaultAppleEnabled = [NSSet setWithObjects:@"com.apple.MobileSMS", @"com.apple.news", @"com.apple.mobilemail", nil];
 +			for (LSApplicationProxy *app in apps) {
 +				NSString *bid = app.applicationIdentifier;
 +				if (bid.length == 0 || [bid isEqualToString:@"com.apple.webapp"]) continue;
@@ -1858,7 +2372,7 @@ index 6a5f861..e69f7de 100644
 +				BOOL hiddenSys = ([tags isKindOfClass:[NSArray class]] && [tags containsObject:@"hidden"]);
 +				if ([app.applicationType isEqual:@"User"] || ([app.applicationType isEqual:@"System"] && !hiddenSys && !app.launchProhibited && !app.placeholder && !app.removedSystemApp)) {
 +					id val = prefsSnapshot[bid];
-+					BOOL isOn = val ? [val boolValue] : [defaultEnabled containsObject:bid];
++					BOOL isOn = val ? [val boolValue] : ([defaultAppleEnabled containsObject:bid] || ![bid hasPrefix:@"com.apple"]);
 +					if (isOn) enabledCount++;
 +				}
 +			}
@@ -1873,10 +2387,11 @@ index 6a5f861..e69f7de 100644
  }
  
  -(void)setupFooterVersion {
-@@ -61,22 +185,26 @@
+@@ -60,23 +184,33 @@
+ }
  
  -(void)resetSettings {
-  	[[NSUserDefaults standardUserDefaults] removePersistentDomainForName:@"com.uncore.dig3st"];
+- 	[[NSUserDefaults standardUserDefaults] removePersistentDomainForName:@"com.uncore.dig3st"];
 -	NSString *prefsPath = @"/var/mobile/Library/Preferences/com.uncore.dig3st.plist";
 -
 -    NSFileManager *fileManager = [NSFileManager defaultManager];
@@ -1893,9 +2408,16 @@ index 6a5f861..e69f7de 100644
 -    } else {
 -        NSLog(@"Preferences file does not exist.");
 -    }
++	[[NSUserDefaults standardUserDefaults] removePersistentDomainForName:@"com.uncore.dig3st"];
 +	[[NSUserDefaults standardUserDefaults] synchronize];
 +	DigestPrefsManager *manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
++	[manager removePersistentDomainForName:@"com.uncore.dig3st"];
 +	[manager synchronize];
++	CFArrayRef keyList = CFPreferencesCopyKeyList(CFSTR("com.uncore.dig3st"), kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
++	if (keyList) {
++		CFPreferencesSetMultiple(NULL, keyList, CFSTR("com.uncore.dig3st"), kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
++		CFRelease(keyList);
++	}
 +	CFPreferencesAppSynchronize(CFSTR("com.uncore.dig3st"));
 +	NSFileManager *fileManager = [NSFileManager defaultManager];
 +	NSArray *prefsPaths = @[
@@ -1916,7 +2438,7 @@ index 6a5f861..e69f7de 100644
  	[self reload];
  	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Respring" style:UIBarButtonItemStylePlain target:self action:@selector(respring)];
  
-@@ -108,10 +236,27 @@
+@@ -108,10 +242,27 @@
  	}
  }
  
@@ -1946,6 +2468,18 @@ index 6a5f861..e69f7de 100644
  }
  
  -(void)donate {
+@@ -121,6 +272,10 @@
+ -(void)respring {
+ 	pid_t pid;
+ 	const char* args[] = {"sbreload", NULL};
+-	posix_spawn(&pid, ROOT_PATH("/usr/bin/sbreload"), NULL, NULL, (char* const*)args, NULL);
++	int rc = posix_spawn(&pid, ROOT_PATH("/usr/bin/sbreload"), NULL, NULL, (char* const*)args, NULL);
++	if (rc != 0) {
++		const char* killArgs[] = {"killall", "-9", "SpringBoard", NULL};
++		posix_spawn(&pid, ROOT_PATH("/usr/bin/killall"), NULL, NULL, (char* const*)killArgs, NULL);
++	}
+ }
+ @end
 diff --git a/preferences/DigestSettingsController.m b/preferences/DigestSettingsController.m
 index 072bf28..aefbf86 100644
 --- a/preferences/DigestSettingsController.m
@@ -2093,42 +2627,189 @@ index 072bf28..aefbf86 100644
 \ No newline at end of file
 +@end
 diff --git a/preferences/DigestTestingController.m b/preferences/DigestTestingController.m
-index bf5f372..3beb690 100644
+index bf5f372..971b947 100644
 --- a/preferences/DigestTestingController.m
 +++ b/preferences/DigestTestingController.m
-@@ -26,10 +26,13 @@
+@@ -1,6 +1,9 @@
+ // https://github.com/NoisyFlake/Velvet2/blob/master/preferences/Velvet2SettingsController.m
+ #import "../headers/HeadersPreferences.h"
+ 
++@interface DigestTestingController ()
++@property (nonatomic, strong) NSMutableDictionary<NSString *, NSString *> *draftValues;
++@end
+ 
+ @implementation DigestTestingController
+ 
+@@ -8,67 +11,123 @@
+     self = [super init];
+     if (self) {
+         self.manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
+-		self.logger =[NSClassFromString(@"DigestLogger") sharedInstance];
++        self.logger = [NSClassFromString(@"DigestLogger") sharedInstance];
++        _draftValues = [NSMutableDictionary new];
+     }
+     return self;
  }
  
- -(void)viewDidLayoutSubviews {
--	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Push" style:UIBarButtonItemStylePlain target:self action:@selector(push)];
-+	if (!self.navigationItem.rightBarButtonItem) {
-+		self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Push" style:UIBarButtonItemStylePlain target:self action:@selector(push)];
-+	}
- 	[super viewDidLayoutSubviews];
+-- (NSArray *)specifiers {
+-	if (!_specifiers) {
+-	    _specifiers = [self visibleSpecifiersFromPlist:@"Testing"];
+-	}
++- (void)viewDidLoad {
++    [super viewDidLoad];
++    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Push" style:UIBarButtonItemStyleDone target:self action:@selector(push)];
++    NSDictionary *dict = [self.manager safeObjectForKey:@"testNotif"];
++    if ([dict isKindOfClass:[NSDictionary class]]) {
++        [dict enumerateKeysAndObjectsUsingBlock:^(id k, id v, BOOL *stop) {
++            if ([k isKindOfClass:[NSString class]] && [v isKindOfClass:[NSString class]]) {
++                self.draftValues[k] = v;
++            }
++        }];
++    }
++    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(textFieldUpdated:) name:UITextFieldTextDidChangeNotification object:nil];
++    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(textFieldUpdated:) name:UITextFieldTextDidEndEditingNotification object:nil];
++}
+ 
+-	return _specifiers;
++- (void)dealloc {
++    [[NSNotificationCenter defaultCenter] removeObserver:self name:UITextFieldTextDidChangeNotification object:nil];
++    [[NSNotificationCenter defaultCenter] removeObserver:self name:UITextFieldTextDidEndEditingNotification object:nil];
  }
+ 
+--(void)showController:(id)controller {
+-	return [super showController:controller]; 
++- (void)textFieldUpdated:(NSNotification *)note {
++    UITextField *tf = [note.object isKindOfClass:[UITextField class]] ? (UITextField *)note.object : nil;
++    if (!tf || ![tf isDescendantOfView:self.table]) return;
++    UIView *v = tf.superview;
++    while (v && ![v isKindOfClass:[PSTableCell class]]) {
++        v = v.superview;
++    }
++    if ([v isKindOfClass:[PSTableCell class]]) {
++        PSSpecifier *sp = ((PSTableCell *)v).specifier;
++        NSString *key = sp.properties[@"key"];
++        if (key.length > 0) {
++            self.draftValues[key] = tf.text ?: @"";
++        }
++    }
++}
++
++- (NSArray *)specifiers {
++    if (!_specifiers) {
++        _specifiers = [self visibleSpecifiersFromPlist:@"Testing"];
++    }
++    return _specifiers;
+ }
+ 
+--(void)viewDidLayoutSubviews {
+-	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Push" style:UIBarButtonItemStylePlain target:self action:@selector(push)];
+-	[super viewDidLayoutSubviews];
++-(void)showController:(id)controller {
++    return [super showController:controller];
+ }
++
  -(void)push {
-+	[self.view endEditing:YES];
- 	@try {
- 		BOOL isOkToPush = YES;
- 		NSMutableDictionary *not = [NSMutableDictionary new];
-@@ -54,7 +57,7 @@
- 			}
- 		}
- 		if (!isOkToPush) return Alert(@"Error", @"Please fill in all fields.",self);
+-	@try {
+-		BOOL isOkToPush = YES;
+-		NSMutableDictionary *not = [NSMutableDictionary new];
+-		for (PSSpecifier *specifier in self.specifiers) {
+-			//skip group cell
+-			if ([[specifier.properties valueForKey:@"cell"] isEqual:@"PSGroupCell"] ) continue;
+-			
+-			[self.logger log:[NSString stringWithFormat:@"specifier: %@", specifier.properties] level:LOGLEVEL_VERBOSE];
+-			PSEditableTableCell *cell = [specifier.properties valueForKey:@"cellObject"];
+-			UITextField *textField = [cell valueForKey:@"textField"]; 
+-			if (textField) {
+-				NSString *inputText = textField.text;
+-				if (!inputText || inputText.length == 0) {
+-					isOkToPush = NO;
+-					break;
+-				}
++    [self.view endEditing:YES];
++    @try {
++        BOOL isOkToPush = YES;
++        NSDictionary *saved = [self.manager safeObjectForKey:@"testNotif"];
++        NSMutableDictionary *not = [NSMutableDictionary new];
++        for (PSSpecifier *specifier in self.specifiers) {
++            if ([[specifier.properties valueForKey:@"cell"] isEqual:@"PSGroupCell"]) continue;
+ 
+-				not[specifier.properties[@"key"]] = inputText;
+-				[self.logger log:[NSString stringWithFormat:@"TextField Text: %@", inputText] level:LOGLEVEL_VERBOSE];
+-			} else {
+-				NSLog(@"Failed to access textField.");
+-			}
+-		}
+-		if (!isOkToPush) return Alert(@"Error", @"Please fill in all fields.",self);
 -			[self.manager setObject:not forKey:@"testNotif"];
-+			[self.manager setSafeObject:not forKey:@"testNotif" notify:NO];
- 			[self.logger log:[NSString stringWithFormat:@"Pushing notification: %@", not] level:LOGLEVEL_INFO];
- 			CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), (__bridge CFStringRef)@"com.uncore.dig3st/push", NULL, NULL, YES);
- 	}	@catch(NSException *e) {
-@@ -64,7 +67,7 @@
+-			[self.logger log:[NSString stringWithFormat:@"Pushing notification: %@", not] level:LOGLEVEL_INFO];
+-			CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), (__bridge CFStringRef)@"com.uncore.dig3st/push", NULL, NULL, YES);
+-	}	@catch(NSException *e) {
+-		NSLog(@"Error: %@", e);
+-		Alert(@"Error", @"An error occurred.",self);
+-	}
++            NSString *key = specifier.properties[@"key"];
++            if (key.length == 0) continue;
++
++            PSEditableTableCell *cell = [specifier.properties valueForKey:@"cellObject"];
++            if (!cell) {
++                NSIndexPath *ip = [self indexPathForSpecifier:specifier];
++                if (ip) {
++                    UITableViewCell *rowCell = [self.table cellForRowAtIndexPath:ip];
++                    if ([rowCell isKindOfClass:[PSEditableTableCell class]]) {
++                        cell = (PSEditableTableCell *)rowCell;
++                    }
++                }
++            }
++            UITextField *textField = cell ? [cell valueForKey:@"textField"] : nil;
++            NSString *rawText = nil;
++            if (textField) {
++                rawText = textField.text;
++            } else if (self.draftValues[key] != nil) {
++                rawText = self.draftValues[key];
++            } else if ([saved isKindOfClass:[NSDictionary class]] && [saved[key] isKindOfClass:[NSString class]]) {
++                rawText = saved[key];
++            } else if ([specifier.properties[@"default"] isKindOfClass:[NSString class]]) {
++                rawText = specifier.properties[@"default"];
++            }
++
++            NSString *inputText = [rawText stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]] ?: @"";
++            if (inputText.length == 0) {
++                isOkToPush = NO;
++                break;
++            }
++            not[key] = inputText;
++        }
++        if (!isOkToPush) {
++            return Alert(@"Error", @"Please fill in all fields.", self);
++        }
++        [self.manager setSafeObject:not forKey:@"testNotif" notify:NO];
++        [self.logger log:[NSString stringWithFormat:@"Pushing notification: %@", not] level:LOGLEVEL_INFO];
++        CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), (__bridge CFStringRef)@"com.uncore.dig3st/push", NULL, NULL, YES);
++    } @catch(NSException *e) {
++        NSLog(@"Error: %@", e);
++        Alert(@"Error", @"An error occurred.", self);
++    }
  }
  
  -(id)readPreferenceValue:(PSSpecifier*)specifier {
 -	NSDictionary *dict = [self.manager objectForKey:@"testNotif"];
-+	NSDictionary *dict = [self.manager safeObjectForKey:@"testNotif"];
- 	return dict[specifier.properties[@"key"]];
+-	return dict[specifier.properties[@"key"]];
++    NSString *key = specifier.properties[@"key"];
++    if (key.length == 0) return nil;
++    if (self.draftValues[key] != nil) {
++        return self.draftValues[key];
++    }
++    NSDictionary *dict = [self.manager safeObjectForKey:@"testNotif"];
++    return [dict isKindOfClass:[NSDictionary class]] ? (dict[key] ?: specifier.properties[@"default"]) : specifier.properties[@"default"];
  }
  
+ - (NSMutableArray*)visibleSpecifiersFromPlist:(NSString*)plist {
+-	return [self loadSpecifiersFromPlistName:plist target:self];
++    return [self loadSpecifiersFromPlistName:plist target:self];
+ }
+-@end
+\ No newline at end of file
++@end
 diff --git a/preferences/Makefile b/preferences/Makefile
 index bf06061..a48c2d3 100644
 --- a/preferences/Makefile
@@ -2394,7 +3075,7 @@ index fd076c1..f12eb2c 100644
  			defaults = "com.uncore.dig3st";
  			key = enabled;
 diff --git a/preferences/Resources/Settings.plist b/preferences/Resources/Settings.plist
-index df1a4a7..9554166 100644
+index df1a4a7..4459012 100644
 --- a/preferences/Resources/Settings.plist
 +++ b/preferences/Resources/Settings.plist
 @@ -16,7 +16,7 @@
@@ -2519,12 +3200,28 @@ index df1a4a7..9554166 100644
  			label = "Check Api(Experimental)";
  			key = apiChecks;
  			defaults = "com.uncore.dig3st";
+@@ -86,6 +150,7 @@
+ 			cell = PSEditTextCell;
+ 			label = "Min message length";
+ 			key = minChars;
++			default = "15";
+ 			defaults = "com.uncore.dig3st";
+ 			noAutoCorrect = true; 
+ 			isNumeric = true;
+@@ -95,6 +160,7 @@
+ 			cell = PSEditTextCell;
+ 			label = "Timeout in seconds";
+ 			key = timeout;
++			default = "30";
+ 			defaults = "com.uncore.dig3st";
+ 			noAutoCorrect = true; 
+ 			isNumeric = true;
 diff --git a/src/DigestBannerAnimator.m b/src/DigestBannerAnimator.m
 new file mode 100644
-index 0000000..b404339
+index 0000000..e1a5fa3
 --- /dev/null
 +++ b/src/DigestBannerAnimator.m
-@@ -0,0 +1,753 @@
+@@ -0,0 +1,760 @@
 +#import "../headers/Digest/DigestBannerAnimator.h"
 +#import <QuartzCore/QuartzCore.h>
 +#import <objc/runtime.h>
@@ -2762,8 +3459,9 @@ index 0000000..b404339
 +    UIFont *summaryFont = self.config.boldSummary
 +        ? [UIFont systemFontOfSize:baseFont.pointSize weight:UIFontWeightSemibold]
 +        : baseFont;
-+    UIColor *baseTextColor = [UIColor labelColor];
-+    UIColor *accentColor = [DigestBannerAnimator resolveAccentColor:self.config.accentColorKey] ?: [UIColor systemBlueColor];
++    UIColor *baseTextColor = [[UIColor labelColor] resolvedColorWithTraitCollection:el.traitCollection];
++    UIColor *accentBase = [DigestBannerAnimator resolveAccentColor:self.config.accentColorKey] ?: [UIColor systemBlueColor];
++    UIColor *accentColor = [accentBase resolvedColorWithTraitCollection:el.traitCollection];
 +
 +    NSMutableAttributedString *out = [[self prefixForBaseFont:baseFont] mutableCopy];
 +    BOOL needsMoreFrames = NO;
@@ -3069,6 +3767,12 @@ index 0000000..b404339
 +    return (state != nil && state.displayLink != nil);
 +}
 +
+++ (NSString *)currentTargetSummaryForLabel:(UIView *)textElement {
++    if (!textElement) return nil;
++    DigestLabelAnimState *state = objc_getAssociatedObject(textElement, kDigestAnimStateKey);
++    return state.targetSummary;
++}
++
 ++ (void)refreshNowForLabel:(UIView *)textElement {
 +    if (!textElement) return;
 +    DigestLabelAnimState *state = objc_getAssociatedObject(textElement, kDigestAnimStateKey);
@@ -3279,11 +3983,13 @@ index 0000000..b404339
 +
 +@end
 diff --git a/src/DigestLogger.m b/src/DigestLogger.m
-index 65f359d..fe39203 100644
+index 65f359d..5a7c4ff 100644
 --- a/src/DigestLogger.m
 +++ b/src/DigestLogger.m
-@@ -3,18 +3,23 @@
+@@ -1,46 +1,60 @@
+ #import "../headers/HeadersTweak.h"
  
+-
  @implementation DigestLogger
  - (NSDictionary *)levels {
 -    return @{
@@ -3313,7 +4019,9 @@ index 65f359d..fe39203 100644
          [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(update) name:@"com.uncore.dig3st/update" object:nil];
      }
      return self;
-@@ -23,24 +28,32 @@
+ }
++
+ +(instancetype)sharedInstance {
      static DigestLogger *sharedInstance = nil;
      static dispatch_once_t onceToken;
      dispatch_once(&onceToken, ^{
@@ -3323,6 +4031,7 @@ index 65f359d..fe39203 100644
      });
      return sharedInstance;
  }
++
  -(void)update {
 -    NSInteger level = [[[NSClassFromString(@"DigestPrefsManager") sharedInstance] objectForKey:@"logLevel"] integerValue];
 -    NSLog(@"Log level updated to %ld", (long)level);
@@ -3354,10 +4063,10 @@ index 65f359d..fe39203 100644
      }
  }
 diff --git a/src/DigestPrefsManager.m b/src/DigestPrefsManager.m
-index f10da7b..98aa55d 100644
+index f10da7b..a71408e 100644
 --- a/src/DigestPrefsManager.m
 +++ b/src/DigestPrefsManager.m
-@@ -1,6 +1,8 @@
+@@ -1,52 +1,137 @@
  #import "../headers/HeadersTweak.h"
  
 -static NSString * nsNotificationString = @"com.uncore.dig3st/preferences.changed";
@@ -3365,9 +4074,72 @@ index f10da7b..98aa55d 100644
 +static NSString *const kDigestDarwinNotify = @"com.uncore.dig3st/preferences.changed";
 +
  static void notificationCallback(CFNotificationCenterRef center, void *observer, CFStringRef name, const void *object, CFDictionaryRef userInfo) {
-     [[NSNotificationCenter defaultCenter] postNotificationName:@"com.uncore.dig3st/update" object:nil];
+-    [[NSNotificationCenter defaultCenter] postNotificationName:@"com.uncore.dig3st/update" object:nil];
++    dispatch_block_t postBlock = ^{
++        [[NSNotificationCenter defaultCenter] postNotificationName:@"com.uncore.dig3st/update" object:nil];
++    };
++    if ([NSThread isMainThread]) {
++        postBlock();
++    } else {
++        dispatch_async(dispatch_get_main_queue(), postBlock);
++    }
  }
-@@ -10,7 +12,7 @@ static void notificationCallback(CFNotificationCenterRef center, void *observer,
+ 
+ @implementation DigestPrefsManager
++
+++ (NSDictionary *)defaultPreferences {
++    static NSDictionary *defaults = nil;
++    static dispatch_once_t onceToken;
++    dispatch_once(&onceToken, ^{
++        defaults = @{
++            @"enabled": @NO,
++            @"apiChecks": @NO,
++            @"sanityChecks": @YES,
++            @"logLevel": @"1",
++            @"includeContext": @YES,
++            @"autoTranslateVN": @YES,
++            @"contextBufferEnabled": @YES,
++            @"contextPerThread": @YES,
++            @"contextMaxMessages": @"4",
++            @"contextWindowMinutes": @"10",
++            @"contextMaxChars": @"800",
++            @"contextIncludeTime": @YES,
++            @"contextRecordShort": @YES,
++            @"bannerBadgeStyle": @"arrow",
++            @"bannerShowPrefix": @NO,
++            @"bannerPrefixText": @"[AI]",
++            @"bannerAccentColor": @"default",
++            @"bannerBoldSummary": @NO,
++            @"bannerShowOriginal": @NO,
++            @"showOriginalInExpanded": @YES,
++            @"streamingEnabled": @YES,
++            @"streamAnimationStyle": @"fadeWords",
++            @"pauseInLowPowerMode": @NO,
++            @"prompt": @"Summarize the core message in 1 concise sentence (max 15 words). Preserve names, numbers, amounts, codes, and times. Output ONLY the summary without repeating the sender/app title or adding 'Summary:' / 'Tóm tắt:' prefixes:",
++            @"systemPrompt": @"You summarize notifications ultra-concisely (max 15 words) in the target language. Output ONLY the core summary text—never include labels like 'Summary:' or 'Tóm tắt:', and never repeat the app name or sender title.",
++            @"minChars": @"15",
++            @"timeout": @"30",
++            @"com.apple.MobileSMS": @YES,
++            @"com.apple.news": @YES,
++            @"ph.telegra.Telegraph": @YES,
++            @"com.apple.mobilemail": @YES,
++            @"activeEndpoint": @"3FAC24B8-6EBF-40CC-818B-8BBC64410EF4",
++            @"endpoints": @[
++                @{@"apiKey": @"your gemini api key", @"uuid": @"3FAC24B8-6EBF-40CC-818B-8BBC64410EF4", @"label": @"main", @"model": @"gemini-2.0-flash", @"url": @"https://generativelanguage.googleapis.com/v1beta/openai"},
++                @{@"apiKey": @"your openai api key", @"uuid": @"792BBF8B-A0EF-477D-B5AE-D105D0D2B340", @"label": @"main", @"model": @"gpt-4o", @"url": @"https://api.openai.com/v1"},
++                @{@"apiKey": @"key may not be required", @"uuid": @"E7C57337-EA07-4EF6-AEB7-D5148B7E856E", @"label": @"ollama", @"model": @"qwen2.5:7b", @"url": @"http://192.168.1.152:11434/v1"},
++            ],
++            @"testNotif": @{
++                @"title": @"Google",
++                @"content": @"We noticed a new sign-in to your Google Account on a Linux device. If this was you, you don’t need to do anything. If not, we’ll help you secure your account.",
++                @"bundleIdentifier": @"com.apple.mobilemail",
++            }
++        };
++    });
++    return defaults;
++}
++
+ + (instancetype)sharedInstance {
      static DigestPrefsManager *sharedInstance = nil;
      static dispatch_once_t onceToken;
      dispatch_once(&onceToken, ^{
@@ -3376,35 +4148,25 @@ index f10da7b..98aa55d 100644
      });
      return sharedInstance;
  }
-@@ -23,30 +25,94 @@ static void notificationCallback(CFNotificationCenterRef center, void *observer,
-         @"apiChecks": @NO,
-         @"sanityChecks": @YES,
-         @"logLevel": @"1",
+ 
+ - (instancetype)initWithSuiteName:(NSString *)suitename {
+     DigestPrefsManager *prefs = [super initWithSuiteName:suitename];
++    if (prefs) {
++        [prefs registerDefaults:[DigestPrefsManager defaultPreferences]];
++        CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, notificationCallback, (CFStringRef)kDigestDarwinNotify, NULL, CFNotificationSuspensionBehaviorCoalesce);
++    }
++    return prefs;
++}
+ 
+-    [prefs registerDefaults:@{
+-        @"enabled": @NO,
+-        @"apiChecks": @NO,
+-        @"sanityChecks": @YES,
+-        @"logLevel": @"1",
 -        @"prompt" : @"Summarize this text as sort as possible only mention about the content do not go in detail,super simple shorten anything you can (urls,numbers),compromise understandability in favor of keeping it short,only keep keywords,if possible fit it in a max a sentence of 5 words",
 -        @"systemPrompt": @"You are an assistant that summarizes notifications.",
-+        @"includeContext": @YES,
-+        @"autoTranslateVN": @YES,
-+        @"contextBufferEnabled": @YES,
-+        @"contextPerThread": @YES,
-+        @"contextMaxMessages": @"4",
-+        @"contextWindowMinutes": @"10",
-+        @"contextMaxChars": @"800",
-+        @"contextIncludeTime": @YES,
-+        @"contextRecordShort": @YES,
-+        @"bannerBadgeStyle": @"arrow",
-+        @"bannerShowPrefix": @NO,
-+        @"bannerPrefixText": @"[AI]",
-+        @"bannerAccentColor": @"default",
-+        @"bannerBoldSummary": @NO,
-+        @"bannerShowOriginal": @NO,
-+        @"showOriginalInExpanded": @YES,
-+        @"streamingEnabled": @YES,
-+        @"streamAnimationStyle": @"fadeWords",
-+        @"pauseInLowPowerMode": @NO,
-+        @"prompt": @"Summarize the core message in 1 concise sentence (max 15 words). Preserve names, numbers, amounts, codes, and times. Output ONLY the summary without repeating the sender/app title or adding 'Summary:' / 'Tóm tắt:' prefixes:",
-+        @"systemPrompt": @"You summarize notifications ultra-concisely (max 15 words) in the target language. Output ONLY the core summary text—never include labels like 'Summary:' or 'Tóm tắt:', and never repeat the app name or sender title.",
-         @"minChars": @"15",
-         @"timeout": @"30",
+-        @"minChars": @"15",
+-        @"timeout": @"30",
 -        //some enabled defaults
 -        @"com.apple.MobileSMS" : @YES,
 -        @"com.apple.news" : @YES,
@@ -3415,51 +4177,36 @@ index f10da7b..98aa55d 100644
 -            @{@"apiKey": @"your gemini api key", @"uuid": @"3FAC24B8-6EBF-40CC-818B-8BBC64410EF4",@"label":@"main", @"model": @"gemini-2.0-flash", @"url": @"https://generativelanguage.googleapis.com/v1beta/openai"},
 -            @{@"apiKey": @"your openai api key", @"uuid": @"792BBF8B-A0EF-477D-B5AE-D105D0D2B340", @"label":@"main",@"model": @"gpt-4o", @"url": @"https://api.openai.com/v1"},
 -            @{@"apiKey": @"key may not be required", @"uuid": @"E7C57337-EA07-4EF6-AEB7-D5148B7E856E", @"label":@"ollama",@"model": @"qwen2.5:7b", @"url": @"http://192.168.1.152:11434/v1"},
-+        @"com.apple.MobileSMS": @YES,
-+        @"com.apple.news": @YES,
-+        @"ph.telegra.Telegraph": @YES,
-+        @"com.apple.mobilemail": @YES,
-+        @"activeEndpoint": @"3FAC24B8-6EBF-40CC-818B-8BBC64410EF4",
-+        @"endpoints": @[
-+            @{@"apiKey": @"your gemini api key", @"uuid": @"3FAC24B8-6EBF-40CC-818B-8BBC64410EF4", @"label": @"main", @"model": @"gemini-2.0-flash", @"url": @"https://generativelanguage.googleapis.com/v1beta/openai"},
-+            @{@"apiKey": @"your openai api key", @"uuid": @"792BBF8B-A0EF-477D-B5AE-D105D0D2B340", @"label": @"main", @"model": @"gpt-4o", @"url": @"https://api.openai.com/v1"},
-+            @{@"apiKey": @"key may not be required", @"uuid": @"E7C57337-EA07-4EF6-AEB7-D5148B7E856E", @"label": @"ollama", @"model": @"qwen2.5:7b", @"url": @"http://192.168.1.152:11434/v1"},
-         ],
+-        ],
 -        @"testNotif":@{
-+        @"testNotif": @{
-             @"title": @"Google",
-             @"content": @"We noticed a new sign-in to your Google Account on a Linux device. If this was you, you don’t need to do anything. If not, we’ll help you secure your account.",
-             @"bundleIdentifier": @"com.apple.mobilemail",
-         }
-     }];
--    
--    CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, notificationCallback, (CFStringRef)nsNotificationString, NULL, CFNotificationSuspensionBehaviorCoalesce);
-+
-+    CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, notificationCallback, (CFStringRef)kDigestDarwinNotify, NULL, CFNotificationSuspensionBehaviorCoalesce);
- 
-     return prefs;
- }
--@end
-\ No newline at end of file
-+
+-            @"title": @"Google",
+-            @"content": @"We noticed a new sign-in to your Google Account on a Linux device. If this was you, you don’t need to do anything. If not, we’ll help you secure your account.",
+-            @"bundleIdentifier": @"com.apple.mobilemail",
 +- (NSDictionary *)copyAllPreferences {
 +    CFPreferencesAppSynchronize((__bridge CFStringRef)kDigestAppID);
-+    NSMutableDictionary *merged = [[self dictionaryRepresentation] mutableCopy] ?: [NSMutableDictionary new];
++    NSMutableDictionary *merged = [[DigestPrefsManager defaultPreferences] mutableCopy];
 +    CFDictionaryRef cfDict = CFPreferencesCopyMultiple(NULL, (__bridge CFStringRef)kDigestAppID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
 +    if (cfDict) {
 +        NSDictionary *cfValues = CFBridgingRelease(cfDict);
-+        [merged addEntriesFromDictionary:cfValues];
++        if ([cfValues isKindOfClass:[NSDictionary class]]) {
++            [merged addEntriesFromDictionary:cfValues];
+         }
+-    }];
+-    
+-    CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, notificationCallback, (CFStringRef)nsNotificationString, NULL, CFNotificationSuspensionBehaviorCoalesce);
 +    }
 +    return [merged copy];
 +}
-+
+ 
+-    return prefs;
 +- (id)safeObjectForKey:(NSString *)key {
 +    if (key.length == 0) return nil;
++    CFPreferencesAppSynchronize((__bridge CFStringRef)kDigestAppID);
 +    CFPropertyListRef cfVal = CFPreferencesCopyAppValue((__bridge CFStringRef)key, (__bridge CFStringRef)kDigestAppID);
 +    if (cfVal) {
 +        return CFBridgingRelease(cfVal);
 +    }
-+    return [self objectForKey:key];
++    return [DigestPrefsManager defaultPreferences][key];
 +}
 +
 +- (void)setSafeObject:(id)value forKey:(NSString *)key notify:(BOOL)notify {
@@ -3486,13 +4233,52 @@ index f10da7b..98aa55d 100644
 +    if (notify) {
 +        CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), (__bridge CFStringRef)kDigestDarwinNotify, NULL, NULL, true);
 +    }
+ }
+-@end
+\ No newline at end of file
++@end
+diff --git a/src/OpenAI/Config.m b/src/OpenAI/Config.m
+index 05e2586..1a2715b 100644
+--- a/src/OpenAI/Config.m
++++ b/src/OpenAI/Config.m
+@@ -1,18 +1,20 @@
+ #import "../../headers/HeadersTweak.h"
+ 
+-@implementation Config 
+-- (instancetype)initWithEndpoint:(NSDictionary*)endpoint timeoutInterval:(NSNumber *)timeoutInterval {
++static NSString *trimConfigField(id val) {
++    if (![val isKindOfClass:[NSString class]]) return nil;
++    NSString *trimmed = [(NSString *)val stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
++    return trimmed;
 +}
++
++@implementation Config
++- (instancetype)initWithEndpoint:(NSDictionary *)endpoint timeoutInterval:(NSNumber *)timeoutInterval {
+     self = [super init];
+     if (self) {
+-        self.token = endpoint[@"apiKey"];
+-        self.host = endpoint[@"url"];
+-        self.model = endpoint[@"model"];
+-        // self.port = port;
+-        // self.scheme = scheme;
+-        // self.basePath = basePath;
+-        self.timeoutInterval = timeoutInterval;
++        self.token = trimConfigField(endpoint[@"apiKey"]) ?: @"";
++        self.host = trimConfigField(endpoint[@"url"]) ?: @"";
++        self.model = trimConfigField(endpoint[@"model"]) ?: @"";
++        self.timeoutInterval = timeoutInterval ?: @30;
+     }
+     return self;
+ }
+-
+-@end
+\ No newline at end of file
 +@end
 diff --git a/src/OpenAI/OpenAI.m b/src/OpenAI/OpenAI.m
-index 8f8f165..2b602a8 100644
+index 8f8f165..b673503 100644
 --- a/src/OpenAI/OpenAI.m
 +++ b/src/OpenAI/OpenAI.m
-@@ -1,14 +1,54 @@
+@@ -1,14 +1,68 @@
  #import "../../headers/HeadersTweak.h"
 +#import <QuartzCore/QuartzCore.h>
 +
@@ -3503,6 +4289,12 @@ index 8f8f165..2b602a8 100644
 +@property(nonatomic, copy) void (^completionBlock)(NSString *finalText);
 +@property(nonatomic, assign) CFTimeInterval lastEmitTime;
 +@property(nonatomic, assign) BOOL finished;
++@property(nonatomic, assign) BOOL sawSSE;
++@property(nonatomic, assign) NSInteger httpStatusCode;
++@property(nonatomic, assign) BOOL allowStreamFallback;
++@property(nonatomic, strong) ChatQuery *query;
++@property(nonatomic, strong) NSNumber *autoTranslateOverride;
++@property(nonatomic, copy) NSString *customPromptOverride;
 +@end
 +
 +@implementation DigestStreamContext
@@ -3519,6 +4311,14 @@ index 8f8f165..2b602a8 100644
 +@interface OpenAI ()
 +@property(nonatomic, strong) NSMutableDictionary<NSNumber *, DigestStreamContext *> *streamContexts;
 +@property(nonatomic, strong) NSObject *streamLock;
++- (NSString *)extractTextValue:(id)value;
++- (void)summarizeInternal:(ChatQuery *)query
++            autoTranslate:(NSNumber *)autoTranslateOverride
++             customPrompt:(NSString *)customPromptOverride
++               streamMode:(BOOL)streaming
++            allowFallback:(BOOL)allowFallback
++                onPartial:(void (^)(NSString *partialText))partialBlock
++               completion:(void (^)(NSString *response))completion;
 +@end
  
  @implementation OpenAI
@@ -3550,7 +4350,7 @@ index 8f8f165..2b602a8 100644
          self.logger = [NSClassFromString(@"DigestLogger") sharedInstance];
          [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(update) name:@"com.uncore.dig3st/update" object:nil];
      }
-@@ -18,8 +58,9 @@
+@@ -18,157 +72,609 @@
  - (void)update {
      [self.logger log:@"Updating OpenAI instance" level:LOGLEVEL_INFO];
      DigestPrefsManager *manager = [DigestPrefsManager sharedInstance];
@@ -3560,14 +4360,22 @@ index 8f8f165..2b602a8 100644
 +    NSString *uuid = prefs[@"activeEndpoint"];
 +    NSArray *endpoints = prefs[@"endpoints"];
      __block NSDictionary *endpoint;
-     [endpoints enumerateObjectsUsingBlock:^(NSDictionary *p, NSUInteger idx, BOOL *stop) {
-         if ([p[@"uuid"] isEqualToString:uuid]) {
-@@ -27,62 +68,101 @@
-             *stop = YES;
-         }
-     }];
+-    [endpoints enumerateObjectsUsingBlock:^(NSDictionary *p, NSUInteger idx, BOOL *stop) {
+-        if ([p[@"uuid"] isEqualToString:uuid]) {
+-            endpoint = p;
+-            *stop = YES;
+-        }
+-    }];
 -    [self.logger log:[NSString stringWithFormat:@"Updating endpoint with UUID %@", uuid] level:LOGLEVEL_INFO];
 -    [self.logger log:[NSString stringWithFormat:@"New endpoint %@", endpoint] level:LOGLEVEL_INFO];
++    if ([uuid isKindOfClass:[NSString class]] && [endpoints isKindOfClass:[NSArray class]]) {
++        [endpoints enumerateObjectsUsingBlock:^(NSDictionary *p, NSUInteger idx, BOOL *stop) {
++            if ([p isKindOfClass:[NSDictionary class]] && [p[@"uuid"] isEqualToString:uuid]) {
++                endpoint = p;
++                *stop = YES;
++            }
++        }];
++    }
 +    if ([self.logger shouldLog:LOGLEVEL_INFO]) {
 +        [self.logger log:[NSString stringWithFormat:@"Updating endpoint with UUID %@", uuid] level:LOGLEVEL_INFO];
 +        [self.logger log:[NSString stringWithFormat:@"New endpoint %@", endpoint] level:LOGLEVEL_INFO];
@@ -3626,8 +4434,19 @@ index 8f8f165..2b602a8 100644
 +    if (url.length == 0) {
 +        return nil;
 +    }
++    NSString *lower = [url lowercaseString];
++    if (![lower hasPrefix:@"http://"] && ![lower hasPrefix:@"https://"]) {
++        url = [@"https://" stringByAppendingString:url];
++    }
 +    while ([url hasSuffix:@"/"]) {
 +        url = [url substringToIndex:url.length - 1];
++    }
++    if ([[url lowercaseString] hasSuffix:@"/chat/completions"]) {
++        if ([path isEqualToString:@"/chat/completions"]) {
++            return [NSURL URLWithString:url];
++        }
++        NSString *base = [url substringToIndex:(url.length - @"/chat/completions".length)];
++        return [NSURL URLWithString:[base stringByAppendingString:path]];
 +    }
 +    return [NSURL URLWithString:[url stringByAppendingString:path]];
  }
@@ -3638,7 +4457,7 @@ index 8f8f165..2b602a8 100644
 +    NSURL *url = [self urlWithPath:@"/models"];
 +    if (!url) {
 +        dispatch_async(dispatch_get_main_queue(), ^{
-+            completion(NO);
++            if (completion) completion(NO);
 +        });
 +        return;
 +    }
@@ -3659,7 +4478,7 @@ index 8f8f165..2b602a8 100644
              NSLog(@"Request failed: %@", error.localizedDescription);
 -            completion(NO);
 +            dispatch_async(dispatch_get_main_queue(), ^{
-+                completion(NO);
++                if (completion) completion(NO);
 +            });
              return;
          }
@@ -3681,7 +4500,8 @@ index 8f8f165..2b602a8 100644
 +                [self.logger log:[NSString stringWithFormat:@"JSON error while checking the endpoint: %@", jsonError.localizedDescription] level:LOGLEVEL_WARNING];
 +            }
              dispatch_async(dispatch_get_main_queue(), ^{
-                 completion(NO);
+-                completion(NO);
++                if (completion) completion(NO);
              });
          } else {
              @try {
@@ -3694,9 +4514,15 @@ index 8f8f165..2b602a8 100644
 +                    [self.logger log:[NSString stringWithFormat:@"Endpoint is valid: %@", isValid ? @"YES" : @"NO"] level:LOGLEVEL_INFO];
 +                }
                  dispatch_async(dispatch_get_main_queue(), ^{
-                     completion(isValid);
+-                    completion(isValid);
++                    if (completion) completion(isValid);
                  });
-@@ -94,81 +174,327 @@
+             } @catch (NSException *e) {
+                 NSLog(@"Exception: %@", e);
+                 dispatch_async(dispatch_get_main_queue(), ^{
+-                    completion(NO);
++                    if (completion) completion(NO);
+                 });
              }
          }
      }];
@@ -3707,16 +4533,38 @@ index 8f8f165..2b602a8 100644
  
 --(void)summarize:(ChatQuery*)query completion:(void (^)(NSString *response))completion {
 -    @try { 
++- (NSString *)extractTextValue:(id)value {
++    if ([value isKindOfClass:[NSString class]]) {
++        return (NSString *)value;
++    }
++    if ([value isKindOfClass:[NSArray class]]) {
++        NSMutableString *buf = [NSMutableString string];
++        for (id item in (NSArray *)value) {
++            if ([item isKindOfClass:[NSString class]]) {
++                [buf appendString:(NSString *)item];
++            } else if ([item isKindOfClass:[NSDictionary class]]) {
++                id txt = item[@"text"] ?: item[@"content"];
++                if ([txt isKindOfClass:[NSString class]]) {
++                    [buf appendString:(NSString *)txt];
++                } else if ([txt isKindOfClass:[NSDictionary class]] && [txt[@"value"] isKindOfClass:[NSString class]]) {
++                    [buf appendString:txt[@"value"]];
++                }
++            }
++        }
++        return buf.length > 0 ? buf : nil;
++    }
++    return nil;
++}
++
 +- (NSString *)cleanText:(NSString *)raw trimEnd:(BOOL)trimEnd {
 +    if (!raw || raw.length == 0) return @"";
 +    NSString *cleaned = raw;
-+    if ([cleaned rangeOfString:@"\n"].location != NSNotFound || [cleaned rangeOfString:@"\r"].location != NSNotFound) {
-+        cleaned = [[cleaned stringByReplacingOccurrencesOfString:@"\r\n" withString:@" "] stringByReplacingOccurrencesOfString:@"\n" withString:@" "];
-+    }
 +
 +    static NSCharacterSet *nonWhitespace = nil;
 +    static NSCharacterSet *sepChars = nil;
 +    static NSRegularExpression *prefixRegex = nil;
++    static NSRegularExpression *thinkClosedRegex = nil;
++    static NSRegularExpression *thinkOpenRegex = nil;
 +    static dispatch_once_t onceToken;
 +    dispatch_once(&onceToken, ^{
 +        nonWhitespace = [[NSCharacterSet whitespaceAndNewlineCharacterSet] invertedSet];
@@ -3724,7 +4572,26 @@ index 8f8f165..2b602a8 100644
 +        prefixRegex = [NSRegularExpression regularExpressionWithPattern:@"^(?:t[oó]m\\s*t[aắ]t(?:\\s+(?:ng[aắ]n|nhanh|th[oô]ng\\s*b[aá]o|n[oộ]i\\s*dung))?|summary|tl\\s*;?\\s*dr|digest)\\s*[:：\\-–]\\s*"
 +                                                                options:NSRegularExpressionCaseInsensitive
 +                                                                  error:nil];
++        thinkClosedRegex = [NSRegularExpression regularExpressionWithPattern:@"<think>[\\s\\S]*?</think>"
++                                                                     options:NSRegularExpressionCaseInsensitive
++                                                                       error:nil];
++        thinkOpenRegex = [NSRegularExpression regularExpressionWithPattern:@"<think>[\\s\\S]*$"
++                                                                   options:NSRegularExpressionCaseInsensitive
++                                                                     error:nil];
 +    });
++
++    if ([cleaned rangeOfString:@"<think" options:NSCaseInsensitiveSearch].location != NSNotFound) {
++        if (thinkClosedRegex) {
++            cleaned = [thinkClosedRegex stringByReplacingMatchesInString:cleaned options:0 range:NSMakeRange(0, cleaned.length) withTemplate:@""];
++        }
++        if (thinkOpenRegex && [cleaned rangeOfString:@"<think" options:NSCaseInsensitiveSearch].location != NSNotFound) {
++            cleaned = [thinkOpenRegex stringByReplacingMatchesInString:cleaned options:0 range:NSMakeRange(0, cleaned.length) withTemplate:@""];
++        }
++    }
++
++    if ([cleaned rangeOfString:@"\n"].location != NSNotFound || [cleaned rangeOfString:@"\r"].location != NSNotFound) {
++        cleaned = [[cleaned stringByReplacingOccurrencesOfString:@"\r\n" withString:@" "] stringByReplacingOccurrencesOfString:@"\n" withString:@" "];
++    }
 +
 +    NSRange nonSpace = [cleaned rangeOfCharacterFromSet:nonWhitespace];
 +    if (nonSpace.location == NSNotFound) return @"";
@@ -3756,10 +4623,28 @@ index 8f8f165..2b602a8 100644
 +       streamMode:(BOOL)streaming
 +        onPartial:(void (^)(NSString *partialText))partialBlock
 +       completion:(void (^)(NSString *response))completion {
++    [self summarizeInternal:query
++              autoTranslate:autoTranslateOverride
++               customPrompt:customPromptOverride
++                 streamMode:streaming
++              allowFallback:streaming
++                  onPartial:partialBlock
++                 completion:completion];
++}
++
++- (void)summarizeInternal:(ChatQuery *)query
++            autoTranslate:(NSNumber *)autoTranslateOverride
++             customPrompt:(NSString *)customPromptOverride
++               streamMode:(BOOL)streaming
++            allowFallback:(BOOL)allowFallback
++                onPartial:(void (^)(NSString *partialText))partialBlock
++               completion:(void (^)(NSString *response))completion {
 +    @try {
          NSURL *url = [self urlWithPath:@"/chat/completions"];
 -        [self.logger log:[NSString stringWithFormat:@"Endpoint url: %@",url] level:LOGLEVEL_VERBOSE];
-+        if (!url || self.configuration.model.length == 0) {
++        NSString *model = [self.configuration.model stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
++        if (!url || model.length == 0) {
++            NSLog(@"Cannot summarize: invalid endpoint URL (%@) or model (%@)", self.configuration.host, self.configuration.model);
 +            dispatch_async(dispatch_get_main_queue(), ^{
 +                if (completion) completion(@"");
 +            });
@@ -3804,23 +4689,26 @@ index 8f8f165..2b602a8 100644
          }];
  
 -        NSDictionary *body = @{
-+        NSMutableDictionary *body = [@{
-             @"model": self.configuration.model,
+-            @"model": self.configuration.model,
 -            @"messages" : messages,
 -        };
 -        [self.logger log:[NSString stringWithFormat:@"Making a post req with body: %@", body] level:LOGLEVEL_VERBOSE];
 -        NSData *jsonData = [NSJSONSerialization dataWithJSONObject:body options:0 error:nil];
 -        
++        NSMutableDictionary *body = [@{
++            @"model": model,
 +            @"messages": messages
 +        } mutableCopy];
 +
-+        NSString *lowerModel = [self.configuration.model lowercaseString];
-+        BOOL isReasoningModel = ([lowerModel hasPrefix:@"o1"] || [lowerModel hasPrefix:@"o3"] || [lowerModel hasPrefix:@"o4"] ||
-+                                 [lowerModel containsString:@"/o1"] || [lowerModel containsString:@"/o3"] || [lowerModel containsString:@"/o4"]);
-+        if (isReasoningModel) {
-+            body[@"max_completion_tokens"] = @256;
++        NSString *lowerModel = [model lowercaseString];
++        BOOL usesMaxCompletionTokens = ([lowerModel hasPrefix:@"o1"] || [lowerModel hasPrefix:@"o3"] ||
++                                        [lowerModel hasPrefix:@"o4"] || [lowerModel hasPrefix:@"gpt-5"] ||
++                                        [lowerModel containsString:@"/o1"] || [lowerModel containsString:@"/o3"] ||
++                                        [lowerModel containsString:@"/o4"] || [lowerModel containsString:@"/gpt-5"]);
++        if (usesMaxCompletionTokens) {
++            body[@"max_completion_tokens"] = @1024;
 +        } else {
-+            body[@"max_tokens"] = @120;
++            body[@"max_tokens"] = @1024;
 +        }
 +        if (streaming) {
 +            body[@"stream"] = @YES;
@@ -3843,8 +4731,9 @@ index 8f8f165..2b602a8 100644
 +        if (streaming) {
 +            [request setValue:@"text/event-stream" forHTTPHeaderField:@"Accept"];
 +        }
-+        if (self.configuration.token.length > 0) {
-+            [request setValue:[NSString stringWithFormat:@"Bearer %@", self.configuration.token] forHTTPHeaderField:@"Authorization"];
++        NSString *token = [self.configuration.token stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
++        if (token.length > 0) {
++            [request setValue:[NSString stringWithFormat:@"Bearer %@", token] forHTTPHeaderField:@"Authorization"];
 +        }
 +        NSTimeInterval timeout = [self.configuration.timeoutInterval doubleValue];
 +        [request setTimeoutInterval:(timeout > 0 ? timeout : 30.0)];
@@ -3856,6 +4745,10 @@ index 8f8f165..2b602a8 100644
 +            DigestStreamContext *ctx = [DigestStreamContext new];
 +            ctx.partialBlock = partialBlock;
 +            ctx.completionBlock = completion;
++            ctx.allowStreamFallback = allowFallback;
++            ctx.query = query;
++            ctx.autoTranslateOverride = autoTranslateOverride;
++            ctx.customPromptOverride = customPromptOverride;
 +            @synchronized(self.streamLock) {
 +                self.streamContexts[@(task.taskIdentifier)] = ctx;
 +            }
@@ -3869,8 +4762,9 @@ index 8f8f165..2b602a8 100644
 -                    return dispatch_async(dispatch_get_main_queue(), ^{
 -                        completion(@"");
 -                    });                
++            NSInteger statusCode = [response isKindOfClass:[NSHTTPURLResponse class]] ? ((NSHTTPURLResponse *)response).statusCode : 0;
 +            if (error || !data) {
-+                NSLog(@"Request failed: %@", error.localizedDescription);
++                NSLog(@"Request failed (HTTP %ld): %@", (long)statusCode, error.localizedDescription);
 +                return dispatch_async(dispatch_get_main_queue(), ^{
 +                    if (completion) completion(@"");
 +                });
@@ -3882,17 +4776,24 @@ index 8f8f165..2b602a8 100644
              id jsonResponse = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonError];
 -            [self.logger log:[NSString stringWithFormat:@"Response body: %@", jsonResponse] level:LOGLEVEL_VERBOSE];
 +            if ([self.logger shouldLog:LOGLEVEL_VERBOSE]) {
-+                [self.logger log:[NSString stringWithFormat:@"Response body: %@", jsonResponse] level:LOGLEVEL_VERBOSE];
++                [self.logger log:[NSString stringWithFormat:@"Response HTTP %ld body: %@", (long)statusCode, jsonResponse] level:LOGLEVEL_VERBOSE];
 +            }
  
 -            if (jsonError) {
 -                    NSLog(@"JSON error: %@", jsonError.localizedDescription);
 +            if (jsonError || ![jsonResponse isKindOfClass:[NSDictionary class]]) {
++                NSString *rawStr = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
++                NSLog(@"Invalid JSON response (HTTP %ld): %@", (long)statusCode, rawStr);
 +                return dispatch_async(dispatch_get_main_queue(), ^{
 +                    if (completion) completion(@"");
 +                });
 +            }
 +            @try {
++                id errObj = jsonResponse[@"error"];
++                if (errObj || statusCode >= 400) {
++                    NSLog(@"API error (HTTP %ld): %@", (long)statusCode, errObj ?: jsonResponse);
++                    [self.logger log:[NSString stringWithFormat:@"API error HTTP %ld: %@", (long)statusCode, errObj ?: jsonResponse] level:LOGLEVEL_WARNING];
++                }
 +                id choices = jsonResponse[@"choices"];
 +                if (![choices isKindOfClass:[NSArray class]] || [choices count] == 0) {
                      return dispatch_async(dispatch_get_main_queue(), ^{
@@ -3905,14 +4806,17 @@ index 8f8f165..2b602a8 100644
 -                // Sometimes the result contains newlines, which we want to remove
 -                NSString *cleanedResult = [result stringByReplacingOccurrencesOfString:@"\n" withString:@""];
 +                }
-+                id message = choices[0][@"message"];
-+                id content = [message isKindOfClass:[NSDictionary class]] ? message[@"content"] : nil;
-+                if (![content isKindOfClass:[NSString class]]) {
++                NSDictionary *choice0 = [choices[0] isKindOfClass:[NSDictionary class]] ? choices[0] : nil;
++                id message = choice0[@"message"];
++                id rawContent = [message isKindOfClass:[NSDictionary class]] ? message[@"content"] : choice0[@"text"];
++                NSString *content = [self extractTextValue:rawContent];
++                if (content.length == 0) {
++                    NSLog(@"API returned empty content (HTTP %ld, finish_reason=%@)", (long)statusCode, choice0[@"finish_reason"]);
 +                    return dispatch_async(dispatch_get_main_queue(), ^{
 +                        if (completion) completion(@"");
 +                    });
 +                }
-+                NSString *cleanedResult = [self cleanText:(NSString *)content trimEnd:YES];
++                NSString *cleanedResult = [self cleanText:content trimEnd:YES];
                  return dispatch_async(dispatch_get_main_queue(), ^{
 -                    completion(cleanedResult);
 +                    if (completion) completion(cleanedResult);
@@ -3940,9 +4844,26 @@ index 8f8f165..2b602a8 100644
 +
 +#pragma mark - NSURLSessionDataDelegate (SSE Streaming)
 +
++- (void)URLSession:(NSURLSession *)session
++          dataTask:(NSURLSessionDataTask *)dataTask
++didReceiveResponse:(NSURLResponse *)response
++ completionHandler:(void (^)(NSURLSessionResponseDisposition disposition))completionHandler {
++    DigestStreamContext *ctx = nil;
++    @synchronized(self.streamLock) {
++        ctx = self.streamContexts[@(dataTask.taskIdentifier)];
++    }
++    if (ctx && [response isKindOfClass:[NSHTTPURLResponse class]]) {
++        ctx.httpStatusCode = ((NSHTTPURLResponse *)response).statusCode;
++    }
++    if (completionHandler) {
++        completionHandler(NSURLSessionResponseAllow);
++    }
++}
++
 +- (void)processSSELine:(NSString *)line context:(DigestStreamContext *)ctx {
 +    NSString *trimmed = [line stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 +    if (![trimmed hasPrefix:@"data:"]) return;
++    ctx.sawSSE = YES;
 +    NSString *payload = [[trimmed substringFromIndex:5] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
 +    if (payload.length == 0 || [payload isEqualToString:@"[DONE]"]) return;
 +
@@ -3950,6 +4871,10 @@ index 8f8f165..2b602a8 100644
 +    if (!jsonData) return;
 +    id jsonObj = [NSJSONSerialization JSONObjectWithData:jsonData options:0 error:nil];
 +    if (![jsonObj isKindOfClass:[NSDictionary class]]) return;
++
++    if (jsonObj[@"error"]) {
++        NSLog(@"SSE error payload: %@", jsonObj[@"error"]);
++    }
 +
 +    id choices = jsonObj[@"choices"];
 +    if (![choices isKindOfClass:[NSArray class]] || [choices count] == 0) return;
@@ -3959,10 +4884,14 @@ index 8f8f165..2b602a8 100644
 +
 +    NSString *deltaText = nil;
 +    id delta = choice0[@"delta"];
-+    if ([delta isKindOfClass:[NSDictionary class]] && [delta[@"content"] isKindOfClass:[NSString class]]) {
-+        deltaText = delta[@"content"];
-+    } else if ([choice0[@"message"] isKindOfClass:[NSDictionary class]] && [choice0[@"message"][@"content"] isKindOfClass:[NSString class]]) {
-+        deltaText = choice0[@"message"][@"content"];
++    if ([delta isKindOfClass:[NSDictionary class]]) {
++        deltaText = [self extractTextValue:delta[@"content"]] ?: [self extractTextValue:delta[@"text"]];
++    }
++    if (deltaText.length == 0 && [choice0[@"message"] isKindOfClass:[NSDictionary class]]) {
++        deltaText = [self extractTextValue:choice0[@"message"][@"content"]];
++    }
++    if (deltaText.length == 0 && [choice0[@"text"] isKindOfClass:[NSString class]]) {
++        deltaText = choice0[@"text"];
 +    }
 +    if (deltaText.length > 0) {
 +        [ctx.accumulatedText appendString:deltaText];
@@ -3980,6 +4909,19 @@ index 8f8f165..2b602a8 100644
 +
 +    const uint8_t *bytes = (const uint8_t *)ctx.rawBuffer.bytes;
 +    NSUInteger length = ctx.rawBuffer.length;
++
++    // If response begins with JSON ('{' or '[') and has not produced SSE 'data:' lines,
++    // keep the entire buffer intact for JSON parsing in didCompleteWithError:.
++    if (!ctx.sawSSE) {
++        NSUInteger first = 0;
++        while (first < length && (bytes[first] == ' ' || bytes[first] == '\t' || bytes[first] == '\r' || bytes[first] == '\n')) {
++            first++;
++        }
++        if (first < length && (bytes[first] == '{' || bytes[first] == '[')) {
++            return;
++        }
++    }
++
 +    NSUInteger lineStart = 0;
 +    BOOL appendedAny = NO;
 +
@@ -3992,6 +4934,7 @@ index 8f8f165..2b602a8 100644
 +            if ((e - s) >= 5 &&
 +                bytes[s] == 'd' && bytes[s + 1] == 'a' && bytes[s + 2] == 't' &&
 +                bytes[s + 3] == 'a' && bytes[s + 4] == ':') {
++                ctx.sawSSE = YES;
 +                NSString *lineStr = [[NSString alloc] initWithBytes:(bytes + s) length:(e - s) encoding:NSUTF8StringEncoding];
 +                if (lineStr.length > 0) {
 +                    NSUInteger beforeLen = ctx.accumulatedText.length;
@@ -4005,7 +4948,7 @@ index 8f8f165..2b602a8 100644
 +        }
 +    }
 +
-+    if (lineStart > 0) {
++    if (lineStart > 0 && ctx.sawSSE) {
 +        [ctx.rawBuffer replaceBytesInRange:NSMakeRange(0, lineStart) withBytes:NULL length:0];
 +    }
 +
@@ -4033,31 +4976,68 @@ index 8f8f165..2b602a8 100644
 +    if (!ctx || ctx.finished) return;
 +    ctx.finished = YES;
 +
++    if (ctx.httpStatusCode == 0 && [task.response isKindOfClass:[NSHTTPURLResponse class]]) {
++        ctx.httpStatusCode = ((NSHTTPURLResponse *)task.response).statusCode;
++    }
++
 +    if (ctx.rawBuffer.length > 0) {
 +        NSString *tail = [[NSString alloc] initWithData:ctx.rawBuffer encoding:NSUTF8StringEncoding];
 +        if (tail.length > 0) {
-+            if ([tail containsString:@"data:"]) {
++            NSString *trimmedTail = [tail stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
++            if (ctx.sawSSE || (![trimmedTail hasPrefix:@"{"] && ![trimmedTail hasPrefix:@"["] && [tail containsString:@"data:"])) {
 +                for (NSString *line in [tail componentsSeparatedByString:@"\n"]) {
 +                    [self processSSELine:line context:ctx];
 +                }
 +            } else if (ctx.accumulatedText.length == 0) {
 +                id jsonResponse = [NSJSONSerialization JSONObjectWithData:ctx.rawBuffer options:0 error:nil];
 +                if ([jsonResponse isKindOfClass:[NSDictionary class]]) {
++                    if (jsonResponse[@"error"] || ctx.httpStatusCode >= 400) {
++                        NSLog(@"Stream endpoint returned JSON error (HTTP %ld): %@", (long)ctx.httpStatusCode, jsonResponse[@"error"] ?: jsonResponse);
++                        [self.logger log:[NSString stringWithFormat:@"Stream API error HTTP %ld: %@", (long)ctx.httpStatusCode, jsonResponse[@"error"] ?: jsonResponse] level:LOGLEVEL_WARNING];
++                    }
 +                    id choices = jsonResponse[@"choices"];
 +                    if ([choices isKindOfClass:[NSArray class]] && [choices count] > 0) {
-+                        id content = choices[0][@"message"][@"content"];
-+                        if ([content isKindOfClass:[NSString class]]) {
++                        NSDictionary *choice0 = [choices[0] isKindOfClass:[NSDictionary class]] ? choices[0] : nil;
++                        id rawContent = [choice0[@"message"] isKindOfClass:[NSDictionary class]]
++                            ? choice0[@"message"][@"content"]
++                            : choice0[@"text"];
++                        NSString *content = [self extractTextValue:rawContent];
++                        if (content.length > 0) {
 +                            [ctx.accumulatedText appendString:content];
 +                        }
 +                    }
++                } else if (ctx.httpStatusCode >= 400) {
++                    NSLog(@"Stream HTTP %ld error body: %@", (long)ctx.httpStatusCode, trimmedTail);
 +                }
 +            }
 +        }
 +    }
 +
++    if (error) {
++        NSLog(@"Stream request failed (HTTP %ld): %@", (long)ctx.httpStatusCode, error.localizedDescription);
++    }
++
 +    NSString *finalResult = (error && ctx.accumulatedText.length == 0)
 +        ? @""
 +        : [self cleanText:ctx.accumulatedText trimEnd:YES];
++
++    BOOL canFallback = (ctx.allowStreamFallback &&
++                        finalResult.length == 0 &&
++                        ctx.query != nil &&
++                        ctx.httpStatusCode != 401 &&
++                        ctx.httpStatusCode != 403);
++    if (canFallback) {
++        NSLog(@"Streaming returned empty/error (HTTP %ld); falling back to non-stream request", (long)ctx.httpStatusCode);
++        [self summarizeInternal:ctx.query
++                  autoTranslate:ctx.autoTranslateOverride
++                   customPrompt:ctx.customPromptOverride
++                     streamMode:NO
++                  allowFallback:NO
++                      onPartial:nil
++                     completion:ctx.completionBlock];
++        return;
++    }
++
 +    void (^comp)(NSString *) = ctx.completionBlock;
 +    dispatch_async(dispatch_get_main_queue(), ^{
 +        if (comp) comp(finalResult);
@@ -4065,23 +5045,111 @@ index 8f8f165..2b602a8 100644
 +}
  @end
 diff --git a/src/PushNotification.xm b/src/PushNotification.xm
-index ef8dd7c..1a39af1 100644
+index ef8dd7c..df97d0b 100644
 --- a/src/PushNotification.xm
 +++ b/src/PushNotification.xm
-@@ -80,7 +80,7 @@
+@@ -79,40 +79,62 @@
+ 
  
  extern "C" void postDebugNotificationWithInfo () {
-     DigestPrefsManager *manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
+-    DigestPrefsManager *manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
 -    NSDictionary *info = [manager objectForKey:@"testNotif"];
-+    NSDictionary *info = [manager respondsToSelector:@selector(safeObjectForKey:)] ? [manager safeObjectForKey:@"testNotif"] : [manager objectForKey:@"testNotif"];
-     NSString *bundleIdentifier = info[@"bundleIdentifier"];
-     NSString *title = info[@"title"];
-     NSString *content = info[@"content"];
+-    NSString *bundleIdentifier = info[@"bundleIdentifier"];
+-    NSString *title = info[@"title"];
+-    NSString *content = info[@"content"];
+-    
+-    NCNotificationRequest *request = [%c(NCNotificationRequest) notificationRequestWithSectionId:bundleIdentifier
+-        notificationId:[NSString stringWithFormat:@"debug-notif-req-%@", [NSUUID UUID].UUIDString]
+-        threadId:[NSString stringWithFormat:@"debug-thread-req-%@", [NSUUID UUID].UUIDString]
+-        title:title
+-        message:content
+-        timestamp:[NSDate date]
+-        destinations:[NSSet setWithObjects:@"BulletinDestinationCoverSheet", @"BulletinDestinationBanner", @"BulletinDestinationNotificationCenter", @"BulletinDestinationLockScreen", nil]];
+-    
+-    SBApplication *app = [[%c(SBApplicationController) sharedInstance] applicationWithBundleIdentifier:bundleIdentifier];
+-    if (app) {
+-        [request.content safelySetValue:app.displayName forKey:@"header"];
+-        UIImage *iconImage = [UIImage _applicationIconImageForBundleIdentifier:app.bundleIdentifier format:5 scale:[UIScreen mainScreen].scale];
+-        if (iconImage) {
+-            [request.content safelySetValue:iconImage forKey:@"_icon"];
+-            [request.content safelySetValue:@[iconImage] forKey:@"_icons"];
++    @try {
++        DigestPrefsManager *manager = [NSClassFromString(@"DigestPrefsManager") sharedInstance];
++        NSDictionary *info = [manager respondsToSelector:@selector(safeObjectForKey:)] ? [manager safeObjectForKey:@"testNotif"] : [manager objectForKey:@"testNotif"];
++        if (![info isKindOfClass:[NSDictionary class]]) {
++            info = @{};
++        }
++        NSString *bundleIdentifier = [info[@"bundleIdentifier"] isKindOfClass:[NSString class]] && [info[@"bundleIdentifier"] length] > 0
++            ? info[@"bundleIdentifier"]
++            : @"com.apple.mobilemail";
++        NSString *title = [info[@"title"] isKindOfClass:[NSString class]] && [info[@"title"] length] > 0
++            ? info[@"title"]
++            : @"Test Notification";
++        NSString *content = [info[@"content"] isKindOfClass:[NSString class]] && [info[@"content"] length] > 0
++            ? info[@"content"]
++            : @"We noticed a new sign-in to your Google Account on a Linux device. If this was you, you don't need to do anything.";
++
++        NCNotificationRequest *request = [%c(NCNotificationRequest) notificationRequestWithSectionId:bundleIdentifier
++            notificationId:[NSString stringWithFormat:@"debug-notif-req-%@", [NSUUID UUID].UUIDString]
++            threadId:[NSString stringWithFormat:@"debug-thread-req-%@", [NSUUID UUID].UUIDString]
++            title:title
++            message:content
++            timestamp:[NSDate date]
++            destinations:[NSSet setWithObjects:@"BulletinDestinationCoverSheet", @"BulletinDestinationBanner", @"BulletinDestinationNotificationCenter", @"BulletinDestinationLockScreen", nil]];
++        if (!request) {
++            NSLog(@"[dig3st] Failed to construct debug NCNotificationRequest");
++            return;
++        }
++
++        SBApplication *app = [[%c(SBApplicationController) sharedInstance] applicationWithBundleIdentifier:bundleIdentifier];
++        if (app) {
++            [request.content safelySetValue:app.displayName forKey:@"header"];
++            UIImage *iconImage = [UIImage _applicationIconImageForBundleIdentifier:app.bundleIdentifier format:5 scale:[UIScreen mainScreen].scale];
++            if (iconImage) {
++                [request.content safelySetValue:iconImage forKey:@"_icon"];
++                [request.content safelySetValue:@[iconImage] forKey:@"_icons"];
++            }
++        } else {
++            [request.content safelySetValue:bundleIdentifier forKey:@"header"];
++        }
++
++        [request.content safelySetValue:[NSDate date] forKey:@"_date"];
++        [request.options safelySetValue:@(1) forKey:@"_canPlaySound"];
++        [request.options safelySetValue:@(1) forKey:@"_canTurnOnDisplay"];
++        [request.options safelySetValue:@(1) forKey:@"_alertsWhenLocked"];
++
++        [request safelySetValue:[[%c(NCNotificationSound) alloc] init] forKey:@"_sound"];
++        [request.sound safelySetValue:@(2) forKey:@"_soundType"];
++        [request.sound safelySetValue:[(TLAlertConfiguration *)[%c(TLAlertConfiguration) alloc] initWithType:17] forKey:@"_alertConfiguration"];
++
++        NCNotificationDispatcher *dispatcher = ((SpringBoard *)[UIApplication sharedApplication]).notificationDispatcher.dispatcher;
++        if (dispatcher) {
++            [dispatcher postNotificationWithRequest:request];
++        } else {
++            NSLog(@"[dig3st] NCNotificationDispatcher is nil; cannot post test notification");
+         }
+-    } else {
+-        [request.content safelySetValue:bundleIdentifier forKey:@"header"];
++    } @catch (NSException *e) {
++        NSLog(@"[dig3st] postDebugNotificationWithInfo exception: %@", e);
+     }
+-    
+-    [request.content safelySetValue:[NSDate date] forKey:@"_date"];
+-    [request.options safelySetValue:@(1) forKey:@"_canPlaySound"];
+-    [request.options safelySetValue:@(1) forKey:@"_canTurnOnDisplay"];
+-    [request.options safelySetValue:@(1) forKey:@"_alertsWhenLocked"];
+-    
+-    [request safelySetValue:[[%c(NCNotificationSound) alloc] init] forKey:@"_sound"];
+-    [request.sound safelySetValue:@(2) forKey:@"_soundType"];
+-    [request.sound safelySetValue:[(TLAlertConfiguration *)[%c(TLAlertConfiguration) alloc] initWithType:17] forKey:@"_alertConfiguration"];
+-    NSLog(@"Notiification dispatcher %@", ((SpringBoard *)[UIApplication sharedApplication]));
+-    [((SpringBoard *)[UIApplication sharedApplication]).notificationDispatcher.dispatcher postNotificationWithRequest:request];
+ }
 diff --git a/src/Tweak.x b/src/Tweak.x
-index 3a91698..d90bf08 100644
+index 3a91698..89f2496 100644
 --- a/src/Tweak.x
 +++ b/src/Tweak.x
-@@ -1,21 +1,860 @@
+@@ -1,21 +1,901 @@
  #import <CoreFoundation/CoreFoundation.h>
 +#import <objc/runtime.h>
  #include <substrate.h>
@@ -4143,14 +5211,31 @@ index 3a91698..d90bf08 100644
 +    if (!obj || key.length == 0) return nil;
 +    @try {
 +        id value = [obj valueForKey:key];
++        NSString *str = nil;
 +        if ([value isKindOfClass:[NSString class]]) {
-+            NSString *trimmed = [(NSString *)value stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
++            str = (NSString *)value;
++        } else if ([value isKindOfClass:[NSAttributedString class]]) {
++            str = [(NSAttributedString *)value string];
++        }
++        if (str) {
++            NSString *trimmed = [str stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 +            return trimmed.length > 0 ? trimmed : nil;
 +        }
 +    } @catch (NSException *e) {
 +        return nil;
 +    }
 +    return nil;
++}
++
++static void safeSetNotificationMessage(id contentObj, NSString *message) {
++    if (!contentObj) return;
++    @try {
++        [contentObj setValue:message forKey:@"message"];
++        return;
++    } @catch (NSException *e) {}
++    @try {
++        [contentObj setValue:message forKey:@"_message"];
++    } @catch (NSException *e2) {}
 +}
 +
 +static NSString *resolveAppName(NCNotificationRequest *req) {
@@ -4571,11 +5656,14 @@ index 3a91698..d90bf08 100644
 +            }
 +        }
 +    }
-+    if (clearCachesFirst && activeSectionLists) {
++    if (activeSectionLists && (clearCachesFirst || !reloadOffscreenOnly)) {
 +        for (NCNotificationStructuredSectionList *sl in [activeSectionLists allObjects]) {
 +            if (![sl respondsToSelector:@selector(containsNotificationRequest:)] || ![sl containsNotificationRequest:targetReq]) continue;
 +            if ([sl respondsToSelector:@selector(notificationListCache)] && sl.notificationListCache) {
 +                [sl.notificationListCache clearCachedHeightsForNotificationRequest:targetReq];
++            }
++            if (!reloadOffscreenOnly && [sl respondsToSelector:@selector(reloadNotificationRequest:)]) {
++                [sl reloadNotificationRequest:targetReq];
 +            }
 +            NCNotificationListView *slv = [sl respondsToSelector:@selector(sectionListView)] ? sl.sectionListView : nil;
 +            if (slv) {
@@ -4726,9 +5814,16 @@ index 3a91698..d90bf08 100644
 +        if (!vc.notificationRequest.dig3st) {
 +            [DigestBannerAnimator stopForLabel:messageEl];
 +            if ([messageEl isKindOfClass:[UILabel class]]) {
-+                ((UILabel *)messageEl).text = msgText;
++                UILabel *lbl = (UILabel *)messageEl;
++                lbl.attributedText = nil;
++                lbl.text = msgText;
 +            } else if ([messageEl isKindOfClass:[UITextView class]]) {
-+                ((UITextView *)messageEl).text = msgText;
++                UITextView *tv = (UITextView *)messageEl;
++                tv.attributedText = nil;
++                tv.text = msgText;
++            }
++            if ([vc respondsToSelector:@selector(_updateWithProvidedStaticContent)]) {
++                [vc _updateWithProvidedStaticContent];
 +            }
 +            [messageEl invalidateIntrinsicContentSize];
 +            [seamlessContentView setNeedsLayout];
@@ -4811,7 +5906,12 @@ index 3a91698..d90bf08 100644
 +        } @catch (NSException *e) {}
 +
 +        if ([DigestBannerAnimator hasActiveAnimationForLabel:messageEl]) {
-+            [DigestBannerAnimator refreshNowForLabel:messageEl];
++            NSString *animTarget = [DigestBannerAnimator currentTargetSummaryForLabel:messageEl];
++            if ([animTarget isEqualToString:msgText]) {
++                [DigestBannerAnimator refreshNowForLabel:messageEl];
++                return;
++            }
++            renderControllerBanner(vc);
 +            return;
 +        }
 +        NSString *origText = safeKVCString(vc.notificationRequest, @"actualMessage");
@@ -4906,7 +6006,7 @@ index 3a91698..d90bf08 100644
 +    contextRecordShort = recShort ? [recShort boolValue] : YES;
 +
 +    id minCharsObj = prefs[@"minChars"];
-+    cachedMinChars = minCharsObj ? [minCharsObj integerValue] : 15;
++    cachedMinChars = minCharsObj ? MAX(0, [minCharsObj integerValue]) : 15;
 +
 +    NSString *badge = prefs[@"bannerBadgeStyle"];
 +    bannerBadgeStyle = ([badge isKindOfClass:[NSString class]] && badge.length > 0) ? [badge copy] : @"arrow";
@@ -4943,10 +6043,19 @@ index 3a91698..d90bf08 100644
 -    //for example unlock notification for usb connection, etc
 -    //the bundle identifier for that is com.apple.springboard.alert.SBUserNotificationAlert
 -    //so skip those
++    if (sectionIdentifier.length == 0) return NO;
++    static NSSet<NSString *> *appleDefaultAllowed = nil;
++    static dispatch_once_t onceToken;
++    dispatch_once(&onceToken, ^{
++        appleDefaultAllowed = [NSSet setWithObjects:@"com.apple.MobileSMS", @"com.apple.news", @"com.apple.mobilemail", nil];
++    });
++    if ([appleDefaultAllowed containsObject:sectionIdentifier]) {
++        return YES;
++    }
      if ([sectionIdentifier hasPrefix:@"com.apple"]) {
          return NO;
      }
-@@ -23,106 +862,367 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
+@@ -23,189 +903,508 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
  }
  
  
@@ -5091,6 +6200,9 @@ index 3a91698..d90bf08 100644
 +    if (activeControllers) {
 +        [activeControllers addObject:self];
 +    }
++    if (self.notificationRequest.dig3st) {
++        renderControllerBanner(self);
++    }
 +}
 +-(void)viewDidDisappear:(BOOL)animated {
 +    %orig;
@@ -5141,10 +6253,12 @@ index 3a91698..d90bf08 100644
 +    }
 +    if (self.notificationRequest.dig3st) {
 +        renderControllerBanner(self);
-+    }
-+}
-+%end
-+
+     }
+ }
+ %end
+ 
+-%hook NCNotificationDispatcher
+--(void)postNotificationWithRequest:(NCNotificationRequest*)req {
 +%hook NCExpandedPlatterViewController
 +-(void)viewDidLoad {
 +    %orig;
@@ -5163,8 +6277,8 @@ index 3a91698..d90bf08 100644
 +    %orig;
 +    if (activeExpandedControllers) {
 +        [activeExpandedControllers removeObject:self];
-     }
- }
++    }
++}
 +-(void)_updateWithProvidedStaticContent {
 +    %orig;
 +    renderExpandedController(self);
@@ -5180,7 +6294,7 @@ index 3a91698..d90bf08 100644
 +
 +%hook NCNotificationPresentableViewController
 +-(BOOL)bn_shouldAnimateViewTransitionToSize:(CGSize)size {
-+    @try {
+     @try {
 +        NCNotificationViewController *nvc = self.notificationViewController;
 +        if (nvc.notificationRequest.dig3st) {
 +            return YES;
@@ -5188,28 +6302,53 @@ index 3a91698..d90bf08 100644
 +    } @catch (NSException *e) {}
 +    return %orig;
 +}
- %end
- 
- %hook NCNotificationDispatcher
- -(void)postNotificationWithRequest:(NCNotificationRequest*)req {
-     @try {
++%end
++
++static void digestProcessNotificationRequest(NCNotificationRequest *req, BOOL isModify, void (^deliverBlock)(NCNotificationRequest *r)) {
++    if (!req) {
++        if (deliverBlock) deliverBlock(req);
++        return;
++    }
++    @try {
 +        if (!tweakEnabled || (pauseInLowPowerMode && lowPowerActive)) {
 +            [req setValue:@(NO) forKey:@"dig3st"];
-+            return %orig;
++            [req setValue:@(NO) forKey:@"dig3stStreaming"];
++            if (deliverBlock) deliverBlock(req);
++            return;
 +        }
          DigestLogger *logger = [NSClassFromString(@"DigestLogger") sharedInstance];
 -        [logger log:[NSString stringWithFormat:@"Notification received bundle identifier is %@",req.sectionIdentifier] level:LOGLEVEL_VERBOSE];
 -        NSString *textContent = [req.content valueForKey:@"message"];
 -        NSInteger minChars = [[prefsManager objectForKey:@"minChars"] integerValue];
-+        if ([logger shouldLog:LOGLEVEL_VERBOSE]) {
-+            [logger log:[NSString stringWithFormat:@"Notification received bundle identifier is %@", req.sectionIdentifier] level:LOGLEVEL_VERBOSE];
-+        }
 +        NSString *textContent = safeKVCString(req.content, @"message");
-+        NSString *bundleId = req.sectionIdentifier ?: @"";
-+        id _enabled = (bundleId.length > 0 && cachedPrefsSnapshot) ? cachedPrefsSnapshot[bundleId] : (bundleId.length > 0 ? [prefsManager safeObjectForKey:bundleId] : nil);
-+        BOOL enabled = _enabled != nil ? [_enabled boolValue] : isOkToSummarize(bundleId);
++        if (isModify) {
++            BOOL alreadyDigested = NO;
++            @try { alreadyDigested = req.dig3st; } @catch (NSException *e) {}
++            if (alreadyDigested) {
++                NSString *prevOrig = safeKVCString(req, @"actualMessage");
++                if (!textContent ||
++                    [textContent isEqualToString:@"Đang tóm tắt…"] ||
++                    (prevOrig && [textContent isEqualToString:prevOrig])) {
++                    if (deliverBlock) deliverBlock(req);
++                    return;
++                }
++            }
++            [req setValue:@(NO) forKey:@"dig3st"];
++            [req setValue:@(NO) forKey:@"dig3stStreaming"];
++            [req setValue:nil forKey:@"dig3stStreamId"];
++            [req setValue:nil forKey:@"actualMessage"];
++        }
  
 -        BOOL contentTooShort = textContent ? textContent.length < minChars  : YES;
++        if ([logger shouldLog:LOGLEVEL_VERBOSE]) {
++            [logger log:[NSString stringWithFormat:@"Notification received (%@) bundle identifier is %@", isModify ? @"modify" : @"post", req.sectionIdentifier] level:LOGLEVEL_VERBOSE];
++        }
++
++        NSDictionary *prefs = cachedPrefsSnapshot;
++        NSString *bundleId = req.sectionIdentifier ?: @"";
++        id _enabled = (bundleId.length > 0 && prefs) ? prefs[bundleId] : (bundleId.length > 0 ? [prefsManager safeObjectForKey:bundleId] : nil);
++        BOOL enabled = _enabled != nil ? [_enabled boolValue] : isOkToSummarize(bundleId);
++
 +        NSNumber *appCtxOverride = resolveAppTriState(@"appCtx", bundleId);
 +        BOOL effectiveCtxEnabled = appCtxOverride ? [appCtxOverride boolValue] : contextBufferEnabled;
 +
@@ -5218,7 +6357,7 @@ index 3a91698..d90bf08 100644
 +        BOOL effectiveStreamEnabled = appStreamOverride ? [appStreamOverride boolValue] : streamingEnabled;
 +
 +        NSString *promptKey = bundleId.length > 0 ? [NSString stringWithFormat:@"appPrompt_%@", bundleId] : nil;
-+        NSString *appCustomPrompt = promptKey ? (cachedPrefsSnapshot ? cachedPrefsSnapshot[promptKey] : [prefsManager safeObjectForKey:promptKey]) : nil;
++        NSString *appCustomPrompt = promptKey ? (prefs ? prefs[promptKey] : [prefsManager safeObjectForKey:promptKey]) : nil;
 +        if (![appCustomPrompt isKindOfClass:[NSString class]] || appCustomPrompt.length == 0) {
 +            appCustomPrompt = nil;
 +        }
@@ -5241,7 +6380,8 @@ index 3a91698..d90bf08 100644
 +            }
              [req setValue:@(NO) forKey:@"dig3st"];
 -            return %orig;        
-+            return %orig;
++            if (deliverBlock) deliverBlock(req);
++            return;
          }
  
 -        //checks if user set anything for this bundle identifier
@@ -5287,10 +6427,11 @@ index 3a91698..d90bf08 100644
 -                    %orig(req);
 -                } else {
 -                    [req setValue:@(NO) forKey:@"dig3st"];
+-                    %orig(req);
 +                    [req setValue:@(NO) forKey:@"dig3stStreaming"];
 +                    [req setValue:textContent forKey:@"actualMessage"];
-+                    [req.content setValue:cachedSummary forKey:@"message"];
-                     %orig(req);
++                    safeSetNotificationMessage(req.content, cachedSummary);
++                    if (deliverBlock) deliverBlock(req);
 +                    return;
                  }
 -            }];
@@ -5307,8 +6448,8 @@ index 3a91698..d90bf08 100644
 +                [req setValue:@(YES) forKey:@"dig3st"];
 +                [req setValue:@(YES) forKey:@"dig3stStreaming"];
 +                [req setValue:streamId forKey:@"dig3stStreamId"];
-+                [req.content setValue:@"Đang tóm tắt…" forKey:@"message"];
-+                %orig(req);
++                safeSetNotificationMessage(req.content, @"Đang tóm tắt…");
++                if (deliverBlock) deliverBlock(req);
 +
 +                [openai summarize:query
 +                    autoTranslate:appTransOverride
@@ -5319,27 +6460,31 @@ index 3a91698..d90bf08 100644
 +                    NSString *curId = nil;
 +                    @try { curId = [req valueForKey:@"dig3stStreamId"]; } @catch (NSException *e) {}
 +                    if (curId && ![curId isEqualToString:streamId]) return;
-+                    [req.content setValue:partialText forKey:@"message"];
++                    safeSetNotificationMessage(req.content, partialText);
 +                    updateVisibleControllersForRequest(req);
 +                }
 +                       completion:^(NSString *summary) {
++                    NSString *curId = nil;
++                    @try { curId = [req valueForKey:@"dig3stStreamId"]; } @catch (NSException *e) {}
++                    if (curId && ![curId isEqualToString:streamId]) return;
++
 +                    [req setValue:@(NO) forKey:@"dig3stStreaming"];
 +                    if (summary.length > 0) {
 +                        if ([logger shouldLog:LOGLEVEL_INFO]) {
 +                            [logger log:[NSString stringWithFormat:@"Stream Summary: %@", summary] level:LOGLEVEL_INFO];
 +                        }
 +                        [summaryCache setObject:@{@"summary": summary, @"ts": @([NSDate timeIntervalSinceReferenceDate])} forKey:cacheKey];
-+                        [req.content setValue:summary forKey:@"message"];
++                        safeSetNotificationMessage(req.content, summary);
 +                    } else {
 +                        [req setValue:@(NO) forKey:@"dig3st"];
-+                        [req.content setValue:textContent forKey:@"message"];
++                        safeSetNotificationMessage(req.content, textContent);
 +                    }
 +                    clearCachesForRequest(req, nil);
-+                    updateVisibleControllersForRequest(req);
-+                    invalidateGroupListsForRequest(req, YES, YES);
++                    BOOL updatedVisible = updateVisibleControllersForRequest(req);
++                    invalidateGroupListsForRequest(req, updatedVisible ? YES : NO, YES);
 +                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-+                        updateVisibleControllersForRequest(req);
-+                        invalidateGroupListsForRequest(req, YES, NO);
++                        BOOL updatedLater = updateVisibleControllersForRequest(req);
++                        invalidateGroupListsForRequest(req, updatedLater ? YES : NO, NO);
 +                    });
 +                }];
 +            } else {
@@ -5357,25 +6502,42 @@ index 3a91698..d90bf08 100644
 +                        [req setValue:@(YES) forKey:@"dig3st"];
 +                        [req setValue:@(NO) forKey:@"dig3stStreaming"];
 +                        [req setValue:textContent forKey:@"actualMessage"];
-+                        [req.content setValue:summary forKey:@"message"];
-+                        %orig(req);
++                        safeSetNotificationMessage(req.content, summary);
 +                    } else {
 +                        [req setValue:@(NO) forKey:@"dig3st"];
-+                        %orig(req);
 +                    }
++                    if (deliverBlock) deliverBlock(req);
 +                }];
 +            }
          } else {
-             [logger log:@"Skipping summarization" level:LOGLEVEL_INFO];
+-            [logger log:@"Skipping summarization" level:LOGLEVEL_INFO];
++            if ([logger shouldLog:LOGLEVEL_INFO]) {
++                [logger log:[NSString stringWithFormat:@"Skipping summarization (enabled=%d, host=%@, model=%@)", enabled, openai.configuration.host, openai.configuration.model] level:LOGLEVEL_INFO];
++            }
              [req setValue:@(NO) forKey:@"dig3st"];
-             %orig(req);
+-            %orig(req);
++            if (deliverBlock) deliverBlock(req);
          }
 -    } @catch (NSException *e) { 
 +    } @catch (NSException *e) {
          [req setValue:@(NO) forKey:@"dig3st"];
          NSLog(@"exception while fetching ai response : %@", e);
-         %orig;
-@@ -131,81 +1231,93 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
+-        %orig;
++        if (deliverBlock) deliverBlock(req);
+     }
+ }
++
++%hook NCNotificationDispatcher
++-(void)postNotificationWithRequest:(NCNotificationRequest*)req {
++    digestProcessNotificationRequest(req, NO, ^(NCNotificationRequest *r) {
++        %orig(r);
++    });
++}
++-(void)modifyNotificationRequest:(NCNotificationRequest*)req {
++    digestProcessNotificationRequest(req, YES, ^(NCNotificationRequest *r) {
++        %orig(r);
++    });
++}
  %end
  
  %ctor {
@@ -5396,7 +6558,7 @@ index 3a91698..d90bf08 100644
 -        BOOL apiChecks = [[prefsManager objectForKey:@"apiChecks"] boolValue];
 -        BOOL sanityChecks = [[prefsManager objectForKey:@"sanityChecks"] boolValue];
 +        refreshRuntimePrefs();
-+        prefsUpdateObserver = [[NSNotificationCenter defaultCenter] addObserverForName:@"com.uncore.dig3st/update" object:nil queue:nil usingBlock:^(NSNotification *note) {
++        prefsUpdateObserver = [[NSNotificationCenter defaultCenter] addObserverForName:@"com.uncore.dig3st/update" object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
 +            refreshRuntimePrefs();
 +        }];
 +        powerStateObserver = [[NSNotificationCenter defaultCenter] addObserverForName:NSProcessInfoPowerStateDidChangeNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
@@ -5435,8 +6597,7 @@ index 3a91698..d90bf08 100644
 +        NSString *uuid = cachedPrefsSnapshot[@"activeEndpoint"];
 +        NSArray *endpoints = cachedPrefsSnapshot[@"endpoints"];
 +        __block NSDictionary *endpoint;
- 
--                [logger log:[NSString stringWithFormat:@"Chosen endpoint is %@",endpoint] level:LOGLEVEL_INFO];
++
 +        if ([uuid isKindOfClass:[NSString class]] && uuid.length > 0) {
 +            [endpoints enumerateObjectsUsingBlock:^(NSDictionary *p, NSUInteger idx, BOOL *stop) {
 +                if ([p[@"uuid"] isEqualToString:uuid]) {
@@ -5446,9 +6607,10 @@ index 3a91698..d90bf08 100644
 +            }];
 +        }
  
+-                [logger log:[NSString stringWithFormat:@"Chosen endpoint is %@",endpoint] level:LOGLEVEL_INFO];
 +        if (tweakEnabled && sanityChecks) {
 +            [logger log:@"Running Sanity Checks" level:LOGLEVEL_INFO];
-+
+ 
 +            if (uuid == nil || [uuid isEqualToString:@""]) {
 +                [logger log:@"UUID was empty please try resetting your settings" level:LOGLEVEL_WARNING];
 +                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(20 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
@@ -5471,7 +6633,9 @@ index 3a91698..d90bf08 100644
 -            Config *config = [[Config alloc] initWithEndpoint:endpoint timeoutInterval:@10];
 -            [logger log:@"Config has been created" level:LOGLEVEL_VERBOSE];
 +        }
-+
+ 
+-            openai = [[OpenAI alloc] initWithConfiguration:config];
+-            [logger log:@"Openai instance has been created" level:LOGLEVEL_VERBOSE];
 +        NSInteger timeout = [cachedPrefsSnapshot[@"timeout"] integerValue];
 +        if (timeout <= 0) {
 +            timeout = 30;
@@ -5479,24 +6643,10 @@ index 3a91698..d90bf08 100644
 +        Config *config = [[Config alloc] initWithEndpoint:endpoint timeoutInterval:@(timeout)];
 +        [logger log:@"Config has been created" level:LOGLEVEL_VERBOSE];
  
--            openai = [[OpenAI alloc] initWithConfiguration:config];
--            [logger log:@"Openai instance has been created" level:LOGLEVEL_VERBOSE];
-+        openai = [[OpenAI alloc] initWithConfiguration:config];
-+        [logger log:@"Openai instance has been created" level:LOGLEVEL_VERBOSE];
- 
 -            NSBundle *bundle = [[NSBundle alloc] initWithPath:ROOT_PATH_NS(@"/Library/PreferenceBundles/dig3st.bundle")];
 -            NSString *imgFile = [bundle pathForResource:@"arrow" ofType:@"png"];
-+        if (tweakEnabled && apiChecks) {
-+            [logger log:@"Running API Check" level:LOGLEVEL_INFO];
-+            [openai check:^(BOOL success) {
-+                if (!success) {
-+                    [logger log:@"API request failed disable Check Api in the settings to skip this check and then respring" level:LOGLEVEL_WARNING];
-+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(20 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-+                        Alert(@"API Error", @"API request failed this means the current endpoint might be invalid,disable Check Api in the settings to skip this check and then respring",nil);
-+                    });
-+                }
-+            }];
-+        }
++        openai = [[OpenAI alloc] initWithConfiguration:config];
++        [logger log:@"Openai instance has been created" level:LOGLEVEL_VERBOSE];
  
 -            if (apiChecks) {
 -                [logger log:@"Running API Check" level:LOGLEVEL_INFO];
@@ -5516,11 +6666,23 @@ index 3a91698..d90bf08 100644
 -            %init;
 -        }else {
 -            [logger log:@"End of ctor block, not running (tweak is disabled)" level:LOGLEVEL_WARNING];
++        if (tweakEnabled && apiChecks) {
++            [logger log:@"Running API Check" level:LOGLEVEL_INFO];
++            [openai check:^(BOOL success) {
++                if (!success) {
++                    [logger log:@"API request failed disable Check Api in the settings to skip this check and then respring" level:LOGLEVEL_WARNING];
++                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(20 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
++                        Alert(@"API Error", @"API request failed this means the current endpoint might be invalid,disable Check Api in the settings to skip this check and then respring",nil);
++                    });
++                }
++            }];
+         }
+-    }@catch(NSException *e) {
++
 +        %init;
 +        if ([logger shouldLog:LOGLEVEL_VERBOSE]) {
 +            [logger log:[NSString stringWithFormat:@"End of ctor block (enabled=%@)", tweakEnabled ? @"YES" : @"NO"] level:LOGLEVEL_VERBOSE];
-         }
--    }@catch(NSException *e) {
++        }
 +    } @catch(NSException *e) {
          NSLog(@"error: %@", e);
      }
