@@ -1102,13 +1102,16 @@ index 0000000..bded49d
 +@end
 diff --git a/preferences/DigestContextController.m b/preferences/DigestContextController.m
 new file mode 100644
-index 0000000..d8bc058
+index 0000000..08d3101
 --- /dev/null
 +++ b/preferences/DigestContextController.m
-@@ -0,0 +1,36 @@
+@@ -0,0 +1,39 @@
 +#import "../headers/HeadersPreferences.h"
 +
-+@implementation DigestContextController : PSListController
++@interface DigestContextController : PSListController
++@end
++
++@implementation DigestContextController
 +
 +- (NSArray *)specifiers {
 +	if (!_specifiers) {
