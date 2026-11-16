@@ -4,6 +4,15 @@ Thiết kế: [docs/tabspace-design.md](docs/tabspace-design.md). Bản thử ng
 
 Đóng gói: `cd extension && zip -r ../tabspace-extension.zip .`.
 
+## Tải bản đóng gói
+
+Bản release: <https://github.com/Hthancder/ArenaAIWorkspace-1/releases/tag/v0.129.0> — mô tả những gì bản này làm được và **không** hứa.
+
+Tệp ZIP để nạp vào Chrome (chính là `tabspace-extension.zip` ở thư mục gốc repo, manifest đặt ở ngay trong nên giải nén là dùng được):
+
+- <https://github.com/Hthancder/ArenaAIWorkspace-1/raw/v0.129.0/tabspace-extension.zip> — bản đóng dấu 0.129.0, không đổi nữa;
+- <https://github.com/Hthancder/ArenaAIWorkspace-1/raw/arena/f90fd78f-arenaaiworkspace-1/tabspace-extension.zip> — cùng tệp trên nhưng luôn theo nhánh đang làm việc.
+
 ### Âm báo thử nghiệm (0.84)
 Trong **Cài đặt & sao lưu → Âm báo**, có thể bật riêng âm lời nhắc preset mới, kết quả đóng tự động thành công hoặc bị chặn/không rõ, chọn hai âm có sẵn hoặc file âm cục bộ (tối đa 1 MB, 5 giây), chỉnh âm lượng và nghe thử. Mặc định tắt. Chỉ cố phát khi trang quản lý đang mở và chứng kiến lượt chuyển trạng thái; không mở trang phát âm, không phát bù khi trang đóng hoặc âm bị bỏ qua. Chrome có thể chặn phát tự động ngay cả khi nghe thử được. Giờ yên lặng, tùy chọn toàn màn hình và tạm dừng tự động hóa có hiệu lực; âm bị bỏ qua, không phát dồn. Âm tùy chỉnh và thiết lập âm lưu cục bộ; chỉ đưa vào sao lưu nếu chọn khi xuất, và có thể xóa trong cài đặt.
 

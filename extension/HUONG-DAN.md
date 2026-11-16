@@ -1,5 +1,9 @@
 # Tabspace 0.129 — bản thử nghiệm
 
+## Tải về
+
+Bản ZIP đã đóng gói cho 0.129.0: <https://github.com/Hthancder/ArenaAIWorkspace-1/raw/v0.129.0/tabspace-extension.zip> (trang release: <https://github.com/Hthancder/ArenaAIWorkspace-1/releases/tag/v0.129.0>). Giải nén ra thư mục cố định rồi làm theo các bước dưới đây. Nếu bạn lấy mã từ repo, tệp cần nạp là thư mục `extension/`.
+
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
 2. Truy cập `chrome://extensions`, bật **Chế độ dành cho nhà phát triển**.
