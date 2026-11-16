@@ -9,7 +9,7 @@ const row=(id,extra={})=>({id,windowId:1,processId:10,sharedTabs:1,at:now,values
 const ctx={
  $:()=>area,Date:{now:()=>now},esc:value=>String(value).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])),
  TabHealth,DuplicateTools,AutoDiscard:A,oldTabDays:7,groups:[],tabs:[],
- autoDiscardContext:()=>({measurable:true}),autoDiscardConfig:config,autoDiscardRun:null,
+ autoDiscardContext:()=>({measurable:true}),autoDiscardConfig:config,autoDiscardRun:null,autoDiscardAction:null,
 };
 vm.runInNewContext(src.slice(start,end),ctx);
 const render=()=>{ctx.renderHealth();return area.innerHTML};
@@ -60,6 +60,18 @@ const render=()=>{ctx.renderHealth();return area.innerHTML};
  assert.match(render(),/không có danh sách nào để xem/);
  assert.doesNotMatch(render(),/Được đề xuất nghỉ \(\d+\)/,'an unusable source never produces a list');
  ctx.autoDiscardContext=()=>({measurable:true});
+ // A finished automatic run is reported on the same page, with the settings header's own words.
+ ctx.autoDiscardAction={at:now,counts:{requested:2,discarded:1,skipped:0,unconfirmed:1,protected:0},status:'partial',results:[{id:1,windowId:1,status:'discarded'},{id:2,windowId:1,url:'https://shop.example/2',status:'unconfirmed'}]};
+ html=render();
+ assert.match(html,/Lượt tự động gần nhất/);
+ assert.match(html,/Lượt tự động vừa chạy: nghỉ 1 tab · 1 tab không xác nhận được\./);
+ assert.match(html,/Giỏ hàng<\/b><div class="rowurl">đã nghỉ · cửa sổ 1/,'the tab that is still open keeps its title');
+ assert.ok(html.includes('<b>https://shop.example/2</b><div class="rowurl">không xác nhận được'),'a tab nobody could confirm is named, not hidden');
+ assert.match(html,/Kiểm tra danh sách tab trước khi tin vào số liệu này/);
+ ctx.autoDiscardAction={at:now,counts:{requested:1,discarded:1,skipped:0,unconfirmed:0,protected:0},status:'complete',results:[{id:1,windowId:1,status:'discarded'}]};
+ assert.doesNotMatch(render(),/Kiểm tra danh sách tab/,'a clean run is not dressed up as a warning');
+ assert.doesNotMatch(render(),/Hoàn tác|hoàn tác|undo/,'a discarded tab is never sold as undoable');
+ ctx.autoDiscardAction=null;
  // The other kinds are pointers to views that already exist, with their own counts.
  ctx.autoDiscardConfig={...config,mode:'suggest'};
  ctx.tabs=[{id:1,windowId:1,url:'https://example.com/a',title:'A',lastAccessed:now-9*86400000},{id:2,windowId:2,url:'https://example.com/a',title:'B',lastAccessed:now-2*86400000},{id:3,windowId:1,url:'https://example.com/b',title:'C'}];

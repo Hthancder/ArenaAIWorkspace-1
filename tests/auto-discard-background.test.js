@@ -1,8 +1,9 @@
-const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),OpenGrace=require('../extension/open-grace.js'),Protection=require('../extension/protection.js'),A=require('../extension/auto-discard.js');let onAlarm,onUpdated,onRemoved,runCalls=[],forgetCalls=[],order=[],failNext=false,listenerAdds=0,alarmCreates=0,timers=0;
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),OpenGrace=require('../extension/open-grace.js'),Protection=require('../extension/protection.js'),A=require('../extension/auto-discard.js');let onAlarm,onUpdated,onRemoved,runCalls=[],applyCalls=[],forgetCalls=[],order=[],runReturns=null,applyFails=false,failNext=false,listenerAdds=0,alarmCreates=0,timers=0;
 const add=f=>async value=>{listenerAdds++;f(value)};
 const chrome={runtime:{onInstalled:{addListener(){}},onStartup:{addListener(){}},getURL:()=>'chrome-extension://x/'},alarms:{get:async()=>({name:'tick'}),create:async()=>{alarmCreates++},onAlarm:{addListener:add(f=>onAlarm=f)}},commands:{onCommand:{addListener(){}}},permissions:{onAdded:{addListener(){}}},tabs:{query:async()=>[],onCreated:{addListener:()=>{}},onRemoved:{addListener:add(f=>onRemoved=f)},onUpdated:{addListener:add(f=>onUpdated=f)}},storage:{local:{get:async()=>({}),set:async()=>{}},session:{get:async()=>({}),set:async()=>{},remove:async()=>{}}}};
-const AutoDiscard={run:async(api,now,deps)=>{order.push(failNext?'run-fail':'run');runCalls.push({api,now,deps});if(failNext)throw Error('storage unavailable')},forget:async(api,ids)=>{forgetCalls.push(ids);return {ok:true,removed:ids.length}}};
-const ctx={chrome,importScripts(...files){order.push(...files)},console,Date,setTimeout(){timers++},setInterval(){timers++},OpenGrace,Protection,ReminderTools:{alarmName:'tick',tick:()=>({changed:false,state:{}}),isQuiet:()=>true,deferFullscreen:async()=>true},AutoSnapshot:{tick:async()=>{}},MutationLock:{run:async work=>work()},AutomationPreview:{},PresetTools:{},AutoDiscard,ScheduledRehearsal:{tick:async()=>{order.push('rehearsal')}}};
+const DiscardTools={request:async()=>({status:'discarded'})};
+const AutoDiscard={run:async(api,now,deps)=>{order.push(failNext?'run-fail':'run');runCalls.push({api,now,deps});if(failNext)throw Error('storage unavailable');return runReturns},apply:async(api,result,now,deps)=>{applyCalls.push({api,result,now,deps});if(applyFails)throw Error('tabs.discard unavailable')},forget:async(api,ids)=>{forgetCalls.push(ids);return {ok:true,removed:ids.length}}};
+const ctx={chrome,importScripts(...files){order.push(...files)},console,Date,DiscardTools,setTimeout(){timers++},setInterval(){timers++},OpenGrace,Protection,ReminderTools:{alarmName:'tick',tick:()=>({changed:false,state:{}}),isQuiet:()=>true,deferFullscreen:async()=>true},AutoSnapshot:{tick:async()=>{}},MutationLock:{run:async work=>work()},AutomationPreview:{},PresetTools:{},AutoDiscard,ScheduledRehearsal:{tick:async()=>{order.push('rehearsal')}}};
 vm.runInNewContext(fs.readFileSync('extension/background.js','utf8'),ctx);
 const flush=async()=>{for(let i=0;i<8;i++)await new Promise(r=>setImmediate(r))};
 const listenersAfterLoad=listenerAdds;
@@ -36,6 +37,22 @@ function harness(everyMinutes){
  failNext=true;const errors=[];const error=console.error;console.error=(...a)=>errors.push(a[0]?.message||String(a[0]));
  onAlarm({name:'tick',scheduledTime:Date.now()});await flush();await flush();console.error=error;
  assert.deepEqual([runCalls.length,order.slice(-2),errors.length],[2,['run-fail','rehearsal'],1]);
+ // A tick acts only on a policy plan, and only through the discard tool the dashboard already uses.
+ failNext=false;
+ runReturns=null;
+ onAlarm({name:'tick',scheduledTime:Date.now()});await flush();
+ assert.equal(applyCalls.length,0,'a run that measured nothing authorises nothing');
+ runReturns={status:'measured',action:null};
+ onAlarm({name:'tick',scheduledTime:Date.now()});await flush();
+ assert.equal(applyCalls.length,0,'the counting plan is never a licence to act');
+ runReturns={status:'measured',action:{chosen:[{id:1,tab:{id:1}}]}};
+ onAlarm({name:'tick',scheduledTime:Date.now()});await flush();
+ assert.deepEqual([applyCalls.length,applyCalls[0].api,applyCalls[0].result,applyCalls[0].deps.discard,applyCalls[0].deps.protection],[1,chrome,runReturns,DiscardTools,Protection],'the worker hands over the plan and the shared tools, nothing else');
+ assert.ok(Number.isFinite(applyCalls[0].now),'and a clock the module can compare the samples against');
+ applyFails=true;const applied=applyCalls.length,errorCount=errors.length,realError=console.error;
+ console.error=(...a)=>errors.push(a[0]?.message||String(a[0]));
+ onAlarm({name:'tick',scheduledTime:Date.now()});await flush();console.error=realError;applyFails=false;
+ assert.deepEqual([applyCalls.length>applied,errors.length-errorCount,errors.at(-1),order.slice(-2)],[true,1,'Automatic discard run failed',['run','rehearsal']],'an action failure is admitted once and cannot starve the rest of the tick');
  // Only a real navigation drops the sample; other updates keep the streak.
  onUpdated(3,{status:'complete'});onUpdated(3,{title:'New title'});await flush();
  assert.deepEqual(forgetCalls.map(ids=>[...ids]),[]);

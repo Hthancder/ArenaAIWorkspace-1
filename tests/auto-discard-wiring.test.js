@@ -8,9 +8,12 @@ assert.ok(/importScripts\([^)]*'auto-discard\.js'/.test(background),'the service
 assert.ok(![...(manifest.permissions||[]),...(manifest.optional_permissions||[])].includes('processes'),'processes permission stays unrequested');
 assert.ok(![...(manifest.permissions||[]),...(manifest.optional_permissions||[])].includes('system.memory'),'system.memory permission stays unrequested');
 
-// The background run only measures: no discard writer and no second sleep path.
-assert.match(background,/try\{if\(typeof AutoDiscard!=='undefined'\)await AutoDiscard\.run\(chrome,Date\.now\(\),\{grace:OpenGrace,protection:Protection,memory:chrome\.system\?\.memory\}\)\}catch\(e\)\{console\.error\('Resource measurement tick failed',e\)\}/);
-assert.doesNotMatch(background,/tabs\.discard|DiscardTools/);
+// The worker measures, then hands any automatic plan to the module; it keeps no discard call of its own.
+assert.match(background,/const measured=await AutoDiscard\.run\(chrome,Date\.now\(\),\{grace:OpenGrace,protection:Protection,memory:chrome\.system\?\.memory\}\)/);
+assert.match(background,/if\(measured\?\.status==='measured'&&measured\.action\)await AutoDiscard\.apply\(chrome,measured,Date\.now\(\),\{discard:DiscardTools,protection:Protection\}\)/);
+assert.match(background,/catch\(e\)\{console\.error\('Automatic discard run failed',e\)\}/,'an action failure is logged, not replayed silently every minute');
+assert.match(background,/importScripts\([^)]*'discard\.js','auto-discard\.js'/,'the shared discard tool is loaded for the worker too');
+assert.doesNotMatch(background,/chrome\.tabs\.discard|tabs\.discard\(|tabs\.remove\(/,'the worker never discards or closes a tab by itself');
 // A navigation drops the sample of that tab instead of charging the new page with the old numbers.
 assert.match(background,/chrome\.tabs\?\.onUpdated\?\.addListener\(\(id,changeInfo\)=>\{if\(typeof AutoDiscard!=='undefined'&&Number\.isInteger\(id\)&&typeof changeInfo\?\.url==='string'\)void AutoDiscard\.forget\(chrome,\[id\]\)\.catch\(\(\)=>\{\}\)\}\)/);
 
@@ -24,7 +27,7 @@ assert.doesNotMatch(opts,/storage\.session|runKey|overCount/,'a backup never car
 
 // 15.3/15.7: the block schedules nothing on its own, and the header stays usable without a mouse.
 assert.doesNotMatch(mod,/alarms\.|setTimeout|setInterval|tabs\.discard|\.create\(|removeAlarm/,'the module waits for the shared alarm and never touches a tab');
-assert.equal((background.match(/AutoDiscard\./g)||[]).length,2,'the service worker uses the module in exactly two places');
+assert.equal((background.match(/AutoDiscard\./g)||[]).length,3,'the service worker uses the module in exactly three places: run, apply, forget');
 assert.match(css,/\.auto-discard-head\{display:flex;align-items:center;gap:12px;flex-wrap:wrap/);
 assert.match(css,/\.auto-discard-head:focus-visible\{outline:3px solid/);
 assert.match(css,/@media\(max-width:600px\)\{\.auto-discard-head\{padding:14px 16px\}\.auto-discard-body\{padding:0 16px 16px\}\.auto-discard-head em\{margin-left:auto\}\}/);
@@ -58,8 +61,11 @@ assert.doesNotMatch(mod,/storage\.local\.set\(\{\[runKey\]/,'a measurement never
 // The setting and its result are saved through the shared lock.
 assert.match(dash,/changes\.autoDiscardConfig\|\|changes\.autoDiscardRun\|\|/);
 assert.ok(dash.includes('${autoDiscardBlock()}<div class="card settingscard"><h2>Thông báo trên website</h2>'),'the block sits inside the settings view');
-assert.match(dash,/async function saveAutoDiscard\(\)\{[\s\S]{0,600}if\(autoDiscardBusy\)return;autoDiscardBusy=true;[\s\S]{0,400}await MutationLock\.run\(async\(\)=>\{/);
-assert.match(dash,/const next=AutoDiscard\.assertUsable\(patch,autoDiscardContext\(\)\);/);
+// The guarded write is intact even though an acknowledgement dialog may sit in front of it.
+assert.match(dash,/async function saveAutoDiscard\(\)\{\n if\(autoDiscardBusy\)return;autoDiscardBusy=true;\n try\{await saveAutoDiscardOnce\(\)\}\n catch\(error\)\{/);
+assert.match(dash,/async function saveAutoDiscardOnce\(\)\{[\s\S]{0,700}await MutationLock\.run\(async\(\)=>\{/);
+assert.match(dash,/if\(\/xác nhận rủi ro\/\.test\(error\?\.message\|\|''\)\)\{autoDiscardBusy=false;await autoDiscardRiskDialog\(\);return\}/,'the refusal turns into one dialog, never a silent default');
+assert.match(dash,/const next=AutoDiscard\.assertUsable\(patch,\{\.\.\.autoDiscardContext\(\),ack:autoDiscardAck\}\);/,'the save hands the acknowledgement to the same gate that refuses without it');
 assert.match(dash,/function autoDiscardContext\(\)\{return \{measurable:autoDiscardCapability\(\)\.measurable,systemMemory:chrome\.system\?\.memory\?\.getInfo\?true:false\}\}/);
 assert.match(dash,/const stored=Number\.isFinite\(autoDiscardRun\?\.at\)\?autoDiscardRun:null;/);
 // Every action of the block is reachable from the delegated handler.
@@ -105,7 +111,14 @@ assert.doesNotMatch(dash,/function autoDiscardAttentionCard\(\)\{[\s\S]{0,1800}t
 // The collapsed header is a real toggle, and the animation follows the shared motion settings.
 assert.match(dash,/<button type="button" class="auto-discard-head" id="autoDiscardToggle" aria-expanded="\$\{autoDiscardOpen\?'true':'false'\}" aria-controls="autoDiscardBody">/);
 assert.match(dash,/<div class="auto-discard-body\$\{autoDiscardOpen\?'':' hidden'\}" id="autoDiscardBody">/);
-assert.match(dash,/Số đo lấy lại theo chu kỳ ở trên, chạy cùng lịch với các việc nền khác; chưa có lượt nghỉ tự động và chưa xin quyền đọc tiến trình/);
+assert.match(dash,/Số đo lấy lại theo chu kỳ ở trên, chạy cùng lịch với các việc nền khác\. Mức Tự động có đường nghỉ riêng nhưng chỉ chạy khi Chrome cho số đo tiến trình thật \(kênh Dev\)/,'the note no longer promises there is no automatic path');
+// 15.3: the automatic level is explained where it is chosen, and its consent is stated as local.
+assert.match(dash,/Mức Tự động nghỉ tab mà không hỏi lại, cần bạn xác nhận rủi ro một lần, và chỉ chạy khi Chrome cho số đo thật\./);
+assert.match(dash,/Tabspace vẫn chưa xin quyền đọc tiến trình nên trên Chrome ổn định không có lượt tự nghỉ nào/);
+assert.match(dash,/autoDiscardAck=stamp/,'the page remembers the acknowledgement without waiting for a reload');
+assert.match(dash,/return showDialog\(`<h2>Bạn sắp để Tabspace tự cho nghỉ tab\?/,'one dialog, asking once');
+assert.match(dash,/\[AutoDiscard\.ackKey\]:stamp/,'and it is stored under its own key, never inside the config');
+assert.doesNotMatch(dash,/autoDiscardConfig=\{[^}]*ack/,'no ack field can leak into the settings object');
 assert.match(css,/@keyframes autoDiscardIn\{from\{opacity:0;transform:translateY\(-3px\)\}to\{opacity:1;transform:none\}\}/);
 assert.match(css,/:root\[data-motion="reduce"\] \*/);
 console.log('Resource measurement shares one entry point, reaches Cần chú ý as a card and Sức khỏe tab as a list, and asks for no new permission: OK');

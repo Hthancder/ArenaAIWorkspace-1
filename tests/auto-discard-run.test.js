@@ -125,6 +125,62 @@ const record=box=>box.session()[A.runKey];
  assert.deepEqual([capped.run.overCount,capped.run.trail.length,capped.run.trailCut,A.maxTrail],[25,A.maxTrail,5,20]);
  assert.deepEqual(capped.run.trail.map(r=>r.id),capped.run.ids.slice(0,A.maxTrail),'the rows in front of the list survive, the rest is only counted');
  assert.deepEqual([db.autoDiscardRun,discards],[undefined,0],'a capped trail is still not persisted and still discards nothing');
- assert.deepEqual([discards,record(noteBox).at,db.autoDiscardRun],[0,now+60000,undefined]);
+ // 15.4.3: the counting plan never authorises an action; only the automatic policy plan may, and only with a human yes.
+ db={autoDiscardConfig:{...config,mode:'auto'},openGraceMinutes:5};
+ const autoBox=store();
+ const autoRun=await A.run(autoBox,now,{tabs});
+ assert.deepEqual(autoRun.action.chosen.map(r=>r.id),[2,1],'the automatic plan is the policy plan');
+ // 15.2: the free window after opening is a hard gate for an unattended run, while the counting list may still name the tab.
+ const guarded=await A.run(autoBox,now+11*60000,deps(tabs));
+ assert.deepEqual([guarded.plan.candidates.map(r=>r.id),guarded.action.chosen.length],[[2,1],0],'a tab nobody can date is never rested unattended');
+ assert.equal(autoRun.plan.chosen.length,autoRun.action.chosen.length,'both plans see the same two tabs here');
+ assert.equal((await A.run(autoBox,now,deps(tabs),{force:true})).action,null,'a forced on-demand measurement authorises nothing');
+ let requested=[];
+ const tool={request:async(api,tab)=>{requested.push(tab.id);return {status:tab.id===2?'discarded':'not-confirmed'}}};
+ assert.match((await A.apply(autoBox,autoRun,now,{discard:tool,protection:Protection})).reason,/chưa có xác nhận rủi ro/);
+ assert.deepEqual([requested.length,db.autoDiscardAction,db.autoDiscardAction],[0,undefined,undefined],'an unacknowledged level touches no tab and writes no report');
+ assert.match((await A.apply(autoBox,autoRun,now,{})).reason,/Không có đường cho nghỉ tab/);
+ db.autoDiscardAck={at:now-1};
+ assert.match((await A.apply(autoBox,autoRun,now+30*60000,{discard:tool,protection:Protection})).status,/stale/,'numbers two cycles old are not a basis for acting');
+ assert.equal(requested.length,0);
+ const applied=await A.apply(autoBox,autoRun,now,{discard:tool,protection:Protection});
+ assert.deepEqual([applied.status,applied.report.counts],['applied',{requested:2,discarded:1,skipped:0,unconfirmed:1,protected:0}]);
+ assert.deepEqual(requested,[2,1],'the heaviest tab is rested first, in the order the cycle chose');
+ assert.deepEqual(db.autoDiscardAction.results.map(r=>[r.id,r.status]),[[2,'discarded'],[1,'unconfirmed']]);
+ assert.equal(db.autoDiscardAction.status,'partial','a run whose result is unclear is reported as such');
+ assert.match(A.actionLabel(db.autoDiscardAction,now).text,/1 tab không xác nhận được/);
+ // The next cycle waits while a result is unclear, instead of hammering tabs nobody can account for.
+ requested=[];
+ assert.match((await A.apply(autoBox,autoRun,now+5*60000,{discard:tool,protection:Protection})).reason,/chờ 10 phút/);
+ assert.deepEqual([requested.length,db.autoDiscardAction.status],[0,'partial']);
+ requested=[];
+ // Protection is checked again at the moment of acting, not only when the list was built.
+ const loose=await A.run(autoBox,now+21*60000,{});
+ assert.deepEqual(loose.action.chosen.map(r=>r.id),[2,1]);
+ db.protectedDomains=['example.com'];
+ const late=await A.apply(autoBox,loose,now+21*60000,{discard:tool,protection:Protection});
+ assert.deepEqual([late.report.counts.protected,late.report.counts.requested,requested.length],[2,0,0],'a domain protected after the measurement is never discarded');
+ db.protectedDomains=[];
+ // A cycle that found nothing to do is a clean answer, not a reason to hold the next one back.
+ db.autoDiscardAction={at:now+21*60000,status:'empty',counts:{requested:0,discarded:0,skipped:0,unconfirmed:0,protected:2},results:[]};
+ const nothing=await A.apply(autoBox,{...loose,action:{chosen:[]}},now+21*60000,{discard:tool,protection:Protection});
+ assert.deepEqual([nothing.status,db.autoDiscardAction.status],['applied','empty']);
+ assert.match(A.actionLabel(db.autoDiscardAction,now+21*60000).text,/nghỉ 0 tab/);
+ // A run that cannot be journaled is refused before a single tab is touched.
+ const blind=store(true,{failWrite:true});
+ const before=requested.length;
+ assert.match((await A.apply(blind,loose,now+21*60000,{discard:tool,protection:Protection})).reason,/Không ghi được nhật ký/);
+ assert.equal(requested.length,before,'no unrecorded automatic discard happens');
+ // A tab that moved between the measurement and the action is skipped by the shared discard tool, and counted.
+ db.protectedDomains=[];
+ const movedBox=store();
+ const moved=await A.run(movedBox,now+22*60000,deps(tabs));
+ db.autoDiscardAck={at:now};
+ delete db.autoDiscardAction;
+ const movedRun=await A.apply(movedBox,{...moved,action:{chosen:[{tab:{id:9,windowId:1,url:'https://example.com/9'}}]}},now+22*60000,{discard:{request:async()=>({status:'skipped'})},protection:Protection});
+ assert.deepEqual([movedRun.report.counts,movedRun.report.status],[{requested:1,discarded:0,skipped:1,unconfirmed:0,protected:0},'complete']);
+ assert.match(A.actionLabel(movedRun.report,now).text,/1 tab bị bỏ qua vì đã thay đổi/);
+ assert.doesNotMatch(JSON.stringify(db.autoDiscardConfig),/ack|risk/i);
+ assert.deepEqual([discards,record(noteBox).at,db.autoDiscardRun],[0,now+60000,undefined],'the measurement path still discards nothing');
  console.log('The measurement cycle stays read-only, waits, and admits every way it cannot run: OK');
 })().catch(e=>{console.error(e);process.exitCode=1});

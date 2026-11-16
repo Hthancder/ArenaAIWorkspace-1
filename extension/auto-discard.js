@@ -2,7 +2,7 @@
 // Resource numbers only pick candidates. Without a real per-tab measurement the feature must stay silent,
 // so every unreadable, stale or changed sample degrades to "unknown" instead of an estimate.
 const AutoDiscard=(()=>{
- const prefix='tabspace:metrics:',settingKey='autoDiscardConfig',runKey='autoDiscardRun',maxSeries=10,maxTrail=20;
+ const prefix='tabspace:metrics:',settingKey='autoDiscardConfig',runKey='autoDiscardRun',ackKey='autoDiscardAck',actionKey='autoDiscardAction',maxSeries=10,maxTrail=20,uncertainWaitMinutes=10;
  const notMeasurable='Không đo được tài nguyên trên Chrome này';
  const modes=Object.freeze(['suggest','ask','auto']),combines=Object.freeze(['any','all']);
  // `fast` resources need several consecutive cycles; `estimated` ones can never trigger an automatic run.
@@ -40,6 +40,8 @@ const AutoDiscard=(()=>{
   if(config.enabled&&context.measurable!==true)throw Error(notMeasurable+'; bật tính năng sẽ không có số để quyết định. Hãy cho nghỉ thủ công trong Tab đang mở.');
   // "Only when the system is short of memory" needs its own source; without it no run would ever happen.
   if(config.enabled&&config.lowMemoryOnly&&context.systemMemory!==true)throw Error('Không đọc được bộ nhớ hệ thống trên Chrome này; thôi chọn "chỉ chạy khi thiếu bộ nhớ" hoặc tắt tính năng.');
+  // 15.3: an unattended run is only refused once a human has read the risk; nothing is assumed here.
+  if(config.enabled&&config.mode==='auto'&&!ackValid(context.ack,context.now))throw Error('Mức Tự động cần bạn xác nhận rủi ro một lần; thiết lập chưa được lưu.');
   return config;
  }
  function trim(value){return String(Math.round(value*10)/10).replace('.',',')}
@@ -49,14 +51,19 @@ const AutoDiscard=(()=>{
   if(resource==='network')return trim(value)+' MB/phút';
   return value>=1024?trim(value/1024)+' GB':trim(value)+' MB';
  }
- function ageLabel(at,now){
-  if(!Number.isFinite(at)||at<=0)return 'chưa có số đo';
+ function sinceLabel(at,now,verb){
+  if(!Number.isFinite(at)||at<=0)return verb==='đo'?'chưa có số đo':'chưa có lượt nào';
   const minutes=Math.max(0,Math.round(((Number.isFinite(now)?now:at)-at)/60000));
-  if(minutes<1)return 'đo ngay bây giờ';
-  if(minutes<60)return `đo ${minutes} phút trước`;
+  if(minutes<1)return verb==='đo'?'đo ngay bây giờ':'vừa chạy';
+  if(minutes<60)return verb==='đo'?`đo ${minutes} phút trước`:`cách đây ${minutes} phút`;
   const hours=Math.round(minutes/60);
-  return hours<24?`đo ${hours} giờ trước`:`đo ${Math.round(hours/24)} ngày trước`;
+  if(hours<24)return verb==='đo'?`đo ${hours} giờ trước`:`cách đây ${hours} giờ`;
+  const days=Math.round(hours/24);
+  return verb==='đo'?`đo ${days} ngày trước`:`cách đây ${days} ngày`;
  }
+ function ageLabel(at,now){return sinceLabel(at,now,'đo')}
+ // 15.3: the automatic level needs one explicit human yes, kept out of the config so no backup can carry it.
+ function ackValid(value,now){return !!value&&typeof value==='object'&&!Array.isArray(value)&&Number.isFinite(value.at)&&value.at<=(Number.isFinite(now)?now:Date.now())}
  function idleLabel(minutes){if(minutes<60)return `${Math.max(1,Math.round(minutes))} phút`;const hours=minutes/60;return hours<24?`${trim(hours)} giờ`:`${trim(hours/24)} ngày`}
  // A stored sample is untrusted input: a malformed record is dropped, which makes the tab unknown.
  function record(raw){
@@ -196,13 +203,15 @@ async function run(api,now,deps={},options={}){
   if(deps.grace?.notes)try{const map=new Map((await deps.grace.notes(api,normal,now)).map(x=>[x.tab?.id,x.note]));note=t=>map.get(t.id)||''}catch{note=()=>deps.grace.manualUnknown}
   // The stored count answers "how many tabs are over the threshold", so it is counted in suggestion mode:
   // policy gates such as the grace window belong to a run, and the run re-checks them anyway.
-  const result=plan(normal,records,{...config,mode:'suggest'},now,{protected:kept,note});
+   const result=plan(normal,records,{...config,mode:'suggest'},now,{protected:kept,note});
+  // 15.4.3: only the policy plan may authorise an action, and a forced measurement (an on-demand look) never does.
+  const action=config.enabled&&config.mode==='auto'&&!options.force?plan(normal,records,config,now,{protected:kept,note}):null;
   // 15.4 asks for a trail per candidate: which tab, which number crossed, when it was read, where it came from.
   // Only ids and numbers are stored; a URL or a title would outlive the reason it describes.
   const trail=result.chosen.slice(0,maxTrail).map(r=>({id:r.id,windowId:r.tab.windowId,processId:r.processId,sharedTabs:r.sharedTabs,at:r.at,values:r.values,triggered:r.triggered,source:r.source}));
   const summary={at:now,overCount:result.candidates.length,blockedCount:result.rows.length-result.candidates.length,measurable:true,ids:result.chosen.map(r=>r.id),...(trail.length?{trail}:{}),...(result.chosen.length>trail.length?{trailCut:result.chosen.length-trail.length}:{}),...(missed?{missed:true}:{})};
   try{await journal.set({[runKey]:summary})}catch{throw Error('Không xác nhận được việc lưu kết quả đo; hãy kiểm tra rồi thử lại.')}
-  return {status:'measured',reason:'',config,plan:result,run:summary};
+  return {status:'measured',reason:'',config,plan:result,action,run:summary};
  }
  // Newest value plus the streak of consecutive cycles above the threshold; a missing number or a gap breaks it.
  function resource(sample,name,config,now){
@@ -323,6 +332,57 @@ async function run(api,now,deps={},options={}){
   if(!(Number.isInteger(run.overCount)&&run.overCount>0))return {kind:'empty',text:`Lượt đo ${ageLabel(run.at,now)} không thấy tab nào vượt ngưỡng đã chọn.`};
   return {kind:'stale',text:`Lượt đo ${ageLabel(run.at,now)} đã quá hai chu kỳ nên không còn được dùng để gợi ý; đo lại để có danh sách mới.`};
  }
+ // 15.4.3: acting is its own entry point, so every measurement path stays read-only and a stale plan cannot be replayed.
+ // The journal is written before a tab is touched: an unrecorded automatic run is worse than a refused one.
+ async function apply(api,result,now,deps={}){
+  if(!Number.isFinite(now)||now<=0)throw Error('Không xác định được thời gian.');
+  if(!result||result.status!=='measured'||!result.action)return {status:'idle',reason:'Không có lượt đo nào được phép tự nghỉ tab; chưa tab nào bị nghỉ.'};
+  let config;try{config=validate(result.config)}catch{return {status:'invalid',reason:'Cấu hình cho nghỉ theo tài nguyên không hợp lệ; chưa tab nào bị nghỉ.'}}
+  if(!config.enabled||config.mode!=='auto')return {status:'idle',reason:'Chỉ mức Tự động mới được phép nghỉ tab; chưa tab nào bị nghỉ.'};
+  if(!Number.isFinite(result.run?.at)||(now-result.run.at)>=2*config.everyMinutes*60000)return {status:'stale',reason:'Số đo của lượt này đã quá hai chu kỳ nên không còn là căn cứ; chưa tab nào bị nghỉ.'};
+  if(!deps.discard?.request)return {status:'unmeasurable',reason:'Không có đường cho nghỉ tab ở điểm gọi này; chưa tab nào bị nghỉ.'};
+  const data=await api.storage.local.get(['automationPaused',ackKey,actionKey,'protectedDomains','protectedUrls']);
+  if(data.automationPaused!==undefined&&data.automationPaused!==false)return {status:'paused',reason:'Tự động hóa toàn cục đang tạm dừng; chưa tab nào bị nghỉ.'};
+  if(!ackValid(data[ackKey],now))return {status:'unconfirmed',reason:'Mức Tự động chưa có xác nhận rủi ro trên máy này; chưa tab nào bị nghỉ.'};
+  const last=data[actionKey];
+  // A previous cycle that could not confirm its own result buys itself ten minutes of quiet, not a retry storm.
+  if(last&&(last.status==='running'||last.status==='partial'||last.status==='uncertain'||last.journalFailed===true)&&Number.isFinite(last.at)&&now-last.at<uncertainWaitMinutes*60000)return {status:'waiting',reason:`Lượt tự động trước chưa xác nhận được kết quả nên Tabspace chờ ${uncertainWaitMinutes} phút; chưa tab nào bị nghỉ.`,last};
+  let domains=[],urls=[];
+  try{domains=deps.protection?deps.protection.validate(data.protectedDomains):[];urls=deps.protection?deps.protection.validateUrls(data.protectedUrls):[]}catch{return {status:'blocked',reason:'Danh sách bảo vệ không hợp lệ; chưa tab nào bị nghỉ.'}}
+  const report={at:result.run.at,id:result.run.at,status:'running',counts:{requested:0,discarded:0,skipped:0,unconfirmed:0,protected:0},results:[]};
+  for(const row of result.action.chosen){
+   const tab=row?.tab;
+   if(!tab||!Number.isInteger(tab.id))continue;
+   if(deps.protection&&(deps.protection.matches(tab.url,domains)||deps.protection.matchesUrl(tab.url,urls))){report.counts.protected++;report.results.push({id:tab.id,windowId:tab.windowId,status:'protected'});continue}
+   report.counts.requested++;report.results.push({id:tab.id,windowId:tab.windowId,url:tab.url,status:'queued'});
+  }
+  report.counts.requested=report.results.filter(r=>r.status==='queued').length;
+  try{await api.storage.local.set({[actionKey]:report})}catch{return {status:'blocked',reason:'Không ghi được nhật ký cho lượt tự động; chưa tab nào bị nghỉ.'}}
+  for(const item of report.results){
+   if(item.status!=='queued')continue;
+   const original=result.action.chosen.find(r=>r.tab?.id===item.id)?.tab||item;
+   let outcome;try{outcome=await deps.discard.request(api,original)}catch{outcome={status:'unknown'}}
+   item.status=outcome?.status==='discarded'?'discarded':outcome?.status==='skipped'?'skipped':'unconfirmed';
+   if(item.status==='discarded')report.counts.discarded++;else if(item.status==='skipped')report.counts.skipped++;else report.counts.unconfirmed++;
+   try{await api.storage.local.set({[actionKey]:report})}catch{report.journalFailed=true}
+  }
+  const acted=report.counts.discarded+report.counts.skipped+report.counts.unconfirmed;
+  report.status=report.journalFailed===true?'uncertain':!acted?'empty':report.counts.unconfirmed?'partial':'complete';
+  try{await api.storage.local.set({[actionKey]:report})}catch{report.journalFailed=true;report.status='uncertain'}
+  return {status:'applied',report,reason:report.counts.discarded?`${report.counts.discarded} tab đã nghỉ.`:'Không tab nào được nghỉ.'};
+ }
+ // One line for the outcome, shared by the settings header and the health page so the two cannot disagree.
+ function actionLabel(report,now){
+  if(!report||!Number.isFinite(report.at))return {kind:'none',text:'Chưa có lượt tự động nào trên máy này.'};
+  const c=report.counts||{},num=value=>Number.isInteger(value)&&value>=0?value:0,when=sinceLabel(report.at,Number.isFinite(now)?now:report.at,'chạy');
+  const parts=[`nghỉ ${num(c.discarded)} tab`];
+  if(num(c.unconfirmed))parts.push(`${num(c.unconfirmed)} tab không xác nhận được`);
+  if(num(c.skipped))parts.push(`${num(c.skipped)} tab bị bỏ qua vì đã thay đổi`);
+  if(num(c.protected))parts.push(`${num(c.protected)} tab bị danh sách bảo vệ chặn`);
+  if(report.status==='running'||report.status==='uncertain')parts.push('kết quả chưa được ghi đầy đủ, hãy xem lại danh sách tab');
+  const body=`${when}: ${parts.join(' · ')}`;
+  return {kind:report.status==='complete'&&!num(c.unconfirmed)?'done':'warning',text:`Lượt tự động ${body}.`,short:`lượt tự động ${body}`};
+ }
  // The note lives on the measurement itself, so the next cycle replaces it instead of hiding future cards.
  async function dismiss(api,at,undo=false){
   if(!Number.isInteger(at))throw Error('Không xác định được lần đo cần ẩn.');
@@ -343,9 +403,10 @@ async function run(api,now,deps={},options={}){
   const count=Number.isInteger(context.overCount)?context.overCount>0?` · ${context.overCount} tab đang vượt ngưỡng`:' · chưa có tab nào vượt ngưỡng':'';
   const age=Number.isFinite(context.measuredAt)&&context.measuredAt>0?` · ${ageLabel(context.measuredAt,Number.isFinite(context.now)?context.now:context.measuredAt)}`:' · chưa có số đo';
   const status=c.mode==='auto'?' · không hỏi lại từng lượt':c.mode==='ask'?' · chỉ nghỉ khi bạn xác nhận':' · không tự chọn tab nào';
+  const acted=Number.isInteger(context.lastAction?.at)?` · ${actionLabel(context.lastAction,Number.isFinite(context.now)?context.now:context.lastAction.at).short}`:'';
   const stale=Number.isFinite(context.measuredAt)&&context.measuredAt>0&&Number.isFinite(context.now)&&context.now-context.measuredAt>2*c.everyMinutes*60000;
-  return {kind:c.mode,text:`${modeLabel(c.mode)} · xét ${c.resources.map(name=>meta[name].short).join(', ')} · tối đa ${c.maxPerRun} tab mỗi lượt${count}${age}${stale?' · dữ liệu đo đã cũ, hãy đo lại':''}${context.missed===true?' · có chu kỳ đo đã bỏ lỡ, không chạy bù':''}${status}`};
+  return {kind:c.mode,text:`${modeLabel(c.mode)} · xét ${c.resources.map(name=>meta[name].short).join(', ')} · tối đa ${c.maxPerRun} tab mỗi lượt${count}${age}${stale?' · dữ liệu đo đã cũ, hãy đo lại':''}${context.missed===true?' · có chu kỳ đo đã bỏ lỡ, không chạy bù':''}${status}${acted}`};
  }
- return {prefix,settingKey,runKey,keys,meta,modes,combines,maxSeries,maxTrail,defaults,notMeasurable,modeLabel,integer,validate,capability,assertUsable,key,record,read,readRecords,recall,forget,remember,measure,prune,run,resource,row,plan,line,attention,suggestions,health,dismiss,describe,valueLabel,ageLabel,idleLabel};
+ return {prefix,settingKey,runKey,ackKey,actionKey,keys,meta,modes,combines,maxSeries,maxTrail,uncertainWaitMinutes,defaults,notMeasurable,modeLabel,integer,validate,capability,assertUsable,key,record,read,readRecords,recall,forget,remember,measure,prune,run,apply,actionLabel,ackValid,resource,row,plan,line,attention,suggestions,health,dismiss,describe,valueLabel,ageLabel,idleLabel};
 })();
 if(typeof module!=='undefined')module.exports=AutoDiscard;

@@ -5,7 +5,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('nod
  db.autoDiscardConfig={...AutoDiscard.defaults,enabled:true,mode:'auto',resources:['memory'],thresholds:{...AutoDiscard.defaults.thresholds,memory:900}};
  ctx.exportDialog();await handler(form(['resource']),d);out=JSON.parse(await blob.text());
  assert.equal(out.personal.resource.thresholds.memory,900);assert.equal(out.personal.resource.enabled,true);
- assert.doesNotMatch(JSON.stringify(out),/autoDiscardRun|overCount|tabspace:metrics/);
+ assert.doesNotMatch(JSON.stringify(out),/autoDiscardRun|autoDiscardAction|autoDiscardAck|overCount|tabspace:metrics/);
  await ctx.importBackupFile({size:100,text:async()=>JSON.stringify(out)});assert.match(html,/name="personalResource"/);
  const staleResource=handler,writesBefore=writes;db.autoDiscardConfig={...AutoDiscard.defaults};
  await assert.rejects(staleResource(form(['personalResource']),d),/đã thay đổi/);assert.equal(writes,writesBefore);

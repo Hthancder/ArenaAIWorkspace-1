@@ -8,7 +8,7 @@ const makeEl=(attrs={})=>({value:'',checked:false,disabled:false,focus(){focuses
 const ctxBase={
  AutoDiscard,OpenGrace,Protection,esc:value=>String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'),
  view:'settings',tabs:[],automationPaused:false,isDashboard:url=>String(url).includes('dashboard.html'),protectionError:false,protectedDomains:[],protectedUrls:[],
- autoDiscardConfig:undefined,autoDiscardRun:undefined,autoDiscardOpen:false,autoDiscardBusy:false,autoDiscardSummary:null,
+ autoDiscardConfig:undefined,autoDiscardRun:undefined,autoDiscardOpen:false,autoDiscardBusy:false,autoDiscardSummary:null,autoDiscardAck:null,autoDiscardAction:null,
  query:'x',selected:new Set(),bulkSelected:new Set(),selectionAnchor:1,selectionClick:1,
  render(){rendered.push(ctx.view)},load:async()=>{loads++},notify:message=>notices.push(message),
  $:selector=>els[selector.replace(/^#/,'')],document:{getElementById:id=>els[id]??null},
@@ -236,5 +236,53 @@ assert.doesNotMatch(markup,/data-action="auto-discard-save"/);
  ctx.autoDiscardSummary={overCount:1,measuredAt:now,ids:[99]};
  ctx.autoDiscardChoose();
  assert.match(notices.at(-1),/Không còn tab nào từ danh sách đo/);
+ // 15.3: the automatic level is saved only after one explicit human yes, asked in a dialog of its own.
+ ctx.chrome={...chromeless,processes:{getProcessIdForTab:async()=>10,getProcessInfo:async()=>({10:{privateMemory:bytes(1400),cpu:10}})}};
+ const askSaved={...AutoDiscard.validate(),enabled:true,mode:'ask',resources:['memory'],thresholds:{memory:500,cpu:50,heap:200,network:20}};
+ db={autoDiscardConfig:structuredClone(askSaved)};ctx.autoDiscardConfig=structuredClone(askSaved);ctx.autoDiscardAck=null;
+ fillForm({...askSaved,mode:'auto'});
+ dialog=null;
+ await ctx.saveAutoDiscard();
+ assert.equal(db.autoDiscardConfig.mode,'ask','nothing is stored while the risk is unacknowledged');
+ assert.equal(db.autoDiscardAck,undefined,'no acknowledgement is invented on the user behalf');
+ assert.match(dialog.markup,/Bạn sắp để Tabspace tự cho nghỉ tab\?/);
+ assert.match(dialog.markup,/mỗi chu kỳ đo có thể cho nghỉ tối đa <b>10<\/b> tab <b>không hỏi lại<\/b>/);
+ assert.match(dialog.markup,/không có bản lưu để khôi phục/);
+ assert.match(dialog.markup,/tiến trình renderer/);
+ assert.match(dialog.markup,/được kiểm lại ngay trước từng lệnh nghỉ/);
+ assert.match(dialog.markup,/không đi theo file sao lưu/);
+ assert.match(dialog.markup,/value="cancel" class="secondary">Hủy<\/button><button class="primary">Tôi hiểu, bật Tự động/);
+ assert.doesNotMatch(dialog.markup,/example\.com|https?:/,'the risk dialog speaks about the policy, not about a tab');
+ // Leaving the dialog alone changes nothing: the yes is never counted as implied by a closed dialog.
+ const closedBefore=closed;
+ assert.equal(closed,closedBefore);
+ // Confirming writes the acknowledgement under its own key, then saves the level that needs it.
+ await dialog.handler(new Map(),{close(){closed++}});
+ assert.ok(Number.isFinite(db.autoDiscardAck.at));
+ assert.equal(db.autoDiscardConfig.mode,'auto');
+ assert.equal(ctx.autoDiscardAck.at,db.autoDiscardAck.at,'the page keeps the yes without waiting for a reload');
+ assert.match(notices.at(-1),/xác nhận rủi ro một lần/);
+ const closedAfterAccept=closed;
+ assert.doesNotMatch(JSON.stringify(db.autoDiscardConfig),/ack|risk/i,'consent is not part of the settings object');
+ // A second save of the same level asks nothing: the acknowledgement is one-time, not per run.
+ dialog=null;
+ await ctx.saveAutoDiscard();
+ assert.equal(dialog,null,'the yes is remembered');
+ assert.equal(closed,closedAfterAccept,'the remembered yes opens no second dialog');
+ // The collapsed header speaks with the module's own label, so the page and the report cannot disagree about a run.
+ ctx.autoDiscardAction={at:Date.now()-5000,counts:{requested:2,discarded:1,skipped:0,unconfirmed:1,protected:0},status:'partial',results:[]};
+ assert.match(ctx.autoDiscardBlock(),/lượt tự động vừa chạy: nghỉ 1 tab · 1 tab không xác nhận được/);
+ assert.match(ctx.autoDiscardBlock(),/Tự động[\s\S]{0,90} · không hỏi lại từng lượt/,'the header still says the level does not ask again');
+ ctx.autoDiscardAction=null;
+ assert.doesNotMatch(ctx.autoDiscardBlock(),/lượt tự động/);
+ // Turning the level off is never a risk, so it needs no yes even with the acknowledgement gone.
+ const ackBefore=db.autoDiscardAck.at;
+ ctx.autoDiscardAck=null;
+ fillForm({...askSaved,mode:'auto',enabled:false});
+ dialog=null;
+ await ctx.saveAutoDiscard();
+ assert.equal(dialog,null,'switching off opens no dialog');
+ assert.equal(db.autoDiscardConfig.enabled,false);
+ assert.equal(db.autoDiscardAck.at,ackBefore,'and no acknowledgement is written or cleared behind the scenes');
  console.log('Collapsed resource block: honest state, guarded saves, no silent discards: OK');
 })().catch(e=>{console.error(e);process.exitCode=1});

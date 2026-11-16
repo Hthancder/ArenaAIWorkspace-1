@@ -32,6 +32,23 @@ assert.equal(A.assertUsable({...base,enabled:false},{}).enabled,false);
 assert.equal(A.assertUsable(base,{measurable:true}).mode,'ask');
 assert.throws(()=>A.assertUsable(base,{}),/Không đo được tài nguyên trên Chrome này/);
 assert.throws(()=>A.assertUsable(base,{}),/cho nghỉ thủ công/);
+ // 15.3: "Tự động" is refused until a human has read the risk once, and the yes is not part of the config.
+ assert.throws(()=>A.assertUsable({...base,mode:'auto'},{measurable:true}),/xác nhận rủi ro một lần/);
+ assert.throws(()=>A.assertUsable({...base,mode:'auto'},{measurable:true,now,ack:{at:now+60000}}),/một lần/,'an acknowledgement from the future is no acknowledgement');
+ assert.equal(A.assertUsable({...base,mode:'auto'},{measurable:true,ack:{at:now}}).mode,'auto');
+ assert.equal(A.assertUsable({...base,mode:'auto',enabled:false},{}).mode,'auto','an automatic policy that is off needs no yes yet');
+ assert.deepEqual([A.ackValid(undefined,now),A.ackValid('yes',now),A.ackValid({at:now+1},now),A.ackValid({at:now},now)],[false,false,false,true]);
+ assert.doesNotMatch(JSON.stringify(A.validate({...base,mode:'auto'})),/ack|risk|action/i,'consent never travels inside the settings object');
+ // 15.4.3: one sentence describes a finished run, and it says so when a result could not be confirmed.
+ const counts=(discarded,unconfirmed,extra={})=>({at:now,counts:{requested:discarded+unconfirmed,discarded,unconfirmed,skipped:0,protected:0,...extra},results:[]});
+ assert.deepEqual([A.actionLabel(null,now).kind,A.actionLabel(null,now).text],['none','Chưa có lượt tự động nào trên máy này.']);
+ assert.match(A.actionLabel(counts(0,0),now).text,/^Lượt tự động vừa chạy: nghỉ 0 tab\.$/);
+ assert.match(A.actionLabel({...counts(3,0),status:'complete'},now).text,/^Lượt tự động vừa chạy: nghỉ 3 tab\.$/);
+ assert.equal(A.actionLabel({...counts(3,0),status:'complete'},now).kind,'done');
+ assert.match(A.actionLabel({...counts(3,1,{skipped:2,protected:4}),status:'partial'},now).text,/nghỉ 3 tab · 1 tab không xác nhận được · 2 tab bị bỏ qua vì đã thay đổi · 4 tab bị danh sách bảo vệ chặn/);
+ assert.equal(A.actionLabel({...counts(3,1),status:'partial'},now).kind,'warning');
+ assert.match(A.actionLabel({...counts(2,0),status:'uncertain',journalFailed:true},now).text,/kết quả chưa được ghi đầy đủ/);
+ assert.match(A.actionLabel({...counts(2,0),at:now-42*60000,status:'complete'},now).short,/^lượt tự động cách đây 42 phút/,'the age is read against the page clock, not the fixture one');
 
 // The exact threshold counts as over, one unit below does not; only consecutive cycles build a streak.
 const c=A.validate(base),single=value=>({windowId:1,processId:10,sharedTabs:1,series:[{at:now,values:{memory:value}}]});
