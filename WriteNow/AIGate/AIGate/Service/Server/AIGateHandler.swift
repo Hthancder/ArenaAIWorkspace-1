@@ -457,8 +457,7 @@ class AIGateHandler: ChannelInboundHandler {
         let pathMode = Configuration.Endpoint.PathMode(rawValue: (dict["pathMode"] as? String) ?? "auto") ?? .auto
         let customHeaders = (dict["customHeaders"] as? [String: String]) ?? [:]
 
-        Task {
-            let result = await EndpointNetworkHelper.fetchModels(baseURL: baseURL, token: token, pathMode: pathMode, customHeaders: customHeaders)
+        EndpointNetworkHelper.fetchModels(baseURL: baseURL, token: token, pathMode: pathMode, customHeaders: customHeaders) { result in
             context.eventLoop.execute {
                 switch result {
                 case let .success(models):
@@ -484,21 +483,20 @@ class AIGateHandler: ChannelInboundHandler {
         let customHeaders = (dict["customHeaders"] as? [String: String]) ?? [:]
         let timeout = max(10, (dict["timeoutSeconds"] as? Int) ?? 30)
 
-        Task {
-            let res = await EndpointNetworkHelper.testChatEndpoint(
-                baseURL: baseURL,
-                token: token,
-                model: model,
-                pathMode: pathMode,
-                customHeaders: customHeaders,
-                timeoutSeconds: timeout
-            )
+        EndpointNetworkHelper.testChatEndpoint(
+            baseURL: baseURL,
+            token: token,
+            model: model,
+            pathMode: pathMode,
+            customHeaders: customHeaders,
+            timeoutSeconds: timeout
+        ) { ok, statusCode, latencyMs, message in
             var payload: [String: Any] = [
-                "ok": res.ok,
-                "latencyMs": res.latencyMs,
-                "message": res.message,
+                "ok": ok,
+                "latencyMs": latencyMs,
+                "message": message,
             ]
-            if let code = res.statusCode {
+            if let code = statusCode {
                 payload["statusCode"] = code
             }
             context.eventLoop.execute {
