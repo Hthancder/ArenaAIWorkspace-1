@@ -1,5 +1,5 @@
 const assert=require('node:assert/strict'),fs=require('node:fs');
-const mod=fs.readFileSync('extension/auto-discard.js','utf8'),dash=fs.readFileSync('extension/dashboard.js','utf8'),html=fs.readFileSync('extension/dashboard.html','utf8'),background=fs.readFileSync('extension/background.js','utf8'),manifest=JSON.parse(fs.readFileSync('extension/manifest.json','utf8')),css=fs.readFileSync('extension/style.css','utf8');
+const mod=fs.readFileSync('extension/auto-discard.js','utf8'),opts=fs.readFileSync('extension/backup-options.js','utf8'),dash=fs.readFileSync('extension/dashboard.js','utf8'),html=fs.readFileSync('extension/dashboard.html','utf8'),background=fs.readFileSync('extension/background.js','utf8'),manifest=JSON.parse(fs.readFileSync('extension/manifest.json','utf8')),css=fs.readFileSync('extension/style.css','utf8');
 
 // The module is loaded for the settings page and for the shared background cadence, before its callers.
 assert.ok(html.includes('<script src="auto-discard.js"></script><script src="dashboard.js"></script>'),'auto-discard.js is loaded before dashboard.js');
@@ -13,6 +13,14 @@ assert.match(background,/try\{if\(typeof AutoDiscard!=='undefined'\)await AutoDi
 assert.doesNotMatch(background,/tabs\.discard|DiscardTools/);
 // A navigation drops the sample of that tab instead of charging the new page with the old numbers.
 assert.match(background,/chrome\.tabs\?\.onUpdated\?\.addListener\(\(id,changeInfo\)=>\{if\(typeof AutoDiscard!=='undefined'&&Number\.isInteger\(id\)&&typeof changeInfo\?\.url==='string'\)void AutoDiscard\.forget\(chrome,\[id\]\)\.catch\(\(\)=>\{\}\)\}\)/);
+
+// Only the settings travel, and never the ability to act on them.
+assert.match(dash,/function backupOptionTools\(\)\{return \{[^}]*resource:AutoDiscard\}\}/);
+assert.match(dash,/if\(applyResource\)Object\.assign\(fields,BackupOptions\.resource\(personal\.resource,backupOptionTools\(\)\)\)/);
+assert.match(dash,/\.\.\.\(applyResource\?\['autoDiscardConfig'\]:\[\]\)\];/);
+assert.match(opts,/if\(resource\)result\.resource=tools\.resource\.validate\(storage\.autoDiscardConfig\);/);
+assert.match(opts,/function resource\(value,tools\)\{[\s\S]{0,200}enabled:false,mode:value\.mode==='auto'\?'ask':value\.mode/);
+assert.doesNotMatch(opts,/storage\.session|runKey|overCount/,'a backup never carries measurement values');
 
 // The setting comes from storage.local and the measurement from storage.session, kept fresh in the header.
 assert.match(dash,/chrome\.storage\.session\?\.get\?chrome\.storage\.session\.get\(\[AutoDiscard\.runKey\]\)\.catch\(\(\)=>\(\{\}\)\):Promise\.resolve\(\{\}\)/);

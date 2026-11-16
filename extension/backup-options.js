@@ -2,11 +2,13 @@
 // Optional portable preferences; automation remains off after import.
 const BackupOptions=(()=>{
  function exportOptions(storage,options,tools){
-  const {preferences=false,sound=false,includeAudio=false,overrides=false,reminders=false}=options||{};if([preferences,sound,includeAudio,overrides,reminders].some(v=>typeof v!=='boolean')||includeAudio&&!sound)throw Error('Lựa chọn xuất không hợp lệ.');const result={};
+  const {preferences=false,sound=false,includeAudio=false,overrides=false,reminders=false,resource=false}=options||{};if([preferences,sound,includeAudio,overrides,reminders,resource].some(v=>typeof v!=='boolean')||includeAudio&&!sound)throw Error('Lựa chọn xuất không hợp lệ.');const result={};
   if(preferences)result.opening={preferences:tools.open.validate(storage.openPreferences),warningLimit:tools.limit.validate(storage.openWarningLimit)};
   if(overrides){const maps=tools.overrides.validate(storage.openOverrides),active=(name,list)=>{const ids=new Set(Array.isArray(list)?list.map(x=>x?.id):[]);return Object.fromEntries(Object.entries(maps[name]).filter(([key])=>ids.has(key)))};result.overrides={groups:active('groups',storage.groups),workspaces:active('workspaces',storage.workspaces)}}
   if(reminders){const inbox=tools.inbox.validate(storage.inboxReminder),backup=tools.backupReminder.validate(storage.backupReminder),retention=tools.retention.validate(storage.retentionConfig);result.reminders={inboxDays:inbox.days,backupDays:backup.days,trashDays:retention.trashDays,historyDays:retention.historyDays}}
   if(sound){const config=tools.sound.validate(storage.soundConfig),omitted=!!config.custom&&!includeAudio;result.sound={config:includeAudio?config:{...config,choice:config.choice==='custom'?'soft':config.choice,custom:null},customOmitted:omitted}}
+  // 15.6: only the thresholds and the way they are combined travel; no measurement value is ever exported.
+  if(resource)result.resource=tools.resource.validate(storage.autoDiscardConfig);
   return result;
  }
  function opening(value,tools){if(!value||typeof value!=='object'||Array.isArray(value)||value.preferences===undefined||value.warningLimit===undefined)throw Error('Cài đặt mở trong file không hợp lệ.');return {openPreferences:tools.open.validate(value.preferences),openWarningLimit:tools.limit.validate(value.warningLimit)}}
@@ -29,6 +31,11 @@ const BackupOptions=(()=>{
   if(c.custom){if(typeof Context!=='function'||typeof decode64!=='function')throw Error('Không thể kiểm tra file âm trong Chrome; chưa nhập.');let binary;try{binary=decode64(c.custom.dataUrl.slice(c.custom.dataUrl.indexOf(',')+1))}catch{throw Error('File âm trong bản sao lưu không hợp lệ.')}if(!binary.length||binary.length>tools.sound.maxBytes)throw Error('File âm trong bản sao lưu quá lớn hoặc rỗng.');const bytes=Uint8Array.from(binary,x=>x.charCodeAt(0));let context,decoded;try{context=new Context();decoded=await context.decodeAudioData(bytes.buffer.slice(0))}catch{throw Error('Chrome không giải mã được file âm trong bản sao lưu.')}finally{try{await context?.close()}catch{}}if(!Number.isFinite(decoded?.duration)||decoded.duration<=0||decoded.duration>tools.sound.maxSeconds)throw Error('Âm trong bản sao lưu phải dài tối đa 5 giây.');c={...c,custom:{...c.custom,duration:decoded.duration}}}
   return {soundConfig:{...c,enabled:false}};
  }
- return {exportOptions,opening,overrides,reminders,sound};
+ // The imported block cannot switch automation on, and "Tự động" needs an in-place risk acknowledgement (§9, 15.3).
+ function resource(value,tools){
+  if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Thiết lập tài nguyên trong file sao lưu không hợp lệ.');
+  return {autoDiscardConfig:tools.resource.validate({...value,enabled:false,mode:value.mode==='auto'?'ask':value.mode})};
+ }
+ return {exportOptions,opening,overrides,reminders,sound,resource};
 })();
 if(typeof module!=='undefined')module.exports=BackupOptions;
