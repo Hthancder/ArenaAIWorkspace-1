@@ -219,3 +219,16 @@ Cả hai trả `status:'waiting'` **trước** khi ghi `autoDiscardAction`, nên
 - hộp **Giới hạn và rủi ro** nêu ba trường hợp giữ lượt và nói rõ khối không có công tắc riêng; hộp **Giờ yên lặng & toàn màn hình** không còn nói mình chỉ ảnh hưởng thông báo, mà khai thêm vế về mức Tự động.
 
 Không có quyền mới, không có hoàn tác, không thêm số đo nào rời khỏi máy.
+
+### Khối có nút xin quyền đọc tiến trình, và đó là quyền tùy chọn (0.126)
+
+15.1 ghi rõ API số đo theo tab chỉ có trên kênh Dev, còn quyền `processes` thì bản cũ không bao giờ xin — nghĩa là trên mọi máy Chrome ổn định, cả mục 15 chỉ là lý thuyết. Bản này thêm đường xin thật, xin đúng cách: `processes` nằm trong `optional_permissions`, **không** nằm trong `permissions`, nên lúc cài extension Chrome không được hứa thêm gì; chỉ khi bấm **Xin quyền đọc tiến trình** trong khối thì Chrome mới hỏi.
+
+- một chỗ gọi duy nhất: `autoDiscardPermission()` trong `dashboard.js`, qua `chrome.permissions.request({permissions:['processes']})`; `background.js` không xin quyền nào;
+- ba câu trả lời, không có im lặng: Chrome từ chối cả yêu cầu → "Chrome không cho phép xin quyền này trên bản Chrome đang chạy; vẫn chỉ còn đường cho nghỉ thủ công."; người dùng bấm từ chối → "Chưa có quyền đọc tiến trình, nên vẫn không có số đo theo tab."; được cấp mà `chrome.processes` vẫn không tồn tại (kênh ổn định) → "Không đo được tài nguyên trên Chrome này. Quyền đọc tiến trình đã bật nhưng Chrome này không có API số đo theo tab." `AutoDiscard.capability(api,granted)` tách hai sự kiện "được cấp" và "đo được", vì gộp chúng lại là hứa một con số trình duyệt không đưa;
+- nút biến mất khi đã có số đo thật, hoặc khi máy này vừa trả lời "có" ngay trong trang hiện tại; bị từ chối thì nút còn đó để bấm lại. Cờ `autoDiscardPermissionGranted` chỉ là chuyện của trang — không có gì được ghi xuống `storage.local`, vì sự đồng ý là của Chrome chứ không phải của file cấu hình;
+- `assertUsable` vẫn từ chối lưu khi `chrome.processes` không tồn tại, kể cả khi quyền đã bật: bật một tính năng không có số đo thì vẫn bị chặn như cũ.
+
+Câu chữ "Tabspace vẫn chưa xin quyền đọc tiến trình" trong khối và trong hộp **Giới hạn và rủi ro** đã thay bằng mô tả đúng: có nút xin trong khối, và Chrome kênh ổn định không cấp quyền đó.
+
+Chưa làm: `processes` không phải quyền mặc định (chủ đích) và không xin lúc cài; thông báo kết quả lượt Tự động qua kênh hệ điều hành vẫn chưa có.

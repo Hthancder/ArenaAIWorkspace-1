@@ -28,6 +28,11 @@ assert.equal(A.validate({...base,lowMemoryOnly:true,lowMemoryFloor:15}).lowMemor
 assert.equal(A.capability({}).measurable,false);
 assert.match(A.capability({processes:{getProcessIdForTab:()=>{}}}).reason,/kênh Dev/);
 assert.equal(A.capability({processes:{getProcessIdForTab(){},getProcessInfo(){}}}).measurable,true);
+ assert.deepEqual([A.capability({},false).granted,A.capability({},undefined).granted],[false,false],'an unknown answer is not a grant');
+ assert.deepEqual([A.capability({},true).granted,A.capability({},true).measurable],[true,false],'a grant is Chrome saying yes, not Chrome handing out numbers');
+ assert.match(A.capability({},true).reason,/Quyền đọc tiến trình đã bật nhưng Chrome này không có API/,'the granted sentence names the missing API, not the missing consent');
+ assert.match(A.capability({},false).reason,/kênh Dev/);
+ assert.match(A.capability({},false).reason,/bấm nút Xin quyền đọc tiến trình trong khối này/,'and the sentence points at the one button that can change it');
 assert.equal(A.assertUsable({...base,enabled:false},{}).enabled,false);
 assert.equal(A.assertUsable(base,{measurable:true}).mode,'ask');
 assert.throws(()=>A.assertUsable(base,{}),/Không đo được tài nguyên trên Chrome này/);

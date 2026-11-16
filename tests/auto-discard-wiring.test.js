@@ -4,8 +4,10 @@ const mod=fs.readFileSync('extension/auto-discard.js','utf8'),opts=fs.readFileSy
 // The module is loaded for the settings page and for the shared background cadence, before its callers.
 assert.ok(html.includes('<script src="auto-discard.js"></script><script src="dashboard.js"></script>'),'auto-discard.js is loaded before dashboard.js');
 assert.ok(/importScripts\([^)]*'auto-discard\.js'/.test(background),'the service worker loads the module too');
-// Reading the resource numbers needs a permission this build deliberately does not request.
-assert.ok(![...(manifest.permissions||[]),...(manifest.optional_permissions||[])].includes('processes'),'processes permission stays unrequested');
+// Reading the resource numbers needs a permission Chrome only offers on its Dev channel: optional, asked
+// for from a button, and never something the install agrees to on the user's behalf.
+assert.ok(!(manifest.permissions||[]).includes('processes'),'the process-reading permission is never a silent part of the install');
+assert.ok((manifest.optional_permissions||[]).includes('processes'),'it is only ever offered as an optional permission, so Chrome can say no');
 assert.ok(![...(manifest.permissions||[]),...(manifest.optional_permissions||[])].includes('system.memory'),'system.memory permission stays unrequested');
 
 // The worker measures, then hands any automatic plan to the module; it keeps no discard call of its own.
@@ -67,6 +69,11 @@ assert.match(dash,/async function saveAutoDiscardOnce\(\)\{[\s\S]{0,700}await Mu
 assert.match(dash,/if\(\/xác nhận rủi ro\/\.test\(error\?\.message\|\|''\)\)\{autoDiscardBusy=false;await autoDiscardRiskDialog\(\);return\}/,'the refusal turns into one dialog, never a silent default');
 assert.match(mod,/const held=await holdReason\(api,deps,now,data\);\n  if\(held\)return \{status:'waiting',reason:held\};/,'the room is asked once, in one place, and the answer ends the run');
 assert.doesNotMatch(mod,/deferFullscreen\(api,data\.deferFullscreenNotifications\)/,'a notification preference never unlocks the unattended discard');
+assert.doesNotMatch(background,/permissions\.request/,'the service worker never asks Chrome for anything');
+assert.match(dash,/chrome\.permissions\.request\(\{permissions:\['processes'\]\}\)/,'exactly one call site asks Chrome, and it is a button handler');
+assert.match(dash,/data-action="auto-discard-permission">Xin quyền đọc tiến trình<\/button>/,'the ask is a labelled button in the block, not a surprise dialog');
+assert.equal((dash.match(/autoDiscardPermissionGranted/g)||[]).length,3,'the yes is remembered for the page and nothing else');
+assert.match(dash,/if\(b\.dataset\.action==='auto-discard-permission'\)\{await autoDiscardPermission\(\);return\}/,'and the click reaches nothing but that handler');
 assert.match(dash,/const next=AutoDiscard\.assertUsable\(patch,\{\.\.\.autoDiscardContext\(\),ack:autoDiscardAck\}\);/,'the save hands the acknowledgement to the same gate that refuses without it');
 assert.match(dash,/function autoDiscardContext\(\)\{return \{measurable:autoDiscardCapability\(\)\.measurable,systemMemory:chrome\.system\?\.memory\?\.getInfo\?true:false\}\}/);
 assert.match(dash,/const stored=Number\.isFinite\(autoDiscardRun\?\.at\)\?autoDiscardRun:null;/);
@@ -116,11 +123,11 @@ assert.match(dash,/<div class="auto-discard-body\$\{autoDiscardOpen\?'':' hidden
 assert.match(dash,/Số đo lấy lại theo chu kỳ ở trên, chạy cùng lịch với các việc nền khác\. Mức Tự động có đường nghỉ riêng nhưng chỉ chạy khi Chrome cho số đo tiến trình thật \(kênh Dev\)/,'the note no longer promises there is no automatic path');
 // 15.3: the automatic level is explained where it is chosen, and its consent is stated as local.
 assert.match(dash,/Mức Tự động nghỉ tab mà không hỏi lại, cần bạn xác nhận rủi ro một lần, và chỉ chạy khi Chrome cho số đo thật\./);
-assert.match(dash,/Tabspace vẫn chưa xin quyền đọc tiến trình nên trên Chrome ổn định không có lượt tự nghỉ nào/);
+assert.match(dash,/Tabspace chỉ có thể xin quyền đọc tiến trình bằng nút trong khối này, và Chrome ở kênh ổn định không cấp quyền đó, nên trên máy thường vẫn không có lượt tự nghỉ nào/,'the limits box says the ask is optional, local to the block, and refused on the stable channel');
 assert.match(dash,/autoDiscardAck=stamp/,'the page remembers the acknowledgement without waiting for a reload');
 assert.match(dash,/return showDialog\(`<h2>Bạn sắp để Tabspace tự cho nghỉ tab\?/,'one dialog, asking once');
 assert.match(dash,/\[AutoDiscard\.ackKey\]:stamp/,'and it is stored under its own key, never inside the config');
 assert.doesNotMatch(dash,/autoDiscardConfig=\{[^}]*ack/,'no ack field can leak into the settings object');
 assert.match(css,/@keyframes autoDiscardIn\{from\{opacity:0;transform:translateY\(-3px\)\}to\{opacity:1;transform:none\}\}/);
 assert.match(css,/:root\[data-motion="reduce"\] \*/);
-console.log('Resource measurement shares one entry point, reaches Cần chú ý as a card and Sức khỏe tab as a list, and asks for no new permission: OK');
+console.log('Resource measurement shares one entry point, reaches Cần chú ý as a card and Sức khỏe tab as a list, and only ever asks for process numbers as an optional permission: OK');

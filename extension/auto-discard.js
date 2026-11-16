@@ -30,9 +30,12 @@ const AutoDiscard=(()=>{
  }
  function key(id){return prefix+id}
  // chrome.processes is Dev-channel only and no other API gives a per-tab number, so nothing is guessed.
- function capability(api){
-  if(!api?.processes?.getProcessIdForTab||!api?.processes?.getProcessInfo)return {measurable:false,reason:notMeasurable+'. Chrome chỉ cho số đo tiến trình ở kênh Dev và quyền đọc chưa được bật.'};
-  return {measurable:true,reason:''};
+ function capability(api,granted){
+  if(api?.processes?.getProcessIdForTab&&api?.processes?.getProcessInfo)return {measurable:true,reason:'',granted:true};
+  // 15.1: the permission is optional and the API is Dev-channel only, so "granted" and "readable" are
+  // two different facts. Saying only the first one would promise a number that this Chrome still lacks.
+  if(granted===true)return {measurable:false,granted:true,reason:notMeasurable+'. Quyền đọc tiến trình đã bật nhưng Chrome này không có API số đo theo tab.'};
+  return {measurable:false,granted:false,reason:notMeasurable+'. Chrome chỉ cho số đo tiến trình ở kênh Dev — nếu máy này chưa bật quyền đọc tiến trình, bấm nút Xin quyền đọc tiến trình trong khối này.'};
  }
  // Turning the policy on without a measurement source would silently do nothing: refuse it while saving.
  function assertUsable(raw,context={}){

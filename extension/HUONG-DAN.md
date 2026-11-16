@@ -1,4 +1,4 @@
-# Tabspace 0.125 — bản thử nghiệm
+# Tabspace 0.126 — bản thử nghiệm
 
 ## Cài vào Chrome
 1. Giải nén file ZIP vào một thư mục cố định. Đừng xóa thư mục sau khi cài.
@@ -18,6 +18,7 @@
 - **Bảo vệ URL chính xác:** ngoài tên miền, có thể bảo vệ từng URL http/https trong Cài đặt. URL được chuẩn hóa, xét query và fragment; thay đổi URL có thể không còn khớp, không phân biệt được tài khoản hoặc bảo đảm dữ liệu chưa lưu. Quy tắc ngăn Tabspace đóng/nghỉ, không ngăn Chrome hay extension khác; danh sách URL có thể chứa dữ liệu nhạy cảm và được xuất vào sao lưu.
 - **Badge và popup:** trong Cài đặt có thể bật badge đếm lời nhắc preset đang chờ (mặc định tắt, chỉ hiển thị số, không hiện tên/URL). Popup hiển thị số lời nhắc và nút tới Cần chú ý ngay cả khi badge tắt. Icon Chrome có thể bị ẩn; badge không thay thế thông báo khác và thiết lập không được sao lưu.
 - **Toàn màn hình:** thông báo hệ điều hành của lời nhắc mặc định được trì hoãn khi phát hiện một cửa sổ Chrome toàn màn hình hoặc không đọc được trạng thái cửa sổ. Có thể tắt trong Giờ yên lặng; lời nhắc vẫn ở Tabspace. Khi trạng thái cho phép, cố gửi một thông báo tổng hợp nếu còn lời nhắc. Không đảm bảo nhận biết video toàn màn hình, ứng dụng khác hoặc chế độ tập trung hệ điều hành.
+- **Quyền đọc tiến trình (tùy chọn):** khối *Tự động cho nghỉ tab theo tài nguyên* có nút **Xin quyền đọc tiến trình** khi Chrome chưa cho số đo. Đây là quyền tùy chọn nên lúc cài extension, Tabspace không xin gì thêm; Chrome chỉ cấp trên kênh Dev, và nếu bị từ chối thì khối vẫn giải thích và để nguyên nút đó cho lần sau.
 - **Giờ yên lặng:** tùy chọn mặc định tắt, áp dụng thông báo hệ điều hành của lời nhắc preset và kết quả tự động đóng; từ 0.124, giờ yên lặng còn giữ lượt Tự động của khối đo tài nguyên (mục 15) — đang yên lặng thì không tab nào bị tự nghỉ, còn việc đo thì vẫn chạy. Lời nhắc vẫn có trong Tabspace. Sau giờ yên lặng, cố gửi một thông báo tổng hợp nếu còn lời nhắc chờ, Chrome đang chạy và quyền được bật; thông báo có thể trễ, bị bỏ qua hoặc hệ điều hành chặn. Theo giờ máy, không bao gồm trong sao lưu.
 - **Cần chú ý:** tổng hợp lời nhắc preset đang chờ và lịch sử dọn có mục chưa xử lý/lỗi/không rõ. Có thể xem trước, nhắc lại, bỏ từng lời nhắc hoặc chọn bỏ nhiều lời nhắc đang thấy; không tự đóng tab hay tắt lịch tương lai. Lượt đang chạy cũng có thể xuất hiện, và cần kiểm tra Chrome khi trạng thái không rõ. Đây chưa phải lịch sử của mọi thông báo.
 - **Kiểm tra preset chồng lấn:** trong Preset, xem các tab web hiện mở khớp nhiều preset sau khi xét ngoại lệ từng preset, quy tắc và nhóm đích. Danh sách có cả preset chưa bật lịch hoặc thiếu nhóm; không chọn preset thắng hay tự dọn. Chỉ xét tab đang mở, không phải phân tích toàn bộ xung đột tương lai.
@@ -345,3 +346,16 @@ Cả hai trả `status:'waiting'` **trước** khi ghi `autoDiscardAction`, nên
 - hộp **Giới hạn và rủi ro** nêu ba trường hợp giữ lượt và nói rõ khối không có công tắc riêng; hộp **Giờ yên lặng & toàn màn hình** không còn nói mình chỉ ảnh hưởng thông báo, mà khai thêm vế về mức Tự động.
 
 Không có quyền mới, không có hoàn tác, không thêm số đo nào rời khỏi máy.
+
+### Khối có nút xin quyền đọc tiến trình, và đó là quyền tùy chọn (0.126)
+
+15.1 ghi rõ API số đo theo tab chỉ có trên kênh Dev, còn quyền `processes` thì bản cũ không bao giờ xin — nghĩa là trên mọi máy Chrome ổn định, cả mục 15 chỉ là lý thuyết. Bản này thêm đường xin thật, xin đúng cách: `processes` nằm trong `optional_permissions`, **không** nằm trong `permissions`, nên lúc cài extension Chrome không được hứa thêm gì; chỉ khi bấm **Xin quyền đọc tiến trình** trong khối thì Chrome mới hỏi.
+
+- một chỗ gọi duy nhất: `autoDiscardPermission()` trong `dashboard.js`, qua `chrome.permissions.request({permissions:['processes']})`; `background.js` không xin quyền nào;
+- ba câu trả lời, không có im lặng: Chrome từ chối cả yêu cầu → "Chrome không cho phép xin quyền này trên bản Chrome đang chạy; vẫn chỉ còn đường cho nghỉ thủ công."; người dùng bấm từ chối → "Chưa có quyền đọc tiến trình, nên vẫn không có số đo theo tab."; được cấp mà `chrome.processes` vẫn không tồn tại (kênh ổn định) → "Không đo được tài nguyên trên Chrome này. Quyền đọc tiến trình đã bật nhưng Chrome này không có API số đo theo tab." `AutoDiscard.capability(api,granted)` tách hai sự kiện "được cấp" và "đo được", vì gộp chúng lại là hứa một con số trình duyệt không đưa;
+- nút biến mất khi đã có số đo thật, hoặc khi máy này vừa trả lời "có" ngay trong trang hiện tại; bị từ chối thì nút còn đó để bấm lại. Cờ `autoDiscardPermissionGranted` chỉ là chuyện của trang — không có gì được ghi xuống `storage.local`, vì sự đồng ý là của Chrome chứ không phải của file cấu hình;
+- `assertUsable` vẫn từ chối lưu khi `chrome.processes` không tồn tại, kể cả khi quyền đã bật: bật một tính năng không có số đo thì vẫn bị chặn như cũ.
+
+Câu chữ "Tabspace vẫn chưa xin quyền đọc tiến trình" trong khối và trong hộp **Giới hạn và rủi ro** đã thay bằng mô tả đúng: có nút xin trong khối, và Chrome kênh ổn định không cấp quyền đó.
+
+Chưa làm: `processes` không phải quyền mặc định (chủ đích) và không xin lúc cài; thông báo kết quả lượt Tự động qua kênh hệ điều hành vẫn chưa có.
