@@ -1,8 +1,10 @@
 import { useState, type ReactNode } from 'react'
 import {
   Button as AriaButton,
+  Header as ListBoxHeader,
   ListBox,
   ListBoxItem,
+  ListBoxSection,
   ProgressBar,
   Radio,
   RadioGroup,
@@ -113,12 +115,18 @@ export function SegmentedControl<T extends string>({
 }
 
 export type SelectOption<T extends string> = { value: T; label: string }
+export type SelectGroup<T extends string> = { label: string; options: SelectOption<T>[] }
 
-/** Dropdown for one of many. `inline` = compact width for use inside a row. */
+/**
+ * Dropdown for one of many. `inline` = compact width for use inside a row.
+ * `groups` renders the options under section headers (optgroups) — use
+ * either `options` or `groups`, not both.
+ */
 export function Select<T extends string>({
   value,
   onChange,
   options,
+  groups,
   inline,
   'aria-label': ariaLabel,
   className,
@@ -126,12 +134,14 @@ export function Select<T extends string>({
 }: {
   value: T
   onChange: (v: T) => void
-  options: SelectOption<T>[]
+  options?: SelectOption<T>[]
+  groups?: SelectGroup<T>[]
   inline?: boolean
   'aria-label': string
   className?: string
   isDisabled?: boolean
 }) {
+  const flat: SelectOption<T>[] = options ?? []
   return (
     <AriaSelect
       aria-label={ariaLabel}
@@ -151,7 +161,7 @@ export function Select<T extends string>({
       </AriaButton>
       <Popover placement="bottom start" className="min-w-[--trigger-width] rounded-[14px]">
         <ListBox className="max-h-[360px] overflow-auto p-1.5 outline-none">
-          {options.map((o) => (
+          {flat.map((o) => (
             <ListBoxItem
               key={o.value}
               id={o.value}
@@ -163,6 +173,26 @@ export function Select<T extends string>({
               </span>
               <span className="truncate">{o.label}</span>
             </ListBoxItem>
+          ))}
+          {(groups ?? []).map((g) => (
+            <ListBoxSection key={g.label}>
+              <ListBoxHeader className="px-2.5 pb-1 pt-2 text-tiny text-ink-muted">
+                {g.label}
+              </ListBoxHeader>
+              {g.options.map((o) => (
+                <ListBoxItem
+                  key={o.value}
+                  id={o.value}
+                  textValue={o.label}
+                  className="group flex h-[34px] cursor-default select-none items-center gap-2.5 rounded-field px-2.5 outline-none data-[focused]:bg-fill-selected"
+                >
+                  <span className="grid w-4 flex-none place-items-center">
+                    <CheckIcon className="hidden h-4 w-4 group-data-[selected]:block" />
+                  </span>
+                  <span className="truncate">{o.label}</span>
+                </ListBoxItem>
+              ))}
+            </ListBoxSection>
           ))}
         </ListBox>
       </Popover>

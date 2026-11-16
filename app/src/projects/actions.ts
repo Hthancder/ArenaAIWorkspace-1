@@ -42,6 +42,15 @@ function loadSettings(saved: Partial<Settings> | undefined): Settings {
   for (const key of Object.keys(saved ?? {}) as (keyof Settings)[]) {
     if (key in defaultSettings) (known as Record<string, unknown>)[key] = saved![key]
   }
+  // Session audio-device prefs — which instrument sounds and the sample
+  // cache policy — belong to the user, not the document. Project files
+  // saved before these keys existed must not reset them to defaults on
+  // open, so fall back to the live store values instead.
+  const current = useStore.getState().settings
+  if (known.instrument === undefined) known.instrument = current.instrument
+  if (known.sampleCacheMode === undefined) {
+    known.sampleCacheMode = current.sampleCacheMode
+  }
   return { ...defaultSettings, ...known }
 }
 

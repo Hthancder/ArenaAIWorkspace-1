@@ -22,7 +22,9 @@
     "pcPlay": "Chơi bằng máy tính",
     "pcKeyLabels": "Nhãn phím máy tính",
     "metronome": "Máy đếm nhịp",
-    "practice": "Luyện tập"
+    "practice": "Luyện tập",
+    "storage": "Bộ nhớ đệm",
+    "data": "Dữ liệu"
   },
   "camera": {
     "distance": "Khoảng cách",
@@ -149,7 +151,10 @@
     "handsMicroMotion": "Chuyển động vi mô",
     "handsFollowInput": "Tay bám theo bạn chơi",
     "handsKeystrike": "Nhát gõ phím",
-    "handsExpression": "Biểu cảm"
+    "handsExpression": "Biểu cảm",
+    "instrument": "Nhạc cụ",
+    "instrumentLazy": "chỉ tải âm thanh khi chọn",
+    "sampleCacheAuto": "Tự động lưu cache âm thanh"
   },
   "particleBlending": {
     "alpha": "Pháp tuyến",
@@ -490,5 +495,23 @@
     "never": "Không bao giờ",
     "offsetValue": "Độ lệch: {{ms}} ms",
     "calibrate": "Đo"
+  },
+  "storage": {
+    "hint": "Mặc định KHÔNG lưu cache — tải lại trang sẽ tải lại toàn bộ âm thanh. Bật tự động lưu hoặc bấm \"Lưu cache ngay\" nếu muốn dùng lại mà không cần tải.",
+    "saveNow": "Lưu cache ngay",
+    "clear": "Xóa toàn bộ cache",
+    "saved": "Đã lưu {{count}} tệp vào cache ({{failed}} tệp lỗi).",
+    "cleared": "Đã xóa toàn bộ cache.",
+    "used": "Đang dùng {{size}}"
+  },
+  "data": {
+    "hint": "Mọi cài đặt bạn tinh chỉnh được tự động lưu trong trình duyệt — vào lại trang không phải chỉnh lại.",
+    "export": "Xuất cài đặt",
+    "import": "Nhập cài đặt",
+    "imported": "Đã nhập cài đặt.",
+    "importFailed": "Tệp cài đặt không hợp lệ.",
+    "reset": "Khôi phục mặc định",
+    "resetConfirm": "Đặt lại toàn bộ cài đặt (kể cả hình nốt tùy chỉnh) về mặc định?",
+    "resetDone": "Đã khôi phục cài đặt mặc định."
   }
 }

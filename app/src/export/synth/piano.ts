@@ -42,6 +42,7 @@ export async function loadOfflinePiano(
       },
       {
         scheduler: new Scheduler(ctx, { lookaheadMs: Number.POSITIVE_INFINITY }),
+        instrument: settings.instrument,
       },
     ),
     signal,

@@ -1,4 +1,14 @@
-import { useEffect, useRef, useState, type ReactNode, useLayoutEffect, useSyncExternalStore } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  useLayoutEffect,
+  useSyncExternalStore,
+} from 'react'
+import { FileTrigger } from 'react-aria-components'
 import { useTranslation } from 'react-i18next'
 import clsx from 'clsx'
 import { useStore, defaultSettings, type Settings } from '../store'
@@ -16,10 +26,12 @@ import {
   Section,
   SelectRow,
   SliderRow,
+  SwitchRow,
   VerticalSliderBands,
   useEffectiveSetting,
   LookAnchorContext,
   BoundCountRow,
+  useRowMatchesQuery,
 } from './controls'
 import { GradientStops, removeGradientStop } from './look/GradientStops'
 import { PresetSwatch } from './look/PresetSwatch'
@@ -27,11 +39,23 @@ import { ReorderColorRows } from './look/ReorderColorRows'
 import { ImagePicker } from './look/ImagePicker'
 import { useBarColors, useEffectiveLook } from './look/useLookState'
 import { VelocityCurveEditor } from './VelocityCurveEditor'
-import { Button, Icon, IconButton, Panel, GEOMETRY, usePresence } from './kit'
+import { Button, Icon, IconButton, Panel, Select, GEOMETRY, usePresence } from './kit'
 import { useShell } from './shell/uiState'
 import { useTakeInProgress } from './shell/takeFocus'
 import { useIdle } from './shell/idle'
 import { useCustomTexture } from '../notes/customTexture'
+import { getInstrument, instrumentsByFamily } from '../audio/instruments'
+import {
+  cacheSamplesNow,
+  clearSampleCache,
+  sampleCacheSizeBytes,
+} from '../audio/sampleCache'
+import {
+  exportSettingsFile,
+  importSettingsFile,
+  resetAllSettings,
+} from '../settingsPersist'
+import { HANDS_DB_URL } from '../hands/motion'
 import { pitchLabel } from '../midi/noteName'
 import { CAMERA_LIMITS } from '../scene/cameraLimits'
 import { getHandsStatus, subscribeHandsStatus } from '../hands/motion'
@@ -39,7 +63,7 @@ import {
   STAGE_BACKGROUND_ACCEPTED_TYPES,
   useStageBackground,
 } from '../scene/stageBackground'
-import { showAlert } from './confirm'
+import { showAlert, showConfirm } from './confirm'
 import { usePractice } from '../practice/practiceStore'
 import { practiceController } from '../practice/usePracticeEngine'
 import {
@@ -1531,6 +1555,7 @@ function LookPanel({ leaving }: { leaving: boolean }) {
 
             <TabPanel title={t('tab.sound')} active={tab === 'sound'}>
               <Section title={t('section.audio')}>
+                <InstrumentRow />
                 <BoundSwitchRow label={t('row.pedalEnabled')} settingKey="pedalEnabled" />
                 <BoundSliderRow label={t('row.transpose')} settingKey="transpose" min={-24} max={24} step={1} />
                 <BoundSliderRow label={t('row.release')} settingKey="releaseTime" min={0.01} max={1.5} step={0.01} />
@@ -1558,6 +1583,8 @@ function LookPanel({ leaving }: { leaving: boolean }) {
                   <BoundSliderRow label={t('row.reverbLowCut')} settingKey="reverbLowCut" min={20} max={1000} step={10} />
                 </Detail>
               </Section>
+              <SampleCacheSection />
+              <DataSection />
             </TabPanel>
           </div>
         </SearchProvider>
@@ -1621,6 +1648,174 @@ function PcGlyphPresetRow() {
       defaultValue={def.pcGlyphPreset}
       scopeKey="pcGlyphPreset"
     />
+  )
+}
+
+// ── Sound: instrument picker (registry) ─────────────────────────────
+
+/**
+ * Instrument picker (Settings.instrument → audio/instruments.ts).
+ * Samples download lazily on selection; the credit line records source
+ * and licence for the chosen set (project rule: the app must say where
+ * each sound comes from).
+ */
+function InstrumentRow() {
+  const { t } = useTranslation('inspector')
+  const value = useStore((st) => st.settings.instrument)
+  const groups = useMemo(
+    () =>
+      instrumentsByFamily().map((g) => ({
+        label: g.label,
+        options: g.items.map((d) => ({ value: d.id, label: d.label })),
+      })),
+    [],
+  )
+  const label = t('row.instrument')
+  if (!useRowMatchesQuery(label)) return null
+  const credit = getInstrument(value).credit
+  return (
+    <div data-search-label={label} className="grid gap-1.5">
+      <span className="select-none truncate text-ink-muted">{label}</span>
+      <Select
+        value={value}
+        onChange={(v) => atomicUpdate({ instrument: v })}
+        groups={groups}
+        aria-label={label}
+      />
+      <p className="text-caption text-ink-faint">
+        {credit} · {t('row.instrumentLazy')}
+      </p>
+    </div>
+  )
+}
+
+// ── Storage: sample-cache policy ────────────────────────────────────
+
+function formatBytes(bytes: number): string {
+  if (bytes <= 0) return '0 MB'
+  const mb = bytes / (1024 * 1024)
+  return `${mb >= 10 ? Math.round(mb) : mb.toFixed(1)} MB`
+}
+
+/**
+ * Sample-cache controls (audio/sampleCache.ts): the auto toggle is a
+ * real setting (persisted); save-now / clear are imperative actions.
+ * Default is OFF — reloading the page re-downloads every sample unless
+ * the user opts in (2026-11-15 requirement).
+ */
+function SampleCacheSection() {
+  const { t } = useTranslation('inspector')
+  const mode = useStore((st) => st.settings.sampleCacheMode)
+  const [sizeBytes, setSizeBytes] = useState(0)
+  const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState<string | null>(null)
+  const refresh = useCallback(() => {
+    void sampleCacheSizeBytes().then(setSizeBytes)
+  }, [])
+  useEffect(() => {
+    refresh()
+  }, [refresh])
+  return (
+    <Section title={t('section.storage')}>
+      <SwitchRow
+        label={t('row.sampleCacheAuto')}
+        value={mode === 'on'}
+        onChange={(v) => atomicUpdate({ sampleCacheMode: v ? 'on' : 'off' })}
+        defaultValue={def.sampleCacheMode === 'on'}
+      />
+      <p className="text-caption text-ink-faint">{t('storage.hint')}</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          variant="quiet"
+          size="sm"
+          isDisabled={busy}
+          onPress={() => {
+            setBusy(true)
+            setNote(null)
+            // Manual save: samples fetched this session + the hands DB.
+            void cacheSamplesNow([HANDS_DB_URL]).then((r) => {
+              setBusy(false)
+              setNote(t('storage.saved', { count: r.saved, failed: r.failed }))
+              refresh()
+            })
+          }}
+        >
+          {t('storage.saveNow')}
+        </Button>
+        <Button
+          variant="quiet"
+          size="sm"
+          isDisabled={busy}
+          onPress={() => {
+            setBusy(true)
+            setNote(null)
+            void clearSampleCache().then(() => {
+              setBusy(false)
+              setNote(t('storage.cleared'))
+              refresh()
+            })
+          }}
+        >
+          {t('storage.clear')}
+        </Button>
+        <span className="text-caption text-ink-faint">
+          {t('storage.used', { size: formatBytes(sizeBytes) })}
+        </span>
+      </div>
+      {note && <p className="text-caption text-ink-muted">{note}</p>}
+    </Section>
+  )
+}
+
+// ── Data: settings export / import / reset ──────────────────────────
+
+/** Settings persistence controls — the save itself is automatic (settingsPersist). */
+function DataSection() {
+  const { t } = useTranslation('inspector')
+  const [note, setNote] = useState<string | null>(null)
+  return (
+    <Section title={t('section.data')}>
+      <p className="text-caption text-ink-faint">{t('data.hint')}</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="quiet" size="sm" onPress={() => exportSettingsFile()}>
+          {t('data.export')}
+        </Button>
+        <FileTrigger
+          acceptedFileTypes={['application/json']}
+          onSelect={(files) => {
+            const file = files?.[0]
+            if (!file) return
+            void importSettingsFile(file).then((ok) =>
+              setNote(ok ? t('data.imported') : t('data.importFailed')),
+            )
+          }}
+        >
+          <Button variant="quiet" size="sm">
+            {t('data.import')}
+          </Button>
+        </FileTrigger>
+        <Button
+          variant="quiet"
+          size="sm"
+          onPress={() => {
+            void showConfirm({
+              title: t('data.reset'),
+              message: t('data.resetConfirm'),
+              confirmLabel: t('data.reset'),
+              destructive: true,
+            }).then((ok) => {
+              if (ok) {
+                resetAllSettings()
+                setNote(t('data.resetDone'))
+              }
+            })
+          }}
+        >
+          {t('data.reset')}
+        </Button>
+      </div>
+      {note && <p className="text-caption text-ink-muted">{note}</p>}
+    </Section>
   )
 }
 

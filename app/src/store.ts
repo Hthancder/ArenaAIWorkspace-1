@@ -28,6 +28,7 @@ import {
   isAnimatableKey,
 } from './midi/settingsKeyframes'
 import { audioEngine } from './audio/engine'
+import { DEFAULT_INSTRUMENT_ID } from './audio/instruments'
 import { track } from './usage'
 import { pinCountBucket } from './usage/events'
 import type { FileRef } from './projects/types'
@@ -539,6 +540,16 @@ export type Settings = {
   // curve via per-layer group volume offsets. 0..1; default 0.85.
   // See `audio/salamanderDescriptor.applyVelocityCompensation`.
   velocityCompensation: number
+  // Which instrument sounds — registry id (audio/instruments.ts). Only the
+  // selected instrument's samples download, on first use. Part of Settings
+  // so the choice survives reloads like every other preference.
+  instrument: string
+  // Sample-cache policy for instrument downloads (audio/sampleCache.ts).
+  // 'off' (default): reload re-downloads every sample (also bypasses the
+  // browser HTTP cache). 'on': store downloads in Cache Storage and reuse
+  // them on later loads. Manual save/clear are imperative UI actions, not
+  // settings — see `cacheSamplesNow` / `clearSampleCache`.
+  sampleCacheMode: 'off' | 'on'
   // Pitch shift in semitones applied at every "input" stage — live MIDI
   // input from a physical device, AND the song timeline. Falling-note
   // positions also shift so the visualization stays aligned with the
@@ -835,6 +846,8 @@ export const defaultSettings: Settings = {
   eqBands: [-6, -2, 0, 0, 0, 0],
   velocityCurve: DEFAULT_VELOCITY_CURVE,
   velocityCompensation: 0.85,
+  instrument: DEFAULT_INSTRUMENT_ID,
+  sampleCacheMode: 'off',
   transpose: 0,
   pcVelocity: 0.78,
   pcOctaveShift: 0,

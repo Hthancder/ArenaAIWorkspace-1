@@ -20,7 +20,7 @@ export type { HandsMotion }
  * overrides for experiments.
  */
 const DB_FILE = 'motion.82cbd97028.bin'
-const DB_URL =
+export const HANDS_DB_URL =
   (import.meta.env.VITE_HANDS_DB_URL as string | undefined) ??
   `${import.meta.env.BASE_URL}hands/${DB_FILE}`
 
@@ -236,7 +236,7 @@ function startRuntime(): Promise<HandsRuntime> {
     setStatus({ state: 'loading', stage: 'download', fraction: 0 })
     const rt = await HandsRuntime.create({ worker: workerUrl, wasm: wasmUrl })
     try {
-      await rt.load(DB_URL, (stage, f) =>
+      await rt.load(HANDS_DB_URL, (stage, f) =>
         setStatus({ state: 'loading', stage: stage === 'download' ? 'download' : 'prepare', fraction: f }), // (decode and build report one 0..1 between them)
       )
     } catch (e) {

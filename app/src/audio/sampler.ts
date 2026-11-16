@@ -1,40 +1,38 @@
 import {
-  Smplr,
-  Scheduler,
+  type Scheduler,
   type StopFn,
 } from 'smplr'
 import {
-  applyVelocityCompensation,
-  buildSalamanderDescriptor,
-} from './salamanderDescriptor'
+  DEFAULT_INSTRUMENT_ID,
+  getInstrument,
+  type InstrumentHandle,
+} from './instruments'
 // Side-effect import: patches AudioParam.prototype.linearRampToValueAtTime
 // so smplr's hardcoded linear release becomes an exponential decay.
-// MUST be imported before any Smplr instance is created; placing it
-// here (top of sampler.ts) guarantees that since createPiano is the
-// only construction site.
+// MUST be imported before any smplr instrument instance is created;
+// placing it here (top of sampler.ts) guarantees that since instrument
+// construction only happens inside createPiano (via the registry).
 import './smoothRelease'
+// Side-effect import: installs the offline dispatch mode on smplr's
+// Scheduler (see the module header) — again before any construction.
+import './offlineDispatch'
+import { retainOfflineDispatch } from './offlineDispatch'
 import { createSampleStorage } from './sampleCache'
 import * as Tone from 'tone'
 
 /**
- * Salamander Grand Piano V3 sample base URL. `VITE_SAMPLES_BASE_URL`
- * overrides at build time (used for staging / a future CDN deploy);
- * otherwise samples are self-hosted from `public/samples/`
+ * Salamander Grand Piano V3 sample base URL lives in `instruments.ts`
+ * (`SALAMANDER_BASE_URL`) with the rest of the instrument registry —
+ * `VITE_SAMPLES_BASE_URL` overrides at build time (staging / a future
+ * CDN deploy); otherwise samples are self-hosted from `public/samples/`
  * (see `scripts/fetch-samples.sh`) — the upstream `samples.notefall.app`
  * bucket is CORS-locked to notefall.app and must NOT be used by this
- * fork. Trailing slashes get stripped so `${base}/A0v1.ogg` always
- * produces a clean URL.
+ * fork.
  *
- * Cache Storage (see `sampleCache.ts`) absorbs the one-time ~27 MB
- * download — subsequent loads return from disk without touching the
- * network, so there's no UX cost to always serving locally on first
- * play.
+ * Whether downloads are kept across reloads is the sample-cache policy
+ * (`sampleCache.ts`) — off by default, opt-in per the 2026-11-15
+ * requirement.
  */
-const SAMPLES_BASE_URL =
-  (import.meta.env.VITE_SAMPLES_BASE_URL as string | undefined)?.replace(
-    /\/$/,
-    '',
-  ) ?? '/samples/salamander-v3-close'
 
 export type LoadProgress = { loaded: number; total: number }
 
@@ -153,6 +151,13 @@ export function createImpulseResponse(
  * `sampleCache.ts` for the Cache Storage persistence layer.
  */
 export type CreatePianoOptions = {
+  /**
+   * Instrument registry id (see `audio/instruments.ts`). Defaults to the
+   * self-hosted Salamander grand. Only the selected instrument's samples
+   * are downloaded (lazy loading) — see `createPiano` for the swap
+   * semantics on change.
+   */
+  instrument?: string
   /**
    * Override smplr's note Scheduler. The default `Scheduler` polls a
    * `setInterval` to dispatch queued events whose time exceeds the
@@ -273,32 +278,38 @@ export async function createPiano(
   hiCut.connect(wetGain)
   wetGain.connect(context.destination)
 
-  // smplr's signature is typed against AudioContext, but it only calls
-  // BaseAudioContext APIs (AudioBufferSourceNode, GainNode). The cast lets
-  // us share createPiano between the realtime engine and the offline
-  // exporter without duplicating the effect-chain wiring.
-  //
-  // Salamander samples are pro-recorded with a zero-amplitude head,
-  // so the click-on-first-frame problem that older 4-layer piano
-  // sets had doesn't apply here — we don't need a fade-in storage
-  // wrapper.
-  // Hold a reference to the descriptor so `setVelocityCompensation`
-  // can mutate per-group `volume` later — smplr re-reads these on
-  // every `piano.start()` (RegionMatcher stores `groupRef`).
-  const descriptor = buildSalamanderDescriptor(SAMPLES_BASE_URL)
-  const piano = new Smplr(
-    context as AudioContext,
-    descriptor,
-    {
+  // Instrument construction lives in `audio/instruments.ts` — every
+  // registry entry adapts an smplr class to the same handle shape and
+  // casts the context once there (smplr is typed against AudioContext
+  // but only calls BaseAudioContext APIs), so the realtime engine and
+  // the offline exporter share `createPiano` and the effect chain
+  // below verbatim. Samples download on selection only.
+  const entry = getInstrument(options?.instrument ?? DEFAULT_INSTRUMENT_ID)
+  // Offline renders need the synchronous dispatch mode (see
+  // `offlineDispatch.ts`) — realtime playback must keep the default
+  // lookahead scheduler, so only retain it for offline contexts
+  // (detected by `startRendering`, which AudioContext lacks).
+  const isOfflineContext =
+    typeof (context as { startRendering?: unknown }).startRendering ===
+    'function'
+  const releaseOfflineDispatch = isOfflineContext
+    ? retainOfflineDispatch()
+    : () => {}
+  let inst: InstrumentHandle
+  try {
+    inst = entry.create({
+      context,
       destination: masterGain,
       storage: createSampleStorage(),
-      velocity: 100,
       scheduler: options?.scheduler,
       onLoadProgress: (p) =>
         onProgress?.({ loaded: p.loaded, total: p.total }),
-    },
-  )
-  await piano.load
+    })
+    await inst.ready
+  } catch (err) {
+    releaseOfflineDispatch()
+    throw err
+  }
 
   // Per-voice options applied at start time. Held as closure variables and
   // mutated by setters so changes reach subsequent notes without rebuilding
@@ -314,7 +325,7 @@ export async function createPiano(
   return {
     context,
     start(midi, velocity, atAudioTime, stopId) {
-      return piano.start({
+      return inst.start({
         note: midi,
         velocity: Math.max(1, Math.min(127, Math.round(velocity * 127))),
         time: atAudioTime,
@@ -326,7 +337,7 @@ export async function createPiano(
       })
     },
     stopAll() {
-      piano.stop()
+      inst.stop()
     },
     setVolume(value) {
       // Clamp to non-negative; >1 is allowed for boost (caller's choice).
@@ -398,7 +409,7 @@ export async function createPiano(
     },
     setVelocityCompensation(compensation) {
       const c = Math.max(0, Math.min(1, compensation))
-      applyVelocityCompensation(descriptor, c)
+      inst.applyVelocityCompensation?.(c)
     },
     dispose() {
       if (disposed) return
@@ -420,10 +431,11 @@ export async function createPiano(
         }
       }
       try {
-        piano.disconnect()
+        inst.disconnect()
       } catch {
         /* ignore */
       }
+      releaseOfflineDispatch()
       safeDisconnect(masterGain)
       for (const eq of eqFilters) safeDisconnect(eq)
       safeDisconnect(dryGain)

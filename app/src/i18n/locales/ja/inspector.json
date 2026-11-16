@@ -22,7 +22,9 @@
     "pcPlay": "PCキーで演奏",
     "pcKeyLabels": "PCキーラベル",
     "metronome": "メトロノーム",
-    "practice": "練習"
+    "practice": "練習",
+    "storage": "ストレージ",
+    "data": "データ"
   },
   "camera": {
     "distance": "距離",
@@ -149,7 +151,10 @@
     "handsMicroMotion": "マイクロモーション",
     "handsFollowInput": "手を演奏に合わせる",
     "handsKeystrike": "キーストローク",
-    "handsExpression": "表現"
+    "handsExpression": "表現",
+    "instrument": "楽器",
+    "instrumentLazy": "選択時にサンプルをダウンロード",
+    "sampleCacheAuto": "サンプルキャッシュを自動保存"
   },
   "particleBlending": {
     "alpha": "通常",
@@ -490,5 +495,23 @@
     "never": "なし",
     "offsetValue": "オフセット: {{ms}} ms",
     "calibrate": "測定"
+  },
+  "storage": {
+    "hint": "既定ではキャッシュしません — 再読み込みで毎回ダウンロードします。自動保存をオンにするか「今すぐキャッシュを保存」で保存できます。",
+    "saveNow": "今すぐキャッシュを保存",
+    "clear": "キャッシュを全削除",
+    "saved": "{{count}} ファイルを保存しました（失敗 {{failed}}）。",
+    "cleared": "キャッシュを削除しました。",
+    "used": "使用量 {{size}}"
+  },
+  "data": {
+    "hint": "調整した設定はすべてブラウザに自動保存されます。",
+    "export": "設定をエクスポート",
+    "import": "設定をインポート",
+    "imported": "設定をインポートしました。",
+    "importFailed": "設定ファイルとして無効です。",
+    "reset": "初期設定に戻す",
+    "resetConfirm": "すべての設定を初期値に戻しますか？",
+    "resetDone": "初期設定に戻しました。"
   }
 }

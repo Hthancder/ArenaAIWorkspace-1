@@ -1,7 +1,26 @@
 import { HttpStorage, type Storage, type StorageResponse } from 'smplr'
 
 /**
- * Persistent on-disk sample cache backed by the Cache Storage API.
+ * Sample caching policy — the user decides whether downloaded sound
+ * files are kept between reloads.
+ *
+ * Requirement (2026-11-15): by default NOTHING is cached — reloading
+ * the page must re-download every sample. Caching is opt-in, two ways:
+ *
+ * - `sampleCacheMode: 'on'` — auto: every fetched sample is stored in
+ *   Cache Storage and reused on later loads.
+ * - manual save (`cacheSamplesNow`) — stores the samples fetched so far
+ *   this session (plus the hands motion DB) and records them in a
+ *   manifest; those files, and only those, are reused on later loads
+ *   even while auto mode is off.
+ *
+ * Read rule: a URL is served from Cache Storage iff auto mode is on OR
+ * the URL is in the manual manifest. In the default state (mode off,
+ * empty manifest) every fetch goes to the network with `cache:
+ * 'no-store'`, which also bypasses the browser HTTP cache — the files
+ * are served with year-long immutable headers (vercel.json), so
+ * without this a plain reload would still be served from the HTTP
+ * cache and the "reload re-downloads" requirement would silently fail.
  *
  * smplr ships its own `CacheStorage` wrapper, but it caches *every*
  * response — including 404s and 5xx errors. If the user toggles
@@ -27,10 +46,58 @@ const LEGACY_CACHE_NAMES = [
   'notefall-samples-v1',
   'notefall-samples-v2',
 ] as const
+/** Cache the hands runtime's Worker stores the ~22 MB motion DB in (see runtime/hands-worker.js). */
+export const HANDS_CACHE_NAME = 'nf-motion-db'
+/** localStorage keys for the cache policy (mode + manual-save manifest). */
+const MODE_KEY = 'nf:sample-cache-mode'
+const MANUAL_KEY = 'nf:sample-cache-manual'
+
+export type SampleCacheMode = 'off' | 'on'
+
+let mode: SampleCacheMode = 'off'
+/** URLs the user explicitly saved via `cacheSamplesNow` (persisted). */
+const manualUrls = new Set<string>()
+/** URLs the sample storage has seen this session (current + earlier instruments). */
+const seenUrls = new Set<string>()
 
 /** Whether Cache Storage is usable in this environment. */
 export function isSampleCacheAvailable(): boolean {
   return typeof globalThis.caches !== 'undefined'
+}
+
+function loadPersistedPolicy(): void {
+  try {
+    const m = localStorage.getItem(MODE_KEY)
+    if (m === 'on' || m === 'off') mode = m
+    const raw = localStorage.getItem(MANUAL_KEY)
+    if (raw) {
+      const list = JSON.parse(raw) as unknown
+      if (Array.isArray(list)) {
+        for (const u of list) if (typeof u === 'string') manualUrls.add(u)
+      }
+    }
+  } catch {
+    /* corrupted / unavailable storage — keep the safe default (off) */
+  }
+}
+loadPersistedPolicy()
+
+export function getSampleCacheMode(): SampleCacheMode {
+  return mode
+}
+
+export function setSampleCacheMode(next: SampleCacheMode): void {
+  mode = next
+  try {
+    localStorage.setItem(MODE_KEY, next)
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Does the policy currently serve `url` from Cache Storage? */
+function usesCacheFor(url: string): boolean {
+  return mode === 'on' || manualUrls.has(url)
 }
 
 // One-time per-session diagnostic so the user can verify cache
@@ -40,9 +107,9 @@ let loggedHit = false
 let loggedMiss = false
 
 /**
- * Storage wrapper that caches successful (200) responses only.
- * 404 / 5xx / network failures fall through to the underlying
- * fetch on every call so a deferred file deployment becomes
+ * Storage wrapper implementing the cache policy above. Only stores 200
+ * responses. 404 / 5xx / network failures fall through to the
+ * underlying fetch on every call so a deferred file deployment becomes
  * playable as soon as it shows up, instead of being stuck behind
  * a cached failure forever.
  *
@@ -51,44 +118,48 @@ let loggedMiss = false
  * to `cache.put` worked in Chrome but failed silently in some
  * other browsers, leaving the cache permanently empty.
  */
-class StatusFilteredCacheStorage implements Storage {
-  constructor(private readonly cacheName: string) {}
-
+class PolicyStorage implements Storage {
   async fetch(url: string): Promise<StorageResponse> {
-    const cache = isSampleCacheAvailable()
-      ? await caches.open(this.cacheName).catch(() => null)
-      : null
-    const request = new Request(url, { method: 'GET' })
+    seenUrls.add(url)
+    const wantCache = usesCacheFor(url)
+    const cache =
+      wantCache && isSampleCacheAvailable()
+        ? await caches.open(CACHE_NAME).catch(() => null)
+        : null
 
     if (cache) {
-      const hit = await cache.match(request).catch(() => undefined)
+      const hit = await cache.match(url).catch(() => undefined)
       if (hit && hit.status === 200) {
         if (!loggedHit) {
           loggedHit = true
           // eslint-disable-next-line no-console
           console.info(
-            '[sampleCache] cache HIT (' + this.cacheName + ') — subsequent samples served from Cache Storage',
+            '[sampleCache] cache HIT (' + CACHE_NAME + ') — serving from Cache Storage',
           )
         }
         return hit
       }
     }
 
-    if (!loggedMiss && cache) {
+    if (!loggedMiss && isSampleCacheAvailable()) {
       loggedMiss = true
       // eslint-disable-next-line no-console
       console.info(
-        '[sampleCache] cache MISS (' + this.cacheName + ') — fetching from network and persisting',
+        '[sampleCache] cache MISS — fetching from network' +
+          (wantCache ? ' and persisting' : ' (cache off, nothing stored)'),
       )
     }
 
-    const fresh = await fetch(request)
+    // `cache: 'no-store'` skips the browser HTTP cache when the Cache
+    // Storage policy doesn't want this file — the immutable headers on
+    // /samples/* would otherwise serve reloads from the HTTP cache.
+    const fresh = await fetch(url, wantCache ? undefined : { cache: 'no-store' })
     if (cache && fresh.status === 200) {
       try {
         // clone() gives us an independent Response stream to hand
         // to cache.put; the original `fresh` still has an intact
         // body that smplr will read via `arrayBuffer()`.
-        await cache.put(request, fresh.clone())
+        await cache.put(url, fresh.clone())
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn('[sampleCache] cache.put failed for', url, err)
@@ -98,14 +169,13 @@ class StatusFilteredCacheStorage implements Storage {
   }
 }
 
-/** Returns the Cache Storage-backed Storage for use with smplr's Smplr
- *  constructor, or the plain HttpStorage fallback. */
+/** Storage for smplr instrument constructors (see the policy above). */
 export function createSampleStorage(): Storage {
   if (!isSampleCacheAvailable()) return HttpStorage
   // Best-effort cleanup of older cache versions so they don't
   // silently consume disk forever. Fire-and-forget.
   void purgeLegacyCaches()
-  return new StatusFilteredCacheStorage(CACHE_NAME)
+  return new PolicyStorage()
 }
 
 async function purgeLegacyCaches(): Promise<void> {
@@ -120,39 +190,90 @@ async function purgeLegacyCaches(): Promise<void> {
 }
 
 /**
- * Returns true if `url` is already present in the cache. Cheap probe
- * used by the UI to decide whether the HQ-piano toggle should warn
- * about a fresh download. A single hit isn't proof the *whole* sample
- * set is cached — but it's a strong signal (the first sample is
- * fetched eagerly and the rest follow), and probing every URL would
- * cost real disk-read time.
+ * Manual save: store every sample fetched so far this session (plus the
+ * hands motion DB when its URL is known) into Cache Storage and record
+ * the URLs in the persisted manifest, so later loads reuse them even
+ * while auto cache mode is off. Returns how many files were stored.
  */
-export async function isUrlCached(url: string): Promise<boolean> {
-  if (!isSampleCacheAvailable()) return false
-  try {
-    const cache = await caches.open(CACHE_NAME)
-    const hit = await cache.match(url)
-    return hit !== undefined
-  } catch {
-    return false
+export async function cacheSamplesNow(
+  extraUrls: readonly string[] = [],
+): Promise<{ saved: number; failed: number }> {
+  if (!isSampleCacheAvailable()) return { saved: 0, failed: 0 }
+  const cache = await caches.open(CACHE_NAME).catch(() => null)
+  if (!cache) return { saved: 0, failed: 0 }
+  let saved = 0
+  let failed = 0
+  for (const url of [...seenUrls, ...extraUrls]) {
+    try {
+      const res = await fetch(url, { cache: 'no-store' })
+      if (res.status === 200) {
+        await cache.put(url, res.clone())
+        manualUrls.add(url)
+        saved++
+      } else {
+        failed++
+      }
+    } catch {
+      failed++
+    }
   }
+  try {
+    localStorage.setItem(MANUAL_KEY, JSON.stringify([...manualUrls]))
+  } catch {
+    /* ignore */
+  }
+  return { saved, failed }
 }
 
 /**
- * Drop every cached sample. Used by a "Clear sample cache" action in
- * the settings UI when the user wants to reclaim disk space.
+ * Manual clear: wipe every cache this app may have written (sample
+ * sets across versions + the hands motion DB) and the manual manifest.
+ * After this the default "reload re-downloads everything" behaviour is
+ * fully restored.
  */
 export async function clearSampleCache(): Promise<void> {
   if (!isSampleCacheAvailable()) return
-  for (const name of [CACHE_NAME, ...LEGACY_CACHE_NAMES]) {
-    try {
-      await caches.delete(name)
-    } catch {
-      // Most likely a quota / permission edge case — surfacing the
-      // error to the user gives them nothing actionable, so swallow.
+  const keys = await caches.keys().catch(() => [] as string[])
+  for (const name of keys) {
+    // Only our namespaces — the origin is app-dedicated, but deleting
+    // arbitrary foreign caches would be rude in an embedded preview.
+    if (name.startsWith('notefall-') || name.startsWith('nf-')) {
+      try {
+        await caches.delete(name)
+      } catch {
+        /* ignore */
+      }
     }
+  }
+  manualUrls.clear()
+  try {
+    localStorage.removeItem(MANUAL_KEY)
+  } catch {
+    /* ignore */
   }
 }
 
-/** Re-export StorageResponse so callers don't need to import smplr directly. */
-export type { StorageResponse }
+/** Approximate bytes currently stored in the app's caches (for the UI). */
+export async function sampleCacheSizeBytes(): Promise<number> {
+  if (!isSampleCacheAvailable()) return 0
+  let total = 0
+  const keys = await caches.keys().catch(() => [] as string[])
+  for (const name of keys) {
+    if (!name.startsWith('notefall-') && !name.startsWith('nf-')) continue
+    try {
+      const cache = await caches.open(name)
+      const reqs = await cache.keys()
+      for (const req of reqs) {
+        const res = await cache.match(req)
+        if (!res) continue
+        // Prefer the Content-Length header — reading every body just to
+        // measure the cache would stream hundreds of megabytes.
+        const header = Number(res.headers.get('content-length'))
+        total += Number.isFinite(header) && header > 0 ? header : 0
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return total
+}

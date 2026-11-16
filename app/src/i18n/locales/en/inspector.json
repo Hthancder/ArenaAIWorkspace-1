@@ -22,7 +22,9 @@
     "pcPlay": "Playing on the computer",
     "pcKeyLabels": "Computer-key labels",
     "metronome": "Metronome",
-    "practice": "Practice"
+    "practice": "Practice",
+    "storage": "Storage",
+    "data": "Data"
   },
   "camera": {
     "distance": "Distance",
@@ -149,7 +151,10 @@
     "handsMicroMotion": "Micro-motion",
     "handsFollowInput": "Hands follow your playing",
     "handsKeystrike": "Keystrike tap",
-    "handsExpression": "Expression"
+    "handsExpression": "Expression",
+    "instrument": "Instrument",
+    "instrumentLazy": "samples download on selection",
+    "sampleCacheAuto": "Auto-save sample cache"
   },
   "particleBlending": {
     "alpha": "Normal",
@@ -490,5 +495,23 @@
     "never": "Never",
     "offsetValue": "Offset: {{ms}} ms",
     "calibrate": "Measure"
+  },
+  "storage": {
+    "hint": "By default nothing is cached — reloading re-downloads every sample. Turn on auto-save or press \"Save cache now\" to keep sounds between visits.",
+    "saveNow": "Save cache now",
+    "clear": "Clear all cache",
+    "saved": "Saved {{count}} files to cache ({{failed}} failed).",
+    "cleared": "Cache cleared.",
+    "used": "Using {{size}}"
+  },
+  "data": {
+    "hint": "Every setting you tune is saved in the browser automatically — no need to redo them on the next visit.",
+    "export": "Export settings",
+    "import": "Import settings",
+    "imported": "Settings imported.",
+    "importFailed": "Not a valid settings file.",
+    "reset": "Restore defaults",
+    "resetConfirm": "Reset all settings (including a custom note texture) to defaults?",
+    "resetDone": "Settings restored to defaults."
   }
 }

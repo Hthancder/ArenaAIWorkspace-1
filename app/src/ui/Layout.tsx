@@ -16,6 +16,7 @@ import { IdleDriver } from './shell/idle'
 import { setFullscreenRoot, useIsFullscreen } from './shell/fullscreen'
 import { useStore } from '../store'
 import { audioEngine } from '../audio/engine'
+import { setSampleCacheMode } from '../audio/sampleCache'
 import { midiInput } from '../audio/midiInput'
 import { isAudioName, useUserAudio } from '../audio/userAudio'
 import { parseMidi } from '../midi/parse'
@@ -129,6 +130,10 @@ export function Layout() {
     audioEngine.setVelocityCompensation(prev.velocityCompensation)
     audioEngine.setTranspose(prev.transpose)
     midiInput.setTranspose(prev.transpose)
+    // Instrument switch is lazy (id-only until the sampler loads) — see
+    // AudioEngine.setInstrument.
+    void audioEngine.setInstrument(prev.instrument)
+    setSampleCacheMode(prev.sampleCacheMode)
     audioEngine.setUserAudioOffset(prev.userAudioOffsetSec)
     audioEngine.setUserAudioVolume(prev.userAudioVolume)
     audioEngine.setMidiOffset(prev.midiOffsetSec)
@@ -167,6 +172,8 @@ export function Layout() {
         audioEngine.setTranspose(cur.transpose)
         midiInput.setTranspose(cur.transpose)
       }
+      if (cur.instrument !== prev.instrument) void audioEngine.setInstrument(cur.instrument)
+      if (cur.sampleCacheMode !== prev.sampleCacheMode) setSampleCacheMode(cur.sampleCacheMode)
       if (cur.userAudioOffsetSec !== prev.userAudioOffsetSec)
         audioEngine.setUserAudioOffset(cur.userAudioOffsetSec)
       if (cur.userAudioVolume !== prev.userAudioVolume)

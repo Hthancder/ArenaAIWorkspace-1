@@ -419,3 +419,67 @@ dùng source dẫn trước; thêm GĐ1 double-curl ≤8mm, GĐ3 strike ≤3.5mm
 0.8–4.5mm + rebound, GĐ2 couple theo proximity). test-livehands/humanize: 3 ngưỡng đổi
 theo fixture/SETTLE_CAP. **Lỗi test bắt buộc phải sửa**: test cũ giữ phím vĩnh viễn
 (setTimeout không chạy) → slot misallocation; source test teleport (segment kích hoạt muộn).
+
+## Nhạc cụ + lưu settings (2026-11-15)
+
+**Yêu cầu**: (1) thêm âm thanh nhạc cụ mới chất lượng cao (đủ piano HQ + nhạc cụ
+khác + GM 128) — CHỈ tải nhạc cụ khi chọn (lazy), mặc định KHÔNG cache (reload
+tải lại toàn bộ sample), tùy chọn bật tự động lưu + "lưu cache ngay" (manual) +
+xóa cache thủ công, ghi nguồn/license; (2) lưu TẤT CẢ cài đặt user tùy chỉnh —
+reload trang không mất.
+
+**Registry** (`src/audio/instruments.ts`): 138 nhạc cụ = 10 chọn lọc + GM 128.
+Nguồn/license xác minh qua mạng (không lấy bừa):
+- Salamander V3 (self-host `public/samples/`) — Alexander Holm, CC-BY 3.0 (ghi công).
+- Splendid Grand Steinway — sfzinstruments, **Public Domain** (qua `SplendidGrandPiano`).
+- CP80 / Wurlitzer EP200 / Pianet T — Greg Sullivan E-Pianos, **CC-BY 3.0**
+  (xác minh README sfzinstruments/GregSullivan.E-Pianos).
+- TX81Z FM Piano + Vibraphone/Xylophone/Tubular Bells/Balafon — VCSL, **CC0**
+  (Versilian Studios).
+- GM 128 — **FluidR3_GM, CC-BY 3.0** (gleitz/midi-js-soundfonts; tránh
+  MusyngKite/FatBoy vì CC-BY-SA). Host GitHub Pages `smpldsnds.github.io` +
+  `gleitz.github.io` (chính host smplr bundle dùng).
+Tên GM lấy NGUYÊN list thật của FluidR3 (đã đối chiếu `getSoundfontNames()`):
+thiếu họ Organ 8 cây, `clavinet`, `synth_choir`, `lead_8_bass__lead` (2 gạch dưới
+— tên file thật) so với list "chuẩn" tự nhớ → luôn tra list thật, không nhớ bừa.
+
+**Lazy + pipeline**: `createPiano(..., { instrument })` nhận registry id; mỗi entry
+adapter smplr class → `InstrumentHandle` thống nhất (ready/start/stop/disconnect +
+`applyVelocityCompensation` chỉ salamander). Chain EQ/reverb/velocity giữ nguyên
+cho mọi nhạc cụ. `AudioEngine.setInstrument` dựng sampler mới SONG SONG (cũ phát
+tiếp tới khi swap), drop rebuild thặng dư, lazy khi chưa init. Export offline
+dùng `settings.instrument` luôn.
+
+**Sự cố kỹ thuật — scheduler export offline**: wrapper smplr (Soundfont/
+ElectricPiano/Mallet/SplendidGrandPiano) KHÔNG forward `scheduler` option → mặc
+định Scheduler (~100ms lookahead, setInterval) câm trong `OfflineAudioContext`
+(một burst đồng bộ) → export WAV chỉ kêu ~100ms đầu. Fix tổng quan
+(`src/audio/offlineDispatch.ts`): patch `Scheduler.prototype.schedule` dispatch
+đồng bộ khi có piano offline (refcount, bật trong createPiano với context có
+`startRendering`, tắt ở dispose) — không phải copy nội bộ từng class.
+
+**Cache policy** (`src/audio/sampleCache.ts`): mặc định OFF — fetch `cache:
+'no-store'` (qua mặt cả HTTP cache immutable 1 năm của /samples/*) và KHÔNG đọc/
+ghi Cache Storage → reload tải lại mọi sample. Bật "Tự động lưu" = read+write
+through. "Lưu cache ngay" = ghi các URL đã fetch phiên này + hands DB
+(`nf-motion-db` — cache riêng của hands worker) vào cache + manifest
+`nf:sample-cache-manual`; các URL trong manifest được đọc từ cache cả khi auto
+off (lưu tay = opt-in giữ riêng từng file). "Xóa cache" = xóa mọi cache `notefall-*`
+/ `nf-*` + manifest. Kích thước hiển thị qua content-length (không đọc body).
+
+**Lưu settings** (`src/settingsPersist.ts`): localStorage `nf:settings`
+(envelope v1 = settings đầy đủ + practice prefs + customTexture base64 ≤2.5MB).
+Restore TRƯỚC render (main.tsx) → Layout sync engine đọc state đã khôi phục làm
+initial — không cần pass apply riêng. Save debounce 400ms + flush pagehide/
+visibilitychange. Lenient merge (key lạ drop, thiếu fill default) như
+`projects/actions.ts:loadSettings` (duplicate có chủ đích — import chéo sẽ cycle).
+UI "Dữ liệu": xuất/nhập JSON + khôi phục mặc định (có confirm). Practice chỉ lưu
+prefs (mode/scoringOffset/waitAutoAdvance/calibration.resultMs) — session state
+không lưu. `projects/actions.ts:loadSettings` giữ `instrument`/`sampleCacheMode`
+hiện tại khi project cũ thiếu (prefs phiên, không thuộc document).
+
+**Test**: `scripts/test-settings-persist.ts` (25 checks: registry 138 ids duy nhất,
+GM 128, credit/label đầy đủ; cache mode persist; boot restore + unknown-key drop +
+practice prefs; save debounce roundtrip; import file rác từ chối; reset; offline
+dispatch patch bật/tắt). Battery cũ (livebrowser 39, livehands 42, notequery 10,
+humanize, practice) + tsc + build sạch.

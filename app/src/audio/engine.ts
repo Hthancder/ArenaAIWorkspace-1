@@ -24,6 +24,7 @@ import {
   type VelocityCurve,
 } from './velocityCurve'
 import { DEFAULT_VELOCITY_COMPENSATION } from './salamanderDescriptor'
+import { DEFAULT_INSTRUMENT_ID } from './instruments'
 
 type ActiveNote = {
   id: number
@@ -112,6 +113,8 @@ export type LiveInputListener = (
  */
 export class AudioEngine {
   private piano: PianoInstrument | null = null
+  /** Registry id of the instrument to build (audio/instruments.ts). */
+  private instrumentId = DEFAULT_INSTRUMENT_ID
   private song: ParsedSong | null = null
 
   private playing = false
@@ -249,26 +252,69 @@ export class AudioEngine {
     if (this.initPromise) return this.initPromise
     this.initPromise = (async () => {
       try {
-        this.piano = await createPiano(undefined, onProgress)
-        this.piano.setVolume(this.effectiveSamplerVolume())
-        this.piano.setReverbSize(this.reverbSize)
-        this.piano.setReverbDecayTime(this.reverbDecayTime)
-        this.piano.setReverbDecay(this.reverbDecay)
-        this.piano.setReverbPreDelay(this.reverbPreDelay)
-        this.piano.setReverbDamping(this.reverbDamping)
-        this.piano.setReverbHiCut(this.reverbHiCut)
-        this.piano.setReverbLowCut(this.reverbLowCut)
-        this.piano.setReverbDry(this.reverbDry)
-        this.piano.setReverbWet(this.effectiveWet())
-        this.piano.setReleaseTime(this.releaseTime)
-        this.piano.setDetune(this.detuneCents)
-        this.piano.setVelocityCompensation(this.velocityCompensation)
-        this.eqBandsDb.forEach((db, i) => this.piano!.setEqBand(i, db))
+        this.piano = await createPiano(undefined, onProgress, {
+          instrument: this.instrumentId,
+        })
+        this.applyPianoSettings(this.piano)
       } finally {
         this.initPromise = null
       }
     })()
     return this.initPromise
+  }
+
+  /** Push every sound-shaping setting onto a (re)built sampler. */
+  private applyPianoSettings(piano: PianoInstrument): void {
+    piano.setVolume(this.effectiveSamplerVolume())
+    piano.setReverbSize(this.reverbSize)
+    piano.setReverbDecayTime(this.reverbDecayTime)
+    piano.setReverbDecay(this.reverbDecay)
+    piano.setReverbPreDelay(this.reverbPreDelay)
+    piano.setReverbDamping(this.reverbDamping)
+    piano.setReverbHiCut(this.reverbHiCut)
+    piano.setReverbLowCut(this.reverbLowCut)
+    piano.setReverbDry(this.reverbDry)
+    piano.setReverbWet(this.effectiveWet())
+    piano.setReleaseTime(this.releaseTime)
+    piano.setDetune(this.detuneCents)
+    piano.setVelocityCompensation(this.velocityCompensation)
+    this.eqBandsDb.forEach((db, i) => piano.setEqBand(i, db))
+  }
+
+  /** Registry id of the sounding instrument (audio/instruments.ts). */
+  getInstrumentId(): string {
+    return this.instrumentId
+  }
+
+  /**
+   * Switch the sounding instrument. Lazy: if the sampler hasn't loaded
+   * yet, only the id changes — the first play downloads the selected
+   * instrument's samples and nothing else. Otherwise the replacement is
+   * built alongside the current one (which keeps sounding until the
+   * swap), then the old sampler is stopped and disposed. Superfluous
+   * rebuilds (the user flipping the picker) are dropped, not queued.
+   */
+  async setInstrument(id: string): Promise<void> {
+    if (id === this.instrumentId) return
+    this.instrumentId = id
+    // Not initialised yet (or dev no-audio) — init() picks the id up.
+    if (!this.piano && !this.initPromise) return
+    // Let an in-flight init settle before swapping.
+    if (this.initPromise) await this.initPromise
+    if (!this.piano) return
+    if (this.instrumentId !== id) return // superseded while awaiting
+    const old = this.piano
+    const fresh = await createPiano(undefined, undefined, { instrument: id })
+    if (this.instrumentId !== id) {
+      // Superseded during the download — drop this build; the newer
+      // call owns the swap and will dispose the still-playing old one.
+      fresh.dispose()
+      return
+    }
+    this.applyPianoSettings(fresh)
+    this.piano = fresh
+    old.stopAll()
+    old.dispose()
   }
 
   isReady(): boolean {
