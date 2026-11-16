@@ -273,6 +273,29 @@ async function run(api,now,deps={},options={}){
   const text=names.map(name=>`${meta[name].short} ${valueLabel(name,entry.values[name])}${meta[name].estimated?' (ước lượng)':''}`).join(' · ');
   return `${text} · ${ageLabel(entry.at,now)}${entry.sharedTabs>1?` · tiến trình chung ${entry.sharedTabs} tab`:''}${entry.source?` · nguồn: ${entry.source}`:''}`;
  }
+ // 15.4: in "Hỏi trước", the measured candidates become one card in Cần chú ý. A card nobody answers is
+ // not consent, and dismissing it lasts only for the measurement it describes, so no suppression list grows.
+ function attention(config,run,now){
+  if(!Number.isFinite(now))throw Error('Không xác định được thời gian.');
+  let c;try{c=validate(config)}catch{return null}
+  if(!c.enabled||c.mode!=='ask')return null;
+  if(!run||run.measurable!==true||!Number.isFinite(run.at)||!(Number.isInteger(run.overCount)&&run.overCount>0))return null;
+  // Numbers older than two cycles are already refused as a decision basis, so they must not nag either.
+  if(now-run.at>=2*c.everyMinutes*60000)return null;
+  const ids=(Array.isArray(run.ids)?run.ids:[]).filter(id=>Number.isInteger(id)&&id>=0);
+  if(!ids.length)return null;
+  return {at:run.at,overCount:run.overCount,blockedCount:Number.isInteger(run.blockedCount)?run.blockedCount:0,ids,dismissed:run.dismissedAt===run.at,age:ageLabel(run.at,now)};
+ }
+ // The note lives on the measurement itself, so the next cycle replaces it instead of hiding future cards.
+ async function dismiss(api,at,undo=false){
+  if(!Number.isInteger(at))throw Error('Không xác định được lần đo cần ẩn.');
+  const data=await api.storage.local.get([runKey]),run=data&&data[runKey];
+  if(!run||run.at!==at)throw Error('Lần đo đã thay đổi ở nơi khác; hãy xem lại danh sách trước khi ẩn thẻ.');
+  const next={...run};
+  if(undo)delete next.dismissedAt;else next.dismissedAt=at;
+  try{await api.storage.local.set({[runKey]:next})}catch{throw Error('Không xác nhận được việc ẩn thẻ; hãy kiểm tra lại trước khi thử.')}
+  return next;
+ }
  function describe(raw,context={}){
   let c;try{c=validate(raw)}catch{return {kind:'error',text:'Cấu hình cho nghỉ theo tài nguyên không hợp lệ; tính năng đã dừng.'}}
   if(context.measurable!==true)return {kind:c.enabled?'warning':'off',text:`${notMeasurable}. ${c.enabled?'Thiết lập đang bật nhưng không có số đo; sẽ không có tab nào được nghỉ.':'Chỉ còn đường cho nghỉ thủ công ở Tab đang mở.'}`};
@@ -284,6 +307,6 @@ async function run(api,now,deps={},options={}){
   const stale=Number.isFinite(context.measuredAt)&&context.measuredAt>0&&Number.isFinite(context.now)&&context.now-context.measuredAt>2*c.everyMinutes*60000;
   return {kind:c.mode,text:`${modeLabel(c.mode)} · xét ${c.resources.map(name=>meta[name].short).join(', ')} · tối đa ${c.maxPerRun} tab mỗi lượt${count}${age}${stale?' · dữ liệu đo đã cũ, hãy đo lại':''}${context.missed===true?' · có chu kỳ đo đã bỏ lỡ, không chạy bù':''}${status}`};
  }
- return {prefix,settingKey,runKey,keys,meta,modes,combines,maxSeries,defaults,notMeasurable,modeLabel,integer,validate,capability,assertUsable,key,record,read,readRecords,recall,forget,remember,measure,prune,run,resource,row,plan,line,describe,valueLabel,ageLabel,idleLabel};
+ return {prefix,settingKey,runKey,keys,meta,modes,combines,maxSeries,defaults,notMeasurable,modeLabel,integer,validate,capability,assertUsable,key,record,read,readRecords,recall,forget,remember,measure,prune,run,resource,row,plan,line,attention,dismiss,describe,valueLabel,ageLabel,idleLabel};
 })();
 if(typeof module!=='undefined')module.exports=AutoDiscard;

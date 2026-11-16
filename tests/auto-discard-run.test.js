@@ -82,5 +82,15 @@ const deps=(list,extra={})=>({grace:OpenGrace,protection:Protection,tabs:list,..
  await assert.rejects(()=>A.run(api(true,{failWrite:true}),now,deps(tabs),{force:true}),/Không xác nhận được việc lưu kết quả đo/);
  const again=await A.run(store(),now,deps(tabs,{memory:{getInfo:async()=>({})}}),{force:true});
  assert.deepEqual([again.status,again.run.overCount,discards],['measured',2,0]);
+ // Hiding the card notes this measurement only; the next cycle replaces the note.
+ const noted=await A.dismiss(api(),again.run.at);
+ assert.deepEqual([noted.dismissedAt,db.autoDiscardRun.dismissedAt,A.attention(config,db.autoDiscardRun,now).dismissed],[again.run.at,again.run.at,true]);
+ assert.equal((await A.dismiss(api(),again.run.at,true)).dismissedAt,undefined);
+ assert.equal((await A.run(store(),now+60000,deps(tabs),{force:true})).run.dismissedAt,undefined);
+ assert.deepEqual(Object.keys(db.autoDiscardRun).sort(),['at','blockedCount','ids','measurable','overCount']);
+ await assert.rejects(()=>A.dismiss(api(),again.run.at),/Lần đo đã thay đổi ở nơi khác/);
+ await assert.rejects(()=>A.dismiss(api(true,{failWrite:true}),db.autoDiscardRun.at),/Không xác nhận được việc ẩn thẻ/);
+ await assert.rejects(()=>A.dismiss(api()),/Không xác định được lần đo cần ẩn/);
+ assert.deepEqual([discards,db.autoDiscardRun.at],[0,now+60000]);
  console.log('The measurement cycle stays read-only, waits, and admits every way it cannot run: OK');
 })().catch(e=>{console.error(e);process.exitCode=1});

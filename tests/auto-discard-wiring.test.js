@@ -23,7 +23,7 @@ assert.match(dash,/const next=AutoDiscard\.assertUsable\(patch,autoDiscardContex
 assert.match(dash,/function autoDiscardContext\(\)\{return \{measurable:autoDiscardCapability\(\)\.measurable,systemMemory:chrome\.system\?\.memory\?\.getInfo\?true:false\}\}/);
 assert.match(dash,/const stored=Number\.isFinite\(autoDiscardRun\?\.at\)\?autoDiscardRun:null;/);
 // Every action of the block is reachable from the delegated handler.
-for(const action of ['auto-discard-toggle','auto-discard-save','auto-discard-measure','auto-discard-reset','auto-discard-choose','auto-discard-limits'])assert.ok(dash.includes(`if(b.dataset.action==='${action}')`),`${action} is wired`);
+for(const action of ['auto-discard-toggle','auto-discard-save','auto-discard-measure','auto-discard-reset','auto-discard-choose','auto-discard-limits','auto-discard-review','auto-discard-dismiss','auto-discard-restore'])assert.ok(dash.includes(`if(b.dataset.action==='${action}')`),`${action} is wired`);
 assert.match(dash,/if\(b\.dataset\.action==='auto-discard-reset'\)\{resetAutoDiscardForm\(\);return\}/);
 assert.match(dash,/if\(e\.key==='Escape'&&autoDiscardOpen&&!\$\('#dialog'\)\.open&&!\$\('#palette'\)\.open\)\{e\.preventDefault\(\);collapseAutoDiscard\(\);return\}/);
 assert.match(dash,/function collapseAutoDiscard\(\)\{if\(!autoDiscardOpen\|\|autoDiscardBusy\)return;/);
@@ -40,10 +40,27 @@ assert.match(mod,/if\(!options\.force&&free>=config\.lowMemoryFloor\)return \{st
 assert.match(mod,/if\(!Number\.isFinite\(capacity\)\|\|!Number\.isFinite\(free\)\|\|capacity<=0\|\|free<0\|\|free>capacity\)return null;/);
 assert.doesNotMatch(mod,/lowMemoryFloor\s*[<>]/,'no invented comparison against a guessed memory number');
 
+// The measured candidates reach the user as one review card in Cần chú ý, decided by the module.
+assert.match(mod,/function attention\(config,run,now\)\{[\s\S]{0,300}if\(!c\.enabled\|\|c\.mode!=='ask'\)return null/);
+assert.match(mod,/if\(now-run\.at>=2\*c\.everyMinutes\*60000\)return null;/);
+assert.match(mod,/if\(!run\|\|run\.at!==at\)throw Error\('Lần đo đã thay đổi ở nơi khác/);
+assert.match(mod,/next\.dismissedAt=at;/);
+assert.match(dash,/function autoDiscardAttention\(\)\{return AutoDiscard\.attention\(autoDiscardConfig,autoDiscardRun,Date\.now\(\)\)\}/);
+assert.match(dash,/<\/div>\$\{autoDiscardAttentionCard\(resource\)\}\$\{notificationHistoryPanel\(\)\}/);
+assert.ok(dash.includes("if(!card){notify('Thẻ không còn hiệu lực; hãy đo lại trong Cài đặt.');return}"),'an expired card refuses every action');
+// The card is decided once, in the module, and counts as something needing attention.
+assert.match(dash,/resource:AutoDiscard\.attention\(autoDiscardConfig,autoDiscardRun,Date\.now\(\)\)\};/);
+assert.match(dash,/const \{reminders,uncertain,autoIssues,resource\}=attentionData\(\);/);
+assert.match(dash,/\$\('#sideAttention'\)\.textContent=attention\.reminders\.length\+attention\.uncertain\.length\+attention\.autoIssues\.length\+\(attention\.resource\?1:0\);/);
+// Both entry points mark tabs through one routine, so the card cannot promise more than the dialog does.
+assert.match(dash,/function autoDiscardChoose\(\)\{autoDiscardMark\(autoDiscardSummary\?\.ids\|\|\[\],true\)\}/);
+assert.match(dash,/function autoDiscardMark\(ids,clearSummary\)\{[\s\S]{0,220}filter\(id=>tabs\.some\(t=>t\.id===id\)\)/);
+assert.doesNotMatch(dash,/function autoDiscardAttentionCard\(\)\{[\s\S]{0,1800}tabs\.discard|function autoDiscardAttentionAction\([\s\S]{0,1200}tabs\.discard/);
+
 // The collapsed header is a real toggle, and the animation follows the shared motion settings.
 assert.match(dash,/<button type="button" class="auto-discard-head" id="autoDiscardToggle" aria-expanded="\$\{autoDiscardOpen\?'true':'false'\}" aria-controls="autoDiscardBody">/);
 assert.match(dash,/<div class="auto-discard-body\$\{autoDiscardOpen\?'':' hidden'\}" id="autoDiscardBody">/);
 assert.match(dash,/Số đo lấy lại theo chu kỳ ở trên, chạy cùng lịch với các việc nền khác; chưa có lượt nghỉ tự động và chưa xin quyền đọc tiến trình/);
 assert.match(css,/@keyframes autoDiscardIn\{from\{opacity:0;transform:translateY\(-3px\)\}to\{opacity:1;transform:none\}\}/);
 assert.match(css,/:root\[data-motion="reduce"\] \*/);
-console.log('Resource measurement shares one entry point, stays read-only, and asks for no new permission: OK');
+console.log('Resource measurement shares one entry point, reaches Cần chú ý as a review card, and asks for no new permission: OK');

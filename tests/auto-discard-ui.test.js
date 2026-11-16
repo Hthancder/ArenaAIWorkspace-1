@@ -192,6 +192,41 @@ assert.doesNotMatch(markup,/data-action="auto-discard-save"/);
  assert.deepEqual(Object.keys(session),[AutoDiscard.key(1),AutoDiscard.key(2)]);
  assert.equal(session[AutoDiscard.key(1)].url,undefined);
  assert.doesNotMatch(JSON.stringify(session),/https?:/);
+ // The attention card is a pointer to the same manual preview, never a second sleep path.
+ const runAt=Date.now();
+ ctx.autoDiscardRun={at:runAt,overCount:2,blockedCount:1,measurable:true,ids:[1,2]};
+ Object.assign(db,{autoDiscardRun:structuredClone(ctx.autoDiscardRun)});
+ let cardMarkup=ctx.autoDiscardAttentionCard();
+ assert.match(cardMarkup,/Tab vượt ngưỡng tài nguyên \(2\)/);
+ assert.match(cardMarkup,/1 tab bị chặn bởi danh sách bảo vệ hoặc đang được xem/);
+ assert.match(cardMarkup,/chưa tab nào bị nghỉ; cần bạn xác nhận/);
+ assert.match(cardMarkup,/>Xem & nghỉ</);
+ assert.doesNotMatch(cardMarkup,/https?:|example\.com|tabspace:metrics/);
+ await ctx.autoDiscardAttentionAction('review');
+ assert.deepEqual([ctx.view,[...ctx.selected].sort(),discards],['open',[1,2],0]);
+ assert.match(notices.at(-1),/Đã chọn 2 tab vượt ngưỡng; chưa cho nghỉ tab nào/);
+ // Dismissing notes the measurement; the card then offers only to come back.
+ await ctx.autoDiscardAttentionAction('dismiss');
+ assert.equal(db.autoDiscardRun.dismissedAt,runAt);
+ ctx.autoDiscardRun=structuredClone(db.autoDiscardRun); // load() refreshes the page state after a write
+ cardMarkup=ctx.autoDiscardAttentionCard();
+ assert.match(cardMarkup,/đã bỏ qua ở lần đo này/);
+ assert.match(cardMarkup,/>Hiện lại thẻ</);
+ assert.doesNotMatch(cardMarkup,/auto-discard-review|auto-discard-dismiss/);
+ await ctx.autoDiscardAttentionAction('restore');
+ assert.equal(db.autoDiscardRun.dismissedAt,undefined);
+ ctx.autoDiscardRun=structuredClone(db.autoDiscardRun);
+ assert.match(ctx.autoDiscardAttentionCard(),/>Xem & nghỉ</);
+ // Old numbers do not nag, and an expired card refuses every action.
+ ctx.autoDiscardRun={at:runAt-3600000,overCount:2,measurable:true,ids:[1,2]};
+ assert.equal(ctx.autoDiscardAttentionCard(),'');
+ await ctx.autoDiscardAttentionAction('dismiss');
+ assert.match(notices.at(-1),/Thẻ không còn hiệu lực; hãy đo lại trong Cài đặt/);
+ ctx.autoDiscardRun={at:runAt,overCount:2,measurable:true,ids:[404]};
+ await ctx.autoDiscardAttentionAction('review');
+ assert.match(notices.at(-1),/Không còn tab nào từ danh sách đo; chưa chọn tab nào/);
+ assert.deepEqual([discards,[...ctx.selected].sort(),db.autoDiscardRun.dismissedAt],[0,[1,2],undefined]);
+ ctx.autoDiscardRun=structuredClone(db.autoDiscardRun);
  ctx.autoDiscardChoose();
  assert.equal(closed>=1,true);
  assert.deepEqual([ctx.view,[...ctx.selected],discards],['open',[1],0]);

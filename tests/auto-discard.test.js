@@ -147,5 +147,23 @@ assert.deepEqual([A.idleLabel(59),A.idleLabel(90),A.idleLabel(48*60),A.idleLabel
  assert.match(A.describe({...base,enabled:true},{measurable:true,overCount:12,measuredAt:now-240000,now}).text,/Hỏi trước · xét RAM, CPU · tối đa 10 tab mỗi lượt · 12 tab đang vượt ngưỡng · đo 4 phút trước · chỉ nghỉ khi bạn xác nhận/);
  assert.match(A.describe({...base,enabled:true,mode:'auto'},{measurable:true,overCount:0,now}).text,/Tự động · xét RAM, CPU · tối đa 10 tab mỗi lượt · chưa có tab nào vượt ngưỡng · chưa có số đo · không hỏi lại từng lượt/);
  assert.equal(A.describe({enabled:'yes'},{}).kind,'error');
+ // The card in Cần chú ý belongs to "Hỏi trước" only, and it expires together with the numbers it reports.
+ const card={at:now,overCount:3,blockedCount:2,measurable:true,ids:[7,8,9]};
+ const ask={...base,mode:'ask',resources:['memory'],thresholds:{memory:500,cpu:50}};
+ assert.deepEqual(A.attention(ask,card,now),{at:now,overCount:3,blockedCount:2,ids:[7,8,9],dismissed:false,age:'đo ngay bây giờ'});
+ assert.equal(A.attention({...ask,mode:'suggest'},card,now),null);
+ assert.equal(A.attention({...ask,mode:'auto'},card,now),null);
+ assert.equal(A.attention({...ask,enabled:false},card,now),null);
+ assert.equal(A.attention({enabled:'nope'},card,now),null);
+ assert.equal(A.attention(ask,null,now),null);
+ assert.equal(A.attention(ask,{...card,measurable:false},now),null);
+ assert.equal(A.attention(ask,{...card,overCount:0},now),null);
+ assert.equal(A.attention(ask,{...card,ids:[]},now),null);
+ assert.equal(A.attention(ask,{...card,ids:['7',-2,1.5,8]},now).ids.join(), '8');
+ assert.equal(A.attention({...ask,everyMinutes:5},card,now+9*60000).age,'đo 9 phút trước');
+ assert.equal(A.attention({...ask,everyMinutes:5},card,now+10*60000),null);
+ assert.equal(A.attention(ask,{...card,dismissedAt:card.at},now).dismissed,true);
+ assert.equal(A.attention(ask,{...card,dismissedAt:card.at-1},now).dismissed,false);
+ assert.throws(()=>A.attention(ask,card,'x'),/Không xác định được thời gian/);
  console.log('Resource thresholds, streaks, guards and honest unmeasurable state: OK');
 })().catch(e=>{console.error(e);process.exitCode=1});
