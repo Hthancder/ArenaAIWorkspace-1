@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct WritingToolsView: View {
-    @StateObject var cfg = Configurator.shared
+    @ObservedObject var cfg = Configurator.shared
     @StateObject var context: Presenter.Context
     @StateObject var textProxy: TextProxy
 
@@ -19,15 +19,20 @@ struct WritingToolsView: View {
     @State var isRetrying: Bool = false
     @State var shouldRetryWhenActive: Bool = false
 
-    @State var model: String = ""
-    @State var modelList: ModelTree = .init(values: [:])
     @State var output: String = ""
+    @State var outputHistory: [String] = []
+    @State var historyIndex: Int = 0
+    @State var currentTask: WritingTaskKind = .preset(WritingPresetItem.defaultPresets[1])
 
-    @State var headerDescription: String = ""
-    @State var isHeaderDescriptionAnimated: Bool = true
+    @State var customPromptInput: String = ""
+    @State var followUpPromptInput: String = ""
+    @State var isEditingOutput: Bool = false
+    @State var showOriginalDiff: Bool = false
+    @State var copiedToast: Bool = false
+    @State var showQuickProviderSheet: Bool = false
 
     @State var error: Error? = nil
-    @State var taskPrompt: Prompt = .rewrite
+    @State var activeRequestToken: UUID = UUID()
 
     @State var initialAnimation: CGFloat = 0
     @State var isClosePressed: Bool = false
@@ -44,7 +49,7 @@ struct WritingToolsView: View {
         !shouldShowError && !shouldShowOutput
     }
 
-    let spacing: CGFloat = 16
+    let spacing: CGFloat = 12
     let innerSpacing: CGFloat = 8
 
     let timer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
@@ -55,7 +60,7 @@ struct WritingToolsView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             title
             if shouldShowError {
                 errorView
@@ -65,14 +70,19 @@ struct WritingToolsView: View {
                 selectiveButtonPanels
             }
         }
-        .animation(.spring, value: isRunning)
-        .animation(.spring, value: output)
-        .animation(.spring, value: error?.localizedDescription)
-        .padding(16)
+        .animation(.spring(), value: isRunning)
+        .animation(.easeInOut(duration: 0.2), value: error?.localizedDescription)
+        .animation(.easeInOut(duration: 0.2), value: isEditingOutput)
+        .animation(.easeInOut(duration: 0.2), value: showOriginalDiff)
+        .padding(14)
         .background(background)
         .foregroundStyle(.white)
+        .sheet(isPresented: $showQuickProviderSheet) {
+            QuickProviderSheet()
+        }
         .onAppear {
             initialAnimation = 1
+            cfg.refreshRuntimeConfig()
         }
         .onChange(of: context.scenePhase) { phase in
             switch phase {
@@ -87,21 +97,5 @@ struct WritingToolsView: View {
                 break
             }
         }
-        .onChange(of: shouldShowSelectiveButtons) { animated in
-            isHeaderDescriptionAnimated = animated
-        }
-    }
-}
-
-extension WritingToolsView {
-    struct ModelHandler: Codable, Identifiable, Equatable {
-        let id: UUID
-        let model: String
-        let url: URL
-    }
-
-    struct ModelTree: Codable, Equatable {
-        var keys: [String] { Array(values.keys) }
-        let values: [String: [ModelHandler]]
     }
 }

@@ -24,7 +24,7 @@ struct AIGateConfiguration {
         return compos.url!
     }()
 
-    static let timeoutInterval: Int64 = 35
+    static let timeoutInterval: Int64 = 180
 
     private init() {}
 }

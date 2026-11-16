@@ -49,22 +49,25 @@ extension UITextField: TextProxyObject {
 
     func _replaceText(with text: String, atRange range: UITextRange, attribute: TextAttribute) -> UITextRange? {
         defer { selectedTextRange = nil }
+        let utf16Length = text.utf16.count
+        let startLocation = offset(from: beginningOfDocument, to: range.start)
         replace(range, withText: text)
         if let attributedText {
             let attributedString = NSMutableAttributedString(attributedString: attributedText)
             let nsRange = NSRange(
-                location: offset(from: beginningOfDocument, to: range.start),
-                length: text.count
+                location: startLocation,
+                length: utf16Length
             )
-            if nsRange.length > 0, nsRange.location + nsRange.length <= attributedString.length {
+            if nsRange.length > 0, nsRange.location >= 0, nsRange.location + nsRange.length <= attributedString.length {
                 attributedString.addAttributes(attribute, range: nsRange)
                 self.attributedText = attributedString
             }
         }
-        guard let endPos = position(from: range.start, offset: text.count) else {
+        guard let startPos = position(from: beginningOfDocument, offset: startLocation),
+              let endPos = position(from: startPos, offset: utf16Length)
+        else {
             return nil
         }
-        let newRange = textRange(from: range.start, to: endPos)
-        return newRange
+        return textRange(from: startPos, to: endPos)
     }
 }

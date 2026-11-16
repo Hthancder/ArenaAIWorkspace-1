@@ -26,12 +26,14 @@ enum ServiceDaemon {
                 continue
             }
 
+            defer { service.shutdown() }
+
             do {
                 try service.wait()
             } catch {
                 print("[*] service exit: \(error)")
             }
-        } while BootMode.current == .bootBoth
+        } while BootMode.current == .bootBoth || BootMode.current == .serviceDaemon
 
         exit(EXIT_FAILURE)
     }

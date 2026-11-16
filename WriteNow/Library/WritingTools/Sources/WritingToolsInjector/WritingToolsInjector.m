@@ -94,17 +94,14 @@ static void new_UICalloutBar_updateAvailableButtons(UICalloutBar *self, SEL _cmd
     NSInteger insertIndex = NSNotFound;
     NSInteger currentIndex = 0;
     for (_UICalloutBarSystemButtonDescription *description in buttonDescriptions) {
-        if (!description.action) { continue; }
-        if ([NSStringFromSelector(description.action) hasPrefix:@"_"]) {
+        if (description.action && [NSStringFromSelector(description.action) hasPrefix:@"_"]) {
             insertIndex = currentIndex;
             break;
         }
         currentIndex++;
     }
 
-    if (insertIndex == 0) { return old_UICalloutBar_updateAvailableButtons(self, _cmd); }
-
-    if (insertIndex == NSNotFound) {
+    if (insertIndex == NSNotFound || insertIndex > (NSInteger)buttonDescriptions.count) {
         [buttonDescriptions addObject:buttonDescription];
     } else {
         [buttonDescriptions insertObject:buttonDescription atIndex:insertIndex];

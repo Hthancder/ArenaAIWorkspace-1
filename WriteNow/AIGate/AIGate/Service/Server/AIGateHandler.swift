@@ -8,9 +8,17 @@
 import Foundation
 import NIO
 
-class AIGateHandler: ChannelDuplexHandler {
+class AIGateHandler: ChannelInboundHandler {
     typealias InboundIn = ByteBuffer
-    typealias OutboundIn = ByteBuffer
+    typealias OutboundOut = ByteBuffer
+
+    var headerBuffer = Data()
+    var bodyBuffer = Data()
+    var isHeaderParsed = false
+    var proxyHandler: AIGateProxyHandler?
+
+    private var pendingLocalCommand: String?
+    private var expectedBodyLength: Int = 0
 
     let group: EventLoopGroup
 
@@ -18,326 +26,483 @@ class AIGateHandler: ChannelDuplexHandler {
         self.group = group
     }
 
-    var upstream: AIGateUpstream?
-    var headerBuffer = Data()
-    var headerCompleted = false
-    var bodyBuffer = Data()
-    var upstreamHandler: AIGateProxyHandler?
-    var upstreamHandlerReady: Bool = false
-    var contentLength: Int? = nil
-
-    func channelActive(context _: ChannelHandlerContext) {
-        upstream = .init()
-
-        headerBuffer = Data()
-        headerCompleted = false
-        bodyBuffer = Data()
-        upstreamHandler = nil
-        upstreamHandlerReady = false
-    }
-
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
-        var inputBuffer = unwrapInboundIn(data)
-        guard let inputRead = inputBuffer.readBytes(length: inputBuffer.readableBytes) else { return }
-        let inputData = Data(inputRead)
-
-        switch headerCompleted {
-        case false:
-            assert(bodyBuffer.isEmpty)
-
-            let parts = splitInputDataForHTTP(currentData: headerBuffer, incomingData: inputData)
-            headerBuffer = parts.header
-            bodyBuffer = parts.body
-            headerCompleted = parts.headerCompleted
-
-        case true:
-            // into body status, header must be processed before
-            bodyBuffer.append(inputData)
-            fireUpstreamInteractIfPossible(context: context)
+        if let proxyHandler {
+            proxyHandler.channelRead(context: context, data: data)
             return
         }
 
-        // once header completed
-        // extract the uri to see if it is the time we shall response with file data
-        // if file not found, we process to the raw tcp proxying
-        guard headerCompleted else { return }
+        var buffer = unwrapInboundIn(data)
+        guard let bytes = buffer.readBytes(length: buffer.readableBytes) else {
+            context.close(mode: .all, promise: nil)
+            return
+        }
 
-        if checkForServerCommandIfFoundInHeader() {
-            context.responseWithHTTP(code: 200, json: [
-                "status": "ok",
-                "timestamp": String(Date().timeIntervalSince1970),
-            ])
-            return
-        } else if checkForServerCommandIfIsGettingModelName() {
-            struct Payload: Codable {
-                let model: String?
-                let model_list: [Configuration.Endpoint]
+        if let cmd = pendingLocalCommand {
+            bodyBuffer.append(contentsOf: bytes)
+            if bodyBuffer.count >= expectedBodyLength {
+                let body = bodyBuffer
+                pendingLocalCommand = nil
+                bodyBuffer = Data()
+                handleLocalActionCommand(cmd: cmd, body: body, context: context)
             }
-            context.responseWithHTTP(code: 200, json: Payload(
-                model: Configuration.shared.activatedEndpoint?.model,
-                model_list: Configuration.shared.endpointHandlerForQuickSwitch()
-            ))
             return
-        } else if let modelID = checkForServerCommandSetModel() {
-            guard Configuration.shared.hasEndpointWithID(modelID) else {
-                context.terminateChannel(reason: .modelNotFound)
-                return
+        }
+
+        if !isHeaderParsed {
+            headerBuffer.append(contentsOf: bytes)
+        } else {
+            bodyBuffer.append(contentsOf: bytes)
+            return
+        }
+
+        let delimiter = "\r\n\r\n".data(using: .utf8)!
+        guard let range = headerBuffer.range(of: delimiter) else {
+            if headerBuffer.count > 64 * 1024 {
+                context.close(mode: .all, promise: nil)
             }
-            if BootMode.current == .serviceDaemon {
-                Configuration.shared.activatedEndpointID = modelID
-                Configuration.shared.saveNow()
+            return
+        }
+
+        let headerData = headerBuffer.subdata(in: 0 ..< range.lowerBound)
+        bodyBuffer = headerBuffer.subdata(in: range.upperBound ..< headerBuffer.count)
+        headerBuffer = Data()
+        isHeaderParsed = true
+
+        guard let headerString = String(data: headerData, encoding: .utf8) else {
+            context.close(mode: .all, promise: nil)
+            return
+        }
+
+        if let localAction = parseLocalActionCommand(from: headerString) {
+            let contentLength = parseContentLength(from: headerString) ?? 0
+            if bodyBuffer.count >= contentLength {
+                let body = contentLength > 0 ? Data(bodyBuffer.prefix(contentLength)) : bodyBuffer
+                bodyBuffer = Data()
+                handleLocalActionCommand(cmd: localAction, body: body, context: context)
             } else {
-                DispatchQueue.main.async {
-                    Configuration.shared.activatedEndpointID = modelID
-                    Configuration.shared.saveNow()
-                    Configuration.shared.reloadValueFromSystem()
+                pendingLocalCommand = localAction
+                expectedBodyLength = contentLength
+            }
+            return
+        }
+
+        if checkForMetricsEndpoint(from: headerString, context: context) {
+            return
+        }
+
+        if !Configuration.shared.isEnabled {
+            context.terminateChannel(reason: .serviceDisabled)
+            return
+        }
+
+        guard let upstream = AIGateUpstream() else {
+            context.terminateChannel(reason: .endpointNotConfigured)
+            return
+        }
+
+        guard let patchedHeader = patchHeaderValues(headerString, with: upstream) else {
+            context.close(mode: .all, promise: nil)
+            return
+        }
+        guard let patchedHeaderData = patchedHeader.data(using: .utf8) else {
+            context.close(mode: .all, promise: nil)
+            return
+        }
+
+        let proxy = AIGateProxyHandler(
+            upstream: upstream,
+            header: patchedHeaderData,
+            body: bodyBuffer,
+            context: context,
+            group: group
+        )
+        bodyBuffer = Data()
+        proxyHandler = proxy
+        proxy.handlerAdded(context: context)
+    }
+
+    func errorCaught(context: ChannelHandlerContext, error: Error) {
+        if let proxyHandler {
+            proxyHandler.errorCaught(context: context, error: error)
+        } else {
+            context.close(mode: .all, promise: nil)
+        }
+    }
+
+    func channelInactive(context: ChannelHandlerContext) {
+        if let proxyHandler {
+            proxyHandler.channelInactive(context: context)
+        }
+    }
+
+    private func sendJSONResponse(_ jsonData: Data, statusCode: Int = 200, statusText: String = "OK", context: ChannelHandlerContext) {
+        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
+        let response = "HTTP/1.1 \(statusCode) \(statusText)\r\nContent-Type: application/json\r\nContent-Length: \(jsonData.count)\r\nConnection: close\r\n\r\n\(jsonString)"
+        var buffer = context.channel.allocator.buffer(capacity: response.utf8.count)
+        buffer.writeString(response)
+        context.writeAndFlush(NIOAny(buffer)).whenComplete { _ in
+            context.close(mode: .all, promise: nil)
+        }
+    }
+
+    private func sendJSONDictionary(_ dict: [String: Any], statusCode: Int = 200, statusText: String = "OK", context: ChannelHandlerContext) {
+        let data = (try? JSONSerialization.data(withJSONObject: dict)) ?? Data("{}".utf8)
+        sendJSONResponse(data, statusCode: statusCode, statusText: statusText, context: context)
+    }
+
+    private func parseRequestLineAndHeaders(from headerString: String) -> (method: String, uri: String, headers: [(String, String)])? {
+        let lines = headerString.components(separatedBy: "\r\n")
+        guard let requestLine = lines.first else { return nil }
+        let reqParts = requestLine.split(separator: " ", omittingEmptySubsequences: true)
+        guard reqParts.count >= 2 else { return nil }
+        let method = String(reqParts[0])
+        let uri = String(reqParts[1])
+        var headers: [(String, String)] = []
+        for line in lines.dropFirst() {
+            guard !line.isEmpty, let colonIdx = line.firstIndex(of: ":") else { continue }
+            let key = line[..<colonIdx].trimmingCharacters(in: .whitespaces)
+            let val = line[line.index(after: colonIdx)...].trimmingCharacters(in: .whitespaces)
+            headers.append((key, val))
+        }
+        return (method, uri, headers)
+    }
+
+    private func parseContentLength(from headerString: String) -> Int? {
+        guard let parsed = parseRequestLineAndHeaders(from: headerString) else { return nil }
+        for (key, value) in parsed.headers where key.caseInsensitiveCompare("Content-Length") == .orderedSame {
+            return Int(value)
+        }
+        return nil
+    }
+
+    private func parseLocalActionCommand(from headerString: String) -> String? {
+        guard let parsed = parseRequestLineAndHeaders(from: headerString) else { return nil }
+        guard let url = URL(string: "http://localhost\(parsed.uri)"),
+              url.path == "/action",
+              let comps = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let cmd = comps.queryItems?.first(where: { $0.name == "command" })?.value
+        else {
+            return nil
+        }
+
+        if cmd == "reload" || cmd == "terminate" || cmd == "ping" {
+            var secretMatches = false
+            for (key, val) in parsed.headers where
+                key.caseInsensitiveCompare("X-AIGate-Secret") == .orderedSame
+                || key.caseInsensitiveCompare("X-Service-Secret") == .orderedSame
+            {
+                if val == Configuration.shared.serviceSecret {
+                    secretMatches = true
+                } else {
+                    Configuration.shared.reloadServiceSecretFromDisk()
+                    secretMatches = (val == Configuration.shared.serviceSecret)
                 }
             }
-            context.responseWithHTTP(code: 200, json: [
-                "status": "ok",
-                "timestamp": String(Date().timeIntervalSince1970),
-            ])
-            return
-        } else if checkForServerCommandIfIsErrorChecking() {
-            context.responseWithHTTP(code: 480, json: [
-                "last_error": ServiceError.lastError?.localizedDescription,
-            ])
-            ServiceError.clearLastError()
-            return
-        } else if !Configuration.shared.isEnabled {
-            context.terminateChannel(reason: .notEnabled)
+            guard secretMatches else { return nil }
+        }
+        return parsed.uri
+    }
+
+    private func handleLocalActionCommand(cmd fullURI: String, body: Data, context: ChannelHandlerContext) {
+        guard let url = URL(string: "http://localhost\(fullURI)"),
+              let comps = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let cmd = comps.queryItems?.first(where: { $0.name == "command" })?.value
+        else {
+            sendJSONDictionary(["error": "Invalid command"], statusCode: 400, statusText: "Bad Request", context: context)
             return
         }
 
-        guard let upstream else {
-            context.terminateChannel(reason: .upstreamNotConfigured)
+        switch cmd {
+        case "ping":
+            sendJSONDictionary(["status": "ok"], context: context)
+
+        case "reload":
+            Configuration.shared.reloadValueFromSystem()
+            sendJSONDictionary(["status": "ok"], context: context)
+
+        case "terminate":
+            sendJSONDictionary(["status": "ok"], context: context)
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.15) {
+                exit(EXIT_SUCCESS)
+            }
+
+        case "switch_endpoint":
+            if let uuidString = comps.queryItems?.first(where: { $0.name == "id" })?.value,
+               let uuid = UUID(uuidString: uuidString),
+               Configuration.shared.hasEndpointWithID(uuid)
+            {
+                Configuration.shared.activatedEndpointID = uuid
+                Configuration.shared.saveNow()
+                Configuration.shared.reloadValueFromSystem()
+                sendJSONDictionary(["status": "ok"], context: context)
+            } else {
+                sendJSONDictionary(["error": "Endpoint not found"], statusCode: 404, statusText: "Not Found", context: context)
+            }
+
+        case "set":
+            if let uuidString = comps.queryItems?.first(where: { $0.name == "id" })?.value,
+               let uuid = UUID(uuidString: uuidString),
+               Configuration.shared.hasEndpointWithID(uuid)
+            {
+                Configuration.shared.activatedEndpointID = uuid
+                Configuration.shared.saveNow()
+                Configuration.shared.reloadValueFromSystem()
+                sendJSONDictionary(["status": "ok"], context: context)
+            } else {
+                sendJSONDictionary(["error": "Endpoint not found"], statusCode: 404, statusText: "Not Found", context: context)
+            }
+
+        case "upsert_endpoint":
+            handleUpsertEndpoint(body: body, context: context)
+
+        case "delete_endpoint":
+            handleDeleteEndpoint(body: body, context: context)
+
+        case "fetch_models":
+            handleFetchModels(body: body, context: context)
+
+        case "test_endpoint":
+            handleTestEndpoint(body: body, context: context)
+
+        case "record_quick_prompt":
+            if let dict = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
+               let prompt = dict["prompt"] as? String
+            {
+                Configuration.shared.recordQuickPrompt(prompt)
+            }
+            sendJSONDictionary(["status": "ok"], context: context)
+
+        default:
+            sendJSONDictionary(["error": "Unsupported command"], statusCode: 400, statusText: "Bad Request", context: context)
+        }
+    }
+
+    private func handleUpsertEndpoint(body: Data, context: ChannelHandlerContext) {
+        guard let dict = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
+              let rawURL = dict["url"] as? String,
+              let normalizedURL = EndpointURLHelper.normalizeBaseURL(rawURL)
+        else {
+            sendJSONDictionary(["error": "Invalid endpoint URL"], statusCode: 400, statusText: "Bad Request", context: context)
             return
         }
 
-        findContentLengthInsideHeader()
-        if contentLength == nil {
-            patchHeaderValues(upstream: upstream, replacingContentLength: nil)
-        }
+        let id = (dict["id"] as? String).flatMap(UUID.init(uuidString:)) ?? UUID()
+        let existing = Configuration.shared.endpoint(for: id)
 
-        let proxyHandler = AIGateProxyHandler(upstream: upstream)
-        upstreamHandler = proxyHandler
-        proxyHandler.activateUpstream(downstream: context)
-        context.pipeline.addHandler(proxyHandler).whenComplete { [weak self] _ in
-            guard let self else { return }
-            upstreamHandlerReady = true
-            fireUpstreamInteractIfPossible(context: context)
+        let name = (dict["name"] as? String) ?? existing?.name ?? ""
+        let incomingToken = dict["token"] as? String
+        let resolvedToken: String
+        if let incomingToken, incomingToken != "[********]" {
+            resolvedToken = incomingToken
+        } else {
+            resolvedToken = existing?.token ?? ""
         }
+        let model = ((dict["model"] as? String) ?? existing?.model ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let pathModeRaw = (dict["pathMode"] as? String) ?? existing?.pathMode.rawValue ?? Configuration.Endpoint.PathMode.auto.rawValue
+        let pathMode = Configuration.Endpoint.PathMode(rawValue: pathModeRaw) ?? .auto
+        let customHeaders = (dict["customHeaders"] as? [String: String]) ?? existing?.customHeaders ?? [:]
+        let useStreaming = (dict["useStreaming"] as? Bool) ?? existing?.useStreaming ?? true
+        let timeoutSeconds = (dict["timeoutSeconds"] as? Int) ?? existing?.timeoutSeconds ?? 60
+        let activate = (dict["activate"] as? Bool) ?? true
+
+        let endpoint = Configuration.Endpoint(
+            id: id,
+            create: existing?.create ?? Date(),
+            name: name,
+            url: normalizedURL,
+            token: resolvedToken,
+            model: model,
+            pathMode: pathMode,
+            customHeaders: customHeaders,
+            useStreaming: useStreaming,
+            timeoutSeconds: max(15, timeoutSeconds)
+        )
+        Configuration.shared.upsert(endpoint, activate: activate)
+
+        let payload = Configuration.shared.buildRuntimeConfigPayload(redactTokens: false)
+        let data = (try? JSONEncoder().encode(payload)) ?? Data("{}".utf8)
+        sendJSONResponse(data, context: context)
     }
 
-    func fireUpstreamInteractIfPossible(context: ChannelHandlerContext) {
-        guard upstreamHandlerReady else { return }
-        guard let upstream else {
-            context.terminateChannel(reason: .upstreamNotConfigured)
+    private func handleDeleteEndpoint(body: Data, context: ChannelHandlerContext) {
+        guard let dict = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
+              let idString = dict["id"] as? String,
+              let id = UUID(uuidString: idString)
+        else {
+            sendJSONDictionary(["error": "Invalid endpoint ID"], statusCode: 400, statusText: "Bad Request", context: context)
             return
         }
-
-        if let contentLength {
-            // wait until everything is received before we can send to host
-            guard bodyBuffer.count >= contentLength else { return }
-
-            // now we replace the model id inside the body if found
-            replaceModelInformationFromRequestBody()
-
-            // before sending to upstream, fix the header!
-            patchHeaderValues(upstream: upstream, replacingContentLength: bodyBuffer.count)
-        }
-
-        if !headerBuffer.isEmpty {
-            let buffer = context.channel.allocator.buffer(bytes: headerBuffer)
-            headerBuffer = Data()
-            context.fireChannelRead(NIOAny(buffer))
-        }
-        if !bodyBuffer.isEmpty {
-            let buffer = context.channel.allocator.buffer(bytes: bodyBuffer)
-            bodyBuffer = Data()
-            context.fireChannelRead(NIOAny(buffer))
-        }
+        Configuration.shared.removeEndpoint(id: id)
+        let payload = Configuration.shared.buildRuntimeConfigPayload(redactTokens: false)
+        let data = (try? JSONEncoder().encode(payload)) ?? Data("{}".utf8)
+        sendJSONResponse(data, context: context)
     }
 
-    func parseHeaderLines() -> (head: String, contents: [String]) {
-        guard let header = String(data: headerBuffer, encoding: .utf8) else {
-            return ("", [])
+    private func handleFetchModels(body: Data, context: ChannelHandlerContext) {
+        guard let dict = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
+              let rawURL = dict["url"] as? String,
+              let baseURL = EndpointURLHelper.normalizeBaseURL(rawURL)
+        else {
+            sendJSONDictionary(["models": [], "error": "Invalid URL"], statusCode: 400, statusText: "Bad Request", context: context)
+            return
         }
-        var headerLines = header
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: "\r\n", with: "\n")
-            .components(separatedBy: "\n")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        guard let firstLine = headerLines.first else {
-            return ("", [])
-        }
-        headerLines.removeFirst()
-        return (firstLine, headerLines)
-    }
+        let token = (dict["token"] as? String) ?? ""
+        let pathMode = Configuration.Endpoint.PathMode(rawValue: (dict["pathMode"] as? String) ?? "auto") ?? .auto
+        let customHeaders = (dict["customHeaders"] as? [String: String]) ?? [:]
 
-    func findContentLengthInsideHeader() {
-        for line in parseHeaderLines().contents {
-            if line.lowercased().hasPrefix("Content-Length: ".lowercased()) {
-                contentLength = Int(
-                    line
-                        .dropFirst("Content-Length: ".count)
-                        .trimmingCharacters(in: .whitespacesAndNewlines)
-                )
+        Task {
+            let result = await EndpointNetworkHelper.fetchModels(baseURL: baseURL, token: token, pathMode: pathMode, customHeaders: customHeaders)
+            switch result {
+            case let .success(models):
+                self.sendJSONDictionary(["models": models], context: context)
+            case let .failure(err):
+                self.sendJSONDictionary(["models": [], "error": err.localizedDescription], context: context)
             }
         }
     }
 
-    func patchHeaderValues(upstream: AIGateUpstream, replacingContentLength: Int?) {
-        var headerObject = parseHeaderLines()
-
-        var headerContents = headerObject.contents
-
-        var tokenInjected = false
-
-        for idx in headerContents.indices {
-            if headerContents[idx].lowercased().hasPrefix("Host: ".lowercased()) {
-                headerContents[idx] = "Host: \(upstream.host)"
-            }
-            if headerContents[idx].lowercased().hasPrefix("Origin: ".lowercased()) {
-                headerContents[idx] = "Origin: \(upstream.host)"
-            }
-            if headerContents[idx].lowercased().hasPrefix("Referer: ".lowercased()) {
-                headerContents[idx] = "Referer: \(upstream.host)"
-            }
-            if headerContents[idx].lowercased().hasPrefix("Connection: ".lowercased()) {
-                headerContents[idx] = "Connection: close"
-            }
-            if headerContents[idx].lowercased().hasPrefix("Authorization: ".lowercased()) {
-                headerContents[idx] = "Authorization: Bearer \(upstream.key)"
-                tokenInjected = true
-            }
-            if headerContents[idx].lowercased().hasPrefix("Content-Length: ".lowercased()) {
-                if let replacingContentLength {
-                    headerContents[idx] = "Content-Length: \(replacingContentLength)"
-                }
-            }
+    private func handleTestEndpoint(body: Data, context: ChannelHandlerContext) {
+        guard let dict = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
+              let rawURL = dict["url"] as? String,
+              let baseURL = EndpointURLHelper.normalizeBaseURL(rawURL)
+        else {
+            sendJSONDictionary(["ok": false, "message": "Invalid URL"], statusCode: 400, statusText: "Bad Request", context: context)
+            return
         }
-        if !tokenInjected {
-            headerContents.append("Authorization: Bearer \(upstream.key)")
-        }
+        let token = (dict["token"] as? String) ?? ""
+        let model = ((dict["model"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let pathMode = Configuration.Endpoint.PathMode(rawValue: (dict["pathMode"] as? String) ?? "auto") ?? .auto
+        let customHeaders = (dict["customHeaders"] as? [String: String]) ?? [:]
+        let timeout = max(10, (dict["timeoutSeconds"] as? Int) ?? 30)
 
-        let method = headerObject.head
-            .components(separatedBy: " ")
-            .first ?? "GET"
-        var uri = headerObject.head
-            .components(separatedBy: " ")
-            .dropFirst()
-            .first ?? "/"
-        let version = headerObject.head
-            .components(separatedBy: " ")
-            .dropFirst(2)
-            .first ?? "HTTP/1.1"
-        if upstream.url.path != "/", upstream.url.path != "" {
-            var leadingPrefix = upstream.url.path
-            while leadingPrefix.hasSuffix("/") {
-                leadingPrefix.removeLast()
+        Task {
+            let res = await EndpointNetworkHelper.testChatEndpoint(
+                baseURL: baseURL,
+                token: token,
+                model: model,
+                pathMode: pathMode,
+                customHeaders: customHeaders,
+                timeoutSeconds: timeout
+            )
+            var payload: [String: Any] = [
+                "ok": res.ok,
+                "latencyMs": res.latencyMs,
+                "message": res.message,
+            ]
+            if let code = res.statusCode {
+                payload["statusCode"] = code
             }
-            while uri.hasPrefix("/") {
-                uri.removeFirst()
-            }
-            uri = upstream.url.path + "/" + uri
+            self.sendJSONDictionary(payload, context: context)
         }
-        if upstream.url.host == "models.inference.ai.azure.com" {
-            if uri.hasPrefix("/v1") {
-                uri = String(uri.dropFirst("/v1".count))
-            }
-        }
-        let newHead = "\(method) \(uri) \(version)"
-        headerObject.head = newHead
-        headerObject.contents = headerContents
-        let text = headerObject.head
-            + "\r\n"
-            + headerObject.contents.joined(separator: "\r\n")
-            + "\r\n\r\n"
-        headerBuffer = Data(text.utf8)
     }
 
-    func replaceModelInformationFromRequestBody() {
-        guard var object = try? JSONSerialization.jsonObject(with: bodyBuffer, options: []) as? [String: Any] else { return }
-        defer {
-            if let new = try? JSONSerialization.data(withJSONObject: object, options: []) {
-                bodyBuffer = new
-            }
+    private func checkForMetricsEndpoint(from headerString: String, context: ChannelHandlerContext) -> Bool {
+        guard let parsed = parseRequestLineAndHeaders(from: headerString),
+              parsed.method == "GET",
+              let url = URL(string: "http://localhost\(parsed.uri)"),
+              url.path == "/metrics",
+              let comps = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let query = comps.queryItems?.first(where: { $0.name == "query" })?.value
+        else {
+            return false
         }
 
-        if object["model"] is String,
-           let our = Configuration.shared.activatedEndpoint?.model
-        { object["model"] = our }
+        switch query {
+        case "status":
+            let payload: [String: String] = [
+                "status": Configuration.shared.isEnabled ? "enabled" : "disabled",
+                "error": ServiceError.lastError?.description ?? "",
+            ]
+            let data = (try? JSONEncoder().encode(payload)) ?? Data("{}".utf8)
+            sendJSONResponse(data, context: context)
+            return true
+
+        case "last_error":
+            let payload: [String: String] = [
+                "last_error": ServiceError.lastError?.description ?? "",
+            ]
+            let data = (try? JSONEncoder().encode(payload)) ?? Data("{}".utf8)
+            sendJSONResponse(data, context: context)
+            return true
+
+        case "model":
+            let payload = Configuration.shared.buildRuntimeConfigPayload(redactTokens: true)
+            let data = (try? JSONEncoder().encode(payload)) ?? Data("{}".utf8)
+            sendJSONResponse(data, context: context)
+            return true
+
+        case "config":
+            let redact = Configuration.shared.appSettings.maskEndpointKeys
+            let payload = Configuration.shared.buildRuntimeConfigPayload(redactTokens: redact)
+            let data = (try? JSONEncoder().encode(payload)) ?? Data("{}".utf8)
+            sendJSONResponse(data, context: context)
+            return true
+
+        default:
+            return false
+        }
+    }
+
+    func patchHeaderValues(_ headerString: String, with upstream: AIGateUpstream) -> String? {
+        var headerLines = headerString.components(separatedBy: "\r\n")
+        guard !headerLines.isEmpty else { return nil }
+
+        let requestLineParts = headerLines[0].components(separatedBy: " ")
+        guard requestLineParts.count >= 3 else { return nil }
+
+        let method = requestLineParts[0]
+        let originalURI = requestLineParts[1]
+        let httpVersion = requestLineParts[2]
+
+        let rewrittenURI = EndpointURLHelper.buildUpstreamURI(
+            baseURL: upstream.url,
+            requestURI: originalURI,
+            pathMode: upstream.pathMode
+        )
+
+        var newLines: [String] = []
+        newLines.append("\(method) \(rewrittenURI) \(httpVersion)")
+
+        let customHeaderKeysLower = Set(upstream.customHeaders.keys.map { $0.lowercased() })
+
+        for line in headerLines.dropFirst() {
+            guard !line.isEmpty else { continue }
+            guard let colonIndex = line.firstIndex(of: ":") else {
+                newLines.append(line)
+                continue
+            }
+            let key = line[..<colonIndex].trimmingCharacters(in: .whitespaces)
+            let lowerKey = key.lowercased()
+
+            if lowerKey == "host"
+                || lowerKey == "authorization"
+                || lowerKey == "origin"
+                || lowerKey == "referer"
+                || lowerKey == "accept-encoding"
+                || customHeaderKeysLower.contains(lowerKey)
+            {
+                continue
+            }
+            newLines.append(line)
+        }
+
+        let isDefaultPort = (upstream.tls && upstream.port == 443) || (!upstream.tls && upstream.port == 80)
+        let hostHeaderValue = isDefaultPort ? upstream.host : "\(upstream.host):\(upstream.port)"
+        newLines.append("Host: \(hostHeaderValue)")
+        newLines.append("Accept-Encoding: identity")
+
+        if !upstream.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            newLines.append("Authorization: Bearer \(upstream.key)")
+        }
+
+        for (headerKey, headerVal) in upstream.customHeaders {
+            let trimmedKey = headerKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmedKey.isEmpty else { continue }
+            newLines.append("\(trimmedKey): \(headerVal)")
+        }
+
+        return newLines.joined(separator: "\r\n") + "\r\n\r\n"
     }
 }
 
-extension AIGateHandler {
-    func checkForServerCommandIfFoundInHeader() -> Bool {
-        let headerLines = parseHeaderLines().contents
-        var command: String? = nil
-        var secret: String? = nil
-        for line in headerLines {
-            if line.hasPrefix(AIGateClient.CommandHeader.exec.rawValue) {
-                command = line
-                    .components(separatedBy: ":")
-                    .last?
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            if line.hasPrefix(AIGateClient.CommandHeader.sect.rawValue) {
-                secret = line
-                    .components(separatedBy: ":")
-                    .last?
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-        }
-        guard secret == Configuration.shared.serviceSecret,
-              let command = AIGateClient.Command(rawValue: command ?? "")
-        else { return false }
-        command.execute()
-        return true
-    }
-
-    func checkForServerCommandIfIsErrorChecking() -> Bool {
-        let headerLines = parseHeaderLines().head
-        if headerLines.hasPrefix("GET /metrics?query=last_error ") {
-            return true
-        }
-        return false
-    }
-
-    func checkForServerCommandIfIsGettingModelName() -> Bool {
-        let headerLines = parseHeaderLines().head
-        if headerLines.hasPrefix("GET /metrics?query=model ") {
-            return true
-        }
-        return false
-    }
-
-    func checkForServerCommandIfIsGettingModelList() -> Bool {
-        let headerLines = parseHeaderLines().head
-        if headerLines.hasPrefix("GET /metrics?query=model_list ") {
-            return true
-        }
-        return false
-    }
-
-    func checkForServerCommandSetModel() -> UUID? {
-        let header = parseHeaderLines()
-        let headerLines = header.head
-        if !headerLines.hasPrefix("GET /action?command=set&keyword=model ") {
-            return nil
-        }
-        let headerKey = "X-WriteNow-ModelID"
-        let headerValue = header.contents
-            .first { $0.hasPrefix("\(headerKey): ") }?
-            .components(separatedBy: ":")
-            .dropFirst()
-            .joined(separator: ":")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let headerValue, let uuid = UUID(uuidString: headerValue) else {
-            return nil
-        }
-        return uuid
-    }
-}

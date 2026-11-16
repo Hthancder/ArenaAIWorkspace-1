@@ -9,62 +9,135 @@ import Foundation
 import SwiftUI
 
 extension WritingToolsView {
+    private var enabledPresets: [WritingPresetItem] {
+        cfg.presets.filter(\.isEnabled)
+    }
+
+    private var gridColumns: [GridItem] {
+        let count = cfg.settings.gridColumns == 3 ? 3 : 2
+        return Array(repeating: GridItem(.flexible(), spacing: innerSpacing), count: count)
+    }
+
     @ViewBuilder
     var selectiveButtonPanels: some View {
         VStack(spacing: innerSpacing) {
-            HStack(spacing: innerSpacing) {
-                BeautifulButton(title: "Proofread".localized, icon: "doc.text.magnifyingglass") {
-                    taskPrompt = .proofread
-                    executeCurrentTask()
+            // Quick custom prompt bar
+            HStack(spacing: 6) {
+                TextField("Ask AI anything (e.g. Translate to VI)...", text: $customPromptInput)
+                    .font(.footnote)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(Color.white.opacity(0.12))
+                    .cornerRadius(10)
+                    .submitLabel(.send)
+                    .onSubmit {
+                        runCustomPrompt(customPromptInput)
+                    }
+
+                Button {
+                    runCustomPrompt(customPromptInput)
+                } label: {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.title3)
+                        .foregroundColor(customPromptInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .white.opacity(0.35) : .white)
                 }
-                BeautifulButton(title: "Rewrite".localized, icon: "arrow.counterclockwise") {
-                    taskPrompt = .rewrite
-                    executeCurrentTask()
+                .disabled(customPromptInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+
+            if !cfg.settings.recentCustomPrompts.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(cfg.settings.recentCustomPrompts, id: \.self) { recent in
+                            Button {
+                                runCustomPrompt(recent)
+                            } label: {
+                                Text(recent)
+                                    .font(.caption2)
+                                    .lineLimit(1)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.white.opacity(0.12))
+                                    .cornerRadius(8)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
                 }
             }
-            .frame(height: 80)
-            HStack(spacing: innerSpacing) {
-                BeautifulButton(title: "Friendly".localized, icon: "bubble.left.and.bubble.right") {
-                    taskPrompt = .friendly
-                    executeCurrentTask()
-                }
-                BeautifulButton(title: "Professional".localized, icon: "books.vertical") {
-                    taskPrompt = .professional
-                    executeCurrentTask()
-                }
-                BeautifulButton(title: "Concise".localized, icon: "textformat.abc.dottedunderline") {
-                    taskPrompt = .concise
-                    executeCurrentTask()
+
+            // Dynamic preset grid
+            ScrollView(showsIndicators: false) {
+                if enabledPresets.isEmpty {
+                    VStack(spacing: 8) {
+                        Image(systemName: "sparkles")
+                            .font(.title2)
+                            .opacity(0.6)
+                        Text("No presets enabled. Use the quick prompt box above or manage presets in Settings.")
+                            .font(.caption)
+                            .multilineTextAlignment(.center)
+                            .opacity(0.7)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 24)
+                } else {
+                    LazyVGrid(columns: gridColumns, spacing: innerSpacing) {
+                        ForEach(enabledPresets) { preset in
+                            presetTile(preset)
+                        }
+                    }
+                    .padding(.vertical, 2)
                 }
             }
-            .frame(height: 60)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .transition(.opacity.combined(with: .scale(scale: 0.85)))
-        .scaleEffect(initialAnimation * 0.25 + 0.75)
+        .transition(.opacity.combined(with: .scale(scale: 0.92)))
+        .scaleEffect(initialAnimation * 0.15 + 0.85)
         .opacity(initialAnimation)
-        .animation(.spring, value: initialAnimation)
-        HStack {
-            Text("Made with ♥ by OwnGoal Studio".localized)
-            Spacer()
-            Text(String(88))
-                .hidden()
-                .accessibilityHidden(true)
-                .overlay(
-                    Image(uiImage: sparklesImage.withRenderingMode(.alwaysTemplate))
-                        .resizable()
-                        .accessibilityHidden(true)
-                        .aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                )
+        .animation(.spring(), value: initialAnimation)
+    }
+
+    private func presetTile(_ preset: WritingPresetItem) -> some View {
+        Button {
+            currentTask = .preset(preset)
+            executeCurrentTask()
+        } label: {
+            VStack(spacing: 5) {
+                Image(systemName: preset.icon.isEmpty ? "sparkles" : preset.icon)
+                    .font(.body)
+                Text(preset.localizedDisplayTitle)
+                    .font(.footnote.weight(.medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                if !preset.outputLanguage.isEmpty || preset.insertBehavior == .append {
+                    HStack(spacing: 4) {
+                        if !preset.outputLanguage.isEmpty {
+                            Text(preset.outputLanguage)
+                        }
+                        if preset.insertBehavior == .append {
+                            Text("+Append")
+                        }
+                    }
+                    .font(.system(size: 9))
+                    .opacity(0.7)
+                    .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 64)
+            .padding(.horizontal, 6)
+            .background(Color.white.opacity(0.11))
+            .cornerRadius(12)
+            .contentShape(RoundedRectangle(cornerRadius: 12))
         }
-        .font(.footnote)
-        .opacity(0.25)
-        .transition(.opacity)
+        .buttonStyle(.plain)
+    }
+
+    func runCustomPrompt(_ raw: String) {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        cfg.recordQuickPrompt(trimmed)
+        customPromptInput = ""
+        currentTask = .customPrompt(trimmed)
+        executeCurrentTask()
     }
 }
-
-let sparklesImage = UIImage(data: Data(base64Encoded:
-    """
-    iVBORw0KGgoAAAANSUhEUgAAAFUAAABSCAMAAAASLmjQAAAABGdBTUEAALGPC/xhBQAAAAFzUkdCAK7OHOkAAAA8UExURQAAAAAAAAAAAAAAAAAAAAAAAAAAAEdwTAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHOw9YMAAAAUdFJOU9mmlzAMyYgABb4WSdIisnltPFdhwjDh1wAAA5JJREFUWMOtWe2igyAIxc/U1NLe/13vWlsrFXK78bPZGSIcjgQDYjIyM/xqgP0wAqT7UWeA5X5UDqDvR7UA8XbUAA9z5KtynDVnXM9J9qLOK2rGIU1m8DE2mh5Up9bFCnPWLArOZvMlqszqvVY2wxOhNhYI1DBOzH/WejaNoUxlDy3zI4YqW17AucoWwCwjqK7txTEOGXAbkQik0/6fR8YmcVggCFDwAj+tsOxxYLkIqrQUKlhDZdZSBGq3CWibySrg65KaCJy/QPWOQk3rEvG1qwAThWoeTqn6qbpEVYbirEeZ8/YOLixRqNM78t8FYHsLRc2fnD6kxjzPmtFh4BRqeB1n87eZyFpLoQ5CUJSdIppbR1QZhPuqi2QsEOaNKufnXystaCQZQjAkyz7s7euB2bVEe8qot2ha/RIKkjcTdkM1+vgwBqRPHQ8obulhWAM1bqi6OEPZ01O4wxhMP1HHVsKVJ16fjH3uKfhmQwBjmzV3Bm0xlQp7hz/ZugkY29VRt/Ha2zVUlVPsyVn8ok1tRNM03eqNz3OEVu2JUnMitq6TvsqAB6onWuVmkSSSIoVSJyrVVF25lVdPuo4Axam5kBDxVc6gkSZxeVa7a5/d2jc/tTLr3Fopjo6nuMed9FpVcAqAIUXFcTNcHtRbol2VZEP9oKp81q/FccSiBrp8VbMsVfEJlrn62oHaszyt1YWA31h73N/0k2lqI0qoSOwOYzJf8yPOARVypF7F7zDOte+t7kL9fHWL6wnBNPyOGlBX3T9QUSbIw39QDcN58HfU9n2JGkp0oQ6y9lab4b+oj4vrmd1V/m0+UKXt9KHEouoHJ35FffibJh4j43MqNi9VmblfoOJK90Ve96LmTbTejLqqonA7Kq+0GTYhGedpWkTf9G1l5+UaNbxpSi0duLIu3waqObKJFZeo494XCdSiOv3Yx7+JRuXIfIJ0tSAbuG5TSnYRBHc4qlTYfKKZKfqw3Ot9tAcdHdU3nJVp5g2lYPm8jr9K1NjXoJ0ilWKBajp7aaJ1EvT0U97IaVwoPS6OP6KukRVZl/GyOgvTO9HDR9HucLG2i8Myy+Ojr3a+7qV41H3QI3/I6nqlA6cqdsS075W0ESQPxH49ebyQWZqzUltQU1TgqwOFSxVsL4c8rKcXLI3pAmm6q2+lQ91oed1iluqDBVCfGC4nUXve+D6VIUVKofMDV6g+2dyhBwZti1HNH2pGheAKMEp1AAAAAElFTkSuQmCC
-    """
-)!)!

@@ -63,6 +63,18 @@ class TextProxy: ObservableObject {
     func replaceText(with text: String) {
         replaceText(with: text, atRange: selectedRange, attribute: selectedTextAttribute)
     }
+
+    func appendText(with text: String) {
+        let combined: String
+        if selectedText.isEmpty {
+            combined = text
+        } else if selectedText.hasSuffix("\n") {
+            combined = "\(selectedText)\(text)"
+        } else {
+            combined = "\(selectedText)\n\n\(text)"
+        }
+        replaceText(with: combined, atRange: selectedRange, attribute: selectedTextAttribute)
+    }
 }
 
 extension TextProxy {

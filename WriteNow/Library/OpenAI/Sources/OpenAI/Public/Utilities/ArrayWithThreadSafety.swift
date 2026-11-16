@@ -22,4 +22,10 @@ class ArrayWithThreadSafety<Element> {
             try self.array.removeAll(where: shouldBeRemoved)
         }
     }
+
+    @inlinable public func snapshot() -> [Element] {
+        queue.sync {
+            self.array
+        }
+    }
 }

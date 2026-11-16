@@ -12,10 +12,13 @@ public class WritingToolsLocalizable: NSObject {
     @objc(sharedInstance)
     public static let shared = WritingToolsLocalizable()
 
+    private let menuTitleDefaultsKey = "WriteNowCachedMenuTitle"
+
     override private init() {
         super.init()
 
         setupChineseSimplified()
+        setupVietnamese()
     }
 
     var systemLanguage: String {
@@ -25,8 +28,23 @@ public class WritingToolsLocalizable: NSObject {
     var localizedStringContents = [String: [String: String]]()
 
     @objc
+    public var customMenuTitle: String? {
+        get { UserDefaults.standard.string(forKey: menuTitleDefaultsKey) }
+        set {
+            if let newValue, !newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                UserDefaults.standard.set(newValue, forKey: menuTitleDefaultsKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: menuTitleDefaultsKey)
+            }
+        }
+    }
+
+    @objc
     public func localizedMenuItemTitle() -> String {
-        localizedString(forKey: "Write Now")
+        if let custom = customMenuTitle, !custom.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return custom
+        }
+        return localizedString(forKey: "Write Now")
     }
 
     @objc

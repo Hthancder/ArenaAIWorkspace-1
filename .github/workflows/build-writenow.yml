@@ -1,4 +1,4 @@
-name: Build WriteNow
+name: Build WriteNow (RootHide)
 
 on:
   workflow_dispatch:
@@ -34,10 +34,9 @@ jobs:
         echo "THEOS=$HOME/theos" >> $GITHUB_ENV
         echo "THEOS_IGNORE_PARALLEL_BUILDING_NOTICE=yes" >> $HOME/.theosrc
 
-    - name: Setup Theos
+    - name: Setup Theos SDK
       run: |
         curl -fsSL https://raw.githubusercontent.com/OwnGoalStudio/theos/refs/heads/master/bin/install-theos -o "$RUNNER_TEMP/install-theos"
-        # The installer explicitly updates Homebrew despite HOMEBREW_NO_AUTO_UPDATE.
         sed -i '' '/^[[:space:]]*brew update || true$/d' "$RUNNER_TEMP/install-theos"
         bash "$RUNNER_TEMP/install-theos"
       env:
@@ -65,9 +64,6 @@ jobs:
     - name: Install swift-create-xcframework
       run: |
         SWIFT_CREATE_XCFRAMEWORK_PATH=$(pwd)/swift-create-xcframework@5.9.zip
-        pushd $HOME/theos/bin
-        unzip $SWIFT_CREATE_XCFRAMEWORK_PATH
-        popd
         pushd $HOME/theos-roothide-legacy/bin
         unzip $SWIFT_CREATE_XCFRAMEWORK_PATH
         popd
@@ -81,37 +77,18 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Build (arm)
-      working-directory: WriteNow
-      run: |
-        source devkit/env.sh
-        make clean package
-
-    - name: Build (arm64)
-      working-directory: WriteNow
-      run: |
-        source devkit/rootless.sh
-        make clean package
-
-    - name: Build (arm64e)
+    - name: Build RootHide (arm64e)
       working-directory: WriteNow
       run: |
         source devkit/roothide.sh
         make clean package
 
-    - name: Collect dSYMs
+    - name: Read Version
       working-directory: WriteNow
       run: |
-        find .theos/obj -name "*.dSYM" -exec cp -r {} ./packages/ \;
         VERSION=$(grep '^Version:' .theos/_/DEBIAN/control | awk '{print $2}')
         echo "VERSION=$VERSION" >> $GITHUB_ENV
-
-    - name: Upload dSYMs
-      uses: actions/upload-artifact@v4
-      with:
-        name: symbols-${{ env.VERSION }}
-        path: |
-          ./WriteNow/packages/*.dSYM
+        ls -lh ./packages/
 
     - name: Upload Packages
       uses: actions/upload-artifact@v4

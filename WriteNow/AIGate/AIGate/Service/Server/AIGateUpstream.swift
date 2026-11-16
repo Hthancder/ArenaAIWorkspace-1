@@ -14,14 +14,30 @@ struct AIGateUpstream {
     let tls: Bool
     let key: String
     let mid: String // model id
+    let pathMode: Configuration.Endpoint.PathMode
+    let customHeaders: [String: String]
+    let timeoutSeconds: Int
 
-    init(url: URL, host: String, port: Int, tls: Bool, key: String, mid: String) {
+    init(
+        url: URL,
+        host: String,
+        port: Int,
+        tls: Bool,
+        key: String,
+        mid: String,
+        pathMode: Configuration.Endpoint.PathMode = .auto,
+        customHeaders: [String: String] = [:],
+        timeoutSeconds: Int = 60
+    ) {
         self.url = url
         self.host = host
         self.port = port
         self.tls = tls
         self.key = key
         self.mid = mid
+        self.pathMode = pathMode
+        self.customHeaders = customHeaders
+        self.timeoutSeconds = timeoutSeconds
     }
 }
 
@@ -46,7 +62,10 @@ extension AIGateUpstream {
             port: port,
             tls: tls,
             key: key,
-            mid: model
+            mid: model,
+            pathMode: endpoint.pathMode,
+            customHeaders: endpoint.customHeaders,
+            timeoutSeconds: max(15, endpoint.timeoutSeconds)
         )
     }
 }

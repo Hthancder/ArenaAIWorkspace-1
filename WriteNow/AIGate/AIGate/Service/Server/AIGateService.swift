@@ -11,10 +11,13 @@ import NIOSSL
 
 class AIGateService: Identifiable {
     var id: UUID = .init()
+    var group: MultiThreadedEventLoopGroup
     var channel: Channel
+    private var isShutDown = false
 
     public init() throws {
         let group = MultiThreadedEventLoopGroup(numberOfThreads: 2)
+        self.group = group
         let bootstrap = ServerBootstrap(group: group)
             .serverChannelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: 1)
             .childChannelInitializer { channel in
@@ -24,7 +27,12 @@ class AIGateService: Identifiable {
             .childChannelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: 1)
             .childChannelOption(ChannelOptions.maxMessagesPerRead, value: 1)
 
-        channel = try bootstrap.bind(host: "127.0.0.1", port: aiGateServicePort).wait()
+        do {
+            channel = try bootstrap.bind(host: "127.0.0.1", port: aiGateServicePort).wait()
+        } catch {
+            try? group.syncShutdownGracefully()
+            throw error
+        }
 
         print("[*] server started and listen on \(AIGateConfiguration.listenURL.absoluteString)")
     }
@@ -33,15 +41,27 @@ class AIGateService: Identifiable {
         try channel.closeFuture.wait()
     }
 
-    deinit { channel.close(mode: .all, promise: nil) }
+    func shutdown() {
+        guard !isShutDown else { return }
+        isShutDown = true
+        try? channel.close(mode: .all).wait()
+        try? group.syncShutdownGracefully()
+    }
+
+    deinit {
+        if !isShutDown {
+            channel.close(mode: .all, promise: nil)
+            group.shutdownGracefully { _ in }
+        }
+    }
 }
 
 extension AIGateService {
-    static func createIdleStateHandler() -> IdleStateHandler {
+    static func createIdleStateHandler(timeoutSeconds: Int64 = AIGateConfiguration.timeoutInterval) -> IdleStateHandler {
         IdleStateHandler(
-            readTimeout: .seconds(AIGateConfiguration.timeoutInterval),
-            writeTimeout: .seconds(AIGateConfiguration.timeoutInterval),
-            allTimeout: .seconds(AIGateConfiguration.timeoutInterval)
+            readTimeout: .seconds(timeoutSeconds),
+            writeTimeout: .seconds(timeoutSeconds),
+            allTimeout: .seconds(timeoutSeconds)
         )
     }
 

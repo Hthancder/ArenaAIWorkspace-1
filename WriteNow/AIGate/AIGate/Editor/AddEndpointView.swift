@@ -6,495 +6,467 @@
 //
 
 import SwiftUI
-import SwiftUIIntrospect
-
-private let noModelError: Error = NSError(
-    domain: "Error",
-    code: 0,
-    userInfo: [NSLocalizedDescriptionKey: NSLocalizedString(
-        "Unable to fetch models. Please check your endpoint address and its key carefully, then try again later.",
-        bundle: Bundle.wrti_support,
-        comment: ""
-    )]
-)
-
-private let invalidURLError: Error = NSError(
-    domain: "Error",
-    code: 0,
-    userInfo: [NSLocalizedDescriptionKey: NSLocalizedString(
-        "Invalid URL.",
-        bundle: Bundle.wrti_support,
-        comment: ""
-    )]
-)
-
-private let recommendedModelKeywords = [
-    // OpenAI – fast and strong for writing
-    "gpt-4o-mini",
-    "gpt-4o",
-
-    // Anthropic – haiku for speed/cost, sonnet for quality
-    "claude-3.5-haiku",
-    "claude-3.5-sonnet",
-
-    // Google – flash tiers are fast and economical
-    "gemini-1.5-flash",
-    "gemini-2.0-flash",
-
-    // Meta – common instruct variants via many providers
-    "llama-3.2-90b-instruct",
-    "llama-3.2-11b-instruct",
-    "llama-3.1-70b-instruct",
-    "llama-3.1-8b-instruct",
-
-    // Alibaba Qwen – good balance for writing
-    "qwen2.5-72b-instruct",
-    "qwen2.5-14b-instruct",
-
-    // Mistral / Cohere – practical choices
-    "mixtral-8x7b-instruct",
-    "mistral-large",
-    "mistral-small",
-    "command-r",
-    "command-r-plus",
-
-    // Deepseek – solid open models
-    "deepseek-chat",
-
-    // Generic size hints often used by aggregators
-    "70b",
-    "72b",
-    "90b",
-].map(\.filteredModelNameForMatch)
-
-private let bannedRecommendedModelKeyword = [
-    "beta",
-    "vision",
-    "online",
-
-    // extra exclusions for non-text/real-time variants
-    "realtime",
-    "audio",
-    "tts",
-    "whisper",
-    "asr",
-].map(\.filteredModelNameForMatch)
 
 struct AddEndpointView: View {
-    @StateObject var cvm = Configuration.shared
+    let editingEndpoint: Configuration.Endpoint?
+
+    @StateObject var configuration = Configuration.shared
     @Environment(\.dismiss) var dismiss
 
-    @State var endpointURL: String
-    @State var endpointKey: String
+    @State private var name: String
+    @State private var urlText: String
+    @State private var token: String
+    @State private var modelID: String
+    @State private var pathMode: Configuration.Endpoint.PathMode
+    @State private var useStreaming: Bool
+    @State private var timeoutSeconds: Int
+    @State private var customHeadersList: [(id: UUID, key: String, value: String)]
 
-    @State var usableModels: [String] = []
-    @State var selectedModels: Set<String> = []
+    @State private var revealKey: Bool
+    @State private var showProviderPicker = false
+    @State private var showAdvanced = false
 
-    @State var isFetchingValues: Bool = false
-    @State var lastError: Error? = nil
+    @State private var fetchedModels: [String] = []
+    @State private var modelSearchText = ""
+    @State private var isFetchingModels = false
+    @State private var fetchStatusMessage = ""
+    @State private var fetchErrorMessage = ""
 
-    @State var isFirstAppear: Bool = true
+    @State private var isTestingConnection = false
+    @State private var testResultMessage = ""
+    @State private var testResultOK = false
 
-    var url: URL? { URL(string: endpointURL) }
-    var urlHost: String { url?.host ?? "" }
+    @State private var suggestedProviderModels: [String] = []
 
-    var isFetchingOrFetchedValues: Bool { isFetchingValues || !usableModels.isEmpty }
-
-    @FocusState private var isEndpointURLFocused: Bool
-    @FocusState private var isEndpointKeyFocused: Bool
-
-    init() {
-        _endpointURL = State(initialValue: Configuration.shared.lastEndpointURL)
-        _endpointKey = State(initialValue: Configuration.shared.lastEndpointKey)
-    }
-
-    var recommendedModels: [String] {
-        usableModels.filter { model in
-            true
-                && recommendedModelKeywords.contains { keyword in
-                    model.filteredModelNameForMatch.contains(keyword)
-                }
-                && !bannedRecommendedModelKeyword.contains { keyword in
-                    model.filteredModelNameForMatch.contains(keyword)
-                }
-        }.sorted()
-    }
-
-    var endpointURLSection: some View {
-        Section {
-            TextField(
-                NSLocalizedString("Endpoint URL", bundle: Bundle.wrti_support, comment: ""),
-                text: $endpointURL,
-                prompt: Text(NSLocalizedString("URL", bundle: Bundle.wrti_support, comment: ""))
-            )
-            .autocorrectionDisabled()
-            .textInputAutocapitalization(.none)
-            .textContentType(.URL)
-            .keyboardType(.URL)
-            .submitLabel(.next)
-            .truncationMode(.tail)
-            .opacity(isFetchingOrFetchedValues ? 0.5 : 1)
-            .focused($isEndpointURLFocused)
-            .onSubmit {
-                isEndpointURLFocused = false
-                isEndpointKeyFocused = true
-            }
-            .introspect(.textField, on: .iOS(.v15, .v16, .v17, .v18)) { textField in
-                textField.tintColor = .accent
-                textField.autocapitalizationType = .none
-                textField.autocorrectionType = .no
-                textField.spellCheckingType = .no
-                textField.smartQuotesType = .no
-                textField.smartDashesType = .no
-                textField.smartInsertDeleteType = .no
-                textField.clearButtonMode = .whileEditing
-            }
-            if usableModels.isEmpty {
-                NavigationLink(
-                    destination: {
-                        CommonProviderPicker { url in
-                            if let url { endpointURL = url }
-                            save()
-                        }
-                    },
-                    label: {
-                        Text(NSLocalizedString("Common Provider", bundle: Bundle.wrti_support, comment: ""))
-                    }
-                )
-                .foregroundStyle(isFetchingOrFetchedValues ? Color.secondary : Color.accent)
-                .transition(.opacity)
-            }
-        } header: {
-            Text(NSLocalizedString("Endpoint URL", bundle: Bundle.wrti_support, comment: ""))
-        } footer: {
-            Text(NSLocalizedString("The URL of the endpoint you want to add. It should be OpenAI API endpoint url without v1 suffix.", bundle: Bundle.wrti_support, comment: ""))
+    init(editingEndpoint: Configuration.Endpoint? = nil) {
+        self.editingEndpoint = editingEndpoint
+        let initialURL = editingEndpoint?.url.absoluteString ?? Configuration.shared.lastEndpointURL
+        let initialToken = editingEndpoint?.token ?? Configuration.shared.lastEndpointKey
+        let initialName = editingEndpoint?.name ?? ""
+        let initialModel = editingEndpoint?.model ?? ""
+        let initialPathMode = editingEndpoint?.pathMode ?? .auto
+        let initialStreaming = editingEndpoint?.useStreaming ?? true
+        let initialTimeout = editingEndpoint?.timeoutSeconds ?? Configuration.shared.appSettings.requestTimeout
+        let initialHeaders = (editingEndpoint?.customHeaders ?? [:]).sorted { $0.key < $1.key }.map {
+            (id: UUID(), key: $0.key, value: $0.value)
         }
+
+        _name = State(initialValue: initialName)
+        _urlText = State(initialValue: initialURL)
+        _token = State(initialValue: initialToken)
+        _modelID = State(initialValue: initialModel)
+        _pathMode = State(initialValue: initialPathMode)
+        _useStreaming = State(initialValue: initialStreaming)
+        _timeoutSeconds = State(initialValue: initialTimeout)
+        _customHeadersList = State(initialValue: initialHeaders)
+        _revealKey = State(initialValue: !Configuration.shared.appSettings.maskEndpointKeys)
     }
 
-    var getKeyURL: URL? {
-        commonProviders.first { $0.endpoint == endpointURL }?.whereToGetKey
+    private var normalizedURL: URL? {
+        EndpointURLHelper.normalizeBaseURL(urlText)
     }
 
-    var endpointKeySection: some View {
-        Section {
-            HStack(spacing: 16) {
-                SecureField(NSLocalizedString("Endpoint Key", bundle: Bundle.wrti_support, comment: ""), text: $endpointKey, prompt: Text(NSLocalizedString("Key", bundle: Bundle.wrti_support, comment: "")))
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.none)
-                    .textContentType(.password)
-                    .keyboardType(.asciiCapable)
-                    .submitLabel(.search)
-                    .truncationMode(.head)
-                    .opacity(isFetchingOrFetchedValues ? 0.5 : 1)
-                    .focused($isEndpointKeyFocused)
-                    .onSubmit {
-                        isEndpointKeyFocused = false
-                        fetchModels()
-                    }
-                    .introspect(.textField, on: .iOS(.v15, .v16, .v17, .v18)) { textField in
-                        textField.tintColor = .accent
-                        textField.autocapitalizationType = .none
-                        textField.autocorrectionType = .no
-                        textField.spellCheckingType = .no
-                        textField.smartQuotesType = .no
-                        textField.smartDashesType = .no
-                        textField.smartInsertDeleteType = .no
-                        textField.clearButtonMode = .never
-                    }
-                Button {
-                    endpointKey = UIPasteboard.general.string ?? ""
-                } label: {
-                    Image(systemName: "doc.on.clipboard")
-                        .foregroundStyle(isFetchingOrFetchedValues ? Color.secondary : Color.accent)
-                }
-                .buttonStyle(.plain)
-            }
-            if let whereToGetKey = getKeyURL, usableModels.isEmpty {
-                Link(NSLocalizedString("Get Endpoint Key", bundle: Bundle.wrti_support, comment: ""), destination: whereToGetKey)
-                    .opacity(isFetchingOrFetchedValues ? 0.5 : 1)
-                    .foregroundStyle(isFetchingOrFetchedValues ? Color.secondary : Color.accent)
-            }
-        } header: {
-            Text(NSLocalizedString("Endpoint Key", bundle: Bundle.wrti_support, comment: ""))
-        } footer: {
-            Text(NSLocalizedString("The authorization of this endpoint. It may be optional.", bundle: Bundle.wrti_support, comment: ""))
+    private var resolvedChatPreview: String {
+        guard let url = normalizedURL,
+              let chatURL = EndpointURLHelper.chatCompletionsURL(baseURL: url, pathMode: pathMode)
+        else {
+            return "Invalid URL"
         }
+        return chatURL.absoluteString
     }
 
-    var fetchModelsSection: some View {
-        Section {
-            Button {
-                isEndpointURLFocused = false
-                isEndpointKeyFocused = false
-                fetchModels()
-            } label: {
-                Text(NSLocalizedString("Fetch Available Models", bundle: Bundle.wrti_support, comment: ""))
-            }
-            .disabled(url == nil || urlHost.isEmpty)
-            .tint(Color.accent)
-        } footer: {
-            if let lastError {
-                Text(String(format: NSLocalizedString("Error: %@", bundle: Bundle.wrti_support, comment: ""), lastError.localizedDescription))
-                    .foregroundColor(.red)
-            }
+    private var parsedCustomHeaders: [String: String] {
+        var dict: [String: String] = [:]
+        for item in customHeadersList {
+            let k = item.key.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !k.isEmpty else { continue }
+            dict[k] = item.value
         }
+        return dict
     }
 
-    var listRecommendedModelsSection: some View {
-        Section {
-            ForEach(recommendedModels, id: \.self) { model in
-                Button {
-                    if selectedModels.contains(model) {
-                        selectedModels.remove(model)
-                    } else {
-                        selectedModels.insert(model)
-                    }
-                } label: {
-                    HStack(spacing: 16) {
-                        Text(model)
-                        Spacer()
-                        Image(systemName: "checkmark")
-                            .opacity(selectedModels.contains(model) ? 1 : 0)
-                    }
-                    .tint(
-                        selectedModels.contains(model) || selectedModels.isEmpty
-                            ? Color.accent
-                            : Color.primary
-                    )
-                    .foregroundStyle(
-                        selectedModels.contains(model) || selectedModels.isEmpty
-                            ? Color.accent
-                            : Color.primary
-                    )
-                }
-            }
-        } header: {
-            Text(NSLocalizedString("Recommended Models", bundle: Bundle.wrti_support, comment: ""))
-        } footer: {
-            Text(NSLocalizedString("Recommended models are tested to perform better in most cases.", bundle: Bundle.wrti_support, comment: ""))
-        }
+    private var filteredModels: [String] {
+        let query = modelSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let base = fetchedModels
+        if query.isEmpty { return base }
+        return base.filter { $0.lowercased().contains(query) }
     }
 
-    var listModelsSection: some View {
-        Section {
-            ForEach(usableModels, id: \.self) { model in
-                Button {
-                    if selectedModels.contains(model) {
-                        selectedModels.remove(model)
-                    } else {
-                        selectedModels.insert(model)
-                    }
-                } label: {
-                    HStack(spacing: 16) {
-                        Text(model)
-                        Spacer()
-                        Image(systemName: "checkmark")
-                            .opacity(selectedModels.contains(model) ? 1 : 0)
-                    }
-                    .tint(
-                        selectedModels.contains(model) || selectedModels.isEmpty
-                            ? Color.accent
-                            : Color.primary
-                    )
-                    .foregroundStyle(
-                        selectedModels.contains(model) || selectedModels.isEmpty
-                            ? Color.accent
-                            : Color.primary
-                    )
-                }
-            }
-        } header: {
-            Text(NSLocalizedString("Available Models", bundle: Bundle.wrti_support, comment: ""))
-        } footer: {
-            Text(NSLocalizedString("Select a model you want to use.", bundle: Bundle.wrti_support, comment: ""))
-        }
-    }
-
-    var saveEndpointsSection: some View {
-        Button(
-            selectedModels.count <= 1
-                ? NSLocalizedString("Save Endpoint", bundle: Bundle.wrti_support, comment: "")
-                : String(format: NSLocalizedString("Save %d Endpoints", bundle: Bundle.wrti_support, comment: ""), selectedModels.count)
-        ) {
-            guard let url else { return }
-            for model in selectedModels.sorted(by: { $0.localizedStandardCompare($1) == .orderedAscending }) {
-                cvm.add(.init(url: url, token: endpointKey, model: model))
-            }
-            dismiss()
-        }
-        .disabled(selectedModels.isEmpty)
-        .tint(Color.accent)
+    private var canSave: Bool {
+        normalizedURL != nil && !modelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var body: some View {
-        Form {
-            Group {
-                endpointURLSection
-                endpointKeySection
-            }
-            .disabled(!usableModels.isEmpty)
-
-            if usableModels.isEmpty {
-                fetchModelsSection
-            } else {
-                if recommendedModels.isEmpty {
-                    listModelsSection
-                    saveEndpointsSection
-                } else {
-                    listRecommendedModelsSection
-                    saveEndpointsSection
-                    listModelsSection
-                }
-            }
-        }
-        .disabled(isFetchingValues)
-        .navigationTitle(NSLocalizedString("Add Endpoint", bundle: Bundle.wrti_support, comment: ""))
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button(NSLocalizedString("Cancel", bundle: Bundle.wrti_support, comment: "")) {
-                    dismiss()
-                }
-            }
-            ToolbarItem(placement: .confirmationAction) {
-                Button(NSLocalizedString("Save", bundle: Bundle.wrti_support, comment: "")) {
-                    guard !selectedModels.isEmpty, let url else { return }
-                    for model in selectedModels.sorted(by: { $0.localizedStandardCompare($1) == .orderedAscending }) {
-                        cvm.add(.init(url: url, token: endpointKey, model: model))
+        NavigationView {
+            List {
+                if editingEndpoint == nil {
+                    Section {
+                        Button {
+                            showProviderPicker = true
+                        } label: {
+                            HStack {
+                                Label("Choose Common Provider", systemImage: "square.grid.2x2")
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    } footer: {
+                        Text("Pick a common provider preset or enter any custom OpenAI-compatible URL below.")
                     }
-                    dismiss()
                 }
-                .disabled(selectedModels.isEmpty)
+
+                Section {
+                    HStack {
+                        Text("Name")
+                            .frame(width: 72, alignment: .leading)
+                            .foregroundColor(.secondary)
+                        TextField("Optional (e.g. OpenRouter)", text: $name)
+                            .disableAutocorrection(true)
+                    }
+
+                    HStack {
+                        Text("URL")
+                            .frame(width: 72, alignment: .leading)
+                            .foregroundColor(.secondary)
+                        TextField("https://api.openai.com/v1", text: $urlText)
+                            .keyboardType(.URL)
+                            .autocapitalization(.none)
+                            .disableAutocorrection(true)
+                    }
+
+                    HStack {
+                        Text("Key")
+                            .frame(width: 72, alignment: .leading)
+                            .foregroundColor(.secondary)
+                        if revealKey {
+                            TextField("sk-... (optional)", text: $token)
+                                .autocapitalization(.none)
+                                .disableAutocorrection(true)
+                        } else {
+                            SecureField("sk-... (optional)", text: $token)
+                                .autocapitalization(.none)
+                                .disableAutocorrection(true)
+                        }
+                        Button {
+                            revealKey.toggle()
+                        } label: {
+                            Image(systemName: revealKey ? "eye.slash" : "eye")
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                } header: {
+                    Text("Endpoint")
+                } footer: {
+                    Text("Chat Endpoint: \(resolvedChatPreview)")
+                        .font(.caption2)
+                }
+
+                Section {
+                    HStack {
+                        Text("Model")
+                            .frame(width: 72, alignment: .leading)
+                            .foregroundColor(.secondary)
+                        TextField("e.g. gpt-4o-mini, deepseek-chat", text: $modelID)
+                            .autocapitalization(.none)
+                            .disableAutocorrection(true)
+                        if !modelID.isEmpty {
+                            Button {
+                                modelID = ""
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(.secondary)
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                    }
+
+                    if !suggestedProviderModels.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 6) {
+                                ForEach(suggestedProviderModels, id: \.self) { m in
+                                    Button {
+                                        modelID = m
+                                    } label: {
+                                        Text(m)
+                                            .font(.caption)
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 5)
+                                            .background(modelID == m ? Color.accent.opacity(0.2) : Color.secondary.opacity(0.12))
+                                            .foregroundColor(modelID == m ? .accent : .primary)
+                                            .cornerRadius(8)
+                                    }
+                                    .buttonStyle(.borderless)
+                                }
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    }
+
+                    Button {
+                        fetchModelsAction()
+                    } label: {
+                        HStack {
+                            Label("Fetch Available Models (Optional)", systemImage: "arrow.clockwise")
+                            Spacer()
+                            if isFetchingModels {
+                                ProgressView()
+                            }
+                        }
+                    }
+                    .disabled(normalizedURL == nil || isFetchingModels)
+
+                    if !fetchStatusMessage.isEmpty {
+                        Text(fetchStatusMessage)
+                            .font(.caption)
+                            .foregroundColor(.green)
+                    }
+                    if !fetchErrorMessage.isEmpty {
+                        Text(fetchErrorMessage)
+                            .font(.caption)
+                            .foregroundColor(.red)
+                    }
+                } header: {
+                    Text("Model ID")
+                } footer: {
+                    Text("Enter any Model ID manually and save directly, or fetch from /models if supported.")
+                }
+
+                if !fetchedModels.isEmpty {
+                    Section {
+                        TextField("Search \(fetchedModels.count) models...", text: $modelSearchText)
+                            .autocapitalization(.none)
+                            .disableAutocorrection(true)
+
+                        ForEach(filteredModels.prefix(80), id: \.self) { model in
+                            Button {
+                                modelID = model
+                            } label: {
+                                HStack {
+                                    Text(model)
+                                        .font(.system(.subheadline, design: .monospaced))
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    if modelID == model {
+                                        Image(systemName: "checkmark")
+                                            .foregroundColor(.accent)
+                                    }
+                                }
+                            }
+                        }
+                    } header: {
+                        Text("Fetched Models (\(filteredModels.count))")
+                    }
+                }
+
+                Section {
+                    Button {
+                        testConnectionAction()
+                    } label: {
+                        HStack {
+                            Label("Test Connection", systemImage: "bolt.horizontal.circle")
+                            Spacer()
+                            if isTestingConnection {
+                                ProgressView()
+                            }
+                        }
+                    }
+                    .disabled(!canSave || isTestingConnection)
+
+                    if !testResultMessage.isEmpty {
+                        Text(testResultMessage)
+                            .font(.caption)
+                            .foregroundColor(testResultOK ? .green : .red)
+                    }
+
+                    DisclosureGroup("Advanced Options", isExpanded: $showAdvanced) {
+                        Picker("Path Mode", selection: $pathMode) {
+                            ForEach(Configuration.Endpoint.PathMode.allCases, id: \.self) { mode in
+                                Text(mode.displayName).tag(mode)
+                            }
+                        }
+
+                        Toggle("Enable Streaming (SSE)", isOn: $useStreaming)
+
+                        Stepper("Timeout: \(timeoutSeconds)s", value: $timeoutSeconds, in: 15 ... 180, step: 15)
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("Custom Headers")
+                                    .font(.subheadline)
+                                Spacer()
+                                Button {
+                                    customHeadersList.append((id: UUID(), key: "", value: ""))
+                                } label: {
+                                    Image(systemName: "plus.circle.fill")
+                                        .foregroundColor(.accent)
+                                }
+                                .buttonStyle(.borderless)
+                            }
+                            ForEach($customHeadersList, id: \.id) { $pair in
+                                HStack(spacing: 6) {
+                                    TextField("Header", text: $pair.key)
+                                        .font(.caption)
+                                        .autocapitalization(.none)
+                                        .disableAutocorrection(true)
+                                    TextField("Value", text: $pair.value)
+                                        .font(.caption)
+                                        .autocapitalization(.none)
+                                        .disableAutocorrection(true)
+                                    Button {
+                                        let targetID = pair.id
+                                        customHeadersList.removeAll { $0.id == targetID }
+                                    } label: {
+                                        Image(systemName: "minus.circle")
+                                            .foregroundColor(.red)
+                                    }
+                                    .buttonStyle(.borderless)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                } header: {
+                    Text("Verification & Advanced")
+                }
+
+                Section {
+                    Button {
+                        saveEndpoint()
+                    } label: {
+                        HStack {
+                            Spacer()
+                            Text(editingEndpoint == nil ? "Save Endpoint" : "Update Endpoint")
+                                .fontWeight(.semibold)
+                            Spacer()
+                        }
+                    }
+                    .disabled(!canSave)
+                }
+            }
+            .navigationTitle(editingEndpoint == nil ? "Add Endpoint" : "Edit Endpoint")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { saveEndpoint() }
+                        .disabled(!canSave)
+                }
+            }
+            .sheet(isPresented: $showProviderPicker) {
+                ProviderPickerView { provider in
+                    if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        name = provider.name
+                    }
+                    urlText = provider.endpoint
+                    if modelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        modelID = provider.defaultModel
+                    }
+                    suggestedProviderModels = provider.recommendedModels
+                    fetchErrorMessage = ""
+                    fetchStatusMessage = ""
+                    testResultMessage = ""
+                }
             }
         }
-        .animation(.spring, value: getKeyURL)
-        .animation(.smooth, value: usableModels)
-        .animation(.smooth, value: recommendedModels)
-        .animation(.spring, value: isFetchingValues)
-        .listStyle(.insetGrouped)
-        .onAppear {
-            guard isFirstAppear else { return }
-            isFirstAppear = false
-            if !cvm.lastEndpointURL.isEmpty { endpointURL = cvm.lastEndpointURL }
-            if !cvm.lastEndpointKey.isEmpty { endpointKey = cvm.lastEndpointKey }
-        }
-        .onChange(of: isEndpointURLFocused) { _ in
-            save()
-        }
-        .onChange(of: isEndpointKeyFocused) { _ in
-            save()
-        }
+        .accentColor(.accent)
+        .navigationViewStyle(.stack)
     }
 
-    func save() {
-        cvm.lastEndpointURL = endpointURL
-        cvm.lastEndpointKey = endpointKey
-    }
+    private func fetchModelsAction() {
+        guard let baseURL = normalizedURL else { return }
+        isFetchingModels = true
+        fetchErrorMessage = ""
+        fetchStatusMessage = ""
+        let trimmedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        let headers = parsedCustomHeaders
 
-    func fetchModels() {
-        cvm.lastEndpointURL = endpointURL
-        cvm.lastEndpointKey = endpointKey
-        isFetchingValues = true
-        lastError = nil
-        DispatchQueue.global(qos: .userInteractive).async {
-            var v1Error: Error?
-            switch fetchModelsViaV1Endpoint() {
-            case let .success(fetchedModels):
-                completeWith(models: fetchedModels, error: nil)
-                return
-            case let .failure(error):
-                v1Error = error
-            }
-            switch fetchModelsViaBareEndpoint() {
-            case let .success(fetchedModels):
-                completeWith(models: fetchedModels, error: nil)
-                return
-            case .failure: break
-            }
-            completeWith(models: [], error: v1Error)
-        }
-    }
-
-    func completeWith(models: [String], error: Error?) {
-        DispatchQueue.main.async {
-            withAnimation {
-                isFetchingValues = false
-                if models.isEmpty {
-                    lastError = error ?? noModelError
-                } else {
-                    usableModels = models
-                    lastError = nil
+        Task {
+            let result = await EndpointNetworkHelper.fetchModels(
+                baseURL: baseURL,
+                token: trimmedToken,
+                pathMode: pathMode,
+                customHeaders: headers
+            )
+            await MainActor.run {
+                isFetchingModels = false
+                switch result {
+                case let .success(models):
+                    fetchedModels = models
+                    fetchStatusMessage = "Fetched \(models.count) models."
+                    if modelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, let first = models.first {
+                        modelID = first
+                    }
+                case let .failure(error):
+                    fetchErrorMessage = error.localizedDescription
                 }
             }
         }
     }
 
-    func fetchModelsViaV1Endpoint() -> Result<[String], Error> {
-        guard let url = url?.appendingPathComponent("v1").appendingPathComponent("models") else {
-            return .failure(invalidURLError)
+    private func testConnectionAction() {
+        guard let baseURL = normalizedURL else { return }
+        isTestingConnection = true
+        testResultMessage = ""
+        let trimmedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedModel = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let headers = parsedCustomHeaders
+
+        Task {
+            let res = await EndpointNetworkHelper.testChatEndpoint(
+                baseURL: baseURL,
+                token: trimmedToken,
+                model: trimmedModel,
+                pathMode: pathMode,
+                customHeaders: headers,
+                timeoutSeconds: timeoutSeconds
+            )
+            await MainActor.run {
+                isTestingConnection = false
+                testResultOK = res.ok
+                testResultMessage = res.message
+            }
         }
-        return fetchModels(url: url)
     }
 
-    func fetchModelsViaBareEndpoint() -> Result<[String], Error> {
-        guard let url = url?.appendingPathComponent("models") else {
-            return .failure(invalidURLError)
-        }
-        return fetchModels(url: url)
-    }
+    private func saveEndpoint() {
+        guard let finalURL = normalizedURL else { return }
+        let finalModel = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !finalModel.isEmpty else { return }
+        let finalToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalName = name.trimmingCharacters(in: .whitespacesAndNewlines)
 
-    func fetchModels(url: URL) -> Result<[String], Error> {
-        assert(!Thread.isMainThread)
-        let sem = DispatchSemaphore(value: 0)
-        var request = URLRequest(
-            url: url,
-            cachePolicy: .reloadIgnoringLocalAndRemoteCacheData,
-            timeoutInterval: 30
-        )
-        request.addValue("Bearer \(endpointKey)", forHTTPHeaderField: "Authorization")
-        var models: [String] = []
-        var check: Error?
-        URLSession.shared.dataTask(with: request) { data, _, error in
-            defer { sem.signal() }
-            models = scrubModels(data)
-            check = error
-        }.resume()
-        sem.wait()
-        if !models.isEmpty {
-            return .success(models)
+        configuration.lastEndpointURL = finalURL.absoluteString
+        configuration.lastEndpointKey = finalToken
+
+        if let existing = editingEndpoint {
+            var updated = existing
+            updated.name = finalName
+            updated.url = finalURL
+            updated.token = finalToken
+            updated.model = finalModel
+            updated.pathMode = pathMode
+            updated.customHeaders = parsedCustomHeaders
+            updated.useStreaming = useStreaming
+            updated.timeoutSeconds = timeoutSeconds
+            configuration.update(updated)
         } else {
-            return .failure(check ?? noModelError)
+            let newEndpoint = Configuration.Endpoint(
+                name: finalName,
+                url: finalURL,
+                token: finalToken,
+                model: finalModel,
+                pathMode: pathMode,
+                customHeaders: parsedCustomHeaders,
+                useStreaming: useStreaming,
+                timeoutSeconds: timeoutSeconds
+            )
+            configuration.add(newEndpoint, activateIfNone: true)
         }
-    }
-
-    func scrubModels(_ data: Data?) -> [String] {
-        var fetchedModels = [String]()
-        guard let data,
-              let object = try? JSONSerialization.jsonObject(with: data)
-        else { return [] }
-        if let dic = object as? [String: Any], let list = dic["data"] as? [[String: Any]] {
-            for item in list {
-                guard let id = item["id"] as? String else { continue }
-                fetchedModels.append(id)
-            }
-        } else if let list = object as? [[String: Any]] {
-            for item in list {
-                if let id = item["id"] as? String, !id.hasPrefix("azureml://") {
-                    fetchedModels.append(id)
-                } else if let id = item["name"] as? String {
-                    fetchedModels.append(id)
-                }
-            }
-        }
-        return fetchedModels.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
-    }
-}
-
-private extension String {
-    var filteredModelNameForMatch: String {
-        lowercased()
-            .replacingOccurrences(of: "-", with: "")
-            .replacingOccurrences(of: "_", with: "")
-            .replacingOccurrences(of: " ", with: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        dismiss()
     }
 }

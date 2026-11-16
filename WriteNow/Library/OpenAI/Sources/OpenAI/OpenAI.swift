@@ -168,6 +168,14 @@ extension OpenAI {
         }
     }
 
+    public func cancelAllStreams() {
+        let active = streamingSessions.snapshot()
+        for session in active {
+            (session as? CancellableStream)?.cancel()
+        }
+        streamingSessions.removeAll { _ in true }
+    }
+
     func performSpeechRequest(request: any URLRequestBuildable, completion: @escaping (Result<AudioSpeechResult, Error>) -> Void) {
         do {
             let request = try request.build(token: configuration.token,

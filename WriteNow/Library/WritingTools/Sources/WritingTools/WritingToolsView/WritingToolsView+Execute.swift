@@ -14,112 +14,200 @@ import WritingToolsLocalizable
 extension WritingToolsView {
     func executeCurrentTask(delayedForRetry: Bool = false) {
         let shouldDelayForAnimation = !output.isEmpty
+        let requestToken = UUID()
+        activeRequestToken = requestToken
 
+        cfg.openAI.cancelAllStreams()
+        isEditingOutput = false
         isRunning = true
         output = ""
+        error = nil
 
-    let text = context.textProxy.selectedText
-    // Adaptive sampling based on input length
-    let sampling = taskPrompt.sampling(for: text.count)
+        let text = context.textProxy.selectedText
+        let settings = cfg.settings
+        let taskToRun = currentTask
+        let built = PromptComposer.buildMessages(for: taskToRun, selectedText: text, settings: settings)
         let query = ChatQuery(
-            messages: [.system(.init(content: taskPrompt.prompt))]
-                + taskPrompt.chatExamplesAfterSystemMessage
-                + [.user(.init(content: .init(string:
-                    """
-                    \(Prompt.userContentHeader)
-
-                    \(text)
-                    """
-                )))],
+            messages: built.messages,
             model: cfg.mid,
-            temperature: sampling.temperature,
-            topP: sampling.topP
+            temperature: built.sampling.temperature,
+            topP: built.sampling.topP
         )
 
+        let useStreaming = settings.streamingEnabled && (cfg.activeEndpoint?.useStreaming ?? true)
+        let stripThink = settings.stripThinkingTags
+
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(
+            deadline: .now() + (shouldDelayForAnimation ? 0.2 : 0) + (delayedForRetry ? 2 : 0)
+        ) {
+            if useStreaming {
+                runStreamingQuery(query: query, stripThink: stripThink, requestToken: requestToken)
+            } else {
+                runNonStreamingQuery(query: query, stripThink: stripThink, requestToken: requestToken)
+            }
+        }
+    }
+
+    private func runStreamingQuery(query: ChatQuery, stripThink: Bool, requestToken: UUID) {
         var completed = false
+        var rawAccumulated = ""
+        var firstError: Error?
+
         let outputSender = CurrentValueSubject<String, Never>("")
         var cancellable: (any Cancellable)? = outputSender
             .throttle(for: .seconds(0.05), scheduler: DispatchQueue.global(qos: .userInteractive), latest: true)
             .removeDuplicates()
             .receive(on: DispatchQueue.main)
-            .sink {
-                guard !completed else {
-                    return
-                }
-                output = $0.trimmingCharacters(in: .whitespacesAndNewlines)
+            .sink { chunk in
+                guard !completed, activeRequestToken == requestToken else { return }
+                let formatted = stripThink ? PromptComposer.stripThinkingTags(from: chunk) : chunk.trimmingCharacters(in: .whitespacesAndNewlines)
+                output = formatted
             }
 
-        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + (shouldDelayForAnimation ? 0.25 : 0) + (delayedForRetry ? 2 : 0)) {
-            cfg.openAI.chatsStream(query: query) { partialResult in
-                switch partialResult {
-                case let .success(result):
-                    let newToken = result.choices.compactMap(\.delta.content).joined()
-                    let value = outputSender.value + newToken
-                    outputSender.send(value)
-                default: break
+        cfg.openAI.chatsStream(query: query) { partialResult in
+            switch partialResult {
+            case let .success(result):
+                let newToken = result.choices.compactMap(\.delta.content).joined()
+                if !newToken.isEmpty {
+                    rawAccumulated += newToken
+                    outputSender.send(rawAccumulated)
                 }
-            } completion: { _ in
-                completed = true
-                outputSender.send(outputSender.value)
-                cancellable?.cancel()
-                cancellable = nil
-
-                let finalValue = outputSender.value.trimmingCharacters(in: .whitespacesAndNewlines)
-                DispatchQueue.main.async {
-                    output = finalValue
+            case let .failure(err):
+                if firstError == nil {
+                    firstError = err
                 }
+            }
+        } completion: { completionError in
+            completed = true
+            cancellable?.cancel()
+            cancellable = nil
 
-                DispatchQueue.global(qos: .userInteractive).asyncAfter(deadline: .now() + 0.1) {
-                    onCompletion()
+            let finalFormatted = stripThink
+                ? PromptComposer.stripThinkingTags(from: rawAccumulated)
+                : rawAccumulated.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            let finalError = firstError ?? completionError
+
+            // If streaming yielded zero text (e.g. provider returned plain JSON instead of SSE), try non-streaming once
+            if finalFormatted.isEmpty, finalError is DecodingError {
+                runNonStreamingQuery(query: query, stripThink: stripThink, requestToken: requestToken)
+                return
+            }
+
+            DispatchQueue.main.async {
+                guard self.activeRequestToken == requestToken else { return }
+                if !finalFormatted.isEmpty {
+                    self.output = finalFormatted
+                    self.appendHistory(finalFormatted)
+                    self.isRunning = false
+                    self.error = nil
+                } else {
+                    self.onEmptyCompletion(upstreamError: finalError)
                 }
             }
         }
     }
 
+    private func runNonStreamingQuery(query: ChatQuery, stripThink: Bool, requestToken: UUID) {
+        cfg.openAI.chats(query: query) { result in
+            DispatchQueue.main.async {
+                guard self.activeRequestToken == requestToken else { return }
+                switch result {
+                case let .success(chatResult):
+                    let raw = chatResult.choices.compactMap { $0.message.content?.string }.joined()
+                    let finalFormatted = stripThink
+                        ? PromptComposer.stripThinkingTags(from: raw)
+                        : raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !finalFormatted.isEmpty {
+                        self.output = finalFormatted
+                        self.appendHistory(finalFormatted)
+                        self.isRunning = false
+                        self.error = nil
+                    } else {
+                        self.onEmptyCompletion(upstreamError: nil)
+                    }
+                case let .failure(err):
+                    self.onEmptyCompletion(upstreamError: err)
+                }
+            }
+        }
+    }
+
+    private func appendHistory(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        if outputHistory.last != trimmed {
+            outputHistory.append(trimmed)
+        }
+        historyIndex = max(0, outputHistory.count - 1)
+    }
+
+    func stopStreaming() {
+        activeRequestToken = UUID()
+        cfg.openAI.cancelAllStreams()
+        isRunning = false
+        let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            output = trimmed
+            appendHistory(trimmed)
+        }
+    }
+
     static let spawnURL = URL(string: "writenow://spawn")
 
-    func onCompletion() {
-        assert(!Thread.isMainThread)
+    func onEmptyCompletion(upstreamError: Error?) {
+        assert(Thread.isMainThread)
 
-        if !output.isEmpty {
-            completeNormally()
-            return
-        }
+        DispatchQueue.global(qos: .userInteractive).async {
+            let request = Configurator.shared.gateErrorCheckRequest
+            var daemonErrorMessage: String?
+            var reachable = false
+            let sem = DispatchSemaphore(value: 0)
+            URLSession.shared.dataTask(with: request) { data, _, err in
+                defer { sem.signal() }
+                guard err == nil, let data else { return }
+                reachable = true
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: String] {
+                    let msg = json["error"] ?? json["last_error"] ?? ""
+                    if !msg.isEmpty {
+                        daemonErrorMessage = msg
+                    }
+                }
+            }.resume()
+            _ = sem.wait(timeout: .now() + 2.5)
 
-        let request = Configurator.shared.gateErrorCheckRequest
-        var checkError: NSError?
-        let sem = DispatchSemaphore(value: 0)
-        URLSession.shared.dataTask(with: request) { data, _, _ in
-            defer { sem.signal() }
-            guard let data else { return }
-            guard let json = try? JSONSerialization.jsonObject(
-                with: data, options: []
-            ) as? [String: String] else { return }
-            guard let lastError = json["last_error"] else { return }
-            checkError = NSError(
+            if !reachable {
+                let nsErr = NSError(
+                    domain: WritingToolsLocalizable.shared.localizedMenuItemTitle(),
+                    code: kErrorCodeRetry,
+                    userInfo: [
+                        NSLocalizedDescriptionKey: WritingToolsLocalizable.shared.localizedString(
+                            forKey: "Unable to establish a secure connection to daemon"
+                        ),
+                    ]
+                )
+                completeWithError(nsErr)
+                return
+            }
+
+            let message: String
+            if let daemonErrorMessage, !daemonErrorMessage.isEmpty {
+                message = daemonErrorMessage
+            } else if let apiErr = upstreamError as? APIErrorResponse {
+                message = apiErr.error.message
+            } else if let upstreamError {
+                message = upstreamError.localizedDescription
+            } else {
+                message = "Empty response from model."
+            }
+
+            let nsErr = NSError(
                 domain: WritingToolsLocalizable.shared.localizedMenuItemTitle(),
                 code: -1,
-                userInfo: [
-                    NSLocalizedDescriptionKey: lastError,
-                ]
+                userInfo: [NSLocalizedDescriptionKey: message]
             )
-        }.resume()
-        _ = sem.wait(timeout: .now() + 3)
-
-        guard let checkError else {
-            completeWithError(NSError(
-                domain: WritingToolsLocalizable.shared.localizedMenuItemTitle(),
-                code: kErrorCodeRetry,
-                userInfo: [
-                    NSLocalizedDescriptionKey: WritingToolsLocalizable.shared.localizedString(
-                        forKey: "Unable to establish a secure connection to daemon"
-                    ),
-                ]
-            ))
-            return
+            completeWithError(nsErr)
         }
-
-        completeWithError(checkError)
     }
 
     func completeNormally() {
@@ -146,30 +234,22 @@ extension WritingToolsView {
     }
 
     func discard() {
+        activeRequestToken = UUID()
+        cfg.openAI.cancelAllStreams()
         isRunning = false
+        isEditingOutput = false
+        showOriginalDiff = false
         output = ""
     }
 
-    func accept() {
+    func accept(forceAppend: Bool? = nil) {
+        let shouldAppend = forceAppend ?? (currentTask.insertBehavior == .append)
+        let finalText = output
         dismiss()
-        context.textProxy.replaceText(with: output)
-    }
-
-    private func location(forTextRagne textRange: UITextRange, inTextView textView: UITextView) -> Int {
-        let beginning = textView.beginningOfDocument
-        let start = textRange.start
-        return textView.offset(from: beginning, to: start)
-    }
-
-    private func length(forTextRange textRange: UITextRange, inTextView textView: UITextView) -> Int {
-        let start = textRange.start
-        let end = textRange.end
-        return textView.offset(from: start, to: end)
-    }
-
-    private func stringRange(forTextRange textRange: UITextRange, inTextView textView: UITextView) -> NSRange {
-        let location = location(forTextRagne: textRange, inTextView: textView)
-        let length = length(forTextRange: textRange, inTextView: textView)
-        return NSRange(location: location, length: length)
+        if shouldAppend {
+            context.textProxy.appendText(with: finalText)
+        } else {
+            context.textProxy.replaceText(with: finalText)
+        }
     }
 }

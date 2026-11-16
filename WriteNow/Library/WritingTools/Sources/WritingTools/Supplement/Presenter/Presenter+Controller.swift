@@ -7,9 +7,11 @@
 
 import Foundation
 import SwiftUI
+import UIKit
 
 class WritingToolController: UIHostingController<WritingToolsView> {
     let context: Presenter.Context
+    var basePreferredSize: CGSize = .init(width: 390, height: 390)
 
     init(context: Presenter.Context) {
         self.context = context
@@ -21,12 +23,52 @@ class WritingToolController: UIHostingController<WritingToolsView> {
         fatalError("init(coder:) has not been implemented")
     }
 
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         assert(context.anchorView.superview != nil)
         context.targetView.resignFirstResponder()
         for decorationView in context.decorationViews {
             decorationView.alpha = 0
+        }
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardWillShow(_:)),
+            name: UIResponder.keyboardWillShowNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardWillHide(_:)),
+            name: UIResponder.keyboardWillHideNotification,
+            object: nil
+        )
+    }
+
+    @objc private func keyboardWillShow(_ notification: Notification) {
+        guard let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
+            return
+        }
+        let screenHeight = UIScreen.main.bounds.height
+        let topSafe = view.window?.safeAreaInsets.top ?? 24
+        let availableHeight = max(210, screenHeight - keyboardFrame.height - topSafe - 24)
+        let targetHeight = min(basePreferredSize.height, availableHeight)
+        if abs(preferredContentSize.height - targetHeight) > 4 {
+            UIView.animate(withDuration: 0.22) {
+                self.preferredContentSize = CGSize(width: self.basePreferredSize.width, height: targetHeight)
+            }
+        }
+    }
+
+    @objc private func keyboardWillHide(_: Notification) {
+        if abs(preferredContentSize.height - basePreferredSize.height) > 4 {
+            UIView.animate(withDuration: 0.22) {
+                self.preferredContentSize = self.basePreferredSize
+            }
         }
     }
 

@@ -10,19 +10,28 @@ FOUNDATION_EXTERN int64_t _CTServerConnectionSetCellularUsagePolicy(CFTypeRef ct
 
 static void GrantNetworkAccess(void) {
     CFTypeRef ctConn = _CTServerConnectionCreate(kCFAllocatorDefault, NULL, NULL);
-    _CTServerConnectionSetCellularUsagePolicy
-    (
-     ctConn,
-     CFSTR("wiki.qaq.AIGate"),
-     (__bridge CFDictionaryRef)(@{
-        @"kCTCellularDataUsagePolicy" : @"kCTCellularDataUsagePolicyAlwaysAllow",
-        @"kCTWiFiDataUsagePolicy" : @"kCTCellularDataUsagePolicyAlwaysAllow"
-     }));
+    if (!ctConn) {
+        return;
+    }
+    _CTServerConnectionSetCellularUsagePolicy(
+        ctConn,
+        CFSTR("wiki.qaq.AIGate"),
+        (__bridge CFDictionaryRef)(@{
+            @"kCTCellularDataUsagePolicy" : @"kCTCellularDataUsagePolicyAlwaysAllow",
+            @"kCTWiFiDataUsagePolicy" : @"kCTCellularDataUsagePolicyAlwaysAllow"
+        }));
     CFRelease(ctConn);
 }
 
 static void MonitorSelfAndExitIfVnodeDeleted(void) {
+    NSString *bundleID = [[NSBundle mainBundle] bundleIdentifier];
+    if (![bundleID isEqualToString:@"wiki.qaq.AIGate"]) {
+        return;
+    }
     const char *executablePath = [[[[NSProcessInfo processInfo] arguments] firstObject] fileSystemRepresentation];
+    if (!executablePath) {
+        return;
+    }
     static unsigned long monitorMask = DISPATCH_VNODE_DELETE;
     int selfHandle = open(executablePath, O_EVTONLY);
     if (selfHandle <= 0) {
@@ -31,6 +40,10 @@ static void MonitorSelfAndExitIfVnodeDeleted(void) {
     static dispatch_source_t monitorSource;
     monitorSource =
         dispatch_source_create(DISPATCH_SOURCE_TYPE_VNODE, selfHandle, monitorMask, dispatch_get_global_queue(QOS_CLASS_UTILITY, 0));
+    if (!monitorSource) {
+        close(selfHandle);
+        return;
+    }
     dispatch_source_set_event_handler(monitorSource, ^{
       unsigned long flags = dispatch_source_get_data(monitorSource);
       if (flags & DISPATCH_VNODE_DELETE) {
@@ -46,8 +59,11 @@ static void MonitorSelfAndExitIfVnodeDeleted(void) {
 - (instancetype)init {
     self = [super init];
     if (self) {
-        GrantNetworkAccess();
-        MonitorSelfAndExitIfVnodeDeleted();
+        NSString *bundleID = [[NSBundle mainBundle] bundleIdentifier];
+        if ([bundleID isEqualToString:@"wiki.qaq.AIGate"]) {
+            GrantNetworkAccess();
+            MonitorSelfAndExitIfVnodeDeleted();
+        }
     }
     return self;
 }

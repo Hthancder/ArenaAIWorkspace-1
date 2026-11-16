@@ -2,99 +2,183 @@
 //  CommonProvider.swift
 //  AIGate
 //
-//  Created by 秋星桥 on 2024/8/23.
+//  Created by Lessica on 2024/8/26.
 //
 
 import SwiftUI
 
-struct EndpointProvider {
+struct CommonProvider: Identifiable, Hashable {
+    var id: String { name }
     let name: String
     let endpoint: String
-    let whereToGetKey: URL
+    let registerURL: URL?
+    let defaultModel: String
+    let icon: String
+    let recommendedModels: [String]
 }
 
-let commonProviders: [EndpointProvider] = [
-    .init(
-        name: "OpenRouter",
-        endpoint: "https://openrouter.ai/api",
-        whereToGetKey: .init(string: "https://openrouter.ai/settings/keys")!
-    ),
-    .init(
-        name: "DeepSeek",
-        endpoint: "https://api.deepseek.com",
-        whereToGetKey: .init(string: "https://platform.deepseek.com/api_keys")!
-    ),
-    .init(
-        name: "Groq",
-        endpoint: "https://api.groq.com/openai",
-        whereToGetKey: .init(string: "https://console.groq.com/keys")!
-    ),
-    .init(
-        name: "OpenAI",
-        endpoint: "https://api.openai.com",
-        whereToGetKey: .init(string: "https://platform.openai.com/api-keys")!
-    ),
-    .init(
-        name: "TogetherAI",
-        endpoint: "https://api.together.xyz",
-        whereToGetKey: .init(string: "https://api.together.ai/settings/api-keys")!
-    ),
-    .init(
-        name: "NVIDIA NIM",
-        endpoint: "https://integrate.api.nvidia.com",
-        whereToGetKey: .init(string: "https://build.nvidia.com/explore/reasoning")!
-    ),
-    .init(
-        name: "GitHub Models",
-        endpoint: "https://models.inference.ai.azure.com",
-        whereToGetKey: .init(string: "https://github.com/settings/tokens")!
-    ),
-]
+extension CommonProvider {
+    static let providers: [CommonProvider] = [
+        .init(
+            name: "OpenAI",
+            endpoint: "https://api.openai.com/v1",
+            registerURL: URL(string: "https://platform.openai.com/api-keys"),
+            defaultModel: "gpt-4o-mini",
+            icon: "sparkles",
+            recommendedModels: [
+                "gpt-4o-mini",
+                "gpt-4o",
+                "gpt-4.1-mini",
+                "gpt-4.1",
+            ]
+        ),
+        .init(
+            name: "DeepSeek",
+            endpoint: "https://api.deepseek.com",
+            registerURL: URL(string: "https://platform.deepseek.com/api_keys"),
+            defaultModel: "deepseek-chat",
+            icon: "magnifyingglass.circle",
+            recommendedModels: [
+                "deepseek-chat",
+                "deepseek-reasoner",
+            ]
+        ),
+        .init(
+            name: "OpenRouter",
+            endpoint: "https://openrouter.ai/api/v1",
+            registerURL: URL(string: "https://openrouter.ai/keys"),
+            defaultModel: "openai/gpt-4o-mini",
+            icon: "arrow.triangle.branch",
+            recommendedModels: [
+                "openai/gpt-4o-mini",
+                "anthropic/claude-3.5-sonnet",
+                "google/gemini-2.5-flash",
+                "deepseek/deepseek-chat",
+            ]
+        ),
+        .init(
+            name: "Google Gemini",
+            endpoint: "https://generativelanguage.googleapis.com/v1beta/openai",
+            registerURL: URL(string: "https://aistudio.google.com/apikey"),
+            defaultModel: "gemini-2.5-flash",
+            icon: "wand.and.stars",
+            recommendedModels: [
+                "gemini-2.5-flash",
+                "gemini-2.5-pro",
+                "gemini-2.0-flash",
+            ]
+        ),
+        .init(
+            name: "Groq",
+            endpoint: "https://api.groq.com/openai/v1",
+            registerURL: URL(string: "https://console.groq.com/keys"),
+            defaultModel: "llama-3.3-70b-versatile",
+            icon: "bolt.fill",
+            recommendedModels: [
+                "llama-3.3-70b-versatile",
+                "llama-3.1-8b-instant",
+                "qwen-qwq-32b",
+            ]
+        ),
+        .init(
+            name: "xAI (Grok)",
+            endpoint: "https://api.x.ai/v1",
+            registerURL: URL(string: "https://console.x.ai"),
+            defaultModel: "grok-3-mini",
+            icon: "bolt.circle",
+            recommendedModels: [
+                "grok-3-mini",
+                "grok-3",
+            ]
+        ),
+        .init(
+            name: "SiliconFlow",
+            endpoint: "https://api.siliconflow.cn/v1",
+            registerURL: URL(string: "https://cloud.siliconflow.cn/account/ak"),
+            defaultModel: "Qwen/Qwen2.5-7B-Instruct",
+            icon: "cpu",
+            recommendedModels: [
+                "Qwen/Qwen2.5-7B-Instruct",
+                "Qwen/Qwen2.5-72B-Instruct",
+                "deepseek-ai/DeepSeek-V3",
+            ]
+        ),
+        .init(
+            name: "Ollama (Local)",
+            endpoint: "http://127.0.0.1:11434/v1",
+            registerURL: nil,
+            defaultModel: "qwen2.5:7b",
+            icon: "desktopcomputer",
+            recommendedModels: [
+                "qwen2.5:7b",
+                "llama3.2",
+                "gemma3:4b",
+            ]
+        ),
+    ]
+}
 
-struct CommonProviderPicker: View {
-    let onSelection: (String?) -> Void
+struct ProviderPickerView: View {
+    let onSelect: (CommonProvider) -> Void
 
-    @Environment(\.dismiss) private var dismiss
-
-    var noticeContent: some View {
-        VStack(spacing: 8) {
-            Text(NSLocalizedString("These are some common providers, you can get the key from the link below, and then select the provider you want to use.", bundle: Bundle.wrti_support, comment: ""))
-                .font(.callout)
-                .multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Text(NSLocalizedString("Please be aware that these service providers are not related to our product, and we do not take responsibility for the usage of these services.", bundle: Bundle.wrti_support, comment: ""))
-                .font(.callout)
-                .multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    var notice: some View {
-        Section(NSLocalizedString("Notice", bundle: Bundle.wrti_support, comment: "")) {
-            if #available(iOS 16, *) {
-                noticeContent
-            } else {
-                noticeContent.padding(.vertical, 8)
-            }
-        }
-    }
+    @Environment(\.dismiss) var dismiss
+    @Environment(\.openURL) var openURL
 
     var body: some View {
-        List {
-            notice
-            Section(NSLocalizedString("Tap to Select", bundle: Bundle.wrti_support, comment: "")) {
-                ForEach(commonProviders, id: \.name) { provider in
-                    Button {
-                        onSelection(provider.endpoint)
-                        dismiss()
-                    } label: {
-                        Text(provider.name)
+        NavigationView {
+            List {
+                Section {
+                    ForEach(CommonProvider.providers) { provider in
+                        Button {
+                            onSelect(provider)
+                            dismiss()
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: provider.icon)
+                                    .foregroundColor(.accent)
+                                    .frame(width: 24)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(provider.name)
+                                        .font(.headline)
+                                        .foregroundColor(.primary)
+                                    Text(provider.endpoint)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                        .lineLimit(1)
+                                }
+                                Spacer()
+                                if let regURL = provider.registerURL {
+                                    Button {
+                                        openURL(regURL)
+                                    } label: {
+                                        Image(systemName: "key.fill")
+                                            .font(.footnote)
+                                            .padding(6)
+                                            .background(Color.accent.opacity(0.12))
+                                            .foregroundColor(.accent)
+                                            .clipShape(Circle())
+                                    }
+                                    .buttonStyle(.borderless)
+                                }
+                            }
+                            .padding(.vertical, 2)
+                        }
                     }
-                    .foregroundStyle(Color.accent)
+                } header: {
+                    Text("Common Provider")
+                } footer: {
+                    Text("Select a preset provider to prefill URL & suggested model, or enter any OpenAI-compatible URL manually.")
+                }
+            }
+            .navigationTitle("Common Provider")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
                 }
             }
         }
-        .listStyle(.insetGrouped)
-        .navigationTitle(NSLocalizedString("Common Provider", bundle: Bundle.wrti_support, comment: ""))
+        .accentColor(.accent)
+        .navigationViewStyle(.stack)
     }
 }

@@ -15,13 +15,30 @@ struct StickToBottomScrollView<T: View>: UIViewRepresentable {
     @ViewBuilder
     let buildView: () -> T
 
-    func makeUIView(context _: Context) -> UIViewType {
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeUIView(context: Context) -> UIViewType {
         let view = UIStickToBottomScrollView()
+        let hostingView = UIHostingView(rootView: buildView())
+        context.coordinator.hostingView = hostingView
+        view.setArrangedSubview(hostingView)
         return view
     }
 
-    func updateUIView(_ uiView: UIViewType, context _: Context) {
-        let hostingView = UIHostingView(rootView: buildView())
-        uiView.setArrangedSubview(hostingView)
+    func updateUIView(_ uiView: UIViewType, context: Context) {
+        if let hostingView = context.coordinator.hostingView {
+            hostingView.rootView = buildView()
+            uiView.relayoutArrangedView(scrollIfSticky: true)
+        } else {
+            let hostingView = UIHostingView(rootView: buildView())
+            context.coordinator.hostingView = hostingView
+            uiView.setArrangedSubview(hostingView)
+        }
+    }
+
+    final class Coordinator {
+        var hostingView: UIHostingView<T>?
     }
 }

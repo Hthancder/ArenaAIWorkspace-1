@@ -10,79 +10,131 @@ import NIO
 
 class AIGateProxySwitchHandler: ChannelInboundHandler {
     typealias InboundIn = ByteBuffer
-    typealias InboundOut = ByteBuffer
+    typealias OutboundOut = ByteBuffer
 
-    let downstream: ChannelHandlerContext
-
+    let proxyHandler: AIGateProxyHandler
     var headerBuffer = Data()
-    var headerCompleted = false
-    var bodyBuffer = Data()
-    var bodyBufferForWrite = Data()
+    var isHeaderChecked = false
+    var failedStatusCode: Int?
+    var errorBodyBuffer = Data()
+    private let maxErrorBodyBytes = 16 * 1024
 
-    init(downstream: ChannelHandlerContext) {
-        self.downstream = downstream
+    init(proxyHandler: AIGateProxyHandler) {
+        self.proxyHandler = proxyHandler
     }
 
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
-        var inputBuffer = unwrapInboundIn(data)
-        guard let inputRead = inputBuffer.readBytes(length: inputBuffer.readableBytes) else { return }
-        let inputData = Data(inputRead)
+        var buffer = unwrapInboundIn(data)
 
-        switch headerCompleted {
-        case false:
-            assert(bodyBuffer.isEmpty)
-
-            let parts = splitInputDataForHTTP(currentData: headerBuffer, incomingData: inputData)
-            headerBuffer = parts.header
-            bodyBuffer = parts.body
-            headerCompleted = parts.headerCompleted
-
-        case true:
-            // into body status, header must be processed before
-            bodyBuffer.append(inputData)
-            writeToDownstream(context: context)
+        if let failedCode = failedStatusCode {
+            if errorBodyBuffer.count < maxErrorBodyBytes,
+               let bytes = buffer.getBytes(at: buffer.readerIndex, length: min(buffer.readableBytes, maxErrorBodyBytes - errorBodyBuffer.count))
+            {
+                errorBodyBuffer.append(contentsOf: bytes)
+            }
+            if errorBodyBuffer.count >= maxErrorBodyBytes {
+                finishFailedResponse(context: context, code: failedCode)
+            }
             return
         }
 
-        guard headerCompleted else { return }
-
-        guard let code = codeFromHeader() else {
-            context.terminateChannel(reason: .upstreamUnrecognizedResponse)
+        if isHeaderChecked {
+            proxyHandler.writeBack(buffer: buffer)
             return
         }
-        guard code == 200 else {
-            context.terminateChannel(reason: .upstreamPassedError(code: code))
+
+        guard let bytes = buffer.readBytes(length: buffer.readableBytes) else {
+            context.terminateChannel(reason: .invalidResponse)
             return
         }
-        writeToDownstream(context: context)
-    }
+        headerBuffer.append(contentsOf: bytes)
 
-    func codeFromHeader() -> Int? {
-        let header = headerBuffer
-        let headerString = String(data: header, encoding: .utf8) ?? ""
-        let lines = headerString.split(separator: "\r\n")
-        let firstLine = lines.first ?? ""
-        let parts = firstLine.split(separator: " ")
-        guard parts.count >= 3 else { return nil }
-        let codeString = parts[1]
-        return Int(codeString)
-    }
-
-    func writeToDownstream(context: ChannelHandlerContext) {
-        if !headerBuffer.isEmpty {
-            let buffer = context.channel.allocator.buffer(bytes: headerBuffer)
-            headerBuffer = Data()
-            downstream.writeAndFlush(NIOAny(buffer), promise: nil)
+        let delimiter = "\r\n\r\n".data(using: .utf8)!
+        guard let range = headerBuffer.range(of: delimiter) else {
+            if headerBuffer.count > 32 * 1024 {
+                context.terminateChannel(reason: .invalidResponse)
+            }
+            return
         }
-        if !bodyBuffer.isEmpty {
-            let buffer = context.channel.allocator.buffer(bytes: bodyBuffer)
-            bodyBuffer = Data()
-            downstream.writeAndFlush(NIOAny(buffer), promise: nil)
+
+        let headerData = headerBuffer.subdata(in: 0 ..< range.lowerBound)
+        let trailingData = headerBuffer.subdata(in: range.upperBound ..< headerBuffer.count)
+        headerBuffer = Data()
+
+        guard let headerString = String(data: headerData, encoding: .utf8),
+              let statusLine = headerString.components(separatedBy: "\r\n").first
+        else {
+            context.terminateChannel(reason: .invalidResponse)
+            return
+        }
+
+        let parts = statusLine.split(separator: " ", maxSplits: 2, omittingEmptySubsequences: true)
+        guard parts.count >= 2, let code = Int(parts[1]) else {
+            context.terminateChannel(reason: .invalidResponse)
+            return
+        }
+
+        isHeaderChecked = true
+
+        if (200 ..< 300).contains(code) {
+            var outBuf = context.channel.allocator.buffer(capacity: headerData.count + delimiter.count + trailingData.count)
+            outBuf.writeBytes(headerData)
+            outBuf.writeBytes(delimiter)
+            outBuf.writeBytes(trailingData)
+            proxyHandler.writeBack(buffer: outBuf)
+            ServiceError.lastError = nil
+        } else {
+            failedStatusCode = code
+            if !trailingData.isEmpty {
+                errorBodyBuffer.append(trailingData.prefix(maxErrorBodyBytes))
+            }
         }
     }
 
     func channelInactive(context: ChannelHandlerContext) {
-        writeToDownstream(context: context)
-        downstream.close(promise: nil)
+        if let failedCode = failedStatusCode {
+            finishFailedResponse(context: context, code: failedCode)
+            return
+        }
+        proxyHandler.context.close(mode: .all, promise: nil)
+    }
+
+    func errorCaught(context: ChannelHandlerContext, error _: Error) {
+        if let failedCode = failedStatusCode {
+            finishFailedResponse(context: context, code: failedCode)
+            return
+        }
+        proxyHandler.context.terminateChannel(reason: .endpointNotReachable)
+    }
+
+    private func finishFailedResponse(context: ChannelHandlerContext, code: Int) {
+        failedStatusCode = nil
+        let detail = extractErrorDetail(from: errorBodyBuffer)
+        proxyHandler.context.terminateChannel(reason: .upstreamPassedError(code: code, detail: detail))
+        context.close(mode: .all, promise: nil)
+    }
+
+    private func extractErrorDetail(from data: Data) -> String? {
+        guard !data.isEmpty else { return nil }
+        if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if let errorObj = obj["error"] as? [String: Any], let msg = errorObj["message"] as? String {
+                return msg
+            }
+            if let msg = obj["message"] as? String {
+                return msg
+            }
+            if let detail = obj["detail"] as? String {
+                return detail
+            }
+            if let errorStr = obj["error"] as? String {
+                return errorStr
+            }
+        }
+        if let text = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !text.isEmpty
+        {
+            return String(text.prefix(280))
+        }
+        return nil
     }
 }

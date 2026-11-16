@@ -26,16 +26,32 @@ public extension Presenter {
         context.targetView.addSubview(anchorView)
         anchorView.frame = anchorView.frame.intersection(targetView.bounds)
         if anchorView.frame.width <= 0 || anchorView.frame.height <= 0 {
-            assertionFailure()
             anchorView.frame = targetView.bounds
         }
 
         let toolController = WritingToolController(context: context)
-        let contentSize = toolController.view.systemLayoutSizeFitting(.init(
-            width: 400,
-            height: CGFloat.greatestFiniteMagnitude
+        let screenBounds = UIScreen.main.bounds
+        let maxWidth = max(280, min(400, screenBounds.width - 18))
+        let targetHeight: CGFloat
+        switch Configurator.shared.settings.popoverSizePreset {
+        case "compact":
+            targetHeight = min(320, screenBounds.height * 0.52)
+        case "large":
+            targetHeight = min(460, screenBounds.height * 0.72)
+        default:
+            targetHeight = min(390, screenBounds.height * 0.62)
+        }
+        let fittingSize = toolController.view.systemLayoutSizeFitting(.init(
+            width: maxWidth,
+            height: UIView.layoutFittingCompressedSize.height
         ))
-        toolController.view.backgroundColor = .black.withAlphaComponent(0.85)
+        let contentSize = CGSize(
+            width: maxWidth,
+            height: max(targetHeight, min(fittingSize.height, targetHeight))
+        )
+
+        toolController.basePreferredSize = contentSize
+        toolController.view.backgroundColor = .black.withAlphaComponent(0.88)
         toolController.modalPresentationStyle = .popover
         toolController.preferredContentSize = contentSize
         toolController.popoverPresentationController?.delegate = context
@@ -51,7 +67,9 @@ public extension Presenter {
         if let context = buildContext(fromResponder: view) {
             return context
         }
-        if let textProxy = TextProxy(delegatingView: view) {
+        if Configurator.shared.settings.autoSelectAllIfEmpty,
+           let textProxy = TextProxy(delegatingView: view)
+        {
             textProxy.selectAll()
         }
         if let context = buildContext(fromResponder: view) {

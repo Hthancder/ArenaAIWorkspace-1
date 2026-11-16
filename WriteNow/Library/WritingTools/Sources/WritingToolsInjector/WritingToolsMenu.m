@@ -14,37 +14,30 @@ NSString *WT_AppleMenuIdentifier(void) {
 }
 
 UIMenuItem *WT_MenuItem(void) {
-    static UIMenuItem *menuItem = nil;
-    if (!menuItem) {
-        WritingToolsPresenter *presenter = [WritingToolsPresenter sharedInstance];
-        menuItem = [[UIMenuItem alloc] initWithTitle:presenter.writingToolMenuName
-                                              action:NSSelectorFromString(@kWritingToolSelectorName)];
-    }
-    return menuItem;
+    WritingToolsPresenter *presenter = [WritingToolsPresenter sharedInstance];
+    return [[UIMenuItem alloc] initWithTitle:presenter.writingToolMenuName
+                                      action:NSSelectorFromString(@kWritingToolSelectorName)];
 }
 
 UICommand *WT_MenuItem_UICommand(void) {
-    static UICommand *command = nil;
-    if (!command) {
-        WritingToolsPresenter *presenter = [WritingToolsPresenter sharedInstance];
-        command = [UICommand commandWithTitle:presenter.writingToolMenuName
-                                        image:nil
-                                       action:NSSelectorFromString(@kWritingToolSelectorName)
-                                    propertyList:nil];
-    }
-    return command;
+    WritingToolsPresenter *presenter = [WritingToolsPresenter sharedInstance];
+    return [UICommand commandWithTitle:presenter.writingToolMenuName
+                                 image:nil
+                                action:NSSelectorFromString(@kWritingToolSelectorName)
+                          propertyList:nil];
 }
 
 BOOL WT_MenuItem_IsWritingTool(id input) {
+    NSString *currentTitle = WT_MenuItem().title;
     if ([input isKindOfClass:[UIMenu class]]) {
         UIMenu *menu = (UIMenu *)input;
-        if ([menu.title isEqualToString:WT_MenuItem().title]) {
+        if ([menu.title isEqualToString:currentTitle]) {
             return YES;
         }
     }
     if ([input isKindOfClass:[UIAction class]]) {
         UIAction *action = (UIAction *)input;
-        if ([action.title isEqualToString:WT_MenuItem().title]) {
+        if ([action.title isEqualToString:currentTitle]) {
             return YES;
         }
     }

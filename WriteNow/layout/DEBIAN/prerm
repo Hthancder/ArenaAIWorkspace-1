@@ -1,12 +1,14 @@
 #!/bin/sh
 
 if [ -f /Library/LaunchDaemons/wiki.qaq.writenowservices.plist ]; then
-    launchctl unload -w /Library/LaunchDaemons/wiki.qaq.writenowservices.plist > /dev/null 2>&1
+    launchctl unload -w /Library/LaunchDaemons/wiki.qaq.writenowservices.plist > /dev/null 2>&1 || true
 elif [ -f /var/jb/Library/LaunchDaemons/wiki.qaq.writenowservices.plist ]; then
-    launchctl unload -w /var/jb/Library/LaunchDaemons/wiki.qaq.writenowservices.plist > /dev/null 2>&1
+    launchctl unload -w /var/jb/Library/LaunchDaemons/wiki.qaq.writenowservices.plist > /dev/null 2>&1 || true
 else
-    ROOTHIDE_PATH=$(ls -d /var/containers/Bundle/Application/.jbroot-*/Library/LaunchDaemons/wiki.qaq.writenowservices.plist)
-    launchctl unload -w $ROOTHIDE_PATH > /dev/null 2>&1
+    ROOTHIDE_PATH=$(ls -d /var/containers/Bundle/Application/.jbroot-*/Library/LaunchDaemons/wiki.qaq.writenowservices.plist 2>/dev/null | head -n 1)
+    if [ -n "$ROOTHIDE_PATH" ] && [ -f "$ROOTHIDE_PATH" ]; then
+        launchctl unload -w "$ROOTHIDE_PATH" > /dev/null 2>&1 || true
+    fi
 fi
 
 exit 0

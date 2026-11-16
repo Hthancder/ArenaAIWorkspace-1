@@ -70,6 +70,7 @@ before-package::
 	$(ECHO_NOTHING)ldid -SAIGate/AIGate/AIGatePrivileged.entitlements $(THEOS_STAGING_DIR)/Applications/AIGate.app$(ECHO_END)
 
 clean::
+	$(ECHO_NOTHING)rm -rf Frameworks/OpenAI.xcframework || true$(ECHO_END)
 	$(ECHO_NOTHING)rm -rf Frameworks/WritingTools.xcframework || true$(ECHO_END)
 	$(ECHO_NOTHING)rm -rf Frameworks/WritingToolsLocalizable.xcframework || true$(ECHO_END)
 	$(ECHO_NOTHING)rm -rf Frameworks/WritingToolsInjector.xcframework || true$(ECHO_END)

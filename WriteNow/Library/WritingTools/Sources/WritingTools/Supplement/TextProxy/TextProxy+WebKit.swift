@@ -76,11 +76,15 @@ extension WKContentView: TextProxyObject {
     }
 
     func _replaceText(with text: String, atRange range: UITextRange, attribute _: TextAttribute) -> UITextRange? {
+        if !isFirstResponder {
+            _ = becomeFirstResponder()
+        }
+        selectedTextRange = range
         insertText(text)
-        guard let endPos = position(from: range.start, offset: text.count) else {
+        let utf16Length = text.utf16.count
+        guard let endPos = position(from: range.start, offset: utf16Length) else {
             return nil
         }
-        let newRange = textRange(from: range.start, to: endPos)
-        return newRange
+        return textRange(from: range.start, to: endPos)
     }
 }
