@@ -1,5 +1,5 @@
 'use strict';
-importScripts('popup-bulk.js','mutation-lock.js','reminders.js','snapshots.js','auto-snapshot.js','open-grace.js','presets.js','protection.js','automation-preview.js','scheduled-rehearsal.js','recovery-point.js','batches.js','auto-close.js','auto-notifications.js','page-notice.js','notice-state.js','notification-history.js','retention.js','retention-auto.js');
+importScripts('popup-bulk.js','mutation-lock.js','reminders.js','snapshots.js','auto-snapshot.js','open-grace.js','presets.js','protection.js','auto-discard.js','automation-preview.js','scheduled-rehearsal.js','recovery-point.js','batches.js','auto-close.js','auto-notifications.js','page-notice.js','notice-state.js','notification-history.js','retention.js','retention-auto.js');
 // Journal page delivery outcomes without recording site, tab, source IDs or message content.
 async function deliverPageNotice(kind,now){
  const result=await PageNotice.deliver(chrome,kind,now,ReminderTools);
@@ -40,6 +40,7 @@ chrome.alarms.onAlarm.addListener(alarm=>{if(typeof PopupBulk!=='undefined'&&typ
  try{const autoNow=Date.now();if(autoNow>=alarm.scheduledTime&&autoNow-alarm.scheduledTime<60000&&typeof AutoClose!=='undefined'){let before;try{before=await chrome.storage.local.get('autoCloseRuns')}catch{}await AutoClose.tick(chrome,autoNow,()=>crypto.randomUUID(),{schedule:ScheduledRehearsal,reminders:ReminderTools,grace:OpenGrace,preview:AutomationPreview,presets:PresetTools,protection:Protection,batches:BatchTools,recovery:RecoveryPoint});try{const after=await chrome.storage.local.get('autoCloseRuns');if(before&&typeof NotificationHistory!=='undefined'&&typeof NoticeState!=='undefined')try{await NotificationHistory.record(chrome,NotificationHistory.resultChanges(before.autoCloseRuns,after.autoCloseRuns,NoticeState,Date.now()))}catch(e){console.error('Notification history unavailable',e)}if(before&&(before.autoCloseRuns===undefined||Array.isArray(before.autoCloseRuns))&&typeof PageNotice!=='undefined'&&Array.isArray(after.autoCloseRuns)&&after.autoCloseRuns.some(r=>r&&['complete','blocked','uncertain'].includes(r.status)&&!before.autoCloseRuns?.some(old=>old?.id===r.id)))await deliverPageNotice('results',Date.now())}catch(e){console.error('Page notice unavailable',e)}}}catch(e){console.error('Scheduled auto-close failed',e)}
  try{if(typeof AutoNotifications!=='undefined'){const outcome=await AutoNotifications.deliver(chrome,Date.now(),ReminderTools);await journalOSNotice('results',outcome,Date.now())}}catch(e){console.error('Auto-close notification failed',e)}
  try{if(typeof RetentionAuto!=='undefined')await RetentionAuto.tick(chrome,Date.now(),()=>crypto.randomUUID(),RetentionTools)}catch(e){console.error('Automatic retention failed',e)}
+ try{if(typeof AutoDiscard!=='undefined')await AutoDiscard.run(chrome,Date.now(),{grace:OpenGrace,protection:Protection,memory:chrome.system?.memory})}catch(e){console.error('Resource measurement tick failed',e)}
  try{if(typeof ScheduledRehearsal!=='undefined')await ScheduledRehearsal.tick(chrome,now,()=>crypto.randomUUID(),{reminders:ReminderTools,grace:OpenGrace,preview:AutomationPreview,presets:PresetTools,protection:Protection})}catch(e){console.error('Scheduled rehearsal failed',e)}
  }).catch(e=>console.error('Scheduled task skipped',e))});
 void ensureReminderAlarm();
@@ -64,6 +65,8 @@ const openGraceQueue=new Map();
 function queueOpenGrace(id,work){const prior=openGraceQueue.get(id)||Promise.resolve(),next=prior.catch(()=>{}).then(work);openGraceQueue.set(id,next);void next.catch(()=>{}).finally(()=>{if(openGraceQueue.get(id)===next)openGraceQueue.delete(id)})}
 chrome.tabs?.onCreated?.addListener(tab=>{const now=Date.now();if(Number.isInteger(tab?.id))queueOpenGrace(tab.id,()=>OpenGrace.created(chrome,tab,now))});
 chrome.tabs?.onRemoved?.addListener(id=>{if(Number.isInteger(id))queueOpenGrace(id,()=>OpenGrace.removed(chrome,id))});
+// A navigation makes the previous sample meaningless: drop it instead of charging the new page with it.
+chrome.tabs?.onUpdated?.addListener((id,changeInfo)=>{if(typeof AutoDiscard!=='undefined'&&Number.isInteger(id)&&typeof changeInfo?.url==='string')void AutoDiscard.forget(chrome,[id]).catch(()=>{})});
 
 // On service-worker startup, conservatively start a full grace period for unknown tabs.
 if(typeof OpenGrace!=='undefined')void OpenGrace.seed(chrome).catch(()=>{});

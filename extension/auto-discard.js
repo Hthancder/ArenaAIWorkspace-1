@@ -2,7 +2,7 @@
 // Resource numbers only pick candidates. Without a real per-tab measurement the feature must stay silent,
 // so every unreadable, stale or changed sample degrades to "unknown" instead of an estimate.
 const AutoDiscard=(()=>{
- const prefix='tabspace:metrics:',settingKey='autoDiscardConfig',maxSeries=10;
+ const prefix='tabspace:metrics:',settingKey='autoDiscardConfig',runKey='autoDiscardRun',maxSeries=10;
  const notMeasurable='Không đo được tài nguyên trên Chrome này';
  const modes=Object.freeze(['suggest','ask','auto']),combines=Object.freeze(['any','all']);
  // `fast` resources need several consecutive cycles; `estimated` ones can never trigger an automatic run.
@@ -37,8 +37,10 @@ const AutoDiscard=(()=>{
  // Turning the policy on without a measurement source would silently do nothing: refuse it while saving.
  function assertUsable(raw,context={}){
   const config=validate(raw);
-  if(!config.enabled||context.measurable===true)return config;
-  throw Error(notMeasurable+'; bật tính năng sẽ không có số để quyết định. Hãy cho nghỉ thủ công trong Tab đang mở.');
+  if(config.enabled&&context.measurable!==true)throw Error(notMeasurable+'; bật tính năng sẽ không có số để quyết định. Hãy cho nghỉ thủ công trong Tab đang mở.');
+  // "Only when the system is short of memory" needs its own source; without it no run would ever happen.
+  if(config.enabled&&config.lowMemoryOnly&&context.systemMemory!==true)throw Error('Không đọc được bộ nhớ hệ thống trên Chrome này; thôi chọn "chỉ chạy khi thiếu bộ nhớ" hoặc tắt tính năng.');
+  return config;
  }
  function trim(value){return String(Math.round(value*10)/10).replace('.',',')}
  function valueLabel(resource,value){
@@ -132,6 +134,51 @@ const AutoDiscard=(()=>{
   }
   return {ok:true,reason:'',records};
  }
+ // Samples of closed tabs are dropped with each run, so storage.session cannot grow across a Chrome session.
+ async function prune(api,liveIds){
+  if(!api?.storage?.session?.get||!api?.storage?.session?.remove)return 0;
+  const live=new Set((Array.isArray(liveIds)?liveIds:[]).filter(id=>Number.isInteger(id)&&id>=0));
+  let stored;try{stored=await api.storage.session.get(null)}catch{return 0}
+  if(!stored||typeof stored!=='object')return 0;
+  const stale=Object.keys(stored).filter(name=>name.startsWith(prefix)&&!live.has(Number(name.slice(prefix.length))));
+  if(stale.length)try{await api.storage.session.remove(stale)}catch{}
+  return stale.length;
+ }
+ // Measuring is the only side effect here: candidates are counted and stored, no tab is ever discarded.
+ async function run(api,now,deps={},options={}){
+  if(!Number.isFinite(now)||now<=0)throw Error('Không xác định được thời gian.');
+  const data=await api.storage.local.get([settingKey,'automationPaused','protectedDomains','protectedUrls',runKey]);
+  let config;try{config=validate(data[settingKey])}catch{return {status:'invalid',reason:'Cấu hình cho nghỉ theo tài nguyên không hợp lệ; việc đo đã dừng.'}}
+  // A forced run is an explicit request to read the numbers now, so the policy gates do not apply to it.
+  if(!config.enabled&&!options.force)return {status:'off',reason:'Tính năng đang tắt; không đo và không nghỉ tab nào.'};
+  if(!options.force&&data.automationPaused!==undefined&&data.automationPaused!==false)return {status:'paused',reason:'Tự động hóa toàn cục đang tạm dừng.'};
+  const cap=capability(api);if(!cap.measurable)return {status:'unmeasurable',reason:cap.reason,config};
+  if(config.lowMemoryOnly&&!deps.memory?.getInfo)return {status:'blocked',reason:'Không đọc được bộ nhớ hệ thống; cần nguồn số RAM khả dụng để chạy ở chế độ chỉ khi thiếu bộ nhớ.',config};
+  const last=Number.isFinite(data[runKey]?.at)?data[runKey].at:0,cycle=config.everyMinutes*60000;
+  if(!options.force&&last&&now-last<cycle)return {status:'waiting',config,reason:`Chưa đến chu kỳ đo; còn khoảng ${Math.max(1,Math.ceil((cycle-(now-last))/60000))} phút.`,nextAt:last+cycle};
+  // A cycle missed while Chrome was asleep is not caught up; the schedule simply resumes (6.2).
+  const missed=!options.force&&last&&now-last>=2*cycle;
+  let kept=new Set();
+  if(deps.protection){
+   let domains,urls;
+   try{domains=deps.protection.validate(data.protectedDomains);urls=deps.protection.validateUrls(data.protectedUrls)}catch{return {status:'blocked',reason:'Danh sách bảo vệ không hợp lệ; việc đo đã dừng.',config}}
+   kept=new Set((Array.isArray(deps.tabs)?deps.tabs:[]).filter(t=>deps.protection.matches(t?.url,domains)||deps.protection.matchesUrl(t?.url,urls)).map(t=>t.url));
+  }
+  const tabs=Array.isArray(deps.tabs)?deps.tabs:await api.tabs.query({});
+  const normal=tabs.filter(t=>t?.incognito===false&&Number.isInteger(t.id)&&Number.isInteger(t.windowId)&&/^https?:\/\//i.test(t.url||''));
+  const measured=await measure(api,normal,now);
+  await remember(api,measured.records,Math.max(1,Math.min(maxSeries,config.cpuCycles)));
+  await prune(api,normal.map(t=>t.id));
+  const records=await recall(api,normal);
+  let note=()=>'';
+  if(deps.grace?.notes)try{const map=new Map((await deps.grace.notes(api,normal,now)).map(x=>[x.tab?.id,x.note]));note=t=>map.get(t.id)||''}catch{note=()=>deps.grace.manualUnknown}
+  // The stored count answers "how many tabs are over the threshold", so it is counted in suggestion mode:
+  // policy gates such as the grace window belong to a run, and the run re-checks them anyway.
+  const result=plan(normal,records,{...config,mode:'suggest'},now,{protected:kept,note});
+  const summary={at:now,overCount:result.candidates.length,blockedCount:result.rows.length-result.candidates.length,measurable:true,ids:result.chosen.map(r=>r.id),...(missed?{missed:true}:{})};
+  try{await api.storage.local.set({[runKey]:summary})}catch{throw Error('Không xác nhận được việc lưu kết quả đo; hãy kiểm tra rồi thử lại.')}
+  return {status:'measured',reason:'',config,plan:result,run:summary};
+ }
  // Newest value plus the streak of consecutive cycles above the threshold; a missing number or a gap breaks it.
  function resource(sample,name,config,now){
   const threshold=config.thresholds[name],need=meta[name].fast?config.cpuCycles:1,limit=2*config.everyMinutes*60000;
@@ -218,8 +265,9 @@ const AutoDiscard=(()=>{
   const count=Number.isInteger(context.overCount)?context.overCount>0?` · ${context.overCount} tab đang vượt ngưỡng`:' · chưa có tab nào vượt ngưỡng':'';
   const age=Number.isFinite(context.measuredAt)&&context.measuredAt>0?` · ${ageLabel(context.measuredAt,Number.isFinite(context.now)?context.now:context.measuredAt)}`:' · chưa có số đo';
   const status=c.mode==='auto'?' · không hỏi lại từng lượt':c.mode==='ask'?' · chỉ nghỉ khi bạn xác nhận':' · không tự chọn tab nào';
-  return {kind:c.mode,text:`${modeLabel(c.mode)} · xét ${c.resources.map(name=>meta[name].short).join(', ')} · tối đa ${c.maxPerRun} tab mỗi lượt${count}${age}${status}`};
+  const stale=Number.isFinite(context.measuredAt)&&context.measuredAt>0&&Number.isFinite(context.now)&&context.now-context.measuredAt>2*c.everyMinutes*60000;
+  return {kind:c.mode,text:`${modeLabel(c.mode)} · xét ${c.resources.map(name=>meta[name].short).join(', ')} · tối đa ${c.maxPerRun} tab mỗi lượt${count}${age}${stale?' · dữ liệu đo đã cũ, hãy đo lại':''}${context.missed===true?' · có chu kỳ đo đã bỏ lỡ, không chạy bù':''}${status}`};
  }
- return {prefix,settingKey,keys,meta,modes,combines,maxSeries,defaults,notMeasurable,modeLabel,integer,validate,capability,assertUsable,key,record,read,readRecords,recall,forget,remember,measure,resource,row,plan,line,describe,valueLabel,ageLabel,idleLabel};
+ return {prefix,settingKey,runKey,keys,meta,modes,combines,maxSeries,defaults,notMeasurable,modeLabel,integer,validate,capability,assertUsable,key,record,read,readRecords,recall,forget,remember,measure,prune,run,resource,row,plan,line,describe,valueLabel,ageLabel,idleLabel};
 })();
 if(typeof module!=='undefined')module.exports=AutoDiscard;

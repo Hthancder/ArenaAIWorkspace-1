@@ -8,7 +8,7 @@ const makeEl=(attrs={})=>({value:'',checked:false,disabled:false,focus(){focuses
 const ctxBase={
  AutoDiscard,OpenGrace,Protection,esc:value=>String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'),
  view:'settings',tabs:[],automationPaused:false,isDashboard:url=>String(url).includes('dashboard.html'),protectionError:false,protectedDomains:[],protectedUrls:[],
- autoDiscardConfig:undefined,autoDiscardOpen:false,autoDiscardBusy:false,autoDiscardSummary:null,
+ autoDiscardConfig:undefined,autoDiscardRun:undefined,autoDiscardOpen:false,autoDiscardBusy:false,autoDiscardSummary:null,
  query:'x',selected:new Set(),bulkSelected:new Set(),selectionAnchor:1,selectionClick:1,
  render(){rendered.push(ctx.view)},load:async()=>{loads++},notify:message=>notices.push(message),
  $:selector=>els[selector.replace(/^#/,'')],document:{getElementById:id=>els[id]??null},
@@ -141,15 +141,15 @@ assert.doesNotMatch(markup,/data-action="auto-discard-save"/);
  const info={10:{privateMemory:bytes(1400),cpu:20},11:{privateMemory:bytes(100),cpu:90}};
  ctx.tabs=[tab(1),tab(2),tab(3),tab(4,{active:true})];
  ctx.chrome={...chromeless,processes:{getProcessIdForTab:async id=>({1:10,2:11,3:12})[id],getProcessInfo:async ids=>Object.fromEntries(ids.map(id=>[id,info[id]]).filter(([,value])=>value))},
-  storage:{...chromeless.storage,session:{get:async keys=>Object.fromEntries(keys.filter(k=>k in session).map(k=>[k,structuredClone(session[k])])),set:async value=>Object.assign(session,structuredClone(value)),remove:async keys=>{for(const k of keys)delete session[k]}}},
+  storage:{...chromeless.storage,session:{get:async keys=>keys===null?structuredClone(session):Object.fromEntries(keys.filter(k=>k in session).map(k=>[k,structuredClone(session[k])])),set:async value=>Object.assign(session,structuredClone(value)),remove:async keys=>{for(const k of keys)delete session[k]}}},
   tabs:{query:async()=>structuredClone(ctx.tabs),discard:async()=>{discards++;throw Error('discard must not run')}}};
  // With a real source the header switches to the policy state instead of the capability warning.
  ctx.autoDiscardConfig={...AutoDiscard.validate(),enabled:false};
  assert.match(ctx.autoDiscardBlock(),/Tự cho nghỉ theo tài nguyên đang tắt/);
  ctx.autoDiscardConfig={...AutoDiscard.validate(),enabled:true,mode:'ask',resources:['memory'],thresholds:{memory:500,cpu:50,heap:200,network:20}};
- ctx.protectedUrls=['https://example.com/2'];
+ Object.assign(db,{autoDiscardConfig:structuredClone(ctx.autoDiscardConfig),protectedUrls:['https://example.com/2']});
  await ctx.autoDiscardMeasure();
- assert.match(dialog.markup,/1 tab vượt ngưỡng/);
+ assert.match(dialog.markup,/Vừa đo 4 tab · 1 tab vượt ngưỡng/);
  assert.match(dialog.markup,/RAM 1,4 GB/);
  assert.match(dialog.markup,/Chưa đưa vào danh sách/);
  assert.match(dialog.markup,/Tab đang được xem/);
@@ -158,8 +158,23 @@ assert.doesNotMatch(markup,/data-action="auto-discard-save"/);
  assert.match(dialog.markup,/chưa tab nào bị nghỉ/);
  assert.match(dialog.markup,/Không xác định được thời điểm mở tab/);
  assert.match(dialog.markup,/Chọn 1 tab để xem trước/);
- assert.deepEqual([discards,ctx.autoDiscardSummary.overCount,loads],[0,1,loads]);
+ assert.deepEqual([discards,ctx.autoDiscardSummary.overCount,db.autoDiscardRun.overCount,db.autoDiscardRun.blockedCount,loads],[0,1,1,3,loads]);
+ assert.deepEqual(db.autoDiscardRun.ids,[1]);
+ ctx.autoDiscardRun=structuredClone(db.autoDiscardRun);
  assert.match(ctx.autoDiscardBlock(),/1 tab đang vượt ngưỡng/);
+ // A run that has not refreshed for two cycles says so instead of presenting old numbers as current.
+ const manual=ctx.autoDiscardSummary;
+ ctx.autoDiscardSummary=null;
+ ctx.autoDiscardRun={at:Date.now()-3600000,overCount:1,measurable:true};
+ assert.match(ctx.autoDiscardBlock(),/dữ liệu đo đã cũ, hãy đo lại/);
+ ctx.autoDiscardRun={at:Date.now(),overCount:1,measurable:true,missed:true};
+ assert.match(ctx.autoDiscardBlock(),/có chu kỳ đo đã bỏ lỡ, không chạy bù/);
+ ctx.autoDiscardRun={at:Date.now(),overCount:0,measurable:true};
+ assert.match(ctx.autoDiscardBlock(),/chưa có tab nào vượt ngưỡng/);
+ // A fresher manual measurement wins over the older background record.
+ ctx.autoDiscardSummary=manual;
+ assert.match(ctx.autoDiscardBlock(),/đo ngay bây giờ/);
+ ctx.autoDiscardRun=structuredClone(db.autoDiscardRun);
  // A blocked measurement never lands in session storage, and no URL is written with it.
  assert.deepEqual(Object.keys(session),[AutoDiscard.key(1),AutoDiscard.key(2)]);
  assert.equal(session[AutoDiscard.key(1)].url,undefined);
