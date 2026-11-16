@@ -15,6 +15,7 @@ class Configuration: NSObject, ObservableObject {
     @objc(shared)
     static let shared = Configuration()
     static let noneActivated: UUID = .init(uuidString: "9dfefff5-ab74-4c5f-ad55-87f31da6a5d1")!
+    static var cachedAccentHex: String = "#3B82F6"
 
     let viewModel: ViewModel = .init()
 
@@ -79,6 +80,7 @@ class Configuration: NSObject, ObservableObject {
         viewModel.uiEndpoints = configuredEndpoints.values.sorted { $0.create < $1.create }
         viewModel.uiPresets = configuredPresets
         viewModel.uiSettings = appSettings
+        Self.cachedAccentHex = appSettings.accentColorHex
         isInitializing = false
 
         objectWillChange
@@ -103,6 +105,7 @@ class Configuration: NSObject, ObservableObject {
         viewModel.uiEndpoints = configuredEndpoints.values.sorted { $0.create < $1.create }
         viewModel.uiPresets = configuredPresets
         viewModel.uiSettings = appSettings
+        Self.cachedAccentHex = appSettings.accentColorHex
     }
 
     // MARK: - Endpoints
@@ -273,6 +276,17 @@ class Configuration: NSObject, ObservableObject {
     func movePresets(from source: IndexSet, to destination: Int) {
         var list = configuredPresets
         list.move(fromOffsets: source, toOffset: destination)
+        configuredPresets = list
+        saveNow()
+        reloadViewModelOnMain()
+    }
+
+    func movePreset(id: UUID, delta: Int) {
+        var list = configuredPresets
+        guard let idx = list.firstIndex(where: { $0.id == id }) else { return }
+        let target = idx + delta
+        guard list.indices.contains(target) else { return }
+        list.swapAt(idx, target)
         configuredPresets = list
         saveNow()
         reloadViewModelOnMain()

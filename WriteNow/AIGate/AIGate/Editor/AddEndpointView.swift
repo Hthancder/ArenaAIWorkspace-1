@@ -488,25 +488,22 @@ struct AddEndpointView: View {
         let trimmedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
         let headers = parsedCustomHeaders
 
-        Task {
-            let result = await EndpointNetworkHelper.fetchModels(
-                baseURL: baseURL,
-                token: trimmedToken,
-                pathMode: pathMode,
-                customHeaders: headers
-            )
-            await MainActor.run {
-                isFetchingModels = false
-                switch result {
-                case let .success(models):
-                    fetchedModels = models
-                    fetchStatusMessage = "Fetched \(models.count) models."
-                    if modelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, let first = models.first {
-                        addModelToProvider(first, activate: true)
-                    }
-                case let .failure(error):
-                    fetchErrorMessage = error.localizedDescription
+        EndpointNetworkHelper.fetchModels(
+            baseURL: baseURL,
+            token: trimmedToken,
+            pathMode: pathMode,
+            customHeaders: headers
+        ) { result in
+            isFetchingModels = false
+            switch result {
+            case let .success(models):
+                fetchedModels = models
+                fetchStatusMessage = "Fetched \(models.count) models."
+                if modelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, let first = models.first {
+                    addModelToProvider(first, activate: true)
                 }
+            case let .failure(error):
+                fetchErrorMessage = error.localizedDescription
             }
         }
     }
@@ -519,20 +516,17 @@ struct AddEndpointView: View {
         let trimmedModel = effectiveActiveModel
         let headers = parsedCustomHeaders
 
-        Task {
-            let res = await EndpointNetworkHelper.testChatEndpoint(
-                baseURL: baseURL,
-                token: trimmedToken,
-                model: trimmedModel,
-                pathMode: pathMode,
-                customHeaders: headers,
-                timeoutSeconds: timeoutSeconds
-            )
-            await MainActor.run {
-                isTestingConnection = false
-                testResultOK = res.ok
-                testResultMessage = res.message
-            }
+        EndpointNetworkHelper.testChatEndpoint(
+            baseURL: baseURL,
+            token: trimmedToken,
+            model: trimmedModel,
+            pathMode: pathMode,
+            customHeaders: headers,
+            timeoutSeconds: timeoutSeconds
+        ) { ok, _, _, message in
+            isTestingConnection = false
+            testResultOK = ok
+            testResultMessage = message
         }
     }
 

@@ -10,7 +10,7 @@ import UIKit
 
 extension UIColor {
     static var accent: UIColor {
-        UIColor(hexString: Configuration.shared.viewModel.uiSettings.accentColorHex)
+        UIColor(hexString: Configuration.cachedAccentHex)
             ?? UIColor(red: 59.0 / 255, green: 130.0 / 255, blue: 246.0 / 255, alpha: 1)
     }
 }

@@ -61,7 +61,7 @@ struct WriteNowRootView: View {
     @State private var showResetPresetsAlert = false
     @State private var mailResult: Result<MFMailComposeResult, Error>? = nil
 
-    @State private var statusTimer = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
+    let statusTimer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
 
     var body: some View {
         Form {
@@ -75,7 +75,12 @@ struct WriteNowRootView: View {
             footerSection
         }
         .listStyle(.insetGrouped)
-        .environment(\.editMode, .constant(isReorderingPresets ? .active : .inactive))
+        .introspect(.list, on: .iOS(.v13, .v14, .v15)) { tableView in
+            scrollViewSubject?.send(tableView)
+        }
+        .introspect(.list, on: .iOS(.v16, .v17, .v18)) { collectionView in
+            scrollViewSubject?.send(collectionView)
+        }
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
             case .addEndpoint:
@@ -107,7 +112,6 @@ struct WriteNowRootView: View {
                 if Bundle.main.bundleIdentifier == "wiki.qaq.AIGate" {
                     _ = GateSessionDelegate()
                 }
-                configuration.reloadValueFromSystem()
                 updateStatus()
             }
         }
@@ -116,12 +120,6 @@ struct WriteNowRootView: View {
         }
         .navigationTitle(NSLocalizedString("Write Now", bundle: Bundle.wrti_support, comment: ""))
         .accentColor(Color.accent)
-        .introspect(.list, on: .iOS(.v13, .v14, .v15)) { tableView in
-            scrollViewSubject?.send(tableView)
-        }
-        .introspect(.list, on: .iOS(.v16, .v17, .v18)) { collectionView in
-            scrollViewSubject?.send(collectionView)
-        }
     }
 
     // MARK: - Credit Section
@@ -330,16 +328,36 @@ struct WriteNowRootView: View {
                     }
                     .buttonStyle(.plain)
 
-                    Toggle("", isOn: Binding(
-                        get: { preset.isEnabled },
-                        set: { newVal in
-                            var updated = preset
-                            updated.isEnabled = newVal
-                            configuration.updatePreset(updated)
+                    if isReorderingPresets {
+                        HStack(spacing: 6) {
+                            Button {
+                                configuration.movePreset(id: preset.id, delta: -1)
+                            } label: {
+                                Image(systemName: "arrow.up.circle")
+                                    .foregroundColor(.accent)
+                            }
+                            .buttonStyle(.borderless)
+
+                            Button {
+                                configuration.movePreset(id: preset.id, delta: 1)
+                            } label: {
+                                Image(systemName: "arrow.down.circle")
+                                    .foregroundColor(.accent)
+                            }
+                            .buttonStyle(.borderless)
                         }
-                    ))
-                    .labelsHidden()
-                    .tint(Color.accent)
+                    } else {
+                        Toggle("", isOn: Binding(
+                            get: { preset.isEnabled },
+                            set: { newVal in
+                                var updated = preset
+                                updated.isEnabled = newVal
+                                configuration.updatePreset(updated)
+                            }
+                        ))
+                        .labelsHidden()
+                        .tint(Color.accent)
+                    }
                 }
             }
             .onDelete { offsets in
@@ -347,9 +365,6 @@ struct WriteNowRootView: View {
                 for idx in offsets where list.indices.contains(idx) {
                     configuration.deletePreset(id: list[idx].id)
                 }
-            }
-            .onMove { source, destination in
-                configuration.movePresets(from: source, to: destination)
             }
 
             Button {
@@ -439,20 +454,17 @@ struct WriteNowRootView: View {
     private func testActiveEndpoint(_ endpoint: Configuration.Endpoint) {
         isTestingActive = true
         testStatusMessage = ""
-        Task {
-            let res = await EndpointNetworkHelper.testChatEndpoint(
-                baseURL: endpoint.url,
-                token: endpoint.token,
-                model: endpoint.model,
-                pathMode: endpoint.pathMode,
-                customHeaders: endpoint.customHeaders,
-                timeoutSeconds: endpoint.timeoutSeconds
-            )
-            await MainActor.run {
-                isTestingActive = false
-                testStatusOK = res.ok
-                testStatusMessage = res.message
-            }
+        EndpointNetworkHelper.testChatEndpoint(
+            baseURL: endpoint.url,
+            token: endpoint.token,
+            model: endpoint.model,
+            pathMode: endpoint.pathMode,
+            customHeaders: endpoint.customHeaders,
+            timeoutSeconds: endpoint.timeoutSeconds
+        ) { ok, _, _, message in
+            isTestingActive = false
+            testStatusOK = ok
+            testStatusMessage = message
         }
     }
 
@@ -489,35 +501,45 @@ struct WriteNowRootView: View {
 struct CreditBannerView: View {
     let accentColor: Color
 
-    @State private var shimmerPhase: CGFloat = -0.8
+    @State private var orbDrift: CGFloat = -1.0
+    @State private var shimmerOffset: CGFloat = -220
     @State private var pulseScale: CGFloat = 1.0
     @State private var spinAngle: Double = 0
 
     var body: some View {
         ZStack {
-            // Animated rich dark aurora card background
             LinearGradient(
                 colors: [
                     Color(red: 0.07, green: 0.09, blue: 0.19),
                     Color(red: 0.13, green: 0.09, blue: 0.25),
                     Color(red: 0.05, green: 0.14, blue: 0.24),
                 ],
-                startPoint: UnitPoint(x: shimmerPhase, y: 0),
-                endPoint: UnitPoint(x: shimmerPhase + 1.2, y: 1)
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
             )
 
             // Ambient moving glow orbs
             Circle()
                 .fill(accentColor.opacity(0.32))
                 .frame(width: 150, height: 150)
-                .blur(radius: 36)
-                .offset(x: shimmerPhase * 90, y: -28)
+                .blur(radius: 32)
+                .offset(x: orbDrift * 70, y: -26)
 
             Circle()
                 .fill(Color.cyan.opacity(0.24))
                 .frame(width: 130, height: 130)
-                .blur(radius: 32)
-                .offset(x: -shimmerPhase * 80, y: 34)
+                .blur(radius: 28)
+                .offset(x: -orbDrift * 65, y: 30)
+
+            // Diagonal sweeping sheen
+            LinearGradient(
+                colors: [.clear, Color.white.opacity(0.14), .clear],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(width: 120)
+            .rotationEffect(.degrees(20))
+            .offset(x: shimmerOffset)
 
             VStack(spacing: 12) {
                 HStack(spacing: 10) {
@@ -542,7 +564,6 @@ struct CreditBannerView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("WRITENOW ENHANCED")
                             .font(.system(size: 10, weight: .heavy, design: .rounded))
-                            .tracking(1.6)
                             .foregroundColor(.cyan.opacity(0.95))
                         Text("iOS 15 · RootHide Edition")
                             .font(.caption2.weight(.medium))
@@ -560,36 +581,17 @@ struct CreditBannerView: View {
                         .clipShape(Capsule())
                 }
 
-                // Prominent Animated Shimmer Credit Title
                 Text("Credit to Hthan24 for improve")
                     .font(.system(size: 20, weight: .heavy, design: .rounded))
                     .multilineTextAlignment(.center)
                     .foregroundColor(.white)
-                    .overlay(
-                        LinearGradient(
-                            colors: [
-                                .clear,
-                                .cyan.opacity(0.9),
-                                .white,
-                                .purple.opacity(0.9),
-                                .clear,
-                            ],
-                            startPoint: UnitPoint(x: shimmerPhase, y: 0.5),
-                            endPoint: UnitPoint(x: shimmerPhase + 0.7, y: 0.5)
-                        )
-                        .mask(
-                            Text("Credit to Hthan24 for improve")
-                                .font(.system(size: 20, weight: .heavy, design: .rounded))
-                                .multilineTextAlignment(.center)
-                        )
-                    )
-                    .shadow(color: accentColor.opacity(0.55), radius: 8, x: 0, y: 2)
+                    .shadow(color: accentColor.opacity(0.65), radius: 8, x: 0, y: 2)
 
                 Text("and for owngoal-dev for nice opensource project !")
                     .font(.system(size: 13.5, weight: .semibold, design: .rounded))
                     .multilineTextAlignment(.center)
-                    .foregroundColor(.white.opacity(0.90))
-                    .padding(.horizontal, 8)
+                    .foregroundColor(.white.opacity(0.92))
+                    .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .background(Color.white.opacity(0.10))
                     .cornerRadius(10)
@@ -602,27 +604,27 @@ struct CreditBannerView: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .strokeBorder(
                     LinearGradient(
-                        colors: [
-                            .cyan.opacity(0.75),
-                            accentColor.opacity(0.85),
-                            .purple.opacity(0.75),
-                            .cyan.opacity(0.75),
-                        ],
-                        startPoint: UnitPoint(x: shimmerPhase, y: 0),
-                        endPoint: UnitPoint(x: shimmerPhase + 1.0, y: 1)
+                        colors: [.cyan.opacity(0.75), accentColor.opacity(0.85), .purple.opacity(0.75)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
                     ),
                     lineWidth: 1.6
                 )
         )
         .onAppear {
-            withAnimation(.linear(duration: 3.4).repeatForever(autoreverses: true)) {
-                shimmerPhase = 0.85
-            }
-            withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) {
-                pulseScale = 1.16
-            }
-            withAnimation(.linear(duration: 6.0).repeatForever(autoreverses: false)) {
-                spinAngle = 360
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                withAnimation(.easeInOut(duration: 3.4).repeatForever(autoreverses: true)) {
+                    orbDrift = 1.0
+                }
+                withAnimation(.linear(duration: 2.8).repeatForever(autoreverses: false)) {
+                    shimmerOffset = 220
+                }
+                withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+                    pulseScale = 1.15
+                }
+                withAnimation(.linear(duration: 6.0).repeatForever(autoreverses: false)) {
+                    spinAngle = 360
+                }
             }
         }
     }

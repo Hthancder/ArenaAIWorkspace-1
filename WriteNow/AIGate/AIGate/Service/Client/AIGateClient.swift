@@ -2,15 +2,17 @@
 //  AIGateClient.swift
 //  AIGate
 //
-//  Created by 秋星桥 on 2024/8/15.
+//  Created by Lessica on 2024/8/20.
 //
 
 import Foundation
 
 class AIGateClient {
-    enum Command: String, CaseIterable, Codable {
-        case ping
+    enum Command: String {
         case reload
+        case test
+        case reset
+        case kill
     }
 
     enum CommandHeader: String {
@@ -45,11 +47,16 @@ class AIGateClient {
 }
 
 extension AIGateClient.Command {
-    func execute() {
-        switch self {
-        case .ping: break
-        case .reload: Configuration.shared.reloadValueFromSystem()
+    func execute(completion: AIGateClient.CommandCompletion? = nil) {
+        AIGateClient.executeCommand(self, completion: completion)
+    }
+
+    func executeAndWait() {
+        let semaphore = DispatchSemaphore(value: 0)
+        execute { _, _ in
+            semaphore.signal()
         }
+        semaphore.wait()
     }
 }
 
@@ -63,44 +70,108 @@ enum EndpointNetworkHelper {
         baseURL: URL,
         token: String,
         pathMode: Configuration.Endpoint.PathMode = .auto,
-        customHeaders: [String: String] = [:]
-    ) async -> Result<[String], Error> {
+        customHeaders: [String: String] = [:],
+        completion: @escaping (Result<[String], Error>) -> Void
+    ) {
         let candidates = EndpointURLHelper.candidateModelsURLs(baseURL: baseURL, pathMode: pathMode)
         guard !candidates.isEmpty else {
-            return .failure(NetworkError(message: "Invalid base URL"))
+            DispatchQueue.main.async {
+                completion(.failure(NetworkError(message: "Invalid base URL")))
+            }
+            return
         }
 
-        var lastError: Error = NetworkError(message: "Unable to fetch models")
-        for url in candidates {
-            var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 20)
-            request.httpMethod = "GET"
-            request.setValue("application/json", forHTTPHeaderField: "Accept")
-            if !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        tryFetchCandidate(
+            candidates: candidates,
+            index: 0,
+            token: token,
+            customHeaders: customHeaders,
+            lastError: NetworkError(message: "Unable to fetch models"),
+            completion: completion
+        )
+    }
+
+    private static func tryFetchCandidate(
+        candidates: [URL],
+        index: Int,
+        token: String,
+        customHeaders: [String: String],
+        lastError: Error,
+        completion: @escaping (Result<[String], Error>) -> Void
+    ) {
+        guard index < candidates.count else {
+            DispatchQueue.main.async {
+                completion(.failure(lastError))
             }
-            for (k, v) in customHeaders where !k.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                request.setValue(v, forHTTPHeaderField: k)
+            return
+        }
+
+        let url = candidates[index]
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 20)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        for (k, v) in customHeaders where !k.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            request.setValue(v, forHTTPHeaderField: k)
+        }
+
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error {
+                tryFetchCandidate(
+                    candidates: candidates,
+                    index: index + 1,
+                    token: token,
+                    customHeaders: customHeaders,
+                    lastError: error,
+                    completion: completion
+                )
+                return
             }
 
-            do {
-                let (data, response) = try await URLSession.shared.data(for: request)
-                guard let http = response as? HTTPURLResponse else { continue }
+            guard let http = response as? HTTPURLResponse, let data else {
+                tryFetchCandidate(
+                    candidates: candidates,
+                    index: index + 1,
+                    token: token,
+                    customHeaders: customHeaders,
+                    lastError: lastError,
+                    completion: completion
+                )
+                return
+            }
 
-                if (200 ..< 300).contains(http.statusCode) {
-                    let parsed = parseModelList(from: data)
-                    if !parsed.isEmpty {
-                        return .success(parsed)
+            if (200 ..< 300).contains(http.statusCode) {
+                let parsed = parseModelList(from: data)
+                if !parsed.isEmpty {
+                    DispatchQueue.main.async {
+                        completion(.success(parsed))
                     }
-                    lastError = NetworkError(message: "HTTP \(http.statusCode): Empty model list returned")
-                } else {
-                    let msg = parseErrorMessage(from: data) ?? "HTTP \(http.statusCode)"
-                    lastError = NetworkError(message: "HTTP \(http.statusCode): \(msg)")
+                    return
                 }
-            } catch {
-                lastError = error
+                let err = NetworkError(message: "HTTP \(http.statusCode): Empty model list returned")
+                tryFetchCandidate(
+                    candidates: candidates,
+                    index: index + 1,
+                    token: token,
+                    customHeaders: customHeaders,
+                    lastError: err,
+                    completion: completion
+                )
+            } else {
+                let msg = parseErrorMessage(from: data) ?? "HTTP \(http.statusCode)"
+                let err = NetworkError(message: "HTTP \(http.statusCode): \(msg)")
+                tryFetchCandidate(
+                    candidates: candidates,
+                    index: index + 1,
+                    token: token,
+                    customHeaders: customHeaders,
+                    lastError: err,
+                    completion: completion
+                )
             }
-        }
-        return .failure(lastError)
+        }.resume()
     }
 
     static func testChatEndpoint(
@@ -109,14 +180,21 @@ enum EndpointNetworkHelper {
         model: String,
         pathMode: Configuration.Endpoint.PathMode = .auto,
         customHeaders: [String: String] = [:],
-        timeoutSeconds: Int = 30
-    ) async -> (ok: Bool, statusCode: Int?, latencyMs: Int, message: String) {
+        timeoutSeconds: Int = 30,
+        completion: @escaping (_ ok: Bool, _ statusCode: Int?, _ latencyMs: Int, _ message: String) -> Void
+    ) {
         guard let url = EndpointURLHelper.chatCompletionsURL(baseURL: baseURL, pathMode: pathMode) else {
-            return (false, nil, 0, "Invalid chat completions URL")
+            DispatchQueue.main.async {
+                completion(false, nil, 0, "Invalid chat completions URL")
+            }
+            return
         }
         let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedModel.isEmpty else {
-            return (false, nil, 0, "Model ID is empty")
+            DispatchQueue.main.async {
+                completion(false, nil, 0, "Model ID is empty")
+            }
+            return
         }
 
         var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: TimeInterval(max(10, timeoutSeconds)))
@@ -141,25 +219,37 @@ enum EndpointNetworkHelper {
         request.httpBody = try? JSONSerialization.data(withJSONObject: bodyObj)
 
         let started = Date()
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+        URLSession.shared.dataTask(with: request) { data, response, error in
             let latencyMs = Int(Date().timeIntervalSince(started) * 1000)
-            guard let http = response as? HTTPURLResponse else {
-                return (false, nil, latencyMs, "Invalid HTTP response")
+            if let error {
+                DispatchQueue.main.async {
+                    completion(false, nil, latencyMs, error.localizedDescription)
+                }
+                return
+            }
+            guard let http = response as? HTTPURLResponse, let data else {
+                DispatchQueue.main.async {
+                    completion(false, nil, latencyMs, "Invalid HTTP response")
+                }
+                return
             }
             if (200 ..< 300).contains(http.statusCode) {
+                let msg: String
                 if let reply = parseChatReplySnippet(from: data) {
-                    return (true, http.statusCode, latencyMs, "HTTP \(http.statusCode) (\(latencyMs)ms): \(reply)")
+                    msg = "HTTP \(http.statusCode) (\(latencyMs)ms): \(reply)"
+                } else {
+                    msg = "HTTP \(http.statusCode) OK (\(latencyMs)ms)"
                 }
-                return (true, http.statusCode, latencyMs, "HTTP \(http.statusCode) OK (\(latencyMs)ms)")
+                DispatchQueue.main.async {
+                    completion(true, http.statusCode, latencyMs, msg)
+                }
             } else {
                 let errMsg = parseErrorMessage(from: data) ?? "HTTP \(http.statusCode)"
-                return (false, http.statusCode, latencyMs, "HTTP \(http.statusCode): \(errMsg)")
+                DispatchQueue.main.async {
+                    completion(false, http.statusCode, latencyMs, "HTTP \(http.statusCode): \(errMsg)")
+                }
             }
-        } catch {
-            let latencyMs = Int(Date().timeIntervalSince(started) * 1000)
-            return (false, nil, latencyMs, error.localizedDescription)
-        }
+        }.resume()
     }
 
     private static func parseModelList(from data: Data) -> [String] {

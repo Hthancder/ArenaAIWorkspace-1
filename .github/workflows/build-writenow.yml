@@ -97,6 +97,12 @@ jobs:
           done
           exit "$STATUS"
         fi
+        PREFS_BIN=$(find .theos/_ -type f -name "WriteNowPrefs" | head -n 1)
+        if [ -n "$PREFS_BIN" ]; then
+          otool -L "$PREFS_BIN" | while IFS= read -r line; do
+            echo "::notice::WriteNowPrefs otool: $line"
+          done
+        fi
 
     - name: Read Version
       working-directory: WriteNow

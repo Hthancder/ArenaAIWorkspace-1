@@ -8,9 +8,6 @@
 import Combine
 import Foundation
 
-private let valueEncoder = JSONEncoder()
-private let valueDecoder = JSONDecoder()
-
 @propertyWrapper
 struct Persist<Value: Codable> {
     private let key: String
@@ -31,6 +28,7 @@ struct Persist<Value: Codable> {
 
         var cancellables: Set<AnyCancellable> = .init()
         subject
+            .dropFirst()
             .receive(on: DispatchQueue.global(qos: .utility))
             .sink { engine.writeValue($0, forKey: key) }
             .store(in: &cancellables)
@@ -55,11 +53,11 @@ struct Persist<Value: Codable> {
 private extension PersistProvider {
     func obtainValue<T: Codable>(for key: String) -> T? {
         guard let data = data(forKey: key) else { return nil }
-        return try? valueDecoder.decode(T.self, from: data)
+        return try? JSONDecoder().decode(T.self, from: data)
     }
 
     func writeValue(_ value: some Codable, forKey key: String) {
-        let data = try? valueEncoder.encode(value)
+        let data = try? JSONEncoder().encode(value)
         set(data, forKey: key)
     }
 }

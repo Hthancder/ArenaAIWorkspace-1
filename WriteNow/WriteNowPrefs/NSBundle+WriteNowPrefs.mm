@@ -8,11 +8,25 @@
     static NSBundle *bundle = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-      NSString *tweakBundlePath;
-      tweakBundlePath = [[NSBundle mainBundle] pathForResource:@"WriteNowPrefs" ofType:@"bundle"];
-      NSString *aliasBundlePath;
-      aliasBundlePath = JBROOT_PATH_NSSTRING(@"/Library/PreferenceBundles/WriteNowPrefs.bundle");
-      bundle = [NSBundle bundleWithPath:tweakBundlePath ?: aliasBundlePath];
+      Class rootClass = NSClassFromString(@"WriteNowRootListController");
+      if (rootClass) {
+          bundle = [NSBundle bundleForClass:rootClass];
+      }
+      if (!bundle) {
+          NSString *tweakBundlePath = [[NSBundle mainBundle] pathForResource:@"WriteNowPrefs" ofType:@"bundle"];
+          if (tweakBundlePath) {
+              bundle = [NSBundle bundleWithPath:tweakBundlePath];
+          }
+      }
+      if (!bundle) {
+          NSString *aliasBundlePath = JBROOT_PATH_NSSTRING(@"/Library/PreferenceBundles/WriteNowPrefs.bundle");
+          if (aliasBundlePath) {
+              bundle = [NSBundle bundleWithPath:aliasBundlePath];
+          }
+      }
+      if (!bundle) {
+          bundle = [NSBundle mainBundle];
+      }
     });
     return bundle;
 }

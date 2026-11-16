@@ -29,6 +29,7 @@ extension String {
 
 class GlobalStorage: PersistProvider {
     static let shared = GlobalStorage()
+    private let ioQueue = DispatchQueue(label: "wiki.qaq.aigate.globalstorage")
 
     private init() {}
 
@@ -38,15 +39,24 @@ class GlobalStorage: PersistProvider {
     }
 
     func data(forKey: String) -> Data? {
-        try? Data(contentsOf: path(forKey: forKey))
+        ioQueue.sync {
+            try? Data(contentsOf: path(forKey: forKey))
+        }
     }
 
     func set(_ data: Data?, forKey: String) {
-        try? data?.write(to: path(forKey: forKey))
+        ioQueue.sync {
+            let url = path(forKey: forKey)
+            if let data {
+                try? data.write(to: url, options: .atomic)
+            }
+        }
     }
 
     func removeObject(forKey: String) {
-        try? FileManager.default.removeItem(at: path(forKey: forKey))
+        ioQueue.sync {
+            try? FileManager.default.removeItem(at: path(forKey: forKey))
+        }
     }
 
     var backgroundImageURL: URL {
@@ -55,16 +65,20 @@ class GlobalStorage: PersistProvider {
     }
 
     func saveBackgroundImage(_ data: Data?) {
-        let url = backgroundImageURL
-        if let data, !data.isEmpty {
-            try? data.write(to: url, options: .atomic)
-        } else {
-            try? FileManager.default.removeItem(at: url)
+        ioQueue.sync {
+            let url = backgroundImageURL
+            if let data, !data.isEmpty {
+                try? data.write(to: url, options: .atomic)
+            } else {
+                try? FileManager.default.removeItem(at: url)
+            }
         }
     }
 
     func loadBackgroundImage() -> Data? {
-        try? Data(contentsOf: backgroundImageURL)
+        ioQueue.sync {
+            try? Data(contentsOf: backgroundImageURL)
+        }
     }
 
     func readDirectValue<T: Codable>(forKey key: String) -> T? {
