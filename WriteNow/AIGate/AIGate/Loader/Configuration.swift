@@ -281,6 +281,9 @@ class Configuration: NSObject, ObservableObject {
         _presetsInitialized.saveNow()
         _configuredPresets.saveNow()
         _appSettings.saveNow()
+        if ProcessInfo.processInfo.environment["BOOT_MODE"] != "ServiceDaemon" {
+            notifyConfigurationChangeToSystem()
+        }
     }
 
     @objc

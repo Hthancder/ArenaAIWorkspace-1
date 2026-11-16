@@ -65,6 +65,8 @@ final class StreamingSession<ResultType: Codable>: NSObject, Identifiable, URLSe
                     onReceiveContent?(self, object)
                 } else if let apiError = try? decoder.decode(APIErrorResponse.self, from: data) {
                     onProcessingError?(self, apiError)
+                } else {
+                    onProcessingError?(self, OpenAIError.nonStreamingPayload)
                 }
             }
         }

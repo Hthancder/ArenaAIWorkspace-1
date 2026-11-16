@@ -82,14 +82,23 @@ extension WritingToolsView {
             cancellable?.cancel()
             cancellable = nil
 
-            let finalFormatted = stripThink
+            let rawTrimmed = rawAccumulated.trimmingCharacters(in: .whitespacesAndNewlines)
+            var finalFormatted = stripThink
                 ? PromptComposer.stripThinkingTags(from: rawAccumulated)
-                : rawAccumulated.trimmingCharacters(in: .whitespacesAndNewlines)
+                : rawTrimmed
+            if finalFormatted.isEmpty, !rawTrimmed.isEmpty {
+                finalFormatted = rawTrimmed
+                    .replacingOccurrences(of: "<think>", with: "", options: .caseInsensitive)
+                    .replacingOccurrences(of: "</think>", with: "", options: .caseInsensitive)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+            }
 
             let finalError = firstError ?? completionError
 
             // If streaming yielded zero text (e.g. provider returned plain JSON instead of SSE), try non-streaming once
-            if finalFormatted.isEmpty, finalError is DecodingError {
+            if finalFormatted.isEmpty,
+               finalError is DecodingError || (finalError as? OpenAIError) == .nonStreamingPayload
+            {
                 runNonStreamingQuery(query: query, stripThink: stripThink, requestToken: requestToken)
                 return
             }
@@ -115,9 +124,16 @@ extension WritingToolsView {
                 switch result {
                 case let .success(chatResult):
                     let raw = chatResult.choices.compactMap { $0.message.content?.string }.joined()
-                    let finalFormatted = stripThink
+                    let rawTrimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                    var finalFormatted = stripThink
                         ? PromptComposer.stripThinkingTags(from: raw)
-                        : raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                        : rawTrimmed
+                    if finalFormatted.isEmpty, !rawTrimmed.isEmpty {
+                        finalFormatted = rawTrimmed
+                            .replacingOccurrences(of: "<think>", with: "", options: .caseInsensitive)
+                            .replacingOccurrences(of: "</think>", with: "", options: .caseInsensitive)
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                    }
                     if !finalFormatted.isEmpty {
                         self.output = finalFormatted
                         self.appendHistory(finalFormatted)

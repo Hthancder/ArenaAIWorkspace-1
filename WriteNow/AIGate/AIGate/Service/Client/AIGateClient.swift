@@ -33,6 +33,7 @@ class AIGateClient {
         )
         request.httpMethod = "GET"
         request.addValue(command.rawValue, forHTTPHeaderField: CommandHeader.exec.rawValue)
+        Configuration.shared.reloadServiceSecretFromDisk()
         let secret = Configuration.shared.serviceSecret
         request.addValue(secret, forHTTPHeaderField: CommandHeader.sect.rawValue)
         request.addValue(secret, forHTTPHeaderField: CommandHeader.gateSecret.rawValue)

@@ -7,8 +7,9 @@
 
 import Foundation
 
-public enum OpenAIError: Error {
+public enum OpenAIError: Error, Equatable {
     case emptyData
+    case nonStreamingPayload
 }
 
 public struct APIError: Error, Decodable, Equatable {

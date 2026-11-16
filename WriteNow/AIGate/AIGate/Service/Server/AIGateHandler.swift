@@ -20,6 +20,12 @@ class AIGateHandler: ChannelInboundHandler {
     private var pendingLocalCommand: String?
     private var expectedBodyLength: Int = 0
 
+    private var pendingProxyHeader: String?
+    private var pendingProxyUpstream: AIGateUpstream?
+    private var expectedProxyBodyLength: Int?
+    private var pendingProxyIsChunked: Bool = false
+    private let maxBufferedProxyBodyBytes = 16 * 1024 * 1024
+
     let group: EventLoopGroup
 
     init(group: EventLoopGroup) {
@@ -41,10 +47,55 @@ class AIGateHandler: ChannelInboundHandler {
         if let cmd = pendingLocalCommand {
             bodyBuffer.append(contentsOf: bytes)
             if bodyBuffer.count >= expectedBodyLength {
-                let body = bodyBuffer
+                let body = expectedBodyLength > 0 ? Data(bodyBuffer.prefix(expectedBodyLength)) : bodyBuffer
                 pendingLocalCommand = nil
                 bodyBuffer = Data()
                 handleLocalActionCommand(cmd: cmd, body: body, context: context)
+            }
+            return
+        }
+
+        if let pendingHeader = pendingProxyHeader, let upstream = pendingProxyUpstream {
+            bodyBuffer.append(contentsOf: bytes)
+            if bodyBuffer.count > maxBufferedProxyBodyBytes {
+                pendingProxyHeader = nil
+                pendingProxyUpstream = nil
+                expectedProxyBodyLength = nil
+                pendingProxyIsChunked = false
+                bodyBuffer = Data()
+                context.terminateChannel(reason: .invalidResponse)
+                return
+            }
+
+            if pendingProxyIsChunked {
+                if let decoded = decodeChunkedBody(bodyBuffer) {
+                    pendingProxyHeader = nil
+                    pendingProxyUpstream = nil
+                    expectedProxyBodyLength = nil
+                    pendingProxyIsChunked = false
+                    bodyBuffer = Data()
+                    startProxying(
+                        headerString: pendingHeader,
+                        body: decoded,
+                        hadBodyLengthHeader: true,
+                        upstream: upstream,
+                        context: context
+                    )
+                }
+            } else if let expectedLen = expectedProxyBodyLength, bodyBuffer.count >= expectedLen {
+                let body = Data(bodyBuffer.prefix(expectedLen))
+                pendingProxyHeader = nil
+                pendingProxyUpstream = nil
+                expectedProxyBodyLength = nil
+                pendingProxyIsChunked = false
+                bodyBuffer = Data()
+                startProxying(
+                    headerString: pendingHeader,
+                    body: body,
+                    hadBodyLengthHeader: true,
+                    upstream: upstream,
+                    context: context
+                )
             }
             return
         }
@@ -101,7 +152,75 @@ class AIGateHandler: ChannelInboundHandler {
             return
         }
 
-        guard let patchedHeader = patchHeaderValues(headerString, with: upstream) else {
+        if upstream.mid.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            context.terminateChannel(reason: .modelNotFound)
+            return
+        }
+
+        let contentLength = parseContentLength(from: headerString)
+        let isChunked = isChunkedTransferEncoding(in: headerString)
+
+        if let contentLength, contentLength > 0 {
+            if bodyBuffer.count >= contentLength {
+                let body = Data(bodyBuffer.prefix(contentLength))
+                bodyBuffer = Data()
+                startProxying(
+                    headerString: headerString,
+                    body: body,
+                    hadBodyLengthHeader: true,
+                    upstream: upstream,
+                    context: context
+                )
+            } else {
+                pendingProxyHeader = headerString
+                pendingProxyUpstream = upstream
+                expectedProxyBodyLength = contentLength
+                pendingProxyIsChunked = false
+            }
+            return
+        }
+
+        if isChunked {
+            if let decoded = decodeChunkedBody(bodyBuffer) {
+                bodyBuffer = Data()
+                startProxying(
+                    headerString: headerString,
+                    body: decoded,
+                    hadBodyLengthHeader: true,
+                    upstream: upstream,
+                    context: context
+                )
+            } else {
+                pendingProxyHeader = headerString
+                pendingProxyUpstream = upstream
+                expectedProxyBodyLength = nil
+                pendingProxyIsChunked = true
+            }
+            return
+        }
+
+        let body = bodyBuffer
+        bodyBuffer = Data()
+        startProxying(
+            headerString: headerString,
+            body: body,
+            hadBodyLengthHeader: contentLength != nil,
+            upstream: upstream,
+            context: context
+        )
+    }
+
+    private func startProxying(
+        headerString: String,
+        body: Data,
+        hadBodyLengthHeader: Bool,
+        upstream: AIGateUpstream,
+        context: ChannelHandlerContext
+    ) {
+        let finalBody = rewriteRequestBodyIfNeeded(body, with: upstream)
+        let bodyLengthToSend: Int? = (hadBodyLengthHeader || !finalBody.isEmpty) ? finalBody.count : nil
+
+        guard let patchedHeader = patchHeaderValues(headerString, with: upstream, bodyLength: bodyLengthToSend) else {
             context.close(mode: .all, promise: nil)
             return
         }
@@ -113,11 +232,10 @@ class AIGateHandler: ChannelInboundHandler {
         let proxy = AIGateProxyHandler(
             upstream: upstream,
             header: patchedHeaderData,
-            body: bodyBuffer,
+            body: finalBody,
             context: context,
-            group: group
+            group: context.eventLoop
         )
-        bodyBuffer = Data()
         proxyHandler = proxy
         proxy.handlerAdded(context: context)
     }
@@ -448,8 +566,75 @@ class AIGateHandler: ChannelInboundHandler {
         }
     }
 
-    func patchHeaderValues(_ headerString: String, with upstream: AIGateUpstream) -> String? {
-        var headerLines = headerString.components(separatedBy: "\r\n")
+    private func isChunkedTransferEncoding(in headerString: String) -> Bool {
+        guard let parsed = parseRequestLineAndHeaders(from: headerString) else { return false }
+        for (key, value) in parsed.headers where key.caseInsensitiveCompare("Transfer-Encoding") == .orderedSame {
+            if value.lowercased().contains("chunked") {
+                return true
+            }
+        }
+        return false
+    }
+
+    private func decodeChunkedBody(_ data: Data) -> Data? {
+        let crlf = Data("\r\n".utf8)
+        var offset = 0
+        var decoded = Data()
+
+        while offset < data.count {
+            guard let lineEndRange = data.range(of: crlf, options: [], in: offset ..< data.count) else {
+                return nil
+            }
+            let sizeLineData = data.subdata(in: offset ..< lineEndRange.lowerBound)
+            guard let sizeLine = String(data: sizeLineData, encoding: .utf8) else {
+                return nil
+            }
+            let hexPart = sizeLine.split(separator: ";", maxSplits: 1).first?.trimmingCharacters(in: .whitespaces) ?? ""
+            guard let chunkSize = Int(hexPart, radix: 16) else {
+                return nil
+            }
+            offset = lineEndRange.upperBound
+            if chunkSize == 0 {
+                // Terminating chunk: expect "\r\n" (no trailers) or "\r\n\r\n" after trailers
+                if offset + 2 <= data.count, data.subdata(in: offset ..< offset + 2) == crlf {
+                    return decoded
+                }
+                let doubleCRLF = Data("\r\n\r\n".utf8)
+                if data.range(of: doubleCRLF, options: [], in: offset ..< data.count) != nil {
+                    return decoded
+                }
+                return nil
+            }
+            guard offset + chunkSize + 2 <= data.count else {
+                return nil
+            }
+            decoded.append(data.subdata(in: offset ..< offset + chunkSize))
+            offset += chunkSize + 2
+        }
+        return nil
+    }
+
+    private func rewriteRequestBodyIfNeeded(_ body: Data, with upstream: AIGateUpstream) -> Data {
+        guard !body.isEmpty else { return body }
+        let targetModel = upstream.mid.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !targetModel.isEmpty else { return body }
+
+        guard var jsonObject = (try? JSONSerialization.jsonObject(with: body, options: [.mutableContainers])) as? [String: Any] else {
+            return body
+        }
+
+        let currentModel = (jsonObject["model"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if currentModel.isEmpty || currentModel == "user_activated_model" {
+            jsonObject["model"] = targetModel
+            if let rewritten = try? JSONSerialization.data(withJSONObject: jsonObject, options: []) {
+                return rewritten
+            }
+        }
+        return body
+    }
+
+    func patchHeaderValues(_ headerString: String, with upstream: AIGateUpstream, bodyLength: Int? = nil) -> String? {
+        let headerLines = headerString.components(separatedBy: "\r\n")
         guard !headerLines.isEmpty else { return nil }
 
         let requestLineParts = headerLines[0].components(separatedBy: " ")
@@ -484,6 +669,11 @@ class AIGateHandler: ChannelInboundHandler {
                 || lowerKey == "origin"
                 || lowerKey == "referer"
                 || lowerKey == "accept-encoding"
+                || lowerKey == "connection"
+                || lowerKey == "proxy-connection"
+                || lowerKey == "keep-alive"
+                || lowerKey == "transfer-encoding"
+                || (bodyLength != nil && lowerKey == "content-length")
                 || customHeaderKeysLower.contains(lowerKey)
             {
                 continue
@@ -495,6 +685,10 @@ class AIGateHandler: ChannelInboundHandler {
         let hostHeaderValue = isDefaultPort ? upstream.host : "\(upstream.host):\(upstream.port)"
         newLines.append("Host: \(hostHeaderValue)")
         newLines.append("Accept-Encoding: identity")
+        newLines.append("Connection: close")
+        if let bodyLength {
+            newLines.append("Content-Length: \(bodyLength)")
+        }
 
         if !upstream.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             newLines.append("Authorization: Bearer \(upstream.key)")
