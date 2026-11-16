@@ -345,31 +345,30 @@ class AIGateHandler: ChannelInboundHandler {
                 exit(EXIT_SUCCESS)
             }
 
-        case "switch_endpoint":
+        case "switch_endpoint", "set":
             if let uuidString = comps.queryItems?.first(where: { $0.name == "id" })?.value,
                let uuid = UUID(uuidString: uuidString),
                Configuration.shared.hasEndpointWithID(uuid)
             {
-                Configuration.shared.activatedEndpointID = uuid
-                Configuration.shared.saveNow()
-                Configuration.shared.reloadValueFromSystem()
-                sendJSONDictionary(["status": "ok"], context: context)
+                if let modelParam = comps.queryItems?.first(where: { $0.name == "model" })?.value,
+                   !modelParam.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                {
+                    Configuration.shared.switchModel(forEndpoint: uuid, model: modelParam, activateEndpoint: true)
+                } else {
+                    Configuration.shared.activatedEndpointID = uuid
+                    Configuration.shared.saveNow()
+                    Configuration.shared.reloadValueFromSystem()
+                }
+                let payload = Configuration.shared.buildRuntimeConfigPayload(redactTokens: false)
+                let data = (try? JSONEncoder().encode(payload)) ?? Data("{}".utf8)
+                sendJSONResponse(data, context: context)
             } else {
                 sendJSONDictionary(["error": "Endpoint not found"], statusCode: 404, statusText: "Not Found", context: context)
             }
 
-        case "set":
-            if let uuidString = comps.queryItems?.first(where: { $0.name == "id" })?.value,
-               let uuid = UUID(uuidString: uuidString),
-               Configuration.shared.hasEndpointWithID(uuid)
-            {
-                Configuration.shared.activatedEndpointID = uuid
-                Configuration.shared.saveNow()
-                Configuration.shared.reloadValueFromSystem()
-                sendJSONDictionary(["status": "ok"], context: context)
-            } else {
-                sendJSONDictionary(["error": "Endpoint not found"], statusCode: 404, statusText: "Not Found", context: context)
-            }
+        case "merge_providers":
+            let merged = Configuration.shared.mergeDuplicateProviders()
+            sendJSONDictionary(["status": "ok", "merged": merged], context: context)
 
         case "upsert_endpoint":
             handleUpsertEndpoint(body: body, context: context)
@@ -417,6 +416,7 @@ class AIGateHandler: ChannelInboundHandler {
             resolvedToken = existing?.token ?? ""
         }
         let model = ((dict["model"] as? String) ?? existing?.model ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let incomingModels = (dict["models"] as? [String]) ?? existing?.models
         let pathModeRaw = (dict["pathMode"] as? String) ?? existing?.pathMode.rawValue ?? Configuration.Endpoint.PathMode.auto.rawValue
         let pathMode = Configuration.Endpoint.PathMode(rawValue: pathModeRaw) ?? .auto
         let customHeaders = (dict["customHeaders"] as? [String: String]) ?? existing?.customHeaders ?? [:]
@@ -431,6 +431,7 @@ class AIGateHandler: ChannelInboundHandler {
             url: normalizedURL,
             token: resolvedToken,
             model: model,
+            models: incomingModels,
             pathMode: pathMode,
             customHeaders: customHeaders,
             useStreaming: useStreaming,
@@ -559,6 +560,20 @@ class AIGateHandler: ChannelInboundHandler {
             let payload = Configuration.shared.buildRuntimeConfigPayload(redactTokens: redact)
             let data = (try? JSONEncoder().encode(payload)) ?? Data("{}".utf8)
             sendJSONResponse(data, context: context)
+            return true
+
+        case "bg_image":
+            if let imgData = GlobalStorage.shared.loadMenuBackgroundImage(), !imgData.isEmpty {
+                let header = "HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nContent-Length: \(imgData.count)\r\nConnection: close\r\n\r\n"
+                var buffer = context.channel.allocator.buffer(capacity: header.utf8.count + imgData.count)
+                buffer.writeString(header)
+                buffer.writeBytes(imgData)
+                context.writeAndFlush(NIOAny(buffer)).whenComplete { _ in
+                    context.close(mode: .all, promise: nil)
+                }
+            } else {
+                sendJSONDictionary(["error": "No background image"], statusCode: 404, statusText: "Not Found", context: context)
+            }
             return true
 
         default:

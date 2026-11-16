@@ -10,17 +10,18 @@ private struct QuickCommonProvider: Identifiable {
     let name: String
     let url: String
     let defaultModel: String
+    let models: [String]
 }
 
 private let quickCommonProviders: [QuickCommonProvider] = [
-    .init(name: "OpenAI", url: "https://api.openai.com/v1", defaultModel: "gpt-4o-mini"),
-    .init(name: "DeepSeek", url: "https://api.deepseek.com", defaultModel: "deepseek-chat"),
-    .init(name: "OpenRouter", url: "https://openrouter.ai/api/v1", defaultModel: "openai/gpt-4o-mini"),
-    .init(name: "Gemini", url: "https://generativelanguage.googleapis.com/v1beta/openai", defaultModel: "gemini-2.5-flash"),
-    .init(name: "Groq", url: "https://api.groq.com/openai/v1", defaultModel: "llama-3.3-70b-versatile"),
-    .init(name: "xAI Grok", url: "https://api.x.ai/v1", defaultModel: "grok-3-mini"),
-    .init(name: "SiliconFlow", url: "https://api.siliconflow.cn/v1", defaultModel: "Qwen/Qwen2.5-7B-Instruct"),
-    .init(name: "Ollama", url: "http://127.0.0.1:11434/v1", defaultModel: "qwen2.5:7b"),
+    .init(name: "OpenAI", url: "https://api.openai.com/v1", defaultModel: "gpt-4o-mini", models: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"]),
+    .init(name: "DeepSeek", url: "https://api.deepseek.com", defaultModel: "deepseek-chat", models: ["deepseek-chat", "deepseek-reasoner"]),
+    .init(name: "OpenRouter", url: "https://openrouter.ai/api/v1", defaultModel: "openai/gpt-4o-mini", models: ["openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet", "google/gemini-2.5-flash"]),
+    .init(name: "Gemini", url: "https://generativelanguage.googleapis.com/v1beta/openai", defaultModel: "gemini-2.5-flash", models: ["gemini-2.5-flash", "gemini-2.5-pro"]),
+    .init(name: "Groq", url: "https://api.groq.com/openai/v1", defaultModel: "llama-3.3-70b-versatile", models: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]),
+    .init(name: "xAI Grok", url: "https://api.x.ai/v1", defaultModel: "grok-3-mini", models: ["grok-3-mini", "grok-3"]),
+    .init(name: "SiliconFlow", url: "https://api.siliconflow.cn/v1", defaultModel: "Qwen/Qwen2.5-7B-Instruct", models: ["Qwen/Qwen2.5-7B-Instruct", "deepseek-ai/DeepSeek-V3"]),
+    .init(name: "Ollama", url: "http://127.0.0.1:11434/v1", defaultModel: "qwen2.5:7b", models: ["qwen2.5:7b", "llama3.2:latest"]),
 ]
 
 struct QuickProviderSheet: View {
@@ -34,6 +35,8 @@ struct QuickProviderSheet: View {
     @State private var urlText = "https://"
     @State private var token = ""
     @State private var modelID = ""
+    @State private var modelsList: [String] = []
+    @State private var newModelDraft = ""
     @State private var pathMode: EndpointItem.PathMode = .auto
     @State private var useStreaming = true
     @State private var timeoutSeconds = 60
@@ -55,6 +58,22 @@ struct QuickProviderSheet: View {
         let q = modelFilter.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if q.isEmpty { return fetchedModels }
         return fetchedModels.filter { $0.lowercased().contains(q) }
+    }
+
+    var effectiveModels: [String] {
+        var result: [String] = []
+        var seen = Set<String>()
+        for m in modelsList {
+            let trimmed = m.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty, seen.insert(trimmed).inserted {
+                result.append(trimmed)
+            }
+        }
+        let active = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !active.isEmpty, seen.insert(active).inserted {
+            result.insert(active, at: 0)
+        }
+        return result
     }
 
     var body: some View {
@@ -83,7 +102,7 @@ struct QuickProviderSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     if isFormVisible {
                         Button("Save") { saveForm() }
-                            .disabled(urlText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || modelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving)
+                            .disabled(urlText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || effectiveModels.isEmpty || isSaving)
                     } else {
                         Button {
                             beginNew()
@@ -109,39 +128,65 @@ struct QuickProviderSheet: View {
                         .foregroundColor(.secondary)
                 }
             } else {
-                Section("Saved Providers (Tap to Activate)") {
+                Section("Saved Providers & Models") {
                     ForEach(cfg.endpoints) { ep in
                         let isActive = ep.id == cfg.activatedEndpointID
-                        HStack(spacing: 10) {
-                            Button {
-                                cfg.switchEndpoint(id: ep.id) { _ in }
-                            } label: {
-                                HStack(spacing: 10) {
-                                    Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
-                                        .foregroundColor(isActive ? .accentColor : .secondary)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(ep.displayName)
-                                            .font(.subheadline.bold())
-                                            .foregroundColor(.primary)
-                                        Text(ep.model)
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                            .lineLimit(1)
+                        let epModels = ep.normalizedModels
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 10) {
+                                Button {
+                                    cfg.switchEndpoint(id: ep.id) { _ in }
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
+                                            .foregroundColor(isActive ? .accentColor : .secondary)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(ep.displayName)
+                                                .font(.subheadline.bold())
+                                                .foregroundColor(.primary)
+                                            Text(ep.model)
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                                .lineLimit(1)
+                                        }
+                                        Spacer()
                                     }
-                                    Spacer()
+                                    .contentShape(Rectangle())
                                 }
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
+                                .buttonStyle(.plain)
 
-                            Button {
-                                beginEdit(ep)
-                            } label: {
-                                Image(systemName: "pencil.circle")
-                                    .font(.title3)
-                                    .foregroundColor(.accentColor)
+                                Button {
+                                    beginEdit(ep)
+                                } label: {
+                                    Image(systemName: "pencil.circle")
+                                        .font(.title3)
+                                        .foregroundColor(.accentColor)
+                                }
+                                .buttonStyle(.borderless)
                             }
-                            .buttonStyle(.borderless)
+
+                            if epModels.count > 1 {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 6) {
+                                        ForEach(epModels, id: \.self) { m in
+                                            let selected = isActive && ep.model == m
+                                            Button {
+                                                cfg.switchEndpoint(id: ep.id, model: m) { _ in }
+                                            } label: {
+                                                Text(m)
+                                                    .font(.system(.caption2, design: .monospaced))
+                                                    .padding(.horizontal, 8)
+                                                    .padding(.vertical, 4)
+                                                    .background(selected ? Color.accentColor.opacity(0.22) : Color.secondary.opacity(0.12))
+                                                    .foregroundColor(selected ? .accentColor : .primary)
+                                                    .cornerRadius(6)
+                                            }
+                                            .buttonStyle(.borderless)
+                                        }
+                                    }
+                                    .padding(.leading, 26)
+                                }
+                            }
                         }
                     }
                     .onDelete { offsets in
@@ -173,6 +218,9 @@ struct QuickProviderSheet: View {
                                     if name.isEmpty { name = p.name }
                                     urlText = p.url
                                     if modelID.isEmpty { modelID = p.defaultModel }
+                                    for m in p.models where !modelsList.contains(m) {
+                                        modelsList.append(m)
+                                    }
                                 } label: {
                                     Text(p.name)
                                         .font(.caption.bold())
@@ -190,7 +238,7 @@ struct QuickProviderSheet: View {
                 }
             }
 
-            Section("Endpoint") {
+            Section("Provider") {
                 TextField("Display Name (optional)", text: $name)
                     .disableAutocorrection(true)
 
@@ -219,10 +267,53 @@ struct QuickProviderSheet: View {
                 }
             }
 
-            Section("Model ID (Manual or Fetch)") {
-                TextField("Model ID (e.g. gpt-4o-mini)", text: $modelID)
+            Section("Models in Provider") {
+                TextField("Active Model ID (e.g. gpt-4o-mini)", text: $modelID)
                     .autocapitalization(.none)
                     .disableAutocorrection(true)
+
+                HStack {
+                    TextField("Add another model ID...", text: $newModelDraft)
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
+                        .onSubmit {
+                            addDraftModel()
+                        }
+                    Button {
+                        addDraftModel()
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                    }
+                    .disabled(newModelDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+
+                ForEach(modelsList, id: \.self) { m in
+                    let isActive = m == modelID.trimmingCharacters(in: .whitespacesAndNewlines)
+                    HStack {
+                        Button {
+                            modelID = m
+                        } label: {
+                            HStack {
+                                Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
+                                    .foregroundColor(isActive ? .accentColor : .secondary)
+                                Text(m)
+                                    .font(.system(.caption, design: .monospaced))
+                                    .foregroundColor(.primary)
+                                Spacer()
+                            }
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            modelsList.removeAll { $0 == m }
+                            if modelID == m { modelID = modelsList.first ?? "" }
+                        } label: {
+                            Image(systemName: "minus.circle")
+                                .foregroundColor(.red)
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
 
                 Button {
                     fetchModels()
@@ -242,7 +333,9 @@ struct QuickProviderSheet: View {
                         .autocapitalization(.none)
                         .disableAutocorrection(true)
                     ForEach(filteredModels.prefix(60), id: \.self) { m in
+                        let inList = modelsList.contains(m)
                         Button {
+                            if !inList { modelsList.append(m) }
                             modelID = m
                         } label: {
                             HStack {
@@ -253,6 +346,12 @@ struct QuickProviderSheet: View {
                                 if modelID == m {
                                     Image(systemName: "checkmark")
                                         .foregroundColor(.accentColor)
+                                } else if inList {
+                                    Image(systemName: "checkmark.circle")
+                                        .foregroundColor(.secondary)
+                                } else {
+                                    Image(systemName: "plus.circle")
+                                        .foregroundColor(.secondary)
                                 }
                             }
                         }
@@ -273,12 +372,12 @@ struct QuickProviderSheet: View {
                     testConnection()
                 } label: {
                     HStack {
-                        Label("Test Connection", systemImage: "bolt.horizontal.circle")
+                        Label("Test Active Model", systemImage: "bolt.horizontal.circle")
                         Spacer()
                         if isTesting { ProgressView() }
                     }
                 }
-                .disabled(isTesting || modelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(isTesting || effectiveModels.isEmpty)
 
                 if !statusMessage.isEmpty {
                     Text(statusMessage)
@@ -302,7 +401,7 @@ struct QuickProviderSheet: View {
                         Spacer()
                     }
                 }
-                .disabled(isSaving || urlText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || modelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(isSaving || urlText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || effectiveModels.isEmpty)
 
                 if let target = editingTarget {
                     Button(role: .destructive) {
@@ -322,6 +421,18 @@ struct QuickProviderSheet: View {
         }
     }
 
+    private func addDraftModel() {
+        let trimmed = newModelDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        if !modelsList.contains(trimmed) {
+            modelsList.append(trimmed)
+        }
+        if modelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            modelID = trimmed
+        }
+        newModelDraft = ""
+    }
+
     private func beginNew() {
         editingTarget = nil
         isCreatingNew = true
@@ -329,6 +440,8 @@ struct QuickProviderSheet: View {
         urlText = "https://"
         token = ""
         modelID = ""
+        modelsList = []
+        newModelDraft = ""
         pathMode = .auto
         useStreaming = true
         timeoutSeconds = cfg.settings.requestTimeout
@@ -345,6 +458,8 @@ struct QuickProviderSheet: View {
         urlText = ep.url.absoluteString
         token = ep.token
         modelID = ep.model
+        modelsList = ep.normalizedModels
+        newModelDraft = ""
         pathMode = ep.pathMode
         useStreaming = ep.useStreaming
         timeoutSeconds = ep.timeoutSeconds
@@ -371,6 +486,7 @@ struct QuickProviderSheet: View {
                 statusMessage = "Loaded \(models.count) models."
                 if modelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, let first = models.first {
                     modelID = first
+                    if !modelsList.contains(first) { modelsList.append(first) }
                 }
             case let .failure(err):
                 statusIsError = true
@@ -380,12 +496,17 @@ struct QuickProviderSheet: View {
     }
 
     private func testConnection() {
+        let testModel = modelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? (effectiveModels.first ?? "")
+            : modelID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !testModel.isEmpty else { return }
+
         isTesting = true
         statusMessage = ""
         cfg.testEndpointViaDaemon(
             url: urlText,
             token: token,
-            model: modelID,
+            model: testModel,
             pathMode: pathMode,
             customHeaders: editingTarget?.customHeaders ?? [:],
             timeoutSeconds: timeoutSeconds
@@ -397,6 +518,11 @@ struct QuickProviderSheet: View {
     }
 
     private func saveForm() {
+        let finalModels = effectiveModels
+        guard !finalModels.isEmpty else { return }
+        let rawActive = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let activeModel = rawActive.isEmpty ? finalModels[0] : rawActive
+
         isSaving = true
         statusMessage = ""
         cfg.upsertEndpoint(
@@ -404,7 +530,8 @@ struct QuickProviderSheet: View {
             name: name,
             url: urlText,
             token: token,
-            model: modelID,
+            model: activeModel,
+            models: finalModels,
             pathMode: pathMode,
             customHeaders: editingTarget?.customHeaders ?? [:],
             useStreaming: useStreaming,

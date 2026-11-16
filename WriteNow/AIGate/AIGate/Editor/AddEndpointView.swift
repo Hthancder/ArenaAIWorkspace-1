@@ -23,6 +23,8 @@ struct AddEndpointView: View {
     @State private var urlText: String
     @State private var token: String
     @State private var modelID: String
+    @State private var modelsList: [String]
+    @State private var newModelDraft: String = ""
     @State private var pathMode: Configuration.Endpoint.PathMode
     @State private var useStreaming: Bool
     @State private var timeoutSeconds: Int
@@ -50,6 +52,7 @@ struct AddEndpointView: View {
         let initialToken = editingEndpoint?.token ?? Configuration.shared.lastEndpointKey
         let initialName = editingEndpoint?.name ?? ""
         let initialModel = editingEndpoint?.model ?? ""
+        let initialModels = editingEndpoint?.normalizedModels ?? []
         let initialPathMode = editingEndpoint?.pathMode ?? .auto
         let initialStreaming = editingEndpoint?.useStreaming ?? true
         let initialTimeout = editingEndpoint?.timeoutSeconds ?? Configuration.shared.appSettings.requestTimeout
@@ -61,6 +64,7 @@ struct AddEndpointView: View {
         _urlText = State(initialValue: initialURL)
         _token = State(initialValue: initialToken)
         _modelID = State(initialValue: initialModel)
+        _modelsList = State(initialValue: initialModels)
         _pathMode = State(initialValue: initialPathMode)
         _useStreaming = State(initialValue: initialStreaming)
         _timeoutSeconds = State(initialValue: initialTimeout)
@@ -98,8 +102,24 @@ struct AddEndpointView: View {
         return base.filter { $0.lowercased().contains(query) }
     }
 
+    private var effectiveModelsToSave: [String] {
+        var result: [String] = []
+        var seen = Set<String>()
+        for m in modelsList {
+            let trimmed = m.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty, seen.insert(trimmed).inserted {
+                result.append(trimmed)
+            }
+        }
+        let active = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !active.isEmpty, seen.insert(active).inserted {
+            result.insert(active, at: 0)
+        }
+        return result
+    }
+
     private var canSave: Bool {
-        normalizedURL != nil && !modelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        normalizedURL != nil && !effectiveModelsToSave.isEmpty
     }
 
     var body: some View {
@@ -164,7 +184,7 @@ struct AddEndpointView: View {
                         .buttonStyle(.borderless)
                     }
                 } header: {
-                    Text("Endpoint")
+                    Text("Provider")
                 } footer: {
                     Text("Chat Endpoint: \(resolvedChatPreview)")
                         .font(.caption2)
@@ -172,7 +192,7 @@ struct AddEndpointView: View {
 
                 Section {
                     HStack {
-                        Text("Model")
+                        Text("Active")
                             .frame(width: 72, alignment: .leading)
                             .foregroundColor(.secondary)
                         TextField("e.g. gpt-4o-mini, deepseek-chat", text: $modelID)
@@ -180,12 +200,63 @@ struct AddEndpointView: View {
                             .disableAutocorrection(true)
                         if !modelID.isEmpty {
                             Button {
-                                modelID = ""
+                                addModelToList(modelID, setActive: true)
                             } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundColor(.secondary)
+                                Image(systemName: modelsList.contains(modelID.trimmingCharacters(in: .whitespacesAndNewlines)) ? "checkmark.circle.fill" : "plus.circle.fill")
+                                    .foregroundColor(.accent)
                             }
                             .buttonStyle(.borderless)
+                        }
+                    }
+
+                    HStack {
+                        Text("Add Model")
+                            .frame(width: 72, alignment: .leading)
+                            .foregroundColor(.secondary)
+                        TextField("Add another model ID...", text: $newModelDraft)
+                            .autocapitalization(.none)
+                            .disableAutocorrection(true)
+                            .onSubmit {
+                                commitDraftModel()
+                            }
+                        Button {
+                            commitDraftModel()
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .foregroundColor(newModelDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .secondary : .accent)
+                        }
+                        .buttonStyle(.borderless)
+                        .disabled(newModelDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+
+                    if !modelsList.isEmpty {
+                        ForEach(modelsList, id: \.self) { m in
+                            let isActive = (m == modelID.trimmingCharacters(in: .whitespacesAndNewlines))
+                            HStack(spacing: 8) {
+                                Button {
+                                    modelID = m
+                                } label: {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
+                                            .foregroundColor(isActive ? .accent : .secondary)
+                                        Text(m)
+                                            .font(.system(.subheadline, design: .monospaced))
+                                            .foregroundColor(.primary)
+                                            .lineLimit(1)
+                                        Spacer()
+                                    }
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+
+                                Button {
+                                    removeModelFromList(m)
+                                } label: {
+                                    Image(systemName: "minus.circle")
+                                        .foregroundColor(.red.opacity(0.85))
+                                }
+                                .buttonStyle(.borderless)
+                            }
                         }
                     }
 
@@ -193,16 +264,21 @@ struct AddEndpointView: View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 6) {
                                 ForEach(suggestedProviderModels, id: \.self) { m in
+                                    let inList = modelsList.contains(m)
                                     Button {
-                                        modelID = m
+                                        toggleModelInList(m)
                                     } label: {
-                                        Text(m)
-                                            .font(.caption)
-                                            .padding(.horizontal, 10)
-                                            .padding(.vertical, 5)
-                                            .background(modelID == m ? Color.accent.opacity(0.2) : Color.secondary.opacity(0.12))
-                                            .foregroundColor(modelID == m ? .accent : .primary)
-                                            .cornerRadius(8)
+                                        HStack(spacing: 4) {
+                                            Image(systemName: inList ? "checkmark" : "plus")
+                                                .font(.caption2)
+                                            Text(m)
+                                                .font(.caption)
+                                        }
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 5)
+                                        .background(inList ? Color.accent.opacity(0.22) : Color.secondary.opacity(0.12))
+                                        .foregroundColor(inList ? .accent : .primary)
+                                        .cornerRadius(8)
                                     }
                                     .buttonStyle(.borderless)
                                 }
@@ -235,9 +311,17 @@ struct AddEndpointView: View {
                             .foregroundColor(.red)
                     }
                 } header: {
-                    Text("Model ID")
+                    HStack {
+                        Text("Models in Provider")
+                        Spacer()
+                        if !modelsList.isEmpty {
+                            Text("\(modelsList.count) saved")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 } footer: {
-                    Text("Enter any Model ID manually and save directly, or fetch from /models if supported.")
+                    Text("Group multiple models under this single provider. Tap a saved model to set it active, or add/fetch more anytime.")
                 }
 
                 if !fetchedModels.isEmpty {
@@ -247,23 +331,36 @@ struct AddEndpointView: View {
                             .disableAutocorrection(true)
 
                         ForEach(filteredModels.prefix(80), id: \.self) { model in
+                            let inList = modelsList.contains(model)
+                            let isActive = modelID.trimmingCharacters(in: .whitespacesAndNewlines) == model
                             Button {
-                                modelID = model
+                                if inList {
+                                    modelID = model
+                                } else {
+                                    addModelToList(model, setActive: true)
+                                }
                             } label: {
                                 HStack {
                                     Text(model)
                                         .font(.system(.subheadline, design: .monospaced))
                                         .foregroundColor(.primary)
                                     Spacer()
-                                    if modelID == model {
-                                        Image(systemName: "checkmark")
+                                    if isActive {
+                                        Text("Active")
+                                            .font(.caption2.bold())
                                             .foregroundColor(.accent)
+                                    } else if inList {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundColor(.accent.opacity(0.75))
+                                    } else {
+                                        Image(systemName: "plus.circle")
+                                            .foregroundColor(.secondary)
                                     }
                                 }
                             }
                         }
                     } header: {
-                        Text("Fetched Models (\(filteredModels.count))")
+                        Text("Fetched Models (\(filteredModels.count)) — Tap to Add")
                     }
                 }
 
@@ -272,7 +369,7 @@ struct AddEndpointView: View {
                         testConnectionAction()
                     } label: {
                         HStack {
-                            Label("Test Connection", systemImage: "bolt.horizontal.circle")
+                            Label("Test Active Model Connection", systemImage: "bolt.horizontal.circle")
                             Spacer()
                             if isTestingConnection {
                                 ProgressView()
@@ -344,7 +441,7 @@ struct AddEndpointView: View {
                     } label: {
                         HStack {
                             Spacer()
-                            Text(editingEndpoint == nil ? "Save Endpoint" : "Update Endpoint")
+                            Text(editingEndpoint == nil ? "Save Provider" : "Update Provider")
                                 .fontWeight(.semibold)
                             Spacer()
                         }
@@ -352,7 +449,7 @@ struct AddEndpointView: View {
                     .disabled(!canSave)
                 }
             }
-            .navigationTitle(editingEndpoint == nil ? "Add Endpoint" : "Edit Endpoint")
+            .navigationTitle(editingEndpoint == nil ? "Add Provider" : "Edit Provider")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -372,6 +469,10 @@ struct AddEndpointView: View {
                     if modelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         modelID = provider.defaultModel
                     }
+                    for rec in provider.recommendedModels {
+                        addModelToList(rec, setActive: false)
+                    }
+                    addModelToList(provider.defaultModel, setActive: modelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     suggestedProviderModels = provider.recommendedModels
                     fetchErrorMessage = ""
                     fetchStatusMessage = ""
@@ -381,6 +482,45 @@ struct AddEndpointView: View {
         }
         .accentColor(.accent)
         .navigationViewStyle(.stack)
+    }
+
+    private func commitDraftModel() {
+        let trimmed = newModelDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        addModelToList(trimmed, setActive: modelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        newModelDraft = ""
+    }
+
+    private func addModelToList(_ raw: String, setActive: Bool) {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        if !modelsList.contains(trimmed) {
+            modelsList.append(trimmed)
+        }
+        if setActive || modelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            modelID = trimmed
+        }
+    }
+
+    private func toggleModelInList(_ raw: String) {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        if modelsList.contains(trimmed) {
+            if modelID != trimmed {
+                modelID = trimmed
+            } else {
+                removeModelFromList(trimmed)
+            }
+        } else {
+            addModelToList(trimmed, setActive: true)
+        }
+    }
+
+    private func removeModelFromList(_ model: String) {
+        modelsList.removeAll { $0 == model }
+        if modelID.trimmingCharacters(in: .whitespacesAndNewlines) == model {
+            modelID = modelsList.first ?? ""
+        }
     }
 
     private func fetchModelsAction() {
@@ -405,7 +545,7 @@ struct AddEndpointView: View {
                     fetchedModels = models
                     fetchStatusMessage = "Fetched \(models.count) models."
                     if modelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, let first = models.first {
-                        modelID = first
+                        addModelToList(first, setActive: true)
                     }
                 case let .failure(error):
                     fetchErrorMessage = error.localizedDescription
@@ -416,17 +556,21 @@ struct AddEndpointView: View {
 
     private func testConnectionAction() {
         guard let baseURL = normalizedURL else { return }
+        let activeToTest = modelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? (effectiveModelsToSave.first ?? "")
+            : modelID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !activeToTest.isEmpty else { return }
+
         isTestingConnection = true
         testResultMessage = ""
         let trimmedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedModel = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
         let headers = parsedCustomHeaders
 
         Task {
             let res = await EndpointNetworkHelper.testChatEndpoint(
                 baseURL: baseURL,
                 token: trimmedToken,
-                model: trimmedModel,
+                model: activeToTest,
                 pathMode: pathMode,
                 customHeaders: headers,
                 timeoutSeconds: timeoutSeconds
@@ -441,8 +585,10 @@ struct AddEndpointView: View {
 
     private func saveEndpoint() {
         guard let finalURL = normalizedURL else { return }
-        let finalModel = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !finalModel.isEmpty else { return }
+        let finalModels = effectiveModelsToSave
+        guard !finalModels.isEmpty else { return }
+        let rawActive = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalModel = rawActive.isEmpty ? finalModels[0] : rawActive
         let finalToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
         let finalName = name.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -455,6 +601,7 @@ struct AddEndpointView: View {
             updated.url = finalURL
             updated.token = finalToken
             updated.model = finalModel
+            updated.models = finalModels
             updated.pathMode = pathMode
             updated.customHeaders = parsedCustomHeaders
             updated.useStreaming = useStreaming
@@ -466,6 +613,7 @@ struct AddEndpointView: View {
                 url: finalURL,
                 token: finalToken,
                 model: finalModel,
+                models: finalModels,
                 pathMode: pathMode,
                 customHeaders: parsedCustomHeaders,
                 useStreaming: useStreaming,

@@ -95,6 +95,7 @@ class Configuration: NSObject, ObservableObject {
         viewModel.uiEndpoints = configuredEndpoints.values.sorted { $0.create < $1.create }
         viewModel.uiPresets = configuredPresets
         viewModel.uiSettings = appSettings
+        viewModel.uiAccentColor = Color(hexString: appSettings.accentColorHex)
     }
 
     // MARK: - Endpoints
@@ -142,6 +143,108 @@ class Configuration: NSObject, ObservableObject {
 
     func endpoint(for id: UUID) -> Endpoint? {
         configuredEndpoints[id]
+    }
+
+    func switchModel(forEndpoint id: UUID, model: String, activateEndpoint: Bool = true) {
+        guard var ep = configuredEndpoints[id] else { return }
+        let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        ep.model = trimmed
+        var updatedModels = ep.normalizedModels
+        if !updatedModels.contains(trimmed) {
+            updatedModels.insert(trimmed, at: 0)
+        }
+        ep.models = updatedModels
+        configuredEndpoints[id] = ep
+        if activateEndpoint {
+            activatedEndpointID = id
+        }
+        saveNow()
+        reloadViewModelOnMain()
+    }
+
+    var hasDuplicateProviderGroups: Bool {
+        let sorted = allEndpointsSorted
+        var seen = Set<String>()
+        for ep in sorted {
+            let key = "\(ep.url.absoluteString.lowercased())|\(ep.token)"
+            if !seen.insert(key).inserted {
+                return true
+            }
+        }
+        return false
+    }
+
+    @discardableResult
+    func mergeDuplicateProviders() -> Int {
+        let sorted = allEndpointsSorted
+        var groups: [String: [Endpoint]] = [:]
+        var orderedKeys: [String] = []
+        for ep in sorted {
+            let key = "\(ep.url.absoluteString.lowercased())|\(ep.token)"
+            if groups[key] == nil {
+                orderedKeys.append(key)
+                groups[key] = [ep]
+            } else {
+                groups[key]?.append(ep)
+            }
+        }
+
+        var mergedCount = 0
+        var newMap: [Endpoint.ID: Endpoint] = [:]
+        var newActivatedID = activatedEndpointID
+
+        for key in orderedKeys {
+            guard let items = groups[key], var primary = items.first else { continue }
+            if items.count > 1 {
+                mergedCount += items.count - 1
+            }
+            var combinedModels: [String] = []
+            var seenModels = Set<String>()
+            for item in items {
+                for m in item.normalizedModels {
+                    if seenModels.insert(m).inserted {
+                        combinedModels.append(m)
+                    }
+                }
+                if item.id == activatedEndpointID {
+                    newActivatedID = primary.id
+                    if !item.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        primary.model = item.model
+                    }
+                }
+                if primary.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                   !item.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                {
+                    primary.name = item.name
+                }
+            }
+            primary.models = combinedModels
+            if primary.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                primary.model = combinedModels.first ?? ""
+            }
+            newMap[primary.id] = primary
+        }
+
+        configuredEndpoints = newMap
+        if newMap[newActivatedID] != nil {
+            activatedEndpointID = newActivatedID
+        } else {
+            activatedEndpointID = allEndpointsSorted.first?.id ?? Self.noneActivated
+        }
+        saveNow()
+        reloadViewModelOnMain()
+        return mergedCount
+    }
+
+    func saveMenuBackgroundImage(_ data: Data?) {
+        GlobalStorage.shared.saveMenuBackgroundImage(data)
+        updateSettings { settings in
+            settings.menuBgImageVersion = (data != nil && !(data?.isEmpty ?? true)) ? UUID().uuidString : ""
+            if settings.menuBgImageVersion.isEmpty, settings.menuThemePreset == "customImage" {
+                settings.menuThemePreset = "appleIntelligence"
+            }
+        }
     }
 
     // MARK: - Presets
@@ -349,5 +452,6 @@ extension Configuration {
         @Published var uiActivatedEndpoint: Configuration.Endpoint?
         @Published var uiPresets: [WritingPreset] = []
         @Published var uiSettings: AppSettings = .default
+        @Published var uiAccentColor: Color = .accent
     }
 }

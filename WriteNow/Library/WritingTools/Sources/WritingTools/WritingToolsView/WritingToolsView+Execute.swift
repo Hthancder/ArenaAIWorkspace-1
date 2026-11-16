@@ -261,11 +261,31 @@ extension WritingToolsView {
     func accept(forceAppend: Bool? = nil) {
         let shouldAppend = forceAppend ?? (currentTask.insertBehavior == .append)
         let finalText = output
+        let captured = TextTransitionAnimator.captureBeforeReplace(context: context)
+        let animatedDisplayText: String
+        if shouldAppend {
+            let existing = context.textProxy.selectedText
+            if existing.isEmpty {
+                animatedDisplayText = finalText
+            } else if existing.hasSuffix("\n") {
+                animatedDisplayText = "\(existing)\(finalText)"
+            } else {
+                animatedDisplayText = "\(existing)\n\n\(finalText)"
+            }
+        } else {
+            animatedDisplayText = finalText
+        }
+
         dismiss()
         if shouldAppend {
             context.textProxy.appendText(with: finalText)
         } else {
             context.textProxy.replaceText(with: finalText)
+        }
+        if let captured {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                TextTransitionAnimator.play(capture: captured, newText: animatedDisplayText)
+            }
         }
     }
 }

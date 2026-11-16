@@ -56,17 +56,59 @@ extension WritingToolsView {
 
     var providerQuickMenu: some View {
         Menu {
-            if !cfg.endpoints.isEmpty {
-                Section("Switch Endpoint") {
-                    ForEach(cfg.endpoints) { ep in
+            if let active = cfg.activeEndpoint, active.normalizedModels.count > 1 {
+                Section("Models in \(active.displayName)") {
+                    ForEach(active.normalizedModels, id: \.self) { m in
                         Button {
-                            switchToEndpoint(ep)
+                            switchToEndpoint(active, model: m)
                         } label: {
-                            let label = "\(ep.displayName) — \(ep.model)"
-                            if ep.id == cfg.activatedEndpointID {
-                                Label(label, systemImage: "checkmark")
+                            if active.model == m {
+                                Label(m, systemImage: "checkmark")
                             } else {
-                                Text(label)
+                                Text(m)
+                            }
+                        }
+                    }
+                }
+                Divider()
+            }
+
+            if !cfg.endpoints.isEmpty {
+                Section("Switch Provider") {
+                    ForEach(cfg.endpoints) { ep in
+                        let models = ep.normalizedModels
+                        let isEPActive = ep.id == cfg.activatedEndpointID
+                        if models.count > 1 {
+                            Menu {
+                                ForEach(models, id: \.self) { m in
+                                    Button {
+                                        switchToEndpoint(ep, model: m)
+                                    } label: {
+                                        if isEPActive && ep.model == m {
+                                            Label(m, systemImage: "checkmark")
+                                        } else {
+                                            Text(m)
+                                        }
+                                    }
+                                }
+                            } label: {
+                                let label = "\(ep.displayName) (\(models.count))"
+                                if isEPActive {
+                                    Label(label, systemImage: "checkmark")
+                                } else {
+                                    Text(label)
+                                }
+                            }
+                        } else {
+                            Button {
+                                switchToEndpoint(ep, model: ep.model)
+                            } label: {
+                                let label = "\(ep.displayName) — \(ep.model)"
+                                if isEPActive {
+                                    Label(label, systemImage: "checkmark")
+                                } else {
+                                    Text(label)
+                                }
                             }
                         }
                     }
@@ -118,8 +160,8 @@ extension WritingToolsView {
             }
     }
 
-    func switchToEndpoint(_ ep: EndpointItem) {
-        cfg.switchEndpoint(id: ep.id) { ok in
+    func switchToEndpoint(_ ep: EndpointItem, model: String? = nil) {
+        cfg.switchEndpoint(id: ep.id, model: model) { ok in
             if ok, shouldShowOutput, !isRunning, !isRetrying {
                 executeCurrentTask()
             }

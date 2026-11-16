@@ -8,6 +8,7 @@
 import Combine
 import Foundation
 import OpenAI
+import UIKit
 import WritingToolsLocalizable
 
 public struct EndpointItem: Codable, Identifiable, Equatable, Hashable {
@@ -29,10 +30,27 @@ public struct EndpointItem: Codable, Identifiable, Equatable, Hashable {
     public var url: URL
     public var token: String
     public var model: String
+    public var models: [String]
     public var pathMode: PathMode
     public var customHeaders: [String: String]
     public var useStreaming: Bool
     public var timeoutSeconds: Int
+
+    public var normalizedModels: [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for raw in models {
+            let m = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !m.isEmpty, seen.insert(m).inserted {
+                result.append(m)
+            }
+        }
+        let active = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !active.isEmpty, seen.insert(active).inserted {
+            result.insert(active, at: 0)
+        }
+        return result
+    }
 
     public var displayName: String {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -55,6 +73,7 @@ public struct EndpointItem: Codable, Identifiable, Equatable, Hashable {
         url: URL,
         token: String = "",
         model: String = "",
+        models: [String]? = nil,
         pathMode: PathMode = .auto,
         customHeaders: [String: String] = [:],
         useStreaming: Bool = true,
@@ -65,7 +84,20 @@ public struct EndpointItem: Codable, Identifiable, Equatable, Hashable {
         self.name = name
         self.url = url
         self.token = token
-        self.model = model
+        let active = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        var merged: [String] = []
+        var seen = Set<String>()
+        for raw in (models ?? []) {
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty, seen.insert(trimmed).inserted {
+                merged.append(trimmed)
+            }
+        }
+        if !active.isEmpty, seen.insert(active).inserted {
+            merged.insert(active, at: 0)
+        }
+        self.model = active.isEmpty ? (merged.first ?? "") : active
+        self.models = merged
         self.pathMode = pathMode
         self.customHeaders = customHeaders
         self.useStreaming = useStreaming
@@ -73,7 +105,7 @@ public struct EndpointItem: Codable, Identifiable, Equatable, Hashable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, create, name, url, token, model, pathMode, customHeaders, useStreaming, timeoutSeconds
+        case id, create, name, url, token, model, models, pathMode, customHeaders, useStreaming, timeoutSeconds
     }
 
     public init(from decoder: Decoder) throws {
@@ -83,7 +115,21 @@ public struct EndpointItem: Codable, Identifiable, Equatable, Hashable {
         name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
         url = try c.decode(URL.self, forKey: .url)
         token = try c.decodeIfPresent(String.self, forKey: .token) ?? ""
-        model = try c.decodeIfPresent(String.self, forKey: .model) ?? ""
+        let decodedModel = (try c.decodeIfPresent(String.self, forKey: .model) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let decodedModels = try c.decodeIfPresent([String].self, forKey: .models) ?? []
+        var merged: [String] = []
+        var seen = Set<String>()
+        for raw in decodedModels {
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty, seen.insert(trimmed).inserted {
+                merged.append(trimmed)
+            }
+        }
+        if !decodedModel.isEmpty, seen.insert(decodedModel).inserted {
+            merged.insert(decodedModel, at: 0)
+        }
+        model = decodedModel.isEmpty ? (merged.first ?? "") : decodedModel
+        models = merged
         pathMode = try c.decodeIfPresent(PathMode.self, forKey: .pathMode) ?? .auto
         customHeaders = try c.decodeIfPresent([String: String].self, forKey: .customHeaders) ?? [:]
         useStreaming = try c.decodeIfPresent(Bool.self, forKey: .useStreaming) ?? true
@@ -104,6 +150,14 @@ public struct RuntimeSettings: Codable, Equatable {
     public var autoSelectAllIfEmpty: Bool
     public var maskEndpointKeys: Bool
     public var recentCustomPrompts: [String]
+    public var textAnimationStyle: String
+    public var menuThemePreset: String
+    public var menuCustomColorHex1: String
+    public var menuCustomColorHex2: String
+    public var menuBgImageVersion: String
+    public var menuBgImageBlur: Double
+    public var menuBgImageDim: Double
+    public var accentColorHex: String
 
     public static let `default` = RuntimeSettings(
         menuTitle: "Write Now",
@@ -117,13 +171,23 @@ public struct RuntimeSettings: Codable, Equatable {
         animatedBackground: true,
         autoSelectAllIfEmpty: true,
         maskEndpointKeys: false,
-        recentCustomPrompts: []
+        recentCustomPrompts: [],
+        textAnimationStyle: "shatter",
+        menuThemePreset: "appleIntelligence",
+        menuCustomColorHex1: "#1E3A8A",
+        menuCustomColorHex2: "#0F172A",
+        menuBgImageVersion: "",
+        menuBgImageBlur: 4.0,
+        menuBgImageDim: 0.45,
+        accentColorHex: "#3B82F6"
     )
 
     enum CodingKeys: String, CodingKey {
         case menuTitle, globalSystemPrompt, useFewShotExamples, stripThinkingTags
         case streamingEnabled, requestTimeout, gridColumns, popoverSizePreset
         case animatedBackground, autoSelectAllIfEmpty, maskEndpointKeys, recentCustomPrompts
+        case textAnimationStyle, menuThemePreset, menuCustomColorHex1, menuCustomColorHex2
+        case menuBgImageVersion, menuBgImageBlur, menuBgImageDim, accentColorHex
     }
 
     public init(
@@ -138,7 +202,15 @@ public struct RuntimeSettings: Codable, Equatable {
         animatedBackground: Bool = true,
         autoSelectAllIfEmpty: Bool = true,
         maskEndpointKeys: Bool = false,
-        recentCustomPrompts: [String] = []
+        recentCustomPrompts: [String] = [],
+        textAnimationStyle: String = "shatter",
+        menuThemePreset: String = "appleIntelligence",
+        menuCustomColorHex1: String = "#1E3A8A",
+        menuCustomColorHex2: String = "#0F172A",
+        menuBgImageVersion: String = "",
+        menuBgImageBlur: Double = 4.0,
+        menuBgImageDim: Double = 0.45,
+        accentColorHex: String = "#3B82F6"
     ) {
         self.menuTitle = menuTitle
         self.globalSystemPrompt = globalSystemPrompt
@@ -152,6 +224,14 @@ public struct RuntimeSettings: Codable, Equatable {
         self.autoSelectAllIfEmpty = autoSelectAllIfEmpty
         self.maskEndpointKeys = maskEndpointKeys
         self.recentCustomPrompts = recentCustomPrompts
+        self.textAnimationStyle = textAnimationStyle
+        self.menuThemePreset = menuThemePreset
+        self.menuCustomColorHex1 = menuCustomColorHex1
+        self.menuCustomColorHex2 = menuCustomColorHex2
+        self.menuBgImageVersion = menuBgImageVersion
+        self.menuBgImageBlur = menuBgImageBlur
+        self.menuBgImageDim = menuBgImageDim
+        self.accentColorHex = accentColorHex
     }
 
     public init(from decoder: Decoder) throws {
@@ -168,6 +248,14 @@ public struct RuntimeSettings: Codable, Equatable {
         autoSelectAllIfEmpty = try c.decodeIfPresent(Bool.self, forKey: .autoSelectAllIfEmpty) ?? true
         maskEndpointKeys = try c.decodeIfPresent(Bool.self, forKey: .maskEndpointKeys) ?? false
         recentCustomPrompts = try c.decodeIfPresent([String].self, forKey: .recentCustomPrompts) ?? []
+        textAnimationStyle = try c.decodeIfPresent(String.self, forKey: .textAnimationStyle) ?? "shatter"
+        menuThemePreset = try c.decodeIfPresent(String.self, forKey: .menuThemePreset) ?? "appleIntelligence"
+        menuCustomColorHex1 = try c.decodeIfPresent(String.self, forKey: .menuCustomColorHex1) ?? "#1E3A8A"
+        menuCustomColorHex2 = try c.decodeIfPresent(String.self, forKey: .menuCustomColorHex2) ?? "#0F172A"
+        menuBgImageVersion = try c.decodeIfPresent(String.self, forKey: .menuBgImageVersion) ?? ""
+        menuBgImageBlur = try c.decodeIfPresent(Double.self, forKey: .menuBgImageBlur) ?? 4.0
+        menuBgImageDim = try c.decodeIfPresent(Double.self, forKey: .menuBgImageDim) ?? 0.45
+        accentColorHex = try c.decodeIfPresent(String.self, forKey: .accentColorHex) ?? "#3B82F6"
     }
 }
 
@@ -196,12 +284,17 @@ public class Configurator: ObservableObject {
     public static let shared = Configurator()
 
     private let cachedConfigDefaultsKey = "WriteNowCachedRuntimeConfigV1"
+    private let cachedBgImageDefaultsKey = "WriteNowCachedBgImageDataV1"
+    private let cachedBgImageVersionKey = "WriteNowCachedBgImageVersionV1"
 
     @Published public var endpoints: [EndpointItem] = []
     @Published public var activatedEndpointID: UUID = UUID()
     @Published public var presets: [WritingPresetItem] = WritingPresetItem.defaultPresets
     @Published public var settings: RuntimeSettings = .default
     @Published public var daemonConnected: Bool = true
+    @Published public var customBackgroundImage: UIImage? = nil
+
+    private var loadedBgImageVersion: String = ""
 
     public var activeEndpoint: EndpointItem? {
         endpoints.first { $0.id == activatedEndpointID }
@@ -237,6 +330,12 @@ public class Configurator: ObservableObject {
         {
             applyRuntimeConfig(cached, cacheToDefaults: false)
         }
+        if let imgData = UserDefaults.standard.data(forKey: cachedBgImageDefaultsKey),
+           let img = UIImage(data: imgData)
+        {
+            customBackgroundImage = img
+            loadedBgImageVersion = UserDefaults.standard.string(forKey: cachedBgImageVersionKey) ?? ""
+        }
     }
 
     public func refreshRuntimeConfig(completion: ((RuntimeConfig?) -> Void)? = nil) {
@@ -269,18 +368,66 @@ public class Configurator: ObservableObject {
         if cacheToDefaults, let data = try? JSONEncoder().encode(cfg) {
             UserDefaults.standard.set(data, forKey: cachedConfigDefaultsKey)
         }
+
+        syncBackgroundImageIfNeeded(version: cfg.settings.menuBgImageVersion)
     }
 
-    public func switchEndpoint(id: UUID, completion: ((Bool) -> Void)? = nil) {
-        guard let url = URL(string: "http://127.0.0.1:5540/action?command=switch_endpoint&id=\(id.uuidString)") else {
+    private func syncBackgroundImageIfNeeded(version: String) {
+        if version.isEmpty {
+            if customBackgroundImage != nil || !loadedBgImageVersion.isEmpty {
+                loadedBgImageVersion = ""
+                customBackgroundImage = nil
+                UserDefaults.standard.removeObject(forKey: cachedBgImageDefaultsKey)
+                UserDefaults.standard.removeObject(forKey: cachedBgImageVersionKey)
+            }
+            return
+        }
+        guard version != loadedBgImageVersion || customBackgroundImage == nil else { return }
+        guard let url = URL(string: "http://127.0.0.1:5540/metrics?query=bg_image") else { return }
+        var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 5)
+        req.httpMethod = "GET"
+        URLSession.shared.dataTask(with: req) { [weak self] data, response, error in
+            guard let self,
+                  error == nil,
+                  let http = response as? HTTPURLResponse,
+                  (200 ..< 300).contains(http.statusCode),
+                  let data,
+                  let image = UIImage(data: data)
+            else { return }
+            DispatchQueue.main.async {
+                self.loadedBgImageVersion = version
+                self.customBackgroundImage = image
+                UserDefaults.standard.set(data, forKey: self.cachedBgImageDefaultsKey)
+                UserDefaults.standard.set(version, forKey: self.cachedBgImageVersionKey)
+            }
+        }.resume()
+    }
+
+    public func switchEndpoint(id: UUID, model: String? = nil, completion: ((Bool) -> Void)? = nil) {
+        var comps = URLComponents(string: "http://127.0.0.1:5540/action")!
+        var items = [
+            URLQueryItem(name: "command", value: "switch_endpoint"),
+            URLQueryItem(name: "id", value: id.uuidString),
+        ]
+        if let model, !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            items.append(URLQueryItem(name: "model", value: model.trimmingCharacters(in: .whitespacesAndNewlines)))
+        }
+        comps.queryItems = items
+        guard let url = comps.url else {
             completion?(false)
             return
         }
         var request = URLRequest(url: url, timeoutInterval: 4)
         request.httpMethod = "GET"
-        URLSession.shared.dataTask(with: request) { [weak self] _, response, error in
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             let ok = error == nil && ((response as? HTTPURLResponse)?.statusCode == 200)
-            if ok {
+            if ok, let data, let cfg = try? JSONDecoder().decode(RuntimeConfig.self, from: data) {
+                DispatchQueue.main.async {
+                    self?.daemonConnected = true
+                    self?.applyRuntimeConfig(cfg, cacheToDefaults: true)
+                    completion?(true)
+                }
+            } else if ok {
                 self?.refreshRuntimeConfig { _ in
                     completion?(true)
                 }
@@ -296,6 +443,7 @@ public class Configurator: ObservableObject {
         url: String,
         token: String,
         model: String,
+        models: [String]? = nil,
         pathMode: EndpointItem.PathMode = .auto,
         customHeaders: [String: String] = [:],
         useStreaming: Bool = true,
@@ -314,6 +462,9 @@ public class Configurator: ObservableObject {
             "timeoutSeconds": timeoutSeconds,
             "activate": activate,
         ]
+        if let models {
+            body["models"] = models
+        }
         if let id { body["id"] = id.uuidString }
         performJSONAction(command: "upsert_endpoint", body: body) { result in
             switch result {

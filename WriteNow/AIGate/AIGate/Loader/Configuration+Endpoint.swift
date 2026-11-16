@@ -28,10 +28,27 @@ extension Configuration {
         var url: URL
         var token: String
         var model: String
+        var models: [String]
         var pathMode: PathMode
         var customHeaders: [String: String]
         var useStreaming: Bool
         var timeoutSeconds: Int
+
+        var normalizedModels: [String] {
+            var seen = Set<String>()
+            var result: [String] = []
+            for raw in models {
+                let m = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !m.isEmpty, seen.insert(m).inserted {
+                    result.append(m)
+                }
+            }
+            let active = model.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !active.isEmpty, seen.insert(active).inserted {
+                result.insert(active, at: 0)
+            }
+            return result
+        }
 
         var displayName: String {
             let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -47,7 +64,10 @@ extension Configuration {
 
         var displayModel: String {
             let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty ? "(No Model ID)" : trimmed
+            if trimmed.isEmpty {
+                return normalizedModels.first ?? "(No Model ID)"
+            }
+            return trimmed
         }
 
         init(
@@ -57,6 +77,7 @@ extension Configuration {
             url: URL,
             token: String,
             model: String,
+            models: [String]? = nil,
             pathMode: PathMode = .auto,
             customHeaders: [String: String] = [:],
             useStreaming: Bool = true,
@@ -67,7 +88,20 @@ extension Configuration {
             self.name = name
             self.url = url
             self.token = token
-            self.model = model
+            let active = model.trimmingCharacters(in: .whitespacesAndNewlines)
+            var merged: [String] = []
+            var seen = Set<String>()
+            for raw in (models ?? []) {
+                let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty, seen.insert(trimmed).inserted {
+                    merged.append(trimmed)
+                }
+            }
+            if !active.isEmpty, seen.insert(active).inserted {
+                merged.insert(active, at: 0)
+            }
+            self.model = active.isEmpty ? (merged.first ?? "") : active
+            self.models = merged
             self.pathMode = pathMode
             self.customHeaders = customHeaders
             self.useStreaming = useStreaming
@@ -75,7 +109,7 @@ extension Configuration {
         }
 
         enum CodingKeys: String, CodingKey {
-            case id, create, name, url, token, model, pathMode, customHeaders, useStreaming, timeoutSeconds
+            case id, create, name, url, token, model, models, pathMode, customHeaders, useStreaming, timeoutSeconds
         }
 
         init(from decoder: Decoder) throws {
@@ -85,7 +119,21 @@ extension Configuration {
             name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
             url = try container.decode(URL.self, forKey: .url)
             token = try container.decodeIfPresent(String.self, forKey: .token) ?? ""
-            model = try container.decodeIfPresent(String.self, forKey: .model) ?? ""
+            let decodedModel = (try container.decodeIfPresent(String.self, forKey: .model) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let decodedModels = try container.decodeIfPresent([String].self, forKey: .models) ?? []
+            var merged: [String] = []
+            var seen = Set<String>()
+            for raw in decodedModels {
+                let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty, seen.insert(trimmed).inserted {
+                    merged.append(trimmed)
+                }
+            }
+            if !decodedModel.isEmpty, seen.insert(decodedModel).inserted {
+                merged.insert(decodedModel, at: 0)
+            }
+            model = decodedModel.isEmpty ? (merged.first ?? "") : decodedModel
+            models = merged
             pathMode = try container.decodeIfPresent(PathMode.self, forKey: .pathMode) ?? .auto
             customHeaders = try container.decodeIfPresent([String: String].self, forKey: .customHeaders) ?? [:]
             useStreaming = try container.decodeIfPresent(Bool.self, forKey: .useStreaming) ?? true
@@ -238,6 +286,14 @@ extension Configuration {
         var autoSelectAllIfEmpty: Bool
         var maskEndpointKeys: Bool
         var recentCustomPrompts: [String]
+        var textAnimationStyle: String
+        var menuThemePreset: String
+        var menuCustomColorHex1: String
+        var menuCustomColorHex2: String
+        var menuBgImageVersion: String
+        var menuBgImageBlur: Double
+        var menuBgImageDim: Double
+        var accentColorHex: String
 
         static let `default` = AppSettings(
             menuTitle: "Write Now",
@@ -251,7 +307,15 @@ extension Configuration {
             animatedBackground: true,
             autoSelectAllIfEmpty: true,
             maskEndpointKeys: false,
-            recentCustomPrompts: []
+            recentCustomPrompts: [],
+            textAnimationStyle: "shatter",
+            menuThemePreset: "appleIntelligence",
+            menuCustomColorHex1: "#1E3A8A",
+            menuCustomColorHex2: "#0F172A",
+            menuBgImageVersion: "",
+            menuBgImageBlur: 4.0,
+            menuBgImageDim: 0.45,
+            accentColorHex: "#3B82F6"
         )
 
         init(
@@ -266,7 +330,15 @@ extension Configuration {
             animatedBackground: Bool = true,
             autoSelectAllIfEmpty: Bool = true,
             maskEndpointKeys: Bool = false,
-            recentCustomPrompts: [String] = []
+            recentCustomPrompts: [String] = [],
+            textAnimationStyle: String = "shatter",
+            menuThemePreset: String = "appleIntelligence",
+            menuCustomColorHex1: String = "#1E3A8A",
+            menuCustomColorHex2: String = "#0F172A",
+            menuBgImageVersion: String = "",
+            menuBgImageBlur: Double = 4.0,
+            menuBgImageDim: Double = 0.45,
+            accentColorHex: String = "#3B82F6"
         ) {
             self.menuTitle = menuTitle
             self.globalSystemPrompt = globalSystemPrompt
@@ -280,12 +352,22 @@ extension Configuration {
             self.autoSelectAllIfEmpty = autoSelectAllIfEmpty
             self.maskEndpointKeys = maskEndpointKeys
             self.recentCustomPrompts = recentCustomPrompts
+            self.textAnimationStyle = textAnimationStyle
+            self.menuThemePreset = menuThemePreset
+            self.menuCustomColorHex1 = menuCustomColorHex1
+            self.menuCustomColorHex2 = menuCustomColorHex2
+            self.menuBgImageVersion = menuBgImageVersion
+            self.menuBgImageBlur = menuBgImageBlur
+            self.menuBgImageDim = menuBgImageDim
+            self.accentColorHex = accentColorHex
         }
 
         enum CodingKeys: String, CodingKey {
             case menuTitle, globalSystemPrompt, useFewShotExamples, stripThinkingTags
             case streamingEnabled, requestTimeout, gridColumns, popoverSizePreset
             case animatedBackground, autoSelectAllIfEmpty, maskEndpointKeys, recentCustomPrompts
+            case textAnimationStyle, menuThemePreset, menuCustomColorHex1, menuCustomColorHex2
+            case menuBgImageVersion, menuBgImageBlur, menuBgImageDim, accentColorHex
         }
 
         init(from decoder: Decoder) throws {
@@ -302,6 +384,14 @@ extension Configuration {
             autoSelectAllIfEmpty = try container.decodeIfPresent(Bool.self, forKey: .autoSelectAllIfEmpty) ?? true
             maskEndpointKeys = try container.decodeIfPresent(Bool.self, forKey: .maskEndpointKeys) ?? false
             recentCustomPrompts = try container.decodeIfPresent([String].self, forKey: .recentCustomPrompts) ?? []
+            textAnimationStyle = try container.decodeIfPresent(String.self, forKey: .textAnimationStyle) ?? "shatter"
+            menuThemePreset = try container.decodeIfPresent(String.self, forKey: .menuThemePreset) ?? "appleIntelligence"
+            menuCustomColorHex1 = try container.decodeIfPresent(String.self, forKey: .menuCustomColorHex1) ?? "#1E3A8A"
+            menuCustomColorHex2 = try container.decodeIfPresent(String.self, forKey: .menuCustomColorHex2) ?? "#0F172A"
+            menuBgImageVersion = try container.decodeIfPresent(String.self, forKey: .menuBgImageVersion) ?? ""
+            menuBgImageBlur = try container.decodeIfPresent(Double.self, forKey: .menuBgImageBlur) ?? 4.0
+            menuBgImageDim = try container.decodeIfPresent(Double.self, forKey: .menuBgImageDim) ?? 0.45
+            accentColorHex = try container.decodeIfPresent(String.self, forKey: .accentColorHex) ?? "#3B82F6"
         }
     }
 

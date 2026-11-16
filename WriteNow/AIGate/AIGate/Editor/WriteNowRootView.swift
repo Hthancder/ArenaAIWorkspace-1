@@ -9,6 +9,7 @@ import Combine
 import MessageUI
 import SwiftUI
 import SwiftUIIntrospect
+import UIKit
 
 private enum EndpointSheetMode: Identifiable {
     case add
@@ -60,6 +61,7 @@ struct WriteNowRootView: View {
     @State private var testStatusMessage: String = ""
     @State private var testStatusOK: Bool = false
     @State private var isTestingActive: Bool = false
+    @State private var mergeNoticeMessage: String = ""
 
     @State private var showResetPresetsAlert = false
     @State private var openMailComposer = false
@@ -67,8 +69,13 @@ struct WriteNowRootView: View {
 
     @State private var statusTimer = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
 
+    var activeAccent: Color {
+        configurationViewModel.uiAccentColor
+    }
+
     var body: some View {
         List {
+            creditBannerSection
             serviceSection
             endpointsSection
             presetsSection
@@ -121,7 +128,8 @@ struct WriteNowRootView: View {
             updateStatus()
         }
         .navigationTitle(NSLocalizedString("Write Now", bundle: Bundle.wrti_support, comment: ""))
-        .accentColor(.accent)
+        .accentColor(activeAccent)
+        .tint(activeAccent)
         .introspect(.list, on: .iOS(.v15)) { tableView in
             scrollViewSubject?.send(tableView)
         }
@@ -132,13 +140,21 @@ struct WriteNowRootView: View {
 
     // MARK: - Sections
 
+    var creditBannerSection: some View {
+        Section {
+            CreditHeroCard(accentColor: activeAccent)
+                .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                .listRowBackground(Color.clear)
+        }
+    }
+
     var serviceSection: some View {
         Section {
             Toggle(
                 NSLocalizedString("Enable Service", bundle: Bundle.wrti_support, comment: ""),
                 isOn: $configuration.isEnabled
             )
-            .tint(.accent)
+            .tint(activeAccent)
 
             HStack {
                 Label("Daemon Status", systemImage: daemonReachable ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
@@ -205,14 +221,32 @@ struct WriteNowRootView: View {
                 }
             }
 
+            if configuration.hasDuplicateProviderGroups {
+                Button {
+                    let count = configuration.mergeDuplicateProviders()
+                    mergeNoticeMessage = count > 0
+                        ? "Merged \(count) duplicate endpoint(s) into grouped providers."
+                        : "All providers are already grouped."
+                } label: {
+                    Label("Merge Same-Provider Models", systemImage: "rectangle.stack.badge.plus")
+                        .foregroundColor(activeAccent)
+                }
+            }
+
+            if !mergeNoticeMessage.isEmpty {
+                Text(mergeNoticeMessage)
+                    .font(.caption)
+                    .foregroundColor(.green)
+            }
+
             Button {
                 endpointSheet = .add
             } label: {
-                Label(NSLocalizedString("Add Endpoint", bundle: Bundle.wrti_support, comment: ""), systemImage: "plus.circle.fill")
+                Label(NSLocalizedString("Add Provider / Endpoint", bundle: Bundle.wrti_support, comment: ""), systemImage: "plus.circle.fill")
             }
         } header: {
             HStack {
-                Text(NSLocalizedString("Endpoints", bundle: Bundle.wrti_support, comment: ""))
+                Text("Providers & Models")
                 Spacer()
                 if !configurationViewModel.uiEndpoints.isEmpty {
                     Text("\(configurationViewModel.uiEndpoints.count)")
@@ -221,7 +255,7 @@ struct WriteNowRootView: View {
                 }
             }
         } footer: {
-            Text("Tap an endpoint to activate it. Tap the slider icon or long press to edit, test, duplicate, or delete. No model fetching is required to save.")
+            Text("Each provider holds multiple models. Tap a model pill to switch models in 1 tap, or tap the slider icon to add/manage models inside a provider.")
         }
     }
 
@@ -234,7 +268,7 @@ struct WriteNowRootView: View {
                     } label: {
                         HStack(spacing: 10) {
                             Image(systemName: preset.icon)
-                                .foregroundColor(preset.isEnabled ? .accent : .secondary)
+                                .foregroundColor(preset.isEnabled ? activeAccent : .secondary)
                                 .frame(width: 24)
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 6) {
@@ -247,8 +281,8 @@ struct WriteNowRootView: View {
                                             .font(.caption2)
                                             .padding(.horizontal, 5)
                                             .padding(.vertical, 1)
-                                            .background(Color.accent.opacity(0.14))
-                                            .foregroundColor(.accent)
+                                            .background(activeAccent.opacity(0.14))
+                                            .foregroundColor(activeAccent)
                                             .cornerRadius(4)
                                     }
                                     if preset.insertBehavior == .append {
@@ -281,7 +315,7 @@ struct WriteNowRootView: View {
                         }
                     ))
                     .labelsHidden()
-                    .tint(.accent)
+                    .tint(activeAccent)
                 }
             }
             .onDelete { offsets in
@@ -329,15 +363,18 @@ struct WriteNowRootView: View {
                 BehaviorSettingsView()
             } label: {
                 HStack {
-                    Label("Behavior, Appearance & Backup", systemImage: "gearshape.2.fill")
+                    Label("Themes, Text FX, Behavior & Backup", systemImage: "paintbrush.pointed.fill")
                     Spacer()
-                    Text("\(configurationViewModel.uiSettings.gridColumns) cols · \(configurationViewModel.uiSettings.requestTimeout)s")
+                    Text("\(configurationViewModel.uiSettings.menuThemePreset) · \(configurationViewModel.uiSettings.textAnimationStyle)")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                        .lineLimit(1)
                 }
             }
         } header: {
-            Text("Customization")
+            Text("Customization & Themes")
+        } footer: {
+            Text("Customize WriteNow menu background image, color themes, accent color picker, and text replace animations (Shatter, Fall, Ash Dust, Wave, Glitch, Typewriter).")
         }
     }
 
@@ -365,7 +402,7 @@ struct WriteNowRootView: View {
         Section {
             EmptyView()
         } footer: {
-            Text("WriteNow RootHide · \(Bundle.wrti_packageVersion)")
+            Text("WriteNow RootHide · \(Bundle.wrti_packageVersion) · Credit to Hthan24 & owngoal-dev")
         }
     }
 
@@ -419,12 +456,180 @@ struct WriteNowRootView: View {
     }
 }
 
+// MARK: - Impressive Animated Credit Hero Card
+
+struct CreditHeroCard: View {
+    let accentColor: Color
+
+    @State private var animateGradient = false
+    @State private var shimmerOffset: CGFloat = -1.3
+    @State private var pulseRing = false
+    @State private var tapBurst = false
+
+    var body: some View {
+        ZStack {
+            // Animated flowing aurora backdrop
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: animateGradient
+                            ? [
+                                Color(red: 0.08, green: 0.14, blue: 0.34),
+                                accentColor.opacity(0.85),
+                                Color(red: 0.38, green: 0.16, blue: 0.62),
+                                Color(red: 0.06, green: 0.24, blue: 0.36),
+                            ]
+                            : [
+                                Color(red: 0.14, green: 0.10, blue: 0.34),
+                                Color(red: 0.06, green: 0.32, blue: 0.56),
+                                accentColor.opacity(0.80),
+                                Color(red: 0.10, green: 0.16, blue: 0.30),
+                            ],
+                        startPoint: animateGradient ? .topLeading : .bottomLeading,
+                        endPoint: animateGradient ? .bottomTrailing : .topTrailing
+                    )
+                )
+
+            // Ambient glowing orbs
+            Circle()
+                .fill(accentColor.opacity(0.45))
+                .frame(width: 140, height: 140)
+                .blur(radius: 26)
+                .offset(x: animateGradient ? -90 : 80, y: animateGradient ? -35 : 30)
+
+            Circle()
+                .fill(Color.cyan.opacity(0.35))
+                .frame(width: 110, height: 110)
+                .blur(radius: 24)
+                .offset(x: animateGradient ? 95 : -80, y: animateGradient ? 30 : -30)
+
+            // Diagonal sweeping light shimmer
+            GeometryReader { geo in
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(0.0),
+                        Color.white.opacity(0.22),
+                        Color.white.opacity(0.0),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(width: geo.size.width * 0.45)
+                .rotationEffect(.degrees(24))
+                .offset(x: shimmerOffset * geo.size.width * 1.4)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+            // Main content
+            VStack(spacing: 10) {
+                HStack(spacing: 10) {
+                    ZStack {
+                        Circle()
+                            .stroke(
+                                AngularGradient(
+                                    colors: [.cyan, accentColor, .purple, .yellow, .cyan],
+                                    center: .center
+                                ),
+                                lineWidth: 2.5
+                            )
+                            .frame(width: 44, height: 44)
+                            .rotationEffect(.degrees(animateGradient ? 360 : 0))
+
+                        Circle()
+                            .fill(Color.white.opacity(0.14))
+                            .frame(width: 36, height: 36)
+
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(.white)
+                            .scaleEffect(pulseRing ? 1.15 : 0.92)
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("WRITENOW ENHANCED EDITION")
+                            .font(.system(size: 10, weight: .heavy, design: .rounded))
+                            .tracking(1.6)
+                            .foregroundColor(.white.opacity(0.78))
+
+                        Text("Credit to Hthan24 for improve")
+                            .font(.system(size: 19, weight: .black, design: .rounded))
+                            .foregroundColor(.white)
+                            .shadow(color: .black.opacity(0.35), radius: 4, x: 0, y: 2)
+                            .minimumScaleFactor(0.75)
+                            .lineLimit(2)
+                    }
+
+                    Spacer(minLength: 0)
+                }
+
+                Text("and for owngoal-dev for nice opensource project !")
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundColor(Color.white.opacity(0.95))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.white.opacity(0.12))
+                    .cornerRadius(10)
+
+                HStack(spacing: 8) {
+                    Label("Multi-Model Providers", systemImage: "cpu")
+                    Spacer()
+                    Label("Custom Themes & Text FX", systemImage: "wand.and.stars")
+                }
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.white.opacity(0.85))
+            }
+            .padding(16)
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.55),
+                            accentColor.opacity(0.75),
+                            Color.cyan.opacity(0.55),
+                        ],
+                        startPoint: animateGradient ? .topLeading : .bottomTrailing,
+                        endPoint: animateGradient ? .bottomTrailing : .topLeading
+                    ),
+                    lineWidth: 1.5
+                )
+        )
+        .scaleEffect(tapBurst ? 0.97 : 1.0)
+        .shadow(color: accentColor.opacity(0.35), radius: 12, x: 0, y: 6)
+        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .onTapGesture {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.45)) {
+                tapBurst = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
+                    tapBurst = false
+                }
+            }
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 4.0).repeatForever(autoreverses: true)) {
+                animateGradient = true
+            }
+            withAnimation(.easeInOut(duration: 1.3).repeatForever(autoreverses: true)) {
+                pulseRing = true
+            }
+            withAnimation(.linear(duration: 3.2).repeatForever(autoreverses: false)) {
+                shimmerOffset = 1.4
+            }
+        }
+    }
+}
+
 // MARK: - Preset Editor Sheet
 
 struct PresetEditorView: View {
     let editingPreset: Configuration.WritingPreset?
 
     @StateObject var configuration = Configuration.shared
+    @StateObject var viewModel = Configuration.shared.viewModel
     @Environment(\.dismiss) var dismiss
 
     @State private var title: String
@@ -476,9 +681,9 @@ struct PresetEditorView: View {
                         } label: {
                             Image(systemName: icon.isEmpty ? "sparkles" : icon)
                                 .font(.title3)
-                                .foregroundColor(.accent)
+                                .foregroundColor(viewModel.uiAccentColor)
                                 .frame(width: 40, height: 40)
-                                .background(Color.accent.opacity(0.14))
+                                .background(viewModel.uiAccentColor.opacity(0.14))
                                 .cornerRadius(10)
                         }
                         .buttonStyle(.borderless)
@@ -508,8 +713,8 @@ struct PresetEditorView: View {
                                     Image(systemName: sym)
                                         .font(.body)
                                         .frame(width: 36, height: 36)
-                                        .background(icon == sym ? Color.accent.opacity(0.25) : Color.secondary.opacity(0.1))
-                                        .foregroundColor(icon == sym ? .accent : .primary)
+                                        .background(icon == sym ? viewModel.uiAccentColor.opacity(0.25) : Color.secondary.opacity(0.1))
+                                        .foregroundColor(icon == sym ? viewModel.uiAccentColor : .primary)
                                         .cornerRadius(8)
                                 }
                                 .buttonStyle(.borderless)
@@ -549,8 +754,8 @@ struct PresetEditorView: View {
                                         .font(.caption)
                                         .padding(.horizontal, 10)
                                         .padding(.vertical, 5)
-                                        .background(outputLanguage == lang ? Color.accent.opacity(0.2) : Color.secondary.opacity(0.12))
-                                        .foregroundColor(outputLanguage == lang ? .accent : .primary)
+                                        .background(outputLanguage == lang ? viewModel.uiAccentColor.opacity(0.2) : Color.secondary.opacity(0.12))
+                                        .foregroundColor(outputLanguage == lang ? viewModel.uiAccentColor : .primary)
                                         .cornerRadius(8)
                                 }
                                 .buttonStyle(.borderless)
@@ -573,14 +778,14 @@ struct PresetEditorView: View {
                                 .monospacedDigit()
                         }
                         Slider(value: $temperature, in: 0.0 ... 1.2, step: 0.05)
-                            .tint(.accent)
+                            .tint(viewModel.uiAccentColor)
                     }
 
                     Toggle("Include Few-shot Examples", isOn: $includeExamples)
-                        .tint(.accent)
+                        .tint(viewModel.uiAccentColor)
 
                     Toggle("Enabled in Menu", isOn: $isEnabled)
-                        .tint(.accent)
+                        .tint(viewModel.uiAccentColor)
                 } header: {
                     Text("Execution Options")
                 }
@@ -611,7 +816,8 @@ struct PresetEditorView: View {
                 }
             }
         }
-        .accentColor(.accent)
+        .accentColor(viewModel.uiAccentColor)
+        .tint(viewModel.uiAccentColor)
         .navigationViewStyle(.stack)
     }
 
@@ -651,7 +857,47 @@ struct PresetEditorView: View {
     }
 }
 
-// MARK: - Behavior, Appearance & Backup View
+// MARK: - Behavior, Theme, Text FX & Backup View
+
+private struct ThemePresetOption: Identifiable {
+    let id: String
+    let title: String
+    let colors: [Color]
+}
+
+private let menuThemeOptions: [ThemePresetOption] = [
+    .init(id: "appleIntelligence", title: "Apple Intelligence", colors: [.purple, .pink, .orange, .blue]),
+    .init(id: "midnightBlue", title: "Midnight Ocean", colors: [Color(hexString: "#0F172A"), Color(hexString: "#1D4ED8"), Color(hexString: "#06B6D4")]),
+    .init(id: "emeraldForest", title: "Emerald Forest", colors: [Color(hexString: "#064E3B"), Color(hexString: "#10B981"), Color(hexString: "#14B8A6")]),
+    .init(id: "sunsetAmber", title: "Sunset Amber", colors: [Color(hexString: "#7C2D12"), Color(hexString: "#F97316"), Color(hexString: "#EAB308")]),
+    .init(id: "obsidianMono", title: "Obsidian Dark", colors: [Color(hexString: "#09090B"), Color(hexString: "#27272A"), Color(hexString: "#52525B")]),
+    .init(id: "sakuraBlossom", title: "Sakura Rose", colors: [Color(hexString: "#4C0519"), Color(hexString: "#EC4899"), Color(hexString: "#A855F7")]),
+    .init(id: "cyberNeon", title: "Cyber Neon", colors: [Color(hexString: "#312E81"), Color(hexString: "#06B6D4"), Color(hexString: "#22C55E")]),
+    .init(id: "customColor", title: "Custom Colors", colors: [.blue, .indigo]),
+    .init(id: "customImage", title: "Custom Photo", colors: [.gray, .black]),
+]
+
+private let animationStyleOptions: [(id: String, title: String, subtitle: String)] = [
+    ("shatter", "Shatter & Assemble", "Old text shatters into fragments across screen, new text flies in"),
+    ("fallDown", "Gravity Fall & Rise", "Old text drops down with gravity, new text rises up"),
+    ("ashDust", "Ash & Dust (Snap)", "Old text dissolves into glowing ash dust particles, new text grows"),
+    ("wave", "Wave Flip", "Ripple wave flips old text away and reveals new text"),
+    ("glitch", "Cyber Glitch", "RGB digital glitch scramble before locking new text"),
+    ("typewriter", "Laser Typewriter", "Laser sweep erases old text and types new text smoothly"),
+    ("magicGlow", "Apple Magic Glow", "Luminous rainbow sweep across the selection"),
+    ("none", "Instant (No Animation)", "Replace text immediately"),
+]
+
+private let accentSwatchColors: [(name: String, hex: String)] = [
+    ("Ocean", "#3B82F6"),
+    ("Emerald", "#10B981"),
+    ("Violet", "#8B5CF6"),
+    ("Amber", "#F59E0B"),
+    ("Crimson", "#EF4444"),
+    ("Cyan", "#06B6D4"),
+    ("Rose", "#EC4899"),
+    ("Graphite", "#64748B"),
+]
 
 struct BehaviorSettingsView: View {
     @StateObject var configuration = Configuration.shared
@@ -668,6 +914,17 @@ struct BehaviorSettingsView: View {
     @State private var gridColumns: Int
     @State private var sizePreset: String
     @State private var animatedBg: Bool
+
+    @State private var textAnimationStyle: String
+    @State private var menuThemePreset: String
+    @State private var customColor1: Color
+    @State private var customColor2: Color
+    @State private var bgBlur: Double
+    @State private var bgDim: Double
+    @State private var accentColor: Color
+
+    @State private var previewBgImage: UIImage?
+    @State private var showPhotoPicker = false
 
     @State private var backupAlertTitle = ""
     @State private var backupAlertMessage = ""
@@ -686,10 +943,206 @@ struct BehaviorSettingsView: View {
         _gridColumns = State(initialValue: s.gridColumns)
         _sizePreset = State(initialValue: s.popoverSizePreset)
         _animatedBg = State(initialValue: s.animatedBackground)
+        _textAnimationStyle = State(initialValue: s.textAnimationStyle)
+        _menuThemePreset = State(initialValue: s.menuThemePreset)
+        _customColor1 = State(initialValue: Color(hexString: s.menuCustomColorHex1, fallback: .blue))
+        _customColor2 = State(initialValue: Color(hexString: s.menuCustomColorHex2, fallback: .indigo))
+        _bgBlur = State(initialValue: s.menuBgImageBlur)
+        _bgDim = State(initialValue: s.menuBgImageDim)
+        _accentColor = State(initialValue: Color(hexString: s.accentColorHex, fallback: .blue))
+        if let data = GlobalStorage.shared.loadMenuBackgroundImage(), let img = UIImage(data: data) {
+            _previewBgImage = State(initialValue: img)
+        } else {
+            _previewBgImage = State(initialValue: nil)
+        }
     }
 
     var body: some View {
         List {
+            // Accent Color Theme (Settings & Controls)
+            Section {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(accentSwatchColors, id: \.hex) { swatch in
+                            let c = Color(hexString: swatch.hex)
+                            Button {
+                                accentColor = c
+                            } label: {
+                                VStack(spacing: 4) {
+                                    Circle()
+                                        .fill(c)
+                                        .frame(width: 28, height: 28)
+                                        .overlay(
+                                            Circle()
+                                                .stroke(Color.primary, lineWidth: accentColor.hexRGBString == swatch.hex ? 2.5 : 0)
+                                                .padding(-3)
+                                        )
+                                    Text(swatch.name)
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                    }
+                    .padding(.vertical, 6)
+                }
+
+                ColorPicker("Custom Accent Color", selection: $accentColor, supportsOpacity: false)
+            } header: {
+                Text("App Accent Color")
+            } footer: {
+                Text("Replace the default pink accent with any preset or custom color from the color wheel.")
+            }
+
+            // WriteNow Menu Theme & Background Image
+            Section {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(menuThemeOptions) { option in
+                            let selected = menuThemePreset == option.id
+                            Button {
+                                menuThemePreset = option.id
+                            } label: {
+                                VStack(spacing: 5) {
+                                    ZStack {
+                                        if option.id == "customImage", let previewBgImage {
+                                            Image(uiImage: previewBgImage)
+                                                .resizable()
+                                                .scaledToFill()
+                                                .frame(width: 56, height: 42)
+                                                .clipped()
+                                        } else if option.id == "customColor" {
+                                            LinearGradient(colors: [customColor1, customColor2], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                                .frame(width: 56, height: 42)
+                                        } else {
+                                            LinearGradient(colors: option.colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+                                                .frame(width: 56, height: 42)
+                                        }
+
+                                        if option.id == "customImage" && previewBgImage == nil {
+                                            Image(systemName: "photo")
+                                                .foregroundColor(.white)
+                                        }
+                                    }
+                                    .cornerRadius(10)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(selected ? accentColor : Color.secondary.opacity(0.25), lineWidth: selected ? 2.5 : 1)
+                                    )
+
+                                    Text(option.title)
+                                        .font(.system(size: 10, weight: selected ? .bold : .regular))
+                                        .foregroundColor(selected ? accentColor : .primary)
+                                        .lineLimit(1)
+                                }
+                                .frame(width: 68)
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                    }
+                    .padding(.vertical, 6)
+                }
+
+                if menuThemePreset == "customColor" {
+                    ColorPicker("Background Color 1", selection: $customColor1, supportsOpacity: false)
+                    ColorPicker("Background Color 2", selection: $customColor2, supportsOpacity: false)
+                }
+
+                Button {
+                    showPhotoPicker = true
+                } label: {
+                    Label(previewBgImage == nil ? "Choose Custom Background Photo" : "Change Custom Background Photo", systemImage: "photo.on.rectangle.angled")
+                }
+
+                if let previewBgImage {
+                    HStack(spacing: 12) {
+                        Image(uiImage: previewBgImage)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 64, height: 48)
+                            .cornerRadius(8)
+                            .clipped()
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Custom Background Active")
+                                .font(.subheadline.weight(.medium))
+                            Text("Blur \(Int(bgBlur)) · Dim \(Int(bgDim * 100))%")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Button(role: .destructive) {
+                            self.previewBgImage = nil
+                            configuration.saveMenuBackgroundImage(nil)
+                            if menuThemePreset == "customImage" {
+                                menuThemePreset = "appleIntelligence"
+                            }
+                        } label: {
+                            Image(systemName: "trash")
+                        }
+                        .buttonStyle(.borderless)
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text("Photo Blur")
+                            Spacer()
+                            Text("\(Int(bgBlur))")
+                                .foregroundColor(.secondary)
+                                .monospacedDigit()
+                        }
+                        Slider(value: $bgBlur, in: 0 ... 18, step: 1)
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text("Dark Overlay (Readability)")
+                            Spacer()
+                            Text("\(Int(bgDim * 100))%")
+                                .foregroundColor(.secondary)
+                                .monospacedDigit()
+                        }
+                        Slider(value: $bgDim, in: 0.1 ... 0.85, step: 0.05)
+                    }
+                }
+
+                Toggle("Animated Mesh Background", isOn: $animatedBg)
+            } header: {
+                Text("WriteNow Menu Theme & Wallpaper")
+            } footer: {
+                Text("Customize the prompt menu background with themes, custom gradient colors, or your own photo.")
+            }
+
+            // Text Apply Animations
+            Section {
+                ForEach(animationStyleOptions, id: \.id) { item in
+                    Button {
+                        textAnimationStyle = item.id
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: textAnimationStyle == item.id ? "checkmark.circle.fill" : "circle")
+                                .foregroundColor(textAnimationStyle == item.id ? accentColor : .secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(item.title)
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundColor(.primary)
+                                Text(item.subtitle)
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            } header: {
+                Text("Text Replace Animation (Accept / Append)")
+            } footer: {
+                Text("Visual effect played directly on the selected text when applying AI improvements.")
+            }
+
             Section {
                 HStack {
                     Text("Menu Button Title")
@@ -697,10 +1150,17 @@ struct BehaviorSettingsView: View {
                     TextField("Write Now", text: $menuTitle)
                         .multilineTextAlignment(.trailing)
                 }
+                Picker("Preset Grid Columns", selection: $gridColumns) {
+                    Text("2 Columns").tag(2)
+                    Text("3 Columns").tag(3)
+                }
+                Picker("Popover Size", selection: $sizePreset) {
+                    Text("Compact").tag("compact")
+                    Text("Standard").tag("standard")
+                    Text("Large").tag("large")
+                }
             } header: {
-                Text("Text Selection Menu")
-            } footer: {
-                Text("Title shown in the iOS text selection menu (e.g. Write Now, AI).")
+                Text("Menu Layout & Title")
             }
 
             Section {
@@ -722,23 +1182,6 @@ struct BehaviorSettingsView: View {
                 Stepper("Request Timeout: \(timeout)s", value: $timeout, in: 15 ... 180, step: 15)
             } header: {
                 Text("AI Behavior & Security")
-            }
-
-            Section {
-                Picker("Preset Grid Columns", selection: $gridColumns) {
-                    Text("2 Columns").tag(2)
-                    Text("3 Columns").tag(3)
-                }
-                Picker("Popover Size", selection: $sizePreset) {
-                    Text("Compact").tag("compact")
-                    Text("Standard").tag("standard")
-                    Text("Large").tag("large")
-                }
-                Toggle("Animated Mesh Background", isOn: $animatedBg)
-            } header: {
-                Text("Popover Appearance (iPhone 7 Plus)")
-            } footer: {
-                Text("Disable Animated Background or choose Compact size for extra smoothness on iOS 15.")
             }
 
             Section {
@@ -784,9 +1227,19 @@ struct BehaviorSettingsView: View {
                 Text("Backup & Restore")
             }
         }
-        .tint(.accent)
-        .navigationTitle("Customization")
+        .tint(accentColor)
+        .accentColor(accentColor)
+        .navigationTitle("Themes & Customization")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showPhotoPicker) {
+            PhotoLibraryPicker { image in
+                if let jpegData = Self.compressBackgroundImage(image) {
+                    previewBgImage = UIImage(data: jpegData)
+                    configuration.saveMenuBackgroundImage(jpegData)
+                    menuThemePreset = "customImage"
+                }
+            }
+        }
         .onChange(of: menuTitle) { _ in commitSettings() }
         .onChange(of: globalPrompt) { _ in commitSettings() }
         .onChange(of: useFewShot) { _ in commitSettings() }
@@ -798,11 +1251,30 @@ struct BehaviorSettingsView: View {
         .onChange(of: gridColumns) { _ in commitSettings() }
         .onChange(of: sizePreset) { _ in commitSettings() }
         .onChange(of: animatedBg) { _ in commitSettings() }
+        .onChange(of: textAnimationStyle) { _ in commitSettings() }
+        .onChange(of: menuThemePreset) { _ in commitSettings() }
+        .onChange(of: customColor1) { _ in commitSettings() }
+        .onChange(of: customColor2) { _ in commitSettings() }
+        .onChange(of: bgBlur) { _ in commitSettings() }
+        .onChange(of: bgDim) { _ in commitSettings() }
+        .onChange(of: accentColor) { _ in commitSettings() }
         .alert(backupAlertTitle, isPresented: $showBackupAlert) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(backupAlertMessage)
         }
+    }
+
+    private static func compressBackgroundImage(_ image: UIImage) -> Data? {
+        let maxDim: CGFloat = 960
+        let size = image.size
+        let scale = min(1.0, maxDim / max(size.width, size.height))
+        let targetSize = CGSize(width: max(1, size.width * scale), height: max(1, size.height * scale))
+        let renderer = UIGraphicsImageRenderer(size: targetSize)
+        let resized = renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: targetSize))
+        }
+        return resized.jpegData(compressionQuality: 0.78)
     }
 
     private func commitSettings() {
@@ -819,6 +1291,13 @@ struct BehaviorSettingsView: View {
             s.gridColumns = gridColumns
             s.popoverSizePreset = sizePreset
             s.animatedBackground = animatedBg
+            s.textAnimationStyle = textAnimationStyle
+            s.menuThemePreset = menuThemePreset
+            s.menuCustomColorHex1 = customColor1.hexRGBString
+            s.menuCustomColorHex2 = customColor2.hexRGBString
+            s.menuBgImageBlur = bgBlur
+            s.menuBgImageDim = bgDim
+            s.accentColorHex = accentColor.hexRGBString
         }
     }
 
@@ -834,5 +1313,54 @@ struct BehaviorSettingsView: View {
         gridColumns = s.gridColumns
         sizePreset = s.popoverSizePreset
         animatedBg = s.animatedBackground
+        textAnimationStyle = s.textAnimationStyle
+        menuThemePreset = s.menuThemePreset
+        customColor1 = Color(hexString: s.menuCustomColorHex1, fallback: .blue)
+        customColor2 = Color(hexString: s.menuCustomColorHex2, fallback: .indigo)
+        bgBlur = s.menuBgImageBlur
+        bgDim = s.menuBgImageDim
+        accentColor = Color(hexString: s.accentColorHex, fallback: .blue)
+    }
+}
+
+private struct PhotoLibraryPicker: UIViewControllerRepresentable {
+    let onPicked: (UIImage) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onPicked: onPicked, dismiss: dismiss)
+    }
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .photoLibrary
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_: UIImagePickerController, context _: Context) {}
+
+    final class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
+        let onPicked: (UIImage) -> Void
+        let dismiss: DismissAction
+
+        init(onPicked: @escaping (UIImage) -> Void, dismiss: DismissAction) {
+            self.onPicked = onPicked
+            self.dismiss = dismiss
+        }
+
+        func imagePickerController(
+            _ picker: UIImagePickerController,
+            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
+        ) {
+            if let img = (info[.editedImage] ?? info[.originalImage]) as? UIImage {
+                onPicked(img)
+            }
+            dismiss()
+        }
+
+        func imagePickerControllerDidCancel(_: UIImagePickerController) {
+            dismiss()
+        }
     }
 }

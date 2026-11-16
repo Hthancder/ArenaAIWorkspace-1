@@ -48,6 +48,23 @@ class GlobalStorage: PersistProvider {
     func removeObject(forKey: String) {
         try? FileManager.default.removeItem(at: path(forKey: forKey))
     }
+
+    private var menuBackgroundImageURL: URL {
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("menu_background.jpg")
+    }
+
+    func saveMenuBackgroundImage(_ data: Data?) {
+        if let data, !data.isEmpty {
+            try? data.write(to: menuBackgroundImageURL, options: .atomic)
+        } else {
+            try? FileManager.default.removeItem(at: menuBackgroundImageURL)
+        }
+    }
+
+    func loadMenuBackgroundImage() -> Data? {
+        try? Data(contentsOf: menuBackgroundImageURL)
+    }
 }
 
 extension Persist {
