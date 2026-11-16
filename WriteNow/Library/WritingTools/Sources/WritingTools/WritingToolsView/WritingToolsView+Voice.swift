@@ -340,8 +340,13 @@ extension WritingToolsView {
         }
     }
 
-    private func startVoicePolling() {
+    private func stopVoicePolling() {
         voicePollTimer?.invalidate()
+        voicePollTimer = nil
+    }
+
+    private func startVoicePolling() {
+        stopVoicePolling()
         voicePollTimer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) { _ in
             guard isRecordingVoice else {
                 voicePollTimer?.invalidate()
