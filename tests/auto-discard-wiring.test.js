@@ -14,8 +14,15 @@ assert.doesNotMatch(background,/tabs\.discard|DiscardTools/);
 // A navigation drops the sample of that tab instead of charging the new page with the old numbers.
 assert.match(background,/chrome\.tabs\?\.onUpdated\?\.addListener\(\(id,changeInfo\)=>\{if\(typeof AutoDiscard!=='undefined'&&Number\.isInteger\(id\)&&typeof changeInfo\?\.url==='string'\)void AutoDiscard\.forget\(chrome,\[id\]\)\.catch\(\(\)=>\{\}\)\}\)/);
 
-// The setting and its result are loaded, kept fresh in the header, and saved through the shared lock.
-assert.match(dash,/autoDiscardConfig=result\.autoDiscardConfig;autoDiscardRun=result\.autoDiscardRun;/);
+// The setting comes from storage.local and the measurement from storage.session, kept fresh in the header.
+assert.match(dash,/chrome\.storage\.session\?\.get\?chrome\.storage\.session\.get\(\[AutoDiscard\.runKey\]\)\.catch\(\(\)=>\(\{\}\)\):Promise\.resolve\(\{\}\)/);
+assert.match(dash,/autoDiscardConfig=result\.autoDiscardConfig;autoDiscardRun=measurement\?\.\[AutoDiscard\.runKey\];/);
+assert.match(dash,/if\(area==='session'&&changes\[AutoDiscard\.runKey\]\)dashboardRefresh\.request\(\);/);
+assert.match(mod,/if\(!journal\)return \{status:'blocked',reason:'Không có nơi giữ kết quả đo trên máy; chrome\.storage\.session không khả dụng\.',config\};/);
+assert.match(mod,/if\(data\[runKey\]!==undefined\)try\{await api\.storage\.local\.remove\?\.\(runKey\)\}catch\{\}/);
+assert.match(mod,/try\{await journal\.set\(\{\[runKey\]:summary\}\)\}catch\{/);
+assert.doesNotMatch(mod,/storage\.local\.set\(\{\[runKey\]/,'a measurement never lands in the persisted backup area');
+// The setting and its result are saved through the shared lock.
 assert.match(dash,/changes\.autoDiscardConfig\|\|changes\.autoDiscardRun\|\|/);
 assert.ok(dash.includes('${autoDiscardBlock()}<div class="card settingscard"><h2>Thông báo trên website</h2>'),'the block sits inside the settings view');
 assert.match(dash,/async function saveAutoDiscard\(\)\{[\s\S]{0,600}if\(autoDiscardBusy\)return;autoDiscardBusy=true;[\s\S]{0,400}await MutationLock\.run\(async\(\)=>\{/);

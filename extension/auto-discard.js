@@ -157,6 +157,8 @@ async function systemFreePercent(memory){
 async function run(api,now,deps={},options={}){
   if(!Number.isFinite(now)||now<=0)throw Error('Không xác định được thời gian.');
   const data=await api.storage.local.get([settingKey,'automationPaused','protectedDomains','protectedUrls',runKey]);
+  // 15.6: a measurement is the newest sample rather than policy, so it is kept in storage.session with the series.
+  const journal=api.storage.session?.get&&api.storage.session?.set?api.storage.session:null;
   let config;try{config=validate(data[settingKey])}catch{return {status:'invalid',reason:'Cấu hình cho nghỉ theo tài nguyên không hợp lệ; việc đo đã dừng.'}}
   // A forced run is an explicit request to read the numbers now, so the policy gates do not apply to it.
   if(!config.enabled&&!options.force)return {status:'off',reason:'Tính năng đang tắt; không đo và không nghỉ tab nào.'};
@@ -170,7 +172,11 @@ async function run(api,now,deps={},options={}){
    // A manual measurement still shows the numbers; only the automatic cycle is held back when memory is fine.
    if(!options.force&&free>=config.lowMemoryFloor)return {status:'waiting',config,reason:`RAM khả dụng còn ${free}%, chưa thấp hơn ngưỡng ${config.lowMemoryFloor}% nên lượt đo bỏ qua.`};
   }
-  const last=Number.isFinite(data[runKey]?.at)?data[runKey].at:0,cycle=config.everyMinutes*60000;
+  // Without somewhere to keep the record a cycle would measure for nothing, so the run says so first.
+  if(!journal)return {status:'blocked',reason:'Không có nơi giữ kết quả đo trên máy; chrome.storage.session không khả dụng.',config};
+  // Older builds kept the record in storage.local, where its tab ids would outlive the tabs they described.
+  if(data[runKey]!==undefined)try{await api.storage.local.remove?.(runKey)}catch{}
+  const saved=await journal.get([runKey]),last=Number.isFinite(saved?.[runKey]?.at)?saved[runKey].at:0,cycle=config.everyMinutes*60000;
   if(!options.force&&last&&now-last<cycle)return {status:'waiting',config,reason:`Chưa đến chu kỳ đo; còn khoảng ${Math.max(1,Math.ceil((cycle-(now-last))/60000))} phút.`,nextAt:last+cycle};
   // A cycle missed while Chrome was asleep is not caught up; the schedule simply resumes (6.2).
   const missed=!options.force&&last&&now-last>=2*cycle;
@@ -192,7 +198,7 @@ async function run(api,now,deps={},options={}){
   // policy gates such as the grace window belong to a run, and the run re-checks them anyway.
   const result=plan(normal,records,{...config,mode:'suggest'},now,{protected:kept,note});
   const summary={at:now,overCount:result.candidates.length,blockedCount:result.rows.length-result.candidates.length,measurable:true,ids:result.chosen.map(r=>r.id),...(missed?{missed:true}:{})};
-  try{await api.storage.local.set({[runKey]:summary})}catch{throw Error('Không xác nhận được việc lưu kết quả đo; hãy kiểm tra rồi thử lại.')}
+  try{await journal.set({[runKey]:summary})}catch{throw Error('Không xác nhận được việc lưu kết quả đo; hãy kiểm tra rồi thử lại.')}
   return {status:'measured',reason:'',config,plan:result,run:summary};
  }
  // Newest value plus the streak of consecutive cycles above the threshold; a missing number or a gap breaks it.
@@ -289,11 +295,13 @@ async function run(api,now,deps={},options={}){
  // The note lives on the measurement itself, so the next cycle replaces it instead of hiding future cards.
  async function dismiss(api,at,undo=false){
   if(!Number.isInteger(at))throw Error('Không xác định được lần đo cần ẩn.');
-  const data=await api.storage.local.get([runKey]),run=data&&data[runKey];
+  const journal=api.storage.session;
+  if(!journal?.get||!journal?.set)throw Error('Không đọc được nơi giữ kết quả đo; khởi động lại Chrome rồi thử lại.');
+  const data=await journal.get([runKey]),run=data&&data[runKey];
   if(!run||run.at!==at)throw Error('Lần đo đã thay đổi ở nơi khác; hãy xem lại danh sách trước khi ẩn thẻ.');
   const next={...run};
   if(undo)delete next.dismissedAt;else next.dismissedAt=at;
-  try{await api.storage.local.set({[runKey]:next})}catch{throw Error('Không xác nhận được việc ẩn thẻ; hãy kiểm tra lại trước khi thử.')}
+   try{await journal.set({[runKey]:next})}catch{throw Error('Không xác nhận được việc ẩn thẻ; hãy kiểm tra lại trước khi thử.')}
   return next;
  }
  function describe(raw,context={}){

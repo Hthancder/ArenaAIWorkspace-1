@@ -171,9 +171,9 @@ assert.doesNotMatch(markup,/data-action="auto-discard-save"/);
  assert.match(dialog.markup,/chưa tab nào bị nghỉ/);
  assert.match(dialog.markup,/Không xác định được thời điểm mở tab/);
  assert.match(dialog.markup,/Chọn 1 tab để xem trước/);
- assert.deepEqual([discards,ctx.autoDiscardSummary.overCount,db.autoDiscardRun.overCount,db.autoDiscardRun.blockedCount,loads],[0,1,1,3,loads]);
- assert.deepEqual(db.autoDiscardRun.ids,[1]);
- ctx.autoDiscardRun=structuredClone(db.autoDiscardRun);
+ assert.deepEqual([discards,ctx.autoDiscardSummary.overCount,session[AutoDiscard.runKey].overCount,session[AutoDiscard.runKey].blockedCount,loads],[0,1,1,3,loads]);
+ assert.deepEqual(session[AutoDiscard.runKey].ids,[1]);
+ ctx.autoDiscardRun=structuredClone(session[AutoDiscard.runKey]);
  assert.match(ctx.autoDiscardBlock(),/1 tab đang vượt ngưỡng/);
  // A run that has not refreshed for two cycles says so instead of presenting old numbers as current.
  const manual=ctx.autoDiscardSummary;
@@ -187,15 +187,15 @@ assert.doesNotMatch(markup,/data-action="auto-discard-save"/);
  // A fresher manual measurement wins over the older background record.
  ctx.autoDiscardSummary=manual;
  assert.match(ctx.autoDiscardBlock(),/đo ngay bây giờ/);
- ctx.autoDiscardRun=structuredClone(db.autoDiscardRun);
+ ctx.autoDiscardRun=structuredClone(session[AutoDiscard.runKey]);
  // A blocked measurement never lands in session storage, and no URL is written with it.
- assert.deepEqual(Object.keys(session),[AutoDiscard.key(1),AutoDiscard.key(2)]);
+ assert.deepEqual(Object.keys(session).sort(),[AutoDiscard.key(1),AutoDiscard.key(2),AutoDiscard.runKey].sort());
  assert.equal(session[AutoDiscard.key(1)].url,undefined);
  assert.doesNotMatch(JSON.stringify(session),/https?:/);
  // The attention card is a pointer to the same manual preview, never a second sleep path.
  const runAt=Date.now();
  ctx.autoDiscardRun={at:runAt,overCount:2,blockedCount:1,measurable:true,ids:[1,2]};
- Object.assign(db,{autoDiscardRun:structuredClone(ctx.autoDiscardRun)});
+ Object.assign(session,{[AutoDiscard.runKey]:structuredClone(ctx.autoDiscardRun)});
  let cardMarkup=ctx.autoDiscardAttentionCard();
  assert.match(cardMarkup,/Tab vượt ngưỡng tài nguyên \(2\)/);
  assert.match(cardMarkup,/1 tab bị chặn bởi danh sách bảo vệ hoặc đang được xem/);
@@ -207,15 +207,15 @@ assert.doesNotMatch(markup,/data-action="auto-discard-save"/);
  assert.match(notices.at(-1),/Đã chọn 2 tab vượt ngưỡng; chưa cho nghỉ tab nào/);
  // Dismissing notes the measurement; the card then offers only to come back.
  await ctx.autoDiscardAttentionAction('dismiss');
- assert.equal(db.autoDiscardRun.dismissedAt,runAt);
- ctx.autoDiscardRun=structuredClone(db.autoDiscardRun); // load() refreshes the page state after a write
+ assert.equal(session[AutoDiscard.runKey].dismissedAt,runAt);
+ ctx.autoDiscardRun=structuredClone(session[AutoDiscard.runKey]); // load() refreshes the page state after a write
  cardMarkup=ctx.autoDiscardAttentionCard();
  assert.match(cardMarkup,/đã bỏ qua ở lần đo này/);
  assert.match(cardMarkup,/>Hiện lại thẻ</);
  assert.doesNotMatch(cardMarkup,/auto-discard-review|auto-discard-dismiss/);
  await ctx.autoDiscardAttentionAction('restore');
- assert.equal(db.autoDiscardRun.dismissedAt,undefined);
- ctx.autoDiscardRun=structuredClone(db.autoDiscardRun);
+ assert.equal(session[AutoDiscard.runKey].dismissedAt,undefined);
+ ctx.autoDiscardRun=structuredClone(session[AutoDiscard.runKey]);
  assert.match(ctx.autoDiscardAttentionCard(),/>Xem & nghỉ</);
  // Old numbers do not nag, and an expired card refuses every action.
  ctx.autoDiscardRun={at:runAt-3600000,overCount:2,measurable:true,ids:[1,2]};
@@ -225,8 +225,8 @@ assert.doesNotMatch(markup,/data-action="auto-discard-save"/);
  ctx.autoDiscardRun={at:runAt,overCount:2,measurable:true,ids:[404]};
  await ctx.autoDiscardAttentionAction('review');
  assert.match(notices.at(-1),/Không còn tab nào từ danh sách đo; chưa chọn tab nào/);
- assert.deepEqual([discards,[...ctx.selected].sort(),db.autoDiscardRun.dismissedAt],[0,[1,2],undefined]);
- ctx.autoDiscardRun=structuredClone(db.autoDiscardRun);
+ assert.deepEqual([discards,[...ctx.selected].sort(),session[AutoDiscard.runKey].dismissedAt],[0,[1,2],undefined]);
+ ctx.autoDiscardRun=structuredClone(session[AutoDiscard.runKey]);
  ctx.autoDiscardChoose();
  assert.equal(closed>=1,true);
  assert.deepEqual([ctx.view,[...ctx.selected],discards],['open',[1],0]);
