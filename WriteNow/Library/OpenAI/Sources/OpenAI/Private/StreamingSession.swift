@@ -42,7 +42,7 @@ final class StreamingSession<ResultType: Codable>: NSObject, Identifiable, URLSe
     }
 
     func perform() {
-        let task = urlSession.dataTask(with: urlRequest)
+        let task: URLSessionDataTask = urlSession.dataTask(with: urlRequest)
         dataTask = task
         task.resume()
     }
