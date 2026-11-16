@@ -18,8 +18,21 @@ public extension Presenter {
         guard let targetView = TextProxy.lookupViewOfInterest(view: respondingView),
               let context = obtainContextFor(targetView)
         else {
+            Configurator.shared.refreshRuntimeConfig()
             presentUnavailable(respondingView)
             return
+        }
+
+        Configurator.shared.refreshRuntimeConfig { [weak context] _ in
+            guard let context else { return }
+            let vectors = Presenter.themeColorVectors()
+            let animatedBg = Configurator.shared.settings.animatedBackground
+            for dec in context.decorationViews {
+                if let grad = dec as? AnimatedMulticolorGradientView {
+                    grad.setColors(vectors, animated: true)
+                    grad.speed = animatedBg ? 1.0 : 0.0
+                }
+            }
         }
 
         let anchorView = context.anchorView

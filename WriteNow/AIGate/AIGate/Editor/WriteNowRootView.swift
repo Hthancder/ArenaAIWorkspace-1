@@ -707,7 +707,7 @@ struct ThemeAppearanceView: View {
     @State private var customImagePreview: UIImage?
     @State private var showPhotoPicker = false
     @State private var previewTrigger = UUID()
-    @State private var previewShowAfter = false
+    @State private var previewPlayCount = 0
     @State private var statusBanner = ""
 
     private let accentSwatches: [(name: String, hex: String)] = [
@@ -910,6 +910,45 @@ struct ThemeAppearanceView: View {
             }
 
             Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    NativeAnimationPreviewBox(
+                        style: selectedAnimation,
+                        accentColor: UIColor(accentColor),
+                        themeColors: previewThemeUIColors,
+                        playCount: previewPlayCount
+                    )
+                    .frame(height: 92)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(Color.secondary.opacity(0.22), lineWidth: 1)
+                    )
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        triggerAnimationPreview()
+                    }
+
+                    HStack {
+                        Text("Tap the preview or pick an effect below to test.")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Button {
+                            triggerAnimationPreview()
+                        } label: {
+                            Label("Play", systemImage: "play.fill")
+                                .font(.caption.weight(.semibold))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(accentColor.opacity(0.14))
+                                .foregroundColor(accentColor)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+                .padding(.vertical, 4)
+
                 ForEach(AnimationCatalog.items) { anim in
                     Button {
                         selectedAnimation = anim.id
@@ -936,13 +975,6 @@ struct ThemeAppearanceView: View {
                         }
                     }
                 }
-
-                Button {
-                    triggerAnimationPreview()
-                } label: {
-                    Label("Preview Selected Text Animation", systemImage: "play.circle.fill")
-                        .foregroundColor(accentColor)
-                }
             } header: {
                 Text("Text Replacement Animation")
             } footer: {
@@ -961,6 +993,15 @@ struct ThemeAppearanceView: View {
                 }
             }
         }
+    }
+
+    private var previewThemeUIColors: [UIColor] {
+        if backgroundMode == "solid" {
+            let acc = UIColor(accentColor)
+            let sol = UIColor(solidColor)
+            return [acc, sol, acc.withAlphaComponent(0.75), sol]
+        }
+        return previewColors.map { UIColor($0) }
     }
 
     private var menuPreviewCard: some View {
@@ -999,15 +1040,19 @@ struct ThemeAppearanceView: View {
                 }
 
                 HStack(spacing: 8) {
-                    Text(previewShowAfter ? "Polished text rises smoothly!" : "Original draft text here...")
+                    Text("Selected text highlight & menu theme follow your active palette.")
                         .font(.caption.weight(.medium))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(8)
-                        .background(Color.white.opacity(0.14))
+                        .background(
+                            LinearGradient(
+                                colors: previewColors.prefix(2).map { $0.opacity(0.45) },
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
                         .cornerRadius(8)
-                        .id(previewTrigger)
-                        .transition(.opacity.combined(with: .scale(scale: 0.94)))
                 }
 
                 HStack(spacing: 8) {
@@ -1017,7 +1062,11 @@ struct ThemeAppearanceView: View {
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 7)
-                            .background(Color.white.opacity(0.15))
+                            .background(accentColor.opacity(0.32))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.white.opacity(0.16), lineWidth: 1)
+                            )
                             .cornerRadius(8)
                     }
                 }
@@ -1029,10 +1078,8 @@ struct ThemeAppearanceView: View {
     }
 
     private func triggerAnimationPreview() {
-        withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
-            previewShowAfter.toggle()
-            previewTrigger = UUID()
-        }
+        previewPlayCount += 1
+        previewTrigger = UUID()
     }
 
     private func savePickedImage(_ image: UIImage) {
@@ -1530,5 +1577,533 @@ struct BehaviorSettingsView: View {
         timeout = s.requestTimeout
         gridColumns = s.gridColumns
         sizePreset = s.popoverSizePreset
+    }
+}
+
+private struct NativeAnimationPreviewBox: UIViewRepresentable {
+    let style: String
+    let accentColor: UIColor
+    let themeColors: [UIColor]
+    let playCount: Int
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeUIView(context: Context) -> PreviewContainerView {
+        let container = PreviewContainerView()
+        context.coordinator.container = container
+        container.configureInitialText()
+        return container
+    }
+
+    func updateUIView(_ uiView: PreviewContainerView, context: Context) {
+        if context.coordinator.lastPlayCount != playCount {
+            context.coordinator.lastPlayCount = playCount
+            uiView.playAnimation(style: style, accentColor: accentColor, themeColors: themeColors)
+        }
+    }
+
+    final class Coordinator {
+        weak var container: PreviewContainerView?
+        var lastPlayCount: Int = 0
+    }
+}
+
+private final class PreviewContainerView: UIView {
+    private let textView = UITextView()
+    private let highlightLayer = CAGradientLayer()
+    private weak var activeOverlay: UIView?
+    private var showingAfter = false
+    private var animationGeneration: Int = 0
+
+    private let draftText = "Draft: Writing tools on iOS 15 should feel fast, fluid, and native across every single line of your text."
+    private let polishedText = "Polished: Smooth native animations glide effortlessly across every line of your selected text!"
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = .secondarySystemGroupedBackground
+        clipsToBounds = true
+
+        highlightLayer.opacity = 0
+        highlightLayer.cornerRadius = 6
+        layer.addSublayer(highlightLayer)
+
+        textView.backgroundColor = .clear
+        textView.isEditable = false
+        textView.isSelectable = false
+        textView.isScrollEnabled = false
+        textView.textContainerInset = UIEdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
+        textView.font = UIFont.systemFont(ofSize: 13.5, weight: .regular)
+        textView.textColor = .label
+        addSubview(textView)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        textView.frame = bounds
+        highlightLayer.frame = bounds.insetBy(dx: 6, dy: 6)
+    }
+
+    func configureInitialText() {
+        showingAfter = false
+        textView.text = draftText
+    }
+
+    func playAnimation(style: String, accentColor: UIColor, themeColors: [UIColor]) {
+        layoutIfNeeded()
+        animationGeneration += 1
+        let gen = animationGeneration
+
+        activeOverlay?.removeFromSuperview()
+        activeOverlay = nil
+
+        let colors = themeColors.isEmpty ? [accentColor, accentColor.withAlphaComponent(0.6)] : themeColors
+        highlightLayer.colors = colors.prefix(3).map { $0.withAlphaComponent(0.32).cgColor }
+        highlightLayer.startPoint = CGPoint(x: 0, y: 0)
+        highlightLayer.endPoint = CGPoint(x: 1, y: 1)
+
+        // Flash themed selection highlight briefly before replacing
+        highlightLayer.opacity = 1
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
+            guard let self, self.animationGeneration == gen else { return }
+            self.highlightLayer.opacity = 0
+            self.runReplacement(style: style, accentColor: accentColor, themeColors: colors, generation: gen)
+        }
+    }
+
+    private func runReplacement(style: String, accentColor: UIColor, themeColors: [UIColor], generation: Int) {
+        guard bounds.width > 20, bounds.height > 20 else { return }
+
+        let oldLines = visibleLineRects(in: textView)
+        let beforeImage = capturePreviewImage()
+
+        showingAfter.toggle()
+        textView.text = showingAfter ? polishedText : draftText
+        textView.layoutIfNeeded()
+
+        let normalized = style.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalized != "none", !normalized.isEmpty else {
+            return
+        }
+
+        let newLines = visibleLineRects(in: textView)
+        let afterImage = capturePreviewImage()
+
+        let overlay = UIView(frame: bounds)
+        overlay.isUserInteractionEnabled = false
+        overlay.clipsToBounds = true
+        overlay.backgroundColor = .clear
+        addSubview(overlay)
+        activeOverlay = overlay
+
+        let bgColor = backgroundColor ?? .secondarySystemGroupedBackground
+        let veil = UIView(frame: overlay.bounds)
+        veil.backgroundColor = bgColor
+
+        let maskPath = UIBezierPath()
+        for line in (oldLines + newLines) {
+            maskPath.append(UIBezierPath(roundedRect: line.insetBy(dx: -3, dy: -2), cornerRadius: 5))
+        }
+        let maskLayer = CAShapeLayer()
+        maskLayer.frame = veil.bounds
+        maskLayer.path = maskPath.cgPath
+        veil.layer.mask = maskLayer
+
+        let glow = CAGradientLayer()
+        glow.frame = veil.bounds
+        glow.colors = themeColors.prefix(3).map { $0.withAlphaComponent(0.22).cgColor }
+        glow.startPoint = CGPoint(x: 0, y: 0)
+        glow.endPoint = CGPoint(x: 1, y: 1)
+        veil.layer.addSublayer(glow)
+
+        overlay.addSubview(veil)
+
+        let oldTiles = sliceTiles(image: beforeImage, lines: oldLines, backdropColor: bgColor)
+        let newTiles = sliceTiles(image: afterImage, lines: newLines, backdropColor: bgColor)
+
+        switch normalized {
+        case "rain_drop_rise":
+            for (idx, tile) in oldTiles.enumerated() {
+                let iv = UIImageView(frame: tile.frame)
+                iv.image = tile.image
+                overlay.addSubview(iv)
+                let delay = Double(tile.lineIndex) * 0.03 + Double(idx % 5) * 0.006
+                UIView.animate(withDuration: 0.32, delay: delay, options: [.curveEaseIn]) {
+                    iv.transform = CGAffineTransform(translationX: CGFloat.random(in: -10 ... 10), y: CGFloat.random(in: 30 ... 64))
+                        .rotated(by: CGFloat.random(in: -0.3 ... 0.3))
+                    iv.alpha = 0
+                }
+            }
+            for (idx, tile) in newTiles.enumerated() {
+                let iv = UIImageView(frame: tile.frame)
+                iv.image = tile.image
+                iv.transform = CGAffineTransform(translationX: 0, y: 18).scaledBy(x: 0.92, y: 0.4)
+                iv.alpha = 0
+                overlay.addSubview(iv)
+                let delay = 0.18 + Double(tile.lineIndex) * 0.03 + Double(idx % 5) * 0.006
+                UIView.animate(withDuration: 0.42, delay: delay, usingSpringWithDamping: 0.72, initialSpringVelocity: 0.85, options: [.curveEaseOut]) {
+                    iv.transform = .identity
+                    iv.alpha = 1
+                }
+            }
+            finishOverlay(overlay, veil: veil, after: 0.82, generation: generation)
+
+        case "thanos_dust":
+            let emitter = CAEmitterLayer()
+            emitter.emitterPosition = CGPoint(x: bounds.midX, y: bounds.midY)
+            emitter.emitterSize = bounds.size
+            emitter.emitterShape = .rectangle
+            let dot = makeDotCGImage()
+            let ash = CAEmitterCell()
+            ash.contents = dot
+            ash.birthRate = 120
+            ash.lifetime = 0.7
+            ash.velocity = 40
+            ash.velocityRange = 22
+            ash.emissionLongitude = -CGFloat.pi / 4
+            ash.emissionRange = CGFloat.pi / 2
+            ash.yAcceleration = -55
+            ash.xAcceleration = 45
+            ash.scale = 0.3
+            ash.scaleRange = 0.2
+            ash.alphaSpeed = -1.4
+            ash.color = UIColor.lightGray.cgColor
+            let ember = CAEmitterCell()
+            ember.contents = dot
+            ember.birthRate = 55
+            ember.lifetime = 0.6
+            ember.velocity = 46
+            ember.velocityRange = 24
+            ember.emissionLongitude = -CGFloat.pi / 3
+            ember.emissionRange = CGFloat.pi / 2
+            ember.yAcceleration = -70
+            ember.xAcceleration = 50
+            ember.scale = 0.25
+            ember.alphaSpeed = -1.5
+            ember.color = accentColor.cgColor
+            emitter.emitterCells = [ash, ember]
+            overlay.layer.addSublayer(emitter)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) { emitter.birthRate = 0 }
+
+            let oldCount = max(1, oldTiles.count)
+            for (idx, tile) in oldTiles.enumerated() {
+                let iv = UIImageView(frame: tile.frame)
+                iv.image = tile.image
+                overlay.addSubview(iv)
+                UIView.animate(withDuration: 0.34, delay: (Double(idx) / Double(oldCount)) * 0.24, options: [.curveEaseOut]) {
+                    iv.transform = CGAffineTransform(translationX: CGFloat.random(in: 14 ... 48), y: CGFloat.random(in: -30 ... -8))
+                        .scaledBy(x: 0.35, y: 0.35)
+                    iv.alpha = 0
+                }
+            }
+            let newCount = max(1, newTiles.count)
+            for (idx, tile) in newTiles.enumerated() {
+                let iv = UIImageView(frame: tile.frame)
+                iv.image = tile.image
+                iv.transform = CGAffineTransform(translationX: -8, y: 10).scaledBy(x: 0.85, y: 0.85)
+                iv.alpha = 0
+                overlay.addSubview(iv)
+                UIView.animate(withDuration: 0.36, delay: 0.22 + (Double(idx) / Double(newCount)) * 0.22, options: [.curveEaseOut]) {
+                    iv.transform = .identity
+                    iv.alpha = 1
+                }
+            }
+            finishOverlay(overlay, veil: veil, after: 0.85, generation: generation)
+
+        case "typewriter_wave":
+            let oldCount = max(1, oldTiles.count)
+            for (idx, tile) in oldTiles.enumerated() {
+                let iv = UIImageView(frame: tile.frame)
+                iv.image = tile.image
+                overlay.addSubview(iv)
+                UIView.animate(withDuration: 0.18, delay: (Double(idx) / Double(oldCount)) * 0.20, options: [.curveEaseIn]) {
+                    iv.alpha = 0
+                    iv.transform = CGAffineTransform(translationX: 0, y: -4).scaledBy(x: 0.96, y: 0.96)
+                }
+            }
+            let beam = UIView(frame: CGRect(x: 0, y: -14, width: bounds.width, height: 24))
+            let beamGrad = CAGradientLayer()
+            beamGrad.frame = beam.bounds
+            beamGrad.colors = [
+                accentColor.withAlphaComponent(0).cgColor,
+                accentColor.withAlphaComponent(0.55).cgColor,
+                UIColor.white.withAlphaComponent(0.6).cgColor,
+                accentColor.withAlphaComponent(0).cgColor,
+            ]
+            beam.layer.addSublayer(beamGrad)
+            overlay.addSubview(beam)
+            UIView.animate(withDuration: 0.50, delay: 0.04, options: [.curveEaseInOut]) {
+                beam.frame.origin.y = self.bounds.height - 10
+            } completion: { _ in
+                UIView.animate(withDuration: 0.14) { beam.alpha = 0 }
+            }
+            let newCount = max(1, newTiles.count)
+            for (idx, tile) in newTiles.enumerated() {
+                let iv = UIImageView(frame: tile.frame)
+                iv.image = tile.image
+                iv.transform = CGAffineTransform(translationX: 0, y: 8).scaledBy(x: 0.96, y: 0.96)
+                iv.alpha = 0
+                overlay.addSubview(iv)
+                UIView.animate(withDuration: 0.30, delay: 0.10 + (Double(idx) / Double(newCount)) * 0.32, usingSpringWithDamping: 0.82, initialSpringVelocity: 0.5, options: [.curveEaseOut]) {
+                    iv.transform = .identity
+                    iv.alpha = 1
+                }
+            }
+            finishOverlay(overlay, veil: veil, after: 0.76, generation: generation)
+
+        case "flip_cascade":
+            var perspective = CATransform3DIdentity
+            perspective.m34 = -1.0 / 450.0
+            let oldCount = max(1, oldTiles.count)
+            for (idx, tile) in oldTiles.enumerated() {
+                let iv = UIImageView(frame: tile.frame)
+                iv.image = tile.image
+                iv.layer.transform = perspective
+                overlay.addSubview(iv)
+                UIView.animate(withDuration: 0.20, delay: (Double(idx) / Double(oldCount)) * 0.18, options: [.curveEaseIn]) {
+                    iv.layer.transform = CATransform3DRotate(perspective, .pi / 2.0, 1, 0, 0)
+                    iv.alpha = 0
+                }
+            }
+            let newCount = max(1, newTiles.count)
+            for (idx, tile) in newTiles.enumerated() {
+                let iv = UIImageView(frame: tile.frame)
+                iv.image = tile.image
+                iv.layer.transform = CATransform3DRotate(perspective, -.pi / 2.0, 1, 0, 0)
+                iv.alpha = 0
+                overlay.addSubview(iv)
+                UIView.animate(withDuration: 0.32, delay: 0.16 + (Double(idx) / Double(newCount)) * 0.22, usingSpringWithDamping: 0.76, initialSpringVelocity: 0.6, options: [.curveEaseOut]) {
+                    iv.layer.transform = perspective
+                    iv.alpha = 1
+                }
+            }
+            finishOverlay(overlay, veil: veil, after: 0.74, generation: generation)
+
+        case "glitch_matrix":
+            var oldViews: [UIImageView] = []
+            var cyanViews: [UIImageView] = []
+            var accViews: [UIImageView] = []
+            for tile in oldTiles {
+                let main = UIImageView(frame: tile.frame)
+                main.image = tile.image
+                let cyan = UIImageView(frame: tile.frame.offsetBy(dx: -3, dy: 0))
+                cyan.image = tile.image.withRenderingMode(.alwaysTemplate)
+                cyan.tintColor = UIColor.cyan.withAlphaComponent(0.75)
+                let acc = UIImageView(frame: tile.frame.offsetBy(dx: 3, dy: 0))
+                acc.image = tile.image.withRenderingMode(.alwaysTemplate)
+                acc.tintColor = accentColor.withAlphaComponent(0.75)
+                overlay.addSubview(cyan)
+                overlay.addSubview(acc)
+                overlay.addSubview(main)
+                oldViews.append(main)
+                cyanViews.append(cyan)
+                accViews.append(acc)
+            }
+            var newViews: [UIImageView] = []
+            for tile in newTiles {
+                let iv = UIImageView(frame: tile.frame)
+                iv.image = tile.image
+                iv.alpha = 0
+                overlay.addSubview(iv)
+                newViews.append(iv)
+            }
+            UIView.animate(withDuration: 0.09) {
+                for (i, v) in oldViews.enumerated() { v.transform = CGAffineTransform(translationX: i % 2 == 0 ? 5 : -5, y: 0) }
+                for (i, v) in cyanViews.enumerated() { v.transform = CGAffineTransform(translationX: i % 2 == 0 ? -7 : 6, y: -1) }
+                for (i, v) in accViews.enumerated() { v.transform = CGAffineTransform(translationX: i % 2 == 0 ? 7 : -6, y: 1) }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.14) { [weak self] in
+                guard let self, self.animationGeneration == generation else { return }
+                UIView.animate(withDuration: 0.12) {
+                    oldViews.forEach { $0.alpha = 0 }
+                    cyanViews.forEach { $0.alpha = 0 }
+                    accViews.forEach { $0.alpha = 0 }
+                }
+                for (i, iv) in newViews.enumerated() {
+                    iv.transform = CGAffineTransform(translationX: i % 2 == 0 ? -4 : 4, y: 0)
+                    UIView.animate(withDuration: 0.22, delay: Double(i % 5) * 0.015, options: [.curveEaseOut]) {
+                        iv.transform = .identity
+                        iv.alpha = 1
+                    }
+                }
+            }
+            finishOverlay(overlay, veil: veil, after: 0.58, generation: generation)
+
+        default: // "scatter_assemble"
+            for (idx, tile) in oldTiles.enumerated() {
+                let iv = UIImageView(frame: tile.frame)
+                iv.image = tile.image
+                overlay.addSubview(iv)
+                let delay = min(0.16, Double(idx) * 0.005)
+                UIView.animate(withDuration: 0.34, delay: delay, options: [.curveEaseOut]) {
+                    iv.transform = CGAffineTransform(translationX: CGFloat.random(in: -70 ... 70), y: CGFloat.random(in: -45 ... 45))
+                        .rotated(by: CGFloat.random(in: -0.7 ... 0.7))
+                        .scaledBy(x: 0.45, y: 0.45)
+                    iv.alpha = 0
+                }
+            }
+            for (idx, tile) in newTiles.enumerated() {
+                let iv = UIImageView(frame: tile.frame)
+                iv.image = tile.image
+                iv.transform = CGAffineTransform(translationX: CGFloat.random(in: -65 ... 65), y: CGFloat.random(in: -40 ... 40))
+                    .rotated(by: CGFloat.random(in: -0.5 ... 0.5))
+                    .scaledBy(x: 1.22, y: 1.22)
+                iv.alpha = 0
+                overlay.addSubview(iv)
+                let delay = 0.14 + min(0.22, Double(idx) * 0.006)
+                UIView.animate(withDuration: 0.44, delay: delay, usingSpringWithDamping: 0.78, initialSpringVelocity: 0.75, options: [.curveEaseOut]) {
+                    iv.transform = .identity
+                    iv.alpha = 1
+                }
+            }
+            finishOverlay(overlay, veil: veil, after: 0.78, generation: generation)
+        }
+    }
+
+    private func finishOverlay(_ overlay: UIView, veil: UIView, after delay: TimeInterval, generation: Int) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self, self.animationGeneration == generation else {
+                overlay.removeFromSuperview()
+                return
+            }
+            UIView.animate(withDuration: 0.16) {
+                veil.alpha = 0
+                overlay.alpha = 0
+            } completion: { _ in
+                overlay.removeFromSuperview()
+            }
+        }
+    }
+
+    private func capturePreviewImage() -> UIImage? {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = window?.screen.scale ?? UIScreen.main.scale
+        format.opaque = false
+        let renderer = UIGraphicsImageRenderer(bounds: bounds, format: format)
+        return renderer.image { ctx in
+            if !drawHierarchy(in: bounds, afterScreenUpdates: true) {
+                layer.render(in: ctx.cgContext)
+            }
+        }
+    }
+
+    private func visibleLineRects(in tv: UITextView) -> [CGRect] {
+        guard let range = tv.textRange(from: tv.beginningOfDocument, to: tv.endOfDocument) else { return [] }
+        let raw = tv.selectionRects(for: range).map(\.rect)
+            .filter { !$0.isEmpty && $0.width > 1.5 && $0.height > 2 }
+            .sorted { $0.minY < $1.minY }
+        var merged: [CGRect] = []
+        for rect in raw {
+            if let lastIdx = merged.indices.last {
+                let last = merged[lastIdx]
+                let overlap = min(last.maxY, rect.maxY) - max(last.minY, rect.minY)
+                if overlap > min(last.height, rect.height) * 0.45 {
+                    merged[lastIdx] = last.union(rect)
+                    continue
+                }
+            }
+            merged.append(rect)
+        }
+        return merged.map { $0.insetBy(dx: -2, dy: -1.5).intersection(bounds) }
+            .filter { !$0.isEmpty }
+    }
+
+    private struct PreviewTile {
+        let image: UIImage
+        let frame: CGRect
+        let lineIndex: Int
+    }
+
+    private func sliceTiles(image: UIImage?, lines: [CGRect], backdropColor: UIColor) -> [PreviewTile] {
+        guard let cg = image?.cgImage, let scale = image?.scale else { return [] }
+        var bgR: CGFloat = 0, bgG: CGFloat = 0, bgB: CGFloat = 0, bgA: CGFloat = 1
+        backdropColor.resolvedColor(with: traitCollection).getRed(&bgR, green: &bgG, blue: &bgB, alpha: &bgA)
+        let bgRGB = (UInt8(clamping: Int(bgR * 255)), UInt8(clamping: Int(bgG * 255)), UInt8(clamping: Int(bgB * 255)))
+
+        var out: [PreviewTile] = []
+        for (lineIdx, rect) in lines.enumerated() {
+            let pxRect = CGRect(
+                x: max(0, floor(rect.minX * scale)),
+                y: max(0, floor(rect.minY * scale)),
+                width: min(CGFloat(cg.width) - max(0, floor(rect.minX * scale)), ceil(rect.width * scale)),
+                height: min(CGFloat(cg.height) - max(0, floor(rect.minY * scale)), ceil(rect.height * scale))
+            )
+            guard pxRect.width >= 2, pxRect.height >= 2, let lineCG = cg.cropping(to: pxRect) else { continue }
+
+            let w = lineCG.width
+            let h = lineCG.height
+            var buffer = [UInt8](repeating: 0, count: w * h * 4)
+            let cs = CGColorSpaceCreateDeviceRGB()
+            let bi = CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
+            guard let ctx = CGContext(data: &buffer, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4, space: cs, bitmapInfo: bi) else {
+                continue
+            }
+            ctx.draw(lineCG, in: CGRect(x: 0, y: 0, width: w, height: h))
+            var hasInk = [Bool](repeating: false, count: w)
+            for y in 0 ..< h {
+                for x in 0 ..< w {
+                    let i = (y * w + x) * 4
+                    let r = Int(buffer[i]), g = Int(buffer[i + 1]), b = Int(buffer[i + 2]), a = Int(buffer[i + 3])
+                    guard a > 0 else { continue }
+                    let diff = max(abs(r - Int(bgRGB.0)), max(abs(g - Int(bgRGB.1)), abs(b - Int(bgRGB.2))))
+                    if diff <= 10 {
+                        buffer[i] = 0; buffer[i + 1] = 0; buffer[i + 2] = 0; buffer[i + 3] = 0
+                    } else {
+                        hasInk[x] = true
+                        if diff < 42 {
+                            let na = max(0, min(255, (diff - 10) * 255 / 32))
+                            buffer[i] = UInt8((r * na) / 255)
+                            buffer[i + 1] = UInt8((g * na) / 255)
+                            buffer[i + 2] = UInt8((b * na) / 255)
+                            buffer[i + 3] = UInt8(na)
+                        }
+                    }
+                }
+            }
+            guard let keyedCG = ctx.makeImage() else { continue }
+            var splits: [CGFloat] = []
+            let stepPx = max(16, Int(34 * scale))
+            let radPx = max(8, Int(12 * scale))
+            var cursor = stepPx
+            while cursor < w - Int(12 * scale) {
+                var chosen = cursor
+                var bestDist = Int.max
+                for x in max(10, cursor - radPx) ... min(w - 10, cursor + radPx) where !hasInk[x] {
+                    if abs(x - cursor) < bestDist { bestDist = abs(x - cursor); chosen = x }
+                }
+                let pt = CGFloat(chosen) / scale
+                if (splits.last.map { pt - $0 >= 10 } ?? (pt >= 10)), rect.width - pt >= 10 {
+                    splits.append(pt)
+                }
+                cursor = chosen + stepPx
+            }
+            let boundsPt = [CGFloat(0)] + splits + [rect.width]
+            for i in 0 ..< (boundsPt.count - 1) {
+                let sPt = boundsPt[i], ePt = boundsPt[i + 1], cw = ePt - sPt
+                guard cw >= 2 else { continue }
+                let pxX = max(0, Int(floor(sPt * scale)))
+                let pxW = min(keyedCG.width - pxX, Int(ceil(cw * scale)))
+                guard pxW >= 2, let chunkCG = keyedCG.cropping(to: CGRect(x: pxX, y: 0, width: pxW, height: keyedCG.height)) else { continue }
+                out.append(PreviewTile(
+                    image: UIImage(cgImage: chunkCG, scale: scale, orientation: .up),
+                    frame: CGRect(x: rect.minX + sPt, y: rect.minY, width: cw, height: rect.height),
+                    lineIndex: lineIdx
+                ))
+            }
+        }
+        return out
+    }
+
+    private func makeDotCGImage() -> CGImage? {
+        let size = CGSize(width: 8, height: 8)
+        return UIGraphicsImageRenderer(size: size).image { ctx in
+            UIColor.white.setFill()
+            ctx.cgContext.fillEllipse(in: CGRect(origin: .zero, size: size))
+        }.cgImage
     }
 }

@@ -68,7 +68,11 @@ extension WKContentView: TextProxyObject {
 
     func _selectionRectsInView() -> [CGRect] {
         guard let selectedTextRange else { return [] }
-        var ans = selectionRects(for: selectedTextRange).map(\.rect)
+        return _selectionRectsInView(for: selectedTextRange)
+    }
+
+    func _selectionRectsInView(for range: UITextRange) -> [CGRect] {
+        var ans = selectionRects(for: range).map(\.rect)
         if let compositingView = findCompositingView(fromView: self) {
             ans = ans.map { compositingView.convert($0, to: self) }
         }

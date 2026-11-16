@@ -54,6 +54,15 @@ class TextProxy: ObservableObject {
         replacedRange = selectedRange
     }
 
+    func selectionRectsInView(for range: UITextRange) -> [CGRect] {
+        delegatingView._selectionRectsInView(for: range)
+    }
+
+    var replacedSelectionRectsInView: [CGRect] {
+        let rects = delegatingView._selectionRectsInView(for: replacedRange)
+        return rects.isEmpty ? selectionRectsInView : rects
+    }
+
     func replaceText(with text: String, atRange range: UITextRange, attribute: TextAttribute) {
         if let range = delegatingView._replaceText(with: text, atRange: range, attribute: attribute) {
             replacedRange = range
@@ -121,6 +130,7 @@ protocol TextProxyObject: UIView, UITextInput {
     func _selectedTextAttribute() -> TextAttribute
     func _selectedRange() -> UITextRange
     func _selectionRectsInView() -> [CGRect]
+    func _selectionRectsInView(for range: UITextRange) -> [CGRect]
     func _replaceText(with text: String, atRange range: UITextRange, attribute: TextAttribute) -> UITextRange?
     func _selectAll()
 }

@@ -261,13 +261,23 @@ extension WritingToolsView {
     func accept(forceAppend: Bool? = nil) {
         let shouldAppend = forceAppend ?? (currentTask.insertBehavior == .append)
         let finalText = output
-        let oldText = context.textProxy.selectedText
-        let selectionRects = context.textProxy.selectionRectsInView
-        let fallbackRect = context.anchorView.frame
-        let attrs = context.textProxy.selectedTextAttribute
         let targetView = context.targetView
         let animStyle = cfg.settings.textReplacementAnimation
         let accentHex = cfg.settings.accentColorHex
+        let themeUIColors = Presenter.themeUIColors()
+        let oldRects = context.textProxy.selectionRectsInView
+
+        let prepared = animStyle != "none"
+            ? TextReplacementAnimator.prepareSnapshot(
+                targetView: targetView,
+                oldRectsInTarget: oldRects,
+                decorationViews: context.decorationViews
+            )
+            : nil
+
+        if animStyle != "none" {
+            context.decorationViews.forEach { $0.alpha = 0 }
+        }
 
         dismiss()
 
@@ -277,19 +287,29 @@ extension WritingToolsView {
             context.textProxy.replaceText(with: finalText)
         }
 
-        if animStyle != "none" {
-            let displayedNewText = shouldAppend
-                ? (oldText.isEmpty ? finalText : "\(oldText)\n\n\(finalText)")
-                : finalText
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+        if let prepared, animStyle != "none" {
+            let isWebKit = !(targetView is UITextView) && !(targetView is UITextField)
+            if isWebKit {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
+                    let newRects = self.context.textProxy.replacedSelectionRectsInView
+                    TextReplacementAnimator.animate(
+                        style: animStyle,
+                        targetView: targetView,
+                        prepared: prepared,
+                        newRectsInTarget: newRects,
+                        themeColors: themeUIColors,
+                        accentHex: accentHex
+                    )
+                }
+            } else {
+                targetView.layoutIfNeeded()
+                let newRects = context.textProxy.replacedSelectionRectsInView
                 TextReplacementAnimator.animate(
                     style: animStyle,
                     targetView: targetView,
-                    selectionRectsInView: selectionRects,
-                    fallbackRectInTarget: fallbackRect,
-                    oldText: oldText,
-                    newText: displayedNewText,
-                    attributes: attrs,
+                    prepared: prepared,
+                    newRectsInTarget: newRects,
+                    themeColors: themeUIColors,
                     accentHex: accentHex
                 )
             }

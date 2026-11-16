@@ -146,15 +146,72 @@ extension Presenter {
     }
 
     func magicColorBackground() -> AnimatedMulticolorGradientView {
-        let colors: [ColorVector] = ColorfulPreset
-            .appleIntelligence.colors
-            .map { ColorVector.init($0) }
+        let colors: [ColorVector] = Self.themeColorVectors()
         let magicColorView = AnimatedMulticolorGradientView()
-        magicColorView.speed = 1.0
+        magicColorView.speed = Configurator.shared.settings.animatedBackground ? 1.0 : 0.0
         magicColorView.transitionSpeed = 5.0
         magicColorView.clipsToBounds = true
         magicColorView.setColors(colors, animated: false)
         return magicColorView
+    }
+
+    static func themeUIColors() -> [UIColor] {
+        let s = Configurator.shared.settings
+        let presetHexMap: [String: [String]] = [
+            "midnight_ocean": ["#0EA5E9", "#2563EB", "#1E1B4B", "#0F172A"],
+            "aurora_borealis": ["#10B981", "#06B6D4", "#6366F1", "#0B1120"],
+            "sunset_amber": ["#F97316", "#EF4444", "#DB2777", "#1F1024"],
+            "cyberpunk_neon": ["#06B6D4", "#D946EF", "#7C3AED", "#09091A"],
+            "obsidian_minimal": ["#475569", "#334155", "#1E293B", "#09090B"],
+            "apple_intelligence": ["#F86594", "#A855F7", "#3B82F6", "#181029"],
+        ]
+
+        if s.backgroundMode == "solid" {
+            let accent = uiColor(fromHex: s.accentColorHex) ?? UIColor.systemBlue
+            let solid = uiColor(fromHex: s.solidBackgroundHex) ?? accent
+            return [accent, solid, accent.withAlphaComponent(0.75), solid]
+        }
+
+        if s.menuThemePreset == "custom_colors" {
+            let custom = s.customThemeColorsHex.compactMap { uiColor(fromHex: $0) }
+            if custom.count >= 2 { return custom }
+        }
+
+        if s.backgroundMode == "image" {
+            let accent = uiColor(fromHex: s.accentColorHex) ?? UIColor.systemBlue
+            let base = (presetHexMap[s.menuThemePreset] ?? presetHexMap["midnight_ocean"]!)
+                .compactMap { uiColor(fromHex: $0) }
+            if !base.isEmpty {
+                return [accent] + Array(base.prefix(3))
+            }
+        }
+
+        let hexes = presetHexMap[s.menuThemePreset] ?? presetHexMap["midnight_ocean"]!
+        let resolved = hexes.compactMap { uiColor(fromHex: $0) }
+        if !resolved.isEmpty { return resolved }
+        return ColorfulPreset.appleIntelligence.colors
+    }
+
+    static func themeColorVectors() -> [ColorVector] {
+        themeUIColors().map { ColorVector($0) }
+    }
+
+    private static func uiColor(fromHex hexString: String) -> UIColor? {
+        var hex = hexString.trimmingCharacters(in: .whitespacesAndNewlines)
+        if hex.hasPrefix("#") { hex.removeFirst() }
+        guard hex.count == 6 || hex.count == 8, let value = UInt64(hex, radix: 16) else { return nil }
+        if hex.count == 6 {
+            let r = CGFloat((value >> 16) & 0xFF) / 255.0
+            let g = CGFloat((value >> 8) & 0xFF) / 255.0
+            let b = CGFloat(value & 0xFF) / 255.0
+            return UIColor(red: r, green: g, blue: b, alpha: 1.0)
+        } else {
+            let r = CGFloat((value >> 24) & 0xFF) / 255.0
+            let g = CGFloat((value >> 16) & 0xFF) / 255.0
+            let b = CGFloat((value >> 8) & 0xFF) / 255.0
+            let a = CGFloat(value & 0xFF) / 255.0
+            return UIColor(red: r, green: g, blue: b, alpha: a)
+        }
     }
 
     private func prepareRects(_ rects: [CGRect], radius: CGFloat) -> [CGRect] {
