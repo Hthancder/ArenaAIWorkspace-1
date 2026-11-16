@@ -232,3 +232,14 @@ Không có quyền mới, không có hoàn tác, không thêm số đo nào rờ
 Câu chữ "Tabspace vẫn chưa xin quyền đọc tiến trình" trong khối và trong hộp **Giới hạn và rủi ro** đã thay bằng mô tả đúng: có nút xin trong khối, và Chrome kênh ổn định không cấp quyền đó.
 
 Chưa làm: `processes` không phải quyền mặc định (chủ đích) và không xin lúc cài; thông báo kết quả lượt Tự động qua kênh hệ điều hành vẫn chưa có.
+
+### Lượt Tự động có kết quả được ghi vào kênh riêng của ứng dụng (0.127)
+
+15.4.3 hứa "báo theo kênh đã bật" cho mức Tự động. Từ bản này lời hứa đó đi qua đúng hai kênh mà ứng dụng đã có, không mở kênh mới, không thêm công tắc:
+
+- **nhật ký sự kiện** — `AutoDiscard.resultEvent(report)` sinh `{id:'discard:<id lượt>',kind:'result',at,status}` với `status` chỉ nằm trong bảng từ vựng mà `NotificationHistory` nhận (`complete` / `blocked` / `uncertain`), rồi `background.js` đưa vào `NotificationHistory.record`. Việc dịch từ `report.status` sang bảng đó nằm một chỗ duy nhất: `complete` → complete, `partial`/`uncertain`/`running` → uncertain, `journalFailed` → blocked, `empty` → **không có sự kiện** (một lượt không nghỉ tab nào không phải một kết quả để báo);
+- **bản tin ngay trên trang** — `deliverPageNotice('results')`, tức là dùng luôn bộ lọc origin, giờ yên lặng, toàn màn hình, cooldown 60 giây và nút tạm dừng mà kết quả tự động đóng vẫn dùng.
+
+Những gì bản này không làm, và tài liệu nói đúng như vậy: **không** phát thông báo hệ điều hành cho lượt tự nghỉ (`notifications.create` vẫn chỉ có một chỗ, phục vụ lời nhắc), **không** có hàng đợi riêng kiểu `autoCloseNoticePending`, và **không** tự thử lại khi một kết quả còn mơ hồ. Hộp **Giới hạn và rủi ro** nêu thẳng cả ba.
+
+Hai chi tiết nhỏ nhưng là thứ khiến nó đáng tin: id sự kiện suy ra từ chính lượt đo (`discard:` + id lượt) nên một worker gửi lại cũng không nhân đôi nhật ký; và nếu `NotificationHistory.record` ném lỗi, worker báo đúng một lần `console.error`, bản tin trên trang vẫn đi, lịch rehearsal vẫn chạy.

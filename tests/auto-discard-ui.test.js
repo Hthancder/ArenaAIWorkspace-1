@@ -137,7 +137,7 @@ assert.doesNotMatch(markup,/data-action="auto-discard-save"/);
  // The limits explainer is readable from the block and changes nothing when it is opened and closed.
  const dbBefore=JSON.stringify(db),loadsBefore=loads;
  ctx.autoDiscardLimits();
- for(const phrase of [/tiến trình renderer/,/không chỉ ra được tab nào nặng hơn/,/không tạo bản lưu để khôi phục/,/luôn ở trạng thái tắt khi nhập/,/giờ yên lặng và toàn màn hình được đọc lại <b>ngay trước khi nghỉ tab<\/b>/,/không cho biết tình trạng cửa sổ/,/không<\/b> mở đường cho lượt tự nghỉ/])assert.match(dialog.markup,phrase);
+ for(const phrase of [/tiến trình renderer/,/không chỉ ra được tab nào nặng hơn/,/không tạo bản lưu để khôi phục/,/luôn ở trạng thái tắt khi nhập/,/giờ yên lặng và toàn màn hình được đọc lại <b>ngay trước khi nghỉ tab<\/b>/,/không cho biết tình trạng cửa sổ/,/không<\/b> mở đường cho lượt tự nghỉ/,/nhật ký sự kiện \(nếu bạn bật nhật ký\)/,/không<\/b> phát thông báo hệ điều hành cho lượt tự nghỉ/])assert.match(dialog.markup,phrase);
  assert.doesNotMatch(dialog.markup,/bật lại giờ yên lặng trong khối|đặt giờ yên lặng ở đây/);
  assert.doesNotMatch(dialog.markup,/example\.com|https?:/);
  await dialog.handler(new Map(),{close(){closed++}});

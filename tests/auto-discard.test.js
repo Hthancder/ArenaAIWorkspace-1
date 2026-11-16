@@ -219,5 +219,11 @@ assert.deepEqual([A.idleLabel(59),A.idleLabel(90),A.idleLabel(48*60),A.idleLabel
  assert.equal(A.attention(ask,{...card,dismissedAt:card.at},now).dismissed,true);
  assert.equal(A.attention(ask,{...card,dismissedAt:card.at-1},now).dismissed,false);
  assert.throws(()=>A.attention(ask,card,'x'),/Không xác định được thời gian/);
- console.log('Resource thresholds, streaks, guards and honest unmeasurable state: OK');
+ // 15.4: one translation from a run report to the vocabulary the existing channels speak.
+assert.deepEqual(['complete','partial','uncertain','running'].map(name=>A.notifyStatus({status:name})),['complete','uncertain','uncertain','uncertain'],'a half-confirmed run is never booked as a success');
+assert.deepEqual([A.notifyStatus({status:'empty'}),A.notifyStatus({status:'complete',journalFailed:true}),A.notifyStatus(null),A.notifyStatus('nope')],[null,'blocked',null,null],'nothing to do is not a result, and a report that could not be written is a blocked one');
+assert.deepEqual(A.resultEvent({id:1234,at:2345,status:'partial',counts:{unconfirmed:2}}),{id:'discard:1234',kind:'result',at:2345,status:'uncertain'},'the event id comes from the run, so a repeated delivery cannot grow the journal');
+assert.deepEqual([A.resultEvent({id:1,at:2,status:'empty'}),A.resultEvent({status:'complete'}),A.resultEvent({id:0,at:1,status:'complete'}),A.resultEvent(undefined)],[null,null,null,null],'no identity or no result means no event at all');
+assert.equal(A.noticePrefix,'discard:','the prefix is a fact of this module, and the page pins it too');
+console.log('Resource thresholds, streaks, guards and honest unmeasurable state: OK');
 })().catch(e=>{console.error(e);process.exitCode=1});

@@ -353,6 +353,23 @@ async function run(api,now,deps={},options={}){
   try{if(await deps.reminders.deferFullscreen(api,true))return holdFullscreen}catch{return holdFullscreen}
   return '';
  }
+ // 15.4: the channels that already exist speak a small fixed vocabulary (complete / blocked / uncertain),
+ // and a run that found nothing to do is not a result at all. The translation lives here, once, so the
+ // journal and the page notice cannot describe one run three different ways.
+ const noticePrefix='discard:';
+ function notifyStatus(report){
+  if(!report||typeof report!=='object')return null;
+  if(report.journalFailed===true)return 'blocked';
+  if(report.status==='complete')return 'complete';
+  if(report.status==='running'||report.status==='partial'||report.status==='uncertain')return 'uncertain';
+  return null;
+ }
+ // The id is derived from the run itself, so a worker that repeats a delivery cannot grow the journal.
+ function resultEvent(report){
+  const status=notifyStatus(report),at=Number.isFinite(report?.at)?report.at:0,id=Number.isFinite(report?.id)?report.id:0;
+  if(!status||!at||!id)return null;
+  return {id:noticePrefix+id,kind:'result',at,status};
+ }
 async function apply(api,result,now,deps={}){
   if(!Number.isFinite(now)||now<=0)throw Error('Không xác định được thời gian.');
   if(!result||result.status!=='measured'||!result.action)return {status:'idle',reason:'Không có lượt đo nào được phép tự nghỉ tab; chưa tab nào bị nghỉ.'};
@@ -430,6 +447,6 @@ async function apply(api,result,now,deps={}){
   const stale=Number.isFinite(context.measuredAt)&&context.measuredAt>0&&Number.isFinite(context.now)&&context.now-context.measuredAt>2*c.everyMinutes*60000;
   return {kind:c.mode,text:`${modeLabel(c.mode)} · xét ${c.resources.map(name=>meta[name].short).join(', ')} · tối đa ${c.maxPerRun} tab mỗi lượt${count}${age}${stale?' · dữ liệu đo đã cũ, hãy đo lại':''}${context.missed===true?' · có chu kỳ đo đã bỏ lỡ, không chạy bù':''}${status}${acted}`};
  }
- return {prefix,settingKey,runKey,ackKey,actionKey,keys,meta,modes,combines,maxSeries,maxTrail,uncertainWaitMinutes,defaults,notMeasurable,modeLabel,integer,validate,capability,assertUsable,key,record,read,readRecords,recall,forget,remember,measure,prune,run,apply,actionLabel,ackValid,holdReason,resource,row,plan,line,attention,suggestions,health,dismiss,describe,valueLabel,ageLabel,idleLabel};
+ return {prefix,settingKey,runKey,ackKey,actionKey,keys,meta,modes,combines,maxSeries,maxTrail,uncertainWaitMinutes,defaults,notMeasurable,modeLabel,integer,validate,capability,assertUsable,key,record,read,readRecords,recall,forget,remember,measure,prune,run,apply,actionLabel,ackValid,holdReason,notifyStatus,resultEvent,noticePrefix,resource,row,plan,line,attention,suggestions,health,dismiss,describe,valueLabel,ageLabel,idleLabel};
 })();
 if(typeof module!=='undefined')module.exports=AutoDiscard;

@@ -1,9 +1,9 @@
-const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),OpenGrace=require('../extension/open-grace.js'),Protection=require('../extension/protection.js'),A=require('../extension/auto-discard.js');let onAlarm,onUpdated,onRemoved,runCalls=[],applyCalls=[],forgetCalls=[],order=[],runReturns=null,applyFails=false,failNext=false,listenerAdds=0,alarmCreates=0,timers=0;
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),OpenGrace=require('../extension/open-grace.js'),Protection=require('../extension/protection.js'),A=require('../extension/auto-discard.js');let onAlarm,onUpdated,onRemoved,runCalls=[],applyCalls=[],forgetCalls=[],order=[],runReturns=null,applyFails=false,failNext=false,listenerAdds=0,alarmCreates=0,timers=0,journal=[],pageDeliveries=[],journalFails=false,applyReturns=null;
 const add=f=>async value=>{listenerAdds++;f(value)};
 const chrome={runtime:{onInstalled:{addListener(){}},onStartup:{addListener(){}},getURL:()=>'chrome-extension://x/'},alarms:{get:async()=>({name:'tick'}),create:async()=>{alarmCreates++},onAlarm:{addListener:add(f=>onAlarm=f)}},commands:{onCommand:{addListener(){}}},permissions:{onAdded:{addListener(){}}},tabs:{query:async()=>[],onCreated:{addListener:()=>{}},onRemoved:{addListener:add(f=>onRemoved=f)},onUpdated:{addListener:add(f=>onUpdated=f)}},storage:{local:{get:async()=>({}),set:async()=>{}},session:{get:async()=>({}),set:async()=>{},remove:async()=>{}}}};
 const DiscardTools={request:async()=>({status:'discarded'})};
-const AutoDiscard={run:async(api,now,deps)=>{order.push(failNext?'run-fail':'run');runCalls.push({api,now,deps});if(failNext)throw Error('storage unavailable');return runReturns},apply:async(api,result,now,deps)=>{applyCalls.push({api,result,now,deps});if(applyFails)throw Error('tabs.discard unavailable')},forget:async(api,ids)=>{forgetCalls.push(ids);return {ok:true,removed:ids.length}}};
-const ctx={chrome,importScripts(...files){order.push(...files)},console,Date,DiscardTools,setTimeout(){timers++},setInterval(){timers++},OpenGrace,Protection,ReminderTools:{alarmName:'tick',tick:()=>({changed:false,state:{}}),isQuiet:()=>true,deferFullscreen:async()=>true},AutoSnapshot:{tick:async()=>{}},MutationLock:{run:async work=>work()},AutomationPreview:{},PresetTools:{},AutoDiscard,ScheduledRehearsal:{tick:async()=>{order.push('rehearsal')}}};
+const AutoDiscard={run:async(api,now,deps)=>{order.push(failNext?'run-fail':'run');runCalls.push({api,now,deps});if(failNext)throw Error('storage unavailable');return runReturns},apply:async(api,result,now,deps)=>{applyCalls.push({api,result,now,deps});if(applyFails)throw Error('tabs.discard unavailable');return applyReturns},resultEvent:A.resultEvent,forget:async(api,ids)=>{forgetCalls.push(ids);return {ok:true,removed:ids.length}}};
+const ctx={chrome,importScripts(...files){order.push(...files)},console,Date,DiscardTools,setTimeout(){timers++},setInterval(){timers++},OpenGrace,Protection,ReminderTools:{alarmName:'tick',tick:()=>({changed:false,state:{}}),isQuiet:()=>true,deferFullscreen:async()=>true},AutoSnapshot:{tick:async()=>{}},MutationLock:{run:async work=>work()},NotificationHistory:{record:async(api,events)=>{if(journalFails)throw Error('journal full');journal.push(events)},pageEvent:()=>null},PageNotice:{deliver:async(api,kind)=>{pageDeliveries.push(kind);return 'sent'}},AutomationPreview:{},PresetTools:{},AutoDiscard,ScheduledRehearsal:{tick:async()=>{order.push('rehearsal')}}};
 vm.runInNewContext(fs.readFileSync('extension/background.js','utf8'),ctx);
 const flush=async()=>{for(let i=0;i<8;i++)await new Promise(r=>setImmediate(r))};
 const listenersAfterLoad=listenerAdds;
@@ -54,6 +54,23 @@ function harness(everyMinutes){
  console.error=(...a)=>errors.push(a[0]?.message||String(a[0]));
  onAlarm({name:'tick',scheduledTime:Date.now()});await flush();console.error=realError;applyFails=false;
  assert.deepEqual([applyCalls.length>applied,errors.length-errorCount,errors.at(-1),order.slice(-2)],[true,1,'Automatic discard run failed',['run','rehearsal']],'an action failure is admitted once and cannot starve the rest of the tick');
+ // 0.127: a finished run is booked in the channels the app already has, and a run with nothing to say is not.
+ applyReturns={status:'applied',report:{id:1234,at:1700000000000,status:'partial',counts:{discarded:1,unconfirmed:1}}};
+ onAlarm({name:'tick',scheduledTime:Date.now()});await flush();
+ const event=journal[0]?.[0]||{};
+ assert.deepEqual([journal.length,journal[0]?.length,event.id,event.kind,event.at,event.status],[1,1,'discard:1234','result',1700000000000,'uncertain'],'the journal gets the translated event, once, in the module\'s own words');
+ assert.deepEqual(pageDeliveries,['results'],'and the on-page results channel is nudged');
+ applyReturns={status:'applied',report:{id:1235,at:1700000000000,status:'empty',counts:{discarded:0}}};
+ journal=[];pageDeliveries=[];
+ onAlarm({name:'tick',scheduledTime:Date.now()});await flush();
+ assert.deepEqual([journal.length,pageDeliveries.length],[0,0],'a cycle that rested nothing has no result to announce');
+ applyReturns={status:'applied',report:{id:1236,at:1700000000000,status:'complete',counts:{discarded:2}}};
+ journalFails=true;journal=[];pageDeliveries=[];
+ const reportError=console.error,reported=[];console.error=(...a)=>reported.push(a[0]?.message||String(a[0]));
+ onAlarm({name:'tick',scheduledTime:Date.now()});await flush();console.error=reportError;journalFails=false;
+ assert.deepEqual([journal.length,pageDeliveries.length,reported.length],[0,1,1],'a broken journal is admitted once and never swallows the page notice');
+ assert.deepEqual(order.slice(-2),['run','rehearsal'],'and reporting a run cannot starve the rest of the tick');
+ applyReturns=null;
  // Only a real navigation drops the sample; other updates keep the streak.
  onUpdated(3,{status:'complete'});onUpdated(3,{title:'New title'});await flush();
  assert.deepEqual(forgetCalls.map(ids=>[...ids]),[]);
