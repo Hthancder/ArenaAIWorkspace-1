@@ -81,30 +81,8 @@ jobs:
           echo "DEB=$DEB" >> "$GITHUB_ENV"
           echo "--- cấu trúc gói ---"
           dpkg-deb -c "$DEB"
-          echo "--- control ---"
-          dpkg-deb -f "$DEB"
-          test "$(dpkg-deb -f "$DEB" Architecture)" = "${PACKAGE_ARCH}" \
-            || { echo "Sai Architecture, cần ${PACKAGE_ARCH}"; exit 1; }
-
-          # Bung gói, xác nhận binary là Mach-O arm64 (KHÔNG arm64e), không rootful
-          rm -rf /tmp/verify && mkdir -p /tmp/verify && dpkg-deb -x "$DEB" /tmp/verify
-          DYLIB=/tmp/verify/Library/MobileSubstrate/DynamicLibraries/SiriBridge.dylib
-          test -f "$DYLIB" || { echo "Thiếu SiriBridge.dylib"; exit 1; }
-          python3 - "$DYLIB" <<'PY'
-          import sys, struct
-          data = open(sys.argv[1], 'rb').read()
-          magic = struct.unpack('<I', data[:4])[0]
-          cpu, sub = struct.unpack('<II', data[4:12])
-          assert magic == 0xfeedfacf, f'không phải Mach-O 64: {magic:#x}'
-          assert cpu == 0x0100000c, f'CPU type sai (cần arm64): {cpu:#x}'
-          print(f'OK Mach-O arm64, cpusubtype={sub:#x} (0x0 = ALL → không phải arm64e)')
-          # Không được chứa layout rootful
-          import os
-          rootful = [p for p in ('/tmp/verify/usr/lib',) if os.path.exists(p)]
-          assert not rootful, 'phát hiện layout rootful'
-          PY
+          python3 tools/verify_deb.py "$DEB" "${PACKAGE_ARCH}"
           echo "SIZE=$(stat -c%s "$DEB")" >> "$GITHUB_ENV"
-          ls -l "$DEB"
 
       - name: SHA256 + job summary
         run: |
