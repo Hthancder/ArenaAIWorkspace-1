@@ -32,6 +32,23 @@ public struct WritingPresetItem: Codable, Identifiable, Equatable, Hashable {
         case append
     }
 
+    public enum Availability: String, Codable, CaseIterable, Hashable {
+        case both
+        case editableOnly
+        case readOnlyOnly
+
+        public func matches(isReadOnly: Bool, showEditableInReadOnly: Bool) -> Bool {
+            switch self {
+            case .both:
+                return true
+            case .editableOnly:
+                return !isReadOnly || showEditableInReadOnly
+            case .readOnlyOnly:
+                return isReadOnly
+            }
+        }
+    }
+
     public let id: UUID
     public var defaultKey: String?
     public var title: String
@@ -45,6 +62,7 @@ public struct WritingPresetItem: Codable, Identifiable, Equatable, Hashable {
     public var isEnabled: Bool
     public var endpointID: UUID?
     public var modelOverride: String
+    public var availability: Availability
 
     public init(
         id: UUID = UUID(),
@@ -59,7 +77,8 @@ public struct WritingPresetItem: Codable, Identifiable, Equatable, Hashable {
         insertBehavior: InsertBehavior = .replace,
         isEnabled: Bool = true,
         endpointID: UUID? = nil,
-        modelOverride: String = ""
+        modelOverride: String = "",
+        availability: Availability = .both
     ) {
         self.id = id
         self.defaultKey = defaultKey
@@ -74,10 +93,11 @@ public struct WritingPresetItem: Codable, Identifiable, Equatable, Hashable {
         self.isEnabled = isEnabled
         self.endpointID = endpointID
         self.modelOverride = modelOverride
+        self.availability = availability
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, defaultKey, title, icon, systemPrompt, temperature, topP, includeExamples, outputLanguage, insertBehavior, isEnabled, endpointID, modelOverride
+        case id, defaultKey, title, icon, systemPrompt, temperature, topP, includeExamples, outputLanguage, insertBehavior, isEnabled, endpointID, modelOverride, availability
     }
 
     public init(from decoder: Decoder) throws {
@@ -95,6 +115,16 @@ public struct WritingPresetItem: Codable, Identifiable, Equatable, Hashable {
         isEnabled = try c.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
         endpointID = try c.decodeIfPresent(UUID.self, forKey: .endpointID)
         modelOverride = try c.decodeIfPresent(String.self, forKey: .modelOverride) ?? ""
+        if let decodedAvail = try c.decodeIfPresent(Availability.self, forKey: .availability) {
+            availability = decodedAvail
+        } else {
+            switch defaultKey {
+            case "proofread", "rewrite", "friendly", "professional", "concise":
+                availability = .editableOnly
+            default:
+                availability = .both
+            }
+        }
     }
 
     public var shortOverrideModelName: String {
@@ -180,7 +210,78 @@ public struct WritingPresetItem: Codable, Identifiable, Equatable, Hashable {
             includeExamples: true,
             outputLanguage: "",
             insertBehavior: .replace,
-            isEnabled: true
+            isEnabled: true,
+            availability: .editableOnly
+        ),
+        WritingPresetItem(
+            id: UUID(uuidString: "11111111-1111-4111-8111-111111111106")!,
+            defaultKey: "translate",
+            title: "Translate",
+            icon: "globe",
+            systemPrompt: "Translate the text accurately and naturally. If an output language is configured, strictly output in that language; otherwise translate into natural Vietnamese if the source is in another language, or into natural English if the source is already in Vietnamese. Preserve meaning, tone, and structure.",
+            temperature: 0.2,
+            topP: nil,
+            includeExamples: false,
+            outputLanguage: "",
+            insertBehavior: .replace,
+            isEnabled: true,
+            availability: .both
+        ),
+        WritingPresetItem(
+            id: UUID(uuidString: "11111111-1111-4111-8111-111111111107")!,
+            defaultKey: "summary",
+            title: "Summary",
+            icon: "text.alignleft",
+            systemPrompt: "Summarize the provided text clearly and accurately, capturing the main ideas and essential details without adding commentary.",
+            temperature: 0.25,
+            topP: nil,
+            includeExamples: false,
+            outputLanguage: "",
+            insertBehavior: .replace,
+            isEnabled: true,
+            availability: .both
+        ),
+        WritingPresetItem(
+            id: UUID(uuidString: "11111111-1111-4111-8111-111111111108")!,
+            defaultKey: "keyPoints",
+            title: "Key Points",
+            icon: "list.bullet",
+            systemPrompt: "Extract the key points from the provided text as clear, concise bullet points in the same language.",
+            temperature: 0.25,
+            topP: nil,
+            includeExamples: false,
+            outputLanguage: "",
+            insertBehavior: .replace,
+            isEnabled: true,
+            availability: .both
+        ),
+        WritingPresetItem(
+            id: UUID(uuidString: "11111111-1111-4111-8111-111111111109")!,
+            defaultKey: "explain",
+            title: "Explain",
+            icon: "lightbulb",
+            systemPrompt: "Explain the provided text clearly in plain, easy-to-understand language. Clarify unfamiliar terms, context, or implications concisely in the reader's language (or Vietnamese/English as appropriate).",
+            temperature: 0.3,
+            topP: nil,
+            includeExamples: false,
+            outputLanguage: "",
+            insertBehavior: .replace,
+            isEnabled: true,
+            availability: .readOnlyOnly
+        ),
+        WritingPresetItem(
+            id: UUID(uuidString: "11111111-1111-4111-8111-111111111110")!,
+            defaultKey: "draftReply",
+            title: "Draft Reply",
+            icon: "arrowshape.turn.up.left",
+            systemPrompt: "Draft a clear, natural, ready-to-send reply to the provided message or email in the same language and an appropriate polite tone.",
+            temperature: 0.45,
+            topP: nil,
+            includeExamples: false,
+            outputLanguage: "",
+            insertBehavior: .replace,
+            isEnabled: true,
+            availability: .readOnlyOnly
         ),
     ]
 }
@@ -260,10 +361,12 @@ public enum PromptComposer {
         case let .customPrompt(instruction):
             let systemPrompt =
                 """
-                You are a helpful AI writing assistant inside an iOS text editor.
-                Follow the user's instruction accurately using any provided text or clipboard context.
-                If the user is asking to write a reply to a clipboard message, draft a natural, ready-to-send reply.
-                Output only the resulting text without meta commentary, preambles, or markdown fences unless requested.\(extraSuffix)
+                You are a helpful AI writing and reading assistant inside iOS.
+                Follow the user's instruction accurately using the provided text and any clipboard context.
+                - If the user asks to rewrite, edit, or translate, output only the resulting text.
+                - If the user asks a question, explanation, summary, or analysis of the text, answer clearly and directly in the requested or matching language.
+                - If the user asks to write a reply to a message, draft a natural, ready-to-send reply.
+                Do not add meta preambles or markdown fences unless requested.\(extraSuffix)
                 """
             let userContent =
                 """

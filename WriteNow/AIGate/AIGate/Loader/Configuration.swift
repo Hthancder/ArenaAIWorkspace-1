@@ -45,6 +45,9 @@ class Configuration: NSObject, ObservableObject {
     @PublishedPersist(key: "PresetsInitialized", defaultValue: false)
     private var presetsInitialized: Bool
 
+    @PublishedPersist(key: "ReadOnlyPresetsSeededV1", defaultValue: false)
+    private var readOnlyPresetsSeeded: Bool
+
     @PublishedPersist(key: "ConfiguredPresets", defaultValue: [])
     private var configuredPresets: [WritingPreset]
 
@@ -68,8 +71,27 @@ class Configuration: NSObject, ObservableObject {
         if !presetsInitialized {
             configuredPresets = WritingPreset.defaultPresets
             presetsInitialized = true
+            readOnlyPresetsSeeded = true
             _configuredPresets.saveNow()
             _presetsInitialized.saveNow()
+            _readOnlyPresetsSeeded.saveNow()
+        } else if !readOnlyPresetsSeeded {
+            var current = configuredPresets
+            let existingKeys = Set(current.compactMap(\.defaultKey))
+            let existingIDs = Set(current.map(\.id))
+            var addedAny = false
+            for seed in WritingPreset.readOnlySeedPresets {
+                if let dk = seed.defaultKey, existingKeys.contains(dk) { continue }
+                if existingIDs.contains(seed.id) { continue }
+                current.append(seed)
+                addedAny = true
+            }
+            if addedAny {
+                configuredPresets = current
+                _configuredPresets.saveNow()
+            }
+            readOnlyPresetsSeeded = true
+            _readOnlyPresetsSeeded.saveNow()
         }
 
         if activatedEndpointID != Self.noneActivated, configuredEndpoints[activatedEndpointID] == nil {
@@ -394,6 +416,45 @@ class Configuration: NSObject, ObservableObject {
 
     func notifyConfigurationChangeToSystem() {
         AIGateClient.executeCommand(.reload, secret: serviceSecret)
+        postConfigChangedDarwinNotification()
+    }
+
+    private func postConfigChangedDarwinNotification() {
+        let name = CFNotificationName("wiki.qaq.writenow.configChanged" as CFString)
+        CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), name, nil, nil, true)
+    }
+
+    func isPresetPinnedToSelectionMenu(_ presetID: UUID) -> Bool {
+        appSettings.selectionMenuItems.contains {
+            $0.isEnabled && $0.actionKind == .preset && $0.presetID == presetID
+        }
+    }
+
+    func setPresetPinnedToSelectionMenu(_ preset: WritingPreset, pinned: Bool) {
+        updateSettings { s in
+            if pinned {
+                if let idx = s.selectionMenuItems.firstIndex(where: { $0.actionKind == .preset && $0.presetID == preset.id }) {
+                    s.selectionMenuItems[idx].isEnabled = true
+                    s.selectionMenuItems[idx].title = preset.title
+                    s.selectionMenuItems[idx].icon = preset.icon
+                    s.selectionMenuItems[idx].availability = preset.availability
+                } else {
+                    s.selectionMenuItems.append(
+                        SelectionMenuItem(
+                            title: preset.title,
+                            icon: preset.icon,
+                            actionKind: .preset,
+                            presetID: preset.id,
+                            customPrompt: "",
+                            availability: preset.availability,
+                            isEnabled: true
+                        )
+                    )
+                }
+            } else {
+                s.selectionMenuItems.removeAll { $0.actionKind == .preset && $0.presetID == preset.id }
+            }
+        }
     }
 
     func saveNow() {
@@ -402,6 +463,7 @@ class Configuration: NSObject, ObservableObject {
         _activatedEndpointID.saveNow()
         _configuredEndpoints.saveNow()
         _presetsInitialized.saveNow()
+        _readOnlyPresetsSeeded.saveNow()
         _configuredPresets.saveNow()
         _appSettings.saveNow()
         if !isInitializing, ProcessInfo.processInfo.environment["BOOT_MODE"] != "ServiceDaemon" {
@@ -416,8 +478,10 @@ class Configuration: NSObject, ObservableObject {
         _activatedEndpointID.invalidateCaches()
         _configuredEndpoints.invalidateCaches()
         _presetsInitialized.invalidateCaches()
+        _readOnlyPresetsSeeded.invalidateCaches()
         _configuredPresets.invalidateCaches()
         _appSettings.invalidateCaches()
+        postConfigChangedDarwinNotification()
         if Thread.isMainThread {
             reloadViewModel()
         } else {

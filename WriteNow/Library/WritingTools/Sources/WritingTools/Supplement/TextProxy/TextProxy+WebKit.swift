@@ -10,7 +10,16 @@ import WebKit
 import WritingToolsInjector
 
 extension WKContentView: TextProxyObject {
-    var _eligibleForWritingTool: Bool { isFocusingElement() && isUserInteractionEnabled }
+    var _isReadOnly: Bool { !isFocusingElement() }
+    var _eligibleForWritingTool: Bool {
+        if isFocusingElement() && isUserInteractionEnabled {
+            return true
+        }
+        guard Configurator.shared.settings.readOnlyEnabled, isUserInteractionEnabled else {
+            return false
+        }
+        return !(selectedTextRange?.isEmpty ?? true) || !_selectedText().isEmpty
+    }
     var _appearanceForWritingTool: TextProxy.WTAppearance {
         .init(magicColorBehavior: .overText)
     }
@@ -22,14 +31,39 @@ extension WKContentView: TextProxyObject {
 
     var _requiresAsynconousSelectedTextFetching: Bool { true }
 
-    // WebKit are trimming characters to 200 per selection
-    // and the full content is only available by async task
+    private func findAncestorWKWebView() -> WKWebView? {
+        var cursor: UIView? = superview
+        while let view = cursor {
+            if let webView = view as? WKWebView {
+                return webView
+            }
+            cursor = view.superview
+        }
+        return nil
+    }
+
+    // WebKit trims synchronous text(in:) to 200 chars and may require async JS / SpeakSelection
     func _fetchSelectedText(_ onCompletion: @escaping (String) -> Void) {
-        let selectedText = _selectedText()
-        if selectedText.count < 200 {
-            onCompletion(selectedText)
+        let syncSelectedText = _selectedText()
+        if !isFocusingElement(), let webView = findAncestorWKWebView() {
+            webView.evaluateJavaScript("window.getSelection ? String(window.getSelection().toString()) : ''") { [weak self] result, _ in
+                if let jsText = result as? String, !jsText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    onCompletion(jsText)
+                    return
+                }
+                self?.fallbackSpeakSelectionFetch(syncSelectedText: syncSelectedText, onCompletion: onCompletion)
+            }
             return
         }
+
+        if syncSelectedText.count < 200, !syncSelectedText.isEmpty {
+            onCompletion(syncSelectedText)
+            return
+        }
+        fallbackSpeakSelectionFetch(syncSelectedText: syncSelectedText, onCompletion: onCompletion)
+    }
+
+    private func fallbackSpeakSelectionFetch(syncSelectedText: String, onCompletion: @escaping (String) -> Void) {
         DispatchQueue.global(qos: .userInteractive).async { [weak self] in
             guard let self else { return }
             if responds(to: #selector(accessibilityRetrieveSpeakSelectionContent)),
@@ -41,12 +75,13 @@ extension WKContentView: TextProxyObject {
                 wn_isGettingSelectedTextSemaphore = nil
 
                 if waited == .timedOut {
-                    onCompletion(selectedText)
+                    onCompletion(syncSelectedText)
                 } else {
-                    onCompletion(wn_selectedText ?? selectedText)
+                    let resolved = wn_selectedText ?? syncSelectedText
+                    onCompletion(resolved.isEmpty ? syncSelectedText : resolved)
                 }
             } else {
-                onCompletion(selectedText)
+                onCompletion(syncSelectedText)
             }
         }
     }
@@ -80,6 +115,7 @@ extension WKContentView: TextProxyObject {
     }
 
     func _replaceText(with text: String, atRange range: UITextRange, attribute _: TextAttribute) -> UITextRange? {
+        guard !_isReadOnly else { return nil }
         if !isFirstResponder {
             _ = becomeFirstResponder()
         }

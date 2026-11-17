@@ -23,6 +23,7 @@ extension Presenter {
         let decorationViews: [UIView]
 
         let textProxy: TextProxy
+        let launchSlotAction: RuntimeSelectionMenuItem?
         @Published var scenePhase: ScenePhase = .active
 
         init(
@@ -32,7 +33,8 @@ extension Presenter {
             anchorView: UIView,
             anchorRects: [CGRect],
             decorationViews: [UIView],
-            textProxy: TextProxy
+            textProxy: TextProxy,
+            launchSlotAction: RuntimeSelectionMenuItem? = nil
         ) {
             self.parentView = parentView
             self.parentController = parentController
@@ -41,6 +43,7 @@ extension Presenter {
             self.anchorRects = anchorRects
             self.decorationViews = decorationViews
             self.textProxy = textProxy
+            self.launchSlotAction = launchSlotAction
 
             super.init()
 
@@ -92,16 +95,48 @@ extension Presenter {
 }
 
 extension Presenter {
-    func buildContext(fromResponder responder: UIResponder) -> Context? {
+    func buildContext(fromResponder responder: UIResponder, launchSlotAction: RuntimeSelectionMenuItem? = nil) -> Context? {
         guard let fatherView = responder as? UIView else { return nil }
-        guard let parentView = fatherView.superview else { return nil }
-        guard let parentController = fatherView.parentViewController else { return nil }
+        guard let parentView = fatherView.superview ?? fatherView.window else { return nil }
+        guard let parentController = fatherView.parentViewController ?? fatherView.window?.rootViewController else { return nil }
         guard let textProxy = TextProxy(delegatingView: fatherView) else { return nil }
         let appearance = textProxy.appearanceForWritingTool
         guard textProxy.isEligibleForWritingTool else { return nil }
 
+        return assembleContext(
+            fatherView: fatherView,
+            parentView: parentView,
+            parentController: parentController,
+            textProxy: textProxy,
+            appearance: appearance,
+            launchSlotAction: launchSlotAction
+        )
+    }
+
+    func buildReadOnlyFallbackContext(from respondingView: UIView, launchSlotAction: RuntimeSelectionMenuItem? = nil) -> Context? {
+        guard let textProxy = TextProxy.makeReadOnlyFallback(from: respondingView) else { return nil }
+        guard let parentView = respondingView.superview ?? respondingView.window else { return nil }
+        guard let parentController = respondingView.parentViewController ?? respondingView.window?.rootViewController else { return nil }
+        return assembleContext(
+            fatherView: respondingView,
+            parentView: parentView,
+            parentController: parentController,
+            textProxy: textProxy,
+            appearance: textProxy.appearanceForWritingTool,
+            launchSlotAction: launchSlotAction
+        )
+    }
+
+    private func assembleContext(
+        fatherView: UIView,
+        parentView: UIView,
+        parentController: UIViewController,
+        textProxy: TextProxy,
+        appearance: TextProxy.WTAppearance,
+        launchSlotAction: RuntimeSelectionMenuItem?
+    ) -> Context {
         var selectedRects = textProxy.selectionRectsInView
-        if selectedRects.isEmpty { selectedRects = [.zero] }
+        if selectedRects.isEmpty { selectedRects = [fatherView.bounds] }
         let selectionUnionRect = selectedRects.reduce(selectedRects[0]) { $0.union($1) }
 
         let anchorView = UIView()
@@ -141,7 +176,8 @@ extension Presenter {
             anchorView: anchorView,
             anchorRects: preparedRects,
             decorationViews: decorationViews,
-            textProxy: textProxy
+            textProxy: textProxy,
+            launchSlotAction: launchSlotAction
         )
     }
 

@@ -37,6 +37,8 @@ struct WritingToolsView: View {
     @State var diffDisplayMode: OutputDiffDisplayMode = .none
     @State var copiedToast: Bool = false
     @State var showQuickProviderSheet: Bool = false
+    @State var isSpeakingOutput: Bool = false
+    @State var didTriggerLaunchAction: Bool = false
 
     // Clipboard Context & Session Restore
     @State var clipboardContextText: String = ""
@@ -128,6 +130,7 @@ struct WritingToolsView: View {
             voiceSourceLang = cfg.settings.stt.sourceLanguage
             voiceTargetLang = cfg.settings.stt.targetLanguage
             refreshClipboardAndSessionState()
+            maybeTriggerLaunchAction()
             cfg.refreshRuntimeConfig { updated in
                 if let updated {
                     voiceMode = updated.settings.stt.voiceMode
@@ -137,9 +140,16 @@ struct WritingToolsView: View {
                 }
             }
         }
+        .onChange(of: textProxy.isFetchingSelectedText) { fetching in
+            if !fetching {
+                maybeTriggerLaunchAction()
+            }
+        }
         .onDisappear {
             voicePollTimer?.invalidate()
             voicePollTimer = nil
+            OutputSpeechHelper.shared.stop()
+            isSpeakingOutput = false
             if isRecordingVoice {
                 cfg.cancelVoiceRecording()
             }
@@ -188,5 +198,35 @@ struct WritingToolsView: View {
         }
 
         restorableSession = cfg.loadValidLastSession()
+    }
+
+    private func maybeTriggerLaunchAction() {
+        guard !didTriggerLaunchAction,
+              !textProxy.isFetchingSelectedText,
+              let launch = context.launchSlotAction
+        else { return }
+        didTriggerLaunchAction = true
+
+        switch launch.actionKind {
+        case .preset:
+            if let pid = launch.presetID,
+               let preset = cfg.presets.first(where: { $0.id == pid })
+            {
+                currentTask = .preset(preset)
+                executeCurrentTask()
+            } else {
+                let fallback = launch.customPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+                runCustomPrompt(fallback.isEmpty ? launch.title : fallback)
+            }
+        case .customPrompt:
+            let promptText = launch.customPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+            runCustomPrompt(promptText.isEmpty ? launch.title : promptText)
+        case .smartReply:
+            runSmartReply()
+        case .voicePrompt:
+            if cfg.settings.stt.enabled {
+                startVoiceRecording(isFollowUp: false)
+            }
+        }
     }
 }

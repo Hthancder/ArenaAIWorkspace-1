@@ -18,6 +18,8 @@ extension WritingToolsView {
         activeRequestToken = requestToken
 
         cfg.openAI.cancelAllStreams()
+        OutputSpeechHelper.shared.stop()
+        isSpeakingOutput = false
         isEditingOutput = false
         diffDisplayMode = .none
         restorableSession = nil
@@ -300,6 +302,8 @@ extension WritingToolsView {
     func discard() {
         activeRequestToken = UUID()
         cfg.openAI.cancelAllStreams()
+        OutputSpeechHelper.shared.stop()
+        isSpeakingOutput = false
         isRunning = false
         isEditingOutput = false
         diffDisplayMode = .none
@@ -310,7 +314,45 @@ extension WritingToolsView {
         cfg.clearLastSession()
     }
 
+    func copyOutputToPasteboard(_ text: String, closeAfter: Bool) {
+        UIPasteboard.general.string = text
+        copiedToast = true
+        if closeAfter {
+            OutputSpeechHelper.shared.stop()
+            isSpeakingOutput = false
+            output = ""
+            cfg.clearLastSession()
+            dismiss()
+        } else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                copiedToast = false
+            }
+        }
+    }
+
+    func presentShareSheet(text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let activity = UIActivityViewController(activityItems: [trimmed], applicationActivities: nil)
+        guard let root = context.parentController.view.window?.rootViewController ?? Optional(context.parentController) else {
+            return
+        }
+        var top = root
+        while let presented = top.presentedViewController, !presented.isBeingDismissed {
+            top = presented
+        }
+        if let pop = activity.popoverPresentationController {
+            pop.sourceView = top.view
+            pop.sourceRect = CGRect(x: top.view.bounds.midX, y: top.view.bounds.midY, width: 1, height: 1)
+        }
+        top.present(activity, animated: true)
+    }
+
     func accept(forceAppend: Bool? = nil) {
+        if textProxy.isReadOnly {
+            copyOutputToPasteboard(output, closeAfter: true)
+            return
+        }
         let shouldAppend = forceAppend ?? (currentTask.insertBehavior == .append)
         let finalText = output
         let targetView = context.targetView

@@ -121,6 +121,213 @@ public struct EndpointItem: Codable, Identifiable, Equatable, Hashable {
     }
 }
 
+public struct RuntimeSelectionMenuItem: Codable, Identifiable, Equatable, Hashable {
+    public enum ActionKind: String, Codable, CaseIterable, Hashable {
+        case preset
+        case customPrompt
+        case smartReply
+        case voicePrompt
+    }
+
+    public let id: UUID
+    public var title: String
+    public var icon: String
+    public var actionKind: ActionKind
+    public var presetID: UUID?
+    public var customPrompt: String
+    public var availability: WritingPresetItem.Availability
+    public var isEnabled: Bool
+
+    public init(
+        id: UUID = UUID(),
+        title: String,
+        icon: String = "sparkles",
+        actionKind: ActionKind = .preset,
+        presetID: UUID? = nil,
+        customPrompt: String = "",
+        availability: WritingPresetItem.Availability = .both,
+        isEnabled: Bool = true
+    ) {
+        self.id = id
+        self.title = title
+        self.icon = icon
+        self.actionKind = actionKind
+        self.presetID = presetID
+        self.customPrompt = customPrompt
+        self.availability = availability
+        self.isEnabled = isEnabled
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, icon, actionKind, presetID, customPrompt, availability, isEnabled
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        title = try c.decode(String.self, forKey: .title)
+        icon = try c.decodeIfPresent(String.self, forKey: .icon) ?? "sparkles"
+        actionKind = try c.decodeIfPresent(ActionKind.self, forKey: .actionKind) ?? .preset
+        presetID = try c.decodeIfPresent(UUID.self, forKey: .presetID)
+        customPrompt = try c.decodeIfPresent(String.self, forKey: .customPrompt) ?? ""
+        availability = try c.decodeIfPresent(WritingPresetItem.Availability.self, forKey: .availability) ?? .both
+        isEnabled = try c.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
+    }
+
+    public static let defaultItems: [RuntimeSelectionMenuItem] = [
+        RuntimeSelectionMenuItem(
+            id: UUID(uuidString: "22222222-2222-4222-8222-222222222201")!,
+            title: "Translate",
+            icon: "globe",
+            actionKind: .preset,
+            presetID: UUID(uuidString: "11111111-1111-4111-8111-111111111106")!,
+            customPrompt: "",
+            availability: .both,
+            isEnabled: true
+        ),
+        RuntimeSelectionMenuItem(
+            id: UUID(uuidString: "22222222-2222-4222-8222-222222222202")!,
+            title: "Explain",
+            icon: "lightbulb",
+            actionKind: .preset,
+            presetID: UUID(uuidString: "11111111-1111-4111-8111-111111111109")!,
+            customPrompt: "",
+            availability: .readOnlyOnly,
+            isEnabled: false
+        ),
+    ]
+}
+
+public struct RuntimeQuickActionItem: Codable, Identifiable, Equatable, Hashable {
+    public let id: UUID
+    public var title: String
+    public var icon: String
+    public var instruction: String
+    public var availability: WritingPresetItem.Availability
+    public var showOnInputPanel: Bool
+    public var showOnOutputRefine: Bool
+    public var isEnabled: Bool
+
+    public init(
+        id: UUID = UUID(),
+        title: String,
+        icon: String = "bolt.fill",
+        instruction: String,
+        availability: WritingPresetItem.Availability = .both,
+        showOnInputPanel: Bool = true,
+        showOnOutputRefine: Bool = true,
+        isEnabled: Bool = true
+    ) {
+        self.id = id
+        self.title = title
+        self.icon = icon
+        self.instruction = instruction
+        self.availability = availability
+        self.showOnInputPanel = showOnInputPanel
+        self.showOnOutputRefine = showOnOutputRefine
+        self.isEnabled = isEnabled
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, icon, instruction, availability, showOnInputPanel, showOnOutputRefine, isEnabled
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        title = try c.decode(String.self, forKey: .title)
+        icon = try c.decodeIfPresent(String.self, forKey: .icon) ?? "bolt.fill"
+        instruction = try c.decode(String.self, forKey: .instruction)
+        availability = try c.decodeIfPresent(WritingPresetItem.Availability.self, forKey: .availability) ?? .both
+        showOnInputPanel = try c.decodeIfPresent(Bool.self, forKey: .showOnInputPanel) ?? true
+        showOnOutputRefine = try c.decodeIfPresent(Bool.self, forKey: .showOnOutputRefine) ?? true
+        isEnabled = try c.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
+    }
+
+    public static let defaultItems: [RuntimeQuickActionItem] = [
+        RuntimeQuickActionItem(
+            id: UUID(uuidString: "33333333-3333-4333-8333-333333333301")!,
+            title: "-> VI",
+            icon: "globe",
+            instruction: "Translate this into natural Vietnamese.",
+            availability: .both,
+            showOnInputPanel: true,
+            showOnOutputRefine: true,
+            isEnabled: true
+        ),
+        RuntimeQuickActionItem(
+            id: UUID(uuidString: "33333333-3333-4333-8333-333333333302")!,
+            title: "-> EN",
+            icon: "globe",
+            instruction: "Translate this into natural English.",
+            availability: .both,
+            showOnInputPanel: true,
+            showOnOutputRefine: true,
+            isEnabled: true
+        ),
+        RuntimeQuickActionItem(
+            id: UUID(uuidString: "33333333-3333-4333-8333-333333333303")!,
+            title: "Tóm tắt",
+            icon: "text.alignleft",
+            instruction: "Summarize clearly into 3 concise bullet points.",
+            availability: .readOnlyOnly,
+            showOnInputPanel: true,
+            showOnOutputRefine: true,
+            isEnabled: true
+        ),
+        RuntimeQuickActionItem(
+            id: UUID(uuidString: "33333333-3333-4333-8333-333333333304")!,
+            title: "Giải thích",
+            icon: "lightbulb",
+            instruction: "Explain this clearly in plain, simple language.",
+            availability: .readOnlyOnly,
+            showOnInputPanel: true,
+            showOnOutputRefine: true,
+            isEnabled: true
+        ),
+        RuntimeQuickActionItem(
+            id: UUID(uuidString: "33333333-3333-4333-8333-333333333305")!,
+            title: "Shorter",
+            icon: "arrow.down.right.and.arrow.up.left",
+            instruction: "Make this shorter and more concise.",
+            availability: .both,
+            showOnInputPanel: false,
+            showOnOutputRefine: true,
+            isEnabled: true
+        ),
+        RuntimeQuickActionItem(
+            id: UUID(uuidString: "33333333-3333-4333-8333-333333333306")!,
+            title: "Natural",
+            icon: "sparkles",
+            instruction: "Make this sound more natural and fluent.",
+            availability: .editableOnly,
+            showOnInputPanel: false,
+            showOnOutputRefine: true,
+            isEnabled: true
+        ),
+        RuntimeQuickActionItem(
+            id: UUID(uuidString: "33333333-3333-4333-8333-333333333307")!,
+            title: "Formal",
+            icon: "briefcase",
+            instruction: "Make this more formal and professional.",
+            availability: .editableOnly,
+            showOnInputPanel: false,
+            showOnOutputRefine: true,
+            isEnabled: true
+        ),
+        RuntimeQuickActionItem(
+            id: UUID(uuidString: "33333333-3333-4333-8333-333333333308")!,
+            title: "Fix Grammar",
+            icon: "checkmark.seal",
+            instruction: "Fix only spelling, grammar, and punctuation.",
+            availability: .editableOnly,
+            showOnInputPanel: false,
+            showOnOutputRefine: true,
+            isEnabled: true
+        ),
+    ]
+}
+
 public struct RuntimeSettings: Codable, Equatable {
     public var menuTitle: String
     public var globalSystemPrompt: String
@@ -150,6 +357,16 @@ public struct RuntimeSettings: Codable, Equatable {
     public var autoAttachClipboardOnEmpty: Bool
     public var restoreLastSessionEnabled: Bool
     public var lastSessionTTLSeconds: Int
+    public var readOnlyEnabled: Bool
+    public var readOnlyShowEditablePresets: Bool
+    public var readOnlyPrimaryAction: String
+    public var readOnlyShowSpeakButton: Bool
+    public var readOnlyShowShareButton: Bool
+    public var showMainMenuItemInSelection: Bool
+    public var showMainMenuItemOnReadOnly: Bool
+    public var selectionMenuPresentationMode: String
+    public var selectionMenuItems: [RuntimeSelectionMenuItem]
+    public var quickActions: [RuntimeQuickActionItem]
 
     public static let `default` = RuntimeSettings(
         menuTitle: "Write Now",
@@ -179,7 +396,17 @@ public struct RuntimeSettings: Codable, Equatable {
         clipboardContextEnabled: true,
         autoAttachClipboardOnEmpty: false,
         restoreLastSessionEnabled: true,
-        lastSessionTTLSeconds: 180
+        lastSessionTTLSeconds: 180,
+        readOnlyEnabled: true,
+        readOnlyShowEditablePresets: false,
+        readOnlyPrimaryAction: "copy_close",
+        readOnlyShowSpeakButton: true,
+        readOnlyShowShareButton: true,
+        showMainMenuItemInSelection: true,
+        showMainMenuItemOnReadOnly: true,
+        selectionMenuPresentationMode: "inline",
+        selectionMenuItems: RuntimeSelectionMenuItem.defaultItems,
+        quickActions: RuntimeQuickActionItem.defaultItems
     )
 
     enum CodingKeys: String, CodingKey {
@@ -191,6 +418,10 @@ public struct RuntimeSettings: Codable, Equatable {
         case backgroundImageRevision, textReplacementAnimation, stt
         case wordDiffEnabled, defaultDiffMode, clipboardContextEnabled
         case autoAttachClipboardOnEmpty, restoreLastSessionEnabled, lastSessionTTLSeconds
+        case readOnlyEnabled, readOnlyShowEditablePresets, readOnlyPrimaryAction
+        case readOnlyShowSpeakButton, readOnlyShowShareButton
+        case showMainMenuItemInSelection, showMainMenuItemOnReadOnly, selectionMenuPresentationMode
+        case selectionMenuItems, quickActions
     }
 
     public init(
@@ -221,7 +452,17 @@ public struct RuntimeSettings: Codable, Equatable {
         clipboardContextEnabled: Bool = true,
         autoAttachClipboardOnEmpty: Bool = false,
         restoreLastSessionEnabled: Bool = true,
-        lastSessionTTLSeconds: Int = 180
+        lastSessionTTLSeconds: Int = 180,
+        readOnlyEnabled: Bool = true,
+        readOnlyShowEditablePresets: Bool = false,
+        readOnlyPrimaryAction: String = "copy_close",
+        readOnlyShowSpeakButton: Bool = true,
+        readOnlyShowShareButton: Bool = true,
+        showMainMenuItemInSelection: Bool = true,
+        showMainMenuItemOnReadOnly: Bool = true,
+        selectionMenuPresentationMode: String = "inline",
+        selectionMenuItems: [RuntimeSelectionMenuItem] = RuntimeSelectionMenuItem.defaultItems,
+        quickActions: [RuntimeQuickActionItem] = RuntimeQuickActionItem.defaultItems
     ) {
         self.menuTitle = menuTitle
         self.globalSystemPrompt = globalSystemPrompt
@@ -251,6 +492,16 @@ public struct RuntimeSettings: Codable, Equatable {
         self.autoAttachClipboardOnEmpty = autoAttachClipboardOnEmpty
         self.restoreLastSessionEnabled = restoreLastSessionEnabled
         self.lastSessionTTLSeconds = lastSessionTTLSeconds
+        self.readOnlyEnabled = readOnlyEnabled
+        self.readOnlyShowEditablePresets = readOnlyShowEditablePresets
+        self.readOnlyPrimaryAction = readOnlyPrimaryAction
+        self.readOnlyShowSpeakButton = readOnlyShowSpeakButton
+        self.readOnlyShowShareButton = readOnlyShowShareButton
+        self.showMainMenuItemInSelection = showMainMenuItemInSelection
+        self.showMainMenuItemOnReadOnly = showMainMenuItemOnReadOnly
+        self.selectionMenuPresentationMode = selectionMenuPresentationMode
+        self.selectionMenuItems = selectionMenuItems
+        self.quickActions = quickActions
     }
 
     public init(from decoder: Decoder) throws {
@@ -283,6 +534,16 @@ public struct RuntimeSettings: Codable, Equatable {
         autoAttachClipboardOnEmpty = try c.decodeIfPresent(Bool.self, forKey: .autoAttachClipboardOnEmpty) ?? false
         restoreLastSessionEnabled = try c.decodeIfPresent(Bool.self, forKey: .restoreLastSessionEnabled) ?? true
         lastSessionTTLSeconds = try c.decodeIfPresent(Int.self, forKey: .lastSessionTTLSeconds) ?? 180
+        readOnlyEnabled = try c.decodeIfPresent(Bool.self, forKey: .readOnlyEnabled) ?? true
+        readOnlyShowEditablePresets = try c.decodeIfPresent(Bool.self, forKey: .readOnlyShowEditablePresets) ?? false
+        readOnlyPrimaryAction = try c.decodeIfPresent(String.self, forKey: .readOnlyPrimaryAction) ?? "copy_close"
+        readOnlyShowSpeakButton = try c.decodeIfPresent(Bool.self, forKey: .readOnlyShowSpeakButton) ?? true
+        readOnlyShowShareButton = try c.decodeIfPresent(Bool.self, forKey: .readOnlyShowShareButton) ?? true
+        showMainMenuItemInSelection = try c.decodeIfPresent(Bool.self, forKey: .showMainMenuItemInSelection) ?? true
+        showMainMenuItemOnReadOnly = try c.decodeIfPresent(Bool.self, forKey: .showMainMenuItemOnReadOnly) ?? true
+        selectionMenuPresentationMode = try c.decodeIfPresent(String.self, forKey: .selectionMenuPresentationMode) ?? "inline"
+        selectionMenuItems = try c.decodeIfPresent([RuntimeSelectionMenuItem].self, forKey: .selectionMenuItems) ?? RuntimeSelectionMenuItem.defaultItems
+        quickActions = try c.decodeIfPresent([RuntimeQuickActionItem].self, forKey: .quickActions) ?? RuntimeQuickActionItem.defaultItems
     }
 }
 
@@ -450,6 +711,8 @@ public class Configurator: ObservableObject {
     @Published public var settings: RuntimeSettings = .default
     @Published public var daemonConnected: Bool = true
     @Published public var customBackgroundImageData: Data? = nil
+    private var lastConfigRefreshTime: Date = .distantPast
+    private var isRefreshingConfig: Bool = false
 
     public var activeEndpoint: EndpointItem? {
         endpoints.first { $0.id == activatedEndpointID }
@@ -486,11 +749,38 @@ public class Configurator: ObservableObject {
         {
             applyRuntimeConfig(cached, cacheToDefaults: false)
         }
+
+        let center = CFNotificationCenterGetDarwinNotifyCenter()
+        CFNotificationCenterAddObserver(
+            center,
+            Unmanaged.passUnretained(self).toOpaque(),
+            { _, observer, _, _, _ in
+                guard let observer else { return }
+                let instance = Unmanaged<Configurator>.fromOpaque(observer).takeUnretainedValue()
+                instance.refreshRuntimeConfig()
+            },
+            "wiki.qaq.writenow.configChanged" as CFString,
+            nil,
+            .deliverImmediately
+        )
+    }
+
+    public func refreshRuntimeConfigIfStale(maxAge: TimeInterval = 2.0) {
+        let now = Date()
+        guard !isRefreshingConfig, now.timeIntervalSince(lastConfigRefreshTime) >= maxAge else { return }
+        refreshRuntimeConfig()
     }
 
     public func refreshRuntimeConfig(completion: ((RuntimeConfig?) -> Void)? = nil) {
+        isRefreshingConfig = true
         URLSession.shared.dataTask(with: gateConfigCheckRequest) { [weak self] data, _, error in
             guard let self else { return }
+            defer {
+                DispatchQueue.main.async {
+                    self.isRefreshingConfig = false
+                    self.lastConfigRefreshTime = Date()
+                }
+            }
             guard error == nil, let data,
                   let decoded = try? JSONDecoder().decode(RuntimeConfig.self, from: data)
             else {

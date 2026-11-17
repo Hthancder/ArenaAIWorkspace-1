@@ -8,7 +8,16 @@
 import UIKit
 
 extension UITextView: TextProxyObject {
-    var _eligibleForWritingTool: Bool { isEditable && isUserInteractionEnabled }
+    var _isReadOnly: Bool { !(isEditable && isUserInteractionEnabled) }
+    var _eligibleForWritingTool: Bool {
+        if isEditable && isUserInteractionEnabled {
+            return true
+        }
+        guard Configurator.shared.settings.readOnlyEnabled, isSelectable else {
+            return false
+        }
+        return !(selectedTextRange?.isEmpty ?? true) || hasText
+    }
     var _appearanceForWritingTool: TextProxy.WTAppearance {
         .init(magicColorBehavior: .behindText)
     }
@@ -52,6 +61,7 @@ extension UITextView: TextProxyObject {
     }
 
     func _replaceText(with text: String, atRange range: UITextRange, attribute: TextAttribute) -> UITextRange? {
+        guard !_isReadOnly else { return nil }
         defer { selectedTextRange = nil }
         let utf16Length = text.utf16.count
         let startLocation = offset(from: beginningOfDocument, to: range.start)

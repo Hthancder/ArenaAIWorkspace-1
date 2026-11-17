@@ -11,9 +11,12 @@
 NS_ASSUME_NONNULL_BEGIN
 
 FOUNDATION_EXTERN NSString *WT_AppleMenuIdentifier(void);
+FOUNDATION_EXTERN NSString *WT_CustomSubmenuIdentifier(void);
+FOUNDATION_EXTERN NSInteger WT_SlotIndexFromSelectorName(NSString * _Nullable name);
 
 FOUNDATION_EXTERN UIMenuItem *WT_MenuItem(void);
 FOUNDATION_EXTERN UICommand *WT_MenuItem_UICommand(void);
+FOUNDATION_EXTERN NSArray<UICommand *> *WT_BuildCommandsForReadOnly(BOOL isReadOnly);
 
 FOUNDATION_EXTERN BOOL WT_MenuItem_IsWritingTool(id input);
 

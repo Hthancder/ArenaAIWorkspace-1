@@ -18,5 +18,8 @@ public class Presenter: NSObject {
 
         // let the shader compile
         _ = AnimatedMulticolorGradientView()
+
+        // pre-warm runtime configuration so text selection menu items are fresh
+        Configurator.shared.refreshRuntimeConfigIfStale(maxAge: 1.0)
     }
 }

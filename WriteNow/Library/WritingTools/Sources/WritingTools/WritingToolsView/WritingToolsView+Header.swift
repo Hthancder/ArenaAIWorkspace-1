@@ -35,10 +35,26 @@ extension WritingToolsView {
                 Text(cfg.settings.menuTitle.isEmpty ? "Write Now".localized : cfg.settings.menuTitle)
                     .lineLimit(1)
                     .font(.headline.bold())
-                Text(textCountDescription)
-                    .font(.caption2)
-                    .foregroundColor(.white.opacity(0.65))
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(textCountDescription)
+                        .font(.caption2)
+                        .foregroundColor(.white.opacity(0.65))
+                        .lineLimit(1)
+
+                    if textProxy.isReadOnly {
+                        HStack(spacing: 3) {
+                            Image(systemName: "eye")
+                                .font(.system(size: 8.5, weight: .bold))
+                            Text("Read-Only")
+                                .font(.system(size: 9.5, weight: .semibold))
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 1.5)
+                        .background(Color.cyan.opacity(0.24))
+                        .foregroundColor(Color(red: 0.72, green: 0.96, blue: 1.0))
+                        .clipShape(Capsule())
+                    }
+                }
             }
 
             Spacer(minLength: 4)

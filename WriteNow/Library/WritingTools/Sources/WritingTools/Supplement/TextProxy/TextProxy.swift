@@ -2,7 +2,7 @@
 //  TextProxy.swift
 //  WritingTools
 //
-//  Created by 秋星桥 on 2024/8/19.
+//  Created by 秋星桥 on 2024/8/8.
 //
 
 import Combine
@@ -11,21 +11,33 @@ import UIKit
 typealias TextAttribute = [NSAttributedString.Key: Any]
 
 class TextProxy: ObservableObject {
-    let delegatingView: TextProxyObject
+    let delegatingView: TextProxyObject?
+    let fallbackTargetView: UIView?
+    let isReadOnly: Bool
 
     var isEligibleForWritingTool: Bool {
-        [
-            delegatingView._eligibleForWritingTool,
-            !selectedRange.isEmpty,
-            !selectedText.isEmpty,
-        ].allSatisfy { $0 }
+        if let delegatingView {
+            if delegatingView._isReadOnly {
+                return Configurator.shared.settings.readOnlyEnabled
+                    && delegatingView._eligibleForWritingTool
+                    && (!selectedRange.isEmpty || !selectedText.isEmpty || isFetchingSelectedText)
+            }
+            return [
+                delegatingView._eligibleForWritingTool,
+                !selectedRange.isEmpty,
+                !selectedText.isEmpty,
+            ].allSatisfy { $0 }
+        }
+        return Configurator.shared.settings.readOnlyEnabled
+            && !selectedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var appearanceForWritingTool: WTAppearance {
-        delegatingView._appearanceForWritingTool
+        delegatingView?._appearanceForWritingTool ?? .init(magicColorBehavior: .overText)
     }
 
     @Published private(set) var selectedText: String = ""
+    @Published private(set) var isFetchingSelectedText: Bool = false
 
     private(set) var selectedTextAttribute: TextAttribute = [:]
     private(set) var selectedRange: UITextRange = .init()
@@ -37,16 +49,27 @@ class TextProxy: ObservableObject {
             return nil
         }
         self.delegatingView = delegatingView
+        self.fallbackTargetView = nil
+        self.isReadOnly = delegatingView._isReadOnly
         frozenCurrentParameters()
         prepareSelectedTextAsynconously()
     }
 
+    init(readOnlyFallbackView: UIView, initialText: String, selectionRects: [CGRect]) {
+        self.delegatingView = nil
+        self.fallbackTargetView = readOnlyFallbackView
+        self.isReadOnly = true
+        self.selectedText = initialText
+        self.selectionRectsInView = selectionRects.isEmpty ? [readOnlyFallbackView.bounds] : selectionRects
+    }
+
     func selectAll() {
-        delegatingView._selectAll()
+        delegatingView?._selectAll()
         frozenCurrentParameters()
     }
 
     func frozenCurrentParameters() {
+        guard let delegatingView else { return }
         selectedText = delegatingView._selectedText()
         selectedTextAttribute = delegatingView._selectedTextAttribute()
         selectedRange = delegatingView._selectedRange()
@@ -55,15 +78,17 @@ class TextProxy: ObservableObject {
     }
 
     func selectionRectsInView(for range: UITextRange) -> [CGRect] {
-        delegatingView._selectionRectsInView(for: range)
+        delegatingView?._selectionRectsInView(for: range) ?? selectionRectsInView
     }
 
     var replacedSelectionRectsInView: [CGRect] {
+        guard let delegatingView else { return selectionRectsInView }
         let rects = delegatingView._selectionRectsInView(for: replacedRange)
         return rects.isEmpty ? selectionRectsInView : rects
     }
 
     func replaceText(with text: String, atRange range: UITextRange, attribute: TextAttribute) {
+        guard !isReadOnly, let delegatingView else { return }
         if let range = delegatingView._replaceText(with: text, atRange: range, attribute: attribute) {
             replacedRange = range
         }
@@ -74,6 +99,7 @@ class TextProxy: ObservableObject {
     }
 
     func appendText(with text: String) {
+        guard !isReadOnly else { return }
         let combined: String
         if selectedText.isEmpty {
             combined = text
@@ -103,26 +129,33 @@ extension TextProxy {
 
 extension TextProxy {
     private func prepareSelectedTextAsynconously() {
+        guard let delegatingView else { return }
         if delegatingView._requiresAsynconousSelectedTextFetching {
+            isFetchingSelectedText = true
             _prepareSelectedTextAsynconously()
         }
     }
 
     private func _prepareSelectedTextAsynconously() {
-        delegatingView._fetchSelectedText { [weak self] content in
+        delegatingView?._fetchSelectedText { [weak self] content in
             self?.__prepareSelectedTextAsynconously(content)
         }
     }
 
     private func __prepareSelectedTextAsynconously(_ content: String) {
         DispatchQueue.main.async { [weak self] in
-            self?.selectedText = content
+            guard let self else { return }
+            if !content.isEmpty {
+                self.selectedText = content
+            }
+            self.isFetchingSelectedText = false
         }
     }
 }
 
 protocol TextProxyObject: UIView, UITextInput {
     var _eligibleForWritingTool: Bool { get }
+    var _isReadOnly: Bool { get }
     var _appearanceForWritingTool: TextProxy.WTAppearance { get }
     var _requiresAsynconousSelectedTextFetching: Bool { get }
     func _selectedText() -> String

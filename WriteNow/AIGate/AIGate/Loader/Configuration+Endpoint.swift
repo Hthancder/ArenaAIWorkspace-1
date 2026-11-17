@@ -137,6 +137,28 @@ extension Configuration {
             case append
         }
 
+        enum Availability: String, Codable, CaseIterable, Hashable {
+            case both
+            case editableOnly
+            case readOnlyOnly
+
+            var displayName: String {
+                switch self {
+                case .both: return "Editable & Read-Only"
+                case .editableOnly: return "Editable Only"
+                case .readOnlyOnly: return "Read-Only Only"
+                }
+            }
+
+            var shortLabel: String {
+                switch self {
+                case .both: return "All"
+                case .editableOnly: return "Edit"
+                case .readOnlyOnly: return "Read"
+                }
+            }
+        }
+
         let id: UUID
         var defaultKey: String?
         var title: String
@@ -150,6 +172,7 @@ extension Configuration {
         var isEnabled: Bool
         var endpointID: UUID?
         var modelOverride: String
+        var availability: Availability
 
         init(
             id: UUID = .init(),
@@ -164,7 +187,8 @@ extension Configuration {
             insertBehavior: InsertBehavior = .replace,
             isEnabled: Bool = true,
             endpointID: UUID? = nil,
-            modelOverride: String = ""
+            modelOverride: String = "",
+            availability: Availability = .both
         ) {
             self.id = id
             self.defaultKey = defaultKey
@@ -179,10 +203,11 @@ extension Configuration {
             self.isEnabled = isEnabled
             self.endpointID = endpointID
             self.modelOverride = modelOverride
+            self.availability = availability
         }
 
         enum CodingKeys: String, CodingKey {
-            case id, defaultKey, title, icon, systemPrompt, temperature, topP, includeExamples, outputLanguage, insertBehavior, isEnabled, endpointID, modelOverride
+            case id, defaultKey, title, icon, systemPrompt, temperature, topP, includeExamples, outputLanguage, insertBehavior, isEnabled, endpointID, modelOverride, availability
         }
 
         init(from decoder: Decoder) throws {
@@ -200,6 +225,16 @@ extension Configuration {
             isEnabled = try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
             endpointID = try container.decodeIfPresent(UUID.self, forKey: .endpointID)
             modelOverride = try container.decodeIfPresent(String.self, forKey: .modelOverride) ?? ""
+            if let decodedAvail = try container.decodeIfPresent(Availability.self, forKey: .availability) {
+                availability = decodedAvail
+            } else {
+                switch defaultKey {
+                case "proofread", "rewrite", "friendly", "professional", "concise":
+                    availability = .editableOnly
+                default:
+                    availability = .both
+                }
+            }
         }
 
         static let defaultPresets: [WritingPreset] = [
@@ -214,7 +249,8 @@ extension Configuration {
                 includeExamples: true,
                 outputLanguage: "",
                 insertBehavior: .replace,
-                isEnabled: true
+                isEnabled: true,
+                availability: .editableOnly
             ),
             WritingPreset(
                 id: UUID(uuidString: "11111111-1111-4111-8111-111111111102")!,
@@ -227,7 +263,8 @@ extension Configuration {
                 includeExamples: true,
                 outputLanguage: "",
                 insertBehavior: .replace,
-                isEnabled: true
+                isEnabled: true,
+                availability: .editableOnly
             ),
             WritingPreset(
                 id: UUID(uuidString: "11111111-1111-4111-8111-111111111103")!,
@@ -240,7 +277,8 @@ extension Configuration {
                 includeExamples: true,
                 outputLanguage: "",
                 insertBehavior: .replace,
-                isEnabled: true
+                isEnabled: true,
+                availability: .editableOnly
             ),
             WritingPreset(
                 id: UUID(uuidString: "11111111-1111-4111-8111-111111111104")!,
@@ -253,7 +291,8 @@ extension Configuration {
                 includeExamples: true,
                 outputLanguage: "",
                 insertBehavior: .replace,
-                isEnabled: true
+                isEnabled: true,
+                availability: .editableOnly
             ),
             WritingPreset(
                 id: UUID(uuidString: "11111111-1111-4111-8111-111111111105")!,
@@ -266,6 +305,295 @@ extension Configuration {
                 includeExamples: true,
                 outputLanguage: "",
                 insertBehavior: .replace,
+                isEnabled: true,
+                availability: .editableOnly
+            ),
+            WritingPreset(
+                id: UUID(uuidString: "11111111-1111-4111-8111-111111111106")!,
+                defaultKey: "translate",
+                title: "Translate",
+                icon: "globe",
+                systemPrompt: "Translate the text accurately and naturally. If an output language is configured, strictly output in that language; otherwise translate into natural Vietnamese if the source is in another language, or into natural English if the source is already in Vietnamese. Preserve meaning, tone, and structure.",
+                temperature: 0.2,
+                topP: nil,
+                includeExamples: false,
+                outputLanguage: "",
+                insertBehavior: .replace,
+                isEnabled: true,
+                availability: .both
+            ),
+            WritingPreset(
+                id: UUID(uuidString: "11111111-1111-4111-8111-111111111107")!,
+                defaultKey: "summary",
+                title: "Summary",
+                icon: "text.alignleft",
+                systemPrompt: "Summarize the provided text clearly and accurately, capturing the main ideas and essential details without adding commentary.",
+                temperature: 0.25,
+                topP: nil,
+                includeExamples: false,
+                outputLanguage: "",
+                insertBehavior: .replace,
+                isEnabled: true,
+                availability: .both
+            ),
+            WritingPreset(
+                id: UUID(uuidString: "11111111-1111-4111-8111-111111111108")!,
+                defaultKey: "keyPoints",
+                title: "Key Points",
+                icon: "list.bullet",
+                systemPrompt: "Extract the key points from the provided text as clear, concise bullet points in the same language.",
+                temperature: 0.25,
+                topP: nil,
+                includeExamples: false,
+                outputLanguage: "",
+                insertBehavior: .replace,
+                isEnabled: true,
+                availability: .both
+            ),
+            WritingPreset(
+                id: UUID(uuidString: "11111111-1111-4111-8111-111111111109")!,
+                defaultKey: "explain",
+                title: "Explain",
+                icon: "lightbulb",
+                systemPrompt: "Explain the provided text clearly in plain, easy-to-understand language. Clarify unfamiliar terms, context, or implications concisely in the reader's language (or Vietnamese/English as appropriate).",
+                temperature: 0.3,
+                topP: nil,
+                includeExamples: false,
+                outputLanguage: "",
+                insertBehavior: .replace,
+                isEnabled: true,
+                availability: .readOnlyOnly
+            ),
+            WritingPreset(
+                id: UUID(uuidString: "11111111-1111-4111-8111-111111111110")!,
+                defaultKey: "draftReply",
+                title: "Draft Reply",
+                icon: "arrowshape.turn.up.left",
+                systemPrompt: "Draft a clear, natural, ready-to-send reply to the provided message or email in the same language and an appropriate polite tone.",
+                temperature: 0.45,
+                topP: nil,
+                includeExamples: false,
+                outputLanguage: "",
+                insertBehavior: .replace,
+                isEnabled: true,
+                availability: .readOnlyOnly
+            ),
+        ]
+
+        static let readOnlySeedPresets: [WritingPreset] = Array(defaultPresets.suffix(5))
+    }
+
+    struct SelectionMenuItem: Codable, Identifiable, Equatable, Hashable {
+        enum ActionKind: String, Codable, CaseIterable, Hashable {
+            case preset
+            case customPrompt
+            case smartReply
+            case voicePrompt
+
+            var displayName: String {
+                switch self {
+                case .preset: return "Run Preset"
+                case .customPrompt: return "Custom Prompt"
+                case .smartReply: return "Smart Reply"
+                case .voicePrompt: return "Voice Input"
+                }
+            }
+        }
+
+        let id: UUID
+        var title: String
+        var icon: String
+        var actionKind: ActionKind
+        var presetID: UUID?
+        var customPrompt: String
+        var availability: WritingPreset.Availability
+        var isEnabled: Bool
+
+        init(
+            id: UUID = UUID(),
+            title: String,
+            icon: String = "sparkles",
+            actionKind: ActionKind = .preset,
+            presetID: UUID? = nil,
+            customPrompt: String = "",
+            availability: WritingPreset.Availability = .both,
+            isEnabled: Bool = true
+        ) {
+            self.id = id
+            self.title = title
+            self.icon = icon
+            self.actionKind = actionKind
+            self.presetID = presetID
+            self.customPrompt = customPrompt
+            self.availability = availability
+            self.isEnabled = isEnabled
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id, title, icon, actionKind, presetID, customPrompt, availability, isEnabled
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+            title = try c.decode(String.self, forKey: .title)
+            icon = try c.decodeIfPresent(String.self, forKey: .icon) ?? "sparkles"
+            actionKind = try c.decodeIfPresent(ActionKind.self, forKey: .actionKind) ?? .preset
+            presetID = try c.decodeIfPresent(UUID.self, forKey: .presetID)
+            customPrompt = try c.decodeIfPresent(String.self, forKey: .customPrompt) ?? ""
+            availability = try c.decodeIfPresent(WritingPreset.Availability.self, forKey: .availability) ?? .both
+            isEnabled = try c.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
+        }
+
+        static let defaultItems: [SelectionMenuItem] = [
+            SelectionMenuItem(
+                id: UUID(uuidString: "22222222-2222-4222-8222-222222222201")!,
+                title: "Translate",
+                icon: "globe",
+                actionKind: .preset,
+                presetID: UUID(uuidString: "11111111-1111-4111-8111-111111111106")!,
+                customPrompt: "",
+                availability: .both,
+                isEnabled: true
+            ),
+            SelectionMenuItem(
+                id: UUID(uuidString: "22222222-2222-4222-8222-222222222202")!,
+                title: "Explain",
+                icon: "lightbulb",
+                actionKind: .preset,
+                presetID: UUID(uuidString: "11111111-1111-4111-8111-111111111109")!,
+                customPrompt: "",
+                availability: .readOnlyOnly,
+                isEnabled: false
+            ),
+        ]
+    }
+
+    struct QuickActionItem: Codable, Identifiable, Equatable, Hashable {
+        let id: UUID
+        var title: String
+        var icon: String
+        var instruction: String
+        var availability: WritingPreset.Availability
+        var showOnInputPanel: Bool
+        var showOnOutputRefine: Bool
+        var isEnabled: Bool
+
+        init(
+            id: UUID = UUID(),
+            title: String,
+            icon: String = "bolt.fill",
+            instruction: String,
+            availability: WritingPreset.Availability = .both,
+            showOnInputPanel: Bool = true,
+            showOnOutputRefine: Bool = true,
+            isEnabled: Bool = true
+        ) {
+            self.id = id
+            self.title = title
+            self.icon = icon
+            self.instruction = instruction
+            self.availability = availability
+            self.showOnInputPanel = showOnInputPanel
+            self.showOnOutputRefine = showOnOutputRefine
+            self.isEnabled = isEnabled
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id, title, icon, instruction, availability, showOnInputPanel, showOnOutputRefine, isEnabled
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+            title = try c.decode(String.self, forKey: .title)
+            icon = try c.decodeIfPresent(String.self, forKey: .icon) ?? "bolt.fill"
+            instruction = try c.decode(String.self, forKey: .instruction)
+            availability = try c.decodeIfPresent(WritingPreset.Availability.self, forKey: .availability) ?? .both
+            showOnInputPanel = try c.decodeIfPresent(Bool.self, forKey: .showOnInputPanel) ?? true
+            showOnOutputRefine = try c.decodeIfPresent(Bool.self, forKey: .showOnOutputRefine) ?? true
+            isEnabled = try c.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
+        }
+
+        static let defaultItems: [QuickActionItem] = [
+            QuickActionItem(
+                id: UUID(uuidString: "33333333-3333-4333-8333-333333333301")!,
+                title: "-> VI",
+                icon: "globe",
+                instruction: "Translate this into natural Vietnamese.",
+                availability: .both,
+                showOnInputPanel: true,
+                showOnOutputRefine: true,
+                isEnabled: true
+            ),
+            QuickActionItem(
+                id: UUID(uuidString: "33333333-3333-4333-8333-333333333302")!,
+                title: "-> EN",
+                icon: "globe",
+                instruction: "Translate this into natural English.",
+                availability: .both,
+                showOnInputPanel: true,
+                showOnOutputRefine: true,
+                isEnabled: true
+            ),
+            QuickActionItem(
+                id: UUID(uuidString: "33333333-3333-4333-8333-333333333303")!,
+                title: "Tóm tắt",
+                icon: "text.alignleft",
+                instruction: "Summarize clearly into 3 concise bullet points.",
+                availability: .readOnlyOnly,
+                showOnInputPanel: true,
+                showOnOutputRefine: true,
+                isEnabled: true
+            ),
+            QuickActionItem(
+                id: UUID(uuidString: "33333333-3333-4333-8333-333333333304")!,
+                title: "Giải thích",
+                icon: "lightbulb",
+                instruction: "Explain this clearly in plain, simple language.",
+                availability: .readOnlyOnly,
+                showOnInputPanel: true,
+                showOnOutputRefine: true,
+                isEnabled: true
+            ),
+            QuickActionItem(
+                id: UUID(uuidString: "33333333-3333-4333-8333-333333333305")!,
+                title: "Shorter",
+                icon: "arrow.down.right.and.arrow.up.left",
+                instruction: "Make this shorter and more concise.",
+                availability: .both,
+                showOnInputPanel: false,
+                showOnOutputRefine: true,
+                isEnabled: true
+            ),
+            QuickActionItem(
+                id: UUID(uuidString: "33333333-3333-4333-8333-333333333306")!,
+                title: "Natural",
+                icon: "sparkles",
+                instruction: "Make this sound more natural and fluent.",
+                availability: .editableOnly,
+                showOnInputPanel: false,
+                showOnOutputRefine: true,
+                isEnabled: true
+            ),
+            QuickActionItem(
+                id: UUID(uuidString: "33333333-3333-4333-8333-333333333307")!,
+                title: "Formal",
+                icon: "briefcase",
+                instruction: "Make this more formal and professional.",
+                availability: .editableOnly,
+                showOnInputPanel: false,
+                showOnOutputRefine: true,
+                isEnabled: true
+            ),
+            QuickActionItem(
+                id: UUID(uuidString: "33333333-3333-4333-8333-333333333308")!,
+                title: "Fix Grammar",
+                icon: "checkmark.seal",
+                instruction: "Fix only spelling, grammar, and punctuation.",
+                availability: .editableOnly,
+                showOnInputPanel: false,
+                showOnOutputRefine: true,
                 isEnabled: true
             ),
         ]
@@ -300,6 +628,16 @@ extension Configuration {
         var autoAttachClipboardOnEmpty: Bool
         var restoreLastSessionEnabled: Bool
         var lastSessionTTLSeconds: Int
+        var readOnlyEnabled: Bool
+        var readOnlyShowEditablePresets: Bool
+        var readOnlyPrimaryAction: String     // "copy_close" | "copy" | "share"
+        var readOnlyShowSpeakButton: Bool
+        var readOnlyShowShareButton: Bool
+        var showMainMenuItemInSelection: Bool
+        var showMainMenuItemOnReadOnly: Bool
+        var selectionMenuPresentationMode: String // "inline" | "submenu"
+        var selectionMenuItems: [SelectionMenuItem]
+        var quickActions: [QuickActionItem]
 
         static let `default` = AppSettings(
             menuTitle: "Write Now",
@@ -329,7 +667,17 @@ extension Configuration {
             clipboardContextEnabled: true,
             autoAttachClipboardOnEmpty: false,
             restoreLastSessionEnabled: true,
-            lastSessionTTLSeconds: 180
+            lastSessionTTLSeconds: 180,
+            readOnlyEnabled: true,
+            readOnlyShowEditablePresets: false,
+            readOnlyPrimaryAction: "copy_close",
+            readOnlyShowSpeakButton: true,
+            readOnlyShowShareButton: true,
+            showMainMenuItemInSelection: true,
+            showMainMenuItemOnReadOnly: true,
+            selectionMenuPresentationMode: "inline",
+            selectionMenuItems: SelectionMenuItem.defaultItems,
+            quickActions: QuickActionItem.defaultItems
         )
 
         init(
@@ -360,7 +708,17 @@ extension Configuration {
             clipboardContextEnabled: Bool = true,
             autoAttachClipboardOnEmpty: Bool = false,
             restoreLastSessionEnabled: Bool = true,
-            lastSessionTTLSeconds: Int = 180
+            lastSessionTTLSeconds: Int = 180,
+            readOnlyEnabled: Bool = true,
+            readOnlyShowEditablePresets: Bool = false,
+            readOnlyPrimaryAction: String = "copy_close",
+            readOnlyShowSpeakButton: Bool = true,
+            readOnlyShowShareButton: Bool = true,
+            showMainMenuItemInSelection: Bool = true,
+            showMainMenuItemOnReadOnly: Bool = true,
+            selectionMenuPresentationMode: String = "inline",
+            selectionMenuItems: [SelectionMenuItem] = SelectionMenuItem.defaultItems,
+            quickActions: [QuickActionItem] = QuickActionItem.defaultItems
         ) {
             self.menuTitle = menuTitle
             self.globalSystemPrompt = globalSystemPrompt
@@ -390,6 +748,16 @@ extension Configuration {
             self.autoAttachClipboardOnEmpty = autoAttachClipboardOnEmpty
             self.restoreLastSessionEnabled = restoreLastSessionEnabled
             self.lastSessionTTLSeconds = lastSessionTTLSeconds
+            self.readOnlyEnabled = readOnlyEnabled
+            self.readOnlyShowEditablePresets = readOnlyShowEditablePresets
+            self.readOnlyPrimaryAction = readOnlyPrimaryAction
+            self.readOnlyShowSpeakButton = readOnlyShowSpeakButton
+            self.readOnlyShowShareButton = readOnlyShowShareButton
+            self.showMainMenuItemInSelection = showMainMenuItemInSelection
+            self.showMainMenuItemOnReadOnly = showMainMenuItemOnReadOnly
+            self.selectionMenuPresentationMode = selectionMenuPresentationMode
+            self.selectionMenuItems = selectionMenuItems
+            self.quickActions = quickActions
         }
 
         enum CodingKeys: String, CodingKey {
@@ -401,6 +769,10 @@ extension Configuration {
             case backgroundImageRevision, textReplacementAnimation, stt
             case wordDiffEnabled, defaultDiffMode, clipboardContextEnabled
             case autoAttachClipboardOnEmpty, restoreLastSessionEnabled, lastSessionTTLSeconds
+            case readOnlyEnabled, readOnlyShowEditablePresets, readOnlyPrimaryAction
+            case readOnlyShowSpeakButton, readOnlyShowShareButton
+            case showMainMenuItemInSelection, showMainMenuItemOnReadOnly, selectionMenuPresentationMode
+            case selectionMenuItems, quickActions
         }
 
         init(from decoder: Decoder) throws {
@@ -433,6 +805,16 @@ extension Configuration {
             autoAttachClipboardOnEmpty = try container.decodeIfPresent(Bool.self, forKey: .autoAttachClipboardOnEmpty) ?? false
             restoreLastSessionEnabled = try container.decodeIfPresent(Bool.self, forKey: .restoreLastSessionEnabled) ?? true
             lastSessionTTLSeconds = try container.decodeIfPresent(Int.self, forKey: .lastSessionTTLSeconds) ?? 180
+            readOnlyEnabled = try container.decodeIfPresent(Bool.self, forKey: .readOnlyEnabled) ?? true
+            readOnlyShowEditablePresets = try container.decodeIfPresent(Bool.self, forKey: .readOnlyShowEditablePresets) ?? false
+            readOnlyPrimaryAction = try container.decodeIfPresent(String.self, forKey: .readOnlyPrimaryAction) ?? "copy_close"
+            readOnlyShowSpeakButton = try container.decodeIfPresent(Bool.self, forKey: .readOnlyShowSpeakButton) ?? true
+            readOnlyShowShareButton = try container.decodeIfPresent(Bool.self, forKey: .readOnlyShowShareButton) ?? true
+            showMainMenuItemInSelection = try container.decodeIfPresent(Bool.self, forKey: .showMainMenuItemInSelection) ?? true
+            showMainMenuItemOnReadOnly = try container.decodeIfPresent(Bool.self, forKey: .showMainMenuItemOnReadOnly) ?? true
+            selectionMenuPresentationMode = try container.decodeIfPresent(String.self, forKey: .selectionMenuPresentationMode) ?? "inline"
+            selectionMenuItems = try container.decodeIfPresent([SelectionMenuItem].self, forKey: .selectionMenuItems) ?? SelectionMenuItem.defaultItems
+            quickActions = try container.decodeIfPresent([QuickActionItem].self, forKey: .quickActions) ?? QuickActionItem.defaultItems
         }
     }
 

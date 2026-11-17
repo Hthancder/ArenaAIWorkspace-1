@@ -106,7 +106,7 @@ struct WriteNowRootView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This replaces all custom and modified presets with the 5 built-in presets.")
+            Text("This replaces all custom and modified presets with the built-in default presets (including Read-Only presets).")
         }
         .onAppear {
             DispatchQueue.main.async {
@@ -335,6 +335,20 @@ struct WriteNowRootView: View {
                                         .font(.subheadline)
                                         .fontWeight(.medium)
                                         .foregroundColor(preset.isEnabled ? .primary : .secondary)
+                                    if preset.availability != .both {
+                                        Text(preset.availability.shortLabel)
+                                            .font(.caption2)
+                                            .padding(.horizontal, 5)
+                                            .padding(.vertical, 1)
+                                            .background(preset.availability == .readOnlyOnly ? Color.cyan.opacity(0.16) : Color.secondary.opacity(0.14))
+                                            .foregroundColor(preset.availability == .readOnlyOnly ? .cyan : .secondary)
+                                            .cornerRadius(4)
+                                    }
+                                    if configuration.isPresetPinnedToSelectionMenu(preset.id) {
+                                        Image(systemName: "pin.fill")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(Color.accent)
+                                    }
                                     if !preset.outputLanguage.isEmpty {
                                         Text(preset.outputLanguage)
                                             .font(.caption2)
@@ -440,6 +454,19 @@ struct WriteNowRootView: View {
 
     var behaviorSection: some View {
         Section {
+            NavigationLink {
+                ReadOnlyAndMenuSettingsView()
+            } label: {
+                HStack {
+                    Label("Read-Only, Menu & Quick Actions", systemImage: "hand.tap.fill")
+                    Spacer()
+                    let pinCount = configurationViewModel.uiSettings.selectionMenuItems.filter(\.isEnabled).count
+                    Text("\(pinCount) pinned")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
             NavigationLink {
                 BehaviorSettingsView()
             } label: {
@@ -1223,6 +1250,8 @@ struct PresetEditorView: View {
     @State private var outputLanguage: String
     @State private var insertBehavior: Configuration.WritingPreset.InsertBehavior
     @State private var isEnabled: Bool
+    @State private var availability: Configuration.WritingPreset.Availability
+    @State private var pinToSelectionMenu: Bool
     @State private var selectedEndpointID: UUID?
     @State private var modelOverride: String
     @State private var showIconGrid = false
@@ -1249,6 +1278,8 @@ struct PresetEditorView: View {
         _outputLanguage = State(initialValue: editingPreset?.outputLanguage ?? "")
         _insertBehavior = State(initialValue: editingPreset?.insertBehavior ?? .replace)
         _isEnabled = State(initialValue: editingPreset?.isEnabled ?? true)
+        _availability = State(initialValue: editingPreset?.availability ?? .both)
+        _pinToSelectionMenu = State(initialValue: editingPreset.map { Configuration.shared.isPresetPinnedToSelectionMenu($0.id) } ?? false)
         _selectedEndpointID = State(initialValue: editingPreset?.endpointID)
         _modelOverride = State(initialValue: editingPreset?.modelOverride ?? "")
     }
@@ -1363,6 +1394,12 @@ struct PresetEditorView: View {
                         Text("Append After Selection").tag(Configuration.WritingPreset.InsertBehavior.append)
                     }
 
+                    Picker("Show In", selection: $availability) {
+                        ForEach(Configuration.WritingPreset.Availability.allCases, id: \.self) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
+                    }
+
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
                             Text("Temperature")
@@ -1379,6 +1416,9 @@ struct PresetEditorView: View {
                         .tint(.accent)
 
                     Toggle("Enabled in Menu", isOn: $isEnabled)
+                        .tint(.accent)
+
+                    Toggle("Pin Directly to Text Selection Menu", isOn: $pinToSelectionMenu)
                         .tint(.accent)
                 } header: {
                     Text("Execution Options")
@@ -1489,9 +1529,11 @@ struct PresetEditorView: View {
             existing.outputLanguage = cleanLang
             existing.insertBehavior = insertBehavior
             existing.isEnabled = isEnabled
+            existing.availability = availability
             existing.endpointID = selectedEndpointID
             existing.modelOverride = cleanModelOverride
             configuration.updatePreset(existing)
+            configuration.setPresetPinnedToSelectionMenu(existing, pinned: pinToSelectionMenu)
         } else {
             let preset = Configuration.WritingPreset(
                 defaultKey: nil,
@@ -1505,9 +1547,13 @@ struct PresetEditorView: View {
                 insertBehavior: insertBehavior,
                 isEnabled: isEnabled,
                 endpointID: selectedEndpointID,
-                modelOverride: cleanModelOverride
+                modelOverride: cleanModelOverride,
+                availability: availability
             )
             configuration.addPreset(preset)
+            if pinToSelectionMenu {
+                configuration.setPresetPinnedToSelectionMenu(preset, pinned: true)
+            }
         }
         dismiss()
     }
@@ -3074,5 +3120,616 @@ struct STTSettingsView: View {
             testFinalOutput = finalText
             testProviderUsed = provider
         }
+    }
+}
+
+// MARK: - Read-Only, Text Selection Menu & Quick Actions Settings View
+
+private enum ReadOnlySettingsSheet: Identifiable {
+    case addMenuItem
+    case editMenuItem(Configuration.SelectionMenuItem)
+    case addQuickAction
+    case editQuickAction(Configuration.QuickActionItem)
+
+    var id: String {
+        switch self {
+        case .addMenuItem: return "add-menu"
+        case let .editMenuItem(item): return "edit-menu-\(item.id.uuidString)"
+        case .addQuickAction: return "add-qa"
+        case let .editQuickAction(item): return "edit-qa-\(item.id.uuidString)"
+        }
+    }
+}
+
+struct ReadOnlyAndMenuSettingsView: View {
+    @ObservedObject var configuration = Configuration.shared
+    @ObservedObject var viewModel = Configuration.shared.viewModel
+
+    @State private var readOnlyEnabled: Bool
+    @State private var readOnlyShowEditablePresets: Bool
+    @State private var readOnlyPrimaryAction: String
+    @State private var readOnlyShowSpeakButton: Bool
+    @State private var readOnlyShowShareButton: Bool
+    @State private var showMainMenuItemInSelection: Bool
+    @State private var showMainMenuItemOnReadOnly: Bool
+    @State private var selectionMenuPresentationMode: String
+    @State private var selectionMenuItems: [Configuration.SelectionMenuItem]
+    @State private var quickActions: [Configuration.QuickActionItem]
+
+    @State private var activeSheet: ReadOnlySettingsSheet?
+    @State private var isReorderingMenuItems = false
+    @State private var isReorderingQuickActions = false
+
+    init() {
+        let s = Configuration.shared.appSettings
+        _readOnlyEnabled = State(initialValue: s.readOnlyEnabled)
+        _readOnlyShowEditablePresets = State(initialValue: s.readOnlyShowEditablePresets)
+        _readOnlyPrimaryAction = State(initialValue: s.readOnlyPrimaryAction)
+        _readOnlyShowSpeakButton = State(initialValue: s.readOnlyShowSpeakButton)
+        _readOnlyShowShareButton = State(initialValue: s.readOnlyShowShareButton)
+        _showMainMenuItemInSelection = State(initialValue: s.showMainMenuItemInSelection)
+        _showMainMenuItemOnReadOnly = State(initialValue: s.showMainMenuItemOnReadOnly)
+        _selectionMenuPresentationMode = State(initialValue: s.selectionMenuPresentationMode)
+        _selectionMenuItems = State(initialValue: s.selectionMenuItems)
+        _quickActions = State(initialValue: s.quickActions)
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Enable Read-Only Text Support", isOn: $readOnlyEnabled)
+                if readOnlyEnabled {
+                    Toggle("Show Editing Presets in Read-Only", isOn: $readOnlyShowEditablePresets)
+                    Picker("Primary Output Action", selection: $readOnlyPrimaryAction) {
+                        Text("Copy & Close").tag("copy_close")
+                        Text("Copy Only").tag("copy")
+                        Text("Share Sheet").tag("share")
+                    }
+                    Toggle("Show Speak (Read Aloud) Button", isOn: $readOnlyShowSpeakButton)
+                    Toggle("Show Share Button", isOn: $readOnlyShowShareButton)
+                }
+            } header: {
+                Text("Read-Only Contexts (Safari, Mail, Notes, PDF, Chat)")
+            } footer: {
+                Text("Allows translating, explaining, summarizing, and free-form prompting on non-editable text with Copy/Share/Speak actions instead of Replace.")
+            }
+
+            Section {
+                Toggle("Show Main \"\(configuration.appSettings.menuTitle)\" Button", isOn: $showMainMenuItemInSelection)
+                if showMainMenuItemInSelection && readOnlyEnabled {
+                    Toggle("Show Main Button on Read-Only Text", isOn: $showMainMenuItemOnReadOnly)
+                }
+                Picker("iOS 16+ Menu Style", selection: $selectionMenuPresentationMode) {
+                    Text("Inline Buttons").tag("inline")
+                    Text("Expandable Submenu").tag("submenu")
+                }
+
+                ForEach(selectionMenuItems) { item in
+                    HStack(spacing: 10) {
+                        Button {
+                            activeSheet = .editMenuItem(item)
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: item.icon.isEmpty ? "sparkles" : item.icon)
+                                    .foregroundColor(item.isEnabled ? .accent : .secondary)
+                                    .frame(width: 22)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 5) {
+                                        Text(item.title)
+                                            .font(.subheadline.weight(.medium))
+                                            .foregroundColor(item.isEnabled ? .primary : .secondary)
+                                        Text(item.availability.shortLabel)
+                                            .font(.caption2)
+                                            .padding(.horizontal, 5)
+                                            .padding(.vertical, 1)
+                                            .background(Color.secondary.opacity(0.14))
+                                            .foregroundColor(.secondary)
+                                            .cornerRadius(4)
+                                    }
+                                    Text(menuItemSubtitle(item))
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                        .lineLimit(1)
+                                }
+                                Spacer()
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+
+                        if isReorderingMenuItems {
+                            HStack(spacing: 6) {
+                                Button {
+                                    moveMenuItem(id: item.id, delta: -1)
+                                } label: {
+                                    Image(systemName: "arrow.up.circle").foregroundColor(.accent)
+                                }
+                                .buttonStyle(.borderless)
+                                Button {
+                                    moveMenuItem(id: item.id, delta: 1)
+                                } label: {
+                                    Image(systemName: "arrow.down.circle").foregroundColor(.accent)
+                                }
+                                .buttonStyle(.borderless)
+                            }
+                        } else {
+                            Toggle("", isOn: Binding(
+                                get: { item.isEnabled },
+                                set: { val in
+                                    if let idx = selectionMenuItems.firstIndex(where: { $0.id == item.id }) {
+                                        selectionMenuItems[idx].isEnabled = val
+                                        commit()
+                                    }
+                                }
+                            ))
+                            .labelsHidden()
+                        }
+                    }
+                }
+                .onDelete { offsets in
+                    selectionMenuItems.remove(atOffsets: offsets)
+                    commit()
+                }
+
+                Button {
+                    activeSheet = .addMenuItem
+                } label: {
+                    Label("Add Item to Text Selection Menu", systemImage: "plus.circle.fill")
+                }
+                .disabled(selectionMenuItems.count >= 12)
+            } header: {
+                HStack {
+                    Text("Text Selection Menu Items (Up to 12)")
+                    Spacer()
+                    if selectionMenuItems.count > 1 {
+                        Button(isReorderingMenuItems ? "Done" : "Reorder") {
+                            isReorderingMenuItems.toggle()
+                        }
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.accent)
+                    }
+                }
+            } footer: {
+                Text("Pin presets, custom prompts, Smart Reply, or Voice directly into the iOS Copy/Look Up popup bar for 1-tap launch.")
+            }
+
+            Section {
+                ForEach(quickActions) { action in
+                    HStack(spacing: 10) {
+                        Button {
+                            activeSheet = .editQuickAction(action)
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: action.icon.isEmpty ? "bolt.fill" : action.icon)
+                                    .foregroundColor(action.isEnabled ? .accent : .secondary)
+                                    .frame(width: 22)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 5) {
+                                        Text(action.title)
+                                            .font(.subheadline.weight(.medium))
+                                            .foregroundColor(action.isEnabled ? .primary : .secondary)
+                                        Text(action.availability.shortLabel)
+                                            .font(.caption2)
+                                            .padding(.horizontal, 5)
+                                            .padding(.vertical, 1)
+                                            .background(Color.secondary.opacity(0.14))
+                                            .foregroundColor(.secondary)
+                                            .cornerRadius(4)
+                                    }
+                                    Text(action.instruction)
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                        .lineLimit(1)
+                                }
+                                Spacer()
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+
+                        if isReorderingQuickActions {
+                            HStack(spacing: 6) {
+                                Button {
+                                    moveQuickAction(id: action.id, delta: -1)
+                                } label: {
+                                    Image(systemName: "arrow.up.circle").foregroundColor(.accent)
+                                }
+                                .buttonStyle(.borderless)
+                                Button {
+                                    moveQuickAction(id: action.id, delta: 1)
+                                } label: {
+                                    Image(systemName: "arrow.down.circle").foregroundColor(.accent)
+                                }
+                                .buttonStyle(.borderless)
+                            }
+                        } else {
+                            Toggle("", isOn: Binding(
+                                get: { action.isEnabled },
+                                set: { val in
+                                    if let idx = quickActions.firstIndex(where: { $0.id == action.id }) {
+                                        quickActions[idx].isEnabled = val
+                                        commit()
+                                    }
+                                }
+                            ))
+                            .labelsHidden()
+                        }
+                    }
+                }
+                .onDelete { offsets in
+                    quickActions.remove(atOffsets: offsets)
+                    commit()
+                }
+
+                Button {
+                    activeSheet = .addQuickAction
+                } label: {
+                    Label("Add Quick Action Chip", systemImage: "plus.circle.fill")
+                }
+
+                Button {
+                    quickActions = Configuration.QuickActionItem.defaultItems
+                    commit()
+                } label: {
+                    Label("Reset Quick Actions to Default", systemImage: "arrow.uturn.backward.circle")
+                }
+            } header: {
+                HStack {
+                    Text("Quick Actions & Refine Chips")
+                    Spacer()
+                    if quickActions.count > 1 {
+                        Button(isReorderingQuickActions ? "Done" : "Reorder") {
+                            isReorderingQuickActions.toggle()
+                        }
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.accent)
+                    }
+                }
+            } footer: {
+                Text("Quick chips appear inside the WriteNow popover (above presets and below results) for 1-tap prompts and refinements.")
+            }
+        }
+        .listStyle(.insetGrouped)
+        .tint(.accent)
+        .navigationTitle("Read-Only & Menu")
+        .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: readOnlyEnabled) { _ in commit() }
+        .onChange(of: readOnlyShowEditablePresets) { _ in commit() }
+        .onChange(of: readOnlyPrimaryAction) { _ in commit() }
+        .onChange(of: readOnlyShowSpeakButton) { _ in commit() }
+        .onChange(of: readOnlyShowShareButton) { _ in commit() }
+        .onChange(of: showMainMenuItemInSelection) { _ in commit() }
+        .onChange(of: showMainMenuItemOnReadOnly) { _ in commit() }
+        .onChange(of: selectionMenuPresentationMode) { _ in commit() }
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .addMenuItem:
+                SelectionMenuItemEditorView(editingItem: nil) { saved in
+                    selectionMenuItems.append(saved)
+                    commit()
+                }
+            case let .editMenuItem(item):
+                SelectionMenuItemEditorView(editingItem: item) { saved in
+                    if let idx = selectionMenuItems.firstIndex(where: { $0.id == saved.id }) {
+                        selectionMenuItems[idx] = saved
+                        commit()
+                    }
+                }
+            case .addQuickAction:
+                QuickActionEditorView(editingAction: nil) { saved in
+                    quickActions.append(saved)
+                    commit()
+                }
+            case let .editQuickAction(action):
+                QuickActionEditorView(editingAction: action) { saved in
+                    if let idx = quickActions.firstIndex(where: { $0.id == saved.id }) {
+                        quickActions[idx] = saved
+                        commit()
+                    }
+                }
+            }
+        }
+    }
+
+    private func menuItemSubtitle(_ item: Configuration.SelectionMenuItem) -> String {
+        switch item.actionKind {
+        case .preset:
+            if let pid = item.presetID,
+               let preset = viewModel.uiPresets.first(where: { $0.id == pid })
+            {
+                return "Preset: \(preset.title)"
+            }
+            return "Run Preset"
+        case .customPrompt:
+            return item.customPrompt.isEmpty ? "Custom Prompt" : item.customPrompt
+        case .smartReply:
+            return "Draft Smart Reply"
+        case .voicePrompt:
+            return "Start Voice Input"
+        }
+    }
+
+    private func moveMenuItem(id: UUID, delta: Int) {
+        guard let idx = selectionMenuItems.firstIndex(where: { $0.id == id }) else { return }
+        let target = idx + delta
+        guard selectionMenuItems.indices.contains(target) else { return }
+        selectionMenuItems.swapAt(idx, target)
+        commit()
+    }
+
+    private func moveQuickAction(id: UUID, delta: Int) {
+        guard let idx = quickActions.firstIndex(where: { $0.id == id }) else { return }
+        let target = idx + delta
+        guard quickActions.indices.contains(target) else { return }
+        quickActions.swapAt(idx, target)
+        commit()
+    }
+
+    private func commit() {
+        configuration.updateSettings { s in
+            s.readOnlyEnabled = readOnlyEnabled
+            s.readOnlyShowEditablePresets = readOnlyShowEditablePresets
+            s.readOnlyPrimaryAction = readOnlyPrimaryAction
+            s.readOnlyShowSpeakButton = readOnlyShowSpeakButton
+            s.readOnlyShowShareButton = readOnlyShowShareButton
+            s.showMainMenuItemInSelection = showMainMenuItemInSelection
+            s.showMainMenuItemOnReadOnly = showMainMenuItemOnReadOnly
+            s.selectionMenuPresentationMode = selectionMenuPresentationMode
+            s.selectionMenuItems = selectionMenuItems
+            s.quickActions = quickActions
+        }
+    }
+}
+
+// MARK: - Selection Menu Item Editor Sheet
+
+private struct SelectionMenuItemEditorView: View {
+    let editingItem: Configuration.SelectionMenuItem?
+    let onSave: (Configuration.SelectionMenuItem) -> Void
+
+    @ObservedObject var viewModel = Configuration.shared.viewModel
+    @Environment(\.dismiss) var dismiss
+
+    @State private var title: String
+    @State private var icon: String
+    @State private var actionKind: Configuration.SelectionMenuItem.ActionKind
+    @State private var presetID: UUID?
+    @State private var customPrompt: String
+    @State private var availability: Configuration.WritingPreset.Availability
+    @State private var isEnabled: Bool
+
+    init(
+        editingItem: Configuration.SelectionMenuItem?,
+        onSave: @escaping (Configuration.SelectionMenuItem) -> Void
+    ) {
+        self.editingItem = editingItem
+        self.onSave = onSave
+        let defaultPreset = Configuration.shared.viewModel.uiPresets.first?.id
+        _title = State(initialValue: editingItem?.title ?? "")
+        _icon = State(initialValue: editingItem?.icon ?? "sparkles")
+        _actionKind = State(initialValue: editingItem?.actionKind ?? .preset)
+        _presetID = State(initialValue: editingItem?.presetID ?? defaultPreset)
+        _customPrompt = State(initialValue: editingItem?.customPrompt ?? "")
+        _availability = State(initialValue: editingItem?.availability ?? .both)
+        _isEnabled = State(initialValue: editingItem?.isEnabled ?? true)
+    }
+
+    private var canSave: Bool {
+        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanTitle.isEmpty else { return false }
+        if actionKind == .customPrompt {
+            return !customPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        return true
+    }
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section {
+                    HStack {
+                        Text("Menu Title")
+                        Spacer()
+                        TextField("e.g. Dịch VN", text: $title)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    HStack {
+                        Text("SF Symbol (iOS 16+)")
+                        Spacer()
+                        TextField("globe", text: $icon)
+                            .multilineTextAlignment(.trailing)
+                            .autocapitalization(.none)
+                            .disableAutocorrection(true)
+                    }
+                    Picker("Show In", selection: $availability) {
+                        ForEach(Configuration.WritingPreset.Availability.allCases, id: \.self) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
+                    }
+                    Toggle("Enabled", isOn: $isEnabled)
+                } header: {
+                    Text("Appearance & Scope")
+                }
+
+                Section {
+                    Picker("Action", selection: $actionKind) {
+                        ForEach(Configuration.SelectionMenuItem.ActionKind.allCases, id: \.self) { kind in
+                            Text(kind.displayName).tag(kind)
+                        }
+                    }
+
+                    if actionKind == .preset {
+                        Picker("Preset", selection: $presetID) {
+                            ForEach(viewModel.uiPresets) { preset in
+                                Text(preset.title).tag(UUID?.some(preset.id))
+                            }
+                        }
+                        .onChange(of: presetID) { newID in
+                            if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                               let hit = viewModel.uiPresets.first(where: { $0.id == newID })
+                            {
+                                title = hit.title
+                                icon = hit.icon
+                                availability = hit.availability
+                            }
+                        }
+                    } else if actionKind == .customPrompt {
+                        TextEditor(text: $customPrompt)
+                            .frame(minHeight: 110)
+                            .font(.body)
+                    }
+                } header: {
+                    Text("Action Target")
+                } footer: {
+                    if actionKind == .customPrompt {
+                        Text("Prompt executed immediately when you tap this item in the text selection bar.")
+                    }
+                }
+            }
+            .navigationTitle(editingItem == nil ? "Add Menu Item" : "Edit Menu Item")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { save() }
+                        .disabled(!canSave)
+                }
+            }
+        }
+        .accentColor(.accent)
+        .navigationViewStyle(.stack)
+    }
+
+    private func save() {
+        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanTitle.isEmpty else { return }
+        let item = Configuration.SelectionMenuItem(
+            id: editingItem?.id ?? UUID(),
+            title: cleanTitle,
+            icon: icon.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "sparkles" : icon.trimmingCharacters(in: .whitespacesAndNewlines),
+            actionKind: actionKind,
+            presetID: actionKind == .preset ? presetID : nil,
+            customPrompt: customPrompt.trimmingCharacters(in: .whitespacesAndNewlines),
+            availability: availability,
+            isEnabled: isEnabled
+        )
+        onSave(item)
+        dismiss()
+    }
+}
+
+// MARK: - Quick Action Editor Sheet
+
+private struct QuickActionEditorView: View {
+    let editingAction: Configuration.QuickActionItem?
+    let onSave: (Configuration.QuickActionItem) -> Void
+
+    @Environment(\.dismiss) var dismiss
+
+    @State private var title: String
+    @State private var icon: String
+    @State private var instruction: String
+    @State private var availability: Configuration.WritingPreset.Availability
+    @State private var showOnInputPanel: Bool
+    @State private var showOnOutputRefine: Bool
+    @State private var isEnabled: Bool
+
+    init(
+        editingAction: Configuration.QuickActionItem?,
+        onSave: @escaping (Configuration.QuickActionItem) -> Void
+    ) {
+        self.editingAction = editingAction
+        self.onSave = onSave
+        _title = State(initialValue: editingAction?.title ?? "")
+        _icon = State(initialValue: editingAction?.icon ?? "bolt.fill")
+        _instruction = State(initialValue: editingAction?.instruction ?? "")
+        _availability = State(initialValue: editingAction?.availability ?? .both)
+        _showOnInputPanel = State(initialValue: editingAction?.showOnInputPanel ?? true)
+        _showOnOutputRefine = State(initialValue: editingAction?.showOnOutputRefine ?? true)
+        _isEnabled = State(initialValue: editingAction?.isEnabled ?? true)
+    }
+
+    private var canSave: Bool {
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section {
+                    HStack {
+                        Text("Chip Title")
+                        Spacer()
+                        TextField("e.g. Dịch VN", text: $title)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    HStack {
+                        Text("SF Symbol")
+                        Spacer()
+                        TextField("bolt.fill", text: $icon)
+                            .multilineTextAlignment(.trailing)
+                            .autocapitalization(.none)
+                            .disableAutocorrection(true)
+                    }
+                    Picker("Show In", selection: $availability) {
+                        ForEach(Configuration.WritingPreset.Availability.allCases, id: \.self) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
+                    }
+                } header: {
+                    Text("Identity")
+                }
+
+                Section {
+                    TextEditor(text: $instruction)
+                        .frame(minHeight: 110)
+                        .font(.body)
+                } header: {
+                    Text("Prompt / Refine Instruction")
+                }
+
+                Section {
+                    Toggle("Show on Popover Input Bar", isOn: $showOnInputPanel)
+                    Toggle("Show on Output Refine Bar", isOn: $showOnOutputRefine)
+                    Toggle("Enabled", isOn: $isEnabled)
+                } header: {
+                    Text("Placement")
+                }
+            }
+            .navigationTitle(editingAction == nil ? "Add Quick Action" : "Edit Quick Action")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { save() }
+                        .disabled(!canSave)
+                }
+            }
+        }
+        .accentColor(.accent)
+        .navigationViewStyle(.stack)
+    }
+
+    private func save() {
+        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanInstruction = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanTitle.isEmpty, !cleanInstruction.isEmpty else { return }
+        let item = Configuration.QuickActionItem(
+            id: editingAction?.id ?? UUID(),
+            title: cleanTitle,
+            icon: icon.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "bolt.fill" : icon.trimmingCharacters(in: .whitespacesAndNewlines),
+            instruction: cleanInstruction,
+            availability: availability,
+            showOnInputPanel: showOnInputPanel,
+            showOnOutputRefine: showOnOutputRefine,
+            isEnabled: isEnabled
+        )
+        onSave(item)
+        dismiss()
     }
 }

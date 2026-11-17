@@ -30,7 +30,9 @@ class WritingToolController: UIHostingController<WritingToolsView> {
     override func viewDidLoad() {
         super.viewDidLoad()
         assert(context.anchorView.superview != nil)
-        context.targetView.resignFirstResponder()
+        if !context.textProxy.isReadOnly {
+            context.targetView.resignFirstResponder()
+        }
         for decorationView in context.decorationViews {
             decorationView.alpha = 0
         }
@@ -104,9 +106,11 @@ class WritingToolController: UIHostingController<WritingToolsView> {
         super.viewDidDisappear(animated)
         context.anchorView.removeFromSuperview()
         context.decorationViews.forEach { $0.removeFromSuperview() }
-        if let textInput = context.targetView as? UITextInput {
-            textInput.selectedTextRange = context.textProxy.replacedRange
+        if !context.textProxy.isReadOnly {
+            if let textInput = context.targetView as? UITextInput {
+                textInput.selectedTextRange = context.textProxy.replacedRange
+            }
+            context.targetView.becomeFirstResponder()
         }
-        context.targetView.becomeFirstResponder()
     }
 }

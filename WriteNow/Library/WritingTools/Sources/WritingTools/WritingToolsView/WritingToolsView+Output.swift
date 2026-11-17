@@ -5,21 +5,25 @@
 //  Created by 秋星桥 on 2024/8/8.
 //
 
+import AVFoundation
 import Combine
 import Foundation
 import SwiftUI
 import UIKit
 
-private let quickRefineChips: [(title: String, instruction: String)] = [
-    ("Shorter", "Make this shorter and more concise."),
-    ("Natural", "Make this sound more natural and fluent."),
-    ("Formal", "Make this more formal and professional."),
-    ("Fix Grammar", "Fix only spelling, grammar, and punctuation."),
-    ("-> VI", "Translate this into natural Vietnamese."),
-    ("-> EN", "Translate this into natural English."),
-]
-
 extension WritingToolsView {
+    private var enabledOutputQuickActions: [RuntimeQuickActionItem] {
+        cfg.settings.quickActions.filter { action in
+            action.isEnabled
+                && action.showOnOutputRefine
+                && !action.instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && action.availability.matches(
+                    isReadOnly: textProxy.isReadOnly,
+                    showEditableInReadOnly: cfg.settings.readOnlyShowEditablePresets
+                )
+        }
+    }
+
     var outputPanel: some View {
         VStack(spacing: 8) {
             // Top mini-toolbar: version history, Original compare, Manual Edit
@@ -96,6 +100,21 @@ extension WritingToolsView {
                     }
                     .buttonStyle(.plain)
                     .disabled(isRunning)
+
+                    if cfg.settings.readOnlyShowSpeakButton && !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Button {
+                            toggleSpeakOutput()
+                        } label: {
+                            Image(systemName: isSpeakingOutput ? "stop.circle.fill" : "speaker.wave.2")
+                                .font(.caption2.weight(.semibold))
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 4)
+                                .background(isSpeakingOutput ? Color.cyan.opacity(0.32) : Color.white.opacity(0.12))
+                                .cornerRadius(8)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isRunning)
+                    }
                 }
             }
 
@@ -163,20 +182,28 @@ extension WritingToolsView {
             // Inline refine chips + follow-up prompt input (when idle with output)
             if !isRunning, !output.isEmpty {
                 VStack(spacing: 6) {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
-                            ForEach(quickRefineChips, id: \.title) { chip in
-                                Button {
-                                    runFollowUp(chip.instruction)
-                                } label: {
-                                    Text(chip.title)
-                                        .font(.caption2.weight(.medium))
+                    if !enabledOutputQuickActions.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 6) {
+                                ForEach(enabledOutputQuickActions) { chip in
+                                    Button {
+                                        runFollowUp(chip.instruction)
+                                    } label: {
+                                        HStack(spacing: 3) {
+                                            if !chip.icon.isEmpty {
+                                                Image(systemName: chip.icon)
+                                                    .font(.system(size: 9))
+                                            }
+                                            Text(chip.title)
+                                                .font(.caption2.weight(.medium))
+                                        }
                                         .padding(.horizontal, 8)
                                         .padding(.vertical, 4)
                                         .background(Color.white.opacity(0.13))
                                         .cornerRadius(8)
+                                    }
+                                    .buttonStyle(.plain)
                                 }
-                                .buttonStyle(.plain)
                             }
                         }
                     }
@@ -210,7 +237,10 @@ extension WritingToolsView {
                         if (isRecordingVoice || isProcessingVoice) && voiceTargetIsFollowUp {
                             liveRecordingStrip
                         } else {
-                            TextField("Refine result or hold Mic...", text: $followUpPromptInput)
+                            TextField(
+                                textProxy.isReadOnly ? "Ask a follow-up or hold Mic..." : "Refine result or hold Mic...",
+                                text: $followUpPromptInput
+                            )
                                 .font(.caption)
                                 .padding(.horizontal, 9)
                                 .padding(.vertical, 6)
@@ -247,16 +277,15 @@ extension WritingToolsView {
                     BeautifulButton(title: "Stop".localized) { stopStreaming() }
                 }
                 .frame(height: 38)
+            } else if textProxy.isReadOnly {
+                readOnlyActionBar
+                    .frame(height: 38)
             } else {
                 HStack(spacing: 6) {
                     BeautifulButton(title: "Discard".localized) { discard() }
                     BeautifulButton(title: "Again".localized) { executeCurrentTask() }
                     BeautifulButton(title: copiedToast ? "Copied".localized : "Copy".localized) {
-                        UIPasteboard.general.string = output
-                        copiedToast = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                            copiedToast = false
-                        }
+                        copyOutputToPasteboard(output, closeAfter: false)
                     }
                     BeautifulButton(
                         title: currentTask.insertBehavior == .append ? "Append".localized : "Accept".localized
@@ -280,6 +309,79 @@ extension WritingToolsView {
             }
         }
         .transition(.opacity.combined(with: .scale(scale: 0.92)))
+    }
+
+    @ViewBuilder
+    private var readOnlyActionBar: some View {
+        let primary = cfg.settings.readOnlyPrimaryAction
+        HStack(spacing: 6) {
+            BeautifulButton(title: "Discard".localized) { discard() }
+            BeautifulButton(title: "Again".localized) { executeCurrentTask() }
+
+            if primary == "share" {
+                BeautifulButton(title: copiedToast ? "Copied".localized : "Copy".localized) {
+                    copyOutputToPasteboard(output, closeAfter: false)
+                }
+                BeautifulButton(title: "Share") {
+                    presentShareSheet(text: output)
+                }
+                .contextMenu { readOnlyContextMenu }
+            } else {
+                if cfg.settings.readOnlyShowShareButton {
+                    BeautifulButton(title: "Share") {
+                        presentShareSheet(text: output)
+                    }
+                }
+                if primary == "copy" {
+                    BeautifulButton(title: copiedToast ? "Copied".localized : "Copy".localized) {
+                        copyOutputToPasteboard(output, closeAfter: false)
+                    }
+                    .contextMenu { readOnlyContextMenu }
+                } else {
+                    BeautifulButton(title: copiedToast ? "Copied".localized : "Copy & Close") {
+                        copyOutputToPasteboard(output, closeAfter: true)
+                    }
+                    .contextMenu { readOnlyContextMenu }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var readOnlyContextMenu: some View {
+        Button {
+            copyOutputToPasteboard(output, closeAfter: false)
+        } label: {
+            Label("Copy Only", systemImage: "doc.on.doc")
+        }
+        Button {
+            copyOutputToPasteboard(output, closeAfter: true)
+        } label: {
+            Label("Copy & Close", systemImage: "checkmark.circle")
+        }
+        Button {
+            let qa = "Original:\n\(textProxy.selectedText)\n\nResult:\n\(output)"
+            copyOutputToPasteboard(qa, closeAfter: false)
+        } label: {
+            Label("Copy Original + Result", systemImage: "doc.on.clipboard")
+        }
+        Button {
+            presentShareSheet(text: output)
+        } label: {
+            Label("Share...", systemImage: "square.and.arrow.up")
+        }
+    }
+
+    private func toggleSpeakOutput() {
+        if isSpeakingOutput {
+            OutputSpeechHelper.shared.stop()
+            isSpeakingOutput = false
+        } else {
+            isSpeakingOutput = true
+            OutputSpeechHelper.shared.speak(output) {
+                isSpeakingOutput = false
+            }
+        }
     }
 
     private func navigateHistory(delta: Int) {
@@ -553,5 +655,54 @@ private enum WordDiffEngine {
             tokens.append(current)
         }
         return tokens
+    }
+}
+
+// MARK: - Output Text-to-Speech Helper
+
+final class OutputSpeechHelper: NSObject, AVSpeechSynthesizerDelegate {
+    static let shared = OutputSpeechHelper()
+    private let synthesizer = AVSpeechSynthesizer()
+    private var onFinish: (() -> Void)?
+
+    override private init() {
+        super.init()
+        synthesizer.delegate = self
+    }
+
+    func speak(_ text: String, onFinish: @escaping () -> Void) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            onFinish()
+            return
+        }
+        if synthesizer.isSpeaking {
+            synthesizer.stopSpeaking(at: .immediate)
+        }
+        self.onFinish = onFinish
+        let utterance = AVSpeechUtterance(string: trimmed)
+        utterance.rate = AVSpeechUtteranceDefaultSpeechRate
+        synthesizer.speak(utterance)
+    }
+
+    func stop() {
+        if synthesizer.isSpeaking {
+            synthesizer.stopSpeaking(at: .immediate)
+        }
+        onFinish = nil
+    }
+
+    func speechSynthesizer(_: AVSpeechSynthesizer, didFinish _: AVSpeechUtterance) {
+        DispatchQueue.main.async { [weak self] in
+            self?.onFinish?()
+            self?.onFinish = nil
+        }
+    }
+
+    func speechSynthesizer(_: AVSpeechSynthesizer, didCancel _: AVSpeechUtterance) {
+        DispatchQueue.main.async { [weak self] in
+            self?.onFinish?()
+            self?.onFinish = nil
+        }
     }
 }

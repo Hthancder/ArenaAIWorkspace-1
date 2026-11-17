@@ -13,11 +13,23 @@ import UIKit
 public extension Presenter {
     @objc(presentToolController:)
     func presentToolController(_ responder: UIResponder) {
+        presentToolController(responder, slotIndex: 0)
+    }
+
+    @objc(presentToolController:slotIndex:)
+    func presentToolController(_ responder: UIResponder, slotIndex: Int) {
         guard let respondingView = responder as? UIView else { return }
 
-        guard let targetView = TextProxy.lookupViewOfInterest(view: respondingView),
-              let context = obtainContextFor(targetView)
-        else {
+        let context: Context?
+        if let targetView = TextProxy.lookupViewOfInterest(view: respondingView) {
+            let launchAction = resolveLaunchItem(slotIndex: slotIndex, isReadOnly: targetView._isReadOnly)
+            context = obtainContextFor(targetView, launchSlotAction: launchAction)
+        } else {
+            let launchAction = resolveLaunchItem(slotIndex: slotIndex, isReadOnly: true)
+            context = buildReadOnlyFallbackContext(from: respondingView, launchSlotAction: launchAction)
+        }
+
+        guard let context else {
             Configurator.shared.refreshRuntimeConfig()
             presentUnavailable(respondingView)
             return
@@ -35,8 +47,9 @@ public extension Presenter {
             }
         }
 
+        let targetView = context.targetView
         let anchorView = context.anchorView
-        context.targetView.addSubview(anchorView)
+        targetView.addSubview(anchorView)
         anchorView.frame = anchorView.frame.intersection(targetView.bounds)
         if anchorView.frame.width <= 0 || anchorView.frame.height <= 0 {
             anchorView.frame = targetView.bounds
@@ -73,19 +86,28 @@ public extension Presenter {
         toolController.popoverPresentationController?.canOverlapSourceViewRect = true
         toolController.popoverPresentationController?.permittedArrowDirections = [.up, .down]
 
-        context.parentController.present(toolController, animated: true)
+        let presenterVC = topMostPresenter(from: context.parentController)
+        presenterVC.present(toolController, animated: true)
     }
 
-    private func obtainContextFor(_ view: UIView) -> Context? {
-        if let context = buildContext(fromResponder: view) {
+    private func topMostPresenter(from root: UIViewController) -> UIViewController {
+        var current = root
+        while let presented = current.presentedViewController, !presented.isBeingDismissed {
+            current = presented
+        }
+        return current
+    }
+
+    private func obtainContextFor(_ view: UIView, launchSlotAction: RuntimeSelectionMenuItem?) -> Context? {
+        if let context = buildContext(fromResponder: view, launchSlotAction: launchSlotAction) {
             return context
         }
-        if Configurator.shared.settings.autoSelectAllIfEmpty,
-           let textProxy = TextProxy(delegatingView: view)
+        if let textProxy = TextProxy(delegatingView: view), !textProxy.isReadOnly,
+           Configurator.shared.settings.autoSelectAllIfEmpty
         {
             textProxy.selectAll()
         }
-        if let context = buildContext(fromResponder: view) {
+        if let context = buildContext(fromResponder: view, launchSlotAction: launchSlotAction) {
             return context
         }
         return nil

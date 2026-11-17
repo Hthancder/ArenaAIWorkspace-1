@@ -9,6 +9,9 @@
 
 #define kWritingToolSelectorName "_WT_OpenTools_3cf98861"
 #define kWritingToolSelectorSignature "v@:"
+#define kWritingToolCustomSlotPrefix "_WT_CustomSlot_"
+#define kWritingToolCustomSlotSuffix "_3cf98861"
+#define kWritingToolCustomSlotCount 12
 
 NS_ASSUME_NONNULL_BEGIN
 

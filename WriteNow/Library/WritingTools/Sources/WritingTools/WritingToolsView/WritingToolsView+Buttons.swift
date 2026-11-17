@@ -10,7 +10,24 @@ import SwiftUI
 
 extension WritingToolsView {
     private var enabledPresets: [WritingPresetItem] {
-        cfg.presets.filter(\.isEnabled)
+        cfg.presets.filter { preset in
+            preset.isEnabled && preset.availability.matches(
+                isReadOnly: textProxy.isReadOnly,
+                showEditableInReadOnly: cfg.settings.readOnlyShowEditablePresets
+            )
+        }
+    }
+
+    private var enabledInputQuickActions: [RuntimeQuickActionItem] {
+        cfg.settings.quickActions.filter { action in
+            action.isEnabled
+                && action.showOnInputPanel
+                && !action.instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && action.availability.matches(
+                    isReadOnly: textProxy.isReadOnly,
+                    showEditableInReadOnly: cfg.settings.readOnlyShowEditablePresets
+                )
+        }
     }
 
     private var gridColumns: [GridItem] {
@@ -20,6 +37,22 @@ extension WritingToolsView {
 
     @ViewBuilder
     var selectiveButtonPanels: some View {
+        if textProxy.isFetchingSelectedText && context.launchSlotAction != nil {
+            VStack(spacing: 10) {
+                ProgressView()
+                    .tint(.white)
+                Text("Reading selected text...")
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.75))
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            selectiveButtonPanelsBody
+        }
+    }
+
+    @ViewBuilder
+    private var selectiveButtonPanelsBody: some View {
         VStack(spacing: innerSpacing) {
             // Quick custom prompt + Voice bar
             HStack(spacing: 6) {
@@ -29,7 +62,9 @@ extension WritingToolsView {
                     TextField(
                         voiceMode == "dictate"
                             ? "Tap or hold Mic to dictate..."
-                            : (voiceMode == "translate" ? "Tap or hold Mic to speak & translate..." : "Ask AI anything or hold Mic..."),
+                            : (voiceMode == "translate"
+                                ? "Tap or hold Mic to speak & translate..."
+                                : (textProxy.isReadOnly ? "Ask, translate, or prompt freely..." : "Ask AI anything or hold Mic...")),
                         text: $customPromptInput
                     )
                     .font(.footnote)
@@ -175,6 +210,32 @@ extension WritingToolsView {
                 .cornerRadius(8)
             }
 
+            if !enabledInputQuickActions.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(enabledInputQuickActions) { action in
+                            Button {
+                                runCustomPrompt(action.instruction)
+                            } label: {
+                                HStack(spacing: 4) {
+                                    if !action.icon.isEmpty {
+                                        Image(systemName: action.icon)
+                                            .font(.system(size: 10, weight: .semibold))
+                                    }
+                                    Text(action.title)
+                                        .font(.caption2.weight(.semibold))
+                                }
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 5)
+                                .background(Color.white.opacity(0.16))
+                                .cornerRadius(8)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+
             if !cfg.settings.recentCustomPrompts.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
@@ -239,15 +300,18 @@ extension WritingToolsView {
                     .font(.footnote.weight(.medium))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
-                if !preset.outputLanguage.isEmpty || preset.insertBehavior == .append || !preset.shortOverrideModelName.isEmpty {
+                if !preset.outputLanguage.isEmpty || preset.insertBehavior == .append || !preset.shortOverrideModelName.isEmpty || preset.availability == .readOnlyOnly {
                     HStack(spacing: 4) {
+                        if preset.availability == .readOnlyOnly {
+                            Text("Read")
+                        }
                         if !preset.shortOverrideModelName.isEmpty {
                             Text(preset.shortOverrideModelName)
                         }
                         if !preset.outputLanguage.isEmpty {
                             Text(preset.outputLanguage)
                         }
-                        if preset.insertBehavior == .append {
+                        if preset.insertBehavior == .append && !textProxy.isReadOnly {
                             Text("+Append")
                         }
                     }

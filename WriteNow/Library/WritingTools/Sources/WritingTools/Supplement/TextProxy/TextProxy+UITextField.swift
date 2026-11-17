@@ -8,6 +8,7 @@
 import UIKit
 
 extension UITextField: TextProxyObject {
+    var _isReadOnly: Bool { !(isEnabled && isUserInteractionEnabled) }
     var _eligibleForWritingTool: Bool { isUserInteractionEnabled }
     var _appearanceForWritingTool: TextProxy.WTAppearance {
         .init(magicColorBehavior: .behindText)
