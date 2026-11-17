@@ -424,7 +424,7 @@ public struct RuntimeSettings: Codable, Equatable {
         unlockBlockedSelection: false,
         floatingPickerBubbleEnabled: false,
         pickerTwoFingerLongPressEnabled: true,
-        pickerStatusBarDoubleTapEnabled: true,
+        pickerStatusBarDoubleTapEnabled: false,
         ocrPreferredLanguages: ["vi-VN", "en-US", "zh-Hans", "ja-JP", "ko-KR"],
         keepEditContextEnabled: true,
         editContextMatchMode: "smart_match",
@@ -497,7 +497,7 @@ public struct RuntimeSettings: Codable, Equatable {
         unlockBlockedSelection: Bool = false,
         floatingPickerBubbleEnabled: Bool = false,
         pickerTwoFingerLongPressEnabled: Bool = true,
-        pickerStatusBarDoubleTapEnabled: Bool = true,
+        pickerStatusBarDoubleTapEnabled: Bool = false,
         ocrPreferredLanguages: [String] = ["vi-VN", "en-US", "zh-Hans", "ja-JP", "ko-KR"],
         keepEditContextEnabled: Bool = true,
         editContextMatchMode: String = "smart_match",
@@ -602,7 +602,7 @@ public struct RuntimeSettings: Codable, Equatable {
         unlockBlockedSelection = try c.decodeIfPresent(Bool.self, forKey: .unlockBlockedSelection) ?? false
         floatingPickerBubbleEnabled = try c.decodeIfPresent(Bool.self, forKey: .floatingPickerBubbleEnabled) ?? false
         pickerTwoFingerLongPressEnabled = try c.decodeIfPresent(Bool.self, forKey: .pickerTwoFingerLongPressEnabled) ?? true
-        pickerStatusBarDoubleTapEnabled = try c.decodeIfPresent(Bool.self, forKey: .pickerStatusBarDoubleTapEnabled) ?? true
+        pickerStatusBarDoubleTapEnabled = try c.decodeIfPresent(Bool.self, forKey: .pickerStatusBarDoubleTapEnabled) ?? false
         ocrPreferredLanguages = try c.decodeIfPresent([String].self, forKey: .ocrPreferredLanguages) ?? ["vi-VN", "en-US", "zh-Hans", "ja-JP", "ko-KR"]
         keepEditContextEnabled = try c.decodeIfPresent(Bool.self, forKey: .keepEditContextEnabled) ?? true
         editContextMatchMode = try c.decodeIfPresent(String.self, forKey: .editContextMatchMode) ?? "smart_match"

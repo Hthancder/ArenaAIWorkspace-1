@@ -56,6 +56,8 @@ struct WriteNowRootView: View {
     @State private var testStatusMessage: String = ""
     @State private var testStatusOK: Bool = false
     @State private var isTestingActive: Bool = false
+    @State private var isTestingAllEndpoints: Bool = false
+    @State private var allEndpointsHealthSummary: String = ""
     @State private var groupMergeFeedback: String = ""
     @State private var isReorderingPresets: Bool = false
 
@@ -242,6 +244,27 @@ struct WriteNowRootView: View {
                 Text(groupMergeFeedback)
                     .font(.caption)
                     .foregroundColor(.green)
+            }
+
+            if configurationViewModel.uiEndpoints.count > 1 {
+                Button {
+                    testAllEndpoints()
+                } label: {
+                    HStack {
+                        Label("Test All Providers", systemImage: "waveform.path.ecg")
+                        Spacer()
+                        if isTestingAllEndpoints {
+                            ProgressView()
+                        }
+                    }
+                }
+                .disabled(isTestingAllEndpoints)
+
+                if !allEndpointsHealthSummary.isEmpty {
+                    Text(allEndpointsHealthSummary)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
 
             Button {
@@ -541,6 +564,40 @@ struct WriteNowRootView: View {
             isTestingActive = false
             testStatusOK = ok
             testStatusMessage = message
+        }
+    }
+
+    private func testAllEndpoints() {
+        let list = configurationViewModel.uiEndpoints
+        guard !list.isEmpty else { return }
+        isTestingAllEndpoints = true
+        allEndpointsHealthSummary = "Testing \(list.count) provider(s)..."
+
+        let group = DispatchGroup()
+        let lock = NSLock()
+        var results: [Int: String] = [:]
+
+        for (idx, ep) in list.enumerated() {
+            group.enter()
+            EndpointNetworkHelper.testChatEndpoint(
+                baseURL: ep.url,
+                token: ep.token,
+                model: ep.model,
+                pathMode: ep.pathMode,
+                customHeaders: ep.customHeaders,
+                timeoutSeconds: min(20, max(10, ep.timeoutSeconds))
+            ) { ok, _, latencyMs, _ in
+                lock.lock()
+                results[idx] = ok ? "\(ep.displayName): \(latencyMs)ms ✓" : "\(ep.displayName): Failed ✗"
+                lock.unlock()
+                group.leave()
+            }
+        }
+
+        group.notify(queue: .main) {
+            self.isTestingAllEndpoints = false
+            let ordered = list.indices.compactMap { results[$0] }
+            self.allEndpointsHealthSummary = ordered.joined(separator: " · ")
         }
     }
 

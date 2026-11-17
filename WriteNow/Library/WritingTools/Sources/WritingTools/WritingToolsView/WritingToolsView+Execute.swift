@@ -24,6 +24,8 @@ extension WritingToolsView {
         diffDisplayMode = .none
         restorableSession = nil
         isRunning = true
+        requestStartedAt = Date()
+        lastGenerationDuration = nil
         output = ""
         error = nil
 
@@ -204,6 +206,11 @@ extension WritingToolsView {
     private func recordCompletedTurn(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        if let started = requestStartedAt {
+            lastGenerationDuration = Date().timeIntervalSince(started)
+            requestStartedAt = nil
+        }
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
         currentSessionTurns.append(EditContextTurn(instruction: currentTaskInstructionLabel, output: trimmed))
     }
 
@@ -342,6 +349,7 @@ extension WritingToolsView {
                 UIApplication.shared.open(spawnURL)
                 self.setNeedsRetryWhenActive()
             }
+            UINotificationFeedbackGenerator().notificationOccurred(.warning)
             isRunning = false
             self.error = error
         }
@@ -362,6 +370,8 @@ extension WritingToolsView {
         historyIndex = 0
         currentSessionTurns = []
         lastPresetForFollowUp = nil
+        requestStartedAt = nil
+        lastGenerationDuration = nil
         error = nil
         restorableSession = nil
         cfg.clearLastSession()
@@ -412,6 +422,7 @@ extension WritingToolsView {
             copyOutputToPasteboard(output, closeAfter: true)
             return
         }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
         let shouldAppend = forceAppend ?? (currentTask.insertBehavior == .append)
         let finalText = output
         let targetView = context.targetView

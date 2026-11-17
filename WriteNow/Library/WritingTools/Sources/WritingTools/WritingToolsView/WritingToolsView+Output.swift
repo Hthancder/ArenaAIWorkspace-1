@@ -136,6 +136,35 @@ extension WritingToolsView {
                             .buttonStyle(.plain)
                             .disabled(isRunning)
                         }
+
+                        if !isRunning && !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Button {
+                                copyOutputToPasteboard(output, closeAfter: false)
+                            } label: {
+                                Image(systemName: copiedToast ? "checkmark" : "doc.on.doc")
+                                    .font(.caption2.weight(.semibold))
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 4)
+                                    .background(copiedToast ? Color.green.opacity(0.32) : Color.white.opacity(0.12))
+                                    .cornerRadius(8)
+                            }
+                            .buttonStyle(.plain)
+
+                            let words = output.split { $0.isWhitespace || $0.isNewline }.count
+                            let statText: String = {
+                                if let dur = lastGenerationDuration, dur > 0.05 {
+                                    return String(format: "%.1fs · %dw", dur, words)
+                                }
+                                return "\(words)w"
+                            }()
+                            Text(statText)
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundColor(.white.opacity(0.62))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 4)
+                                .background(Color.white.opacity(0.08))
+                                .cornerRadius(7)
+                        }
                     }
                 }
             }

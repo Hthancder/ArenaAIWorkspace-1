@@ -32,6 +32,7 @@ final class ScreenTextOverlayViewController: UIViewController {
 
     private let bottomActionBar = UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterialDark))
     private let hintLabel = UILabel()
+    private let selectAllMultiButton = UIButton(type: .system)
     private let copyMultiButton = UIButton(type: .system)
     private let askMultiButton = UIButton(type: .system)
     private let ocrSpinner = UIActivityIndicatorView(style: .medium)
@@ -151,6 +152,15 @@ final class ScreenTextOverlayViewController: UIViewController {
         ocrSpinner.color = .systemCyan
         ocrSpinner.hidesWhenStopped = true
 
+        selectAllMultiButton.setTitle("All", for: .normal)
+        selectAllMultiButton.titleLabel?.font = .systemFont(ofSize: 12, weight: .semibold)
+        selectAllMultiButton.backgroundColor = UIColor.white.withAlphaComponent(0.14)
+        selectAllMultiButton.setTitleColor(.white, for: .normal)
+        selectAllMultiButton.layer.cornerRadius = 10
+        selectAllMultiButton.contentEdgeInsets = UIEdgeInsets(top: 6, left: 9, bottom: 6, right: 9)
+        selectAllMultiButton.isHidden = true
+        selectAllMultiButton.addTarget(self, action: #selector(didTapSelectAllMulti), for: .touchUpInside)
+
         copyMultiButton.setTitle("Copy", for: .normal)
         copyMultiButton.titleLabel?.font = .systemFont(ofSize: 13, weight: .semibold)
         copyMultiButton.backgroundColor = UIColor.white.withAlphaComponent(0.18)
@@ -169,7 +179,7 @@ final class ScreenTextOverlayViewController: UIViewController {
         askMultiButton.isHidden = true
         askMultiButton.addTarget(self, action: #selector(didTapAskMulti), for: .touchUpInside)
 
-        let stack = UIStackView(arrangedSubviews: [ocrSpinner, hintLabel, copyMultiButton, askMultiButton])
+        let stack = UIStackView(arrangedSubviews: [ocrSpinner, hintLabel, selectAllMultiButton, copyMultiButton, askMultiButton])
         stack.axis = .horizontal
         stack.spacing = 8
         stack.alignment = .center
@@ -246,17 +256,21 @@ final class ScreenTextOverlayViewController: UIViewController {
             hintLabel.text = blocks.isEmpty
                 ? "Drag a box over any text to scan with OCR"
                 : "Tap box • Long-press to copy • Drag for OCR"
+            selectAllMultiButton.isHidden = true
             copyMultiButton.isHidden = true
             askMultiButton.isHidden = true
         case .multiSelect:
             hintLabel.text = selectedIndices.isEmpty
                 ? "Tap blocks in order to combine them"
                 : "\(selectedIndices.count) selected"
+            selectAllMultiButton.isHidden = blocks.isEmpty
+            selectAllMultiButton.setTitle(selectedIndices.count == blocks.count && !blocks.isEmpty ? "None" : "All", for: .normal)
             copyMultiButton.isHidden = selectedIndices.isEmpty
             askMultiButton.isHidden = selectedIndices.isEmpty
             askMultiButton.setTitle("WriteNow (\(selectedIndices.count))", for: .normal)
         case .drawOCR:
             hintLabel.text = "Drag a rectangle over any text, image, or video"
+            selectAllMultiButton.isHidden = true
             copyMultiButton.isHidden = true
             askMultiButton.isHidden = true
         }
@@ -311,6 +325,17 @@ final class ScreenTextOverlayViewController: UIViewController {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
             self?.updateModeUI()
         }
+    }
+
+    @objc private func didTapSelectAllMulti() {
+        guard !blocks.isEmpty else { return }
+        if selectedIndices.count == blocks.count {
+            selectedIndices.removeAll()
+        } else {
+            selectedIndices = Array(blocks.indices)
+        }
+        refreshSelectionStyles()
+        updateModeUI()
     }
 
     @objc private func didTapCopyMulti() {
@@ -391,10 +416,11 @@ final class ScreenTextOverlayViewController: UIViewController {
                 self.blocks = ocrBlocks
                 self.selectedIndices.removeAll()
                 self.rebuildBlockButtons()
+                self.updateModeUI()
             } else {
-                self.hintLabel.text = "No text detected. Try drawing a tighter OCR box."
+                UINotificationFeedbackGenerator().notificationOccurred(.warning)
+                self.hintLabel.text = "No text detected — drag a box to scan"
             }
-            self.updateModeUI()
         }
     }
 

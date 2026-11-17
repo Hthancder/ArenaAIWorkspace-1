@@ -54,6 +54,32 @@ extension WritingToolsView {
     @ViewBuilder
     private var selectiveButtonPanelsBody: some View {
         VStack(spacing: innerSpacing) {
+            let trimmedInput = textProxy.selectedText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmedInput.isEmpty {
+                Button {
+                    showSelectedTextPreviewAlert = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: textProxy.isReadOnly ? "doc.text.viewfinder" : "text.quote")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.72))
+                        Text(trimmedInput.replacingOccurrences(of: "\n", with: " "))
+                            .font(.system(size: 10.5))
+                            .foregroundColor(.white.opacity(0.76))
+                            .lineLimit(1)
+                        Spacer(minLength: 4)
+                        Text("\(trimmedInput.count)c")
+                            .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.55))
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.white.opacity(0.08))
+                    .cornerRadius(7)
+                }
+                .buttonStyle(.plain)
+            }
+
             // Quick custom prompt + Voice bar
             HStack(spacing: 6) {
                 if (isRecordingVoice || isProcessingVoice) && !voiceTargetIsFollowUp {

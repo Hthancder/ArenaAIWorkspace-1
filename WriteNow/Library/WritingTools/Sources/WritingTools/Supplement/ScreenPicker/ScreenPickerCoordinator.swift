@@ -59,11 +59,7 @@ final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
 
         if !attachedWindows.contains(window) {
             attachedWindows.add(window)
-            if Configurator.shared.settings.pickerTwoFingerLongPressEnabled
-                || Configurator.shared.settings.pickerStatusBarDoubleTapEnabled
-            {
-                installGestures(on: window)
-            }
+            syncGestures(on: window, settings: Configurator.shared.settings)
         }
         syncFloatingBubble(in: window)
     }
@@ -75,15 +71,8 @@ final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
             if settings.floatingPickerBubbleEnabled {
                 self.hiddenForCurrentSession = false
             }
-            if settings.pickerTwoFingerLongPressEnabled || settings.pickerStatusBarDoubleTapEnabled {
-                for win in self.attachedWindows.allObjects {
-                    let hasOurs = (win.gestureRecognizers ?? []).contains {
-                        $0.name == "WriteNowStatusBarTap" || $0.name == "WriteNowTwoFingerHold"
-                    }
-                    if !hasOurs {
-                        self.installGestures(on: win)
-                    }
-                }
+            for win in self.attachedWindows.allObjects {
+                self.syncGestures(on: win, settings: settings)
             }
             if let keyWin = self.attachedWindows.allObjects.first(where: { $0.isKeyWindow }) ?? self.attachedWindows.allObjects.first {
                 self.syncFloatingBubble(in: keyWin)
@@ -111,27 +100,53 @@ final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
         }
     }
 
-    private func installGestures(on window: UIWindow) {
-        let twoFingerHold = UILongPressGestureRecognizer(target: self, action: #selector(handleTwoFingerLongPress(_:)))
-        twoFingerHold.numberOfTouchesRequired = 2
-        twoFingerHold.minimumPressDuration = 0.42
-        twoFingerHold.cancelsTouchesInView = false
-        twoFingerHold.delaysTouchesBegan = false
-        twoFingerHold.name = "WriteNowTwoFingerHold"
-        twoFingerHold.delegate = self
-        window.addGestureRecognizer(twoFingerHold)
+    private func syncGestures(on window: UIWindow, settings: RuntimeSettings) {
+        let wantTwoFinger = settings.readOnlyEnabled && settings.pickerTwoFingerLongPressEnabled
+        let wantStatusTap = settings.readOnlyEnabled && settings.pickerStatusBarDoubleTapEnabled
 
-        let statusBarTap = UITapGestureRecognizer(target: self, action: #selector(handleStatusBarDoubleTap(_:)))
-        statusBarTap.numberOfTapsRequired = 2
-        statusBarTap.cancelsTouchesInView = false
-        statusBarTap.delaysTouchesBegan = false
-        statusBarTap.name = "WriteNowStatusBarTap"
-        statusBarTap.delegate = self
-        window.addGestureRecognizer(statusBarTap)
+        let existingTwoFinger = (window.gestureRecognizers ?? []).filter { $0.name == "WriteNowTwoFingerHold" }
+        let existingStatusTap = (window.gestureRecognizers ?? []).filter { $0.name == "WriteNowStatusBarTap" }
+
+        if wantTwoFinger && existingTwoFinger.isEmpty {
+            let twoFingerHold = UILongPressGestureRecognizer(target: self, action: #selector(handleTwoFingerLongPress(_:)))
+            twoFingerHold.numberOfTouchesRequired = 2
+            twoFingerHold.minimumPressDuration = 0.55
+            twoFingerHold.allowableMovement = 14
+            twoFingerHold.cancelsTouchesInView = false
+            twoFingerHold.delaysTouchesBegan = false
+            twoFingerHold.name = "WriteNowTwoFingerHold"
+            twoFingerHold.delegate = self
+            window.addGestureRecognizer(twoFingerHold)
+        } else if !wantTwoFinger {
+            existingTwoFinger.forEach { window.removeGestureRecognizer($0) }
+        }
+
+        if wantStatusTap && existingStatusTap.isEmpty {
+            let statusBarTap = UITapGestureRecognizer(target: self, action: #selector(handleStatusBarDoubleTap(_:)))
+            statusBarTap.numberOfTapsRequired = 2
+            statusBarTap.cancelsTouchesInView = false
+            statusBarTap.delaysTouchesBegan = false
+            statusBarTap.name = "WriteNowStatusBarTap"
+            statusBarTap.delegate = self
+            window.addGestureRecognizer(statusBarTap)
+        } else if !wantStatusTap {
+            existingStatusTap.forEach { window.removeGestureRecognizer($0) }
+        }
+    }
+
+    private static func isInteractiveView(_ view: UIView?) -> Bool {
+        var cur = view
+        while let v = cur {
+            if v is UIControl || v is UITextField || v is UITextView || v is UINavigationBar || v is UITabBar || v is UIToolbar {
+                return true
+            }
+            cur = v.superview
+        }
+        return false
     }
 
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        guard Configurator.shared.settings.readOnlyEnabled, !isOverlayPresented else {
+        guard Configurator.shared.settings.readOnlyEnabled, !isOverlayPresented, !isKeyboardVisible else {
             return false
         }
         if gestureRecognizer.name == "WriteNowStatusBarTap" {
@@ -139,8 +154,13 @@ final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
                   let win = gestureRecognizer.view as? UIWindow
             else { return false }
             let loc = gestureRecognizer.location(in: win)
-            let topZone = max(44.0, win.safeAreaInsets.top + 8.0)
-            return loc.y <= topZone
+            let barHeight = win.windowScene?.statusBarManager?.statusBarFrame.height ?? win.safeAreaInsets.top
+            let strictTop = max(16.0, min(barHeight, 32.0))
+            guard loc.y <= strictTop else { return false }
+            if Self.isInteractiveView(win.hitTest(loc, with: nil)) {
+                return false
+            }
+            return true
         }
         return Configurator.shared.settings.pickerTwoFingerLongPressEnabled
     }

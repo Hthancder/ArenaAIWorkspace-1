@@ -39,6 +39,7 @@ extension WritingToolsLocalizable {
             "Share...": "Chia sẻ...",
             "Clear Memory": "Xóa bộ nhớ",
             "Edit Memory": "Bộ nhớ chỉnh sửa",
+            "Captured Input Text": "Văn bản đã lấy",
             "%d characters": "%d ký tự",
             "%d character": "%d ký tự",
             "Unable to establish a secure connection to daemon": "Không thể kết nối tới dịch vụ WriteNow daemon",

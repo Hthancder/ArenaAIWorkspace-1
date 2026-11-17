@@ -41,6 +41,9 @@ struct WritingToolsView: View {
     @State var showQuickProviderSheet: Bool = false
     @State var showEditMemoryAlert: Bool = false
     @State var showContextPreviewAlert: Bool = false
+    @State var showSelectedTextPreviewAlert: Bool = false
+    @State var requestStartedAt: Date? = nil
+    @State var lastGenerationDuration: TimeInterval? = nil
     @State var isSpeakingOutput: Bool = false
     @State var didTriggerLaunchAction: Bool = false
 
@@ -169,6 +172,14 @@ struct WritingToolsView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(String(clipboardContextText.prefix(700)))
+        }
+        .alert("Captured Input Text", isPresented: $showSelectedTextPreviewAlert) {
+            Button("Copy") {
+                UIPasteboard.general.string = textProxy.selectedText
+            }
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(String(textProxy.selectedText.prefix(900)))
         }
         .onAppear {
             initialAnimation = 1
