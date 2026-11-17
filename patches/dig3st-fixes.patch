@@ -31,10 +31,10 @@ index e48656e..9661bf0 100644
  @end
 diff --git a/headers/Digest/DigestBannerAnimator.h b/headers/Digest/DigestBannerAnimator.h
 new file mode 100644
-index 0000000..2975402
+index 0000000..23be824
 --- /dev/null
 +++ b/headers/Digest/DigestBannerAnimator.h
-@@ -0,0 +1,55 @@
+@@ -0,0 +1,63 @@
 +#import <UIKit/UIKit.h>
 +
 +@interface DigestBannerRenderConfig : NSObject
@@ -88,7 +88,15 @@ index 0000000..2975402
 +                 originalText:(NSString *)originalText
 +                       config:(DigestBannerRenderConfig *)config
 +                   layoutHost:(UIView *)layoutHost;
+++ (BOOL)elementHasDigestStyle:(UIView *)textElement;
 ++ (void)stopForLabel:(UIView *)textElement;
++@end
++
++@interface DigestExpandedOriginalCardView : UIView
++- (void)configureWithSummary:(NSString *)summary
++                originalText:(NSString *)originalText
++                      config:(DigestBannerRenderConfig *)config
++           showBottomDivider:(BOOL)showDivider;
 +@end
 diff --git a/headers/Digest/DigestLogger.h b/headers/Digest/DigestLogger.h
 index f7d21e7..e5320d9 100644
@@ -146,7 +154,7 @@ index 062b2a3..03ad3ac 100644
  #import "Notification.h"
  #import "OpenAI.h"
 diff --git a/headers/Notification.h b/headers/Notification.h
-index e8bdc8b..ef16da9 100644
+index e8bdc8b..da486d3 100644
 --- a/headers/Notification.h
 +++ b/headers/Notification.h
 @@ -1,7 +1,13 @@
@@ -163,7 +171,7 @@ index e8bdc8b..ef16da9 100644
  @property (nonatomic, retain) NSObject *content;
  @end
  
-@@ -9,16 +15,73 @@
+@@ -9,16 +15,124 @@
  @property (nonatomic,readonly) UIView * viewForPreview;
  @end
  
@@ -173,6 +181,7 @@ index e8bdc8b..ef16da9 100644
 +@property (nonatomic, weak) id delegate;
 +- (void)_updatePreferredContentSize;
 +- (void)_updateWithProvidedStaticContent;
++- (void)_updateWithProvidedCustomContent;
 +- (void)invalidateContentProviders;
 +- (void)updateContent;
 +@end
@@ -181,8 +190,9 @@ index e8bdc8b..ef16da9 100644
  @property (nonatomic,readonly) NCNotificationShortLookView * viewForPreview;
 -@property (nonatomic,readonly) NCNotificationRequest  * notificationRequest;
  @property (nonatomic, retain) UIImage *image;
- @end
- 
++- (BOOL)isNotificationContentViewHidden;
++@end
++
 +@protocol DigestBNPresentableContext <NSObject>
 +@optional
 +- (void)setHostNeedsUpdate;
@@ -193,16 +203,51 @@ index e8bdc8b..ef16da9 100644
 +@property (nonatomic,readonly) id<DigestBNPresentableContext> presentableContext;
 +@end
 +
++@interface PLExpandedPlatterView : UIView
++@property (nonatomic, readonly) UIView *customContentView;
++@property (nonatomic, assign) CGSize customContentSize;
++- (UIView *)_mainContentView;
++- (void)_configureMainContentViewIfNecessary;
++- (CGRect)_mainContentViewFrame;
++- (CGSize)_contentViewSize;
++- (CGSize)sizeThatFitsContentWithSize:(CGSize)size;
++- (CGSize)contentSizeForSize:(CGSize)size;
++- (CGSize)_contentSizeThatFitsContentWithSizeExcludingActions:(CGSize)size;
++- (CGRect)_boundsInsetHorizontallyFromDismissControlIfNecessary;
++@end
++
++@interface NCExpandedPlatterView : PLExpandedPlatterView
++@property (nonatomic, assign) BOOL hidesNotificationContent;
++- (void)_layoutSubviews;
++@end
++
++@interface NCNotificationLongLookView : PLExpandedPlatterView
++@property (nonatomic, assign) BOOL hidesNotificationContent;
++@end
++
 +@interface NCExpandedPlatterViewController : UIViewController
 +@property (nonatomic,readonly) NCNotificationRequest *notificationRequest;
 +- (UIView *)_expandedPlatterViewIfLoaded;
++- (void)_updatePreferredContentSize;
++- (void)_updateWithProvidedStaticContent;
++- (void)_updateWithProvidedCustomContent;
 +@end
 +
++@interface NCNotificationLongLookViewController : NCNotificationViewController
++- (UIView *)_longLookViewIfLoaded;
+ @end
+ 
  @interface NCNotificationSeamlessContentView : UIView
 -- (NCNotificationShortLookViewController *)_viewControllerForAncestor;
 +- (UIViewController *)_viewControllerForAncestor;
 +- (void)_updateTextAttributesIfNecessary;
 +- (void)_updateTextAttributesForSecondaryTextElement;
++@end
++
++@interface NCNotificationContentView : UIView
++- (UIViewController *)_viewControllerForAncestor;
++- (void)_updateTextAttributesForSecondaryTextSupportingView:(id)view withStyle:(long long)style;
++- (void)setSecondaryText:(NSString *)text;
 +@end
 +
 +@interface NCNotificationListCache : NSObject
@@ -215,17 +260,30 @@ index e8bdc8b..ef16da9 100644
 +@property (nonatomic, retain) NSMutableDictionary *visibleViews;
 +@property (nonatomic, weak) id dataSource;
 +@property (nonatomic, readonly, getter=isNotificationListViewCurrentlyVisible) BOOL notificationListViewCurrentlyVisible;
++@property (nonatomic, getter=isGrouped) BOOL grouped;
++@property (nonatomic, getter=isHiddenBelowStack) BOOL hiddenBelowStack;
++@property (nonatomic, getter=isPerformingGroupingAnimation) BOOL performingGroupingAnimation;
++@property (nonatomic, getter=isSubviewPerformingGroupingAnimation) BOOL subviewPerformingGroupingAnimation;
++@property (nonatomic, getter=isPerformingStackVisibilityAnimation) BOOL performingStackVisibilityAnimation;
++@property (nonatomic, getter=isPerformingRevealAnimation) BOOL performingRevealAnimation;
++@property (nonatomic, getter=isPerformingRevealTransitionAnimation) BOOL performingRevealTransitionAnimation;
++- (BOOL)_isGrouping;
 +- (void)reloadViewAtIndex:(unsigned long long)arg1;
 +@end
 +
 +@interface NCNotificationListCell : UIView
 +@property (nonatomic, retain) NCNotificationViewController *contentViewController;
++@property (nonatomic, getter=isHiddenBelowStack) BOOL hiddenBelowStack;
++- (id)notificationViewController;
 +@end
 +
 +@interface NCNotificationGroupList : NSObject
 +@property (nonatomic, retain) NCNotificationListCache *notificationListCache;
 +@property (nonatomic, retain) NCNotificationListView *groupListView;
++@property (nonatomic, readonly) NCNotificationListView *listView;
 +@property (nonatomic, retain) NSMutableArray *orderedRequests;
++@property (nonatomic, readonly, getter=isGrouped) BOOL grouped;
++@property (nonatomic, readonly) NCNotificationRequest *leadingNotificationRequest;
 +- (id)initWithSectionIdentifier:(id)arg1 threadIdentifier:(id)arg2;
 +- (void)insertNotificationRequest:(id)arg1;
 +- (void)reloadNotificationRequest:(id)arg1;
@@ -236,6 +294,7 @@ index e8bdc8b..ef16da9 100644
 +@interface NCNotificationStructuredSectionList : NSObject
 +@property (nonatomic, retain) NCNotificationListCache *notificationListCache;
 +@property (nonatomic, retain) NCNotificationListView *sectionListView;
++@property (nonatomic, readonly) NCNotificationListView *listView;
 +@property (nonatomic, retain) NSMutableArray *notificationGroups;
 +- (id)initWithTitle:(id)arg1 sectionType:(unsigned long long)arg2;
 +- (BOOL)containsNotificationRequest:(id)arg1;
@@ -3246,10 +3305,10 @@ index df1a4a7..4459012 100644
  			isNumeric = true;
 diff --git a/src/DigestBannerAnimator.m b/src/DigestBannerAnimator.m
 new file mode 100644
-index 0000000..3f742d7
+index 0000000..6cce137
 --- /dev/null
 +++ b/src/DigestBannerAnimator.m
-@@ -0,0 +1,1059 @@
+@@ -0,0 +1,1254 @@
 +#import "../headers/Digest/DigestBannerAnimator.h"
 +#import <QuartzCore/QuartzCore.h>
 +#import <objc/runtime.h>
@@ -3425,13 +3484,19 @@ index 0000000..3f742d7
 +    if ([el isKindOfClass:[UILabel class]]) {
 +        UILabel *lbl = (UILabel *)el;
 +        lbl.numberOfLines = (NSInteger)maxLines;
-+        lbl.lineBreakMode = NSLineBreakByTruncatingTail;
++        lbl.lineBreakMode = (maxLines == 0) ? NSLineBreakByWordWrapping : NSLineBreakByTruncatingTail;
 +        lbl.attributedText = attr;
 +    } else if ([el isKindOfClass:[UITextView class]]) {
 +        UITextView *tv = (UITextView *)el;
++        if (maxLines == 0) {
++            tv.scrollEnabled = NO;
++        }
 +        tv.textContainer.maximumNumberOfLines = maxLines;
-+        tv.textContainer.lineBreakMode = NSLineBreakByTruncatingTail;
++        tv.textContainer.lineBreakMode = (maxLines == 0) ? NSLineBreakByWordWrapping : NSLineBreakByTruncatingTail;
 +        tv.attributedText = attr;
++        if (maxLines == 0 && tv.textContainer && tv.layoutManager) {
++            [tv.layoutManager ensureLayoutForTextContainer:tv.textContainer];
++        }
 +    } else if ([el respondsToSelector:@selector(setAttributedText:)]) {
 +        [(id)el setAttributedText:attr];
 +    }
@@ -4261,6 +4326,10 @@ index 0000000..3f742d7
 +    [state handleDisplayLink:nil];
 +}
 +
+++ (BOOL)elementHasDigestStyle:(UIView *)textElement {
++    return elementHasDigestStyledAttribute(textElement);
++}
++
 ++ (void)renderExpandedToLabel:(UIView *)textElement
 +                  withSummary:(NSString *)summary
 +                 originalText:(NSString *)originalText
@@ -4282,14 +4351,13 @@ index 0000000..3f742d7
 +    objc_setAssociatedObject(textElement, kDigestExpImg, badgeImg, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 +
 +    UIFont *summaryFont = [UIFont systemFontOfSize:baseFont.pointSize weight:UIFontWeightSemibold];
-+    UIColor *baseTextColor = [[UIColor labelColor] resolvedColorWithTraitCollection:textElement.traitCollection];
 +    [out appendAttributedString:[[NSAttributedString alloc] initWithString:summary attributes:@{
 +        NSFontAttributeName: summaryFont,
-+        NSForegroundColorAttributeName: baseTextColor
++        NSForegroundColorAttributeName: [UIColor labelColor]
 +    }]];
 +
 +    if (originalText.length > 0 && ![originalText isEqualToString:summary]) {
-+        UIFont *dividerFont = [UIFont systemFontOfSize:MAX(11.0, baseFont.pointSize - 3.0) weight:UIFontWeightMedium];
++        UIFont *dividerFont = [UIFont systemFontOfSize:MAX(11.0, baseFont.pointSize - 3.0) weight:UIFontWeightSemibold];
 +        [out appendAttributedString:[[NSAttributedString alloc] initWithString:@"\n\n── Nội dung gốc ──\n" attributes:@{
 +            NSFontAttributeName: dividerFont,
 +            NSForegroundColorAttributeName: [UIColor tertiaryLabelColor]
@@ -4306,6 +4374,192 @@ index 0000000..3f742d7
 +    applyAttributedTextToElement(textElement, out, 0);
 +    [textElement invalidateIntrinsicContentSize];
 +    [layoutHost setNeedsLayout];
++}
++
++@end
++
++@interface DigestExpandedOriginalCardView ()
++@property (nonatomic, strong) UILabel *summaryLabel;
++@property (nonatomic, strong) UIView *midDivider;
++@property (nonatomic, strong) UILabel *sectionHeaderLabel;
++@property (nonatomic, strong) UITextView *originalTextView;
++@property (nonatomic, strong) UIView *bottomDivider;
++@property (nonatomic, strong) UIImage *retainedBadgeImage;
++@property (nonatomic, copy) NSString *lastConfigKey;
++@property (nonatomic, assign) BOOL showBottomDivider;
++@property (nonatomic, assign) BOOL hasSummarySection;
++@property (nonatomic, assign) BOOL hasOriginalSection;
++@end
++
++@implementation DigestExpandedOriginalCardView
++
++- (instancetype)initWithFrame:(CGRect)frame {
++    self = [super initWithFrame:frame];
++    if (self) {
++        self.backgroundColor = [UIColor clearColor];
++        self.clipsToBounds = YES;
++
++        _summaryLabel = [[UILabel alloc] initWithFrame:CGRectZero];
++        _summaryLabel.numberOfLines = 0;
++        _summaryLabel.lineBreakMode = NSLineBreakByWordWrapping;
++        _summaryLabel.backgroundColor = [UIColor clearColor];
++        [self addSubview:_summaryLabel];
++
++        _midDivider = [[UIView alloc] initWithFrame:CGRectZero];
++        _midDivider.backgroundColor = [UIColor separatorColor];
++        [self addSubview:_midDivider];
++
++        _sectionHeaderLabel = [[UILabel alloc] initWithFrame:CGRectZero];
++        _sectionHeaderLabel.numberOfLines = 1;
++        _sectionHeaderLabel.font = [UIFont systemFontOfSize:11.0 weight:UIFontWeightSemibold];
++        _sectionHeaderLabel.textColor = [UIColor tertiaryLabelColor];
++        _sectionHeaderLabel.text = @"NỘI DUNG GỐC";
++        _sectionHeaderLabel.backgroundColor = [UIColor clearColor];
++        [self addSubview:_sectionHeaderLabel];
++
++        _originalTextView = [[UITextView alloc] initWithFrame:CGRectZero];
++        _originalTextView.backgroundColor = [UIColor clearColor];
++        _originalTextView.editable = NO;
++        _originalTextView.selectable = YES;
++        _originalTextView.scrollEnabled = NO;
++        _originalTextView.showsVerticalScrollIndicator = NO;
++        _originalTextView.showsHorizontalScrollIndicator = NO;
++        _originalTextView.dataDetectorTypes = UIDataDetectorTypeLink | UIDataDetectorTypePhoneNumber;
++        _originalTextView.textContainerInset = UIEdgeInsetsZero;
++        _originalTextView.textContainer.lineFragmentPadding = 0.0;
++        _originalTextView.textContainer.maximumNumberOfLines = 0;
++        _originalTextView.textContainer.lineBreakMode = NSLineBreakByWordWrapping;
++        [self addSubview:_originalTextView];
++
++        _bottomDivider = [[UIView alloc] initWithFrame:CGRectZero];
++        _bottomDivider.backgroundColor = [UIColor separatorColor];
++        [self addSubview:_bottomDivider];
++    }
++    return self;
++}
++
++- (void)configureWithSummary:(NSString *)summary
++                originalText:(NSString *)originalText
++                      config:(DigestBannerRenderConfig *)config
++           showBottomDivider:(BOOL)showDivider {
++    NSString *key = [NSString stringWithFormat:@"card|%@|%@|%@|%d|%@|%@|%d",
++                     summary ?: @"", originalText ?: @"",
++                     config.badgeStyle ?: @"", config.showPrefix ? 1 : 0,
++                     config.prefixText ?: @"", config.accentColorKey ?: @"",
++                     showDivider ? 1 : 0];
++    if ([self.lastConfigKey isEqualToString:key]) {
++        return;
++    }
++    self.lastConfigKey = key;
++    self.showBottomDivider = showDivider;
++
++    BOOL hasOrig = (originalText.length > 0);
++    BOOL hasSum = (summary.length > 0 && (!hasOrig || ![summary isEqualToString:originalText]));
++    self.hasSummarySection = hasSum;
++    self.hasOriginalSection = hasOrig;
++
++    UIFont *summaryFont = [UIFont systemFontOfSize:14.0 weight:UIFontWeightSemibold];
++
++    if (hasSum) {
++        UIImage *badgeImg = nil;
++        NSAttributedString *prefix = [DigestBannerAnimator prefixAttributedStringWithConfig:config baseFont:summaryFont retainedImage:&badgeImg];
++        self.retainedBadgeImage = badgeImg;
++        NSMutableAttributedString *sumAttr = prefix ? [prefix mutableCopy] : [NSMutableAttributedString new];
++        [sumAttr appendAttributedString:[[NSAttributedString alloc] initWithString:summary attributes:@{
++            NSFontAttributeName: summaryFont,
++            NSForegroundColorAttributeName: [UIColor labelColor]
++        }]];
++        self.summaryLabel.attributedText = sumAttr;
++        self.summaryLabel.hidden = NO;
++    } else {
++        self.summaryLabel.attributedText = nil;
++        self.summaryLabel.hidden = YES;
++        self.retainedBadgeImage = nil;
++    }
++
++    if (hasOrig) {
++        UIFont *origFont = [UIFont systemFontOfSize:14.5 weight:UIFontWeightRegular];
++        self.originalTextView.attributedText = [[NSAttributedString alloc] initWithString:originalText attributes:@{
++            NSFontAttributeName: origFont,
++            NSForegroundColorAttributeName: [UIColor labelColor]
++        }];
++        if (self.originalTextView.textContainer && self.originalTextView.layoutManager) {
++            [self.originalTextView.layoutManager ensureLayoutForTextContainer:self.originalTextView.textContainer];
++        }
++        self.sectionHeaderLabel.hidden = NO;
++        self.originalTextView.hidden = NO;
++        self.midDivider.hidden = !hasSum;
++    } else {
++        self.originalTextView.attributedText = nil;
++        self.sectionHeaderLabel.hidden = YES;
++        self.originalTextView.hidden = YES;
++        self.midDivider.hidden = YES;
++    }
++
++    self.bottomDivider.hidden = !showDivider;
++    [self invalidateIntrinsicContentSize];
++    [self setNeedsLayout];
++}
++
++- (CGSize)computeLayoutForWidth:(CGFloat)width applyFrames:(BOOL)applyFrames {
++    CGFloat w = (width > 32.0) ? width : 320.0;
++    CGFloat padX = 16.0;
++    CGFloat contentW = MAX(20.0, w - padX * 2.0);
++    CGFloat scale = MAX(1.0, [UIScreen mainScreen].scale);
++    CGFloat hairline = 1.0 / scale;
++    CGFloat y = 8.0;
++
++    if (self.hasSummarySection) {
++        CGSize sFit = [self.summaryLabel sizeThatFits:CGSizeMake(contentW, CGFLOAT_MAX)];
++        CGFloat sh = ceil(sFit.height);
++        if (applyFrames) {
++            self.summaryLabel.frame = CGRectMake(padX, y, contentW, sh);
++        }
++        y += sh;
++    }
++
++    if (self.hasSummarySection && self.hasOriginalSection) {
++        y += 8.0;
++        if (applyFrames) {
++            self.midDivider.frame = CGRectMake(padX, y, contentW, hairline);
++        }
++        y += hairline + 8.0;
++    }
++
++    if (self.hasOriginalSection) {
++        CGSize hFit = [self.sectionHeaderLabel sizeThatFits:CGSizeMake(contentW, CGFLOAT_MAX)];
++        CGFloat hh = ceil(hFit.height);
++        if (applyFrames) {
++            self.sectionHeaderLabel.frame = CGRectMake(padX, y, contentW, hh);
++        }
++        y += hh + 4.0;
++
++        CGSize oFit = [self.originalTextView sizeThatFits:CGSizeMake(contentW, CGFLOAT_MAX)];
++        CGFloat oh = ceil(oFit.height);
++        if (applyFrames) {
++            self.originalTextView.frame = CGRectMake(padX, y, contentW, oh);
++        }
++        y += oh;
++    }
++
++    y += 10.0;
++    if (self.showBottomDivider) {
++        if (applyFrames) {
++            self.bottomDivider.frame = CGRectMake(padX, y, contentW, hairline);
++        }
++        y += hairline + 4.0;
++    }
++
++    return CGSizeMake(w, y);
++}
++
++- (CGSize)sizeThatFits:(CGSize)size {
++    return [self computeLayoutForWidth:size.width applyFrames:NO];
++}
++
++- (void)layoutSubviews {
++    [super layoutSubviews];
++    [self computeLayoutForWidth:self.bounds.size.width applyFrames:YES];
 +}
 +
 +@end
@@ -5477,10 +5731,10 @@ index ef8dd7c..df97d0b 100644
 -    [((SpringBoard *)[UIApplication sharedApplication]).notificationDispatcher.dispatcher postNotificationWithRequest:request];
  }
 diff --git a/src/Tweak.x b/src/Tweak.x
-index 3a91698..2ee4528 100644
+index 3a91698..b1a4431 100644
 --- a/src/Tweak.x
 +++ b/src/Tweak.x
-@@ -1,21 +1,945 @@
+@@ -1,21 +1,1437 @@
  #import <CoreFoundation/CoreFoundation.h>
 +#import <objc/runtime.h>
  #include <substrate.h>
@@ -5783,10 +6037,15 @@ index 3a91698..2ee4528 100644
 +@interface NSObject (DigestUIKitSizing)
 +- (void)_updatePreferredContentSize;
 +- (id)_expandedPlatterViewIfLoaded;
++- (id)_longLookViewIfLoaded;
++- (id)staticContentProvider;
++- (BOOL)isContentHidden;
 +- (NCNotificationRequest *)notificationRequest;
 +- (id)presentableContext;
 +- (void)setHostNeedsUpdate;
 +@end
++
++static NSUInteger gListViewLayoutDepth = 0;
 +
 +static void rebuildCachedBannerConfig(void) {
 +    DigestBannerRenderConfig *cfg = [DigestBannerRenderConfig new];
@@ -5824,14 +6083,16 @@ index 3a91698..2ee4528 100644
 +    return cachedBannerConfig;
 +}
 +
-+static UIView *findSeamlessContentViewInHierarchy(UIView *rootView) {
++static UIView *findNotificationContentViewInHierarchy(UIView *rootView) {
 +    if (!rootView) return nil;
 +    NSMutableArray<UIView *> *queue = [NSMutableArray arrayWithObject:rootView];
 +    Class seamlessCls = NSClassFromString(@"NCNotificationSeamlessContentView");
++    Class legacyCls = NSClassFromString(@"NCNotificationContentView");
 +    NSUInteger head = 0;
 +    while (head < queue.count && head < 64) {
 +        UIView *v = queue[head++];
-+        if (seamlessCls && [v isKindOfClass:seamlessCls]) {
++        if ((seamlessCls && [v isKindOfClass:seamlessCls]) ||
++            (legacyCls && [v isKindOfClass:legacyCls])) {
 +            return v;
 +        }
 +        if (queue.count < 64) {
@@ -5848,12 +6109,169 @@ index 3a91698..2ee4528 100644
 +        cv = [preview valueForKey:@"notificationContentView"];
 +    } @catch (NSException *e) {}
 +    if (cv) return cv;
-+    return findSeamlessContentViewInHierarchy(vc.view);
++    return findNotificationContentViewInHierarchy(vc.view);
++}
++
++static UIView *findMessageElementInContentView(UIView *contentView) {
++    if (!contentView) return nil;
++    static NSArray<NSString *> *keys = nil;
++    static dispatch_once_t onceToken;
++    dispatch_once(&onceToken, ^{
++        keys = @[@"secondaryTextElement", @"secondaryTextView", @"secondaryLabel"];
++    });
++    for (NSString *k in keys) {
++        UIView *el = nil;
++        @try {
++            id val = [contentView valueForKey:k];
++            if ([val isKindOfClass:[UIView class]]) {
++                el = (UIView *)val;
++            }
++        } @catch (NSException *e) {}
++        if (el) return el;
++    }
++    return nil;
 +}
 +
 +static void *kDigestSizingGuard = &kDigestSizingGuard;
 +static void *kDigestLastLayoutSig = &kDigestLastLayoutSig;
 +static void *kDigestAttrGuard = &kDigestAttrGuard;
++static void *kDigestAsyncRelayoutPending = &kDigestAsyncRelayoutPending;
++static void *kDigestPlatterReqKey = &kDigestPlatterReqKey;
++static void *kDigestPlatterCardKey = &kDigestPlatterCardKey;
++static void *kDigestPlatterCardActiveKey = &kDigestPlatterCardActiveKey;
++static void *kDigestExpandedSigKey = &kDigestExpandedSigKey;
++
++static NCNotificationListView *listViewForGroupList(NCNotificationGroupList *gl) {
++    if (!gl) return nil;
++    if ([gl respondsToSelector:@selector(listView)]) {
++        NCNotificationListView *v = gl.listView;
++        if (v) return v;
++    }
++    if ([gl respondsToSelector:@selector(groupListView)]) {
++        return gl.groupListView;
++    }
++    return nil;
++}
++
++static NCNotificationListView *listViewForSectionList(NCNotificationStructuredSectionList *sl) {
++    if (!sl) return nil;
++    if ([sl respondsToSelector:@selector(listView)]) {
++        NCNotificationListView *v = sl.listView;
++        if (v) return v;
++    }
++    if ([sl respondsToSelector:@selector(sectionListView)]) {
++        return sl.sectionListView;
++    }
++    return nil;
++}
++
++static BOOL listViewIsAnimatingGroupOrReveal(NCNotificationListView *lv) {
++    if (!lv) return NO;
++    if ([lv respondsToSelector:@selector(isPerformingGroupingAnimation)] && [lv isPerformingGroupingAnimation]) return YES;
++    if ([lv respondsToSelector:@selector(isSubviewPerformingGroupingAnimation)] && [lv isSubviewPerformingGroupingAnimation]) return YES;
++    if ([lv respondsToSelector:@selector(isPerformingStackVisibilityAnimation)] && [lv isPerformingStackVisibilityAnimation]) return YES;
++    if ([lv respondsToSelector:@selector(isPerformingRevealAnimation)] && [lv isPerformingRevealAnimation]) return YES;
++    if ([lv respondsToSelector:@selector(isPerformingRevealTransitionAnimation)] && [lv isPerformingRevealTransitionAnimation]) return YES;
++    return NO;
++}
++
++static BOOL listViewIsGrouped(NCNotificationListView *lv) {
++    if (!lv) return NO;
++    if ([lv respondsToSelector:@selector(isGrouped)]) return [lv isGrouped];
++    if ([lv respondsToSelector:@selector(_isGrouping)]) return [lv _isGrouping];
++    return NO;
++}
++
++static BOOL anyAncestorListViewAnimating(UIView *startView) {
++    if (!startView) return NO;
++    Class listViewCls = NSClassFromString(@"NCNotificationListView");
++    if (!listViewCls) return NO;
++    UIView *cur = startView;
++    NSUInteger depth = 0;
++    while (cur && depth < 16) {
++        if ([cur isKindOfClass:listViewCls]) {
++            if (listViewIsAnimatingGroupOrReveal((NCNotificationListView *)cur)) {
++                return YES;
++            }
++        }
++        cur = cur.superview;
++        depth++;
++    }
++    return NO;
++}
++
++static BOOL viewIsHiddenOrNonLeadingInListView(UIView *child, NCNotificationListView *lv) {
++    if (!child || !lv) return NO;
++    if ([child respondsToSelector:@selector(isHiddenBelowStack)] && [(NCNotificationListCell *)child isHiddenBelowStack]) {
++        return YES;
++    }
++    if (!listViewIsGrouped(lv)) return NO;
++    if (child.alpha < 0.05 || !CGAffineTransformIsIdentity(child.transform)) {
++        return YES;
++    }
++    NSDictionary *vis = [lv respondsToSelector:@selector(visibleViews)] ? lv.visibleViews : nil;
++    if (vis) {
++        __block NSNumber *idxNum = nil;
++        [vis enumerateKeysAndObjectsUsingBlock:^(id key, id obj, BOOL *stop) {
++            if (obj == child && [key isKindOfClass:[NSNumber class]]) {
++                idxNum = (NSNumber *)key;
++                *stop = YES;
++            }
++        }];
++        if (idxNum && [idxNum unsignedIntegerValue] > 0) {
++            return YES;
++        }
++    }
++    return NO;
++}
++
++static BOOL controllerIsHiddenInGroupedStack(NCNotificationShortLookViewController *vc,
++                                             BOOL *outInsideListView,
++                                             BOOL *outInGroupedList,
++                                             BOOL *outGroupAnimating) {
++    if (outInsideListView) *outInsideListView = NO;
++    if (outInGroupedList) *outInGroupedList = NO;
++    if (outGroupAnimating) *outGroupAnimating = NO;
++    if (!vc || !vc.isViewLoaded) return NO;
++
++    if ([vc respondsToSelector:@selector(isNotificationContentViewHidden)] && [vc isNotificationContentViewHidden]) {
++        return YES;
++    }
++
++    Class cellCls = NSClassFromString(@"NCNotificationListCell");
++    Class lvCls = NSClassFromString(@"NCNotificationListView");
++    UIView *cell = nil;
++    UIView *cur = vc.view;
++    NSUInteger depth = 0;
++    BOOL hiddenInStack = NO;
++    while (cur && depth < 16) {
++        if (cellCls && [cur isKindOfClass:cellCls] && !cell) {
++            cell = cur;
++            if ([cur respondsToSelector:@selector(isHiddenBelowStack)] && [(NCNotificationListCell *)cur isHiddenBelowStack]) {
++                hiddenInStack = YES;
++            }
++        } else if (lvCls && [cur isKindOfClass:lvCls]) {
++            NCNotificationListView *lv = (NCNotificationListView *)cur;
++            if (outInsideListView) *outInsideListView = YES;
++            if (listViewIsAnimatingGroupOrReveal(lv)) {
++                if (outGroupAnimating) *outGroupAnimating = YES;
++            }
++            if (listViewIsGrouped(lv)) {
++                if (outInGroupedList) *outInGroupedList = YES;
++                if (cell && viewIsHiddenOrNonLeadingInListView(cell, lv)) {
++                    hiddenInStack = YES;
++                }
++            }
++            if (anyAncestorListViewAnimating(lv.superview)) {
++                if (outGroupAnimating) *outGroupAnimating = YES;
++            }
++            break;
++        }
++        cur = cur.superview;
++        depth++;
++    }
++    return hiddenInStack;
++}
 +
 +static NCNotificationRequest *matchingRequestInArray(NSArray *requests, NCNotificationRequest *targetReq) {
 +    if (!requests || !targetReq) return nil;
@@ -5894,7 +6312,7 @@ index 3a91698..2ee4528 100644
 +}
 +
 +static void invalidateAncestorListViewsFromView(UIView *startView, NCNotificationRequest *req) {
-+    if (!startView) return;
++    if (!startView || gListViewLayoutDepth > 0 || anyAncestorListViewAnimating(startView)) return;
 +    Class listViewCls = NSClassFromString(@"NCNotificationListView");
 +    Class listCellCls = NSClassFromString(@"NCNotificationListCell");
 +    UIView *child = startView;
@@ -5902,9 +6320,19 @@ index 3a91698..2ee4528 100644
 +    NSUInteger depth = 0;
 +    while (cur && depth < 16) {
 +        if (listCellCls && [cur isKindOfClass:listCellCls]) {
++            if ([cur respondsToSelector:@selector(isHiddenBelowStack)] && [(NCNotificationListCell *)cur isHiddenBelowStack]) {
++                return;
++            }
 +            [cur setNeedsLayout];
 +        } else if (listViewCls && [cur isKindOfClass:listViewCls]) {
 +            NCNotificationListView *lv = (NCNotificationListView *)cur;
++            if (listViewIsAnimatingGroupOrReveal(lv)) {
++                return;
++            }
++            if (viewIsHiddenOrNonLeadingInListView(child, lv)) {
++                return;
++            }
++            BOOL lvGrouped = listViewIsGrouped(lv);
 +            id ds = [lv respondsToSelector:@selector(dataSource)] ? lv.dataSource : nil;
 +            if (req && ds && [ds respondsToSelector:@selector(notificationListCache)]) {
 +                id c = [ds notificationListCache];
@@ -5915,24 +6343,29 @@ index 3a91698..2ee4528 100644
 +            if ([lv respondsToSelector:@selector(setCachedSizeValid:)]) {
 +                lv.cachedSizeValid = NO;
 +            }
-+            NSDictionary *vis = [lv respondsToSelector:@selector(visibleViews)] ? lv.visibleViews : nil;
-+            if (vis && child && [lv respondsToSelector:@selector(reloadViewAtIndex:)]) {
-+                __block NSNumber *matchedIdx = nil;
-+                [vis enumerateKeysAndObjectsUsingBlock:^(id key, id obj, BOOL *stop) {
-+                    if (obj == child && [key isKindOfClass:[NSNumber class]]) {
-+                        matchedIdx = (NSNumber *)key;
-+                        *stop = YES;
-+                    }
-+                }];
-+                if (matchedIdx) {
-+                    CGFloat cw = child.bounds.size.width;
-+                    CGSize cFit = (cw > 0) ? [child sizeThatFits:CGSizeMake(cw, CGFLOAT_MAX)] : CGSizeZero;
-+                    if (cFit.height <= 0 || fabs(cFit.height - child.bounds.size.height) > 1.0) {
-+                        [lv reloadViewAtIndex:[matchedIdx unsignedIntegerValue]];
++            if (!lvGrouped && !(listViewCls && [child isKindOfClass:listViewCls] && listViewIsGrouped((NCNotificationListView *)child))) {
++                NSDictionary *vis = [lv respondsToSelector:@selector(visibleViews)] ? lv.visibleViews : nil;
++                if (vis && child && [lv respondsToSelector:@selector(reloadViewAtIndex:)]) {
++                    __block NSNumber *matchedIdx = nil;
++                    [vis enumerateKeysAndObjectsUsingBlock:^(id key, id obj, BOOL *stop) {
++                        if (obj == child && [key isKindOfClass:[NSNumber class]]) {
++                            matchedIdx = (NSNumber *)key;
++                            *stop = YES;
++                        }
++                    }];
++                    if (matchedIdx) {
++                        CGFloat cw = child.bounds.size.width;
++                        CGSize cFit = (cw > 0) ? [child sizeThatFits:CGSizeMake(cw, CGFLOAT_MAX)] : CGSizeZero;
++                        if (cFit.height <= 0 || fabs(cFit.height - child.bounds.size.height) > 1.0) {
++                            [lv reloadViewAtIndex:[matchedIdx unsignedIntegerValue]];
++                        }
 +                    }
 +                }
 +            }
 +            [lv setNeedsLayout];
++            if (lvGrouped) {
++                break;
++            }
 +        }
 +        child = cur;
 +        cur = cur.superview;
@@ -5945,22 +6378,46 @@ index 3a91698..2ee4528 100644
 +    if (clearCachesFirst) {
 +        clearCachesForRequest(targetReq, nil);
 +    }
++    BOOL handledByGroupList = NO;
 +    if (activeGroupLists) {
 +        for (NCNotificationGroupList *gl in [activeGroupLists allObjects]) {
 +            NSArray *reqs = [gl respondsToSelector:@selector(orderedRequests)] ? gl.orderedRequests : nil;
 +            NCNotificationRequest *matched = matchingRequestInArray(reqs, targetReq);
 +            if (!matched) continue;
-+            NCNotificationListView *glv = [gl respondsToSelector:@selector(groupListView)] ? gl.groupListView : nil;
++            handledByGroupList = YES;
++
++            NCNotificationListView *glv = listViewForGroupList(gl);
++            if (listViewIsAnimatingGroupOrReveal(glv) || anyAncestorListViewAnimating(glv.superview)) {
++                continue;
++            }
++
++            BOOL glGrouped = ([gl respondsToSelector:@selector(isGrouped)] && gl.isGrouped) || listViewIsGrouped(glv);
++            NCNotificationRequest *leadingReq = [gl respondsToSelector:@selector(leadingNotificationRequest)] ? gl.leadingNotificationRequest : reqs.firstObject;
++            BOOL isNonLeadingInGroup = (glGrouped && leadingReq && matched != leadingReq && ![matched isEqual:leadingReq]);
++
++            if ([gl respondsToSelector:@selector(notificationListCache)]) {
++                NCNotificationListCache *glCache = gl.notificationListCache;
++                if (glCache && [glCache respondsToSelector:@selector(clearCachedHeightsForNotificationRequest:)]) {
++                    [glCache clearCachedHeightsForNotificationRequest:targetReq];
++                    [glCache clearCachedHeightsForNotificationRequest:matched];
++                }
++            }
++
++            if (isNonLeadingInGroup) {
++                continue;
++            }
++
 +            BOOL glVisible = NO;
 +            if (glv && glv.window != nil) {
 +                glVisible = ![glv respondsToSelector:@selector(isNotificationListViewCurrentlyVisible)] || [glv isNotificationListViewCurrentlyVisible];
 +            }
++            NSUInteger idx = [reqs indexOfObjectIdenticalTo:matched];
++            if (idx == NSNotFound) idx = [reqs indexOfObject:matched];
++            UIView *cellView = (glv && idx != NSNotFound && [glv respondsToSelector:@selector(visibleViews)])
++                ? glv.visibleViews[@(idx)] : nil;
++
 +            BOOL shouldRelayoutGLV = !glVisible || !reloadOffscreenOnly;
 +            if (!shouldRelayoutGLV) {
-+                NSUInteger idxCheck = [reqs indexOfObjectIdenticalTo:matched];
-+                if (idxCheck == NSNotFound) idxCheck = [reqs indexOfObject:matched];
-+                UIView *cellView = (idxCheck != NSNotFound && [glv respondsToSelector:@selector(visibleViews)])
-+                    ? glv.visibleViews[@(idxCheck)] : nil;
 +                if (!cellView) {
 +                    shouldRelayoutGLV = YES;
 +                } else if (cellView.bounds.size.width > 0) {
@@ -5973,29 +6430,23 @@ index 3a91698..2ee4528 100644
 +            if (!clearCachesFirst && !shouldRelayoutGLV) {
 +                continue;
 +            }
-+            if ([gl respondsToSelector:@selector(notificationListCache)]) {
-+                NCNotificationListCache *glCache = gl.notificationListCache;
-+                if (glCache && [glCache respondsToSelector:@selector(clearCachedHeightsForNotificationRequest:)]) {
-+                    [glCache clearCachedHeightsForNotificationRequest:targetReq];
-+                    [glCache clearCachedHeightsForNotificationRequest:matched];
-+                }
-+            }
-+            if (!glVisible || !reloadOffscreenOnly) {
++
++            if ((!glVisible || !cellView) && !reloadOffscreenOnly) {
 +                if ([gl respondsToSelector:@selector(reloadNotificationRequest:)]) {
 +                    [gl reloadNotificationRequest:matched];
 +                }
 +            }
-+            if (glv && shouldRelayoutGLV) {
++            if (glv && shouldRelayoutGLV && gListViewLayoutDepth == 0) {
 +                if ([glv respondsToSelector:@selector(setCachedSizeValid:)]) {
 +                    glv.cachedSizeValid = NO;
 +                }
-+                NSUInteger idx = [reqs indexOfObjectIdenticalTo:matched];
-+                if (idx == NSNotFound) idx = [reqs indexOfObject:matched];
-+                if (idx != NSNotFound && [glv respondsToSelector:@selector(reloadViewAtIndex:)]) {
++                if (!glGrouped && idx != NSNotFound && [glv respondsToSelector:@selector(reloadViewAtIndex:)]) {
 +                    [glv reloadViewAtIndex:idx];
 +                }
 +                [glv setNeedsLayout];
-+                invalidateAncestorListViewsFromView(glv, matched);
++                if (!glGrouped) {
++                    invalidateAncestorListViewsFromView(glv, matched);
++                }
 +            }
 +        }
 +    }
@@ -6005,11 +6456,12 @@ index 3a91698..2ee4528 100644
 +            if ([sl respondsToSelector:@selector(notificationListCache)] && sl.notificationListCache) {
 +                [sl.notificationListCache clearCachedHeightsForNotificationRequest:targetReq];
 +            }
-+            if (!reloadOffscreenOnly && [sl respondsToSelector:@selector(reloadNotificationRequest:)]) {
++            NCNotificationListView *slv = listViewForSectionList(sl);
++            if (listViewIsAnimatingGroupOrReveal(slv)) continue;
++            if (!handledByGroupList && !reloadOffscreenOnly && [sl respondsToSelector:@selector(reloadNotificationRequest:)]) {
 +                [sl reloadNotificationRequest:targetReq];
 +            }
-+            NCNotificationListView *slv = [sl respondsToSelector:@selector(sectionListView)] ? sl.sectionListView : nil;
-+            if (slv) {
++            if (slv && gListViewLayoutDepth == 0) {
 +                if ([slv respondsToSelector:@selector(setCachedSizeValid:)]) {
 +                    slv.cachedSizeValid = NO;
 +                }
@@ -6022,6 +6474,47 @@ index 3a91698..2ee4528 100644
 +static void relayoutControllerPreferredSize(UIViewController *vc, UIView *contentView, UIView *platterView) {
 +    if (!vc || !vc.view) return;
 +    if ([objc_getAssociatedObject(vc, kDigestSizingGuard) boolValue]) return;
++
++    if ([vc isKindOfClass:NSClassFromString(@"NCExpandedPlatterViewController")] ||
++        [vc isKindOfClass:NSClassFromString(@"NCNotificationLongLookViewController")]) {
++        objc_setAssociatedObject(vc, kDigestSizingGuard, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++        @try {
++            [contentView setNeedsLayout];
++            [platterView setNeedsLayout];
++            if ([vc respondsToSelector:@selector(_updatePreferredContentSize)]) {
++                [(id)vc _updatePreferredContentSize];
++            }
++            [vc.view setNeedsLayout];
++        } @catch (NSException *e) {}
++        objc_setAssociatedObject(vc, kDigestSizingGuard, @NO, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++        return;
++    }
++
++    NCNotificationShortLookViewController *slvc = [vc isKindOfClass:NSClassFromString(@"NCNotificationShortLookViewController")]
++        ? (NCNotificationShortLookViewController *)vc : nil;
++    BOOL insideListView = NO;
++    BOOL inGroupedList = NO;
++    BOOL groupAnimating = NO;
++    if (slvc && (controllerIsHiddenInGroupedStack(slvc, &insideListView, &inGroupedList, &groupAnimating) || groupAnimating)) {
++        return;
++    }
++
++    if (insideListView && gListViewLayoutDepth > 0) {
++        if (![objc_getAssociatedObject(vc, kDigestAsyncRelayoutPending) boolValue]) {
++            objc_setAssociatedObject(vc, kDigestAsyncRelayoutPending, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++            __weak UIViewController *weakVC = vc;
++            __weak UIView *weakCV = contentView;
++            __weak UIView *weakPlatter = platterView;
++            dispatch_async(dispatch_get_main_queue(), ^{
++                UIViewController *strongVC = weakVC;
++                if (!strongVC) return;
++                objc_setAssociatedObject(strongVC, kDigestAsyncRelayoutPending, @NO, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++                relayoutControllerPreferredSize(strongVC, weakCV, weakPlatter);
++            });
++        }
++        return;
++    }
++
 +    objc_setAssociatedObject(vc, kDigestSizingGuard, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 +    @try {
 +        [contentView setNeedsLayout];
@@ -6073,19 +6566,211 @@ index 3a91698..2ee4528 100644
 +                            [ctx setHostNeedsUpdate];
 +                        }
 +                    }
-+                } else {
++                    [parent.view setNeedsLayout];
++                } else if (!insideListView) {
 +                    [parent preferredContentSizeDidChangeForChildContentContainer:vc];
++                    [parent.view setNeedsLayout];
 +                }
-+                [parent.view setNeedsLayout];
 +            }
 +            if (listNeedsSize) {
-+                invalidateAncestorListViewsFromView(vc.view, req);
++                if (!inGroupedList) {
++                    invalidateAncestorListViewsFromView(vc.view, req);
++                } else {
++                    Class lvCls = NSClassFromString(@"NCNotificationListView");
++                    UIView *cur = vc.view.superview;
++                    NSUInteger d = 0;
++                    while (cur && d < 10) {
++                        if (lvCls && [cur isKindOfClass:lvCls]) {
++                            NCNotificationListView *glv = (NCNotificationListView *)cur;
++                            if (!listViewIsAnimatingGroupOrReveal(glv)) {
++                                if ([glv respondsToSelector:@selector(setCachedSizeValid:)]) {
++                                    glv.cachedSizeValid = NO;
++                                }
++                                [glv setNeedsLayout];
++                            }
++                            break;
++                        }
++                        cur = cur.superview;
++                        d++;
++                    }
++                }
 +            }
-+            [vc.view.superview invalidateIntrinsicContentSize];
-+            [vc.view.superview setNeedsLayout];
++            if (!insideListView) {
++                [vc.view.superview invalidateIntrinsicContentSize];
++                [vc.view.superview setNeedsLayout];
++            }
 +        }
 +    } @catch (NSException *e) {}
 +    objc_setAssociatedObject(vc, kDigestSizingGuard, @NO, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++}
++
++static UIView *platterViewForExpandedController(UIViewController *vc) {
++    if (!vc) return nil;
++    UIView *platter = nil;
++    if ([vc respondsToSelector:@selector(_expandedPlatterViewIfLoaded)]) {
++        platter = [(id)vc _expandedPlatterViewIfLoaded];
++    }
++    if (!platter && [vc respondsToSelector:@selector(_longLookViewIfLoaded)]) {
++        platter = [(id)vc _longLookViewIfLoaded];
++    }
++    if (!platter) {
++        @try { platter = [vc valueForKey:@"_expandedPlatterView"]; } @catch (NSException *e) {}
++    }
++    if (!platter) {
++        @try { platter = [vc valueForKey:@"_longLookView"]; } @catch (NSException *e) {}
++    }
++    return platter;
++}
++
++static UIView *mainContentViewForPlatter(UIView *platter, BOOL createIfNeeded) {
++    if (!platter) return nil;
++    UIView *mainView = nil;
++    if ([platter respondsToSelector:@selector(_mainContentView)]) {
++        mainView = [(PLExpandedPlatterView *)platter _mainContentView];
++        if (!mainView && createIfNeeded && [platter respondsToSelector:@selector(_configureMainContentViewIfNecessary)]) {
++            [(PLExpandedPlatterView *)platter _configureMainContentViewIfNecessary];
++            mainView = [(PLExpandedPlatterView *)platter _mainContentView];
++        }
++    }
++    if (!mainView && [platter respondsToSelector:@selector(customContentView)]) {
++        mainView = [(PLExpandedPlatterView *)platter customContentView].superview;
++    }
++    return mainView;
++}
++
++static CGFloat resolveExpandedMeasureWidth(UIView *platter, CGFloat hintWidth) {
++    if (hintWidth > 32.0) return hintWidth;
++    UIView *mainView = mainContentViewForPlatter(platter, NO);
++    if (mainView && mainView.bounds.size.width > 32.0) {
++        return mainView.bounds.size.width;
++    }
++    if ([platter respondsToSelector:@selector(_boundsInsetHorizontallyFromDismissControlIfNecessary)]) {
++        CGRect b = [(PLExpandedPlatterView *)platter _boundsInsetHorizontallyFromDismissControlIfNecessary];
++        if (b.size.width > 32.0) return b.size.width;
++    }
++    if (platter.bounds.size.width > 32.0) {
++        return platter.bounds.size.width;
++    }
++    return MAX(280.0, [UIScreen mainScreen].bounds.size.width - 32.0);
++}
++
++static BOOL syncDigestExpandedCardOnPlatter(UIView *platter) {
++    if (!platter) return NO;
++    NCNotificationRequest *req = objc_getAssociatedObject(platter, kDigestPlatterReqKey);
++    DigestExpandedOriginalCardView *card = objc_getAssociatedObject(platter, kDigestPlatterCardKey);
++
++    if (!showOriginalInExpanded || !req || !req.dig3st) {
++        objc_setAssociatedObject(platter, kDigestPlatterCardActiveKey, @NO, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++        if (card) card.hidden = YES;
++        return NO;
++    }
++
++    NSString *msgText = safeKVCString(req.content, @"message");
++    NSString *origText = safeKVCString(req, @"actualMessage");
++    if (origText.length == 0 && msgText.length == 0) {
++        objc_setAssociatedObject(platter, kDigestPlatterCardActiveKey, @NO, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++        if (card) card.hidden = YES;
++        return NO;
++    }
++
++    BOOL hidesContent = NO;
++    if ([platter respondsToSelector:@selector(hidesNotificationContent)]) {
++        hidesContent = [(NCExpandedPlatterView *)platter hidesNotificationContent];
++    }
++
++    UIView *notifView = nil;
++    UIView *messageEl = nil;
++    if (!hidesContent) {
++        @try { notifView = [platter valueForKey:@"notificationContentView"]; } @catch (NSException *e) {}
++        if (!notifView) {
++            @try { notifView = [platter valueForKey:@"_notificationContentView"]; } @catch (NSException *e) {}
++        }
++        if (notifView) {
++            messageEl = findMessageElementInContentView(notifView);
++        }
++    }
++
++    BOOL inlineStyled = (!hidesContent && notifView && messageEl && !notifView.hidden && !messageEl.hidden &&
++                         [DigestBannerAnimator elementHasDigestStyle:messageEl]);
++    if (inlineStyled) {
++        objc_setAssociatedObject(platter, kDigestPlatterCardActiveKey, @NO, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++        if (card) card.hidden = YES;
++        return NO;
++    }
++
++    if (!card) {
++        card = [[DigestExpandedOriginalCardView alloc] initWithFrame:CGRectZero];
++        objc_setAssociatedObject(platter, kDigestPlatterCardKey, card, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++    }
++
++    UIView *ccv = [platter respondsToSelector:@selector(customContentView)] ? [(PLExpandedPlatterView *)platter customContentView] : nil;
++    BOOL hasCustom = (ccv != nil && ccv.subviews.count > 0);
++    [card configureWithSummary:msgText
++                  originalText:origText
++                        config:currentBannerRenderConfig()
++             showBottomDivider:hasCustom];
++    card.hidden = NO;
++
++    UIView *mainView = mainContentViewForPlatter(platter, YES);
++    if (mainView && card.superview != mainView) {
++        [mainView addSubview:card];
++    }
++    objc_setAssociatedObject(platter, kDigestPlatterCardActiveKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++    return YES;
++}
++
++static CGFloat digestExpandedCardHeightForPlatter(UIView *platter, CGFloat hintWidth) {
++    if (!platter) return 0.0;
++    if (![objc_getAssociatedObject(platter, kDigestPlatterCardActiveKey) boolValue]) return 0.0;
++    DigestExpandedOriginalCardView *card = objc_getAssociatedObject(platter, kDigestPlatterCardKey);
++    if (!card || card.hidden) return 0.0;
++    CGFloat w = resolveExpandedMeasureWidth(platter, hintWidth);
++    CGSize fit = [card sizeThatFits:CGSizeMake(w, CGFLOAT_MAX)];
++    return ceil(fit.height);
++}
++
++static void layoutDigestExpandedCardInPlatter(UIView *platter) {
++    if (!platter) return;
++    if (![objc_getAssociatedObject(platter, kDigestPlatterCardActiveKey) boolValue]) return;
++    DigestExpandedOriginalCardView *card = objc_getAssociatedObject(platter, kDigestPlatterCardKey);
++    if (!card || card.hidden) return;
++
++    UIView *mainView = mainContentViewForPlatter(platter, NO);
++    if (!mainView) return;
++    if (card.superview != mainView) {
++        [mainView addSubview:card];
++    }
++
++    CGFloat mainW = mainView.bounds.size.width;
++    if (mainW <= 32.0) mainW = resolveExpandedMeasureWidth(platter, 0.0);
++    CGFloat cardH = ceil([card sizeThatFits:CGSizeMake(mainW, CGFLOAT_MAX)].height);
++    if (cardH <= 0.0) return;
++
++    BOOL hidesContent = ([platter respondsToSelector:@selector(hidesNotificationContent)] && [(NCExpandedPlatterView *)platter hidesNotificationContent]);
++    CGFloat cardY = 0.0;
++    if (!hidesContent) {
++        UIView *notifView = nil;
++        @try { notifView = [platter valueForKey:@"notificationContentView"]; } @catch (NSException *e) {}
++        if (!notifView) {
++            @try { notifView = [platter valueForKey:@"_notificationContentView"]; } @catch (NSException *e) {}
++        }
++        if (notifView && notifView.superview == mainView && !notifView.hidden) {
++            cardY = CGRectGetMaxY(notifView.frame);
++        }
++    }
++
++    card.frame = CGRectMake(0.0, cardY, mainW, cardH);
++    [mainView bringSubviewToFront:card];
++
++    UIView *ccv = [platter respondsToSelector:@selector(customContentView)] ? [(PLExpandedPlatterView *)platter customContentView] : nil;
++    if (ccv && ccv.superview == mainView) {
++        CGRect cf = ccv.frame;
++        CGFloat minY = cardY + cardH;
++        if (cf.origin.y < minY - 0.5) {
++            cf.origin.y = minY;
++            ccv.frame = cf;
++        }
++    }
 +}
 +
 +static void renderExpandedController(UIViewController *vc) {
@@ -6097,39 +6782,75 @@ index 3a91698..2ee4528 100644
 +        } else if ([vc isKindOfClass:NSClassFromString(@"NCNotificationViewController")]) {
 +            req = ((NCNotificationViewController *)vc).notificationRequest;
 +        }
-+        if (!req || !req.dig3st) return;
-+
-+        UIView *platter = nil;
-+        if ([vc isKindOfClass:NSClassFromString(@"NCExpandedPlatterViewController")] &&
-+            [vc respondsToSelector:@selector(_expandedPlatterViewIfLoaded)]) {
-+            platter = [(NCExpandedPlatterViewController *)vc _expandedPlatterViewIfLoaded];
-+        }
-+        if (!platter) {
-+            @try { platter = [vc valueForKey:@"_expandedPlatterView"]; } @catch (NSException *e) {}
-+        }
-+        UIView *seamless = nil;
++        UIView *platter = platterViewForExpandedController(vc);
 +        if (platter) {
-+            @try { seamless = [platter valueForKey:@"notificationContentView"]; } @catch (NSException *e) {}
++            objc_setAssociatedObject(platter, kDigestPlatterReqKey, req, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 +        }
-+        if (!seamless) {
-+            seamless = findSeamlessContentViewInHierarchy(vc.view);
++        if (!req || !req.dig3st) {
++            if (platter) syncDigestExpandedCardOnPlatter(platter);
++            return;
 +        }
-+        if (!seamless) return;
-+
-+        UIView *messageEl = nil;
-+        @try { messageEl = [seamless valueForKey:@"secondaryTextElement"]; } @catch (NSException *e) {}
-+        NSString *msgText = safeKVCString(req.content, @"message");
-+        NSString *origText = safeKVCString(req, @"actualMessage");
-+        if (!messageEl || !msgText) return;
-+
 +        @try {
-+            [seamless setValue:@(0) forKey:@"secondaryTextMaximumNumberOfLines"];
-+            if (platter) [platter setValue:@(0) forKey:@"maximumNumberOfSecondaryTextLines"];
++            id scp = [vc respondsToSelector:@selector(staticContentProvider)] ? [(id)vc staticContentProvider] : [vc valueForKey:@"_staticContentProvider"];
++            if (scp && [scp respondsToSelector:@selector(isContentHidden)] && [scp isContentHidden]) {
++                if (platter) {
++                    objc_setAssociatedObject(platter, kDigestPlatterCardActiveKey, @NO, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++                    DigestExpandedOriginalCardView *card = objc_getAssociatedObject(platter, kDigestPlatterCardKey);
++                    if (card) card.hidden = YES;
++                }
++                return;
++            }
 +        } @catch (NSException *e) {}
 +
-+        DigestBannerRenderConfig *cfg = currentBannerRenderConfig();
-+        [DigestBannerAnimator renderExpandedToLabel:messageEl withSummary:msgText originalText:origText config:cfg layoutHost:seamless];
-+        relayoutControllerPreferredSize(vc, seamless, platter);
++        NSString *msgText = safeKVCString(req.content, @"message");
++        NSString *origText = safeKVCString(req, @"actualMessage");
++        BOOL hidesContent = (platter && [platter respondsToSelector:@selector(hidesNotificationContent)] && [(NCExpandedPlatterView *)platter hidesNotificationContent]);
++
++        UIView *contentView = nil;
++        UIView *messageEl = nil;
++        if (!hidesContent) {
++            if (platter) {
++                @try { contentView = [platter valueForKey:@"notificationContentView"]; } @catch (NSException *e) {}
++                if (!contentView) {
++                    @try { contentView = [platter valueForKey:@"_notificationContentView"]; } @catch (NSException *e) {}
++                }
++            }
++            if (!contentView) {
++                contentView = findNotificationContentViewInHierarchy(vc.view);
++            }
++            if (contentView) {
++                messageEl = findMessageElementInContentView(contentView);
++            }
++        }
++
++        if (!hidesContent && contentView && messageEl && msgText.length > 0) {
++            @try {
++                if ([contentView isKindOfClass:NSClassFromString(@"NCNotificationSeamlessContentView")]) {
++                    [contentView setValue:@(0) forKey:@"secondaryTextMaximumNumberOfLines"];
++                } else {
++                    [contentView setValue:@(0) forKey:@"maximumNumberOfSecondaryTextLines"];
++                }
++            } @catch (NSException *e) {}
++            @try {
++                if (platter) [platter setValue:@(0) forKey:@"maximumNumberOfSecondaryTextLines"];
++            } @catch (NSException *e) {}
++
++            DigestBannerRenderConfig *cfg = currentBannerRenderConfig();
++            [DigestBannerAnimator renderExpandedToLabel:messageEl withSummary:msgText originalText:origText config:cfg layoutHost:contentView];
++        }
++
++        BOOL cardActive = platter ? syncDigestExpandedCardOnPlatter(platter) : NO;
++        CGFloat cardH = platter ? digestExpandedCardHeightForPlatter(platter, 0.0) : 0.0;
++        NSString *expSig = [NSString stringWithFormat:@"%d|%d|%.1f|%lu|%lu|%p",
++                            hidesContent ? 1 : 0, cardActive ? 1 : 0, cardH,
++                            (unsigned long)msgText.hash, (unsigned long)origText.hash, messageEl];
++        NSString *prevExpSig = objc_getAssociatedObject(vc, kDigestExpandedSigKey);
++        if (![expSig isEqualToString:prevExpSig]) {
++            objc_setAssociatedObject(vc, kDigestExpandedSigKey, expSig, OBJC_ASSOCIATION_COPY_NONATOMIC);
++            relayoutControllerPreferredSize(vc, contentView ?: platter, platter);
++        } else if (cardActive && platter) {
++            [platter setNeedsLayout];
++        }
 +    } @catch (NSException *e) {
 +        NSLog(@"dig3st expanded render error: %@", e);
 +    }
@@ -6138,19 +6859,26 @@ index 3a91698..2ee4528 100644
 +static void renderControllerBanner(NCNotificationShortLookViewController *vc) {
 +    if (!vc || !vc.notificationRequest) return;
 +    @try {
-+        if ([vc isKindOfClass:NSClassFromString(@"NCExpandedPlatterViewController")]) {
++        if ([vc isKindOfClass:NSClassFromString(@"NCExpandedPlatterViewController")] ||
++            [vc isKindOfClass:NSClassFromString(@"NCNotificationLongLookViewController")]) {
 +            renderExpandedController(vc);
 +            return;
 +        }
 +        UIView *seamlessContentView = findContentViewForController(vc);
 +        if (!seamlessContentView) return;
 +
-+        UIView *messageEl = nil;
-+        @try {
-+            messageEl = [seamlessContentView valueForKey:@"secondaryTextElement"];
-+        } @catch (NSException *e) {}
++        UIView *messageEl = findMessageElementInContentView(seamlessContentView);
 +        NSString *msgText = safeKVCString(vc.notificationRequest.content, @"message");
 +        if (!messageEl || !msgText) return;
++
++        BOOL insideListView = NO;
++        BOOL inGroupedList = NO;
++        BOOL groupAnimating = NO;
++        BOOL hiddenInStack = controllerIsHiddenInGroupedStack(vc, &insideListView, &inGroupedList, &groupAnimating);
++        if (hiddenInStack) {
++            [DigestBannerAnimator stopForLabel:messageEl];
++            return;
++        }
 +
 +        UIView *preview = (UIView *)vc.viewForPreview;
 +        NCNotificationRequest *req = vc.notificationRequest;
@@ -6171,7 +6899,9 @@ index 3a91698..2ee4528 100644
 +            }
 +            [messageEl invalidateIntrinsicContentSize];
 +            [seamlessContentView setNeedsLayout];
-+            relayoutControllerPreferredSize(vc, seamlessContentView, preview);
++            if (!groupAnimating) {
++                relayoutControllerPreferredSize(vc, seamlessContentView, preview);
++            }
 +            return;
 +        }
 +
@@ -6208,6 +6938,16 @@ index 3a91698..2ee4528 100644
 +            }
 +        } @catch (NSException *e) {}
 +
++        if (groupAnimating) {
++            [DigestBannerAnimator applyStaticToLabel:messageEl
++                                         withSummary:msgText
++                                        originalText:origText
++                                         isStreaming:isStreaming
++                                              config:cfg
++                                          layoutHost:seamlessContentView];
++            return;
++        }
++
 +        __weak NCNotificationShortLookViewController *weakVC = vc;
 +        __weak UIView *weakCV = seamlessContentView;
 +        __weak UIView *weakPreview = preview;
@@ -6238,15 +6978,21 @@ index 3a91698..2ee4528 100644
 +static void renderControllerBannerStaticOnly(NCNotificationShortLookViewController *vc) {
 +    if (!vc || !vc.notificationRequest || !vc.notificationRequest.dig3st) return;
 +    @try {
-+        if ([vc isKindOfClass:NSClassFromString(@"NCExpandedPlatterViewController")]) {
++        if ([vc isKindOfClass:NSClassFromString(@"NCExpandedPlatterViewController")] ||
++            [vc isKindOfClass:NSClassFromString(@"NCNotificationLongLookViewController")]) {
 +            renderExpandedController(vc);
++            return;
++        }
++        BOOL insideListView = NO;
++        BOOL inGroupedList = NO;
++        BOOL groupAnimating = NO;
++        if (controllerIsHiddenInGroupedStack(vc, &insideListView, &inGroupedList, &groupAnimating)) {
 +            return;
 +        }
 +        UIView *seamlessContentView = findContentViewForController(vc);
 +        if (!seamlessContentView) return;
 +
-+        UIView *messageEl = nil;
-+        @try { messageEl = [seamlessContentView valueForKey:@"secondaryTextElement"]; } @catch (NSException *e) {}
++        UIView *messageEl = findMessageElementInContentView(seamlessContentView);
 +        NSString *msgText = safeKVCString(vc.notificationRequest.content, @"message");
 +        if (!messageEl || !msgText) return;
 +
@@ -6430,7 +7176,7 @@ index 3a91698..2ee4528 100644
      if ([sectionIdentifier hasPrefix:@"com.apple"]) {
          return NO;
      }
-@@ -23,189 +947,525 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
+@@ -23,189 +1439,709 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
  }
  
  
@@ -6498,6 +7244,17 @@ index 3a91698..2ee4528 100644
 +}
 +%end
 +
++%hook NCNotificationListView
++-(void)layoutSubviews {
++    gListViewLayoutDepth++;
++    @try {
++        %orig;
++    } @finally {
++        if (gListViewLayoutDepth > 0) gListViewLayoutDepth--;
++    }
++}
++%end
++
  %hook NCNotificationSeamlessContentView
  %property (nonatomic, retain) UIImageView *imageView;
 +-(void)_updateTextAttributesForSecondaryTextElement {
@@ -6506,8 +7263,9 @@ index 3a91698..2ee4528 100644
 +    objc_setAssociatedObject(self, kDigestAttrGuard, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 +    @try {
 +        UIViewController *controller = [self _viewControllerForAncestor];
-+        if ([controller isKindOfClass:NSClassFromString(@"NCExpandedPlatterViewController")]) {
-+            NCNotificationRequest *req = ((NCExpandedPlatterViewController *)controller).notificationRequest;
++        if ([controller isKindOfClass:NSClassFromString(@"NCExpandedPlatterViewController")] ||
++            [controller isKindOfClass:NSClassFromString(@"NCNotificationLongLookViewController")]) {
++            NCNotificationRequest *req = [controller respondsToSelector:@selector(notificationRequest)] ? [(NCNotificationViewController *)controller notificationRequest] : nil;
 +            if (req.dig3st && showOriginalInExpanded) {
 +                renderExpandedController(controller);
 +            }
@@ -6525,19 +7283,25 @@ index 3a91698..2ee4528 100644
 -        NCNotificationShortLookViewController *controller = [self _viewControllerForAncestor];
 -        NCNotificationRequest *req = controller.notificationRequest;
 -        //long view
-+        UIViewController *controller = [self _viewControllerForAncestor];
-+        NCNotificationRequest *req = nil;
-+        if ([controller isKindOfClass:NSClassFromString(@"NCExpandedPlatterViewController")]) {
-+            req = ((NCExpandedPlatterViewController *)controller).notificationRequest;
-+        } else if ([controller isKindOfClass:NSClassFromString(@"NCNotificationViewController")]) {
-+            req = ((NCNotificationViewController *)controller).notificationRequest;
-+        }
-         if ([controller isKindOfClass:NSClassFromString(@"NCExpandedPlatterViewController")] && req.dig3st) {
+-        if ([controller isKindOfClass:NSClassFromString(@"NCExpandedPlatterViewController")] && req.dig3st) {
 -            %orig([req valueForKey:@"actualMessage"]);
 -        }else{
++        UIViewController *controller = [self _viewControllerForAncestor];
++        BOOL isExpandedVC = ([controller isKindOfClass:NSClassFromString(@"NCExpandedPlatterViewController")] ||
++                             [controller isKindOfClass:NSClassFromString(@"NCNotificationLongLookViewController")]);
++        NCNotificationRequest *req = nil;
++        if (controller && [controller respondsToSelector:@selector(notificationRequest)]) {
++            req = [(NCNotificationViewController *)controller notificationRequest];
++        }
++        if (isExpandedVC && req.dig3st) {
 +            %orig(arg1);
-+            if (showOriginalInExpanded) {
-+                renderExpandedController(controller);
++            if (showOriginalInExpanded && ![objc_getAssociatedObject(self, kDigestAttrGuard) boolValue]) {
++                objc_setAssociatedObject(self, kDigestAttrGuard, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++                @try {
++                    renderExpandedController(controller);
++                } @finally {
++                    objc_setAssociatedObject(self, kDigestAttrGuard, @NO, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++                }
 +            }
 +        } else {
              %orig(arg1);
@@ -6545,6 +7309,49 @@ index 3a91698..2ee4528 100644
      } @catch(NSException *e) {
 -        NSLog(@"error: setting long view text %@", e) ;
 +        NSLog(@"error: setting long view text %@", e);
++        %orig(arg1);
++    }
++}
++%end
++
++%hook NCNotificationContentView
++-(void)_updateTextAttributesForSecondaryTextSupportingView:(id)view withStyle:(long long)style {
++    %orig;
++    if ([objc_getAssociatedObject(self, kDigestAttrGuard) boolValue]) return;
++    objc_setAssociatedObject(self, kDigestAttrGuard, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++    @try {
++        UIViewController *controller = [self _viewControllerForAncestor];
++        if ([controller isKindOfClass:NSClassFromString(@"NCNotificationLongLookViewController")] ||
++            [controller isKindOfClass:NSClassFromString(@"NCExpandedPlatterViewController")]) {
++            NCNotificationRequest *req = [controller respondsToSelector:@selector(notificationRequest)] ? [(NCNotificationViewController *)controller notificationRequest] : nil;
++            if (req.dig3st && showOriginalInExpanded) {
++                renderExpandedController(controller);
++            }
++        }
++    } @catch (NSException *e) {}
++    objc_setAssociatedObject(self, kDigestAttrGuard, @NO, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++}
++-(void)setSecondaryText:(NSString *)arg1 {
++    @try {
++        UIViewController *controller = [self _viewControllerForAncestor];
++        BOOL isExpandedVC = ([controller isKindOfClass:NSClassFromString(@"NCNotificationLongLookViewController")] ||
++                             [controller isKindOfClass:NSClassFromString(@"NCExpandedPlatterViewController")]);
++        NCNotificationRequest *req = (controller && [controller respondsToSelector:@selector(notificationRequest)])
++            ? [(NCNotificationViewController *)controller notificationRequest] : nil;
++        if (isExpandedVC && req.dig3st) {
++            %orig(arg1);
++            if (showOriginalInExpanded && ![objc_getAssociatedObject(self, kDigestAttrGuard) boolValue]) {
++                objc_setAssociatedObject(self, kDigestAttrGuard, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++                @try {
++                    renderExpandedController(controller);
++                } @finally {
++                    objc_setAssociatedObject(self, kDigestAttrGuard, @NO, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++                }
++            }
++        } else {
++            %orig(arg1);
++        }
++    } @catch (NSException *e) {
 +        %orig(arg1);
      }
  }
@@ -6554,24 +7361,27 @@ index 3a91698..2ee4528 100644
  %property (nonatomic, retain) UIImage *image;
 +-(void)_updateWithProvidedStaticContent {
 +    %orig;
++    if (![self isKindOfClass:NSClassFromString(@"NCNotificationShortLookViewController")]) return;
 +    if (self.notificationRequest.dig3st) {
 +        renderControllerBannerStaticOnly(self);
 +    }
 +}
 +-(unsigned long long)_maximumNumberOfSecondaryTextLinesForProvidedStaticContent {
-+    if (self.notificationRequest.dig3st) {
++    if ([self isKindOfClass:NSClassFromString(@"NCNotificationShortLookViewController")] && self.notificationRequest.dig3st) {
 +        return 4;
 +    }
 +    return %orig;
 +}
 +-(void)viewDidLoad {
 +    %orig;
++    if (![self isKindOfClass:NSClassFromString(@"NCNotificationShortLookViewController")]) return;
 +    if (activeControllers) {
 +        [activeControllers addObject:self];
 +    }
 +}
 +-(void)viewWillAppear:(BOOL)animated {
 +    %orig;
++    if (![self isKindOfClass:NSClassFromString(@"NCNotificationShortLookViewController")]) return;
 +    if (activeControllers) {
 +        [activeControllers addObject:self];
 +    }
@@ -6581,6 +7391,7 @@ index 3a91698..2ee4528 100644
 +}
 +-(void)viewDidDisappear:(BOOL)animated {
 +    %orig;
++    if (![self isKindOfClass:NSClassFromString(@"NCNotificationShortLookViewController")]) return;
 +    @try {
 +        NCNotificationRequest *req = self.notificationRequest;
 +        if (req.dig3st && !req.dig3stStreaming) {
@@ -6591,7 +7402,7 @@ index 3a91698..2ee4528 100644
 +            }
 +        }
 +        UIView *cv = findContentViewForController(self);
-+        UIView *lbl = cv ? [cv valueForKey:@"secondaryTextElement"] : nil;
++        UIView *lbl = findMessageElementInContentView(cv);
 +        if (lbl) [DigestBannerAnimator stopForLabel:lbl];
 +    } @catch (NSException *e) {}
 +    if (activeControllers) {
@@ -6631,6 +7442,7 @@ index 3a91698..2ee4528 100644
 -        } 
 -    } @catch(NSException *e) {
 -        NSLog(@"error: %@", e);
++    if (![self isKindOfClass:NSClassFromString(@"NCNotificationShortLookViewController")]) return;
 +    if (self.notificationRequest.dig3st) {
 +        renderControllerBanner(self);
      }
@@ -6645,6 +7457,7 @@ index 3a91698..2ee4528 100644
 +    if (activeExpandedControllers) {
 +        [activeExpandedControllers addObject:self];
 +    }
++    renderExpandedController(self);
 +}
 +-(void)viewWillAppear:(BOOL)animated {
 +    %orig;
@@ -6663,6 +7476,10 @@ index 3a91698..2ee4528 100644
 +    %orig;
 +    renderExpandedController(self);
 +}
++-(void)_updateWithProvidedCustomContent {
++    %orig;
++    renderExpandedController(self);
++}
 +-(void)viewDidLayoutSubviews {
 +    %orig;
 +    if (activeExpandedControllers) {
@@ -6672,9 +7489,123 @@ index 3a91698..2ee4528 100644
 +}
 +%end
 +
++%hook NCNotificationLongLookViewController
++-(void)viewDidLoad {
++    %orig;
++    if (![self isKindOfClass:NSClassFromString(@"NCNotificationLongLookViewController")]) return;
++    if (activeExpandedControllers) {
++        [activeExpandedControllers addObject:self];
++    }
++    renderExpandedController(self);
++}
++-(void)viewWillAppear:(BOOL)animated {
++    %orig;
++    if (![self isKindOfClass:NSClassFromString(@"NCNotificationLongLookViewController")]) return;
++    if (activeExpandedControllers) {
++        [activeExpandedControllers addObject:self];
++    }
++    renderExpandedController(self);
++}
++-(void)viewDidDisappear:(BOOL)animated {
++    %orig;
++    if (![self isKindOfClass:NSClassFromString(@"NCNotificationLongLookViewController")]) return;
++    if (activeExpandedControllers) {
++        [activeExpandedControllers removeObject:self];
++    }
++}
++-(void)_updateWithProvidedStaticContent {
++    %orig;
++    if (![self isKindOfClass:NSClassFromString(@"NCNotificationLongLookViewController")]) return;
++    renderExpandedController(self);
++}
++-(void)_updateWithProvidedCustomContent {
++    %orig;
++    if (![self isKindOfClass:NSClassFromString(@"NCNotificationLongLookViewController")]) return;
++    renderExpandedController(self);
++}
++-(void)viewDidLayoutSubviews {
++    %orig;
++    if (![self isKindOfClass:NSClassFromString(@"NCNotificationLongLookViewController")]) return;
++    if (activeExpandedControllers) {
++        [activeExpandedControllers addObject:self];
++    }
++    renderExpandedController(self);
++}
++%end
++
++%hook NCExpandedPlatterView
++-(void)setHidesNotificationContent:(BOOL)hidden {
++    %orig;
++    syncDigestExpandedCardOnPlatter(self);
++}
++-(CGSize)sizeThatFitsContentWithSize:(CGSize)size {
++    CGSize s = %orig;
++    CGFloat extra = digestExpandedCardHeightForPlatter(self, size.width);
++    if (extra > 0.0) {
++        s.height += extra;
++    }
++    return s;
++}
++-(CGSize)_contentViewSize {
++    CGSize s = %orig;
++    CGFloat extra = digestExpandedCardHeightForPlatter(self, s.width);
++    if (extra > 0.0) {
++        s.height += extra;
++    }
++    return s;
++}
++-(CGRect)_mainContentViewFrame {
++    CGRect f = %orig;
++    CGFloat extra = digestExpandedCardHeightForPlatter(self, f.size.width);
++    if (extra > 0.0) {
++        f.size.height += extra;
++    }
++    return f;
++}
++-(void)_layoutSubviews {
++    %orig;
++    layoutDigestExpandedCardInPlatter(self);
++}
++%end
++
++%hook NCNotificationLongLookView
++-(void)setHidesNotificationContent:(BOOL)hidden {
++    %orig;
++    syncDigestExpandedCardOnPlatter(self);
++}
++-(CGSize)_contentSizeThatFitsContentWithSizeExcludingActions:(CGSize)size {
++    CGSize s = %orig;
++    CGFloat extra = digestExpandedCardHeightForPlatter(self, size.width);
++    if (extra > 0.0) {
++        s.height += extra;
++    }
++    return s;
++}
++-(CGSize)_contentViewSize {
++    CGSize s = %orig;
++    CGFloat extra = digestExpandedCardHeightForPlatter(self, s.width);
++    if (extra > 0.0) {
++        s.height += extra;
++    }
++    return s;
++}
++-(CGRect)_mainContentViewFrame {
++    CGRect f = %orig;
++    CGFloat extra = digestExpandedCardHeightForPlatter(self, f.size.width);
++    if (extra > 0.0) {
++        f.size.height += extra;
++    }
++    return f;
++}
++-(void)layoutSubviews {
++    %orig;
++    layoutDigestExpandedCardInPlatter(self);
++}
++%end
++
 +%hook NCNotificationPresentableViewController
 +-(BOOL)bn_shouldAnimateViewTransitionToSize:(CGSize)size {
-+    @try {
+     @try {
 +        NCNotificationViewController *nvc = self.notificationViewController;
 +        if (nvc.notificationRequest.dig3st) {
 +            return YES;
@@ -6689,7 +7620,7 @@ index 3a91698..2ee4528 100644
 +        if (deliverBlock) deliverBlock(req);
 +        return;
 +    }
-     @try {
++    @try {
 +        if (!tweakEnabled || (pauseInLowPowerMode && lowPowerActive)) {
 +            [req setValue:@(NO) forKey:@"dig3st"];
 +            [req setValue:@(NO) forKey:@"dig3stStreaming"];
@@ -6732,12 +7663,12 @@ index 3a91698..2ee4528 100644
 +
 +        NSNumber *appCtxOverride = resolveAppTriState(@"appCtx", bundleId);
 +        BOOL effectiveCtxEnabled = appCtxOverride ? [appCtxOverride boolValue] : contextBufferEnabled;
-+
+ 
+-        BOOL contentTooShort = textContent ? textContent.length < minChars  : YES;
 +        NSNumber *appTransOverride = resolveAppTriState(@"appTrans", bundleId);
 +        NSNumber *appStreamOverride = resolveAppTriState(@"appStream", bundleId);
 +        BOOL effectiveStreamEnabled = appStreamOverride ? [appStreamOverride boolValue] : streamingEnabled;
- 
--        BOOL contentTooShort = textContent ? textContent.length < minChars  : YES;
++
 +        NSString *promptKey = bundleId.length > 0 ? [NSString stringWithFormat:@"appPrompt_%@", bundleId] : nil;
 +        NSString *appCustomPrompt = promptKey ? (prefs ? prefs[promptKey] : [prefsManager safeObjectForKey:promptKey]) : nil;
 +        if (![appCustomPrompt isKindOfClass:[NSString class]] || appCustomPrompt.length == 0) {
@@ -7025,7 +7956,9 @@ index 3a91698..2ee4528 100644
 -            Config *config = [[Config alloc] initWithEndpoint:endpoint timeoutInterval:@10];
 -            [logger log:@"Config has been created" level:LOGLEVEL_VERBOSE];
 +        }
-+
+ 
+-            openai = [[OpenAI alloc] initWithConfiguration:config];
+-            [logger log:@"Openai instance has been created" level:LOGLEVEL_VERBOSE];
 +        NSInteger timeout = [cachedPrefsSnapshot[@"timeout"] integerValue];
 +        if (timeout <= 0) {
 +            timeout = 30;
@@ -7033,24 +7966,10 @@ index 3a91698..2ee4528 100644
 +        Config *config = [[Config alloc] initWithEndpoint:endpoint timeoutInterval:@(timeout)];
 +        [logger log:@"Config has been created" level:LOGLEVEL_VERBOSE];
  
--            openai = [[OpenAI alloc] initWithConfiguration:config];
--            [logger log:@"Openai instance has been created" level:LOGLEVEL_VERBOSE];
-+        openai = [[OpenAI alloc] initWithConfiguration:config];
-+        [logger log:@"Openai instance has been created" level:LOGLEVEL_VERBOSE];
- 
 -            NSBundle *bundle = [[NSBundle alloc] initWithPath:ROOT_PATH_NS(@"/Library/PreferenceBundles/dig3st.bundle")];
 -            NSString *imgFile = [bundle pathForResource:@"arrow" ofType:@"png"];
-+        if (tweakEnabled && apiChecks) {
-+            [logger log:@"Running API Check" level:LOGLEVEL_INFO];
-+            [openai check:^(BOOL success) {
-+                if (!success) {
-+                    [logger log:@"API request failed disable Check Api in the settings to skip this check and then respring" level:LOGLEVEL_WARNING];
-+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(20 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-+                        Alert(@"API Error", @"API request failed this means the current endpoint might be invalid,disable Check Api in the settings to skip this check and then respring",nil);
-+                    });
-+                }
-+            }];
-+        }
++        openai = [[OpenAI alloc] initWithConfiguration:config];
++        [logger log:@"Openai instance has been created" level:LOGLEVEL_VERBOSE];
  
 -            if (apiChecks) {
 -                [logger log:@"Running API Check" level:LOGLEVEL_INFO];
@@ -7070,6 +7989,18 @@ index 3a91698..2ee4528 100644
 -            %init;
 -        }else {
 -            [logger log:@"End of ctor block, not running (tweak is disabled)" level:LOGLEVEL_WARNING];
++        if (tweakEnabled && apiChecks) {
++            [logger log:@"Running API Check" level:LOGLEVEL_INFO];
++            [openai check:^(BOOL success) {
++                if (!success) {
++                    [logger log:@"API request failed disable Check Api in the settings to skip this check and then respring" level:LOGLEVEL_WARNING];
++                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(20 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
++                        Alert(@"API Error", @"API request failed this means the current endpoint might be invalid,disable Check Api in the settings to skip this check and then respring",nil);
++                    });
++                }
++            }];
++        }
++
 +        %init;
 +        if ([logger shouldLog:LOGLEVEL_VERBOSE]) {
 +            [logger log:[NSString stringWithFormat:@"End of ctor block (enabled=%@)", tweakEnabled ? @"YES" : @"NO"] level:LOGLEVEL_VERBOSE];
