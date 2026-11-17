@@ -37,7 +37,8 @@
   "loadingIsland": {
     "title": "Loading piano sounds",
     "handsLoading": "Loading hand motion",
-    "handsWorking": "Generating hand motion"
+    "handsWorking": "Generating hand motion",
+    "instrumentLoading": "Loading instrument"
   },
   "startCard": {
     "title": "Start with a song",

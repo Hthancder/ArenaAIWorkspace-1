@@ -37,7 +37,8 @@
   "loadingIsland": {
     "title": "Đang tải tiếng đàn",
     "handsLoading": "Đang tải chuyển động tay",
-    "handsWorking": "Đang tạo chuyển động tay"
+    "handsWorking": "Đang tạo chuyển động tay",
+    "instrumentLoading": "Đang tải nhạc cụ"
   },
   "startCard": {
     "title": "Bắt đầu với một bản nhạc",

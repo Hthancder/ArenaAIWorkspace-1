@@ -154,7 +154,9 @@
     "handsExpression": "表現",
     "instrument": "楽器",
     "instrumentLazy": "選択時にサンプルをダウンロード",
-    "sampleCacheAuto": "サンプルキャッシュを自動保存"
+    "sampleCacheAuto": "サンプルキャッシュを自動保存",
+    "instrumentLoading": "読み込み中… {{loaded}}/{{total}} サンプル",
+    "instrumentError": "楽器の読み込みに失敗: {{message}}"
   },
   "particleBlending": {
     "alpha": "通常",

@@ -14,13 +14,18 @@ import { HttpStorage, type Storage, type StorageResponse } from 'smplr'
  *   manifest; those files, and only those, are reused on later loads
  *   even while auto mode is off.
  *
- * Read rule: a URL is served from Cache Storage iff auto mode is on OR
- * the URL is in the manual manifest. In the default state (mode off,
- * empty manifest) every fetch goes to the network with `cache:
- * 'no-store'`, which also bypasses the browser HTTP cache — the files
- * are served with year-long immutable headers (vercel.json), so
- * without this a plain reload would still be served from the HTTP
- * cache and the "reload re-downloads" requirement would silently fail.
+ * Read rule (in order): (1) the in-memory SESSION byte cache — raw
+ * fetched bytes kept for this tab session only (P2 decision
+ * 2026-11-15: re-selecting a just-used instrument must not re-download;
+ * the bytes die with the reload, so "reload re-downloads everything"
+ * still holds); (2) Cache Storage iff auto mode is on OR the URL is in
+ * the manual manifest; (3) the network with `cache: 'no-store'` when
+ * the Cache Storage policy doesn't want this file — the files are
+ * served with year-long immutable headers (vercel.json), so without
+ * this a plain reload would still be served from the HTTP cache and
+ * the "reload re-downloads" requirement would silently fail. Successful
+ * network reads populate the session cache (LRU, capped — see
+ * SESSION_CACHE_CAP_BYTES).
  *
  * smplr ships its own `CacheStorage` wrapper, but it caches *every*
  * response — including 404s and 5xx errors. If the user toggles
@@ -33,8 +38,9 @@ import { HttpStorage, type Storage, type StorageResponse } from 'smplr'
  * Versioned cache name (`v2` and up) lets us invalidate on a code
  * deploy if we discover poisoned caches from older builds.
  *
- * Falls back to plain HttpStorage if Cache Storage isn't available
- * (e.g. third-party iframe, very old browser).
+ * Falls back to plain HttpStorage when `fetch`/`Request` are missing
+ * (very old browser); the session cache works with or without Cache
+ * Storage, which only affects the disk layer.
  */
 
 // v3: previous (v2) builds passed a synthetic Response to cache.put,
@@ -59,6 +65,81 @@ let mode: SampleCacheMode = 'off'
 const manualUrls = new Set<string>()
 /** URLs the sample storage has seen this session (current + earlier instruments). */
 const seenUrls = new Set<string>()
+
+// ── Session byte cache (in-memory, tab-scoped) ──────────────────────
+//
+// Raw fetched bytes kept ONLY for this browser tab: switching back to a
+// just-used instrument re-serves instantly instead of re-downloading.
+// Deliberately memory-only — a reload wipes it, which is exactly the
+// "reload re-downloads everything" default. LRU by access order, capped
+// so long instrument-hopping sessions can't grow without bound (P2:
+// "chỉ cache bytes nén — nhẹ RAM"). Decoded AudioBuffers are NOT kept
+// (a salamander set decodes to ~719 MB of float32 PCM — measured — so
+// retaining instruments' decoded samples would blow memory far faster
+// than the compressed bytes do).
+
+const SESSION_CACHE_CAP_BYTES = 80 * 1024 * 1024
+let sessionCacheCapBytes = SESSION_CACHE_CAP_BYTES
+/** LRU: Map iteration order = oldest first; hits re-insert to the end. */
+const sessionBytes = new Map<string, ArrayBuffer>()
+let sessionBytesTotal = 0
+
+/** Test hook — shrink the cap to exercise eviction. */
+export function setSessionCacheCapForTests(bytes: number): void {
+  sessionCacheCapBytes = Math.max(0, bytes)
+  evictSessionCache()
+}
+
+export function sessionCacheStats(): { entries: number; bytes: number } {
+  return { entries: sessionBytes.size, bytes: sessionBytesTotal }
+}
+
+function sessionGet(url: string): ArrayBuffer | undefined {
+  const hit = sessionBytes.get(url)
+  if (hit) {
+    sessionBytes.delete(url)
+    sessionBytes.set(url, hit) // mark as most-recently-used
+  }
+  return hit
+}
+
+function sessionPut(url: string, bytes: ArrayBuffer): void {
+  if (bytes.byteLength > sessionCacheCapBytes) return // never cacheable alone
+  const prev = sessionBytes.get(url)
+  if (prev) sessionBytesTotal -= prev.byteLength
+  sessionBytes.delete(url)
+  sessionBytes.set(url, bytes)
+  sessionBytesTotal += bytes.byteLength
+  evictSessionCache()
+}
+
+function evictSessionCache(): void {
+  while (sessionBytesTotal > sessionCacheCapBytes && sessionBytes.size > 0) {
+    const oldest = sessionBytes.keys().next().value as string
+    const bytes = sessionBytes.get(oldest)!
+    sessionBytes.delete(oldest)
+    sessionBytesTotal -= bytes.byteLength
+  }
+}
+
+function clearSessionCache(): void {
+  sessionBytes.clear()
+  sessionBytesTotal = 0
+}
+
+/**
+ * StorageResponse over cached raw bytes. `arrayBuffer()` hands out a
+ * COPY — smplr may decode (which some engines detach) or read the same
+ * entry again on a later switch, so the cached master must survive.
+ */
+function sessionResponse(bytes: ArrayBuffer): StorageResponse {
+  return {
+    status: 200,
+    arrayBuffer: async () => bytes.slice(0),
+    text: async () => new TextDecoder().decode(bytes),
+    json: async () => JSON.parse(new TextDecoder().decode(bytes)) as unknown,
+  }
+}
 
 /** Whether Cache Storage is usable in this environment. */
 export function isSampleCacheAvailable(): boolean {
@@ -121,6 +202,13 @@ let loggedMiss = false
 class PolicyStorage implements Storage {
   async fetch(url: string): Promise<StorageResponse> {
     seenUrls.add(url)
+
+    // 1. Session byte cache — instant reuse when switching back to an
+    //    instrument already loaded this tab (no network, no decode-data
+    //    re-download; smplr still decodes per build).
+    const mem = sessionGet(url)
+    if (mem) return sessionResponse(mem)
+
     const wantCache = usesCacheFor(url)
     const cache =
       wantCache && isSampleCacheAvailable()
@@ -136,6 +224,13 @@ class PolicyStorage implements Storage {
           console.info(
             '[sampleCache] cache HIT (' + CACHE_NAME + ') — serving from Cache Storage',
           )
+        }
+        // Read into the session cache so the next build is instant.
+        try {
+          const bytes = await hit.clone().arrayBuffer()
+          sessionPut(url, bytes)
+        } catch {
+          /* keep the plain hit */
         }
         return hit
       }
@@ -165,13 +260,23 @@ class PolicyStorage implements Storage {
         console.warn('[sampleCache] cache.put failed for', url, err)
       }
     }
+    if (fresh.status === 200) {
+      try {
+        const bytes = await fresh.clone().arrayBuffer()
+        sessionPut(url, bytes)
+      } catch {
+        /* session cache is best-effort */
+      }
+    }
     return fresh
   }
 }
 
 /** Storage for smplr instrument constructors (see the policy above). */
 export function createSampleStorage(): Storage {
-  if (!isSampleCacheAvailable()) return HttpStorage
+  if (typeof fetch === 'undefined' || typeof Request === 'undefined') {
+    return HttpStorage
+  }
   // Best-effort cleanup of older cache versions so they don't
   // silently consume disk forever. Fire-and-forget.
   void purgeLegacyCaches()
@@ -226,12 +331,14 @@ export async function cacheSamplesNow(
 }
 
 /**
- * Manual clear: wipe every cache this app may have written (sample
- * sets across versions + the hands motion DB) and the manual manifest.
- * After this the default "reload re-downloads everything" behaviour is
- * fully restored.
+ * Manual clear: wipe the in-memory session bytes, every cache this app
+ * may have written (sample sets across versions + the hands motion DB)
+ * and the manual manifest. After this the default "reload re-downloads
+ * everything" behaviour is fully restored — and re-selecting an
+ * already-used instrument re-downloads too.
  */
 export async function clearSampleCache(): Promise<void> {
+  clearSessionCache()
   if (!isSampleCacheAvailable()) return
   const keys = await caches.keys().catch(() => [] as string[])
   for (const name of keys) {

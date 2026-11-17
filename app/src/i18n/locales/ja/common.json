@@ -37,7 +37,8 @@
   "loadingIsland": {
     "title": "ピアノの音を読み込み中",
     "handsLoading": "手の動きを読み込み中",
-    "handsWorking": "手の動きを生成中"
+    "handsWorking": "手の動きを生成中",
+    "instrumentLoading": "楽器を読み込み中"
   },
   "startCard": {
     "title": "曲を選んで始めましょう",

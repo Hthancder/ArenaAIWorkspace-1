@@ -154,7 +154,9 @@
     "handsExpression": "Biểu cảm",
     "instrument": "Nhạc cụ",
     "instrumentLazy": "chỉ tải âm thanh khi chọn",
-    "sampleCacheAuto": "Tự động lưu cache âm thanh"
+    "sampleCacheAuto": "Tự động lưu cache âm thanh",
+    "instrumentLoading": "Đang tải… {{loaded}}/{{total}} mẫu",
+    "instrumentError": "Tải nhạc cụ lỗi: {{message}}"
   },
   "particleBlending": {
     "alpha": "Pháp tuyến",

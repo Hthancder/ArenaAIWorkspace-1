@@ -154,7 +154,9 @@
     "handsExpression": "Expression",
     "instrument": "Instrument",
     "instrumentLazy": "samples download on selection",
-    "sampleCacheAuto": "Auto-save sample cache"
+    "sampleCacheAuto": "Auto-save sample cache",
+    "instrumentLoading": "Loading… {{loaded}}/{{total}} samples",
+    "instrumentError": "Instrument load failed: {{message}}"
   },
   "particleBlending": {
     "alpha": "Normal",

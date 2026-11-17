@@ -25,6 +25,7 @@ import {
 } from './velocityCurve'
 import { DEFAULT_VELOCITY_COMPENSATION } from './salamanderDescriptor'
 import { DEFAULT_INSTRUMENT_ID } from './instruments'
+import { setInstrumentLoad } from './instrumentStatus'
 
 type ActiveNote = {
   id: number
@@ -115,6 +116,8 @@ export class AudioEngine {
   private piano: PianoInstrument | null = null
   /** Registry id of the instrument to build (audio/instruments.ts). */
   private instrumentId = DEFAULT_INSTRUMENT_ID
+  /** Bumped per instrument rebuild — stale builds stop publishing status. */
+  private instrumentGen = 0
   private song: ParsedSong | null = null
 
   private playing = false
@@ -293,6 +296,9 @@ export class AudioEngine {
    * built alongside the current one (which keeps sounding until the
    * swap), then the old sampler is stopped and disposed. Superfluous
    * rebuilds (the user flipping the picker) are dropped, not queued.
+   * Load progress (and load errors) are published through
+   * `instrumentStatus` — the LoadingIsland row and the instrument
+   * picker both watch it.
    */
   async setInstrument(id: string): Promise<void> {
     if (id === this.instrumentId) return
@@ -304,10 +310,38 @@ export class AudioEngine {
     if (!this.piano) return
     if (this.instrumentId !== id) return // superseded while awaiting
     const old = this.piano
-    const fresh = await createPiano(undefined, undefined, { instrument: id })
+    // Generation guard: only the newest rebuild may publish status —
+    // a stale build's late progress/error must go quiet.
+    const gen = ++this.instrumentGen
+    setInstrumentLoad({ state: 'loading', loaded: 0, total: 1 })
+    let fresh: PianoInstrument
+    try {
+      fresh = await createPiano(
+        undefined,
+        (p) => {
+          if (this.instrumentGen === gen) {
+            setInstrumentLoad({
+              state: 'loading',
+              loaded: p.loaded,
+              total: p.total,
+            })
+          }
+        },
+        { instrument: id },
+      )
+    } catch (err) {
+      // The swap never happened — the old sampler keeps sounding.
+      if (this.instrumentGen === gen) {
+        setInstrumentLoad({
+          state: 'error',
+          message: err instanceof Error ? err.message : String(err),
+        })
+      }
+      return
+    }
     if (this.instrumentId !== id) {
       // Superseded during the download — drop this build; the newer
-      // call owns the swap and will dispose the still-playing old one.
+      // call owns the swap, the status stream, and disposing the old one.
       fresh.dispose()
       return
     }
@@ -315,6 +349,7 @@ export class AudioEngine {
     this.piano = fresh
     old.stopAll()
     old.dispose()
+    setInstrumentLoad({ state: 'ready' })
   }
 
   isReady(): boolean {

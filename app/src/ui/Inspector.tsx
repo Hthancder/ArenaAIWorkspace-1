@@ -39,12 +39,16 @@ import { ReorderColorRows } from './look/ReorderColorRows'
 import { ImagePicker } from './look/ImagePicker'
 import { useBarColors, useEffectiveLook } from './look/useLookState'
 import { VelocityCurveEditor } from './VelocityCurveEditor'
-import { Button, Icon, IconButton, Panel, Select, GEOMETRY, usePresence } from './kit'
+import { Button, Icon, IconButton, Panel, Progress, Select, GEOMETRY, usePresence } from './kit'
 import { useShell } from './shell/uiState'
 import { useTakeInProgress } from './shell/takeFocus'
 import { useIdle } from './shell/idle'
 import { useCustomTexture } from '../notes/customTexture'
 import { getInstrument, instrumentsByFamily } from '../audio/instruments'
+import {
+  getInstrumentLoad,
+  subscribeInstrumentLoad,
+} from '../audio/instrumentStatus'
 import {
   cacheSamplesNow,
   clearSampleCache,
@@ -1662,6 +1666,7 @@ function PcGlyphPresetRow() {
 function InstrumentRow() {
   const { t } = useTranslation('inspector')
   const value = useStore((st) => st.settings.instrument)
+  const load = useSyncExternalStore(subscribeInstrumentLoad, getInstrumentLoad)
   const groups = useMemo(
     () =>
       instrumentsByFamily().map((g) => ({
@@ -1682,6 +1687,26 @@ function InstrumentRow() {
         groups={groups}
         aria-label={label}
       />
+      {load.state === 'loading' && (
+        <div className="flex items-center gap-2">
+          <Progress
+            value={load.total > 0 ? load.loaded / load.total : 0}
+            label={label}
+            className="w-24"
+          />
+          <span className="text-caption text-ink-muted">
+            {t('row.instrumentLoading', {
+              loaded: load.loaded,
+              total: load.total,
+            })}
+          </span>
+        </div>
+      )}
+      {load.state === 'error' && (
+        <p className="text-caption text-ink">
+          {t('row.instrumentError', { message: load.message })}
+        </p>
+      )}
       <p className="text-caption text-ink-faint">
         {credit} · {t('row.instrumentLazy')}
       </p>

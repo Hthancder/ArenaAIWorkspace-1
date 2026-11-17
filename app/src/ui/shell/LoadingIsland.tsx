@@ -2,6 +2,10 @@ import { useEffect, useState, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useStore } from '../../store'
 import { getHandsStatus, subscribeHandsStatus } from '../../hands/motion'
+import {
+  getInstrumentLoad,
+  subscribeInstrumentLoad,
+} from '../../audio/instrumentStatus'
 import { GEOMETRY, Progress, showToast } from '../kit'
 
 /** Making a song's motion is often over in a moment (an edit of a short piece): its row shows only once it has run this long. */
@@ -35,6 +39,33 @@ function useHandsRow(): { label: string; fraction: number } | null {
 }
 
 /**
+ * The instrument-switch row: samples downloading for a newly selected
+ * instrument (its own row — deliberately not `store.loadStatus`, which
+ * gates playback on the FIRST piano load; a mid-session switch must not
+ * block play since the old sampler keeps sounding until the swap).
+ */
+function useInstrumentRow(): { label: string; fraction: number } | null {
+  const { t } = useTranslation('common')
+  const st = useSyncExternalStore(subscribeInstrumentLoad, getInstrumentLoad)
+  const failed = st.state === 'error'
+  const message = st.state === 'error' ? st.message : ''
+  useEffect(() => {
+    if (failed) {
+      showToast({
+        message: t('row.instrumentError', { ns: 'inspector', message }),
+      })
+    }
+  }, [failed, message, t])
+  if (st.state === 'loading') {
+    return {
+      label: t('loadingIsland.instrumentLoading'),
+      fraction: st.total > 0 ? st.loaded / st.total : 0,
+    }
+  }
+  return null
+}
+
+/**
  * Small island at the top centre while something the picture needs is being prepared: the piano sounds, the hands' motion
  * (one row each when both run). Never blocks the app: only playback waits for the sounds (the Viewport's click-eater guards
  * destructive canvas gestures); hands simply appear when their motion is ready.
@@ -43,8 +74,10 @@ export function LoadingIsland() {
   const { t } = useTranslation('common')
   const status = useStore((s) => s.loadStatus)
   const hands = useHandsRow()
+  const instrument = useInstrumentRow()
   const rows: { key: string; label: string; fraction: number }[] = []
   if (status.state === 'loading') rows.push({ key: 'piano', label: t('loadingIsland.title'), fraction: status.total > 0 ? status.loaded / status.total : 0 })
+  if (instrument) rows.push({ key: 'instrument', ...instrument })
   if (hands) rows.push({ key: 'hands', ...hands })
   if (!rows.length) return null
   return (

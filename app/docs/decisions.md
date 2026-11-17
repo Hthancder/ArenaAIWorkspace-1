@@ -483,3 +483,39 @@ GM 128, credit/label đầy đủ; cache mode persist; boot restore + unknown-ke
 practice prefs; save debounce roundtrip; import file rác từ chối; reset; offline
 dispatch patch bật/tắt). Battery cũ (livebrowser 39, livehands 42, notequery 10,
 humanize, practice) + tsc + build sạch.
+
+## Sửa: tải lại nhạc cụ khi chọn lại + thiếu tiến trình (2026-11-15, user duyệt P2)
+
+**Triệu chứng**: (1) chọn A→B→A trong cùng phiên = A tải lại từ đầu; (2) không có
+tiến trình khi đổi nhạc cụ. User chọn phương án **P2 (chỉ cache bytes nén, nhẹ
+RAM)** + tiến trình ở **cả LoadingIsland lẫn ô Nhạc cụ**.
+
+**Nguyên nhân gốc (đo từ file thật)**:
+- Lớp mạng: policy mặc định fetch `cache:'no-store'`, không giữ gì → đổi lại là
+  download lại. Lớp bộ nhớ: mỗi lần chọn = smplr instance mới với AudioBuffer
+  decode riêng; instance cũ `dispose()` giải phóng RAM — **cần thiết**: bộ
+  Salamander 27,1MB nén (240 file, 34 phút stereo 44.1kHz) decode ra **~719MB
+  float32 PCM** (đo bằng granule position của OGG) — giữ decoded của 2-3 nhạc
+  cụ là >1GB RAM.
+- Thiếu tiến trình: `setInstrument` gọi `createPiano(undefined, undefined, …)`
+  — tham số `onProgress` bị bỏ trống (đường init có wire, đường switch cắt).
+
+**Fix**:
+- Session byte-cache (`sampleCache.ts`): Map LRU url→ArrayBuffer **chỉ trong RAM
+  của tab** (cap 80MB, entry lớn hơn cap không cache; 404 không cache;
+  `arrayBuffer()` trả bản copy để decode không phá bản chính). Đọc thứ tự:
+  session → Cache Storage (nếu policy cho) → network `no-store`; network thành
+  công nạp vào session. `clearSampleCache` xóa cả session. Reload = mất hết →
+  "reload tải lại toàn bộ" vẫn đúng. Chọn lại nhạc cụ vừa dùng: không download
+  lại (vẫn decode ~2-4s — đã trình user, duyệt P2).
+- Tiến trình (`instrumentStatus.ts` — external store kiểu hands status):
+  `setInstrument` phát loading/loaded:total/ready/error, **guard theo generation**
+  (build thặng dư câm); lỗi → giữ sampler cũ phát tiếp + toast. LoadingIsland
+  thêm dòng riêng "Đang tải nhạc cụ" (KHÔNG dùng `store.loadStatus` — cờ đó
+  chặn playback khi tải lần đầu, switch không được chặn vì sampler cũ vẫn kêu).
+  Ô "Nhạc cụ" hiện Progress + "Đang tải… X/Y" + dòng lỗi.
+
+**Test**: `test-sample-cache.ts` 16 checks (mem hit không fetch lại, bytes/text
+hoàn nguyên, 404 không cache, LRU evict đúng thứ tự, clear xóa session, entry
+quá cap không cache, instrumentStatus subscribe/unsubscribe). Battery cũ +
+settings-persist + tsc + build sạch.
