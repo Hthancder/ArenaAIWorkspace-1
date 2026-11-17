@@ -8,6 +8,7 @@
 import AVFoundation
 import Combine
 import Foundation
+import NaturalLanguage
 import SwiftUI
 import UIKit
 
@@ -28,7 +29,7 @@ extension WritingToolsView {
         VStack(spacing: 8) {
             // Top mini-toolbar: version history, Original compare, Manual Edit, Speak, Memory
             if !output.isEmpty || outputHistory.count > 1 {
-                ScrollView(.horizontal, showsIndicators: false) {
+                ResponsiveHorizontalScrollView {
                     HStack(spacing: 6) {
                         if outputHistory.count > 1 {
                             HStack(spacing: 4) {
@@ -37,7 +38,10 @@ extension WritingToolsView {
                                 } label: {
                                     Image(systemName: "chevron.left")
                                         .font(.caption.bold())
+                                        .frame(minWidth: 20, minHeight: 22)
+                                        .contentShape(Rectangle())
                                 }
+                                .buttonStyle(.plain)
                                 .disabled(historyIndex <= 0 || isRunning)
 
                                 Text("\(historyIndex + 1)/\(outputHistory.count)")
@@ -48,7 +52,10 @@ extension WritingToolsView {
                                 } label: {
                                     Image(systemName: "chevron.right")
                                         .font(.caption.bold())
+                                        .frame(minWidth: 20, minHeight: 22)
+                                        .contentShape(Rectangle())
                                 }
+                                .buttonStyle(.plain)
                                 .disabled(historyIndex >= outputHistory.count - 1 || isRunning)
                             }
                             .padding(.horizontal, 8)
@@ -71,6 +78,7 @@ extension WritingToolsView {
                                 .padding(.vertical, 4)
                                 .background(priorEditContextAttached ? Color.purple.opacity(0.34) : Color.white.opacity(0.10))
                                 .cornerRadius(8)
+                                .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                             .disabled(isRunning)
@@ -87,6 +95,7 @@ extension WritingToolsView {
                                     .padding(.vertical, 4)
                                     .background(diffDisplayMode == .wordDiff ? Color.white.opacity(0.28) : Color.white.opacity(0.12))
                                     .cornerRadius(8)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                             .disabled(isRunning)
@@ -102,6 +111,7 @@ extension WritingToolsView {
                                 .padding(.vertical, 4)
                                 .background(diffDisplayMode == .originalSplit ? Color.white.opacity(0.28) : Color.white.opacity(0.12))
                                 .cornerRadius(8)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
 
@@ -118,6 +128,7 @@ extension WritingToolsView {
                                 .padding(.vertical, 4)
                                 .background(isEditingOutput ? Color.white.opacity(0.28) : Color.white.opacity(0.12))
                                 .cornerRadius(8)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .disabled(isRunning)
@@ -128,10 +139,11 @@ extension WritingToolsView {
                             } label: {
                                 Image(systemName: isSpeakingOutput ? "stop.circle.fill" : "speaker.wave.2")
                                     .font(.caption2.weight(.semibold))
-                                    .padding(.horizontal, 7)
-                                    .padding(.vertical, 4)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 5)
                                     .background(isSpeakingOutput ? Color.cyan.opacity(0.32) : Color.white.opacity(0.12))
                                     .cornerRadius(8)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                             .disabled(isRunning)
@@ -143,10 +155,11 @@ extension WritingToolsView {
                             } label: {
                                 Image(systemName: copiedToast ? "checkmark" : "doc.on.doc")
                                     .font(.caption2.weight(.semibold))
-                                    .padding(.horizontal, 7)
-                                    .padding(.vertical, 4)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 5)
                                     .background(copiedToast ? Color.green.opacity(0.32) : Color.white.opacity(0.12))
                                     .cornerRadius(8)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
 
@@ -166,7 +179,10 @@ extension WritingToolsView {
                                 .cornerRadius(7)
                         }
                     }
+                    .foregroundColor(.white)
                 }
+                .frame(height: 30)
+                .zIndex(5)
             }
 
             // Content area
@@ -229,13 +245,15 @@ extension WritingToolsView {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .clipped()
+                .layoutPriority(-1)
             }
 
             // Inline refine chips + follow-up prompt input (when idle with output)
             if !isRunning, !output.isEmpty {
                 VStack(spacing: 6) {
                     if !enabledOutputQuickActions.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
+                        ResponsiveHorizontalScrollView {
                             HStack(spacing: 6) {
                                 ForEach(enabledOutputQuickActions) { chip in
                                     Button {
@@ -249,15 +267,18 @@ extension WritingToolsView {
                                             Text(chip.title)
                                                 .font(.caption2.weight(.medium))
                                         }
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Color.white.opacity(0.13))
+                                        .padding(.horizontal, 9)
+                                        .padding(.vertical, 5)
+                                        .background(Color.white.opacity(0.14))
                                         .cornerRadius(8)
+                                        .contentShape(Rectangle())
                                     }
                                     .buttonStyle(.plain)
                                 }
                             }
+                            .foregroundColor(.white)
                         }
+                        .frame(height: 28)
                     }
 
                     if !voiceBannerMessage.isEmpty {
@@ -774,6 +795,7 @@ private enum WordDiffEngine {
 final class OutputSpeechHelper: NSObject, AVSpeechSynthesizerDelegate {
     static let shared = OutputSpeechHelper()
     private let synthesizer = AVSpeechSynthesizer()
+    private var currentUtterance: AVSpeechUtterance?
     private var onFinish: (() -> Void)?
 
     override private init() {
@@ -784,58 +806,89 @@ final class OutputSpeechHelper: NSObject, AVSpeechSynthesizerDelegate {
     func speak(_ text: String, speedMultiplier: Double = 1.0, languageHint: String? = nil, onFinish: @escaping () -> Void) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            onFinish()
+            DispatchQueue.main.async { onFinish() }
             return
         }
+        self.onFinish = nil
+        currentUtterance = nil
         if synthesizer.isSpeaking {
             synthesizer.stopSpeaking(at: .immediate)
         }
+        let session = AVAudioSession.sharedInstance()
+        try? session.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+        try? session.setActive(true, options: [])
+
         self.onFinish = onFinish
         let utterance = AVSpeechUtterance(string: trimmed)
         let baseRate = AVSpeechUtteranceDefaultSpeechRate
         let clampedMult = min(max(Float(speedMultiplier), 0.7), 1.35)
         utterance.rate = min(max(baseRate * clampedMult, AVSpeechUtteranceMinimumSpeechRate), AVSpeechUtteranceMaximumSpeechRate)
-        if let code = Self.resolveVoiceLanguage(hint: languageHint),
+        if let code = Self.resolveVoiceLanguage(hint: languageHint, sampleText: trimmed),
            let voice = AVSpeechSynthesisVoice(language: code)
         {
             utterance.voice = voice
         }
+        currentUtterance = utterance
         synthesizer.speak(utterance)
     }
 
-    private static func resolveVoiceLanguage(hint: String?) -> String? {
-        guard let raw = hint?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
-              !raw.isEmpty
-        else { return nil }
-        if raw.contains("viet") || raw == "vi" { return "vi-VN" }
-        if raw.contains("eng") || raw == "en" { return "en-US" }
-        if raw.contains("japan") || raw == "ja" { return "ja-JP" }
-        if raw.contains("chin") || raw.contains("mandarin") || raw.hasPrefix("zh") { return "zh-CN" }
-        if raw.contains("kor") || raw == "ko" { return "ko-KR" }
-        if raw.contains("french") || raw == "fr" { return "fr-FR" }
-        if raw.contains("german") || raw == "de" { return "de-DE" }
-        if raw.contains("span") || raw == "es" { return "es-ES" }
+    private static func resolveVoiceLanguage(hint: String?, sampleText: String) -> String? {
+        if let raw = hint?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), !raw.isEmpty {
+            if raw.contains("viet") || raw == "vi" { return "vi-VN" }
+            if raw.contains("eng") || raw == "en" { return "en-US" }
+            if raw.contains("japan") || raw == "ja" { return "ja-JP" }
+            if raw.contains("chin") || raw.contains("mandarin") || raw.hasPrefix("zh") { return "zh-CN" }
+            if raw.contains("kor") || raw == "ko" { return "ko-KR" }
+            if raw.contains("french") || raw == "fr" { return "fr-FR" }
+            if raw.contains("german") || raw == "de" { return "de-DE" }
+            if raw.contains("span") || raw == "es" { return "es-ES" }
+        }
+        let recognizer = NLLanguageRecognizer()
+        recognizer.processString(String(sampleText.prefix(240)))
+        if let dominant = recognizer.dominantLanguage {
+            switch dominant {
+            case .vietnamese: return "vi-VN"
+            case .english: return "en-US"
+            case .japanese: return "ja-JP"
+            case .simplifiedChinese, .traditionalChinese: return "zh-CN"
+            case .korean: return "ko-KR"
+            case .french: return "fr-FR"
+            case .german: return "de-DE"
+            case .spanish: return "es-ES"
+            default: return dominant.rawValue
+            }
+        }
         return nil
     }
 
     func stop() {
+        onFinish = nil
+        currentUtterance = nil
         if synthesizer.isSpeaking {
             synthesizer.stopSpeaking(at: .immediate)
         }
-        onFinish = nil
+        try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
     }
 
-    func speechSynthesizer(_: AVSpeechSynthesizer, didFinish _: AVSpeechUtterance) {
+    func speechSynthesizer(_: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         DispatchQueue.main.async { [weak self] in
-            self?.onFinish?()
-            self?.onFinish = nil
+            guard let self, self.currentUtterance === utterance else { return }
+            self.currentUtterance = nil
+            let cb = self.onFinish
+            self.onFinish = nil
+            try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+            cb?()
         }
     }
 
-    func speechSynthesizer(_: AVSpeechSynthesizer, didCancel _: AVSpeechUtterance) {
+    func speechSynthesizer(_: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
         DispatchQueue.main.async { [weak self] in
-            self?.onFinish?()
-            self?.onFinish = nil
+            guard let self, self.currentUtterance === utterance else { return }
+            self.currentUtterance = nil
+            let cb = self.onFinish
+            self.onFinish = nil
+            try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+            cb?()
         }
     }
 }

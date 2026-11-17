@@ -362,7 +362,7 @@ extension WritingToolsView {
             }
 
             if !enabledInputQuickActions.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
+                ResponsiveHorizontalScrollView {
                     HStack(spacing: 6) {
                         ForEach(enabledInputQuickActions) { action in
                             Button {
@@ -380,15 +380,18 @@ extension WritingToolsView {
                                 .padding(.vertical, 5)
                                 .background(Color.white.opacity(0.16))
                                 .cornerRadius(8)
+                                .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                         }
                     }
+                    .foregroundColor(.white)
                 }
+                .frame(height: 28)
             }
 
             if !cfg.settings.recentCustomPrompts.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
+                ResponsiveHorizontalScrollView {
                     HStack(spacing: 6) {
                         ForEach(cfg.settings.recentCustomPrompts, id: \.self) { recent in
                             Button {
@@ -401,11 +404,14 @@ extension WritingToolsView {
                                     .padding(.vertical, 4)
                                     .background(Color.white.opacity(0.12))
                                     .cornerRadius(8)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                         }
                     }
+                    .foregroundColor(.white)
                 }
+                .frame(height: 26)
             }
 
             // Dynamic preset grid

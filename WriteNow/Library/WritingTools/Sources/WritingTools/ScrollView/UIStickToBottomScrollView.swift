@@ -15,6 +15,7 @@ class UIStickToBottomScrollView: UIScrollView, UIScrollViewDelegate {
     init() {
         super.init(frame: .zero)
 
+        clipsToBounds = true
         showsHorizontalScrollIndicator = false
         showsVerticalScrollIndicator = true
         indicatorStyle = .white
