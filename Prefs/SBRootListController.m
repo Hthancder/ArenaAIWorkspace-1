@@ -2,11 +2,20 @@
 #import <Preferences/PSViewController.h>
 #import <notify.h>
 #import <AVFoundation/AVFoundation.h>
+#import <arpa/inet.h>
 #import "SBPrefsUI.h"
 #import "SBPaths.h"
 #import "SBLog.h"
 
 static NSString *const kDomain = @"com.hthancder.siribridge";
+
+static BOOL SBIsPrivateIPv4Host(NSString *host) {
+    struct in_addr address;
+    if (!host.length || inet_aton(host.UTF8String, &address) == 0) return NO;
+    uint32_t ip = ntohl(address.s_addr);
+    return (ip >> 24) == 10 || (ip >> 20) == 0xAC1 ||
+           (ip >> 16) == 0xC0A8 || (ip >> 16) == 0xA9FE || ip == 0x7F000001;
+}
 
 #pragma mark - Header
 
@@ -147,6 +156,8 @@ static NSString *const kDomain = @"com.hthancder.siribridge";
 @property (nonatomic, strong) NSMutableArray<SBRowView *> *localVoiceRows;
 @property (nonatomic, strong) SBCardView *remoteCard;
 @property (nonatomic, assign) BOOL advancedExpanded;
+- (void)fetchModels;
+- (void)testConnection;
 @end
 
 @implementation SBRootListController
@@ -382,6 +393,9 @@ static NSString *const kDomain = @"com.hthancder.siribridge";
                         placeholder:@"gpt-4o-mini"
                            keyboard:UIKeyboardTypeDefault isSecret:NO]
           toCard:card];
+    [self addRow:[SBRowView actionRow:@"Tải danh sách model" subtitle:@"Lấy model khả dụng từ endpoint hiện tại"
+                                color:nil action:^{ [self fetchModels]; }]
+          toCard:card];
 
     [self addRow:[SBRowView textRow:@"Field chứa câu trả lời"
                            subtitle:@"Đường dẫn JSON, dấu . phân cấp"
@@ -392,7 +406,7 @@ static NSString *const kDomain = @"com.hthancder.siribridge";
 
     [self addRow:[SBRowView longTextRow:@"System prompt"
                                subtitle:@"Định hình giọng điệu trả lời"
-                                    key:@"SystemPrompt" def:@""
+                                    key:@"SystemPrompt" def:@"Bạn là trợ lý giọng nói trên iPhone. Trả lời cực kỳ ngắn gọn, tự nhiên, tối đa 2 câu, không markdown, không emoji, không liệt kê, vì câu trả lời sẽ được đọc thành tiếng."
                             placeholder:@"Bạn là trợ lý giọng nói trên iPhone. Trả lời rất ngắn gọn, không markdown."]
           toCard:card];
 
@@ -540,7 +554,7 @@ static NSString *const kDomain = @"com.hthancder.siribridge";
 
     // ---------- Footer ----------
     UILabel *footer = [[UILabel alloc] init];
-    footer.text = @"SiriBridge 0.1.0 · mã nguồn mở, miễn phí\nKhông telemetry · Không tài khoản · arm64 rootless + roothide";
+    footer.text = @"SiriBridge 0.2.2 · mã nguồn mở, miễn phí\nKhông telemetry · Không tài khoản · arm64 rootless + roothide";
     footer.font = [SBTheme bodyFont:11.5];
     footer.textColor = [SBTheme secondaryLabel];
     footer.textAlignment = NSTextAlignmentCenter;
@@ -622,12 +636,11 @@ static NSString *const kDomain = @"com.hthancder.siribridge";
 - (NSString *)jailbreakRoot { return SBJailbreakRoot(); }
 
 - (NSString *)environmentName {
+    NSString *root = [self jailbreakRoot];
     if (SBIsRootHide()) return @"roothide";
-#ifdef THEOS_PACKAGE_SCHEME_ROOTHIDE
-    return @"roothide (chưa resolve được jbroot)";
-#else
-    return [SBJailbreakRoot() isEqualToString:@"/"] ? @"rootful?!" : @"rootless";
-#endif
+    if ([root isEqualToString:@"/var/jb"]) return @"rootless";
+    if (![root isEqualToString:@"/"]) return @"roothide (jbroot đã resolve)";
+    return @"không xác định (jbroot chưa resolve)";
 }
 
 #pragma mark Actions
@@ -674,62 +687,167 @@ static NSString *const kDomain = @"com.hthancder.siribridge";
     return out;
 }
 
+#pragma mark Endpoint utilities
+
+- (NSMutableURLRequest *)requestForEndpoint:(NSString *)endpoint method:(NSString *)method {
+    NSURL *url = [NSURL URLWithString:endpoint];
+    if (!url || !url.scheme.length || !url.host.length) return nil;
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
+    request.HTTPMethod = method;
+    request.cachePolicy = NSURLRequestReloadIgnoringLocalCacheData;
+    request.timeoutInterval = MAX(8, [SBSettingsStore.shared doubleForKey:@"Timeout" def:45]);
+    [request setValue:@"application/json" forHTTPHeaderField:@"Accept"];
+    [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+
+    NSString *key = [SBSettingsStore.shared stringForKey:@"APIKey" def:@""];
+    if (key.length) {
+        [request setValue:[@"Bearer " stringByAppendingString:key] forHTTPHeaderField:@"Authorization"];
+        [request setValue:key forHTTPHeaderField:@"x-api-key"];
+        [request setValue:key forHTTPHeaderField:@"x-goog-api-key"];
+    }
+    NSString *headers = [SBSettingsStore.shared stringForKey:@"ExtraHeaders" def:@""];
+    if (headers.length) {
+        NSData *data = [headers dataUsingEncoding:NSUTF8StringEncoding];
+        NSError *error = nil;
+        id parsed = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:&error] : nil;
+        if (![parsed isKindOfClass:[NSDictionary class]]) return nil;
+        [(NSDictionary *)parsed enumerateKeysAndObjectsUsingBlock:^(id name, id value, BOOL *stop) {
+            [request setValue:[value description] forHTTPHeaderField:[name description]];
+        }];
+    }
+    return request;
+}
+
+- (NSString *)modelsURLForEndpoint:(NSString *)endpoint {
+    NSURLComponents *parts = [NSURLComponents componentsWithString:endpoint];
+    if (!parts.host.length) return nil;
+    NSString *path = parts.path ?: @"";
+    if ([parts.host isEqualToString:@"generativelanguage.googleapis.com"]) {
+        parts.path = @"/v1beta/models";
+    } else if ([parts.host isEqualToString:@"localhost"] ||
+               [parts.host isEqualToString:@"127.0.0.1"] ||
+               [parts.host hasSuffix:@".local"] || SBIsPrivateIPv4Host(parts.host)) {
+        if ([path containsString:@"/v1/"] && [parts.port integerValue] == 11434)
+            parts.path = @"/api/tags"; // Ollama's documented local tags endpoint.
+        else
+            parts.path = @"/v1/models"; // OpenAI-compatible local servers.
+    } else {
+        NSRange range = [path rangeOfString:@"/chat/completions" options:NSBackwardsSearch];
+        if (range.location != NSNotFound) path = [path substringToIndex:range.location];
+        range = [path rangeOfString:@"/responses" options:NSBackwardsSearch];
+        if (range.location != NSNotFound) path = [path substringToIndex:range.location];
+        parts.path = [[path stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"/"]] length]
+            ? [[@"/" stringByAppendingString:[path stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"/"]]] stringByAppendingString:@"/models"]
+            : @"/v1/models";
+    }
+    return parts.URL.absoluteString;
+}
+
+- (void)fetchModels {
+    SBSettingsStore *store = SBSettingsStore.shared;
+    NSString *endpoint = [store stringForKey:@"Endpoint" def:@""];
+    NSString *modelsURL = [self modelsURLForEndpoint:endpoint];
+    NSMutableURLRequest *request = modelsURL ? [self requestForEndpoint:modelsURL method:@"GET"] : nil;
+    if (!request) {
+        [self alert:@"Không thể tạo yêu cầu" body:@"Kiểm tra endpoint và Header phụ (phải là JSON object hợp lệ)."];
+        return;
+    }
+    self.navigationItem.prompt = @"Đang tải danh sách model…";
+    __weak typeof(self) weakSelf = self;
+    [[[NSURLSession sharedSession] dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            __strong typeof(weakSelf) self = weakSelf;
+            if (!self) return;
+            self.navigationItem.prompt = nil;
+            if (error) { [self alert:@"Không tải được model" body:error.localizedDescription]; return; }
+            NSInteger status = [(NSHTTPURLResponse *)response statusCode];
+            id json = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL] : nil;
+            if (status < 200 || status >= 300 || ![json isKindOfClass:[NSDictionary class]]) {
+                NSString *body = [[NSString alloc] initWithData:data ?: [NSData data] encoding:NSUTF8StringEncoding] ?: @"";
+                if (body.length > 500) body = [[body substringToIndex:500] stringByAppendingString:@"…"];
+                [self alert:[NSString stringWithFormat:@"Lấy model thất bại (HTTP %ld)", (long)status] body:body];
+                return;
+            }
+            NSArray *raw = [json[@"data"] isKindOfClass:[NSArray class]] ? json[@"data"] :
+                           ([json[@"models"] isKindOfClass:[NSArray class]] ? json[@"models"] : nil);
+            NSMutableArray *choices = [NSMutableArray array];
+            for (id item in raw ?: @[]) {
+                NSString *name = [item isKindOfClass:[NSString class]] ? item :
+                    ([item isKindOfClass:[NSDictionary class]] ? (item[@"id"] ?: item[@"name"]) : nil);
+                if (![name isKindOfClass:[NSString class]] || !name.length) continue;
+                if ([name hasPrefix:@"models/"]) name = [name substringFromIndex:7];
+                [choices addObject:@{@"value": name, @"title": name}];
+            }
+            if (!choices.count) { [self alert:@"Không có model" body:@"Endpoint không trả về danh sách model được hỗ trợ."]; return; }
+            SBPickerController *picker = [[SBPickerController alloc] initWithTitle:@"Chọn model"
+                choices:choices selectedID:[store stringForKey:@"Model" def:@""] onSelect:^(NSString *identifier) {
+                    [store setString:identifier forKey:@"Model"];
+                    [self reloadAll];
+                }];
+            UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:picker];
+            nav.modalPresentationStyle = UIModalPresentationPageSheet;
+            [self presentViewController:nav animated:YES completion:nil];
+        });
+    }] resume];
+}
+
 #pragma mark Test connection
 
 - (void)testConnection {
     SBSettingsStore *store = SBSettingsStore.shared;
     NSString *endpoint = [store stringForKey:@"Endpoint" def:@""];
-    if (endpoint.length == 0) {
-        [self alert:@"Thiếu endpoint" body:@"Hãy nhập endpoint trước khi kiểm tra."];
+    NSMutableURLRequest *req = [self requestForEndpoint:endpoint method:@"POST"];
+    if (!req) {
+        [self alert:@"Cấu hình chưa hợp lệ" body:@"Endpoint cần là URL HTTP(S) hợp lệ; Header phụ phải là JSON object."];
         return;
     }
 
-    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:endpoint]];
-    req.HTTPMethod = @"POST";
-    req.timeoutInterval = MAX(10, [store doubleForKey:@"Timeout" def:45]);
-    [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
-    NSString *key = [store stringForKey:@"APIKey" def:@""];
-    if (key.length) [req setValue:[@"Bearer " stringByAppendingString:key] forHTTPHeaderField:@"Authorization"];
-
-    NSString *headers = [store stringForKey:@"ExtraHeaders" def:@""];
-    if (headers.length) {
-        NSData *hd = [headers dataUsingEncoding:NSUTF8StringEncoding];
-        id obj = hd ? [NSJSONSerialization JSONObjectWithData:hd options:0 error:NULL] : nil;
-        if ([obj isKindOfClass:[NSDictionary class]]) {
-            [(NSDictionary *)obj enumerateKeysAndObjectsUsingBlock:^(id k, id v, BOOL *stop) {
-                [req setValue:[v description] forHTTPHeaderField:[k description]];
-            }];
+    NSString *model = [store stringForKey:@"Model" def:@"gpt-4o-mini"];
+    NSString *template = [store stringForKey:@"BodyTemplate" def:@""];
+    NSDictionary *body = @{@"model": model,
+        @"messages": @[@{@"role": @"user", @"content": @"Trả lời đúng một từ: OK"}],
+        @"max_tokens": @16};
+    NSData *bodyData = nil;
+    if (template.length) {
+        NSString *system = [store stringForKey:@"SystemPrompt" def:@""];
+        NSArray *messages = @[@{@"role": @"user", @"content": @"Trả lời đúng một từ: OK"}];
+        NSMutableString *s = [template mutableCopy];
+        NSDictionary *replace = @{@"{{SYSTEM}}": system, @"{{PROMPT}}": @"Trả lời đúng một từ: OK",
+                                  @"{{MODEL}}": model, @"{{MESSAGES}}": [[NSString alloc] initWithData:
+                                      [NSJSONSerialization dataWithJSONObject:messages options:0 error:NULL]
+                                      encoding:NSUTF8StringEncoding] ?: @"[]", @"{{HISTORY}}": @"[]"};
+        for (NSString *token in replace) {
+            NSString *escaped = [replace[token] stringByReplacingOccurrencesOfString:@"\\" withString:@"\\\\"];
+            escaped = [escaped stringByReplacingOccurrencesOfString:@"\"" withString:@"\\\""];
+            escaped = [escaped stringByReplacingOccurrencesOfString:@"\n" withString:@"\\n"];
+            [s replaceOccurrencesOfString:token withString:escaped options:0 range:NSMakeRange(0, s.length)];
         }
+        bodyData = [s dataUsingEncoding:NSUTF8StringEncoding];
+        id parsed = bodyData ? [NSJSONSerialization JSONObjectWithData:bodyData options:0 error:NULL] : nil;
+        if (![parsed isKindOfClass:[NSDictionary class]]) {
+            [self alert:@"Body template không hợp lệ" body:@"Kiểm tra JSON và placeholder trong Body template."];
+            return;
+        }
+    } else {
+        bodyData = [NSJSONSerialization dataWithJSONObject:body options:0 error:NULL];
     }
+    req.HTTPBody = bodyData;
 
-    NSDictionary *body = @{
-        @"model": [store stringForKey:@"Model" def:@"gpt-4o-mini"],
-        @"messages": @[@{@"role": @"user", @"content": @"ping"}],
-        @"max_tokens": @(16),
-    };
-    req.HTTPBody = [NSJSONSerialization dataWithJSONObject:body options:0 error:NULL];
-
+    self.navigationItem.prompt = @"Đang kiểm tra kết nối…";
     __weak typeof(self) weakSelf = self;
-    NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithRequest:req
-        completionHandler:^(NSData *data, NSURLResponse *resp, NSError *err) {
+    [[[NSURLSession sharedSession] dataTaskWithRequest:req completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
         dispatch_async(dispatch_get_main_queue(), ^{
             __strong typeof(weakSelf) self = weakSelf;
             if (!self) return;
-            if (err) {
-                [self alert:@"Không kết nối được" body:err.localizedDescription];
-                return;
-            }
-            NSInteger code = [(NSHTTPURLResponse *)resp statusCode];
-            NSString *text = [[NSString alloc] initWithData:data ?: [NSData data]
-                                                   encoding:NSUTF8StringEncoding] ?: @"";
-            if (text.length > 400) text = [[text substringToIndex:400] stringByAppendingString:@"…"];
-            [self alert:[NSString stringWithFormat:@"HTTP %ld", (long)code] body:text];
+            self.navigationItem.prompt = nil;
+            if (error) { [self alert:@"Không kết nối được" body:error.localizedDescription]; return; }
+            NSInteger code = [(NSHTTPURLResponse *)response statusCode];
+            NSString *text = [[NSString alloc] initWithData:data ?: [NSData data] encoding:NSUTF8StringEncoding] ?: @"";
+            if (text.length > 600) text = [[text substringToIndex:600] stringByAppendingString:@"…"];
+            [self alert:[NSString stringWithFormat:@"HTTP %ld %@", (long)code,
+                         (code >= 200 && code < 300) ? @"· kết nối thành công" : @"· yêu cầu thất bại"] body:text];
         });
-    }];
-    [task resume];
-    self.navigationItem.prompt = @"Đang kiểm tra…";
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{ self.navigationItem.prompt = nil; });
+    }] resume];
 }
 
 - (void)alert:(NSString *)title body:(NSString *)body {

@@ -95,12 +95,25 @@ static NSString *SBJSONEscape(NSString *s) {
 
     if (cfg.bodyTemplate.length) {
         NSString *historyJSON = SBJSONString(history) ?: @"[]";
+        NSMutableArray *messages = [NSMutableArray array];
+        if (system.length) [messages addObject:@{@"role": @"system", @"content": system}];
+        [messages addObjectsFromArray:history];
+        [messages addObject:@{@"role": @"user", @"content": prompt ?: @""}];
+        NSString *messagesJSON = SBJSONString(messages) ?: @"[]";
         NSString *s = cfg.bodyTemplate;
         s = [s stringByReplacingOccurrencesOfString:@"{{SYSTEM}}"  withString:SBJSONEscape(system)];
         s = [s stringByReplacingOccurrencesOfString:@"{{PROMPT}}"  withString:SBJSONEscape(prompt)];
         s = [s stringByReplacingOccurrencesOfString:@"{{HISTORY}}" withString:historyJSON];
+        s = [s stringByReplacingOccurrencesOfString:@"{{MESSAGES}}" withString:messagesJSON];
         s = [s stringByReplacingOccurrencesOfString:@"{{MODEL}}"   withString:SBJSONEscape(cfg.model ?: @"")];
-        return [s dataUsingEncoding:NSUTF8StringEncoding];
+        NSData *templateData = [s dataUsingEncoding:NSUTF8StringEncoding];
+        id templateObject = templateData ? [NSJSONSerialization JSONObjectWithData:templateData options:0 error:NULL] : nil;
+        if (![templateObject isKindOfClass:[NSDictionary class]]) {
+            @throw [NSException exceptionWithName:@"SBInvalidBodyTemplate"
+                                           reason:@"Body template phải là JSON object hợp lệ"
+                                         userInfo:nil];
+        }
+        return templateData;
     }
 
     NSMutableArray *messages = [NSMutableArray array];

@@ -614,8 +614,20 @@ static UIColor *SBDynamic(UIColor *light, UIColor *dark) {
     self.userInteractionEnabled = YES;
     UILongPressGestureRecognizer *press = [[UILongPressGestureRecognizer alloc] initWithTarget:self
                                                                                         action:@selector(pressState:)];
-    press.minimumPressDuration = 0.01;
+    // A near-zero long press wins the recognizer race against the row's tap,
+    // which made action rows appear tappable but never invoke their action.
+    press.minimumPressDuration = 0.35;
+    press.cancelsTouchesInView = NO;
+    press.delaysTouchesBegan = NO;
+    press.delaysTouchesEnded = NO;
+    press.delegate = self;
     [self addGestureRecognizer:press];
+}
+
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
+shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)otherGestureRecognizer {
+    // Keep highlight feedback independent from action/choice tap recognizers.
+    return YES;
 }
 
 - (void)pressState:(UILongPressGestureRecognizer *)g {

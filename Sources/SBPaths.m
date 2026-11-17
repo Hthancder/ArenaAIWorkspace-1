@@ -19,16 +19,31 @@ static void SBResolveJBRootInner(void) {
     if (SBJBRootResolved) return;
     SBJBRootResolved = YES;
 
-    // 1) roothide: jbroot() là nguồn chân lý duy nhất
-    SBJBRootFunc fn = NULL;
-    void *handle = dlopen("libroothide.dylib", RTLD_LAZY);
-    if (!handle) handle = dlopen("/usr/lib/libroothide.dylib", RTLD_LAZY);
-    if (handle) fn = (SBJBRootFunc)dlsym(handle, "jbroot");
+    // 1) roothide: consult an already-loaded symbol first (Bootstrap often
+    // loads libroothide at a randomized jbroot-relative install name), then
+    // try documented install locations. The C API is const char *jbroot(path).
+    SBJBRootFunc fn = (SBJBRootFunc)dlsym(RTLD_DEFAULT, "jbroot");
+    void *handle = NULL;
+    if (!fn) {
+        const char *paths[] = {
+            "libroothide.dylib",
+            "/usr/lib/libroothide.dylib",
+            "/var/jb/usr/lib/libroothide.dylib",
+            NULL
+        };
+        for (const char **p = paths; *p && !handle; p++)
+            handle = dlopen(*p, RTLD_LAZY | RTLD_LOCAL);
+        if (handle) fn = (SBJBRootFunc)dlsym(handle, "jbroot");
+    }
     if (fn) {
         const char *root = fn("/");
         if (root && root[0]) {
-            SBJBRoot = [NSString stringWithUTF8String:root];
-            SBIsRootHideFlag = YES;
+            NSString *resolved = [NSString stringWithUTF8String:root];
+            if (resolved.length) {
+                SBJBRoot = resolved;
+                SBIsRootHideFlag = ![resolved isEqualToString:@"/"] &&
+                                   ![resolved isEqualToString:@"/var/jb"];
+            }
         }
     }
 

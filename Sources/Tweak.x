@@ -40,16 +40,6 @@ static id SBValue(id obj, NSString *key) {
     return nil;
 }
 
-static BOOL SBIsHandledCommand(NSString *className) {
-    static NSSet *set;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        set = [NSSet setWithArray:@[@"SAUIAddViews", @"SAUIAddDialogs", @"SAUISayIt",
-                                    @"SAUIRepeatIt", @"SAUIDisambiguationList"]];
-    });
-    return [set containsObject:className ?: @""];
-}
-
 static NSString *SBDedupText = nil;
 static void SBResetTurnDedup(void) { SBDedupText = nil; }
 static BOOL SBClaimText(NSString *text) {
@@ -90,8 +80,16 @@ static IMP sOrigEndReason   = NULL;
 
 static void SBWillStart(id self, SEL _cmd, id connection) {
     @try {
+        // Type-to-Siri may call startRequestWithOptions: before this delegate
+        // callback. Preserve that text across the lifecycle reset, otherwise
+        // receivedCommand has no turn text and Siri's own answer leaks through.
+        NSString *pendingText = SBCaptureCurrentTurnText();
         SBCaptureClearTurn();
         SBResetTurnDedup();
+        if (pendingText.length && [[SBConfig shared] shouldHandleTextSafe:pendingText]) {
+            SBCaptureRememberTurnText(pendingText);
+            SBCaptureSetAnswerSink(self);
+        }
     } @catch (NSException *e) { SBLog(@"willStart: %@", e.reason); }
     if (sOrigWillStart) ((void (*)(id, SEL, id))sOrigWillStart)(self, _cmd, connection);
 }
@@ -101,7 +99,8 @@ static void SBStartRequest(id self, SEL _cmd, id options, id completion) {
         NSString *text = SBCaptureTextFromRequestOptions(options);
         if (text.length && [[SBConfig shared] shouldHandleTextSafe:text]) {
             SBCaptureRememberTurnText(text);
-            SBLog(@"type-to-siri: %@", text);
+            SBCaptureSetAnswerSink(self);
+            SBLog(@"type-to-siri captured (%lu chars)", (unsigned long)text.length);
         }
     } @catch (NSException *e) { SBLog(@"startRequest: %@", e.reason); }
     if (sOrigStartReq) ((void (*)(id, SEL, id, id))sOrigStartReq)(self, _cmd, options, completion);
@@ -129,9 +128,16 @@ static void SBReceivedCommand(id self, SEL _cmd, id connection, id command, id c
         NSString *turnText = SBCaptureCurrentTurnText();
         NSString *cls = NSStringFromClass([command class]);
 
-        if (cfg.enabled && cfg.replaceSiri && turnText.length > 0 && SBIsHandledCommand(cls)) {
+        // Replace means replacing the whole ACE response, not only a short
+        // allow-list of UI command classes. Siri can return other ACE classes
+        // across iOS 15 builds; letting one through leaks the native answer.
+        if (cfg.enabled && cfg.replaceSiri && turnText.length == 0) {
+            SBLog(@"không thay câu trả lời: không capture được text; cho Siri gốc xử lý (%@)", cls);
+        }
+        if (cfg.enabled && cfg.replaceSiri && turnText.length > 0 &&
+            [cfg shouldHandleTextSafe:turnText]) {
             swallowed = YES;
-            SBLog(@"chặn command %@", cls);
+            SBLog(@"chặn ACE command %@ cho lượt '%@'", cls, turnText);
 
             SBAckCommand(command, completion);
 
@@ -230,7 +236,7 @@ static void SBGuardWrite(NSString *bundle, NSString *state, NSString *detail) {
         NSMutableDictionary *all = [[NSDictionary dictionaryWithContentsOfFile:SBGuardPlist] mutableCopy]
                                     ?: [NSMutableDictionary dictionary];
         all[bundle ?: @"?"] = @{@"state": state ?: @"?", @"detail": detail ?: @"",
-                                @"date": [NSDate date], @"ver": @"0.2.1"};
+                                @"date": [NSDate date], @"ver": @"0.2.2"};
         [all writeToFile:SBGuardPlist atomically:YES];
     } @catch (__unused NSException *e) {}
 }
