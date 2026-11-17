@@ -35,6 +35,98 @@ public extension Presenter {
             return
         }
 
+        presentPopover(with: context)
+    }
+
+    @objc(presentFromRestrictedMenuTarget:fallbackCopyAction:slotIndex:)
+    func presentFromRestrictedMenuTarget(_ targetView: UIView?, fallbackCopyAction: Any?, slotIndex: Int) {
+        let resolvedTarget = targetView ?? UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first { $0.isKeyWindow && $0.windowLevel == .normal }
+
+        if let resolvedTarget,
+           let targetVOI = TextProxy.lookupViewOfInterest(view: resolvedTarget),
+           let context = obtainContextFor(
+               targetVOI,
+               launchSlotAction: resolveLaunchItem(slotIndex: slotIndex, isReadOnly: targetVOI._isReadOnly)
+           )
+        {
+            presentPopover(with: context)
+            return
+        }
+
+        if let resolvedTarget,
+           let context = buildReadOnlyFallbackContext(
+               from: resolvedTarget,
+               launchSlotAction: resolveLaunchItem(slotIndex: slotIndex, isReadOnly: true)
+           )
+        {
+            presentPopover(with: context)
+            return
+        }
+
+        if let resolvedTarget,
+           let fallbackCopyAction,
+           let copied = TextProxy.extractViaCopyMenuElement(fallbackCopyAction, targetView: resolvedTarget),
+           !copied.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        {
+            presentExtractedText(
+                copied,
+                fromHostView: resolvedTarget,
+                parentController: nil,
+                anchorRectInHost: resolvedTarget.bounds,
+                slotIndex: slotIndex
+            )
+            return
+        }
+
+        if let resolvedTarget {
+            presentUnavailable(resolvedTarget)
+        }
+    }
+
+    @objc(presentFromContextMenuView:windowPoint:slotIndex:fallbackCopyAction:)
+    func presentFromContextMenuView(_ view: UIView?, windowPoint: CGPoint, slotIndex: Int, fallbackCopyAction: Any?) {
+        TextProxy.extractTextNearPoint(windowPoint, in: view, fallbackCopyAction: fallbackCopyAction) { [weak self] result in
+            guard let self else { return }
+            if let result {
+                self.presentExtractedText(
+                    result.text,
+                    fromHostView: result.targetView,
+                    parentController: nil,
+                    anchorRectInHost: result.rectInTarget,
+                    slotIndex: slotIndex
+                )
+            } else if let view {
+                self.presentUnavailable(view)
+            }
+        }
+    }
+
+    func presentExtractedText(
+        _ text: String,
+        fromHostView hostView: UIView,
+        parentController: UIViewController?,
+        anchorRectInHost: CGRect,
+        slotIndex: Int
+    ) {
+        let launchAction = resolveLaunchItem(slotIndex: slotIndex, isReadOnly: true)
+        guard let context = buildExtractedTextContext(
+            text: text,
+            hostView: hostView,
+            parentController: parentController,
+            anchorRectInHost: anchorRectInHost,
+            launchSlotAction: launchAction
+        ) else {
+            presentUnavailable(hostView)
+            return
+        }
+        presentPopover(with: context)
+    }
+
+    private func presentPopover(with context: Context) {
+
         Configurator.shared.refreshRuntimeConfig { [weak context] _ in
             guard let context else { return }
             let vectors = Presenter.themeColorVectors()

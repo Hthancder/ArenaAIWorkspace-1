@@ -127,6 +127,30 @@ extension Presenter {
         )
     }
 
+    func buildExtractedTextContext(
+        text: String,
+        hostView: UIView,
+        parentController: UIViewController?,
+        anchorRectInHost: CGRect,
+        launchSlotAction: RuntimeSelectionMenuItem? = nil
+    ) -> Context? {
+        guard let textProxy = TextProxy.makeReadOnlyWithText(text, view: hostView, selectionRect: anchorRectInHost) else {
+            return nil
+        }
+        guard let parentView = hostView.superview ?? hostView.window ?? hostView as UIView? else { return nil }
+        guard let resolvedVC = parentController ?? hostView.parentViewController ?? hostView.window?.rootViewController else {
+            return nil
+        }
+        return assembleContext(
+            fatherView: hostView,
+            parentView: parentView,
+            parentController: resolvedVC,
+            textProxy: textProxy,
+            appearance: textProxy.appearanceForWritingTool,
+            launchSlotAction: launchSlotAction
+        )
+    }
+
     private func assembleContext(
         fatherView: UIView,
         parentView: UIView,

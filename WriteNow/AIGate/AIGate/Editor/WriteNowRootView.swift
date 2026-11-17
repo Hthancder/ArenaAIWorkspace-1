@@ -3155,6 +3155,12 @@ struct ReadOnlyAndMenuSettingsView: View {
     @State private var selectionMenuPresentationMode: String
     @State private var selectionMenuItems: [Configuration.SelectionMenuItem]
     @State private var quickActions: [Configuration.QuickActionItem]
+    @State private var injectIntoContextMenus: Bool
+    @State private var unlockBlockedSelection: Bool
+    @State private var floatingPickerBubbleEnabled: Bool
+    @State private var pickerTwoFingerLongPressEnabled: Bool
+    @State private var pickerStatusBarDoubleTapEnabled: Bool
+    @State private var ocrLanguagesText: String
 
     @State private var activeSheet: ReadOnlySettingsSheet?
     @State private var isReorderingMenuItems = false
@@ -3172,6 +3178,12 @@ struct ReadOnlyAndMenuSettingsView: View {
         _selectionMenuPresentationMode = State(initialValue: s.selectionMenuPresentationMode)
         _selectionMenuItems = State(initialValue: s.selectionMenuItems)
         _quickActions = State(initialValue: s.quickActions)
+        _injectIntoContextMenus = State(initialValue: s.injectIntoContextMenus)
+        _unlockBlockedSelection = State(initialValue: s.unlockBlockedSelection)
+        _floatingPickerBubbleEnabled = State(initialValue: s.floatingPickerBubbleEnabled)
+        _pickerTwoFingerLongPressEnabled = State(initialValue: s.pickerTwoFingerLongPressEnabled)
+        _pickerStatusBarDoubleTapEnabled = State(initialValue: s.pickerStatusBarDoubleTapEnabled)
+        _ocrLanguagesText = State(initialValue: s.ocrPreferredLanguages.joined(separator: ", "))
     }
 
     var body: some View {
@@ -3192,6 +3204,36 @@ struct ReadOnlyAndMenuSettingsView: View {
                 Text("Read-Only Contexts (Safari, Mail, Notes, PDF, Chat)")
             } footer: {
                 Text("Allows translating, explaining, summarizing, and free-form prompting on non-editable text with Copy/Share/Speak actions instead of Replace.")
+            }
+
+            if readOnlyEnabled {
+                Section {
+                    Toggle("Inject into App Long-Press Context Menus", isOn: $injectIntoContextMenus)
+                    Toggle("Force-Unlock Blocked Selection (Web & UITextView)", isOn: $unlockBlockedSelection)
+                } header: {
+                    Text("Restricted & Copy-Only Components")
+                } footer: {
+                    Text("Adds WriteNow into app-custom long-press menus (e.g. Messenger, Telegram, X) and Copy-only menus. Force-Unlock enables text selection on locked UITextView and web pages.")
+                }
+
+                Section {
+                    Toggle("2-Finger Long Press Anywhere", isOn: $pickerTwoFingerLongPressEnabled)
+                    Toggle("Double-Tap Status Bar Area", isOn: $pickerStatusBarDoubleTapEnabled)
+                    Toggle("Floating Screen Picker Button", isOn: $floatingPickerBubbleEnabled)
+
+                    HStack {
+                        Text("OCR Languages")
+                        Spacer()
+                        TextField("vi-VN, en-US, zh-Hans", text: $ocrLanguagesText)
+                            .multilineTextAlignment(.trailing)
+                            .autocapitalization(.none)
+                            .disableAutocorrection(true)
+                    }
+                } header: {
+                    Text("Universal Screen Text Picker & Offline OCR")
+                } footer: {
+                    Text("Works on ANY unselectable or uncopyable text (labels, SwiftUI views, locked chats, images, videos). Tap detected text blocks or drag a box for offline Apple Vision OCR.")
+                }
             }
 
             Section {
@@ -3401,6 +3443,12 @@ struct ReadOnlyAndMenuSettingsView: View {
         .onChange(of: showMainMenuItemInSelection) { _ in commit() }
         .onChange(of: showMainMenuItemOnReadOnly) { _ in commit() }
         .onChange(of: selectionMenuPresentationMode) { _ in commit() }
+        .onChange(of: injectIntoContextMenus) { _ in commit() }
+        .onChange(of: unlockBlockedSelection) { _ in commit() }
+        .onChange(of: floatingPickerBubbleEnabled) { _ in commit() }
+        .onChange(of: pickerTwoFingerLongPressEnabled) { _ in commit() }
+        .onChange(of: pickerStatusBarDoubleTapEnabled) { _ in commit() }
+        .onChange(of: ocrLanguagesText) { _ in commit() }
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
             case .addMenuItem:
@@ -3477,6 +3525,18 @@ struct ReadOnlyAndMenuSettingsView: View {
             s.selectionMenuPresentationMode = selectionMenuPresentationMode
             s.selectionMenuItems = selectionMenuItems
             s.quickActions = quickActions
+            s.injectIntoContextMenus = injectIntoContextMenus
+            s.unlockBlockedSelection = unlockBlockedSelection
+            s.floatingPickerBubbleEnabled = floatingPickerBubbleEnabled
+            s.pickerTwoFingerLongPressEnabled = pickerTwoFingerLongPressEnabled
+            s.pickerStatusBarDoubleTapEnabled = pickerStatusBarDoubleTapEnabled
+            let parsedLangs = ocrLanguagesText
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            if !parsedLangs.isEmpty {
+                s.ocrPreferredLanguages = parsedLangs
+            }
         }
     }
 }

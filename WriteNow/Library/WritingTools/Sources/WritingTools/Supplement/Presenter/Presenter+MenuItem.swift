@@ -21,6 +21,26 @@ extension Presenter {
         Configurator.shared.settings.readOnlyEnabled
     }
 
+    @objc(shouldInjectIntoContextMenus)
+    func shouldInjectIntoContextMenus() -> Bool {
+        Configurator.shared.settings.injectIntoContextMenus
+    }
+
+    @objc(shouldUnlockBlockedSelection)
+    func shouldUnlockBlockedSelection() -> Bool {
+        Configurator.shared.settings.unlockBlockedSelection
+    }
+
+    @objc(hasExtractableTextNearView:windowPoint:)
+    func hasExtractableTextNearView(_ view: UIView?, windowPoint: CGPoint) -> Bool {
+        TextProxy.hasExtractableTextNearView(view, windowPoint: windowPoint)
+    }
+
+    @objc(attachScreenPickerToWindow:)
+    func attachScreenPicker(to window: UIWindow) {
+        ScreenPickerCoordinator.shared.attachIfNeeded(to: window)
+    }
+
     @objc(isResponderReadOnly:)
     func isResponderReadOnly(_ responder: UIResponder) -> Bool {
         if let view = responder as? UIView,

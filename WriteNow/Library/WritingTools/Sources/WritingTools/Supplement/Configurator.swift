@@ -367,6 +367,12 @@ public struct RuntimeSettings: Codable, Equatable {
     public var selectionMenuPresentationMode: String
     public var selectionMenuItems: [RuntimeSelectionMenuItem]
     public var quickActions: [RuntimeQuickActionItem]
+    public var injectIntoContextMenus: Bool
+    public var unlockBlockedSelection: Bool
+    public var floatingPickerBubbleEnabled: Bool
+    public var pickerTwoFingerLongPressEnabled: Bool
+    public var pickerStatusBarDoubleTapEnabled: Bool
+    public var ocrPreferredLanguages: [String]
 
     public static let `default` = RuntimeSettings(
         menuTitle: "Write Now",
@@ -406,7 +412,13 @@ public struct RuntimeSettings: Codable, Equatable {
         showMainMenuItemOnReadOnly: true,
         selectionMenuPresentationMode: "inline",
         selectionMenuItems: RuntimeSelectionMenuItem.defaultItems,
-        quickActions: RuntimeQuickActionItem.defaultItems
+        quickActions: RuntimeQuickActionItem.defaultItems,
+        injectIntoContextMenus: true,
+        unlockBlockedSelection: false,
+        floatingPickerBubbleEnabled: false,
+        pickerTwoFingerLongPressEnabled: true,
+        pickerStatusBarDoubleTapEnabled: true,
+        ocrPreferredLanguages: ["vi-VN", "en-US", "zh-Hans", "ja-JP", "ko-KR"]
     )
 
     enum CodingKeys: String, CodingKey {
@@ -422,6 +434,9 @@ public struct RuntimeSettings: Codable, Equatable {
         case readOnlyShowSpeakButton, readOnlyShowShareButton
         case showMainMenuItemInSelection, showMainMenuItemOnReadOnly, selectionMenuPresentationMode
         case selectionMenuItems, quickActions
+        case injectIntoContextMenus, unlockBlockedSelection
+        case floatingPickerBubbleEnabled, pickerTwoFingerLongPressEnabled, pickerStatusBarDoubleTapEnabled
+        case ocrPreferredLanguages
     }
 
     public init(
@@ -462,7 +477,13 @@ public struct RuntimeSettings: Codable, Equatable {
         showMainMenuItemOnReadOnly: Bool = true,
         selectionMenuPresentationMode: String = "inline",
         selectionMenuItems: [RuntimeSelectionMenuItem] = RuntimeSelectionMenuItem.defaultItems,
-        quickActions: [RuntimeQuickActionItem] = RuntimeQuickActionItem.defaultItems
+        quickActions: [RuntimeQuickActionItem] = RuntimeQuickActionItem.defaultItems,
+        injectIntoContextMenus: Bool = true,
+        unlockBlockedSelection: Bool = false,
+        floatingPickerBubbleEnabled: Bool = false,
+        pickerTwoFingerLongPressEnabled: Bool = true,
+        pickerStatusBarDoubleTapEnabled: Bool = true,
+        ocrPreferredLanguages: [String] = ["vi-VN", "en-US", "zh-Hans", "ja-JP", "ko-KR"]
     ) {
         self.menuTitle = menuTitle
         self.globalSystemPrompt = globalSystemPrompt
@@ -502,6 +523,12 @@ public struct RuntimeSettings: Codable, Equatable {
         self.selectionMenuPresentationMode = selectionMenuPresentationMode
         self.selectionMenuItems = selectionMenuItems
         self.quickActions = quickActions
+        self.injectIntoContextMenus = injectIntoContextMenus
+        self.unlockBlockedSelection = unlockBlockedSelection
+        self.floatingPickerBubbleEnabled = floatingPickerBubbleEnabled
+        self.pickerTwoFingerLongPressEnabled = pickerTwoFingerLongPressEnabled
+        self.pickerStatusBarDoubleTapEnabled = pickerStatusBarDoubleTapEnabled
+        self.ocrPreferredLanguages = ocrPreferredLanguages
     }
 
     public init(from decoder: Decoder) throws {
@@ -544,6 +571,12 @@ public struct RuntimeSettings: Codable, Equatable {
         selectionMenuPresentationMode = try c.decodeIfPresent(String.self, forKey: .selectionMenuPresentationMode) ?? "inline"
         selectionMenuItems = try c.decodeIfPresent([RuntimeSelectionMenuItem].self, forKey: .selectionMenuItems) ?? RuntimeSelectionMenuItem.defaultItems
         quickActions = try c.decodeIfPresent([RuntimeQuickActionItem].self, forKey: .quickActions) ?? RuntimeQuickActionItem.defaultItems
+        injectIntoContextMenus = try c.decodeIfPresent(Bool.self, forKey: .injectIntoContextMenus) ?? true
+        unlockBlockedSelection = try c.decodeIfPresent(Bool.self, forKey: .unlockBlockedSelection) ?? false
+        floatingPickerBubbleEnabled = try c.decodeIfPresent(Bool.self, forKey: .floatingPickerBubbleEnabled) ?? false
+        pickerTwoFingerLongPressEnabled = try c.decodeIfPresent(Bool.self, forKey: .pickerTwoFingerLongPressEnabled) ?? true
+        pickerStatusBarDoubleTapEnabled = try c.decodeIfPresent(Bool.self, forKey: .pickerStatusBarDoubleTapEnabled) ?? true
+        ocrPreferredLanguages = try c.decodeIfPresent([String].self, forKey: .ocrPreferredLanguages) ?? ["vi-VN", "en-US", "zh-Hans", "ja-JP", "ko-KR"]
     }
 }
 
@@ -836,6 +869,7 @@ public class Configurator: ObservableObject {
         if cacheToDefaults, let data = try? JSONEncoder().encode(cfg) {
             UserDefaults.standard.set(data, forKey: cachedConfigDefaultsKey)
         }
+        NotificationCenter.default.post(name: Notification.Name("WriteNowRuntimeSettingsDidUpdate"), object: nil)
     }
 
     public func switchEndpoint(id: UUID, model: String? = nil, completion: ((Bool) -> Void)? = nil) {

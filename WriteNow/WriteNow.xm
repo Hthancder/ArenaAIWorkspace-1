@@ -3,6 +3,7 @@
 #import <HBLog.h>
 
 @import UIKit;
+@import WebKit;
 @import WritingToolsInjector;
 
 static UIResponder *_lastResponderForEditing = nil;
@@ -14,6 +15,7 @@ static UIResponder *_lastResponderForEditing = nil;
 @interface NSObject (WriteNowPresenterBridge)
 + (instancetype)sharedInstance;
 - (BOOL)isReadOnlyEnabled;
+- (BOOL)shouldUnlockBlockedSelection;
 - (BOOL)canPerformCustomSlot:(NSInteger)slotIndex isReadOnly:(BOOL)isReadOnly;
 @end
 
@@ -81,6 +83,54 @@ static BOOL WN_IsTextBearingReadOnlyView(UIView *view) {
 }
 
 %group WriteNowUniversal
+
+%hook UITextView
+
+- (void)setSelectable:(BOOL)selectable {
+    if (!selectable && !self.isSecureTextEntry) {
+        Class presenterCls = NSClassFromString(@"WritingToolsPresenter");
+        id presenter = [presenterCls respondsToSelector:@selector(sharedInstance)] ? [presenterCls sharedInstance] : nil;
+        if (presenter && [presenter shouldUnlockBlockedSelection]) {
+            NSString *clsName = NSStringFromClass([self class]);
+            if (![clsName containsString:@"Keyboard"] && ![clsName containsString:@"Picker"]) {
+                %orig(YES);
+                return;
+            }
+        }
+    }
+    %orig;
+}
+
+%end
+
+%hook WKWebView
+
+- (void)didMoveToWindow {
+    %orig;
+    if (!self.window) { return; }
+    Class presenterCls = NSClassFromString(@"WritingToolsPresenter");
+    id presenter = [presenterCls respondsToSelector:@selector(sharedInstance)] ? [presenterCls sharedInstance] : nil;
+    if (!presenter || ![presenter shouldUnlockBlockedSelection]) { return; }
+
+    static NSString *const kUnlockCSS =
+        @"try{var s=document.getElementById('__wn_unlock_sel');if(!s){s=document.createElement('style');s.id='__wn_unlock_sel';s.textContent='*{-webkit-user-select:text!important;user-select:text!important;-webkit-touch-callout:default!important;}';(document.head||document.documentElement).appendChild(s);}}catch(e){}";
+    WKUserScript *script = [[WKUserScript alloc] initWithSource:kUnlockCSS
+                                                  injectionTime:WKUserScriptInjectionTimeAtDocumentEnd
+                                               forMainFrameOnly:NO];
+    BOOL alreadyAdded = NO;
+    for (WKUserScript *existing in self.configuration.userContentController.userScripts) {
+        if ([existing.source containsString:@"__wn_unlock_sel"]) {
+            alreadyAdded = YES;
+            break;
+        }
+    }
+    if (!alreadyAdded) {
+        [self.configuration.userContentController addUserScript:script];
+    }
+    [self evaluateJavaScript:kUnlockCSS completionHandler:nil];
+}
+
+%end
 
 %hook WKContentView
 

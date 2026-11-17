@@ -82,6 +82,46 @@ NSArray<UICommand *> *WT_BuildCommandsForReadOnly(BOOL isReadOnly) {
     return [commands copy];
 }
 
+NSArray<UIMenuElement *> *WT_BuildUIActionsForReadOnly(BOOL isReadOnly, void (^handler)(NSInteger slotIndex)) {
+    WritingToolsPresenter *presenter = [WritingToolsPresenter sharedInstance];
+    NSMutableArray<UIMenuElement *> *actions = [NSMutableArray array];
+
+    if ([presenter shouldShowMainMenuItemForReadOnly:isReadOnly]) {
+        UIImage *img = [UIImage systemImageNamed:@"sparkles"];
+        UIAction *mainAction = [UIAction actionWithTitle:[presenter writingToolMenuName]
+                                                   image:img
+                                              identifier:@"wiki.qaq.writenow.action.main"
+                                                 handler:^(__kindof UIAction * _Nonnull action) {
+            if (handler) { handler(0); }
+        }];
+        [actions addObject:mainAction];
+    }
+
+    NSArray<NSDictionary<NSString *, id> *> *customItems = [presenter customSelectionMenuItemsForReadOnly:isReadOnly];
+    for (NSDictionary<NSString *, id> *dict in customItems) {
+        NSString *title = dict[@"title"];
+        NSString *iconName = dict[@"icon"];
+        NSNumber *slotNum = dict[@"slotIndex"];
+        if (![title isKindOfClass:[NSString class]] || !title.length) { continue; }
+        if (![slotNum isKindOfClass:[NSNumber class]]) { continue; }
+        NSInteger slotIndex = [slotNum integerValue];
+        UIImage *img = nil;
+        if ([iconName isKindOfClass:[NSString class]] && iconName.length) {
+            img = [UIImage systemImageNamed:iconName];
+        }
+        NSString *ident = [NSString stringWithFormat:@"wiki.qaq.writenow.action.slot.%ld", (long)slotIndex];
+        UIAction *customAction = [UIAction actionWithTitle:title
+                                                     image:img
+                                                identifier:ident
+                                                   handler:^(__kindof UIAction * _Nonnull action) {
+            if (handler) { handler(slotIndex); }
+        }];
+        [actions addObject:customAction];
+    }
+
+    return [actions copy];
+}
+
 BOOL WT_MenuItem_IsWritingTool(id input) {
     NSString *currentTitle = WT_MenuItem().title;
     if ([input isKindOfClass:[UIMenu class]]) {
@@ -93,7 +133,8 @@ BOOL WT_MenuItem_IsWritingTool(id input) {
     }
     if ([input isKindOfClass:[UIAction class]]) {
         UIAction *action = (UIAction *)input;
-        if ([action.title isEqualToString:currentTitle]) {
+        if ([action.identifier hasPrefix:@"wiki.qaq.writenow."] ||
+            [action.title isEqualToString:currentTitle]) {
             return YES;
         }
     }
@@ -102,6 +143,72 @@ BOOL WT_MenuItem_IsWritingTool(id input) {
         NSString *selectorName = NSStringFromSelector(command.action);
         if (WT_SlotIndexFromSelectorName(selectorName) >= 0) {
             return YES;
+        }
+    }
+    return NO;
+}
+
+BOOL WT_MenuContainsWriteNow(UIMenu *menu) {
+    for (id item in menu.children) {
+        if (WT_MenuItem_IsWritingTool(item)) { return YES; }
+        if ([item isKindOfClass:[UIMenu class]]) {
+            if (WT_MenuContainsWriteNow((UIMenu *)item)) { return YES; }
+        }
+    }
+    return NO;
+}
+
+static BOOL WT_IsCopyTitle(NSString *title) {
+    if (!title.length) { return NO; }
+    NSString *low = title.lowercaseString;
+    if ([low isEqualToString:@"copy"] ||
+        [low hasPrefix:@"copy "] ||
+        [low containsString:@"sao chép"] ||
+        [low isEqualToString:@"chép"] ||
+        [low isEqualToString:@"拷贝"] ||
+        [low isEqualToString:@"复制"] ||
+        [low isEqualToString:@"コピー"] ||
+        [low isEqualToString:@"복사"]) {
+        return YES;
+    }
+    return NO;
+}
+
+id WT_FindCopyMenuElement(NSArray *elements) {
+    for (id item in elements) {
+        if ([item isKindOfClass:[UICommand class]] && ![item isKindOfClass:[UIAction class]]) {
+            UICommand *cmd = (UICommand *)item;
+            if ([NSStringFromSelector(cmd.action) isEqualToString:@"copy:"] || WT_IsCopyTitle(cmd.title)) {
+                return cmd;
+            }
+        } else if ([item isKindOfClass:[UIAction class]]) {
+            UIAction *act = (UIAction *)item;
+            NSString *ident = act.identifier.lowercaseString ?: @"";
+            if ([ident containsString:@"copy"] || WT_IsCopyTitle(act.title)) {
+                return act;
+            }
+        } else if ([item isKindOfClass:[UIMenu class]]) {
+            id sub = WT_FindCopyMenuElement([(UIMenu *)item children]);
+            if (sub) { return sub; }
+        }
+    }
+    return nil;
+}
+
+BOOL WT_MenuLooksLikeTextOrContentMenu(NSArray *elements) {
+    if (WT_FindCopyMenuElement(elements) != nil) {
+        return YES;
+    }
+    for (id item in elements) {
+        if ([item isKindOfClass:[UIAction class]]) {
+            NSString *low = [[(UIAction *)item title] lowercaseString];
+            for (NSString *kw in @[@"reply", @"trả lời", @"forward", @"chuyển tiếp", @"translate", @"dịch", @"quote", @"trích dẫn", @"share", @"chia sẻ", @"speak", @"đọc"]) {
+                if ([low containsString:kw]) { return YES; }
+            }
+        } else if ([item isKindOfClass:[UIMenu class]]) {
+            if (WT_MenuLooksLikeTextOrContentMenu([(UIMenu *)item children])) {
+                return YES;
+            }
         }
     }
     return NO;

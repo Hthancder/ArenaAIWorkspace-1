@@ -2,26 +2,42 @@
 //  WritingToolsPresenter.h
 //  WritingTools
 //
-//  Created by 秋星桥 on 2024/8/19.
+//  Created by 秋星桥 on 2024/8/16.
 //
 
-#import <UIKit/UIKit.h>
+@import UIKit;
 
 NS_ASSUME_NONNULL_BEGIN
 
-@class WritingToolsPresenter;
+@interface WritingToolsPresenter : NSObject
 
-@interface WritingToolsPresenter
+@property (nonatomic, copy, readonly) NSString *writingToolMenuName;
+
 + (instancetype)sharedInstance;
-- (NSString *)writingToolMenuName;
-- (void)presentToolController:(UIResponder *)responder;
-- (void)presentToolController:(UIResponder *)responder slotIndex:(NSInteger)slotIndex;
+
 - (BOOL)isReadOnlyEnabled;
 - (BOOL)isResponderReadOnly:(UIResponder *)responder;
 - (BOOL)canPerformCustomSlot:(NSInteger)slotIndex isReadOnly:(BOOL)isReadOnly;
 - (BOOL)shouldShowMainMenuItemForReadOnly:(BOOL)isReadOnly;
 - (NSString *)menuPresentationMode;
 - (NSArray<NSDictionary<NSString *, id> *> *)customSelectionMenuItemsForReadOnly:(BOOL)isReadOnly;
+
+- (BOOL)shouldInjectIntoContextMenus;
+- (BOOL)shouldUnlockBlockedSelection;
+- (BOOL)hasExtractableTextNearView:(nullable UIView *)view windowPoint:(CGPoint)windowPoint;
+
+- (void)attachScreenPickerToWindow:(UIWindow *)window;
+- (void)presentFromRestrictedMenuTarget:(nullable UIView *)targetView
+                     fallbackCopyAction:(nullable id)copyAction
+                              slotIndex:(NSInteger)slotIndex;
+- (void)presentFromContextMenuView:(nullable UIView *)view
+                       windowPoint:(CGPoint)windowPoint
+                         slotIndex:(NSInteger)slotIndex
+                fallbackCopyAction:(nullable id)copyAction;
+
+- (void)presentToolController:(UIResponder *)responder;
+- (void)presentToolController:(UIResponder *)responder slotIndex:(NSInteger)slotIndex;
+
 @end
 
 NS_ASSUME_NONNULL_END

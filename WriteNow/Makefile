@@ -56,6 +56,8 @@ WriteNow_SWIFTFLAGS += -FFrameworks/SpringInterpolation.xcframework/ios-arm64_ar
 WriteNow_LDFLAGS += -FFrameworks/MSDisplayLink.xcframework/ios-arm64_arm64e -framework MSDisplayLink
 WriteNow_SWIFTFLAGS += -FFrameworks/MSDisplayLink.xcframework/ios-arm64_arm64e -framework MSDisplayLink
 
+WriteNow_FRAMEWORKS += Vision WebKit
+
 include $(THEOS_MAKE_PATH)/tweak.mk
 
 export DEBUG

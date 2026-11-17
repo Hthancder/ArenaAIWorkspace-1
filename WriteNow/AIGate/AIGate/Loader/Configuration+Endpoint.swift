@@ -638,6 +638,12 @@ extension Configuration {
         var selectionMenuPresentationMode: String // "inline" | "submenu"
         var selectionMenuItems: [SelectionMenuItem]
         var quickActions: [QuickActionItem]
+        var injectIntoContextMenus: Bool
+        var unlockBlockedSelection: Bool
+        var floatingPickerBubbleEnabled: Bool
+        var pickerTwoFingerLongPressEnabled: Bool
+        var pickerStatusBarDoubleTapEnabled: Bool
+        var ocrPreferredLanguages: [String]
 
         static let `default` = AppSettings(
             menuTitle: "Write Now",
@@ -677,7 +683,13 @@ extension Configuration {
             showMainMenuItemOnReadOnly: true,
             selectionMenuPresentationMode: "inline",
             selectionMenuItems: SelectionMenuItem.defaultItems,
-            quickActions: QuickActionItem.defaultItems
+            quickActions: QuickActionItem.defaultItems,
+            injectIntoContextMenus: true,
+            unlockBlockedSelection: false,
+            floatingPickerBubbleEnabled: false,
+            pickerTwoFingerLongPressEnabled: true,
+            pickerStatusBarDoubleTapEnabled: true,
+            ocrPreferredLanguages: ["vi-VN", "en-US", "zh-Hans", "ja-JP", "ko-KR"]
         )
 
         init(
@@ -718,7 +730,13 @@ extension Configuration {
             showMainMenuItemOnReadOnly: Bool = true,
             selectionMenuPresentationMode: String = "inline",
             selectionMenuItems: [SelectionMenuItem] = SelectionMenuItem.defaultItems,
-            quickActions: [QuickActionItem] = QuickActionItem.defaultItems
+            quickActions: [QuickActionItem] = QuickActionItem.defaultItems,
+            injectIntoContextMenus: Bool = true,
+            unlockBlockedSelection: Bool = false,
+            floatingPickerBubbleEnabled: Bool = false,
+            pickerTwoFingerLongPressEnabled: Bool = true,
+            pickerStatusBarDoubleTapEnabled: Bool = true,
+            ocrPreferredLanguages: [String] = ["vi-VN", "en-US", "zh-Hans", "ja-JP", "ko-KR"]
         ) {
             self.menuTitle = menuTitle
             self.globalSystemPrompt = globalSystemPrompt
@@ -758,6 +776,12 @@ extension Configuration {
             self.selectionMenuPresentationMode = selectionMenuPresentationMode
             self.selectionMenuItems = selectionMenuItems
             self.quickActions = quickActions
+            self.injectIntoContextMenus = injectIntoContextMenus
+            self.unlockBlockedSelection = unlockBlockedSelection
+            self.floatingPickerBubbleEnabled = floatingPickerBubbleEnabled
+            self.pickerTwoFingerLongPressEnabled = pickerTwoFingerLongPressEnabled
+            self.pickerStatusBarDoubleTapEnabled = pickerStatusBarDoubleTapEnabled
+            self.ocrPreferredLanguages = ocrPreferredLanguages
         }
 
         enum CodingKeys: String, CodingKey {
@@ -773,6 +797,9 @@ extension Configuration {
             case readOnlyShowSpeakButton, readOnlyShowShareButton
             case showMainMenuItemInSelection, showMainMenuItemOnReadOnly, selectionMenuPresentationMode
             case selectionMenuItems, quickActions
+            case injectIntoContextMenus, unlockBlockedSelection
+            case floatingPickerBubbleEnabled, pickerTwoFingerLongPressEnabled, pickerStatusBarDoubleTapEnabled
+            case ocrPreferredLanguages
         }
 
         init(from decoder: Decoder) throws {
@@ -815,6 +842,12 @@ extension Configuration {
             selectionMenuPresentationMode = try container.decodeIfPresent(String.self, forKey: .selectionMenuPresentationMode) ?? "inline"
             selectionMenuItems = try container.decodeIfPresent([SelectionMenuItem].self, forKey: .selectionMenuItems) ?? SelectionMenuItem.defaultItems
             quickActions = try container.decodeIfPresent([QuickActionItem].self, forKey: .quickActions) ?? QuickActionItem.defaultItems
+            injectIntoContextMenus = try container.decodeIfPresent(Bool.self, forKey: .injectIntoContextMenus) ?? true
+            unlockBlockedSelection = try container.decodeIfPresent(Bool.self, forKey: .unlockBlockedSelection) ?? false
+            floatingPickerBubbleEnabled = try container.decodeIfPresent(Bool.self, forKey: .floatingPickerBubbleEnabled) ?? false
+            pickerTwoFingerLongPressEnabled = try container.decodeIfPresent(Bool.self, forKey: .pickerTwoFingerLongPressEnabled) ?? true
+            pickerStatusBarDoubleTapEnabled = try container.decodeIfPresent(Bool.self, forKey: .pickerStatusBarDoubleTapEnabled) ?? true
+            ocrPreferredLanguages = try container.decodeIfPresent([String].self, forKey: .ocrPreferredLanguages) ?? ["vi-VN", "en-US", "zh-Hans", "ja-JP", "ko-KR"]
         }
     }
 
