@@ -17,9 +17,10 @@ concurrency:
 jobs:
   deb:
     name: .deb (${{ matrix.scheme }}, arm64, iOS 15)
+    # macos-15-intel: runner x86_64 (macos-14 báo "configuration not supported").
     # Toolchain chính thức của Apple: clang + ld64 + ldid + dpkg-deb THẬT.
     # Không dùng zig trên Linux nữa — xem docs/09-ly-do-chuyen-sang-macos.md
-    runs-on: macos-14
+    runs-on: macos-15-intel
     strategy:
       fail-fast: false
       matrix:
