@@ -331,10 +331,7 @@ extension WritingToolsView {
 
         default: // "prompt"
             if cfg.settings.stt.autoSendVoicePrompt {
-                customPromptInput = ""
-                cfg.recordQuickPrompt(trimmedFinal)
-                currentTask = .customPrompt(trimmedFinal)
-                executeCurrentTask()
+                runCustomPrompt(trimmedFinal)
             } else {
                 customPromptInput = trimmedFinal
             }

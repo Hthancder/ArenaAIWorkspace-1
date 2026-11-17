@@ -279,6 +279,35 @@ extension WritingToolsView {
                         }
 
                         if !(isRecordingVoice || isProcessingVoice) {
+                            let availablePresets = cfg.presets.filter {
+                                $0.isEnabled && $0.availability.matches(
+                                    isReadOnly: textProxy.isReadOnly,
+                                    showEditableInReadOnly: cfg.settings.readOnlyShowEditablePresets
+                                )
+                            }
+                            if !availablePresets.isEmpty {
+                                Menu {
+                                    ForEach(availablePresets) { preset in
+                                        Button {
+                                            runFollowUpWithPreset(preset, extraInstruction: followUpPromptInput)
+                                        } label: {
+                                            Label(
+                                                preset.localizedDisplayTitle,
+                                                systemImage: preset.icon.isEmpty ? "sparkles" : preset.icon
+                                            )
+                                        }
+                                    }
+                                } label: {
+                                    Image(systemName: "sparkles")
+                                        .font(.callout)
+                                        .foregroundColor(.cyan.opacity(0.9))
+                                        .padding(5)
+                                        .background(Color.white.opacity(0.12))
+                                        .clipShape(Circle())
+                                }
+                                .disabled(output.isEmpty)
+                            }
+
                             Button {
                                 runFollowUp(followUpPromptInput)
                             } label: {
@@ -431,6 +460,18 @@ extension WritingToolsView {
             instruction: trimmed
         )
         executeCurrentTask()
+    }
+
+    private func runFollowUpWithPreset(_ preset: WritingPresetItem, extraInstruction: String) {
+        guard !output.isEmpty else { return }
+        let extra = extraInstruction.trimmingCharacters(in: .whitespacesAndNewlines)
+        let langNote = preset.outputLanguage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? ""
+            : " Output strictly in \(preset.outputLanguage)."
+        let combined = extra.isEmpty
+            ? "Apply the '\(preset.title)' preset style: \(preset.systemPrompt)\(langNote)"
+            : "Apply the '\(preset.title)' preset style (\(preset.systemPrompt)\(langNote)) AND also follow this custom requirement: \(extra)"
+        runFollowUp(combined)
     }
 }
 

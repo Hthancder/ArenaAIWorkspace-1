@@ -288,13 +288,21 @@ public struct WritingPresetItem: Codable, Identifiable, Equatable, Hashable {
 
 public enum WritingTaskKind: Equatable {
     case preset(WritingPresetItem)
+    case presetWithPrompt(WritingPresetItem, instruction: String)
     case customPrompt(String)
     case followUp(originalText: String, currentOutput: String, instruction: String)
 
     var insertBehavior: WritingPresetItem.InsertBehavior {
         switch self {
-        case let .preset(p): return p.insertBehavior
+        case let .preset(p), let .presetWithPrompt(p, _): return p.insertBehavior
         case .customPrompt, .followUp: return .replace
+        }
+    }
+
+    var associatedPreset: WritingPresetItem? {
+        switch self {
+        case let .preset(p), let .presetWithPrompt(p, _): return p
+        case .customPrompt, .followUp: return nil
         }
     }
 }
@@ -355,6 +363,48 @@ public enum PromptComposer {
                 \(Prompt.userContentHeader)
 
                 \(selectedText)\(clipboardBlock)\(editHistoryBlock)
+                """
+            ))))
+
+            let sampling = adaptiveSampling(baseTemperature: preset.temperature, baseTopP: preset.topP, inputLength: selectedText.count)
+            return (messages, sampling)
+
+        case let .presetWithPrompt(preset, instruction):
+            let langRule: String
+            let lang = preset.outputLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
+            if lang.isEmpty {
+                langRule = ""
+            } else {
+                langRule = "\n- Output strictly in \(lang)."
+            }
+
+            let systemPrompt =
+                """
+                \(preset.systemPrompt)
+                You are also following an additional custom requirement from the user. Combine the preset's style, tone, and strengths above with the user's custom instruction below.
+                - Always preserve core meaning and accuracy unless the user explicitly asks to expand, reply, or transform.
+                - Always respond in the same language as the input unless the preset or custom instruction specifies a target language.\(langRule)
+                - Output only the resulting text/answer with no meta preambles or explanations unless requested.\(extraSuffix)
+                """
+            var messages: [ChatQuery.ChatCompletionMessageParam] = [
+                .system(.init(content: systemPrompt)),
+            ]
+
+            if settings.useFewShotExamples, preset.includeExamples, lang.isEmpty, cleanClipboard.isEmpty, editHistoryBlock.isEmpty {
+                let keyPrompt = preset.defaultKey.flatMap(Prompt.init(rawValue:)) ?? .rewrite
+                messages.append(contentsOf: keyPrompt.chatExamplesAfterSystemMessage)
+            }
+
+            let sourceBlock = selectedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? "(No selected source text — fulfill the custom instruction directly using the preset style.)"
+                : selectedText
+            messages.append(.user(.init(content: .init(string:
+                """
+                Custom Requirement (combine with preset): \(instruction)\(clipboardBlock)\(editHistoryBlock)
+
+                \(Prompt.userContentHeader)
+
+                \(sourceBlock)
                 """
             ))))
 

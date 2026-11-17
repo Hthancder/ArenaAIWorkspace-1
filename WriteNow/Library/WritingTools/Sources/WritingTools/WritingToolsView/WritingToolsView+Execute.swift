@@ -39,7 +39,7 @@ extension WritingToolsView {
             sessionTurns: currentSessionTurns
         )
         let requestModel: String
-        if case let .preset(preset) = taskToRun,
+        if let preset = taskToRun.associatedPreset,
            preset.endpointID != nil || !preset.modelOverride.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         {
             let epId = preset.endpointID?.uuidString ?? ""

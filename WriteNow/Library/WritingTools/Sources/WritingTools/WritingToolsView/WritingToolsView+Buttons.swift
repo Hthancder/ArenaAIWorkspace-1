@@ -60,11 +60,13 @@ extension WritingToolsView {
                     liveRecordingStrip
                 } else {
                     TextField(
-                        voiceMode == "dictate"
-                            ? "Tap or hold Mic to dictate..."
-                            : (voiceMode == "translate"
-                                ? "Tap or hold Mic to speak & translate..."
-                                : (textProxy.isReadOnly ? "Ask, translate, or prompt freely..." : "Ask AI anything or hold Mic...")),
+                        selectedPresetForCustomPrompt != nil
+                            ? "Custom instruction for \(selectedPresetForCustomPrompt!.localizedDisplayTitle)..."
+                            : (voiceMode == "dictate"
+                                ? "Tap or hold Mic to dictate..."
+                                : (voiceMode == "translate"
+                                    ? "Tap or hold Mic to speak & translate..."
+                                    : (textProxy.isReadOnly ? "Ask, translate, or prompt freely..." : "Ask AI anything or hold Mic..."))),
                         text: $customPromptInput
                     )
                     .font(.footnote)
@@ -75,6 +77,33 @@ extension WritingToolsView {
                     .submitLabel(.send)
                     .onSubmit {
                         runCustomPrompt(customPromptInput)
+                    }
+                }
+
+                if !(isRecordingVoice || isProcessingVoice), !enabledPresets.isEmpty {
+                    Menu {
+                        if selectedPresetForCustomPrompt != nil {
+                            Button(role: .destructive) {
+                                selectedPresetForCustomPrompt = nil
+                            } label: {
+                                Label("Clear Attached Preset", systemImage: "xmark.circle")
+                            }
+                            Divider()
+                        }
+                        ForEach(enabledPresets) { preset in
+                            Button {
+                                selectedPresetForCustomPrompt = preset
+                            } label: {
+                                Label(
+                                    preset.localizedDisplayTitle,
+                                    systemImage: selectedPresetForCustomPrompt?.id == preset.id ? "checkmark.circle.fill" : (preset.icon.isEmpty ? "sparkles" : preset.icon)
+                                )
+                            }
+                        }
+                    } label: {
+                        Image(systemName: selectedPresetForCustomPrompt != nil ? "link.circle.fill" : "plus.circle")
+                            .font(.title3)
+                            .foregroundColor(selectedPresetForCustomPrompt != nil ? .cyan : .white.opacity(0.75))
                     }
                 }
 
@@ -92,6 +121,40 @@ extension WritingToolsView {
                     }
                     .disabled(customPromptInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
+            }
+
+            if let attachedPreset = selectedPresetForCustomPrompt {
+                HStack(spacing: 6) {
+                    Image(systemName: attachedPreset.icon.isEmpty ? "sparkles" : attachedPreset.icon)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundColor(.cyan)
+                    Text("Preset + Prompt: \(attachedPreset.localizedDisplayTitle)")
+                        .font(.caption2.weight(.semibold))
+                        .lineLimit(1)
+                    if !attachedPreset.outputLanguage.isEmpty {
+                        Text("· \(attachedPreset.outputLanguage)")
+                            .font(.caption2)
+                            .foregroundColor(.white.opacity(0.72))
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 4)
+                    Button {
+                        selectedPresetForCustomPrompt = nil
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(Color.cyan.opacity(0.22))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.cyan.opacity(0.45), lineWidth: 1)
+                )
+                .cornerRadius(8)
             }
 
             if cfg.settings.stt.enabled {
@@ -332,9 +395,18 @@ extension WritingToolsView {
     }
 
     private func presetTile(_ preset: WritingPresetItem) -> some View {
-        Button {
-            currentTask = .preset(preset)
-            executeCurrentTask()
+        let pendingPrompt = customPromptInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        let isCombinedReady = !pendingPrompt.isEmpty
+        let isAttached = selectedPresetForCustomPrompt?.id == preset.id
+
+        return Button {
+            if !pendingPrompt.isEmpty {
+                runPresetWithPrompt(preset, instruction: pendingPrompt)
+            } else {
+                selectedPresetForCustomPrompt = nil
+                currentTask = .preset(preset)
+                executeCurrentTask()
+            }
         } label: {
             VStack(spacing: 5) {
                 Image(systemName: preset.icon.isEmpty ? "sparkles" : preset.icon)
@@ -343,7 +415,12 @@ extension WritingToolsView {
                     .font(.footnote.weight(.medium))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
-                if !preset.outputLanguage.isEmpty || preset.insertBehavior == .append || !preset.shortOverrideModelName.isEmpty || preset.availability == .readOnlyOnly {
+                if isCombinedReady {
+                    Text("+ Prompt")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(.cyan)
+                        .lineLimit(1)
+                } else if !preset.outputLanguage.isEmpty || preset.insertBehavior == .append || !preset.shortOverrideModelName.isEmpty || preset.availability == .readOnlyOnly {
                     HStack(spacing: 4) {
                         if preset.availability == .readOnlyOnly {
                             Text("Read")
@@ -366,16 +443,58 @@ extension WritingToolsView {
             .frame(maxWidth: .infinity)
             .frame(height: 64)
             .padding(.horizontal, 6)
-            .background(Color.white.opacity(0.11))
+            .background(isAttached ? Color.cyan.opacity(0.24) : Color.white.opacity(0.11))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isAttached || isCombinedReady ? Color.cyan.opacity(isAttached ? 0.65 : 0.35) : Color.clear, lineWidth: 1)
+            )
             .cornerRadius(12)
             .contentShape(RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            if isCombinedReady {
+                Button {
+                    runPresetWithPrompt(preset, instruction: pendingPrompt)
+                } label: {
+                    Label("Combine Preset + Prompt", systemImage: "link.badge.plus")
+                }
+            }
+            Button {
+                selectedPresetForCustomPrompt = preset
+            } label: {
+                Label("Attach to Custom Prompt", systemImage: "link")
+            }
+            Button {
+                currentTask = .preset(preset)
+                executeCurrentTask()
+            } label: {
+                Label("Run Preset Only", systemImage: "play.fill")
+            }
+        }
+    }
+
+    func runPresetWithPrompt(_ preset: WritingPresetItem, instruction raw: String) {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            currentTask = .preset(preset)
+            executeCurrentTask()
+            return
+        }
+        cfg.recordQuickPrompt(trimmed)
+        customPromptInput = ""
+        selectedPresetForCustomPrompt = nil
+        currentTask = .presetWithPrompt(preset, instruction: trimmed)
+        executeCurrentTask()
     }
 
     func runCustomPrompt(_ raw: String) {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        if let attachedPreset = selectedPresetForCustomPrompt {
+            runPresetWithPrompt(attachedPreset, instruction: trimmed)
+            return
+        }
         cfg.recordQuickPrompt(trimmed)
         customPromptInput = ""
         currentTask = .customPrompt(trimmed)

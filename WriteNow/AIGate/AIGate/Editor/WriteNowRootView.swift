@@ -3675,6 +3675,15 @@ private struct SelectionMenuItemEditorView: View {
                                 availability = hit.availability
                             }
                         }
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Optional Custom Prompt (Combined)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            TextEditor(text: $customPrompt)
+                                .frame(minHeight: 75)
+                                .font(.body)
+                        }
                     } else if actionKind == .customPrompt {
                         TextEditor(text: $customPrompt)
                             .frame(minHeight: 110)
@@ -3685,6 +3694,8 @@ private struct SelectionMenuItemEditorView: View {
                 } footer: {
                     if actionKind == .customPrompt {
                         Text("Prompt executed immediately when you tap this item in the text selection bar.")
+                    } else if actionKind == .preset {
+                        Text("Leave extra prompt empty to run the preset alone, or add custom instructions to combine both.")
                     }
                 }
             }

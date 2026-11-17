@@ -32,6 +32,7 @@ struct WritingToolsView: View {
     @State var currentTask: WritingTaskKind = .preset(WritingPresetItem.defaultPresets[1])
 
     @State var customPromptInput: String = ""
+    @State var selectedPresetForCustomPrompt: WritingPresetItem? = nil
     @State var followUpPromptInput: String = ""
     @State var isEditingOutput: Bool = false
     @State var diffDisplayMode: OutputDiffDisplayMode = .none
@@ -96,6 +97,7 @@ struct WritingToolsView: View {
     var currentTaskInstructionLabel: String {
         switch currentTask {
         case let .preset(preset): return preset.title
+        case let .presetWithPrompt(preset, prompt): return "\(preset.title): \(prompt)"
         case let .customPrompt(prompt): return prompt
         case let .followUp(_, _, instruction): return instruction
         }
@@ -104,6 +106,7 @@ struct WritingToolsView: View {
     var currentTaskTitle: String {
         switch currentTask {
         case let .preset(preset): return preset.localizedDisplayTitle
+        case let .presetWithPrompt(preset, prompt): return "\(preset.localizedDisplayTitle) + \(String(prompt.prefix(20)))"
         case let .customPrompt(prompt): return String(prompt.prefix(32))
         case .followUp: return "Refined Draft"
         }
@@ -237,7 +240,8 @@ struct WritingToolsView: View {
         didTriggerLaunchAction = true
 
         let hasText = !textProxy.selectedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        if !hasText && (launch.actionKind == .preset || launch.actionKind == .customPrompt) {
+        let hasExtraSlotPrompt = !launch.customPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if !hasText && ((launch.actionKind == .preset && !hasExtraSlotPrompt) || launch.actionKind == .customPrompt) {
             // Avoid sending empty selected text automatically on slot launch if WebKit/view returned nothing
             return
         }
@@ -247,7 +251,12 @@ struct WritingToolsView: View {
             if let pid = launch.presetID,
                let preset = cfg.presets.first(where: { $0.id == pid })
             {
-                currentTask = .preset(preset)
+                let extra = launch.customPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+                if extra.isEmpty {
+                    currentTask = .preset(preset)
+                } else {
+                    currentTask = .presetWithPrompt(preset, instruction: extra)
+                }
                 executeCurrentTask()
             } else {
                 let fallback = launch.customPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
