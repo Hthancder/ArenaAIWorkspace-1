@@ -160,8 +160,19 @@ extension Presenter {
                raw.count >= 2
             {
                 let lower = raw.lowercased()
-                let isChrome = lower == "reply" || lower == "send" || lower == "clear" || lower == "now" || lower == "open"
-                if !isChrome {
+                let isTimestampOrChrome = lower == "reply"
+                    || lower == "send"
+                    || lower == "clear"
+                    || lower == "now"
+                    || lower == "open"
+                    || lower == "vừa xong"
+                    || lower == "bây giờ"
+                    || lower.hasSuffix(" ago")
+                    || lower.hasSuffix(" trước")
+                    || lower.contains("more notification")
+                    || lower.contains("thông báo nữa")
+                    || (raw.count <= 6 && raw.contains(":") && raw.rangeOfCharacter(from: .decimalDigits) != nil)
+                if !isTimestampOrChrome {
                     let frameInRoot = node.convert(node.bounds, to: searchRoot)
                     if frameInRoot.height >= 8,
                        frameInRoot.maxY <= targetOriginY + 24,
@@ -180,7 +191,8 @@ extension Presenter {
         let ordered = pieces.sorted { $0.y < $1.y }.map(\.text)
         let joined = ordered.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !joined.isEmpty else { return nil }
-        return String(joined.prefix(1500))
+        if joined.count <= 1500 { return joined }
+        return String(joined.suffix(1500))
     }
 
     func buildContext(fromResponder responder: UIResponder, launchSlotAction: RuntimeSelectionMenuItem? = nil) -> Context? {
@@ -322,10 +334,15 @@ extension Presenter {
         )
     }
 
-    func magicColorBackground() -> AnimatedMulticolorGradientView {
+    func magicColorBackground() -> UIView {
+        if !Configurator.shared.settings.animatedBackground {
+            let staticView = StaticGradientHighlightView(colors: Self.themeUIColors())
+            staticView.clipsToBounds = true
+            return staticView
+        }
         let colors: [ColorVector] = Self.themeColorVectors()
         let magicColorView = AnimatedMulticolorGradientView()
-        magicColorView.speed = Configurator.shared.settings.animatedBackground ? 1.0 : 0.0
+        magicColorView.speed = 1.0
         magicColorView.transitionSpeed = 5.0
         magicColorView.clipsToBounds = true
         magicColorView.setColors(colors, animated: false)
@@ -473,5 +490,27 @@ extension Presenter {
         shapeLayer.path = path.cgPath
         shapeLayer.fillColor = UIColor.white.cgColor
         return shapeLayer
+    }
+}
+
+private final class StaticGradientHighlightView: UIView {
+    private let gradientLayer = CAGradientLayer()
+
+    init(colors: [UIColor]) {
+        super.init(frame: .zero)
+        gradientLayer.colors = colors.map(\.cgColor)
+        gradientLayer.startPoint = CGPoint(x: 0, y: 0)
+        gradientLayer.endPoint = CGPoint(x: 1, y: 1)
+        layer.addSublayer(gradientLayer)
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        gradientLayer.frame = bounds
     }
 }

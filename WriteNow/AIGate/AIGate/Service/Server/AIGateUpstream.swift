@@ -8,6 +8,8 @@
 import Foundation
 
 struct AIGateUpstream {
+    let endpointID: UUID
+    let endpointName: String
     let url: URL
     let host: String
     let port: Int
@@ -19,6 +21,8 @@ struct AIGateUpstream {
     let timeoutSeconds: Int
 
     init(
+        endpointID: UUID = UUID(),
+        endpointName: String = "",
         url: URL,
         host: String,
         port: Int,
@@ -29,6 +33,8 @@ struct AIGateUpstream {
         customHeaders: [String: String] = [:],
         timeoutSeconds: Int = 60
     ) {
+        self.endpointID = endpointID
+        self.endpointName = endpointName
         self.url = url
         self.host = host
         self.port = port
@@ -55,7 +61,10 @@ extension AIGateUpstream {
             matchedEndpoint = cvm.activatedEndpoint
         }
         guard let endpoint = matchedEndpoint else { return nil }
+        self.init(endpoint: endpoint, modelOverride: modelOverride)
+    }
 
+    init?(endpoint: Configuration.Endpoint, modelOverride: String? = nil) {
         guard let host = endpoint.url.host else { return nil }
         guard let scheme = endpoint.url.scheme else { return nil }
 
@@ -68,6 +77,8 @@ extension AIGateUpstream {
         guard model.data(using: .utf8) != nil else { return nil }
 
         self.init(
+            endpointID: endpoint.id,
+            endpointName: endpoint.displayTitle,
             url: endpoint.url,
             host: host,
             port: port,

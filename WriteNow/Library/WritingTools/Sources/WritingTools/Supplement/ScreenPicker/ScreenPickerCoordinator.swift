@@ -16,6 +16,9 @@ final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
     private var isKeyboardVisible = false
     private var hiddenForCurrentSession = false
 
+    private static let bubbleIsLeftKey = "WriteNowPickerBubbleIsLeft"
+    private static let bubbleYRatioKey = "WriteNowPickerBubbleYRatio"
+
     override private init() {
         super.init()
         let nc = NotificationCenter.default
@@ -56,7 +59,11 @@ final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
 
         if !attachedWindows.contains(window) {
             attachedWindows.add(window)
-            installGestures(on: window)
+            if Configurator.shared.settings.pickerTwoFingerLongPressEnabled
+                || Configurator.shared.settings.pickerStatusBarDoubleTapEnabled
+            {
+                installGestures(on: window)
+            }
         }
         syncFloatingBubble(in: window)
     }
@@ -64,12 +71,23 @@ final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
     @objc private func handleSettingsUpdate() {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            if Configurator.shared.settings.floatingPickerBubbleEnabled {
+            let settings = Configurator.shared.settings
+            if settings.floatingPickerBubbleEnabled {
                 self.hiddenForCurrentSession = false
+            }
+            if settings.pickerTwoFingerLongPressEnabled || settings.pickerStatusBarDoubleTapEnabled {
+                for win in self.attachedWindows.allObjects {
+                    let hasOurs = (win.gestureRecognizers ?? []).contains {
+                        $0.name == "WriteNowStatusBarTap" || $0.name == "WriteNowTwoFingerHold"
+                    }
+                    if !hasOurs {
+                        self.installGestures(on: win)
+                    }
+                }
             }
             if let keyWin = self.attachedWindows.allObjects.first(where: { $0.isKeyWindow }) ?? self.attachedWindows.allObjects.first {
                 self.syncFloatingBubble(in: keyWin)
-            } else if !Configurator.shared.settings.floatingPickerBubbleEnabled {
+            } else if !settings.floatingPickerBubbleEnabled {
                 self.removeBubble()
             }
         }
@@ -99,6 +117,7 @@ final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
         twoFingerHold.minimumPressDuration = 0.42
         twoFingerHold.cancelsTouchesInView = false
         twoFingerHold.delaysTouchesBegan = false
+        twoFingerHold.name = "WriteNowTwoFingerHold"
         twoFingerHold.delegate = self
         window.addGestureRecognizer(twoFingerHold)
 
@@ -167,8 +186,17 @@ final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
             return
         }
 
+        let isLeft = UserDefaults.standard.bool(forKey: Self.bubbleIsLeftKey)
+        let savedRatio = UserDefaults.standard.double(forKey: Self.bubbleYRatioKey)
+        let yRatio = (savedRatio > 0.08 && savedRatio < 0.92) ? savedRatio : 0.42
+        let centerX: CGFloat = isLeft ? 28 : (window.bounds.width - 28)
+        let minY = window.safeAreaInsets.top + 32
+        let maxY = max(minY + 20, window.bounds.height - window.safeAreaInsets.bottom - 32)
+        let centerY = max(minY, min(maxY, window.bounds.height * yRatio))
+
         let btn = UIButton(type: .system)
-        btn.frame = CGRect(x: window.bounds.width - 52, y: window.bounds.height * 0.42, width: 42, height: 42)
+        btn.frame = CGRect(x: 0, y: 0, width: 42, height: 42)
+        btn.center = CGPoint(x: centerX, y: centerY)
         btn.layer.cornerRadius = 21
         btn.backgroundColor = UIColor.black.withAlphaComponent(0.72)
         btn.layer.borderWidth = 1
@@ -286,7 +314,11 @@ final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
         gesture.setTranslation(.zero, in: win)
 
         if gesture.state == .ended || gesture.state == .cancelled {
-            let snapX: CGFloat = center.x < win.bounds.midX ? 28 : (win.bounds.width - 28)
+            let isLeft = center.x < win.bounds.midX
+            let snapX: CGFloat = isLeft ? 28 : (win.bounds.width - 28)
+            let yRatio = Double(center.y / max(1, win.bounds.height))
+            UserDefaults.standard.set(isLeft, forKey: Self.bubbleIsLeftKey)
+            UserDefaults.standard.set(yRatio, forKey: Self.bubbleYRatioKey)
             UIView.animate(withDuration: 0.25, delay: 0, usingSpringWithDamping: 0.8, initialSpringVelocity: 0.5) {
                 btn.center.x = snapX
             }

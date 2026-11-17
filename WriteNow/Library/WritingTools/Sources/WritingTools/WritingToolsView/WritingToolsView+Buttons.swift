@@ -183,10 +183,20 @@ extension WritingToolsView {
                     .buttonStyle(.plain)
 
                     if let lastStep = prior.turns.last {
-                        Text(lastStep.instruction)
-                            .font(.system(size: 10))
-                            .foregroundColor(.white.opacity(0.68))
-                            .lineLimit(1)
+                        Button {
+                            showEditMemoryAlert = true
+                        } label: {
+                            HStack(spacing: 3) {
+                                Text(lastStep.instruction)
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.white.opacity(0.68))
+                                    .lineLimit(1)
+                                Image(systemName: "info.circle")
+                                    .font(.system(size: 9.5))
+                                    .foregroundColor(.white.opacity(0.55))
+                            }
+                        }
+                        .buttonStyle(.plain)
                     }
 
                     Spacer(minLength: 2)
@@ -270,10 +280,15 @@ extension WritingToolsView {
                     }
                     .buttonStyle(.plain)
 
-                    Text(clipboardContextText.replacingOccurrences(of: "\n", with: " "))
-                        .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.68))
-                        .lineLimit(1)
+                    Button {
+                        showContextPreviewAlert = true
+                    } label: {
+                        Text(clipboardContextText.replacingOccurrences(of: "\n", with: " "))
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.68))
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
 
                     Spacer(minLength: 2)
 

@@ -51,6 +51,7 @@ struct WriteNowRootView: View {
     @State private var activeSheet: RootActiveSheet?
 
     @State private var serviceError: String = ""
+    @State private var daemonMetricsSummary: String = ""
     @State private var daemonReachable: Bool = true
     @State private var testStatusMessage: String = ""
     @State private var testStatusOK: Bool = false
@@ -179,6 +180,17 @@ struct WriteNowRootView: View {
                     Text(testStatusMessage)
                         .font(.caption)
                         .foregroundColor(testStatusOK ? .green : .red)
+                }
+            }
+
+            if !daemonMetricsSummary.isEmpty {
+                HStack {
+                    Label("Metrics", systemImage: "speedometer")
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text(daemonMetricsSummary)
+                        .font(.caption.monospacedDigit())
+                        .foregroundColor(.secondary)
                 }
             }
 
@@ -554,6 +566,19 @@ struct WriteNowRootView: View {
                    let decoded = try? JSONDecoder().decode([String: String].self, from: data)
                 {
                     self.serviceError = decoded["error"] ?? ""
+                    let reqs = Int(decoded["total_requests"] ?? "0") ?? 0
+                    let lat = Int(decoded["last_latency_ms"] ?? "0") ?? 0
+                    let ep = decoded["last_endpoint"] ?? ""
+                    let fb = Int(decoded["total_fallbacks"] ?? "0") ?? 0
+                    if reqs > 0 {
+                        var parts = ["\(reqs) req"]
+                        if lat > 0 { parts.append("\(lat)ms") }
+                        if !ep.isEmpty { parts.append(ep) }
+                        if fb > 0 { parts.append("\(fb) fallback") }
+                        self.daemonMetricsSummary = parts.joined(separator: " • ")
+                    } else {
+                        self.daemonMetricsSummary = ""
+                    }
                 }
             }
         }.resume()
@@ -1585,6 +1610,7 @@ struct BehaviorSettingsView: View {
     @State private var editContextMatchMode: String
     @State private var editContextMaxTurns: Int
     @State private var editContextTTLSeconds: Int
+    @State private var autoFallbackEndpointEnabled: Bool
 
     @State private var backupAlertTitle = ""
     @State private var backupAlertMessage = ""
@@ -1612,6 +1638,7 @@ struct BehaviorSettingsView: View {
         _editContextMatchMode = State(initialValue: s.editContextMatchMode)
         _editContextMaxTurns = State(initialValue: s.editContextMaxTurns)
         _editContextTTLSeconds = State(initialValue: s.editContextTTLSeconds)
+        _autoFallbackEndpointEnabled = State(initialValue: s.autoFallbackEndpointEnabled)
     }
 
     var body: some View {
@@ -1645,6 +1672,7 @@ struct BehaviorSettingsView: View {
                 Toggle("Strip <think> Reasoning Tags", isOn: $stripThink)
                 Toggle("Include Few-shot Examples", isOn: $useFewShot)
                 Toggle("Auto-select All When Selection Empty", isOn: $autoSelectAll)
+                Toggle("Auto-Fallback Provider on Error", isOn: $autoFallbackEndpointEnabled)
                 Stepper("Request Timeout: \(timeout)s", value: $timeout, in: 15 ... 180, step: 15)
             } header: {
                 Text("AI Behavior & Security")
@@ -1708,6 +1736,15 @@ struct BehaviorSettingsView: View {
                         Text("30 Minutes").tag(1800)
                         Text("Always Keep").tag(0)
                     }
+                }
+                Button(role: .destructive) {
+                    UserDefaults.standard.removeObject(forKey: "WriteNowEditContextRecordsV1")
+                    UserDefaults.standard.removeObject(forKey: "WriteNowEditContextRecordV1")
+                    backupAlertTitle = "Edit Memory Cleared"
+                    backupAlertMessage = "Saved edit history has been cleared."
+                    showBackupAlert = true
+                } label: {
+                    Label("Clear Edit Memory", systemImage: "trash")
                 }
             } header: {
                 Text("Previous-Edit Context Memory")
@@ -1782,6 +1819,7 @@ struct BehaviorSettingsView: View {
         .onChange(of: editContextMatchMode) { _ in commitSettings() }
         .onChange(of: editContextMaxTurns) { _ in commitSettings() }
         .onChange(of: editContextTTLSeconds) { _ in commitSettings() }
+        .onChange(of: autoFallbackEndpointEnabled) { _ in commitSettings() }
         .alert(backupAlertTitle, isPresented: $showBackupAlert) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -1812,6 +1850,7 @@ struct BehaviorSettingsView: View {
             s.editContextMatchMode = editContextMatchMode
             s.editContextMaxTurns = editContextMaxTurns
             s.editContextTTLSeconds = editContextTTLSeconds
+            s.autoFallbackEndpointEnabled = autoFallbackEndpointEnabled
         }
     }
 
@@ -1836,6 +1875,7 @@ struct BehaviorSettingsView: View {
         editContextMatchMode = s.editContextMatchMode
         editContextMaxTurns = s.editContextMaxTurns
         editContextTTLSeconds = s.editContextTTLSeconds
+        autoFallbackEndpointEnabled = s.autoFallbackEndpointEnabled
     }
 }
 
@@ -3191,6 +3231,7 @@ struct ReadOnlyAndMenuSettingsView: View {
     @State private var readOnlyShowEditablePresets: Bool
     @State private var readOnlyPrimaryAction: String
     @State private var readOnlyShowSpeakButton: Bool
+    @State private var speechRate: Double
     @State private var readOnlyShowShareButton: Bool
     @State private var showMainMenuItemInSelection: Bool
     @State private var showMainMenuItemOnReadOnly: Bool
@@ -3214,6 +3255,7 @@ struct ReadOnlyAndMenuSettingsView: View {
         _readOnlyShowEditablePresets = State(initialValue: s.readOnlyShowEditablePresets)
         _readOnlyPrimaryAction = State(initialValue: s.readOnlyPrimaryAction)
         _readOnlyShowSpeakButton = State(initialValue: s.readOnlyShowSpeakButton)
+        _speechRate = State(initialValue: s.speechRate)
         _readOnlyShowShareButton = State(initialValue: s.readOnlyShowShareButton)
         _showMainMenuItemInSelection = State(initialValue: s.showMainMenuItemInSelection)
         _showMainMenuItemOnReadOnly = State(initialValue: s.showMainMenuItemOnReadOnly)
@@ -3240,6 +3282,13 @@ struct ReadOnlyAndMenuSettingsView: View {
                         Text("Share Sheet").tag("share")
                     }
                     Toggle("Show Speak (Read Aloud) Button", isOn: $readOnlyShowSpeakButton)
+                    if readOnlyShowSpeakButton {
+                        Picker("Speech Speed", selection: $speechRate) {
+                            Text("0.85× Slow").tag(0.85)
+                            Text("1.0× Normal").tag(1.0)
+                            Text("1.15× Fast").tag(1.15)
+                        }
+                    }
                     Toggle("Show Share Button", isOn: $readOnlyShowShareButton)
                 }
             } header: {
@@ -3481,6 +3530,7 @@ struct ReadOnlyAndMenuSettingsView: View {
         .onChange(of: readOnlyShowEditablePresets) { _ in commit() }
         .onChange(of: readOnlyPrimaryAction) { _ in commit() }
         .onChange(of: readOnlyShowSpeakButton) { _ in commit() }
+        .onChange(of: speechRate) { _ in commit() }
         .onChange(of: readOnlyShowShareButton) { _ in commit() }
         .onChange(of: showMainMenuItemInSelection) { _ in commit() }
         .onChange(of: showMainMenuItemOnReadOnly) { _ in commit() }
@@ -3561,6 +3611,7 @@ struct ReadOnlyAndMenuSettingsView: View {
             s.readOnlyShowEditablePresets = readOnlyShowEditablePresets
             s.readOnlyPrimaryAction = readOnlyPrimaryAction
             s.readOnlyShowSpeakButton = readOnlyShowSpeakButton
+            s.speechRate = speechRate
             s.readOnlyShowShareButton = readOnlyShowShareButton
             s.showMainMenuItemInSelection = showMainMenuItemInSelection
             s.showMainMenuItemOnReadOnly = showMainMenuItemOnReadOnly

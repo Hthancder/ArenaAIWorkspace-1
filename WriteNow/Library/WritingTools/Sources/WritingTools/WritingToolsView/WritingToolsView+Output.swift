@@ -188,6 +188,7 @@ extension WritingToolsView {
 
                         if diffDisplayMode == .wordDiff && !isRunning {
                             WordLevelDiffView(original: textProxy.selectedText, updated: output)
+                                .equatable()
                         } else {
                             Text(output)
                                 .multilineTextAlignment(.leading)
@@ -338,9 +339,11 @@ extension WritingToolsView {
                     BeautifulButton(title: copiedToast ? "Copied".localized : "Copy".localized) {
                         copyOutputToPasteboard(output, closeAfter: false)
                     }
-                    BeautifulButton(
-                        title: currentTask.insertBehavior == .append ? "Append".localized : "Accept".localized
-                    ) {
+                    let isEmptyCompose = textProxy.selectedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    let primaryTitle = currentTask.insertBehavior == .append
+                        ? "Append".localized
+                        : (isEmptyCompose ? "Insert".localized : "Accept".localized)
+                    BeautifulButton(title: primaryTitle) {
                         accept()
                     }
                     .contextMenu {
@@ -373,13 +376,13 @@ extension WritingToolsView {
                 BeautifulButton(title: copiedToast ? "Copied".localized : "Copy".localized) {
                     copyOutputToPasteboard(output, closeAfter: false)
                 }
-                BeautifulButton(title: "Share") {
+                BeautifulButton(title: "Share".localized) {
                     presentShareSheet(text: output)
                 }
                 .contextMenu { readOnlyContextMenu }
             } else {
                 if cfg.settings.readOnlyShowShareButton {
-                    BeautifulButton(title: "Share") {
+                    BeautifulButton(title: "Share".localized) {
                         presentShareSheet(text: output)
                     }
                 }
@@ -389,7 +392,7 @@ extension WritingToolsView {
                     }
                     .contextMenu { readOnlyContextMenu }
                 } else {
-                    BeautifulButton(title: copiedToast ? "Copied".localized : "Copy & Close") {
+                    BeautifulButton(title: copiedToast ? "Copied".localized : "Copy & Close".localized) {
                         copyOutputToPasteboard(output, closeAfter: true)
                     }
                     .contextMenu { readOnlyContextMenu }
@@ -429,7 +432,12 @@ extension WritingToolsView {
             isSpeakingOutput = false
         } else {
             isSpeakingOutput = true
-            OutputSpeechHelper.shared.speak(output) {
+            let langHint = (currentTask.associatedPreset ?? lastPresetForFollowUp)?.outputLanguage
+            OutputSpeechHelper.shared.speak(
+                output,
+                speedMultiplier: cfg.settings.speechRate,
+                languageHint: langHint
+            ) {
                 isSpeakingOutput = false
             }
         }
@@ -518,9 +526,13 @@ private struct EditableOutputTextView: UIViewRepresentable {
 
 // MARK: - Word-Level Inline Diff View
 
-private struct WordLevelDiffView: View {
+private struct WordLevelDiffView: View, Equatable {
     let original: String
     let updated: String
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.original == rhs.original && lhs.updated == rhs.updated
+    }
 
     var body: some View {
         let diff = WordDiffEngine.build(original: original, updated: updated)
@@ -740,7 +752,7 @@ final class OutputSpeechHelper: NSObject, AVSpeechSynthesizerDelegate {
         synthesizer.delegate = self
     }
 
-    func speak(_ text: String, onFinish: @escaping () -> Void) {
+    func speak(_ text: String, speedMultiplier: Double = 1.0, languageHint: String? = nil, onFinish: @escaping () -> Void) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             onFinish()
@@ -751,8 +763,30 @@ final class OutputSpeechHelper: NSObject, AVSpeechSynthesizerDelegate {
         }
         self.onFinish = onFinish
         let utterance = AVSpeechUtterance(string: trimmed)
-        utterance.rate = AVSpeechUtteranceDefaultSpeechRate
+        let baseRate = AVSpeechUtteranceDefaultSpeechRate
+        let clampedMult = min(max(Float(speedMultiplier), 0.7), 1.35)
+        utterance.rate = min(max(baseRate * clampedMult, AVSpeechUtteranceMinimumSpeechRate), AVSpeechUtteranceMaximumSpeechRate)
+        if let code = Self.resolveVoiceLanguage(hint: languageHint),
+           let voice = AVSpeechSynthesisVoice(language: code)
+        {
+            utterance.voice = voice
+        }
         synthesizer.speak(utterance)
+    }
+
+    private static func resolveVoiceLanguage(hint: String?) -> String? {
+        guard let raw = hint?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+              !raw.isEmpty
+        else { return nil }
+        if raw.contains("viet") || raw == "vi" { return "vi-VN" }
+        if raw.contains("eng") || raw == "en" { return "en-US" }
+        if raw.contains("japan") || raw == "ja" { return "ja-JP" }
+        if raw.contains("chin") || raw.contains("mandarin") || raw.hasPrefix("zh") { return "zh-CN" }
+        if raw.contains("kor") || raw == "ko" { return "ko-KR" }
+        if raw.contains("french") || raw == "fr" { return "fr-FR" }
+        if raw.contains("german") || raw == "de" { return "de-DE" }
+        if raw.contains("span") || raw == "es" { return "es-ES" }
+        return nil
     }
 
     func stop() {

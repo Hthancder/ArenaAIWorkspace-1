@@ -63,11 +63,6 @@ extension WritingToolsView {
 
             closeButton
         }
-        .onReceive(timer) { _ in
-            if !isRunning {
-                cfg.refreshRuntimeConfig()
-            }
-        }
     }
 
     var providerQuickMenu: some View {

@@ -22,6 +22,18 @@ enum ServiceError: Error, Equatable {
         }
     }
 
+    static var lastLatencyMs: Int = 0
+    static var lastEndpointName: String = ""
+    static var totalRequests: Int = 0
+    static var totalFallbacks: Int = 0
+
+    static func recordSuccess(endpointName: String, startNs: UInt64) {
+        let elapsedMs = Int((DispatchTime.now().uptimeNanoseconds - startNs) / 1_000_000)
+        lastLatencyMs = max(0, elapsedMs)
+        lastEndpointName = endpointName
+        lastError = nil
+    }
+
     var description: String {
         switch self {
         case .serviceDisabled:

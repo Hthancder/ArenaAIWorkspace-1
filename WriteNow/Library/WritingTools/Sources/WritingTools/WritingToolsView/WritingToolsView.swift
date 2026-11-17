@@ -33,11 +33,14 @@ struct WritingToolsView: View {
 
     @State var customPromptInput: String = ""
     @State var selectedPresetForCustomPrompt: WritingPresetItem? = nil
+    @State var lastPresetForFollowUp: WritingPresetItem? = nil
     @State var followUpPromptInput: String = ""
     @State var isEditingOutput: Bool = false
     @State var diffDisplayMode: OutputDiffDisplayMode = .none
     @State var copiedToast: Bool = false
     @State var showQuickProviderSheet: Bool = false
+    @State var showEditMemoryAlert: Bool = false
+    @State var showContextPreviewAlert: Bool = false
     @State var isSpeakingOutput: Bool = false
     @State var didTriggerLaunchAction: Bool = false
 
@@ -116,8 +119,6 @@ struct WritingToolsView: View {
     let spacing: CGFloat = 12
     let innerSpacing: CGFloat = 8
 
-    let timer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
-
     init(context: Presenter.Context) {
         _context = .init(wrappedValue: context)
         _textProxy = .init(wrappedValue: context.textProxy)
@@ -143,6 +144,31 @@ struct WritingToolsView: View {
         .foregroundStyle(.white)
         .sheet(isPresented: $showQuickProviderSheet) {
             QuickProviderSheet()
+        }
+        .alert("Edit Memory", isPresented: $showEditMemoryAlert) {
+            Button("Clear Memory", role: .destructive) {
+                activePriorEditContext = nil
+                priorEditContextAttached = false
+                cfg.clearEditContext()
+            }
+            Button("OK", role: .cancel) {}
+        } message: {
+            if let prior = activePriorEditContext {
+                let steps = prior.turns.enumerated().map { idx, t in
+                    "• Step \(idx + 1) [\(t.instruction)]:\n\(String(t.output.prefix(160)))"
+                }.joined(separator: "\n")
+                Text("Original:\n\(String(prior.originalText.prefix(240)))\n\n\(steps)")
+            } else {
+                Text("No previous edit history attached.")
+            }
+        }
+        .alert(isNotificationContext ? "Notification Context" : "Clipboard Context", isPresented: $showContextPreviewAlert) {
+            Button(clipboardContextAttached ? "Detach" : "Attach") {
+                clipboardContextAttached.toggle()
+            }
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(String(clipboardContextText.prefix(700)))
         }
         .onAppear {
             initialAnimation = 1

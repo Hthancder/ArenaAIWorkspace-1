@@ -30,6 +30,12 @@ extension WritingToolsView {
         let text = context.textProxy.selectedText
         let settings = cfg.settings
         let taskToRun = currentTask
+        if let preset = taskToRun.associatedPreset {
+            lastPresetForFollowUp = preset
+        } else if case .customPrompt = taskToRun {
+            lastPresetForFollowUp = nil
+        }
+
         let built = PromptComposer.buildMessages(
             for: taskToRun,
             selectedText: text,
@@ -38,8 +44,18 @@ extension WritingToolsView {
             priorEditContext: effectivePriorEditContext,
             sessionTurns: currentSessionTurns
         )
+        let activePresetForModel: WritingPresetItem?
+        switch taskToRun {
+        case let .preset(p), let .presetWithPrompt(p, _):
+            activePresetForModel = p
+        case .followUp:
+            activePresetForModel = lastPresetForFollowUp
+        case .customPrompt:
+            activePresetForModel = nil
+        }
+
         let requestModel: String
-        if let preset = taskToRun.associatedPreset,
+        if let preset = activePresetForModel,
            preset.endpointID != nil || !preset.modelOverride.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         {
             let epId = preset.endpointID?.uuidString ?? ""
@@ -76,7 +92,7 @@ extension WritingToolsView {
 
         let outputSender = CurrentValueSubject<String, Never>("")
         var cancellable: (any Cancellable)? = outputSender
-            .throttle(for: .seconds(0.05), scheduler: DispatchQueue.global(qos: .userInteractive), latest: true)
+            .throttle(for: .seconds(0.075), scheduler: DispatchQueue.global(qos: .userInteractive), latest: true)
             .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .sink { chunk in
@@ -345,6 +361,7 @@ extension WritingToolsView {
         outputHistory = []
         historyIndex = 0
         currentSessionTurns = []
+        lastPresetForFollowUp = nil
         error = nil
         restorableSession = nil
         cfg.clearLastSession()

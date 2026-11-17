@@ -25,8 +25,8 @@ struct DetectedScreenTextBlock: Identifiable {
 enum ScreenTextScanner {
     static func captureSnapshot(of window: UIWindow) -> UIImage? {
         let format = UIGraphicsImageRendererFormat()
-        format.scale = window.screen.scale
-        format.opaque = false
+        format.scale = min(window.screen.scale, 2.0)
+        format.opaque = true
         let renderer = UIGraphicsImageRenderer(bounds: window.bounds, format: format)
         return renderer.image { _ in
             window.drawHierarchy(in: window.bounds, afterScreenUpdates: false)
@@ -158,8 +158,9 @@ enum ScreenTextScanner {
                         sourceKind: .ocr
                     )
                 }
+                let grouped = mergeAdjacentOCRBlocks(blocks)
                 DispatchQueue.main.async {
-                    completion(blocks)
+                    completion(grouped)
                 }
             } catch {
                 DispatchQueue.main.async {
@@ -167,6 +168,44 @@ enum ScreenTextScanner {
                 }
             }
         }
+    }
+
+    private static func mergeAdjacentOCRBlocks(_ lines: [DetectedScreenTextBlock]) -> [DetectedScreenTextBlock] {
+        guard lines.count > 1 else { return lines }
+        let sorted = lines.sorted {
+            if abs($0.rectInWindow.minY - $1.rectInWindow.minY) > 10 {
+                return $0.rectInWindow.minY < $1.rectInWindow.minY
+            }
+            return $0.rectInWindow.minX < $1.rectInWindow.minX
+        }
+
+        var merged: [DetectedScreenTextBlock] = []
+        var currentText = sorted[0].text
+        var currentRect = sorted[0].rectInWindow
+        var lastLineRect = sorted[0].rectInWindow
+
+        for next in sorted.dropFirst() {
+            let lineHeight = max(14, min(lastLineRect.height, next.rectInWindow.height))
+            let verticalGap = next.rectInWindow.minY - lastLineRect.maxY
+            let horizontalOverlap = min(currentRect.maxX, next.rectInWindow.maxX) - max(currentRect.minX, next.rectInWindow.minX)
+            let alignedLeft = abs(next.rectInWindow.minX - currentRect.minX) <= 32
+            let sameParagraph = verticalGap >= -lineHeight * 0.4
+                && verticalGap <= lineHeight * 1.15
+                && (alignedLeft || horizontalOverlap > 24)
+
+            if sameParagraph {
+                currentText += "\n" + next.text
+                currentRect = currentRect.union(next.rectInWindow)
+                lastLineRect = next.rectInWindow
+            } else {
+                merged.append(DetectedScreenTextBlock(text: currentText, rectInWindow: currentRect, sourceView: nil, sourceKind: .ocr))
+                currentText = next.text
+                currentRect = next.rectInWindow
+                lastLineRect = next.rectInWindow
+            }
+        }
+        merged.append(DetectedScreenTextBlock(text: currentText, rectInWindow: currentRect, sourceView: nil, sourceKind: .ocr))
+        return merged
     }
 
     // MARK: - Private Traversal
@@ -177,6 +216,7 @@ enum ScreenTextScanner {
         blocks: inout [DetectedScreenTextBlock],
         webViews: inout [WKWebView]
     ) {
+        if blocks.count >= 160 { return }
         if view.isHidden || view.alpha < 0.05 { return }
         let clsName = NSStringFromClass(type(of: view))
         if clsName.contains("WriteNow") || clsName.contains("ScreenTextOverlay") { return }

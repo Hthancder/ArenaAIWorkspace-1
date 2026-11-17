@@ -217,27 +217,93 @@ class AIGateHandler: ChannelInboundHandler {
         upstream: AIGateUpstream,
         context: ChannelHandlerContext
     ) {
+        ServiceError.totalRequests += 1
         let (resolvedUpstream, finalBody) = resolveUpstreamAndRewriteBody(body, defaultUpstream: upstream)
-        let bodyLengthToSend: Int? = (hadBodyLengthHeader || !finalBody.isEmpty) ? finalBody.count : nil
+        var candidateUpstreams: [AIGateUpstream] = [resolvedUpstream]
+        if Configuration.shared.appSettings.autoFallbackEndpointEnabled {
+            for ep in Configuration.shared.allEndpointsSorted where ep.id != resolvedUpstream.endpointID {
+                if let fallback = AIGateUpstream(endpoint: ep) {
+                    candidateUpstreams.append(fallback)
+                }
+            }
+        }
+        launchProxyCandidate(
+            at: 0,
+            candidates: candidateUpstreams,
+            headerString: headerString,
+            originalBody: body,
+            resolvedPrimaryBody: finalBody,
+            hadBodyLengthHeader: hadBodyLengthHeader,
+            context: context
+        )
+    }
 
-        guard let patchedHeader = patchHeaderValues(headerString, with: resolvedUpstream, bodyLength: bodyLengthToSend) else {
+    private func launchProxyCandidate(
+        at index: Int,
+        candidates: [AIGateUpstream],
+        headerString: String,
+        originalBody: Data,
+        resolvedPrimaryBody: Data,
+        hadBodyLengthHeader: Bool,
+        context: ChannelHandlerContext
+    ) {
+        guard candidates.indices.contains(index) else {
             context.close(mode: .all, promise: nil)
             return
         }
-        guard let patchedHeaderData = patchedHeader.data(using: .utf8) else {
+        let targetUpstream = candidates[index]
+        let candidateBody: Data
+        if index == 0 {
+            candidateBody = resolvedPrimaryBody
+        } else {
+            candidateBody = rewriteModelInBody(originalBody, to: targetUpstream.mid)
+        }
+        let bodyLengthToSend: Int? = (hadBodyLengthHeader || !candidateBody.isEmpty) ? candidateBody.count : nil
+
+        guard let patchedHeader = patchHeaderValues(headerString, with: targetUpstream, bodyLength: bodyLengthToSend),
+              let patchedHeaderData = patchedHeader.data(using: .utf8)
+        else {
             context.close(mode: .all, promise: nil)
             return
         }
 
+        let nextIndex = index + 1
+        let hasMore = candidates.indices.contains(nextIndex)
         let proxy = AIGateProxyHandler(
-            upstream: resolvedUpstream,
+            upstream: targetUpstream,
             header: patchedHeaderData,
-            body: finalBody,
+            body: candidateBody,
             context: context,
-            group: context.eventLoop
+            group: context.eventLoop,
+            onFailureFallback: hasMore ? { [weak self] _ in
+                guard let self else { return false }
+                ServiceError.totalFallbacks += 1
+                self.launchProxyCandidate(
+                    at: nextIndex,
+                    candidates: candidates,
+                    headerString: headerString,
+                    originalBody: originalBody,
+                    resolvedPrimaryBody: resolvedPrimaryBody,
+                    hadBodyLengthHeader: hadBodyLengthHeader,
+                    context: context
+                )
+                return true
+            } : nil
         )
         proxyHandler = proxy
         proxy.handlerAdded(context: context)
+    }
+
+    private func rewriteModelInBody(_ body: Data, to modelID: String) -> Data {
+        let cleanModel = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanModel.isEmpty,
+              !body.isEmpty,
+              var jsonObject = try? JSONSerialization.jsonObject(with: body, options: []) as? [String: Any]
+        else {
+            return body
+        }
+        jsonObject["model"] = cleanModel
+        return (try? JSONSerialization.data(withJSONObject: jsonObject, options: [])) ?? body
     }
 
     func errorCaught(context: ChannelHandlerContext, error: Error) {
@@ -591,6 +657,10 @@ class AIGateHandler: ChannelInboundHandler {
             let payload: [String: String] = [
                 "status": Configuration.shared.isEnabled ? "enabled" : "disabled",
                 "error": ServiceError.lastError?.description ?? "",
+                "last_latency_ms": "\(ServiceError.lastLatencyMs)",
+                "last_endpoint": ServiceError.lastEndpointName,
+                "total_requests": "\(ServiceError.totalRequests)",
+                "total_fallbacks": "\(ServiceError.totalFallbacks)",
             ]
             let data = (try? JSONEncoder().encode(payload)) ?? Data("{}".utf8)
             sendJSONResponse(data, context: context)

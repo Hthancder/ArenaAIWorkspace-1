@@ -14,19 +14,32 @@ class AIGateProxyHandler: ChannelInboundHandler {
     typealias InboundIn = ByteBuffer
     typealias OutboundOut = ByteBuffer
 
+    private static let sharedSSLContext: NIOSSLContext? = try? NIOSSLContext(configuration: .makeClientConfiguration())
+
     var remoteChannel: Channel?
     let upstream: AIGateUpstream
     let header: Data
     var bodyBuffer: Data
     let context: ChannelHandlerContext
     let group: EventLoopGroup
+    let requestStartNs: UInt64 = DispatchTime.now().uptimeNanoseconds
+    var onFailureFallback: ((ServiceError) -> Bool)?
+    var didTriggerFallback: Bool = false
 
-    init(upstream: AIGateUpstream, header: Data, body: Data, context: ChannelHandlerContext, group: EventLoopGroup) {
+    init(
+        upstream: AIGateUpstream,
+        header: Data,
+        body: Data,
+        context: ChannelHandlerContext,
+        group: EventLoopGroup,
+        onFailureFallback: ((ServiceError) -> Bool)? = nil
+    ) {
         self.upstream = upstream
         self.header = header
         bodyBuffer = body
         self.context = context
         self.group = group
+        self.onFailureFallback = onFailureFallback
     }
 
     private static func isIPAddress(_ host: String) -> Bool {
@@ -49,7 +62,12 @@ class AIGateProxyHandler: ChannelInboundHandler {
                 var ret = channel.pipeline.addHandlers([])
                 if tls {
                     do {
-                        let sslContext = try NIOSSLContext(configuration: .makeClientConfiguration())
+                        let sslContext: NIOSSLContext
+                        if let cached = Self.sharedSSLContext {
+                            sslContext = cached
+                        } else {
+                            sslContext = try NIOSSLContext(configuration: .makeClientConfiguration())
+                        }
                         let sslHandler = try NIOSSLClientHandler(context: sslContext, serverHostname: sniHost)
                         ret = channel.pipeline.addHandler(sslHandler)
                     } catch {
@@ -80,10 +98,22 @@ class AIGateProxyHandler: ChannelInboundHandler {
                     self.bodyBuffer = Data()
                     remoteChannel.writeAndFlush(buffer, promise: nil)
                 case .failure:
-                    self.context.terminateChannel(reason: .endpointNotReachable)
+                    self.handleFailureBeforeOutput(reason: .endpointNotReachable)
                 }
             }
         }
+    }
+
+    func handleFailureBeforeOutput(reason: ServiceError) {
+        let fallback = onFailureFallback
+        onFailureFallback = nil
+        if let fallback, fallback(reason) {
+            didTriggerFallback = true
+            remoteChannel?.close(mode: .all, promise: nil)
+            remoteChannel = nil
+            return
+        }
+        context.terminateChannel(reason: reason)
     }
 
     func channelRead(context _: ChannelHandlerContext, data: NIOAny) {

@@ -16,10 +16,7 @@ public class Presenter: NSObject {
     override private init() {
         super.init()
 
-        // let the shader compile
-        _ = AnimatedMulticolorGradientView()
-
-        // pre-warm runtime configuration so text selection menu items are fresh
-        Configurator.shared.refreshRuntimeConfigIfStale(maxAge: 1.0)
+        // pre-warm runtime configuration lazily without compiling Metal shaders on every app launch
+        Configurator.shared.refreshRuntimeConfigIfStale(maxAge: 2.0)
     }
 }

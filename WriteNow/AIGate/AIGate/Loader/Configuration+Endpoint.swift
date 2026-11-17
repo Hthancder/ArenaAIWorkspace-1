@@ -648,6 +648,8 @@ extension Configuration {
         var editContextMatchMode: String      // "smart_match" | "always_in_ttl"
         var editContextMaxTurns: Int
         var editContextTTLSeconds: Int
+        var speechRate: Double                // 0.85 | 1.0 | 1.15
+        var autoFallbackEndpointEnabled: Bool
 
         static let `default` = AppSettings(
             menuTitle: "Write Now",
@@ -697,7 +699,9 @@ extension Configuration {
             keepEditContextEnabled: true,
             editContextMatchMode: "smart_match",
             editContextMaxTurns: 3,
-            editContextTTLSeconds: 300
+            editContextTTLSeconds: 300,
+            speechRate: 1.0,
+            autoFallbackEndpointEnabled: false
         )
 
         init(
@@ -748,7 +752,9 @@ extension Configuration {
             keepEditContextEnabled: Bool = true,
             editContextMatchMode: String = "smart_match",
             editContextMaxTurns: Int = 3,
-            editContextTTLSeconds: Int = 300
+            editContextTTLSeconds: Int = 300,
+            speechRate: Double = 1.0,
+            autoFallbackEndpointEnabled: Bool = false
         ) {
             self.menuTitle = menuTitle
             self.globalSystemPrompt = globalSystemPrompt
@@ -798,6 +804,8 @@ extension Configuration {
             self.editContextMatchMode = editContextMatchMode
             self.editContextMaxTurns = editContextMaxTurns
             self.editContextTTLSeconds = editContextTTLSeconds
+            self.speechRate = speechRate
+            self.autoFallbackEndpointEnabled = autoFallbackEndpointEnabled
         }
 
         enum CodingKeys: String, CodingKey {
@@ -817,6 +825,7 @@ extension Configuration {
             case floatingPickerBubbleEnabled, pickerTwoFingerLongPressEnabled, pickerStatusBarDoubleTapEnabled
             case ocrPreferredLanguages
             case keepEditContextEnabled, editContextMatchMode, editContextMaxTurns, editContextTTLSeconds
+            case speechRate, autoFallbackEndpointEnabled
         }
 
         init(from decoder: Decoder) throws {
@@ -869,6 +878,8 @@ extension Configuration {
             editContextMatchMode = try container.decodeIfPresent(String.self, forKey: .editContextMatchMode) ?? "smart_match"
             editContextMaxTurns = try container.decodeIfPresent(Int.self, forKey: .editContextMaxTurns) ?? 3
             editContextTTLSeconds = try container.decodeIfPresent(Int.self, forKey: .editContextTTLSeconds) ?? 300
+            speechRate = try container.decodeIfPresent(Double.self, forKey: .speechRate) ?? 1.0
+            autoFallbackEndpointEnabled = try container.decodeIfPresent(Bool.self, forKey: .autoFallbackEndpointEnabled) ?? false
         }
     }
 

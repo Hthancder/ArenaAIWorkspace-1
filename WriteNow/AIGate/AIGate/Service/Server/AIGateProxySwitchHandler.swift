@@ -87,7 +87,10 @@ class AIGateProxySwitchHandler: ChannelInboundHandler {
             outBuf.writeBytes(delimiter)
             outBuf.writeBytes(trailingData)
             proxyHandler.writeBack(buffer: outBuf)
-            ServiceError.lastError = nil
+            ServiceError.recordSuccess(
+                endpointName: proxyHandler.upstream.endpointName,
+                startNs: proxyHandler.requestStartNs
+            )
         } else {
             failedStatusCode = code
             errorExpectedLength = parseContentLength(from: headerString)
@@ -106,12 +109,15 @@ class AIGateProxySwitchHandler: ChannelInboundHandler {
     func channelInactive(context: ChannelHandlerContext) {
         errorFlushTask?.cancel()
         errorFlushTask = nil
+        if proxyHandler.didTriggerFallback {
+            return
+        }
         if let failedCode = failedStatusCode {
             finishFailedResponse(context: context, code: failedCode)
             return
         }
         if !isHeaderChecked {
-            proxyHandler.context.terminateChannel(reason: .invalidResponse)
+            proxyHandler.handleFailureBeforeOutput(reason: .invalidResponse)
             return
         }
         proxyHandler.context.close(mode: .all, promise: nil)
@@ -120,11 +126,14 @@ class AIGateProxySwitchHandler: ChannelInboundHandler {
     func errorCaught(context: ChannelHandlerContext, error _: Error) {
         errorFlushTask?.cancel()
         errorFlushTask = nil
+        if proxyHandler.didTriggerFallback {
+            return
+        }
         if let failedCode = failedStatusCode {
             finishFailedResponse(context: context, code: failedCode)
             return
         }
-        proxyHandler.context.terminateChannel(reason: .endpointNotReachable)
+        proxyHandler.handleFailureBeforeOutput(reason: .endpointNotReachable)
         context.close(mode: .all, promise: nil)
     }
 
@@ -161,7 +170,12 @@ class AIGateProxySwitchHandler: ChannelInboundHandler {
         }
 
         let detail = extractErrorDetail(from: rawBody)
-        proxyHandler.context.terminateChannel(reason: .upstreamPassedError(code: code, detail: detail))
+        let reason: ServiceError = .upstreamPassedError(code: code, detail: detail)
+        if code == 429 || (500 ... 599).contains(code) {
+            proxyHandler.handleFailureBeforeOutput(reason: reason)
+        } else {
+            proxyHandler.context.terminateChannel(reason: reason)
+        }
         context.close(mode: .all, promise: nil)
     }
 

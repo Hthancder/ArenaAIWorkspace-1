@@ -39,8 +39,7 @@ extension WritingToolsView {
     var background: some View {
         let s = cfg.settings
         if s.backgroundMode == "image",
-           let imgData = cfg.customBackgroundImageData,
-           let uiImage = UIImage(data: imgData)
+           let uiImage = cfg.cachedBackgroundImage
         {
             GeometryReader { geo in
                 Image(uiImage: uiImage)
@@ -62,12 +61,12 @@ extension WritingToolsView {
         } else if s.backgroundMode == "mesh" && s.animatedBackground {
             ColorfulView(
                 color: .constant(themeColors),
-                speed: .constant(0.25),
+                speed: .constant(isRunning ? 0.08 : 0.22),
                 bias: .constant(0.01),
                 noise: .constant(0),
-                transitionSpeed: .constant(1.3),
-                frameLimit: .constant(30),
-                renderScale: .constant(0.5)
+                transitionSpeed: .constant(1.2),
+                frameLimit: .constant(20),
+                renderScale: .constant(0.35)
             )
             .opacity(0.82)
             .ignoresSafeArea()

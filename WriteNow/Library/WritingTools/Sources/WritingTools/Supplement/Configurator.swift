@@ -8,6 +8,7 @@
 import Combine
 import Foundation
 import OpenAI
+import UIKit
 import WritingToolsLocalizable
 
 public struct EndpointItem: Codable, Identifiable, Equatable, Hashable {
@@ -377,6 +378,8 @@ public struct RuntimeSettings: Codable, Equatable {
     public var editContextMatchMode: String
     public var editContextMaxTurns: Int
     public var editContextTTLSeconds: Int
+    public var speechRate: Double
+    public var autoFallbackEndpointEnabled: Bool
 
     public static let `default` = RuntimeSettings(
         menuTitle: "Write Now",
@@ -426,7 +429,9 @@ public struct RuntimeSettings: Codable, Equatable {
         keepEditContextEnabled: true,
         editContextMatchMode: "smart_match",
         editContextMaxTurns: 3,
-        editContextTTLSeconds: 300
+        editContextTTLSeconds: 300,
+        speechRate: 1.0,
+        autoFallbackEndpointEnabled: false
     )
 
     enum CodingKeys: String, CodingKey {
@@ -446,6 +451,7 @@ public struct RuntimeSettings: Codable, Equatable {
         case floatingPickerBubbleEnabled, pickerTwoFingerLongPressEnabled, pickerStatusBarDoubleTapEnabled
         case ocrPreferredLanguages
         case keepEditContextEnabled, editContextMatchMode, editContextMaxTurns, editContextTTLSeconds
+        case speechRate, autoFallbackEndpointEnabled
     }
 
     public init(
@@ -496,7 +502,9 @@ public struct RuntimeSettings: Codable, Equatable {
         keepEditContextEnabled: Bool = true,
         editContextMatchMode: String = "smart_match",
         editContextMaxTurns: Int = 3,
-        editContextTTLSeconds: Int = 300
+        editContextTTLSeconds: Int = 300,
+        speechRate: Double = 1.0,
+        autoFallbackEndpointEnabled: Bool = false
     ) {
         self.menuTitle = menuTitle
         self.globalSystemPrompt = globalSystemPrompt
@@ -546,6 +554,8 @@ public struct RuntimeSettings: Codable, Equatable {
         self.editContextMatchMode = editContextMatchMode
         self.editContextMaxTurns = editContextMaxTurns
         self.editContextTTLSeconds = editContextTTLSeconds
+        self.speechRate = speechRate
+        self.autoFallbackEndpointEnabled = autoFallbackEndpointEnabled
     }
 
     public init(from decoder: Decoder) throws {
@@ -598,6 +608,8 @@ public struct RuntimeSettings: Codable, Equatable {
         editContextMatchMode = try c.decodeIfPresent(String.self, forKey: .editContextMatchMode) ?? "smart_match"
         editContextMaxTurns = try c.decodeIfPresent(Int.self, forKey: .editContextMaxTurns) ?? 3
         editContextTTLSeconds = try c.decodeIfPresent(Int.self, forKey: .editContextTTLSeconds) ?? 300
+        speechRate = try c.decodeIfPresent(Double.self, forKey: .speechRate) ?? 1.0
+        autoFallbackEndpointEnabled = try c.decodeIfPresent(Bool.self, forKey: .autoFallbackEndpointEnabled) ?? false
     }
 }
 
@@ -791,8 +803,19 @@ public class Configurator: ObservableObject {
     @Published public var settings: RuntimeSettings = .default
     @Published public var daemonConnected: Bool = true
     @Published public var customBackgroundImageData: Data? = nil
+    @Published public var cachedBackgroundImage: UIImage? = nil
     private var lastConfigRefreshTime: Date = .distantPast
     private var isRefreshingConfig: Bool = false
+    private var lastAppliedPayloadData: Data? = nil
+
+    private let localSession: URLSession = {
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.waitsForConnectivity = false
+        cfg.urlCache = nil
+        cfg.requestCachePolicy = .reloadIgnoringLocalCacheData
+        cfg.timeoutIntervalForRequest = 10
+        return URLSession(configuration: cfg)
+    }()
 
     public var activeEndpoint: EndpointItem? {
         endpoints.first { $0.id == activatedEndpointID }
@@ -823,10 +846,15 @@ public class Configurator: ObservableObject {
     }()
 
     private init() {
-        customBackgroundImageData = UserDefaults.standard.data(forKey: cachedBgImageKey)
+        let initialBg = UserDefaults.standard.data(forKey: cachedBgImageKey)
+        customBackgroundImageData = initialBg
+        if let initialBg {
+            cachedBackgroundImage = Self.decodeAndDownscaleImage(initialBg, maxDimension: 960)
+        }
         if let data = UserDefaults.standard.data(forKey: cachedConfigDefaultsKey),
            let cached = try? JSONDecoder().decode(RuntimeConfig.self, from: data)
         {
+            lastAppliedPayloadData = data
             applyRuntimeConfig(cached, cacheToDefaults: false)
         }
 
@@ -853,7 +881,7 @@ public class Configurator: ObservableObject {
 
     public func refreshRuntimeConfig(completion: ((RuntimeConfig?) -> Void)? = nil) {
         isRefreshingConfig = true
-        URLSession.shared.dataTask(with: gateConfigCheckRequest) { [weak self] data, _, error in
+        localSession.dataTask(with: gateConfigCheckRequest) { [weak self] data, _, error in
             guard let self else { return }
             defer {
                 DispatchQueue.main.async {
@@ -861,9 +889,22 @@ public class Configurator: ObservableObject {
                     self.lastConfigRefreshTime = Date()
                 }
             }
-            guard error == nil, let data,
-                  let decoded = try? JSONDecoder().decode(RuntimeConfig.self, from: data)
-            else {
+            guard error == nil, let data else {
+                DispatchQueue.main.async {
+                    self.daemonConnected = false
+                    completion?(nil)
+                }
+                return
+            }
+            if data == self.lastAppliedPayloadData {
+                DispatchQueue.main.async {
+                    self.daemonConnected = true
+                    self.refreshBackgroundImageIfNeeded(revision: self.settings.backgroundImageRevision, mode: self.settings.backgroundMode)
+                    completion?(nil)
+                }
+                return
+            }
+            guard let decoded = try? JSONDecoder().decode(RuntimeConfig.self, from: data) else {
                 DispatchQueue.main.async {
                     self.daemonConnected = false
                     completion?(nil)
@@ -872,6 +913,7 @@ public class Configurator: ObservableObject {
             }
             DispatchQueue.main.async {
                 self.daemonConnected = true
+                self.lastAppliedPayloadData = data
                 self.applyRuntimeConfig(decoded, cacheToDefaults: true)
                 self.refreshBackgroundImageIfNeeded(revision: decoded.settings.backgroundImageRevision, mode: decoded.settings.backgroundMode)
                 completion?(decoded)
@@ -879,10 +921,25 @@ public class Configurator: ObservableObject {
         }.resume()
     }
 
+    private static func decodeAndDownscaleImage(_ data: Data, maxDimension: CGFloat) -> UIImage? {
+        guard let image = UIImage(data: data) else { return nil }
+        let maxSide = max(image.size.width, image.size.height)
+        guard maxSide > maxDimension else { return image }
+        let ratio = maxDimension / maxSide
+        let targetSize = CGSize(width: floor(image.size.width * ratio), height: floor(image.size.height * ratio))
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1.0
+        format.opaque = true
+        return UIGraphicsImageRenderer(size: targetSize, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: targetSize))
+        }
+    }
+
     private func refreshBackgroundImageIfNeeded(revision: String, mode: String) {
         if revision.isEmpty {
             if customBackgroundImageData != nil {
                 customBackgroundImageData = nil
+                cachedBackgroundImage = nil
                 UserDefaults.standard.removeObject(forKey: cachedBgImageKey)
                 UserDefaults.standard.removeObject(forKey: cachedBgRevKey)
             }
@@ -890,16 +947,18 @@ public class Configurator: ObservableObject {
         }
         guard mode == "image" else { return }
         let cachedRev = UserDefaults.standard.string(forKey: cachedBgRevKey) ?? ""
-        if cachedRev == revision, customBackgroundImageData != nil {
+        if cachedRev == revision, cachedBackgroundImage != nil {
             return
         }
         guard let url = URL(string: "http://127.0.0.1:5540/metrics?query=bg_image") else { return }
         var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 5)
         req.httpMethod = "GET"
-        URLSession.shared.dataTask(with: req) { [weak self] data, _, error in
+        localSession.dataTask(with: req) { [weak self] data, _, error in
             guard let self, error == nil, let data, !data.isEmpty else { return }
+            let decoded = Self.decodeAndDownscaleImage(data, maxDimension: 960)
             DispatchQueue.main.async {
                 self.customBackgroundImageData = data
+                self.cachedBackgroundImage = decoded
                 UserDefaults.standard.set(data, forKey: self.cachedBgImageKey)
                 UserDefaults.standard.set(revision, forKey: self.cachedBgRevKey)
             }
@@ -1263,9 +1322,30 @@ public class Configurator: ObservableObject {
         UserDefaults.standard.removeObject(forKey: Self.lastSessionKey)
     }
 
-    // MARK: - Previous-Edit Context Persistence
+    // MARK: - Previous-Edit Context Persistence (LRU up to 4 records)
 
-    private static let editContextKey = "WriteNowEditContextRecordV1"
+    private static let legacyEditContextKey = "WriteNowEditContextRecordV1"
+    private static let editContextRecordsKey = "WriteNowEditContextRecordsV1"
+
+    private func loadAllValidEditRecords() -> [EditContextRecord] {
+        var records: [EditContextRecord] = []
+        if let data = UserDefaults.standard.data(forKey: Self.editContextRecordsKey),
+           let decoded = try? JSONDecoder().decode([EditContextRecord].self, from: data)
+        {
+            records = decoded
+        } else if let legacyData = UserDefaults.standard.data(forKey: Self.legacyEditContextKey),
+                  let legacy = try? JSONDecoder().decode(EditContextRecord.self, from: legacyData)
+        {
+            records = [legacy]
+        }
+
+        let ttl = settings.editContextTTLSeconds
+        if ttl > 0 {
+            let now = Date()
+            records = records.filter { now.timeIntervalSince($0.updatedAt) <= TimeInterval(ttl) }
+        }
+        return records
+    }
 
     public func saveEditContext(
         originalText: String,
@@ -1290,53 +1370,57 @@ public class Configurator: ObservableObject {
             lastAcceptedOutput: String(cleanAccepted.prefix(2500)),
             updatedAt: Date()
         )
-        if let data = try? JSONEncoder().encode(record) {
-            UserDefaults.standard.set(data, forKey: Self.editContextKey)
+
+        var records = loadAllValidEditRecords().filter { existing in
+            existing.originalText != record.originalText
+                && existing.lastAcceptedOutput != record.lastAcceptedOutput
+        }
+        records.insert(record, at: 0)
+        if records.count > 4 {
+            records = Array(records.prefix(4))
+        }
+        if let data = try? JSONEncoder().encode(records) {
+            UserDefaults.standard.set(data, forKey: Self.editContextRecordsKey)
         }
     }
 
     public func loadMatchingEditContext(forSelectedText selectedText: String) -> EditContextRecord? {
         guard settings.keepEditContextEnabled else { return nil }
-        guard let data = UserDefaults.standard.data(forKey: Self.editContextKey),
-              let record = try? JSONDecoder().decode(EditContextRecord.self, from: data)
-        else { return nil }
-
-        let ttl = settings.editContextTTLSeconds
-        if ttl > 0 && Date().timeIntervalSince(record.updatedAt) > TimeInterval(ttl) {
-            clearEditContext()
-            return nil
-        }
+        let records = loadAllValidEditRecords()
+        guard !records.isEmpty else { return nil }
 
         if settings.editContextMatchMode == "always_in_ttl" {
-            return record
+            return records.first
         }
 
-        // Smart match: check if newly selected text matches or overlaps the previous improved text
         let normSelected = Self.normalizeForEditMatch(selectedText)
-        let normLast = Self.normalizeForEditMatch(record.lastAcceptedOutput)
-        guard normSelected.count >= 4, normLast.count >= 4 else { return nil }
-
-        if normSelected == normLast {
-            return record
-        }
-        if normSelected.count >= 12 && (normLast.contains(normSelected) || normSelected.contains(normLast)) {
-            return record
-        }
-
+        guard normSelected.count >= 4 else { return nil }
         let wordsA = Set(normSelected.split(separator: " ").map(String.init))
-        let wordsB = Set(normLast.split(separator: " ").map(String.init))
-        if !wordsA.isEmpty && !wordsB.isEmpty {
-            let intersection = wordsA.intersection(wordsB).count
-            let minCount = min(wordsA.count, wordsB.count)
-            if minCount > 0 && Double(intersection) / Double(minCount) >= 0.55 {
+
+        for record in records {
+            let normLast = Self.normalizeForEditMatch(record.lastAcceptedOutput)
+            guard normLast.count >= 4 else { continue }
+            if normSelected == normLast {
                 return record
+            }
+            if normSelected.count >= 12 && (normLast.contains(normSelected) || normSelected.contains(normLast)) {
+                return record
+            }
+            let wordsB = Set(normLast.split(separator: " ").map(String.init))
+            if !wordsA.isEmpty && !wordsB.isEmpty {
+                let intersection = wordsA.intersection(wordsB).count
+                let minCount = min(wordsA.count, wordsB.count)
+                if minCount > 0 && Double(intersection) / Double(minCount) >= 0.55 {
+                    return record
+                }
             }
         }
         return nil
     }
 
     public func clearEditContext() {
-        UserDefaults.standard.removeObject(forKey: Self.editContextKey)
+        UserDefaults.standard.removeObject(forKey: Self.editContextRecordsKey)
+        UserDefaults.standard.removeObject(forKey: Self.legacyEditContextKey)
     }
 
     private static func normalizeForEditMatch(_ raw: String) -> String {

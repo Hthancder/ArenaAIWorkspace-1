@@ -32,6 +32,7 @@ final class ScreenTextOverlayViewController: UIViewController {
 
     private let bottomActionBar = UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterialDark))
     private let hintLabel = UILabel()
+    private let copyMultiButton = UIButton(type: .system)
     private let askMultiButton = UIButton(type: .system)
     private let ocrSpinner = UIActivityIndicatorView(style: .medium)
 
@@ -150,6 +151,15 @@ final class ScreenTextOverlayViewController: UIViewController {
         ocrSpinner.color = .systemCyan
         ocrSpinner.hidesWhenStopped = true
 
+        copyMultiButton.setTitle("Copy", for: .normal)
+        copyMultiButton.titleLabel?.font = .systemFont(ofSize: 13, weight: .semibold)
+        copyMultiButton.backgroundColor = UIColor.white.withAlphaComponent(0.18)
+        copyMultiButton.setTitleColor(.white, for: .normal)
+        copyMultiButton.layer.cornerRadius = 10
+        copyMultiButton.contentEdgeInsets = UIEdgeInsets(top: 6, left: 10, bottom: 6, right: 10)
+        copyMultiButton.isHidden = true
+        copyMultiButton.addTarget(self, action: #selector(didTapCopyMulti), for: .touchUpInside)
+
         askMultiButton.setTitle("Ask WriteNow", for: .normal)
         askMultiButton.titleLabel?.font = .systemFont(ofSize: 13, weight: .bold)
         askMultiButton.backgroundColor = UIColor.systemCyan.withAlphaComponent(0.85)
@@ -159,7 +169,7 @@ final class ScreenTextOverlayViewController: UIViewController {
         askMultiButton.isHidden = true
         askMultiButton.addTarget(self, action: #selector(didTapAskMulti), for: .touchUpInside)
 
-        let stack = UIStackView(arrangedSubviews: [ocrSpinner, hintLabel, askMultiButton])
+        let stack = UIStackView(arrangedSubviews: [ocrSpinner, hintLabel, copyMultiButton, askMultiButton])
         stack.axis = .horizontal
         stack.spacing = 8
         stack.alignment = .center
@@ -204,6 +214,9 @@ final class ScreenTextOverlayViewController: UIViewController {
             btn.layer.borderWidth = 1.4
             styleBlockButton(btn, selectedOrder: selectedIndices.firstIndex(of: idx), kind: block.sourceKind)
             btn.addTarget(self, action: #selector(didTapBlock(_:)), for: .touchUpInside)
+            let lp = UILongPressGestureRecognizer(target: self, action: #selector(didLongPressBlock(_:)))
+            lp.minimumPressDuration = 0.4
+            btn.addGestureRecognizer(lp)
             blocksContainer.addSubview(btn)
             blockButtons.append(btn)
         }
@@ -232,16 +245,19 @@ final class ScreenTextOverlayViewController: UIViewController {
         case .tap:
             hintLabel.text = blocks.isEmpty
                 ? "Drag a box over any text to scan with OCR"
-                : "Tap any box • Drag anywhere to OCR a region"
+                : "Tap box • Long-press to copy • Drag for OCR"
+            copyMultiButton.isHidden = true
             askMultiButton.isHidden = true
         case .multiSelect:
             hintLabel.text = selectedIndices.isEmpty
                 ? "Tap blocks in order to combine them"
-                : "\(selectedIndices.count) block(s) selected"
+                : "\(selectedIndices.count) selected"
+            copyMultiButton.isHidden = selectedIndices.isEmpty
             askMultiButton.isHidden = selectedIndices.isEmpty
-            askMultiButton.setTitle("Ask WriteNow (\(selectedIndices.count))", for: .normal)
+            askMultiButton.setTitle("WriteNow (\(selectedIndices.count))", for: .normal)
         case .drawOCR:
             hintLabel.text = "Drag a rectangle over any text, image, or video"
+            copyMultiButton.isHidden = true
             askMultiButton.isHidden = true
         }
     }
@@ -281,6 +297,34 @@ final class ScreenTextOverlayViewController: UIViewController {
 
         let block = blocks[idx]
         presentWriteNow(withText: block.text, anchorRect: block.rectInWindow, sourceView: block.sourceView)
+    }
+
+    @objc private func didLongPressBlock(_ gesture: UILongPressGestureRecognizer) {
+        guard gesture.state == .began,
+              let btn = gesture.view as? UIButton,
+              blocks.indices.contains(btn.tag)
+        else { return }
+        let text = blocks[btn.tag].text
+        UIPasteboard.general.string = text
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        hintLabel.text = "Copied!"
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+            self?.updateModeUI()
+        }
+    }
+
+    @objc private func didTapCopyMulti() {
+        let texts = selectedIndices.compactMap { idx -> String? in
+            guard blocks.indices.contains(idx) else { return nil }
+            return blocks[idx].text
+        }
+        guard !texts.isEmpty else { return }
+        UIPasteboard.general.string = texts.joined(separator: "\n\n")
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        hintLabel.text = "Copied \(texts.count) block(s)!"
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+            self?.updateModeUI()
+        }
     }
 
     @objc private func didTapAskMulti() {
