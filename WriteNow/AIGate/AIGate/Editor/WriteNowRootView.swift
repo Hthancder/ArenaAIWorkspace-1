@@ -1255,7 +1255,7 @@ struct PresetEditorView: View {
 
     private var selectedEndpointForOverride: Configuration.Endpoint? {
         if let id = selectedEndpointID {
-            return configuration.endpoints.first { $0.id == id }
+            return configuration.allEndpointsSorted.first { $0.id == id }
         }
         return configuration.activatedEndpoint
     }
@@ -1387,8 +1387,8 @@ struct PresetEditorView: View {
                 Section {
                     Picker("Provider", selection: $selectedEndpointID) {
                         Text("Use Global Active Provider").tag(UUID?.none)
-                        ForEach(configuration.endpoints) { ep in
-                            Text(ep.title.isEmpty ? (ep.url.host ?? "Endpoint") : ep.title)
+                        ForEach(configuration.allEndpointsSorted) { ep in
+                            Text(ep.displayName)
                                 .tag(UUID?.some(ep.id))
                         }
                     }
@@ -1402,7 +1402,7 @@ struct PresetEditorView: View {
                             .disableAutocorrection(true)
                     }
 
-                    if let ep = selectedEndpointForOverride, !ep.availableModels.isEmpty {
+                    if let ep = selectedEndpointForOverride, !ep.effectiveModels.isEmpty {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 6) {
                                 Button {
@@ -1418,7 +1418,7 @@ struct PresetEditorView: View {
                                 }
                                 .buttonStyle(.borderless)
 
-                                ForEach(ep.availableModels.prefix(12), id: \.self) { m in
+                                ForEach(ep.effectiveModels.prefix(12), id: \.self) { m in
                                     Button {
                                         modelOverride = m
                                     } label: {

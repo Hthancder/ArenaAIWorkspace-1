@@ -50,7 +50,7 @@ extension AIGateUpstream {
         let cvm = Configuration.shared
         let matchedEndpoint: Configuration.Endpoint?
         if let endpointID {
-            matchedEndpoint = cvm.endpoints.first(where: { $0.id == endpointID }) ?? cvm.activatedEndpoint
+            matchedEndpoint = cvm.allEndpointsSorted.first(where: { $0.id == endpointID }) ?? cvm.activatedEndpoint
         } else {
             matchedEndpoint = cvm.activatedEndpoint
         }
