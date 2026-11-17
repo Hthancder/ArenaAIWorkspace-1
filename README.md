@@ -35,14 +35,29 @@ nhưng:
 
 ## 2. Cài đặt
 
+### Cách nhanh nhất: tải `.deb` build sẵn bởi GitHub Actions
+
+Mỗi lần push, CI build và (khi chạy tay / gắn tag) phát hành Release:
+
+```
+https://github.com/Hthancder/ArenaAIWorkspace-1/releases
+```
+
+Tải `com.hthancder.siribridge_<ver>_iphoneos-arm64.deb` rồi:
+
 ```bash
-# build
+# qua SSH (thiết bị đã jailbreak)
+scp com.hthancder.siribridge_*.deb root@<IP>:/var/mobile/
+ssh root@<IP> 'dpkg -i /var/mobile/com.hthancder.siribridge_*.deb && killall -9 SpringBoard'
+```
+Hoặc mở file `.deb` bằng **Sileo / Zebra / Filza** trên máy.
+
+### Tự build
+
+```bash
 ./build.sh              # macOS + Theos
 ./build.sh --linux      # Linux + zig (xem §6)
-
-# cài (thiết bị đã jailbreak, đã cấu hình SSH trong Theos hoặc dùng Sileo/Zebra)
-make install
-# hoặc copy packages/*.deb sang máy rồi mở bằng Sileo
+make install            # cài trực tiếp qua SSH nếu Theos đã cấu hình device
 ```
 
 Sau khi cài: **Settings → SiriBridge**.
@@ -180,7 +195,15 @@ Cách hoạt động: `tools/theos-toolchain-stub/bin/clang` là wrapper gọi
 
 ### Ký
 Rootless (ElleKit / libhooker) nạp dylib **không cần** chữ ký.
-Nếu muốn ký ad-hoc: `make package TARGET_CODESIGN=ldid`.
+Trên CI/máy Linux không có `ldid`, build dùng shim `tools/bin/ldid` (no-op);
+nếu muốn ký ad-hoc: `make package TARGET_CODESIGN=$(command -v ldid)`.
+
+### CI (GitHub Actions)
+`.github/workflows/build.yml` chạy trên mọi branch:
+Ubuntu + zig 0.13 + Theos (recursive) + SDK iPhoneOS15.6 →
+kiểm tra Mach-O (`cffaedfe`), `dpkg-deb -I/-c`, upload artifact,
+và phát hành Release khi tag `v*` hoặc chạy tay (`workflow_dispatch`).
+Trạng thái: https://github.com/Hthancder/ArenaAIWorkspace-1/actions
 
 ---
 
