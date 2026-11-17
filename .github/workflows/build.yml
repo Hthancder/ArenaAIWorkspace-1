@@ -63,7 +63,8 @@ jobs:
           set -euo pipefail
           # `make package` KHÔNG ký binary. Phải dùng FINALPACKAGE=1 để Theos
           # chạy `ldid -S` trên từng file — thiếu chữ ký là process chết lúc load.
-          ./build.sh SCHEME=${SCHEME}
+          set -o pipefail
+          ./build.sh SCHEME=${SCHEME} 2>&1 | tee "$RUNNER_TEMP/build.log"
 
       - name: Kiểm tra sản phẩm
         run: |
@@ -87,6 +88,14 @@ jobs:
             echo "| --- | --- | --- |"
             echo "| ${SCHEME} | ${PACKAGE_ARCH} | $(du -h "$DEB" | cut -f1) |"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: buildlog-${{ matrix.scheme }}-${{ github.sha }}
+          path: ${{ runner.temp }}/build.log
+          if-no-files-found: ignore
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
