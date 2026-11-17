@@ -32,8 +32,8 @@ Bảng chọn gói:
 
 | File | Dùng cho | Package arch |
 |---|---|---|
-| `com.hthancder.siribridge_0.1.1_iphoneos-arm64.deb` | jailbreak **rootless** (cài vào `/var/jb`) | `iphoneos-arm64` |
-| `com.hthancder.siribridge_0.1.1_iphoneos-arm64e.deb` | **roothide** Bootstrap | `iphoneos-arm64e` |
+| `com.hthancder.siribridge_0.2.0_iphoneos-arm64.deb` | jailbreak **rootless** (cài vào `/var/jb`) | `iphoneos-arm64` |
+| `com.hthancder.siribridge_0.2.0_iphoneos-arm64e.deb` | **roothide** Bootstrap | `iphoneos-arm64e` |
 
 > Bản roothide có trường `Architecture: iphoneos-arm64e` **theo quy ước của roothide**
 > (roothide/theos tự ép giá trị này). Code bên trong vẫn là **arm64 thuần** —
@@ -284,8 +284,8 @@ Release gần nhất: <https://github.com/Hthancder/ArenaAIWorkspace-1/releases/
 
 | File | Kích thước | scheme |
 |---|---|---|
-| `com.hthancder.siribridge_0.1.2_iphoneos-arm64.deb` | ~173 KB | rootless |
-| `com.hthancder.siribridge_0.1.2_iphoneos-arm64e.deb` | ~173 KB | roothide |
+| `com.hthancder.siribridge_0.2.0_iphoneos-arm64.deb` | ~70 KB | rootless |
+| `com.hthancder.siribridge_0.2.0_iphoneos-arm64e.deb` | ~70 KB | roothide |
 
 ---
 
