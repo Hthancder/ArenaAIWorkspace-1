@@ -4,6 +4,7 @@
 Dùng: python3 tools/verify_deb.py <file.deb> <package_arch_mong_doi>
 """
 import os
+import plistlib
 import struct
 import subprocess
 import sys
@@ -84,6 +85,39 @@ def main() -> None:
     loader = find("Library/PreferenceLoader/Preferences/SiriBridge.plist")
     if not loader:
         fail("thiếu PreferenceLoader entry → sẽ không hiện trong Settings")
+
+    # Kiểm tra cấu hình PreferenceLoader và PreferenceBundle ngay trong CI.
+    # Thiếu isController làm entry custom detail không được mở như controller.
+    try:
+        with open(loader, "rb") as fh:
+            entry_plist = plistlib.load(fh)
+        entry = entry_plist.get("entry", {})
+        if not isinstance(entry, dict):
+            fail("PreferenceLoader entry phải là dictionary")
+        for key in ("bundle", "cell", "detail", "label"):
+            if not entry.get(key):
+                fail(f"PreferenceLoader entry thiếu key '{key}'")
+        if entry["bundle"] != "SiriBridgePrefs":
+            fail(f"PreferenceLoader bundle='{entry['bundle']}', cần SiriBridgePrefs")
+        if entry["detail"] != "SBRootListController":
+            fail(f"PreferenceLoader detail='{entry['detail']}', controller không khớp")
+        if not entry.get("isController"):
+            fail("PreferenceLoader entry thiếu isController=true")
+    except (OSError, plistlib.InvalidFileException) as exc:
+        fail(f"PreferenceLoader entry không đọc được: {exc}")
+
+    bundle_dir = os.path.dirname(prefs)
+    info_path = os.path.join(bundle_dir, "Info.plist")
+    try:
+        with open(info_path, "rb") as fh:
+            info = plistlib.load(fh)
+        if info.get("CFBundleExecutable") != "SiriBridgePrefs":
+            fail("PreferenceBundle Info.plist trỏ sai CFBundleExecutable")
+        if info.get("NSPrincipalClass") != "SBRootListController":
+            fail("PreferenceBundle Info.plist trỏ sai NSPrincipalClass")
+    except (OSError, plistlib.InvalidFileException) as exc:
+        fail(f"PreferenceBundle Info.plist không đọc được: {exc}")
+    print("OK PreferenceLoader entry + PreferenceBundle principal class")
 
     rel = os.path.relpath(dylib, tmp)
     print(f"OK layout: {rel}")

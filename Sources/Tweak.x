@@ -230,7 +230,7 @@ static void SBGuardWrite(NSString *bundle, NSString *state, NSString *detail) {
         NSMutableDictionary *all = [[NSDictionary dictionaryWithContentsOfFile:SBGuardPlist] mutableCopy]
                                     ?: [NSMutableDictionary dictionary];
         all[bundle ?: @"?"] = @{@"state": state ?: @"?", @"detail": detail ?: @"",
-                                @"date": [NSDate date], @"ver": @"0.2.0"};
+                                @"date": [NSDate date], @"ver": @"0.2.1"};
         [all writeToFile:SBGuardPlist atomically:YES];
     } @catch (__unused NSException *e) {}
 }

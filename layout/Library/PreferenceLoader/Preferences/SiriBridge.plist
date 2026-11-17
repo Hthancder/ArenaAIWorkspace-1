@@ -10,6 +10,9 @@
 		<string>PSLinkCell</string>
 		<key>detail</key>
 		<string>SBRootListController</string>
+		<!-- PreferenceLoader phải biết detail là controller, không phải view lẻ. -->
+		<key>isController</key>
+		<true/>
 		<key>label</key>
 		<string>SiriBridge</string>
 	</dict>

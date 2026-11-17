@@ -1,8 +1,13 @@
 # 08 · Không thấy mục SiriBridge trong Cài đặt
 
 Mục trong Cài đặt do **PreferenceLoader** tạo ra từ file
-`…/Library/PreferenceLoader/Preferences/SiriBridge.plist`. Không hiện = một
-trong các nguyên nhân dưới.
+`…/Library/PreferenceLoader/Preferences/SiriBridge.plist`; file entry phải trỏ đúng
+`SiriBridgePrefs` và controller `SBRootListController`. Bản hiện tại khai báo rõ
+`isController=true`; CI cũng đọc plist entry và `Info.plist` của bundle để bắt lỗi
+đường dẫn/class ngay khi đóng gói. Không hiện thường do một trong các nguyên nhân dưới.
+
+Định dạng entry tham khảo implementation của [PreferenceLoader](https://github.com/ArtikusHG/PreferenceLoader/blob/master/Tweak.xm)
+(và API `specifiersFromEntry` trong [Theos headers](https://github.com/theos/headers/blob/master/libprefs/prefs.h)).
 
 ## A. Cài nhầm bản (hay gặp nhất)
 

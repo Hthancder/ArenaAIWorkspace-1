@@ -171,6 +171,7 @@ static NSString *const kDomain = @"com.hthancder.siribridge";
     [super viewDidLoad];
     SBLog(@"prefs: viewDidLoad (class %@)", NSStringFromClass([self class]));
     self.view.backgroundColor = [SBTheme bg];
+    self.navigationItem.title = @"SiriBridge";
     if (@available(iOS 13.0, *)) self.overrideUserInterfaceStyle = UIUserInterfaceStyleUnspecified;
 
     self.scrollView = [[UIScrollView alloc] init];
