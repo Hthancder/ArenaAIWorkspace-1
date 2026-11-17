@@ -106,3 +106,23 @@ jobs:
             packages/SHA256SUMS-${{ matrix.scheme }}
           if-no-files-found: error
 
+      - name: Release
+        if: github.event_name == 'workflow_dispatch' || github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('ci-{0}', github.run_number) }}
+          name: ${{ github.ref_type == 'tag' && github.ref_name || format('CI build #{0}', github.run_number) }}
+          body: |
+            SiriBridge cho iOS 15 (arm64) — hai bản **rootless** và **roothide**. Không có bản rootful.
+
+            | File | Dùng cho |
+            | --- | --- |
+            | `*_iphoneos-arm64.deb` | jailbreak rootless (Dopamine / palera1n 15, `/var/jb`) |
+            | `*_iphoneos-arm64e.deb` | roothide Bootstrap (package arch arm64e, code vẫn là arm64) |
+
+            Cài: mở bằng Sileo/Zebra, hoặc `dpkg -i` trong terminal trên máy.
+          files: |
+            packages/*.deb
+            packages/SHA256SUMS-${{ matrix.scheme }}
+          fail_on_unmatched_files: true
+          generate_release_notes: false
