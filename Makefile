@@ -25,17 +25,19 @@ ADDITIONAL_CFLAGS = -Wno-unguarded-availability-new -Wno-nullability-completenes
 SiriBridge_CFLAGS = -fobjc-arc -I Sources -Wno-deprecated-declarations -Wno-unused-function
 SiriBridge_FRAMEWORKS = Foundation UIKit AVFoundation MediaPlayer EventKit Contacts CoreFoundation
 # Symbol của Siri/SpringBoard không link được lúc build — resolve ở runtime
-# -headerpad: chừa chỗ trong header để tools/sb_codesign.py thêm LC_CODE_SIGNATURE
-# (toolchain zig trên Linux không ký ad-hoc; không có chữ ký → SpringBoard/Siri sập)
-SiriBridge_LDFLAGS = -Wl,-undefined,dynamic_lookup -Wl,-headerpad,0x1000
+SiriBridge_LDFLAGS = -Wl,-undefined,dynamic_lookup
 
 include $(THEOS)/makefiles/tweak.mk
 
 SUBPROJECTS += Prefs
 include $(THEOS)/makefiles/aggregate.mk
 
-# Linux/zig: dùng shim tools/bin/ldid (no-op) trừ khi có ldid thật.
-TARGET_CODESIGN = $(or $(shell command -v ldid 2>/dev/null),$(CURDIR)/tools/bin/ldid)
+# ldid THẬT (brew install ldid). Không fallback sang shim no-op nữa:
+# binary không ký = dyld từ chối = process chết = safe mode.
+TARGET_CODESIGN = $(shell command -v ldid 2>/dev/null)
+ifeq ($(strip $(TARGET_CODESIGN)),)
+$(warning Không tìm thấy ldid — binary sẽ KHÔNG được ký. Chạy: brew install ldid)
+endif
 
 after-install::
 	install.exec "killall -9 SpringBoard || true"

@@ -1,43 +1,61 @@
 #!/usr/bin/env bash
 # build.sh — build SiriBridge
 #
-#  macOS + Theos (khuyến nghị, toolchain chính thức):
-#     ./build.sh
+#   ./build.sh                        # rootless, ký bằng ldid thật (macOS)
+#   ./build.sh SCHEME=roothide        # roothide
+#   ./build.sh THEOS=/opt/theos SCHEME=roothide
 #
-#  Linux (đã test trong sandbox dự án): cần
-#     - Theos đã `--recursive`
-#     - SDK iPhoneOS15.6.sdk trong $THEOS/sdks (từ github.com/theos/sdks)
-#     - zig 0.13.x  (pip install ziglang==0.13.0)
-#     - rsync
-#   rồi: ZIG_BIN=/path/to/zig THEOS=/path/to/theos ./build.sh --linux
+# Cần (macOS): Theos (https://theos.dev), ldid (`brew install ldid`),
+# dpkg (`brew install dpkg`), Xcode Command Line Tools.
 #
+# Ghi chú quan trọng: dùng FINALPACKAGE=1. `make package` thường KHÔNG ký
+# binary; thiếu chữ ký ad-hoc là process chết ngay khi dyld load.
 set -euo pipefail
 cd "$(dirname "$0")"
 
-MODE="macos"
-if [[ "${1:-}" == "--linux" ]]; then MODE="linux"; shift; fi
-ARGS=("$@")   # forward SCHEME=rootless|roothide (và mọi biến make khác)
+if [[ "${1:-}" == "--linux" ]]; then
+  cat >&2 <<'EOF'
+LỖI: chế độ build bằng zig trên Linux đã bị bỏ.
 
-if [[ "$MODE" == "linux" ]]; then
-  : "${THEOS:?cần export THEOS}"
-  : "${ZIG_BIN:?cần export ZIG_BIN (đường dẫn tới binary zig 0.13.x)}"
-  STUB="$(pwd)/tools/theos-toolchain-stub/bin"
-  mkdir -p "$THEOS/toolchain/linux/iphone/bin"
-  for t in clang clang++; do
-    ln -sf "$STUB/$t" "$THEOS/toolchain/linux/iphone/bin/$t"
-  done
-  export ZIG_BIN
-  export PATH="$(pwd)/tools/bin:$PATH"   # shim ldid no-op
-  # zig không tự tìm libSystem trong SDK → cần -L; wrapper đã xử lý
-  set -- "${ARGS[@]+"${ARGS[@]}"}"
-  make package "$@"
-else
-  : "${THEOS:?cần cài Theos: https://theos.dev}"
-  make clean >/dev/null 2>&1 || true
-  set -- "${ARGS[@]+"${ARGS[@]}"}"
-  make package FINALPACKAGE=1 "$@"
+Lý do: linker của zig sinh LC_LOAD_DYLINKER trong một MH_DYLIB — Mach-O
+không hợp lệ với dyld của iOS, và zig không ký ad-hoc được. Đây chính là
+nguyên nhân gây sập/safe mode. Xem docs/09-ly-do-chuyen-sang-macos.md.
+
+Build trên macOS:
+    brew install ldid dpkg
+    git clone --recursive https://github.com/theos/theos.git ~/theos
+    git clone --depth 1 https://github.com/theos/sdks.git && \
+      cp -R sdks/iPhoneOS15.6.sdk ~/theos/sdks/
+    export THEOS=~/theos
+    ./build.sh
+EOF
+  exit 1
 fi
+
+: "${THEOS:?cần export THEOS (https://theos.dev)}"
+
+command -v ldid >/dev/null 2>&1 || {
+  echo "LỖI: không có ldid. Chạy: brew install ldid" >&2
+  exit 1
+}
+
+ARGS=("$@")
+
+make clean >/dev/null 2>&1 || true
+rm -rf Prefs/.theos packages
+
+# FINALPACKAGE=1  → Theos chạy `ldid -S` trên dylib và bundle (BẮT BUỘC)
+make package FINALPACKAGE=1 "${ARGS[@]}"
 
 echo
 echo "==> Sản phẩm:"
 ls -la packages/*.deb 2>/dev/null || true
+
+echo
+echo "==> Kiểm tra:"
+DEB="$(ls packages/*.deb | head -n1)"
+case "$DEB" in
+  *arm64e*) ARCH=iphoneos-arm64e ;;
+  *)        ARCH=iphoneos-arm64 ;;
+esac
+python3 tools/verify_deb.py "$DEB" "$ARCH" --strict

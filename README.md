@@ -218,33 +218,20 @@ Tắt tools thường cho câu trả lời chất lượng hơn (giống nhận 
 
 ## 6. Build
 
-### macOS (chính thức)
 ```bash
-export THEOS=~/theos
-./build.sh
-# hoặc
-make package FINALPACKAGE=1
+brew install ldid dpkg
+export THEOS=~/theos          # git clone --recursive https://github.com/theos/theos.git
+./build.sh                    # rootless
+./build.sh SCHEME=roothide    # roothide
 ```
 
-### Linux (đã kiểm chứng trong sandbox của dự án)
-Yêu cầu: Theos clone `--recursive`, SDK `iPhoneOS15.6.sdk` (từ `theos/sdks`),
-`zig` 0.13.x (`pip install ziglang==0.13.0`), `rsync`, `dpkg-deb`.
+`build.sh` chạy `make package FINALPACKAGE=1` để Theos **ký ad-hoc bằng `ldid`
+thật**, rồi tự chạy `tools/verify_deb.py --strict`.
 
-```bash
-export THEOS=/path/to/theos
-export ZIG_BIN=/path/to/zig
-./build.sh --linux
-```
-
-Cách hoạt động: `tools/theos-toolchain-stub/bin/clang` là wrapper gọi
-`zig cc --target aarch64-ios`, tự thêm `-isystem <SDK>/usr/include`,
-`-F<SDK>/System/Library/Frameworks`, `-L<SDK>/usr/lib`, `-fno-modules`.
-`build.sh --linux` symlink wrapper vào `$THEOS/toolchain/linux/iphone/bin/`.
-
-### Ký
-Rootless (ElleKit / libhooker) nạp dylib **không cần** chữ ký.
-Trên CI/máy Linux không có `ldid`, build dùng shim `tools/bin/ldid` (no-op);
-nếu muốn ký ad-hoc: `make package TARGET_CODESIGN=$(command -v ldid)`.
+Build bằng zig trên Linux **đã bị bỏ** — nó sinh Mach-O hỏng
+(`LC_LOAD_DYLINKER` trong dylib + mạch load command rác), chính là nguyên nhân
+safe mode và lỗi không thấy mục trong Cài đặt. Chi tiết:
+`docs/09-ly-do-chuyen-sang-macos.md`.
 
 ### CI (GitHub Actions)
 `.github/workflows/build.yml` chạy trên mọi branch, **matrix 2 job**:
@@ -254,10 +241,17 @@ nếu muốn ký ad-hoc: `make package TARGET_CODESIGN=$(command -v ldid)`.
 | `rootless` | `theos/theos` | `iphoneos-arm64` |
 | `roothide` | `roothide/theos` (clone `--recursive`, có `vendor/mod/roothide`) | `iphoneos-arm64e` |
 
-Mỗi job: Ubuntu + zig 0.13 + SDK iPhoneOS15.6 → verify Mach-O là arm64
-(`cpusubtype & 0xff == 0`, từ chối arm64e), kiểm tra không có layout rootful,
-`dpkg-deb -c/-f`, upload artifact + `SHA256SUMS`, và phát hành Release
-(một Release chứa **cả hai** .deb) khi tag `v*` hoặc chạy tay.
+Mỗi job chạy trên `macos-14`: Theos + `ldid` (brew) + SDK iPhoneOS15.6 →
+build `FINALPACKAGE=1` (ký thật), rồi verify:
+
+* arm64 thuần (`cpusubtype & 0xff == 0`), từ chối arm64e;
+* **không** có `LC_LOAD_DYLINKER` trong dylib, mạch load command hợp lệ;
+* chữ ký ad-hoc hợp lệ (superblob, SHA-256, hash từng trang);
+* không phụ thuộc substrate, filter chỉ `com.apple.SiriViewService`;
+* không có layout rootful.
+
+Sau đó upload artifact + `SHA256SUMS` và phát hành Release (một Release chứa
+**cả hai** .deb) khi tag `v*` hoặc chạy tay.
 Trạng thái: https://github.com/Hthancder/ArenaAIWorkspace-1/actions
 
 ---
@@ -321,7 +315,7 @@ Bản 0.1.1 sửa đúng nguyên nhân gây safe mode khi respring. Tóm tắt (
 
 | Nguyên nhân | Sửa |
 |---|---|
-| Binary **không có chữ ký** (ldid shim no-op trên Linux) | `tools/sb_codesign.py` ký ad-hoc thật, CI verify hash từng trang |
+| Build bằng **zig trên Linux** sinh Mach-O hỏng: `LC_LOAD_DYLINKER` trong dylib + mạch load command bị rác | chuyển sang **macOS runner** (clang + ld64 + `ldid` thật); CI chặn nếu còn `LC_LOAD_DYLINKER` |
 | Dylib phụ thuộc `MSHookMessageEx` (chỉ có khi substrate đã nạp) | bỏ Logos, hook bằng `class_replaceMethod` của libobjc |
 | Inject vào **SpringBoard** dù không có hook nào ở đó | plist chỉ còn `com.apple.SiriViewService` |
 | `%ctor` làm I/O nặng (plist, CFPreferences, dlopen) trên main thread | hoãn 1.5 s, bọc `@try`, có **crash-loop guard** |

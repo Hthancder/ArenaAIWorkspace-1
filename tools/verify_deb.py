@@ -10,6 +10,9 @@ import sys
 import tempfile
 
 CPU_TYPE_ARM64 = 0x0100000C
+LC_LOAD_DYLINKER = 0x0E
+MH_DYLIB = 6
+MH_BUNDLE = 8
 CPU_SUBTYPE_MASK = 0x00FFFFFF   # bỏ bit capability (arm64e = 0x80000002)
 MACHO_64_LE = 0xFEEDFACF
 
@@ -104,6 +107,34 @@ def main() -> None:
             fail(f"{os.path.basename(path)} cpusubtype={subtype:#x} → không phải arm64 ALL")
         print(f"OK {os.path.basename(path)}: Mach-O arm64, cpusubtype={subtype:#x} (ALL, không arm64e)")
 
+    # --- 3b. Cấu trúc load command phải là Mach-O THẬT ---
+    # zig tự sửa load command cuối thành LC_LOAD_DYLINKER và làm hỏng mạch
+    # load command. dyld gặp file này là chết ngay khi load → safe mode.
+    for path in (dylib, prefs):
+        with open(path, "rb") as fh:
+            blob = fh.read()
+        ncmds = struct.unpack("<I", blob[16:20])[0]
+        sizeofcmds = struct.unpack("<I", blob[20:24])[0]
+        off, seen = 32, []
+        for _ in range(ncmds):
+            if off + 8 > len(blob):
+                fail(f"{os.path.basename(path)}: load command vượt quá cuối file "
+                     f"(header hỏng — toolchain lỗi)")
+            cmd, size_ = struct.unpack("<II", blob[off:off + 8])
+            if size_ < 8:
+                fail(f"{os.path.basename(path)}: load command {cmd:#x} có size={size_} "
+                     f"(header hỏng — toolchain lỗi)")
+            seen.append(cmd)
+            off += size_
+        if off != 32 + sizeofcmds:
+            fail(f"{os.path.basename(path)}: sizeofcmds={sizeofcmds} nhưng quét được "
+                 f"{off - 32} byte (header hỏng — toolchain lỗi)")
+        if LC_LOAD_DYLINKER in seen:
+            fail(f"{os.path.basename(path)}: có LC_LOAD_DYLINKER trong "
+                 f"{'MH_DYLIB' if struct.unpack('<I', blob[12:16])[0] == MH_DYLIB else 'Mach-O'}"
+                 f" — dyld sẽ từ chối file này (lỗi của zig ld trên Linux)")
+        print(f"OK {os.path.basename(path)}: {ncmds} load command hợp lệ, không có LC_LOAD_DYLINKER")
+
     # --- 4. Bắt buộc có chữ ký ad-hoc (thiếu = SpringBoard/Siri sập khi load) ---
     for path in (dylib, prefs):
         with open(path, "rb") as fh:
@@ -118,6 +149,10 @@ def main() -> None:
         if not cs:
             fail(f"{os.path.basename(path)} KHÔNG có LC_CODE_SIGNATURE "
                  f"(toolchain Linux không ký → phải chạy tools/sb_codesign.py)")
+        ftype = struct.unpack("<I", blob[12:16])[0]
+        if ftype not in (MH_DYLIB, MH_BUNDLE):
+            fail(f"{os.path.basename(path)}: filetype={ftype}, cần MH_DYLIB(6) hoặc MH_BUNDLE(8)")
+
         dataoff, datasize = cs
         if datasize < 1000:
             fail(f"{os.path.basename(path)} chữ ký quá nhỏ ({datasize} B)")

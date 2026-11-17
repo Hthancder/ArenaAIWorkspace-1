@@ -2,13 +2,13 @@ name: build
 
 on:
   push:
-    branches: ['**']      # chạy trên mọi branch để test tweak
+    branches: ['**']
     tags: ['v*']
   pull_request:
   workflow_dispatch:
 
 permissions:
-  contents: write      # để tạo Release kèm .deb
+  contents: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -17,52 +17,40 @@ concurrency:
 jobs:
   deb:
     name: .deb (${{ matrix.scheme }}, arm64, iOS 15)
-    # Không dùng macOS runner (tốn phí). Build bằng zig trên Ubuntu.
-    runs-on: ubuntu-latest
+    # Toolchain chính thức của Apple: clang + ld64 + ldid + dpkg-deb THẬT.
+    # Không dùng zig trên Linux nữa — xem docs/09-ly-do-chuyen-sang-macos.md
+    runs-on: macos-14
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Rootless: Theos upstream, cài vào /var/jb
           - scheme: rootless
             theos_repo: https://github.com/theos/theos.git
             package_arch: iphoneos-arm64
-          # RootHide: cần fork roothide/theos (có vendor/mod/roothide + libroothide.tbd)
-          # Package arch = iphoneos-arm64e theo quy ước roothide, nhưng Mach-O bên trong vẫn là arm64.
           - scheme: roothide
             theos_repo: https://github.com/roothide/theos.git
             package_arch: iphoneos-arm64e
     env:
       SCHEME: ${{ matrix.scheme }}
       PACKAGE_ARCH: ${{ matrix.package_arch }}
+      HOMEBREW_NO_AUTO_UPDATE: 1
+      HOMEBREW_NO_INSTALL_CLEANUP: 1
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Cài phụ thuộc
+      - name: Cài Theos + ldid
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            make git rsync dpkg fakeroot xz-utils curl ca-certificates python3
-          python3 -m pip install "ziglang==0.13.0"
-
-      - name: Kiểm tra toolchain
-        run: |
-          # wheel ziglang không cài binary vào PATH, chỉ có module + binary trong site-packages
-          ZIG="$(python3 -c 'import ziglang,os;print(os.path.join(os.path.dirname(ziglang.__file__),"zig"))')"
-          chmod +x "$ZIG"
-          "$ZIG" version
-          echo "ZIG_BIN=$ZIG" >> "$GITHUB_ENV"
-
-      - name: Lấy Theos (${{ matrix.scheme }})
-        run: |
-          # --recursive là bắt buộc: roothide/theos để module trong submodule vendor/
+          set -euo pipefail
+          brew install ldid dpkg xz rsync
           git clone --recursive --depth 1 "${{ matrix.theos_repo }}" "$RUNNER_TEMP/theos"
           mkdir -p "$RUNNER_TEMP/theos/sdks"
           echo "THEOS=$RUNNER_TEMP/theos" >> "$GITHUB_ENV"
+          echo "PATH=$RUNNER_TEMP/theos/bin:$PATH" >> "$GITHUB_ENV"
 
       - name: Lấy iOS SDK 15.6
         run: |
+          set -euo pipefail
           git clone --depth 1 --filter=blob:none --sparse https://github.com/theos/sdks.git "$RUNNER_TEMP/sdks"
           cd "$RUNNER_TEMP/sdks"
           git sparse-checkout set iPhoneOS15.6.sdk
@@ -71,8 +59,10 @@ jobs:
 
       - name: Build (${{ matrix.scheme }})
         run: |
-          chmod +x build.sh tools/*.sh tools/*.py tools/bin/* tools/theos-toolchain-stub/bin/*
-          ./build.sh --linux SCHEME=${SCHEME}
+          set -euo pipefail
+          # `make package` KHÔNG ký binary. Phải dùng FINALPACKAGE=1 để Theos
+          # chạy `ldid -S` trên từng file — thiếu chữ ký là process chết lúc load.
+          ./build.sh SCHEME=${SCHEME}
 
       - name: Kiểm tra sản phẩm
         run: |
@@ -81,22 +71,20 @@ jobs:
           echo "DEB=$DEB" >> "$GITHUB_ENV"
           echo "--- cấu trúc gói ---"
           dpkg-deb -c "$DEB"
-          # --strict: thêm kiểm tra chống safe mode (không phụ thuộc substrate,
-          # filter chỉ inject SiriViewService, chữ ký ad-hoc hợp lệ)
           python3 tools/verify_deb.py "$DEB" "${PACKAGE_ARCH}" --strict
-          echo "SIZE=$(stat -c%s "$DEB")" >> "$GITHUB_ENV"
+          echo "SIZE=$(stat -f%z "$DEB")" >> "$GITHUB_ENV"
 
       - name: SHA256 + job summary
         run: |
           set -euo pipefail
           BASE="$(basename "$DEB")"
-          ( cd packages && sha256sum "$BASE" > "SHA256SUMS-${SCHEME}" )
+          ( cd packages && shasum -a 256 "$BASE" > "SHA256SUMS-${SCHEME}" )
           cat "packages/SHA256SUMS-${SCHEME}" >> "$GITHUB_STEP_SUMMARY"
           {
             echo ""
             echo "| scheme | package arch | dung lượng |"
             echo "| --- | --- | --- |"
-            echo "| ${SCHEME} | ${PACKAGE_ARCH} | $(numfmt --to=iec "$SIZE") |"
+            echo "| ${SCHEME} | ${PACKAGE_ARCH} | $(du -h "$DEB" | cut -f1) |"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload artifact
@@ -122,7 +110,7 @@ jobs:
             | `*_iphoneos-arm64.deb` | jailbreak rootless (Dopamine / palera1n 15, `/var/jb`) |
             | `*_iphoneos-arm64e.deb` | roothide Bootstrap (package arch arm64e, code vẫn là arm64) |
 
-            Cài: mở bằng Sileo/Zebra, hoặc `dpkg -i` trong terminal trên máy.
+            Build bằng **macOS runner + Theos chính thức** (clang, ld64, ldid), không còn zig.
           files: |
             packages/*.deb
             packages/SHA256SUMS-${{ matrix.scheme }}
