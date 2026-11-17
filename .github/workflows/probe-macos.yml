@@ -1,5 +1,5 @@
 name: probe-macos
-on: workflow_dispatch
+on: [push, workflow_dispatch]
 jobs:
   p:
     strategy:
@@ -8,4 +8,4 @@ jobs:
         os: [macos-15, macos-15-intel, macos-14, macos-13, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - run: uname -m && sw_vers
+      - run: uname -m && sw_vers && ls /Applications | grep -i xcode
