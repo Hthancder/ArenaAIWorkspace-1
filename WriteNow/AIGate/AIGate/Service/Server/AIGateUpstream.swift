@@ -78,7 +78,7 @@ extension AIGateUpstream {
 
         self.init(
             endpointID: endpoint.id,
-            endpointName: endpoint.displayTitle,
+            endpointName: endpoint.displayName,
             url: endpoint.url,
             host: host,
             port: port,
