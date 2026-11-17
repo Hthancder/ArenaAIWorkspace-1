@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# ldid giả lập cho môi trường build Linux không có ldid thật.
+#
+# Theos gọi:  ldid -S <file>      (ký ad-hoc)  →  ta không làm gì cả.
+# Trên rootless (ElleKit / libhooker), dylib KHÔNG cần chữ ký để được nạp,
+# nên bỏ bước ký là an toàn và không ảnh hưởng chức năng.
+#
+# Nếu bạn muốn ký thật: cài `ldid` (Procursus/Homebrew) và xoá file này
+# khỏi PATH, hoặc chạy: make package TARGET_CODESIGN=/usr/bin/ldid
+exit 0

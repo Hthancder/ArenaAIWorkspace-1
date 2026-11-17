@@ -29,8 +29,10 @@ include $(THEOS)/makefiles/tweak.mk
 SUBPROJECTS += Prefs
 include $(THEOS)/makefiles/aggregate.mk
 
-# Tắt bước ký mặc định nếu máy build không có ldid (Linux/zig)
-TARGET_CODESIGN ?= ldid
+# Linux/zig: không có ldid → bỏ qua bước ký (rootless không cần chữ ký).
+# Máy macOS có ldid thì tự dùng ldid; muốn ký ad-hoc: TARGET_CODESIGN=ldid
+# Linux/zig: dùng shim tools/bin/ldid (no-op) trừ khi có ldid thật.
+TARGET_CODESIGN = $(or $(shell command -v ldid 2>/dev/null),$(CURDIR)/tools/bin/ldid)
 
 after-install::
 	install.exec "killall -9 SpringBoard || true"

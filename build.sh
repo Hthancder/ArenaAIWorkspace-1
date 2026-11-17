@@ -26,8 +26,9 @@ if [[ "$MODE" == "linux" ]]; then
     ln -sf "$STUB/$t" "$THEOS/toolchain/linux/iphone/bin/$t"
   done
   export ZIG_BIN
+  export PATH="$(pwd)/tools/bin:$PATH"   # shim ldid no-op
   # zig không tự tìm libSystem trong SDK → cần -L; wrapper đã xử lý
-  make package TARGET_CODESIGN=true
+  make package
 else
   : "${THEOS:?cần cài Theos: https://theos.dev}"
   make clean >/dev/null 2>&1 || true
