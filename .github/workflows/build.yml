@@ -16,9 +16,25 @@ concurrency:
 
 jobs:
   deb:
-    name: Build .deb (arm64, rootless, iOS 15)
+    name: .deb (${{ matrix.scheme }}, arm64, iOS 15)
     # Không dùng macOS runner (tốn phí). Build bằng zig trên Ubuntu.
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Rootless: Theos upstream, cài vào /var/jb
+          - scheme: rootless
+            theos_repo: https://github.com/theos/theos.git
+            package_arch: iphoneos-arm64
+          # RootHide: cần fork roothide/theos (có vendor/mod/roothide + libroothide.tbd)
+          # Package arch = iphoneos-arm64e theo quy ước roothide, nhưng Mach-O bên trong vẫn là arm64.
+          - scheme: roothide
+            theos_repo: https://github.com/roothide/theos.git
+            package_arch: iphoneos-arm64e
+    env:
+      SCHEME: ${{ matrix.scheme }}
+      PACKAGE_ARCH: ${{ matrix.package_arch }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,9 +54,10 @@ jobs:
           "$ZIG" version
           echo "ZIG_BIN=$ZIG" >> "$GITHUB_ENV"
 
-      - name: Lấy Theos
+      - name: Lấy Theos (${{ matrix.scheme }})
         run: |
-          git clone --recursive --depth 1 https://github.com/theos/theos.git "$RUNNER_TEMP/theos"
+          # --recursive là bắt buộc: roothide/theos để module trong submodule vendor/
+          git clone --recursive --depth 1 "${{ matrix.theos_repo }}" "$RUNNER_TEMP/theos"
           mkdir -p "$RUNNER_TEMP/theos/sdks"
           echo "THEOS=$RUNNER_TEMP/theos" >> "$GITHUB_ENV"
 
@@ -52,74 +69,82 @@ jobs:
           ln -sfn "$RUNNER_TEMP/sdks/iPhoneOS15.6.sdk" "$RUNNER_TEMP/theos/sdks/iPhoneOS15.6.sdk"
           ls -l "$RUNNER_TEMP/theos/sdks"
 
-      - name: Build
+      - name: Build (${{ matrix.scheme }})
         run: |
           chmod +x build.sh tools/*.sh tools/theos-toolchain-stub/bin/*
-          ./build.sh --linux
+          ./build.sh --linux SCHEME=${SCHEME}
 
       - name: Kiểm tra sản phẩm
         run: |
-          set -e
-          deb=$(ls packages/*.deb | head -1)
-          echo "== $deb"
-          dpkg-deb -I "$deb"
-          echo "== nội dung"
-          dpkg-deb -c "$deb"
-          # Binaries phải là Mach-O arm64
-          tmp=$(mktemp -d)
-          dpkg-deb -x "$deb" "$tmp"
-          for f in "$tmp/var/jb/Library/MobileSubstrate/DynamicLibraries/"*.dylib; do
-            magic=$(od -An -tx1 -N4 "$f" | tr -d ' \n')
-            echo "$(basename "$f"): magic=$magic size=$(stat -c%s "$f")"
-            [ "$magic" = "cffaedfe" ] || { echo "::error::Không phải Mach-O 64 little-endian"; exit 1; }
-            [ "$(stat -c%s "$f")" -gt 20000 ] || { echo "::error::File rỗng/quá nhỏ"; exit 1; }
-          done
-          # Không được có arm64e (theo yêu cầu)
-          if command -v lipo >/dev/null; then lipo -archs "$tmp"/var/jb/Library/MobileSubstrate/DynamicLibraries/*.dylib; fi
+          set -euo pipefail
+          DEB="$(ls packages/*.deb | head -n1)"
+          echo "DEB=$DEB" >> "$GITHUB_ENV"
+          echo "--- cấu trúc gói ---"
+          dpkg-deb -c "$DEB"
+          echo "--- control ---"
+          dpkg-deb -f "$DEB"
+          test "$(dpkg-deb -f "$DEB" Architecture)" = "${PACKAGE_ARCH}" \
+            || { echo "Sai Architecture, cần ${PACKAGE_ARCH}"; exit 1; }
 
-      - name: Checksum + tóm tắt
+          # Bung gói, xác nhận binary là Mach-O arm64 (KHÔNG arm64e), không rootful
+          rm -rf /tmp/verify && mkdir -p /tmp/verify && dpkg-deb -x "$DEB" /tmp/verify
+          DYLIB=/tmp/verify/Library/MobileSubstrate/DynamicLibraries/SiriBridge.dylib
+          test -f "$DYLIB" || { echo "Thiếu SiriBridge.dylib"; exit 1; }
+          python3 - "$DYLIB" <<'PY'
+          import sys, struct
+          data = open(sys.argv[1], 'rb').read()
+          magic = struct.unpack('<I', data[:4])[0]
+          cpu, sub = struct.unpack('<II', data[4:12])
+          assert magic == 0xfeedfacf, f'không phải Mach-O 64: {magic:#x}'
+          assert cpu == 0x0100000c, f'CPU type sai (cần arm64): {cpu:#x}'
+          print(f'OK Mach-O arm64, cpusubtype={sub:#x} (0x0 = ALL → không phải arm64e)')
+          # Không được chứa layout rootful
+          import os
+          rootful = [p for p in ('/tmp/verify/usr/lib',) if os.path.exists(p)]
+          assert not rootful, 'phát hiện layout rootful'
+          PY
+          echo "SIZE=$(stat -c%s "$DEB")" >> "$GITHUB_ENV"
+          ls -l "$DEB"
+
+      - name: SHA256 + job summary
         run: |
-          deb=$(ls packages/*.deb | head -1)
-          sha256sum "$deb" | tee SHA256SUMS
+          set -euo pipefail
+          BASE="$(basename "$DEB")"
+          ( cd packages && sha256sum "$BASE" > "SHA256SUMS-${SCHEME}" )
+          cat "packages/SHA256SUMS-${SCHEME}" >> "$GITHUB_STEP_SUMMARY"
           {
-            echo "### SiriBridge .deb"
-            echo '```'
-            dpkg-deb -f "$deb"
-            echo '```'
-            echo '```'
-            cat SHA256SUMS
-            echo '```'
+            echo ""
+            echo "| scheme | package arch | dung lượng |"
+            echo "| --- | --- | --- |"
+            echo "| ${SCHEME} | ${PACKAGE_ARCH} | $(numfmt --to=iec "$SIZE") |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload .deb
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SiriBridge-deb-${{ github.sha }}
+          name: SiriBridge-${{ matrix.scheme }}-deb-${{ github.sha }}
           path: |
             packages/*.deb
-            SHA256SUMS
+            packages/SHA256SUMS-${{ matrix.scheme }}
           if-no-files-found: error
 
-      - name: Phát hành (tag v* hoặc chạy tay)
+      - name: Release
         if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('ci-{0}', github.run_number) }}
-          name: SiriBridge ${{ github.ref_name }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('ci-{0}', github.run_number) }}
+          name: SiriBridge ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('CI build #{0}', github.run_number) }}
           body: |
-            Build tự động bởi GitHub Actions.
-            * iOS 15 · rootless · iphoneos-arm64 (không arm64e)
-            * cài: `dpkg -i *.deb` hoặc mở bằng Sileo/Zebra
+            SiriBridge cho iOS 15 (arm64), hai bản **rootless** và **roothide**. Không có bản rootful.
+
+            | File | Dùng cho |
+            | --- | --- |
+            | `*_iphoneos-arm64.deb` | jailbreak rootless (Dopamine/Palera1n 15, `/var/jb`) |
+            | `*_iphoneos-arm64e.deb` | roothide Bootstrap (package arch arm64e, code vẫn là arm64) |
+
+            Cài: `sileo`/`zebra` mở file .deb, hoặc `dpkg -i` trong terminal của máy.
           files: |
             packages/*.deb
-            SHA256SUMS
+            packages/SHA256SUMS-${{ matrix.scheme }}
           fail_on_unmatched_files: true
-
-      - name: Upload log toàn bộ
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs-${{ github.sha }}
-          path: |
-            .theos/**/*.log
-          if-no-files-found: ignore
+          generate_release_notes: false

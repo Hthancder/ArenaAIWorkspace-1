@@ -16,6 +16,7 @@ cd "$(dirname "$0")"
 
 MODE="macos"
 if [[ "${1:-}" == "--linux" ]]; then MODE="linux"; shift; fi
+ARGS=("$@")   # forward SCHEME=rootless|roothide (và mọi biến make khác)
 
 if [[ "$MODE" == "linux" ]]; then
   : "${THEOS:?cần export THEOS}"
@@ -28,11 +29,13 @@ if [[ "$MODE" == "linux" ]]; then
   export ZIG_BIN
   export PATH="$(pwd)/tools/bin:$PATH"   # shim ldid no-op
   # zig không tự tìm libSystem trong SDK → cần -L; wrapper đã xử lý
-  make package
+  set -- "${ARGS[@]+"${ARGS[@]}"}"
+  make package "$@"
 else
   : "${THEOS:?cần cài Theos: https://theos.dev}"
   make clean >/dev/null 2>&1 || true
-  make package FINALPACKAGE=1
+  set -- "${ARGS[@]+"${ARGS[@]}"}"
+  make package FINALPACKAGE=1 "$@"
 fi
 
 echo

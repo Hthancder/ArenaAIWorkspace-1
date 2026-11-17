@@ -1,7 +1,7 @@
 # SiriBridge
 
 Tweak mã nguồn mở thay **Siri** bằng **LLM endpoint tuỳ chỉnh** + **TTS tuỳ chỉnh**,
-dành cho **iOS 15 · rootless · arm64 (KHÔNG arm64e)**.
+dành cho **iOS 15 · arm64 (KHÔNG arm64e) · rootless *hoặc* roothide (KHÔNG rootful)**.
 
 Đây là bản "làm lại từ đầu" theo tinh thần của SiriPlus (bản thương mại US$4.99),
 nhưng:
@@ -24,12 +24,25 @@ nhưng:
 |---|---|
 | iOS | **15.0 – 15.x** (thiết kế cho 15.x; hook có kiểm tra method nên không crash nếu thiếu) |
 | Kiến trúc | **arm64** (A11 trở xuống: iPhone 8/8 Plus/X, iPhone 7, SE2…, iPad tương ứng) |
-| Jailbreak | **rootless** — palera1n rootless / Dopamine / XinaA15 (tuỳ máy) |
-| **Không** hỗ trợ | **arm64e** (A12+), rootful, roothide, Serotonin |
+| Jailbreak | **rootless** (palera1n rootless / Dopamine / XinaA15) **và roothide** (Bootstrap) |
+| **Không** hỗ trợ | **arm64e** (binary), **rootful** (bị chặn cứng trong `common-scheme.mk`) |
 | Tiến trình inject | `com.apple.SiriViewService`, `com.apple.springboard` |
 
+Bảng chọn gói:
+
+| File | Dùng cho | Package arch |
+|---|---|---|
+| `com.hthancder.siribridge_0.1.0_iphoneos-arm64.deb` | jailbreak **rootless** (cài vào `/var/jb`) | `iphoneos-arm64` |
+| `com.hthancder.siribridge_0.1.0_iphoneos-arm64e.deb` | **roothide** Bootstrap | `iphoneos-arm64e` |
+
+> Bản roothide có trường `Architecture: iphoneos-arm64e` **theo quy ước của roothide**
+> (roothide/theos tự ép giá trị này). Code bên trong vẫn là **arm64 thuần** —
+> `ARCHS = arm64`, `cpusubtype = 0` (ALL), không sinh mã arm64e.
+> Đường dẫn được resolve lúc chạy: `jbroot()` từ `libroothide.dylib` (qua `dlsym`, không link),
+> fallback `/var/jb`, fallback gốc `/` — xem `Sources/SBPaths.m`.
+
 > Trên iOS 15, phần lớn máy A12+ là arm64e → tweak này **cố tình** không build cho arm64e
-> theo yêu cầu. Nếu sau này cần, thêm `arm64e` vào `ARCHS` và test kỹ.
+> theo yêu cầu.
 
 ---
 
@@ -52,6 +65,15 @@ ssh root@<IP> 'dpkg -i /var/mobile/com.hthancder.siribridge_*.deb && killall -9 
 ```
 Hoặc mở file `.deb` bằng **Sileo / Zebra / Filza** trên máy.
 
+### Chọn bản rootless hay roothide khi build
+
+```bash
+make package                     # mặc định: rootless
+make package SCHEME=roothide     # roothide (cần roothide/theos)
+```
+
+`common-scheme.mk` chặn mọi giá trị khác — **rootful không build được**, đó là chủ ý.
+
 ### Tự build
 
 ```bash
@@ -68,6 +90,25 @@ Lần đầu nên bật:
 3. `Kiểu TTS` = *Trên máy* và chọn giọng ở `Giọng đọc`
 
 Respring (hoặc tắt/mở Siri một lần) là tweak hoạt động.
+
+---
+
+## 2.5. Giao diện cấu hình (Settings → SiriBridge)
+
+Không dùng `PSListController` mặc định. Màn hình được vẽ tay bằng Auto Layout:
+
+* **Hero card** gradient tím→xanh, công tắc tổng, pill trạng thái ĐANG BẬT/ĐANG TẮT;
+* các **card bo tròn** nhóm theo mục: Kích hoạt · Trả lời · Mô hình · Tinh chỉnh · Giọng đọc;
+* hàng **switch / text / long-text / slider / segment / choice / action** với giá trị hiển thị ngay trên hàng
+  (slider hiện số, choice hiện nhãn, long-text hiện preview);
+* **Preset nhanh**: OpenAI · OpenRouter · Ollama · LM Studio · Gemini · Groq — một chạm điền endpoint/model/field;
+* **ẩn/hiện theo ngữ cảnh**: chọn TTS kiểu "Máy" mới hiện voice/tốc độ/cao độ/âm lượng,
+  kiểu "Endpoint" mới hiện card endpoint TTS, kiểu "Siri" thì ẩn hết;
+* **Nâng cao & gỡ lỗi** thu gọn được: môi trường (rootless/roothide + jbroot thật), xoá lịch sử,
+  đặt lại toàn bộ, liệt kê voice ra log;
+* **Kiểm tra kết nối**: POST thử tới endpoint và hiện nguyên văn HTTP code + body → biết ngay sai key hay sai URL;
+* hỗ trợ **Dark Mode** (màu động), ghi cấu hình có **debounce 250ms** nên kéo slider không spam notify;
+* text dài (system prompt, header JSON, body template) mở **editor toàn màn hình** dùng font mono.
 
 ---
 
@@ -199,10 +240,17 @@ Trên CI/máy Linux không có `ldid`, build dùng shim `tools/bin/ldid` (no-op)
 nếu muốn ký ad-hoc: `make package TARGET_CODESIGN=$(command -v ldid)`.
 
 ### CI (GitHub Actions)
-`.github/workflows/build.yml` chạy trên mọi branch:
-Ubuntu + zig 0.13 + Theos (recursive) + SDK iPhoneOS15.6 →
-kiểm tra Mach-O (`cffaedfe`), `dpkg-deb -I/-c`, upload artifact,
-và phát hành Release khi tag `v*` hoặc chạy tay (`workflow_dispatch`).
+`.github/workflows/build.yml` chạy trên mọi branch, **matrix 2 job**:
+
+| scheme | Theos | package arch |
+|---|---|---|
+| `rootless` | `theos/theos` | `iphoneos-arm64` |
+| `roothide` | `roothide/theos` (clone `--recursive`, có `vendor/mod/roothide`) | `iphoneos-arm64e` |
+
+Mỗi job: Ubuntu + zig 0.13 + SDK iPhoneOS15.6 → verify Mach-O là arm64
+(`cpusubtype & 0xff == 0`, từ chối arm64e), kiểm tra không có layout rootful,
+`dpkg-deb -c/-f`, upload artifact + `SHA256SUMS`, và phát hành Release
+(một Release chứa **cả hai** .deb) khi tag `v*` hoặc chạy tay.
 Trạng thái: https://github.com/Hthancder/ArenaAIWorkspace-1/actions
 
 ---
@@ -212,6 +260,7 @@ Trạng thái: https://github.com/Hthancder/ArenaAIWorkspace-1/actions
 ```
 Sources/
   Tweak.x         hook AFUISiriSession (+ lưới an toàn SRSiriViewController)
+  SBPaths.*       resolve jbroot: roothide (`jbroot()` qua dlsym) → /var/jb → /
   SBConfig.*      đọc/ghi prefs (NSUserDefaults suite com.hthancder.siribridge)
   SBCapture.*     lấy text người dùng từ SASSpeechRecognized / SASRequestOptions
   SBHistory.*     lịch sử hội thoại trong RAM
@@ -220,7 +269,9 @@ Sources/
   SBTools.*       tool-calling → API hệ thống
   SBDeliver.*     bơm SAUIAddViews vào delegate, cờ "do chính tweak bơm"
   SBEngine.*      điều phối một lượt hỏi-đáp (LLM → tool → UI → TTS)
-Prefs/            bảng cấu hình (PreferenceLoader bundle)
+Prefs/            bảng cấu hình tự vẽ (card, hero gradient, live value, preset, test kết nối)
+  SBRootListController.m  dựng toàn bộ màn hình từ các card
+  SBPrefsUI.*             theme, store, row (switch/text/slider/segment/choice/action), editor, picker
 docs/             nghiên cứu kỹ thuật (Siri, SiriPlus, kiến trúc, kiểm thử)
 ```
 

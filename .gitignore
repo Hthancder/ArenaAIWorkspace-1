@@ -4,3 +4,5 @@ Prefs/.theos/
 *.deb
 *.dylib
 .DS_Store
+._*
+Prefs/._*

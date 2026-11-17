@@ -3,7 +3,6 @@
 		bundle = "SiriBridgePrefs";
 		cell = PSLinkCell;
 		detail = "SBRootListController";
-		icon = "icon.png";
 		label = "SiriBridge";
 	};
 }

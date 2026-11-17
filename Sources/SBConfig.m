@@ -1,4 +1,5 @@
 #import "SBConfig.h"
+#import "SBPaths.h"
 #import <notify.h>
 
 NSString *const SBConfigDomain      = @"com.hthancder.siribridge";
@@ -17,8 +18,24 @@ NSString *const SBConfigChangedNote = @"com.hthancder.siribridge/settingsChanged
     return self;
 }
 
+// cfprefsd đôi khi không phục vụ domain cho process bị sandbox (SiriViewService
+// trên một số bản jailbreak) → đọc thẳng plist làm fallback.
+static NSDictionary *SBPreferencesFallback(void) {
+    static NSDictionary *cache; static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        for (NSString *path in SBPathCandidates(SBPrimaryPreferencesPath())) {
+            NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:path];
+            if (dict.count) { cache = dict; return; }
+        }
+        cache = @{};
+    });
+    return cache;
+}
+
 static id SBGet(NSUserDefaults *d, NSString *k, id def) {
     id v = [d objectForKey:k];
+    if (v) return v;
+    v = SBPreferencesFallback()[k];
     return v ?: def;
 }
 
