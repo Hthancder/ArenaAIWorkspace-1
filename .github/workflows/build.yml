@@ -101,10 +101,23 @@ jobs:
           git checkout -q --orphan ci-log-tmp || exit 0
           git rm -rq --cached . >/dev/null 2>&1 || true
           mkdir -p ci-logs
+          # Mỗi scheme ghi file riêng nhưng cùng push một nhánh: đọc file cũ
+          # về trước để không ghi đè log của job kia.
+          git fetch -q origin ci-log 2>/dev/null && \
+            git checkout -q FETCH_HEAD -- ci-logs 2>/dev/null || true
           cp "$RUNNER_TEMP/build.log" "ci-logs/${SCHEME}-${GITHUB_RUN_ID}.log"
           git add -f "ci-logs/${SCHEME}-${GITHUB_RUN_ID}.log"
-          git commit -qm "ci log ${SCHEME} ${GITHUB_RUN_ID}"
-          git push -f -q origin HEAD:ci-log && echo "log tại nhánh ci-log"
+          git commit -qm "ci log ${SCHEME} ${GITHUB_RUN_ID}" || exit 0
+          for i in 1 2 3; do
+            git push -f -q origin HEAD:ci-log && break
+            sleep 5
+            git fetch -q origin ci-log 2>/dev/null && \
+              git checkout -q FETCH_HEAD -- ci-logs 2>/dev/null || true
+            cp "$RUNNER_TEMP/build.log" "ci-logs/${SCHEME}-${GITHUB_RUN_ID}.log"
+            git add -f "ci-logs/${SCHEME}-${GITHUB_RUN_ID}.log"
+            git commit -qm "ci log ${SCHEME} ${GITHUB_RUN_ID}" || true
+          done
+          echo "log tại nhánh ci-log"
 
       - name: Upload build log
         if: always()

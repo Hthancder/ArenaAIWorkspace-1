@@ -166,17 +166,27 @@ def main() -> None:
         (_magic, _len, _ver, _flags, hash_off, _ident, _nspec, ncode,
          code_limit, hash_size, hash_type, _plat, page_log, _spare, _scatter) = \
             struct.unpack(">IIIIIIIIIBBBBII", cd[:48])
-        if hash_type != 2 or hash_size != 32:
-            fail(f"{os.path.basename(path)} hashType={hash_type} (cần 2 = SHA-256)")
-        page = 1 << page_log
+        # ldid mặc định SHA-1 (hashType 1); ldid -S cũng có thể dùng SHA-256.
+        # Cả hai đều hợp lệ cho chữ ký ad-hoc trên iOS.
         import hashlib
+        algos = {1: ("sha1", 20), 2: ("sha256", 32)}
+        if hash_type not in algos:
+            fail(f"{os.path.basename(path)} hashType={hash_type} (chỉ hỗ trợ 1=SHA-1, 2=SHA-256)")
+        algo_name, expect_size = algos[hash_type]
+        if hash_size != expect_size:
+            fail(f"{os.path.basename(path)} hashType={hash_type} nhưng hashSize={hash_size} "
+                 f"(cần {expect_size})")
+        page = 1 << page_log
         for i in range(min(ncode, 400)):
             start = i * page
-            want = cd[hash_off + i * 32: hash_off + (i + 1) * 32]
-            got = hashlib.sha256(blob[start:min(start + page, code_limit)]).digest()
+            want = cd[hash_off + i * hash_size: hash_off + (i + 1) * hash_size]
+            got = hashlib.new(algo_name, blob[start:min(start + page, code_limit)]).digest()
             if got != want:
                 fail(f"{os.path.basename(path)} hash trang {i} không khớp")
-        print(f"OK {os.path.basename(path)}: chữ ký ad-hoc hợp lệ ({ncode} trang, SHA-256)")
+        if ncode == 0:
+            fail(f"{os.path.basename(path)} không có hash trang nào")
+        print(f"OK {os.path.basename(path)}: chữ ký ad-hoc hợp lệ "
+              f"({ncode} trang, {algo_name.upper()})")
 
     if strict:
         strict_checks(tmp)
