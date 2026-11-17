@@ -284,6 +284,17 @@ docs/             nghiên cứu kỹ thuật (Siri, SiriPlus, kiến trúc, ki�
 
 ---
 
+## 7.5. Download hiện có
+
+Release gần nhất: <https://github.com/Hthancder/ArenaAIWorkspace-1/releases/latest>
+
+| File | Kích thước | scheme |
+|---|---|---|
+| `com.hthancder.siribridge_0.1.0_iphoneos-arm64.deb` | ~155 KB | rootless |
+| `com.hthancder.siribridge_0.1.0_iphoneos-arm64e.deb` | ~155 KB | roothide |
+
+---
+
 ## 8. Giới hạn đã biết (đọc trước khi test)
 
 * **Chưa có thiết bị thật để test** — code đã build được ra `.deb` arm64 nhưng
