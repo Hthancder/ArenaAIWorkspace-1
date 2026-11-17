@@ -290,8 +290,27 @@ Release gần nhất: <https://github.com/Hthancder/ArenaAIWorkspace-1/releases/
 
 | File | Kích thước | scheme |
 |---|---|---|
-| `com.hthancder.siribridge_0.1.1_iphoneos-arm64.deb` | ~168 KB | rootless |
-| `com.hthancder.siribridge_0.1.1_iphoneos-arm64e.deb` | ~168 KB | roothide |
+| `com.hthancder.siribridge_0.1.2_iphoneos-arm64.deb` | ~173 KB | rootless |
+| `com.hthancder.siribridge_0.1.2_iphoneos-arm64e.deb` | ~173 KB | roothide |
+
+---
+
+## 7.5. Không thấy mục trong Cài đặt?
+
+Chạy trên máy:
+
+```bash
+sh /var/jb/usr/share/siribridge/sb-doctor.sh
+```
+
+Nguyên nhân thường gặp (chi tiết: `docs/08-settings-khong-hien.md`):
+
+1. **Cài nhầm bản** — máy rootless phải dùng `*_iphoneos-arm64.deb`, roothide
+   dùng `*_iphoneos-arm64e.deb`. Sai bản ⇒ file nằm sai thư mục gốc.
+2. **Thiếu PreferenceLoader** — không có nó thì Settings không hiện *bất kỳ*
+   tweak nào. Từ 0.1.2 gói đã `Depends: preferenceloader`.
+3. **Đang ở safe mode** — mọi tweak bị tắt, kiểm tra tweak khác còn mục không.
+4. Cờ `.safemode` của SiriBridge còn bật (xoá file đó rồi respring).
 
 ---
 

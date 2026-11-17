@@ -5,7 +5,7 @@ include common-scheme.mk
 
 export TARGET = iphone:clang:15.6:15.0
 
-PACKAGE_VERSION = 0.1.1
+PACKAGE_VERSION = 0.1.2
 export PACKAGE_VERSION
 
 include $(THEOS)/makefiles/common.mk

@@ -4,6 +4,7 @@
 #import <AVFoundation/AVFoundation.h>
 #import "SBPrefsUI.h"
 #import "SBPaths.h"
+#import "SBLog.h"
 
 static NSString *const kDomain = @"com.hthancder.siribridge";
 
@@ -168,6 +169,7 @@ static NSString *const kDomain = @"com.hthancder.siribridge";
 
 - (void)viewDidLoad {
     [super viewDidLoad];
+    SBLog(@"prefs: viewDidLoad (class %@)", NSStringFromClass([self class]));
     self.view.backgroundColor = [SBTheme bg];
     if (@available(iOS 13.0, *)) self.overrideUserInterfaceStyle = UIUserInterfaceStyleUnspecified;
 
@@ -195,7 +197,24 @@ static NSString *const kDomain = @"com.hthancder.siribridge";
         [self.contentStack.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor constant:-16.0],
     ]];
 
-    [self buildUI];
+    @try {
+        [self buildUI];
+    } @catch (NSException *e) {
+        SBLog(@"prefs: buildUI exception %@ — %@", e.name, e.reason);
+        UILabel *err = [[UILabel alloc] init];
+        err.text = [NSString stringWithFormat:@"Lỗi dựng giao diện:\n%@\n%@",
+                    e.name, e.reason ?: @""];
+        err.numberOfLines = 0;
+        err.textAlignment = NSTextAlignmentCenter;
+        err.textColor = [SBTheme secondaryLabel];
+        err.translatesAutoresizingMaskIntoConstraints = NO;
+        [self.view addSubview:err];
+        [NSLayoutConstraint activateConstraints:@[
+            [err.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
+            [err.centerYAnchor constraintEqualToAnchor:self.view.centerYAnchor],
+            [err.widthAnchor constraintEqualToAnchor:self.view.widthAnchor multiplier:0.8],
+        ]];
+    }
 
     // Cập nhật lại khi quay về từ app khác (cấu hình có thể đã đổi)
     [[NSNotificationCenter defaultCenter] addObserver:self
@@ -205,6 +224,11 @@ static NSString *const kDomain = @"com.hthancder.siribridge";
 }
 
 - (void)dealloc { [[NSNotificationCenter defaultCenter] removeObserver:self]; }
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    SBLog(@"prefs: viewWillAppear — bundle ĐÃ load");
+}
 
 - (void)reloadAll {
     for (SBRowView *row in self.allRows) [row refreshValue];

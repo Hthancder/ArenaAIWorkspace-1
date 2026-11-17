@@ -7,7 +7,7 @@ include ../common-scheme.mk
 include $(THEOS)/makefiles/common.mk
 
 BUNDLE_NAME = SiriBridgePrefs
-SiriBridgePrefs_FILES = SBRootListController.m SBPrefsUI.m ../Sources/SBPaths.m
+SiriBridgePrefs_FILES = SBRootListController.m SBPrefsUI.m ../Sources/SBPaths.m ../Sources/SBLog.m
 ADDITIONAL_CFLAGS = -Wno-unguarded-availability-new -Wno-nullability-completeness
 SiriBridgePrefs_CFLAGS = -fobjc-arc -I../Sources -Wno-deprecated-declarations
 SiriBridgePrefs_FRAMEWORKS = UIKit AVFoundation

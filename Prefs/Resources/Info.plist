@@ -8,8 +8,8 @@
 	<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
 	<key>CFBundleName</key><string>SiriBridge</string>
 	<key>CFBundlePackageType</key><string>BNDL</string>
-	<key>CFBundleShortVersionString</key><string>0.1.1</string>
-	<key>CFBundleVersion</key><string>0.1.1</string>
+	<key>CFBundleShortVersionString</key><string>0.1.2</string>
+	<key>CFBundleVersion</key><string>0.1.2</string>
 	<key>NSPrincipalClass</key><string>SBRootListController</string>
 </dict>
 </plist>

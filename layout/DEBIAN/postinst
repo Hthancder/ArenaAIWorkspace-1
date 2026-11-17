@@ -1,18 +1,20 @@
 #!/bin/sh
-# SiriBridge postinst — dọn cờ safe mode để lần respring sau tweak được phép chạy.
-#
-# Nếu máy rơi vào safe mode, tạo file dưới đây rồi respring để TẮT hẳn tweak:
-#   touch /var/mobile/Library/Preferences/com.hthancder.siribridge.safemode
-# Xoá file đó (hoặc cài lại gói) để bật lại.
+# SiriBridge postinst
+set -e 2>/dev/null || true
 
 PREFS=/var/mobile/Library/Preferences
 STATE="$PREFS/com.hthancder.siribridge.state.plist"
 
-if [ -f "$STATE" ]; then
-  rm -f "$STATE"
-fi
-chown mobile:mobile "$PREFS" 2>/dev/null || true
+# Dọn cờ crash-loop để lần respring sau tweak được phép chạy.
+rm -f "$STATE"
 
-echo "SiriBridge: đã cài. Bật/tắt trong Settings → SiriBridge."
-echo "Nếu bị safe mode: touch $PREFS/com.hthancder.siribridge.safemode && killall -9 SpringBoard"
+# Bundle cài trong Cài đặt phải đúng quyền, sai quyền là Settings bỏ qua im lặng.
+find /var/jb/Library/PreferenceBundles/SiriBridgePrefs.bundle /Library/PreferenceBundles/SiriBridgePrefs.bundle -type d -exec chmod 755 {} \; 2>/dev/null || true
+find /var/jb/Library/PreferenceBundles/SiriBridgePrefs.bundle /Library/PreferenceBundles/SiriBridgePrefs.bundle -type f -exec chmod 644 {} \; 2>/dev/null || true
+chmod 755 /var/jb/Library/PreferenceBundles/SiriBridgePrefs.bundle/SiriBridgePrefs /Library/PreferenceBundles/SiriBridgePrefs.bundle/SiriBridgePrefs 2>/dev/null || true
+
+echo "SiriBridge: đã cài."
+echo "  Kiểm tra Cài đặt:  Settings → SiriBridge"
+echo "  Chẩn đoán:         sh /var/jb/usr/share/siribridge/sb-doctor.sh"
+echo "  Tắt khẩn cấp:      touch $PREFS/com.hthancder.siribridge.safemode && killall -9 SpringBoard"
 exit 0
