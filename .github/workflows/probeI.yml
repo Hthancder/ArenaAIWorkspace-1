@@ -1,4 +1,4 @@
-name: probeG
+name: probeI
 
 on:
   push:
@@ -36,26 +36,7 @@ jobs:
       SCHEME: ${{ matrix.scheme }}
       PACKAGE_ARCH: ${{ matrix.package_arch }}
     steps:
-      - name: Kiểm tra sản phẩm
+      - name: clone theos repo matrix
         run: |
-          set -euo pipefail
-          DEB="$(ls packages/*.deb | head -n1)"
-          echo "DEB=$DEB" >> "$GITHUB_ENV"
-          echo "--- cấu trúc gói ---"
-          dpkg-deb -c "$DEB"
-          python3 tools/verify_deb.py "$DEB" "${PACKAGE_ARCH}"
-          echo "SIZE=$(stat -c%s "$DEB")" >> "$GITHUB_ENV"
-
-      - name: SHA256 + job summary
-        run: |
-          set -euo pipefail
-          BASE="$(basename "$DEB")"
-          ( cd packages && sha256sum "$BASE" > "SHA256SUMS-${SCHEME}" )
-          cat "packages/SHA256SUMS-${SCHEME}" >> "$GITHUB_STEP_SUMMARY"
-          {
-            echo ""
-            echo "| scheme | package arch | dung lượng |"
-            echo "| --- | --- | --- |"
-            echo "| ${SCHEME} | ${PACKAGE_ARCH} | $(numfmt --to=iec "$SIZE") |"
-          } >> "$GITHUB_STEP_SUMMARY"
-
+          git clone --recursive --depth 1 "${{ matrix.theos_repo }}" "$RUNNER_TEMP/theos" || echo "CLONE FAILED $?"
+          ls "$RUNNER_TEMP/theos" | head -5
