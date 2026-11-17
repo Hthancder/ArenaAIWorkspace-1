@@ -1,4 +1,4 @@
-name: probeK
+name: probeL
 
 on:
   push:
@@ -74,3 +74,55 @@ jobs:
           chmod +x build.sh tools/*.sh tools/theos-toolchain-stub/bin/*
           ./build.sh --linux SCHEME=${SCHEME}
 
+      - name: Kiểm tra sản phẩm
+        run: |
+          set -euo pipefail
+          DEB="$(ls packages/*.deb | head -n1)"
+          echo "DEB=$DEB" >> "$GITHUB_ENV"
+          echo "--- cấu trúc gói ---"
+          dpkg-deb -c "$DEB"
+          python3 tools/verify_deb.py "$DEB" "${PACKAGE_ARCH}"
+          echo "SIZE=$(stat -c%s "$DEB")" >> "$GITHUB_ENV"
+
+      - name: SHA256 + job summary
+        run: |
+          set -euo pipefail
+          BASE="$(basename "$DEB")"
+          ( cd packages && sha256sum "$BASE" > "SHA256SUMS-${SCHEME}" )
+          cat "packages/SHA256SUMS-${SCHEME}" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo ""
+            echo "| scheme | package arch | dung lượng |"
+            echo "| --- | --- | --- |"
+            echo "| ${SCHEME} | ${PACKAGE_ARCH} | $(numfmt --to=iec "$SIZE") |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SiriBridge-${{ matrix.scheme }}-deb-${{ github.sha }}
+          path: |
+            packages/*.deb
+            packages/SHA256SUMS-${{ matrix.scheme }}
+          if-no-files-found: error
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('ci-{0}', github.run_number) }}
+          name: SiriBridge ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('CI build #{0}', github.run_number) }}
+          body: |
+            SiriBridge cho iOS 15 (arm64), hai bản **rootless** và **roothide**. Không có bản rootful.
+
+            | File | Dùng cho |
+            | --- | --- |
+            | `*_iphoneos-arm64.deb` | jailbreak rootless (Dopamine/Palera1n 15, `/var/jb`) |
+            | `*_iphoneos-arm64e.deb` | roothide Bootstrap (package arch arm64e, code vẫn là arm64) |
+
+            Cài: `sileo`/`zebra` mở file .deb, hoặc `dpkg -i` trong terminal của máy.
+          files: |
+            packages/*.deb
+            packages/SHA256SUMS-${{ matrix.scheme }}
+          fail_on_unmatched_files: true
+          generate_release_notes: false
