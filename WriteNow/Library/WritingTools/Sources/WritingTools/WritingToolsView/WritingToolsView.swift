@@ -6,6 +6,13 @@
 //
 
 import SwiftUI
+import UIKit
+
+enum OutputDiffDisplayMode: Equatable {
+    case none
+    case wordDiff
+    case originalSplit
+}
 
 struct WritingToolsView: View {
     @ObservedObject var cfg = Configurator.shared
@@ -27,9 +34,14 @@ struct WritingToolsView: View {
     @State var customPromptInput: String = ""
     @State var followUpPromptInput: String = ""
     @State var isEditingOutput: Bool = false
-    @State var showOriginalDiff: Bool = false
+    @State var diffDisplayMode: OutputDiffDisplayMode = .none
     @State var copiedToast: Bool = false
     @State var showQuickProviderSheet: Bool = false
+
+    // Clipboard Context & Session Restore
+    @State var clipboardContextText: String = ""
+    @State var clipboardContextAttached: Bool = false
+    @State var restorableSession: LastSessionSnapshot? = nil
 
     @State var error: Error? = nil
     @State var activeRequestToken: UUID = UUID()
@@ -65,6 +77,20 @@ struct WritingToolsView: View {
         !shouldShowError && !shouldShowOutput
     }
 
+    var activeClipboardContext: String? {
+        guard cfg.settings.clipboardContextEnabled, clipboardContextAttached else { return nil }
+        let trimmed = clipboardContextText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    var currentTaskTitle: String {
+        switch currentTask {
+        case let .preset(preset): return preset.localizedDisplayTitle
+        case let .customPrompt(prompt): return String(prompt.prefix(32))
+        case .followUp: return "Refined Draft"
+        }
+    }
+
     let spacing: CGFloat = 12
     let innerSpacing: CGFloat = 8
 
@@ -89,7 +115,7 @@ struct WritingToolsView: View {
         .animation(.spring(), value: isRunning)
         .animation(.easeInOut(duration: 0.2), value: error?.localizedDescription)
         .animation(.easeInOut(duration: 0.2), value: isEditingOutput)
-        .animation(.easeInOut(duration: 0.2), value: showOriginalDiff)
+        .animation(.easeInOut(duration: 0.2), value: diffDisplayMode)
         .padding(14)
         .background(background)
         .foregroundStyle(.white)
@@ -101,11 +127,13 @@ struct WritingToolsView: View {
             voiceMode = cfg.settings.stt.voiceMode
             voiceSourceLang = cfg.settings.stt.sourceLanguage
             voiceTargetLang = cfg.settings.stt.targetLanguage
+            refreshClipboardAndSessionState()
             cfg.refreshRuntimeConfig { updated in
                 if let updated {
                     voiceMode = updated.settings.stt.voiceMode
                     voiceSourceLang = updated.settings.stt.sourceLanguage
                     voiceTargetLang = updated.settings.stt.targetLanguage
+                    refreshClipboardAndSessionState()
                 }
             }
         }
@@ -114,6 +142,15 @@ struct WritingToolsView: View {
             voicePollTimer = nil
             if isRecordingVoice {
                 cfg.cancelVoiceRecording()
+            }
+            if !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                cfg.saveLastSession(
+                    output: output,
+                    outputHistory: outputHistory,
+                    historyIndex: historyIndex,
+                    taskTitle: currentTaskTitle,
+                    voiceLastTranscript: voiceLastTranscript
+                )
             }
         }
         .onChange(of: context.scenePhase) { phase in
@@ -129,5 +166,27 @@ struct WritingToolsView: View {
                 break
             }
         }
+    }
+
+    private func refreshClipboardAndSessionState() {
+        if cfg.settings.clipboardContextEnabled {
+            let rawClip = (UIPasteboard.general.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !rawClip.isEmpty {
+                clipboardContextText = String(rawClip.prefix(3000))
+                if cfg.settings.autoAttachClipboardOnEmpty,
+                   textProxy.selectedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                {
+                    clipboardContextAttached = true
+                }
+            } else {
+                clipboardContextText = ""
+                clipboardContextAttached = false
+            }
+        } else {
+            clipboardContextText = ""
+            clipboardContextAttached = false
+        }
+
+        restorableSession = cfg.loadValidLastSession()
     }
 }

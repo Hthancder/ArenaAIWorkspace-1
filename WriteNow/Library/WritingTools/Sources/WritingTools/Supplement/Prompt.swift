@@ -43,6 +43,8 @@ public struct WritingPresetItem: Codable, Identifiable, Equatable, Hashable {
     public var outputLanguage: String
     public var insertBehavior: InsertBehavior
     public var isEnabled: Bool
+    public var endpointID: UUID?
+    public var modelOverride: String
 
     public init(
         id: UUID = UUID(),
@@ -55,7 +57,9 @@ public struct WritingPresetItem: Codable, Identifiable, Equatable, Hashable {
         includeExamples: Bool = false,
         outputLanguage: String = "",
         insertBehavior: InsertBehavior = .replace,
-        isEnabled: Bool = true
+        isEnabled: Bool = true,
+        endpointID: UUID? = nil,
+        modelOverride: String = ""
     ) {
         self.id = id
         self.defaultKey = defaultKey
@@ -68,10 +72,12 @@ public struct WritingPresetItem: Codable, Identifiable, Equatable, Hashable {
         self.outputLanguage = outputLanguage
         self.insertBehavior = insertBehavior
         self.isEnabled = isEnabled
+        self.endpointID = endpointID
+        self.modelOverride = modelOverride
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, defaultKey, title, icon, systemPrompt, temperature, topP, includeExamples, outputLanguage, insertBehavior, isEnabled
+        case id, defaultKey, title, icon, systemPrompt, temperature, topP, includeExamples, outputLanguage, insertBehavior, isEnabled, endpointID, modelOverride
     }
 
     public init(from decoder: Decoder) throws {
@@ -87,6 +93,14 @@ public struct WritingPresetItem: Codable, Identifiable, Equatable, Hashable {
         outputLanguage = try c.decodeIfPresent(String.self, forKey: .outputLanguage) ?? ""
         insertBehavior = try c.decodeIfPresent(InsertBehavior.self, forKey: .insertBehavior) ?? .replace
         isEnabled = try c.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
+        endpointID = try c.decodeIfPresent(UUID.self, forKey: .endpointID)
+        modelOverride = try c.decodeIfPresent(String.self, forKey: .modelOverride) ?? ""
+    }
+
+    public var shortOverrideModelName: String {
+        let trimmed = modelOverride.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+        return trimmed.components(separatedBy: "/").last?.components(separatedBy: ":").first ?? trimmed
     }
 
     public var localizedDisplayTitle: String {
@@ -202,10 +216,15 @@ public enum PromptComposer {
     public static func buildMessages(
         for task: WritingTaskKind,
         selectedText: String,
-        settings: RuntimeSettings
+        settings: RuntimeSettings,
+        clipboardContext: String? = nil
     ) -> (messages: [ChatQuery.ChatCompletionMessageParam], sampling: SamplingConfig) {
         let globalExtra = settings.globalSystemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         let extraSuffix = globalExtra.isEmpty ? "" : "\n\nAdditional user instructions:\n\(globalExtra)"
+        let cleanClipboard = (clipboardContext ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let clipboardBlock = cleanClipboard.isEmpty
+            ? ""
+            : "\n\n[Clipboard Context / Message to Reference]:\n\(cleanClipboard)"
 
         switch task {
         case let .preset(preset):
@@ -222,7 +241,7 @@ public enum PromptComposer {
                 .system(.init(content: systemPrompt)),
             ]
 
-            if settings.useFewShotExamples, preset.includeExamples, lang.isEmpty {
+            if settings.useFewShotExamples, preset.includeExamples, lang.isEmpty, cleanClipboard.isEmpty {
                 let keyPrompt = preset.defaultKey.flatMap(Prompt.init(rawValue:)) ?? .rewrite
                 messages.append(contentsOf: keyPrompt.chatExamplesAfterSystemMessage)
             }
@@ -231,7 +250,7 @@ public enum PromptComposer {
                 """
                 \(Prompt.userContentHeader)
 
-                \(selectedText)
+                \(selectedText)\(clipboardBlock)
                 """
             ))))
 
@@ -242,12 +261,13 @@ public enum PromptComposer {
             let systemPrompt =
                 """
                 You are a helpful AI writing assistant inside an iOS text editor.
-                Follow the user's instruction accurately on the provided text.
+                Follow the user's instruction accurately using any provided text or clipboard context.
+                If the user is asking to write a reply to a clipboard message, draft a natural, ready-to-send reply.
                 Output only the resulting text without meta commentary, preambles, or markdown fences unless requested.\(extraSuffix)
                 """
             let userContent =
                 """
-                Instruction: \(instruction)
+                Instruction: \(instruction)\(clipboardBlock)
 
                 \(Prompt.userContentHeader)
                 \(selectedText)
@@ -267,7 +287,7 @@ public enum PromptComposer {
             let userContent =
                 """
                 Original input text:
-                \(originalText)
+                \(originalText)\(clipboardBlock)
 
                 Current draft output:
                 \(currentOutput)

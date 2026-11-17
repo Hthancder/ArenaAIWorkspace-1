@@ -148,6 +148,8 @@ extension Configuration {
         var outputLanguage: String
         var insertBehavior: InsertBehavior
         var isEnabled: Bool
+        var endpointID: UUID?
+        var modelOverride: String
 
         init(
             id: UUID = .init(),
@@ -160,7 +162,9 @@ extension Configuration {
             includeExamples: Bool = false,
             outputLanguage: String = "",
             insertBehavior: InsertBehavior = .replace,
-            isEnabled: Bool = true
+            isEnabled: Bool = true,
+            endpointID: UUID? = nil,
+            modelOverride: String = ""
         ) {
             self.id = id
             self.defaultKey = defaultKey
@@ -173,10 +177,12 @@ extension Configuration {
             self.outputLanguage = outputLanguage
             self.insertBehavior = insertBehavior
             self.isEnabled = isEnabled
+            self.endpointID = endpointID
+            self.modelOverride = modelOverride
         }
 
         enum CodingKeys: String, CodingKey {
-            case id, defaultKey, title, icon, systemPrompt, temperature, topP, includeExamples, outputLanguage, insertBehavior, isEnabled
+            case id, defaultKey, title, icon, systemPrompt, temperature, topP, includeExamples, outputLanguage, insertBehavior, isEnabled, endpointID, modelOverride
         }
 
         init(from decoder: Decoder) throws {
@@ -192,6 +198,8 @@ extension Configuration {
             outputLanguage = try container.decodeIfPresent(String.self, forKey: .outputLanguage) ?? ""
             insertBehavior = try container.decodeIfPresent(InsertBehavior.self, forKey: .insertBehavior) ?? .replace
             isEnabled = try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
+            endpointID = try container.decodeIfPresent(UUID.self, forKey: .endpointID)
+            modelOverride = try container.decodeIfPresent(String.self, forKey: .modelOverride) ?? ""
         }
 
         static let defaultPresets: [WritingPreset] = [
@@ -286,6 +294,12 @@ extension Configuration {
         var backgroundImageRevision: String
         var textReplacementAnimation: String
         var stt: STTSettings
+        var wordDiffEnabled: Bool
+        var defaultDiffMode: String           // "toggle_word" | "auto_word" | "split"
+        var clipboardContextEnabled: Bool
+        var autoAttachClipboardOnEmpty: Bool
+        var restoreLastSessionEnabled: Bool
+        var lastSessionTTLSeconds: Int
 
         static let `default` = AppSettings(
             menuTitle: "Write Now",
@@ -308,8 +322,14 @@ extension Configuration {
             backgroundImageBlur: 6.0,
             backgroundImageDim: 0.45,
             backgroundImageRevision: "",
-            textReplacementAnimation: "scatter_assemble",
-            stt: .default
+            textReplacementAnimation: "apple_intelligence",
+            stt: .default,
+            wordDiffEnabled: true,
+            defaultDiffMode: "toggle_word",
+            clipboardContextEnabled: true,
+            autoAttachClipboardOnEmpty: false,
+            restoreLastSessionEnabled: true,
+            lastSessionTTLSeconds: 180
         )
 
         init(
@@ -333,8 +353,14 @@ extension Configuration {
             backgroundImageBlur: Double = 6.0,
             backgroundImageDim: Double = 0.45,
             backgroundImageRevision: String = "",
-            textReplacementAnimation: String = "scatter_assemble",
-            stt: STTSettings = .default
+            textReplacementAnimation: String = "apple_intelligence",
+            stt: STTSettings = .default,
+            wordDiffEnabled: Bool = true,
+            defaultDiffMode: String = "toggle_word",
+            clipboardContextEnabled: Bool = true,
+            autoAttachClipboardOnEmpty: Bool = false,
+            restoreLastSessionEnabled: Bool = true,
+            lastSessionTTLSeconds: Int = 180
         ) {
             self.menuTitle = menuTitle
             self.globalSystemPrompt = globalSystemPrompt
@@ -358,6 +384,12 @@ extension Configuration {
             self.backgroundImageRevision = backgroundImageRevision
             self.textReplacementAnimation = textReplacementAnimation
             self.stt = stt
+            self.wordDiffEnabled = wordDiffEnabled
+            self.defaultDiffMode = defaultDiffMode
+            self.clipboardContextEnabled = clipboardContextEnabled
+            self.autoAttachClipboardOnEmpty = autoAttachClipboardOnEmpty
+            self.restoreLastSessionEnabled = restoreLastSessionEnabled
+            self.lastSessionTTLSeconds = lastSessionTTLSeconds
         }
 
         enum CodingKeys: String, CodingKey {
@@ -367,6 +399,8 @@ extension Configuration {
             case accentColorHex, menuThemePreset, backgroundMode, customThemeColorsHex
             case solidBackgroundHex, backgroundImageBlur, backgroundImageDim
             case backgroundImageRevision, textReplacementAnimation, stt
+            case wordDiffEnabled, defaultDiffMode, clipboardContextEnabled
+            case autoAttachClipboardOnEmpty, restoreLastSessionEnabled, lastSessionTTLSeconds
         }
 
         init(from decoder: Decoder) throws {
@@ -391,8 +425,14 @@ extension Configuration {
             backgroundImageBlur = try container.decodeIfPresent(Double.self, forKey: .backgroundImageBlur) ?? 6.0
             backgroundImageDim = try container.decodeIfPresent(Double.self, forKey: .backgroundImageDim) ?? 0.45
             backgroundImageRevision = try container.decodeIfPresent(String.self, forKey: .backgroundImageRevision) ?? ""
-            textReplacementAnimation = try container.decodeIfPresent(String.self, forKey: .textReplacementAnimation) ?? "scatter_assemble"
+            textReplacementAnimation = try container.decodeIfPresent(String.self, forKey: .textReplacementAnimation) ?? "apple_intelligence"
             stt = try container.decodeIfPresent(STTSettings.self, forKey: .stt) ?? .default
+            wordDiffEnabled = try container.decodeIfPresent(Bool.self, forKey: .wordDiffEnabled) ?? true
+            defaultDiffMode = try container.decodeIfPresent(String.self, forKey: .defaultDiffMode) ?? "toggle_word"
+            clipboardContextEnabled = try container.decodeIfPresent(Bool.self, forKey: .clipboardContextEnabled) ?? true
+            autoAttachClipboardOnEmpty = try container.decodeIfPresent(Bool.self, forKey: .autoAttachClipboardOnEmpty) ?? false
+            restoreLastSessionEnabled = try container.decodeIfPresent(Bool.self, forKey: .restoreLastSessionEnabled) ?? true
+            lastSessionTTLSeconds = try container.decodeIfPresent(Int.self, forKey: .lastSessionTTLSeconds) ?? 180
         }
     }
 

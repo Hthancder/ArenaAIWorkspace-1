@@ -217,10 +217,10 @@ class AIGateHandler: ChannelInboundHandler {
         upstream: AIGateUpstream,
         context: ChannelHandlerContext
     ) {
-        let finalBody = rewriteRequestBodyIfNeeded(body, with: upstream)
+        let (resolvedUpstream, finalBody) = resolveUpstreamAndRewriteBody(body, defaultUpstream: upstream)
         let bodyLengthToSend: Int? = (hadBodyLengthHeader || !finalBody.isEmpty) ? finalBody.count : nil
 
-        guard let patchedHeader = patchHeaderValues(headerString, with: upstream, bodyLength: bodyLengthToSend) else {
+        guard let patchedHeader = patchHeaderValues(headerString, with: resolvedUpstream, bodyLength: bodyLengthToSend) else {
             context.close(mode: .all, promise: nil)
             return
         }
@@ -230,7 +230,7 @@ class AIGateHandler: ChannelInboundHandler {
         }
 
         let proxy = AIGateProxyHandler(
-            upstream: upstream,
+            upstream: resolvedUpstream,
             header: patchedHeaderData,
             body: finalBody,
             context: context,
@@ -692,23 +692,43 @@ class AIGateHandler: ChannelInboundHandler {
         return nil
     }
 
-    private func rewriteRequestBodyIfNeeded(_ body: Data, with upstream: AIGateUpstream) -> Data {
-        guard !body.isEmpty else { return body }
-        let targetModel = upstream.mid.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !targetModel.isEmpty else { return body }
-
+    private func resolveUpstreamAndRewriteBody(_ body: Data, defaultUpstream: AIGateUpstream) -> (AIGateUpstream, Data) {
+        guard !body.isEmpty else { return (defaultUpstream, body) }
         guard var jsonObject = (try? JSONSerialization.jsonObject(with: body, options: [.mutableContainers])) as? [String: Any] else {
-            return body
+            return (defaultUpstream, body)
         }
 
         let currentModel = (jsonObject["model"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        // Per-preset / per-request route token: "__wn_ep__:<endpointUUID>::<modelOverride>"
+        let prefix = "__wn_ep__:"
+        if currentModel.hasPrefix(prefix) {
+            let remainder = String(currentModel.dropFirst(prefix.count))
+            let parts = remainder.components(separatedBy: "::")
+            let epIdStr = parts.first?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let modelOverride = parts.count > 1 ? parts.dropFirst().joined(separator: "::").trimmingCharacters(in: .whitespacesAndNewlines) : ""
+            let epUUID = UUID(uuidString: epIdStr)
+            let resolved = AIGateUpstream(endpointID: epUUID, modelOverride: modelOverride) ?? defaultUpstream
+            let targetModel = resolved.mid.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !targetModel.isEmpty {
+                jsonObject["model"] = targetModel
+                if let rewritten = try? JSONSerialization.data(withJSONObject: jsonObject, options: []) {
+                    return (resolved, rewritten)
+                }
+            }
+            return (resolved, body)
+        }
+
+        let targetModel = defaultUpstream.mid.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !targetModel.isEmpty else { return (defaultUpstream, body) }
+
         if currentModel.isEmpty || currentModel == "user_activated_model" {
             jsonObject["model"] = targetModel
             if let rewritten = try? JSONSerialization.data(withJSONObject: jsonObject, options: []) {
-                return rewritten
+                return (defaultUpstream, rewritten)
             }
         }
-        return body
+        return (defaultUpstream, body)
     }
 
     func patchHeaderValues(_ headerString: String, with upstream: AIGateUpstream, bodyLength: Int? = nil) -> String? {

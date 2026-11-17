@@ -709,6 +709,7 @@ enum AnimationCatalog {
     }
 
     static let items: [AnimSpec] = [
+        .init(id: "apple_intelligence", title: "Apple Intelligence Glow", subtitle: "100% native snapshot morph with luminous prism wave", icon: "wand.and.stars.inverse"),
         .init(id: "scatter_assemble", title: "Scatter & Assemble", subtitle: "Old letters shatter & scatter everywhere, new text snaps in", icon: "sparkles.rectangle.stack"),
         .init(id: "rain_drop_rise", title: "Gravity Fall & Sprout", subtitle: "Old text falls down with gravity, new text sprouts upward", icon: "arrow.down.to.line.compact"),
         .init(id: "thanos_dust", title: "Ash & Dust (Snap)", subtitle: "Old text dissolves into drifting ash particles, new text rises", icon: "wind"),
@@ -719,7 +720,7 @@ enum AnimationCatalog {
     ]
 
     static func shortTitle(for id: String) -> String {
-        items.first { $0.id == id }?.title ?? "Scatter & Assemble"
+        items.first { $0.id == id }?.title ?? "Apple Intelligence Glow"
     }
 }
 
@@ -1222,6 +1223,8 @@ struct PresetEditorView: View {
     @State private var outputLanguage: String
     @State private var insertBehavior: Configuration.WritingPreset.InsertBehavior
     @State private var isEnabled: Bool
+    @State private var selectedEndpointID: UUID?
+    @State private var modelOverride: String
     @State private var showIconGrid = false
 
     private let iconOptions: [String] = [
@@ -1246,6 +1249,15 @@ struct PresetEditorView: View {
         _outputLanguage = State(initialValue: editingPreset?.outputLanguage ?? "")
         _insertBehavior = State(initialValue: editingPreset?.insertBehavior ?? .replace)
         _isEnabled = State(initialValue: editingPreset?.isEnabled ?? true)
+        _selectedEndpointID = State(initialValue: editingPreset?.endpointID)
+        _modelOverride = State(initialValue: editingPreset?.modelOverride ?? "")
+    }
+
+    private var selectedEndpointForOverride: Configuration.Endpoint? {
+        if let id = selectedEndpointID {
+            return configuration.endpoints.first { $0.id == id }
+        }
+        return configuration.activatedEndpoint
     }
 
     private var canSave: Bool {
@@ -1373,6 +1385,64 @@ struct PresetEditorView: View {
                 }
 
                 Section {
+                    Picker("Provider", selection: $selectedEndpointID) {
+                        Text("Use Global Active Provider").tag(UUID?.none)
+                        ForEach(configuration.endpoints) { ep in
+                            Text(ep.title.isEmpty ? (ep.url.host ?? "Endpoint") : ep.title)
+                                .tag(UUID?.some(ep.id))
+                        }
+                    }
+
+                    HStack {
+                        Text("Model Override")
+                        Spacer()
+                        TextField("Global Default", text: $modelOverride)
+                            .multilineTextAlignment(.trailing)
+                            .autocapitalization(.none)
+                            .disableAutocorrection(true)
+                    }
+
+                    if let ep = selectedEndpointForOverride, !ep.availableModels.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 6) {
+                                Button {
+                                    modelOverride = ""
+                                } label: {
+                                    Text("Default (\(ep.model))")
+                                        .font(.caption2)
+                                        .padding(.horizontal, 9)
+                                        .padding(.vertical, 5)
+                                        .background(modelOverride.isEmpty ? Color.accent.opacity(0.22) : Color.secondary.opacity(0.12))
+                                        .foregroundColor(modelOverride.isEmpty ? .accent : .primary)
+                                        .cornerRadius(8)
+                                }
+                                .buttonStyle(.borderless)
+
+                                ForEach(ep.availableModels.prefix(12), id: \.self) { m in
+                                    Button {
+                                        modelOverride = m
+                                    } label: {
+                                        Text(m)
+                                            .font(.caption2)
+                                            .padding(.horizontal, 9)
+                                            .padding(.vertical, 5)
+                                            .background(modelOverride == m ? Color.accent.opacity(0.22) : Color.secondary.opacity(0.12))
+                                            .foregroundColor(modelOverride == m ? .accent : .primary)
+                                            .cornerRadius(8)
+                                    }
+                                    .buttonStyle(.borderless)
+                                }
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    }
+                } header: {
+                    Text("Per-Preset Model Routing (Optional)")
+                } footer: {
+                    Text("Bind this preset to a faster or specialized provider/model (e.g. Haiku/Flash for Proofread, Claude/GPT-4o for Rewrite) without changing your global model.")
+                }
+
+                Section {
                     Button {
                         save()
                     } label: {
@@ -1407,6 +1477,7 @@ struct PresetEditorView: View {
         let cleanPrompt = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanIcon = icon.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanLang = outputLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanModelOverride = modelOverride.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanTitle.isEmpty, !cleanPrompt.isEmpty else { return }
 
         if var existing = editingPreset {
@@ -1418,6 +1489,8 @@ struct PresetEditorView: View {
             existing.outputLanguage = cleanLang
             existing.insertBehavior = insertBehavior
             existing.isEnabled = isEnabled
+            existing.endpointID = selectedEndpointID
+            existing.modelOverride = cleanModelOverride
             configuration.updatePreset(existing)
         } else {
             let preset = Configuration.WritingPreset(
@@ -1430,7 +1503,9 @@ struct PresetEditorView: View {
                 includeExamples: includeExamples,
                 outputLanguage: cleanLang,
                 insertBehavior: insertBehavior,
-                isEnabled: isEnabled
+                isEnabled: isEnabled,
+                endpointID: selectedEndpointID,
+                modelOverride: cleanModelOverride
             )
             configuration.addPreset(preset)
         }
@@ -1454,6 +1529,12 @@ struct BehaviorSettingsView: View {
     @State private var timeout: Int
     @State private var gridColumns: Int
     @State private var sizePreset: String
+    @State private var wordDiffEnabled: Bool
+    @State private var defaultDiffMode: String
+    @State private var clipboardContextEnabled: Bool
+    @State private var autoAttachClipboardOnEmpty: Bool
+    @State private var restoreLastSessionEnabled: Bool
+    @State private var lastSessionTTLSeconds: Int
 
     @State private var backupAlertTitle = ""
     @State private var backupAlertMessage = ""
@@ -1471,6 +1552,12 @@ struct BehaviorSettingsView: View {
         _timeout = State(initialValue: s.requestTimeout)
         _gridColumns = State(initialValue: s.gridColumns)
         _sizePreset = State(initialValue: s.popoverSizePreset)
+        _wordDiffEnabled = State(initialValue: s.wordDiffEnabled)
+        _defaultDiffMode = State(initialValue: s.defaultDiffMode)
+        _clipboardContextEnabled = State(initialValue: s.clipboardContextEnabled)
+        _autoAttachClipboardOnEmpty = State(initialValue: s.autoAttachClipboardOnEmpty)
+        _restoreLastSessionEnabled = State(initialValue: s.restoreLastSessionEnabled)
+        _lastSessionTTLSeconds = State(initialValue: s.lastSessionTTLSeconds)
     }
 
     var body: some View {
@@ -1521,6 +1608,35 @@ struct BehaviorSettingsView: View {
                 }
             } header: {
                 Text("Popover Layout (iPhone 7 Plus)")
+            }
+
+            Section {
+                Toggle("Enable Word-Level Diff", isOn: $wordDiffEnabled)
+                if wordDiffEnabled {
+                    Picker("Default Compare Mode", selection: $defaultDiffMode) {
+                        Text("Off (Tap Diff to View)").tag("toggle_word")
+                        Text("Auto-Show Word Diff").tag("auto_word")
+                        Text("Auto-Show Split Original").tag("split")
+                    }
+                }
+                Toggle("Enable Clipboard Context & Smart Reply", isOn: $clipboardContextEnabled)
+                if clipboardContextEnabled {
+                    Toggle("Auto-Attach Clipboard if Selection Empty", isOn: $autoAttachClipboardOnEmpty)
+                }
+                Toggle("Enable Restore Last Session", isOn: $restoreLastSessionEnabled)
+                if restoreLastSessionEnabled {
+                    Picker("Session Keep Duration", selection: $lastSessionTTLSeconds) {
+                        Text("1 Minute").tag(60)
+                        Text("3 Minutes").tag(180)
+                        Text("5 Minutes").tag(300)
+                        Text("10 Minutes").tag(600)
+                        Text("Always Keep").tag(0)
+                    }
+                }
+            } header: {
+                Text("Diff, Smart Reply & Session")
+            } footer: {
+                Text("Restore Last Session keeps your generated draft if the menu closes accidentally, and clears automatically when you Accept or Discard.")
             }
 
             Section {
@@ -1580,6 +1696,12 @@ struct BehaviorSettingsView: View {
         .onChange(of: timeout) { _ in commitSettings() }
         .onChange(of: gridColumns) { _ in commitSettings() }
         .onChange(of: sizePreset) { _ in commitSettings() }
+        .onChange(of: wordDiffEnabled) { _ in commitSettings() }
+        .onChange(of: defaultDiffMode) { _ in commitSettings() }
+        .onChange(of: clipboardContextEnabled) { _ in commitSettings() }
+        .onChange(of: autoAttachClipboardOnEmpty) { _ in commitSettings() }
+        .onChange(of: restoreLastSessionEnabled) { _ in commitSettings() }
+        .onChange(of: lastSessionTTLSeconds) { _ in commitSettings() }
         .alert(backupAlertTitle, isPresented: $showBackupAlert) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -1600,6 +1722,12 @@ struct BehaviorSettingsView: View {
             s.requestTimeout = timeout
             s.gridColumns = gridColumns
             s.popoverSizePreset = sizePreset
+            s.wordDiffEnabled = wordDiffEnabled
+            s.defaultDiffMode = defaultDiffMode
+            s.clipboardContextEnabled = clipboardContextEnabled
+            s.autoAttachClipboardOnEmpty = autoAttachClipboardOnEmpty
+            s.restoreLastSessionEnabled = restoreLastSessionEnabled
+            s.lastSessionTTLSeconds = lastSessionTTLSeconds
         }
     }
 
@@ -1614,6 +1742,12 @@ struct BehaviorSettingsView: View {
         timeout = s.requestTimeout
         gridColumns = s.gridColumns
         sizePreset = s.popoverSizePreset
+        wordDiffEnabled = s.wordDiffEnabled
+        defaultDiffMode = s.defaultDiffMode
+        clipboardContextEnabled = s.clipboardContextEnabled
+        autoAttachClipboardOnEmpty = s.autoAttachClipboardOnEmpty
+        restoreLastSessionEnabled = s.restoreLastSessionEnabled
+        lastSessionTTLSeconds = s.lastSessionTTLSeconds
     }
 }
 
@@ -1718,6 +1852,7 @@ private final class PreviewContainerView: UIView {
 
         let oldLines = visibleLineRects(in: textView)
         let beforeImage = capturePreviewImage()
+        let beforeSnapshot = textView.resizableSnapshotView(from: textView.bounds, afterScreenUpdates: false, withCapInsets: .zero)
 
         showingAfter.toggle()
         textView.text = showingAfter ? polishedText : draftText
@@ -1737,6 +1872,71 @@ private final class PreviewContainerView: UIView {
         overlay.backgroundColor = .clear
         addSubview(overlay)
         activeOverlay = overlay
+
+        if normalized == "apple_intelligence" {
+            let afterSnapshot = textView.resizableSnapshotView(from: textView.bounds, afterScreenUpdates: true, withCapInsets: .zero)
+            let beforeView: UIView = beforeSnapshot ?? {
+                let iv = UIImageView(frame: bounds)
+                iv.image = beforeImage
+                return iv
+            }()
+            let afterView: UIView = afterSnapshot ?? {
+                let iv = UIImageView(frame: bounds)
+                iv.image = afterImage
+                return iv
+            }()
+            beforeView.frame = bounds
+            afterView.frame = bounds
+            overlay.addSubview(beforeView)
+            overlay.addSubview(afterView)
+
+            let revealMask = CAGradientLayer()
+            revealMask.frame = afterView.bounds
+            revealMask.colors = [UIColor.white.cgColor, UIColor.white.cgColor, UIColor.clear.cgColor]
+            revealMask.locations = [-0.25, -0.10, 0.05]
+            revealMask.startPoint = CGPoint(x: 0.3, y: 0.0)
+            revealMask.endPoint = CGPoint(x: 0.7, y: 1.0)
+            afterView.layer.mask = revealMask
+
+            let bandHeight: CGFloat = 34
+            let sweepBand = UIView(frame: CGRect(x: 0, y: -bandHeight * 0.5, width: bounds.width, height: bandHeight))
+            let bandGrad = CAGradientLayer()
+            bandGrad.frame = sweepBand.bounds
+            bandGrad.colors = [
+                UIColor(red: 0.97, green: 0.40, blue: 0.58, alpha: 0.0).cgColor,
+                UIColor(red: 0.97, green: 0.40, blue: 0.58, alpha: 0.45).cgColor,
+                UIColor(red: 0.66, green: 0.33, blue: 0.97, alpha: 0.55).cgColor,
+                UIColor(red: 0.13, green: 0.83, blue: 0.93, alpha: 0.42).cgColor,
+                UIColor(red: 0.13, green: 0.83, blue: 0.93, alpha: 0.0).cgColor,
+            ]
+            bandGrad.startPoint = CGPoint(x: 0, y: 0)
+            bandGrad.endPoint = CGPoint(x: 1, y: 1)
+            sweepBand.layer.addSublayer(bandGrad)
+            overlay.addSubview(sweepBand)
+
+            let locAnim = CABasicAnimation(keyPath: "locations")
+            locAnim.fromValue = [-0.25, -0.10, 0.05]
+            locAnim.toValue = [0.95, 1.12, 1.28]
+            locAnim.duration = 0.60
+            locAnim.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            locAnim.fillMode = .forwards
+            locAnim.isRemovedOnCompletion = false
+            revealMask.add(locAnim, forKey: "aiSweepPreview")
+
+            UIView.animate(withDuration: 0.60, delay: 0, options: [.curveEaseInOut]) {
+                sweepBand.frame.origin.y = self.bounds.height - bandHeight * 0.35
+                beforeView.alpha = 0
+            } completion: { _ in
+                UIView.animate(withDuration: 0.16) {
+                    sweepBand.alpha = 0
+                } completion: { _ in
+                    if self.animationGeneration == generation {
+                        overlay.removeFromSuperview()
+                    }
+                }
+            }
+            return
+        }
 
         let bgColor = backgroundColor ?? .secondarySystemGroupedBackground
         let veil = UIView(frame: overlay.bounds)

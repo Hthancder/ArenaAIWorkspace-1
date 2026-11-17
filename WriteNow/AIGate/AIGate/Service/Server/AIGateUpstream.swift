@@ -43,8 +43,18 @@ struct AIGateUpstream {
 
 extension AIGateUpstream {
     init?() {
+        self.init(endpointID: nil, modelOverride: nil)
+    }
+
+    init?(endpointID: UUID?, modelOverride: String?) {
         let cvm = Configuration.shared
-        guard let endpoint = cvm.activatedEndpoint else { return nil }
+        let matchedEndpoint: Configuration.Endpoint?
+        if let endpointID {
+            matchedEndpoint = cvm.endpoints.first(where: { $0.id == endpointID }) ?? cvm.activatedEndpoint
+        } else {
+            matchedEndpoint = cvm.activatedEndpoint
+        }
+        guard let endpoint = matchedEndpoint else { return nil }
 
         guard let host = endpoint.url.host else { return nil }
         guard let scheme = endpoint.url.scheme else { return nil }
@@ -52,7 +62,8 @@ extension AIGateUpstream {
         let tls = scheme.lowercased() == "https"
         let port = endpoint.url.port ?? (tls ? 443 : 80)
         let key = endpoint.token
-        let model = endpoint.model
+        let cleanOverride = (modelOverride ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let model = cleanOverride.isEmpty ? endpoint.model : cleanOverride
 
         guard model.data(using: .utf8) != nil else { return nil }
 

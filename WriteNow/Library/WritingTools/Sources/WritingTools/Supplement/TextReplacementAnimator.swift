@@ -11,6 +11,7 @@ import UIKit
 enum TextReplacementAnimator {
     struct PreparedSnapshot {
         let beforeImage: UIImage?
+        let beforeSnapshotView: UIView?
         let oldRectsInTarget: [CGRect]
         let targetBoundsAtCapture: CGRect
         let backdropColor: UIColor
@@ -30,6 +31,11 @@ enum TextReplacementAnimator {
         let wasHidden = decorationViews.map(\.isHidden)
         decorationViews.forEach { $0.isHidden = true }
         let beforeImage = captureImage(of: targetView, afterScreenUpdates: false)
+        let beforeSnapshotView = targetView.resizableSnapshotView(
+            from: targetView.bounds,
+            afterScreenUpdates: false,
+            withCapInsets: .zero
+        )
         for (view, hidden) in zip(decorationViews, wasHidden) {
             view.isHidden = hidden
         }
@@ -42,6 +48,7 @@ enum TextReplacementAnimator {
 
         return PreparedSnapshot(
             beforeImage: beforeImage,
+            beforeSnapshotView: beforeSnapshotView,
             oldRectsInTarget: oldRectsInTarget,
             targetBoundsAtCapture: targetView.bounds,
             backdropColor: backdrop
@@ -101,33 +108,76 @@ enum TextReplacementAnimator {
         let newOverlayLines = newLines.map { toOverlay($0, referenceBounds: currentBounds) }
         let allOverlayLines = oldOverlayLines + newOverlayLines
 
-        // Build exact line-by-line veil covering 100% of old and new text lines
+        let resolvedTheme = themeColors.isEmpty
+            ? [colorFromHex(accentHex) ?? .systemBlue, .systemPurple]
+            : themeColors
+        let accentColor = colorFromHex(accentHex) ?? resolvedTheme.first ?? .systemBlue
+
+        // 100% Native Apple Intelligence luminous sweep using UIView.resizableSnapshotView
+        if normalizedStyle == "apple_intelligence" {
+            let afterSnapshotView = targetView.resizableSnapshotView(
+                from: currentBounds,
+                afterScreenUpdates: true,
+                withCapInsets: .zero
+            )
+            runAppleIntelligenceSweep(
+                overlay: overlay,
+                targetFrameInOverlay: toOverlay(currentBounds, referenceBounds: currentBounds),
+                beforeSnapshotView: prepared.beforeSnapshotView,
+                afterSnapshotView: afterSnapshotView,
+                beforeImage: prepared.beforeImage,
+                afterImage: afterImage,
+                oldLines: oldOverlayLines,
+                newLines: newOverlayLines,
+                themeColors: resolvedTheme,
+                accentColor: accentColor
+            )
+            return
+        }
+
+        // Build per-line backdrop veil covering 100% of old and new text lines
         let veilContainer = UIView(frame: overlay.bounds)
-        veilContainer.backgroundColor = prepared.backdropColor
+        veilContainer.backgroundColor = .clear
         veilContainer.alpha = 1
+
+        for line in allOverlayLines {
+            let padded = line.insetBy(dx: -3, dy: -2)
+            let targetLineRect = CGRect(
+                x: padded.minX + overlayFrame.minX - targetFrameInHost.minX + currentBounds.minX,
+                y: padded.minY + overlayFrame.minY - targetFrameInHost.minY + currentBounds.minY,
+                width: padded.width,
+                height: padded.height
+            )
+            let localColor = sampleLineBackdropColor(
+                from: afterImage ?? prepared.beforeImage,
+                lineRectInTarget: targetLineRect,
+                fallback: prepared.backdropColor
+            )
+            let lineVeil = UIView(frame: padded)
+            lineVeil.backgroundColor = localColor
+            lineVeil.layer.cornerRadius = 5
+            veilContainer.addSubview(lineVeil)
+        }
 
         let maskPath = UIBezierPath()
         for line in allOverlayLines {
             let padded = line.insetBy(dx: -3, dy: -2)
             maskPath.append(UIBezierPath(roundedRect: padded, cornerRadius: 5))
         }
+        let glowContainer = UIView(frame: veilContainer.bounds)
         let maskLayer = CAShapeLayer()
-        maskLayer.frame = veilContainer.bounds
+        maskLayer.frame = glowContainer.bounds
         maskLayer.path = maskPath.cgPath
-        veilContainer.layer.mask = maskLayer
-
-        let resolvedTheme = themeColors.isEmpty
-            ? [colorFromHex(accentHex) ?? .systemBlue, .systemPurple]
-            : themeColors
-        let accentColor = colorFromHex(accentHex) ?? resolvedTheme.first ?? .systemBlue
+        glowContainer.layer.mask = maskLayer
 
         let glowView = AnimatedMulticolorGradientView()
-        glowView.frame = veilContainer.bounds
+        glowView.frame = glowContainer.bounds
         glowView.speed = 1.35
         glowView.transitionSpeed = 5.0
         glowView.alpha = 0.24
         glowView.setColors(resolvedTheme.map { ColorVector($0) }, animated: false)
-        veilContainer.addSubview(glowView)
+        glowContainer.addSubview(glowView)
+        veilContainer.addSubview(glowContainer)
 
         overlay.addSubview(veilContainer)
 
@@ -207,6 +257,160 @@ enum TextReplacementAnimator {
                 newTiles: newTiles
             )
         }
+    }
+
+    // MARK: - 0. Native Apple Intelligence Luminous Sweep
+
+    private static func runAppleIntelligenceSweep(
+        overlay: UIView,
+        targetFrameInOverlay: CGRect,
+        beforeSnapshotView: UIView?,
+        afterSnapshotView: UIView?,
+        beforeImage: UIImage?,
+        afterImage: UIImage?,
+        oldLines: [CGRect],
+        newLines: [CGRect],
+        themeColors: [UIColor],
+        accentColor: UIColor
+    ) {
+        let allLines = oldLines + newLines
+        let unionBounds = allLines.reduce(allLines.first ?? overlay.bounds) { $0.union($1) }
+            .insetBy(dx: -8, dy: -6)
+            .intersection(overlay.bounds)
+
+        let beforeView: UIView
+        if let snap = beforeSnapshotView {
+            snap.frame = targetFrameInOverlay
+            beforeView = snap
+        } else {
+            let iv = UIImageView(frame: targetFrameInOverlay)
+            iv.image = beforeImage
+            iv.contentMode = .scaleToFill
+            beforeView = iv
+        }
+
+        let afterView: UIView
+        if let snap = afterSnapshotView {
+            snap.frame = targetFrameInOverlay
+            afterView = snap
+        } else {
+            let iv = UIImageView(frame: targetFrameInOverlay)
+            iv.image = afterImage
+            iv.contentMode = .scaleToFill
+            afterView = iv
+        }
+
+        // Clip both snapshot layers smoothly to the affected text region so untouched lines never flicker
+        let regionContainer = UIView(frame: overlay.bounds)
+        let regionMask = CAShapeLayer()
+        let maskPath = UIBezierPath()
+        for line in allLines {
+            maskPath.append(UIBezierPath(roundedRect: line.insetBy(dx: -5, dy: -3), cornerRadius: 6))
+        }
+        regionMask.frame = regionContainer.bounds
+        regionMask.path = maskPath.cgPath
+        regionContainer.layer.mask = regionMask
+        overlay.addSubview(regionContainer)
+
+        // Old text sits underneath, fading softly upward as the light band sweeps past
+        regionContainer.addSubview(beforeView)
+
+        // New text sits on top with an animated gradient reveal mask sweeping top-to-bottom
+        regionContainer.addSubview(afterView)
+        let revealMask = CAGradientLayer()
+        revealMask.frame = afterView.bounds
+        revealMask.colors = [
+            UIColor.white.cgColor,
+            UIColor.white.cgColor,
+            UIColor.clear.cgColor,
+        ]
+        revealMask.locations = [-0.25, -0.10, 0.05]
+        revealMask.startPoint = CGPoint(x: 0.3, y: 0.0)
+        revealMask.endPoint = CGPoint(x: 0.7, y: 1.0)
+        afterView.layer.mask = revealMask
+
+        // Luminous Apple Intelligence prism band sweeping across the lines
+        let prismColors: [UIColor] = [
+            UIColor(red: 0.97, green: 0.40, blue: 0.58, alpha: 1),
+            UIColor(red: 0.66, green: 0.33, blue: 0.97, alpha: 1),
+            accentColor,
+            UIColor(red: 0.13, green: 0.83, blue: 0.93, alpha: 1),
+        ]
+        let bandHeight = max(28, min(56, unionBounds.height * 0.42))
+        let sweepBand = UIView(frame: CGRect(
+            x: unionBounds.minX,
+            y: unionBounds.minY - bandHeight * 0.6,
+            width: max(20, unionBounds.width),
+            height: bandHeight
+        ))
+        let bandGradient = CAGradientLayer()
+        bandGradient.frame = sweepBand.bounds
+        bandGradient.colors = [
+            prismColors[0].withAlphaComponent(0.0).cgColor,
+            prismColors[0].withAlphaComponent(0.45).cgColor,
+            prismColors[1].withAlphaComponent(0.55).cgColor,
+            prismColors[3].withAlphaComponent(0.45).cgColor,
+            prismColors[3].withAlphaComponent(0.0).cgColor,
+        ]
+        bandGradient.startPoint = CGPoint(x: 0.0, y: 0.0)
+        bandGradient.endPoint = CGPoint(x: 1.0, y: 1.0)
+        sweepBand.layer.addSublayer(bandGradient)
+        sweepBand.alpha = 0.0
+        regionContainer.addSubview(sweepBand)
+
+        // Subtle starlight shimmer particles riding the sweep
+        let emitter = CAEmitterLayer()
+        emitter.emitterPosition = CGPoint(x: unionBounds.midX, y: unionBounds.minY)
+        emitter.emitterSize = CGSize(width: max(24, unionBounds.width * 0.9), height: 10)
+        emitter.emitterShape = .line
+        let dotImage = makeDustParticleImage()
+        let spark = CAEmitterCell()
+        spark.contents = dotImage
+        spark.birthRate = Float(min(90, max(28, allLines.count * 14)))
+        spark.lifetime = 0.50
+        spark.velocity = 20
+        spark.velocityRange = 16
+        spark.emissionRange = .pi * 2
+        spark.scale = 0.22
+        spark.scaleRange = 0.14
+        spark.alphaSpeed = -2.0
+        spark.color = (themeColors.first ?? prismColors[1]).withAlphaComponent(0.9).cgColor
+        emitter.emitterCells = [spark]
+        regionContainer.layer.addSublayer(emitter)
+
+        let duration: TimeInterval = 0.62
+        let locAnim = CABasicAnimation(keyPath: "locations")
+        locAnim.fromValue = [-0.25, -0.10, 0.05]
+        locAnim.toValue = [0.95, 1.12, 1.28]
+        locAnim.duration = duration
+        locAnim.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        locAnim.fillMode = .forwards
+        locAnim.isRemovedOnCompletion = false
+        revealMask.add(locAnim, forKey: "aiSweepReveal")
+
+        let emitterAnim = CABasicAnimation(keyPath: "emitterPosition.y")
+        emitterAnim.fromValue = unionBounds.minY
+        emitterAnim.toValue = unionBounds.maxY
+        emitterAnim.duration = duration * 0.92
+        emitterAnim.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        emitter.add(emitterAnim, forKey: "aiSparkMove")
+
+        UIView.animate(withDuration: 0.16, delay: 0, options: [.curveEaseOut]) {
+            sweepBand.alpha = 1.0
+            beforeView.alpha = 0.72
+        }
+        UIView.animate(withDuration: duration, delay: 0, options: [.curveEaseInOut]) {
+            sweepBand.frame.origin.y = unionBounds.maxY - bandHeight * 0.35
+            beforeView.alpha = 0.0
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration * 0.78) {
+            emitter.birthRate = 0
+            UIView.animate(withDuration: 0.18) {
+                sweepBand.alpha = 0
+            }
+        }
+
+        cleanupOverlay(overlay: overlay, veil: regionContainer, after: duration + 0.14)
     }
 
     // MARK: - 1. Scatter & Assemble
@@ -854,6 +1058,55 @@ enum TextReplacementAnimator {
             ctx.cgContext.fillEllipse(in: CGRect(origin: .zero, size: size))
         }
         return img.cgImage
+    }
+
+    private static func sampleLineBackdropColor(
+        from image: UIImage?,
+        lineRectInTarget: CGRect,
+        fallback: UIColor
+    ) -> UIColor {
+        guard let cg = image?.cgImage, let image else { return fallback }
+        let w = cg.width
+        let h = cg.height
+        let scale = image.scale
+        guard w > 4, h > 4 else { return fallback }
+
+        let probePoints: [CGPoint] = [
+            CGPoint(x: max(1, lineRectInTarget.minX - 2), y: lineRectInTarget.midY),
+            CGPoint(x: lineRectInTarget.minX + 2, y: max(1, lineRectInTarget.minY + 1)),
+            CGPoint(x: max(1, lineRectInTarget.maxX - 2), y: lineRectInTarget.midY),
+        ]
+
+        var rgba = [UInt8](repeating: 0, count: 4)
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
+
+        for pt in probePoints {
+            let px = min(w - 1, max(0, Int(pt.x * scale)))
+            let py = min(h - 1, max(0, Int(pt.y * scale)))
+            guard let pixelCG = cg.cropping(to: CGRect(x: px, y: py, width: 1, height: 1)),
+                  let ctx = CGContext(
+                      data: &rgba,
+                      width: 1,
+                      height: 1,
+                      bitsPerComponent: 8,
+                      bytesPerRow: 4,
+                      space: colorSpace,
+                      bitmapInfo: bitmapInfo
+                  )
+            else { continue }
+            ctx.clear(CGRect(x: 0, y: 0, width: 1, height: 1))
+            ctx.draw(pixelCG, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+            if rgba[3] > 210 {
+                return UIColor(
+                    red: CGFloat(rgba[0]) / 255.0,
+                    green: CGFloat(rgba[1]) / 255.0,
+                    blue: CGFloat(rgba[2]) / 255.0,
+                    alpha: 1.0
+                )
+            }
+        }
+        return fallback
     }
 
     private static func sampleBackdropColor(

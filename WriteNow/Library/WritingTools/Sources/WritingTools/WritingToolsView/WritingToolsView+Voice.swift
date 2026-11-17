@@ -326,7 +326,8 @@ extension WritingToolsView {
             outputHistory.append(trimmedFinal)
             historyIndex = outputHistory.count - 1
             isEditingOutput = false
-            showOriginalDiff = false
+            diffDisplayMode = .none
+            persistSessionSnapshot()
 
         default: // "prompt"
             if cfg.settings.stt.autoSendVoicePrompt {

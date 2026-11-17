@@ -63,6 +63,93 @@ extension WritingToolsView {
                 voiceModeAndLanguageStrip
             }
 
+            if let snapshot = restorableSession {
+                HStack(spacing: 8) {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.cyan)
+
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Restore: \(snapshot.taskTitle)")
+                            .font(.caption2.weight(.semibold))
+                            .lineLimit(1)
+                        Text(snapshot.output)
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.68))
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 4)
+
+                    Button("Restore") {
+                        restoreLastSession(snapshot)
+                    }
+                    .font(.caption2.weight(.bold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.cyan.opacity(0.32))
+                    .cornerRadius(6)
+                    .buttonStyle(.plain)
+
+                    Button {
+                        restorableSession = nil
+                        cfg.clearLastSession()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.white.opacity(0.6))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 9)
+                .padding(.vertical, 6)
+                .background(Color.white.opacity(0.11))
+                .cornerRadius(9)
+            }
+
+            if cfg.settings.clipboardContextEnabled, !clipboardContextText.isEmpty {
+                HStack(spacing: 6) {
+                    Button {
+                        clipboardContextAttached.toggle()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: clipboardContextAttached ? "doc.on.clipboard.fill" : "doc.on.clipboard")
+                                .font(.caption2)
+                            Text(clipboardContextAttached ? "Clipboard ✓" : "+ Clipboard")
+                                .font(.caption2.weight(.semibold))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(clipboardContextAttached ? Color.green.opacity(0.32) : Color.white.opacity(0.12))
+                        .cornerRadius(7)
+                    }
+                    .buttonStyle(.plain)
+
+                    Text(clipboardContextText.replacingOccurrences(of: "\n", with: " "))
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.68))
+                        .lineLimit(1)
+
+                    Spacer(minLength: 2)
+
+                    Button {
+                        runSmartReply()
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: "arrowshape.turn.up.left.fill")
+                                .font(.system(size: 9))
+                            Text("Smart Reply")
+                                .font(.caption2.weight(.semibold))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.white.opacity(0.20))
+                        .cornerRadius(7)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
             if !voiceBannerMessage.isEmpty {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.triangle.fill")
@@ -152,8 +239,11 @@ extension WritingToolsView {
                     .font(.footnote.weight(.medium))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
-                if !preset.outputLanguage.isEmpty || preset.insertBehavior == .append {
+                if !preset.outputLanguage.isEmpty || preset.insertBehavior == .append || !preset.shortOverrideModelName.isEmpty {
                     HStack(spacing: 4) {
+                        if !preset.shortOverrideModelName.isEmpty {
+                            Text(preset.shortOverrideModelName)
+                        }
                         if !preset.outputLanguage.isEmpty {
                             Text(preset.outputLanguage)
                         }
@@ -183,5 +273,29 @@ extension WritingToolsView {
         customPromptInput = ""
         currentTask = .customPrompt(trimmed)
         executeCurrentTask()
+    }
+
+    func runSmartReply() {
+        if !clipboardContextText.isEmpty {
+            clipboardContextAttached = true
+            let draftNote = textProxy.selectedText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let instruction = draftNote.isEmpty
+                ? "Write a natural, helpful, ready-to-send reply to the clipboard message in the same language as that message."
+                : "Write a natural, ready-to-send reply to the clipboard message incorporating my draft notes/points in the selected text."
+            currentTask = .customPrompt(instruction)
+        } else {
+            currentTask = .customPrompt("Write a natural, clear, ready-to-send reply to the selected message in the same language.")
+        }
+        executeCurrentTask()
+    }
+
+    func restoreLastSession(_ snapshot: LastSessionSnapshot) {
+        output = snapshot.output
+        outputHistory = snapshot.outputHistory.isEmpty ? [snapshot.output] : snapshot.outputHistory
+        historyIndex = max(0, min(snapshot.historyIndex, outputHistory.count - 1))
+        voiceLastTranscript = snapshot.voiceLastTranscript
+        isEditingOutput = false
+        diffDisplayMode = .none
+        restorableSession = nil
     }
 }

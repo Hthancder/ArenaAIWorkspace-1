@@ -144,6 +144,12 @@ public struct RuntimeSettings: Codable, Equatable {
     public var backgroundImageRevision: String
     public var textReplacementAnimation: String
     public var stt: RuntimeSTTSettings
+    public var wordDiffEnabled: Bool
+    public var defaultDiffMode: String
+    public var clipboardContextEnabled: Bool
+    public var autoAttachClipboardOnEmpty: Bool
+    public var restoreLastSessionEnabled: Bool
+    public var lastSessionTTLSeconds: Int
 
     public static let `default` = RuntimeSettings(
         menuTitle: "Write Now",
@@ -166,8 +172,14 @@ public struct RuntimeSettings: Codable, Equatable {
         backgroundImageBlur: 6.0,
         backgroundImageDim: 0.45,
         backgroundImageRevision: "",
-        textReplacementAnimation: "scatter_assemble",
-        stt: .default
+        textReplacementAnimation: "apple_intelligence",
+        stt: .default,
+        wordDiffEnabled: true,
+        defaultDiffMode: "toggle_word",
+        clipboardContextEnabled: true,
+        autoAttachClipboardOnEmpty: false,
+        restoreLastSessionEnabled: true,
+        lastSessionTTLSeconds: 180
     )
 
     enum CodingKeys: String, CodingKey {
@@ -177,6 +189,8 @@ public struct RuntimeSettings: Codable, Equatable {
         case accentColorHex, menuThemePreset, backgroundMode, customThemeColorsHex
         case solidBackgroundHex, backgroundImageBlur, backgroundImageDim
         case backgroundImageRevision, textReplacementAnimation, stt
+        case wordDiffEnabled, defaultDiffMode, clipboardContextEnabled
+        case autoAttachClipboardOnEmpty, restoreLastSessionEnabled, lastSessionTTLSeconds
     }
 
     public init(
@@ -200,8 +214,14 @@ public struct RuntimeSettings: Codable, Equatable {
         backgroundImageBlur: Double = 6.0,
         backgroundImageDim: Double = 0.45,
         backgroundImageRevision: String = "",
-        textReplacementAnimation: String = "scatter_assemble",
-        stt: RuntimeSTTSettings = .default
+        textReplacementAnimation: String = "apple_intelligence",
+        stt: RuntimeSTTSettings = .default,
+        wordDiffEnabled: Bool = true,
+        defaultDiffMode: String = "toggle_word",
+        clipboardContextEnabled: Bool = true,
+        autoAttachClipboardOnEmpty: Bool = false,
+        restoreLastSessionEnabled: Bool = true,
+        lastSessionTTLSeconds: Int = 180
     ) {
         self.menuTitle = menuTitle
         self.globalSystemPrompt = globalSystemPrompt
@@ -225,6 +245,12 @@ public struct RuntimeSettings: Codable, Equatable {
         self.backgroundImageRevision = backgroundImageRevision
         self.textReplacementAnimation = textReplacementAnimation
         self.stt = stt
+        self.wordDiffEnabled = wordDiffEnabled
+        self.defaultDiffMode = defaultDiffMode
+        self.clipboardContextEnabled = clipboardContextEnabled
+        self.autoAttachClipboardOnEmpty = autoAttachClipboardOnEmpty
+        self.restoreLastSessionEnabled = restoreLastSessionEnabled
+        self.lastSessionTTLSeconds = lastSessionTTLSeconds
     }
 
     public init(from decoder: Decoder) throws {
@@ -249,9 +275,24 @@ public struct RuntimeSettings: Codable, Equatable {
         backgroundImageBlur = try c.decodeIfPresent(Double.self, forKey: .backgroundImageBlur) ?? 6.0
         backgroundImageDim = try c.decodeIfPresent(Double.self, forKey: .backgroundImageDim) ?? 0.45
         backgroundImageRevision = try c.decodeIfPresent(String.self, forKey: .backgroundImageRevision) ?? ""
-        textReplacementAnimation = try c.decodeIfPresent(String.self, forKey: .textReplacementAnimation) ?? "scatter_assemble"
+        textReplacementAnimation = try c.decodeIfPresent(String.self, forKey: .textReplacementAnimation) ?? "apple_intelligence"
         stt = try c.decodeIfPresent(RuntimeSTTSettings.self, forKey: .stt) ?? .default
+        wordDiffEnabled = try c.decodeIfPresent(Bool.self, forKey: .wordDiffEnabled) ?? true
+        defaultDiffMode = try c.decodeIfPresent(String.self, forKey: .defaultDiffMode) ?? "toggle_word"
+        clipboardContextEnabled = try c.decodeIfPresent(Bool.self, forKey: .clipboardContextEnabled) ?? true
+        autoAttachClipboardOnEmpty = try c.decodeIfPresent(Bool.self, forKey: .autoAttachClipboardOnEmpty) ?? false
+        restoreLastSessionEnabled = try c.decodeIfPresent(Bool.self, forKey: .restoreLastSessionEnabled) ?? true
+        lastSessionTTLSeconds = try c.decodeIfPresent(Int.self, forKey: .lastSessionTTLSeconds) ?? 180
     }
+}
+
+public struct LastSessionSnapshot: Codable, Equatable {
+    public let output: String
+    public let outputHistory: [String]
+    public let historyIndex: Int
+    public let taskTitle: String
+    public let voiceLastTranscript: String
+    public let savedAt: Date
 }
 
 public struct RuntimeSTTSettings: Codable, Equatable {
@@ -800,5 +841,54 @@ public class Configurator: ObservableObject {
             return err
         }
         return nil
+    }
+
+    // MARK: - Last Session Snapshot Persistence
+
+    private static let lastSessionKey = "WriteNowLastSessionSnapshotV1"
+
+    public func saveLastSession(
+        output: String,
+        outputHistory: [String],
+        historyIndex: Int,
+        taskTitle: String,
+        voiceLastTranscript: String
+    ) {
+        guard settings.restoreLastSessionEnabled else { return }
+        let trimmedOut = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedVoice = voiceLastTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedOut.isEmpty || !trimmedVoice.isEmpty else { return }
+
+        let trimmedHistory = Array(outputHistory.suffix(8))
+        let clampedIndex = max(0, min(historyIndex, max(0, trimmedHistory.count - 1)))
+        let snapshot = LastSessionSnapshot(
+            output: output,
+            outputHistory: trimmedHistory,
+            historyIndex: clampedIndex,
+            taskTitle: taskTitle,
+            voiceLastTranscript: voiceLastTranscript,
+            savedAt: Date()
+        )
+        if let data = try? JSONEncoder().encode(snapshot) {
+            UserDefaults.standard.set(data, forKey: Self.lastSessionKey)
+        }
+    }
+
+    public func loadValidLastSession() -> LastSessionSnapshot? {
+        guard settings.restoreLastSessionEnabled else { return nil }
+        guard let data = UserDefaults.standard.data(forKey: Self.lastSessionKey),
+              let snapshot = try? JSONDecoder().decode(LastSessionSnapshot.self, from: data)
+        else { return nil }
+
+        let ttl = settings.lastSessionTTLSeconds
+        if ttl > 0 && Date().timeIntervalSince(snapshot.savedAt) > TimeInterval(ttl) {
+            clearLastSession()
+            return nil
+        }
+        return snapshot
+    }
+
+    public func clearLastSession() {
+        UserDefaults.standard.removeObject(forKey: Self.lastSessionKey)
     }
 }

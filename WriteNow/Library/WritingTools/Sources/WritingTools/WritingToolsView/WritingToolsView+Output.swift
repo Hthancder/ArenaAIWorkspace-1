@@ -54,22 +54,38 @@ extension WritingToolsView {
 
                     Spacer()
 
+                    if cfg.settings.wordDiffEnabled && !textProxy.selectedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Button {
+                            diffDisplayMode = (diffDisplayMode == .wordDiff) ? .none : .wordDiff
+                            if diffDisplayMode != .none { isEditingOutput = false }
+                        } label: {
+                            Label("Diff", systemImage: "doc.text.magnifyingglass")
+                                .font(.caption2.weight(.medium))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(diffDisplayMode == .wordDiff ? Color.white.opacity(0.28) : Color.white.opacity(0.12))
+                                .cornerRadius(8)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isRunning)
+                    }
+
                     Button {
-                        showOriginalDiff.toggle()
-                        if showOriginalDiff { isEditingOutput = false }
+                        diffDisplayMode = (diffDisplayMode == .originalSplit) ? .none : .originalSplit
+                        if diffDisplayMode != .none { isEditingOutput = false }
                     } label: {
-                        Label("Original".localized, systemImage: showOriginalDiff ? "eye.fill" : "eye")
+                        Label("Original".localized, systemImage: diffDisplayMode == .originalSplit ? "eye.fill" : "eye")
                             .font(.caption2.weight(.medium))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                            .background(showOriginalDiff ? Color.white.opacity(0.28) : Color.white.opacity(0.12))
+                            .background(diffDisplayMode == .originalSplit ? Color.white.opacity(0.28) : Color.white.opacity(0.12))
                             .cornerRadius(8)
                     }
                     .buttonStyle(.plain)
 
                     Button {
                         isEditingOutput.toggle()
-                        if isEditingOutput { showOriginalDiff = false }
+                        if isEditingOutput { diffDisplayMode = .none }
                     } label: {
                         Label(isEditingOutput ? "Done".localized : "Edit".localized, systemImage: isEditingOutput ? "checkmark" : "pencil")
                             .font(.caption2.weight(.medium))
@@ -114,7 +130,7 @@ extension WritingToolsView {
                             .cornerRadius(8)
                         }
 
-                        if showOriginalDiff {
+                        if diffDisplayMode == .originalSplit {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("ORIGINAL")
                                     .font(.system(size: 10, weight: .bold))
@@ -129,11 +145,15 @@ extension WritingToolsView {
                             .cornerRadius(8)
                         }
 
-                        Text(output)
-                            .multilineTextAlignment(.leading)
-                            .font(.system(.footnote))
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        if diffDisplayMode == .wordDiff && !isRunning {
+                            WordLevelDiffView(original: textProxy.selectedText, updated: output)
+                        } else {
+                            Text(output)
+                                .multilineTextAlignment(.leading)
+                                .font(.system(.footnote))
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                         Divider().hidden()
                     }
                 }
@@ -321,5 +341,217 @@ private struct EditableOutputTextView: UIViewRepresentable {
         func textViewDidChange(_ textView: UITextView) {
             text = textView.text
         }
+    }
+}
+
+// MARK: - Word-Level Inline Diff View
+
+private struct WordLevelDiffView: View {
+    let original: String
+    let updated: String
+
+    var body: some View {
+        let diff = WordDiffEngine.build(original: original, updated: updated)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text("CHANGES")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.white.opacity(0.55))
+                if diff.addedWords > 0 {
+                    Text("+\(diff.addedWords)")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(Color(red: 0.56, green: 0.96, blue: 0.72))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Color.green.opacity(0.24))
+                        .cornerRadius(4)
+                }
+                if diff.removedWords > 0 {
+                    Text("-\(diff.removedWords)")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(Color(red: 1.0, green: 0.62, blue: 0.62))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Color.red.opacity(0.24))
+                        .cornerRadius(4)
+                }
+                if diff.addedWords == 0, diff.removedWords == 0 {
+                    Text("No changes")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.white.opacity(0.55))
+                }
+                Spacer()
+            }
+
+            Text(diff.attributed)
+                .multilineTextAlignment(.leading)
+                .font(.system(.footnote))
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+private enum WordDiffEngine {
+    enum OpKind {
+        case equal
+        case remove
+        case add
+    }
+
+    struct Result {
+        let attributed: AttributedString
+        let addedWords: Int
+        let removedWords: Int
+    }
+
+    static func build(original: String, updated: String) -> Result {
+        let oldTokens = tokenize(original)
+        let newTokens = tokenize(updated)
+
+        var prefix = 0
+        while prefix < oldTokens.count, prefix < newTokens.count, oldTokens[prefix] == newTokens[prefix] {
+            prefix += 1
+        }
+        var suffix = 0
+        while suffix < (oldTokens.count - prefix),
+              suffix < (newTokens.count - prefix),
+              oldTokens[oldTokens.count - 1 - suffix] == newTokens[newTokens.count - 1 - suffix]
+        {
+            suffix += 1
+        }
+
+        let midOld = Array(oldTokens[prefix ..< (oldTokens.count - suffix)])
+        let midNew = Array(newTokens[prefix ..< (newTokens.count - suffix)])
+
+        var ops: [(OpKind, String)] = []
+        if prefix > 0 {
+            ops.append((.equal, oldTokens[0 ..< prefix].joined()))
+        }
+
+        if midOld.isEmpty && midNew.isEmpty {
+            // Identical
+        } else if midOld.count * midNew.count > 160_000 {
+            if !midOld.isEmpty {
+                ops.append((.remove, midOld.joined()))
+            }
+            if !midNew.isEmpty {
+                ops.append((.add, midNew.joined()))
+            }
+        } else {
+            let n = midOld.count
+            let m = midNew.count
+            var dp = Array(repeating: Array(repeating: 0, count: m + 1), count: n + 1)
+            if n > 0, m > 0 {
+                for i in stride(from: n - 1, through: 0, by: -1) {
+                    for j in stride(from: m - 1, through: 0, by: -1) {
+                        if midOld[i] == midNew[j] {
+                            dp[i][j] = dp[i + 1][j + 1] + 1
+                        } else {
+                            dp[i][j] = max(dp[i + 1][j], dp[i][j + 1])
+                        }
+                    }
+                }
+            }
+
+            var i = 0
+            var j = 0
+            while i < n && j < m {
+                if midOld[i] == midNew[j] {
+                    appendMerged(&ops, kind: .equal, text: midOld[i])
+                    i += 1
+                    j += 1
+                } else if dp[i + 1][j] >= dp[i][j + 1] {
+                    appendMerged(&ops, kind: .remove, text: midOld[i])
+                    i += 1
+                } else {
+                    appendMerged(&ops, kind: .add, text: midNew[j])
+                    j += 1
+                }
+            }
+            while i < n {
+                appendMerged(&ops, kind: .remove, text: midOld[i])
+                i += 1
+            }
+            while j < m {
+                appendMerged(&ops, kind: .add, text: midNew[j])
+                j += 1
+            }
+        }
+
+        if suffix > 0 {
+            appendMerged(&ops, kind: .equal, text: oldTokens[(oldTokens.count - suffix) ..< oldTokens.count].joined())
+        }
+
+        var attributed = AttributedString()
+        var addedCount = 0
+        var removedCount = 0
+
+        for (kind, text) in ops {
+            guard !text.isEmpty else { continue }
+            var piece = AttributedString(text)
+            switch kind {
+            case .equal:
+                piece.foregroundColor = Color.white.opacity(0.92)
+            case .remove:
+                let wordCount = countNonWhitespaceTokens(text)
+                removedCount += wordCount
+                piece.foregroundColor = Color(red: 1.0, green: 0.72, blue: 0.72)
+                piece.backgroundColor = Color.red.opacity(0.30)
+                piece.strikethroughStyle = .single
+            case .add:
+                let wordCount = countNonWhitespaceTokens(text)
+                addedCount += wordCount
+                piece.foregroundColor = Color(red: 0.70, green: 1.0, blue: 0.80)
+                piece.backgroundColor = Color.green.opacity(0.30)
+            }
+            attributed.append(piece)
+        }
+
+        return Result(attributed: attributed, addedWords: addedCount, removedWords: removedCount)
+    }
+
+    private static func appendMerged(_ ops: inout [(OpKind, String)], kind: OpKind, text: String) {
+        if let last = ops.last, last.0 == kind {
+            ops[ops.count - 1].1 += text
+        } else {
+            ops.append((kind, text))
+        }
+    }
+
+    private static func countNonWhitespaceTokens(_ text: String) -> Int {
+        tokenize(text).filter { token in
+            !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }.count
+    }
+
+    private static func tokenize(_ text: String) -> [String] {
+        var tokens: [String] = []
+        var current = ""
+        var currentIsWord = false
+        var currentIsSpace = false
+
+        for ch in text {
+            let isSpace = ch.isWhitespace
+            let isWord = !isSpace && (ch.isLetter || ch.isNumber || ch == "_" || ch == "'" || ch == "’")
+            if current.isEmpty {
+                current.append(ch)
+                currentIsWord = isWord
+                currentIsSpace = isSpace
+            } else if isSpace && currentIsSpace {
+                current.append(ch)
+            } else if isWord && currentIsWord {
+                current.append(ch)
+            } else {
+                tokens.append(current)
+                current = String(ch)
+                currentIsWord = isWord
+                currentIsSpace = isSpace
+            }
+        }
+        if !current.isEmpty {
+            tokens.append(current)
+        }
+        return tokens
     }
 }

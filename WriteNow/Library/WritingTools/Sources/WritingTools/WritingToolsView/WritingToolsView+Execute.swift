@@ -19,6 +19,8 @@ extension WritingToolsView {
 
         cfg.openAI.cancelAllStreams()
         isEditingOutput = false
+        diffDisplayMode = .none
+        restorableSession = nil
         isRunning = true
         output = ""
         error = nil
@@ -26,10 +28,25 @@ extension WritingToolsView {
         let text = context.textProxy.selectedText
         let settings = cfg.settings
         let taskToRun = currentTask
-        let built = PromptComposer.buildMessages(for: taskToRun, selectedText: text, settings: settings)
+        let built = PromptComposer.buildMessages(
+            for: taskToRun,
+            selectedText: text,
+            settings: settings,
+            clipboardContext: activeClipboardContext
+        )
+        let requestModel: String
+        if case let .preset(preset) = taskToRun,
+           preset.endpointID != nil || !preset.modelOverride.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        {
+            let epId = preset.endpointID?.uuidString ?? ""
+            let overrideModel = preset.modelOverride.trimmingCharacters(in: .whitespacesAndNewlines)
+            requestModel = "__wn_ep__:\(epId)::\(overrideModel)"
+        } else {
+            requestModel = cfg.mid
+        }
         let query = ChatQuery(
             messages: built.messages,
-            model: cfg.mid,
+            model: requestModel,
             temperature: built.sampling.temperature,
             topP: built.sampling.topP
         )
@@ -108,6 +125,8 @@ extension WritingToolsView {
                 if !finalFormatted.isEmpty {
                     self.output = finalFormatted
                     self.appendHistory(finalFormatted)
+                    self.applyPreferredDefaultDiffMode()
+                    self.persistSessionSnapshot()
                     self.isRunning = false
                     self.error = nil
                 } else {
@@ -137,6 +156,8 @@ extension WritingToolsView {
                     if !finalFormatted.isEmpty {
                         self.output = finalFormatted
                         self.appendHistory(finalFormatted)
+                        self.applyPreferredDefaultDiffMode()
+                        self.persistSessionSnapshot()
                         self.isRunning = false
                         self.error = nil
                     } else {
@@ -158,6 +179,32 @@ extension WritingToolsView {
         historyIndex = max(0, outputHistory.count - 1)
     }
 
+    func applyPreferredDefaultDiffMode() {
+        let hasOriginal = !textProxy.selectedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard hasOriginal else {
+            diffDisplayMode = .none
+            return
+        }
+        switch cfg.settings.defaultDiffMode {
+        case "auto_word":
+            diffDisplayMode = cfg.settings.wordDiffEnabled ? .wordDiff : .none
+        case "split":
+            diffDisplayMode = .originalSplit
+        default:
+            diffDisplayMode = .none
+        }
+    }
+
+    func persistSessionSnapshot() {
+        cfg.saveLastSession(
+            output: output,
+            outputHistory: outputHistory,
+            historyIndex: historyIndex,
+            taskTitle: currentTaskTitle,
+            voiceLastTranscript: voiceLastTranscript
+        )
+    }
+
     func stopStreaming() {
         activeRequestToken = UUID()
         cfg.openAI.cancelAllStreams()
@@ -166,6 +213,7 @@ extension WritingToolsView {
         if !trimmed.isEmpty {
             output = trimmed
             appendHistory(trimmed)
+            persistSessionSnapshot()
         }
     }
 
@@ -254,10 +302,12 @@ extension WritingToolsView {
         cfg.openAI.cancelAllStreams()
         isRunning = false
         isEditingOutput = false
-        showOriginalDiff = false
+        diffDisplayMode = .none
         voiceLastTranscript = ""
         voiceBannerMessage = ""
         output = ""
+        restorableSession = nil
+        cfg.clearLastSession()
     }
 
     func accept(forceAppend: Bool? = nil) {
@@ -268,6 +318,8 @@ extension WritingToolsView {
         let accentHex = cfg.settings.accentColorHex
         let themeUIColors = Presenter.themeUIColors()
         let oldRects = context.textProxy.selectionRectsInView
+
+        cfg.clearLastSession()
 
         let prepared = animStyle != "none"
             ? TextReplacementAnimator.prepareSnapshot(
