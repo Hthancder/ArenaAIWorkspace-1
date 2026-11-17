@@ -1,0 +1,46 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  deb:
+    # Không dùng macOS runner (tốn phí). Build bằng zig trên Ubuntu.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Cài phụ thuộc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y make git rsync dpkg fakeroot xz-utils curl unzip python3
+          python3 -m pip install --user ziglang==0.13.0
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Lấy Theos
+        run: |
+          git clone --recursive --depth 1 https://github.com/theos/theos.git "$RUNNER_TEMP/theos"
+          echo "THEOS=$RUNNER_TEMP/theos" >> $GITHUB_ENV
+
+      - name: Lấy iOS SDK 15.6
+        run: |
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/theos/sdks.git "$RUNNER_TEMP/sdks"
+          cd "$RUNNER_TEMP/sdks"
+          git sparse-checkout set iPhoneOS15.6.sdk
+          ln -sfn "$RUNNER_TEMP/sdks/iPhoneOS15.6.sdk" "$THEOS/sdks/iPhoneOS15.6.sdk"
+
+      - name: Build
+        run: |
+          export ZIG_BIN="$(command -v zig)"
+          chmod +x build.sh tools/*.sh tools/theos-toolchain-stub/bin/*
+          ./build.sh --linux
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SiriBridge-deb
+          path: packages/*.deb
