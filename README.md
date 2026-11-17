@@ -50,18 +50,25 @@ Bảng chọn gói:
 
 ### Cách nhanh nhất: tải `.deb` build sẵn bởi GitHub Actions
 
-Mỗi lần push, CI build và (khi chạy tay / gắn tag) phát hành Release:
+Mỗi lần push, CI build **cả hai bản** (matrix rootless + roothide). Release được tạo
+khi chạy tay (`workflow_dispatch`) hoặc gắn tag `v*` — và chứa **2 file `.deb`**:
 
 ```
 https://github.com/Hthancder/ArenaAIWorkspace-1/releases
 ```
 
-Tải `com.hthancder.siribridge_<ver>_iphoneos-arm64.deb` rồi:
+Tải đúng file theo máy:
+
+| Máy | File |
+|---|---|
+| rootless (Dopamine, palera1n rootless) | `com.hthancder.siribridge_<ver>_iphoneos-arm64.deb` |
+| roothide (Bootstrap) | `com.hthancder.siribridge_<ver>_iphoneos-arm64e.deb` |
 
 ```bash
-# qua SSH (thiết bị đã jailbreak)
-scp com.hthancder.siribridge_*.deb root@<IP>:/var/mobile/
-ssh root@<IP> 'dpkg -i /var/mobile/com.hthancder.siribridge_*.deb && killall -9 SpringBoard'
+# qua SSH (thiết bị đã jailbreak), ví dụ bản rootless
+scp com.hthancder.siribridge_*_iphoneos-arm64.deb root@<IP>:/var/mobile/
+ssh root@<IP> 'dpkg -i /var/mobile/com.hthancder.siribridge_*_iphoneos-arm64.deb && killall -9 SpringBoard'
+# roothide: thay *_iphoneos-arm64.deb bằng *_iphoneos-arm64e.deb
 ```
 Hoặc mở file `.deb` bằng **Sileo / Zebra / Filza** trên máy.
 
