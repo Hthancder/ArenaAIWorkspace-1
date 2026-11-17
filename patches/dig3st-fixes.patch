@@ -1,13 +1,14 @@
 diff --git a/Makefile b/Makefile
-index 8be5b46..fa66665 100644
+index 8be5b46..69a57f4 100644
 --- a/Makefile
 +++ b/Makefile
-@@ -7,9 +7,13 @@ include $(THEOS)/makefiles/common.mk
+@@ -7,9 +7,14 @@ include $(THEOS)/makefiles/common.mk
  
  TWEAK_NAME = dig3st
  
 -dig3st_FILES = src/PushNotification.xm src/Tweak.x src/DigestPrefsManager.m src/Alert.m ./src/OpenAI/OpenAI.m ./src/OpenAI/Config.m ./src/OpenAI/ChatQuery.m ./src/DigestLogger.m
 +dig3st_FILES = src/PushNotification.xm src/Tweak.x src/DigestPrefsManager.m src/Alert.m ./src/OpenAI/OpenAI.m ./src/OpenAI/Config.m ./src/OpenAI/ChatQuery.m ./src/DigestLogger.m src/DigestBannerAnimator.m
++dig3st_FRAMEWORKS = UIKit QuartzCore
  dig3st_CFLAGS = -fobjc-arc
  dig3st_PRIVATE_FRAMEWORKS = UserNotificationsKit
 +ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
@@ -30,10 +31,10 @@ index e48656e..9661bf0 100644
  @end
 diff --git a/headers/Digest/DigestBannerAnimator.h b/headers/Digest/DigestBannerAnimator.h
 new file mode 100644
-index 0000000..c9a6e7e
+index 0000000..2975402
 --- /dev/null
 +++ b/headers/Digest/DigestBannerAnimator.h
-@@ -0,0 +1,41 @@
+@@ -0,0 +1,55 @@
 +#import <UIKit/UIKit.h>
 +
 +@interface DigestBannerRenderConfig : NSObject
@@ -43,7 +44,7 @@ index 0000000..c9a6e7e
 +@property (nonatomic, copy) NSString *accentColorKey;   // default, label, blue, purple, teal, orange, red, green
 +@property (nonatomic, assign) BOOL boldSummary;
 +@property (nonatomic, assign) BOOL showOriginalLine;
-+@property (nonatomic, copy) NSString *animationStyle;   // fadeWords, typewriter, shimmer, crossfade, none
++@property (nonatomic, copy) NSString *animationStyle;   // aiSweep, springFade, glowPulse, shimmer, fadeWords, typewriter, crossfade, none
 +@property (nonatomic, strong) UIImage *arrowImage;
 +@end
 +
@@ -54,6 +55,11 @@ index 0000000..c9a6e7e
 +                                          retainedImage:(UIImage **)outImage;
 ++ (BOOL)hasActiveAnimationForLabel:(UIView *)textElement;
 ++ (NSString *)currentTargetSummaryForLabel:(UIView *)textElement;
+++ (BOOL)isLabelStaticUpToDate:(UIView *)textElement
++                  withSummary:(NSString *)summary
++                 originalText:(NSString *)originalText
++                  isStreaming:(BOOL)isStreaming
++                       config:(DigestBannerRenderConfig *)config;
 ++ (void)refreshNowForLabel:(UIView *)textElement;
 ++ (void)applyStaticToLabel:(UIView *)textElement
 +               withSummary:(NSString *)summary
@@ -68,6 +74,15 @@ index 0000000..c9a6e7e
 +             config:(DigestBannerRenderConfig *)config
 +         layoutHost:(UIView *)layoutHost
 +      onLayoutDelta:(void (^)(void))layoutDeltaBlock;
+++ (void)updateLabel:(UIView *)textElement
++        withSummary:(NSString *)summary
++       originalText:(NSString *)originalText
++        isStreaming:(BOOL)isStreaming
++    alreadyAnimated:(BOOL)alreadyAnimated
++             config:(DigestBannerRenderConfig *)config
++         layoutHost:(UIView *)layoutHost
++      onLayoutDelta:(void (^)(void))layoutDeltaBlock
++onAnimationComplete:(void (^)(NSString *completedSummary))completeBlock;
 ++ (void)renderExpandedToLabel:(UIView *)textElement
 +                  withSummary:(NSString *)summary
 +                 originalText:(NSString *)originalText
@@ -131,22 +146,24 @@ index 062b2a3..03ad3ac 100644
  #import "Notification.h"
  #import "OpenAI.h"
 diff --git a/headers/Notification.h b/headers/Notification.h
-index e8bdc8b..ac979b5 100644
+index e8bdc8b..ef16da9 100644
 --- a/headers/Notification.h
 +++ b/headers/Notification.h
-@@ -1,7 +1,11 @@
+@@ -1,7 +1,13 @@
  @interface NCNotificationRequest : NSObject
  @property (nonatomic, assign) BOOL dig3st;
  @property (nonatomic, retain) NSString * actualMessage;
 +@property (nonatomic, assign) BOOL dig3stStreaming;
 +@property (nonatomic, retain) NSString * dig3stStreamId;
++@property (nonatomic, assign) BOOL dig3stAnimDone;
++@property (nonatomic, copy) NSString * dig3stAnimKey;
  @property (nonatomic, retain) NSString *sectionIdentifier;
 +@property (nonatomic, retain) NSString *threadIdentifier;
 +@property (nonatomic, retain) NSString *notificationIdentifier;
  @property (nonatomic, retain) NSObject *content;
  @end
  
-@@ -9,16 +13,73 @@
+@@ -9,16 +15,73 @@
  @property (nonatomic,readonly) UIView * viewForPreview;
  @end
  
@@ -859,10 +876,10 @@ index e3804b1..8f9f5ec 100644
  @end
 diff --git a/preferences/DigestAppearanceController.m b/preferences/DigestAppearanceController.m
 new file mode 100644
-index 0000000..1862609
+index 0000000..b320f28
 --- /dev/null
 +++ b/preferences/DigestAppearanceController.m
-@@ -0,0 +1,415 @@
+@@ -0,0 +1,425 @@
 +#import "../headers/HeadersPreferences.h"
 +#import <Preferences/PSListItemsController.h>
 +
@@ -912,18 +929,22 @@ index 0000000..1862609
 +}
 +
 +- (NSString *)animationDisplayName:(NSString *)animKey {
-+	if ([animKey isEqualToString:@"typewriter"]) return @"Typewriter";
++	if ([animKey isEqualToString:@"aiSweep"]) return @"Apple AI Sweep";
++	if ([animKey isEqualToString:@"springFade"]) return @"Spring Pop";
++	if ([animKey isEqualToString:@"glowPulse"]) return @"Glow Pulse";
 +	if ([animKey isEqualToString:@"shimmer"]) return @"Shimmer Wave";
++	if ([animKey isEqualToString:@"fadeWords"]) return @"Word Fade-In";
++	if ([animKey isEqualToString:@"typewriter"]) return @"Typewriter";
 +	if ([animKey isEqualToString:@"crossfade"]) return @"Soft Crossfade";
 +	if ([animKey isEqualToString:@"none"]) return @"Instant";
-+	return @"Word Fade-In";
++	return @"Apple AI Sweep";
 +}
 +
 +- (void)viewWillAppear:(BOOL)animated {
 +	[super viewWillAppear:animated];
 +	DigestPrefsManager *manager = [self prefs];
 +
-+	NSString *curAnim = [manager safeObjectForKey:@"streamAnimationStyle"] ?: @"fadeWords";
++	NSString *curAnim = [manager safeObjectForKey:@"streamAnimationStyle"] ?: @"aiSweep";
 +	id strObj = [manager safeObjectForKey:@"streamingEnabled"];
 +	BOOL curStreaming = strObj ? [strObj boolValue] : YES;
 +	NSString *curBadge = [manager safeObjectForKey:@"bannerBadgeStyle"] ?: @"arrow";
@@ -949,7 +970,7 @@ index 0000000..1862609
 +			[self playStreamDemo];
 +		});
 +	} else {
-+		[self refreshPreviewBannerStreaming:NO text:nil];
++		[self refreshPreviewBannerStreaming:NO text:nil animateReveal:animChanged];
 +	}
 +}
 +
@@ -1023,7 +1044,7 @@ index 0000000..1862609
 +	cfg.boldSummary = [[manager safeObjectForKey:@"bannerBoldSummary"] boolValue];
 +	cfg.showOriginalLine = [[manager safeObjectForKey:@"bannerShowOriginal"] boolValue];
 +	NSString *anim = [manager safeObjectForKey:@"streamAnimationStyle"];
-+	cfg.animationStyle = ([anim isKindOfClass:[NSString class]] && anim.length > 0) ? anim : @"fadeWords";
++	cfg.animationStyle = ([anim isKindOfClass:[NSString class]] && anim.length > 0) ? anim : @"aiSweep";
 +	cfg.arrowImage = self.arrowImage;
 +	return cfg;
 +}
@@ -1033,7 +1054,7 @@ index 0000000..1862609
 +	DigestPrefsManager *manager = [self prefs];
 +	id strObj = [manager safeObjectForKey:@"streamingEnabled"];
 +	BOOL strOn = strObj ? [strObj boolValue] : YES;
-+	NSString *animKey = [manager safeObjectForKey:@"streamAnimationStyle"] ?: @"fadeWords";
++	NSString *animKey = [manager safeObjectForKey:@"streamAnimationStyle"] ?: @"aiSweep";
 +	if (self.expandedPreviewMode) {
 +		self.previewModeBadge.text = @"LONG-PRESS PREVIEW · FULL ORIGINAL";
 +	} else {
@@ -1196,6 +1217,10 @@ index 0000000..1862609
 +}
 +
 +- (void)refreshPreviewBannerStreaming:(BOOL)streaming text:(NSString *)overrideText {
++	[self refreshPreviewBannerStreaming:streaming text:overrideText animateReveal:NO];
++}
++
++- (void)refreshPreviewBannerStreaming:(BOOL)streaming text:(NSString *)overrideText animateReveal:(BOOL)animateReveal {
 +	if (!self.previewBodyLabel) return;
 +	NSString *sampleSummary = overrideText ?: @"Minh hẹn 7h tối nay gặp ở quán cũ Nguyễn Huệ để chốt slide.";
 +	NSString *sampleOriginal = @"Ê tối nay rảnh không, tầm 7h qua quán cũ chỗ Nguyễn Huệ ngồi chút nha để mình chốt nốt slide thuyết trình ngày mai luôn. Nhớ mang theo USB file thiết kế nhé!";
@@ -1216,11 +1241,13 @@ index 0000000..1862609
 +						  withSummary:sampleSummary
 +						 originalText:sampleOriginal
 +						  isStreaming:streaming
++					  alreadyAnimated:(!streaming && !animateReveal)
 +							   config:cfg
 +						   layoutHost:self.previewCardView
 +						onLayoutDelta:^{
 +		[weakSelf resizeTableHeaderToFit];
-+	}];
++	}
++				  onAnimationComplete:nil];
 +	[self resizeTableHeaderToFit];
 +}
 +
@@ -1245,14 +1272,14 @@ index 0000000..1862609
 +	];
 +
 +	__weak typeof(self) weakSelf = self;
-+	[self refreshPreviewBannerStreaming:YES text:@"Đang tóm tắt…"];
++	[self refreshPreviewBannerStreaming:YES text:@"Đang tóm tắt…" animateReveal:NO];
 +	for (NSUInteger i = 0; i < steps.count; i++) {
 +		BOOL isLast = (i == steps.count - 1);
-+		double delay = 0.25 + (i * 0.24);
++		double delay = 0.22 + (i * 0.20);
 +		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
 +			__strong typeof(weakSelf) strongSelf = weakSelf;
 +			if (!strongSelf || strongSelf.demoGeneration != gen) return;
-+			[strongSelf refreshPreviewBannerStreaming:!isLast text:steps[i]];
++			[strongSelf refreshPreviewBannerStreaming:!isLast text:steps[i] animateReveal:isLast];
 +		});
 +	}
 +}
@@ -2811,7 +2838,7 @@ index bf5f372..971b947 100644
 \ No newline at end of file
 +@end
 diff --git a/preferences/Makefile b/preferences/Makefile
-index bf06061..a48c2d3 100644
+index bf06061..1a8501e 100644
 --- a/preferences/Makefile
 +++ b/preferences/Makefile
 @@ -6,16 +6,17 @@ include $(THEOS)/makefiles/common.mk
@@ -2819,8 +2846,9 @@ index bf06061..a48c2d3 100644
  BUNDLE_NAME = dig3st
  
 -dig3st_FILES = $(wildcard *.m CustomCells/*.m  ../src/DigestPrefsManager.m  ../src/DigestLogger.m  ../src/Alert.m)
+-dig3st_FRAMEWORKS = UIKit
 +dig3st_FILES = $(wildcard *.m CustomCells/*.m  ../src/DigestPrefsManager.m  ../src/DigestLogger.m  ../src/Alert.m ../src/DigestBannerAnimator.m)
- dig3st_FRAMEWORKS = UIKit
++dig3st_FRAMEWORKS = UIKit QuartzCore
  dig3st_PRIVATE_FRAMEWORKS = Preferences
  dig3st_INSTALL_PATH = /Library/PreferenceBundles
  
@@ -2839,7 +2867,7 @@ index bf06061..a48c2d3 100644
  include $(THEOS_MAKE_PATH)/bundle.mk
 diff --git a/preferences/Resources/Appearance.plist b/preferences/Resources/Appearance.plist
 new file mode 100644
-index 0000000..a892be3
+index 0000000..1f431dc
 --- /dev/null
 +++ b/preferences/Resources/Appearance.plist
 @@ -0,0 +1,116 @@
@@ -2895,7 +2923,7 @@ index 0000000..a892be3
 +		{
 +			cell = PSGroupCell;
 +			label = "Streaming & Animation";
-+			footerText = "Changing Stream Animation automatically replays the Live Preview above.";
++			footerText = "GPU-native styles (Apple AI Sweep, Spring Pop, Glow Pulse, Shimmer Wave, Soft Crossfade) run smoothly at 60–120Hz with zero scroll lag. Animations play once per notification and never replay when scrolling.";
 +		},
 +		{
 +			cell = PSSwitchCell;
@@ -2913,10 +2941,10 @@ index 0000000..a892be3
 +			detail = PSListItemsController;
 +			defaults = "com.uncore.dig3st";
 +			key = streamAnimationStyle;
-+			default = "fadeWords";
++			default = "aiSweep";
 +			label = "Stream Animation";
-+			validTitles = ("Word Fade-In (Mờ dần từng chữ)", "Typewriter (Gõ từng chữ)", "Shimmer Wave (Sóng sáng)", "Soft Crossfade (Chuyển mờ)", "None (Tức thì)");
-+			validValues = ("fadeWords", "typewriter", "shimmer", "crossfade", "none");
++			validTitles = ("Apple AI Sweep (Quét sáng iOS)", "Spring Pop (Nảy mượt iOS)", "Glow Pulse (Phát sáng viền)", "Shimmer Wave (Sóng sáng)", "Word Fade-In (Mờ từng chữ)", "Typewriter (Gõ từng chữ)", "Soft Crossfade (Chuyển mờ)", "None (Tức thì)");
++			validValues = ("aiSweep", "springFade", "glowPulse", "shimmer", "fadeWords", "typewriter", "crossfade", "none");
 +			PostNotification = "com.uncore.dig3st/preferences.changed";
 +		},
 +		{
@@ -3218,10 +3246,10 @@ index df1a4a7..4459012 100644
  			isNumeric = true;
 diff --git a/src/DigestBannerAnimator.m b/src/DigestBannerAnimator.m
 new file mode 100644
-index 0000000..e1a5fa3
+index 0000000..3f742d7
 --- /dev/null
 +++ b/src/DigestBannerAnimator.m
-@@ -0,0 +1,760 @@
+@@ -0,0 +1,1059 @@
 +#import "../headers/Digest/DigestBannerAnimator.h"
 +#import <QuartzCore/QuartzCore.h>
 +#import <objc/runtime.h>
@@ -3266,7 +3294,6 @@ index 0000000..e1a5fa3
 +@property (nonatomic, assign) NSUInteger revealedChars;
 +@property (nonatomic, assign) CFTimeInterval streamStartTime;
 +@property (nonatomic, assign) CFTimeInterval lastTypeStepTime;
-+@property (nonatomic, assign) CFTimeInterval lastPulseRenderTime;
 +@property (nonatomic, assign) NSUInteger lastLayoutTokenCount;
 +@property (nonatomic, assign) BOOL lastLayoutStreaming;
 +@property (nonatomic, assign) NSUInteger missingWindowTicks;
@@ -3276,13 +3303,29 @@ index 0000000..e1a5fa3
 +@property (nonatomic, copy) NSAttributedString *cachedPrefixAttr;
 +@property (nonatomic, strong) UIImage *cachedPrefixImage;
 +@property (nonatomic, copy) void (^layoutDeltaBlock)(void);
++@property (nonatomic, copy) void (^completionCallback)(NSString *completedSummary);
++@property (nonatomic, assign) BOOL completionNotified;
 +- (void)invalidate;
 +@end
 +
++static NSString *const kDigestStyledAttrKey = @"dig3stStyled";
++
 +static void *kDigestAnimStateKey = &kDigestAnimStateKey;
 +static void *kDigestStaticImgKey = &kDigestStaticImgKey;
++static void *kDigestLastStaticKey = &kDigestLastStaticKey;
++static void *kDigestStreamMaskKey = &kDigestStreamMaskKey;
++static void *kDigestAnimGenKey = &kDigestAnimGenKey;
 +static void *kDigestExpKey = &kDigestExpKey;
 +static void *kDigestExpImg = &kDigestExpImg;
++
++static NSHashTable<DigestLabelAnimState *> *digestActiveDisplayLinks(void) {
++    static NSHashTable<DigestLabelAnimState *> *table = nil;
++    static dispatch_once_t onceToken;
++    dispatch_once(&onceToken, ^{
++        table = [NSHashTable weakObjectsHashTable];
++    });
++    return table;
++}
 +
 +static NSCharacterSet *digestWhitespaceSet(void) {
 +    static NSCharacterSet *ws = nil;
@@ -3301,6 +3344,77 @@ index 0000000..e1a5fa3
 +        cache.countLimit = 24;
 +    });
 +    return cache;
++}
++
++static NSUInteger nextElementAnimGeneration(UIView *el) {
++    NSNumber *cur = objc_getAssociatedObject(el, kDigestAnimGenKey);
++    NSUInteger next = cur ? ([cur unsignedIntegerValue] + 1) : 1;
++    objc_setAssociatedObject(el, kDigestAnimGenKey, @(next), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++    return next;
++}
++
++static NSUInteger currentElementAnimGeneration(UIView *el) {
++    NSNumber *cur = objc_getAssociatedObject(el, kDigestAnimGenKey);
++    return cur ? [cur unsignedIntegerValue] : 0;
++}
++
++static void clearGPUEffectsOnElement(UIView *el) {
++    if (!el) return;
++    [el.layer removeAnimationForKey:@"dig3stReveal"];
++    [el.layer removeAnimationForKey:@"dig3stGlow"];
++    [el.layer removeAnimationForKey:@"dig3stTransition"];
++    CAGradientLayer *streamMask = objc_getAssociatedObject(el, kDigestStreamMaskKey);
++    if (streamMask) {
++        [streamMask removeAllAnimations];
++        objc_setAssociatedObject(el, kDigestStreamMaskKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++    }
++    if (el.layer.mask) {
++        [el.layer.mask removeAllAnimations];
++        el.layer.mask = nil;
++    }
++    el.layer.opacity = 1.0f;
++    el.layer.transform = CATransform3DIdentity;
++    el.layer.shadowOpacity = 0.0f;
++    el.layer.shadowRadius = 0.0f;
++}
++
++static void ensureStreamShimmerMaskOnElement(UIView *el) {
++    if (!el || el.window == nil) return;
++    CGRect bounds = el.bounds;
++    if (bounds.size.width < 12.0 || bounds.size.height < 4.0) return;
++
++    CGRect maskFrame = CGRectMake(-16.0, -12.0, bounds.size.width + 32.0, MAX(bounds.size.height + 40.0, 120.0));
++    CAGradientLayer *existing = objc_getAssociatedObject(el, kDigestStreamMaskKey);
++    if (existing && el.layer.mask == existing) {
++        if (!CGRectEqualToRect(existing.frame, maskFrame)) {
++            [CATransaction begin];
++            [CATransaction setDisableActions:YES];
++            existing.frame = maskFrame;
++            [CATransaction commit];
++        }
++        return;
++    }
++
++    CAGradientLayer *grad = [CAGradientLayer layer];
++    grad.frame = maskFrame;
++    grad.startPoint = CGPointMake(0.0, 0.45);
++    grad.endPoint = CGPointMake(1.0, 0.55);
++    UIColor *dim = [[UIColor whiteColor] colorWithAlphaComponent:0.42];
++    UIColor *bright = [UIColor whiteColor];
++    grad.colors = @[(id)dim.CGColor, (id)bright.CGColor, (id)dim.CGColor];
++    grad.locations = @[@(-0.6), @(-0.3), @(0.0)];
++
++    CABasicAnimation *sweep = [CABasicAnimation animationWithKeyPath:@"locations"];
++    sweep.fromValue = @[@(-0.65), @(-0.32), @(0.0)];
++    sweep.toValue = @[@(1.0), @(1.32), @(1.65)];
++    sweep.duration = 1.15;
++    sweep.repeatCount = HUGE_VALF;
++    sweep.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut];
++    sweep.removedOnCompletion = NO;
++    [grad addAnimation:sweep forKey:@"dig3stStreamShimmer"];
++
++    objc_setAssociatedObject(el, kDigestStreamMaskKey, grad, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++    el.layer.mask = grad;
 +}
 +
 +static void applyAttributedTextToElement(UIView *el, NSAttributedString *attr, NSUInteger maxLines) {
@@ -3323,12 +3437,43 @@ index 0000000..e1a5fa3
 +    }
 +}
 +
++static BOOL elementHasDigestStyledAttribute(UIView *el) {
++    if (!el) return NO;
++    NSAttributedString *cur = nil;
++    if ([el isKindOfClass:[UILabel class]]) {
++        cur = ((UILabel *)el).attributedText;
++    } else if ([el isKindOfClass:[UITextView class]]) {
++        cur = ((UITextView *)el).attributedText;
++    } else if ([el respondsToSelector:@selector(attributedText)]) {
++        cur = [(id)el attributedText];
++    }
++    if (![cur isKindOfClass:[NSAttributedString class]] || cur.length == 0) return NO;
++    id marker = [cur attribute:kDigestStyledAttrKey atIndex:0 effectiveRange:NULL];
++    return [marker boolValue];
++}
++
 +static UIFont *baseFontForElement(UIView *el) {
 +    if ([el respondsToSelector:@selector(font)]) {
 +        UIFont *f = [(id)el font];
 +        if ([f isKindOfClass:[UIFont class]]) return f;
 +    }
 +    return [UIFont systemFontOfSize:14.0];
++}
++
++static NSString *buildStaticRenderKey(NSString *summary,
++                                      NSString *originalText,
++                                      BOOL isStreaming,
++                                      DigestBannerRenderConfig *config) {
++    return [NSString stringWithFormat:@"s|%@|%@|%d|%@|%d|%@|%d|%d|%@",
++            summary ?: @"",
++            originalText ?: @"",
++            isStreaming ? 1 : 0,
++            config.badgeStyle ?: @"",
++            config.showPrefix ? 1 : 0,
++            config.prefixText ?: @"",
++            config.boldSummary ? 1 : 0,
++            config.showOriginalLine ? 1 : 0,
++            config.accentColorKey ?: @""];
 +}
 +
 +@implementation DigestLabelAnimState
@@ -3346,6 +3491,7 @@ index 0000000..e1a5fa3
 +        [self.displayLink invalidate];
 +        self.displayLink = nil;
 +    }
++    [digestActiveDisplayLinks() removeObject:self];
 +}
 +
 +- (void)dealloc {
@@ -3357,8 +3503,9 @@ index 0000000..e1a5fa3
 +    DigestDisplayLinkProxy *proxy = [DigestDisplayLinkProxy new];
 +    proxy.target = self;
 +    self.displayLink = [CADisplayLink displayLinkWithTarget:proxy selector:@selector(tick:)];
-+    self.displayLink.preferredFrameRateRange = CAFrameRateRangeMake(20.0f, 30.0f, 30.0f);
++    self.displayLink.preferredFrameRateRange = CAFrameRateRangeMake(24.0f, 60.0f, 60.0f);
 +    [self.displayLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
++    [digestActiveDisplayLinks() addObject:self];
 +}
 +
 +- (NSArray<NSString *> *)tokenizeText:(NSString *)text {
@@ -3396,7 +3543,7 @@ index 0000000..e1a5fa3
 +    for (NSUInteger i = commonCount; i < newTokens.count; i++) {
 +        NSString *tok = newTokens[i];
 +        BOOL onlySpace = ([tok stringByTrimmingCharactersInSet:ws].length == 0);
-+        CFTimeInterval stagger = onlySpace ? 0.0 : (wordOrder * 0.048);
++        CFTimeInterval stagger = onlySpace ? 0.0 : (wordOrder * 0.030);
 +        if (!onlySpace) wordOrder++;
 +        [newBirths addObject:@(now + stagger)];
 +    }
@@ -3433,8 +3580,12 @@ index 0000000..e1a5fa3
 +    BOOL needsRelayout = (self.lastLayoutStreaming != self.isStreaming);
 +    if (link != nil && el.window == nil) {
 +        self.missingWindowTicks++;
-+        if (self.missingWindowTicks > 150) {
++        if (self.missingWindowTicks > 90) {
 +            if (!self.isStreaming && self.targetSummary.length > 0) {
++                if (!self.completionNotified && self.completionCallback) {
++                    self.completionNotified = YES;
++                    self.completionCallback(self.targetSummary);
++                }
 +                [DigestBannerAnimator applyStaticToLabel:el
 +                                             withSummary:self.targetSummary
 +                                            originalText:self.originalText
@@ -3454,14 +3605,12 @@ index 0000000..e1a5fa3
 +    }
 +
 +    CFTimeInterval now = CACurrentMediaTime();
-+    NSString *anim = self.config.animationStyle ?: @"fadeWords";
++    NSString *anim = self.config.animationStyle ?: @"aiSweep";
 +    UIFont *baseFont = baseFontForElement(el);
 +    UIFont *summaryFont = self.config.boldSummary
 +        ? [UIFont systemFontOfSize:baseFont.pointSize weight:UIFontWeightSemibold]
 +        : baseFont;
 +    UIColor *baseTextColor = [[UIColor labelColor] resolvedColorWithTraitCollection:el.traitCollection];
-+    UIColor *accentBase = [DigestBannerAnimator resolveAccentColor:self.config.accentColorKey] ?: [UIColor systemBlueColor];
-+    UIColor *accentColor = [accentBase resolvedColorWithTraitCollection:el.traitCollection];
 +
 +    NSMutableAttributedString *out = [[self prefixForBaseFont:baseFont] mutableCopy];
 +    BOOL needsMoreFrames = NO;
@@ -3474,7 +3623,7 @@ index 0000000..e1a5fa3
 +        if (self.revealedChars < targetLen) {
 +            CFTimeInterval dt = MAX(0.0, now - self.lastTypeStepTime);
 +            NSUInteger remaining = targetLen - self.revealedChars;
-+            CGFloat cps = self.isStreaming ? MAX(42.0, MIN(95.0, remaining * 3.0)) : MAX(70.0, remaining * 4.5);
++            CGFloat cps = self.isStreaming ? MAX(55.0, MIN(120.0, remaining * 3.5)) : MAX(95.0, remaining * 5.2);
 +            NSUInteger step = (NSUInteger)floor(dt * cps);
 +            if (step >= 1) {
 +                NSUInteger nextIdx = MIN(targetLen, self.revealedChars + step);
@@ -3491,7 +3640,7 @@ index 0000000..e1a5fa3
 +            if (self.revealedChars < targetLen) {
 +                needsMoreFrames = YES;
 +            }
-+        } else if (link != nil && self.isStreaming && !needsRelayout && (now - self.lastPulseRenderTime) < 0.08) {
++        } else if (link != nil && self.isStreaming) {
 +            return;
 +        }
 +
@@ -3504,95 +3653,22 @@ index 0000000..e1a5fa3
 +                NSFontAttributeName: summaryFont,
 +                NSForegroundColorAttributeName: baseTextColor
 +            }];
-+            NSUInteger tail = 0;
-+            NSUInteger idx = visible.length;
-+            while (idx > 0 && tail < 4 && (self.isStreaming || self.revealedChars < self.targetSummary.length)) {
-+                NSRange seq = [visible rangeOfComposedCharacterSequenceAtIndex:idx - 1];
-+                CGFloat alpha = 0.25 + tail * 0.22;
-+                [visAttr addAttribute:NSForegroundColorAttributeName value:[baseTextColor colorWithAlphaComponent:MIN(1.0, alpha)] range:seq];
-+                idx = seq.location;
-+                tail++;
++            if (self.revealedChars < self.targetSummary.length) {
++                NSUInteger tail = 0;
++                NSUInteger idx = visible.length;
++                while (idx > 0 && tail < 3) {
++                    NSRange seq = [visible rangeOfComposedCharacterSequenceAtIndex:idx - 1];
++                    CGFloat alpha = 0.28 + tail * 0.24;
++                    [visAttr addAttribute:NSForegroundColorAttributeName value:[baseTextColor colorWithAlphaComponent:MIN(1.0, alpha)] range:seq];
++                    idx = seq.location;
++                    tail++;
++                }
 +            }
 +            [out appendAttributedString:visAttr];
 +        }
-+        if (self.isStreaming || self.revealedChars < self.targetSummary.length) {
-+            CGFloat pulse = 0.30 + 0.70 * (0.5 + 0.5 * sin((now - self.streamStartTime) * 7.0));
-+            [out appendAttributedString:[[NSAttributedString alloc] initWithString:@" ▍" attributes:@{
-+                NSFontAttributeName: summaryFont,
-+                NSForegroundColorAttributeName: [accentColor colorWithAlphaComponent:pulse]
-+            }]];
-+            needsMoreFrames = YES;
-+            self.lastPulseRenderTime = now;
-+        }
-+    } else if ([anim isEqualToString:@"shimmer"]) {
-+        CFTimeInterval elapsed = now - self.streamStartTime;
-+        CGFloat phase = (CGFloat)fmod(elapsed * 1.65, 2.0);
-+        CGFloat fadeDur = 0.34;
-+        NSDictionary *fullAttrs = @{
-+            NSFontAttributeName: summaryFont,
-+            NSForegroundColorAttributeName: baseTextColor
-+        };
-+        NSMutableString *settledRun = !self.isStreaming ? [NSMutableString new] : nil;
-+
-+        for (NSUInteger i = 0; i < self.tokens.count; i++) {
-+            NSString *tok = self.tokens[i];
-+            CFTimeInterval birth = [self.tokenBirthTimes[i] doubleValue];
-+            CGFloat age = (CGFloat)(now - birth);
-+            CGFloat fadeAlpha = (age <= 0) ? 0.06 : (age >= fadeDur ? 1.0 : (0.06 + 0.94 * (1.0 - pow(1.0 - (age / fadeDur), 3.0))));
-+            if (age < fadeDur) {
-+                needsMoreFrames = YES;
-+            }
-+            if (!self.isStreaming && fadeAlpha >= 0.999) {
-+                [settledRun appendString:tok];
-+                continue;
-+            }
-+            if (settledRun.length > 0) {
-+                [out appendAttributedString:[[NSAttributedString alloc] initWithString:settledRun attributes:fullAttrs]];
-+                [settledRun setString:@""];
-+            }
-+            CGFloat shimmerAlpha = 1.0;
-+            UIColor *tokColor = baseTextColor;
-+            if (self.isStreaming) {
-+                CGFloat normPos = (CGFloat)i / MAX(1.0, (CGFloat)self.tokens.count);
-+                CGFloat wave = 0.5 + 0.5 * cos((normPos - phase) * M_PI * 2.0);
-+                shimmerAlpha = 0.28 + 0.72 * wave;
-+                if (wave > 0.85) {
-+                    CGFloat r1 = 0, g1 = 0, b1 = 0, a1 = 1;
-+                    CGFloat r2 = 0, g2 = 0, b2 = 0, a2 = 1;
-+                    if ([baseTextColor getRed:&r1 green:&g1 blue:&b1 alpha:&a1] &&
-+                        [accentColor getRed:&r2 green:&g2 blue:&b2 alpha:&a2]) {
-+                        CGFloat mix = (wave - 0.85) / 0.15 * 0.45;
-+                        tokColor = [UIColor colorWithRed:(r1 + (r2 - r1) * mix)
-+                                                   green:(g1 + (g2 - g1) * mix)
-+                                                    blue:(b1 + (b2 - b1) * mix)
-+                                                   alpha:MIN(1.0, fadeAlpha * shimmerAlpha)];
-+                    }
-+                } else {
-+                    tokColor = [baseTextColor colorWithAlphaComponent:MIN(1.0, fadeAlpha * shimmerAlpha)];
-+                }
-+                needsMoreFrames = YES;
-+            } else {
-+                tokColor = [baseTextColor colorWithAlphaComponent:fadeAlpha];
-+            }
-+            [out appendAttributedString:[[NSAttributedString alloc] initWithString:tok attributes:@{
-+                NSFontAttributeName: summaryFont,
-+                NSForegroundColorAttributeName: tokColor
-+            }]];
-+        }
-+        if (settledRun.length > 0) {
-+            [out appendAttributedString:[[NSAttributedString alloc] initWithString:settledRun attributes:fullAttrs]];
-+        }
-+        if (self.isStreaming) {
-+            CGFloat pulse = 0.30 + 0.70 * (0.5 + 0.5 * sin(elapsed * 6.5));
-+            [out appendAttributedString:[[NSAttributedString alloc] initWithString:@" ●" attributes:@{
-+                NSFontAttributeName: [UIFont systemFontOfSize:MAX(9.0, baseFont.pointSize - 3.0)],
-+                NSForegroundColorAttributeName: [accentColor colorWithAlphaComponent:pulse]
-+            }]];
-+            self.lastPulseRenderTime = now;
-+        }
 +    } else {
-+        // fadeWords (default): coalesce consecutive fully-settled tokens into one run
-+        CFTimeInterval fadeDur = 0.38;
++        // fadeWords: smooth cubic fade-in without jittery cursor symbols
++        CFTimeInterval fadeDur = 0.26;
 +        NSDictionary *fullAttrs = @{
 +            NSFontAttributeName: summaryFont,
 +            NSForegroundColorAttributeName: baseTextColor
@@ -3616,31 +3692,22 @@ index 0000000..e1a5fa3
 +            }
 +            CGFloat alpha;
 +            if (age <= 0) {
-+                alpha = 0.05;
++                alpha = 0.04;
 +            } else {
 +                CGFloat t = age / fadeDur;
-+                CGFloat eased = 1.0 - pow(1.0 - t, 3.0);
-+                alpha = 0.05 + 0.95 * eased;
++                CGFloat eased = t * t * (3.0 - 2.0 * t);
++                alpha = 0.04 + 0.96 * eased;
 +            }
 +            [out appendAttributedString:[[NSAttributedString alloc] initWithString:tok attributes:@{
 +                NSFontAttributeName: summaryFont,
 +                NSForegroundColorAttributeName: [baseTextColor colorWithAlphaComponent:alpha]
 +            }]];
 +        }
-+        if (link != nil && self.isStreaming && !anyTokenAnimating && !needsRelayout && (now - self.lastPulseRenderTime) < 0.08) {
++        if (link != nil && self.isStreaming && !anyTokenAnimating && !needsRelayout) {
 +            return;
 +        }
 +        if (settledRun.length > 0) {
 +            [out appendAttributedString:[[NSAttributedString alloc] initWithString:settledRun attributes:fullAttrs]];
-+        }
-+        if (self.isStreaming) {
-+            CGFloat pulse = 0.25 + 0.75 * (0.5 + 0.5 * sin((now - self.streamStartTime) * 6.0));
-+            [out appendAttributedString:[[NSAttributedString alloc] initWithString:@" ●" attributes:@{
-+                NSFontAttributeName: [UIFont systemFontOfSize:MAX(9.0, baseFont.pointSize - 3.0)],
-+                NSForegroundColorAttributeName: [accentColor colorWithAlphaComponent:pulse]
-+            }]];
-+            needsMoreFrames = YES;
-+            self.lastPulseRenderTime = now;
 +        }
 +    }
 +
@@ -3657,6 +3724,9 @@ index 0000000..e1a5fa3
 +        }]];
 +    }
 +
++    if (out.length > 0) {
++        [out addAttribute:kDigestStyledAttrKey value:@YES range:NSMakeRange(0, 1)];
++    }
 +    applyAttributedTextToElement(el, out, 4);
 +
 +    if (needsRelayout || self.tokens.count != self.lastLayoutTokenCount) {
@@ -3670,7 +3740,13 @@ index 0000000..e1a5fa3
 +    }
 +
 +    if (!needsMoreFrames) {
++        NSString *staticKey = buildStaticRenderKey(self.targetSummary, self.originalText, self.isStreaming, self.config);
++        objc_setAssociatedObject(el, kDigestLastStaticKey, staticKey, OBJC_ASSOCIATION_COPY_NONATOMIC);
 +        [self invalidate];
++        if (!self.isStreaming && !self.completionNotified && self.completionCallback) {
++            self.completionNotified = YES;
++            self.completionCallback(self.targetSummary);
++        }
 +    }
 +}
 +@end
@@ -3773,6 +3849,18 @@ index 0000000..e1a5fa3
 +    return state.targetSummary;
 +}
 +
+++ (BOOL)isLabelStaticUpToDate:(UIView *)textElement
++                  withSummary:(NSString *)summary
++                 originalText:(NSString *)originalText
++                  isStreaming:(BOOL)isStreaming
++                       config:(DigestBannerRenderConfig *)config {
++    if (!textElement || !summary) return NO;
++    NSString *staticKey = buildStaticRenderKey(summary, originalText, isStreaming, config);
++    NSString *prevKey = objc_getAssociatedObject(textElement, kDigestLastStaticKey);
++    if (![prevKey isEqualToString:staticKey]) return NO;
++    return elementHasDigestStyledAttribute(textElement);
++}
++
 ++ (void)refreshNowForLabel:(UIView *)textElement {
 +    if (!textElement) return;
 +    DigestLabelAnimState *state = objc_getAssociatedObject(textElement, kDigestAnimStateKey);
@@ -3792,17 +3880,12 @@ index 0000000..e1a5fa3
 +    UIFont *summaryFont = config.boldSummary
 +        ? [UIFont systemFontOfSize:baseFont.pointSize weight:UIFontWeightSemibold]
 +        : baseFont;
++    UIColor *baseTextColor = [[UIColor labelColor] resolvedColorWithTraitCollection:textElement.traitCollection];
 +    [out appendAttributedString:[[NSAttributedString alloc] initWithString:(summary ?: @"") attributes:@{
 +        NSFontAttributeName: summaryFont,
-+        NSForegroundColorAttributeName: [UIColor labelColor]
++        NSForegroundColorAttributeName: baseTextColor
 +    }]];
-+    if (isStreaming) {
-+        UIColor *accent = [self resolveAccentColor:config.accentColorKey] ?: [UIColor systemBlueColor];
-+        [out appendAttributedString:[[NSAttributedString alloc] initWithString:@" ●" attributes:@{
-+            NSFontAttributeName: [UIFont systemFontOfSize:MAX(9.0, baseFont.pointSize - 3.0)],
-+            NSForegroundColorAttributeName: accent
-+        }]];
-+    } else if (config.showOriginalLine && originalText.length > 0 && ![originalText isEqualToString:summary]) {
++    if (!isStreaming && config.showOriginalLine && originalText.length > 0 && ![originalText isEqualToString:summary]) {
 +        NSString *flatOrig = [[originalText stringByReplacingOccurrencesOfString:@"\r\n" withString:@" "] stringByReplacingOccurrencesOfString:@"\n" withString:@" "];
 +        if (flatOrig.length > 70) {
 +            NSRange safeRange = [flatOrig rangeOfComposedCharacterSequencesForRange:NSMakeRange(0, 70)];
@@ -3814,6 +3897,9 @@ index 0000000..e1a5fa3
 +            NSForegroundColorAttributeName: [UIColor secondaryLabelColor]
 +        }]];
 +    }
++    if (out.length > 0) {
++        [out addAttribute:kDigestStyledAttrKey value:@YES range:NSMakeRange(0, 1)];
++    }
 +    return out;
 +}
 +
@@ -3824,6 +3910,13 @@ index 0000000..e1a5fa3
 +                    config:(DigestBannerRenderConfig *)config
 +                layoutHost:(UIView *)layoutHost {
 +    if (!textElement || !summary) return;
++    NSString *staticKey = buildStaticRenderKey(summary, originalText, isStreaming, config);
++    if (!isStreaming &&
++        [objc_getAssociatedObject(textElement, kDigestLastStaticKey) isEqualToString:staticKey] &&
++        elementHasDigestStyledAttribute(textElement)) {
++        return;
++    }
++
 +    if (!isStreaming) {
 +        [self stopForLabel:textElement];
 +    }
@@ -3835,17 +3928,154 @@ index 0000000..e1a5fa3
 +                                                             config:config
 +                                                      retainedImage:&badgeImg];
 +    objc_setAssociatedObject(textElement, kDigestStaticImgKey, badgeImg, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++    objc_setAssociatedObject(textElement, kDigestLastStaticKey, staticKey, OBJC_ASSOCIATION_COPY_NONATOMIC);
 +    applyAttributedTextToElement(textElement, out, 4);
++
++    if (isStreaming) {
++        ensureStreamShimmerMaskOnElement(textElement);
++    }
++
 +    [textElement invalidateIntrinsicContentSize];
 +    [layoutHost setNeedsLayout];
 +}
 +
 ++ (void)stopForLabel:(UIView *)textElement {
 +    if (!textElement) return;
++    nextElementAnimGeneration(textElement);
++    clearGPUEffectsOnElement(textElement);
 +    DigestLabelAnimState *state = objc_getAssociatedObject(textElement, kDigestAnimStateKey);
 +    if (state) {
 +        [state invalidate];
 +        objc_setAssociatedObject(textElement, kDigestAnimStateKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++    }
++}
++
+++ (void)runNativeRevealOnElement:(UIView *)el
++                           style:(NSString *)anim
++                          config:(DigestBannerRenderConfig *)config {
++    if (!el || el.window == nil) return;
++
++    NSUInteger gen = nextElementAnimGeneration(el);
++    clearGPUEffectsOnElement(el);
++
++    __weak UIView *weakEl = el;
++    void (^cleanupMask)(void) = ^{
++        UIView *strongEl = weakEl;
++        if (!strongEl || currentElementAnimGeneration(strongEl) != gen) return;
++        if (strongEl.layer.mask) {
++            [strongEl.layer.mask removeAllAnimations];
++            strongEl.layer.mask = nil;
++        }
++        strongEl.layer.shadowOpacity = 0.0f;
++        strongEl.layer.shadowRadius = 0.0f;
++    };
++
++    if ([anim isEqualToString:@"crossfade"]) {
++        CATransition *tr = [CATransition animation];
++        tr.type = kCATransitionFade;
++        tr.duration = 0.22;
++        tr.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut];
++        [el.layer addAnimation:tr forKey:@"dig3stTransition"];
++        return;
++    }
++
++    // Native Spring Rise + Scale + Opacity (CoreAnimation Render Server GPU)
++    CASpringAnimation *posY = [CASpringAnimation animationWithKeyPath:@"transform.translation.y"];
++    posY.fromValue = @([anim isEqualToString:@"springFade"] ? 5.5 : 3.5);
++    posY.toValue = @0.0;
++    posY.damping = 22.0;
++    posY.stiffness = 280.0;
++    posY.mass = 0.85;
++    posY.initialVelocity = 0.0;
++    posY.duration = posY.settlingDuration;
++
++    CASpringAnimation *scale = [CASpringAnimation animationWithKeyPath:@"transform.scale"];
++    scale.fromValue = @([anim isEqualToString:@"springFade"] ? 0.985 : 0.992);
++    scale.toValue = @1.0;
++    scale.damping = 22.0;
++    scale.stiffness = 280.0;
++    scale.mass = 0.85;
++    scale.duration = scale.settlingDuration;
++
++    CABasicAnimation *fade = [CABasicAnimation animationWithKeyPath:@"opacity"];
++    fade.fromValue = @0.15;
++    fade.toValue = @1.0;
++    fade.duration = 0.24;
++    fade.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
++
++    CAAnimationGroup *group = [CAAnimationGroup animation];
++    group.animations = @[posY, scale, fade];
++    group.duration = MAX(0.38, MIN(0.55, posY.settlingDuration));
++    group.removedOnCompletion = YES;
++    [el.layer addAnimation:group forKey:@"dig3stReveal"];
++
++    // Accent / Apple Intelligence Aura Glow
++    if ([anim isEqualToString:@"glowPulse"]) {
++        UIColor *accent = [self resolveAccentColor:config.accentColorKey];
++        if (!accent) {
++            accent = [UIColor colorWithRed:0.46 green:0.38 blue:1.0 alpha:1.0];
++        }
++        UIColor *resolvedAccent = [accent resolvedColorWithTraitCollection:el.traitCollection];
++        el.layer.shadowColor = resolvedAccent.CGColor;
++        el.layer.shadowOffset = CGSizeZero;
++        el.layer.shadowRadius = 6.5;
++
++        CAKeyframeAnimation *glowAnim = [CAKeyframeAnimation animationWithKeyPath:@"shadowOpacity"];
++        glowAnim.values = @[@0.0, @0.62, @0.0];
++        glowAnim.keyTimes = @[@0.0, @0.32, @1.0];
++        glowAnim.duration = 0.62;
++        glowAnim.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut];
++        glowAnim.removedOnCompletion = YES;
++        [el.layer addAnimation:glowAnim forKey:@"dig3stGlow"];
++    }
++
++    // Horizontal Alpha Sweep Mask for aiSweep / shimmer / glowPulse (only when laid out)
++    CGRect bounds = el.bounds;
++    if (([anim isEqualToString:@"aiSweep"] || [anim isEqualToString:@"shimmer"] || [anim isEqualToString:@"glowPulse"]) &&
++        bounds.size.width >= 16.0 && bounds.size.height >= 4.0) {
++        CAGradientLayer *grad = [CAGradientLayer layer];
++        grad.frame = CGRectMake(-16.0, -16.0, bounds.size.width + 32.0, MAX(bounds.size.height + 64.0, 220.0));
++        grad.startPoint = CGPointMake(0.0, 0.45);
++        grad.endPoint = CGPointMake(1.0, 0.55);
++
++        if ([anim isEqualToString:@"shimmer"]) {
++            UIColor *dim = [[UIColor whiteColor] colorWithAlphaComponent:0.35];
++            UIColor *full = [UIColor whiteColor];
++            grad.colors = @[(id)full.CGColor, (id)dim.CGColor, (id)full.CGColor];
++            grad.locations = @[@(-0.4), @(-0.2), @(0.0)];
++
++            [CATransaction begin];
++            [CATransaction setCompletionBlock:cleanupMask];
++            CABasicAnimation *sweep = [CABasicAnimation animationWithKeyPath:@"locations"];
++            sweep.fromValue = @[@(-0.4), @(-0.2), @(0.0)];
++            sweep.toValue = @[@(1.0), @(1.2), @(1.4)];
++            sweep.duration = 0.48;
++            sweep.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
++            sweep.fillMode = kCAFillModeForwards;
++            sweep.removedOnCompletion = NO;
++            [grad addAnimation:sweep forKey:@"dig3stSweep"];
++            [CATransaction commit];
++        } else {
++            UIColor *full = [UIColor whiteColor];
++            UIColor *soft = [[UIColor whiteColor] colorWithAlphaComponent:0.14];
++            grad.colors = @[(id)full.CGColor, (id)full.CGColor, (id)soft.CGColor];
++            grad.locations = @[@(-0.45), @(-0.20), @(0.0)];
++
++            [CATransaction begin];
++            [CATransaction setCompletionBlock:cleanupMask];
++            CABasicAnimation *sweep = [CABasicAnimation animationWithKeyPath:@"locations"];
++            sweep.fromValue = @[@(-0.45), @(-0.20), @(0.0)];
++            sweep.toValue = @[@(1.0), @(1.25), @(1.45)];
++            sweep.duration = 0.44;
++            sweep.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
++            sweep.fillMode = kCAFillModeForwards;
++            sweep.removedOnCompletion = NO;
++            [grad addAnimation:sweep forKey:@"dig3stSweep"];
++            [CATransaction commit];
++        }
++        el.layer.mask = grad;
++    } else if ([anim isEqualToString:@"glowPulse"]) {
++        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.68 * NSEC_PER_SEC)), dispatch_get_main_queue(), cleanupMask);
 +    }
 +}
 +
@@ -3856,9 +4086,41 @@ index 0000000..e1a5fa3
 +             config:(DigestBannerRenderConfig *)config
 +         layoutHost:(UIView *)layoutHost
 +      onLayoutDelta:(void (^)(void))layoutDeltaBlock {
++    [self updateLabel:textElement
++          withSummary:summary
++         originalText:originalText
++          isStreaming:isStreaming
++      alreadyAnimated:NO
++               config:config
++           layoutHost:layoutHost
++        onLayoutDelta:layoutDeltaBlock
++  onAnimationComplete:nil];
++}
++
+++ (void)updateLabel:(UIView *)textElement
++        withSummary:(NSString *)summary
++       originalText:(NSString *)originalText
++        isStreaming:(BOOL)isStreaming
++    alreadyAnimated:(BOOL)alreadyAnimated
++             config:(DigestBannerRenderConfig *)config
++         layoutHost:(UIView *)layoutHost
++      onLayoutDelta:(void (^)(void))layoutDeltaBlock
++onAnimationComplete:(void (^)(NSString *completedSummary))completeBlock {
 +    if (!textElement || !summary) return;
 +
-+    NSString *anim = config.animationStyle ?: @"fadeWords";
++    NSString *anim = config.animationStyle ?: @"aiSweep";
++
++    // Never replay animation if this notification already finished animating (e.g. scroll/swipe back)
++    if (alreadyAnimated && !isStreaming) {
++        [self applyStaticToLabel:textElement
++                     withSummary:summary
++                    originalText:originalText
++                     isStreaming:NO
++                          config:config
++                      layoutHost:layoutHost];
++        return;
++    }
++
 +    NSString *renderKey = [NSString stringWithFormat:@"%@|%@|%@|%@|%d|%@|%d|%d|%@|%@",
 +                           summary, originalText ?: @"", isStreaming ? @"1" : @"0",
 +                           config.badgeStyle ?: @"", config.showPrefix, config.prefixText ?: @"",
@@ -3866,22 +4128,59 @@ index 0000000..e1a5fa3
 +                           config.accentColorKey ?: @"", anim];
 +
 +    DigestLabelAnimState *state = objc_getAssociatedObject(textElement, kDigestAnimStateKey);
-+    if (state && [state.lastRenderKey isEqualToString:renderKey]) {
++    BOOL wantsCPUDisplayLink = ([anim isEqualToString:@"fadeWords"] || [anim isEqualToString:@"typewriter"]);
++    if (wantsCPUDisplayLink) {
++        BOOL lpm = [[NSProcessInfo processInfo] isLowPowerModeEnabled];
++        BOOL alreadyOwned = (state != nil && state.displayLink != nil);
++        if (lpm || (!alreadyOwned && digestActiveDisplayLinks().count >= 2)) {
++            anim = @"springFade";
++            wantsCPUDisplayLink = NO;
++        }
++    }
++
++    if (state && [state.lastRenderKey isEqualToString:renderKey] && elementHasDigestStyledAttribute(textElement)) {
++        if (isStreaming) {
++            ensureStreamShimmerMaskOnElement(textElement);
++        } else if (!wantsCPUDisplayLink && !state.completionNotified && textElement.window != nil) {
++            BOOL needsBounds = ([anim isEqualToString:@"aiSweep"] || [anim isEqualToString:@"shimmer"]);
++            if (!needsBounds || textElement.bounds.size.width >= 16.0) {
++                state.completionNotified = YES;
++                if (![anim isEqualToString:@"none"]) {
++                    [self runNativeRevealOnElement:textElement style:anim config:config];
++                }
++                if (completeBlock) {
++                    completeBlock(summary);
++                }
++            }
++        }
 +        return;
 +    }
 +
-+    if ([anim isEqualToString:@"none"] || [anim isEqualToString:@"crossfade"]) {
-+        if (state) {
++    if (!wantsCPUDisplayLink) {
++        if (state && state.displayLink) {
 +            [state invalidate];
-+        } else {
++        }
++        BOOL isNewTarget = (!state || ![state.targetSummary isEqualToString:summary]);
++        if (!state) {
 +            state = [DigestLabelAnimState new];
 +            objc_setAssociatedObject(textElement, kDigestAnimStateKey, state, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 +        }
++        if (isNewTarget) {
++            state.completionNotified = NO;
++        }
++        BOOL wasStreaming = state.isStreaming;
++        NSString *prevSummary = state.targetSummary;
 +        state.textElement = textElement;
 +        state.layoutHost = layoutHost;
 +        state.lastRenderKey = renderKey;
++        state.targetSummary = summary;
++        state.originalText = originalText;
++        state.isStreaming = isStreaming;
++        state.config = config;
 +        state.layoutDeltaBlock = layoutDeltaBlock;
++        state.completionCallback = completeBlock;
 +
++        NSString *staticKey = buildStaticRenderKey(summary, originalText, isStreaming, config);
 +        UIImage *badgeImg = nil;
 +        NSAttributedString *out = [self buildStaticAttributedForElement:textElement
 +                                                            withSummary:summary
@@ -3889,23 +4188,45 @@ index 0000000..e1a5fa3
 +                                                            isStreaming:isStreaming
 +                                                                 config:config
 +                                                          retainedImage:&badgeImg];
-+        state.retainedBadgeImage = badgeImg;
++        objc_setAssociatedObject(textElement, kDigestStaticImgKey, badgeImg, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++        objc_setAssociatedObject(textElement, kDigestLastStaticKey, staticKey, OBJC_ASSOCIATION_COPY_NONATOMIC);
 +
-+        if ([anim isEqualToString:@"crossfade"]) {
-+            [UIView transitionWithView:textElement duration:0.22 options:UIViewAnimationOptionTransitionCrossDissolve | UIViewAnimationOptionAllowUserInteraction animations:^{
-+                applyAttributedTextToElement(textElement, out, 4);
-+            } completion:nil];
-+        } else {
++        if (isStreaming) {
++            if (prevSummary.length > 0 && ![prevSummary isEqualToString:summary] && textElement.window != nil) {
++                CATransition *tr = [CATransition animation];
++                tr.type = kCATransitionFade;
++                tr.duration = 0.14;
++                tr.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
++                [textElement.layer addAnimation:tr forKey:@"dig3stTransition"];
++            }
 +            applyAttributedTextToElement(textElement, out, 4);
++            ensureStreamShimmerMaskOnElement(textElement);
++        } else {
++            clearGPUEffectsOnElement(textElement);
++            applyAttributedTextToElement(textElement, out, 4);
++            if (!state.completionNotified && textElement.window != nil) {
++                BOOL needsBounds = ([anim isEqualToString:@"aiSweep"] || [anim isEqualToString:@"shimmer"]);
++                if (!needsBounds || textElement.bounds.size.width >= 16.0) {
++                    state.completionNotified = YES;
++                    if (![anim isEqualToString:@"none"]) {
++                        [self runNativeRevealOnElement:textElement style:anim config:config];
++                    }
++                    if (completeBlock) {
++                        completeBlock(summary);
++                    }
++                }
++            }
 +        }
++
 +        [textElement invalidateIntrinsicContentSize];
 +        [layoutHost setNeedsLayout];
-+        if (layoutDeltaBlock) {
++        if (layoutDeltaBlock && (wasStreaming != isStreaming || ![prevSummary isEqualToString:summary])) {
 +            layoutDeltaBlock();
 +        }
 +        return;
 +    }
 +
++    // CPU-driven word/typewriter streaming animation (capped at 2 concurrent)
 +    if (!state) {
 +        state = [DigestLabelAnimState new];
 +        state.streamStartTime = CACurrentMediaTime();
@@ -3915,13 +4236,14 @@ index 0000000..e1a5fa3
 +    BOOL isNewSession = (state.targetSummary.length == 0 ||
 +                         (![summary hasPrefix:state.targetSummary] && ![state.targetSummary hasPrefix:summary]));
 +    if (isNewSession) {
++        clearGPUEffectsOnElement(textElement);
 +        state.tokens = [NSMutableArray new];
 +        state.tokenBirthTimes = [NSMutableArray new];
 +        state.revealedChars = 0;
 +        state.streamStartTime = CACurrentMediaTime();
 +        state.lastTypeStepTime = state.streamStartTime;
-+        state.lastPulseRenderTime = 0;
 +        state.missingWindowTicks = 0;
++        state.completionNotified = NO;
 +    }
 +
 +    state.textElement = textElement;
@@ -3932,6 +4254,7 @@ index 0000000..e1a5fa3
 +    state.isStreaming = isStreaming;
 +    state.config = config;
 +    state.layoutDeltaBlock = layoutDeltaBlock;
++    state.completionCallback = completeBlock;
 +
 +    [state syncTokensForTarget:summary];
 +    [state ensureDisplayLink];
@@ -3950,7 +4273,7 @@ index 0000000..e1a5fa3
 +                           summary, originalText ?: @"", config.badgeStyle ?: @"",
 +                           config.showPrefix, config.prefixText ?: @"", config.accentColorKey ?: @""];
 +    NSString *prevKey = objc_getAssociatedObject(textElement, kDigestExpKey);
-+    if ([prevKey isEqualToString:renderKey]) return;
++    if ([prevKey isEqualToString:renderKey] && elementHasDigestStyledAttribute(textElement)) return;
 +    objc_setAssociatedObject(textElement, kDigestExpKey, renderKey, OBJC_ASSOCIATION_COPY_NONATOMIC);
 +
 +    UIFont *baseFont = baseFontForElement(textElement);
@@ -3959,9 +4282,10 @@ index 0000000..e1a5fa3
 +    objc_setAssociatedObject(textElement, kDigestExpImg, badgeImg, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 +
 +    UIFont *summaryFont = [UIFont systemFontOfSize:baseFont.pointSize weight:UIFontWeightSemibold];
++    UIColor *baseTextColor = [[UIColor labelColor] resolvedColorWithTraitCollection:textElement.traitCollection];
 +    [out appendAttributedString:[[NSAttributedString alloc] initWithString:summary attributes:@{
 +        NSFontAttributeName: summaryFont,
-+        NSForegroundColorAttributeName: [UIColor labelColor]
++        NSForegroundColorAttributeName: baseTextColor
 +    }]];
 +
 +    if (originalText.length > 0 && ![originalText isEqualToString:summary]) {
@@ -3976,6 +4300,9 @@ index 0000000..e1a5fa3
 +        }]];
 +    }
 +
++    if (out.length > 0) {
++        [out addAttribute:kDigestStyledAttrKey value:@YES range:NSMakeRange(0, 1)];
++    }
 +    applyAttributedTextToElement(textElement, out, 0);
 +    [textElement invalidateIntrinsicContentSize];
 +    [layoutHost setNeedsLayout];
@@ -4063,7 +4390,7 @@ index 65f359d..5a7c4ff 100644
      }
  }
 diff --git a/src/DigestPrefsManager.m b/src/DigestPrefsManager.m
-index f10da7b..a71408e 100644
+index f10da7b..e3e0354 100644
 --- a/src/DigestPrefsManager.m
 +++ b/src/DigestPrefsManager.m
 @@ -1,52 +1,137 @@
@@ -4113,7 +4440,7 @@ index f10da7b..a71408e 100644
 +            @"bannerShowOriginal": @NO,
 +            @"showOriginalInExpanded": @YES,
 +            @"streamingEnabled": @YES,
-+            @"streamAnimationStyle": @"fadeWords",
++            @"streamAnimationStyle": @"aiSweep",
 +            @"pauseInLowPowerMode": @NO,
 +            @"prompt": @"Summarize the core message in 1 concise sentence (max 15 words). Preserve names, numbers, amounts, codes, and times. Output ONLY the summary without repeating the sender/app title or adding 'Summary:' / 'Tóm tắt:' prefixes:",
 +            @"systemPrompt": @"You summarize notifications ultra-concisely (max 15 words) in the target language. Output ONLY the core summary text—never include labels like 'Summary:' or 'Tóm tắt:', and never repeat the app name or sender title.",
@@ -4275,10 +4602,10 @@ index 05e2586..1a2715b 100644
 \ No newline at end of file
 +@end
 diff --git a/src/OpenAI/OpenAI.m b/src/OpenAI/OpenAI.m
-index 8f8f165..b673503 100644
+index 8f8f165..e31490c 100644
 --- a/src/OpenAI/OpenAI.m
 +++ b/src/OpenAI/OpenAI.m
-@@ -1,14 +1,68 @@
+@@ -1,14 +1,69 @@
  #import "../../headers/HeadersTweak.h"
 +#import <QuartzCore/QuartzCore.h>
 +
@@ -4332,6 +4659,7 @@ index 8f8f165..b673503 100644
 +        ephemeralCfg.requestCachePolicy = NSURLRequestReloadIgnoringLocalCacheData;
 +        ephemeralCfg.HTTPCookieAcceptPolicy = NSHTTPCookieAcceptPolicyNever;
 +        ephemeralCfg.HTTPShouldSetCookies = NO;
++        ephemeralCfg.HTTPMaximumConnectionsPerHost = 6;
 +        ephemeralCfg.timeoutIntervalForRequest = 60.0;
 +
 +        _session = [NSURLSession sessionWithConfiguration:ephemeralCfg];
@@ -4350,7 +4678,7 @@ index 8f8f165..b673503 100644
          self.logger = [NSClassFromString(@"DigestLogger") sharedInstance];
          [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(update) name:@"com.uncore.dig3st/update" object:nil];
      }
-@@ -18,157 +72,609 @@
+@@ -18,157 +73,612 @@
  - (void)update {
      [self.logger log:@"Updating OpenAI instance" level:LOGLEVEL_INFO];
      DigestPrefsManager *manager = [DigestPrefsManager sharedInstance];
@@ -4900,8 +5228,10 @@ index 8f8f165..b673503 100644
 +
 +- (void)URLSession:(NSURLSession *)session dataTask:(NSURLSessionDataTask *)dataTask didReceiveData:(NSData *)data {
 +    DigestStreamContext *ctx = nil;
++    NSUInteger activeStreamCount = 1;
 +    @synchronized(self.streamLock) {
 +        ctx = self.streamContexts[@(dataTask.taskIdentifier)];
++        activeStreamCount = self.streamContexts.count;
 +    }
 +    if (!ctx || ctx.finished || data.length == 0) return;
 +
@@ -4954,7 +5284,8 @@ index 8f8f165..b673503 100644
 +
 +    if (appendedAny && ctx.partialBlock) {
 +        CFTimeInterval now = CACurrentMediaTime();
-+        if (now - ctx.lastEmitTime >= 0.045) {
++        CFTimeInterval minInterval = (activeStreamCount > 2) ? 0.14 : 0.085;
++        if (now - ctx.lastEmitTime >= minInterval) {
 +            ctx.lastEmitTime = now;
 +            NSString *snapshot = [self cleanText:ctx.accumulatedText trimEnd:NO];
 +            if (snapshot.length > 0) {
@@ -5146,10 +5477,10 @@ index ef8dd7c..df97d0b 100644
 -    [((SpringBoard *)[UIApplication sharedApplication]).notificationDispatcher.dispatcher postNotificationWithRequest:request];
  }
 diff --git a/src/Tweak.x b/src/Tweak.x
-index 3a91698..89f2496 100644
+index 3a91698..2ee4528 100644
 --- a/src/Tweak.x
 +++ b/src/Tweak.x
-@@ -1,21 +1,901 @@
+@@ -1,21 +1,945 @@
  #import <CoreFoundation/CoreFoundation.h>
 +#import <objc/runtime.h>
  #include <substrate.h>
@@ -5178,9 +5509,10 @@ index 3a91698..89f2496 100644
 +static BOOL bannerShowOriginal = NO;
 +static BOOL showOriginalInExpanded = YES;
 +static BOOL streamingEnabled = YES;
-+static NSString *streamAnimationStyle = @"fadeWords";
++static NSString *streamAnimationStyle = @"aiSweep";
 +static BOOL pauseInLowPowerMode = NO;
 +static BOOL lowPowerActive = NO;
++static DigestBannerRenderConfig *cachedBannerConfig = nil;
 +
 +static id prefsUpdateObserver = nil;
 +static id powerStateObserver = nil;
@@ -5456,7 +5788,7 @@ index 3a91698..89f2496 100644
 +- (void)setHostNeedsUpdate;
 +@end
 +
-+static DigestBannerRenderConfig *currentBannerRenderConfig(void) {
++static void rebuildCachedBannerConfig(void) {
 +    DigestBannerRenderConfig *cfg = [DigestBannerRenderConfig new];
 +    cfg.badgeStyle = bannerBadgeStyle;
 +    cfg.showPrefix = bannerShowPrefix;
@@ -5482,7 +5814,14 @@ index 3a91698..89f2496 100644
 +        }
 +        cfg.arrowImage = cachedArrowImage;
 +    }
-+    return cfg;
++    cachedBannerConfig = cfg;
++}
++
++static DigestBannerRenderConfig *currentBannerRenderConfig(void) {
++    if (!cachedBannerConfig) {
++        rebuildCachedBannerConfig();
++    }
++    return cachedBannerConfig;
 +}
 +
 +static UIView *findSeamlessContentViewInHierarchy(UIView *rootView) {
@@ -5586,7 +5925,11 @@ index 3a91698..89f2496 100644
 +                    }
 +                }];
 +                if (matchedIdx) {
-+                    [lv reloadViewAtIndex:[matchedIdx unsignedIntegerValue]];
++                    CGFloat cw = child.bounds.size.width;
++                    CGSize cFit = (cw > 0) ? [child sizeThatFits:CGSizeMake(cw, CGFLOAT_MAX)] : CGSizeZero;
++                    if (cFit.height <= 0 || fabs(cFit.height - child.bounds.size.height) > 1.0) {
++                        [lv reloadViewAtIndex:[matchedIdx unsignedIntegerValue]];
++                    }
 +                }
 +            }
 +            [lv setNeedsLayout];
@@ -5810,8 +6153,9 @@ index 3a91698..89f2496 100644
 +        if (!messageEl || !msgText) return;
 +
 +        UIView *preview = (UIView *)vc.viewForPreview;
++        NCNotificationRequest *req = vc.notificationRequest;
 +
-+        if (!vc.notificationRequest.dig3st) {
++        if (!req.dig3st) {
 +            [DigestBannerAnimator stopForLabel:messageEl];
 +            if ([messageEl isKindOfClass:[UILabel class]]) {
 +                UILabel *lbl = (UILabel *)messageEl;
@@ -5831,6 +6175,23 @@ index 3a91698..89f2496 100644
 +            return;
 +        }
 +
++        NSString *origText = safeKVCString(req, @"actualMessage");
++        DigestBannerRenderConfig *cfg = currentBannerRenderConfig();
++
++        BOOL isStreaming = NO;
++        @try {
++            isStreaming = [[req valueForKey:@"dig3stStreaming"] boolValue];
++        } @catch (NSException *e) {}
++
++        BOOL alreadyDone = (!isStreaming && req.dig3stAnimDone && [req.dig3stAnimKey isEqualToString:msgText]);
++        if (alreadyDone && [DigestBannerAnimator isLabelStaticUpToDate:messageEl
++                                                             withSummary:msgText
++                                                            originalText:origText
++                                                             isStreaming:NO
++                                                                  config:cfg]) {
++            return;
++        }
++
 +        @try {
 +            id curSecLines = [seamlessContentView valueForKey:@"secondaryTextMaximumNumberOfLines"];
 +            if (![curSecLines isKindOfClass:[NSNumber class]] || [curSecLines unsignedIntegerValue] != 4) {
@@ -5847,26 +6208,27 @@ index 3a91698..89f2496 100644
 +            }
 +        } @catch (NSException *e) {}
 +
-+        NSString *origText = safeKVCString(vc.notificationRequest, @"actualMessage");
-+        DigestBannerRenderConfig *cfg = currentBannerRenderConfig();
-+
-+        BOOL isStreaming = NO;
-+        @try {
-+            isStreaming = [[vc.notificationRequest valueForKey:@"dig3stStreaming"] boolValue];
-+        } @catch (NSException *e) {}
-+
 +        __weak NCNotificationShortLookViewController *weakVC = vc;
 +        __weak UIView *weakCV = seamlessContentView;
 +        __weak UIView *weakPreview = preview;
++        __weak NCNotificationRequest *weakReq = req;
 +
 +        [DigestBannerAnimator updateLabel:messageEl
 +                              withSummary:msgText
 +                             originalText:origText
 +                              isStreaming:isStreaming
++                          alreadyAnimated:alreadyDone
 +                                   config:cfg
 +                               layoutHost:seamlessContentView
 +                            onLayoutDelta:^{
 +            relayoutControllerPreferredSize(weakVC, weakCV, weakPreview);
++        }
++                      onAnimationComplete:^(NSString *completedSummary) {
++            NCNotificationRequest *strongReq = weakReq;
++            if (strongReq && completedSummary.length > 0) {
++                strongReq.dig3stAnimDone = YES;
++                strongReq.dig3stAnimKey = completedSummary;
++            }
 +        }];
 +    } @catch (NSException *e) {
 +        NSLog(@"dig3st render error: %@", e);
@@ -5887,6 +6249,22 @@ index 3a91698..89f2496 100644
 +        @try { messageEl = [seamlessContentView valueForKey:@"secondaryTextElement"]; } @catch (NSException *e) {}
 +        NSString *msgText = safeKVCString(vc.notificationRequest.content, @"message");
 +        if (!messageEl || !msgText) return;
++
++        NCNotificationRequest *req = vc.notificationRequest;
++        NSString *origText = safeKVCString(req, @"actualMessage");
++        DigestBannerRenderConfig *cfg = currentBannerRenderConfig();
++        BOOL isStreaming = NO;
++        @try {
++            isStreaming = [[req valueForKey:@"dig3stStreaming"] boolValue];
++        } @catch (NSException *e) {}
++
++        if ([DigestBannerAnimator isLabelStaticUpToDate:messageEl
++                                            withSummary:msgText
++                                           originalText:origText
++                                            isStreaming:isStreaming
++                                                 config:cfg]) {
++            return;
++        }
 +
 +        UIView *preview = (UIView *)vc.viewForPreview;
 +        @try {
@@ -5914,12 +6292,6 @@ index 3a91698..89f2496 100644
 +            renderControllerBanner(vc);
 +            return;
 +        }
-+        NSString *origText = safeKVCString(vc.notificationRequest, @"actualMessage");
-+        DigestBannerRenderConfig *cfg = currentBannerRenderConfig();
-+        BOOL isStreaming = NO;
-+        @try {
-+            isStreaming = [[vc.notificationRequest valueForKey:@"dig3stStreaming"] boolValue];
-+        } @catch (NSException *e) {}
 +
 +        [DigestBannerAnimator applyStaticToLabel:messageEl
 +                                     withSummary:msgText
@@ -6025,10 +6397,11 @@ index 3a91698..89f2496 100644
 +    streamingEnabled = strEn ? [strEn boolValue] : YES;
 +
 +    NSString *anim = prefs[@"streamAnimationStyle"];
-+    streamAnimationStyle = ([anim isKindOfClass:[NSString class]] && anim.length > 0) ? [anim copy] : @"fadeWords";
++    streamAnimationStyle = ([anim isKindOfClass:[NSString class]] && anim.length > 0) ? [anim copy] : @"aiSweep";
 +
 +    pauseInLowPowerMode = [prefs[@"pauseInLowPowerMode"] boolValue];
 +    lowPowerActive = [[NSProcessInfo processInfo] isLowPowerModeEnabled];
++    rebuildCachedBannerConfig();
 +}
  
  %hook NCNotificationRequest
@@ -6036,6 +6409,8 @@ index 3a91698..89f2496 100644
  %property (nonatomic, retain) NSString * actualMessage;
 +%property (nonatomic, assign) BOOL dig3stStreaming;
 +%property (nonatomic, retain) NSString * dig3stStreamId;
++%property (nonatomic, assign) BOOL dig3stAnimDone;
++%property (nonatomic, retain) NSString * dig3stAnimKey;
  %end
  
  BOOL isOkToSummarize(NSString *sectionIdentifier) {
@@ -6055,7 +6430,7 @@ index 3a91698..89f2496 100644
      if ([sectionIdentifier hasPrefix:@"com.apple"]) {
          return NO;
      }
-@@ -23,189 +903,508 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
+@@ -23,189 +947,525 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
  }
  
  
@@ -6068,7 +6443,7 @@ index 3a91698..89f2496 100644
 +    return r;
 +}
 +-(double)heightForNotificationRequest:(NCNotificationRequest *)req withFrameWidth:(double)w isContentRevealed:(BOOL)revealed shouldCalculateHeight:(BOOL)calc {
-+    if (activeListCaches) {
++    if (activeListCaches && ![activeListCaches containsObject:self]) {
 +        [activeListCaches addObject:self];
 +    }
 +    return %orig;
@@ -6207,6 +6582,14 @@ index 3a91698..89f2496 100644
 +-(void)viewDidDisappear:(BOOL)animated {
 +    %orig;
 +    @try {
++        NCNotificationRequest *req = self.notificationRequest;
++        if (req.dig3st && !req.dig3stStreaming) {
++            NSString *msgText = safeKVCString(req.content, @"message");
++            if (msgText.length > 0) {
++                req.dig3stAnimDone = YES;
++                req.dig3stAnimKey = msgText;
++            }
++        }
 +        UIView *cv = findContentViewForController(self);
 +        UIView *lbl = cv ? [cv valueForKey:@"secondaryTextElement"] : nil;
 +        if (lbl) [DigestBannerAnimator stopForLabel:lbl];
@@ -6248,9 +6631,6 @@ index 3a91698..89f2496 100644
 -        } 
 -    } @catch(NSException *e) {
 -        NSLog(@"error: %@", e);
-+    if (activeControllers) {
-+        [activeControllers addObject:self];
-+    }
 +    if (self.notificationRequest.dig3st) {
 +        renderControllerBanner(self);
      }
@@ -6294,7 +6674,7 @@ index 3a91698..89f2496 100644
 +
 +%hook NCNotificationPresentableViewController
 +-(BOOL)bn_shouldAnimateViewTransitionToSize:(CGSize)size {
-     @try {
++    @try {
 +        NCNotificationViewController *nvc = self.notificationViewController;
 +        if (nvc.notificationRequest.dig3st) {
 +            return YES;
@@ -6309,7 +6689,7 @@ index 3a91698..89f2496 100644
 +        if (deliverBlock) deliverBlock(req);
 +        return;
 +    }
-+    @try {
+     @try {
 +        if (!tweakEnabled || (pauseInLowPowerMode && lowPowerActive)) {
 +            [req setValue:@(NO) forKey:@"dig3st"];
 +            [req setValue:@(NO) forKey:@"dig3stStreaming"];
@@ -6337,9 +6717,10 @@ index 3a91698..89f2496 100644
 +            [req setValue:@(NO) forKey:@"dig3stStreaming"];
 +            [req setValue:nil forKey:@"dig3stStreamId"];
 +            [req setValue:nil forKey:@"actualMessage"];
++            req.dig3stAnimDone = NO;
++            req.dig3stAnimKey = nil;
 +        }
- 
--        BOOL contentTooShort = textContent ? textContent.length < minChars  : YES;
++
 +        if ([logger shouldLog:LOGLEVEL_VERBOSE]) {
 +            [logger log:[NSString stringWithFormat:@"Notification received (%@) bundle identifier is %@", isModify ? @"modify" : @"post", req.sectionIdentifier] level:LOGLEVEL_VERBOSE];
 +        }
@@ -6355,7 +6736,8 @@ index 3a91698..89f2496 100644
 +        NSNumber *appTransOverride = resolveAppTriState(@"appTrans", bundleId);
 +        NSNumber *appStreamOverride = resolveAppTriState(@"appStream", bundleId);
 +        BOOL effectiveStreamEnabled = appStreamOverride ? [appStreamOverride boolValue] : streamingEnabled;
-+
+ 
+-        BOOL contentTooShort = textContent ? textContent.length < minChars  : YES;
 +        NSString *promptKey = bundleId.length > 0 ? [NSString stringWithFormat:@"appPrompt_%@", bundleId] : nil;
 +        NSString *appCustomPrompt = promptKey ? (prefs ? prefs[promptKey] : [prefsManager safeObjectForKey:promptKey]) : nil;
 +        if (![appCustomPrompt isKindOfClass:[NSString class]] || appCustomPrompt.length == 0) {
@@ -6429,6 +6811,8 @@ index 3a91698..89f2496 100644
 -                    [req setValue:@(NO) forKey:@"dig3st"];
 -                    %orig(req);
 +                    [req setValue:@(NO) forKey:@"dig3stStreaming"];
++                    req.dig3stAnimDone = NO;
++                    req.dig3stAnimKey = nil;
 +                    [req setValue:textContent forKey:@"actualMessage"];
 +                    safeSetNotificationMessage(req.content, cachedSummary);
 +                    if (deliverBlock) deliverBlock(req);
@@ -6448,6 +6832,8 @@ index 3a91698..89f2496 100644
 +                [req setValue:@(YES) forKey:@"dig3st"];
 +                [req setValue:@(YES) forKey:@"dig3stStreaming"];
 +                [req setValue:streamId forKey:@"dig3stStreamId"];
++                req.dig3stAnimDone = NO;
++                req.dig3stAnimKey = nil;
 +                safeSetNotificationMessage(req.content, @"Đang tóm tắt…");
 +                if (deliverBlock) deliverBlock(req);
 +
@@ -6469,6 +6855,8 @@ index 3a91698..89f2496 100644
 +                    if (curId && ![curId isEqualToString:streamId]) return;
 +
 +                    [req setValue:@(NO) forKey:@"dig3stStreaming"];
++                    req.dig3stAnimDone = NO;
++                    req.dig3stAnimKey = nil;
 +                    if (summary.length > 0) {
 +                        if ([logger shouldLog:LOGLEVEL_INFO]) {
 +                            [logger log:[NSString stringWithFormat:@"Stream Summary: %@", summary] level:LOGLEVEL_INFO];
@@ -6482,10 +6870,12 @@ index 3a91698..89f2496 100644
 +                    clearCachesForRequest(req, nil);
 +                    BOOL updatedVisible = updateVisibleControllersForRequest(req);
 +                    invalidateGroupListsForRequest(req, updatedVisible ? YES : NO, YES);
-+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-+                        BOOL updatedLater = updateVisibleControllersForRequest(req);
-+                        invalidateGroupListsForRequest(req, updatedLater ? YES : NO, NO);
-+                    });
++                    if (summary.length > 0 && req.dig3st) {
++                        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
++                            BOOL updatedLater = updateVisibleControllersForRequest(req);
++                            invalidateGroupListsForRequest(req, updatedLater ? YES : NO, NO);
++                        });
++                    }
 +                }];
 +            } else {
 +                [openai summarize:query
@@ -6501,6 +6891,8 @@ index 3a91698..89f2496 100644
 +                        [summaryCache setObject:@{@"summary": summary, @"ts": @([NSDate timeIntervalSinceReferenceDate])} forKey:cacheKey];
 +                        [req setValue:@(YES) forKey:@"dig3st"];
 +                        [req setValue:@(NO) forKey:@"dig3stStreaming"];
++                        req.dig3stAnimDone = NO;
++                        req.dig3stAnimKey = nil;
 +                        [req setValue:textContent forKey:@"actualMessage"];
 +                        safeSetNotificationMessage(req.content, summary);
 +                    } else {
@@ -6633,9 +7025,7 @@ index 3a91698..89f2496 100644
 -            Config *config = [[Config alloc] initWithEndpoint:endpoint timeoutInterval:@10];
 -            [logger log:@"Config has been created" level:LOGLEVEL_VERBOSE];
 +        }
- 
--            openai = [[OpenAI alloc] initWithConfiguration:config];
--            [logger log:@"Openai instance has been created" level:LOGLEVEL_VERBOSE];
++
 +        NSInteger timeout = [cachedPrefsSnapshot[@"timeout"] integerValue];
 +        if (timeout <= 0) {
 +            timeout = 30;
@@ -6643,10 +7033,24 @@ index 3a91698..89f2496 100644
 +        Config *config = [[Config alloc] initWithEndpoint:endpoint timeoutInterval:@(timeout)];
 +        [logger log:@"Config has been created" level:LOGLEVEL_VERBOSE];
  
--            NSBundle *bundle = [[NSBundle alloc] initWithPath:ROOT_PATH_NS(@"/Library/PreferenceBundles/dig3st.bundle")];
--            NSString *imgFile = [bundle pathForResource:@"arrow" ofType:@"png"];
+-            openai = [[OpenAI alloc] initWithConfiguration:config];
+-            [logger log:@"Openai instance has been created" level:LOGLEVEL_VERBOSE];
 +        openai = [[OpenAI alloc] initWithConfiguration:config];
 +        [logger log:@"Openai instance has been created" level:LOGLEVEL_VERBOSE];
+ 
+-            NSBundle *bundle = [[NSBundle alloc] initWithPath:ROOT_PATH_NS(@"/Library/PreferenceBundles/dig3st.bundle")];
+-            NSString *imgFile = [bundle pathForResource:@"arrow" ofType:@"png"];
++        if (tweakEnabled && apiChecks) {
++            [logger log:@"Running API Check" level:LOGLEVEL_INFO];
++            [openai check:^(BOOL success) {
++                if (!success) {
++                    [logger log:@"API request failed disable Check Api in the settings to skip this check and then respring" level:LOGLEVEL_WARNING];
++                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(20 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
++                        Alert(@"API Error", @"API request failed this means the current endpoint might be invalid,disable Check Api in the settings to skip this check and then respring",nil);
++                    });
++                }
++            }];
++        }
  
 -            if (apiChecks) {
 -                [logger log:@"Running API Check" level:LOGLEVEL_INFO];
@@ -6666,23 +7070,11 @@ index 3a91698..89f2496 100644
 -            %init;
 -        }else {
 -            [logger log:@"End of ctor block, not running (tweak is disabled)" level:LOGLEVEL_WARNING];
-+        if (tweakEnabled && apiChecks) {
-+            [logger log:@"Running API Check" level:LOGLEVEL_INFO];
-+            [openai check:^(BOOL success) {
-+                if (!success) {
-+                    [logger log:@"API request failed disable Check Api in the settings to skip this check and then respring" level:LOGLEVEL_WARNING];
-+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(20 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-+                        Alert(@"API Error", @"API request failed this means the current endpoint might be invalid,disable Check Api in the settings to skip this check and then respring",nil);
-+                    });
-+                }
-+            }];
-         }
--    }@catch(NSException *e) {
-+
 +        %init;
 +        if ([logger shouldLog:LOGLEVEL_VERBOSE]) {
 +            [logger log:[NSString stringWithFormat:@"End of ctor block (enabled=%@)", tweakEnabled ? @"YES" : @"NO"] level:LOGLEVEL_VERBOSE];
-+        }
+         }
+-    }@catch(NSException *e) {
 +    } @catch(NSException *e) {
          NSLog(@"error: %@", e);
      }
