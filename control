@@ -1,6 +1,6 @@
 Package: com.hthancder.siribridge
 Name: SiriBridge
-Version: 0.1.2
+Version: 0.2.0
 Architecture: iphoneos-arm64
 Description: Thay Siri bằng LLM endpoint tuỳ chỉnh + TTS tuỳ chỉnh (iOS 15, arm64, rootless hoặc roothide)
 Maintainer: hthancder
