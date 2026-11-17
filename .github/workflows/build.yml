@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -88,6 +89,28 @@ jobs:
             echo "| --- | --- | --- |"
             echo "| ${SCHEME} | ${PACKAGE_ARCH} | $(du -h "$DEB" | cut -f1) |"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Đẩy log build vào issue khi lỗi
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          TITLE="ci-log-${SCHEME}"
+          BODY="$(printf 'Job: %s\nSHA: %s\n\n```\n' "${SCHEME}" "${GITHUB_SHA}")"
+          BODY="${BODY}$(tail -c 40000 "$RUNNER_TEMP/build.log" 2>/dev/null)"
+          BODY="${BODY}
+          ```
+          "
+          NUM=$(gh api "repos/${GITHUB_REPOSITORY}/issues?labels=ci-log&state=all&per_page=100" \
+                  --jq ".[] | select(.title == \"${TITLE}\") | .number" | head -n1)
+          if [ -n "$NUM" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/${NUM}" -f body="$BODY" >/dev/null
+          else
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/issues" \
+              -f title="$TITLE" -f body="$BODY" -f "labels[]=ci-log" >/dev/null
+          fi
+          echo "đã ghi log vào issue ${NUM:-mới}"
 
       - name: Upload build log
         if: always()
