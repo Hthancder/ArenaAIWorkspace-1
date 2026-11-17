@@ -24,6 +24,7 @@ extension Presenter {
 
         let textProxy: TextProxy
         let launchSlotAction: RuntimeSelectionMenuItem?
+        let prefetchedExternalContext: String?
         let onCompleteAndClose: (() -> Void)?
         @Published var scenePhase: ScenePhase = .active
 
@@ -36,6 +37,7 @@ extension Presenter {
             decorationViews: [UIView],
             textProxy: TextProxy,
             launchSlotAction: RuntimeSelectionMenuItem? = nil,
+            prefetchedExternalContext: String? = nil,
             onCompleteAndClose: (() -> Void)? = nil
         ) {
             self.parentView = parentView
@@ -46,6 +48,7 @@ extension Presenter {
             self.decorationViews = decorationViews
             self.textProxy = textProxy
             self.launchSlotAction = launchSlotAction
+            self.prefetchedExternalContext = prefetchedExternalContext
             self.onCompleteAndClose = onCompleteAndClose
 
             super.init()
@@ -98,10 +101,92 @@ extension Presenter {
 }
 
 extension Presenter {
+    private static func resolveFallbackParentController(for view: UIView) -> UIViewController {
+        if let vc = view.parentViewController {
+            return vc
+        }
+        if let rootVC = view.window?.rootViewController {
+            return rootVC
+        }
+        return UIViewController()
+    }
+
+    static func extractNotificationContext(around targetView: UIView) -> String? {
+        guard let win = targetView.window else { return nil }
+        let winClass = NSStringFromClass(type(of: win))
+        let isSpringBoard = Bundle.main.bundleIdentifier == "com.apple.springboard"
+
+        // Find platter container if inside NCNotification / PLPlatter hierarchy
+        var platterRoot: UIView?
+        var cursor: UIView? = targetView
+        while let current = cursor {
+            let cls = NSStringFromClass(type(of: current))
+            if cls.contains("NCNotificationLongLook")
+                || cls.contains("PLPlatter")
+                || cls.contains("NCNotificationView")
+                || cls.contains("Notification")
+            {
+                platterRoot = current
+            }
+            cursor = current.superview
+        }
+
+        let isNotificationContext = platterRoot != nil
+            || winClass.contains("Notification")
+            || winClass.contains("Banner")
+            || (isSpringBoard && win.windowLevel != .normal)
+        guard isNotificationContext else { return nil }
+
+        let searchRoot = platterRoot ?? win
+        let targetOriginY = targetView.convert(CGPoint.zero, to: searchRoot).y
+
+        var pieces: [(y: CGFloat, text: String)] = []
+        var seen = Set<String>()
+
+        func walk(_ node: UIView) {
+            guard node !== targetView, !node.isDescendant(of: targetView) else { return }
+            guard !node.isHidden, node.alpha > 0.05 else { return }
+            let cls = NSStringFromClass(type(of: node))
+            if cls.contains("Keyboard") || cls.contains("UIKB") || cls.contains("WriteNow") { return }
+
+            var rawText: String?
+            if let label = node as? UILabel {
+                rawText = label.text
+            } else if let tv = node as? UITextView, !tv.isEditable {
+                rawText = tv.text
+            }
+
+            if let raw = rawText?.trimmingCharacters(in: .whitespacesAndNewlines),
+               raw.count >= 2
+            {
+                let lower = raw.lowercased()
+                let isChrome = lower == "reply" || lower == "send" || lower == "clear" || lower == "now" || lower == "open"
+                if !isChrome {
+                    let frameInRoot = node.convert(node.bounds, to: searchRoot)
+                    if frameInRoot.height >= 8,
+                       frameInRoot.maxY <= targetOriginY + 24,
+                       seen.insert(raw).inserted
+                    {
+                        pieces.append((frameInRoot.minY, raw))
+                    }
+                }
+            }
+            for sub in node.subviews {
+                walk(sub)
+            }
+        }
+
+        walk(searchRoot)
+        let ordered = pieces.sorted { $0.y < $1.y }.map(\.text)
+        let joined = ordered.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !joined.isEmpty else { return nil }
+        return String(joined.prefix(1500))
+    }
+
     func buildContext(fromResponder responder: UIResponder, launchSlotAction: RuntimeSelectionMenuItem? = nil) -> Context? {
         guard let fatherView = responder as? UIView else { return nil }
         guard let parentView = fatherView.superview ?? fatherView.window else { return nil }
-        guard let parentController = fatherView.parentViewController ?? fatherView.window?.rootViewController else { return nil }
+        let parentController = Self.resolveFallbackParentController(for: fatherView)
         guard let textProxy = TextProxy(delegatingView: fatherView) else { return nil }
         let appearance = textProxy.appearanceForWritingTool
         guard textProxy.isEligibleForWritingTool else { return nil }
@@ -112,21 +197,23 @@ extension Presenter {
             parentController: parentController,
             textProxy: textProxy,
             appearance: appearance,
-            launchSlotAction: launchSlotAction
+            launchSlotAction: launchSlotAction,
+            prefetchedExternalContext: Self.extractNotificationContext(around: fatherView)
         )
     }
 
     func buildReadOnlyFallbackContext(from respondingView: UIView, launchSlotAction: RuntimeSelectionMenuItem? = nil) -> Context? {
         guard let textProxy = TextProxy.makeReadOnlyFallback(from: respondingView) else { return nil }
         guard let parentView = respondingView.superview ?? respondingView.window else { return nil }
-        guard let parentController = respondingView.parentViewController ?? respondingView.window?.rootViewController else { return nil }
+        let parentController = Self.resolveFallbackParentController(for: respondingView)
         return assembleContext(
             fatherView: respondingView,
             parentView: parentView,
             parentController: parentController,
             textProxy: textProxy,
             appearance: textProxy.appearanceForWritingTool,
-            launchSlotAction: launchSlotAction
+            launchSlotAction: launchSlotAction,
+            prefetchedExternalContext: Self.extractNotificationContext(around: respondingView)
         )
     }
 
@@ -142,9 +229,7 @@ extension Presenter {
             return nil
         }
         guard let parentView = hostView.superview ?? hostView.window ?? hostView as UIView? else { return nil }
-        guard let resolvedVC = parentController ?? hostView.parentViewController ?? hostView.window?.rootViewController else {
-            return nil
-        }
+        let resolvedVC = parentController ?? Self.resolveFallbackParentController(for: hostView)
         return assembleContext(
             fatherView: hostView,
             parentView: parentView,
@@ -152,6 +237,7 @@ extension Presenter {
             textProxy: textProxy,
             appearance: textProxy.appearanceForWritingTool,
             launchSlotAction: launchSlotAction,
+            prefetchedExternalContext: Self.extractNotificationContext(around: hostView),
             onCompleteAndClose: onCompleteAndClose
         )
     }
@@ -163,41 +249,64 @@ extension Presenter {
         textProxy: TextProxy,
         appearance: TextProxy.WTAppearance,
         launchSlotAction: RuntimeSelectionMenuItem?,
+        prefetchedExternalContext: String? = nil,
         onCompleteAndClose: (() -> Void)? = nil
     ) -> Context {
-        var selectedRects = textProxy.selectionRectsInView
-        if selectedRects.isEmpty { selectedRects = [fatherView.bounds] }
+        let hasSelectedContent = !textProxy.selectedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        var selectedRects = textProxy.selectionRectsInView.filter { $0.width > 0 && $0.height > 0 }
+        if selectedRects.isEmpty {
+            let fallbackRect = CGRect(
+                x: max(4, min(fatherView.bounds.midX - 24, fatherView.bounds.width - 48)),
+                y: 4,
+                width: max(40, min(fatherView.bounds.width - 8, 200)),
+                height: max(24, min(fatherView.bounds.height - 8, 36))
+            )
+            selectedRects = [fallbackRect]
+        }
         let selectionUnionRect = selectedRects.reduce(selectedRects[0]) { $0.union($1) }
 
         let anchorView = UIView()
-        anchorView.frame = selectionUnionRect
-
-        let textMaskView = UIView()
-        fatherView.addSubview(textMaskView)
-        textMaskView.frame = fatherView.bounds
-
-        var preparedRects = selectedRects
-        let maskShapeLayer = prepareUnionRectLayerMaskWithCornerRadius(
-            withRects: &preparedRects,
-            usingCoordinateFromView: fatherView,
-            convertingToSubviewForMask: textMaskView,
-            withCornerRadius: 4
+        anchorView.frame = CGRect(
+            x: selectionUnionRect.origin.x,
+            y: selectionUnionRect.origin.y,
+            width: max(24, selectionUnionRect.width),
+            height: max(24, selectionUnionRect.height)
         )
-        textMaskView.layer.addSublayer(maskShapeLayer)
 
-        let backgroundView = magicColorBackground()
-        fatherView.addSubview(backgroundView)
-        backgroundView.frame = fatherView.bounds
-        backgroundView.layer.mask = maskShapeLayer
+        var decorationViews: [UIView] = []
+        var preparedRects = selectedRects
 
-        switch appearance.magicColorBehavior {
-        case .behindText:
-            fatherView.sendSubviewToBack(backgroundView)
-        case .overText:
-            fatherView.bringSubviewToFront(backgroundView)
+        if hasSelectedContent {
+            let textMaskView = UIView()
+            fatherView.addSubview(textMaskView)
+            textMaskView.frame = fatherView.bounds
+
+            let maskShapeLayer = prepareUnionRectLayerMaskWithCornerRadius(
+                withRects: &preparedRects,
+                usingCoordinateFromView: fatherView,
+                convertingToSubviewForMask: textMaskView,
+                withCornerRadius: 4
+            )
+            if !preparedRects.isEmpty {
+                textMaskView.layer.addSublayer(maskShapeLayer)
+
+                let backgroundView = magicColorBackground()
+                fatherView.addSubview(backgroundView)
+                backgroundView.frame = fatherView.bounds
+                backgroundView.layer.mask = maskShapeLayer
+
+                switch appearance.magicColorBehavior {
+                case .behindText:
+                    fatherView.sendSubviewToBack(backgroundView)
+                case .overText:
+                    fatherView.bringSubviewToFront(backgroundView)
+                }
+
+                decorationViews = [backgroundView, textMaskView]
+            } else {
+                textMaskView.removeFromSuperview()
+            }
         }
-
-        let decorationViews = [backgroundView, textMaskView]
 
         return .init(
             parentView: parentView,
@@ -208,6 +317,7 @@ extension Presenter {
             decorationViews: decorationViews,
             textProxy: textProxy,
             launchSlotAction: launchSlotAction,
+            prefetchedExternalContext: prefetchedExternalContext,
             onCompleteAndClose: onCompleteAndClose
         )
     }

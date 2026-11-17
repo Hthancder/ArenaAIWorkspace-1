@@ -16,7 +16,11 @@ extension Presenter.Context: UIPopoverPresentationControllerDelegate {
     }
 
     public func popoverPresentationController(_ popoverPresentationController: UIPopoverPresentationController, willRepositionPopoverTo rectPtr: UnsafeMutablePointer<CGRect>, in viewPtr: AutoreleasingUnsafeMutablePointer<UIView>) {
-        guard anchorRects.count > 1, let maskView = decorationViews.last else {
+        guard anchorRects.count > 1,
+              let maskView = decorationViews.last,
+              maskView.window != nil,
+              viewPtr.pointee.window === maskView.window
+        else {
             return
         }
         let view = viewPtr.pointee

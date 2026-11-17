@@ -40,10 +40,7 @@ public extension Presenter {
 
     @objc(presentFromRestrictedMenuTarget:fallbackCopyAction:slotIndex:)
     func presentFromRestrictedMenuTarget(_ targetView: UIView?, fallbackCopyAction: Any?, slotIndex: Int) {
-        let resolvedTarget = targetView ?? UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap(\.windows)
-            .first { $0.isKeyWindow && $0.windowLevel == .normal }
+        let resolvedTarget = targetView ?? Self.findActiveTargetFallbackView()
 
         if let resolvedTarget,
            let targetVOI = TextProxy.lookupViewOfInterest(view: resolvedTarget),
@@ -84,6 +81,35 @@ public extension Presenter {
         if let resolvedTarget {
             presentUnavailable(resolvedTarget)
         }
+    }
+
+    private static func findActiveTargetFallbackView() -> UIView? {
+        let windows = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .filter { !$0.isHidden }
+            .sorted { lhs, rhs in
+                if lhs.windowLevel != rhs.windowLevel {
+                    return lhs.windowLevel.rawValue > rhs.windowLevel.rawValue
+                }
+                return lhs.isKeyWindow && !rhs.isKeyWindow
+            }
+        for win in windows {
+            let cls = NSStringFromClass(type(of: win))
+            if cls.contains("WriteNow") { continue }
+            if let fr = findFirstResponderView(in: win) {
+                return fr
+            }
+        }
+        return windows.first { !NSStringFromClass(type(of: $0)).contains("WriteNow") }
+    }
+
+    private static func findFirstResponderView(in view: UIView) -> UIView? {
+        if view.isFirstResponder { return view }
+        for sub in view.subviews {
+            if let hit = findFirstResponderView(in: sub) { return hit }
+        }
+        return nil
     }
 
     @objc(presentFromContextMenuView:windowPoint:slotIndex:fallbackCopyAction:)
@@ -175,13 +201,66 @@ public extension Presenter {
         toolController.modalPresentationStyle = .popover
         toolController.preferredContentSize = contentSize
         toolController.popoverPresentationController?.delegate = context
-        toolController.popoverPresentationController?.sourceView = context.anchorView
-        toolController.popoverPresentationController?.sourceRect = context.anchorView.bounds.insetBy(dx: -2, dy: -2)
         toolController.popoverPresentationController?.canOverlapSourceViewRect = true
         toolController.popoverPresentationController?.permittedArrowDirections = [.up, .down]
 
-        let presenterVC = topMostPresenter(from: context.parentController)
-        presenterVC.present(toolController, animated: true)
+        let targetWindow = targetView.window
+        let candidatePresenter = topMostPresenter(from: context.parentController)
+        let needsDedicatedWindow = Self.requiresDedicatedOverlayWindow(
+            for: targetWindow,
+            presenterVC: candidatePresenter
+        )
+
+        if needsDedicatedWindow {
+            let hostWindow: UIWindow
+            if let scene = targetWindow?.windowScene {
+                hostWindow = WriteNowPopoverHostWindow(windowScene: scene)
+            } else {
+                hostWindow = WriteNowPopoverHostWindow(frame: screenBounds)
+            }
+            hostWindow.frame = targetWindow?.bounds ?? screenBounds
+            hostWindow.backgroundColor = .clear
+            hostWindow.windowLevel = UIWindow.Level(
+                rawValue: max((targetWindow?.windowLevel.rawValue ?? 0) + 5, UIWindow.Level.statusBar.rawValue + 100)
+            )
+            let hostRoot = UIViewController()
+            hostRoot.view.backgroundColor = .clear
+            hostWindow.rootViewController = hostRoot
+            hostWindow.isHidden = false
+            hostRoot.view.layoutIfNeeded()
+
+            let rectInTargetWin = targetWindow?.convert(anchorView.frame, from: targetView) ?? anchorView.frame
+            var rectInHost = hostWindow.convert(rectInTargetWin, from: targetWindow)
+            if rectInHost.width <= 0 || rectInHost.height <= 0 || !rectInHost.intersects(hostRoot.view.bounds) {
+                rectInHost = CGRect(
+                    x: max(16, hostRoot.view.bounds.midX - 60),
+                    y: max(60, hostRoot.view.bounds.midY - 24),
+                    width: 120,
+                    height: 36
+                )
+            }
+
+            toolController.hostedOverlayWindow = hostWindow
+            toolController.popoverPresentationController?.sourceView = hostRoot.view
+            toolController.popoverPresentationController?.sourceRect = rectInHost.insetBy(dx: -2, dy: -2)
+            hostRoot.present(toolController, animated: true)
+        } else {
+            toolController.popoverPresentationController?.sourceView = context.anchorView
+            toolController.popoverPresentationController?.sourceRect = context.anchorView.bounds.insetBy(dx: -2, dy: -2)
+            candidatePresenter.present(toolController, animated: true)
+        }
+    }
+
+    private static func requiresDedicatedOverlayWindow(
+        for targetWindow: UIWindow?,
+        presenterVC: UIViewController
+    ) -> Bool {
+        guard let targetWindow else { return true }
+        if presenterVC.view.window !== targetWindow { return true }
+        if targetWindow.rootViewController == nil { return true }
+        if targetWindow.windowLevel != .normal { return true }
+        if Bundle.main.bundleIdentifier == "com.apple.springboard" { return true }
+        return false
     }
 
     private func topMostPresenter(from root: UIViewController) -> UIViewController {
@@ -193,10 +272,9 @@ public extension Presenter {
     }
 
     private func obtainContextFor(_ view: UIView, launchSlotAction: RuntimeSelectionMenuItem?) -> Context? {
-        if let context = buildContext(fromResponder: view, launchSlotAction: launchSlotAction) {
-            return context
-        }
-        if let textProxy = TextProxy(delegatingView: view), !textProxy.isReadOnly,
+        if let textProxy = TextProxy(delegatingView: view),
+           !textProxy.isReadOnly,
+           textProxy.selectedText.isEmpty,
            Configurator.shared.settings.autoSelectAllIfEmpty
         {
             textProxy.selectAll()
@@ -243,3 +321,6 @@ public extension Presenter {
         }
     }
 }
+
+private final class WriteNowPopoverHostWindow: UIWindow {}
+

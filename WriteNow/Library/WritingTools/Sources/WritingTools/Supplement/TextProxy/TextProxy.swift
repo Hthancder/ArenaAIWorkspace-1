@@ -22,11 +22,7 @@ class TextProxy: ObservableObject {
                     && delegatingView._eligibleForWritingTool
                     && (!selectedRange.isEmpty || !selectedText.isEmpty || isFetchingSelectedText)
             }
-            return [
-                delegatingView._eligibleForWritingTool,
-                !selectedRange.isEmpty,
-                !selectedText.isEmpty,
-            ].allSatisfy { $0 }
+            return delegatingView._eligibleForWritingTool
         }
         return Configurator.shared.settings.readOnlyEnabled
             && !selectedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty

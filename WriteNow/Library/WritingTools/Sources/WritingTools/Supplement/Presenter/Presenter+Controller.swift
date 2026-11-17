@@ -12,6 +12,7 @@ import UIKit
 class WritingToolController: UIHostingController<WritingToolsView> {
     let context: Presenter.Context
     var basePreferredSize: CGSize = .init(width: 390, height: 390)
+    var hostedOverlayWindow: UIWindow?
 
     init(context: Presenter.Context) {
         self.context = context
@@ -25,14 +26,17 @@ class WritingToolController: UIHostingController<WritingToolsView> {
 
     deinit {
         NotificationCenter.default.removeObserver(self)
+        let win = hostedOverlayWindow
+        hostedOverlayWindow = nil
+        if let win {
+            DispatchQueue.main.async {
+                win.isHidden = true
+            }
+        }
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        assert(context.anchorView.superview != nil)
-        if !context.textProxy.isReadOnly {
-            context.targetView.resignFirstResponder()
-        }
         for decorationView in context.decorationViews {
             decorationView.alpha = 0
         }
@@ -78,7 +82,6 @@ class WritingToolController: UIHostingController<WritingToolsView> {
         super.viewWillAppear(animated)
 
         for view in context.decorationViews {
-            assert(view.superview != nil)
             view.alpha = 0
         }
         UIView.animate(withDuration: 0.25) { [self] in
@@ -106,7 +109,11 @@ class WritingToolController: UIHostingController<WritingToolsView> {
         super.viewDidDisappear(animated)
         context.anchorView.removeFromSuperview()
         context.decorationViews.forEach { $0.removeFromSuperview() }
-        if !context.textProxy.isReadOnly {
+        if let overlay = hostedOverlayWindow {
+            overlay.isHidden = true
+            hostedOverlayWindow = nil
+        }
+        if !context.textProxy.isReadOnly, context.targetView.window != nil {
             if let textInput = context.targetView as? UITextInput {
                 textInput.selectedTextRange = context.textProxy.replacedRange
             }

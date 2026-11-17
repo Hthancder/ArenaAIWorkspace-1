@@ -16,17 +16,84 @@
 #import <objc/runtime.h>
 
 static __weak UIView *gLastTouchView = nil;
+static __weak UIWindow *gLastTouchWindow = nil;
 static CGPoint gLastTouchWindowPoint = {0, 0};
 static __weak UIView *gLastEditMenuTargetView = nil;
+
+static BOOL WT_IsIgnoredInternalWindowOrView(UIView *view) {
+    if (!view) { return YES; }
+    NSString *clsName = NSStringFromClass([view class]);
+    if ([clsName containsString:@"WriteNow"] ||
+        [clsName containsString:@"InteractiveHighlight"] ||
+        [clsName containsString:@"UIKeyboard"] ||
+        [clsName containsString:@"UIKBRender"] ||
+        [clsName containsString:@"UIEmoji"] ||
+        [clsName containsString:@"_UIRemoteKeyboard"]) {
+        return YES;
+    }
+    return NO;
+}
+
+static UIView *WT_FindFirstResponderInView(UIView *view) {
+    if (!view) { return nil; }
+    if (view.isFirstResponder) { return view; }
+    for (UIView *sub in view.subviews) {
+        UIView *hit = WT_FindFirstResponderInView(sub);
+        if (hit) { return hit; }
+    }
+    return nil;
+}
+
+static UIView *WT_FindTopMostFirstResponderView(void) {
+    NSMutableArray<UIWindow *> *candidates = [NSMutableArray array];
+    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+        if (![scene isKindOfClass:[UIWindowScene class]]) { continue; }
+        for (UIWindow *win in ((UIWindowScene *)scene).windows) {
+            if (!win.isHidden && !WT_IsIgnoredInternalWindowOrView(win)) {
+                [candidates addObject:win];
+            }
+        }
+    }
+    [candidates sortUsingComparator:^NSComparisonResult(UIWindow *a, UIWindow *b) {
+        if (a.windowLevel != b.windowLevel) {
+            return a.windowLevel > b.windowLevel ? NSOrderedAscending : NSOrderedDescending;
+        }
+        if (a.isKeyWindow != b.isKeyWindow) {
+            return a.isKeyWindow ? NSOrderedAscending : NSOrderedDescending;
+        }
+        return NSOrderedSame;
+    }];
+    for (UIWindow *win in candidates) {
+        UIView *fr = WT_FindFirstResponderInView(win);
+        if (fr && !WT_IsIgnoredInternalWindowOrView(fr)) {
+            return fr;
+        }
+    }
+    return nil;
+}
+
+static UIView *WT_ResolveActiveMenuTargetView(void);
 
 // MARK: - UIResponder
 
 static void add_UIResponder_openWriteTools(id self, SEL _cmd) {
     NSInteger slotIndex = WT_SlotIndexFromSelectorName(NSStringFromSelector(_cmd));
     if (slotIndex < 0) { slotIndex = 0; }
+    __weak id weakSelf = self;
     dispatch_async(dispatch_get_main_queue(), ^{
+        id resolved = weakSelf;
+        UIView *targetView = nil;
+        if ([resolved isKindOfClass:[UIView class]]) {
+            targetView = (UIView *)resolved;
+        } else if ([resolved isKindOfClass:[UIViewController class]]) {
+            targetView = [(UIViewController *)resolved view];
+        }
+        if (!targetView || !targetView.window) {
+            targetView = WT_ResolveActiveMenuTargetView();
+        }
+        if (!targetView) { return; }
         WritingToolsPresenter *presenter = [WritingToolsPresenter sharedInstance];
-        [presenter presentToolController:self slotIndex:slotIndex];
+        [presenter presentToolController:targetView slotIndex:slotIndex];
     });
 }
 
@@ -34,14 +101,15 @@ static void add_UIResponder_openWriteTools(id self, SEL _cmd) {
 
 static void (*old_UIWindow_sendEvent_)(UIWindow *, SEL, UIEvent *);
 static void new_UIWindow_sendEvent_(UIWindow *self, SEL _cmd, UIEvent *event) {
-    if (event.type == UIEventTypeTouches && self.windowLevel == UIWindowLevelNormal) {
+    if (event.type == UIEventTypeTouches && !self.isHidden) {
         NSString *clsName = NSStringFromClass([self class]);
-        if (![clsName containsString:@"TextEffects"] && ![clsName containsString:@"WriteNow"]) {
+        if (![clsName containsString:@"WriteNow"] && ![clsName containsString:@"InteractiveHighlight"]) {
             NSSet<UITouch *> *touches = [event touchesForWindow:self];
             if (touches.count == 1) {
                 UITouch *touch = touches.anyObject;
-                if (touch.phase == UITouchPhaseBegan) {
+                if (touch.phase == UITouchPhaseBegan && !WT_IsIgnoredInternalWindowOrView(touch.view)) {
                     gLastTouchView = touch.view;
+                    gLastTouchWindow = self;
                     gLastTouchWindowPoint = [touch locationInView:self];
                 }
             }
@@ -95,11 +163,29 @@ static BOOL WT_SubmenuHasActionNamed(NSArray *children, NSString *targetSelName)
 }
 
 static UIView *WT_ResolveActiveMenuTargetView(void) {
-    if (gLastEditMenuTargetView && gLastEditMenuTargetView.window) {
+    if (gLastEditMenuTargetView && gLastEditMenuTargetView.window && !WT_IsIgnoredInternalWindowOrView(gLastEditMenuTargetView)) {
         return gLastEditMenuTargetView;
     }
-    if (gLastTouchView && gLastTouchView.window) {
+    if (UIView *fr = WT_FindTopMostFirstResponderView()) {
+        return fr;
+    }
+    if (gLastTouchView && gLastTouchView.window && !WT_IsIgnoredInternalWindowOrView(gLastTouchView)) {
         return gLastTouchView;
+    }
+    return nil;
+}
+
+static UIView *WT_FindActionCapableResponderView(UIView *candidate) {
+    if (!candidate) { return nil; }
+    SEL sel = NSSelectorFromString(@kWritingToolSelectorName);
+    UIResponder *cur = candidate;
+    for (NSInteger depth = 0; depth < 8 && cur != nil; depth++) {
+        if ([cur isKindOfClass:[UIView class]] && ![cur isKindOfClass:[UIWindow class]]) {
+            if ([cur canPerformAction:sel withSender:nil]) {
+                return (UIView *)cur;
+            }
+        }
+        cur = cur.nextResponder;
     }
     return nil;
 }
@@ -154,10 +240,15 @@ static void new__UIEditMenuPresentation_displayMenu_configuration_(id self, SEL 
 
         if (hasSelectionActions) {
             BOOL isReadOnly = !hasEditActions;
-            BOOL responderSupportsSelector = activeTarget != nil &&
-                [activeTarget canPerformAction:NSSelectorFromString(@kWritingToolSelectorName) withSender:nil];
+            UIView *capableTarget = WT_FindActionCapableResponderView(activeTarget)
+                ?: WT_FindActionCapableResponderView(WT_FindTopMostFirstResponderView())
+                ?: WT_FindActionCapableResponderView(gLastTouchView);
+            BOOL responderSupportsSelector = (capableTarget != nil);
+            UIView *resolvedTarget = capableTarget ?: activeTarget ?: gLastTouchView;
 
-            if (responderSupportsSelector) {
+            BOOL isNonNormalWindow = (resolvedTarget.window != nil && resolvedTarget.window.windowLevel != UIWindowLevelNormal);
+
+            if (responderSupportsSelector && !isNonNormalWindow) {
                 NSArray<UICommand *> *wtCommands = WT_BuildCommandsForReadOnly(isReadOnly);
                 if (wtCommands.count > 0) {
                     UIMenu *wrapped = WT_WrapActionsForMode((NSArray<UIMenuElement *> *)wtCommands, presenter);
@@ -170,7 +261,7 @@ static void new__UIEditMenuPresentation_displayMenu_configuration_(id self, SEL 
                 }
             } else if (!isReadOnly || [presenter isReadOnlyEnabled]) {
                 // Subclass overrode canPerformAction: or blocked standard selectors — inject UIActions directly
-                __weak UIView *weakTarget = activeTarget;
+                __weak UIView *weakTarget = resolvedTarget;
                 id capturedCopy = copyElement;
                 NSArray<UIMenuElement *> *wtActions = WT_BuildUIActionsForReadOnly(isReadOnly, ^(NSInteger slotIndex) {
                     [presenter presentFromRestrictedMenuTarget:weakTarget
@@ -197,7 +288,7 @@ static void new__UIEditMenuPresentation_displayMenu_configuration_(id self, SEL 
     if (!injected && [presenter isReadOnlyEnabled]) {
         id copyElement = WT_FindCopyMenuElement(build);
         if (copyElement != nil) {
-            __weak UIView *weakTarget = activeTarget;
+            __weak UIView *weakTarget = activeTarget ?: gLastTouchView;
             id capturedCopy = copyElement;
             NSArray<UIMenuElement *> *wtActions = WT_BuildUIActionsForReadOnly(YES, ^(NSInteger slotIndex) {
                 [presenter presentFromRestrictedMenuTarget:weakTarget

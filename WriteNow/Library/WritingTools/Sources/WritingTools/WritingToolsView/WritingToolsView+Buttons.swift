@@ -248,15 +248,19 @@ extension WritingToolsView {
                 .cornerRadius(9)
             }
 
-            if cfg.settings.clipboardContextEnabled, !clipboardContextText.isEmpty {
+            if (isNotificationContext || cfg.settings.clipboardContextEnabled), !clipboardContextText.isEmpty {
                 HStack(spacing: 6) {
                     Button {
                         clipboardContextAttached.toggle()
                     } label: {
                         HStack(spacing: 4) {
-                            Image(systemName: clipboardContextAttached ? "doc.on.clipboard.fill" : "doc.on.clipboard")
+                            Image(systemName: isNotificationContext
+                                ? (clipboardContextAttached ? "bell.badge.fill" : "bell")
+                                : (clipboardContextAttached ? "doc.on.clipboard.fill" : "doc.on.clipboard"))
                                 .font(.caption2)
-                            Text(clipboardContextAttached ? "Clipboard ✓" : "+ Clipboard")
+                            Text(isNotificationContext
+                                ? (clipboardContextAttached ? "Notification ✓" : "+ Notification")
+                                : (clipboardContextAttached ? "Clipboard ✓" : "+ Clipboard"))
                                 .font(.caption2.weight(.semibold))
                         }
                         .padding(.horizontal, 8)

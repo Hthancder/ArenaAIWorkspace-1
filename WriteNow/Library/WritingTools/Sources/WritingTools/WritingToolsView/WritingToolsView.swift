@@ -44,6 +44,7 @@ struct WritingToolsView: View {
     // Clipboard Context, Session Restore & Previous-Edit Context
     @State var clipboardContextText: String = ""
     @State var clipboardContextAttached: Bool = false
+    @State var isNotificationContext: Bool = false
     @State var restorableSession: LastSessionSnapshot? = nil
     @State var activePriorEditContext: EditContextRecord? = nil
     @State var priorEditContextAttached: Bool = false
@@ -84,7 +85,7 @@ struct WritingToolsView: View {
     }
 
     var activeClipboardContext: String? {
-        guard cfg.settings.clipboardContextEnabled, clipboardContextAttached else { return nil }
+        guard isNotificationContext || cfg.settings.clipboardContextEnabled, clipboardContextAttached else { return nil }
         let trimmed = clipboardContextText.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
@@ -199,7 +200,15 @@ struct WritingToolsView: View {
     }
 
     private func refreshClipboardAndSessionState() {
-        if cfg.settings.clipboardContextEnabled {
+        let notifCtx = (context.prefetchedExternalContext ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !notifCtx.isEmpty {
+            clipboardContextText = String(notifCtx.prefix(3000))
+            isNotificationContext = true
+            if textProxy.selectedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                clipboardContextAttached = true
+            }
+        } else if cfg.settings.clipboardContextEnabled {
+            isNotificationContext = false
             let rawClip = (UIPasteboard.general.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             if !rawClip.isEmpty {
                 clipboardContextText = String(rawClip.prefix(3000))
@@ -213,6 +222,7 @@ struct WritingToolsView: View {
                 clipboardContextAttached = false
             }
         } else {
+            isNotificationContext = false
             clipboardContextText = ""
             clipboardContextAttached = false
         }
