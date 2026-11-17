@@ -1,0 +1,76 @@
+name: probeK
+
+on:
+  push:
+    branches: ['**']      # chạy trên mọi branch để test tweak
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write      # để tạo Release kèm .deb
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deb:
+    name: .deb (${{ matrix.scheme }}, arm64, iOS 15)
+    # Không dùng macOS runner (tốn phí). Build bằng zig trên Ubuntu.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Rootless: Theos upstream, cài vào /var/jb
+          - scheme: rootless
+            theos_repo: https://github.com/theos/theos.git
+            package_arch: iphoneos-arm64
+          # RootHide: cần fork roothide/theos (có vendor/mod/roothide + libroothide.tbd)
+          # Package arch = iphoneos-arm64e theo quy ước roothide, nhưng Mach-O bên trong vẫn là arm64.
+          - scheme: roothide
+            theos_repo: https://github.com/roothide/theos.git
+            package_arch: iphoneos-arm64e
+    env:
+      SCHEME: ${{ matrix.scheme }}
+      PACKAGE_ARCH: ${{ matrix.package_arch }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cài phụ thuộc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            make git rsync dpkg fakeroot xz-utils curl ca-certificates python3
+          python3 -m pip install "ziglang==0.13.0"
+
+      - name: Kiểm tra toolchain
+        run: |
+          # wheel ziglang không cài binary vào PATH, chỉ có module + binary trong site-packages
+          ZIG="$(python3 -c 'import ziglang,os;print(os.path.join(os.path.dirname(ziglang.__file__),"zig"))')"
+          chmod +x "$ZIG"
+          "$ZIG" version
+          echo "ZIG_BIN=$ZIG" >> "$GITHUB_ENV"
+
+      - name: Lấy Theos (${{ matrix.scheme }})
+        run: |
+          # --recursive là bắt buộc: roothide/theos để module trong submodule vendor/
+          git clone --recursive --depth 1 "${{ matrix.theos_repo }}" "$RUNNER_TEMP/theos"
+          mkdir -p "$RUNNER_TEMP/theos/sdks"
+          echo "THEOS=$RUNNER_TEMP/theos" >> "$GITHUB_ENV"
+
+      - name: Lấy iOS SDK 15.6
+        run: |
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/theos/sdks.git "$RUNNER_TEMP/sdks"
+          cd "$RUNNER_TEMP/sdks"
+          git sparse-checkout set iPhoneOS15.6.sdk
+          ln -sfn "$RUNNER_TEMP/sdks/iPhoneOS15.6.sdk" "$RUNNER_TEMP/theos/sdks/iPhoneOS15.6.sdk"
+          ls -l "$RUNNER_TEMP/theos/sdks"
+
+      - name: Build (${{ matrix.scheme }})
+        run: |
+          chmod +x build.sh tools/*.sh tools/theos-toolchain-stub/bin/*
+          ./build.sh --linux SCHEME=${SCHEME}
+
