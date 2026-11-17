@@ -1,8 +1,7 @@
 #import "SBTTS.h"
 #import "SBConfig.h"
 #import <AVFoundation/AVFoundation.h>
-
-#define SBLog(fmt, ...) NSLog(@"[SiriBridge] " fmt, ##__VA_ARGS__)
+#import "SBLog.h"
 
 @interface SBTTS () <AVSpeechSynthesizerDelegate, AVAudioPlayerDelegate>
 @property (nonatomic, strong) AVSpeechSynthesizer *synth;
@@ -44,20 +43,32 @@
 }
 
 - (void)configureAudioSession {
-    AVAudioSession *s = [AVAudioSession sharedInstance];
-    // Siri đang giữ .playAndRecord; đổi category có thể làm Siri mất micro.
-    // Chỉ cần active + cho phép mix/duck.
-    NSError *err = nil;
-    [s setCategory:AVAudioSessionCategoryPlayAndRecord
-              mode:AVAudioSessionModeDefault
-           options:AVAudioSessionCategoryOptionDuckOthers | AVAudioSessionCategoryOptionAllowBluetooth
-             error:&err];
-    if (err) SBLog(@"audio category: %@", err.localizedDescription);
-    [s setActive:YES error:&err];
-    if (err) SBLog(@"audio active: %@", err.localizedDescription);
+    // QUAN TRỌNG: không đổi category/mode. Siri đang giữ .playAndRecord và
+    // micro; đổi category khi session đang chạy làm AVAudioSession trả lỗi
+    // (đôi khi kéo theo assertion). Chỉ cần đảm bảo session active.
+    @try {
+        AVAudioSession *s = [AVAudioSession sharedInstance];
+        if (!s.isOtherAudioPlaying) {
+            NSError *err = nil;
+            [s setActive:YES error:&err];
+            if (err) SBLog(@"audio active: %@", err.localizedDescription);
+        }
+    } @catch (NSException *e) {
+        SBLog(@"audio session: %@", e.reason);
+    }
 }
 
 - (void)speak:(NSString *)text completion:(void (^)(void))completion {
+    @try {
+        [self sb_speak:text completion:completion];
+    } @catch (NSException *e) {
+        SBLog(@"speak exception: %@ — %@", e.name, e.reason);
+        self.pending = nil;
+        if (completion) completion();
+    }
+}
+
+- (void)sb_speak:(NSString *)text completion:(void (^)(void))completion {
     SBConfig *cfg = [SBConfig shared];
     if (!text.length) { if (completion) completion(); return; }
     self.pending = completion;
@@ -87,6 +98,11 @@
         NSString *lang = [[NSLocale preferredLanguages] firstObject];
         u.voice = [AVSpeechSynthesisVoice voiceWithLanguage:lang];
     }
+    if (!u.voice && text.length) {
+        SBLog(@"không có voice nào → bỏ qua TTS, chỉ hiện chữ");
+        [self finish];
+        return;
+    }
     u.rate    = cfg.ttsRate  > 0 ? cfg.ttsRate  : AVSpeechUtteranceDefaultSpeechRate;
     u.pitchMultiplier = cfg.ttsPitch > 0 ? cfg.ttsPitch : 1.0;
     u.volume  = cfg.ttsVolume > 0 ? cfg.ttsVolume : 1.0;
@@ -106,8 +122,9 @@
     req.HTTPMethod = @"POST";
     req.timeoutInterval = 60;
     [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
-    if (cfg.apiKey.length) [req setValue:[@"Bearer " stringByAppendingString:cfg.apiKey]
-                      forHTTPHeaderField:@"Authorization"];
+    NSString *ttsKey = cfg.apiKey;
+    if (ttsKey.length) [req setValue:[@"Bearer " stringByAppendingString:ttsKey]
+                   forHTTPHeaderField:@"Authorization"];
     id extra = [NSJSONSerialization JSONObjectWithData:[(cfg.ttsHeaders ?: @"{}") dataUsingEncoding:NSUTF8StringEncoding]
                                               options:0 error:NULL];
     if ([extra isKindOfClass:[NSDictionary class]])
@@ -123,7 +140,12 @@
             id json = [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL];
             NSString *path = cfg.ttsResponseField.length ? cfg.ttsResponseField : @"data";
             id v = json;
-            for (NSString *p in [path componentsSeparatedByString:@"."]) v = v[p];
+            for (NSString *p in [path componentsSeparatedByString:@"."]) {
+                if ([v isKindOfClass:[NSDictionary class]]) v = v[p];
+                else if ([v isKindOfClass:[NSArray class]] && p.integerValue < (NSInteger)[v count])
+                    v = v[p.integerValue];
+                else { v = nil; break; }
+            }
             if ([v isKindOfClass:[NSString class]]) {
                 audio = [[NSData alloc] initWithBase64EncodedString:v options:0];
             }
@@ -167,6 +189,20 @@
 
 - (void)speechSynthesizer:(AVSpeechSynthesizer *)s didFinishSpeechUtterance:(AVSpeechUtterance *)u { [self finish]; }
 - (void)speechSynthesizer:(AVSpeechSynthesizer *)s didCancelSpeechUtterance:(AVSpeechUtterance *)u { [self finish]; }
+
+// Nếu synthesizer không hoàn tất (voice lỗi, bị ngắt), vẫn phải gọi completion
+// để SBEngine không kẹt ở trạng thái busy.
+- (void)speechSynthesizer:(AVSpeechSynthesizer *)s didStartSpeechUtterance:(AVSpeechUtterance *)u {
+    double timeout = MAX(6.0, u.speechString.length / 12.0 + 3.0);
+    __weak typeof(self) weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(timeout * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        __strong typeof(weakSelf) self_ = weakSelf;
+        if (!self_ || !self_.pending) return;
+        SBLog(@"TTS timeout → kết thúc lượt");
+        [self_ finish];
+    });
+}
 
 #pragma mark - AVAudioPlayerDelegate
 

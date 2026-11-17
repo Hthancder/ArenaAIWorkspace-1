@@ -8,7 +8,14 @@ static BOOL SBIsRootHideFlag = NO;
 
 typedef const char *(*SBJBRootFunc)(const char *);
 
+static void SBResolveJBRootInner(void);
+
 static void SBResolveJBRoot(void) {
+    @try { SBResolveJBRootInner(); }
+    @catch (__unused NSException *e) { SBJBRoot = @"/"; SBJBRootResolved = YES; }
+}
+
+static void SBResolveJBRootInner(void) {
     if (SBJBRootResolved) return;
     SBJBRootResolved = YES;
 

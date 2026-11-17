@@ -1,0 +1,5 @@
+#!/bin/sh
+# Gỡ tweak: xoá cờ trạng thái để lần cài sau không bị coi là crash-loop.
+rm -f /var/mobile/Library/Preferences/com.hthancder.siribridge.state.plist
+rm -f /var/mobile/Library/Preferences/com.hthancder.siribridge.safemode
+exit 0

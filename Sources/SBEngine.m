@@ -7,6 +7,7 @@
 #import "SBCapture.h"
 #import <objc/message.h>
 #import "SBDeliver.h"
+#import "SBLog.h"
 
 @interface SBEngine ()
 - (void)runToolCalls:(NSArray *)calls index:(NSInteger)i collected:(NSString *)c
@@ -16,7 +17,7 @@
 - (void)showAnswer:(NSString *)answer delegate:(id)delegate;
 @end
 
-#define SBLog(fmt, ...) NSLog(@"[SiriBridge] " fmt, ##__VA_ARGS__)
+#import "SBHook.h"
 
 #pragma mark - ACE helpers (không cần link SAObjects)
 
@@ -44,6 +45,15 @@ static Class SBClass(NSString *n) { return NSClassFromString(n); }
 #pragma mark - Public
 
 - (void)handleTurnWithText:(NSString *)text session:(id)session delegate:(id)delegate {
+    @try {
+        [self sb_handleTurn:text session:session delegate:delegate];
+    } @catch (NSException *e) {
+        SBLog(@"handleTurn exception: %@ — %@", e.name, e.reason);
+        _turn = 0;
+    }
+}
+
+- (void)sb_handleTurn:(NSString *)text session:(id)session delegate:(id)delegate {
     if (!text.length) return;
     if (_turn > 0) { SBLog(@"đang bận, bỏ qua lượt mới"); return; }
 
@@ -154,11 +164,11 @@ static Class SBClass(NSString *n) { return NSClassFromString(n); }
     if (!AV || !UV) { SBLog(@"thiếu SAObjects"); return; }
 
     id view = ((id (*)(id, SEL))objc_msgSend)(UV, NSSelectorFromString(@"assistantUtteranceView"));
-    [view setValue:@"…" forKey:@"text"];
+    SBSetSafe(view, @"text", @"…");
 
     id add = ((id (*)(id, SEL))objc_msgSend)(AV, NSSelectorFromString(@"addViews"));
-    [add setValue:@[view] forKey:@"views"];
-    [add setValue:@"Reflected" forKey:@"dialogPhase"];   // phase "đang xử lý"
+    SBSetSafe(add, @"views", @[view]);
+    SBSetSafe(add, @"dialogPhase", @"Reflected");   // phase "đang xử lý"
 
     SBDeliverCommand(delegate, add, @"siriSessionDidReceiveAddViewsCommand:completion:");
 }
@@ -170,18 +180,16 @@ static Class SBClass(NSString *n) { return NSClassFromString(n); }
 
     SBConfig *cfg = [SBConfig shared];
     id view = ((id (*)(id, SEL))objc_msgSend)(UV, NSSelectorFromString(@"assistantUtteranceView"));
-    [view setValue:answer forKey:@"text"];
+    SBSetSafe(view, @"text", answer);
     // Chỉ để Siri tự đọc khi người dùng chọn TTSMode = 2,
     // nếu không sẽ bị đọc 2 lần (Siri + SBTTS).
-    if (cfg.ttsMode == 2 && cfg.speakAnswer) {
-        [view setValue:answer forKey:@"speakableText"];
-    }
-    [view setValue:@(NO)   forKey:@"canUseServerTTS"];
-    [view setValue:[NSUUID UUID].UUIDString forKey:@"dialogIdentifier"];
+    if (cfg.ttsMode == 2 && cfg.speakAnswer) SBSetSafe(view, @"speakableText", answer);
+    SBSetSafe(view, @"canUseServerTTS", @(NO));
+    SBSetSafe(view, @"dialogIdentifier", [NSUUID UUID].UUIDString);
 
     id add = ((id (*)(id, SEL))objc_msgSend)(AV, NSSelectorFromString(@"addViews"));
-    [add setValue:@[view] forKey:@"views"];
-    [add setValue:@"Completion" forKey:@"dialogPhase"];
+    SBSetSafe(add, @"views", @[view]);
+    SBSetSafe(add, @"dialogPhase", @"Completion");
 
     SBDeliverCommand(delegate, add, @"siriSessionDidReceiveAddViewsCommand:completion:");
 }

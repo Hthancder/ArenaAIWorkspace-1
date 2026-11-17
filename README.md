@@ -295,6 +295,31 @@ Release gần nhất: <https://github.com/Hthancder/ArenaAIWorkspace-1/releases/
 
 ---
 
+## 7.6. Nếu bị safe mode
+
+Bản 0.1.1 sửa đúng nguyên nhân gây safe mode khi respring. Tóm tắt (chi tiết:
+`docs/07-safe-mode-rootcause.md`):
+
+| Nguyên nhân | Sửa |
+|---|---|
+| Binary **không có chữ ký** (ldid shim no-op trên Linux) | `tools/sb_codesign.py` ký ad-hoc thật, CI verify hash từng trang |
+| Dylib phụ thuộc `MSHookMessageEx` (chỉ có khi substrate đã nạp) | bỏ Logos, hook bằng `class_replaceMethod` của libobjc |
+| Inject vào **SpringBoard** dù không có hook nào ở đó | plist chỉ còn `com.apple.SiriViewService` |
+| `%ctor` làm I/O nặng (plist, CFPreferences, dlopen) trên main thread | hoãn 1.5 s, bọc `@try`, có **crash-loop guard** |
+| KVC (`setValue:forKey:`) trên ACE object có thể ném | `SBSetSafe()` dùng khắp nơi |
+| `AVAudioSession setCategory:` khi Siri đang giữ micro | chỉ `setActive:YES` |
+| TTS không bao giờ gọi completion → kẹt `busy` | thêm timeout |
+| `substringToIndex:` với số byte của NSData | cắt theo `NSString.length` |
+
+Thoát khẩn cấp (xem chi tiết trong `tools/README-safe-mode.md`):
+
+```bash
+touch /var/mobile/Library/Preferences/com.hthancder.siribridge.safemode
+killall -9 SpringBoard
+```
+
+---
+
 ## 8. Giới hạn đã biết (đọc trước khi test)
 
 * **Chưa có thiết bị thật để test** — code đã build được ra `.deb` arm64 nhưng

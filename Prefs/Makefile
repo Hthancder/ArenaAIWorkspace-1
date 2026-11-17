@@ -11,7 +11,7 @@ SiriBridgePrefs_FILES = SBRootListController.m SBPrefsUI.m ../Sources/SBPaths.m
 ADDITIONAL_CFLAGS = -Wno-unguarded-availability-new -Wno-nullability-completeness
 SiriBridgePrefs_CFLAGS = -fobjc-arc -I../Sources -Wno-deprecated-declarations
 SiriBridgePrefs_FRAMEWORKS = UIKit AVFoundation
-SiriBridgePrefs_LDFLAGS = -Wl,-undefined,dynamic_lookup
+SiriBridgePrefs_LDFLAGS = -Wl,-undefined,dynamic_lookup -Wl,-headerpad,0x1000
 SiriBridgePrefs_INSTALL_PATH = /Library/PreferenceBundles
 
 include $(THEOS_MAKE_PATH)/bundle.mk

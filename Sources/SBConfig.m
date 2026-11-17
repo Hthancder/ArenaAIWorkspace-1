@@ -1,5 +1,6 @@
 #import "SBConfig.h"
 #import "SBPaths.h"
+#import "SBLog.h"
 #import <notify.h>
 
 NSString *const SBConfigDomain      = @"com.hthancder.siribridge";
@@ -40,6 +41,14 @@ static id SBGet(NSUserDefaults *d, NSString *k, id def) {
 }
 
 - (void)reload {
+    @try {
+        [self sb_reload];
+    } @catch (NSException *e) {
+        SBLog(@"reload lỗi: %@ — dùng giá trị mặc định", e.reason);
+    }
+}
+
+- (void)sb_reload {
     NSUserDefaults *d = [[NSUserDefaults alloc] initWithSuiteName:SBConfigDomain];
     // Suite chưa tồn tại (lần đầu) → dùng domain mặc định của process
     if (!d) d = [NSUserDefaults standardUserDefaults];
@@ -83,6 +92,11 @@ static id SBGet(NSUserDefaults *d, NSString *k, id def) {
 
 - (void)postChanged {
     notify_post(SBConfigChangedNote.UTF8String);
+}
+
+- (BOOL)shouldHandleTextSafe:(NSString *)text {
+    @try { return [self shouldHandleText:text]; }
+    @catch (NSException *e) { return NO; }
 }
 
 - (BOOL)shouldHandleText:(NSString *)text {

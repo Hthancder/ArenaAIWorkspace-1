@@ -71,7 +71,7 @@ jobs:
 
       - name: Build (${{ matrix.scheme }})
         run: |
-          chmod +x build.sh tools/*.sh tools/theos-toolchain-stub/bin/*
+          chmod +x build.sh tools/*.sh tools/*.py tools/bin/* tools/theos-toolchain-stub/bin/*
           ./build.sh --linux SCHEME=${SCHEME}
 
       - name: Kiểm tra sản phẩm
@@ -81,7 +81,9 @@ jobs:
           echo "DEB=$DEB" >> "$GITHUB_ENV"
           echo "--- cấu trúc gói ---"
           dpkg-deb -c "$DEB"
-          python3 tools/verify_deb.py "$DEB" "${PACKAGE_ARCH}"
+          # --strict: thêm kiểm tra chống safe mode (không phụ thuộc substrate,
+          # filter chỉ inject SiriViewService, chữ ký ad-hoc hợp lệ)
+          python3 tools/verify_deb.py "$DEB" "${PACKAGE_ARCH}" --strict
           echo "SIZE=$(stat -c%s "$DEB")" >> "$GITHUB_ENV"
 
       - name: SHA256 + job summary

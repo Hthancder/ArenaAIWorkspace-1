@@ -2,7 +2,7 @@
 #import "SBConfig.h"
 #import "SBHistory.h"
 
-#define SBLog(fmt, ...) NSLog(@"[SiriBridge] " fmt, ##__VA_ARGS__)
+#import "SBLog.h"
 
 #pragma mark - JSON helpers
 
@@ -126,7 +126,16 @@ static NSString *SBJSONEscape(NSString *s) {
         dispatch_async(dispatch_get_main_queue(), ^{ if (completion) completion(a, t, e); });
     };
 
-    NSData *body = [self bodyForPrompt:prompt tools:tools cfg:cfg];
+    NSData *body = nil;
+    @try {
+        body = [self bodyForPrompt:prompt tools:tools cfg:cfg];
+    } @catch (NSException *e) {
+        SBLog(@"body template lỗi: %@", e.reason);
+        done(nil, nil, [NSError errorWithDomain:@"SiriBridge" code:-3
+                                      userInfo:@{NSLocalizedDescriptionKey:
+                                      @"Body template / Header JSON không hợp lệ"}]);
+        return;
+    }
     NSMutableURLRequest *req = [self requestForEndpoint:cfg.endpoint
                                                  apiKey:cfg.apiKey
                                            extraHeaders:cfg.extraHeaders
@@ -148,7 +157,9 @@ static NSString *SBJSONEscape(NSString *s) {
         NSInteger code = [(NSHTTPURLResponse *)resp statusCode];
         id json = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL] : nil;
         if (code < 200 || code >= 300 || ![json isKindOfClass:[NSDictionary class]]) {
-            NSString *snippet = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] substringToIndex:MIN(300u, data.length)];
+            NSString *full = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+            if (full.length > 300) full = [[full substringToIndex:300] stringByAppendingString:@"…"];
+            NSString *snippet = full;
             NSString *msg = [NSString stringWithFormat:@"HTTP %ld %@", (long)code, snippet ?: @""];
             if ([json isKindOfClass:[NSDictionary class]] && json[@"error"]) {
                 id e = json[@"error"];
@@ -196,7 +207,9 @@ static NSString *SBJSONEscape(NSString *s) {
 
         if (!answer.length && !toolCalls.count) {
             NSString *dump = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-            SBLog(@"Không bóc được nội dung, response: %.400s", dump.UTF8String);
+            if (!dump) dump = [NSString stringWithFormat:@"<%lu bytes không phải UTF-8>", (unsigned long)data.length];
+            if (dump.length > 400) dump = [dump substringToIndex:400];
+            SBLog(@"Không bóc được nội dung, response: %@", dump);
             done(nil, nil, [NSError errorWithDomain:@"SiriBridge" code:-2
                                           userInfo:@{NSLocalizedDescriptionKey:
                                           @"Không đọc được câu trả lời (kiểm tra Response Field)"}]);

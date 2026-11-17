@@ -5,7 +5,7 @@ include common-scheme.mk
 
 export TARGET = iphone:clang:15.6:15.0
 
-PACKAGE_VERSION = 0.1.0
+PACKAGE_VERSION = 0.1.1
 export PACKAGE_VERSION
 
 include $(THEOS)/makefiles/common.mk
@@ -25,7 +25,9 @@ ADDITIONAL_CFLAGS = -Wno-unguarded-availability-new -Wno-nullability-completenes
 SiriBridge_CFLAGS = -fobjc-arc -I Sources -Wno-deprecated-declarations -Wno-unused-function
 SiriBridge_FRAMEWORKS = Foundation UIKit AVFoundation MediaPlayer EventKit Contacts CoreFoundation
 # Symbol của Siri/SpringBoard không link được lúc build — resolve ở runtime
-SiriBridge_LDFLAGS = -Wl,-undefined,dynamic_lookup
+# -headerpad: chừa chỗ trong header để tools/sb_codesign.py thêm LC_CODE_SIGNATURE
+# (toolchain zig trên Linux không ký ad-hoc; không có chữ ký → SpringBoard/Siri sập)
+SiriBridge_LDFLAGS = -Wl,-undefined,dynamic_lookup -Wl,-headerpad,0x1000
 
 include $(THEOS)/makefiles/tweak.mk
 

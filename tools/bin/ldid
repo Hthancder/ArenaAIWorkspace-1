@@ -1,10 +1,17 @@
 #!/usr/bin/env bash
-# ldid giả lập cho môi trường build Linux không có ldid thật.
-#
-# Theos gọi:  ldid -S <file>      (ký ad-hoc)  →  ta không làm gì cả.
-# Trên rootless (ElleKit / libhooker), dylib KHÔNG cần chữ ký để được nạp,
-# nên bỏ bước ký là an toàn và không ảnh hưởng chức năng.
-#
-# Nếu bạn muốn ký thật: cài `ldid` (Procursus/Homebrew) và xoá file này
-# khỏi PATH, hoặc chạy: make package TARGET_CODESIGN=/usr/bin/ldid
+# ldid thay thế cho môi trường Linux/CI: không dùng ldid thật mà gọi
+# tools/sb_codesign.py để ký ad-hoc (SHA-256 CodeDirectory).
+# Theos gọi:  ldid -S <file>   |   ldid -S<entitlements> <file>
+set -u
+ROOT="$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)"
+PY=python3
+[ -x "$ROOT/tools/pybin/python3" ] && PY="$ROOT/tools/pybin/python3"
+# lấy đối số cuối cùng là đường dẫn file
+for last in "$@"; do :; done
+if [ -n "${last:-}" ] && [ -f "$last" ]; then
+  "$PY" "$ROOT/tools/sb_codesign.py" "$last" || {
+    echo "ldid(shim): ký thất bại cho $last" >&2
+    exit 1
+  }
+fi
 exit 0

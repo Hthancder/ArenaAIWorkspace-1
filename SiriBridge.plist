@@ -6,8 +6,9 @@
 	<dict>
 		<key>Bundles</key>
 		<array>
+			<!-- CHỈ SiriViewService. Tweak không hook gì trong SpringBoard, nên
+			     inject vào SpringBoard chỉ tạo thêm đường chết → safe mode. -->
 			<string>com.apple.SiriViewService</string>
-			<string>com.apple.springboard</string>
 		</array>
 	</dict>
 </dict>

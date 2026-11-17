@@ -30,5 +30,7 @@ if [[ -n "$sdk" ]]; then
   [[ -d "$sdk/usr/lib" ]] && args+=("-L$sdk/usr/lib")
 fi
 args+=("-fno-modules")
+# Chừa chỗ trong header để ta tự thêm LC_CODE_SIGNATURE (zig/ld64 không ký trên Linux)
+args+=("-Wl,-headerpad,0x1000")
 # Nếu SDK không có ldid, Theos vẫn gọi codesign tool; bỏ qua an toàn:
 exec "$ZIG" cc "${args[@]}"

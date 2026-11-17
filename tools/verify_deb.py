@@ -19,10 +19,35 @@ def fail(msg: str) -> None:
     sys.exit(1)
 
 
+def strict_checks(tmp: str) -> None:
+    """Các kiểm tra chống safe mode: không phụ thuộc substrate, không inject SpringBoard."""
+    found_filter = ""
+    for base, _dirs, files in os.walk(tmp):
+        for name in files:
+            path = os.path.join(base, name)
+            if name == "SiriBridge.plist" and "DynamicLibraries" in path:
+                found_filter = path
+            if name.endswith(".dylib"):
+                with open(path, "rb") as fh:
+                    blob = fh.read()
+                if b"MSHookMessageEx" in blob:
+                    fail(f"{os.path.basename(path)} còn tham chiếu MSHookMessageEx "
+                         f"(Logos/substrate) — dyld có thể bind lỗi lúc load")
+    if not found_filter:
+        fail("thiếu plist filter của MobileSubstrate")
+    with open(found_filter, "rb") as fh:
+        plist = fh.read()
+    if b"springboard" in plist:
+        fail("plist filter còn inject com.apple.springboard (tweak không hook gì ở đó)")
+    print("OK không phụ thuộc substrate, filter chỉ có SiriViewService")
+
+
 def main() -> None:
-    if len(sys.argv) != 3:
-        fail("cần 2 tham số: <file.deb> <package_arch>")
-    deb, expected_arch = sys.argv[1], sys.argv[2]
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    strict = "--strict" in sys.argv
+    if len(args) != 2:
+        fail("cần 2 tham số: <file.deb> <package_arch> [--strict]")
+    deb, expected_arch = args
 
     # --- 1. Trường Architecture trong control ---
     control = subprocess.run(["dpkg-deb", "-f", deb], capture_output=True, text=True, check=True).stdout
@@ -78,6 +103,48 @@ def main() -> None:
         if base_subtype != 0:
             fail(f"{os.path.basename(path)} cpusubtype={subtype:#x} → không phải arm64 ALL")
         print(f"OK {os.path.basename(path)}: Mach-O arm64, cpusubtype={subtype:#x} (ALL, không arm64e)")
+
+    # --- 4. Bắt buộc có chữ ký ad-hoc (thiếu = SpringBoard/Siri sập khi load) ---
+    for path in (dylib, prefs):
+        with open(path, "rb") as fh:
+            blob = fh.read()
+        ncmds = struct.unpack("<I", blob[16:20])[0]
+        off, cs = 32, None
+        for _ in range(ncmds):
+            cmd, size_ = struct.unpack("<II", blob[off:off + 8])
+            if cmd == 0x1D:
+                cs = struct.unpack("<II", blob[off + 8:off + 16])
+            off += size_
+        if not cs:
+            fail(f"{os.path.basename(path)} KHÔNG có LC_CODE_SIGNATURE "
+                 f"(toolchain Linux không ký → phải chạy tools/sb_codesign.py)")
+        dataoff, datasize = cs
+        if datasize < 1000:
+            fail(f"{os.path.basename(path)} chữ ký quá nhỏ ({datasize} B)")
+        sb = blob[dataoff:dataoff + datasize]
+        if struct.unpack(">I", sb[:4])[0] != 0xFADE0CC0:
+            fail(f"{os.path.basename(path)} superblob sai magic")
+        _slot, cd_off = struct.unpack(">II", sb[12:20])
+        cd = sb[cd_off:]
+        if struct.unpack(">I", cd[:4])[0] != 0xFADE0C02:
+            fail(f"{os.path.basename(path)} CodeDirectory sai magic")
+        (_magic, _len, _ver, _flags, hash_off, _ident, _nspec, ncode,
+         code_limit, hash_size, hash_type, _plat, page_log, _spare, _scatter) = \
+            struct.unpack(">IIIIIIIIIBBBBII", cd[:48])
+        if hash_type != 2 or hash_size != 32:
+            fail(f"{os.path.basename(path)} hashType={hash_type} (cần 2 = SHA-256)")
+        page = 1 << page_log
+        import hashlib
+        for i in range(min(ncode, 400)):
+            start = i * page
+            want = cd[hash_off + i * 32: hash_off + (i + 1) * 32]
+            got = hashlib.sha256(blob[start:min(start + page, code_limit)]).digest()
+            if got != want:
+                fail(f"{os.path.basename(path)} hash trang {i} không khớp")
+        print(f"OK {os.path.basename(path)}: chữ ký ad-hoc hợp lệ ({ncode} trang, SHA-256)")
+
+    if strict:
+        strict_checks(tmp)
 
     size = os.path.getsize(deb)
     if size < 20000:

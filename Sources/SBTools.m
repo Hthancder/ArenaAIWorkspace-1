@@ -5,6 +5,7 @@
 #import <EventKit/EventKit.h>
 #import <Contacts/Contacts.h>
 #import <objc/message.h>
+#import "SBLog.h"
 
 // Private nhưng ổn định từ iOS 8 → 15, dùng để mở app không cần URL scheme
 @interface LSApplicationWorkspace : NSObject
@@ -17,8 +18,6 @@
 @property (nonatomic, readonly) NSString *bundleIdentifier;
 @property (nonatomic, readonly) NSString *displayName;
 @end
-
-#define SBLog(fmt, ...) NSLog(@"[SiriBridge] " fmt, ##__VA_ARGS__)
 
 @implementation SBTools
 
@@ -108,6 +107,7 @@
     Class ws = NSClassFromString(@"LSApplicationWorkspace");
     if (!ws) return nil;
     id space = [ws performSelector:@selector(defaultWorkspace)];
+    if (![space respondsToSelector:@selector(allInstalledApplications)]) return nil;
     NSArray *apps = [space performSelector:@selector(allInstalledApplications)];
     NSString *needle = name.lowercaseString;
     NSString *best = nil; NSUInteger bestScore = 0;
@@ -129,6 +129,16 @@
 #pragma mark - Run
 
 + (void)runTool:(NSString *)name arguments:(NSString *)json completion:(void (^)(NSString *))completion {
+    @try {
+        [self sb_runTool:name arguments:json completion:completion];
+    } @catch (NSException *e) {
+        SBLog(@"tool %@ exception: %@ — %@", name, e.name, e.reason);
+        // Không được để SBEngine treo chờ mãi
+        [self finish:[NSString stringWithFormat:@"tool %@ lỗi", name] completion:completion];
+    }
+}
+
++ (void)sb_runTool:(NSString *)name arguments:(NSString *)json completion:(void (^)(NSString *))completion {
     NSDictionary *a = [self args:json];
     SBLog(@"tool %@ %@", name, json);
 
@@ -145,7 +155,11 @@
     if ([name isEqualToString:@"list_apps"]) {
         Class ws = NSClassFromString(@"LSApplicationWorkspace");
         if (!ws) { [self finish:@"không truy cập được" completion:completion]; return; }
-        NSArray *apps = [[ws performSelector:@selector(defaultWorkspace)] performSelector:@selector(allInstalledApplications)];
+        id space = [ws performSelector:@selector(defaultWorkspace)];
+        if (![space respondsToSelector:@selector(allInstalledApplications)]) {
+            [self finish:@"không truy cập được" completion:completion]; return;
+        }
+        NSArray *apps = [space performSelector:@selector(allInstalledApplications)];
         NSMutableArray *names = [NSMutableArray array];
         for (id app in apps) {
             NSString *n = nil; @try { n = [app valueForKey:@"displayName"]; } @catch (...) {}
@@ -160,10 +174,17 @@
         if (!bid) { [self finish:[NSString stringWithFormat:@"không tìm thấy app %@", appName]
                       completion:completion]; return; }
         dispatch_async(dispatch_get_main_queue(), ^{
-            Class ws = NSClassFromString(@"LSApplicationWorkspace");
-            BOOL ok = [[ws performSelector:@selector(defaultWorkspace)]
-                       openApplicationWithBundleID:bid];
-            if (completion) completion(ok ? [NSString stringWithFormat:@"đã mở %@", appName] : @"mở thất bại");
+            @try {
+                Class ws = NSClassFromString(@"LSApplicationWorkspace");
+                id space = [ws performSelector:@selector(defaultWorkspace)];
+                SEL s = NSSelectorFromString(@"openApplicationWithBundleID:");
+                BOOL ok = [space respondsToSelector:s] &&
+                          ((BOOL (*)(id, SEL, id))objc_msgSend)(space, s, bid);
+                if (completion) completion(ok ? [NSString stringWithFormat:@"đã mở %@", appName] : @"mở thất bại");
+            } @catch (NSException *e) {
+                SBLog(@"open_app: %@", e.reason);
+                if (completion) completion(@"mở thất bại");
+            }
         });
         return;
     }
@@ -256,7 +277,7 @@
     }
     if ([name isEqualToString:@"send_message"]) {
         NSString *to = a[@"to"] ?: @""; NSString *body = a[@"body"] ?: @"";
-        NSString *url = [NSString stringWithFormat:@"sms://%@&body=%@",
+        NSString *url = [NSString stringWithFormat:@"sms:%@&body=%@",
                          [to stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLHostAllowedCharacterSet]],
                          [body stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]]];
         [self runTool:@"open_url" arguments:[NSString stringWithFormat:@"{\"url\":\"%@\"}", url] completion:completion];

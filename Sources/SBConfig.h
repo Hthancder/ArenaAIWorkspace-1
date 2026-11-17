@@ -43,6 +43,8 @@ extern NSString *const SBConfigChangedNote;     // CFNotificationName
 
 + (instancetype)shared;
 - (void)reload;
+/// Bản không bao giờ ném — dùng trong hook của process hệ thống.
+- (BOOL)shouldHandleTextSafe:(NSString *)text;
 - (void)postChanged;
 - (BOOL)shouldHandleText:(NSString *)text;   // prefix + native keyword
 @end
