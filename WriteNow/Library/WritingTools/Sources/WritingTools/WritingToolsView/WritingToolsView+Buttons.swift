@@ -106,6 +106,10 @@ extension WritingToolsView {
                     }
                 }
 
+                if !(isRecordingVoice || isProcessingVoice) {
+                    attachmentMenuButton
+                }
+
                 if !(isRecordingVoice || isProcessingVoice), !enabledPresets.isEmpty {
                     Menu {
                         if selectedPresetForCustomPrompt != nil {
@@ -138,15 +142,26 @@ extension WritingToolsView {
                 }
 
                 if !(isRecordingVoice || isProcessingVoice) {
+                    let hasPromptOrAttachments = !customPromptInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        || !attachedImages.isEmpty
+                        || !attachedFiles.isEmpty
                     Button {
-                        runCustomPrompt(customPromptInput)
+                        runCustomPromptOrAttachmentFallback()
                     } label: {
                         Image(systemName: "arrow.up.circle.fill")
                             .font(.title3)
-                            .foregroundColor(customPromptInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .white.opacity(0.35) : .white)
+                            .foregroundColor(hasPromptOrAttachments ? .white : .white.opacity(0.35))
                     }
-                    .disabled(customPromptInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(!hasPromptOrAttachments)
                 }
+            }
+
+            if !attachedImages.isEmpty || !attachedFiles.isEmpty {
+                attachmentsStrip
+            }
+
+            if !attachmentBannerMessage.isEmpty {
+                attachmentBannerView
             }
 
             if let attachedPreset = selectedPresetForCustomPrompt {
@@ -539,6 +554,21 @@ extension WritingToolsView {
         executeCurrentTask()
     }
 
+    func runCustomPromptOrAttachmentFallback() {
+        let trimmed = customPromptInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            runCustomPrompt(trimmed)
+        } else if !attachedImages.isEmpty || !attachedFiles.isEmpty {
+            let fallbackPrompt = "Analyze, summarize, and explain the attached content clearly."
+            if let attachedPreset = selectedPresetForCustomPrompt {
+                runPresetWithPrompt(attachedPreset, instruction: fallbackPrompt)
+            } else {
+                currentTask = .customPrompt(fallbackPrompt)
+                executeCurrentTask()
+            }
+        }
+    }
+
     func runCustomPrompt(_ raw: String) {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -550,6 +580,241 @@ extension WritingToolsView {
         customPromptInput = ""
         currentTask = .customPrompt(trimmed)
         executeCurrentTask()
+    }
+
+    // MARK: - Attachment UI & Actions
+
+    @ViewBuilder
+    var attachmentMenuButton: some View {
+        let count = attachedImages.count + attachedFiles.count
+        Menu {
+            Button {
+                pickPhotos()
+            } label: {
+                Label("Attach Photo".localized, systemImage: "photo.on.rectangle.angled")
+            }
+
+            Button {
+                attachScreenShot()
+            } label: {
+                Label("Capture Screen".localized, systemImage: "camera.viewfinder")
+            }
+
+            Button {
+                pasteClipboardImage()
+            } label: {
+                Label("Paste Image".localized, systemImage: "doc.on.clipboard")
+            }
+
+            Button {
+                pickFiles()
+            } label: {
+                Label("Attach File".localized, systemImage: "doc.badge.plus")
+            }
+
+            if count > 0 {
+                Divider()
+                Button(role: .destructive) {
+                    attachedImages.removeAll()
+                    attachedFiles.removeAll()
+                    attachmentBannerMessage = ""
+                } label: {
+                    Label("Clear Attachments".localized, systemImage: "trash")
+                }
+            }
+        } label: {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: count > 0 ? "paperclip.circle.fill" : "paperclip.circle")
+                    .font(.title3)
+                    .foregroundColor(count > 0 ? .cyan : .white.opacity(0.75))
+                if count > 0 {
+                    Text("\(count)")
+                        .font(.system(size: 8.5, weight: .bold))
+                        .foregroundColor(.black)
+                        .padding(.horizontal, 3.5)
+                        .padding(.vertical, 1)
+                        .background(Color.cyan)
+                        .clipShape(Capsule())
+                        .offset(x: 4, y: -3)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    var attachmentsStrip: some View {
+        ResponsiveHorizontalScrollView {
+            HStack(spacing: 6) {
+                ForEach(attachedImages) { item in
+                    ZStack(alignment: .topTrailing) {
+                        HStack(spacing: 5) {
+                            Image(uiImage: item.thumbnail)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 26, height: 26)
+                                .clipShape(RoundedRectangle(cornerRadius: 5))
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text(item.label)
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .lineLimit(1)
+                                Text(item.sizeSummary)
+                                    .font(.system(size: 8.5, design: .monospaced))
+                                    .foregroundColor(.white.opacity(0.65))
+                            }
+                        }
+                        .padding(.leading, 4)
+                        .padding(.trailing, 18)
+                        .padding(.vertical, 3)
+                        .background(Color.cyan.opacity(0.22))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.cyan.opacity(0.45), lineWidth: 0.8)
+                        )
+                        .cornerRadius(8)
+
+                        Button {
+                            attachedImages.removeAll { $0.id == item.id }
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 12))
+                                .foregroundColor(.white.opacity(0.85))
+                        }
+                        .buttonStyle(.plain)
+                        .padding(3)
+                    }
+                }
+
+                ForEach(attachedFiles) { file in
+                    ZStack(alignment: .topTrailing) {
+                        Button {
+                            previewAttachedFile = file
+                        } label: {
+                            HStack(spacing: 5) {
+                                Image(systemName: file.fileExtension == "pdf" ? "doc.richtext" : "doc.text.fill")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(.orange)
+                                VStack(alignment: .leading, spacing: 0) {
+                                    Text(file.fileName)
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .lineLimit(1)
+                                    Text(file.isTruncated ? "\(file.charCountSummary)+" : file.charCountSummary)
+                                        .font(.system(size: 8.5, design: .monospaced))
+                                        .foregroundColor(.white.opacity(0.65))
+                                }
+                            }
+                            .padding(.leading, 7)
+                            .padding(.trailing, 20)
+                            .padding(.vertical, 4)
+                            .background(Color.orange.opacity(0.20))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.orange.opacity(0.45), lineWidth: 0.8)
+                            )
+                            .cornerRadius(8)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            attachedFiles.removeAll { $0.id == file.id }
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 12))
+                                .foregroundColor(.white.opacity(0.85))
+                        }
+                        .buttonStyle(.plain)
+                        .padding(3)
+                    }
+                }
+            }
+            .foregroundColor(.white)
+        }
+        .frame(height: 36)
+    }
+
+    @ViewBuilder
+    var attachmentBannerView: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "info.circle.fill")
+                .font(.caption2)
+                .foregroundColor(.cyan)
+            Text(attachmentBannerMessage)
+                .font(.caption2)
+                .foregroundColor(.white.opacity(0.9))
+                .lineLimit(2)
+            Spacer()
+            Button {
+                attachmentBannerMessage = ""
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.white.opacity(0.65))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(Color.black.opacity(0.28))
+        .cornerRadius(8)
+    }
+
+    func pickPhotos() {
+        let remaining = max(1, 4 - attachedImages.count)
+        AttachmentPickerHelper.presentPhotoPicker(from: context, remainingSlots: remaining) { items in
+            guard !items.isEmpty else { return }
+            for item in items {
+                if attachedImages.count < 4 {
+                    attachedImages.append(item)
+                }
+            }
+            attachmentBannerMessage = ""
+        }
+    }
+
+    func pickFiles() {
+        AttachmentPickerHelper.presentDocumentPicker(from: context) { images, files, errors in
+            for img in images where attachedImages.count < 4 {
+                attachedImages.append(img)
+            }
+            for file in files where attachedFiles.count < 4 {
+                attachedFiles.append(file)
+            }
+            if let firstErr = errors.first {
+                attachmentBannerMessage = firstErr
+            } else {
+                attachmentBannerMessage = ""
+            }
+        }
+    }
+
+    func attachScreenShot() {
+        guard attachedImages.count < 4 else {
+            attachmentBannerMessage = "Max 4 images attached."
+            return
+        }
+        AttachmentPickerHelper.captureScreenSnapshot(from: context) { item in
+            if let item {
+                attachedImages.append(item)
+                attachmentBannerMessage = ""
+            } else {
+                attachmentBannerMessage = "Could not capture screen snapshot."
+            }
+        }
+    }
+
+    func pasteClipboardImage() {
+        guard attachedImages.count < 4 else {
+            attachmentBannerMessage = "Max 4 images attached."
+            return
+        }
+        if let img = UIPasteboard.general.image,
+           let item = AttachedImageItem.fromUIImage(img, label: "Clipboard")
+        {
+            attachedImages.append(item)
+            attachmentBannerMessage = ""
+        } else {
+            attachmentBannerMessage = "No image in clipboard".localized
+        }
     }
 
     func runSmartReply() {

@@ -306,6 +306,14 @@ extension WritingToolsView {
                         .cornerRadius(8)
                     }
 
+                    if !attachedImages.isEmpty || !attachedFiles.isEmpty {
+                        attachmentsStrip
+                    }
+
+                    if !attachmentBannerMessage.isEmpty {
+                        attachmentBannerView
+                    }
+
                     HStack(spacing: 6) {
                         if (isRecordingVoice || isProcessingVoice) && voiceTargetIsFollowUp {
                             liveRecordingStrip
@@ -323,6 +331,10 @@ extension WritingToolsView {
                                 .onSubmit {
                                     runFollowUp(followUpPromptInput)
                                 }
+                        }
+
+                        if !(isRecordingVoice || isProcessingVoice) {
+                            attachmentMenuButton
                         }
 
                         if cfg.settings.stt.enabled {
@@ -359,14 +371,22 @@ extension WritingToolsView {
                                 .disabled(output.isEmpty)
                             }
 
+                            let hasFollowUpOrAttachments = !followUpPromptInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                || !attachedImages.isEmpty
+                                || !attachedFiles.isEmpty
                             Button {
-                                runFollowUp(followUpPromptInput)
+                                let trimmed = followUpPromptInput.trimmingCharacters(in: .whitespacesAndNewlines)
+                                if !trimmed.isEmpty {
+                                    runFollowUp(trimmed)
+                                } else {
+                                    runFollowUp("Incorporate and analyze the attached image(s)/file(s) to refine the response.")
+                                }
                             } label: {
                                 Image(systemName: "arrow.up.circle.fill")
                                     .font(.title3)
-                                    .foregroundColor(followUpPromptInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .white.opacity(0.35) : .white)
+                                    .foregroundColor(hasFollowUpOrAttachments ? .white : .white.opacity(0.35))
                             }
-                            .disabled(followUpPromptInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            .disabled(!hasFollowUpOrAttachments)
                         }
                     }
                 }

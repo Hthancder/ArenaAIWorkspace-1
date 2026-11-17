@@ -261,13 +261,35 @@ enum ScreenTextScanner {
             traverse(view: sub, in: window, blocks: &blocks, webViews: &webViews)
         }
 
-        // Only capture accessibility text if no child already produced a text block inside this container
+        // Only capture accessibility text / accessibilityElements if no child already produced a text block inside this container
         if blocks.count == beforeCount {
-            if let ax = (view.accessibilityValue ?? view.accessibilityLabel)?.trimmingCharacters(in: .whitespacesAndNewlines),
-               isMeaningfulText(ax),
-               ax.count >= 3
-            {
-                blocks.append(DetectedScreenTextBlock(text: ax, rectInWindow: clipped, sourceView: view, sourceKind: .accessibility))
+            let axCount = view.accessibilityElementCount()
+            if axCount != NSNotFound && axCount > 0 {
+                let cap = min(axCount, 40)
+                for idx in 0 ..< cap {
+                    guard blocks.count < 160 else { break }
+                    guard let elem = view.accessibilityElement(at: idx) as? NSObject else { continue }
+                    let raw = (elem.accessibilityValue ?? elem.accessibilityLabel)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    guard isMeaningfulText(raw), raw.count >= 3 else { continue }
+                    let elemFrameInWin: CGRect
+                    let axFrame = elem.accessibilityFrame
+                    if !axFrame.isEmpty, let winScene = window.windowScene {
+                        let converted = winScene.coordinateSpace.convert(axFrame, from: UIScreen.main.coordinateSpace)
+                        let c = converted.intersection(window.bounds)
+                        elemFrameInWin = c.isEmpty ? clipped : c
+                    } else {
+                        elemFrameInWin = clipped
+                    }
+                    blocks.append(DetectedScreenTextBlock(text: raw, rectInWindow: elemFrameInWin, sourceView: view, sourceKind: .accessibility))
+                }
+            }
+            if blocks.count == beforeCount {
+                if let ax = (view.accessibilityValue ?? view.accessibilityLabel)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   isMeaningfulText(ax),
+                   ax.count >= 3
+                {
+                    blocks.append(DetectedScreenTextBlock(text: ax, rectInWindow: clipped, sourceView: view, sourceKind: .accessibility))
+                }
             }
         }
     }

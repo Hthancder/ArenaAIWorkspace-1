@@ -44,7 +44,9 @@ extension WritingToolsView {
             settings: settings,
             clipboardContext: activeClipboardContext,
             priorEditContext: effectivePriorEditContext,
-            sessionTurns: currentSessionTurns
+            sessionTurns: currentSessionTurns,
+            attachedFiles: attachedFiles,
+            attachedImages: attachedImages
         )
         let activePresetForModel: WritingPresetItem?
         switch taskToRun {

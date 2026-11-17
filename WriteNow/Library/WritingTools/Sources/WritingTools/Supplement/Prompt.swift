@@ -328,7 +328,9 @@ public enum PromptComposer {
         settings: RuntimeSettings,
         clipboardContext: String? = nil,
         priorEditContext: EditContextRecord? = nil,
-        sessionTurns: [EditContextTurn] = []
+        sessionTurns: [EditContextTurn] = [],
+        attachedFiles: [AttachedFileItem] = [],
+        attachedImages: [AttachedImageItem] = []
     ) -> (messages: [ChatQuery.ChatCompletionMessageParam], sampling: SamplingConfig) {
         let globalExtra = settings.globalSystemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         let extraSuffix = globalExtra.isEmpty ? "" : "\n\nAdditional user instructions:\n\(globalExtra)"
@@ -337,6 +339,11 @@ public enum PromptComposer {
             ? ""
             : "\n\n[Clipboard Context / Message to Reference]:\n\(cleanClipboard)"
         let editHistoryBlock = formatPriorEditContext(priorEditContext, maxTurns: settings.editContextMaxTurns)
+        let filesBlock = formatAttachedFiles(attachedFiles)
+        let hasAttachments = !attachedFiles.isEmpty || !attachedImages.isEmpty
+        let attachmentNote = hasAttachments
+            ? "\n- The user has attached image(s) and/or document file(s) for extra context; examine and incorporate them directly."
+            : ""
 
         switch task {
         case let .preset(preset):
@@ -348,23 +355,23 @@ public enum PromptComposer {
                 langRule = "\n- Output strictly in \(lang)."
             }
 
-            let systemPrompt = "\(preset.systemPrompt) \(generalPrompt)\(langRule)\(extraSuffix)"
+            let systemPrompt = "\(preset.systemPrompt) \(generalPrompt)\(langRule)\(attachmentNote)\(extraSuffix)"
             var messages: [ChatQuery.ChatCompletionMessageParam] = [
                 .system(.init(content: systemPrompt)),
             ]
 
-            if settings.useFewShotExamples, preset.includeExamples, lang.isEmpty, cleanClipboard.isEmpty, editHistoryBlock.isEmpty {
+            if settings.useFewShotExamples, preset.includeExamples, lang.isEmpty, cleanClipboard.isEmpty, editHistoryBlock.isEmpty, !hasAttachments {
                 let keyPrompt = preset.defaultKey.flatMap(Prompt.init(rawValue:)) ?? .rewrite
                 messages.append(contentsOf: keyPrompt.chatExamplesAfterSystemMessage)
             }
 
-            messages.append(.user(.init(content: .init(string:
+            let userText =
                 """
                 \(Prompt.userContentHeader)
 
-                \(selectedText)\(clipboardBlock)\(editHistoryBlock)
+                \(selectedText)\(clipboardBlock)\(editHistoryBlock)\(filesBlock)
                 """
-            ))))
+            messages.append(makeUserMessage(text: userText, attachedImages: attachedImages))
 
             let sampling = adaptiveSampling(baseTemperature: preset.temperature, baseTopP: preset.topP, inputLength: selectedText.count)
             return (messages, sampling)
@@ -383,30 +390,30 @@ public enum PromptComposer {
                 \(preset.systemPrompt)
                 You are also following an additional custom requirement from the user. Combine the preset's style, tone, and strengths above with the user's custom instruction below.
                 - Always preserve core meaning and accuracy unless the user explicitly asks to expand, reply, or transform.
-                - Always respond in the same language as the input unless the preset or custom instruction specifies a target language.\(langRule)
+                - Always respond in the same language as the input unless the preset or custom instruction specifies a target language.\(langRule)\(attachmentNote)
                 - Output only the resulting text/answer with no meta preambles or explanations unless requested.\(extraSuffix)
                 """
             var messages: [ChatQuery.ChatCompletionMessageParam] = [
                 .system(.init(content: systemPrompt)),
             ]
 
-            if settings.useFewShotExamples, preset.includeExamples, lang.isEmpty, cleanClipboard.isEmpty, editHistoryBlock.isEmpty {
+            if settings.useFewShotExamples, preset.includeExamples, lang.isEmpty, cleanClipboard.isEmpty, editHistoryBlock.isEmpty, !hasAttachments {
                 let keyPrompt = preset.defaultKey.flatMap(Prompt.init(rawValue:)) ?? .rewrite
                 messages.append(contentsOf: keyPrompt.chatExamplesAfterSystemMessage)
             }
 
             let sourceBlock = selectedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ? "(No selected source text — fulfill the custom instruction directly using the preset style.)"
+                ? "(No selected source text — fulfill the custom instruction using the preset style and any attached context.)"
                 : selectedText
-            messages.append(.user(.init(content: .init(string:
+            let userText =
                 """
-                Custom Requirement (combine with preset): \(instruction)\(clipboardBlock)\(editHistoryBlock)
+                Custom Requirement (combine with preset): \(instruction)\(clipboardBlock)\(editHistoryBlock)\(filesBlock)
 
                 \(Prompt.userContentHeader)
 
                 \(sourceBlock)
                 """
-            ))))
+            messages.append(makeUserMessage(text: userText, attachedImages: attachedImages))
 
             let sampling = adaptiveSampling(baseTemperature: preset.temperature, baseTopP: preset.topP, inputLength: selectedText.count)
             return (messages, sampling)
@@ -415,22 +422,22 @@ public enum PromptComposer {
             let systemPrompt =
                 """
                 You are a helpful AI writing and reading assistant inside iOS.
-                Follow the user's instruction accurately using the provided text and any clipboard or previous edit context.
+                Follow the user's instruction accurately using the provided text, clipboard, edit history, and any attached images or files.
                 - If the user asks to rewrite, edit, or translate, output only the resulting text.
-                - If the user asks a question, explanation, summary, or analysis of the text, answer clearly and directly in the requested or matching language.
-                - If the user asks to write a reply to a message, draft a natural, ready-to-send reply.
+                - If the user asks a question, explanation, summary, or analysis of the text, image, or file, answer clearly and directly in the requested or matching language.
+                - If the user asks to write a reply to a message, draft a natural, ready-to-send reply.\(attachmentNote)
                 Do not add meta preambles or markdown fences unless requested.\(extraSuffix)
                 """
             let userContent =
                 """
-                Instruction: \(instruction)\(clipboardBlock)\(editHistoryBlock)
+                Instruction: \(instruction)\(clipboardBlock)\(editHistoryBlock)\(filesBlock)
 
                 \(Prompt.userContentHeader)
                 \(selectedText)
                 """
             let messages: [ChatQuery.ChatCompletionMessageParam] = [
                 .system(.init(content: systemPrompt)),
-                .user(.init(content: .init(string: userContent))),
+                makeUserMessage(text: userContent, attachedImages: attachedImages),
             ]
             return (messages, SamplingConfig(temperature: 0.4))
 
@@ -438,14 +445,14 @@ public enum PromptComposer {
             let systemPrompt =
                 """
                 You are a helpful AI writing assistant. The user wants to refine the draft text based on their follow-up instruction.
-                Use the original input, any prior edit history, and the current draft output to preserve intended meaning and continuity.
-                Output only the updated text with no meta commentary or explanations.\(extraSuffix)
+                Use the original input, any prior edit history, attached images/files, and the current draft output to preserve intended meaning and continuity.
+                Output only the updated text with no meta commentary or explanations.\(attachmentNote)\(extraSuffix)
                 """
             let sessionTurnsBlock = formatSessionTurns(sessionTurns, maxTurns: settings.editContextMaxTurns)
             let userContent =
                 """
                 Original input text:
-                \(originalText)\(clipboardBlock)\(editHistoryBlock)\(sessionTurnsBlock)
+                \(originalText)\(clipboardBlock)\(editHistoryBlock)\(filesBlock)\(sessionTurnsBlock)
 
                 Current draft output:
                 \(currentOutput)
@@ -455,10 +462,52 @@ public enum PromptComposer {
                 """
             let messages: [ChatQuery.ChatCompletionMessageParam] = [
                 .system(.init(content: systemPrompt)),
-                .user(.init(content: .init(string: userContent))),
+                makeUserMessage(text: userContent, attachedImages: attachedImages),
             ]
             return (messages, SamplingConfig(temperature: 0.35))
         }
+    }
+
+    private static func makeUserMessage(
+        text: String,
+        attachedImages: [AttachedImageItem]
+    ) -> ChatQuery.ChatCompletionMessageParam {
+        guard !attachedImages.isEmpty else {
+            return .user(.init(content: .init(string: text)))
+        }
+        var parts: [ChatQuery.ChatCompletionMessageParam.ChatCompletionUserMessageParam.Content.VisionContent] = [
+            .chatCompletionContentPartTextParam(.init(text: text)),
+        ]
+        for image in attachedImages {
+            parts.append(.chatCompletionContentPartImageParam(.init(
+                imageUrl: .init(url: image.jpegData, detail: .auto)
+            )))
+        }
+        return .user(.init(content: .vision(parts)))
+    }
+
+    private static func formatAttachedFiles(_ files: [AttachedFileItem]) -> String {
+        guard !files.isEmpty else { return "" }
+        let totalBudget = 56_000
+        var used = 0
+        var blocks: [String] = []
+        for file in files {
+            guard used < totalBudget else { break }
+            let remaining = totalBudget - used
+            let snippet = file.extractedText.count > remaining
+                ? String(file.extractedText.prefix(remaining)) + "\n...(truncated)"
+                : file.extractedText
+            used += snippet.count
+            let truncNote = file.isTruncated ? " [truncated]" : ""
+            blocks.append(
+                """
+                --- File: \(file.fileName)\(truncNote) ---
+                \(snippet)
+                """
+            )
+        }
+        guard !blocks.isEmpty else { return "" }
+        return "\n\n[Attached File(s) Context]:\n" + blocks.joined(separator: "\n\n")
     }
 
     private static func formatPriorEditContext(_ record: EditContextRecord?, maxTurns: Int) -> String {

@@ -27,6 +27,10 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)hasExtractableTextNearView:(nullable UIView *)view windowPoint:(CGPoint)windowPoint;
 
 - (void)attachScreenPickerToWindow:(UIWindow *)window;
+- (void)presentFromUniversalMenuTarget:(nullable UIView *)targetView
+                           windowPoint:(CGPoint)windowPoint
+                    fallbackCopyAction:(nullable id)copyAction
+                             slotIndex:(NSInteger)slotIndex;
 - (void)presentFromRestrictedMenuTarget:(nullable UIView *)targetView
                      fallbackCopyAction:(nullable id)copyAction
                               slotIndex:(NSInteger)slotIndex;
@@ -34,6 +38,14 @@ NS_ASSUME_NONNULL_BEGIN
                        windowPoint:(CGPoint)windowPoint
                          slotIndex:(NSInteger)slotIndex
                 fallbackCopyAction:(nullable id)copyAction;
+- (void)attachCopySheetAccessoryToPresentedVC:(UIViewController *)presentedVC
+                                   targetView:(nullable UIView *)targetView
+                                  windowPoint:(CGPoint)windowPoint
+                                     copyView:(nullable UIView *)copyView;
+- (void)attachCopySheetAccessoryToWindow:(UIWindow *)window
+                              targetView:(nullable UIView *)targetView
+                             windowPoint:(CGPoint)windowPoint
+                                copyView:(nullable UIView *)copyView;
 
 - (void)presentToolController:(UIResponder *)responder;
 - (void)presentToolController:(UIResponder *)responder slotIndex:(NSInteger)slotIndex;

@@ -56,6 +56,12 @@ struct WritingToolsView: View {
     @State var priorEditContextAttached: Bool = false
     @State var currentSessionTurns: [EditContextTurn] = []
 
+    // Multimodal Image & File Attachments
+    @State var attachedImages: [AttachedImageItem] = []
+    @State var attachedFiles: [AttachedFileItem] = []
+    @State var attachmentBannerMessage: String = ""
+    @State var previewAttachedFile: AttachedFileItem? = nil
+
     @State var error: Error? = nil
     @State var activeRequestToken: UUID = UUID()
 
@@ -180,6 +186,27 @@ struct WritingToolsView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(String(textProxy.selectedText.prefix(900)))
+        }
+        .alert(
+            previewAttachedFile?.fileName ?? "Attached File",
+            isPresented: Binding(
+                get: { previewAttachedFile != nil },
+                set: { if !$0 { previewAttachedFile = nil } }
+            )
+        ) {
+            if let file = previewAttachedFile {
+                Button("Remove", role: .destructive) {
+                    attachedFiles.removeAll { $0.id == file.id }
+                    previewAttachedFile = nil
+                }
+            }
+            Button("OK", role: .cancel) {
+                previewAttachedFile = nil
+            }
+        } message: {
+            if let file = previewAttachedFile {
+                Text(String(file.extractedText.prefix(900)))
+            }
         }
         .onAppear {
             initialAnimation = 1

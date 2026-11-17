@@ -153,26 +153,95 @@ extension TextProxy {
             return
         }
 
-        // 4. Safe native copy action when direct view inspection couldn't find text
-        if let fallbackCopyAction,
-           let copied = extractViaCopyMenuElement(fallbackCopyAction, targetView: anchorView),
-           !copied.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        {
-            let rect = anchorRectForPoint(windowPoint, in: anchorView)
-            completion((copied, anchorView, rect))
+        // 4. Safe native copy action when direct view inspection couldn't find text (supports async pasteboard updates)
+        if let fallbackCopyAction {
+            extractViaCopyMenuElementAsync(fallbackCopyAction, targetView: anchorView) { copied in
+                if let copied, !copied.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    let rect = anchorRectForPoint(windowPoint, in: anchorView)
+                    completion((copied, anchorView, rect))
+                    return
+                }
+                finishTemporaryCopyOrNil(anchorView: anchorView, windowPoint: windowPoint, completion: completion)
+            }
             return
         }
 
-        // 5. Fallback via standard copy: on anchorView
-        if anchorView.canPerformAction(#selector(UIResponderStandardEditActions.copy(_:)), withSender: nil),
-           let copied = extractViaTemporaryCopy(from: anchorView),
+        finishTemporaryCopyOrNil(anchorView: anchorView, windowPoint: windowPoint, completion: completion)
+    }
+
+    private static func finishTemporaryCopyOrNil(
+        anchorView: UIView,
+        windowPoint: CGPoint,
+        completion: @escaping ((text: String, targetView: UIView, rectInTarget: CGRect)?) -> Void
+    ) {
+        if let target = anchorView.target(forAction: #selector(UIResponderStandardEditActions.copy(_:)), withSender: nil) as? UIResponder,
+           let copied = extractViaTemporaryCopy(from: anchorView, resolvedTarget: target),
            !copied.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         {
             completion((copied, anchorView, anchorRectForPoint(windowPoint, in: anchorView)))
             return
         }
-
         completion(nil)
+    }
+
+    static func extractTextViaOCRFallback(
+        in window: UIWindow,
+        near windowPoint: CGPoint,
+        completion: @escaping ((text: String, rectInWindow: CGRect)?) -> Void
+    ) {
+        guard let snapshot = ScreenTextScanner.captureSnapshot(of: window) else {
+            completion(nil)
+            return
+        }
+        let region: CGRect?
+        if windowPoint.x > 1 || windowPoint.y > 1 {
+            let yStart = max(0, windowPoint.y - 240)
+            let yEnd = min(window.bounds.height, windowPoint.y + 240)
+            region = CGRect(x: 0, y: yStart, width: window.bounds.width, height: max(60, yEnd - yStart))
+        } else {
+            region = nil
+        }
+
+        ScreenTextScanner.recognizeText(
+            in: snapshot,
+            windowBounds: window.bounds,
+            regionInWindow: region,
+            preferredLanguages: Locale.preferredLanguages
+        ) { blocks in
+            let meaningful = blocks.filter {
+                let t = $0.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                return t.count >= 3 && t.rangeOfCharacter(from: .alphanumerics) != nil
+            }
+            guard !meaningful.isEmpty else {
+                completion(nil)
+                return
+            }
+            if windowPoint.x > 1 || windowPoint.y > 1 {
+                if let direct = meaningful
+                    .filter({ $0.rectInWindow.insetBy(dx: -16, dy: -16).contains(windowPoint) })
+                    .sorted(by: { $0.text.count > $1.text.count })
+                    .first
+                {
+                    completion((direct.text, direct.rectInWindow))
+                    return
+                }
+                // Pick nearest substantial block to touch point
+                let best = meaningful.min { lhs, rhs in
+                    let dl = hypot(lhs.rectInWindow.midX - windowPoint.x, (lhs.rectInWindow.midY - windowPoint.y) * 1.4) - min(30, Double(lhs.text.count) * 0.25)
+                    let dr = hypot(rhs.rectInWindow.midX - windowPoint.x, (rhs.rectInWindow.midY - windowPoint.y) * 1.4) - min(30, Double(rhs.text.count) * 0.25)
+                    return dl < dr
+                }
+                if let best {
+                    completion((best.text, best.rectInWindow))
+                    return
+                }
+            }
+            if let longest = meaningful.sorted(by: { $0.text.count > $1.text.count }).first {
+                completion((longest.text, longest.rectInWindow))
+            } else {
+                completion(nil)
+            }
+        }
     }
 
     private static func extractFastTextNearView(_ view: UIView, windowPoint: CGPoint) -> (text: String, targetView: UIView, rectInTarget: CGRect)? {
@@ -186,24 +255,25 @@ extension TextProxy {
             return (direct, view, view.bounds)
         }
 
-        // Look at subviews of view (or enclosing cell/container) containing windowPoint
+        // Look at subviews and accessibilityElements of view (or enclosing cell/container) containing windowPoint
         let container = enclosingCellOrContainer(for: view) ?? view
-        var candidates: [(text: String, view: UIView, area: CGFloat)] = []
-        collectReadableTextViews(in: container, depth: 0, maxDepth: 5, into: &candidates)
+        var candidates: [(text: String, view: UIView, rectInWindow: CGRect)] = []
+        collectReadableTextViews(in: container, depth: 0, maxDepth: 6, into: &candidates)
 
-        if let window = container.window {
-            // Prefer a subview directly under windowPoint
+        if windowPoint.x > 1 || windowPoint.y > 1 {
+            // Prefer a subview or accessibility element directly under windowPoint
             let hitDirect = candidates.filter { cand in
-                let rectInWin = cand.view.convert(cand.view.bounds, to: window)
-                return rectInWin.insetBy(dx: -12, dy: -12).contains(windowPoint)
+                !cand.rectInWindow.isEmpty && cand.rectInWindow.insetBy(dx: -14, dy: -14).contains(windowPoint)
             }
             if let best = hitDirect.sorted(by: { $0.text.count > $1.text.count }).first {
-                return (best.text, best.view, best.view.bounds)
+                let rectInTarget = container.window.map { best.view.convert(best.rectInWindow, from: $0) } ?? best.view.bounds
+                return (best.text, best.view, rectInTarget.isEmpty ? best.view.bounds : rectInTarget)
             }
         }
 
         if let longest = candidates.sorted(by: { $0.text.count > $1.text.count }).first {
-            return (longest.text, longest.view, longest.view.bounds)
+            let rectInTarget = container.window.map { longest.view.convert(longest.rectInWindow, from: $0) } ?? longest.view.bounds
+            return (longest.text, longest.view, rectInTarget.isEmpty ? longest.view.bounds : rectInTarget)
         }
 
         if let ax = extractAccessibilityText(from: container) {
@@ -217,17 +287,40 @@ extension TextProxy {
         in view: UIView,
         depth: Int,
         maxDepth: Int,
-        into list: inout [(text: String, view: UIView, area: CGFloat)]
+        into list: inout [(text: String, view: UIView, rectInWindow: CGRect)]
     ) {
         guard depth <= maxDepth, !view.isHidden, view.alpha > 0.05 else { return }
         if isSecureTextView(view) { return }
 
+        let rectInWin = view.window.map { view.convert(view.bounds, to: $0) } ?? view.bounds
+
         if let direct = extractSafeTextProperty(from: view) {
-            let area = view.bounds.width * view.bounds.height
-            list.append((direct, view, area))
-        } else if let ax = extractAccessibilityText(from: view), view.subviews.isEmpty {
-            let area = view.bounds.width * view.bounds.height
-            list.append((ax, view, area))
+            list.append((direct, view, rectInWin))
+        } else {
+            let axCount = view.accessibilityElementCount()
+            if axCount != NSNotFound && axCount > 0 {
+                let cap = min(axCount, 40)
+                for idx in 0 ..< cap {
+                    guard let elem = view.accessibilityElement(at: idx) as? NSObject else { continue }
+                    let val = elem.accessibilityValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    let lbl = elem.accessibilityLabel?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    let chosen = val.count >= 3 ? val : (lbl.count >= 3 ? lbl : "")
+                    guard !chosen.isEmpty else { continue }
+                    let elemRect: CGRect
+                    let axFrame = elem.accessibilityFrame
+                    if !axFrame.isEmpty, let winScene = view.window?.windowScene, let win = view.window {
+                        let converted = winScene.coordinateSpace.convert(axFrame, from: UIScreen.main.coordinateSpace)
+                        let c = converted.intersection(win.bounds)
+                        elemRect = c.isEmpty ? rectInWin : c
+                    } else {
+                        elemRect = rectInWin
+                    }
+                    list.append((chosen, view, elemRect))
+                }
+            }
+            if let ax = extractAccessibilityText(from: view), (view.subviews.isEmpty || ax.count >= 12) {
+                list.append((ax, view, rectInWin))
+            }
         }
 
         for sub in view.subviews {
@@ -359,14 +452,7 @@ extension TextProxy {
         let savedItems = pasteboard.items
         let previousChangeCount = pasteboard.changeCount
 
-        if let action = element as? UIAction {
-            let performSel = NSSelectorFromString("performWithSender:target:")
-            if action.responds(to: performSel) {
-                _ = action.perform(performSel, with: nil, with: targetView)
-            }
-        } else if let cmd = element as? UICommand {
-            UIApplication.shared.sendAction(cmd.action, to: targetView, from: nil, for: nil)
-        }
+        triggerCopyElement(element, targetView: targetView)
 
         if pasteboard.changeCount != previousChangeCount {
             let copied = pasteboard.string
@@ -376,12 +462,73 @@ extension TextProxy {
         return nil
     }
 
-    private static func extractViaTemporaryCopy(from view: UIView) -> String? {
+    static func extractViaCopyMenuElementAsync(
+        _ element: Any,
+        targetView: UIView,
+        completion: @escaping (String?) -> Void
+    ) {
         let pasteboard = UIPasteboard.general
         let savedItems = pasteboard.items
         let previousChangeCount = pasteboard.changeCount
 
-        UIApplication.shared.sendAction(#selector(UIResponderStandardEditActions.copy(_:)), to: view, from: nil, for: nil)
+        triggerCopyElement(element, targetView: targetView)
+
+        if pasteboard.changeCount != previousChangeCount {
+            let copied = pasteboard.string
+            pasteboard.items = savedItems
+            completion(copied)
+            return
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.09) {
+            if pasteboard.changeCount != previousChangeCount {
+                let copied = pasteboard.string
+                pasteboard.items = savedItems
+                completion(copied)
+            } else {
+                completion(nil)
+            }
+        }
+    }
+
+    private static func triggerCopyElement(_ element: Any, targetView: UIView) {
+        if let action = element as? UIAction {
+            let performSel = NSSelectorFromString("performWithSender:target:")
+            if action.responds(to: performSel) {
+                _ = action.perform(performSel, with: nil, with: targetView)
+            }
+        } else if let cmd = element as? UICommand {
+            let resolved = targetView.target(forAction: cmd.action, withSender: nil)
+            if !UIApplication.shared.sendAction(cmd.action, to: resolved, from: targetView, for: nil) {
+                UIApplication.shared.sendAction(cmd.action, to: nil, from: targetView, for: nil)
+            }
+        } else if let menuItem = element as? UIMenuItem {
+            let resolved = targetView.target(forAction: menuItem.action, withSender: nil)
+            if !UIApplication.shared.sendAction(menuItem.action, to: resolved, from: targetView, for: nil) {
+                UIApplication.shared.sendAction(menuItem.action, to: nil, from: targetView, for: nil)
+            }
+        } else if let alertAction = element as? UIAlertAction {
+            if let ivar = class_getInstanceVariable(UIAlertAction.self, "_handler"),
+               let rawBlock = object_getIvar(alertAction, ivar)
+            {
+                typealias AlertHandler = @convention(block) (UIAlertAction) -> Void
+                let block = unsafeBitCast(rawBlock as AnyObject, to: AlertHandler.self)
+                block(alertAction)
+            }
+        } else if let control = element as? UIControl {
+            control.sendActions(for: .touchUpInside)
+        }
+    }
+
+    private static func extractViaTemporaryCopy(from view: UIView, resolvedTarget: UIResponder? = nil) -> String? {
+        let pasteboard = UIPasteboard.general
+        let savedItems = pasteboard.items
+        let previousChangeCount = pasteboard.changeCount
+
+        let target = resolvedTarget ?? view
+        if !UIApplication.shared.sendAction(#selector(UIResponderStandardEditActions.copy(_:)), to: target, from: view, for: nil) {
+            UIApplication.shared.sendAction(#selector(UIResponderStandardEditActions.copy(_:)), to: nil, from: view, for: nil)
+        }
 
         var copied: String?
         if pasteboard.changeCount != previousChangeCount {

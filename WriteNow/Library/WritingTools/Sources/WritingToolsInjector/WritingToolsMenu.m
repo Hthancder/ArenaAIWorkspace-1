@@ -158,9 +158,15 @@ BOOL WT_MenuContainsWriteNow(UIMenu *menu) {
     return NO;
 }
 
-static BOOL WT_IsCopyTitle(NSString *title) {
-    if (!title.length) { return NO; }
-    NSString *low = title.lowercaseString;
+BOOL WT_IsCopyTitle(NSString * _Nullable title) {
+    if (![title isKindOfClass:[NSString class]] || !title.length) { return NO; }
+    NSString *trimmed = [title stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (!trimmed.length || trimmed.length > 36) { return NO; }
+    NSString *low = trimmed.lowercaseString;
+    if (([low containsString:@"link"] || [low containsString:@"liên kết"] || [low containsString:@"url"] || [low containsString:@"address"] || [low containsString:@"địa chỉ"]) &&
+        !([low containsString:@"text"] || [low containsString:@"văn bản"] || [low containsString:@"post"] || [low containsString:@"bài"])) {
+        return NO;
+    }
     if ([low isEqualToString:@"copy"] ||
         [low hasPrefix:@"copy "] ||
         [low containsString:@"sao chép"] ||
@@ -174,17 +180,70 @@ static BOOL WT_IsCopyTitle(NSString *title) {
     return NO;
 }
 
+BOOL WT_IsTextMenuTitle(NSString * _Nullable title) {
+    if (![title isKindOfClass:[NSString class]] || !title.length) { return NO; }
+    NSString *low = [title stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]].lowercaseString;
+    if (WT_IsCopyTitle(title)) { return YES; }
+    for (NSString *kw in @[@"reply", @"trả lời", @"forward", @"chuyển tiếp", @"translate", @"dịch", @"quote", @"trích dẫn", @"speak", @"đọc"]) {
+        if ([low containsString:kw]) { return YES; }
+    }
+    return NO;
+}
+
+NSArray<UIMenuItem *> *WT_BuildExtraMenuItemsForReadOnly(BOOL isReadOnly) {
+    WritingToolsPresenter *presenter = [WritingToolsPresenter sharedInstance];
+    NSMutableArray<UIMenuItem *> *items = [NSMutableArray array];
+
+    if ([presenter shouldShowMainMenuItemForReadOnly:isReadOnly]) {
+        [items addObject:WT_MenuItem()];
+    }
+
+    NSArray<NSDictionary<NSString *, id> *> *customItems = [presenter customSelectionMenuItemsForReadOnly:isReadOnly];
+    for (NSDictionary<NSString *, id> *dict in customItems) {
+        NSString *title = dict[@"title"];
+        NSString *selName = dict[@"selector"];
+        if (![title isKindOfClass:[NSString class]] || !title.length) { continue; }
+        if (![selName isKindOfClass:[NSString class]] || !selName.length) { continue; }
+        UIMenuItem *item = [[UIMenuItem alloc] initWithTitle:title action:NSSelectorFromString(selName)];
+        if (item) {
+            [items addObject:item];
+        }
+    }
+    return [items copy];
+}
+
+UIMenuItem * _Nullable WT_FindCopyUIMenuItem(NSArray<UIMenuItem *> * _Nullable items) {
+    for (UIMenuItem *item in items) {
+        if (![item isKindOfClass:[UIMenuItem class]]) { continue; }
+        NSString *selName = NSStringFromSelector(item.action).lowercaseString ?: @"";
+        if (WT_IsCopyTitle(item.title) || ([selName containsString:@"copy"] && ![selName containsString:@"link"] && ![selName containsString:@"url"])) {
+            return item;
+        }
+    }
+    return nil;
+}
+
+BOOL WT_ExtraItemsContainCopyOrTextAction(NSArray<UIMenuItem *> * _Nullable items) {
+    if (WT_FindCopyUIMenuItem(items) != nil) { return YES; }
+    for (UIMenuItem *item in items) {
+        if (![item isKindOfClass:[UIMenuItem class]]) { continue; }
+        if (WT_IsTextMenuTitle(item.title)) { return YES; }
+    }
+    return NO;
+}
+
 id WT_FindCopyMenuElement(NSArray *elements) {
     for (id item in elements) {
         if ([item isKindOfClass:[UICommand class]] && ![item isKindOfClass:[UIAction class]]) {
             UICommand *cmd = (UICommand *)item;
-            if ([NSStringFromSelector(cmd.action) isEqualToString:@"copy:"] || WT_IsCopyTitle(cmd.title)) {
+            NSString *selName = NSStringFromSelector(cmd.action).lowercaseString ?: @"";
+            if ([selName isEqualToString:@"copy:"] || WT_IsCopyTitle(cmd.title) || ([selName containsString:@"copy"] && ![selName containsString:@"link"] && ![selName containsString:@"url"])) {
                 return cmd;
             }
         } else if ([item isKindOfClass:[UIAction class]]) {
             UIAction *act = (UIAction *)item;
             NSString *ident = act.identifier.lowercaseString ?: @"";
-            if ([ident containsString:@"copy"] || WT_IsCopyTitle(act.title)) {
+            if (WT_IsCopyTitle(act.title) || ([ident containsString:@"copy"] && ![ident containsString:@"link"] && ![ident containsString:@"url"])) {
                 return act;
             }
         } else if ([item isKindOfClass:[UIMenu class]]) {
@@ -201,10 +260,9 @@ BOOL WT_MenuLooksLikeTextOrContentMenu(NSArray *elements) {
     }
     for (id item in elements) {
         if ([item isKindOfClass:[UIAction class]]) {
-            NSString *low = [[(UIAction *)item title] lowercaseString];
-            for (NSString *kw in @[@"reply", @"trả lời", @"forward", @"chuyển tiếp", @"translate", @"dịch", @"quote", @"trích dẫn", @"share", @"chia sẻ", @"speak", @"đọc"]) {
-                if ([low containsString:kw]) { return YES; }
-            }
+            if (WT_IsTextMenuTitle([(UIAction *)item title])) { return YES; }
+        } else if ([item isKindOfClass:[UICommand class]]) {
+            if (WT_IsTextMenuTitle([(UICommand *)item title])) { return YES; }
         } else if ([item isKindOfClass:[UIMenu class]]) {
             if (WT_MenuLooksLikeTextOrContentMenu([(UIMenu *)item children])) {
                 return YES;
