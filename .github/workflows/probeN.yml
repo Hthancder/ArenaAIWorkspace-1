@@ -36,8 +36,28 @@ jobs:
       SCHEME: ${{ matrix.scheme }}
       PACKAGE_ARCH: ${{ matrix.package_arch }}
     steps:
-      - name: Build (${{ matrix.scheme }})
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: SHA256 + job summary
         run: |
-          chmod +x build.sh tools/*.sh tools/theos-toolchain-stub/bin/*
-          ./build.sh --linux SCHEME=${SCHEME}
+          set -euo pipefail
+          BASE="$(basename "$DEB")"
+          ( cd packages && sha256sum "$BASE" > "SHA256SUMS-${SCHEME}" )
+          cat "packages/SHA256SUMS-${SCHEME}" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo ""
+            echo "| scheme | package arch | dung lượng |"
+            echo "| --- | --- | --- |"
+            echo "| ${SCHEME} | ${PACKAGE_ARCH} | $(numfmt --to=iec "$SIZE") |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SiriBridge-${{ matrix.scheme }}-deb-${{ github.sha }}
+          path: |
+            packages/*.deb
+            packages/SHA256SUMS-${{ matrix.scheme }}
+          if-no-files-found: error
 
