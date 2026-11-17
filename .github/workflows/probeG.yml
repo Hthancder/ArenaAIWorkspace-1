@@ -1,4 +1,4 @@
-name: probeC
+name: probeG
 
 on:
   push:
@@ -36,5 +36,26 @@ jobs:
       SCHEME: ${{ matrix.scheme }}
       PACKAGE_ARCH: ${{ matrix.package_arch }}
     steps:
-      - name: st1
-        run: echo hi
+      - name: Kiểm tra sản phẩm
+        run: |
+          set -euo pipefail
+          DEB="$(ls packages/*.deb | head -n1)"
+          echo "DEB=$DEB" >> "$GITHUB_ENV"
+          echo "--- cấu trúc gói ---"
+          dpkg-deb -c "$DEB"
+          python3 tools/verify_deb.py "$DEB" "${PACKAGE_ARCH}"
+          echo "SIZE=$(stat -c%s "$DEB")" >> "$GITHUB_ENV"
+
+      - name: SHA256 + job summary
+        run: |
+          set -euo pipefail
+          BASE="$(basename "$DEB")"
+          ( cd packages && sha256sum "$BASE" > "SHA256SUMS-${SCHEME}" )
+          cat "packages/SHA256SUMS-${SCHEME}" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo ""
+            echo "| scheme | package arch | dung lượng |"
+            echo "| --- | --- | --- |"
+            echo "| ${SCHEME} | ${PACKAGE_ARCH} | $(numfmt --to=iec "$SIZE") |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
