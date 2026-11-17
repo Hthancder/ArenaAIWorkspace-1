@@ -19,7 +19,7 @@ NSArray<UICommand *> *WT_BuildCommandsForReadOnly(BOOL isReadOnly);
 NSArray<UIMenuElement *> *WT_BuildUIActionsForReadOnly(BOOL isReadOnly, void (^handler)(NSInteger slotIndex));
 BOOL WT_MenuItem_IsWritingTool(id input);
 BOOL WT_MenuContainsWriteNow(UIMenu *menu);
-nullable id WT_FindCopyMenuElement(NSArray *elements);
+id _Nullable WT_FindCopyMenuElement(NSArray *elements);
 BOOL WT_MenuLooksLikeTextOrContentMenu(NSArray *elements);
 
 NS_ASSUME_NONNULL_END
