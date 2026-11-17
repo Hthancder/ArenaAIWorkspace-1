@@ -147,19 +147,19 @@ extension TextProxy {
         fallbackCopyAction: Any?,
         completion: @escaping ((text: String, targetView: UIView, rectInTarget: CGRect)?) -> Void
     ) {
-        // 3. Try safe native copy action first when a copy button exists (most faithful for chat bubbles like Telegram/Messenger)
+        // 3. Direct view-tree & accessibility inspection near touch point FIRST (avoids touching UIPasteboard on iOS 16+)
+        if let hit = extractFastTextNearView(anchorView, windowPoint: windowPoint) {
+            completion(hit)
+            return
+        }
+
+        // 4. Safe native copy action when direct view inspection couldn't find text
         if let fallbackCopyAction,
            let copied = extractViaCopyMenuElement(fallbackCopyAction, targetView: anchorView),
            !copied.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         {
             let rect = anchorRectForPoint(windowPoint, in: anchorView)
             completion((copied, anchorView, rect))
-            return
-        }
-
-        // 4. Direct view-tree & accessibility inspection near touch point
-        if let hit = extractFastTextNearView(anchorView, windowPoint: windowPoint) {
-            completion(hit)
             return
         }
 

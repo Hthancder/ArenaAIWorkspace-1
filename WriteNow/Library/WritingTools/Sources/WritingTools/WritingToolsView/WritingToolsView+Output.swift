@@ -26,94 +26,116 @@ extension WritingToolsView {
 
     var outputPanel: some View {
         VStack(spacing: 8) {
-            // Top mini-toolbar: version history, Original compare, Manual Edit
+            // Top mini-toolbar: version history, Original compare, Manual Edit, Speak, Memory
             if !output.isEmpty || outputHistory.count > 1 {
-                HStack(spacing: 8) {
-                    if outputHistory.count > 1 {
-                        HStack(spacing: 4) {
-                            Button {
-                                navigateHistory(delta: -1)
-                            } label: {
-                                Image(systemName: "chevron.left")
-                                    .font(.caption.bold())
-                            }
-                            .disabled(historyIndex <= 0 || isRunning)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        if outputHistory.count > 1 {
+                            HStack(spacing: 4) {
+                                Button {
+                                    navigateHistory(delta: -1)
+                                } label: {
+                                    Image(systemName: "chevron.left")
+                                        .font(.caption.bold())
+                                }
+                                .disabled(historyIndex <= 0 || isRunning)
 
-                            Text("\(historyIndex + 1)/\(outputHistory.count)")
-                                .font(.caption2.monospacedDigit())
+                                Text("\(historyIndex + 1)/\(outputHistory.count)")
+                                    .font(.caption2.monospacedDigit())
 
-                            Button {
-                                navigateHistory(delta: 1)
-                            } label: {
-                                Image(systemName: "chevron.right")
-                                    .font(.caption.bold())
+                                Button {
+                                    navigateHistory(delta: 1)
+                                } label: {
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption.bold())
+                                }
+                                .disabled(historyIndex >= outputHistory.count - 1 || isRunning)
                             }
-                            .disabled(historyIndex >= outputHistory.count - 1 || isRunning)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.white.opacity(0.12))
+                            .cornerRadius(8)
                         }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.white.opacity(0.12))
-                        .cornerRadius(8)
-                    }
 
-                    Spacer()
+                        if cfg.settings.keepEditContextEnabled, let prior = activePriorEditContext {
+                            Button {
+                                priorEditContextAttached.toggle()
+                            } label: {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "brain.head.profile")
+                                        .font(.system(size: 9))
+                                    Text(priorEditContextAttached ? "Memory (\(prior.turns.count))" : "Memory Off")
+                                        .font(.caption2.weight(.medium))
+                                }
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 4)
+                                .background(priorEditContextAttached ? Color.purple.opacity(0.34) : Color.white.opacity(0.10))
+                                .cornerRadius(8)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(isRunning)
+                        }
 
-                    if cfg.settings.wordDiffEnabled && !textProxy.selectedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        if cfg.settings.wordDiffEnabled && !textProxy.selectedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Button {
+                                diffDisplayMode = (diffDisplayMode == .wordDiff) ? .none : .wordDiff
+                                if diffDisplayMode != .none { isEditingOutput = false }
+                            } label: {
+                                Label("Diff", systemImage: "doc.text.magnifyingglass")
+                                    .font(.caption2.weight(.medium))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(diffDisplayMode == .wordDiff ? Color.white.opacity(0.28) : Color.white.opacity(0.12))
+                                    .cornerRadius(8)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(isRunning)
+                        }
+
                         Button {
-                            diffDisplayMode = (diffDisplayMode == .wordDiff) ? .none : .wordDiff
+                            diffDisplayMode = (diffDisplayMode == .originalSplit) ? .none : .originalSplit
                             if diffDisplayMode != .none { isEditingOutput = false }
                         } label: {
-                            Label("Diff", systemImage: "doc.text.magnifyingglass")
+                            Label("Original".localized, systemImage: diffDisplayMode == .originalSplit ? "eye.fill" : "eye")
                                 .font(.caption2.weight(.medium))
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(diffDisplayMode == .wordDiff ? Color.white.opacity(0.28) : Color.white.opacity(0.12))
+                                .background(diffDisplayMode == .originalSplit ? Color.white.opacity(0.28) : Color.white.opacity(0.12))
                                 .cornerRadius(8)
                         }
                         .buttonStyle(.plain)
-                        .disabled(isRunning)
-                    }
 
-                    Button {
-                        diffDisplayMode = (diffDisplayMode == .originalSplit) ? .none : .originalSplit
-                        if diffDisplayMode != .none { isEditingOutput = false }
-                    } label: {
-                        Label("Original".localized, systemImage: diffDisplayMode == .originalSplit ? "eye.fill" : "eye")
-                            .font(.caption2.weight(.medium))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(diffDisplayMode == .originalSplit ? Color.white.opacity(0.28) : Color.white.opacity(0.12))
-                            .cornerRadius(8)
-                    }
-                    .buttonStyle(.plain)
-
-                    Button {
-                        isEditingOutput.toggle()
-                        if isEditingOutput { diffDisplayMode = .none }
-                    } label: {
-                        Label(isEditingOutput ? "Done".localized : "Edit".localized, systemImage: isEditingOutput ? "checkmark" : "pencil")
-                            .font(.caption2.weight(.medium))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(isEditingOutput ? Color.white.opacity(0.28) : Color.white.opacity(0.12))
-                            .cornerRadius(8)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(isRunning)
-
-                    if cfg.settings.readOnlyShowSpeakButton && !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Button {
-                            toggleSpeakOutput()
+                            if isEditingOutput, outputHistory.indices.contains(historyIndex) {
+                                outputHistory[historyIndex] = output
+                            }
+                            isEditingOutput.toggle()
+                            if isEditingOutput { diffDisplayMode = .none }
                         } label: {
-                            Image(systemName: isSpeakingOutput ? "stop.circle.fill" : "speaker.wave.2")
-                                .font(.caption2.weight(.semibold))
-                                .padding(.horizontal, 7)
+                            Label(isEditingOutput ? "Done".localized : "Edit".localized, systemImage: isEditingOutput ? "checkmark" : "pencil")
+                                .font(.caption2.weight(.medium))
+                                .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(isSpeakingOutput ? Color.cyan.opacity(0.32) : Color.white.opacity(0.12))
+                                .background(isEditingOutput ? Color.white.opacity(0.28) : Color.white.opacity(0.12))
                                 .cornerRadius(8)
                         }
                         .buttonStyle(.plain)
                         .disabled(isRunning)
+
+                        if cfg.settings.readOnlyShowSpeakButton && !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Button {
+                                toggleSpeakOutput()
+                            } label: {
+                                Image(systemName: isSpeakingOutput ? "stop.circle.fill" : "speaker.wave.2")
+                                    .font(.caption2.weight(.semibold))
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 4)
+                                    .background(isSpeakingOutput ? Color.cyan.opacity(0.32) : Color.white.opacity(0.12))
+                                    .cornerRadius(8)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(isRunning)
+                        }
                     }
                 }
             }
@@ -385,6 +407,10 @@ extension WritingToolsView {
     }
 
     private func navigateHistory(delta: Int) {
+        if isEditingOutput, outputHistory.indices.contains(historyIndex) {
+            outputHistory[historyIndex] = output
+        }
+        isEditingOutput = false
         let next = historyIndex + delta
         guard outputHistory.indices.contains(next) else { return }
         historyIndex = next
@@ -394,6 +420,9 @@ extension WritingToolsView {
     private func runFollowUp(_ raw: String) {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !output.isEmpty else { return }
+        if isEditingOutput, outputHistory.indices.contains(historyIndex) {
+            outputHistory[historyIndex] = output
+        }
         followUpPromptInput = ""
         isEditingOutput = false
         currentTask = .followUp(

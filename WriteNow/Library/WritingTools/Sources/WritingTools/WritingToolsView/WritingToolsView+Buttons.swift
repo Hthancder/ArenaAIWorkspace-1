@@ -98,6 +98,49 @@ extension WritingToolsView {
                 voiceModeAndLanguageStrip
             }
 
+            if cfg.settings.keepEditContextEnabled, let prior = activePriorEditContext {
+                HStack(spacing: 6) {
+                    Button {
+                        priorEditContextAttached.toggle()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: priorEditContextAttached ? "brain.head.profile" : "brain")
+                                .font(.caption2)
+                            let n = prior.turns.count
+                            Text(priorEditContextAttached
+                                ? "Edit Memory (\(n) \(n == 1 ? "step" : "steps")) ✓"
+                                : "Attach Edit Memory (\(n))")
+                                .font(.caption2.weight(.semibold))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(priorEditContextAttached ? Color.purple.opacity(0.36) : Color.white.opacity(0.12))
+                        .cornerRadius(7)
+                    }
+                    .buttonStyle(.plain)
+
+                    if let lastStep = prior.turns.last {
+                        Text(lastStep.instruction)
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.68))
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 2)
+
+                    Button {
+                        activePriorEditContext = nil
+                        priorEditContextAttached = false
+                        cfg.clearEditContext()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.white.opacity(0.6))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
             if let snapshot = restorableSession {
                 HStack(spacing: 8) {
                     Image(systemName: "clock.arrow.circlepath")

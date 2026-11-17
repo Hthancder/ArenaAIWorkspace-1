@@ -1581,6 +1581,10 @@ struct BehaviorSettingsView: View {
     @State private var autoAttachClipboardOnEmpty: Bool
     @State private var restoreLastSessionEnabled: Bool
     @State private var lastSessionTTLSeconds: Int
+    @State private var keepEditContextEnabled: Bool
+    @State private var editContextMatchMode: String
+    @State private var editContextMaxTurns: Int
+    @State private var editContextTTLSeconds: Int
 
     @State private var backupAlertTitle = ""
     @State private var backupAlertMessage = ""
@@ -1604,6 +1608,10 @@ struct BehaviorSettingsView: View {
         _autoAttachClipboardOnEmpty = State(initialValue: s.autoAttachClipboardOnEmpty)
         _restoreLastSessionEnabled = State(initialValue: s.restoreLastSessionEnabled)
         _lastSessionTTLSeconds = State(initialValue: s.lastSessionTTLSeconds)
+        _keepEditContextEnabled = State(initialValue: s.keepEditContextEnabled)
+        _editContextMatchMode = State(initialValue: s.editContextMatchMode)
+        _editContextMaxTurns = State(initialValue: s.editContextMaxTurns)
+        _editContextTTLSeconds = State(initialValue: s.editContextTTLSeconds)
     }
 
     var body: some View {
@@ -1686,6 +1694,28 @@ struct BehaviorSettingsView: View {
             }
 
             Section {
+                Toggle("Keep Context from Previous Edits", isOn: $keepEditContextEnabled)
+                if keepEditContextEnabled {
+                    Picker("Attach Context When", selection: $editContextMatchMode) {
+                        Text("Smart Match (Re-edited Text)").tag("smart_match")
+                        Text("Always Within Time Window").tag("always_in_ttl")
+                    }
+                    Stepper("Max History Steps: \(editContextMaxTurns)", value: $editContextMaxTurns, in: 1 ... 5)
+                    Picker("Memory Keep Duration", selection: $editContextTTLSeconds) {
+                        Text("2 Minutes").tag(120)
+                        Text("5 Minutes").tag(300)
+                        Text("10 Minutes").tag(600)
+                        Text("30 Minutes").tag(1800)
+                        Text("Always Keep").tag(0)
+                    }
+                }
+            } header: {
+                Text("Previous-Edit Context Memory")
+            } footer: {
+                Text("When you select and re-edit text that was previously improved (even after tapping Accept or Copy & Close), AI remembers the original text and prior edit steps.")
+            }
+
+            Section {
                 Button {
                     if let data = configuration.exportBackupJSON(),
                        let str = String(data: data, encoding: .utf8)
@@ -1748,6 +1778,10 @@ struct BehaviorSettingsView: View {
         .onChange(of: autoAttachClipboardOnEmpty) { _ in commitSettings() }
         .onChange(of: restoreLastSessionEnabled) { _ in commitSettings() }
         .onChange(of: lastSessionTTLSeconds) { _ in commitSettings() }
+        .onChange(of: keepEditContextEnabled) { _ in commitSettings() }
+        .onChange(of: editContextMatchMode) { _ in commitSettings() }
+        .onChange(of: editContextMaxTurns) { _ in commitSettings() }
+        .onChange(of: editContextTTLSeconds) { _ in commitSettings() }
         .alert(backupAlertTitle, isPresented: $showBackupAlert) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -1774,6 +1808,10 @@ struct BehaviorSettingsView: View {
             s.autoAttachClipboardOnEmpty = autoAttachClipboardOnEmpty
             s.restoreLastSessionEnabled = restoreLastSessionEnabled
             s.lastSessionTTLSeconds = lastSessionTTLSeconds
+            s.keepEditContextEnabled = keepEditContextEnabled
+            s.editContextMatchMode = editContextMatchMode
+            s.editContextMaxTurns = editContextMaxTurns
+            s.editContextTTLSeconds = editContextTTLSeconds
         }
     }
 
@@ -1794,6 +1832,10 @@ struct BehaviorSettingsView: View {
         autoAttachClipboardOnEmpty = s.autoAttachClipboardOnEmpty
         restoreLastSessionEnabled = s.restoreLastSessionEnabled
         lastSessionTTLSeconds = s.lastSessionTTLSeconds
+        keepEditContextEnabled = s.keepEditContextEnabled
+        editContextMatchMode = s.editContextMatchMode
+        editContextMaxTurns = s.editContextMaxTurns
+        editContextTTLSeconds = s.editContextTTLSeconds
     }
 }
 

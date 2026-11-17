@@ -318,7 +318,9 @@ public enum PromptComposer {
         for task: WritingTaskKind,
         selectedText: String,
         settings: RuntimeSettings,
-        clipboardContext: String? = nil
+        clipboardContext: String? = nil,
+        priorEditContext: EditContextRecord? = nil,
+        sessionTurns: [EditContextTurn] = []
     ) -> (messages: [ChatQuery.ChatCompletionMessageParam], sampling: SamplingConfig) {
         let globalExtra = settings.globalSystemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         let extraSuffix = globalExtra.isEmpty ? "" : "\n\nAdditional user instructions:\n\(globalExtra)"
@@ -326,6 +328,7 @@ public enum PromptComposer {
         let clipboardBlock = cleanClipboard.isEmpty
             ? ""
             : "\n\n[Clipboard Context / Message to Reference]:\n\(cleanClipboard)"
+        let editHistoryBlock = formatPriorEditContext(priorEditContext, maxTurns: settings.editContextMaxTurns)
 
         switch task {
         case let .preset(preset):
@@ -342,7 +345,7 @@ public enum PromptComposer {
                 .system(.init(content: systemPrompt)),
             ]
 
-            if settings.useFewShotExamples, preset.includeExamples, lang.isEmpty, cleanClipboard.isEmpty {
+            if settings.useFewShotExamples, preset.includeExamples, lang.isEmpty, cleanClipboard.isEmpty, editHistoryBlock.isEmpty {
                 let keyPrompt = preset.defaultKey.flatMap(Prompt.init(rawValue:)) ?? .rewrite
                 messages.append(contentsOf: keyPrompt.chatExamplesAfterSystemMessage)
             }
@@ -351,7 +354,7 @@ public enum PromptComposer {
                 """
                 \(Prompt.userContentHeader)
 
-                \(selectedText)\(clipboardBlock)
+                \(selectedText)\(clipboardBlock)\(editHistoryBlock)
                 """
             ))))
 
@@ -362,7 +365,7 @@ public enum PromptComposer {
             let systemPrompt =
                 """
                 You are a helpful AI writing and reading assistant inside iOS.
-                Follow the user's instruction accurately using the provided text and any clipboard context.
+                Follow the user's instruction accurately using the provided text and any clipboard or previous edit context.
                 - If the user asks to rewrite, edit, or translate, output only the resulting text.
                 - If the user asks a question, explanation, summary, or analysis of the text, answer clearly and directly in the requested or matching language.
                 - If the user asks to write a reply to a message, draft a natural, ready-to-send reply.
@@ -370,7 +373,7 @@ public enum PromptComposer {
                 """
             let userContent =
                 """
-                Instruction: \(instruction)\(clipboardBlock)
+                Instruction: \(instruction)\(clipboardBlock)\(editHistoryBlock)
 
                 \(Prompt.userContentHeader)
                 \(selectedText)
@@ -385,12 +388,14 @@ public enum PromptComposer {
             let systemPrompt =
                 """
                 You are a helpful AI writing assistant. The user wants to refine the draft text based on their follow-up instruction.
+                Use the original input, any prior edit history, and the current draft output to preserve intended meaning and continuity.
                 Output only the updated text with no meta commentary or explanations.\(extraSuffix)
                 """
+            let sessionTurnsBlock = formatSessionTurns(sessionTurns, maxTurns: settings.editContextMaxTurns)
             let userContent =
                 """
                 Original input text:
-                \(originalText)\(clipboardBlock)
+                \(originalText)\(clipboardBlock)\(editHistoryBlock)\(sessionTurnsBlock)
 
                 Current draft output:
                 \(currentOutput)
@@ -404,6 +409,35 @@ public enum PromptComposer {
             ]
             return (messages, SamplingConfig(temperature: 0.35))
         }
+    }
+
+    private static func formatPriorEditContext(_ record: EditContextRecord?, maxTurns: Int) -> String {
+        guard let record, !record.turns.isEmpty else { return "" }
+        let limit = max(1, min(5, maxTurns))
+        let recent = Array(record.turns.suffix(limit))
+        let steps = recent.enumerated().map { idx, turn in
+            "Step \(idx + 1) [\(turn.instruction)]:\n\(turn.output)"
+        }.joined(separator: "\n\n")
+        return
+            """
+
+
+            [Previous Edit Context — the user is continuing to refine text from an earlier edit]:
+            Initial original text before previous edits:
+            \(record.originalText)
+
+            Previous edit steps:
+            \(steps)
+            """
+    }
+
+    private static func formatSessionTurns(_ turns: [EditContextTurn], maxTurns: Int) -> String {
+        let prior = Array(turns.dropLast().suffix(max(0, min(4, maxTurns))))
+        guard !prior.isEmpty else { return "" }
+        let steps = prior.enumerated().map { idx, turn in
+            "Turn \(idx + 1) [\(turn.instruction)]:\n\(turn.output)"
+        }.joined(separator: "\n\n")
+        return "\n\nEarlier refinement turns in this session:\n\(steps)"
     }
 
     private static func adaptiveSampling(baseTemperature: Double, baseTopP: Double?, inputLength: Int) -> SamplingConfig {

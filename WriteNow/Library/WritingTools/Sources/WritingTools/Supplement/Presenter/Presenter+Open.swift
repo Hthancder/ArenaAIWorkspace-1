@@ -109,7 +109,8 @@ public extension Presenter {
         fromHostView hostView: UIView,
         parentController: UIViewController?,
         anchorRectInHost: CGRect,
-        slotIndex: Int
+        slotIndex: Int,
+        onCompleteAndClose: (() -> Void)? = nil
     ) {
         let launchAction = resolveLaunchItem(slotIndex: slotIndex, isReadOnly: true)
         guard let context = buildExtractedTextContext(
@@ -117,7 +118,8 @@ public extension Presenter {
             hostView: hostView,
             parentController: parentController,
             anchorRectInHost: anchorRectInHost,
-            launchSlotAction: launchAction
+            launchSlotAction: launchAction,
+            onCompleteAndClose: onCompleteAndClose
         ) else {
             presentUnavailable(hostView)
             return

@@ -644,6 +644,10 @@ extension Configuration {
         var pickerTwoFingerLongPressEnabled: Bool
         var pickerStatusBarDoubleTapEnabled: Bool
         var ocrPreferredLanguages: [String]
+        var keepEditContextEnabled: Bool
+        var editContextMatchMode: String      // "smart_match" | "always_in_ttl"
+        var editContextMaxTurns: Int
+        var editContextTTLSeconds: Int
 
         static let `default` = AppSettings(
             menuTitle: "Write Now",
@@ -689,7 +693,11 @@ extension Configuration {
             floatingPickerBubbleEnabled: false,
             pickerTwoFingerLongPressEnabled: true,
             pickerStatusBarDoubleTapEnabled: true,
-            ocrPreferredLanguages: ["vi-VN", "en-US", "zh-Hans", "ja-JP", "ko-KR"]
+            ocrPreferredLanguages: ["vi-VN", "en-US", "zh-Hans", "ja-JP", "ko-KR"],
+            keepEditContextEnabled: true,
+            editContextMatchMode: "smart_match",
+            editContextMaxTurns: 3,
+            editContextTTLSeconds: 300
         )
 
         init(
@@ -736,7 +744,11 @@ extension Configuration {
             floatingPickerBubbleEnabled: Bool = false,
             pickerTwoFingerLongPressEnabled: Bool = true,
             pickerStatusBarDoubleTapEnabled: Bool = true,
-            ocrPreferredLanguages: [String] = ["vi-VN", "en-US", "zh-Hans", "ja-JP", "ko-KR"]
+            ocrPreferredLanguages: [String] = ["vi-VN", "en-US", "zh-Hans", "ja-JP", "ko-KR"],
+            keepEditContextEnabled: Bool = true,
+            editContextMatchMode: String = "smart_match",
+            editContextMaxTurns: Int = 3,
+            editContextTTLSeconds: Int = 300
         ) {
             self.menuTitle = menuTitle
             self.globalSystemPrompt = globalSystemPrompt
@@ -782,6 +794,10 @@ extension Configuration {
             self.pickerTwoFingerLongPressEnabled = pickerTwoFingerLongPressEnabled
             self.pickerStatusBarDoubleTapEnabled = pickerStatusBarDoubleTapEnabled
             self.ocrPreferredLanguages = ocrPreferredLanguages
+            self.keepEditContextEnabled = keepEditContextEnabled
+            self.editContextMatchMode = editContextMatchMode
+            self.editContextMaxTurns = editContextMaxTurns
+            self.editContextTTLSeconds = editContextTTLSeconds
         }
 
         enum CodingKeys: String, CodingKey {
@@ -800,6 +816,7 @@ extension Configuration {
             case injectIntoContextMenus, unlockBlockedSelection
             case floatingPickerBubbleEnabled, pickerTwoFingerLongPressEnabled, pickerStatusBarDoubleTapEnabled
             case ocrPreferredLanguages
+            case keepEditContextEnabled, editContextMatchMode, editContextMaxTurns, editContextTTLSeconds
         }
 
         init(from decoder: Decoder) throws {
@@ -848,6 +865,10 @@ extension Configuration {
             pickerTwoFingerLongPressEnabled = try container.decodeIfPresent(Bool.self, forKey: .pickerTwoFingerLongPressEnabled) ?? true
             pickerStatusBarDoubleTapEnabled = try container.decodeIfPresent(Bool.self, forKey: .pickerStatusBarDoubleTapEnabled) ?? true
             ocrPreferredLanguages = try container.decodeIfPresent([String].self, forKey: .ocrPreferredLanguages) ?? ["vi-VN", "en-US", "zh-Hans", "ja-JP", "ko-KR"]
+            keepEditContextEnabled = try container.decodeIfPresent(Bool.self, forKey: .keepEditContextEnabled) ?? true
+            editContextMatchMode = try container.decodeIfPresent(String.self, forKey: .editContextMatchMode) ?? "smart_match"
+            editContextMaxTurns = try container.decodeIfPresent(Int.self, forKey: .editContextMaxTurns) ?? 3
+            editContextTTLSeconds = try container.decodeIfPresent(Int.self, forKey: .editContextTTLSeconds) ?? 300
         }
     }
 

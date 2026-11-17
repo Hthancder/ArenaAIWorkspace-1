@@ -392,7 +392,10 @@ final class ScreenTextOverlayViewController: UIViewController {
             fromHostView: hostView,
             parentController: self,
             anchorRectInHost: hostView.bounds,
-            slotIndex: 0
+            slotIndex: 0,
+            onCompleteAndClose: { [weak self] in
+                self?.dismiss(animated: true)
+            }
         )
     }
 }

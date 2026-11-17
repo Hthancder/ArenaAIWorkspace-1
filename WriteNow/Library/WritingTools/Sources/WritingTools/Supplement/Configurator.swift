@@ -373,6 +373,10 @@ public struct RuntimeSettings: Codable, Equatable {
     public var pickerTwoFingerLongPressEnabled: Bool
     public var pickerStatusBarDoubleTapEnabled: Bool
     public var ocrPreferredLanguages: [String]
+    public var keepEditContextEnabled: Bool
+    public var editContextMatchMode: String
+    public var editContextMaxTurns: Int
+    public var editContextTTLSeconds: Int
 
     public static let `default` = RuntimeSettings(
         menuTitle: "Write Now",
@@ -418,7 +422,11 @@ public struct RuntimeSettings: Codable, Equatable {
         floatingPickerBubbleEnabled: false,
         pickerTwoFingerLongPressEnabled: true,
         pickerStatusBarDoubleTapEnabled: true,
-        ocrPreferredLanguages: ["vi-VN", "en-US", "zh-Hans", "ja-JP", "ko-KR"]
+        ocrPreferredLanguages: ["vi-VN", "en-US", "zh-Hans", "ja-JP", "ko-KR"],
+        keepEditContextEnabled: true,
+        editContextMatchMode: "smart_match",
+        editContextMaxTurns: 3,
+        editContextTTLSeconds: 300
     )
 
     enum CodingKeys: String, CodingKey {
@@ -437,6 +445,7 @@ public struct RuntimeSettings: Codable, Equatable {
         case injectIntoContextMenus, unlockBlockedSelection
         case floatingPickerBubbleEnabled, pickerTwoFingerLongPressEnabled, pickerStatusBarDoubleTapEnabled
         case ocrPreferredLanguages
+        case keepEditContextEnabled, editContextMatchMode, editContextMaxTurns, editContextTTLSeconds
     }
 
     public init(
@@ -483,7 +492,11 @@ public struct RuntimeSettings: Codable, Equatable {
         floatingPickerBubbleEnabled: Bool = false,
         pickerTwoFingerLongPressEnabled: Bool = true,
         pickerStatusBarDoubleTapEnabled: Bool = true,
-        ocrPreferredLanguages: [String] = ["vi-VN", "en-US", "zh-Hans", "ja-JP", "ko-KR"]
+        ocrPreferredLanguages: [String] = ["vi-VN", "en-US", "zh-Hans", "ja-JP", "ko-KR"],
+        keepEditContextEnabled: Bool = true,
+        editContextMatchMode: String = "smart_match",
+        editContextMaxTurns: Int = 3,
+        editContextTTLSeconds: Int = 300
     ) {
         self.menuTitle = menuTitle
         self.globalSystemPrompt = globalSystemPrompt
@@ -529,6 +542,10 @@ public struct RuntimeSettings: Codable, Equatable {
         self.pickerTwoFingerLongPressEnabled = pickerTwoFingerLongPressEnabled
         self.pickerStatusBarDoubleTapEnabled = pickerStatusBarDoubleTapEnabled
         self.ocrPreferredLanguages = ocrPreferredLanguages
+        self.keepEditContextEnabled = keepEditContextEnabled
+        self.editContextMatchMode = editContextMatchMode
+        self.editContextMaxTurns = editContextMaxTurns
+        self.editContextTTLSeconds = editContextTTLSeconds
     }
 
     public init(from decoder: Decoder) throws {
@@ -577,6 +594,36 @@ public struct RuntimeSettings: Codable, Equatable {
         pickerTwoFingerLongPressEnabled = try c.decodeIfPresent(Bool.self, forKey: .pickerTwoFingerLongPressEnabled) ?? true
         pickerStatusBarDoubleTapEnabled = try c.decodeIfPresent(Bool.self, forKey: .pickerStatusBarDoubleTapEnabled) ?? true
         ocrPreferredLanguages = try c.decodeIfPresent([String].self, forKey: .ocrPreferredLanguages) ?? ["vi-VN", "en-US", "zh-Hans", "ja-JP", "ko-KR"]
+        keepEditContextEnabled = try c.decodeIfPresent(Bool.self, forKey: .keepEditContextEnabled) ?? true
+        editContextMatchMode = try c.decodeIfPresent(String.self, forKey: .editContextMatchMode) ?? "smart_match"
+        editContextMaxTurns = try c.decodeIfPresent(Int.self, forKey: .editContextMaxTurns) ?? 3
+        editContextTTLSeconds = try c.decodeIfPresent(Int.self, forKey: .editContextTTLSeconds) ?? 300
+    }
+}
+
+public struct EditContextTurn: Codable, Equatable {
+    public let instruction: String
+    public let output: String
+    public let timestamp: Date
+
+    public init(instruction: String, output: String, timestamp: Date = Date()) {
+        self.instruction = instruction
+        self.output = output
+        self.timestamp = timestamp
+    }
+}
+
+public struct EditContextRecord: Codable, Equatable {
+    public let originalText: String
+    public let turns: [EditContextTurn]
+    public let lastAcceptedOutput: String
+    public let updatedAt: Date
+
+    public init(originalText: String, turns: [EditContextTurn], lastAcceptedOutput: String, updatedAt: Date = Date()) {
+        self.originalText = originalText
+        self.turns = turns
+        self.lastAcceptedOutput = lastAcceptedOutput
+        self.updatedAt = updatedAt
     }
 }
 
@@ -1214,5 +1261,88 @@ public class Configurator: ObservableObject {
 
     public func clearLastSession() {
         UserDefaults.standard.removeObject(forKey: Self.lastSessionKey)
+    }
+
+    // MARK: - Previous-Edit Context Persistence
+
+    private static let editContextKey = "WriteNowEditContextRecordV1"
+
+    public func saveEditContext(
+        originalText: String,
+        turns: [EditContextTurn],
+        lastAcceptedOutput: String
+    ) {
+        guard settings.keepEditContextEnabled else { return }
+        let cleanAccepted = lastAcceptedOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanAccepted.isEmpty, !turns.isEmpty else { return }
+
+        let maxTurns = max(1, min(5, settings.editContextMaxTurns))
+        let cappedTurns = Array(turns.suffix(maxTurns)).map { turn in
+            EditContextTurn(
+                instruction: String(turn.instruction.prefix(400)),
+                output: String(turn.output.prefix(2200)),
+                timestamp: turn.timestamp
+            )
+        }
+        let record = EditContextRecord(
+            originalText: String(originalText.prefix(2200)),
+            turns: cappedTurns,
+            lastAcceptedOutput: String(cleanAccepted.prefix(2500)),
+            updatedAt: Date()
+        )
+        if let data = try? JSONEncoder().encode(record) {
+            UserDefaults.standard.set(data, forKey: Self.editContextKey)
+        }
+    }
+
+    public func loadMatchingEditContext(forSelectedText selectedText: String) -> EditContextRecord? {
+        guard settings.keepEditContextEnabled else { return nil }
+        guard let data = UserDefaults.standard.data(forKey: Self.editContextKey),
+              let record = try? JSONDecoder().decode(EditContextRecord.self, from: data)
+        else { return nil }
+
+        let ttl = settings.editContextTTLSeconds
+        if ttl > 0 && Date().timeIntervalSince(record.updatedAt) > TimeInterval(ttl) {
+            clearEditContext()
+            return nil
+        }
+
+        if settings.editContextMatchMode == "always_in_ttl" {
+            return record
+        }
+
+        // Smart match: check if newly selected text matches or overlaps the previous improved text
+        let normSelected = Self.normalizeForEditMatch(selectedText)
+        let normLast = Self.normalizeForEditMatch(record.lastAcceptedOutput)
+        guard normSelected.count >= 4, normLast.count >= 4 else { return nil }
+
+        if normSelected == normLast {
+            return record
+        }
+        if normSelected.count >= 12 && (normLast.contains(normSelected) || normSelected.contains(normLast)) {
+            return record
+        }
+
+        let wordsA = Set(normSelected.split(separator: " ").map(String.init))
+        let wordsB = Set(normLast.split(separator: " ").map(String.init))
+        if !wordsA.isEmpty && !wordsB.isEmpty {
+            let intersection = wordsA.intersection(wordsB).count
+            let minCount = min(wordsA.count, wordsB.count)
+            if minCount > 0 && Double(intersection) / Double(minCount) >= 0.55 {
+                return record
+            }
+        }
+        return nil
+    }
+
+    public func clearEditContext() {
+        UserDefaults.standard.removeObject(forKey: Self.editContextKey)
+    }
+
+    private static func normalizeForEditMatch(_ raw: String) -> String {
+        raw.lowercased()
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
     }
 }

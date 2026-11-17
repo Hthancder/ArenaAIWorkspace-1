@@ -40,10 +40,13 @@ struct WritingToolsView: View {
     @State var isSpeakingOutput: Bool = false
     @State var didTriggerLaunchAction: Bool = false
 
-    // Clipboard Context & Session Restore
+    // Clipboard Context, Session Restore & Previous-Edit Context
     @State var clipboardContextText: String = ""
     @State var clipboardContextAttached: Bool = false
     @State var restorableSession: LastSessionSnapshot? = nil
+    @State var activePriorEditContext: EditContextRecord? = nil
+    @State var priorEditContextAttached: Bool = false
+    @State var currentSessionTurns: [EditContextTurn] = []
 
     @State var error: Error? = nil
     @State var activeRequestToken: UUID = UUID()
@@ -83,6 +86,19 @@ struct WritingToolsView: View {
         guard cfg.settings.clipboardContextEnabled, clipboardContextAttached else { return nil }
         let trimmed = clipboardContextText.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    var effectivePriorEditContext: EditContextRecord? {
+        guard cfg.settings.keepEditContextEnabled, priorEditContextAttached else { return nil }
+        return activePriorEditContext
+    }
+
+    var currentTaskInstructionLabel: String {
+        switch currentTask {
+        case let .preset(preset): return preset.title
+        case let .customPrompt(prompt): return prompt
+        case let .followUp(_, _, instruction): return instruction
+        }
     }
 
     var currentTaskTitle: String {
@@ -142,6 +158,7 @@ struct WritingToolsView: View {
         }
         .onChange(of: textProxy.isFetchingSelectedText) { fetching in
             if !fetching {
+                refreshEditContextMatch()
                 maybeTriggerLaunchAction()
             }
         }
@@ -198,6 +215,18 @@ struct WritingToolsView: View {
         }
 
         restorableSession = cfg.loadValidLastSession()
+        refreshEditContextMatch()
+    }
+
+    private func refreshEditContextMatch() {
+        guard !textProxy.isFetchingSelectedText else { return }
+        if let matched = cfg.loadMatchingEditContext(forSelectedText: textProxy.selectedText) {
+            activePriorEditContext = matched
+            priorEditContextAttached = true
+        } else if !cfg.settings.keepEditContextEnabled {
+            activePriorEditContext = nil
+            priorEditContextAttached = false
+        }
     }
 
     private func maybeTriggerLaunchAction() {
@@ -206,6 +235,12 @@ struct WritingToolsView: View {
               let launch = context.launchSlotAction
         else { return }
         didTriggerLaunchAction = true
+
+        let hasText = !textProxy.selectedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if !hasText && (launch.actionKind == .preset || launch.actionKind == .customPrompt) {
+            // Avoid sending empty selected text automatically on slot launch if WebKit/view returned nothing
+            return
+        }
 
         switch launch.actionKind {
         case .preset:

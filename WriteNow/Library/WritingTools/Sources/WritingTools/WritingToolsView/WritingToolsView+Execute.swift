@@ -34,7 +34,9 @@ extension WritingToolsView {
             for: taskToRun,
             selectedText: text,
             settings: settings,
-            clipboardContext: activeClipboardContext
+            clipboardContext: activeClipboardContext,
+            priorEditContext: effectivePriorEditContext,
+            sessionTurns: currentSessionTurns
         )
         let requestModel: String
         if case let .preset(preset) = taskToRun,
@@ -127,6 +129,7 @@ extension WritingToolsView {
                 if !finalFormatted.isEmpty {
                     self.output = finalFormatted
                     self.appendHistory(finalFormatted)
+                    self.recordCompletedTurn(finalFormatted)
                     self.applyPreferredDefaultDiffMode()
                     self.persistSessionSnapshot()
                     self.isRunning = false
@@ -158,6 +161,7 @@ extension WritingToolsView {
                     if !finalFormatted.isEmpty {
                         self.output = finalFormatted
                         self.appendHistory(finalFormatted)
+                        self.recordCompletedTurn(finalFormatted)
                         self.applyPreferredDefaultDiffMode()
                         self.persistSessionSnapshot()
                         self.isRunning = false
@@ -179,6 +183,34 @@ extension WritingToolsView {
             outputHistory.append(trimmed)
         }
         historyIndex = max(0, outputHistory.count - 1)
+    }
+
+    private func recordCompletedTurn(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        currentSessionTurns.append(EditContextTurn(instruction: currentTaskInstructionLabel, output: trimmed))
+    }
+
+    func commitEditContextOnFinish(acceptedText: String) {
+        guard cfg.settings.keepEditContextEnabled else { return }
+        let cleanFinal = acceptedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanFinal.isEmpty else { return }
+
+        let baseOriginal = effectivePriorEditContext?.originalText ?? textProxy.selectedText
+        var combinedTurns = effectivePriorEditContext?.turns ?? []
+        if currentSessionTurns.isEmpty {
+            combinedTurns.append(EditContextTurn(instruction: currentTaskInstructionLabel, output: cleanFinal))
+        } else {
+            combinedTurns.append(contentsOf: currentSessionTurns)
+            if combinedTurns.last?.output != cleanFinal {
+                combinedTurns.append(EditContextTurn(instruction: "Manual edit", output: cleanFinal))
+            }
+        }
+        cfg.saveEditContext(
+            originalText: baseOriginal,
+            turns: combinedTurns,
+            lastAcceptedOutput: cleanFinal
+        )
     }
 
     func applyPreferredDefaultDiffMode() {
@@ -310,19 +342,29 @@ extension WritingToolsView {
         voiceLastTranscript = ""
         voiceBannerMessage = ""
         output = ""
+        outputHistory = []
+        historyIndex = 0
+        currentSessionTurns = []
+        error = nil
         restorableSession = nil
         cfg.clearLastSession()
     }
 
     func copyOutputToPasteboard(_ text: String, closeAfter: Bool) {
         UIPasteboard.general.string = text
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
         copiedToast = true
         if closeAfter {
+            commitEditContextOnFinish(acceptedText: text)
             OutputSpeechHelper.shared.stop()
             isSpeakingOutput = false
-            output = ""
             cfg.clearLastSession()
-            dismiss()
+            let onComplete = context.onCompleteAndClose
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
+                self.output = ""
+                self.dismiss()
+                onComplete?()
+            }
         } else {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                 copiedToast = false
@@ -361,6 +403,7 @@ extension WritingToolsView {
         let themeUIColors = Presenter.themeUIColors()
         let oldRects = context.textProxy.selectionRectsInView
 
+        commitEditContextOnFinish(acceptedText: finalText)
         cfg.clearLastSession()
 
         let prepared = animStyle != "none"

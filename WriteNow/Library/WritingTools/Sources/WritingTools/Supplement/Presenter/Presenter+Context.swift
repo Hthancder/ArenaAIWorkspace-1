@@ -24,6 +24,7 @@ extension Presenter {
 
         let textProxy: TextProxy
         let launchSlotAction: RuntimeSelectionMenuItem?
+        let onCompleteAndClose: (() -> Void)?
         @Published var scenePhase: ScenePhase = .active
 
         init(
@@ -34,7 +35,8 @@ extension Presenter {
             anchorRects: [CGRect],
             decorationViews: [UIView],
             textProxy: TextProxy,
-            launchSlotAction: RuntimeSelectionMenuItem? = nil
+            launchSlotAction: RuntimeSelectionMenuItem? = nil,
+            onCompleteAndClose: (() -> Void)? = nil
         ) {
             self.parentView = parentView
             self.parentController = parentController
@@ -44,6 +46,7 @@ extension Presenter {
             self.decorationViews = decorationViews
             self.textProxy = textProxy
             self.launchSlotAction = launchSlotAction
+            self.onCompleteAndClose = onCompleteAndClose
 
             super.init()
 
@@ -132,7 +135,8 @@ extension Presenter {
         hostView: UIView,
         parentController: UIViewController?,
         anchorRectInHost: CGRect,
-        launchSlotAction: RuntimeSelectionMenuItem? = nil
+        launchSlotAction: RuntimeSelectionMenuItem? = nil,
+        onCompleteAndClose: (() -> Void)? = nil
     ) -> Context? {
         guard let textProxy = TextProxy.makeReadOnlyWithText(text, view: hostView, selectionRect: anchorRectInHost) else {
             return nil
@@ -147,7 +151,8 @@ extension Presenter {
             parentController: resolvedVC,
             textProxy: textProxy,
             appearance: textProxy.appearanceForWritingTool,
-            launchSlotAction: launchSlotAction
+            launchSlotAction: launchSlotAction,
+            onCompleteAndClose: onCompleteAndClose
         )
     }
 
@@ -157,7 +162,8 @@ extension Presenter {
         parentController: UIViewController,
         textProxy: TextProxy,
         appearance: TextProxy.WTAppearance,
-        launchSlotAction: RuntimeSelectionMenuItem?
+        launchSlotAction: RuntimeSelectionMenuItem?,
+        onCompleteAndClose: (() -> Void)? = nil
     ) -> Context {
         var selectedRects = textProxy.selectionRectsInView
         if selectedRects.isEmpty { selectedRects = [fatherView.bounds] }
@@ -201,7 +207,8 @@ extension Presenter {
             anchorRects: preparedRects,
             decorationViews: decorationViews,
             textProxy: textProxy,
-            launchSlotAction: launchSlotAction
+            launchSlotAction: launchSlotAction,
+            onCompleteAndClose: onCompleteAndClose
         )
     }
 
