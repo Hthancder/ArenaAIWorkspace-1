@@ -152,6 +152,8 @@
     "handsFollowInput": "Hands follow your playing",
     "handsKeystrike": "Keystrike tap",
     "handsExpression": "Expression",
+    "handsImpact": "Press impact",
+    "handsIdleLife": "Idle liveliness",
     "instrument": "Instrument",
     "instrumentLazy": "samples download on selection",
     "sampleCacheAuto": "Auto-save sample cache",

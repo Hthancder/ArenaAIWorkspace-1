@@ -152,6 +152,8 @@
     "handsFollowInput": "手を演奏に合わせる",
     "handsKeystrike": "キーストローク",
     "handsExpression": "表現",
+    "handsImpact": "押鍵の勢い",
+    "handsIdleLife": "待ち時間の動き",
     "instrument": "楽器",
     "instrumentLazy": "選択時にサンプルをダウンロード",
     "sampleCacheAuto": "サンプルキャッシュを自動保存",

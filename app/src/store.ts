@@ -439,6 +439,12 @@ export type Settings = {
   // Expression layer ("có hồn", controlled): velocity-scaled strikes,
   // accent arm roll, rolled chords, register posture. 0 = off.
   handsExpression: number
+  // GĐ 6 — press impact (0..1): wrist jerk + joint grip + contact wobble
+  // at each key-down ("nhấn giật nhẹ như nhấn thật"). 0 = neutral presses.
+  handsImpact: number
+  // GĐ 6 — idle life (0..1): wrist breathing + slow finger lifts while
+  // the hand waits for its next note ("độ rảnh ngón"). 0 = still.
+  handsIdleLife: number
   keyLabelsEnabled: boolean
   keyLabelsMode: 'c' | 'white' | 'all'   // which keys carry a label
   keyLabelFormat: PitchLabelFormat
@@ -802,6 +808,8 @@ export const defaultSettings: Settings = {
   handsFollowInput: true,
   handsKeystrike: 0.6,
   handsExpression: 0.65,
+  handsImpact: 0.5,
+  handsIdleLife: 0.5,
   keyLabelsEnabled: false,
   keyLabelsMode: 'c',
   keyLabelFormat: 'letterOctave',

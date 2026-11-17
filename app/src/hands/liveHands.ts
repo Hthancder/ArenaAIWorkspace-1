@@ -47,6 +47,8 @@ import { keyForMidi } from '../keyboard/layout'
 import { boneDir, clamp, normalize, rotateAbout, rotateVec, shiftPose } from './geom'
 import type { HandPose, HandPoses, Vec3 } from './types'
 
+const clamp01 = (v: number): number => clamp(v, 0, 1)
+
 export type LiveHandsOpts = {
   playing: boolean
   /** 0..1 — strength of the per-press strike. */
@@ -77,6 +79,23 @@ export type LiveHandsOpts = {
    * when not playing along with the motion (which already anticipates).
    */
   nextKey?: (hand: 'L' | 'R') => { keyX: number; in: number; finger?: number } | null
+  /**
+   * GĐ 6 — 0..1 press impact ("nhấn giật nhẹ, có kiểm soát"): the wrist
+   * jerk + rebound at key-down, the joint's grip overshoot, and the small
+   * contact wobble around the press point. 0 = neutral presses.
+   */
+  impact?: number
+  /**
+   * GĐ 6 — 0..1 idle life ("độ rảnh"): wrist breathing + slow finger
+   * lifts while the hand waits for its next note. 0 = still.
+   */
+  idle?: number
+  /**
+   * GĐ 6 — "độ rảnh ngón": seconds until this hand's next note (capped);
+   * null = no schedule signal (free play / frozen playhead) — the wall
+   * clock since this hand's last press decides instead.
+   */
+  gapToNext?: (hand: 'L' | 'R') => number | null
 }
 
 // ---- artistic constants (world units: 1 mm = 0.01; angles in rad) ---------------------------------------------------
@@ -141,7 +160,31 @@ const REPEAT_REF_SEC = 0.25
 const REPEAT_MIN = 0.55 // GĐ 4 — fast repeats keep ≥55% of the windup so each tap reads
 const PRESS_SHARE = 0.85 // GĐ 1 — how much of an already-pressing source pose we do NOT re-curl
 const TAU_PECK_DOWN = 0.022 // GĐ 4 — the strike's down-stroke is faster than the return
-const ATTACK_DIP = 0.022 // GĐ 4 — wrist micro-dip with each strike (arm weight), z-down
+// ---- GĐ 6 — press impact ("nhấn giật nhẹ"): damped follow-through ─────────────
+// Keystroke studies: after key-impact a rebound motion occurs (or is
+// absorbed by wrist undulation as follow-through). One underdamped pulse
+// per key-down: first lobe = the jerk (down), second = the small rebound.
+const IMPACT_A = 0.053 // wrist pulse scale — peak ≈ 0.57·A·impactS·vel (≈2.5–3 mm)
+const IMPACT_HZ = 8.5 // follow-through band (8–11 Hz force fluctuations in studies)
+const IMPACT_DAMP = 0.38
+const IMPACT_WIN = 0.5 // pulse considered dead after this long (settled)
+const IMPACT_GRIP = 0.056 // joint grip scale (rad) — peak ≈ 0.032·impactS (0.02–0.04 rad)
+/** Contact wobble: the press point shivers around the key (rad at MCP). */
+const CONTACT_WOB_TH = 0.005 // ≈0.2 mm peak at the tip (std ≈ 0.1 mm, tremor band)
+const CONTACT_WOB_HZ = 9.5 // physiological tremor band (8–12 Hz)
+const CONTACT_WOB_HZ2 = 3.7 // slow companion for an organic contour
+/** Idle life ("độ rảnh"): wrist breathing + slow finger lifts while waiting. */
+const BREATH_Y = 0.014 // ≈1.4 mm peak-to-peak at defaults (ngưỡng: 1–3 mm)
+const BREATH_Z = 0.008
+const BREATH_HZ = 0.34 // one breath ≈ 2.9 s (ngưỡng: 0.25–0.5 Hz)
+const IDLE_LIFT_TH = 0.08 // finger lift scale (rad) — the swing arc ≈3 mm travel at defaults
+const IDLE_LIFT_HZ = 0.42 // slow lift/settle cycles (sparse via env³)
+const IDLE_LIFT_MAX = 0.095 // hard cap: no idle motion beyond ≈4 mm (ngưỡng)
+/** Idle gate: dead below 0.45 s of free time, full above 1 s. */
+const IDLE_GAP_MIN = 0.45
+const IDLE_GAP_FULL = 1.0
+const IDLE_TAU_IN = 0.4
+const IDLE_TAU_OUT = 0.12 // a fresh key-down kills idle fast (press reads clean)
 const TAU_DRIFT_PLAY = 0.045 // GĐ 3 — corrections follow quickly while playing along
 const TAU_REBIND = 0.02 // GĐ 3 — right after a key-down the stale correction dies fast
 const REBIND_SEC = 0.15
@@ -224,9 +267,18 @@ type HandState = {
   /** performance.now()/1000 of the last key-down (chord grouping). */
   lastKeyT: number
   keyDownT: number
-  attackSm: number
   lastTipX: number[]
   tipVelSm: number[]
+  /** GĐ 6 — smoothed idle-life weight (0..1). */
+  idleW: number
+  /** GĐ 6 — song-gap bookkeeping (frozen playhead detection). */
+  songGapPrev: number
+  songAdvT: number
+  /** GĐ 6 — last-frame impact/idle components (test/debug). */
+  dbgWrist: number
+  dbgGrip: number[]
+  dbgWob: number[]
+  dbgGap: number
   /** Running index within the current chord (rolled-chord stagger). */
   chordIdx: number
   /** Smoothed drift speed (units/s) — drives the travel arc (N2). */
@@ -278,9 +330,15 @@ const makeHand = (hand: 'L' | 'R'): HandState => ({
   chordIdx: 0,
   driftVel: 0,
   keyDownT: -9,
-  attackSm: 0,
   lastTipX: [0, 0, 0, 0, 0],
   tipVelSm: [0, 0, 0, 0, 0],
+  idleW: 0,
+  songGapPrev: NaN,
+  songAdvT: -9,
+  dbgWrist: 0,
+  dbgGrip: [0, 0, 0, 0, 0],
+  dbgWob: [0, 0, 0, 0, 0],
+  dbgGap: 5,
 })
 
 function copyPose(src: HandPose, dst: HandPose): void {
@@ -365,6 +423,33 @@ function abductFinger(p: HandPose, f: number, phi: number): void {
   if (f === 0) for (const t of p.thumbRef) rotateVec(t, _axis, phi)
 }
 
+/**
+ * Rigid weight cue: the wrist sinks `dip` (z-down) by rotating the whole
+ * hand about the elbow. The old translate-without-elbow (`shiftPose(…,
+ * false)`) planted the elbow while the wrist dropped — the forearm
+ * STRETCHED 4.03 mm on every press (measured), exactly the "kéo giãn/
+ * biến dạng" the rigid rule forbids. Rotation keeps every bone exact.
+ */
+function dipWristRigid(p: HandPose, dip: number): void {
+  const fw: Vec3 = [p.wrist[0] - p.elbow[0], p.wrist[1] - p.elbow[1], p.wrist[2] - p.elbow[2]]
+  const len = Math.hypot(fw[0], fw[1], fw[2])
+  const fwXY = Math.hypot(fw[0], fw[1])
+  if (len < 1e-6 || fwXY < 0.2 * len) {
+    // Degenerate forearm direction — a whole-arm translation stays rigid.
+    shiftPose(p, 0, 0, -dip)
+    return
+  }
+  // Axis = forearm × ẑ: rotating about it swings the wrist along z.
+  _axis[0] = fw[1]
+  _axis[1] = -fw[0]
+  _axis[2] = 0
+  normalize(_axis)
+  const theta = -Math.asin(clamp(dip / fwXY, -0.999, 0.999))
+  const pts: Vec3[] = [p.wrist, ...p.bases, ...p.fingers.flat()]
+  rotateAbout(p.elbow, _axis, theta, pts)
+  for (const t of p.thumbRef) rotateVec(t, _axis, theta)
+}
+
 class LiveHandsOverlay {
   private L = makeHand('L')
   private R = makeHand('R')
@@ -386,6 +471,16 @@ class LiveHandsOverlay {
   slotDebug(hand: 'L' | 'R', finger: number): { swing: number; abduct: number; axis: Vec3 | null; lift: number; couple: number } {
     const s = this[hand].slots[finger]
     return { swing: s.swing, abduct: s.abduct, axis: s.axis ? ([...s.axis] as Vec3) : null, lift: s.lift, couple: s.couple }
+  }
+
+  /**
+   * Test/debug: the GĐ 6 press-impact + idle components applied on the
+   * last frame — wrist pulse (z), per-finger grip (rad) and contact wobble
+   * (rad), the idle weight and the effective free-time gap (s).
+   */
+  impactDebug(hand: 'L' | 'R'): { wrist: number; grip: number[]; wob: number[]; idleW: number; gap: number } {
+    const st = this[hand]
+    return { wrist: st.dbgWrist, grip: [...st.dbgGrip], wob: [...st.dbgWob], idleW: st.idleW, gap: st.dbgGap }
   }
 
   attach(): () => void {
@@ -730,15 +825,33 @@ class LiveHandsOverlay {
       st.driftVel += (speed - st.driftVel) * (1 - Math.exp(-dt / 0.12))
       st.drift += clamp(driftStep, -DRIFT_RATE * dt, DRIFT_RATE * dt)
 
-      // GĐ 4 — attack dip: a quick wrist drop with each key-down (arm
-      // weight), rebounding over ~250 ms. Visible "dồn sức", 2–3 mm.
-      let atk = 0
-      for (const sl of st.slots) {
-        const e = sl.strikeT > 0 && sl.strikeT < 0.35 ? Math.exp(-Math.max(0, sl.strikeT - 0.04) / 0.12) : 0
-        if (e > atk) atk = e
+      // GĐ 6 — idle life weight: how free this hand is right now. Two
+      // signals — the song's look-ahead ("thời gian tới nốt rơi kế tiếp",
+      // only while the playhead actually advances: at a Wait gate or pause
+      // the WAIT itself is the user's free time) and the wall clock since
+      // this hand's last press (works in free play). A fresh key-down
+      // zeroes the gate instantly so every press reads clean.
+      const sgRaw = opts.gapToNext ? opts.gapToNext(hand) : null
+      let songGap: number | null = null
+      if (sgRaw != null && Number.isFinite(sgRaw)) {
+        const g = clamp(sgRaw, 0, 5)
+        // An advancing playhead shrinks the gap by ~dt per frame; a frozen
+        // one (pause / Wait gate) reports a constant gap — stop trusting
+        // it after 0.6 s of stillness and let the wall clock decide.
+        if (Number.isFinite(st.songGapPrev) && st.songGapPrev - g > dt * 0.25) st.songAdvT = nowSec
+        st.songGapPrev = g
+        if (nowSec - st.songAdvT < 0.6) songGap = g
       }
-      if (!Number.isFinite(st.attackSm)) st.attackSm = 0
-      st.attackSm += (atk - st.attackSm) * (1 - Math.exp(-dt / 0.025))
+      const wallGap = nowSec - st.keyDownT
+      const gapEff = Math.min(wallGap, songGap ?? 5)
+      st.dbgGap = gapEff
+      const gate = clamp01((gapEff - IDLE_GAP_MIN) / (IDLE_GAP_FULL - IDLE_GAP_MIN))
+      const idleAmt = clamp(Number.isFinite(opts.idle) ? opts.idle! : 0.5, 0, 1)
+      const idleTarget = clamp01(idleAmt * (0.7 + 0.6 * express)) * gate
+      if (!Number.isFinite(st.idleW)) st.idleW = 0
+      st.idleW +=
+        (idleTarget - st.idleW) *
+        (1 - Math.exp(-dt / (idleTarget < st.idleW ? IDLE_TAU_OUT : IDLE_TAU_IN)))
       for (let f = 0; f < 5; f++) st.lastTipX[f] = tipXs[f]
 
       // Accent roll smoothing (recovers slowly when the accents pass).
@@ -800,8 +913,39 @@ class LiveHandsOverlay {
     // that "flies" instead of sliding on rails.
     const arc = ARC_LIFT * clamp(Math.abs(st.driftVel) / DRIFT_RATE, 0, 1)
     if (arc > 0.0005) shiftPose(pose, 0, arc, 0)
-    // GĐ 4 — the wrist dips into the strike (arm weight) and rebounds.
-    if (st.attackSm > 0.004) shiftPose(pose, 0, 0, -ATTACK_DIP * Math.min(1, st.attackSm))
+    // GĐ 6 — press impact ("giật nhẹ khi nhấn"): one underdamped pulse per
+    // key-down — the wrist jerks down (arm absorbing the key impact) and
+    // rebounds once, small and quick, then settles. Deterministic per
+    // press (every repeat has its move), never random shaking.
+    const expressA = clamp(Number.isFinite(opts.expression) ? opts.expression! : 0, 0, 1)
+    const impactS = clamp01((Number.isFinite(opts.impact) ? opts.impact! : 0.5) * (1.35 + 0.7 * expressA))
+    let wristZ = 0
+    for (const sl of st.slots) {
+      const ti = sl.strikeT
+      if (ti >= 0 && ti < IMPACT_WIN) {
+        // NEGATIVE first lobe = the jerk goes DOWN into the key; the
+        // second (positive) lobe is the small rebound ≤ 1 mm.
+        const v =
+          -IMPACT_A *
+          impactS *
+          (0.7 + 0.4 * sl.vel) *
+          Math.exp(-IMPACT_DAMP * 2 * Math.PI * IMPACT_HZ * ti) *
+          Math.sin(2 * Math.PI * IMPACT_HZ * Math.sqrt(1 - IMPACT_DAMP * IMPACT_DAMP) * ti)
+        if (Math.abs(v) > Math.abs(wristZ)) wristZ = v
+      }
+    }
+    st.dbgWrist = wristZ
+    if (Math.abs(wristZ) > 0.0002) shiftPose(pose, 0, 0, wristZ)
+    // GĐ 6 — idle life: the wrist "breathes" (slow y/z oscillation) while
+    // the hand waits for its next note — subtle, 1–3 mm, ~0.34 Hz.
+    if (st.idleW > 0.004) {
+      shiftPose(
+        pose,
+        0,
+        BREATH_Y * st.idleW * Math.sin(2 * Math.PI * BREATH_HZ * nowSec + st.seed),
+        BREATH_Z * st.idleW * Math.sin(2 * Math.PI * BREATH_HZ * 0.77 * nowSec + st.seed * 1.7),
+      )
+    }
     // Accent roll: the hand rolls around its forearm axis (arm weight on
     // strong notes). Rotation about the wrist on the forearm axis — bone
     // lengths exact.
@@ -828,7 +972,41 @@ class LiveHandsOverlay {
       const active = s.held || s.strikeT < PECK_SEC
       if (active && !s.axis) s.axis = fingerAxis(pose, f)
       if (!active && s.axis) s.axis = null
-      const theta = clamp(s.swing + (s.midi === null ? flutter : 0), SWING_MIN, SWING_MAX)
+      // GĐ 6 — joint grip ("khớp co co nhẹ"): the striking finger curls a
+      // hair past the press angle at impact and eases — same damped rhythm
+      // as the wrist jerk. Contact wobble: the press point shivers around
+      // the key centre (tremor band), only while the finger is in contact.
+      let grip = 0
+      const tg = s.strikeT
+      if (tg >= 0 && tg < IMPACT_WIN) {
+        grip =
+          -IMPACT_GRIP *
+          impactS *
+          (0.7 + 0.4 * s.vel) *
+          Math.exp(-IMPACT_DAMP * 2 * Math.PI * IMPACT_HZ * tg) *
+          Math.sin(2 * Math.PI * IMPACT_HZ * Math.sqrt(1 - IMPACT_DAMP * IMPACT_DAMP) * tg)
+      }
+      let wob = 0
+      if (s.tap > 0.45 && impactS > 0.001) {
+        const ph = f * 1.7 + st.seed
+        wob =
+          CONTACT_WOB_TH *
+          impactS *
+          s.tap *
+          (0.62 * Math.sin(2 * Math.PI * CONTACT_WOB_HZ * nowSec + ph) +
+            0.38 * Math.sin(2 * Math.PI * CONTACT_WOB_HZ2 * nowSec + ph * 1.31))
+      }
+      // GĐ 6 — idle life: a free finger lifts and settles slowly
+      // ("nhấc/hạ chậm", sparse) — no pressing finger, no random jerk.
+      let lift = 0
+      if (st.idleW > 0.004 && s.tap < 0.3) {
+        const env = Math.max(0, Math.sin(2 * Math.PI * IDLE_LIFT_HZ * nowSec + f * 2.1 + st.seed * 1.3))
+        lift =
+          Math.min(IDLE_LIFT_MAX, IDLE_LIFT_TH * st.idleW * Math.max(0, 1 - s.tap * 3)) * env * env * env
+      }
+      st.dbgGrip[f] = grip
+      st.dbgWob[f] = wob
+      const theta = clamp(s.swing + (s.midi === null ? flutter : 0) + grip + wob + lift, SWING_MIN, SWING_MAX)
       // GĐ 1 — the swing arc's LATERAL component slides the tip sideways
       // (measured ~6 mm at windup) — remember it to cancel below, so the
       // stroke goes straight into the key.
@@ -845,9 +1023,10 @@ class LiveHandsOverlay {
     // Cancel the swing's lateral slide — the pressed finger stays over its
     // key while the stroke reads as vertical travel.
     if (Math.abs(swingLatX) > 0.0005) shiftPose(pose, -swingLatX, 0, 0)
-    // Weight cue: the hand sinks slightly as the fingers press.
+    // Weight cue: the hand sinks slightly as the fingers press — RIGID
+    // (forearm rotates about the elbow; never stretch the arm).
     const dip = WRIST_DIP * maxTap * clamp(Number.isFinite(opts.keystrike) ? opts.keystrike : 1, 0, 1)
-    if (dip > 0.0005) shiftPose(pose, 0, 0, -dip, false)
+    if (dip > 0.0005) dipWristRigid(pose, dip)
   }
 
   /** Every key-down: peck reset + velocity capture + rolled-chord stagger. */

@@ -152,6 +152,8 @@
     "handsFollowInput": "Tay bám theo bạn chơi",
     "handsKeystrike": "Nhát gõ phím",
     "handsExpression": "Biểu cảm",
+    "handsImpact": "Lực nhấn tay",
+    "handsIdleLife": "Độ sống khi rảnh",
     "instrument": "Nhạc cụ",
     "instrumentLazy": "chỉ tải âm thanh khi chọn",
     "sampleCacheAuto": "Tự động lưu cache âm thanh",

@@ -74,6 +74,12 @@ export type NoteQuery = {
   planFor(midi: number, t: number): { hand: 'L' | 'R'; finger: number } | null
   /** The nearest note starting on `hand` within the next 0.4 s (anticipation). */
   nextOn(hand: 'L' | 'R', t: number): { keyX: number; in: number; finger?: number } | null
+  /**
+   * "Độ rảnh ngón": seconds until this hand's next note starts, capped at
+   * `cap` (null = none within the horizon). Drives the idle-life layer —
+   * long gap = the hand may breathe and lift its fingers.
+   */
+  gapToNext(hand: 'L' | 'R', t: number, cap?: number): number | null
 }
 
 export function makeNoteQuery(notes: SongHandsNote[], plan?: HandsMotion['plan'] | null): NoteQuery {
@@ -150,6 +156,18 @@ export function makeNoteQuery(notes: SongHandsNote[], plan?: HandsMotion['plan']
         if (!k) continue
         const fg = plan ? plan.finger[i] : n.finger
         return { keyX: k.x, in: n.on - t, finger: fg !== null && fg !== undefined && fg >= 1 && fg <= 5 ? fg - 1 : undefined }
+      }
+      return null
+    },
+    gapToNext(hand, t, cap = 5) {
+      // Same matching rules as nextOn, but the window is the caller's
+      // horizon ("how long is this hand free?"), not the lean window.
+      for (let i = lowerBound(t); i < notes.length && notes[i].on <= t + cap; i++) {
+        const n = notes[i]
+        const h = plan ? plan.hand[i] ?? n.hand : n.hand
+        const eff = h ?? ((keyForMidi(n.midi)?.x ?? 0) < 0 ? 'L' : 'R')
+        if (eff !== hand) continue
+        return Math.max(0, n.on - t)
       }
       return null
     },

@@ -40,6 +40,8 @@ const HAND_KEYS = [
   'handsFollowInput',
   'handsKeystrike',
   'handsExpression',
+  'handsImpact',
+  'handsIdleLife',
   'bloomEnabled',
   'midiOffsetSec',
   'midiSpeedAutomation',
@@ -194,6 +196,18 @@ export function Hands() {
         playing,
         keystrike: s.handsKeystrike,
         expression: s.handsExpression,
+        // GĐ 6 — press impact (giật nhẹ + khớp co + rung điểm nhấn) and
+        // idle life (thở cổ tay + nhấc ngón khi chờ nốt kế), each with its
+        // own 0..1 control ("có kiểm soát").
+        impact: s.handsImpact,
+        idle: s.handsIdleLife,
+        // "Độ rảnh ngón": song-time look-ahead for this hand (5 s). While
+        // the playhead is frozen (pause / Wait gate) liveHands falls back
+        // to the wall clock — the wait itself is the user's free time.
+        gapToNext: (hand) => {
+          const rm = motionRef.current
+          return rm ? rm.query.gapToNext(hand, t, 5) : null
+        },
         // Natural fingering: the motion plan's (hand, finger) for the
         // matching song note — imminent notes first. Binary search over
         // the onset-sorted notes (S4), the same semantics as before.

@@ -578,7 +578,12 @@ console.log('naturalness: idle neighbour dips with the strike (tiny)')
     dip = Math.min(dip, poses.R!.fingers[2][3][1] - poses.R!.wrist[1] - restY2)
   }
   h?.release()
-  check('neighbour dip is felt but tiny (0.15–12 mm)', dip <= -0.0015 && dip >= -0.012, `dip=${dip.toFixed(4)}`)
+  // Upper bound 2 mm (was 1.2): the GĐ 6 rigid weight cue sinks the wrist
+  // by rotating the forearm about the planted elbow — tips, being farther
+  // from the elbow than the wrist, dip ~0.8 mm more RELATIVE to the wrist
+  // than the old (physically impossible) forearm-stretching translate.
+  // The sympathetic couple itself (the subject here) is unchanged.
+  check('neighbour dip is felt but tiny (0.15–20 mm)', dip <= -0.0015 && dip >= -0.02, `dip=${dip.toFixed(4)}`)
 }
 
 

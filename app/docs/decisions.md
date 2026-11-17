@@ -519,3 +519,49 @@ RAM)** + tiến trình ở **cả LoadingIsland lẫn ô Nhạc cụ**.
 hoàn nguyên, 404 không cache, LRU evict đúng thứ tự, clear xóa session, entry
 quá cap không cache, instrumentStatus subscribe/unsubscribe). Battery cũ +
 settings-persist + tsc + build sạch.
+
+## GĐ 6 — Press impact + idle life (tay chân thực hơn, 2026-11-16)
+
+Yêu cầu: (1) khi nhấn tay **giật nhẹ** (cổ tay nảy 1–2 nhịp), **khớp co co nhẹ**,
+**vị trí nhấn dao động nhỏ** quanh tâm phím; (2) dùng "độ rảnh ngón" (thời gian tới
+nốt kế tiếp) để tay làm gì đó tự nhiên khi chờ lâu. Kế hoạch có ngưỡng đo được user
+duyệt trước khi code (đủ 3 thành phần press; idle = thở cổ tay + nhấc ngón "nhẹ";
+2 slider riêng; GĐ 1→3).
+
+**Cơ chế — press impact** (`liveHands.applyTo`): một xung tắt dần (underdamped,
+8.5 Hz, ζ=0.38) mỗi key-down — lõi đầu xuống (jerk ≈2.5–3 mm), lõi hai nảy lên
+(≤1.2 mm), êm hoàn toàn trước ~350 ms. Deterministic theo từng lần nhấn (lặp nào
+cũng có động tác), KHÔNG rung ngẫu nhiên. Ngón bấm co nhẹ quá góc nhấn (grip
+0.02–0.045 rad, cùng nhịp). Điểm rung tiếp xúc (wobble) 9.5+3.7 Hz, ≈0.2 mm đỉnh
+tại đầu ngón, CHỈ khi đang giữ phím — khớp dao động lực 8–11 Hz khi duy trì lực
+bấm (nghiên cứu keystroke: sau va chạm có rebound hoặc wrist undulation
+follow-through; run sinh lý 8–12 Hz). `impact` slider (0..1, mặc định 0.5) tắt/bật
+cả nhóm; `impact: 0` = tuyệt đối không jerk/grip/wobble (test chứng minh).
+
+**Cơ chế — idle life** (`liveHands.update/applyTo`): `gapEff = min(wallGap,
+songGap)` — wallGap = thời gian kể từ key-down cuối của CHÍNH tay đó (hoạt động cả
+khi chơi tự do), songGap = `NoteQuery.gapToNext(hand, t, 5)` (look-ahead 5 s, tiền
+làm dịu trước nốt tới). Playhead đứng yên (pause/Wait gate) → gap treo không đổi →
+máy dò "đóng băng" (0.6 s) bỏ tín hiệu, **thời gian chờ chính là độ rảnh** (đúng
+yêu cầu "chờ lâu quá thì tay làm gì đó"). Cửa sổ: <0.45 s = im, >1 s = đầy. Hành
+vi (chọn "nhẹ" của user): cổ tay thở ±1.5 mm pp @0.34 Hz + ngón rảnh nhấc/hạ chậm
+(env³ thưa @0.42 Hz, ~3 mm cung 3D, cứng ≤4 mm). Key-down giết idle trong ≤0.3 s
+(mọi press đọc sạch). `handsIdleLife` slider (0..1, mặc định 0.5).
+
+**Root-cause fix hệ trọng — rigid**: weight cue cũ `shiftPose(pose, 0, 0, -dip,
+false)` chìm cổ tay mà KHÔNG dịch khuỷu = **kéo giãn cẳng tay 4.03 mm mỗi lần
+nhấn** (đo bằng test bone-length mới — lỗi "biến dạng" âm thầm từ GĐ 4). Thay bằng
+`dipWristRigid`: xoay trọn bàn tay quanh khuỷu (trục = cẳng tay × ẑ) — cổ tay
+đúng hành trình, mọi xương chính xác tuyệt đối (test: drift < 1e-6). Hệ quả đo
+được: đầu ngón chìm thêm ~0.8 mm TƯƠNG ĐỐI cổ tay (cơ học thật — đầu ngón xa khuỷu
+hơn cổ tay) → ngưỡng "neighbour dip" của test-livebrowser nới 1.2→2 mm (couple
+cảm thông không đổi).
+
+**Bài học đo lường**: nâng ngón là quay khớp MCP = CUNG 3D — đo theo hành trình 3D
+(span 2–4 mm), không theo một trục (trục z dịch 4.6 mm khi y chỉ 2.8 mm).
+
+**Điều khiển**: `handsImpact` ("Lực nhấn tay") + `handsIdleLife` ("Độ sống khi
+rảnh") — Inspector mục Chuyển động tay, lưu qua reload như mọi setting (merge theo
+`defaultSettings`). Test: `scripts/test-impact-idle.ts` (19 kiểm tra theo đúng
+ngưỡng trình user) + 4 kiểm tra `gapToNext` trong test-notequery; toàn bộ 8 suite
+xanh; export không đổi (`applyTo` no-op khi exporting).

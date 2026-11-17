@@ -155,14 +155,17 @@ function boneLengths(p: HandPose): number[] {
   return out
 }
 
-console.log('idle: no presses → poses untouched')
+console.log('idle: no presses + idle life OFF → poses untouched')
 {
+  // GĐ 6 contract: `idle: 0` is the "still" control — with it the poses
+  // must not move at all. (With idle > 0 the hand breathes and lifts its
+  // fingers while waiting — measured in test-impact-idle.ts.)
   liveHands.attach()
   liveHands.reset()
   const p = posesOf()
   const tpl = posesOf()
   const before = JSON.stringify(p)
-  frames(p, 5, baseOpts(), () => {
+  frames(p, 5, { ...baseOpts(), idle: 0 }, () => {
     refreshPose(p.L!, tpl.L!)
     refreshPose(p.R!, tpl.R!)
   })

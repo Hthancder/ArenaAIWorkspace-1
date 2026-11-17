@@ -158,5 +158,24 @@ const query = makeNoteQuery(notes, plan)
   check('null hands pass through', pooled(8).R === null)
 }
 
+// ---- gapToNext ("độ rảnh ngón"): time until this hand's next note ----
+{
+  const small: SongHandsNote[] = [
+    { midi: 60, on: 1, off: 1.5, hand: 'R', finger: 2, velocity: 0.7 },
+    { midi: 64, on: 1.2, off: 1.6, hand: 'R', finger: 3, velocity: 0.7 },
+    { midi: 48, on: 5, off: 6, hand: 'L', finger: 2, velocity: 0.7 },
+    { midi: 50, on: 8, off: 9, hand: 'L', finger: 3, velocity: 0.7 },
+  ]
+  const g = makeNoteQuery(small, null)
+  const rGap = g.gapToNext('R', 0.5, 5)
+  check('gapToNext finds the next note of the same hand', rGap !== null && Math.abs(rGap - 0.5) < 1e-9, String(rGap))
+  const lGap = g.gapToNext('L', 0.5, 5)
+  check('gapToNext skips the other hand', lGap !== null && Math.abs(lGap - 4.5) < 1e-9, String(lGap))
+  const beyond = g.gapToNext('R', 1.3, 5)
+  check('gapToNext is null past the last note', beyond === null, String(beyond))
+  const capped = g.gapToNext('L', 2.5, 2) // L's next is at 5 → 2.5 s > cap
+  check('gapToNext honours the horizon cap', capped === null, String(capped))
+}
+
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} FAILURES`)
 if (failures) process.exit(1)
