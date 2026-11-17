@@ -225,7 +225,7 @@ struct WritingToolsView: View {
             runSmartReply()
         case .voicePrompt:
             if cfg.settings.stt.enabled {
-                startVoiceRecording(isFollowUp: false)
+                beginVoiceCapture(isFollowUp: false)
             }
         }
     }
