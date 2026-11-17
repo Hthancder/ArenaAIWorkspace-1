@@ -166,7 +166,8 @@ static UIView *WT_ResolveActiveMenuTargetView(void) {
     if (gLastEditMenuTargetView && gLastEditMenuTargetView.window && !WT_IsIgnoredInternalWindowOrView(gLastEditMenuTargetView)) {
         return gLastEditMenuTargetView;
     }
-    if (UIView *fr = WT_FindTopMostFirstResponderView()) {
+    UIView *fr = WT_FindTopMostFirstResponderView();
+    if (fr) {
         return fr;
     }
     if (gLastTouchView && gLastTouchView.window && !WT_IsIgnoredInternalWindowOrView(gLastTouchView)) {
