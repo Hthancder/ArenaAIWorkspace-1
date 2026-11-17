@@ -1,0 +1,70 @@
+name: probeM
+
+on:
+  push:
+    branches: ['**']      # chạy trên mọi branch để test tweak
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write      # để tạo Release kèm .deb
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deb:
+    name: .deb (${{ matrix.scheme }}, arm64, iOS 15)
+    # Không dùng macOS runner (tốn phí). Build bằng zig trên Ubuntu.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Rootless: Theos upstream, cài vào /var/jb
+          - scheme: rootless
+            theos_repo: https://github.com/theos/theos.git
+            package_arch: iphoneos-arm64
+          # RootHide: cần fork roothide/theos (có vendor/mod/roothide + libroothide.tbd)
+          # Package arch = iphoneos-arm64e theo quy ước roothide, nhưng Mach-O bên trong vẫn là arm64.
+          - scheme: roothide
+            theos_repo: https://github.com/roothide/theos.git
+            package_arch: iphoneos-arm64e
+    env:
+      SCHEME: ${{ matrix.scheme }}
+      PACKAGE_ARCH: ${{ matrix.package_arch }}
+    steps:
+      - name: Kiểm tra sản phẩm
+        run: |
+          set -euo pipefail
+          DEB="$(ls packages/*.deb | head -n1)"
+          echo "DEB=$DEB" >> "$GITHUB_ENV"
+          echo "--- cấu trúc gói ---"
+          dpkg-deb -c "$DEB"
+          python3 tools/verify_deb.py "$DEB" "${PACKAGE_ARCH}"
+          echo "SIZE=$(stat -c%s "$DEB")" >> "$GITHUB_ENV"
+
+      - name: SHA256 + job summary
+        run: |
+          set -euo pipefail
+          BASE="$(basename "$DEB")"
+          ( cd packages && sha256sum "$BASE" > "SHA256SUMS-${SCHEME}" )
+          cat "packages/SHA256SUMS-${SCHEME}" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo ""
+            echo "| scheme | package arch | dung lượng |"
+            echo "| --- | --- | --- |"
+            echo "| ${SCHEME} | ${PACKAGE_ARCH} | $(numfmt --to=iec "$SIZE") |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SiriBridge-${{ matrix.scheme }}-deb-${{ github.sha }}
+          path: |
+            packages/*.deb
+            packages/SHA256SUMS-${{ matrix.scheme }}
+          if-no-files-found: error
+
