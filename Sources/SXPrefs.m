@@ -95,7 +95,7 @@ static double SXClamp(double v, double lo, double hi) {
 
 	_temperature = SXClamp(round([self doubleFor:@"temperature" default:0.7] * 10.0) / 10.0, 0.0, 2.0);
 	_contextTurns = (NSInteger)SXClamp((double)[self integerFor:@"contextTurns" default:8], 2, 40);
-	_responseTimeout = SXClamp((double)[self integerFor:@"timeout" default:6], 2, 15);
+	_responseTimeout = SXClamp((double)[self integerFor:@"timeout" default:10], 2, 30);
 	_customPrompt = [self stringFor:@"customPrompt" default:@""] ?: @"";
 
 	_hideWebCards = [self boolFor:@"hideWebCards" default:YES];

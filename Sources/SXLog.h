@@ -1,6 +1,6 @@
 #import <Foundation/Foundation.h>
 
-#define SX_VERSION @"1.0.2"
+#define SX_VERSION @"1.0.3"
 
 typedef NS_ENUM(NSInteger, SXLogLevel) {
 	SXLogLevelDebug = 0,

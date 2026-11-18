@@ -271,11 +271,11 @@
 			<key>defaults</key>
 			<string>com.sirix.tweak</string>
 			<key>default</key>
-			<integer>6</integer>
+			<integer>10</integer>
 			<key>min</key>
 			<integer>2</integer>
 			<key>max</key>
-			<integer>15</integer>
+			<integer>30</integer>
 			<key>showValue</key>
 			<true/>
 			<key>PostNotification</key>
@@ -453,7 +453,7 @@
 			<key>label</key>
 			<string>Phiên bản</string>
 			<key>value</key>
-			<string>1.0.2</string>
+			<string>1.0.3</string>
 		</dict>
 		<dict>
 			<key>cell</key>

@@ -95,6 +95,35 @@ static BOOL SXApplyTextToView(id view, NSString *text) {
 	return applied;
 }
 
+/// Tạo bong bóng trả lời của SiriX khi lệnh không có sẵn trường văn bản
+/// (ví dụ Apple chỉ gửi thẻ tìm kiếm — đã ẩn — hoặc rỗng).
+static id SXMakeUtteranceView(NSString *text) {
+	Class cls = NSClassFromString(@"SAUIAssistantUtteranceView");
+	if (!cls) return nil;
+	id view = [[cls alloc] init];
+	if (!view) return nil;
+	BOOL canSet = NO;
+	SEL setSpeakable = NSSelectorFromString(@"setSpeakableText:");
+	if ([view respondsToSelector:setSpeakable]) {
+		SXSet(view, setSpeakable, text);
+		canSet = YES;
+	}
+	SEL setText = NSSelectorFromString(@"setText:");
+	if ([view respondsToSelector:setText]) {
+		SXSet(view, setText, text);
+		canSet = YES;
+	}
+	SEL setDialogId = NSSelectorFromString(@"setDialogId:");
+	if ([view respondsToSelector:setDialogId]) {
+		SXSet(view, setDialogId, NSUUID.UUID.UUIDString);
+	}
+	SEL setAceId = NSSelectorFromString(@"setAceId:");
+	if ([view respondsToSelector:setAceId]) {
+		SXSet(view, setAceId, NSUUID.UUID.UUIDString);
+	}
+	return canSet ? view : nil;
+}
+
 /// Thay nội dung tại chỗ: SAUIAddViews.views[*].speakableText/text + SAUISayIt.message.
 static BOOL SXMutateCommand(id command, NSString *text, NSString *source, NSString *className) {
 	if (!text.length || !command) return NO;
@@ -120,7 +149,19 @@ static BOOL SXMutateCommand(id command, NSString *text, NSString *source, NSStri
 					[kept addObject:view];
 					if (SXApplyTextToView(view, text)) changed = YES;
 				}
-				if (changed && stripped) {
+				BOOL injected = NO;
+				if (!changed) {
+					// Không có trường văn bản sẵn (thẻ đã ẩn / rỗng) → chèn bong bóng của SiriX
+					// thay vì thả về câu trả lời gốc của Siri.
+					id bubble = SXMakeUtteranceView(text);
+					if (bubble) {
+						[kept insertObject:bubble atIndex:0];
+						changed = YES;
+						injected = YES;
+						SXLogDbg(@"resp", @"chèn bong bóng trả lời (%lu ký tự)", (unsigned long)text.length);
+					}
+				}
+				if (stripped || injected) {
 					SXSet(command, setViewsSelector, kept);
 				}
 			}
@@ -391,7 +432,8 @@ static BOOL SXMutateCommand(id command, NSString *text, NSString *source, NSStri
 	NSString *question = _question;
 	_consumed = YES;
 	[_condition unlock];
-	SXLogWrn(@"resp", @"%@: hết %.0f giây chờ AI (%@) — giữ câu trả lời gốc. Câu hỏi: “%@”",
+	SXLogWrn(@"resp", @"%@: hết %.0f giây chờ AI (%@) — giữ câu trả lời gốc. Câu hỏi: “%@”. "
+			 @"Gợi ý: tăng “Thời gian chờ AI” trong Cài đặt hoặc đổi model nhanh hơn.",
 			 source, timeout, className, SXShort(question, 80));
 	return NO;
 }
