@@ -19,6 +19,7 @@ SiriXPreferences_FILES = \
 	../Sources/SXTools.m \
 	../Sources/SXNetwork.m \
 	../Sources/SXConfigIO.m \
+	../Sources/SXProviders.m \
 	../Sources/SXMediaFormat.m \
 	../Sources/SXTTS.m \
 	SXProviderConfigController.m \

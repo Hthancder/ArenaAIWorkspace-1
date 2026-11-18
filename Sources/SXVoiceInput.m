@@ -35,7 +35,7 @@
 	[_lock lock];
 	if (_owner == owner && _tap && now - _started < 0.3) { [_lock unlock]; return; }
 	[self invalidateLocked];
-	if (prefs.enabled && prefs.sttEnabled && !prefs.localOnly && ![prefs.sttSource isEqual:@"off"] && !SXDefinitelyOffline()) {
+	if (prefs.enabled && prefs.sttEnabled && !prefs.localOnly && !SXSTTConfiguration(prefs.settings)[@"issue"] && !SXDefinitelyOffline()) {
 		_started = now; _startedAt = CFAbsoluteTimeGetCurrent();
 		_owner = owner; _prefs = prefs;
 		_tap = [[SXAudioTap alloc] initWithMaxSeconds:(NSUInteger)prefs.sttMaxSec];

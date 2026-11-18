@@ -11,28 +11,47 @@
 
 #pragma mark - Danh sách
 
+- (SXProvider)configuredProvider {
+	NSString *identifier = [self.specifier propertyForKey:@"sxProvider"];
+	return identifier ? SXProviderFromID(identifier) : [SXPrefs shared].provider;
+}
+- (void)viewDidLoad {
+	[super viewDidLoad];
+	self.title = [NSString stringWithFormat:@"Cấu hình %@", SXProviderName([self configuredProvider])];
+}
 - (NSArray *)specifiers {
 	if (!_specifiers) {
-		NSString *plistName = nil;
+		SXProvider provider = [self configuredProvider];
+		NSMutableDictionary *settings = [[SXPrefs shared].settings mutableCopy];
+		settings[@"provider"] = SXProviderID(provider);
+		NSMutableArray *loaded = nil;
 		@try {
-			plistName = [[self specifier] propertyForKey:@"configPlist"];
+			loaded = [self loadSpecifiersFromPlistName:@"ProviderConfig" target:self];
+			NSDictionary *keys = @{@"key": SXChatKey(provider, @"Key"), @"model": SXChatKey(provider, @"Model"),
+				@"fallback": SXChatKey(provider, @"FallbackModel"), @"base": @"customBase"};
+			for (PSSpecifier *specifier in loaded) {
+				NSString *field = [specifier propertyForKey:@"sxField"];
+				NSString *key = field ? keys[field] : nil;
+				if (key) [specifier setProperty:key forKey:@"key"];
+				if ([field isEqual:@"model"]) {
+					NSString *model = SXChatDefaultModel(provider);
+					[specifier setProperty:model.length ? model : @"Nhập mã mô hình" forKey:@"placeholder"];
+				}
+				if ([specifier.identifier isEqual:@"sx-provider-about"]) {
+					NSString *note = provider == SXProviderCustom ? @"Nhập địa chỉ HTTPS gốc của máy chủ tương thích /chat/completions và mô hình máy chủ hỗ trợ. Đổi địa chỉ sẽ xóa khóa cũ." :
+						[NSString stringWithFormat:@"SiriX dùng địa chỉ chính thức của %@. Chỉ cần nhập khóa API; có thể đổi mô hình nếu muốn.", SXProviderName(provider)];
+					[specifier setProperty:note forKey:@"footerText"];
+				}
+			}
 		} @catch (NSException *exception) {
-			SXLogErr(@"pref", @"đọc configPlist: %@", exception.name);
+			SXLogErr(@"pref", @"load ProviderConfig: %@", exception.name);
 		}
-		if (![plistName isKindOfClass:[NSString class]] || !plistName.length) {
-			plistName = @"ProviderOpenAI";
-		}
-		@try {
-			_specifiers = [self loadSpecifiersFromPlistName:plistName target:self];
-			SXLogInf(@"pref", @"trang cấu hình %@: %lu specifier",
-					 plistName, (unsigned long)_specifiers.count);
-		} @catch (NSException *exception) {
-			SXLogErr(@"pref", @"load %@ EXCEPTION: %@", plistName, exception.name);
+		if (!loaded) {
 			PSSpecifier *group = [PSSpecifier groupSpecifierWithName:@"SiriX"];
-			[group setProperty:@"Tải trang cấu hình thất bại — quay lại và xem log nhé."
-					   forKey:@"footerText"];
-			_specifiers = [NSMutableArray arrayWithObject:group];
+			[group setProperty:@"Không tải được trang cấu hình. Quay lại và xem log để kiểm tra." forKey:@"footerText"];
+			loaded = [NSMutableArray arrayWithObject:group];
 		}
+		_specifiers = [self sx_visibleSpecifiers:loaded settings:settings];
 	}
 	return _specifiers;
 }
@@ -49,11 +68,10 @@
 	if (prefs.localOnly) {
 		[self showAlert:@"SiriX đang không gửi mạng" message:@"Tắt chế độ Chỉ dùng Siri gốc để kiểm tra API." error:NO]; return;
 	}
-	NSString *plistName = [[self specifier] propertyForKey:@"configPlist"];
-	SXProvider provider = [plistName isEqual:@"ProviderGemini"] ? SXProviderGemini : SXProviderOpenAI;
-	NSString *key = provider == SXProviderGemini ? prefs.geminiKey : prefs.openaiKey;
-	if (!key.length) {
-		[self showAlert:@"Chưa có khóa API" message:@"Hãy dán khóa API trước khi kiểm tra." error:NO]; return;
+	SXProvider provider = [self configuredProvider];
+	NSString *issue = SXChatIssue(prefs.settings, provider);
+	if (issue) {
+		[self showAlert:@"Cấu hình chưa đủ" message:issue error:NO]; return;
 	}
 	SXRequest *probe = [[SXRequest alloc] initWithTimeout:12];
 	_probe = probe;
@@ -75,10 +93,10 @@
 					if (self.presentedViewController != progress) return;
 					[progress dismissViewControllerAnimated:YES completion:^{
 						if (error || !answer.length) {
-							NSString *message = [error.domain isEqual:NSURLErrorDomain] ? @"Kiểm tra kết nối mạng và địa chỉ API." : error.localizedDescription;
+							NSString *message = [error.domain isEqual:NSURLErrorDomain] ? (provider == SXProviderCustom ? @"Kiểm tra mạng và địa chỉ API đã nhập." : @"Kiểm tra mạng rồi thử lại.") : error.localizedDescription;
 							[self showAlert:@"⚠️ Không kết nối được" message:message error:YES];
 						} else {
-							NSString *message = [NSString stringWithFormat:@"%@ / %@ — %ld ms", info[@"provider"] ?: @"?", info[@"model"] ?: @"?", (long)[info[@"ms"] integerValue]];
+							NSString *message = [NSString stringWithFormat:@"%@ / %@ — %ld ms", SXProviderName(provider), info[@"model"] ?: @"?", (long)[info[@"ms"] integerValue]];
 							[self showAlert:@"✓ Hoạt động" message:message error:NO];
 						}
 					}];

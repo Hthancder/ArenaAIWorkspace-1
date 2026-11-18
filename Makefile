@@ -22,6 +22,7 @@ SiriX_FILES = \
 	Sources/SXDisplayPolicy.m \
 	Sources/SXNetwork.m \
 	Sources/SXConfigIO.m \
+	Sources/SXProviders.m \
 	Sources/SXAudio.m \
 	Sources/SXMediaFormat.m \
 	Sources/SXSTT.m \

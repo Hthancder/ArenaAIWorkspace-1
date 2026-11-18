@@ -26,6 +26,7 @@ FOUNDATION_EXPORT NSURLSessionConfiguration *SXEphemeralSession(void);
 FOUNDATION_EXPORT BOOL SXDefinitelyOffline(void);
 FOUNDATION_EXPORT NSURL * _Nullable SXHTTPSURL(NSString *text);
 FOUNDATION_EXPORT NSString *SXEndpoint(NSString *base, NSString *suffix);
+FOUNDATION_EXPORT NSString *const SXGeminiBaseURL;
 FOUNDATION_EXPORT NSString * _Nullable SXGeminiEndpoint(NSString *model, BOOL stream);
 FOUNDATION_EXPORT NSError *SXRequestError(SXRequest *request);
 /// Bounded, ephemeral HTTP; only call on a worker queue. Returns status/data.

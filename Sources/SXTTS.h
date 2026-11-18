@@ -9,7 +9,6 @@ NS_ASSUME_NONNULL_BEGIN
 FOUNDATION_EXPORT SXTTSPlan * _Nullable SXTTSPrepare(NSString *text, SXPrefs *prefs, SXRequest * _Nullable network);
 FOUNDATION_EXPORT SXTTSPlan * _Nullable SXTTSSystemPlan(NSString *text, SXPrefs *prefs);
 FOUNDATION_EXPORT NSArray<NSDictionary *> *SXTTSVoices(SXPrefs *prefs);
-FOUNDATION_EXPORT BOOL SXTTSModeAllows(NSString *mode, BOOL answer);
 /// Must run on main. Result: YES = selected output, NO = fallback/failed.
 FOUNDATION_EXPORT void SXTTSPlay(SXTTSPlan *plan, void (^ _Nullable result)(BOOL));
 FOUNDATION_EXPORT void SXTTSStop(void);

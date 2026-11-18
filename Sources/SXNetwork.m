@@ -100,6 +100,9 @@ static NSTimeInterval SXNow(void) { return NSProcessInfo.processInfo.systemUptim
 @end
 
 BOOL SXDefinitelyOffline(void) {
+#ifdef SX_TESTING
+	if (NSClassFromString(@"SXFixtureProtocol")) return NO;
+#endif
 	struct sockaddr_in address = {0};
 	address.sin_len = sizeof(address);
 	address.sin_family = AF_INET;
@@ -130,11 +133,12 @@ NSString *SXEndpoint(NSString *base, NSString *suffix) {
 	parts.path = path;
 	return parts.URL.absoluteString ?: @"";
 }
+NSString *const SXGeminiBaseURL = @"https://generativelanguage.googleapis.com/v1beta";
 NSString *SXGeminiEndpoint(NSString *model, BOOL stream) {
 	if ([model hasPrefix:@"models/"]) model = [model substringFromIndex:7];
 	NSCharacterSet *allowed = [NSCharacterSet characterSetWithCharactersInString:@"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_."];
 	if (!model.length || model.length > 128 || [model rangeOfCharacterFromSet:allowed.invertedSet].location != NSNotFound) return nil;
-	return [NSString stringWithFormat:@"https://generativelanguage.googleapis.com/v1beta/models/%@:%@", model,
+	return [NSString stringWithFormat:@"%@/models/%@:%@", SXGeminiBaseURL, model,
 		stream ? @"streamGenerateContent?alt=sse" : @"generateContent"];
 }
 NSError *SXRequestError(SXRequest *request) {

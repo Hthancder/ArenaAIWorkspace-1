@@ -61,8 +61,11 @@
 - (void)send {
 	NSString *question = [self.input.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
 	if (self.request || !question.length) return;
+	[[SXPrefs shared] reload];
 	SXPrefs *prefs = [[SXPrefs shared] snapshot];
 	if (prefs.localOnly) { [self append:@"SiriX đang không gửi yêu cầu mạng."]; return; }
+	NSString *issue = SXChatIssue(prefs.settings, prefs.provider);
+	if (issue) { [self append:issue]; return; }
 	SXRequest *request = [[SXRequest alloc] initWithTimeout:30 firstOutput:prefs.responseTimeout];
 	self.request = request;
 	self.sendButton.enabled = NO;

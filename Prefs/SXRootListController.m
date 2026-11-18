@@ -67,9 +67,16 @@ static void SXExceptionHandler(NSException *exception) {
 			loaded = [NSMutableArray arrayWithObject:group];
 		}
 
-		_specifiers = loaded;
-		SXLogInf(@"pref", @"bảng cài đặt sẵn sàng: %lu specifier",
-				 (unsigned long)loaded.count);
+		SXPrefs *prefs = [[SXPrefs shared] snapshot];
+		for (PSSpecifier *specifier in loaded) {
+			if ([specifier.identifier isEqual:@"sx-provider-config"]) {
+				specifier.name = [NSString stringWithFormat:@"Cấu hình %@", SXProviderName(prefs.provider)];
+				[specifier setProperty:SXProviderID(prefs.provider) forKey:@"sxProvider"];
+			}
+			if ([specifier.identifier isEqual:@"sx-history"] && prefs.incognito) specifier.name = @"Lịch sử (không lưu lượt mới)";
+		}
+		_specifiers = [self sx_visibleSpecifiers:loaded settings:prefs.settings];
+		SXLogInf(@"pref", @"bảng cài đặt sẵn sàng: %lu specifier", (unsigned long)_specifiers.count);
 	}
 	return _specifiers;
 }
@@ -93,8 +100,9 @@ static void SXExceptionHandler(NSException *exception) {
 	SXPrefs *prefs = [SXPrefs shared];
 	if (!prefs.enabled) return @"Đã tắt";
 	if (prefs.localOnly) return @"Chỉ dùng Siri gốc";
-	if (!prefs.activeAPIKey.length) return @"Chưa có khóa API";
-	return @"Sẵn sàng — trả lời bằng AI";
+	NSString *provider = SXProviderName(prefs.provider);
+	if (SXChatIssue(prefs.settings, prefs.provider)) return [NSString stringWithFormat:@"%@ · Chưa đủ cấu hình", provider];
+	return [NSString stringWithFormat:@"%@ · %@", provider, [prefs.triggerMode isEqual:@"prefix"] ? @"Chờ tiền tố @ai" : @"Sẵn sàng"];
 }
 
 #pragma mark - Vòng đời
@@ -116,8 +124,9 @@ static void SXExceptionHandler(NSException *exception) {
 							 dispatch_get_main_queue(), ^(int token) {
 		[[SXPrefs shared] reload];
 		SXRootListController *strongSelf = weakSelf;
-		if (strongSelf) {
+		if (strongSelf.viewIfLoaded.window && strongSelf.navigationController.topViewController == strongSelf) {
 			@try {
+				[strongSelf sx_refreshLayout];
 				[strongSelf reloadSpecifierID:@"sx-status" animated:NO];
 			} @catch (NSException *exception) {
 				SXLogErr(@"pref", @"reloadSpecifiers EXCEPTION: %@", exception.name);
@@ -127,11 +136,6 @@ static void SXExceptionHandler(NSException *exception) {
 	SXLogInf(@"pref", @"viewDidLoad — xong");
 }
 
-- (void)viewWillAppear:(BOOL)animated {
-	[super viewWillAppear:animated];
-	[self.table reloadData];
-	[self refreshSTTTrial];
-}
 - (void)viewWillDisappear:(BOOL)animated {
 	[super viewWillDisappear:animated];
 	[_voiceTest cancel]; _voiceTest = nil;
@@ -241,6 +245,7 @@ static void SXExceptionHandler(NSException *exception) {
 #pragma mark - Kiểm tra và media
 
 - (void)refreshSTTTrial {
+	if (![SXPrefs shared].sttEnabled) return;
 	__weak typeof(self) weakSelf = self;
 	dispatch_async([SXStore queue], ^{
 		NSDictionary *trial = [[SXStore shared] snapshot][@"sttTrial"];
@@ -252,7 +257,8 @@ static void SXExceptionHandler(NSException *exception) {
 		else if (status) text = @"Đã hết thời gian thử";
 		dispatch_async(dispatch_get_main_queue(), ^{
 			typeof(self) self = weakSelf; if (!self) return;
-			self->_trialStatus = text; [self reloadSpecifierID:@"sx-stt-trial" animated:NO];
+			self->_trialStatus = text;
+			if ([self specifierForID:@"sx-stt-trial"]) [self reloadSpecifierID:@"sx-stt-trial" animated:NO];
 		});
 	});
 }
@@ -260,11 +266,16 @@ static void SXExceptionHandler(NSException *exception) {
 	(void)sender;
 	[[SXPrefs shared] reload];
 	SXPrefs *prefs = [SXPrefs shared];
-	if (!prefs.enabled || !prefs.sttEnabled || prefs.localOnly || [prefs.sttSource isEqual:@"off"]) {
-		[self showAlert:@"Chưa bật nhận diện SiriX" message:@"Bật SiriX, bật nhận diện và chọn nguồn STT trước khi thử." error:NO]; return;
+	if (!prefs.enabled || !prefs.sttEnabled || prefs.localOnly) {
+		[self showAlert:@"Không thể thử STT" message:prefs.localOnly ? @"Tắt Chỉ dùng Siri gốc để cho phép gửi âm thanh." : @"Bật SiriX và nhận diện giọng nói trước khi thử." error:NO]; return;
+	}
+	NSDictionary *config = SXSTTConfiguration(prefs.settings);
+	if (config[@"issue"]) {
+		[self showAlert:@"Nguồn STT chưa sẵn sàng" message:config[@"issue"] error:NO]; return;
 	}
 	NSString *hint = [prefs.triggerMode isEqual:@"prefix"] ? @"Apple phải nhận được tiền tố @ai thì SiriX mới gửi âm thanh. " : @"";
-	NSString *message = [hint stringByAppendingString:@"Trong 60 giây, mở Siri bằng giọng nói và nói một câu thử không chứa thông tin riêng tư. Âm thanh được gửi đến nguồn STT đang chọn. Quay lại đây để xem trạng thái; không cần cấp mic cho Cài đặt."];
+	NSString *message = [NSString stringWithFormat:@"%@Trong 60 giây, mở Siri và nói một câu thử không chứa thông tin riêng tư. Âm thanh sẽ gửi đến %@. Quay lại đây để xem kết quả; không cần cấp mic cho Cài đặt.",
+		hint, SXProviderName(SXProviderFromID(config[@"source"]))];
 	UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Thử STT trên Siri" message:message preferredStyle:UIAlertControllerStyleAlert];
 	__weak typeof(self) weakSelf = self;
 	[alert addAction:[UIAlertAction actionWithTitle:@"Bắt đầu" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
@@ -282,12 +293,17 @@ static void SXExceptionHandler(NSException *exception) {
 }
 - (void)sx_testVoice:(id)sender {
 	(void)sender;
-	[_voiceTest cancel];
+	[_voiceTest cancel]; _voiceTest = nil;
 	[[SXPrefs shared] reload];
 	SXPrefs *prefs = [[SXPrefs shared] snapshot];
+	if ([prefs.ttsMode isEqual:@"off"]) return;
+	SXTTSStop();
+	NSString *fallbackNote = SXTTSConfiguration(prefs.settings)[@"issue"];
+	if (prefs.localOnly && ![prefs.ttsSource isEqual:@"system"]) fallbackNote = @"Chỉ dùng Siri gốc đang chặn kết nối tới nguồn trực tuyến.";
 	SXRequest *request = [[SXRequest alloc] initWithTimeout:2];
 	_voiceTest = request;
-	NSString *text = [prefs.ttsLang isEqual:@"en"] ? @"Hello, this is SiriX." : @"Xin chào, đây là SiriX.";
+	BOOL english = SXConfigShowsRule(@"tts-picker", prefs.settings) && [prefs.ttsLang isEqual:@"en"];
+	NSString *text = english ? @"Hello, this is SiriX." : @"Xin chào, đây là SiriX.";
 	__weak typeof(self) weakSelf = self;
 	dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
 		SXTTSPlan *selected = SXTTSPrepare(text, prefs, request);
@@ -296,8 +312,9 @@ static void SXExceptionHandler(NSException *exception) {
 			typeof(self) self = weakSelf;
 			if (!self || self->_voiceTest != request || !self.view.window) return;
 			self->_voiceTest = nil;
+			if (![prefs.settings isEqual:[SXPrefs shared].settings]) return;
 			if (plan) SXTTSPlay(plan, nil);
-			if (!selected) [self showAlert:@"Đang thử giọng hệ thống" message:@"Nguồn đã chọn không khả dụng hoặc bị tắt mạng." error:NO];
+			if (!selected) [self showAlert:@"Đang thử giọng hệ thống" message:fallbackNote ?: @"Không phát được từ nguồn đã chọn trong thời gian chờ." error:NO];
 		});
 	});
 }
@@ -311,10 +328,12 @@ static void SXExceptionHandler(NSException *exception) {
 	__weak typeof(self) weakSelf = self;
 	dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
 		BOOL offline = SXDefinitelyOffline();
-		NSString *mic = prefs.sttEnabled ? @"Đã bật STT; dùng Thử STT để kiểm tra mic trong Siri." : @"STT đang tắt.";
-		BOOL validURL = prefs.provider == SXProviderGemini || SXHTTPSURL(prefs.openaiBase) != nil;
-		NSString *endpoint = !validURL ? @"URL HTTPS không hợp lệ." : @"Chưa thử kết nối.";
-		if (!offline && validURL && prefs.activeAPIKey.length && !prefs.localOnly) {
+		NSString *sttIssue = SXSTTConfiguration(prefs.settings)[@"issue"];
+		NSString *mic = !prefs.sttEnabled ? @"STT đang tắt." :
+			((prefs.localOnly || !prefs.enabled) ? @"STT chưa chạy khi SiriX tắt hoặc chỉ dùng Siri gốc." : (sttIssue ?: @"Đã cấu hình; dùng Thử STT để kiểm tra mic trong Siri."));
+		NSString *chatIssue = SXChatIssue(prefs.settings, prefs.provider);
+		NSString *endpoint = chatIssue ?: @"Chưa thử kết nối.";
+		if (!offline && !chatIssue && !prefs.localOnly) {
 			__block NSString *result;
 			[SXLLM performQuestion:@"Reply with OK." history:@[] tools:@[] executor:nil prefs:prefs provider:prefs.provider model:nil
 				prompt:@"Connection check." maxTokens:64 request:request progress:nil completion:^(NSString *answer, NSError *error, NSDictionary *info) {
@@ -322,8 +341,8 @@ static void SXExceptionHandler(NSException *exception) {
 				}];
 			endpoint = result ?: endpoint;
 		}
-		NSString *message = [NSString stringWithFormat:@"Mạng: %@\nMic: %@\nKhóa: %@\nEndpoint: %@",
-			prefs.localOnly ? @"Không gửi mạng (cài đặt)" : (offline ? @"Không có kết nối" : @"Có tuyến kết nối"), mic, prefs.activeAPIKey.length ? @"Đã cấu hình" : @"Chưa đặt", endpoint];
+		NSString *message = [NSString stringWithFormat:@"Nhà cung cấp: %@\nMạng: %@\nMic: %@\nAPI: %@",
+			SXProviderName(prefs.provider), prefs.localOnly ? @"Không gửi mạng (cài đặt)" : (offline ? @"Không có kết nối" : @"Có tuyến kết nối"), mic, endpoint];
 		dispatch_async(dispatch_get_main_queue(), ^{
 			typeof(self) self = weakSelf; if (!self || self->_diagnostics != request) return;
 			self->_diagnostics = nil; [self showAlert:@"Kiểm tra nhanh" message:message error:NO];
@@ -346,7 +365,10 @@ static void SXExceptionHandler(NSException *exception) {
 }
 - (void)sx_checkUpdate:(id)sender {
 	(void)sender;
-	if (_updateCheck || [SXPrefs shared].localOnly) return;
+	if (_updateCheck) return;
+	if ([SXPrefs shared].localOnly) {
+		[self showAlert:@"Không thể kiểm tra cập nhật" message:@"Chỉ dùng Siri gốc đang chặn kết nối mạng của SiriX." error:NO]; return;
+	}
 	SXRequest *request = [[SXRequest alloc] initWithTimeout:5]; _updateCheck = request;
 	__weak typeof(self) weakSelf = self;
 	dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
@@ -368,8 +390,10 @@ static void SXExceptionHandler(NSException *exception) {
 			if (tag) {
 				NSString *version = [tag hasPrefix:@"v"] ? [tag substringFromIndex:1] : tag;
 				self->_latestVersion = [version compare:SX_VERSION options:NSNumericSearch] == NSOrderedDescending ? [version stringByAppendingString:@" — có bản mới"] : version;
-				[self reloadSpecifierID:@"sx-latest" animated:YES];
+			} else {
+				self->_latestVersion = [response[@"status"] integerValue] == 404 ? @"Chưa có bản ổn định" : @"Không kiểm tra được";
 			}
+			[self reloadSpecifierID:@"sx-latest" animated:YES];
 		});
 	});
 }

@@ -92,7 +92,7 @@
 }
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
 	(void)tableView;
-	if (section == 0) return @"Không ghi thêm câu hỏi, tắt công cụ và báo đáp án trễ. Câu hỏi vẫn đi tới nhà cung cấp AI; dữ liệu cũ không tự bị xóa.";
+	if (section == 0) return @"Không ghi lượt mới, không chạy công cụ hay báo đáp án đến muộn. Giọng đọc dùng hệ thống; câu hỏi vẫn gửi đến nhà cung cấp AI.";
 	return self.items.count ? @"Chọn một mục để xem, sao chép hoặc xóa. Lịch sử được lưu trên thiết bị." : @"Chưa có câu trả lời AI được lưu.";
 }
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {

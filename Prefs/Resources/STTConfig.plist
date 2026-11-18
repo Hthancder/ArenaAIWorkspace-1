@@ -11,8 +11,12 @@
 			<string>PSGroupCell</string>
 			<key>label</key>
 			<string>Nguồn STT</string>
+			<key>id</key>
+			<string>sx-stt-about</string>
 			<key>footerText</key>
-			<string>Địa chỉ HTTPS cho nguồn Tự chỉnh. Bỏ trống khóa để dùng lại khóa AI nếu cùng nhà cung cấp; đổi nguồn thì nhập lại khóa dành cho nguồn mới.</string>
+			<string>Dùng nguồn nhận diện đang chọn.</string>
+			<key>sxRule</key>
+			<string>stt</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -21,18 +25,22 @@
 			<string>Địa chỉ API gốc</string>
 			<key>key</key>
 			<string>sttBaseUrl</string>
-			<key>defaults</key>
-			<string>com.sirix.tweak</string>
 			<key>default</key>
 			<string></string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
 			<key>PostNotification</key>
 			<string>com.sirix.tweak/prefs.changed</string>
 			<key>placeholder</key>
 			<string>https://…/v1</string>
 			<key>noAutoCorrect</key>
 			<true/>
+			<key>sxRule</key>
+			<string>stt-custom</string>
 			<key>isURL</key>
 			<true/>
+			<key>id</key>
+			<string>sx-stt-base</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -40,37 +48,49 @@
 			<key>label</key>
 			<string>Khóa API STT</string>
 			<key>key</key>
-			<string>sttApiKey</string>
-			<key>defaults</key>
-			<string>com.sirix.tweak</string>
+			<string>sx-key</string>
+			<key>sxField</key>
+			<string>key</string>
 			<key>default</key>
 			<string></string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
 			<key>PostNotification</key>
 			<string>com.sirix.tweak/prefs.changed</string>
 			<key>placeholder</key>
-			<string>Không bắt buộc</string>
+			<string>Theo nguồn đã chọn</string>
 			<key>noAutoCorrect</key>
 			<true/>
+			<key>sxRule</key>
+			<string>stt-key</string>
 			<key>isSecure</key>
 			<true/>
+			<key>id</key>
+			<string>sx-stt-key</string>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSEditTextCell</string>
 			<key>label</key>
-			<string>Mô hình</string>
+			<string>Mô hình STT</string>
 			<key>key</key>
-			<string>sttModel</string>
-			<key>defaults</key>
-			<string>com.sirix.tweak</string>
+			<string>sx-model</string>
+			<key>sxField</key>
+			<string>model</string>
 			<key>default</key>
 			<string></string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
 			<key>PostNotification</key>
 			<string>com.sirix.tweak/prefs.changed</string>
 			<key>placeholder</key>
-			<string>Theo nguồn</string>
+			<string></string>
 			<key>noAutoCorrect</key>
 			<true/>
+			<key>sxRule</key>
+			<string>stt-model</string>
+			<key>id</key>
+			<string>sx-stt-model</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -78,7 +98,9 @@
 			<key>label</key>
 			<string>Nhận diện</string>
 			<key>footerText</key>
-			<string>Ngôn ngữ để auto hoặc mã hai chữ cái (vi, en). Siri nhận diện thay nếu STT mất quá nhiều thời gian.</string>
+			<string>Bỏ trống ngôn ngữ để tự nhận diện, hoặc nhập mã hai chữ cái (vi, en). Nếu STT chậm, dùng kết quả của Apple.</string>
+			<key>sxRule</key>
+			<string>stt</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -97,6 +119,8 @@
 			<string>auto, vi, en</string>
 			<key>noAutoCorrect</key>
 			<true/>
+			<key>sxRule</key>
+			<string>stt-language</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -115,6 +139,8 @@
 			<string></string>
 			<key>noAutoCorrect</key>
 			<true/>
+			<key>sxRule</key>
+			<string>stt</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -135,6 +161,8 @@
 			<integer>30</integer>
 			<key>showValue</key>
 			<true/>
+			<key>sxRule</key>
+			<string>stt</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -155,6 +183,8 @@
 			<integer>2500</integer>
 			<key>showValue</key>
 			<true/>
+			<key>sxRule</key>
+			<string>stt</string>
 		</dict>
 	</array>
 </dict>

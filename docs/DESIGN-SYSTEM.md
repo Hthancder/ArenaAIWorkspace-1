@@ -134,6 +134,7 @@ hoặc gõ        (sttLanguage)      (sttTranslate)         ngôn ngữ câu h�
 8. **Chỉ 3 Darwin notify**: `prefs.changed` (mọi thay đổi), `resetHistory`, `respring` — không thêm kênh mới.
 9. **Log category** cố định (§8) — module nào chỉ được ghi category của nó.
 10. **Bubble/Thông báo**: emoji đầu dòng **một trong** `⏳ ⚠️ ✓` (không dùng emoji khác trong chuỗi hiển thị).
+11. **Cấu hình theo nguồn**: preset dùng địa chỉ cố định; chỉ **Tự chỉnh** có trường URL. Chỉ hiện trường được dùng, giữ hồ sơ riêng khi chuyển nguồn, và xóa khóa cũ khi đổi địa chỉ của hồ sơ tự chỉnh. Thử và chạy thật dùng cùng cấu hình hiệu lực.
 
 ---
 
@@ -152,26 +153,25 @@ SiriX (Root — header icon + tên + phụ đề)
 │   └─ PSLinkList    Cách kích hoạt ★       [Tự động ⭐ | Tiền tố "@ai"]
 │
 ├─ [Nhóm] Nhà cung cấp
-│   ├─ PSLinkList    Nhà cung cấp            [OpenAI tương thích ⭐ | Google Gemini]
-│   ├─ PSLinkCell    Cấu hình OpenAI        → subpage ① (key/base/model/Model dự phòng★/Kiểm tra kết nối)
-│   └─ PSLinkCell    Cấu hình Gemini        → subpage ② (key/model/Model dự phòng★/Kiểm tra kết nối)
+│   ├─ PSLinkList    Nhà cung cấp            [OpenAI ⭐ | Groq | Google Gemini | Tự chỉnh]
+│   └─ PSLinkCell    Cấu hình <nhà đã chọn>  → khóa/mô hình/dự phòng/kiểm tra; URL chỉ cho Tự chỉnh
 │
 ├─ [Nhóm] Nhận diện giọng nói (STT) ★v1.2
 │   ├─ PSSwitch      Thay nhận diện của Siri   (mặc định OFF — đã chốt)
 │   ├─ PSLinkList    Nguồn STT                [Theo cấu hình AI ⭐ | Groq | OpenAI | Gemini | Tự chỉnh]
 │   ├─ PSLinkList    Chế độ dịch              [Tắt ⭐ | Tiếng Việt | Tiếng Anh]
 │   ├─ PSButton      Thử STT                  (SpringBoard ghi 3s → notification + log)
-│   └─ PSLinkCell    Cấu hình STT             (base/key/model/ngôn ngữ/prompt/thời gian chờ)
+│   └─ PSLinkCell    Cấu hình STT             (ẩn nếu STT tắt; URL riêng chỉ cho Tự chỉnh, tự động dùng khóa AI)
 │
 ├─ [Nhóm] Giọng đọc (TTS) ★v1.2
 │   ├─ PSLinkList    Khi nào đọc              [Tắt | Lỗi | Trả lời AI ⭐ | Mọi câu]
-│   ├─ PSLinkList    Nguồn TTS                [Hệ thống ⭐ | Edge | Google | Gemini | Tự chỉnh]
+│   ├─ PSLinkList    Nguồn TTS                [Hệ thống ⭐ | Google Cloud | Gemini | Tự chỉnh] (chỉ đọc lỗi dùng hệ thống)
 │   ├─ PSLinkList    Ngôn ngữ đọc             [Tự động ⭐ | Tiếng Việt | Tiếng Anh]
 │   ├─ PSLinkList    Giọng nói                (lọc theo nguồn×ngôn ngữ; Hệ thống đọc giọng thật)
 │   ├─ PSSlider      Tốc độ đọc               0.5–2.0
 │   ├─ PSSlider      Âm lượng                  0–100
 │   ├─ PSButton      Thử giọng
-│   └─ PSLinkCell    Cấu hình TTS              (custom endpoint/key — nguồn Tự chỉnh)
+│   └─ PSLinkCell    Cấu hình TTS              (chỉ nguồn trực tuyến; URL và nhập mã giọng chỉ cho Tự chỉnh)
 │
 ├─ [Nhóm] Trả lời
 │   ├─ PSSlider      Nhiệt độ                  0–2 (bước 0.1)
@@ -181,7 +181,6 @@ SiriX (Root — header icon + tên + phụ đề)
 │   ├─ PSSwitch      Trả lời theo streaming
 │   ├─ PSSwitch      Hiển thị Markdown đẹp
 │   ├─ PSSwitch      Ẩn thẻ kết quả tìm kiếm
-│   ├─ PSLinkList    Báo lỗi bằng giọng nói ★(hợp nhất)  [Tắt | Chỉ lỗi | Mọi lỗi]  ← thay switch speakErrors ở v1.2 (§9)
 │   └─ PSSwitch      Hiện câu trả lời Siri gốc ★
 │
 ├─ [Nhóm] Prompt
@@ -263,7 +262,7 @@ SiriX (Root — header icon + tên + phụ đề)
 | Từ | Đến | Quy tắc |
 |---|---|---|
 | v1.0/v1.1 `speakErrors` | v1.2 `ttsMode` | `speakErrors=YES` & chưa từng set `ttsMode` → `ttsMode=all`; mặc định cũ NO → `ttsMode=ai` giữ nguyên không ghi đè cấu hình đã chọn |
-| Row `provider`-filter trên Root (v1.0–1.1) | Subpage riêng (v1.1 IA) | code bỏ nhánh filter `propertyForKey:@"provider"`; key `provider` vẫn đọc để chọn trang cấu hình nào hiển thị trạng thái |
+| Hồ sơ `openai` tương thích cũ có `openaiBase` | Hồ sơ OpenAI/Groq/Tự chỉnh riêng | Nhận URL chuẩn theo host, cổng và đường dẫn; proxy giữ URL và khóa trong Tự chỉnh. URL lỗi không chuyển khóa sang endpoint mặc định. Tệp JSON v1 dùng cùng quy tắc di trú. |
 | `timeout` đã lưu (6/15s…) | giữ nguyên | slider 2–30s chỉ là biên mới — **không** ép lại default 10 |
 | `customPrompt` | như cũ | effective = custom ? custom : default (không đổi) |
 | Root.plist 35 → ~N specifier | code `specifiers` chỉ còn @try load + fallback | log in tỉ lệ `N/N` |

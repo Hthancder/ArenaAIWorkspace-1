@@ -1,7 +1,7 @@
 # SiriX ⚡
 
 **Trợ lý AI trả lời ngay trong giao diện Siri gốc** — hỗ trợ iOS 15, cả **rootless** lẫn **roothide**.
-Nhà cung cấp: **OpenAI tương thích** (mặc định) hoặc **Google Gemini**. Toàn bộ giao diện cài đặt bằng **Tiếng Việt**.
+Chọn **OpenAI** (mặc định), **Groq**, **Google Gemini** hoặc **Tự chỉnh** (API tương thích OpenAI). Toàn bộ giao diện cài đặt bằng **Tiếng Việt**.
 
 > SiriX lắng nghe câu hỏi của bạn qua Siri, gửi sang AI, rồi **thay câu trả lời ngay tại chỗ** — Siri vẫn phát giọng nói, hiển thị giao diện y như gốc. Các tác vụ hệ thống (báo thức, mở app, gọi điện…) vẫn do Siri gốc đảm nhiệm nên luôn ổn định.
 
@@ -10,7 +10,7 @@ Nhà cung cấp: **OpenAI tương thích** (mặc định) hoặc **Google Gemin
 ## Tính năng
 
 - **Trả lời bằng AI trong UI Siri gốc** — không cửa sổ phụ, không sao chép tay.
-- **2 nhà cung cấp**: OpenAI tương thích (tự đổi địa chỉ API qua HTTPS — dùng endpoint `/v1/chat/completions`) và Gemini.
+- **Cấu hình theo nhà cung cấp**: OpenAI, Groq và Gemini dùng địa chỉ chính thức. Chỉ **Tự chỉnh** có ô địa chỉ HTTPS (API `/chat/completions`).
 - **2 chế độ trả lời**
   - *Thông minh (mặc định)*: AI trả lời câu hỏi tri thức; tác vụ hệ thống để Siri gốc xử lý.
   - *Thay thế mọi câu trả lời*: AI thay toàn bộ phản hồi của Siri.
@@ -27,7 +27,7 @@ Nhà cung cấp: **OpenAI tương thích** (mặc định) hoặc **Google Gemin
 
 - iOS **15.0 – 16.x** (thiết kế & thử nghiệm chính trên 15; 16 là mức hỗ trợ thêm)
 - Jailbreak **rootless** (Dopamine…) hoặc **roothide**, có **PreferenceLoader**
-- Một khóa API của OpenAI tương thích hoặc Gemini
+- Một khóa API cho nhà cung cấp AI bạn chọn
 
 ## Cài đặt
 
@@ -40,9 +40,11 @@ Mỗi lần push code, CI tự build lại cả 2 gói.
 ## Cấu hình nhanh
 
 1. **Cài đặt → SiriX**
-2. *Nhà cung cấp & API*: chọn nhà cung cấp → dán **Khóa API** (mặc định dùng `gpt-4o-mini`; Gemini mặc định `gemini-2.0-flash`).
-3. Trong **Cấu hình OpenAI** hoặc **Cấu hình Gemini**, bấm **Kiểm tra kết nối** — thấy “✓ Hoạt động” là xong.
+2. Chọn **Nhà cung cấp** rồi mở trang **Cấu hình** xuất hiện ngay bên dưới. Với OpenAI, Groq hoặc Gemini, dán khóa API của nhà đó; có thể để mô hình mặc định hoặc nhập mô hình khác.
+3. Nếu chọn **Tự chỉnh** (ví dụ OpenRouter hoặc proxy riêng), nhập địa chỉ HTTPS gốc và mã mô hình máy chủ hỗ trợ. Bấm **Kiểm tra kết nối** ngay trên trang vừa cấu hình.
 4. Bật **Bật SiriX** rồi thử: *“Hey Siri, …”* hoặc Type-to-Siri.
+
+Khóa, mô hình và giọng được lưu riêng theo nguồn. Khi đổi địa chỉ **Tự chỉnh**, SiriX xóa khóa gắn với địa chỉ cũ. Cấu hình OpenAI tương thích cũ được chuyển theo địa chỉ đã dùng (OpenAI, Groq hoặc Tự chỉnh); vẫn nhập được tệp JSON v1 và bản xuất mới che mọi khóa mặc định.
 
 ## Gửi log gỡ lỗi (quan trọng ⭐)
 
@@ -62,7 +64,7 @@ Siri nghe câu hỏi ──► AFConversation.addItemForSpeechRecognizedCommand:
                       AFConnection.startRequestWithText:                   (Type-to-Siri)
         │
         ▼
-   SXIntercept ──► SXLLM (OpenAI/Gemini, có công cụ) ──► đáp án sẵn sàng
+   SXIntercept ──► SXLLM (nhà cung cấp đang chọn, có công cụ) ──► đáp án sẵn sàng
         │
 Siri gốc trả lời ──► AFConnection._handleCommand:reply:                    (lệnh ACE đến)
         │               ├─ là tác vụ hệ thống  → cho qua, Siri gốc xử lý
@@ -91,7 +93,7 @@ git -C /tmp/sdks sparse-checkout set iPhoneOS15.6.sdk
 ./scripts/test-log-file.sh  # regression xóa/xoay vòng log (Linux/macOS)
 ```
 
-Trên macOS, `./scripts/test-intercept-macos.sh` chạy regression với ACE/LLM giả, `./scripts/test-store-macos.sh` kiểm tra kho dữ liệu, và `./scripts/test-v12-macos.sh` dùng fixture cho xuất/nhập, audio format, hủy mạng và SSE. CI chạy các bộ test này; chúng không thay thế việc thử Siri trên thiết bị thật.
+Trên macOS, `./scripts/test-intercept-macos.sh` chạy regression với ACE/LLM giả, `./scripts/test-store-macos.sh` kiểm tra kho dữ liệu, và `./scripts/test-v12-macos.sh` dùng fixture cho di trú/xuất nhập, hiện/ẩn mục theo nguồn, địa chỉ/khóa thực sự dùng trong request, audio format và SSE. CI chạy các bộ test này; chúng không thay thế việc thử Siri trên thiết bị thật.
 
 Build deb thật (cần macOS/theos): `make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless|roothide`.
 

@@ -358,6 +358,6 @@ static BOOL SXCanHook(NSString *className, Class cls, NSString *selectorName) {
 		SXLogInf(@"boot", @"SiriX %@ sẵn sàng (scheme=%s) — chế độ=%@ provider=%@",
 				 SX_VERSION, SX_SCHEME,
 				 [SXPrefs shared].mode == SXReplyModeFull ? @"thay thế tất cả" : @"thông minh",
-				 [SXPrefs shared].provider == SXProviderGemini ? @"gemini" : @"openai");
+				 SXProviderID([SXPrefs shared].provider));
 	}
 }

@@ -1,11 +1,6 @@
-#import <Foundation/Foundation.h>
+#import "SXProviders.h"
 
 NS_ASSUME_NONNULL_BEGIN
-
-typedef NS_ENUM(NSInteger, SXProvider) {
-	SXProviderOpenAI = 0,
-	SXProviderGemini,
-};
 
 typedef NS_ENUM(NSInteger, SXReplyMode) {
 	SXReplyModeSmart = 0, // AI trả lời câu hỏi tri thức, tác vụ hệ thống để Siri gốc
@@ -32,11 +27,6 @@ FOUNDATION_EXPORT NSString *SXDefaultSystemPrompt(void);
 @property (nonatomic, readonly) SXReplyMode mode;
 @property (nonatomic, readonly) SXProvider provider;
 @property (nonatomic, readonly, copy) NSString *triggerMode; // auto | prefix
-@property (nonatomic, readonly, copy) NSString *openaiKey;
-@property (nonatomic, readonly, copy) NSString *openaiBase;
-@property (nonatomic, readonly, copy) NSString *openaiModel;
-@property (nonatomic, readonly, copy) NSString *geminiKey;
-@property (nonatomic, readonly, copy) NSString *geminiModel;
 @property (nonatomic, readonly) double temperature;      // 0–2, làm tròn 0.1
 @property (nonatomic, readonly) NSInteger contextTurns;  // 2–40 cặp Q/A giữ lại
 @property (nonatomic, readonly) NSTimeInterval responseTimeout; // 2–30 giây (ngân sách AI từ lúc hỏi)
@@ -58,15 +48,13 @@ FOUNDATION_EXPORT NSString *SXDefaultSystemPrompt(void);
 @property (nonatomic, readonly) BOOL deferredReplies;
 @property (nonatomic, readonly) BOOL liveSiriUpdates;
 @property (nonatomic, readonly) BOOL sttEnabled;
-@property (nonatomic, readonly, copy) NSString *sttSource, *sttBaseUrl, *sttApiKey, *sttModel, *sttLanguage, *sttTranslate, *sttPrompt;
+@property (nonatomic, readonly, copy) NSString *sttLanguage, *sttTranslate, *sttPrompt;
 @property (nonatomic, readonly) NSInteger sttMaxSec, sttWaitMs;
-@property (nonatomic, readonly, copy) NSString *ttsMode, *ttsSource, *ttsLang, *ttsVoice, *ttsBaseUrl, *ttsApiKey, *ttsModel;
+@property (nonatomic, readonly, copy) NSString *ttsMode, *ttsSource, *ttsLang; // ttsSource is effective; private / errors-only use system
 @property (nonatomic, readonly) double ttsSpeed, ttsVolume;
 
 - (NSString *)fallbackModelForProvider:(SXProvider)provider;
-- (nullable NSString *)activeAPIKey;
 - (NSString *)activeModel;
-- (NSString *)activeBaseURL;
 - (NSString *)systemPrompt;
 
 @end

@@ -11,11 +11,8 @@
 @implementation SXTTSPlan
 @end
 
-BOOL SXTTSModeAllows(NSString *mode, BOOL answer) {
-	return [mode isEqualToString:@"all"] || [mode isEqualToString:(answer ? @"ai" : @"errors")];
-}
 static NSString *SXTTSLanguage(NSString *text, SXPrefs *prefs) {
-	NSString *language = prefs.ttsLang;
+	NSString *language = [prefs.ttsSource isEqual:@"custom"] ? @"auto" : prefs.ttsLang;
 	if ([language isEqual:@"auto"] || !language.length) {
 		NSString *fallback = [NSLocale.currentLocale.languageCode isEqual:@"en"] ? @"en" : @"vi";
 		language = SXDetectedLanguage(text, fallback);
@@ -27,7 +24,7 @@ SXTTSPlan *SXTTSSystemPlan(NSString *text, SXPrefs *prefs) {
 	SXTTSPlan *plan = [SXTTSPlan new];
 	plan.text = text;
 	plan.language = SXTTSLanguage(text, prefs);
-	plan.voice = [prefs.ttsSource isEqual:@"system"] ? prefs.ttsVoice : @"";
+	plan.voice = prefs.settings[@"ttsSystemVoice"] ?: @"";
 	plan.speed = prefs.ttsSpeed;
 	plan.volume = prefs.ttsVolume / 100.f;
 	return plan;
@@ -41,7 +38,9 @@ NSArray<NSDictionary *> *SXTTSVoices(SXPrefs *prefs) {
 	if ([prefs.ttsSource isEqual:@"system"]) {
 		NSMutableArray *result = [NSMutableArray array];
 		for (AVSpeechSynthesisVoice *voice in AVSpeechSynthesisVoice.speechVoices) {
-			if (![prefs.ttsLang isEqual:@"auto"] && ![voice.language hasPrefix:[prefs.ttsLang stringByAppendingString:@"-"]]) continue;
+			NSString *language = [voice.language componentsSeparatedByString:@"-"].firstObject;
+			if (![language isEqual:@"vi"] && ![language isEqual:@"en"]) continue;
+			if (![prefs.ttsLang isEqual:@"auto"] && ![language isEqual:prefs.ttsLang]) continue;
 			[result addObject:@{@"id": voice.identifier, @"name": [NSString stringWithFormat:@"%@ · %@", voice.name, voice.language]}];
 		}
 		return [result sortedArrayUsingDescriptors:@[[NSSortDescriptor sortDescriptorWithKey:@"name" ascending:YES selector:@selector(localizedCaseInsensitiveCompare:)]]];
@@ -55,7 +54,7 @@ NSArray<NSDictionary *> *SXTTSVoices(SXPrefs *prefs) {
 		}
 		return SXVoiceItems(ids);
 	}
-	return SXVoiceItems(@[@"alloy", @"ash", @"coral", @"echo", @"fable", @"nova", @"onyx", @"sage", @"shimmer"]);
+	return @[]; // Custom endpoints accept a free-form voice ID in their own pane.
 }
 static NSData *SXTTSFetch(NSString *url, NSDictionary *body, NSDictionary *headers, SXRequest *budget) {
 	NSMutableURLRequest *post = SXJSONRequest(url, body, headers);
@@ -99,29 +98,31 @@ static NSData *SXGeminiAudio(NSData *data) {
 	return SXPCM16WAV(pcm, (uint32_t)rate);
 }
 SXTTSPlan *SXTTSPrepare(NSString *text, SXPrefs *prefs, SXRequest *request) {
+	NSString *source = prefs.ttsSource;
+	if ([source isEqual:@"off"]) return nil;
 	SXTTSPlan *plan = SXTTSSystemPlan(text, prefs);
-	if (!plan || [prefs.ttsSource isEqual:@"system"]) return plan;
-	if (!request || request.remaining <= 0 || prefs.localOnly || prefs.incognito || SXDefinitelyOffline()) return nil;
+	if (!plan || [source isEqual:@"system"]) return plan;
+	if (!request || request.remaining <= 0 || prefs.localOnly || SXDefinitelyOffline()) return nil;
+	NSDictionary *config = SXTTSConfiguration(prefs.settings);
+	if (config[@"issue"]) return nil;
 	NSData *audio = nil;
-	NSString *voice = prefs.ttsVoice;
-	if ([prefs.ttsSource isEqual:@"gemini"]) {
-		NSString *key = prefs.ttsApiKey.length ? prefs.ttsApiKey : prefs.geminiKey;
-		NSString *url = SXGeminiEndpoint(prefs.ttsModel.length ? prefs.ttsModel : @"gemini-2.5-flash-preview-tts", NO);
-		if (!url || !key.length) return nil;
+	NSString *voice = config[@"voice"], *key = config[@"key"];
+	if ([source isEqual:@"gemini"]) {
+		NSString *url = SXGeminiEndpoint(config[@"model"], NO);
+		if (!url) return nil;
 		NSDictionary *generation = @{@"responseModalities": @[@"AUDIO"], @"speechConfig": @{@"voiceConfig":
 			@{@"prebuiltVoiceConfig": @{@"voiceName": voice.length ? voice : @"Kore"}}}};
 		NSString *instruction = [NSString stringWithFormat:@"Read aloud verbatim in %@. Only say the text after the next newline.\n%@", plan.language, text];
 		audio = SXGeminiAudio(SXTTSFetch(url, @{@"contents": @[@{@"parts": @[@{@"text": instruction}]}], @"generationConfig": generation}, @{@"x-goog-api-key": key}, request));
-	} else if ([prefs.ttsSource isEqual:@"google"]) {
-		if (!prefs.ttsApiKey.length) return nil;
+	} else if ([source isEqual:@"google"]) {
 		if (![voice hasPrefix:plan.language]) voice = [plan.language stringByAppendingString:@"-Standard-A"];
-		audio = SXDecodeAudio(SXAudioJSON(SXTTSFetch(@"https://texttospeech.googleapis.com/v1/text:synthesize",
+		audio = SXDecodeAudio(SXAudioJSON(SXTTSFetch(config[@"base"],
 			@{@"input": @{@"text": text}, @"voice": @{@"languageCode": plan.language, @"name": voice},
-				@"audioConfig": @{@"audioEncoding": @"MP3"}}, @{@"x-goog-api-key": prefs.ttsApiKey}, request))[@"audioContent"]);
-	} else if ([prefs.ttsSource isEqual:@"custom"]) {
-		NSString *url = SXEndpoint(prefs.ttsBaseUrl, @"/audio/speech");
-		NSDictionary *headers = prefs.ttsApiKey.length ? @{@"Authorization": [@"Bearer " stringByAppendingString:prefs.ttsApiKey]} : @{};
-		audio = SXTTSFetch(url, @{@"model": prefs.ttsModel.length ? prefs.ttsModel : @"tts-1", @"voice": voice.length ? voice : @"alloy",
+				@"audioConfig": @{@"audioEncoding": @"MP3"}}, @{@"x-goog-api-key": key}, request))[@"audioContent"]);
+	} else if ([source isEqual:@"custom"]) {
+		NSString *url = SXEndpoint(config[@"base"], @"/audio/speech");
+		NSDictionary *headers = key.length ? @{@"Authorization": [@"Bearer " stringByAppendingString:key]} : @{};
+		audio = SXTTSFetch(url, @{@"model": config[@"model"], @"voice": voice.length ? voice : @"alloy",
 			@"input": text, @"response_format": @"mp3"}, headers, request);
 	}
 	if (!audio.length || request.remaining <= 0) return nil;

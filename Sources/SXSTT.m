@@ -59,36 +59,12 @@ static NSString *SXWhisper(NSData *wav, NSString *base, NSString *key, NSString 
 	if (key.length) [post setValue:[@"Bearer " stringByAppendingString:key] forHTTPHeaderField:@"Authorization"];
 	return SXSTTTrim(SXSTTJSON(post, request)[@"text"]);
 }
-static BOOL SXSameOrigin(NSString *a, NSString *b) {
-	NSURL *left = SXHTTPSURL(a), *right = SXHTTPSURL(b);
-	return left && right && [left.host.lowercaseString isEqual:right.host.lowercaseString] && [(left.port ?: @443) isEqual:(right.port ?: @443)];
-}
 NSString *SXTranscribe(NSData *wav, SXPrefs *prefs, SXRequest *request) {
-	if (!wav.length || prefs.localOnly || request.remaining <= 0 || SXDefinitelyOffline()) return nil;
-	NSString *source = prefs.sttSource, *base = prefs.sttBaseUrl, *key = prefs.sttApiKey, *model = prefs.sttModel;
-	BOOL automatic = [source isEqual:@"auto"];
-	if (automatic) {
-		// In auto the selected LLM provider owns the credentials and endpoint.
-		// Never send an explicit STT key to a different provider after switching LLM.
-		key = @""; base = @"";
-		if (prefs.provider == SXProviderGemini) source = @"gemini";
-		else if (SXSameOrigin(prefs.openaiBase, @"https://api.groq.com")) source = @"groq";
-		else if (SXSameOrigin(prefs.openaiBase, @"https://api.openai.com")) source = @"openai";
-		else source = @"custom";
-	}
-	NSString *text = nil;
-	BOOL english = [prefs.sttTranslate isEqual:@"en"];
-	if ([source isEqual:@"gemini"]) {
-		text = SXGeminiTranscript(wav, key.length ? key : prefs.geminiKey, model.length ? model : @"gemini-2.5-flash", prefs, request);
-	} else {
-		if ([source isEqual:@"groq"]) { base = @"https://api.groq.com/openai/v1"; if (!model.length) model = english ? @"whisper-large-v3" : @"whisper-large-v3-turbo"; }
-		else if ([source isEqual:@"openai"]) { base = @"https://api.openai.com/v1"; if (!model.length) model = @"whisper-1"; }
-		else if ([source isEqual:@"custom"]) { if (automatic && !base.length) base = prefs.openaiBase; if (!model.length) model = @"whisper-1"; }
-		else return nil;
-		if (!key.length && SXSameOrigin(base, prefs.openaiBase)) key = prefs.openaiKey;
-		if (![source isEqual:@"custom"] && !key.length) return nil;
-		text = SXWhisper(wav, base, key, model, english, prefs, request);
-	}
+	if (!wav.length || !prefs.sttEnabled || prefs.localOnly || request.remaining <= 0 || SXDefinitelyOffline()) return nil;
+	NSDictionary *config = SXSTTConfiguration(prefs.settings);
+	if (config[@"issue"]) return nil;
+	NSString *text = [config[@"source"] isEqual:@"gemini"] ? SXGeminiTranscript(wav, config[@"key"], config[@"model"], prefs, request) :
+		SXWhisper(wav, config[@"base"], config[@"key"], config[@"model"], [prefs.sttTranslate isEqual:@"en"], prefs, request);
 	if (text && [prefs.sttTranslate isEqual:@"vi"] && request.remaining > 0) {
 		__block NSString *translated = nil;
 		[SXLLM performQuestion:text history:@[] tools:@[] executor:nil prefs:prefs provider:prefs.provider model:nil

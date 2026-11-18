@@ -127,6 +127,7 @@ jobs:
           ROOTPLIST=$(find "$STAGE" -path '*SiriXPreferences.bundle/Root.plist' | head -n 1)
           [ -n "$ROOTPLIST" ] || vfail "prefs" "Không thấy SiriXPreferences.bundle/Root.plist. Cây staging: $(find "$STAGE" | sed "s|$STAGE||" | head -80 | tr '\n' ' ')"
           grep -rq 'SXPromptController' "$ROOTPLIST" || vfail "prefs-content" "Root.plist thiếu SXPromptController"
+          [ -f "${ROOTPLIST%/*}/ProviderConfig.plist" ] || vfail "provider-config" "Thiếu cấu hình nhà cung cấp"
           [ -f "${ROOTPLIST%/*}/STTConfig.plist" ] || vfail "stt-config" "Thiếu cấu hình STT"
           [ -f "${ROOTPLIST%/*}/TTSConfig.plist" ] || vfail "tts-config" "Thiếu cấu hình TTS"
 
