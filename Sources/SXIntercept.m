@@ -131,9 +131,16 @@ static BOOL SXApplyTextToView(id view, NSString *displayText, NSString *speechTe
 	return YES;
 }
 
+static NSString *SXDialogID(id command);      // định nghĩa ở dưới
+
 /// Tạo bong bóng trả lời của SiriX khi lệnh không có sẵn trường văn bản
 /// (ví dụ Apple chỉ gửi thẻ tìm kiếm — đã ẩn — hoặc rỗng).
-static id SXMakeUtteranceView(NSString *displayText, NSString *speechText) {
+///
+/// View mới PHẢI mang cùng `dialogIdentifier` với lệnh ACE đang xử lý: Siri gắn
+/// view vào hội thoại theo id này. Một id ngẫu nhiên làm hội thoại không khớp
+/// (Siri đóng giao diện / layout truy cập nil) — đây là nguyên nhân nhìn thấy
+/// "Siri văng" sau khi AI gọi công cụ xong và câu trả lời được chèn vào.
+static id SXMakeUtteranceView(NSString *displayText, NSString *speechText, id command) {
 	Class cls = NSClassFromString(@"SAUIAssistantUtteranceView");
 	if (!cls) return nil;
 	id view = [[cls alloc] init];
@@ -149,15 +156,26 @@ static id SXMakeUtteranceView(NSString *displayText, NSString *speechText) {
 		SXSet(view, setText, displayText);
 		canSet = YES;
 	}
-	SEL setDialogId = NSSelectorFromString(@"setDialogId:");
-	if ([view respondsToSelector:setDialogId]) {
-		SXSet(view, setDialogId, NSUUID.UUID.UUIDString);
+	if (!canSet) return nil;
+
+	// Kế thừa id hội thoại của lệnh (nếu có) thay vì bịa id mới.
+	NSString *dialogID = SXDialogID(command);
+	for (NSString *name in @[@"dialogIdentifier", @"dialogId"]) {
+		if (!dialogID.length) break;
+		SEL setter = NSSelectorFromString([NSString stringWithFormat:@"set%@%@:",
+										   [[name substringToIndex:1] uppercaseString],
+										   [name substringFromIndex:1]]);
+		if ([view respondsToSelector:setter]) SXSet(view, setter, dialogID);
 	}
+	SEL setRefId = NSSelectorFromString(@"setRefId:");
+	if ([view respondsToSelector:setRefId]) SXSet(view, setRefId, NSUUID.UUID.UUIDString);
 	SEL setAceId = NSSelectorFromString(@"setAceId:");
-	if ([view respondsToSelector:setAceId]) {
-		SXSet(view, setAceId, NSUUID.UUID.UUIDString);
+	if ([view respondsToSelector:setAceId]) SXSet(view, setAceId, NSUUID.UUID.UUIDString);
+	SEL setListen = NSSelectorFromString(@"setListenAfterSpeaking:");
+	if ([view respondsToSelector:setListen]) {
+		((void (*)(id, SEL, BOOL))objc_msgSend)(view, setListen, NO);
 	}
-	return canSet ? view : nil;
+	return view;
 }
 
 /// View có chữ (text hoặc speakableText) — ứng viên để thay.
@@ -231,19 +249,31 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 				if (!changed) {
 					// Không có trường văn bản sẵn (thẻ đã ẩn / rỗng) → chèn bong bóng của SiriX
 					// thay vì thả về câu trả lời gốc của Siri.
-					id bubble = SXMakeUtteranceView(displayText, speechText);
+					id bubble = SXMakeUtteranceView(displayText, speechText, command);
 					if (bubble) {
 						[kept insertObject:bubble atIndex:0];
 						changed = YES;
 						injected = YES;
-						SXLogDbg(@"resp", @"chèn bong bóng trả lời (%lu ký tự)", (unsigned long)displayText.length);
+						SXLogDbg(@"resp", @"chèn bong bóng trả lời (%lu ký tự, dialog=%@)",
+								 (unsigned long)displayText.length,
+								 SXDialogID(command) ?: @"(không có)");
 					}
 				}
 				// KHÔNG BAO GIỜ để views = [] (ACE dialog vỡ → giao diện tự đóng).
 				// Nếu strip hết mà chèn không được → không sửa gì, trả về Siri gốc (an toàn).
 				if ((stripped || injected) && kept.count > 0) {
+					BOOL allValid = YES;
+					for (id view in kept) { if (!view) { allValid = NO; break; } }
+					if (!allValid) {
+						SXLogErr(@"err", @"danh sách view sau khi sửa có phần tử nil — bỏ thao tác");
+						return NO;
+					}
 					[rollback addObject:^{ SXSet(command, setViewsSelector, views); }];
 					SXSet(command, setViewsSelector, kept);
+					NSMutableArray<NSString *> *names = [NSMutableArray arrayWithCapacity:kept.count];
+					for (id view in kept) [names addObject:NSStringFromClass([view class])];
+					SXLogDbg(@"resp", @"views sau khi sửa (%lu): %@", (unsigned long)kept.count,
+							 [names componentsJoinedByString:@", "]);
 				} else if (stripped && kept.count == 0 && !injected) {
 					SXLogWrn(@"resp", @"views sẽ rỗng sau khi ẩn thẻ và không chèn được — bỏ thao tác");
 					return NO;
@@ -313,7 +343,9 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 	NSString *_lastCaptureText;
 	NSTimeInterval _lastCaptureTime;
 	NSTimeInterval _captureTime; // mốc0 của ngân sách chờ AI (v1.1)
+	NSTimeInterval _lastProgressAt; // lần cuối có tiến triển (tool/round) — gia hạn chờ ACE
 }
+- (void)noteToolProgress;
 @end
 
 @implementation SXIntercept
@@ -331,6 +363,7 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 	self = [super init];
 	if (self) {
 		_condition = [[NSCondition alloc] init];
+		_lastProgressAt = 0;
 		_history = [NSMutableArray array];
 		_handledCommands = [NSHashTable hashTableWithOptions:NSPointerFunctionsWeakMemory | NSPointerFunctionsObjectPointerPersonality];
 	}
@@ -407,6 +440,7 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 	uint64_t myGeneration = _generation;
 	_question = clean;
 	_captureTime = now;
+	_lastProgressAt = now;
 	_pending = YES;
 	_consumed = NO;
 	_decisionDisplay = nil;
@@ -452,6 +486,9 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 		if (requestHistory.count > maxTurns) requestHistory = [requestHistory subarrayWithRange:NSMakeRange(requestHistory.count - maxTurns, maxTurns)];
 
 		SXToolExec executor = ^NSDictionary *(NSString *name, NSDictionary *arguments, NSError **error) {
+			// Mỗi lần gọi công cụ là một mốc tiến triển: hook ACE đang chờ sẽ được
+			// gia hạn thêm 3 giây thay vì tưởng model bị treo rồi hiện bubble hết giờ.
+			[self noteToolProgress];
 			if ([name isEqualToString:@"reset_conversation"]) {
 				if (![[SXIntercept shared] clearHistory]) {
 					if (error) *error = [NSError errorWithDomain:@"com.sirix.history" code:1 userInfo:@{NSLocalizedDescriptionKey: @"Không xóa được lịch sử đã lưu."}];
@@ -522,6 +559,9 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 - (BOOL)handleIncomingCommand:(id)command {
 	if (!command || ![SXPrefs shared].enabled) return NO;
 	NSString *className = NSStringFromClass([command class]);
+	// Ghi cả luồng: nếu hook chạy trên luồng chính thì mọi giây chờ AI ở đây
+	// đều là giây giao diện bị đứng — log giúp xác định đúng ca lỗi.
+	SXLogDbg(@"hook", @"lệnh ACE %@ (main=%d)", className, NSThread.isMainThread ? 1 : 0);
 
 	if (SXIsActionClass(className)) {
 		[_condition lock];
@@ -581,11 +621,21 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 	}
 
 	if (!_consumed) {
-		// Chặn ACE tối đa 5s, kể cả khi timeout cấu hình lớn hơn.
-		NSTimeInterval elapsed = _captureTime > 0 ? (CFAbsoluteTimeGetCurrent() - _captureTime) : 0;
-		NSTimeInterval waitBudget = MIN(5.0, MAX(0.0, prefs.responseTimeout - elapsed));
-		NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:waitBudget];
+		// Chặn luồng ACE có giới hạn: 6s cơ bản, cộng thêm 3s mỗi khi có TIẾN TRIỂN
+		// (model vừa gọi công cụ / vừa chạy xong một vòng) nhưng tổng không quá 9s
+		// và không quá ngân sách người dùng đặt. Nhờ vậy lượt có gọi công cụ không
+		// bị cắt oan thành "AI trả lời quá muộn" rồi hiện bubble sai.
+		NSTimeInterval budget = MAX(2.0, prefs.responseTimeout);
+		NSTimeInterval baseWait = MIN(budget, 6.0);
+		// Nếu hook chạy trên luồng chính thì mỗi giây chờ là một giây giao diện
+		// đứng → trần thấp hơn. Log "main=1" giúp xác nhận trên thiết bị.
+		NSTimeInterval hardCap = MIN(budget, NSThread.isMainThread ? 6.5 : 9.0);
+		NSTimeInterval captureAt = _captureTime > 0 ? _captureTime : CFAbsoluteTimeGetCurrent();
+		NSTimeInterval baseDeadline = captureAt + baseWait;
 		while (!_ready && !_errored && !_consumed && _generation == myGeneration && !_actionSeen) {
+			NSTimeInterval target = MIN(MAX(baseDeadline, _lastProgressAt + 3.0), captureAt + hardCap);
+			if (target <= CFAbsoluteTimeGetCurrent()) break;
+			NSDate *deadline = [NSDate dateWithTimeIntervalSinceReferenceDate:target];
 			if (![_condition waitUntilDate:deadline]) break;
 		}
 		if (_generation != myGeneration) {
@@ -626,8 +676,9 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 				[self queueStatistic:@"timeout" milliseconds:nil];
 				_decisionDisplay = [SXDisplayPolicy timeoutBubbleMessageInMode:prefs.mode action:prefs.timeoutAction];
 				_decisionSpeech = _decisionDisplay;
-				SXLogWrn(@"resp", @"%@: hết ngân sách %.0fs (chặn ≤5s, thực tế %.1fs) — %@",
-						 source, prefs.responseTimeout, waitBudget, _decisionDisplay ? @"bubble hết giờ" : @"giữ Siri gốc");
+				SXLogWrn(@"resp", @"%@: hết ngân sách (chờ %.1fs / trần %.0fs, ngân sách %.0fs) — %@",
+						 source, CFAbsoluteTimeGetCurrent() - captureAt, hardCap, prefs.responseTimeout,
+						 _decisionDisplay ? @"bubble hết giờ" : @"giữ Siri gốc");
 			}
 			if (!_decisionDisplay.length) {
 				_outcomeCounted = YES;
@@ -637,9 +688,10 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 	}
 
 	// AddViews, SayIt và hook dự phòng có thể là nhiều object cho cùng một lượt.
-	// Dùng cùng quyết định thay vì cho các lệnh sau lọt về Siri gốc. Hết hạn
-	// sau 30 giây để không áp dụng nhầm cho một phiên không bắt được capture.
-	if (!_decisionDisplay.length || CFAbsoluteTimeGetCurrent() - _decisionTime > 20.0) {
+	// Dùng cùng quyết định thay vì cho các lệnh sau lọt về Siri gốc. Cửa sổ 10 s
+	// (trước là 20 s): quyết định quá cũ chỉ có thể áp lên một lệnh ACE mà Siri đã
+	// bỏ — sửa lúc đó làm hội thoại lệch trạng thái và giao diện tự đóng.
+	if (!_decisionDisplay.length || CFAbsoluteTimeGetCurrent() - _decisionTime > 10.0) {
 		[_condition unlock];
 		SXLogDbg(@"resp", @"%@: quyết định giữ gốc hoặc đã hết hạn (%@)", source, className);
 		return NO;
@@ -694,6 +746,13 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 	}
 	[_condition unlock];
 	return changed;
+}
+
+- (void)noteToolProgress {
+	[_condition lock];
+	_lastProgressAt = CFAbsoluteTimeGetCurrent();
+	[_condition broadcast];
+	[_condition unlock];
 }
 
 - (void)clearHistoryMemory {

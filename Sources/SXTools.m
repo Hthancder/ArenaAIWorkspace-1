@@ -215,7 +215,9 @@ static NSDictionary *SXToolFetchURL(NSDictionary *args, NSError **error) {
 
 	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
 	request.HTTPMethod = @"GET";
-	request.timeoutInterval = 12;
+	// Công cụ chạy BÊN TRONG một lượt Siri (ngân sách ~10s) → không được tải
+	// trang lâu hơn thế, nếu không câu trả lời luôn về muộn.
+	request.timeoutInterval = 6;
 	[request setValue:[NSString stringWithFormat:
 		@"Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) SiriX/%@", SX_VERSION]
    forHTTPHeaderField:@"User-Agent"];
@@ -233,7 +235,7 @@ static NSDictionary *SXToolFetchURL(NSDictionary *args, NSError **error) {
 	};
 
 	NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration ephemeralSessionConfiguration];
-	configuration.timeoutIntervalForRequest = 12;
+	configuration.timeoutIntervalForRequest = 6;
 	// Redirect đã bị chặn ở delegate (completionHandler(nil)) — không cần cấu hình thêm.
 	NSURLSession *session = [NSURLSession sessionWithConfiguration:configuration
 														  delegate:delegate
@@ -241,7 +243,7 @@ static NSDictionary *SXToolFetchURL(NSDictionary *args, NSError **error) {
 	delegate.session = session;
 	[[session dataTaskWithRequest:request] resume];
 
-	if (dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(15 * NSEC_PER_SEC)))) {
+	if (dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(7 * NSEC_PER_SEC)))) {
 		delegate.completion = nil;
 		[session invalidateAndCancel];
 		if (error) *error = SXToolError(4, @"Hết thời gian chờ khi tải trang.");
@@ -316,6 +318,10 @@ static NSDictionary *SXToolFetchURL(NSDictionary *args, NSError **error) {
 	NSError *localError = nil;
 	NSDictionary *result = nil;
 
+	// Lưới an toàn cuối cùng: công cụ chạy trên luồng nền của SpringBoard và có
+	// thể chạm UIKit/pasteboard/mạng. Một exception lọt ra ngoài sẽ giết cả
+	// SpringBoard (người dùng thấy "Siri văng") — mọi lỗi phải thành NSError.
+	@try {
 	if ([name isEqualToString:@"system_info"]) {
 		result = SXToolSystemInfo(&localError);
 	} else if ([name isEqualToString:@"clipboard"]) {
@@ -329,6 +335,12 @@ static NSDictionary *SXToolFetchURL(NSDictionary *args, NSError **error) {
 		result = SXToolFetchURL(arguments, &localError);
 	} else {
 		localError = SXToolError(404, [NSString stringWithFormat:@"Không có công cụ “%@”.", name]);
+	}
+	} @catch (NSException *exception) {
+		SXLogErr(@"err", @"công cụ “%@” ném exception %@: %@ | %@",
+				 name, exception.name, exception.reason,
+				 [exception.callStackSymbols componentsJoinedByString:@" ; "]);
+		localError = SXToolError(10, [NSString stringWithFormat:@"Công cụ “%@” gặp lỗi nội bộ.", name]);
 	}
 
 	if (localError) {

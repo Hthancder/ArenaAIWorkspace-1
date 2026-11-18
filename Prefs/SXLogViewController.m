@@ -3,9 +3,8 @@
 #import "SXLogFile.h"
 #import "SXUISupport.h"
 #import <UIKit/UIKit.h>
-#include <fcntl.h>
-#include <unistd.h>
 #include <errno.h>
+#include <stdlib.h>
 #include <string.h>
 
 typedef NS_ENUM(NSInteger, SXLogFilter) {
@@ -14,16 +13,92 @@ typedef NS_ENUM(NSInteger, SXLogFilter) {
 	SXLogFilterErrors,   // ERROR
 };
 
+// ── Giới hạn hiển thị ────────────────────────────────────────────────────────
+// Trước đây màn hình nạp TOÀN BỘ file (tới 512 KB) rồi dựng lại UITextView mỗi
+// 2 giây trên luồng chính. Khi log lớn, mỗi nhịp layout tốn hàng trăm ms → giao
+// diện đơ, không bấm được nút Back. Nay: chỉ đọc đuôi file, chỉ vẽ lại khi nội
+// dung đổi, và nối thêm phần mới thay vì dựng lại cả khối văn bản.
+static const NSUInteger kSXLogTailBytes = 160 * 1024;   // đọc tối đa 160 KB cuối file
+static const NSUInteger kSXLogMaxLines = 1200;          // hiển thị tối đa 1200 dòng
+static const NSUInteger kSXLogMaxChars = 180 * 1024;    // trần ký tự trong UITextView
+static const NSUInteger kSXLogAppendBudget = 48 * 1024; // nối thêm tối đa mỗi nhịp
+static const NSTimeInterval kSXLogRefreshInterval = 2.5;
+
+#pragma mark - Lọc (thuần, chạy trên luồng nền)
+
+static BOOL SXLogLineMatches(NSString *line, SXLogFilter filter, NSString *lowerQuery) {
+	switch (filter) {
+		case SXLogFilterAll:
+			break;
+		case SXLogFilterProblems:
+			if ([line rangeOfString:@"[WARN ]"].location == NSNotFound &&
+				[line rangeOfString:@"[ERROR]"].location == NSNotFound) return NO;
+			break;
+		case SXLogFilterErrors:
+			if ([line rangeOfString:@"[ERROR]"].location == NSNotFound) return NO;
+			break;
+	}
+	if (lowerQuery.length && [line.lowercaseString rangeOfString:lowerQuery].location == NSNotFound) return NO;
+	return YES;
+}
+
+/// Lọc + giới hạn số dòng, trả về văn bản hiển thị. `outLines` = số dòng giữ lại,
+/// `outCapped` = YES khi phải bỏ bớt dòng cũ (log dài hơn hạn mức).
+static NSString *SXLogFilteredText(NSString *raw, SXLogFilter filter, NSString *query,
+								   NSUInteger *outLines, BOOL *outCapped) {
+	if (outLines) *outLines = 0;
+	if (outCapped) *outCapped = NO;
+	if (!raw.length) return @"";
+
+	NSString *lowerQuery = query.lowercaseString;
+	NSArray<NSString *> *lines = [raw componentsSeparatedByString:@"\n"];
+	NSMutableArray<NSString *> *kept = [NSMutableArray arrayWithCapacity:MIN(lines.count, kSXLogMaxLines)];
+
+	for (NSString *line in lines) {
+		if (!line.length) continue;
+		if (!SXLogLineMatches(line, filter, lowerQuery)) continue;
+		[kept addObject:line];
+	}
+	if (kept.count > kSXLogMaxLines) {
+		NSUInteger drop = kept.count - kSXLogMaxLines;
+		[kept removeObjectsInRange:NSMakeRange(0, drop)];
+		if (outCapped) *outCapped = YES;
+	}
+	if (outLines) *outLines = kept.count;
+	if (!kept.count) return @"";
+
+	NSMutableString *output = [NSMutableString stringWithCapacity:raw.length];
+	for (NSString *line in kept) {
+		[output appendString:line];
+		[output appendString:@"\n"];
+	}
+	return output;
+}
+
+#pragma mark - Màn hình
+
 @interface SXLogViewController () <UISearchBarDelegate, UITextViewDelegate>
 @property (nonatomic, strong) UITextView *textView;
 @property (nonatomic, strong) UILabel *emptyLabel;
 @property (nonatomic, strong) UISegmentedControl *filterControl;
 @property (nonatomic, strong) UISearchBar *searchBar;
 @property (nonatomic, strong) NSTimer *refreshTimer;
-@property (nonatomic, copy) NSString *rawLog;
+@property (nonatomic, strong) dispatch_queue_t workQueue;
+
+@property (nonatomic, copy) NSString *visibleText;   // nội dung dùng để sao chép
+@property (nonatomic, copy) NSString *appliedText;   // nội dung đang hiển thị
 @property (nonatomic, copy) NSString *query;
-@property (nonatomic, copy) NSString *visibleText;
 @property (nonatomic) BOOL wasAtBottom;
+@property (nonatomic) BOOL paused;                   // người dùng tạm dừng tự làm mới
+@property (nonatomic) BOOL reading;                  // đang đọc file ở luồng nền
+@property (nonatomic) BOOL reloadPending;             // có yêu cầu làm mới bị hoãn
+@property (nonatomic) NSUInteger renderedRequest;    // chống kết quả cũ ghi đè
+@property (nonatomic) unsigned long long fileSize;
+@property (nonatomic) BOOL tailTruncated;
+@property (nonatomic) BOOL linesCapped;
+@property (nonatomic) NSUInteger renderedLines;
+@property (nonatomic) BOOL readFailed;
+@property (nonatomic) unsigned long long lastRenderedFileSize;
 @end
 
 @implementation SXLogViewController
@@ -34,16 +109,18 @@ typedef NS_ENUM(NSInteger, SXLogFilter) {
 	[super viewDidLoad];
 	self.title = @"Log";
 	self.view.backgroundColor = UIColor.systemBackgroundColor;
+	self.workQueue = dispatch_queue_create("com.sirix.prefs.log", DISPATCH_QUEUE_SERIAL);
+	self.wasAtBottom = YES;
 
 	self.navigationItem.rightBarButtonItems = @[
 		[[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"doc.on.doc"]
-										 style:UIBarButtonItemStylePlain
-										target:self
-										action:@selector(copyLog:)],
+										style:UIBarButtonItemStylePlain
+									   target:self
+									   action:@selector(copyLog:)],
 		[[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"ellipsis.circle"]
-										 style:UIBarButtonItemStylePlain
-										target:self
-										action:@selector(showMore:)],
+										style:UIBarButtonItemStylePlain
+									   target:self
+									   action:@selector(showMore:)],
 	];
 
 	self.filterControl = [[UISegmentedControl alloc] initWithItems:@[@"Tất cả", @"Vấn đề", @"Lỗi"]];
@@ -68,8 +145,9 @@ typedef NS_ENUM(NSInteger, SXLogFilter) {
 	self.textView.textContainerInset = UIEdgeInsetsMake(10, 12, 20, 12);
 	self.textView.alwaysBounceVertical = YES;
 	self.textView.delegate = self;
+	self.textView.hidden = YES; // hiện sau khi đọc xong, tránh nhấp nháy
 
-	self.emptyLabel = [SXUI footnoteLabel:@"Chưa có log nào.\n\nHãy hỏi Siri một câu rồi quay lại đây."];
+	self.emptyLabel = [SXUI footnoteLabel:@"Đang đọc log…"];
 	self.emptyLabel.translatesAutoresizingMaskIntoConstraints = NO;
 	self.emptyLabel.textAlignment = NSTextAlignmentCenter;
 
@@ -98,132 +176,290 @@ typedef NS_ENUM(NSInteger, SXLogFilter) {
 		[self.emptyLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.view.trailingAnchor constant:-32],
 	]];
 
-	self.wasAtBottom = YES;
-	[self reloadLogAnimated:NO];
+	[self sx_requestReloadAnimated:NO force:YES];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
-	[self reloadLogAnimated:NO];
-	[self.refreshTimer invalidate];
-	self.refreshTimer = [NSTimer scheduledTimerWithTimeInterval:2.0
-														target:self
-													  selector:@selector(timerTick)
-													  userInfo:nil
-													   repeats:YES];
+	NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+	[center addObserver:self selector:@selector(sx_appDidBecomeActive:)
+				   name:UIApplicationDidBecomeActiveNotification object:nil];
+	[center addObserver:self selector:@selector(sx_appWillResignActive:)
+				   name:UIApplicationWillResignActiveNotification object:nil];
+	[self sx_startTimer];
+	[self sx_requestReloadAnimated:NO force:YES];
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
 	[super viewWillDisappear:animated];
+	[self sx_stopTimer];
+	[[NSNotificationCenter defaultCenter] removeObserver:self];
+}
+
+- (void)dealloc {
+	[self sx_stopTimer];
+	[[NSNotificationCenter defaultCenter] removeObserver:self];
+}
+
+#pragma mark - Hẹn giờ làm mới
+
+- (void)sx_startTimer {
+	[self sx_stopTimer];
+	if (self.paused) return;
+	__weak typeof(self) weakSelf = self;
+	NSTimer *timer = [NSTimer scheduledTimerWithTimeInterval:kSXLogRefreshInterval
+													 repeats:YES
+													   block:^(NSTimer *tick) {
+		(void)tick;
+		[weakSelf sx_requestReloadAnimated:YES force:NO];
+	}];
+	// Dung sai giúp hệ thống gộp nhịp, giảm hao pin và giật khi đang cuộn.
+	timer.tolerance = 0.6;
+	self.refreshTimer = timer;
+}
+
+- (void)sx_stopTimer {
 	[self.refreshTimer invalidate];
 	self.refreshTimer = nil;
 }
 
-- (void)timerTick {
-	[self reloadLogAnimated:YES];
+- (void)sx_appDidBecomeActive:(NSNotification *)note {
+	(void)note;
+	[self sx_startTimer];
+	[self sx_requestReloadAnimated:NO force:YES];
 }
 
-#pragma mark - Đọc & lọc
+- (void)sx_appWillResignActive:(NSNotification *)note {
+	(void)note;
+	[self sx_stopTimer];
+}
 
-- (NSString *)readLogFile {
-	NSData *data = [NSData dataWithContentsOfFile:SXLogFilePath()];
-	if (!data.length) return @"";
-	NSString *text = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-	if (!text) text = [[NSString alloc] initWithData:data encoding:NSISOLatin1StringEncoding];
+#pragma mark - Đọc & hiển thị
+
+/// Đọc phần đuôi file log. Chạy trên luồng nền — không bao giờ chặn luồng chính.
+- (NSString *)readTailWithSize:(unsigned long long *)outSize truncated:(BOOL *)outTruncated {
+	if (outSize) *outSize = 0;
+	if (outTruncated) *outTruncated = NO;
+
+	char *buffer = malloc(kSXLogTailBytes + 1);
+	if (!buffer) return nil;
+
+	off_t size = 0;
+	int truncated = 0;
+	ssize_t got = SXLogFileReadTail(SXLogFilePath().fileSystemRepresentation,
+									buffer, kSXLogTailBytes, &size, &truncated);
+
+	NSString *text = nil;
+	if (got >= 0) {
+		text = [[NSString alloc] initWithBytes:buffer length:(NSUInteger)got encoding:NSUTF8StringEncoding];
+		if (!text) {
+			text = [[NSString alloc] initWithBytes:buffer length:(NSUInteger)got
+										  encoding:NSISOLatin1StringEncoding];
+		}
+	}
+	free(buffer);
+
+	if (outSize) *outSize = size > 0 ? (unsigned long long)size : 0;
+	if (outTruncated) *outTruncated = (truncated != 0);
+
+	if (got < 0) {
+		// Chưa từng có log (máy mới cài) không phải là lỗi — chỉ là rỗng.
+		if (![[NSFileManager defaultManager] fileExistsAtPath:SXLogFilePath()]) return @"";
+		return nil;
+	}
 	return text ?: @"";
 }
 
-- (BOOL)line:(NSString *)line matchesFilter:(SXLogFilter)filter {
-	switch (filter) {
-		case SXLogFilterAll: return YES;
-		case SXLogFilterProblems:
-			return [line containsString:@"[WARN ]"] || [line containsString:@"[ERROR]"];
-		case SXLogFilterErrors: return [line containsString:@"[ERROR]"];
+- (void)sx_requestReloadAnimated:(BOOL)animated force:(BOOL)force {
+	if (!self.viewLoaded) return;
+	if (self.reading) {
+		// Đang đọc dở: ghi nhớ để chạy lại ngay khi xong (không bỏ yêu cầu của người dùng).
+		if (force) self.reloadPending = YES;
+		return;
 	}
-	return YES;
-}
+	// Đang bôi đen để sao chép: hoãn cập nhật để không cướp vùng chọn.
+	if (animated && !force && self.textView.selectedRange.length > 0) return;
 
-- (NSString *)filteredLogFrom:(NSString *)raw count:(NSUInteger *)outCount {
+	self.reading = YES;
+	NSUInteger request = ++self.renderedRequest;
 	SXLogFilter filter = (SXLogFilter)self.filterControl.selectedSegmentIndex;
-	NSString *query = self.query.lowercaseString;
-	NSArray<NSString *> *lines = [raw componentsSeparatedByString:@"\n"];
-	NSMutableString *output = [NSMutableString string];
-	NSUInteger kept = 0;
+	NSString *query = [self.query copy];
 
-	for (NSString *line in lines) {
-		if (!line.length) continue;
-		if (![self line:line matchesFilter:filter]) continue;
-		if (query.length && [line.lowercaseString rangeOfString:query].location == NSNotFound) continue;
-		[output appendString:line];
-		[output appendString:@"\n"];
-		kept++;
-	}
-	if (outCount) *outCount = kept;
-	return output;
+	__weak typeof(self) weakSelf = self;
+	dispatch_async(self.workQueue, ^{
+		typeof(self) worker = weakSelf;
+		if (!worker) return;
+
+		unsigned long long size = 0;
+		BOOL truncated = NO;
+		NSString *raw = [worker readTailWithSize:&size truncated:&truncated];
+
+		NSUInteger lines = 0;
+		BOOL capped = NO;
+		NSString *filtered = raw
+			? SXLogFilteredText(raw, filter, query, &lines, &capped)
+			: nil;
+
+		dispatch_async(dispatch_get_main_queue(), ^{
+			typeof(self) strongSelf = weakSelf;
+			if (!strongSelf) return;
+			strongSelf.reading = NO;
+			// Có yêu cầu mới hơn trong lúc đọc → bỏ kết quả này.
+			if (request != strongSelf.renderedRequest) return;
+			[strongSelf sx_applyText:filtered
+								failed:(raw == nil)
+								  size:size
+							 truncated:truncated
+								 lines:lines
+								capped:capped
+							  animated:animated];
+			if (strongSelf.reloadPending) {
+				strongSelf.reloadPending = NO;
+				[strongSelf sx_requestReloadAnimated:NO force:YES];
+			}
+		});
+	});
 }
 
-- (void)reloadLogAnimated:(BOOL)animated {
-	NSString *raw = [self readLogFile];
-	BOOL rawChanged = ![raw isEqualToString:self.rawLog ?: @""];
-	if (animated && !rawChanged) return;
+- (void)sx_applyText:(NSString *)filtered
+			  failed:(BOOL)failed
+				size:(unsigned long long)size
+		   truncated:(BOOL)truncated
+			   lines:(NSUInteger)lines
+			  capped:(BOOL)capped
+			animated:(BOOL)animated {
+	self.readFailed = failed;
+	self.fileSize = size;
+	self.tailTruncated = truncated;
+	self.linesCapped = capped;
+	self.renderedLines = lines;
 
-	self.rawLog = raw;
-	NSUInteger count = 0;
-	NSString *filtered = [self filteredLogFrom:raw count:&count];
-	self.visibleText = filtered;
-
-	BOOL empty = filtered.length == 0;
+	BOOL empty = (filtered.length == 0);
+	self.visibleText = filtered ?: @"";
 	self.emptyLabel.hidden = !empty;
 	self.textView.hidden = empty;
+
 	if (empty) {
-		self.textView.text = @"";
-		self.emptyLabel.text = raw.length
-			? @"Không có dòng nào khớp bộ lọc hoặc từ khoá."
-			: @"Chưa có log nào.\n\nHãy hỏi Siri một câu rồi quay lại đây.";
-		self.navigationItem.prompt = raw.length ? @"0 dòng khớp" : nil;
+		self.appliedText = nil;
+		if (self.textView.text.length) self.textView.text = @"";
+		if (failed) {
+			self.emptyLabel.text = [NSString stringWithFormat:
+				@"Không đọc được tệp log.\n\n%@", SXLogFilePath()];
+		} else if (size > 0) {
+			self.emptyLabel.text = @"Không có dòng nào khớp bộ lọc hoặc từ khoá.";
+		} else {
+			self.emptyLabel.text = @"Chưa có log nào.\n\nHãy hỏi Siri một câu rồi quay lại đây.";
+		}
+		[self sx_updatePrompt];
 		return;
 	}
 
-	self.emptyLabel.hidden = YES;
-	unsigned long long bytes = (unsigned long long)raw.length;
-	self.navigationItem.prompt = [NSString stringWithFormat:@"%@ dòng · %@ ký tự",
-								  [SXUI groupedNumber:(NSInteger)count],
-								  [SXUI groupedNumber:(NSInteger)bytes]];
+	if ([filtered isEqualToString:self.appliedText ?: @""]) {
+		[self sx_updatePrompt];
+		return;
+	}
 
+	BOOL stayAtBottom = self.wasAtBottom || self.appliedText.length == 0;
 	CGFloat offset = self.textView.contentOffset.y;
-	BOOL stayAtBottom = self.wasAtBottom;
-	self.textView.text = filtered;
-	[self.textView layoutIfNeeded];
 
-	if (!animated || stayAtBottom) {
-		[self scrollToEnd];
+	// Nối thêm khi: lượt này là cập nhật tự động, file chỉ lớn lên (không bị xoay
+	// vòng/xoá), và phần đang hiển thị vẫn là một đoạn liền trong nội dung mới.
+	// Dùng tìm ngược thay vì hasPrefix để vẫn nối được sau khi phần đầu bị cắt.
+	NSString *applied = self.appliedText ?: @"";
+	BOOL fileGrew = self.lastRenderedFileSize > 0 && size >= self.lastRenderedFileSize;
+	NSRange found = applied.length
+		? [filtered rangeOfString:applied options:NSBackwardsSearch]
+		: NSMakeRange(NSNotFound, 0);
+	BOOL canAppend = animated
+		&& fileGrew
+		&& applied.length
+		&& found.location != NSNotFound
+		&& (filtered.length - NSMaxRange(found)) <= kSXLogAppendBudget
+		&& self.textView.text.length == applied.length;
+
+	if (canAppend) {
+		NSString *delta = [filtered substringFromIndex:NSMaxRange(found)];
+		NSDictionary *attrs = @{
+			NSFontAttributeName: self.textView.font ?: [UIFont monospacedSystemFontOfSize:11 weight:UIFontWeightRegular],
+			NSForegroundColorAttributeName: self.textView.textColor ?: UIColor.labelColor,
+		};
+		NSTextStorage *storage = self.textView.textStorage;
+		[storage beginEditing];
+		[storage appendAttributedString:[[NSAttributedString alloc] initWithString:delta attributes:attrs]];
+		[self sx_trimTextView];
+		[storage endEditing];
+	} else {
+		self.textView.text = filtered;
+	}
+
+	self.appliedText = self.textView.text;
+	self.lastRenderedFileSize = size;
+	[self sx_updatePrompt];
+
+	if (stayAtBottom) {
+		[self sx_scrollToBottom];
 	} else {
 		CGFloat maxOffset = MAX(0.0, self.textView.contentSize.height - self.textView.bounds.size.height);
 		self.textView.contentOffset = CGPointMake(0, MIN(offset, maxOffset));
 	}
 }
 
-- (void)scrollToEnd {
-	if (self.textView.text.length == 0) return;
-	[self.textView scrollRangeToVisible:NSMakeRange(self.textView.text.length - 1, 1)];
+/// Giữ UITextView trong hạn mức ký tự: cắt từ đầu tới ranh giới dòng.
+- (void)sx_trimTextView {
+	NSTextStorage *storage = self.textView.textStorage;
+	if (storage.length <= kSXLogMaxChars) return;
+	NSUInteger excess = storage.length - kSXLogMaxChars;
+	NSString *plain = storage.string;
+	if (excess >= plain.length) return;
+	NSRange window = NSMakeRange(excess, MIN(plain.length - excess, (NSUInteger)8192));
+	NSRange newline = [plain rangeOfString:@"\n" options:0 range:window];
+	NSUInteger cut = newline.location != NSNotFound ? NSMaxRange(newline) : excess;
+	if (cut > 0) [storage deleteCharactersInRange:NSMakeRange(0, cut)];
 }
+
+- (void)sx_scrollToBottom {
+	[self.textView layoutIfNeeded];
+	CGFloat inset = self.textView.adjustedContentInset.bottom;
+	CGFloat maxOffset = MAX(0.0, self.textView.contentSize.height + inset - self.textView.bounds.size.height);
+	if (fabs(self.textView.contentOffset.y - maxOffset) < 1.0) return;
+	[self.textView setContentOffset:CGPointMake(0, maxOffset) animated:NO];
+}
+
+- (void)sx_updatePrompt {
+	NSMutableArray<NSString *> *parts = [NSMutableArray array];
+	if (self.readFailed) {
+		[parts addObject:@"không đọc được tệp"];
+	} else {
+		[parts addObject:[NSString stringWithFormat:@"%@ dòng",
+						  [SXUI groupedNumber:(NSInteger)self.renderedLines]]];
+		[parts addObject:[NSString stringWithFormat:@"%@ KB",
+						  [SXUI groupedNumber:(NSInteger)(self.fileSize / 1024)]]];
+		if (self.linesCapped || self.tailTruncated) [parts addObject:@"đã cắt phần đầu"];
+	}
+	if (self.paused) [parts addObject:@"tạm dừng"];
+	self.navigationItem.prompt = [parts componentsJoinedByString:@" · "];
+}
+
+#pragma mark - Cuộn
 
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView {
 	CGFloat maxOffset = scrollView.contentSize.height - scrollView.bounds.size.height;
 	self.wasAtBottom = scrollView.contentOffset.y >= maxOffset - 80.0;
 }
 
-#pragma mark - Bộ lọc
+#pragma mark - Bộ lọc & tìm kiếm
 
 - (void)sx_filterChanged:(UISegmentedControl *)sender {
 	(void)sender;
-	[self reloadLogAnimated:NO];
+	self.appliedText = nil; // đổi bộ lọc → vẽ lại toàn bộ
+	[self sx_requestReloadAnimated:NO force:YES];
 }
 
 - (void)searchBar:(UISearchBar *)searchBar textDidChange:(NSString *)searchText {
 	(void)searchBar;
 	self.query = searchText;
-	[self reloadLogAnimated:NO];
+	self.appliedText = nil;
+	[self sx_requestReloadAnimated:NO force:YES];
 }
 
 - (void)searchBarSearchButtonClicked:(UISearchBar *)searchBar {
@@ -233,15 +469,16 @@ typedef NS_ENUM(NSInteger, SXLogFilter) {
 - (void)searchBarCancelButtonClicked:(UISearchBar *)searchBar {
 	searchBar.text = @"";
 	self.query = nil;
+	self.appliedText = nil;
 	[searchBar resignFirstResponder];
-	[self reloadLogAnimated:NO];
+	[self sx_requestReloadAnimated:NO force:YES];
 }
 
 #pragma mark - Hành động
 
 - (void)copyLog:(id)sender {
 	(void)sender;
-	NSString *content = self.visibleText.length ? self.visibleText : [self readLogFile];
+	NSString *content = self.visibleText.length ? self.visibleText : self.appliedText;
 	if (!content.length) {
 		[SXUI alertOn:self title:@"Log trống" message:nil];
 		return;
@@ -253,21 +490,27 @@ typedef NS_ENUM(NSInteger, SXLogFilter) {
 	__weak typeof(self) weakSelf = self;
 	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.2 * NSEC_PER_SEC)),
 				   dispatch_get_main_queue(), ^{
-		[weakSelf reloadLogAnimated:NO];
+		[weakSelf sx_updatePrompt];
 	});
 }
 
 - (void)showMore:(id)sender {
 	(void)sender;
 	UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"Log SiriX"
-																   message:@"/var/mobile/Library/Logs/SiriX.log"
-															preferredStyle:UIAlertControllerStyleActionSheet];
+																  message:SXLogFilePath()
+														   preferredStyle:UIAlertControllerStyleActionSheet];
 	__weak typeof(self) weakSelf = self;
 	[sheet addAction:[UIAlertAction actionWithTitle:@"Chia sẻ tệp log"
 											  style:UIAlertActionStyleDefault
 											handler:^(UIAlertAction *action) {
 		(void)action;
 		[weakSelf shareLog];
+	}]];
+	[sheet addAction:[UIAlertAction actionWithTitle:(self.paused ? @"Tiếp tục tự làm mới" : @"Tạm dừng tự làm mới")
+											  style:UIAlertActionStyleDefault
+											handler:^(UIAlertAction *action) {
+		(void)action;
+		[weakSelf togglePause];
 	}]];
 	[sheet addAction:[UIAlertAction actionWithTitle:@"Xoá log"
 											  style:UIAlertActionStyleDestructive
@@ -279,7 +522,7 @@ typedef NS_ENUM(NSInteger, SXLogFilter) {
 											  style:UIAlertActionStyleDefault
 											handler:^(UIAlertAction *action) {
 		(void)action;
-		[weakSelf reloadLogAnimated:NO];
+		[weakSelf sx_requestReloadAnimated:NO force:YES];
 	}]];
 	[sheet addAction:[UIAlertAction actionWithTitle:@"Hủy" style:UIAlertActionStyleCancel handler:nil]];
 
@@ -288,13 +531,24 @@ typedef NS_ENUM(NSInteger, SXLogFilter) {
 	[self presentViewController:sheet animated:YES completion:nil];
 }
 
+- (void)togglePause {
+	self.paused = !self.paused;
+	if (self.paused) {
+		[self sx_stopTimer];
+	} else {
+		[self sx_startTimer];
+		[self sx_requestReloadAnimated:NO force:YES];
+	}
+	[self sx_updatePrompt];
+}
+
 - (void)shareLog {
-	NSString *content = [self readLogFile];
-	if (!content.length) return;
+	NSData *data = [NSData dataWithContentsOfFile:SXLogFilePath() options:0 error:NULL];
+	if (!data.length) return;
 	NSString *tempPath = [NSTemporaryDirectory() stringByAppendingPathComponent:@"SiriX.log"];
-	[content writeToFile:tempPath atomically:YES encoding:NSUTF8StringEncoding error:NULL];
-	UIActivityViewController *activity = [[UIActivityViewController alloc] initWithActivityItems:@[[NSURL fileURLWithPath:tempPath]]
-																		 applicationActivities:nil];
+	if (![data writeToFile:tempPath atomically:YES]) return;
+	UIActivityViewController *activity = [[UIActivityViewController alloc]
+		initWithActivityItems:@[[NSURL fileURLWithPath:tempPath]] applicationActivities:nil];
 	UIPopoverPresentationController *popover = activity.popoverPresentationController;
 	if (popover) popover.barButtonItem = self.navigationItem.rightBarButtonItems.lastObject;
 	[self presentViewController:activity animated:YES completion:nil];
@@ -317,7 +571,8 @@ typedef NS_ENUM(NSInteger, SXLogFilter) {
 		if ([[NSFileManager defaultManager] fileExistsAtPath:oldPath]) {
 			[[NSFileManager defaultManager] removeItemAtPath:oldPath error:NULL];
 		}
-		[weakSelf reloadLogAnimated:NO];
+		weakSelf.appliedText = nil;
+		[weakSelf sx_requestReloadAnimated:NO force:YES];
 	}];
 }
 

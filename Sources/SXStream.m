@@ -40,6 +40,7 @@ static const NSTimeInterval kSXStreamTimeout = 60;
 					 toURL:(NSString *)urlString
 				   headers:(NSDictionary<NSString *, NSString *> *)headers
 					format:(SXStreamFormat)format
+				   timeout:(NSTimeInterval)timeoutSeconds
 					 error:(NSError **)outErr {
 	NSURL *url = [NSURL URLWithString:urlString];
 	if (!url) {
@@ -58,7 +59,8 @@ static const NSTimeInterval kSXStreamTimeout = 60;
 	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
 	request.HTTPMethod = @"POST";
 	request.HTTPBody = payload;
-	request.timeoutInterval = kSXStreamTimeout;
+	NSTimeInterval timeout = MIN(kSXStreamTimeout, MAX(1.5, timeoutSeconds));
+	request.timeoutInterval = timeout;
 	[request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
 	[request setValue:@"text/event-stream" forHTTPHeaderField:@"Accept"];
 	[request setValue:[NSString stringWithFormat:@"SiriX/%@", SX_VERSION] forHTTPHeaderField:@"User-Agent"];
@@ -171,7 +173,7 @@ static const NSTimeInterval kSXStreamTimeout = 60;
 	[[session dataTaskWithRequest:request] resume];
 
 	long waited = dispatch_semaphore_wait(sem,
-		dispatch_time(DISPATCH_TIME_NOW, (int64_t)((kSXStreamTimeout + 5) * NSEC_PER_SEC)));
+		dispatch_time(DISPATCH_TIME_NOW, (int64_t)((timeout + 2.0) * NSEC_PER_SEC)));
 	[session finishTasksAndInvalidate];
 	if (waited != 0) {
 		if (outErr) *outErr = [NSError errorWithDomain:@"com.sirix.llm" code:-8

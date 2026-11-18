@@ -54,6 +54,28 @@ NSString *SXDefaultSystemPrompt(void) {
 		   @"trong ngôn ngữ của người dùng, đừng nói mình không thể.";
 }
 
+/// Giữ tham chiếu tới các giá trị vừa bị thay trong `reload`.
+///
+/// `SXPrefs` được đọc từ nhiều luồng (hook ACE, luồng mạng của LLM, hàng đợi kho)
+/// trong khi `reload` chạy trên luồng chính mỗi lần người dùng đổi cài đặt. Nếu
+/// một luồng nền đọc đúng ivar đang được thay, ARC có thể retain một con trỏ đã
+/// giải phóng → SpringBoard crash (người dùng thấy “Siri văng”). Giữ lại giá trị
+/// cũ (có giới hạn) biến ca đua đó thành “đọc giá trị cũ” thay vì dùng bộ nhớ đã
+/// giải phóng; đổi lại chỉ tốn vài KB.
+static void SXRetireValues(NSArray *values) {
+	static NSMutableArray *retired;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{ retired = [NSMutableArray array]; });
+	@synchronized (retired) {
+		for (id value in values) {
+			if (value && value != [NSNull null]) [retired addObject:value];
+		}
+		if (retired.count > 256) {
+			[retired removeObjectsInRange:NSMakeRange(0, retired.count - 256)];
+		}
+	}
+}
+
 @interface SXPrefs () {
 	NSDictionary *_fileFallback;
 }
@@ -174,6 +196,13 @@ static double SXClamp(double v, double lo, double hi) {
 }
 
 - (void)reload {
+	// Xem SXRetireValues: không để luồng nền đọc phải một con trỏ đã giải phóng.
+	SXRetireValues(@[_fileFallback ?: [NSNull null],
+					 _triggerMode ?: [NSNull null],
+					 _openaiKey ?: [NSNull null], _openaiBase ?: [NSNull null], _openaiModel ?: [NSNull null],
+					 _geminiKey ?: [NSNull null], _geminiModel ?: [NSNull null],
+					 _customPrompt ?: [NSNull null], _timeoutAction ?: [NSNull null]]);
+
 	NSDictionary *file = nil;
 	if ([[NSFileManager defaultManager] fileExistsAtPath:kSXFilePath]) {
 		file = [NSDictionary dictionaryWithContentsOfFile:kSXFilePath];

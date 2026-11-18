@@ -1,8 +1,12 @@
 # SiriX — tiến độ thực hiện thiết kế v1.2
 
+> **1.1.2 — sửa treo màn hình Log và văng Siri khi gọi công cụ.** Màn hình log đọc
+> theo kiểu "đuôi file" trên luồng nền; pipeline công cụ có trần thời gian, bọc
+> exception và chèn bong bóng đúng `dialogIdentifier`. Chi tiết ở mục cuối tài liệu.
+>
 > **1.1.1 — refactor Settings & logic.** Giao diện cài đặt được làm lại theo một tầng
 > dùng chung (`Prefs/SXUISupport`), logic prefs có kiểm tra hợp lệ, và một số lỗi
-> trong pipeline được vá. Chi tiết ở mục cuối tài liệu.
+> trong pipeline được vá.
 
 Tài liệu thiết kế là mục tiêu, không phải danh sách tính năng đã hoàn tất.
 Không đổi phiên bản gói sang 1.2 cho đến khi các hạng mục bắt buộc được thực hiện và kiểm thử.
@@ -71,3 +75,57 @@ STT, TTS và deferred push phụ thuộc API riêng, quyền mic và audio sessi
 
 STT/TTS thay Apple, deferred push cho đáp án trễ, model dự phòng, huỷ request theo generation,
 xuất/nhập cấu hình, và hiển thị stream theo từng chữ trong bubble.
+
+## 1.1.2 — Sửa treo màn hình Log & văng Siri khi gọi công cụ
+
+Ca lỗi lấy từ log thiết bị thật (bản 1.1.1, roothide):
+
+### 1. Màn hình Log làm treo Preferences
+
+Nguyên nhân: mỗi 2 giây màn hình nạp **toàn bộ** `SiriX.log` (tới 512 KB) bằng
+`dataWithContentsOfFile:` trên luồng chính, tách/lọc từng dòng rồi **dựng lại toàn bộ
+UITextView** (`text`, `layoutIfNeeded`, `scrollRangeToVisible`). Khi log gần mức trần,
+riêng một lần layout đã tốn hàng trăm ms; lặp lại mỗi 2 giây làm luồng chính bị chiếm
+liên tục nên giao diện đơ, không bấm được nút, không thoát ra được.
+
+Đã sửa:
+
+- `SXLogFileReadTail()` (C, có test): chỉ đọc **160 KB cuối** file, bỏ dòng đầu bị cụt,
+  không nạp cả file; gọi trên hàng đợi nền riêng, không bao giờ trên luồng chính.
+- Hiển thị tối đa **1 200 dòng**; phần cũ bị cắt và hiện “đã cắt phần đầu” trên prompt.
+- Chỉ vẽ lại khi nội dung **thực sự đổi**; bình thường **nối thêm** phần mới vào
+  `textStorage` (tối đa 48 KB mỗi nhịp) thay vì dựng lại cả khối văn bản.
+- Bỏ nhịp khi lần đọc trước chưa xong (không xếp hàng dồn), hoãn cập nhật khi đang bôi
+  đen để sao chép, dừng hẹn giờ khi màn hình ẩn hoặc app xuống nền.
+- Hẹn giờ 2,5 s có `tolerance`, hoãn được bằng “Tạm dừng tự làm mới”.
+
+### 2. Siri văng khi AI gọi công cụ
+
+Ba nguyên nhân độc lập, đều đã vá:
+
+1. **Không có lưới an toàn exception**: `executor` của công cụ (UIKit, pasteboard, mạng,
+   `UIDevice`) chạy trên luồng nền SpringBoard mà không có `@try`. Một exception lọt ra
+   ngoài = giết cả SpringBoard (người dùng thấy “Siri văng”, log không có dòng nào vì
+   crash là signal, không phải NSException). Nay: `SXRunTool()` bọc `@try/@catch`, mọi
+   lỗi thành `NSError` để model đọc và trả lời tiếp; `SXTools.execute` cũng bọc tương tự.
+2. **Lượt có công cụ bị cắt oan**: hook ACE chỉ chờ tối đa 5 s trong khi `fetch_url`
+   cho phép tới 15 s, nên quyết định “hết giờ” được áp lên lệnh ACE trong khi model vẫn
+   đang chạy; câu trả lời thật về sau đó không còn chỗ hiển thị ⇒ hội thoại bị đóng.
+   Nay: chờ 6 s cơ bản + 3 s mỗi lần có tiến triển (tối đa 9 s), `fetch_url` giới hạn
+   6 s/7 s, và cả lượt có trần `min(responseTimeout, 15 s)` — hết trần thì báo lỗi rõ
+   ràng thay vì treo.
+3. **Bong bóng chèn sai hội thoại**: `SAUIAssistantUtteranceView` được tạo với
+   `dialogId` ngẫu nhiên, không có `refId`, lệch với `dialogIdentifier` của lệnh ACE.
+   Siri gắn view vào hội thoại theo id này; lệch id làm giao diện đóng/layout lỗi. Nay
+   view mới kế thừa `dialogIdentifier` của lệnh, có `refId`/`aceId`, `listenAfterSpeaking = NO`,
+   và danh sách view sau khi sửa được kiểm tra nil + ghi log từng lớp.
+
+Ngoài ra: mọi hook trong `Tweak.x` đều bọc `@try` để một lỗi trong tweak không bao giờ
+làm chết SpringBoard, và log ghi rõ hook chạy trên luồng chính hay không.
+
+### Kiểm chứng
+
+- `./scripts/local-check.sh` → lint Settings + compile toàn bộ (aarch64-ios 15.0, `-Werror`) + plist.
+- `./scripts/test-log-file.sh` → thêm 5 ca cho `SXLogFileReadTail` (file nhỏ, đuôi bị cắt,
+  file rỗng, file không tồn tại, một dòng dài hơn cửa sổ đọc).
+- Trên thiết bị: log khởi động phải ghi `SiriX 1.1.2`; màn hình Log hiện `N dòng · X KB`.

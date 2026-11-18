@@ -11,6 +11,7 @@ static const NSTimeInterval kSXHTTPTimeout = 60;
 static NSDictionary *SXHTTPPost(NSString *urlString,
 								NSDictionary *body,
 								NSDictionary<NSString *, NSString *> *headers,
+								NSTimeInterval timeoutSeconds,
 								NSError **outErr) {
 	NSURL *url = [NSURL URLWithString:urlString];
 	if (!url) {
@@ -29,7 +30,8 @@ static NSDictionary *SXHTTPPost(NSString *urlString,
 	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
 	request.HTTPMethod = @"POST";
 	request.HTTPBody = payload;
-	request.timeoutInterval = kSXHTTPTimeout;
+	NSTimeInterval timeout = MIN(kSXHTTPTimeout, MAX(1.5, timeoutSeconds));
+	request.timeoutInterval = timeout;
 	[request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
 	[request setValue:[NSString stringWithFormat:@"SiriX/%@", SX_VERSION] forHTTPHeaderField:@"User-Agent"];
 	[headers enumerateKeysAndObjectsUsingBlock:^(NSString *key, NSString *value, BOOL *stop) {
@@ -47,7 +49,7 @@ static NSDictionary *SXHTTPPost(NSString *urlString,
 		sessionError = err;
 		dispatch_semaphore_signal(sem);
 	}] resume];
-	long waitResult = dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kSXHTTPTimeout * NSEC_PER_SEC)));
+	long waitResult = dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, (int64_t)((timeout + 1.0) * NSEC_PER_SEC)));
 
 	if (sessionError) {
 		if (outErr) *outErr = sessionError;
@@ -57,7 +59,7 @@ static NSDictionary *SXHTTPPost(NSString *urlString,
 		// Không có response trong 60s: báo đúng là hết giờ, không phải "HTTP 0".
 		if (outErr) *outErr = [NSError errorWithDomain:@"com.sirix.llm" code:-1004
 			userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithFormat:
-				@"Máy chủ không phản hồi trong %.0f giây. Kiểm tra mạng hoặc endpoint.", kSXHTTPTimeout]}];
+				@"Máy chủ không phản hồi trong %.0f giây. Kiểm tra mạng hoặc endpoint.", timeout]}];
 		return nil;
 	}
 	return @{@"status": @(status), @"data": data ?: [NSData data]};
@@ -96,6 +98,35 @@ static NSDictionary *SXInfo(NSString *provider, NSString *model, NSInteger statu
 static NSError *SXErr(NSInteger code, NSString *message) {
 	return [NSError errorWithDomain:@"com.sirix.llm" code:code
 						   userInfo:@{NSLocalizedDescriptionKey: message}];
+}
+
+/// Chạy công cụ với lưới an toàn: exception của công cụ (UIKit, pasteboard, mạng…)
+/// KHÔNG được làm chết process SpringBoard. Mọi lỗi → NSError để model đọc.
+static NSDictionary *SXRunTool(SXToolExec executor, NSString *name, NSDictionary *arguments,
+							   NSInteger round, NSError **outError) {
+	CFAbsoluteTime began = CFAbsoluteTimeGetCurrent();
+	NSError *toolError = nil;
+	NSDictionary *result = nil;
+	@try {
+		result = executor(name, arguments, &toolError);
+	} @catch (NSException *exception) {
+		SXLogErr(@"err", @"công cụ “%@” ném exception %@: %@ | %@",
+				 name, exception.name, exception.reason,
+				 [exception.callStackSymbols componentsJoinedByString:@" ; "]);
+		toolError = SXErr(-1010, [NSString stringWithFormat:@"Công cụ “%@” gặp lỗi nội bộ.", name]);
+	} @catch (id other) {
+		SXLogErr(@"err", @"công cụ “%@” ném lỗi không phải NSException", name);
+		toolError = SXErr(-1010, [NSString stringWithFormat:@"Công cụ “%@” gặp lỗi nội bộ.", name]);
+	}
+	SXLogDbg(@"tool", @"vòng %ld: %@ → %ld ms%@", (long)round, name,
+			 (long)((CFAbsoluteTimeGetCurrent() - began) * 1000),
+			 toolError ? @" (lỗi)" : @"");
+	if (toolError) {
+		SXLogWrn(@"tool", @"%@ lỗi: %@", name, toolError.localizedDescription);
+		if (outError) *outError = toolError;
+		return nil;
+	}
+	return result;
 }
 
 // Retry giới hạn theo từng vòng HTTP, chỉ với 429/5xx; không chạy lại tool.
@@ -153,12 +184,25 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 			 (unsigned long)toolsPayload.count, prefs.temperature);
 
 	CFAbsoluteTime start = CFAbsoluteTimeGetCurrent();
+	// Trần thời gian cho CẢ lượt (kể cả các vòng gọi công cụ): model không thể
+	// quay vô hạn trong nền trong khi Siri đã bỏ lượt chờ.
+	NSTimeInterval turnLimit = MIN(MAX(4.0, prefs.responseTimeout), 15.0);
+	CFAbsoluteTime deadline = start + turnLimit;
 	NSInteger rounds = 0;
 	NSInteger lastStatus = 0;
 	NSInteger retryCount = 0;
 	BOOL forceNonStream = !prefs.streaming;
 
 	while (YES) {
+		NSTimeInterval remaining = deadline - CFAbsoluteTimeGetCurrent();
+		if (remaining < 1.0) {
+			NSError *err = SXErr(-1009, [NSString stringWithFormat:
+				@"AI chưa trả lời xong trong %.0f giây (đã %ld vòng công cụ).",
+				turnLimit, (long)rounds]);
+			SXLogWrn(@"llm", @"%@", err.localizedDescription);
+			completion(nil, err, SXInfo(@"openai", model, lastStatus, rounds, start));
+			return;
+		}
 		NSMutableDictionary *body = [@{
 			@"model": model,
 			@"messages": messages,
@@ -177,6 +221,7 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 												   headers:@{@"Authorization":
 														[NSString stringWithFormat:@"Bearer %@", key]}
 													 format:SXStreamFormatOpenAI
+													  timeout:remaining
 													  error:&streamError];
 			if (!streamResp) {
 				// Lỗi transport/hết giờ trên SSE → thử non-stream một lần
@@ -222,7 +267,7 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 		NSError *postError = nil;
 		NSDictionary *resp = SXHTTPPost(url, body, @{
 			@"Authorization": [NSString stringWithFormat:@"Bearer %@", key],
-		}, &postError);
+		}, remaining, &postError);
 		if (!resp) {
 			SXLogErr(@"llm", @"openai lỗi mạng: %@", postError.localizedDescription);
 			completion(nil, postError, SXInfo(@"openai", model, 0, rounds, start));
@@ -280,7 +325,7 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 					if ([parsed isKindOfClass:[NSDictionary class]]) args = parsed;
 				}
 				NSError *toolError = nil;
-				NSDictionary *toolResult = executor(name, args, &toolError);
+				NSDictionary *toolResult = SXRunTool(executor, name, args, rounds, &toolError);
 				NSString *resultText = toolError
 					? [@"Lỗi công cụ: " stringByAppendingString:toolError.localizedDescription]
 					: ([toolResult[@"result"] isKindOfClass:[NSString class]] ? toolResult[@"result"] : @"Đã thực hiện xong.");
@@ -354,12 +399,23 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 			 (unsigned long)toolDefs.count, prefs.temperature);
 
 	CFAbsoluteTime start = CFAbsoluteTimeGetCurrent();
+	NSTimeInterval turnLimit = MIN(MAX(4.0, prefs.responseTimeout), 15.0);
+	CFAbsoluteTime deadline = start + turnLimit;
 	NSInteger rounds = 0;
 	NSInteger lastStatus = 0;
 	NSInteger retryCount = 0;
 	BOOL forceNonStream = !prefs.streaming;
 
 	while (YES) {
+		NSTimeInterval remaining = deadline - CFAbsoluteTimeGetCurrent();
+		if (remaining < 1.0) {
+			NSError *err = SXErr(-1009, [NSString stringWithFormat:
+				@"AI chưa trả lời xong trong %.0f giây (đã %ld vòng công cụ).",
+				turnLimit, (long)rounds]);
+			SXLogWrn(@"llm", @"%@", err.localizedDescription);
+			completion(nil, err, SXInfo(@"gemini", model, lastStatus, rounds, start));
+			return;
+		}
 		NSMutableDictionary *body = [@{
 			@"contents": contents,
 			@"systemInstruction": @{@"parts": @[@{@"text": prefs.systemPrompt}]},
@@ -384,6 +440,7 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 													 toURL:streamURL
 												   headers:@{@"x-goog-api-key": key}
 													 format:SXStreamFormatGemini
+													  timeout:remaining
 													  error:&streamError];
 			if (!streamResp) {
 				// Như nhánh OpenAI: SSE lỗi/treo → fallback non-stream.
@@ -426,7 +483,7 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 		}
 
 		NSError *postError = nil;
-		NSDictionary *resp = SXHTTPPost(url, body, @{@"x-goog-api-key": key}, &postError);
+		NSDictionary *resp = SXHTTPPost(url, body, @{@"x-goog-api-key": key}, remaining, &postError);
 		if (!resp) {
 			SXLogErr(@"llm", @"gemini lỗi mạng: %@", postError.localizedDescription);
 			completion(nil, postError, SXInfo(@"gemini", model, 0, rounds, start));
@@ -488,7 +545,7 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 				if (!name) continue;
 				NSDictionary *args = [call[@"args"] isKindOfClass:[NSDictionary class]] ? call[@"args"] : @{};
 				NSError *toolError = nil;
-				NSDictionary *toolResult = executor(name, args, &toolError);
+				NSDictionary *toolResult = SXRunTool(executor, name, args, rounds, &toolError);
 				NSString *resultText = toolError
 					? [@"Lỗi công cụ: " stringByAppendingString:toolError.localizedDescription]
 					: ([toolResult[@"result"] isKindOfClass:[NSString class]] ? toolResult[@"result"] : @"Đã thực hiện xong.");

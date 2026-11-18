@@ -15,6 +15,8 @@ typedef NS_ENUM(NSInteger, SXStreamFormat) {
 ///   @"status"        NSNumber   HTTP status (0 nếu lỗi mạng trước khi có response)
 ///   @"firstTokenMs"  NSNumber   ms đến token đầu tiên (-1 nếu không có)
 ///   @"errorText"     NSString?  đoạn lỗi từ máy chủ (khi status ≥ 400)
+/// `timeoutSeconds` là ngân sách còn lại của cả lượt (SXLLM truyền vào) —
+/// không bao giờ chờ lâu hơn trần 60 giây của SSE.
 /// Lỗi mạng thật → nil + *outErr.
 @interface SXStream : NSObject
 
@@ -22,6 +24,7 @@ typedef NS_ENUM(NSInteger, SXStreamFormat) {
 							  toURL:(NSString *)urlString
 							headers:(NSDictionary<NSString *, NSString *> *)headers
 							 format:(SXStreamFormat)format
+							timeout:(NSTimeInterval)timeoutSeconds
 							   error:(NSError **)outErr;
 
 @end

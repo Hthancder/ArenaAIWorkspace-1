@@ -119,11 +119,17 @@ static void SXCapture(NSString *raw, NSString *source) {
 %hook AFConversation
 
 - (void)addItemForSpeechRecognizedCommand:(id)command {
-	NSString *text = SXUtteranceFromRecognized(command);
-	if (text) {
-		[[SXIntercept shared] noteQuestion:text source:@"AFConversation.addItemForSpeechRecognizedCommand"];
-	} else {
-		SXLogDbg(@"capture", @"AFConversation.addItemForSpeechRecognizedCommand: không trích được văn bản");
+	// Mọi hook đều bọc @try: một exception lọt vào Siri sẽ giết SpringBoard
+	// (người dùng thấy "giao diện Siri văng").
+	@try {
+		NSString *text = SXUtteranceFromRecognized(command);
+		if (text) {
+			[[SXIntercept shared] noteQuestion:text source:@"AFConversation.addItemForSpeechRecognizedCommand"];
+		} else {
+			SXLogDbg(@"capture", @"AFConversation.addItemForSpeechRecognizedCommand: không trích được văn bản");
+		}
+	} @catch (NSException *exception) {
+		SXLogErr(@"err", @"hook addItemForSpeechRecognizedCommand exception %@: %@", exception.name, exception.reason);
 	}
 	%orig;
 }
@@ -134,7 +140,11 @@ static void SXCapture(NSString *raw, NSString *source) {
 %group AFConvViewsHook
 %hook AFConversation
 - (void)addItemsForAddViewsCommand:(id)command {
-	[[SXIntercept shared] handleAddViewsInsertion:command];
+	@try {
+		[[SXIntercept shared] handleAddViewsInsertion:command];
+	} @catch (NSException *exception) {
+		SXLogErr(@"err", @"hook addItemsForAddViewsCommand exception %@: %@", exception.name, exception.reason);
+	}
 	%orig;
 }
 
@@ -147,7 +157,12 @@ static void SXCapture(NSString *raw, NSString *source) {
 %hook AFConnection
 
 - (void)_handleCommand:(id)command reply:(id)reply {
-	[[SXIntercept shared] handleIncomingCommand:command];
+	@try {
+		[[SXIntercept shared] handleIncomingCommand:command];
+	} @catch (NSException *exception) {
+		SXLogErr(@"err", @"hook _handleCommand exception %@: %@ | %@", exception.name, exception.reason,
+				 [exception.callStackSymbols componentsJoinedByString:@" ; "]);
+	}
 	%orig;
 }
 
@@ -157,9 +172,13 @@ static void SXCapture(NSString *raw, NSString *source) {
 %group AFConnSpeechHook
 %hook AFConnection
 - (void)_tellSpeechDelegateSpeechRecognized:(id)result {
-	NSString *text = SXUtteranceFromRecognized(result);
-	if (text) {
-		[[SXIntercept shared] noteQuestion:text source:@"AFConnection._tellSpeechDelegateSpeechRecognized:"];
+	@try {
+		NSString *text = SXUtteranceFromRecognized(result);
+		if (text) {
+			[[SXIntercept shared] noteQuestion:text source:@"AFConnection._tellSpeechDelegateSpeechRecognized:"];
+		}
+	} @catch (NSException *exception) {
+		SXLogErr(@"err", @"hook _tellSpeechDelegateSpeechRecognized exception %@: %@", exception.name, exception.reason);
 	}
 	%orig;
 }
@@ -170,7 +189,11 @@ static void SXCapture(NSString *raw, NSString *source) {
 %group AFConnTextHook
 %hook AFConnection
 - (void)startRequestWithText:(NSString *)text {
-	SXCapture(text, @"AFConnection.startRequestWithText (Type-to-Siri)");
+	@try {
+		SXCapture(text, @"AFConnection.startRequestWithText (Type-to-Siri)");
+	} @catch (NSException *exception) {
+		SXLogErr(@"err", @"hook startRequestWithText exception %@: %@", exception.name, exception.reason);
+	}
 	%orig;
 }
 
