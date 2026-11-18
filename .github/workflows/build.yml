@@ -22,12 +22,24 @@ jobs:
 
       - name: Regression tests (lint + C/ObjC)
         run: |
-          set -euo pipefail
-          ./scripts/check-prefs.sh
-          ./scripts/test-log-file.sh
-          ./scripts/test-intercept-macos.sh
-          ./scripts/test-store-macos.sh
-          ./scripts/test-toolkit-macos.sh
+          set -uo pipefail
+          # Chạy từng script, gom log; khi hỏng thì đẩy phần đuôi log vào
+          # annotation của check-run để đọc được từ ngoài (job log bị chặn).
+          log=$(mktemp)
+          failed=""
+          for script in check-prefs test-log-file test-intercept-macos test-store-macos test-toolkit-macos; do
+            echo "===== $script =====" | tee -a "$log"
+            if ! "./scripts/${script}.sh" >> "$log" 2>&1; then
+              failed="$script"
+              break
+            fi
+          done
+          tail -n 80 "$log"
+          if [ -n "$failed" ]; then
+            msg=$(tail -n 30 "$log" | tr '\n' '\001' | sed 's/\001/%0A/g')
+            echo "::error title=Regression tests: $failed failed::$msg"
+            exit 1
+          fi
 
       - name: Install build tools
         run: brew install make dpkg ldid
