@@ -31,7 +31,7 @@ static NSDictionary *SXHTTPPost(NSString *urlString,
 	request.HTTPBody = payload;
 	request.timeoutInterval = kSXHTTPTimeout;
 	[request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
-	[request setValue:@"SiriX/1.0" forHTTPHeaderField:@"User-Agent"];
+	[request setValue:[NSString stringWithFormat:@"SiriX/%@", SX_VERSION] forHTTPHeaderField:@"User-Agent"];
 	[headers enumerateKeysAndObjectsUsingBlock:^(NSString *key, NSString *value, BOOL *stop) {
 		[request setValue:value forHTTPHeaderField:key];
 	}];
@@ -47,10 +47,17 @@ static NSDictionary *SXHTTPPost(NSString *urlString,
 		sessionError = err;
 		dispatch_semaphore_signal(sem);
 	}] resume];
-	dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kSXHTTPTimeout * NSEC_PER_SEC)));
+	long waitResult = dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kSXHTTPTimeout * NSEC_PER_SEC)));
 
 	if (sessionError) {
 		if (outErr) *outErr = sessionError;
+		return nil;
+	}
+	if (waitResult != 0) {
+		// Không có response trong 60s: báo đúng là hết giờ, không phải "HTTP 0".
+		if (outErr) *outErr = [NSError errorWithDomain:@"com.sirix.llm" code:-1004
+			userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithFormat:
+				@"Máy chủ không phản hồi trong %.0f giây. Kiểm tra mạng hoặc endpoint.", kSXHTTPTimeout]}];
 		return nil;
 	}
 	return @{@"status": @(status), @"data": data ?: [NSData data]};
@@ -109,7 +116,18 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 	NSString *key = [prefs.openaiKey stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
 	NSString *model = [prefs.openaiModel stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
 	if (!model.length) model = @"gpt-4o-mini";
-	NSString *base = prefs.activeBaseURL;
+	NSString *rawBase = [prefs.openaiBase stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+	NSString *base = [SXPrefs normalizedBaseURL:rawBase];
+	if (!base.length) {
+		// Không bao giờ âm thầm rơi về api.openai.com khi người dùng đã nhập một địa chỉ sai:
+		// làm vậy sẽ gửi khóa của họ tới máy chủ không mong muốn.
+		NSString *message = rawBase.length
+			? [NSString stringWithFormat:@"Địa chỉ API không hợp lệ: %@", rawBase]
+			: @"Chưa đặt địa chỉ API. Mở Cấu hình OpenAI để nhập endpoint.";
+		SXLogErr(@"llm", @"%@", message);
+		completion(nil, SXErr(-1003, message), nil);
+		return;
+	}
 	NSString *url = [base hasSuffix:@"/chat/completions"] ? base : [base stringByAppendingString:@"/chat/completions"];
 	NSMutableArray *messages = [NSMutableArray array];
 	[messages addObject:@{@"role": @"system", @"content": prefs.systemPrompt}];
@@ -219,6 +237,7 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 			completion(nil, err, SXInfo(@"openai", model, lastStatus, rounds, start));
 			return;
 		}
+		retryCount = 0; // request thành công → trả lại ngân sách retry cho vòng sau
 
 		id json = [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL];
 		NSDictionary *choice = nil;
@@ -422,6 +441,7 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 			completion(nil, err, SXInfo(@"gemini", model, lastStatus, rounds, start));
 			return;
 		}
+		retryCount = 0; // request thành công → trả lại ngân sách retry cho vòng sau
 
 		id json = [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL];
 		NSDictionary *candidate = nil;
@@ -473,7 +493,9 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 					? [@"Lỗi công cụ: " stringByAppendingString:toolError.localizedDescription]
 					: ([toolResult[@"result"] isKindOfClass:[NSString class]] ? toolResult[@"result"] : @"Đã thực hiện xong.");
 				SXLogDbg(@"llm", @"round %ld: tool %@ → %@", (long)rounds, name, SXShort(resultText, 160));
-				[contents addObject:@{@"role": @"tool", @"parts": @[@{@"functionResponse": @{
+				// Gemini chỉ nhận role "user"/"model" — functionResponse phải đi kèm "user"
+				// ("tool"/"function" là quy ước của OpenAI và bị API trả 400).
+				[contents addObject:@{@"role": @"user", @"parts": @[@{@"functionResponse": @{
 					@"name": name,
 					@"response": @{@"result": resultText},
 				}}]}];

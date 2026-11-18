@@ -1,5 +1,6 @@
 #import "SXRootListController.h"
 #import "SXLogViewController.h"
+#import "SXUISupport.h"
 #import "PSSpecifier.h"
 #import "SXLog.h"
 #import "SXPrefs.h"
@@ -20,6 +21,13 @@ static void SXExceptionHandler(NSException *exception) {
 			 [exception.callStackSymbols componentsJoinedByString:@" ; "]);
 	if (SXPrevExceptionHandler) SXPrevExceptionHandler(exception);
 }
+
+@interface SXRootListController ()
+@property (nonatomic, strong) UIView *headerView;
+@property (nonatomic, strong) UIView *statusPill;
+@property (nonatomic, strong) UILabel *statusLabel;
+@property (nonatomic, strong) UIView *statusDot;
+@end
 
 @implementation SXRootListController {
 	int _prefsToken;
@@ -48,27 +56,41 @@ static void SXExceptionHandler(NSException *exception) {
 					 [exception.callStackSymbols componentsJoinedByString:@" ; "]);
 			loaded = nil;
 		}
-		if (!loaded) {
-			// Bảng dự phòng tối giản — Settings không được crash.
+		if (!loaded.count) {
+			// Bảng dự phòng tối giản — Settings không được để trống hoặc crash.
 			PSSpecifier *group = [PSSpecifier groupSpecifierWithName:@"SiriX"];
-			[group setProperty:@"Tải bảng cài đặt thất bại. Hãy gửi log tại "
-							  @"/var/mobile/Library/Logs/SiriX.log để mình sửa."
-					   forKey:@"footerText"];
-			loaded = [NSMutableArray arrayWithObject:group];
+			[group setProperty:@"Không tải được bảng cài đặt. Mở “Xem & sao chép log” để lấy log gửi lại."
+					  forKey:@"footerText"];
+			PSSpecifier *log = [PSSpecifier preferenceSpecifierNamed:@"Xem & sao chép log"
+															 target:self
+																set:NULL
+																get:NULL
+															 detail:NSClassFromString(@"SXLogViewController")
+															   cell:PSLinkCell
+															   edit:nil];
+			loaded = [NSMutableArray arrayWithObjects:group, log, nil];
 		}
-
 		_specifiers = loaded;
-		SXLogInf(@"pref", @"bảng cài đặt sẵn sàng: %lu specifier",
-				 (unsigned long)loaded.count);
+		SXLogInf(@"pref", @"bảng cài đặt sẵn sàng: %lu specifier", (unsigned long)loaded.count);
 	}
 	return _specifiers;
 }
 
+#pragma mark - Giá trị động
+
 - (id)readPreferenceValue:(PSSpecifier *)specifier {
 	@try {
 		NSString *key = [specifier propertyForKey:@"key"];
-		if ([key isEqualToString:@"status"]) return [self statusText];
+		SXPrefs *prefs = [SXPrefs shared];
+
+		if ([key isEqualToString:@"summary.status"]) return prefs.statusSummary;
+		if ([key isEqualToString:@"summary.provider"]) return prefs.providerSummary;
+		if ([key isEqualToString:@"summary.reply"]) return prefs.replySummary;
+		if ([key isEqualToString:@"summary.history"]) return prefs.historySummary;
+		if ([key isEqualToString:@"version"]) return SX_VERSION;
 		if ([key isEqualToString:@"packageScheme"]) return @SX_SCHEME;
+		if ([key isEqualToString:@"status"]) return prefs.statusSummary;
+
 		return [super readPreferenceValue:specifier];
 	} @catch (NSException *exception) {
 		SXLogErr(@"pref", @"readPreferenceValue EXCEPTION (key=%@): %@ — %@",
@@ -77,11 +99,39 @@ static void SXExceptionHandler(NSException *exception) {
 	}
 }
 
-- (NSString *)statusText {
-	SXPrefs *prefs = [SXPrefs shared];
-	if (!prefs.enabled) return @"Đã tắt";
-	if (!prefs.activeAPIKey.length) return @"Chưa có khóa API";
-	return @"Sẵn sàng — trả lời bằng AI";
+- (void)setPreferenceValue:(id)value specifier:(PSSpecifier *)specifier {
+	@try {
+		[super setPreferenceValue:value specifier:specifier];
+	} @catch (NSException *exception) {
+		SXLogErr(@"pref", @"setPreferenceValue EXCEPTION (key=%@): %@ — %@",
+				 [specifier propertyForKey:@"key"], exception.name, exception.reason);
+	}
+	// Một nguồn duy nhất: ghi xong thì phát notify; chính trang này cũng nghe notify
+	// nên không cần làm mới ở đây (tránh refresh hai lần cho mỗi lần bấm).
+	notify_post("com.sirix.tweak/prefs.changed");
+}
+
+/// Gộp các thay đổi liên tiếp (kéo slider) thành một lần làm mới duy nhất.
+- (void)sx_scheduleTableRefresh {
+	[NSObject cancelPreviousPerformRequestsWithTarget:self
+											 selector:@selector(sx_applyTableRefresh)
+											   object:nil];
+	[self performSelector:@selector(sx_applyTableRefresh) withObject:nil afterDelay:0.2];
+}
+
+- (void)sx_applyTableRefresh {
+	@try {
+		[self reload];
+	} @catch (NSException *exception) {
+		SXLogErr(@"pref", @"reload EXCEPTION: %@", exception.reason);
+	}
+	@try {
+		UITableView *table = self.tableView ?: ([self.view isKindOfClass:[UITableView class]]
+											   ? (UITableView *)self.view : nil);
+		[table reloadData];
+	} @catch (NSException *exception) {
+		SXLogErr(@"pref", @"reloadData EXCEPTION: %@", exception.reason);
+	}
 }
 
 #pragma mark - Vòng đời
@@ -92,114 +142,160 @@ static void SXExceptionHandler(NSException *exception) {
 	self.title = @"SiriX";
 
 	@try {
-		[self buildHeader];
+		[self sx_buildHeader];
 	} @catch (NSException *exception) {
 		SXLogErr(@"pref", @"buildHeader EXCEPTION: %@ — %@", exception.name, exception.reason);
 	}
 
-	// Tải lại cài đặt + danh sách mỗi khi có thay đổi (áp dụng ngay, không cần mở lại trang).
 	__weak SXRootListController *weakSelf = self;
 	notify_register_dispatch("com.sirix.tweak/prefs.changed", &_prefsToken,
 							 dispatch_get_main_queue(), ^(int token) {
+		(void)token;
 		[[SXPrefs shared] reload];
 		SXRootListController *strongSelf = weakSelf;
-		if (strongSelf) {
-			@try {
-				strongSelf->_specifiers = nil;
-				[strongSelf reloadSpecifiers];
-			} @catch (NSException *exception) {
-				SXLogErr(@"pref", @"reloadSpecifiers EXCEPTION: %@", exception.reason);
-			}
+		if (!strongSelf) return;
+		@try {
+			[strongSelf sx_updateStatusPill];
+			// Cấu trúc bảng không đổi — chỉ đọc lại giá trị, gộp nhiều thay đổi liên tiếp.
+			[strongSelf sx_scheduleTableRefresh];
+		} @catch (NSException *exception) {
+			SXLogErr(@"pref", @"notify handler EXCEPTION: %@", exception.reason);
 		}
 	});
 	SXLogInf(@"pref", @"viewDidLoad — xong");
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+	[super viewWillAppear:animated];
+	[self sx_updateStatusPill];
 }
 
 - (void)dealloc {
 	if (_prefsToken) notify_cancel(_prefsToken);
 }
 
-- (void)buildHeader {
-	// Tìm UITableView: có thể là self.view hoặc một trong các subview (iOS 15).
-	UITableView *table = nil;
-	if ([self.view isKindOfClass:[UITableView class]]) {
-		table = (UITableView *)self.view;
-	} else {
-		for (UIView *subview in self.view.subviews) {
-			if ([subview isKindOfClass:[UITableView class]]) {
-				table = (UITableView *)subview;
-				break;
-			}
-		}
+#pragma mark - Header
+
+- (UITableView *)sx_tableView {
+	if ([self.view isKindOfClass:[UITableView class]]) return (UITableView *)self.view;
+	for (UIView *subview in self.view.subviews) {
+		if ([subview isKindOfClass:[UITableView class]]) return (UITableView *)subview;
 	}
+	return nil;
+}
+
+- (void)sx_buildHeader {
+	UITableView *table = [self sx_tableView];
 	if (!table) {
-		NSMutableArray<NSString *> *subviewClasses = [NSMutableArray array];
-		for (UIView *subview in self.view.subviews) {
-			[subviewClasses addObject:NSStringFromClass(subview.class)];
-		}
-		SXLogWrn(@"pref", @"không tìm thấy UITableView (view=%@, subviews=%@) — bỏ header",
-				 NSStringFromClass(self.view.class),
-				 [subviewClasses componentsJoinedByString:@","]);
+		SXLogWrn(@"pref", @"không tìm thấy UITableView (view=%@) — bỏ header",
+				 NSStringFromClass(self.view.class));
 		return;
 	}
 
 	CGFloat width = UIScreen.mainScreen.bounds.size.width;
-	UIView *header = [[UIView alloc] initWithFrame:CGRectMake(0, 0, width, 124)];
+	UIView *header = [[UIView alloc] initWithFrame:CGRectMake(0, 0, width, 178)];
 
 	UIImage *iconImage = [UIImage imageNamed:@"SiriXIcon"
-									inBundle:[NSBundle bundleForClass:self.class]
-			   compatibleWithTraitCollection:nil];
+								   inBundle:[NSBundle bundleForClass:self.class]
+			  compatibleWithTraitCollection:nil];
 	UIImageView *iconView = [[UIImageView alloc] initWithImage:iconImage];
-	iconView.frame = CGRectMake((width - 68) / 2, 10, 68, 68);
 	iconView.contentMode = UIViewContentModeScaleAspectFill;
-	iconView.layer.cornerRadius = 15;
+	iconView.layer.cornerRadius = 16;
 	iconView.clipsToBounds = YES;
-	iconView.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin;
-	[header addSubview:iconView];
+	iconView.translatesAutoresizingMaskIntoConstraints = NO;
+	[iconView.widthAnchor constraintEqualToConstant:66].active = YES;
+	[iconView.heightAnchor constraintEqualToConstant:66].active = YES;
 
-	UILabel *titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, 84, width, 28)];
+	UILabel *titleLabel = [[UILabel alloc] init];
 	titleLabel.text = @"SiriX";
-	titleLabel.font = [UIFont systemFontOfSize:24 weight:UIFontWeightSemibold];
+	titleLabel.font = [UIFont systemFontOfSize:23 weight:UIFontWeightBold];
 	titleLabel.textAlignment = NSTextAlignmentCenter;
-	titleLabel.adjustsFontSizeToFitWidth = YES;
-	titleLabel.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-	[header addSubview:titleLabel];
 
-	UILabel *subtitleLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, 112, width, 16)];
-	subtitleLabel.text = @"Trợ lý AI ngay trong giao diện Siri";
-	subtitleLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightRegular];
-	subtitleLabel.textColor = [UIColor secondaryLabelColor];
+	UILabel *subtitleLabel = [SXUI footnoteLabel:@"Trợ lý AI ngay trong giao diện Siri"];
 	subtitleLabel.textAlignment = NSTextAlignmentCenter;
-	subtitleLabel.adjustsFontSizeToFitWidth = YES;
-	subtitleLabel.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-	[header addSubview:subtitleLabel];
+
+	SXPrefs *prefs = [SXPrefs shared];
+	NSString *status = prefs.statusSummary;
+	UIColor *statusColor = [SXUI colorForStatusText:status];
+	UIView *pill = [SXUI statusPillWithText:status color:statusColor];
+
+	UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[iconView, titleLabel, subtitleLabel, pill]];
+	stack.axis = UILayoutConstraintAxisVertical;
+	stack.alignment = UIStackViewAlignmentCenter;
+	stack.spacing = 5;
+	stack.translatesAutoresizingMaskIntoConstraints = NO;
+	[header addSubview:stack];
+	[NSLayoutConstraint activateConstraints:@[
+		[stack.centerXAnchor constraintEqualToAnchor:header.centerXAnchor],
+		[stack.topAnchor constraintEqualToAnchor:header.topAnchor constant:14],
+		[stack.leadingAnchor constraintGreaterThanOrEqualToAnchor:header.leadingAnchor constant:16],
+		[stack.trailingAnchor constraintLessThanOrEqualToAnchor:header.trailingAnchor constant:-16],
+	]];
+	if (status.length) [stack setCustomSpacing:9 afterView:subtitleLabel];
 
 	table.tableHeaderView = header;
+
+	self.headerView = header;
+	self.statusPill = pill;
+	self.statusDot = pill.subviews.firstObject;
+	self.statusLabel = pill.subviews.lastObject;
 	SXLogInf(@"pref", @"header cài đặt đã gắn (icon=%d, table=%@)", iconImage != nil,
 			 NSStringFromClass([table class]));
 }
 
+- (void)sx_updateStatusPill {
+	if (!self.statusPill || !self.statusLabel) return;
+	NSString *status = [SXPrefs shared].statusSummary;
+	UIColor *color = [SXUI colorForStatusText:status];
+	self.statusLabel.text = status;
+	self.statusLabel.textColor = color;
+	self.statusDot.backgroundColor = color;
+	self.statusPill.backgroundColor = [color colorWithAlphaComponent:0.14];
+}
+
 #pragma mark - Hành động
 
-- (void)sx_resetHistory:(id)sender {
-	notify_post("com.sirix.tweak/resetHistory");
-	[self showAlert:@"Đã xóa lịch sử hội thoại"
-			message:@"Các câu hỏi/trả lời trước đó đã được xoá khỏi bộ nhớ của SiriX."
-			   error:NO];
+- (void)sx_resetAll:(id)sender {
+	(void)sender;
+	__weak typeof(self) weakSelf = self;
+	[SXUI confirmOn:self
+			  title:@"Khôi phục cài đặt mặc định?"
+			message:@"Toàn bộ tùy chọn, khóa API và prompt tùy chỉnh sẽ bị xoá. Lịch sử hội thoại và log không bị ảnh hưởng."
+		confirmText:@"Khôi phục"
+			 action:^{
+		[SXPrefs resetAll];
+		[[SXPrefs shared] reload];
+		notify_post("com.sirix.tweak/prefs.changed");
+		[SXUI tapFeedback];
+		typeof(self) strongSelf = weakSelf;
+		if (strongSelf) {
+			@try {
+				strongSelf->_specifiers = nil;
+				[strongSelf reloadSpecifiers];
+				[strongSelf sx_updateStatusPill];
+			} @catch (NSException *exception) {
+				SXLogErr(@"pref", @"reset reload EXCEPTION: %@", exception.reason);
+			}
+		}
+	}];
 }
 
 - (void)sx_respring:(id)sender {
-	notify_post("com.sirix.respring");
+	(void)sender;
+	[SXUI confirmOn:self
+			  title:@"Khởi động lại SpringBoard?"
+			message:@"Màn hình sẽ tối khoảng vài giây. Cài đặt đã lưu, không mất dữ liệu."
+		confirmText:@"Khởi động lại"
+			 action:^{
+		SXLogInf(@"pref", @"người dùng yêu cầu khởi động lại SpringBoard");
+		notify_post("com.sirix.respring");
+	}];
 }
 
-- (void)showAlert:(NSString *)title message:(NSString *)message error:(BOOL)isError {
-	if (!self.view.window) return;
-	UIAlertController *alert = [UIAlertController alertControllerWithTitle:title
-																   message:message
-															preferredStyle:UIAlertControllerStyleAlert];
-	[alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
-	[self presentViewController:alert animated:YES completion:nil];
-	(void)isError;
+- (void)sx_resetHistory:(id)sender {
+	(void)sender;
+	notify_post("com.sirix.tweak/resetHistory");
+	[SXUI alertOn:self title:@"Đã xoá ngữ cảnh" message:@"Các câu hỏi/trả lời trước đó đã được xoá khỏi bộ nhớ của SiriX."];
 }
 
 @end

@@ -16,7 +16,9 @@ SiriXPreferences_FILES = \
 	../Sources/SXStream.m \
 	../Sources/SXMarkdown.m \
 	../Sources/SXTools.m \
-	SXProviderConfigController.m
+	SXProviderConfigController.m \
+	SXModelPickerController.m \
+	SXUISupport.m
 
 SiriXPreferences_CFLAGS = -fobjc-arc -Wno-deprecated-declarations \
 	-I$(THEOS_PROJECT_DIR)/include \

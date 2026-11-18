@@ -5,6 +5,43 @@
 static NSString *const kSXDomain = @"com.sirix.tweak";
 static NSString *const kSXFilePath = @"/var/mobile/Library/Preferences/com.sirix.tweak.plist";
 
+NSString *SXProviderDisplayName(SXProvider provider) {
+	return provider == SXProviderGemini ? @"Gemini" : @"OpenAI";
+}
+
+NSArray<NSString *> *SXPreferenceKeys(void) {
+	static NSArray<NSString *> *keys;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		keys = @[@"enabled", @"mode", @"triggerMode", @"provider",
+				 @"openaiKey", @"openaiBase", @"openaiModel",
+				 @"geminiKey", @"geminiModel",
+				 @"temperature", @"contextTurns", @"timeout", @"timeoutAction",
+				 @"streaming", @"markdown", @"hideWebCards", @"showOriginal", @"speakErrors",
+				 @"customPrompt", @"incognito",
+				 @"maxToolRounds", @"toolSystemInfo", @"toolClipboard", @"toolFetchURL",
+				 @"verbose"];
+	});
+	return keys;
+}
+
+NSArray<NSDictionary *> *SXModelPresets(SXProvider provider) {
+	if (provider == SXProviderGemini) {
+		return @[
+			@{@"model": @"gemini-2.0-flash", @"title": @"Gemini 2.0 Flash", @"hint": @"Nhanh, miễn phí hạn mức rộng — mặc định"},
+			@{@"model": @"gemini-2.0-flash-lite", @"title": @"Gemini 2.0 Flash Lite", @"hint": @"Nhanh nhất, câu trả lời ngắn hơn"},
+			@{@"model": @"gemini-1.5-flash", @"title": @"Gemini 1.5 Flash", @"hint": @"Ổn định, phù hợp câu hỏi dài"},
+			@{@"model": @"gemini-1.5-pro", @"title": @"Gemini 1.5 Pro", @"hint": @"Chất lượng cao hơn, chậm hơn"},
+		];
+	}
+	return @[
+		@{@"model": @"gpt-4o-mini", @"title": @"GPT-4o mini", @"hint": @"Nhanh, rẻ — mặc định"},
+		@{@"model": @"gpt-4o", @"title": @"GPT-4o", @"hint": @"Chất lượng cao, độ trễ trung bình"},
+		@{@"model": @"gpt-4.1-mini", @"title": @"GPT-4.1 mini", @"hint": @"Cân bằng tốc độ và chất lượng"},
+		@{@"model": @"o4-mini", @"title": @"o4-mini (reasoning)", @"hint": @"Model suy luận — thường chậm hơn 5 giây"},
+	];
+}
+
 NSString *SXDefaultSystemPrompt(void) {
 	return @"Bạn là SiriX, trợ lý AI tích hợp sẵn trong Siri trên iPhone. "
 		   @"Trả lời chính xác, tự nhiên, ngắn gọn (thường 1–3 câu, trừ khi người dùng hỏi điều cần giải thích kỹ). "
@@ -77,11 +114,63 @@ static double SXClamp(double v, double lo, double hi) {
 #pragma mark - Tải lại
 
 + (void)setString:(NSString *)value forKey:(NSString *)key {
+	[self setValue:value forKey:key];
+}
+
++ (void)setValue:(id)value forKey:(NSString *)key {
 	if (!key.length) return;
+	if (value && ![value isKindOfClass:[NSString class]] && ![value isKindOfClass:[NSNumber class]]) return;
 	CFPreferencesSetAppValue((__bridge CFStringRef)key,
 							 (__bridge CFPropertyListRef)value,
 							 (__bridge CFStringRef)kSXDomain);
 	CFPreferencesAppSynchronize((__bridge CFStringRef)kSXDomain);
+}
+
++ (void)resetAll {
+	CFArrayRef raw = CFPreferencesCopyKeyList((__bridge CFStringRef)kSXDomain,
+											  kCFPreferencesCurrentUser,
+											  kCFPreferencesAnyHost);
+	NSArray *existing = raw ? CFBridgingRelease(raw) : @[];
+	NSMutableSet *keys = [NSMutableSet setWithArray:SXPreferenceKeys()];
+	if ([existing isKindOfClass:[NSArray class]]) [keys addObjectsFromArray:existing];
+	for (NSString *key in keys) {
+		if (![key isKindOfClass:[NSString class]] || !key.length) continue;
+		CFPreferencesSetAppValue((__bridge CFStringRef)key, NULL, (__bridge CFStringRef)kSXDomain);
+	}
+	CFPreferencesAppSynchronize((__bridge CFStringRef)kSXDomain);
+	SXLogInf(@"pref", @"đã khôi phục toàn bộ cài đặt mặc định (%lu key)", (unsigned long)keys.count);
+}
+
++ (NSString *)normalizedBaseURL:(NSString *)raw {
+	if (![raw isKindOfClass:[NSString class]]) return nil;
+	NSString *text = [raw stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+	if (!text.length) return nil;
+	NSURLComponents *components = [NSURLComponents componentsWithString:text];
+	NSString *scheme = components.scheme.lowercaseString;
+	if (![scheme isEqualToString:@"https"] && ![scheme isEqualToString:@"http"]) return nil;
+	if (!components.host.length) return nil;
+	while ([text hasSuffix:@"/"]) text = [text substringToIndex:text.length - 1];
+	return text;
+}
+
++ (BOOL)isValidBaseURL:(NSString *)raw {
+	return [self normalizedBaseURL:raw] != nil;
+}
+
++ (NSString *)stringForKey:(NSString *)key {
+	if (!key.length) return nil;
+	id value = CFBridgingRelease(CFPreferencesCopyAppValue((__bridge CFStringRef)key,
+														   (__bridge CFStringRef)kSXDomain));
+	return [value isKindOfClass:[NSString class]] ? value : nil;
+}
+
++ (NSString *)maskedKey:(NSString *)key {
+	if (![key isKindOfClass:[NSString class]]) return @"";
+	NSString *trimmed = [key stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+	if (!trimmed.length) return @"";
+	if (trimmed.length <= 8) return @"••••••••";
+	return [NSString stringWithFormat:@"%@…%@", [trimmed substringToIndex:3],
+			[trimmed substringFromIndex:trimmed.length - 4]];
 }
 
 - (void)reload {
@@ -153,10 +242,8 @@ static double SXClamp(double v, double lo, double hi) {
 }
 
 - (NSString *)activeBaseURL {
-	NSString *base = [_openaiBase stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-	if (!base.length) base = @"https://api.openai.com/v1";
-	while ([base hasSuffix:@"/"]) base = [base substringToIndex:base.length - 1];
-	return base;
+	NSString *base = [SXPrefs normalizedBaseURL:_openaiBase];
+	return base.length ? base : @"https://api.openai.com/v1";
 }
 
 - (NSString *)systemPrompt {
@@ -179,6 +266,33 @@ static double SXClamp(double v, double lo, double hi) {
 											   withString:NSLocale.currentLocale.languageCode ?: @"vi"];
 	}
 	return base;
+}
+
+#pragma mark - Tóm tắt trạng thái
+
+- (NSString *)statusSummary {
+	if (!_enabled) return @"Đã tắt";
+	if (!self.activeAPIKey.length) return @"Thiếu khóa API";
+	return @"Sẵn sàng";
+}
+
+- (NSString *)activeProviderName {
+	return SXProviderDisplayName(_provider);
+}
+
+- (NSString *)providerSummary {
+	return [NSString stringWithFormat:@"%@ · %@", self.activeProviderName, self.activeModel];
+}
+
+- (NSString *)replySummary {
+	NSString *mode = _mode == SXReplyModeFull ? @"Thay thế mọi câu" : @"Thông minh";
+	NSString *trigger = [_triggerMode isEqualToString:@"prefix"] ? @"tiền tố @ai" : @"tự động";
+	return [NSString stringWithFormat:@"%@ · %@ · chờ %.0fs", mode, trigger, _responseTimeout];
+}
+
+- (NSString *)historySummary {
+	if (_incognito) return @"Không lưu";
+	return [NSString stringWithFormat:@"Đang lưu · %ld câu gần nhất", (long)_contextTurns];
 }
 
 @end

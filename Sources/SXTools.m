@@ -3,6 +3,8 @@
 #import "SXLog.h"
 #import <UIKit/UIKit.h>
 #include <sys/utsname.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
 
 static NSString *const kSXToolsErrorDomain = @"com.sirix.tools";
 
@@ -93,6 +95,107 @@ static NSString *SXStripHTML(NSData *data) {
 	return html;
 }
 
+/// Chặn máy chủ nội bộ/loopback: công cụ này do model điều khiển, nên không được
+/// phép quét router, NAS hay service chạy trên máy người dùng.
+static BOOL SXHostLooksPrivate(NSString *host) {
+	if (![host isKindOfClass:[NSString class]] || !host.length) return YES;
+	NSString *lower = host.lowercaseString;
+	if ([lower isEqualToString:@"localhost"] || [lower hasSuffix:@".local"] ||
+		[lower hasSuffix:@".internal"] || [lower hasSuffix:@".lan"]) return YES;
+
+	// IPv6 literal
+	if ([lower containsString:@":"]) {
+		if ([lower isEqualToString:@"::1"] || [lower hasPrefix:@"fc"] ||
+			[lower hasPrefix:@"fd"] || [lower hasPrefix:@"fe80"] || [lower isEqualToString:@"::"]) return YES;
+	}
+
+	// IPv4 literal
+	struct in_addr addr;
+	if (inet_pton(AF_INET, lower.UTF8String, &addr) == 1) {
+		uint32_t value = ntohl(addr.s_addr);
+		uint32_t a = (value >> 24) & 0xFF;
+		uint32_t b = (value >> 16) & 0xFF;
+		if (a == 0 || a == 10 || a == 127) return YES;
+		if (a == 169 && b == 254) return YES;
+		if (a == 172 && b >= 16 && b <= 31) return YES;
+		if (a == 192 && b == 168) return YES;
+		return NO;
+	}
+
+	// Host toàn chữ số (dạng thập phân của IPv4, ví dụ 2130706433).
+	NSCharacterSet *digits = [NSCharacterSet decimalDigitCharacterSet];
+	if ([lower rangeOfCharacterFromSet:[digits invertedSet]].location == NSNotFound) return YES;
+	return NO;
+}
+
+/// Delegate nhỏ: không đi theo redirect, cắt body ở 2 MB.
+@interface SXFetchDelegate : NSObject <NSURLSessionDataDelegate>
+@property (nonatomic, copy) void (^completion)(NSData *data, NSInteger status, NSError *error);
+@property (nonatomic, strong) NSURLSession *session;
+@property (nonatomic, strong) NSMutableData *buffer;
+@property (nonatomic) NSInteger status;
+@property (nonatomic) BOOL finished;
+@property (nonatomic) NSUInteger limit;
+@end
+
+@implementation SXFetchDelegate
+
+- (instancetype)init {
+	self = [super init];
+	if (self) {
+		_buffer = [NSMutableData data];
+		_limit = 2 * 1024 * 1024;
+	}
+	return self;
+}
+
+- (void)finishWithError:(NSError *)error {
+	if (self.finished) return;
+	self.finished = YES;
+	void (^completion)(NSData *, NSInteger, NSError *) = self.completion;
+	self.completion = nil;
+	[self.session finishTasksAndInvalidate];
+	self.session = nil;
+	if (completion) completion(self.buffer, self.status, error);
+}
+
+- (void)URLSession:(NSURLSession *)session
+				task:(NSURLSessionTask *)task
+	willPerformHTTPRedirection:(NSHTTPURLResponse *)response
+			newRequest:(NSURLRequest *)request
+	 completionHandler:(void (^)(NSURLRequest * _Nullable))completionHandler {
+	(void)session; (void)task; (void)response;
+	SXLogWrn(@"tool", @"fetch_url: chặn redirect → %@", request.URL.absoluteString);
+	completionHandler(nil); // giữ nguyên phản hồi 3xx, không tải tiếp
+}
+
+- (void)URLSession:(NSURLSession *)session
+		  dataTask:(NSURLSessionDataTask *)dataTask
+	didReceiveResponse:(NSURLResponse *)response
+	 completionHandler:(void (^)(NSURLSessionResponseDisposition))completionHandler {
+	(void)session; (void)dataTask;
+	self.status = [(NSHTTPURLResponse *)response statusCode];
+	completionHandler(NSURLSessionResponseAllow);
+}
+
+- (void)URLSession:(NSURLSession *)session dataTask:(NSURLSessionDataTask *)dataTask didReceiveData:(NSData *)data {
+	(void)session;
+	if (self.buffer.length + data.length > self.limit) {
+		[dataTask cancel];
+		NSError *error = SXToolError(7, @"Trang quá lớn để đọc (giới hạn 2 MB).");
+		[self finishWithError:error];
+		return;
+	}
+	[self.buffer appendData:data];
+}
+
+- (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task didCompleteWithError:(NSError *)error {
+	(void)session; (void)task;
+	[self finishWithError:error];
+}
+
+@end
+
 static NSDictionary *SXToolFetchURL(NSDictionary *args, NSError **error) {
 	id raw = args[@"url"];
 	if (![raw isKindOfClass:[NSString class]]) {
@@ -104,31 +207,48 @@ static NSDictionary *SXToolFetchURL(NSDictionary *args, NSError **error) {
 		if (error) *error = SXToolError(3, @"Chỉ hỗ trợ URL bắt đầu bằng https://.");
 		return nil;
 	}
+	if (SXHostLooksPrivate(url.host)) {
+		SXLogWrn(@"tool", @"fetch_url bị chặn: máy chủ nội bộ (%@)", url.host ?: @"?");
+		if (error) *error = SXToolError(8, @"Không cho phép đọc địa chỉ mạng nội bộ.");
+		return nil;
+	}
 
 	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
 	request.HTTPMethod = @"GET";
 	request.timeoutInterval = 12;
-	[request setValue:@"Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) SiriX/1.0"
+	[request setValue:[NSString stringWithFormat:
+		@"Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) SiriX/%@", SX_VERSION]
    forHTTPHeaderField:@"User-Agent"];
 
+	SXFetchDelegate *delegate = [[SXFetchDelegate alloc] init];
 	dispatch_semaphore_t sem = dispatch_semaphore_create(0);
 	__block NSData *body = nil;
 	__block NSInteger status = 0;
-	__block NSError *sessionError = nil;
-	[[[NSURLSession sharedSession] dataTaskWithRequest:request
-									completionHandler:^(NSData *data, NSURLResponse *response, NSError *err) {
+	__block NSError *fetchError = nil;
+	delegate.completion = ^(NSData *data, NSInteger code, NSError *err) {
 		body = data;
-		status = [(NSHTTPURLResponse *)response statusCode];
-		sessionError = err;
+		status = code;
+		fetchError = err;
 		dispatch_semaphore_signal(sem);
-	}] resume];
+	};
+
+	NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration ephemeralSessionConfiguration];
+	configuration.timeoutIntervalForRequest = 12;
+	// Redirect đã bị chặn ở delegate (completionHandler(nil)) — không cần cấu hình thêm.
+	NSURLSession *session = [NSURLSession sessionWithConfiguration:configuration
+														  delegate:delegate
+													 delegateQueue:nil];
+	delegate.session = session;
+	[[session dataTaskWithRequest:request] resume];
 
 	if (dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(15 * NSEC_PER_SEC)))) {
+		delegate.completion = nil;
+		[session invalidateAndCancel];
 		if (error) *error = SXToolError(4, @"Hết thời gian chờ khi tải trang.");
 		return nil;
 	}
-	if (sessionError) {
-		if (error) *error = SXToolError(5, [NSString stringWithFormat:@"Không tải được trang: %@", sessionError.localizedDescription]);
+	if (fetchError) {
+		if (error) *error = SXToolError(5, [NSString stringWithFormat:@"Không tải được trang: %@", fetchError.localizedDescription]);
 		return nil;
 	}
 	if (status < 200 || status >= 400) {
@@ -140,7 +260,7 @@ static NSDictionary *SXToolFetchURL(NSDictionary *args, NSError **error) {
 		if (error) *error = SXToolError(6, @"Trang không có nội dung văn bản.");
 		return nil;
 	}
-	SXLogDbg(@"tool", @"fetch_url %@ → %lu ký từ trích được", url.absoluteString, (unsigned long)text.length);
+	SXLogDbg(@"tool", @"fetch_url %@ → %lu ký tự trích được", url.absoluteString, (unsigned long)text.length);
 	return @{@"result": text};
 }
 

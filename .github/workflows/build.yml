@@ -18,6 +18,8 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - name: Lint settings (plist + controller + selector)
+        run: ./scripts/check-prefs.sh
       - name: Test log file operations
         run: ./scripts/test-log-file.sh
       - name: Test response interception

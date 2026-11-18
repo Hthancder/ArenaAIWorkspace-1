@@ -4,6 +4,40 @@
 #import <notify.h>
 #import <UIKit/UIKit.h>
 
+#pragma mark - Mẫu prompt
+
+static NSString *SXTemplateShort(void) {
+	return @"Bạn là SiriX, trợ lý AI tích hợp trong Siri. Trả lời ngắn nhất có thể (thường 1–2 câu), "
+		   @"đúng trọng tâm, cùng ngôn ngữ với câu hỏi. Không emoji. Chỉ dùng **đậm** hoặc gạch đầu dòng "
+		   @"khi thật sự cần. Nếu người dùng yêu cầu thao tác trên máy (báo thức, gọi điện, mở app…), "
+		   @"hệ thống tự thực hiện — chỉ xác nhận ngắn gọn.";
+}
+
+static NSString *SXTemplateDetailed(void) {
+	return @"Bạn là SiriX, trợ lý AI trong Siri trên iPhone, hôm nay {date}, thiết bị {device}. "
+		   @"Trả lời bằng ngôn ngữ của người dùng. Với câu hỏi cần giải thích: mở đầu bằng câu trả lời "
+		   @"trực tiếp, sau đó 2–4 gạch đầu dòng ngắn nêu lý do hoặc ví dụ, kết thúc bằng một câu chốt. "
+		   @"Không lan man, không emoji, không nhắc lại câu hỏi. Tác vụ hệ thống do iOS xử lý — chỉ xác nhận.";
+}
+
+static NSString *SXTemplateCoding(void) {
+	return @"Bạn là SiriX — trợ lý lập trình tích hợp trong Siri. Trả lời cùng ngôn ngữ với câu hỏi. "
+		   @"Khi đưa code: dùng khối ```ngôn_ngữ``` gọn, chỉ phần cần thiết, kèm 1–3 câu giải thích ngay "
+		   @"dưới. Khi câu trả lời dài, chia mục ngắn. Không emoji, không xin lỗi thừa.";
+}
+
+static NSArray<NSString *> *SXTemplateTitles(void) {
+	return @[@"Ngắn gọn (mặc định)", @"Giải thích kỹ", @"Lập trình"];
+}
+
+static NSString *SXTemplateAtIndex(NSInteger index) {
+	switch (index) {
+		case 1: return SXTemplateDetailed();
+		case 2: return SXTemplateCoding();
+		default: return SXTemplateShort();
+	}
+}
+
 @interface SXPromptController ()
 @property (nonatomic, strong) UITextView *textView;
 @property (nonatomic, strong) UISegmentedControl *segmentControl;
@@ -69,6 +103,13 @@
 		initWithFrame:CGRectMake(0, 0, self.view.bounds.size.width, 44)];
 	toolbar.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 	NSMutableArray<UIBarButtonItem *> *items = [NSMutableArray array];
+	[items addObject:[[UIBarButtonItem alloc] initWithTitle:@"Mẫu"
+													  style:UIBarButtonItemStylePlain
+													 target:self
+													 action:@selector(sx_showTemplates:)]];
+	[items addObject:[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
+																   target:nil
+																   action:nil]];
 	NSArray<NSString *> *tokens = @[@"{date}", @"{device}", @"{lang}"];
 	[tokens enumerateObjectsUsingBlock:^(NSString *token, NSUInteger idx, BOOL *stop) {
 		UIBarButtonItem *item = [[UIBarButtonItem alloc] initWithTitle:token
@@ -279,6 +320,54 @@
 }
 
 #pragma mark - Bàn phím
+
+#pragma mark - Mẫu prompt
+
+- (void)sx_showTemplates:(id)sender {
+	UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"Chọn mẫu prompt"
+																   message:@"Mẫu sẽ thay nội dung đang soạn (có hỏi lại nếu chưa lưu)."
+															preferredStyle:UIAlertControllerStyleActionSheet];
+	NSArray<NSString *> *titles = SXTemplateTitles();
+	__weak typeof(self) weakSelf = self;
+	[titles enumerateObjectsUsingBlock:^(NSString *title, NSUInteger idx, BOOL *stop) {
+		[sheet addAction:[UIAlertAction actionWithTitle:title
+												  style:UIAlertActionStyleDefault
+												handler:^(UIAlertAction *action) {
+			(void)action;
+			[weakSelf sx_applyTemplateAtIndex:(NSInteger)idx];
+		}]];
+	}];
+	[sheet addAction:[UIAlertAction actionWithTitle:@"Hủy" style:UIAlertActionStyleCancel handler:nil]];
+
+	UIPopoverPresentationController *popover = sheet.popoverPresentationController;
+	if (popover) popover.barButtonItem = self.navigationItem.rightBarButtonItem;
+	[self presentViewController:sheet animated:YES completion:nil];
+}
+
+- (void)sx_applyTemplateAtIndex:(NSInteger)index {
+	NSString *text = SXTemplateAtIndex(index);
+	if (!text.length) return;
+	void (^apply)(void) = ^{
+		self.textView.text = text;
+		[self updateStatus];
+		[self.textView becomeFirstResponder];
+	};
+	if (![self isDirty]) {
+		apply();
+		return;
+	}
+	UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Thay nội dung đang soạn?"
+																   message:@"Nội dung đã sửa nhưng chưa lưu sẽ bị thay bằng mẫu."
+															preferredStyle:UIAlertControllerStyleAlert];
+	[alert addAction:[UIAlertAction actionWithTitle:@"Thay bằng mẫu"
+											  style:UIAlertActionStyleDestructive
+											handler:^(UIAlertAction *action) {
+		(void)action;
+		apply();
+	}]];
+	[alert addAction:[UIAlertAction actionWithTitle:@"Hủy" style:UIAlertActionStyleCancel handler:nil]];
+	[self presentViewController:alert animated:YES completion:nil];
+}
 
 - (void)sx_keyboardWillChange:(NSNotification *)note {
 	NSDictionary *userInfo = note.userInfo;

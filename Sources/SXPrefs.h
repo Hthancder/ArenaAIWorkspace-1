@@ -14,6 +14,15 @@ typedef NS_ENUM(NSInteger, SXReplyMode) {
 
 FOUNDATION_EXPORT NSString *SXDefaultSystemPrompt(void);
 
+/// Các key UI được phép ghi trực tiếp (dùng cho nút "Khôi phục mặc định" và trang cấu hình).
+FOUNDATION_EXPORT NSArray<NSString *> *SXPreferenceKeys(void);
+
+/// Tên hiển thị của nhà cung cấp — "OpenAI" / "Gemini".
+FOUNDATION_EXPORT NSString *SXProviderDisplayName(SXProvider provider);
+
+/// Model gợi ý cho từng nhà cung cấp: @[ @{@"model", @"title", @"hint"} ].
+FOUNDATION_EXPORT NSArray<NSDictionary *> *SXModelPresets(SXProvider provider);
+
 @interface SXPrefs : NSObject
 
 + (instancetype)shared;
@@ -23,6 +32,24 @@ FOUNDATION_EXPORT NSString *SXDefaultSystemPrompt(void);
 
 /// Ghi một key chuỗi (CFPreferences + đồng bộ ngay). value = nil → xóa key.
 + (void)setString:(nullable NSString *)value forKey:(NSString *)key;
+
+/// Ghi giá trị bất kỳ (NSString / NSNumber / nil để xóa) + đồng bộ ngay.
++ (void)setValue:(nullable id)value forKey:(NSString *)key;
+
+/// Xóa toàn bộ key của SiriX khỏi domain (dùng cho "Khôi phục cài đặt mặc định").
++ (void)resetAll;
+
+/// Chuẩn hóa endpoint OpenAI: bỏ khoảng trắng + "/" cuối. nil nếu không phải http(s) có host.
++ (nullable NSString *)normalizedBaseURL:(nullable NSString *)raw;
+
+/// Kiểm tra nhanh một endpoint có dùng được không (để UI cảnh báo trước khi lưu).
++ (BOOL)isValidBaseURL:(nullable NSString *)raw;
+
+/// "sk-…a1b2" — hiển thị khóa đã che, không bao giờ in đầy đủ.
++ (NSString *)maskedKey:(nullable NSString *)key;
+
+/// Đọc một key chuỗi bất kỳ (dùng cho dữ liệu phụ như kết quả kiểm tra gần nhất).
++ (nullable NSString *)stringForKey:(NSString *)key;
 
 @property (nonatomic, readonly) BOOL enabled;
 @property (nonatomic, readonly) SXReplyMode mode;
@@ -54,6 +81,18 @@ FOUNDATION_EXPORT NSString *SXDefaultSystemPrompt(void);
 - (NSString *)activeModel;
 - (NSString *)activeBaseURL;
 - (NSString *)systemPrompt;
+
+#pragma mark - Tóm tắt trạng thái cho giao diện
+
+/// "Sẵn sàng" / "Đã tắt" / "Thiếu khóa API".
+@property (nonatomic, readonly, copy) NSString *statusSummary;
+/// "OpenAI · gpt-4o-mini".
+@property (nonatomic, readonly, copy) NSString *providerSummary;
+/// "Thông minh · tự động · chờ 10s".
+@property (nonatomic, readonly, copy) NSString *replySummary;
+/// "Đang lưu · 8 câu gần nhất" hoặc "Không lưu".
+@property (nonatomic, readonly, copy) NSString *historySummary;
+@property (nonatomic, readonly, copy) NSString *activeProviderName;
 
 @end
 

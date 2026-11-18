@@ -1,4 +1,5 @@
 #import "SXStream.h"
+#import "SXLog.h"
 
 static const NSTimeInterval kSXStreamTimeout = 60;
 
@@ -60,7 +61,7 @@ static const NSTimeInterval kSXStreamTimeout = 60;
 	request.timeoutInterval = kSXStreamTimeout;
 	[request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
 	[request setValue:@"text/event-stream" forHTTPHeaderField:@"Accept"];
-	[request setValue:@"SiriX/1.1" forHTTPHeaderField:@"User-Agent"];
+	[request setValue:[NSString stringWithFormat:@"SiriX/%@", SX_VERSION] forHTTPHeaderField:@"User-Agent"];
 	[headers enumerateKeysAndObjectsUsingBlock:^(NSString *key, NSString *value, BOOL *stop) {
 		[request setValue:value forHTTPHeaderField:key];
 	}];

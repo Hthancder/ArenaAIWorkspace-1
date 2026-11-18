@@ -7,64 +7,89 @@
 	<key>items</key>
 	<array>
 		<dict>
-			<key>cell</key>
-			<string>PSGroupCell</string>
-			<key>label</key>
-			<string>Khóa &amp; Mô hình</string>
+			<key>cell</key><string>PSGroupCell</string>
+			<key>label</key><string>Khóa API</string>
 			<key>footerText</key>
-			<string>Khóa Gemini (dạng AIza…) lấy tại aistudio.google.com — chỉ lưu trên máy, không bao giờ hiện đầy đủ trong log.</string>
+			<string>Tạo khóa miễn phí tại Google AI Studio. Khóa chỉ lưu trên máy và không bao giờ được ghi đầy đủ vào log.</string>
 		</dict>
 		<dict>
-			<key>cell</key>
-			<string>PSSecureEditTextCell</string>
-			<key>label</key>
-			<string>Khóa API</string>
-			<key>key</key>
-			<string>geminiKey</string>
-			<key>defaults</key>
-			<string>com.sirix.tweak</string>
-			<key>default</key>
-			<string></string>
-			<key>placeholder</key>
-			<string>AIza…</string>
-			<key>isSecure</key>
-			<true/>
-			<key>PostNotification</key>
-			<string>com.sirix.tweak/prefs.changed</string>
+			<key>cell</key><string>PSSecureEditTextCell</string>
+			<key>label</key><string>Khóa API</string>
+			<key>key</key><string>geminiKey</string>
+			<key>defaults</key><string>com.sirix.tweak</string>
+			<key>default</key><string></string>
+			<key>PostNotification</key><string>com.sirix.tweak/prefs.changed</string>
 		</dict>
 		<dict>
-			<key>cell</key>
-			<string>PSEditTextCell</string>
-			<key>label</key>
-			<string>Mô hình</string>
-			<key>key</key>
-			<string>geminiModel</string>
-			<key>defaults</key>
-			<string>com.sirix.tweak</string>
-			<key>default</key>
-			<string>gemini-2.0-flash</string>
-			<key>placeholder</key>
-			<string>gemini-2.0-flash</string>
-			<key>noAutoCorrect</key>
-			<true/>
-			<key>PostNotification</key>
-			<string>com.sirix.tweak/prefs.changed</string>
+			<key>cell</key><string>PSTitleValueCell</string>
+			<key>label</key><string>Khóa đang dùng</string>
+			<key>key</key><string>keyDisplay</string>
 		</dict>
 		<dict>
-			<key>cell</key>
-			<string>PSGroupCell</string>
-			<key>label</key>
-			<string>Kiểm tra</string>
+			<key>cell</key><string>PSButtonCell</string>
+			<key>label</key><string>Dán khóa từ bộ nhớ tạm</string>
+			<key>action</key><string>sx_pasteKey:</string>
+		</dict>
+
+		<dict>
+			<key>cell</key><string>PSGroupCell</string>
+			<key>label</key><string>Endpoint</string>
 			<key>footerText</key>
-			<string>Gửi một câu hỏi thật tới Gemini bằng đúng cấu hình này — không lưu lịch sử hội thoại.</string>
+			<string>Gemini dùng endpoint cố định của Google (Generative Language API v1beta). Không cần cấu hình thêm.</string>
 		</dict>
 		<dict>
-			<key>cell</key>
-			<string>PSButtonCell</string>
-			<key>label</key>
-			<string>Kiểm tra kết nối</string>
-			<key>action</key>
-			<string>sx_testConnection:</string>
+			<key>cell</key><string>PSTitleValueCell</string>
+			<key>label</key><string>Máy chủ</string>
+			<key>key</key><string>endpointDisplay</string>
+		</dict>
+
+		<dict>
+			<key>cell</key><string>PSGroupCell</string>
+			<key>label</key><string>Mô hình</string>
+			<key>footerText</key>
+			<string>Flash phù hợp trả lời nhanh trong Siri; Pro chất lượng cao hơn nhưng thường vượt mốc chờ 5 giây.</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSLinkCell</string>
+			<key>label</key><string>Chọn từ danh sách</string>
+			<key>detail</key><string>SXModelPickerController</string>
+			<key>providerPicker</key><string>gemini</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSEditTextCell</string>
+			<key>label</key><string>Mô hình tùy chỉnh</string>
+			<key>key</key><string>geminiModel</string>
+			<key>defaults</key><string>com.sirix.tweak</string>
+			<key>default</key><string>gemini-2.0-flash</string>
+			<key>PostNotification</key><string>com.sirix.tweak/prefs.changed</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSTitleValueCell</string>
+			<key>label</key><string>Đang dùng</string>
+			<key>key</key><string>modelDisplay</string>
+		</dict>
+
+		<dict>
+			<key>cell</key><string>PSGroupCell</string>
+			<key>label</key><string>Kiểm tra</string>
+			<key>footerText</key>
+			<string>Gửi một câu ngắn tới Gemini để xác nhận khóa và mô hình. Kết quả được lưu lại và tự xoá khi bạn đổi cấu hình.</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSButtonCell</string>
+			<key>label</key><string>Kiểm tra kết nối</string>
+			<key>action</key><string>sx_testConnection:</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSTitleValueCell</string>
+			<key>id</key><string>testStatus</string>
+			<key>label</key><string>Kết quả</string>
+			<key>key</key><string>testStatus</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSLinkCell</string>
+			<key>label</key><string>Trò chuyện thử</string>
+			<key>detail</key><string>SXChatTestController</string>
 		</dict>
 	</array>
 </dict>

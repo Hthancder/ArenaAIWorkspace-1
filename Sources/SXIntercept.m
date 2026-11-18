@@ -160,6 +160,38 @@ static id SXMakeUtteranceView(NSString *displayText, NSString *speechText) {
 	return canSet ? view : nil;
 }
 
+/// View có chữ (text hoặc speakableText) — ứng viên để thay.
+static BOOL SXViewHasText(id view) {
+	if (!view) return NO;
+	id value = SXMsg(view, NSSelectorFromString(@"text"));
+	if ([value isKindOfClass:[NSString class]] && [(NSString *)value length]) return YES;
+	value = SXMsg(view, NSSelectorFromString(@"speakableText"));
+	return [value isKindOfClass:[NSString class]] && [(NSString *)value length];
+}
+
+/// Chọn MỘT view chính để thay: ưu tiên Utterance (bong bóng trả lời), nếu không có thì
+/// lấy view có chữ cuối cùng. Các view khác giữ nguyên — tránh việc tiêu đề/phụ đề
+/// bị đè cùng một nội dung (chữ lặp) khi Apple gửi nhiều view trong một AddViews.
+static id SXPrimaryTextView(NSArray *views) {
+	id fallback = nil;
+	for (id view in views) {
+		if (SXIsCardView(view)) continue;
+		if (!SXViewHasText(view)) continue;
+		NSString *className = NSStringFromClass([view class]);
+		if ([className containsString:@"Utterance"]) return view;
+		fallback = view;
+	}
+	return fallback;
+}
+
+/// ID hội thoại của lệnh ACE (nếu có) — dùng để không áp quyết định cũ sang lệnh khác.
+static NSString *SXDialogID(id command) {
+	if (!command) return nil;
+	id value = nil;
+	@try { value = [command valueForKey:@"dialogIdentifier"]; } @catch (NSException *exception) { value = nil; }
+	return [value isKindOfClass:[NSString class]] && [value length] ? value : nil;
+}
+
 /// Thay nội dung tại chỗ: SAUIAddViews.views[*] + SAUISayIt.message.
 /// - displayText: bản hiển thị (có thể đã render markdown)
 /// - speechText : bản đọc/phát giọng (thuần, markdown đã gỡ)
@@ -191,8 +223,10 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 						continue;
 					}
 					[kept addObject:view];
-					if (SXApplyTextToView(view, displayText, speechText, rollback)) changed = YES;
 				}
+				// Chỉ thay view chính. View khác (tiêu đề, phụ đề…) giữ nguyên văn.
+				id primary = SXPrimaryTextView(kept);
+				if (primary && SXApplyTextToView(primary, displayText, speechText, rollback)) changed = YES;
 				BOOL injected = NO;
 				if (!changed) {
 					// Không có trường văn bản sẵn (thẻ đã ẩn / rỗng) → chèn bong bóng của SiriX
@@ -260,6 +294,7 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 	NSString *_decisionSpeech;
 	NSTimeInterval _decisionTime;
 	BOOL _decisionIsAnswer;
+	NSString *_decisionDialogID;
 	BOOL _historySaved;
 	BOOL _outcomeCounted;
 	BOOL _questionIncognito;
@@ -378,6 +413,7 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 	_decisionSpeech = nil;
 	_decisionTime = 0;
 	_decisionIsAnswer = NO;
+	_decisionDialogID = nil;
 	_historySaved = NO;
 	_outcomeCounted = NO;
 	_questionIncognito = prefs.incognito;
@@ -568,6 +604,7 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 		if (!_consumed) {
 			_consumed = YES;
 			_decisionTime = CFAbsoluteTimeGetCurrent();
+			_decisionDialogID = SXDialogID(command);
 			[_condition broadcast];
 			if (_ready && _answer.length && _answerDisplay.length) {
 				_decisionIsAnswer = YES;
@@ -602,9 +639,16 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 	// AddViews, SayIt và hook dự phòng có thể là nhiều object cho cùng một lượt.
 	// Dùng cùng quyết định thay vì cho các lệnh sau lọt về Siri gốc. Hết hạn
 	// sau 30 giây để không áp dụng nhầm cho một phiên không bắt được capture.
-	if (!_decisionDisplay.length || CFAbsoluteTimeGetCurrent() - _decisionTime > 30.0) {
+	if (!_decisionDisplay.length || CFAbsoluteTimeGetCurrent() - _decisionTime > 20.0) {
 		[_condition unlock];
 		SXLogDbg(@"resp", @"%@: quyết định giữ gốc hoặc đã hết hạn (%@)", source, className);
+		return NO;
+	}
+	// Chỉ áp quyết định cho cùng hội thoại — tránh đè lên một lệnh UI không liên quan.
+	NSString *dialogID = SXDialogID(command);
+	if (dialogID.length && _decisionDialogID.length && ![dialogID isEqualToString:_decisionDialogID]) {
+		[_condition unlock];
+		SXLogDbg(@"resp", @"%@: khác dialog (%@ ≠ %@) — cho qua", source, dialogID, _decisionDialogID);
 		return NO;
 	}
 	if ([_handledCommands containsObject:command]) {

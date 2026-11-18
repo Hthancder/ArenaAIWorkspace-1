@@ -76,6 +76,11 @@ void SXLogWrite(SXLogLevel level, NSString *category, NSString *format, ...) { (
 @end
 @implementation FakeAlarm
 @end
+@interface FakeDialogAddViews : FakeAddViews
+@property (nonatomic, copy) NSString *dialogIdentifier;
+@end
+@implementation FakeDialogAddViews
+@end
 
 static void begin(NSString *question) {
 	[[SXIntercept shared] noteQuestion:question source:@"test"];
@@ -84,6 +89,15 @@ static void begin(NSString *question) {
 static FakeAddViews *viewCommand(void) {
 	FakeView *view = [FakeView new]; view.text = @"Siri gốc"; view.speakableText = @"Siri gốc";
 	FakeAddViews *command = [FakeAddViews new]; command.views = @[view]; return command;
+}
+static FakeDialogAddViews *dialogCommand(NSString *dialog, NSString *text) {
+	FakeView *view = [FakeView new];
+	view.text = text;
+	view.speakableText = text;
+	FakeDialogAddViews *command = [FakeDialogAddViews new];
+	command.dialogIdentifier = dialog;
+	command.views = @[view];
+	return command;
 }
 static FakeSayIt *sayCommand(void) {
 	FakeSayIt *command = [FakeSayIt new]; command.message = @"Siri gốc"; return command;
@@ -106,6 +120,31 @@ int main(void) {
 		FakeAddViews *next = viewCommand();
 		assert([intercept handleIncomingCommand:next]);
 		assert([((FakeView *)next.views[0]).text isEqualToString:@"AI answer"]);
+
+		// AddViews nhiều view: chỉ view chính (cuối) bị thay, view khác giữ nguyên.
+		begin(@"question multi view");
+		pendingCompletion(@"multi answer", nil, nil);
+		FakeView *titleView = [FakeView new];
+		titleView.text = @"Tiêu đề";
+		titleView.speakableText = @"Tiêu đề";
+		FakeView *bodyView = [FakeView new];
+		bodyView.text = @"Siri gốc";
+		bodyView.speakableText = @"Siri gốc";
+		FakeAddViews *multi = [FakeAddViews new];
+		multi.views = @[titleView, bodyView];
+		assert([intercept handleIncomingCommand:multi]);
+		assert([bodyView.text isEqualToString:@"multi answer"]);
+		assert([titleView.text isEqualToString:@"Tiêu đề"]);
+
+		// Khác dialogIdentifier: không áp quyết định của lượt trước sang lệnh UI khác.
+		begin(@"question dialog");
+		pendingCompletion(@"dialog answer", nil, nil);
+		FakeDialogAddViews *dialogA = dialogCommand(@"A", @"Siri gốc");
+		assert([intercept handleIncomingCommand:dialogA]);
+		assert([((FakeView *)dialogA.views.firstObject).text isEqualToString:@"dialog answer"]);
+		FakeDialogAddViews *dialogB = dialogCommand(@"B", @"Siri gốc");
+		assert(![intercept handleIncomingCommand:dialogB]);
+		assert([((FakeView *)dialogB.views.firstObject).text isEqualToString:@"Siri gốc"]);
 
 		// Chỉ hiển thị câu gốc, không đọc footer bằng giọng nói.
 		testShowOriginal = YES;
