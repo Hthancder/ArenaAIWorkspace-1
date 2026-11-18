@@ -11,7 +11,9 @@ final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
     private static let bubbleIsLeftKey = "WriteNowPickerBubbleIsLeft"
     private static let bubbleYRatioKey = "WriteNowPickerBubbleYRatio"
     private static let bubbleViewTag = 0x574E4255
-    private static let ownerSelectorKey = NSSelectorFromString("___WriteNowScreenPickerOwnerKey___")
+    private static let ownerPointerKey: UnsafeRawPointer = UnsafeRawPointer(
+        sel_getName(NSSelectorFromString("___WriteNowScreenPickerOwnerKey___"))
+    )
 
     private let attachedWindows = NSHashTable<UIWindow>.weakObjects()
     private weak var bubbleWindow: UIWindow?
@@ -23,8 +25,8 @@ final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
     private var lastShakeTriggerAt: Date = .distantPast
 
     private var isPrimaryOwner: Bool {
-        guard let existing = objc_getAssociatedObject(UIApplication.shared, Self.ownerSelectorKey) as AnyObject? else {
-            objc_setAssociatedObject(UIApplication.shared, Self.ownerSelectorKey, self, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        guard let existing = objc_getAssociatedObject(UIApplication.shared, Self.ownerPointerKey) as AnyObject? else {
+            objc_setAssociatedObject(UIApplication.shared, Self.ownerPointerKey, self, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
             return true
         }
         return existing === self
