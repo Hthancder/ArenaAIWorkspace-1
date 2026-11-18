@@ -107,6 +107,8 @@ hoặc gõ        (sttLanguage)      (sttTranslate)         ngôn ngữ câu h�
 
 ## 5. Quy ước Settings (nhất quán bắt buộc)
 
+> **Lớp UI chi tiết (wireframe, design system, logic từng màn hình) → `DESIGN-UI.md`.**
+
 ### 5.1 Ánh xạ điều khiển — dùng đúng 1 kiểu cho mỗi loại dữ liệu
 | Dữ liệu | Control | Ví dụ |
 |---|---|---|
