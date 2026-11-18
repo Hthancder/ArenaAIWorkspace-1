@@ -105,7 +105,7 @@ jobs:
 
           # Bundle cài đặt
           ROOTPLIST=$(find "$STAGE" -path '*PreferenceBundles/SiriXPreferences.bundle' -name 'Root.plist' | head -n 1)
-          [ -n "$ROOTPLIST" ] || vfail "prefs" "Không thấy SiriXPreferences.bundle/Root.plist"
+          [ -n "$ROOTPLIST" ] || vfail "prefs" "Không thấy SiriXPreferences.bundle/Root.plist. Cây staging: $(find "$STAGE" | sed "s|$STAGE||" | head -80 | tr '\n' ' ')"
           grep -rq 'SXPromptController' "$ROOTPLIST" || vfail "prefs-content" "Root.plist thiếu SXPromptController"
 
           # Entry PreferenceLoader
