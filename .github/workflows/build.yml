@@ -1,0 +1,124 @@
+name: Build SiriX
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: write
+
+concurrency:
+  group: sirix-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.scheme }}
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - scheme: rootless
+            theos_repo: theos/theos
+          - scheme: roothide
+            theos_repo: roothide/theos
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: brew install make dpkg ldid
+
+      - name: Clone Theos (${{ matrix.theos_repo }}) + patched SDK
+        run: |
+          git clone --depth 1 --recursive "https://github.com/${{ matrix.theos_repo }}" "$GITHUB_WORKSPACE/theos"
+          # SDK "patched" của theos — chứa private-framework tbds (Preferences…) mà Xcode stock không có
+          # (thos repo có sẵn thư mục rỗng sdks/ với .keep → xóa trước khi clone vào)
+          rm -rf "$GITHUB_WORKSPACE/theos/sdks"
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/theos/sdks "$GITHUB_WORKSPACE/theos/sdks"
+          git -C "$GITHUB_WORKSPACE/theos/sdks" sparse-checkout set iPhoneOS15.6.sdk
+          echo "THEOS=$GITHUB_WORKSPACE/theos" >> "$GITHUB_ENV"
+
+      - name: Build & package (THEOS_PACKAGE_SCHEME=${{ matrix.scheme }})
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          make clean > build.log 2>&1
+          make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=${{ matrix.scheme }} >> build.log 2>&1
+          rc=$?
+          if [ $rc -ne 0 ]; then
+            echo "===== TAIL build.log ====="; tail -n 80 build.log
+            # Kênh 1: annotation (đọc được qua API)
+            MSG=$(tail -n 40 build.log | tr '\n' '\001' | sed 's/\001/%0A/g')
+            echo "::error title=Build ${{ matrix.scheme }} failed::$MSG"
+            # Kênh 2: check-run summary (đọc được qua API)
+            SUMMARY=$( { echo "### ❌ Build failed (${{ matrix.scheme }})"; echo '```'; tail -n 150 build.log; echo '```'; } )
+            CRID=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/check-runs?per_page=50" \
+                   --jq "[.check_runs[] | select(.name == \"${{ matrix.scheme }}\")][0].id" 2>/dev/null)
+            if [ -n "$CRID" ] && [ "$CRID" != "null" ]; then
+              gh api -X PATCH "repos/${GITHUB_REPOSITORY}/check-runs/${CRID}" \
+                -f "output[title]=Build failed (${{ matrix.scheme }})" \
+                -f "output[summary]=${SUMMARY}" >/dev/null 2>&1
+            fi
+          else
+            echo "## ✅ ${{ matrix.scheme }} build OK" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit $rc
+
+      - name: Validate package
+        run: |
+          set -uo pipefail
+          vfail() { echo "::error title=Validate (${{ matrix.scheme }}): $1::$2"; exit 1; }
+          echo "=== packages/ ==="; ls -la packages/ 2>&1 || true
+          DEB=$(ls packages/*.deb 2>/dev/null | head -n 1)
+          [ -n "$DEB" ] || vfail "no deb" "Không tìm thấy .deb trong packages/. Nội dung: $(ls -la packages 2>&1)"
+          echo "deb: $DEB ($(wc -c < "$DEB") bytes)"
+          INFO=$(dpkg-deb --info "$DEB" 2>&1) || vfail "dpkg-deb --info" "$INFO"
+          echo "$INFO"
+          ARCH=$(dpkg-deb -f "$DEB" Architecture 2>&1) || vfail "dpkg-deb -f Architecture" "$ARCH"
+          echo "Architecture: $ARCH"
+          case "$ARCH" in
+            iphoneos-arm64|iphoneos-arm64e) ;;
+            *) vfail "arch" "Architecture không hợp lệ: $ARCH" ;;
+          esac
+          CONT=$(dpkg-deb --contents "$DEB" 2>&1) || vfail "dpkg-deb --contents" "$CONT"
+          echo "$CONT"
+          STAGE=$(mktemp -d)
+          EX=$(dpkg-deb -x "$DEB" "$STAGE" 2>&1) || vfail "dpkg-deb -x" "$EX"
+
+          # Dylib tweak + marker selector
+          DYLIB=$(find "$STAGE" -name 'SiriX.dylib' | head -n 1)
+          [ -n "$DYLIB" ] || vfail "dylib" "Không thấy SiriX.dylib: $(find "$STAGE" -type f | head -30 | tr '\n' ' ')"
+          echo "dylib: $DYLIB"
+          strings "$DYLIB" | grep -q '_handleCommand' || vfail "marker1" "_handleCommand không có trong dylib"
+          strings "$DYLIB" | grep -q 'addItemForSpeechRecognizedCommand' || vfail "marker2" "addItemForSpeechRecognizedCommand không có"
+          strings "$DYLIB" | grep -q 'SiriX' || vfail "marker3" "SiriX không có"
+
+          # Filter plist (không phải entry PreferenceLoader)
+          FILTER=$(find "$STAGE" -name 'SiriX.plist' ! -path '*PreferenceLoader*' | head -n 1)
+          [ -n "$FILTER" ] || vfail "filter" "Không thấy filter SiriX.plist"
+          grep -q 'com.apple.springboard' "$FILTER" || vfail "filter-content" "Filter thiếu com.apple.springboard"
+
+          # Bundle cài đặt
+          ROOTPLIST=$(find "$STAGE" -path '*SiriXPreferences.bundle/Root.plist' | head -n 1)
+          [ -n "$ROOTPLIST" ] || vfail "prefs" "Không thấy SiriXPreferences.bundle/Root.plist. Cây staging: $(find "$STAGE" | sed "s|$STAGE||" | head -80 | tr '\n' ' ')"
+          grep -rq 'SXPromptController' "$ROOTPLIST" || vfail "prefs-content" "Root.plist thiếu SXPromptController"
+
+          # Entry PreferenceLoader
+          ENTRY=$(find "$STAGE" -path '*PreferenceLoader*' -name 'SiriX.plist' | head -n 1)
+          [ -n "$ENTRY" ] || vfail "entry" "Không thấy entry PreferenceLoader"
+          grep -q 'SXRootListController' "$ENTRY" || vfail "entry-content" "Entry thiếu SXRootListController"
+
+          echo "=== OK: $DEB ==="
+          echo "✅ ${{ matrix.scheme }}: $(basename "$DEB") — Architecture=$ARCH" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: SiriX-${{ matrix.scheme }}
+          path: packages/*.deb
+          if-no-files-found: error
