@@ -314,3 +314,11 @@ Prefs/
 4. **Mục D** (stats/history/prefix/fallback/export…) — nhiều việc nhưng chắc.
 5. **Mini-chat / cập nhật / current_app** — rải rác khi rảnh nhánh.
 6. Spike Edge/Deferred-push cuối cùng (được thì cộng, không được thì plan B đã cam kết).
+
+---
+
+## J. Đã chốt (phiếu chọn của bạn — 2026-11-18)
+
+1. **"Thay nhận diện của Siri" (STT)** → mặc định **OFF** — người dùng tự bật trong Settings *(khớp key `sttEnabled = NO`)*.
+2. **Phạm vi v1.2** → **gộp tất cả vào một v1.2 đầy đủ**: STT + TTS + toàn bộ mục D (deferred push, thống kê, lịch sử, tiền tố, model dự phòng, xuất/nhập, footer Siri gốc, ẩn danh, offline) + nhóm chất lượng (trò chuyện thử, kiểm tra cập nhật, tool `current_app`, backoff 429).
+3. **Edge TTS** → **giữ spike Edge TTS** (nguồn free chất lượng cao); fail → plan B Hệ thống/Google/Gemini như mục G3.
