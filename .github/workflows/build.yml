@@ -8,10 +8,6 @@ permissions:
   contents: read
   checks: write
 
-concurrency:
-  group: sirix-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   # Một job macOS DUY NHẤT làm tất cả: test + build cả rootless và roothide.
   # Trước đây là matrix 2 job (+1 job test) nên cần 3 runner macOS; runner macOS
@@ -153,7 +149,10 @@ jobs:
   publish:
     name: Publish deb to release
     needs: build
-    if: github.event_name == 'workflow_dispatch'
+    # Chạy khi bấm tay, hoặc khi commit có thẻ [release] (push thường không tạo release).
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.head_commit.message, '[release]')
     runs-on: ubuntu-latest
     permissions:
       contents: write
