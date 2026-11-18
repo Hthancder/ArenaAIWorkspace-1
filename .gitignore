@@ -1,0 +1,10 @@
+.theos/
+packages/
+obj/
+*.deb
+*.o
+.DS_Store
+.idea/
+# Nghiên cứu bên thứ ba (không commit — giữ trên đĩa làm tham khảo)
+research/
+*.out
