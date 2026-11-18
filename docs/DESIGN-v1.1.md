@@ -181,7 +181,9 @@ SiriX (Root)                              ← header icon + tiêu đề (giữ)
 ├─ [Nhóm] Trả lời
 │   ├─ PSSlider      Nhiệt độ                   0–2, step 0.1, showValue
 │   ├─ PSSlider      Số câu giữ lại             2–40
-│   ├─ PSSlider      Thời gian chờ AI (giây)     2–30, default 10
+│   ├─ PSSlider      Thời gian chờ AI (giây)     2–30, default 10 — chỉnh tự do
+│   ├─ PSLinkList    Khi hết giờ chờ (chế độ Thay thế)
+│   │                  [Bubble "chưa kịp" | Giữ Siri gốc]   (mới — chỉnh được)
 │   ├─ PSSwitch      Trả lời theo streaming     (mới)
 │   ├─ PSSwitch      Hiển thị Markdown đẹp       (mới)
 │   ├─ PSSwitch      Ẩn thẻ kết quả tìm kiếm
@@ -229,6 +231,7 @@ SiriX (Root)                              ← header icon + tiêu đề (giữ)
 |---|---|---|---|
 | `streaming` | bool | YES | Trả lời |
 | `markdown` | bool | YES | Trả lời |
+| `timeoutAction` | `bubble`\|`keep` | `bubble` | Trả lời (khi hết giờ, chế độ Thay thế) |
 | `maxToolRounds` | int 1–4 | 3 | Công cụ |
 | `triggerMode` | `auto`\|`prefix` | `auto` | Bật tắt (P2) |
 | `fallbackModel` | string | "" | Trang con (P2) |
@@ -244,7 +247,7 @@ SiriX (Root)                              ← header icon + tiêu đề (giữ)
 
 ## G. Tính năng chất lượng (nghĩ đủ)
 
-**v1.1 — làm ngay (P0+P1):** Display Policy, chống đóng UI (hard-cap + deferred push spike), streaming M1(+M2 spike), Prompt UX, Markdown, IA Settings mới + trang con, `maxToolRounds`.
+**v1.1 — làm ngay (P0+P1):** Display Policy (+ `timeoutAction` chỉnh được), chống đóng UI (hard-cap 5s + mutate-on-copy + validity checklist), streaming M1(+M2 spike), Prompt UX, Markdown, IA Settings mới + trang con, `maxToolRounds`.
 
 **v1.2 — P2 (roadmap):**
 
@@ -299,8 +302,10 @@ Không đổi: hook selector surface, định dạng log, scheme rootless/roothi
 
 ---
 
-## J. Câu hỏi mở (muốn bạn chọn trước khi làm)
+## J. Đã chốt (phiếu chọn của bạn —2026-11-18)
 
-1. **Deferred push** (AI trả lời trễ "vào" đúng dialog đang mở): làm spike luôn trong v1.1, hay v1.1 chỉ cam kết "không đóng UI + bubble lỗi", push để v1.2?
-2. **Full mode hết timeout:** hiện bubble "chưa kịp" *(đơn giản)*, hay **retry 1 lần bằng model nhanh** *(cần `fallbackModel` — vào luôn v1.1)*?
-3. **Thống kê + Lịch sử:** đưa vào v1.1 *(scope lớn hơn)* hay để v1.2?
+1. **Deferred push** (câu trả lời trễ "vào" đúng dialog đang mở) → **để v1.2**.
+   v1.1 cam kết: hard-cap 5s, không đóng UI, bubble lỗi/bubble trễ, mutate-on-copy.
+2. **Hết timeout ở chế độ Thay thế** → **chỉnh được trong Cài đặt**: row *"Khi hết giờ chờ"* = `bubble` (mặc định) | `keep`; thời gian chờ chỉnh bằng slider 2–30s; *(P2: thêm phương án `retry` bằng model dự phòng)*.
+   Yêu cầu "cho chỉnh timeout tùy chỉnh, etc." → mọi thông số sống trong Settings, nhóm Trả lời / Nâng cao.
+3. **Thống kê + Lịch sử hội thoại** → **để v1.2**.
