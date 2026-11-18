@@ -91,6 +91,16 @@ static NSError *SXErr(NSInteger code, NSString *message) {
 						   userInfo:@{NSLocalizedDescriptionKey: message}];
 }
 
+// Retry giới hạn theo từng vòng HTTP, chỉ với 429/5xx; không chạy lại tool.
+static BOOL SXRetryHTTP(NSInteger status, NSInteger *attempt) {
+	if (!((status == 429) || (status >= 500 && status < 600)) || *attempt >= 2) return NO;
+	NSTimeInterval delay = *attempt == 0 ? 0.5 : 1.5;
+	(*attempt)++;
+	SXLogWrn(@"llm", @"HTTP %ld — thử lại %ld/2 sau %.1fs", (long)status, (long)*attempt, delay);
+	[NSThread sleepForTimeInterval:delay]; // chạy trên luồng network, không phải luồng ACE/UI
+	return YES;
+}
+
 #pragma mark - OpenAI tương thích
 
 static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary *> *history,
@@ -127,6 +137,7 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 	CFAbsoluteTime start = CFAbsoluteTimeGetCurrent();
 	NSInteger rounds = 0;
 	NSInteger lastStatus = 0;
+	NSInteger retryCount = 0;
 	BOOL forceNonStream = !prefs.streaming;
 
 	while (YES) {
@@ -174,6 +185,8 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 					}
 					forceNonStream = YES; // stream “thành công” nhưng rỗng → thử non-stream
 				}
+			} else if (streamStatus != 501 && SXRetryHTTP(streamStatus, &retryCount)) {
+				continue;
 			} else if (streamStatus == 400 || streamStatus == 404 || streamStatus == 405 || streamStatus == 415 || streamStatus == 501) {
 				SXLogWrn(@"llm", @"endpoint không hỗ trợ stream (HTTP %ld) → non-stream", (long)streamStatus);
 				forceNonStream = YES;
@@ -200,6 +213,7 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 		lastStatus = [resp[@"status"] integerValue];
 		NSData *data = resp[@"data"];
 		if (lastStatus < 200 || lastStatus >= 300) {
+			if (SXRetryHTTP(lastStatus, &retryCount)) continue;
 			NSError *err = SXHTTPError(lastStatus, data);
 			SXLogErr(@"llm", @"openai HTTP %ld: %@", (long)lastStatus, err.localizedDescription);
 			completion(nil, err, SXInfo(@"openai", model, lastStatus, rounds, start));
@@ -227,6 +241,7 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 
 		if ([toolCalls isKindOfClass:[NSArray class]] && [toolCalls count] && executor && rounds < prefs.maxToolRounds) {
 			rounds++;
+			retryCount = 0;
 			NSMutableDictionary *assistantMsg = [@{@"role": @"assistant"} mutableCopy];
 			assistantMsg[@"content"] = content ?: [NSNull null];
 			assistantMsg[@"tool_calls"] = toolCalls;
@@ -322,6 +337,7 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 	CFAbsoluteTime start = CFAbsoluteTimeGetCurrent();
 	NSInteger rounds = 0;
 	NSInteger lastStatus = 0;
+	NSInteger retryCount = 0;
 	BOOL forceNonStream = !prefs.streaming;
 
 	while (YES) {
@@ -374,6 +390,8 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 					}
 					forceNonStream = YES;
 				}
+			} else if (streamStatus != 501 && SXRetryHTTP(streamStatus, &retryCount)) {
+				continue;
 			} else if (streamStatus == 400 || streamStatus == 404 || streamStatus == 405 || streamStatus == 415 || streamStatus == 501) {
 				SXLogWrn(@"llm", @"gemini stream không khả dụng (HTTP %ld) → non-stream", (long)streamStatus);
 				forceNonStream = YES;
@@ -398,6 +416,7 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 		lastStatus = [resp[@"status"] integerValue];
 		NSData *data = resp[@"data"];
 		if (lastStatus < 200 || lastStatus >= 300) {
+			if (SXRetryHTTP(lastStatus, &retryCount)) continue;
 			NSError *err = SXHTTPError(lastStatus, data);
 			SXLogErr(@"llm", @"gemini HTTP %ld: %@", (long)lastStatus, err.localizedDescription);
 			completion(nil, err, SXInfo(@"gemini", model, lastStatus, rounds, start));
@@ -442,6 +461,7 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 
 		if (functionCalls.count && executor && rounds < prefs.maxToolRounds) {
 			rounds++;
+			retryCount = 0;
 			[contents addObject:@{@"role": @"model", @"parts": parts}];
 			for (NSDictionary *call in functionCalls) {
 				NSString *name = [call[@"name"] isKindOfClass:[NSString class]] ? call[@"name"] : nil;

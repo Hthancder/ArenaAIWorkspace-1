@@ -14,6 +14,7 @@ static SXReplyMode testMode = SXReplyModeFull;
 static NSString *testTimeoutAction = @"bubble";
 static NSString *testTriggerMode = @"auto";
 static NSString *lastQuestion;
+static BOOL testShowOriginal;
 
 @implementation SXPrefs
 + (instancetype)shared { static SXPrefs *p; static dispatch_once_t once; dispatch_once(&once, ^{ p = [SXPrefs new]; }); return p; }
@@ -23,6 +24,7 @@ static NSString *lastQuestion;
 - (NSTimeInterval)responseTimeout { return 2; }
 - (BOOL)markdown { return NO; }
 - (BOOL)hideWebCards { return YES; }
+- (BOOL)showOriginal { return testShowOriginal; }
 - (BOOL)speakErrors { return NO; }
 - (NSString *)timeoutAction { return testTimeoutAction; }
 - (NSInteger)contextTurns { return 8; }
@@ -101,6 +103,15 @@ int main(void) {
 		FakeAddViews *next = viewCommand();
 		assert([intercept handleIncomingCommand:next]);
 		assert([((FakeView *)next.views[0]).text isEqualToString:@"AI answer"]);
+
+		// Chỉ hiển thị câu gốc, không đọc footer bằng giọng nói.
+		testShowOriginal = YES;
+		begin(@"question original");
+		pendingCompletion(@"answer", nil, nil);
+		views = viewCommand(); assert([intercept handleIncomingCommand:views]);
+		assert([((FakeView *)views.views[0]).text containsString:@"Siri: Siri gốc"]);
+		assert([((FakeView *)views.views[0]).speakableText isEqualToString:@"answer"]);
+		testShowOriginal = NO;
 
 		// Lệnh không sửa được không được chặn lệnh tiếp theo thử lại.
 		begin(@"question two");

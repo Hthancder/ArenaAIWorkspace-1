@@ -17,7 +17,10 @@ Nhà cung cấp: **OpenAI tương thích** (mặc định) hoặc **Google Gemin
 - **Công cụ AI**: thông tin thiết bị, bảng nhớ tạm, đọc trang web (https), xóa lịch sử — bật/tắt từng cái.
 - **Hội thoại có ngữ cảnh** (giữ N cặp câu hỏi/trả lời gần nhất), nhiệt độ, thời gian chờ đều chỉnh được.
 - **Prompt tùy chỉnh** (để trống = dùng prompt mặc định).
+- **Tiền tố @ai** tùy chọn, xem câu Siri gốc, và trò chuyện thử trong Settings.
 - **Log gỡ lỗi đầy đủ, sao chép được** — gửi lại cho mình để cải thiện tweak từng bước.
+
+> Tình trạng so với thiết kế v1.2, bao gồm các phần chưa triển khai: [docs/IMPLEMENTATION-STATUS.md](docs/IMPLEMENTATION-STATUS.md).
 
 ## Yêu cầu
 

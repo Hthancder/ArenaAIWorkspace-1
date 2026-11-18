@@ -110,6 +110,7 @@ static double SXClamp(double v, double lo, double hi) {
 	_customPrompt = [self stringFor:@"customPrompt" default:@""] ?: @"";
 
 	_hideWebCards = [self boolFor:@"hideWebCards" default:YES];
+	_showOriginal = [self boolFor:@"showOriginal" default:NO];
 	_speakErrors = [self boolFor:@"speakErrors" default:NO];
 	_verbose = [self boolFor:@"verbose" default:YES];
 	_streaming = [self boolFor:@"streaming" default:YES];

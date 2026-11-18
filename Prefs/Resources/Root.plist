@@ -272,6 +272,14 @@
 			<string>com.sirix.tweak/prefs.changed</string>
 		</dict>
 		<dict>
+			<key>cell</key><string>PSSwitchCell</string>
+			<key>label</key><string>Hiện câu trả lời Siri gốc</string>
+			<key>key</key><string>showOriginal</string>
+			<key>defaults</key><string>com.sirix.tweak</string>
+			<key>default</key><false/>
+			<key>PostNotification</key><string>com.sirix.tweak/prefs.changed</string>
+		</dict>
+		<dict>
 			<key>cell</key>
 			<string>PSSwitchCell</string>
 			<key>label</key>

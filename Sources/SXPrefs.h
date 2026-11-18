@@ -38,6 +38,7 @@ FOUNDATION_EXPORT NSString *SXDefaultSystemPrompt(void);
 @property (nonatomic, readonly) NSTimeInterval responseTimeout; // 2–30 giây (ngân sách AI từ lúc hỏi)
 @property (nonatomic, readonly, copy) NSString *customPrompt;   // rỗng = dùng prompt mặc định
 @property (nonatomic, readonly) BOOL hideWebCards;
+@property (nonatomic, readonly) BOOL showOriginal;
 @property (nonatomic, readonly) BOOL speakErrors;
 @property (nonatomic, readonly) BOOL verbose;
 @property (nonatomic, readonly) BOOL streaming;                 // trả lời theo SSE (v1.1)

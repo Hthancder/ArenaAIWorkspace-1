@@ -46,6 +46,25 @@ static BOOL SXIsCardView(id view) {
 	return NO;
 }
 
+// Snapshot trước khi sửa; chỉ nối vào bản hiển thị, không đọc lại bằng TTS.
+static NSString *SXOriginalResponse(id command, NSString *className) {
+	if (![className containsString:@"AddViews"]) return nil;
+	id views = SXMsg(command, NSSelectorFromString(@"views"));
+	if (![views isKindOfClass:[NSArray class]]) return nil;
+	for (id view in views) {
+		if (SXIsCardView(view)) continue;
+		id value = SXMsg(view, NSSelectorFromString(@"text"));
+		if (![value isKindOfClass:[NSString class]] || ![value length])
+			value = SXMsg(view, NSSelectorFromString(@"speakableText"));
+		if ([value isKindOfClass:[NSString class]] && [value length]) {
+			NSString *original = [(NSString *)value stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+			if (original.length > 1000) original = [[original substringToIndex:1000] stringByAppendingString:@"…"];
+			if (original.length) return original;
+		}
+	}
+	return nil;
+}
+
 /// Gõ lại câu trả lời thành văn bản thuần để Siri phát thành giọng nói tự nhiên.
 static NSString *SXSanitizeAnswer(NSString *raw) {
 	if (!raw.length) return @"";
@@ -553,7 +572,12 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 	}
 	BOOL changed = NO;
 	@try {
-		changed = SXMutateCommand(command, _decisionDisplay, _decisionSpeech, source, className);
+		NSString *display = _decisionDisplay;
+		if (_decisionIsAnswer && prefs.showOriginal) {
+			NSString *original = SXOriginalResponse(command, className);
+			if (original.length) display = [display stringByAppendingFormat:@"\n—\nSiri: %@", original];
+		}
+		changed = SXMutateCommand(command, display, _decisionSpeech, source, className);
 	} @catch (NSException *exception) {
 		SXLogErr(@"err", @"%@: mutate %@ exception %@: %@ — cho qua", source, className, exception.name, exception.reason);
 	}
