@@ -110,9 +110,13 @@ jobs:
           DYLIB=$(find "$STAGE" -name 'SiriX.dylib' | head -n 1)
           [ -n "$DYLIB" ] || vfail "dylib" "Không thấy SiriX.dylib: $(find "$STAGE" -type f | head -30 | tr '\n' ' ')"
           echo "dylib: $DYLIB"
-          strings "$DYLIB" | grep -q '_handleCommand' || vfail "marker1" "_handleCommand không có trong dylib"
-          strings "$DYLIB" | grep -q 'addItemForSpeechRecognizedCommand' || vfail "marker2" "addItemForSpeechRecognizedCommand không có"
-          strings "$DYLIB" | grep -q 'SiriX' || vfail "marker3" "SiriX không có"
+          # Read all strings first: grep -q may close a pipe early and make
+          # strings fail with SIGPIPE even when the marker was found.
+          MARKERS="$STAGE/SiriX-symbols.txt"
+          strings "$DYLIB" > "$MARKERS" || vfail "strings" "Không đọc được marker trong dylib"
+          grep -Fq '_handleCommand' "$MARKERS" || vfail "marker1" "_handleCommand không có trong dylib"
+          grep -Fq 'addItemForSpeechRecognizedCommand' "$MARKERS" || vfail "marker2" "addItemForSpeechRecognizedCommand không có"
+          grep -Fq 'SiriX' "$MARKERS" || vfail "marker3" "SiriX không có"
 
           # Filter plist (không phải entry PreferenceLoader)
           FILTER=$(find "$STAGE" -name 'SiriX.plist' ! -path '*PreferenceLoader*' | head -n 1)
