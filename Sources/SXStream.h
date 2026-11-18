@@ -1,6 +1,9 @@
 #import <Foundation/Foundation.h>
+#import "SXNetwork.h"
 
 NS_ASSUME_NONNULL_BEGIN
+
+typedef void (^SXStreamProgress)(NSString *cumulativeText);
 
 typedef NS_ENUM(NSInteger, SXStreamFormat) {
 	SXStreamFormatOpenAI = 0, // data: {choices[0].delta.content} / [DONE]
@@ -14,7 +17,6 @@ typedef NS_ENUM(NSInteger, SXStreamFormat) {
 ///   @"sawToolCalls"  BOOL       model muốn gọi công cụ → caller chuyển non-stream
 ///   @"status"        NSNumber   HTTP status (0 nếu lỗi mạng trước khi có response)
 ///   @"firstTokenMs"  NSNumber   ms đến token đầu tiên (-1 nếu không có)
-///   @"errorText"     NSString?  đoạn lỗi từ máy chủ (khi status ≥ 400)
 /// Lỗi mạng thật → nil + *outErr.
 @interface SXStream : NSObject
 
@@ -22,7 +24,9 @@ typedef NS_ENUM(NSInteger, SXStreamFormat) {
 							  toURL:(NSString *)urlString
 							headers:(NSDictionary<NSString *, NSString *> *)headers
 							 format:(SXStreamFormat)format
-							   error:(NSError **)outErr;
+							   request:(SXRequest *)request
+                           progress:(nullable SXStreamProgress)progress
+                              error:(NSError **)outErr;
 
 @end
 

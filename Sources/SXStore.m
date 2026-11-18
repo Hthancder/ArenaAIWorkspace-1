@@ -74,7 +74,7 @@
 	if (history.count > 40) [history removeObjectsInRange:NSMakeRange(0, history.count - 40)];
 	NSDictionary *rawStats = [saved[@"stats"] isKindOfClass:NSDictionary.class] ? saved[@"stats"] : @{};
 	NSMutableDictionary *stats = [NSMutableDictionary dictionary];
-	for (NSString *key in @[@"replaced", @"kept", @"timeout", @"error", @"msAvg"]) {
+	for (NSString *key in @[@"replaced", @"kept", @"timeout", @"error", @"stt_ok", @"stt_fb", @"tts_ok", @"tts_fb", @"msAvg"]) {
 		id value = rawStats[key];
 		if ([value isKindOfClass:NSNumber.class] && [value doubleValue] >= 0) stats[key] = value;
 	}
@@ -82,8 +82,10 @@
 	NSString *statsEpoch = [saved[@"statsEpoch"] isKindOfClass:NSString.class] ? saved[@"statsEpoch"] : @"initial";
 	NSNumber *historyClearedAt = [saved[@"historyClearedAt"] isKindOfClass:NSNumber.class] ? saved[@"historyClearedAt"] : @0;
 	NSNumber *statsClearedAt = [saved[@"statsClearedAt"] isKindOfClass:NSNumber.class] ? saved[@"statsClearedAt"] : @0;
-	return [@{@"history": history, @"stats": stats, @"historyEpoch": historyEpoch, @"statsEpoch": statsEpoch,
+	NSMutableDictionary *state = [@{@"history": history, @"stats": stats, @"historyEpoch": historyEpoch, @"statsEpoch": statsEpoch,
 		@"historyClearedAt": historyClearedAt, @"statsClearedAt": statsClearedAt} mutableCopy];
+	if ([saved[@"sttTrial"] isKindOfClass:NSDictionary.class]) state[@"sttTrial"] = saved[@"sttTrial"];
+	return state;
 }
 - (BOOL)writeLocked:(NSDictionary *)state {
 	NSError *error = nil;
@@ -163,7 +165,7 @@
 	flock(fd, LOCK_UN); close(fd); return ok;
 }
 - (BOOL)recordEvent:(NSString *)event milliseconds:(NSNumber *)milliseconds epoch:(NSString *)epoch startedAt:(NSTimeInterval)startedAt {
-	if (![@[@"replaced", @"kept", @"timeout", @"error"] containsObject:event] || !epoch.length) return NO;
+	if (![@[@"replaced", @"kept", @"timeout", @"error", @"stt_ok", @"stt_fb", @"tts_ok", @"tts_fb"] containsObject:event] || !epoch.length) return NO;
 	int fd = [self acquireLock]; if (fd < 0) return NO;
 	NSMutableDictionary *state = [self readLocked];
 	if (!state) { flock(fd, LOCK_UN); close(fd); return NO; }
@@ -188,6 +190,38 @@
 	state[@"statsEpoch"] = NSUUID.UUID.UUIDString;
 	state[@"statsClearedAt"] = @(CFAbsoluteTimeGetCurrent());
 	BOOL ok = [self writeLocked:state];
+	flock(fd, LOCK_UN); close(fd); return ok;
+}
+- (BOOL)armSTTTrial {
+	int fd = [self acquireLock]; if (fd < 0) return NO;
+	NSMutableDictionary *state = [self readLocked];
+	NSTimeInterval now = CFAbsoluteTimeGetCurrent();
+	state[@"sttTrial"] = @{@"id": NSUUID.UUID.UUIDString, @"armedAt": @(now), @"expires": @(now + 60), @"status": @"waiting"};
+	BOOL ok = state && [self writeLocked:state];
+	flock(fd, LOCK_UN); close(fd); return ok;
+}
+- (NSString *)claimSTTTrialStartedAt:(NSTimeInterval)startedAt {
+	int fd = [self acquireLock]; if (fd < 0) return nil;
+	NSMutableDictionary *state = [self readLocked];
+	NSMutableDictionary *trial = [state[@"sttTrial"] mutableCopy];
+	NSString *identifier = nil;
+	if ([trial[@"status"] isEqual:@"waiting"] && [trial[@"id"] isKindOfClass:NSString.class] &&
+		[trial[@"armedAt"] isKindOfClass:NSNumber.class] && [trial[@"expires"] isKindOfClass:NSNumber.class] &&
+		startedAt >= [trial[@"armedAt"] doubleValue] && CFAbsoluteTimeGetCurrent() <= [trial[@"expires"] doubleValue]) {
+		trial[@"status"] = @"running"; state[@"sttTrial"] = trial;
+		if ([self writeLocked:state]) identifier = trial[@"id"];
+	}
+	flock(fd, LOCK_UN); close(fd); return identifier;
+}
+- (BOOL)finishSTTTrial:(NSString *)identifier success:(BOOL)success {
+	int fd = [self acquireLock]; if (fd < 0) return NO;
+	NSMutableDictionary *state = [self readLocked];
+	NSMutableDictionary *trial = [state[@"sttTrial"] mutableCopy];
+	BOOL ok = NO;
+	if ([trial[@"id"] isEqual:identifier] && [trial[@"status"] isEqual:@"running"]) {
+		trial[@"status"] = success ? @"ok" : @"fallback"; state[@"sttTrial"] = trial;
+		ok = [self writeLocked:state];
+	}
 	flock(fd, LOCK_UN); close(fd); return ok;
 }
 @end

@@ -3,6 +3,8 @@ name: Build SiriX
 on:
   push:
   workflow_dispatch:
+  release:
+    types: [published]
 
 permissions:
   contents: read
@@ -24,6 +26,8 @@ jobs:
         run: ./scripts/test-intercept-macos.sh
       - name: Test history and statistics store
         run: ./scripts/test-store-macos.sh
+      - name: Test v1.2 settings, native guards and streaming
+        run: ./scripts/test-v12-macos.sh
 
   build:
     name: ${{ matrix.scheme }}
@@ -119,6 +123,8 @@ jobs:
           ROOTPLIST=$(find "$STAGE" -path '*SiriXPreferences.bundle/Root.plist' | head -n 1)
           [ -n "$ROOTPLIST" ] || vfail "prefs" "Không thấy SiriXPreferences.bundle/Root.plist. Cây staging: $(find "$STAGE" | sed "s|$STAGE||" | head -80 | tr '\n' ' ')"
           grep -rq 'SXPromptController' "$ROOTPLIST" || vfail "prefs-content" "Root.plist thiếu SXPromptController"
+          [ -f "${ROOTPLIST%/*}/STTConfig.plist" ] || vfail "stt-config" "Thiếu cấu hình STT"
+          [ -f "${ROOTPLIST%/*}/TTSConfig.plist" ] || vfail "tts-config" "Thiếu cấu hình TTS"
 
           # Entry PreferenceLoader
           ENTRY=$(find "$STAGE" -path '*PreferenceLoader*' -name 'SiriX.plist' | head -n 1)
@@ -134,3 +140,32 @@ jobs:
           name: SiriX-${{ matrix.scheme }}
           path: packages/*.deb
           if-no-files-found: error
+
+  release-assets:
+    name: Attach validated packages
+    if: github.event_name == 'release' && !github.event.release.prerelease
+    needs: [regression, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: SiriX-*
+          path: release-assets
+      - name: Attach to the already-published release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's/^Version: //p' control)
+          [ "${GITHUB_REF_NAME#v}" = "$version" ] || { echo "Release tag does not match control version"; exit 1; }
+          mkdir output-packages
+          for scheme in rootless roothide; do
+            shopt -s nullglob
+            files=("release-assets/SiriX-$scheme/"*.deb)
+            [ "${#files[@]}" -eq 1 ] || { echo "Expected one deb for $scheme"; exit 1; }
+            cp "${files[0]}" "output-packages/SiriX-$version-$scheme.deb"
+          done
+          gh release upload "$GITHUB_REF_NAME" output-packages/*.deb

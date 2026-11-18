@@ -1,26 +1,21 @@
-# SiriX — tiến độ thực hiện thiết kế v1.2
+# SiriX — triển khai v1.2 và kiểm tra trước phát hành
 
-Tài liệu thiết kế là mục tiêu, không phải danh sách tính năng đã hoàn tất.
-Không đổi phiên bản gói sang 1.2 cho đến khi các hạng mục bắt buộc được thực hiện và kiểm thử.
+Nhánh này triển khai các nhóm v1.2 bên dưới. **Chưa chốt phát hành 1.2.0**: phiên bản `.deb` và bundle giữ `1.1.0` cho đến khi xác nhận các hook/audio trên iPhone jailbreak. `local-check.sh` không kiểm tra được quyền mic, UI Siri hay cách audio session của Apple hoạt động.
 
-## Đã thực hiện trong mã (vẫn cần kiểm thử trên thiết bị)
+| Hạng mục | Trong mã | Cần xác nhận trên thiết bị / giới hạn |
+|---|---|---|
+| Nhận diện & dịch | STT mặc định **tắt**; AVAudioEngine trong lượt nói Siri, PCM16 16 kHz trong bộ nhớ, ngừng ở lifecycle hoặc giới hạn thời lượng. Groq, OpenAI, Gemini và endpoint HTTPS tương thích; dịch VI bằng một request giới hạn / EN tại nguồn. | Quyền mic/routing từng jailbreak. Chỉ gửi sau khi có transcript Apple đủ điều kiện, không tự bật mic từ Settings. Hook UI thử bản sao L2; nếu không dùng được thì L1 (AI nhận STT, UI giữ Apple), rồi Apple. Không sửa luồng intent Apple hay chữ nhận diện từng phần. |
+| Thử STT | Settings mở cửa sổ thử 60 giây cho lượt Siri giọng nói tiếp theo, hiển thị trạng thái khi quay lại. Không ghi audio/transcript của bài thử vào bản ghi chẩn đoán. | Bài thử dùng cùng pipeline Siri, không tự bắt đầu ghi âm hay tự bật STT. Ở chế độ tiền tố, Apple phải nhận ra `@ai` mới có upload. |
+| Giọng đọc | Hệ thống, Google Cloud, Gemini và `/audio/speech`; chọn giọng/lọc, VI/EN tự động, tốc độ/âm lượng và Thử giọng. Gỡ nội dung đọc của Apple chỉ khi có đường đọc thay thế đã chuẩn bị; nguồn online trễ/lỗi trước khi sửa ACE → giữ Siri đọc. Lỗi phát sau khi đã làm im ACE → thử giọng hệ thống. | Xác nhận không đọc chồng, Siri không đóng và audio thực sự phát. Dùng `Tắt TTS SiriX` nếu thiết bị không tương thích. Edge không có adapter ổn định được chọn; dùng phương án dự phòng trong thiết kế (Hệ thống/Google Cloud/Gemini/Tự chỉnh). Google Cloud cần khóa dịch vụ. |
+| Streaming, hủy và model dự phòng | SSE có giới hạn token đầu và thời gian toàn lượt; hủy mạng/media theo lượt. Mini-chat hiển thị dần. Thử một lần với model dự phòng của đúng provider, không chạy lại tool; 429/5xx có backoff, mất mạng có nhánh giữ bản gốc / báo lỗi. | Hiển thị dần trong Siri là **opt-in thử nghiệm**, dùng `SAUIUpdateViews` khi có view và cùng `refId`; nếu không, hiển thị bản hoàn tất hoặc lịch sử. Giới hạn chờ ACE 5 giây, STT tối đa 2,5 giây. |
+| Đáp án trễ | Có thể cập nhật bubble đang tồn tại nếu bật cập nhật thử nghiệm; nếu không, lưu lịch sử và thử gửi banner không chứa transcript. | Banner và đường dẫn sang Lịch sử phụ thuộc `BBServer`/PreferenceLoader và chính sách thông báo của máy. Nếu không khả dụng, xem đáp án trong Lịch sử. Không hiện nếu đã sang lượt khác hoặc không lưu lịch sử. |
+| Dữ liệu & công cụ | Log chuẩn không ghi nguyên văn transcript/đáp án, API key, URL hay kết quả tool. Không lưu lịch sử giữ lượt riêng tư trong RAM, tắt tool và thông báo trễ. Chế độ chỉ dùng Siri gốc chặn request mạng của **SiriX**, kể cả thử kết nối và kiểm tra cập nhật. `current_app` tùy chọn, chỉ tên/mã gói. Tool kiểm tra bật/tắt lúc chạy; đọc web yêu cầu URL HTTPS nêu trong câu hỏi. | Chế độ này không kiểm soát kết nối Siri/Apple hoặc xóa log/lịch sử đã có. Nhận diện lệnh hệ thống từ text/các lệnh ACE là best effort; nếu cần chắc chắn không gửi ngoài Siri, dùng chế độ chỉ dùng Siri gốc. |
+| Settings & phân phối | Thống kê STT/TTS, lịch sử, model dự phòng, xuất/nhập JSON có xác nhận và che khóa mặc định, chẩn đoán nhanh, kiểm tra GitHub Release. CI thêm test fixture và đường gắn cả hai gói vào release đã xuất bản đúng phiên bản. | Nếu repo không công khai hoặc chưa có stable GitHub Release, hàng cập nhật chưa có phiên bản từ API công khai. Không tự cài/bật cập nhật. |
 
-- Sửa ghi log sau khi xóa hoặc xoay vòng, và làm mới màn hình xem log.
-- Các hook chỉ được cài khi class/selector có mặt; một quyết định trả lời được áp dụng cho các lệnh AddViews/SayIt cùng lượt, kèm giới hạn thời gian và ưu tiên tác vụ hệ thống khi đã nhận diện.
-- Chế độ kích hoạt `auto` / `prefix`; trong `prefix`, chỉ `@ai` có nội dung được gửi tới AI, còn `@siri` hoặc câu không có tiền tố giữ Siri gốc. Nhận diện chính xác `@ai` phụ thuộc transcript Apple, nên Type-to-Siri là cách thử đáng tin cậy hơn.
-- Tùy chọn hiển thị bản Siri gốc khi lệnh AddViews có văn bản; bản gốc không được đưa vào lời đọc.
-- Trò chuyện thử trong Settings với provider đang chọn, không dùng tool và không lưu lịch sử lâu dài.
-- Kiểm tra kết nối chạy nền, dùng đúng provider của trang cấu hình; retry HTTP 429/5xx tối đa hai lần mỗi vòng trên luồng nền.
-- Lịch sử lưu trên thiết bị có giới hạn, xem chi tiết/sao chép/xóa từng mục hoặc toàn bộ; lượt ở chế độ không lưu chỉ ở bộ nhớ. Không phải chế độ ẩn danh mạng hoặc log.
-- Thống kê thay/giữ/lỗi/hết giờ và thời gian trung bình có trọng số; có thể xóa riêng. Lưu/đọc kho làm trên hàng đợi nền, dùng lock liên tiến trình và epoch để tránh đáp án cũ phục hồi dữ liệu sau khi xóa.
+## Checklist trên iPhone trước khi bump phiên bản
 
-## Chưa hoàn tất so với thiết kế
-
-- STT thay Apple, ghi mic, dịch transcript và thử STT.
-- TTS tùy chỉnh, chọn giọng/nguồn, tự nhận ngôn ngữ, và chống Siri đọc chồng.
-- Deferred push/notification cho đáp án trễ; chế độ ẩn danh toàn diện (chặn dữ liệu nhạy cảm trong mọi log và không gửi mạng) chưa có.
-- Model dự phòng khi lỗi/hết giờ, hủy request theo generation, phát hiện offline sớm.
-- Xuất/nhập cấu hình, kiểm tra cập nhật, công cụ `current_app`, các trang cấu hình tương ứng.
-- Hiển thị stream theo từng chữ và mốc timeout theo token đầu; hiện SSE chỉ tích lũy và hiển thị khi hoàn tất.
-
-STT, TTS và deferred push phụ thuộc API riêng, quyền mic và audio session của Siri. Không đưa các công tắc chưa hoạt động vào Settings hoặc cam kết hành vi an toàn cho đến khi có kiểm thử trên thiết bị iOS jailbreak. Log có thể chứa câu hỏi, URL hoặc dữ liệu khác. Không lưu lịch sử không đồng nghĩa với ẩn danh khi dùng mạng hoặc log.
+1. Cài gói đúng scheme, chạy qua ít nhất iOS 15 rootless và roothide; ghi rõ phiên bản iOS và jailbreak. Với iOS 16.x, kiểm tra selector có được nhận diện, không crash nếu thiếu.
+2. Không bật STT: Type-to-Siri, giọng Siri gốc, `@ai`, `@siri`, đặt báo thức, hẹn giờ và mở app. Bật STT: nói VI; thử dịch EN→VI và VI→EN; thử mic không cấp quyền, hủy Siri giữa lượt, endpoint lỗi/chậm và Type-to-Siri.
+3. Thử giọng hệ thống VI/EN và một nguồn online. Lượt có cả AddViews và SayIt chỉ đọc một lần; nguồn online lỗi vẫn có giọng Siri. Trả lời mới phải dừng âm thanh của lượt cũ.
+4. Mạng chậm: thử giữ Siri, thông báo hết giờ, retry đúng một lần, vào lượt mới giữa stream, bật/tắt cập nhật dần. Kiểm tra đáp án trễ được lưu, banner không lộ nội dung và tap đi tới Lịch sử trên phiên bản PreferenceLoader đang dùng.
+5. Bật Không lưu lịch sử và Chỉ dùng Siri gốc riêng rẽ; kiểm tra không rò dữ liệu mới và thao tác xóa không bị lượt đang chạy phục hồi. Kiểm tra xuất JSON mặc định không có khóa, nhập hủy không đổi gì, và nhập đổi endpoint không dùng lại khóa cũ.

@@ -1,5 +1,7 @@
 #import "SXPrefs.h"
 #import "SXLog.h"
+#import "SXConfigIO.h"
+#import "SXNetwork.h"
 #import <UIKit/UIKit.h>
 
 static NSString *const kSXDomain = @"com.sirix.tweak";
@@ -12,155 +14,93 @@ NSString *SXDefaultSystemPrompt(void) {
 		   @"Ưu tiên văn bản thuần (phần lớn câu trả lời chỉ cần vậy); khi thật sự cần nhấn mạnh hoặc liệt kê, "
 		   @"duy nhất dùng **đậm**, danh sách gạch đầu dòng ngắn, `mã code` hoặc khối code gọn — "
 		   @"SiriX tự trình bày đẹp và vẫn phát giọng nói trôi chảy. Không emoji. "
-		   @"Nếu người dùng yêu cầu thao tác trên máy (mở ứng dụng, đặt báo thức, gọi điện, nhắn tin…), "
-		   @"hệ thống tự thực hiện — hãy xác nhận ngắn gọn, ví dụ: “Đã đặt báo thức 7 giờ.” "
-		   @"trong ngôn ngữ của người dùng, đừng nói mình không thể.";
+		   @"Tác vụ trên máy do Siri xử lý; không khẳng định đã thực hiện tác vụ nếu bạn không xác minh được.";
 }
 
-@interface SXPrefs () {
-	NSDictionary *_fileFallback;
-}
+@interface SXPrefs ()
+@property (atomic, readwrite, copy) NSDictionary *settings;
 @end
 
 @implementation SXPrefs
-
 + (instancetype)shared {
 	static SXPrefs *instance;
-	static dispatch_once_t onceToken;
-	dispatch_once(&onceToken, ^{
-		instance = [[SXPrefs alloc] init];
-		[instance reload];
-	});
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{ instance = [SXPrefs new]; [instance reload]; });
 	return instance;
 }
-
-#pragma mark - Đọc giá trị
-
-- (id)valueFor:(NSString *)key {
-	id v = CFBridgingRelease(CFPreferencesCopyAppValue((__bridge CFStringRef)key,
-													   (__bridge CFStringRef)kSXDomain));
-	if (!v) v = _fileFallback[key];
-	return v;
+- (SXPrefs *)snapshot {
+	SXPrefs *result = [SXPrefs new];
+	result.settings = self.settings;
+	return result;
 }
 
-- (BOOL)boolFor:(NSString *)key default:(BOOL)dflt {
-	id v = [self valueFor:key];
-	if ([v isKindOfClass:[NSNumber class]]) return [v boolValue];
-	if ([v isKindOfClass:[NSString class]]) return [(NSString *)v boolValue];
-	return dflt;
++ (BOOL)writeValues:(NSDictionary *)values removing:(NSArray<NSString *> *)keys {
+	CFStringRef domain = (__bridge CFStringRef)kSXDomain;
+	CFPreferencesSetMultiple((__bridge CFDictionaryRef)values, (__bridge CFArrayRef)keys, domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+	return CFPreferencesSynchronize(domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
 }
-
-- (double)doubleFor:(NSString *)key default:(double)dflt {
-	id v = [self valueFor:key];
-	if ([v isKindOfClass:[NSNumber class]]) return [v doubleValue];
-	if ([v isKindOfClass:[NSString class]]) return [(NSString *)v doubleValue];
-	return dflt;
-}
-
-- (NSInteger)integerFor:(NSString *)key default:(NSInteger)dflt {
-	id v = [self valueFor:key];
-	if ([v isKindOfClass:[NSNumber class]]) return [v integerValue];
-	if ([v isKindOfClass:[NSString class]]) return [(NSString *)v integerValue];
-	return dflt;
-}
-
-- (NSString *)stringFor:(NSString *)key default:(NSString *)dflt {
-	id v = [self valueFor:key];
-	if ([v isKindOfClass:[NSString class]]) return [v copy];
-	return dflt;
-}
-
-static double SXClamp(double v, double lo, double hi) {
-	return v < lo ? lo : (v > hi ? hi : v);
-}
-
-#pragma mark - Tải lại
-
 + (void)setString:(NSString *)value forKey:(NSString *)key {
-	if (!key.length) return;
-	CFPreferencesSetAppValue((__bridge CFStringRef)key,
-							 (__bridge CFPropertyListRef)value,
-							 (__bridge CFStringRef)kSXDomain);
-	CFPreferencesAppSynchronize((__bridge CFStringRef)kSXDomain);
+	if (key.length) [self writeValues:(value ? @{key: value} : @{}) removing:(value ? @[] : @[key])];
 }
-
 - (void)reload {
-	NSDictionary *file = nil;
-	if ([[NSFileManager defaultManager] fileExistsAtPath:kSXFilePath]) {
-		file = [NSDictionary dictionaryWithContentsOfFile:kSXFilePath];
+	@synchronized (self) {
+		CFStringRef domain = (__bridge CFStringRef)kSXDomain;
+		CFPreferencesAppSynchronize(domain);
+		NSDictionary *file = [NSDictionary dictionaryWithContentsOfFile:kSXFilePath];
+		NSDictionary *defaults = SXConfigDefaults();
+		NSMutableDictionary *next = [defaults mutableCopy];
+		id (^read)(NSString *) = ^id(NSString *key) {
+			return CFBridgingRelease(CFPreferencesCopyAppValue((__bridge CFStringRef)key, domain)) ?: file[key];
+		};
+		for (NSString *key in defaults) {
+			id raw = read(key);
+			// Older Settings bundles sometimes wrote booleans as integer values.
+			if (CFGetTypeID((__bridge CFTypeRef)defaults[key]) == CFBooleanGetTypeID() && [raw isKindOfClass:NSNumber.class]) raw = @([raw boolValue]);
+			id typed = SXConfigValue(key, raw);
+			// A malformed saved endpoint must never redirect its secret to a default host.
+			if (raw && !typed && [key isEqualToString:@"openaiBase"]) next[key] = @"";
+			else if (typed) next[key] = typed;
+		}
+		id legacyVoice = read(@"speakErrors");
+		if (!read(@"ttsMode") && [legacyVoice respondsToSelector:@selector(boolValue)] && [legacyVoice boolValue]) next[@"ttsMode"] = @"all";
+		if (![next[@"openaiBase"] length] && !read(@"openaiBase")) next[@"openaiBase"] = defaults[@"openaiBase"];
+		if ([next isEqual:self.settings]) return;
+		if ([next[@"localOnly"] boolValue]) [SXRequest setNetworkAllowed:NO];
+		self.settings = next;
+		if (![next[@"localOnly"] boolValue]) [SXRequest setNetworkAllowed:YES];
+		SXLogSetVerbose(self.verbose);
+		SXLogInf(@"pref", @"cài đặt: enabled=%d provider=%ld localOnly=%d privateHistory=%d STT=%d streaming=%d",
+			self.enabled, (long)self.provider, self.localOnly, self.incognito, self.sttEnabled, self.streaming);
 	}
-	_fileFallback = file;
-
-	_enabled = [self boolFor:@"enabled" default:YES];
-	_mode = [[self stringFor:@"mode" default:@"smart"] isEqualToString:@"full"]
-		? SXReplyModeFull : SXReplyModeSmart;
-	_triggerMode = [[self stringFor:@"triggerMode" default:@"auto"] isEqualToString:@"prefix"] ? @"prefix" : @"auto";
-	_provider = [[self stringFor:@"provider" default:@"openai"] isEqualToString:@"gemini"]
-		? SXProviderGemini : SXProviderOpenAI;
-
-	_openaiKey = [self stringFor:@"openaiKey" default:@""] ?: @"";
-	_openaiBase = [self stringFor:@"openaiBase" default:@"https://api.openai.com/v1"] ?: @"https://api.openai.com/v1";
-	_openaiModel = [self stringFor:@"openaiModel" default:@"gpt-4o-mini"] ?: @"gpt-4o-mini";
-	_geminiKey = [self stringFor:@"geminiKey" default:@""] ?: @"";
-	_geminiModel = [self stringFor:@"geminiModel" default:@"gemini-2.0-flash"] ?: @"gemini-2.0-flash";
-
-	_temperature = SXClamp(round([self doubleFor:@"temperature" default:0.7] * 10.0) / 10.0, 0.0, 2.0);
-	_contextTurns = (NSInteger)SXClamp((double)[self integerFor:@"contextTurns" default:8], 2, 40);
-	_responseTimeout = SXClamp((double)[self integerFor:@"timeout" default:10], 2, 30);
-	_customPrompt = [self stringFor:@"customPrompt" default:@""] ?: @"";
-
-	_hideWebCards = [self boolFor:@"hideWebCards" default:YES];
-	_showOriginal = [self boolFor:@"showOriginal" default:NO];
-	_incognito = [self boolFor:@"incognito" default:NO];
-	_speakErrors = [self boolFor:@"speakErrors" default:NO];
-	_verbose = [self boolFor:@"verbose" default:YES];
-	_streaming = [self boolFor:@"streaming" default:YES];
-	_markdown = [self boolFor:@"markdown" default:YES];
-	_timeoutAction = [[self stringFor:@"timeoutAction" default:@"bubble"] isEqualToString:@"keep"]
-		? @"keep" : @"bubble";
-	_maxToolRounds = (NSInteger)SXClamp((double)[self integerFor:@"maxToolRounds" default:3], 1, 4);
-	_toolSystemInfo = [self boolFor:@"toolSystemInfo" default:YES];
-	_toolClipboard = [self boolFor:@"toolClipboard" default:YES];
-	_toolFetchURL = [self boolFor:@"toolFetchURL" default:YES];
-
-	SXLogSetVerbose(_verbose);
-	SXLogInf(@"pref", @"cài đặt: enabled=%d mode=%@ provider=%@ temp=%.1f turns=%ld timeout=%.0fs "
-			 @"stream=%d md=%d timeoutAction=%@ tools=%ld "
-			 @"openAIKey=%@ geminiKey=%@ customPrompt=%@",
-			 _enabled, _mode == SXReplyModeFull ? @"full" : @"smart",
-			 _provider == SXProviderGemini ? @"gemini" : @"openai",
-			 _temperature, (long)_contextTurns, _responseTimeout,
-			 _streaming, _markdown, _timeoutAction, (long)_maxToolRounds,
-			 SXRedactKey(_openaiKey), SXRedactKey(_geminiKey),
-			 _customPrompt.length > 0 ? [NSString stringWithFormat:@"%lu ký tự", (unsigned long)_customPrompt.length] : @"(mặc định)");
 }
-
-#pragma mark - Truy vấn theo provider hiện tại
-
-- (NSString *)activeAPIKey {
-	// Cắt khoảng trắng/dấu xuống dòng thừa — dán khóa từ web thường dính "\n" ở đuôi.
-	NSString *key = _provider == SXProviderGemini ? _geminiKey : _openaiKey;
-	return [key stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-}
-
+#define SX_BOOL(name) - (BOOL)name { return [self.settings[@#name] boolValue]; }
+#define SX_INT(name) - (NSInteger)name { return [self.settings[@#name] integerValue]; }
+#define SX_DOUBLE(name) - (double)name { return [self.settings[@#name] doubleValue]; }
+#define SX_STRING(name) - (NSString *)name { return self.settings[@#name] ?: @""; }
+SX_BOOL(enabled) SX_BOOL(hideWebCards) SX_BOOL(showOriginal) SX_BOOL(incognito) SX_BOOL(localOnly)
+SX_BOOL(verbose) SX_BOOL(streaming) SX_BOOL(markdown) SX_BOOL(toolSystemInfo) SX_BOOL(toolClipboard)
+SX_BOOL(toolFetchURL) SX_BOOL(toolCurrentApp) SX_BOOL(deferredReplies) SX_BOOL(liveSiriUpdates) SX_BOOL(sttEnabled)
+SX_INT(contextTurns) SX_INT(maxToolRounds) SX_INT(sttMaxSec) SX_INT(sttWaitMs)
+SX_DOUBLE(temperature) SX_DOUBLE(ttsSpeed) SX_DOUBLE(ttsVolume)
+SX_STRING(triggerMode) SX_STRING(openaiKey) SX_STRING(openaiBase) SX_STRING(openaiModel) SX_STRING(geminiKey)
+SX_STRING(geminiModel) SX_STRING(customPrompt) SX_STRING(timeoutAction)
+SX_STRING(sttSource) SX_STRING(sttBaseUrl) SX_STRING(sttApiKey) SX_STRING(sttModel) SX_STRING(sttLanguage) SX_STRING(sttTranslate) SX_STRING(sttPrompt)
+SX_STRING(ttsMode) SX_STRING(ttsSource) SX_STRING(ttsLang) SX_STRING(ttsVoice) SX_STRING(ttsBaseUrl) SX_STRING(ttsApiKey) SX_STRING(ttsModel)
+- (NSTimeInterval)responseTimeout { return [self.settings[@"timeout"] doubleValue]; }
+- (SXReplyMode)mode { return [self.settings[@"mode"] isEqual:@"full"] ? SXReplyModeFull : SXReplyModeSmart; }
+- (SXProvider)provider { return [self.settings[@"provider"] isEqual:@"gemini"] ? SXProviderGemini : SXProviderOpenAI; }
+- (NSString *)activeAPIKey { return self.provider == SXProviderGemini ? self.geminiKey : self.openaiKey; }
 - (NSString *)activeModel {
-	NSString *model = _provider == SXProviderGemini ? _geminiModel : _openaiModel;
-	model = [model stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-	if (!model.length) {
-		return _provider == SXProviderGemini ? @"gemini-2.0-flash" : @"gpt-4o-mini";
-	}
-	return model;
+	if (self.provider == SXProviderGemini) return self.geminiModel.length ? self.geminiModel : SXConfigDefaults()[@"geminiModel"];
+	return self.openaiModel.length ? self.openaiModel : SXConfigDefaults()[@"openaiModel"];
 }
-
-- (NSString *)activeBaseURL {
-	NSString *base = [_openaiBase stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-	if (!base.length) base = @"https://api.openai.com/v1";
-	while ([base hasSuffix:@"/"]) base = [base substringToIndex:base.length - 1];
-	return base;
+- (NSString *)activeBaseURL { return self.openaiBase; }
+- (NSString *)fallbackModelForProvider:(SXProvider)provider {
+	return self.settings[provider == SXProviderGemini ? @"geminiFallbackModel" : @"openaiFallbackModel"] ?: @"";
 }
 
 - (NSString *)systemPrompt {
-	NSString *base = _customPrompt.length ? _customPrompt : SXDefaultSystemPrompt();
+	NSString *base = self.customPrompt.length ? self.customPrompt : SXDefaultSystemPrompt();
 	if ([base containsString:@"{"] && [base containsString:@"}"]) {
 		static NSDateFormatter *dateFormatter;
 		static dispatch_once_t once;

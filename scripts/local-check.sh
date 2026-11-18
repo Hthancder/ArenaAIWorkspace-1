@@ -61,11 +61,8 @@ done
 echo "── [3/3] Plist validate"
 python3 - <<'PY' || FAIL=1
 import plistlib, sys, pathlib
-files = [
-    "SiriX.plist", "Prefs/Resources/Root.plist",
-    "Prefs/Resources/Info.plist",
-    "layout/Library/PreferenceLoader/Preferences/SiriX.plist",
-]
+files = ["SiriX.plist", *sorted(pathlib.Path("Prefs/Resources").glob("*.plist")),
+         "layout/Library/PreferenceLoader/Preferences/SiriX.plist"]
 ok = True
 for f in files:
     try:

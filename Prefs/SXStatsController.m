@@ -29,8 +29,12 @@
 			if (!snapshot) { self.text.text = @"Không đọc được thống kê. Kiểm tra quyền ghi kho SiriX."; return; }
 			NSDictionary *stats = snapshot[@"stats"];
 			NSInteger replaced = [stats[@"replaced"] integerValue], kept = [stats[@"kept"] integerValue];
-			double rate = replaced + kept ? (100.0 * replaced / (replaced + kept)) : 0;
-			self.text.text = [NSString stringWithFormat:@"Đã thay phản hồi: %ld\nGiữ Siri gốc: %ld\nHết giờ: %ld\nLỗi AI: %ld\nTỉ lệ thay: %.1f%%\nThời gian AI trung bình có trọng số: %.0f ms\n\nHết giờ và lỗi có thể đồng thời được tính vào thay hoặc giữ. Tác vụ hệ thống không tính vào tỉ lệ. Số liệu ghi theo lượt đã quan sát, không phải chi phí API.", (long)replaced, (long)kept, (long)[stats[@"timeout"] integerValue], (long)[stats[@"error"] integerValue], rate, [stats[@"msAvg"] doubleValue]];
+			NSInteger timeout = [stats[@"timeout"] integerValue], errors = [stats[@"error"] integerValue];
+			NSInteger total = replaced + timeout + errors;
+			double rate = total ? (100.0 * replaced / total) : 0;
+			self.text.text = [NSString stringWithFormat:@"Đã trả lời bằng AI: %ld\nGiữ Siri gốc: %ld\nHết giờ: %ld\nLỗi AI: %ld\nTỉ lệ thay: %.1f%%\nThời gian AI trung bình có trọng số: %.0f ms\n\nSTT thành công / dùng Apple: %ld / %ld\nTTS đã phát / dùng dự phòng: %ld / %ld\n\nTỉ lệ tính trên số lượt trả lời bằng AI, hết giờ hoặc lỗi. Tác vụ hệ thống không tính vào tỉ lệ; lượt hiện đáp án muộn có thể tính cả hết giờ và trả lời.",
+				(long)replaced, (long)kept, (long)timeout, (long)errors, rate, [stats[@"msAvg"] doubleValue],
+				(long)[stats[@"stt_ok"] integerValue], (long)[stats[@"stt_fb"] integerValue], (long)[stats[@"tts_ok"] integerValue], (long)[stats[@"tts_fb"] integerValue]];
 		});
 	});
 }

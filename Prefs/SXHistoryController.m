@@ -1,5 +1,6 @@
 #import "SXHistoryController.h"
 #import "SXStore.h"
+#import "SXPrefs.h"
 #import <notify.h>
 #import <UIKit/UIKit.h>
 
@@ -80,12 +81,32 @@
 		});
 	});
 }
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section { (void)tableView; (void)section; return (NSInteger)self.items.count; }
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { (void)tableView; return 2; }
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section { (void)tableView; return section == 0 ? 1 : (NSInteger)self.items.count; }
+- (void)toggleHistory:(UISwitch *)sender {
+	if (![SXPrefs writeValues:@{@"incognito": @(sender.on)} removing:@[]]) {
+		[sender setOn:[SXPrefs shared].incognito animated:YES]; [self showError]; return;
+	}
+	[[SXPrefs shared] reload];
+	notify_post("com.sirix.tweak/prefs.changed");
+}
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	(void)tableView; (void)section;
+	(void)tableView;
+	if (section == 0) return @"Không ghi thêm câu hỏi, tắt công cụ và báo đáp án trễ. Câu hỏi vẫn đi tới nhà cung cấp AI; dữ liệu cũ không tự bị xóa.";
 	return self.items.count ? @"Chọn một mục để xem, sao chép hoặc xóa. Lịch sử được lưu trên thiết bị." : @"Chưa có câu trả lời AI được lưu.";
 }
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+	if (indexPath.section == 0) {
+		UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil];
+		cell.textLabel.text = @"Không lưu lịch sử";
+		cell.textLabel.adjustsFontForContentSizeCategory = YES;
+		cell.selectionStyle = UITableViewCellSelectionStyleNone;
+		UISwitch *control = [UISwitch new]; control.on = [SXPrefs shared].incognito;
+		control.accessibilityLabel = cell.textLabel.text;
+		[control addTarget:self action:@selector(toggleHistory:) forControlEvents:UIControlEventValueChanged];
+		cell.accessoryView = control;
+		return cell;
+	}
 	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"turn"];
 	if (!cell) cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:@"turn"];
 	NSDictionary *item = self.items[indexPath.row];
@@ -99,6 +120,7 @@
 }
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
 	[tableView deselectRowAtIndexPath:indexPath animated:YES];
+	if (indexPath.section == 0 || (NSUInteger)indexPath.row >= self.items.count) return;
 	SXHistoryDetailController *detail = [SXHistoryDetailController new];
 	detail.item = self.items[indexPath.row];
 	__weak typeof(self) weakSelf = self;

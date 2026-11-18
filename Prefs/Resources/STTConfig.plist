@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>title</key>
+	<string>Cấu hình STT</string>
+	<key>items</key>
+	<array>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Nguồn STT</string>
+			<key>footerText</key>
+			<string>Địa chỉ HTTPS cho nguồn Tự chỉnh. Bỏ trống khóa để dùng lại khóa AI nếu cùng nhà cung cấp; đổi nguồn thì nhập lại khóa dành cho nguồn mới.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSEditTextCell</string>
+			<key>label</key>
+			<string>Địa chỉ API gốc</string>
+			<key>key</key>
+			<string>sttBaseUrl</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>default</key>
+			<string></string>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>placeholder</key>
+			<string>https://…/v1</string>
+			<key>noAutoCorrect</key>
+			<true/>
+			<key>isURL</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSecureEditTextCell</string>
+			<key>label</key>
+			<string>Khóa API STT</string>
+			<key>key</key>
+			<string>sttApiKey</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>default</key>
+			<string></string>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>placeholder</key>
+			<string>Không bắt buộc</string>
+			<key>noAutoCorrect</key>
+			<true/>
+			<key>isSecure</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSEditTextCell</string>
+			<key>label</key>
+			<string>Mô hình</string>
+			<key>key</key>
+			<string>sttModel</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>default</key>
+			<string></string>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>placeholder</key>
+			<string>Theo nguồn</string>
+			<key>noAutoCorrect</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Nhận diện</string>
+			<key>footerText</key>
+			<string>Ngôn ngữ để auto hoặc mã hai chữ cái (vi, en). Siri nhận diện thay nếu STT mất quá nhiều thời gian.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSEditTextCell</string>
+			<key>label</key>
+			<string>Ngôn ngữ nói</string>
+			<key>key</key>
+			<string>sttLanguage</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>default</key>
+			<string>auto</string>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>placeholder</key>
+			<string>auto, vi, en</string>
+			<key>noAutoCorrect</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSEditTextCell</string>
+			<key>label</key>
+			<string>Gợi ý đọc tên riêng</string>
+			<key>key</key>
+			<string>sttPrompt</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>default</key>
+			<string></string>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>placeholder</key>
+			<string></string>
+			<key>noAutoCorrect</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSliderCell</string>
+			<key>label</key>
+			<string>Giới hạn mic (giây)</string>
+			<key>key</key>
+			<string>sttMaxSec</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>default</key>
+			<integer>30</integer>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>min</key>
+			<integer>3</integer>
+			<key>max</key>
+			<integer>30</integer>
+			<key>showValue</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSliderCell</string>
+			<key>label</key>
+			<string>Chờ STT (mili giây)</string>
+			<key>key</key>
+			<string>sttWaitMs</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>default</key>
+			<integer>2500</integer>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>min</key>
+			<integer>250</integer>
+			<key>max</key>
+			<integer>2500</integer>
+			<key>showValue</key>
+			<true/>
+		</dict>
+	</array>
+</dict>
+</plist>

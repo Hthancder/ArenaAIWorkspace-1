@@ -10,18 +10,18 @@ Nhà cung cấp: **OpenAI tương thích** (mặc định) hoặc **Google Gemin
 ## Tính năng
 
 - **Trả lời bằng AI trong UI Siri gốc** — không cửa sổ phụ, không sao chép tay.
-- **2 nhà cung cấp**: OpenAI tương thích (tự đổi địa chỉ API — dùng được mọi endpoint `/v1/chat/completions`) và Gemini.
+- **2 nhà cung cấp**: OpenAI tương thích (tự đổi địa chỉ API qua HTTPS — dùng endpoint `/v1/chat/completions`) và Gemini.
 - **2 chế độ trả lời**
   - *Thông minh (mặc định)*: AI trả lời câu hỏi tri thức; tác vụ hệ thống để Siri gốc xử lý.
   - *Thay thế mọi câu trả lời*: AI thay toàn bộ phản hồi của Siri.
-- **Công cụ AI**: thông tin thiết bị, bảng nhớ tạm, đọc trang web (https), xóa lịch sử — bật/tắt từng cái.
+- **Công cụ AI**: thông tin thiết bị, bảng nhớ tạm, đọc URL HTTPS có trong câu hỏi, ngữ cảnh ứng dụng (tùy chọn). Xóa lịch sử trong Cài đặt.
 - **Hội thoại có ngữ cảnh** (giữ N cặp câu hỏi/trả lời gần nhất), lịch sử lưu trên máy, thống kê, nhiệt độ và thời gian chờ đều chỉnh được.
-- **Không lưu lịch sử**: các lượt mới chỉ giữ trong bộ nhớ. Tùy chọn này không ngăn Siri, nhà cung cấp AI hoặc các log khác xử lý nội dung; lịch sử cũ phải xóa riêng.
+- **Riêng tư**: Không lưu lịch sử giữ lượt mới trong bộ nhớ và tắt tool/thông báo trễ, nhưng vẫn dùng API AI. **Chỉ dùng Siri gốc** chặn mạng của SiriX, không thay đổi luồng Apple. Lịch sử/log cũ phải xóa riêng.
 - **Prompt tùy chỉnh** (để trống = dùng prompt mặc định).
 - **Tiền tố @ai** tùy chọn, xem câu Siri gốc, và trò chuyện thử trong Settings.
 - **Log gỡ lỗi đầy đủ, sao chép được** — gửi lại cho mình để cải thiện tweak từng bước.
 
-> Tình trạng so với thiết kế v1.2, bao gồm các phần chưa triển khai: [docs/IMPLEMENTATION-STATUS.md](docs/IMPLEMENTATION-STATUS.md).
+> **Nhánh v1.2:** bổ sung nhận diện và dịch tùy chọn, giọng đọc Hệ thống/Google Cloud/Gemini/Tự chỉnh, model dự phòng, lưu câu trả lời đến muộn, và xuất/nhập cấu hình. STT mặc định tắt. [Tiến độ, các chế độ dự phòng và checklist kiểm thử thiết bị](docs/IMPLEMENTATION-STATUS.md). Chưa bump gói ổn định lên 1.2.0.
 
 ## Yêu cầu
 
@@ -41,7 +41,7 @@ Mỗi lần push code, CI tự build lại cả 2 gói.
 
 1. **Cài đặt → SiriX**
 2. *Nhà cung cấp & API*: chọn nhà cung cấp → dán **Khóa API** (mặc định dùng `gpt-4o-mini`; Gemini mặc định `gemini-2.0-flash`).
-3. Bấm **Kiểm tra kết nối API** (mục *Gỡ lỗi*) — thấy “✓ Hoạt động” là xong.
+3. Trong **Cấu hình OpenAI** hoặc **Cấu hình Gemini**, bấm **Kiểm tra kết nối** — thấy “✓ Hoạt động” là xong.
 4. Bật **Bật SiriX** rồi thử: *“Hey Siri, …”* hoặc Type-to-Siri.
 
 ## Gửi log gỡ lỗi (quan trọng ⭐)
@@ -49,11 +49,11 @@ Mỗi lần push code, CI tự build lại cả 2 gói.
 Khi có gì đó chưa đúng (Siri không trả lời bằng AI, trả lời chậm, lỗi khóa API…):
 
 1. **Cài đặt → SiriX → Gỡ lỗi → Xem & sao chép log**
-2. Bấm **Sao chép** → gửi toàn bộ nội dung đó lại cho mình.
+2. Bấm **Sao chép**, xem lại dữ liệu rồi chia sẻ các dòng liên quan.
 
-Log ghi mọi bước: hook nào đã cài / thiếu, câu hỏi bắt được từ đâu, lệnh ACE nào đến, quyết định thay thế hay cho qua, request AI (URL, model, số message — **không bao giờ ghi khóa API đầy đủ**), thời gian chờ, lỗi chi tiết. Nhờ log đó mình sẽ chỉnh đúng chỗ thay vì đoán.
+Log chẩn đoán ghi trạng thái hook, nguồn bắt câu hỏi, quyết định thay/giữ, mã lỗi và thời gian. Mã hiện tại không ghi nguyên văn câu hỏi, địa chỉ API, đáp án hay kết quả công cụ.
 
-Log nằm tại: `/var/mobile/Library/Logs/SiriX.log` (kiểm tra xoay vòng khi tiến trình khởi động nếu vượt 512 KB, có `.old`). Xóa log cũng xóa bản `.old`; các dòng mới tiếp tục được ghi mà không cần respring. Log có thể chứa nội dung câu hỏi và URL: hãy kiểm tra thông tin riêng tư trước khi chia sẻ.
+Log nằm tại: `/var/mobile/Library/Logs/SiriX.log` (kiểm tra xoay vòng khi tiến trình khởi động nếu vượt 512 KB, có `.old`). Xóa log cũng xóa bản `.old`; các dòng mới tiếp tục được ghi mà không cần respring. Log của bản cũ có thể chứa nội dung câu hỏi hoặc URL: hãy kiểm tra thông tin riêng tư trước khi chia sẻ.
 
 ## Cách hoạt động (ngắn gọn)
 
@@ -74,7 +74,7 @@ Siri gốc trả lời ──► AFConnection._handleCommand:reply:             
 
 - Mỗi hook được kiểm tra class/selector lúc khởi động; selector không có sẽ được bỏ qua và ghi log. Các API Siri là API riêng của Apple nên cần xác minh trên từng thiết bị.
 - Trong một lượt, AddViews và SayIt dùng cùng quyết định AI/lỗi/hết giờ; tác vụ hệ thống được ưu tiên khi đã nhận diện. Nếu không sửa được lệnh hoặc thiếu hook, Siri gốc vẫn có thể xuất hiện.
-- Chế độ thay thế mặc định hiển thị thông báo khi hết giờ; tùy chọn **giữ Siri gốc** vẫn cố ý cho phản hồi gốc đi qua. Chờ trên luồng ACE tối đa 5 giây; đáp án đến sau khi đã quyết định hết giờ không tự hiện lại.
+- Chế độ thay thế mặc định hiển thị thông báo khi hết giờ; tùy chọn **giữ Siri gốc** vẫn cố ý cho phản hồi gốc đi qua. Chờ trên luồng ACE tối đa 5 giây. Nếu bật lưu đáp án đến muộn, đáp án hợp lệ của lượt hiện tại được lưu trong Lịch sử khi không thể cập nhật bubble; banner phụ thuộc máy.
 
 ## Build cục bộ (tùy chọn)
 
@@ -83,15 +83,15 @@ CI là đường build chính (macOS + Xcode trên GitHub Actions). Muốn kiể
 ```bash
 pip install --break-system-packages ziglang     # trình biên dịch ObjC
 git clone --depth 1 https://github.com/theos/theos /tmp/theos-check
-cd /tmp/theos-check && git submodule update --init vendor/logos vendor/include
+git -C /tmp/theos-check submodule update --init vendor/logos vendor/include
 git clone --depth 1 --filter=blob:none --sparse https://github.com/theos/sdks /tmp/sdks
-cd /tmp/sdks && git sparse-checkout set iPhoneOS15.6.sdk
+git -C /tmp/sdks sparse-checkout set iPhoneOS15.6.sdk
 
 ./scripts/local-check.sh    # Logos → compile toàn bộ (aarch64-ios, -Werror) → validate plist
 ./scripts/test-log-file.sh  # regression xóa/xoay vòng log (Linux/macOS)
 ```
 
-Trên macOS, `./scripts/test-intercept-macos.sh` chạy regression của state machine với ACE/LLM giả và `./scripts/test-store-macos.sh` kiểm tra kho lịch sử/thống kê. CI chạy cả hai bộ test. Chúng không thay thế việc thử Siri trên thiết bị thật.
+Trên macOS, `./scripts/test-intercept-macos.sh` chạy regression với ACE/LLM giả, `./scripts/test-store-macos.sh` kiểm tra kho dữ liệu, và `./scripts/test-v12-macos.sh` dùng fixture cho xuất/nhập, audio format, hủy mạng và SSE. CI chạy các bộ test này; chúng không thay thế việc thử Siri trên thiết bị thật.
 
 Build deb thật (cần macOS/theos): `make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless|roothide`.
 
@@ -115,4 +115,4 @@ docs/RESEARCH.md    toàn bộ nghiên cứu về SiriPlus & kiến trúc Siri i
 
 ## Phản hồi
 
-Cài đặt có lỗi? Gửi **log** (hướng dẫn ở trên) + mô tả câu bạn đã hỏi + model đang dùng. Có log là mình sửa được ngay.
+Cài đặt có lỗi? Gửi các dòng **log** đã kiểm tra thông tin riêng tư, model, iOS/scheme và một ca thử không chứa dữ liệu nhạy cảm.

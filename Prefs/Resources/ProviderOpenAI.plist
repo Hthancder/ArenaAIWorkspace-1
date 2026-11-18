@@ -72,6 +72,24 @@
 		</dict>
 		<dict>
 			<key>cell</key>
+			<string>PSEditTextCell</string>
+			<key>label</key>
+			<string>Mô hình dự phòng</string>
+			<key>key</key>
+			<string>openaiFallbackModel</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>default</key>
+			<string></string>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>placeholder</key>
+			<string>Bỏ trống để tắt</string>
+			<key>noAutoCorrect</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
 			<string>Kiểm tra</string>

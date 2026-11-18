@@ -29,10 +29,15 @@ FOUNDATION_EXPORT NSString *SXRedactKey(NSString * _Nullable key);
 #define SXLogWrn(cat, ...) SXLogWrite(SXLogLevelWarn, (cat), __VA_ARGS__)
 #define SXLogErr(cat, ...) SXLogWrite(SXLogLevelError, (cat), __VA_ARGS__)
 
-/// Cắt chuỗi cho log — format precision trên '@' là không an toàn, phải cắt trước.
+/// A UTF-16 cap that never leaves half of a surrogate pair.
+static inline NSString *SXPrefix(NSString *string, NSUInteger limit) {
+	if (string.length <= limit) return string;
+	if (limit && CFStringIsSurrogateHighCharacter([string characterAtIndex:limit - 1])) limit--;
+	return [string substringToIndex:limit];
+}
 static inline NSString *SXShort(NSString * _Nullable string, NSUInteger maxLength) {
 	if (!string) return @"(nil)";
-	return string.length <= maxLength ? string : [[string substringToIndex:maxLength] stringByAppendingString:@"…"];
+	return string.length <= maxLength ? string : [SXPrefix(string, maxLength) stringByAppendingString:@"…"];
 }
 
 NS_ASSUME_NONNULL_END

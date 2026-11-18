@@ -1,12 +1,12 @@
 #import "SXStream.h"
-
-static const NSTimeInterval kSXStreamTimeout = 60;
+#import "SXLog.h"
+#include <string.h>
 
 /// Receiver delegate — NSURLSession không có API dataTask với 3 block
 /// (nhận response/data/completion), nên dùng delegate thật (iOS API đúng).
-@interface SXStreamReceiver : NSObject <NSURLSessionDataDelegate>
+@interface SXStreamReceiver : SXNoRedirect <NSURLSessionDataDelegate>
 @property (nonatomic, copy) void (^onResponse)(NSInteger status);
-@property (nonatomic, copy) void (^onData)(NSData *data);
+@property (nonatomic, copy) BOOL (^onData)(NSData *data);
 @property (nonatomic, copy) void (^onComplete)(NSError *error);
 @end
 
@@ -23,7 +23,7 @@ static const NSTimeInterval kSXStreamTimeout = 60;
 
 - (void)URLSession:(NSURLSession *)session dataTask:(NSURLSessionDataTask *)dataTask
 	didReceiveData:(NSData *)data {
-	if (self.onData) self.onData(data);
+	if (self.onData && !self.onData(data)) [dataTask cancel];
 }
 
 - (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task
@@ -39,49 +39,44 @@ static const NSTimeInterval kSXStreamTimeout = 60;
 					 toURL:(NSString *)urlString
 				   headers:(NSDictionary<NSString *, NSString *> *)headers
 					format:(SXStreamFormat)format
-					 error:(NSError **)outErr {
-	NSURL *url = [NSURL URLWithString:urlString];
-	if (!url) {
-		if (outErr) *outErr = [NSError errorWithDomain:@"com.sirix.llm" code:-1
-			userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithFormat:@"URL không hợp lệ: %@", urlString]}];
+                      request:(SXRequest *)budget
+                     progress:(SXStreamProgress)progress
+                        error:(NSError **)outErr {
+	NSMutableURLRequest *request = SXJSONRequest(urlString, body, headers);
+	if (!request) {
+		if (outErr) *outErr = [NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorBadURL userInfo:nil];
 		return nil;
 	}
-	NSError *jsonError = nil;
-	NSData *payload = [NSJSONSerialization dataWithJSONObject:body options:0 error:&jsonError];
-	if (!payload) {
-		if (outErr) *outErr = jsonError ?: [NSError errorWithDomain:@"com.sirix.llm" code:-2
-			userInfo:@{NSLocalizedDescriptionKey: @"Không tạo được JSON yêu cầu."}];
-		return nil;
-	}
-
-	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
-	request.HTTPMethod = @"POST";
-	request.HTTPBody = payload;
-	request.timeoutInterval = kSXStreamTimeout;
-	[request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
 	[request setValue:@"text/event-stream" forHTTPHeaderField:@"Accept"];
-	[request setValue:@"SiriX/1.1" forHTTPHeaderField:@"User-Agent"];
-	[headers enumerateKeysAndObjectsUsingBlock:^(NSString *key, NSString *value, BOOL *stop) {
-		[request setValue:value forHTTPHeaderField:key];
-	}];
 
 	NSMutableString *content = [NSMutableString string];
-	NSMutableString *errorBody = [NSMutableString string];
 	__block BOOL sawToolCalls = NO;
 	__block NSInteger status = 0;
 	__block NSError *taskError = nil;
 	__block NSInteger firstTokenMs = -1;
-	CFAbsoluteTime start = CFAbsoluteTimeGetCurrent();
+	NSTimeInterval start = NSProcessInfo.processInfo.systemUptime;
+	__block NSTimeInterval lastFlush = 0;
+	__block BOOL doneMarker = NO, oversized = NO;
 
 	NSMutableData *buffer = [NSMutableData data];
-	__block NSString *pendingTail = @"";
+	void (^append)(NSString *) = ^(NSString *piece) {
+		if (!piece.length || content.length >= 4000 || budget.remaining <= 0) return;
+		[content appendString:SXPrefix(piece, 4000 - content.length)];
+		NSTimeInterval now = NSProcessInfo.processInfo.systemUptime;
+		if (firstTokenMs < 0 && [content stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].length) {
+			firstTokenMs = (NSInteger)((now - start) * 1000);
+			[budget markFirstOutput];
+		}
+		if (progress && firstTokenMs >= 0 && now - lastFlush >= 0.25) { lastFlush = now; progress([content copy]); }
+	};
 
 	void (^consumeLine)(NSString *) = ^(NSString *line) {
 		NSString *trimmed = [line stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 		if (![trimmed hasPrefix:@"data:"]) return;
 		NSString *chunkText = [[trimmed substringFromIndex:5] stringByTrimmingCharactersInSet:
 							   [NSCharacterSet whitespaceCharacterSet]];
-		if (!chunkText.length || [chunkText isEqualToString:@"[DONE]"]) return;
+		if ([chunkText isEqualToString:@"[DONE]"]) { doneMarker = YES; return; }
+		if (!chunkText.length) return;
 
 		id json = [NSJSONSerialization JSONObjectWithData:[chunkText dataUsingEncoding:NSUTF8StringEncoding]
 												  options:0 error:NULL];
@@ -97,10 +92,7 @@ static const NSTimeInterval kSXStreamTimeout = 60;
 				return;
 			}
 			NSString *piece = [delta[@"content"] isKindOfClass:[NSString class]] ? delta[@"content"] : nil;
-			if (piece.length) {
-				if (firstTokenMs < 0) firstTokenMs = (NSInteger)((CFAbsoluteTimeGetCurrent() - start) * 1000);
-				[content appendString:piece];
-			}
+			append(piece);
 		} else {
 			NSArray *candidates = [json[@"candidates"] isKindOfClass:[NSArray class]] ? json[@"candidates"] : nil;
 			id cand = (candidates.count && [candidates[0] isKindOfClass:[NSDictionary class]])
@@ -116,72 +108,63 @@ static const NSTimeInterval kSXStreamTimeout = 60;
 					return;
 				}
 				NSString *piece = [part[@"text"] isKindOfClass:[NSString class]] ? part[@"text"] : nil;
-				if (piece.length) {
-					if (firstTokenMs < 0) firstTokenMs = (NSInteger)((CFAbsoluteTimeGetCurrent() - start) * 1000);
-					[content appendString:piece];
-				}
+				if (![part[@"thought"] isEqual:@YES]) append(piece);
 			}
 		}
 	};
 
+	// Split bytes before decoding so a boundary in a Vietnamese/emoji codepoint
+	// doesn't delay already-complete events or corrupt UTF-8.
 	void (^consumeBuffer)(BOOL) = ^(BOOL flush) {
-		if (!buffer.length && !flush) return;
-		NSString *text = [[NSString alloc] initWithData:buffer encoding:NSUTF8StringEncoding];
-		if (!text) {
-			// UTF-8 bị cắt giữa chunk — giữ buffer chờ chunk kế.
-			if (flush) {
-				NSString *whole = [[NSString alloc] initWithData:buffer encoding:NSISOLatin1StringEncoding];
-				for (NSString *line in [whole componentsSeparatedByString:@"\n"]) consumeLine(line);
-				[buffer setLength:0];
-			}
-			return;
+		const uint8_t *bytes = buffer.bytes;
+		NSUInteger startOffset = 0;
+		for (NSUInteger i = 0; i < buffer.length && !sawToolCalls && !doneMarker; i++) {
+			if (bytes[i] != '\n') continue;
+			NSString *line = [[NSString alloc] initWithBytes:bytes + startOffset length:i - startOffset encoding:NSUTF8StringEncoding];
+			if (line) consumeLine(line);
+			startOffset = i + 1;
 		}
-		[buffer setLength:0];
-		NSString *joined = [pendingTail stringByAppendingString:text];
-		NSArray<NSString *> *lines = [joined componentsSeparatedByString:@"\n"];
-		pendingTail = flush ? @"" : (lines.lastObject ?: @"");
-		NSUInteger count = lines.count - (flush ? 0 : 1);
-		for (NSUInteger i = 0; i < count; i++) consumeLine(lines[i]);
+		if (flush && startOffset < buffer.length && !sawToolCalls && !doneMarker) {
+			NSString *line = [[NSString alloc] initWithBytes:bytes + startOffset length:buffer.length - startOffset encoding:NSUTF8StringEncoding];
+			if (line) consumeLine(line);
+			startOffset = buffer.length;
+		}
+		if (startOffset) [buffer replaceBytesInRange:NSMakeRange(0, startOffset) withBytes:NULL length:0];
 	};
 
 	dispatch_semaphore_t sem = dispatch_semaphore_create(0);
-	SXStreamReceiver *receiver = [[SXStreamReceiver alloc] init];
-	receiver.onResponse = ^(NSInteger statusCode) {
-		status = statusCode;
-	};
-	receiver.onData = ^(NSData *data) {
-		if (sawToolCalls) return;
+	SXStreamReceiver *receiver = [SXStreamReceiver new];
+	receiver.onResponse = ^(NSInteger statusCode) { status = statusCode; };
+	receiver.onData = ^BOOL(NSData *data) {
+		if (budget.remaining <= 0) return NO;
+		if (status < 200 || status >= 300) return YES; // never parse error bodies as SSE
+		if (data.length > 512 * 1024 - buffer.length) { oversized = YES; return NO; }
 		[buffer appendData:data];
-		if (status >= 400 && errorBody.length < 4096) {
-			NSString *errChunk = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-			if (errChunk) [errorBody appendString:errChunk];
-		}
 		consumeBuffer(NO);
+		return !sawToolCalls && !doneMarker;
 	};
 	receiver.onComplete = ^(NSError *error) {
 		taskError = error;
-		consumeBuffer(YES);
+		if (!error && status >= 200 && status < 300) consumeBuffer(YES);
 		dispatch_semaphore_signal(sem);
 	};
-	NSURLSession *session = [NSURLSession
-		sessionWithConfiguration:[NSURLSessionConfiguration ephemeralSessionConfiguration]
-						delegate:receiver
-				   delegateQueue:nil]; // nil = hàng đợi tuần tự do session tạo
-	[[session dataTaskWithRequest:request] resume];
-
-	long waited = dispatch_semaphore_wait(sem,
-		dispatch_time(DISPATCH_TIME_NOW, (int64_t)((kSXStreamTimeout + 5) * NSEC_PER_SEC)));
-	[session finishTasksAndInvalidate];
-	if (waited != 0) {
-		if (outErr) *outErr = [NSError errorWithDomain:@"com.sirix.llm" code:-8
-			userInfo:@{NSLocalizedDescriptionKey: @"SSE hết thời gian chờ."}];
+	NSURLSession *session = [NSURLSession sessionWithConfiguration:SXEphemeralSession() delegate:receiver delegateQueue:nil];
+	NSURLSessionDataTask *task = [session dataTaskWithRequest:request];
+	BOOL finished = [budget startTask:task] && [budget waitForCompletion:sem];
+	[budget finishTask:task];
+	if (!finished) {
+		[session invalidateAndCancel];
+		if (outErr) *outErr = SXRequestError(budget);
 		return nil;
 	}
-	// Lỗi transport MỌI lúc (kể cả giữa chừng) → trả lỗi, KHÔNG bao giờ “thành công”
-	// với nội dung bị cắt cụt (SSE đứt giữa chừng = đáp án thiếu chữ).
-	if (taskError) {
-		if (outErr) *outErr = taskError;
+	[session finishTasksAndInvalidate];
+	if (oversized) {
+		if (outErr) *outErr = [NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorDataLengthExceedsMaximum userInfo:nil];
 		return nil;
+	}
+	if (taskError && !sawToolCalls && !doneMarker) {
+		if (firstTokenMs < 0) { if (outErr) *outErr = taskError; return nil; }
+		SXLogWrn(@"llm", @"SSE ngắt sau token đầu; dùng nội dung đã nhận.");
 	}
 
 	NSMutableDictionary *result = [NSMutableDictionary dictionaryWithDictionary:@{
@@ -190,7 +173,6 @@ static const NSTimeInterval kSXStreamTimeout = 60;
 		@"status": @(status),
 		@"firstTokenMs": @(firstTokenMs),
 	}];
-	if (errorBody.length) result[@"errorText"] = [errorBody copy];
 	return result;
 }
 

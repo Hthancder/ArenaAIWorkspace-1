@@ -17,6 +17,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// Epoch bảo vệ các sự kiện đang xếp hàng không phục hồi thống kê sau khi xóa.
 - (BOOL)recordEvent:(NSString *)event milliseconds:(nullable NSNumber *)milliseconds epoch:(NSString *)epoch startedAt:(NSTimeInterval)startedAt;
 - (BOOL)clearStats;
+/// STT trial metadata only (no recorded audio or text), works across processes.
+- (BOOL)armSTTTrial;
+- (nullable NSString *)claimSTTTrialStartedAt:(NSTimeInterval)startedAt;
+- (BOOL)finishSTTTrial:(NSString *)identifier success:(BOOL)success;
 @end
 
 NS_ASSUME_NONNULL_END

@@ -7,6 +7,7 @@
 #import "SXLog.h"
 #import "SXMarkdown.h"
 #import "SXStore.h"
+#import "SXTTS.h"
 #include <assert.h>
 
 static SXLLMCompletion pendingCompletion;
@@ -16,7 +17,10 @@ static NSString *testTimeoutAction = @"bubble";
 static NSString *testTriggerMode = @"auto";
 static NSString *lastQuestion;
 static BOOL testShowOriginal;
-static BOOL testIncognito;
+static BOOL testIncognito, testLocalOnly, testDeferred;
+static NSString *testFallback, *lastModel;
+static NSString *testTTSMode = @"off";
+static SXRequest *lastRequest;
 
 @implementation SXPrefs
 + (instancetype)shared { static SXPrefs *p; static dispatch_once_t once; dispatch_once(&once, ^{ p = [SXPrefs new]; }); return p; }
@@ -28,23 +32,41 @@ static BOOL testIncognito;
 - (BOOL)hideWebCards { return YES; }
 - (BOOL)showOriginal { return testShowOriginal; }
 - (BOOL)incognito { return testIncognito; }
-- (BOOL)speakErrors { return NO; }
+- (NSString *)ttsMode { return testTTSMode; }
+- (NSString *)ttsSource { return @"system"; }
+- (BOOL)localOnly { return testLocalOnly; }
+- (BOOL)deferredReplies { return testDeferred; }
+- (NSString *)fallbackModelForProvider:(SXProvider)provider { (void)provider; return testFallback ?: @""; }
+- (NSString *)activeModel { return @"primary"; }
+- (SXPrefs *)snapshot { return self; }
 - (NSString *)timeoutAction { return testTimeoutAction; }
 - (NSInteger)contextTurns { return 8; }
 @end
 @implementation SXLLM
-+ (void)askQuestion:(NSString *)question history:(NSArray *)history tools:(NSArray *)tools executor:(SXToolExec)executor completion:(SXLLMCompletion)completion {
-	lastQuestion = [question copy]; (void)history; (void)tools; (void)executor;
++ (void)performQuestion:(NSString *)question history:(NSArray *)history tools:(NSArray *)tools executor:(SXToolExec)executor
+	prefs:(SXPrefs *)prefs provider:(SXProvider)provider model:(NSString *)model prompt:(NSString *)prompt maxTokens:(NSUInteger)maxTokens
+	request:(SXRequest *)request progress:(SXStreamProgress)progress completion:(SXLLMCompletion)completion {
+	lastQuestion = [question copy]; lastModel = [model copy]; lastRequest = request;
+	(void)history; (void)tools; (void)executor; (void)prefs; (void)provider; (void)prompt; (void)maxTokens; (void)progress;
 	pendingCompletion = [completion copy];
 	dispatch_semaphore_signal(requestStarted);
 }
 @end
 @implementation SXTools
-+ (NSArray *)definitions { return @[]; }
-+ (NSDictionary *)execute:(NSString *)name arguments:(NSDictionary *)arguments error:(NSError **)error {
-	(void)name; (void)arguments; (void)error; return nil;
++ (NSArray *)definitionsForPrefs:(SXPrefs *)prefs question:(NSString *)question { (void)prefs; (void)question; return @[]; }
++ (NSDictionary *)execute:(NSString *)name arguments:(NSDictionary *)arguments question:(NSString *)question request:(SXRequest *)request error:(NSError **)error {
+	(void)name; (void)arguments; (void)question; (void)request; (void)error; return nil;
 }
 @end
+@implementation SXTTSPlan
+@end
+BOOL SXTTSModeAllows(NSString *mode, BOOL isAnswer) {
+	return [mode isEqual:@"all"] || [mode isEqual:(isAnswer ? @"ai" : @"errors")];
+}
+SXTTSPlan *SXTTSSystemPlan(NSString *text, SXPrefs *prefs) { (void)text; (void)prefs; return [SXTTSPlan new]; }
+SXTTSPlan *SXTTSPrepare(NSString *text, SXPrefs *prefs, SXRequest *request) { (void)request; return SXTTSSystemPlan(text, prefs); }
+void SXTTSPlay(SXTTSPlan *plan, void (^result)(BOOL)) { (void)plan; if (result) result(YES); }
+void SXTTSStop(void) {}
 NSString *SXMarkdownRender(NSString *text) { return text; }
 void SXLogWrite(SXLogLevel level, NSString *category, NSString *format, ...) { (void)level; (void)category; (void)format; }
 
@@ -148,14 +170,21 @@ int main(void) {
 		pendingCompletion(nil, [NSError errorWithDomain:@"test" code:1 userInfo:@{NSLocalizedDescriptionKey:@"lỗi thử"}], nil);
 		views = viewCommand(); assert([intercept handleIncomingCommand:views]);
 		say = sayCommand(); assert([intercept handleIncomingCommand:say]);
-		assert([say.message containsString:@"lỗi thử"]);
+		assert([((FakeView *)views.views[0]).text containsString:@"lỗi thử"]);
+		assert([say.message isEqual:@""]);
+		testDeferred = YES;
 		begin(@"question timeout");
 		views = viewCommand(); assert([intercept handleIncomingCommand:views]);
+		assert([((FakeView *)views.views[0]).text containsString:@"quá muộn"]);
 		say = sayCommand(); assert([intercept handleIncomingCommand:say]);
-		assert([say.message containsString:@"quá muộn"]);
+		assert([say.message isEqual:@""]);
 		pendingCompletion(@"late answer", nil, nil);
 		say = sayCommand(); assert([intercept handleIncomingCommand:say]);
-		assert([say.message containsString:@"quá muộn"]);
+		assert([say.message isEqual:@""]);
+		dispatch_sync([SXStore queue], ^{});
+		assert([[[SXStore shared] snapshot][@"history"] lastObject] != nil);
+		assert([[[[SXStore shared] snapshot][@"history"] lastObject][@"a"] isEqual:@"late answer"]);
+		testDeferred = NO;
 
 		// Tùy chọn keep và chế độ thông minh chủ động giữ phản hồi Siri khi hết giờ.
 		testTimeoutAction = @"keep";
@@ -217,6 +246,42 @@ int main(void) {
 		assert(!changed && [actionSay.message isEqualToString:@"Siri gốc"]);
 		pendingCompletion(@"unused", nil, nil);
 		say = sayCommand(); assert(![intercept handleIncomingCommand:say]);
+		assert(lastRequest.cancelled);
+
+		// Explicit controls and obvious actions must not reach the provider.
+		[intercept noteQuestion:@"Đặt báo thức lúc 7 giờ" source:@"test"];
+		assert(dispatch_semaphore_wait(requestStarted, dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC)) != 0);
+		testLocalOnly = YES;
+		[intercept noteQuestion:@"private network off" source:@"test"];
+		assert(dispatch_semaphore_wait(requestStarted, dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC)) != 0);
+		testLocalOnly = NO;
+
+		// One fallback only; the old attempt is canceled and never runs tools again.
+		testFallback = @"secondary";
+		testTimeoutAction = @"retry";
+		begin(@"retry this turn");
+		SXRequest *first = lastRequest;
+		SXLLMCompletion firstCompletion = pendingCompletion;
+		firstCompletion(nil, [NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorTimedOut userInfo:nil], nil);
+		assert(dispatch_semaphore_wait(requestStarted, dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC)) == 0);
+		assert(first.cancelled && [lastModel isEqual:@"secondary"]);
+		pendingCompletion(@"backup answer", nil, nil);
+		say = sayCommand(); assert([intercept handleIncomingCommand:say]);
+		assert([say.message isEqual:@"backup answer"]);
+		testFallback = nil; testTimeoutAction = @"bubble";
+
+		// A ready custom voice uses silent Apple fields; generation cancels playback.
+		testTTSMode = @"ai";
+		begin(@"try a voice");
+		pendingCompletion(@"answer with voice", nil, nil);
+		views = viewCommand(); assert([intercept handleIncomingCommand:views]);
+		assert([((FakeView *)views.views[0]).text isEqual:@"answer with voice"]);
+		assert([((FakeView *)views.views[0]).speakableText isEqual:@""]);
+		say = sayCommand(); assert([intercept handleIncomingCommand:say] && [say.message isEqual:@""]);
+		SXRequest *voice = lastRequest;
+		begin(@"new capture cancels voice");
+		assert(voice.cancelled);
+		[intercept preferencesDidChange];
 		puts("intercept regression tests: OK");
 	}
 	return 0;

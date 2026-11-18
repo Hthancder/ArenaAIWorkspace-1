@@ -1,4 +1,6 @@
 #import <Foundation/Foundation.h>
+#import "SXNetwork.h"
+#import "SXPrefs.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -11,12 +13,11 @@ typedef NSDictionary * _Nullable (^SXToolExec)(NSString *name,
 
 /// Danh sách công cụ dạng trung lập (OpenAI/Gemini đều tự chuyển đổi).
 /// Mỗi phần tử: @{@"name", @"description", @"parameters" (JSON schema)}.
-+ (NSArray<NSDictionary *> *)definitions;
++ (NSArray<NSDictionary *> *)definitionsForPrefs:(SXPrefs *)prefs question:(NSString *)question;
 
 /// Chạy công cụ đã bật. Trả về @{ @"result": … } hoặc nil kèm lỗi.
-+ (nullable NSDictionary *)execute:(NSString *)name
-						arguments:(NSDictionary *)arguments
-							 error:(NSError * _Nullable * _Nullable)error;
++ (nullable NSDictionary *)execute:(NSString *)name arguments:(NSDictionary *)arguments
+                         question:(NSString *)question request:(SXRequest *)request error:(NSError * _Nullable * _Nullable)error;
 
 @end
 

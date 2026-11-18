@@ -20,6 +20,10 @@ FOUNDATION_EXPORT NSString *SXDefaultSystemPrompt(void);
 
 /// Đọc lại toàn bộ cài đặt (CFPreferences + fallback file). Log lại tóm tắt.
 - (void)reload;
+/// Immutable per-turn configuration; never mutate the live object in a worker.
+- (SXPrefs *)snapshot;
+@property (atomic, readonly, copy) NSDictionary *settings;
++ (BOOL)writeValues:(NSDictionary *)values removing:(NSArray<NSString *> *)keys;
 
 /// Ghi một key chuỗi (CFPreferences + đồng bộ ngay). value = nil → xóa key.
 + (void)setString:(nullable NSString *)value forKey:(NSString *)key;
@@ -40,16 +44,26 @@ FOUNDATION_EXPORT NSString *SXDefaultSystemPrompt(void);
 @property (nonatomic, readonly) BOOL hideWebCards;
 @property (nonatomic, readonly) BOOL showOriginal;
 @property (nonatomic, readonly) BOOL incognito;
-@property (nonatomic, readonly) BOOL speakErrors;
+@property (nonatomic, readonly) BOOL localOnly;
 @property (nonatomic, readonly) BOOL verbose;
 @property (nonatomic, readonly) BOOL streaming;                 // trả lời theo SSE (v1.1)
 @property (nonatomic, readonly) BOOL markdown;                  // trình bày Markdown khi hiển thị (v1.1)
-@property (nonatomic, readonly, copy) NSString *timeoutAction;  // "bubble" | "keep" — khi hết giờ (chế độ Thay thế)
+@property (nonatomic, readonly, copy) NSString *timeoutAction;  // bubble | keep | retry
 @property (nonatomic, readonly) NSInteger maxToolRounds;        // 1–4, mặc định 3
 @property (nonatomic, readonly) BOOL toolSystemInfo;
 @property (nonatomic, readonly) BOOL toolClipboard;
 @property (nonatomic, readonly) BOOL toolFetchURL;
 
+@property (nonatomic, readonly) BOOL toolCurrentApp;
+@property (nonatomic, readonly) BOOL deferredReplies;
+@property (nonatomic, readonly) BOOL liveSiriUpdates;
+@property (nonatomic, readonly) BOOL sttEnabled;
+@property (nonatomic, readonly, copy) NSString *sttSource, *sttBaseUrl, *sttApiKey, *sttModel, *sttLanguage, *sttTranslate, *sttPrompt;
+@property (nonatomic, readonly) NSInteger sttMaxSec, sttWaitMs;
+@property (nonatomic, readonly, copy) NSString *ttsMode, *ttsSource, *ttsLang, *ttsVoice, *ttsBaseUrl, *ttsApiKey, *ttsModel;
+@property (nonatomic, readonly) double ttsSpeed, ttsVolume;
+
+- (NSString *)fallbackModelForProvider:(SXProvider)provider;
 - (nullable NSString *)activeAPIKey;
 - (NSString *)activeModel;
 - (NSString *)activeBaseURL;

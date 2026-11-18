@@ -1,4 +1,4 @@
-#import "PSListController.h"
+#import "SXPreferenceListController.h"
 
-@interface SXRootListController : PSListController
+@interface SXRootListController : SXPreferenceListController
 @end

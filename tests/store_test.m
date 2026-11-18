@@ -41,6 +41,14 @@ int main(void) {
 		assert(![store recordEvent:@"error" milliseconds:nil epoch:statsEpoch startedAt:startedAt]);
 		assert([[[store snapshot] objectForKey:@"stats"] count] == 0);
 		assert(![store recordEvent:@"error" milliseconds:nil epoch:[store snapshot][@"statsEpoch"] startedAt:startedAt]);
+		assert([store armSTTTrial]);
+		assert(![store claimSTTTrialStartedAt:startedAt]);
+		NSTimeInterval trialStarted = CFAbsoluteTimeGetCurrent();
+		NSString *trial = [store claimSTTTrialStartedAt:trialStarted];
+		assert(trial.length && ![store claimSTTTrialStartedAt:trialStarted]);
+		assert(![store finishSTTTrial:@"other" success:YES]);
+		assert([store finishSTTTrial:trial success:YES]);
+		assert([[[store snapshot][@"sttTrial"] objectForKey:@"status"] isEqual:@"ok"]);
 		struct stat st;
 		assert(stat([[dir stringByAppendingPathComponent:@"state.plist"] fileSystemRepresentation], &st) == 0);
 		assert((st.st_mode & 0777) == 0600);

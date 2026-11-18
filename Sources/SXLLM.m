@@ -3,81 +3,18 @@
 #import "SXLog.h"
 #import "SXStream.h"
 
-static const NSTimeInterval kSXHTTPTimeout = 60;
-
-#pragma mark - HTTP
-
-/// POST JSON → @{ @"status": NSNumber, @"data": NSData } ; lỗi mạng → *outErr.
-static NSDictionary *SXHTTPPost(NSString *urlString,
-								NSDictionary *body,
-								NSDictionary<NSString *, NSString *> *headers,
-								NSError **outErr) {
-	NSURL *url = [NSURL URLWithString:urlString];
-	if (!url) {
-		if (outErr) *outErr = [NSError errorWithDomain:@"com.sirix.llm" code:-1
-			userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithFormat:@"URL không hợp lệ: %@", urlString]}];
+static NSDictionary *SXHTTPPost(NSString *url, NSDictionary *body, NSDictionary *headers, SXRequest *request, NSError **error) {
+	NSMutableURLRequest *post = SXJSONRequest(url, body, headers);
+	if (!post) {
+		if (error) *error = [NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorBadURL userInfo:@{NSLocalizedDescriptionKey: @"Địa chỉ API HTTPS không hợp lệ."}];
 		return nil;
 	}
-	NSError *jsonError = nil;
-	NSData *payload = [NSJSONSerialization dataWithJSONObject:body options:0 error:&jsonError];
-	if (!payload) {
-		if (outErr) *outErr = jsonError ?: [NSError errorWithDomain:@"com.sirix.llm" code:-2
-			userInfo:@{NSLocalizedDescriptionKey: @"Không tạo được JSON yêu cầu."}];
-		return nil;
-	}
-
-	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
-	request.HTTPMethod = @"POST";
-	request.HTTPBody = payload;
-	request.timeoutInterval = kSXHTTPTimeout;
-	[request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
-	[request setValue:@"SiriX/1.0" forHTTPHeaderField:@"User-Agent"];
-	[headers enumerateKeysAndObjectsUsingBlock:^(NSString *key, NSString *value, BOOL *stop) {
-		[request setValue:value forHTTPHeaderField:key];
-	}];
-
-	dispatch_semaphore_t sem = dispatch_semaphore_create(0);
-	__block NSData *data = nil;
-	__block NSInteger status = 0;
-	__block NSError *sessionError = nil;
-	[[[NSURLSession sharedSession] dataTaskWithRequest:request
-									completionHandler:^(NSData *d, NSURLResponse *response, NSError *err) {
-		data = d;
-		status = [(NSHTTPURLResponse *)response statusCode];
-		sessionError = err;
-		dispatch_semaphore_signal(sem);
-	}] resume];
-	dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kSXHTTPTimeout * NSEC_PER_SEC)));
-
-	if (sessionError) {
-		if (outErr) *outErr = sessionError;
-		return nil;
-	}
-	return @{@"status": @(status), @"data": data ?: [NSData data]};
+	return SXHTTP(post, request, 512 * 1024, error);
 }
 
-static NSString *SXSnippet(NSData *data, NSUInteger max) {
-	NSString *s = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] ?: @"";
-	if (s.length > max) s = [[s substringToIndex:max] stringByAppendingString:@"…"];
-	return s;
-}
-
-static NSError *SXHTTPError(NSInteger status, NSData *data) {
-	NSString *detail = nil;
-	id json = data.length ? [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL] : nil;
-	if ([json isKindOfClass:[NSDictionary class]]) {
-		id errObj = json[@"error"];
-		if ([errObj isKindOfClass:[NSDictionary class]]) {
-			id msg = errObj[@"message"];
-			if ([msg isKindOfClass:[NSString class]]) detail = msg;
-		} else if ([errObj isKindOfClass:[NSString class]]) {
-			detail = errObj;
-		}
-	}
-	if (!detail.length) detail = SXSnippet(data, 300) ?: @"(không có nội dung)";
-	return [NSError errorWithDomain:@"com.sirix.llm" code:status
-						   userInfo:@{NSLocalizedDescriptionKey:
-									  [NSString stringWithFormat:@"Máy chủ trả về HTTP %ld: %@", (long)status, detail]}];
+static NSError *SXHTTPError(NSInteger status) {
+	return [NSError errorWithDomain:@"com.sirix.llm" code:status userInfo:@{NSLocalizedDescriptionKey:
+		[NSString stringWithFormat:@"Máy chủ AI trả HTTP %ld.", (long)status]}];
 }
 
 static NSDictionary *SXInfo(NSString *provider, NSString *model, NSInteger status,
@@ -92,27 +29,27 @@ static NSError *SXErr(NSInteger code, NSString *message) {
 }
 
 // Retry giới hạn theo từng vòng HTTP, chỉ với 429/5xx; không chạy lại tool.
-static BOOL SXRetryHTTP(NSInteger status, NSInteger *attempt) {
+static BOOL SXRetryHTTP(NSInteger status, NSInteger *attempt, SXRequest *request) {
 	if (!((status == 429) || (status >= 500 && status < 600)) || *attempt >= 2) return NO;
 	NSTimeInterval delay = *attempt == 0 ? 0.5 : 1.5;
 	(*attempt)++;
 	SXLogWrn(@"llm", @"HTTP %ld — thử lại %ld/2 sau %.1fs", (long)status, (long)*attempt, delay);
-	[NSThread sleepForTimeInterval:delay]; // chạy trên luồng network, không phải luồng ACE/UI
-	return YES;
+	return [request waitForDelay:delay];
 }
 
 #pragma mark - OpenAI tương thích
 
 static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary *> *history,
 						NSArray<NSDictionary *> *toolDefs, SXToolExec executor,
-						SXLLMCompletion completion) {
+						NSString *overrideModel, NSString *prompt, NSUInteger maxTokens,
+						SXRequest *request, SXStreamProgress progress, SXLLMCompletion completion) {
 	NSString *key = [prefs.openaiKey stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
-	NSString *model = [prefs.openaiModel stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+	NSString *model = overrideModel ?: [prefs.openaiModel stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
 	if (!model.length) model = @"gpt-4o-mini";
 	NSString *base = prefs.activeBaseURL;
-	NSString *url = [base hasSuffix:@"/chat/completions"] ? base : [base stringByAppendingString:@"/chat/completions"];
+	NSString *url = SXEndpoint(base, @"/chat/completions");
 	NSMutableArray *messages = [NSMutableArray array];
-	[messages addObject:@{@"role": @"system", @"content": prefs.systemPrompt}];
+	[messages addObject:@{@"role": @"system", @"content": (prompt ?: prefs.systemPrompt)}];
 	for (NSDictionary *turn in history) {
 		NSString *q = [turn[@"q"] isKindOfClass:[NSString class]] ? turn[@"q"] : nil;
 		NSString *a = [turn[@"a"] isKindOfClass:[NSString class]] ? turn[@"a"] : nil;
@@ -130,22 +67,25 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 		}}];
 	}
 
-	SXLogDbg(@"llm", @"openai → POST %@ (model=%@, %lu message, %lu tool, temp=%.1f)",
-			 url, model, (unsigned long)messages.count,
+	SXLogDbg(@"llm", @"openai → POST (%lu message, %lu tool, temp=%.1f)",
+			 (unsigned long)messages.count,
 			 (unsigned long)toolsPayload.count, prefs.temperature);
 
 	CFAbsoluteTime start = CFAbsoluteTimeGetCurrent();
 	NSInteger rounds = 0;
 	NSInteger lastStatus = 0;
 	NSInteger retryCount = 0;
-	BOOL forceNonStream = !prefs.streaming;
+	BOOL forceNonStream = !prefs.streaming || maxTokens > 0;
+	NSSet *allowedTools = [NSSet setWithArray:[toolDefs valueForKey:@"name"]];
 
 	while (YES) {
+		if (request.remaining <= 0) { completion(nil, SXRequestError(request), nil); return; }
 		NSMutableDictionary *body = [@{
 			@"model": model,
 			@"messages": messages,
 			@"temperature": @(prefs.temperature),
 		} mutableCopy];
+		if (maxTokens) body[@"max_tokens"] = @(maxTokens);
 		if (toolsPayload.count) body[@"tools"] = toolsPayload;
 
 		// ---- Streaming (SSE): vòng đầu; nếu model trả tool_calls / rỗng / endpoint
@@ -159,11 +99,15 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 												   headers:@{@"Authorization":
 														[NSString stringWithFormat:@"Bearer %@", key]}
 													 format:SXStreamFormatOpenAI
-													  error:&streamError];
+													  request:request progress:progress
+											  error:&streamError];
 			if (!streamResp) {
+				if (request.remaining <= 0 || streamError.code == NSURLErrorNotConnectedToInternet || streamError.code == NSURLErrorTimedOut) {
+					completion(nil, (request.remaining <= 0 ? SXRequestError(request) : streamError), nil); return;
+				}
 				// Lỗi transport/hết giờ trên SSE → thử non-stream một lần
 				// (nhiều proxy nhận POST thường nhưng treo SSE). Non-stream lỗi → báo lỗi như cũ.
-				SXLogWrn(@"llm", @"openai stream lỗi (%@) → thử non-stream", streamError.localizedDescription);
+				SXLogWrn(@"llm", @"openai stream lỗi (%ld) → thử non-stream", (long)streamError.code);
 				forceNonStream = YES;
 				continue;
 			}
@@ -185,16 +129,13 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 					}
 					forceNonStream = YES; // stream “thành công” nhưng rỗng → thử non-stream
 				}
-			} else if (streamStatus != 501 && SXRetryHTTP(streamStatus, &retryCount)) {
+			} else if (streamStatus != 501 && SXRetryHTTP(streamStatus, &retryCount, request)) {
 				continue;
 			} else if (streamStatus == 400 || streamStatus == 404 || streamStatus == 405 || streamStatus == 415 || streamStatus == 501) {
 				SXLogWrn(@"llm", @"endpoint không hỗ trợ stream (HTTP %ld) → non-stream", (long)streamStatus);
 				forceNonStream = YES;
 			} else {
-				NSString *errorText = [streamResp[@"errorText"] isKindOfClass:[NSString class]]
-					? streamResp[@"errorText"] : nil;
-				NSData *errData = [errorText dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
-				NSError *err = SXHTTPError(streamStatus, errData);
+				NSError *err = SXHTTPError(streamStatus);
 				SXLogErr(@"llm", @"openai stream HTTP %ld: %@", (long)streamStatus, err.localizedDescription);
 				completion(nil, err, SXInfo(@"openai", model, streamStatus, rounds, start));
 				return;
@@ -204,17 +145,17 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 		NSError *postError = nil;
 		NSDictionary *resp = SXHTTPPost(url, body, @{
 			@"Authorization": [NSString stringWithFormat:@"Bearer %@", key],
-		}, &postError);
+		}, request, &postError);
 		if (!resp) {
-			SXLogErr(@"llm", @"openai lỗi mạng: %@", postError.localizedDescription);
+			SXLogErr(@"llm", @"openai lỗi mạng: %ld", (long)postError.code);
 			completion(nil, postError, SXInfo(@"openai", model, 0, rounds, start));
 			return;
 		}
 		lastStatus = [resp[@"status"] integerValue];
 		NSData *data = resp[@"data"];
 		if (lastStatus < 200 || lastStatus >= 300) {
-			if (SXRetryHTTP(lastStatus, &retryCount)) continue;
-			NSError *err = SXHTTPError(lastStatus, data);
+			if (SXRetryHTTP(lastStatus, &retryCount, request)) continue;
+			NSError *err = SXHTTPError(lastStatus);
 			SXLogErr(@"llm", @"openai HTTP %ld: %@", (long)lastStatus, err.localizedDescription);
 			completion(nil, err, SXInfo(@"openai", model, lastStatus, rounds, start));
 			return;
@@ -230,7 +171,7 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 			}
 		}
 		if (![choice isKindOfClass:[NSDictionary class]]) {
-			NSError *err = SXErr(-3, [NSString stringWithFormat:@"Phản hồi không hợp lệ: %@", SXSnippet(data, 200)]);
+			NSError *err = SXErr(-3, @"Phản hồi của AI không hợp lệ.");
 			SXLogErr(@"llm", @"%@", err.localizedDescription);
 			completion(nil, err, SXInfo(@"openai", model, lastStatus, rounds, start));
 			return;
@@ -261,18 +202,20 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 					if ([parsed isKindOfClass:[NSDictionary class]]) args = parsed;
 				}
 				NSError *toolError = nil;
-				NSDictionary *toolResult = executor(name, args, &toolError);
+				if (request.remaining <= 0) { completion(nil, SXRequestError(request), nil); return; }
+				NSDictionary *toolResult = [allowedTools containsObject:name] ? executor(name, args, &toolError) : nil;
+				if (!toolResult && !toolError) toolError = SXErr(-9, @"Công cụ không được phép hoặc đã tắt.");
 				NSString *resultText = toolError
 					? [@"Lỗi công cụ: " stringByAppendingString:toolError.localizedDescription]
 					: ([toolResult[@"result"] isKindOfClass:[NSString class]] ? toolResult[@"result"] : @"Đã thực hiện xong.");
-				SXLogDbg(@"llm", @"round %ld: tool %@ → %@", (long)rounds, name, SXShort(resultText, 160));
+				SXLogDbg(@"llm", @"round %ld: tool ok=%d", (long)rounds, toolError == nil);
 				[messages addObject:@{@"role": @"tool", @"tool_call_id": callId, @"content": resultText}];
 			}
 			continue;
 		}
 
-		if (!content.length) {
-			NSError *err = SXErr(-4, @"Model trả về nội dung rỗng.");
+		if (![content stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].length) {
+			NSError *err = SXErr(-6, @"AI không trả lời." );
 			SXLogErr(@"llm", @"%@", err.localizedDescription);
 			completion(nil, err, SXInfo(@"openai", model, lastStatus, rounds, start));
 			return;
@@ -311,15 +254,14 @@ static id SXGeminiSchema(id node) {
 
 static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary *> *history,
 						NSArray<NSDictionary *> *toolDefs, SXToolExec executor,
-						SXLLMCompletion completion) {
+						NSString *overrideModel, NSString *prompt, NSUInteger maxTokens,
+						SXRequest *request, SXStreamProgress progress, SXLLMCompletion completion) {
 	NSString *key = [prefs.geminiKey stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
-	NSString *model = [prefs.geminiModel stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+	NSString *model = overrideModel ?: [prefs.geminiModel stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
 	if (!model.length) model = @"gemini-2.0-flash";
-	if ([model hasPrefix:@"models/"]) model = [model substringFromIndex:7];
-	NSString *url = [NSString stringWithFormat:
-		@"https://generativelanguage.googleapis.com/v1beta/models/%@:generateContent", model];
-	NSString *streamURL = [NSString stringWithFormat:
-		@"https://generativelanguage.googleapis.com/v1beta/models/%@:streamGenerateContent?alt=sse", model];
+	NSString *url = SXGeminiEndpoint(model, NO);
+	NSString *streamURL = SXGeminiEndpoint(model, YES);
+	if (!url || !streamURL) { completion(nil, SXErr(-1, @"Tên mô hình Gemini không hợp lệ."), nil); return; }
 
 	NSMutableArray *contents = [NSMutableArray array];
 	for (NSDictionary *turn in history) {
@@ -330,21 +272,23 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 	}
 	[contents addObject:@{@"role": @"user", @"parts": @[@{@"text": question}]}];
 
-	SXLogDbg(@"llm", @"gemini → POST models/%@ (%lu message, %lu tool, temp=%.1f)",
-			 model, (unsigned long)contents.count,
+	SXLogDbg(@"llm", @"gemini → POST (%lu message, %lu tool, temp=%.1f)",
+			 (unsigned long)contents.count,
 			 (unsigned long)toolDefs.count, prefs.temperature);
 
 	CFAbsoluteTime start = CFAbsoluteTimeGetCurrent();
 	NSInteger rounds = 0;
 	NSInteger lastStatus = 0;
 	NSInteger retryCount = 0;
-	BOOL forceNonStream = !prefs.streaming;
+	BOOL forceNonStream = !prefs.streaming || maxTokens > 0;
+	NSSet *allowedTools = [NSSet setWithArray:[toolDefs valueForKey:@"name"]];
 
 	while (YES) {
+		if (request.remaining <= 0) { completion(nil, SXRequestError(request), nil); return; }
 		NSMutableDictionary *body = [@{
 			@"contents": contents,
-			@"systemInstruction": @{@"parts": @[@{@"text": prefs.systemPrompt}]},
-			@"generationConfig": @{@"temperature": @(prefs.temperature)},
+			@"systemInstruction": @{@"parts": @[@{@"text": (prompt ?: prefs.systemPrompt)}]},
+			@"generationConfig": maxTokens ? @{@"temperature": @0.0, @"maxOutputTokens": @(maxTokens)} : @{@"temperature": @(prefs.temperature)},
 		} mutableCopy];
 		if (toolDefs.count) {
 			NSMutableArray *decls = [NSMutableArray array];
@@ -355,7 +299,7 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 					@"parameters": SXGeminiSchema(def[@"parameters"] ?: @{@"type": @"object", @"properties": @{}}),
 				}];
 			}
-			body[@"tools"] = @{@"functionDeclarations": decls};
+			body[@"tools"] = @[@{@"functionDeclarations": decls}];
 		}
 
 		// ---- Streaming (SSE) — như nhánh OpenAI ----
@@ -365,10 +309,14 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 													 toURL:streamURL
 												   headers:@{@"x-goog-api-key": key}
 													 format:SXStreamFormatGemini
-													  error:&streamError];
+													  request:request progress:progress
+											  error:&streamError];
 			if (!streamResp) {
+				if (request.remaining <= 0 || streamError.code == NSURLErrorNotConnectedToInternet || streamError.code == NSURLErrorTimedOut) {
+					completion(nil, (request.remaining <= 0 ? SXRequestError(request) : streamError), nil); return;
+				}
 				// Như nhánh OpenAI: SSE lỗi/treo → fallback non-stream.
-				SXLogWrn(@"llm", @"gemini stream lỗi (%@) → thử non-stream", streamError.localizedDescription);
+				SXLogWrn(@"llm", @"gemini stream lỗi (%ld) → thử non-stream", (long)streamError.code);
 				forceNonStream = YES;
 				continue;
 			}
@@ -390,16 +338,13 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 					}
 					forceNonStream = YES;
 				}
-			} else if (streamStatus != 501 && SXRetryHTTP(streamStatus, &retryCount)) {
+			} else if (streamStatus != 501 && SXRetryHTTP(streamStatus, &retryCount, request)) {
 				continue;
 			} else if (streamStatus == 400 || streamStatus == 404 || streamStatus == 405 || streamStatus == 415 || streamStatus == 501) {
 				SXLogWrn(@"llm", @"gemini stream không khả dụng (HTTP %ld) → non-stream", (long)streamStatus);
 				forceNonStream = YES;
 			} else {
-				NSString *errorText = [streamResp[@"errorText"] isKindOfClass:[NSString class]]
-					? streamResp[@"errorText"] : nil;
-				NSData *errData = [errorText dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
-				NSError *err = SXHTTPError(streamStatus, errData);
+				NSError *err = SXHTTPError(streamStatus);
 				SXLogErr(@"llm", @"gemini stream HTTP %ld: %@", (long)streamStatus, err.localizedDescription);
 				completion(nil, err, SXInfo(@"gemini", model, streamStatus, rounds, start));
 				return;
@@ -407,17 +352,17 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 		}
 
 		NSError *postError = nil;
-		NSDictionary *resp = SXHTTPPost(url, body, @{@"x-goog-api-key": key}, &postError);
+		NSDictionary *resp = SXHTTPPost(url, body, @{@"x-goog-api-key": key}, request, &postError);
 		if (!resp) {
-			SXLogErr(@"llm", @"gemini lỗi mạng: %@", postError.localizedDescription);
+			SXLogErr(@"llm", @"gemini lỗi mạng: %ld", (long)postError.code);
 			completion(nil, postError, SXInfo(@"gemini", model, 0, rounds, start));
 			return;
 		}
 		lastStatus = [resp[@"status"] integerValue];
 		NSData *data = resp[@"data"];
 		if (lastStatus < 200 || lastStatus >= 300) {
-			if (SXRetryHTTP(lastStatus, &retryCount)) continue;
-			NSError *err = SXHTTPError(lastStatus, data);
+			if (SXRetryHTTP(lastStatus, &retryCount, request)) continue;
+			NSError *err = SXHTTPError(lastStatus);
 			SXLogErr(@"llm", @"gemini HTTP %ld: %@", (long)lastStatus, err.localizedDescription);
 			completion(nil, err, SXInfo(@"gemini", model, lastStatus, rounds, start));
 			return;
@@ -430,18 +375,14 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 			if ([candidates isKindOfClass:[NSArray class]] && [candidates count] && [candidates[0] isKindOfClass:[NSDictionary class]]) {
 				candidate = candidates[0];
 			} else {
-				id feedback = json[@"promptFeedback"];
-				NSString *block = [feedback isKindOfClass:[NSDictionary class]] && [feedback[@"blockReason"] isKindOfClass:[NSString class]]
-					? feedback[@"blockReason"] : nil;
-				NSError *err = SXErr(-5, [NSString stringWithFormat:@"Bị chặn bởi bộ lọc an toàn%@.",
-										  block.length ? [NSString stringWithFormat:@" (%@)", block] : @""]);
+				NSError *err = SXErr(-5, @"Provider không cho phép câu trả lời này.");
 				SXLogWrn(@"llm", @"%@", err.localizedDescription);
 				completion(nil, err, SXInfo(@"gemini", model, lastStatus, rounds, start));
 				return;
 			}
 		}
 		if (!candidate) {
-			NSError *err = SXErr(-3, [NSString stringWithFormat:@"Phản hồi không hợp lệ: %@", SXSnippet(data, 200)]);
+			NSError *err = SXErr(-3, @"Phản hồi của AI không hợp lệ.");
 			SXLogErr(@"llm", @"%@", err.localizedDescription);
 			completion(nil, err, SXInfo(@"gemini", model, lastStatus, rounds, start));
 			return;
@@ -455,7 +396,7 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 		NSMutableArray *functionCalls = [NSMutableArray array];
 		for (id part in parts) {
 			if (![part isKindOfClass:[NSDictionary class]]) continue;
-			if ([part[@"text"] isKindOfClass:[NSString class]]) [text appendString:part[@"text"]];
+			if ([part[@"text"] isKindOfClass:[NSString class]] && ![part[@"thought"] isEqual:@YES]) [text appendString:part[@"text"]];
 			if ([part[@"functionCall"] isKindOfClass:[NSDictionary class]]) [functionCalls addObject:part[@"functionCall"]];
 		}
 
@@ -468,11 +409,13 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 				if (!name) continue;
 				NSDictionary *args = [call[@"args"] isKindOfClass:[NSDictionary class]] ? call[@"args"] : @{};
 				NSError *toolError = nil;
-				NSDictionary *toolResult = executor(name, args, &toolError);
+				if (request.remaining <= 0) { completion(nil, SXRequestError(request), nil); return; }
+				NSDictionary *toolResult = [allowedTools containsObject:name] ? executor(name, args, &toolError) : nil;
+				if (!toolResult && !toolError) toolError = SXErr(-9, @"Công cụ không được phép hoặc đã tắt.");
 				NSString *resultText = toolError
 					? [@"Lỗi công cụ: " stringByAppendingString:toolError.localizedDescription]
 					: ([toolResult[@"result"] isKindOfClass:[NSString class]] ? toolResult[@"result"] : @"Đã thực hiện xong.");
-				SXLogDbg(@"llm", @"round %ld: tool %@ → %@", (long)rounds, name, SXShort(resultText, 160));
+				SXLogDbg(@"llm", @"round %ld: tool ok=%d", (long)rounds, toolError == nil);
 				[contents addObject:@{@"role": @"tool", @"parts": @[@{@"functionResponse": @{
 					@"name": name,
 					@"response": @{@"result": resultText},
@@ -481,8 +424,8 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 			continue;
 		}
 
-		if (!text.length) {
-			NSError *err = SXErr(-4, @"Model trả về nội dung rỗng.");
+		if (![text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].length) {
+			NSError *err = SXErr(-6, @"AI không trả lời." );
 			SXLogErr(@"llm", @"%@", err.localizedDescription);
 			completion(nil, err, SXInfo(@"gemini", model, lastStatus, rounds, start));
 			return;
@@ -515,7 +458,16 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
            executor:(SXToolExec)executor
            provider:(SXProvider)provider
          completion:(SXLLMCompletion)completion {
-	SXPrefs *prefs = [SXPrefs shared];
+	SXPrefs *prefs = [[SXPrefs shared] snapshot];
+	[self performQuestion:question history:history tools:tools executor:executor prefs:prefs provider:provider
+		model:nil prompt:nil maxTokens:0 request:[[SXRequest alloc] initWithTimeout:30 firstOutput:prefs.responseTimeout] progress:nil completion:completion];
+}
+
++ (void)performQuestion:(NSString *)question history:(NSArray *)history tools:(NSArray *)toolDefs executor:(SXToolExec)executor
+	prefs:(SXPrefs *)prefs provider:(SXProvider)provider model:(NSString *)model prompt:(NSString *)prompt maxTokens:(NSUInteger)maxTokens
+	request:(SXRequest *)request progress:(SXStreamProgress)progress completion:(SXLLMCompletion)completion {
+	if (prefs.localOnly || request.cancelled) { completion(nil, SXErr(-1002, @"SiriX đang không gửi yêu cầu mạng."), nil); return; }
+	if (SXDefinitelyOffline()) { completion(nil, SXErr(-1003, @"Không có mạng — SiriX không gọi được AI."), nil); return; }
 	NSString *key = [(provider == SXProviderGemini ? prefs.geminiKey : prefs.openaiKey)
 		stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
 
@@ -533,9 +485,9 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 	}
 
 	if (provider == SXProviderGemini) {
-		SXAskGemini(prefs, question, history, tools, executor, completion);
+		SXAskGemini(prefs, question, history, toolDefs, executor, model, prompt, maxTokens, request, progress, completion);
 	} else {
-		SXAskOpenAI(prefs, question, history, tools, executor, completion);
+		SXAskOpenAI(prefs, question, history, toolDefs, executor, model, prompt, maxTokens, request, progress, completion);
 	}
 }
 

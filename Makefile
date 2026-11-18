@@ -19,12 +19,20 @@ SiriX_FILES = \
 	Sources/SXIntercept.m \
 	Sources/SXStream.m \
 	Sources/SXMarkdown.m \
-	Sources/SXDisplayPolicy.m
+	Sources/SXDisplayPolicy.m \
+	Sources/SXNetwork.m \
+	Sources/SXConfigIO.m \
+	Sources/SXAudio.m \
+	Sources/SXMediaFormat.m \
+	Sources/SXSTT.m \
+	Sources/SXVoiceInput.m \
+	Sources/SXTTS.m \
+	Sources/SXNative.m
 
 SiriX_CFLAGS = -fobjc-arc -Wno-deprecated-declarations \
 	-I$(THEOS_PROJECT_DIR)/include \
 	-DSX_SCHEME=\"$(THEOS_PACKAGE_SCHEME)\"
-SiriX_FRAMEWORKS = UIKit Foundation
+SiriX_FRAMEWORKS = UIKit Foundation AVFoundation SystemConfiguration
 
 include $(THEOS_MAKE_PATH)/tweak.mk
 

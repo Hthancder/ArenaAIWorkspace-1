@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>title</key>
+	<string>Cấu hình TTS</string>
+	<key>items</key>
+	<array>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Nguồn giọng trực tuyến</string>
+			<key>footerText</key>
+			<string>Google Cloud cần khóa dịch vụ. Gemini có thể dùng khóa Gemini đã cấu hình. Nguồn Tự chỉnh yêu cầu địa chỉ HTTPS; không tự dùng lại khóa chat.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSEditTextCell</string>
+			<key>label</key>
+			<string>Địa chỉ API gốc</string>
+			<key>key</key>
+			<string>ttsBaseUrl</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>default</key>
+			<string></string>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>placeholder</key>
+			<string>https://…/v1</string>
+			<key>noAutoCorrect</key>
+			<true/>
+			<key>isURL</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSecureEditTextCell</string>
+			<key>label</key>
+			<string>Khóa API TTS</string>
+			<key>key</key>
+			<string>ttsApiKey</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>default</key>
+			<string></string>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>placeholder</key>
+			<string>Theo nguồn</string>
+			<key>noAutoCorrect</key>
+			<true/>
+			<key>isSecure</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSEditTextCell</string>
+			<key>label</key>
+			<string>Mô hình</string>
+			<key>key</key>
+			<string>ttsModel</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>default</key>
+			<string></string>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>placeholder</key>
+			<string>Theo nguồn</string>
+			<key>noAutoCorrect</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSEditTextCell</string>
+			<key>label</key>
+			<string>Mã giọng tùy chỉnh</string>
+			<key>key</key>
+			<string>ttsVoice</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>default</key>
+			<string></string>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>placeholder</key>
+			<string>Giọng mặc định</string>
+			<key>noAutoCorrect</key>
+			<true/>
+		</dict>
+	</array>
+</dict>
+</plist>

@@ -7,6 +7,8 @@
 #import "SXLog.h"
 #import "SXPrefs.h"
 #import "SXIntercept.h"
+#import "SXVoiceInput.h"
+#import "SXNative.h"
 
 #ifndef SX_SCHEME
 #define SX_SCHEME "unknown"
@@ -17,9 +19,7 @@
 static NSUncaughtExceptionHandler *SXPrevExceptionHandler = NULL;
 
 static void SXExceptionHandler(NSException *exception) {
-	SXLogErr(@"err", @"EXCEPTION không bắt được: %@ — %@ | %@",
-			 exception.name, exception.reason,
-			 [exception.callStackSymbols componentsJoinedByString:@" ; "]);
+	SXLogErr(@"err", @"EXCEPTION không bắt được: %@", exception.name);
 	if (SXPrevExceptionHandler) SXPrevExceptionHandler(exception);
 }
 
@@ -99,6 +99,7 @@ static NSString *SXUtteranceFromRecognized(id object) {
 	text = SXNorm(SXChainUtterance(object));
 	if (text) return text;
 
+	if ([object isKindOfClass:NSString.class]) return SXNorm(object);
 	id direct = nil;
 	@try { direct = [object valueForKey:@"text"]; } @catch (NSException *e) {}
 	return SXNorm([direct isKindOfClass:[NSString class]] ? direct : nil);
@@ -119,13 +120,20 @@ static void SXCapture(NSString *raw, NSString *source) {
 %hook AFConversation
 
 - (void)addItemForSpeechRecognizedCommand:(id)command {
-	NSString *text = SXUtteranceFromRecognized(command);
-	if (text) {
-		[[SXIntercept shared] noteQuestion:text source:@"AFConversation.addItemForSpeechRecognizedCommand"];
-	} else {
-		SXLogDbg(@"capture", @"AFConversation.addItemForSpeechRecognizedCommand: không trích được văn bản");
+	NSString *apple = SXUtteranceFromRecognized(command);
+	id presented = command;
+	if (apple.length) {
+		NSString *outcome = nil;
+		NSString *ref = SXRefID(command);
+		NSString *text = [[SXVoiceInput shared] finalText:apple owner:nil reference:ref outcome:&outcome];
+		if (![text isEqual:apple]) {
+			id copy = SXTranscriptCopy(command, text);
+			if (copy) presented = copy;
+			else SXLogDbg(@"stt", @"giữ text Apple trên UI; transcript mới chỉ dùng cho AI (L1).");
+		}
+		[[SXIntercept shared] noteQuestion:text source:@"AFConversation.recognized" reference:ref stt:outcome];
 	}
-	%orig;
+	%orig(presented);
 }
 
 %end
@@ -134,7 +142,7 @@ static void SXCapture(NSString *raw, NSString *source) {
 %group AFConvViewsHook
 %hook AFConversation
 - (void)addItemsForAddViewsCommand:(id)command {
-	[[SXIntercept shared] handleAddViewsInsertion:command];
+	[[SXIntercept shared] handleAddViewsInsertion:command conversation:self];
 	%orig;
 }
 
@@ -157,10 +165,14 @@ static void SXCapture(NSString *raw, NSString *source) {
 %group AFConnSpeechHook
 %hook AFConnection
 - (void)_tellSpeechDelegateSpeechRecognized:(id)result {
-	NSString *text = SXUtteranceFromRecognized(result);
-	if (text) {
-		[[SXIntercept shared] noteQuestion:text source:@"AFConnection._tellSpeechDelegateSpeechRecognized:"];
+	NSString *apple = SXUtteranceFromRecognized(result);
+	if (apple.length) {
+		NSString *outcome = nil;
+		NSString *ref = SXRefID(result);
+		NSString *text = [[SXVoiceInput shared] finalText:apple owner:self reference:ref outcome:&outcome];
+		[[SXIntercept shared] noteQuestion:text source:@"AFConnection.recognized" reference:ref stt:outcome];
 	}
+	// Do not change the transcript used by the Apple request / intent pipeline.
 	%orig;
 }
 
@@ -170,6 +182,8 @@ static void SXCapture(NSString *raw, NSString *source) {
 %group AFConnTextHook
 %hook AFConnection
 - (void)startRequestWithText:(NSString *)text {
+	[[SXVoiceInput shared] cancel];
+	[[SXIntercept shared] beginRequest];
 	SXCapture(text, @"AFConnection.startRequestWithText (Type-to-Siri)");
 	%orig;
 }
@@ -177,34 +191,105 @@ static void SXCapture(NSString *raw, NSString *source) {
 %end
 %end
 
-%group AFConnRequestHook
-%hook AFConnection
-- (void)_requestWillBeginWithRequestClass:(id)requestClass
-						  isSpeechRequest:(BOOL)isSpeech
-					 speechRequestOptions:(id)options
-							  requestInfo:(id)info
-					analyticsEventProvider:(id)provider {
-	SXLogDbg(@"hook", @"yêu cầu mới: class=%@ speech=%d",
-			 requestClass ? [requestClass description] : @"?", isSpeech ? 1 : 0);
-	%orig;
+static BOOL SXHasRecordingBegin;
+static void SXBeginVoice(id connection) {
+	[[SXIntercept shared] beginRequest];
+	[[SXVoiceInput shared] begin:connection];
 }
 
+%group AFConnRequestHook
+%hook AFConnection
+- (void)_requestWillBeginWithRequestClass:(id)requestClass isSpeechRequest:(BOOL)isSpeech
+	 speechRequestOptions:(id)options requestInfo:(id)info analyticsEventProvider:(id)provider {
+	if (isSpeech) [[SXIntercept shared] beginRequest];
+	%orig;
+}
 %end
 %end
 
 %group AFConnBackgroundRequestHook
 %hook AFConnection
-- (void)_requestWillBeginWithRequestClass:(id)requestClass
-						  isSpeechRequest:(BOOL)isSpeech
-					 speechRequestOptions:(id)options
-							  requestInfo:(id)info
-						isBackgroundRequest:(BOOL)isBackground
-					analyticsEventProvider:(id)provider {
-	SXLogDbg(@"hook", @"yêu cầu mới: class=%@ speech=%d background=%d",
-			 requestClass ? [requestClass description] : @"?", isSpeech ? 1 : 0, isBackground ? 1 : 0);
+- (void)_requestWillBeginWithRequestClass:(id)requestClass isSpeechRequest:(BOOL)isSpeech speechRequestOptions:(id)options
+	 requestInfo:(id)info isBackgroundRequest:(BOOL)isBackground analyticsEventProvider:(id)provider {
+	if (isSpeech && !isBackground) [[SXIntercept shared] beginRequest];
 	%orig;
 }
+%end
+%end
 
+%group AFConnRecordingBegin
+%hook AFConnection
+- (void)_tellSpeechDelegateRecordingWillBeginWithInputAudioPowerXPCWrapper:(id)context {
+	SXBeginVoice(self);
+	%orig;
+}
+%end
+%end
+
+%group AFConnRecordingBegan
+%hook AFConnection
+- (void)_tellSpeechDelegateRecordingDidBeginOnAVRecordRoute:(id)route audioSessionID:(unsigned int)sessionID {
+	if (!SXHasRecordingBegin) SXBeginVoice(self);
+	%orig;
+}
+%end
+%end
+
+%group AFConnRecordingEnd
+%hook AFConnection
+- (void)_tellSpeechDelegateRecordingDidEnd {
+	[[SXVoiceInput shared] endRecording:self];
+	%orig;
+}
+%end
+%end
+
+%group AFConnRecordingCancel
+%hook AFConnection
+- (void)_tellSpeechDelegateRecordingDidCancel {
+	[[SXVoiceInput shared] cancel];
+	%orig;
+}
+%end
+%end
+
+%group AFConnRequestEnd
+%hook AFConnection
+- (void)_requestDidEnd {
+	[[SXVoiceInput shared] endRecording:self];
+	%orig;
+}
+%end
+%end
+
+%group AFConnDismiss
+%hook AFConnection
+- (void)didDismissUI {
+	[[SXVoiceInput shared] cancel];
+	[[SXIntercept shared] dialogDidDismiss];
+	%orig;
+}
+%end
+%end
+
+%group SXBulletinShort
+%hook BBServer
+- (id)initWithQueue:(dispatch_queue_t)queue {
+	id server = %orig;
+	SXRememberBulletinServer(server, queue);
+	return server;
+}
+%end
+%end
+
+%group SXBulletinLong
+%hook BBServer
+- (id)initWithQueue:(dispatch_queue_t)queue dataProviderManager:(id)manager syncService:(id)sync dismissalSyncCache:(id)cache
+	 observerListener:(id)observer conduitListener:(id)conduit systemStateListener:(id)state settingsListener:(id)settings {
+	id server = %orig;
+	SXRememberBulletinServer(server, queue);
+	return server;
+}
 %end
 %end
 
@@ -230,11 +315,16 @@ static BOOL SXCanHook(NSString *className, Class cls, NSString *selectorName) {
 		notify_register_dispatch("com.sirix.tweak/prefs.changed", &prefsToken,
 								 dispatch_get_main_queue(), ^(int token) {
 			[[SXPrefs shared] reload];
+			[[SXVoiceInput shared] cancel];
+			[[SXIntercept shared] preferencesDidChange];
 		});
 
 		// Nút "Khởi động lại SpringBoard" trong Cài đặt — chỉ đăng ký ở SpringBoard.
 		NSString *processName = [NSString stringWithUTF8String:getprogname() ?: ""];
 		if ([processName isEqualToString:@"SpringBoard"]) {
+			Class bulletin = objc_getClass("BBServer");
+			if (SXCanHook(@"BBServer", bulletin, @"initWithQueue:")) %init(SXBulletinShort);
+			if (SXCanHook(@"BBServer", bulletin, @"initWithQueue:dataProviderManager:syncService:dismissalSyncCache:observerListener:conduitListener:systemStateListener:settingsListener:")) %init(SXBulletinLong);
 			int respringToken = 0;
 			notify_register_dispatch("com.sirix.respring", &respringToken,
 									 dispatch_get_main_queue(), ^(int token) {
@@ -256,6 +346,14 @@ static BOOL SXCanHook(NSString *className, Class cls, NSString *selectorName) {
 		if (SXCanHook(@"AFConnection", connection, @"startRequestWithText:")) %init(AFConnTextHook);
 		if (SXCanHook(@"AFConnection", connection, @"_requestWillBeginWithRequestClass:isSpeechRequest:speechRequestOptions:requestInfo:analyticsEventProvider:")) %init(AFConnRequestHook);
 		if (SXCanHook(@"AFConnection", connection, @"_requestWillBeginWithRequestClass:isSpeechRequest:speechRequestOptions:requestInfo:isBackgroundRequest:analyticsEventProvider:")) %init(AFConnBackgroundRequestHook);
+
+		SXHasRecordingBegin = SXCanHook(@"AFConnection", connection, @"_tellSpeechDelegateRecordingWillBeginWithInputAudioPowerXPCWrapper:");
+		if (SXHasRecordingBegin) %init(AFConnRecordingBegin);
+		if (SXCanHook(@"AFConnection", connection, @"_tellSpeechDelegateRecordingDidBeginOnAVRecordRoute:audioSessionID:")) %init(AFConnRecordingBegan);
+		if (SXCanHook(@"AFConnection", connection, @"_tellSpeechDelegateRecordingDidEnd")) %init(AFConnRecordingEnd);
+		if (SXCanHook(@"AFConnection", connection, @"_tellSpeechDelegateRecordingDidCancel")) %init(AFConnRecordingCancel);
+		if (SXCanHook(@"AFConnection", connection, @"_requestDidEnd")) %init(AFConnRequestEnd);
+		if (SXCanHook(@"AFConnection", connection, @"didDismissUI")) %init(AFConnDismiss);
 
 		SXLogInf(@"boot", @"SiriX %@ sẵn sàng (scheme=%s) — chế độ=%@ provider=%@",
 				 SX_VERSION, SX_SCHEME,

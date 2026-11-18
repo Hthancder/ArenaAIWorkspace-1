@@ -3,6 +3,8 @@
 #import "SXLog.h"
 #import <UIKit/UIKit.h>
 #include <sys/utsname.h>
+#import <objc/message.h>
+#include <arpa/inet.h>
 
 static NSString *const kSXToolsErrorDomain = @"com.sirix.tools";
 
@@ -29,11 +31,11 @@ static NSDictionary *SXToolSystemInfo(NSError **error) {
 	double totalGB = [fs[NSFileSystemSize] doubleValue] / (1024.0 * 1024.0 * 1024.0);
 
 	NSString *result = [NSString stringWithFormat:
-		@"Thiết bị: %@ (%@), iOS %@, tên “%@”. "
+		@"Thiết bị: %@ (%@), iOS %@. "
 		@"Pin: %@. Dung lượng: %.1f/%.1f GB còn trống. Ngôn ngữ: %@. "
 		@"Thời gian hiện tại: %@.",
 		device.model, [NSString stringWithUTF8String:info.machine] ?: @"?",
-		device.systemVersion, device.name,
+		device.systemVersion,
 		batteryText, freeGB, totalGB,
 		[NSLocale.currentLocale localeIdentifier],
 		[NSDateFormatter localizedStringFromDate:[NSDate date]
@@ -49,14 +51,14 @@ static NSDictionary *SXToolClipboardCopy(NSDictionary *args, NSError **error) {
 		return nil;
 	}
 	UIPasteboard.generalPasteboard.string = text;
-	SXLogDbg(@"tool", @"clipboard_copy (%lu ký tự)", (unsigned long)[(NSString *)text length]);
+	SXLogDbg(@"llm", @"clipboard_copy (%lu ký tự)", (unsigned long)[(NSString *)text length]);
 	return @{@"result": @"Đã sao chép vào bảng nhớ tạm."};
 }
 
 static NSDictionary *SXToolClipboardRead(NSError **error) {
 	NSString *text = UIPasteboard.generalPasteboard.string;
 	if (!text.length) return @{@"result": @"Bảng nhớ tạm trống."};
-	if (text.length > 1000) text = [[text substringToIndex:1000] stringByAppendingString:@"…"];
+	if (text.length > 1000) text = SXShort(text, 1000);
 	return @{@"result": text};
 }
 
@@ -93,54 +95,40 @@ static NSString *SXStripHTML(NSData *data) {
 	return html;
 }
 
-static NSDictionary *SXToolFetchURL(NSDictionary *args, NSError **error) {
+static NSDictionary *SXToolFetchURL(NSDictionary *args, NSString *question, SXRequest *budget, NSError **error) {
 	id raw = args[@"url"];
 	if (![raw isKindOfClass:[NSString class]]) {
 		if (error) *error = SXToolError(2, @"Thiếu tham số “url”.");
 		return nil;
 	}
-	NSURL *url = [NSURL URLWithString:(NSString *)raw];
-	if (!url || ![url.scheme.lowercaseString isEqualToString:@"https"]) {
-		if (error) *error = SXToolError(3, @"Chỉ hỗ trợ URL bắt đầu bằng https://.");
-		return nil;
+	NSURL *url = SXHTTPSURL(raw);
+	// Only fetch a public-looking, explicitly supplied URL; the model cannot
+	// invent arbitrary destinations or follow redirects on the phone's network.
+	NSString *host = url.host.lowercaseString;
+	struct in_addr ipv4;
+	struct in6_addr ipv6;
+	BOOL valid = url && [host containsString:@"."] && ![host hasSuffix:@".local"] && ![host hasSuffix:@".internal"] &&
+		inet_pton(AF_INET, host.UTF8String, &ipv4) != 1 && inet_pton(AF_INET6, host.UTF8String, &ipv6) != 1;
+	NSDataDetector *links = [NSDataDetector dataDetectorWithTypes:NSTextCheckingTypeLink error:NULL];
+	BOOL explicit = NO;
+	for (NSTextCheckingResult *item in [links matchesInString:question options:0 range:NSMakeRange(0, question.length)]) {
+		if ([item.URL isEqual:url]) { explicit = YES; break; }
 	}
+	if (!valid || !explicit) { if (error) *error = SXToolError(3, @"Chỉ đọc URL HTTPS công khai được nêu trong câu hỏi."); return nil; }
+	NSMutableURLRequest *get = [NSMutableURLRequest requestWithURL:url];
+	get.timeoutInterval = 8;
+	NSDictionary *response = SXHTTP(get, budget, 512 * 1024, error);
+	if (!response) return nil;
+	NSInteger status = [response[@"status"] integerValue];
+	if (status < 200 || status >= 300) { if (error) *error = SXToolError(status, @"Trang web không trả nội dung hợp lệ."); return nil; }
+	NSData *body = response[@"data"];
 
-	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
-	request.HTTPMethod = @"GET";
-	request.timeoutInterval = 12;
-	[request setValue:@"Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) SiriX/1.0"
-   forHTTPHeaderField:@"User-Agent"];
-
-	dispatch_semaphore_t sem = dispatch_semaphore_create(0);
-	__block NSData *body = nil;
-	__block NSInteger status = 0;
-	__block NSError *sessionError = nil;
-	[[[NSURLSession sharedSession] dataTaskWithRequest:request
-									completionHandler:^(NSData *data, NSURLResponse *response, NSError *err) {
-		body = data;
-		status = [(NSHTTPURLResponse *)response statusCode];
-		sessionError = err;
-		dispatch_semaphore_signal(sem);
-	}] resume];
-
-	if (dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(15 * NSEC_PER_SEC)))) {
-		if (error) *error = SXToolError(4, @"Hết thời gian chờ khi tải trang.");
-		return nil;
-	}
-	if (sessionError) {
-		if (error) *error = SXToolError(5, [NSString stringWithFormat:@"Không tải được trang: %@", sessionError.localizedDescription]);
-		return nil;
-	}
-	if (status < 200 || status >= 400) {
-		if (error) *error = SXToolError(status, [NSString stringWithFormat:@"Máy chủ trả về HTTP %ld.", (long)status]);
-		return nil;
-	}
 	NSString *text = SXStripHTML(body ?: [NSData data]);
 	if (!text.length) {
 		if (error) *error = SXToolError(6, @"Trang không có nội dung văn bản.");
 		return nil;
 	}
-	SXLogDbg(@"tool", @"fetch_url %@ → %lu ký từ trích được", url.absoluteString, (unsigned long)text.length);
+	SXLogDbg(@"llm", @"fetch_url: %lu ký tự", (unsigned long)text.length);
 	return @{@"result": text};
 }
 
@@ -148,8 +136,9 @@ static NSDictionary *SXToolFetchURL(NSDictionary *args, NSError **error) {
 
 @implementation SXTools
 
-+ (NSArray<NSDictionary *> *)definitions {
-	SXPrefs *prefs = [SXPrefs shared];
++ (NSArray<NSDictionary *> *)definitionsForPrefs:(SXPrefs *)prefs question:(NSString *)question {
+	if (prefs.incognito || prefs.localOnly) return @[];
+	NSString *lower = question.lowercaseString;
 	NSMutableArray<NSDictionary *> *defs = [NSMutableArray array];
 
 	if (prefs.toolSystemInfo) {
@@ -159,7 +148,7 @@ static NSDictionary *SXToolFetchURL(NSDictionary *args, NSError **error) {
 			@"parameters": @{@"type": @"object", @"properties": @{}, @"required": @[]},
 		}];
 	}
-	if (prefs.toolClipboard) {
+	if (prefs.toolClipboard && ([lower containsString:@"clipboard"] || [lower containsString:@"bảng nhớ tạm"] || [lower containsString:@"bộ nhớ tạm"])) {
 		[defs addObject:@{
 			@"name": @"clipboard",
 			@"description": @"Đọc hoặc ghi bảng nhớ tạm (copy/paste).",
@@ -173,7 +162,7 @@ static NSDictionary *SXToolFetchURL(NSDictionary *args, NSError **error) {
 			},
 		}];
 	}
-	if (prefs.toolFetchURL) {
+	if (prefs.toolFetchURL && [lower containsString:@"https://"]) {
 		[defs addObject:@{
 			@"name": @"fetch_url",
 			@"description": @"Tải một trang web (https) và trả về phần văn bản thuần để đọc nội dung.",
@@ -184,39 +173,53 @@ static NSDictionary *SXToolFetchURL(NSDictionary *args, NSError **error) {
 			},
 		}];
 	}
-	[defs addObject:@{
-		@"name": @"reset_conversation",
-		@"description": @"Xóa toàn bộ lịch sử hội thoại hiện tại. Dùng khi người dùng muốn bắt đầu lại.",
-		@"parameters": @{@"type": @"object", @"properties": @{}, @"required": @[]},
-	}];
+	if (prefs.toolCurrentApp && [NSProcessInfo.processInfo.processName isEqualToString:@"SpringBoard"]) {
+		[defs addObject:@{@"name": @"current_app", @"description": @"Tên và mã gói của ứng dụng trước Siri; không đọc màn hình.",
+			@"parameters": @{@"type": @"object", @"properties": @{}, @"required": @[]}}];
+	}
 	return defs;
 }
 
-+ (NSDictionary *)execute:(NSString *)name arguments:(NSDictionary *)arguments error:(NSError **)error {
-	NSError *localError = nil;
-	NSDictionary *result = nil;
-
-	if ([name isEqualToString:@"system_info"]) {
-		result = SXToolSystemInfo(&localError);
-	} else if ([name isEqualToString:@"clipboard"]) {
-		NSString *action = [arguments[@"action"] isKindOfClass:[NSString class]] ? arguments[@"action"] : @"read";
-		if ([action isEqualToString:@"copy"]) {
-			result = SXToolClipboardCopy(arguments, &localError);
-		} else {
-			result = SXToolClipboardRead(&localError);
-		}
-	} else if ([name isEqualToString:@"fetch_url"]) {
-		result = SXToolFetchURL(arguments, &localError);
-	} else {
-		localError = SXToolError(404, [NSString stringWithFormat:@"Không có công cụ “%@”.", name]);
-	}
-
-	if (localError) {
-		SXLogWrn(@"tool", @"%@ lỗi: %@", name, localError.localizedDescription);
-		if (error) *error = localError;
-		return nil;
-	}
-	return result;
+static id SXAppProperty(id object, NSString *name) {
+	SEL selector = NSSelectorFromString(name);
+	NSMethodSignature *sig = [object methodSignatureForSelector:selector];
+	if (sig.numberOfArguments != 2 || sig.methodReturnType[0] != '@') return nil;
+	return ((id (*)(id, SEL))objc_msgSend)(object, selector);
+}
+static NSDictionary *SXToolCurrentApp(void) {
+	@try {
+		id app = SXAppProperty(UIApplication.sharedApplication, @"_accessibilityFrontMostApplication");
+		id name = SXAppProperty(app, @"displayName"), identifier = SXAppProperty(app, @"bundleIdentifier");
+		if (![identifier isKindOfClass:NSString.class] || ![identifier length] || [identifier isEqual:@"com.apple.springboard"]) return nil;
+		return @{@"result": [NSString stringWithFormat:@"%@ (%@)", [name isKindOfClass:NSString.class] ? name : @"Ứng dụng", identifier]};
+	} @catch (NSException *ignored) { (void)ignored; return nil; }
 }
 
++ (NSDictionary *)execute:(NSString *)name arguments:(NSDictionary *)arguments question:(NSString *)question request:(SXRequest *)request error:(NSError **)error {
+	SXPrefs *prefs = [[SXPrefs shared] snapshot];
+	NSSet *allowed = [NSSet setWithArray:[[self definitionsForPrefs:prefs question:question] valueForKey:@"name"]];
+	if (request.remaining <= 0 || ![allowed containsObject:name]) {
+		if (error) *error = SXToolError(403, @"Công cụ đã tắt hoặc lượt này đã kết thúc."); return nil;
+	}
+	if ([name isEqual:@"system_info"]) return SXToolSystemInfo(error);
+	if ([name isEqual:@"fetch_url"]) return SXToolFetchURL(arguments, question, request, error);
+	if ([name isEqual:@"clipboard"]) {
+		NSString *action = [arguments[@"action"] isKindOfClass:NSString.class] ? arguments[@"action"] : @"";
+		if ([action isEqual:@"copy"]) return SXToolClipboardCopy(arguments, error);
+		if ([action isEqual:@"read"]) return SXToolClipboardRead(error);
+	}
+	if ([name isEqual:@"current_app"]) {
+		if (NSThread.isMainThread) return SXToolCurrentApp();
+		dispatch_semaphore_t ready = dispatch_semaphore_create(0);
+		__block NSDictionary *result = nil;
+		dispatch_async(dispatch_get_main_queue(), ^{
+			if (request.remaining > 0 && ![SXPrefs shared].incognito && [SXPrefs shared].toolCurrentApp) result = SXToolCurrentApp();
+			dispatch_semaphore_signal(ready);
+		});
+		if (dispatch_semaphore_wait(ready, dispatch_time(DISPATCH_TIME_NOW, 250 * NSEC_PER_MSEC)) == 0 && result) return result;
+		if (error) *error = SXToolError(4, @"Không đọc được ứng dụng hiện tại."); return nil;
+	}
+	if (error) *error = SXToolError(404, @"Công cụ không hỗ trợ thao tác này.");
+	return nil;
+}
 @end

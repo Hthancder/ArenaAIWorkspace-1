@@ -6,6 +6,8 @@
 #import "SXMarkdown.h"
 #import "SXDisplayPolicy.h"
 #import "SXStore.h"
+#import "SXNative.h"
+#import "SXTTS.h"
 #import <objc/message.h>
 #import <notify.h>
 
@@ -59,7 +61,7 @@ static NSString *SXOriginalResponse(id command, NSString *className) {
 			value = SXMsg(view, NSSelectorFromString(@"speakableText"));
 		if ([value isKindOfClass:[NSString class]] && [value length]) {
 			NSString *original = [(NSString *)value stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
-			if (original.length > 1000) original = [[original substringToIndex:1000] stringByAppendingString:@"…"];
+			if (original.length > 1000) original = SXShort(original, 1000);
 			if (original.length) return original;
 		}
 	}
@@ -90,7 +92,7 @@ static NSString *SXSanitizeAnswer(NSString *raw) {
 	text = [whitespace stringByReplacingMatchesInString:text options:0
 												 range:NSMakeRange(0, text.length) withTemplate:@" "];
 	text = [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-	if (text.length > 800) text = [[text substringToIndex:800] stringByAppendingString:@"…"];
+	if (text.length > 800) text = SXShort(text, 800);
 	return text;
 }
 
@@ -117,11 +119,14 @@ static BOOL SXApplyTextToView(id view, NSString *displayText, NSString *speechTe
 		if ([current isKindOfClass:[NSString class]] && ((NSString *)current).length) hasContent = YES;
 	}
 	if (!hasContent) return NO;
+	if (speechText.length == 0 && (!canSpeak || !canText))
+		[NSException raise:@"SXSpeechFieldsUnavailable" format:@"Missing speech or display setter"];
 
 	if (canSpeak) {
 		id old = SXMsg(view, speakableSelector);
 		[rollback addObject:^{ SXSet(view, setSpeakableSelector, old); }];
 		SXSet(view, setSpeakableSelector, speechText);
+		if (!speechText.length && [SXMsg(view, speakableSelector) length]) [NSException raise:@"SXSpeechFieldsUnavailable" format:@"Speech was not cleared"];
 	}
 	if (canText) {
 		id old = SXMsg(view, textSelector);
@@ -141,10 +146,11 @@ static id SXMakeUtteranceView(NSString *displayText, NSString *speechText) {
 	BOOL canSet = NO;
 	SEL setSpeakable = NSSelectorFromString(@"setSpeakableText:");
 	if ([view respondsToSelector:setSpeakable]) {
-		SXSet(view, setSpeakable, speechText.length ? speechText : displayText);
+		SXSet(view, setSpeakable, speechText);
 		canSet = YES;
 	}
 	SEL setText = NSSelectorFromString(@"setText:");
+	if (!speechText.length && (!canSet || ![view respondsToSelector:setText])) return nil;
 	if ([view respondsToSelector:setText]) {
 		SXSet(view, setText, displayText);
 		canSet = YES;
@@ -166,9 +172,9 @@ static id SXMakeUtteranceView(NSString *displayText, NSString *speechText) {
 /// Ghi nhớ các giá trị cũ trước setter để cố gắng khôi phục nếu API riêng
 /// của Apple ném exception (không giả định ACE object hỗ trợ NSCopying).
 static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechText,
-							NSString *source, NSString *className) {
+							NSString *source, NSString *className, BOOL hideCards) {
 	if (!displayText.length || !command) return NO;
-	if (!speechText.length) speechText = displayText;
+	if (!speechText) speechText = displayText;
 	BOOL isAddViews = [className containsString:@"AddViews"];
 	BOOL isSayIt = [className containsString:@"SayIt"];
 	BOOL changed = NO;
@@ -182,7 +188,6 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 		if ([command respondsToSelector:viewsSelector] && [command respondsToSelector:setViewsSelector]) {
 			NSArray *views = SXMsg(command, viewsSelector);
 			if ([views isKindOfClass:[NSArray class]]) {
-				BOOL hideCards = [SXPrefs shared].hideWebCards;
 				NSMutableArray *kept = [NSMutableArray arrayWithCapacity:views.count];
 				for (id view in views) {
 					if (hideCards && SXIsCardView(view)) {
@@ -224,6 +229,7 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 			if ([current isKindOfClass:[NSString class]] && ((NSString *)current).length) {
 				[rollback addObject:^{ SXSet(command, setMessageSelector, current); }];
 				SXSet(command, setMessageSelector, speechText);
+				if (!speechText.length && [SXMsg(command, messageSelector) length]) [NSException raise:@"SXSpeechFieldsUnavailable" format:@"Message was not cleared"];
 				changed = YES;
 			}
 		}
@@ -233,8 +239,8 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 		for (void (^undo)(void) in [rollback reverseObjectEnumerator]) {
 			@try { undo(); } @catch (NSException *ignored) { rollbackFailed = YES; }
 		}
-		SXLogErr(@"err", @"%@: sửa %@ lỗi %@: %@ — khôi phục %@",
-				 source, className, exception.name, exception.reason,
+		SXLogErr(@"err", @"%@: sửa %@ lỗi %@ — khôi phục %@",
+				 source, className, exception.name,
 				 rollbackFailed ? @"không hoàn toàn" : @"giá trị cũ");
 		return NO;
 	}
@@ -249,425 +255,461 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 	return NO;
 }
 
-#pragma mark - Trạng thái
+#pragma mark - State of one Siri request
+
+static NSTimeInterval SXUptime(void) { return NSProcessInfo.processInfo.systemUptime; }
+static const NSTimeInterval SXTurnLimit = 30.0;
+static NSString *SXDisplayText(NSString *answer, BOOL markdown, BOOL pending) {
+	if (!markdown) return answer.length > 2000 ? SXShort(answer, 2000) : answer;
+	if (pending) {
+		if (([answer componentsSeparatedByString:@"```"].count - 1) % 2) answer = [answer stringByAppendingString:@"\n```"];
+		if (([answer componentsSeparatedByString:@"**"].count - 1) % 2) answer = [answer stringByAppendingString:@"**"];
+	}
+	return SXMarkdownRender(answer);
+}
 
 @interface SXIntercept () {
 	NSCondition *_condition;
 	uint64_t _generation;
-	BOOL _pending;
-	BOOL _consumed; // quyết định đã chọn cho lượt này (không chỉ cho một lệnh ACE)
-	NSString *_decisionDisplay;
-	NSString *_decisionSpeech;
-	NSTimeInterval _decisionTime;
-	BOOL _decisionIsAnswer;
-	BOOL _historySaved;
-	BOOL _outcomeCounted;
-	BOOL _questionIncognito;
-	NSString *_historyEpoch;
-	NSString *_statsEpoch;
-	NSNumber *_llmMs;
-	NSHashTable *_handledCommands; // cùng object có thể đi qua cả hai hook
-	BOOL _ready;
-	BOOL _errored;
-	BOOL _actionSeen;
-	NSString *_question;
-	NSString *_answer;        // bản đọc (thuần, ≤800 ký tự)
-	NSString *_answerDisplay; // bản hiển thị (nguyên văn, ≤4000 ký tự)
+	BOOL _pending, _actionSeen, _decided, _decisionIsAnswer, _deferred, _closed, _streamingView;
+	BOOL _outcomeCounted, _historySaved, _skipHistory, _memoryPrivate, _voiceApple, _ttsScheduled, _suppressed;
+	NSTimeInterval _captureTime, _captureUptime, _lastCaptureTime, _lastRequestBegin;
+	NSString *_lastCaptureText, *_ref, *_question, *_partial, *_streamOriginal;
+	NSString *_answer, *_answerDisplay, *_decisionDisplay, *_decisionSpeech;
+	NSString *_historyEpoch, *_statsEpoch;
 	NSError *_answerError;
+	NSNumber *_llmMs;
+	SXPrefs *_prefs;
+	SXRequest *_request, *_mediaRequest;
+	SXTTSPlan *_ttsPlan;
+	SXNativeBubble *_nativeBubble;
+	NSHashTable *_handledCommands;
 	NSMutableArray<NSDictionary *> *_history;
-	NSString *_lastCaptureText;
-	NSTimeInterval _lastCaptureTime;
-	NSTimeInterval _captureTime; // mốc0 của ngân sách chờ AI (v1.1)
 }
 @end
 
 @implementation SXIntercept
-
 + (instancetype)shared {
 	static SXIntercept *instance;
-	static dispatch_once_t onceToken;
-	dispatch_once(&onceToken, ^{
-		instance = [[SXIntercept alloc] init];
-	});
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{ instance = [SXIntercept new]; });
 	return instance;
 }
-
 - (instancetype)init {
-	self = [super init];
-	if (self) {
-		_condition = [[NSCondition alloc] init];
-		_history = [NSMutableArray array];
+	if ((self = [super init])) {
+		_condition = [NSCondition new]; _history = [NSMutableArray array];
 		_handledCommands = [NSHashTable hashTableWithOptions:NSPointerFunctionsWeakMemory | NSPointerFunctionsObjectPointerPersonality];
 	}
 	return self;
 }
-
 - (void)setup {
 	int token = 0;
 	notify_register_dispatch("com.sirix.tweak/resetHistory", &token, dispatch_get_main_queue(), ^(int t) {
-		[[SXIntercept shared] clearHistoryMemory];
+		(void)t; [[SXIntercept shared] clearHistoryMemory];
 	});
 }
-
-#pragma mark - Câu hỏi
-
-- (void)noteQuestion:(NSString *)text source:(NSString *)source {
-	NSString *clean = [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-	if (!clean.length) {
-		SXLogDbg(@"capture", @"(%@) văn bản rỗng — bỏ qua", source);
-		return;
-	}
-
-	static NSRegularExpression *whitespace;
-	static dispatch_once_t once;
-	dispatch_once(&once, ^{
-		whitespace = [NSRegularExpression regularExpressionWithPattern:@"\\s+" options:0 error:NULL];
-	});
-	NSString *normalized = [whitespace stringByReplacingMatchesInString:clean
-															   options:0
-																 range:NSMakeRange(0, clean.length)
-														   withTemplate:@" "].lowercaseString;
-
-	SXPrefs *prefs = [SXPrefs shared];
-	[_condition lock];
-	if (!prefs.enabled) {
-		[_condition unlock];
-		SXLogDbg(@"capture", @"tweak đang tắt — bỏ qua");
-		return;
-	}
-	NSTimeInterval now = CFAbsoluteTimeGetCurrent();
-	if (_lastCaptureText && [_lastCaptureText isEqualToString:normalized] && now - _lastCaptureTime < 2.5) {
-		[_condition unlock];
-		SXLogDbg(@"capture", @"trùng lặp trong %.1f giây (nguồn %@)", now - _lastCaptureTime, source);
-		return;
-	}
-	_lastCaptureText = normalized;
-	_lastCaptureTime = now;
-
-	// Prefix mode mặc định để Siri xử lý; luôn hủy lượt cũ khi bỏ qua để
-	// không gắn đáp án cũ vào một yêu cầu không có tiền tố.
-	if ([prefs.triggerMode isEqualToString:@"prefix"]) {
-		NSString *lower = clean.lowercaseString;
-		BOOL hasAI = [lower hasPrefix:@"@ai"] && (lower.length == 3 || [[NSCharacterSet whitespaceAndNewlineCharacterSet] characterIsMember:[lower characterAtIndex:3]]);
-		if (!hasAI) {
-			_generation++;
-			_pending = NO;
-			[_condition broadcast];
-			[_condition unlock];
-			SXLogInf(@"capture", @"bỏ qua câu không có tiền tố @ai — dùng Siri gốc (%@)", source);
-			return;
-		}
-		clean = [[clean substringFromIndex:3] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-		if (!clean.length) {
-			_generation++;
-			_pending = NO;
-			[_condition broadcast];
-			[_condition unlock];
-			SXLogInf(@"capture", @"tiền tố @ai không có câu hỏi — dùng Siri gốc");
-			return;
-		}
-	}
-
+- (void)invalidateLocked {
 	_generation++;
-	uint64_t myGeneration = _generation;
-	_question = clean;
-	_captureTime = now;
-	_pending = YES;
-	_consumed = NO;
-	_decisionDisplay = nil;
-	_decisionSpeech = nil;
-	_decisionTime = 0;
-	_decisionIsAnswer = NO;
-	_historySaved = NO;
-	_outcomeCounted = NO;
-	_questionIncognito = prefs.incognito;
-	_historyEpoch = nil;
-	_statsEpoch = nil;
-	_llmMs = nil;
+	[_request cancel]; [_mediaRequest cancel]; _request = nil; _mediaRequest = nil;
+	_pending = NO; _actionSeen = NO; _decided = NO; _closed = NO;
+	_decisionIsAnswer = NO; _deferred = NO; _streamingView = NO; _suppressed = NO;
+	_voiceApple = NO; _ttsScheduled = NO; _outcomeCounted = NO; _historySaved = NO; _skipHistory = NO;
+	_ref = nil; _question = nil; _partial = nil; _streamOriginal = nil; _lastCaptureText = nil;
+	_answer = nil; _answerDisplay = nil; _answerError = nil; _decisionDisplay = nil; _decisionSpeech = nil;
+	_historyEpoch = nil; _statsEpoch = nil; _llmMs = nil; _nativeBubble = nil; _ttsPlan = nil; _prefs = nil;
 	[_handledCommands removeAllObjects];
-	_ready = NO;
-	_errored = NO;
-	_actionSeen = NO;
-	_answer = nil;
-	_answerDisplay = nil;
-	_answerError = nil;
-	NSArray<NSDictionary *> *historySnapshot = [_history copy];
-	[_condition broadcast]; // đánh thức các lượt chờ của câu hỏi trước
-
-	if (prefs.incognito) SXLogInf(@"capture", @"câu hỏi #%llu (%@): [không lưu lịch sử]", (unsigned long long)myGeneration, source);
-	else SXLogInf(@"capture", @"câu hỏi #%llu (%@): “%@”", (unsigned long long)myGeneration, source, clean);
+	dispatch_async(dispatch_get_main_queue(), ^{ SXTTSStop(); });
+	[_condition broadcast];
+}
+- (void)beginRequest {
+	[_condition lock];
+	NSTimeInterval now = SXUptime();
+	if (now - _lastRequestBegin >= 0.25 || !_lastRequestBegin) { [self invalidateLocked]; _lastRequestBegin = now; }
 	[_condition unlock];
-
+}
+- (void)preferencesDidChange {
+	[_condition lock];
+	[self invalidateLocked];
+	[_history removeAllObjects];
+	[_condition unlock];
+}
+- (void)dialogDidDismiss {
+	[_condition lock];
+	_closed = YES; _nativeBubble = nil; _partial = nil;
+	[_mediaRequest cancel];
+	if (_streamingView) {
+		_streamingView = NO; _deferred = _prefs.deferredReplies && !_prefs.incognito;
+		if (_answerDisplay.length && _deferred) [self saveAnswerLocked:YES];
+	} else if (!_deferred) { [_request cancel]; _pending = NO; }
+	dispatch_async(dispatch_get_main_queue(), ^{ SXTTSStop(); });
+	[_condition broadcast]; [_condition unlock];
+}
+- (void)noteQuestion:(NSString *)text source:(NSString *)source {
+	[self noteQuestion:text source:source reference:nil stt:nil];
+}
+- (void)noteQuestion:(NSString *)text source:(NSString *)source reference:(NSString *)reference stt:(NSString *)outcome {
+	NSString *clean = [text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+	if (!clean.length) return;
+	SXPrefs *prefs = [[SXPrefs shared] snapshot];
+	NSString *normalized = clean.lowercaseString;
+	[_condition lock];
+	NSTimeInterval now = SXUptime();
+	if ([_lastCaptureText isEqual:normalized] && now - _lastCaptureTime < 2.5 && (!_ref || !reference || [_ref isEqual:reference])) {
+		if (!_ref) _ref = [reference copy];
+		[_condition unlock]; return;
+	}
+	[self invalidateLocked];
+	_lastCaptureText = normalized; _lastCaptureTime = now;
+	if (!prefs.enabled || prefs.localOnly || SXBypassesAI(clean, prefs.triggerMode)) {
+		SXLogDbg(@"capture", @"passthrough (%@)", source);
+		[_condition unlock]; return;
+	}
+	if ([normalized hasPrefix:@"@ai"] && (normalized.length == 3 || [NSCharacterSet.whitespaceAndNewlineCharacterSet characterIsMember:[normalized characterAtIndex:3]]))
+		clean = [[clean substringFromIndex:3] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+	if (!clean.length) { [_condition unlock]; return; }
+	if (prefs.incognito != _memoryPrivate) { [_history removeAllObjects]; _memoryPrivate = prefs.incognito; }
+	_prefs = prefs; _question = clean; _ref = [reference copy];
+	_captureTime = CFAbsoluteTimeGetCurrent(); _captureUptime = now; _pending = YES;
+	uint64_t generation = _generation;
+	NSArray *memory = [_history copy];
+	NSString *fallback = [prefs fallbackModelForProvider:prefs.provider];
+	if ([fallback isEqual:prefs.activeModel]) fallback = @"";
+	NSTimeInterval first = prefs.responseTimeout;
+	if ([prefs.timeoutAction isEqual:@"retry"] && fallback.length) first = MAX(1, first * 0.65);
+	SXRequest *request = [[SXRequest alloc] initWithTimeout:SXTurnLimit firstOutput:first];
+	_request = request;
+	[_condition unlock];
+	SXLogDbg(@"capture", @"lượt %llu (%@); %lu ký tự", (unsigned long long)generation, source, (unsigned long)clean.length);
 	dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
-		// Đọc kho và epoch trên luồng nền, không chặn hook ACE bằng I/O.
 		__block NSDictionary *stored = nil;
 		dispatch_sync([SXStore queue], ^{ stored = [[SXStore shared] snapshot]; });
 		[self->_condition lock];
-		BOOL stale = (self->_generation != myGeneration);
-		BOOL privateTurn = self->_questionIncognito || [SXPrefs shared].incognito;
-		if (!stale) {
-			self->_historyEpoch = stored[@"historyEpoch"];
+		BOOL current = generation == self->_generation && self->_pending && !self->_actionSeen && !request.cancelled;
+		if (current) {
+			if (!self->_skipHistory) self->_historyEpoch = stored[@"historyEpoch"];
 			self->_statsEpoch = stored[@"statsEpoch"];
+			if (outcome.length) [self queueStatistic:outcome milliseconds:nil];
 		}
 		[self->_condition unlock];
-		if (stale) return;
-		NSArray *requestHistory = privateTurn ? historySnapshot : (stored[@"history"] ?: historySnapshot);
-		NSUInteger maxTurns = (NSUInteger)[SXPrefs shared].contextTurns;
-		if (requestHistory.count > maxTurns) requestHistory = [requestHistory subarrayWithRange:NSMakeRange(requestHistory.count - maxTurns, maxTurns)];
-
-		SXToolExec executor = ^NSDictionary *(NSString *name, NSDictionary *arguments, NSError **error) {
-			if ([name isEqualToString:@"reset_conversation"]) {
-				if (![[SXIntercept shared] clearHistory]) {
-					if (error) *error = [NSError errorWithDomain:@"com.sirix.history" code:1 userInfo:@{NSLocalizedDescriptionKey: @"Không xóa được lịch sử đã lưu."}];
-					return nil;
-				}
-				return @{@"result": @"Đã xóa lịch sử hội thoại."};
-			}
-			return [SXTools execute:name arguments:arguments error:error];
-		};
-		[SXLLM askQuestion:clean
-				   history:requestHistory
-					 tools:[SXTools definitions]
-				   executor:executor
-				completion:^(NSString *answer, NSError *error, NSDictionary *info) {
-			[self applyAnswer:answer error:error info:info forGeneration:myGeneration];
-		}];
+		if (!current) return;
+		NSArray *history = prefs.incognito ? memory : (stored[@"history"] ?: memory);
+		NSUInteger maxTurns = (NSUInteger)prefs.contextTurns;
+		if (history.count > maxTurns) history = [history subarrayWithRange:NSMakeRange(history.count - maxTurns, maxTurns)];
+		[self runQuestion:clean history:history prefs:prefs request:request model:nil fallback:fallback generation:generation];
 	});
 }
-
-- (void)applyAnswer:(NSString *)answer error:(NSError *)error info:(NSDictionary *)info forGeneration:(uint64_t)generation {
+- (BOOL)isCurrent:(uint64_t)generation {
 	[_condition lock];
-	if (generation != _generation) {
-		[_condition unlock];
-		SXLogDbg(@"resp", @"bỏ đáp án cũ (câu hỏi #%llu, hiện tại #%llu)",
-				 (unsigned long long)generation, (unsigned long long)_generation);
-		return;
+	BOOL current = generation == _generation && _pending && !_actionSeen && SXUptime() - _captureUptime < SXTurnLimit;
+	[_condition unlock];
+	return current;
+}
+- (void)runQuestion:(NSString *)question history:(NSArray *)history prefs:(SXPrefs *)prefs request:(SXRequest *)request
+	model:(NSString *)model fallback:(NSString *)fallback generation:(uint64_t)generation {
+	if (![self isCurrent:generation] || request.cancelled) return;
+	NSArray *tools = model ? @[] : [SXTools definitionsForPrefs:prefs question:question];
+	SXToolExec executor = tools.count ? ^NSDictionary *(NSString *name, NSDictionary *args, NSError **error) {
+		if (![self isCurrent:generation] || request.remaining <= 0) { if (error) *error = SXRequestError(request); return nil; }
+		return [SXTools execute:name arguments:args question:question request:request error:error];
+	} : (SXToolExec)nil;
+	[SXLLM performQuestion:question history:history tools:tools executor:executor prefs:prefs provider:prefs.provider model:model prompt:nil maxTokens:0
+		request:request progress:^(NSString *partial) { [self receivePartial:partial generation:generation request:request]; }
+		completion:^(NSString *answer, NSError *error, NSDictionary *info) {
+			if (request.cancelled || ![self isCurrent:generation]) return;
+			BOOL timeout = [error.domain isEqual:NSURLErrorDomain] && error.code == NSURLErrorTimedOut;
+			BOOL retryable = timeout ? [prefs.timeoutAction isEqual:@"retry"] : (error && (error.code == -6 || error.code == 404 ||
+				error.code == 400 || error.code == 429 || (error.code >= 500 && error.code < 600) || error.code == NSURLErrorNetworkConnectionLost));
+			if (fallback.length && retryable) {
+				[self->_condition lock];
+				NSTimeInterval elapsed = SXUptime() - self->_captureUptime;
+				BOOL canRetry = self->_generation == generation && self->_pending && !self->_actionSeen &&
+					(!self->_decided || self->_deferred || self->_streamingView) && elapsed < SXTurnLimit - 1;
+				if (canRetry) {
+					[request cancel]; self->_partial = nil;
+					SXRequest *retry = [[SXRequest alloc] initWithTimeout:SXTurnLimit - elapsed firstOutput:MIN(8, MAX(1, prefs.responseTimeout - elapsed))];
+					self->_request = retry;
+					[self->_condition unlock];
+					SXLogInf(@"llm", @"thử một lần với model dự phòng");
+					[self runQuestion:question history:history prefs:prefs request:retry model:fallback fallback:nil generation:generation];
+					return;
+				}
+				[self->_condition unlock];
+			}
+			[self applyAnswer:answer error:error info:info generation:generation];
+		}];
+}
+- (void)receivePartial:(NSString *)partial generation:(uint64_t)generation request:(SXRequest *)request {
+	[_condition lock];
+	if (_generation == generation && _request == request && _pending && !_actionSeen && !_closed && _prefs.liveSiriUpdates) {
+		_partial = [partial copy];
+		[_condition broadcast];
+		if (_nativeBubble && _streamingView) [self queueNativeUpdateLocked:NO];
 	}
-	_llmMs = [info[@"ms"] isKindOfClass:NSNumber.class] ? info[@"ms"] : nil;
-	if (error) {
-		_errored = YES;
-		_answerError = error;
-	} else {
-		// Bản hiển thị: giữ nguyên văn (render markdown lúc hiển thị), cắt an toàn.
-		NSString *raw = [answer stringByTrimmingCharactersInSet:
-						 [NSCharacterSet whitespaceAndNewlineCharacterSet]];
-		if (raw.length > 4000) raw = [[raw substringToIndex:4000] stringByAppendingString:@"…"];
-		_answerDisplay = raw;
-		// Bản đọc: gỡ markdown + cắt 800 (đề phòng TTS/LibreSpeech).
-		_answer = SXSanitizeAnswer(raw);
-		if (_answerDisplay.length && _answer.length) {
-			_ready = YES;
-			SXLogDbg(@"resp", @"đáp án #%llu sẵn sàng (hiển thị %lu · đọc %lu ký tự)",
-					 (unsigned long long)generation,
-					 (unsigned long)_answerDisplay.length, (unsigned long)_answer.length);
-		} else {
-			// Rỗng sau khi xử lý → errored (không bao giờ hiện bubble trống).
-			_errored = YES;
-			_answerError = [NSError errorWithDomain:@"com.sirix.llm" code:-6
-										   userInfo:@{NSLocalizedDescriptionKey: @"Đáp án rỗng sau khi xử lý."}];
-		}
-	}
-	[_condition broadcast];
 	[_condition unlock];
 }
+- (void)applyAnswer:(NSString *)answer error:(NSError *)error info:(NSDictionary *)info generation:(uint64_t)generation {
+	NSString *display = [answer stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+	if (display.length > 4000) display = SXShort(display, 4000);
+	NSString *speech = display.length ? SXSanitizeAnswer(display) : nil;
+	[_condition lock];
+	if (_generation != generation || !_pending || _actionSeen || SXUptime() - _captureUptime >= SXTurnLimit) { [_condition unlock]; return; }
+	SXPrefs *prefs = _prefs;
+	_llmMs = [info[@"ms"] isKindOfClass:NSNumber.class] ? info[@"ms"] : nil;
+	if (!error && speech.length) {
+		_answerDisplay = display; _answer = speech;
+		if (!_closed && (!_decided || _streamingView || (_deferred && _nativeBubble)) && SXTTSModeAllows(prefs.ttsMode, YES)) {
+			if ([prefs.ttsSource isEqual:@"system"] || prefs.incognito || (_deferred && _nativeBubble)) _ttsPlan = SXTTSSystemPlan(speech, prefs);
+			else if (!_decided || _streamingView) {
+				SXRequest *audio = [[SXRequest alloc] initWithTimeout:2];
+				_mediaRequest = audio;
+				dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+					SXTTSPlan *plan = SXTTSPrepare(speech, prefs, audio);
+					[self->_condition lock];
+					if (generation == self->_generation && self->_mediaRequest == audio && !self->_voiceApple && !self->_closed && !audio.cancelled) self->_ttsPlan = plan;
+					[self->_condition unlock];
+				});
+			}
+		}
+		if (_deferred && _nativeBubble && !_closed && _decisionDisplay.length) _streamingView = YES;
+		if (_streamingView) [self queueNativeUpdateLocked:YES];
+		else if (_deferred) [self saveAnswerLocked:YES];
+	} else {
+		_answerError = error ?: [NSError errorWithDomain:@"com.sirix.llm" code:-6 userInfo:@{NSLocalizedDescriptionKey: @"AI không trả lời."}];
+		if (_streamingView) [self queueNativeUpdateLocked:YES];
+	}
+	[_condition broadcast]; [_condition unlock];
+}
 
-// Ghi số liệu ngoài hook, epoch ngăn tác vụ xếp hàng phục hồi thống kê đã xóa.
+#pragma mark - Persistence and deferred output
+
 - (void)queueStatistic:(NSString *)event milliseconds:(NSNumber *)milliseconds {
 	NSString *epoch = _statsEpoch;
 	NSTimeInterval startedAt = _captureTime;
-	if (!epoch.length) return;
+	if (epoch.length) dispatch_async([SXStore queue], ^{ [[SXStore shared] recordEvent:event milliseconds:milliseconds epoch:epoch startedAt:startedAt]; });
+}
+- (void)saveAnswerLocked:(BOOL)late {
+	if (_historySaved || _skipHistory || !_answerDisplay.length) return;
+	_historySaved = YES;
+	SXPrefs *prefs = _prefs;
+	NSString *question = _question, *answer = _answerDisplay, *epoch = _historyEpoch;
+	NSTimeInterval started = _captureTime;
+	NSUInteger limit = MAX(1, (NSUInteger)prefs.contextTurns);
+	if (!late || !prefs.incognito) {
+		[_history addObject:@{@"q": question, @"a": answer}];
+		while (_history.count > limit) [_history removeObjectAtIndex:0];
+	}
+	if (prefs.incognito || !epoch.length) return;
+	uint64_t generation = _generation;
 	dispatch_async([SXStore queue], ^{
-		[[SXStore shared] recordEvent:event milliseconds:milliseconds epoch:epoch startedAt:startedAt];
+		if ([SXPrefs shared].incognito || [SXPrefs shared].localOnly || (late && ![self isCurrent:generation])) return;
+		BOOL saved = [[SXStore shared] appendQuestion:question answer:answer limit:limit epoch:epoch startedAt:started];
+		if (late && saved && [self isCurrent:generation] && ![SXPrefs shared].incognito && [SXPrefs shared].deferredReplies) {
+			SXLogInf(@"resp", @"đáp án trễ đã lưu; thông báo=%d", SXNotifyHistory());
+		}
+	});
+}
+- (NSString *)errorBubbleLocked {
+	if (_answerError.code == -1003 || _answerError.code == NSURLErrorNotConnectedToInternet) return @"⚠️ Không có mạng — SiriX không gọi được AI.";
+	if (_answerError.code == -6) return @"⚠️ AI không trả lời.";
+	if ([_answerError.domain isEqual:NSURLErrorDomain]) return @"⚠️ SiriX không kết nối được với AI.";
+	return [@"⚠️ SiriX gặp lỗi: " stringByAppendingString:_answerError.localizedDescription ?: @"Không rõ lỗi."];
+}
+- (void)queueNativeUpdateLocked:(BOOL)final {
+	uint64_t generation = _generation;
+	SXNativeBubble *bubble = _nativeBubble;
+	BOOL success = _answerDisplay.length && !_answerError;
+	NSString *text = final ? (success ? SXDisplayText(_answerDisplay, _prefs.markdown, NO) : [self errorBubbleLocked])
+		: SXDisplayText(_partial, _prefs.markdown, YES);
+	if (_streamOriginal.length) text = [text stringByAppendingFormat:@"\n—\nSiri: %@", _streamOriginal];
+	dispatch_async(dispatch_get_main_queue(), ^{
+		[self->_condition lock];
+		BOOL eligible = generation == self->_generation && self->_streamingView && !self->_actionSeen && !self->_closed &&
+			bubble == self->_nativeBubble && SXUptime() - self->_captureUptime < SXTurnLimit;
+		[self->_condition unlock];
+		if (!eligible) return;
+		BOOL updated = [bubble updateText:text];
+		[self->_condition lock];
+		if (generation == self->_generation && self->_streamingView) {
+			if (final || !updated) {
+				self->_streamingView = NO; self->_nativeBubble = nil;
+				if (final && updated) {
+					self->_deferred = NO;
+					self->_decisionIsAnswer = success;
+					self->_decisionDisplay = success ? SXDisplayText(self->_answerDisplay, self->_prefs.markdown, NO) : [self errorBubbleLocked];
+					self->_decisionSpeech = success ? self->_answer : @"";
+					self->_outcomeCounted = YES;
+					if (success) { [self queueStatistic:@"replaced" milliseconds:self->_llmMs]; [self saveAnswerLocked:NO]; }
+					else [self queueStatistic:@"error" milliseconds:self->_llmMs];
+					if (success && !self->_voiceApple && self->_suppressed && !self->_ttsScheduled) {
+						// Siri was already given a silent provisional bubble. Playback is
+						// finalized here, even if an online TTS plan missed its deadline.
+						if (SXTTSModeAllows(self->_prefs.ttsMode, YES)) {
+							BOOL fallback = !self->_ttsPlan && ![self->_prefs.ttsSource isEqual:@"system"];
+							[self queueSpeechLocked:(self->_ttsPlan ?: SXTTSSystemPlan(self->_answer, self->_prefs)) fallback:fallback];
+						}
+					}
+				} else {
+					self->_decisionDisplay = nil;
+					self->_deferred = self->_prefs.deferredReplies && !self->_prefs.incognito;
+					if (self->_deferred && self->_answerDisplay.length) [self saveAnswerLocked:YES];
+					SXLogDbg(@"resp", @"không cập nhật được bubble Siri; dùng lịch sử cho đáp án trễ.");
+				}
+			}
+		}
+		[self->_condition unlock];
+	});
+}
+- (void)queueSpeechLocked:(SXTTSPlan *)plan fallback:(BOOL)fallback {
+	if (!plan || _ttsScheduled || _closed || _voiceApple) return;
+	_ttsScheduled = YES;
+	uint64_t generation = _generation;
+	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 120 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+		[self->_condition lock];
+		BOOL allowed = generation == self->_generation && self->_pending && !self->_actionSeen && !self->_closed && !self->_voiceApple;
+		[self->_condition unlock];
+		if (!allowed) return;
+		SXTTSPlay(plan, ^(BOOL ok) {
+			[self->_condition lock];
+			if (generation == self->_generation) [self queueStatistic:(ok && !fallback ? @"tts_ok" : @"tts_fb") milliseconds:nil];
+			[self->_condition unlock];
+		});
 	});
 }
 
-#pragma mark - Đường vào lệnh ACE
+#pragma mark - ACE display
 
 - (BOOL)handleIncomingCommand:(id)command {
 	if (!command || ![SXPrefs shared].enabled) return NO;
 	NSString *className = NSStringFromClass([command class]);
-
+	NSString *reference = SXRefID(command);
 	if (SXIsActionClass(className)) {
 		[_condition lock];
-		if (_pending) {
-			_actionSeen = YES;
-			[_condition broadcast]; // đánh thức luồng đang chờ — thoát ngay, không giữ ACE
+		if (_pending && (!_ref || !reference || [_ref isEqual:reference])) {
+			_actionSeen = YES; [_request cancel]; [_mediaRequest cancel];
+			dispatch_async(dispatch_get_main_queue(), ^{ SXTTSStop(); });
+			[_condition broadcast];
 		}
 		[_condition unlock];
-		SXLogDbg(@"resp", @"tác vụ hệ thống — cho Siri gốc xử lý: %@", className);
 		return NO;
 	}
-
-	BOOL looksLikeResponse = [className containsString:@"AddViews"] || [className containsString:@"SayIt"];
-	if (!looksLikeResponse) {
-		SXLogDbg(@"resp", @"bỏ qua lệnh không liên quan: %@", className);
-		return NO;
+	if ([className isEqual:@"SAPreSynthesizeTTS"]) {
+		[_condition lock];
+		BOOL suppress = _pending && !_closed && !_actionSeen && _suppressed && !_voiceApple && reference && [_ref isEqual:reference];
+		BOOL changed = suppress && SXSilentPreSynthesis(command);
+		if (suppress && !changed) {
+			_voiceApple = YES;
+			dispatch_async(dispatch_get_main_queue(), ^{ SXTTSStop(); });
+		}
+		[_condition unlock];
+		return changed;
 	}
-	return [self awaitAndMutate:command
-						 source:@"AFConnection._handleCommand:reply:"
-					  className:className];
+	if (![className containsString:@"AddViews"] && ![className containsString:@"SayIt"]) return NO;
+	// Only the insertion hook has a real AFConversation. Do not wait twice.
+	if ([className containsString:@"AddViews"] && [SXPrefs shared].liveSiriUpdates && NSThread.isMainThread &&
+		[NSClassFromString(@"AFConversation") instancesRespondToSelector:@selector(addItemsForAddViewsCommand:)]) return NO;
+	return [self awaitAndMutate:command source:@"AFConnection" className:className bubble:nil];
 }
-
-- (BOOL)handleAddViewsInsertion:(id)command {
+- (BOOL)handleAddViewsInsertion:(id)command { return [self handleAddViewsInsertion:command conversation:nil]; }
+- (BOOL)handleAddViewsInsertion:(id)command conversation:(id)conversation {
 	if (!command || ![SXPrefs shared].enabled) return NO;
 	NSString *className = NSStringFromClass([command class]);
 	if (![className containsString:@"AddViews"]) return NO;
-	return [self awaitAndMutate:command
-						 source:@"AFConversation.addItemsForAddViewsCommand:"
-					  className:className];
+	SXNativeBubble *bubble = conversation && [SXPrefs shared].liveSiriUpdates ? [SXNativeBubble bubbleInConversation:conversation command:command] : nil;
+	return [self awaitAndMutate:command source:@"AFConversation" className:className bubble:bubble];
 }
-
-/// Chờ đáp án (có giới hạn), thay thế tại chỗ, hoặc cho qua — an toàn khi chạy song song.
-- (BOOL)awaitAndMutate:(id)command source:(NSString *)source className:(NSString *)className {
-	SXPrefs *prefs = [SXPrefs shared];
+- (BOOL)awaitAndMutate:(id)command source:(NSString *)source className:(NSString *)className bubble:(SXNativeBubble *)bubble {
+	NSString *reference = SXRefID(command);
 	[_condition lock];
-
-	if (!_pending) {
-		[_condition unlock];
-		SXLogDbg(@"resp", @"%@: không có câu hỏi đang chờ — cho qua (%@)", source, className);
-		return NO;
+	if (!_pending || _actionSeen || _closed || SXUptime() - _captureUptime >= SXTurnLimit || (_ref && reference && ![_ref isEqual:reference])) {
+		[_condition unlock]; return NO;
 	}
-	uint64_t myGeneration = _generation;
-	if ([_handledCommands containsObject:command]) {
-		[_condition unlock];
-		SXLogDbg(@"resp", @"%@: lệnh đã được sửa ở hook khác (%@)", source, className);
-		return YES;
-	}
-
-	// Tác vụ Apple luôn ưu tiên, kể cả chế độ thay mọi câu. Kiểm tra lại sau
-	// khi chờ vì một luồng khác có thể nhận lệnh tác vụ trong lúc này.
-	if (_actionSeen) {
-		_consumed = YES;
-		_decisionDisplay = nil;
-		[_condition unlock];
-		SXLogInf(@"resp", @"%@: có tác vụ hệ thống — giữ Siri gốc (%@)", source, className);
-		return NO;
-	}
-
-	if (!_consumed) {
-		// Chặn ACE tối đa 5s, kể cả khi timeout cấu hình lớn hơn.
-		NSTimeInterval elapsed = _captureTime > 0 ? (CFAbsoluteTimeGetCurrent() - _captureTime) : 0;
-		NSTimeInterval waitBudget = MIN(5.0, MAX(0.0, prefs.responseTimeout - elapsed));
-		NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:waitBudget];
-		while (!_ready && !_errored && !_consumed && _generation == myGeneration && !_actionSeen) {
+	if (!_ref) _ref = [reference copy];
+	if ([_handledCommands containsObject:command]) { [_condition unlock]; return YES; }
+	uint64_t generation = _generation;
+	if (!_decided) {
+		// Main/ACE never waits for ongoing streaming beyond this budget.
+		NSTimeInterval remaining = MAX(0, _prefs.responseTimeout - (SXUptime() - _captureUptime));
+		NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:MIN(5.0, remaining)];
+		// A provisional bubble is silent. Only use it if final playback has a
+		// supported local fallback, not when the user asked for Apple's voice.
+		BOOL canPreview = bubble && SXTTSModeAllows(_prefs.ttsMode, YES);
+		while (!_answerDisplay && !_answerError && !(canPreview && _partial.length) && !_decided && _pending && !_closed && !_actionSeen && generation == _generation)
 			if (![_condition waitUntilDate:deadline]) break;
-		}
-		if (_generation != myGeneration) {
-			[_condition unlock];
-			SXLogDbg(@"resp", @"%@: câu hỏi mới — bỏ lượt chờ cũ", source);
-			return NO;
-		}
-		if (_actionSeen) {
-			_consumed = YES;
-			_decisionDisplay = nil;
-			[_condition unlock];
-			SXLogInf(@"resp", @"%@: phát hiện tác vụ trong lúc chờ — giữ Siri gốc", source);
-			return NO;
-		}
-		// Một hook khác có thể đã quyết định trong lúc condition nhả lock.
-		if (!_consumed) {
-			_consumed = YES;
-			_decisionTime = CFAbsoluteTimeGetCurrent();
-			[_condition broadcast];
-			if (_ready && _answer.length && _answerDisplay.length) {
-				_decisionIsAnswer = YES;
-				_decisionSpeech = _answer;
-				_decisionDisplay = prefs.markdown ? SXMarkdownRender(_answerDisplay) : _answerDisplay;
-				if (!prefs.markdown && _decisionDisplay.length > 2000)
-					_decisionDisplay = [[_decisionDisplay substringToIndex:2000] stringByAppendingString:@"…"];
-				[SXDisplayPolicy logDecision:@"chọn đáp án AI cho lượt" source:source];
-			} else if (_errored) {
+		if (generation != _generation || !_pending || _closed || _actionSeen) { [_condition unlock]; return NO; }
+		if ([_handledCommands containsObject:command]) { [_condition unlock]; return YES; }
+		if (!_decided) {
+			_decided = YES;
+			BOOL canSpeakError = SXTTSModeAllows(_prefs.ttsMode, NO);
+			if (_answerDisplay.length) {
+				_decisionIsAnswer = YES; _decisionDisplay = SXDisplayText(_answerDisplay, _prefs.markdown, NO); _decisionSpeech = _answer;
+			} else if (canPreview && _partial.length && !_answerError) {
+				_streamingView = YES; _nativeBubble = bubble;
+				_decisionDisplay = SXDisplayText(_partial, _prefs.markdown, YES); _decisionSpeech = @"";
+			} else if (_answerError && _answerError.code != NSURLErrorTimedOut) {
 				[self queueStatistic:@"error" milliseconds:_llmMs];
-				if ([SXDisplayPolicy shouldShowErrorBubbleInMode:prefs.mode speakErrors:prefs.speakErrors]) {
-					_decisionDisplay = [NSString stringWithFormat:@"⚠️ SiriX gặp lỗi: %@", _answerError.localizedDescription];
-					_decisionSpeech = _decisionDisplay;
-					[SXDisplayPolicy logDecision:@"bubble lỗi" source:source];
-				} else {
-					SXLogInf(@"resp", @"%@: AI lỗi (%@) — giữ Siri gốc", source, _answerError.localizedDescription);
-				}
+				if ([SXDisplayPolicy shouldShowErrorBubbleInMode:_prefs.mode speakErrors:canSpeakError]) _decisionDisplay = [self errorBubbleLocked];
+				_decisionSpeech = canSpeakError ? _decisionDisplay : @"";
+				if (canSpeakError && _decisionDisplay) _ttsPlan = SXTTSSystemPlan(_decisionDisplay, _prefs);
 			} else {
 				[self queueStatistic:@"timeout" milliseconds:nil];
-				_decisionDisplay = [SXDisplayPolicy timeoutBubbleMessageInMode:prefs.mode action:prefs.timeoutAction];
-				_decisionSpeech = _decisionDisplay;
-				SXLogWrn(@"resp", @"%@: hết ngân sách %.0fs (chặn ≤5s, thực tế %.1fs) — %@",
-						 source, prefs.responseTimeout, waitBudget, _decisionDisplay ? @"bubble hết giờ" : @"giữ Siri gốc");
+				_decisionDisplay = [SXDisplayPolicy timeoutBubbleMessageInMode:_prefs.mode action:_prefs.timeoutAction];
+				_decisionSpeech = canSpeakError ? _decisionDisplay : @"";
+				if (canSpeakError && _decisionDisplay) _ttsPlan = SXTTSSystemPlan(_decisionDisplay, _prefs);
+				_deferred = _prefs.deferredReplies && !_answerError && !_prefs.incognito;
+				if (!_deferred) { [_request cancel]; [_mediaRequest cancel]; }
 			}
-			if (!_decisionDisplay.length) {
-				_outcomeCounted = YES;
-				[self queueStatistic:@"kept" milliseconds:nil];
-			}
+			if (!_decisionDisplay.length) { _outcomeCounted = YES; [self queueStatistic:@"kept" milliseconds:nil]; }
+			[_condition broadcast];
 		}
 	}
-
-	// AddViews, SayIt và hook dự phòng có thể là nhiều object cho cùng một lượt.
-	// Dùng cùng quyết định thay vì cho các lệnh sau lọt về Siri gốc. Hết hạn
-	// sau 30 giây để không áp dụng nhầm cho một phiên không bắt được capture.
-	if (!_decisionDisplay.length || CFAbsoluteTimeGetCurrent() - _decisionTime > 30.0) {
-		[_condition unlock];
-		SXLogDbg(@"resp", @"%@: quyết định giữ gốc hoặc đã hết hạn (%@)", source, className);
-		return NO;
-	}
-	if ([_handledCommands containsObject:command]) {
-		[_condition unlock];
-		return YES;
-	}
-	BOOL changed = NO;
-	@try {
-		NSString *display = _decisionDisplay;
-		if (_decisionIsAnswer && prefs.showOriginal) {
-			NSString *original = SXOriginalResponse(command, className);
-			if (original.length) display = [display stringByAppendingFormat:@"\n—\nSiri: %@", original];
+	if (!_decisionDisplay.length) { [_condition unlock]; return NO; }
+	NSString *display = _decisionDisplay;
+	if ((_decisionIsAnswer || _streamingView) && _prefs.showOriginal) {
+		NSString *original = SXOriginalResponse(command, className);
+		if (original.length) {
+			display = [display stringByAppendingFormat:@"\n—\nSiri: %@", original];
+			if (_streamingView && bubble == _nativeBubble) _streamOriginal = original;
 		}
-		changed = SXMutateCommand(command, display, _decisionSpeech, source, className);
-	} @catch (NSException *exception) {
-		SXLogErr(@"err", @"%@: mutate %@ exception %@: %@ — cho qua", source, className, exception.name, exception.reason);
+	}
+	BOOL custom = _ttsPlan && !_voiceApple && !_streamingView;
+	if (_ttsScheduled && _suppressed && !_voiceApple && !_streamingView) custom = YES;
+	BOOL silent = custom || _streamingView || (_decisionSpeech && !_decisionSpeech.length);
+	BOOL changed = SXMutateCommand(command, display, silent ? @"" : _decisionSpeech, source, className, _prefs.hideWebCards);
+	if (!changed && silent) {
+		_voiceApple = YES;
+		if (_streamingView && bubble == _nativeBubble) {
+			_streamingView = NO; _nativeBubble = nil; _deferred = _prefs.deferredReplies && !_prefs.incognito; _decisionDisplay = nil;
+		} else if (!_streamingView) changed = SXMutateCommand(command, display, _decisionSpeech.length ? _decisionSpeech : display, source, className, _prefs.hideWebCards);
+		custom = NO;
 	}
 	if (changed) {
 		[_handledCommands addObject:command];
-		if (!_outcomeCounted) {
+		if (silent && !_voiceApple) _suppressed = YES;
+		if (_deferred && bubble && !_nativeBubble && !_decisionIsAnswer && !_answerError) _nativeBubble = bubble;
+		if (!_streamingView && !_outcomeCounted) {
 			_outcomeCounted = YES;
-			[self queueStatistic:@"replaced" milliseconds:_decisionIsAnswer ? _llmMs : nil];
+			if (_decisionIsAnswer) [self queueStatistic:@"replaced" milliseconds:_llmMs];
 		}
-		// Chỉ thêm lịch sử khi thực sự sửa được phản hồi AI, và chỉ một lần.
-		if (_decisionIsAnswer && !_historySaved) {
-			[_history addObject:@{@"q": _question ?: @"",
-				@"a": _answerDisplay.length > 1000 ? [[_answerDisplay substringToIndex:1000] stringByAppendingString:@"…"] : _answerDisplay}];
-			while ((NSInteger)_history.count > prefs.contextTurns) [_history removeObjectAtIndex:0];
-			_historySaved = YES;
-			// Từng lượt được đánh dấu riêng tư từ lúc capture; đổi cấu hình trong
-			// khi chờ cũng không được khiến lượt riêng tư bị ghi xuống đĩa.
-			if (!_questionIncognito && !prefs.incognito && _historyEpoch.length) {
-				NSString *question = _question;
-				NSString *answer = _answerDisplay;
-				NSString *epoch = _historyEpoch;
-				NSUInteger limit = (NSUInteger)prefs.contextTurns;
-				NSTimeInterval startedAt = _captureTime;
-				dispatch_async([SXStore queue], ^{
-					[[SXStore shared] appendQuestion:question answer:answer limit:limit epoch:epoch startedAt:startedAt];
-				});
-			}
+		if (custom) [self queueSpeechLocked:_ttsPlan fallback:NO];
+		else if (_decisionIsAnswer && SXTTSModeAllows(_prefs.ttsMode, YES) && !_voiceApple) {
+			_voiceApple = YES; [_mediaRequest cancel]; [self queueStatistic:@"tts_fb" milliseconds:nil];
 		}
+		if (_decisionIsAnswer) [self saveAnswerLocked:NO];
 	}
 	[_condition unlock];
 	return changed;
 }
-
 - (void)clearHistoryMemory {
 	[_condition lock];
-	NSUInteger count = _history.count;
+	_historyEpoch = nil; _skipHistory = YES;
 	[_history removeAllObjects];
 	[_condition unlock];
-	SXLogInf(@"pref", @"đã xóa ngữ cảnh trong bộ nhớ (%lu câu)", (unsigned long)count);
 }
-
 - (BOOL)clearHistory {
 	[self clearHistoryMemory];
-	// Được gọi bởi tool trên luồng nền; callback Darwin chỉ xóa bộ nhớ.
 	__block BOOL ok = NO;
 	dispatch_sync([SXStore queue], ^{ ok = [[SXStore shared] clearHistory]; });
-	if (!ok) SXLogErr(@"err", @"không xóa được lịch sử đã lưu");
-	notify_post("com.sirix.tweak/resetHistory");
+	if (ok) notify_post("com.sirix.tweak/resetHistory");
 	return ok;
 }
-
 @end
