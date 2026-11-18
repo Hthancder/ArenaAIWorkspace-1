@@ -1,6 +1,7 @@
 # SiriX v1.1 — Tài liệu thiết kế (DESIGN ONLY)
 
 > Lượt này **chỉ thiết kế**. Không thay đổi code.
+> **Quy ước / IA / luồng tổng thể → `DESIGN-SYSTEM.md` (nguồn sự thật, ưu tiên khi mâu thuẫn).**
 > Cơ sở: log thật từ thiết bị iOS 15 (roothide,12:33–12:38, v1.0.2) + cấu trúc code hiện tại.
 
 ---
@@ -202,7 +203,6 @@ SiriX (Root)                              ← header icon + tiêu đề (giữ)
 │
 ├─ [Nhóm] Gỡ lỗi
 │   ├─ PSSwitch      Ghi log chi tiết
-│   ├─ PSButton      Kiểm tra kết nối API
 │   ├─ PSLinkCell    Xem & sao chép log
 │   └─ PSButton      Xóa thống kê               (P2)
 │
@@ -211,6 +211,8 @@ SiriX (Root)                              ← header icon + tiêu đề (giữ)
     ├─ PSTitleValue  Gói cài đặt                 (rootless/roothide)
     └─ PSButton      Khởi động lại SpringBoard
 ```
+
+> ⚠ **Nhất quán (đã chốt):** “Kiểm tra kết nối” sống trong 2 trang *Cấu hình OpenAI/Gemini* (không lặp ở Gỡ lỗi); “Xóa lịch sử” sẽ chuyển vào trang *Lịch sử hội thoại* khi có (v1.2).
 
 **Trang con ① — Cấu hình OpenAI tương thích**
 ```

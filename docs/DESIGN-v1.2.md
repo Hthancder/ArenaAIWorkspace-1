@@ -1,6 +1,7 @@
 # SiriX v1.2 — Tài liệu thiết kế (DESIGN ONLY)
 
 > Tiếp nối `DESIGN-v1.1.md` (đã chốt). Lượt này **chỉ thiết kế**.
+> **Quy ước / IA / luồng tổng thể → `DESIGN-SYSTEM.md` (nguồn sự thật, ưu tiên khi mâu thuẫn).**
 > Trọng tâm: **STT thay Apple Speech**, **TTS trả lời (free-first, tự nhận ngôn ngữ, chọn giọng)** và các mục v1.2 còn lại.
 
 ---
