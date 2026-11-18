@@ -21,6 +21,9 @@ FOUNDATION_EXPORT NSString *SXDefaultSystemPrompt(void);
 /// Đọc lại toàn bộ cài đặt (CFPreferences + fallback file). Log lại tóm tắt.
 - (void)reload;
 
+/// Ghi một key chuỗi (CFPreferences + đồng bộ ngay). value = nil → xóa key.
++ (void)setString:(nullable NSString *)value forKey:(NSString *)key;
+
 @property (nonatomic, readonly) BOOL enabled;
 @property (nonatomic, readonly) SXReplyMode mode;
 @property (nonatomic, readonly) SXProvider provider;
@@ -31,11 +34,15 @@ FOUNDATION_EXPORT NSString *SXDefaultSystemPrompt(void);
 @property (nonatomic, readonly, copy) NSString *geminiModel;
 @property (nonatomic, readonly) double temperature;      // 0–2, làm tròn 0.1
 @property (nonatomic, readonly) NSInteger contextTurns;  // 2–40 cặp Q/A giữ lại
-@property (nonatomic, readonly) NSTimeInterval responseTimeout; // 2–15 giây
+@property (nonatomic, readonly) NSTimeInterval responseTimeout; // 2–30 giây (ngân sách AI từ lúc hỏi)
 @property (nonatomic, readonly, copy) NSString *customPrompt;   // rỗng = dùng prompt mặc định
 @property (nonatomic, readonly) BOOL hideWebCards;
 @property (nonatomic, readonly) BOOL speakErrors;
 @property (nonatomic, readonly) BOOL verbose;
+@property (nonatomic, readonly) BOOL streaming;                 // trả lời theo SSE (v1.1)
+@property (nonatomic, readonly) BOOL markdown;                  // trình bày Markdown khi hiển thị (v1.1)
+@property (nonatomic, readonly, copy) NSString *timeoutAction;  // "bubble" | "keep" — khi hết giờ (chế độ Thay thế)
+@property (nonatomic, readonly) NSInteger maxToolRounds;        // 1–4, mặc định 3
 @property (nonatomic, readonly) BOOL toolSystemInfo;
 @property (nonatomic, readonly) BOOL toolClipboard;
 @property (nonatomic, readonly) BOOL toolFetchURL;

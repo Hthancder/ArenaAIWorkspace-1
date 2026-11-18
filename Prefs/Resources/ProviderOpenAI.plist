@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>title</key>
+	<string>Cấu hình OpenAI</string>
+	<key>items</key>
+	<array>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Khóa &amp; Endpoint</string>
+			<key>footerText</key>
+			<string>Dán khóa từ trang web nhà cung cấp — chỉ lưu trên máy, không bao giờ hiện đầy đủ trong log. Địa chỉ API gốc: mọi endpoint tương thích /chat/completions (OpenAI, Groq, OpenRouter, LM Studio…).</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSecureEditTextCell</string>
+			<key>label</key>
+			<string>Khóa API</string>
+			<key>key</key>
+			<string>openaiKey</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>default</key>
+			<string></string>
+			<key>placeholder</key>
+			<string>sk-… / gsk-…</string>
+			<key>isSecure</key>
+			<true/>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSEditTextCell</string>
+			<key>label</key>
+			<string>Địa chỉ API gốc</string>
+			<key>key</key>
+			<string>openaiBase</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>default</key>
+			<string>https://api.openai.com/v1</string>
+			<key>placeholder</key>
+			<string>https://api.openai.com/v1</string>
+			<key>isURL</key>
+			<true/>
+			<key>noAutoCorrect</key>
+			<true/>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSEditTextCell</string>
+			<key>label</key>
+			<string>Mô hình</string>
+			<key>key</key>
+			<string>openaiModel</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>default</key>
+			<string>gpt-4o-mini</string>
+			<key>placeholder</key>
+			<string>gpt-4o-mini</string>
+			<key>noAutoCorrect</key>
+			<true/>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Kiểm tra</string>
+			<key>footerText</key>
+			<string>Gửi một câu hỏi thật tới endpoint bằng đúng cấu hình này — không lưu lịch sử hội thoại.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>Kiểm tra kết nối</string>
+			<key>action</key>
+			<string>sx_testConnection:</string>
+		</dict>
+	</array>
+</dict>
+</plist>

@@ -1,5 +1,6 @@
 #import "SXPrefs.h"
 #import "SXLog.h"
+#import <UIKit/UIKit.h>
 
 static NSString *const kSXDomain = @"com.sirix.tweak";
 static NSString *const kSXFilePath = @"/var/mobile/Library/Preferences/com.sirix.tweak.plist";
@@ -8,8 +9,9 @@ NSString *SXDefaultSystemPrompt(void) {
 	return @"Bạn là SiriX, trợ lý AI tích hợp sẵn trong Siri trên iPhone. "
 		   @"Trả lời chính xác, tự nhiên, ngắn gọn (thường 1–3 câu, trừ khi người dùng hỏi điều cần giải thích kỹ). "
 		   @"Luôn trả lời bằng ngôn ngữ mà người dùng đã đặt câu hỏi. "
-		   @"Dùng văn bản thuần: không markdown, không emoji, không gạch đầu dòng, không tiêu đề — "
-		   @"vì câu trả lời sẽ được Siri phát thành giọng nói. "
+		   @"Ưu tiên văn bản thuần (phần lớn câu trả lời chỉ cần vậy); khi thật sự cần nhấn mạnh hoặc liệt kê, "
+		   @"duy nhất dùng **đậm**, danh sách gạch đầu dòng ngắn, `mã code` hoặc khối code gọn — "
+		   @"SiriX tự trình bày đẹp và vẫn phát giọng nói trôi chảy. Không emoji. "
 		   @"Nếu người dùng yêu cầu thao tác trên máy (mở ứng dụng, đặt báo thức, gọi điện, nhắn tin…), "
 		   @"hệ thống tự thực hiện — hãy xác nhận ngắn gọn, ví dụ: “Đã đặt báo thức 7 giờ.” "
 		   @"trong ngôn ngữ của người dùng, đừng nói mình không thể.";
@@ -74,6 +76,14 @@ static double SXClamp(double v, double lo, double hi) {
 
 #pragma mark - Tải lại
 
++ (void)setString:(NSString *)value forKey:(NSString *)key {
+	if (!key.length) return;
+	CFPreferencesSetAppValue((__bridge CFStringRef)key,
+							 (__bridge CFPropertyListRef)value,
+							 (__bridge CFStringRef)kSXDomain);
+	CFPreferencesAppSynchronize((__bridge CFStringRef)kSXDomain);
+}
+
 - (void)reload {
 	NSDictionary *file = nil;
 	if ([[NSFileManager defaultManager] fileExistsAtPath:kSXFilePath]) {
@@ -101,16 +111,23 @@ static double SXClamp(double v, double lo, double hi) {
 	_hideWebCards = [self boolFor:@"hideWebCards" default:YES];
 	_speakErrors = [self boolFor:@"speakErrors" default:NO];
 	_verbose = [self boolFor:@"verbose" default:YES];
+	_streaming = [self boolFor:@"streaming" default:YES];
+	_markdown = [self boolFor:@"markdown" default:YES];
+	_timeoutAction = [[self stringFor:@"timeoutAction" default:@"bubble"] isEqualToString:@"keep"]
+		? @"keep" : @"bubble";
+	_maxToolRounds = (NSInteger)SXClamp((double)[self integerFor:@"maxToolRounds" default:3], 1, 4);
 	_toolSystemInfo = [self boolFor:@"toolSystemInfo" default:YES];
 	_toolClipboard = [self boolFor:@"toolClipboard" default:YES];
 	_toolFetchURL = [self boolFor:@"toolFetchURL" default:YES];
 
 	SXLogSetVerbose(_verbose);
 	SXLogInf(@"pref", @"cài đặt: enabled=%d mode=%@ provider=%@ temp=%.1f turns=%ld timeout=%.0fs "
+			 @"stream=%d md=%d timeoutAction=%@ tools=%ld "
 			 @"openAIKey=%@ geminiKey=%@ customPrompt=%@",
 			 _enabled, _mode == SXReplyModeFull ? @"full" : @"smart",
 			 _provider == SXProviderGemini ? @"gemini" : @"openai",
 			 _temperature, (long)_contextTurns, _responseTimeout,
+			 _streaming, _markdown, _timeoutAction, (long)_maxToolRounds,
 			 SXRedactKey(_openaiKey), SXRedactKey(_geminiKey),
 			 _customPrompt.length > 0 ? [NSString stringWithFormat:@"%lu ký tự", (unsigned long)_customPrompt.length] : @"(mặc định)");
 }
@@ -136,7 +153,25 @@ static double SXClamp(double v, double lo, double hi) {
 }
 
 - (NSString *)systemPrompt {
-	return _customPrompt.length ? _customPrompt : SXDefaultSystemPrompt();
+	NSString *base = _customPrompt.length ? _customPrompt : SXDefaultSystemPrompt();
+	if ([base containsString:@"{"] && [base containsString:@"}"]) {
+		static NSDateFormatter *dateFormatter;
+		static dispatch_once_t once;
+		dispatch_once(&once, ^{
+			dateFormatter = [[NSDateFormatter alloc] init];
+			dateFormatter.locale = [NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
+			dateFormatter.dateFormat = @"yyyy-MM-dd";
+		});
+		base = [base stringByReplacingOccurrencesOfString:@"{date}"
+											   withString:[dateFormatter stringFromDate:NSDate.date]];
+		base = [base stringByReplacingOccurrencesOfString:@"{device}"
+											   withString:[NSString stringWithFormat:@"%@ (iOS %@)",
+														   UIDevice.currentDevice.model ?: @"iPhone",
+														   UIDevice.currentDevice.systemVersion ?: @"?"]];
+		base = [base stringByReplacingOccurrencesOfString:@"{lang}"
+											   withString:NSLocale.currentLocale.languageCode ?: @"vi"];
+	}
+	return base;
 }
 
 @end

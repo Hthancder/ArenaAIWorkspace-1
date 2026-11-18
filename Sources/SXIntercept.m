@@ -3,6 +3,8 @@
 #import "SXPrefs.h"
 #import "SXLLM.h"
 #import "SXTools.h"
+#import "SXMarkdown.h"
+#import "SXDisplayPolicy.h"
 #import <objc/message.h>
 #import <notify.h>
 
@@ -72,14 +74,16 @@ static NSString *SXSanitizeAnswer(NSString *raw) {
 	return text;
 }
 
-static BOOL SXApplyTextToView(id view, NSString *text) {
+/// Thay text của view: `speakableText` nhận BẢN ĐỌC (thuần, không markdown),
+/// `text` nhận BẢN HIỂN THỊ (đã render markdown nếu bật).
+static BOOL SXApplyTextToView(id view, NSString *displayText, NSString *speechText) {
 	BOOL applied = NO;
 	SEL speakableSelector = NSSelectorFromString(@"speakableText");
 	SEL setSpeakableSelector = NSSelectorFromString(@"setSpeakableText:");
 	if ([view respondsToSelector:setSpeakableSelector]) {
 		id current = SXMsg(view, speakableSelector);
 		if ([current isKindOfClass:[NSString class]] && ((NSString *)current).length) {
-			SXSet(view, setSpeakableSelector, text);
+			SXSet(view, setSpeakableSelector, speechText);
 			applied = YES;
 		}
 	}
@@ -88,7 +92,7 @@ static BOOL SXApplyTextToView(id view, NSString *text) {
 	if ([view respondsToSelector:setTextSelector]) {
 		id current = SXMsg(view, textSelector);
 		if ([current isKindOfClass:[NSString class]] && ((NSString *)current).length) {
-			SXSet(view, setTextSelector, text);
+			SXSet(view, setTextSelector, displayText);
 			applied = YES;
 		}
 	}
@@ -97,7 +101,7 @@ static BOOL SXApplyTextToView(id view, NSString *text) {
 
 /// Tạo bong bóng trả lời của SiriX khi lệnh không có sẵn trường văn bản
 /// (ví dụ Apple chỉ gửi thẻ tìm kiếm — đã ẩn — hoặc rỗng).
-static id SXMakeUtteranceView(NSString *text) {
+static id SXMakeUtteranceView(NSString *displayText, NSString *speechText) {
 	Class cls = NSClassFromString(@"SAUIAssistantUtteranceView");
 	if (!cls) return nil;
 	id view = [[cls alloc] init];
@@ -105,12 +109,12 @@ static id SXMakeUtteranceView(NSString *text) {
 	BOOL canSet = NO;
 	SEL setSpeakable = NSSelectorFromString(@"setSpeakableText:");
 	if ([view respondsToSelector:setSpeakable]) {
-		SXSet(view, setSpeakable, text);
+		SXSet(view, setSpeakable, speechText.length ? speechText : displayText);
 		canSet = YES;
 	}
 	SEL setText = NSSelectorFromString(@"setText:");
 	if ([view respondsToSelector:setText]) {
-		SXSet(view, setText, text);
+		SXSet(view, setText, displayText);
 		canSet = YES;
 	}
 	SEL setDialogId = NSSelectorFromString(@"setDialogId:");
@@ -124,9 +128,15 @@ static id SXMakeUtteranceView(NSString *text) {
 	return canSet ? view : nil;
 }
 
-/// Thay nội dung tại chỗ: SAUIAddViews.views[*].speakableText/text + SAUISayIt.message.
-static BOOL SXMutateCommand(id command, NSString *text, NSString *source, NSString *className) {
-	if (!text.length || !command) return NO;
+/// Thay nội dung tại chỗ: SAUIAddViews.views[*] + SAUISayIt.message.
+/// - displayText: bản hiển thị (có thể đã render markdown)
+/// - speechText : bản đọc/phát giọng (thuần, markdown đã gỡ)
+/// Mọi thao tác xây giá trị MỚI trước, setter chạy sau (mutate-on-copy) —
+/// nếu có bất kỳ phần tử nào hỏng → không gọi setter → bản gốc nguyên vẹn.
+static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechText,
+							NSString *source, NSString *className) {
+	if (!displayText.length || !command) return NO;
+	if (!speechText.length) speechText = displayText;
 	BOOL isAddViews = [className containsString:@"AddViews"];
 	BOOL isSayIt = [className containsString:@"SayIt"];
 	BOOL changed = NO;
@@ -147,22 +157,32 @@ static BOOL SXMutateCommand(id command, NSString *text, NSString *source, NSStri
 						continue;
 					}
 					[kept addObject:view];
-					if (SXApplyTextToView(view, text)) changed = YES;
+					if (SXApplyTextToView(view, displayText, speechText)) changed = YES;
 				}
 				BOOL injected = NO;
 				if (!changed) {
 					// Không có trường văn bản sẵn (thẻ đã ẩn / rỗng) → chèn bong bóng của SiriX
 					// thay vì thả về câu trả lời gốc của Siri.
-					id bubble = SXMakeUtteranceView(text);
+					id bubble = SXMakeUtteranceView(displayText, speechText);
 					if (bubble) {
 						[kept insertObject:bubble atIndex:0];
 						changed = YES;
 						injected = YES;
-						SXLogDbg(@"resp", @"chèn bong bóng trả lời (%lu ký tự)", (unsigned long)text.length);
+						SXLogDbg(@"resp", @"chèn bong bóng trả lời (%lu ký tự)", (unsigned long)displayText.length);
 					}
 				}
-				if (stripped || injected) {
-					SXSet(command, setViewsSelector, kept);
+				// KHÔNG BAO GIỜ để views = [] (ACE dialog vỡ → giao diện tự đóng).
+				// Nếu strip hết mà chèn không được → không sửa gì, trả về Siri gốc (an toàn).
+				if ((stripped || injected) && kept.count > 0) {
+					@try {
+						SXSet(command, setViewsSelector, kept);
+					} @catch (NSException *exception) {
+						SXLogErr(@"resp", @"setViews: exception %@ — giữ bản gốc", exception.name);
+						return NO;
+					}
+				} else if (stripped && kept.count == 0 && !injected) {
+					SXLogWrn(@"resp", @"views sẽ rỗng sau khi ẩn thẻ và không chèn được — bỏ thao tác");
+					return NO;
 				}
 			}
 		}
@@ -172,7 +192,12 @@ static BOOL SXMutateCommand(id command, NSString *text, NSString *source, NSStri
 		if ([command respondsToSelector:setMessageSelector]) {
 			id current = SXMsg(command, messageSelector);
 			if ([current isKindOfClass:[NSString class]] && ((NSString *)current).length) {
-				SXSet(command, setMessageSelector, text);
+				@try {
+					SXSet(command, setMessageSelector, speechText);
+				} @catch (NSException *exception) {
+					SXLogErr(@"resp", @"setMessage: exception %@ — giữ bản gốc", exception.name);
+					return NO;
+				}
 				changed = YES;
 			}
 		}
@@ -180,7 +205,7 @@ static BOOL SXMutateCommand(id command, NSString *text, NSString *source, NSStri
 
 	if (changed) {
 		SXLogInf(@"resp", @"THAY THẾ — %@ | %@ | %lu ký tự%@",
-				 source, className, (unsigned long)text.length,
+				 source, className, (unsigned long)displayText.length,
 				 stripped ? [NSString stringWithFormat:@" | ẩn %lu thẻ web", (unsigned long)stripped] : @"");
 		return YES;
 	}
@@ -199,11 +224,13 @@ static BOOL SXMutateCommand(id command, NSString *text, NSString *source, NSStri
 	BOOL _errored;
 	BOOL _actionSeen;
 	NSString *_question;
-	NSString *_answer;
+	NSString *_answer;        // bản đọc (thuần, ≤800 ký tự)
+	NSString *_answerDisplay; // bản hiển thị (nguyên văn, ≤4000 ký tự)
 	NSError *_answerError;
 	NSMutableArray<NSDictionary *> *_history;
 	NSString *_lastCaptureText;
 	NSTimeInterval _lastCaptureTime;
+	NSTimeInterval _captureTime; // mốc0 của ngân sách chờ AI (v1.1)
 }
 @end
 
@@ -273,12 +300,14 @@ static BOOL SXMutateCommand(id command, NSString *text, NSString *source, NSStri
 	_generation++;
 	uint64_t myGeneration = _generation;
 	_question = clean;
+	_captureTime = now;
 	_pending = YES;
 	_consumed = NO;
 	_ready = NO;
 	_errored = NO;
 	_actionSeen = NO;
 	_answer = nil;
+	_answerDisplay = nil;
 	_answerError = nil;
 	NSArray<NSDictionary *> *historySnapshot = [_history copy];
 	[_condition broadcast]; // đánh thức các lượt chờ của câu hỏi trước
@@ -322,12 +351,20 @@ static BOOL SXMutateCommand(id command, NSString *text, NSString *source, NSStri
 		_errored = YES;
 		_answerError = error;
 	} else {
-		_answer = SXSanitizeAnswer(answer);
-		if (_answer.length) {
+		// Bản hiển thị: giữ nguyên văn (render markdown lúc hiển thị), cắt an toàn.
+		NSString *raw = [answer stringByTrimmingCharactersInSet:
+						 [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+		if (raw.length > 4000) raw = [[raw substringToIndex:4000] stringByAppendingString:@"…"];
+		_answerDisplay = raw;
+		// Bản đọc: gỡ markdown + cắt 800 (đề phòng TTS/LibreSpeech).
+		_answer = SXSanitizeAnswer(raw);
+		if (_answerDisplay.length && _answer.length) {
 			_ready = YES;
-			SXLogDbg(@"resp", @"đáp án #%llu sẵn sàng (%lu ký tự)",
-					 (unsigned long long)generation, (unsigned long)_answer.length);
+			SXLogDbg(@"resp", @"đáp án #%llu sẵn sàng (hiển thị %lu · đọc %lu ký tự)",
+					 (unsigned long long)generation,
+					 (unsigned long)_answerDisplay.length, (unsigned long)_answer.length);
 		} else {
+			// Rỗng sau khi xử lý → errored (không bao giờ hiện bubble trống).
 			_errored = YES;
 			_answerError = [NSError errorWithDomain:@"com.sirix.llm" code:-6
 										   userInfo:@{NSLocalizedDescriptionKey: @"Đáp án rỗng sau khi xử lý."}];
@@ -389,8 +426,12 @@ static BOOL SXMutateCommand(id command, NSString *text, NSString *source, NSStri
 		return NO;
 	}
 
+	// Ngân sách chờ = từ lúc hỏi (capture + timeout); CHẶN luồng ACE tối đa5s
+	// (hard-cap chống watchdog đóng dialog — DESIGN-SYSTEM §10).
 	NSTimeInterval timeout = prefs.responseTimeout;
-	NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:timeout];
+	NSTimeInterval elapsed = _captureTime > 0 ? (CFAbsoluteTimeGetCurrent() - _captureTime) : 0;
+	NSTimeInterval waitBudget = MIN(5.0, MAX(0.0, timeout - elapsed));
+	NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:waitBudget];
 	while (!_ready && !_errored && !_consumed && _generation == myGeneration) {
 		if (![_condition waitUntilDate:deadline]) break;
 	}
@@ -405,36 +446,58 @@ static BOOL SXMutateCommand(id command, NSString *text, NSString *source, NSStri
 		SXLogDbg(@"resp", @"%@: câu trả lời đã được xử lý ở luồng khác — cho qua", source);
 		return NO;
 	}
-	if (_ready && _answer.length) {
-		NSString *answer = _answer;
+	if (_ready && _answer.length && _answerDisplay.length) {
+		NSString *speech = _answer;
+		NSString *raw = _answerDisplay;
 		NSString *question = _question;
 		_consumed = YES;
-		[_history addObject:@{@"q": question ?: @"", @"a": answer}];
+		[_history addObject:@{@"q": question ?: @"",
+							  @"a": raw.length > 1000 ? [[raw substringToIndex:1000] stringByAppendingString:@"…"] : raw}];
 		while ((NSInteger)_history.count > prefs.contextTurns) {
 			[_history removeObjectAtIndex:0];
 		}
 		[_condition unlock];
-		return SXMutateCommand(command, answer, source, className);
+
+		NSString *display = raw;
+		if (prefs.markdown) {
+			display = SXMarkdownRender(raw);
+		} else if (display.length > 2000) {
+			display = [[display substringToIndex:2000] stringByAppendingString:@"…"];
+		}
+		[SXDisplayPolicy logDecision:[NSString stringWithFormat:@"thay thế (md=%d, hiển thị %lu ký tự)",
+									   prefs.markdown, (unsigned long)display.length]
+							   source:source];
+		return SXMutateCommand(command, display, speech, source, className);
 	}
 	if (_errored) {
 		NSError *error = _answerError;
 		_consumed = YES;
 		[_condition unlock];
-		if (prefs.speakErrors) {
-			NSString *message = [NSString stringWithFormat:@"SiriX gặp lỗi: %@", error.localizedDescription];
-			return SXMutateCommand(command, message, source, className);
+		if ([SXDisplayPolicy shouldShowErrorBubbleInMode:prefs.mode speakErrors:prefs.speakErrors]) {
+			NSString *message = [NSString stringWithFormat:@"⚠️ SiriX gặp lỗi: %@", error.localizedDescription];
+			[SXDisplayPolicy logDecision:@"bubble lỗi" source:source];
+			return SXMutateCommand(command, message, message, source, className);
 		}
-		SXLogInf(@"resp", @"%@: AI lỗi (%@) — giữ câu trả lời gốc", source, error.localizedDescription);
+		SXLogInf(@"resp", @"%@: AI lỗi (%@) — giữ câu trả lời gốc (chính sách: thông minh, chưa bật báo lỗi)",
+				 source, error.localizedDescription);
 		return NO;
 	}
 
-	// Hết giờ chờ.
+	// Hết ngân sách chờ.
 	NSString *question = _question;
 	_consumed = YES;
 	[_condition unlock];
-	SXLogWrn(@"resp", @"%@: hết %.0f giây chờ AI (%@) — giữ câu trả lời gốc. Câu hỏi: “%@”. "
-			 @"Gợi ý: tăng “Thời gian chờ AI” trong Cài đặt hoặc đổi model nhanh hơn.",
-			 source, timeout, className, SXShort(question, 80));
+	NSString *timeoutMessage = [SXDisplayPolicy timeoutBubbleMessageInMode:prefs.mode
+																	 action:prefs.timeoutAction];
+	SXLogWrn(@"resp", @"%@: hết ngân sách %.0fs chờ AI (chặn ≤5s, ngân sách %.1fs) (%@) — %@. Câu hỏi: “%@”. "
+			 @"Gợi ý: tăng “Thời gian chờ AI” hoặc đổi model nhanh hơn.",
+			 source, timeout, waitBudget, className,
+			 timeoutMessage ? @"chèn bubble thông báo" : @"giữ câu trả lời gốc",
+			 SXShort(question, 80));
+	if (timeoutMessage) {
+		[SXDisplayPolicy logDecision:@"bubble hết giờ" source:source];
+		return SXMutateCommand(command, timeoutMessage, timeoutMessage, source, className);
+	}
 	return NO;
 }
 

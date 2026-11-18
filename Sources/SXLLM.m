@@ -1,8 +1,8 @@
 #import "SXLLM.h"
 #import "SXPrefs.h"
 #import "SXLog.h"
+#import "SXStream.h"
 
-static const NSInteger kSXMaxToolRounds = 4;
 static const NSTimeInterval kSXHTTPTimeout = 60;
 
 #pragma mark - HTTP
@@ -100,7 +100,6 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 	NSString *model = prefs.activeModel;
 	NSString *base = prefs.activeBaseURL;
 	NSString *url = [base hasSuffix:@"/chat/completions"] ? base : [base stringByAppendingString:@"/chat/completions"];
-
 	NSMutableArray *messages = [NSMutableArray array];
 	[messages addObject:@{@"role": @"system", @"content": prefs.systemPrompt}];
 	for (NSDictionary *turn in history) {
@@ -127,6 +126,7 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 	CFAbsoluteTime start = CFAbsoluteTimeGetCurrent();
 	NSInteger rounds = 0;
 	NSInteger lastStatus = 0;
+	BOOL forceNonStream = !prefs.streaming;
 
 	while (YES) {
 		NSMutableDictionary *body = [@{
@@ -135,6 +135,55 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 			@"temperature": @(prefs.temperature),
 		} mutableCopy];
 		if (toolsPayload.count) body[@"tools"] = toolsPayload;
+
+		// ---- Streaming (SSE): vòng đầu; nếu model trả tool_calls / rỗng / endpoint
+		// không hỗ trợ → chuyển non-stream cho vòng này và các vòng sau ----
+		if (!forceNonStream) {
+			NSMutableDictionary *streamBody = [body mutableCopy];
+			streamBody[@"stream"] = @YES;
+			NSError *streamError = nil;
+			NSDictionary *streamResp = [SXStream postJSON:streamBody
+													 toURL:url
+												   headers:@{@"Authorization":
+														[NSString stringWithFormat:@"Bearer %@", key]}
+													 format:SXStreamFormatOpenAI
+													  error:&streamError];
+			if (!streamResp) {
+				SXLogErr(@"llm", @"openai stream lỗi mạng: %@", streamError.localizedDescription);
+				completion(nil, streamError, SXInfo(@"openai", model, 0, rounds, start));
+				return;
+			}
+			NSInteger streamStatus = [streamResp[@"status"] integerValue];
+			if (streamStatus >= 200 && streamStatus < 300) {
+				if ([streamResp[@"sawToolCalls"] boolValue]) {
+					SXLogDbg(@"llm", @"stream báo tool_calls → non-stream vòng %ld", (long)(rounds + 1));
+					forceNonStream = YES;
+				} else {
+					NSString *streamed = [streamResp[@"content"] isKindOfClass:[NSString class]]
+						? streamResp[@"content"] : nil;
+					if (streamed.length) {
+						NSInteger ft = [streamResp[@"firstTokenMs"] integerValue];
+						NSDictionary *info = SXInfo(@"openai", model, streamStatus, rounds, start);
+						SXLogInf(@"llm", @"openai OK (stream) — first-token %ld ms · tổng %ld ms · %lu ký tự",
+								 (long)ft, (long)[info[@"ms"] integerValue], (unsigned long)streamed.length);
+						completion(streamed, nil, info);
+						return;
+					}
+					forceNonStream = YES; // stream “thành công” nhưng rỗng → thử non-stream
+				}
+			} else if (streamStatus == 400 || streamStatus == 405 || streamStatus == 501) {
+				SXLogWrn(@"llm", @"endpoint không hỗ trợ stream (HTTP %ld) → non-stream", (long)streamStatus);
+				forceNonStream = YES;
+			} else {
+				NSString *errorText = [streamResp[@"errorText"] isKindOfClass:[NSString class]]
+					? streamResp[@"errorText"] : nil;
+				NSData *errData = [errorText dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+				NSError *err = SXHTTPError(streamStatus, errData);
+				SXLogErr(@"llm", @"openai stream HTTP %ld: %@", (long)streamStatus, err.localizedDescription);
+				completion(nil, err, SXInfo(@"openai", model, streamStatus, rounds, start));
+				return;
+			}
+		}
 
 		NSError *postError = nil;
 		NSDictionary *resp = SXHTTPPost(url, body, @{
@@ -173,7 +222,7 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 		NSString *content = [choice[@"content"] isKindOfClass:[NSString class]] ? choice[@"content"] : nil;
 		id toolCalls = choice[@"tool_calls"];
 
-		if ([toolCalls isKindOfClass:[NSArray class]] && [toolCalls count] && executor && rounds < kSXMaxToolRounds) {
+		if ([toolCalls isKindOfClass:[NSArray class]] && [toolCalls count] && executor && rounds < prefs.maxToolRounds) {
 			rounds++;
 			NSMutableDictionary *assistantMsg = [@{@"role": @"assistant"} mutableCopy];
 			assistantMsg[@"content"] = content ?: [NSNull null];
@@ -250,6 +299,8 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 	if ([model hasPrefix:@"models/"]) model = [model substringFromIndex:7];
 	NSString *url = [NSString stringWithFormat:
 		@"https://generativelanguage.googleapis.com/v1beta/models/%@:generateContent", model];
+	NSString *streamURL = [NSString stringWithFormat:
+		@"https://generativelanguage.googleapis.com/v1beta/models/%@:streamGenerateContent?alt=sse", model];
 
 	NSMutableArray *contents = [NSMutableArray array];
 	for (NSDictionary *turn in history) {
@@ -267,6 +318,7 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 	CFAbsoluteTime start = CFAbsoluteTimeGetCurrent();
 	NSInteger rounds = 0;
 	NSInteger lastStatus = 0;
+	BOOL forceNonStream = !prefs.streaming;
 
 	while (YES) {
 		NSMutableDictionary *body = [@{
@@ -284,6 +336,51 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 				}];
 			}
 			body[@"tools"] = @{@"functionDeclarations": decls};
+		}
+
+		// ---- Streaming (SSE) — như nhánh OpenAI ----
+		if (!forceNonStream) {
+			NSError *streamError = nil;
+			NSDictionary *streamResp = [SXStream postJSON:body
+													 toURL:streamURL
+												   headers:@{@"x-goog-api-key": key}
+													 format:SXStreamFormatGemini
+													  error:&streamError];
+			if (!streamResp) {
+				SXLogErr(@"llm", @"gemini stream lỗi mạng: %@", streamError.localizedDescription);
+				completion(nil, streamError, SXInfo(@"gemini", model, 0, rounds, start));
+				return;
+			}
+			NSInteger streamStatus = [streamResp[@"status"] integerValue];
+			if (streamStatus >= 200 && streamStatus < 300) {
+				if ([streamResp[@"sawToolCalls"] boolValue]) {
+					SXLogDbg(@"llm", @"stream báo functionCall → non-stream vòng %ld", (long)(rounds + 1));
+					forceNonStream = YES;
+				} else {
+					NSString *streamed = [streamResp[@"content"] isKindOfClass:[NSString class]]
+						? streamResp[@"content"] : nil;
+					if (streamed.length) {
+						NSInteger ft = [streamResp[@"firstTokenMs"] integerValue];
+						NSDictionary *info = SXInfo(@"gemini", model, streamStatus, rounds, start);
+						SXLogInf(@"llm", @"gemini OK (stream) — first-token %ld ms · tổng %ld ms · %lu ký tự",
+								 (long)ft, (long)[info[@"ms"] integerValue], (unsigned long)streamed.length);
+						completion(streamed, nil, info);
+						return;
+					}
+					forceNonStream = YES;
+				}
+			} else if (streamStatus == 400 || streamStatus == 405 || streamStatus == 501) {
+				SXLogWrn(@"llm", @"gemini stream không khả dụng (HTTP %ld) → non-stream", (long)streamStatus);
+				forceNonStream = YES;
+			} else {
+				NSString *errorText = [streamResp[@"errorText"] isKindOfClass:[NSString class]]
+					? streamResp[@"errorText"] : nil;
+				NSData *errData = [errorText dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+				NSError *err = SXHTTPError(streamStatus, errData);
+				SXLogErr(@"llm", @"gemini stream HTTP %ld: %@", (long)streamStatus, err.localizedDescription);
+				completion(nil, err, SXInfo(@"gemini", model, streamStatus, rounds, start));
+				return;
+			}
 		}
 
 		NSError *postError = nil;
@@ -338,7 +435,7 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 			if ([part[@"functionCall"] isKindOfClass:[NSDictionary class]]) [functionCalls addObject:part[@"functionCall"]];
 		}
 
-		if (functionCalls.count && executor && rounds < kSXMaxToolRounds) {
+		if (functionCalls.count && executor && rounds < prefs.maxToolRounds) {
 			rounds++;
 			[contents addObject:@{@"role": @"model", @"parts": parts}];
 			for (NSDictionary *call in functionCalls) {

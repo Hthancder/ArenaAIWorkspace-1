@@ -6,58 +6,101 @@
 
 @interface SXPromptController ()
 @property (nonatomic, strong) UITextView *textView;
-@property (nonatomic, strong) UILabel *placeholderLabel;
+@property (nonatomic, strong) UISegmentedControl *segmentControl;
+@property (nonatomic, copy) NSString *rawEffective;  // prompt đang dùng (raw, chưa thay biến)
+@property (nonatomic, copy) NSString *savedSnapshot; // nội dung đã lưu — mốc tính “chưa lưu”
 @end
 
-@implementation SXPromptController
+@implementation SXPromptController {
+	NSInteger _lastSegmentIndex; // để phục hồi segmented khi hủy chuyển tab
+}
 
-#pragma mark - Vòng đời
+#pragma mark - Khung hình
+
+- (void)loadView {
+	[super loadView];
+	self.view.backgroundColor = UIColor.systemBackgroundColor;
+
+	SXPrefs *prefs = [SXPrefs shared];
+	[prefs reload];
+	self.rawEffective = prefs.customPrompt.length
+		? [prefs.customPrompt copy]
+		: SXDefaultSystemPrompt();
+	_lastSegmentIndex = 0;
+
+	// Ô tiêu đề: [Đang dùng | Mặc định]
+	self.segmentControl = [[UISegmentedControl alloc] initWithItems:@[@"Đang dùng", @"Mặc định"]];
+	self.segmentControl.selectedSegmentIndex = 0;
+	[self.segmentControl addTarget:self
+							action:@selector(sx_segmentChanged:)
+				  forControlEvents:UIControlEventValueChanged];
+	self.navigationItem.titleView = self.segmentControl;
+
+	// Quay lại: chevron trái, có cảnh báo khi nội dung chưa lưu (DESIGN-UI §4.2)
+	self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
+		initWithImage:[UIImage systemImageNamed:@"chevron.left"]
+				 style:UIBarButtonItemStylePlain
+				target:self
+				action:@selector(sx_backTapped)];
+
+	// Lưu: chỉ bật khi có chỉnh sửa
+	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
+		initWithTitle:@"Lưu"
+				style:UIBarButtonItemStyleDone
+			   target:self
+			   action:@selector(sx_save)];
+	self.navigationItem.rightBarButtonItem.enabled = NO;
+
+	// Ô soạn thảo
+	UITextView *textView = [[UITextView alloc] initWithFrame:self.view.bounds];
+	textView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+	textView.font = [UIFont monospacedSystemFontOfSize:15 weight:UIFontWeightRegular];
+	textView.delegate = self;
+	textView.text = self.rawEffective;
+	textView.backgroundColor = [UIColor secondarySystemBackgroundColor];
+	textView.layer.cornerRadius = 12.0;
+	textView.textContainerInset = UIEdgeInsetsMake(12, 12, 12, 12);
+	[self.view addSubview:textView];
+	self.textView = textView;
+	self.savedSnapshot = [self.rawEffective copy];
+
+	// Thanh công cụ trên bàn phím: chips + Khôi phục + Sao chép
+	UIToolbar *toolbar = [[UIToolbar alloc]
+		initWithFrame:CGRectMake(0, 0, self.view.bounds.size.width, 44)];
+	toolbar.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+	NSMutableArray<UIBarButtonItem *> *items = [NSMutableArray array];
+	NSArray<NSString *> *tokens = @[@"{date}", @"{device}", @"{lang}"];
+	[tokens enumerateObjectsUsingBlock:^(NSString *token, NSUInteger idx, BOOL *stop) {
+		UIBarButtonItem *item = [[UIBarButtonItem alloc] initWithTitle:token
+																 style:UIBarButtonItemStylePlain
+																target:self
+																action:@selector(sx_insertChip:)];
+		item.tag = (NSInteger)idx;
+		[items addObject:item];
+	}];
+	[items addObject:[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
+																  target:nil action:nil]];
+	[items addObject:[[UIBarButtonItem alloc] initWithTitle:@"Khôi phục mặc định"
+													 style:UIBarButtonItemStylePlain
+													target:self
+													action:@selector(sx_resetToDefault)]];
+	[items addObject:[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
+																  target:nil action:nil]];
+	[items addObject:[[UIBarButtonItem alloc] initWithTitle:@"Sao chép"
+													 style:UIBarButtonItemStylePlain
+													target:self
+													action:@selector(sx_copy)]];
+	toolbar.items = items;
+	textView.inputAccessoryView = toolbar;
+}
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = @"Prompt tùy chỉnh";
-	self.view.backgroundColor = UIColor.systemBackgroundColor;
-
-	self.navigationItem.rightBarButtonItems = @[
-		[[UIBarButtonItem alloc] initWithTitle:@"Lưu"
-										 style:UIBarButtonItemStyleDone
-										target:self
-										action:@selector(save:)],
-		[[UIBarButtonItem alloc] initWithTitle:@"Mặc định"
-										 style:UIBarButtonItemStylePlain
-										target:self
-										action:@selector(resetToDefault:)],
-	];
-
-	self.textView = [[UITextView alloc] initWithFrame:self.view.bounds];
-	self.textView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-	self.textView.font = [UIFont systemFontOfSize:15];
-	self.textView.textColor = UIColor.labelColor;
-	self.textView.backgroundColor = UIColor.clearColor;
-	self.textView.delegate = self;
-	self.textView.textContainerInset = UIEdgeInsetsMake(12, 10, 12, 10);
-	[self.view addSubview:self.textView];
-
-	self.placeholderLabel = [[UILabel alloc] initWithFrame:CGRectMake(14, 14, self.view.bounds.size.width - 28, 40)];
-	self.placeholderLabel.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-	self.placeholderLabel.numberOfLines = 2;
-	self.placeholderLabel.font = [UIFont systemFontOfSize:15];
-	self.placeholderLabel.textColor = UIColor.placeholderTextColor;
-	self.placeholderLabel.text = @"Để trống để dùng prompt mặc định của SiriX.\nPrompt hiện tại sẽ áp dụng cho mọi câu hỏi.";
-	[self.view addSubview:self.placeholderLabel];
-
-	NSString *current = [SXPrefs shared].customPrompt;
-	self.textView.text = current;
-	[self updatePlaceholder];
-
+	[self updateStatus];
 	[[NSNotificationCenter defaultCenter] addObserver:self
-											 selector:@selector(keyboardWillChange:)
+											 selector:@selector(sx_keyboardWillChange:)
 												 name:UIKeyboardWillChangeFrameNotification
 											   object:nil];
-}
-
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)viewDidAppear:(BOOL)animated {
@@ -65,46 +108,168 @@
 	[self.textView becomeFirstResponder];
 }
 
-#pragma mark - Placeholder
-
-- (void)updatePlaceholder {
-	self.placeholderLabel.hidden = self.textView.text.length > 0;
+- (void)dealloc {
+	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
+#pragma mark - Trạng thái
+
+- (BOOL)isDirty {
+	return ![self.textView.text isEqualToString:self.savedSnapshot];
+}
+
+- (void)updateStatus {
+	NSString *buffer = self.textView.text ?: @"";
+	BOOL dirty = [self isDirty];
+	BOOL isDefaultContent = (buffer.length == 0 ||
+							 [buffer isEqualToString:SXDefaultSystemPrompt()]);
+	if (dirty) {
+		self.navigationItem.prompt = [NSString stringWithFormat:
+			@"Đã sửa · chưa lưu (%lu ký tự)", (unsigned long)buffer.length];
+	} else if (isDefaultContent) {
+		self.navigationItem.prompt = @"Đang dùng: prompt mặc định của SiriX";
+	} else {
+		self.navigationItem.prompt = [NSString stringWithFormat:
+			@"Đang dùng: prompt tùy chỉnh (%lu ký tự)", (unsigned long)buffer.length];
+	}
+	self.navigationItem.rightBarButtonItem.enabled = dirty;
+}
+
+- (void)loadContent:(NSString *)content {
+	self.textView.text = content ?: @"";
+	self.savedSnapshot = [self.textView.text copy];
+	[self updateStatus];
+}
+
+#pragma mark - UITextViewDelegate
+
 - (void)textViewDidChange:(UITextView *)textView {
-	[self updatePlaceholder];
+	[self updateStatus];
+}
+
+#pragma mark - Hành động
+
+- (void)sx_insertChip:(UIBarButtonItem *)sender {
+	static NSArray<NSString *> *tokens;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		tokens = @[@"{date}", @"{device}", @"{lang}"];
+	});
+	if (sender.tag < 0 || sender.tag >= (NSInteger)tokens.count) return;
+	[self.textView insertText:tokens[sender.tag]];
+	[self updateStatus];
+}
+
+- (void)sx_segmentChanged:(UISegmentedControl *)sender {
+	NSInteger newIndex = sender.selectedSegmentIndex;
+	NSString *target = (newIndex == 0) ? self.rawEffective : SXDefaultSystemPrompt();
+
+	__weak typeof(self) weakSelf = self;
+	void (^apply)(void) = ^{
+		typeof(self) self_ = weakSelf;
+		if (!self_) return;
+		[self_ loadContent:target];
+		self_->_lastSegmentIndex = newIndex;
+	};
+
+	if ([self isDirty]) {
+		UIAlertController *alert = [UIAlertController
+			alertControllerWithTitle:@"Đã có thay đổi chưa lưu"
+							 message:@"Chuyển tab sẽ bỏ nội dung đang sửa."
+					  preferredStyle:UIAlertControllerStyleAlert];
+		[alert addAction:[UIAlertAction actionWithTitle:@"Bỏ thay đổi & chuyển"
+												 style:UIAlertActionStyleDestructive
+											   handler:^(UIAlertAction *action) { apply(); }]];
+		[alert addAction:[UIAlertAction actionWithTitle:@"Ở lại"
+												 style:UIAlertActionStyleCancel
+											   handler:^(UIAlertAction *action) {
+			typeof(self) self_ = weakSelf;
+			if (self_) self_.segmentControl.selectedSegmentIndex = self_->_lastSegmentIndex;
+		}]];
+		[self presentViewController:alert animated:YES completion:nil];
+	} else {
+		apply();
+	}
+}
+
+- (void)sx_save {
+	NSString *trimmed = [(self.textView.text ?: @"") stringByTrimmingCharactersInSet:
+						 [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+	BOOL asDefault = (trimmed.length == 0 ||
+					  [trimmed isEqualToString:SXDefaultSystemPrompt()]);
+	[SXPrefs setString:(asDefault ? nil : trimmed) forKey:@"customPrompt"];
+	notify_post("com.sirix.tweak/prefs.changed");
+	SXLogInf(@"pref", @"Lưu prompt — %@",
+			 asDefault ? @"xóa bản riêng, dùng mặc định"
+					   : [NSString stringWithFormat:@"%lu ký tự", (unsigned long)trimmed.length]);
+	[[SXPrefs shared] reload];
+	self.rawEffective = asDefault ? SXDefaultSystemPrompt() : trimmed;
+	[self loadContent:self.rawEffective];
+	[self.navigationController popViewControllerAnimated:YES];
+}
+
+- (void)sx_resetToDefault {
+	// Hành động xây dựng: không cần xác nhận.
+	[SXPrefs setString:nil forKey:@"customPrompt"];
+	notify_post("com.sirix.tweak/prefs.changed");
+	SXLogInf(@"pref", @"Khôi phục prompt mặc định — xóa bản tùy chỉnh");
+	[[SXPrefs shared] reload];
+	self.rawEffective = SXDefaultSystemPrompt();
+	self.segmentControl.selectedSegmentIndex = 0;
+	_lastSegmentIndex = 0;
+	[self loadContent:SXDefaultSystemPrompt()];
+	[self.textView becomeFirstResponder];
+}
+
+- (void)sx_copy {
+	[UIPasteboard generalPasteboard].string = self.textView.text ?: @"";
+	SXLogDbg(@"pref", @"sao chép prompt (%lu ký tự)",
+			 (unsigned long)(self.textView.text.length));
+	self.navigationItem.prompt = @"Đã sao chép ✓";
+	__weak typeof(self) weakSelf = self;
+	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.2 * NSEC_PER_SEC)),
+				   dispatch_get_main_queue(), ^{
+		[weakSelf updateStatus];
+	});
+}
+
+- (void)sx_backTapped {
+	if (![self isDirty]) {
+		[self.navigationController popViewControllerAnimated:YES];
+		return;
+	}
+	UIAlertController *alert = [UIAlertController
+		alertControllerWithTitle:@"Thoát mà chưa lưu?"
+						 message:@"Nội dung đang sửa sẽ bị mất."
+				  preferredStyle:UIAlertControllerStyleAlert];
+	__weak typeof(self) weakSelf = self;
+	[alert addAction:[UIAlertAction actionWithTitle:@"Thoát không lưu"
+											 style:UIAlertActionStyleDestructive
+										   handler:^(UIAlertAction *action) {
+		[weakSelf.navigationController popViewControllerAnimated:YES];
+	}]];
+	[alert addAction:[UIAlertAction actionWithTitle:@"Tiếp tục sửa"
+											 style:UIAlertActionStyleCancel
+										   handler:nil]];
+	[self presentViewController:alert animated:YES completion:nil];
 }
 
 #pragma mark - Bàn phím
 
-- (void)keyboardWillChange:(NSNotification *)notification {
-	CGRect endFrame = [notification.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
-	CGFloat overlap = MAX(0, self.view.bounds.size.height - endFrame.origin.y);
-	self.textView.contentInset = UIEdgeInsetsMake(0, 0, overlap, 0);
-	self.textView.scrollIndicatorInsets = self.textView.contentInset;
-}
+- (void)sx_keyboardWillChange:(NSNotification *)note {
+	NSDictionary *userInfo = note.userInfo;
+	CGRect endFrame = [userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
+	NSTimeInterval duration = [userInfo[UIKeyboardAnimationDurationUserInfoKey] doubleValue];
+	UIViewAnimationOptions curve = [userInfo[UIKeyboardAnimationCurveUserInfoKey] unsignedIntegerValue] << 16;
 
-#pragma mark - Lưu / đặt lại
+	CGRect converted = [self.view convertRect:endFrame fromView:nil];
+	CGFloat overlap = MAX(0, CGRectGetMaxY(self.view.bounds) - CGRectGetMinY(converted));
+	UIEdgeInsets insets = UIEdgeInsetsMake(0, 0, overlap, 0);
 
-- (void)save:(id)sender {
-	NSString *text = [self.textView.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-	if (text.length) {
-		CFPreferencesSetAppValue((__bridge CFStringRef)@"customPrompt",
-								 (__bridge CFStringRef)text,
-								 CFSTR("com.sirix.tweak"));
-	} else {
-		CFPreferencesSetAppValue((__bridge CFStringRef)@"customPrompt", NULL, CFSTR("com.sirix.tweak"));
-	}
-	CFPreferencesAppSynchronize(CFSTR("com.sirix.tweak"));
-	notify_post("com.sirix.tweak/prefs.changed");
-	SXLogInf(@"pref", @"đã lưu prompt tùy chỉnh (%lu ký tự)", (unsigned long)text.length);
-	[self.navigationController popViewControllerAnimated:YES];
-}
-
-- (void)resetToDefault:(id)sender {
-	self.textView.text = @"";
-	[self updatePlaceholder];
-	[self.textView becomeFirstResponder];
+	[UIView animateWithDuration:duration delay:0 options:curve animations:^{
+		self.textView.contentInset = insets;
+		self.textView.scrollIndicatorInsets = insets;
+	} completion:nil];
 }
 
 @end

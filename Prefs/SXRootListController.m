@@ -3,7 +3,6 @@
 #import "PSSpecifier.h"
 #import "SXLog.h"
 #import "SXPrefs.h"
-#import "SXLLM.h"
 #import <notify.h>
 #import <UIKit/UIKit.h>
 
@@ -58,24 +57,9 @@ static void SXExceptionHandler(NSException *exception) {
 			loaded = [NSMutableArray arrayWithObject:group];
 		}
 
-		NSString *activeProvider = [SXPrefs shared].provider == SXProviderGemini ? @"gemini" : @"openai";
-		NSMutableArray *filtered = [NSMutableArray arrayWithCapacity:loaded.count];
-		for (PSSpecifier *specifier in loaded) {
-			NSString *providerTag = nil;
-			@try {
-				providerTag = [specifier propertyForKey:@"provider"];
-			} @catch (NSException *exception) {
-				SXLogErr(@"pref", @"propertyForKey EXCEPTION: %@", exception.reason);
-			}
-			if ([providerTag isKindOfClass:[NSString class]] && providerTag.length &&
-				![providerTag isEqualToString:activeProvider]) {
-				continue;
-			}
-			[filtered addObject:specifier];
-		}
-		_specifiers = filtered;
-		SXLogInf(@"pref", @"bảng cài đặt sẵn sàng: %lu/%lu specifier (provider=%@)",
-				 (unsigned long)filtered.count, (unsigned long)loaded.count, activeProvider);
+		_specifiers = loaded;
+		SXLogInf(@"pref", @"bảng cài đặt sẵn sàng: %lu specifier",
+				 (unsigned long)loaded.count);
 	}
 	return _specifiers;
 }
@@ -196,46 +180,6 @@ static void SXExceptionHandler(NSException *exception) {
 }
 
 #pragma mark - Hành động
-
-- (void)sx_testConnection:(id)sender {
-	SXPrefs *prefs = [SXPrefs shared];
-	[prefs reload];
-	if (!prefs.activeAPIKey.length) {
-		[self showAlert:@"Chưa có khóa API"
-				message:@"Hãy chọn nhà cung cấp và dán khóa API trước khi kiểm tra."
-				   error:NO];
-		return;
-	}
-
-	UIAlertController *progress = [UIAlertController alertControllerWithTitle:@"Đang kiểm tra…"
-																	 message:@"Gửi một câu hỏi thử tới API đã cấu hình."
-															  preferredStyle:UIAlertControllerStyleAlert];
-	[self presentViewController:progress animated:YES completion:nil];
-
-	__weak SXRootListController *weakSelf = self;
-	[SXLLM askQuestion:@"Ping. Trả lời đúng một từ: pong"
-			   history:@[]
-				 tools:@[]
-			   executor:nil
-			completion:^(NSString *answer, NSError *error, NSDictionary *info) {
-		dispatch_async(dispatch_get_main_queue(), ^{
-			SXRootListController *strongSelf = weakSelf;
-			if (!strongSelf) return;
-			[progress dismissViewControllerAnimated:YES completion:^{
-				if (error) {
-					[strongSelf showAlert:@"✗ Thất bại" message:error.localizedDescription error:YES];
-				} else {
-					NSString *message = [NSString stringWithFormat:@"%@ / %@ — %ld ms\n\n“%@”",
-										 info[@"provider"] ?: @"?",
-										 info[@"model"] ?: @"?",
-										 (long)[info[@"ms"] integerValue],
-										 answer ?: @""];
-					[strongSelf showAlert:@"✓ Hoạt động" message:message error:NO];
-				}
-			}];
-		});
-	}];
-}
 
 - (void)sx_resetHistory:(id)sender {
 	notify_post("com.sirix.tweak/resetHistory");
