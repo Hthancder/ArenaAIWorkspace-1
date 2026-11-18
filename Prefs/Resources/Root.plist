@@ -28,7 +28,7 @@
 			<key>label</key>
 			<string>Bật tắt</string>
 			<key>footerText</key>
-			<string>Thông minh: AI trả lời câu hỏi tri thức, còn tác vụ (báo thức, gọi điện…) vẫn do Siri gốc. Thay thế mọi câu: AI trả lời mọi câu hỏi bạn nói với Siri.</string>
+			<string>Thông minh: Siri gốc xử lý tác vụ. Với cách kích hoạt bằng tiền tố, chỉ câu bắt đầu bằng @ai được gửi AI; @siri và câu không có tiền tố dùng Siri gốc.</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -69,6 +69,17 @@
 			<string>PSListItemsController</string>
 			<key>PostNotification</key>
 			<string>com.sirix.tweak/prefs.changed</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSLinkListCell</string>
+			<key>label</key><string>Cách kích hoạt</string>
+			<key>key</key><string>triggerMode</string>
+			<key>defaults</key><string>com.sirix.tweak</string>
+			<key>default</key><string>auto</string>
+			<key>validValues</key><array><string>auto</string><string>prefix</string></array>
+			<key>validTitles</key><array><string>Tự động</string><string>Tiền tố @ai</string></array>
+			<key>detail</key><string>PSListItemsController</string>
+			<key>PostNotification</key><string>com.sirix.tweak/prefs.changed</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -367,6 +378,16 @@
 			<string>Xóa lịch sử hội thoại</string>
 			<key>action</key>
 			<string>sx_resetHistory:</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSGroupCell</string>
+			<key>label</key><string>Trò chuyện thử</string>
+			<key>footerText</key><string>Thử nhà cung cấp đang chọn mà không cần mở Siri. Hội thoại thử chỉ tồn tại trong màn hình này.</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSLinkCell</string>
+			<key>label</key><string>Trò chuyện thử</string>
+			<key>detail</key><string>SXChatTestController</string>
 		</dict>
 		<dict>
 			<key>cell</key>

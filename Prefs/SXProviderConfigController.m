@@ -44,7 +44,10 @@
 	[self.view endEditing:YES];
 	SXPrefs *prefs = [SXPrefs shared];
 	[prefs reload];
-	if (!prefs.activeAPIKey.length) {
+	NSString *plistName = [[self specifier] propertyForKey:@"configPlist"];
+	SXProvider provider = [plistName isEqualToString:@"ProviderGemini"] ? SXProviderGemini : SXProviderOpenAI;
+	NSString *key = provider == SXProviderGemini ? prefs.geminiKey : prefs.openaiKey;
+	if (![[key stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet] length]) {
 		[self showAlert:@"Chưa có khóa API"
 				message:@"Hãy dán khóa API trước khi kiểm tra."
 				   error:NO];
@@ -60,10 +63,12 @@
 	[self presentViewController:progress animated:YES completion:nil];
 
 	__weak SXProviderConfigController *weakSelf = self;
+	dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
 	[SXLLM askQuestion:@"Ping. Trả lời đúng một từ: pong"
 			   history:@[]
 				 tools:@[]
 			   executor:nil
+			   provider:provider
 			completion:^(NSString *answer, NSError *error, NSDictionary *info) {
 		dispatch_async(dispatch_get_main_queue(), ^{
 			SXProviderConfigController *strongSelf = weakSelf;
@@ -82,6 +87,7 @@
 			}];
 		});
 	}];
+	});
 }
 
 - (void)showAlert:(NSString *)title message:(NSString *)message error:(BOOL)isError {

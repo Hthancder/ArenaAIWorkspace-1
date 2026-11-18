@@ -1,0 +1,190 @@
+// Chạy trên macOS Foundation: kiểm thử SXIntercept thật với ACE/LLM giả.
+#import <Foundation/Foundation.h>
+#import "SXIntercept.h"
+#import "SXPrefs.h"
+#import "SXLLM.h"
+#import "SXTools.h"
+#import "SXLog.h"
+#import "SXMarkdown.h"
+#include <assert.h>
+
+static SXLLMCompletion pendingCompletion;
+static dispatch_semaphore_t requestStarted;
+static SXReplyMode testMode = SXReplyModeFull;
+static NSString *testTimeoutAction = @"bubble";
+static NSString *testTriggerMode = @"auto";
+static NSString *lastQuestion;
+
+@implementation SXPrefs
++ (instancetype)shared { static SXPrefs *p; static dispatch_once_t once; dispatch_once(&once, ^{ p = [SXPrefs new]; }); return p; }
+- (BOOL)enabled { return YES; }
+- (NSString *)triggerMode { return testTriggerMode; }
+- (SXReplyMode)mode { return testMode; }
+- (NSTimeInterval)responseTimeout { return 2; }
+- (BOOL)markdown { return NO; }
+- (BOOL)hideWebCards { return YES; }
+- (BOOL)speakErrors { return NO; }
+- (NSString *)timeoutAction { return testTimeoutAction; }
+- (NSInteger)contextTurns { return 8; }
+@end
+@implementation SXLLM
++ (void)askQuestion:(NSString *)question history:(NSArray *)history tools:(NSArray *)tools executor:(SXToolExec)executor completion:(SXLLMCompletion)completion {
+	lastQuestion = [question copy]; (void)history; (void)tools; (void)executor;
+	pendingCompletion = [completion copy];
+	dispatch_semaphore_signal(requestStarted);
+}
+@end
+@implementation SXTools
++ (NSArray *)definitions { return @[]; }
++ (NSDictionary *)execute:(NSString *)name arguments:(NSDictionary *)arguments error:(NSError **)error {
+	(void)name; (void)arguments; (void)error; return nil;
+}
+@end
+NSString *SXMarkdownRender(NSString *text) { return text; }
+void SXLogWrite(SXLogLevel level, NSString *category, NSString *format, ...) { (void)level; (void)category; (void)format; }
+
+@interface FakeView : NSObject
+@property (nonatomic, copy) NSString *text;
+@property (nonatomic, copy) NSString *speakableText;
+@end
+@implementation FakeView
+@end
+@interface FailingView : FakeView
+@end
+@implementation FailingView
+- (void)setText:(NSString *)text {
+	[super setText:text];
+	if ([text isEqualToString:@"throws"]) [NSException raise:@"test" format:@"setter failed"];
+}
+@end
+@interface FakeAddViews : NSObject
+@property (nonatomic, copy) NSArray *views;
+@end
+@implementation FakeAddViews
+@end
+@interface FakeSayIt : NSObject
+@property (nonatomic, copy) NSString *message;
+@end
+@implementation FakeSayIt
+@end
+@interface FakeAlarm : NSObject
+@end
+@implementation FakeAlarm
+@end
+
+static void begin(NSString *question) {
+	[[SXIntercept shared] noteQuestion:question source:@"test"];
+	assert(dispatch_semaphore_wait(requestStarted, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) == 0);
+}
+static FakeAddViews *viewCommand(void) {
+	FakeView *view = [FakeView new]; view.text = @"Siri gốc"; view.speakableText = @"Siri gốc";
+	FakeAddViews *command = [FakeAddViews new]; command.views = @[view]; return command;
+}
+static FakeSayIt *sayCommand(void) {
+	FakeSayIt *command = [FakeSayIt new]; command.message = @"Siri gốc"; return command;
+}
+int main(void) {
+	@autoreleasepool {
+		requestStarted = dispatch_semaphore_create(0);
+		SXIntercept *intercept = [SXIntercept shared];
+
+		begin(@"question one");
+		pendingCompletion(@"AI answer", nil, nil);
+		FakeAddViews *views = viewCommand();
+		assert([intercept handleIncomingCommand:views]);
+		assert([((FakeView *)views.views[0]).text isEqualToString:@"AI answer"]);
+		assert([intercept handleAddViewsInsertion:views]); // cùng object qua cả hai hook
+		assert(views.views.count == 1);
+		FakeSayIt *say = sayCommand();
+		assert([intercept handleIncomingCommand:say]);
+		assert([say.message isEqualToString:@"AI answer"]);
+		FakeAddViews *next = viewCommand();
+		assert([intercept handleIncomingCommand:next]);
+		assert([((FakeView *)next.views[0]).text isEqualToString:@"AI answer"]);
+
+		// Lệnh không sửa được không được chặn lệnh tiếp theo thử lại.
+		begin(@"question two");
+		pendingCompletion(@"second answer", nil, nil);
+		assert(![intercept handleIncomingCommand:[FakeAddViews new]]);
+		say = sayCommand();
+		assert([intercept handleIncomingCommand:say]);
+		assert([say.message isEqualToString:@"second answer"]);
+
+		// Setter hỏng sau khi ghi: rollback cả text lẫn speakableText.
+		begin(@"question rollback");
+		pendingCompletion(@"throws", nil, nil);
+		FailingView *broken = [FailingView new]; broken.text = @"old"; broken.speakableText = @"old voice";
+		views = [FakeAddViews new]; views.views = @[broken];
+		assert(![intercept handleIncomingCommand:views]);
+		assert([broken.text isEqualToString:@"old"] && [broken.speakableText isEqualToString:@"old voice"]);
+		say = sayCommand(); assert([intercept handleIncomingCommand:say]);
+		assert([say.message isEqualToString:@"throws"]);
+
+		// Đáp án cũ không được ghi đè khi câu hỏi mới đã bắt đầu.
+		begin(@"question stale");
+		SXLLMCompletion stale = pendingCompletion;
+		begin(@"question fresh");
+		stale(@"stale answer", nil, nil);
+		pendingCompletion(@"fresh answer", nil, nil);
+		say = sayCommand(); assert([intercept handleIncomingCommand:say]);
+		assert([say.message isEqualToString:@"fresh answer"]);
+
+		// Lỗi và timeout bubble cũng phải nhất quán giữa AddViews và SayIt.
+		begin(@"question error");
+		pendingCompletion(nil, [NSError errorWithDomain:@"test" code:1 userInfo:@{NSLocalizedDescriptionKey:@"lỗi thử"}], nil);
+		views = viewCommand(); assert([intercept handleIncomingCommand:views]);
+		say = sayCommand(); assert([intercept handleIncomingCommand:say]);
+		assert([say.message containsString:@"lỗi thử"]);
+		begin(@"question timeout");
+		views = viewCommand(); assert([intercept handleIncomingCommand:views]);
+		say = sayCommand(); assert([intercept handleIncomingCommand:say]);
+		assert([say.message containsString:@"quá muộn"]);
+		pendingCompletion(@"late answer", nil, nil);
+		say = sayCommand(); assert([intercept handleIncomingCommand:say]);
+		assert([say.message containsString:@"quá muộn"]);
+
+		// Tùy chọn keep và chế độ thông minh chủ động giữ phản hồi Siri khi hết giờ.
+		testTimeoutAction = @"keep";
+		begin(@"question keep");
+		say = sayCommand(); assert(![intercept handleIncomingCommand:say]);
+		assert([say.message isEqualToString:@"Siri gốc"]);
+		testTimeoutAction = @"bubble";
+		testMode = SXReplyModeSmart;
+		begin(@"question smart error");
+		pendingCompletion(nil, [NSError errorWithDomain:@"test" code:1 userInfo:nil], nil);
+		say = sayCommand(); assert(![intercept handleIncomingCommand:say]);
+		assert([say.message isEqualToString:@"Siri gốc"]);
+		testMode = SXReplyModeFull;
+
+		// Tiền tố: loại khỏi câu gửi AI; không tiền tố hủy đáp án cũ.
+		testTriggerMode = @"prefix";
+		begin(@"@AI hello prefix");
+		assert([lastQuestion isEqualToString:@"hello prefix"]);
+		pendingCompletion(@"prefix answer", nil, nil);
+		say = sayCommand(); assert([intercept handleIncomingCommand:say]);
+		[intercept noteQuestion:@"@siri ordinary request" source:@"test"];
+		say = sayCommand(); assert(![intercept handleIncomingCommand:say]);
+		assert(dispatch_semaphore_wait(requestStarted, dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC)) != 0);
+		[intercept noteQuestion:@"@aim not a prefix" source:@"test"];
+		assert(dispatch_semaphore_wait(requestStarted, dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC)) != 0);
+		testTriggerMode = @"auto";
+
+		// Tác vụ tới trong lúc chờ: full cũng phải giữ Siri gốc.
+		begin(@"question action");
+		dispatch_semaphore_t done = dispatch_semaphore_create(0);
+		FakeSayIt *actionSay = sayCommand();
+		__block BOOL changed = YES;
+		dispatch_async(dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
+			changed = [intercept handleIncomingCommand:actionSay];
+			dispatch_semaphore_signal(done);
+		});
+		[NSThread sleepForTimeInterval:0.1];
+		assert(![intercept handleIncomingCommand:[FakeAlarm new]]);
+		assert(dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC)) == 0);
+		assert(!changed && [actionSay.message isEqualToString:@"Siri gốc"]);
+		pendingCompletion(@"unused", nil, nil);
+		say = sayCommand(); assert(![intercept handleIncomingCommand:say]);
+		puts("intercept regression tests: OK");
+	}
+	return 0;
+}

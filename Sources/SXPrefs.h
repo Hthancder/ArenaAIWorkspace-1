@@ -27,6 +27,7 @@ FOUNDATION_EXPORT NSString *SXDefaultSystemPrompt(void);
 @property (nonatomic, readonly) BOOL enabled;
 @property (nonatomic, readonly) SXReplyMode mode;
 @property (nonatomic, readonly) SXProvider provider;
+@property (nonatomic, readonly, copy) NSString *triggerMode; // auto | prefix
 @property (nonatomic, readonly, copy) NSString *openaiKey;
 @property (nonatomic, readonly, copy) NSString *openaiBase;
 @property (nonatomic, readonly, copy) NSString *openaiModel;

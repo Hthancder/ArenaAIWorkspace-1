@@ -115,19 +115,24 @@ static void SXCapture(NSString *raw, NSString *source) {
 
 #pragma mark - Hook: hội thoại
 
-%group AFConvHooks
+%group AFConvCaptureHook
 %hook AFConversation
 
 - (void)addItemForSpeechRecognizedCommand:(id)command {
-	%orig;
 	NSString *text = SXUtteranceFromRecognized(command);
 	if (text) {
 		[[SXIntercept shared] noteQuestion:text source:@"AFConversation.addItemForSpeechRecognizedCommand"];
 	} else {
 		SXLogDbg(@"capture", @"AFConversation.addItemForSpeechRecognizedCommand: không trích được văn bản");
 	}
+	%orig;
 }
 
+%end
+%end
+
+%group AFConvViewsHook
+%hook AFConversation
 - (void)addItemsForAddViewsCommand:(id)command {
 	[[SXIntercept shared] handleAddViewsInsertion:command];
 	%orig;
@@ -138,7 +143,7 @@ static void SXCapture(NSString *raw, NSString *source) {
 
 #pragma mark - Hook: kết nối Assistant
 
-%group AFConnHooks
+%group AFConnCommandHook
 %hook AFConnection
 
 - (void)_handleCommand:(id)command reply:(id)reply {
@@ -146,19 +151,34 @@ static void SXCapture(NSString *raw, NSString *source) {
 	%orig;
 }
 
+%end
+%end
+
+%group AFConnSpeechHook
+%hook AFConnection
 - (void)_tellSpeechDelegateSpeechRecognized:(id)result {
-	%orig;
 	NSString *text = SXUtteranceFromRecognized(result);
 	if (text) {
 		[[SXIntercept shared] noteQuestion:text source:@"AFConnection._tellSpeechDelegateSpeechRecognized:"];
 	}
+	%orig;
 }
 
+%end
+%end
+
+%group AFConnTextHook
+%hook AFConnection
 - (void)startRequestWithText:(NSString *)text {
 	SXCapture(text, @"AFConnection.startRequestWithText (Type-to-Siri)");
 	%orig;
 }
 
+%end
+%end
+
+%group AFConnRequestHook
+%hook AFConnection
 - (void)_requestWillBeginWithRequestClass:(id)requestClass
 						  isSpeechRequest:(BOOL)isSpeech
 					 speechRequestOptions:(id)options
@@ -169,6 +189,11 @@ static void SXCapture(NSString *raw, NSString *source) {
 	%orig;
 }
 
+%end
+%end
+
+%group AFConnBackgroundRequestHook
+%hook AFConnection
 - (void)_requestWillBeginWithRequestClass:(id)requestClass
 						  isSpeechRequest:(BOOL)isSpeech
 					 speechRequestOptions:(id)options
@@ -185,12 +210,11 @@ static void SXCapture(NSString *raw, NSString *source) {
 
 #pragma mark - Khởi động
 
-static void SXLogHookStatus(NSString *className, Class cls, NSArray<NSString *> *selectors) {
-	for (NSString *selectorName in selectors) {
-		BOOL exists = class_getInstanceMethod(cls, NSSelectorFromString(selectorName)) != NULL;
-		SXLogInf(@"hook", @"%@ %@: %@", className, selectorName,
-				 exists ? @"tìm thấy, đã cài ✓" : @"KHÔNG tìm thấy — hook sẽ không kích hoạt");
-	}
+static BOOL SXCanHook(NSString *className, Class cls, NSString *selectorName) {
+	BOOL exists = cls && class_getInstanceMethod(cls, NSSelectorFromString(selectorName)) != NULL;
+	SXLogInf(@"hook", @"%@ %@: %@", className, selectorName,
+			 exists ? @"tìm thấy — cài hook" : @"KHÔNG tìm thấy — bỏ qua hook");
+	return exists;
 }
 
 %ctor {
@@ -223,27 +247,15 @@ static void SXLogHookStatus(NSString *className, Class cls, NSArray<NSString *> 
 		}
 
 		Class conversation = objc_getClass("AFConversation");
-		if (conversation) {
-			SXLogHookStatus(@"AFConversation", conversation, @[
-				@"addItemForSpeechRecognizedCommand:",
-				@"addItemsForAddViewsCommand:",
-			]);
-			%init(AFConvHooks);
-		} else {
-			SXLogWrn(@"hook", @"Không tìm thấy lớp AFConversation — bắt câu hỏi sẽ yếu đi");
-		}
+		if (SXCanHook(@"AFConversation", conversation, @"addItemForSpeechRecognizedCommand:")) %init(AFConvCaptureHook);
+		if (SXCanHook(@"AFConversation", conversation, @"addItemsForAddViewsCommand:")) %init(AFConvViewsHook);
 
 		Class connection = objc_getClass("AFConnection");
-		if (connection) {
-			SXLogHookStatus(@"AFConnection", connection, @[
-				@"_handleCommand:reply:",
-				@"_tellSpeechDelegateSpeechRecognized:",
-				@"startRequestWithText:",
-			]);
-			%init(AFConnHooks);
-		} else {
-			SXLogWrn(@"hook", @"Không tìm thấy lớp AFConnection — không thể thay thế câu trả lời");
-		}
+		if (SXCanHook(@"AFConnection", connection, @"_handleCommand:reply:")) %init(AFConnCommandHook);
+		if (SXCanHook(@"AFConnection", connection, @"_tellSpeechDelegateSpeechRecognized:")) %init(AFConnSpeechHook);
+		if (SXCanHook(@"AFConnection", connection, @"startRequestWithText:")) %init(AFConnTextHook);
+		if (SXCanHook(@"AFConnection", connection, @"_requestWillBeginWithRequestClass:isSpeechRequest:speechRequestOptions:requestInfo:analyticsEventProvider:")) %init(AFConnRequestHook);
+		if (SXCanHook(@"AFConnection", connection, @"_requestWillBeginWithRequestClass:isSpeechRequest:speechRequestOptions:requestInfo:isBackgroundRequest:analyticsEventProvider:")) %init(AFConnBackgroundRequestHook);
 
 		SXLogInf(@"boot", @"SiriX %@ sẵn sàng (scheme=%s) — chế độ=%@ provider=%@",
 				 SX_VERSION, SX_SCHEME,

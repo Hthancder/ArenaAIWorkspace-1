@@ -1,5 +1,6 @@
 #import <Foundation/Foundation.h>
 #import "SXTools.h"
+#import "SXPrefs.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -16,6 +17,14 @@ typedef void (^SXLLMCompletion)(NSString * _Nullable answer,
 			  tools:(NSArray<NSDictionary *> *)toolDefs
 			executor:(nullable SXToolExec)executor
 		 completion:(SXLLMCompletion)completion;
+
+/// Kiểm tra một provider cụ thể mà không thay đổi lựa chọn toàn cục.
++ (void)askQuestion:(NSString *)question
+            history:(NSArray<NSDictionary *> *)history
+              tools:(NSArray<NSDictionary *> *)toolDefs
+           executor:(nullable SXToolExec)executor
+           provider:(SXProvider)provider
+         completion:(SXLLMCompletion)completion;
 
 @end
 

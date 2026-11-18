@@ -6,10 +6,12 @@ SiriXPreferences_FILES = \
 	SXRootListController.m \
 	SXLogViewController.m \
 	SXPromptController.m \
+	SXChatTestController.m \
 	../Sources/SXLog.m \
 	../Sources/SXPrefs.m \
 	../Sources/SXLLM.m \
 	../Sources/SXStream.m \
+	../Sources/SXMarkdown.m \
 	../Sources/SXTools.m \
 	SXProviderConfigController.m
 

@@ -1,4 +1,5 @@
 #import "SXLog.h"
+#import "SXLogFile.h"
 #import <os/log.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -7,7 +8,6 @@
 #include <string.h>
 #include <stdio.h>
 
-static int gFd = -1;
 static volatile BOOL gVerbose = YES;
 static os_log_t gOsLog = nil;
 static NSString *gProc = @"unknown";
@@ -40,7 +40,7 @@ static os_log_type_t SXOsLogLevel(SXLogLevel level) {
 	return OS_LOG_TYPE_INFO;
 }
 
-static void SXOpenLogFile(void) {
+static void SXPrepareLogFile(void) {
 	NSString *dir = @"/var/mobile/Library/Logs";
 	[[NSFileManager defaultManager] createDirectoryAtPath:dir
 						  withIntermediateDirectories:YES
@@ -53,21 +53,22 @@ static void SXOpenLogFile(void) {
 		[[NSFileManager defaultManager] removeItemAtPath:old error:NULL];
 		[[NSFileManager defaultManager] moveItemAtPath:path toPath:old error:NULL];
 	}
-	gFd = open(path.fileSystemRepresentation, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
 }
 
 void SXLogInit(void) {
-	if (gFd >= 0) return;
-	SXOpenLogFile();
-	gOsLog = os_log_create("com.sirix.tweak", "sirix");
-	const char *pn = getprogname();
-	gProc = pn ? [NSString stringWithUTF8String:pn] : @"unknown";
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		SXPrepareLogFile();
+		gOsLog = os_log_create("com.sirix.tweak", "sirix");
+		const char *pn = getprogname();
+		gProc = pn ? [NSString stringWithUTF8String:pn] : @"unknown";
 #ifndef SX_SCHEME
 #define SX_SCHEME "unknown"
 #endif
-	SXLogWrite(SXLogLevelInfo, @"boot",
-			   @"===== SiriX %@ khởi động — process=%@ scheme=%s build=%s =====",
-			   SX_VERSION, gProc, SX_SCHEME, __DATE__ " " __TIME__);
+		SXLogWrite(SXLogLevelInfo, @"boot",
+				   @"===== SiriX %@ khởi động — process=%@ scheme=%s build=%s =====",
+				   SX_VERSION, gProc, SX_SCHEME, __DATE__ " " __TIME__);
+	});
 }
 
 void SXLogWrite(SXLogLevel level, NSString *category, NSString *format, ...) {
@@ -94,13 +95,11 @@ void SXLogWrite(SXLogLevel level, NSString *category, NSString *format, ...) {
 					  gProc.UTF8String ?: "?",
 					  msg];
 
-	if (gFd >= 0) {
-		const char *bytes = line.UTF8String;
-		if (bytes) {
-			// Một lần write duy nhất với O_APPEND: các process ghi xen kẽ không cắt dòng.
-			write(gFd, bytes, strlen(bytes));
-		}
-	}
+	// Mở theo đường dẫn cho từng dòng: xóa/đổi tên/xoay vòng trong process khác
+	// không khiến descriptor tiếp tục ghi vào inode đã bị tách khỏi SiriX.log.
+	const char *bytes = line.UTF8String;
+	if (bytes) (void)SXLogFileAppend(SXLogFilePath().fileSystemRepresentation, bytes, strlen(bytes));
+
 	if (gOsLog) {
 		os_log_with_type(gOsLog, SXOsLogLevel(level), "%{public}@", line);
 	}

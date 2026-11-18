@@ -13,6 +13,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  regression:
+    name: Regression tests
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test log file operations
+        run: ./scripts/test-log-file.sh
+      - name: Test response interception
+        run: ./scripts/test-intercept-macos.sh
+
   build:
     name: ${{ matrix.scheme }}
     runs-on: macos-15

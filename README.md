@@ -49,7 +49,7 @@ Khi có gì đó chưa đúng (Siri không trả lời bằng AI, trả lời ch
 
 Log ghi mọi bước: hook nào đã cài / thiếu, câu hỏi bắt được từ đâu, lệnh ACE nào đến, quyết định thay thế hay cho qua, request AI (URL, model, số message — **không bao giờ ghi khóa API đầy đủ**), thời gian chờ, lỗi chi tiết. Nhờ log đó mình sẽ chỉnh đúng chỗ thay vì đoán.
 
-Log nằm tại: `/var/mobile/Library/Logs/SiriX.log` (tự xoay vòng ở 512 KB, có `.old`).
+Log nằm tại: `/var/mobile/Library/Logs/SiriX.log` (kiểm tra xoay vòng khi tiến trình khởi động nếu vượt 512 KB, có `.old`). Xóa log cũng xóa bản `.old`; các dòng mới tiếp tục được ghi mà không cần respring. Log có thể chứa nội dung câu hỏi và URL: hãy kiểm tra thông tin riêng tư trước khi chia sẻ.
 
 ## Cách hoạt động (ngắn gọn)
 
@@ -68,8 +68,9 @@ Siri gốc trả lời ──► AFConnection._handleCommand:reply:             
    Siri phát giọng nói / hiển thị câu trả lời AI — giao diện gốc, không đổi.
 ```
 
-- Mọi hook đều **bọc kiểm tra runtime**: thiếu class/selector là bỏ qua và ghi log, không crash.
-- Mọi đường lỗi đều **fail-safe về Siri gốc** — SiriX hỏng thì Siri vẫn chạy bình thường.
+- Mỗi hook được kiểm tra class/selector lúc khởi động; selector không có sẽ được bỏ qua và ghi log. Các API Siri là API riêng của Apple nên cần xác minh trên từng thiết bị.
+- Trong một lượt, AddViews và SayIt dùng cùng quyết định AI/lỗi/hết giờ; tác vụ hệ thống được ưu tiên khi đã nhận diện. Nếu không sửa được lệnh hoặc thiếu hook, Siri gốc vẫn có thể xuất hiện.
+- Chế độ thay thế mặc định hiển thị thông báo khi hết giờ; tùy chọn **giữ Siri gốc** vẫn cố ý cho phản hồi gốc đi qua. Chờ trên luồng ACE tối đa 5 giây; đáp án đến sau khi đã quyết định hết giờ không tự hiện lại.
 
 ## Build cục bộ (tùy chọn)
 
@@ -83,7 +84,10 @@ git clone --depth 1 --filter=blob:none --sparse https://github.com/theos/sdks /t
 cd /tmp/sdks && git sparse-checkout set iPhoneOS15.6.sdk
 
 ./scripts/local-check.sh    # Logos → compile toàn bộ (aarch64-ios, -Werror) → validate plist
+./scripts/test-log-file.sh  # regression xóa/xoay vòng log (Linux/macOS)
 ```
+
+Trên macOS, `./scripts/test-intercept-macos.sh` chạy thêm regression của state machine với ACE/LLM giả. CI chạy cả hai bộ test. Chúng không thay thế việc thử Siri trên thiết bị thật.
 
 Build deb thật (cần macOS/theos): `make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless|roothide`.
 

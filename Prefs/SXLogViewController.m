@@ -1,6 +1,11 @@
 #import "SXLogViewController.h"
 #import "SXLog.h"
+#import "SXLogFile.h"
 #import <UIKit/UIKit.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
 
 @interface SXLogViewController ()
 @property (nonatomic, strong) UITextView *textView;
@@ -50,6 +55,12 @@
 	[self.view addSubview:self.emptyLabel];
 
 	[self reloadLogAnimated:NO];
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+	[super viewWillAppear:animated];
+	[self reloadLogAnimated:NO];
+	[self.refreshTimer invalidate];
 	self.refreshTimer = [NSTimer scheduledTimerWithTimeInterval:2.0
 														 target:self
 													   selector:@selector(timerTick)
@@ -186,7 +197,24 @@
 	[alert addAction:[UIAlertAction actionWithTitle:@"Xóa"
 											  style:UIAlertActionStyleDestructive
 											handler:^(UIAlertAction *action) {
-		[[NSFileManager defaultManager] removeItemAtPath:SXLogFilePath() error:NULL];
+		// Truncate tại chỗ, không unlink: process đang ghi không bị mất đường dẫn.
+		if (SXLogFileClear(SXLogFilePath().fileSystemRepresentation) < 0) {
+			NSString *reason = [NSString stringWithUTF8String:strerror(errno)];
+			UIAlertController *failure = [UIAlertController alertControllerWithTitle:@"Không thể xóa log"
+				message:reason preferredStyle:UIAlertControllerStyleAlert];
+			[failure addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+			[weakSelf presentViewController:failure animated:YES completion:nil];
+			return;
+		}
+		NSError *oldError = nil;
+		NSString *oldPath = [SXLogFilePath() stringByAppendingString:@".old"];
+		if ([[NSFileManager defaultManager] fileExistsAtPath:oldPath] &&
+			![[NSFileManager defaultManager] removeItemAtPath:oldPath error:&oldError]) {
+			UIAlertController *failure = [UIAlertController alertControllerWithTitle:@"Không thể xóa log cũ"
+				message:oldError.localizedDescription preferredStyle:UIAlertControllerStyleAlert];
+			[failure addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+			[weakSelf presentViewController:failure animated:YES completion:nil];
+		}
 		[weakSelf reloadLogAnimated:NO];
 	}]];
 	[alert addAction:[UIAlertAction actionWithTitle:@"Hủy"

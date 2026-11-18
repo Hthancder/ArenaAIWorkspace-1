@@ -96,8 +96,9 @@ static NSError *SXErr(NSInteger code, NSString *message) {
 static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary *> *history,
 						NSArray<NSDictionary *> *toolDefs, SXToolExec executor,
 						SXLLMCompletion completion) {
-	NSString *key = prefs.activeAPIKey;
-	NSString *model = prefs.activeModel;
+	NSString *key = [prefs.openaiKey stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+	NSString *model = [prefs.openaiModel stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+	if (!model.length) model = @"gpt-4o-mini";
 	NSString *base = prefs.activeBaseURL;
 	NSString *url = [base hasSuffix:@"/chat/completions"] ? base : [base stringByAppendingString:@"/chat/completions"];
 	NSMutableArray *messages = [NSMutableArray array];
@@ -296,8 +297,9 @@ static id SXGeminiSchema(id node) {
 static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary *> *history,
 						NSArray<NSDictionary *> *toolDefs, SXToolExec executor,
 						SXLLMCompletion completion) {
-	NSString *key = prefs.activeAPIKey;
-	NSString *model = prefs.activeModel;
+	NSString *key = [prefs.geminiKey stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+	NSString *model = [prefs.geminiModel stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+	if (!model.length) model = @"gemini-2.0-flash";
 	if ([model hasPrefix:@"models/"]) model = [model substringFromIndex:7];
 	NSString *url = [NSString stringWithFormat:
 		@"https://generativelanguage.googleapis.com/v1beta/models/%@:generateContent", model];
@@ -483,9 +485,19 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 			  tools:(NSArray<NSDictionary *> *)tools
 			executor:(SXToolExec)executor
 		 completion:(SXLLMCompletion)completion {
+	[self askQuestion:question history:history tools:tools executor:executor
+			 provider:[SXPrefs shared].provider completion:completion];
+}
+
++ (void)askQuestion:(NSString *)question
+            history:(NSArray<NSDictionary *> *)history
+              tools:(NSArray<NSDictionary *> *)tools
+           executor:(SXToolExec)executor
+           provider:(SXProvider)provider
+         completion:(SXLLMCompletion)completion {
 	SXPrefs *prefs = [SXPrefs shared];
-	SXProvider provider = prefs.provider;
-	NSString *key = prefs.activeAPIKey;
+	NSString *key = [(provider == SXProviderGemini ? prefs.geminiKey : prefs.openaiKey)
+		stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
 
 	if (!key.length) {
 		NSString *providerName = provider == SXProviderGemini ? @"Gemini" : @"OpenAI tương thích";

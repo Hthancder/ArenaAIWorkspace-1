@@ -94,6 +94,7 @@ static double SXClamp(double v, double lo, double hi) {
 	_enabled = [self boolFor:@"enabled" default:YES];
 	_mode = [[self stringFor:@"mode" default:@"smart"] isEqualToString:@"full"]
 		? SXReplyModeFull : SXReplyModeSmart;
+	_triggerMode = [[self stringFor:@"triggerMode" default:@"auto"] isEqualToString:@"prefix"] ? @"prefix" : @"auto";
 	_provider = [[self stringFor:@"provider" default:@"openai"] isEqualToString:@"gemini"]
 		? SXProviderGemini : SXProviderOpenAI;
 
