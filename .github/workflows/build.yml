@@ -112,9 +112,13 @@ jobs:
 
             DYLIB=$(find "$STAGE" -name 'SiriX.dylib' | head -n 1)
             [ -n "$DYLIB" ] || vfail "dylib" "$SCHEME" "Không thấy SiriX.dylib: $(find "$STAGE" -type f | head -30 | tr '\n' ' ')"
-            strings "$DYLIB" | grep -q '_handleCommand' || vfail "marker1" "$SCHEME" "_handleCommand không có trong dylib"
-            strings "$DYLIB" | grep -q 'addItemForSpeechRecognizedCommand' || vfail "marker2" "$SCHEME" "addItemForSpeechRecognizedCommand không có"
-            strings "$DYLIB" | grep -q 'SiriX' || vfail "marker3" "$SCHEME" "SiriX không có"
+            # Ghi strings ra file rồi mới grep: `strings | grep -q` làm strings chết vì
+            # SIGPIPE, pipefail biến nó thành exit 141 → báo thiếu marker dù có.
+            strings "$DYLIB" > "$STAGE/strings.txt"
+            for marker in _handleCommand addItemForSpeechRecognizedCommand SiriX; do
+              grep -q -- "$marker" "$STAGE/strings.txt" ||
+                vfail "marker:$marker" "$SCHEME" "không thấy '$marker' trong dylib ($(wc -l < "$STAGE/strings.txt") dòng strings)"
+            done
 
             FILTER=$(find "$STAGE" -name 'SiriX.plist' ! -path '*PreferenceLoader*' | head -n 1)
             [ -n "$FILTER" ] || vfail "filter" "$SCHEME" "Không thấy filter SiriX.plist"
