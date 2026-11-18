@@ -15,7 +15,8 @@ Nhà cung cấp: **OpenAI tương thích** (mặc định) hoặc **Google Gemin
   - *Thông minh (mặc định)*: AI trả lời câu hỏi tri thức; tác vụ hệ thống để Siri gốc xử lý.
   - *Thay thế mọi câu trả lời*: AI thay toàn bộ phản hồi của Siri.
 - **Công cụ AI**: thông tin thiết bị, bảng nhớ tạm, đọc trang web (https), xóa lịch sử — bật/tắt từng cái.
-- **Hội thoại có ngữ cảnh** (giữ N cặp câu hỏi/trả lời gần nhất), nhiệt độ, thời gian chờ đều chỉnh được.
+- **Hội thoại có ngữ cảnh** (giữ N cặp câu hỏi/trả lời gần nhất), lịch sử lưu trên máy, thống kê, nhiệt độ và thời gian chờ đều chỉnh được.
+- **Không lưu lịch sử**: các lượt mới chỉ giữ trong bộ nhớ. Tùy chọn này không ngăn Siri, nhà cung cấp AI hoặc các log khác xử lý nội dung; lịch sử cũ phải xóa riêng.
 - **Prompt tùy chỉnh** (để trống = dùng prompt mặc định).
 - **Tiền tố @ai** tùy chọn, xem câu Siri gốc, và trò chuyện thử trong Settings.
 - **Log gỡ lỗi đầy đủ, sao chép được** — gửi lại cho mình để cải thiện tweak từng bước.
@@ -90,7 +91,7 @@ cd /tmp/sdks && git sparse-checkout set iPhoneOS15.6.sdk
 ./scripts/test-log-file.sh  # regression xóa/xoay vòng log (Linux/macOS)
 ```
 
-Trên macOS, `./scripts/test-intercept-macos.sh` chạy thêm regression của state machine với ACE/LLM giả. CI chạy cả hai bộ test. Chúng không thay thế việc thử Siri trên thiết bị thật.
+Trên macOS, `./scripts/test-intercept-macos.sh` chạy regression của state machine với ACE/LLM giả và `./scripts/test-store-macos.sh` kiểm tra kho lịch sử/thống kê. CI chạy cả hai bộ test. Chúng không thay thế việc thử Siri trên thiết bị thật.
 
 Build deb thật (cần macOS/theos): `make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless|roothide`.
 

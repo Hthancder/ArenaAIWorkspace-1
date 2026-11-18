@@ -5,6 +5,7 @@
 #import "SXTools.h"
 #import "SXMarkdown.h"
 #import "SXDisplayPolicy.h"
+#import "SXStore.h"
 #import <objc/message.h>
 #import <notify.h>
 
@@ -260,6 +261,11 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 	NSTimeInterval _decisionTime;
 	BOOL _decisionIsAnswer;
 	BOOL _historySaved;
+	BOOL _outcomeCounted;
+	BOOL _questionIncognito;
+	NSString *_historyEpoch;
+	NSString *_statsEpoch;
+	NSNumber *_llmMs;
 	NSHashTable *_handledCommands; // cùng object có thể đi qua cả hai hook
 	BOOL _ready;
 	BOOL _errored;
@@ -299,7 +305,7 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 - (void)setup {
 	int token = 0;
 	notify_register_dispatch("com.sirix.tweak/resetHistory", &token, dispatch_get_main_queue(), ^(int t) {
-		[[SXIntercept shared] clearHistory];
+		[[SXIntercept shared] clearHistoryMemory];
 	});
 }
 
@@ -326,14 +332,13 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 	[_condition lock];
 	if (!prefs.enabled) {
 		[_condition unlock];
-		SXLogDbg(@"capture", @"tweak đang tắt — bỏ qua “%@”", SXShort(clean, 80));
+		SXLogDbg(@"capture", @"tweak đang tắt — bỏ qua");
 		return;
 	}
 	NSTimeInterval now = CFAbsoluteTimeGetCurrent();
 	if (_lastCaptureText && [_lastCaptureText isEqualToString:normalized] && now - _lastCaptureTime < 2.5) {
 		[_condition unlock];
-		SXLogDbg(@"capture", @"trùng lặp trong %.1f giây — bỏ “%@” (nguồn %@)",
-				 now - _lastCaptureTime, SXShort(clean, 80), source);
+		SXLogDbg(@"capture", @"trùng lặp trong %.1f giây (nguồn %@)", now - _lastCaptureTime, source);
 		return;
 	}
 	_lastCaptureText = normalized;
@@ -374,6 +379,11 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 	_decisionTime = 0;
 	_decisionIsAnswer = NO;
 	_historySaved = NO;
+	_outcomeCounted = NO;
+	_questionIncognito = prefs.incognito;
+	_historyEpoch = nil;
+	_statsEpoch = nil;
+	_llmMs = nil;
 	[_handledCommands removeAllObjects];
 	_ready = NO;
 	_errored = NO;
@@ -384,34 +394,48 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 	NSArray<NSDictionary *> *historySnapshot = [_history copy];
 	[_condition broadcast]; // đánh thức các lượt chờ của câu hỏi trước
 
-	SXLogInf(@"capture", @"câu hỏi #%llu (%@): “%@”", (unsigned long long)myGeneration, source, clean);
+	if (prefs.incognito) SXLogInf(@"capture", @"câu hỏi #%llu (%@): [không lưu lịch sử]", (unsigned long long)myGeneration, source);
+	else SXLogInf(@"capture", @"câu hỏi #%llu (%@): “%@”", (unsigned long long)myGeneration, source, clean);
 	[_condition unlock];
 
 	dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
-		// Bỏ nếu đã có câu hỏi mới trước khi kịp gửi.
+		// Đọc kho và epoch trên luồng nền, không chặn hook ACE bằng I/O.
+		__block NSDictionary *stored = nil;
+		dispatch_sync([SXStore queue], ^{ stored = [[SXStore shared] snapshot]; });
 		[self->_condition lock];
 		BOOL stale = (self->_generation != myGeneration);
+		BOOL privateTurn = self->_questionIncognito || [SXPrefs shared].incognito;
+		if (!stale) {
+			self->_historyEpoch = stored[@"historyEpoch"];
+			self->_statsEpoch = stored[@"statsEpoch"];
+		}
 		[self->_condition unlock];
 		if (stale) return;
+		NSArray *requestHistory = privateTurn ? historySnapshot : (stored[@"history"] ?: historySnapshot);
+		NSUInteger maxTurns = (NSUInteger)[SXPrefs shared].contextTurns;
+		if (requestHistory.count > maxTurns) requestHistory = [requestHistory subarrayWithRange:NSMakeRange(requestHistory.count - maxTurns, maxTurns)];
 
 		SXToolExec executor = ^NSDictionary *(NSString *name, NSDictionary *arguments, NSError **error) {
 			if ([name isEqualToString:@"reset_conversation"]) {
-				[[SXIntercept shared] clearHistory];
+				if (![[SXIntercept shared] clearHistory]) {
+					if (error) *error = [NSError errorWithDomain:@"com.sirix.history" code:1 userInfo:@{NSLocalizedDescriptionKey: @"Không xóa được lịch sử đã lưu."}];
+					return nil;
+				}
 				return @{@"result": @"Đã xóa lịch sử hội thoại."};
 			}
 			return [SXTools execute:name arguments:arguments error:error];
 		};
 		[SXLLM askQuestion:clean
-				   history:historySnapshot
+				   history:requestHistory
 					 tools:[SXTools definitions]
 				   executor:executor
 				completion:^(NSString *answer, NSError *error, NSDictionary *info) {
-			[self applyAnswer:answer error:error forGeneration:myGeneration];
+			[self applyAnswer:answer error:error info:info forGeneration:myGeneration];
 		}];
 	});
 }
 
-- (void)applyAnswer:(NSString *)answer error:(NSError *)error forGeneration:(uint64_t)generation {
+- (void)applyAnswer:(NSString *)answer error:(NSError *)error info:(NSDictionary *)info forGeneration:(uint64_t)generation {
 	[_condition lock];
 	if (generation != _generation) {
 		[_condition unlock];
@@ -419,6 +443,7 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 				 (unsigned long long)generation, (unsigned long long)_generation);
 		return;
 	}
+	_llmMs = [info[@"ms"] isKindOfClass:NSNumber.class] ? info[@"ms"] : nil;
 	if (error) {
 		_errored = YES;
 		_answerError = error;
@@ -444,6 +469,15 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 	}
 	[_condition broadcast];
 	[_condition unlock];
+}
+
+// Ghi số liệu ngoài hook, epoch ngăn tác vụ xếp hàng phục hồi thống kê đã xóa.
+- (void)queueStatistic:(NSString *)event milliseconds:(NSNumber *)milliseconds {
+	NSString *epoch = _statsEpoch;
+	if (!epoch.length) return;
+	dispatch_async([SXStore queue], ^{
+		[[SXStore shared] recordEvent:event milliseconds:milliseconds epoch:epoch];
+	});
 }
 
 #pragma mark - Đường vào lệnh ACE
@@ -542,6 +576,7 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 					_decisionDisplay = [[_decisionDisplay substringToIndex:2000] stringByAppendingString:@"…"];
 				[SXDisplayPolicy logDecision:@"chọn đáp án AI cho lượt" source:source];
 			} else if (_errored) {
+				[self queueStatistic:@"error" milliseconds:_llmMs];
 				if ([SXDisplayPolicy shouldShowErrorBubbleInMode:prefs.mode speakErrors:prefs.speakErrors]) {
 					_decisionDisplay = [NSString stringWithFormat:@"⚠️ SiriX gặp lỗi: %@", _answerError.localizedDescription];
 					_decisionSpeech = _decisionDisplay;
@@ -550,10 +585,15 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 					SXLogInf(@"resp", @"%@: AI lỗi (%@) — giữ Siri gốc", source, _answerError.localizedDescription);
 				}
 			} else {
+				[self queueStatistic:@"timeout" milliseconds:nil];
 				_decisionDisplay = [SXDisplayPolicy timeoutBubbleMessageInMode:prefs.mode action:prefs.timeoutAction];
 				_decisionSpeech = _decisionDisplay;
 				SXLogWrn(@"resp", @"%@: hết ngân sách %.0fs (chặn ≤5s, thực tế %.1fs) — %@",
 						 source, prefs.responseTimeout, waitBudget, _decisionDisplay ? @"bubble hết giờ" : @"giữ Siri gốc");
+			}
+			if (!_decisionDisplay.length) {
+				_outcomeCounted = YES;
+				[self queueStatistic:@"kept" milliseconds:nil];
 			}
 		}
 	}
@@ -583,25 +623,49 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 	}
 	if (changed) {
 		[_handledCommands addObject:command];
+		if (!_outcomeCounted) {
+			_outcomeCounted = YES;
+			[self queueStatistic:@"replaced" milliseconds:_decisionIsAnswer ? _llmMs : nil];
+		}
 		// Chỉ thêm lịch sử khi thực sự sửa được phản hồi AI, và chỉ một lần.
 		if (_decisionIsAnswer && !_historySaved) {
 			[_history addObject:@{@"q": _question ?: @"",
 				@"a": _answerDisplay.length > 1000 ? [[_answerDisplay substringToIndex:1000] stringByAppendingString:@"…"] : _answerDisplay}];
 			while ((NSInteger)_history.count > prefs.contextTurns) [_history removeObjectAtIndex:0];
 			_historySaved = YES;
+			// Từng lượt được đánh dấu riêng tư từ lúc capture; đổi cấu hình trong
+			// khi chờ cũng không được khiến lượt riêng tư bị ghi xuống đĩa.
+			if (!_questionIncognito && !prefs.incognito && _historyEpoch.length) {
+				NSString *question = _question;
+				NSString *answer = _answerDisplay;
+				NSString *epoch = _historyEpoch;
+				NSUInteger limit = (NSUInteger)prefs.contextTurns;
+				dispatch_async([SXStore queue], ^{
+					[[SXStore shared] appendQuestion:question answer:answer limit:limit epoch:epoch];
+				});
+			}
 		}
 	}
 	[_condition unlock];
 	return changed;
 }
 
-- (void)clearHistory {
-	NSUInteger count = 0;
+- (void)clearHistoryMemory {
 	[_condition lock];
-	count = _history.count;
+	NSUInteger count = _history.count;
 	[_history removeAllObjects];
 	[_condition unlock];
-	SXLogInf(@"pref", @"đã xóa lịch sử hội thoại (%lu câu)", (unsigned long)count);
+	SXLogInf(@"pref", @"đã xóa ngữ cảnh trong bộ nhớ (%lu câu)", (unsigned long)count);
+}
+
+- (BOOL)clearHistory {
+	[self clearHistoryMemory];
+	// Được gọi bởi tool trên luồng nền; callback Darwin chỉ xóa bộ nhớ.
+	__block BOOL ok = NO;
+	dispatch_sync([SXStore queue], ^{ ok = [[SXStore shared] clearHistory]; });
+	if (!ok) SXLogErr(@"err", @"không xóa được lịch sử đã lưu");
+	notify_post("com.sirix.tweak/resetHistory");
+	return ok;
 }
 
 @end

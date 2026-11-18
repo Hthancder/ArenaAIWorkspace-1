@@ -22,6 +22,8 @@ jobs:
         run: ./scripts/test-log-file.sh
       - name: Test response interception
         run: ./scripts/test-intercept-macos.sh
+      - name: Test history and statistics store
+        run: ./scripts/test-store-macos.sh
 
   build:
     name: ${{ matrix.scheme }}

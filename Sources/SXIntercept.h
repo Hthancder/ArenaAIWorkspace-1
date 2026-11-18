@@ -19,7 +19,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// Đường dự phòng khi AddViews được chèn vào hội thoại (AFConversation).
 - (BOOL)handleAddViewsInsertion:(id)command;
 
-- (void)clearHistory;
+- (BOOL)clearHistory;
 
 @end
 

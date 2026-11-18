@@ -7,7 +7,10 @@ SiriXPreferences_FILES = \
 	SXLogViewController.m \
 	SXPromptController.m \
 	SXChatTestController.m \
+	SXHistoryController.m \
+	SXStatsController.m \
 	../Sources/SXLog.m \
+	../Sources/SXStore.m \
 	../Sources/SXPrefs.m \
 	../Sources/SXLLM.m \
 	../Sources/SXStream.m \

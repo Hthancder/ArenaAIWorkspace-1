@@ -23,6 +23,11 @@
 			<string>status</string>
 		</dict>
 		<dict>
+			<key>cell</key><string>PSLinkCell</string>
+			<key>label</key><string>Thống kê chi tiết</string>
+			<key>detail</key><string>SXStatsController</string>
+		</dict>
+		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
@@ -380,12 +385,22 @@
 			<string>com.sirix.tweak/prefs.changed</string>
 		</dict>
 		<dict>
-			<key>cell</key>
-			<string>PSButtonCell</string>
-			<key>label</key>
-			<string>Xóa lịch sử hội thoại</string>
-			<key>action</key>
-			<string>sx_resetHistory:</string>
+			<key>cell</key><string>PSGroupCell</string>
+			<key>label</key><string>Lịch sử hội thoại</string>
+			<key>footerText</key><string>Không lưu lịch sử ngăn lưu câu mới vào thiết bị, nhưng không ẩn câu hỏi khỏi nhà cung cấp AI, Siri hoặc mọi log. Lịch sử đã lưu trước đó vẫn còn cho đến khi bạn xóa.</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSLinkCell</string>
+			<key>label</key><string>Xem lịch sử hội thoại</string>
+			<key>detail</key><string>SXHistoryController</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSSwitchCell</string>
+			<key>label</key><string>Không lưu lịch sử</string>
+			<key>key</key><string>incognito</string>
+			<key>defaults</key><string>com.sirix.tweak</string>
+			<key>default</key><false/>
+			<key>PostNotification</key><string>com.sirix.tweak/prefs.changed</string>
 		</dict>
 		<dict>
 			<key>cell</key><string>PSGroupCell</string>

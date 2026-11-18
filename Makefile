@@ -12,6 +12,7 @@ TWEAK_NAME = SiriX
 SiriX_FILES = \
 	Sources/Tweak.x \
 	Sources/SXLog.m \
+	Sources/SXStore.m \
 	Sources/SXPrefs.m \
 	Sources/SXTools.m \
 	Sources/SXLLM.m \

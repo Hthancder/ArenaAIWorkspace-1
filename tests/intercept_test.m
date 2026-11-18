@@ -6,6 +6,7 @@
 #import "SXTools.h"
 #import "SXLog.h"
 #import "SXMarkdown.h"
+#import "SXStore.h"
 #include <assert.h>
 
 static SXLLMCompletion pendingCompletion;
@@ -15,6 +16,7 @@ static NSString *testTimeoutAction = @"bubble";
 static NSString *testTriggerMode = @"auto";
 static NSString *lastQuestion;
 static BOOL testShowOriginal;
+static BOOL testIncognito;
 
 @implementation SXPrefs
 + (instancetype)shared { static SXPrefs *p; static dispatch_once_t once; dispatch_once(&once, ^{ p = [SXPrefs new]; }); return p; }
@@ -25,6 +27,7 @@ static BOOL testShowOriginal;
 - (BOOL)markdown { return NO; }
 - (BOOL)hideWebCards { return YES; }
 - (BOOL)showOriginal { return testShowOriginal; }
+- (BOOL)incognito { return testIncognito; }
 - (BOOL)speakErrors { return NO; }
 - (NSString *)timeoutAction { return testTimeoutAction; }
 - (NSInteger)contextTurns { return 8; }
@@ -179,6 +182,25 @@ int main(void) {
 		[intercept noteQuestion:@"@aim not a prefix" source:@"test"];
 		assert(dispatch_semaphore_wait(requestStarted, dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC)) != 0);
 		testTriggerMode = @"auto";
+
+		// Không lưu lịch sử: câu riêng tư chỉ nằm trong bộ nhớ.
+		dispatch_sync([SXStore queue], ^{});
+		NSUInteger savedCount = [[[SXStore shared] snapshot][@"history"] count];
+		testIncognito = YES;
+		begin(@"private question");
+		pendingCompletion(@"private answer", nil, nil);
+		say = sayCommand(); assert([intercept handleIncomingCommand:say]);
+		dispatch_sync([SXStore queue], ^{});
+		assert([[[SXStore shared] snapshot][@"history"] count] == savedCount);
+		testIncognito = NO;
+
+		// Xóa khi một yêu cầu đang chờ: đáp án trễ không được phục hồi lịch sử.
+		begin(@"before reset question");
+		assert([[SXStore shared] clearHistory]);
+		pendingCompletion(@"after reset answer", nil, nil);
+		say = sayCommand(); assert([intercept handleIncomingCommand:say]);
+		dispatch_sync([SXStore queue], ^{});
+		assert([[[SXStore shared] snapshot][@"history"] count] == 0);
 
 		// Tác vụ tới trong lúc chờ: full cũng phải giữ Siri gốc.
 		begin(@"question action");
