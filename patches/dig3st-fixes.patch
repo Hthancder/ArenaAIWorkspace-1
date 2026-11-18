@@ -154,10 +154,10 @@ index 062b2a3..03ad3ac 100644
  #import "Notification.h"
  #import "OpenAI.h"
 diff --git a/headers/Notification.h b/headers/Notification.h
-index e8bdc8b..da486d3 100644
+index e8bdc8b..8677305 100644
 --- a/headers/Notification.h
 +++ b/headers/Notification.h
-@@ -1,7 +1,13 @@
+@@ -1,24 +1,163 @@
  @interface NCNotificationRequest : NSObject
  @property (nonatomic, assign) BOOL dig3st;
  @property (nonatomic, retain) NSString * actualMessage;
@@ -165,13 +165,27 @@ index e8bdc8b..da486d3 100644
 +@property (nonatomic, retain) NSString * dig3stStreamId;
 +@property (nonatomic, assign) BOOL dig3stAnimDone;
 +@property (nonatomic, copy) NSString * dig3stAnimKey;
++@property (nonatomic, copy) NSString * dig3stSummary;
  @property (nonatomic, retain) NSString *sectionIdentifier;
 +@property (nonatomic, retain) NSString *threadIdentifier;
 +@property (nonatomic, retain) NSString *notificationIdentifier;
  @property (nonatomic, retain) NSObject *content;
++- (instancetype)initWithNotificationRequest:(NCNotificationRequest *)request;
++- (BOOL)isCollapsedNotification;
++@end
++
++@interface NCNotificationRequestContentProvider : NSObject
++- (NCNotificationRequest *)notificationRequest;
++- (id)secondaryText;
++- (BOOL)isHidingContent;
++- (BOOL)isContentHidden;
++- (BOOL)isThreadSummary;
++- (long long)contentHidingEnforcement;
++- (BOOL)isContentHidingDisabled;
++- (BOOL)isDeviceAuthenticated;
  @end
  
-@@ -9,16 +15,124 @@
+ @interface NCNotificationShortLookView : UIView
  @property (nonatomic,readonly) UIView * viewForPreview;
  @end
  
@@ -179,6 +193,7 @@ index e8bdc8b..da486d3 100644
 +@interface NCNotificationViewController : UIViewController
 +@property (nonatomic,readonly) NCNotificationRequest *notificationRequest;
 +@property (nonatomic, weak) id delegate;
++- (id)staticContentProvider;
 +- (void)_updatePreferredContentSize;
 +- (void)_updateWithProvidedStaticContent;
 +- (void)_updateWithProvidedCustomContent;
@@ -206,9 +221,11 @@ index e8bdc8b..da486d3 100644
 +@interface PLExpandedPlatterView : UIView
 +@property (nonatomic, readonly) UIView *customContentView;
 +@property (nonatomic, assign) CGSize customContentSize;
++@property (nonatomic, assign) BOOL clipsVisibleContentToBounds;
 +- (UIView *)_mainContentView;
 +- (void)_configureMainContentViewIfNecessary;
 +- (CGRect)_mainContentViewFrame;
++- (CGRect)_actionsViewFrame;
 +- (CGSize)_contentViewSize;
 +- (CGSize)sizeThatFitsContentWithSize:(CGSize)size;
 +- (CGSize)contentSizeForSize:(CGSize)size;
@@ -218,6 +235,7 @@ index e8bdc8b..da486d3 100644
 +
 +@interface NCExpandedPlatterView : PLExpandedPlatterView
 +@property (nonatomic, assign) BOOL hidesNotificationContent;
++@property (nonatomic, assign, getter=isScrollViewPinnedToBottom) BOOL scrollViewPinnedToBottom;
 +- (void)_layoutSubviews;
 +@end
 +
@@ -227,14 +245,21 @@ index e8bdc8b..da486d3 100644
 +
 +@interface NCExpandedPlatterViewController : UIViewController
 +@property (nonatomic,readonly) NCNotificationRequest *notificationRequest;
++@property (nonatomic,readonly) id customContentViewController;
++- (id)staticContentProvider;
 +- (UIView *)_expandedPlatterViewIfLoaded;
 +- (void)_updatePreferredContentSize;
 +- (void)_updateWithProvidedStaticContent;
 +- (void)_updateWithProvidedCustomContent;
++- (void)preferredContentSizeDidChangeForChildContentContainer:(id<UIContentContainer>)container;
++- (void)customContentDidLoadExtension:(id)customContent;
++- (BOOL)_isLockedByAppProtection;
 +@end
 +
 +@interface NCNotificationLongLookViewController : NCNotificationViewController
 +- (UIView *)_longLookViewIfLoaded;
++- (void)preferredContentSizeDidChangeForChildContentContainer:(id<UIContentContainer>)container;
++- (void)customContentDidLoadExtension:(id)customContent;
  @end
  
  @interface NCNotificationSeamlessContentView : UIView
@@ -3305,10 +3330,10 @@ index df1a4a7..4459012 100644
  			isNumeric = true;
 diff --git a/src/DigestBannerAnimator.m b/src/DigestBannerAnimator.m
 new file mode 100644
-index 0000000..6cce137
+index 0000000..e671965
 --- /dev/null
 +++ b/src/DigestBannerAnimator.m
-@@ -0,0 +1,1254 @@
+@@ -0,0 +1,1260 @@
 +#import "../headers/Digest/DigestBannerAnimator.h"
 +#import <QuartzCore/QuartzCore.h>
 +#import <objc/runtime.h>
@@ -4534,8 +4559,14 @@ index 0000000..6cce137
 +        }
 +        y += hh + 4.0;
 +
++        if (self.originalTextView.textContainer && fabs(self.originalTextView.textContainer.size.width - contentW) > 0.5) {
++            self.originalTextView.textContainer.size = CGSizeMake(contentW, CGFLOAT_MAX);
++        }
++        if (self.originalTextView.textContainer && self.originalTextView.layoutManager) {
++            [self.originalTextView.layoutManager ensureLayoutForTextContainer:self.originalTextView.textContainer];
++        }
 +        CGSize oFit = [self.originalTextView sizeThatFits:CGSizeMake(contentW, CGFLOAT_MAX)];
-+        CGFloat oh = ceil(oFit.height);
++        CGFloat oh = MAX(18.0, ceil(oFit.height));
 +        if (applyFrames) {
 +            self.originalTextView.frame = CGRectMake(padX, y, contentW, oh);
 +        }
@@ -5731,10 +5762,10 @@ index ef8dd7c..df97d0b 100644
 -    [((SpringBoard *)[UIApplication sharedApplication]).notificationDispatcher.dispatcher postNotificationWithRequest:request];
  }
 diff --git a/src/Tweak.x b/src/Tweak.x
-index 3a91698..b1a4431 100644
+index 3a91698..5a9fc6a 100644
 --- a/src/Tweak.x
 +++ b/src/Tweak.x
-@@ -1,21 +1,1437 @@
+@@ -1,21 +1,1560 @@
  #import <CoreFoundation/CoreFoundation.h>
 +#import <objc/runtime.h>
  #include <substrate.h>
@@ -5813,15 +5844,20 @@ index 3a91698..b1a4431 100644
 +    return nil;
 +}
 +
-+static void safeSetNotificationMessage(id contentObj, NSString *message) {
-+    if (!contentObj) return;
-+    @try {
-+        [contentObj setValue:message forKey:@"message"];
-+        return;
-+    } @catch (NSException *e) {}
-+    @try {
-+        [contentObj setValue:message forKey:@"_message"];
-+    } @catch (NSException *e2) {}
++static NSString *digestSummaryTextForRequest(NCNotificationRequest *req) {
++    if (!req) return nil;
++    if (req.dig3st) {
++        NSString *s = safeKVCString(req, @"dig3stSummary");
++        if (s.length > 0) return s;
++    }
++    return safeKVCString(req.content, @"message");
++}
++
++static NSString *digestOriginalTextForRequest(NCNotificationRequest *req) {
++    if (!req) return nil;
++    NSString *actual = safeKVCString(req, @"actualMessage");
++    if (actual.length > 0) return actual;
++    return safeKVCString(req.content, @"message");
 +}
 +
 +static NSString *resolveAppName(NCNotificationRequest *req) {
@@ -6139,6 +6175,7 @@ index 3a91698..b1a4431 100644
 +static void *kDigestPlatterReqKey = &kDigestPlatterReqKey;
 +static void *kDigestPlatterCardKey = &kDigestPlatterCardKey;
 +static void *kDigestPlatterCardActiveKey = &kDigestPlatterCardActiveKey;
++static void *kDigestPlatterHasCustomKey = &kDigestPlatterHasCustomKey;
 +static void *kDigestExpandedSigKey = &kDigestExpandedSigKey;
 +
 +static NCNotificationListView *listViewForGroupList(NCNotificationGroupList *gl) {
@@ -6202,10 +6239,19 @@ index 3a91698..b1a4431 100644
 +
 +static BOOL viewIsHiddenOrNonLeadingInListView(UIView *child, NCNotificationListView *lv) {
 +    if (!child || !lv) return NO;
++    BOOL grouped = listViewIsGrouped(lv);
++    if (!grouped) {
++        if (listViewIsAnimatingGroupOrReveal(lv)) {
++            return NO;
++        }
++        if ([child respondsToSelector:@selector(isHiddenBelowStack)] && [(NCNotificationListCell *)child isHiddenBelowStack]) {
++            return YES;
++        }
++        return NO;
++    }
 +    if ([child respondsToSelector:@selector(isHiddenBelowStack)] && [(NCNotificationListCell *)child isHiddenBelowStack]) {
 +        return YES;
 +    }
-+    if (!listViewIsGrouped(lv)) return NO;
 +    if (child.alpha < 0.05 || !CGAffineTransformIsIdentity(child.transform)) {
 +        return YES;
 +    }
@@ -6431,16 +6477,16 @@ index 3a91698..b1a4431 100644
 +                continue;
 +            }
 +
-+            if ((!glVisible || !cellView) && !reloadOffscreenOnly) {
++            if ((!glVisible || !cellView) && !reloadOffscreenOnly && !matched.dig3st) {
 +                if ([gl respondsToSelector:@selector(reloadNotificationRequest:)]) {
 +                    [gl reloadNotificationRequest:matched];
 +                }
 +            }
-+            if (glv && shouldRelayoutGLV && gListViewLayoutDepth == 0) {
++            if (glv && shouldRelayoutGLV && gListViewLayoutDepth == 0 && !listViewIsAnimatingGroupOrReveal(glv)) {
 +                if ([glv respondsToSelector:@selector(setCachedSizeValid:)]) {
 +                    glv.cachedSizeValid = NO;
 +                }
-+                if (!glGrouped && idx != NSNotFound && [glv respondsToSelector:@selector(reloadViewAtIndex:)]) {
++                if (!glGrouped && !glVisible && idx != NSNotFound && [glv respondsToSelector:@selector(reloadViewAtIndex:)]) {
 +                    [glv reloadViewAtIndex:idx];
 +                }
 +                [glv setNeedsLayout];
@@ -6458,7 +6504,7 @@ index 3a91698..b1a4431 100644
 +            }
 +            NCNotificationListView *slv = listViewForSectionList(sl);
 +            if (listViewIsAnimatingGroupOrReveal(slv)) continue;
-+            if (!handledByGroupList && !reloadOffscreenOnly && [sl respondsToSelector:@selector(reloadNotificationRequest:)]) {
++            if (!handledByGroupList && !reloadOffscreenOnly && !targetReq.dig3st && [sl respondsToSelector:@selector(reloadNotificationRequest:)]) {
 +                [sl reloadNotificationRequest:targetReq];
 +            }
 +            if (slv && gListViewLayoutDepth == 0) {
@@ -6479,12 +6525,20 @@ index 3a91698..b1a4431 100644
 +        [vc isKindOfClass:NSClassFromString(@"NCNotificationLongLookViewController")]) {
 +        objc_setAssociatedObject(vc, kDigestSizingGuard, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 +        @try {
++            UIView *mainView = nil;
++            if (platterView && [platterView respondsToSelector:@selector(_mainContentView)]) {
++                mainView = [(PLExpandedPlatterView *)platterView _mainContentView];
++            }
 +            [contentView setNeedsLayout];
++            [mainView setNeedsLayout];
 +            [platterView setNeedsLayout];
 +            if ([vc respondsToSelector:@selector(_updatePreferredContentSize)]) {
 +                [(id)vc _updatePreferredContentSize];
 +            }
 +            [vc.view setNeedsLayout];
++            if (platterView && platterView.window != nil && platterView.bounds.size.width > 32.0) {
++                [platterView layoutIfNeeded];
++            }
 +        } @catch (NSException *e) {}
 +        objc_setAssociatedObject(vc, kDigestSizingGuard, @NO, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 +        return;
@@ -6532,7 +6586,7 @@ index 3a91698..b1a4431 100644
 +        BOOL bannerNeedsSize = (fit.height > 0 && fabs(fit.height - vc.preferredContentSize.height) > 0.5);
 +        BOOL listNeedsSize = (fit.height > 0 && fabs(fit.height - vc.view.bounds.size.height) > 1.0);
 +
-+        NSString *msgText = req ? (safeKVCString(req.content, @"message") ?: @"") : @"";
++        NSString *msgText = req ? (digestSummaryTextForRequest(req) ?: @"") : @"";
 +        BOOL isStreaming = NO;
 +        if (req) {
 +            @try { isStreaming = [[req valueForKey:@"dig3stStreaming"] boolValue]; } @catch (NSException *e) {}
@@ -6665,8 +6719,8 @@ index 3a91698..b1a4431 100644
 +        return NO;
 +    }
 +
-+    NSString *msgText = safeKVCString(req.content, @"message");
-+    NSString *origText = safeKVCString(req, @"actualMessage");
++    NSString *msgText = digestSummaryTextForRequest(req);
++    NSString *origText = digestOriginalTextForRequest(req);
 +    if (origText.length == 0 && msgText.length == 0) {
 +        objc_setAssociatedObject(platter, kDigestPlatterCardActiveKey, @NO, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 +        if (card) card.hidden = YES;
@@ -6704,7 +6758,10 @@ index 3a91698..b1a4431 100644
 +    }
 +
 +    UIView *ccv = [platter respondsToSelector:@selector(customContentView)] ? [(PLExpandedPlatterView *)platter customContentView] : nil;
-+    BOOL hasCustom = (ccv != nil && ccv.subviews.count > 0);
++    CGSize customSize = [platter respondsToSelector:@selector(customContentSize)] ? [(PLExpandedPlatterView *)platter customContentSize] : CGSizeZero;
++    BOOL hasCustom = ((ccv != nil && ccv.subviews.count > 0) ||
++                      customSize.height > 1.0 ||
++                      [objc_getAssociatedObject(platter, kDigestPlatterHasCustomKey) boolValue]);
 +    [card configureWithSummary:msgText
 +                  originalText:origText
 +                        config:currentBannerRenderConfig()
@@ -6712,8 +6769,13 @@ index 3a91698..b1a4431 100644
 +    card.hidden = NO;
 +
 +    UIView *mainView = mainContentViewForPlatter(platter, YES);
-+    if (mainView && card.superview != mainView) {
-+        [mainView addSubview:card];
++    if (mainView) {
++        if (!mainView.clipsToBounds) {
++            mainView.clipsToBounds = YES;
++        }
++        if (card.superview != mainView) {
++            [mainView addSubview:card];
++        }
 +    }
 +    objc_setAssociatedObject(platter, kDigestPlatterCardActiveKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 +    return YES;
@@ -6737,6 +6799,9 @@ index 3a91698..b1a4431 100644
 +
 +    UIView *mainView = mainContentViewForPlatter(platter, NO);
 +    if (!mainView) return;
++    if (!mainView.clipsToBounds) {
++        mainView.clipsToBounds = YES;
++    }
 +    if (card.superview != mainView) {
 +        [mainView addSubview:card];
 +    }
@@ -6760,14 +6825,31 @@ index 3a91698..b1a4431 100644
 +    }
 +
 +    card.frame = CGRectMake(0.0, cardY, mainW, cardH);
++    [card layoutIfNeeded];
 +    [mainView bringSubviewToFront:card];
 +
 +    UIView *ccv = [platter respondsToSelector:@selector(customContentView)] ? [(PLExpandedPlatterView *)platter customContentView] : nil;
 +    if (ccv && ccv.superview == mainView) {
 +        CGRect cf = ccv.frame;
 +        CGFloat minY = cardY + cardH;
-+        if (cf.origin.y < minY - 0.5) {
++        BOOL changed = NO;
++        if (fabs(cf.origin.y - minY) > 0.5) {
 +            cf.origin.y = minY;
++            changed = YES;
++        }
++        if (fabs(cf.size.width - mainW) > 0.5) {
++            cf.size.width = mainW;
++            changed = YES;
++        }
++        if ([platter respondsToSelector:@selector(customContentSize)]) {
++            CGSize cs = [(PLExpandedPlatterView *)platter customContentSize];
++            BOOL clipped = ([platter respondsToSelector:@selector(clipsVisibleContentToBounds)] && [(PLExpandedPlatterView *)platter clipsVisibleContentToBounds]);
++            if (cs.height > 1.0 && !clipped && fabs(cf.size.height - cs.height) > 0.5) {
++                cf.size.height = cs.height;
++                changed = YES;
++            }
++        }
++        if (changed) {
 +            ccv.frame = cf;
 +        }
 +    }
@@ -6785,14 +6867,39 @@ index 3a91698..b1a4431 100644
 +        UIView *platter = platterViewForExpandedController(vc);
 +        if (platter) {
 +            objc_setAssociatedObject(platter, kDigestPlatterReqKey, req, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++            BOOL vcHasCustom = ([vc respondsToSelector:@selector(customContentViewController)] &&
++                                [(NCExpandedPlatterViewController *)vc customContentViewController] != nil);
++            objc_setAssociatedObject(platter, kDigestPlatterHasCustomKey, @(vcHasCustom), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 +        }
 +        if (!req || !req.dig3st) {
 +            if (platter) syncDigestExpandedCardOnPlatter(platter);
 +            return;
 +        }
 +        @try {
-+            id scp = [vc respondsToSelector:@selector(staticContentProvider)] ? [(id)vc staticContentProvider] : [vc valueForKey:@"_staticContentProvider"];
-+            if (scp && [scp respondsToSelector:@selector(isContentHidden)] && [scp isContentHidden]) {
++            if ([vc respondsToSelector:@selector(_isLockedByAppProtection)] &&
++                [(NCExpandedPlatterViewController *)vc _isLockedByAppProtection]) {
++                if (platter) {
++                    objc_setAssociatedObject(platter, kDigestPlatterCardActiveKey, @NO, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++                    DigestExpandedOriginalCardView *card = objc_getAssociatedObject(platter, kDigestPlatterCardKey);
++                    if (card) card.hidden = YES;
++                }
++                return;
++            }
++            NCNotificationRequestContentProvider *scp = [vc respondsToSelector:@selector(staticContentProvider)]
++                ? (NCNotificationRequestContentProvider *)[(NCExpandedPlatterViewController *)vc staticContentProvider]
++                : (NCNotificationRequestContentProvider *)[vc valueForKey:@"_staticContentProvider"];
++            BOOL hiddenBySystem = NO;
++            if (scp) {
++                if ([scp respondsToSelector:@selector(isHidingContent)] && [scp isHidingContent]) {
++                    hiddenBySystem = YES;
++                } else if ([scp respondsToSelector:@selector(isContentHidden)] && [scp isContentHidden]) {
++                    BOOL auth = ([scp respondsToSelector:@selector(isDeviceAuthenticated)] && [scp isDeviceAuthenticated]);
++                    if (!auth) {
++                        hiddenBySystem = YES;
++                    }
++                }
++            }
++            if (hiddenBySystem) {
 +                if (platter) {
 +                    objc_setAssociatedObject(platter, kDigestPlatterCardActiveKey, @NO, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 +                    DigestExpandedOriginalCardView *card = objc_getAssociatedObject(platter, kDigestPlatterCardKey);
@@ -6802,8 +6909,8 @@ index 3a91698..b1a4431 100644
 +            }
 +        } @catch (NSException *e) {}
 +
-+        NSString *msgText = safeKVCString(req.content, @"message");
-+        NSString *origText = safeKVCString(req, @"actualMessage");
++        NSString *msgText = digestSummaryTextForRequest(req);
++        NSString *origText = digestOriginalTextForRequest(req);
 +        BOOL hidesContent = (platter && [platter respondsToSelector:@selector(hidesNotificationContent)] && [(NCExpandedPlatterView *)platter hidesNotificationContent]);
 +
 +        UIView *contentView = nil;
@@ -6840,9 +6947,11 @@ index 3a91698..b1a4431 100644
 +        }
 +
 +        BOOL cardActive = platter ? syncDigestExpandedCardOnPlatter(platter) : NO;
-+        CGFloat cardH = platter ? digestExpandedCardHeightForPlatter(platter, 0.0) : 0.0;
-+        NSString *expSig = [NSString stringWithFormat:@"%d|%d|%.1f|%lu|%lu|%p",
-+                            hidesContent ? 1 : 0, cardActive ? 1 : 0, cardH,
++        CGFloat measureW = platter ? resolveExpandedMeasureWidth(platter, 0.0) : 0.0;
++        CGFloat cardH = platter ? digestExpandedCardHeightForPlatter(platter, measureW) : 0.0;
++        CGSize cs = (platter && [platter respondsToSelector:@selector(customContentSize)]) ? [(PLExpandedPlatterView *)platter customContentSize] : CGSizeZero;
++        NSString *expSig = [NSString stringWithFormat:@"%d|%d|%.1f|%.1f|%.1f|%.1f|%lu|%lu|%p",
++                            hidesContent ? 1 : 0, cardActive ? 1 : 0, measureW, cardH, cs.width, cs.height,
 +                            (unsigned long)msgText.hash, (unsigned long)origText.hash, messageEl];
 +        NSString *prevExpSig = objc_getAssociatedObject(vc, kDigestExpandedSigKey);
 +        if (![expSig isEqualToString:prevExpSig]) {
@@ -6868,7 +6977,7 @@ index 3a91698..b1a4431 100644
 +        if (!seamlessContentView) return;
 +
 +        UIView *messageEl = findMessageElementInContentView(seamlessContentView);
-+        NSString *msgText = safeKVCString(vc.notificationRequest.content, @"message");
++        NSString *msgText = digestSummaryTextForRequest(vc.notificationRequest);
 +        if (!messageEl || !msgText) return;
 +
 +        BOOL insideListView = NO;
@@ -6993,7 +7102,7 @@ index 3a91698..b1a4431 100644
 +        if (!seamlessContentView) return;
 +
 +        UIView *messageEl = findMessageElementInContentView(seamlessContentView);
-+        NSString *msgText = safeKVCString(vc.notificationRequest.content, @"message");
++        NSString *msgText = digestSummaryTextForRequest(vc.notificationRequest);
 +        if (!messageEl || !msgText) return;
 +
 +        NCNotificationRequest *req = vc.notificationRequest;
@@ -7157,6 +7266,51 @@ index 3a91698..b1a4431 100644
 +%property (nonatomic, retain) NSString * dig3stStreamId;
 +%property (nonatomic, assign) BOOL dig3stAnimDone;
 +%property (nonatomic, retain) NSString * dig3stAnimKey;
++%property (nonatomic, copy) NSString * dig3stSummary;
++
++-(id)initWithNotificationRequest:(NCNotificationRequest *)other {
++    NCNotificationRequest *r = %orig;
++    if (r && other && other != r) {
++        @try {
++            r.dig3st = other.dig3st;
++            r.actualMessage = other.actualMessage;
++            r.dig3stStreaming = other.dig3stStreaming;
++            r.dig3stStreamId = other.dig3stStreamId;
++            r.dig3stAnimDone = other.dig3stAnimDone;
++            r.dig3stAnimKey = other.dig3stAnimKey;
++            r.dig3stSummary = other.dig3stSummary;
++        } @catch (NSException *e) {}
++    }
++    return r;
++}
++%end
++
++%hook NCNotificationRequestContentProvider
++-(id)secondaryText {
++    id orig = %orig;
++    if (!orig) return orig;
++    @try {
++        NCNotificationRequest *req = [self respondsToSelector:@selector(notificationRequest)] ? [self notificationRequest] : nil;
++        if (!req || !req.dig3st) return orig;
++        if ([req respondsToSelector:@selector(isCollapsedNotification)] && [req isCollapsedNotification]) return orig;
++        if ([self respondsToSelector:@selector(isHidingContent)] && [self isHidingContent]) return orig;
++        if ([self respondsToSelector:@selector(isContentHidden)] && [self isContentHidden]) return orig;
++        if ([self respondsToSelector:@selector(isThreadSummary)] && [self isThreadSummary]) return orig;
++        if ([self respondsToSelector:@selector(contentHidingEnforcement)] && [self contentHidingEnforcement] == 1) return orig;
++        if ([self respondsToSelector:@selector(isContentHidingDisabled)] && [self isContentHidingDisabled]) return orig;
++
++        NSString *summary = req.dig3stSummary;
++        if (summary.length == 0) return orig;
++
++        if ([orig isKindOfClass:[NSAttributedString class]]) {
++            return [[NSAttributedString alloc] initWithString:summary];
++        }
++        if ([orig isKindOfClass:[NSString class]]) {
++            return summary;
++        }
++    } @catch (NSException *e) {}
++    return orig;
++}
  %end
  
  BOOL isOkToSummarize(NSString *sectionIdentifier) {
@@ -7176,7 +7330,7 @@ index 3a91698..b1a4431 100644
      if ([sectionIdentifier hasPrefix:@"com.apple"]) {
          return NO;
      }
-@@ -23,189 +1439,709 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
+@@ -23,189 +1562,775 @@ BOOL isOkToSummarize(NSString *sectionIdentifier) {
  }
  
  
@@ -7395,7 +7549,7 @@ index 3a91698..b1a4431 100644
 +    @try {
 +        NCNotificationRequest *req = self.notificationRequest;
 +        if (req.dig3st && !req.dig3stStreaming) {
-+            NSString *msgText = safeKVCString(req.content, @"message");
++            NSString *msgText = digestSummaryTextForRequest(req);
 +            if (msgText.length > 0) {
 +                req.dig3stAnimDone = YES;
 +                req.dig3stAnimKey = msgText;
@@ -7480,6 +7634,21 @@ index 3a91698..b1a4431 100644
 +    %orig;
 +    renderExpandedController(self);
 +}
++-(void)preferredContentSizeDidChangeForChildContentContainer:(id<UIContentContainer>)container {
++    %orig;
++    renderExpandedController(self);
++}
++-(void)customContentDidLoadExtension:(id)customContent {
++    %orig;
++    renderExpandedController(self);
++}
++-(void)viewWillLayoutSubviews {
++    %orig;
++    if (activeExpandedControllers) {
++        [activeExpandedControllers addObject:self];
++    }
++    renderExpandedController(self);
++}
 +-(void)viewDidLayoutSubviews {
 +    %orig;
 +    if (activeExpandedControllers) {
@@ -7523,6 +7692,24 @@ index 3a91698..b1a4431 100644
 +    if (![self isKindOfClass:NSClassFromString(@"NCNotificationLongLookViewController")]) return;
 +    renderExpandedController(self);
 +}
++-(void)preferredContentSizeDidChangeForChildContentContainer:(id<UIContentContainer>)container {
++    %orig;
++    if (![self isKindOfClass:NSClassFromString(@"NCNotificationLongLookViewController")]) return;
++    renderExpandedController(self);
++}
++-(void)customContentDidLoadExtension:(id)customContent {
++    %orig;
++    if (![self isKindOfClass:NSClassFromString(@"NCNotificationLongLookViewController")]) return;
++    renderExpandedController(self);
++}
++-(void)viewWillLayoutSubviews {
++    %orig;
++    if (![self isKindOfClass:NSClassFromString(@"NCNotificationLongLookViewController")]) return;
++    if (activeExpandedControllers) {
++        [activeExpandedControllers addObject:self];
++    }
++    renderExpandedController(self);
++}
 +-(void)viewDidLayoutSubviews {
 +    %orig;
 +    if (![self isKindOfClass:NSClassFromString(@"NCNotificationLongLookViewController")]) return;
@@ -7537,6 +7724,14 @@ index 3a91698..b1a4431 100644
 +-(void)setHidesNotificationContent:(BOOL)hidden {
 +    %orig;
 +    syncDigestExpandedCardOnPlatter(self);
++}
++-(CGSize)contentSizeForSize:(CGSize)size {
++    CGSize s = %orig;
++    CGFloat extra = digestExpandedCardHeightForPlatter(self, size.width);
++    if (extra > 0.0) {
++        s.height = MAX(0.0, s.height - extra);
++    }
++    return s;
 +}
 +-(CGSize)sizeThatFitsContentWithSize:(CGSize)size {
 +    CGSize s = %orig;
@@ -7562,7 +7757,20 @@ index 3a91698..b1a4431 100644
 +    }
 +    return f;
 +}
++-(CGRect)_actionsViewFrame {
++    CGRect f = %orig;
++    CGFloat extra = digestExpandedCardHeightForPlatter(self, 0.0);
++    if (extra > 0.0) {
++        f.origin.y += extra;
++    }
++    return f;
++}
 +-(void)_layoutSubviews {
++    if ([objc_getAssociatedObject(self, kDigestPlatterCardActiveKey) boolValue] &&
++        [self respondsToSelector:@selector(isScrollViewPinnedToBottom)] &&
++        [(NCExpandedPlatterView *)self isScrollViewPinnedToBottom]) {
++        [(NCExpandedPlatterView *)self setScrollViewPinnedToBottom:NO];
++    }
 +    %orig;
 +    layoutDigestExpandedCardInPlatter(self);
 +}
@@ -7572,6 +7780,14 @@ index 3a91698..b1a4431 100644
 +-(void)setHidesNotificationContent:(BOOL)hidden {
 +    %orig;
 +    syncDigestExpandedCardOnPlatter(self);
++}
++-(CGSize)contentSizeForSize:(CGSize)size {
++    CGSize s = %orig;
++    CGFloat extra = digestExpandedCardHeightForPlatter(self, size.width);
++    if (extra > 0.0) {
++        s.height = MAX(0.0, s.height - extra);
++    }
++    return s;
 +}
 +-(CGSize)_contentSizeThatFitsContentWithSizeExcludingActions:(CGSize)size {
 +    CGSize s = %orig;
@@ -7597,6 +7813,14 @@ index 3a91698..b1a4431 100644
 +    }
 +    return f;
 +}
++-(CGRect)_actionsViewFrame {
++    CGRect f = %orig;
++    CGFloat extra = digestExpandedCardHeightForPlatter(self, 0.0);
++    if (extra > 0.0) {
++        f.origin.y += extra;
++    }
++    return f;
++}
 +-(void)layoutSubviews {
 +    %orig;
 +    layoutDigestExpandedCardInPlatter(self);
@@ -7605,7 +7829,7 @@ index 3a91698..b1a4431 100644
 +
 +%hook NCNotificationPresentableViewController
 +-(BOOL)bn_shouldAnimateViewTransitionToSize:(CGSize)size {
-     @try {
++    @try {
 +        NCNotificationViewController *nvc = self.notificationViewController;
 +        if (nvc.notificationRequest.dig3st) {
 +            return YES;
@@ -7620,7 +7844,7 @@ index 3a91698..b1a4431 100644
 +        if (deliverBlock) deliverBlock(req);
 +        return;
 +    }
-+    @try {
+     @try {
 +        if (!tweakEnabled || (pauseInLowPowerMode && lowPowerActive)) {
 +            [req setValue:@(NO) forKey:@"dig3st"];
 +            [req setValue:@(NO) forKey:@"dig3stStreaming"];
@@ -7648,6 +7872,7 @@ index 3a91698..b1a4431 100644
 +            [req setValue:@(NO) forKey:@"dig3stStreaming"];
 +            [req setValue:nil forKey:@"dig3stStreamId"];
 +            [req setValue:nil forKey:@"actualMessage"];
++            req.dig3stSummary = nil;
 +            req.dig3stAnimDone = NO;
 +            req.dig3stAnimKey = nil;
 +        }
@@ -7663,12 +7888,12 @@ index 3a91698..b1a4431 100644
 +
 +        NSNumber *appCtxOverride = resolveAppTriState(@"appCtx", bundleId);
 +        BOOL effectiveCtxEnabled = appCtxOverride ? [appCtxOverride boolValue] : contextBufferEnabled;
- 
--        BOOL contentTooShort = textContent ? textContent.length < minChars  : YES;
++
 +        NSNumber *appTransOverride = resolveAppTriState(@"appTrans", bundleId);
 +        NSNumber *appStreamOverride = resolveAppTriState(@"appStream", bundleId);
 +        BOOL effectiveStreamEnabled = appStreamOverride ? [appStreamOverride boolValue] : streamingEnabled;
-+
+ 
+-        BOOL contentTooShort = textContent ? textContent.length < minChars  : YES;
 +        NSString *promptKey = bundleId.length > 0 ? [NSString stringWithFormat:@"appPrompt_%@", bundleId] : nil;
 +        NSString *appCustomPrompt = promptKey ? (prefs ? prefs[promptKey] : [prefsManager safeObjectForKey:promptKey]) : nil;
 +        if (![appCustomPrompt isKindOfClass:[NSString class]] || appCustomPrompt.length == 0) {
@@ -7745,7 +7970,7 @@ index 3a91698..b1a4431 100644
 +                    req.dig3stAnimDone = NO;
 +                    req.dig3stAnimKey = nil;
 +                    [req setValue:textContent forKey:@"actualMessage"];
-+                    safeSetNotificationMessage(req.content, cachedSummary);
++                    req.dig3stSummary = cachedSummary;
 +                    if (deliverBlock) deliverBlock(req);
 +                    return;
                  }
@@ -7765,7 +7990,7 @@ index 3a91698..b1a4431 100644
 +                [req setValue:streamId forKey:@"dig3stStreamId"];
 +                req.dig3stAnimDone = NO;
 +                req.dig3stAnimKey = nil;
-+                safeSetNotificationMessage(req.content, @"Đang tóm tắt…");
++                req.dig3stSummary = @"Đang tóm tắt…";
 +                if (deliverBlock) deliverBlock(req);
 +
 +                [openai summarize:query
@@ -7777,7 +8002,7 @@ index 3a91698..b1a4431 100644
 +                    NSString *curId = nil;
 +                    @try { curId = [req valueForKey:@"dig3stStreamId"]; } @catch (NSException *e) {}
 +                    if (curId && ![curId isEqualToString:streamId]) return;
-+                    safeSetNotificationMessage(req.content, partialText);
++                    req.dig3stSummary = partialText;
 +                    updateVisibleControllersForRequest(req);
 +                }
 +                       completion:^(NSString *summary) {
@@ -7793,20 +8018,14 @@ index 3a91698..b1a4431 100644
 +                            [logger log:[NSString stringWithFormat:@"Stream Summary: %@", summary] level:LOGLEVEL_INFO];
 +                        }
 +                        [summaryCache setObject:@{@"summary": summary, @"ts": @([NSDate timeIntervalSinceReferenceDate])} forKey:cacheKey];
-+                        safeSetNotificationMessage(req.content, summary);
++                        req.dig3stSummary = summary;
 +                    } else {
 +                        [req setValue:@(NO) forKey:@"dig3st"];
-+                        safeSetNotificationMessage(req.content, textContent);
++                        req.dig3stSummary = nil;
 +                    }
 +                    clearCachesForRequest(req, nil);
 +                    BOOL updatedVisible = updateVisibleControllersForRequest(req);
 +                    invalidateGroupListsForRequest(req, updatedVisible ? YES : NO, YES);
-+                    if (summary.length > 0 && req.dig3st) {
-+                        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-+                            BOOL updatedLater = updateVisibleControllersForRequest(req);
-+                            invalidateGroupListsForRequest(req, updatedLater ? YES : NO, NO);
-+                        });
-+                    }
 +                }];
 +            } else {
 +                [openai summarize:query
@@ -7825,9 +8044,10 @@ index 3a91698..b1a4431 100644
 +                        req.dig3stAnimDone = NO;
 +                        req.dig3stAnimKey = nil;
 +                        [req setValue:textContent forKey:@"actualMessage"];
-+                        safeSetNotificationMessage(req.content, summary);
++                        req.dig3stSummary = summary;
 +                    } else {
 +                        [req setValue:@(NO) forKey:@"dig3st"];
++                        req.dig3stSummary = nil;
 +                    }
 +                    if (deliverBlock) deliverBlock(req);
 +                }];
