@@ -70,6 +70,11 @@ static const NSTimeInterval kSXStreamTimeout = 60;
 
 	NSMutableString *content = [NSMutableString string];
 	NSMutableString *errorBody = [NSMutableString string];
+	// Gộp tool/function call NGAY TRONG stream: nhờ vậy lượt có công cụ không phải
+	// gửi lại request lần hai (trước đây làm vậy nên mọi lượt dùng công cụ đều
+	// chậm gấp đôi và thường về muộn hơn ngân sách chờ của Siri).
+	NSMutableDictionary<NSNumber *, NSMutableDictionary *> *partialCalls = [NSMutableDictionary dictionary];
+	NSMutableArray<NSDictionary *> *geminiCalls = [NSMutableArray array];
 	__block BOOL sawToolCalls = NO;
 	__block NSInteger status = 0;
 	__block NSError *taskError = nil;
@@ -95,8 +100,30 @@ static const NSTimeInterval kSXStreamTimeout = 60;
 			id delta = (choices.count && [choices[0] isKindOfClass:[NSDictionary class]])
 				? choices[0][@"delta"] : nil;
 			if (![delta isKindOfClass:[NSDictionary class]]) return;
-			if ([delta[@"tool_calls"] isKindOfClass:[NSArray class]] && [delta[@"tool_calls"] count]) {
+			NSArray *deltaCalls = [delta[@"tool_calls"] isKindOfClass:[NSArray class]] ? delta[@"tool_calls"] : nil;
+			if (deltaCalls.count) {
 				sawToolCalls = YES;
+				for (id item in deltaCalls) {
+					if (![item isKindOfClass:[NSDictionary class]]) continue;
+					NSInteger index = [item[@"index"] isKindOfClass:[NSNumber class]]
+						? [item[@"index"] integerValue] : (NSInteger)partialCalls.count;
+					NSMutableDictionary *entry = partialCalls[@(index)];
+					if (!entry) {
+						entry = [@{@"id": @"", @"name": @"", @"arguments": @""} mutableCopy];
+						partialCalls[@(index)] = entry;
+					}
+					id identifier = item[@"id"];
+					if ([identifier isKindOfClass:[NSString class]] && [identifier length]) entry[@"id"] = identifier;
+					id function = item[@"function"];
+					if ([function isKindOfClass:[NSDictionary class]]) {
+						id name = function[@"name"];
+						if ([name isKindOfClass:[NSString class]] && [name length]) entry[@"name"] = name;
+						id fragment = function[@"arguments"];
+						if ([fragment isKindOfClass:[NSString class]]) {
+							entry[@"arguments"] = [(NSString *)entry[@"arguments"] stringByAppendingString:fragment];
+						}
+					}
+				}
 				return;
 			}
 			NSString *piece = [delta[@"content"] isKindOfClass:[NSString class]] ? delta[@"content"] : nil;
@@ -114,9 +141,11 @@ static const NSTimeInterval kSXStreamTimeout = 60;
 				? candContent[@"parts"] : nil;
 			for (id part in parts) {
 				if (![part isKindOfClass:[NSDictionary class]]) continue;
-				if ([part[@"functionCall"] isKindOfClass:[NSDictionary class]]) {
+				id functionCall = part[@"functionCall"];
+				if ([functionCall isKindOfClass:[NSDictionary class]]) {
 					sawToolCalls = YES;
-					return;
+					[geminiCalls addObject:functionCall];
+					continue;
 				}
 				NSString *piece = [part[@"text"] isKindOfClass:[NSString class]] ? part[@"text"] : nil;
 				if (piece.length) {
@@ -153,7 +182,7 @@ static const NSTimeInterval kSXStreamTimeout = 60;
 		status = statusCode;
 	};
 	receiver.onData = ^(NSData *data) {
-		if (sawToolCalls) return;
+		// Không dừng ở tool call đầu tiên: tham số được gửi thành nhiều mảnh.
 		[buffer appendData:data];
 		if (status >= 400 && errorBody.length < 4096) {
 			NSString *errChunk = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
@@ -187,11 +216,32 @@ static const NSTimeInterval kSXStreamTimeout = 60;
 		return nil;
 	}
 
+	NSMutableArray<NSDictionary *> *toolCalls = [NSMutableArray array];
+	NSArray<NSNumber *> *indexes = [[partialCalls allKeys] sortedArrayUsingSelector:@selector(compare:)];
+	for (NSNumber *index in indexes) {
+		NSDictionary *entry = partialCalls[index];
+		NSString *name = [entry[@"name"] isKindOfClass:[NSString class]] ? entry[@"name"] : nil;
+		if (!name.length) continue;
+		NSString *arguments = [entry[@"arguments"] isKindOfClass:[NSString class]] ? entry[@"arguments"] : @"";
+		NSString *identifier = [entry[@"id"] isKindOfClass:[NSString class]] && [entry[@"id"] length]
+			? entry[@"id"] : name;
+		[toolCalls addObject:@{
+			@"id": identifier,
+			@"type": @"function",
+			@"function": @{
+				@"name": name,
+				@"arguments": arguments.length ? arguments : @"{}",
+			},
+		}];
+	}
+
 	NSMutableDictionary *result = [NSMutableDictionary dictionaryWithDictionary:@{
 		@"content": [content copy],
 		@"sawToolCalls": @(sawToolCalls),
 		@"status": @(status),
 		@"firstTokenMs": @(firstTokenMs),
+		@"toolCalls": toolCalls,
+		@"functionCalls": geminiCalls,
 	}];
 	if (errorBody.length) result[@"errorText"] = [errorBody copy];
 	return result;

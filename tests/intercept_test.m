@@ -44,6 +44,9 @@ static BOOL testIncognito;
 + (NSDictionary *)execute:(NSString *)name arguments:(NSDictionary *)arguments error:(NSError **)error {
 	(void)name; (void)arguments; (void)error; return nil;
 }
++ (NSString *)promptBrief { return @""; }
++ (void)beginTurn {}
++ (NSArray<SXTool *> *)catalog { return @[]; }
 @end
 NSString *SXMarkdownRender(NSString *text) { return text; }
 void SXLogWrite(SXLogLevel level, NSString *category, NSString *format, ...) { (void)level; (void)category; (void)format; }

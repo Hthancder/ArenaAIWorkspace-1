@@ -19,7 +19,7 @@ NSArray<NSString *> *SXPreferenceKeys(void) {
 				 @"temperature", @"contextTurns", @"timeout", @"timeoutAction",
 				 @"streaming", @"markdown", @"hideWebCards", @"showOriginal", @"speakErrors",
 				 @"customPrompt", @"incognito",
-				 @"maxToolRounds", @"toolSystemInfo", @"toolClipboard", @"toolFetchURL",
+				 @"maxToolRounds", @"toolsDisabled",
 				 @"verbose"];
 	});
 	return keys;
@@ -201,7 +201,8 @@ static double SXClamp(double v, double lo, double hi) {
 					 _triggerMode ?: [NSNull null],
 					 _openaiKey ?: [NSNull null], _openaiBase ?: [NSNull null], _openaiModel ?: [NSNull null],
 					 _geminiKey ?: [NSNull null], _geminiModel ?: [NSNull null],
-					 _customPrompt ?: [NSNull null], _timeoutAction ?: [NSNull null]]);
+					 _customPrompt ?: [NSNull null], _timeoutAction ?: [NSNull null],
+					 _disabledTools ?: [NSNull null]]);
 
 	NSDictionary *file = nil;
 	if ([[NSFileManager defaultManager] fileExistsAtPath:kSXFilePath]) {
@@ -237,20 +238,69 @@ static double SXClamp(double v, double lo, double hi) {
 	_timeoutAction = [[self stringFor:@"timeoutAction" default:@"bubble"] isEqualToString:@"keep"]
 		? @"keep" : @"bubble";
 	_maxToolRounds = (NSInteger)SXClamp((double)[self integerFor:@"maxToolRounds" default:3], 1, 4);
-	_toolSystemInfo = [self boolFor:@"toolSystemInfo" default:YES];
-	_toolClipboard = [self boolFor:@"toolClipboard" default:YES];
-	_toolFetchURL = [self boolFor:@"toolFetchURL" default:YES];
+	_disabledTools = [self loadDisabledTools];
 
 	SXLogSetVerbose(_verbose);
 	SXLogInf(@"pref", @"cài đặt: enabled=%d mode=%@ provider=%@ temp=%.1f turns=%ld timeout=%.0fs "
-			 @"stream=%d md=%d timeoutAction=%@ tools=%ld "
+			 @"stream=%d md=%d timeoutAction=%@ toolRounds=%ld toolsOff=%lu "
 			 @"openAIKey=%@ geminiKey=%@ customPrompt=%@",
 			 _enabled, _mode == SXReplyModeFull ? @"full" : @"smart",
 			 _provider == SXProviderGemini ? @"gemini" : @"openai",
 			 _temperature, (long)_contextTurns, _responseTimeout,
 			 _streaming, _markdown, _timeoutAction, (long)_maxToolRounds,
+		 (unsigned long)_disabledTools.count,
 			 SXRedactKey(_openaiKey), SXRedactKey(_geminiKey),
 			 _customPrompt.length > 0 ? [NSString stringWithFormat:@"%lu ký tự", (unsigned long)_customPrompt.length] : @"(mặc định)");
+}
+
+
+#pragma mark - Công cụ
+
+/// Tên công cụ theo ba công tắc của bản 1.1.x (để người dùng nâng cấp không bị mất lựa chọn).
+static NSArray<NSString *> *SXLegacyToolNames(NSString *legacyKey) {
+	if ([legacyKey isEqualToString:@"toolSystemInfo"]) return @[@"device_info"];
+	if ([legacyKey isEqualToString:@"toolClipboard"]) {
+		return @[@"clipboard_read", @"clipboard_write", @"clipboard_clear"];
+	}
+	if ([legacyKey isEqualToString:@"toolFetchURL"]) return @[@"web_fetch"];
+	return @[];
+}
+
+- (NSSet<NSString *> *)loadDisabledTools {
+	id stored = [self valueFor:@"toolsDisabled"];
+	if ([stored isKindOfClass:[NSArray class]]) {
+		NSMutableSet *set = [NSMutableSet set];
+		for (id name in (NSArray *)stored) {
+			if ([name isKindOfClass:[NSString class]] && [(NSString *)name length]) [set addObject:name];
+		}
+		return [set copy];
+	}
+	// Chưa có key mới: chuyển ba công tắc cũ sang danh sách tắt (nếu người dùng đã tắt).
+	NSMutableSet *set = [NSMutableSet set];
+	for (NSString *legacy in @[@"toolSystemInfo", @"toolClipboard", @"toolFetchURL"]) {
+		id value = [self valueFor:legacy];
+		if (!value) continue;
+		BOOL enabled = [value isKindOfClass:[NSNumber class]] ? [value boolValue] : YES;
+		if (!enabled) [set addObjectsFromArray:SXLegacyToolNames(legacy)];
+	}
+	return [set copy];
+}
+
+- (BOOL)isToolEnabled:(NSString *)name {
+	if (!name.length) return NO;
+	return ![_disabledTools containsObject:name];
+}
+
++ (void)setToolNamed:(NSString *)name enabled:(BOOL)enabled {
+	if (!name.length) return;
+	NSSet<NSString *> *current = [SXPrefs shared].disabledTools ?: [NSSet set];
+	NSMutableSet<NSString *> *disabled = [current mutableCopy];
+	if (enabled) [disabled removeObject:name];
+	else [disabled addObject:name];
+	NSArray *sorted = [[disabled allObjects] sortedArrayUsingSelector:@selector(compare:)];
+	[SXPrefs setValue:(sorted.count ? sorted : @[]) forKey:@"toolsDisabled"];
+	[[SXPrefs shared] reload];
+	SXLogInf(@"pref", @"công cụ %@: %@", name, enabled ? @"bật" : @"tắt");
 }
 
 #pragma mark - Truy vấn theo provider hiện tại

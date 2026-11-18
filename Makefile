@@ -15,6 +15,8 @@ SiriX_FILES = \
 	Sources/SXStore.m \
 	Sources/SXPrefs.m \
 	Sources/SXTools.m \
+	Sources/SXToolkit.m \
+	Sources/SXToolCatalog.m \
 	Sources/SXLLM.m \
 	Sources/SXIntercept.m \
 	Sources/SXStream.m \
@@ -24,7 +26,7 @@ SiriX_FILES = \
 SiriX_CFLAGS = -fobjc-arc -Wno-deprecated-declarations \
 	-I$(THEOS_PROJECT_DIR)/include \
 	-DSX_SCHEME=\"$(THEOS_PACKAGE_SCHEME)\"
-SiriX_FRAMEWORKS = UIKit Foundation
+SiriX_FRAMEWORKS = UIKit Foundation SystemConfiguration
 
 include $(THEOS_MAKE_PATH)/tweak.mk
 

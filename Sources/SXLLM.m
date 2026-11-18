@@ -129,6 +129,60 @@ static NSDictionary *SXRunTool(SXToolExec executor, NSString *name, NSDictionary
 	return result;
 }
 
+/// Tham số công cụ đến dưới dạng chuỗi JSON (OpenAI gửi từng mảnh, Gemini gửi
+/// object sẵn). Sai cú pháp → {} để handler tự báo thiếu tham số, thay vì làm
+/// hỏng cả lượt.
+static NSDictionary *SXToolArguments(id raw) {
+	if ([raw isKindOfClass:[NSDictionary class]]) return raw;
+	if (![raw isKindOfClass:[NSString class]] || ![raw length]) return @{};
+	id parsed = [NSJSONSerialization JSONObjectWithData:[(NSString *)raw dataUsingEncoding:NSUTF8StringEncoding]
+													   options:0 error:NULL];
+	return [parsed isKindOfClass:[NSDictionary class]] ? parsed : @{};
+}
+
+static NSString *SXToolResultText(NSError *toolError, NSDictionary *toolResult) {
+	if (toolError) return [@"Lỗi công cụ: " stringByAppendingString:toolError.localizedDescription ?: @"không rõ"];
+	id value = toolResult[@"result"];
+	return [value isKindOfClass:[NSString class]] && [value length] ? value : @"Đã thực hiện xong.";
+}
+
+/// System prompt = cấu hình người dùng + bối cảnh + bản mô tả công cụ.
+/// Model nhỏ (7B–14B tự host) thường bỏ qua `description` trong schema, nên
+/// danh sách công cụ phải được nhắc lại bằng lời trong system prompt.
+static NSString *SXComposeSystemPrompt(SXPrefs *prefs) {
+	NSMutableString *prompt = [prefs.systemPrompt mutableCopy] ?: [NSMutableString string];
+	NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
+	formatter.locale = [NSLocale localeWithLocaleIdentifier:@"vi_VN"];
+	formatter.dateFormat = @"EEEE, dd/MM/yyyy HH:mm";
+	NSString *zone = [NSTimeZone localTimeZone].name ?: @"?";
+	[prompt appendFormat:@"\n\nBối cảnh: bây giờ là %@ (%@); trả lời bằng tiếng Việt.",
+		[formatter stringFromDate:[NSDate date]] ?: @"?", zone];
+	NSString *brief = [SXTools promptBrief];
+	if (brief.length) [prompt appendFormat:@"\n\n%@", brief];
+	return [prompt copy];
+}
+
+/// Thực thi các functionCall Gemini rồi thêm kết quả vào `contents`. Dùng chung
+/// cho cả nhánh stream và non-stream để hai đường không lệch hành vi.
+static void SXAppendGeminiToolResults(NSMutableArray *contents, SXToolExec executor,
+									  NSArray *functionCalls, NSInteger round) {
+	for (NSDictionary *call in functionCalls) {
+		if (![call isKindOfClass:[NSDictionary class]]) continue;
+		NSString *name = [call[@"name"] isKindOfClass:[NSString class]] ? call[@"name"] : nil;
+		if (!name.length) continue;
+		NSDictionary *args = SXToolArguments(call[@"args"]);
+		NSError *toolError = nil;
+		NSDictionary *toolResult = SXRunTool(executor, name, args, round, &toolError);
+		NSString *resultText = SXToolResultText(toolError, toolResult);
+		// Gemini chỉ nhận role "user"/"model" — functionResponse phải đi kèm "user"
+		// ("tool"/"function" là quy ước của OpenAI và bị API trả 400).
+		[contents addObject:@{@"role": @"user", @"parts": @[@{@"functionResponse": @{
+			@"name": name,
+			@"response": @{@"result": resultText},
+		}}]}];
+	}
+}
+
 // Retry giới hạn theo từng vòng HTTP, chỉ với 429/5xx; không chạy lại tool.
 static BOOL SXRetryHTTP(NSInteger status, NSInteger *attempt) {
 	if (!((status == 429) || (status >= 500 && status < 600)) || *attempt >= 2) return NO;
@@ -140,6 +194,29 @@ static BOOL SXRetryHTTP(NSInteger status, NSInteger *attempt) {
 }
 
 #pragma mark - OpenAI tương thích
+
+/// Thực thi toàn bộ tool_calls của một lượt, trả về các message `role: tool`
+/// đúng thứ tự — dùng cho cả nhánh stream và non-stream.
+static NSArray<NSDictionary *> *SXAppendOpenAIToolResults(NSMutableArray *messages,
+													 SXToolExec executor, NSArray *toolCalls, NSInteger round) {
+	NSMutableArray *appended = [NSMutableArray array];
+	for (NSDictionary *call in toolCalls) {
+		if (![call isKindOfClass:[NSDictionary class]]) continue;
+		NSDictionary *function = [call[@"function"] isKindOfClass:[NSDictionary class]] ? call[@"function"] : nil;
+		NSString *name = [function[@"name"] isKindOfClass:[NSString class]] ? function[@"name"] : nil;
+		if (!name.length) continue;
+		NSString *callId = [call[@"id"] isKindOfClass:[NSString class]] && [call[@"id"] length]
+			? call[@"id"] : name;
+		NSDictionary *args = SXToolArguments(function[@"arguments"]);
+		NSError *toolError = nil;
+		NSDictionary *toolResult = SXRunTool(executor, name, args, round, &toolError);
+		NSDictionary *message = @{@"role": @"tool", @"tool_call_id": callId,
+								  @"content": SXToolResultText(toolError, toolResult)};
+		[messages addObject:message];
+		[appended addObject:message];
+	}
+	return appended;
+}
 
 static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary *> *history,
 						NSArray<NSDictionary *> *toolDefs, SXToolExec executor,
@@ -161,7 +238,9 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 	}
 	NSString *url = [base hasSuffix:@"/chat/completions"] ? base : [base stringByAppendingString:@"/chat/completions"];
 	NSMutableArray *messages = [NSMutableArray array];
-	[messages addObject:@{@"role": @"system", @"content": prefs.systemPrompt}];
+	// Nối danh sách công cụ + bối cảnh thời gian vào system prompt.
+	NSString *systemPrompt = SXComposeSystemPrompt(prefs);
+	[messages addObject:@{@"role": @"system", @"content": systemPrompt}];
 	for (NSDictionary *turn in history) {
 		NSString *q = [turn[@"q"] isKindOfClass:[NSString class]] ? turn[@"q"] : nil;
 		NSString *a = [turn[@"a"] isKindOfClass:[NSString class]] ? turn[@"a"] : nil;
@@ -232,8 +311,25 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 			}
 			NSInteger streamStatus = [streamResp[@"status"] integerValue];
 			if (streamStatus >= 200 && streamStatus < 300) {
+				NSArray *streamCalls = [streamResp[@"toolCalls"] isKindOfClass:[NSArray class]]
+					? streamResp[@"toolCalls"] : nil;
+				if (streamCalls.count && executor && rounds < prefs.maxToolRounds) {
+					// Chạy công cụ ngay trên dữ liệu stream: bỏ được trọn một vòng
+					// request (1–3 s), đủ để Siri kịp chờ trên máy thật.
+					rounds++;
+					retryCount = 0;
+					NSString *streamed = [streamResp[@"content"] isKindOfClass:[NSString class]]
+						? streamResp[@"content"] : nil;
+					SXLogDbg(@"llm", @"stream có %lu tool_call → chạy ngay (vòng %ld)",
+							 (unsigned long)streamCalls.count, (long)rounds);
+					[messages addObject:@{@"role": @"assistant",
+										  @"content": streamed.length ? streamed : (id)[NSNull null],
+										  @"tool_calls": streamCalls}];
+					SXAppendOpenAIToolResults(messages, executor, streamCalls, rounds);
+					continue;
+				}
 				if ([streamResp[@"sawToolCalls"] boolValue]) {
-					SXLogDbg(@"llm", @"stream báo tool_calls → non-stream vòng %ld", (long)(rounds + 1));
+					SXLogDbg(@"llm", @"stream báo tool_calls nhưng không gộp đủ → non-stream vòng %ld", (long)(rounds + 1));
 					forceNonStream = YES;
 				} else {
 					NSString *streamed = [streamResp[@"content"] isKindOfClass:[NSString class]]
@@ -311,27 +407,7 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 			assistantMsg[@"tool_calls"] = toolCalls;
 			[messages addObject:assistantMsg];
 
-			for (NSDictionary *call in toolCalls) {
-				if (![call isKindOfClass:[NSDictionary class]]) continue;
-				NSString *name = [call[@"function"] isKindOfClass:[NSDictionary class]] ? call[@"function"][@"name"] : nil;
-				NSString *argsString = [call[@"function"] isKindOfClass:[NSDictionary class]] ? call[@"function"][@"arguments"] : nil;
-				NSString *callId = [call[@"id"] isKindOfClass:[NSString class]] ? call[@"id"] : (name ?: @"");
-				if (![name isKindOfClass:[NSString class]]) continue;
-
-				NSDictionary *args = @{};
-				if ([argsString isKindOfClass:[NSString class]] && argsString.length) {
-					id parsed = [NSJSONSerialization JSONObjectWithData:[argsString dataUsingEncoding:NSUTF8StringEncoding]
-															   options:0 error:NULL];
-					if ([parsed isKindOfClass:[NSDictionary class]]) args = parsed;
-				}
-				NSError *toolError = nil;
-				NSDictionary *toolResult = SXRunTool(executor, name, args, rounds, &toolError);
-				NSString *resultText = toolError
-					? [@"Lỗi công cụ: " stringByAppendingString:toolError.localizedDescription]
-					: ([toolResult[@"result"] isKindOfClass:[NSString class]] ? toolResult[@"result"] : @"Đã thực hiện xong.");
-				SXLogDbg(@"llm", @"round %ld: tool %@ → %@", (long)rounds, name, SXShort(resultText, 160));
-				[messages addObject:@{@"role": @"tool", @"tool_call_id": callId, @"content": resultText}];
-			}
+			SXAppendOpenAIToolResults(messages, executor, toolCalls, rounds);
 			continue;
 		}
 
@@ -418,7 +494,7 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 		}
 		NSMutableDictionary *body = [@{
 			@"contents": contents,
-			@"systemInstruction": @{@"parts": @[@{@"text": prefs.systemPrompt}]},
+			@"systemInstruction": @{@"parts": @[@{@"text": SXComposeSystemPrompt(prefs)}]},
 			@"generationConfig": @{@"temperature": @(prefs.temperature)},
 		} mutableCopy];
 		if (toolDefs.count) {
@@ -450,8 +526,28 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 			}
 			NSInteger streamStatus = [streamResp[@"status"] integerValue];
 			if (streamStatus >= 200 && streamStatus < 300) {
+				NSArray *streamCalls = [streamResp[@"functionCalls"] isKindOfClass:[NSArray class]]
+					? streamResp[@"functionCalls"] : nil;
+				if (streamCalls.count && executor && rounds < prefs.maxToolRounds) {
+					rounds++;
+					retryCount = 0;
+					NSString *streamed = [streamResp[@"content"] isKindOfClass:[NSString class]]
+						? streamResp[@"content"] : nil;
+					SXLogDbg(@"llm", @"stream có %lu functionCall → chạy ngay (vòng %ld)",
+							 (unsigned long)streamCalls.count, (long)rounds);
+					NSMutableArray *modelParts = [NSMutableArray array];
+					if (streamed.length) [modelParts addObject:@{@"text": streamed}];
+					for (NSDictionary *call in streamCalls) {
+						if ([call isKindOfClass:[NSDictionary class]]) {
+							[modelParts addObject:@{@"functionCall": call}];
+						}
+					}
+					[contents addObject:@{@"role": @"model", @"parts": modelParts}];
+					SXAppendGeminiToolResults(contents, executor, streamCalls, rounds);
+					continue;
+				}
 				if ([streamResp[@"sawToolCalls"] boolValue]) {
-					SXLogDbg(@"llm", @"stream báo functionCall → non-stream vòng %ld", (long)(rounds + 1));
+					SXLogDbg(@"llm", @"stream báo functionCall chưa đủ → non-stream vòng %ld", (long)(rounds + 1));
 					forceNonStream = YES;
 				} else {
 					NSString *streamed = [streamResp[@"content"] isKindOfClass:[NSString class]]
@@ -540,23 +636,7 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 			rounds++;
 			retryCount = 0;
 			[contents addObject:@{@"role": @"model", @"parts": parts}];
-			for (NSDictionary *call in functionCalls) {
-				NSString *name = [call[@"name"] isKindOfClass:[NSString class]] ? call[@"name"] : nil;
-				if (!name) continue;
-				NSDictionary *args = [call[@"args"] isKindOfClass:[NSDictionary class]] ? call[@"args"] : @{};
-				NSError *toolError = nil;
-				NSDictionary *toolResult = SXRunTool(executor, name, args, rounds, &toolError);
-				NSString *resultText = toolError
-					? [@"Lỗi công cụ: " stringByAppendingString:toolError.localizedDescription]
-					: ([toolResult[@"result"] isKindOfClass:[NSString class]] ? toolResult[@"result"] : @"Đã thực hiện xong.");
-				SXLogDbg(@"llm", @"round %ld: tool %@ → %@", (long)rounds, name, SXShort(resultText, 160));
-				// Gemini chỉ nhận role "user"/"model" — functionResponse phải đi kèm "user"
-				// ("tool"/"function" là quy ước của OpenAI và bị API trả 400).
-				[contents addObject:@{@"role": @"user", @"parts": @[@{@"functionResponse": @{
-					@"name": name,
-					@"response": @{@"result": resultText},
-				}}]}];
-			}
+			SXAppendGeminiToolResults(contents, executor, functionCalls, rounds);
 			continue;
 		}
 
@@ -610,6 +690,9 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 		completion(nil, SXErr(-1001, @"Câu hỏi rỗng."), nil);
 		return;
 	}
+
+	// Mỗi câu hỏi là một lượt mới: xoá cache chống gọi lặp của tầng công cụ.
+	[SXTools beginTurn];
 
 	if (provider == SXProviderGemini) {
 		SXAskGemini(prefs, question, history, tools, executor, completion);

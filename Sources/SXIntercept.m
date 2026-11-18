@@ -9,6 +9,37 @@
 #import <objc/message.h>
 #import <notify.h>
 
+#pragma mark - Công cụ riêng của tweak
+
+/// `reset_conversation` cần SXIntercept (xoá lịch sử + phát notify) nên không
+/// nằm trong SXToolCatalog dùng chung. Đăng ký vào cùng sổ với 12 công cụ kia để
+/// model thấy nó trong danh sách và Settings liệt kê được.
+static void SXRegisterHostTools(void) {
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		SXTool *tool = [SXTool toolWithName:@"reset_conversation"
+									 title:@"Xoá lịch sử hội thoại"
+								   summary:@"Xoá toàn bộ câu hỏi và câu trả lời đã lưu trên máy."
+									prompt:@"Dùng khi người dùng muốn xoá hoặc quên lịch sử trò chuyện đã lưu."
+								  category:SXToolCategoryMemory
+								parameters:@{@"type": @"object", @"properties": @{}, @"required": @[]}
+								   handler:^NSDictionary *(NSDictionary *arguments, NSError **error) {
+			(void)arguments;
+			if (![[SXIntercept shared] clearHistory]) {
+				if (error) {
+					*error = [NSError errorWithDomain:SXToolErrorDomain code:1
+											userInfo:@{NSLocalizedDescriptionKey: @"Không xoá được lịch sử đã lưu."}];
+				}
+				return nil;
+			}
+			return @{@"result": @"Đã xoá lịch sử hội thoại."};
+		}];
+		tool.sideEffect = YES;
+		tool.timeout = 4.0;
+		[SXToolkit registerTool:tool];
+	});
+}
+
 #pragma mark - Tiện ích
 
 static id SXMsg(id object, SEL selector) {
@@ -366,6 +397,7 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 		_lastProgressAt = 0;
 		_history = [NSMutableArray array];
 		_handledCommands = [NSHashTable hashTableWithOptions:NSPointerFunctionsWeakMemory | NSPointerFunctionsObjectPointerPersonality];
+		SXRegisterHostTools();
 	}
 	return self;
 }
@@ -489,13 +521,6 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 			// Mỗi lần gọi công cụ là một mốc tiến triển: hook ACE đang chờ sẽ được
 			// gia hạn thêm 3 giây thay vì tưởng model bị treo rồi hiện bubble hết giờ.
 			[self noteToolProgress];
-			if ([name isEqualToString:@"reset_conversation"]) {
-				if (![[SXIntercept shared] clearHistory]) {
-					if (error) *error = [NSError errorWithDomain:@"com.sirix.history" code:1 userInfo:@{NSLocalizedDescriptionKey: @"Không xóa được lịch sử đã lưu."}];
-					return nil;
-				}
-				return @{@"result": @"Đã xóa lịch sử hội thoại."};
-			}
 			return [SXTools execute:name arguments:arguments error:error];
 		};
 		[SXLLM askQuestion:clean

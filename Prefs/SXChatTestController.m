@@ -328,10 +328,15 @@ typedef NS_ENUM(NSInteger, SXChatRole) {
 
 	__weak typeof(self) weakSelf = self;
 	dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+		// Bật đúng bộ công cụ như Siri thật để kiểm chứng ngay trong Settings:
+		// thấy AI gọi công cụ, thấy kết quả thật (pin, bảng nhớ tạm, web…).
+		SXToolExec executor = ^NSDictionary *(NSString *name, NSDictionary *arguments, NSError **error) {
+			return [SXTools execute:name arguments:arguments error:error];
+		};
 		[SXLLM askQuestion:question
 				   history:history
-					 tools:@[]
-				  executor:nil
+					 tools:[SXTools definitions]
+				  executor:executor
 				completion:^(NSString *answer, NSError *error, NSDictionary *info) {
 			dispatch_async(dispatch_get_main_queue(), ^{
 				typeof(self) strongSelf = weakSelf;

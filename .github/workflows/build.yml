@@ -27,6 +27,7 @@ jobs:
           ./scripts/test-log-file.sh
           ./scripts/test-intercept-macos.sh
           ./scripts/test-store-macos.sh
+          ./scripts/test-toolkit-macos.sh
 
       - name: Install build tools
         run: brew install make dpkg ldid

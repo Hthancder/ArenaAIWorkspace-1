@@ -73,9 +73,13 @@ FOUNDATION_EXPORT NSArray<NSDictionary *> *SXModelPresets(SXProvider provider);
 @property (nonatomic, readonly) BOOL markdown;                  // trình bày Markdown khi hiển thị (v1.1)
 @property (nonatomic, readonly, copy) NSString *timeoutAction;  // "bubble" | "keep" — khi hết giờ (chế độ Thay thế)
 @property (nonatomic, readonly) NSInteger maxToolRounds;        // 1–4, mặc định 3
-@property (nonatomic, readonly) BOOL toolSystemInfo;
-@property (nonatomic, readonly) BOOL toolClipboard;
-@property (nonatomic, readonly) BOOL toolFetchURL;
+/// Tên các công cụ người dùng đã tắt (xem `SXTools catalog`). Rỗng = bật tất cả.
+@property (nonatomic, readonly, copy) NSSet<NSString *> *disabledTools;
+
+/// Công cụ có đang bật không (dùng cho màn hình Cài đặt → Công cụ).
+- (BOOL)isToolEnabled:(NSString *)name;
+/// Bật/tắt một công cụ và ghi ngay xuống prefs.
++ (void)setToolNamed:(NSString *)name enabled:(BOOL)enabled;
 
 - (nullable NSString *)activeAPIKey;
 - (NSString *)activeModel;

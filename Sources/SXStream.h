@@ -11,7 +11,9 @@ typedef NS_ENUM(NSInteger, SXStreamFormat) {
 /// (mọi thao tác URLSession đều bất đồng bộ — chỉ giữ semaphore như SXHTTPPost).
 /// Trả về dict:
 ///   @"content"       NSString   nội dung tích lũy
-///   @"sawToolCalls"  BOOL       model muốn gọi công cụ → caller chuyển non-stream
+///   @"sawToolCalls"  BOOL       model có phát tool/function call trong stream
+///   @"toolCalls"     NSArray    (OpenAI) đã gộp đủ: @{id, type, function:{name, arguments}}
+///   @"functionCalls" NSArray    (Gemini) đã gộp: @{name, args}
 ///   @"status"        NSNumber   HTTP status (0 nếu lỗi mạng trước khi có response)
 ///   @"firstTokenMs"  NSNumber   ms đến token đầu tiên (-1 nếu không có)
 ///   @"errorText"     NSString?  đoạn lỗi từ máy chủ (khi status ≥ 400)

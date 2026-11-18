@@ -221,31 +221,12 @@
 			<key>cell</key><string>PSGroupCell</string>
 			<key>label</key><string>Công cụ AI</string>
 			<key>footerText</key>
-			<string>AI tự gọi công cụ khi cần; tác vụ hệ thống vẫn do Siri gốc đảm nhiệm. “Số vòng” là số lần AI được gọi công cụ trong một câu hỏi.</string>
+			<string>AI gọi công cụ thật trên máy (đọc pin, bảng nhớ tạm, web, mở ứng dụng, ghi nhớ, tính toán) thay vì đoán. “Số vòng” là số lần AI được gọi công cụ trong một câu hỏi — để 2–3 là đủ cho hầu hết câu.</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSSwitchCell</string>
-			<key>label</key><string>Thông tin thiết bị</string>
-			<key>key</key><string>toolSystemInfo</string>
-			<key>defaults</key><string>com.sirix.tweak</string>
-			<key>default</key><true/>
-			<key>PostNotification</key><string>com.sirix.tweak/prefs.changed</string>
-		</dict>
-		<dict>
-			<key>cell</key><string>PSSwitchCell</string>
-			<key>label</key><string>Đọc bộ nhớ tạm</string>
-			<key>key</key><string>toolClipboard</string>
-			<key>defaults</key><string>com.sirix.tweak</string>
-			<key>default</key><true/>
-			<key>PostNotification</key><string>com.sirix.tweak/prefs.changed</string>
-		</dict>
-		<dict>
-			<key>cell</key><string>PSSwitchCell</string>
-			<key>label</key><string>Đọc trang web (https)</string>
-			<key>key</key><string>toolFetchURL</string>
-			<key>defaults</key><string>com.sirix.tweak</string>
-			<key>default</key><true/>
-			<key>PostNotification</key><string>com.sirix.tweak/prefs.changed</string>
+			<key>cell</key><string>PSLinkCell</string>
+			<key>label</key><string>Công cụ AI</string>
+			<key>detail</key><string>SXToolsController</string>
 		</dict>
 		<dict>
 			<key>cell</key><string>PSSliderCell</string>

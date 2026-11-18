@@ -1,5 +1,13 @@
 # SiriX — tiến độ thực hiện thiết kế v1.2
 
+> **1.1.3 — làm lại toàn bộ tầng công cụ.** Từ một danh sách công cụ nhỏ dựng trực
+> tiếp trong `SXTools`, công cụ giờ là một tầng riêng: `SXToolkit` (sổ đăng ký +
+> thực thi có kiểm soát) và `SXToolCatalog` (13 công cụ thật). Model thấy công cụ
+> qua schema + mô tả trong system prompt, gọi được cả khi stream (không tốn thêm
+> một vòng request), tham số được validate/ép kiểu, kết quả lỗi được trả lại bằng
+> tiếng Việt để model tự sửa, mỗi công cụ có trần thời gian riêng, và Settings có
+> màn hình Công cụ bật/tắt từng công cụ. Chi tiết ở mục cuối tài liệu.
+>
 > **1.1.2 — sửa treo màn hình Log và văng Siri khi gọi công cụ.** Màn hình log đọc
 > theo kiểu "đuôi file" trên luồng nền; pipeline công cụ có trần thời gian, bọc
 > exception và chèn bong bóng đúng `dialogIdentifier`. Chi tiết ở mục cuối tài liệu.
@@ -129,3 +137,50 @@ làm chết SpringBoard, và log ghi rõ hook chạy trên luồng chính hay kh
 - `./scripts/test-log-file.sh` → thêm 5 ca cho `SXLogFileReadTail` (file nhỏ, đuôi bị cắt,
   file rỗng, file không tồn tại, một dòng dài hơn cửa sổ đọc).
 - Trên thiết bị: log khởi động phải ghi `SiriX 1.1.2`; màn hình Log hiện `N dòng · X KB`.
+
+## 1.1.3 — Tầng công cụ mới
+
+**Vì sao làm lại.** Bản 1.1.2 truyền công cụ theo kiểu "một mảng dictionary dựng
+tay trong `SXTools`" và chỉ đường non-stream mới chạy được công cụ. Hệ quả trên
+máy thật: model không thấy đúng schema, mỗi lượt có công cụ phải gửi lại request
+lần hai (chậm gấp đôi, thường quá hạn chờ của Siri), tham số sai kiểu làm handler
+hỏng, và không có chỗ nào để bật/tắt từng công cụ.
+
+**Kiến trúc.**
+
+| Thành phần | Vai trò |
+| --- | --- |
+| `Sources/SXToolkit.{h,m}` | `SXTool` (tên, tiêu đề, mô tả cho model, schema, handler, timeout, main-thread, side-effect) + sổ đăng ký có lock + bộ thực thi |
+| `Sources/SXToolCatalog.{h,m}` | 12 công cụ dựng sẵn; `SXInstallBuiltinTools()` đăng ký một lần |
+| `Sources/SXTools.{h,m}` | Facade cho pipeline: `definitions`, `execute:arguments:error:`, `promptBrief`, `beginTurn`, `catalog`; đọc `SXPrefs.disabledTools` |
+| `Sources/SXIntercept.m` | Đăng ký thêm `reset_conversation` (cần `SXIntercept` nên không nằm trong catalog) |
+| `Prefs/SXToolsController.{h,m}` | Màn hình "Công cụ AI": nhóm theo loại, mô tả tiếng Việt, công tắc từng công cụ, nút bật lại tất cả |
+
+**Hành vi thực thi.** Validate theo JSON schema (thiếu tham số bắt buộc → lỗi 422
+kèm tên tham số); ép kiểu khi model gửi chuỗi cho số/boolean; chạy handler trên
+hàng đợi riêng với trần thời gian của từng công cụ (504 khi quá hạn); bọc
+`@try/@catch` (500 thay vì làm sập SpringBoard); chuẩn hoá kết quả về
+`@{@"result": NSString}`, cắt ở 4 000 ký tự; cache theo `(tên, tham số)` trong một
+lượt để model không gọi lặp cùng một việc; tắt công cụ → 403, tên lạ → 404 kèm
+danh sách công cụ đang dùng (model tự sửa được).
+
+**Đường stream.** `SXStream` giờ gộp `tool_calls` (OpenAI) và `functionCall`
+(Gemini) ngay trong SSE, nên `SXLLM` thực thi công cụ tại chỗ — bỏ được trọn một
+vòng request so với bản "thấy tool call thì quay lại non-stream".
+
+**Danh sách công cụ 1.1.3.** `device_info` (3 s) · `clipboard_read/write/clear`
+(3 s, main thread) · `web_fetch` (10 s; chỉ http/https, chặn host nội bộ, không đi
+theo redirect, trần 2 MB) · `list_apps` (4 s) · `open_app` (5 s) · `open_url`
+(5 s) · `run_shortcut` (5 s) · `remember`/`recall`/`forget` (4 s; plist tại
+`/var/mobile/Library/SiriX/memory.plist`, tối đa 200 ghi chú) · `calculate` (2 s;
+parser đệ quy, không `eval`) · `reset_conversation` (4 s).
+
+**Kiểm thử.** `tests/toolkit_test.m` (chạy bằng `scripts/test-toolkit-macos.sh`
+trong CI) phủ: registry, thứ tự, thay thế khi trùng tên, schema, ép kiểu, thiếu
+tham số, cache trong lượt, reset theo lượt, 404/403/500/504, cắt kết quả, handler
+trả nil. Trò chuyện thử trong Settings giờ dùng đúng bộ công cụ như Siri thật.
+
+**Đã bỏ.** Ba công tắc cũ (`toolSystemInfo`, `toolClipboard`, `toolFetchURL`) nay
+được migrate sang `toolsDisabled` (danh sách tên công cụ bị tắt); Root.plist thay
+ba hàng công tắc bằng một liên kết tới màn hình Công cụ.
+

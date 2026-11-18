@@ -9,6 +9,7 @@ SiriXPreferences_FILES = \
 	SXChatTestController.m \
 	SXHistoryController.m \
 	SXStatsController.m \
+	SXToolsController.m \
 	../Sources/SXLog.m \
 	../Sources/SXStore.m \
 	../Sources/SXPrefs.m \
@@ -16,6 +17,8 @@ SiriXPreferences_FILES = \
 	../Sources/SXStream.m \
 	../Sources/SXMarkdown.m \
 	../Sources/SXTools.m \
+	../Sources/SXToolkit.m \
+	../Sources/SXToolCatalog.m \
 	SXProviderConfigController.m \
 	SXModelPickerController.m \
 	SXUISupport.m
@@ -24,7 +27,7 @@ SiriXPreferences_CFLAGS = -fobjc-arc -Wno-deprecated-declarations \
 	-I$(THEOS_PROJECT_DIR)/include \
 	-I../Sources \
 	-DSX_SCHEME=\"$(THEOS_PACKAGE_SCHEME)\"
-SiriXPreferences_FRAMEWORKS = UIKit Foundation
+SiriXPreferences_FRAMEWORKS = UIKit Foundation SystemConfiguration
 SiriXPreferences_PRIVATE_FRAMEWORKS = Preferences
 SiriXPreferences_INSTALL_PATH = /Library/PreferenceBundles
 
