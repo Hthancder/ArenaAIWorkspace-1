@@ -136,3 +136,63 @@ jobs:
           name: SiriX-${{ matrix.scheme }}
           path: packages/*.deb
           if-no-files-found: error
+
+  publish:
+    name: Publish deb to release
+    needs: build
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout (để đọc phiên bản trong control)
+        uses: actions/checkout@v4
+
+      - name: Download built debs
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Chuẩn bị thư mục phát hành
+        run: |
+          set -euo pipefail
+          VERSION=$(awk '/^Version:/ {print $2}' control)
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          mkdir -p dist
+          for dir in artifacts/*/; do
+            name=$(basename "$dir")
+            deb=$(find "$dir" -name '*.deb' | head -n 1)
+            if [ -z "$deb" ]; then
+              echo "::error title=Thiếu deb::Không có .deb trong $dir"
+              exit 1
+            fi
+            cp "$deb" "dist/${name}.deb"
+          done
+          cd dist
+          for f in *.deb; do sha256sum "$f" >> SHA256SUMS; done
+          ls -lh
+          printf '%s\n' \
+            "Bản build tự động từ commit ${GITHUB_SHA:0:7} (nhánh ${GITHUB_REF_NAME})." \
+            "" \
+            "- SiriX-rootless.deb — Dopamine / palera1n rootless" \
+            "- SiriX-roothide.deb — roothide" \
+            "- SHA256SUMS — kiểm tra toàn vẹn trước khi cài" \
+            "" \
+            "Cài đặt: mở tệp .deb bằng Sileo/Zebra, hoặc chạy dpkg -i <tên>.deb rồi respring." \
+            > /tmp/notes.md
+          cat /tmp/notes.md
+
+      - name: Tạo release kèm asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="sirix-${VERSION}-build.${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG" dist/*.deb dist/SHA256SUMS \
+            --title "SiriX ${VERSION} (build ${GITHUB_RUN_NUMBER})" \
+            --notes-file /tmp/notes.md \
+            --repo "$GITHUB_REPOSITORY"
+          {
+            echo "### 📦 $TAG"
+            echo "https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
+          } >> "$GITHUB_STEP_SUMMARY"
