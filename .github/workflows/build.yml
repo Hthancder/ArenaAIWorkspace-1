@@ -34,7 +34,24 @@ jobs:
           echo "THEOS=$GITHUB_WORKSPACE/theos" >> "$GITHUB_ENV"
 
       - name: Build & package (THEOS_PACKAGE_SCHEME=${{ matrix.scheme }})
-        run: make clean || true; make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=${{ matrix.scheme }}
+        run: |
+          set +e
+          make clean > build.log 2>&1
+          make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=${{ matrix.scheme }} >> build.log 2>&1
+          rc=$?
+          if [ $rc -ne 0 ]; then
+            {
+              echo "## ❌ Build failed (${{ matrix.scheme }})"
+              echo '```'
+              tail -n 150 build.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "===== build failed, tail: ====="
+            tail -n 80 build.log
+          else
+            echo "## ✅ ${{ matrix.scheme }} build OK" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit $rc
 
       - name: Validate package
         run: |
