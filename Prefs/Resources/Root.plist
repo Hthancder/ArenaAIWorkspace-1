@@ -22,7 +22,6 @@
 			<key>key</key>
 			<string>status</string>
 		</dict>
-
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -38,6 +37,8 @@
 			<string>Bật SiriX</string>
 			<key>key</key>
 			<string>enabled</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
 			<key>default</key>
 			<true/>
 			<key>PostNotification</key>
@@ -50,6 +51,8 @@
 			<string>Chế độ trả lời</string>
 			<key>key</key>
 			<string>mode</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
 			<key>default</key>
 			<string>smart</string>
 			<key>validValues</key>
@@ -67,7 +70,6 @@
 			<key>PostNotification</key>
 			<string>com.sirix.tweak/prefs.changed</string>
 		</dict>
-
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -83,6 +85,8 @@
 			<string>Nhà cung cấp</string>
 			<key>key</key>
 			<string>provider</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
 			<key>default</key>
 			<string>openai</string>
 			<key>validValues</key>
@@ -120,7 +124,6 @@
 			<key>configPlist</key>
 			<string>ProviderGemini</string>
 		</dict>
-
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -136,10 +139,12 @@
 			<string>Nhiệt độ</string>
 			<key>key</key>
 			<string>temperature</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
 			<key>min</key>
-			<real>0</real>
+			<real>0.0</real>
 			<key>max</key>
-			<real>2</real>
+			<real>2.0</real>
 			<key>default</key>
 			<real>0.7</real>
 			<key>showValue</key>
@@ -154,12 +159,14 @@
 			<string>Số câu hội thoại giữ lại</string>
 			<key>key</key>
 			<string>contextTurns</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
 			<key>min</key>
-			<real>2</real>
+			<real>2.0</real>
 			<key>max</key>
-			<real>40</real>
+			<real>40.0</real>
 			<key>default</key>
-			<real>8</real>
+			<real>8.0</real>
 			<key>showValue</key>
 			<true/>
 			<key>PostNotification</key>
@@ -172,12 +179,14 @@
 			<string>Thời gian chờ AI (giây)</string>
 			<key>key</key>
 			<string>timeout</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
 			<key>min</key>
-			<real>2</real>
+			<real>2.0</real>
 			<key>max</key>
-			<real>30</real>
+			<real>30.0</real>
 			<key>default</key>
-			<real>10</real>
+			<real>10.0</real>
 			<key>showValue</key>
 			<true/>
 			<key>PostNotification</key>
@@ -190,6 +199,8 @@
 			<string>Khi hết giờ chờ</string>
 			<key>key</key>
 			<string>timeoutAction</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
 			<key>default</key>
 			<string>bubble</string>
 			<key>validValues</key>
@@ -214,6 +225,8 @@
 			<string>Trả lời theo streaming</string>
 			<key>key</key>
 			<string>streaming</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
 			<key>default</key>
 			<true/>
 			<key>PostNotification</key>
@@ -226,6 +239,8 @@
 			<string>Hiển thị Markdown đẹp</string>
 			<key>key</key>
 			<string>markdown</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
 			<key>default</key>
 			<true/>
 			<key>PostNotification</key>
@@ -238,6 +253,8 @@
 			<string>Ẩn thẻ kết quả tìm kiếm</string>
 			<key>key</key>
 			<string>hideWebCards</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
 			<key>default</key>
 			<true/>
 			<key>PostNotification</key>
@@ -250,12 +267,13 @@
 			<string>Báo lỗi bằng giọng nói</string>
 			<key>key</key>
 			<string>speakErrors</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
 			<key>default</key>
 			<false/>
 			<key>PostNotification</key>
 			<string>com.sirix.tweak/prefs.changed</string>
 		</dict>
-
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -272,7 +290,6 @@
 			<key>detail</key>
 			<string>SXPromptController</string>
 		</dict>
-
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -288,6 +305,8 @@
 			<string>Thông tin hệ thống</string>
 			<key>key</key>
 			<string>toolSystemInfo</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
 			<key>default</key>
 			<true/>
 			<key>PostNotification</key>
@@ -300,6 +319,8 @@
 			<string>Đọc bộ nhớ tạm</string>
 			<key>key</key>
 			<string>toolClipboard</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
 			<key>default</key>
 			<true/>
 			<key>PostNotification</key>
@@ -312,6 +333,8 @@
 			<string>Truy cập trang web</string>
 			<key>key</key>
 			<string>toolFetchURL</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
 			<key>default</key>
 			<true/>
 			<key>PostNotification</key>
@@ -324,12 +347,14 @@
 			<string>Số vòng công cụ</string>
 			<key>key</key>
 			<string>maxToolRounds</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
 			<key>min</key>
-			<real>1</real>
+			<real>1.0</real>
 			<key>max</key>
-			<real>4</real>
+			<real>4.0</real>
 			<key>default</key>
-			<real>3</real>
+			<real>3.0</real>
 			<key>showValue</key>
 			<true/>
 			<key>PostNotification</key>
@@ -343,7 +368,6 @@
 			<key>action</key>
 			<string>sx_resetHistory:</string>
 		</dict>
-
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -359,6 +383,8 @@
 			<string>Ghi log chi tiết</string>
 			<key>key</key>
 			<string>verbose</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
 			<key>default</key>
 			<true/>
 			<key>PostNotification</key>
@@ -372,7 +398,6 @@
 			<key>detail</key>
 			<string>SXLogViewController</string>
 		</dict>
-
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
