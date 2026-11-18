@@ -136,10 +136,26 @@ static void SXExceptionHandler(NSException *exception) {
 }
 
 - (void)buildHeader {
-	// Chỉ gắn header khi view thực sự là UITableView — tránh unrecognized selector.
-	if (![self.view isKindOfClass:[UITableView class]]) {
-		SXLogWrn(@"pref", @"view (%@) không phải UITableView — bỏ header",
-				 NSStringFromClass([self.view class]));
+	// Tìm UITableView: có thể là self.view hoặc một trong các subview (iOS 15).
+	UITableView *table = nil;
+	if ([self.view isKindOfClass:[UITableView class]]) {
+		table = (UITableView *)self.view;
+	} else {
+		for (UIView *subview in self.view.subviews) {
+			if ([subview isKindOfClass:[UITableView class]]) {
+				table = (UITableView *)subview;
+				break;
+			}
+		}
+	}
+	if (!table) {
+		NSMutableArray<NSString *> *subviewClasses = [NSMutableArray array];
+		for (UIView *subview in self.view.subviews) {
+			[subviewClasses addObject:NSStringFromClass(subview.class)];
+		}
+		SXLogWrn(@"pref", @"không tìm thấy UITableView (view=%@, subviews=%@) — bỏ header",
+				 NSStringFromClass(self.view.class),
+				 [subviewClasses componentsJoinedByString:@","]);
 		return;
 	}
 
@@ -174,8 +190,9 @@ static void SXExceptionHandler(NSException *exception) {
 	subtitleLabel.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 	[header addSubview:subtitleLabel];
 
-	((UITableView *)self.view).tableHeaderView = header;
-	SXLogInf(@"pref", @"header cài đặt đã gắn (icon=%d)", iconImage != nil);
+	table.tableHeaderView = header;
+	SXLogInf(@"pref", @"header cài đặt đã gắn (icon=%d, table=%@)", iconImage != nil,
+			 NSStringFromClass([table class]));
 }
 
 #pragma mark - Hành động

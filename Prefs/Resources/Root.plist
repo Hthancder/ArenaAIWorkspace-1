@@ -140,12 +140,10 @@
 			<string>https://api.openai.com/v1</string>
 			<key>placeholder</key>
 			<string>https://api.openai.com/v1</string>
-			<key>keyboard</key>
-			<integer>7</integer>
-			<key>autoCaps</key>
-			<integer>0</integer>
-			<key>autoCorrection</key>
-			<integer>0</integer>
+			<key>noAutoCorrect</key>
+			<true/>
+			<key>isURL</key>
+			<true/>
 			<key>PostNotification</key>
 			<string>com.sirix.tweak/prefs.changed</string>
 			<key>provider</key>
@@ -164,10 +162,8 @@
 			<string>gpt-4o-mini</string>
 			<key>placeholder</key>
 			<string>gpt-4o-mini</string>
-			<key>autoCaps</key>
-			<integer>0</integer>
-			<key>autoCorrection</key>
-			<integer>0</integer>
+			<key>noAutoCorrect</key>
+			<true/>
 			<key>PostNotification</key>
 			<string>com.sirix.tweak/prefs.changed</string>
 			<key>provider</key>
@@ -208,10 +204,8 @@
 			<string>gemini-2.0-flash</string>
 			<key>placeholder</key>
 			<string>gemini-2.0-flash</string>
-			<key>autoCaps</key>
-			<integer>0</integer>
-			<key>autoCorrection</key>
-			<integer>0</integer>
+			<key>noAutoCorrect</key>
+			<true/>
 			<key>PostNotification</key>
 			<string>com.sirix.tweak/prefs.changed</string>
 			<key>provider</key>
@@ -459,7 +453,7 @@
 			<key>label</key>
 			<string>Phiên bản</string>
 			<key>value</key>
-			<string>1.0.1</string>
+			<string>1.0.2</string>
 		</dict>
 		<dict>
 			<key>cell</key>
