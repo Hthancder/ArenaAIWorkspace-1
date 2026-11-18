@@ -59,6 +59,10 @@ extension WritingToolsView {
 
             Spacer(minLength: 4)
 
+            if cfg.settings.readOnlyEnabled {
+                screenOCRButton
+            }
+
             providerQuickMenu
 
             closeButton
@@ -131,6 +135,53 @@ extension WritingToolsView {
             .foregroundColor(.white)
         }
         .disabled(isRunning)
+    }
+
+    var screenOCRButton: some View {
+        Button {
+            launchScreenOCRFromHeader()
+        } label: {
+            Image(systemName: "text.viewfinder")
+                .font(.caption.bold())
+                .foregroundColor(.cyan)
+                .frame(width: 26, height: 26)
+                .background(
+                    Circle()
+                        .foregroundStyle(.white)
+                        .opacity(0.14)
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(isRunning)
+    }
+
+    func launchScreenOCRFromHeader() {
+        let hostWin: UIWindow? = {
+            if let win = context.targetView.window,
+               win.windowLevel == .normal,
+               !NSStringFromClass(type(of: win)).contains("WriteNow")
+            {
+                return win
+            }
+            for scene in UIApplication.shared.connectedScenes {
+                guard let ws = scene as? UIWindowScene else { continue }
+                if let win = ws.windows.first(where: {
+                    !$0.isHidden && $0.windowLevel == .normal && !NSStringFromClass(type(of: $0)).contains("WriteNow")
+                }) {
+                    return win
+                }
+            }
+            return nil
+        }()
+        if isRunning {
+            stopStreaming()
+        }
+        dismiss()
+        if let hostWin {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
+                ScreenPickerCoordinator.shared.presentPicker(in: hostWin, forceFullOCR: true)
+            }
+        }
     }
 
     var closeButton: some View {

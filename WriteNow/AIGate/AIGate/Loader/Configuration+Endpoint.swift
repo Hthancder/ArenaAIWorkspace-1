@@ -642,7 +642,9 @@ extension Configuration {
         var unlockBlockedSelection: Bool
         var floatingPickerBubbleEnabled: Bool
         var pickerTwoFingerLongPressEnabled: Bool
+        var pickerThreeFingerTapEnabled: Bool
         var pickerStatusBarDoubleTapEnabled: Bool
+        var pickerShakeEnabled: Bool
         var ocrPreferredLanguages: [String]
         var keepEditContextEnabled: Bool
         var editContextMatchMode: String      // "smart_match" | "always_in_ttl"
@@ -694,7 +696,9 @@ extension Configuration {
             unlockBlockedSelection: false,
             floatingPickerBubbleEnabled: false,
             pickerTwoFingerLongPressEnabled: true,
+            pickerThreeFingerTapEnabled: true,
             pickerStatusBarDoubleTapEnabled: false,
+            pickerShakeEnabled: false,
             ocrPreferredLanguages: ["vi-VN", "en-US", "zh-Hans", "ja-JP", "ko-KR"],
             keepEditContextEnabled: true,
             editContextMatchMode: "smart_match",
@@ -747,7 +751,9 @@ extension Configuration {
             unlockBlockedSelection: Bool = false,
             floatingPickerBubbleEnabled: Bool = false,
             pickerTwoFingerLongPressEnabled: Bool = true,
+            pickerThreeFingerTapEnabled: Bool = true,
             pickerStatusBarDoubleTapEnabled: Bool = false,
+            pickerShakeEnabled: Bool = false,
             ocrPreferredLanguages: [String] = ["vi-VN", "en-US", "zh-Hans", "ja-JP", "ko-KR"],
             keepEditContextEnabled: Bool = true,
             editContextMatchMode: String = "smart_match",
@@ -798,7 +804,9 @@ extension Configuration {
             self.unlockBlockedSelection = unlockBlockedSelection
             self.floatingPickerBubbleEnabled = floatingPickerBubbleEnabled
             self.pickerTwoFingerLongPressEnabled = pickerTwoFingerLongPressEnabled
+            self.pickerThreeFingerTapEnabled = pickerThreeFingerTapEnabled
             self.pickerStatusBarDoubleTapEnabled = pickerStatusBarDoubleTapEnabled
+            self.pickerShakeEnabled = pickerShakeEnabled
             self.ocrPreferredLanguages = ocrPreferredLanguages
             self.keepEditContextEnabled = keepEditContextEnabled
             self.editContextMatchMode = editContextMatchMode
@@ -822,7 +830,7 @@ extension Configuration {
             case showMainMenuItemInSelection, showMainMenuItemOnReadOnly, selectionMenuPresentationMode
             case selectionMenuItems, quickActions
             case injectIntoContextMenus, unlockBlockedSelection
-            case floatingPickerBubbleEnabled, pickerTwoFingerLongPressEnabled, pickerStatusBarDoubleTapEnabled
+            case floatingPickerBubbleEnabled, pickerTwoFingerLongPressEnabled, pickerThreeFingerTapEnabled, pickerStatusBarDoubleTapEnabled, pickerShakeEnabled
             case ocrPreferredLanguages
             case keepEditContextEnabled, editContextMatchMode, editContextMaxTurns, editContextTTLSeconds
             case speechRate, autoFallbackEndpointEnabled
@@ -872,7 +880,9 @@ extension Configuration {
             unlockBlockedSelection = try container.decodeIfPresent(Bool.self, forKey: .unlockBlockedSelection) ?? false
             floatingPickerBubbleEnabled = try container.decodeIfPresent(Bool.self, forKey: .floatingPickerBubbleEnabled) ?? false
             pickerTwoFingerLongPressEnabled = try container.decodeIfPresent(Bool.self, forKey: .pickerTwoFingerLongPressEnabled) ?? true
+            pickerThreeFingerTapEnabled = try container.decodeIfPresent(Bool.self, forKey: .pickerThreeFingerTapEnabled) ?? true
             pickerStatusBarDoubleTapEnabled = try container.decodeIfPresent(Bool.self, forKey: .pickerStatusBarDoubleTapEnabled) ?? false
+            pickerShakeEnabled = try container.decodeIfPresent(Bool.self, forKey: .pickerShakeEnabled) ?? false
             ocrPreferredLanguages = try container.decodeIfPresent([String].self, forKey: .ocrPreferredLanguages) ?? ["vi-VN", "en-US", "zh-Hans", "ja-JP", "ko-KR"]
             keepEditContextEnabled = try container.decodeIfPresent(Bool.self, forKey: .keepEditContextEnabled) ?? true
             editContextMatchMode = try container.decodeIfPresent(String.self, forKey: .editContextMatchMode) ?? "smart_match"

@@ -372,7 +372,9 @@ public struct RuntimeSettings: Codable, Equatable {
     public var unlockBlockedSelection: Bool
     public var floatingPickerBubbleEnabled: Bool
     public var pickerTwoFingerLongPressEnabled: Bool
+    public var pickerThreeFingerTapEnabled: Bool
     public var pickerStatusBarDoubleTapEnabled: Bool
+    public var pickerShakeEnabled: Bool
     public var ocrPreferredLanguages: [String]
     public var keepEditContextEnabled: Bool
     public var editContextMatchMode: String
@@ -424,7 +426,9 @@ public struct RuntimeSettings: Codable, Equatable {
         unlockBlockedSelection: false,
         floatingPickerBubbleEnabled: false,
         pickerTwoFingerLongPressEnabled: true,
+        pickerThreeFingerTapEnabled: true,
         pickerStatusBarDoubleTapEnabled: false,
+        pickerShakeEnabled: false,
         ocrPreferredLanguages: ["vi-VN", "en-US", "zh-Hans", "ja-JP", "ko-KR"],
         keepEditContextEnabled: true,
         editContextMatchMode: "smart_match",
@@ -448,7 +452,7 @@ public struct RuntimeSettings: Codable, Equatable {
         case showMainMenuItemInSelection, showMainMenuItemOnReadOnly, selectionMenuPresentationMode
         case selectionMenuItems, quickActions
         case injectIntoContextMenus, unlockBlockedSelection
-        case floatingPickerBubbleEnabled, pickerTwoFingerLongPressEnabled, pickerStatusBarDoubleTapEnabled
+        case floatingPickerBubbleEnabled, pickerTwoFingerLongPressEnabled, pickerThreeFingerTapEnabled, pickerStatusBarDoubleTapEnabled, pickerShakeEnabled
         case ocrPreferredLanguages
         case keepEditContextEnabled, editContextMatchMode, editContextMaxTurns, editContextTTLSeconds
         case speechRate, autoFallbackEndpointEnabled
@@ -497,7 +501,9 @@ public struct RuntimeSettings: Codable, Equatable {
         unlockBlockedSelection: Bool = false,
         floatingPickerBubbleEnabled: Bool = false,
         pickerTwoFingerLongPressEnabled: Bool = true,
+        pickerThreeFingerTapEnabled: Bool = true,
         pickerStatusBarDoubleTapEnabled: Bool = false,
+        pickerShakeEnabled: Bool = false,
         ocrPreferredLanguages: [String] = ["vi-VN", "en-US", "zh-Hans", "ja-JP", "ko-KR"],
         keepEditContextEnabled: Bool = true,
         editContextMatchMode: String = "smart_match",
@@ -548,7 +554,9 @@ public struct RuntimeSettings: Codable, Equatable {
         self.unlockBlockedSelection = unlockBlockedSelection
         self.floatingPickerBubbleEnabled = floatingPickerBubbleEnabled
         self.pickerTwoFingerLongPressEnabled = pickerTwoFingerLongPressEnabled
+        self.pickerThreeFingerTapEnabled = pickerThreeFingerTapEnabled
         self.pickerStatusBarDoubleTapEnabled = pickerStatusBarDoubleTapEnabled
+        self.pickerShakeEnabled = pickerShakeEnabled
         self.ocrPreferredLanguages = ocrPreferredLanguages
         self.keepEditContextEnabled = keepEditContextEnabled
         self.editContextMatchMode = editContextMatchMode
@@ -602,7 +610,9 @@ public struct RuntimeSettings: Codable, Equatable {
         unlockBlockedSelection = try c.decodeIfPresent(Bool.self, forKey: .unlockBlockedSelection) ?? false
         floatingPickerBubbleEnabled = try c.decodeIfPresent(Bool.self, forKey: .floatingPickerBubbleEnabled) ?? false
         pickerTwoFingerLongPressEnabled = try c.decodeIfPresent(Bool.self, forKey: .pickerTwoFingerLongPressEnabled) ?? true
+        pickerThreeFingerTapEnabled = try c.decodeIfPresent(Bool.self, forKey: .pickerThreeFingerTapEnabled) ?? true
         pickerStatusBarDoubleTapEnabled = try c.decodeIfPresent(Bool.self, forKey: .pickerStatusBarDoubleTapEnabled) ?? false
+        pickerShakeEnabled = try c.decodeIfPresent(Bool.self, forKey: .pickerShakeEnabled) ?? false
         ocrPreferredLanguages = try c.decodeIfPresent([String].self, forKey: .ocrPreferredLanguages) ?? ["vi-VN", "en-US", "zh-Hans", "ja-JP", "ko-KR"]
         keepEditContextEnabled = try c.decodeIfPresent(Bool.self, forKey: .keepEditContextEnabled) ?? true
         editContextMatchMode = try c.decodeIfPresent(String.self, forKey: .editContextMatchMode) ?? "smart_match"

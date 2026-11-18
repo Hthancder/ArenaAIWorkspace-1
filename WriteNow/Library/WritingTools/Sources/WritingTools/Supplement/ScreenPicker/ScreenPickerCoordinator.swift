@@ -8,6 +8,11 @@ import UIKit
 final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
     static let shared = ScreenPickerCoordinator()
 
+    private static let bubbleIsLeftKey = "WriteNowPickerBubbleIsLeft"
+    private static let bubbleYRatioKey = "WriteNowPickerBubbleYRatio"
+    private static let bubbleViewTag = 0x574E4255
+    private static let ownerSelectorKey = NSSelectorFromString("___WriteNowScreenPickerOwnerKey___")
+
     private let attachedWindows = NSHashTable<UIWindow>.weakObjects()
     private weak var bubbleWindow: UIWindow?
     private var bubbleButton: UIButton?
@@ -15,12 +20,19 @@ final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
     private var isOverlayPresented = false
     private var isKeyboardVisible = false
     private var hiddenForCurrentSession = false
+    private var lastShakeTriggerAt: Date = .distantPast
 
-    private static let bubbleIsLeftKey = "WriteNowPickerBubbleIsLeft"
-    private static let bubbleYRatioKey = "WriteNowPickerBubbleYRatio"
+    private var isPrimaryOwner: Bool {
+        guard let existing = objc_getAssociatedObject(UIApplication.shared, Self.ownerSelectorKey) as AnyObject? else {
+            objc_setAssociatedObject(UIApplication.shared, Self.ownerSelectorKey, self, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+            return true
+        }
+        return existing === self
+    }
 
     override private init() {
         super.init()
+        guard isPrimaryOwner else { return }
         let nc = NotificationCenter.default
         nc.addObserver(
             self,
@@ -49,7 +61,7 @@ final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
     }
 
     func attachIfNeeded(to window: UIWindow) {
-        guard isNormalAppProcess else { return }
+        guard isPrimaryOwner, isNormalAppProcess else { return }
         guard window.windowLevel == .normal else { return }
         let clsName = NSStringFromClass(type(of: window))
         guard !clsName.contains("TextEffects"),
@@ -64,9 +76,19 @@ final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
         syncFloatingBubble(in: window)
     }
 
+    func handleShake(in window: UIWindow) {
+        guard isPrimaryOwner, isNormalAppProcess else { return }
+        let settings = Configurator.shared.settings
+        guard settings.readOnlyEnabled, settings.pickerShakeEnabled, !isOverlayPresented else { return }
+        let now = Date()
+        guard now.timeIntervalSince(lastShakeTriggerAt) > 2.0 else { return }
+        lastShakeTriggerAt = now
+        presentPicker(in: window, forceFullOCR: true)
+    }
+
     @objc private func handleSettingsUpdate() {
         DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
+            guard let self, self.isPrimaryOwner else { return }
             let settings = Configurator.shared.settings
             if settings.floatingPickerBubbleEnabled {
                 self.hiddenForCurrentSession = false
@@ -102,9 +124,11 @@ final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
 
     private func syncGestures(on window: UIWindow, settings: RuntimeSettings) {
         let wantTwoFinger = settings.readOnlyEnabled && settings.pickerTwoFingerLongPressEnabled
+        let wantThreeFinger = settings.readOnlyEnabled && settings.pickerThreeFingerTapEnabled
         let wantStatusTap = settings.readOnlyEnabled && settings.pickerStatusBarDoubleTapEnabled
 
         let existingTwoFinger = (window.gestureRecognizers ?? []).filter { $0.name == "WriteNowTwoFingerHold" }
+        let existingThreeFinger = (window.gestureRecognizers ?? []).filter { $0.name == "WriteNowThreeFingerTap" }
         let existingStatusTap = (window.gestureRecognizers ?? []).filter { $0.name == "WriteNowStatusBarTap" }
 
         if wantTwoFinger && existingTwoFinger.isEmpty {
@@ -119,6 +143,19 @@ final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
             window.addGestureRecognizer(twoFingerHold)
         } else if !wantTwoFinger {
             existingTwoFinger.forEach { window.removeGestureRecognizer($0) }
+        }
+
+        if wantThreeFinger && existingThreeFinger.isEmpty {
+            let threeFingerTap = UITapGestureRecognizer(target: self, action: #selector(handleThreeFingerTap(_:)))
+            threeFingerTap.numberOfTouchesRequired = 3
+            threeFingerTap.numberOfTapsRequired = 1
+            threeFingerTap.cancelsTouchesInView = false
+            threeFingerTap.delaysTouchesBegan = false
+            threeFingerTap.name = "WriteNowThreeFingerTap"
+            threeFingerTap.delegate = self
+            window.addGestureRecognizer(threeFingerTap)
+        } else if !wantThreeFinger {
+            existingThreeFinger.forEach { window.removeGestureRecognizer($0) }
         }
 
         if wantStatusTap && existingStatusTap.isEmpty {
@@ -146,9 +183,13 @@ final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
     }
 
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        guard Configurator.shared.settings.readOnlyEnabled, !isOverlayPresented, !isKeyboardVisible else {
+        guard Configurator.shared.settings.readOnlyEnabled, !isOverlayPresented else {
             return false
         }
+        if gestureRecognizer.name == "WriteNowThreeFingerTap" {
+            return Configurator.shared.settings.pickerThreeFingerTapEnabled
+        }
+        guard !isKeyboardVisible else { return false }
         if gestureRecognizer.name == "WriteNowStatusBarTap" {
             guard Configurator.shared.settings.pickerStatusBarDoubleTapEnabled,
                   let win = gestureRecognizer.view as? UIWindow
@@ -179,6 +220,13 @@ final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
         presentPicker(in: window, forceFullOCR: false)
     }
 
+    @objc private func handleThreeFingerTap(_ gesture: UITapGestureRecognizer) {
+        guard gesture.state == .recognized,
+              let window = gesture.view as? UIWindow
+        else { return }
+        presentPicker(in: window, forceFullOCR: false)
+    }
+
     @objc private func handleStatusBarDoubleTap(_ gesture: UITapGestureRecognizer) {
         guard gesture.state == .recognized,
               let window = gesture.view as? UIWindow
@@ -188,6 +236,17 @@ final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
 
     // MARK: - Floating Bubble
 
+    private func cleanupDuplicateBubbleViews(except keeper: UIButton?) {
+        for scene in UIApplication.shared.connectedScenes {
+            guard let ws = scene as? UIWindowScene else { continue }
+            for win in ws.windows {
+                for sub in win.subviews where sub.tag == Self.bubbleViewTag && sub !== keeper {
+                    sub.removeFromSuperview()
+                }
+            }
+        }
+    }
+
     private func syncFloatingBubble(in window: UIWindow) {
         let settings = Configurator.shared.settings
         guard settings.readOnlyEnabled, settings.floatingPickerBubbleEnabled, !hiddenForCurrentSession else {
@@ -196,6 +255,7 @@ final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
         }
 
         if let existing = bubbleButton {
+            cleanupDuplicateBubbleViews(except: existing)
             if existing.superview !== window {
                 existing.removeFromSuperview()
                 window.addSubview(existing)
@@ -206,6 +266,8 @@ final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
             return
         }
 
+        cleanupDuplicateBubbleViews(except: nil)
+
         let isLeft = UserDefaults.standard.bool(forKey: Self.bubbleIsLeftKey)
         let savedRatio = UserDefaults.standard.double(forKey: Self.bubbleYRatioKey)
         let yRatio = (savedRatio > 0.08 && savedRatio < 0.92) ? savedRatio : 0.42
@@ -215,10 +277,11 @@ final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
         let centerY = max(minY, min(maxY, window.bounds.height * yRatio))
 
         let btn = UIButton(type: .system)
+        btn.tag = Self.bubbleViewTag
         btn.frame = CGRect(x: 0, y: 0, width: 42, height: 42)
         btn.center = CGPoint(x: centerX, y: centerY)
         btn.layer.cornerRadius = 21
-        btn.backgroundColor = UIColor.black.withAlphaComponent(0.72)
+        btn.backgroundColor = UIColor.black.withAlphaComponent(0.76)
         btn.layer.borderWidth = 1
         btn.layer.borderColor = UIColor.systemCyan.withAlphaComponent(0.65).cgColor
         btn.layer.shadowColor = UIColor.black.cgColor
@@ -229,7 +292,15 @@ final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
         btn.tintColor = .systemCyan
         btn.autoresizingMask = [.flexibleLeftMargin, .flexibleTopMargin, .flexibleBottomMargin]
         btn.isHidden = isOverlayPresented || isKeyboardVisible
-        btn.addTarget(self, action: #selector(didTapFloatingBubble), for: .touchUpInside)
+
+        let doubleTap = UITapGestureRecognizer(target: self, action: #selector(didDoubleTapFloatingBubble))
+        doubleTap.numberOfTapsRequired = 2
+        btn.addGestureRecognizer(doubleTap)
+
+        let singleTap = UITapGestureRecognizer(target: self, action: #selector(didTapFloatingBubble))
+        singleTap.numberOfTapsRequired = 1
+        singleTap.require(toFail: doubleTap)
+        btn.addGestureRecognizer(singleTap)
 
         let pan = UIPanGestureRecognizer(target: self, action: #selector(handleBubblePan(_:)))
         btn.addGestureRecognizer(pan)
@@ -250,6 +321,7 @@ final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
         bubbleButton?.removeFromSuperview()
         bubbleButton = nil
         bubbleWindow = nil
+        cleanupDuplicateBubbleViews(except: nil)
     }
 
     private func scheduleBubbleDim() {
@@ -266,6 +338,12 @@ final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
         guard let window = bubbleWindow ?? attachedWindows.allObjects.first(where: { $0.isKeyWindow }) else { return }
         scheduleBubbleDim()
         presentPicker(in: window, forceFullOCR: false)
+    }
+
+    @objc private func didDoubleTapFloatingBubble() {
+        guard let window = bubbleWindow ?? attachedWindows.allObjects.first(where: { $0.isKeyWindow }) else { return }
+        scheduleBubbleDim()
+        presentPicker(in: window, forceFullOCR: true)
     }
 
     @objc private func handleBubbleLongPress(_ gesture: UILongPressGestureRecognizer) {
@@ -286,6 +364,33 @@ final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
         })
         sheet.addAction(UIAlertAction(title: "Full-Screen OCR", style: .default) { [weak self] _ in
             self?.presentPicker(in: window, forceFullOCR: true)
+        })
+        sheet.addAction(UIAlertAction(title: "Ask AI with Screenshot", style: .default) { [weak self] _ in
+            self?.bubbleButton?.isHidden = true
+            DispatchQueue.main.async {
+                let snap = ScreenTextScanner.captureSnapshot(of: window)
+                if let btn = self?.bubbleButton,
+                   Configurator.shared.settings.floatingPickerBubbleEnabled,
+                   !(self?.hiddenForCurrentSession ?? false),
+                   !(self?.isKeyboardVisible ?? false)
+                {
+                    btn.isHidden = false
+                }
+                guard let snap, let attached = AttachedImageItem.fromUIImage(snap, label: "Screen") else { return }
+                let host = UIView(frame: CGRect(x: window.bounds.midX - 40, y: window.bounds.midY - 20, width: 80, height: 40))
+                host.backgroundColor = .clear
+                host.isUserInteractionEnabled = false
+                window.addSubview(host)
+                Presenter.shared.presentExtractedText(
+                    "",
+                    fromHostView: host,
+                    parentController: topVC,
+                    anchorRectInHost: host.bounds,
+                    slotIndex: 0,
+                    initialAttachedImages: [attached],
+                    onCompleteAndClose: { [weak host] in host?.removeFromSuperview() }
+                )
+            }
         })
         if let clip = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines),
            !clip.isEmpty
@@ -349,65 +454,64 @@ final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
     // MARK: - Present Picker
 
     func presentPicker(in window: UIWindow, forceFullOCR: Bool = false) {
-        guard !isOverlayPresented,
-              let rootVC = window.rootViewController
-        else { return }
+        guard isPrimaryOwner, !isOverlayPresented else { return }
 
-        var topVC = rootVC
-        while let presented = topVC.presentedViewController, !presented.isBeingDismissed {
-            topVC = presented
-        }
-        if topVC is ScreenTextOverlayViewController { return }
-
-        let feedback = UIImpactFeedbackGenerator(style: .medium)
-        feedback.impactOccurred()
-
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         isOverlayPresented = true
         bubbleButton?.isHidden = true
 
-        let snapshot = ScreenTextScanner.captureSnapshot(of: window)
-        if forceFullOCR {
-            let overlay = ScreenTextOverlayViewController(
-                sourceWindow: window,
-                snapshot: snapshot,
-                initialBlocks: []
-            )
-            attachDismissObserver(to: overlay)
-            topVC.present(overlay, animated: true)
-            return
-        }
-
-        ScreenTextScanner.scanVisibleText(in: window) { [weak self] blocks in
+        DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            let overlay = ScreenTextOverlayViewController(
-                sourceWindow: window,
-                snapshot: snapshot,
-                initialBlocks: blocks
-            )
-            self.attachDismissObserver(to: overlay)
-            topVC.present(overlay, animated: true)
-        }
-    }
+            let snapshot = ScreenTextScanner.captureSnapshot(of: window)
+            if forceFullOCR {
+                self.showOverlayWindow(for: window, snapshot: snapshot, initialBlocks: [])
+                return
+            }
 
-    private func attachDismissObserver(to overlay: ScreenTextOverlayViewController) {
-        let watcher = OverlayDismissObserver { [weak self] in
-            self?.isOverlayPresented = false
-            if let btn = self?.bubbleButton,
-               Configurator.shared.settings.floatingPickerBubbleEnabled,
-               !(self?.hiddenForCurrentSession ?? false),
-               !(self?.isKeyboardVisible ?? false)
-            {
-                btn.isHidden = false
-                self?.scheduleBubbleDim()
+            ScreenTextScanner.scanVisibleText(in: window) { [weak self] blocks in
+                self?.showOverlayWindow(for: window, snapshot: snapshot, initialBlocks: blocks)
             }
         }
-        objc_setAssociatedObject(overlay, &OverlayDismissObserver.assocKey, watcher, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+    }
+
+    private func showOverlayWindow(
+        for sourceWindow: UIWindow,
+        snapshot: UIImage?,
+        initialBlocks: [DetectedScreenTextBlock]
+    ) {
+        let overlay = ScreenTextOverlayViewController(
+            sourceWindow: sourceWindow,
+            snapshot: snapshot,
+            initialBlocks: initialBlocks
+        )
+
+        let overlayWindow: UIWindow
+        if let scene = sourceWindow.windowScene {
+            overlayWindow = WriteNowScreenOverlayWindow(windowScene: scene)
+        } else {
+            overlayWindow = WriteNowScreenOverlayWindow(frame: sourceWindow.bounds)
+        }
+        overlayWindow.frame = sourceWindow.bounds
+        overlayWindow.backgroundColor = .clear
+        overlayWindow.isOpaque = false
+        overlayWindow.windowLevel = UIWindow.Level(rawValue: UIWindow.Level.statusBar.rawValue + 50)
+        overlayWindow.rootViewController = overlay
+        overlayWindow.makeKeyAndVisible()
+
+        overlay.ownedOverlayWindow = overlayWindow
+        overlay.onOverlayDismissed = { [weak self] in
+            guard let self else { return }
+            self.isOverlayPresented = false
+            if let btn = self.bubbleButton,
+               Configurator.shared.settings.floatingPickerBubbleEnabled,
+               !self.hiddenForCurrentSession,
+               !self.isKeyboardVisible
+            {
+                btn.isHidden = false
+                self.scheduleBubbleDim()
+            }
+        }
     }
 }
 
-private final class OverlayDismissObserver: NSObject {
-    static var assocKey: UInt8 = 0
-    let onDeinit: () -> Void
-    init(onDeinit: @escaping () -> Void) { self.onDeinit = onDeinit }
-    deinit { DispatchQueue.main.async(execute: onDeinit) }
-}
+private final class WriteNowScreenOverlayWindow: UIWindow {}

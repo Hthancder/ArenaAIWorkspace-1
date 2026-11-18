@@ -3299,7 +3299,9 @@ struct ReadOnlyAndMenuSettingsView: View {
     @State private var unlockBlockedSelection: Bool
     @State private var floatingPickerBubbleEnabled: Bool
     @State private var pickerTwoFingerLongPressEnabled: Bool
+    @State private var pickerThreeFingerTapEnabled: Bool
     @State private var pickerStatusBarDoubleTapEnabled: Bool
+    @State private var pickerShakeEnabled: Bool
     @State private var ocrLanguagesText: String
 
     @State private var activeSheet: ReadOnlySettingsSheet?
@@ -3323,7 +3325,9 @@ struct ReadOnlyAndMenuSettingsView: View {
         _unlockBlockedSelection = State(initialValue: s.unlockBlockedSelection)
         _floatingPickerBubbleEnabled = State(initialValue: s.floatingPickerBubbleEnabled)
         _pickerTwoFingerLongPressEnabled = State(initialValue: s.pickerTwoFingerLongPressEnabled)
+        _pickerThreeFingerTapEnabled = State(initialValue: s.pickerThreeFingerTapEnabled)
         _pickerStatusBarDoubleTapEnabled = State(initialValue: s.pickerStatusBarDoubleTapEnabled)
+        _pickerShakeEnabled = State(initialValue: s.pickerShakeEnabled)
         _ocrLanguagesText = State(initialValue: s.ocrPreferredLanguages.joined(separator: ", "))
     }
 
@@ -3365,8 +3369,10 @@ struct ReadOnlyAndMenuSettingsView: View {
                 }
 
                 Section {
+                    Toggle("3-Finger Tap Anywhere (Quick OCR)", isOn: $pickerThreeFingerTapEnabled)
                     Toggle("2-Finger Long Press Anywhere", isOn: $pickerTwoFingerLongPressEnabled)
                     Toggle("Double-Tap Status Bar Area", isOn: $pickerStatusBarDoubleTapEnabled)
+                    Toggle("Shake Device for Screen OCR", isOn: $pickerShakeEnabled)
                     Toggle("Floating Screen Picker Button", isOn: $floatingPickerBubbleEnabled)
 
                     HStack {
@@ -3380,7 +3386,7 @@ struct ReadOnlyAndMenuSettingsView: View {
                 } header: {
                     Text("Universal Screen Text Picker & Offline OCR")
                 } footer: {
-                    Text("Works on ANY unselectable or uncopyable text (labels, SwiftUI views, locked chats, images, videos). Tap detected text blocks or drag a box for offline Apple Vision OCR.")
+                    Text("Works on ANY unselectable or uncopyable text (labels, SwiftUI views, locked chats, images, videos). Single-tap bubble to scan screen, double-tap bubble for instant full-screen OCR, or drag a box.")
                 }
             }
 
@@ -3596,7 +3602,9 @@ struct ReadOnlyAndMenuSettingsView: View {
         .onChange(of: unlockBlockedSelection) { _ in commit() }
         .onChange(of: floatingPickerBubbleEnabled) { _ in commit() }
         .onChange(of: pickerTwoFingerLongPressEnabled) { _ in commit() }
+        .onChange(of: pickerThreeFingerTapEnabled) { _ in commit() }
         .onChange(of: pickerStatusBarDoubleTapEnabled) { _ in commit() }
+        .onChange(of: pickerShakeEnabled) { _ in commit() }
         .onChange(of: ocrLanguagesText) { _ in commit() }
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
@@ -3679,7 +3687,9 @@ struct ReadOnlyAndMenuSettingsView: View {
             s.unlockBlockedSelection = unlockBlockedSelection
             s.floatingPickerBubbleEnabled = floatingPickerBubbleEnabled
             s.pickerTwoFingerLongPressEnabled = pickerTwoFingerLongPressEnabled
+            s.pickerThreeFingerTapEnabled = pickerThreeFingerTapEnabled
             s.pickerStatusBarDoubleTapEnabled = pickerStatusBarDoubleTapEnabled
+            s.pickerShakeEnabled = pickerShakeEnabled
             let parsedLangs = ocrLanguagesText
                 .split(separator: ",")
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }

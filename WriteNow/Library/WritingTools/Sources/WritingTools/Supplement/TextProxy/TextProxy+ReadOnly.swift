@@ -7,9 +7,9 @@ import UIKit
 import WebKit
 
 extension TextProxy {
-    static func makeReadOnlyWithText(_ text: String, view: UIView, selectionRect: CGRect? = nil) -> TextProxy? {
+    static func makeReadOnlyWithText(_ text: String, view: UIView, selectionRect: CGRect? = nil, allowEmpty: Bool = false) -> TextProxy? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
+        guard allowEmpty || !trimmed.isEmpty else { return nil }
         let rect = selectionRect ?? view.bounds
         return TextProxy(
             readOnlyFallbackView: view,

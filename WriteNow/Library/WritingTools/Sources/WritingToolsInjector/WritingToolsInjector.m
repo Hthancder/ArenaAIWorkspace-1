@@ -212,6 +212,16 @@ static void new_UIWindow_becomeKeyWindow(UIWindow *self, SEL _cmd) {
     }
 }
 
+static void (*old_UIWindow_motionEnded_withEvent_)(UIWindow *, SEL, UIEventSubtype, UIEvent *);
+static void new_UIWindow_motionEnded_withEvent_(UIWindow *self, SEL _cmd, UIEventSubtype motion, UIEvent *event) {
+    old_UIWindow_motionEnded_withEvent_(self, _cmd, motion, event);
+    if (motion == UIEventSubtypeMotionShake && self.windowLevel == UIWindowLevelNormal && !WT_IsIgnoredInternalWindowOrView(self)) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [[WritingToolsPresenter sharedInstance] handleShakeToOCRInWindow:self];
+        });
+    }
+}
+
 static UIView * _Nullable WT_FindCopyActionViewInRoot(UIView *root, UIWindow *window) {
     if (!root || !window || root.isHidden || root.alpha <= 0.05) { return nil; }
     CGRect winBounds = window.bounds;
@@ -863,6 +873,12 @@ __attribute__((always_inline)) BOOL WTAddMessageExecute(Class cls, SEL selName, 
 + (void)load {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
+        SEL processGuardKey = NSSelectorFromString(@"___WriteNowInjectorLoadedKey___");
+        if (objc_getAssociatedObject([UIApplication class], processGuardKey) != nil) {
+            return;
+        }
+        objc_setAssociatedObject([UIApplication class], processGuardKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
         WTAddMessageExecute(
             [UIResponder class],
             NSSelectorFromString(@kWritingToolSelectorName),
@@ -906,6 +922,13 @@ __attribute__((always_inline)) BOOL WTAddMessageExecute(Class cls, SEL selName, 
             @selector(makeKeyAndVisible),
             (IMP)new_UIWindow_makeKeyAndVisible,
             (IMP *)&old_UIWindow_makeKeyAndVisible
+        );
+
+        WTHookMessageExecute(
+            [UIWindow class],
+            @selector(motionEnded:withEvent:),
+            (IMP)new_UIWindow_motionEnded_withEvent_,
+            (IMP *)&old_UIWindow_motionEnded_withEvent_
         );
 
         WTHookMessageExecute(

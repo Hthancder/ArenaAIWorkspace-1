@@ -20,7 +20,9 @@ final class ScreenTextOverlayViewController: UIViewController {
         didSet { updateModeUI() }
     }
 
-    private let snapshotImageView = UIImageView()
+    var ownedOverlayWindow: UIWindow?
+    var onOverlayDismissed: (() -> Void)?
+
     private let scrimView = UIView()
     private let blocksContainer = UIView()
     private var blockButtons: [UIButton] = []
@@ -28,6 +30,7 @@ final class ScreenTextOverlayViewController: UIViewController {
     private let topBar = UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterialDark))
     private let modeControl = UISegmentedControl(items: ["Tap", "Multi", "OCR Box"])
     private let fullOCRButton = UIButton(type: .system)
+    private let askImageButton = UIButton(type: .system)
     private let closeButton = UIButton(type: .system)
 
     private let bottomActionBar = UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterialDark))
@@ -58,7 +61,7 @@ final class ScreenTextOverlayViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .black
+        view.backgroundColor = .clear
 
         setupBackdrop()
         setupTopBar()
@@ -72,14 +75,23 @@ final class ScreenTextOverlayViewController: UIViewController {
         }
     }
 
-    private func setupBackdrop() {
-        snapshotImageView.image = snapshot
-        snapshotImageView.contentMode = .scaleToFill
-        snapshotImageView.frame = view.bounds
-        snapshotImageView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        view.addSubview(snapshotImageView)
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        cleanupOverlayIfNeeded()
+    }
 
-        scrimView.backgroundColor = UIColor.black.withAlphaComponent(0.42)
+    private func cleanupOverlayIfNeeded() {
+        if let win = ownedOverlayWindow {
+            win.isHidden = true
+            ownedOverlayWindow = nil
+        }
+        let cb = onOverlayDismissed
+        onOverlayDismissed = nil
+        cb?()
+    }
+
+    private func setupBackdrop() {
+        scrimView.backgroundColor = UIColor.black.withAlphaComponent(0.18)
         scrimView.frame = view.bounds
         scrimView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(scrimView)
@@ -99,20 +111,24 @@ final class ScreenTextOverlayViewController: UIViewController {
 
         modeControl.selectedSegmentIndex = 0
         modeControl.selectedSegmentTintColor = UIColor.systemCyan.withAlphaComponent(0.35)
-        modeControl.setTitleTextAttributes([.foregroundColor: UIColor.white, .font: UIFont.systemFont(ofSize: 12, weight: .semibold)], for: .normal)
+        modeControl.setTitleTextAttributes([.foregroundColor: UIColor.white, .font: UIFont.systemFont(ofSize: 11.5, weight: .semibold)], for: .normal)
         modeControl.addTarget(self, action: #selector(modeChanged), for: .valueChanged)
 
         fullOCRButton.setImage(UIImage(systemName: "text.viewfinder"), for: .normal)
         fullOCRButton.setTitle(" OCR", for: .normal)
-        fullOCRButton.titleLabel?.font = .systemFont(ofSize: 12, weight: .semibold)
+        fullOCRButton.titleLabel?.font = .systemFont(ofSize: 11.5, weight: .semibold)
         fullOCRButton.tintColor = .systemCyan
         fullOCRButton.addTarget(self, action: #selector(didTapFullOCR), for: .touchUpInside)
+
+        askImageButton.setImage(UIImage(systemName: "photo.badge.plus"), for: .normal)
+        askImageButton.tintColor = .systemGreen
+        askImageButton.addTarget(self, action: #selector(didTapAskWithScreenshot), for: .touchUpInside)
 
         closeButton.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
         closeButton.tintColor = UIColor.white.withAlphaComponent(0.85)
         closeButton.addTarget(self, action: #selector(didTapClose), for: .touchUpInside)
 
-        let stack = UIStackView(arrangedSubviews: [modeControl, fullOCRButton, closeButton])
+        let stack = UIStackView(arrangedSubviews: [modeControl, fullOCRButton, askImageButton, closeButton])
         stack.axis = .horizontal
         stack.spacing = 8
         stack.alignment = .center
@@ -121,8 +137,8 @@ final class ScreenTextOverlayViewController: UIViewController {
 
         NSLayoutConstraint.activate([
             topBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
-            topBar.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 12),
-            topBar.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -12),
+            topBar.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 10),
+            topBar.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -10),
             topBar.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
             stack.topAnchor.constraint(equalTo: topBar.contentView.topAnchor, constant: 6),
@@ -130,7 +146,9 @@ final class ScreenTextOverlayViewController: UIViewController {
             stack.leadingAnchor.constraint(equalTo: topBar.contentView.leadingAnchor, constant: 10),
             stack.trailingAnchor.constraint(equalTo: topBar.contentView.trailingAnchor, constant: -10),
 
-            modeControl.widthAnchor.constraint(greaterThanOrEqualToConstant: 170),
+            modeControl.widthAnchor.constraint(greaterThanOrEqualToConstant: 156),
+            askImageButton.widthAnchor.constraint(equalToConstant: 26),
+            askImageButton.heightAnchor.constraint(equalToConstant: 26),
             closeButton.widthAnchor.constraint(equalToConstant: 28),
             closeButton.heightAnchor.constraint(equalToConstant: 28),
         ])
@@ -287,11 +305,37 @@ final class ScreenTextOverlayViewController: UIViewController {
     }
 
     @objc private func didTapClose() {
-        dismiss(animated: true)
+        cleanupOverlayIfNeeded()
+        if presentingViewController != nil {
+            dismiss(animated: true)
+        }
     }
 
     @objc private func didTapFullOCR() {
         runFullScreenOCR()
+    }
+
+    @objc private func didTapAskWithScreenshot() {
+        let img = snapshot ?? ScreenTextScanner.captureSnapshot(of: sourceWindow)
+        guard let img, let attached = AttachedImageItem.fromUIImage(img, label: "Screen") else {
+            hintLabel.text = "Could not capture screen image."
+            return
+        }
+        let combinedText = selectedIndices
+            .compactMap { blocks.indices.contains($0) ? blocks[$0].text : nil }
+            .joined(separator: "\n\n")
+        let anchorRect = CGRect(
+            x: max(16, view.bounds.midX - 60),
+            y: max(80, view.bounds.midY - 30),
+            width: 120,
+            height: 60
+        )
+        presentWriteNow(
+            withText: combinedText,
+            anchorRect: anchorRect,
+            sourceView: nil,
+            attachedImages: [attached]
+        )
     }
 
     @objc private func didTapBlock(_ sender: UIButton) {
@@ -449,7 +493,12 @@ final class ScreenTextOverlayViewController: UIViewController {
         }
     }
 
-    private func presentWriteNow(withText text: String, anchorRect: CGRect, sourceView: UIView?) {
+    private func presentWriteNow(
+        withText text: String,
+        anchorRect: CGRect,
+        sourceView: UIView?,
+        attachedImages: [AttachedImageItem] = []
+    ) {
         activeAnchorHostView?.removeFromSuperview()
         let hostView = UIView(frame: anchorRect)
         hostView.backgroundColor = .clear
@@ -463,8 +512,9 @@ final class ScreenTextOverlayViewController: UIViewController {
             parentController: self,
             anchorRectInHost: hostView.bounds,
             slotIndex: 0,
+            initialAttachedImages: attachedImages,
             onCompleteAndClose: { [weak self] in
-                self?.dismiss(animated: true)
+                self?.didTapClose()
             }
         )
     }

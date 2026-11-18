@@ -210,6 +210,9 @@ struct WritingToolsView: View {
         }
         .onAppear {
             initialAnimation = 1
+            if attachedImages.isEmpty && !context.initialAttachedImages.isEmpty {
+                attachedImages = context.initialAttachedImages
+            }
             voiceMode = cfg.settings.stt.voiceMode
             voiceSourceLang = cfg.settings.stt.sourceLanguage
             voiceTargetLang = cfg.settings.stt.targetLanguage

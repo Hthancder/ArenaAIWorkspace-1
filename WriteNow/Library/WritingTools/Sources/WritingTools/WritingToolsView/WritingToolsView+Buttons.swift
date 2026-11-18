@@ -612,6 +612,22 @@ extension WritingToolsView {
                 Label("Attach File".localized, systemImage: "doc.badge.plus")
             }
 
+            Divider()
+
+            Button {
+                ocrTextFromPhoto()
+            } label: {
+                Label("OCR Text from Photo".localized, systemImage: "text.viewfinder")
+            }
+
+            if cfg.settings.readOnlyEnabled {
+                Button {
+                    launchScreenOCRFromHeader()
+                } label: {
+                    Label("Screen OCR".localized, systemImage: "viewfinder")
+                }
+            }
+
             if count > 0 {
                 Divider()
                 Button(role: .destructive) {
@@ -798,6 +814,31 @@ extension WritingToolsView {
                 attachmentBannerMessage = ""
             } else {
                 attachmentBannerMessage = "Could not capture screen snapshot."
+            }
+        }
+    }
+
+    func ocrTextFromPhoto() {
+        let langs = cfg.settings.ocrPreferredLanguages
+        AttachmentPickerHelper.presentPhotoOCRPicker(from: context, preferredLanguages: langs) { extracted in
+            let trimmed = extracted.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else {
+                attachmentBannerMessage = "No text detected in photo.".localized
+                return
+            }
+            attachmentBannerMessage = ""
+            if shouldShowOutput {
+                if followUpPromptInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    followUpPromptInput = trimmed
+                } else {
+                    followUpPromptInput += "\n\n" + trimmed
+                }
+            } else {
+                if customPromptInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    customPromptInput = trimmed
+                } else {
+                    customPromptInput += "\n\n" + trimmed
+                }
             }
         }
     }

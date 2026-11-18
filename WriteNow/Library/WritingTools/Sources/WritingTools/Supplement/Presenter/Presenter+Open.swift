@@ -357,6 +357,7 @@ public extension Presenter {
         parentController: UIViewController?,
         anchorRectInHost: CGRect,
         slotIndex: Int,
+        initialAttachedImages: [AttachedImageItem] = [],
         onCompleteAndClose: (() -> Void)? = nil
     ) {
         let launchAction = resolveLaunchItem(slotIndex: slotIndex, isReadOnly: true)
@@ -366,6 +367,7 @@ public extension Presenter {
             parentController: parentController,
             anchorRectInHost: anchorRectInHost,
             launchSlotAction: launchAction,
+            initialAttachedImages: initialAttachedImages,
             onCompleteAndClose: onCompleteAndClose
         ) else {
             presentUnavailable(hostView)

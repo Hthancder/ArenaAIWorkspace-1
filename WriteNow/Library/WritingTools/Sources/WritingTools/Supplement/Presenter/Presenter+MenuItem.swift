@@ -41,6 +41,11 @@ extension Presenter {
         ScreenPickerCoordinator.shared.attachIfNeeded(to: window)
     }
 
+    @objc(handleShakeToOCRInWindow:)
+    func handleShakeToOCR(in window: UIWindow) {
+        ScreenPickerCoordinator.shared.handleShake(in: window)
+    }
+
     @objc(isResponderReadOnly:)
     func isResponderReadOnly(_ responder: UIResponder) -> Bool {
         if let view = responder as? UIView,

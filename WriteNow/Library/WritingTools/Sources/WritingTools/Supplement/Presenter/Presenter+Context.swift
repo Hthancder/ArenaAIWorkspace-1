@@ -25,6 +25,7 @@ extension Presenter {
         let textProxy: TextProxy
         let launchSlotAction: RuntimeSelectionMenuItem?
         let prefetchedExternalContext: String?
+        let initialAttachedImages: [AttachedImageItem]
         let onCompleteAndClose: (() -> Void)?
         @Published var scenePhase: ScenePhase = .active
 
@@ -38,6 +39,7 @@ extension Presenter {
             textProxy: TextProxy,
             launchSlotAction: RuntimeSelectionMenuItem? = nil,
             prefetchedExternalContext: String? = nil,
+            initialAttachedImages: [AttachedImageItem] = [],
             onCompleteAndClose: (() -> Void)? = nil
         ) {
             self.parentView = parentView
@@ -49,6 +51,7 @@ extension Presenter {
             self.textProxy = textProxy
             self.launchSlotAction = launchSlotAction
             self.prefetchedExternalContext = prefetchedExternalContext
+            self.initialAttachedImages = initialAttachedImages
             self.onCompleteAndClose = onCompleteAndClose
 
             super.init()
@@ -235,9 +238,15 @@ extension Presenter {
         parentController: UIViewController?,
         anchorRectInHost: CGRect,
         launchSlotAction: RuntimeSelectionMenuItem? = nil,
+        initialAttachedImages: [AttachedImageItem] = [],
         onCompleteAndClose: (() -> Void)? = nil
     ) -> Context? {
-        guard let textProxy = TextProxy.makeReadOnlyWithText(text, view: hostView, selectionRect: anchorRectInHost) else {
+        guard let textProxy = TextProxy.makeReadOnlyWithText(
+            text,
+            view: hostView,
+            selectionRect: anchorRectInHost,
+            allowEmpty: !initialAttachedImages.isEmpty
+        ) else {
             return nil
         }
         guard let parentView = hostView.superview ?? hostView.window ?? hostView as UIView? else { return nil }
@@ -250,6 +259,7 @@ extension Presenter {
             appearance: textProxy.appearanceForWritingTool,
             launchSlotAction: launchSlotAction,
             prefetchedExternalContext: Self.extractNotificationContext(around: hostView),
+            initialAttachedImages: initialAttachedImages,
             onCompleteAndClose: onCompleteAndClose
         )
     }
@@ -262,6 +272,7 @@ extension Presenter {
         appearance: TextProxy.WTAppearance,
         launchSlotAction: RuntimeSelectionMenuItem?,
         prefetchedExternalContext: String? = nil,
+        initialAttachedImages: [AttachedImageItem] = [],
         onCompleteAndClose: (() -> Void)? = nil
     ) -> Context {
         let hasSelectedContent = !textProxy.selectedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -330,6 +341,7 @@ extension Presenter {
             textProxy: textProxy,
             launchSlotAction: launchSlotAction,
             prefetchedExternalContext: prefetchedExternalContext,
+            initialAttachedImages: initialAttachedImages,
             onCompleteAndClose: onCompleteAndClose
         )
     }

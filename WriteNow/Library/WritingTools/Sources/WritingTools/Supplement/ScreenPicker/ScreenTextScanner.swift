@@ -26,10 +26,58 @@ enum ScreenTextScanner {
     static func captureSnapshot(of window: UIWindow) -> UIImage? {
         let format = UIGraphicsImageRendererFormat()
         format.scale = min(window.screen.scale, 2.0)
-        format.opaque = true
-        let renderer = UIGraphicsImageRenderer(bounds: window.bounds, format: format)
-        return renderer.image { _ in
-            window.drawHierarchy(in: window.bounds, afterScreenUpdates: false)
+        format.opaque = false
+
+        let primary = UIGraphicsImageRenderer(bounds: window.bounds, format: format).image { _ in
+            window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+        }
+        if imageHasVisibleContent(primary) {
+            return primary
+        }
+
+        let fallback = UIGraphicsImageRenderer(bounds: window.bounds, format: format).image { ctx in
+            window.layer.render(in: ctx.cgContext)
+        }
+        return imageHasVisibleContent(fallback) ? fallback : primary
+    }
+
+    private static func imageHasVisibleContent(_ image: UIImage) -> Bool {
+        guard let cg = image.cgImage, cg.width >= 8, cg.height >= 8 else { return false }
+        let sampleSize = 8
+        var pixels = [UInt8](repeating: 0, count: sampleSize * sampleSize * 4)
+        guard let ctx = CGContext(
+            data: &pixels,
+            width: sampleSize,
+            height: sampleSize,
+            bitsPerComponent: 8,
+            bytesPerRow: sampleSize * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return true }
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: sampleSize, height: sampleSize))
+        var maxBrightness: Int = 0
+        for idx in stride(from: 0, to: pixels.count, by: 4) {
+            let sum = Int(pixels[idx]) + Int(pixels[idx + 1]) + Int(pixels[idx + 2])
+            if sum > maxBrightness { maxBrightness = sum }
+            if maxBrightness > 18 { return true }
+        }
+        return false
+    }
+
+    static func recognizePlainText(
+        in image: UIImage,
+        preferredLanguages: [String],
+        completion: @escaping (String) -> Void
+    ) {
+        let bounds = CGRect(origin: .zero, size: image.size)
+        recognizeText(
+            in: image,
+            windowBounds: bounds,
+            regionInWindow: nil,
+            preferredLanguages: preferredLanguages
+        ) { blocks in
+            let text = blocks.map(\.text).joined(separator: "\n\n")
+            completion(text.trimmingCharacters(in: .whitespacesAndNewlines))
         }
     }
 

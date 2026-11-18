@@ -27,6 +27,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)hasExtractableTextNearView:(nullable UIView *)view windowPoint:(CGPoint)windowPoint;
 
 - (void)attachScreenPickerToWindow:(UIWindow *)window;
+- (void)handleShakeToOCRInWindow:(UIWindow *)window;
 - (void)presentFromUniversalMenuTarget:(nullable UIView *)targetView
                            windowPoint:(CGPoint)windowPoint
                     fallbackCopyAction:(nullable id)copyAction

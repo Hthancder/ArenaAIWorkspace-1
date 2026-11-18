@@ -11,7 +11,35 @@ final class AttachmentPickerHelper: NSObject, PHPickerViewControllerDelegate, UI
     private static var activeInstance: AttachmentPickerHelper?
 
     private var onImagesPicked: (([AttachedImageItem]) -> Void)?
+    private var onOCRTextPicked: ((String) -> Void)?
     private var onFilesPicked: (([AttachedImageItem], [AttachedFileItem], [String]) -> Void)?
+
+    static func presentPhotoOCRPicker(
+        from context: Presenter.Context,
+        preferredLanguages: [String],
+        completion: @escaping (String) -> Void
+    ) {
+        guard let presenterVC = findPresenterController(from: context) else {
+            completion("")
+            return
+        }
+        var config = PHPickerConfiguration()
+        config.selectionLimit = 1
+        config.filter = .images
+
+        let picker = PHPickerViewController(configuration: config)
+        let helper = AttachmentPickerHelper()
+        helper.onOCRTextPicked = { text in
+            Self.activeInstance = nil
+            completion(text)
+        }
+        helper.preferredOCRLanguages = preferredLanguages
+        picker.delegate = helper
+        Self.activeInstance = helper
+        presenterVC.present(picker, animated: true)
+    }
+
+    private var preferredOCRLanguages: [String] = ["vi-VN", "en-US"]
 
     static func presentPhotoPicker(
         from context: Presenter.Context,
@@ -138,6 +166,27 @@ final class AttachmentPickerHelper: NSObject, PHPickerViewControllerDelegate, UI
 
     func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
         picker.dismiss(animated: true)
+
+        if let ocrCallback = onOCRTextPicked {
+            guard let provider = results.first?.itemProvider,
+                  provider.canLoadObject(ofClass: UIImage.self)
+            else {
+                ocrCallback("")
+                return
+            }
+            let langs = preferredOCRLanguages
+            provider.loadObject(ofClass: UIImage.self) { object, _ in
+                guard let image = object as? UIImage else {
+                    DispatchQueue.main.async { ocrCallback("") }
+                    return
+                }
+                ScreenTextScanner.recognizePlainText(in: image, preferredLanguages: langs) { text in
+                    ocrCallback(text)
+                }
+            }
+            return
+        }
+
         guard !results.isEmpty else {
             onImagesPicked?([])
             return
