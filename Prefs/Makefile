@@ -16,7 +16,6 @@ SiriXPreferences_CFLAGS = -fobjc-arc -Wno-deprecated-declarations \
 	-I../Sources \
 	-DSX_SCHEME=\"$(THEOS_PACKAGE_SCHEME)\"
 SiriXPreferences_FRAMEWORKS = UIKit Foundation
-SiriXPreferences_PRIVATE_FRAMEWORKS = Preferences
 SiriXPreferences_INSTALL_PATH = /Library/PreferenceBundles
 
 include $(THEOS_MAKE_PATH)/bundle.mk
