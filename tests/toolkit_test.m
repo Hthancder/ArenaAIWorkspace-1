@@ -2,10 +2,16 @@
 // số, cache trong lượt, timeout, exception, cắt kết quả, lọc công cụ đang tắt.
 #import <Foundation/Foundation.h>
 #import "SXToolkit.h"
+#import "SXLog.h"
 #include <assert.h>
 #include <stdio.h>
 
 static NSInteger handlerCalls = 0;
+
+// SXToolkit ghi log; test này không kéo theo SXLog.m nên cấp một bản rỗng.
+void SXLogWrite(SXLogLevel level, NSString *category, NSString *format, ...) {
+	(void)level; (void)category; (void)format;
+}
 
 static SXTool *EchoTool(void) {
 	return [SXTool toolWithName:@"echo"
