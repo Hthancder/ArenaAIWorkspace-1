@@ -196,7 +196,8 @@ static void SXLogHookStatus(NSString *className, Class cls, NSArray<NSString *> 
 %ctor {
 	@autoreleasepool {
 		SXLogInit();
-		SXPrevExceptionHandler = NSSetUncaughtExceptionHandler(&SXExceptionHandler);
+		SXPrevExceptionHandler = NSGetUncaughtExceptionHandler();
+		NSSetUncaughtExceptionHandler(&SXExceptionHandler);
 		[SXPrefs shared];
 		[[SXIntercept shared] setup];
 

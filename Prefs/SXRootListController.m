@@ -29,7 +29,8 @@ static void SXExceptionHandler(NSException *exception) {
 /// Chạy ngay khi bundle được nạp — mốc sớm nhất để chẩn đoán crash khi mở Settings.
 + (void)load {
 	SXLogInit();
-	SXPrevExceptionHandler = NSSetUncaughtExceptionHandler(&SXExceptionHandler);
+	SXPrevExceptionHandler = NSGetUncaughtExceptionHandler();
+	NSSetUncaughtExceptionHandler(&SXExceptionHandler);
 	SXLogInf(@"pref", @"bundle SiriXPreferences NẠP THÀNH CÔNG (process=%@)",
 			 NSProcessInfo.processInfo.processName);
 }
