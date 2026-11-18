@@ -36,6 +36,8 @@ jobs:
         run: |
           git clone --depth 1 --recursive "https://github.com/${{ matrix.theos_repo }}" "$GITHUB_WORKSPACE/theos"
           # SDK "patched" của theos — chứa private-framework tbds (Preferences…) mà Xcode stock không có
+          # (thos repo có sẵn thư mục rỗng sdks/ với .keep → xóa trước khi clone vào)
+          rm -rf "$GITHUB_WORKSPACE/theos/sdks"
           git clone --depth 1 --filter=blob:none --sparse https://github.com/theos/sdks "$GITHUB_WORKSPACE/theos/sdks"
           git -C "$GITHUB_WORKSPACE/theos/sdks" sparse-checkout set iPhoneOS15.6.sdk
           echo "THEOS=$GITHUB_WORKSPACE/theos" >> "$GITHUB_ENV"
