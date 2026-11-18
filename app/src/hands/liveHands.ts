@@ -468,9 +468,9 @@ class LiveHandsOverlay {
   }
 
   /** Test/debug: a copy of one finger slot's motion state. */
-  slotDebug(hand: 'L' | 'R', finger: number): { swing: number; abduct: number; axis: Vec3 | null; lift: number; couple: number } {
+  slotDebug(hand: 'L' | 'R', finger: number): { swing: number; abduct: number; axis: Vec3 | null; lift: number; couple: number; midi: number | null } {
     const s = this[hand].slots[finger]
-    return { swing: s.swing, abduct: s.abduct, axis: s.axis ? ([...s.axis] as Vec3) : null, lift: s.lift, couple: s.couple }
+    return { swing: s.swing, abduct: s.abduct, axis: s.axis ? ([...s.axis] as Vec3) : null, lift: s.lift, couple: s.couple, midi: s.midi }
   }
 
   /**
@@ -1109,7 +1109,18 @@ class LiveHandsOverlay {
     // 1) The song's own fingering, when this key is a note near the
     //    playhead — unless that hand is clearly farther from the key
     //    than the other one (which is free to take it).
-    const plan = opts.resolvePlan ? opts.resolvePlan(w.midi) : null
+    // GĐ 7 — "bấm thủ công bên nào, tay bên đó": a key CLEARLY on one side
+    // of the keyboard (outside the contested middle — the middle-C octave,
+    // where either hand is natural on a real piano) belongs to that side's
+    // hand — the plan may not drag the far hand over ("tay phải vẫn tranh
+    // đánh của tay trái"). Inside the middle band the plan decides, and
+    // fingers always. The band is ±1.0 key-units around x=0 (≈ F4): C4
+    // sits at −0.59, so middle-C material stays playable by either hand
+    // exactly as pianists treat it.
+    const SIDE_BAND = 1.0
+    const clearSide: 'L' | 'R' | null = w.keyX < -SIDE_BAND ? 'L' : w.keyX > SIDE_BAND ? 'R' : null
+    const plan0 = opts.resolvePlan ? opts.resolvePlan(w.midi) : null
+    const plan = plan0 && (clearSide === null || plan0.hand === clearSide) ? plan0 : null
     if (plan && plan.finger >= 0 && plan.finger < 5) {
       const other = plan.hand === 'L' ? 'R' : 'L'
       const dPlan = Math.abs(palmOf(plan.hand) - w.keyX)

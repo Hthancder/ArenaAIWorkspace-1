@@ -434,6 +434,10 @@ export type Settings = {
   // fingers tap the pressed keys, the wrist drifts toward them. Live-only
   // (exports always render the pure song motion).
   handsFollowInput: boolean
+  // GĐ 7 — auto hand split: pre-assign each melodic line to one hand
+  // before the motion runtime plans ("chia tay tự động", line-aware).
+  // Off = the runtime plans hands itself (the old behaviour).
+  handsAutoSplit: boolean
   // Strength of the per-press strike tap (0..1).
   handsKeystrike: number
   // Expression layer ("có hồn", controlled): velocity-scaled strikes,
@@ -806,6 +810,7 @@ export const defaultSettings: Settings = {
   handsSmoothness: 0.5,
   handsMicroMotion: 0.5,
   handsFollowInput: true,
+  handsAutoSplit: true,
   handsKeystrike: 0.6,
   handsExpression: 0.65,
   handsImpact: 0.5,

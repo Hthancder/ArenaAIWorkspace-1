@@ -492,5 +492,55 @@ console.log('expression: velocity depth, accent roll, rolled chords (opts.expres
   check('playback accent presses deeper', zLoud < zSoftPlay - 0.02, `${zLoud} vs ${zSoftPlay}`)
 }
 
+// ---- GĐ 2: claim — pressing the left half goes to the LEFT hand --------
+{
+  const p = posesOf()
+  const tpl = posesOf()
+  const refresh = () => {
+    refreshPose(p.L!, tpl.L!)
+    refreshPose(p.R!, tpl.R!)
+  }
+  // the PLAN insists on the right hand — the side rule must override it
+  const opts = baseOpts({ resolvePlan: () => ({ hand: 'R' as const, finger: 3 }) })
+  const hasMidi = (hand: 'L' | 'R', midi: number) => [0, 1, 2, 3, 4].some((f) => liveHands.slotDebug(hand, f).midi === midi)
+
+  const h1 = audioEngine.triggerKey(36, 0.9) // E2 → keyX ≈ −3.3 (clear left half)
+  frames(p, 16, opts, refresh)
+  check('claim: left-half key → LEFT hand even when plan says R', hasMidi('L', 36) && !hasMidi('R', 36))
+  h1?.release()
+  frames(p, 40, opts, refresh)
+
+  const h2 = audioEngine.triggerKey(88, 0.9) // E6 → keyX ≈ +3.3 (clear right half), plan says R
+  frames(p, 16, opts, refresh)
+  check('claim: right-half key → RIGHT hand with the plan', hasMidi('R', 88) && !hasMidi('L', 88))
+  h2?.release()
+  frames(p, 40, opts, refresh)
+
+  const optsL = baseOpts({ resolvePlan: () => ({ hand: 'L' as const, finger: 2 }) })
+  const h3 = audioEngine.triggerKey(84, 0.9) // C6, plan says L — side rule: R
+  frames(p, 16, optsL, refresh)
+  check('claim: right-half key ignores a LEFT plan too', hasMidi('R', 84) && !hasMidi('L', 84))
+  h3?.release()
+  frames(p, 40, optsL, refresh)
+
+  // contested middle band (C4 area): the plan decides — both hands natural
+  const h4 = audioEngine.triggerKey(60, 0.9) // C4 at x≈−0.59 (band), plan R
+  frames(p, 16, opts, refresh)
+  check('claim: middle-band key follows the plan (R)', hasMidi('R', 60) && !hasMidi('L', 60))
+  h4?.release()
+  frames(p, 40, opts, refresh)
+
+  // outer-left keys with NO plan → the left hand, always (the ≥99% bound)
+  let leftOk = 0
+  for (const midi of [33, 36, 41, 45, 48, 52, 55]) {
+    const h = audioEngine.triggerKey(midi, 0.8)
+    frames(p, 10, baseOpts(), refresh)
+    if (hasMidi('L', midi)) leftOk++
+    h?.release()
+    frames(p, 24, baseOpts(), refresh)
+  }
+  check('claim: outer-left keys with no plan → LEFT hand ≥ 99%', leftOk === 7, `${leftOk}/7`)
+}
+
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} FAILURES`)
 process.exit(failures === 0 ? 0 : 1)

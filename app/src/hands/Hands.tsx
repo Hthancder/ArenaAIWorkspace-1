@@ -8,6 +8,7 @@ import { buildSpeedMap } from '../midi/speedMap'
 import { useSettingsSlice, useStore } from '../store'
 import { createMeshHands } from './meshHand'
 import { retainHandsRuntime, songHandNotes, synthHandMotion, trackHandsWork, makeNoteQuery, pooledPoseAt, type NoteQuery, type ReadyMotion } from './motion'
+import { autoSplitHands } from './autoSplit'
 import {
   createHumanizeScratch,
   humanizePoses,
@@ -38,6 +39,7 @@ const HAND_KEYS = [
   'handsSmoothness',
   'handsMicroMotion',
   'handsFollowInput',
+  'handsAutoSplit',
   'handsKeystrike',
   'handsExpression',
   'handsImpact',
@@ -129,6 +131,10 @@ export function Hands() {
         trimEndSec: s.midiTrimEndSec ?? song.duration,
         transpose: s.transpose,
       })
+      // GĐ 7 — auto hand split: keep every melodic line whole on one hand
+      // before the runtime plans (its per-note optimiser cut wide-span
+      // figures mid-run and handed the top to the right hand).
+      if (s.handsAutoSplit) autoSplitHands(notes)
       if (!notes.length) {
         motionRef.current = null
         invalidate()
@@ -152,7 +158,7 @@ export function Hands() {
       window.clearTimeout(id)
       ctl.abort()
     }
-  }, [song, speedMap, s.midiOffsetSec, s.midiTrimStartSec, s.midiTrimEndSec, s.transpose, invalidate])
+  }, [song, speedMap, s.midiOffsetSec, s.midiTrimStartSec, s.midiTrimEndSec, s.transpose, s.handsAutoSplit, invalidate])
 
   useFrame(() => {
     resetBlurFrame()

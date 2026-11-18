@@ -565,3 +565,48 @@ rảnh") — Inspector mục Chuyển động tay, lưu qua reload như mọi se
 `defaultSettings`). Test: `scripts/test-impact-idle.ts` (19 kiểm tra theo đúng
 ngưỡng trình user) + 4 kiểm tra `gapToNext` trong test-notequery; toàn bộ 8 suite
 xanh; export không đổi (`applyTo` no-op khi exporting).
+
+## GĐ 7 — Auto hand split (line-aware) + claim theo bên tay (18/11/2026)
+
+**Người dùng chốt (ask_user)**: lỗi thấy ở PLAYBACK; chia tay **line-aware**
+(mỗi chuỗi nốt liền mạch = 1 tay, ranh giới trượt theo khoảng trống âm vực —
+KHÔNG threshold C4 cứng); "ngón chưa hợp lý" = **đổi tay/ngón giữa chừng đường
+nốt**; duyệt GĐ 1 → GĐ 2.
+
+**Chẩn đoán gốc (đo bằng planner thật qua diag-plan)**: planner gốc TỐI ƯU TỪNG
+NỐT, không có khái niệm đường nốt → cắt figure ở ranh giới âm vực: case arp
+C2→G4 bị cắt 6 lần ở giữa chuỗi; ostinato C4–G4 chia L12/R48; melody G3–E4
+L6/R48 (tay trái bị "cướp" đỉnh). Playback KHÔNG đi qua claim (triggerKey chỉ ở
+input thủ công) → triệu chứng playback = plan 100%.
+
+**GĐ 1 — `src/hands/autoSplit.ts` (`splitHands` thuần + `autoSplitHands`)**:
+onset ≤40ms → cluster → **units** (split theo gap >7 bán cung hoặc span >12 =
+1 sải tay; chord vừa tay = nguyên tử; note "figure start" — có nốt tiếp trong
+0.4s — tách khỏi chord held) → **lines** (liên kết pitch gần nhất, step ≤12,
+legato tol 0.12s; **điểm liên kết = |Δpitch| + 3 × độ cũ của line** — line chết
+1.6s không được "cướp" nốt của figure mới chỉ vì lệch 1 bán cung) → **tay**
+(k-means k=2 deterministic trên mean line; line pin theo đa số note gán tay;
+explicit hand LUÔN thắng). Gọi trước synthHandMotion, gated `handsAutoSplit`
+(mặc định BẬT, switch trong Inspector).
+
+**GĐ 2 — claim (liveHands)**: "bấm thủ công bên nào, tay bên đó" — key ngoài
+**band giữa ±1.0 unit (C4..C5, vùng tranh chấp tự nhiên của piano)** thuộc tay
+bên đó, plan không được kéo tay xa qua; trong band plan quyết định; ngón luôn
+theo plan. Band = ±1.0 vì keyForMidi(60).x = −0.588: band ±0.5 đẩy C4 sang
+"trái cứng" và đá plan của bài (test livebrowser đo C4 cho tay phải).
+
+**Đo (ngưỡng đã duyệt) — test-autosplit (unit) + test-autosplit-plan (planner
+thật)**: case A arp rộng 6→**0** lần đổi tay giữa chuỗi (pin 100%); interlock
+tuần tự 8→0/pass; 2 luồng giao nhau ≤1/pass (tại điểm giao); melody thấp
+0/0; scale + ostinato 0; **ngón**: same-finger lặp = 0, a-b-a-b/f2121 = 0%
+trên MỌI case (52 note scale, 48 note melody — planner ngón sạch; lỗi "đổi
+ngón" thực ra = đổi TAY giữa đường nốt, GĐ 1 đã cắt). Same-finger còn lại chỉ
+trên quãng NHẢY (1→1 octave 160ms = reposition hợp lệ, báo cáo user). Claim
+test (test-livehands): nửa trái → L cả khi plan nói R (5/5).
+
+**Không làm (có chủ đích)**: phẫu thuật ngón tay (planner ngón đã sạch sau đo);
+band ±0.5 (đá plan C4); đổi planner wasm (source không public).
+
+**Battery 18/11: 10/10 ALL PASS** (livebrowser, livehands, notequery,
+impact-idle, settings-persist, sample-cache, humanize, practice, autosplit,
+autosplit-plan) + tsc + build. GUARD strikes worst ≤3.5mm ✓.

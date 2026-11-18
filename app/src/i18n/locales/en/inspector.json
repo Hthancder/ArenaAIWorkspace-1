@@ -150,6 +150,7 @@
     "handsSmoothness": "Smoothness",
     "handsMicroMotion": "Micro-motion",
     "handsFollowInput": "Hands follow your playing",
+    "handsAutoSplit": "Auto hand split",
     "handsKeystrike": "Keystrike tap",
     "handsExpression": "Expression",
     "handsImpact": "Press impact",

@@ -1549,6 +1549,7 @@ function LookPanel({ leaving }: { leaving: boolean }) {
                 <BoundSliderRow label={t('row.handsSmoothness')} settingKey="handsSmoothness" min={0} max={1} step={0.01} />
                 <BoundSliderRow label={t('row.handsMicroMotion')} settingKey="handsMicroMotion" min={0} max={1} step={0.01} />
                 <BoundSwitchRow label={t('row.handsFollowInput')} settingKey="handsFollowInput" />
+                <BoundSwitchRow label={t('row.handsAutoSplit')} settingKey="handsAutoSplit" />
                 <BoundSliderRow label={t('row.handsKeystrike')} settingKey="handsKeystrike" min={0} max={1} step={0.01} />
                 <BoundSliderRow label={t('row.handsExpression')} settingKey="handsExpression" min={0} max={1} step={0.01} />
                 <BoundSliderRow label={t('row.handsImpact')} settingKey="handsImpact" min={0} max={1} step={0.01} />

@@ -150,6 +150,7 @@
     "handsSmoothness": "滑らかさ",
     "handsMicroMotion": "マイクロモーション",
     "handsFollowInput": "手を演奏に合わせる",
+    "handsAutoSplit": "自動ハンド割り",
     "handsKeystrike": "キーストローク",
     "handsExpression": "表現",
     "handsImpact": "押鍵の勢い",
