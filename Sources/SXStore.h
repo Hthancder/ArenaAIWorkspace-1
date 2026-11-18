@@ -11,11 +11,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// {history: [{id,q,a,date}], historyEpoch: string, stats: dictionary, statsEpoch: string}.
 - (nullable NSDictionary *)snapshot;
 /// Từ chối ghi khi lịch sử đã được xóa sau khi request bắt đầu.
-- (BOOL)appendQuestion:(NSString *)question answer:(NSString *)answer limit:(NSUInteger)limit epoch:(NSString *)epoch;
+- (BOOL)appendQuestion:(NSString *)question answer:(NSString *)answer limit:(NSUInteger)limit epoch:(NSString *)epoch startedAt:(NSTimeInterval)startedAt;
 - (BOOL)deleteHistoryID:(NSString *)identifier;
 - (BOOL)clearHistory;
 /// Epoch bảo vệ các sự kiện đang xếp hàng không phục hồi thống kê sau khi xóa.
-- (BOOL)recordEvent:(NSString *)event milliseconds:(nullable NSNumber *)milliseconds epoch:(NSString *)epoch;
+- (BOOL)recordEvent:(NSString *)event milliseconds:(nullable NSNumber *)milliseconds epoch:(NSString *)epoch startedAt:(NSTimeInterval)startedAt;
 - (BOOL)clearStats;
 @end
 

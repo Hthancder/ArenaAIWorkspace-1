@@ -474,9 +474,10 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 // Ghi số liệu ngoài hook, epoch ngăn tác vụ xếp hàng phục hồi thống kê đã xóa.
 - (void)queueStatistic:(NSString *)event milliseconds:(NSNumber *)milliseconds {
 	NSString *epoch = _statsEpoch;
+	NSTimeInterval startedAt = _captureTime;
 	if (!epoch.length) return;
 	dispatch_async([SXStore queue], ^{
-		[[SXStore shared] recordEvent:event milliseconds:milliseconds epoch:epoch];
+		[[SXStore shared] recordEvent:event milliseconds:milliseconds epoch:epoch startedAt:startedAt];
 	});
 }
 
@@ -640,8 +641,9 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 				NSString *answer = _answerDisplay;
 				NSString *epoch = _historyEpoch;
 				NSUInteger limit = (NSUInteger)prefs.contextTurns;
+				NSTimeInterval startedAt = _captureTime;
 				dispatch_async([SXStore queue], ^{
-					[[SXStore shared] appendQuestion:question answer:answer limit:limit epoch:epoch];
+					[[SXStore shared] appendQuestion:question answer:answer limit:limit epoch:epoch startedAt:startedAt];
 				});
 			}
 		}

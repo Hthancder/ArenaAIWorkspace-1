@@ -80,7 +80,10 @@
 	}
 	NSString *historyEpoch = [saved[@"historyEpoch"] isKindOfClass:NSString.class] ? saved[@"historyEpoch"] : @"initial";
 	NSString *statsEpoch = [saved[@"statsEpoch"] isKindOfClass:NSString.class] ? saved[@"statsEpoch"] : @"initial";
-	return [@{@"history": history, @"stats": stats, @"historyEpoch": historyEpoch, @"statsEpoch": statsEpoch} mutableCopy];
+	NSNumber *historyClearedAt = [saved[@"historyClearedAt"] isKindOfClass:NSNumber.class] ? saved[@"historyClearedAt"] : @0;
+	NSNumber *statsClearedAt = [saved[@"statsClearedAt"] isKindOfClass:NSNumber.class] ? saved[@"statsClearedAt"] : @0;
+	return [@{@"history": history, @"stats": stats, @"historyEpoch": historyEpoch, @"statsEpoch": statsEpoch,
+		@"historyClearedAt": historyClearedAt, @"statsClearedAt": statsClearedAt} mutableCopy];
 }
 - (BOOL)writeLocked:(NSDictionary *)state {
 	NSError *error = nil;
@@ -117,14 +120,14 @@
 	flock(fd, LOCK_UN); close(fd);
 	return result;
 }
-- (BOOL)appendQuestion:(NSString *)question answer:(NSString *)answer limit:(NSUInteger)limit epoch:(NSString *)epoch {
+- (BOOL)appendQuestion:(NSString *)question answer:(NSString *)answer limit:(NSUInteger)limit epoch:(NSString *)epoch startedAt:(NSTimeInterval)startedAt {
 	if (!question.length || !answer.length || !epoch.length) return NO;
 	int fd = [self acquireLock];
 	if (fd < 0) return NO;
 	NSMutableDictionary *state = [self readLocked];
 	if (!state) { flock(fd, LOCK_UN); close(fd); return NO; }
 	BOOL ok = NO;
-	if ([state[@"historyEpoch"] isEqualToString:epoch]) {
+	if ([state[@"historyEpoch"] isEqualToString:epoch] && startedAt > [state[@"historyClearedAt"] doubleValue]) {
 		NSMutableArray *items = [state[@"history"] mutableCopy];
 		[items addObject:@{@"id": NSUUID.UUID.UUIDString, @"q": question, @"a": answer, @"date": NSDate.date}];
 		NSUInteger max = MAX(1, MIN(limit, 40));
@@ -155,16 +158,17 @@
 	if (!state) { flock(fd, LOCK_UN); close(fd); return NO; }
 	state[@"history"] = @[];
 	state[@"historyEpoch"] = NSUUID.UUID.UUIDString;
+	state[@"historyClearedAt"] = @(CFAbsoluteTimeGetCurrent());
 	BOOL ok = [self writeLocked:state];
 	flock(fd, LOCK_UN); close(fd); return ok;
 }
-- (BOOL)recordEvent:(NSString *)event milliseconds:(NSNumber *)milliseconds epoch:(NSString *)epoch {
+- (BOOL)recordEvent:(NSString *)event milliseconds:(NSNumber *)milliseconds epoch:(NSString *)epoch startedAt:(NSTimeInterval)startedAt {
 	if (![@[@"replaced", @"kept", @"timeout", @"error"] containsObject:event] || !epoch.length) return NO;
 	int fd = [self acquireLock]; if (fd < 0) return NO;
 	NSMutableDictionary *state = [self readLocked];
 	if (!state) { flock(fd, LOCK_UN); close(fd); return NO; }
 	BOOL ok = NO;
-	if ([state[@"statsEpoch"] isEqualToString:epoch]) {
+	if ([state[@"statsEpoch"] isEqualToString:epoch] && startedAt > [state[@"statsClearedAt"] doubleValue]) {
 		NSMutableDictionary *stats = [state[@"stats"] mutableCopy];
 		stats[event] = @([stats[event] integerValue] + 1);
 		if (milliseconds && milliseconds.doubleValue >= 0) {
@@ -182,6 +186,7 @@
 	if (!state) { flock(fd, LOCK_UN); close(fd); return NO; }
 	state[@"stats"] = @{};
 	state[@"statsEpoch"] = NSUUID.UUID.UUIDString;
+	state[@"statsClearedAt"] = @(CFAbsoluteTimeGetCurrent());
 	BOOL ok = [self writeLocked:state];
 	flock(fd, LOCK_UN); close(fd); return ok;
 }
