@@ -32,6 +32,7 @@ jobs:
     runs-on: macos-15
     strategy:
       fail-fast: false
+      max-parallel: 1   # runner macOS cấp phát chậm: chạy lần lượt để job không bị huỷ khi xếp hàng
       matrix:
         include:
           - scheme: rootless
