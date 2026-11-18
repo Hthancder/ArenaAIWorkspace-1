@@ -177,7 +177,9 @@ static const NSTimeInterval kSXStreamTimeout = 60;
 			userInfo:@{NSLocalizedDescriptionKey: @"SSE hết thời gian chờ."}];
 		return nil;
 	}
-	if (taskError && status < 400 && !content.length && !sawToolCalls) {
+	// Lỗi transport MỌI lúc (kể cả giữa chừng) → trả lỗi, KHÔNG bao giờ “thành công”
+	// với nội dung bị cắt cụt (SSE đứt giữa chừng = đáp án thiếu chữ).
+	if (taskError) {
 		if (outErr) *outErr = taskError;
 		return nil;
 	}

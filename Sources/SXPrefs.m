@@ -135,14 +135,18 @@ static double SXClamp(double v, double lo, double hi) {
 #pragma mark - Truy vấn theo provider hiện tại
 
 - (NSString *)activeAPIKey {
-	return _provider == SXProviderGemini ? _geminiKey : _openaiKey;
+	// Cắt khoảng trắng/dấu xuống dòng thừa — dán khóa từ web thường dính "\n" ở đuôi.
+	NSString *key = _provider == SXProviderGemini ? _geminiKey : _openaiKey;
+	return [key stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 }
 
 - (NSString *)activeModel {
-	if (_provider == SXProviderGemini) {
-		return _geminiModel.length ? _geminiModel : @"gemini-2.0-flash";
+	NSString *model = _provider == SXProviderGemini ? _geminiModel : _openaiModel;
+	model = [model stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+	if (!model.length) {
+		return _provider == SXProviderGemini ? @"gemini-2.0-flash" : @"gpt-4o-mini";
 	}
-	return _openaiModel.length ? _openaiModel : @"gpt-4o-mini";
+	return model;
 }
 
 - (NSString *)activeBaseURL {

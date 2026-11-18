@@ -76,27 +76,30 @@ static NSString *SXSanitizeAnswer(NSString *raw) {
 
 /// Thay text của view: `speakableText` nhận BẢN ĐỌC (thuần, không markdown),
 /// `text` nhận BẢN HIỂN THỊ (đã render markdown nếu bật).
+/// Quy tắc: nếu view có chữ ở MỘT trong hai trường → ghi CẢ HAI
+/// (trường trống cũng được điền — tránh bubble hiển thị rỗng hoặc TTS đọc nhầm markdown).
 static BOOL SXApplyTextToView(id view, NSString *displayText, NSString *speechText) {
-	BOOL applied = NO;
 	SEL speakableSelector = NSSelectorFromString(@"speakableText");
 	SEL setSpeakableSelector = NSSelectorFromString(@"setSpeakableText:");
-	if ([view respondsToSelector:setSpeakableSelector]) {
-		id current = SXMsg(view, speakableSelector);
-		if ([current isKindOfClass:[NSString class]] && ((NSString *)current).length) {
-			SXSet(view, setSpeakableSelector, speechText);
-			applied = YES;
-		}
-	}
 	SEL textSelector = NSSelectorFromString(@"text");
 	SEL setTextSelector = NSSelectorFromString(@"setText:");
-	if ([view respondsToSelector:setTextSelector]) {
-		id current = SXMsg(view, textSelector);
-		if ([current isKindOfClass:[NSString class]] && ((NSString *)current).length) {
-			SXSet(view, setTextSelector, displayText);
-			applied = YES;
-		}
+	BOOL canSpeak = [view respondsToSelector:setSpeakableSelector];
+	BOOL canText = [view respondsToSelector:setTextSelector];
+
+	BOOL hasContent = NO;
+	if (canSpeak) {
+		id current = SXMsg(view, speakableSelector);
+		if ([current isKindOfClass:[NSString class]] && ((NSString *)current).length) hasContent = YES;
 	}
-	return applied;
+	if (!hasContent && canText) {
+		id current = SXMsg(view, textSelector);
+		if ([current isKindOfClass:[NSString class]] && ((NSString *)current).length) hasContent = YES;
+	}
+	if (!hasContent) return NO;
+
+	if (canSpeak) SXSet(view, setSpeakableSelector, speechText);
+	if (canText) SXSet(view, setTextSelector, displayText);
+	return YES;
 }
 
 /// Tạo bong bóng trả lời của SiriX khi lệnh không có sẵn trường văn bản
@@ -382,7 +385,10 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 
 	if (SXIsActionClass(className)) {
 		[_condition lock];
-		if (_pending && !_consumed) _actionSeen = YES;
+		if (_pending && !_consumed) {
+			_actionSeen = YES;
+			[_condition broadcast]; // đánh thức luồng đang chờ — thoát ngay, không giữ ACE
+		}
 		[_condition unlock];
 		SXLogDbg(@"resp", @"tác vụ hệ thống — cho Siri gốc xử lý: %@", className);
 		return NO;
@@ -432,7 +438,9 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 	NSTimeInterval elapsed = _captureTime > 0 ? (CFAbsoluteTimeGetCurrent() - _captureTime) : 0;
 	NSTimeInterval waitBudget = MIN(5.0, MAX(0.0, timeout - elapsed));
 	NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:waitBudget];
-	while (!_ready && !_errored && !_consumed && _generation == myGeneration) {
+	BOOL smartKeep = (prefs.mode == SXReplyModeSmart);
+	while (!_ready && !_errored && !_consumed && _generation == myGeneration &&
+		   !(smartKeep && _actionSeen)) {
 		if (![_condition waitUntilDate:deadline]) break;
 	}
 

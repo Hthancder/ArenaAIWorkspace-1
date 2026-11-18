@@ -149,9 +149,11 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 													 format:SXStreamFormatOpenAI
 													  error:&streamError];
 			if (!streamResp) {
-				SXLogErr(@"llm", @"openai stream lỗi mạng: %@", streamError.localizedDescription);
-				completion(nil, streamError, SXInfo(@"openai", model, 0, rounds, start));
-				return;
+				// Lỗi transport/hết giờ trên SSE → thử non-stream một lần
+				// (nhiều proxy nhận POST thường nhưng treo SSE). Non-stream lỗi → báo lỗi như cũ.
+				SXLogWrn(@"llm", @"openai stream lỗi (%@) → thử non-stream", streamError.localizedDescription);
+				forceNonStream = YES;
+				continue;
 			}
 			NSInteger streamStatus = [streamResp[@"status"] integerValue];
 			if (streamStatus >= 200 && streamStatus < 300) {
@@ -171,7 +173,7 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 					}
 					forceNonStream = YES; // stream “thành công” nhưng rỗng → thử non-stream
 				}
-			} else if (streamStatus == 400 || streamStatus == 405 || streamStatus == 501) {
+			} else if (streamStatus == 400 || streamStatus == 404 || streamStatus == 405 || streamStatus == 415 || streamStatus == 501) {
 				SXLogWrn(@"llm", @"endpoint không hỗ trợ stream (HTTP %ld) → non-stream", (long)streamStatus);
 				forceNonStream = YES;
 			} else {
@@ -347,9 +349,10 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 													 format:SXStreamFormatGemini
 													  error:&streamError];
 			if (!streamResp) {
-				SXLogErr(@"llm", @"gemini stream lỗi mạng: %@", streamError.localizedDescription);
-				completion(nil, streamError, SXInfo(@"gemini", model, 0, rounds, start));
-				return;
+				// Như nhánh OpenAI: SSE lỗi/treo → fallback non-stream.
+				SXLogWrn(@"llm", @"gemini stream lỗi (%@) → thử non-stream", streamError.localizedDescription);
+				forceNonStream = YES;
+				continue;
 			}
 			NSInteger streamStatus = [streamResp[@"status"] integerValue];
 			if (streamStatus >= 200 && streamStatus < 300) {
@@ -369,7 +372,7 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 					}
 					forceNonStream = YES;
 				}
-			} else if (streamStatus == 400 || streamStatus == 405 || streamStatus == 501) {
+			} else if (streamStatus == 400 || streamStatus == 404 || streamStatus == 405 || streamStatus == 415 || streamStatus == 501) {
 				SXLogWrn(@"llm", @"gemini stream không khả dụng (HTTP %ld) → non-stream", (long)streamStatus);
 				forceNonStream = YES;
 			} else {
@@ -487,7 +490,7 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 	if (!key.length) {
 		NSString *providerName = provider == SXProviderGemini ? @"Gemini" : @"OpenAI tương thích";
 		NSError *err = SXErr(-1000, [NSString stringWithFormat:
-			@"Chưa đặt khóa API cho %@. Mở Cài đặt → SiriX → Nhà cung cấp & API.", providerName]);
+			@"Chưa đặt khóa API cho %@. Mở Cài đặt → SiriX → Cấu hình OpenAI / Cấu hình Gemini rồi dán khóa.", providerName]);
 		SXLogWrn(@"llm", @"bỏ yêu cầu — %@", err.localizedDescription);
 		completion(nil, err, nil);
 		return;

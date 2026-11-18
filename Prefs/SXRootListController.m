@@ -97,7 +97,7 @@ static void SXExceptionHandler(NSException *exception) {
 		SXLogErr(@"pref", @"buildHeader EXCEPTION: %@ — %@", exception.name, exception.reason);
 	}
 
-	// Tải lại cài đặt + danh sách (lọc provider) mỗi khi có thay đổi.
+	// Tải lại cài đặt + danh sách mỗi khi có thay đổi (áp dụng ngay, không cần mở lại trang).
 	__weak SXRootListController *weakSelf = self;
 	notify_register_dispatch("com.sirix.tweak/prefs.changed", &_prefsToken,
 							 dispatch_get_main_queue(), ^(int token) {

@@ -80,7 +80,7 @@
 	}];
 	[items addObject:[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
 																  target:nil action:nil]];
-	[items addObject:[[UIBarButtonItem alloc] initWithTitle:@"Khôi phục mặc định"
+	[items addObject:[[UIBarButtonItem alloc] initWithTitle:@"Khôi phục"
 													 style:UIBarButtonItemStylePlain
 													target:self
 													action:@selector(sx_resetToDefault)]];
@@ -119,18 +119,20 @@
 }
 
 - (void)updateStatus {
+	// Trạng thái phản ánh bản ĐANG DÙNG (rawEffective), không phải nội dung đang xem —
+	// đang ở tab “Mặc định” nhưng custom vẫn được lưu thì vẫn ghi “prompt tùy chỉnh”.
 	NSString *buffer = self.textView.text ?: @"";
 	BOOL dirty = [self isDirty];
-	BOOL isDefaultContent = (buffer.length == 0 ||
-							 [buffer isEqualToString:SXDefaultSystemPrompt()]);
+	BOOL effectiveIsDefault = (self.rawEffective.length == 0 ||
+							   [self.rawEffective isEqualToString:SXDefaultSystemPrompt()]);
 	if (dirty) {
 		self.navigationItem.prompt = [NSString stringWithFormat:
 			@"Đã sửa · chưa lưu (%lu ký tự)", (unsigned long)buffer.length];
-	} else if (isDefaultContent) {
+	} else if (effectiveIsDefault) {
 		self.navigationItem.prompt = @"Đang dùng: prompt mặc định của SiriX";
 	} else {
 		self.navigationItem.prompt = [NSString stringWithFormat:
-			@"Đang dùng: prompt tùy chỉnh (%lu ký tự)", (unsigned long)buffer.length];
+			@"Đang dùng: prompt tùy chỉnh (%lu ký tự)", (unsigned long)self.rawEffective.length];
 	}
 	self.navigationItem.rightBarButtonItem.enabled = dirty;
 }
@@ -209,7 +211,29 @@
 }
 
 - (void)sx_resetToDefault {
-	// Hành động xây dựng: không cần xác nhận.
+	// Đang sửa dở mà bấm Khôi phục → xác nhận trước (nút nằm sát Sao chép trên bàn phím).
+	if ([self isDirty]) {
+		UIAlertController *alert = [UIAlertController
+			alertControllerWithTitle:@"Khôi phục prompt mặc định?"
+							 message:@"Nội dung đang sửa sẽ bị thay bằng prompt mặc định."
+					  preferredStyle:UIAlertControllerStyleAlert];
+		__weak typeof(self) weakSelf = self;
+		[alert addAction:[UIAlertAction actionWithTitle:@"Khôi phục"
+												 style:UIAlertActionStyleDestructive
+											   handler:^(UIAlertAction *action) {
+			[weakSelf doResetToDefault];
+		}]];
+		[alert addAction:[UIAlertAction actionWithTitle:@"Hủy"
+												 style:UIAlertActionStyleCancel
+											   handler:nil]];
+		[self presentViewController:alert animated:YES completion:nil];
+		return;
+	}
+	[self doResetToDefault];
+}
+
+- (void)doResetToDefault {
+	// Hành động xây dựng (đã xác nhận nếu cần) — không cần hỏi thêm.
 	[SXPrefs setString:nil forKey:@"customPrompt"];
 	notify_post("com.sirix.tweak/prefs.changed");
 	SXLogInf(@"pref", @"Khôi phục prompt mặc định — xóa bản tùy chỉnh");

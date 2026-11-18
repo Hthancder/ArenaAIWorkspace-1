@@ -39,6 +39,9 @@
 #pragma mark - Kiểm tra kết nối
 
 - (void)sx_testConnection:(id)sender {
+	// Chốt giá trị đang gõ dở trong ô text (Preferences ghi khi end editing)
+	// rồi mới đọc prefs — kẻo kiểm tra bằng giá trị cũ.
+	[self.view endEditing:YES];
 	SXPrefs *prefs = [SXPrefs shared];
 	[prefs reload];
 	if (!prefs.activeAPIKey.length) {
@@ -82,7 +85,7 @@
 }
 
 - (void)showAlert:(NSString *)title message:(NSString *)message error:(BOOL)isError {
-	if (!self.view.window) return;
+	if (!self.view.window || self.presentedViewController) return; // không chồng 2 alert
 	UIAlertController *alert = [UIAlertController alertControllerWithTitle:title
 																   message:message
 															preferredStyle:UIAlertControllerStyleAlert];
