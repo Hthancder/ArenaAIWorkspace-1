@@ -1,7 +1,8 @@
 export THEOS_PACKAGE_SCHEME ?= rootless
 
 ARCHS = arm64 arm64e
-TARGET = iphone:clang:latest:15.0
+# SDK 15.6 từ theos/sdks (SDK "patched" có private-framework tbds — Xcode stock không có)
+TARGET = iphone:clang:15.6:15.0
 INSTALL_TARGET_PROCESSES = SpringBoard Preferences
 
 include $(THEOS)/makefiles/common.mk
