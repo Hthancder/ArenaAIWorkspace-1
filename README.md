@@ -109,9 +109,16 @@ cd /tmp/theos-check && git submodule update --init vendor/logos vendor/include
 git clone --depth 1 --filter=blob:none --sparse https://github.com/theos/sdks /tmp/sdks
 cd /tmp/sdks && git sparse-checkout set iPhoneOS15.6.sdk
 
-./scripts/local-check.sh    # Logos → compile toàn bộ (aarch64-ios, -Werror) → validate plist
-./scripts/test-log-file.sh  # regression xóa/xoay vòng log (Linux/macOS)
+./scripts/local-check.sh         # Logos → compile toàn bộ (aarch64-ios, -Werror) → validate plist
+./scripts/check-prefs.sh         # lint tầng Settings (plist, selector, cân bằng ngoặc)
+./scripts/test-prefs-fallback.sh # mọi trang Settings phải có lưới an toàn chống trang trắng
+./scripts/test-log-file.sh       # regression xóa/xoay vòng log (Linux/macOS)
 ```
+
+Không trang cài đặt nào được để trắng: mỗi màn hình gọi
+`SXShowContentFallbackIfNeeded` trong `viewDidAppear:` để hiện lý do, nút sao chép
+log và nút quay lại khi dữ liệu không tải được (bảo vệ bằng
+`scripts/test-prefs-fallback.sh` trong CI).
 
 Trên macOS, `./scripts/test-intercept-macos.sh` chạy regression của state machine với ACE/LLM giả và `./scripts/test-store-macos.sh` kiểm tra kho lịch sử/thống kê. CI chạy cả hai bộ test. Chúng không thay thế việc thử Siri trên thiết bị thật.
 
@@ -124,7 +131,7 @@ Sources/            tweak: Logos hooks, log, prefs, LLM, tools, state machine
 Prefs/              bundle cài đặt (PSListController, xem log, soạn prompt) + header Preferences
 layout/             entry PreferenceLoader
 include/            header CydiaSubstrate (để build được ở cả CI lẫn máy cá nhân)
-scripts/            local-check.sh — kiểm tra không cần macOS
+scripts/            local-check.sh — kiểm tra không cần macOS (kèm lint Settings + test lưới an toàn)
 docs/RESEARCH.md    toàn bộ nghiên cứu về SiriPlus & kiến trúc Siri iOS 15
 .github/workflows/  build rootless + roothide, validate deb, upload artifact
 ```

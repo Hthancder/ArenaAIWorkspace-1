@@ -13,6 +13,56 @@
 #define SX_SCHEME "unknown"
 #endif
 
+#pragma mark - Nạp plist cài đặt ở đúng nơi
+
+/// Bundle chứa tài nguyên cài đặt. Trên máy roothide, `NSBundle mainBundle` của
+/// Preferences là `/var/containers/...` còn bundle thật nằm dưới `/var/jb`; nhầm
+/// một trong hai thì `loadSpecifiersFromPlistName:` trả nil và trang trắng.
+static NSBundle *SXSettingsBundle(Class aClass) {
+	NSBundle *bundle = [NSBundle bundleForClass:aClass];
+	if (bundle) return bundle;
+	NSString *path = @"/Library/PreferenceBundles/SiriXPreferences.bundle";
+	for (NSString *prefix in @[@"/var/jb", @""]) {
+		NSString *candidate = [prefix stringByAppendingString:path];
+		NSBundle *found = [NSBundle bundleWithPath:candidate];
+		if (found && [found pathForResource:@"Root" ofType:@"plist"]) return found;
+	}
+	return nil;
+}
+
+/// Tải specifier từ plist với đường dẫn dự phòng. `loadSpecifiersFromPlistName:`
+/// dựa vào `self.bundle`; nếu bundle chưa đúng thì gán lại rồi thử lần nữa.
+NSMutableArray *SXLoadSpecifiers(PSListController *controller, Class aClass, NSString *plistName) {
+	NSMutableArray *loaded = nil;
+	@try {
+		loaded = [[controller loadSpecifiersFromPlistName:plistName target:controller] mutableCopy];
+	} @catch (NSException *exception) {
+		SXLogErr(@"pref", @"load %@ EXCEPTION: %@ — %@", plistName, exception.name, exception.reason);
+		loaded = nil;
+	}
+	if (loaded.count) return loaded;
+
+	NSBundle *bundle = SXSettingsBundle(aClass);
+	NSString *found = [bundle pathForResource:plistName ofType:@"plist"];
+	SXLogWrn(@"pref", @"load %@ trả rỗng — thử lại với bundle=%@ (plist=%@)",
+			 plistName, bundle.bundlePath ?: @"?", found ?: @"(không thấy)");
+	if (!bundle || !found) return loaded;
+	@try {
+		NSMutableArray *retry = [[controller loadSpecifiersFromPlistName:plistName
+																  target:controller
+																  bundle:bundle] mutableCopy];
+		if (retry.count) {
+			SXLogInf(@"pref", @"load %@ thành công với bundle tường minh (%lu mục)",
+					 plistName, (unsigned long)retry.count);
+			return retry;
+		}
+	} @catch (NSException *exception) {
+		SXLogErr(@"pref", @"load %@ với bundle tường minh EXCEPTION: %@ — %@",
+				 plistName, exception.name, exception.reason);
+	}
+	return loaded;
+}
+
 #pragma mark - Chẩn đoán exception
 
 static NSUncaughtExceptionHandler *SXPrevExceptionHandler = NULL;
@@ -175,9 +225,19 @@ static SXChoiceDefinition *SXChoiceDefinitionFor(NSString *key) {
 		NSString *key = [self.specifier propertyForKey:PSKeyNameKey];
 		if (key.length) self.prefsKey = key;
 	}
+	// Không chốt `definition` ở đây: `specifier` có thể tới sau. `specifiers`
+	// đọc lại và ghi vào cùng thuộc tính này.
 	self.definition = SXChoiceDefinitionFor(self.prefsKey);
 	self.title = self.definition.title ?: @"Giá trị";
+	SXLogDbg(@"pref", @"bộ chọn mở: key=%@, specifier=%@",
+			 self.prefsKey ?: @"(trống)", NSStringFromClass([self.specifier class]));
 	self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+	[super viewDidAppear:animated];
+	SXShowContentFallbackIfNeeded(self, self.definition.title ?: @"Giá trị",
+								  @"không dựng được danh sách lựa chọn");
 }
 
 - (double)sx_currentValue {
@@ -407,6 +467,28 @@ static SXChoiceDefinition *SXChoiceDefinitionFor(NSString *key) {
 		NSMutableArray *items = [NSMutableArray array];
 		SXChoiceDefinition *definition = self.definition;
 		if (!definition) {
+			// `specifier` (hàng vừa bấm) có thể chưa được Preferences gán lúc
+			// viewDidLoad; đọc lại ở đây. Không suy ra được key thì hiện thông
+			// báo thay vì màn hình trống.
+			@try {
+				NSString *key = [self.specifier propertyForKey:PSKeyNameKey];
+				if (key.length && !self.prefsKey.length) self.prefsKey = key;
+			} @catch (NSException *exception) {
+				SXLogErr(@"pref", @"đọc key ở specifiers: %@", exception.reason);
+			}
+			if (!definition) definition = SXChoiceDefinitionFor(self.prefsKey);
+			self.definition = definition;
+			if (definition.title.length) self.title = definition.title;
+		}
+		if (!definition) {
+			SXLogErr(@"pref", @"bộ chọn %@ thiếu định nghĩa (specifier=%@) — hiện thông báo",
+					 self.prefsKey ?: @"(trống)", NSStringFromClass([self.specifier class]));
+			PSSpecifier *group = [PSSpecifier groupSpecifierWithName:self.title ?: @"Giá trị"];
+			[group setProperty:[NSString stringWithFormat:
+					@"Không tìm thấy định nghĩa cho khoá “%@”. Mở lại từ trang chính, hoặc gửi log để mình thêm định nghĩa.",
+					self.prefsKey.length ? self.prefsKey : @"(không đọc được key)"]
+					forKey:@"footerText"];
+			[items addObject:group];
 			_specifiers = items;
 			return _specifiers;
 		}
@@ -521,29 +603,51 @@ static SXChoiceDefinition *SXChoiceDefinitionFor(NSString *key) {
 
 - (NSArray *)specifiers {
 	if (!_specifiers) {
-		NSMutableArray *loaded = nil;
-		@try {
-			loaded = [[self loadSpecifiersFromPlistName:@"Root" target:self] mutableCopy];
-		} @catch (NSException *exception) {
-			SXLogErr(@"pref", @"loadSpecifiers EXCEPTION: %@ — %@", exception.name, exception.reason);
-			loaded = nil;
-		}
+		NSMutableArray *loaded = SXLoadSpecifiers(self, self.class, @"Root");
 		if (!loaded.count) {
-			// Settings không được để trống hoặc crash: bảng dự phòng tối giản.
-			PSSpecifier *group = [PSSpecifier groupSpecifierWithName:@"SiriX"];
-			[group setProperty:@"Không tải được bảng cài đặt. Mở “Xem & sao chép log” để lấy log gửi lại."
-					   forKey:@"footerText"];
+			// Root.plist không đọc được (thiếu trong gói, hỏng, hoặc Preferences ném
+			// khi dựng cell). Settings không bao giờ được để trống: hiện lý do, đường
+			// dẫn bundle và lối thoát thay vì một trang trắng.
+			NSBundle *bundle = [NSBundle bundleForClass:self.class];
+			NSString *rootPath = [bundle pathForResource:@"Root" ofType:@"plist"];
+			SXLogErr(@"pref", @"Root.plist KHÔNG tải được — hiện bảng dự phòng (bundle=%@, root=%@, version=%@, scheme=%@)",
+					 bundle.bundlePath ?: @"?", rootPath ?: @"(thiếu)", SX_VERSION, @SX_SCHEME);
+			NSString *footer = rootPath.length
+				? [NSString stringWithFormat:@"Không dựng được bảng cài đặt từ %@. Bản %@ · %@. "
+				   @"Gửi log qua “Xem & sao chép log” để mình sửa đúng chỗ.", rootPath.lastPathComponent,
+				   SX_VERSION, @SX_SCHEME]
+				: [NSString stringWithFormat:@"Gói cài đặt thiếu Root.plist (bundle=%@). Bản %@ · %@. "
+				   @"Cài lại gói .deb đúng loại (rootless/roothide) rồi mở lại Settings.",
+				   bundle.bundlePath ?: @"?", SX_VERSION, @SX_SCHEME];
+			PSSpecifier *group = [PSSpecifier groupSpecifierWithName:@"SiriX — chưa tải được bảng cài đặt"];
+			[group setProperty:footer forKey:@"footerText"];
 			PSSpecifier *log = [PSSpecifier preferenceSpecifierNamed:@"Xem & sao chép log"
 															  target:self set:NULL get:NULL
 															  detail:NSClassFromString(@"SXLogViewController")
 																cell:PSLinkCell edit:nil];
-			loaded = [NSMutableArray arrayWithObjects:group, log, nil];
+			PSSpecifier *reload = [PSSpecifier preferenceSpecifierNamed:@"Thử tải lại bảng cài đặt"
+															   target:self
+																  set:NULL get:NULL detail:nil
+																 cell:PSButtonCell edit:nil];
+			reload.cellType = PSButtonCell;
+			[reload setProperty:@(YES) forKey:PSEnabledKey];
+			[reload setProperty:NSStringFromSelector(@selector(sx_reloadTable:)) forKey:PSButtonActionKey];
+			PSSpecifier *respring = [PSSpecifier preferenceSpecifierNamed:@"Khởi động lại SpringBoard"
+																target:self
+																   set:NULL get:NULL detail:nil
+																  cell:PSButtonCell edit:nil];
+			respring.cellType = PSButtonCell;
+			[respring setProperty:@(YES) forKey:PSEnabledKey];
+			[respring setProperty:NSStringFromSelector(@selector(sx_respring:)) forKey:PSButtonActionKey];
+			loaded = [NSMutableArray arrayWithObjects:group, log, reload, respring, nil];
 		}
 		_specifiers = [self sx_applyChoiceDetails:loaded];
 		// Đọc lại toàn bộ prefs một lần trước khi vẽ: tránh hàng “Tổng quan” hiện
 		// giá trị cũ do CFPreferences chưa đồng bộ từ tiến trình khác.
 		[[SXPrefs shared] reload];
-		SXLogInf(@"pref", @"bảng cài đặt sẵn sàng: %lu specifier", (unsigned long)_specifiers.count);
+		SXLogInf(@"pref", @"bảng cài đặt sẵn sàng: %lu specifier · version=%@ · scheme=%@ · bundle=%@",
+				 (unsigned long)_specifiers.count, SX_VERSION, @SX_SCHEME,
+				 [NSBundle bundleForClass:self.class].bundlePath ?: @"?");
 	}
 	return _specifiers;
 }
@@ -698,6 +802,12 @@ static SXChoiceDefinition *SXChoiceDefinitionFor(NSString *key) {
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
 	[self sx_updateStatusPill];
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+	[super viewDidAppear:animated];
+	// Trang gốc cũng có thể trắng nếu Preferences dựng cell hỏng im lặng.
+	SXShowContentFallbackIfNeeded(self, @"Cài đặt SiriX", @"không dựng được các hàng cài đặt");
 }
 
 - (void)dealloc {
@@ -860,6 +970,25 @@ static SXChoiceDefinition *SXChoiceDefinitionFor(NSString *key) {
 			}];
 		});
 	});
+}
+
+/// Nút thoát khỏi bảng dự phòng: xoá cache specifier rồi dựng lại từ plist.
+- (void)sx_reloadTable:(id)sender {
+	(void)sender;
+	SXLogInf(@"pref", @"người dùng yêu cầu tải lại bảng cài đặt");
+	_specifiers = nil;
+	@try {
+		[self reloadSpecifiers];
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+		[self reload];
+#pragma clang diagnostic pop
+	} @catch (NSException *exception) {
+		SXLogErr(@"pref", @"tải lại bảng EXCEPTION: %@ — %@", exception.name, exception.reason);
+		[SXUI alertOn:self title:@"Vẫn không tải được"
+			  message:[NSString stringWithFormat:@"%@. Gửi log để mình xem chi tiết.",
+					   exception.reason ?: @"không rõ lỗi"]];
+	}
 }
 
 - (void)sx_respring:(id)sender {

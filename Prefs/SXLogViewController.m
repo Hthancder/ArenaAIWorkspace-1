@@ -193,6 +193,11 @@ static UIColor *SXLogColorForLine(NSString *line) {
 	[self sx_requestReloadAnimated:NO force:YES];
 }
 
+- (void)viewDidAppear:(BOOL)animated {
+	[super viewDidAppear:animated];
+	SXShowContentFallbackIfNeeded(self, @"Nhật ký", @"không đọc được tệp log");
+}
+
 - (void)viewWillDisappear:(BOOL)animated {
 	[super viewWillDisappear:animated];
 	[self sx_stopTimer];

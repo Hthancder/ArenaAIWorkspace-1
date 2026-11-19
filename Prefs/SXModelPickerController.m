@@ -184,6 +184,11 @@
 	}
 }
 
+- (void)viewDidAppear:(BOOL)animated {
+	[super viewDidAppear:animated];
+	SXShowContentFallbackIfNeeded(self, @"Chọn model", @"không có model gợi ý");
+}
+
 - (void)viewWillDisappear:(BOOL)animated {
 	[super viewWillDisappear:animated];
 	self.search.active = NO;

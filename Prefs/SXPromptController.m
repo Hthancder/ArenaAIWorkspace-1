@@ -196,6 +196,7 @@ static NSString *SXPromptCountText(NSUInteger length) {
 
 - (void)viewDidAppear:(BOOL)animated {
 	[super viewDidAppear:animated];
+	SXShowContentFallbackIfNeeded(self, @"Prompt hệ thống", @"không dựng được ô soạn thảo");
 	[self.textView becomeFirstResponder];
 }
 

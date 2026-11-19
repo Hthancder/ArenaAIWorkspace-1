@@ -100,6 +100,7 @@ Không đổi phiên bản gói sang 1.2 cho đến khi các hạng mục bắt 
 - Chế độ kích hoạt `auto` / `prefix`; trong `prefix`, chỉ `@ai` có nội dung được gửi tới AI, còn `@siri` hoặc câu không có tiền tố giữ Siri gốc. Nhận diện chính xác `@ai` phụ thuộc transcript Apple, nên Type-to-Siri là cách thử đáng tin cậy hơn.
 - Tuỳ chọn hiển thị bản Siri gốc khi lệnh AddViews có văn bản; bản gốc không được đưa vào lời đọc.
 - Trò chuyện thử trong Settings với provider đang chọn, không dùng tool và không lưu lịch sử lâu dài.
+- Mọi màn hình cài đặt đều có lưới an toàn (`SXShowContentFallbackIfNeeded`): trang trống hiện lý do + nút sao chép log + nút quay lại, không bao giờ trắng im lặng.
 - Kiểm tra kết nối chạy nền, dùng đúng provider của trang cấu hình; retry HTTP 429/5xx tối đa hai lần mỗi vòng trên luồng nền.
 - Khi lượt thật hết giờ hoặc lỗi mạng ở lượt đầu, tuỳ chọn `retry` (`timeoutAction`) thử lại một lần bằng model dự phòng; đây là lần gọi thứ hai trên luồng nền sau khi Siri đã được trả lời.
 - Lịch sử lưu trên thiết bị có giới hạn, xem chi tiết/sao chép/xóa từng mục hoặc toàn bộ; lượt ở chế độ không lưu chỉ ở bộ nhớ. Không phải chế độ ẩn danh mạng hoặc log.
@@ -479,3 +480,53 @@ mở ra màn hình trống”.
   Settings báo phiên bản cũ hơn gói cài.
 - Test mới: `tests/update_test.m` (+ `scripts/test-update-macos.sh`) kiểm tra so sánh phiên bản;
   `tests/store_test.m` kiểm tra cộng dồn token tổng và theo ngày.
+
+## 1.2.1 — Không còn trang cài đặt trắng
+
+Triệu chứng người dùng gặp: trang chính có hàng, bấm vào trang con thì trống. Có
+ba nguyên nhân khác nhau cùng cho ra một màn hình trắng, nên lớp sửa xử lý cả ba
+thay vì vá riêng từng trang.
+
+- **Lưới an toàn dùng chung** (`Prefs/SXUISupport`: `SXShowContentFallbackIfNeeded`).
+  Mọi màn hình cài đặt gọi hàm này trong `viewDidAppear:`. Hàm duyệt cây view và
+  coi trang là trống khi không có bảng nào có hàng, không có nhãn/ô nhập/nút hiện,
+  và không có `backgroundView` trạng thái rỗng. Khi trống, nó chèn một khối có
+  tiêu đề “<tên trang> chưa hiện được”, lý do kỹ thuật, phiên bản + iOS, nút
+  **Sao chép log để gửi lại** và nút **Quay lại**, đồng thời ghi
+  `SXLogErr("pref", …)` để biết chính xác trang nào hỏng.
+  - Trang có `view` chính là `UITableView` (`PSListController`) được xét cả ở gốc,
+    và khối dự phòng gắn vào `backgroundView` để không bị đè/cuộn mất.
+  - Nội dung về muộn (đọc đĩa/mạng ở luồng nền) thì khối tự gỡ sau 1.5 / 4 / 9
+    giây — lưới an toàn không bao giờ che nội dung thật.
+  - Đếm hàng qua `dataSource` (không dùng `visibleCells`): trang vừa mở chưa layout
+    vẫn được nhận là có dữ liệu.
+- **Nạp plist ở đúng bundle** (`Prefs/SXRootListController`: `SXLoadSpecifiers`).
+  `loadSpecifiersFromPlistName:` dựa vào `self.bundle`; trên roothide bundle có
+  thể nằm dưới `/var/jb`, nên lần nạp đầu trả rỗng và trang mở ra trống. Hàm mới
+  ghi log lần nạp rỗng rồi thử lại với bundle tường minh
+  (`bundleForClass:` → `/var/jb/Library/PreferenceBundles/SiriXPreferences.bundle`
+  → `/Library/PreferenceBundles/…`). Dùng cho cả `Root.plist` và hai plist nhà
+  cung cấp.
+- **Trang gốc không còn im lặng**: nếu `Root.plist` không tải được, bảng dự phòng
+  hiện đường dẫn bundle, phiên bản, scheme, kèm ba lối thoát — xem log, thử tải
+  lại bảng, khởi động lại SpringBoard.
+- **Bộ chọn giá trị** (`SXAPIChoiceController`) không còn đoán bừa khoá
+  `openaiApi`: thiếu `key` thì hiện thông báo thay vì mở nhầm trang 3 lựa chọn;
+  thiếu `validValues` thì ghi log + footer giải thích; `specifier` tới muộn được
+  đọc lại trước khi dựng hàng.
+- **Bảo vệ bằng test**: `scripts/test-prefs-fallback.sh` (chạy trong CI) bắt buộc
+  mọi lớp `SX*Controller` mở từ Settings phải gọi
+  `SXShowContentFallbackIfNeeded` bên trong `viewDidAppear:` với tiêu đề không
+  rỗng. Thêm trang mới mà quên là CI đỏ ngay.
+
+### Cần kiểm trên thiết bị
+
+1. Mở SiriX → từng trang con: Chẩn đoán, Lịch sử, Thống kê, Công cụ, Chọn model,
+   Header (danh sách + sửa), Trò chuyện thử, Prompt, Nhật ký, Cấu hình nhà cung cấp,
+   các bộ chọn giá trị. Không trang nào được trắng.
+2. Nếu còn trang trắng: vào Gỡ lỗi → Xem & sao chép log, tìm dòng
+   `trang … TRỐNG` hoặc `load … trả rỗng` — log ghi rõ tên trang, bundle và plist.
+3. Trang trống phải hiện tiêu đề “<tên trang> chưa hiện được”, lý do, phiên bản,
+   và hai nút **Sao chép log** / **Quay lại**.
+4. `SXLogInf("pref", "load … thành công với bundle tường minh")` xuất hiện nghĩa là
+   máy roothide trước đây nạp sai bundle — báo lại để mình bỏ hẳn đường cũ.

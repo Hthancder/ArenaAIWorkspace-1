@@ -18,6 +18,35 @@
 	[super viewDidLoad];
 	[self sx_loadFromSpecifier];
 	self.title = self.screenTitle.length ? self.screenTitle : @"Chọn giá trị";
+	SXLogDbg(@"pref", @"bộ chọn giá trị mở: key=%@, %lu lựa chọn, specifier=%@",
+			 self.prefsKey ?: @"(trống)", (unsigned long)self.values.count,
+			 NSStringFromClass([self.specifier class]));
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+	[super viewDidAppear:animated];
+	SXShowContentFallbackIfNeeded(self, self.screenTitle ?: @"Chọn giá trị",
+								  @"không đọc được danh sách lựa chọn");
+}
+
+/// `specifier` (hàng vừa bấm) có thể tới sau `viewDidLoad`; nếu lúc đó đang
+/// dùng giá trị mặc định thì đọc lại. Không đọc lại thì trang hiện đúng số
+/// hàng nhưng của SAI khoá — hoặc rỗng nếu plist không có `validValues`.
+- (void)sx_refreshFromSpecifierIfNeeded {
+	@try {
+		PSSpecifier *specifier = self.specifier;
+		if (!specifier) return;
+		NSString *key = [specifier propertyForKey:@"configKey"];
+		if (!key.length) key = [specifier propertyForKey:@"key"];
+		if (!key.length) key = [specifier propertyForKey:PSKeyNameKey];
+		if (![key isKindOfClass:[NSString class]] || !key.length) return;
+		if ([key isEqualToString:self.prefsKey]) return;
+		[self sx_loadFromSpecifier];
+		self.title = self.screenTitle.length ? self.screenTitle : @"Chọn giá trị";
+		_specifiers = nil;
+	} @catch (NSException *exception) {
+		SXLogErr(@"pref", @"đọc lại specifier: %@", exception.reason);
+	}
 }
 
 /// Đọc `key`, `validValues`, `validTitles` (và `footerText` làm gợi ý) từ đúng
@@ -28,15 +57,28 @@
 	NSString *key = [specifier propertyForKey:@"configKey"];
 	if (!key.length) key = [specifier propertyForKey:@"key"];
 	if (!key.length) key = [specifier propertyForKey:PSKeyNameKey];
-	self.prefsKey = key.length ? key : @"openaiApi";
+	// Không đoán bừa khi thiếu key: trước đây rơi về `openaiApi` nên mở nhầm
+	// trang sẽ thấy 3 lựa chọn giao thức cho một khoá khác hẳn.
+	self.prefsKey = ([key isKindOfClass:[NSString class]] && key.length) ? key : nil;
 	self.screenTitle = [specifier propertyForKey:@"label"];
 	NSArray *values = [specifier propertyForKey:@"validValues"];
 	NSArray *titles = [specifier propertyForKey:@"validTitles"];
 	if (![values isKindOfClass:[NSArray class]] || !values.count) {
-		values = @[@"auto", @"responses", @"chat"];
+		// Chỉ trang “Giao thức API” mới không khai báo validValues trong plist.
+		if ([self.prefsKey isEqualToString:@"openaiApi"]) {
+			values = @[@"auto", @"responses", @"chat"];
+		} else {
+			SXLogWrn(@"pref", @"bộ chọn %@ thiếu validValues trong plist (specifier=%@)",
+					 self.prefsKey ?: @"(trống)", NSStringFromClass(specifier.class));
+			values = @[];
+		}
 	}
 	if (![titles isKindOfClass:[NSArray class]] || titles.count != values.count) {
-		titles = values;
+		if ([self.prefsKey isEqualToString:@"openaiApi"]) {
+			titles = @[@"Tự dò", @"Responses API", @"Chat completions"];
+		} else {
+			titles = values;
+		}
 	}
 	self.values = values;
 	self.titles = titles;
@@ -47,6 +89,7 @@
 
 /// Giá trị đang lưu, đọc lại từ đĩa mỗi lần vẽ để không hiện ✓ cũ.
 - (id)sx_current {
+	if (!self.prefsKey.length) return [self sx_defaultValue];
 	[[SXPrefs shared] reload];
 	if ([self.prefsKey isEqualToString:@"openaiApi"]) {
 		return SXOpenAIApiStorageKey([SXPrefs shared].openaiApi);
@@ -64,6 +107,7 @@
 
 - (NSArray *)specifiers {
 	if (!_specifiers) {
+		[self sx_refreshFromSpecifierIfNeeded];
 		NSMutableArray *items = [NSMutableArray array];
 		PSSpecifier *group = [PSSpecifier groupSpecifierWithName:self.screenTitle ?: @"Chọn giá trị"];
 		NSString *footer = [self.specifier propertyForKey:@"footerText"];
@@ -89,6 +133,13 @@
 			if (i < self.hints.count) [row setProperty:self.hints[i] forKey:@"sxHint"];
 			[items addObject:row];
 		}
+		if (items.count <= 1) {
+			SXLogErr(@"pref", @"bộ chọn %@ không có lựa chọn nào (validValues=? )",
+					 self.prefsKey ?: @"(trống)");
+			[items.firstObject setProperty:[NSString stringWithFormat:
+					@"Chưa đọc được danh sách lựa chọn cho “%@”. Mở lại từ trang chính.",
+					self.prefsKey.length ? self.prefsKey : @"(không rõ)"] forKey:@"footerText"];
+		}
 		_specifiers = items;
 	}
 	return _specifiers;
@@ -102,6 +153,11 @@
 }
 
 - (void)sx_pick:(PSSpecifier *)specifier {
+	if (!self.prefsKey.length) {
+		[SXUI alertOn:self title:@"Chưa xác định được khoá cài đặt"
+			  message:@"Mở lại trang này từ màn hình chính SiriX. Nếu vẫn lỗi, vào Gỡ lỗi → Xem log để gửi lại."];
+		return;
+	}
 	NSInteger index = [self.specifiers indexOfObjectIdenticalTo:specifier];
 	NSInteger valueIndex = index - 1;   // trừ hàng nhóm ở đầu
 	if (valueIndex < 0 || (NSUInteger)valueIndex >= self.values.count) return;

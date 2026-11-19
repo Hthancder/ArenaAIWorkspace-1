@@ -121,6 +121,11 @@ static NSString *SXStatsNumber(id value) {
 	[self sx_reload];
 }
 
+- (void)viewDidAppear:(BOOL)animated {
+	[super viewDidAppear:animated];
+	SXShowContentFallbackIfNeeded(self, @"Thống kê", @"chưa có số liệu hoặc không đọc được kho");
+}
+
 #pragma mark - Header
 
 - (void)sx_buildHeader {

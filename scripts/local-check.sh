@@ -32,6 +32,11 @@ echo "── [0/3] Selector khai báo phải có thân hàm"
 python3 scripts/check-declared-methods.py || FAIL=1
 python3 scripts/check-specifier-types.py || FAIL=1
 
+echo "── [0/3] Lưới an toàn cho mọi trang Settings"
+# Trang con mở ra trống là lỗi người dùng thấy rõ nhất mà trình biên dịch không
+# bắt được: mỗi lớp SX*Controller phải gọi SXShowContentFallbackIfNeeded.
+./scripts/test-prefs-fallback.sh || FAIL=1
+
 echo "── [1/3] Logos preprocess"
 perl "$THEOS/bin/logos.pl" Sources/Tweak.x > "$OUT/Tweak.ii"
 echo "   ✓ Sources/Tweak.x → Tweak.ii ($(grep -c '' "$OUT/Tweak.ii") dòng)"

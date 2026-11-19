@@ -1,5 +1,6 @@
 #import "SXPrefs.h"
 #import "SXProviderConfigController.h"
+#import "SXRootListController.h"
 #import "SXChatTestController.h"
 #import "SXHeadersController.h"
 #import "SXModelPickerController.h"
@@ -36,6 +37,10 @@ static NSString *SXAPIPathSuffix(SXOpenAIApi api) {
 	return @" (tự dò)";
 }
 
+// SXLoadSpecifiers sống trong SXRootListController.m và khai báo ở header của
+// nó: roothide đặt bundle dưới /var/jb nên `loadSpecifiersFromPlistName:` có
+// thể trả rỗng dù plist có trên máy.
+
 @implementation SXProviderConfigController
 
 #pragma mark - Nhận diện trang
@@ -69,13 +74,7 @@ static NSString *SXAPIPathSuffix(SXOpenAIApi api) {
 
 - (NSArray *)specifiers {
 	if (!_specifiers) {
-		@try {
-			_specifiers = [[self loadSpecifiersFromPlistName:self.configPlistName target:self] mutableCopy];
-		} @catch (NSException *exception) {
-			SXLogErr(@"pref", @"load %@ EXCEPTION: %@ — %@", self.configPlistName,
-					 exception.name, exception.reason);
-			_specifiers = nil;
-		}
+		_specifiers = SXLoadSpecifiers(self, self.class, self.configPlistName);
 		if (!_specifiers.count) {
 			PSSpecifier *group = [PSSpecifier groupSpecifierWithName:@"SiriX"];
 			[group setProperty:@"Không tải được trang cấu hình này. Mở “Xem & sao chép log” để xem chi tiết."
@@ -157,6 +156,11 @@ static NSString *SXAPIPathSuffix(SXOpenAIApi api) {
 		[self sx_invalidateTestResult];
 	}
 	self.headerSignature = signature;
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+	[super viewDidAppear:animated];
+	SXShowContentFallbackIfNeeded(self, @"Cấu hình nhà cung cấp", @"không tải được trang cấu hình");
 }
 
 #pragma mark - Ô nhập

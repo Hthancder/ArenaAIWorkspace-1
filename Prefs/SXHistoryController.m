@@ -88,6 +88,11 @@ static NSString *SXHistoryTimeText(NSDate *date) {
 	];
 }
 
+- (void)viewDidAppear:(BOOL)animated {
+	[super viewDidAppear:animated];
+	SXShowContentFallbackIfNeeded(self, @"Chi tiết lượt", @"không đọc được nội dung lượt này");
+}
+
 - (NSString *)sx_plainText {
 	return [NSString stringWithFormat:@"Bạn: %@\n\nSiriX: %@",
 			SXHistoryText(self.item[@"q"]), SXHistoryText(self.item[@"a"])];
@@ -287,6 +292,11 @@ static NSString *SXHistoryTimeText(NSDate *date) {
 	// Lần đầu: đọc kho ngay để không thấy chớp màn hình trống.
 	if (!self.loadedOnce) [self sx_showLoadingState];
 	[self sx_reloadHistory];
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+	[super viewDidAppear:animated];
+	SXShowContentFallbackIfNeeded(self, @"Lịch sử hội thoại", @"chưa có lượt nào hoặc không đọc được kho");
 }
 
 #pragma mark - Dữ liệu

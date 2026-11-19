@@ -199,6 +199,7 @@
 
 - (void)viewDidAppear:(BOOL)animated {
 	[super viewDidAppear:animated];
+	SXShowContentFallbackIfNeeded(self, @"Header tuỳ chỉnh", @"không đọc được header");
 	if (self.editing) return;
 	[self.table layoutIfNeeded];
 	[[self sx_fieldInSection:0] becomeFirstResponder];
@@ -541,6 +542,11 @@
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
 	SXEnsureBackButton(self, @"Header tuỳ chỉnh");
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+	[super viewDidAppear:animated];
+	SXShowContentFallbackIfNeeded(self, @"Header tuỳ chỉnh", @"không đọc được danh sách header");
 }
 
 #pragma mark - Dữ liệu

@@ -64,12 +64,31 @@ typedef NS_ENUM(NSInteger, SXDiagnosticLevel) {
 			   action:@selector(sx_shareReport)];
 
 	[self sx_reload];
+
+	// Dữ liệu tới từ hàng đợi nền; nếu lần đọc đầu thất bại thì trang vẫn phải
+	// có tiếng nói. Hẹn một nhịp ngắn rồi kiểm tra lại.
+	__weak typeof(self) weakSelf = self;
+	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)),
+				   dispatch_get_main_queue(), ^{
+		typeof(self) strongSelf = weakSelf;
+		if (!strongSelf) return;
+		SXLogInf(@"pref", @"chẩn đoán: %lu nhóm / %lu mục sau khi tải",
+				 (unsigned long)strongSelf.sections.count,
+				 (unsigned long)strongSelf.sections.firstObject.count);
+		SXShowContentFallbackIfNeeded(strongSelf, @"Chẩn đoán",
+									 @"không đọc được cấu hình hoặc số liệu");
+	});
 }
 
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
 	SXEnsureBackButton(self, @"Chẩn đoán");
 	[self sx_reload];
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+	[super viewDidAppear:animated];
+	SXShowContentFallbackIfNeeded(self, @"Chẩn đoán", @"không đọc được cấu hình/số liệu");
 }
 
 #pragma mark - Dữ liệu

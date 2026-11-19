@@ -179,6 +179,11 @@
 	[self.table reloadData];
 }
 
+- (void)viewDidAppear:(BOOL)animated {
+	[super viewDidAppear:animated];
+	SXShowContentFallbackIfNeeded(self, @"Công cụ AI", @"không nạp được danh sách công cụ");
+}
+
 #pragma mark - Dữ liệu
 
 - (void)reloadCatalog {

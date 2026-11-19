@@ -186,6 +186,7 @@ typedef NS_ENUM(NSInteger, SXChatRole) {
 
 - (void)viewDidAppear:(BOOL)animated {
 	[super viewDidAppear:animated];
+	SXShowContentFallbackIfNeeded(self, @"Trò chuyện thử", @"không dựng được khung chat");
 	[self.input becomeFirstResponder];
 }
 

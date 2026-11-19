@@ -51,6 +51,21 @@ NS_ASSUME_NONNULL_BEGIN
 /// "1 234" — đọc số liệu dễ hơn trong thống kê.
 + (NSString *)groupedNumber:(NSInteger)value;
 
+/// Sao chép nội dung vào clipboard (kèm rung nhẹ); trả về NO nếu rỗng.
++ (BOOL)copyText:(NSString *)text;
+
 @end
+
+/// Lưới an toàn cho MỌI trang con: nếu màn hình đang trống (không có bảng có
+/// hàng, không có chữ, không có khối nội dung) thì chèn một chỗ trống có tiêu
+/// đề, lý do và nút sao chép log — thay vì để người dùng nhìn màn hình trắng
+/// rồi không biết vì sao.
+///
+/// `title` là tên trang ("Chẩn đoán", "Lịch sử"…), `reason` là lý do kỹ thuật
+/// ngắn ("không tải được dữ liệu", "không có mục nào"…). Trả về YES nếu đã
+/// chèn nội dung dự phòng. Gọi trên luồng chính, trong `viewDidAppear:`.
+FOUNDATION_EXPORT BOOL SXShowContentFallbackIfNeeded(UIViewController *controller,
+                                                     NSString *title,
+                                                     NSString *reason);
 
 NS_ASSUME_NONNULL_END

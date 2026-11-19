@@ -1,4 +1,6 @@
 #import "SXUISupport.h"
+#import "SXLog.h"
+#import "UIViewController+SXBack.h"
 
 @implementation SXUI
 
@@ -200,6 +202,13 @@
 	return [[text substringToIndex:limit] stringByAppendingString:@"…"];
 }
 
++ (BOOL)copyText:(NSString *)text {
+	if (![text isKindOfClass:[NSString class]] || !text.length) return NO;
+	[UIPasteboard generalPasteboard].string = text;
+	[self tapFeedback];
+	return YES;
+}
+
 + (NSString *)groupedNumber:(NSInteger)value {
 	static NSNumberFormatter *formatter;
 	static dispatch_once_t once;
@@ -210,6 +219,213 @@
 		formatter.usesGroupingSeparator = YES;
 	});
 	return [formatter stringFromNumber:@(value)] ?: [NSString stringWithFormat:@"%ld", (long)value];
+}
+
+#pragma mark - Lưới an toàn cho trang con
+
+/// Thẻ của khối dự phòng. Đặt số lạ để không đụng tag của PreferenceLoader.
+static const NSInteger SXContentFallbackTag = 0x5EEDF001;
+
+/// Bảng có ít nhất một hàng chưa? Hỏi qua `dataSource` thay vì
+/// `visibleCells`: trang vừa mở có thể chưa layout nên `visibleCells` rỗng dù
+/// dữ liệu đã có, và ta sẽ chèn khối dự phòng đè lên nội dung thật.
+static BOOL SXTableHasRows(UITableView *table) {
+	if (!table) return NO;
+	NSInteger sections = table.numberOfSections;
+	if (sections <= 0) return NO;
+	@try {
+		for (NSInteger section = 0; section < sections; section++) {
+			if ([table.dataSource tableView:table numberOfRowsInSection:section] > 0) return YES;
+		}
+	} @catch (NSException *exception) {
+		SXLogErr(@"pref", @"đếm hàng bảng: %@ — %@", exception.name, exception.reason);
+		// Không đếm được thì coi như có nội dung: thà bỏ sót một trang trống còn
+		// hơn che mất một trang đang chạy tốt.
+		return YES;
+	}
+	return NO;
+}
+
+/// Trang có nội dung nhìn thấy được không? Đếm hàng của mọi UITableView đang
+/// hiện, rồi tới các nhãn có chữ. Màn hình chỉ có nền và thanh điều hướng bị
+/// coi là trống. `ignoreTag` bỏ qua chính khối dự phòng (nếu không thì lần kiểm
+/// tra sau sẽ thấy nhãn của nó và tưởng trang đã có nội dung).
+static BOOL SXHasVisibleContentIgnoringTag(UIView *view, NSInteger ignoreTag) {
+	if (!view) return NO;
+	// `PSListController` dùng chính `view` làm bảng ⇒ phải xét cả gốc, không chỉ
+	// các view con.
+	if ([view isKindOfClass:[UITableView class]] && SXTableHasRows((UITableView *)view)) return YES;
+	for (UIView *subview in view.subviews) {
+		if (ignoreTag != 0 && subview.tag == ignoreTag) continue;
+		if ([subview isKindOfClass:[UITableView class]]) {
+			UITableView *table = (UITableView *)subview;
+			if (SXTableHasRows(table)) return YES;
+			// Bảng 0 hàng vẫn có thể đang hiện `backgroundView` (trạng thái rỗng) —
+			// trừ khi chính nó là khối dự phòng đang được bỏ qua.
+			if (table.backgroundView && !table.backgroundView.hidden &&
+				(ignoreTag == 0 || table.backgroundView.tag != ignoreTag)) return YES;
+			continue;
+		}
+		if ([subview isKindOfClass:[UILabel class]]) {
+			UILabel *label = (UILabel *)subview;
+			if (!label.hidden && label.alpha > 0.01 && label.text.length) return YES;
+		}
+		if ([subview isKindOfClass:[UITextView class]] || [subview isKindOfClass:[UITextField class]]) {
+			if (!subview.hidden && subview.alpha > 0.01) return YES;
+		}
+		if ([subview isKindOfClass:[UIControl class]] && !subview.hidden) return YES;
+		if ([subview isKindOfClass:[UIScrollView class]] && !subview.hidden &&
+			subview.subviews.count > 0) return YES;
+		if (SXHasVisibleContentIgnoringTag(subview, ignoreTag)) return YES;
+	}
+	return NO;
+}
+
+static BOOL SXHasVisibleContent(UIView *view) {
+	return SXHasVisibleContentIgnoringTag(view, 0);
+}
+
+/// Khối dự phòng đang hiện, nếu có. Với `PSListController` nó nằm ở
+/// `backgroundView` chứ không phải view con, nên tìm cả hai chỗ.
+static UIView *SXContentFallbackView(UIView *view) {
+	UIView *found = [view viewWithTag:SXContentFallbackTag];
+	if (found) return found;
+	if ([view isKindOfClass:[UITableView class]]) {
+		UITableView *table = (UITableView *)view;
+		if (table.backgroundView.tag == SXContentFallbackTag) return table.backgroundView;
+		// Trang tự dựng bảng con: khối có thể nằm trong backgroundView của bảng đó.
+		for (UIView *subview in view.subviews) {
+			if (![subview isKindOfClass:[UITableView class]]) continue;
+			UITableView *inner = (UITableView *)subview;
+			if (inner.backgroundView.tag == SXContentFallbackTag) return inner.backgroundView;
+		}
+	}
+	return nil;
+}
+
+BOOL SXShowContentFallbackIfNeeded(UIViewController *controller, NSString *title, NSString *reason) {
+	if (!controller || !controller.isViewLoaded) return NO;
+	if (![NSThread isMainThread]) return NO;
+	UIView *view = controller.view;
+	if (!view) return NO;
+	// Đã chèn rồi thì thôi (viewDidAppear có thể chạy lại).
+	if (SXContentFallbackView(view)) return YES;
+	if (SXHasVisibleContent(view)) return NO;
+
+	SXLogErr(@"pref", @"trang %@ TRỐNG — hiện chỗ trống dự phòng (%@)",
+			 title.length ? title : NSStringFromClass(controller.class), reason ?: @"không rõ");
+
+	UIView *container = [[UIView alloc] initWithFrame:CGRectZero];
+	container.tag = SXContentFallbackTag;
+	container.translatesAutoresizingMaskIntoConstraints = NO;
+	container.backgroundColor = UIColor.systemGroupedBackgroundColor;
+
+	UIImageView *icon = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"exclamationmark.triangle"]];
+	icon.tintColor = [SXUI warningColor];
+	icon.contentMode = UIViewContentModeScaleAspectFit;
+	[icon.widthAnchor constraintEqualToConstant:34].active = YES;
+	[icon.heightAnchor constraintEqualToConstant:34].active = YES;
+
+	UILabel *titleLabel = [[UILabel alloc] init];
+	titleLabel.text = title.length ? [NSString stringWithFormat:@"%@ chưa hiện được", title] : @"Trang chưa hiện được";
+	titleLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
+	titleLabel.textAlignment = NSTextAlignmentCenter;
+	titleLabel.numberOfLines = 0;
+
+	NSString *detail = [NSString stringWithFormat:@"Lý do: %@.\nBản %@ · %@",
+						reason.length ? reason : @"không có nội dung",
+						SX_VERSION,
+						[NSProcessInfo.processInfo.operatingSystemVersionString stringByReplacingOccurrencesOfString:@"Version " withString:@""]];
+	UILabel *detailLabel = [SXUI footnoteLabel:detail];
+	detailLabel.textAlignment = NSTextAlignmentCenter;
+	detailLabel.numberOfLines = 0;
+
+	UIButton *logButton = [UIButton buttonWithType:UIButtonTypeSystem];
+	[logButton setTitle:@"Sao chép log để gửi lại" forState:UIControlStateNormal];
+	logButton.titleLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleSubheadline];
+	[logButton addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
+		(void)action;
+		NSString *log = [NSString stringWithContentsOfFile:SXLogFilePath()
+												 encoding:NSUTF8StringEncoding error:NULL];
+		if (![SXUI copyText:log.length ? log : [NSString stringWithFormat:
+																@"Không đọc được %@", SXLogFilePath()]]) {
+			detailLabel.text = @"Không có nội dung log để sao chép.";
+		}
+	}] forControlEvents:UIControlEventTouchUpInside];
+
+	UIButton *backButton = [UIButton buttonWithType:UIButtonTypeSystem];
+	[backButton setTitle:@"Quay lại" forState:UIControlStateNormal];
+	backButton.titleLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleSubheadline];
+	// `controller` giữ `view` giữ nút giữ block ⇒ phải tham chiếu yếu, nếu không
+	// màn hình không bao giờ được giải phóng.
+	__weak UIViewController *weakBackTarget = controller;
+	[backButton addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
+		(void)action;
+		UIViewController *target = weakBackTarget;
+		if (!target) return;
+		if ([target respondsToSelector:@selector(sx_goBack:)]) {
+			SEL selector = @selector(sx_goBack:);
+			void (*goBack)(id, SEL, id) = (void (*)(id, SEL, id))[target methodForSelector:selector];
+			if (goBack) goBack(target, selector, nil);
+		} else if (target.navigationController.viewControllers.count > 1) {
+			[target.navigationController popViewControllerAnimated:YES];
+		} else {
+			[target dismissViewControllerAnimated:YES completion:nil];
+		}
+	}] forControlEvents:UIControlEventTouchUpInside];
+
+	UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[icon, titleLabel, detailLabel, logButton, backButton]];
+	stack.axis = UILayoutConstraintAxisVertical;
+	stack.alignment = UIStackViewAlignmentCenter;
+	stack.spacing = 12;
+	stack.translatesAutoresizingMaskIntoConstraints = NO;
+	[container addSubview:stack];
+	[NSLayoutConstraint activateConstraints:@[
+		[stack.centerYAnchor constraintEqualToAnchor:container.centerYAnchor],
+		[stack.centerXAnchor constraintEqualToAnchor:container.centerXAnchor],
+		[stack.leadingAnchor constraintGreaterThanOrEqualToAnchor:container.leadingAnchor constant:28],
+		[stack.trailingAnchor constraintLessThanOrEqualToAnchor:container.trailingAnchor constant:-28],
+	]];
+
+	if ([view isKindOfClass:[UITableView class]]) {
+		// Gốc là bảng: gắn làm `backgroundView` để khối đứng yên, không cuộn theo
+		// nội dung và không bị gỡ khi bảng reload.
+		container.translatesAutoresizingMaskIntoConstraints = YES;
+		container.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+		container.frame = view.bounds;
+		((UITableView *)view).backgroundView = container;
+	} else {
+		[view addSubview:container];
+		[NSLayoutConstraint activateConstraints:@[
+			[container.topAnchor constraintEqualToAnchor:view.topAnchor],
+			[container.leadingAnchor constraintEqualToAnchor:view.leadingAnchor],
+			[container.trailingAnchor constraintEqualToAnchor:view.trailingAnchor],
+			[container.bottomAnchor constraintEqualToAnchor:view.bottomAnchor],
+		]];
+	}
+
+	// Dữ liệu có thể về muộn (đọc đĩa/mạng ở luồng nền). Kiểm tra lại vài lần:
+	// nội dung thật xuất hiện thì gỡ khối này, đừng che mất trang.
+	for (NSNumber *delay in @[@1.5, @4.0, @9.0]) {
+		__weak UIViewController *weakController = controller;
+		dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+									  (int64_t)(delay.doubleValue * NSEC_PER_SEC)),
+					   dispatch_get_main_queue(), ^{
+			UIViewController *strongController = weakController;
+			if (!strongController || !strongController.isViewLoaded) return;
+			UIView *current = strongController.view;
+			UIView *placeholder = SXContentFallbackView(current);
+			if (!placeholder) return;
+			if (!SXHasVisibleContentIgnoringTag(current, SXContentFallbackTag)) return;
+			SXLogInf(@"pref", @"trang %@ đã có nội dung — gỡ khối dự phòng", title ?: @"?");
+			if ([current isKindOfClass:[UITableView class]] &&
+				((UITableView *)current).backgroundView == placeholder) {
+				((UITableView *)current).backgroundView = nil;
+			}
+			[placeholder removeFromSuperview];
+		});
+	}
+	return YES;
 }
 
 @end
