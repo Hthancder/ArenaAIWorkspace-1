@@ -123,13 +123,31 @@ jobs:
           from pathlib import Path
           lines = Path('work/boot.log').read_text(errors='replace').splitlines()
           print(f'::notice::HEADLESS_BOOT: {len(lines)} log lines; this is incomplete test data, not a game release')
-          for line in (lines if len(lines) <= 35 else lines[:15] + lines[-20:]):
-              print('::notice::HEADLESS_BOOT: ' + line.replace('%', '%25')[:800])
+          key = [line for line in lines if any(word in line for word in ('[room]', '[stats]', '[gml]', '[trace]', '[audio]'))]
+          print('::notice::HEADLESS_BOOT_SUMMARY: ' + ' | '.join(key).replace('%', '%25')[:3500])
           PY
           echo "::notice::HEADLESS_BOOT: exit status $status"
           if [ "$status" -ne 0 ]; then exit "$status"; fi
           if ! grep -Fq '[room] -> rom_lobby' work/boot.log; then
             echo '::error::Headless run did not reach rom_lobby; it may have ended early.'
+            exit 1
+          fi
+      - name: Probe gameplay room headlessly (forced transition)
+        shell: bash
+        run: |
+          set +e
+          mkdir -p work/play-save
+          timeout 60 work/runner-build/gmrunner work/probe-game --headless --fast --mute --seed 1 --frames 400 --trace --stats --goto rom_play@160 --save-dir work/play-save > work/play.log 2>&1
+          status=$?
+          python3 - <<'PY'
+          from pathlib import Path
+          lines = Path('work/play.log').read_text(errors='replace').splitlines()
+          key = [line for line in lines if any(word in line for word in ('[room]', '[stats]', '[gml]', '[trace]', 'error', 'Error'))]
+          print('::notice::FORCED_GAMEPLAY_SUMMARY: ' + ' | '.join(key).replace('%', '%25')[:3500])
+          PY
+          if [ "$status" -ne 0 ]; then echo "::error::Forced gameplay probe exited $status"; exit "$status"; fi
+          if ! grep -Fq '[room] -> rom_play' work/play.log; then
+            echo '::error::Forced gameplay probe did not enter rom_play.'
             exit 1
           fi
       - name: Upload diagnostic log
@@ -141,5 +159,6 @@ jobs:
             work/probe.log
             work/runner-inspect.log
             work/boot.log
+            work/play.log
           if-no-files-found: ignore
           retention-days: 3
