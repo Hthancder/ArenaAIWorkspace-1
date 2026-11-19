@@ -444,7 +444,10 @@ static SXChoiceDefinition *SXChoiceDefinitionFor(NSString *key) {
 																 edit:nil];
 		[fieldRow setProperty:definition.title forKey:@"placeholder"];
 		[fieldRow setProperty:@(YES) forKey:@"noAutoCorrect"];
-		[fieldRow setProperty:@(NO) forKey:@"autoCaps"];
+		// `autoCaps` là THUỘC TÍNH KIỂU CHUỖI của Preferences ("none"/"sentences"/
+		// "words"/"all"), không phải boolean. Đặt @(NO) khiến Preferences gọi
+		// -isEqualToString: lên __NSCFBoolean và ném NSInvalidArgumentException.
+		[fieldRow setProperty:@"none" forKey:@"autoCaps"];
 		[fieldRow setProperty:@(UIKeyboardTypeNumbersAndPunctuation) forKey:@"keyboardType"];
 		[items addObject:fieldRow];
 

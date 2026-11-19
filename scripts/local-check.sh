@@ -30,6 +30,7 @@ echo "── [0/3] Selector khai báo phải có thân hàm"
 # và GỌI từ Settings nhưng chưa từng được viết. Trình biên dịch không bắt được
 # (Objective-C chỉ cảnh báo), nên kiểm ở đây.
 python3 scripts/check-declared-methods.py || FAIL=1
+python3 scripts/check-specifier-types.py || FAIL=1
 
 echo "── [1/3] Logos preprocess"
 perl "$THEOS/bin/logos.pl" Sources/Tweak.x > "$OUT/Tweak.ii"
