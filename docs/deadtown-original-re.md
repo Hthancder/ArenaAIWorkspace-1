@@ -365,6 +365,19 @@ python tools/recover_deadtown_sprites.py verify APK new-research-output
 The workflow runs extraction and tampering checks in a temporary test directory;
 it uploads reports only, not exported assets.
 
+`tools/deadtown_sprite_masks.py` independently summarizes the packed masks
+using the MSB-first, row-padded bit interpretation in the pinned gmrunner's
+`Collision.cpp`; Android's native interpretation has **not** been separately
+verified. Under that interpretation, the 402 stored bitmaps comprise 62 full
+canvases, 302 smaller rectangles, 37 irregular shapes, and one empty mask
+(`mask_noone`). All row-padding bits are zero. For 398 nonempty masks the
+set-bit bounding rectangle matches the sprite's stored bbox; three differ:
+`mask_zombie` has mask bounds 0–36 vs stored bbox 0–37, `mask_boss3` 0–118 vs
+0–119, and `mask_boss4` 0–48 vs 0–49 on both axes. The empty mask has no
+set-bit bounds. For example, `mask_player` has 225 set bits in a 15×15 canvas.
+This is a static bitmap reading, not proof of transformed, scaled, animated or
+device-runtime collision behavior; it does not justify changing those bounds.
+
 ### UI/input investigation: coordinate spaces
 
 The pinned third-party runner returns `os_type = 0` (Windows) even on its mobile
