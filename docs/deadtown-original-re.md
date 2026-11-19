@@ -140,6 +140,50 @@ PYTHONPATH=.cache/re-pylibs python tools/deadtown_native_lang.py /path/to/origin
 languages; the native function has a broadly similar switch. The `str:` event
 is a much more direct explanation for that text than missing translations.
 
+### Original table arguments: deeper static analysis
+
+`tools/deadtown_native_tables.py` follows static GOT relocations, `YYSetString`
+constructions, pointer copies and the stack argument vector into table calls in
+`sys_global` Create. For the pinned library it resolves the arguments of all
+observed calls in these groups: weapons 35, equipment 27, consumables 22,
+recipes 91, miscellaneous items 65, skills 23, spawn entries 129, and translations
+465. For each value the output records its type, native symbol, relocation and
+call address. The argument vector order of all 465 translations agrees with the
+independent earlier string-construction scanner. Neither analyzer executes the
+APK; they do not prove runtime control flow or that globals stay unchanged.
+
+Concrete old-source differences are not just missing entries. Native candidates
+for `Dagger` damage and `Cotton clothes` defense are 45 and 2 respectively,
+while the GMX has 40 and 1. The third native spawn call is `(0,4,25,3,5)`
+versus `(0,4,25,2,5)` in the GMX. The native consumable calls have ten arguments;
+the GMX `db_use_add` accepts only nine, and the two new native entries include
+`Gas mask` with a nonzero tenth value. We have not recovered what the tenth field
+means. Appending these tables to the old source would shift item/recipe indices
+and could silently break crafting, saving and gameplay: **none are injected**.
+Recover the corresponding data consumers, ordering and original schema first.
+
+Reproduce independently with the same optional dependencies as above:
+
+```sh
+PYTHONPATH=.cache/re-pylibs python tools/deadtown_native_tables.py /path/to/original.apk \
+  --output native-table-candidates.json
+PYTHONPATH=.cache/re-pylibs python -m unittest discover -s tests -p 'test_deadtown_native_tables.py' -v
+```
+
+### UI/input investigation: coordinate spaces
+
+The pinned third-party runner returns `os_type = 0` (Windows) even on its mobile
+build. Its `display_get_width/height` report the SDL desktop display mode,
+while touch positions go through `screenToWindow` and `device_mouse_raw_x/y`
+return those transformed window coordinates. The old source's `sys_view` uses
+both `display_get_width/height` and raw touch coordinates for its on-screen
+controls, and uses display dimensions when drawing buttons in Draw GUI. A
+mismatch among display, window, GUI and actual drawable sizes could therefore
+misplace controls or touch hitboxes. The actual iOS values and original APK's
+coordinate semantics have not yet been measured; this is a diagnostic risk,
+not a proven fix. A headless desktop-only instrumentation workflow exists to
+measure the incomplete VM build without changing or releasing an IPA.
+
 The previous experimental probe linked only 504 GMX events and cleared 68
 unresolved native code IDs to serialize its VM data. It rendered screenshots
 on desktop and ran on the user's iOS device, but that is not a reconstruction of
