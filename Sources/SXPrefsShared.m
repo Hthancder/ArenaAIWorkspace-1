@@ -132,10 +132,14 @@ static NSArray<NSString *> *SXLegacyToolNames(NSString *legacyKey) {
 		});
 		base = [base stringByReplacingOccurrencesOfString:@"{date}"
 											   withString:[dateFormatter stringFromDate:NSDate.date]];
+#if defined(__APPLE__) && __has_include(<UIKit/UIKit.h>)
 		base = [base stringByReplacingOccurrencesOfString:@"{device}"
-											   withString:[NSString stringWithFormat:@"%@ (iOS %@)",
-														   UIDevice.currentDevice.model ?: @"iPhone",
-														   UIDevice.currentDevice.systemVersion ?: @"?"]];
+										   withString:[NSString stringWithFormat:@"%@ (iOS %@)",
+													   UIDevice.currentDevice.model ?: @"iPhone",
+													   UIDevice.currentDevice.systemVersion ?: @"?"]];
+#else
+		base = [base stringByReplacingOccurrencesOfString:@"{device}" withString:@"iPhone (iOS)"];
+#endif
 		base = [base stringByReplacingOccurrencesOfString:@"{lang}"
 											   withString:NSLocale.currentLocale.languageCode ?: @"vi"];
 	}
