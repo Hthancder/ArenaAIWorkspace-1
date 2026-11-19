@@ -76,7 +76,7 @@ int main(void) {
 
 		// --- prompt brief có tên + dấu hiệu tham số bắt buộc
 		NSString *brief = [SXToolkit promptBriefExcluding:[NSSet set]];
-		assert([brief containsString:@"echo("]);
+		assert([brief containsString:@"echo(text (bắt buộc))"]);
 		assert([brief containsString:@"bắt buộc"]);
 
 		// --- tắt công cụ: không có trong schema, gọi bị từ chối 403

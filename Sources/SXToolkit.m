@@ -182,8 +182,8 @@ static NSMutableDictionary<NSString *, NSDictionary *> *SXToolCallCache(void) {
 	[lines addObject:@"Danh sách công cụ (tên — việc nó làm — tham số):"];
 	for (SXTool *tool in tools) {
 		NSString *when = tool.prompt.length ? tool.prompt : tool.summary;
-		[lines addObject:[NSString stringWithFormat:@"- %@: %@ | %@ | tham số: %@",
-						  tool.name, tool.summary ?: @"", when, [tool parameterSignature]]];
+		[lines addObject:[NSString stringWithFormat:@"- %@(%@): %@ | %@",
+						  tool.name, [tool parameterSignature], tool.summary ?: @"", when]];
 	}
 	[lines addObject:@"Quy tắc: gọi tối thiểu lượt cần thiết; tham số phải đúng kiểu; nếu công cụ báo lỗi, "
 					  @"đọc kỹ thông báo để sửa tham số hoặc đổi cách làm; sau khi có kết quả, trả lời người dùng "
