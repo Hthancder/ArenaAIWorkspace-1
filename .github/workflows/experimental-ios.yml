@@ -11,6 +11,11 @@ on:
         type: boolean
         required: true
         default: false
+      release_existing:
+        description: 'Publish the previously built experimental IPA as a prerelease'
+        type: boolean
+        required: true
+        default: false
 
 permissions:
   contents: read
@@ -19,7 +24,7 @@ jobs:
   experimental-ipa:
     # A push must not accept the AIR license on behalf of the user. Manual
     # dispatch can be used when this workflow also exists on the default branch.
-    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.accept_air_license) || (github.event_name == 'push' && vars.AIR_SDK_LICENSE_ACCEPTED == 'true') }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.accept_air_license && !inputs.release_existing) || (github.event_name == 'push' && vars.AIR_SDK_LICENSE_ACCEPTED == 'true') }}
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
@@ -58,3 +63,26 @@ jobs:
           path: ${{ runner.temp }}/experimental.ipa
           if-no-files-found: error
           retention-days: 3
+
+  publish-existing:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.release_existing }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Download previously built IPA
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh run download 44480837903 --name experimental-ios-ipa --dir "$RUNNER_TEMP/release"
+      - name: Publish experimental prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create lostlife-ios-test-1 \
+            "$RUNNER_TEMP/release/experimental.ipa#LostLife-iOS-test.ipa" \
+            --target "$GITHUB_SHA" --prerelease \
+            --title "LostLife iOS — bản thử nghiệm 1" \
+            --notes "Bản AIR interpreter thử nghiệm dành cho cài đặt riêng qua TrollStore. Đã đóng gói thành công nhưng chưa được kiểm thử trên thiết bị iOS; có thể gặp lỗi, chậm hoặc không tương thích. Không dành cho App Store. IPA được tạo từ tài nguyên ở commit 4291b63 và từ workflow build run 44480837903."
