@@ -138,6 +138,7 @@ static NSString *testBase = @"https://mock.test/v1";
 - (NSArray<NSDictionary *> *)openaiHeaders { return @[]; }
 - (NSArray<NSDictionary *> *)geminiHeaders { return @[]; }
 - (NSArray<NSDictionary *> *)headersForProvider:(SXProvider)p { (void)p; return @[]; }
+- (id)valueFor:(NSString *)key { (void)key; return nil; }
 - (NSString *)systemPrompt { return @"Bạn là trợ lý kiểm thử."; }
 + (NSString *)normalizedBaseURL:(NSString *)raw {
 	NSString *text = [raw stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
