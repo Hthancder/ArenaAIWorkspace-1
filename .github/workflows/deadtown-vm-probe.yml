@@ -1,0 +1,67 @@
+name: Dead Town bytecode feasibility probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - arena/78062d86-arenaaiworkspace-1
+    paths:
+      - .github/workflows/deadtown-vm-probe.yml
+      - tools/deadtown-vm-probe.csx
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve original container and source script
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/source work/utmt
+          git fetch --no-tags origin 8643abdda26944002384bc216bf555717a9e1e42
+          git show '8643abdda26944002384bc216bf555717a9e1e42:Dead+Town+-+Zombie+survival_1.4.2_APKPure.apk' > work/original.apk
+          echo 'bc8fa1990cb2cdde8d184f2a942fe4010820f0592d88a36e1cbee0f0592d88a36e1cbee0a6aac081fb  work/original.apk' | sha256sum -c
+          unzip -p work/original.apk assets/game.droid > work/game.droid
+          curl -fsSL --retry 2 'https://codeload.github.com/kjs104901/deadtown/tar.gz/5e3d798f914c8cd3b066c8289323005d63111f37' | tar xz -C work/source --strip-components=1
+      - name: Download pinned UndertaleModTool CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release download 0.9.2.0 -R UnderminersTeam/UndertaleModTool -p 'UTMT_CLI_v0.9.2.0-Ubuntu.zip' -O work/utmt.zip
+          echo 'd182f00c0e5ced8d9252aa1f796374cfee077a3889a658e70b68685f9cd559c7  work/utmt.zip' | sha256sum -c
+          unzip -q work/utmt.zip -d work/utmt
+          exe=$(find work/utmt -type f -name UndertaleModCli | head -1)
+          test -n "$exe"
+          chmod +x "$exe"
+          echo "UTMT_EXE=$GITHUB_WORKSPACE/$exe" >> "$GITHUB_ENV"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Probe a single script, without creating an IPA
+        shell: bash
+        env:
+          GML_PROBE_SOURCE: ${{ github.workspace }}/work/source/deadtown.gmx/scripts/lang_type_set.gml
+        run: |
+          set +e
+          "$UTMT_EXE" load work/game.droid -s tools/deadtown-vm-probe.csx 2>&1 | tee work/probe.log
+          status=${PIPESTATUS[0]}
+          python3 - <<'PY'
+          from pathlib import Path
+          lines = Path('work/probe.log').read_text(errors='replace').splitlines()
+          matches = [line for line in lines if 'PROBE:' in line or 'error' in line.lower() or 'exception' in line.lower()]
+          for line in matches[:20]:
+              print('::notice::' + line.replace('%', '%25')[:1000])
+          PY
+          exit "$status"
+      - name: Upload diagnostic log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deadtown-vm-probe-log
+          path: work/probe.log
+          if-no-files-found: ignore
+          retention-days: 3
