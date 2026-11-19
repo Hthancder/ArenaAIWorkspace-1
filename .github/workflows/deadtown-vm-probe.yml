@@ -21,7 +21,8 @@ jobs:
       - name: Retrieve original container and source script
         shell: bash
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
+          trap 'echo "::error::Preparation failed at line $LINENO (status $?)"' ERR
           mkdir -p work/source work/utmt
           git fetch --no-tags origin 8643abdda26944002384bc216bf555717a9e1e42
           git show '8643abdda26944002384bc216bf555717a9e1e42:Dead+Town+-+Zombie+survival_1.4.2_APKPure.apk' > work/original.apk
