@@ -424,3 +424,21 @@ Có xác nhận trước khi ghi đè.
 tới `SXChoiceController` mà key không có định nghĩa là lỗi — đúng kiểu “bấm vào
 mở ra màn hình trống”.
 
+## 1.1.9 — Responses API + cải tiến vận hành
+
+- **OpenAI Responses API (`/v1/responses`)** dùng song song chat completions. Chọn ở
+  Cấu hình OpenAI → *Giao thức API*: `Tự dò` (mặc định), `Responses`, `Chat completions`.
+  Dòng *Endpoint đang dùng* hiện đúng đường dẫn sẽ gọi. Tự dò dùng OPTIONS (không tốn token),
+  ưu tiên Responses với `api.openai.com` và model dòng mới; `/responses` trả 404/405/501 thì
+  rơi về chat completions.
+- Vòng gọi công cụ trên Responses dùng `function_call_output` + `previous_response_id`
+  (khi máy chủ trả id); nếu không, các mục `function_call` được gửi lại kèm output.
+- **Model suy luận** (o1/o3/o4/gpt-5) không còn bị gửi `temperature` — trước đây lỗi 400
+  ngay vòng đầu.
+- **Model dự phòng**: 404 ở vòng đầu → thử `gpt-4o-mini` (OpenAI) / `gemini-2.0-flash`
+  một lần rồi mới báo lỗi.
+- **Cứu stream**: stream đứt giữa chừng khi đã có chữ và chưa gọi công cụ → dùng phần đã
+  nhận thay vì bắt chờ hết ngân sách.
+- **Trò chuyện thử**: chữ hiện dần theo từng mảnh thật; nút gửi chuyển thành nút dừng để
+  huỷ lượt đang chạy.
+- **Thống kê**: thêm số liệu 7 ngày gần nhất (cột theo ngày, hôm nay tô đậm).

@@ -13,6 +13,7 @@ typedef NS_ENUM(NSInteger, SXChatRole) {
 	SXChatRoleError,
 	SXChatRoleTyping,
 	SXChatRoleTool,   // “đang dùng công cụ …” — chỉ trong màn hình thử
+	SXChatRoleNote,   // ghi chú hệ thống (“Đã huỷ lượt này.”) — không vào lịch sử
 };
 
 @interface SXChatMessage : NSObject
@@ -105,6 +106,7 @@ typedef NS_ENUM(NSInteger, SXChatRole) {
 			_label.textColor = [SXUI dangerColor];
 			break;
 		case SXChatRoleTyping:
+		case SXChatRoleNote:
 			_bubble.backgroundColor = UIColor.secondarySystemBackgroundColor;
 			_label.textColor = UIColor.secondaryLabelColor;
 			break;
@@ -113,14 +115,15 @@ typedef NS_ENUM(NSInteger, SXChatRole) {
 			_label.textColor = [SXUI accentColor];
 			break;
 	}
-	if (message.role == SXChatRoleTyping || message.role == SXChatRoleTool) {
+	if (message.role == SXChatRoleTyping || message.role == SXChatRoleTool ||
+		message.role == SXChatRoleNote) {
 		_label.font = [UIFont monospacedSystemFontOfSize:12 weight:UIFontWeightRegular];
 	} else {
 		_label.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
 	}
 
 	NSString *meta = (message.role == SXChatRoleError || message.role == SXChatRoleTyping ||
-					  message.role == SXChatRoleTool)
+					  message.role == SXChatRoleTool || message.role == SXChatRoleNote)
 		? @""
 		: [SXUI relativeStringForDate:message.date];
 	_meta.text = meta;
@@ -261,6 +264,7 @@ typedef NS_ENUM(NSInteger, SXChatRole) {
 	self.sendButton.imageView.contentMode = UIViewContentModeScaleAspectFit;
 	self.sendButton.tintColor = [SXUI accentColor];
 	[self.sendButton addTarget:self action:@selector(sx_send) forControlEvents:UIControlEventTouchUpInside];
+	self.sendButton.accessibilityLabel = @"Gửi hoặc dừng";
 	[self.sendButton.widthAnchor constraintEqualToConstant:40].active = YES;
 	[self.sendButton.heightAnchor constraintEqualToConstant:40].active = YES;
 
@@ -321,9 +325,36 @@ typedef NS_ENUM(NSInteger, SXChatRole) {
 
 - (void)sx_updateSendEnabled {
 	BOOL hasText = self.input.text.length > 0;
-	self.sendButton.enabled = hasText && !self.busy;
+	UIImage *icon = [UIImage systemImageNamed:self.busy ? @"stop.circle.fill" : @"arrow.up.circle.fill"];
+	[self.sendButton setImage:icon forState:UIControlStateNormal];
+	self.sendButton.enabled = self.busy || hasText;
 	self.sendButton.alpha = self.sendButton.enabled ? 1.0 : 0.35;
 	self.placeholder.hidden = hasText;
+}
+
+/// Trong lúc chờ, nút gửi thành nút dừng: huỷ lượt đang chạy và bỏ bong bóng
+/// đang gõ, thay vì khoá UI cho tới khi hết ngân sách.
+- (void)sx_cancel {
+	if (!self.busy) return;
+	self.generation++;
+	self.busy = NO;
+	NSUInteger count = self.messages.count;
+	for (NSUInteger i = count; i > 0; i--) {
+		SXChatMessage *message = self.messages[i - 1];
+		if (message.role == SXChatRoleTyping || message == self.streamingReply) {
+			[self.messages removeObjectAtIndex:i - 1];
+		}
+	}
+	self.streamingReply = nil;
+	SXChatMessage *note = [SXChatMessage new];
+	note.role = SXChatRoleNote;
+	note.text = @"Đã huỷ lượt này.";
+	note.date = [NSDate date];
+	[self.messages addObject:note];
+	[self.table reloadData];
+	[self sx_scrollToBottom];
+	[self sx_updateSendEnabled];
+	SXLogDbg(@"chat-test", @"người dùng huỷ lượt đang chạy");
 }
 
 - (void)sx_scrollToBottom {
@@ -362,9 +393,13 @@ typedef NS_ENUM(NSInteger, SXChatRole) {
 }
 
 - (void)sx_send {
+	if (self.busy) {
+		[self sx_cancel];
+		return;
+	}
 	NSString *question = [self.input.text stringByTrimmingCharactersInSet:
 						  [NSCharacterSet whitespaceAndNewlineCharacterSet]];
-	if (self.busy || !question.length) return;
+	if (!question.length) return;
 
 	[self.input resignFirstResponder];
 	self.input.text = @"";

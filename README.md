@@ -29,6 +29,9 @@ Nhà cung cấp: **OpenAI tương thích** (mặc định) hoặc **Google Gemin
 - **Chẩn đoán nhanh** — một màn hình chỉ ra vì sao Siri chưa trả lời (thiếu khoá, endpoint sai,
   trần chờ ngắn hơn ngân sách…) kèm báo cáo chia sẻ được.
 - **Sao lưu cấu hình** — xuất ra plist (không kèm lịch sử) và phục hồi bằng cách dán nội dung tệp.
+- **OpenAI Responses API** — dùng `/v1/responses` song song chat completions, tự dò (không tốn token)
+  hoặc chọn tay; model suy luận (o1/o3/o4/gpt-5) tự bỏ `temperature`; model sai (404) tự thử model
+  mặc định; stream đứt giữa chừng vẫn giữ phần đã nhận.
 - **Settings chỉn chu** — header có trạng thái sống, kiểm tra kết nối ngay trong trang cấu hình,
   chọn model có ô tìm kiếm, lịch sử nhóm theo ngày, thống kê có tỉ lệ/sự cố/tốc độ, chat thử dạng bong bóng.
 
@@ -52,7 +55,9 @@ Mỗi lần push code, CI tự build lại cả 2 gói.
 
 1. **Cài đặt → SiriX**
 2. *Nhà cung cấp & API*: chọn nhà cung cấp → dán **Khóa API** (mặc định dùng `gpt-4o-mini`; Gemini mặc định `gemini-2.0-flash`).
-3. Bấm **Kiểm tra kết nối API** (mục *Gỡ lỗi*) — thấy “✓ Hoạt động” là xong.
+3. Bấm **Kiểm tra kết nối API** (mục *Gỡ lỗi*) — thấy “✓ Hoạt động” là xong. Trang cấu hình OpenAI có thêm
+   **Giao thức API** (Tự dò / Responses / Chat completions) và dòng **Endpoint đang dùng** cho biết chính xác
+   đường dẫn sẽ gọi.
 4. Bật **Bật SiriX** rồi thử: *“Hey Siri, …”* hoặc Type-to-Siri.
 
 ## Gửi log gỡ lỗi (quan trọng ⭐)

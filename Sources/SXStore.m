@@ -82,7 +82,10 @@
 	NSString *statsEpoch = [saved[@"statsEpoch"] isKindOfClass:NSString.class] ? saved[@"statsEpoch"] : @"initial";
 	NSNumber *historyClearedAt = [saved[@"historyClearedAt"] isKindOfClass:NSNumber.class] ? saved[@"historyClearedAt"] : @0;
 	NSNumber *statsClearedAt = [saved[@"statsClearedAt"] isKindOfClass:NSNumber.class] ? saved[@"statsClearedAt"] : @0;
-	return [@{@"history": history, @"stats": stats, @"historyEpoch": historyEpoch, @"statsEpoch": statsEpoch,
+	NSDictionary *statsByDay = [saved[@"statsByDay"] isKindOfClass:NSDictionary.class]
+		? saved[@"statsByDay"] : @{};
+	return [@{@"history": history, @"stats": stats, @"statsByDay": statsByDay,
+			  @"historyEpoch": historyEpoch, @"statsEpoch": statsEpoch,
 		@"historyClearedAt": historyClearedAt, @"statsClearedAt": statsClearedAt} mutableCopy];
 }
 - (BOOL)writeLocked:(NSDictionary *)state {
@@ -163,6 +166,18 @@
 	BOOL ok = [self writeLocked:state];
 	flock(fd, LOCK_UN); close(fd); return ok;
 }
+/// Khoá ngày (giờ máy) cho thống kê theo ngày — "2026-11-19".
+static NSString *SXStoreDayKey(NSDate *date) {
+	static NSDateFormatter *formatter;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		formatter = [[NSDateFormatter alloc] init];
+		formatter.locale = [NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
+		formatter.dateFormat = @"yyyy-MM-dd";
+	});
+	return [formatter stringFromDate:date ?: [NSDate date]];
+}
+
 - (BOOL)recordEvent:(NSString *)event milliseconds:(NSNumber *)milliseconds epoch:(NSString *)epoch startedAt:(NSTimeInterval)startedAt {
 	if (![@[@"replaced", @"kept", @"timeout", @"error"] containsObject:event] || !epoch.length) return NO;
 	int fd = [self acquireLock]; if (fd < 0) return NO;
@@ -177,6 +192,25 @@
 			stats[@"msAvg"] = @(stats[@"msAvg"] ? 0.2 * milliseconds.doubleValue + 0.8 * previous : milliseconds.doubleValue);
 		}
 		state[@"stats"] = stats;
+
+		// Số liệu theo ngày: đủ để vẽ 7 ngày gần nhất mà không phình tệp.
+		NSMutableDictionary *byDay = [state[@"statsByDay"] isKindOfClass:[NSDictionary class]]
+			? [state[@"statsByDay"] mutableCopy] : [NSMutableDictionary dictionary];
+		NSString *day = SXStoreDayKey([NSDate date]);
+		NSMutableDictionary *bucket = [byDay[day] isKindOfClass:[NSDictionary class]]
+			? [byDay[day] mutableCopy] : [NSMutableDictionary dictionary];
+		bucket[event] = @([bucket[event] integerValue] + 1);
+		if (milliseconds && milliseconds.doubleValue >= 0) {
+			double previous = [bucket[@"msAvg"] doubleValue];
+			bucket[@"msAvg"] = @(bucket[@"msAvg"] ? 0.2 * milliseconds.doubleValue + 0.8 * previous
+												  : milliseconds.doubleValue);
+		}
+		byDay[day] = bucket;
+		if (byDay.count > 7) {
+			NSArray *keys = [[byDay allKeys] sortedArrayUsingSelector:@selector(compare:)];
+			for (NSUInteger i = 0; i + 7 < keys.count; i++) [byDay removeObjectForKey:keys[i]];
+		}
+		state[@"statsByDay"] = byDay;
 		ok = [self writeLocked:state];
 	}
 	flock(fd, LOCK_UN); close(fd); return ok;
@@ -186,6 +220,7 @@
 	NSMutableDictionary *state = [self readLocked];
 	if (!state) { flock(fd, LOCK_UN); close(fd); return NO; }
 	state[@"stats"] = @{};
+	state[@"statsByDay"] = @{};
 	state[@"statsEpoch"] = NSUUID.UUID.UUIDString;
 	state[@"statsClearedAt"] = @(CFAbsoluteTimeGetCurrent());
 	BOOL ok = [self writeLocked:state];

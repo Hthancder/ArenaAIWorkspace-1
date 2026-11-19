@@ -71,6 +71,10 @@ static NSString *SXStatsNumber(id value) {
 @property (nonatomic, strong) UILabel *rateHint;
 @property (nonatomic, strong) SXRateBarView *rateBar;
 @property (nonatomic, strong) UIView *header;
+/// Bảy ngày gần nhất: số lượt mỗi ngày (cột nhỏ trong phần đầu bảng).
+@property (nonatomic, strong) NSArray<NSNumber *> *weekCounts;
+@property (nonatomic, strong) UILabel *weekCaption;
+@property (nonatomic, strong) UIStackView *weekBars;
 @property (nonatomic, copy) NSArray<NSDictionary *> *sections;
 @property (nonatomic) NSInteger totalEvents;
 @property (nonatomic) NSInteger loadGeneration;
@@ -145,8 +149,18 @@ static NSString *SXStatsNumber(id value) {
 		@"Chỉ tính các lượt SiriX đã thay hoặc đã quyết định giữ Siri gốc; lượt hết giờ và lỗi nằm trong mục Sự cố."];
 	self.rateHint.textColor = UIColor.tertiaryLabelColor;
 
+	self.weekCaption = [SXUI footnoteLabel:@"7 ngày gần nhất"];
+	self.weekCaption.textColor = UIColor.tertiaryLabelColor;
+
+	self.weekBars = [[UIStackView alloc] init];
+	self.weekBars.axis = UILayoutConstraintAxisHorizontal;
+	self.weekBars.distribution = UIStackViewDistributionFillEqually;
+	self.weekBars.alignment = UIStackViewAlignmentBottom;
+	self.weekBars.spacing = 4;
+	[self.weekBars.heightAnchor constraintEqualToConstant:44].active = YES;
+
 	UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:
-		@[overline, self.rateLabel, self.rateBar, self.rateCaption, self.rateHint]];
+		@[overline, self.rateLabel, self.rateBar, self.rateCaption, self.weekBars, self.weekCaption, self.rateHint]];
 	stack.axis = UILayoutConstraintAxisVertical;
 	stack.alignment = UIStackViewAlignmentFill;
 	stack.spacing = 6;
@@ -274,8 +288,70 @@ static NSString *SXStatsNumber(id value) {
 		], @"footer": @"Trung bình có trọng số (làm mượt theo thời gian), không phải chi phí API. Lượt không có phản hồi AI không được tính."},
 	];
 
+	NSDictionary *byDay = [snapshot[@"statsByDay"] isKindOfClass:[NSDictionary class]]
+		? snapshot[@"statsByDay"] : @{};
+	NSMutableArray<NSNumber *> *counts = [NSMutableArray array];
+	NSCalendar *calendar = [NSCalendar currentCalendar];
+	NSInteger total = 0;
+	NSInteger today = 0;
+	for (NSInteger offset = 6; offset >= 0; offset--) {
+		NSDate *day = [calendar dateByAddingUnit:NSCalendarUnitDay value:-offset toDate:[NSDate date] options:0];
+		NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
+		formatter.locale = [NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
+		formatter.dateFormat = @"yyyy-MM-dd";
+		NSString *key = [formatter stringFromDate:day ?: [NSDate date]];
+		NSDictionary *bucket = [byDay[key] isKindOfClass:[NSDictionary class]] ? byDay[key] : @{};
+		NSInteger count = [bucket[@"replaced"] integerValue] + [bucket[@"kept"] integerValue] +
+			[bucket[@"timeout"] integerValue] + [bucket[@"error"] integerValue];
+		[counts addObject:@(count)];
+		total += count;
+		if (offset == 0) today = count;
+	}
+	self.weekCounts = counts;
+	if (total > 0) {
+		self.weekCaption.text = [NSString stringWithFormat:@"Hôm nay: %ld lượt · 7 ngày: %ld lượt",
+								 (long)today, (long)total];
+	} else {
+		self.weekCaption.text = @"Chưa có lượt nào trong 7 ngày gần nhất.";
+	}
+	[self sx_rebuildWeekBars];
+	[self sx_layoutHeader];
+
 	[self.table reloadData];
 	[self sx_updateEmptyState];
+}
+
+/// Cột nhỏ cho 7 ngày: cao theo tỉ lệ so với ngày nhiều nhất, hôm nay tô đậm.
+- (void)sx_rebuildWeekBars {
+	for (UIView *view in [self.weekBars.arrangedSubviews copy]) {
+		[self.weekBars removeArrangedSubview:view];
+		[view removeFromSuperview];
+	}
+	NSInteger max = 1;
+	for (NSNumber *value in self.weekCounts) max = MAX(max, value.integerValue);
+	NSUInteger index = 0;
+	for (NSNumber *value in self.weekCounts) {
+		NSInteger count = value.integerValue;
+		UIView *holder = [[UIView alloc] init];
+		UIView *bar = [[UIView alloc] init];
+		bar.translatesAutoresizingMaskIntoConstraints = NO;
+		bar.layer.cornerRadius = 3;
+		bar.layer.cornerCurve = kCACornerCurveContinuous;
+		bar.backgroundColor = (index + 1 == self.weekCounts.count)
+			? [SXUI accentColor] : [[SXUI accentColor] colorWithAlphaComponent:0.35];
+		[holder addSubview:bar];
+		CGFloat ratio = max > 0 ? (CGFloat)count / (CGFloat)max : 0.0;
+		CGFloat height = MAX(3.0, 40.0 * ratio);
+		[NSLayoutConstraint activateConstraints:@[
+			[bar.bottomAnchor constraintEqualToAnchor:holder.bottomAnchor],
+			[bar.leadingAnchor constraintEqualToAnchor:holder.leadingAnchor constant:2],
+			[bar.trailingAnchor constraintEqualToAnchor:holder.trailingAnchor constant:-2],
+			[bar.heightAnchor constraintEqualToConstant:height],
+		]];
+		holder.accessibilityLabel = [NSString stringWithFormat:@"%ld lượt", (long)count];
+		[self.weekBars addArrangedSubview:holder];
+		index++;
+	}
 }
 
 - (void)sx_updateEmptyState {
