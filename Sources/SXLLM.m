@@ -13,6 +13,11 @@ static NSTimeInterval SXTurnBudget(SXPrefs *prefs) {
 	return MIN(MAX(6.0, prefs.responseTimeout), 120.0);
 }
 
+/// Model dự phòng khi model người dùng đặt không tồn tại trên endpoint (404).
+static NSString *SXFallbackModel(SXProvider provider) {
+	return provider == SXProviderGemini ? @"gemini-2.0-flash" : @"gpt-4o-mini";
+}
+
 /// Trần các vòng gọi công cụ trong một lượt.
 static NSInteger SXToolRoundLimit(SXPrefs *prefs) {
 	return MAX(1, MIN(prefs.maxToolRounds, 6));
@@ -159,9 +164,34 @@ static void SXAppendOpenAIToolResults(NSMutableArray *messages, SXToolExec execu
 	}
 }
 
-static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary *> *history,
-						NSArray<NSDictionary *> *toolDefs, SXToolExec executor,
-						SXLLMDelta onDelta, SXLLMCompletion completion) {
+static void SXAskOpenAIResponses(SXPrefs *prefs, NSString *question, NSArray<NSDictionary *> *history,
+								 NSArray<NSDictionary *> *toolDefs, SXToolExec executor,
+								 NSString *url, NSDictionary<NSString *, NSString *> *headers,
+								 NSString *model, SXLLMDelta onDelta, SXLLMCompletion completion);
+static NSString *SXOpenAIURL(NSString *base, BOOL responses);
+static BOOL SXModelRejectsTemperature(NSString *model);
+
+/// Stream đứt giữa chừng (mạng rớt, idle timeout) nhưng đã có chữ: thà trả lời
+/// bằng phần đã nhận còn hơn để người dùng chờ hết ngân sách rồi nhận “hết giờ”.
+/// Chỉ áp dụng khi CHƯA có tool call — nếu model đang gọi công cụ thì phải làm
+/// nốt, không thể cắt giữa.
+static BOOL SXStreamSalvage(NSDictionary *streamResp, NSString *provider, NSString *model,
+							NSInteger rounds, CFAbsoluteTime start, SXLLMCompletion completion) {
+	if (![streamResp isKindOfClass:[NSDictionary class]] || !completion) return NO;
+	if ([streamResp[@"sawToolCalls"] boolValue]) return NO;
+	NSString *partial = [streamResp[@"content"] isKindOfClass:[NSString class]] ? streamResp[@"content"] : nil;
+	partial = [partial stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+	if (!partial.length) return NO;
+	NSDictionary *info = SXInfo(provider, model, [streamResp[@"status"] integerValue], rounds, start);
+	SXLogWrn(@"llm", @"stream đứt — dùng phần đã nhận (%lu ký tự, %ld ms)",
+			 (unsigned long)partial.length, (long)[info[@"ms"] integerValue]);
+	completion(partial, nil, info);
+	return YES;
+}
+
+static void SXAskOpenAIChat(SXPrefs *prefs, NSString *question, NSArray<NSDictionary *> *history,
+							NSArray<NSDictionary *> *toolDefs, SXToolExec executor,
+							SXLLMDelta onDelta, SXLLMCompletion completion) {
 	NSString *key = [[prefs openaiKey] stringByTrimmingCharactersInSet:
 					 [NSCharacterSet whitespaceAndNewlineCharacterSet]];
 	NSString *model = [[prefs openaiModel] stringByTrimmingCharactersInSet:
@@ -179,8 +209,7 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 		completion(nil, [SXHTTP errorWithCode:-1003 message:message], nil);
 		return;
 	}
-	NSString *url = [base hasSuffix:@"/chat/completions"] ? base
-		: [base stringByAppendingString:@"/chat/completions"];
+	NSString *url = SXOpenAIURL(base, NO);
 	NSDictionary<NSString *, NSString *> *headers = SXRequestHeaders(prefs, SXProviderOpenAI, key);
 
 	NSMutableArray *messages = [NSMutableArray array];
@@ -227,8 +256,9 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 		// ngắn, non-stream cho câu trả lời trọn vẹn trong một lần.
 		BOOL streamThisRound = streamAllowed && rounds == 0;
 
-		NSMutableDictionary *body = [@{@"model": model, @"messages": messages,
-									   @"temperature": @(prefs.temperature)} mutableCopy];
+		NSMutableDictionary *body = [@{@"model": model, @"messages": messages} mutableCopy];
+		// o1/o3/o4/gpt-5 từ chối `temperature` (HTTP 400). Bỏ hẳn thay vì gửi 0.
+		if (!SXModelRejectsTemperature(model)) body[@"temperature"] = @(prefs.temperature);
 		if (toolsPayload.count) {
 			body[@"tools"] = toolsPayload;
 			body[@"tool_choice"] = @"auto";
@@ -254,6 +284,7 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 													  error:&streamError];
 			if (!streamResp) {
 				SXLogWrn(@"llm", @"openai stream lỗi (%@) → non-stream", streamError.localizedDescription);
+				if (SXStreamSalvage(streamError.userInfo[@"sx.partial"], @"openai", model, rounds, start, completion)) return;
 				streamAllowed = NO;
 				continue;
 			}
@@ -307,6 +338,13 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 			lastStatus = result.status;
 			if (lastStatus < 200 || lastStatus >= 300) {
 				if (SXShouldRetry(lastStatus, &retryCount, deadline)) continue;
+				NSString *fallback = SXFallbackModel(SXProviderOpenAI);
+				if (lastStatus == 404 && rounds == 0 && ![model isEqualToString:fallback]) {
+					SXLogWrn(@"llm", @"model %@ không có trên endpoint (404) → thử %@", model, fallback);
+					model = fallback;
+					retryCount = 0;
+					continue;
+				}
 				NSError *err = [SXHTTP errorWithStatus:lastStatus data:result.body];
 				SXLogErr(@"llm", @"openai HTTP %ld: %@", (long)lastStatus, err.localizedDescription);
 				completion(nil, err, SXInfo(@"openai", model, lastStatus, rounds, start));
@@ -361,6 +399,411 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 		completion(content, nil, info);
 		return;
 	}
+}
+
+#pragma mark - OpenAI Responses API
+
+/// Model suy luận (o-series, gpt-5) từ chối `temperature`; gửi kèm sẽ ăn 400.
+static BOOL SXModelRejectsTemperature(NSString *model) {
+	if (![model isKindOfClass:[NSString class]]) return NO;
+	NSString *lower = model.lowercaseString;
+	if ([lower hasPrefix:@"o1"] || [lower hasPrefix:@"o3"] || [lower hasPrefix:@"o4"] ||
+		[lower hasPrefix:@"gpt-5"]) return YES;
+	return [lower containsString:@"reasoning"];
+}
+
+/// Đổi schema công cụ kiểu chat completions (lồng function) sang kiểu phẳng của
+/// Responses API: {type:"function", name, description, parameters}.
+static NSArray<NSDictionary *> *SXResponsesTools(NSArray<NSDictionary *> *toolDefs) {
+	NSMutableArray *tools = [NSMutableArray array];
+	for (NSDictionary *def in toolDefs) {
+		NSDictionary *parameters = [def[@"parameters"] isKindOfClass:[NSDictionary class]]
+			? def[@"parameters"] : @{@"type": @"object", @"properties": @{}};
+		[tools addObject:@{@"type": @"function",
+						   @"name": def[@"name"] ?: @"",
+						   @"description": def[@"description"] ?: @"",
+						   @"parameters": parameters,
+						   @"strict": @NO}];
+	}
+	return tools;
+}
+
+/// `input` của Responses API: mảng item. Lịch sử + câu hỏi mới, dạng message.
+static NSMutableArray *SXResponsesInput(NSString *question, NSArray<NSDictionary *> *history) {
+	NSMutableArray *input = [NSMutableArray array];
+	for (NSDictionary *turn in history) {
+		NSString *q = [turn[@"q"] isKindOfClass:[NSString class]] ? turn[@"q"] : nil;
+		NSString *a = [turn[@"a"] isKindOfClass:[NSString class]] ? turn[@"a"] : nil;
+		if (q.length) [input addObject:@{@"role": @"user", @"content": q}];
+		if (a.length) [input addObject:@{@"role": @"assistant", @"content": a}];
+	}
+	[input addObject:@{@"role": @"user", @"content": question}];
+	return input;
+}
+
+/// Ghi kết quả công cụ vào `input` đúng dạng function_call_output.
+static void SXAppendResponsesToolResults(NSMutableArray *input, SXToolExec executor,
+										 NSArray<NSDictionary *> *calls, NSInteger round) {
+	for (NSDictionary *call in calls) {
+		if (![call isKindOfClass:[NSDictionary class]]) continue;
+		NSString *name = [call[@"name"] isKindOfClass:[NSString class]] ? call[@"name"] : nil;
+		NSString *callId = [call[@"call_id"] isKindOfClass:[NSString class]] ? call[@"call_id"] : nil;
+		if (!callId.length) callId = name;
+		if (!callId.length) continue;
+		BOOL failed = NO;
+		NSString *text = name.length
+			? SXRunTool(executor, name, SXToolArguments(call[@"arguments"]), round, &failed)
+			: @"Lỗi công cụ: thiếu tên công cụ.";
+		(void)failed;
+		[input addObject:@{@"type": @"function_call_output",
+						   @"call_id": callId,
+						   @"output": SXToolJSONString(@{@"result": text})}];
+	}
+}
+
+/// Đọc câu trả lời từ JSON không stream của /v1/responses:
+/// {output:[{type:"message", content:[{type:"output_text", text}]},
+///          {type:"function_call", call_id, name, arguments}]}
+static NSDictionary *SXResponsesParseJSON(NSData *data) {
+	id json = [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL];
+	if (![json isKindOfClass:[NSDictionary class]]) return nil;
+	NSMutableString *text = [NSMutableString string];
+	NSMutableArray<NSDictionary *> *calls = [NSMutableArray array];
+	NSMutableString *reasoning = [NSMutableString string];
+	NSArray *output = [((NSDictionary *)json)[@"output"] isKindOfClass:[NSArray class]]
+		? ((NSDictionary *)json)[@"output"] : nil;
+	for (id item in output) {
+		if (![item isKindOfClass:[NSDictionary class]]) continue;
+		NSString *type = [item[@"type"] isKindOfClass:[NSString class]] ? item[@"type"] : @"";
+		if ([type isEqualToString:@"function_call"]) {
+			NSString *name = [item[@"name"] isKindOfClass:[NSString class]] ? item[@"name"] : nil;
+			if (!name.length) continue;
+			NSString *callId = [item[@"call_id"] isKindOfClass:[NSString class]] ? item[@"call_id"] : name;
+			NSString *arguments = [item[@"arguments"] isKindOfClass:[NSString class]] ? item[@"arguments"] : @"{}";
+			[calls addObject:@{@"call_id": callId, @"name": name, @"arguments": arguments}];
+			continue;
+		}
+		if ([type isEqualToString:@"reasoning"]) {
+			NSArray *summary = [item[@"summary"] isKindOfClass:[NSArray class]] ? item[@"summary"] : nil;
+			for (id part in summary) {
+				if ([part isKindOfClass:[NSDictionary class]] && [part[@"text"] isKindOfClass:[NSString class]]) {
+					[reasoning appendString:part[@"text"]];
+				}
+			}
+			continue;
+		}
+		NSArray *parts = [item[@"content"] isKindOfClass:[NSArray class]] ? item[@"content"] : nil;
+		for (id part in parts) {
+			if (![part isKindOfClass:[NSDictionary class]]) continue;
+			id value = part[@"text"];
+			if ([value isKindOfClass:[NSString class]]) [text appendString:value];
+		}
+	}
+	NSMutableDictionary *result = [@{
+		@"content": [text copy],
+		@"calls": calls,
+	} mutableCopy];
+	NSString *identifier = [((NSDictionary *)json)[@"id"] isKindOfClass:[NSString class]]
+		? ((NSDictionary *)json)[@"id"] : nil;
+	if (identifier.length) result[@"responseId"] = identifier;
+	if (reasoning.length) result[@"reasoning"] = [reasoning copy];
+	id error = ((NSDictionary *)json)[@"error"];
+	if ([error isKindOfClass:[NSDictionary class]] && [error[@"message"] isKindOfClass:[NSString class]]) {
+		result[@"errorText"] = error[@"message"];
+	}
+	return result;
+}
+
+static void SXAskOpenAIResponses(SXPrefs *prefs, NSString *question, NSArray<NSDictionary *> *history,
+								 NSArray<NSDictionary *> *toolDefs, SXToolExec executor,
+								 NSString *url, NSDictionary<NSString *, NSString *> *headers,
+								 NSString *model, SXLLMDelta onDelta, SXLLMCompletion completion) {
+	CFAbsoluteTime start = CFAbsoluteTimeGetCurrent();
+	CFAbsoluteTime deadline = start + SXTurnBudget(prefs);
+	NSInteger rounds = 0;
+	NSInteger lastStatus = 0;
+	NSInteger retryCount = 0;
+	BOOL streamAllowed = prefs.streaming;
+	BOOL allowTemperature = !SXModelRejectsTemperature(model);
+	NSMutableArray *input = SXResponsesInput(question, history);
+	NSString *previousResponseId = nil;
+
+	SXLogDbg(@"llm", @"openai/responses → %@ (model=%@, %lu item, %lu tool, stream=%d, temperature=%d)",
+			 url, model, (unsigned long)input.count, (unsigned long)toolDefs.count,
+			 streamAllowed, allowTemperature);
+
+	while (YES) {
+		NSTimeInterval remaining = deadline - CFAbsoluteTimeGetCurrent();
+		if (remaining < 1.0) {
+			completion(nil, [SXHTTP errorWithCode:-1009
+									  message:[NSString stringWithFormat:
+											   @"AI chưa trả lời xong trong %.0f giây (đã %ld vòng công cụ).",
+											   SXTurnBudget(prefs), (long)rounds]],
+					   SXInfo(@"openai/responses", model, lastStatus, rounds, start));
+			return;
+		}
+		BOOL streamThisRound = streamAllowed && rounds == 0;
+
+		NSMutableDictionary *body = [@{@"model": model,
+									   @"input": input,
+									   @"instructions": SXComposeSystemPrompt(prefs, toolDefs)}
+									 mutableCopy];
+		if (allowTemperature) body[@"temperature"] = @(prefs.temperature);
+		if (toolDefs.count) {
+			body[@"tools"] = SXResponsesTools(toolDefs);
+			body[@"tool_choice"] = @"auto";
+		}
+		if (previousResponseId.length && rounds > 0) body[@"previous_response_id"] = previousResponseId;
+
+		NSString *content = nil;
+		NSArray<NSDictionary *> *calls = nil;
+		NSString *streamError = nil;
+
+		if (streamThisRound) {
+			body[@"stream"] = @YES;
+			NSTimeInterval streamBudget = MIN(remaining, MAX(4.0, remaining * 0.65));
+			NSError *error = nil;
+			NSDictionary *streamResp = [SXStream postJSON:body
+													toURL:url
+												  headers:headers
+												   format:SXStreamFormatResponses
+												  timeout:streamBudget
+											  idleTimeout:MIN(12.0, streamBudget)
+												  onDelta:onDelta
+													error:&error];
+			if (!streamResp) {
+				SXLogWrn(@"llm", @"responses stream lỗi (%@) → non-stream", error.localizedDescription);
+				if (error.userInfo[@"sx.partial"] &&
+					SXStreamSalvage(error.userInfo[@"sx.partial"], @"openai/responses", model, rounds, start, completion)) return;
+				streamAllowed = NO;
+				continue;
+			}
+			lastStatus = [streamResp[@"status"] integerValue];
+			if (lastStatus >= 200 && lastStatus < 300) {
+				content = [streamResp[@"content"] isKindOfClass:[NSString class]] ? streamResp[@"content"] : nil;
+				calls = [streamResp[@"responseCalls"] isKindOfClass:[NSArray class]] ? streamResp[@"responseCalls"] : @[];
+				if ([streamResp[@"responseId"] isKindOfClass:[NSString class]]) {
+					previousResponseId = streamResp[@"responseId"];
+				}
+				if (streamResp[@"reasoning"]) {
+					SXLogDbg(@"llm", @"responses suy luận: %@", SXShort(streamResp[@"reasoning"], 300));
+				}
+				if (!calls.count && content.length) {
+					NSDictionary *info = SXInfo(@"openai/responses", model, lastStatus, rounds, start);
+					NSInteger firstToken = [streamResp[@"firstTokenMs"] integerValue];
+					SXLogInf(@"llm", @"openai/responses OK (stream) — token đầu %ld ms · tổng %ld ms · %lu ký tự",
+							 (long)firstToken, (long)[info[@"ms"] integerValue], (unsigned long)content.length);
+					completion(content, nil, info);
+					return;
+				}
+				if (!calls.count) {
+					SXLogWrn(@"llm", @"responses stream rỗng → non-stream");
+					streamAllowed = NO;
+					continue;
+				}
+			} else if (SXShouldRetry(lastStatus, &retryCount, deadline)) {
+				continue;
+			} else if (lastStatus == 400 || lastStatus == 404 || lastStatus == 405 ||
+					   lastStatus == 415 || lastStatus == 501 || lastStatus == 422) {
+				SXLogWrn(@"llm", @"responses stream không hỗ trợ (HTTP %ld) → non-stream", (long)lastStatus);
+				streamAllowed = NO;
+				continue;
+			} else {
+				streamError = [streamResp[@"errorText"] isKindOfClass:[NSString class]]
+					? streamResp[@"errorText"] : nil;
+				NSData *data = [streamError dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+				NSError *err = [SXHTTP errorWithStatus:lastStatus data:data];
+				SXLogErr(@"llm", @"responses stream HTTP %ld: %@", (long)lastStatus, err.localizedDescription);
+				completion(nil, err, SXInfo(@"openai/responses", model, lastStatus, rounds, start));
+				return;
+			}
+		} else {
+			SXHTTPResult *result = [SXHTTP postURL:url
+											  body:body
+										   headers:headers
+										   timeout:remaining
+									   idleTimeout:MIN(30.0, remaining)
+											onData:nil];
+			if (result.error && result.status == 0) {
+				SXLogErr(@"llm", @"responses lỗi mạng: %@", result.error.localizedDescription);
+				completion(nil, result.error, SXInfo(@"openai/responses", model, 0, rounds, start));
+				return;
+			}
+			lastStatus = result.status;
+			if (lastStatus < 200 || lastStatus >= 300) {
+				if (SXShouldRetry(lastStatus, &retryCount, deadline)) continue;
+				NSString *fallback = SXFallbackModel(SXProviderOpenAI);
+				if (lastStatus == 404 && rounds == 0 && ![model isEqualToString:fallback]) {
+					SXLogWrn(@"llm", @"responses: model %@ không có (404) → thử %@", model, fallback);
+					model = fallback;
+					retryCount = 0;
+					continue;
+				}
+				if ((lastStatus == 404 || lastStatus == 405 || lastStatus == 501) && rounds == 0) {
+					// Máy chủ không có /responses (nhiều gateway chỉ làm chat
+					// completions). Rơi về nhánh cũ thay vì báo lỗi cho người dùng.
+					SXLogWrn(@"llm", @"/responses trả HTTP %ld → dùng chat completions", (long)lastStatus);
+					SXAskOpenAIChat(prefs, question, history, toolDefs, executor, onDelta, completion);
+					return;
+				}
+				NSError *err = [SXHTTP errorWithStatus:lastStatus data:result.body];
+				SXLogErr(@"llm", @"responses HTTP %ld: %@", (long)lastStatus, err.localizedDescription);
+				completion(nil, err, SXInfo(@"openai/responses", model, lastStatus, rounds, start));
+				return;
+			}
+			retryCount = 0;
+			NSDictionary *parsed = SXResponsesParseJSON(result.body);
+			if (!parsed) {
+				NSString *snippet = [[NSString alloc] initWithData:result.body encoding:NSUTF8StringEncoding] ?: @"";
+				if (snippet.length > 200) snippet = [[snippet substringToIndex:200] stringByAppendingString:@"…"];
+				NSError *err = [SXHTTP errorWithCode:-3
+											 message:[NSString stringWithFormat:@"Phản hồi không hợp lệ: %@", snippet]];
+				SXLogErr(@"llm", @"%@", err.localizedDescription);
+				completion(nil, err, SXInfo(@"openai/responses", model, lastStatus, rounds, start));
+				return;
+			}
+			if (parsed[@"errorText"]) {
+				NSError *err = [SXHTTP errorWithCode:-5 message:parsed[@"errorText"]];
+				SXLogErr(@"llm", @"responses báo lỗi: %@", err.localizedDescription);
+				completion(nil, err, SXInfo(@"openai/responses", model, lastStatus, rounds, start));
+				return;
+			}
+			content = [parsed[@"content"] isKindOfClass:[NSString class]] ? parsed[@"content"] : nil;
+			calls = [parsed[@"calls"] isKindOfClass:[NSArray class]] ? parsed[@"calls"] : @[];
+			if ([parsed[@"responseId"] isKindOfClass:[NSString class]]) previousResponseId = parsed[@"responseId"];
+		}
+
+		if (calls.count && executor && rounds < SXToolRoundLimit(prefs)) {
+			rounds++;
+			retryCount = 0;
+			SXLogDbg(@"llm", @"responses: chạy %lu function_call (vòng %ld)", (unsigned long)calls.count, (long)rounds);
+			// Chỉ gửi các item mới (function_call_output); phần trước đó đã nằm ở
+			// máy chủ qua `previous_response_id` khi máy chủ hỗ trợ.
+			if (!previousResponseId.length) {
+				for (NSDictionary *call in calls) {
+					[input addObject:@{@"type": @"function_call",
+									   @"call_id": call[@"call_id"] ?: @"",
+									   @"name": call[@"name"] ?: @"",
+									   @"arguments": call[@"arguments"] ?: @"{}"}];
+				}
+			}
+			NSMutableArray *toolInput = [NSMutableArray array];
+			SXAppendResponsesToolResults(toolInput, executor, calls, rounds);
+			if (previousResponseId.length) {
+				input = toolInput;
+			} else {
+				[input addObjectsFromArray:toolInput];
+			}
+			continue;
+		}
+
+		if (!content.length) {
+			NSError *err = [SXHTTP errorWithCode:-4 message:@"Model trả về nội dung rỗng."];
+			SXLogErr(@"llm", @"%@", err.localizedDescription);
+			completion(nil, err, SXInfo(@"openai/responses", model, lastStatus, rounds, start));
+			return;
+		}
+		NSDictionary *info = SXInfo(@"openai/responses", model, lastStatus, rounds, start);
+		SXLogInf(@"llm", @"openai/responses OK — %ld ms, %ld vòng công cụ, %lu ký tự",
+				 (long)[info[@"ms"] integerValue], (long)rounds, (unsigned long)content.length);
+		completion(content, nil, info);
+		return;
+	}
+}
+
+/// URL của một giao thức trên endpoint hiện tại. Người dùng có thể đã dán sẵn
+/// ".../v1", ".../v1/chat/completions" hoặc ".../v1/responses" — cắt đuôi đó rồi
+/// ghép lại cho đúng, để đổi giao thức không tạo ra ".../chat/completions/responses".
+static NSString *SXOpenAIURL(NSString *base, BOOL responses) {
+	NSString *root = base;
+	for (NSString *suffix in @[@"/chat/completions", @"/responses"]) {
+		if ([root hasSuffix:suffix]) {
+			root = [root substringToIndex:root.length - suffix.length];
+			break;
+		}
+	}
+	return [root stringByAppendingString:responses ? @"/responses" : @"/chat/completions"];
+}
+
+/// Máy chủ có /responses không? Một META/OPTIONS rẻ hơn một lượt gọi thật và
+/// không tốn token. Chỉ dùng cho giao thức "Tự dò".
+static BOOL SXOpenAIHasResponses(NSString *url, NSDictionary<NSString *, NSString *> *headers) {
+	@try {
+		NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:url]];
+		request.HTTPMethod = @"OPTIONS";
+		request.timeoutInterval = 4.0;
+		for (NSString *name in headers) {
+			if ([name.lowercaseString isEqualToString:@"content-type"]) continue;
+			[request setValue:headers[name] forHTTPHeaderField:name];
+		}
+		__block NSInteger status = 0;
+		dispatch_semaphore_t done = dispatch_semaphore_create(0);
+		NSURLSessionDataTask *task = [NSURLSession.sharedSession dataTaskWithRequest:request
+																 completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+			(void)data; (void)error;
+			if ([response isKindOfClass:[NSHTTPURLResponse class]]) {
+				status = ((NSHTTPURLResponse *)response).statusCode;
+			}
+			dispatch_semaphore_signal(done);
+		}];
+		[task resume];
+		dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.5 * NSEC_PER_SEC)));
+		if (status == 0) return NO;
+		// 200/204/405 = đường dẫn tồn tại (một số máy chủ không trả 2xx cho OPTIONS).
+		return status != 404 && status != 501;
+	} @catch (NSException *exception) {
+		SXLogWrn(@"llm", @"dò /responses lỗi: %@", exception.reason);
+		return NO;
+	}
+}
+
+/// Nhánh OpenAI tương thích: chọn giao thức theo cấu hình, tự dò khi cần, và
+/// rơi về chat completions nếu /responses không có (404/405/501).
+static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary *> *history,
+						NSArray<NSDictionary *> *toolDefs, SXToolExec executor,
+						SXLLMDelta onDelta, SXLLMCompletion completion) {
+	NSString *key = [[prefs openaiKey] stringByTrimmingCharactersInSet:
+					 [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+	NSString *model = [[prefs openaiModel] stringByTrimmingCharactersInSet:
+					   [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+	if (!model.length) model = @"gpt-4o-mini";
+	NSString *rawBase = [[prefs openaiBase] stringByTrimmingCharactersInSet:
+						 [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+	NSString *base = [SXPrefs normalizedBaseURL:rawBase];
+	if (!base.length) {
+		NSString *message = rawBase.length
+			? [NSString stringWithFormat:@"Địa chỉ API không hợp lệ: %@", rawBase]
+			: @"Chưa đặt địa chỉ API. Mở Cấu hình OpenAI để nhập endpoint.";
+		completion(nil, [SXHTTP errorWithCode:-1003 message:message], nil);
+		return;
+	}
+	NSDictionary<NSString *, NSString *> *headers = SXRequestHeaders(prefs, SXProviderOpenAI, key);
+	NSString *responsesURL = SXOpenAIURL(base, YES);
+
+	SXOpenAIApi api = prefs.openaiApi;
+	if (api == SXOpenAIApiAuto) {
+		// Dấu hiệu rẻ để đoán trước khi dò: endpoint chính chủ OpenAI hoặc model
+		// thuộc dòng chỉ có trên Responses API.
+		NSString *host = [NSURL URLWithString:base].host.lowercaseString ?: @"";
+		NSString *lowerModel = model.lowercaseString;
+		BOOL looksResponsesOnly = [lowerModel hasPrefix:@"gpt-5"] || [lowerModel hasPrefix:@"o3"] ||
+			[lowerModel hasPrefix:@"o4"] || [lowerModel hasPrefix:@"codex"];
+		BOOL official = [host isEqualToString:@"api.openai.com"];
+		if (official || looksResponsesOnly) {
+			api = SXOpenAIApiResponses;
+		} else {
+			api = SXOpenAIHasResponses(responsesURL, headers) ? SXOpenAIApiResponses : SXOpenAIApiChat;
+		}
+		SXLogInf(@"llm", @"tự dò giao thức OpenAI (host=%@ model=%@) → %@",
+				 host, model, api == SXOpenAIApiResponses ? @"responses" : @"chat");
+	}
+
+	if (api == SXOpenAIApiResponses) {
+		SXAskOpenAIResponses(prefs, question, history, toolDefs, executor,
+							 responsesURL, headers, model, onDelta, completion);
+		return;
+	}
+	SXAskOpenAIChat(prefs, question, history, toolDefs, executor, onDelta, completion);
 }
 
 #pragma mark - Gemini
@@ -484,6 +927,7 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 													  error:&streamError];
 			if (!streamResp) {
 				SXLogWrn(@"llm", @"gemini stream lỗi (%@) → non-stream", streamError.localizedDescription);
+				if (SXStreamSalvage(streamError.userInfo[@"sx.partial"], @"gemini", model, rounds, start, completion)) return;
 				streamAllowed = NO;
 				continue;
 			}
@@ -531,6 +975,13 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 			lastStatus = result.status;
 			if (lastStatus < 200 || lastStatus >= 300) {
 				if (SXShouldRetry(lastStatus, &retryCount, deadline)) continue;
+				NSString *fallback = SXFallbackModel(SXProviderGemini);
+				if (lastStatus == 404 && rounds == 0 && ![model isEqualToString:fallback]) {
+					SXLogWrn(@"llm", @"gemini: model %@ không có (404) → thử %@", model, fallback);
+					model = fallback;
+					retryCount = 0;
+					continue;
+				}
 				NSError *err = [SXHTTP errorWithStatus:lastStatus data:result.body];
 				SXLogErr(@"llm", @"gemini HTTP %ld: %@", (long)lastStatus, err.localizedDescription);
 				completion(nil, err, SXInfo(@"gemini", model, lastStatus, rounds, start));

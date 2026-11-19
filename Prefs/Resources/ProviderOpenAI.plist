@@ -79,6 +79,34 @@
 			<string>Endpoint đang dùng</string>
 		</dict>
 		<dict>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>cell</key>
+			<string>PSLinkListCell</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>detail</key>
+			<string>PSListItemsController</string>
+			<key>footerText</key>
+			<string>“Tự dò” thử /v1/responses trước; máy chủ không có (404/405) thì tự dùng /v1/chat/completions. Chọn tay khi gateway của bạn chỉ hỗ trợ một trong hai. Model dòng mới (gpt-5, o3, o4) chỉ chạy trên Responses API.</string>
+			<key>key</key>
+			<string>openaiApi</string>
+			<key>label</key>
+			<string>Giao thức API</string>
+			<key>validTitles</key>
+			<array>
+				<string>Tự dò (khuyến nghị)</string>
+				<string>Responses API (/v1/responses)</string>
+				<string>Chat completions (/v1/chat/completions)</string>
+			</array>
+			<key>validValues</key>
+			<array>
+				<string>auto</string>
+				<string>responses</string>
+				<string>chat</string>
+			</array>
+		</dict>
+		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>

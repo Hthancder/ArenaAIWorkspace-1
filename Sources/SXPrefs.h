@@ -8,6 +8,13 @@ typedef NS_ENUM(NSInteger, SXProvider) {
 	SXProviderGemini,
 };
 
+/// Giao thức của nhánh "OpenAI tương thích".
+typedef NS_ENUM(NSInteger, SXOpenAIApi) {
+	SXOpenAIApiAuto = 0,     // tự dò: thử /responses trước, 404/405 thì dùng chat completions
+	SXOpenAIApiResponses,    // luôn dùng /v1/responses (OpenAI Responses API)
+	SXOpenAIApiChat,         // luôn dùng /v1/chat/completions
+};
+
 typedef NS_ENUM(NSInteger, SXReplyMode) {
 	SXReplyModeSmart = 0, // AI trả lời câu hỏi tri thức, tác vụ hệ thống để Siri gốc
 	SXReplyModeFull,      // AI thay toàn bộ câu trả lời
@@ -17,6 +24,11 @@ FOUNDATION_EXPORT NSString *SXDefaultSystemPrompt(void);
 
 /// Các key UI được phép ghi trực tiếp (dùng cho nút "Khôi phục mặc định" và trang cấu hình).
 FOUNDATION_EXPORT NSArray<NSString *> *SXPreferenceKeys(void);
+
+/// Nhãn của giao thức OpenAI ("Responses API" / "Chat completions").
+FOUNDATION_EXPORT NSString *SXOpenAIApiDisplayName(SXOpenAIApi api);
+/// "responses" | "chat" | "auto" — giá trị lưu trong prefs.
+FOUNDATION_EXPORT NSString *SXOpenAIApiStorageKey(SXOpenAIApi api);
 
 /// Tên hiển thị của nhà cung cấp — "OpenAI" / "Gemini".
 FOUNDATION_EXPORT NSString *SXProviderDisplayName(SXProvider provider);
@@ -54,6 +66,7 @@ FOUNDATION_EXPORT NSArray<NSDictionary *> *SXModelPresets(SXProvider provider);
 @property (nonatomic, readonly, copy) NSString *openaiKey;
 @property (nonatomic, readonly, copy) NSString *openaiBase;
 @property (nonatomic, readonly, copy) NSString *openaiModel;
+@property (nonatomic, readonly) SXOpenAIApi openaiApi;
 @property (nonatomic, readonly, copy) NSString *geminiKey;
 @property (nonatomic, readonly, copy) NSString *geminiModel;
 @end
@@ -94,6 +107,8 @@ FOUNDATION_EXPORT NSArray<NSDictionary *> *SXModelPresets(SXProvider provider);
 @property (nonatomic, readonly, copy) NSString *openaiKey;
 @property (nonatomic, readonly, copy) NSString *openaiBase;
 @property (nonatomic, readonly, copy) NSString *openaiModel;
+/// Giao thức nhánh OpenAI: tự dò (mặc định) / Responses / chat completions.
+@property (nonatomic, readonly) SXOpenAIApi openaiApi;
 @property (nonatomic, readonly, copy) NSString *geminiKey;
 @property (nonatomic, readonly, copy) NSString *geminiModel;
 @property (nonatomic, readonly) double temperature;      // 0–2, làm tròn 0.1

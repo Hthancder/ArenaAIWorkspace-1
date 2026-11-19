@@ -425,8 +425,10 @@ typedef NS_ENUM(NSInteger, SXChatRole) {
 
 /// Tách riêng để dễ đọc: cập nhật bong bóng đang gõ dần (streaming) tại chỗ.
 - (void)sx_appendDelta:(NSString *)delta firstTokenMs:(NSUInteger)firstTokenMs {
-	(void)delta; (void)firstTokenMs;
+	(void)firstTokenMs;
+	if (![delta isKindOfClass:[NSString class]] || !delta.length) return;
 	SXChatMessage *reply = self.streamingReply;
+	BOOL isNew = NO;
 	if (!reply) {
 		// Thay dòng “đang trả lời…” bằng bong bóng thật ngay từ token đầu.
 		SXChatMessage *typing = self.messages.lastObject;
@@ -437,11 +439,43 @@ typedef NS_ENUM(NSInteger, SXChatRole) {
 		reply.date = [NSDate date];
 		[self.messages addObject:reply];
 		self.streamingReply = reply;
+		isNew = YES;
 	}
 	if (![reply.text isKindOfClass:[NSString class]]) reply.text = @"";
-	(void)reply;
-	// Nội dung đầy đủ đến từ completion; trong lúc stream chỉ cần báo “đang viết”
-	// bằng dòng công cụ hoặc giữ bong bóng trống có nhịp, tránh nhấp nháy chữ.
+	reply.text = [reply.text stringByAppendingString:delta];
+
+	if (isNew) {
+		[UIView performWithoutAnimation:^{ [self.table reloadData]; }];
+		[self sx_scrollToBottom];
+		return;
+	}
+	// Có bong bóng rồi: chỉ sửa nhãn của đúng ô cuối, không reload bảng (reload mỗi
+	// token làm bảng nhấp nháy và ăn CPU vô ích).
+	[self sx_refreshStreamingBubble];
+}
+
+/// Cập nhật nhãn bong bóng đang stream tại chỗ.
+- (void)sx_refreshStreamingBubble {
+	if (!self.streamingReply) return;
+	NSUInteger row = [self.messages indexOfObjectIdenticalTo:self.streamingReply];
+	if (row == NSNotFound) return;
+	NSIndexPath *indexPath = [NSIndexPath indexPathForRow:(NSInteger)row inSection:0];
+	UITableViewCell *cell = nil;
+	@try {
+		cell = [self.table cellForRowAtIndexPath:indexPath];
+	} @catch (NSException *exception) {
+		(void)exception;
+		return;
+	}
+	if (!cell || ![cell respondsToSelector:@selector(configureWithMessage:)]) {
+		[UIView performWithoutAnimation:^{ [self.table reloadData]; }];
+		return;
+	}
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+	[cell performSelector:@selector(configureWithMessage:) withObject:self.streamingReply];
+#pragma clang diagnostic pop
+	[self sx_scrollToBottom];
 }
 
 - (void)sx_finishWithAnswer:(NSString *)answer
@@ -452,6 +486,7 @@ typedef NS_ENUM(NSInteger, SXChatRole) {
 			   firstTokenMs:(NSUInteger)firstTokenMs
 					 deltas:(NSUInteger)deltas {
 	[self.messages removeObject:typing];
+	NSString *streamed = self.streamingReply.text;
 	if (self.streamingReply) [self.messages removeObject:self.streamingReply];
 	self.streamingReply = nil;
 	self.busy = NO;
@@ -463,6 +498,7 @@ typedef NS_ENUM(NSInteger, SXChatRole) {
 		reply.text = error.localizedDescription;
 	} else {
 		NSString *raw = [answer stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+		if (!raw.length && streamed.length) raw = streamed;   // stream đã hiện chữ
 		if (!raw.length) {
 			reply.role = SXChatRoleError;
 			reply.text = @"Model không trả về nội dung.";

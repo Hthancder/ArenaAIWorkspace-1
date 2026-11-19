@@ -133,6 +133,8 @@ static NSString *testBase = @"https://mock.test/v1";
 - (NSString *)openaiKey { return @"sk-test"; }
 - (NSString *)openaiBase { return testBase; }
 - (NSString *)openaiModel { return @"mock-model"; }
+/// Test luôn đi nhánh chat completions: máy chủ giả không có /responses.
+- (SXOpenAIApi)openaiApi { return SXOpenAIApiChat; }
 - (NSString *)geminiKey { return @"gemini-test"; }
 - (NSString *)geminiModel { return @"gemini-2.0-flash"; }
 - (double)temperature { return 0.2; }

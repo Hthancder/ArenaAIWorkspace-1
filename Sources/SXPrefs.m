@@ -182,6 +182,9 @@ static double SXClamp(double v, double lo, double hi) {
 	_openaiKey = [self stringFor:@"openaiKey" default:@""] ?: @"";
 	_openaiBase = [self stringFor:@"openaiBase" default:@"https://api.openai.com/v1"] ?: @"https://api.openai.com/v1";
 	_openaiModel = [self stringFor:@"openaiModel" default:@"gpt-4o-mini"] ?: @"gpt-4o-mini";
+	NSString *api = [self stringFor:@"openaiApi" default:@"auto"];
+	_openaiApi = [api isEqualToString:@"responses"] ? SXOpenAIApiResponses
+		: [api isEqualToString:@"chat"] ? SXOpenAIApiChat : SXOpenAIApiAuto;
 	_geminiKey = [self stringFor:@"geminiKey" default:@""] ?: @"";
 	_geminiModel = [self stringFor:@"geminiModel" default:@"gemini-2.0-flash"] ?: @"gemini-2.0-flash";
 

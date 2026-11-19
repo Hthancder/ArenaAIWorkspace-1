@@ -285,8 +285,13 @@
 			if (self.provider == SXProviderGemini) return @"generativelanguage.googleapis.com";
 			NSString *raw = [SXPrefs shared].openaiBase;
 			NSString *normalized = [SXPrefs normalizedBaseURL:raw];
-			if (normalized.length) return normalized;
-			return raw.length ? @"⚠️ địa chỉ không hợp lệ" : @"Mặc định";
+			NSString *base = normalized.length ? normalized
+				: (raw.length ? @"⚠️ địa chỉ không hợp lệ" : @"Mặc định");
+			// Giao thức nằm cùng dòng cho gọn: endpoint + đường dẫn sẽ gọi.
+			SXOpenAIApi api = [SXPrefs shared].openaiApi;
+			NSString *path = api == SXOpenAIApiResponses ? @"/responses"
+				: api == SXOpenAIApiChat ? @"/chat/completions" : @" (tự dò)";
+			return [NSString stringWithFormat:@"%@%@", base, path];
 		}
 		if ([key isEqualToString:@"testStatus"]) return [self testStatusText];
 		if ([key isEqualToString:@"headersDisplay"]) {
@@ -314,7 +319,10 @@
 	NSString *rawBase = prefs.openaiBase;
 	NSString *endpoint = self.provider == SXProviderGemini
 		? @"generativelanguage.googleapis.com"
-		: ([SXPrefs normalizedBaseURL:rawBase] ?: (rawBase.length ? @"⚠️ địa chỉ không hợp lệ" : @"Mặc định"));
+		: [NSString stringWithFormat:@"%@%@",
+		   [SXPrefs normalizedBaseURL:rawBase] ?: (rawBase.length ? @"⚠️ địa chỉ không hợp lệ" : @"Mặc định"),
+		   prefs.openaiApi == SXOpenAIApiResponses ? @"/responses"
+		   : prefs.openaiApi == SXOpenAIApiChat ? @"/chat/completions" : @" (tự dò)"];
 	NSDictionary<NSString *, NSString *> *updates = @{
 		@"keyDisplay": keyText.length ? [SXPrefs maskedKey:keyText] : @"Chưa đặt",
 		@"modelDisplay": [self currentModel],

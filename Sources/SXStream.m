@@ -18,6 +18,11 @@
 @property (nonatomic) BOOL sawToolCalls;
 @property (nonatomic) NSInteger firstTokenMs;
 @property (nonatomic, copy, nullable) NSString *errorText;
+/// Responses API: id lượt + tóm tắt suy luận (nếu có) để lưu lại/ghi log.
+@property (nonatomic, copy, nullable) NSString *responseId;
+@property (nonatomic, strong) NSMutableString *reasoning;
+/// Responses API: các mục function_call đang được stream (theo item_id).
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSMutableDictionary *> *responseCalls;
 @end
 
 @implementation SXSSEParser {
@@ -34,6 +39,8 @@
 		_content = [NSMutableString string];
 		_geminiCalls = [NSMutableArray array];
 		_partialCalls = [NSMutableDictionary dictionary];
+		_reasoning = [NSMutableString string];
+		_responseCalls = [NSMutableDictionary dictionary];
 		_firstTokenMs = -1;
 		_lineBuffer = [NSMutableData data];
 		_start = CFAbsoluteTimeGetCurrent();
@@ -86,10 +93,16 @@
 											  options:0 error:NULL];
 	if (![json isKindOfClass:[NSDictionary class]]) return;
 
-	if (self.format == SXStreamFormatOpenAI) {
-		[self consumeOpenAIChunk:(NSDictionary *)json];
-	} else {
-		[self consumeGeminiChunk:(NSDictionary *)json];
+	switch (self.format) {
+		case SXStreamFormatOpenAI:
+			[self consumeOpenAIChunk:(NSDictionary *)json];
+			break;
+		case SXStreamFormatGemini:
+			[self consumeGeminiChunk:(NSDictionary *)json];
+			break;
+		case SXStreamFormatResponses:
+			[self consumeResponsesEvent:(NSDictionary *)json];
+			break;
 	}
 }
 
@@ -169,6 +182,139 @@
 	}
 }
 
+/// Responses API phát sự kiện theo `type`, không phải theo `choices`.
+/// Văn bản: response.output_text.delta. Công cụ: response.output_item.added
+/// (tạo function_call rỗng) → response.function_call_arguments.delta (gom tham số)
+/// → response.output_item.done (đủ). Lỗi: response.failed / error.
+- (void)consumeResponsesEvent:(NSDictionary *)json {
+	NSString *type = [json[@"type"] isKindOfClass:[NSString class]] ? json[@"type"] : nil;
+	id error = json[@"error"];
+	if (error && !self.errorText.length) {
+		id message = [error isKindOfClass:[NSDictionary class]] ? ((NSDictionary *)error)[@"message"] : error;
+		if ([message isKindOfClass:[NSString class]]) self.errorText = message;
+	}
+	id responseObject = [json[@"response"] isKindOfClass:[NSDictionary class]] ? json[@"response"] : nil;
+
+	if ([type isEqualToString:@"response.created"] || [type isEqualToString:@"response.in_progress"]) {
+		NSString *identifier = [responseObject[@"id"] isKindOfClass:[NSString class]] ? responseObject[@"id"] : nil;
+		if (identifier.length) self.responseId = identifier;
+		return;
+	}
+	if ([type isEqualToString:@"response.output_text.delta"]) {
+		id piece = json[@"delta"];
+		if ([piece isKindOfClass:[NSString class]]) [self appendPiece:piece];
+		return;
+	}
+	if ([type isEqualToString:@"response.reasoning_summary_text.delta"] ||
+		[type isEqualToString:@"response.reasoning_text.delta"]) {
+		id piece = json[@"delta"];
+		if ([piece isKindOfClass:[NSString class]]) [self.reasoning appendString:piece];
+		return;
+	}
+	if ([type isEqualToString:@"response.output_item.added"]) {
+		id item = json[@"item"];
+		if ([item isKindOfClass:[NSDictionary class]] && [item[@"type"] isEqualToString:@"function_call"]) {
+			NSString *identifier = [item[@"id"] isKindOfClass:[NSString class]] ? item[@"id"] : nil;
+			if (!identifier.length) identifier = [item[@"call_id"] isKindOfClass:[NSString class]] ? item[@"call_id"] : @"";
+			NSString *name = [item[@"name"] isKindOfClass:[NSString class]] ? item[@"name"] : @"";
+			self.sawToolCalls = YES;
+			self.responseCalls[identifier ?: @""] = [@{@"id": identifier ?: @"",
+													 @"call_id": [item[@"call_id"] isKindOfClass:[NSString class]] ? item[@"call_id"] : @"",
+													 @"name": name, @"arguments": @""} mutableCopy];
+			id arguments = item[@"arguments"];
+			if ([arguments isKindOfClass:[NSString class]] && [arguments length]) {
+				self.responseCalls[identifier ?: @""][@"arguments"] = arguments;
+			}
+		}
+		return;
+	}
+	if ([type isEqualToString:@"response.function_call_arguments.delta"]) {
+		id itemId = json[@"item_id"];
+		id piece = json[@"delta"];
+		if (![itemId isKindOfClass:[NSString class]] || ![piece isKindOfClass:[NSString class]]) return;
+		NSMutableDictionary *entry = self.responseCalls[itemId];
+		if (!entry) {
+			entry = [@{@"id": itemId, @"call_id": @"", @"name": @"", @"arguments": @""} mutableCopy];
+			self.responseCalls[itemId] = entry;
+		}
+		self.sawToolCalls = YES;
+		entry[@"arguments"] = [entry[@"arguments"] stringByAppendingString:piece];
+		return;
+	}
+	if ([type isEqualToString:@"response.output_item.done"]) {
+		id item = json[@"item"];
+		if (![item isKindOfClass:[NSDictionary class]] || ![item[@"type"] isEqualToString:@"function_call"]) return;
+		NSString *identifier = [item[@"id"] isKindOfClass:[NSString class]] ? item[@"id"] : @"";
+		NSMutableDictionary *entry = self.responseCalls[identifier];
+		if (!entry) {
+			entry = [@{@"id": identifier, @"call_id": @"", @"name": @"", @"arguments": @""} mutableCopy];
+			self.responseCalls[identifier] = entry;
+		}
+		if ([item[@"name"] isKindOfClass:[NSString class]]) entry[@"name"] = item[@"name"];
+		if ([item[@"call_id"] isKindOfClass:[NSString class]]) entry[@"call_id"] = item[@"call_id"];
+		if ([item[@"arguments"] isKindOfClass:[NSString class]]) entry[@"arguments"] = item[@"arguments"];
+		self.sawToolCalls = YES;
+		return;
+	}
+	if ([type isEqualToString:@"response.completed"] || [type isEqualToString:@"response.done"]) {
+		NSString *identifier = [responseObject[@"id"] isKindOfClass:[NSString class]] ? responseObject[@"id"] : nil;
+		if (identifier.length) self.responseId = identifier;
+		// Một số máy chủ chỉ gửi nội dung trong sự kiện tổng kết (không stream
+		// từng mảnh). Lấy thêm nếu chưa có gì, để không mất câu trả lời.
+		if (self.content.length == 0) {
+			NSArray *output = [responseObject[@"output"] isKindOfClass:[NSArray class]] ? responseObject[@"output"] : nil;
+			for (id item in output) {
+				if (![item isKindOfClass:[NSDictionary class]]) continue;
+				if ([item[@"type"] isEqualToString:@"function_call"]) {
+					NSString *identifier2 = [item[@"id"] isKindOfClass:[NSString class]] ? item[@"id"] : @"";
+					NSMutableDictionary *entry = self.responseCalls[identifier2];
+					if (!entry) {
+						entry = [@{@"id": identifier2, @"call_id": @"", @"name": @"", @"arguments": @""} mutableCopy];
+						self.responseCalls[identifier2] = entry;
+					}
+					if ([item[@"name"] isKindOfClass:[NSString class]]) entry[@"name"] = item[@"name"];
+					if ([item[@"call_id"] isKindOfClass:[NSString class]]) entry[@"call_id"] = item[@"call_id"];
+					if ([item[@"arguments"] isKindOfClass:[NSString class]]) entry[@"arguments"] = item[@"arguments"];
+					self.sawToolCalls = YES;
+					continue;
+				}
+				NSArray *parts = [item[@"content"] isKindOfClass:[NSArray class]] ? item[@"content"] : nil;
+				for (id part in parts) {
+					if (![part isKindOfClass:[NSDictionary class]]) continue;
+					id text = part[@"text"];
+					if ([text isKindOfClass:[NSString class]]) [self appendPiece:text];
+				}
+			}
+		}
+		return;
+	}
+	if ([type isEqualToString:@"response.failed"] || [type isEqualToString:@"error"]) {
+		if (self.errorText.length) return;
+		id failedError = responseObject[@"error"] ?: json[@"error"] ?: json[@"message"];
+		id message = [failedError isKindOfClass:[NSDictionary class]] ? failedError[@"message"] : failedError;
+		if ([message isKindOfClass:[NSString class]]) self.errorText = message;
+		return;
+	}
+}
+
+/// Responses API gom function_call theo đúng thứ tự model phát ra.
+- (NSArray<NSDictionary *> *)orderedResponseCalls {
+	NSMutableArray<NSDictionary *> *calls = [NSMutableArray array];
+	for (NSString *identifier in self.responseCalls) {
+		NSDictionary *entry = self.responseCalls[identifier];
+		NSString *name = [entry[@"name"] isKindOfClass:[NSString class]] ? entry[@"name"] : nil;
+		if (!name.length) continue;
+		NSString *callId = [entry[@"call_id"] isKindOfClass:[NSString class]] && [entry[@"call_id"] length]
+			? entry[@"call_id"] : ([entry[@"id"] isKindOfClass:[NSString class]] && [entry[@"id"] length]
+			? entry[@"id"] : name);
+		NSString *arguments = [entry[@"arguments"] isKindOfClass:[NSString class]] ? entry[@"arguments"] : @"";
+		[calls addObject:@{@"call_id": callId,
+						   @"name": name,
+						   @"arguments": arguments.length ? arguments : @"{}"}];
+	}
+	return calls;
+}
+
 - (NSArray<NSDictionary *> *)orderedToolCalls {
 	NSMutableArray<NSDictionary *> *calls = [NSMutableArray array];
 	NSArray<NSNumber *> *indexes = [[self.partialCalls allKeys] sortedArrayUsingSelector:@selector(compare:)];
@@ -228,7 +374,21 @@
 	[parser finish];
 
 	if (result.error && result.status == 0) {
-		if (outErr) *outErr = result.error;
+		// Mạng rớt / idle timeout giữa lúc stream: mang theo phần đã nhận để tầng
+		// gọi quyết định dùng nó thay vì bỏ cả câu trả lời.
+		if (outErr) {
+			NSMutableDictionary *info = [result.error.userInfo mutableCopy]
+				?: [NSMutableDictionary dictionary];
+			if (parser.content.length) {
+				info[@"sx.partial"] = @{@"content": [parser.content copy] ?: @"",
+										@"sawToolCalls": @(parser.sawToolCalls),
+										@"status": @(0),
+										@"firstTokenMs": @(parser.firstTokenMs)};
+			}
+			*outErr = [NSError errorWithDomain:result.error.domain
+										  code:result.error.code
+									  userInfo:info];
+		}
 		return nil;
 	}
 	if (result.status < 200 || result.status >= 300) {
@@ -248,14 +408,19 @@
 		return response;
 	}
 
-	NSDictionary *response = @{
+	NSMutableDictionary *response = [@{
 		@"content": [parser.content copy] ?: @"",
 		@"sawToolCalls": @(parser.sawToolCalls),
 		@"status": @(result.status),
 		@"firstTokenMs": @(parser.firstTokenMs),
 		@"toolCalls": [parser orderedToolCalls],
 		@"functionCalls": parser.geminiCalls ?: @[],
-	};
+	} mutableCopy];
+	if (format == SXStreamFormatResponses) {
+		response[@"responseCalls"] = [parser orderedResponseCalls];
+		if (parser.responseId.length) response[@"responseId"] = parser.responseId;
+		if (parser.reasoning.length) response[@"reasoning"] = [parser.reasoning copy];
+	}
 	return response;
 }
 

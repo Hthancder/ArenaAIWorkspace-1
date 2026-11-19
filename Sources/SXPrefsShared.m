@@ -29,7 +29,7 @@ NSArray<NSString *> *SXPreferenceKeys(void) {
 	static dispatch_once_t once;
 	dispatch_once(&once, ^{
 		keys = @[@"enabled", @"mode", @"triggerMode", @"provider",
-				 @"openaiKey", @"openaiBase", @"openaiModel",
+				 @"openaiKey", @"openaiBase", @"openaiModel", @"openaiApi",
 				 @"geminiKey", @"geminiModel",
 				 @"temperature", @"contextTurns", @"timeout", @"replyDeadline", @"timeoutAction",
 				 @"streaming", @"markdown", @"hideWebCards", @"showOriginal", @"speakErrors",
@@ -39,6 +39,22 @@ NSArray<NSString *> *SXPreferenceKeys(void) {
 				 @"verbose"];
 	});
 	return keys;
+}
+
+NSString *SXOpenAIApiDisplayName(SXOpenAIApi api) {
+	switch (api) {
+		case SXOpenAIApiResponses: return @"Responses API";
+		case SXOpenAIApiChat: return @"Chat completions";
+		default: return @"Tự dò";
+	}
+}
+
+NSString *SXOpenAIApiStorageKey(SXOpenAIApi api) {
+	switch (api) {
+		case SXOpenAIApiResponses: return @"responses";
+		case SXOpenAIApiChat: return @"chat";
+		default: return @"auto";
+	}
 }
 
 NSArray<NSDictionary *> *SXModelPresets(SXProvider provider) {
