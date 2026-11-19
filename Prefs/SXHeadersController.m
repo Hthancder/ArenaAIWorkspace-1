@@ -456,6 +456,9 @@
 @property (nonatomic) BOOL providerResolved;
 @property (nonatomic, strong) UITableView *table;
 @property (nonatomic, strong) NSMutableArray<NSDictionary *> *headers;   // strong: `copy` sẽ biến thành mảng bất biến
+/// Nhãn chân bảng được cập nhật tại chỗ: reload section sau mỗi lần gạt công
+/// tắc hay xoá hàng là đường dẫn tới exception “invalid update”.
+@property (nonatomic, strong) UILabel *footerLabel;
 @end
 
 @implementation SXHeadersController
@@ -522,6 +525,7 @@
 	]];
 
 	[self sx_reloadFromPrefs];
+	[self sx_refreshSummary];
 	SXLogDbg(@"pref", @"mở header tuỳ chỉnh %@ (%lu mục)",
 			 SXProviderDisplayName(self.provider), (unsigned long)self.headers.count);
 }
@@ -571,12 +575,64 @@
 	return SXProviderDisplayName(self.provider);
 }
 
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
+- (NSString *)sx_footerText {
+	NSString *text = [NSString stringWithFormat:
+		@"%@. Header được gửi kèm mọi request tới %@ — kể cả Kiểm tra kết nối và Trò chuyện thử. "
+		@"Giá trị chỉ lưu trên máy, không ghi vào log; tắt công tắc để ngừng gửi mà không phải xoá.",
+		SXHeadersSummary(self.headers), SXProviderDisplayName(self.provider)];
+	if (self.provider == SXProviderOpenAI) {
+		NSString *base = [SXPrefs shared].openaiBase;
+		if ([base isKindOfClass:[NSString class]] && [base.lowercaseString hasPrefix:@"http://"]) {
+			text = [text stringByAppendingString:@"\n\n⚠️ Endpoint đang dùng http:// nên giá trị header "
+					@"(kể cả token) đi trên mạng không mã hoá. Hãy đổi sang https:// nếu máy chủ hỗ trợ."];
+		}
+	}
+	return text;
+}
+
+- (UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section {
 	(void)section;
-	return [NSString stringWithFormat:
-			@"%@. Header được gửi kèm mọi request tới %@ — kể cả Kiểm tra kết nối và Trò chuyện thử. "
-			@"Giá trị chỉ lưu trên máy, không ghi vào log; tắt công tắc để ngừng gửi mà không phải xoá.",
-			SXHeadersSummary(self.headers), SXProviderDisplayName(self.provider)];
+	if (!self.footerLabel) {
+		UILabel *label = [[UILabel alloc] init];
+		label.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
+		label.adjustsFontForContentSizeCategory = YES;
+		label.textColor = UIColor.secondaryLabelColor;
+		label.numberOfLines = 0;
+		self.footerLabel = label;
+	}
+	self.footerLabel.text = [self sx_footerText];
+	self.footerLabel.frame = CGRectMake(0, 0, MAX(tableView.bounds.size.width - 40, 1),
+										[self tableView:tableView heightForFooterInSection:section]);
+	return self.footerLabel;
+}
+
+- (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
+	(void)section;
+	if (!self.headers.count) return UITableViewAutomaticDimension;
+	NSString *text = [self sx_footerText];
+	CGRect rect = [text boundingRectWithSize:CGSizeMake(MAX(tableView.bounds.size.width - 56, 1), CGFLOAT_MAX)
+									 options:NSStringDrawingUsesLineFragmentOrigin
+								  attributes:@{NSFontAttributeName: [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote]}
+									 context:nil];
+	return MAX(rect.size.height, 20) + 30;
+}
+
+#pragma mark - Cập nhật tại chỗ
+
+/// Đồng bộ lại nhãn chân bảng + dòng trạng thái mà không reload bảng.
+- (void)sx_refreshSummary {
+	self.footerLabel.text = [self sx_footerText];
+	[self.table beginUpdates];
+	[self.table endUpdates];
+	NSUInteger enabled = 0;
+	for (NSDictionary *header in self.headers) {
+		if (header[@"enabled"] == nil || [header[@"enabled"] boolValue]) enabled++;
+	}
+	self.navigationItem.prompt = self.headers.count
+		? [NSString stringWithFormat:@"%lu/%lu header đang gửi · %@",
+		   (unsigned long)enabled, (unsigned long)self.headers.count,
+		   SXProviderDisplayName(self.provider)]
+		: SXProviderDisplayName(self.provider);
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -613,15 +669,15 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 	NSString *name = self.headers[indexPath.row][@"name"];
 	[self.headers removeObjectAtIndex:indexPath.row];
 	[self sx_persist];
-	[self.table deleteRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationAutomatic];
+	@try {
+		[self.table deleteRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationAutomatic];
+	} @catch (NSException *exception) {
+		SXLogErr(@"pref", @"deleteRows header: %@", exception.reason);
+		[self.table reloadData];
+	}
 	[SXUI tapFeedback];
 	SXLogInf(@"pref", @"xoá header %@ của %@", name, SXProviderDisplayName(self.provider));
-	@try {
-		[self.table reloadSections:[NSIndexSet indexSetWithIndex:0]
-				  withRowAnimation:UITableViewRowAnimationNone];
-	} @catch (NSException *exception) {
-		SXLogErr(@"pref", @"reload footer sau xoá: %@", exception.reason);
-	}
+	[self sx_refreshSummary];
 }
 
 - (BOOL)tableView:(UITableView *)tableView canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -635,13 +691,16 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 	[self.headers removeObjectAtIndex:from.row];
 	[self.headers insertObject:header atIndex:to.row];
 	[self sx_persist];
+	[self sx_refreshSummary];
 }
 
 #pragma mark - Hành động
 
 - (void)sx_toggleEditing {
-	[self.table setEditing:!self.table.isEditing animated:YES];
-	self.navigationItem.leftBarButtonItem.title = self.table.isEditing ? @"Xong" : @"Sửa";
+	BOOL editing = !self.table.isEditing;
+	[self.table setEditing:editing animated:YES];
+	self.navigationItem.leftBarButtonItem.title = editing ? @"Xong" : @"Sửa";
+	self.navigationItem.rightBarButtonItem.enabled = !editing;
 }
 
 - (void)sx_toggleChanged:(UISwitch *)sender {
@@ -653,12 +712,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 	[self sx_persist];
 	[SXUI tapFeedback];
 	SXLogDbg(@"pref", @"header %@ → %@", header[@"name"], sender.isOn ? @"bật" : @"tắt");
-	@try {
-		[self.table reloadSections:[NSIndexSet indexSetWithIndex:0]
-				  withRowAnimation:UITableViewRowAnimationNone];
-	} @catch (NSException *exception) {
-		SXLogErr(@"pref", @"reload footer sau bật/tắt: %@", exception.reason);
-	}
+	[self sx_refreshSummary];
 }
 
 - (void)sx_addHeader {
@@ -693,6 +747,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 		} @catch (NSException *exception) {
 			SXLogErr(@"pref", @"reload sau lưu header: %@", exception.reason);
 		}
+		[strongSelf sx_refreshSummary];
 		SXLogInf(@"pref", @"lưu header %@ cho %@ (%lu mục)",
 				 header[@"name"], SXProviderDisplayName(strongSelf.provider),
 				 (unsigned long)strongSelf.headers.count);
