@@ -81,12 +81,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq libsdl2-dev libbz2-dev pkg-config xvfb libgl1-mesa-dri
-          mkdir -p work/runner
-          curl -fsSL --retry 2 'https://codeload.github.com/andronep/gmrunner/tar.gz/e7121381d38b03a24242812fc22b0a7386d545c6' | tar xz -C work/runner --strip-components=1
-          cmake -S work/runner -B work/runner-build -DCMAKE_BUILD_TYPE=Release
-          cmake --build work/runner-build --target gmdump gmrunner --parallel 4
+          # A matching cache already contains the executables. Avoid rebuilding
+          # and avoid an unbounded apt update on every probe.
+          if [ '${{ steps.runner-cache.outputs.cache-hit }}' = 'true' ] && \
+             test -x work/runner-build/gmrunner && test -x work/runner-build/gmdump; then
+            if ldd work/runner-build/gmrunner | grep -q 'not found'; then
+              timeout 120 sudo apt-get install -y -qq libsdl2-2.0-0 libbz2-1.0
+            fi
+            ldd work/runner-build/gmrunner | grep 'not found' && exit 1 || true
+          else
+            timeout 120 sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 update -qq
+            timeout 120 sudo apt-get install -y -qq libsdl2-dev libbz2-dev pkg-config
+            mkdir -p work/runner
+            curl -fsSL --retry 2 'https://codeload.github.com/andronep/gmrunner/tar.gz/e7121381d38b03a24242812fc22b0a7386d545c6' | tar xz -C work/runner --strip-components=1
+            cmake -S work/runner -B work/runner-build -DCMAKE_BUILD_TYPE=Release
+            cmake --build work/runner-build --target gmdump gmrunner --parallel 4
+          fi
       - name: Cache runner build
         if: steps.runner-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
@@ -164,8 +174,8 @@ jobs:
           for version in old new; do
             mkdir -p "work/q-save-$version"
             if [ "$version" = old ]; then game=work/old-probe-game; else game=work/probe-game; fi
-            GMR_TRACE_CALL=draw_text_transformed timeout 90 xvfb-run -a -s '-screen 0 1280x720x24' \
-              work/runner-build/gmrunner "$game" --hidden --fast --mute --seed 1 --trace \
+            GMR_TRACE_CALL=draw_text_transformed timeout 90 \
+              work/runner-build/gmrunner "$game" --headless --fast --mute --seed 1 --trace \
               --frames 215 --goto rom_play@160 --press 200:Q --save-dir "work/q-save-$version" \
               > "work/q-$version.log" 2>&1
             grep -F '[room] -> rom_play' "work/q-$version.log" >/dev/null || { echo "::error::$version did not enter gameplay"; exit 1; }

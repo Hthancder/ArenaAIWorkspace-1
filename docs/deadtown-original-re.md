@@ -84,11 +84,49 @@ The user screenshot shows an on-screen virtual gamepad and text starting with
 `str...`; it is not proof of the original game's intended UI. The gamepad is
 provided by the third-party runner, not evidence of the original APK's layout.
 The landscape test's new-install default hides that overlay, but an update
-retains existing config. `lang_get` in GMX returns the English key for language
-0 and uses maps for other languages; the native function has a broadly similar
-switch, but the cause of the screenshot's `str...` text has **not** been
-established. Neither localization failure nor debug text should be claimed as
-the cause without tracing the exact string through the running test build.
+retains existing config.
+
+The GMX's `sys_UI` KeyPress event 81 (Q) contains exactly
+`ui_message_type("str:"+string(random(100000)))`. It puts a random debug
+message into the same on-screen queue used by item pickups, which the screenshot
+closely resembles. The exported native event list has no `sys_UI:KeyPress:81`.
+The experimental build linked this source-only event, and the runner can map
+virtual buttons to detected keyboard keys. That makes the event a strong
+explanation; without input tracing on the pictured iPhone, the exact input path
+and screenshot version remain unconfirmed. Names such as `Shotgun ammo X9` are
+normal messages produced by the old source's `item_get`, not this debug string.
+The offline preparation now removes only the precisely checked Q event from its
+copy; it leaves `ui_message_type`, item messages and other events intact. This
+has not yet been shipped in an IPA or confirmed on the user's device.
+
+### Candidate original translation literals
+
+`tools/deadtown_native_lang.py` scans the pinned library for a specific ARM/GOT
+pattern in `sys_global` Create. It resolves C string symbols used by four
+successive `YYSetString` calls before a `lang_add` call, then records addresses,
+symbols and candidate strings. With this particular APK it finds 465 candidate
+calls, with zero unresolved patterns: 362 distinct tuples exactly match the 362
+literal tuples parsed from the old GMX, and 103 distinct tuples are not in that
+source. Examples of candidate English text not present there include `Shortcut`,
+`Delete the save file`, and `Enter the sewer?#Using the small key`.
+
+This is strong cross-checking but **not a decompilation**: the scanner is a
+linear disassembly, does not recover control flow or verify the argument array,
+and assumes that construction order equals argument order. Literal pools can
+look like instructions. Do not automatically inject these candidates into a game
+or treat all as proven dynamically executed entries. Validate argument order and
+behavior before applying them. Example run (dependencies are optional and
+installed outside the repository's tracked files):
+
+```sh
+python -m pip install --target .cache/re-pylibs capstone==5.0.6 pyelftools==0.32
+PYTHONPATH=.cache/re-pylibs python tools/deadtown_native_lang.py /path/to/original.apk \
+  --compare-gmx /path/to/deadtown/deadtown.gmx --output candidates.json
+```
+
+`lang_get` in GMX returns the English key for language 0 and uses maps for other
+languages; the native function has a broadly similar switch. The `str:` event
+is a much more direct explanation for that text than missing translations.
 
 The previous experimental probe linked only 504 GMX events and cleared 68
 unresolved native code IDs to serialize its VM data. It rendered screenshots
