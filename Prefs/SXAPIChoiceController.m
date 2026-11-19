@@ -136,9 +136,14 @@
 		if (items.count <= 1) {
 			SXLogErr(@"pref", @"bộ chọn %@ không có lựa chọn nào (validValues=? )",
 					 self.prefsKey ?: @"(trống)");
-			[items.firstObject setProperty:[NSString stringWithFormat:
+			// `items.firstObject` là `id`; gán qua biến PSSpecifier* để trình biên
+			// dịch chọn đúng `-setProperty:forKey:` của PSSpecifier (nếu không sẽ
+			// nhập nhằng với `NSStream` và báo lỗi kiểu).
+			PSSpecifier *group = items.firstObject;
+			NSString *footerText = [NSString stringWithFormat:
 					@"Chưa đọc được danh sách lựa chọn cho “%@”. Mở lại từ trang chính.",
-					self.prefsKey.length ? self.prefsKey : @"(không rõ)"] forKey:@"footerText"];
+					self.prefsKey.length ? self.prefsKey : @"(không rõ)"];
+			[group setProperty:footerText forKey:@"footerText"];
 		}
 		_specifiers = items;
 	}

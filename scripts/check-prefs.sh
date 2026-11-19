@@ -189,6 +189,17 @@ for path in sorted(glob.glob("Prefs/*.m")):
             if bad in body.group(0):
                 fail(f"{path}: {name} vừa xử lý gõ chữ vừa gọi {bad} — bàn phím sẽ tắt sau mỗi ký tự")
 
+# ------------------------------------------- setProperty trên biểu thức `id`
+# `items.firstObject` có kiểu `id`, nên `-setProperty:forKey:` nhập nhằng với
+# `NSStream` và clang báo "multiple methods named 'setProperty:forKey:' found
+# with mismatched result" — lỗi chỉ lộ khi build thật (CI), không lộ khi lint.
+for path in checked:
+    text = read(path)
+    for match in re.finditer(r"\[\s*[A-Za-z_][A-Za-z0-9_\.]*\.(?:firstObject|lastObject)\s+setProperty:", text):
+        line = text[:match.start()].count("\n") + 1
+        fail(f"{path}:{line}: gọi setProperty: trên biểu thức `id` (firstObject/lastObject) — "
+             "gán qua biến PSSpecifier* trước, nếu không clang báo lỗi nhập nhằng")
+
 # --------------------------------------------- key màn hình đọc phải có trong code
 # Một hàng PSLinkListCell trỏ tới SXChoiceController với `key` mà lớp đó không
 # biết sẽ mở ra màn hình trống (đúng kiểu lỗi "bấm vào không có gì xảy ra").
