@@ -185,9 +185,10 @@ static double SXClamp(double v, double lo, double hi) {
 	_geminiKey = [self stringFor:@"geminiKey" default:@""] ?: @"";
 	_geminiModel = [self stringFor:@"geminiModel" default:@"gemini-2.0-flash"] ?: @"gemini-2.0-flash";
 
-	_temperature = SXClamp(round([self doubleFor:@"temperature" default:0.7] * 10.0) / 10.0, 0.0, 2.0);
-	_contextTurns = (NSInteger)SXClamp((double)[self integerFor:@"contextTurns" default:8], 2, 40);
-	_responseTimeout = SXClamp((double)[self integerFor:@"timeout" default:10], 2, 30);
+	_temperature = SXClamp(round([self doubleFor:@"temperature" default:0.7] * 100.0) / 100.0, 0.0, 2.0);
+	_contextTurns = (NSInteger)SXClamp((double)[self integerFor:@"contextTurns" default:8], 0, 40);
+	_responseTimeout = SXClamp((double)[self integerFor:@"timeout" default:10], 2, 120);
+	_replyDeadline = SXClamp((double)[self integerFor:@"replyDeadline" default:8], 2, 20);
 	_customPrompt = [self stringFor:@"customPrompt" default:@""] ?: @"";
 
 	_hideWebCards = [self boolFor:@"hideWebCards" default:YES];
@@ -199,21 +200,21 @@ static double SXClamp(double v, double lo, double hi) {
 	_markdown = [self boolFor:@"markdown" default:YES];
 	_timeoutAction = [[self stringFor:@"timeoutAction" default:@"bubble"] isEqualToString:@"keep"]
 		? @"keep" : @"bubble";
-	_maxToolRounds = (NSInteger)SXClamp((double)[self integerFor:@"maxToolRounds" default:3], 1, 4);
+	_maxToolRounds = (NSInteger)SXClamp((double)[self integerFor:@"maxToolRounds" default:3], 1, 6);
 	_disabledTools = [self loadDisabledToolsForReload];
 	_openaiHeaders = SXHeadersNormalized([self valueFor:@"openaiHeaders"]);
 	_geminiHeaders = SXHeadersNormalized([self valueFor:@"geminiHeaders"]);
 
 	SXLogSetVerbose(_verbose);
 	SXLogInf(@"pref", @"cài đặt: enabled=%d mode=%@ provider=%@ temp=%.1f turns=%ld timeout=%.0fs "
-			 @"stream=%d md=%d timeoutAction=%@ toolRounds=%ld toolsOff=%lu headers=%lu/%lu "
+			 @"stream=%d md=%d timeoutAction=%@ toolRounds=%ld toolsOff=%lu headers=%lu/%lu deadline=%.0fs "
 			 @"openAIKey=%@ geminiKey=%@ customPrompt=%@",
 			 _enabled, _mode == SXReplyModeFull ? @"full" : @"smart",
 			 _provider == SXProviderGemini ? @"gemini" : @"openai",
 			 _temperature, (long)_contextTurns, _responseTimeout,
 			 _streaming, _markdown, _timeoutAction, (long)_maxToolRounds,
-		 (unsigned long)_disabledTools.count,
-		 (unsigned long)_openaiHeaders.count, (unsigned long)_geminiHeaders.count,
+			 (unsigned long)_disabledTools.count,
+			 (unsigned long)_openaiHeaders.count, (unsigned long)_geminiHeaders.count, _replyDeadline,
 			 SXRedactKey(_openaiKey), SXRedactKey(_geminiKey),
 			 _customPrompt.length > 0 ? [NSString stringWithFormat:@"%lu ký tự", (unsigned long)_customPrompt.length] : @"(mặc định)");
 }

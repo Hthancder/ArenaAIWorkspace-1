@@ -130,7 +130,8 @@
 	if ([state[@"historyEpoch"] isEqualToString:epoch] && startedAt > [state[@"historyClearedAt"] doubleValue]) {
 		NSMutableArray *items = [state[@"history"] mutableCopy];
 		[items addObject:@{@"id": NSUUID.UUID.UUIDString, @"q": question, @"a": answer, @"date": NSDate.date}];
-		NSUInteger max = MAX(1, MIN(limit, 40));
+		// Kho giữ tối đa 40 lượt để UI lịch sử vẫn đọc được; `limit` (ngữ cảnh) có thể 0.
+		NSUInteger max = MIN(MAX(limit, (NSUInteger)1), (NSUInteger)40);
 		while (items.count > max) [items removeObjectAtIndex:0];
 		state[@"history"] = items;
 		ok = [self writeLocked:state];

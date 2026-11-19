@@ -529,8 +529,10 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 		if (stale) return;
 
 		NSArray *requestHistory = privateTurn ? historySnapshot : (stored[@"history"] ?: historySnapshot);
-		NSUInteger maxTurns = (NSUInteger)[SXPrefs shared].contextTurns;
-		if (requestHistory.count > maxTurns) {
+		// 0 = không gửi ngữ cảnh: mỗi câu hỏi độc lập, tiết kiệm token.
+		NSUInteger maxTurns = (NSUInteger)MAX(0, [SXPrefs shared].contextTurns);
+		if (maxTurns == 0) requestHistory = @[];
+		else if (requestHistory.count > maxTurns) {
 			requestHistory = [requestHistory subarrayWithRange:
 							  NSMakeRange(requestHistory.count - maxTurns, maxTurns)];
 		}
@@ -667,7 +669,9 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 		// lâu (Siri tự đóng khi quá chậm). Hook trên luồng chính dùng trần thấp
 		// hơn vì mỗi giây chờ là một giây giao diện đứng yên.
 		NSTimeInterval budget = MAX(2.0, prefs.responseTimeout);
-		NSTimeInterval hardCap = MIN(budget, NSThread.isMainThread ? 8.0 : 16.0);
+		// Trần chờ do người dùng đặt (2–20 s); ngân sách AI chỉ là mức trần trên.
+		// Trước đây trần cứng 8/16 s khiến đặt “chờ 30 giây” mà vẫn bị cắt ở 8 s.
+		NSTimeInterval hardCap = MIN(budget, MAX(2.0, prefs.replyDeadline));
 		NSTimeInterval captureAt = _captureTime > 0 ? _captureTime : CFAbsoluteTimeGetCurrent();
 		NSTimeInterval baseDeadline = captureAt + MIN(hardCap, 5.0);
 		while (!_ready && !_errored && !_decided && _generation == myGeneration && !_actionSeen) {
@@ -775,7 +779,7 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 			NSString *storedAnswer = _answerDisplay.length > 1000
 				? [[_answerDisplay substringToIndex:1000] stringByAppendingString:@"…"] : _answerDisplay;
 			[_history addObject:@{@"q": _question ?: @"", @"a": storedAnswer ?: @""}];
-			while ((NSInteger)_history.count > prefs.contextTurns && _history.count) {
+			while ((NSInteger)_history.count > MAX(0, prefs.contextTurns) && _history.count) {
 				[_history removeObjectAtIndex:0];
 			}
 			_historySaved = YES;
@@ -785,7 +789,7 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 				NSString *question = _question ?: @"";
 				NSString *answer = storedAnswer ?: @"";
 				NSString *epoch = _historyEpoch;
-				NSUInteger limit = (NSUInteger)prefs.contextTurns;
+				NSUInteger limit = MAX(1, (NSUInteger)prefs.contextTurns);
 				NSTimeInterval startedAt = _captureTime;
 				dispatch_async([SXStore queue], ^{
 					[[SXStore shared] appendQuestion:question answer:answer limit:limit

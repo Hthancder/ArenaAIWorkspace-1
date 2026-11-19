@@ -178,6 +178,29 @@ for path in sorted(glob.glob("Prefs/*.m")):
             if bad in body.group(0):
                 fail(f"{path}: {name} vừa xử lý gõ chữ vừa gọi {bad} — bàn phím sẽ tắt sau mỗi ký tự")
 
+# --------------------------------------------- key màn hình đọc phải có trong code
+# Một hàng PSLinkListCell trỏ tới SXChoiceController với `key` mà lớp đó không
+# biết sẽ mở ra màn hình trống (đúng kiểu lỗi "bấm vào không có gì xảy ra").
+CHOICE_KEYS = set()
+root_text = read("Prefs/SXRootListController.m")
+for match in re.finditer(r'SXChoiceDefinitionFor\(@"([A-Za-z0-9_]+)"\)', root_text):
+    CHOICE_KEYS.add(match.group(1))
+for match in re.finditer(r'@"([A-Za-z0-9_]+)"\s*:\s*\[SXChoiceController class\]', root_text):
+    CHOICE_KEYS.add(match.group(1))
+
+for plist_path in sorted(glob.glob("Prefs/Resources/*.plist")):
+    try:
+        data = plistlib.load(open(plist_path, "rb"))
+    except Exception:
+        continue
+    for spec in walk_specifiers(data):
+        if spec.get("detail") != "SXChoiceController":
+            continue
+        key = spec.get("key")
+        if isinstance(key, str) and key and key not in CHOICE_KEYS:
+            fail(f"{plist_path}: hàng '{spec.get('label')}' dùng SXChoiceController "
+                 f"nhưng key '{key}' không có định nghĩa")
+
 # ---------------------------------------------------------------- report
 for message in WARNINGS:
     print(f"⚠️  {message}")

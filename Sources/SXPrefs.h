@@ -37,6 +37,7 @@ FOUNDATION_EXPORT NSArray<NSDictionary *> *SXModelPresets(SXProvider provider);
 @property (nonatomic, readonly) double temperature;
 @property (nonatomic, readonly) NSInteger contextTurns;
 @property (nonatomic, readonly) NSTimeInterval responseTimeout;
+@property (nonatomic, readonly) NSTimeInterval replyDeadline;
 @property (nonatomic, readonly, copy) NSString *timeoutAction;
 @property (nonatomic, readonly) BOOL markdown;
 @property (nonatomic, readonly) BOOL hideWebCards;
@@ -97,7 +98,10 @@ FOUNDATION_EXPORT NSArray<NSDictionary *> *SXModelPresets(SXProvider provider);
 @property (nonatomic, readonly, copy) NSString *geminiModel;
 @property (nonatomic, readonly) double temperature;      // 0–2, làm tròn 0.1
 @property (nonatomic, readonly) NSInteger contextTurns;  // 2–40 cặp Q/A giữ lại
-@property (nonatomic, readonly) NSTimeInterval responseTimeout; // 2–30 giây (ngân sách AI từ lúc hỏi)
+@property (nonatomic, readonly) NSTimeInterval responseTimeout; // 2–120 giây (ngân sách AI từ lúc hỏi)
+/// Trần thời gian SiriX giữ giao diện Siri chờ trước khi quyết định (2–20 giây).
+/// Thấp hơn ngân sách thì đáp án tới sau trần bị bỏ; cao hơn thì Siri có thể tự đóng.
+@property (nonatomic, readonly) NSTimeInterval replyDeadline;
 @property (nonatomic, readonly, copy) NSString *customPrompt;   // rỗng = dùng prompt mặc định
 @property (nonatomic, readonly) BOOL hideWebCards;
 @property (nonatomic, readonly) BOOL showOriginal;

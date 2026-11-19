@@ -10,12 +10,12 @@ NSNotificationName const SXLLMToolActivityNotification = @"SXLLMToolActivityNoti
 /// gồm mọi vòng gọi công cụ). Siri chỉ giữ hội thoại được vài giây nên đây là
 /// con số quan trọng nhất — vượt quá thì người dùng thấy “trả lời quá muộn”.
 static NSTimeInterval SXTurnBudget(SXPrefs *prefs) {
-	return MIN(MAX(6.0, prefs.responseTimeout), 30.0);
+	return MIN(MAX(6.0, prefs.responseTimeout), 120.0);
 }
 
 /// Trần các vòng gọi công cụ trong một lượt.
 static NSInteger SXToolRoundLimit(SXPrefs *prefs) {
-	return MAX(1, MIN(prefs.maxToolRounds, 4));
+	return MAX(1, MIN(prefs.maxToolRounds, 6));
 }
 
 static void SXPostToolActivity(NSString *name, NSTimeInterval elapsed, NSError *error) {

@@ -23,55 +23,145 @@ static void SXExceptionHandler(NSException *exception) {
 	if (SXPrevExceptionHandler) SXPrevExceptionHandler(exception);
 }
 
-/// Các key số dùng slider trên giao diện cũ nhưng người dùng thật sự chỉ cần
-/// vài mức (“chờ 10 giây” chứ không phải 11,4 giây). Trang gốc thay slider
-/// bằng danh sách mức cố định cho dễ bấm và dễ hiểu.
-static NSArray<NSString *> *SXTemperatureTitles(void) {
-	return @[@"0.0 · máy móc, ít sáng tạo",
-			 @"0.3 · bám sát câu hỏi",
-			 @"0.7 · cân bằng (khuyến nghị)",
-			 @"1.0 · sáng tạo vừa",
-			 @"1.5 · rất sáng tạo, dễ lan man"];
+#pragma mark - Bộ chọn giá trị
+
+/// Một mức gợi ý: giá trị + nhãn + ghi chú ngắn.
+@interface SXChoiceOption : NSObject
+@property (nonatomic) double value;
+@property (nonatomic, copy) NSString *title;
+@property (nonatomic, copy) NSString *hint;
+@property (nonatomic) BOOL isDefault;
++ (instancetype)value:(double)value title:(NSString *)title hint:(NSString *)hint isDefault:(BOOL)isDefault;
+@end
+
+@implementation SXChoiceOption
++ (instancetype)value:(double)value title:(NSString *)title hint:(NSString *)hint isDefault:(BOOL)isDefault {
+	SXChoiceOption *option = [SXChoiceOption new];
+	option.value = value;
+	option.title = title;
+	option.hint = hint;
+	option.isDefault = isDefault;
+	return option;
 }
-static NSArray<NSNumber *> *SXTemperatureValues(void) {
-	return @[@0.0, @0.3, @0.7, @1.0, @1.5];
-}
-static NSArray<NSString *> *SXContextTitles(void) {
-	return @[@"2 câu · ngắn nhất, nhanh nhất",
-			 @"4 câu · đủ cho hội thoại ngắn",
-			 @"8 câu · cân bằng (khuyến nghị)",
-			 @"16 câu · hội thoại dài",
-			 @"30 câu · nhớ lâu, tốn token"];
-}
-static NSArray<NSNumber *> *SXContextValues(void) {
-	return @[@2, @4, @8, @16, @30];
-}
-static NSArray<NSString *> *SXTimeoutTitles(void) {
-	return @[@"6 giây · chỉ model thật nhanh",
-			 @"10 giây · cân bằng (khuyến nghị)",
-			 @"15 giây · model lớn / mạng chậm",
-			 @"20 giây · kiên nhẫn",
-			 @"30 giây · giữ luồng Siri lâu"];
-}
-static NSArray<NSNumber *> *SXTimeoutValues(void) {
-	return @[@6, @10, @15, @20, @30];
-}
-static NSArray<NSString *> *SXToolRoundTitles(void) {
-	return @[@"1 vòng · nhanh nhất",
-			 @"2 vòng · đủ cho hầu hết câu",
-			 @"3 vòng · mặc định",
-			 @"4 vòng · câu hỏi nhiều bước"];
-}
-static NSArray<NSNumber *> *SXToolRoundValues(void) {
-	return @[@1, @2, @3, @4];
+@end
+
+/// Định nghĩa một key số chỉnh được: miền giá trị, đơn vị, các mức gợi ý và
+/// cách đọc/ghi. Thêm một key mới = thêm một hàm dựng ở đây, không phải sửa
+/// màn hình — trước đây mỗi mức là một mảng song song dễ lệch nhau.
+@interface SXChoiceDefinition : NSObject
+@property (nonatomic, copy) NSString *key;
+@property (nonatomic, copy) NSString *title;
+@property (nonatomic, copy) NSString *unit;
+@property (nonatomic) double minimum;
+@property (nonatomic) double maximum;
+@property (nonatomic) BOOL integerOnly;
+@property (nonatomic) double defaultValue;
+@property (nonatomic, copy) NSArray<SXChoiceOption *> *options;
+@property (nonatomic, copy) NSString *footer;
+/// Đọc giá trị hiện tại (đã chuẩn hoá) từ prefs.
+@property (nonatomic, copy) double (^readBlock)(SXPrefs *prefs);
+@end
+
+@implementation SXChoiceDefinition
+@end
+
+static SXChoiceDefinition *SXChoiceDefinitionFor(NSString *key) {
+	SXChoiceDefinition *definition = [SXChoiceDefinition new];
+	definition.key = key;
+	if ([key isEqualToString:@"temperature"]) {
+		definition.title = @"Nhiệt độ";
+		definition.unit = @"";
+		definition.minimum = 0.0;
+		definition.maximum = 2.0;
+		definition.integerOnly = NO;
+		definition.defaultValue = 0.7;
+		definition.readBlock = ^double(SXPrefs *prefs) { return prefs.temperature; };
+		definition.options = @[
+			[SXChoiceOption value:0.0 title:@"0.0 · máy móc, ít sáng tạo" hint:@"Câu trả lời ổn định nhất" isDefault:NO],
+			[SXChoiceOption value:0.3 title:@"0.3 · bám sát câu hỏi" hint:@"Ít lan man, phù hợp tra cứu" isDefault:NO],
+			[SXChoiceOption value:0.7 title:@"0.7 · cân bằng" hint:@"Mức khuyến nghị" isDefault:YES],
+			[SXChoiceOption value:1.0 title:@"1.0 · sáng tạo vừa" hint:@"Đa dạng cách diễn đạt" isDefault:NO],
+			[SXChoiceOption value:1.5 title:@"1.5 · rất sáng tạo" hint:@"Dễ lan man, có thể sai chi tiết" isDefault:NO],
+		];
+		definition.footer = @"Thấp = bám sát câu hỏi, lặp lại được. Cao = nhiều cách diễn đạt hơn nhưng dễ bịa. Nhập giá trị bất kỳ từ 0.0 đến 2.0 (bước 0.05).";
+		return definition;
+	}
+	if ([key isEqualToString:@"contextTurns"]) {
+		definition.title = @"Ngữ cảnh hội thoại";
+		definition.unit = @"câu";
+		definition.minimum = 0;
+		definition.maximum = 40;
+		definition.integerOnly = YES;
+		definition.defaultValue = 8;
+		definition.readBlock = ^double(SXPrefs *prefs) { return (double)prefs.contextTurns; };
+		definition.options = @[
+			[SXChoiceOption value:0 title:@"0 câu · không nhớ gì" hint:@"Mỗi câu độc lập, tốn ít token nhất" isDefault:NO],
+			[SXChoiceOption value:4 title:@"4 câu · hội thoại ngắn" hint:@"Đủ cho hỏi–đáp liền mạch" isDefault:NO],
+			[SXChoiceOption value:8 title:@"8 câu · cân bằng" hint:@"Mức khuyến nghị" isDefault:YES],
+			[SXChoiceOption value:16 title:@"16 câu · hội thoại dài" hint:@"Nhớ lâu hơn, tốn token hơn" isDefault:NO],
+			[SXChoiceOption value:30 title:@"30 câu · nhớ rất lâu" hint:@"Chỉ dùng khi cần trao đổi dài" isDefault:NO],
+		];
+		definition.footer = @"Số cặp hỏi/đáp gần nhất gửi kèm mỗi câu hỏi. 0 = mỗi câu độc lập (rẻ nhất); càng cao càng tốn token và dễ nhiễu. Lịch sử lưu trên máy vẫn giữ tới 40 lượt.";
+		return definition;
+	}
+	if ([key isEqualToString:@"timeout"]) {
+		definition.title = @"Thời gian chờ AI";
+		definition.unit = @"giây";
+		definition.minimum = 2;
+		definition.maximum = 120;
+		definition.integerOnly = YES;
+		definition.defaultValue = 10;
+		definition.readBlock = ^double(SXPrefs *prefs) { return prefs.responseTimeout; };
+		definition.options = @[
+			[SXChoiceOption value:6 title:@"6 giây · chỉ model thật nhanh" hint:@"gpt-4o-mini, Gemini Flash" isDefault:NO],
+			[SXChoiceOption value:10 title:@"10 giây · cân bằng" hint:@"Mức khuyến nghị" isDefault:YES],
+			[SXChoiceOption value:15 title:@"15 giây · model lớn" hint:@"gpt-4o, Gemini Pro" isDefault:NO],
+			[SXChoiceOption value:30 title:@"30 giây · model suy luận" hint:@"o4-mini, R1…" isDefault:NO],
+			[SXChoiceOption value:60 title:@"60 giây · kiên nhẫn" hint:@"Cần tăng trần chờ Siri ở dưới" isDefault:NO],
+		];
+		definition.footer = @"Ngân sách tối đa cho toàn bộ một câu hỏi (gồm mọi vòng gọi công cụ). Đặt cao hơn trần chờ Siri bên dưới thì đáp án tới sau trần sẽ không được hiển thị.";
+		return definition;
+	}
+	if ([key isEqualToString:@"replyDeadline"]) {
+		definition.title = @"Trần chờ Siri";
+		definition.unit = @"giây";
+		definition.minimum = 2;
+		definition.maximum = 20;
+		definition.integerOnly = YES;
+		definition.defaultValue = 8;
+		definition.readBlock = ^double(SXPrefs *prefs) { return prefs.replyDeadline; };
+		definition.options = @[
+			[SXChoiceOption value:5 title:@"5 giây · nhanh, an toàn" hint:@"Chỉ model rất nhanh kịp" isDefault:NO],
+			[SXChoiceOption value:8 title:@"8 giây · cân bằng" hint:@"Mức khuyến nghị" isDefault:YES],
+			[SXChoiceOption value:12 title:@"12 giây · chờ lâu hơn" hint:@"Model lớn có cơ hội trả lời" isDefault:NO],
+			[SXChoiceOption value:16 title:@"16 giây · kiên nhẫn" hint:@"Siri có thể tự đóng giao diện" isDefault:NO],
+		];
+		definition.footer = @"Bao lâu SiriX giữ giao diện Siri chờ trước khi quyết định dùng Siri gốc hay bubble “chưa kịp”. Siri gốc tự đóng sau khoảng 8–10 giây nên để cao hơn thường không có tác dụng.";
+		return definition;
+	}
+	if ([key isEqualToString:@"maxToolRounds"]) {
+		definition.title = @"Số vòng công cụ";
+		definition.unit = @"vòng";
+		definition.minimum = 1;
+		definition.maximum = 6;
+		definition.integerOnly = YES;
+		definition.defaultValue = 3;
+		definition.readBlock = ^double(SXPrefs *prefs) { return (double)prefs.maxToolRounds; };
+		definition.options = @[
+			[SXChoiceOption value:1 title:@"1 vòng · nhanh nhất" hint:@"Chỉ một lần gọi công cụ" isDefault:NO],
+			[SXChoiceOption value:2 title:@"2 vòng · đủ cho hầu hết câu" hint:@"Đọc dữ liệu rồi trả lời" isDefault:NO],
+			[SXChoiceOption value:3 title:@"3 vòng · mặc định" hint:@"Câu hỏi cần vài bước" isDefault:YES],
+			[SXChoiceOption value:5 title:@"5 vòng · câu hỏi nhiều bước" hint:@"Chậm hơn, tốn token hơn" isDefault:NO],
+		];
+		definition.footer = @"Số lần AI được gọi công cụ trong một câu hỏi. Nhiều vòng hơn thì giải được câu nhiều bước nhưng lâu hơn và dễ vượt trần chờ Siri.";
+		return definition;
+	}
+	return nil;
 }
 
-#pragma mark - Bộ chọn mức
-/// Danh sách mức cố định cho một key số. Cell vẫn khai báo `PSLinkListCell`
-/// trong plist nhưng các mục do lớp này cung cấp (không dùng
-/// PSListItemsController) để tiêu đề đọc được ngay trong danh sách.
-@interface SXChoiceController : PSListController
+@interface SXChoiceController : PSListController <UITextFieldDelegate>
 @property (nonatomic, copy) NSString *prefsKey;
+@property (nonatomic, strong) SXChoiceDefinition *definition;
 @end
 
 @implementation SXChoiceController
@@ -84,57 +174,197 @@ static NSArray<NSNumber *> *SXToolRoundValues(void) {
 		NSString *key = [self.specifier propertyForKey:PSKeyNameKey];
 		if (key.length) self.prefsKey = key;
 	}
-}
-
-- (NSArray<NSNumber *> *)values {
-	if ([self.prefsKey isEqualToString:@"temperature"]) return SXTemperatureValues();
-	if ([self.prefsKey isEqualToString:@"contextTurns"]) return SXContextValues();
-	if ([self.prefsKey isEqualToString:@"timeout"]) return SXTimeoutValues();
-	if ([self.prefsKey isEqualToString:@"maxToolRounds"]) return SXToolRoundValues();
-	return @[];
-}
-
-- (NSArray<NSString *> *)titlesForValues {
-	if ([self.prefsKey isEqualToString:@"temperature"]) return SXTemperatureTitles();
-	if ([self.prefsKey isEqualToString:@"contextTurns"]) return SXContextTitles();
-	if ([self.prefsKey isEqualToString:@"timeout"]) return SXTimeoutTitles();
-	if ([self.prefsKey isEqualToString:@"maxToolRounds"]) return SXToolRoundTitles();
-	return @[];
+	self.definition = SXChoiceDefinitionFor(self.prefsKey);
+	self.title = self.definition.title ?: @"Giá trị";
+	self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
 }
 
 - (double)sx_currentValue {
-	SXPrefs *prefs = [SXPrefs shared];
-	if ([self.prefsKey isEqualToString:@"temperature"]) return prefs.temperature;
-	if ([self.prefsKey isEqualToString:@"contextTurns"]) return (double)prefs.contextTurns;
-	if ([self.prefsKey isEqualToString:@"timeout"]) return prefs.responseTimeout;
-	if ([self.prefsKey isEqualToString:@"maxToolRounds"]) return (double)prefs.maxToolRounds;
-	return 0;
+	if (!self.definition) return 0;
+	return self.definition.readBlock ? self.definition.readBlock([SXPrefs shared]) : self.definition.defaultValue;
 }
+
+- (NSString *)sx_formatValue:(double)value {
+	if (self.definition.integerOnly) return [NSString stringWithFormat:@"%.0f", value];
+	return [NSString stringWithFormat:@"%.2f", value];
+}
+
+/// Nhãn đọc nhanh: "10 giây", "0.70", "8 câu".
+- (NSString *)sx_displayValue:(double)value {
+	NSString *number = [self sx_formatValue:value];
+	return self.definition.unit.length
+		? [NSString stringWithFormat:@"%@ %@", number, self.definition.unit] : number;
+}
+
+- (double)sx_normalize:(double)value {
+	SXChoiceDefinition *definition = self.definition;
+	double clamped = MIN(MAX(value, definition.minimum), definition.maximum);
+	if (definition.integerOnly) return round(clamped);
+	return round(clamped * 20.0) / 20.0;   // bước 0.05
+}
+
+#pragma mark - Ghi
+
+- (void)sx_applyValue:(double)value {
+	if (!self.definition || !self.prefsKey.length) return;
+	double normalized = [self sx_normalize:value];
+	id stored = self.definition.integerOnly ? @((NSInteger)normalized) : @(normalized);
+	[SXPrefs setValue:stored forKey:self.prefsKey];
+	[[SXPrefs shared] reload];
+	notify_post("com.sirix.tweak/prefs.changed");
+	[SXUI tapFeedback];
+	SXLogInf(@"pref", @"%@ = %@", self.prefsKey, [self sx_displayValue:normalized]);
+	[self.navigationController popViewControllerAnimated:YES];
+}
+
+/// Ô nhập số nằm trong một PSEditTextCell do Preferences dựng; lấy giá trị từ
+/// chính cell đang hiển thị thay vì giữ con trỏ (cell có thể bị tái sử dụng).
+- (UITextField *)sx_editingField {
+	for (UITableViewCell *cell in self.table.visibleCells) {
+		if (![cell isKindOfClass:[UITableViewCell class]]) continue;
+		if ([cell respondsToSelector:@selector(editingTextField)]) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+			id field = [cell performSelector:@selector(editingTextField)];
+#pragma clang diagnostic pop
+			if ([field isKindOfClass:[UITextField class]]) return field;
+		}
+		for (UIView *subview in cell.contentView.subviews) {
+			if ([subview isKindOfClass:[UITextField class]]) return (UITextField *)subview;
+		}
+	}
+	return nil;
+}
+
+- (void)sx_applyCustomField {
+	UITextField *field = [self sx_editingField];
+	NSString *raw = field.text;
+	if (!raw.length) {
+		[SXUI alertOn:self title:@"Chưa nhập gì"
+			  message:@"Gõ một số vào ô “Giá trị” rồi bấm Dùng giá trị này."];
+		return;
+	}
+	NSString *text = [raw stringByReplacingOccurrencesOfString:@"," withString:@"."];
+	text = [text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+	NSScanner *scanner = [NSScanner scannerWithString:text];
+	double parsed = 0;
+	BOOL ok = text.length && [scanner scanDouble:&parsed] && scanner.isAtEnd;
+	if (!ok) {
+		[SXUI alertOn:self title:@"Giá trị không hợp lệ"
+			  message:[NSString stringWithFormat:@"Hãy nhập một số từ %@ đến %@.",
+					   [self sx_formatValue:self.definition.minimum],
+					   [self sx_formatValue:self.definition.maximum]]];
+		return;
+	}
+	if (self.definition.integerOnly && floor(parsed) != parsed) {
+		[SXUI alertOn:self title:@"Cần số nguyên"
+			  message:[NSString stringWithFormat:@"Mục này chỉ nhận số nguyên (%@).", self.definition.unit]];
+		return;
+	}
+	if (parsed < self.definition.minimum || parsed > self.definition.maximum) {
+		[SXUI alertOn:self title:@"Ngoài khoảng cho phép"
+			  message:[NSString stringWithFormat:@"Chọn từ %@ đến %@.",
+					   [self sx_displayValue:self.definition.minimum],
+					   [self sx_displayValue:self.definition.maximum]]];
+		return;
+	}
+	[self.view endEditing:YES];
+	[self sx_applyValue:parsed];
+}
+
+#pragma mark - Hành động
+
+- (void)sx_pick:(PSSpecifier *)row specifier:(PSSpecifier *)group {
+	(void)group;
+	NSNumber *value = [row propertyForKey:@"sxValue"];
+	if (![value isKindOfClass:[NSNumber class]]) return;
+	[self.view endEditing:YES];
+	[self sx_applyValue:value.doubleValue];
+}
+
+- (BOOL)textFieldShouldReturn:(UITextField *)textField {
+	(void)textField;
+	[self sx_applyCustomField];
+	return YES;
+}
+
+#pragma mark - Bảng
 
 - (NSArray *)specifiers {
 	if (!_specifiers) {
 		NSMutableArray *items = [NSMutableArray array];
-		PSSpecifier *group = [PSSpecifier groupSpecifierWithName:self.title];
-		group.cellType = PSGroupCell;
-		[items addObject:group];
-		NSArray<NSNumber *> *values = [self values];
-		NSArray<NSString *> *titles = [self titlesForValues];
+		SXChoiceDefinition *definition = self.definition;
+		if (!definition) {
+			_specifiers = items;
+			return _specifiers;
+		}
 		double current = [self sx_currentValue];
-		NSUInteger best = 0;
-		double bestDelta = DBL_MAX;
-		for (NSUInteger i = 0; i < values.count && i < titles.count; i++) {
-			double delta = fabs(values[i].doubleValue - current);
-			if (delta < bestDelta) { bestDelta = delta; best = i; }
-			PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:titles[i]
+
+		// Nhóm 1: giá trị đang dùng + ô nhập số tuỳ chỉnh.
+		PSSpecifier *currentGroup = [PSSpecifier groupSpecifierWithName:@"Giá trị đang dùng"];
+		currentGroup.cellType = PSGroupCell;
+		[items addObject:currentGroup];
+
+		PSSpecifier *valueRow = [PSSpecifier preferenceSpecifierNamed:[self sx_displayValue:current]
+															   target:self
+																  set:nil
+																  get:@selector(sx_readCurrentForSpecifier:)
+															   detail:nil
+																 cell:PSTitleValueCell
+																 edit:nil];
+		[valueRow setProperty:self.prefsKey forKey:PSKeyNameKey];
+		[items addObject:valueRow];
+
+		PSSpecifier *customGroup = [PSSpecifier groupSpecifierWithName:@"Nhập giá trị riêng"];
+		customGroup.cellType = PSGroupCell;
+		[customGroup setProperty:[NSString stringWithFormat:@"Số từ %@ đến %@. %@",
+								  [self sx_formatValue:definition.minimum],
+								  [self sx_formatValue:definition.maximum],
+								  definition.integerOnly ? @"Chỉ nhận số nguyên." : @"Bước 0.05."]
+						  forKey:@"footerText"];
+		[items addObject:customGroup];
+
+		PSSpecifier *fieldRow = [PSSpecifier preferenceSpecifierNamed:@"Giá trị"
+															   target:self
+																  set:nil get:nil
+															   detail:nil
+																 cell:PSEditTextCell
+																 edit:nil];
+		[fieldRow setProperty:definition.title forKey:@"placeholder"];
+		[fieldRow setProperty:@(YES) forKey:@"noAutoCorrect"];
+		[fieldRow setProperty:@(NO) forKey:@"autoCaps"];
+		[fieldRow setProperty:@(UIKeyboardTypeNumbersAndPunctuation) forKey:@"keyboardType"];
+		[items addObject:fieldRow];
+
+		PSSpecifier *applyRow = [PSSpecifier preferenceSpecifierNamed:@"Dùng giá trị này"
+															   target:self
+																  set:nil get:nil
+															   detail:nil
+																 cell:PSButtonCell
+																 edit:nil];
+		applyRow.cellType = PSButtonCell;
+		[applyRow setProperty:@(YES) forKey:PSEnabledKey];
+		[items addObject:applyRow];
+
+		// Nhóm 2: các mức gợi ý.
+		PSSpecifier *levelsGroup = [PSSpecifier groupSpecifierWithName:@"Mức gợi ý"];
+		levelsGroup.cellType = PSGroupCell;
+		[levelsGroup setProperty:definition.footer ?: @"" forKey:@"footerText"];
+		[items addObject:levelsGroup];
+
+		for (NSUInteger i = 0; i < definition.options.count; i++) {
+			SXChoiceOption *option = definition.options[i];
+			NSString *name = option.isDefault
+				? [option.title stringByAppendingString:@" — mặc định"] : option.title;
+			PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:name
 															  target:self
 																 set:@selector(sx_pick:specifier:)
 																 get:nil
 															  detail:nil
 																cell:PSListItemCell
 																edit:nil];
-			[row setProperty:@(i) forKey:@"sxIndex"];
-			// Dấu ✓ đặt qua property "value": PSTableCell tự hiển thị.
-			[row setProperty:i == best ? @"✓" : @"" forKey:PSValueKey];
+			[row setProperty:@(option.value) forKey:@"sxValue"];
+			[row setProperty:fabs(option.value - current) < 0.001 ? @"✓" : @"" forKey:PSValueKey];
 			[items addObject:row];
 		}
 		_specifiers = items;
@@ -142,20 +372,13 @@ static NSArray<NSNumber *> *SXToolRoundValues(void) {
 	return _specifiers;
 }
 
-- (void)sx_pick:(PSSpecifier *)row specifier:(PSSpecifier *)group {
-	(void)group;
-	NSNumber *index = [row propertyForKey:@"sxIndex"];
-	NSArray<NSNumber *> *values = [self values];
-	if (![index isKindOfClass:[NSNumber class]] || index.unsignedIntegerValue >= values.count) return;
-	[SXPrefs setValue:values[index.unsignedIntegerValue] forKey:self.prefsKey];
-	[[SXPrefs shared] reload];
-	notify_post("com.sirix.tweak/prefs.changed");
-	[SXUI tapFeedback];
-	[self.navigationController popViewControllerAnimated:YES];
+/// Định dạng lại hàng "Giá trị đang dùng" mỗi lần bảng đọc lại.
+- (id)sx_readCurrentForSpecifier:(PSSpecifier *)specifier {
+	(void)specifier;
+	return [self sx_displayValue:[self sx_currentValue]];
 }
 
 @end
-
 #pragma mark - Trang gốc
 
 @interface SXRootListController ()
@@ -216,6 +439,7 @@ static NSArray<NSNumber *> *SXToolRoundValues(void) {
 		@"temperature": [SXChoiceController class],
 		@"contextTurns": [SXChoiceController class],
 		@"timeout": [SXChoiceController class],
+		@"replyDeadline": [SXChoiceController class],
 		@"maxToolRounds": [SXChoiceController class],
 	};
 	for (PSSpecifier *specifier in specifiers) {
@@ -257,13 +481,21 @@ static NSArray<NSNumber *> *SXToolRoundValues(void) {
 			return [prefs.timeoutAction isEqualToString:@"keep"] ? @"Giữ Siri gốc" : @"Bubble “chưa kịp”";
 		}
 		if ([key isEqualToString:@"temperature"]) {
-			return [NSString stringWithFormat:@"%.1f", prefs.temperature];
+			NSString *hint = prefs.temperature <= 0.05 ? @"máy móc"
+				: prefs.temperature < 0.5 ? @"bám câu hỏi"
+				: prefs.temperature < 0.9 ? @"cân bằng"
+				: prefs.temperature < 1.3 ? @"sáng tạo" : @"rất sáng tạo";
+			return [NSString stringWithFormat:@"%.2f · %@", prefs.temperature, hint];
 		}
 		if ([key isEqualToString:@"contextTurns"]) {
-			return [NSString stringWithFormat:@"%ld câu", (long)prefs.contextTurns];
+			return prefs.contextTurns == 0 ? @"Không nhớ (0 câu)"
+				: [NSString stringWithFormat:@"%ld câu", (long)prefs.contextTurns];
 		}
 		if ([key isEqualToString:@"timeout"]) {
 			return [NSString stringWithFormat:@"%.0f giây", prefs.responseTimeout];
+		}
+		if ([key isEqualToString:@"replyDeadline"]) {
+			return [NSString stringWithFormat:@"%.0f giây", prefs.replyDeadline];
 		}
 		if ([key isEqualToString:@"maxToolRounds"]) {
 			return [NSString stringWithFormat:@"%ld vòng", (long)prefs.maxToolRounds];

@@ -176,7 +176,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>AI có tối đa “Thời gian chờ AI” để trả lời. Siri giữ giao diện chờ khoảng 8 giây, nên model chậm hơn mốc đó nên chọn “Giữ Siri gốc” để tránh bubble “chưa kịp”.</string>
+			<string>Hai con số thời gian khác nhau: “Thời gian chờ AI” là ngân sách tối đa cho câu trả lời, còn “Trần chờ Siri” là bao lâu SiriX giữ giao diện Siri. Đặt trần thấp hơn ngân sách để Siri không bị treo; Siri gốc tự đóng sau khoảng 8–10 giây.</string>
 			<key>label</key>
 			<string>Trả lời</string>
 		</dict>
@@ -221,6 +221,20 @@
 			<string>timeout</string>
 			<key>label</key>
 			<string>Thời gian chờ AI</string>
+		</dict>
+		<dict>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>cell</key>
+			<string>PSLinkListCell</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>detail</key>
+			<string>SXChoiceController</string>
+			<key>key</key>
+			<string>replyDeadline</string>
+			<key>label</key>
+			<string>Trần chờ Siri</string>
 		</dict>
 		<dict>
 			<key>PostNotification</key>

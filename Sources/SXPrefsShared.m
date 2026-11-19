@@ -31,7 +31,7 @@ NSArray<NSString *> *SXPreferenceKeys(void) {
 		keys = @[@"enabled", @"mode", @"triggerMode", @"provider",
 				 @"openaiKey", @"openaiBase", @"openaiModel",
 				 @"geminiKey", @"geminiModel",
-				 @"temperature", @"contextTurns", @"timeout", @"timeoutAction",
+				 @"temperature", @"contextTurns", @"timeout", @"replyDeadline", @"timeoutAction",
 				 @"streaming", @"markdown", @"hideWebCards", @"showOriginal", @"speakErrors",
 				 @"customPrompt", @"incognito",
 				 @"maxToolRounds", @"toolsDisabled",
