@@ -70,7 +70,13 @@ def check(log, save_file):
         raw = base64.b64decode(Path(save_file).read_bytes().strip(), validate=True)
         ini = configparser.ConfigParser(interpolation=None, strict=True)
         ini.read_string(raw.decode('utf-8'))
-        fields = [ini.getfloat('player', key) for key in ('buffpoisonprotect', 'buffpoison')]
+        # GameMaker INI serialization quotes real values; ConfigParser does
+        # not remove those quotes. Inspect only the two expected fields.
+        values = [ini.get('player', key).strip() for key in ('buffpoisonprotect', 'buffpoison')]
+        fields = [float(value[1:-1] if len(value) >= 2 and value[0] == '"' and value[-1] == '"'
+                        else value) for value in values]
+        if any(not math.isfinite(value) for value in fields):
+            raise ValueError('non-finite saved value')
     except (OSError, ValueError, UnicodeError, configparser.Error) as exc:
         raise ValueError('could not decode candidate save data') from exc
     if fields != [321, 2]:
