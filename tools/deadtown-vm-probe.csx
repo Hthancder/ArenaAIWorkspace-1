@@ -40,7 +40,7 @@ var apkObjectNames = new HashSet<string>(Data.GameObjects.Select(x => x.Name.Con
 Console.WriteLine($"PROBE: APK objects absent from source={apkObjectNames.Except(sourceObjectNames).Count()}, source objects absent from APK={sourceObjectNames.Except(apkObjectNames).Count()}");
 string eventsPath = Environment.GetEnvironmentVariable("GML_PROBE_EVENTS");
 if (string.IsNullOrEmpty(eventsPath)) throw new Exception("GML_PROBE_EVENTS is not set");
-using var document = JsonDocument.Parse(File.ReadAllText(eventsPath));
+var document = JsonDocument.Parse(File.ReadAllText(eventsPath));
 int selected = 0;
 foreach (var evt in document.RootElement.EnumerateArray())
 {
@@ -50,6 +50,7 @@ foreach (var evt in document.RootElement.EnumerateArray())
     group.QueueReplace(code, text);
     selected++;
 }
+document.Dispose();
 Console.WriteLine($"PROBE: compiling {selected} translated event bodies; event behavior is not yet verified");
 var result = group.Import(false);
 Console.WriteLine($"PROBE: compile_success={result.Successful}, code_entries={Data.Code.Count}, variables={Data.Variables.Count}, functions={Data.Functions.Count}");
