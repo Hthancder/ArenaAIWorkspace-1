@@ -157,8 +157,20 @@ for `Dagger` damage and `Cotton clothes` defense are 45 and 2 respectively,
 while the GMX has 40 and 1. The third native spawn call is `(0,4,25,3,5)`
 versus `(0,4,25,2,5)` in the GMX. The native consumable calls have ten arguments;
 the GMX `db_use_add` accepts only nine, and the two new native entries include
-`Gas mask` with a nonzero tenth value. We have not recovered what the tenth field
-means. Appending these tables to the old source would shift item/recipe indices
+`Gas mask` with a nonzero tenth value. Native `db_use_add` copies `argument9`
+from the tenth argument pointer at `0x1bc380` into a local RValue at `0x1bc384`,
+then assigns it at array column 9 (`0x1bc5a4`–`0x1bc5b4`) using the same row
+index and array used for columns 0–8. The targeted inspector
+`tools/deadtown_poison_evidence.py` also verifies that native `item_use` calls
+`db_info_get` with field 9 at `0x1a572c`, multiplies the value by 30 and 60, and
+sets variable index 32 at `0x1a57d4`; the native `sys_player_buff` Step retrieves,
+adds, and sets index 32 on APK object 142 (`obj_player`) at
+`0x6022c0`–`0x6022e0`. The adjacent exported `g_VAR_*` symbol order maps that
+position to `buff_poison_protect`, a strong indication that the tenth field
+controls poison-protection duration. Variable registration and this path's
+runtime effects still need independent confirmation; other original consumers,
+saves, and combat interactions remain to be recovered. The old GMX lacks this
+whole path. Appending these tables to the old source would shift item/recipe indices
 and could silently break crafting, saving and gameplay: **none are injected**.
 Recover the corresponding data consumers, ordering and original schema first.
 
