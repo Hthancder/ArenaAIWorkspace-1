@@ -1,0 +1,92 @@
+name: Dead Town RE debug-fix test IPA
+
+on:
+  push:
+    branches:
+      - arena/78062d86-arenaaiworkspace-1
+    paths:
+      - .github/workflows/deadtown-re-test-ipa.yml
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve original iOS 15 runner
+        uses: actions/download-artifact@v4
+        with:
+          name: gmrunner-ios15-standalone-untested
+          path: runner
+          run-id: 44509744633
+          github-token: ${{ github.token }}
+      - name: Retrieve tested debug-fix game data
+        uses: actions/download-artifact@v4
+        with:
+          name: deadtown-incomplete-game-data
+          path: game
+          run-id: 44517643086
+          github-token: ${{ github.token }}
+      - name: Package isolated test app
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p unpacked output
+          unzip -q runner/gmRunner.ipa -d unpacked
+          app=unpacked/Payload/gmRunner.app
+          test -s game/data.win
+          test -s game/audiogroup1.dat
+          test -s game/audiogroup2.dat
+          # A separate bundle ID means a clean data directory and does not
+          # overwrite the previous test's saves/config or make an update appear
+          # to include new data when the launcher preserves existing files.
+          printf 'touch = 1\ntouch_controls = off\n' > game/gmrunner.ini
+          cp -R game "$app/BundledGame"
+          python tools/prepare_deadtown_ios_plist.py "$app/Info.plist"
+          python - <<'PY'
+          import plistlib, struct
+          from pathlib import Path
+          from tools.prepare_deadtown_ios_plist import LANDSCAPE
+          app = Path('unpacked/Payload/gmRunner.app')
+          path = app / 'Info.plist'
+          info = plistlib.loads(path.read_bytes())
+          info['CFBundleIdentifier'] = 'org.gmrunner.deadtown.retest3'
+          info['CFBundleDisplayName'] = 'Dead Town RE Test'
+          path.write_bytes(plistlib.dumps(info, fmt=plistlib.FMT_BINARY, sort_keys=False))
+          check = plistlib.loads(path.read_bytes())
+          assert check['CFBundleIdentifier'] == 'org.gmrunner.deadtown.retest3'
+          assert check['MinimumOSVersion'] == '15.0'
+          assert check['UISupportedInterfaceOrientations'] == LANDSCAPE
+          assert check['UISupportedInterfaceOrientations~ipad'] == LANDSCAPE
+          assert struct.unpack('<II', (app / check['CFBundleExecutable']).read_bytes()[:8]) == (0xfeedfacf, 0x100000c)
+          assert not (app / '_CodeSignature').exists()
+          print('::notice::Unsigned ARM64 iOS 15 landscape test, separate bundle ID; game remains incomplete')
+          PY
+          (cd unpacked && zip -qry ../output/DeadTown-iOS15-RE-test3.ipa Payload)
+          unzip -tq output/DeadTown-iOS15-RE-test3.ipa
+          sha256sum output/DeadTown-iOS15-RE-test3.ipa | tee output/SHA256.txt
+      - name: Upload test IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeadTown-iOS15-RE-test-3
+          path: output/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Publish prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<'EOF'
+          **Bản thử RE 3, không phải bản game gốc hoàn chỉnh.** Đã bỏ sự kiện Q debug của source cũ, vốn tạo chữ `str:` và số ngẫu nhiên. Trong thử nghiệm desktop, nhấn Q ở bản cũ sinh chữ này; bản mới không còn. Chưa kiểm tra trên iPhone và chưa xác minh đó là nguyên nhân chính xác trong mọi ảnh.
+
+          Cài bằng TrollStore. Đây là app riêng, không ghi đè bản thử trước; save và mod không tự chuyển sang app mới. Sao lưu trước khi tự chuyển dữ liệu. Bản cài mới mặc định ẩn gamepad ảo của runner; điều khiển cảm ứng trong game vẫn cần kiểm tra trên thiết bị. Những thông báo tên vật phẩm nhặt được không phải dòng debug Q và vẫn được giữ.
+
+          Game vẫn thiếu nhiều script/event so với APK gốc, chưa xác nhận gameplay, mở khóa, save hay điều khiển đầy đủ. Tắt quảng cáo, Google Play và thông báo; âm thanh lấy byte gốc APK, không chuyển đổi. Kết quả điều tra: docs/deadtown-original-re.md trong repo.
+
+          Runner: https://github.com/andronep/gmrunner (GPL-3.0-or-later), commit e7121381d38b03a24242812fc22b0a7386d545c6. Adaptation/build source: this repository at the release commit. Source project: https://github.com/kjs104901/deadtown.
+          EOF
+          gh release create deadtown-ios15-re-test-3 output/DeadTown-iOS15-RE-test3.ipa output/SHA256.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Dead Town iOS 15 — RE test 3' --notes-file notes.md

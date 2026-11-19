@@ -96,8 +96,12 @@ explanation; without input tracing on the pictured iPhone, the exact input path
 and screenshot version remain unconfirmed. Names such as `Shotgun ammo X9` are
 normal messages produced by the old source's `item_get`, not this debug string.
 The offline preparation now removes only the precisely checked Q event from its
-copy; it leaves `ui_message_type`, item messages and other events intact. This
-has not yet been shipped in an IPA or confirmed on the user's device.
+copy; it leaves `ui_message_type`, item messages and other events intact. In
+[probe run 44517643086](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44517643086),
+a forced gameplay transition followed by a scripted Q press caused the old
+build to call `draw_text_transformed` with `str:43680.18`; the patched build
+made no `str:` draw call in the same test. This does not reproduce the iPhone
+touch path or prove that all `str:` reports have this cause.
 
 ### Candidate original translation literals
 
