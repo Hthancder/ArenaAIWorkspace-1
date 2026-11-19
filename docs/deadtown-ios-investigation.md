@@ -244,3 +244,34 @@ converter must handle event actions and bindings, reconcile asset and room
 versions, and validate every dependency and behavior before packaging.
 The reproducible probe is `.github/workflows/deadtown-vm-probe.yml` with
 `tools/deadtown-vm-probe.csx`; it is deliberately not a conversion or release.
+
+### Later reconstruction and runtime probes
+
+The experimental action translator (`tools/deadtown_event_probe.py`) handled
+all 539 source-file event bodies using only the action forms observed here;
+unknown actions fail closed. Its translation of legacy drag-and-drop semantics
+has not been independently validated. The VM probe compiled 138 source-file
+scripts and these 539 event bodies, linked 504 events onto matching APK objects,
+and skipped 35 events because the object or collision target was absent.
+It removed 68 unresolved YYC script-code references rather than recovering
+their behavior. This data is incomplete; the 94 APK objects not represented by
+source and the remaining source/APK mismatches still matter.
+
+Run `44506631946` re-read the serialized test data and the runner's verifier
+decoded 78,426 instructions without bytecode reference errors. The first
+headless attempt timed out at startup because unimplemented notification
+functions returned zero in a loop. Offline preparation now disables notification
+clearing and scheduling; local notification rewards are consequently untested.
+Run `44509453989` entered the logo room, naturally reached the lobby, and
+remained there for 300 headless frames. A separate forced room transition
+entered `rom_play` and ran until 400 frames. Run `44510011219` rendered
+screenshots of the lobby and a forced gameplay room on Linux; the gameplay
+screenshot had visible debug text. These tests do not validate normal navigation,
+touch input, sound playback, unlocks, saves, or iOS device compatibility.
+The APK audio group files were copied without transcoding.
+
+The IPA packaging workflow `.github/workflows/deadtown-test-ipa.yml` packages
+this incomplete data with the iOS 15 runner. The app uses a separate bundle ID
+and copies the bundled game into Documents on first launch without overwriting
+existing files, so it can later be modified. A successful packaging run only
+proves an unsigned IPA was assembled, not that it can be installed or played.
