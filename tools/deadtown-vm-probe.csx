@@ -4,7 +4,7 @@ using System;
 using System.IO;
 using System.Collections.Generic;
 using System.Linq;
-using System.Xml.Linq;
+using System.Text.Json;
 using UndertaleModLib;
 using UndertaleModLib.Models;
 using UndertaleModLib.Compiler;
@@ -31,32 +31,26 @@ var group = new CodeImportGroup(Data);
 foreach (string script in paths)
     group.QueueReplace("gml_Script_" + Path.GetFileNameWithoutExtension(script), File.ReadAllText(script));
 
-// Probe a conservative subset of event code separately. Do not attach events to
-// the APK objects: matching object and room versions is still unresolved.
+// Probe the translated event bodies without attaching them: version/ID
+// compatibility and drag-and-drop semantic equivalence are still unverified.
 string objectsDir = Path.Combine(Directory.GetParent(Path.GetDirectoryName(path)).FullName, "objects");
-int selected = 0, skipped = 0;
 var objectFiles = Directory.GetFiles(objectsDir, "*.object.gmx");
 var sourceObjectNames = new HashSet<string>(objectFiles.Select(x => Path.GetFileName(x).Replace(".object.gmx", "")), StringComparer.Ordinal);
 var apkObjectNames = new HashSet<string>(Data.GameObjects.Select(x => x.Name.Content), StringComparer.Ordinal);
 Console.WriteLine($"PROBE: APK objects absent from source={apkObjectNames.Except(sourceObjectNames).Count()}, source objects absent from APK={sourceObjectNames.Except(apkObjectNames).Count()}");
-foreach (string filename in objectFiles.OrderBy(x => x, StringComparer.Ordinal))
+string eventsPath = Environment.GetEnvironmentVariable("GML_PROBE_EVENTS");
+if (string.IsNullOrEmpty(eventsPath)) throw new Exception("GML_PROBE_EVENTS is not set");
+using var document = JsonDocument.Parse(File.ReadAllText(eventsPath));
+int selected = 0;
+foreach (var evt in document.RootElement.EnumerateArray())
 {
-    string objectName = Path.GetFileName(filename).Replace(".object.gmx", "");
-    var events = XDocument.Load(filename).Root.Element("events")?.Elements("event");
-    if (events == null) continue;
-    foreach (var evt in events)
-    {
-        var actions = evt.Elements("action").ToArray();
-        if (actions.Length != 1 || (string)actions[0].Element("id") != "603" ||
-            (string)actions[0].Element("whoName") != "self") { skipped++; continue; }
-        var text = actions[0].Element("arguments")?.Element("argument")?.Element("string")?.Value;
-        if (text == null) { skipped++; continue; }
-        var code = UndertaleCode.CreateEmptyEntry(Data, "probe_" + objectName + "_" + selected);
-        group.QueueReplace(code, text);
-        selected++;
-    }
+    string objectName = evt.GetProperty("object").GetString();
+    string text = evt.GetProperty("gml").GetString();
+    var code = UndertaleCode.CreateEmptyEntry(Data, "probe_" + objectName + "_" + selected);
+    group.QueueReplace(code, text);
+    selected++;
 }
-Console.WriteLine($"PROBE: compiling {selected} single-action events, skipped {skipped} multi-action or unsupported events");
+Console.WriteLine($"PROBE: compiling {selected} translated event bodies; event behavior is not yet verified");
 var result = group.Import(false);
 Console.WriteLine($"PROBE: compile_success={result.Successful}, code_entries={Data.Code.Count}, variables={Data.Variables.Count}, functions={Data.Functions.Count}");
 if (!result.Successful)

@@ -8,6 +8,7 @@ on:
     paths:
       - .github/workflows/deadtown-vm-probe.yml
       - tools/deadtown-vm-probe.csx
+      - tools/deadtown_event_probe.py
 
 permissions:
   contents: read
@@ -33,6 +34,7 @@ jobs:
           python3 tools/stage_deadtown_gmx.py work/source/deadtown.gmx work/staged || test "$?" -eq 1
           python3 tools/recover_deadtown_audio.py apply work/staged work/audio
           python3 tools/prepare_deadtown_offline.py work/staged work/offline
+          python3 tools/deadtown_event_probe.py work/offline work/events.json
       - name: Download pinned UndertaleModTool CLI
         shell: bash
         run: |
@@ -50,6 +52,7 @@ jobs:
         shell: bash
         env:
           GML_PROBE_SOURCE: ${{ github.workspace }}/work/offline/scripts/lang_type_set.gml
+          GML_PROBE_EVENTS: ${{ github.workspace }}/work/events.json
         run: |
           set +e
           "$UTMT_EXE" load work/game.droid -s tools/deadtown-vm-probe.csx 2>&1 | tee work/probe.log
