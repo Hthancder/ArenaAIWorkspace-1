@@ -10,7 +10,7 @@ using UndertaleModLib.Compiler;
 EnsureDataLoaded();
 string path = Environment.GetEnvironmentVariable("GML_PROBE_EVENTS");
 if (string.IsNullOrEmpty(path)) throw new Exception("GML_PROBE_EVENTS is not set");
-using var doc = JsonDocument.Parse(File.ReadAllText(path));
+var doc = JsonDocument.Parse(File.ReadAllText(path));
 int index = 0, found = 0;
 foreach (var evt in doc.RootElement.EnumerateArray())
 {
@@ -41,5 +41,6 @@ show_debug_message(""DT_COORDS display="" + string(display_get_width()) + ""x"" 
     }
     index++;
 }
+doc.Dispose();
 if (found != 1) throw new Exception("Expected exactly one sys_view Create event, got " + found);
 Console.WriteLine("UI_DIAGNOSTIC: data is instrumented and incomplete; never package or publish as a game");
