@@ -1,5 +1,13 @@
 # SiriX — tiến độ thực hiện thiết kế v1.2
 
+> **1.1.4 — header HTTP tuỳ chỉnh + hết văng khi mở danh sách mô hình.** Mỗi nhà
+> cung cấp có màn hình header riêng: thêm/sửa/bật-tắt/xoá/sắp xếp, kiểm tra tên
+> theo RFC 7230 ngay khi gõ, gợi ý xếp theo endpoint đang cấu hình (OpenRouter,
+> Azure, gateway nội bộ), và giá trị không bao giờ lộ ra danh sách hay log. Danh
+> sách mô hình được vẽ lại từ đầu bằng UIKit thuần — bản cũ dùng `PSButtonCell`
+> với `buttonAction`, class thật của Preferences không có setter đó nên Settings
+> văng khi chạm vào hàng.
+>
 > **1.1.3 — làm lại toàn bộ tầng công cụ.** Từ một danh sách công cụ nhỏ dựng trực
 > tiếp trong `SXTools`, công cụ giờ là một tầng riêng: `SXToolkit` (sổ đăng ký +
 > thực thi có kiểm soát) và `SXToolCatalog` (13 công cụ thật). Model thấy công cụ
@@ -183,4 +191,57 @@ trả nil. Trò chuyện thử trong Settings giờ dùng đúng bộ công cụ
 **Đã bỏ.** Ba công tắc cũ (`toolSystemInfo`, `toolClipboard`, `toolFetchURL`) nay
 được migrate sang `toolsDisabled` (danh sách tên công cụ bị tắt); Root.plist thay
 ba hàng công tắc bằng một liên kết tới màn hình Công cụ.
+
+## 1.1.4 — Header tuỳ chỉnh & sửa lỗi văng danh sách mô hình
+
+**Vì sao.** Nhiều endpoint tương thích OpenAI không chỉ cần khóa: OpenRouter cần
+`HTTP-Referer`/`X-Title`, Azure dùng `api-key` thay `Authorization`, gateway sau
+proxy cần header định danh riêng. Trước 1.1.4 chỉ có đúng một bộ header cứng.
+
+**Tầng dữ liệu — `Sources/SXHeaders.{h,m}` (Foundation-only, có test).**
+- `SXHeaderNameIsValid`: token RFC 7230 (chữ, số, `!#$%&'*+-.^_`|~`); tên có dấu
+  cách, dấu hai chấm hay ký tự ngoài ASCII bị từ chối ngay trong ô nhập.
+- `SXHeaderNameIsReserved`: `Host`, `Content-Type`, `Content-Length`,
+  `Transfer-Encoding`, `Connection`, `Accept-Encoding`, `Expect`, `Upgrade` —
+  ghi đè sẽ làm hỏng request nên bị lọc bỏ (kèm giải thích).
+- `SXHeaderValidate`: trả về lỗi cụ thể (trống / sai tên / giá trị rỗng hoặc có
+  xuống dòng / trùng tên / quá trần `SXHeaderMaximum` = 16).
+- `SXHeadersNormalized`: đọc dữ liệu thô từ prefs (kể cả dạng từ điển cũ), bỏ
+  rác, điền `enabled` mặc định.
+- `SXHeadersApplied`: bộ header thật sự gửi đi — chỉ mục đang bật và hợp lệ;
+  trùng tên (không phân biệt hoa thường) thì giá trị sau thắng.
+- `SXHeaderValueMasked` / `SXHeadersSummary`: hiển thị `••••a1b2` và “2 header ·
+  1 đang bật”.
+- `SXHeaderPresetsForEndpoint`: gợi ý khớp endpoint hiện tại được xếp lên đầu.
+
+**Lưu trữ.** `SXPrefs` có `openaiHeaders` / `geminiHeaders` (mảng
+`{name, value, enabled}`), `-headersForProvider:`, `+setHeaders:forProvider:`,
+`-headersSummaryForProvider:`. `+setValue:forKey:` giờ chấp nhận mọi kiểu
+property list (trước đây chỉ chuỗi/số). Tóm tắt ở trang chính hiện thêm “· N
+header” khi có header đang bật.
+
+**Gửi đi.** `SXRequestHeaders()` trong `SXLLM` ghép header xác thực mặc định với
+header tuỳ chỉnh (áp sau, nên gateway riêng có thể thay cả `Authorization`), dùng
+chung cho non-stream, stream (SSE) và cả “Kiểm tra kết nối”. Log chỉ ghi **tên**
+header và số lượng, không bao giờ ghi giá trị.
+
+**Giao diện.** `Prefs/SXHeadersController`: danh sách header (tên đẳng khoảng,
+giá trị đã che, công tắc gửi/ngừng, vuốt để xoá, “Sửa” để xoá + sắp xếp), màn
+hình soạn header với kiểm tra trực tiếp dưới ô nhập, nút “Dán” làm sạch token
+dán từ web, và danh sách gợi ý theo endpoint. Trang cấu hình từng nhà cung cấp
+có thêm nhóm “Header tuỳ chỉnh” + dòng “Đang gửi”.
+
+**Lỗi đã sửa: Settings văng khi mở “Chọn từ danh sách”.** Hàng trong danh sách
+mô hình được dựng bằng `PSButtonCell` rồi gán `row.buttonAction = @selector(…)`.
+`PSSpecifier` thật của Preferences không có setter `setButtonAction:` → ném
+`NSInvalidArgumentException` ngay khi bảng được dựng. `SXModelPickerController`
+được viết lại thành `PSViewController` + `UITableView` (cùng khuôn với các màn
+hình khác của SiriX): mục “Đang dùng”, danh sách gợi ý có dấu ✓, và hàng “Nhập
+mô hình khác…” mở hộp thoại nhập tay. Không còn phụ thuộc private API nào của
+Preferences.
+
+**Kiểm thử.** `tests/headers_test.m` (chạy bằng `scripts/test-headers-macos.sh`
+trong CI) phủ: validate tên/giá trị/trùng tên/trần, header hệ thống, chuẩn hoá
+dữ liệu thô, dạng từ điển cũ, thứ tự thắng khi trùng tên, tóm tắt, che giá trị,
+gợi ý theo endpoint.
 

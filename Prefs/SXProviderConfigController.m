@@ -112,6 +112,9 @@
 			return raw.length ? @"⚠️ địa chỉ không hợp lệ" : @"Mặc định";
 		}
 		if ([key isEqualToString:@"testStatus"]) return [self testStatusText];
+		if ([key isEqualToString:@"headersDisplay"]) {
+			return [[SXPrefs shared] headersSummaryForProvider:self.provider];
+		}
 		return [super readPreferenceValue:specifier];
 	} @catch (NSException *exception) {
 		SXLogErr(@"pref", @"readPreferenceValue EXCEPTION (key=%@): %@ — %@",
@@ -260,6 +263,16 @@
 				  message:detail];
 		});
 	}];
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+	[super viewWillAppear:animated];
+	// Header có thể vừa đổi ở màn hình con — cập nhật lại dòng tóm tắt.
+	@try {
+		[self reloadSpecifierID:@"headersDisplay" animated:NO];
+	} @catch (NSException *exception) {
+		(void)exception;
+	}
 }
 
 - (void)sx_openChat:(id)sender {

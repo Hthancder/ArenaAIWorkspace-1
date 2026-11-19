@@ -27,7 +27,7 @@ jobs:
           # annotation của check-run để đọc được từ ngoài (job log bị chặn).
           log=$(mktemp)
           failed=""
-          for script in check-prefs test-log-file test-intercept-macos test-store-macos test-toolkit-macos; do
+          for script in check-prefs test-log-file test-intercept-macos test-store-macos test-toolkit-macos test-headers-macos; do
             echo "===== $script =====" | tee -a "$log"
             if ! "./scripts/${script}.sh" >> "$log" 2>&1; then
               failed="$script"

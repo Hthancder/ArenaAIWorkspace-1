@@ -14,7 +14,11 @@ Nhà cung cấp: **OpenAI tương thích** (mặc định) hoặc **Google Gemin
 - **2 chế độ trả lời**
   - *Thông minh (mặc định)*: AI trả lời câu hỏi tri thức; tác vụ hệ thống để Siri gốc xử lý.
   - *Thay thế mọi câu trả lời*: AI thay toàn bộ phản hồi của Siri.
-- **Công cụ AI**: thông tin thiết bị, bảng nhớ tạm, đọc trang web (https), xóa lịch sử — bật/tắt từng cái.
+- **Header HTTP tuỳ chỉnh** cho từng nhà cung cấp — thêm bao nhiêu cũng được, bật/tắt/xoá/sắp xếp,
+  kiểm tra tên ngay khi gõ, gợi ý tự xếp theo endpoint (OpenRouter, Azure, gateway nội bộ). Giá trị
+  chỉ lưu trên máy và không bao giờ ghi vào log.
+- **13 công cụ AI thật**: thiết bị, bảng nhớ tạm, đọc trang web, mở ứng dụng/liên kết, chạy phím tắt,
+  ghi nhớ lâu dài, tính toán, xoá lịch sử — bật/tắt từng cái, mỗi công cụ có trần thời gian riêng.
 - **Hội thoại có ngữ cảnh** (giữ N cặp câu hỏi/trả lời gần nhất), lịch sử lưu trên máy, thống kê, nhiệt độ và thời gian chờ đều chỉnh được.
 - **Không lưu lịch sử**: các lượt mới chỉ giữ trong bộ nhớ. Tùy chọn này không ngăn Siri, nhà cung cấp AI hoặc các log khác xử lý nội dung; lịch sử cũ phải xóa riêng.
 - **Prompt tùy chỉnh** (để trống = dùng prompt mặc định).
@@ -33,9 +37,9 @@ Nhà cung cấp: **OpenAI tương thích** (mặc định) hoặc **Google Gemin
 
 ## Cài đặt
 
-1. Mở repo này trên GitHub → tab **Actions** → chạy mới nhất của workflow **Build SiriX**.
-2. Chờ 2 job **rootless** / **roothide** hoàn tất (vài phút).
-3. Vào run đó → mục **Artifacts** → tải `SiriX-rootless` hoặc `SiriX-roothide` (chọn đúng scheme jailbreak của bạn) → cài `.deb` bằng tweak installer quen thuộc.
+1. Mở trang **Releases** của repo → bản mới nhất (`sirix-<phiên bản>-build.<số>`).
+2. Tải đúng gói: `SiriX-rootless.deb` (Dopamine / palera1n rootless) hoặc `SiriX-roothide.deb`.
+3. Mở tệp bằng Sileo/Zebra (hoặc `dpkg -i`) rồi respring. Đối chiếu `SHA256SUMS` nếu muốn chắc chắn.
 
 Mỗi lần push code, CI tự build lại cả 2 gói.
 

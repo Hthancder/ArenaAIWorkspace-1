@@ -10,9 +10,11 @@ SiriXPreferences_FILES = \
 	SXHistoryController.m \
 	SXStatsController.m \
 	SXToolsController.m \
+	SXHeadersController.m \
 	../Sources/SXLog.m \
 	../Sources/SXStore.m \
 	../Sources/SXPrefs.m \
+	../Sources/SXHeaders.m \
 	../Sources/SXLLM.m \
 	../Sources/SXStream.m \
 	../Sources/SXMarkdown.m \

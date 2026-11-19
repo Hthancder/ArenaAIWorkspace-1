@@ -20,6 +20,7 @@ NSArray<NSString *> *SXPreferenceKeys(void) {
 				 @"streaming", @"markdown", @"hideWebCards", @"showOriginal", @"speakErrors",
 				 @"customPrompt", @"incognito",
 				 @"maxToolRounds", @"toolsDisabled",
+				 @"openaiHeaders", @"geminiHeaders",
 				 @"verbose"];
 	});
 	return keys;
@@ -141,7 +142,11 @@ static double SXClamp(double v, double lo, double hi) {
 
 + (void)setValue:(id)value forKey:(NSString *)key {
 	if (!key.length) return;
-	if (value && ![value isKindOfClass:[NSString class]] && ![value isKindOfClass:[NSNumber class]]) return;
+	// Cho phép mọi kiểu property list: chuỗi, số, mảng (header tuỳ chỉnh), từ điển…
+	if (value && ![NSPropertyListSerialization propertyList:value isValidForFormat:NSPropertyListBinaryFormat_v1_0]) {
+		SXLogWrn(@"pref", @"bỏ qua key %@: giá trị không phải property list", key);
+		return;
+	}
 	CFPreferencesSetAppValue((__bridge CFStringRef)key,
 							 (__bridge CFPropertyListRef)value,
 							 (__bridge CFStringRef)kSXDomain);
@@ -202,7 +207,8 @@ static double SXClamp(double v, double lo, double hi) {
 					 _openaiKey ?: [NSNull null], _openaiBase ?: [NSNull null], _openaiModel ?: [NSNull null],
 					 _geminiKey ?: [NSNull null], _geminiModel ?: [NSNull null],
 					 _customPrompt ?: [NSNull null], _timeoutAction ?: [NSNull null],
-					 _disabledTools ?: [NSNull null]]);
+					 _disabledTools ?: [NSNull null],
+					 _openaiHeaders ?: [NSNull null], _geminiHeaders ?: [NSNull null]]);
 
 	NSDictionary *file = nil;
 	if ([[NSFileManager defaultManager] fileExistsAtPath:kSXFilePath]) {
@@ -239,16 +245,19 @@ static double SXClamp(double v, double lo, double hi) {
 		? @"keep" : @"bubble";
 	_maxToolRounds = (NSInteger)SXClamp((double)[self integerFor:@"maxToolRounds" default:3], 1, 4);
 	_disabledTools = [self loadDisabledTools];
+	_openaiHeaders = SXHeadersNormalized([self valueFor:@"openaiHeaders"]);
+	_geminiHeaders = SXHeadersNormalized([self valueFor:@"geminiHeaders"]);
 
 	SXLogSetVerbose(_verbose);
 	SXLogInf(@"pref", @"cài đặt: enabled=%d mode=%@ provider=%@ temp=%.1f turns=%ld timeout=%.0fs "
-			 @"stream=%d md=%d timeoutAction=%@ toolRounds=%ld toolsOff=%lu "
+			 @"stream=%d md=%d timeoutAction=%@ toolRounds=%ld toolsOff=%lu headers=%lu/%lu "
 			 @"openAIKey=%@ geminiKey=%@ customPrompt=%@",
 			 _enabled, _mode == SXReplyModeFull ? @"full" : @"smart",
 			 _provider == SXProviderGemini ? @"gemini" : @"openai",
 			 _temperature, (long)_contextTurns, _responseTimeout,
 			 _streaming, _markdown, _timeoutAction, (long)_maxToolRounds,
 		 (unsigned long)_disabledTools.count,
+		 (unsigned long)_openaiHeaders.count, (unsigned long)_geminiHeaders.count,
 			 SXRedactKey(_openaiKey), SXRedactKey(_geminiKey),
 			 _customPrompt.length > 0 ? [NSString stringWithFormat:@"%lu ký tự", (unsigned long)_customPrompt.length] : @"(mặc định)");
 }
@@ -301,6 +310,27 @@ static NSArray<NSString *> *SXLegacyToolNames(NSString *legacyKey) {
 	[SXPrefs setValue:(sorted.count ? sorted : @[]) forKey:@"toolsDisabled"];
 	[[SXPrefs shared] reload];
 	SXLogInf(@"pref", @"công cụ %@: %@", name, enabled ? @"bật" : @"tắt");
+}
+
+#pragma mark - Header tuỳ chỉnh
+
+- (NSArray<NSDictionary *> *)headersForProvider:(SXProvider)provider {
+	NSArray *stored = provider == SXProviderGemini ? _geminiHeaders : _openaiHeaders;
+	return [stored isKindOfClass:[NSArray class]] ? stored : @[];
+}
+
++ (void)setHeaders:(NSArray<NSDictionary *> *)headers forProvider:(SXProvider)provider {
+	NSArray *clean = SXHeadersNormalized(headers);
+	NSString *key = provider == SXProviderGemini ? @"geminiHeaders" : @"openaiHeaders";
+	[self setValue:clean forKey:key];
+	[[SXPrefs shared] reload];
+	SXLogInf(@"pref", @"header %@: %lu mục (%lu đang gửi)", SXProviderDisplayName(provider),
+			 (unsigned long)clean.count,
+			 (unsigned long)SXHeadersApplied(clean).count);
+}
+
+- (NSString *)headersSummaryForProvider:(SXProvider)provider {
+	return SXHeadersSummary([self headersForProvider:provider]);
 }
 
 #pragma mark - Truy vấn theo provider hiện tại
@@ -360,6 +390,12 @@ static NSArray<NSString *> *SXLegacyToolNames(NSString *legacyKey) {
 }
 
 - (NSString *)providerSummary {
+	NSArray<NSDictionary *> *headers = [self headersForProvider:_provider];
+	NSUInteger active = SXHeadersApplied(headers).count;
+	if (active) {
+		return [NSString stringWithFormat:@"%@ · %@ · %lu header", self.activeProviderName,
+				self.activeModel, (unsigned long)active];
+	}
 	return [NSString stringWithFormat:@"%@ · %@", self.activeProviderName, self.activeModel];
 }
 

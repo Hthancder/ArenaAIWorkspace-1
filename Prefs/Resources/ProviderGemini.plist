@@ -45,6 +45,24 @@
 
 		<dict>
 			<key>cell</key><string>PSGroupCell</string>
+			<key>label</key><string>Header tuỳ chỉnh</string>
+			<key>footerText</key>
+			<string>Gửi kèm header HTTP riêng trong mọi request tới nhà cung cấp này — cần cho OpenRouter (HTTP-Referer, X-Title), Azure (api-key), gateway sau proxy hoặc máy chủ nội bộ. Header hệ thống (Host, Content-Type, Content-Length) bị bỏ qua vì sẽ làm hỏng request. Giá trị chỉ lưu trên máy và không bao giờ ghi vào log.</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSLinkCell</string>
+			<key>label</key><string>Header tuỳ chỉnh</string>
+			<key>detail</key><string>SXHeadersController</string>
+			<key>headersProvider</key><string>gemini</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSTitleValueCell</string>
+			<key>label</key><string>Đang gửi</string>
+			<key>key</key><string>headersDisplay</string>
+		</dict>
+
+		<dict>
+			<key>cell</key><string>PSGroupCell</string>
 			<key>label</key><string>Mô hình</string>
 			<key>footerText</key>
 			<string>Flash phù hợp trả lời nhanh trong Siri; Pro chất lượng cao hơn nhưng thường vượt mốc chờ 5 giây.</string>

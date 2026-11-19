@@ -183,6 +183,28 @@ static void SXAppendGeminiToolResults(NSMutableArray *contents, SXToolExec execu
 	}
 }
 
+/// Bộ header cho request: header xác thực mặc định + header tuỳ chỉnh người dùng
+/// đã bật (xem Settings → Cấu hình <nhà cung cấp> → Header tuỳ chỉnh). Header
+/// tuỳ chỉnh được áp SAU nên có thể thay cả Authorization/api-key khi gateway yêu
+/// cầu; những header hệ thống (Host, Content-Type…) đã bị lọc từ SXHeaders.
+static NSDictionary<NSString *, NSString *> *SXRequestHeaders(SXPrefs *prefs,
+															 SXProvider provider,
+															 NSString *key) {
+	NSMutableDictionary<NSString *, NSString *> *headers = [NSMutableDictionary dictionary];
+	if (provider == SXProviderGemini) headers[@"x-goog-api-key"] = key;
+	else headers[@"Authorization"] = [NSString stringWithFormat:@"Bearer %@", key];
+
+	NSDictionary<NSString *, NSString *> *custom = SXHeadersApplied([prefs headersForProvider:provider]);
+	if (custom.count) {
+		[headers addEntriesFromDictionary:custom];
+		SXLogDbg(@"llm", @"áp %lu header tuỳ chỉnh cho %@ (%@)", (unsigned long)custom.count,
+				 SXProviderDisplayName(provider),
+				 [[custom.allKeys sortedArrayUsingSelector:@selector(compare:)]
+				  componentsJoinedByString:@", "]);
+	}
+	return headers;
+}
+
 // Retry giới hạn theo từng vòng HTTP, chỉ với 429/5xx; không chạy lại tool.
 static BOOL SXRetryHTTP(NSInteger status, NSInteger *attempt) {
 	if (!((status == 429) || (status >= 500 && status < 600)) || *attempt >= 2) return NO;
@@ -237,6 +259,7 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 		return;
 	}
 	NSString *url = [base hasSuffix:@"/chat/completions"] ? base : [base stringByAppendingString:@"/chat/completions"];
+	NSDictionary<NSString *, NSString *> *requestHeaders = SXRequestHeaders(prefs, SXProviderOpenAI, key);
 	NSMutableArray *messages = [NSMutableArray array];
 	// Nối danh sách công cụ + bối cảnh thời gian vào system prompt.
 	NSString *systemPrompt = SXComposeSystemPrompt(prefs);
@@ -297,8 +320,7 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 			NSError *streamError = nil;
 			NSDictionary *streamResp = [SXStream postJSON:streamBody
 													 toURL:url
-												   headers:@{@"Authorization":
-														[NSString stringWithFormat:@"Bearer %@", key]}
+												   headers:requestHeaders
 													 format:SXStreamFormatOpenAI
 													  timeout:remaining
 													  error:&streamError];
@@ -361,9 +383,7 @@ static void SXAskOpenAI(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 		}
 
 		NSError *postError = nil;
-		NSDictionary *resp = SXHTTPPost(url, body, @{
-			@"Authorization": [NSString stringWithFormat:@"Bearer %@", key],
-		}, remaining, &postError);
+		NSDictionary *resp = SXHTTPPost(url, body, requestHeaders, remaining, &postError);
 		if (!resp) {
 			SXLogErr(@"llm", @"openai lỗi mạng: %@", postError.localizedDescription);
 			completion(nil, postError, SXInfo(@"openai", model, 0, rounds, start));
@@ -460,6 +480,7 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 		@"https://generativelanguage.googleapis.com/v1beta/models/%@:generateContent", model];
 	NSString *streamURL = [NSString stringWithFormat:
 		@"https://generativelanguage.googleapis.com/v1beta/models/%@:streamGenerateContent?alt=sse", model];
+	NSDictionary<NSString *, NSString *> *requestHeaders = SXRequestHeaders(prefs, SXProviderGemini, key);
 
 	NSMutableArray *contents = [NSMutableArray array];
 	for (NSDictionary *turn in history) {
@@ -514,7 +535,7 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 			NSError *streamError = nil;
 			NSDictionary *streamResp = [SXStream postJSON:body
 													 toURL:streamURL
-												   headers:@{@"x-goog-api-key": key}
+												   headers:requestHeaders
 													 format:SXStreamFormatGemini
 													  timeout:remaining
 													  error:&streamError];
@@ -579,7 +600,7 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 		}
 
 		NSError *postError = nil;
-		NSDictionary *resp = SXHTTPPost(url, body, @{@"x-goog-api-key": key}, remaining, &postError);
+		NSDictionary *resp = SXHTTPPost(url, body, requestHeaders, remaining, &postError);
 		if (!resp) {
 			SXLogErr(@"llm", @"gemini lỗi mạng: %@", postError.localizedDescription);
 			completion(nil, postError, SXInfo(@"gemini", model, 0, rounds, start));

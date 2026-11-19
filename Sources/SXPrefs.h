@@ -1,4 +1,5 @@
 #import <Foundation/Foundation.h>
+#import "SXHeaders.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -75,6 +76,17 @@ FOUNDATION_EXPORT NSArray<NSDictionary *> *SXModelPresets(SXProvider provider);
 @property (nonatomic, readonly) NSInteger maxToolRounds;        // 1–4, mặc định 3
 /// Tên các công cụ người dùng đã tắt (xem `SXTools catalog`). Rỗng = bật tất cả.
 @property (nonatomic, readonly, copy) NSSet<NSString *> *disabledTools;
+
+/// Header HTTP tuỳ chỉnh của từng nhà cung cấp (đã chuẩn hoá: chỉ header hợp lệ).
+@property (nonatomic, readonly, copy) NSArray<NSDictionary *> *openaiHeaders;
+@property (nonatomic, readonly, copy) NSArray<NSDictionary *> *geminiHeaders;
+
+/// Header đang cấu hình cho một nhà cung cấp.
+- (NSArray<NSDictionary *> *)headersForProvider:(SXProvider)provider;
+/// Lưu danh sách header (được chuẩn hoá lại trước khi ghi) + reload ngay.
++ (void)setHeaders:(NSArray<NSDictionary *> *)headers forProvider:(SXProvider)provider;
+/// "2 header · đang gửi tất cả" — nhãn cho trang cấu hình.
+- (NSString *)headersSummaryForProvider:(SXProvider)provider;
 
 /// Công cụ có đang bật không (dùng cho màn hình Cài đặt → Công cụ).
 - (BOOL)isToolEnabled:(NSString *)name;
