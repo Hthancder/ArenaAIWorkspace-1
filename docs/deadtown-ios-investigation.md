@@ -219,3 +219,28 @@ custom VM-data rebuild would need to preserve action order, control flow, event
 links, asset IDs, room data and source/version compatibility; merely compiling
 the 124 script files would not reconstruct the game. No such converter has
 been validated.
+
+### Free VM bytecode feasibility probe (not a game build)
+
+GitHub Actions run `44501077642` completed the corrected runner build and
+package checks. The unsigned runner is still untested on a device and contains
+no Dead Town game.
+
+Run `44504158157` compiled one source script in memory using the GPL-licensed
+UndertaleModTool 0.9.2.0 compiler, after experimentally initializing empty
+VM code tables in a copy of the APK's YYC data. Run `44504808068` compiled
+138 staged script files and 376 selected single-action event bodies in memory
+(514 entries). It skipped 163 other events, did not attach compiled events to
+objects, did not serialize or run the resulting game, and produced no IPA.
+The 138 includes source files not necessarily referenced by the GMX project.
+
+The source and APK appear to represent different asset sets: among all staged
+files, 68 APK script names and 94 APK object names have no matching source
+file; 14 source scripts and 19 source object files have no APK match. The APK
+has 15 room records while the GMX project lists seven rooms. Names alone do
+not prove compatibility of shared assets. Therefore simply inserting compiled
+source scripts into the APK data cannot safely recover the full game. A real
+converter must handle event actions and bindings, reconcile asset and room
+versions, and validate every dependency and behavior before packaging.
+The reproducible probe is `.github/workflows/deadtown-vm-probe.yml` with
+`tools/deadtown-vm-probe.csx`; it is deliberately not a conversion or release.
