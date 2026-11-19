@@ -139,6 +139,19 @@ static NSString *testBase = @"https://mock.test/v1";
 - (NSArray<NSDictionary *> *)geminiHeaders { return @[]; }
 - (NSArray<NSDictionary *> *)headersForProvider:(SXProvider)p { (void)p; return @[]; }
 - (NSString *)systemPrompt { return @"Bạn là trợ lý kiểm thử."; }
++ (NSString *)normalizedBaseURL:(NSString *)raw {
+	NSString *text = [raw stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+	while ([text hasSuffix:@"/"]) text = [text substringToIndex:text.length - 1];
+	if (![text hasPrefix:@"http://"] && ![text hasPrefix:@"https://"]) return nil;
+	return text.length ? text : nil;
+}
++ (BOOL)isValidBaseURL:(NSString *)raw { return [self normalizedBaseURL:raw] != nil; }
++ (NSString *)maskedKey:(NSString *)key { return key.length > 8 ? @"sk-…" : @"(trống)"; }
++ (NSString *)stringForKey:(NSString *)key { (void)key; return nil; }
++ (void)setString:(NSString *)value forKey:(NSString *)key { (void)value; (void)key; }
++ (void)setValue:(id)value forKey:(NSString *)key { (void)value; (void)key; }
++ (void)resetAll { }
+- (void)reload { }
 @end
 
 void SXLogWrite(SXLogLevel level, NSString *category, NSString *format, ...) {
