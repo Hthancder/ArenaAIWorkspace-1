@@ -30,9 +30,11 @@ jobs:
           import base64, zlib
           data = Path('prior/build.log').read_bytes()
           encoded = base64.b64encode(zlib.compress(data, 9)).decode()
-          if len(encoded) > 50000:
-              raise SystemExit('Log too large for diagnostic annotation')
-          print('::notice::LOG_BASE64:' + encoded)
+          chunks = [encoded[i:i + 3000] for i in range(0, len(encoded), 3000)]
+          if len(chunks) > 10:
+              raise SystemExit('Log too large for diagnostic annotations')
+          for index, part in enumerate(chunks):
+              print(f'::notice::LOG_PART_{index:02d}:' + part)
           PY
   runner:
     if: ${{ !contains(github.event.head_commit.message, '[diagnostics]') }}
