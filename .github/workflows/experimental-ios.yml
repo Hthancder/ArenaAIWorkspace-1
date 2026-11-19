@@ -1,0 +1,54 @@
+name: Experimental AIR iOS build
+
+on:
+  push:
+    branches:
+      - arena/78062d86-arenaaiworkspace-1
+  workflow_dispatch:
+    inputs:
+      accept_air_license:
+        description: 'I have read and accept the Adobe AIR SDK License Agreement'
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  experimental-ipa:
+    # A push must not accept the AIR license on behalf of the user. Manual
+    # dispatch can be used when this workflow also exists on the default branch.
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.accept_air_license) || (github.event_name == 'push' && vars.AIR_SDK_LICENSE_ACCEPTED == 'true') }}
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout build scripts
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: tooling
+      - name: Checkout game assets at investigated commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 4291b63d9b244eeb950b450e4b42de776327d4a1
+          path: assets
+      - name: Verify preparation tools
+        working-directory: tooling
+        run: python3 -m unittest discover -s tests -v
+      - name: Set up AIR SDK
+        uses: joshtynjala/setup-adobe-air-action@05ea6f91dae02a43f66f17a862ac95b34f4fc9dc
+        with:
+          air-version: '51.1.3.12'
+          accept-license: 'true'
+      - name: Reconstruct game files
+        run: python3 tooling/tools/stage_air_game.py assets "$RUNNER_TEMP/air-staged"
+      - name: Attempt interpreter-mode IPA
+        run: python3 tooling/tools/build_test_ipa.py "$RUNNER_TEMP/air-staged" "$RUNNER_TEMP/experimental.ipa"
+      - name: Upload experimental IPA
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: experimental-ios-ipa
+          path: ${{ runner.temp }}/experimental.ipa
+          if-no-files-found: error
+          retention-days: 3

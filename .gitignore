@@ -1,0 +1,7 @@
+.cache/
+__pycache__/
+*.py[cod]
+*.ipa
+*.p12
+*.pfx
+*.mobileprovision
