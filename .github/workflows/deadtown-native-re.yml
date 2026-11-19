@@ -7,9 +7,12 @@ on:
     paths:
       - .github/workflows/deadtown-native-re.yml
       - tools/deadtown_native_tables.py
+      - tools/deadtown_native_callgraph.py
+      - tools/deadtown_native_inventory.py
       - tools/deadtown_native_lang.py
       - tools/recover_deadtown_audio.py
       - tests/test_deadtown_native_tables.py
+      - tests/test_deadtown_native_callgraph.py
       - tests/test_deadtown_native_lang.py
 
 permissions:
@@ -40,8 +43,10 @@ jobs:
         run: |
           set -euo pipefail
           python -m unittest discover -s tests -p 'test_deadtown_native_tables.py' -v
+          python -m unittest discover -s tests -p 'test_deadtown_native_callgraph.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_native_lang.py' -v
           mkdir -p work/reports
+          python tools/deadtown_native_callgraph.py .cache/deadtown-original.apk --output work/reports/native-callgraph.json
           python tools/deadtown_native_tables.py .cache/deadtown-original.apk --output work/reports/native-tables.json
           python tools/deadtown_native_lang.py .cache/deadtown-original.apk --compare-gmx .cache/deadtown/deadtown.gmx --output work/reports/native-language.json
       - name: Preserve research reports (not a game build)

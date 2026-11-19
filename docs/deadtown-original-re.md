@@ -179,10 +179,26 @@ return those transformed window coordinates. The old source's `sys_view` uses
 both `display_get_width/height` and raw touch coordinates for its on-screen
 controls, and uses display dimensions when drawing buttons in Draw GUI. A
 mismatch among display, window, GUI and actual drawable sizes could therefore
-misplace controls or touch hitboxes. The actual iOS values and original APK's
-coordinate semantics have not yet been measured; this is a diagnostic risk,
-not a proven fix. A headless desktop-only instrumentation workflow exists to
-measure the incomplete VM build without changing or releasing an IPA.
+misplace controls or touch hitboxes. In an instrumented headless run of the
+incomplete VM build, [run 44547797982](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44547797982)
+measured `display=1280x720`, `gui=1334x750`, `window=1334x750`,
+`viewport=1232x693`, `os_type=0` during `sys_view` Create. This establishes a
+coordinate-space difference in that desktop run, but it does not establish how
+much of the user's iOS screenshot it explains. The actual iOS values and original
+APK's coordinate semantics have not yet been measured; no unverified UI fix
+has been applied. The instrumentation changes only a disposable VM-data copy,
+not an IPA.
+
+### Native GML call graph
+
+`tools/deadtown_native_callgraph.py` finds candidate direct calls to GML exports
+and writes callsite addresses for all 1,051 exported game functions. For
+example, native `sys_view` Step has direct calls to absent `gp_*` scripts, while
+native `sys_UI` Draw GUI calls `get_enchant_price` and `get_enchant_my_money`,
+also absent from the old source. This helps prioritize reconstruction, but it
+is not equivalent to GML or a complete control-flow graph: indirect calls and
+non-exported code are omitted, and decoded literal data may be false positives.
+These callsite inventories cannot establish that a whole feature was restored.
 
 The previous experimental probe linked only 504 GMX events and cleared 68
 unresolved native code IDs to serialize its VM data. It rendered screenshots
@@ -205,6 +221,27 @@ The prior 90 audio payloads were extracted byte-for-byte without transcoding.
    features cannot be promised as offline equivalents. Unlocks and mod support
    also remain unverified.
 
+## Readiness gate requested by the user
+
+Do not ask the user to test another IPA merely because it packages or fixes one
+issue. Before inviting a device test, the work must show evidence for:
+
+- Restored or intentionally excluded functionality accounted for against the
+  original, including matching-name functions whose behavior differs. An export
+  name count alone is not evidence of equivalence.
+- Single-player progression, crafting, spawning, inventory, equipment, combat,
+  save/load and offline/unlock behavior tested on representative scenarios,
+  with no unhandled functions or critical errors in the tested paths.
+- UI/layout and multi-touch tested against original reference frames and hitbox
+  behavior at multiple aspect ratios; display, GUI, viewport and touch spaces
+  verified together, including rotation and safe areas.
+- Original audio bytes retained and playback checked; install/update preserves
+  user saves and mods without inadvertently retaining obsolete game code.
+- An actual iOS build and runtime/device validation where available. Desktop
+  headless tests and metadata checks cannot establish iPhone correctness.
+
 This is substantial reverse engineering and may require manual reimplementation;
 there is no proven automatic route from this APK's Android native code to a
-faithful iOS IPA.
+faithful iOS IPA. A claim of zero bugs or full equivalence cannot be guaranteed
+by static analysis or CI alone. Multiplayer/server behavior also conflicts with
+the requested offline-only scope and must be explicitly accounted for.

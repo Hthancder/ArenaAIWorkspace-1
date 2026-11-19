@@ -1,6 +1,8 @@
+import re
 import tempfile
 import unittest
 from pathlib import Path
+import xml.etree.ElementTree as ET
 
 from tools.deadtown_native_tables import extract, multi_store_offset
 from tools.deadtown_native_lang import extract as extract_languages
@@ -63,6 +65,25 @@ class NativeTableIntegrationTests(unittest.TestCase):
         prior = extract_languages(APK)
         self.assertEqual([(x['call_address'], values(x)) for x in rows['lang_add']],
                          [(x['call_address'], x['candidate_arguments']) for x in prior['entries']])
+
+    @unittest.skipUnless((ROOT / '.cache/deadtown/deadtown.gmx/objects/sys_global.object.gmx').is_file(),
+                         'requires pinned GMX source')
+    def test_numeric_tables_against_old_source(self):
+        result = extract(APK)
+        tree = ET.parse(ROOT / '.cache/deadtown/deadtown.gmx/objects/sys_global.object.gmx')
+        source = '\n'.join(node.text or '' for node in tree.iter('string'))
+        for function, old_calls, old_distinct, common in (
+                ('db_craft_add', 76, 76, 71), ('db_spawn_add', 127, 126, 109)):
+            literal_calls = re.findall(r'(?m)^\s*' + function + r'\(([^\n)]*)\)', source)
+            self.assertEqual(len(literal_calls), old_calls)
+            old = {tuple(float(v.strip()) for v in call.split(',')) for call in literal_calls}
+            native = {tuple(arg['value'] for arg in row['arguments']) for row in result['entries'][function]}
+            self.assertEqual(len(old), old_distinct)
+            self.assertEqual(len(old & native), common)
+        self.assertIn('db_weapon_add("Dagger",spr_noone,ih_dagger,"Small keen knife",7,40,7', source)
+        self.assertIn('db_equip_add("Cotton clothes",spr_noone,spr_noone,"Clothes made from cotton",1,1,0)', source)
+        self.assertIn('db_spawn_add(0,4,25,2,5)', source)
+        self.assertIn('db_use_add("Raw meat",spr_noone,"Kind of meat",20,5,0,0,0,1)', source)
 
 
 if __name__ == '__main__':
