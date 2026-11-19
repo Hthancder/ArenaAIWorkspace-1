@@ -197,12 +197,25 @@ The project https://github.com/andronep/gmrunner (GPL-3.0-or-later), commit
 `.github/workflows/gmrunner-ios15.yml` is experimenting with an iOS 15
 adaptation using the simple UIKit launcher in `tools/gmrunner-ios15/Launcher.swift`
 and the runner's built-in game menu. GitHub Actions runs `44494942432` and
-`44496782229` built the unsigned standalone runner, but the subsequent package
-verification failed; the latter reported MinimumOSVersion 15.0 before failing.
-The precise failure is still being diagnosed. The runner does not include Dead Town. No iOS 15 device, game-data, audio, input, or save test has yet
+`44496782229` and `44498584718` built an unsigned standalone runner, but the
+package verification failed because the `lipo -verify_arch` arguments were in
+the wrong order. A follow-up inspection of run `44498584718`'s package
+confirmed arm64 and an iOS Mach-O minimum version of 15.0 (run `44500902092`);
+the verification command has been corrected. This validates the package
+metadata and architecture only, not installation or runtime behavior. The
+runner does not include Dead Town. No iOS 15 device, game-data, audio, input, or save test has yet
 occurred. Do not present a runner-only artifact as a working Dead Town IPA.
 
 UndertaleModTool has a GML VM compiler and can construct an empty data file,
 but this is not a verified GMX-to-bytecode converter. Rebuilding Dead Town's
 resources and event bindings and compiling its code through it would require
 substantial implementation and testing; the APK's YYC code is not supported.
+
+A preliminary inventory of all 165 object XML files in the staged source found
+539 event elements and 855 actions: 792 execute-code actions and 63 legacy
+drag-and-drop actions (including alarms and condition/control actions). This
+count includes object files not necessarily referenced by the project. Any
+custom VM-data rebuild would need to preserve action order, control flow, event
+links, asset IDs, room data and source/version compatibility; merely compiling
+the 124 script files would not reconstruct the game. No such converter has
+been validated.

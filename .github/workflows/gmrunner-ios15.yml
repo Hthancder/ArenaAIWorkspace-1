@@ -13,30 +13,7 @@ permissions:
   actions: read
 
 jobs:
-  inspect-package:
-    if: ${{ contains(github.event.head_commit.message, '[inspect]') }}
-    runs-on: macos-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: gmrunner-ios15-standalone-untested
-          path: prior
-          run-id: 44498584718
-          github-token: ${{ github.token }}
-      - name: Inspect prior package
-        run: |
-          set -u
-          set +e
-          unzip -q prior/gmRunner.ipa -d unpacked
-          app=unpacked/Payload/gmRunner.app
-          exe=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Info.plist")
-          for cmd in "ls -la '$app'" "file '$app/$exe'" "lipo -info '$app/$exe'" "lipo '$app/$exe' -verify_arch arm64" "otool -l '$app/$exe' | grep -A 5 LC_BUILD_VERSION | tr '\\n' ' '"; do
-            result=$(eval "$cmd" 2>&1); status=$?
-            safe=$(printf '%s' "$result" | head -c 2500 | sed ':a;N;$!ba;s/\n/ /g')
-            echo "::notice::cmd=$cmd status=$status output=$safe"
-          done
   runner:
-    if: ${{ !contains(github.event.head_commit.message, '[inspect]') }}
     runs-on: macos-latest
     timeout-minutes: 35
     steps:
@@ -115,10 +92,10 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
       - name: Upload standalone runner only
-        if: always()
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: gmrunner-ios15-standalone-untested
           path: work/gmrunner/dist/ios/gmRunner.ipa
-          if-no-files-found: ignore
+          if-no-files-found: error
           retention-days: 3
