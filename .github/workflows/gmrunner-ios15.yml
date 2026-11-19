@@ -26,6 +26,7 @@ jobs:
       - name: Inspect prior package
         run: |
           set -u
+          set +e
           unzip -q prior/gmRunner.ipa -d unpacked
           app=unpacked/Payload/gmRunner.app
           exe=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Info.plist")
