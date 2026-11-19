@@ -41,6 +41,38 @@ static NSDictionary *SXInfo(NSString *provider, NSString *model, NSInteger statu
 			 @"ms": @((NSInteger)((CFAbsoluteTimeGetCurrent() - start) * 1000))};
 }
 
+/// Lấy @{in, out} từ thân JSON không stream (OpenAI chat / Responses / Gemini).
+static NSDictionary *SXUsageFromJSON(id json) {
+	if (![json isKindOfClass:[NSDictionary class]]) return nil;
+	NSDictionary *body = json;
+	NSDictionary *usage = body[@"usage"];
+	if (![usage isKindOfClass:[NSDictionary class]] &&
+		[body[@"response"] isKindOfClass:[NSDictionary class]]) {
+		NSDictionary *inner = ((NSDictionary *)body[@"response"])[@"usage"];
+		if ([inner isKindOfClass:[NSDictionary class]]) usage = inner;
+	}
+	if (![usage isKindOfClass:[NSDictionary class]]) usage = body[@"usageMetadata"];
+	if (![usage isKindOfClass:[NSDictionary class]]) return nil;
+	NSInteger in = [usage[@"prompt_tokens"] integerValue] ?: [usage[@"input_tokens"] integerValue];
+	NSInteger out = [usage[@"completion_tokens"] integerValue] ?: [usage[@"output_tokens"] integerValue];
+	if (!in) in = [usage[@"promptTokenCount"] integerValue];
+	if (!out) out = [usage[@"candidatesTokenCount"] integerValue];
+	if (in <= 0 && out <= 0) return nil;
+	return @{@"in": @(in), @"out": @(out)};
+}
+
+/// Gắn số token (nếu máy chủ báo) vào info của lượt — Thống kê dùng để hiện
+/// chi phí thật thay vì chỉ đếm lượt.
+static NSDictionary *SXInfoWithUsage(NSDictionary *info, NSDictionary *usage) {
+	if (![usage isKindOfClass:[NSDictionary class]] || !info) return info;
+	NSInteger in = [usage[@"in"] integerValue];
+	NSInteger out = [usage[@"out"] integerValue];
+	if (in <= 0 && out <= 0) return info;
+	NSMutableDictionary *result = [info mutableCopy];
+	result[@"usage"] = @{@"in": @(in), @"out": @(out)};
+	return result;
+}
+
 #pragma mark - Bối cảnh & header
 
 /// System prompt = prompt người dùng + bối cảnh máy/thời gian + danh sách công
@@ -210,6 +242,7 @@ static void SXAskOpenAIChat(SXPrefs *prefs, NSString *question, NSArray<NSDictio
 		return;
 	}
 	NSString *url = SXOpenAIURL(base, NO);
+	NSInteger usageIn = 0, usageOut = 0;
 	NSDictionary<NSString *, NSString *> *headers = SXRequestHeaders(prefs, SXProviderOpenAI, key);
 
 	NSMutableArray *messages = [NSMutableArray array];
@@ -299,7 +332,12 @@ static void SXAskOpenAIChat(SXPrefs *prefs, NSString *question, NSArray<NSDictio
 					SXLogInf(@"llm", @"openai OK (stream) — token đầu %ld ms · tổng %ld ms · %lu ký tự",
 							 (long)firstToken, (long)[info[@"ms"] integerValue],
 							 (unsigned long)content.length);
-					completion(content, nil, info);
+					NSDictionary *streamUsage = [streamResp[@"usage"] isKindOfClass:[NSDictionary class]]
+						? streamResp[@"usage"] : nil;
+					completion(content, nil, SXInfoWithUsage(info, @{
+						@"in": @(usageIn + [streamUsage[@"in"] integerValue]),
+						@"out": @(usageOut + [streamUsage[@"out"] integerValue]),
+					}));
 					return;
 				}
 				if (!((NSArray *)toolCalls).count) {
@@ -353,6 +391,9 @@ static void SXAskOpenAIChat(SXPrefs *prefs, NSString *question, NSArray<NSDictio
 			retryCount = 0;
 
 			id json = [NSJSONSerialization JSONObjectWithData:result.body options:0 error:NULL];
+			NSDictionary *roundUsage = SXUsageFromJSON(json);
+			usageIn += [roundUsage[@"in"] integerValue];
+			usageOut += [roundUsage[@"out"] integerValue];
 			NSDictionary *choice = nil;
 			if ([json isKindOfClass:[NSDictionary class]]) {
 				id choices = ((NSDictionary *)json)[@"choices"];
@@ -396,7 +437,7 @@ static void SXAskOpenAIChat(SXPrefs *prefs, NSString *question, NSArray<NSDictio
 		NSDictionary *info = SXInfo(@"openai", model, lastStatus, rounds, start);
 		SXLogInf(@"llm", @"openai OK — %ld ms, %ld vòng công cụ, %lu ký tự",
 				 (long)[info[@"ms"] integerValue], (long)rounds, (unsigned long)content.length);
-		completion(content, nil, info);
+		completion(content, nil, SXInfoWithUsage(info, @{@"in": @(usageIn), @"out": @(usageOut)}));
 		return;
 	}
 }
@@ -525,6 +566,7 @@ static void SXAskOpenAIResponses(SXPrefs *prefs, NSString *question, NSArray<NSD
 	NSInteger retryCount = 0;
 	BOOL streamAllowed = prefs.streaming;
 	BOOL allowTemperature = !SXModelRejectsTemperature(model);
+	NSInteger usageIn = 0, usageOut = 0;
 	NSMutableArray *input = SXResponsesInput(question, history);
 	NSString *previousResponseId = nil;
 
@@ -593,7 +635,12 @@ static void SXAskOpenAIResponses(SXPrefs *prefs, NSString *question, NSArray<NSD
 					NSInteger firstToken = [streamResp[@"firstTokenMs"] integerValue];
 					SXLogInf(@"llm", @"openai/responses OK (stream) — token đầu %ld ms · tổng %ld ms · %lu ký tự",
 							 (long)firstToken, (long)[info[@"ms"] integerValue], (unsigned long)content.length);
-					completion(content, nil, info);
+					NSDictionary *streamUsage = [streamResp[@"usage"] isKindOfClass:[NSDictionary class]]
+						? streamResp[@"usage"] : nil;
+					completion(content, nil, SXInfoWithUsage(info, @{
+						@"in": @(usageIn + [streamUsage[@"in"] integerValue]),
+						@"out": @(usageOut + [streamUsage[@"out"] integerValue]),
+					}));
 					return;
 				}
 				if (!calls.count) {
@@ -652,6 +699,10 @@ static void SXAskOpenAIResponses(SXPrefs *prefs, NSString *question, NSArray<NSD
 				return;
 			}
 			retryCount = 0;
+			NSDictionary *roundUsage = SXUsageFromJSON([NSJSONSerialization
+				JSONObjectWithData:result.body options:0 error:NULL]);
+			usageIn += [roundUsage[@"in"] integerValue];
+			usageOut += [roundUsage[@"out"] integerValue];
 			NSDictionary *parsed = SXResponsesParseJSON(result.body);
 			if (!parsed) {
 				NSString *snippet = [[NSString alloc] initWithData:result.body encoding:NSUTF8StringEncoding] ?: @"";
@@ -706,7 +757,7 @@ static void SXAskOpenAIResponses(SXPrefs *prefs, NSString *question, NSArray<NSD
 		NSDictionary *info = SXInfo(@"openai/responses", model, lastStatus, rounds, start);
 		SXLogInf(@"llm", @"openai/responses OK — %ld ms, %ld vòng công cụ, %lu ký tự",
 				 (long)[info[@"ms"] integerValue], (long)rounds, (unsigned long)content.length);
-		completion(content, nil, info);
+		completion(content, nil, SXInfoWithUsage(info, @{@"in": @(usageIn), @"out": @(usageOut)}));
 		return;
 	}
 }
@@ -886,6 +937,7 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 	NSInteger rounds = 0;
 	NSInteger lastStatus = 0;
 	NSInteger retryCount = 0;
+	NSInteger usageIn = 0, usageOut = 0;
 	BOOL streamAllowed = prefs.streaming;
 
 	SXLogDbg(@"llm", @"gemini → models/%@ (%lu message, %lu tool, temp=%.1f, stream=%d)",
@@ -941,7 +993,12 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 					NSInteger firstToken = [streamResp[@"firstTokenMs"] integerValue];
 					SXLogInf(@"llm", @"gemini OK (stream) — token đầu %ld ms · tổng %ld ms · %lu ký tự",
 							 (long)firstToken, (long)[info[@"ms"] integerValue], (unsigned long)text.length);
-					completion(text, nil, info);
+					NSDictionary *streamUsage = [streamResp[@"usage"] isKindOfClass:[NSDictionary class]]
+						? streamResp[@"usage"] : nil;
+					completion(text, nil, SXInfoWithUsage(info, @{
+						@"in": @(usageIn + [streamUsage[@"in"] integerValue]),
+						@"out": @(usageOut + [streamUsage[@"out"] integerValue]),
+					}));
 					return;
 				}
 				if (!functionCalls.count) {
@@ -990,6 +1047,9 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 			retryCount = 0;
 
 			id json = [NSJSONSerialization JSONObjectWithData:result.body options:0 error:NULL];
+			NSDictionary *roundUsage = SXUsageFromJSON(json);
+			usageIn += [roundUsage[@"in"] integerValue];
+			usageOut += [roundUsage[@"out"] integerValue];
 			NSDictionary *candidate = nil;
 			if ([json isKindOfClass:[NSDictionary class]] &&
 				[((NSDictionary *)json)[@"candidates"] isKindOfClass:[NSArray class]] &&
@@ -1054,7 +1114,7 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 		NSDictionary *info = SXInfo(@"gemini", model, lastStatus, rounds, start);
 		SXLogInf(@"llm", @"gemini OK — %ld ms, %ld vòng công cụ, %lu ký tự",
 				 (long)[info[@"ms"] integerValue], (long)rounds, (unsigned long)text.length);
-		completion(text, nil, info);
+		completion(text, nil, SXInfoWithUsage(info, @{@"in": @(usageIn), @"out": @(usageOut)}));
 		return;
 	}
 }

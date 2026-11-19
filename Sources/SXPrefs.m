@@ -200,6 +200,7 @@ static double SXClamp(double v, double lo, double hi) {
 	_speakErrors = [self boolFor:@"speakErrors" default:NO];
 	_verbose = [self boolFor:@"verbose" default:YES];
 	_streaming = [self boolFor:@"streaming" default:YES];
+	_deferLongReplies = [self boolFor:@"deferLongReplies" default:YES];
 	_markdown = [self boolFor:@"markdown" default:YES];
 	_timeoutAction = [[self stringFor:@"timeoutAction" default:@"bubble"] isEqualToString:@"keep"]
 		? @"keep" : @"bubble";
@@ -210,12 +211,12 @@ static double SXClamp(double v, double lo, double hi) {
 
 	SXLogSetVerbose(_verbose);
 	SXLogInf(@"pref", @"cài đặt: enabled=%d mode=%@ provider=%@ temp=%.1f turns=%ld timeout=%.0fs "
-			 @"stream=%d md=%d timeoutAction=%@ toolRounds=%ld toolsOff=%lu headers=%lu/%lu deadline=%.0fs "
+			 @"stream=%d md=%d timeoutAction=%@ toolRounds=%ld deferLong=%d toolsOff=%lu headers=%lu/%lu deadline=%.0fs "
 			 @"openAIKey=%@ geminiKey=%@ customPrompt=%@",
 			 _enabled, _mode == SXReplyModeFull ? @"full" : @"smart",
 			 _provider == SXProviderGemini ? @"gemini" : @"openai",
 			 _temperature, (long)_contextTurns, _responseTimeout,
-			 _streaming, _markdown, _timeoutAction, (long)_maxToolRounds,
+			 _streaming, _markdown, _timeoutAction, (long)_maxToolRounds, _deferLongReplies,
 			 (unsigned long)_disabledTools.count,
 			 (unsigned long)_openaiHeaders.count, (unsigned long)_geminiHeaders.count, _replyDeadline,
 			 SXRedactKey(_openaiKey), SXRedactKey(_geminiKey),

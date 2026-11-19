@@ -58,7 +58,7 @@
 >
 > **1.1.3 — làm lại toàn bộ tầng công cụ.** Từ một danh sách công cụ nhỏ dựng trực
 > tiếp trong `SXTools`, công cụ giờ là một tầng riêng: `SXToolkit` (sổ đăng ký +
-> thực thi có kiểm soát) và `SXToolCatalog` (13 công cụ thật). Model thấy công cụ
+> thực thi có kiểm soát) và `SXToolCatalog` (14 công cụ thật). Model thấy công cụ
 > qua schema + mô tả trong system prompt, gọi được cả khi stream (không tốn thêm
 > một vòng request), tham số được validate/ép kiểu, kết quả lỗi được trả lại bằng
 > tiếng Việt để model tự sửa, mỗi công cụ có trần thời gian riêng, và Settings có
@@ -90,10 +90,10 @@ Không đổi phiên bản gói sang 1.2 cho đến khi các hạng mục bắt 
 
 - STT thay Apple, ghi mic, dịch transcript và thử STT.
 - TTS tuỳ chỉnh, chọn giọng/nguồn, tự nhận ngôn ngữ, và chống Siri đọc chồng.
-- Deferred push/notification cho đáp án trễ; chế độ ẩn danh toàn diện (chặn dữ liệu nhạy cảm trong mọi log và không gửi mạng) chưa có.
-- Model dự phòng khi lỗi/hết giờ, hủy request theo generation, phát hiện offline sớm.
-- Xuất/nhập cấu hình, kiểm tra cập nhật, công cụ `current_app`, các trang cấu hình tương ứng.
-- Hiển thị stream theo từng chữ và mốc timeout theo token đầu; hiện SSE chỉ tích lũy và hiển thị khi hoàn tất.
+- Chế độ ẩn danh toàn diện (chặn dữ liệu nhạy cảm trong mọi log và không gửi mạng) chưa có.
+
+Đã xong trong 1.1.9: số liệu token, `current_app`, kiểm tra cập nhật, thông báo trả lời trễ
+(`deferLongReplies`), model dự phòng, cứu stream, huỷ lượt trò chuyện thử, thống kê 7 ngày.
 
 STT, TTS và deferred push phụ thuộc API riêng, quyền mic và audio session của Siri. Không đưa các công tắc chưa hoạt động vào Settings hoặc cam kết hành vi an toàn cho đến khi có kiểm thử trên thiết bị iOS jailbreak. Log có thể chứa câu hỏi, URL hoặc dữ liệu khác. Không lưu lịch sử không đồng nghĩa với ẩn danh khi dùng mạng hoặc log.
 
@@ -207,7 +207,7 @@ hỏng, và không có chỗ nào để bật/tắt từng công cụ.
 | Thành phần | Vai trò |
 | --- | --- |
 | `Sources/SXToolkit.{h,m}` | `SXTool` (tên, tiêu đề, mô tả cho model, schema, handler, timeout, main-thread, side-effect) + sổ đăng ký có lock + bộ thực thi |
-| `Sources/SXToolCatalog.{h,m}` | 12 công cụ dựng sẵn; `SXInstallBuiltinTools()` đăng ký một lần |
+| `Sources/SXToolCatalog.{h,m}` | 14 công cụ dựng sẵn; `SXInstallBuiltinTools()` đăng ký một lần |
 | `Sources/SXTools.{h,m}` | Facade cho pipeline: `definitions`, `execute:arguments:error:`, `promptBrief`, `beginTurn`, `catalog`; đọc `SXPrefs.disabledTools` |
 | `Sources/SXIntercept.m` | Đăng ký thêm `reset_conversation` (cần `SXIntercept` nên không nằm trong catalog) |
 | `Prefs/SXToolsController.{h,m}` | Màn hình "Công cụ AI": nhóm theo loại, mô tả tiếng Việt, công tắc từng công cụ, nút bật lại tất cả |
@@ -442,3 +442,21 @@ mở ra màn hình trống”.
 - **Trò chuyện thử**: chữ hiện dần theo từng mảnh thật; nút gửi chuyển thành nút dừng để
   huỷ lượt đang chạy.
 - **Thống kê**: thêm số liệu 7 ngày gần nhất (cột theo ngày, hôm nay tô đậm).
+
+### 1.1.10 — Token, cập nhật, current_app, trả lời trễ
+
+- **Token thật**: `SXStream` đọc `usage` của cả ba giao thức (`prompt/completion_tokens`,
+  `input/output_tokens`, `promptTokenCount/candidatesTokenCount`), `SXLLM` cộng dồn qua các
+  vòng công cụ vào `info[@"usage"]`, `SXIntercept` ghi kèm thống kê. Thống kê hiện tổng
+  token gửi/nhận + tỉ lệ, và số theo từng ngày trong dải 7 ngày.
+- **Công cụ `current_app`** (thứ 14): hỏi `SBApplicationController` ứng dụng tiền cảnh; không
+  xác định được thì nói thật thay vì đoán. Bật/tắt và timeout như mọi công cụ khác.
+- **Kiểm tra cập nhật**: `Sources/SXUpdate.{h,m}` đọc `releases/latest` của repo, so semver
+  (`v`/`-build.N` được bỏ qua), nút ở Về SiriX → mở trang phát hành. Không tự tải, không khoá API.
+- **Trả lời trễ**: `deferLongReplies` (mặc định bật, hàng mới ở nhóm Trả lời). Đáp án về sau khi
+  Siri đã quyết định hết giờ/giữ gốc được gửi bằng thông báo `UserNotifications` (xin quyền một lần
+  lúc khởi động), thay vì bị bỏ.
+- `scripts/bump-version.sh x.y.z` đổi `control`, `SX_VERSION`, `Info.plist` cùng lúc — hết cảnh
+  Settings báo phiên bản cũ hơn gói cài.
+- Test mới: `tests/update_test.m` (+ `scripts/test-update-macos.sh`) kiểm tra so sánh phiên bản;
+  `tests/store_test.m` kiểm tra cộng dồn token tổng và theo ngày.

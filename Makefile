@@ -29,7 +29,7 @@ SiriX_FILES = \
 SiriX_CFLAGS = -fobjc-arc -Wno-deprecated-declarations \
 	-I$(THEOS_PROJECT_DIR)/include \
 	-DSX_SCHEME=\"$(THEOS_PACKAGE_SCHEME)\"
-SiriX_FRAMEWORKS = UIKit Foundation SystemConfiguration
+SiriX_FRAMEWORKS = UIKit Foundation SystemConfiguration UserNotifications
 
 include $(THEOS_MAKE_PATH)/tweak.mk
 

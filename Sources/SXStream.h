@@ -23,6 +23,7 @@ typedef void (^SXStreamDelta)(NSString *delta, NSInteger firstTokenMs);
 ///   @"status"        NSNumber   HTTP status (0 nếu lỗi mạng trước khi có response)
 ///   @"firstTokenMs"  NSNumber   ms đến token đầu tiên (-1 nếu không có)
 ///   @"errorText"     NSString?  đoạn lỗi từ máy chủ (khi status ≥ 400)
+///   @"usage"         NSDictionary?  @{in, out} — số token máy chủ báo (nếu có)
 /// Lỗi mạng thật → nil + *outErr.
 @interface SXStream : NSObject
 

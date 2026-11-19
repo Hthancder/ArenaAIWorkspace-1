@@ -37,6 +37,20 @@ int main(void) {
 		assert([store recordEvent:@"error" milliseconds:@100 epoch:statsEpoch startedAt:startedAt]);
 		assert([store recordEvent:@"error" milliseconds:@200 epoch:statsEpoch startedAt:startedAt]);
 		assert([[[store snapshot][@"stats"] objectForKey:@"msAvg"] intValue] == 120);
+		// Token: cộng dồn cả tổng lẫn theo ngày, bỏ qua giá trị âm/thiếu.
+		assert([store recordEvent:@"replaced" milliseconds:nil
+						   tokens:@{@"in": @120, @"out": @45} epoch:statsEpoch startedAt:startedAt]);
+		assert([store recordEvent:@"replaced" milliseconds:nil
+						   tokens:@{@"in": @80, @"out": @30} epoch:statsEpoch startedAt:startedAt]);
+		NSDictionary *tokenStats = [store snapshot][@"stats"];
+		assert([tokenStats[@"tokensIn"] integerValue] == 200);
+		assert([tokenStats[@"tokensOut"] integerValue] == 75);
+		NSDictionary *byDay = [store snapshot][@"statsByDay"];
+		assert(byDay.count >= 1);
+		NSDictionary *today = nil;
+		for (NSString *key in byDay) today = byDay[key];
+		assert([today[@"tokensIn"] integerValue] >= 200);
+
 		assert([store clearStats]);
 		assert(![store recordEvent:@"error" milliseconds:nil epoch:statsEpoch startedAt:startedAt]);
 		assert([[[store snapshot] objectForKey:@"stats"] count] == 0);

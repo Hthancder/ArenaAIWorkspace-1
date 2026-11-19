@@ -293,6 +293,59 @@ static NSDictionary *SXWebFetch(NSDictionary *arguments, NSError **error) {
 	return SXRes(result);
 }
 
+#pragma mark - Ứng dụng đang mở
+
+/// Ứng dụng đang ở tiền cảnh. iOS 15 không có API công khai nên phải hỏi
+/// SpringBoard qua một tiến trình khác (Siri/SpringBoard đều là system daemon).
+/// Trả nil khi không xác định được — công cụ sẽ nói thật là “không rõ”.
+static NSDictionary *SXFrontmostApp(void) {
+	Class springBoard = NSClassFromString(@"SBApplicationController");
+	if (!springBoard) return nil;
+	id shared = ((id (*)(id, SEL))objc_msgSend)(springBoard, NSSelectorFromString(@"sharedInstanceIfExists"));
+	if (!shared) {
+		shared = ((id (*)(id, SEL))objc_msgSend)(springBoard, NSSelectorFromString(@"sharedInstance"));
+	}
+	if (!shared) return nil;
+	id app = ((id (*)(id, SEL))objc_msgSend)(shared, NSSelectorFromString(@"applicationWithDisplayedApplication:"));
+	if (![app isKindOfClass:NSObject.class]) {
+		// Một số bản iOS đặt tên khác — thử lấy ứng dụng đang hiển thị qua
+		// thuộc tính `frontmostApplication` nếu có.
+		app = ((id (*)(id, SEL))objc_msgSend)(shared, NSSelectorFromString(@"frontmostApplication"));
+	}
+	if (![app isKindOfClass:NSObject.class]) return nil;
+
+	NSString *identifier = nil;
+	@try {
+		id value = ((id (*)(id, SEL))objc_msgSend)(app, NSSelectorFromString(@"bundleIdentifier"));
+		if ([value isKindOfClass:NSString.class]) identifier = value;
+	} @catch (__unused NSException *exception) {}
+	if (!identifier.length) return nil;
+
+	NSString *name = nil;
+	@try {
+		id value = ((id (*)(id, SEL))objc_msgSend)(app, NSSelectorFromString(@"displayName"));
+		if ([value isKindOfClass:NSString.class]) name = value;
+	} @catch (__unused NSException *exception) {}
+	return @{@"bundleIdentifier": identifier, @"name": name.length ? name : identifier};
+}
+
+static NSDictionary *SXCurrentApp(NSDictionary *arguments, NSError **error) {
+	(void)arguments;
+	NSDictionary *app = SXFrontmostApp();
+	if (!app) {
+		// Không đoán bừa: nói rõ giới hạn để model không bịa tên ứng dụng.
+		return SXRes(@"Không xác định được ứng dụng đang mở trên phiên bản iOS này. "
+					  @"Hãy hỏi người dùng nếu cần.");
+	}
+	NSString *name = app[@"name"];
+	NSString *identifier = app[@"bundleIdentifier"];
+	if ([identifier isEqualToString:@"com.apple.springboard"]) {
+		return SXRes(@"Người dùng đang ở Màn hình chính (không có ứng dụng nào mở).");
+	}
+	SXLogDbg(@"tool", @"current_app → %@ (%@)", name, identifier);
+	return SXRes([NSString stringWithFormat:@"Ứng dụng đang mở: %@ (%@).", name, identifier]);
+}
+
 #pragma mark - Ứng dụng & phím tắt
 
 static id SXLSWorkspace(void) {
@@ -904,6 +957,20 @@ void SXInstallBuiltinTools(void) {
 		}];
 		apps.timeout = 4.0;
 		[SXToolkit registerTool:apps];
+
+		SXTool *currentApp = [SXTool toolWithName:@"current_app"
+										  title:@"Ứng dụng đang mở"
+										summary:@"Cho biết người dùng đang ở ứng dụng nào."
+										 prompt:@"Cho biết ứng dụng đang hiển thị trước mặt người dùng. Gọi khi câu trả lời phụ thuộc vào ngữ cảnh màn hình (“cái này”, “ở đây”, “trong app này”). Nếu không xác định được, hỏi lại thay vì đoán."
+									   category:SXToolCategorySystem
+									 parameters:SXObjectSchema()
+										handler:^NSDictionary *(NSDictionary *arguments, NSError **error) {
+			return SXCurrentApp(arguments, error);
+		}];
+		currentApp.timeout = 3.0;
+		currentApp.requiresMainThread = YES;
+		currentApp.liveData = YES;   // người dùng có thể đã chuyển app trong lượt
+		[SXToolkit registerTool:currentApp];
 
 		SXTool *openApp = [SXTool toolWithName:@"open_app"
 										 title:@"Mở ứng dụng"

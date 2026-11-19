@@ -123,7 +123,10 @@ FOUNDATION_EXPORT NSArray<NSDictionary *> *SXModelPresets(SXProvider provider);
 @property (nonatomic, readonly) BOOL incognito;
 @property (nonatomic, readonly) BOOL speakErrors;
 @property (nonatomic, readonly) BOOL verbose;
-@property (nonatomic, readonly) BOOL streaming;                 // trả lời theo SSE (v1.1)
+@property (nonatomic, readonly) BOOL streaming;
+/// Trả lời nốt câu dài sau khi Siri đã đóng, bằng thông báo kèm nút đọc
+/// (mặc định bật). Chỉ áp cho lượt vượt trần chờ.
+@property (nonatomic, readonly) BOOL deferLongReplies;
 @property (nonatomic, readonly) BOOL markdown;                  // trình bày Markdown khi hiển thị (v1.1)
 @property (nonatomic, readonly, copy) NSString *timeoutAction;  // "bubble" | "keep" — khi hết giờ (chế độ Thay thế)
 @property (nonatomic, readonly) NSInteger maxToolRounds;        // 1–4, mặc định 3

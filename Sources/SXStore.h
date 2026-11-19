@@ -16,6 +16,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)clearHistory;
 /// Epoch bảo vệ các sự kiện đang xếp hàng không phục hồi thống kê sau khi xóa.
 - (BOOL)recordEvent:(NSString *)event milliseconds:(nullable NSNumber *)milliseconds epoch:(NSString *)epoch startedAt:(NSTimeInterval)startedAt;
+/// Như trên, kèm số token máy chủ báo (@{in, out}) để Thống kê cộng dồn.
+- (BOOL)recordEvent:(NSString *)event milliseconds:(nullable NSNumber *)milliseconds
+			 tokens:(nullable NSDictionary *)tokens epoch:(NSString *)epoch startedAt:(NSTimeInterval)startedAt;
 - (BOOL)clearStats;
 @end
 

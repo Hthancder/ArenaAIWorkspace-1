@@ -74,7 +74,8 @@
 	if (history.count > 40) [history removeObjectsInRange:NSMakeRange(0, history.count - 40)];
 	NSDictionary *rawStats = [saved[@"stats"] isKindOfClass:NSDictionary.class] ? saved[@"stats"] : @{};
 	NSMutableDictionary *stats = [NSMutableDictionary dictionary];
-	for (NSString *key in @[@"replaced", @"kept", @"timeout", @"error", @"msAvg"]) {
+	for (NSString *key in @[@"replaced", @"kept", @"timeout", @"error", @"msAvg",
+							 @"tokensIn", @"tokensOut"]) {
 		id value = rawStats[key];
 		if ([value isKindOfClass:NSNumber.class] && [value doubleValue] >= 0) stats[key] = value;
 	}
@@ -179,6 +180,11 @@ static NSString *SXStoreDayKey(NSDate *date) {
 }
 
 - (BOOL)recordEvent:(NSString *)event milliseconds:(NSNumber *)milliseconds epoch:(NSString *)epoch startedAt:(NSTimeInterval)startedAt {
+	return [self recordEvent:event milliseconds:milliseconds tokens:nil epoch:epoch startedAt:startedAt];
+}
+
+- (BOOL)recordEvent:(NSString *)event milliseconds:(NSNumber *)milliseconds
+			 tokens:(NSDictionary *)tokens epoch:(NSString *)epoch startedAt:(NSTimeInterval)startedAt {
 	if (![@[@"replaced", @"kept", @"timeout", @"error"] containsObject:event] || !epoch.length) return NO;
 	int fd = [self acquireLock]; if (fd < 0) return NO;
 	NSMutableDictionary *state = [self readLocked];
@@ -191,6 +197,11 @@ static NSString *SXStoreDayKey(NSDate *date) {
 			double previous = [stats[@"msAvg"] doubleValue];
 			stats[@"msAvg"] = @(stats[@"msAvg"] ? 0.2 * milliseconds.doubleValue + 0.8 * previous : milliseconds.doubleValue);
 		}
+		// Số token máy chủ báo: cộng dồn để Thống kê hiện chi phí thật của ngày.
+		NSInteger in = [tokens[@"in"] integerValue];
+		NSInteger out = [tokens[@"out"] integerValue];
+		if (in > 0) stats[@"tokensIn"] = @([stats[@"tokensIn"] integerValue] + in);
+		if (out > 0) stats[@"tokensOut"] = @([stats[@"tokensOut"] integerValue] + out);
 		state[@"stats"] = stats;
 
 		// Số liệu theo ngày: đủ để vẽ 7 ngày gần nhất mà không phình tệp.
@@ -200,6 +211,8 @@ static NSString *SXStoreDayKey(NSDate *date) {
 		NSMutableDictionary *bucket = [byDay[day] isKindOfClass:[NSDictionary class]]
 			? [byDay[day] mutableCopy] : [NSMutableDictionary dictionary];
 		bucket[event] = @([bucket[event] integerValue] + 1);
+		if (in > 0) bucket[@"tokensIn"] = @([bucket[@"tokensIn"] integerValue] + in);
+		if (out > 0) bucket[@"tokensOut"] = @([bucket[@"tokensOut"] integerValue] + out);
 		if (milliseconds && milliseconds.doubleValue >= 0) {
 			double previous = [bucket[@"msAvg"] doubleValue];
 			bucket[@"msAvg"] = @(bucket[@"msAvg"] ? 0.2 * milliseconds.doubleValue + 0.8 * previous

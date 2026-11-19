@@ -5,6 +5,7 @@
 #import "PSSpecifier.h"
 #import "SXLog.h"
 #import "SXTools.h"
+#import "SXUpdate.h"
 #import <notify.h>
 #import <UIKit/UIKit.h>
 
@@ -791,6 +792,58 @@ static SXChoiceDefinition *SXChoiceDefinitionFor(NSString *key) {
 			SXLogErr(@"pref", @"reset reload EXCEPTION: %@", exception.reason);
 		}
 	}];
+}
+
+/// Đọc `releases/latest` rồi hiện kết quả: bản mới → nút mở trang tải, đã mới
+/// nhất → báo yên tâm, lỗi mạng → nói rõ chứ không im lặng.
+- (void)sx_checkUpdate:(id)sender {
+	(void)sender;
+	__weak typeof(self) weakSelf = self;
+	UIAlertController *waiting = [UIAlertController alertControllerWithTitle:@"Đang kiểm tra…"
+																	message:@"Hỏi GitHub Releases bản mới nhất."
+															 preferredStyle:UIAlertControllerStyleAlert];
+	[self presentViewController:waiting animated:YES completion:nil];
+
+	dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+		NSError *error = nil;
+		NSDictionary *result = [SXUpdate checkWithTimeout:10.0 error:&error];
+		dispatch_async(dispatch_get_main_queue(), ^{
+			[waiting dismissViewControllerAnimated:YES completion:^{
+				typeof(self) strongSelf = weakSelf;
+				if (!strongSelf) return;
+				if (!result) {
+					[SXUI alertOn:strongSelf
+							 title:@"Không kiểm tra được"
+						   message:error.localizedDescription ?: @"Không rõ lỗi."];
+					return;
+				}
+				NSString *latest = result[@"latest"];
+				if (![result[@"newer"] boolValue]) {
+					[SXUI alertOn:strongSelf
+							 title:@"Đã là bản mới nhất"
+						   message:[NSString stringWithFormat:
+									@"SiriX %@ là bản mới nhất trên GitHub Releases.",
+									result[@"current"] ?: SX_VERSION]];
+					return;
+				}
+				NSString *urlString = result[@"url"];
+				[SXUI confirmOn:strongSelf
+						  title:[NSString stringWithFormat:@"Có bản mới %@", latest]
+						message:[NSString stringWithFormat:
+								 @"Bạn đang dùng %@. Mở trang phát hành để tải gói rootless "
+								 @"hoặc roothide mới và cài lại bằng Sileo/Zebra.",
+								 result[@"current"] ?: SX_VERSION]
+					confirmText:@"Mở trang phát hành"
+						 action:^{
+					NSURL *url = [NSURL URLWithString:[urlString isKindOfClass:NSString.class]
+													  ? urlString : @""];
+					if (url) {
+						[[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
+					}
+				}];
+			}];
+		});
+	});
 }
 
 - (void)sx_respring:(id)sender {

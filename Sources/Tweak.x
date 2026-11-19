@@ -3,6 +3,7 @@
 #import <objc/message.h>
 #import <notify.h>
 #import <signal.h>
+#import <UserNotifications/UserNotifications.h>
 #import <unistd.h>
 #import "SXLog.h"
 #import "SXPrefs.h"
@@ -279,6 +280,17 @@ static BOOL SXCanHook(NSString *className, Class cls, NSString *selectorName) {
 		if (SXCanHook(@"AFConnection", connection, @"startRequestWithText:")) %init(AFConnTextHook);
 		if (SXCanHook(@"AFConnection", connection, @"_requestWillBeginWithRequestClass:isSpeechRequest:speechRequestOptions:requestInfo:analyticsEventProvider:")) %init(AFConnRequestHook);
 		if (SXCanHook(@"AFConnection", connection, @"_requestWillBeginWithRequestClass:isSpeechRequest:speechRequestOptions:requestInfo:isBackgroundRequest:analyticsEventProvider:")) %init(AFConnBackgroundRequestHook);
+
+		// Trả lời trễ gửi qua thông báo: xin quyền một lần, im lặng nếu
+		// người dùng từ chối (tính năng chỉ tắt, không làm hỏng gì).
+		if ([SXPrefs shared].deferLongReplies) {
+			[[UNUserNotificationCenter currentNotificationCenter]
+				requestAuthorizationWithOptions:(UNAuthorizationOptionAlert | UNAuthorizationOptionSound)
+			  completionHandler:^(BOOL granted, NSError *error) {
+				if (error) SXLogWrn(@"boot", @"xin quyền thông báo lỗi: %@", error.localizedDescription);
+				else SXLogInf(@"boot", @"quyền thông báo: %@", granted ? @"có" : @"không");
+			}];
+		}
 
 		SXLogInf(@"boot", @"SiriX %@ sẵn sàng (scheme=%s) — chế độ=%@ provider=%@",
 				 SX_VERSION, SX_SCHEME,

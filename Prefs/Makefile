@@ -26,13 +26,14 @@ SiriXPreferences_FILES = \
 	SXProviderConfigController.m \
 	SXModelPickerController.m \
 	SXUISupport.m \
-	SXDiagnosticsController.m
+	SXDiagnosticsController.m \
+	../Sources/SXUpdate.m
 
 SiriXPreferences_CFLAGS = -fobjc-arc -Wno-deprecated-declarations \
 	-I$(THEOS_PROJECT_DIR)/include \
 	-I../Sources \
 	-DSX_SCHEME=\"$(THEOS_PACKAGE_SCHEME)\"
-SiriXPreferences_FRAMEWORKS = UIKit Foundation SystemConfiguration
+SiriXPreferences_FRAMEWORKS = UIKit Foundation SystemConfiguration UserNotifications
 SiriXPreferences_PRIVATE_FRAMEWORKS = Preferences
 SiriXPreferences_INSTALL_PATH = /Library/PreferenceBundles
 

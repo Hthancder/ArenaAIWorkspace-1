@@ -8,6 +8,9 @@
 #import "SXStore.h"
 #import <objc/message.h>
 #import <notify.h>
+#ifndef SX_TESTING
+#import <UserNotifications/UserNotifications.h>
+#endif
 
 #pragma mark - Công cụ riêng của tweak
 
@@ -364,6 +367,8 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 	NSString *_historyEpoch;
 	NSString *_statsEpoch;
 	NSNumber *_llmMs;
+	/// Token máy chủ báo cho lượt này (@{in, out}) — ghi kèm thống kê nếu có.
+	NSDictionary *_llmUsage;
 	NSHashTable *_handledCommands;
 	BOOL _ready;
 	BOOL _errored;
@@ -380,6 +385,45 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 }
 - (void)noteToolProgress;
 @end
+
+#pragma mark - Trả lời trễ
+
+/// Câu trả lời đến sau khi Siri đã đóng: không thể chèn vào hội thoại nữa
+/// (Siri đã kết thúc lượt), nên gửi thông báo kèm nút đọc + toàn văn trong
+/// thân thông báo. Trước đây đáp án này bị bỏ hoàn toàn.
+static void SXPostDeferredAnswer(NSString *question, NSString *display) {
+#ifndef SX_TESTING
+	if (!display.length) return;
+	NSString *body = display.length > 900
+		? [[display substringToIndex:900] stringByAppendingString:@"…"] : display;
+	NSString *title = question.length
+		? [NSString stringWithFormat:@"SiriX trả lời: %@", SXShort(question, 60)]
+		: @"SiriX trả lời";
+	@try {
+		UNMutableNotificationContent *content = [[UNMutableNotificationContent alloc] init];
+		content.title = title;
+		content.body = body;
+		content.sound = nil;    // im lặng: người dùng có thể không cầm máy
+		content.threadIdentifier = @"com.sirix.tweak.deferred";
+		UNTimeIntervalNotificationTrigger *trigger =
+			[UNTimeIntervalNotificationTrigger triggerWithTimeInterval:1.0 repeats:NO];
+		UNNotificationRequest *request = [UNNotificationRequest requestWithIdentifier:
+			[NSString stringWithFormat:@"sirix.deferred.%@", NSUUID.UUID.UUIDString]
+																	content:content trigger:trigger];
+		[[UNUserNotificationCenter currentNotificationCenter]
+			addNotificationRequest:request withCompletionHandler:^(NSError *error) {
+			if (error) SXLogWrn(@"resp", @"không gửi được thông báo trả lời trễ: %@",
+								error.localizedDescription);
+			else SXLogInf(@"resp", @"đã gửi thông báo trả lời trễ (%lu ký tự)",
+						  (unsigned long)display.length);
+		}];
+	} @catch (NSException *exception) {
+		SXLogErr(@"resp", @"thông báo trả lời trễ lỗi: %@", exception.reason);
+	}
+#else
+	(void)question; (void)display;   // bản test không có UserNotifications
+#endif
+}
 
 @implementation SXIntercept
 
@@ -498,6 +542,7 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 	_historyEpoch = nil;
 	_statsEpoch = nil;
 	_llmMs = nil;
+	_llmUsage = nil;
 	[_handledCommands removeAllObjects];
 	_ready = NO;
 	_errored = NO;
@@ -555,6 +600,8 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 
 - (void)applyAnswer:(NSString *)answer error:(NSError *)error info:(NSDictionary *)info
 	  forGeneration:(uint64_t)generation {
+	// Khai báo ngoài khối lock để còn dùng sau khi nhả lock (gửi thông báo).
+	BOOL answerArrivedLate = NO;
 	[_condition lock];
 	if (generation != _generation) {
 		[_condition unlock];
@@ -563,6 +610,7 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 		return;
 	}
 	_llmMs = [info[@"ms"] isKindOfClass:NSNumber.class] ? info[@"ms"] : nil;
+	_llmUsage = [info[@"usage"] isKindOfClass:NSDictionary.class] ? info[@"usage"] : nil;
 	if (error) {
 		_errored = YES;
 		_answerError = error;
@@ -577,6 +625,9 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 			SXLogDbg(@"resp", @"đáp án #%llu sẵn sàng (hiển thị %lu · đọc %lu ký tự)",
 					 (unsigned long long)generation,
 					 (unsigned long)_answerDisplay.length, (unsigned long)_answer.length);
+			// Lượt đã quyết định (hết giờ / giữ Siri gốc) rồi mới có đáp án →
+			// không còn chỗ chèn vào Siri. Gửi thông báo thay vì bỏ đi.
+			answerArrivedLate = (_decided || _outcomeCounted) && !_decisionIsAnswer;
 		} else {
 			_errored = YES;
 			_answerError = [NSError errorWithDomain:@"com.sirix.llm" code:-6
@@ -585,15 +636,32 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 	}
 	[_condition broadcast];
 	[_condition unlock];
+
+	BOOL allowDeferred = [SXPrefs shared].deferLongReplies;
+	if (answerArrivedLate && _ready && allowDeferred && generation == _generation) {
+		NSString *display = _answerDisplay;
+		NSString *question = _question;
+		SXLogInf(@"resp", @"đáp án tới sau khi đã quyết định — gửi thông báo (%lu ký tự)",
+				 (unsigned long)display.length);
+		dispatch_async(dispatch_get_main_queue(), ^{
+			SXPostDeferredAnswer(question, display);
+		});
+	}
 }
 
 // Ghi số liệu ngoài hook, epoch ngăn tác vụ xếp hàng phục hồi thống kê đã xóa.
 - (void)queueStatistic:(NSString *)event milliseconds:(NSNumber *)milliseconds {
+	[self queueStatistic:event milliseconds:milliseconds tokens:nil];
+}
+
+- (void)queueStatistic:(NSString *)event milliseconds:(NSNumber *)milliseconds
+				tokens:(NSDictionary *)tokens {
 	NSString *epoch = _statsEpoch;
 	NSTimeInterval startedAt = _captureTime;
 	if (!epoch.length) return;
 	dispatch_async([SXStore queue], ^{
-		[[SXStore shared] recordEvent:event milliseconds:milliseconds epoch:epoch startedAt:startedAt];
+		[[SXStore shared] recordEvent:event milliseconds:milliseconds tokens:tokens
+								epoch:epoch startedAt:startedAt];
 	});
 }
 
@@ -709,7 +777,7 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 				}
 				[SXDisplayPolicy logDecision:@"chọn đáp án AI cho lượt" source:source];
 			} else if (_errored) {
-				[self queueStatistic:@"error" milliseconds:_llmMs];
+				[self queueStatistic:@"error" milliseconds:_llmMs tokens:_llmUsage];
 				if ([SXDisplayPolicy shouldShowErrorBubbleInMode:prefs.mode speakErrors:prefs.speakErrors]) {
 					_decisionDisplay = [NSString stringWithFormat:@"⚠️ SiriX gặp lỗi: %@",
 										_answerError.localizedDescription];
@@ -772,7 +840,8 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 		[_handledCommands addObject:command];
 		if (!_outcomeCounted) {
 			_outcomeCounted = YES;
-			[self queueStatistic:@"replaced" milliseconds:_decisionIsAnswer ? _llmMs : nil];
+			[self queueStatistic:@"replaced" milliseconds:_decisionIsAnswer ? _llmMs : nil
+						   tokens:_decisionIsAnswer ? _llmUsage : nil];
 		}
 		// Chỉ thêm lịch sử khi thực sự sửa được phản hồi AI, và chỉ một lần.
 		if (_decisionIsAnswer && !_historySaved) {

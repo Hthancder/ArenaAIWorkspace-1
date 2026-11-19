@@ -17,7 +17,7 @@ Nhà cung cấp: **OpenAI tương thích** (mặc định) hoặc **Google Gemin
 - **Header HTTP tuỳ chỉnh** cho từng nhà cung cấp — thêm bao nhiêu cũng được, bật/tắt/xoá/sắp xếp,
   kiểm tra tên ngay khi gõ, gợi ý tự xếp theo endpoint (OpenRouter, Azure, gateway nội bộ). Giá trị
   chỉ lưu trên máy và không bao giờ ghi vào log.
-- **13 công cụ AI thật**: thiết bị, bảng nhớ tạm, đọc trang web, mở ứng dụng/liên kết, chạy phím tắt,
+- **14 công cụ AI thật**: thiết bị, bảng nhớ tạm, đọc trang web, biết ứng dụng đang mở, mở ứng dụng/liên kết, chạy phím tắt,
   ghi nhớ lâu dài, tính toán, xoá lịch sử — bật/tắt từng cái, mỗi công cụ có trần thời gian riêng.
 - **Hội thoại có ngữ cảnh** (giữ N cặp câu hỏi/trả lời gần nhất), lịch sử lưu trên máy, thống kê, nhiệt độ và thời gian chờ đều chỉnh được.
 - **Không lưu lịch sử**: các lượt mới chỉ giữ trong bộ nhớ. Tuỳ chọn này không ngăn Siri, nhà cung cấp AI hoặc các log khác xử lý nội dung; lịch sử cũ phải xóa riêng.
@@ -29,6 +29,11 @@ Nhà cung cấp: **OpenAI tương thích** (mặc định) hoặc **Google Gemin
 - **Chẩn đoán nhanh** — một màn hình chỉ ra vì sao Siri chưa trả lời (thiếu khoá, endpoint sai,
   trần chờ ngắn hơn ngân sách…) kèm báo cáo chia sẻ được.
 - **Sao lưu cấu hình** — xuất ra plist (không kèm lịch sử) và phục hồi bằng cách dán nội dung tệp.
+- **Số liệu token** — Thống kê cộng dồn token gửi/nhận theo `usage` máy chủ báo (OpenAI, Responses, Gemini),
+  kèm dải 7 ngày và tỉ lệ nhận/gửi.
+- **Kiểm tra cập nhật** — so số phiên bản với GitHub Releases, có bản mới thì mở thẳng trang tải.
+- **Trả lời dài không mất** — câu trả lời về sau khi Siri đã đóng sẽ được gửi bằng thông báo (bật/tắt được).
+- **Biết ứng dụng đang mở** — công cụ `current_app` để “cái này ở đây” có ngữ cảnh thật.
 - **OpenAI Responses API** — dùng `/v1/responses` song song chat completions, tự dò (không tốn token)
   hoặc chọn tay; model suy luận (o1/o3/o4/gpt-5) tự bỏ `temperature`; model sai (404) tự thử model
   mặc định; stream đứt giữa chừng vẫn giữ phần đã nhận.

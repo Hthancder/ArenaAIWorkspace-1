@@ -23,6 +23,9 @@
 @property (nonatomic, strong) NSMutableString *reasoning;
 /// Responses API: các mục function_call đang được stream (theo item_id).
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSMutableDictionary *> *responseCalls;
+/// Số token máy chủ báo (in/out/total) — chỉ có khi máy chủ gửi kèm.
+@property (nonatomic) NSInteger usageIn;
+@property (nonatomic) NSInteger usageOut;
 @end
 
 @implementation SXSSEParser {
@@ -115,7 +118,20 @@
 	if (self.onDelta) self.onDelta(piece, _firstTokenMs);
 }
 
+/// Đọc khối usage của cả ba giao thức: OpenAI đặt usage ở cấp gốc, Responses
+/// cũng vậy nhưng đặt trong `response`, Gemini dùng `usageMetadata`.
+- (void)consumeUsageDict:(NSDictionary *)usage {
+	if (![usage isKindOfClass:[NSDictionary class]]) return;
+	NSInteger in = [usage[@"prompt_tokens"] integerValue] ?: [usage[@"input_tokens"] integerValue];
+	NSInteger out = [usage[@"completion_tokens"] integerValue] ?: [usage[@"output_tokens"] integerValue];
+	if (!in) in = [usage[@"promptTokenCount"] integerValue];
+	if (!out) out = [usage[@"candidatesTokenCount"] integerValue];
+	if (in > 0) self.usageIn = in;
+	if (out > 0) self.usageOut = out;
+}
+
 - (void)consumeOpenAIChunk:(NSDictionary *)json {
+	if ([json[@"usage"] isKindOfClass:[NSDictionary class]]) [self consumeUsageDict:json[@"usage"]];
 	id error = json[@"error"];
 	if (error && !self.errorText.length) {
 		id message = [error isKindOfClass:[NSDictionary class]] ? ((NSDictionary *)error)[@"message"] : error;
@@ -159,6 +175,9 @@
 }
 
 - (void)consumeGeminiChunk:(NSDictionary *)json {
+	if ([json[@"usageMetadata"] isKindOfClass:[NSDictionary class]]) {
+		[self consumeUsageDict:json[@"usageMetadata"]];
+	}
 	id error = json[@"error"];
 	if (error && !self.errorText.length) {
 		id message = [error isKindOfClass:[NSDictionary class]] ? ((NSDictionary *)error)[@"message"] : error;
@@ -259,6 +278,9 @@
 	if ([type isEqualToString:@"response.completed"] || [type isEqualToString:@"response.done"]) {
 		NSString *identifier = [responseObject[@"id"] isKindOfClass:[NSString class]] ? responseObject[@"id"] : nil;
 		if (identifier.length) self.responseId = identifier;
+		if ([responseObject[@"usage"] isKindOfClass:[NSDictionary class]]) {
+			[self consumeUsageDict:responseObject[@"usage"]];
+		}
 		// Một số máy chủ chỉ gửi nội dung trong sự kiện tổng kết (không stream
 		// từng mảnh). Lấy thêm nếu chưa có gì, để không mất câu trả lời.
 		if (self.content.length == 0) {
@@ -380,10 +402,14 @@
 			NSMutableDictionary *info = [result.error.userInfo mutableCopy]
 				?: [NSMutableDictionary dictionary];
 			if (parser.content.length) {
-				info[@"sx.partial"] = @{@"content": [parser.content copy] ?: @"",
-										@"sawToolCalls": @(parser.sawToolCalls),
-										@"status": @(0),
-										@"firstTokenMs": @(parser.firstTokenMs)};
+				NSMutableDictionary *partial = [@{@"content": [parser.content copy] ?: @"",
+												  @"sawToolCalls": @(parser.sawToolCalls),
+												  @"status": @(0),
+												  @"firstTokenMs": @(parser.firstTokenMs)} mutableCopy];
+				if (parser.usageIn > 0 || parser.usageOut > 0) {
+					partial[@"usage"] = @{@"in": @(parser.usageIn), @"out": @(parser.usageOut)};
+				}
+				info[@"sx.partial"] = partial;
 			}
 			*outErr = [NSError errorWithDomain:result.error.domain
 										  code:result.error.code
@@ -405,6 +431,9 @@
 			? [[NSString alloc] initWithData:errorBody encoding:NSUTF8StringEncoding] : nil;
 		NSString *finalError = parser.errorText.length ? parser.errorText : text;
 		if (finalError.length) response[@"errorText"] = finalError;
+		if (parser.usageIn > 0 || parser.usageOut > 0) {
+			response[@"usage"] = @{@"in": @(parser.usageIn), @"out": @(parser.usageOut)};
+		}
 		return response;
 	}
 
@@ -420,6 +449,9 @@
 		response[@"responseCalls"] = [parser orderedResponseCalls];
 		if (parser.responseId.length) response[@"responseId"] = parser.responseId;
 		if (parser.reasoning.length) response[@"reasoning"] = [parser.reasoning copy];
+	}
+	if (parser.usageIn > 0 || parser.usageOut > 0) {
+		response[@"usage"] = @{@"in": @(parser.usageIn), @"out": @(parser.usageOut)};
 	}
 	return response;
 }

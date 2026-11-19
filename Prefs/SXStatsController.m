@@ -288,6 +288,25 @@ static NSString *SXStatsNumber(id value) {
 		], @"footer": @"Trung bình có trọng số (làm mượt theo thời gian), không phải chi phí API. Lượt không có phản hồi AI không được tính."},
 	];
 
+	NSArray<NSDictionary *> *baseSections = self.sections;
+	NSInteger tokensIn = [stats[@"tokensIn"] integerValue];
+	NSInteger tokensOut = [stats[@"tokensOut"] integerValue];
+	if (tokensIn > 0 || tokensOut > 0) {
+		NSMutableArray *rows = [NSMutableArray array];
+		[rows addObject:@{@"label": @"Token gửi đi", @"value": [SXUI groupedNumber:tokensIn]}];
+		[rows addObject:@{@"label": @"Token nhận về", @"value": [SXUI groupedNumber:tokensOut]}];
+		if (tokensIn > 0 && tokensOut > 0) {
+			[rows addObject:@{@"label": @"Tỉ lệ nhận/gửi",
+							  @"value": [NSString stringWithFormat:@"%.1f×",
+										 (double)tokensOut / (double)tokensIn]}];
+		}
+		self.sections = [baseSections arrayByAddingObject:@{
+			@"title": @"Token (máy chủ báo)",
+			@"rows": rows,
+			@"footer": @"Chỉ cộng khi nhà cung cấp trả `usage` (OpenAI, Responses, Gemini). Có sẵn bảng giá thì đây là số để tính tiền; SiriX không tự quy đổi tiền tệ.",
+		}];
+	}
+
 	NSDictionary *byDay = [snapshot[@"statsByDay"] isKindOfClass:[NSDictionary class]]
 		? snapshot[@"statsByDay"] : @{};
 	NSMutableArray<NSNumber *> *counts = [NSMutableArray array];

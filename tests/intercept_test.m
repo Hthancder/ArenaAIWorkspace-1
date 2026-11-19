@@ -29,6 +29,7 @@ static BOOL testIncognito;
 - (BOOL)showOriginal { return testShowOriginal; }
 - (BOOL)incognito { return testIncognito; }
 - (BOOL)speakErrors { return NO; }
+- (BOOL)deferLongReplies { return NO; }   // test không xin quyền thông báo
 - (NSString *)timeoutAction { return testTimeoutAction; }
 - (NSInteger)contextTurns { return 8; }
 - (SXProvider)provider { return SXProviderOpenAI; }
