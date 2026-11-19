@@ -108,6 +108,62 @@ def inspect(apk_path):
         op = list(dis.disasm(read(addr, 4), addr))[0]
         if op.mnemonic != 'bl' or expected not in calls.get(int(op.op_str[1:], 16), ''):
             raise ValueError(f'unexpected helper call at 0x{addr:x}')
+    # Evidence for the later player Step block. Index-to-name registration is
+    # still not established: treat the three indices as opaque identifiers.
+    for addr, op, operands in (
+        (0x5cea74, 'vldr', 'd8, [pc, #0x26c]'),
+        (0x5d0448, 'mov', 'r1, #0x20'),
+        (0x5d044c, 'blx', 'r2'),
+        (0x5d0458, 'bl', '#0x176444'),
+        (0x5d0468, 'vsub.f64', 'd0, d8, d0'),
+        (0x5d0474, 'vneg.f64', 'd1, d1'),
+        (0x5d0478, 'vcmpe.f64', 'd0, d1'),
+        (0x5d0480, 'bpl', '#0x5d04d8'),
+        (0x5d0498, 'mov', 'r1, #0x20'),
+        (0x5d049c, 'blx', 'r2'),
+        (0x5d04a0, 'mov', 'r5, r0'),
+        (0x5d04a8, 'mov', 'r0, #0'),
+        (0x5d04ac, 'movt', 'r1, #0x3ff0'),
+        (0x5d04b4, 'str', 'r1, [sp, #0x154]'),
+        (0x5d04b8, 'str', 'r0, [sp, #0x150]'),
+        (0x5d04ec, 'mov', 'r1, #0x20'),
+        (0x5d04f0, 'blx', 'r2'),
+        (0x5d04f4, 'mov', 'r5, r0'),
+        (0x5d0564, 'add', 'r0, sp, #0x150'),
+        (0x5d0568, 'bl', '#0x176444'),
+        (0x5d0584, 'vsub.f64', 'd0, d1, d0'),
+        (0x5d0594, 'stm', 'r5, {r0, r1}'),
+        (0x5d0598, 'b', '#0x5d05f4'),
+        (0x5d0624, 'mov', 'r1, #0xab'),
+        (0x5d0628, 'blx', 'r2'),
+        (0x5d062c, 'mov', 'r5, r0'),
+        (0x5d064c, 'mov', 'r0, #0'),
+        (0x5d0650, 'str', 'r0, [r5, #0xc]'),
+        (0x5d0654, 'str', 'r0, [r5, #4]'),
+        (0x5d0658, 'str', 'r0, [r5]'),
+        (0x5d0670, 'movw', 'r1, #0x38f'),
+        (0x5d0690, 'bl', '#0x176594'),
+        (0x5d0698, 'bge', '#0x5d06d8'),
+        (0x5d06b0, 'movw', 'r1, #0x38f'),
+        (0x5d06c8, 'mov', 'r1, #0x20'),
+        (0x5d06d4, 'bl', '#0x176558'),
+    ):
+        instruction(addr, op, operands)
+    if struct.unpack('<d', read(0x5cece8, 8))[0] != 0.0:
+        raise ValueError('unexpected player Step comparison constant')
+    # The compiler's exported g_Vars pointer array contains global, instance,
+    # and potentially other scope entries. It is not a flat instance-index
+    # lookup: e.g. index 32 there is pointer, not buff_poison_protect.
+    var_array = by_name['g_Vars']
+    array_slot = var_array['st_value'] + 32 * 4
+    # g_Vars slots use R_ARM_ABS32, while the GOT lookups above use GLOB_DAT.
+    abs32 = {entry['r_offset']: relsyms.get_symbol(entry['r_info_sym'])
+             for entry in rel.iter_relocations() if entry['r_info_type'] == 2}
+    array_symbol = abs32.get(array_slot)
+    if (var_array['st_size'] <= 32 * 4 or array_symbol is None or
+            array_symbol.name != 'g_VAR_pointer'):
+        raise ValueError('unexpected g_Vars pointer array layout')
+
     names = resource_names(game, b'OBJT')
     if names[0x8e] != 'obj_player':
         raise ValueError('unexpected target object ID')
@@ -126,6 +182,22 @@ def inspect(apk_path):
         'player_object_id': 142, 'player_object_name': names[0x8e],
         'buff_step_get_call': '0x6022c0', 'buff_step_add_call': '0x6022cc',
         'buff_step_set_call': '0x6022e0',
+        'player_step_evidence': {
+            'function': 'gml_Object_obj_player_Step_0',
+            'comparison_zero_literal': '0x5cece8',
+            'variable_index': 32,
+            'conditional_branch': '0x5d0480',
+            'subtract_one_real_path': '0x5d0564-0x5d0594',
+            'comparison_fallthrough_zeroes_variable_index': 171,
+            'branch_target_zeroes_variable_index': 32,
+            'candidate_upper_bound_index': 911,
+            'clamp_assignment': '0x5d06a4-0x5d06d4',
+            'limitations': 'The comparison uses a runtime-loaded tolerance, and the exact branching, '
+                           'variable names, types and runtime behavior are not fully validated. '
+                           'Index 171 and 911 are opaque, not mapped to names.',
+        },
+        'g_vars_index_32': {'symbol': array_symbol.name, 'slot': f'0x{array_slot:x}',
+                            'warning': 'g_Vars is not a verified instance-variable-index mapping'},
         'interpretation': 'Strong static evidence that item_use reads use_db column 9, multiplies by 30*60, '
                           'and writes variable index 32; buff Step adds index 32 to obj_player. '
                           'The contiguous g_VAR symbol ordering suggests this is buff_poison_protect, '

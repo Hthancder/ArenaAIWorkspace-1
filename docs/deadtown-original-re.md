@@ -165,14 +165,28 @@ index and array used for columns 0–8. The targeted inspector
 `db_info_get` with field 9 at `0x1a572c`, multiplies the value by 30 and 60, and
 sets variable index 32 at `0x1a57d4`; the native `sys_player_buff` Step retrieves,
 adds, and sets index 32 on APK object 142 (`obj_player`) at
-`0x6022c0`–`0x6022e0`. The adjacent exported `g_VAR_*` symbol order maps that
-position to `buff_poison_protect`, a strong indication that the tenth field
-controls poison-protection duration. Variable registration and this path's
-runtime effects still need independent confirmation; other original consumers,
-saves, and combat interactions remain to be recovered. The old GMX lacks this
-whole path. Appending these tables to the old source would shift item/recipe indices
-and could silently break crafting, saving and gameplay: **none are injected**.
-Recover the corresponding data consumers, ordering and original schema first.
+`0x6022c0`–`0x6022e0`. Nearby `g_VAR_*` symbols are ordered like the previous
+fields, ending in `buff_poison_protect`; this suggests a relationship, but it
+**does not establish** the instance-variable index-to-name mapping. In fact,
+relocations show that slot 32 of the exported `g_Vars` pointer array is
+`g_VAR_pointer`, not `g_VAR_buff_poison_protect`. The array contains more than
+one kind of variable and must not be used as a direct instance-index lookup.
+The registration/slot mechanism remains to be traced; projecting offsets from
+one known-looking region onto the rest of the symbol table is unsafe.
+
+Further static checks in `obj_player` Step find a block using instance variable
+index 32. It compares against zero with a runtime-loaded tolerance; on one path
+it subtracts 1 (for the real-number case) and sets index 171 to zero; on the
+other it sets index 32 to zero. The following block conditionally copies index
+911 into index 32 after a comparison. This resembles a countdown and upper
+bound, but the precise runtime comparison, data types, names of indices 171/911,
+and original combat and save/load behavior remain unproven. The inspector checks
+representative exact instructions and the relevant `g_Vars` relocation, not a
+complete control-flow or runtime trace. No behavior should be patched from this
+alone. The old GMX lacks the whole tenth-field path. Appending these tables to
+the old source would shift item/recipe indices and could silently break crafting,
+saving and gameplay: **none are injected**. Recover the corresponding data
+consumers, ordering and original schema first.
 
 Reproduce independently with the same optional dependencies as above:
 

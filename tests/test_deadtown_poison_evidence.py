@@ -32,6 +32,14 @@ class PoisonEvidenceTests(unittest.TestCase):
         self.assertEqual(evidence['adjacent_variable_symbols'][-1], 'g_VAR_buff_poison_protect')
         self.assertEqual(evidence['player_object_name'], 'obj_player')
         self.assertEqual(evidence['buff_step_add_call'], '0x6022cc')
+        step = evidence['player_step_evidence']
+        self.assertEqual(step['variable_index'], 32)
+        self.assertEqual(step['comparison_fallthrough_zeroes_variable_index'], 171)
+        self.assertEqual(step['branch_target_zeroes_variable_index'], 32)
+        self.assertEqual(step['candidate_upper_bound_index'], 911)
+        self.assertIn('not mapped', step['limitations'])
+        self.assertEqual(evidence['g_vars_index_32']['symbol'], 'g_VAR_pointer')
+        self.assertIn('not a verified', evidence['g_vars_index_32']['warning'])
         self.assertIn('unverified', evidence['interpretation'])
 
 
