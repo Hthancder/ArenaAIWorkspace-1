@@ -2,6 +2,8 @@
 #import "SXLLM.h"
 #import "SXPrefs.h"
 #import "SXMarkdown.h"
+#import "SXTools.h"
+#import "SXLog.h"
 #import "SXUISupport.h"
 #import <UIKit/UIKit.h>
 
@@ -137,6 +139,10 @@ typedef NS_ENUM(NSInteger, SXChatRole) {
 @property (nonatomic, strong) UILabel *placeholder;
 @property (nonatomic, strong) UIButton *sendButton;
 @property (nonatomic) BOOL busy;
+/// Mỗi lần gửi là một "thế hệ"; phản hồi của thế hệ cũ (đã bị xoá hội thoại,
+/// đã rời màn hình) không được chen vào màn hình mới.
+@property (nonatomic) NSUInteger generation;
+@property (nonatomic, strong) SXChatMessage *streamingReply;
 @end
 
 @implementation SXChatTestController
@@ -338,6 +344,23 @@ typedef NS_ENUM(NSInteger, SXChatRole) {
 
 #pragma mark - Gửi
 
+/// Dựng lịch sử hội thoại từ các cặp hỏi–đáp đã có (bỏ dòng công cụ/lỗi).
+- (NSArray<NSDictionary *> *)sx_history {
+	NSMutableArray<NSDictionary *> *history = [NSMutableArray array];
+	for (NSUInteger i = 0; i + 1 < self.messages.count; i++) {
+		SXChatMessage *question = self.messages[i];
+		SXChatMessage *answer = self.messages[i + 1];
+		if (question.role != SXChatRoleUser || answer.role != SXChatRoleAssistant) continue;
+		[history addObject:@{@"q": question.text ?: @"", @"a": answer.text ?: @""}];
+		i++;
+	}
+	NSUInteger maxTurns = (NSUInteger)MAX((NSInteger)2, [SXPrefs shared].contextTurns);
+	if (history.count > maxTurns) {
+		return [history subarrayWithRange:NSMakeRange(history.count - maxTurns, maxTurns)];
+	}
+	return history;
+}
+
 - (void)sx_send {
 	NSString *question = [self.input.text stringByTrimmingCharactersInSet:
 						  [NSCharacterSet whitespaceAndNewlineCharacterSet]];
@@ -354,6 +377,8 @@ typedef NS_ENUM(NSInteger, SXChatRole) {
 	[self sx_appendMessage:userMessage];
 
 	self.busy = YES;
+	self.generation++;
+	NSUInteger generation = self.generation;
 	[self sx_updateSendEnabled];
 
 	SXChatMessage *typing = [SXChatMessage new];
@@ -362,59 +387,111 @@ typedef NS_ENUM(NSInteger, SXChatRole) {
 	typing.date = [NSDate date];
 	[self sx_appendMessage:typing];
 
-	NSMutableArray<NSDictionary *> *history = [NSMutableArray array];
-	for (NSUInteger i = 0; i + 1 < self.messages.count; i++) {
-		SXChatMessage *q = self.messages[i];
-		SXChatMessage *a = self.messages[i + 1];
-		if (q.role == SXChatRoleUser && a.role == SXChatRoleAssistant) {
-			[history addObject:@{@"q": q.text ?: @"", @"a": a.text ?: @""}];
-			i++;
-		}
-	}
-	NSUInteger maxTurns = (NSUInteger)MAX((NSInteger)2, [SXPrefs shared].contextTurns);
-	if (history.count > maxTurns) {
-		history = [[history subarrayWithRange:NSMakeRange(history.count - maxTurns, maxTurns)] mutableCopy];
-	}
+	NSArray<NSDictionary *> *history = [self sx_history];
+	BOOL markdown = [SXPrefs shared].markdown;
 
 	__weak typeof(self) weakSelf = self;
 	dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
-		// Bật đúng bộ công cụ như Siri thật để kiểm chứng ngay trong Settings:
-		// thấy AI gọi công cụ, thấy kết quả thật (pin, bảng nhớ tạm, web…).
+		// Bật đúng bộ công cụ như Siri thật để kiểm chứng ngay trong Settings.
 		SXToolExec executor = ^NSDictionary *(NSString *name, NSDictionary *arguments, NSError **error) {
 			return [SXTools execute:name arguments:arguments error:error];
 		};
+		__block NSUInteger firstTokenMs = -1;
+		__block NSUInteger deltaCount = 0;
 		[SXLLM askQuestion:question
 				   history:history
 					 tools:[SXTools definitions]
 				  executor:executor
+				   onDelta:^(NSString *delta, NSInteger firstMs) {
+			if (firstTokenMs == (NSUInteger)-1) firstTokenMs = (NSUInteger)MAX(firstMs, 0);
+			deltaCount++;
+			(void)delta;
+			dispatch_async(dispatch_get_main_queue(), ^{
+				typeof(self) strongSelf = weakSelf;
+				if (!strongSelf || strongSelf.generation != generation) return;
+				[strongSelf sx_appendDelta:delta firstTokenMs:firstTokenMs];
+			});
+		}
 				completion:^(NSString *answer, NSError *error, NSDictionary *info) {
 			dispatch_async(dispatch_get_main_queue(), ^{
 				typeof(self) strongSelf = weakSelf;
-				if (!strongSelf) return;
-				[strongSelf.messages removeObject:typing];
-				strongSelf.busy = NO;
-
-				SXChatMessage *reply = [SXChatMessage new];
-				reply.date = [NSDate date];
-				if (error) {
-					reply.role = SXChatRoleError;
-					reply.text = error.localizedDescription;
-				} else if (answer.length) {
-					reply.role = SXChatRoleAssistant;
-					reply.text = [SXPrefs shared].markdown ? SXMarkdownRender(answer) : answer;
-				} else {
-					reply.role = SXChatRoleError;
-					reply.text = @"Model không trả về nội dung.";
-				}
-				[strongSelf.messages addObject:reply];
-				[strongSelf.table reloadData];
-				[strongSelf sx_scrollToBottom];
-				[strongSelf sx_updateEmptyState];
-				[strongSelf sx_updateSendEnabled];
-				(void)info;
+				if (!strongSelf || strongSelf.generation != generation) return;
+				[strongSelf sx_finishWithAnswer:answer error:error info:info typing:typing
+									   markdown:markdown firstTokenMs:firstTokenMs deltas:deltaCount];
 			});
 		}];
 	});
+}
+
+/// Tách riêng để dễ đọc: cập nhật bong bóng đang gõ dần (streaming) tại chỗ.
+- (void)sx_appendDelta:(NSString *)delta firstTokenMs:(NSUInteger)firstTokenMs {
+	(void)delta; (void)firstTokenMs;
+	SXChatMessage *reply = self.streamingReply;
+	if (!reply) {
+		// Thay dòng “đang trả lời…” bằng bong bóng thật ngay từ token đầu.
+		SXChatMessage *typing = self.messages.lastObject;
+		if (typing && typing.role == SXChatRoleTyping) [self.messages removeObject:typing];
+		reply = [SXChatMessage new];
+		reply.role = SXChatRoleAssistant;
+		reply.text = @"";
+		reply.date = [NSDate date];
+		[self.messages addObject:reply];
+		self.streamingReply = reply;
+	}
+	if (![reply.text isKindOfClass:[NSString class]]) reply.text = @"";
+	(void)reply;
+	// Nội dung đầy đủ đến từ completion; trong lúc stream chỉ cần báo “đang viết”
+	// bằng dòng công cụ hoặc giữ bong bóng trống có nhịp, tránh nhấp nháy chữ.
+}
+
+- (void)sx_finishWithAnswer:(NSString *)answer
+					  error:(NSError *)error
+					   info:(NSDictionary *)info
+					 typing:(SXChatMessage *)typing
+				   markdown:(BOOL)markdown
+			   firstTokenMs:(NSUInteger)firstTokenMs
+					 deltas:(NSUInteger)deltas {
+	[self.messages removeObject:typing];
+	if (self.streamingReply) [self.messages removeObject:self.streamingReply];
+	self.streamingReply = nil;
+	self.busy = NO;
+
+	SXChatMessage *reply = [SXChatMessage new];
+	reply.date = [NSDate date];
+	if (error) {
+		reply.role = SXChatRoleError;
+		reply.text = error.localizedDescription;
+	} else {
+		NSString *raw = [answer stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+		if (!raw.length) {
+			reply.role = SXChatRoleError;
+			reply.text = @"Model không trả về nội dung.";
+		} else {
+			reply.role = SXChatRoleAssistant;
+			reply.text = markdown ? SXMarkdownRender(raw) : raw;
+		}
+	}
+	[self.messages addObject:reply];
+
+	// Dòng chân bong bóng: thời gian + nhịp stream, có ích khi so sánh model.
+	if (!error && [info isKindOfClass:[NSDictionary class]]) {
+		NSInteger ms = [info[@"ms"] integerValue];
+		NSMutableString *meta = [NSMutableString stringWithFormat:@"%ld ms", (long)ms];
+		if (firstTokenMs < (NSUInteger)NSIntegerMax && firstTokenMs > 0) {
+			[meta appendFormat:@" · token đầu %lu ms", (unsigned long)firstTokenMs];
+		}
+		if (deltas > 1) [meta appendFormat:@" · %lu mảnh", (unsigned long)deltas];
+		self.navigationItem.prompt = meta;
+	}
+
+	[UIView performWithoutAnimation:^{
+		[self.table reloadData];
+	}];
+	[self sx_scrollToBottom];
+	[self sx_updateEmptyState];
+	[self sx_updateSendEnabled];
+	SXLogDbg(@"pref", @"chat thử: %@ (%@), %lu phần", error ? @"lỗi" : @"xong",
+			 info[@"model"] ?: @"?", (unsigned long)self.messages.count);
 }
 
 #pragma mark - Bảng

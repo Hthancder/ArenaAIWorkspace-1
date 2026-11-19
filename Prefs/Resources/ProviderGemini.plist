@@ -2,113 +2,172 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>title</key>
-	<string>Cấu hình Gemini</string>
 	<key>items</key>
 	<array>
 		<dict>
-			<key>cell</key><string>PSGroupCell</string>
-			<key>label</key><string>Khóa API</string>
+			<key>cell</key>
+			<string>PSGroupCell</string>
 			<key>footerText</key>
 			<string>Tạo khóa miễn phí tại Google AI Studio. Khóa chỉ lưu trên máy và không bao giờ được ghi đầy đủ vào log.</string>
+			<key>label</key>
+			<string>Khóa API</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSSecureEditTextCell</string>
-			<key>label</key><string>Khóa API</string>
-			<key>key</key><string>geminiKey</string>
-			<key>defaults</key><string>com.sirix.tweak</string>
-			<key>default</key><string></string>
-			<key>PostNotification</key><string>com.sirix.tweak/prefs.changed</string>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>autoCaps</key>
+			<false/>
+			<key>cell</key>
+			<string>PSSecureEditTextCell</string>
+			<key>default</key>
+			<string></string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>key</key>
+			<string>geminiKey</string>
+			<key>label</key>
+			<string>Khóa API</string>
+			<key>noAutoCorrect</key>
+			<true/>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSTitleValueCell</string>
-			<key>label</key><string>Khóa đang dùng</string>
-			<key>key</key><string>keyDisplay</string>
+			<key>cell</key>
+			<string>PSTitleValueCell</string>
+			<key>key</key>
+			<string>keyDisplay</string>
+			<key>label</key>
+			<string>Khóa đang dùng</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSButtonCell</string>
-			<key>label</key><string>Dán khóa từ bộ nhớ tạm</string>
-			<key>action</key><string>sx_pasteKey:</string>
+			<key>action</key>
+			<string>sx_pasteKey:</string>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>Dán khóa từ bộ nhớ tạm</string>
 		</dict>
-
 		<dict>
-			<key>cell</key><string>PSGroupCell</string>
-			<key>label</key><string>Endpoint</string>
+			<key>cell</key>
+			<string>PSGroupCell</string>
 			<key>footerText</key>
 			<string>Gemini dùng endpoint cố định của Google (Generative Language API v1beta). Không cần cấu hình thêm.</string>
+			<key>label</key>
+			<string>Endpoint</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSTitleValueCell</string>
-			<key>label</key><string>Máy chủ</string>
-			<key>key</key><string>endpointDisplay</string>
+			<key>cell</key>
+			<string>PSTitleValueCell</string>
+			<key>key</key>
+			<string>endpointDisplay</string>
+			<key>label</key>
+			<string>Máy chủ</string>
 		</dict>
-
 		<dict>
-			<key>cell</key><string>PSGroupCell</string>
-			<key>label</key><string>Header tuỳ chỉnh</string>
+			<key>cell</key>
+			<string>PSGroupCell</string>
 			<key>footerText</key>
 			<string>Gửi kèm header HTTP riêng trong mọi request tới nhà cung cấp này — cần cho OpenRouter (HTTP-Referer, X-Title), Azure (api-key), gateway sau proxy hoặc máy chủ nội bộ. Header hệ thống (Host, Content-Type, Content-Length) bị bỏ qua vì sẽ làm hỏng request. Giá trị chỉ lưu trên máy và không bao giờ ghi vào log.</string>
+			<key>label</key>
+			<string>Header tuỳ chỉnh</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSLinkCell</string>
-			<key>label</key><string>Header tuỳ chỉnh</string>
-			<key>detail</key><string>SXHeadersController</string>
-			<key>headersProvider</key><string>gemini</string>
+			<key>cell</key>
+			<string>PSLinkCell</string>
+			<key>detail</key>
+			<string>SXHeadersController</string>
+			<key>headersProvider</key>
+			<string>gemini</string>
+			<key>label</key>
+			<string>Header tuỳ chỉnh</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSTitleValueCell</string>
-			<key>label</key><string>Đang gửi</string>
-			<key>key</key><string>headersDisplay</string>
+			<key>cell</key>
+			<string>PSTitleValueCell</string>
+			<key>key</key>
+			<string>headersDisplay</string>
+			<key>label</key>
+			<string>Đang gửi</string>
 		</dict>
-
 		<dict>
-			<key>cell</key><string>PSGroupCell</string>
-			<key>label</key><string>Mô hình</string>
+			<key>cell</key>
+			<string>PSGroupCell</string>
 			<key>footerText</key>
 			<string>Flash phù hợp trả lời nhanh trong Siri; Pro chất lượng cao hơn nhưng thường vượt mốc chờ 5 giây.</string>
+			<key>label</key>
+			<string>Mô hình</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSLinkCell</string>
-			<key>label</key><string>Chọn từ danh sách</string>
-			<key>detail</key><string>SXModelPickerController</string>
-			<key>providerPicker</key><string>gemini</string>
+			<key>cell</key>
+			<string>PSLinkCell</string>
+			<key>detail</key>
+			<string>SXModelPickerController</string>
+			<key>label</key>
+			<string>Chọn từ danh sách</string>
+			<key>providerPicker</key>
+			<string>gemini</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSEditTextCell</string>
-			<key>label</key><string>Mô hình tuỳ chỉnh</string>
-			<key>key</key><string>geminiModel</string>
-			<key>defaults</key><string>com.sirix.tweak</string>
-			<key>default</key><string>gemini-2.0-flash</string>
-			<key>PostNotification</key><string>com.sirix.tweak/prefs.changed</string>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>autoCaps</key>
+			<false/>
+			<key>cell</key>
+			<string>PSEditTextCell</string>
+			<key>default</key>
+			<string>gemini-2.0-flash</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>key</key>
+			<string>geminiModel</string>
+			<key>label</key>
+			<string>Mô hình tuỳ chỉnh</string>
+			<key>noAutoCorrect</key>
+			<true/>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSTitleValueCell</string>
-			<key>label</key><string>Đang dùng</string>
-			<key>key</key><string>modelDisplay</string>
+			<key>cell</key>
+			<string>PSTitleValueCell</string>
+			<key>key</key>
+			<string>modelDisplay</string>
+			<key>label</key>
+			<string>Đang dùng</string>
 		</dict>
-
 		<dict>
-			<key>cell</key><string>PSGroupCell</string>
-			<key>label</key><string>Kiểm tra</string>
+			<key>cell</key>
+			<string>PSGroupCell</string>
 			<key>footerText</key>
 			<string>Gửi một câu ngắn tới Gemini để xác nhận khóa và mô hình. Kết quả được lưu lại và tự xoá khi bạn đổi cấu hình.</string>
+			<key>label</key>
+			<string>Kiểm tra</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSButtonCell</string>
-			<key>label</key><string>Kiểm tra kết nối</string>
-			<key>action</key><string>sx_testConnection:</string>
+			<key>action</key>
+			<string>sx_testConnection:</string>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>Kiểm tra kết nối</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSTitleValueCell</string>
-			<key>id</key><string>testStatus</string>
-			<key>label</key><string>Kết quả</string>
-			<key>key</key><string>testStatus</string>
+			<key>cell</key>
+			<string>PSTitleValueCell</string>
+			<key>id</key>
+			<string>testStatus</string>
+			<key>key</key>
+			<string>testStatus</string>
+			<key>label</key>
+			<string>Kết quả</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSLinkCell</string>
-			<key>label</key><string>Trò chuyện thử</string>
-			<key>detail</key><string>SXChatTestController</string>
+			<key>cell</key>
+			<string>PSLinkCell</string>
+			<key>detail</key>
+			<string>SXChatTestController</string>
+			<key>label</key>
+			<string>Trò chuyện thử</string>
 		</dict>
 	</array>
+	<key>title</key>
+	<string>Cấu hình Gemini</string>
 </dict>
 </plist>

@@ -10,6 +10,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// Hàm đồng bộ (gọi trên luồng nền). `timeout` là trần cho CẢ request, kể cả
 /// phần thân trả về; `idleTimeout` là thời gian tối đa không nhận thêm byte.
 
+FOUNDATION_EXPORT NSString *const SXHTTPErrorDomain;
+
 /// Kết quả một request. status = 0 khi lỗi transport trước khi có response.
 @interface SXHTTPResult : NSObject
 @property (nonatomic) NSInteger status;
