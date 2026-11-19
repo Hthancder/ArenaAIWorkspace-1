@@ -27,10 +27,15 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          for line in Path('prior/build.log').read_text(errors='replace').splitlines()[-40:]:
-              print('::warning::' + line.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')[:500])
+          import base64, zlib
+          data = Path('prior/build.log').read_bytes()
+          encoded = base64.b64encode(zlib.compress(data, 9)).decode()
+          if len(encoded) > 50000:
+              raise SystemExit('Log too large for diagnostic annotation')
+          print('::notice::LOG_BASE64:' + encoded)
           PY
   runner:
+    if: ${{ !contains(github.event.head_commit.message, '[diagnostics]') }}
     runs-on: macos-latest
     timeout-minutes: 35
     steps:
