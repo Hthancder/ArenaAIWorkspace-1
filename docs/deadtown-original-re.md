@@ -103,6 +103,14 @@ build to call `draw_text_transformed` with `str:43680.18`; the patched build
 made no `str:` draw call in the same test. This does not reproduce the iPhone
 touch path or prove that all `str:` reports have this cause.
 
+An isolated [RE test 3 IPA](https://github.com/Hthancder/ArenaAIWorkspace-1/releases/tag/deadtown-ios15-re-test-3)
+was packaged in [run 44517874289](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44517874289)
+using the tested data. It has a different bundle ID, so it installs separately
+and does not overwrite the previous app's saves/config/mods. Saves do not move
+across automatically. It remains an incomplete experiment, not a faithful
+port, and has not been tested on an iPhone. The extracted translation candidates
+below are not inserted into this test.
+
 ### Candidate original translation literals
 
 `tools/deadtown_native_lang.py` scans the pinned library for a specific ARM/GOT
