@@ -153,3 +153,27 @@ GMX XML files parse. These are static checks only: they do not validate GML
 compatibility, import, game logic, audio playback, or an iOS IPA. The project
 still needs modern GameMaker import and runtime testing. The `.cache` copy is
 disposable; the tools and the specified upstream/APK commits reproduce it.
+
+## Real import and iOS build attempt
+
+GitHub Actions run `44493423659` used GameMaker ProjectTool `2024.14.165`
+to import the recovered and patched GMX into a `.yyp` project. The import job
+completed and uploaded `deadtown-imported-project-untested` and its logs
+(three-day retention). ProjectTool emitted 534 diagnostic lines containing
+warnings/errors; all matched its `Failed to find Options property` pattern for
+legacy settings. An import success and matching warning text do not establish
+that GML compiles or any platform works.
+
+The iOS job started on macOS but stopped at the explicit access check because
+no GameMaker access key was configured. GameMaker's documented iOS runtime
+installation requires a licence, and the attempted iOS compilation/unsigned
+IPA steps have **not run or been validated**. Once access is configured outside
+chat, rerun the failed job in run `44493423659`; build, packaging, TrollStore
+installation, iOS 15 compatibility, restored audio, and unlocks remain untested.
+No IPA was produced.
+
+The previously supplied APK's `game.droid` contains empty `CODE`, `VARI`, and
+`FUNC` chunks; its 32-bit Android `libyoyo.so` exports many `gml_Script_*` and
+`gml_Object_*` native functions. This is evidence of a native-compiled game,
+not a usable GML bytecode payload for a generic iOS GameMaker VM runner. The
+Android ELF cannot simply be packaged as an iOS executable.
