@@ -20,6 +20,26 @@ final class GMRSceneDelegate: UIResponder, UIWindowSceneDelegate {
     func sceneDidBecomeActive(_ scene: UIScene) { forward(#selector(UIApplicationDelegate.applicationDidBecomeActive(_:))) }
 }
 
+// An optional packaged game is copied once into Documents so it can be modded
+// through Files. Existing game files and saves are never overwritten.
+func installBundledGame(into root: URL) -> String? {
+    guard let resources = Bundle.main.resourceURL else { return nil }
+    let bundled = resources.appendingPathComponent("BundledGame", isDirectory: true)
+    guard FileManager.default.fileExists(atPath: bundled.path) else { return nil }
+    let destination = root.appendingPathComponent("Dead Town", isDirectory: true)
+    guard !FileManager.default.fileExists(atPath: destination.path) else { return nil }
+    let staging = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: staging) }
+    do {
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: bundled, to: staging)
+        try FileManager.default.moveItem(at: staging, to: destination)
+        return nil
+    } catch {
+        return "Không thể chép game vào Tệp: \(error.localizedDescription)"
+    }
+}
+
 func waitForScene() -> UIWindowScene? {
     let deadline = Date(timeIntervalSinceNow: 10)
     while Date() < deadline {
@@ -50,6 +70,7 @@ public func gmrIosSafeArea(_ window: UnsafeMutableRawPointer, _ insets: UnsafeMu
 public func gmrIosRunLauncher(_ root: UnsafePointer<CChar>, _ out: UnsafeMutablePointer<CChar>, _ outSize: Int32) -> Int32 {
     guard outSize > 1 else { return 0 }
     let dir = URL(fileURLWithPath: String(cString: root))
+    let installError = installBundledGame(into: dir)
     let window: UIWindow
     if let scene = waitForScene() { window = UIWindow(windowScene: scene) }
     else { window = UIWindow(frame: UIScreen.main.bounds) }
@@ -69,7 +90,7 @@ public func gmrIosRunLauncher(_ root: UnsafePointer<CChar>, _ out: UnsafeMutable
                 return FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDir) && isDir.boolValue &&
                     names.contains { FileManager.default.fileExists(atPath: folder.appendingPathComponent($0).path) }
             }.sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
-            let message = games.isEmpty ? "Chép thư mục game chứa data.win vào Tệp > Trên iPhone > gmRunner." : "Chọn game"
+            let message = installError ?? (games.isEmpty ? "Chép thư mục game chứa data.win vào Tệp > Trên iPhone > gmRunner." : "Chọn game")
             let alert = UIAlertController(title: "gmRunner", message: message, preferredStyle: .alert)
             for game in games {
                 alert.addAction(UIAlertAction(title: game.lastPathComponent, style: .default) { _ in selected = game })

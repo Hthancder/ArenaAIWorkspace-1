@@ -150,6 +150,13 @@ jobs:
             echo '::error::Forced gameplay probe did not enter rom_play.'
             exit 1
           fi
+      - name: Save incomplete game data for experimental IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: deadtown-incomplete-game-data
+          path: work/probe-game/
+          if-no-files-found: error
+          retention-days: 3
       - name: Upload diagnostic log
         if: always()
         uses: actions/upload-artifact@v4
