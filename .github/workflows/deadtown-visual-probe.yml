@@ -1,0 +1,79 @@
+name: Dead Town experimental rendering probe
+
+on:
+  push:
+    branches:
+      - arena/78062d86-arenaaiworkspace-1
+    paths:
+      - .github/workflows/deadtown-visual-probe.yml
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  visual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download incomplete test game
+        uses: actions/download-artifact@v4
+        with:
+          name: deadtown-incomplete-game-data
+          path: work/game
+          run-id: 44509744719
+          github-token: ${{ github.token }}
+      - uses: actions/cache/restore@v4
+        id: runner-cache
+        with:
+          path: work/runner-build
+          key: gmrunner-linux-e7121381d38b03a24242812fc22b0a7386d545c6-v1
+      - name: Install headless graphics dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libsdl2-dev libbz2-dev libgl1-mesa-dri xvfb python3-pil
+          test '${{ steps.runner-cache.outputs.cache-hit }}' = 'true'
+          test -x work/runner-build/gmrunner
+      - name: Render lobby and forced gameplay samples
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/shots work/save
+          set +e
+          timeout 90 xvfb-run -a -s '-screen 0 1280x720x24' work/runner-build/gmrunner work/game --hidden --fast --mute --seed 1 --frames 320 --trace --stats --goto rom_play@160 --screenshot 120,300 --screenshot-dir work/shots --save-dir work/save > work/render.log 2>&1
+          status=$?
+          python3 - <<'PY'
+          from pathlib import Path
+          for line in Path('work/render.log').read_text(errors='replace').splitlines():
+              if any(s in line for s in ('[room]', '[stats]', '[shot]', '[gml]', 'error', 'Error')):
+                  print('::notice::RENDER: ' + line.replace('%', '%25')[:500])
+          PY
+          if [ "$status" -ne 0 ]; then exit "$status"; fi
+          test -s work/shots/shot_120.png
+          test -s work/shots/shot_300.png
+      - name: Publish tiny preview for diagnostic inspection
+        if: success()
+        run: |
+          python3 - <<'PY'
+          import base64, io
+          from PIL import Image
+          for frame in (120, 300):
+              img = Image.open(f'work/shots/shot_{frame}.png').convert('RGB')
+              img.thumbnail((320, 180))
+              out = io.BytesIO(); img.save(out, format='JPEG', quality=55, optimize=True)
+              encoded = base64.b64encode(out.getvalue()).decode()
+              chunks = [encoded[i:i+3000] for i in range(0, len(encoded), 3000)]
+              if len(chunks) > 10: raise ValueError('preview too large')
+              for index, part in enumerate(chunks):
+                  print(f'::notice::PREVIEW_{frame}_{index:02d}:' + part)
+          PY
+      - name: Upload diagnostic files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deadtown-render-probe
+          path: |
+            work/render.log
+            work/shots/
+          if-no-files-found: ignore
+          retention-days: 3
