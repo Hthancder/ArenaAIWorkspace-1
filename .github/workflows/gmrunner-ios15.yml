@@ -13,31 +13,7 @@ permissions:
   actions: read
 
 jobs:
-  previous-diagnostics:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Retrieve prior build log
-        uses: actions/download-artifact@v4
-        with:
-          name: gmrunner-ios15-build-log
-          path: prior
-          run-id: 44494942432
-          github-token: ${{ github.token }}
-      - name: Show last diagnostics
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import base64, zlib
-          data = Path('prior/build.log').read_bytes()
-          encoded = base64.b64encode(zlib.compress(data, 9)).decode()
-          chunks = [encoded[i:i + 3000] for i in range(0, len(encoded), 3000)]
-          if len(chunks) > 10:
-              raise SystemExit('Log too large for diagnostic annotations')
-          for index, part in enumerate(chunks):
-              print(f'::notice::LOG_PART_{index:02d}:' + part)
-          PY
   runner:
-    if: ${{ !contains(github.event.head_commit.message, '[diagnostics]') }}
     runs-on: macos-latest
     timeout-minutes: 35
     steps:
@@ -102,6 +78,10 @@ jobs:
           echo "::notice::IPA MinimumOSVersion=$version"
           if [ "$version" != '15.0' ]; then echo '::error::Unexpected minimum iOS version'; exit 1; fi
           exe=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Info.plist")
+          echo "::notice::IPA CFBundleExecutable=$exe"
+          ls -l "$app"
+          file "$app/$exe"
+          lipo -info "$app/$exe"
           lipo -verify_arch arm64 "$app/$exe"
       - name: Upload build log
         if: always()
@@ -112,10 +92,10 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
       - name: Upload standalone runner only
-        if: success()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gmrunner-ios15-standalone-untested
           path: work/gmrunner/dist/ios/gmRunner.ipa
-          if-no-files-found: error
+          if-no-files-found: ignore
           retention-days: 3

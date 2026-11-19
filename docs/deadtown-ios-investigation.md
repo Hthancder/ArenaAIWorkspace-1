@@ -196,7 +196,13 @@ The project https://github.com/andronep/gmrunner (GPL-3.0-or-later), commit
 `e7121381d38b03a24242812fc22b0a7386d545c6`, supports iOS but targets iOS 17.
 `.github/workflows/gmrunner-ios15.yml` is experimenting with an iOS 15
 adaptation using the simple UIKit launcher in `tools/gmrunner-ios15/Launcher.swift`
-and the runner's built-in game menu. GitHub Actions run `44494942432` was
-still in progress at the last check; the standalone runner does not include
-Dead Town. No iOS 15 device, game-data, audio, input, or save test has yet
+and the runner's built-in game menu. GitHub Actions runs `44494942432` and
+`44496782229` built the unsigned standalone runner, but the subsequent package
+verification failed; the latter reported MinimumOSVersion 15.0 before failing.
+The precise failure is still being diagnosed. The runner does not include Dead Town. No iOS 15 device, game-data, audio, input, or save test has yet
 occurred. Do not present a runner-only artifact as a working Dead Town IPA.
+
+UndertaleModTool has a GML VM compiler and can construct an empty data file,
+but this is not a verified GMX-to-bytecode converter. Rebuilding Dead Town's
+resources and event bindings and compiling its code through it would require
+substantial implementation and testing; the APK's YYC code is not supported.
