@@ -1,4 +1,5 @@
 #import "SXHeadersController.h"
+#import "SXNavigationSupport.h"
 #import "SXLog.h"
 #import "SXPrefs.h"
 #import "SXUISupport.h"
@@ -188,6 +189,12 @@
 		[self.table.bottomAnchor constraintEqualToAnchor:self.view.keyboardLayoutGuide.topAnchor],
 	]];
 	[self sx_validate];
+}
+
+
+- (void)viewWillAppear:(BOOL)animated {
+	[super viewWillAppear:animated];
+	SXEnsureBackButton(self, @"Sửa header");
 }
 
 - (void)viewDidAppear:(BOOL)animated {
@@ -528,6 +535,12 @@
 	[self sx_refreshSummary];
 	SXLogDbg(@"pref", @"mở header tuỳ chỉnh %@ (%lu mục)",
 			 SXProviderDisplayName(self.provider), (unsigned long)self.headers.count);
+}
+
+
+- (void)viewWillAppear:(BOOL)animated {
+	[super viewWillAppear:animated];
+	SXEnsureBackButton(self, @"Header tuỳ chỉnh");
 }
 
 #pragma mark - Dữ liệu

@@ -1,4 +1,5 @@
 #import "SXDiagnosticsController.h"
+#import "SXNavigationSupport.h"
 #import "SXLog.h"
 #import "SXPrefs.h"
 #import "SXStore.h"
@@ -67,6 +68,7 @@ typedef NS_ENUM(NSInteger, SXDiagnosticLevel) {
 
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
+	SXEnsureBackButton(self, @"Chẩn đoán");
 	[self sx_reload];
 }
 
@@ -281,9 +283,11 @@ typedef NS_ENUM(NSInteger, SXDiagnosticLevel) {
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
 	(void)tableView;
-	return section == (NSInteger)self.sections.count - 1
-		? @"Chẩn đoán chỉ đọc cấu hình và số liệu trên máy — không gửi câu hỏi nào tới nhà cung cấp AI."
-		: nil;
+	// Bảng rỗng (chưa có dữ liệu) vẫn gọi hàm này với section 0 — -1 sẽ khớp
+	// nhầm và đặt footer dưới một section không tồn tại.
+	NSInteger count = (NSInteger)self.sections.count;
+	if (count <= 0 || section != count - 1) return nil;
+	return @"Chẩn đoán chỉ đọc cấu hình và số liệu trên máy — không gửi câu hỏi nào tới nhà cung cấp AI.";
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {

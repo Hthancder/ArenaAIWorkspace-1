@@ -1,4 +1,5 @@
 #import "SXLogViewController.h"
+#import "SXNavigationSupport.h"
 #import "SXLog.h"
 #import "SXLogFile.h"
 #import "SXUISupport.h"
@@ -182,6 +183,7 @@ static UIColor *SXLogColorForLine(NSString *line) {
 
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
+	SXEnsureBackButton(self, @"Nhật ký");
 	NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
 	[center addObserver:self selector:@selector(sx_appDidBecomeActive:)
 				   name:UIApplicationDidBecomeActiveNotification object:nil];

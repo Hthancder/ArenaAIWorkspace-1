@@ -84,7 +84,7 @@
 			<key>defaults</key>
 			<string>com.sirix.tweak</string>
 			<key>detail</key>
-			<string>PSListItemsController</string>
+			<string>SXAPIChoiceController</string>
 			<key>key</key>
 			<string>mode</string>
 			<key>label</key>
@@ -110,7 +110,7 @@
 			<key>defaults</key>
 			<string>com.sirix.tweak</string>
 			<key>detail</key>
-			<string>PSListItemsController</string>
+			<string>SXAPIChoiceController</string>
 			<key>key</key>
 			<string>triggerMode</string>
 			<key>label</key>
@@ -144,7 +144,7 @@
 			<key>defaults</key>
 			<string>com.sirix.tweak</string>
 			<key>detail</key>
-			<string>PSListItemsController</string>
+			<string>SXAPIChoiceController</string>
 			<key>key</key>
 			<string>provider</string>
 			<key>label</key>
@@ -254,7 +254,7 @@
 			<key>defaults</key>
 			<string>com.sirix.tweak</string>
 			<key>detail</key>
-			<string>PSListItemsController</string>
+			<string>SXAPIChoiceController</string>
 			<key>key</key>
 			<string>timeoutAction</string>
 			<key>label</key>

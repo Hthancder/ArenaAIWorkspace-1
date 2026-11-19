@@ -26,6 +26,14 @@
 @property (nonatomic) BOOL testing;
 @end
 
+/// Đuôi đường dẫn tương ứng giao thức đang chọn — một nơi duy nhất để mọi
+/// dòng tóm tắt hiển thị giống nhau và không lặp lại ba ngôi lồng nhau.
+static NSString *SXAPIPathSuffix(SXOpenAIApi api) {
+	if (api == SXOpenAIApiResponses) return @"/responses";
+	if (api == SXOpenAIApiChat) return @"/chat/completions";
+	return @" (tự dò)";
+}
+
 @implementation SXProviderConfigController
 
 #pragma mark - Nhận diện trang
@@ -288,10 +296,7 @@
 			NSString *base = normalized.length ? normalized
 				: (raw.length ? @"⚠️ địa chỉ không hợp lệ" : @"Mặc định");
 			// Giao thức nằm cùng dòng cho gọn: endpoint + đường dẫn sẽ gọi.
-			SXOpenAIApi api = [SXPrefs shared].openaiApi;
-			NSString *path = api == SXOpenAIApiResponses ? @"/responses"
-				: api == SXOpenAIApiChat ? @"/chat/completions" : @" (tự dò)";
-			return [NSString stringWithFormat:@"%@%@", base, path];
+			return [base stringByAppendingString:SXAPIPathSuffix([SXPrefs shared].openaiApi)];
 		}
 		if ([key isEqualToString:@"testStatus"]) return [self testStatusText];
 		if ([key isEqualToString:@"headersDisplay"]) {
@@ -317,12 +322,14 @@
 	[prefs reload];
 	NSString *keyText = [self currentKey];
 	NSString *rawBase = prefs.openaiBase;
-	NSString *endpoint = self.provider == SXProviderGemini
-		? @"generativelanguage.googleapis.com"
-		: [NSString stringWithFormat:@"%@%@",
-		   [SXPrefs normalizedBaseURL:rawBase] ?: (rawBase.length ? @"⚠️ địa chỉ không hợp lệ" : @"Mặc định"),
-		   prefs.openaiApi == SXOpenAIApiResponses ? @"/responses"
-		   : prefs.openaiApi == SXOpenAIApiChat ? @"/chat/completions" : @" (tự dò)"];
+	NSString *endpoint = nil;
+	if (self.provider == SXProviderGemini) {
+		endpoint = @"generativelanguage.googleapis.com";
+	} else {
+		NSString *base = [SXPrefs normalizedBaseURL:rawBase];
+		if (!base.length) base = rawBase.length ? @"⚠️ địa chỉ không hợp lệ" : @"Mặc định";
+		endpoint = [base stringByAppendingString:SXAPIPathSuffix(prefs.openaiApi)];
+	}
 	NSDictionary<NSString *, NSString *> *updates = @{
 		@"keyDisplay": keyText.length ? [SXPrefs maskedKey:keyText] : @"Chưa đặt",
 		@"modelDisplay": [self currentModel],

@@ -1,4 +1,5 @@
 #import "SXHistoryController.h"
+#import "SXNavigationSupport.h"
 #import "SXStore.h"
 #import "SXUISupport.h"
 #import "SXLog.h"
@@ -282,6 +283,7 @@ static NSString *SXHistoryTimeText(NSDate *date) {
 
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
+	SXEnsureBackButton(self, @"Lịch sử");
 	// Lần đầu: đọc kho ngay để không thấy chớp màn hình trống.
 	if (!self.loadedOnce) [self sx_showLoadingState];
 	[self sx_reloadHistory];

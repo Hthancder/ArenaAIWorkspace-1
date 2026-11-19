@@ -1,4 +1,5 @@
 #import "SXChatTestController.h"
+#import "SXNavigationSupport.h"
 #import "SXLLM.h"
 #import "SXPrefs.h"
 #import "SXMarkdown.h"
@@ -129,6 +130,11 @@ typedef NS_ENUM(NSInteger, SXChatRole) {
 	_meta.text = meta;
 	_meta.hidden = meta.length == 0;
 	_meta.textColor = fromUser ? [UIColor.whiteColor colorWithAlphaComponent:0.7] : UIColor.tertiaryLabelColor;
+
+	// Tái sử dụng cell: nhãn đã từng được đo theo nội dung khác. Đặt lại chiều
+	// rộng ưu tiên để bảng tính đúng chiều cao thay vì giữ kích thước cũ.
+	_label.preferredMaxLayoutWidth = 0;
+	[self setNeedsLayout];
 }
 
 @end
@@ -173,9 +179,26 @@ typedef NS_ENUM(NSInteger, SXChatRole) {
 	[self sx_updateSendEnabled];
 }
 
+- (void)viewWillAppear:(BOOL)animated {
+	[super viewWillAppear:animated];
+	SXEnsureBackButton(self, @"Trò chuyện thử");
+}
+
 - (void)viewDidAppear:(BOOL)animated {
 	[super viewDidAppear:animated];
 	[self.input becomeFirstResponder];
+}
+
+- (void)viewWillDisappear:(BOOL)animated {
+	[super viewWillDisappear:animated];
+	// Đang chờ AI mà rời màn hình: tăng thế hệ để mọi callback (delta/finish/
+	// tool) tự bỏ qua. Không có bước này, callback của lượt cũ vẫn reload bảng
+	// đã bị pop và giữ nguyên trạng thái "đang trả lời…".
+	if (self.busy) {
+		self.generation++;
+		self.busy = NO;
+		SXLogDbg(@"chat-test", @"rời màn hình khi đang trả lời — bỏ lượt");
+	}
 }
 
 - (void)dealloc {

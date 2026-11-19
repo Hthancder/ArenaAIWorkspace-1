@@ -1,4 +1,5 @@
 #import "SXToolsController.h"
+#import "SXNavigationSupport.h"
 #import "SXUISupport.h"
 #import "SXLog.h"
 #import "SXPrefs.h"
@@ -172,6 +173,7 @@
 
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
+	SXEnsureBackButton(self, @"Công cụ");
 	// Cấu hình có thể đổi từ màn hình khác (khôi phục mặc định…).
 	[self reloadCatalog];
 	[self.table reloadData];

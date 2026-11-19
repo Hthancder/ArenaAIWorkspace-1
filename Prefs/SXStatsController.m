@@ -1,4 +1,5 @@
 #import "SXStatsController.h"
+#import "SXNavigationSupport.h"
 #import "SXStore.h"
 #import "SXUISupport.h"
 #import "SXLog.h"
@@ -116,6 +117,7 @@ static NSString *SXStatsNumber(id value) {
 
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
+	SXEnsureBackButton(self, @"Thống kê");
 	[self sx_reload];
 }
 

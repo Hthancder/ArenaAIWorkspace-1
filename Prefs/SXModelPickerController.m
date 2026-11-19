@@ -1,4 +1,5 @@
 #import "SXModelPickerController.h"
+#import "SXNavigationSupport.h"
 #import "SXLog.h"
 #import "SXPrefs.h"
 #import "SXUISupport.h"
@@ -174,6 +175,7 @@
 
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
+	SXEnsureBackButton(self, @"Model");
 	// Đổi model ở màn khác (nhập tay trong trang nhà cung cấp) thì phải thấy ngay.
 	NSString *latest = [self preferredModel];
 	if (![latest isEqualToString:self.currentModel]) {

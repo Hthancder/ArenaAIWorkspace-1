@@ -1,4 +1,5 @@
 #import "SXPromptController.h"
+#import "SXNavigationSupport.h"
 #import "SXLog.h"
 #import "SXPrefs.h"
 #import "SXUISupport.h"
@@ -186,6 +187,11 @@ static NSString *SXPromptCountText(NSUInteger length) {
 											 selector:@selector(sx_keyboardWillChange:)
 												 name:UIKeyboardWillChangeFrameNotification
 											   object:nil];
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+	[super viewWillAppear:animated];
+	SXEnsureBackButton(self, @"Prompt hệ thống");
 }
 
 - (void)viewDidAppear:(BOOL)animated {

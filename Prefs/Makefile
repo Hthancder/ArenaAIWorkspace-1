@@ -27,6 +27,9 @@ SiriXPreferences_FILES = \
 	SXModelPickerController.m \
 	SXUISupport.m \
 	SXDiagnosticsController.m \
+	SXAPIChoiceController.m \
+	SXNavigationSupport.m \
+	UIViewController+SXBack.m \
 	../Sources/SXUpdate.m
 
 SiriXPreferences_CFLAGS = -fobjc-arc -Wno-deprecated-declarations \

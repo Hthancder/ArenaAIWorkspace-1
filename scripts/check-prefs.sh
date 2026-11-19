@@ -29,6 +29,15 @@ def read(path):
         return handle.read()
 
 # ---------------------------------------------------------------- plist
+# Controller do Apple cung cấp. Chỉ những lớp có hành vi ổn định trong
+# PreferenceLoader mới được phép — trước đây `PSListItemsController` làm trang
+# cấu hình OpenAI văng ngay khi mở (nó cần `values`/`titles` dạng khác).
+APPLE_DETAILS = {"PSListItemsController"}  # đã thay bằng SXAPIChoiceController
+FORBIDDEN_DETAILS = {
+    "PSListItemsController": "dùng SXAPIChoiceController (tự dựng) — lớp này cần "
+                             "values/titles không tới được cell trong trang nạp bằng plist",
+}
+
 PLIST_CONTROLLER = {
     "Prefs/Resources/Root.plist": "SXRootListController",
     "Prefs/Resources/ProviderOpenAI.plist": "SXProviderConfigController",
@@ -68,8 +77,10 @@ for plist_path in sorted(glob.glob("Prefs/Resources/*.plist")):
 
     for spec in walk_specifiers(data):
         detail = spec.get("detail")
-        if isinstance(detail, str) and detail and not detail.startswith("PS"):
-            if detail not in impls:
+        if isinstance(detail, str) and detail in FORBIDDEN_DETAILS:
+            fail(f"{plist_path}: detail '{detail}' bị cấm — {FORBIDDEN_DETAILS[detail]}")
+        if isinstance(detail, str) and detail and detail not in FORBIDDEN_DETAILS:
+            if not detail.startswith("PS") and detail not in impls:
                 fail(f"{plist_path}: detail '{detail}' không có @implementation")
         action = spec.get("action")
         if isinstance(action, str) and action:
