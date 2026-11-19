@@ -267,9 +267,21 @@ then observed the candidate mask entry 3, consumed a one-item mask, transferred
 and consumed one from a two-item stack. In the same forced desktop scenario,
 the reconstructed normal save/load scripts round-tripped protection 321 and
 poison 2; the checker independently decoded those fields from the disposable
-save. This validates only this candidate in this runner under forced conditions,
-not original runtime equivalence, general map behavior, damage, other save
-modes, audio, graphics or iOS. No result from this probe is packaged for users.
+save.
+
+A further forced run ([44565506937](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44565506937))
+measured HP immediately before and after the candidate poison-damage block,
+before hunger/regeneration. With the candidate's initially computed poison
+rate `100/4500`, the HP change multiplied by 4,500 was 100 at skill 20 level 0
+and 50 at level 1. When poison and protection were deliberately set together,
+the candidate took that damage in the first step and none in the next: its
+poison block precedes its protection timer/clear block. These are forced VM
+measurements; although static ARM evidence has similar candidate operations,
+this does **not** establish the native branch reachability, timing or exact
+ordering under real gameplay. This validates only this candidate in this
+runner under these conditions, not original runtime equivalence, general map
+behavior, other save modes, audio, graphics or iOS. No result from this probe
+is packaged for users.
 
 Reproduce independently with the same optional dependencies as above:
 
@@ -278,6 +290,33 @@ PYTHONPATH=.cache/re-pylibs python tools/deadtown_native_tables.py /path/to/orig
   --output native-table-candidates.json
 PYTHONPATH=.cache/re-pylibs python -m unittest discover -s tests -p 'test_deadtown_native_tables.py' -v
 ```
+
+### Sprite metadata comparison: visual and collision risks
+
+`tools/deadtown_sprite_metadata.py` compares the pinned APK's bytecode-15
+SPRT metadata with project-declared GMX sprites, without changing either. It
+compares sizes, origin, bounding-box numbers, separate-mask flag (GMX `-1`
+normalized to true) and frame counts; the parser checks frame pointers refer
+to TPAG. The two formats' numeric `bbox_mode` values are compared as stored,
+so differences are leads, not proof that runtime collision behavior differs.
+
+The APK has **402** sprite names versus **291** declared in GMX; all 291 GMX
+names exist in the APK, and 111 APK sprites have no same-named GMX declaration.
+Of the shared names, **24** differ in at least one compared metadata field and
+267 match those selected fields. In 17 shared sprites, the frame counts differ:
+`spr_item_use` is 22 vs 20, `spr_item_etc` 65 vs 49, `spr_item_weapon` 35 vs
+30, `spr_ui_buff` 7 vs 6, `spr_action_button` 11 vs 10 and
+`spr_ui_health` 6 vs 4 (APK vs GMX). `spr_setting_cradits` width is 107 vs
+247, with different origin and bounding box. These mismatches explain why
+injecting newer table indices into the older art without analysis is unsafe;
+they do not establish what any specific rendered screen looks like.
+
+Reproduce with `python tools/deadtown_sprite_metadata.py APK PROJECT --output
+sprite-metadata.json`; the native research workflow also generates the full
+report. It does **not** compare decoded pixels, transparency, mask bits,
+animation rates, positions or UI logic. Matching metadata is not visual or
+collision equivalence, and the 111 APK-only assets are not automatically
+restored by this report.
 
 ### UI/input investigation: coordinate spaces
 
