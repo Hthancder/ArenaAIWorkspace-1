@@ -41,7 +41,8 @@ Console.WriteLine($"PROBE: APK objects absent from source={apkObjectNames.Except
 string eventsPath = Environment.GetEnvironmentVariable("GML_PROBE_EVENTS");
 if (string.IsNullOrEmpty(eventsPath)) throw new Exception("GML_PROBE_EVENTS is not set");
 var document = JsonDocument.Parse(File.ReadAllText(eventsPath));
-int selected = 0;
+int selected = 0, skippedLinks = 0;
+var eventLinks = new List<(UndertaleGameObject obj, UndertaleCode code, EventType type, uint subtype)>();
 foreach (var evt in document.RootElement.EnumerateArray())
 {
     string objectName = evt.GetProperty("object").GetString();
@@ -49,6 +50,20 @@ foreach (var evt in document.RootElement.EnumerateArray())
     var code = UndertaleCode.CreateEmptyEntry(Data, "probe_" + objectName + "_" + selected);
     group.QueueReplace(code, text);
     selected++;
+    var attr = evt.GetProperty("attributes");
+    uint type = uint.Parse(attr.GetProperty("eventtype").GetString());
+    var obj = Data.GameObjects.FirstOrDefault(x => x.Name.Content == objectName);
+    uint subtype;
+    if (type == 4)
+    {
+        string other = attr.GetProperty("ename").GetString();
+        int id = Data.GameObjects.ToList().FindIndex(x => x.Name.Content == other);
+        if (id < 0) { skippedLinks++; continue; }
+        subtype = (uint)id;
+    }
+    else subtype = uint.Parse(attr.GetProperty("enumb").GetString());
+    if (obj == null || type >= obj.Events.Count) { skippedLinks++; continue; }
+    eventLinks.Add((obj, code, (EventType)type, subtype));
 }
 document.Dispose();
 Console.WriteLine($"PROBE: compiling {selected} translated event bodies; event behavior is not yet verified");
@@ -60,4 +75,12 @@ if (!result.Successful)
         Console.WriteLine("PROBE_ERROR: " + error.Code.Name.Content + ": " + error.GenerateDetailedMessage().Replace('\n', ' '));
     throw new Exception("Probe compilation failed");
 }
-Console.WriteLine("PROBE: scripts and selected event bodies compiled in memory, with no event bindings or playable game or IPA");
+// Destructive only to this in-memory copy. YYC event pointers are not VM
+// pointers. Missing source objects remain without behavior: this data is
+// deliberately incomplete and must never be presented as a playable game.
+foreach (var obj in Data.GameObjects)
+    foreach (var list in obj.Events) list.Clear();
+foreach (var link in eventLinks)
+    CodeImportGroup.LinkEvent(link.obj, link.code, link.type, link.subtype, action => action());
+Console.WriteLine($"PROBE: linked {eventLinks.Count} events to matching APK objects; skipped {skippedLinks} missing objects or collision targets");
+Console.WriteLine("PROBE: incomplete data for serialization testing only; no playable game or IPA");

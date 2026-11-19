@@ -55,8 +55,13 @@ jobs:
           GML_PROBE_EVENTS: ${{ github.workspace }}/work/events.json
         run: |
           set +e
-          "$UTMT_EXE" load work/game.droid -s tools/deadtown-vm-probe.csx 2>&1 | tee work/probe.log
+          "$UTMT_EXE" load work/game.droid -s tools/deadtown-vm-probe.csx -o work/incomplete-probe.win 2>&1 | tee work/probe.log
           status=${PIPESTATUS[0]}
+          if [ "$status" -eq 0 ]; then
+            "$UTMT_EXE" info work/incomplete-probe.win 2>&1 | tee -a work/probe.log
+            status=${PIPESTATUS[0]}
+            if [ "$status" -eq 0 ]; then echo 'PROBE: serialized incomplete data was re-read by UndertaleModTool' | tee -a work/probe.log; fi
+          fi
           python3 - <<'PY'
           from pathlib import Path
           lines = Path('work/probe.log').read_text(errors='replace').splitlines()
