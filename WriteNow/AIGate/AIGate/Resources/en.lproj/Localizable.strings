@@ -47,7 +47,7 @@
 "Cancel" = "Cancel";
 
 /* No comment provided by engineer. */
-"CFBundleDisplayName" = "Write Now";
+"CFBundleDisplayName" = "OmniAI";
 
 /* HTTP 4xx */
 "Client Error" = "Client Error";
@@ -452,10 +452,10 @@
 "Waiting for activation… %d/5" = "Waiting for activation… %d/5";
 
 /* No comment provided by engineer. */
-"Write Now" = "Write Now";
+"Write Now" = "OmniAI";
 
 /* No comment provided by engineer. */
-"Write Now Lite" = "Write Now Lite";
+"Write Now Lite" = "OmniAI Lite";
 
 /* No comment provided by engineer. */
 "Write Now Lite is made for TrollStore with partial support for Write Now, which is now free for everyone to try out." = "Write Now Lite is made for TrollStore with partial support for Write Now, which is now free for everyone to try out.";

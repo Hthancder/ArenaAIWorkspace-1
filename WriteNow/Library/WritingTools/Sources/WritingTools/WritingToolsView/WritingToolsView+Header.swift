@@ -37,25 +37,26 @@ extension WritingToolsView {
     }
 
     var title: some View {
-        HStack(alignment: .center, spacing: 6) {
+        HStack(alignment: .center, spacing: 5) {
             VStack(alignment: .leading, spacing: 1.5) {
                 Text(headerBrandTitle)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                     .font(.subheadline.bold())
-                HStack(spacing: 5) {
+                HStack(spacing: 4) {
                     Text(textCountDescription)
                         .font(.system(size: 10))
                         .foregroundColor(.white.opacity(0.65))
                         .lineLimit(1)
 
                     if textProxy.isReadOnly {
-                        HStack(spacing: 2.5) {
+                        HStack(spacing: 2) {
                             Image(systemName: "eye")
-                                .font(.system(size: 8, weight: .bold))
+                                .font(.system(size: 7.5, weight: .bold))
                             Text("Read-Only")
-                                .font(.system(size: 9, weight: .semibold))
+                                .font(.system(size: 8.5, weight: .semibold))
                         }
-                        .padding(.horizontal, 5)
+                        .padding(.horizontal, 4.5)
                         .padding(.vertical, 1)
                         .background(Color.cyan.opacity(0.24))
                         .foregroundColor(Color(red: 0.72, green: 0.96, blue: 1.0))
@@ -63,6 +64,7 @@ extension WritingToolsView {
                     }
                 }
             }
+            .layoutPriority(1)
 
             Spacer(minLength: 2)
 
@@ -87,9 +89,9 @@ extension WritingToolsView {
             (Presenter.shared.activeToolController as? WritingToolController)?.setExpandedSize(next)
         } label: {
             Image(systemName: isPopoverExpanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
-                .font(.system(size: 11, weight: .bold))
+                .font(.system(size: 10.5, weight: .bold))
                 .foregroundColor(isPopoverExpanded ? .cyan : .white.opacity(0.9))
-                .frame(width: 26, height: 26)
+                .frame(width: 24, height: 24)
                 .background(
                     Circle()
                         .foregroundStyle(.white)
@@ -151,9 +153,9 @@ extension WritingToolsView {
             }
         } label: {
             Image(systemName: cfg.settings.minimalUIMode ? "line.3.horizontal.decrease.circle.fill" : "slider.horizontal.3")
-                .font(.system(size: 11.5, weight: .bold))
+                .font(.system(size: 11, weight: .bold))
                 .foregroundColor(cfg.settings.minimalUIMode ? .cyan : .white.opacity(0.9))
-                .frame(width: 26, height: 26)
+                .frame(width: 24, height: 24)
                 .background(
                     Circle()
                         .foregroundStyle(.white)
@@ -224,19 +226,19 @@ extension WritingToolsView {
                 Label("Manage / Add Provider & Model...", systemImage: "slider.horizontal.3")
             }
         } label: {
-            HStack(spacing: 3.5) {
+            HStack(spacing: 3) {
                 Image(systemName: cfg.activeEndpoint == nil ? "plus.circle.fill" : "cpu")
-                    .font(.system(size: 10.5))
+                    .font(.system(size: 10))
                 Text(activeEndpointLabel)
-                    .font(.system(size: 11.5, weight: .medium))
+                    .font(.system(size: 11, weight: .medium))
                     .lineLimit(1)
-                    .frame(maxWidth: 96)
+                    .frame(maxWidth: 78)
                 Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 8.5))
+                    .font(.system(size: 8))
                     .opacity(0.75)
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4.5)
             .background(Color.white.opacity(0.16))
             .clipShape(Capsule())
             .foregroundColor(.white)
@@ -249,9 +251,9 @@ extension WritingToolsView {
             launchScreenOCRFromHeader()
         } label: {
             Image(systemName: "text.viewfinder")
-                .font(.system(size: 11.5, weight: .bold))
+                .font(.system(size: 11, weight: .bold))
                 .foregroundColor(.cyan)
-                .frame(width: 26, height: 26)
+                .frame(width: 24, height: 24)
                 .background(
                     Circle()
                         .foregroundStyle(.white)
@@ -315,10 +317,10 @@ extension WritingToolsView {
 
     var closeButton: some View {
         Image(systemName: "xmark")
-            .font(.system(size: 11.5, weight: .bold))
+            .font(.system(size: 11, weight: .bold))
             .foregroundStyle(.white)
             .opacity(isClosePressed ? 0.5 : 1)
-            .frame(width: 26, height: 26)
+            .frame(width: 24, height: 24)
             .background(
                 Circle()
                     .foregroundStyle(.white)

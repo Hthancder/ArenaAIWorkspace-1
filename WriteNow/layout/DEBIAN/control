@@ -1,8 +1,8 @@
 Package: wiki.qaq.writenow
-Name: Write Now
+Name: OmniAI
 Version: 2.4-1
 Architecture: iphoneos-arm
-Description: AI tool within your hands.
+Description: OmniAI — All-in-one AI assistant for translation, Q&A, notes, OCR & writing.
 Maintainer: Lessica <82flex@gmail.com>
 Author: Lessica <82flex@gmail.com>
 Section: Tweaks

@@ -109,7 +109,7 @@ final class STTService: NSObject, AVAudioRecorderDelegate {
 
             let stt = Configuration.shared.appSettings.stt
             guard stt.enabled else {
-                completion(false, "Speech-to-Text is disabled in WriteNow Settings.")
+                completion(false, "Speech-to-Text is disabled in OmniAI Settings.")
                 return
             }
 

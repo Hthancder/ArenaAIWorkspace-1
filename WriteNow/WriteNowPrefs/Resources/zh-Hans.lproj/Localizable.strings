@@ -47,7 +47,7 @@
 "Cancel" = "取消";
 
 /* No comment provided by engineer. */
-"CFBundleDisplayName" = "妙写";
+"CFBundleDisplayName" = "OmniAI";
 
 /* HTTP 4xx */
 "Client Error" = "Client Error";
@@ -452,10 +452,10 @@
 "Waiting for activation… %d/5" = "正在等待激活… %d/5";
 
 /* No comment provided by engineer. */
-"Write Now" = "妙写";
+"Write Now" = "OmniAI";
 
 /* No comment provided by engineer. */
-"Write Now Lite" = "妙写 Lite";
+"Write Now Lite" = "OmniAI Lite";
 
 /* No comment provided by engineer. */
 "Write Now Lite is made for TrollStore with partial support for Write Now, which is now free for everyone to try out." = "妙写 Lite 是为巨魔商店特殊制作的版本，支持妙写的部分功能。现可供所有人免费体验。";

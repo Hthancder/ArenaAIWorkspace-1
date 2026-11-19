@@ -480,27 +480,43 @@ final class ScreenTextOverlayViewController: UIViewController {
                         ? PromptComposer.stripThinkingTags(from: rawJoined)
                         : rawJoined
                     let parsed = Self.parseNumberedTranslations(raw, expectedCount: limited.count)
-                    var entries: [(frameInWindow: CGRect, originalText: String, replacedText: String)] = []
+                    var requests: [InPlaceReplacementRequest] = []
                     for (idx, blk) in limited.enumerated() {
                         if let translated = parsed[idx], !translated.isEmpty {
-                            entries.append((blk.rectInWindow, blk.text, translated))
+                            requests.append(
+                                InPlaceReplacementRequest(
+                                    frameInWindow: blk.rectInWindow,
+                                    originalText: blk.text,
+                                    replacedText: translated,
+                                    targetView: blk.sourceView,
+                                    selectedNSRange: nil
+                                )
+                            )
                         }
                     }
-                    if entries.isEmpty {
+                    if requests.isEmpty {
                         let fallback = raw.trimmingCharacters(in: .whitespacesAndNewlines)
                         if !fallback.isEmpty, let first = limited.first {
                             let union = limited.map(\.rectInWindow).reduce(first.rectInWindow) { $0.union($1) }
-                            entries.append((union, limited.map(\.text).joined(separator: "\n"), fallback))
+                            requests.append(
+                                InPlaceReplacementRequest(
+                                    frameInWindow: union,
+                                    originalText: limited.map(\.text).joined(separator: "\n"),
+                                    replacedText: fallback,
+                                    targetView: limited.count == 1 ? first.sourceView : nil,
+                                    selectedNSRange: nil
+                                )
+                            )
                         }
                     }
-                    guard !entries.isEmpty else {
+                    guard !requests.isEmpty else {
                         self.hintLabel.text = "Translation returned empty."
                         return
                     }
                     let win = self.sourceWindow
                     let snap = self.snapshot
                     self.didTapClose()
-                    InPlaceTextReplacementManager.shared.showReplacements(entries: entries, in: win, snapshot: snap)
+                    InPlaceTextReplacementManager.shared.applyReplacements(requests: requests, in: win, snapshot: snap)
 
                 case let .failure(err):
                     self.hintLabel.text = err.localizedDescription
@@ -633,6 +649,7 @@ final class ScreenTextOverlayViewController: UIViewController {
         Presenter.shared.presentExtractedText(
             text,
             fromHostView: hostView,
+            nativeSourceView: sourceView,
             parentController: self,
             anchorRectInHost: hostView.bounds,
             slotIndex: 0,

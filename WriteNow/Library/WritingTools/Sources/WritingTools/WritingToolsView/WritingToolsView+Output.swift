@@ -484,7 +484,7 @@ extension WritingToolsView {
             Button {
                 replaceOnScreenInPlace()
             } label: {
-                Label("Show Replaced Text On Screen", systemImage: "rectangle.on.rectangle.angled")
+                Label("Replace Native / On Screen", systemImage: "rectangle.on.rectangle.angled")
             }
         }
         Button {
@@ -530,12 +530,21 @@ extension WritingToolsView {
         }
 
         let original = textProxy.selectedText
+        let targetView = context.nativeSourceView ?? context.targetView
+        let selectedNSRange = context.selectedNSRange
         let closeOverlay = context.onCompleteAndClose
         dismiss()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
             closeOverlay?()
-            InPlaceTextReplacementManager.shared.showReplacements(
-                entries: [(resolvedRect, original, trimmed)],
+            let req = InPlaceReplacementRequest(
+                frameInWindow: resolvedRect,
+                originalText: original,
+                replacedText: trimmed,
+                targetView: targetView,
+                selectedNSRange: selectedNSRange
+            )
+            InPlaceTextReplacementManager.shared.applyReplacements(
+                requests: [req],
                 in: hostWin
             )
         }

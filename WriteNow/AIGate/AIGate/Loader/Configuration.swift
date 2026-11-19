@@ -48,6 +48,9 @@ class Configuration: NSObject, ObservableObject {
     @PublishedPersist(key: "ReadOnlyPresetsSeededV1", defaultValue: false)
     private var readOnlyPresetsSeeded: Bool
 
+    @PublishedPersist(key: "OmniAIBrandMigratedV1", defaultValue: false)
+    private var omniAIBrandMigrated: Bool
+
     @PublishedPersist(key: "ConfiguredPresets", defaultValue: [])
     private var configuredPresets: [WritingPreset]
 
@@ -92,6 +95,33 @@ class Configuration: NSObject, ObservableObject {
             }
             readOnlyPresetsSeeded = true
             _readOnlyPresetsSeeded.saveNow()
+        }
+
+        if !omniAIBrandMigrated {
+            let trimmedTitle = appSettings.menuTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmedTitle.isEmpty || trimmedTitle == "Write\u{00A0}Now" || trimmedTitle == "Write Now" {
+                var updatedSettings = appSettings
+                updatedSettings.menuTitle = "OmniAI"
+                appSettings = updatedSettings
+                _appSettings.saveNow()
+            }
+
+            var current = configuredPresets
+            let existingKeys = Set(current.compactMap(\.defaultKey))
+            let existingIDs = Set(current.map(\.id))
+            var addedAny = false
+            for seed in WritingPreset.defaultPresets where seed.defaultKey == "askAI" || seed.defaultKey == "quickNote" {
+                if let dk = seed.defaultKey, existingKeys.contains(dk) { continue }
+                if existingIDs.contains(seed.id) { continue }
+                current.append(seed)
+                addedAny = true
+            }
+            if addedAny {
+                configuredPresets = current
+                _configuredPresets.saveNow()
+            }
+            omniAIBrandMigrated = true
+            _omniAIBrandMigrated.saveNow()
         }
 
         if activatedEndpointID != Self.noneActivated, configuredEndpoints[activatedEndpointID] == nil {
@@ -464,6 +494,7 @@ class Configuration: NSObject, ObservableObject {
         _configuredEndpoints.saveNow()
         _presetsInitialized.saveNow()
         _readOnlyPresetsSeeded.saveNow()
+        _omniAIBrandMigrated.saveNow()
         _configuredPresets.saveNow()
         _appSettings.saveNow()
         if !isInitializing, ProcessInfo.processInfo.environment["BOOT_MODE"] != "ServiceDaemon" {
@@ -479,6 +510,7 @@ class Configuration: NSObject, ObservableObject {
         _configuredEndpoints.invalidateCaches()
         _presetsInitialized.invalidateCaches()
         _readOnlyPresetsSeeded.invalidateCaches()
+        _omniAIBrandMigrated.invalidateCaches()
         _configuredPresets.invalidateCaches()
         _appSettings.invalidateCaches()
         postConfigChangedDarwinNotification()

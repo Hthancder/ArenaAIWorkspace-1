@@ -65,7 +65,7 @@ private let apps: [AppAdView.App] = [
         requiresJailbreak: false
     ),
     .init(
-        name: NSLocalizedString("Write Now", bundle: Bundle.wrti_support, comment: ""),
+        name: "OmniAI",
         url: URL(string: "https://havoc.app/package/writenow")!,
         icon: URL(string: "https://media.havoc.app/68c57e59a25de63e9b02e964")!,
         description: NSLocalizedString("AI tool within your hands.", bundle: Bundle.wrti_support, comment: ""),
@@ -130,7 +130,7 @@ struct LiteEditionBannerHeader: View {
             } header: {
                 Text(NSLocalizedString("Complete Edition", bundle: Bundle.wrti_support, comment: ""))
             } footer: {
-                Text(NSLocalizedString("Write Now Lite is made for TrollStore with partial support for Write Now, which is now free for everyone to try out.", bundle: Bundle.wrti_support, comment: ""))
+                Text("OmniAI Lite is made for TrollStore with partial support for OmniAI, which is now free for everyone to try out.")
             }
         }
     }

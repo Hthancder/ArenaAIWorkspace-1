@@ -16,10 +16,12 @@ extension Presenter {
         let parentView: UIView
         let parentController: UIViewController
         let targetView: UIView
+        weak var nativeSourceView: UIView?
 
         let anchorView: UIView
         let anchorRects: [CGRect]
         let anchorRectsInWindow: [CGRect]
+        let selectedNSRange: NSRange?
 
         let decorationViews: [UIView]
 
@@ -34,6 +36,7 @@ extension Presenter {
             parentView: UIView,
             parentController: UIViewController,
             targetView: UIView,
+            nativeSourceView: UIView? = nil,
             anchorView: UIView,
             anchorRects: [CGRect],
             decorationViews: [UIView],
@@ -46,12 +49,23 @@ extension Presenter {
             self.parentView = parentView
             self.parentController = parentController
             self.targetView = targetView
+            self.nativeSourceView = nativeSourceView
             self.anchorView = anchorView
             self.anchorRects = anchorRects
             if let win = targetView.window {
                 self.anchorRectsInWindow = anchorRects.map { targetView.convert($0, to: win) }
             } else {
                 self.anchorRectsInWindow = anchorRects
+            }
+            if let tv = targetView as? UITextView,
+               let range = tv.selectedTextRange,
+               !range.isEmpty
+            {
+                let loc = tv.offset(from: tv.beginningOfDocument, to: range.start)
+                let len = tv.offset(from: range.start, to: range.end)
+                self.selectedNSRange = (loc >= 0 && len > 0) ? NSRange(location: loc, length: len) : nil
+            } else {
+                self.selectedNSRange = nil
             }
             self.decorationViews = decorationViews
             self.textProxy = textProxy
@@ -241,6 +255,7 @@ extension Presenter {
     func buildExtractedTextContext(
         text: String,
         hostView: UIView,
+        nativeSourceView: UIView? = nil,
         parentController: UIViewController?,
         anchorRectInHost: CGRect,
         launchSlotAction: RuntimeSelectionMenuItem? = nil,
@@ -259,6 +274,7 @@ extension Presenter {
         let resolvedVC = parentController ?? Self.resolveFallbackParentController(for: hostView)
         return assembleContext(
             fatherView: hostView,
+            nativeSourceView: nativeSourceView,
             parentView: parentView,
             parentController: resolvedVC,
             textProxy: textProxy,
@@ -272,6 +288,7 @@ extension Presenter {
 
     private func assembleContext(
         fatherView: UIView,
+        nativeSourceView: UIView? = nil,
         parentView: UIView,
         parentController: UIViewController,
         textProxy: TextProxy,
@@ -341,6 +358,7 @@ extension Presenter {
             parentView: parentView,
             parentController: parentController,
             targetView: fatherView,
+            nativeSourceView: nativeSourceView,
             anchorView: anchorView,
             anchorRects: preparedRects,
             decorationViews: decorationViews,

@@ -354,6 +354,7 @@ public extension Presenter {
     func presentExtractedText(
         _ text: String,
         fromHostView hostView: UIView,
+        nativeSourceView: UIView? = nil,
         parentController: UIViewController?,
         anchorRectInHost: CGRect,
         slotIndex: Int,
@@ -364,6 +365,7 @@ public extension Presenter {
         guard let context = buildExtractedTextContext(
             text: text,
             hostView: hostView,
+            nativeSourceView: nativeSourceView,
             parentController: parentController,
             anchorRectInHost: anchorRectInHost,
             launchSlotAction: launchAction,

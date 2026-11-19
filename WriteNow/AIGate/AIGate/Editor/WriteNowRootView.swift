@@ -99,7 +99,7 @@ struct WriteNowRootView: View {
                 MailView(result: $mailResult) { composer in
                     composer.setToRecipients(["example@example.com"])
                     composer.setSubject("Feedback")
-                    composer.setMessageBody("Hello, WriteNow!", isHTML: false)
+                    composer.setMessageBody("Hello, OmniAI!", isHTML: false)
                 }
             }
         }
@@ -122,7 +122,7 @@ struct WriteNowRootView: View {
         .onReceive(statusTimer) { _ in
             updateStatus()
         }
-        .navigationTitle(NSLocalizedString("Write Now", bundle: Bundle.wrti_support, comment: ""))
+        .navigationTitle("OmniAI")
         .accentColor(Color.accent)
     }
 
@@ -311,7 +311,7 @@ struct WriteNowRootView: View {
         } header: {
             Text("Menu Theme & Animations")
         } footer: {
-            Text("Customize the WriteNow menu theme, custom photo background, accent color palette, and text replacement animations.")
+            Text("Customize the OmniAI menu theme, custom photo background, accent color palette, and text replacement animations.")
         }
     }
 
@@ -544,7 +544,7 @@ struct WriteNowRootView: View {
         Section {
             EmptyView()
         } footer: {
-            Text("WriteNow RootHide · v\(Bundle.wrti_packageVersion) · Improved by Hthan24 · Base by owngoal-dev")
+            Text("OmniAI RootHide · v\(Bundle.wrti_packageVersion) · Enhanced by Hthan24 · Base by owngoal-dev")
         }
     }
 
@@ -1136,7 +1136,7 @@ struct ThemeAppearanceView: View {
             PhotoLibraryPicker { image in
                 if let image {
                     savePickedImage(image)
-                    statusBanner = "Custom photo saved & synced to WriteNow menu."
+                    statusBanner = "Custom photo saved & synced to OmniAI menu."
                 }
             }
         }
@@ -1877,7 +1877,7 @@ struct BehaviorSettingsView: View {
                           let data = raw.data(using: .utf8)
                     else {
                         backupAlertTitle = "Clipboard Empty"
-                        backupAlertMessage = "Copy a valid WriteNow JSON backup to clipboard first."
+                        backupAlertMessage = "Copy a valid OmniAI JSON backup to clipboard first."
                         showBackupAlert = true
                         return
                     }
@@ -2987,7 +2987,7 @@ struct STTSettingsView: View {
             } header: {
                 Text("Languages & Translation")
             } footer: {
-                Text("You can also switch Prompt / Dictate / Translate and Source → Target languages directly inside the WriteNow popup.")
+                Text("You can also switch Prompt / Dictate / Translate and Source → Target languages directly inside the OmniAI popup.")
             }
 
             Section {
@@ -3011,7 +3011,7 @@ struct STTSettingsView: View {
                     Text("Whisper Prompt Hint (optional)")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    TextField("Terms, names, bilingual hints (e.g. iOS, RootHide, WriteNow)", text: $promptHint)
+                    TextField("Terms, names, bilingual hints (e.g. iOS, RootHide, OmniAI)", text: $promptHint)
                         .onChange(of: promptHint) { _ in commitSTT() }
                 }
 
@@ -3450,7 +3450,7 @@ struct ReadOnlyAndMenuSettingsView: View {
                 } header: {
                     Text("Restricted & Copy-Only Components")
                 } footer: {
-                    Text("Adds WriteNow into app-custom long-press menus (e.g. Messenger, Telegram, X) and Copy-only menus. Force-Unlock enables text selection on locked UITextView and web pages.")
+                    Text("Adds OmniAI into app-custom long-press menus (e.g. Messenger, Telegram, X) and Copy-only menus. Force-Unlock enables text selection on locked UITextView and web pages.")
                 }
 
                 Section {
@@ -3667,7 +3667,7 @@ struct ReadOnlyAndMenuSettingsView: View {
                     }
                 }
             } footer: {
-                Text("Quick chips appear inside the WriteNow popover (above presets and below results) for 1-tap prompts and refinements.")
+                Text("Quick chips appear inside the OmniAI popover (above presets and below results) for 1-tap prompts and refinements.")
             }
         }
         .listStyle(.insetGrouped)
