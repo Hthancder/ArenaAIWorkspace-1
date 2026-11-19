@@ -110,7 +110,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          GMR_TRACE_CALL=ds_map_add,ds_map_delete,ds_map_find_value,ds_map_exists,instance_create \
+          GMR_TRACE_CALL=ds_map_add,ds_map_delete,ds_map_replace,ds_map_find_value,ds_map_exists,instance_create \
             timeout 120 work/runner-build/gmrunner work/diagnostic --headless --fast --mute --seed 1 \
             --frames 190 --trace --stats --goto rom_play@160 --save-dir work/save > work/probe.log 2>&1 || { tail -100 work/probe.log; exit 1; }
           grep -F '[room] -> rom_play' work/probe.log

@@ -39,6 +39,8 @@ def check(log, save_file):
         raise ValueError('candidate mask database, consumption or player count mismatch')
     if [numbers(row) for row in records.get('transfer', [])] != [[5400]]:
         raise ValueError('candidate buff transfer did not happen exactly once')
+    if numbers(one('stack', 1)) != [1]:
+        raise ValueError('candidate stacked item consumption failed')
     states = {}
     for fields in records.get('state', []):
         if len(fields) != 4:

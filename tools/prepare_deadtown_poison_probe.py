@@ -117,8 +117,28 @@ def plan(source, apk):
         'global.use_db[global.use_db_target,8]=item_cooked\n'
         'global.use_db[global.use_db_target,9]=argument9 // RE probe only\n', 'use DB column 9')
     path = 'scripts/item_use.gml'
+    text = (source / path).read_text(encoding='utf-8')
+    # The incomplete VM/runner combination corrupts the local DS-map handle
+    # when compiling a compound [?...]-assignment (seen in the forced probe).
+    # Use explicit DS operations ONLY in this diagnostic copy. Equivalence is
+    # limited to an existing numeric inventory entry and not validated on APK.
+    old_map = '''target_inven[? pointer] -= 1;
+if target_inven[? pointer] <= 0
+{
+    ds_map_delete(target_inven,pointer);
+}
+'''
+    new_map = '''// Diagnostic compatibility workaround, not a release fix.
+var dt_amount = ds_map_find_value(target_inven,pointer) - 1;
+ds_map_replace(target_inven,pointer,dt_amount);
+if dt_amount <= 0
+{
+    ds_map_delete(target_inven,pointer);
+}
+'''
+    text = replace_once(text, old_map, new_map, 'item use map compatibility')
     old = 'ins.buff_painkiller = db_info_get(target_inven,pointer,7)*30*60 // painkiller \n'
-    changed[path] = replace_once((source / path).read_text(encoding='utf-8'), old,
+    changed[path] = replace_once(text, old,
         old + 'ins.buff_poison_protect = db_info_get(target_inven,pointer,9)*30*60 // RE probe only\n',
         'item use buff')
 

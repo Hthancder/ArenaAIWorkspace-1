@@ -52,7 +52,16 @@ if (dt_poison_probe_tick >= 2 && dt_poison_probe_tick <= 9)
     show_debug_message(""DT_POISON|state|"" + string(dt_poison_probe_tick) + ""|"" + string(buff_poison_protect) + ""|"" + string(buff_poison) + ""|"" + string(hp));
 }
 if (dt_poison_probe_tick == 4) { buff_poison_protect = 20000; buff_poison = 20; }
-if (dt_poison_probe_tick == 6) { buff_poison_protect = 1; buff_poison = 20; }
+if (dt_poison_probe_tick == 6)
+{
+    // Test an existing stack separately from the one-item mask.
+    if ds_map_exists(global.inven_use, 0) ds_map_delete(global.inven_use, 0);
+    ds_map_add(global.inven_use, 0, 2);
+    item_use(0);
+    show_debug_message(""DT_POISON|stack|"" + string(ds_map_find_value(global.inven_use,0)));
+    buff_poison_protect = 1;
+    buff_poison = 20;
+}
 if (dt_poison_probe_tick == 7) { buff_poison = 2; }
 if (dt_poison_probe_tick == 10)
 {
