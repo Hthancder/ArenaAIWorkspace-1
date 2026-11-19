@@ -56,7 +56,16 @@ jobs:
           set -euo pipefail
           mkdir -p work/diagnostic work/save
           cp work/game/audiogroup*.dat work/diagnostic/
-          "$UTMT_EXE" load work/game/data.win -s tools/deadtown-ui-diagnostic.csx -o work/diagnostic/data.win
+          set +e
+          "$UTMT_EXE" load work/game/data.win -s tools/deadtown-ui-diagnostic.csx -o work/diagnostic/data.win > work/instrument.log 2>&1
+          status=$?
+          set -e
+          python - <<'PY'
+          from pathlib import Path
+          for line in Path('work/instrument.log').read_text(errors='replace').splitlines()[-25:]:
+              print('::notice::UI_INSTRUMENT: ' + line.replace('%', '%25')[:800])
+          PY
+          if [ "$status" -ne 0 ]; then exit "$status"; fi
           test -s work/diagnostic/data.win
       - uses: actions/cache/restore@v4
         id: runner-cache
