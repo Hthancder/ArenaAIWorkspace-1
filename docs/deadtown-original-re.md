@@ -136,9 +136,41 @@ PYTHONPATH=.cache/re-pylibs python tools/deadtown_native_lang.py /path/to/origin
   --compare-gmx /path/to/deadtown/deadtown.gmx --output candidates.json
 ```
 
-`lang_get` in GMX returns the English key for language 0 and uses maps for other
-languages; the native function has a broadly similar switch. The `str:` event
-is a much more direct explanation for that text than missing translations.
+`lang_get` in GMX returns the English key for language 0 but directly calls
+`ds_map_find_value` for languages 1–3. A new targeted static inspection
+(`tools/deadtown_lang_fallback_evidence.py`) identifies the native switch in
+`gml_Script_lang_get` at `0x2df86c`, resolves GOT references to
+`g_FUNC_ds_map_exists` and `g_FUNC_ds_map_find_value` for cases 1–3, and pins
+the branch and return instructions: when the existence result is not above
+0.5, the branch returns argument 0. Case 0 also returns argument 0. The global
+selector and map indices (62–65) are identified by their use here, not by a
+verified global-name registration. This is strong static evidence of a
+missing-key fallback, **not** native runtime execution or a proof for other
+selector values.
+
+A forced side-by-side experiment in the disposable desktop VM
+[44641496464](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44641496464)
+compared the old script with a candidate that checks existence first. For each
+selector 0–3 it used synthetic known, empty and missing entries: the old
+script produced undefined for missing keys in modes 1–3, while the candidate
+returned the key; a present entry containing an empty string remained empty.
+That checks this candidate and this runner only, not Android or iOS. It does
+not establish that missing translations caused the user's screenshot; the old
+`str:` debug event remains a direct, independently reproduced cause of a
+`str:` message. The candidate is not included in any IPA pipeline.
+
+`tools/deadtown_lang_coverage.py` compares name/description fields of the
+static native table candidates using the old source schema. Of 344 candidate
+references (340 distinct keys), **52** distinct keys are absent from the old
+GMX translation literals, including `Gas mask`, while all 340 occur among the
+native translation candidates. This is a static cross-check, not proof of
+native control flow or runtime use. All 465 candidate `lang_add` calls have
+empty Chinese and Japanese fields; all 362 old-source literal calls do too.
+An existing-but-empty translation is **not** a missing key and the observed
+fallback must not automatically replace it. Two candidate English keys are
+duplicated (`Light machine gun`, `Heavy machine gun`); map insertion order and
+actual outcome need separate validation. Neither audit injects translations or
+claims that all UI text has been recovered.
 
 ### Original table arguments: deeper static analysis
 
