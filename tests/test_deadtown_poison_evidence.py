@@ -37,7 +37,25 @@ class PoisonEvidenceTests(unittest.TestCase):
         self.assertEqual(step['comparison_fallthrough_zeroes_variable_index'], 171)
         self.assertEqual(step['branch_target_zeroes_variable_index'], 32)
         self.assertEqual(step['candidate_upper_bound_index'], 911)
-        self.assertIn('not mapped', step['limitations'])
+        self.assertIn('not an independently registered name', step['limitations'])
+        save = evidence['save_load_evidence']
+        self.assertEqual(save['section'], 'player')
+        self.assertEqual(save['keys_to_player_indices'], {'buffpoison': 171, 'buffpoisonprotect': 32})
+        self.assertEqual([r['text'] for r in save['resolved_string_relocations']],
+                         ['player', 'buffpoison', 'player', 'buffpoisonprotect'] * 2)
+        self.assertEqual(evidence['player_create_evidence']['candidate_bound_initial_value'], 18000)
+        damage = evidence['poison_damage_evidence']
+        self.assertEqual((damage['poison_index'], damage['health_candidate_index'], damage['damage_candidate_index']),
+                         (171, 28, 914))
+        self.assertEqual((damage['health_save_section']['text'], damage['health_save_key']['text']), ('player', 'hp'))
+        self.assertEqual((damage['skill_id'], damage['skill_result_above_half_divisor']), (20, 2))
+        self.assertEqual((damage['create_numerator_candidate_index'], damage['create_divisor']), (169, 4500))
+        self.assertEqual((damage['numerator_save_section']['text'], damage['numerator_save_key']['text']),
+                         ('player', 'hp_max'))
+        self.assertEqual(damage['numerator_create_initial_value'], 100)
+        self.assertIn('unverified', damage['limitations'])
+        self.assertEqual(evidence['zombie5_step_evidence']['comparison_offset'], -900)
+        self.assertEqual(evidence['zombie5_step_evidence']['fallthrough_set_value'], 900)
         self.assertEqual(evidence['g_vars_index_32']['symbol'], 'g_VAR_pointer')
         self.assertIn('not a verified', evidence['g_vars_index_32']['warning'])
         self.assertIn('unverified', evidence['interpretation'])

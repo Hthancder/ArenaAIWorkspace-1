@@ -165,25 +165,52 @@ index and array used for columns 0–8. The targeted inspector
 `db_info_get` with field 9 at `0x1a572c`, multiplies the value by 30 and 60, and
 sets variable index 32 at `0x1a57d4`; the native `sys_player_buff` Step retrieves,
 adds, and sets index 32 on APK object 142 (`obj_player`) at
-`0x6022c0`–`0x6022e0`. Nearby `g_VAR_*` symbols are ordered like the previous
-fields, ending in `buff_poison_protect`; this suggests a relationship, but it
-**does not establish** the instance-variable index-to-name mapping. In fact,
-relocations show that slot 32 of the exported `g_Vars` pointer array is
+`0x6022c0`–`0x6022e0`. Independent evidence now comes from normal protect-mode
+save/load: in `game_save_protect`, getters for player object 142 at `0x1dc3e8`
+and `0x1dc444` read indices 171 and 32, respectively, and pass them to
+`ini_write_real` with GOT-relocated section/key strings `player`/`buffpoison`
+and `player`/`buffpoisonprotect`. In `game_load_protect`, the corresponding
+`ini_read_real` results feed setters for the same indices at `0x221060` and
+`0x2210f0`. The inspector resolves the actual strings and checks the relevant
+instructions and calls; this is stronger independent evidence for the purpose
+of the two indices, but is not a runtime persistence test or proof about every
+save mode. The old GMX saves `buffpoison` but lacks the protection field.
+
+Relocations show that slot 32 of the exported `g_Vars` pointer array is
 `g_VAR_pointer`, not `g_VAR_buff_poison_protect`. The array contains more than
 one kind of variable and must not be used as a direct instance-index lookup.
 The registration/slot mechanism remains to be traced; projecting offsets from
 one known-looking region onto the rest of the symbol table is unsafe.
 
-Further static checks in `obj_player` Step find a block using instance variable
-index 32. It compares against zero with a runtime-loaded tolerance; on one path
-it subtracts 1 (for the real-number case) and sets index 171 to zero; on the
-other it sets index 32 to zero. The following block conditionally copies index
-911 into index 32 after a comparison. This resembles a countdown and upper
-bound, but the precise runtime comparison, data types, names of indices 171/911,
-and original combat and save/load behavior remain unproven. The inspector checks
-representative exact instructions and the relevant `g_Vars` relocation, not a
-complete control-flow or runtime trace. No behavior should be patched from this
-alone. The old GMX lacks the whole tenth-field path. Appending these tables to
+Further static checks in `obj_player` Step find a block using index 32. It
+compares against zero with a runtime-loaded tolerance; on one path it subtracts
+1 (for the real-number case) and sets index 171 to zero; on the other it sets
+index 32 to zero. The following block conditionally copies index 911 into index
+32 after a comparison. Create initializes index 32 to zero and index 911 to the
+real value 18,000; index 911 is therefore a candidate upper bound, though its
+registered name is not independently established. In a separate native
+`obj_zombie5` Step block, index 171 is compared using -900 and, on one branch,
+assigned 900. This alone does not establish the surrounding hit conditions,
+frame rate, runtime tolerance, or combat ordering. A scan for an immediate
+`0x20` in `obj_boss2` was a false lead: that occurrence is an argument to
+`view_effect_closeup`, not a variable lookup.
+
+The native Step block around `0x5cea50` also checks index 171 and invokes
+`rpg_skill_get_level` with a GOT-resolved real argument 20. On the real-number
+arithmetic paths it subtracts index 914, or index 914 divided by 2 when the
+skill result is above 0.5, from index 28. The native normal save routine
+associates index 28 with `player`/`hp`, via a separately checked string
+relocation. In Create, index 914 is initialized using the current value at
+index 169 divided by 4,500; the normal save routine associates index 169 with
+`player`/`hp_max`, and Create initially assigns it 100. This is materially
+different evidence from the old GMX's literal `buff_poison_hurt = 0.06`;
+intervening writes, exact event ordering, skill semantics and observed damage
+still require verification. None of these indices is assigned a registered
+name merely by guessing from `g_Vars` layout.
+
+These checks cover representative exact instructions, relocations and calls,
+not complete control flow or a runtime trace. No behavior should be patched
+from this alone. Appending these tables to
 the old source would shift item/recipe indices and could silently break crafting,
 saving and gameplay: **none are injected**. Recover the corresponding data
 consumers, ordering and original schema first.
