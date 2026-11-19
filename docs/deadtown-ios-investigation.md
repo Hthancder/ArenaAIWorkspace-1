@@ -275,3 +275,16 @@ this incomplete data with the iOS 15 runner. The app uses a separate bundle ID
 and copies the bundled game into Documents on first launch without overwriting
 existing files, so it can later be modified. A successful packaging run only
 proves an unsigned IPA was assembled, not that it can be installed or played.
+
+### iOS landscape clipping report
+
+A user screenshot from the first IPA shows a 2208x1242 landscape display with
+the rendering confined to approximately the left 1242 pixels, consistent with
+SDL having retained portrait drawable dimensions after a rotation. This is a
+hypothesis, not a confirmed device diagnosis. The second experimental IPA locks
+both iPhone and iPad interface orientations to landscape from app launch, keeps
+the same bundle ID, and increments the build number. Fresh installations also
+receive `touch_controls = off` so the game's own touch controls are not covered
+by the runner's L/R buttons; existing game/configuration files are not
+replaced. The package was assembled and plist/arm64 metadata checked in run
+`44513350133`; it has not yet been tested on an iOS device.
