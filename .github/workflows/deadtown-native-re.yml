@@ -19,6 +19,8 @@ on:
       - tests/test_deadtown_sprite_metadata.py
       - tests/test_deadtown_sprite_pixels.py
       - tools/deadtown_native_lang.py
+      - tools/deadtown_lang_fallback_evidence.py
+      - tests/test_deadtown_lang_fallback_evidence.py
       - tools/recover_deadtown_audio.py
       - tests/test_deadtown_native_tables.py
       - tests/test_deadtown_native_callgraph.py
@@ -60,6 +62,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_deadtown_sprite_masks.py' -v
           python -m unittest discover -s tests -p 'test_recover_deadtown_sprites.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_native_lang.py' -v
+          python -m unittest discover -s tests -p 'test_deadtown_lang_fallback_evidence.py' -v
           mkdir -p work/reports
           python tools/deadtown_poison_evidence.py .cache/deadtown-original.apk --output work/reports/poison-evidence.json
           python tools/deadtown_sprite_metadata.py .cache/deadtown-original.apk .cache/deadtown/deadtown.gmx --output work/reports/sprite-metadata.json
@@ -68,6 +71,7 @@ jobs:
           python tools/deadtown_native_callgraph.py .cache/deadtown-original.apk --output work/reports/native-callgraph.json
           python tools/deadtown_native_tables.py .cache/deadtown-original.apk --output work/reports/native-tables.json
           python tools/deadtown_native_lang.py .cache/deadtown-original.apk --compare-gmx .cache/deadtown/deadtown.gmx --output work/reports/native-language.json
+          python tools/deadtown_lang_fallback_evidence.py .cache/deadtown-original.apk --output work/reports/language-fallback.json
       - name: Preserve research reports (not a game build)
         uses: actions/upload-artifact@v4
         with:
