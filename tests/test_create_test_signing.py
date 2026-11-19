@@ -33,6 +33,11 @@ class TestSigningTests(unittest.TestCase):
         self.assertEqual(profile["Entitlements"]["application-identifier"], "LOCALDEV01.*")
         self.assertEqual(profile["Platform"], ["iOS"])
         self.assertEqual(len(profile["DeveloperCertificates"]), 1)
+        cert = self.root / "cert.der"
+        cert.write_bytes(profile["DeveloperCertificates"][0])
+        subject = subprocess.run(["openssl", "x509", "-inform", "DER", "-in", str(cert), "-noout", "-subject"],
+                                 check=True, capture_output=True, text=True).stdout
+        self.assertIn("LOCALDEV01", subject)
         self.assertFalse((self.output / "key.pem").exists())
 
     def test_empty_password_does_not_create_directory(self):

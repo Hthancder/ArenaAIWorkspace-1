@@ -32,6 +32,8 @@ prompt = no
 [dn]
 CN = iPhone Developer: AIR Experimental
 O = Local Test Only
+OU = LOCALDEV01
+UID = LOCALTEST01
 [ext]
 basicConstraints = critical,CA:FALSE
 keyUsage = critical,digitalSignature
