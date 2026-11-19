@@ -113,6 +113,24 @@ jobs:
           grep -F '[room] -> rom_play' work/probe.log
           grep -F 'DT_POISON|' work/probe.log || true
           python tools/check_deadtown_poison_probe.py work/probe.log work/save/dt_poison_probe.sav
+      - name: Summarize probe diagnostics
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          for name in ('compile.log', 'instrument.log', 'probe.log'):
+              path = Path('work') / name
+              if not path.exists():
+                  continue
+              lines = path.read_text(errors='replace').splitlines()
+              selected = [line for line in lines if 'DT_POISON|' in line or 'PROBE:' in line or
+                          'POISON_INSTRUMENT' in line or 'error' in line.lower() or 'exception' in line.lower()]
+              if name == 'probe.log':
+                  selected += lines[-12:]
+              for line in selected[-35:]:
+                  print('::notice::' + name + ': ' + line.replace('%', '%25')[:900])
+          PY
       - name: Preserve research logs only
         if: always()
         uses: actions/upload-artifact@v4
