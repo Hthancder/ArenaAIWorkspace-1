@@ -13,7 +13,6 @@ int main(void) {
 		assert(![SXUpdate isVersion:@"1.1.9" newerThan:@"1.1.9"]);
 		assert(![SXUpdate isVersion:@"1.1.8" newerThan:@"1.1.9"]);
 		assert([SXUpdate isVersion:@"v2.0" newerThan:@"1.9.9"]);
-		assert([SXUpdate isVersion:@"1.2.0-build.140" newerThan:@"1.2.0"]);
 		// `-build.N` là hậu tố build, không phải bản mới hơn cùng số phiên bản.
 		assert(![SXUpdate isVersion:@"1.2.0-build.140" newerThan:@"1.2.0"]);
 		assert([SXUpdate isVersion:@"1.2.0-build.140" newerThan:@"1.1.9"]);
