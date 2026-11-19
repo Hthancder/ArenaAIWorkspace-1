@@ -16,7 +16,7 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - name: Retrieve original container and source script
@@ -70,11 +70,38 @@ jobs:
               print('::notice::' + line.replace('%', '%25')[:1000])
           PY
           exit "$status"
+      - name: Build runner data inspection tool
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libsdl2-dev libbz2-dev pkg-config
+          mkdir -p work/runner
+          curl -fsSL --retry 2 'https://codeload.github.com/andronep/gmrunner/tar.gz/e7121381d38b03a24242812fc22b0a7386d545c6' | tar xz -C work/runner --strip-components=1
+          cmake -S work/runner -B work/runner-build -DCMAKE_BUILD_TYPE=Release
+          cmake --build work/runner-build --target gmdump --parallel 2
+      - name: Inspect incomplete data using runner loader
+        shell: bash
+        run: |
+          set +e
+          work/runner-build/gmdump work/incomplete-probe.win info > work/runner-inspect.log 2>&1
+          info_status=$?
+          work/runner-build/gmdump work/incomplete-probe.win verify >> work/runner-inspect.log 2>&1
+          verify_status=$?
+          python3 - <<'PY'
+          from pathlib import Path
+          for line in Path('work/runner-inspect.log').read_text(errors='replace').splitlines()[:30]:
+              print('::notice::RUNNER_INSPECT: ' + line.replace('%', '%25')[:800])
+          PY
+          echo "::notice::Runner inspection statuses info=$info_status verify=$verify_status"
+          [ "$info_status" -eq 0 ] && [ "$verify_status" -eq 0 ]
       - name: Upload diagnostic log
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: deadtown-vm-probe-log
-          path: work/probe.log
+          path: |
+            work/probe.log
+            work/runner-inspect.log
           if-no-files-found: ignore
           retention-days: 3
