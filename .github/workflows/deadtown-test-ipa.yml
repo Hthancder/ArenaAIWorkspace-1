@@ -1,0 +1,85 @@
+name: Package incomplete Dead Town iOS test
+
+on:
+  push:
+    branches:
+      - arena/78062d86-arenaaiworkspace-1
+    paths:
+      - .github/workflows/deadtown-test-ipa.yml
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Wait for iOS 15 runner build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run watch 44509744633 --repo "$GITHUB_REPOSITORY" --exit-status --interval 20
+      - name: Download verified iOS runner
+        uses: actions/download-artifact@v4
+        with:
+          name: gmrunner-ios15-standalone-untested
+          path: runner
+          run-id: 44509744633
+          github-token: ${{ github.token }}
+      - name: Download incomplete Dead Town data
+        uses: actions/download-artifact@v4
+        with:
+          name: deadtown-incomplete-game-data
+          path: game
+          run-id: 44509744719
+          github-token: ${{ github.token }}
+      - name: Package unsigned experimental IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p unpacked output
+          unzip -q runner/gmRunner.ipa -d unpacked
+          app=unpacked/Payload/gmRunner.app
+          test -f "$app/Info.plist"
+          test -s game/data.win
+          test -s game/audiogroup1.dat
+          test -s game/audiogroup2.dat
+          cp -R game "$app/BundledGame"
+          python3 - <<'PY'
+          import plistlib
+          import struct
+          from pathlib import Path
+          app = Path('unpacked/Payload/gmRunner.app')
+          path = app / 'Info.plist'
+          info = plistlib.loads(path.read_bytes())
+          if info.get('MinimumOSVersion') != '15.0': raise SystemExit('Unexpected iOS target')
+          binary = app / info['CFBundleExecutable']
+          magic, cputype = struct.unpack('<II', binary.read_bytes()[:8])
+          if magic != 0xfeedfacf or cputype != 0x100000c: raise SystemExit('Not arm64 Mach-O')
+          if (app / '_CodeSignature').exists(): raise SystemExit('Unexpected existing signature')
+          info['CFBundleIdentifier'] = 'org.gmrunner.deadtown.experimental'
+          info['CFBundleDisplayName'] = 'Dead Town Test'
+          path.write_bytes(plistlib.dumps(info, fmt=plistlib.FMT_BINARY, sort_keys=False))
+          print('::notice::Unsigned ARM64 IPA targets iOS 15; includes incomplete Dead Town data.')
+          PY
+          (cd unpacked && zip -qry ../output/DeadTown-iOS15-experimental.ipa Payload)
+          unzip -tq output/DeadTown-iOS15-experimental.ipa
+          sha256sum output/DeadTown-iOS15-experimental.ipa | tee output/SHA256.txt
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeadTown-iOS15-experimental-IPA
+          path: output/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Publish test release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<'EOF'
+          **Bản thử nghiệm rất sớm — không phải bản game hoàn chỉnh.** Cài bằng TrollStore trên iOS 15. Game chứa dữ liệu gốc được dựng lại một phần; có thể không mở, treo, mất hình, thiếu nội dung hoặc điều khiển không đúng. Nên dùng bản lưu mới và sao lưu dữ liệu trước khi thử. Đã tắt quảng cáo, Google Play và thông báo; mở toàn bộ nội dung chưa được xác nhận. Âm thanh lấy nguyên từ APK, không chuyển đổi. Chưa được kiểm tra trên iPhone.
+
+          Open-source runner: https://github.com/andronep/gmrunner (GPL-3.0-or-later), commit e7121381d38b03a24242812fc22b0a7386d545c6. Adaptation/build scripts and experimental conversion: this repository at the release commit. Source project: https://github.com/kjs104901/deadtown.
+          EOF
+          gh release create deadtown-ios15-experimental-1 output/DeadTown-iOS15-experimental.ipa output/SHA256.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title 'Dead Town iOS 15 — experimental test 1' --notes-file notes.md
