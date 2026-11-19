@@ -272,6 +272,106 @@ static SXChoiceDefinition *SXChoiceDefinitionFor(NSString *key) {
 	[self sx_applyValue:parsed];
 }
 
+#pragma mark - Sao lưu cấu hình
+
+- (void)sx_exportSettings:(id)sender {
+	(void)sender;
+	[[SXPrefs shared] reload];
+	NSDictionary *settings = [[SXPrefs shared] exportableSettings];
+	if (!settings.count) {
+		[SXUI alertOn:self title:@"Chưa có gì để xuất" message:@"Bạn chưa đổi cài đặt nào khỏi mặc định."];
+		return;
+	}
+	NSError *error = nil;
+	NSData *data = [NSPropertyListSerialization dataWithPropertyList:settings
+															 format:NSPropertyListXMLFormat_v1_0
+															options:0
+															  error:&error];
+	if (!data) {
+		[SXUI alertOn:self title:@"Không tạo được tệp" message:error.localizedDescription];
+		return;
+	}
+	NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
+	formatter.locale = [NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
+	formatter.dateFormat = @"yyyyMMdd-HHmm";
+	NSString *name = [NSString stringWithFormat:@"SiriX-%@.plist", [formatter stringFromDate:NSDate.date]];
+	NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent:name];
+	if (![data writeToFile:path atomically:YES]) {
+		[SXUI alertOn:self title:@"Không ghi được tệp" message:@"Thử lại sau khi đóng bớt ứng dụng."];
+		return;
+	}
+	SXLogInf(@"pref", @"xuất cấu hình (%lu key) → %@", (unsigned long)settings.count, name);
+	UIActivityViewController *activity =
+		[[UIActivityViewController alloc] initWithActivityItems:@[[NSURL fileURLWithPath:path]]
+										 applicationActivities:nil];
+	UIPopoverPresentationController *popover = activity.popoverPresentationController;
+	if (popover) popover.sourceView = self.view;
+	[self presentViewController:activity animated:YES completion:nil];
+}
+
+- (void)sx_importSettings:(id)sender {
+	(void)sender;
+	// Preferences không có UIDocumentPicker sẵn — dán nội dung tệp là cách chắc chắn
+	// chạy được trên mọi jailbreak (không phụ thuộc quyền truy cập tệp của Settings).
+	UIAlertController *alert = [UIAlertController
+		alertControllerWithTitle:@"Phục hồi cấu hình"
+						 message:@"Dán nội dung tệp sao lưu (.plist) vào ô dưới. Cấu hình hiện tại sẽ bị thay; lịch sử và thống kê giữ nguyên."
+				  preferredStyle:UIAlertControllerStyleAlert];
+	[alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+		field.placeholder = @"<plist>…";
+		field.autocapitalizationType = UITextAutocapitalizationTypeNone;
+		field.autocorrectionType = UITextAutocorrectionTypeNo;
+	}];
+	[alert addAction:[UIAlertAction actionWithTitle:@"Huỷ" style:UIAlertActionStyleCancel handler:nil]];
+	__weak typeof(self) weakSelf = self;
+	__weak UIAlertController *weakAlert = alert;
+	[alert addAction:[UIAlertAction actionWithTitle:@"Phục hồi" style:UIAlertActionStyleDestructive
+										   handler:^(UIAlertAction *action) {
+		(void)action;
+		typeof(self) strongSelf = weakSelf;
+		if (!strongSelf) return;
+		NSString *text = weakAlert.textFields.firstObject.text ?: @"";
+		NSData *data = [text dataUsingEncoding:NSUTF8StringEncoding];
+		id parsed = nil;
+		if (data.length) {
+			parsed = [NSPropertyListSerialization propertyListWithData:data
+															  options:NSPropertyListImmutable
+															   format:NULL
+																error:NULL];
+		}
+		if (![parsed isKindOfClass:[NSDictionary class]]) {
+			[SXUI alertOn:strongSelf title:@"Không đọc được tệp"
+				  message:@"Nội dung phải là plist dạng XML hoặc nhị phân của bản sao lưu SiriX."];
+			return;
+		}
+		[SXUI confirmOn:strongSelf
+				  title:@"Ghi đè cấu hình hiện tại?"
+				message:@"Khoá API, endpoint, model và tuỳ chọn sẽ được thay bằng nội dung tệp."
+			confirmText:@"Phục hồi"
+				 action:^{
+			NSInteger written = [[SXPrefs shared] importSettings:(NSDictionary *)parsed];
+			if (written <= 0) {
+				[SXUI alertOn:strongSelf title:@"Tệp không có cấu hình SiriX" message:nil];
+				return;
+			}
+			notify_post("com.sirix.tweak/prefs.changed");
+			[SXUI tapFeedback];
+			SXLogInf(@"pref", @"phục hồi cấu hình từ tệp (%ld key)", (long)written);
+			strongSelf->_specifiers = nil;
+			@try {
+				[strongSelf reloadSpecifiers];
+			} @catch (NSException *exception) {
+				SXLogErr(@"pref", @"reload sau phục hồi: %@", exception.reason);
+			}
+			[SXUI alertOn:strongSelf
+					title:@"Đã phục hồi"
+				  message:[NSString stringWithFormat:@"%ld mục đã được ghi. Khởi động lại SpringBoard nếu cần áp dụng ngay.",
+						   (long)written]];
+		}];
+	}]];
+	[self presentViewController:alert animated:YES completion:nil];
+}
+
 #pragma mark - Hành động
 
 - (void)sx_pick:(PSSpecifier *)row specifier:(PSSpecifier *)group {

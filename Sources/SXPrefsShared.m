@@ -199,6 +199,39 @@ static NSArray<NSString *> *SXLegacyToolNames(NSString *legacyKey) {
 }
 
 
+#pragma mark - Sao lưu & phục hồi
+
+/// Chỉ những key thuộc phần "cấu hình" — khoá API, endpoint, model, thời gian,
+/// tính năng, header. Lịch sử/thống kê là dữ liệu riêng, không nằm trong bản sao
+/// lưu này để tránh người dùng vô tình chia sẻ nội dung hội thoại.
+- (NSDictionary<NSString *, id> *)exportableSettings {
+	NSMutableDictionary<NSString *, id> *exported = [NSMutableDictionary dictionary];
+	for (NSString *key in SXPreferenceKeys()) {
+		if ([key isEqualToString:@"verbose"]) continue;   // không mang theo cờ gỡ lỗi
+		id value = [self valueFor:key];
+		if (value) exported[key] = value;
+	}
+	exported[@"exportedAt"] = @([[NSDate date] timeIntervalSince1970]);
+	exported[@"exportedBy"] = [NSString stringWithFormat:@"SiriX %@", SX_VERSION];
+	return exported;
+}
+
+/// Ghi lại cấu hình từ một tệp sao lưu. Trả về số key đã ghi; 0 = tệp không hợp lệ.
+- (NSInteger)importSettings:(NSDictionary *)settings {
+	if (![settings isKindOfClass:[NSDictionary class]] || !settings.count) return 0;
+	NSSet *allowed = [NSSet setWithArray:SXPreferenceKeys()];
+	NSInteger written = 0;
+	for (NSString *key in settings) {
+		if (![key isKindOfClass:[NSString class]] || ![allowed containsObject:key]) continue;
+		id value = settings[key];
+		if (value == [NSNull null]) continue;
+		[SXPrefs setValue:value forKey:key];
+		written++;
+	}
+	[self reload];
+	return written;
+}
+
 #pragma mark - Tóm tắt trạng thái
 
 - (NSString *)statusSummary {

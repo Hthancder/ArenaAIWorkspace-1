@@ -387,3 +387,40 @@ thêm tỉ lệ sự cố và mức tốc độ (nhanh/vừa/chậm/rất chậm
 khi thứ tự nhóm đổi. Log tô màu theo mức, nối thêm theo mảng dòng nên log bị xoay
 vòng không làm mất dòng. Ô tìm kiếm của cả hai màn đều có debounce.
 
+## 1.1.8 — Giá trị tuỳ chỉnh, Chẩn đoán, Sao lưu
+
+Người dùng hỏi đúng chỗ yếu nhất: “thêm cả cho phép timeout tuỳ chỉnh… UI cải
+tiến chưa, UX các kiểu”. Ba việc dưới đây là phần còn thiếu của bản 1.1.7.
+
+**Thời gian chờ tuỳ chỉnh thật.** Trước đây “Thời gian chờ AI” chỉ có 5 mức
+(6/10/15/20/30 s) và bị kẹp ở 30 giây. Quan trọng hơn: **trần chờ trong mã là
+8 giây** (luồng chính) và 16 giây (luồng nền), nên đặt “30 giây” vẫn bị cắt
+sau 8 giây mà không có dòng nào giải thích. Nay:
+
+- `timeout` mở rộng **2–120 giây**, có ô nhập số bất kỳ.
+- Thêm key mới `replyDeadline` (**Trần chờ Siri**, 2–20 giây, mặc định 8): đây
+  chính là con số trước đây bị viết cứng trong `SXIntercept.m`.
+- Ngữ cảnh hội thoại nhận **0 câu** (mỗi câu độc lập, tiết kiệm token) — kho
+  lịch sử vẫn giữ tới 40 lượt cho màn Lịch sử.
+- Nhiệt độ chỉnh theo **bước 0,05** (trước làm tròn 0,1), số vòng công cụ mở
+  tới **6**.
+- Màn chọn mức viết lại: mỗi key có một `SXChoiceDefinition` (miền giá trị, đơn
+  vị, mặc định, các mức gợi ý, chân trang) thay cho các mảng song song; thêm ô
+  nhập số có kiểm tra khoảng/số nguyên và nút “Dùng giá trị này”. Hàng ở trang
+  chính hiện cả nhãn nghĩa (“0.70 · cân bằng”, “Không nhớ (0 câu)”).
+
+**Chẩn đoán nhanh.** Màn mới trả lời câu hỏi hay gặp nhất — “vì sao Siri không
+trả lời?” — bằng một danh sách có mức ✓/⚠️/✗: bật/tắt, khoá API, model,
+endpoint (kể cả cảnh báo `http://`), ngân sách và trần chờ, các cặp cấu hình
+hay làm hỏng trải nghiệm (trần ngắn hơn ngân sách; trần > 12 giây thì Siri tự
+đóng), và số lượt thay/giữ/hết giờ/lỗi. Có nút chia sẻ báo cáo dạng văn bản.
+
+**Sao lưu cấu hình.** Xuất cấu hình ra plist (chỉ cấu hình: khoá API, endpoint,
+model, thời gian, header, công cụ — **không** gồm lịch sử/thống kê) và phục hồi
+bằng cách dán nội dung tệp (không phụ thuộc quyền truy cập tệp của Settings).
+Có xác nhận trước khi ghi đè.
+
+**Chặn tái phát.** `check-prefs.sh` thêm luật: một hàng `PSLinkListCell` trỏ
+tới `SXChoiceController` mà key không có định nghĩa là lỗi — đúng kiểu “bấm vào
+mở ra màn hình trống”.
+

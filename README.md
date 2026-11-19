@@ -24,6 +24,11 @@ Nhà cung cấp: **OpenAI tương thích** (mặc định) hoặc **Google Gemin
 - **Prompt tuỳ chỉnh** (để trống = dùng prompt mặc định).
 - **Tiền tố @ai** tuỳ chọn, xem câu Siri gốc, và trò chuyện thử trong Settings.
 - **Log gỡ lỗi đầy đủ, sao chép được** — tô màu theo mức, tìm kiếm, tự làm mới, chỉ sao chép phần đang xem.
+- **Mọi con số đều chỉnh được** — thời gian chờ AI (2–120 s), trần chờ Siri (2–20 s), nhiệt độ theo
+  bước 0,05, ngữ cảnh 0–40 câu, số vòng công cụ 1–6: chọn mức gợi ý hoặc tự nhập số.
+- **Chẩn đoán nhanh** — một màn hình chỉ ra vì sao Siri chưa trả lời (thiếu khoá, endpoint sai,
+  trần chờ ngắn hơn ngân sách…) kèm báo cáo chia sẻ được.
+- **Sao lưu cấu hình** — xuất ra plist (không kèm lịch sử) và phục hồi bằng cách dán nội dung tệp.
 - **Settings chỉn chu** — header có trạng thái sống, kiểm tra kết nối ngay trong trang cấu hình,
   chọn model có ô tìm kiếm, lịch sử nhóm theo ngày, thống kê có tỉ lệ/sự cố/tốc độ, chat thử dạng bong bóng.
 

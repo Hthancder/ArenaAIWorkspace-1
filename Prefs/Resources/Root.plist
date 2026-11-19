@@ -482,6 +482,30 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
+			<string>Tệp sao lưu chỉ chứa cấu hình (khoá API, endpoint, model, thời gian, header, công cụ). Lịch sử hội thoại và thống kê không nằm trong tệp.</string>
+			<key>label</key>
+			<string>Sao lưu cấu hình</string>
+		</dict>
+		<dict>
+			<key>action</key>
+			<string>sx_exportSettings:</string>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>Xuất cấu hình…</string>
+		</dict>
+		<dict>
+			<key>action</key>
+			<string>sx_importSettings:</string>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>Phục hồi từ tệp…</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>footerText</key>
 			<string>SiriX — trợ lý AI cho Siri. Phát triển độc lập, không liên kết với Apple, OpenAI hay Google.</string>
 			<key>label</key>
 			<string>Về SiriX</string>

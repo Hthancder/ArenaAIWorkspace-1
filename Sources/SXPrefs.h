@@ -148,6 +148,11 @@ FOUNDATION_EXPORT NSArray<NSDictionary *> *SXModelPresets(SXProvider provider);
 /// Ghi cả danh sách công cụ bị tắt trong MỘT lần (“Bật lại tất cả”).
 + (void)setDisabledTools:(NSSet<NSString *> *)names;
 
+/// Cấu hình để sao lưu (không gồm lịch sử, thống kê hay cờ gỡ lỗi).
+- (NSDictionary<NSString *, id> *)exportableSettings;
+/// Ghi lại cấu hình từ tệp sao lưu; trả về số key đã ghi (0 = tệp không hợp lệ).
+- (NSInteger)importSettings:(NSDictionary *)settings;
+
 /// Prompt hệ thống hiện hành (đã thay {date}/{device}/{lang}).
 - (NSString *)systemPrompt;
 - (nullable NSString *)activeAPIKey;
