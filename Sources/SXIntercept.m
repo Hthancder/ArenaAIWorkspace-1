@@ -637,15 +637,33 @@ static void SXPostDeferredAnswer(NSString *question, NSString *display) {
 	[_condition broadcast];
 	[_condition unlock];
 
-	BOOL allowDeferred = [SXPrefs shared].deferLongReplies;
-	if (answerArrivedLate && _ready && allowDeferred && generation == _generation) {
-		NSString *display = _answerDisplay;
+	// Đáp án tới muộn: lưu vào Lịch sử (nếu được phép) và gửi thông báo — nếu
+	// người dùng đã tắt thông báo hay chưa cấp quyền thì ít nhất Lịch sử vẫn có.
+	if (answerArrivedLate && _ready && generation == _generation) {
+		SXPrefs *prefs = [SXPrefs shared];
+		BOOL allowDeferred = prefs.deferLongReplies;
 		NSString *question = _question;
-		SXLogInf(@"resp", @"đáp án tới sau khi đã quyết định — gửi thông báo (%lu ký tự)",
-				 (unsigned long)display.length);
-		dispatch_async(dispatch_get_main_queue(), ^{
-			SXPostDeferredAnswer(question, display);
-		});
+		NSString *display = _answerDisplay;
+		BOOL privateTurn = _questionIncognito || prefs.incognito;
+		NSString *epoch = _historyEpoch;
+		NSUInteger limit = MAX(1, (NSUInteger)prefs.contextTurns);
+		NSTimeInterval startedAt = _captureTime;
+		if (display.length && !privateTurn && epoch.length) {
+			NSString *stored = display.length > 1000
+				? [[display substringToIndex:1000] stringByAppendingString:@"…"] : display;
+			NSString *answer = stored;
+			dispatch_async([SXStore queue], ^{
+				[[SXStore shared] appendQuestion:question ?: @"" answer:answer limit:limit
+									   epoch:epoch startedAt:startedAt];
+			});
+		}
+		if (allowDeferred) {
+			SXLogInf(@"resp", @"đáp án tới sau khi đã quyết định — gửi thông báo (%lu ký tự)",
+					 (unsigned long)display.length);
+			dispatch_async(dispatch_get_main_queue(), ^{
+				SXPostDeferredAnswer(question, display);
+			});
+		}
 	}
 }
 
