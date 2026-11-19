@@ -4,9 +4,7 @@
 #include <assert.h>
 
 // Không cần mạng: chỉ kiểm tra phần so sánh phiên bản và tách tag CI.
-void SXLogWrite(SXLogLevel level, NSString *category, NSString *format, ...) {
-	(void)level; (void)category; (void)format;
-}
+// SXLog.m thật được liên kết nên không khai báo bản thay thế ở đây.
 
 int main(void) {
 	@autoreleasepool {
