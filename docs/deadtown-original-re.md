@@ -331,7 +331,39 @@ frames** not present in GMX; APK-only sprite names are not included in this
 count. Transparent RGB can still affect texture filtering: classification is
 not a promise of pixel-identical rendering. No collision masks, animation
 rates, placement, device scaling, UI logic, or runtime drawing are compared.
-Neither report modifies or automatically restores the 111 APK-only assets.
+Neither comparison report modifies the 111 APK-only assets.
+
+#### Recovering sprite data into an isolated research export
+
+`tools/recover_deadtown_sprites.py` can extract the APK's resource IDs, sprite
+metadata, atlas coordinates, packed mask bytes and PNG frame candidates into a
+**new disposable directory**. On the pinned APK, extraction and independent
+read-back verification cover **402 sprites, 1,029 atlas frame references and
+402 original packed masks**. For 1,028 unscaled references it crops the atlas
+and places the decoded RGBA rectangle at the TPAG target offset on a
+transparent canvas. Outside the stored rectangle the original transparent RGB
+is unknowable; PNGs are newly encoded, not original atlas bytes. The remaining
+reference, `mask_noone[0]`, has a 32×32 source and a 1×1 target: it is saved as
+the untouched 32×32 decoded atlas region and explicitly marked **not
+reconstructed**, rather than inventing a scaling filter. The byte-for-byte
+mask export preserves raw packed data but does not assert the runtime's mask
+interpretation. The manifest records resource ID, metadata, TPAG values,
+per-frame RGBA/PNG hashes and raw-mask hashes.
+
+The `verify` command rebuilds expectations from the pinned APK, checks every
+frame's decoded RGBA and every raw mask, validates the manifest and rejects
+symlinked export entries. This is research data, not a GMX or IPA; no existing
+project or assets are overwritten. It does not restore missing logic, prove
+animation/collision/UI equivalence or modify original audio. Reproduce (Pillow
+11.3.0 required):
+
+```sh
+python tools/recover_deadtown_sprites.py extract APK new-research-output
+python tools/recover_deadtown_sprites.py verify APK new-research-output
+```
+
+The workflow runs extraction and tampering checks in a temporary test directory;
+it uploads reports only, not exported assets.
 
 ### UI/input investigation: coordinate spaces
 
