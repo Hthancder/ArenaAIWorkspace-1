@@ -1,0 +1,66 @@
+name: Dead Town GameMaker import diagnostics
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout working branch
+        uses: actions/checkout@v4
+      - name: Prepare original GameMaker project and recovered audio
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work
+          git clone --depth 1 https://github.com/kjs104901/deadtown.git work/upstream
+          test "$(git -C work/upstream rev-parse HEAD)" = '5e3d798f914c8cd3b066c8289323005d63111f37'
+          git fetch --no-tags origin 8643abdda26944002384bc216bf555717a9e1e42
+          git show '8643abdda26944002384bc216bf555717a9e1e42:Dead+Town+-+Zombie+survival_1.4.2_APKPure.apk' > work/original.apk
+          echo 'bc8fa1990cb2cdde8d184f2a942fe4010820f0592d88a36e1cbee0a6aac081fb  work/original.apk' | sha256sum --check
+          python tools/recover_deadtown_audio.py extract work/original.apk work/audio
+          # Missing files are expected before the recovered audio is applied.
+          python tools/stage_deadtown_gmx.py work/upstream/deadtown.gmx work/staged || test "$?" -eq 1
+          python tools/recover_deadtown_audio.py apply work/staged work/audio
+          python tools/prepare_deadtown_offline.py work/staged work/offline
+          python tools/audit_deadtown_gmx.py work/offline
+      - name: Install GameMaker ProjectTool
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/projecttool
+          curl --fail --location --retry 2 --output work/projecttool.tgz 'https://gmpm.gamemaker.io/@gm-tools/project-tool-linux-x64/-/project-tool-linux-x64-2024.14.165.tgz'
+          tar -xzf work/projecttool.tgz -C work/projecttool --strip-components=1
+          test -f work/projecttool/ProjectTool
+          chmod +x work/projecttool/ProjectTool
+      - name: Import GMX into modern GameMaker project
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$GITHUB_WORKSPACE/work/offline/deadtown.project.gmx"
+          destination="$GITHUB_WORKSPACE/work/converted/deadtown.yyp"
+          script="$GITHUB_WORKSPACE/work/import.txt"
+          printf 'PROJECT OPEN SOURCE="%s"\nPROJECT SAVE DESTINATION="%s"\n' "$project" "$destination" > "$script"
+          (cd work/projecttool && ./ProjectTool SCRIPT "PATH=$script") 2>&1 | tee work/import.log
+          test -s "$destination"
+      - name: Upload import diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deadtown-import-logs
+          path: work/import.log
+          if-no-files-found: ignore
+          retention-days: 3
+      - name: Upload imported project for further work
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deadtown-imported-project-untested
+          path: work/converted/
+          if-no-files-found: error
+          retention-days: 3
