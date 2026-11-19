@@ -22,6 +22,14 @@
 		</dict>
 		<dict>
 			<key>cell</key>
+			<string>PSLinkCell</string>
+			<key>detail</key>
+			<string>SXDiagnosticsController</string>
+			<key>label</key>
+			<string>Chẩn đoán nhanh</string>
+		</dict>
+		<dict>
+			<key>cell</key>
 			<string>PSTitleValueCell</string>
 			<key>key</key>
 			<string>summary.provider</string>
