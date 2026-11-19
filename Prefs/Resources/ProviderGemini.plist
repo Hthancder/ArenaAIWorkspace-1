@@ -136,6 +136,32 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
+			<string>Tuỳ chọn: dùng khi model chính không tồn tại (HTTP 404) và khi “Khi hết giờ chờ” = Thử lại. Endpoint phải hỗ trợ model dự phòng này; để trống = dùng model dự phòng mặc định.</string>
+			<key>label</key>
+			<string>Model dự phòng</string>
+		</dict>
+		<dict>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>autoCaps</key>
+			<string>none</string>
+			<key>cell</key>
+			<string>PSEditTextCell</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>key</key>
+			<string>geminiFallbackModel</string>
+			<key>label</key>
+			<string>Mã model dự phòng</string>
+			<key>noAutoCorrect</key>
+			<true/>
+			<key>placeholder</key>
+			<string>gemini-2.0-flash</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>footerText</key>
 			<string>Gửi một câu ngắn tới Gemini để xác nhận khóa và mô hình. Kết quả được lưu lại và tự xoá khi bạn đổi cấu hình.</string>
 			<key>label</key>
 			<string>Kiểm tra</string>

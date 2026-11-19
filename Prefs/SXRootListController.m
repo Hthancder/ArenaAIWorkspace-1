@@ -593,7 +593,9 @@ static SXChoiceDefinition *SXChoiceDefinitionFor(NSString *key) {
 			return prefs.provider == SXProviderGemini ? @"Google Gemini" : @"OpenAI tương thích";
 		}
 		if ([key isEqualToString:@"timeoutAction"]) {
-			return [prefs.timeoutAction isEqualToString:@"keep"] ? @"Giữ Siri gốc" : @"Bubble “chưa kịp”";
+			if ([prefs.timeoutAction isEqualToString:@"keep"]) return @"Giữ Siri gốc";
+			if ([prefs.timeoutAction isEqualToString:@"retry"]) return @"Thử lại bằng model dự phòng";
+			return @"Bubble “chưa kịp”";
 		}
 		if ([key isEqualToString:@"temperature"]) {
 			NSString *hint = prefs.temperature <= 0.05 ? @"máy móc"

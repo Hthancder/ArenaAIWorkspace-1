@@ -20,7 +20,7 @@ Nhà cung cấp: **OpenAI tương thích** (mặc định) hoặc **Google Gemin
 - **14 công cụ AI thật**: thiết bị, bảng nhớ tạm, đọc trang web, biết ứng dụng đang mở, mở ứng dụng/liên kết, chạy phím tắt,
   ghi nhớ lâu dài, tính toán, xoá lịch sử — bật/tắt từng cái, mỗi công cụ có trần thời gian riêng.
 - **Hội thoại có ngữ cảnh** (giữ N cặp câu hỏi/trả lời gần nhất), lịch sử lưu trên máy, thống kê, nhiệt độ và thời gian chờ đều chỉnh được.
-- **Không lưu lịch sử**: các lượt mới chỉ giữ trong bộ nhớ. Tuỳ chọn này không ngăn Siri, nhà cung cấp AI hoặc các log khác xử lý nội dung; lịch sử cũ phải xóa riêng.
+- **Không lưu lịch sử**: lượt riêng tư không ghi câu mới xuống đĩa, không gửi ngữ cảnh hội thoại cũ cho AI và không đưa đáp án trễ vào thông báo; nội dung câu hiện tại vẫn được gửi tới nhà cung cấp đã chọn để tạo câu trả lời. Lịch sử cũ phải xóa riêng.
 - **Prompt tuỳ chỉnh** (để trống = dùng prompt mặc định).
 - **Tiền tố @ai** tuỳ chọn, xem câu Siri gốc, và trò chuyện thử trong Settings.
 - **Log gỡ lỗi đầy đủ, sao chép được** — tô màu theo mức, tìm kiếm, tự làm mới, chỉ sao chép phần đang xem.
@@ -35,8 +35,8 @@ Nhà cung cấp: **OpenAI tương thích** (mặc định) hoặc **Google Gemin
 - **Trả lời dài không mất** — câu trả lời về sau khi Siri đã đóng sẽ được gửi bằng thông báo (bật/tắt được).
 - **Biết ứng dụng đang mở** — công cụ `current_app` để “cái này ở đây” có ngữ cảnh thật.
 - **OpenAI Responses API** — dùng `/v1/responses` song song chat completions, tự dò (không tốn token)
-  hoặc chọn tay; model suy luận (o1/o3/o4/gpt-5) tự bỏ `temperature`; model sai (404) tự thử model
-  mặc định; stream đứt giữa chừng vẫn giữ phần đã nhận.
+  hoặc chọn tay; model suy luận (o1/o3/o4/gpt-5) tự bỏ `temperature`; model sai (404) thử model dự phòng
+  riêng của từng provider (để trống thì dùng mặc định); stream đứt giữa chừng vẫn giữ phần đã nhận.
 - **Settings chỉn chu** — header có trạng thái sống, kiểm tra kết nối ngay trong trang cấu hình,
   chọn model có ô tìm kiếm, lịch sử nhóm theo ngày, thống kê có tỉ lệ/sự cố/tốc độ, chat thử dạng bong bóng.
 
@@ -96,6 +96,7 @@ Siri gốc trả lời ──► AFConnection._handleCommand:reply:             
 - Mỗi hook được kiểm tra class/selector lúc khởi động; selector không có sẽ được bỏ qua và ghi log. Các API Siri là API riêng của Apple nên cần xác minh trên từng thiết bị.
 - Trong một lượt, AddViews và SayIt dùng cùng quyết định AI/lỗi/hết giờ; tác vụ hệ thống được ưu tiên khi đã nhận diện. Nếu không sửa được lệnh hoặc thiếu hook, Siri gốc vẫn có thể xuất hiện.
 - Chế độ thay thế mặc định hiển thị thông báo khi hết giờ; tuỳ chọn **giữ Siri gốc** vẫn cố ý cho phản hồi gốc đi qua. Chờ trên luồng ACE tối đa 5 giây; đáp án đến sau khi đã quyết định hết giờ không tự hiện lại.
+- Tuỳ chọn **thử lại bằng model dự phòng** (`timeoutAction = retry`): khi lượt đầu hết giờ hoặc gặp lỗi mạng (timeout, mất kết nối, máy chủ đóng kết nối — kể cả khi đang stream), SiriX giữ nguyên câu trả lời Siri cho hội thoại và tự gọi lại **một lần** bằng model dự phòng đã cấu hình, với trần riêng 20–45 giây. Đáp án của lần thử lại tới qua Lịch sử và thông báo (thông báo theo tuỳ chọn trả lời nốt câu dài; lượt riêng tư không gửi thông báo). Lỗi HTTP (401/400/404 không có model dự phòng…) không retry vì đổi model cũng không giải quyết.
 
 ## Build cục bộ (tuỳ chọn)
 

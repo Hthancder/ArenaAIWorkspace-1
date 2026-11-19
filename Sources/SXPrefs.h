@@ -69,6 +69,8 @@ FOUNDATION_EXPORT NSArray<NSDictionary *> *SXModelPresets(SXProvider provider);
 @property (nonatomic, readonly) SXOpenAIApi openaiApi;
 @property (nonatomic, readonly, copy) NSString *geminiKey;
 @property (nonatomic, readonly, copy) NSString *geminiModel;
+@property (nonatomic, readonly, copy) NSString *openaiFallbackModel;
+@property (nonatomic, readonly, copy) NSString *geminiFallbackModel;
 @end
 #else
 /// Lớp thật (SXPrefs.m): đọc CFPreferences + file fallback.
@@ -111,6 +113,8 @@ FOUNDATION_EXPORT NSArray<NSDictionary *> *SXModelPresets(SXProvider provider);
 @property (nonatomic, readonly) SXOpenAIApi openaiApi;
 @property (nonatomic, readonly, copy) NSString *geminiKey;
 @property (nonatomic, readonly, copy) NSString *geminiModel;
+@property (nonatomic, readonly, copy) NSString *openaiFallbackModel;
+@property (nonatomic, readonly, copy) NSString *geminiFallbackModel;
 @property (nonatomic, readonly) double temperature;      // 0–2, làm tròn 0.1
 @property (nonatomic, readonly) NSInteger contextTurns;  // 2–40 cặp Q/A giữ lại
 @property (nonatomic, readonly) NSTimeInterval responseTimeout; // 2–120 giây (ngân sách AI từ lúc hỏi)
@@ -128,7 +132,9 @@ FOUNDATION_EXPORT NSArray<NSDictionary *> *SXModelPresets(SXProvider provider);
 /// (mặc định bật). Chỉ áp cho lượt vượt trần chờ.
 @property (nonatomic, readonly) BOOL deferLongReplies;
 @property (nonatomic, readonly) BOOL markdown;                  // trình bày Markdown khi hiển thị (v1.1)
-@property (nonatomic, readonly, copy) NSString *timeoutAction;  // "bubble" | "keep" — khi hết giờ (chế độ Thay thế)
+/// "bubble" (báo chưa kịp) | "keep" (giữ Siri gốc) | "retry" (thử lại một lần
+/// bằng model dự phòng khi hết giờ hoặc lỗi mạng) — khi hết giờ, chế độ Thay thế.
+@property (nonatomic, readonly, copy) NSString *timeoutAction;
 @property (nonatomic, readonly) NSInteger maxToolRounds;        // 1–4, mặc định 3
 /// Tên các công cụ người dùng đã tắt (xem `SXTools catalog`). Rỗng = bật tất cả.
 @property (nonatomic, readonly, copy) NSSet<NSString *> *disabledTools;
@@ -176,6 +182,8 @@ FOUNDATION_EXPORT NSArray<NSDictionary *> *SXModelPresets(SXProvider provider);
 - (nullable NSString *)activeAPIKey;
 - (NSString *)activeModel;
 - (NSString *)activeBaseURL;
+/// Model dự phòng cho provider cụ thể (chuỗi rỗng = không cấu hình).
+- (NSString *)fallbackModelForProvider:(SXProvider)provider;
 
 /// "Sẵn sàng" / "Đã tắt" / "Thiếu khóa API".
 @property (nonatomic, readonly, copy) NSString *statusSummary;

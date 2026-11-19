@@ -29,8 +29,8 @@ NSArray<NSString *> *SXPreferenceKeys(void) {
 	static dispatch_once_t once;
 	dispatch_once(&once, ^{
 		keys = @[@"enabled", @"mode", @"triggerMode", @"provider",
-				 @"openaiKey", @"openaiBase", @"openaiModel", @"openaiApi",
-				 @"geminiKey", @"geminiModel",
+				 @"openaiKey", @"openaiBase", @"openaiModel", @"openaiApi", @"openaiFallbackModel",
+				 @"geminiKey", @"geminiModel", @"geminiFallbackModel",
 				 @"temperature", @"contextTurns", @"timeout", @"replyDeadline", @"timeoutAction",
 				 @"streaming", @"markdown", @"hideWebCards", @"showOriginal", @"speakErrors",
 				 @"customPrompt", @"incognito", @"deferLongReplies",
@@ -264,6 +264,10 @@ static NSArray<NSString *> *SXLegacyToolNames(NSString *legacyKey) {
 
 - (NSString *)activeProviderName {
 	return SXProviderDisplayName(self.provider);
+}
+
+- (NSString *)fallbackModelForProvider:(SXProvider)provider {
+	return provider == SXProviderGemini ? self.geminiFallbackModel : self.openaiFallbackModel;
 }
 
 - (NSString *)providerSummary {

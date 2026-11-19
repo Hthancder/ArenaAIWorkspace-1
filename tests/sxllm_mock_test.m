@@ -48,9 +48,19 @@ void SXMockHTTPReset(void) {
 void SXMockHTTPReply(NSInteger status, NSString *body) {
 	[queue addObject:@{@"status": @(status), @"body": body ?: @""}];
 }
+/// Lỗi transport (timeout/mất mạng): không có HTTP response, đúng như SXHTTP
+/// trả về khi URLSession thất bại — dùng để kiểm tra nhánh retry.
+void SXMockHTTPReplyTransportError(NSInteger code) {
+	[queue addObject:@{@"transportError": @(code), @"status": @0, @"body": @""}];
+}
 void SXMockHTTPReplyJSON(NSInteger status, id object) {
 	NSData *data = [NSJSONSerialization dataWithJSONObject:object options:0 error:NULL];
 	SXMockHTTPReply(status, [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding]);
+}
+/// Trả lời chậm `delay` giây: dùng để đốt hết ngân sách của lượt chính và
+/// kiểm nhánh "hết giờ ở lượt đầu → thử lại bằng model dự phòng".
+void SXMockHTTPReplyDelayed(NSInteger status, NSString *body, NSTimeInterval delay) {
+	[queue addObject:@{@"status": @(status), @"body": body ?: @"", @"delay": @(delay)}];
 }
 NSArray<NSDictionary *> *SXMockHTTPRequests(void) { return requests; }
 NSString *SXMockLastRequestBody(void) { return requests.lastObject[@"body"]; }
@@ -76,6 +86,13 @@ NSString *SXMockLastRequestBody(void) { return requests.lastObject[@"body"]; }
 	}
 	NSDictionary *script = queue.firstObject;
 	[queue removeObjectAtIndex:0];
+	if (script[@"transportError"]) {
+		result.error = [NSError errorWithDomain:SXHTTPErrorDomain
+										   code:[script[@"transportError"] integerValue]
+									   userInfo:@{NSLocalizedDescriptionKey: @"lỗi mạng giả lập"}];
+		return result;
+	}
+	if (script[@"delay"]) [NSThread sleepForTimeInterval:[script[@"delay"] doubleValue]];
 	result.status = [script[@"status"] integerValue];
 	result.body = [script[@"body"] dataUsingEncoding:NSUTF8StringEncoding];
 	if (onStatus) onStatus(result.status);
@@ -117,7 +134,8 @@ NSString *SXMockLastRequestBody(void) { return requests.lastObject[@"body"]; }
 						   userInfo:@{NSLocalizedDescriptionKey: [self userMessageForStatus:status data:data]}];
 }
 + (NSError *)errorWithCode:(NSInteger)code message:(NSString *)message {
-	return [NSError errorWithDomain:@"mock" code:code userInfo:@{NSLocalizedDescriptionKey: message ?: @"lỗi"}];
+	return [NSError errorWithDomain:SXHTTPErrorDomain code:code
+						  userInfo:@{NSLocalizedDescriptionKey: message ?: @"lỗi"}];
 }
 @end
 
@@ -125,6 +143,9 @@ NSString *SXMockLastRequestBody(void) { return requests.lastObject[@"body"]; }
 
 static BOOL testStreaming = NO;
 static NSString *testBase = @"https://mock.test/v1";
+static NSString *testOpenAIFallback = @"";
+static NSString *testGeminiFallback = @"";
+static NSString *testTimeoutAction = @"bubble";
 
 @implementation SXPrefs
 + (instancetype)shared { static SXPrefs *p; static dispatch_once_t once; dispatch_once(&once, ^{ p = [SXPrefs new]; }); return p; }
@@ -133,6 +154,8 @@ static NSString *testBase = @"https://mock.test/v1";
 - (NSString *)openaiKey { return @"sk-test"; }
 - (NSString *)openaiBase { return testBase; }
 - (NSString *)openaiModel { return @"mock-model"; }
+- (NSString *)openaiFallbackModel { return testOpenAIFallback; }
+- (NSString *)geminiFallbackModel { return testGeminiFallback; }
 /// Test luôn đi nhánh chat completions: máy chủ giả không có /responses.
 - (SXOpenAIApi)openaiApi { return SXOpenAIApiChat; }
 - (NSString *)geminiKey { return @"gemini-test"; }
@@ -144,6 +167,7 @@ static NSString *testBase = @"https://mock.test/v1";
 - (BOOL)streaming { return testStreaming; }
 - (BOOL)markdown { return NO; }
 - (BOOL)verbose { return NO; }
+- (NSString *)timeoutAction { return testTimeoutAction; }
 - (NSString *)customPrompt { return nil; }
 - (NSArray<NSDictionary *> *)openaiHeaders { return @[]; }
 - (NSArray<NSDictionary *> *)geminiHeaders { return @[]; }
@@ -223,7 +247,30 @@ int main(void) {
 		assert(!error && [out[@"answer"] isEqualToString:@"Chào bạn!"]);
 		assert([SXMockLastRequestBody() containsString:@"\"model\":\"mock-model\""]);
 
-		// ── 2. Model gọi công cụ → kết quả tool đúng chuẩn, vòng hai trả lời.
+		// ── 2. Model dự phòng do người dùng cấu hình chỉ chạy khi model chính 404.
+		testOpenAIFallback = @"rescue-model";
+		SXMockHTTPReset();
+		SXMockHTTPReplyJSON(404, @{@"error": @{@"message": @"model not found"}});
+		SXMockHTTPReplyJSON(200, @{@"choices": @[@{@"message": @{@"role": @"assistant", @"content": @"Đã dùng model dự phòng."}}]});
+		out = Run(SXProviderOpenAI, @[], nil, nil, &error);
+		assert(!error && [out[@"answer"] isEqualToString:@"Đã dùng model dự phòng."]);
+		assert(SXMockHTTPRequests().count == 2);
+		assert([SXMockHTTPRequests()[0][@"body"] containsString:@"mock-model"]);
+		assert([SXMockHTTPRequests()[1][@"body"] containsString:@"rescue-model"]);
+		testOpenAIFallback = @"";
+
+		// ── 3. Gemini cũng dùng model dự phòng riêng khi model chính 404.
+		testGeminiFallback = @"gemini-rescue";
+		SXMockHTTPReset();
+		SXMockHTTPReplyJSON(404, @{@"error": @{@"message": @"model not found"}});
+		SXMockHTTPReplyJSON(200, @{@"candidates": @[@{@"content": @{@"parts": @[@{@"text": @"Gemini dự phòng."}]}}]});
+		out = Run(SXProviderGemini, @[], nil, nil, &error);
+		assert(!error && [out[@"answer"] isEqualToString:@"Gemini dự phòng."]);
+		assert(SXMockHTTPRequests().count == 2);
+		assert([SXMockHTTPRequests()[1][@"url"] containsString:@"gemini-rescue"]);
+		testGeminiFallback = @"";
+
+		// ── 4. Model gọi công cụ → kết quả tool đúng chuẩn, vòng hai trả lời.
 		SXMockHTTPReset();
 		SXMockHTTPReplyJSON(200, @{@"choices": @[@{
 			@"message": @{@"role": @"assistant", @"content": [NSNull null],
@@ -247,7 +294,7 @@ int main(void) {
 		assert([secondBody containsString:@"result"] && [secondBody containsString:@"12:00"]);
 		assert([secondBody containsString:@"\"tools\""]);
 
-		// ── 3. Stream SSE: mảnh văn bản đến tăng dần, đúng thứ tự.
+		// ── 5. Stream SSE: mảnh văn bản đến tăng dần, đúng thứ tự.
 		testStreaming = YES;
 		SXMockHTTPReset();
 		SXMockHTTPReply(200, SSE(@[@"{\"choices\":[{\"delta\":{\"content\":\"Xin \"}}]}",
@@ -257,14 +304,14 @@ int main(void) {
 		assert(!error && [out[@"answer"] isEqualToString:@"Xin chào"]);
 		assert(deltas.count == 2 && [deltas[0] isEqualToString:@"Xin "] && [deltas[1] isEqualToString:@"chào"]);
 
-		// ── 4. Endpoint không hỗ trợ stream (400) → tự chuyển non-stream.
+		// ── 6. Endpoint không hỗ trợ stream (400) → tự chuyển non-stream.
 		SXMockHTTPReset();
 		SXMockHTTPReplyJSON(400, @{@"error": @{@"message": @"stream unsupported"}});
 		SXMockHTTPReplyJSON(200, @{@"choices": @[@{@"message": @{@"content": @"không stream"}}]});
 		out = Run(SXProviderOpenAI, @[], nil, nil, &error);
 		assert(!error && [out[@"answer"] isEqualToString:@"không stream"]);
 
-		// ── 5. Stream có tool_calls: gộp mảnh arguments, chạy công cụ, rồi trả lời.
+		// ── 7. Stream có tool_calls: gộp mảnh arguments, chạy công cụ, rồi trả lời.
 		SXMockHTTPReset();
 		SXMockHTTPReply(200, SSE(@[
 			@"{\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_9\",\"function\":{\"name\":\"clock\",\"arguments\":\"\"}}]}}]}",
@@ -275,7 +322,7 @@ int main(void) {
 		assert(!error && runs == 1 && [out[@"answer"] isEqualToString:@"Đã xong."]);
 		testStreaming = NO;
 
-		// ── 6. Gemini: functionResponse dùng role user + response là OBJECT.
+		// ── 8. Gemini: functionResponse dùng role user + response là OBJECT.
 		SXMockHTTPReset();
 		SXMockHTTPReplyJSON(200, @{@"candidates": @[@{
 			@"content": @{@"parts": @[@{@"functionCall": @{@"name": @"clock", @"args": @{}}}]}}]});
@@ -290,7 +337,7 @@ int main(void) {
 		assert([geminiBody containsString:@"\"response\":{\"result\":\"12:00\"}"]);
 		assert(![geminiBody containsString:@"\"role\":\"tool\""]);
 
-		// ── 7. Lỗi 401 → báo lỗi ngay, không thử lại; thông điệp có nội dung máy chủ.
+		// ── 9. Lỗi 401 → báo lỗi ngay, không thử lại; thông điệp có nội dung máy chủ.
 		SXMockHTTPReset();
 		SXMockHTTPReplyJSON(401, @{@"error": @{@"message": @"Incorrect API key"}});
 		error = nil;
@@ -298,28 +345,117 @@ int main(void) {
 		assert(error && error.code == 401);
 		assert([error.localizedDescription containsString:@"Incorrect API key"]);
 
-		// ── 8. 429 rồi 200: thử lại và vẫn thành công.
+		// ── 10. 429 rồi 200: thử lại và vẫn thành công.
 		SXMockHTTPReset();
 		SXMockHTTPReplyJSON(429, @{@"error": @{@"message": @"slow down"}});
 		SXMockHTTPReplyJSON(200, @{@"choices": @[@{@"message": @{@"content": @"vẫn ổn"}}]});
 		out = Run(SXProviderOpenAI, @[], nil, nil, &error);
 		assert(!error && [out[@"answer"] isEqualToString:@"vẫn ổn"]);
 
-		// ── 9. Endpoint rỗng trả về → lỗi rõ ràng, không treo.
+		// ── 11. Endpoint rỗng trả về → lỗi rõ ràng, không treo.
 		SXMockHTTPReset();
 		SXMockHTTPReply(200, @"");
 		error = nil;
 		out = Run(SXProviderOpenAI, @[], nil, nil, &error);
 		assert(error && error.code == -3);
 
-		// ── 10. Header tuỳ chỉnh + khóa hợp nhất vào request.
+		// ── 12. Header tuỳ chỉnh + khóa hợp nhất vào request.
 		SXMockHTTPReset();
 		SXMockHTTPReplyJSON(200, @{@"choices": @[@{@"message": @{@"content": @"ok"}}]});
 		Run(SXProviderOpenAI, @[], nil, nil, &error);
 		NSDictionary *sentHeaders = SXMockHTTPRequests().lastObject[@"headers"];
 		assert([sentHeaders[@"Authorization"] isEqualToString:@"Bearer sk-test"]);
 
-		// ── 11. Base URL rỗng: báo lỗi cấu hình chứ không âm thầm gửi api.openai.com.
+		// ── 13. timeoutAction=retry: lỗi mạng ở lượt đầu → thử lại bằng model dự phòng.
+		testOpenAIFallback = @"rescue-model";
+		testTimeoutAction = @"retry";
+		SXMockHTTPReset();
+		SXMockHTTPReplyTransportError(NSURLErrorTimedOut);
+		SXMockHTTPReplyJSON(200, @{@"choices": @[@{@"message": @{@"role": @"assistant", @"content": @"Cứu kịp."}}]});
+		out = Run(SXProviderOpenAI, @[], nil, nil, &error);
+		assert(!error && [out[@"answer"] isEqualToString:@"Cứu kịp."]);
+		assert(SXMockHTTPRequests().count == 2);
+		assert([SXMockHTTPRequests()[1][@"body"] containsString:@"rescue-model"]);
+
+		// ── 14. Cùng lỗi mạng nhưng chính sách mặc định: báo lỗi ngay, không gọi lần hai.
+		testTimeoutAction = @"bubble";
+		SXMockHTTPReset();
+		SXMockHTTPReplyTransportError(NSURLErrorNotConnectedToInternet);
+		error = nil;
+		out = Run(SXProviderOpenAI, @[], nil, nil, &error);
+		assert(error && SXMockHTTPRequests().count == 1);
+
+		// ── 15. Retry chỉ dành cho lỗi mạng: HTTP 401 vẫn báo lỗi ngay.
+		testTimeoutAction = @"retry";
+		SXMockHTTPReset();
+		SXMockHTTPReplyJSON(401, @{@"error": @{@"message": @"Incorrect API key"}});
+		error = nil;
+		out = Run(SXProviderOpenAI, @[], nil, nil, &error);
+		assert(error && error.code == 401 && SXMockHTTPRequests().count == 1);
+
+		// ── 16. Gemini cũng retry bằng model dự phòng và URL đổi theo model mới.
+		testGeminiFallback = @"gemini-rescue";
+		SXMockHTTPReset();
+		SXMockHTTPReplyTransportError(NSURLErrorNetworkConnectionLost);
+		SXMockHTTPReplyJSON(200, @{@"candidates": @[@{@"content": @{@"parts": @[@{@"text": @"Gemini cứu kịp."}]}}]});
+		out = Run(SXProviderGemini, @[], nil, nil, &error);
+		assert(!error && [out[@"answer"] isEqualToString:@"Gemini cứu kịp."]);
+		assert(SXMockHTTPRequests().count == 2);
+		assert([SXMockHTTPRequests()[1][@"url"] containsString:@"gemini-rescue"]);
+		testGeminiFallback = @"";
+		testOpenAIFallback = @"";
+		testTimeoutAction = @"bubble";
+
+		// ── 17. Rớt mạng giữa stream (chưa có chữ): thử lại bằng model dự phòng ngay.
+		testOpenAIFallback = @"rescue-model";
+		testTimeoutAction = @"retry";
+		testStreaming = YES;
+		SXMockHTTPReset();
+		SXMockHTTPReplyTransportError(NSURLErrorTimedOut);
+		SXMockHTTPReply(200, SSE(@[@"{\"choices\":[{\"delta\":{\"content\":\"Stream cứu\"}}]}"]));
+		out = Run(SXProviderOpenAI, @[], nil, nil, &error);
+		assert(!error && [out[@"answer"] isEqualToString:@"Stream cứu"]);
+		assert(SXMockHTTPRequests().count == 2);
+		assert([SXMockHTTPRequests()[1][@"body"] containsString:@"rescue-model"]);
+		testStreaming = NO;
+		testOpenAIFallback = @"";
+		testTimeoutAction = @"bubble";
+
+		// ── 18. Retry đúng MỘT lần: lần gọi lại cũng lỗi thì báo lỗi, không lặp nữa.
+		testOpenAIFallback = @"rescue-model";
+		testTimeoutAction = @"retry";
+		SXMockHTTPReset();
+		SXMockHTTPReplyTransportError(NSURLErrorTimedOut);   // lần gọi chính
+		SXMockHTTPReplyTransportError(NSURLErrorTimedOut);   // lần gọi lại cũng hỏng
+		error = nil;
+		out = Run(SXProviderOpenAI, @[], nil, nil, &error);
+		// Đúng 2 request: nếu retry lặp, queue rỗng sẽ trả lỗi "hết kịch bản" (code -1).
+		assert(SXMockHTTPRequests().count == 2);
+		assert(error && error.code == NSURLErrorTimedOut);
+		assert([SXMockHTTPRequests()[1][@"body"] containsString:@"rescue-model"]);
+		testOpenAIFallback = @"";
+		testTimeoutAction = @"bubble";
+
+		// ── 19. Hết ngân sách ở lượt đầu (không phải lỗi transport): retry bằng
+		// model dự phòng. Lượt chính là một stream 200 rỗng trả lời sau 7,6 s
+		// (ngân sách mock 8 s) → vòng sau không còn thời gian, và vì chưa có lỗi
+		// transport nào nên chỉ nhánh "hết ngân sách" mới cứu được lượt này.
+		testOpenAIFallback = @"rescue-model";
+		testTimeoutAction = @"retry";
+		testStreaming = YES;
+		SXMockHTTPReset();
+		SXMockHTTPReplyDelayed(200, @"", 7.6);
+		SXMockHTTPReplyJSON(200, @{@"choices": @[@{@"message": @{@"role": @"assistant", @"content": @"Chậm mà chắc."}}]});
+		error = nil;
+		out = Run(SXProviderOpenAI, @[], nil, nil, &error);
+		assert(!error && [out[@"answer"] isEqualToString:@"Chậm mà chắc."]);
+		assert(SXMockHTTPRequests().count == 2);
+		assert([SXMockHTTPRequests()[1][@"body"] containsString:@"rescue-model"]);
+		testStreaming = NO;
+		testOpenAIFallback = @"";
+		testTimeoutAction = @"bubble";
+
+		// ── 20. Base URL rỗng: báo lỗi cấu hình chứ không âm thầm gửi api.openai.com.
 		testBase = @"";
 		SXMockHTTPReset();
 		error = nil;

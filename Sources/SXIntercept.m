@@ -573,7 +573,9 @@ static void SXPostDeferredAnswer(NSString *question, NSString *display) {
 		[self->_condition unlock];
 		if (stale) return;
 
-		NSArray *requestHistory = privateTurn ? historySnapshot : (stored[@"history"] ?: historySnapshot);
+		// Lượt riêng tư không được gửi bất kỳ ngữ cảnh cũ nào tới nhà cung cấp,
+		// kể cả lịch sử đang giữ trong RAM trước khi bật chế độ này.
+		NSArray *requestHistory = privateTurn ? @[] : (stored[@"history"] ?: historySnapshot);
 		// 0 = không gửi ngữ cảnh: mỗi câu hỏi độc lập, tiết kiệm token.
 		NSUInteger maxTurns = (NSUInteger)MAX(0, [SXPrefs shared].contextTurns);
 		if (maxTurns == 0) requestHistory = @[];
@@ -657,12 +659,16 @@ static void SXPostDeferredAnswer(NSString *question, NSString *display) {
 									   epoch:epoch startedAt:startedAt];
 			});
 		}
-		if (allowDeferred) {
+		// Thông báo là một bản lưu bền ngoài lịch sử. Không gửi nội dung của
+		// lượt riêng tư vào Notification Center.
+		if ([SXDisplayPolicy shouldSendDeferredAnswerWhenEnabled:allowDeferred privateTurn:privateTurn]) {
 			SXLogInf(@"resp", @"đáp án tới sau khi đã quyết định — gửi thông báo (%lu ký tự)",
 					 (unsigned long)display.length);
 			dispatch_async(dispatch_get_main_queue(), ^{
 				SXPostDeferredAnswer(question, display);
 			});
+		} else if (allowDeferred && privateTurn) {
+			SXLogInf(@"resp", @"bỏ thông báo trả lời trễ cho lượt riêng tư");
 		}
 	}
 }
@@ -818,6 +824,10 @@ static void SXPostDeferredAnswer(NSString *question, NSString *display) {
 			if (!_decisionDisplay.length) {
 				_outcomeCounted = YES;
 				[self queueStatistic:@"kept" milliseconds:nil];
+				if ([prefs.timeoutAction isEqualToString:@"retry"] && !_errored) {
+					SXLogInf(@"resp", @"%@: giữ Siri gốc và chờ đáp án của lần thử lại bằng model dự phòng",
+							 source);
+				}
 			}
 		}
 	}

@@ -120,7 +120,7 @@
 │ Nhiệt độ                            0.7 │
 │ Số câu giữ lại                        8 │
 │ Thời gian chờ AI (giây)               10 │
-│ Khi hết giờ chờ        Bubble "chưa kịp"›│
+│ Khi hết giờ chờ  Bubble "chưa kịp" / Giữ Siri / Thử lại›│
 │ Trả lời theo streaming            [● ]  │
 │ Hiển thị Markdown đẹp              [● ] │
 │ Ẩn thẻ kết quả tìm kiếm           [● ]  │
@@ -145,7 +145,8 @@ Cấu hình OpenAI
 │ Khóa API            [••••••••gWIT    ] │  ← secure, placeholder "sk-… / gsk-…"
 │ Địa chỉ API gốc     [api.groq.com/…  ] │  ← isURL, auto https:// khi thiếu
 │ Mô hình              [llama-3.3-70b…  ] │
-│ Model dự phòng       [gpt-4o-mini     ] │  ← v1.2, footer: dùng khi lỗi/timeout
+│ Model dự phòng       [gpt-4o-mini     ] │  ← v1.2, footer: dùng khi model chính 404
+│                                         │     và khi "Khi hết giờ chờ" = Thử lại
 └ footer: Hỗ trợ OpenAI, Groq, OpenRouter… ┘
 ┌ KIỂM TRA ──────────────────────────────┐
 │ Kiểm tra kết nối                       │  ← pattern modal §4.4

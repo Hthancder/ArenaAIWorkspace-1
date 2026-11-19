@@ -173,9 +173,10 @@ Answer ready → hiển thị bubble (text, markdown)
 | `auto` ⭐ | Thông minh (mặc định như hiện tại) |
 | `prefix` | Không tiền tố → **Siri gốc**; `@ai …` → bắt buộc AI; `@siri …` → bỏ qua; gỡ tiền tố trước khi gửi |
 
-### D5. Model dự phòng — `fallbackModel`
-- Lỗi/không mạng/timeout ở lượt đầu → **retry1 lần** bằng model nhanh (ô nhập riêng trong trang cấu hình LLM).
+### D5. Model dự phòng — `openaiFallbackModel` / `geminiFallbackModel`
+- Lỗi/không mạng/timeout ở lượt đầu → **retry 1 lần** bằng model nhanh (ô nhập riêng trong trang cấu hình từng nhà cung cấp).
 - Đưa vào row **"Khi hết giờ chờ"** thêm phương án **`retry`** (cùng `timeoutAction`): `bubble | keep | retry`.
+- Đã hiện thực trong `SXLLM`: lỗi transport (timeout, mất mạng, không tìm được host, máy chủ đóng kết nối, rớt stream khi chưa có chữ) ở lượt đầu → gọi lại một lần bằng model dự phòng của provider với trần riêng 20–45 giây (`SXRetryBudget`). Lỗi HTTP không retry. Khi hết trần chờ ACE, chính sách `retry` **giữ Siri gốc** (không bubble) và đáp án tới sau đi theo đường đáp án trễ: lưu Lịch sử (nếu bật và không riêng tư) và gửi thông báo khi `deferLongReplies` bật — lượt riêng tư không gửi thông báo.
 
 ### D6. Xuất / Nhập cấu hình
 - **Xuất**: JSON (phiên bản 1) → Share sheet (AirDrop/Files). Toggle **"Kèm khóa API"** mặc định **TẮT** (ẩn key = `***`).
@@ -248,7 +249,7 @@ SiriX (Root)
 | `ttsSpeed` / `ttsVolume` | real | 1.0 / 100 |
 | `ttsBaseUrl` / `ttsApiKey` | string | "" |
 | `triggerMode` | `auto\|prefix` | `auto` |
-| `fallbackModel` | string | "" |
+| `openaiFallbackModel` / `geminiFallbackModel` | string | "" (mỗi provider một model) |
 | `timeoutAction` | `bubble\|keep\|retry` | `bubble` |
 | `showOriginal` | bool | NO |
 | `incognito` | bool | NO |

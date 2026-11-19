@@ -162,6 +162,7 @@ static double SXClamp(double v, double lo, double hi) {
 					 _triggerMode ?: [NSNull null],
 					 _openaiKey ?: [NSNull null], _openaiBase ?: [NSNull null], _openaiModel ?: [NSNull null],
 					 _geminiKey ?: [NSNull null], _geminiModel ?: [NSNull null],
+					 _openaiFallbackModel ?: [NSNull null], _geminiFallbackModel ?: [NSNull null],
 					 _customPrompt ?: [NSNull null], _timeoutAction ?: [NSNull null],
 					 _disabledTools ?: [NSNull null],
 					 _openaiHeaders ?: [NSNull null], _geminiHeaders ?: [NSNull null]]);
@@ -187,6 +188,8 @@ static double SXClamp(double v, double lo, double hi) {
 		: [api isEqualToString:@"chat"] ? SXOpenAIApiChat : SXOpenAIApiAuto;
 	_geminiKey = [self stringFor:@"geminiKey" default:@""] ?: @"";
 	_geminiModel = [self stringFor:@"geminiModel" default:@"gemini-2.0-flash"] ?: @"gemini-2.0-flash";
+	_openaiFallbackModel = [self stringFor:@"openaiFallbackModel" default:@""] ?: @"";
+	_geminiFallbackModel = [self stringFor:@"geminiFallbackModel" default:@""] ?: @"";
 
 	_temperature = SXClamp(round([self doubleFor:@"temperature" default:0.7] * 100.0) / 100.0, 0.0, 2.0);
 	_contextTurns = (NSInteger)SXClamp((double)[self integerFor:@"contextTurns" default:8], 0, 40);
@@ -202,8 +205,9 @@ static double SXClamp(double v, double lo, double hi) {
 	_streaming = [self boolFor:@"streaming" default:YES];
 	_deferLongReplies = [self boolFor:@"deferLongReplies" default:YES];
 	_markdown = [self boolFor:@"markdown" default:YES];
-	_timeoutAction = [[self stringFor:@"timeoutAction" default:@"bubble"] isEqualToString:@"keep"]
-		? @"keep" : @"bubble";
+	NSString *timeoutAction = [self stringFor:@"timeoutAction" default:@"bubble"];
+	_timeoutAction = ([timeoutAction isEqualToString:@"keep"] || [timeoutAction isEqualToString:@"retry"])
+		? [timeoutAction copy] : @"bubble";
 	_maxToolRounds = (NSInteger)SXClamp((double)[self integerFor:@"maxToolRounds" default:3], 1, 6);
 	_disabledTools = [self loadDisabledToolsForReload];
 	_openaiHeaders = SXHeadersNormalized([self valueFor:@"openaiHeaders"]);

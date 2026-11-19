@@ -14,7 +14,14 @@ static NSTimeInterval SXTurnBudget(SXPrefs *prefs) {
 }
 
 /// Model dự phòng khi model người dùng đặt không tồn tại trên endpoint (404).
-static NSString *SXFallbackModel(SXProvider provider) {
+static NSString *SXFallbackModel(SXProvider provider, SXPrefs *prefs) {
+	NSString *configured = [[prefs fallbackModelForProvider:provider]
+						   stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+	// Người dùng hay dán nguyên "models/gemini-…" từ tài liệu Google; bỏ tiền tố
+	// để URL và thông điệp lỗi không bị lặp "models/models/".
+	if (provider == SXProviderGemini && [configured hasPrefix:@"models/"])
+		configured = [configured substringFromIndex:7];
+	if (configured.length) return configured;
 	return provider == SXProviderGemini ? @"gemini-2.0-flash" : @"gpt-4o-mini";
 }
 
@@ -124,6 +131,66 @@ static BOOL SXShouldRetry(NSInteger status, NSInteger *attempt, CFAbsoluteTime d
 	SXLogWrn(@"llm", @"HTTP %ld — thử lại %ld/2 sau %.1fs", (long)status, (long)*attempt, delay);
 	[NSThread sleepForTimeInterval:delay];
 	return YES;
+}
+
+#pragma mark - Thử lại bằng model dự phòng (timeoutAction=retry)
+
+/// Trần cho lần thử lại bằng model dự phòng: không ngắn hơn 20 giây (model
+/// dự phòng vẫn cần thời gian trả lời) và không quá 45 giây (một lượt treo
+/// không được giữ luồng nền mãi). Đây là trần riêng của lần thử lại, không
+/// cộng dồn vào ngân sách lượt đầu.
+static NSTimeInterval SXRetryBudget(SXPrefs *prefs) {
+	NSTimeInterval budget = SXTurnBudget(prefs);
+	if (budget < 20.0) budget = 20.0;
+	return MIN(budget, 45.0);
+}
+
+/// Lỗi mạng/timeout có đáng thử lại bằng model dự phòng không?
+/// Chỉ lỗi transport (chưa có HTTP response): hết giờ, mất mạng, không tìm
+/// được host, máy chủ đóng kết nối. Lỗi cấu hình (URL sai) và lỗi HTTP
+/// (401/400) thử lại bằng model khác cũng không đổi kết quả nên không retry.
+static BOOL SXIsRetryableTransportError(NSError *error) {
+	if (!error) return NO;
+	if (![error.domain isEqualToString:SXHTTPErrorDomain]) return NO;
+	switch (error.code) {
+		case NSURLErrorTimedOut:
+		case NSURLErrorCannotFindHost:
+		case NSURLErrorCannotConnectToHost:
+		case NSURLErrorNotConnectedToInternet:
+		case NSURLErrorNetworkConnectionLost:
+		case NSURLErrorDNSLookupFailed:
+			return YES;
+		case -3: // SXHTTP: máy chủ đóng kết nối mà không trả lời
+			return YES;
+		default:
+			return NO;
+	}
+}
+
+/// Có nên thử lại bằng model dự phòng vì lỗi mạng/timeout không?
+/// Điều kiện: người dùng chọn timeoutAction=retry, mới ở lượt đầu, chưa thử
+/// lại lần nào, và model dự phòng khác model hiện tại.
+static BOOL SXShouldRetryWithFallback(SXPrefs *prefs, NSString *model, NSString *fallback,
+									  NSInteger rounds, BOOL alreadyRetried) {
+	if (alreadyRetried || rounds != 0) return NO;
+	if (![prefs.timeoutAction isEqualToString:@"retry"]) return NO;
+	if (!fallback.length || [model isEqualToString:fallback]) return NO;
+	return YES;
+}
+
+/// Lỗi transport khi ĐANG stream: trả về model dự phòng cần chuyển sang, hoặc
+/// nil nếu không retry. Dùng cho cả lỗi stream (chưa có chữ nào) lẫn lỗi
+/// non-stream; model hiện tại vừa chứng minh là không trả lời được nên thử lại
+/// bằng model khác thay vì lặp lại chính nó.
+static NSString *SXRescueModelAfterFailure(SXPrefs *prefs, SXProvider provider,
+										   NSString *model, NSInteger rounds,
+										   BOOL alreadyRetried, NSError *error) {
+	if (!SXIsRetryableTransportError(error)) return nil;
+	NSString *fallback = SXFallbackModel(provider, prefs);
+	if (!SXShouldRetryWithFallback(prefs, model, fallback, rounds, alreadyRetried)) return nil;
+	SXLogWrn(@"llm", @"%@ lỗi mạng/timeout (%@) → thử lại bằng model dự phòng %@ (trần %.0fs)",
+			 SXProviderDisplayName(provider), error.localizedDescription, fallback, SXRetryBudget(prefs));
+	return fallback;
 }
 
 #pragma mark - Công cụ
@@ -269,6 +336,8 @@ static void SXAskOpenAIChat(SXPrefs *prefs, NSString *question, NSArray<NSDictio
 	NSInteger rounds = 0;
 	NSInteger lastStatus = 0;
 	NSInteger retryCount = 0;
+	BOOL retriedWithFallback = NO;
+	NSInteger attempts = 0;
 	BOOL streamAllowed = prefs.streaming;
 
 	SXLogDbg(@"llm", @"openai → %@ (model=%@, %lu message, %lu tool, temp=%.1f, stream=%d)",
@@ -278,6 +347,18 @@ static void SXAskOpenAIChat(SXPrefs *prefs, NSString *question, NSArray<NSDictio
 	while (YES) {
 		NSTimeInterval remaining = deadline - CFAbsoluteTimeGetCurrent();
 		if (remaining < 1.0) {
+			// Hết ngân sách ở lượt đầu + người dùng chọn retry: thử một lần bằng
+			// model dự phòng với trần riêng thay vì báo hết giờ ngay.
+			NSString *fallback = SXFallbackModel(SXProviderOpenAI, prefs);
+			if (attempts > 0 && SXShouldRetryWithFallback(prefs, model, fallback, rounds, retriedWithFallback)) {
+				SXLogWrn(@"llm", @"openai hết ngân sách ở lượt đầu → thử lại bằng model dự phòng %@ (trần %.0fs)",
+						 fallback, SXRetryBudget(prefs));
+				model = fallback;
+				retriedWithFallback = YES;
+				retryCount = 0;
+				deadline = CFAbsoluteTimeGetCurrent() + SXRetryBudget(prefs);
+				continue;
+			}
 			completion(nil, [SXHTTP errorWithCode:-1009
 										  message:[NSString stringWithFormat:
 												   @"AI chưa trả lời xong trong %.0f giây (đã %ld vòng công cụ).",
@@ -285,6 +366,7 @@ static void SXAskOpenAIChat(SXPrefs *prefs, NSString *question, NSArray<NSDictio
 					   SXInfo(@"openai", model, lastStatus, rounds, start));
 			return;
 		}
+		attempts++;   // đã qua kiểm tra ngân sách: vòng này sẽ gửi đúng một request
 		// Không stream lại sau khi đã dùng công cụ: vòng tổng hợp cuối thường
 		// ngắn, non-stream cho câu trả lời trọn vẹn trong một lần.
 		BOOL streamThisRound = streamAllowed && rounds == 0;
@@ -318,6 +400,18 @@ static void SXAskOpenAIChat(SXPrefs *prefs, NSString *question, NSArray<NSDictio
 			if (!streamResp) {
 				SXLogWrn(@"llm", @"openai stream lỗi (%@) → non-stream", streamError.localizedDescription);
 				if (SXStreamSalvage(streamError.userInfo[@"sx.partial"], @"openai", model, rounds, start, completion)) return;
+				NSString *rescue = SXRescueModelAfterFailure(prefs, SXProviderOpenAI, model, rounds,
+															 retriedWithFallback, streamError);
+				if (rescue.length) {
+					// Thử lại ngay bằng model dự phòng. Nếu lần này cũng hỏng thì
+					// `retriedWithFallback` đã bật nên nhánh dưới sẽ bỏ stream.
+					model = rescue;
+					retriedWithFallback = YES;
+					retryCount = 0;
+					streamAllowed = prefs.streaming;
+					deadline = CFAbsoluteTimeGetCurrent() + SXRetryBudget(prefs);
+					continue;
+				}
 				streamAllowed = NO;
 				continue;
 			}
@@ -369,6 +463,15 @@ static void SXAskOpenAIChat(SXPrefs *prefs, NSString *question, NSArray<NSDictio
 									   idleTimeout:MIN(30.0, remaining)
 											onData:nil];
 			if (result.error && result.status == 0) {
+				NSString *rescue = SXRescueModelAfterFailure(prefs, SXProviderOpenAI, model, rounds,
+															 retriedWithFallback, result.error);
+				if (rescue.length) {
+					model = rescue;
+					retriedWithFallback = YES;
+					retryCount = 0;
+					deadline = CFAbsoluteTimeGetCurrent() + SXRetryBudget(prefs);
+					continue;
+				}
 				SXLogErr(@"llm", @"openai lỗi mạng: %@", result.error.localizedDescription);
 				completion(nil, result.error, SXInfo(@"openai", model, 0, rounds, start));
 				return;
@@ -376,7 +479,7 @@ static void SXAskOpenAIChat(SXPrefs *prefs, NSString *question, NSArray<NSDictio
 			lastStatus = result.status;
 			if (lastStatus < 200 || lastStatus >= 300) {
 				if (SXShouldRetry(lastStatus, &retryCount, deadline)) continue;
-				NSString *fallback = SXFallbackModel(SXProviderOpenAI);
+				NSString *fallback = SXFallbackModel(SXProviderOpenAI, prefs);
 				if (lastStatus == 404 && rounds == 0 && ![model isEqualToString:fallback]) {
 					SXLogWrn(@"llm", @"model %@ không có trên endpoint (404) → thử %@", model, fallback);
 					model = fallback;
@@ -564,6 +667,8 @@ static void SXAskOpenAIResponses(SXPrefs *prefs, NSString *question, NSArray<NSD
 	NSInteger rounds = 0;
 	NSInteger lastStatus = 0;
 	NSInteger retryCount = 0;
+	BOOL retriedWithFallback = NO;
+	NSInteger attempts = 0;
 	BOOL streamAllowed = prefs.streaming;
 	BOOL allowTemperature = !SXModelRejectsTemperature(model);
 	NSInteger usageIn = 0, usageOut = 0;
@@ -577,6 +682,16 @@ static void SXAskOpenAIResponses(SXPrefs *prefs, NSString *question, NSArray<NSD
 	while (YES) {
 		NSTimeInterval remaining = deadline - CFAbsoluteTimeGetCurrent();
 		if (remaining < 1.0) {
+			NSString *fallback = SXFallbackModel(SXProviderOpenAI, prefs);
+			if (attempts > 0 && SXShouldRetryWithFallback(prefs, model, fallback, rounds, retriedWithFallback)) {
+				SXLogWrn(@"llm", @"responses hết ngân sách ở lượt đầu → thử lại bằng model dự phòng %@ (trần %.0fs)",
+						 fallback, SXRetryBudget(prefs));
+				model = fallback;
+				retriedWithFallback = YES;
+				retryCount = 0;
+				deadline = CFAbsoluteTimeGetCurrent() + SXRetryBudget(prefs);
+				continue;
+			}
 			completion(nil, [SXHTTP errorWithCode:-1009
 									  message:[NSString stringWithFormat:
 											   @"AI chưa trả lời xong trong %.0f giây (đã %ld vòng công cụ).",
@@ -584,7 +699,11 @@ static void SXAskOpenAIResponses(SXPrefs *prefs, NSString *question, NSArray<NSD
 					   SXInfo(@"openai/responses", model, lastStatus, rounds, start));
 			return;
 		}
+		attempts++;   // vòng này sẽ gửi đúng một request
 		BOOL streamThisRound = streamAllowed && rounds == 0;
+		// Tính lại theo model hiện tại: model dự phòng có thể là loại suy luận
+		// (o1/o3/gpt-5) và từ chối `temperature` dù model chính nhận.
+		allowTemperature = !SXModelRejectsTemperature(model);
 
 		NSMutableDictionary *body = [@{@"model": model,
 									   @"input": input,
@@ -617,6 +736,18 @@ static void SXAskOpenAIResponses(SXPrefs *prefs, NSString *question, NSArray<NSD
 				SXLogWrn(@"llm", @"responses stream lỗi (%@) → non-stream", error.localizedDescription);
 				if (error.userInfo[@"sx.partial"] &&
 					SXStreamSalvage(error.userInfo[@"sx.partial"], @"openai/responses", model, rounds, start, completion)) return;
+				NSString *rescue = SXRescueModelAfterFailure(prefs, SXProviderOpenAI, model, rounds,
+															 retriedWithFallback, error);
+				if (rescue.length) {
+					// Thử lại ngay bằng model dự phòng. Nếu lần này cũng hỏng thì
+					// `retriedWithFallback` đã bật nên nhánh dưới sẽ bỏ stream.
+					model = rescue;
+					retriedWithFallback = YES;
+					retryCount = 0;
+					streamAllowed = prefs.streaming;
+					deadline = CFAbsoluteTimeGetCurrent() + SXRetryBudget(prefs);
+					continue;
+				}
 				streamAllowed = NO;
 				continue;
 			}
@@ -672,6 +803,15 @@ static void SXAskOpenAIResponses(SXPrefs *prefs, NSString *question, NSArray<NSD
 									   idleTimeout:MIN(30.0, remaining)
 											onData:nil];
 			if (result.error && result.status == 0) {
+				NSString *rescue = SXRescueModelAfterFailure(prefs, SXProviderOpenAI, model, rounds,
+															 retriedWithFallback, result.error);
+				if (rescue.length) {
+					model = rescue;
+					retriedWithFallback = YES;
+					retryCount = 0;
+					deadline = CFAbsoluteTimeGetCurrent() + SXRetryBudget(prefs);
+					continue;
+				}
 				SXLogErr(@"llm", @"responses lỗi mạng: %@", result.error.localizedDescription);
 				completion(nil, result.error, SXInfo(@"openai/responses", model, 0, rounds, start));
 				return;
@@ -679,7 +819,7 @@ static void SXAskOpenAIResponses(SXPrefs *prefs, NSString *question, NSArray<NSD
 			lastStatus = result.status;
 			if (lastStatus < 200 || lastStatus >= 300) {
 				if (SXShouldRetry(lastStatus, &retryCount, deadline)) continue;
-				NSString *fallback = SXFallbackModel(SXProviderOpenAI);
+				NSString *fallback = SXFallbackModel(SXProviderOpenAI, prefs);
 				if (lastStatus == 404 && rounds == 0 && ![model isEqualToString:fallback]) {
 					SXLogWrn(@"llm", @"responses: model %@ không có (404) → thử %@", model, fallback);
 					model = fallback;
@@ -899,6 +1039,18 @@ static void SXAppendGeminiToolResults(NSMutableArray *contents, SXToolExec execu
 	}
 }
 
+/// URL Gemini dựng theo `model` mỗi lần gọi: khi đổi sang model dự phòng
+/// (404 hoặc retry) request phải đi tới đúng model mới, không dùng lại URL cũ.
+static NSString *SXGeminiURL(NSString *model) {
+	return [NSString stringWithFormat:
+			@"https://generativelanguage.googleapis.com/v1beta/models/%@:generateContent", model];
+}
+
+static NSString *SXGeminiStreamURL(NSString *model) {
+	return [NSString stringWithFormat:
+			@"https://generativelanguage.googleapis.com/v1beta/models/%@:streamGenerateContent?alt=sse", model];
+}
+
 static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary *> *history,
 						NSArray<NSDictionary *> *toolDefs, SXToolExec executor,
 						SXLLMDelta onDelta, SXLLMCompletion completion) {
@@ -908,10 +1060,6 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 					   [NSCharacterSet whitespaceAndNewlineCharacterSet]];
 	if (!model.length) model = @"gemini-2.0-flash";
 	if ([model hasPrefix:@"models/"]) model = [model substringFromIndex:7];
-	NSString *url = [NSString stringWithFormat:
-		@"https://generativelanguage.googleapis.com/v1beta/models/%@:generateContent", model];
-	NSString *streamURL = [NSString stringWithFormat:
-		@"https://generativelanguage.googleapis.com/v1beta/models/%@:streamGenerateContent?alt=sse", model];
 	NSDictionary<NSString *, NSString *> *headers = SXRequestHeaders(prefs, SXProviderGemini, key);
 
 	NSMutableArray *contents = [NSMutableArray array];
@@ -938,6 +1086,8 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 	NSInteger lastStatus = 0;
 	NSInteger retryCount = 0;
 	NSInteger usageIn = 0, usageOut = 0;
+	BOOL retriedWithFallback = NO;
+	NSInteger attempts = 0;
 	BOOL streamAllowed = prefs.streaming;
 
 	SXLogDbg(@"llm", @"gemini → models/%@ (%lu message, %lu tool, temp=%.1f, stream=%d)",
@@ -947,6 +1097,16 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 	while (YES) {
 		NSTimeInterval remaining = deadline - CFAbsoluteTimeGetCurrent();
 		if (remaining < 1.0) {
+			NSString *fallback = SXFallbackModel(SXProviderGemini, prefs);
+			if (attempts > 0 && SXShouldRetryWithFallback(prefs, model, fallback, rounds, retriedWithFallback)) {
+				SXLogWrn(@"llm", @"gemini hết ngân sách ở lượt đầu → thử lại bằng model dự phòng %@ (trần %.0fs)",
+						 fallback, SXRetryBudget(prefs));
+				model = fallback;
+				retriedWithFallback = YES;
+				retryCount = 0;
+				deadline = CFAbsoluteTimeGetCurrent() + SXRetryBudget(prefs);
+				continue;
+			}
 			completion(nil, [SXHTTP errorWithCode:-1009
 										  message:[NSString stringWithFormat:
 												   @"AI chưa trả lời xong trong %.0f giây (đã %ld vòng công cụ).",
@@ -954,6 +1114,7 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 					   SXInfo(@"gemini", model, lastStatus, rounds, start));
 			return;
 		}
+		attempts++;   // vòng này sẽ gửi đúng một request
 		BOOL streamThisRound = streamAllowed && rounds == 0;
 
 		NSMutableDictionary *body = [@{
@@ -970,7 +1131,7 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 			NSTimeInterval streamBudget = MIN(remaining, MAX(4.0, remaining * 0.65));
 			NSError *streamError = nil;
 			NSDictionary *streamResp = [SXStream postJSON:body
-													toURL:streamURL
+													toURL:SXGeminiStreamURL(model)
 												  headers:headers
 												   format:SXStreamFormatGemini
 												  timeout:streamBudget
@@ -980,6 +1141,18 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 			if (!streamResp) {
 				SXLogWrn(@"llm", @"gemini stream lỗi (%@) → non-stream", streamError.localizedDescription);
 				if (SXStreamSalvage(streamError.userInfo[@"sx.partial"], @"gemini", model, rounds, start, completion)) return;
+				NSString *rescue = SXRescueModelAfterFailure(prefs, SXProviderGemini, model, rounds,
+															 retriedWithFallback, streamError);
+				if (rescue.length) {
+					// Thử lại ngay bằng model dự phòng. Nếu lần này cũng hỏng thì
+					// `retriedWithFallback` đã bật nên nhánh dưới sẽ bỏ stream.
+					model = rescue;
+					retriedWithFallback = YES;
+					retryCount = 0;
+					streamAllowed = prefs.streaming;
+					deadline = CFAbsoluteTimeGetCurrent() + SXRetryBudget(prefs);
+					continue;
+				}
 				streamAllowed = NO;
 				continue;
 			}
@@ -1022,9 +1195,18 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 				return;
 			}
 		} else {
-			SXHTTPResult *result = [SXHTTP postURL:url body:body headers:headers
+			SXHTTPResult *result = [SXHTTP postURL:SXGeminiURL(model) body:body headers:headers
 										   timeout:remaining idleTimeout:MIN(30.0, remaining) onData:nil];
 			if (result.error && result.status == 0) {
+				NSString *rescue = SXRescueModelAfterFailure(prefs, SXProviderGemini, model, rounds,
+															 retriedWithFallback, result.error);
+				if (rescue.length) {
+					model = rescue;
+					retriedWithFallback = YES;
+					retryCount = 0;
+					deadline = CFAbsoluteTimeGetCurrent() + SXRetryBudget(prefs);
+					continue;
+				}
 				SXLogErr(@"llm", @"gemini lỗi mạng: %@", result.error.localizedDescription);
 				completion(nil, result.error, SXInfo(@"gemini", model, 0, rounds, start));
 				return;
@@ -1032,7 +1214,7 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 			lastStatus = result.status;
 			if (lastStatus < 200 || lastStatus >= 300) {
 				if (SXShouldRetry(lastStatus, &retryCount, deadline)) continue;
-				NSString *fallback = SXFallbackModel(SXProviderGemini);
+				NSString *fallback = SXFallbackModel(SXProviderGemini, prefs);
 				if (lastStatus == 404 && rounds == 0 && ![model isEqualToString:fallback]) {
 					SXLogWrn(@"llm", @"gemini: model %@ không có (404) → thử %@", model, fallback);
 					model = fallback;

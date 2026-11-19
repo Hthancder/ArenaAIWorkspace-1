@@ -25,6 +25,7 @@
 @property (nonatomic, copy) NSString *headerSignature;
 @property (nonatomic, copy) NSString *testResult;
 @property (nonatomic) BOOL testing;
+- (NSString *)fallbackModelKey;
 @end
 
 /// Đuôi đường dẫn tương ứng giao thức đang chọn — một nơi duy nhất để mọi
@@ -58,6 +59,7 @@ static NSString *SXAPIPathSuffix(SXOpenAIApi api) {
 
 - (NSString *)keyName { return self.provider == SXProviderGemini ? @"geminiKey" : @"openaiKey"; }
 - (NSString *)modelKey { return self.provider == SXProviderGemini ? @"geminiModel" : @"openaiModel"; }
+- (NSString *)fallbackModelKey { return self.provider == SXProviderGemini ? @"geminiFallbackModel" : @"openaiFallbackModel"; }
 - (NSString *)baseKey { return self.provider == SXProviderGemini ? nil : @"openaiBase"; }
 - (NSString *)lastTestKey {
 	return self.provider == SXProviderGemini ? @"lastTest.gemini" : @"lastTest.openai";
@@ -173,6 +175,7 @@ static NSString *SXAPIPathSuffix(SXOpenAIApi api) {
 	// Khoá API và endpoint: cắt khoảng trắng thừa ngay khi gõ xong từng ký tự là
 	// phản cảm (người dùng đang dán giữa chừng) — chỉ cắt khi rời ô.
 	if ([key isEqualToString:self.keyName] || [key isEqualToString:@"openaiBase"]) return;
+	if ([key isEqualToString:self.fallbackModelKey]) [self sx_invalidateTestResult];
 
 	[self sx_storeText:text forKey:key specifier:specifier];
 }
@@ -211,6 +214,26 @@ static NSString *SXAPIPathSuffix(SXOpenAIApi api) {
 	} else if ([key isEqualToString:self.modelKey]) {
 		if (!text.length) {
 			// Mô hình trống = quay về mặc định, không lưu chuỗi rỗng đè lên.
+			[SXPrefs setValue:nil forKey:key];
+			[[SXPrefs shared] reload];
+			[self sx_refreshSummaryRows];
+			[self sx_postPrefsChanged];
+			return;
+		}
+		[self sx_invalidateTestResult];
+	} else if ([key isEqualToString:self.fallbackModelKey]) {
+		if (!text.length) {
+			[SXPrefs setValue:nil forKey:key];
+			[[SXPrefs shared] reload];
+			[self sx_refreshSummaryRows];
+			[self sx_postPrefsChanged];
+			return;
+		}
+		// Bỏ khoảng trắng đầu/cuối: dán kèm khoảng trắng làm model dự phòng bị
+		// 404 đúng vào lúc cần nó nhất (khi retry).
+		text = [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+		textField.text = text;
+		if (!text.length) {
 			[SXPrefs setValue:nil forKey:key];
 			[[SXPrefs shared] reload];
 			[self sx_refreshSummaryRows];

@@ -225,7 +225,7 @@ SiriX (Root — header icon + tên + phụ đề)
 | STT timeout/lỗi | Dùng text Apple | `stt=fallback reason=…` |
 | Không mạng tại capture | Bubble "⏳ Không có mạng" (full) / passthrough (smart) — không đợi timeout | `llm: offline` |
 | LLM 429/5xx | Backoff 0.5s→1.5s (≤2) → lỗi | `llm=retry n` |
-| LLM timeout | `timeoutAction`: bubble ⏳ / keep / retry `fallbackModel`1 lần | `resp: timeout …` |
+| LLM timeout | `timeoutAction`: bubble ⏳ / keep / retry `fallbackModel` 1 lần (trần riêng 20–45 s; giữ Siri gốc, đáp án tới sau qua thông báo) | `resp: timeout …` |
 | AI trả lời rỗng | bubble ⚠️ "AI không trả lời" | `llm: empty` |
 | Stream disconnect giữa chừng | Nếu đã có ≥1 token → complete với phần có; không → coi timeout | `llm: sse cut` |
 | Provider TTS lỗi | Apple đọc (đặt lại speakableText) | `tts=fallback apple` |

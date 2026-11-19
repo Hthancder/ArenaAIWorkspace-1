@@ -1,5 +1,23 @@
 # SiriX — tiến độ thực hiện thiết kế v1.2
 
+**Working tree (chưa phát hành):**
+- Lượt riêng tư không gửi hội thoại cũ (kể cả ngữ cảnh RAM) tới nhà cung cấp và không đưa
+  đáp án trễ vào Notification Center. Câu hỏi hiện tại vẫn gửi tới provider; đây không phải
+  chế độ ẩn danh mạng, log/Siri vẫn có thể xử lý nội dung.
+- Cấu hình model dự phòng riêng cho OpenAI/Gemini; khi model chính trả 404, client thử model
+  dự phòng đã nhập. Để trống vẫn giữ hành vi model dự phòng mặc định. Đã thêm mock regression
+  cho cả hai nhánh (kèm URL Gemini đổi đúng theo model mới — trước đây URL dựng một lần nên
+  fallback Gemini thực tế chưa bao giờ đổi model).
+- `timeoutAction = retry`: lỗi mạng/timeout ở lượt đầu (kể cả rớt stream khi chưa có chữ) →
+  gọi lại **một lần** bằng model dự phòng của provider, trần riêng 20–45 giây; khi hết trần
+  chờ ACE thì giữ Siri gốc và đáp án tới sau đi qua thông báo/Lịch sử như đáp án trễ. Lỗi
+  HTTP (401/400/…) không retry. Settings và trang Gỡ lỗi hiển thị đúng lựa chọn mới. Có mock
+  regression cho OpenAI (non-stream, stream, hết ngân sách, chỉ-một-lần) và Gemini, cùng
+  trường hợp "không retry khi tắt" và "HTTP 401 không retry". Chưa chạy được trên macOS ở
+  phiên này (máy Linux không có Foundation): cần CI macOS xác nhận trước khi phát hành.
+- Có regression assertion cho việc không gửi history riêng tư; cần chạy CI macOS và thử trên
+  thiết bị trước khi phát hành. STT/TTS vẫn chưa hoàn tất.
+
 > **1.1.7 — viết lại từng tính năng Settings, không còn bản vá chồng bản vá.**
 > Mười màn hình Settings được dựng lại trên cùng một bộ khung: dữ liệu đọc trong
 > nền có số thế hệ (kết quả cũ không ghi đè kết quả mới), trạng thái rỗng/lỗi
@@ -83,6 +101,7 @@ Không đổi phiên bản gói sang 1.2 cho đến khi các hạng mục bắt 
 - Tuỳ chọn hiển thị bản Siri gốc khi lệnh AddViews có văn bản; bản gốc không được đưa vào lời đọc.
 - Trò chuyện thử trong Settings với provider đang chọn, không dùng tool và không lưu lịch sử lâu dài.
 - Kiểm tra kết nối chạy nền, dùng đúng provider của trang cấu hình; retry HTTP 429/5xx tối đa hai lần mỗi vòng trên luồng nền.
+- Khi lượt thật hết giờ hoặc lỗi mạng ở lượt đầu, tuỳ chọn `retry` (`timeoutAction`) thử lại một lần bằng model dự phòng; đây là lần gọi thứ hai trên luồng nền sau khi Siri đã được trả lời.
 - Lịch sử lưu trên thiết bị có giới hạn, xem chi tiết/sao chép/xóa từng mục hoặc toàn bộ; lượt ở chế độ không lưu chỉ ở bộ nhớ. Không phải chế độ ẩn danh mạng hoặc log.
 - Thống kê thay/giữ/lỗi/hết giờ và thời gian trung bình có trọng số; có thể xóa riêng. Lưu/đọc kho làm trên hàng đợi nền, dùng lock liên tiến trình và epoch để tránh đáp án cũ phục hồi dữ liệu sau khi xóa.
 

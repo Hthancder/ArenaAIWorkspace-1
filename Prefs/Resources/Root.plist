@@ -263,11 +263,13 @@
 			<array>
 				<string>Bubble “chưa kịp trả lời”</string>
 				<string>Giữ nguyên câu trả lời Siri</string>
+				<string>Thử lại bằng model dự phòng</string>
 			</array>
 			<key>validValues</key>
 			<array>
 				<string>bubble</string>
 				<string>keep</string>
+				<string>retry</string>
 			</array>
 		</dict>
 		<dict>
@@ -406,7 +408,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>“Không lưu lịch sử” chỉ ngăn ghi câu mới xuống máy — không ẩn câu hỏi khỏi nhà cung cấp AI, Siri hay log. Lịch sử đã lưu trước đó vẫn còn cho đến khi bạn xoá.</string>
+			<string>Lượt riêng tư không lưu câu mới, không gửi ngữ cảnh cũ cho AI và không đưa đáp án trễ vào thông báo. Câu hiện tại vẫn được gửi tới nhà cung cấp để trả lời; log và Siri vẫn có thể xử lý nội dung. Lịch sử cũ phải xoá riêng.</string>
 			<key>label</key>
 			<string>Dữ liệu</string>
 		</dict>

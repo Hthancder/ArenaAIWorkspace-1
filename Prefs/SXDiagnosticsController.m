@@ -179,9 +179,19 @@ typedef NS_ENUM(NSInteger, SXDiagnosticLevel) {
 	}
 	[items addObject:[self itemWithTitle:@"Trần chờ Siri" detail:deadlineDetail level:deadlineLevel]];
 
-	NSString *action = [prefs.timeoutAction isEqualToString:@"keep"]
-		? @"Khi hết giờ: giữ câu trả lời Siri gốc" : @"Khi hết giờ: hiện bubble “chưa kịp trả lời”";
-	[items addObject:[self itemWithTitle:@"Khi hết giờ" detail:action level:SXDiagnosticLevelOK]];
+	NSString *action = @"Khi hết giờ: hiện bubble “chưa kịp trả lời”";
+	SXDiagnosticLevel actionLevel = SXDiagnosticLevelOK;
+	if ([prefs.timeoutAction isEqualToString:@"keep"]) {
+		action = @"Khi hết giờ: giữ câu trả lời Siri gốc";
+	} else if ([prefs.timeoutAction isEqualToString:@"retry"]) {
+		action = @"Khi hết giờ: thử lại một lần bằng model dự phòng";
+		if (![prefs fallbackModelForProvider:prefs.provider].length) {
+			action = [action stringByAppendingString:
+				@" — chưa đặt model dự phòng, sẽ dùng mặc định của nhà cung cấp."];
+			actionLevel = SXDiagnosticLevelWarn;
+		}
+	}
+	[items addObject:[self itemWithTitle:@"Khi hết giờ" detail:action level:actionLevel]];
 
 	if (prefs.streaming) {
 		[items addObject:[self itemWithTitle:@"Streaming bật"

@@ -1,6 +1,7 @@
 // Chạy trên macOS Foundation: kiểm thử SXIntercept thật với ACE/LLM giả.
 #import <Foundation/Foundation.h>
 #import "SXIntercept.h"
+#import "SXDisplayPolicy.h"
 #import "SXPrefs.h"
 #import "SXLLM.h"
 #import "SXTools.h"
@@ -15,6 +16,7 @@ static SXReplyMode testMode = SXReplyModeFull;
 static NSString *testTimeoutAction = @"bubble";
 static NSString *testTriggerMode = @"auto";
 static NSString *lastQuestion;
+static NSArray *lastHistory;
 static BOOL testShowOriginal;
 static BOOL testIncognito;
 
@@ -24,6 +26,7 @@ static BOOL testIncognito;
 - (NSString *)triggerMode { return testTriggerMode; }
 - (SXReplyMode)mode { return testMode; }
 - (NSTimeInterval)responseTimeout { return 2; }
+- (NSTimeInterval)replyDeadline { return 2; }
 - (BOOL)markdown { return NO; }
 - (BOOL)hideWebCards { return YES; }
 - (BOOL)showOriginal { return testShowOriginal; }
@@ -41,7 +44,7 @@ static BOOL testIncognito;
 @end
 @implementation SXLLM
 + (void)askQuestion:(NSString *)question history:(NSArray *)history tools:(NSArray *)tools executor:(SXToolExec)executor completion:(SXLLMCompletion)completion {
-	lastQuestion = [question copy]; (void)history; (void)tools; (void)executor;
+	lastQuestion = [question copy]; lastHistory = [history copy]; (void)tools; (void)executor;
 	pendingCompletion = [completion copy];
 	dispatch_semaphore_signal(requestStarted);
 }
@@ -114,6 +117,13 @@ static FakeSayIt *sayCommand(void) {
 }
 int main(void) {
 	@autoreleasepool {
+		assert(![SXDisplayPolicy shouldSendDeferredAnswerWhenEnabled:NO privateTurn:NO]);
+		assert([SXDisplayPolicy shouldSendDeferredAnswerWhenEnabled:YES privateTurn:NO]);
+		assert(![SXDisplayPolicy shouldSendDeferredAnswerWhenEnabled:YES privateTurn:YES]);
+		// "retry": giữ Siri gốc để chờ đáp án của lần thử lại (tới qua thông báo).
+		assert(![SXDisplayPolicy timeoutBubbleMessageInMode:SXReplyModeFull action:@"retry"]);
+		assert([[SXDisplayPolicy timeoutBubbleMessageInMode:SXReplyModeFull action:@"bubble"]
+				hasPrefix:@"⏳"]);
 		requestStarted = dispatch_semaphore_create(0);
 		SXIntercept *intercept = [SXIntercept shared];
 
@@ -211,6 +221,11 @@ int main(void) {
 		begin(@"question keep");
 		say = sayCommand(); assert(![intercept handleIncomingCommand:say]);
 		assert([say.message isEqualToString:@"Siri gốc"]);
+		// Chính sách retry: cùng đường "giữ Siri gốc" như keep, không bubble.
+		testTimeoutAction = @"retry";
+		begin(@"question retry");
+		say = sayCommand(); assert(![intercept handleIncomingCommand:say]);
+		assert([say.message isEqualToString:@"Siri gốc"]);
 		testTimeoutAction = @"bubble";
 		testMode = SXReplyModeSmart;
 		begin(@"question smart error");
@@ -237,6 +252,7 @@ int main(void) {
 		NSUInteger savedCount = [[[SXStore shared] snapshot][@"history"] count];
 		testIncognito = YES;
 		begin(@"private question");
+		assert(lastHistory.count == 0); // không gửi lịch sử cũ cho provider trong lượt riêng tư
 		pendingCompletion(@"private answer", nil, nil);
 		say = sayCommand(); assert([intercept handleIncomingCommand:say]);
 		dispatch_sync([SXStore queue], ^{});
