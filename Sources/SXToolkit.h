@@ -18,6 +18,10 @@ FOUNDATION_EXPORT NSString *SXToolCategoryTitle(SXToolCategory category);
 /// (được đưa nguyên văn cho model để nó tự sửa tham số và thử lại).
 FOUNDATION_EXPORT NSString *const SXToolErrorDomain;
 
+/// JSON một dòng từ dictionary (dùng cho thân message `tool` của OpenAI và
+/// cho message công cụ của chat thử).
+FOUNDATION_EXPORT NSString *SXToolJSONString(NSDictionary *object);
+
 /// Handler trả về @{ @“result”: NSString } hoặc nil + *error.
 typedef NSDictionary * _Nullable (^SXToolHandler)(NSDictionary *arguments,
 												  NSError * _Nullable * _Nullable error);
@@ -44,6 +48,10 @@ typedef NSDictionary * _Nullable (^SXToolHandler)(NSDictionary *arguments,
 @property (nonatomic) NSTimeInterval timeout;   // mặc định 8 s
 @property (nonatomic) BOOL requiresMainThread;  // chạm UIKit/pasteboard
 @property (nonatomic) BOOL sideEffect;          // thay đổi trạng thái máy (mở app, chép…)
+/// Công cụ chỉ đọc trạng thái máy (giờ, pin…): gọi hai lần trong cùng một lượt
+/// đều phải chạy. Mặc định NO — các công cụ còn lại được cache trong lượt để
+/// model lặp lại cùng tham số không tốn thêm thời gian.
+@property (nonatomic) BOOL liveData;
 
 /// @{ @“type”: @“function”, @“function”: @{ @“name”, @“description”, @“parameters” } }
 - (NSDictionary *)functionPayload;

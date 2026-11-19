@@ -14,7 +14,9 @@ SiriX_FILES = \
 	Sources/SXLog.m \
 	Sources/SXStore.m \
 	Sources/SXPrefs.m \
+	Sources/SXPrefsShared.m \
 	Sources/SXHeaders.m \
+	Sources/SXHTTP.m \
 	Sources/SXTools.m \
 	Sources/SXToolkit.m \
 	Sources/SXToolCatalog.m \

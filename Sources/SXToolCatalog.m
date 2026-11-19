@@ -2,6 +2,7 @@
 #import "SXToolkit.h"
 #import "SXLog.h"
 #import "SXPrefs.h"
+#import "SXHTTP.h"
 #import <UIKit/UIKit.h>
 #import <objc/message.h>
 #import <SystemConfiguration/SystemConfiguration.h>
@@ -221,65 +222,6 @@ static NSString *SXPageTitle(NSData *data) {
 	return value.length ? value : nil;
 }
 
-/// Không đi theo redirect, cắt body ở 2 MB.
-@interface SXWebReceiver : NSObject <NSURLSessionDataDelegate>
-@property (nonatomic, copy) void (^onFinish)(NSData *data, NSInteger status, NSString *mime, NSError *error);
-@property (nonatomic, strong) NSURLSession *session;
-@property (nonatomic, strong) NSMutableData *buffer;
-@property (nonatomic) NSInteger status;
-@property (nonatomic, copy) NSString *mime;
-@property (nonatomic) BOOL finished;
-@end
-
-@implementation SXWebReceiver
-
-- (void)finish:(NSError *)error {
-	if (self.finished) return;
-	self.finished = YES;
-	void (^callback)(NSData *, NSInteger, NSString *, NSError *) = self.onFinish;
-	self.onFinish = nil;
-	[self.session finishTasksAndInvalidate];
-	self.session = nil;
-	if (callback) callback(self.buffer ?: [NSData data], self.status, self.mime, error);
-}
-
-- (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task
-	willPerformHTTPRedirection:(NSHTTPURLResponse *)response
-				newRequest:(NSURLRequest *)request
-		 completionHandler:(void (^)(NSURLRequest * _Nullable))completionHandler {
-	(void)session; (void)task; (void)response; (void)request;
-	completionHandler(nil); // giữ nguyên 3xx: không lặng lẽ đi tới host khác
-}
-
-- (void)URLSession:(NSURLSession *)session dataTask:(NSURLSessionDataTask *)dataTask
-	didReceiveResponse:(NSURLResponse *)response
-	 completionHandler:(void (^)(NSURLSessionResponseDisposition))completionHandler {
-	(void)session; (void)dataTask;
-	if ([response isKindOfClass:[NSHTTPURLResponse class]]) self.status = [(NSHTTPURLResponse *)response statusCode];
-	self.mime = response.MIMEType;
-	completionHandler(NSURLSessionResponseAllow);
-}
-
-- (void)URLSession:(NSURLSession *)session dataTask:(NSURLSessionDataTask *)dataTask
-	didReceiveData:(NSData *)data {
-	(void)session;
-	if (!self.buffer) self.buffer = [NSMutableData data];
-	if (self.buffer.length + data.length > 2 * 1024 * 1024) {
-		[dataTask cancel];
-		[self finish:SXErr(413, @"Trang lớn hơn 2 MB — không tải tiếp.")];
-		return;
-	}
-	[self.buffer appendData:data];
-}
-
-- (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task
-	didCompleteWithError:(NSError *)error {
-	(void)session; (void)task;
-	[self finish:error];
-}
-
-@end
-
 static NSDictionary *SXWebFetch(NSDictionary *arguments, NSError **error) {
 	NSString *raw = SXTrimmed(arguments[@"url"]);
 	if (!raw.length) {
@@ -297,65 +239,37 @@ static NSDictionary *SXWebFetch(NSDictionary *arguments, NSError **error) {
 		return nil;
 	}
 
-	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
-	request.HTTPMethod = @"GET";
-	request.timeoutInterval = 7;
-	[request setValue:@"Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) SiriX"
-   forHTTPHeaderField:@"User-Agent"];
-	[request setValue:@"text/html,application/json,text/plain;q=0.9,*/*;q=0.5"
-   forHTTPHeaderField:@"Accept"];
-
-	SXWebReceiver *receiver = [[SXWebReceiver alloc] init];
-	dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
-	__block NSData *body = nil;
-	__block NSInteger status = 0;
-	__block NSString *mime = nil;
-	__block NSError *transport = nil;
-	receiver.onFinish = ^(NSData *data, NSInteger code, NSString *type, NSError *failure) {
-		body = data;
-		status = code;
-		mime = [type copy];
-		transport = failure;
-		dispatch_semaphore_signal(semaphore);
-	};
-
-	NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration ephemeralSessionConfiguration];
-	configuration.timeoutIntervalForRequest = 7;
-	configuration.HTTPMaximumConnectionsPerHost = 2;
-	NSURLSession *session = [NSURLSession sessionWithConfiguration:configuration
-														  delegate:receiver
-													 delegateQueue:nil];
-	receiver.session = session;
-	[[session dataTaskWithRequest:request] resume];
-
-	if (dispatch_semaphore_wait(semaphore, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8 * NSEC_PER_SEC))) != 0) {
-		receiver.onFinish = nil;
-		[session invalidateAndCancel];
-		if (error) *error = SXErr(504, @"Trang không phản hồi trong 8 giây.");
+	// Không đi theo redirect (SXHTTP.getURL không theo): một bookmark công khai
+	// có thể chuyển hướng vào mạng nội bộ, nên 3xx được trả về cho model biết.
+	SXHTTPResult *response = [SXHTTP getURL:url.absoluteString
+									headers:@{@"Accept": @"text/html,application/json,text/plain;q=0.9,*/*;q=0.5"}
+									timeout:8.0
+								idleTimeout:6.0
+								   maxBytes:2 * 1024 * 1024];
+	if (response.error) {
+		if (error) *error = SXErr(response.error.code ?: 502, [NSString stringWithFormat:
+			@"Không tải được trang: %@", response.error.localizedDescription]);
 		return nil;
 	}
-	if (transport) {
-		if (error) *error = SXErr(502, [NSString stringWithFormat:@"Không tải được trang: %@",
-									   transport.localizedDescription]);
-		return nil;
-	}
+	NSInteger status = response.status;
 	if (status >= 300 && status < 400) {
 		if (error) *error = SXErr(409, [NSString stringWithFormat:
 			@"Trang chuyển hướng (HTTP %ld). Hãy gọi lại với URL đích nếu biết.", (long)status]);
 		return nil;
 	}
 	if (status < 200 || status >= 300) {
-		if (error) *error = SXErr(status ? status : 502,
-								  [NSString stringWithFormat:@"Máy chủ trả về HTTP %ld.", (long)status]);
+		if (error) *error = SXErr(status ?: 502, [NSString stringWithFormat:
+			@"Máy chủ trả về HTTP %ld.", (long)status]);
 		return nil;
 	}
 
-	BOOL isJSON = [mime containsString:@"json"];
+	NSData *body = response.body ?: [NSData data];
+	BOOL isJSON = [response.mimeType containsString:@"json"];
 	NSString *text = nil;
 	NSString *title = nil;
 	if (isJSON) {
-		NSData *pretty = body;
 		id json = [NSJSONSerialization JSONObjectWithData:body options:0 error:NULL];
+		NSData *pretty = body;
 		if (json) {
 			NSData *formatted = [NSJSONSerialization dataWithJSONObject:json
 															   options:NSJSONWritingPrettyPrinted
@@ -918,6 +832,7 @@ void SXInstallBuiltinTools(void) {
 		}];
 		device.timeout = 3.0;
 		device.requiresMainThread = NO;
+		device.liveData = YES;   // giờ/pin phải mới mỗi lần gọi trong cùng lượt
 		[SXToolkit registerTool:device];
 
 		SXTool *read = [SXTool toolWithName:@"clipboard_read"

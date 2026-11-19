@@ -82,6 +82,11 @@ static void SXRetireValues(NSArray *values) {
 }
 @end
 
+/// Kế thừa từ SXPrefs (Shared) — khai báo để `-reload` gọi được.
+@interface SXPrefs (ReloadHelpers)
+- (NSSet<NSString *> *)loadDisabledToolsForReload;
+@end
+
 @implementation SXPrefs
 
 + (instancetype)shared {
@@ -244,7 +249,7 @@ static double SXClamp(double v, double lo, double hi) {
 	_timeoutAction = [[self stringFor:@"timeoutAction" default:@"bubble"] isEqualToString:@"keep"]
 		? @"keep" : @"bubble";
 	_maxToolRounds = (NSInteger)SXClamp((double)[self integerFor:@"maxToolRounds" default:3], 1, 4);
-	_disabledTools = [self loadDisabledTools];
+	_disabledTools = [self loadDisabledToolsForReload];
 	_openaiHeaders = SXHeadersNormalized([self valueFor:@"openaiHeaders"]);
 	_geminiHeaders = SXHeadersNormalized([self valueFor:@"geminiHeaders"]);
 
@@ -260,158 +265,6 @@ static double SXClamp(double v, double lo, double hi) {
 		 (unsigned long)_openaiHeaders.count, (unsigned long)_geminiHeaders.count,
 			 SXRedactKey(_openaiKey), SXRedactKey(_geminiKey),
 			 _customPrompt.length > 0 ? [NSString stringWithFormat:@"%lu ký tự", (unsigned long)_customPrompt.length] : @"(mặc định)");
-}
-
-
-#pragma mark - Công cụ
-
-/// Tên công cụ theo ba công tắc của bản 1.1.x (để người dùng nâng cấp không bị mất lựa chọn).
-static NSArray<NSString *> *SXLegacyToolNames(NSString *legacyKey) {
-	if ([legacyKey isEqualToString:@"toolSystemInfo"]) return @[@"device_info"];
-	if ([legacyKey isEqualToString:@"toolClipboard"]) {
-		return @[@"clipboard_read", @"clipboard_write", @"clipboard_clear"];
-	}
-	if ([legacyKey isEqualToString:@"toolFetchURL"]) return @[@"web_fetch"];
-	return @[];
-}
-
-- (NSSet<NSString *> *)loadDisabledTools {
-	id stored = [self valueFor:@"toolsDisabled"];
-	if ([stored isKindOfClass:[NSArray class]]) {
-		NSMutableSet *set = [NSMutableSet set];
-		for (id name in (NSArray *)stored) {
-			if ([name isKindOfClass:[NSString class]] && [(NSString *)name length]) [set addObject:name];
-		}
-		return [set copy];
-	}
-	// Chưa có key mới: chuyển ba công tắc cũ sang danh sách tắt (nếu người dùng đã tắt).
-	NSMutableSet *set = [NSMutableSet set];
-	for (NSString *legacy in @[@"toolSystemInfo", @"toolClipboard", @"toolFetchURL"]) {
-		id value = [self valueFor:legacy];
-		if (!value) continue;
-		BOOL enabled = [value isKindOfClass:[NSNumber class]] ? [value boolValue] : YES;
-		if (!enabled) [set addObjectsFromArray:SXLegacyToolNames(legacy)];
-	}
-	return [set copy];
-}
-
-- (BOOL)isToolEnabled:(NSString *)name {
-	if (!name.length) return NO;
-	return ![_disabledTools containsObject:name];
-}
-
-+ (void)setToolNamed:(NSString *)name enabled:(BOOL)enabled {
-	if (!name.length) return;
-	NSSet<NSString *> *current = [SXPrefs shared].disabledTools ?: [NSSet set];
-	NSMutableSet<NSString *> *disabled = [current mutableCopy];
-	if (enabled) [disabled removeObject:name];
-	else [disabled addObject:name];
-	[self setDisabledTools:disabled];
-	SXLogInf(@"pref", @"công cụ %@: %@", name, enabled ? @"bật" : @"tắt");
-}
-
-+ (void)setDisabledTools:(NSSet<NSString *> *)names {
-	NSArray *sorted = [[names allObjects] sortedArrayUsingSelector:@selector(compare:)];
-	[SXPrefs setValue:(sorted.count ? sorted : @[]) forKey:@"toolsDisabled"];
-	[[SXPrefs shared] reload];
-}
-
-#pragma mark - Header tuỳ chỉnh
-
-- (NSArray<NSDictionary *> *)headersForProvider:(SXProvider)provider {
-	NSArray *stored = provider == SXProviderGemini ? _geminiHeaders : _openaiHeaders;
-	return [stored isKindOfClass:[NSArray class]] ? stored : @[];
-}
-
-+ (void)setHeaders:(NSArray<NSDictionary *> *)headers forProvider:(SXProvider)provider {
-	NSArray *clean = SXHeadersNormalized(headers);
-	NSString *key = provider == SXProviderGemini ? @"geminiHeaders" : @"openaiHeaders";
-	[self setValue:clean forKey:key];
-	[[SXPrefs shared] reload];
-	SXLogInf(@"pref", @"header %@: %lu mục (%lu đang gửi)", SXProviderDisplayName(provider),
-			 (unsigned long)clean.count,
-			 (unsigned long)SXHeadersApplied(clean).count);
-}
-
-- (NSString *)headersSummaryForProvider:(SXProvider)provider {
-	return SXHeadersSummary([self headersForProvider:provider]);
-}
-
-#pragma mark - Truy vấn theo provider hiện tại
-
-- (NSString *)activeAPIKey {
-	// Cắt khoảng trắng/dấu xuống dòng thừa — dán khóa từ web thường dính "\n" ở đuôi.
-	NSString *key = _provider == SXProviderGemini ? _geminiKey : _openaiKey;
-	return [key stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-}
-
-- (NSString *)activeModel {
-	NSString *model = _provider == SXProviderGemini ? _geminiModel : _openaiModel;
-	model = [model stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-	if (!model.length) {
-		return _provider == SXProviderGemini ? @"gemini-2.0-flash" : @"gpt-4o-mini";
-	}
-	return model;
-}
-
-- (NSString *)activeBaseURL {
-	NSString *base = [SXPrefs normalizedBaseURL:_openaiBase];
-	return base.length ? base : @"https://api.openai.com/v1";
-}
-
-- (NSString *)systemPrompt {
-	NSString *base = _customPrompt.length ? _customPrompt : SXDefaultSystemPrompt();
-	if ([base containsString:@"{"] && [base containsString:@"}"]) {
-		static NSDateFormatter *dateFormatter;
-		static dispatch_once_t once;
-		dispatch_once(&once, ^{
-			dateFormatter = [[NSDateFormatter alloc] init];
-			dateFormatter.locale = [NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
-			dateFormatter.dateFormat = @"yyyy-MM-dd";
-		});
-		base = [base stringByReplacingOccurrencesOfString:@"{date}"
-											   withString:[dateFormatter stringFromDate:NSDate.date]];
-		base = [base stringByReplacingOccurrencesOfString:@"{device}"
-											   withString:[NSString stringWithFormat:@"%@ (iOS %@)",
-														   UIDevice.currentDevice.model ?: @"iPhone",
-														   UIDevice.currentDevice.systemVersion ?: @"?"]];
-		base = [base stringByReplacingOccurrencesOfString:@"{lang}"
-											   withString:NSLocale.currentLocale.languageCode ?: @"vi"];
-	}
-	return base;
-}
-
-#pragma mark - Tóm tắt trạng thái
-
-- (NSString *)statusSummary {
-	if (!_enabled) return @"Đã tắt";
-	if (!self.activeAPIKey.length) return @"Thiếu khóa API";
-	return @"Sẵn sàng";
-}
-
-- (NSString *)activeProviderName {
-	return SXProviderDisplayName(_provider);
-}
-
-- (NSString *)providerSummary {
-	NSArray<NSDictionary *> *headers = [self headersForProvider:_provider];
-	NSUInteger active = SXHeadersApplied(headers).count;
-	if (active) {
-		return [NSString stringWithFormat:@"%@ · %@ · %lu header", self.activeProviderName,
-				self.activeModel, (unsigned long)active];
-	}
-	return [NSString stringWithFormat:@"%@ · %@", self.activeProviderName, self.activeModel];
-}
-
-- (NSString *)replySummary {
-	NSString *mode = _mode == SXReplyModeFull ? @"Thay thế mọi câu" : @"Thông minh";
-	NSString *trigger = [_triggerMode isEqualToString:@"prefix"] ? @"tiền tố @ai" : @"tự động";
-	return [NSString stringWithFormat:@"%@ · %@ · chờ %.0fs", mode, trigger, _responseTimeout];
-}
-
-- (NSString *)historySummary {
-	if (_incognito) return @"Không lưu";
-	return [NSString stringWithFormat:@"Đang lưu · %ld câu gần nhất", (long)_contextTurns];
 }
 
 @end

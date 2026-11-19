@@ -1,35 +1,191 @@
 #import "SXStream.h"
 #import "SXLog.h"
+#import "SXHTTP.h"
 
-static const NSTimeInterval kSXStreamTimeout = 60;
-
-/// Receiver delegate — NSURLSession không có API dataTask với 3 block
-/// (nhận response/data/completion), nên dùng delegate thật (iOS API đúng).
-@interface SXStreamReceiver : NSObject <NSURLSessionDataDelegate>
-@property (nonatomic, copy) void (^onResponse)(NSInteger status);
-@property (nonatomic, copy) void (^onData)(NSData *data);
-@property (nonatomic, copy) void (^onComplete)(NSError *error);
+/// Bộ phân tích SSE chạy theo từng mẩu byte.
+///
+/// Bản cũ gom toàn bộ thân trả về rồi mới tách dòng, nên "stream" thực chất chỉ
+/// là non-stream có thêm một chặng chờ: token đầu tiên đến lúc nào người dùng
+/// cũng không thấy. Ở đây mỗi mẩu byte được xử lý ngay khi tới; một dòng chưa
+/// hoàn chỉnh được giữ lại (kể cả khi nó bị cắt giữa ký tự UTF-8) để ghép với
+/// mẩu sau.
+@interface SXSSEParser : NSObject
+@property (nonatomic) SXStreamFormat format;
+@property (nonatomic, copy, nullable) SXStreamDelta onDelta;
+@property (nonatomic, strong) NSMutableString *content;
+@property (nonatomic, strong) NSMutableArray<NSDictionary *> *geminiCalls;
+@property (nonatomic, strong) NSMutableDictionary<NSNumber *, NSMutableDictionary *> *partialCalls;
+@property (nonatomic) BOOL sawToolCalls;
+@property (nonatomic) NSInteger firstTokenMs;
+@property (nonatomic, copy, nullable) NSString *errorText;
 @end
 
-@implementation SXStreamReceiver
+@implementation SXSSEParser {
+	NSMutableData *_lineBuffer;
+	CFAbsoluteTime _start;
+	BOOL _finished;
+}
 
-- (void)URLSession:(NSURLSession *)session dataTask:(NSURLSessionDataTask *)dataTask
-	didReceiveResponse:(NSURLResponse *)response
-	completionHandler:(void (^)(NSURLSessionResponseDisposition))completionHandler {
-	if (self.onResponse) {
-		self.onResponse([(NSHTTPURLResponse *)response statusCode]);
+- (instancetype)initWithFormat:(SXStreamFormat)format onDelta:(SXStreamDelta)onDelta {
+	self = [super init];
+	if (self) {
+		_format = format;
+		_onDelta = [onDelta copy];
+		_content = [NSMutableString string];
+		_geminiCalls = [NSMutableArray array];
+		_partialCalls = [NSMutableDictionary dictionary];
+		_firstTokenMs = -1;
+		_lineBuffer = [NSMutableData data];
+		_start = CFAbsoluteTimeGetCurrent();
 	}
-	completionHandler(NSURLSessionResponseAllow);
+	return self;
 }
 
-- (void)URLSession:(NSURLSession *)session dataTask:(NSURLSessionDataTask *)dataTask
-	didReceiveData:(NSData *)data {
-	if (self.onData) self.onData(data);
+- (void)consumeData:(NSData *)data {
+	if (_finished || !data.length) return;
+	[_lineBuffer appendData:data];
+	// Tách theo byte '\n' tại chỗ: dòng có thể kết thúc giữa hai mẩu.
+	const uint8_t *bytes = _lineBuffer.bytes;
+	NSUInteger length = _lineBuffer.length;
+	NSUInteger start = 0;
+	for (NSUInteger i = 0; i < length; i++) {
+		if (bytes[i] != '\n') continue;
+		NSUInteger lineLength = i - start;
+		if (lineLength && bytes[i > start ? i - 1 : i] == '\r' && i > start) lineLength--;
+		NSData *lineData = [_lineBuffer subdataWithRange:NSMakeRange(start, lineLength)];
+		start = i + 1;
+		[self consumeLine:lineData];
+		if (_finished) break;
+	}
+	if (start > 0) [_lineBuffer replaceBytesInRange:NSMakeRange(0, start) withBytes:NULL length:0];
+	if (_finished) [_lineBuffer setLength:0];
 }
 
-- (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task
-	didCompleteWithError:(NSError *)error {
-	if (self.onComplete) self.onComplete(error);
+- (void)finish {
+	if (_finished) return;
+	if (_lineBuffer.length) {
+		NSData *rest = [_lineBuffer copy];
+		[_lineBuffer setLength:0];
+		[self consumeLine:rest];
+	}
+	_finished = YES;
+}
+
+- (void)consumeLine:(NSData *)lineData {
+	if (_finished || !lineData.length) return;
+	NSString *line = [[NSString alloc] initWithData:lineData encoding:NSUTF8StringEncoding];
+	if (!line) line = [[NSString alloc] initWithData:lineData encoding:NSISOLatin1StringEncoding];
+	if (!line.length) return;
+	line = [line stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+	if (![line hasPrefix:@"data:"]) return;
+	NSString *chunk = [[line substringFromIndex:5] stringByTrimmingCharactersInSet:
+					   [NSCharacterSet whitespaceCharacterSet]];
+	if (!chunk.length || [chunk isEqualToString:@"[DONE]"]) return;
+
+	id json = [NSJSONSerialization JSONObjectWithData:[chunk dataUsingEncoding:NSUTF8StringEncoding]
+											  options:0 error:NULL];
+	if (![json isKindOfClass:[NSDictionary class]]) return;
+
+	if (self.format == SXStreamFormatOpenAI) {
+		[self consumeOpenAIChunk:(NSDictionary *)json];
+	} else {
+		[self consumeGeminiChunk:(NSDictionary *)json];
+	}
+}
+
+- (void)appendPiece:(NSString *)piece {
+	if (!piece.length) return;
+	if (_firstTokenMs < 0) {
+		_firstTokenMs = (NSInteger)((CFAbsoluteTimeGetCurrent() - _start) * 1000.0);
+	}
+	[_content appendString:piece];
+	if (self.onDelta) self.onDelta(piece, _firstTokenMs);
+}
+
+- (void)consumeOpenAIChunk:(NSDictionary *)json {
+	id error = json[@"error"];
+	if (error && !self.errorText.length) {
+		id message = [error isKindOfClass:[NSDictionary class]] ? ((NSDictionary *)error)[@"message"] : error;
+		if ([message isKindOfClass:[NSString class]]) self.errorText = message;
+	}
+	NSArray *choices = [json[@"choices"] isKindOfClass:[NSArray class]] ? json[@"choices"] : nil;
+	if (!choices.count || ![choices[0] isKindOfClass:[NSDictionary class]]) return;
+	id delta = ((NSDictionary *)choices[0])[@"delta"];
+	if (![delta isKindOfClass:[NSDictionary class]]) return;
+	NSDictionary *deltaDict = (NSDictionary *)delta;
+
+	NSArray *calls = [deltaDict[@"tool_calls"] isKindOfClass:[NSArray class]] ? deltaDict[@"tool_calls"] : nil;
+	if (calls.count) {
+		self.sawToolCalls = YES;
+		for (id item in calls) {
+			if (![item isKindOfClass:[NSDictionary class]]) continue;
+			NSDictionary *call = (NSDictionary *)item;
+			NSInteger index = [call[@"index"] isKindOfClass:[NSNumber class]]
+				? [call[@"index"] integerValue] : (NSInteger)self.partialCalls.count;
+			NSMutableDictionary *entry = self.partialCalls[@(index)];
+			if (!entry) {
+				entry = [@{@"id": @"", @"name": @"", @"arguments": @""} mutableCopy];
+				self.partialCalls[@(index)] = entry;
+			}
+			id identifier = call[@"id"];
+			if ([identifier isKindOfClass:[NSString class]] && [identifier length]) entry[@"id"] = identifier;
+			id function = call[@"function"];
+			if ([function isKindOfClass:[NSDictionary class]]) {
+				id name = ((NSDictionary *)function)[@"name"];
+				if ([name isKindOfClass:[NSString class]] && [name length]) entry[@"name"] = name;
+				id fragment = ((NSDictionary *)function)[@"arguments"];
+				if ([fragment isKindOfClass:[NSString class]]) {
+					entry[@"arguments"] = [(NSString *)entry[@"arguments"] stringByAppendingString:fragment];
+				}
+			}
+		}
+		return;
+	}
+	id piece = deltaDict[@"content"];
+	if ([piece isKindOfClass:[NSString class]]) [self appendPiece:piece];
+}
+
+- (void)consumeGeminiChunk:(NSDictionary *)json {
+	id error = json[@"error"];
+	if (error && !self.errorText.length) {
+		id message = [error isKindOfClass:[NSDictionary class]] ? ((NSDictionary *)error)[@"message"] : error;
+		if ([message isKindOfClass:[NSString class]]) self.errorText = message;
+	}
+	NSArray *candidates = [json[@"candidates"] isKindOfClass:[NSArray class]] ? json[@"candidates"] : nil;
+	if (!candidates.count || ![candidates[0] isKindOfClass:[NSDictionary class]]) return;
+	id content = ((NSDictionary *)candidates[0])[@"content"];
+	id parts = [content isKindOfClass:[NSDictionary class]] && [content[@"parts"] isKindOfClass:[NSArray class]]
+		? content[@"parts"] : nil;
+	for (id part in parts) {
+		if (![part isKindOfClass:[NSDictionary class]]) continue;
+		id functionCall = ((NSDictionary *)part)[@"functionCall"];
+		if ([functionCall isKindOfClass:[NSDictionary class]]) {
+			self.sawToolCalls = YES;
+			[self.geminiCalls addObject:functionCall];
+			continue;
+		}
+		id piece = ((NSDictionary *)part)[@"text"];
+		if ([piece isKindOfClass:[NSString class]]) [self appendPiece:piece];
+	}
+}
+
+- (NSArray<NSDictionary *> *)orderedToolCalls {
+	NSMutableArray<NSDictionary *> *calls = [NSMutableArray array];
+	NSArray<NSNumber *> *indexes = [[self.partialCalls allKeys] sortedArrayUsingSelector:@selector(compare:)];
+	for (NSNumber *index in indexes) {
+		NSDictionary *entry = self.partialCalls[index];
+		NSString *name = [entry[@"name"] isKindOfClass:[NSString class]] ? entry[@"name"] : nil;
+		if (!name.length) continue;
+		NSString *arguments = [entry[@"arguments"] isKindOfClass:[NSString class]] ? entry[@"arguments"] : @"";
+		NSString *identifier = [entry[@"id"] isKindOfClass:[NSString class]] && [entry[@"id"] length]
+			? entry[@"id"] : name;
+		[calls addObject:@{
+			@"id": identifier,
+			@"type": @"function",
+			@"function": @{@"name": name, @"arguments": arguments.length ? arguments : @"{}"},
+		}];
+	}
+	return calls;
 }
 
 @end
@@ -41,210 +197,66 @@ static const NSTimeInterval kSXStreamTimeout = 60;
 				   headers:(NSDictionary<NSString *, NSString *> *)headers
 					format:(SXStreamFormat)format
 				   timeout:(NSTimeInterval)timeoutSeconds
+			   idleTimeout:(NSTimeInterval)idleTimeout
+				   onDelta:(SXStreamDelta)onDelta
 					 error:(NSError **)outErr {
-	NSURL *url = [NSURL URLWithString:urlString];
-	if (!url) {
-		if (outErr) *outErr = [NSError errorWithDomain:@"com.sirix.llm" code:-1
-			userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithFormat:@"URL không hợp lệ: %@", urlString]}];
-		return nil;
-	}
-	NSError *jsonError = nil;
-	NSData *payload = [NSJSONSerialization dataWithJSONObject:body options:0 error:&jsonError];
-	if (!payload) {
-		if (outErr) *outErr = jsonError ?: [NSError errorWithDomain:@"com.sirix.llm" code:-2
-			userInfo:@{NSLocalizedDescriptionKey: @"Không tạo được JSON yêu cầu."}];
-		return nil;
-	}
-
-	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
-	request.HTTPMethod = @"POST";
-	request.HTTPBody = payload;
-	NSTimeInterval timeout = MIN(kSXStreamTimeout, MAX(1.5, timeoutSeconds));
-	request.timeoutInterval = timeout;
-	[request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
-	[request setValue:@"text/event-stream" forHTTPHeaderField:@"Accept"];
-	[request setValue:[NSString stringWithFormat:@"SiriX/%@", SX_VERSION] forHTTPHeaderField:@"User-Agent"];
-	[headers enumerateKeysAndObjectsUsingBlock:^(NSString *key, NSString *value, BOOL *stop) {
-		[request setValue:value forHTTPHeaderField:key];
-	}];
-
-	NSMutableString *content = [NSMutableString string];
-	NSMutableString *errorBody = [NSMutableString string];
-	// Gộp tool/function call NGAY TRONG stream: nhờ vậy lượt có công cụ không phải
-	// gửi lại request lần hai (trước đây làm vậy nên mọi lượt dùng công cụ đều
-	// chậm gấp đôi và thường về muộn hơn ngân sách chờ của Siri).
-	NSMutableDictionary<NSNumber *, NSMutableDictionary *> *partialCalls = [NSMutableDictionary dictionary];
-	NSMutableArray<NSDictionary *> *geminiCalls = [NSMutableArray array];
-	__block BOOL sawToolCalls = NO;
+	SXSSEParser *parser = [[SXSSEParser alloc] initWithFormat:format onDelta:onDelta];
+	NSMutableData *errorBody = [NSMutableData data];
 	__block NSInteger status = 0;
-	__block NSError *taskError = nil;
-	__block NSInteger firstTokenMs = -1;
-	CFAbsoluteTime start = CFAbsoluteTimeGetCurrent();
 
-	NSMutableData *buffer = [NSMutableData data];
-	__block NSString *pendingTail = @"";
+	NSMutableDictionary<NSString *, NSString *> *requestHeaders = [headers mutableCopy]
+		?: [NSMutableDictionary dictionary];
+	requestHeaders[@"Accept"] = @"text/event-stream";
 
-	void (^consumeLine)(NSString *) = ^(NSString *line) {
-		NSString *trimmed = [line stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-		if (![trimmed hasPrefix:@"data:"]) return;
-		NSString *chunkText = [[trimmed substringFromIndex:5] stringByTrimmingCharactersInSet:
-							   [NSCharacterSet whitespaceCharacterSet]];
-		if (!chunkText.length || [chunkText isEqualToString:@"[DONE]"]) return;
-
-		id json = [NSJSONSerialization JSONObjectWithData:[chunkText dataUsingEncoding:NSUTF8StringEncoding]
-												  options:0 error:NULL];
-		if (![json isKindOfClass:[NSDictionary class]]) return;
-
-		if (format == SXStreamFormatOpenAI) {
-			NSArray *choices = [json[@"choices"] isKindOfClass:[NSArray class]] ? json[@"choices"] : nil;
-			id delta = (choices.count && [choices[0] isKindOfClass:[NSDictionary class]])
-				? choices[0][@"delta"] : nil;
-			if (![delta isKindOfClass:[NSDictionary class]]) return;
-			NSArray *deltaCalls = [delta[@"tool_calls"] isKindOfClass:[NSArray class]] ? delta[@"tool_calls"] : nil;
-			if (deltaCalls.count) {
-				sawToolCalls = YES;
-				for (id item in deltaCalls) {
-					if (![item isKindOfClass:[NSDictionary class]]) continue;
-					NSInteger index = [item[@"index"] isKindOfClass:[NSNumber class]]
-						? [item[@"index"] integerValue] : (NSInteger)partialCalls.count;
-					NSMutableDictionary *entry = partialCalls[@(index)];
-					if (!entry) {
-						entry = [@{@"id": @"", @"name": @"", @"arguments": @""} mutableCopy];
-						partialCalls[@(index)] = entry;
-					}
-					id identifier = item[@"id"];
-					if ([identifier isKindOfClass:[NSString class]] && [identifier length]) entry[@"id"] = identifier;
-					id function = item[@"function"];
-					if ([function isKindOfClass:[NSDictionary class]]) {
-						id name = function[@"name"];
-						if ([name isKindOfClass:[NSString class]] && [name length]) entry[@"name"] = name;
-						id fragment = function[@"arguments"];
-						if ([fragment isKindOfClass:[NSString class]]) {
-							entry[@"arguments"] = [(NSString *)entry[@"arguments"] stringByAppendingString:fragment];
-						}
-					}
-				}
-				return;
-			}
-			NSString *piece = [delta[@"content"] isKindOfClass:[NSString class]] ? delta[@"content"] : nil;
-			if (piece.length) {
-				if (firstTokenMs < 0) firstTokenMs = (NSInteger)((CFAbsoluteTimeGetCurrent() - start) * 1000);
-				[content appendString:piece];
-			}
-		} else {
-			NSArray *candidates = [json[@"candidates"] isKindOfClass:[NSArray class]] ? json[@"candidates"] : nil;
-			id cand = (candidates.count && [candidates[0] isKindOfClass:[NSDictionary class]])
-				? candidates[0] : nil;
-			id candContent = [cand isKindOfClass:[NSDictionary class]] ? cand[@"content"] : nil;
-			NSArray *parts = ([candContent isKindOfClass:[NSDictionary class]]
-							  && [candContent[@"parts"] isKindOfClass:[NSArray class]])
-				? candContent[@"parts"] : nil;
-			for (id part in parts) {
-				if (![part isKindOfClass:[NSDictionary class]]) continue;
-				id functionCall = part[@"functionCall"];
-				if ([functionCall isKindOfClass:[NSDictionary class]]) {
-					sawToolCalls = YES;
-					[geminiCalls addObject:functionCall];
-					continue;
-				}
-				NSString *piece = [part[@"text"] isKindOfClass:[NSString class]] ? part[@"text"] : nil;
-				if (piece.length) {
-					if (firstTokenMs < 0) firstTokenMs = (NSInteger)((CFAbsoluteTimeGetCurrent() - start) * 1000);
-					[content appendString:piece];
-				}
-			}
-		}
-	};
-
-	void (^consumeBuffer)(BOOL) = ^(BOOL flush) {
-		if (!buffer.length && !flush) return;
-		NSString *text = [[NSString alloc] initWithData:buffer encoding:NSUTF8StringEncoding];
-		if (!text) {
-			// UTF-8 bị cắt giữa chunk — giữ buffer chờ chunk kế.
-			if (flush) {
-				NSString *whole = [[NSString alloc] initWithData:buffer encoding:NSISOLatin1StringEncoding];
-				for (NSString *line in [whole componentsSeparatedByString:@"\n"]) consumeLine(line);
-				[buffer setLength:0];
-			}
-			return;
-		}
-		[buffer setLength:0];
-		NSString *joined = [pendingTail stringByAppendingString:text];
-		NSArray<NSString *> *lines = [joined componentsSeparatedByString:@"\n"];
-		pendingTail = flush ? @"" : (lines.lastObject ?: @"");
-		NSUInteger count = lines.count - (flush ? 0 : 1);
-		for (NSUInteger i = 0; i < count; i++) consumeLine(lines[i]);
-	};
-
-	dispatch_semaphore_t sem = dispatch_semaphore_create(0);
-	SXStreamReceiver *receiver = [[SXStreamReceiver alloc] init];
-	receiver.onResponse = ^(NSInteger statusCode) {
-		status = statusCode;
-	};
-	receiver.onData = ^(NSData *data) {
-		// Không dừng ở tool call đầu tiên: tham số được gửi thành nhiều mảnh.
-		[buffer appendData:data];
-		if (status >= 400 && errorBody.length < 4096) {
-			NSString *errChunk = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-			if (errChunk) [errorBody appendString:errChunk];
-		}
-		consumeBuffer(NO);
-	};
-	receiver.onComplete = ^(NSError *error) {
-		taskError = error;
-		consumeBuffer(YES);
-		dispatch_semaphore_signal(sem);
-	};
-	NSURLSession *session = [NSURLSession
-		sessionWithConfiguration:[NSURLSessionConfiguration ephemeralSessionConfiguration]
-						delegate:receiver
-				   delegateQueue:nil]; // nil = hàng đợi tuần tự do session tạo
-	[[session dataTaskWithRequest:request] resume];
-
-	long waited = dispatch_semaphore_wait(sem,
-		dispatch_time(DISPATCH_TIME_NOW, (int64_t)((timeout + 2.0) * NSEC_PER_SEC)));
-	[session finishTasksAndInvalidate];
-	if (waited != 0) {
-		if (outErr) *outErr = [NSError errorWithDomain:@"com.sirix.llm" code:-8
-			userInfo:@{NSLocalizedDescriptionKey: @"SSE hết thời gian chờ."}];
-		return nil;
+	SXHTTPResult *result = [SXHTTP postURL:urlString
+									  body:body
+								   headers:requestHeaders
+								   timeout:timeoutSeconds
+							   idleTimeout:idleTimeout
+								  onStatus:^(NSInteger code) {
+		status = code;
 	}
-	// Lỗi transport MỌI lúc (kể cả giữa chừng) → trả lỗi, KHÔNG bao giờ “thành công”
-	// với nội dung bị cắt cụt (SSE đứt giữa chừng = đáp án thiếu chữ).
-	if (taskError) {
-		if (outErr) *outErr = taskError;
-		return nil;
-	}
-
-	NSMutableArray<NSDictionary *> *toolCalls = [NSMutableArray array];
-	NSArray<NSNumber *> *indexes = [[partialCalls allKeys] sortedArrayUsingSelector:@selector(compare:)];
-	for (NSNumber *index in indexes) {
-		NSDictionary *entry = partialCalls[index];
-		NSString *name = [entry[@"name"] isKindOfClass:[NSString class]] ? entry[@"name"] : nil;
-		if (!name.length) continue;
-		NSString *arguments = [entry[@"arguments"] isKindOfClass:[NSString class]] ? entry[@"arguments"] : @"";
-		NSString *identifier = [entry[@"id"] isKindOfClass:[NSString class]] && [entry[@"id"] length]
-			? entry[@"id"] : name;
-		[toolCalls addObject:@{
-			@"id": identifier,
-			@"type": @"function",
-			@"function": @{
-				@"name": name,
-				@"arguments": arguments.length ? arguments : @"{}",
-			},
-		}];
-	}
-
-	NSMutableDictionary *result = [NSMutableDictionary dictionaryWithDictionary:@{
-		@"content": [content copy],
-		@"sawToolCalls": @(sawToolCalls),
-		@"status": @(status),
-		@"firstTokenMs": @(firstTokenMs),
-		@"toolCalls": toolCalls,
-		@"functionCalls": geminiCalls,
+									onData:^BOOL(NSData *data) {
+		// Lỗi HTTP: gom thân để lấy thông điệp giải thích (thường là một JSON).
+		if (status >= 400) {
+			if (errorBody.length < 64 * 1024) [errorBody appendData:data];
+			return YES;
+		}
+		[parser consumeData:data];
+		return YES;
 	}];
-	if (errorBody.length) result[@"errorText"] = [errorBody copy];
-	return result;
+	[parser finish];
+
+	if (result.error && result.status == 0) {
+		if (outErr) *outErr = result.error;
+		return nil;
+	}
+	if (result.status < 200 || result.status >= 300) {
+		// Mã lỗi thật → trả về cho SXLLM quyết định (retry/fallback/báo lỗi).
+		NSMutableDictionary *response = [NSMutableDictionary dictionaryWithDictionary:@{
+			@"content": [parser.content copy] ?: @"",
+			@"sawToolCalls": @(parser.sawToolCalls),
+			@"status": @(result.status),
+			@"firstTokenMs": @(parser.firstTokenMs),
+			@"toolCalls": [NSArray array],
+			@"functionCalls": [NSArray array],
+		}];
+		NSString *text = errorBody.length && parser.errorText.length == 0
+			? [[NSString alloc] initWithData:errorBody encoding:NSUTF8StringEncoding] : nil;
+		NSString *finalError = parser.errorText.length ? parser.errorText : text;
+		if (finalError.length) response[@"errorText"] = finalError;
+		return response;
+	}
+
+	NSDictionary *response = @{
+		@"content": [parser.content copy] ?: @"",
+		@"sawToolCalls": @(parser.sawToolCalls),
+		@"status": @(result.status),
+		@"firstTokenMs": @(parser.firstTokenMs),
+		@"toolCalls": [parser orderedToolCalls],
+		@"functionCalls": parser.geminiCalls ?: @[],
+	};
+	return response;
 }
 
 @end

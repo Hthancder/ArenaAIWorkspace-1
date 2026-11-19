@@ -177,12 +177,13 @@ static NSMutableDictionary<NSString *, NSDictionary *> *SXToolCallCache(void) {
 	if (!tools.count) return @"";
 
 	NSMutableArray<NSString *> *lines = [NSMutableArray array];
-	[lines addObject:@"Bạn CÓ công cụ thật. Khi câu trả lời cần dữ liệu hoặc thao tác thực tế, hãy gọi công cụ "
-					  @"thay vì đoán; không bao giờ bịa kết quả của công cụ."];
-	[lines addObject:@"Danh sách công cụ:"];
+	[lines addObject:@"Bạn CÓ công cụ thật trên máy. Khi câu trả lời cần dữ liệu hoặc thao tác thực tế, "
+					  @"hãy gọi công cụ thay vì đoán; không bao giờ bịa kết quả của công cụ."];
+	[lines addObject:@"Danh sách công cụ (tên — việc nó làm — tham số):"];
 	for (SXTool *tool in tools) {
-		[lines addObject:[NSString stringWithFormat:@"- %@(%@): %@", tool.name,
-						  [tool parameterSignature], tool.prompt]];
+		NSString *when = tool.prompt.length ? tool.prompt : tool.summary;
+		[lines addObject:[NSString stringWithFormat:@"- %@: %@ | %@ | tham số: %@",
+						  tool.name, tool.summary ?: @"", when, [tool parameterSignature]]];
 	}
 	[lines addObject:@"Quy tắc: gọi tối thiểu lượt cần thiết; tham số phải đúng kiểu; nếu công cụ báo lỗi, "
 					  @"đọc kỹ thông báo để sửa tham số hoặc đổi cách làm; sau khi có kết quả, trả lời người dùng "
@@ -253,6 +254,16 @@ static NSDictionary *SXNormalizedArguments(SXTool *tool, NSDictionary *raw, NSEr
 		return nil;
 	}
 	return arguments;
+}
+
+NSString *SXToolJSONString(NSDictionary *object) {
+	NSData *data = [NSJSONSerialization dataWithJSONObject:object ?: @{} options:0 error:NULL];
+	return data ? [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] : @"{}";
+}
+
+/// JSON mà đường OpenAI gửi làm `content` cho message role=tool.
+static NSString *SXToolJSONPayload(NSString *text) {
+	return SXToolJSONString(@{@"result": text ?: @""});
 }
 
 static NSString *SXToolCacheKey(NSString *name, NSDictionary *arguments) {
@@ -351,13 +362,16 @@ static NSDictionary *SXRunHandler(SXTool *tool, NSDictionary *arguments, NSError
 	}
 
 	NSString *cacheKey = SXToolCacheKey(tool.name, cleanArguments);
+	BOOL cacheable = !tool.liveData && !tool.sideEffect;
 	NSLock *lock = SXToolkitLock();
-	[lock lock];
-	NSDictionary *cached = SXToolCallCache()[cacheKey];
-	[lock unlock];
-	if (cached) {
-		SXLogDbg(@"tool", @"%@ — dùng lại kết quả trong cùng lượt", tool.name);
-		return cached;
+	if (cacheable) {
+		[lock lock];
+		NSDictionary *cached = SXToolCallCache()[cacheKey];
+		[lock unlock];
+		if (cached) {
+			SXLogDbg(@"tool", @"%@ — dùng lại kết quả trong cùng lượt", tool.name);
+			return cached;
+		}
 	}
 
 	CFAbsoluteTime began = CFAbsoluteTimeGetCurrent();
@@ -389,14 +403,19 @@ static NSDictionary *SXRunHandler(SXTool *tool, NSDictionary *arguments, NSError
 		text = [[text substringToIndex:kMaxResult] stringByAppendingString:@"\n…(đã cắt bớt)"];
 		truncated = YES;
 	}
-	NSDictionary *result = @{@"result": text};
+	// Hai khoá cùng một kết quả: "result" là văn bản (API cũ, chat thử, test),
+	// "json" là JSON `{"result": …}` — đường OpenAI gửi nguyên chuỗi này làm
+	// `content` của message `tool`, model đọc được đúng cấu trúc nó mong đợi.
+	NSDictionary *result = @{@"result": text, @"json": SXToolJSONPayload(text)};
 
 	SXLogDbg(@"tool", @"%@ → %ld ms, %lu ký tự%@", tool.name, (long)elapsedMs,
 			 (unsigned long)text.length, truncated ? @" (cắt)" : @"");
 
-	[lock lock];
-	if (SXToolCallCache().count < 128) SXToolCallCache()[cacheKey] = result;
-	[lock unlock];
+	if (cacheable) {
+		[lock lock];
+		if (SXToolCallCache().count < 128) SXToolCallCache()[cacheKey] = result;
+		[lock unlock];
+	}
 	return result;
 }
 

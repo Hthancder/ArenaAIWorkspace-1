@@ -24,6 +24,39 @@ FOUNDATION_EXPORT NSString *SXProviderDisplayName(SXProvider provider);
 /// Model gợi ý cho từng nhà cung cấp: @[ @{@"model", @"title", @"hint"} ].
 FOUNDATION_EXPORT NSArray<NSDictionary *> *SXModelPresets(SXProvider provider);
 
+#if defined(SX_TESTING) && !defined(SX_TEST_USE_REAL_PREFS)
+/// Bản thay thế cho test: lớp giả cùng tên (tests/intercept_test.m) khai báo
+/// `@implementation SXPrefs` với các giá trị cố định; chỉ cần những selector
+/// dưới đây tồn tại. Phần API dùng chung vẫn lấy từ category `SharedAPI`.
+@interface SXPrefs : NSObject
+@property (nonatomic, readonly) BOOL enabled;
+@property (nonatomic, readonly) SXReplyMode mode;
+@property (nonatomic, readonly) SXProvider provider;
+@property (nonatomic, readonly, copy) NSString *triggerMode;
+@property (nonatomic, readonly) double temperature;
+@property (nonatomic, readonly) NSInteger contextTurns;
+@property (nonatomic, readonly) NSTimeInterval responseTimeout;
+@property (nonatomic, readonly, copy) NSString *timeoutAction;
+@property (nonatomic, readonly) BOOL markdown;
+@property (nonatomic, readonly) BOOL hideWebCards;
+@property (nonatomic, readonly) BOOL showOriginal;
+@property (nonatomic, readonly) BOOL incognito;
+@property (nonatomic, readonly) BOOL speakErrors;
+@property (nonatomic, readonly) BOOL streaming;
+@property (nonatomic, readonly) BOOL verbose;
+@property (nonatomic, readonly, copy) NSString *customPrompt;
+@property (nonatomic, readonly) NSInteger maxToolRounds;
+@property (nonatomic, readonly, copy) NSSet<NSString *> *disabledTools;
+@property (nonatomic, readonly, copy) NSArray<NSDictionary *> *openaiHeaders;
+@property (nonatomic, readonly, copy) NSArray<NSDictionary *> *geminiHeaders;
+@property (nonatomic, readonly, copy) NSString *openaiKey;
+@property (nonatomic, readonly, copy) NSString *openaiBase;
+@property (nonatomic, readonly, copy) NSString *openaiModel;
+@property (nonatomic, readonly, copy) NSString *geminiKey;
+@property (nonatomic, readonly, copy) NSString *geminiModel;
+@end
+#else
+/// Lớp thật (SXPrefs.m): đọc CFPreferences + file fallback.
 @interface SXPrefs : NSObject
 
 + (instancetype)shared;
@@ -81,26 +114,34 @@ FOUNDATION_EXPORT NSArray<NSDictionary *> *SXModelPresets(SXProvider provider);
 @property (nonatomic, readonly, copy) NSArray<NSDictionary *> *openaiHeaders;
 @property (nonatomic, readonly, copy) NSArray<NSDictionary *> *geminiHeaders;
 
-/// Header đang cấu hình cho một nhà cung cấp.
+
+
+@end
+
+/// Phần API đặt trong `SXPrefs (Shared)` (SXPrefsShared.m) — dùng chung cho bản
+/// thật và bản test, nên khai báo nằm ngoài khối triển khai ở trên.
+
+#endif // SX_TESTING
+
+@interface SXPrefs (SharedAPI)
+/// Header đang cấu hình cho một nhà cung cấp (đã lọc, chỉ mục đang bật).
 - (NSArray<NSDictionary *> *)headersForProvider:(SXProvider)provider;
-/// Lưu danh sách header (được chuẩn hoá lại trước khi ghi) + reload ngay.
-+ (void)setHeaders:(NSArray<NSDictionary *> *)headers forProvider:(SXProvider)provider;
 /// "2 header · đang gửi tất cả" — nhãn cho trang cấu hình.
 - (NSString *)headersSummaryForProvider:(SXProvider)provider;
-
-/// Công cụ có đang bật không (dùng cho màn hình Cài đặt → Công cụ).
+/// Công cụ có đang bật không (màn hình Cài đặt → Công cụ).
 - (BOOL)isToolEnabled:(NSString *)name;
+/// Lưu danh sách header (chuẩn hoá lại trước khi ghi) + reload ngay.
++ (void)setHeaders:(NSArray<NSDictionary *> *)headers forProvider:(SXProvider)provider;
 /// Bật/tắt một công cụ và ghi ngay xuống prefs.
 + (void)setToolNamed:(NSString *)name enabled:(BOOL)enabled;
-/// Ghi cả danh sách công cụ bị tắt trong MỘT lần (dùng cho nút “Bật lại tất cả”).
+/// Ghi cả danh sách công cụ bị tắt trong MỘT lần (“Bật lại tất cả”).
 + (void)setDisabledTools:(NSSet<NSString *> *)names;
 
+/// Prompt hệ thống hiện hành (đã thay {date}/{device}/{lang}).
+- (NSString *)systemPrompt;
 - (nullable NSString *)activeAPIKey;
 - (NSString *)activeModel;
 - (NSString *)activeBaseURL;
-- (NSString *)systemPrompt;
-
-#pragma mark - Tóm tắt trạng thái cho giao diện
 
 /// "Sẵn sàng" / "Đã tắt" / "Thiếu khóa API".
 @property (nonatomic, readonly, copy) NSString *statusSummary;
@@ -111,7 +152,6 @@ FOUNDATION_EXPORT NSArray<NSDictionary *> *SXModelPresets(SXProvider provider);
 /// "Đang lưu · 8 câu gần nhất" hoặc "Không lưu".
 @property (nonatomic, readonly, copy) NSString *historySummary;
 @property (nonatomic, readonly, copy) NSString *activeProviderName;
-
 @end
 
 NS_ASSUME_NONNULL_END

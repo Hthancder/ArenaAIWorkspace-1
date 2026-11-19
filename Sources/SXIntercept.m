@@ -350,7 +350,9 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 	NSCondition *_condition;
 	uint64_t _generation;
 	BOOL _pending;
-	BOOL _consumed; // quyết định đã chọn cho lượt này (không chỉ cho một lệnh ACE)
+	/// Quyết định đã chọn cho lượt này — áp cho MỌI lệnh AddViews/SayIt cùng hội
+	/// thoại, không chỉ lệnh đầu tiên.
+	BOOL _decided;
 	NSString *_decisionDisplay;
 	NSString *_decisionSpeech;
 	NSTimeInterval _decisionTime;
@@ -362,7 +364,7 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 	NSString *_historyEpoch;
 	NSString *_statsEpoch;
 	NSNumber *_llmMs;
-	NSHashTable *_handledCommands; // cùng object có thể đi qua cả hai hook
+	NSHashTable *_handledCommands;
 	BOOL _ready;
 	BOOL _errored;
 	BOOL _actionSeen;
@@ -373,8 +375,8 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 	NSMutableArray<NSDictionary *> *_history;
 	NSString *_lastCaptureText;
 	NSTimeInterval _lastCaptureTime;
-	NSTimeInterval _captureTime; // mốc0 của ngân sách chờ AI (v1.1)
-	NSTimeInterval _lastProgressAt; // lần cuối có tiến triển (tool/round) — gia hạn chờ ACE
+	NSTimeInterval _captureTime;
+	NSTimeInterval _lastProgressAt;
 }
 - (void)noteToolProgress;
 @end
@@ -394,25 +396,29 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 	self = [super init];
 	if (self) {
 		_condition = [[NSCondition alloc] init];
-		_lastProgressAt = 0;
 		_history = [NSMutableArray array];
-		_handledCommands = [NSHashTable hashTableWithOptions:NSPointerFunctionsWeakMemory | NSPointerFunctionsObjectPointerPersonality];
+		_handledCommands = [NSHashTable hashTableWithOptions:
+			NSPointerFunctionsWeakMemory | NSPointerFunctionsObjectPointerPersonality];
 		SXRegisterHostTools();
 	}
 	return self;
 }
 
 - (void)setup {
+#ifndef SX_TESTING
 	int token = 0;
 	notify_register_dispatch("com.sirix.tweak/resetHistory", &token, dispatch_get_main_queue(), ^(int t) {
+		(void)t;
 		[[SXIntercept shared] clearHistoryMemory];
 	});
+#endif
 }
 
 #pragma mark - Câu hỏi
 
 - (void)noteQuestion:(NSString *)text source:(NSString *)source {
-	NSString *clean = [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+	NSString *clean = [text stringByTrimmingCharactersInSet:
+					   [NSCharacterSet whitespaceAndNewlineCharacterSet]];
 	if (!clean.length) {
 		SXLogDbg(@"capture", @"(%@) văn bản rỗng — bỏ qua", source);
 		return;
@@ -426,7 +432,7 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 	NSString *normalized = [whitespace stringByReplacingMatchesInString:clean
 															   options:0
 																 range:NSMakeRange(0, clean.length)
-														   withTemplate:@" "].lowercaseString;
+														  withTemplate:@" "].lowercaseString;
 
 	SXPrefs *prefs = [SXPrefs shared];
 	[_condition lock];
@@ -436,19 +442,24 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 		return;
 	}
 	NSTimeInterval now = CFAbsoluteTimeGetCurrent();
-	if (_lastCaptureText && [_lastCaptureText isEqualToString:normalized] && now - _lastCaptureTime < 2.5) {
+	// Cùng một câu có thể đi qua ba hook (nhận giọng nói, AFConnection, AFConversation).
+	// Chỉ bỏ khi đúng là cùng một câu trong một khoảng rất ngắn — trước đây cửa sổ
+	// 2,5 giây làm người dùng hỏi lại cùng câu bị coi là trùng và không nhận trả lời.
+	if (_lastCaptureText && [_lastCaptureText isEqualToString:normalized] && now - _lastCaptureTime < 1.0) {
 		[_condition unlock];
-		SXLogDbg(@"capture", @"trùng lặp trong %.1f giây (nguồn %@)", now - _lastCaptureTime, source);
+		SXLogDbg(@"capture", @"trùng lặp trong %.2f giây (nguồn %@)", now - _lastCaptureTime, source);
 		return;
 	}
 	_lastCaptureText = normalized;
 	_lastCaptureTime = now;
 
-	// Prefix mode mặc định để Siri xử lý; luôn hủy lượt cũ khi bỏ qua để
-	// không gắn đáp án cũ vào một yêu cầu không có tiền tố.
+	// Chế độ tiền tố: câu không có @ai do Siri xử lý và luôn huỷ lượt cũ để
+	// đáp án cũ không gắn vào yêu cầu không có tiền tố.
 	if ([prefs.triggerMode isEqualToString:@"prefix"]) {
 		NSString *lower = clean.lowercaseString;
-		BOOL hasAI = [lower hasPrefix:@"@ai"] && (lower.length == 3 || [[NSCharacterSet whitespaceAndNewlineCharacterSet] characterIsMember:[lower characterAtIndex:3]]);
+		BOOL hasAI = [lower hasPrefix:@"@ai"] &&
+			(lower.length == 3 || [[NSCharacterSet whitespaceAndNewlineCharacterSet]
+								   characterIsMember:[lower characterAtIndex:3]]);
 		if (!hasAI) {
 			_generation++;
 			_pending = NO;
@@ -457,7 +468,8 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 			SXLogInf(@"capture", @"bỏ qua câu không có tiền tố @ai — dùng Siri gốc (%@)", source);
 			return;
 		}
-		clean = [[clean substringFromIndex:3] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+		clean = [[clean substringFromIndex:3] stringByTrimmingCharactersInSet:
+				 [NSCharacterSet whitespaceAndNewlineCharacterSet]];
 		if (!clean.length) {
 			_generation++;
 			_pending = NO;
@@ -474,7 +486,7 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 	_captureTime = now;
 	_lastProgressAt = now;
 	_pending = YES;
-	_consumed = NO;
+	_decided = NO;
 	_decisionDisplay = nil;
 	_decisionSpeech = nil;
 	_decisionTime = 0;
@@ -494,10 +506,12 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 	_answerDisplay = nil;
 	_answerError = nil;
 	NSArray<NSDictionary *> *historySnapshot = [_history copy];
-	[_condition broadcast]; // đánh thức các lượt chờ của câu hỏi trước
+	[_condition broadcast]; // đánh thức lượt đang chờ của câu hỏi trước
 
-	if (prefs.incognito) SXLogInf(@"capture", @"câu hỏi #%llu (%@): [không lưu lịch sử]", (unsigned long long)myGeneration, source);
-	else SXLogInf(@"capture", @"câu hỏi #%llu (%@): “%@”", (unsigned long long)myGeneration, source, clean);
+	if (prefs.incognito) SXLogInf(@"capture", @"câu hỏi #%llu (%@): [không lưu lịch sử]",
+								  (unsigned long long)myGeneration, source);
+	else SXLogInf(@"capture", @"câu hỏi #%llu (%@): “%@”",
+				  (unsigned long long)myGeneration, source, clean);
 	[_condition unlock];
 
 	dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
@@ -513,27 +527,32 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 		}
 		[self->_condition unlock];
 		if (stale) return;
+
 		NSArray *requestHistory = privateTurn ? historySnapshot : (stored[@"history"] ?: historySnapshot);
 		NSUInteger maxTurns = (NSUInteger)[SXPrefs shared].contextTurns;
-		if (requestHistory.count > maxTurns) requestHistory = [requestHistory subarrayWithRange:NSMakeRange(requestHistory.count - maxTurns, maxTurns)];
+		if (requestHistory.count > maxTurns) {
+			requestHistory = [requestHistory subarrayWithRange:
+							  NSMakeRange(requestHistory.count - maxTurns, maxTurns)];
+		}
 
 		SXToolExec executor = ^NSDictionary *(NSString *name, NSDictionary *arguments, NSError **error) {
 			// Mỗi lần gọi công cụ là một mốc tiến triển: hook ACE đang chờ sẽ được
-			// gia hạn thêm 3 giây thay vì tưởng model bị treo rồi hiện bubble hết giờ.
+			// gia hạn thay vì tưởng model bị treo rồi hiện bubble hết giờ.
 			[self noteToolProgress];
 			return [SXTools execute:name arguments:arguments error:error];
 		};
 		[SXLLM askQuestion:clean
 				   history:requestHistory
 					 tools:[SXTools definitions]
-				   executor:executor
+				  executor:executor
 				completion:^(NSString *answer, NSError *error, NSDictionary *info) {
 			[self applyAnswer:answer error:error info:info forGeneration:myGeneration];
 		}];
 	});
 }
 
-- (void)applyAnswer:(NSString *)answer error:(NSError *)error info:(NSDictionary *)info forGeneration:(uint64_t)generation {
+- (void)applyAnswer:(NSString *)answer error:(NSError *)error info:(NSDictionary *)info
+	  forGeneration:(uint64_t)generation {
 	[_condition lock];
 	if (generation != _generation) {
 		[_condition unlock];
@@ -546,12 +565,10 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 		_errored = YES;
 		_answerError = error;
 	} else {
-		// Bản hiển thị: giữ nguyên văn (render markdown lúc hiển thị), cắt an toàn.
 		NSString *raw = [answer stringByTrimmingCharactersInSet:
 						 [NSCharacterSet whitespaceAndNewlineCharacterSet]];
 		if (raw.length > 4000) raw = [[raw substringToIndex:4000] stringByAppendingString:@"…"];
 		_answerDisplay = raw;
-		// Bản đọc: gỡ markdown + cắt 800 (đề phòng TTS/LibreSpeech).
 		_answer = SXSanitizeAnswer(raw);
 		if (_answerDisplay.length && _answer.length) {
 			_ready = YES;
@@ -559,7 +576,6 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 					 (unsigned long long)generation,
 					 (unsigned long)_answerDisplay.length, (unsigned long)_answer.length);
 		} else {
-			// Rỗng sau khi xử lý → errored (không bao giờ hiện bubble trống).
 			_errored = YES;
 			_answerError = [NSError errorWithDomain:@"com.sirix.llm" code:-6
 										   userInfo:@{NSLocalizedDescriptionKey: @"Đáp án rỗng sau khi xử lý."}];
@@ -584,22 +600,21 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 - (BOOL)handleIncomingCommand:(id)command {
 	if (!command || ![SXPrefs shared].enabled) return NO;
 	NSString *className = NSStringFromClass([command class]);
-	// Ghi cả luồng: nếu hook chạy trên luồng chính thì mọi giây chờ AI ở đây
-	// đều là giây giao diện bị đứng — log giúp xác định đúng ca lỗi.
 	SXLogDbg(@"hook", @"lệnh ACE %@ (main=%d)", className, NSThread.isMainThread ? 1 : 0);
 
 	if (SXIsActionClass(className)) {
 		[_condition lock];
 		if (_pending) {
 			_actionSeen = YES;
-			[_condition broadcast]; // đánh thức luồng đang chờ — thoát ngay, không giữ ACE
+			[_condition broadcast];
 		}
 		[_condition unlock];
 		SXLogDbg(@"resp", @"tác vụ hệ thống — cho Siri gốc xử lý: %@", className);
 		return NO;
 	}
 
-	BOOL looksLikeResponse = [className containsString:@"AddViews"] || [className containsString:@"SayIt"];
+	BOOL looksLikeResponse = [className containsString:@"AddViews"] ||
+							 [className containsString:@"SayIt"];
 	if (!looksLikeResponse) {
 		SXLogDbg(@"resp", @"bỏ qua lệnh không liên quan: %@", className);
 		return NO;
@@ -638,27 +653,26 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 	// Tác vụ Apple luôn ưu tiên, kể cả chế độ thay mọi câu. Kiểm tra lại sau
 	// khi chờ vì một luồng khác có thể nhận lệnh tác vụ trong lúc này.
 	if (_actionSeen) {
-		_consumed = YES;
+		_decided = YES;
 		_decisionDisplay = nil;
 		[_condition unlock];
 		SXLogInf(@"resp", @"%@: có tác vụ hệ thống — giữ Siri gốc (%@)", source, className);
 		return NO;
 	}
 
-	if (!_consumed) {
-		// Chặn luồng ACE có giới hạn: 6s cơ bản, cộng thêm 3s mỗi khi có TIẾN TRIỂN
-		// (model vừa gọi công cụ / vừa chạy xong một vòng) nhưng tổng không quá 9s
-		// và không quá ngân sách người dùng đặt. Nhờ vậy lượt có gọi công cụ không
-		// bị cắt oan thành "AI trả lời quá muộn" rồi hiện bubble sai.
+	if (!_decided) {
+		// Trần chờ trên luồng ACE. Ngân sách người dùng đặt là trần tổng; mỗi
+		// lần model có tiến triển (chạy công cụ) thì mốc chờ được đẩy thêm 3
+		// giây, nhưng vẫn không vượt quá trần tổng và không giữ hội thoại quá
+		// lâu (Siri tự đóng khi quá chậm). Hook trên luồng chính dùng trần thấp
+		// hơn vì mỗi giây chờ là một giây giao diện đứng yên.
 		NSTimeInterval budget = MAX(2.0, prefs.responseTimeout);
-		NSTimeInterval baseWait = MIN(budget, 6.0);
-		// Nếu hook chạy trên luồng chính thì mỗi giây chờ là một giây giao diện
-		// đứng → trần thấp hơn. Log "main=1" giúp xác nhận trên thiết bị.
-		NSTimeInterval hardCap = MIN(budget, NSThread.isMainThread ? 6.5 : 9.0);
+		NSTimeInterval hardCap = MIN(budget, NSThread.isMainThread ? 8.0 : 16.0);
 		NSTimeInterval captureAt = _captureTime > 0 ? _captureTime : CFAbsoluteTimeGetCurrent();
-		NSTimeInterval baseDeadline = captureAt + baseWait;
-		while (!_ready && !_errored && !_consumed && _generation == myGeneration && !_actionSeen) {
-			NSTimeInterval target = MIN(MAX(baseDeadline, _lastProgressAt + 3.0), captureAt + hardCap);
+		NSTimeInterval baseDeadline = captureAt + MIN(hardCap, 5.0);
+		while (!_ready && !_errored && !_decided && _generation == myGeneration && !_actionSeen) {
+			NSTimeInterval target = MIN(MAX(baseDeadline, _lastProgressAt + 3.0),
+										captureAt + hardCap);
 			if (target <= CFAbsoluteTimeGetCurrent()) break;
 			NSDate *deadline = [NSDate dateWithTimeIntervalSinceReferenceDate:target];
 			if (![_condition waitUntilDate:deadline]) break;
@@ -669,15 +683,15 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 			return NO;
 		}
 		if (_actionSeen) {
-			_consumed = YES;
+			_decided = YES;
 			_decisionDisplay = nil;
 			[_condition unlock];
 			SXLogInf(@"resp", @"%@: phát hiện tác vụ trong lúc chờ — giữ Siri gốc", source);
 			return NO;
 		}
 		// Một hook khác có thể đã quyết định trong lúc condition nhả lock.
-		if (!_consumed) {
-			_consumed = YES;
+		if (!_decided) {
+			_decided = YES;
 			_decisionTime = CFAbsoluteTimeGetCurrent();
 			_decisionDialogID = SXDialogID(command);
 			[_condition broadcast];
@@ -685,23 +699,29 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 				_decisionIsAnswer = YES;
 				_decisionSpeech = _answer;
 				_decisionDisplay = prefs.markdown ? SXMarkdownRender(_answerDisplay) : _answerDisplay;
-				if (!prefs.markdown && _decisionDisplay.length > 2000)
+				if (!_decisionDisplay.length) _decisionDisplay = _answerDisplay;
+				if (!prefs.markdown && _decisionDisplay.length > 2000) {
 					_decisionDisplay = [[_decisionDisplay substringToIndex:2000] stringByAppendingString:@"…"];
+				}
 				[SXDisplayPolicy logDecision:@"chọn đáp án AI cho lượt" source:source];
 			} else if (_errored) {
 				[self queueStatistic:@"error" milliseconds:_llmMs];
 				if ([SXDisplayPolicy shouldShowErrorBubbleInMode:prefs.mode speakErrors:prefs.speakErrors]) {
-					_decisionDisplay = [NSString stringWithFormat:@"⚠️ SiriX gặp lỗi: %@", _answerError.localizedDescription];
+					_decisionDisplay = [NSString stringWithFormat:@"⚠️ SiriX gặp lỗi: %@",
+										_answerError.localizedDescription];
 					_decisionSpeech = _decisionDisplay;
 					[SXDisplayPolicy logDecision:@"bubble lỗi" source:source];
 				} else {
-					SXLogInf(@"resp", @"%@: AI lỗi (%@) — giữ Siri gốc", source, _answerError.localizedDescription);
+					_decisionDisplay = nil;
+					SXLogInf(@"resp", @"%@: AI lỗi (%@) — giữ Siri gốc", source,
+							 _answerError.localizedDescription);
 				}
 			} else {
 				[self queueStatistic:@"timeout" milliseconds:nil];
-				_decisionDisplay = [SXDisplayPolicy timeoutBubbleMessageInMode:prefs.mode action:prefs.timeoutAction];
+				_decisionDisplay = [SXDisplayPolicy timeoutBubbleMessageInMode:prefs.mode
+																		action:prefs.timeoutAction];
 				_decisionSpeech = _decisionDisplay;
-				SXLogWrn(@"resp", @"%@: hết ngân sách (chờ %.1fs / trần %.0fs, ngân sách %.0fs) — %@",
+				SXLogWrn(@"resp", @"%@: hết ngân sách (chờ %.1fs / trần %.1fs, ngân sách %.0fs) — %@",
 						 source, CFAbsoluteTimeGetCurrent() - captureAt, hardCap, prefs.responseTimeout,
 						 _decisionDisplay ? @"bubble hết giờ" : @"giữ Siri gốc");
 			}
@@ -713,9 +733,9 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 	}
 
 	// AddViews, SayIt và hook dự phòng có thể là nhiều object cho cùng một lượt.
-	// Dùng cùng quyết định thay vì cho các lệnh sau lọt về Siri gốc. Cửa sổ 10 s
-	// (trước là 20 s): quyết định quá cũ chỉ có thể áp lên một lệnh ACE mà Siri đã
-	// bỏ — sửa lúc đó làm hội thoại lệch trạng thái và giao diện tự đóng.
+	// Dùng cùng quyết định thay vì cho các lệnh sau lọt về Siri gốc. Cửa sổ 10 s:
+	// quyết định quá cũ chỉ có thể áp lên một lệnh ACE mà Siri đã bỏ — sửa lúc
+	// đó làm hội thoại lệch trạng thái và giao diện tự đóng.
 	if (!_decisionDisplay.length || CFAbsoluteTimeGetCurrent() - _decisionTime > 10.0) {
 		[_condition unlock];
 		SXLogDbg(@"resp", @"%@: quyết định giữ gốc hoặc đã hết hạn (%@)", source, className);
@@ -741,7 +761,8 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 		}
 		changed = SXMutateCommand(command, display, _decisionSpeech, source, className);
 	} @catch (NSException *exception) {
-		SXLogErr(@"err", @"%@: mutate %@ exception %@: %@ — cho qua", source, className, exception.name, exception.reason);
+		SXLogErr(@"err", @"%@: mutate %@ exception %@: %@ — cho qua", source, className,
+				 exception.name, exception.reason);
 	}
 	if (changed) {
 		[_handledCommands addObject:command];
@@ -751,20 +772,24 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 		}
 		// Chỉ thêm lịch sử khi thực sự sửa được phản hồi AI, và chỉ một lần.
 		if (_decisionIsAnswer && !_historySaved) {
-			[_history addObject:@{@"q": _question ?: @"",
-				@"a": _answerDisplay.length > 1000 ? [[_answerDisplay substringToIndex:1000] stringByAppendingString:@"…"] : _answerDisplay}];
-			while ((NSInteger)_history.count > prefs.contextTurns) [_history removeObjectAtIndex:0];
+			NSString *storedAnswer = _answerDisplay.length > 1000
+				? [[_answerDisplay substringToIndex:1000] stringByAppendingString:@"…"] : _answerDisplay;
+			[_history addObject:@{@"q": _question ?: @"", @"a": storedAnswer ?: @""}];
+			while ((NSInteger)_history.count > prefs.contextTurns && _history.count) {
+				[_history removeObjectAtIndex:0];
+			}
 			_historySaved = YES;
 			// Từng lượt được đánh dấu riêng tư từ lúc capture; đổi cấu hình trong
 			// khi chờ cũng không được khiến lượt riêng tư bị ghi xuống đĩa.
 			if (!_questionIncognito && !prefs.incognito && _historyEpoch.length) {
-				NSString *question = _question;
-				NSString *answer = _answerDisplay;
+				NSString *question = _question ?: @"";
+				NSString *answer = storedAnswer ?: @"";
 				NSString *epoch = _historyEpoch;
 				NSUInteger limit = (NSUInteger)prefs.contextTurns;
 				NSTimeInterval startedAt = _captureTime;
 				dispatch_async([SXStore queue], ^{
-					[[SXStore shared] appendQuestion:question answer:answer limit:limit epoch:epoch startedAt:startedAt];
+					[[SXStore shared] appendQuestion:question answer:answer limit:limit
+											   epoch:epoch startedAt:startedAt];
 				});
 			}
 		}
@@ -790,11 +815,12 @@ static BOOL SXMutateCommand(id command, NSString *displayText, NSString *speechT
 
 - (BOOL)clearHistory {
 	[self clearHistoryMemory];
-	// Được gọi bởi tool trên luồng nền; callback Darwin chỉ xóa bộ nhớ.
 	__block BOOL ok = NO;
 	dispatch_sync([SXStore queue], ^{ ok = [[SXStore shared] clearHistory]; });
 	if (!ok) SXLogErr(@"err", @"không xóa được lịch sử đã lưu");
+#ifndef SX_TESTING
 	notify_post("com.sirix.tweak/resetHistory");
+#endif
 	return ok;
 }
 
