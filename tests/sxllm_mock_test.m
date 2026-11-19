@@ -23,6 +23,17 @@
 #import "SXToolkit.h"
 #import "SXLog.h"
 #include <assert.h>
+
+/// SXHTTPResult thật nằm trong SXHTTP.m (không link ở test này vì nó cần
+/// URLSession của iOS); test tự cấp phần khởi tạo + huỷ.
+@implementation SXHTTPResult
+- (instancetype)init {
+	self = [super init];
+	if (self) _body = [NSData data];
+	return self;
+}
+- (void)dealloc { }
+@end
 #include <stdio.h>
 
 #pragma mark - HTTP giả
