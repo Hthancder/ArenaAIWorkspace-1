@@ -115,14 +115,14 @@ jobs:
             --frames 190 --trace --stats --goto rom_play@160 --save-dir work/save > work/probe.log 2>&1 || { tail -100 work/probe.log; exit 1; }
           grep -F '[room] -> rom_play' work/probe.log
           grep -F 'DT_POISON|' work/probe.log || true
-          python tools/check_deadtown_poison_probe.py work/probe.log work/save/dt_poison_probe.sav
+          python tools/check_deadtown_poison_probe.py work/probe.log work/save/dt_poison_probe.sav 2>&1 | tee work/check.log
       - name: Summarize probe diagnostics
         if: always()
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
-          for name in ('probe.log', 'instrument.log', 'compile.log'):
+          for name in ('check.log', 'probe.log', 'instrument.log', 'compile.log'):
               path = Path('work') / name
               if not path.exists():
                   print('::notice::' + name + ': not created')
@@ -131,7 +131,8 @@ jobs:
               selected = [line for line in lines if 'DT_POISON|' in line or 'PROBE:' in line or
                           'POISON_INSTRUMENT' in line or 'error' in line.lower() or 'exception' in line.lower() or
                           ('[call]' in line and ('gml_Script_item_use' in line or 'probe_obj_player_200' in line))]
-              for label, group in (('markers', selected[-20:]), ('tail', lines[-12:])):
+              markers = [line for line in lines if 'DT_POISON|' in line] if name == 'probe.log' else selected
+              for label, group in (('markers', markers[-20:]), ('tail', lines[-12:])):
                   text = ' | '.join(group).replace('%', '%25').replace('\r', ' ')
                   print('::notice::' + name + ' ' + label + ': ' + text[:3500])
           PY
@@ -144,5 +145,6 @@ jobs:
             work/compile.log
             work/instrument.log
             work/probe.log
+            work/check.log
           if-no-files-found: ignore
           retention-days: 3
