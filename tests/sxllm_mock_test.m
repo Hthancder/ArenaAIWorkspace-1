@@ -24,6 +24,10 @@
 #import "SXLog.h"
 #include <assert.h>
 
+/// SXHTTP thật nằm trong SXHTTP.m (không link ở test này vì nó cần URLSession
+/// của iOS); test tự cấp hằng domain, phần khởi tạo và huỷ.
+NSString *const SXHTTPErrorDomain = @"com.sirix.http";
+
 /// SXHTTPResult thật nằm trong SXHTTP.m (không link ở test này vì nó cần
 /// URLSession của iOS); test tự cấp phần khởi tạo + huỷ.
 @implementation SXHTTPResult
