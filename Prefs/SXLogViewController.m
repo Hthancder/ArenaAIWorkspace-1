@@ -21,8 +21,8 @@ typedef NS_ENUM(NSInteger, SXLogFilter) {
 static const NSUInteger kSXLogTailBytes = 160 * 1024;   // đọc tối đa 160 KB cuối file
 static const NSUInteger kSXLogMaxLines = 1200;          // hiển thị tối đa 1200 dòng
 static const NSUInteger kSXLogMaxChars = 180 * 1024;    // trần ký tự trong UITextView
-static const NSUInteger kSXLogAppendBudget = 48 * 1024; // nối thêm tối đa mỗi nhịp
 static const NSTimeInterval kSXLogRefreshInterval = 2.5;
+static const NSTimeInterval kSXLogSearchDebounce = 0.25;
 
 #pragma mark - Lọc (thuần, chạy trên luồng nền)
 
@@ -42,37 +42,37 @@ static BOOL SXLogLineMatches(NSString *line, SXLogFilter filter, NSString *lower
 	return YES;
 }
 
-/// Lọc + giới hạn số dòng, trả về văn bản hiển thị. `outLines` = số dòng giữ lại,
-/// `outCapped` = YES khi phải bỏ bớt dòng cũ (log dài hơn hạn mức).
-static NSString *SXLogFilteredText(NSString *raw, SXLogFilter filter, NSString *query,
-								   NSUInteger *outLines, BOOL *outCapped) {
+/// Lọc + giới hạn số dòng. Trả về mảng dòng (đã cắt phần đầu nếu quá dài) để
+/// màn hình tự tô màu theo mức log và nối thêm dòng mới một cách chính xác —
+/// so chuỗi con trên cả khối văn bản từng sai khi log bị xoay vòng.
+static NSArray<NSString *> *SXLogFilteredLines(NSString *raw, SXLogFilter filter, NSString *query,
+									  NSUInteger *outLines, BOOL *outCapped) {
 	if (outLines) *outLines = 0;
 	if (outCapped) *outCapped = NO;
-	if (!raw.length) return @"";
+	if (!raw.length) return @[];
 
 	NSString *lowerQuery = query.lowercaseString;
-	NSArray<NSString *> *lines = [raw componentsSeparatedByString:@"\n"];
-	NSMutableArray<NSString *> *kept = [NSMutableArray arrayWithCapacity:MIN(lines.count, kSXLogMaxLines)];
-
-	for (NSString *line in lines) {
+	NSArray<NSString *> *all = [raw componentsSeparatedByString:@"\n"];
+	NSMutableArray<NSString *> *kept = [NSMutableArray arrayWithCapacity:MIN(all.count, kSXLogMaxLines)];
+	for (NSString *line in all) {
 		if (!line.length) continue;
 		if (!SXLogLineMatches(line, filter, lowerQuery)) continue;
 		[kept addObject:line];
 	}
 	if (kept.count > kSXLogMaxLines) {
-		NSUInteger drop = kept.count - kSXLogMaxLines;
-		[kept removeObjectsInRange:NSMakeRange(0, drop)];
+		[kept removeObjectsInRange:NSMakeRange(0, kept.count - kSXLogMaxLines)];
 		if (outCapped) *outCapped = YES;
 	}
 	if (outLines) *outLines = kept.count;
-	if (!kept.count) return @"";
+	return kept;
+}
 
-	NSMutableString *output = [NSMutableString stringWithCapacity:raw.length];
-	for (NSString *line in kept) {
-		[output appendString:line];
-		[output appendString:@"\n"];
-	}
-	return output;
+/// Màu theo mức: ERROR đỏ, WARN cam, còn lại màu chữ thường. Giữ chữ đơn cách
+/// nên vẫn đọc được cột thời gian, và không phá vùng chọn khi người dùng bôi đen.
+static UIColor *SXLogColorForLine(NSString *line) {
+	if ([line rangeOfString:@"[ERROR]"].location != NSNotFound) return UIColor.systemRedColor;
+	if ([line rangeOfString:@"[WARN ]"].location != NSNotFound) return UIColor.systemOrangeColor;
+	return UIColor.labelColor;
 }
 
 #pragma mark - Màn hình
@@ -86,7 +86,8 @@ static NSString *SXLogFilteredText(NSString *raw, SXLogFilter filter, NSString *
 @property (nonatomic, strong) dispatch_queue_t workQueue;
 
 @property (nonatomic, copy) NSString *visibleText;   // nội dung dùng để sao chép
-@property (nonatomic, copy) NSString *appliedText;   // nội dung đang hiển thị
+@property (nonatomic, copy) NSArray<NSString *> *appliedLines; // dòng đang hiển thị
+@property (nonatomic, copy) NSString *pendingSearch;
 @property (nonatomic, copy) NSString *query;
 @property (nonatomic) BOOL wasAtBottom;
 @property (nonatomic) BOOL paused;                   // người dùng tạm dừng tự làm mới
@@ -139,7 +140,7 @@ static NSString *SXLogFilteredText(NSString *raw, SXLogFilter filter, NSString *
 	self.textView.translatesAutoresizingMaskIntoConstraints = NO;
 	self.textView.editable = NO;
 	self.textView.selectable = YES;
-	self.textView.font = [UIFont monospacedSystemFontOfSize:11 weight:UIFontWeightRegular];
+	self.textView.font = [UIFont monospacedSystemFontOfSize:12 weight:UIFontWeightRegular];
 	self.textView.textColor = UIColor.labelColor;
 	self.textView.backgroundColor = UIColor.clearColor;
 	self.textView.textContainerInset = UIEdgeInsetsMake(10, 12, 20, 12);
@@ -296,9 +297,7 @@ static NSString *SXLogFilteredText(NSString *raw, SXLogFilter filter, NSString *
 
 		NSUInteger lines = 0;
 		BOOL capped = NO;
-		NSString *filtered = raw
-			? SXLogFilteredText(raw, filter, query, &lines, &capped)
-			: nil;
+		NSArray<NSString *> *kept = raw ? SXLogFilteredLines(raw, filter, query, &lines, &capped) : nil;
 
 		dispatch_async(dispatch_get_main_queue(), ^{
 			typeof(self) strongSelf = weakSelf;
@@ -306,13 +305,13 @@ static NSString *SXLogFilteredText(NSString *raw, SXLogFilter filter, NSString *
 			strongSelf.reading = NO;
 			// Có yêu cầu mới hơn trong lúc đọc → bỏ kết quả này.
 			if (request != strongSelf.renderedRequest) return;
-			[strongSelf sx_applyText:filtered
-								failed:(raw == nil)
-								  size:size
-							 truncated:truncated
-								 lines:lines
-								capped:capped
-							  animated:animated];
+			[strongSelf sx_applyLines:kept
+							   failed:(raw == nil)
+								 size:size
+							truncated:truncated
+								lines:lines
+							   capped:capped
+							 animated:animated];
 			if (strongSelf.reloadPending) {
 				strongSelf.reloadPending = NO;
 				[strongSelf sx_requestReloadAnimated:NO force:YES];
@@ -321,30 +320,41 @@ static NSString *SXLogFilteredText(NSString *raw, SXLogFilter filter, NSString *
 	});
 }
 
-- (void)sx_applyText:(NSString *)filtered
-			  failed:(BOOL)failed
-				size:(unsigned long long)size
-		   truncated:(BOOL)truncated
-			   lines:(NSUInteger)lines
-			  capped:(BOOL)capped
-			animated:(BOOL)animated {
+- (NSAttributedString *)sx_attributedStringForLines:(NSArray<NSString *> *)lines {
+	UIFont *font = [UIFont monospacedSystemFontOfSize:12 weight:UIFontWeightRegular];
+	NSMutableAttributedString *result = [[NSMutableAttributedString alloc] init];
+	for (NSString *line in lines) {
+		NSString *text = [line stringByAppendingString:@"\n"];
+		NSDictionary *attrs = @{NSFontAttributeName: font,
+								NSForegroundColorAttributeName: SXLogColorForLine(line)};
+		[result appendAttributedString:[[NSAttributedString alloc] initWithString:text attributes:attrs]];
+	}
+	return result;
+}
+
+- (void)sx_applyLines:(NSArray<NSString *> *)lines
+			   failed:(BOOL)failed
+				 size:(unsigned long long)size
+			truncated:(BOOL)truncated
+				lines:(NSUInteger)lineCount
+			   capped:(BOOL)capped
+			 animated:(BOOL)animated {
 	self.readFailed = failed;
 	self.fileSize = size;
 	self.tailTruncated = truncated;
 	self.linesCapped = capped;
-	self.renderedLines = lines;
+	self.renderedLines = lineCount;
 
-	BOOL empty = (filtered.length == 0);
-	self.visibleText = filtered ?: @"";
+	BOOL empty = (lines.count == 0);
+	self.visibleText = empty ? @"" : [lines componentsJoinedByString:@"\n"];
 	self.emptyLabel.hidden = !empty;
 	self.textView.hidden = empty;
 
 	if (empty) {
-		self.appliedText = nil;
+		self.appliedLines = @[];
 		if (self.textView.text.length) self.textView.text = @"";
 		if (failed) {
-			self.emptyLabel.text = [NSString stringWithFormat:
-				@"Không đọc được tệp log.\n\n%@", SXLogFilePath()];
+			self.emptyLabel.text = [NSString stringWithFormat:@"Không đọc được tệp log.\n\n%@", SXLogFilePath()];
 		} else if (size > 0) {
 			self.emptyLabel.text = @"Không có dòng nào khớp bộ lọc hoặc từ khoá.";
 		} else {
@@ -354,45 +364,39 @@ static NSString *SXLogFilteredText(NSString *raw, SXLogFilter filter, NSString *
 		return;
 	}
 
-	if ([filtered isEqualToString:self.appliedText ?: @""]) {
+	if ([lines isEqualToArray:self.appliedLines]) {
 		[self sx_updatePrompt];
 		return;
 	}
 
-	BOOL stayAtBottom = self.wasAtBottom || self.appliedText.length == 0;
+	BOOL stayAtBottom = self.wasAtBottom || self.appliedLines.count == 0;
 	CGFloat offset = self.textView.contentOffset.y;
 
-	// Nối thêm khi: lượt này là cập nhật tự động, file chỉ lớn lên (không bị xoay
-	// vòng/xoá), và phần đang hiển thị vẫn là một đoạn liền trong nội dung mới.
-	// Dùng tìm ngược thay vì hasPrefix để vẫn nối được sau khi phần đầu bị cắt.
-	NSString *applied = self.appliedText ?: @"";
-	BOOL fileGrew = self.lastRenderedFileSize > 0 && size >= self.lastRenderedFileSize;
-	NSRange found = applied.length
-		? [filtered rangeOfString:applied options:NSBackwardsSearch]
-		: NSMakeRange(NSNotFound, 0);
+	// Nối thêm chỉ khi phần đang hiển thị vẫn là đoạn đầu của danh sách mới và
+	// phần thêm vào nhỏ — nhờ vậy không phải dựng lại cả khối văn bản mỗi nhịp.
+	BOOL fileGrew = size >= self.lastRenderedFileSize;
 	BOOL canAppend = animated
 		&& fileGrew
-		&& applied.length
-		&& found.location != NSNotFound
-		&& (filtered.length - NSMaxRange(found)) <= kSXLogAppendBudget
-		&& self.textView.text.length == applied.length;
+		&& self.appliedLines.count > 0
+		&& lines.count >= self.appliedLines.count
+		&& (lines.count - self.appliedLines.count) <= 400
+		&& [[lines subarrayWithRange:NSMakeRange(lines.count - self.appliedLines.count, self.appliedLines.count)]
+			isEqualToArray:self.appliedLines];
 
 	if (canAppend) {
-		NSString *delta = [filtered substringFromIndex:NSMaxRange(found)];
-		NSDictionary *attrs = @{
-			NSFontAttributeName: self.textView.font ?: [UIFont monospacedSystemFontOfSize:11 weight:UIFontWeightRegular],
-			NSForegroundColorAttributeName: self.textView.textColor ?: UIColor.labelColor,
-		};
+		NSArray<NSString *> *deltaLines = [lines subarrayWithRange:
+			NSMakeRange(self.appliedLines.count, lines.count - self.appliedLines.count)];
 		NSTextStorage *storage = self.textView.textStorage;
 		[storage beginEditing];
-		[storage appendAttributedString:[[NSAttributedString alloc] initWithString:delta attributes:attrs]];
+		[storage appendAttributedString:[self sx_attributedStringForLines:deltaLines]];
 		[self sx_trimTextView];
 		[storage endEditing];
+		self.appliedLines = lines;
 	} else {
-		self.textView.text = filtered;
+		self.textView.attributedText = [self sx_attributedStringForLines:lines];
+		self.appliedLines = lines;
 	}
 
-	self.appliedText = self.textView.text;
 	self.lastRenderedFileSize = size;
 	[self sx_updatePrompt];
 
@@ -443,7 +447,12 @@ static NSString *SXLogFilteredText(NSString *raw, SXLogFilter filter, NSString *
 #pragma mark - Cuộn
 
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView {
-	CGFloat maxOffset = scrollView.contentSize.height - scrollView.bounds.size.height;
+	CGFloat maxOffset = scrollView.contentSize.height + scrollView.adjustedContentInset.bottom -
+		scrollView.bounds.size.height;
+	if (maxOffset <= 0) {
+		self.wasAtBottom = YES;   // nội dung ngắn hơn khung: luôn coi là ở cuối
+		return;
+	}
 	self.wasAtBottom = scrollView.contentOffset.y >= maxOffset - 80.0;
 }
 
@@ -451,14 +460,24 @@ static NSString *SXLogFilteredText(NSString *raw, SXLogFilter filter, NSString *
 
 - (void)sx_filterChanged:(UISegmentedControl *)sender {
 	(void)sender;
-	self.appliedText = nil; // đổi bộ lọc → vẽ lại toàn bộ
+	self.appliedLines = @[]; // đổi bộ lọc → vẽ lại toàn bộ
 	[self sx_requestReloadAnimated:NO force:YES];
 }
 
 - (void)searchBar:(UISearchBar *)searchBar textDidChange:(NSString *)searchText {
 	(void)searchBar;
-	self.query = searchText;
-	self.appliedText = nil;
+	// Gõ nhanh không đọc lại file 6 lần: gộp thành một lượt sau khi ngừng gõ.
+	self.pendingSearch = searchText;
+	[NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(sx_applySearch) object:nil];
+	[self performSelector:@selector(sx_applySearch) withObject:nil afterDelay:kSXLogSearchDebounce];
+}
+
+- (void)sx_applySearch {
+	NSString *text = self.pendingSearch;
+	if (![text isKindOfClass:[NSString class]]) return;
+	if ((self.query == nil && text.length == 0) || [self.query isEqualToString:text]) return;
+	self.query = text;
+	self.appliedLines = @[];
 	[self sx_requestReloadAnimated:NO force:YES];
 }
 
@@ -467,9 +486,11 @@ static NSString *SXLogFilteredText(NSString *raw, SXLogFilter filter, NSString *
 }
 
 - (void)searchBarCancelButtonClicked:(UISearchBar *)searchBar {
+	[NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(sx_applySearch) object:nil];
+	self.pendingSearch = @"";
 	searchBar.text = @"";
 	self.query = nil;
-	self.appliedText = nil;
+	self.appliedLines = @[];
 	[searchBar resignFirstResponder];
 	[self sx_requestReloadAnimated:NO force:YES];
 }
@@ -478,7 +499,7 @@ static NSString *SXLogFilteredText(NSString *raw, SXLogFilter filter, NSString *
 
 - (void)copyLog:(id)sender {
 	(void)sender;
-	NSString *content = self.visibleText.length ? self.visibleText : self.appliedText;
+	NSString *content = self.visibleText;
 	if (!content.length) {
 		[SXUI alertOn:self title:@"Log trống" message:nil];
 		return;
@@ -571,7 +592,7 @@ static NSString *SXLogFilteredText(NSString *raw, SXLogFilter filter, NSString *
 		if ([[NSFileManager defaultManager] fileExistsAtPath:oldPath]) {
 			[[NSFileManager defaultManager] removeItemAtPath:oldPath error:NULL];
 		}
-		weakSelf.appliedText = nil;
+		weakSelf.appliedLines = @[];
 		[weakSelf sx_requestReloadAnimated:NO force:YES];
 	}];
 }
