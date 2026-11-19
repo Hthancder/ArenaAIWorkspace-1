@@ -29,6 +29,10 @@ jobs:
           echo 'bc8fa1990cb2cdde8d184f2a942fe4010820f0592d88a36e1cbee0a6aac081fb  work/original.apk' | sha256sum -c
           unzip -p work/original.apk assets/game.droid > work/game.droid
           curl -fsSL --retry 2 'https://codeload.github.com/kjs104901/deadtown/tar.gz/5e3d798f914c8cd3b066c8289323005d63111f37' | tar xz -C work/source --strip-components=1
+          python3 tools/recover_deadtown_audio.py extract work/original.apk work/audio
+          python3 tools/stage_deadtown_gmx.py work/source/deadtown.gmx work/staged || test "$?" -eq 1
+          python3 tools/recover_deadtown_audio.py apply work/staged work/audio
+          python3 tools/prepare_deadtown_offline.py work/staged work/offline
       - name: Download pinned UndertaleModTool CLI
         shell: bash
         run: |
@@ -45,7 +49,7 @@ jobs:
       - name: Probe source scripts, without creating an IPA
         shell: bash
         env:
-          GML_PROBE_SOURCE: ${{ github.workspace }}/work/source/deadtown.gmx/scripts/lang_type_set.gml
+          GML_PROBE_SOURCE: ${{ github.workspace }}/work/offline/scripts/lang_type_set.gml
         run: |
           set +e
           "$UTMT_EXE" load work/game.droid -s tools/deadtown-vm-probe.csx 2>&1 | tee work/probe.log

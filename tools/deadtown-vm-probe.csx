@@ -22,7 +22,7 @@ string path = Environment.GetEnvironmentVariable("GML_PROBE_SOURCE");
 if (string.IsNullOrEmpty(path)) throw new Exception("GML_PROBE_SOURCE is not set");
 var paths = Directory.GetFiles(Path.GetDirectoryName(path), "*.gml");
 Array.Sort(paths, StringComparer.Ordinal);
-Console.WriteLine($"PROBE: attempting {paths.Length} original source scripts");
+Console.WriteLine($"PROBE: attempting {paths.Length} staged offline source scripts");
 var group = new CodeImportGroup(Data);
 foreach (string script in paths)
     group.QueueReplace("gml_Script_" + Path.GetFileNameWithoutExtension(script), File.ReadAllText(script));
