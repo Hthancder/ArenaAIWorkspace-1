@@ -228,8 +228,37 @@ These checks cover representative exact instructions, relocations and calls,
 not complete control flow or a runtime trace. No behavior should be patched
 from this alone. Appending these tables to
 the old source would shift item/recipe indices and could silently break crafting,
-saving and gameplay: **none are injected**. Recover the corresponding data
-consumers, ordering and original schema first.
+saving and gameplay: **none are injected into the IPA/release pipeline**.
+Recover the corresponding data consumers, ordering and original schema first.
+
+#### Disposable candidate VM experiment (not an APK comparison)
+
+`tools/prepare_deadtown_poison_probe.py` creates a new, clearly marked research
+copy from the pinned offline project and original APK. It applies the 22
+candidate use rows and selected candidate poison changes only in that copy;
+it refuses to overwrite or nest the source. The dedicated
+`.github/workflows/deadtown-poison-probe.yml` compiles an incomplete VM, forces
+a desktop headless scenario and uploads logs only, not a game or IPA.
+
+The first run ([44560854662](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44560854662))
+found a material compatibility failure: after an original-source compound
+`target_inven[? pointer] -= 1`, `item_use` passed an array instead of the map
+handle to `ds_map_delete`; the item remained and protection was zero. This is
+observed in the UTMT-compiled, incomplete gmrunner VM, **not** in the APK; it
+is not yet established whether the defect lies in the compiler, runner, or
+interaction between them. The same accessor syntax occurs in other old-source
+inventory/crafting scripts, which are not proven correct by this one test.
+
+For the isolated probe only, `item_use` uses explicit DS-map operations for an
+existing numeric key. The run [44562072708](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44562072708)
+then observed the candidate mask entry 3, consumed a one-item mask, transferred
+5,400 to the player, decremented and capped protection, counted poison down,
+and consumed one from a two-item stack. In the same forced desktop scenario,
+the reconstructed normal save/load scripts round-tripped protection 321 and
+poison 2; the checker independently decoded those fields from the disposable
+save. This validates only this candidate in this runner under forced conditions,
+not original runtime equivalence, general map behavior, damage, other save
+modes, audio, graphics or iOS. No result from this probe is packaged for users.
 
 Reproduce independently with the same optional dependencies as above:
 

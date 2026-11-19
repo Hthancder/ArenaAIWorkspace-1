@@ -73,6 +73,7 @@ jobs:
         env:
           GML_PROBE_SOURCE: ${{ github.workspace }}/work/candidate/scripts/lang_type_set.gml
           GML_PROBE_EVENTS: ${{ github.workspace }}/work/events.json
+          GML_PROBE_LEGACY_ITEM: ${{ github.workspace }}/work/offline/scripts/item_use.gml
         run: |
           set -euo pipefail
           mkdir -p work/diagnostic work/save
@@ -93,7 +94,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ '${{ steps.runner-cache.outputs.cache-hit }}' = 'true' ] && test -x work/runner-build/gmrunner; then
+          if [ '${{ steps.runner-cache.outputs.cache-hit }}' = 'true' ] && test -x work/runner-build/gmrunner && test -x work/runner-build/gmdump; then
             if ldd work/runner-build/gmrunner | grep -q 'not found'; then
               timeout 120 sudo apt-get install -y -qq libsdl2-2.0-0 libbz2-1.0
             fi
@@ -106,6 +107,19 @@ jobs:
             cmake -S work/runner -B work/runner-build -DCMAKE_BUILD_TYPE=Release
             cmake --build work/runner-build --target gmdump gmrunner --parallel 4
           fi
+      - name: Compare legacy and candidate VM bytecode
+        shell: bash
+        run: |
+          set -euo pipefail
+          work/runner-build/gmdump work/diagnostic/data.win code probe_item_use_legacy_unlinked > work/legacy-disasm.log
+          work/runner-build/gmdump work/diagnostic/data.win code gml_Script_item_use > work/candidate-disasm.log
+          test -s work/legacy-disasm.log && test -s work/candidate-disasm.log
+          python - <<'PY'
+          from pathlib import Path
+          for name in ('legacy-disasm.log', 'candidate-disasm.log'):
+              lines = Path('work', name).read_text(errors='replace').splitlines()
+              print('::notice::' + name + ': ' + ' | '.join(lines[:55]).replace('%', '%25')[:3500])
+          PY
       - name: Exercise forced poison candidate on disposable save data
         shell: bash
         run: |
@@ -146,5 +160,7 @@ jobs:
             work/instrument.log
             work/probe.log
             work/check.log
+            work/legacy-disasm.log
+            work/candidate-disasm.log
           if-no-files-found: ignore
           retention-days: 3

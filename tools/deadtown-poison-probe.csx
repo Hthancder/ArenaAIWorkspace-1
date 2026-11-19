@@ -109,6 +109,13 @@ show_debug_message(""DT_POISON|item_exit|"" + string(ds_map_exists(global.inven_
 ";
 group.QueueReplace(itemCode, itemBefore + "\n" + itemText + "\n" + itemAfter);
 Console.WriteLine("POISON_INSTRUMENT: item_use");
+// Compile the untouched old-source script into an UNLINKED scratch code entry
+// for bytecode analysis. Never invoke it in the candidate gameplay probe.
+string legacyPath = Environment.GetEnvironmentVariable("GML_PROBE_LEGACY_ITEM");
+if (string.IsNullOrEmpty(legacyPath)) throw new Exception("GML_PROBE_LEGACY_ITEM is not set");
+var legacy = UndertaleCode.CreateEmptyEntry(Data, "probe_item_use_legacy_unlinked");
+group.QueueReplace(legacy, File.ReadAllText(legacyPath));
+Console.WriteLine("POISON_INSTRUMENT: legacy item_use for bytecode comparison only");
 var result = group.Import(false);
 if (!result.Successful)
 {
