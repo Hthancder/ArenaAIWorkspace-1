@@ -65,7 +65,9 @@ jobs:
               matches = [line for line in log.read_text(errors='replace').splitlines()
                          if re.search(r'\b(error|failed|warning|could not)\b', line, re.I)]
               print(f'::notice::ProjectTool reported {len(matches)} diagnostic lines; inspect the import log.')
-              for line in matches[:12]:
+              important = [line for line in matches if not re.search(r"Failed to find Options property", line, re.I)]
+              print(f'::notice::{len(important)} diagnostics are not missing legacy option properties.')
+              for line in important[:15]:
                   safe = line.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
                   print(f'::warning::{safe[:500]}')
           PY
