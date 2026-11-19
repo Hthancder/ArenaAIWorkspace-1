@@ -5,12 +5,22 @@ The generated inputs are not trusted by Apple and have not been verified with
 ADT or Dopamine. This is a diagnostic build, not a production signing tool.
 """
 import argparse
+import os
 import secrets
 import subprocess
 import sys
 import tempfile
 import zipfile
 from pathlib import Path
+
+
+def report_error(message: str) -> None:
+    """Show diagnostics and expose them as annotations in GitHub Actions."""
+    message = message[-6000:]
+    print(message, file=sys.stderr)
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        escaped = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+        print(f"::error::{escaped}", flush=True)
 
 if __package__:
     from .create_test_signing import generate
@@ -44,7 +54,12 @@ def build(stage: Path, output: Path, adt: str = "adt") -> None:
                    str(ipa), str(descriptor), "-C", str(stage), "LostLife.swf", "lib"]
         if (stage / "image.png").is_file():
             command.append("image.png")
-        subprocess.run(command, check=True)
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False)
+        output_text = (result.stdout or "").replace(password, "[REDACTED]")
+        if result.returncode:
+            report_error(output_text or f"ADT exited with status {result.returncode} without diagnostics.")
+            raise subprocess.CalledProcessError(result.returncode, "adt")
+        print(output_text)
         with zipfile.ZipFile(ipa) as z:
             if not any(name.startswith("Payload/") and ".app/" in name for name in z.namelist()):
                 raise ValueError("ADT output is not an IPA containing a Payload app bundle")
@@ -60,11 +75,12 @@ def main() -> int:
     try:
         build(args.stage, args.output, args.adt)
     except subprocess.CalledProcessError as exc:
-        # Do not print the ADT command, which contains the disposable password.
-        print(f"Experimental IPA build failed (tool exit code {exc.returncode}).", file=sys.stderr)
+        # Do not print commands, which may contain the disposable password.
+        stderr = exc.stderr.decode("utf-8", "replace") if isinstance(exc.stderr, bytes) else exc.stderr
+        report_error(f"Experimental IPA build failed (tool exit code {exc.returncode}). {stderr or ''}")
         return 1
     except (OSError, ValueError, zipfile.BadZipFile) as exc:
-        print(f"Experimental IPA build failed: {exc}", file=sys.stderr)
+        report_error(f"Experimental IPA build failed: {exc}")
         return 1
     print("Created an experimental IPA. Signing and device compatibility are unverified.")
     return 0

@@ -31,7 +31,7 @@ class ExperimentalBuildTests(unittest.TestCase):
         (path / "test.mobileprovision").write_bytes(b"placeholder")
 
     @staticmethod
-    def fake_adt(command, check):
+    def fake_adt(command, **kwargs):
         ipa = Path(command[command.index("-provisioning-profile") + 2])
         with zipfile.ZipFile(ipa, "w") as archive:
             archive.writestr("Payload/Test.app/Test", b"placeholder")
