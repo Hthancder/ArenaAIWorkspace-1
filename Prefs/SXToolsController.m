@@ -262,6 +262,10 @@
 	cell.nameLabel.text = [NSString stringWithFormat:@"%@%@", tool.name,
 						   tool.sideEffect ? @"  ·  có tác dụng phụ" : @""];
 	cell.toggle.on = [[SXPrefs shared] isToolEnabled:tool.name];
+	cell.toggle.accessibilityLabel = [NSString stringWithFormat:@"Công cụ %@", tool.title];
+	cell.toggle.accessibilityHint = tool.sideEffect
+		? @"Công cụ này thay đổi trạng thái máy khi AI gọi."
+		: @"Công cụ này chỉ đọc thông tin.";
 	// Gắn vị trí vào công tắc: lúc bấm không phải dò indexPath từ toạ độ.
 	cell.toggle.tag = indexPath.section * 1000 + indexPath.row;
 	[cell.toggle removeTarget:nil action:NULL forControlEvents:UIControlEventValueChanged];
@@ -286,13 +290,8 @@
 			message:@"Mọi công cụ sẽ hiện lại với AI."
 		confirmText:@"Bật tất cả"
 			 action:^{
-		NSMutableSet *names = [NSMutableSet set];
-		for (NSNumber *key in self.categories) {
-			for (SXTool *tool in self.grouped[key]) [names addObject:tool.name];
-		}
-		for (NSString *name in names) {
-			[SXPrefs setToolNamed:name enabled:YES];
-		}
+		// Một lần ghi duy nhất: 13 lần ghi riêng lẻ sẽ reload prefs + notify 13 lần.
+		[SXPrefs setDisabledTools:[NSSet set]];
 		[self reloadCatalog];
 		[self.table reloadData];
 		[SXUI tapFeedback];

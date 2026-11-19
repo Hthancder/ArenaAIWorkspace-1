@@ -30,7 +30,7 @@
 | Nút phá (xóa) | `.systemRed` |
 | Nhấn mạnh trong footer | **đậm** đúng thuật ngữ (dùng `**…**` khi render footer nếu cần) |
 
-- **Không** dùng màu tùy biến, không gradient, không font ngoài system — nhất quán với Cài đặt gốc (điều kiện “đẹp = thuộc về iOS”).
+- **Không** dùng màu tuỳ biến, không gradient, không font ngoài system — nhất quán với Cài đặt gốc (điều kiện “đẹp = thuộc về iOS”).
 - Custom cell: `adjustsFontForContentSizeCategory = YES` (Dynamic Type), chiều cao ≥44pt.
 
 ### 2.2 Bảng thuật ngữ (bắt buộc — trong label, footer, alert, log hướng dẫn)
@@ -160,7 +160,7 @@ Xem / chỉnh prompt          [Đang dùng | Mặc định]   ← segmented
 │  (UITextView — nội dung effective,     │
 │   scroll, font15 mono? NO → system15)  │
 └────────────────────────────────────────┘
-Đang dùng: prompt tùy chỉnh (482 ký tự)   ← nhãn1 dòng, xanh/secondary
+Đang dùng: prompt tuỳ chỉnh (482 ký tự)   ← nhãn1 dòng, xanh/secondary
 [{date}] [{device}] [{lang}]              ← chip chèn biến
 [Lưu] [Khôi phục mặc định] [Sao chép]     ← bar nút dưới, primary/plain/destructive-lite
 ```

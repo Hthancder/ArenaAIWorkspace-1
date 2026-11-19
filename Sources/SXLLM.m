@@ -3,7 +3,22 @@
 #import "SXLog.h"
 #import "SXStream.h"
 
+NSNotificationName const SXLLMToolActivityNotification = @"SXLLMToolActivityNotification";
+
 static const NSTimeInterval kSXHTTPTimeout = 60;
+
+/// Báo cho giao diện biết công cụ nào vừa chạy, mất bao lâu, có lỗi không.
+/// Không kèm tham số hay kết quả — chỉ tên công cụ, để không lộ dữ liệu vào UI.
+static void SXPostToolActivity(NSString *name, NSTimeInterval elapsed, NSError *error) {
+	NSDictionary *info = @{@"name": name ?: @"?",
+						   @"ms": @((NSInteger)(elapsed * 1000.0)),
+						   @"failed": @(error != nil)};
+	dispatch_async(dispatch_get_main_queue(), ^{
+		[[NSNotificationCenter defaultCenter] postNotificationName:SXLLMToolActivityNotification
+														    object:nil
+														  userInfo:info];
+	});
+}
 
 #pragma mark - HTTP
 
@@ -172,7 +187,9 @@ static void SXAppendGeminiToolResults(NSMutableArray *contents, SXToolExec execu
 		if (!name.length) continue;
 		NSDictionary *args = SXToolArguments(call[@"args"]);
 		NSError *toolError = nil;
+		CFAbsoluteTime began = CFAbsoluteTimeGetCurrent();
 		NSDictionary *toolResult = SXRunTool(executor, name, args, round, &toolError);
+		SXPostToolActivity(name, CFAbsoluteTimeGetCurrent() - began, toolError);
 		NSString *resultText = SXToolResultText(toolError, toolResult);
 		// Gemini chỉ nhận role "user"/"model" — functionResponse phải đi kèm "user"
 		// ("tool"/"function" là quy ước của OpenAI và bị API trả 400).
@@ -231,7 +248,9 @@ static NSArray<NSDictionary *> *SXAppendOpenAIToolResults(NSMutableArray *messag
 			? call[@"id"] : name;
 		NSDictionary *args = SXToolArguments(function[@"arguments"]);
 		NSError *toolError = nil;
+		CFAbsoluteTime began = CFAbsoluteTimeGetCurrent();
 		NSDictionary *toolResult = SXRunTool(executor, name, args, round, &toolError);
+		SXPostToolActivity(name, CFAbsoluteTimeGetCurrent() - began, toolError);
 		NSDictionary *message = @{@"role": @"tool", @"tool_call_id": callId,
 								  @"content": SXToolResultText(toolError, toolResult)};
 		[messages addObject:message];

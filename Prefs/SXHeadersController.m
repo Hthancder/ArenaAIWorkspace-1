@@ -105,7 +105,8 @@
 		[self.table.topAnchor constraintEqualToAnchor:self.view.topAnchor],
 		[self.table.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
 		[self.table.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
-		[self.table.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
+		// Bàn phím không che ô đang gõ (iOS 15+).
+		[self.table.bottomAnchor constraintEqualToAnchor:self.view.keyboardLayoutGuide.topAnchor],
 	]];
 	[self sx_validate];
 }
@@ -164,6 +165,8 @@
 		return @"Ví dụ: X-Title, HTTP-Referer, api-key. Header hệ thống (Host, Content-Type, Content-Length) bị bỏ qua vì sẽ làm hỏng request.";
 	}
 	if (section == 1) {
+		NSString *warning = [self sx_insecureWarning];
+		if (warning.length) return warning;
 		return @"Giá trị không được hiện trong danh sách và không bao giờ được ghi vào log.";
 	}
 	return nil;
@@ -258,6 +261,16 @@
 		[self sx_save];
 	}
 	return YES;
+}
+
+/// Endpoint http:// (không phải https) thì header — kể cả token — đi trên mạng
+/// không mã hoá. Cảnh báo ngay dưới ô nhập thay vì để người dùng tự phát hiện.
+- (NSString *)sx_insecureWarning {
+	if (self.presetProvider != SXHeaderPresetProviderOpenAI) return nil;
+	NSString *base = [SXPrefs shared].openaiBase.lowercaseString;
+	if (![base hasPrefix:@"http://"]) return nil;
+	return @"⚠️ Endpoint đang dùng http:// nên giá trị header (kể cả token) đi trên mạng không mã hoá. "
+			@"Hãy đổi sang https:// nếu máy chủ hỗ trợ.";
 }
 
 - (void)sx_pasteValue {
@@ -391,6 +404,7 @@
 	self.table.rowHeight = UITableViewAutomaticDimension;
 	self.table.estimatedRowHeight = 64;
 	[self.table registerClass:[SXHeaderRowCell class] forCellReuseIdentifier:@"header"];
+	self.table.keyboardDismissMode = UIScrollViewKeyboardDismissModeInteractive;
 	[self.view addSubview:self.table];
 	[NSLayoutConstraint activateConstraints:@[
 		[self.table.topAnchor constraintEqualToAnchor:self.view.topAnchor],
@@ -465,6 +479,8 @@
 	cell.valueLabel.text = SXHeaderValueMasked(header[@"value"]);
 	cell.toggle.on = header[@"enabled"] == nil || [header[@"enabled"] boolValue];
 	cell.toggle.tag = indexPath.row;
+	cell.toggle.accessibilityLabel = [NSString stringWithFormat:@"Gửi header %@", header[@"name"]];
+	cell.nameLabel.accessibilityLabel = nil;
 	[cell.toggle removeTarget:nil action:NULL forControlEvents:UIControlEventAllEvents];
 	[cell.toggle addTarget:self action:@selector(sx_toggleChanged:) forControlEvents:UIControlEventValueChanged];
 	return cell;

@@ -92,6 +92,8 @@ FOUNDATION_EXPORT NSArray<NSDictionary *> *SXModelPresets(SXProvider provider);
 - (BOOL)isToolEnabled:(NSString *)name;
 /// Bật/tắt một công cụ và ghi ngay xuống prefs.
 + (void)setToolNamed:(NSString *)name enabled:(BOOL)enabled;
+/// Ghi cả danh sách công cụ bị tắt trong MỘT lần (dùng cho nút “Bật lại tất cả”).
++ (void)setDisabledTools:(NSSet<NSString *> *)names;
 
 - (nullable NSString *)activeAPIKey;
 - (NSString *)activeModel;

@@ -1,5 +1,14 @@
 # SiriX — tiến độ thực hiện thiết kế v1.2
 
+> **1.1.5 — hoàn thiện trong phạm vi hiện có (không thêm tính năng mới).** Trò
+> chuyện thử hiện được việc AI đang làm (công cụ nào, bao nhiêu ms) thay vì chỉ
+> một dòng “đang trả lời”; màn hình header không còn bị bàn phím che, cảnh báo
+> khi endpoint là `http://`; trang cấu hình nhà cung cấp đọc lại mọi hàng tóm tắt
+> sau khi quay về và tự vô hiệu kết quả kiểm tra cũ khi header đổi; khóa dán từ
+> web được bóc BOM/ký tự vô hình/dấu nháy; “Bật lại tất cả” công cụ ghi một lần
+> thay vì 13 lần; nhãn trợ năng cho toàn bộ công tắc mới; thống nhất chính tả
+> “tuỳ chỉnh/tuỳ chọn” trên UI và tài liệu.
+>
 > **1.1.4 — header HTTP tuỳ chỉnh + hết văng khi mở danh sách mô hình.** Mỗi nhà
 > cung cấp có màn hình header riêng: thêm/sửa/bật-tắt/xoá/sắp xếp, kiểm tra tên
 > theo RFC 7230 ngay khi gõ, gợi ý xếp theo endpoint đang cấu hình (OpenRouter,
@@ -32,7 +41,7 @@ Không đổi phiên bản gói sang 1.2 cho đến khi các hạng mục bắt 
 - Sửa ghi log sau khi xóa hoặc xoay vòng, và làm mới màn hình xem log.
 - Các hook chỉ được cài khi class/selector có mặt; một quyết định trả lời được áp dụng cho các lệnh AddViews/SayIt cùng lượt, kèm giới hạn thời gian và ưu tiên tác vụ hệ thống khi đã nhận diện.
 - Chế độ kích hoạt `auto` / `prefix`; trong `prefix`, chỉ `@ai` có nội dung được gửi tới AI, còn `@siri` hoặc câu không có tiền tố giữ Siri gốc. Nhận diện chính xác `@ai` phụ thuộc transcript Apple, nên Type-to-Siri là cách thử đáng tin cậy hơn.
-- Tùy chọn hiển thị bản Siri gốc khi lệnh AddViews có văn bản; bản gốc không được đưa vào lời đọc.
+- Tuỳ chọn hiển thị bản Siri gốc khi lệnh AddViews có văn bản; bản gốc không được đưa vào lời đọc.
 - Trò chuyện thử trong Settings với provider đang chọn, không dùng tool và không lưu lịch sử lâu dài.
 - Kiểm tra kết nối chạy nền, dùng đúng provider của trang cấu hình; retry HTTP 429/5xx tối đa hai lần mỗi vòng trên luồng nền.
 - Lịch sử lưu trên thiết bị có giới hạn, xem chi tiết/sao chép/xóa từng mục hoặc toàn bộ; lượt ở chế độ không lưu chỉ ở bộ nhớ. Không phải chế độ ẩn danh mạng hoặc log.
@@ -41,7 +50,7 @@ Không đổi phiên bản gói sang 1.2 cho đến khi các hạng mục bắt 
 ## Chưa hoàn tất so với thiết kế
 
 - STT thay Apple, ghi mic, dịch transcript và thử STT.
-- TTS tùy chỉnh, chọn giọng/nguồn, tự nhận ngôn ngữ, và chống Siri đọc chồng.
+- TTS tuỳ chỉnh, chọn giọng/nguồn, tự nhận ngôn ngữ, và chống Siri đọc chồng.
 - Deferred push/notification cho đáp án trễ; chế độ ẩn danh toàn diện (chặn dữ liệu nhạy cảm trong mọi log và không gửi mạng) chưa có.
 - Model dự phòng khi lỗi/hết giờ, hủy request theo generation, phát hiện offline sớm.
 - Xuất/nhập cấu hình, kiểm tra cập nhật, công cụ `current_app`, các trang cấu hình tương ứng.
@@ -244,4 +253,39 @@ Preferences.
 trong CI) phủ: validate tên/giá trị/trùng tên/trần, header hệ thống, chuẩn hoá
 dữ liệu thô, dạng từ điển cũ, thứ tự thắng khi trùng tên, tóm tắt, che giá trị,
 gợi ý theo endpoint.
+
+## 1.1.5 — Hoàn thiện trong phạm vi hiện có
+
+Không thêm tính năng lớn. Mục tiêu: mọi thứ đang có phải “xong” — không còn chỗ
+nào là bản nháp.
+
+**Trò chuyện thử.** `SXLLM` phát `SXLLMToolActivityNotification` (tên công cụ,
+số ms, có lỗi hay không) trên hàng đợi chính. Màn hình thử hiển thị đúng một
+dòng hoạt động `🛠 web_fetch · 320 ms`, cập nhật tại chỗ khi có nhiều công cụ
+liên tiếp rồi “đóng băng” khi câu trả lời tới — người dùng thấy AI thật sự làm
+gì mà không bị một loạt bong bóng làm rối. Không kèm tham số hay kết quả công
+cụ, nên không lộ dữ liệu. Ngoài ra: không cho xoá hội thoại khi đang chờ trả
+lời (câu trả lời sẽ rơi vào màn hình trống), và nội dung trạng thái rỗng đã
+đúng thực tế (dùng đúng bộ công cụ như Siri).
+
+**Header tuỳ chỉnh.** Đáy bảng soạn header bám `keyboardLayoutGuide` nên bàn
+phím không che ô đang gõ; cảnh báo ngay dưới ô giá trị khi endpoint là `http://`
+(không mã hoá); công tắc trong danh sách có `accessibilityLabel` theo tên header.
+
+**Trang cấu hình nhà cung cấp.** Quay về từ màn hình con sẽ đọc lại cả bốn hàng
+tóm tắt (`modelDisplay`, `keyDisplay`, `endpointDisplay`, `testStatus`) — trước
+đây chỉ đọc lại dòng header nên mô hình vừa chọn vẫn hiện giá trị cũ. Kết quả
+kiểm tra cũ tự bị vô hiệu khi bộ header đang gửi thay đổi. Khóa dán vào được bóc
+BOM, ký tự zero-width, dấu nháy và khoảng trắng — những thứ khiến request luôn
+401 dù khóa đúng.
+
+**Công cụ.** “Bật lại tất cả” ghi một lần (`+setDisabledTools:`) thay vì 13 lần
+ghi + reload + notify. Công tắc có nhãn trợ năng và gợi ý phân biệt công cụ chỉ
+đọc với công cụ có tác dụng phụ. Trang chính thêm dòng “Đang bật 12/13 · 3 vòng”.
+
+**Danh sách mô hình.** Hiện endpoint đang cấu hình ở dòng ngữ cảnh dưới tiêu đề,
+và đánh dấu “Đang dùng” cho trình đọc màn hình.
+
+**Ngôn ngữ.** Thống nhất “tuỳ chỉnh”, “tuỳ chọn”, “tuỳ biến” (trước đây lẫn
+“tùy…” và “tuỳ…” giữa các màn hình) trong toàn bộ chuỗi UI, README và tài liệu.
 

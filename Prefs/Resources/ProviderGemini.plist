@@ -75,7 +75,7 @@
 		</dict>
 		<dict>
 			<key>cell</key><string>PSEditTextCell</string>
-			<key>label</key><string>Mô hình tùy chỉnh</string>
+			<key>label</key><string>Mô hình tuỳ chỉnh</string>
 			<key>key</key><string>geminiModel</string>
 			<key>defaults</key><string>com.sirix.tweak</string>
 			<key>default</key><string>gemini-2.0-flash</string>

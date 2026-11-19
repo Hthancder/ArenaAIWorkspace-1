@@ -306,10 +306,14 @@ static NSArray<NSString *> *SXLegacyToolNames(NSString *legacyKey) {
 	NSMutableSet<NSString *> *disabled = [current mutableCopy];
 	if (enabled) [disabled removeObject:name];
 	else [disabled addObject:name];
-	NSArray *sorted = [[disabled allObjects] sortedArrayUsingSelector:@selector(compare:)];
+	[self setDisabledTools:disabled];
+	SXLogInf(@"pref", @"công cụ %@: %@", name, enabled ? @"bật" : @"tắt");
+}
+
++ (void)setDisabledTools:(NSSet<NSString *> *)names {
+	NSArray *sorted = [[names allObjects] sortedArrayUsingSelector:@selector(compare:)];
 	[SXPrefs setValue:(sorted.count ? sorted : @[]) forKey:@"toolsDisabled"];
 	[[SXPrefs shared] reload];
-	SXLogInf(@"pref", @"công cụ %@: %@", name, enabled ? @"bật" : @"tắt");
 }
 
 #pragma mark - Header tuỳ chỉnh

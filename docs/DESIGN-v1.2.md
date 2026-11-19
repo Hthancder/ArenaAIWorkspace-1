@@ -10,7 +10,7 @@
 
 | Nhóm | Nội dung |
 |---|---|
-| **STT — thay nhận diện giọng nói mặc định của Siri** | Ghi mic khi Siri mở → Whisper/Groq/Gemini/Tự chỉnh → thay transcript; hỗ trợ endpoint tùy chỉnh, chế độ dịch |
+| **STT — thay nhận diện giọng nói mặc định của Siri** | Ghi mic khi Siri mở → Whisper/Groq/Gemini/Tự chỉnh → thay transcript; hỗ trợ endpoint tuỳ chỉnh, chế độ dịch |
 | **TTS — đọc câu trả lời** | Nguồn free-first (Hệ thống/Edge/Google/Gemini/Tự chỉnh), tự nhận ngôn ngữ phản hồi → chọn giọng phù hợp, chọn giọng, tốc độ, âm lượng |
 | **Mục v1.2 còn lại (đã chốt ở v1.1)** | Deferred push, Thống kê, Lịch sử hội thoại, tiền tố @ai/@siri, model dự phòng, xuất/nhập cấu hình, footer "Siri gốc", đọc to, ẩn danh, offline-fallback |
 | **Chất lượng khác** | Trò chuyện thử trong Settings, kiểm tra cập nhật, công cụ ngữ cảnh app, trả lời cùng ngôn ngữ câu hỏi |
@@ -61,14 +61,14 @@ Người nói ──mic──► [Siri STT (Apple)] ──► partial hypotheses
 - Encode gửi: **WAV** (header + PCM16) — Whisper/Groq nhận thẳng; không cần codec ngoài.
 - Rootheide/rootless: đường dẫn không dùng — chỉ network + AVFoundation ✓.
 
-### B4. Nguồn STT (free-first, endpoint tùy chỉnh)
+### B4. Nguồn STT (free-first, endpoint tuỳ chỉnh)
 
 | Nguồn | Endpoint | Model mặc định | Key | Ghi chú |
 |---|---|---|---|---|
 | **Groq Whisper** ⭐ mặc định khi đã có Groq | `api.groq.com/openai/v1/audio/transcriptions` | `whisper-large-v3-turbo` | reuse key LLM | Free tier, nhanh (~1s) |
 | **OpenAI** | `api.openai.com/v1/audio/transcriptions` | `whisper-1` / `gpt-4o-transcribe` | key OpenAI | |
 | **Gemini (audio)** | `generativelanguage.googleapis.com/...:generateContent` + `inline_data` audio | `gemini-2.0-flash` | key Gemini | Free tier; prompt "trích dẫn chính xác" |
-| **Tự chỉnh (OpenAI-compatible)** ⭐ tùy biến | base URL bất kỳ (`/audio/transcriptions`) | do bạn đặt | optional | Whisper.cpp server, local, proxy… |
+| **Tự chỉnh (OpenAI-compatible)** ⭐ tuỳ biến | base URL bất kỳ (`/audio/transcriptions`) | do bạn đặt | optional | Whisper.cpp server, local, proxy… |
 | **Tắt (Apple)** | — | — | — | Hành vi hiện tại |
 
 - Cấu hình nguồn: `sttSource = off | auto(theo endpoint LLM) | groq | openai | gemini | custom`.
@@ -113,7 +113,7 @@ Answer ready → hiển thị bubble (text, markdown)
      │
      └─ ttsMode ≠ off →
             ① KHÔNG đặt speakableText vào bubble (hoặc set rỗng)
-            ② hook SAPreSynthesizeTTS (đã thấy trong log!) → bỏ qua khi TTS tùy biến BẬT
+            ② hook SAPreSynthesizeTTS (đã thấy trong log!) → bỏ qua khi TTS tuỳ biến BẬT
                → Siri im lặng
             ③ tạo audio: AVSpeech (offline) hoặc GET/POST provider (≤2s)
             ④ phát (AVAudioPlayer/AVSpeech) sau khi bubble hiện

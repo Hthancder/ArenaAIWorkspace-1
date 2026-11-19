@@ -20,9 +20,9 @@ Nhà cung cấp: **OpenAI tương thích** (mặc định) hoặc **Google Gemin
 - **13 công cụ AI thật**: thiết bị, bảng nhớ tạm, đọc trang web, mở ứng dụng/liên kết, chạy phím tắt,
   ghi nhớ lâu dài, tính toán, xoá lịch sử — bật/tắt từng cái, mỗi công cụ có trần thời gian riêng.
 - **Hội thoại có ngữ cảnh** (giữ N cặp câu hỏi/trả lời gần nhất), lịch sử lưu trên máy, thống kê, nhiệt độ và thời gian chờ đều chỉnh được.
-- **Không lưu lịch sử**: các lượt mới chỉ giữ trong bộ nhớ. Tùy chọn này không ngăn Siri, nhà cung cấp AI hoặc các log khác xử lý nội dung; lịch sử cũ phải xóa riêng.
-- **Prompt tùy chỉnh** (để trống = dùng prompt mặc định).
-- **Tiền tố @ai** tùy chọn, xem câu Siri gốc, và trò chuyện thử trong Settings.
+- **Không lưu lịch sử**: các lượt mới chỉ giữ trong bộ nhớ. Tuỳ chọn này không ngăn Siri, nhà cung cấp AI hoặc các log khác xử lý nội dung; lịch sử cũ phải xóa riêng.
+- **Prompt tuỳ chỉnh** (để trống = dùng prompt mặc định).
+- **Tiền tố @ai** tuỳ chọn, xem câu Siri gốc, và trò chuyện thử trong Settings.
 - **Log gỡ lỗi đầy đủ, sao chép được** — lọc theo mức, tìm kiếm, chỉ sao chép phần đang xem.
 - **Settings chỉn chu** — header có trạng thái sống, kiểm tra kết nối ngay trong trang cấu hình,
   chọn model từ danh sách gợi ý, lịch sử nhóm theo ngày, thống kê có thanh tỉ lệ, chat thử dạng bong bóng.
@@ -80,9 +80,9 @@ Siri gốc trả lời ──► AFConnection._handleCommand:reply:             
 
 - Mỗi hook được kiểm tra class/selector lúc khởi động; selector không có sẽ được bỏ qua và ghi log. Các API Siri là API riêng của Apple nên cần xác minh trên từng thiết bị.
 - Trong một lượt, AddViews và SayIt dùng cùng quyết định AI/lỗi/hết giờ; tác vụ hệ thống được ưu tiên khi đã nhận diện. Nếu không sửa được lệnh hoặc thiếu hook, Siri gốc vẫn có thể xuất hiện.
-- Chế độ thay thế mặc định hiển thị thông báo khi hết giờ; tùy chọn **giữ Siri gốc** vẫn cố ý cho phản hồi gốc đi qua. Chờ trên luồng ACE tối đa 5 giây; đáp án đến sau khi đã quyết định hết giờ không tự hiện lại.
+- Chế độ thay thế mặc định hiển thị thông báo khi hết giờ; tuỳ chọn **giữ Siri gốc** vẫn cố ý cho phản hồi gốc đi qua. Chờ trên luồng ACE tối đa 5 giây; đáp án đến sau khi đã quyết định hết giờ không tự hiện lại.
 
-## Build cục bộ (tùy chọn)
+## Build cục bộ (tuỳ chọn)
 
 CI là đường build chính (macOS + Xcode trên GitHub Actions). Muốn kiểm tra code trước khi push, trên Linux:
 

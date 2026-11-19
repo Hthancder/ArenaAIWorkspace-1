@@ -99,7 +99,7 @@ hoặc gõ        (sttLanguage)      (sttTranslate)         ngôn ngữ câu h�
                                                                           ↑ nếu detect thấp
                                                                           → dùng ngôn ngữ cấu hình (ttsLang cố định)
 ```
-- **Prompt rule cố định** trong default prompt: *"Trả lời bằng ngôn ngữ của câu hỏi."* — prompt tùy chỉnh **thay thế toàn bộ** (user tự giữ rule — footnote trong trang Prompt ghi rõ).
+- **Prompt rule cố định** trong default prompt: *"Trả lời bằng ngôn ngữ của câu hỏi."* — prompt tuỳ chỉnh **thay thế toàn bộ** (user tự giữ rule — footnote trong trang Prompt ghi rõ).
 - `ttsLang=auto` (mặc định) là mốc5; người dùng ép `vi`/`en` thì bỏ detect.
 - Log verbose ghi cả 5 mốc khi có lệch (`lang: vi→(dịch)→vi→detect=vi→voice=An`).
 
@@ -186,7 +186,7 @@ SiriX (Root — header icon + tên + phụ đề)
 │
 ├─ [Nhóm] Prompt
 │   ├─ PSLinkCell    Xem / chỉnh prompt        → SXPromptController (segment Đang dùng/Mặc định, chip biến)
-│   └─ footerText    biến {date}{device}{lang} · prompt tùy chỉnh thay thế toàn bộ
+│   └─ footerText    biến {date}{device}{lang} · prompt tuỳ chỉnh thay thế toàn bộ
 │
 ├─ [Nhóm] Công cụ AI
 │   ├─ PSSwitch      Thông tin thiết bị

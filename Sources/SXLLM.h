@@ -4,6 +4,11 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+/// Phát ra (trên hàng đợi chính) mỗi lần một công cụ chạy xong, để giao diện
+/// hiển thị “đang làm gì” thay vì chỉ một chấm “đang trả lời”.
+/// userInfo: @{ @"name": NSString, @"ms": NSNumber, @"failed": NSNumber }.
+FOUNDATION_EXPORT NSNotificationName const SXLLMToolActivityNotification;
+
 typedef void (^SXLLMCompletion)(NSString * _Nullable answer,
 								NSError * _Nullable error,
 								NSDictionary * _Nullable info);

@@ -117,11 +117,11 @@
 ┌ Prompt ──────────────────────────┐
 │ [Đang dùng] [Mặc định]          │  ← segmented: xem 2 bản
 │ ┌──────────────────────────────┐ │
-│ │ (TextView — hiện EFFECTIVE   │ │  ← sửa trực tiếp = tạo bản tùy chỉnh
+│ │ (TextView — hiện EFFECTIVE   │ │  ← sửa trực tiếp = tạo bản tuỳ chỉnh
 │ │  prompt: custom nếu có,      │ │
 │ │  không thì mặc định)        │ │
 │ └──────────────────────────────┘ │
-│ Đang dùng: prompt tùy chỉnh      │  ← nhãn trạng thái (N ký tự)
+│ Đang dùng: prompt tuỳ chỉnh      │  ← nhãn trạng thái (N ký tự)
 │  {date} {device} {lang}          │  ← chip biến — bấm để chèn
 │ [Lưu] [Khôi phục mặc định] [Sao chép] │
 └──────────────────────────────────┘
@@ -192,7 +192,7 @@ SiriX (Root)                              ← header icon + tiêu đề (giữ)
 │
 ├─ [Nhóm] Prompt
 │   ├─ PSLinkCell    Xem / chỉnh prompt         → SXPromptController (redesign, D)
-│   └─ footerText    giải thích mặc định/tùy chỉnh + biến
+│   └─ footerText    giải thích mặc định/tuỳ chỉnh + biến
 │
 ├─ [Nhóm] Công cụ AI
 │   ├─ PSSwitch      Thông tin thiết bị
@@ -263,7 +263,7 @@ SiriX (Root)                              ← header icon + tiêu đề (giữ)
 | **Đẩy câu trả lời trễ** | Deferred push hoàn chỉnh (nếu spike B2.1 thành công) |
 | **Câu trả lời Siri gốc** | Footer nhỏ "Siri: …" dưới bubble khi bật (đối chiếu) |
 | **Xuất/nhập cấu hình** | JSON chia sẻ cấu hình (share qua AirDrop/Files) |
-| **Đọc to mọi câu trả lời** | Tùy chọn speak (không chỉ khi lỗi) |
+| **Đọc to mọi câu trả lời** | Tuỳ chọn speak (không chỉ khi lỗi) |
 | **Tự động dự phòng offline** | Không có mạng → hiện bubble "Không có mạng — dùng Siri gốc" ngay |
 | **Quick-toggle** | Hành động nhanh trong Control Center?? — ngoài phạm vi (giữ理想 nhỏ) |
 
@@ -309,5 +309,5 @@ Không đổi: hook selector surface, định dạng log, scheme rootless/roothi
 1. **Deferred push** (câu trả lời trễ "vào" đúng dialog đang mở) → **để v1.2**.
    v1.1 cam kết: hard-cap 5s, không đóng UI, bubble lỗi/bubble trễ, mutate-on-copy.
 2. **Hết timeout ở chế độ Thay thế** → **chỉnh được trong Cài đặt**: row *"Khi hết giờ chờ"* = `bubble` (mặc định) | `keep`; thời gian chờ chỉnh bằng slider 2–30s; *(P2: thêm phương án `retry` bằng model dự phòng)*.
-   Yêu cầu "cho chỉnh timeout tùy chỉnh, etc." → mọi thông số sống trong Settings, nhóm Trả lời / Nâng cao.
+   Yêu cầu "cho chỉnh timeout tuỳ chỉnh, etc." → mọi thông số sống trong Settings, nhóm Trả lời / Nâng cao.
 3. **Thống kê + Lịch sử hội thoại** → **để v1.2**.

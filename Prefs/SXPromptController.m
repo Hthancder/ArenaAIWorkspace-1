@@ -161,7 +161,7 @@ static NSString *SXTemplateAtIndex(NSInteger index) {
 
 - (void)updateStatus {
 	// Trạng thái phản ánh bản ĐANG DÙNG (rawEffective), không phải nội dung đang xem —
-	// đang ở tab “Mặc định” nhưng custom vẫn được lưu thì vẫn ghi “prompt tùy chỉnh”.
+	// đang ở tab “Mặc định” nhưng custom vẫn được lưu thì vẫn ghi “prompt tuỳ chỉnh”.
 	NSString *buffer = self.textView.text ?: @"";
 	BOOL dirty = [self isDirty];
 	BOOL effectiveIsDefault = (self.rawEffective.length == 0 ||
@@ -173,7 +173,7 @@ static NSString *SXTemplateAtIndex(NSInteger index) {
 		self.navigationItem.prompt = @"Đang dùng: prompt mặc định của SiriX";
 	} else {
 		self.navigationItem.prompt = [NSString stringWithFormat:
-			@"Đang dùng: prompt tùy chỉnh (%lu ký tự)", (unsigned long)self.rawEffective.length];
+			@"Đang dùng: prompt tuỳ chỉnh (%lu ký tự)", (unsigned long)self.rawEffective.length];
 	}
 	self.navigationItem.rightBarButtonItem.enabled = dirty;
 }
@@ -277,7 +277,7 @@ static NSString *SXTemplateAtIndex(NSInteger index) {
 	// Hành động xây dựng (đã xác nhận nếu cần) — không cần hỏi thêm.
 	[SXPrefs setString:nil forKey:@"customPrompt"];
 	notify_post("com.sirix.tweak/prefs.changed");
-	SXLogInf(@"pref", @"Khôi phục prompt mặc định — xóa bản tùy chỉnh");
+	SXLogInf(@"pref", @"Khôi phục prompt mặc định — xóa bản tuỳ chỉnh");
 	[[SXPrefs shared] reload];
 	self.rawEffective = SXDefaultSystemPrompt();
 	self.segmentControl.selectedSegmentIndex = 0;

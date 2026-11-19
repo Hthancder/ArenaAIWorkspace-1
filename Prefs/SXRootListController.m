@@ -4,6 +4,7 @@
 #import "PSSpecifier.h"
 #import "SXLog.h"
 #import "SXPrefs.h"
+#import "SXTools.h"
 #import <notify.h>
 #import <UIKit/UIKit.h>
 
@@ -83,6 +84,16 @@ static void SXExceptionHandler(NSException *exception) {
 		NSString *key = [specifier propertyForKey:@"key"];
 		SXPrefs *prefs = [SXPrefs shared];
 
+		if ([key isEqualToString:@"toolsDisplay"]) {
+			NSArray *tools = [SXTools catalog];
+			NSUInteger enabled = 0;
+			for (SXTool *tool in tools) {
+				if ([prefs isToolEnabled:tool.name]) enabled++;
+			}
+			if (!tools.count) return @"Chưa cài công cụ nào";
+			return [NSString stringWithFormat:@"%lu/%lu · %ld vòng",
+					(unsigned long)enabled, (unsigned long)tools.count, (long)prefs.maxToolRounds];
+		}
 		if ([key isEqualToString:@"summary.status"]) return prefs.statusSummary;
 		if ([key isEqualToString:@"summary.provider"]) return prefs.providerSummary;
 		if ([key isEqualToString:@"summary.reply"]) return prefs.replySummary;
@@ -260,7 +271,7 @@ static void SXExceptionHandler(NSException *exception) {
 	__weak typeof(self) weakSelf = self;
 	[SXUI confirmOn:self
 			  title:@"Khôi phục cài đặt mặc định?"
-			message:@"Toàn bộ tùy chọn, khóa API và prompt tùy chỉnh sẽ bị xoá. Lịch sử hội thoại và log không bị ảnh hưởng."
+			message:@"Toàn bộ tuỳ chọn, khóa API và prompt tuỳ chỉnh sẽ bị xoá. Lịch sử hội thoại và log không bị ảnh hưởng."
 		confirmText:@"Khôi phục"
 			 action:^{
 		[SXPrefs resetAll];

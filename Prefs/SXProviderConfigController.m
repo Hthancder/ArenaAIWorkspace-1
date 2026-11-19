@@ -9,6 +9,7 @@
 #import <UIKit/UIKit.h>
 
 @interface SXProviderConfigController ()
+@property (nonatomic, copy) NSString *headerSignature;   // phát hiện header vừa đổi ở màn hình con
 @property (nonatomic, copy) NSString *configPlistName;
 @property (nonatomic, copy) NSString *testResult;
 @property (nonatomic) BOOL testing;
@@ -174,8 +175,9 @@
 		[SXUI alertOn:self title:@"Bộ nhớ tạm trống" message:@"Hãy sao chép khóa API trước, rồi quay lại đây."];
 		return;
 	}
-	// Khóa dán từ trang web thường kèm xuống dòng/CRLF — lấy dòng đầu tiên.
-	NSString *candidate = clipboard;
+	// Khóa dán từ trang web thường kèm xuống dòng/CRLF, BOM, dấu nháy hoặc ký tự
+	// vô hình — bóc hết trước khi lưu, nếu không request sẽ luôn 401.
+	NSString *candidate = [self sx_cleanedKey:clipboard];
 	NSRange newline = [candidate rangeOfCharacterFromSet:[NSCharacterSet newlineCharacterSet]];
 	if (newline.location != NSNotFound) candidate = [candidate substringToIndex:newline.location];
 	NSString *key = [candidate stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
@@ -196,6 +198,27 @@
 	[SXUI alertOn:self
 			title:@"Đã dán khóa"
 		  message:[NSString stringWithFormat:@"Khóa đang dùng: %@", [SXPrefs maskedKey:key]]];
+}
+
+/// Bóc BOM, ký tự vô hình, dấu nháy và khoảng trắng quanh khóa API.
+- (NSString *)sx_cleanedKey:(NSString *)raw {
+	if (![raw isKindOfClass:[NSString class]]) return @"";
+	NSMutableString *text = [raw mutableCopy];
+	NSArray<NSString *> *invisible = @[@"\uFEFF", @"\u200B", @"\u200C", @"\u200D", @"\u2060"];
+	for (NSString *token in invisible) {
+		[text replaceOccurrencesOfString:token withString:@"" options:0
+								   range:NSMakeRange(0, text.length)];
+	}
+	NSString *trimmed = [text stringByTrimmingCharactersInSet:
+						 [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+	if (trimmed.length >= 2) {
+		unichar first = [trimmed characterAtIndex:0];
+		unichar last = [trimmed characterAtIndex:trimmed.length - 1];
+		if ((first == '"' && last == '"') || (first == '\'' && last == '\'')) {
+			trimmed = [trimmed substringWithRange:NSMakeRange(1, trimmed.length - 2)];
+		}
+	}
+	return [trimmed stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 }
 
 - (void)sx_testConnection:(id)sender {
@@ -267,12 +290,25 @@
 
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
-	// Header có thể vừa đổi ở màn hình con — cập nhật lại dòng tóm tắt.
-	@try {
-		[self reloadSpecifierID:@"headersDisplay" animated:NO];
-	} @catch (NSException *exception) {
-		(void)exception;
+	// Header có thể vừa đổi ở màn hình con: cập nhật dòng tóm tắt và coi kết quả
+	// kiểm tra cũ là hết hiệu lực (nó được đo với bộ header khác).
+	// Màn hình con (danh sách mô hình, header) có thể vừa đổi giá trị — đọc lại
+	// các hàng tóm tắt để không bao giờ hiển thị dữ liệu cũ sau khi quay về.
+	for (NSString *identifier in @[@"headersDisplay", @"modelDisplay", @"keyDisplay",
+								   @"endpointDisplay", @"testStatus"]) {
+		@try {
+			[self reloadSpecifierID:identifier animated:NO];
+		} @catch (NSException *exception) {
+			(void)exception;
+		}
 	}
+	NSString *signature = [NSString stringWithFormat:@"%@",
+						   SXHeadersApplied([[SXPrefs shared] headersForProvider:self.provider])];
+	if (self.headerSignature && ![signature isEqualToString:self.headerSignature]) {
+		[self sx_invalidateTestResult];
+		[self sx_refreshTestRow];
+	}
+	self.headerSignature = signature;
 }
 
 - (void)sx_openChat:(id)sender {

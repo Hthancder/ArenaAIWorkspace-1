@@ -10,6 +10,7 @@ typedef NS_ENUM(NSInteger, SXChatRole) {
 	SXChatRoleAssistant,
 	SXChatRoleError,
 	SXChatRoleTyping,
+	SXChatRoleTool,   // “đang dùng công cụ …” — chỉ trong màn hình thử
 };
 
 @interface SXChatMessage : NSObject
@@ -105,14 +106,19 @@ typedef NS_ENUM(NSInteger, SXChatRole) {
 			_bubble.backgroundColor = UIColor.secondarySystemBackgroundColor;
 			_label.textColor = UIColor.secondaryLabelColor;
 			break;
+		case SXChatRoleTool:
+			_bubble.backgroundColor = [[SXUI accentColor] colorWithAlphaComponent:0.12];
+			_label.textColor = [SXUI accentColor];
+			break;
 	}
-	if (message.role == SXChatRoleTyping) {
-		_label.font = [UIFont italicSystemFontOfSize:15];
+	if (message.role == SXChatRoleTyping || message.role == SXChatRoleTool) {
+		_label.font = [UIFont monospacedSystemFontOfSize:12 weight:UIFontWeightRegular];
 	} else {
 		_label.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
 	}
 
-	NSString *meta = (message.role == SXChatRoleError || message.role == SXChatRoleTyping)
+	NSString *meta = (message.role == SXChatRoleError || message.role == SXChatRoleTyping ||
+					  message.role == SXChatRoleTool)
 		? @""
 		: [SXUI relativeStringForDate:message.date];
 	_meta.text = meta;
@@ -138,6 +144,10 @@ typedef NS_ENUM(NSInteger, SXChatRole) {
 - (void)viewDidLoad {
 	[super viewDidLoad];
 	self.title = @"Trò chuyện thử";
+	[[NSNotificationCenter defaultCenter] addObserver:self
+											 selector:@selector(sx_toolDidRun:)
+												 name:SXLLMToolActivityNotification
+											   object:nil];
 	self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
 	self.messages = [NSMutableArray array];
 
@@ -157,6 +167,46 @@ typedef NS_ENUM(NSInteger, SXChatRole) {
 - (void)viewDidAppear:(BOOL)animated {
 	[super viewDidAppear:animated];
 	[self.input becomeFirstResponder];
+}
+
+- (void)dealloc {
+	[[NSNotificationCenter defaultCenter] removeObserver:self];
+}
+
+/// Công cụ vừa chạy xong. Giữ MỘT dòng hoạt động trong lúc đang trả lời rồi
+/// đóng băng nó khi có câu trả lời — nhờ vậy người dùng thấy AI thật sự làm gì
+/// (đọc web, mở app…) mà không bị một loạt bong bóng làm rối màn hình.
+- (void)sx_toolDidRun:(NSNotification *)notification {
+	// Chỉ hiện khi chính màn hình này đang chờ trả lời — thông báo lạc từ lượt
+	// kiểm tra kết nối ở màn hình khác không được chen vào hội thoại.
+	if (!self.busy) return;
+	NSDictionary *info = notification.userInfo;
+	NSString *name = [info[@"name"] isKindOfClass:[NSString class]] ? info[@"name"] : @"?";
+	NSInteger ms = [info[@"ms"] integerValue];
+	BOOL failed = [info[@"failed"] boolValue];
+	NSString *text = [NSString stringWithFormat:@"%@ %@ · %ld ms", failed ? @"⚠️" : @"🛠", name, (long)ms];
+
+	SXChatMessage *typing = self.messages.lastObject;
+	BOOL typingAtEnd = typing && typing.role == SXChatRoleTyping;
+	SXChatMessage *last = typingAtEnd && self.messages.count >= 2
+		? self.messages[self.messages.count - 2] : typing;
+
+	if (last && last.role == SXChatRoleTool) {
+		last.text = text;
+		[UIView performWithoutAnimation:^{
+			[self.table reloadData];
+		}];
+		return;
+	}
+
+	SXChatMessage *toolMessage = [SXChatMessage new];
+	toolMessage.role = SXChatRoleTool;
+	toolMessage.text = text;
+	toolMessage.date = [NSDate date];
+	NSUInteger insertAt = typingAtEnd ? self.messages.count - 1 : self.messages.count;
+	[self.messages insertObject:toolMessage atIndex:insertAt];
+	[self.table reloadData];
+	if (!typingAtEnd) [self sx_scrollToBottom];
 }
 
 #pragma mark - Giao diện
@@ -256,7 +306,7 @@ typedef NS_ENUM(NSInteger, SXChatRole) {
 	}
 	SXPrefs *prefs = [SXPrefs shared];
 	NSString *message = prefs.activeAPIKey.length
-		? [NSString stringWithFormat:@"Hỏi thử để kiểm tra %@. Hội thoại chỉ nằm trong màn hình này, công cụ AI không được gọi.", prefs.providerSummary]
+		? [NSString stringWithFormat:@"Hỏi thử để kiểm tra %@. Dùng đúng bộ công cụ như Siri thật — thử “pin còn bao nhiêu” hay “chép câu này”. Hội thoại chỉ nằm trong màn hình này.", prefs.providerSummary]
 		: @"Chưa có khóa API. Mở Cấu hình nhà cung cấp để dán khóa trước.";
 	self.table.backgroundView = [SXUI emptyStateWithSymbol:@"bubble.left.and.bubble.right"
 													 title:@"Chưa có tin nhắn"
@@ -386,7 +436,7 @@ typedef NS_ENUM(NSInteger, SXChatRole) {
 	NSIndexPath *indexPath = [self.table indexPathForRowAtPoint:point];
 	if (!indexPath || (NSUInteger)indexPath.row >= self.messages.count) return;
 	SXChatMessage *message = self.messages[(NSUInteger)indexPath.row];
-	if (!message.text.length) return;
+	if (!message.text.length || message.role == SXChatRoleTool) return;
 	UIPasteboard.generalPasteboard.string = message.text;
 	[SXUI tapFeedback];
 	NSString *restore = [SXPrefs shared].providerSummary;
@@ -416,6 +466,12 @@ typedef NS_ENUM(NSInteger, SXChatRole) {
 #pragma mark - Xoá
 
 - (void)sx_confirmClear {
+	if (self.busy) {
+		// Xoá giữa lúc chờ sẽ làm câu trả lời rơi vào màn hình trống — đợi xong đã.
+		[SXUI alertOn:self title:@"Đang chờ trả lời"
+			  message:@"Đợi câu trả lời này xong rồi xoá, hoặc thoát ra và quay lại."];
+		return;
+	}
 	if (!self.messages.count) {
 		[SXUI alertOn:self title:@"Chưa có tin nhắn" message:nil];
 		return;

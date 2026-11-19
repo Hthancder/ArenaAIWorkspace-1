@@ -110,6 +110,11 @@
 - (void)viewDidLoad {
 	[super viewDidLoad];
 	self.title = [NSString stringWithFormat:@"Mô hình %@", SXProviderDisplayName(self.provider)];
+	// Dòng ngữ cảnh dưới tiêu đề: đang cấu hình endpoint nào.
+	NSString *endpoint = self.provider == SXProviderGemini
+		? @"generativelanguage.googleapis.com"
+		: ([SXPrefs normalizedBaseURL:[SXPrefs shared].openaiBase] ?: @"endpoint chưa hợp lệ");
+	self.navigationItem.prompt = endpoint;
 	self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
 
 	self.presets = SXModelPresets(self.provider) ?: @[];
@@ -175,6 +180,7 @@
 		cell.modelLabel.text = nil;
 		cell.hintLabel.text = @"Gõ đúng mã mô hình mà endpoint của bạn nhận.";
 		cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+		cell.accessibilityHint = @"Mở hộp thoại nhập mã mô hình.";
 		return cell;
 	}
 
@@ -187,6 +193,7 @@
 		cell.hintLabel.text = title.length ? nil
 			: @"Không nằm trong danh sách gợi ý — vẫn dùng bình thường nếu endpoint hỗ trợ.";
 		cell.accessoryType = UITableViewCellAccessoryCheckmark;
+		cell.accessibilityValue = @"Đang dùng";
 		return cell;
 	}
 
@@ -198,6 +205,7 @@
 	cell.hintLabel.text = preset[@"hint"];
 	BOOL selected = [preset[@"model"] isEqualToString:self.currentModel];
 	cell.accessoryType = selected ? UITableViewCellAccessoryCheckmark : UITableViewCellAccessoryNone;
+	cell.accessibilityValue = selected ? @"Đang dùng" : nil;
 	return cell;
 }
 
