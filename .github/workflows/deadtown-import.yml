@@ -53,6 +53,22 @@ jobs:
           printf 'PROJECT OPEN SOURCE="%s"\nPROJECT SAVE DESTINATION="%s"\n' "$project" "$destination" > "$script"
           (cd work/projecttool && ./ProjectTool SCRIPT "PATH=$script") 2>&1 | tee work/import.log
           test -s "$destination"
+      - name: Report import diagnostics
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          log = Path('work/import.log')
+          if log.exists():
+              matches = [line for line in log.read_text(errors='replace').splitlines()
+                         if re.search(r'\b(error|failed|warning|could not)\b', line, re.I)]
+              print(f'::notice::ProjectTool reported {len(matches)} diagnostic lines; inspect the import log.')
+              for line in matches[:12]:
+                  safe = line.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+                  print(f'::warning::{safe[:500]}')
+          PY
       - name: Upload import diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -67,5 +83,83 @@ jobs:
         with:
           name: deadtown-imported-project-untested
           path: work/converted/
+          if-no-files-found: error
+          retention-days: 3
+
+  ios:
+    name: Experimental iOS IPA
+    needs: import
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check GameMaker access
+        shell: bash
+        env:
+          GAMEMAKER_ACCESS_KEY: ${{ secrets.GAMEMAKER_ACCESS_KEY }}
+        run: |
+          if [ -z "$GAMEMAKER_ACCESS_KEY" ]; then
+            echo '::error::GameMaker access is not configured; no iOS build was attempted.'
+            exit 1
+          fi
+      - name: Download converted project
+        uses: actions/download-artifact@v4
+        with:
+          name: deadtown-imported-project-untested
+          path: project
+      - name: Set up GameMaker iOS toolchain
+        uses: bscotch/igor-setup@3db465f55c2d9fda63cc08907f7351b97701fb25
+        id: setup
+        with:
+          access-key: ${{ secrets.GAMEMAKER_ACCESS_KEY }}
+          runtime-version: 2026.0.0.23
+          modules: ios
+      - name: Compile GameMaker project for iOS
+        uses: bscotch/igor-build@61b45e9112a069d2f4d5f24e21910eb94d4cf723
+        id: build
+        with:
+          yyp-path: project/deadtown.yyp
+          user-dir: ${{ steps.setup.outputs.user-dir }}
+          platform: ios
+          yyc: false
+          save-logs: true
+      - name: Build unsigned iOS app and package IPA
+        shell: bash
+        env:
+          OUTPUT_DIR: ${{ steps.build.outputs.out-dir }}
+        run: |
+          set -euo pipefail
+          projects=()
+          while IFS= read -r line; do projects+=("$line"); done < <(find "$OUTPUT_DIR" -type d -name '*.xcodeproj' -prune)
+          if [ "${#projects[@]}" -ne 1 ]; then
+            echo '::error::Expected exactly one generated Xcode project; inspect the GameMaker output.'
+            exit 1
+          fi
+          xcodebuild -list -json -project "${projects[0]}" > targets.json
+          target=$(python3 - <<'PY'
+          import json
+          d = json.load(open('targets.json'))['project']
+          targets = [t for t in d['targets'] if not t.lower().endswith(('tests', 'uitests'))]
+          if len(targets) != 1:
+              raise SystemExit('Expected exactly one non-test Xcode target: ' + repr(targets))
+          print(targets[0])
+          PY
+          )
+          mkdir -p "${RUNNER_TEMP}/deadtown-built"
+          xcodebuild -project "${projects[0]}" -target "$target" -configuration Release -sdk iphoneos \
+            CODE_SIGNING_ALLOWED=NO IPHONEOS_DEPLOYMENT_TARGET=15.0 \
+            CONFIGURATION_BUILD_DIR="${RUNNER_TEMP}/deadtown-built" build
+          apps=()
+          while IFS= read -r line; do apps+=("$line"); done < <(find "${RUNNER_TEMP}/deadtown-built" -maxdepth 1 -type d -name '*.app')
+          if [ "${#apps[@]}" -ne 1 ]; then echo '::error::Expected one built app'; exit 1; fi
+          exe=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "${apps[0]}/Info.plist")
+          lipo -verify_arch arm64 "${apps[0]}/$exe"
+          mkdir -p package/Payload
+          cp -R "${apps[0]}" package/Payload/
+          (cd package && zip -qr ../DeadTown-experimental-unsigned.ipa Payload)
+      - name: Upload experimental unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: deadtown-experimental-unsigned-ipa
+          path: DeadTown-experimental-unsigned.ipa
           if-no-files-found: error
           retention-days: 3
