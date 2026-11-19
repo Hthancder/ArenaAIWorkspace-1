@@ -24,7 +24,9 @@ string path = Environment.GetEnvironmentVariable("GML_PROBE_SOURCE");
 if (string.IsNullOrEmpty(path)) throw new Exception("GML_PROBE_SOURCE is not set");
 var paths = Directory.GetFiles(Path.GetDirectoryName(path), "*.gml");
 Array.Sort(paths, StringComparer.Ordinal);
-Console.WriteLine($"PROBE: attempting {paths.Length} staged offline source scripts");
+var sourceScriptNames = new HashSet<string>(paths.Select(Path.GetFileNameWithoutExtension), StringComparer.Ordinal);
+var apkScriptNames = new HashSet<string>(Data.Scripts.Select(x => x.Name.Content), StringComparer.Ordinal);
+Console.WriteLine($"PROBE: attempting {paths.Length} staged offline source scripts; APK scripts absent from source={apkScriptNames.Except(sourceScriptNames).Count()}, source scripts absent from APK={sourceScriptNames.Except(apkScriptNames).Count()}");
 var group = new CodeImportGroup(Data);
 foreach (string script in paths)
     group.QueueReplace("gml_Script_" + Path.GetFileNameWithoutExtension(script), File.ReadAllText(script));
@@ -33,7 +35,11 @@ foreach (string script in paths)
 // the APK objects: matching object and room versions is still unresolved.
 string objectsDir = Path.Combine(Directory.GetParent(Path.GetDirectoryName(path)).FullName, "objects");
 int selected = 0, skipped = 0;
-foreach (string filename in Directory.GetFiles(objectsDir, "*.object.gmx").OrderBy(x => x, StringComparer.Ordinal))
+var objectFiles = Directory.GetFiles(objectsDir, "*.object.gmx");
+var sourceObjectNames = new HashSet<string>(objectFiles.Select(x => Path.GetFileName(x).Replace(".object.gmx", "")), StringComparer.Ordinal);
+var apkObjectNames = new HashSet<string>(Data.GameObjects.Select(x => x.Name.Content), StringComparer.Ordinal);
+Console.WriteLine($"PROBE: APK objects absent from source={apkObjectNames.Except(sourceObjectNames).Count()}, source objects absent from APK={sourceObjectNames.Except(apkObjectNames).Count()}");
+foreach (string filename in objectFiles.OrderBy(x => x, StringComparer.Ordinal))
 {
     string objectName = Path.GetFileName(filename).Replace(".object.gmx", "");
     var events = XDocument.Load(filename).Root.Element("events")?.Elements("event");
