@@ -42,7 +42,7 @@ jobs:
           echo "UTMT_EXE=$GITHUB_WORKSPACE/$exe" >> "$GITHUB_ENV"
         env:
           GH_TOKEN: ${{ github.token }}
-      - name: Probe a single script, without creating an IPA
+      - name: Probe source scripts, without creating an IPA
         shell: bash
         env:
           GML_PROBE_SOURCE: ${{ github.workspace }}/work/source/deadtown.gmx/scripts/lang_type_set.gml

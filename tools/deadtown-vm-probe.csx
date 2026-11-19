@@ -20,14 +20,18 @@ Data.FORM.FUNC.CodeLocals = new UndertaleSimpleList<UndertaleCodeLocals>();
 
 string path = Environment.GetEnvironmentVariable("GML_PROBE_SOURCE");
 if (string.IsNullOrEmpty(path)) throw new Exception("GML_PROBE_SOURCE is not set");
-string source = File.ReadAllText(path);
+var paths = Directory.GetFiles(Path.GetDirectoryName(path), "*.gml");
+Array.Sort(paths, StringComparer.Ordinal);
+Console.WriteLine($"PROBE: attempting {paths.Length} original source scripts");
 var group = new CodeImportGroup(Data);
-group.QueueReplace("gml_Script_lang_type_set", source);
+foreach (string script in paths)
+    group.QueueReplace("gml_Script_" + Path.GetFileNameWithoutExtension(script), File.ReadAllText(script));
 var result = group.Import(false);
 Console.WriteLine($"PROBE: compile_success={result.Successful}, code_entries={Data.Code.Count}, variables={Data.Variables.Count}, functions={Data.Functions.Count}");
 if (!result.Successful)
 {
-    Console.WriteLine("PROBE: " + result.PrintAllErrors(true).Replace('\n', ' '));
+    foreach (var error in result.Errors)
+        Console.WriteLine("PROBE_ERROR: " + error.Code.Name.Content + ": " + error.GenerateDetailedMessage().Replace('\n', ' '));
     throw new Exception("Probe compilation failed");
 }
-Console.WriteLine("PROBE: one source script compiled in memory; this is not a playable game or IPA");
+Console.WriteLine("PROBE: source scripts compiled in memory; no events or playable game or IPA");
