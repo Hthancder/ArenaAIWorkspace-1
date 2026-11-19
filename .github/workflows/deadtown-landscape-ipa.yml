@@ -1,0 +1,89 @@
+name: Dead Town iOS landscape test IPA
+
+on:
+  push:
+    branches:
+      - arena/78062d86-arenaaiworkspace-1
+    paths:
+      - .github/workflows/deadtown-landscape-ipa.yml
+      - tools/prepare_deadtown_ios_plist.py
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify plist preparation tests
+        run: python -m unittest discover -s tests -p 'test_deadtown_ios_plist.py'
+      - name: Retrieve iOS 15 runner from first test
+        uses: actions/download-artifact@v4
+        with:
+          name: gmrunner-ios15-standalone-untested
+          path: runner
+          run-id: 44509744633
+          github-token: ${{ github.token }}
+      - name: Retrieve original test game data
+        uses: actions/download-artifact@v4
+        with:
+          name: deadtown-incomplete-game-data
+          path: game
+          run-id: 44509744719
+          github-token: ${{ github.token }}
+      - name: Package landscape test (same bundle ID)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p unpacked output
+          unzip -q runner/gmRunner.ipa -d unpacked
+          app=unpacked/Payload/gmRunner.app
+          test -s game/data.win
+          test -s game/audiogroup1.dat
+          test -s game/audiogroup2.dat
+          # Only used on fresh installs: the launcher never overwrites existing
+          # game data, user configuration, mods, or saves on an update.
+          printf 'touch = 1\ntouch_controls = off\n' > game/gmrunner.ini
+          cp -R game "$app/BundledGame"
+          python tools/prepare_deadtown_ios_plist.py "$app/Info.plist"
+          python - <<'PY'
+          import plistlib, struct
+          from pathlib import Path
+          from tools.prepare_deadtown_ios_plist import BUNDLE_ID, LANDSCAPE
+          app = Path('unpacked/Payload/gmRunner.app')
+          info = plistlib.loads((app / 'Info.plist').read_bytes())
+          assert info['CFBundleIdentifier'] == BUNDLE_ID
+          assert info['UISupportedInterfaceOrientations'] == LANDSCAPE
+          assert info['UISupportedInterfaceOrientations~ipad'] == LANDSCAPE
+          magic, arch = struct.unpack('<II', (app / info['CFBundleExecutable']).read_bytes()[:8])
+          assert (magic, arch) == (0xfeedfacf, 0x100000c)
+          assert not (app / '_CodeSignature').exists()
+          print(f"::notice::Landscape-only iOS {info['MinimumOSVersion']}, arm64, bundle {BUNDLE_ID}, build {info['CFBundleVersion']}")
+          PY
+          (cd unpacked && zip -qry ../output/DeadTown-iOS15-ngang-test2.ipa Payload)
+          unzip -tq output/DeadTown-iOS15-ngang-test2.ipa
+          sha256sum output/DeadTown-iOS15-ngang-test2.ipa | tee output/SHA256.txt
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeadTown-iOS15-landscape-test-2
+          path: output/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Publish prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<'EOF'
+          **Bản thử nghiệm sửa lỗi màn hình bị vẽ ở góc.** Bản này khóa hướng ngang ngay từ khi mở app để tránh runner lấy kích thước dọc rồi hiển thị trên màn hình ngang. Chưa kiểm tra được trên iPhone thật, nên chưa thể bảo đảm lỗi đã hết.
+
+          Cài bằng TrollStore. Bundle ID giống bản thử 1 để có thể cập nhật; nên sao lưu save trước. Bản cài mới mặc định ẩn nút điều khiển giả L/R để dùng cảm ứng gốc của game. Khi cập nhật, dữ liệu, cấu hình và bản mod đã có trong Tệp không bị launcher ghi đè. Nếu còn các nút L/R, có thể tắt trong menu của runner ở On-screen controls.
+
+          Game vẫn chưa hoàn chỉnh: thiếu một phần mã so với APK gốc, có thể treo hoặc thiếu nội dung; không xác nhận mở toàn bộ. Google Play, quảng cáo và thông báo bị tắt. Âm thanh giữ nguyên từ APK, không chuyển đổi.
+
+          Runner: https://github.com/andronep/gmrunner (GPL-3.0-or-later), commit e7121381d38b03a24242812fc22b0a7386d545c6. Adaptation/build source: this repository at the release commit. Source project: https://github.com/kjs104901/deadtown.
+          EOF
+          gh release create deadtown-ios15-landscape-test-2 output/DeadTown-iOS15-ngang-test2.ipa output/SHA256.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Dead Town iOS 15 — sửa màn hình thử nghiệm 2' --notes-file notes.md
