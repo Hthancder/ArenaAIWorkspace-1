@@ -5,55 +5,6 @@
 static NSString *const kSXDomain = @"com.sirix.tweak";
 static NSString *const kSXFilePath = @"/var/mobile/Library/Preferences/com.sirix.tweak.plist";
 
-NSString *SXProviderDisplayName(SXProvider provider) {
-	return provider == SXProviderGemini ? @"Gemini" : @"OpenAI";
-}
-
-NSArray<NSString *> *SXPreferenceKeys(void) {
-	static NSArray<NSString *> *keys;
-	static dispatch_once_t once;
-	dispatch_once(&once, ^{
-		keys = @[@"enabled", @"mode", @"triggerMode", @"provider",
-				 @"openaiKey", @"openaiBase", @"openaiModel",
-				 @"geminiKey", @"geminiModel",
-				 @"temperature", @"contextTurns", @"timeout", @"timeoutAction",
-				 @"streaming", @"markdown", @"hideWebCards", @"showOriginal", @"speakErrors",
-				 @"customPrompt", @"incognito",
-				 @"maxToolRounds", @"toolsDisabled",
-				 @"openaiHeaders", @"geminiHeaders",
-				 @"verbose"];
-	});
-	return keys;
-}
-
-NSArray<NSDictionary *> *SXModelPresets(SXProvider provider) {
-	if (provider == SXProviderGemini) {
-		return @[
-			@{@"model": @"gemini-2.0-flash", @"title": @"Gemini 2.0 Flash", @"hint": @"Nhanh, miễn phí hạn mức rộng — mặc định"},
-			@{@"model": @"gemini-2.0-flash-lite", @"title": @"Gemini 2.0 Flash Lite", @"hint": @"Nhanh nhất, câu trả lời ngắn hơn"},
-			@{@"model": @"gemini-1.5-flash", @"title": @"Gemini 1.5 Flash", @"hint": @"Ổn định, phù hợp câu hỏi dài"},
-			@{@"model": @"gemini-1.5-pro", @"title": @"Gemini 1.5 Pro", @"hint": @"Chất lượng cao hơn, chậm hơn"},
-		];
-	}
-	return @[
-		@{@"model": @"gpt-4o-mini", @"title": @"GPT-4o mini", @"hint": @"Nhanh, rẻ — mặc định"},
-		@{@"model": @"gpt-4o", @"title": @"GPT-4o", @"hint": @"Chất lượng cao, độ trễ trung bình"},
-		@{@"model": @"gpt-4.1-mini", @"title": @"GPT-4.1 mini", @"hint": @"Cân bằng tốc độ và chất lượng"},
-		@{@"model": @"o4-mini", @"title": @"o4-mini (reasoning)", @"hint": @"Model suy luận — thường chậm hơn 5 giây"},
-	];
-}
-
-NSString *SXDefaultSystemPrompt(void) {
-	return @"Bạn là SiriX, trợ lý AI tích hợp sẵn trong Siri trên iPhone. "
-		   @"Trả lời chính xác, tự nhiên, ngắn gọn (thường 1–3 câu, trừ khi người dùng hỏi điều cần giải thích kỹ). "
-		   @"Luôn trả lời bằng ngôn ngữ mà người dùng đã đặt câu hỏi. "
-		   @"Ưu tiên văn bản thuần (phần lớn câu trả lời chỉ cần vậy); khi thật sự cần nhấn mạnh hoặc liệt kê, "
-		   @"duy nhất dùng **đậm**, danh sách gạch đầu dòng ngắn, `mã code` hoặc khối code gọn — "
-		   @"SiriX tự trình bày đẹp và vẫn phát giọng nói trôi chảy. Không emoji. "
-		   @"Nếu người dùng yêu cầu thao tác trên máy (mở ứng dụng, đặt báo thức, gọi điện, nhắn tin…), "
-		   @"hệ thống tự thực hiện — hãy xác nhận ngắn gọn, ví dụ: “Đã đặt báo thức 7 giờ.” "
-		   @"trong ngôn ngữ của người dùng, đừng nói mình không thể.";
-}
 
 /// Giữ tham chiếu tới các giá trị vừa bị thay trong `reload`.
 ///
