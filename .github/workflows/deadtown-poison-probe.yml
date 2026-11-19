@@ -9,6 +9,8 @@ on:
       - .github/workflows/deadtown-poison-probe.yml
       - tools/prepare_deadtown_poison_probe.py
       - tools/check_deadtown_poison_probe.py
+      - tools/check_deadtown_accessor_bytecode.py
+      - tests/test_check_deadtown_accessor_bytecode.py
       - tools/deadtown-poison-probe.csx
       - tools/deadtown-vm-probe.csx
       - tools/deadtown_event_probe.py
@@ -53,6 +55,7 @@ jobs:
           set -euo pipefail
           python -m unittest discover -s tests -p 'test_prepare_deadtown_poison_probe.py' -v
           python -m unittest discover -s tests -p 'test_check_deadtown_poison_probe.py' -v
+          python -m unittest discover -s tests -p 'test_check_deadtown_accessor_bytecode.py' -v
           python tools/prepare_deadtown_poison_probe.py work/offline work/original.apk work/candidate
           python tools/deadtown_event_probe.py work/candidate work/events.json
       - name: Download pinned UndertaleModTool CLI
@@ -114,6 +117,7 @@ jobs:
           work/runner-build/gmdump work/diagnostic/data.win code probe_item_use_legacy_unlinked > work/legacy-disasm.log
           work/runner-build/gmdump work/diagnostic/data.win code gml_Script_item_use > work/candidate-disasm.log
           test -s work/legacy-disasm.log && test -s work/candidate-disasm.log
+          python tools/check_deadtown_accessor_bytecode.py work/legacy-disasm.log work/candidate-disasm.log
           python - <<'PY'
           from pathlib import Path
           for name in ('legacy-disasm.log', 'candidate-disasm.log'):

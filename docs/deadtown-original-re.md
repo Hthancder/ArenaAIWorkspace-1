@@ -245,9 +245,20 @@ found a material compatibility failure: after an original-source compound
 `target_inven[? pointer] -= 1`, `item_use` passed an array instead of the map
 handle to `ds_map_delete`; the item remained and protection was zero. This is
 observed in the UTMT-compiled, incomplete gmrunner VM, **not** in the APK; it
-is not yet established whether the defect lies in the compiler, runner, or
-interaction between them. The same accessor syntax occurs in other old-source
-inventory/crafting scripts, which are not proven correct by this one test.
+is not evidence of behavior on the APK. A follow-up disassembly in
+[44562684960](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44562684960)
+compiled the untouched old `item_use` into an unlinked diagnostic entry: the
+accessor lowered to `[array]stack.target_inven` reads and writes before the
+`ds_map_delete` call, whereas the workaround emits explicit DS-map calls.
+The Underanalyzer submodule pinned by UTMT 0.9.2.0 at
+[`4ff50a8`](https://github.com/UnderminersTeam/Underanalyzer/blob/4ff50a866b4c1a7acee8cebe6a56d6a48709b453/Underanalyzer/Compiler/Nodes/AccessorNode.cs)
+has a TODO to convert non-array accessors to function calls. This supports a
+compiler-lowering cause for this observed case, without proving that the runner
+has no independent bugs. The same `[? ...]` syntax appears in 17 lines across
+five old-source inventory/crafting scripts (`item_use`, `item_get`, `item_drop`,
+`item_equip`, `item_make`); their semantics and runtime are not established by
+this one test. `tools/check_deadtown_accessor_bytecode.py` checks only this
+specific legacy/candidate disassembly, not general compiler support.
 
 For the isolated probe only, `item_use` uses explicit DS-map operations for an
 existing numeric key. The run [44562072708](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44562072708)
