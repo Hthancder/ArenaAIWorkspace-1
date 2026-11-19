@@ -79,7 +79,7 @@ jobs:
           mkdir -p work/runner
           curl -fsSL --retry 2 'https://codeload.github.com/andronep/gmrunner/tar.gz/e7121381d38b03a24242812fc22b0a7386d545c6' | tar xz -C work/runner --strip-components=1
           cmake -S work/runner -B work/runner-build -DCMAKE_BUILD_TYPE=Release
-          cmake --build work/runner-build --target gmdump --parallel 2
+          cmake --build work/runner-build --target gmdump gmrunner --parallel 2
       - name: Inspect incomplete data using runner loader
         shell: bash
         run: |
@@ -95,6 +95,26 @@ jobs:
           PY
           echo "::notice::Runner inspection statuses info=$info_status verify=$verify_status"
           [ "$info_status" -eq 0 ] && [ "$verify_status" -eq 0 ]
+      - name: Attempt headless boot of incomplete data
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/probe-game work/probe-save
+          cp work/incomplete-probe.win work/probe-game/data.win
+          unzip -p work/original.apk assets/audiogroup1.dat > work/probe-game/audiogroup1.dat
+          unzip -p work/original.apk assets/audiogroup2.dat > work/probe-game/audiogroup2.dat
+          set +e
+          timeout 60 work/runner-build/gmrunner work/probe-game --headless --fast --mute --seed 1 --frames 1200 --trace --save-dir work/probe-save > work/boot.log 2>&1
+          status=$?
+          python3 - <<'PY'
+          from pathlib import Path
+          lines = Path('work/boot.log').read_text(errors='replace').splitlines()
+          print(f'::notice::HEADLESS_BOOT: {len(lines)} log lines; this is incomplete test data, not a game release')
+          for line in (lines[:15] + lines[-20:])[:35]:
+              print('::notice::HEADLESS_BOOT: ' + line.replace('%', '%25')[:800])
+          PY
+          echo "::notice::HEADLESS_BOOT: exit status $status"
+          exit "$status"
       - name: Upload diagnostic log
         if: always()
         uses: actions/upload-artifact@v4
@@ -103,5 +123,6 @@ jobs:
           path: |
             work/probe.log
             work/runner-inspect.log
+            work/boot.log
           if-no-files-found: ignore
           retention-days: 3
