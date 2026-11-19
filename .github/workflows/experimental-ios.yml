@@ -42,8 +42,14 @@ jobs:
           accept-license: 'true'
       - name: Reconstruct game files
         run: python3 tooling/tools/stage_air_game.py assets "$RUNNER_TEMP/air-staged"
+      - name: Enable AIR diagnostics
+        run: |
+          mkdir -p "$HOME/.airsdk"
+          printf 'DebugOut=true\n' > "$HOME/.airsdk/adt.cfg"
       - name: Attempt interpreter-mode IPA
-        run: python3 tooling/tools/build_test_ipa.py "$RUNNER_TEMP/air-staged" "$RUNNER_TEMP/experimental.ipa"
+        run: |
+          export AIR_DEBUG_LOG="$HOME/adt.log"
+          python3 tooling/tools/build_test_ipa.py "$RUNNER_TEMP/air-staged" "$RUNNER_TEMP/experimental.ipa"
       - name: Upload experimental IPA
         if: success()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

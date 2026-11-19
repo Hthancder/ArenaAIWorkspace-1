@@ -58,6 +58,10 @@ def build(stage: Path, output: Path, adt: str = "adt") -> None:
         output_text = (result.stdout or "").replace(password, "[REDACTED]")
         if result.returncode:
             report_error(output_text or f"ADT exited with status {result.returncode} without diagnostics.")
+            debug_path = os.environ.get("AIR_DEBUG_LOG")
+            if debug_path and Path(debug_path).is_file():
+                debug = Path(debug_path).read_text(encoding="utf-8", errors="replace")
+                report_error(debug.replace(password, "[REDACTED]")[-5000:])
             raise subprocess.CalledProcessError(result.returncode, "adt")
         print(output_text)
         with zipfile.ZipFile(ipa) as z:
