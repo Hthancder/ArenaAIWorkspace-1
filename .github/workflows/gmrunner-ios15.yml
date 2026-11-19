@@ -13,7 +13,29 @@ permissions:
   actions: read
 
 jobs:
+  inspect-package:
+    if: ${{ contains(github.event.head_commit.message, '[inspect]') }}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: gmrunner-ios15-standalone-untested
+          path: prior
+          run-id: 44498584718
+          github-token: ${{ github.token }}
+      - name: Inspect prior package
+        run: |
+          set -u
+          unzip -q prior/gmRunner.ipa -d unpacked
+          app=unpacked/Payload/gmRunner.app
+          exe=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Info.plist")
+          for cmd in "ls -la '$app'" "file '$app/$exe'" "lipo -info '$app/$exe'" "lipo -verify_arch arm64 '$app/$exe'" "otool -l '$app/$exe' | grep -A 5 LC_BUILD_VERSION"; do
+            result=$(eval "$cmd" 2>&1); status=$?
+            safe=$(printf '%s' "$result" | head -c 2500 | sed ':a;N;$!ba;s/\n/ /g')
+            echo "::notice::cmd=$cmd status=$status output=$safe"
+          done
   runner:
+    if: ${{ !contains(github.event.head_commit.message, '[inspect]') }}
     runs-on: macos-latest
     timeout-minutes: 35
     steps:
