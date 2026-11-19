@@ -149,6 +149,35 @@ for path in checked:
         if not any(os.path.exists(os.path.join(base, header)) for base in ("Prefs", "Sources", "include")):
             fail(f"{path}: #import \"{header}\" không tìm thấy file")
 
+# --------------------------------------------- thuộc tính mutable dùng copy
+# `copy` trên NSMutableArray/Dictionary/Set trả về bản BẤT BIẾN ⇒ thao tác
+# thêm/xoá/sửa sau đó văng "unrecognized selector". Đây đúng là lỗi từng làm
+# Settings văng khi lưu header.
+for path in checked:
+    text = read(path)
+    for match in re.finditer(r"@property[^;]*?\bcopy\b[^;]*?\bNSMutable[A-Za-z]+", text):
+        line = text[:match.start()].count("\n") + 1
+        fail(f"{path}:{line}: thuộc tính NSMutable… khai báo copy sẽ thành bản bất biến — dùng strong")
+
+# ----------------------------------- không reload bảng trong lúc đang gõ chữ
+# Reload cell/section ngay trong sự kiện gõ sẽ gỡ ô nhập khỏi cửa sổ và UIKit
+# hạ bàn phím sau mỗi ký tự (đúng lỗi "gõ 1 chữ là bàn phím tắt").
+for path in sorted(glob.glob("Prefs/*.m")):
+    text = read(path)
+    handlers = set()
+    for match in re.finditer(
+            r"@selector\(([A-Za-z_][A-Za-z0-9_]*):?\)\s*forControlEvents:\s*UIControlEventEditingChanged",
+            text):
+        handlers.add(match.group(1))
+    for name in sorted(handlers):
+        body = re.search(r"^-\s*\([^)]*\)\s*" + re.escape(name) + r"\b.*?\n\}", text,
+                         re.MULTILINE | re.DOTALL)
+        if not body:
+            continue
+        for bad in ("reloadData", "reloadSections", "reloadSpecifier", "reloadSpecifiers"):
+            if bad in body.group(0):
+                fail(f"{path}: {name} vừa xử lý gõ chữ vừa gọi {bad} — bàn phím sẽ tắt sau mỗi ký tự")
+
 # ---------------------------------------------------------------- report
 for message in WARNINGS:
     print(f"⚠️  {message}")

@@ -1,5 +1,15 @@
 # SiriX — tiến độ thực hiện thiết kế v1.2
 
+> **1.1.6 — sửa hai lỗi chặn dùng ở màn hình Header (1.1.5 hỏng đúng chỗ này).**
+> (1) Bàn phím tắt sau mỗi ký tự: `sx_validate` reload section 0 để cập nhật dòng
+> gợi ý, reload gỡ ô nhập khỏi cửa sổ nên UIKit hạ bàn phím. Nay gợi ý lỗi nằm
+> trong cell và cập nhật tại chỗ, không reload. (2) Văng Settings khi lưu: thuộc
+> tính `headers` khai báo `copy` trên `NSMutableArray` nên runtime giữ bản **bất
+> biến** — `addObject:`/subscript văng `unrecognized selector`. Đổi sang `strong`.
+> Ô nhập giờ do từng cell tự giữ, chữ do màn hình giữ trong `nameText`/`valueText`
+> nên cuộn hay tái sử dụng cell cũng không mất first responder và không mất chữ.
+> `check-prefs.sh` thêm hai luật để hai lỗi này không quay lại.
+>
 > **1.1.5 — hoàn thiện trong phạm vi hiện có (không thêm tính năng mới).** Trò
 > chuyện thử hiện được việc AI đang làm (công cụ nào, bao nhiêu ms) thay vì chỉ
 > một dòng “đang trả lời”; màn hình header không còn bị bàn phím che, cảnh báo
@@ -288,4 +298,34 @@ và đánh dấu “Đang dùng” cho trình đọc màn hình.
 
 **Ngôn ngữ.** Thống nhất “tuỳ chỉnh”, “tuỳ chọn”, “tuỳ biến” (trước đây lẫn
 “tùy…” và “tuỳ…” giữa các màn hình) trong toàn bộ chuỗi UI, README và tài liệu.
+
+## 1.1.6 — Hai lỗi ở màn hình Header
+
+Bản 1.1.5 làm hỏng đúng màn hình mà nó định đánh bóng. Người dùng báo: “ghi được
+một chữ là bàn phím tắt”, và “lưu header thì văng Settings”.
+
+**Bàn phím tắt sau một ký tự.** `sx_validate` chạy trên mỗi `EditingChanged` và
+gọi `reloadSections:` cho section 0 để đổi dòng gợi ý dưới ô nhập. Reload gỡ cell
+— cùng ô nhập đang là first responder — ra khỏi cửa sổ, nên UIKit hạ bàn phím.
+Cách sửa không phải “xoá gợi ý” mà là đổi chỗ: `SXHeaderFieldCell` tự có
+`UITextField` và một `UILabel` gợi ý ngay dưới, trong cùng cell. Gợi ý được cập
+nhật tại chỗ và chỉ gọi `beginUpdates`/`endUpdates` để tính lại chiều cao — không
+tạo lại cell nào, nên bàn phím và con trỏ đứng yên.
+
+**Văng Settings khi lưu.** `@property (nonatomic, copy) NSMutableArray *headers;`
+— `copy` trên `NSMutableArray` trả về `__NSArrayI`, một mảng **bất biến**. Màn
+hình vẫn gán được, nhưng lần đầu chạm vào là văng:
+`-[__NSArrayI addObject:]: unrecognized selector sent to instance`. Đúng là lúc
+bấm Lưu (thêm mới) hoặc bật/tắt/xoá/sắp xếp một header. Đổi sang `strong`. Cùng
+lỗi tiềm ẩn ở `SXToolsController.grouped` cũng đã đổi (ở đó chỉ đọc nên chưa nổ).
+
+**Ô nhập không còn bị “dời”.** Trước đây màn hình giữ hai ô nhập rồi nhét vào cell
+khi `cellForRow` chạy; mỗi lần cuộn hay tái sử dụng cell là gỡ ra gắn vào, kéo
+theo mất first responder và có thể mất chữ. Nay cell tự giữ ô của nó, còn chữ
+sống trong `nameText`/`valueText` của màn hình — ô nhập chỉ là chỗ hiển thị.
+
+**Chặn tái phát.** `scripts/check-prefs.sh` thêm hai luật: (a) cấm khai báo
+`NSMutable…` với `copy`; (b) cấm gọi `reloadData`/`reloadSections`/
+`reloadSpecifier(s)` bên trong hàm đang xử lý `UIControlEventEditingChanged`.
+Cả hai luật đã được thử bằng một file vi phạm cố ý rồi xoá.
 

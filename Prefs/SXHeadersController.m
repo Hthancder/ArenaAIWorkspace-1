@@ -63,6 +63,75 @@
 
 @end
 
+#pragma mark - Ô nhập kèm dòng gợi ý
+
+/// Ô nhập + một dòng chú thích nhỏ ngay dưới, cả hai nằm **trong** cell.
+///
+/// Hai lỗi cũ đều xuất phát từ chỗ này: gợi ý nằm ở footer section nên mỗi lần
+/// gõ phải reload section để cập nhật chữ — reload gỡ ô nhập khỏi cửa sổ nên
+/// UIKit hạ bàn phím ngay sau ký tự đầu tiên. Còn ô nhập do màn hình giữ rồi
+/// "dời" giữa các cell khi cuộn cũng làm mất first responder. Nay mỗi cell tự
+/// có ô nhập của nó, chữ do màn hình giữ trong `nameText`/`valueText`.
+@interface SXHeaderFieldCell : UITableViewCell
+@property (nonatomic, strong) UITextField *field;
+@property (nonatomic, strong) UILabel *hintLabel;
+@end
+
+@implementation SXHeaderFieldCell
+
+- (instancetype)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)reuseIdentifier {
+	self = [super initWithStyle:style reuseIdentifier:reuseIdentifier];
+	if (!self) return nil;
+
+	self.selectionStyle = UITableViewCellSelectionStyleNone;
+
+	_field = [[UITextField alloc] init];
+	_field.font = [UIFont monospacedSystemFontOfSize:15 weight:UIFontWeightRegular];
+	// Tên header và token đều không được bàn phím "sửa giúp".
+	_field.autocapitalizationType = UITextAutocapitalizationTypeNone;
+	_field.autocorrectionType = UITextAutocorrectionTypeNo;
+	_field.spellCheckingType = UITextSpellCheckingTypeNo;
+	_field.smartQuotesType = UITextSmartQuotesTypeNo;
+	_field.smartDashesType = UITextSmartDashesTypeNo;
+	_field.smartInsertDeleteType = UITextSmartInsertDeleteTypeNo;
+	_field.clearButtonMode = UITextFieldViewModeWhileEditing;
+	_field.translatesAutoresizingMaskIntoConstraints = NO;
+
+	_hintLabel = [[UILabel alloc] init];
+	_hintLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
+	_hintLabel.numberOfLines = 0;
+	_hintLabel.textColor = UIColor.systemRedColor;
+	_hintLabel.hidden = YES;
+
+	UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[_field, _hintLabel]];
+	stack.axis = UILayoutConstraintAxisVertical;
+	stack.spacing = 4;
+	stack.translatesAutoresizingMaskIntoConstraints = NO;
+	[self.contentView addSubview:stack];
+
+	UILayoutGuide *margins = self.contentView.layoutMarginsGuide;
+	[NSLayoutConstraint activateConstraints:@[
+		[stack.topAnchor constraintEqualToAnchor:margins.topAnchor constant:2],
+		[stack.bottomAnchor constraintEqualToAnchor:margins.bottomAnchor constant:-2],
+		[stack.leadingAnchor constraintEqualToAnchor:margins.leadingAnchor],
+		[stack.trailingAnchor constraintEqualToAnchor:margins.trailingAnchor],
+		[_field.heightAnchor constraintGreaterThanOrEqualToConstant:32],
+	]];
+	return self;
+}
+
+- (void)prepareForReuse {
+	[super prepareForReuse];
+	[self.field removeTarget:nil action:NULL forControlEvents:UIControlEventAllEvents];
+	self.field.text = @"";
+	self.field.rightView = nil;
+	self.field.rightViewMode = UITextFieldViewModeNever;
+	self.hintLabel.text = nil;
+	self.hintLabel.hidden = YES;
+}
+
+@end
+
 #pragma mark - Màn hình sửa một header
 
 @interface SXHeaderEditController : UIViewController <UITableViewDataSource, UITableViewDelegate, UITextFieldDelegate>
@@ -72,10 +141,14 @@
 @property (nonatomic, copy, nullable) NSDictionary *editing;
 @property (nonatomic, copy) void (^onSave)(NSDictionary *header);
 @property (nonatomic, strong) UITableView *table;
-@property (nonatomic, strong) UITextField *nameField;
-@property (nonatomic, strong) UITextField *valueField;
+/// Chữ là nguồn dữ liệu duy nhất — ô nhập chỉ hiển thị và sửa nó.
+@property (nonatomic, copy) NSString *nameText;
+@property (nonatomic, copy) NSString *valueText;
+@property (nonatomic, weak) UITextField *nameField;
+@property (nonatomic, weak) UITextField *valueField;
 @property (nonatomic, copy) NSArray<NSDictionary *> *suggestions;
 @property (nonatomic, assign) SXHeaderIssue issue;
+@property (nonatomic, copy) NSString *insecureWarning;
 @end
 
 @implementation SXHeaderEditController
@@ -85,6 +158,9 @@
 	self.title = self.editing ? @"Sửa header" : @"Thêm header";
 	self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
 	self.suggestions = SXHeaderPresetsForEndpoint(self.presetProvider, self.endpointHint);
+	self.insecureWarning = [self sx_insecureWarning];
+	self.nameText = [self.editing[@"name"] isKindOfClass:[NSString class]] ? self.editing[@"name"] : @"";
+	self.valueText = [self.editing[@"value"] isKindOfClass:[NSString class]] ? self.editing[@"value"] : @"";
 
 	self.navigationItem.leftBarButtonItem =
 		[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemCancel
@@ -100,6 +176,9 @@
 	self.table.dataSource = self;
 	self.table.delegate = self;
 	self.table.keyboardDismissMode = UIScrollViewKeyboardDismissModeInteractive;
+	self.table.rowHeight = UITableViewAutomaticDimension;
+	self.table.estimatedRowHeight = 52;
+	[self.table registerClass:[SXHeaderFieldCell class] forCellReuseIdentifier:@"field"];
 	[self.view addSubview:self.table];
 	[NSLayoutConstraint activateConstraints:@[
 		[self.table.topAnchor constraintEqualToAnchor:self.view.topAnchor],
@@ -113,28 +192,15 @@
 
 - (void)viewDidAppear:(BOOL)animated {
 	[super viewDidAppear:animated];
-	if (!self.editing) [self.nameField becomeFirstResponder];
+	if (self.editing) return;
+	[self.table layoutIfNeeded];
+	[[self sx_fieldInSection:0] becomeFirstResponder];
 }
 
-- (UITextField *)sx_fieldWithPlaceholder:(NSString *)placeholder
-									text:(NSString *)text
-							   monospaced:(BOOL)monospaced {
-	UITextField *field = [[UITextField alloc] init];
-	field.placeholder = placeholder;
-	field.text = text ?: @"";
-	field.font = monospaced ? [UIFont monospacedSystemFontOfSize:14 weight:UIFontWeightRegular]
-							: [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
-	field.autocapitalizationType = UITextAutocapitalizationTypeNone;
-	field.autocorrectionType = UITextAutocorrectionTypeNo;
-	field.spellCheckingType = UITextSpellCheckingTypeNo;
-	field.smartQuotesType = UITextSmartQuotesTypeNo;
-	field.smartDashesType = UITextSmartDashesTypeNo;
-	field.clearButtonMode = UITextFieldViewModeWhileEditing;
-	field.returnKeyType = UIReturnKeyNext;
-	field.delegate = self;
-	[field addTarget:self action:@selector(sx_fieldChanged) forControlEvents:UIControlEventEditingChanged];
-	field.translatesAutoresizingMaskIntoConstraints = NO;
-	return field;
+- (UITextField *)sx_fieldInSection:(NSInteger)section {
+	SXHeaderFieldCell *cell = (SXHeaderFieldCell *)[self.table
+		cellForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:section]];
+	return [cell isKindOfClass:[SXHeaderFieldCell class]] ? cell.field : nil;
 }
 
 #pragma mark - Bảng
@@ -159,14 +225,10 @@
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
 	(void)tableView;
 	if (section == 0) {
-		BOOL untouched = ![SXHeaderTrimmedName(self.nameField.text) length];
-		NSString *message = untouched ? @"" : SXHeaderIssueMessage(self.issue, SXHeaderTrimmedName(self.nameField.text));
-		if (message.length) return message;
 		return @"Ví dụ: X-Title, HTTP-Referer, api-key. Header hệ thống (Host, Content-Type, Content-Length) bị bỏ qua vì sẽ làm hỏng request.";
 	}
 	if (section == 1) {
-		NSString *warning = [self sx_insecureWarning];
-		if (warning.length) return warning;
+		if (self.insecureWarning.length) return self.insecureWarning;
 		return @"Giá trị không được hiện trong danh sách và không bao giờ được ghi vào log.";
 	}
 	return nil;
@@ -177,45 +239,39 @@
 		return [self sx_suggestionCellForTable:tableView indexPath:indexPath];
 	}
 
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"field"];
-	if (!cell) {
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"field"];
+	SXHeaderFieldCell *cell = [tableView dequeueReusableCellWithIdentifier:@"field" forIndexPath:indexPath];
+	BOOL isName = indexPath.section == 0;
+	UITextField *field = cell.field;
+	field.tag = indexPath.section;
+	field.delegate = self;
+	field.returnKeyType = isName ? UIReturnKeyNext : UIReturnKeyDone;
+	field.placeholder = isName ? @"X-Title" : @"giá trị";
+	field.accessibilityLabel = isName ? @"Tên header" : @"Giá trị header";
+	NSString *expected = isName ? self.nameText : self.valueText;
+	NSString *current = field.text ?: @"";
+	if (![current isEqualToString:expected]) field.text = expected;
+	[field removeTarget:self action:@selector(sx_fieldChanged:) forControlEvents:UIControlEventEditingChanged];
+	[field addTarget:self action:@selector(sx_fieldChanged:) forControlEvents:UIControlEventEditingChanged];
+	if (isName) {
+		self.nameField = field;
+	} else {
+		self.valueField = field;
+		[self sx_installPasteButtonOnField:field];
 	}
-	cell.selectionStyle = UITableViewCellSelectionStyleNone;
-
-	UITextField *field = indexPath.section == 0 ? self.nameField : self.valueField;
-	if (!field) {
-		if (indexPath.section == 0) {
-			field = [self sx_fieldWithPlaceholder:@"X-Title" text:self.editing[@"name"] monospaced:YES];
-			field.returnKeyType = UIReturnKeyNext;
-			self.nameField = field;
-		} else {
-			field = [self sx_fieldWithPlaceholder:@"giá trị" text:self.editing[@"value"] monospaced:YES];
-			field.returnKeyType = UIReturnKeyDone;
-			// Token dán từ trang web hay dính xuống dòng — nút Dán cắt sạch giúp.
-			UIButton *paste = [UIButton buttonWithType:UIButtonTypeSystem];
-			[paste setTitle:@"Dán" forState:UIControlStateNormal];
-			paste.titleLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
-			[paste sizeToFit];
-			[paste addTarget:self action:@selector(sx_pasteValue) forControlEvents:UIControlEventTouchUpInside];
-			field.rightView = paste;
-			field.rightViewMode = UITextFieldViewModeAlways;
-			self.valueField = field;
-		}
-	}
-	if (field.superview != cell.contentView) {
-		[field removeFromSuperview];
-		[cell.contentView addSubview:field];
-	}
-	UILayoutGuide *margins = cell.contentView.layoutMarginsGuide;
-	[NSLayoutConstraint activateConstraints:@[
-		[field.topAnchor constraintEqualToAnchor:margins.topAnchor],
-		[field.bottomAnchor constraintEqualToAnchor:margins.bottomAnchor],
-		[field.leadingAnchor constraintEqualToAnchor:margins.leadingAnchor],
-		[field.trailingAnchor constraintEqualToAnchor:margins.trailingAnchor],
-		[field.heightAnchor constraintGreaterThanOrEqualToConstant:32],
-	]];
+	[self sx_fillHintLabel:cell.hintLabel forSection:indexPath.section];
 	return cell;
+}
+
+- (void)sx_installPasteButtonOnField:(UITextField *)field {
+	if (field.rightView) return;
+	UIButton *paste = [UIButton buttonWithType:UIButtonTypeSystem];
+	[paste setTitle:@"Dán" forState:UIControlStateNormal];
+	paste.titleLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
+	[paste sizeToFit];
+	[paste addTarget:self action:@selector(sx_pasteValue) forControlEvents:UIControlEventTouchUpInside];
+	paste.accessibilityHint = @"Lấy dòng đầu tiên trong bộ nhớ tạm";
+	field.rightView = paste;
+	field.rightViewMode = UITextFieldViewModeAlways;
 }
 
 - (UITableViewCell *)sx_suggestionCellForTable:(UITableView *)tableView indexPath:(NSIndexPath *)indexPath {
@@ -232,7 +288,7 @@
 	NSDictionary *preset = indexPath.row < (NSInteger)self.suggestions.count ? self.suggestions[indexPath.row] : nil;
 	NSString *value = preset[@"value"];
 	cell.textLabel.text = preset ? (value.length ? [NSString stringWithFormat:@"%@: %@", preset[@"name"], value]
-												  : [NSString stringWithFormat:@"%@: (tự điền)", preset[@"name"]]) : @"";
+												: [NSString stringWithFormat:@"%@: (tự điền)", preset[@"name"]]) : @"";
 	cell.textLabel.font = [UIFont monospacedSystemFontOfSize:13 weight:UIFontWeightRegular];
 	cell.detailTextLabel.text = preset[@"note"];
 	return cell;
@@ -243,20 +299,71 @@
 	if (indexPath.section != 2) return;
 	if (indexPath.row >= (NSInteger)self.suggestions.count) return;
 	NSDictionary *preset = self.suggestions[indexPath.row];
-	self.nameField.text = preset[@"name"];
-	self.valueField.text = preset[@"value"] ?: @"";
-	[self sx_validate];
+	NSString *name = [preset[@"name"] isKindOfClass:[NSString class]] ? preset[@"name"] : @"";
+	NSString *value = [preset[@"value"] isKindOfClass:[NSString class]] ? preset[@"value"] : @"";
+	self.nameText = name;
+	self.valueText = value;
 	[SXUI tapFeedback];
-	// Điền xong thì đưa người dùng tới ô còn thiếu để sửa ngay.
-	if (![(NSString *)self.valueField.text length]) [self.valueField becomeFirstResponder];
-	else [self.valueField resignFirstResponder];
+	// Điền xong thì đưa người dùng tới ô còn thiếu để gõ tiếp ngay.
+	[UIView performWithoutAnimation:^{
+		[self.table reloadSections:[NSIndexSet indexSetWithIndexesInRange:NSMakeRange(0, 2)]
+				  withRowAnimation:UITableViewRowAnimationNone];
+	}];
+	[self.table layoutIfNeeded];
+	[self sx_validate];
+	if (!value.length) [[self sx_fieldInSection:1] becomeFirstResponder];
+	else [[self sx_fieldInSection:0] resignFirstResponder];
+}
+
+#pragma mark - Gợi ý lỗi tại chỗ
+
+- (NSString *)sx_messageForSection:(NSInteger)section {
+	NSString *name = SXHeaderTrimmedName(self.nameText);
+	if (section == 0) {
+		if (!name.length) return nil;   // chưa gõ gì thì đừng doạ người dùng
+		return SXHeaderIssueMessage(self.issue, name);
+	}
+	if (self.issue != SXHeaderIssueInvalidValue) return nil;
+	if (!name.length) return nil;
+	return SXHeaderIssueMessage(self.issue, name);
+}
+
+- (void)sx_fillHintLabel:(UILabel *)label forSection:(NSInteger)section {
+	NSString *text = [self sx_messageForSection:section];
+	if (![label.text isEqualToString:text ?: @""]) label.text = text;
+	BOOL shouldHide = !text.length;
+	if (label.hidden != shouldHide) label.hidden = shouldHide;
+}
+
+/// Cập nhật gợi ý trên các ô đang hiện mà **không** reload cell — đây chính là
+/// chỗ từng làm bàn phím tắt sau mỗi ký tự.
+- (void)sx_refreshHints {
+	BOOL changed = NO;
+	for (NSInteger section = 0; section <= 1; section++) {
+		SXHeaderFieldCell *cell = (SXHeaderFieldCell *)[self.table
+			cellForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:section]];
+		if (![cell isKindOfClass:[SXHeaderFieldCell class]]) continue;
+		NSString *before = cell.hintLabel.text ?: @"";
+		BOOL hiddenBefore = cell.hintLabel.hidden;
+		[self sx_fillHintLabel:cell.hintLabel forSection:section];
+		NSString *after = cell.hintLabel.text ?: @"";
+		if (![before isEqualToString:after] || hiddenBefore != cell.hintLabel.hidden) changed = YES;
+	}
+	if (!changed) return;
+	@try {
+		// Chỉ tính lại chiều cao, không tạo lại cell ⇒ bàn phím giữ nguyên.
+		[self.table beginUpdates];
+		[self.table endUpdates];
+	} @catch (NSException *exception) {
+		SXLogErr(@"pref", @"cập nhật gợi ý header: %@", exception.reason);
+	}
 }
 
 #pragma mark - Kiểm tra & lưu
 
 - (BOOL)textFieldShouldReturn:(UITextField *)textField {
-	if (textField == self.nameField) {
-		[self.valueField becomeFirstResponder];
+	if (textField.tag == 0) {
+		[[self sx_fieldInSection:1] becomeFirstResponder];
 	} else {
 		[self sx_save];
 	}
@@ -267,10 +374,11 @@
 /// không mã hoá. Cảnh báo ngay dưới ô nhập thay vì để người dùng tự phát hiện.
 - (NSString *)sx_insecureWarning {
 	if (self.presetProvider != SXHeaderPresetProviderOpenAI) return nil;
-	NSString *base = [SXPrefs shared].openaiBase.lowercaseString;
-	if (![base hasPrefix:@"http://"]) return nil;
+	NSString *base = [SXPrefs shared].openaiBase;
+	if (![base isKindOfClass:[NSString class]]) return nil;
+	if (![base.lowercaseString hasPrefix:@"http://"]) return nil;
 	return @"⚠️ Endpoint đang dùng http:// nên giá trị header (kể cả token) đi trên mạng không mã hoá. "
-			@"Hãy đổi sang https:// nếu máy chủ hỗ trợ.";
+			"Hãy đổi sang https:// nếu máy chủ hỗ trợ.";
 }
 
 - (void)sx_pasteValue {
@@ -281,28 +389,25 @@
 	}
 	NSString *firstLine = [[clipboard componentsSeparatedByCharactersInSet:
 							[NSCharacterSet newlineCharacterSet]] firstObject];
-	self.valueField.text = [firstLine stringByTrimmingCharactersInSet:
-							[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+	self.valueText = [firstLine stringByTrimmingCharactersInSet:
+					  [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+	UITextField *field = [self sx_fieldInSection:1];
+	field.text = self.valueText;
 	[self sx_validate];
+	[field becomeFirstResponder];
 	[SXUI tapFeedback];
 }
 
-- (void)sx_fieldChanged {
+- (void)sx_fieldChanged:(UITextField *)field {
+	if (field.tag == 0) self.nameText = field.text ?: @"";
+	else self.valueText = field.text ?: @"";
 	[self sx_validate];
 }
 
 - (void)sx_validate {
-	self.issue = SXHeaderValidate(self.nameField.text, self.valueField.text, self.existing,
-								  self.editing[@"name"]);
+	self.issue = SXHeaderValidate(self.nameText, self.valueText, self.existing, self.editing[@"name"]);
 	self.navigationItem.rightBarButtonItem.enabled = (self.issue == SXHeaderIssueNone);
-	if ([self.table numberOfSections] > 0) {
-		@try {
-			[self.table reloadSections:[NSIndexSet indexSetWithIndex:0]
-					  withRowAnimation:UITableViewRowAnimationNone];
-		} @catch (NSException *exception) {
-			SXLogErr(@"pref", @"reload footer header: %@", exception.reason);
-		}
-	}
+	[self sx_refreshHints];
 }
 
 - (void)sx_close {
@@ -318,8 +423,8 @@
 }
 
 - (void)sx_save {
-	NSString *name = SXHeaderTrimmedName(self.nameField.text);
-	NSString *value = [self.valueField.text stringByTrimmingCharactersInSet:
+	NSString *name = SXHeaderTrimmedName(self.nameText);
+	NSString *value = [self.valueText stringByTrimmingCharactersInSet:
 					   [NSCharacterSet whitespaceAndNewlineCharacterSet]];
 	SXHeaderIssue issue = SXHeaderValidate(name, value, self.existing, self.editing[@"name"]);
 	if (issue != SXHeaderIssueNone) {
@@ -330,12 +435,15 @@
 	}
 	NSDictionary *header = @{@"name": name, @"value": value,
 							 @"enabled": self.editing[@"enabled"] ?: @YES};
+	[self.view endEditing:YES];
 	if (self.onSave) self.onSave(header);
 	[SXUI tapFeedback];
+	SXLogInf(@"pref", @"header %@ đã lưu từ màn hình sửa", name);
 	[self sx_close];
 }
 
 - (void)sx_cancel {
+	[self.view endEditing:YES];
 	[self sx_close];
 }
 
@@ -347,7 +455,7 @@
 @property (nonatomic) SXProvider provider;
 @property (nonatomic) BOOL providerResolved;
 @property (nonatomic, strong) UITableView *table;
-@property (nonatomic, copy) NSMutableArray<NSDictionary *> *headers;
+@property (nonatomic, strong) NSMutableArray<NSDictionary *> *headers;   // strong: `copy` sẽ biến thành mảng bất biến
 @end
 
 @implementation SXHeadersController
@@ -570,14 +678,21 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 	__weak typeof(self) weakSelf = self;
 	editor.onSave = ^(NSDictionary *header) {
 		typeof(self) strongSelf = weakSelf;
-		if (!strongSelf) return;
-		if (index != NSNotFound && index < (NSInteger)strongSelf.headers.count) {
+		if (!strongSelf || ![header isKindOfClass:[NSDictionary class]]) return;
+		if (![header[@"name"] isKindOfClass:[NSString class]] || ![(NSString *)header[@"name"] length]) return;
+		if (!strongSelf.headers) strongSelf.headers = [NSMutableArray array];
+		NSUInteger count = strongSelf.headers.count;
+		if (index != NSNotFound && index < (NSInteger)count) {
 			strongSelf.headers[index] = header;
 		} else {
 			[strongSelf.headers addObject:header];
 		}
 		[strongSelf sx_persist];
-		[strongSelf.table reloadData];
+		@try {
+			[strongSelf.table reloadData];
+		} @catch (NSException *exception) {
+			SXLogErr(@"pref", @"reload sau lưu header: %@", exception.reason);
+		}
 		SXLogInf(@"pref", @"lưu header %@ cho %@ (%lu mục)",
 				 header[@"name"], SXProviderDisplayName(strongSelf.provider),
 				 (unsigned long)strongSelf.headers.count);

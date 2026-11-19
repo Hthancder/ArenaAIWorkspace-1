@@ -85,7 +85,7 @@
 @interface SXToolsController () <UITableViewDataSource, UITableViewDelegate>
 @property (nonatomic, strong) UITableView *table;
 @property (nonatomic, copy) NSArray<NSNumber *> *categories;   // nhóm có công cụ, theo thứ tự enum
-@property (nonatomic, copy) NSMutableDictionary<NSNumber *, NSArray<SXTool *> *> *grouped;
+@property (nonatomic, strong) NSMutableDictionary<NSNumber *, NSArray<SXTool *> *> *grouped;
 @property (nonatomic, strong) UILabel *summaryLabel;
 @end
 
