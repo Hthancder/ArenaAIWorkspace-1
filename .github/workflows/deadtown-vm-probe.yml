@@ -26,7 +26,7 @@ jobs:
           mkdir -p work/source work/utmt
           git fetch --no-tags origin 8643abdda26944002384bc216bf555717a9e1e42
           git show '8643abdda26944002384bc216bf555717a9e1e42:Dead+Town+-+Zombie+survival_1.4.2_APKPure.apk' > work/original.apk
-          echo 'bc8fa1990cb2cdde8d184f2a942fe4010820f0592d88a36e1cbee0f0592d88a36e1cbee0a6aac081fb  work/original.apk' | sha256sum -c
+          echo 'bc8fa1990cb2cdde8d184f2a942fe4010820f0592d88a36e1cbee0a6aac081fb  work/original.apk' | sha256sum -c
           unzip -p work/original.apk assets/game.droid > work/game.droid
           curl -fsSL --retry 2 'https://codeload.github.com/kjs104901/deadtown/tar.gz/5e3d798f914c8cd3b066c8289323005d63111f37' | tar xz -C work/source --strip-components=1
       - name: Download pinned UndertaleModTool CLI
