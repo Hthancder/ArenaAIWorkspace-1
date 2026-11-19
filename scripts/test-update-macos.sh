@@ -5,6 +5,6 @@ cd "$(dirname "$0")/.."
 out=$(mktemp -d)
 trap 'rm -rf "$out"' EXIT
 clang -fobjc-arc -Wall -Wextra -Werror -Wno-unused-parameter -I Sources \
-  tests/update_test.m Sources/SXUpdate.m Sources/SXHTTP.m Sources/SXLog.m Sources/SXLogFile.m \
+  tests/update_test.m Sources/SXUpdate.m Sources/SXHTTP.m Sources/SXLog.m \
   -framework Foundation -o "$out/update_test"
 "$out/update_test"
