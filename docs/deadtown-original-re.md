@@ -173,8 +173,12 @@ and `player`/`buffpoisonprotect`. In `game_load_protect`, the corresponding
 `ini_read_real` results feed setters for the same indices at `0x221060` and
 `0x2210f0`. The inspector resolves the actual strings and checks the relevant
 instructions and calls; this is stronger independent evidence for the purpose
-of the two indices, but is not a runtime persistence test or proof about every
-save mode. The old GMX saves `buffpoison` but lacks the protection field.
+of the two indices, but is not a runtime persistence test. The inspector now
+also resolves the `player`/`buffpoisonprotect` strings and follows the relevant
+getter/writer or reader/setter in all three additional routine pairs: sewer,
+defence and defence multiplayer. It does not verify every saved field, branch
+reachability or actual persistence in those modes. The old GMX saves
+`buffpoison` but lacks the protection field.
 
 Relocations show that slot 32 of the exported `g_Vars` pointer array is
 `g_VAR_pointer`, not `g_VAR_buff_poison_protect`. The array contains more than
@@ -185,10 +189,22 @@ one known-looking region onto the rest of the symbol table is unsafe.
 Further static checks in `obj_player` Step find a block using index 32. It
 compares against zero with a runtime-loaded tolerance; on one path it subtracts
 1 (for the real-number case) and sets index 171 to zero; on the other it sets
-index 32 to zero. The following block conditionally copies index 911 into index
-32 after a comparison. Create initializes index 32 to zero and index 911 to the
-real value 18,000; index 911 is therefore a candidate upper bound, though its
-registered name is not independently established. In a separate native
+index 32 to zero. The tolerance resolves through a GOT relocation to
+`g_GMLMathEpsilon`, initialized to `1e-10`; its runtime value may be changed.
+The following block conditionally copies index 911 into index 32 after a
+comparison. Create initializes index 32 to zero and index 911 to the real value
+18,000; index 911 is therefore a candidate upper bound, though its registered
+name is not independently established. Earlier in the same native Step,
+index 171 has a similar real-number subtraction-by-one/zero-and-cap block;
+its candidate bound is index 910, initialized to 1,800. The representative
+checks do not prove that all intervening branches execute in a particular game.
+
+The original APK's 15 `ROOM` resource headers all declare default speed 30,
+including the three gameplay rooms. At a steady 30 Steps per second, 1,800
+Steps would correspond to 60 seconds, and the Gas mask's candidate 3 × 30 × 60
+would correspond to 180 seconds. These are **nominal calculations**, not a
+measured duration: room speed, event execution and scheduling can differ at
+runtime. In a separate native
 `obj_zombie5` Step block, index 171 is compared using -900 and, on one branch,
 assigned 900. This alone does not establish the surrounding hit conditions,
 frame rate, runtime tolerance, or combat ordering. A scan for an immediate

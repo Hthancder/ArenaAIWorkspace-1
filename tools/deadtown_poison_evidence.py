@@ -16,11 +16,32 @@ import zipfile
 try:
     from tools.deadtown_native_inventory import resource_names
     from tools.deadtown_native_lang import APK_SHA256, LIB_SHA256
-    from tools.recover_deadtown_audio import read_zip_member
+    from tools.recover_deadtown_audio import chunks, pointers, read_string, read_zip_member, u32
 except ModuleNotFoundError:
     from deadtown_native_inventory import resource_names
     from deadtown_native_lang import APK_SHA256, LIB_SHA256
-    from recover_deadtown_audio import read_zip_member
+    from recover_deadtown_audio import chunks, pointers, read_string, read_zip_member, u32
+
+
+def room_speeds(game):
+    """Read default room speeds from the specific GMS 1 bytecode-15 layout.
+
+    This reads resource defaults, not the possibly modified runtime room_speed.
+    """
+    regions = chunks(game)
+    gen_start, gen_end = regions[b'GEN8']
+    if gen_end - gen_start < 2 or game[gen_start + 1] != 15:
+        raise ValueError('unsupported GameMaker bytecode version')
+    _, end = regions[b'ROOM']
+    result = []
+    for address in pointers(game, regions[b'ROOM']):
+        if address + 20 > end:
+            raise ValueError('truncated room header')
+        name = read_string(game, u32(game, address), regions[b'STRG'])
+        result.append({'name': name, 'default_speed': u32(game, address + 16)})
+    if len({entry['name'] for entry in result}) != len(result):
+        raise ValueError('duplicate room names')
+    return result
 
 
 def inspect(apk_path):
@@ -151,6 +172,46 @@ def inspect(apk_path):
         instruction(addr, op, operands)
     if struct.unpack('<d', read(0x5cece8, 8))[0] != 0.0:
         raise ValueError('unexpected player Step comparison constant')
+    # Resolve the tolerance in the protection countdown comparison. The value
+    # in ELF is only its initializer: the runner exposes a runtime setter.
+    sl_offset = literal(instruction(0x5cea6c, 'ldr', 'sl, [pc, #0xfdc]'))
+    eps_base = literal(instruction(0x5d0460, 'ldr', 'r0, [pc, #0xfbc]'))
+    instruction(0x5d0464, 'add', 'r0, pc, r0')
+    instruction(0x5d046c, 'ldr', 'r0, [sl, r0]')
+    eps_got = (0x5d0464 + 8 + eps_base + sl_offset) & 0xffffffff
+    eps_symbol = reloc.get(eps_got)
+    if eps_symbol is None or eps_symbol.name != 'g_GMLMathEpsilon' or eps_symbol['st_size'] != 8:
+        raise ValueError('unexpected protection comparison tolerance relocation')
+    initial_epsilon = struct.unpack('<d', read(eps_symbol['st_value'], 8))[0]
+    if initial_epsilon != 1e-10:
+        raise ValueError('unexpected initial math epsilon')
+    # Poison's corresponding tick and cap block precedes the protection block.
+    # Pin representative control flow and the normal-real subtraction path.
+    for addr, op, operands in (
+        (0x5cea58, 'mov', 'fp, r0'), (0x5cfff8, 'mov', 'r0, fp'),
+        (0x5d000c, 'vsub.f64', 'd0, d8, d0'),
+        (0x5d0018, 'vneg.f64', 'd1, d1'), (0x5d001c, 'vcmpe.f64', 'd0, d1'),
+        (0x5d0024, 'bpl', '#0x5d0080'), (0x5d003c, 'mov', 'r1, #0xab'),
+        (0x5d0040, 'blx', 'r2'), (0x5d0044, 'mov', 'r5, r0'),
+        (0x5d0048, 'movw', 'r1, #0'), (0x5d004c, 'mov', 'r0, #0'),
+        (0x5d0050, 'movt', 'r1, #0x3ff0'), (0x5d0058, 'str', 'r1, [sp, #0x174]'),
+        (0x5d005c, 'str', 'r0, [sp, #0x170]'),
+        (0x5d0094, 'mov', 'r1, #0xab'), (0x5d0098, 'blx', 'r2'),
+        (0x5d009c, 'mov', 'r5, r0'), (0x5d00bc, 'mov', 'r0, #0'),
+        (0x5d00c0, 'str', 'r0, [r5, #0xc]'), (0x5d00c4, 'str', 'r0, [r5, #4]'),
+        (0x5d00c8, 'str', 'r0, [r5]'), (0x5d00cc, 'b', '#0x5d0194'),
+        (0x5d0118, 'add', 'r0, sp, #0x170'), (0x5d011c, 'bl', '#0x176444'),
+        (0x5d0138, 'vsub.f64', 'd0, d1, d0'), (0x5d0148, 'stm', 'r5, {r0, r1}'),
+        (0x5d01a8, 'movw', 'r1, #0x38e'), (0x5d01c4, 'mov', 'r1, fp'),
+        (0x5d01c8, 'bl', '#0x176594'), (0x5d01d0, 'bge', '#0x5d0210'),
+        (0x5d01e8, 'movw', 'r1, #0x38e'), (0x5d0200, 'mov', 'r1, #0xab'),
+        (0x5d020c, 'bl', '#0x176558'),
+        # obj_player Create initializes the candidate poison cap to 1,800.
+        (0x5a6c8c, 'movw', 'r1, #0x38e'), (0x5a6c90, 'blx', 'r2'),
+        (0x5a6cb4, 'movw', 'r1, #0x2000'), (0x5a6cb8, 'mov', 'r0, #0'),
+        (0x5a6cbc, 'movt', 'r1, #0x409c'), (0x5a6cc4, 'stm', 'r5, {r0, r1}'),
+    ):
+        instruction(addr, op, operands)
     # Resolve the exact strings used as section/key by the native save and load
     # code. An index-to-key association is independent of g_VAR symbol order.
     def string_relocation(base_address, base_load, offset_load, expected):
@@ -177,6 +238,80 @@ def inspect(apk_path):
     save_load_strings = [string_relocation(base, instruction(b, 'ldr', bops),
                                            instruction(o, 'ldr', oops), text)
                          for base, b, o, bops, oops, text in string_specs]
+    # Other modes have distinct routines and literal pools. Check their exact
+    # argument flow instead of assuming all modes share the normal save code.
+    mode_specs = [
+        ('sewer', 'save', 0x24ef4c, (0x24ef40, 'r0, [pc, #0xefc]'),
+         (0x24ef44, 'r1, [pc, #0xefc]'), (0x24ef48, 'r7, [pc, #0xefc]'),
+         0x24ef1c, 0x24ef24, 0x24ef2c, 0x24ef5c),
+        ('sewer', 'load', 0x2597a4, (0x259794, 'r2, [pc, #-0xb64]'),
+         (0x2597a0, 'r0, [pc, #-0xb68]'), (0x25979c, 'r1, [pc, #-0xb68]'),
+         0x25980c, 0x259810, 0x259818, 0x2597c8),
+        ('defence', 'save', 0x263c60, (0x263c54, 'r0, [pc, #0xf20]'),
+         (0x263c58, 'r1, [pc, #0xf20]'), (0x263c5c, 'r7, [pc, #0xf20]'),
+         0x263c30, 0x263c38, 0x263c40, 0x263c70),
+        ('defence', 'load', 0x2abe58, (0x2abe48, 'r2, [pc, #-0x1a0]'),
+         (0x2abe54, 'r0, [pc, #-0x1a4]'), (0x2abe50, 'r1, [pc, #-0x1a4]'),
+         0x2abec8, 0x2abecc, 0x2abed4, 0x2abe7c),
+        ('defence_multi', 'save', 0x2a1488, (0x2a147c, 'r0, [pc, #0xff0]'),
+         (0x2a1480, 'r1, [pc, #0xff0]'), (0x2a1484, 'r7, [pc, #0xff0]'),
+         0x2a1460, 0x2a1464, 0x2a146c, 0x2a1498),
+        ('defence_multi', 'load', 0x2d8fa4, (0x2d8f94, 'r2, [pc, #-0x84]'),
+         (0x2d8fa0, 'r0, [pc, #-0x88]'), (0x2d8f9c, 'r1, [pc, #-0x88]'),
+         0x2d9008, 0x2d900c, 0x2d9014, 0x2d8fc8),
+    ]
+    other_mode_evidence = []
+    for mode, action, base, baseld, sectionld, keyld, obj, index, varcall, inicall in mode_specs:
+        b = instruction(baseld[0], 'ldr', baseld[1])
+        section = string_relocation(base, b, instruction(sectionld[0], 'ldr', sectionld[1]), 'player')
+        key = string_relocation(base, b, instruction(keyld[0], 'ldr', keyld[1]), 'buffpoisonprotect')
+        instruction(obj, 'mov', 'r0, #0x8e')
+        instruction(index, 'mov', 'r1, #0x20')
+        instruction(index + 4, 'mov', 'r2, #0x80000000')
+        expected_calls_for_mode = {varcall: 'YYGML_Variable_GetValue' if action == 'save'
+                                   else 'YYGML_Variable_SetValue',
+                                   inicall: 'YYGML_ini_write_real' if action == 'save'
+                                   else 'YYGML_ini_read_real'}
+        for addr, expected in expected_calls_for_mode.items():
+            op = list(dis.disasm(read(addr, 4), addr))[0]
+            if op.mnemonic != 'bl' or expected not in calls.get(int(op.op_str[1:], 16), ''):
+                raise ValueError(f'unexpected {mode} {action} call at 0x{addr:x}')
+        # Pin each compiler register/data-flow form, including preservation of
+        # the read return and construction of the RValue passed to the setter.
+        forms = {
+            0x24ef4c: [('add', 'r4, pc, r0'), ('vmov', 'r2, r3, d0'), ('ldr', 'r0, [r1, r4]'), ('ldr', 'r1, [r7, r4]')],
+            0x263c60: [('add', 'r6, pc, r0'), ('vmov', 'r2, r3, d0'), ('ldr', 'r0, [r1, r6]'), ('ldr', 'r1, [r7, r6]')],
+            0x2a1488: [('add', 'r6, pc, r0'), ('vmov', 'r2, r3, d0'), ('ldr', 'r0, [r1, r6]'), ('ldr', 'r1, [r7, r6]')],
+        }
+        if action == 'save':
+            for i, (op, operands) in enumerate(forms[base]):
+                instruction(base + 4 * i, op, operands)
+            instruction(inicall - 0x24, 'bl', '#0x176444')
+            arguments = {
+                'sewer': [(0x24ef18, 'add', 'r4, sp, #0x400'), (0x24ef20, 'add', 'r3, r4, #0x118'),
+                          (0x24ef30, 'add', 'r4, sp, #0x400'), (0x24ef34, 'add', 'r0, r4, #0x118')],
+                'defence': [(0x263c2c, 'add', 'r6, sp, #0x3400'), (0x263c34, 'add', 'r3, r6, #0x78'),
+                            (0x263c44, 'add', 'r6, sp, #0x3400'), (0x263c48, 'add', 'r0, r6, #0x78')],
+                'defence_multi': [(0x2a145c, 'add', 'r3, sp, #0x300'), (0x2a1470, 'add', 'r0, sp, #0x300')],
+            }
+            for addr, op, operands in arguments[mode]:
+                instruction(addr, op, operands)
+        else:
+            instruction(base, 'add', 'r2, pc, r2')
+            instruction(base + 0xc, 'ldr', 'r1, [r1, r2]')
+            instruction(base + 0x10, 'ldr', 'r0, [r0, r2]')
+            instruction(inicall + 4, 'mov', 'r4, r0')
+            instruction(inicall + 8, 'mov', 'r6, r1' if mode == 'sewer' else 'r5, r1')
+            returns = {
+                'sewer': [(0x2597f8, 'vmov', 'd0, r4, r6'), (0x259804, 'vstr', 'd0, [sl, #0x298]'), (0x259808, 'add', 'r3, sp, #0x3d8')],
+                'defence': [(0x2abeac, 'vmov', 'd0, r4, r5'), (0x2abec0, 'vstr', 'd0, [r1, #0x30]'), (0x2abec4, 'add', 'r3, sp, #0x2280')],
+                'defence_multi': [(0x2d8ff4, 'vmov', 'd0, r4, r5'), (0x2d9000, 'vstr', 'd0, [r0, #0x280]'), (0x2d9004, 'add', 'r3, sp, #0x330')],
+            }
+            for addr, op, operands in returns[mode]:
+                instruction(addr, op, operands)
+        other_mode_evidence.append({'mode': mode, 'action': action, 'index': 32,
+                                    'section': section, 'key': key,
+                                    'variable_call': f'0x{varcall:x}', 'ini_call': f'0x{inicall:x}'})
     hp_section = string_relocation(0x1dc174, instruction(0x1dc168, 'ldr', 'r0, [pc, #0xa80]'),
                                    instruction(0x1dc16c, 'ldr', 'r1, [pc, #0xa80]'), 'player')
     hp_key = string_relocation(0x1dc174, instruction(0x1dc168, 'ldr', 'r0, [pc, #0xa80]'),
@@ -303,6 +438,9 @@ def inspect(apk_path):
     addresses = [by_name[name]['st_value'] for name in expected_names]
     if addresses != list(range(addresses[0], addresses[0] + len(addresses) * 8, 8)):
         raise ValueError('unexpected variable symbol layout')
+    rooms = room_speeds(game)
+    if len(rooms) != 15 or any(room['default_speed'] != 30 for room in rooms):
+        raise ValueError('unexpected original room speed inventory')
     return {
         'apk_sha256': APK_SHA256, 'library_sha256': LIB_SHA256,
         'db_info_get_call': '0x1a572c', 'field': number,
@@ -318,15 +456,29 @@ def inspect(apk_path):
             'comparison_zero_literal': '0x5cece8',
             'variable_index': 32,
             'conditional_branch': '0x5d0480',
+            'comparison_epsilon_symbol': eps_symbol.name,
+            'comparison_epsilon_got': f'0x{eps_got:x}',
+            'initial_epsilon': initial_epsilon,
             'subtract_one_real_path': '0x5d0564-0x5d0594',
             'comparison_fallthrough_zeroes_variable_index': 171,
             'branch_target_zeroes_variable_index': 32,
             'candidate_upper_bound_index': 911,
             'clamp_assignment': '0x5d06a4-0x5d06d4',
-            'limitations': 'The comparison uses a runtime-loaded tolerance; exact branching, types and '
+            'limitations': 'The epsilon is runtime-mutable; branch reachability, types and '
                            'runtime behavior are not fully validated. Index 911 is a candidate bound, '
                            'not an independently registered name.',
         },
+        'poison_timer_evidence': {
+            'index': 171, 'condition': '0x5cfff8-0x5d0024',
+            'subtract_one_real_path': '0x5d0118-0x5d0148',
+            'branch_target_zeroes_index': 171, 'candidate_bound_index': 910,
+            'candidate_bound_initial_value': 1800,
+            'cap_assignment': '0x5d01e8-0x5d020c',
+            'limitations': 'Representative real-number paths only, not a complete control-flow trace '
+                           'or proof of wall-clock timing and event ordering at runtime.',
+        },
+        'room_defaults': {'rooms': rooms, 'limitations': 'Resource defaults only; room speed can be '
+                          'changed at runtime and elapsed wall-clock time depends on scheduling.'},
         'save_load_evidence': {
             'function_pair': ['gml_Script_game_save_protect', 'gml_Script_game_load_protect'],
             'section': 'player',
@@ -336,7 +488,8 @@ def inspect(apk_path):
             'load_read_calls': ['0x221010', '0x221098'],
             'load_set_calls': ['0x221060', '0x2210f0'],
             'resolved_string_relocations': save_load_strings,
-            'limitations': 'The key associations are static; actual registration, other save modes, '
+            'other_modes_protection': other_mode_evidence,
+            'limitations': 'The key associations are static; actual registration, all save fields, '
                            'path reachability and persistence are not runtime verified.',
         },
         'player_create_evidence': {'index': 32, 'initial_value': 0,
