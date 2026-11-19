@@ -4,6 +4,7 @@ using System;
 using System.IO;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text.Json;
 using UndertaleModLib;
 using UndertaleModLib.Models;
@@ -83,4 +84,27 @@ foreach (var obj in Data.GameObjects)
 foreach (var link in eventLinks)
     CodeImportGroup.LinkEvent(link.obj, link.code, link.type, link.subtype, action => action());
 Console.WriteLine($"PROBE: linked {eventLinks.Count} events to matching APK objects; skipped {skippedLinks} missing objects or collision targets");
+
+// Native YYC code IDs retained by the loader have no meaning in the new VM
+// table. Remove unresolved references solely so serialization can be tested;
+// their corresponding game behavior is still missing, not recovered.
+int cleared = 0;
+void ClearUnresolved(object owner, string field)
+{
+    var info = owner.GetType().GetField(field, BindingFlags.NonPublic | BindingFlags.Instance);
+    if (info == null) throw new Exception("Missing expected reference field: " + field);
+    var reference = (UndertaleResourceById<UndertaleCode, UndertaleChunkCODE>)info.GetValue(owner);
+    if (reference.Resource == null && reference.CachedId != -1) { reference.CachedId = -1; cleared++; }
+}
+foreach (var script in Data.Scripts) ClearUnresolved(script, "_code");
+foreach (var room in Data.Rooms)
+{
+    ClearUnresolved(room, "_creationCodeId");
+    foreach (var instance in room.GameObjects)
+    {
+        ClearUnresolved(instance, "_creationCode");
+        ClearUnresolved(instance, "_preCreateCode");
+    }
+}
+Console.WriteLine($"PROBE: removed {cleared} unresolved native code IDs; behaviors are not restored");
 Console.WriteLine("PROBE: incomplete data for serialization testing only; no playable game or IPA");
