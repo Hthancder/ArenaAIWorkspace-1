@@ -101,8 +101,16 @@ NSString *SXMockLastRequestBody(void) { return requests.lastObject[@"body"]; }
 }
 + (NSString *)userAgent { return @"SiriX/test"; }
 + (NSString *)userMessageForStatus:(NSInteger)status data:(NSData *)data {
-	(void)data;
-	return [NSString stringWithFormat:@"HTTP %ld", (long)status];
+	// Bản giả chỉ cần phần đọc message JSON — phần gợi ý tiếng Việt nằm ở
+	// SXHTTP.m (không link ở đây vì cần URLSession).
+	NSString *detail = @"";
+	id json = data.length ? [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL] : nil;
+	if ([json isKindOfClass:[NSDictionary class]]) {
+		id error = json[@"error"];
+		id message = [error isKindOfClass:[NSDictionary class]] ? error[@"message"] : error;
+		if ([message isKindOfClass:[NSString class]]) detail = message;
+	}
+	return [NSString stringWithFormat:@"HTTP %ld: %@", (long)status, detail];
 }
 + (NSError *)errorWithStatus:(NSInteger)status data:(NSData *)data {
 	return [NSError errorWithDomain:@"mock" code:status
