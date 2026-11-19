@@ -3,6 +3,7 @@
 #import "SXChatTestController.h"
 #import "SXHeadersController.h"
 #import "SXModelPickerController.h"
+#import "SXAPIChoiceController.h"
 #import "PSSpecifier.h"
 #import "PSTableCell.h"
 #import "SXLog.h"
@@ -79,9 +80,41 @@ static NSString *SXAPIPathSuffix(SXOpenAIApi api) {
 					   forKey:@"footerText"];
 			_specifiers = [NSMutableArray arrayWithObject:group];
 		}
+		// Hàng “Giao thức API” được dựng BẰNG CODE, không bằng cell plist.
+		// Lý do: `PSLinkListCell` trong plist là loại cell duy nhất khác biệt giữa
+		// trang OpenAI (văng khi mở) và trang Gemini (chạy tốt); cùng đường dẫn
+		// dựng specifier như 5 hàng chọn số ở trang gốc thì an toàn và đã được
+		// chứng minh trên máy thật.
+		if (self.provider == SXProviderOpenAI) {
+			NSUInteger insertAt = _specifiers.count;
+			for (NSUInteger i = 0; i < _specifiers.count; i++) {
+				PSSpecifier *candidate = _specifiers[i];
+				if ([[candidate propertyForKey:@"key"] isEqualToString:@"endpointDisplay"]) {
+					insertAt = i + 1;
+					break;
+				}
+			}
+			PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:@"Giao thức API"
+															 target:self
+																set:nil
+																get:@selector(sx_readAPIName:)
+															 detail:[SXAPIChoiceController class]
+															   cell:PSLinkCell
+															   edit:nil];
+			[row setProperty:@"openaiApi" forKey:@"key"];
+			[row setProperty:[SXAPIChoiceController class] forKey:@"detail"];
+			[row setProperty:@"openaiApi" forKey:@"configKey"];
+			[_specifiers insertObject:row atIndex:MIN(insertAt, _specifiers.count)];
+		}
 		[self sx_applyCellTweaks];
 	}
 	return _specifiers;
+}
+
+/// Chữ bên phải hàng “Giao thức API”.
+- (id)sx_readAPIName:(PSSpecifier *)specifier {
+	(void)specifier;
+	return SXOpenAIApiDisplayName([SXPrefs shared].openaiApi);
 }
 
 /// Ô nhập tự lưu: không cần nút “Lưu”, và không có cú reload nào để làm rơi

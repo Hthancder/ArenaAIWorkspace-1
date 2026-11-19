@@ -25,7 +25,8 @@
 /// nên không còn lớp Apple nào phải đoán dữ liệu nằm ở đâu.
 - (void)sx_loadFromSpecifier {
 	PSSpecifier *specifier = self.specifier;
-	NSString *key = [specifier propertyForKey:@"key"];
+	NSString *key = [specifier propertyForKey:@"configKey"];
+	if (!key.length) key = [specifier propertyForKey:@"key"];
 	if (!key.length) key = [specifier propertyForKey:PSKeyNameKey];
 	self.prefsKey = key.length ? key : @"openaiApi";
 	self.screenTitle = [specifier propertyForKey:@"label"];

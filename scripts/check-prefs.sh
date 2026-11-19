@@ -32,7 +32,7 @@ def read(path):
 # Controller do Apple cung cấp. Chỉ những lớp có hành vi ổn định trong
 # PreferenceLoader mới được phép — trước đây `PSListItemsController` làm trang
 # cấu hình OpenAI văng ngay khi mở (nó cần `values`/`titles` dạng khác).
-APPLE_DETAILS = {"PSListItemsController"}  # đã thay bằng SXAPIChoiceController
+APPLE_DETAILS = set()  # mọi hàng "chọn một giá trị" đều dùng SXAPIChoiceController
 FORBIDDEN_DETAILS = {
     "PSListItemsController": "dùng SXAPIChoiceController (tự dựng) — lớp này cần "
                              "values/titles không tới được cell trong trang nạp bằng plist",

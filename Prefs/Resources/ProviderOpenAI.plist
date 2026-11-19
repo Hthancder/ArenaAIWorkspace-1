@@ -79,20 +79,6 @@
 			<string>Endpoint đang dùng</string>
 		</dict>
 		<dict>
-			<key>PostNotification</key>
-			<string>com.sirix.tweak/prefs.changed</string>
-			<key>cell</key>
-			<string>PSLinkListCell</string>
-			<key>defaults</key>
-			<string>com.sirix.tweak</string>
-			<key>detail</key>
-			<string>SXAPIChoiceController</string>
-			<key>key</key>
-			<string>openaiApi</string>
-			<key>label</key>
-			<string>Giao thức API</string>
-		</dict>
-		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
