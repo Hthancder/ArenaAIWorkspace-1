@@ -30,7 +30,7 @@ jobs:
           unzip -q prior/gmRunner.ipa -d unpacked
           app=unpacked/Payload/gmRunner.app
           exe=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Info.plist")
-          for cmd in "ls -la '$app'" "file '$app/$exe'" "lipo -info '$app/$exe'" "lipo -verify_arch arm64 '$app/$exe'" "otool -l '$app/$exe' | grep -A 5 LC_BUILD_VERSION"; do
+          for cmd in "ls -la '$app'" "file '$app/$exe'" "lipo -info '$app/$exe'" "lipo '$app/$exe' -verify_arch arm64" "otool -l '$app/$exe' | grep -A 5 LC_BUILD_VERSION | tr '\\n' ' '"; do
             result=$(eval "$cmd" 2>&1); status=$?
             safe=$(printf '%s' "$result" | head -c 2500 | sed ':a;N;$!ba;s/\n/ /g')
             echo "::notice::cmd=$cmd status=$status output=$safe"
@@ -105,7 +105,7 @@ jobs:
           ls -l "$app"
           file "$app/$exe"
           lipo -info "$app/$exe"
-          lipo -verify_arch arm64 "$app/$exe"
+          lipo "$app/$exe" -verify_arch arm64
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
