@@ -177,3 +177,26 @@ The previously supplied APK's `game.droid` contains empty `CODE`, `VARI`, and
 `gml_Object_*` native functions. This is evidence of a native-compiled game,
 not a usable GML bytecode payload for a generic iOS GameMaker VM runner. The
 Android ELF cannot simply be packaged as an iOS executable.
+
+## Free alternative being investigated
+
+The official GameMaker pricing page lists iOS/mobile export in the free
+non-commercial tier but lists "Igor / CI builds" only in the Professional and
+Enterprise tiers. The earlier request for a CI access key did not account for
+that difference; do not ask the user to pay for a CI license.
+
+The supplied APK is native-compiled, so its `game.droid` cannot be used as
+GameMaker VM bytecode. A possible no-purchase approach is to compile the
+imported `.yyp` to a Windows VM build using the free GameMaker IDE, extract
+`data.win`, and try it with an open-source GameMaker runner. This would still
+require a Windows GameMaker installation/account and may encounter GML
+migration errors or runtime incompatibilities; it is not a validated solution.
+
+The project https://github.com/andronep/gmrunner (GPL-3.0-or-later), commit
+`e7121381d38b03a24242812fc22b0a7386d545c6`, supports iOS but targets iOS 17.
+`.github/workflows/gmrunner-ios15.yml` is experimenting with an iOS 15
+adaptation using the simple UIKit launcher in `tools/gmrunner-ios15/Launcher.swift`
+and the runner's built-in game menu. GitHub Actions run `44494942432` was
+still in progress at the last check; the standalone runner does not include
+Dead Town. No iOS 15 device, game-data, audio, input, or save test has yet
+occurred. Do not present a runner-only artifact as a working Dead Town IPA.
