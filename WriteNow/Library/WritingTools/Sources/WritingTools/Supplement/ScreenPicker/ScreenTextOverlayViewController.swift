@@ -459,7 +459,7 @@ final class ScreenTextOverlayViewController: UIViewController {
 
         let query = ChatQuery(
             messages: [
-                .system(.init(content: .textContent(sysPrompt))),
+                .system(.init(content: sysPrompt)),
                 .user(.init(content: .string(numberedInput))),
             ],
             model: Configurator.shared.mid,
@@ -475,7 +475,10 @@ final class ScreenTextOverlayViewController: UIViewController {
 
                 switch result {
                 case let .success(res):
-                    let raw = res.choices.first?.message.content ?? ""
+                    let rawJoined = res.choices.compactMap { $0.message.content?.string }.joined()
+                    let raw = Configurator.shared.settings.stripThinkingTags
+                        ? PromptComposer.stripThinkingTags(from: rawJoined)
+                        : rawJoined
                     let parsed = Self.parseNumberedTranslations(raw, expectedCount: limited.count)
                     var entries: [(frameInWindow: CGRect, originalText: String, replacedText: String)] = []
                     for (idx, blk) in limited.enumerated() {
