@@ -124,9 +124,13 @@ FOUNDATION_EXPORT NSArray<NSDictionary *> *SXModelPresets(SXProvider provider);
 
 #endif // SX_TESTING
 
+/// Đọc thô một key (SXPrefs.m: CFPreferences + file; bản test: dictionary).
+/// Phần dùng chung dựa vào selector này nên nó phải công khai.
+@interface SXPrefs (Storage)
+- (nullable id)valueFor:(NSString *)key;
+@end
+
 @interface SXPrefs (SharedAPI)
-/// Header đang cấu hình cho một nhà cung cấp (đã lọc, chỉ mục đang bật).
-- (NSArray<NSDictionary *> *)headersForProvider:(SXProvider)provider;
 /// "2 header · đang gửi tất cả" — nhãn cho trang cấu hình.
 - (NSString *)headersSummaryForProvider:(SXProvider)provider;
 /// Công cụ có đang bật không (màn hình Cài đặt → Công cụ).

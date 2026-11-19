@@ -4,14 +4,9 @@
 #import "SXPrefs.h"
 #import "SXHeaders.h"
 #import "SXLog.h"
-#ifdef __APPLE__
+#if defined(__APPLE__) && __has_include(<UIKit/UIKit.h>)
 #import <UIKit/UIKit.h>
 #endif
-
-/// Các selector lưu trữ do SXPrefs.m (bản thật) hoặc lớp giả lập cung cấp.
-@interface SXPrefs (Storage)
-- (nullable id)valueFor:(NSString *)key;
-@end
 
 /// Phần này đọc thẳng các ivar mà `-reload` của SXPrefs.m nạp sẵn — đó là lý do
 /// nó nằm chung @implementation với bản thật. Với bản test, các selector dưới
@@ -82,7 +77,9 @@ static NSArray<NSString *> *SXLegacyToolNames(NSString *legacyKey) {
 
 #pragma mark - Header tuỳ chỉnh
 
-- (NSArray<NSDictionary *> *)storedHeadersForProvider:(SXProvider)provider {
+/// Header đang cấu hình. Đặt trong phần dùng chung (không phải lớp chính) để
+/// cả tweak lẫn test đều dùng đúng một cách.
+- (NSArray<NSDictionary *> *)headersForProvider:(SXProvider)provider {
 	NSString *key = provider == SXProviderGemini ? @"geminiHeaders" : @"openaiHeaders";
 	id stored = [self valueFor:key];
 	return [stored isKindOfClass:[NSArray class]] ? stored : @[];
