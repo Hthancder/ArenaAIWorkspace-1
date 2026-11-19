@@ -322,7 +322,7 @@ int main(void) {
 		SXMockHTTPReset();
 		error = nil;
 		out = Run(SXProviderOpenAI, @[], nil, nil, &error);
-		assert(error && [error.localizedDescription containsString:@"Địa chỉ API"]);
+		assert(error && error.code == -1003);
 		testBase = @"https://mock.test/v1";
 
 		puts("sxllm mock tests: OK");
