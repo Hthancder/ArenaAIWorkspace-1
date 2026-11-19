@@ -2,6 +2,11 @@ name: Dead Town GameMaker import diagnostics
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - arena/78062d86-arenaaiworkspace-1
+    paths:
+      - .github/workflows/deadtown-import.yml
 
 permissions:
   contents: read
