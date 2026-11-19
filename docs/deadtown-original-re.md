@@ -313,10 +313,25 @@ they do not establish what any specific rendered screen looks like.
 
 Reproduce with `python tools/deadtown_sprite_metadata.py APK PROJECT --output
 sprite-metadata.json`; the native research workflow also generates the full
-report. It does **not** compare decoded pixels, transparency, mask bits,
-animation rates, positions or UI logic. Matching metadata is not visual or
-collision equivalence, and the 111 APK-only assets are not automatically
-restored by this report.
+report. The metadata report does **not** compare decoded pixels, transparency,
+mask bits, animation rates, positions or UI logic. Matching metadata is not
+visual or collision equivalence.
+
+A separate analysis, `tools/deadtown_sprite_pixels.py`, decodes the six APK PNG
+atlases and reconstructs unscaled TPAG frame regions on their original-sized
+transparent canvases, then compares the same frame index of shared sprite names
+against the GMX PNGs (Pillow 11.3.0). Of 746 shared-index frame pairs, **221**
+are exactly RGBA-identical, **517** differ only in RGB at alpha zero, **5**
+have RGBA differences at pixels not both fully transparent, and **3** have
+different canvas dimensions. The five visible-RGBA differences are
+`ih_dagger[0]`, `spr_event_eng[0]`, `spr_event_kor[0]`, `spr_gps_sign[0]`,
+and `spr_ui_day[0]`; the three size mismatches are `spr_part_bull[0]` and both
+`spr_setting_cradits` frames. Across shared names, the APK has **63 additional
+frames** not present in GMX; APK-only sprite names are not included in this
+count. Transparent RGB can still affect texture filtering: classification is
+not a promise of pixel-identical rendering. No collision masks, animation
+rates, placement, device scaling, UI logic, or runtime drawing are compared.
+Neither report modifies or automatically restores the 111 APK-only assets.
 
 ### UI/input investigation: coordinate spaces
 
