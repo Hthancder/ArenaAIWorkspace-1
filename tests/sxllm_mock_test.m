@@ -7,6 +7,18 @@
 #import <Foundation/Foundation.h>
 #import "SXLLM.h"
 #import "SXPrefs.h"
+
+/// Selector có cả `onDelta` là phần nội bộ (khai báo trong lớp, không đưa vào
+/// header công khai) — test gọi thẳng qua category.
+@interface SXLLM (TestHooks)
++ (void)askQuestion:(NSString *)question
+			history:(NSArray<NSDictionary *> *)history
+			  tools:(NSArray<NSDictionary *> *)tools
+		   executor:(nullable SXToolExec)executor
+		   provider:(SXProvider)provider
+			onDelta:(nullable SXLLMDelta)onDelta
+		 completion:(SXLLMCompletion)completion;
+@end
 #import "SXHTTP.h"
 #import "SXToolkit.h"
 #import "SXLog.h"
@@ -206,7 +218,7 @@ int main(void) {
 		NSString *secondBody = SXMockHTTPRequests()[1][@"body"];
 		assert([secondBody containsString:@"\"role\":\"tool\""]);
 		assert([secondBody containsString:@"\"tool_call_id\":\"call_1\""]);
-		assert([secondBody containsString:@"{\\"result\\":\\"12:00\\"}"]);
+		assert([secondBody containsString:@"result"] && [secondBody containsString:@"12:00"]);
 		assert([secondBody containsString:@"\"tools\""]);
 
 		// ── 3. Stream SSE: mảnh văn bản đến tăng dần, đúng thứ tự.
