@@ -89,7 +89,9 @@ static NSString *SXAPIPathSuffix(SXOpenAIApi api) {
 			NSUInteger insertAt = _specifiers.count;
 			for (NSUInteger i = 0; i < _specifiers.count; i++) {
 				PSSpecifier *candidate = _specifiers[i];
-				if ([[candidate propertyForKey:@"key"] isEqualToString:@"endpointDisplay"]) {
+				id candidateKey = [candidate propertyForKey:@"key"];
+				if ([candidateKey isKindOfClass:[NSString class]] &&
+					[candidateKey isEqualToString:@"endpointDisplay"]) {
 					insertAt = i + 1;
 					break;
 				}
@@ -245,7 +247,8 @@ static NSString *SXAPIPathSuffix(SXOpenAIApi api) {
 /// Tìm specifier của một UITextField bằng cách đối chiếu ô nhập đang hiển thị.
 - (PSSpecifier *)sx_specifierForField:(UITextField *)field {
 	for (PSSpecifier *specifier in self.specifiers) {
-		NSString *cellName = [specifier propertyForKey:@"cell"];
+		id cellValue = [specifier propertyForKey:@"cell"];
+		NSString *cellName = [cellValue isKindOfClass:[NSString class]] ? cellValue : nil;
 		BOOL editable = [cellName isEqualToString:@"PSEditTextCell"] ||
 						[cellName isEqualToString:@"PSSecureEditTextCell"];
 		if (!editable) continue;
@@ -333,7 +336,12 @@ static NSString *SXAPIPathSuffix(SXOpenAIApi api) {
 		}
 		if ([key isEqualToString:@"testStatus"]) return [self testStatusText];
 		if ([key isEqualToString:@"headersDisplay"]) {
-			return [[SXPrefs shared] headersSummaryForProvider:self.provider];
+			@try {
+				return [[SXPrefs shared] headersSummaryForProvider:self.provider];
+			} @catch (NSException *exception) {
+				SXLogErr(@"pref", @"tóm tắt header lỗi: %@", exception.reason);
+				return @"—";
+			}
 		}
 		if ([key isEqualToString:self.keyName]) {
 			// Ô khoá hiển thị khoá đã che; không bao giờ trả khoá thật cho bảng.
@@ -367,7 +375,7 @@ static NSString *SXAPIPathSuffix(SXOpenAIApi api) {
 		@"keyDisplay": keyText.length ? [SXPrefs maskedKey:keyText] : @"Chưa đặt",
 		@"modelDisplay": [self currentModel],
 		@"endpointDisplay": endpoint,
-		@"headersDisplay": [prefs headersSummaryForProvider:self.provider],
+		@"headersDisplay": [self sx_safeHeadersSummary],
 		@"testStatus": [self testStatusText],
 	};
 	[updates enumerateKeysAndObjectsUsingBlock:^(NSString *key, NSString *value, BOOL *stop) {
@@ -393,11 +401,23 @@ static NSString *SXAPIPathSuffix(SXOpenAIApi api) {
 	}];
 }
 
+/// Một dòng tóm tắt lỗi không được làm hỏng cả bảng cấu hình.
+- (NSString *)sx_safeHeadersSummary {
+	@try {
+		return [[SXPrefs shared] headersSummaryForProvider:self.provider];
+	} @catch (NSException *exception) {
+		SXLogErr(@"pref", @"tóm tắt header lỗi: %@", exception.reason);
+		return @"—";
+	}
+}
+
 - (PSSpecifier *)sx_specifierWithKey:(NSString *)key {
 	if (!key.length) return nil;
 	for (PSSpecifier *specifier in self.specifiers) {
-		if ([[specifier propertyForKey:@"key"] isEqualToString:key]) return specifier;
-		if ([[specifier propertyForKey:@"id"] isEqualToString:key]) return specifier;
+		id specifierKey = [specifier propertyForKey:@"key"];
+		if ([specifierKey isKindOfClass:[NSString class]] && [specifierKey isEqualToString:key]) return specifier;
+		id identifier = [specifier propertyForKey:@"id"];
+		if ([identifier isKindOfClass:[NSString class]] && [identifier isEqualToString:key]) return specifier;
 	}
 	return nil;
 }

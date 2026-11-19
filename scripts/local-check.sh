@@ -22,14 +22,20 @@ OUT=$(mktemp -d)
 trap 'rm -rf "$OUT"' EXIT
 FAIL=0
 
-echo "── [0/4] Settings lint"
+echo "── [0/3] Settings lint"
 ./scripts/check-prefs.sh
 
-echo "── [1/4] Logos preprocess"
+echo "── [0/3] Selector khai báo phải có thân hàm"
+# 1.1.10–1.1.12 văng vì `headersSummaryForProvider:` được KHAI BÁO trong header
+# và GỌI từ Settings nhưng chưa từng được viết. Trình biên dịch không bắt được
+# (Objective-C chỉ cảnh báo), nên kiểm ở đây.
+python3 scripts/check-declared-methods.py || FAIL=1
+
+echo "── [1/3] Logos preprocess"
 perl "$THEOS/bin/logos.pl" Sources/Tweak.x > "$OUT/Tweak.ii"
 echo "   ✓ Sources/Tweak.x → Tweak.ii ($(grep -c '' "$OUT/Tweak.ii") dòng)"
 
-echo "── [2/4] Compile (zig cc, aarch64-ios, -fobjc-arc)"
+echo "── [2/3] Compile (zig cc, aarch64-ios, -fobjc-arc)"
 ZIG_FLAGS=(
 	-target aarch64-ios.15.0
 	-iframework "$SDK/System/Library/Frameworks"
@@ -61,7 +67,7 @@ for f in Sources/*.m "$OUT/Tweak.ii" Prefs/*.m; do
 	compile "$f"
 done
 
-echo "── [3/4] Plist validate"
+echo "── [3/3] Plist validate"
 python3 - <<'PY' || FAIL=1
 import plistlib, sys, pathlib
 files = [

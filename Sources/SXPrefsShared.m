@@ -153,6 +153,12 @@ static NSArray<NSString *> *SXLegacyToolNames(NSString *legacyKey) {
 	return [stored isKindOfClass:[NSArray class]] ? stored : @[];
 }
 
+- (NSString *)headersSummaryForProvider:(SXProvider)provider {
+	// Hàm này từng được KHAI BÁO trong header mà quên viết thân — trang cấu hình
+	// gọi nó khi vẽ dòng “Đang gửi” nên văng ngay khi mở (1.1.10–1.1.12).
+	return SXHeadersSummary([self headersForProvider:provider]);
+}
+
 + (void)setHeaders:(NSArray<NSDictionary *> *)headers forProvider:(SXProvider)provider {
 	NSArray *clean = SXHeadersNormalized(headers);
 	NSString *key = provider == SXProviderGemini ? @"geminiHeaders" : @"openaiHeaders";

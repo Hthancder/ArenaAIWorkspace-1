@@ -27,7 +27,8 @@ jobs:
           # annotation của check-run để đọc được từ ngoài (job log bị chặn).
           log=$(mktemp)
           failed=""
-          for script in check-prefs test-log-file test-intercept-macos test-sxllm-macos test-store-macos test-toolkit-macos test-headers-macos test-update-macos; do
+          python3 scripts/check-declared-methods.py || { echo "::error title=Selector thiếu thân hàm::Khai báo trong header nhưng chưa viết trong .m"; exit 1; }
+          for script in check-prefs test-log-file test-intercept-macos test-sxllm-macos test-store-macos test-toolkit-macos test-headers-macos test-update-macos test-prefs-shared-macos; do
             echo "===== $script =====" | tee -a "$log"
             if ! "./scripts/${script}.sh" >> "$log" 2>&1; then
               failed="$script"

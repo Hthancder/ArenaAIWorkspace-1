@@ -221,7 +221,18 @@ static SXChoiceDefinition *SXChoiceDefinitionFor(NSString *key) {
 /// Ô nhập số nằm trong một PSEditTextCell do Preferences dựng; lấy giá trị từ
 /// chính cell đang hiển thị thay vì giữ con trỏ (cell có thể bị tái sử dụng).
 - (UITextField *)sx_editingField {
-	for (UITableViewCell *cell in self.table.visibleCells) {
+	// `self.table` là thuộc tính của PSListController đời cũ; trên iOS 15 nó
+	// không còn (đã đổi sang `tableView`), truy cập là văng. Lấy bảng từ view.
+	UITableView *table = nil;
+	if ([self respondsToSelector:@selector(tableView)]) table = [self performSelector:@selector(tableView)];
+	if (!table && [self.view isKindOfClass:[UITableView class]]) table = (UITableView *)self.view;
+	if (!table) {
+		for (UIView *subview in self.view.subviews) {
+			if ([subview isKindOfClass:[UITableView class]]) { table = (UITableView *)subview; break; }
+		}
+	}
+	if (!table) return nil;
+	for (UITableViewCell *cell in table.visibleCells) {
 		if (![cell isKindOfClass:[UITableViewCell class]]) continue;
 		if ([cell respondsToSelector:@selector(editingTextField)]) {
 #pragma clang diagnostic push
