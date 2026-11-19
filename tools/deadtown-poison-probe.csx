@@ -41,11 +41,11 @@ dt_poison_probe_tick = 0;
             body.Split(new string[] { damageEnd }, StringSplitOptions.None).Length != 2)
             throw new Exception("Unexpected candidate poison damage block");
         body = body.Replace(damageStart, @"
-if dt_poison_probe_tick >= 10 && dt_poison_probe_tick <= 11
+if dt_poison_probe_tick >= 10 && dt_poison_probe_tick <= 13
     dt_hp_before_poison = hp;
 " + damageStart);
         body = body.Replace(damageEnd, @"
-if dt_poison_probe_tick >= 10 && dt_poison_probe_tick <= 11
+if dt_poison_probe_tick >= 10 && dt_poison_probe_tick <= 13
     show_debug_message(""DT_POISON|damage|"" + string(dt_poison_probe_tick + 1) + ""|"" + string(rpg_skill_get_level(20)) + ""|"" + string(buff_poison_hurt * 4500) + ""|"" + string((dt_hp_before_poison - hp) * 4500));
 " + damageEnd);
         suffix = @"
@@ -104,9 +104,13 @@ if (dt_poison_probe_tick == 11)
 }
 if (dt_poison_probe_tick == 12)
 {
+    // Observe order when poison and protection coexist, then next step.
     global.skill_level[20] = 0;
-    buff_poison = 0;
+    buff_poison = 20;
+    buff_poison_protect = 2;
+    hp = 80;
 }
+if (dt_poison_probe_tick == 14) buff_poison = 0;
 ";
     }
     else if (obj == "sys_player_buff" && type == "3" && number == "2")

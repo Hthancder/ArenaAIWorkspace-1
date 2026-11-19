@@ -62,8 +62,11 @@ def check(log, save_file):
     if states[8][:2] != (0, 1) or states[9][:2] != (0, 0):
         raise ValueError('candidate poison countdown failed')
     damage = [numbers(row) for row in records.get('damage', [])]
-    expected_damage = ((11, 0, 100, 100), (12, 1, 100, 50))
-    if len(damage) != 2 or any(len(row) != 4 for row in damage):
+    # The forced candidate applies poison damage before its protection timer
+    # clears poison; the following step is unaffected. Not an APK observation.
+    expected_damage = ((11, 0, 100, 100), (12, 1, 100, 50),
+                       (13, 0, 100, 100), (14, 0, 100, 0))
+    if len(damage) != len(expected_damage) or any(len(row) != 4 for row in damage):
         raise ValueError('missing or invalid candidate damage measurements')
     for actual, expected in zip(damage, expected_damage):
         if any(not math.isclose(a, b, rel_tol=0, abs_tol=0.05) for a, b in zip(actual, expected)):
