@@ -20,8 +20,26 @@ def prepare(source: Path, output: Path) -> None:
         if node.nodeType == node.ELEMENT_NODE and node.localName in ("icon", "android"):
             application.removeChild(node)
             node.unlink()
-    if not any(node.nodeType == node.ELEMENT_NODE and node.localName == "iPhone" for node in application.childNodes):
+    iphone = next((node for node in application.childNodes
+                   if node.nodeType == node.ELEMENT_NODE and node.localName == "iPhone"), None)
+    if iphone is None:
         raise ValueError("The descriptor has no iPhone settings")
+    resolutions = [node for node in iphone.childNodes
+                   if node.nodeType == node.ELEMENT_NODE and node.localName == "requestedDisplayResolution"]
+    if len(resolutions) > 1:
+        raise ValueError("The descriptor has multiple iPhone resolution settings")
+    if resolutions:
+        resolution = resolutions[0]
+        # All devices should use high resolution, even if a prior descriptor
+        # excluded particular devices from its preferred setting.
+        if resolution.hasAttribute("excludeDevices"):
+            resolution.removeAttribute("excludeDevices")
+        while resolution.firstChild:
+            resolution.removeChild(resolution.firstChild).unlink()
+    else:
+        resolution = document.createElementNS(application.namespaceURI, "requestedDisplayResolution")
+        iphone.appendChild(resolution)
+    resolution.appendChild(document.createTextNode("high"))
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_bytes(document.toxml(encoding="utf-8"))
 

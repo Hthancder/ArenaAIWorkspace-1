@@ -17,7 +17,7 @@ class DescriptorTests(unittest.TestCase):
   <id>Test</id><initialWindow><content>Game.swf</content></initialWindow>
   <icon><image36x36>icons/36.png</image36x36></icon>
   <android><manifestAdditions><![CDATA[<manifest/>]]></manifestAdditions></android>
-  <iPhone><InfoAdditions><![CDATA[<key>UIDeviceFamily</key><array><string>1</string></array>]]></InfoAdditions></iPhone>
+  <iPhone><InfoAdditions><![CDATA[<key>UIDeviceFamily</key><array><string>1</string></array>]]></InfoAdditions><requestedDisplayResolution excludeDevices="iPhone15,2">standard</requestedDisplayResolution></iPhone>
 </application>''')
 
     def tearDown(self):
@@ -30,8 +30,23 @@ class DescriptorTests(unittest.TestCase):
         self.assertFalse(doc.getElementsByTagName("icon"))
         self.assertFalse(doc.getElementsByTagName("android"))
         self.assertTrue(doc.getElementsByTagName("iPhone"))
+        resolution = doc.getElementsByTagName("requestedDisplayResolution")[0]
+        self.assertEqual(resolution.firstChild.nodeValue, "high")
+        self.assertFalse(resolution.hasAttribute("excludeDevices"))
         self.assertIn(b"<![CDATA[<key>UIDeviceFamily</key>", self.output.read_bytes())
         self.assertEqual(self.source.read_bytes(), original)
+
+    def test_adds_high_resolution_if_missing(self):
+        self.source.write_text('<application xmlns="http://ns.adobe.com/air/application/32.0"><iPhone/></application>')
+        prepare(self.source, self.output)
+        doc = minidom.parse(str(self.output))
+        self.assertEqual(doc.getElementsByTagName("requestedDisplayResolution")[0].firstChild.nodeValue, "high")
+
+    def test_rejects_duplicate_resolution_settings(self):
+        self.source.write_text('<application xmlns="http://ns.adobe.com/air/application/32.0"><iPhone><requestedDisplayResolution>standard</requestedDisplayResolution><requestedDisplayResolution>high</requestedDisplayResolution></iPhone></application>')
+        with self.assertRaises(ValueError):
+            prepare(self.source, self.output)
+        self.assertFalse(self.output.exists())
 
     def test_refuses_to_overwrite(self):
         self.output.write_text("existing")

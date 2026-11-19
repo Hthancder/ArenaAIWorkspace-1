@@ -36,7 +36,7 @@ The staged descriptor is an unchanged copy for investigation, **not a verified i
 python3 tools/prepare_ios_descriptor.py .cache/air-staged/application.xml .cache/experimental-ios.xml
 ```
 
-This removes the Android section and the icon block that refers to missing files; it retains the original iPhone settings. It has not been validated with ADT and may still require changes. Run the preparation tests with `python3 -m unittest discover -s tests -v`.
+This removes the Android section and the icon block that refers to missing files and changes the iPhone `requestedDisplayResolution` from `standard` to `high` to use the device's high-resolution display. Other iPhone settings are retained. This can improve rendering sharpness but cannot add detail to low-resolution artwork; layout, touch behavior, performance and save retention need device testing. Run the preparation tests with `python3 -m unittest discover -s tests -v`.
 
 ## Device and build research
 

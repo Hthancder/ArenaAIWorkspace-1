@@ -12,10 +12,20 @@ on:
         required: true
         default: false
       release_existing:
-        description: 'Publish the previously built experimental IPA as a prerelease'
+        description: 'Publish a successful experimental IPA build as a prerelease'
         type: boolean
         required: true
         default: false
+      artifact_run_id:
+        description: 'Successful build run ID to publish'
+        type: string
+        required: false
+        default: '44480837903'
+      release_tag:
+        description: 'New prerelease tag'
+        type: string
+        required: false
+        default: 'lostlife-ios-test-1'
 
 permissions:
   contents: read
@@ -75,14 +85,22 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: gh run download 44480837903 --name experimental-ios-ipa --dir "$RUNNER_TEMP/release"
+          BUILD_RUN: ${{ inputs.artifact_run_id }}
+        run: |
+          [[ "$BUILD_RUN" =~ ^[0-9]+$ ]] || { echo 'Invalid run ID'; exit 1; }
+          valid=$(gh run view "$BUILD_RUN" --json conclusion,headBranch,workflowName --jq '.conclusion == "success" and .headBranch == "arena/78062d86-arenaaiworkspace-1" and .workflowName == "Experimental AIR iOS build"')
+          [[ "$valid" == true ]] || { echo 'Build run is not a successful build from this branch'; exit 1; }
+          gh run download "$BUILD_RUN" --name experimental-ios-ipa --dir "$RUNNER_TEMP/release"
       - name: Publish experimental prerelease
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          BUILD_RUN: ${{ inputs.artifact_run_id }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
-          gh release create lostlife-ios-test-1 \
+          [[ "$RELEASE_TAG" =~ ^lostlife-ios-[a-z0-9-]+$ ]] || { echo 'Invalid release tag'; exit 1; }
+          gh release create "$RELEASE_TAG" \
             "$RUNNER_TEMP/release/experimental.ipa#LostLife-iOS-test.ipa" \
             --target "$GITHUB_SHA" --prerelease \
-            --title "LostLife iOS — bản thử nghiệm 1" \
-            --notes "Bản AIR interpreter thử nghiệm dành cho cài đặt riêng qua TrollStore. Đã đóng gói thành công nhưng chưa được kiểm thử trên thiết bị iOS; có thể gặp lỗi, chậm hoặc không tương thích. Không dành cho App Store. IPA được tạo từ tài nguyên ở commit 4291b63 và từ workflow build run 44480837903."
+            --title "LostLife iOS — $RELEASE_TAG" \
+            --notes "Bản AIR interpreter thử nghiệm cho TrollStore. Có thể gặp lỗi hoặc không tương thích; không dành cho App Store. Tài nguyên từ commit 4291b63; IPA từ build run $BUILD_RUN."
