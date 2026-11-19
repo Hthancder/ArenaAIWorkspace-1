@@ -88,6 +88,18 @@ if buff_poison_protect > 0
 doc.Dispose();
 if (createCount != 1 || stepCount != 1 || transferCount != 1)
     throw new Exception($"Unexpected event counts: create={createCount} step={stepCount} transfer={transferCount}");
+string source = Environment.GetEnvironmentVariable("GML_PROBE_SOURCE");
+if (string.IsNullOrEmpty(source)) throw new Exception("GML_PROBE_SOURCE is not set");
+var itemCode = Data.Code.ByName("gml_Script_item_use") ?? throw new Exception("item_use code missing");
+string itemText = File.ReadAllText(Path.Combine(Path.GetDirectoryName(source), "item_use.gml"));
+string itemBefore = @"
+show_debug_message(""DT_POISON|item_enter|"" + string(argument0) + ""|"" + string(global.inven_use) + ""|"" + string(ds_map_find_value(global.inven_use,argument0)));
+";
+string itemAfter = @"
+show_debug_message(""DT_POISON|item_exit|"" + string(ds_map_exists(global.inven_use,argument0)) + ""|"" + string(ins.buff_poison_protect));
+";
+group.QueueReplace(itemCode, itemBefore + "\n" + itemText + "\n" + itemAfter);
+Console.WriteLine("POISON_INSTRUMENT: item_use");
 var result = group.Import(false);
 if (!result.Successful)
 {

@@ -110,7 +110,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          timeout 120 work/runner-build/gmrunner work/diagnostic --headless --fast --mute --seed 1 \
+          GMR_TRACE_CALL=ds_map_add,ds_map_delete,ds_map_find_value,ds_map_exists,instance_create \
+            timeout 120 work/runner-build/gmrunner work/diagnostic --headless --fast --mute --seed 1 \
             --frames 190 --trace --stats --goto rom_play@160 --save-dir work/save > work/probe.log 2>&1 || { tail -100 work/probe.log; exit 1; }
           grep -F '[room] -> rom_play' work/probe.log
           grep -F 'DT_POISON|' work/probe.log || true
@@ -128,7 +129,8 @@ jobs:
                   continue
               lines = path.read_text(errors='replace').splitlines()
               selected = [line for line in lines if 'DT_POISON|' in line or 'PROBE:' in line or
-                          'POISON_INSTRUMENT' in line or 'error' in line.lower() or 'exception' in line.lower()]
+                          'POISON_INSTRUMENT' in line or 'error' in line.lower() or 'exception' in line.lower() or
+                          ('[call]' in line and ('gml_Script_item_use' in line or 'probe_obj_player_200' in line))]
               for label, group in (('markers', selected[-20:]), ('tail', lines[-12:])):
                   text = ' | '.join(group).replace('%', '%25').replace('\r', ' ')
                   print('::notice::' + name + ' ' + label + ': ' + text[:3500])
