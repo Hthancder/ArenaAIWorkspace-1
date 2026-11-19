@@ -33,6 +33,21 @@ dt_poison_probe_tick = 0;
     else if (obj == "obj_player" && type == "3" && number == "0")
     {
         stepCount++;
+        // Measure only the poison-damage block before hunger/healing modifies HP.
+        // Scaling the delta avoids loss from the runner's string formatting.
+        string damageStart = "if 0 < buff_poison\n{\n    if rpg_skill_get_level(20)";
+        string damageEnd = "\nif 0<hungry\n{";
+        if (body.Split(new string[] { damageStart }, StringSplitOptions.None).Length != 2 ||
+            body.Split(new string[] { damageEnd }, StringSplitOptions.None).Length != 2)
+            throw new Exception("Unexpected candidate poison damage block");
+        body = body.Replace(damageStart, @"
+if dt_poison_probe_tick >= 10 && dt_poison_probe_tick <= 11
+    dt_hp_before_poison = hp;
+" + damageStart);
+        body = body.Replace(damageEnd, @"
+if dt_poison_probe_tick >= 10 && dt_poison_probe_tick <= 11
+    show_debug_message(""DT_POISON|damage|"" + string(dt_poison_probe_tick + 1) + ""|"" + string(rpg_skill_get_level(20)) + ""|"" + string(buff_poison_hurt * 4500) + ""|"" + string((dt_hp_before_poison - hp) * 4500));
+" + damageEnd);
         suffix = @"
 // Forced scenario, intentionally not a substitute for original APK testing.
 dt_poison_probe_tick += 1;
@@ -74,6 +89,23 @@ if (dt_poison_probe_tick == 10)
     buff_poison_protect = 0;
     var dt_load_result = game_load_protect(""dt_poison_probe.sav"");
     show_debug_message(""DT_POISON|load_done|"" + string(dt_load_result) + ""|"" + string(buff_poison_protect) + ""|"" + string(buff_poison));
+    // Prepare two isolated poison-damage blocks, with and without skill 20.
+    global.skill_level[20] = 0;
+    buff_poison = 20;
+    buff_poison_protect = 0;
+    hp = 80;
+}
+if (dt_poison_probe_tick == 11)
+{
+    global.skill_level[20] = 1;
+    buff_poison = 20;
+    buff_poison_protect = 0;
+    hp = 80;
+}
+if (dt_poison_probe_tick == 12)
+{
+    global.skill_level[20] = 0;
+    buff_poison = 0;
 }
 ";
     }

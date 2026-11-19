@@ -61,6 +61,13 @@ def check(log, save_file):
         raise ValueError('candidate protection expiry failed')
     if states[8][:2] != (0, 1) or states[9][:2] != (0, 0):
         raise ValueError('candidate poison countdown failed')
+    damage = [numbers(row) for row in records.get('damage', [])]
+    expected_damage = ((11, 0, 100, 100), (12, 1, 100, 50))
+    if len(damage) != 2 or any(len(row) != 4 for row in damage):
+        raise ValueError('missing or invalid candidate damage measurements')
+    for actual, expected in zip(damage, expected_damage):
+        if any(not math.isclose(a, b, rel_tol=0, abs_tol=0.05) for a, b in zip(actual, expected)):
+            raise ValueError('candidate damage or resistance skill mismatch')
     one('save_start', 0)
     if numbers(one('save_done', 1)) != [1]:
         raise ValueError('candidate save file was not created')
@@ -95,7 +102,7 @@ def main():
     except (OSError, ValueError) as exc:
         print('PROBE_FAIL:', exc, file=sys.stderr)
         return 1
-    print('PROBE_PASS: forced candidate mask, timer, cap and normal save/load in desktop VM.')
+    print('PROBE_PASS: forced candidate mask, timers, damage, resistance skill and normal save/load in desktop VM.')
     print('PROBE_LIMIT:', result['limitations'])
     return 0
 

@@ -21,6 +21,8 @@ DT_POISON|state|9|0|0|80
 DT_POISON|save_start
 DT_POISON|save_done|1
 DT_POISON|load_done|1|321|2
+DT_POISON|damage|11|0|100|100
+DT_POISON|damage|12|1|100|50
 '''
 # GameMaker-style INI serialization quotes numeric values.
 SAVE = b'[player]\r\nbuffpoisonprotect="321.000000"\r\nbuffpoison="2.000000"\r\n'
@@ -43,6 +45,10 @@ class PoisonLogTests(unittest.TestCase):
                 check(LOG.replace('|4|5397|', '|4|5398|'), path)
             with self.assertRaisesRegex(ValueError, 'round-trip'):
                 check(LOG.replace('load_done|1|321|2', 'load_done|1|0|2'), path)
+            with self.assertRaisesRegex(ValueError, 'resistance skill'):
+                check(LOG.replace('damage|12|1|100|50', 'damage|12|1|100|100'), path)
+            with self.assertRaisesRegex(ValueError, 'damage measurements'):
+                check(LOG.replace('DT_POISON|damage|11|0|100|100\n', ''), path)
             path.write_bytes(base64.b64encode(SAVE.replace(b'321.000000', b'0')))
             with self.assertRaisesRegex(ValueError, 'unexpected poison'):
                 check(LOG, path)
