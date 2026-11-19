@@ -2,336 +2,502 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>title</key>
-	<string>SiriX</string>
 	<key>items</key>
 	<array>
-		<!-- ===== Tổng quan: đọc trạng thái trong một lần nhìn ===== -->
 		<dict>
-			<key>cell</key><string>PSGroupCell</string>
-			<key>label</key><string>Tổng quan</string>
+			<key>cell</key>
+			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>Mọi thay đổi áp dụng ngay, không cần khởi động lại. Từng quyết định thay/giữ phản hồi đều được ghi vào log.</string>
+			<string>Bốn dòng trên là trạng thái trực tiếp — đổi cài đặt bên dưới là chúng cập nhật ngay.</string>
+			<key>label</key>
+			<string>Tổng quan</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSTitleValueCell</string>
-			<key>label</key><string>Trạng thái</string>
-			<key>key</key><string>summary.status</string>
+			<key>cell</key>
+			<string>PSTitleValueCell</string>
+			<key>key</key>
+			<string>summary.status</string>
+			<key>label</key>
+			<string>Trạng thái</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSTitleValueCell</string>
-			<key>label</key><string>Nhà cung cấp</string>
-			<key>key</key><string>summary.provider</string>
+			<key>cell</key>
+			<string>PSTitleValueCell</string>
+			<key>key</key>
+			<string>summary.provider</string>
+			<key>label</key>
+			<string>Nhà cung cấp</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSTitleValueCell</string>
-			<key>label</key><string>Cách trả lời</string>
-			<key>key</key><string>summary.reply</string>
+			<key>cell</key>
+			<string>PSTitleValueCell</string>
+			<key>key</key>
+			<string>summary.reply</string>
+			<key>label</key>
+			<string>Cách trả lời</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSTitleValueCell</string>
-			<key>label</key><string>Lịch sử</string>
-			<key>key</key><string>summary.history</string>
+			<key>cell</key>
+			<string>PSTitleValueCell</string>
+			<key>key</key>
+			<string>summary.history</string>
+			<key>label</key>
+			<string>Ngữ cảnh hội thoại</string>
 		</dict>
-
-		<!-- ===== Bật tắt & chế độ ===== -->
 		<dict>
-			<key>cell</key><string>PSGroupCell</string>
-			<key>label</key><string>Hoạt động</string>
+			<key>cell</key>
+			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>“Thông minh”: Siri gốc vẫn xử lý báo thức, gọi điện, mở app… và SiriX chỉ trả lời câu hỏi tri thức. “Thay thế mọi câu”: AI thay toàn bộ phản hồi, trừ tác vụ hệ thống đã nhận diện được.</string>
+			<string>“Thông minh” để Siri gốc lo báo thức, gọi điện, mở app… và SiriX chỉ trả lời câu hỏi. “Thay thế mọi câu”: AI thay toàn bộ phản hồi, trừ tác vụ hệ thống.</string>
+			<key>label</key>
+			<string>Hoạt động</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSSwitchCell</string>
-			<key>label</key><string>Bật SiriX</string>
-			<key>key</key><string>enabled</string>
-			<key>defaults</key><string>com.sirix.tweak</string>
-			<key>default</key><true/>
-			<key>PostNotification</key><string>com.sirix.tweak/prefs.changed</string>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>default</key>
+			<true/>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>key</key>
+			<string>enabled</string>
+			<key>label</key>
+			<string>Bật SiriX</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSLinkListCell</string>
-			<key>label</key><string>Chế độ trả lời</string>
-			<key>key</key><string>mode</string>
-			<key>defaults</key><string>com.sirix.tweak</string>
-			<key>default</key><string>smart</string>
-			<key>validValues</key>
-			<array><string>smart</string><string>full</string></array>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>cell</key>
+			<string>PSLinkListCell</string>
+			<key>default</key>
+			<string>smart</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>detail</key>
+			<string>PSListItemsController</string>
+			<key>key</key>
+			<string>mode</string>
+			<key>label</key>
+			<string>Chế độ trả lời</string>
 			<key>validTitles</key>
-			<array><string>Thông minh (khuyến nghị)</string><string>Thay thế mọi câu</string></array>
-			<key>detail</key><string>PSListItemsController</string>
-			<key>PostNotification</key><string>com.sirix.tweak/prefs.changed</string>
-		</dict>
-		<dict>
-			<key>cell</key><string>PSLinkListCell</string>
-			<key>label</key><string>Cách kích hoạt</string>
-			<key>key</key><string>triggerMode</string>
-			<key>defaults</key><string>com.sirix.tweak</string>
-			<key>default</key><string>auto</string>
+			<array>
+				<string>Thông minh (khuyến nghị)</string>
+				<string>Thay thế mọi câu</string>
+			</array>
 			<key>validValues</key>
-			<array><string>auto</string><string>prefix</string></array>
-			<key>validTitles</key>
-			<array><string>Tự động (mọi câu)</string><string>Chỉ khi có tiền tố @ai</string></array>
-			<key>detail</key><string>PSListItemsController</string>
-			<key>PostNotification</key><string>com.sirix.tweak/prefs.changed</string>
+			<array>
+				<string>smart</string>
+				<string>full</string>
+			</array>
 		</dict>
-
-		<!-- ===== Nhà cung cấp ===== -->
 		<dict>
-			<key>cell</key><string>PSGroupCell</string>
-			<key>label</key><string>Nhà cung cấp</string>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>cell</key>
+			<string>PSLinkListCell</string>
+			<key>default</key>
+			<string>auto</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>detail</key>
+			<string>PSListItemsController</string>
+			<key>key</key>
+			<string>triggerMode</string>
+			<key>label</key>
+			<string>Cách kích hoạt</string>
+			<key>validTitles</key>
+			<array>
+				<string>Tự động — trả lời mọi câu</string>
+				<string>Chỉ khi nói “@ai”</string>
+			</array>
+			<key>validValues</key>
+			<array>
+				<string>auto</string>
+				<string>prefix</string>
+			</array>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>OpenAI tương thích dùng được mọi endpoint /v1/chat/completions (OpenAI, Groq, OpenRouter, LM Studio…). Mỗi nhà có trang cấu hình riêng, kèm nút kiểm tra kết nối ngay trong trang.</string>
+			<string>Nhánh OpenAI dùng được mọi endpoint /v1/chat/completions (OpenAI, Groq, OpenRouter, LM Studio…). Mỗi nhà có trang riêng, có nút kiểm tra kết nối.</string>
+			<key>label</key>
+			<string>Nhà cung cấp</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSLinkListCell</string>
-			<key>label</key><string>Nhà cung cấp</string>
-			<key>key</key><string>provider</string>
-			<key>defaults</key><string>com.sirix.tweak</string>
-			<key>default</key><string>openai</string>
-			<key>validValues</key>
-			<array><string>openai</string><string>gemini</string></array>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>cell</key>
+			<string>PSLinkListCell</string>
+			<key>default</key>
+			<string>openai</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>detail</key>
+			<string>PSListItemsController</string>
+			<key>key</key>
+			<string>provider</string>
+			<key>label</key>
+			<string>Nhà cung cấp</string>
 			<key>validTitles</key>
-			<array><string>OpenAI / tương thích OpenAI</string><string>Google Gemini</string></array>
-			<key>detail</key><string>PSListItemsController</string>
-			<key>PostNotification</key><string>com.sirix.tweak/prefs.changed</string>
+			<array>
+				<string>OpenAI / tương thích OpenAI</string>
+				<string>Google Gemini</string>
+			</array>
+			<key>validValues</key>
+			<array>
+				<string>openai</string>
+				<string>gemini</string>
+			</array>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSLinkCell</string>
-			<key>label</key><string>Cấu hình OpenAI</string>
-			<key>detail</key><string>SXProviderConfigController</string>
-			<key>configPlist</key><string>ProviderOpenAI</string>
+			<key>cell</key>
+			<string>PSLinkCell</string>
+			<key>configPlist</key>
+			<string>ProviderOpenAI</string>
+			<key>detail</key>
+			<string>SXProviderConfigController</string>
+			<key>label</key>
+			<string>Cấu hình OpenAI</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSLinkCell</string>
-			<key>label</key><string>Cấu hình Gemini</string>
-			<key>detail</key><string>SXProviderConfigController</string>
-			<key>configPlist</key><string>ProviderGemini</string>
+			<key>cell</key>
+			<string>PSLinkCell</string>
+			<key>configPlist</key>
+			<string>ProviderGemini</string>
+			<key>detail</key>
+			<string>SXProviderConfigController</string>
+			<key>label</key>
+			<string>Cấu hình Gemini</string>
 		</dict>
-
-		<!-- ===== Trả lời ===== -->
 		<dict>
-			<key>cell</key><string>PSGroupCell</string>
-			<key>label</key><string>Trả lời</string>
+			<key>cell</key>
+			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>SiriX chờ AI tối đa “Thời gian chờ”, nhưng chỉ giữ luồng Siri tối đa 5 giây để giao diện không bị đóng. Model suy luận thường lâu hơn mốc này — hãy chọn “Giữ Siri gốc” nếu không muốn thấy bubble “chưa kịp”.</string>
+			<string>AI có tối đa “Thời gian chờ AI” để trả lời. Siri giữ giao diện chờ khoảng 8 giây, nên model chậm hơn mốc đó nên chọn “Giữ Siri gốc” để tránh bubble “chưa kịp”.</string>
+			<key>label</key>
+			<string>Trả lời</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSSliderCell</string>
-			<key>label</key><string>Nhiệt độ</string>
-			<key>key</key><string>temperature</string>
-			<key>defaults</key><string>com.sirix.tweak</string>
-			<key>min</key><real>0.0</real>
-			<key>max</key><real>2.0</real>
-			<key>default</key><real>0.7</real>
-			<key>showValue</key><true/>
-			<key>PostNotification</key><string>com.sirix.tweak/prefs.changed</string>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>cell</key>
+			<string>PSLinkListCell</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>detail</key>
+			<string>SXChoiceController</string>
+			<key>key</key>
+			<string>temperature</string>
+			<key>label</key>
+			<string>Nhiệt độ</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSSliderCell</string>
-			<key>label</key><string>Ngữ cảnh (số câu)</string>
-			<key>key</key><string>contextTurns</string>
-			<key>defaults</key><string>com.sirix.tweak</string>
-			<key>min</key><real>2.0</real>
-			<key>max</key><real>40.0</real>
-			<key>default</key><real>8.0</real>
-			<key>showValue</key><true/>
-			<key>PostNotification</key><string>com.sirix.tweak/prefs.changed</string>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>cell</key>
+			<string>PSLinkListCell</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>detail</key>
+			<string>SXChoiceController</string>
+			<key>key</key>
+			<string>contextTurns</string>
+			<key>label</key>
+			<string>Ngữ cảnh hội thoại</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSSliderCell</string>
-			<key>label</key><string>Thời gian chờ AI (giây)</string>
-			<key>key</key><string>timeout</string>
-			<key>defaults</key><string>com.sirix.tweak</string>
-			<key>min</key><real>2.0</real>
-			<key>max</key><real>30.0</real>
-			<key>default</key><real>10.0</real>
-			<key>showValue</key><true/>
-			<key>PostNotification</key><string>com.sirix.tweak/prefs.changed</string>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>cell</key>
+			<string>PSLinkListCell</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>detail</key>
+			<string>SXChoiceController</string>
+			<key>key</key>
+			<string>timeout</string>
+			<key>label</key>
+			<string>Thời gian chờ AI</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSLinkListCell</string>
-			<key>label</key><string>Khi hết giờ chờ</string>
-			<key>key</key><string>timeoutAction</string>
-			<key>defaults</key><string>com.sirix.tweak</string>
-			<key>default</key><string>bubble</string>
-			<key>validValues</key>
-			<array><string>bubble</string><string>keep</string></array>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>cell</key>
+			<string>PSLinkListCell</string>
+			<key>default</key>
+			<string>bubble</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>detail</key>
+			<string>PSListItemsController</string>
+			<key>key</key>
+			<string>timeoutAction</string>
+			<key>label</key>
+			<string>Khi hết giờ chờ</string>
 			<key>validTitles</key>
-			<array><string>Bubble “chưa kịp”</string><string>Giữ Siri gốc</string></array>
-			<key>detail</key><string>PSListItemsController</string>
-			<key>PostNotification</key><string>com.sirix.tweak/prefs.changed</string>
+			<array>
+				<string>Bubble “chưa kịp trả lời”</string>
+				<string>Giữ nguyên câu trả lời Siri</string>
+			</array>
+			<key>validValues</key>
+			<array>
+				<string>bubble</string>
+				<string>keep</string>
+			</array>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSSwitchCell</string>
-			<key>label</key><string>Nhận câu trả lời theo streaming</string>
-			<key>key</key><string>streaming</string>
-			<key>defaults</key><string>com.sirix.tweak</string>
-			<key>default</key><true/>
-			<key>PostNotification</key><string>com.sirix.tweak/prefs.changed</string>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>default</key>
+			<true/>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>key</key>
+			<string>streaming</string>
+			<key>label</key>
+			<string>Nhận câu trả lời theo streaming</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSSwitchCell</string>
-			<key>label</key><string>Trình bày Markdown</string>
-			<key>key</key><string>markdown</string>
-			<key>defaults</key><string>com.sirix.tweak</string>
-			<key>default</key><true/>
-			<key>PostNotification</key><string>com.sirix.tweak/prefs.changed</string>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>default</key>
+			<true/>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>key</key>
+			<string>markdown</string>
+			<key>label</key>
+			<string>Trình bày Markdown</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSSwitchCell</string>
-			<key>label</key><string>Ẩn thẻ kết quả tìm kiếm</string>
-			<key>key</key><string>hideWebCards</string>
-			<key>defaults</key><string>com.sirix.tweak</string>
-			<key>default</key><true/>
-			<key>PostNotification</key><string>com.sirix.tweak/prefs.changed</string>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>default</key>
+			<true/>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>key</key>
+			<string>hideWebCards</string>
+			<key>label</key>
+			<string>Ẩn thẻ kết quả tìm kiếm</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSSwitchCell</string>
-			<key>label</key><string>Hiện câu trả lời Siri gốc</string>
-			<key>key</key><string>showOriginal</string>
-			<key>defaults</key><string>com.sirix.tweak</string>
-			<key>default</key><false/>
-			<key>PostNotification</key><string>com.sirix.tweak/prefs.changed</string>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>default</key>
+			<false/>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>key</key>
+			<string>showOriginal</string>
+			<key>label</key>
+			<string>Hiện câu trả lời Siri gốc</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSSwitchCell</string>
-			<key>label</key><string>Báo lỗi bằng giọng nói</string>
-			<key>key</key><string>speakErrors</string>
-			<key>defaults</key><string>com.sirix.tweak</string>
-			<key>default</key><false/>
-			<key>PostNotification</key><string>com.sirix.tweak/prefs.changed</string>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>default</key>
+			<false/>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>key</key>
+			<string>speakErrors</string>
+			<key>label</key>
+			<string>Báo lỗi bằng giọng nói</string>
 		</dict>
-
-		<!-- ===== Prompt ===== -->
 		<dict>
-			<key>cell</key><string>PSGroupCell</string>
-			<key>label</key><string>Prompt hệ thống</string>
+			<key>cell</key>
+			<string>PSGroupCell</string>
 			<key>footerText</key>
 			<string>Prompt tuỳ chỉnh thay thế toàn bộ prompt mặc định. Biến hỗ trợ: {date}, {device}, {lang}. Để trống = dùng prompt mặc định của SiriX.</string>
+			<key>label</key>
+			<string>Prompt hệ thống</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSLinkCell</string>
-			<key>label</key><string>Xem / chỉnh prompt</string>
-			<key>detail</key><string>SXPromptController</string>
+			<key>cell</key>
+			<string>PSLinkCell</string>
+			<key>detail</key>
+			<string>SXPromptController</string>
+			<key>label</key>
+			<string>Xem / chỉnh prompt</string>
 		</dict>
-
-		<!-- ===== Công cụ AI ===== -->
 		<dict>
-			<key>cell</key><string>PSGroupCell</string>
-			<key>label</key><string>Công cụ AI</string>
+			<key>cell</key>
+			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>AI gọi công cụ thật trên máy (đọc pin, bảng nhớ tạm, web, mở ứng dụng, ghi nhớ, tính toán) thay vì đoán. “Số vòng” là số lần AI được gọi công cụ trong một câu hỏi — để 2–3 là đủ cho hầu hết câu.</string>
+			<string>AI gọi công cụ thật trên máy (pin, bảng nhớ tạm, web, mở ứng dụng, ghi nhớ, tính toán) thay vì đoán. “Số vòng” là số lần AI được gọi công cụ trong một câu hỏi — 2–3 vòng là đủ cho hầu hết câu.</string>
+			<key>label</key>
+			<string>Công cụ AI</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSLinkCell</string>
-			<key>label</key><string>Công cụ AI</string>
-			<key>detail</key><string>SXToolsController</string>
+			<key>cell</key>
+			<string>PSLinkCell</string>
+			<key>detail</key>
+			<string>SXToolsController</string>
+			<key>label</key>
+			<string>Công cụ AI</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSTitleValueCell</string>
-			<key>label</key><string>Đang bật</string>
-			<key>key</key><string>toolsDisplay</string>
+			<key>cell</key>
+			<string>PSTitleValueCell</string>
+			<key>key</key>
+			<string>toolsDisplay</string>
+			<key>label</key>
+			<string>Đang bật</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSSliderCell</string>
-			<key>label</key><string>Số vòng công cụ</string>
-			<key>key</key><string>maxToolRounds</string>
-			<key>defaults</key><string>com.sirix.tweak</string>
-			<key>min</key><real>1.0</real>
-			<key>max</key><real>4.0</real>
-			<key>default</key><real>3.0</real>
-			<key>showValue</key><true/>
-			<key>PostNotification</key><string>com.sirix.tweak/prefs.changed</string>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>cell</key>
+			<string>PSLinkListCell</string>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>detail</key>
+			<string>SXChoiceController</string>
+			<key>key</key>
+			<string>maxToolRounds</string>
+			<key>label</key>
+			<string>Số vòng công cụ</string>
 		</dict>
-
-		<!-- ===== Dữ liệu ===== -->
 		<dict>
-			<key>cell</key><string>PSGroupCell</string>
-			<key>label</key><string>Dữ liệu</string>
+			<key>cell</key>
+			<string>PSGroupCell</string>
 			<key>footerText</key>
 			<string>“Không lưu lịch sử” chỉ ngăn ghi câu mới xuống máy — không ẩn câu hỏi khỏi nhà cung cấp AI, Siri hay log. Lịch sử đã lưu trước đó vẫn còn cho đến khi bạn xoá.</string>
+			<key>label</key>
+			<string>Dữ liệu</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSLinkCell</string>
-			<key>label</key><string>Lịch sử hội thoại</string>
-			<key>detail</key><string>SXHistoryController</string>
+			<key>cell</key>
+			<string>PSLinkCell</string>
+			<key>detail</key>
+			<string>SXHistoryController</string>
+			<key>label</key>
+			<string>Lịch sử hội thoại</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSLinkCell</string>
-			<key>label</key><string>Thống kê</string>
-			<key>detail</key><string>SXStatsController</string>
+			<key>cell</key>
+			<string>PSLinkCell</string>
+			<key>detail</key>
+			<string>SXStatsController</string>
+			<key>label</key>
+			<string>Thống kê</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSSwitchCell</string>
-			<key>label</key><string>Không lưu lịch sử</string>
-			<key>key</key><string>incognito</string>
-			<key>defaults</key><string>com.sirix.tweak</string>
-			<key>default</key><false/>
-			<key>PostNotification</key><string>com.sirix.tweak/prefs.changed</string>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>default</key>
+			<false/>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>key</key>
+			<string>incognito</string>
+			<key>label</key>
+			<string>Không lưu lịch sử</string>
 		</dict>
-
-		<!-- ===== Thử nghiệm ===== -->
 		<dict>
-			<key>cell</key><string>PSGroupCell</string>
-			<key>label</key><string>Thử nghiệm</string>
+			<key>cell</key>
+			<string>PSGroupCell</string>
 			<key>footerText</key>
 			<string>Kiểm tra nhà cung cấp đang chọn ngay trong Settings, không cần mở Siri. Hội thoại thử chỉ tồn tại trong màn hình đó.</string>
+			<key>label</key>
+			<string>Thử nghiệm</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSLinkCell</string>
-			<key>label</key><string>Trò chuyện thử</string>
-			<key>detail</key><string>SXChatTestController</string>
+			<key>cell</key>
+			<string>PSLinkCell</string>
+			<key>detail</key>
+			<string>SXChatTestController</string>
+			<key>label</key>
+			<string>Trò chuyện thử</string>
 		</dict>
-
-		<!-- ===== Gỡ lỗi ===== -->
 		<dict>
-			<key>cell</key><string>PSGroupCell</string>
-			<key>label</key><string>Gỡ lỗi</string>
+			<key>cell</key>
+			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>Log nằm ở /var/mobile/Library/Logs/SiriX.log. Gặp lỗi, hãy mở log → “Sao chép” rồi gửi lại để mình sửa đúng chỗ.</string>
+			<string>Log nằm ở /var/mobile/Library/Logs/SiriX.log. Gặp lỗi, mở log → “Sao chép” rồi gửi lại để sửa đúng chỗ.</string>
+			<key>label</key>
+			<string>Gỡ lỗi</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSSwitchCell</string>
-			<key>label</key><string>Ghi log chi tiết</string>
-			<key>key</key><string>verbose</string>
-			<key>defaults</key><string>com.sirix.tweak</string>
-			<key>default</key><true/>
-			<key>PostNotification</key><string>com.sirix.tweak/prefs.changed</string>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>default</key>
+			<true/>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>key</key>
+			<string>verbose</string>
+			<key>label</key>
+			<string>Ghi log chi tiết</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSLinkCell</string>
-			<key>label</key><string>Xem &amp; sao chép log</string>
-			<key>detail</key><string>SXLogViewController</string>
+			<key>cell</key>
+			<string>PSLinkCell</string>
+			<key>detail</key>
+			<string>SXLogViewController</string>
+			<key>label</key>
+			<string>Xem &amp; sao chép log</string>
 		</dict>
-
-		<!-- ===== Thông tin ===== -->
 		<dict>
-			<key>cell</key><string>PSGroupCell</string>
-			<key>label</key><string>Về SiriX</string>
+			<key>cell</key>
+			<string>PSGroupCell</string>
 			<key>footerText</key>
 			<string>SiriX — trợ lý AI cho Siri. Phát triển độc lập, không liên kết với Apple, OpenAI hay Google.</string>
+			<key>label</key>
+			<string>Về SiriX</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSTitleValueCell</string>
-			<key>label</key><string>Phiên bản</string>
-			<key>key</key><string>version</string>
+			<key>cell</key>
+			<string>PSTitleValueCell</string>
+			<key>key</key>
+			<string>version</string>
+			<key>label</key>
+			<string>Phiên bản</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSTitleValueCell</string>
-			<key>label</key><string>Gói cài đặt</string>
-			<key>key</key><string>packageScheme</string>
+			<key>cell</key>
+			<string>PSTitleValueCell</string>
+			<key>key</key>
+			<string>packageScheme</string>
+			<key>label</key>
+			<string>Gói cài đặt</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSButtonCell</string>
-			<key>label</key><string>Khôi phục cài đặt mặc định</string>
-			<key>action</key><string>sx_resetAll:</string>
+			<key>action</key>
+			<string>sx_resetAll:</string>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>Khôi phục cài đặt mặc định</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSButtonCell</string>
-			<key>label</key><string>Khởi động lại SpringBoard</string>
-			<key>action</key><string>sx_respring:</string>
+			<key>action</key>
+			<string>sx_respring:</string>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>Khởi động lại SpringBoard</string>
 		</dict>
 	</array>
+	<key>title</key>
+	<string>SiriX</string>
 </dict>
 </plist>
