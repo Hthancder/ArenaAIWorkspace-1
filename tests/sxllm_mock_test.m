@@ -136,15 +136,6 @@ void SXLogWrite(SXLogLevel level, NSString *category, NSString *format, ...) {
 
 #pragma mark - Tiện ích
 
-static NSString *OpenAIChat(id content, NSArray *toolCalls) {
-	NSMutableDictionary *message = [@{@"role": @"assistant"} mutableCopy];
-	if (content) message[@"content"] = content;
-	if (toolCalls) message[@"tool_calls"] = toolCalls;
-	return [NSString stringWithFormat:@"{\"choices\":[{\"message\":%@}]}",
-			[[NSString alloc] initWithData:[NSJSONSerialization dataWithJSONObject:message options:0 error:NULL]
-								  encoding:NSUTF8StringEncoding]];
-}
-
 static NSString *SSE(NSArray<NSString *> *chunks) {
 	NSMutableString *body = [NSMutableString string];
 	for (NSString *chunk in chunks) [body appendFormat:@"data: %@\n\n", chunk];
