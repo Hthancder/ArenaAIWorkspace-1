@@ -1,0 +1,86 @@
+name: Experimental GameMaker runner for iOS 15
+
+on:
+  push:
+    branches:
+      - arena/78062d86-arenaaiworkspace-1
+    paths:
+      - .github/workflows/gmrunner-ios15.yml
+      - tools/gmrunner-ios15/**
+
+permissions:
+  contents: read
+
+jobs:
+  runner:
+    runs-on: macos-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned GPL runner and SDL2 sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/gmrunner
+          curl -fsSL --retry 2 'https://codeload.github.com/andronep/gmrunner/tar.gz/e7121381d38b03a24242812fc22b0a7386d545c6' | tar xz -C work/gmrunner --strip-components=1
+          mkdir -p work/gmrunner/third_party/SDL2
+          curl -fsSL --retry 2 'https://codeload.github.com/libsdl-org/SDL/tar.gz/5d249570393f7a37e037abf22cd6012a4cc56a71' | tar xz -C work/gmrunner/third_party/SDL2 --strip-components=1
+      - name: Adapt launcher for iOS 15
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp tools/gmrunner-ios15/Launcher.swift work/gmrunner/ios/Launcher.swift
+          python3 - <<'PY'
+          from pathlib import Path
+          cmake = Path('work/gmrunner/CMakeLists.txt')
+          s = cmake.read_text()
+          for old, new in [('ios/Launcher.swift ios/GameMenu.swift ios/VideoReader.swift', 'ios/Launcher.swift ios/VideoReader.swift'),
+                           ('XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "17.0"', 'XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "15.0"')]:
+              if s.count(old) != 1: raise SystemExit('Unexpected gmrunner source')
+              s = s.replace(old, new)
+          cmake.write_text(s)
+          script = Path('work/gmrunner/tools/ios/build.sh')
+          s = script.read_text()
+          if s.count('CMAKE_OSX_DEPLOYMENT_TARGET=17.0') != 1: raise SystemExit('Unexpected build script')
+          script.write_text(s.replace('CMAKE_OSX_DEPLOYMENT_TARGET=17.0', 'CMAKE_OSX_DEPLOYMENT_TARGET=15.0'))
+          PY
+      - name: Build unsigned standalone runner (does not include the game)
+        shell: bash
+        run: |
+          set -uo pipefail
+          set +e
+          (cd work/gmrunner && GMR_PRIVATE=0 tools/ios/build.sh) 2>&1 | tee work/build.log
+          status=${PIPESTATUS[0]}
+          set -e
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          text = Path('work/build.log').read_text(errors='replace')
+          lines = [line for line in text.splitlines() if re.search(r'\berror:|\bfatal error:|\bBUILD FAILED\b', line, re.I)]
+          for line in lines[:15]:
+              safe = line.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+              print(f'::warning::{safe[:500]}')
+          PY
+          if [ "$status" -ne 0 ]; then exit "$status"; fi
+          unzip -q work/gmrunner/dist/ios/gmRunner.ipa -d work/unpacked
+          app=work/unpacked/Payload/gmRunner.app
+          version=$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$app/Info.plist")
+          [ "$version" = '15.0' ]
+          exe=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Info.plist")
+          lipo -verify_arch arm64 "$app/$exe"
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gmrunner-ios15-build-log
+          path: work/build.log
+          if-no-files-found: ignore
+          retention-days: 3
+      - name: Upload standalone runner only
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gmrunner-ios15-standalone-untested
+          path: work/gmrunner/dist/ios/gmRunner.ipa
+          if-no-files-found: error
+          retention-days: 3
