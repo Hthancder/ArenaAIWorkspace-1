@@ -29,6 +29,13 @@ class EventTranslationTests(unittest.TestCase):
         self.assertIn('else\n{', text)
         self.assertTrue(text.index('x = 1') < text.index('else') < text.index('x = 2') < text.index('x = 3'))
 
+    def test_code_action_comment_ends_before_next_action(self):
+        text = translate_actions([action('603', ['x = "/*"; /* disabled']), action('603', ['y = 2'])])
+        self.assertIn('/* disabled\n*/\n', text)
+        self.assertTrue(text.index('*/') < text.index('y = 2'))
+        text = translate_actions([action('603', ['x = 1 // /* not a block'])])
+        self.assertNotIn('*/', text)
+
     def test_nested_if_and_expression(self):
         text = translate_actions([action('408', ['x > 0']), action('408', ['y > 0']), action('603', ['x = y'])])
         self.assertIn('if ((x > 0))', text)

@@ -17,6 +17,50 @@ class UnsupportedAction(ValueError):
     pass
 
 
+def close_trailing_block_comment(source: str) -> str:
+    """Stop an action's unterminated comment from consuming following actions.
+
+    GameMaker accepts the end of an individual code action as the end of a
+    comment. Once actions are concatenated, restore that boundary explicitly.
+    """
+    state = 'code'
+    i = 0
+    while i < len(source):
+        c = source[i]
+        pair = source[i:i + 2]
+        if state == 'code':
+            if pair == '//':
+                state = 'line'
+                i += 2
+                continue
+            if pair == '/*':
+                state = 'block'
+                i += 2
+                continue
+            if c in ('"', "'"):
+                state = c
+        elif state == 'line':
+            if c in '\r\n':
+                state = 'code'
+        elif state == 'block':
+            if pair == '*/':
+                state = 'code'
+                i += 2
+                continue
+        else:
+            if c == '\\':
+                i += 2
+                continue
+            if c == state:
+                state = 'code'
+        i += 1
+    if state == 'block':
+        return source + '\n*/\n'
+    if state in ('"', "'"):
+        raise UnsupportedAction('unterminated string in code action')
+    return source
+
+
 def translate_actions(actions: list[ET.Element]) -> str:
     def field(a: ET.Element, key: str) -> str:
         value = a.findtext(key)
@@ -54,7 +98,7 @@ def translate_actions(actions: list[ET.Element]) -> str:
             if len(values) != 1:
                 raise UnsupportedAction('execute-code expects one argument')
             # Newlines ensure a trailing GML comment cannot swallow the brace.
-            return '{\n' + values[0] + '\n}', i + 1
+            return '{\n' + close_trailing_block_comment(values[0]) + '\n}', i + 1
         if aid == '301':
             values = args(a)
             if len(values) != 2 or not values[1].isdigit() or not 0 <= int(values[1]) <= 11:
