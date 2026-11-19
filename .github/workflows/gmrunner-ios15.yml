@@ -10,8 +10,26 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
+  previous-diagnostics:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Retrieve prior build log
+        uses: actions/download-artifact@v4
+        with:
+          name: gmrunner-ios15-build-log
+          path: prior
+          run-id: 44494942432
+          github-token: ${{ github.token }}
+      - name: Show last diagnostics
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          for line in Path('prior/build.log').read_text(errors='replace').splitlines()[-40:]:
+              print('::warning::' + line.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')[:500])
+          PY
   runner:
     runs-on: macos-latest
     timeout-minutes: 35
@@ -61,11 +79,21 @@ jobs:
               safe = line.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
               print(f'::warning::{safe[:500]}')
           PY
-          if [ "$status" -ne 0 ]; then exit "$status"; fi
+          if [ "$status" -ne 0 ]; then
+            echo "::error::Runner build script failed with exit status $status"
+            python3 - <<'PY'
+          from pathlib import Path
+          for line in Path('work/build.log').read_text(errors='replace').splitlines()[-25:]:
+              print('::warning::' + line.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')[:500])
+          PY
+            exit "$status"
+          fi
+          echo '::notice::Runner build script completed; checking package.'
           unzip -q work/gmrunner/dist/ios/gmRunner.ipa -d work/unpacked
           app=work/unpacked/Payload/gmRunner.app
           version=$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$app/Info.plist")
-          [ "$version" = '15.0' ]
+          echo "::notice::IPA MinimumOSVersion=$version"
+          if [ "$version" != '15.0' ]; then echo '::error::Unexpected minimum iOS version'; exit 1; fi
           exe=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Info.plist")
           lipo -verify_arch arm64 "$app/$exe"
       - name: Upload build log
