@@ -4,7 +4,9 @@ import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from tools.prepare_deadtown_offline import PatchError, prepare, replace_in_strings, replace_once
+from tools.prepare_deadtown_offline import (
+    PatchError, prepare, remove_legacy_ui_debug_key, replace_in_strings, replace_once,
+)
 
 
 class OfflinePatchUnitTests(unittest.TestCase):
@@ -18,6 +20,20 @@ class OfflinePatchUnitTests(unittest.TestCase):
         tree = ET.ElementTree(ET.fromstring('<object><string>a &lt; b</string></object>'))
         replace_in_strings(tree, 'a < b', 'true', 'test')
         self.assertEqual(tree.find('.//string').text, 'true')
+
+    def test_removes_only_exact_legacy_q_event(self):
+        xml = ('<object><events><event eventtype="9" enumb="81"><action><id>603</id>'
+               '<arguments><argument><string>ui_message_type("str:"+string(random(100000)))\n'
+               '</string></argument></arguments></action></event>'
+               '<event eventtype="9" enumb="73"><action/></event></events></object>')
+        tree = ET.ElementTree(ET.fromstring(xml))
+        remove_legacy_ui_debug_key(tree)
+        self.assertEqual([e.get('enumb') for e in tree.findall('./events/event')], ['73'])
+        for bad in (xml.replace('random(100000)', 'random(10)'),
+                    xml.replace('enumb="81"', 'enumb="82"'),
+                    xml.replace('</events>', '<event eventtype="9" enumb="81"/></events>')):
+            with self.assertRaises(PatchError):
+                remove_legacy_ui_debug_key(ET.ElementTree(ET.fromstring(bad)))
 
     def test_refuses_existing_output_without_touching_it(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -55,6 +71,11 @@ class OfflineRealProjectTests(unittest.TestCase):
             self.assertIn('offline_i <= 13', actions)
             self.assertNotIn('unity_ads_init(', actions)
             self.assertNotIn('iap_purchase_details(', actions)
+            ui = ET.parse(result / 'objects/sys_UI.object.gmx')
+            self.assertFalse(any(e.get('eventtype') == '9' and e.get('enumb') == '81'
+                                 for e in ui.findall('./events/event')))
+            self.assertTrue(any(e.get('eventtype') == '9' and e.get('enumb') == '73'
+                                for e in ui.findall('./events/event')))
             self.assertIn('= 0 // offline: free shop', (result / 'scripts/shop_db_add.gml').read_text())
             self.assertEqual((result / 'sound/audio/snd_item_get.ogg').read_bytes(),
                              (STAGED / 'sound/audio/snd_item_get.ogg').read_bytes())

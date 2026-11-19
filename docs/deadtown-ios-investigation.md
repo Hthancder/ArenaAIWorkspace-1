@@ -287,4 +287,8 @@ the same bundle ID, and increments the build number. Fresh installations also
 receive `touch_controls = off` so the game's own touch controls are not covered
 by the runner's L/R buttons; existing game/configuration files are not
 replaced. The package was assembled and plist/arm64 metadata checked in run
-`44513350133`; it has not yet been tested on an iOS device.
+`44513350133`; the screenshot received later has not been confirmed to be from
+this particular build.
+
+For a reproducible original-APK vs. GMX symbol and resource inventory, see
+[deadtown-original-re.md](deadtown-original-re.md).

@@ -82,7 +82,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update -qq
-          sudo apt-get install -y -qq libsdl2-dev libbz2-dev pkg-config
+          sudo apt-get install -y -qq libsdl2-dev libbz2-dev pkg-config xvfb libgl1-mesa-dri
           mkdir -p work/runner
           curl -fsSL --retry 2 'https://codeload.github.com/andronep/gmrunner/tar.gz/e7121381d38b03a24242812fc22b0a7386d545c6' | tar xz -C work/runner --strip-components=1
           cmake -S work/runner -B work/runner-build -DCMAKE_BUILD_TYPE=Release
@@ -150,6 +150,41 @@ jobs:
             echo '::error::Forced gameplay probe did not enter rom_play.'
             exit 1
           fi
+      - name: Retrieve previous experimental data for Q-debug comparison
+        uses: actions/download-artifact@v4
+        with:
+          name: deadtown-incomplete-game-data
+          path: work/old-probe-game
+          run-id: 44509744719
+          github-token: ${{ github.token }}
+      - name: Compare old and patched Q-key debug message
+        shell: bash
+        run: |
+          set -euo pipefail
+          for version in old new; do
+            mkdir -p "work/q-save-$version"
+            if [ "$version" = old ]; then game=work/old-probe-game; else game=work/probe-game; fi
+            GMR_TRACE_CALL=draw_text_transformed timeout 90 xvfb-run -a -s '-screen 0 1280x720x24' \
+              work/runner-build/gmrunner "$game" --hidden --fast --mute --seed 1 --trace \
+              --frames 215 --goto rom_play@160 --press 200:Q --save-dir "work/q-save-$version" \
+              > "work/q-$version.log" 2>&1
+            grep -F '[room] -> rom_play' "work/q-$version.log" >/dev/null || { echo "::error::$version did not enter gameplay"; exit 1; }
+          done
+          # The old Q event should visibly draw its generated str: message; the
+          # patch must eliminate it. This does not validate actual iOS input.
+          python3 - <<'PY'
+          from pathlib import Path
+          def matches(version):
+              return [line for line in Path(f'work/q-{version}.log').read_text(errors='replace').splitlines()
+                      if 'draw_text_transformed(' in line and '"str:' in line]
+          old, new = matches('old'), matches('new')
+          if not old:
+              raise SystemExit('::error::Did not reproduce the expected old Q debug message')
+          if new:
+              raise SystemExit('::error::Q debug message still rendered in patched build')
+          print('::notice::Q_DEBUG_OLD: ' + old[0].replace('%', '%25')[:350])
+          print('::notice::Q_DEBUG_NEW: no str: draw calls after scripted Q; gameplay transition was forced')
+          PY
       - name: Save incomplete game data for experimental IPA
         uses: actions/upload-artifact@v4
         with:

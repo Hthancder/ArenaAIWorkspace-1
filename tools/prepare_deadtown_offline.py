@@ -47,6 +47,30 @@ def replace_in_strings(tree, old, new, label):
     nodes[0].text = replace_once(nodes[0].text, old, new, label)
 
 
+def remove_legacy_ui_debug_key(tree):
+    """Remove the source-only Q debug event, not other UI or pickup messages.
+
+    The pinned APK's exported sys_UI events have no KeyPress:81; the old GMX
+    event inserts a random str: message into the normal pickup-message queue.
+    Fail closed if the expected legacy event is missing, duplicated or changed.
+    """
+    parent = tree.find('./events')
+    if parent is None:
+        raise PatchError('sys_UI: missing events')
+    matches = [event for event in parent.findall('event')
+               if event.get('eventtype') == '9' and event.get('enumb') == '81']
+    if len(matches) != 1:
+        raise PatchError(f'sys_UI: expected one Q debug event, found {len(matches)}')
+    event = matches[0]
+    actions = event.findall('./action')
+    strings = [node.text or '' for node in event.iter('string')]
+    if len(actions) != 1 or actions[0].findtext('id') != '603' or strings != [
+        'ui_message_type("str:"+string(random(100000)))\n'
+    ]:
+        raise PatchError('sys_UI: Q event does not match expected debug action')
+    parent.remove(event)
+
+
 def plan(project):
     project = Path(project)
     files = {}
@@ -133,6 +157,11 @@ def plan(project):
     text = (project / path).read_text(encoding='utf-8')
     script(path, replace_once(text, 'global.shop_db[global.shop_db_index,4] = argument4 // price',
         'global.shop_db[global.shop_db_index,4] = 0 // offline: free shop', 'shop prices'))
+
+    # The original APK has no equivalent Q KeyPress event; do not carry this
+    # old-source-only debug hook into the experimental VM reconstruction.
+    ui = xml('objects/sys_UI.object.gmx')
+    remove_legacy_ui_debug_key(ui)
 
     for name, expected in [('sys_spawn_time_light', 1), ('sys_UI', 2), ('obj_shop_item', 2)]:
         rel = f'objects/{name}.object.gmx'
