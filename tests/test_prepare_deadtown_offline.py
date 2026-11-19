@@ -41,7 +41,9 @@ class OfflineRealProjectTests(unittest.TestCase):
         before = hashlib.sha256(source.read_bytes()).hexdigest()
         with tempfile.TemporaryDirectory() as tmp:
             result = Path(tmp) / 'offline'
-            self.assertEqual(prepare(STAGED, result), 16)
+            self.assertEqual(prepare(STAGED, result), 18)
+            self.assertNotIn('push_get_first_local_notification', (result / 'scripts/push_clear.gml').read_text())
+            self.assertNotIn('push_local_notification', (result / 'scripts/push_push.gml').read_text())
             self.assertEqual(hashlib.sha256(source.read_bytes()).hexdigest(), before)
             tree = ET.parse(result / 'deadtown.project.gmx')
             self.assertEqual(list(tree.find('NewExtensions')), [])

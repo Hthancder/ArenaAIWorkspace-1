@@ -9,6 +9,7 @@ on:
       - .github/workflows/deadtown-vm-probe.yml
       - tools/deadtown-vm-probe.csx
       - tools/deadtown_event_probe.py
+      - tools/prepare_deadtown_offline.py
 
 permissions:
   contents: read
@@ -70,6 +71,12 @@ jobs:
               print('::notice::' + line.replace('%', '%25')[:1000])
           PY
           exit "$status"
+      - name: Restore runner build cache
+        id: runner-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: work/runner-build
+          key: gmrunner-linux-e7121381d38b03a24242812fc22b0a7386d545c6-v1
       - name: Build runner data inspection tool
         shell: bash
         run: |
@@ -79,7 +86,13 @@ jobs:
           mkdir -p work/runner
           curl -fsSL --retry 2 'https://codeload.github.com/andronep/gmrunner/tar.gz/e7121381d38b03a24242812fc22b0a7386d545c6' | tar xz -C work/runner --strip-components=1
           cmake -S work/runner -B work/runner-build -DCMAKE_BUILD_TYPE=Release
-          cmake --build work/runner-build --target gmdump gmrunner --parallel 2
+          cmake --build work/runner-build --target gmdump gmrunner --parallel 4
+      - name: Cache runner build
+        if: steps.runner-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: work/runner-build
+          key: gmrunner-linux-e7121381d38b03a24242812fc22b0a7386d545c6-v1
       - name: Inspect incomplete data using runner loader
         shell: bash
         run: |

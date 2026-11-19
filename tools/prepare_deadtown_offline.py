@@ -22,6 +22,8 @@ EXPECTED_INPUT_HASHES = {
     'scripts/iap_activate_auto.gml': '5241edc2c8a4b2560317edbc8db27116e294a0995981acbf920aa212bbb65fde',
     'scripts/iap_consume_auto.gml': 'fdbf45e7dad3d9e99a00c3df4c1a51a54e7d1d419da81df29efc3b3a1eb6d2d5',
     'scripts/leaderboard_post.gml': 'd7c9f80e50322b8df62c7cf498e8695cf0f599d63a25ece81180c197d8974bee',
+    'scripts/push_clear.gml': '6eaa6d984213209b29d067dd0e36c649227a498cad36be781024b048f4690893',
+    'scripts/push_push.gml': '46d9728fa6c78f5315ef05c851a2afd5be604e14d578480487e912b939418c77',
     'scripts/shop_db_add.gml': '7deccd0b660f54b2f6a8402680bba303ca905422a02b6026aee28fb98e6485c7',
     'scripts/unity_ads_show_scr.gml': '16d25bbb1c20989470473e35a1c3c649c61d410b44ea5fbc72d42ff5c975b23a',
 }
@@ -122,6 +124,11 @@ def plan(project):
     script('scripts/iap_activate_auto.gml', '// Offline: store activation disabled.\n')
     script('scripts/iap_consume_auto.gml', '// Offline: store consumption disabled.\n')
     script('scripts/unity_ads_show_scr.gml', '// Offline: ads disabled.\n')
+    # Local notifications are optional and not supported by the experimental
+    # runner. Its unknown-function stub returns 0; using that in push_clear's
+    # >= 0 loop otherwise hangs the game during startup.
+    script('scripts/push_clear.gml', '// Offline: no local notifications to clear.\n')
+    script('scripts/push_push.gml', '// Offline: local notification scheduling disabled.\n')
     path = 'scripts/shop_db_add.gml'
     text = (project / path).read_text(encoding='utf-8')
     script(path, replace_once(text, 'global.shop_db[global.shop_db_index,4] = argument4 // price',
