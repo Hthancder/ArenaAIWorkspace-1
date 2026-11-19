@@ -23,9 +23,9 @@ Nhà cung cấp: **OpenAI tương thích** (mặc định) hoặc **Google Gemin
 - **Không lưu lịch sử**: các lượt mới chỉ giữ trong bộ nhớ. Tuỳ chọn này không ngăn Siri, nhà cung cấp AI hoặc các log khác xử lý nội dung; lịch sử cũ phải xóa riêng.
 - **Prompt tuỳ chỉnh** (để trống = dùng prompt mặc định).
 - **Tiền tố @ai** tuỳ chọn, xem câu Siri gốc, và trò chuyện thử trong Settings.
-- **Log gỡ lỗi đầy đủ, sao chép được** — lọc theo mức, tìm kiếm, chỉ sao chép phần đang xem.
+- **Log gỡ lỗi đầy đủ, sao chép được** — tô màu theo mức, tìm kiếm, tự làm mới, chỉ sao chép phần đang xem.
 - **Settings chỉn chu** — header có trạng thái sống, kiểm tra kết nối ngay trong trang cấu hình,
-  chọn model từ danh sách gợi ý, lịch sử nhóm theo ngày, thống kê có thanh tỉ lệ, chat thử dạng bong bóng.
+  chọn model có ô tìm kiếm, lịch sử nhóm theo ngày, thống kê có tỉ lệ/sự cố/tốc độ, chat thử dạng bong bóng.
 
 > Tình trạng so với thiết kế v1.2, bao gồm các phần chưa triển khai: [docs/IMPLEMENTATION-STATUS.md](docs/IMPLEMENTATION-STATUS.md).
 

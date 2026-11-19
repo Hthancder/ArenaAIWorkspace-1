@@ -1,6 +1,6 @@
 Package: com.sirix.tweak
 Name: SiriX
-Version: 1.1.6
+Version: 1.1.7
 Architecture: iphoneos-arm64
 Description: Trợ lý AI (OpenAI tương thích / Gemini) trả lời ngay trong giao diện Siri gốc — hỗ trợ iOS 15, rootless và roothide.
 Maintainer: SiriX Project <sirix@local>

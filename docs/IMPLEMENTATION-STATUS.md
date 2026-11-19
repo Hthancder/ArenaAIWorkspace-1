@@ -1,5 +1,34 @@
 # SiriX — tiến độ thực hiện thiết kế v1.2
 
+> **1.1.7 — viết lại từng tính năng Settings, không còn bản vá chồng bản vá.**
+> Mười màn hình Settings được dựng lại trên cùng một bộ khung: dữ liệu đọc trong
+> nền có số thế hệ (kết quả cũ không ghi đè kết quả mới), trạng thái rỗng/lỗi
+> hiện ngay trong bảng thay vì alert bật lên giữa lúc cuộn, mọi danh sách dùng ô
+> tự vẽ để chữ xuống dòng đúng thay vì bị cắt cụt.
+>
+> - **Header tuỳ chỉnh**: chân bảng là `UILabel` cập nhật tại chỗ — gạt công tắc,
+>   xoá, kéo hàng không còn `reloadSections:` (đường dẫn tới lỗi “invalid update”
+>   và tới lần văng khi lưu của 1.1.6). Có dòng “3/4 header đang gửi” và cảnh báo
+>   `http://` ngay trong danh sách.
+> - **Lịch sử**: ô tự vẽ (câu hỏi + câu trả lời + giờ), nhóm theo ngày kèm số
+>   lượt, tìm kiếm có debounce, kéo-để-làm-mới có chống ghi đè, xoá một lượt gỡ
+>   ngay khỏi danh sách, chi tiết có nút Chép.
+> - **Thống kê**: phần đầu Auto Layout (không còn frame cứng vỡ khi đổi cỡ chữ),
+>   thêm “Tỉ lệ sự cố” và “Đánh giá tốc độ”, nút xoá chỉ bật khi có số liệu.
+> - **Công cụ AI**: chạm ô để bật/tắt (một hành vi, một vùng chạm), mỗi ô giữ
+>   closure riêng thay vì giải mã `tag = section*1000 + row`, tiêu đề nhóm hiện
+>   “x/y đang bật”, thêm “Tắt tất cả”, nhấn giữ để xem khi nào AI dùng công cụ.
+> - **Nhật ký**: vẽ theo từng dòng có màu mức log, nối thêm theo mảng dòng (log
+>   xoay vòng không còn mất/lặp dòng), tìm kiếm debounce 0,25 s.
+> - **Prompt hệ thống**: ô soạn thảo Auto Layout, mẫu “Gia sư”, chuyển tab không
+>   còn lệch trạng thái công tắc, nút Lưu phản ánh đúng “Đã lưu”.
+> - **Chọn mô hình**: thêm ô tìm kiếm, kiểm tra mã trước khi lưu, chạm lại mô
+>   hình đang dùng chỉ đóng màn hình, dấu ✓ cập nhật khi quay lại.
+> - Sửa chân trang Gemini: mốc chờ đúng là 8 giây (trước ghi 5).
+>
+> Cùng bản này: **trang nhà cung cấp** và **trò chuyện thử** đã được viết lại
+> (xem mục 1.1.7 bên dưới), **trang chính** dựng lại với pill trạng thái sống.
+
 > **1.1.6 — sửa hai lỗi chặn dùng ở màn hình Header (1.1.5 hỏng đúng chỗ này).**
 > (1) Bàn phím tắt sau mỗi ký tự: `sx_validate` reload section 0 để cập nhật dòng
 > gợi ý, reload gỡ ô nhập khỏi cửa sổ nên UIKit hạ bàn phím. Nay gợi ý lỗi nằm
@@ -328,4 +357,33 @@ sống trong `nameText`/`valueText` của màn hình — ô nhập chỉ là ch�
 `NSMutable…` với `copy`; (b) cấm gọi `reloadData`/`reloadSections`/
 `reloadSpecifier(s)` bên trong hàm đang xử lý `UIControlEventEditingChanged`.
 Cả hai luật đã được thử bằng một file vi phạm cố ý rồi xoá.
+
+## 1.1.7 — Viết lại từng tính năng
+
+Không thêm tính năng mới; mục tiêu là hết lỗi vặt và mọi màn hình cùng một chuẩn.
+Bốn nhóm việc:
+
+**Cấu hình nhà cung cấp.** Gõ tới đâu lưu tới đó nhưng **không reload bảng** —
+mỗi hàng tóm tắt (`keyDisplay`, `modelDisplay`, `endpointDisplay`, `headersDisplay`,
+`testStatus`) được vá thẳng vào `PSTableCell.value`, nên con trỏ và bàn phím đứng
+yên. Khoá dán từ trình quản lý mật khẩu được bóc BOM, ký tự vô hình, dấu nháy và
+xuống dòng trước khi kiểm tra. Địa chỉ endpoint sai hiện “⚠️ địa chỉ không hợp lệ”
+và **không được lưu**; đổi cấu hình thì kết quả kiểm tra cũ tự mất hiệu lực để
+không ai đọc nhầm một chữ “✓” từ cấu hình trước. Nút “Dán khoá” đọc clipboard,
+kiểm tra tối thiểu 8 ký tự, và chỉ hiện khoá đã che.
+
+**Trò chuyện thử.** Mỗi lần gửi có một số thế hệ: xoá hội thoại giữa lúc chờ thì
+câu trả lời cũ bị bỏ, không rơi vào cuộc mới. Bong bóng “đang gõ” được **thay**
+bằng bong bóng trả lời ở token đầu tiên thay vì để lại hai dòng. Lịch sử gửi kèm
+là các cặp hỏi/đáp thật, cắt theo “Ngữ cảnh hội thoại”. Dòng phụ dưới tiêu đề ghi
+`ms · token đầu · số mảnh` — đọc được chất lượng stream mà không cần mở log.
+
+**Lịch sử & thống kê.** Đọc kho trong nền có số thế hệ nên kéo-xuống-làm-mới liên
+tục không ghi đè bằng dữ liệu cũ. Lỗi quyền ghi hiện thành trạng thái rỗng có
+hướng dẫn thay vì alert chen ngang. Lịch sử chia nhóm ngày có số lượt; thống kê
+thêm tỉ lệ sự cố và mức tốc độ (nhanh/vừa/chậm/rất chậm).
+
+**Công cụ & nhật ký.** Ô công cụ tự vẽ giữ closure riêng nên không còn bấm nhầm
+khi thứ tự nhóm đổi. Log tô màu theo mức, nối thêm theo mảng dòng nên log bị xoay
+vòng không làm mất dòng. Ô tìm kiếm của cả hai màn đều có debounce.
 
