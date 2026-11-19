@@ -143,7 +143,16 @@ public struct WritingPresetItem: Codable, Identifiable, Equatable, Hashable {
             case .concise: return title == "Concise" ? "Concise".localized : title
             }
         }
-        return title
+        switch defaultKey {
+        case "translate": return title == "Translate" ? "Translate".localized : title
+        case "summary": return title == "Summary" ? "Summary".localized : title
+        case "keyPoints": return title == "Key Points" ? "Key Points".localized : title
+        case "explain": return title == "Explain" ? "Explain".localized : title
+        case "draftReply": return title == "Draft Reply" ? "Draft Reply".localized : title
+        case "askAI": return title == "Ask AI" ? "Ask AI".localized : title
+        case "quickNote": return title == "Quick Note" ? "Quick Note".localized : title
+        default: return title
+        }
     }
 
     public static let defaultPresets: [WritingPresetItem] = [
@@ -282,6 +291,34 @@ public struct WritingPresetItem: Codable, Identifiable, Equatable, Hashable {
             insertBehavior: .replace,
             isEnabled: true,
             availability: .readOnlyOnly
+        ),
+        WritingPresetItem(
+            id: UUID(uuidString: "11111111-1111-4111-8111-111111111111")!,
+            defaultKey: "askAI",
+            title: "Ask AI",
+            icon: "questionmark.bubble",
+            systemPrompt: "Answer the user's question or analyze the provided text/image accurately, clearly, and helpfully in the same language as the query.",
+            temperature: 0.4,
+            topP: nil,
+            includeExamples: false,
+            outputLanguage: "",
+            insertBehavior: .replace,
+            isEnabled: true,
+            availability: .both
+        ),
+        WritingPresetItem(
+            id: UUID(uuidString: "11111111-1111-4111-8111-111111111112")!,
+            defaultKey: "quickNote",
+            title: "Quick Note",
+            icon: "note.text",
+            systemPrompt: "Turn the provided content into a clean, well-structured study/work note with a concise title, key takeaways, and action items if applicable, in the same language.",
+            temperature: 0.3,
+            topP: nil,
+            includeExamples: false,
+            outputLanguage: "",
+            insertBehavior: .replace,
+            isEnabled: true,
+            availability: .both
         ),
     ]
 }

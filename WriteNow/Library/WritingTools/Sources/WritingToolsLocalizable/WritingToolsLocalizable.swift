@@ -42,9 +42,12 @@ public class WritingToolsLocalizable: NSObject {
     @objc
     public func localizedMenuItemTitle() -> String {
         if let custom = customMenuTitle, !custom.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if custom == "Write Now" || custom == "Write Now" {
+                return "OmniAI"
+            }
             return custom
         }
-        return localizedString(forKey: "Write Now")
+        return "OmniAI"
     }
 
     @objc

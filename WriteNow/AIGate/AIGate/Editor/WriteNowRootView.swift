@@ -708,10 +708,10 @@ struct CreditBannerView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("WRITENOW ENHANCED")
+                        Text("OMNIAI ENHANCED")
                             .font(.system(size: 10, weight: .heavy, design: .rounded))
                             .foregroundColor(.cyan.opacity(0.95))
-                        Text("iOS 15 · RootHide Edition")
+                        Text("Universal AI · Translate · OCR · Notes")
                             .font(.caption2.weight(.medium))
                             .foregroundColor(.white.opacity(0.68))
                     }
@@ -1053,7 +1053,7 @@ struct ThemeAppearanceView: View {
                     }
                 }
             } header: {
-                Text("WriteNow Menu Background")
+                Text("OmniAI Menu Background")
             }
 
             Section {
@@ -1668,6 +1668,19 @@ struct BehaviorSettingsView: View {
     @State private var editContextMaxTurns: Int
     @State private var editContextTTLSeconds: Int
     @State private var autoFallbackEndpointEnabled: Bool
+    @State private var minimalUIMode: Bool
+    @State private var uiShowInputPreview: Bool
+    @State private var uiShowHeaderOCR: Bool
+    @State private var uiShowAttachmentButton: Bool
+    @State private var uiShowVoiceButton: Bool
+    @State private var uiShowQuickActionsBar: Bool
+    @State private var uiShowRecentBar: Bool
+    @State private var uiShowSmartReplyButton: Bool
+    @State private var uiShowPresetGrid: Bool
+    @State private var uiShowOutputQuickActions: Bool
+    @State private var uiShowOutputSpeakButton: Bool
+    @State private var uiShowOutputDiffButton: Bool
+    @State private var inPlaceOverlayEnabled: Bool
 
     @State private var backupAlertTitle = ""
     @State private var backupAlertMessage = ""
@@ -1696,6 +1709,19 @@ struct BehaviorSettingsView: View {
         _editContextMaxTurns = State(initialValue: s.editContextMaxTurns)
         _editContextTTLSeconds = State(initialValue: s.editContextTTLSeconds)
         _autoFallbackEndpointEnabled = State(initialValue: s.autoFallbackEndpointEnabled)
+        _minimalUIMode = State(initialValue: s.minimalUIMode)
+        _uiShowInputPreview = State(initialValue: s.uiShowInputPreview)
+        _uiShowHeaderOCR = State(initialValue: s.uiShowHeaderOCR)
+        _uiShowAttachmentButton = State(initialValue: s.uiShowAttachmentButton)
+        _uiShowVoiceButton = State(initialValue: s.uiShowVoiceButton)
+        _uiShowQuickActionsBar = State(initialValue: s.uiShowQuickActionsBar)
+        _uiShowRecentBar = State(initialValue: s.uiShowRecentBar)
+        _uiShowSmartReplyButton = State(initialValue: s.uiShowSmartReplyButton)
+        _uiShowPresetGrid = State(initialValue: s.uiShowPresetGrid)
+        _uiShowOutputQuickActions = State(initialValue: s.uiShowOutputQuickActions)
+        _uiShowOutputSpeakButton = State(initialValue: s.uiShowOutputSpeakButton)
+        _uiShowOutputDiffButton = State(initialValue: s.uiShowOutputDiffButton)
+        _inPlaceOverlayEnabled = State(initialValue: s.inPlaceOverlayEnabled)
     }
 
     var body: some View {
@@ -1704,13 +1730,13 @@ struct BehaviorSettingsView: View {
                 HStack {
                     Text("Menu Button Title")
                     Spacer()
-                    TextField("Write Now", text: $menuTitle)
+                    TextField("OmniAI", text: $menuTitle)
                         .multilineTextAlignment(.trailing)
                 }
             } header: {
-                Text("Text Selection Menu")
+                Text("Assistant Name & Menu Title")
             } footer: {
-                Text("Title shown in the iOS text selection menu (e.g. Write Now, AI).")
+                Text("Title shown in the iOS menu and popover header (e.g. OmniAI, AI Assist, Translate).")
             }
 
             Section {
@@ -1736,17 +1762,37 @@ struct BehaviorSettingsView: View {
             }
 
             Section {
-                Picker("Preset Grid Columns", selection: $gridColumns) {
-                    Text("2 Columns").tag(2)
-                    Text("3 Columns").tag(3)
-                }
+                Toggle("Minimal UI Mode (Quick Translate / Ask)", isOn: $minimalUIMode)
                 Picker("Popover Size", selection: $sizePreset) {
                     Text("Compact").tag("compact")
                     Text("Standard").tag("standard")
                     Text("Large").tag("large")
+                    Text("Expanded (Full Width)").tag("expanded")
+                }
+                if !minimalUIMode && uiShowPresetGrid {
+                    Picker("Preset Grid Columns", selection: $gridColumns) {
+                        Text("2 Columns").tag(2)
+                        Text("3 Columns").tag(3)
+                    }
+                }
+                Toggle("In-Place Screen Overlay (On Screen)", isOn: $inPlaceOverlayEnabled)
+                DisclosureGroup("Customize Visible UI Buttons") {
+                    Toggle("Input Text Preview", isOn: $uiShowInputPreview)
+                    Toggle("Header Screen OCR Button", isOn: $uiShowHeaderOCR)
+                    Toggle("Attachment Menu (Photo / Camera / Region / File)", isOn: $uiShowAttachmentButton)
+                    Toggle("Voice / Mic Bar", isOn: $uiShowVoiceButton)
+                    Toggle("Quick Actions Bar", isOn: $uiShowQuickActionsBar)
+                    Toggle("Recent Prompts Bar", isOn: $uiShowRecentBar)
+                    Toggle("Smart Reply Button", isOn: $uiShowSmartReplyButton)
+                    Toggle("Full Preset Grid", isOn: $uiShowPresetGrid)
+                    Toggle("Output Refine Chips", isOn: $uiShowOutputQuickActions)
+                    Toggle("Output Speak Button (TTS)", isOn: $uiShowOutputSpeakButton)
+                    Toggle("Output Diff Button", isOn: $uiShowOutputDiffButton)
                 }
             } header: {
-                Text("Popover Layout (iPhone 7 Plus)")
+                Text("Interface Layout & Minimal Mode")
+            } footer: {
+                Text("Minimal UI strips extra clutter down to a fast prompt bar + 1-tap action chips. You can also toggle layout and expand size directly inside the popover header.")
             }
 
             Section {
@@ -1877,6 +1923,19 @@ struct BehaviorSettingsView: View {
         .onChange(of: editContextMaxTurns) { _ in commitSettings() }
         .onChange(of: editContextTTLSeconds) { _ in commitSettings() }
         .onChange(of: autoFallbackEndpointEnabled) { _ in commitSettings() }
+        .onChange(of: minimalUIMode) { _ in commitSettings() }
+        .onChange(of: uiShowInputPreview) { _ in commitSettings() }
+        .onChange(of: uiShowHeaderOCR) { _ in commitSettings() }
+        .onChange(of: uiShowAttachmentButton) { _ in commitSettings() }
+        .onChange(of: uiShowVoiceButton) { _ in commitSettings() }
+        .onChange(of: uiShowQuickActionsBar) { _ in commitSettings() }
+        .onChange(of: uiShowRecentBar) { _ in commitSettings() }
+        .onChange(of: uiShowSmartReplyButton) { _ in commitSettings() }
+        .onChange(of: uiShowPresetGrid) { _ in commitSettings() }
+        .onChange(of: uiShowOutputQuickActions) { _ in commitSettings() }
+        .onChange(of: uiShowOutputSpeakButton) { _ in commitSettings() }
+        .onChange(of: uiShowOutputDiffButton) { _ in commitSettings() }
+        .onChange(of: inPlaceOverlayEnabled) { _ in commitSettings() }
         .alert(backupAlertTitle, isPresented: $showBackupAlert) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -1887,7 +1946,7 @@ struct BehaviorSettingsView: View {
     private func commitSettings() {
         configuration.updateSettings { s in
             let cleanedTitle = menuTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-            s.menuTitle = cleanedTitle.isEmpty ? "Write Now" : cleanedTitle
+            s.menuTitle = cleanedTitle.isEmpty ? "OmniAI" : cleanedTitle
             s.globalSystemPrompt = globalPrompt
             s.useFewShotExamples = useFewShot
             s.stripThinkingTags = stripThink
@@ -1908,6 +1967,19 @@ struct BehaviorSettingsView: View {
             s.editContextMaxTurns = editContextMaxTurns
             s.editContextTTLSeconds = editContextTTLSeconds
             s.autoFallbackEndpointEnabled = autoFallbackEndpointEnabled
+            s.minimalUIMode = minimalUIMode
+            s.uiShowInputPreview = uiShowInputPreview
+            s.uiShowHeaderOCR = uiShowHeaderOCR
+            s.uiShowAttachmentButton = uiShowAttachmentButton
+            s.uiShowVoiceButton = uiShowVoiceButton
+            s.uiShowQuickActionsBar = uiShowQuickActionsBar
+            s.uiShowRecentBar = uiShowRecentBar
+            s.uiShowSmartReplyButton = uiShowSmartReplyButton
+            s.uiShowPresetGrid = uiShowPresetGrid
+            s.uiShowOutputQuickActions = uiShowOutputQuickActions
+            s.uiShowOutputSpeakButton = uiShowOutputSpeakButton
+            s.uiShowOutputDiffButton = uiShowOutputDiffButton
+            s.inPlaceOverlayEnabled = inPlaceOverlayEnabled
         }
     }
 
@@ -1933,6 +2005,19 @@ struct BehaviorSettingsView: View {
         editContextMaxTurns = s.editContextMaxTurns
         editContextTTLSeconds = s.editContextTTLSeconds
         autoFallbackEndpointEnabled = s.autoFallbackEndpointEnabled
+        minimalUIMode = s.minimalUIMode
+        uiShowInputPreview = s.uiShowInputPreview
+        uiShowHeaderOCR = s.uiShowHeaderOCR
+        uiShowAttachmentButton = s.uiShowAttachmentButton
+        uiShowVoiceButton = s.uiShowVoiceButton
+        uiShowQuickActionsBar = s.uiShowQuickActionsBar
+        uiShowRecentBar = s.uiShowRecentBar
+        uiShowSmartReplyButton = s.uiShowSmartReplyButton
+        uiShowPresetGrid = s.uiShowPresetGrid
+        uiShowOutputQuickActions = s.uiShowOutputQuickActions
+        uiShowOutputSpeakButton = s.uiShowOutputSpeakButton
+        uiShowOutputDiffButton = s.uiShowOutputDiffButton
+        inPlaceOverlayEnabled = s.inPlaceOverlayEnabled
     }
 }
 

@@ -7,11 +7,16 @@
 
 import ColorfulX
 import Foundation
+import UIKit
 
 @objc(WritingToolsPresenter)
 public class Presenter: NSObject {
     @objc(sharedInstance)
     public static let shared = Presenter()
+
+    weak var activeToolController: UIViewController?
+    weak var activePopoverHostWindow: UIWindow?
+    var lastPopoverPresentAt: Date = .distantPast
 
     override private init() {
         super.init()

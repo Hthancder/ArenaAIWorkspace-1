@@ -12,6 +12,8 @@ import UIKit
 class WritingToolController: UIHostingController<WritingToolsView> {
     let context: Presenter.Context
     var basePreferredSize: CGSize = .init(width: 390, height: 390)
+    var compactPreferredSize: CGSize = .init(width: 390, height: 390)
+    var isExpandedSize: Bool = false
     var hostedOverlayWindow: UIWindow?
 
     init(context: Presenter.Context) {
@@ -22,6 +24,23 @@ class WritingToolController: UIHostingController<WritingToolsView> {
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    func setExpandedSize(_ expanded: Bool) {
+        isExpandedSize = expanded
+        let target: CGSize
+        if expanded {
+            let bounds = UIScreen.main.bounds
+            let w = max(compactPreferredSize.width, min(680, bounds.width - 14))
+            let h = max(compactPreferredSize.height, min(bounds.height * 0.78, 680))
+            target = CGSize(width: w, height: h)
+        } else {
+            target = compactPreferredSize
+        }
+        basePreferredSize = target
+        UIView.animate(withDuration: 0.22, delay: 0, usingSpringWithDamping: 0.88, initialSpringVelocity: 0.4) {
+            self.preferredContentSize = target
+        }
     }
 
     deinit {
@@ -112,6 +131,10 @@ class WritingToolController: UIHostingController<WritingToolsView> {
         if let overlay = hostedOverlayWindow {
             overlay.isHidden = true
             hostedOverlayWindow = nil
+        }
+        if Presenter.shared.activeToolController === self {
+            Presenter.shared.activeToolController = nil
+            Presenter.shared.activePopoverHostWindow = nil
         }
         if !context.textProxy.isReadOnly, context.targetView.window != nil {
             if let textInput = context.targetView as? UITextInput {

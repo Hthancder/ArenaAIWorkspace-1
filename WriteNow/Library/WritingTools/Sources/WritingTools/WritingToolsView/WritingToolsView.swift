@@ -83,6 +83,7 @@ struct WritingToolsView: View {
 
     @State var initialAnimation: CGFloat = 0
     @State var isClosePressed: Bool = false
+    @State var isPopoverExpanded: Bool = Configurator.shared.settings.popoverSizePreset == "expanded"
 
     var shouldShowError: Bool {
         error != nil

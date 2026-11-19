@@ -378,9 +378,37 @@ extension Configuration {
                 isEnabled: true,
                 availability: .readOnlyOnly
             ),
+            WritingPreset(
+                id: UUID(uuidString: "11111111-1111-4111-8111-111111111111")!,
+                defaultKey: "askAI",
+                title: "Ask AI",
+                icon: "questionmark.bubble",
+                systemPrompt: "Answer the user's question or analyze the provided text/image accurately, clearly, and helpfully in the same language as the query.",
+                temperature: 0.4,
+                topP: nil,
+                includeExamples: false,
+                outputLanguage: "",
+                insertBehavior: .replace,
+                isEnabled: true,
+                availability: .both
+            ),
+            WritingPreset(
+                id: UUID(uuidString: "11111111-1111-4111-8111-111111111112")!,
+                defaultKey: "quickNote",
+                title: "Quick Note",
+                icon: "note.text",
+                systemPrompt: "Turn the provided content into a clean, well-structured study/work note with a concise title, key takeaways, and action items if applicable, in the same language.",
+                temperature: 0.3,
+                topP: nil,
+                includeExamples: false,
+                outputLanguage: "",
+                insertBehavior: .replace,
+                isEnabled: true,
+                availability: .both
+            ),
         ]
 
-        static let readOnlySeedPresets: [WritingPreset] = Array(defaultPresets.suffix(5))
+        static let readOnlySeedPresets: [WritingPreset] = Array(defaultPresets.suffix(7))
     }
 
     struct SelectionMenuItem: Codable, Identifiable, Equatable, Hashable {
@@ -652,9 +680,22 @@ extension Configuration {
         var editContextTTLSeconds: Int
         var speechRate: Double                // 0.85 | 1.0 | 1.15
         var autoFallbackEndpointEnabled: Bool
+        var minimalUIMode: Bool
+        var uiShowInputPreview: Bool
+        var uiShowHeaderOCR: Bool
+        var uiShowAttachmentButton: Bool
+        var uiShowVoiceButton: Bool
+        var uiShowQuickActionsBar: Bool
+        var uiShowRecentBar: Bool
+        var uiShowSmartReplyButton: Bool
+        var uiShowPresetGrid: Bool
+        var uiShowOutputQuickActions: Bool
+        var uiShowOutputSpeakButton: Bool
+        var uiShowOutputDiffButton: Bool
+        var inPlaceOverlayEnabled: Bool
 
         static let `default` = AppSettings(
-            menuTitle: "Write Now",
+            menuTitle: "OmniAI",
             globalSystemPrompt: "",
             useFewShotExamples: true,
             stripThinkingTags: true,
@@ -705,11 +746,24 @@ extension Configuration {
             editContextMaxTurns: 3,
             editContextTTLSeconds: 300,
             speechRate: 1.0,
-            autoFallbackEndpointEnabled: false
+            autoFallbackEndpointEnabled: false,
+            minimalUIMode: false,
+            uiShowInputPreview: true,
+            uiShowHeaderOCR: true,
+            uiShowAttachmentButton: true,
+            uiShowVoiceButton: true,
+            uiShowQuickActionsBar: true,
+            uiShowRecentBar: true,
+            uiShowSmartReplyButton: true,
+            uiShowPresetGrid: true,
+            uiShowOutputQuickActions: true,
+            uiShowOutputSpeakButton: true,
+            uiShowOutputDiffButton: true,
+            inPlaceOverlayEnabled: true
         )
 
         init(
-            menuTitle: String = "Write Now",
+            menuTitle: String = "OmniAI",
             globalSystemPrompt: String = "",
             useFewShotExamples: Bool = true,
             stripThinkingTags: Bool = true,
@@ -760,7 +814,20 @@ extension Configuration {
             editContextMaxTurns: Int = 3,
             editContextTTLSeconds: Int = 300,
             speechRate: Double = 1.0,
-            autoFallbackEndpointEnabled: Bool = false
+            autoFallbackEndpointEnabled: Bool = false,
+            minimalUIMode: Bool = false,
+            uiShowInputPreview: Bool = true,
+            uiShowHeaderOCR: Bool = true,
+            uiShowAttachmentButton: Bool = true,
+            uiShowVoiceButton: Bool = true,
+            uiShowQuickActionsBar: Bool = true,
+            uiShowRecentBar: Bool = true,
+            uiShowSmartReplyButton: Bool = true,
+            uiShowPresetGrid: Bool = true,
+            uiShowOutputQuickActions: Bool = true,
+            uiShowOutputSpeakButton: Bool = true,
+            uiShowOutputDiffButton: Bool = true,
+            inPlaceOverlayEnabled: Bool = true
         ) {
             self.menuTitle = menuTitle
             self.globalSystemPrompt = globalSystemPrompt
@@ -814,6 +881,19 @@ extension Configuration {
             self.editContextTTLSeconds = editContextTTLSeconds
             self.speechRate = speechRate
             self.autoFallbackEndpointEnabled = autoFallbackEndpointEnabled
+            self.minimalUIMode = minimalUIMode
+            self.uiShowInputPreview = uiShowInputPreview
+            self.uiShowHeaderOCR = uiShowHeaderOCR
+            self.uiShowAttachmentButton = uiShowAttachmentButton
+            self.uiShowVoiceButton = uiShowVoiceButton
+            self.uiShowQuickActionsBar = uiShowQuickActionsBar
+            self.uiShowRecentBar = uiShowRecentBar
+            self.uiShowSmartReplyButton = uiShowSmartReplyButton
+            self.uiShowPresetGrid = uiShowPresetGrid
+            self.uiShowOutputQuickActions = uiShowOutputQuickActions
+            self.uiShowOutputSpeakButton = uiShowOutputSpeakButton
+            self.uiShowOutputDiffButton = uiShowOutputDiffButton
+            self.inPlaceOverlayEnabled = inPlaceOverlayEnabled
         }
 
         enum CodingKeys: String, CodingKey {
@@ -834,11 +914,15 @@ extension Configuration {
             case ocrPreferredLanguages
             case keepEditContextEnabled, editContextMatchMode, editContextMaxTurns, editContextTTLSeconds
             case speechRate, autoFallbackEndpointEnabled
+            case minimalUIMode, uiShowInputPreview, uiShowHeaderOCR, uiShowAttachmentButton
+            case uiShowVoiceButton, uiShowQuickActionsBar, uiShowRecentBar, uiShowSmartReplyButton
+            case uiShowPresetGrid, uiShowOutputQuickActions, uiShowOutputSpeakButton, uiShowOutputDiffButton
+            case inPlaceOverlayEnabled
         }
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            menuTitle = try container.decodeIfPresent(String.self, forKey: .menuTitle) ?? "Write Now"
+            menuTitle = try container.decodeIfPresent(String.self, forKey: .menuTitle) ?? "OmniAI"
             globalSystemPrompt = try container.decodeIfPresent(String.self, forKey: .globalSystemPrompt) ?? ""
             useFewShotExamples = try container.decodeIfPresent(Bool.self, forKey: .useFewShotExamples) ?? true
             stripThinkingTags = try container.decodeIfPresent(Bool.self, forKey: .stripThinkingTags) ?? true
@@ -890,6 +974,19 @@ extension Configuration {
             editContextTTLSeconds = try container.decodeIfPresent(Int.self, forKey: .editContextTTLSeconds) ?? 300
             speechRate = try container.decodeIfPresent(Double.self, forKey: .speechRate) ?? 1.0
             autoFallbackEndpointEnabled = try container.decodeIfPresent(Bool.self, forKey: .autoFallbackEndpointEnabled) ?? false
+            minimalUIMode = try container.decodeIfPresent(Bool.self, forKey: .minimalUIMode) ?? false
+            uiShowInputPreview = try container.decodeIfPresent(Bool.self, forKey: .uiShowInputPreview) ?? true
+            uiShowHeaderOCR = try container.decodeIfPresent(Bool.self, forKey: .uiShowHeaderOCR) ?? true
+            uiShowAttachmentButton = try container.decodeIfPresent(Bool.self, forKey: .uiShowAttachmentButton) ?? true
+            uiShowVoiceButton = try container.decodeIfPresent(Bool.self, forKey: .uiShowVoiceButton) ?? true
+            uiShowQuickActionsBar = try container.decodeIfPresent(Bool.self, forKey: .uiShowQuickActionsBar) ?? true
+            uiShowRecentBar = try container.decodeIfPresent(Bool.self, forKey: .uiShowRecentBar) ?? true
+            uiShowSmartReplyButton = try container.decodeIfPresent(Bool.self, forKey: .uiShowSmartReplyButton) ?? true
+            uiShowPresetGrid = try container.decodeIfPresent(Bool.self, forKey: .uiShowPresetGrid) ?? true
+            uiShowOutputQuickActions = try container.decodeIfPresent(Bool.self, forKey: .uiShowOutputQuickActions) ?? true
+            uiShowOutputSpeakButton = try container.decodeIfPresent(Bool.self, forKey: .uiShowOutputSpeakButton) ?? true
+            uiShowOutputDiffButton = try container.decodeIfPresent(Bool.self, forKey: .uiShowOutputDiffButton) ?? true
+            inPlaceOverlayEnabled = try container.decodeIfPresent(Bool.self, forKey: .inPlaceOverlayEnabled) ?? true
         }
     }
 

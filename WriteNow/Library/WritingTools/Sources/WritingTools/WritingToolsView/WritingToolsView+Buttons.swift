@@ -53,9 +53,10 @@ extension WritingToolsView {
 
     @ViewBuilder
     private var selectiveButtonPanelsBody: some View {
-        VStack(spacing: innerSpacing) {
+        let isMinimal = cfg.settings.minimalUIMode
+        VStack(spacing: isMinimal ? 6 : innerSpacing) {
             let trimmedInput = textProxy.selectedText.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmedInput.isEmpty {
+            if cfg.settings.uiShowInputPreview, !trimmedInput.isEmpty {
                 Button {
                     showSelectedTextPreviewAlert = true
                 } label: {
@@ -80,7 +81,7 @@ extension WritingToolsView {
                 .buttonStyle(.plain)
             }
 
-            // Quick custom prompt + Voice bar
+            // Quick custom prompt + Voice + Attachments bar
             HStack(spacing: 6) {
                 if (isRecordingVoice || isProcessingVoice) && !voiceTargetIsFollowUp {
                     liveRecordingStrip
@@ -92,7 +93,7 @@ extension WritingToolsView {
                                 ? "Tap or hold Mic to dictate..."
                                 : (voiceMode == "translate"
                                     ? "Tap or hold Mic to speak & translate..."
-                                    : (textProxy.isReadOnly ? "Ask, translate, or prompt freely..." : "Ask AI anything or hold Mic..."))),
+                                    : (textProxy.isReadOnly ? "Ask, translate, note, or prompt..." : "Ask AI, translate, or rewrite..."))),
                         text: $customPromptInput
                     )
                     .font(.footnote)
@@ -106,11 +107,11 @@ extension WritingToolsView {
                     }
                 }
 
-                if !(isRecordingVoice || isProcessingVoice) {
+                if !(isRecordingVoice || isProcessingVoice), cfg.settings.uiShowAttachmentButton {
                     attachmentMenuButton
                 }
 
-                if !(isRecordingVoice || isProcessingVoice), !enabledPresets.isEmpty {
+                if !(isRecordingVoice || isProcessingVoice), !isMinimal, !enabledPresets.isEmpty {
                     Menu {
                         if selectedPresetForCustomPrompt != nil {
                             Button(role: .destructive) {
@@ -137,7 +138,7 @@ extension WritingToolsView {
                     }
                 }
 
-                if cfg.settings.stt.enabled {
+                if cfg.settings.stt.enabled && cfg.settings.uiShowVoiceButton {
                     makeMicButton(isFollowUp: false)
                 }
 
@@ -198,11 +199,11 @@ extension WritingToolsView {
                 .cornerRadius(8)
             }
 
-            if cfg.settings.stt.enabled {
+            if !isMinimal, cfg.settings.stt.enabled, cfg.settings.uiShowVoiceButton {
                 voiceModeAndLanguageStrip
             }
 
-            if cfg.settings.keepEditContextEnabled, let prior = activePriorEditContext {
+            if !isMinimal, cfg.settings.keepEditContextEnabled, let prior = activePriorEditContext {
                 HStack(spacing: 6) {
                     Button {
                         priorEditContextAttached.toggle()
@@ -255,7 +256,7 @@ extension WritingToolsView {
                 }
             }
 
-            if let snapshot = restorableSession {
+            if !isMinimal, let snapshot = restorableSession {
                 HStack(spacing: 8) {
                     Image(systemName: "clock.arrow.circlepath")
                         .font(.caption.weight(.semibold))
@@ -299,7 +300,7 @@ extension WritingToolsView {
                 .cornerRadius(9)
             }
 
-            if (isNotificationContext || cfg.settings.clipboardContextEnabled), !clipboardContextText.isEmpty {
+            if !isMinimal, (isNotificationContext || cfg.settings.clipboardContextEnabled), !clipboardContextText.isEmpty {
                 HStack(spacing: 6) {
                     Button {
                         clipboardContextAttached.toggle()
@@ -333,21 +334,23 @@ extension WritingToolsView {
 
                     Spacer(minLength: 2)
 
-                    Button {
-                        runSmartReply()
-                    } label: {
-                        HStack(spacing: 3) {
-                            Image(systemName: "arrowshape.turn.up.left.fill")
-                                .font(.system(size: 9))
-                            Text("Smart Reply")
-                                .font(.caption2.weight(.semibold))
+                    if cfg.settings.uiShowSmartReplyButton {
+                        Button {
+                            runSmartReply()
+                        } label: {
+                            HStack(spacing: 3) {
+                                Image(systemName: "arrowshape.turn.up.left.fill")
+                                    .font(.system(size: 9))
+                                Text("Smart Reply")
+                                    .font(.caption2.weight(.semibold))
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.white.opacity(0.20))
+                            .cornerRadius(7)
                         }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.white.opacity(0.20))
-                        .cornerRadius(7)
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
             }
 
@@ -376,83 +379,97 @@ extension WritingToolsView {
                 .cornerRadius(8)
             }
 
-            if !enabledInputQuickActions.isEmpty {
-                ResponsiveHorizontalScrollView {
-                    HStack(spacing: 6) {
-                        ForEach(enabledInputQuickActions) { action in
-                            Button {
-                                runCustomPrompt(action.instruction)
-                            } label: {
-                                HStack(spacing: 4) {
-                                    if !action.icon.isEmpty {
-                                        Image(systemName: action.icon)
-                                            .font(.system(size: 10, weight: .semibold))
-                                    }
-                                    Text(action.title)
-                                        .font(.caption2.weight(.semibold))
-                                }
-                                .padding(.horizontal, 9)
-                                .padding(.vertical, 5)
-                                .background(Color.white.opacity(0.16))
-                                .cornerRadius(8)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .foregroundColor(.white)
+            if isMinimal {
+                if !enabledInputQuickActions.isEmpty || !enabledPresets.isEmpty {
+                    minimalActionChipBar
                 }
-                .frame(height: 28)
-            }
-
-            if !cfg.settings.recentCustomPrompts.isEmpty {
-                ResponsiveHorizontalScrollView {
-                    HStack(spacing: 6) {
-                        ForEach(cfg.settings.recentCustomPrompts, id: \.self) { recent in
-                            Button {
-                                runCustomPrompt(recent)
-                            } label: {
-                                Text(recent)
-                                    .font(.caption2)
-                                    .lineLimit(1)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Color.white.opacity(0.12))
+                Spacer(minLength: 0)
+            } else {
+                if cfg.settings.uiShowQuickActionsBar, !enabledInputQuickActions.isEmpty {
+                    ResponsiveHorizontalScrollView {
+                        HStack(spacing: 6) {
+                            ForEach(enabledInputQuickActions) { action in
+                                Button {
+                                    runCustomPrompt(action.instruction)
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        if !action.icon.isEmpty {
+                                            Image(systemName: action.icon)
+                                                .font(.system(size: 10, weight: .semibold))
+                                        }
+                                        Text(action.title)
+                                            .font(.caption2.weight(.semibold))
+                                    }
+                                    .padding(.horizontal, 9)
+                                    .padding(.vertical, 5)
+                                    .background(Color.white.opacity(0.16))
                                     .cornerRadius(8)
                                     .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
+                        .foregroundColor(.white)
                     }
-                    .foregroundColor(.white)
+                    .frame(height: 28)
                 }
-                .frame(height: 26)
-            }
 
-            // Dynamic preset grid
-            ScrollView(showsIndicators: false) {
-                if enabledPresets.isEmpty {
-                    VStack(spacing: 8) {
-                        Image(systemName: "sparkles")
-                            .font(.title2)
-                            .opacity(0.6)
-                        Text("No presets enabled. Use the quick prompt box above or manage presets in Settings.")
-                            .font(.caption)
-                            .multilineTextAlignment(.center)
-                            .opacity(0.7)
+                if cfg.settings.uiShowRecentBar, !cfg.settings.recentCustomPrompts.isEmpty {
+                    ResponsiveHorizontalScrollView {
+                        HStack(spacing: 6) {
+                            ForEach(cfg.settings.recentCustomPrompts, id: \.self) { recent in
+                                Button {
+                                    runCustomPrompt(recent)
+                                } label: {
+                                    Text(recent)
+                                        .font(.caption2)
+                                        .lineLimit(1)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.white.opacity(0.12))
+                                        .cornerRadius(8)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .foregroundColor(.white)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 24)
-                } else {
-                    LazyVGrid(columns: gridColumns, spacing: innerSpacing) {
-                        ForEach(enabledPresets) { preset in
-                            presetTile(preset)
+                    .frame(height: 26)
+                }
+
+                if cfg.settings.uiShowPresetGrid {
+                    // Dynamic preset grid
+                    ScrollView(showsIndicators: false) {
+                        if enabledPresets.isEmpty {
+                            VStack(spacing: 8) {
+                                Image(systemName: "sparkles")
+                                    .font(.title2)
+                                    .opacity(0.6)
+                                Text("No presets enabled. Use the quick prompt box above or manage presets in Settings.")
+                                    .font(.caption)
+                                    .multilineTextAlignment(.center)
+                                    .opacity(0.7)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 24)
+                        } else {
+                            LazyVGrid(columns: gridColumns, spacing: innerSpacing) {
+                                ForEach(enabledPresets) { preset in
+                                    presetTile(preset)
+                                }
+                            }
+                            .padding(.vertical, 2)
                         }
                     }
-                    .padding(.vertical, 2)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    if !enabledPresets.isEmpty {
+                        minimalPresetChipStrip
+                    }
+                    Spacer(minLength: 0)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .transition(.opacity.combined(with: .scale(scale: 0.92)))
         .scaleEffect(initialAnimation * 0.15 + 0.85)
@@ -582,6 +599,101 @@ extension WritingToolsView {
         executeCurrentTask()
     }
 
+    // MARK: - Minimal / Compact Chip Bars
+
+    @ViewBuilder
+    private var minimalActionChipBar: some View {
+        ResponsiveHorizontalScrollView {
+            HStack(spacing: 6) {
+                if cfg.settings.uiShowQuickActionsBar {
+                    ForEach(enabledInputQuickActions) { action in
+                        Button {
+                            runCustomPrompt(action.instruction)
+                        } label: {
+                            HStack(spacing: 3.5) {
+                                if !action.icon.isEmpty {
+                                    Image(systemName: action.icon)
+                                        .font(.system(size: 10, weight: .semibold))
+                                }
+                                Text(action.title)
+                                    .font(.caption2.weight(.semibold))
+                            }
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 5)
+                            .background(Color.cyan.opacity(0.24))
+                            .cornerRadius(8)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                ForEach(enabledPresets) { preset in
+                    let pendingPrompt = customPromptInput.trimmingCharacters(in: .whitespacesAndNewlines)
+                    Button {
+                        if !pendingPrompt.isEmpty {
+                            runPresetWithPrompt(preset, instruction: pendingPrompt)
+                        } else {
+                            selectedPresetForCustomPrompt = nil
+                            currentTask = .preset(preset)
+                            executeCurrentTask()
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: preset.icon.isEmpty ? "sparkles" : preset.icon)
+                                .font(.system(size: 10))
+                            Text(preset.localizedDisplayTitle)
+                                .font(.caption2.weight(.medium))
+                        }
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(Color.white.opacity(0.14))
+                        .cornerRadius(8)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .foregroundColor(.white)
+        }
+        .frame(height: 30)
+    }
+
+    @ViewBuilder
+    private var minimalPresetChipStrip: some View {
+        ResponsiveHorizontalScrollView {
+            HStack(spacing: 6) {
+                ForEach(enabledPresets) { preset in
+                    let pendingPrompt = customPromptInput.trimmingCharacters(in: .whitespacesAndNewlines)
+                    Button {
+                        if !pendingPrompt.isEmpty {
+                            runPresetWithPrompt(preset, instruction: pendingPrompt)
+                        } else {
+                            selectedPresetForCustomPrompt = nil
+                            currentTask = .preset(preset)
+                            executeCurrentTask()
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: preset.icon.isEmpty ? "sparkles" : preset.icon)
+                                .font(.system(size: 10))
+                            Text(preset.localizedDisplayTitle)
+                                .font(.caption2.weight(.medium))
+                        }
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(Color.white.opacity(0.14))
+                        .cornerRadius(8)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .foregroundColor(.white)
+        }
+        .frame(height: 28)
+    }
+
     // MARK: - Attachment UI & Actions
 
     @ViewBuilder
@@ -592,6 +704,18 @@ extension WritingToolsView {
                 pickPhotos()
             } label: {
                 Label("Attach Photo".localized, systemImage: "photo.on.rectangle.angled")
+            }
+
+            Button {
+                takeCameraPhoto()
+            } label: {
+                Label("Take Photo".localized, systemImage: "camera")
+            }
+
+            Button {
+                launchScreenRegionCapture()
+            } label: {
+                Label("Capture Region".localized, systemImage: "crop")
             }
 
             Button {
@@ -784,6 +908,21 @@ extension WritingToolsView {
                 }
             }
             attachmentBannerMessage = ""
+        }
+    }
+
+    func takeCameraPhoto() {
+        guard attachedImages.count < 4 else {
+            attachmentBannerMessage = "Max 4 images attached."
+            return
+        }
+        AttachmentPickerHelper.presentCameraPicker(from: context) { item, err in
+            if let item {
+                attachedImages.append(item)
+                attachmentBannerMessage = ""
+            } else if let err, !err.isEmpty {
+                attachmentBannerMessage = err
+            }
         }
     }
 

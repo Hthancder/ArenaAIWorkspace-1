@@ -360,12 +360,20 @@ final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
         }
 
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        let sheet = UIAlertController(title: "WriteNow Screen Picker", message: nil, preferredStyle: .actionSheet)
+        let sheet = UIAlertController(title: "OmniAI Screen Tools", message: nil, preferredStyle: .actionSheet)
+        if InPlaceTextReplacementManager.shared.isShowingOverlay {
+            sheet.addAction(UIAlertAction(title: "Revert Screen Text Overlay", style: .destructive) { _ in
+                InPlaceTextReplacementManager.shared.clearAll()
+            })
+        }
         sheet.addAction(UIAlertAction(title: "Scan Screen Text", style: .default) { [weak self] _ in
             self?.presentPicker(in: window, forceFullOCR: false)
         })
         sheet.addAction(UIAlertAction(title: "Full-Screen OCR", style: .default) { [weak self] _ in
             self?.presentPicker(in: window, forceFullOCR: true)
+        })
+        sheet.addAction(UIAlertAction(title: "Capture Screen Region (AI / OCR)", style: .default) { [weak self] _ in
+            self?.presentRegionCapture(in: window)
         })
         sheet.addAction(UIAlertAction(title: "Ask AI with Screenshot", style: .default) { [weak self] _ in
             self?.bubbleButton?.isHidden = true
@@ -450,6 +458,84 @@ final class ScreenPickerCoordinator: NSObject, UIGestureRecognizerDelegate {
                 btn.center.x = snapX
             }
             scheduleBubbleDim()
+        }
+    }
+
+    func presentRegionCapture(
+        in window: UIWindow,
+        existingText: String = "",
+        existingImages: [AttachedImageItem] = [],
+        mode: ScreenRegionCropViewController.ActionMode = .attachImage
+    ) {
+        guard isPrimaryOwner, !isOverlayPresented else { return }
+
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        isOverlayPresented = true
+        bubbleButton?.isHidden = true
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            let snapshot = ScreenTextScanner.captureSnapshot(of: window)
+            let cropVC = ScreenRegionCropViewController(
+                sourceWindow: window,
+                snapshot: snapshot,
+                initialMode: mode
+            ) { [weak self] imageItem, ocrText, rect in
+                guard let self else { return }
+                self.isOverlayPresented = false
+                if let btn = self.bubbleButton,
+                   Configurator.shared.settings.floatingPickerBubbleEnabled,
+                   !self.hiddenForCurrentSession,
+                   !self.isKeyboardVisible
+                {
+                    btn.isHidden = false
+                    self.scheduleBubbleDim()
+                }
+
+                var mergedImages = existingImages
+                if let imageItem, mergedImages.count < 4 {
+                    mergedImages.append(imageItem)
+                }
+                let finalText: String
+                if let ocrText, !ocrText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    finalText = existingText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        ? ocrText
+                        : "\(existingText)\n\n\(ocrText)"
+                } else {
+                    finalText = existingText
+                }
+
+                guard !finalText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !mergedImages.isEmpty else {
+                    return
+                }
+                let host = UIView(frame: rect.isEmpty ? CGRect(x: window.bounds.midX - 40, y: window.bounds.midY - 20, width: 80, height: 40) : rect)
+                host.backgroundColor = .clear
+                host.isUserInteractionEnabled = false
+                window.addSubview(host)
+                Presenter.shared.presentExtractedText(
+                    finalText,
+                    fromHostView: host,
+                    parentController: nil,
+                    anchorRectInHost: host.bounds,
+                    slotIndex: 0,
+                    initialAttachedImages: mergedImages,
+                    onCompleteAndClose: { [weak host] in host?.removeFromSuperview() }
+                )
+            }
+
+            let overlayWindow: UIWindow
+            if let scene = window.windowScene {
+                overlayWindow = WriteNowScreenOverlayWindow(windowScene: scene)
+            } else {
+                overlayWindow = WriteNowScreenOverlayWindow(frame: window.bounds)
+            }
+            overlayWindow.frame = window.bounds
+            overlayWindow.backgroundColor = .clear
+            overlayWindow.isOpaque = false
+            overlayWindow.windowLevel = UIWindow.Level(rawValue: UIWindow.Level.statusBar.rawValue + 50)
+            overlayWindow.rootViewController = cropVC
+            overlayWindow.makeKeyAndVisible()
+            cropVC.ownedOverlayWindow = overlayWindow
         }
     }
 

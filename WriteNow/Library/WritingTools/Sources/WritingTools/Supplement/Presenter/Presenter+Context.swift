@@ -19,6 +19,7 @@ extension Presenter {
 
         let anchorView: UIView
         let anchorRects: [CGRect]
+        let anchorRectsInWindow: [CGRect]
 
         let decorationViews: [UIView]
 
@@ -47,6 +48,11 @@ extension Presenter {
             self.targetView = targetView
             self.anchorView = anchorView
             self.anchorRects = anchorRects
+            if let win = targetView.window {
+                self.anchorRectsInWindow = anchorRects.map { targetView.convert($0, to: win) }
+            } else {
+                self.anchorRectsInWindow = anchorRects
+            }
             self.decorationViews = decorationViews
             self.textProxy = textProxy
             self.launchSlotAction = launchSlotAction

@@ -7,12 +7,42 @@ import PhotosUI
 import UIKit
 import UniformTypeIdentifiers
 
-final class AttachmentPickerHelper: NSObject, PHPickerViewControllerDelegate, UIDocumentPickerDelegate {
+final class AttachmentPickerHelper: NSObject, PHPickerViewControllerDelegate, UIDocumentPickerDelegate, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
     private static var activeInstance: AttachmentPickerHelper?
 
     private var onImagesPicked: (([AttachedImageItem]) -> Void)?
     private var onOCRTextPicked: ((String) -> Void)?
+    private var onCameraImagePicked: ((AttachedImageItem?, String?) -> Void)?
     private var onFilesPicked: (([AttachedImageItem], [AttachedFileItem], [String]) -> Void)?
+
+    static func presentCameraPicker(
+        from context: Presenter.Context,
+        completion: @escaping (AttachedImageItem?, String?) -> Void
+    ) {
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+            completion(nil, "Camera is not available on this device.")
+            return
+        }
+        guard Bundle.main.object(forInfoDictionaryKey: "NSCameraUsageDescription") != nil else {
+            completion(nil, "This host app does not declare camera permission. Use OmniAI app or Photo Library.")
+            return
+        }
+        guard let presenterVC = findPresenterController(from: context) else {
+            completion(nil, "Unable to open camera.")
+            return
+        }
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.allowsEditing = false
+        let helper = AttachmentPickerHelper()
+        helper.onCameraImagePicked = { item, err in
+            Self.activeInstance = nil
+            completion(item, err)
+        }
+        picker.delegate = helper
+        Self.activeInstance = helper
+        presenterVC.present(picker, animated: true)
+    }
 
     static func presentPhotoOCRPicker(
         from context: Presenter.Context,
@@ -247,5 +277,25 @@ final class AttachmentPickerHelper: NSObject, PHPickerViewControllerDelegate, UI
                 self?.onFilesPicked?(images, files, errors)
             }
         }
+    }
+
+    // MARK: - UIImagePickerControllerDelegate
+
+    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        picker.dismiss(animated: true)
+        onCameraImagePicked?(nil, nil)
+    }
+
+    func imagePickerController(
+        _ picker: UIImagePickerController,
+        didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
+    ) {
+        picker.dismiss(animated: true)
+        let image = (info[.editedImage] as? UIImage) ?? (info[.originalImage] as? UIImage)
+        guard let image, let item = AttachedImageItem.fromUIImage(image, label: "Camera") else {
+            onCameraImagePicked?(nil, "Failed to process captured photo.")
+            return
+        }
+        onCameraImagePicked?(item, nil)
     }
 }

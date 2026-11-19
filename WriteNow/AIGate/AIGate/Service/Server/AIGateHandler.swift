@@ -443,6 +443,27 @@ class AIGateHandler: ChannelInboundHandler {
             }
             sendJSONDictionary(["status": "ok"], context: context)
 
+        case "update_ui_settings":
+            if let dict = try? JSONSerialization.jsonObject(with: body) as? [String: Any] {
+                var s = Configuration.shared.appSettings
+                if let v = dict["minimalUIMode"] as? Bool { s.minimalUIMode = v }
+                if let v = dict["popoverSizePreset"] as? String { s.popoverSizePreset = v }
+                if let v = dict["uiShowInputPreview"] as? Bool { s.uiShowInputPreview = v }
+                if let v = dict["uiShowHeaderOCR"] as? Bool { s.uiShowHeaderOCR = v }
+                if let v = dict["uiShowAttachmentButton"] as? Bool { s.uiShowAttachmentButton = v }
+                if let v = dict["uiShowVoiceButton"] as? Bool { s.uiShowVoiceButton = v }
+                if let v = dict["uiShowQuickActionsBar"] as? Bool { s.uiShowQuickActionsBar = v }
+                if let v = dict["uiShowRecentBar"] as? Bool { s.uiShowRecentBar = v }
+                if let v = dict["uiShowSmartReplyButton"] as? Bool { s.uiShowSmartReplyButton = v }
+                if let v = dict["uiShowPresetGrid"] as? Bool { s.uiShowPresetGrid = v }
+                if let v = dict["uiShowOutputQuickActions"] as? Bool { s.uiShowOutputQuickActions = v }
+                if let v = dict["uiShowOutputSpeakButton"] as? Bool { s.uiShowOutputSpeakButton = v }
+                if let v = dict["uiShowOutputDiffButton"] as? Bool { s.uiShowOutputDiffButton = v }
+                if let v = dict["inPlaceOverlayEnabled"] as? Bool { s.inPlaceOverlayEnabled = v }
+                Configuration.shared.updateAppSettings(s)
+            }
+            sendJSONDictionary(["status": "ok"], context: context)
+
         case "stt_start":
             STTService.shared.startRecording { ok, err in
                 context.eventLoop.execute {

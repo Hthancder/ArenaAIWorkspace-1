@@ -2,10 +2,9 @@
 //  WritingToolsView+Header.swift
 //  WritingTools
 //
-//  Created by 秋星桥 on 2024/8/8.
-//
 
 import SwiftUI
+import UIKit
 
 extension WritingToolsView {
     var selectedTextCount: Int {
@@ -18,38 +17,46 @@ extension WritingToolsView {
             : String(format: "%d character".localized, selectedTextCount)
     }
 
+    var headerBrandTitle: String {
+        let raw = cfg.settings.menuTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if raw.isEmpty || raw == "Write\u{00A0}Now" || raw == "Write Now" {
+            return "OmniAI".localized
+        }
+        return raw
+    }
+
     var activeEndpointLabel: String {
         if let active = cfg.activeEndpoint {
             let shortModel = active.shortModelName
             if active.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return shortModel.isEmpty ? active.displayName : shortModel
             }
-            return shortModel.isEmpty ? active.displayName : "\(active.displayName) · \(shortModel)"
+            return shortModel.isEmpty ? active.displayName : shortModel
         }
-        return "Add Provider"
+        return "Provider"
     }
 
     var title: some View {
-        HStack(alignment: .center, spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(cfg.settings.menuTitle.isEmpty ? "Write Now".localized : cfg.settings.menuTitle)
+        HStack(alignment: .center, spacing: 6) {
+            VStack(alignment: .leading, spacing: 1.5) {
+                Text(headerBrandTitle)
                     .lineLimit(1)
-                    .font(.headline.bold())
-                HStack(spacing: 6) {
+                    .font(.subheadline.bold())
+                HStack(spacing: 5) {
                     Text(textCountDescription)
-                        .font(.caption2)
+                        .font(.system(size: 10))
                         .foregroundColor(.white.opacity(0.65))
                         .lineLimit(1)
 
                     if textProxy.isReadOnly {
-                        HStack(spacing: 3) {
+                        HStack(spacing: 2.5) {
                             Image(systemName: "eye")
-                                .font(.system(size: 8.5, weight: .bold))
+                                .font(.system(size: 8, weight: .bold))
                             Text("Read-Only")
-                                .font(.system(size: 9.5, weight: .semibold))
+                                .font(.system(size: 9, weight: .semibold))
                         }
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 1.5)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
                         .background(Color.cyan.opacity(0.24))
                         .foregroundColor(Color(red: 0.72, green: 0.96, blue: 1.0))
                         .clipShape(Capsule())
@@ -57,15 +64,114 @@ extension WritingToolsView {
                 }
             }
 
-            Spacer(minLength: 4)
+            Spacer(minLength: 2)
 
-            if cfg.settings.readOnlyEnabled {
+            if cfg.settings.readOnlyEnabled && cfg.settings.uiShowHeaderOCR {
                 screenOCRButton
             }
+
+            expandToggleButton
+
+            uiCustomizeMenu
 
             providerQuickMenu
 
             closeButton
+        }
+    }
+
+    var expandToggleButton: some View {
+        Button {
+            let next = !isPopoverExpanded
+            isPopoverExpanded = next
+            (Presenter.shared.activeToolController as? WritingToolController)?.setExpandedSize(next)
+        } label: {
+            Image(systemName: isPopoverExpanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(isPopoverExpanded ? .cyan : .white.opacity(0.9))
+                .frame(width: 26, height: 26)
+                .background(
+                    Circle()
+                        .foregroundStyle(.white)
+                        .opacity(isPopoverExpanded ? 0.22 : 0.14)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    var uiCustomizeMenu: some View {
+        Menu {
+            Section("Interface Mode & Size") {
+                Button {
+                    cfg.updateUISettings { $0.minimalUIMode.toggle() }
+                } label: {
+                    Label(
+                        cfg.settings.minimalUIMode ? "Switch to Full UI" : "Switch to Minimal UI",
+                        systemImage: cfg.settings.minimalUIMode ? "rectangle.grid.2x2" : "bolt.horizontal.circle"
+                    )
+                }
+
+                Menu {
+                    ForEach(["compact", "standard", "large", "expanded"], id: \.self) { sizeKey in
+                        Button {
+                            cfg.updateUISettings { $0.popoverSizePreset = sizeKey }
+                            let exp = sizeKey == "expanded"
+                            isPopoverExpanded = exp
+                            (Presenter.shared.activeToolController as? WritingToolController)?.setExpandedSize(exp)
+                        } label: {
+                            let label = sizeKey.capitalized
+                            if cfg.settings.popoverSizePreset == sizeKey {
+                                Label(label, systemImage: "checkmark")
+                            } else {
+                                Text(label)
+                            }
+                        }
+                    }
+                } label: {
+                    Label("Default Size (\(cfg.settings.popoverSizePreset.capitalized))", systemImage: "arrow.up.left.and.arrow.down.right")
+                }
+            }
+
+            Section("Visible Controls") {
+                uiToggleButton("Input Preview", keyPath: \.uiShowInputPreview)
+                uiToggleButton("Header OCR Button", keyPath: \.uiShowHeaderOCR)
+                uiToggleButton("Attachment Menu", keyPath: \.uiShowAttachmentButton)
+                uiToggleButton("Voice / Mic Bar", keyPath: \.uiShowVoiceButton)
+                uiToggleButton("Quick Actions Bar", keyPath: \.uiShowQuickActionsBar)
+                uiToggleButton("Recent Prompts Bar", keyPath: \.uiShowRecentBar)
+                uiToggleButton("Smart Reply Button", keyPath: \.uiShowSmartReplyButton)
+                uiToggleButton("Preset Grid", keyPath: \.uiShowPresetGrid)
+            }
+
+            Section("Output Controls") {
+                uiToggleButton("Refine Chips", keyPath: \.uiShowOutputQuickActions)
+                uiToggleButton("Speak Button (TTS)", keyPath: \.uiShowOutputSpeakButton)
+                uiToggleButton("Diff Compare Button", keyPath: \.uiShowOutputDiffButton)
+                uiToggleButton("In-Place Screen Overlay", keyPath: \.inPlaceOverlayEnabled)
+            }
+        } label: {
+            Image(systemName: cfg.settings.minimalUIMode ? "line.3.horizontal.decrease.circle.fill" : "slider.horizontal.3")
+                .font(.system(size: 11.5, weight: .bold))
+                .foregroundColor(cfg.settings.minimalUIMode ? .cyan : .white.opacity(0.9))
+                .frame(width: 26, height: 26)
+                .background(
+                    Circle()
+                        .foregroundStyle(.white)
+                        .opacity(cfg.settings.minimalUIMode ? 0.22 : 0.14)
+                )
+        }
+    }
+
+    private func uiToggleButton(_ title: String, keyPath: WritableKeyPath<RuntimeSettings, Bool>) -> some View {
+        let current = cfg.settings[keyPath: keyPath]
+        return Button {
+            cfg.updateUISettings { $0[keyPath: keyPath].toggle() }
+        } label: {
+            if current {
+                Label(title, systemImage: "checkmark")
+            } else {
+                Text(title)
+            }
         }
     }
 
@@ -118,17 +224,18 @@ extension WritingToolsView {
                 Label("Manage / Add Provider & Model...", systemImage: "slider.horizontal.3")
             }
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: 3.5) {
                 Image(systemName: cfg.activeEndpoint == nil ? "plus.circle.fill" : "cpu")
-                    .font(.caption2)
+                    .font(.system(size: 10.5))
                 Text(activeEndpointLabel)
-                    .font(.caption.weight(.medium))
+                    .font(.system(size: 11.5, weight: .medium))
                     .lineLimit(1)
+                    .frame(maxWidth: 96)
                 Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 9))
+                    .font(.system(size: 8.5))
                     .opacity(0.75)
             }
-            .padding(.horizontal, 9)
+            .padding(.horizontal, 8)
             .padding(.vertical, 5)
             .background(Color.white.opacity(0.16))
             .clipShape(Capsule())
@@ -142,7 +249,7 @@ extension WritingToolsView {
             launchScreenOCRFromHeader()
         } label: {
             Image(systemName: "text.viewfinder")
-                .font(.caption.bold())
+                .font(.system(size: 11.5, weight: .bold))
                 .foregroundColor(.cyan)
                 .frame(width: 26, height: 26)
                 .background(
@@ -155,24 +262,26 @@ extension WritingToolsView {
         .disabled(isRunning)
     }
 
-    func launchScreenOCRFromHeader() {
-        let hostWin: UIWindow? = {
-            if let win = context.targetView.window,
-               win.windowLevel == .normal,
-               !NSStringFromClass(type(of: win)).contains("WriteNow")
-            {
+    func resolveUnderlyingHostWindow() -> UIWindow? {
+        if let win = context.targetView.window,
+           win.windowLevel == .normal,
+           !NSStringFromClass(type(of: win)).contains("WriteNow")
+        {
+            return win
+        }
+        for scene in UIApplication.shared.connectedScenes {
+            guard let ws = scene as? UIWindowScene else { continue }
+            if let win = ws.windows.first(where: {
+                !$0.isHidden && $0.windowLevel == .normal && !NSStringFromClass(type(of: $0)).contains("WriteNow")
+            }) {
                 return win
             }
-            for scene in UIApplication.shared.connectedScenes {
-                guard let ws = scene as? UIWindowScene else { continue }
-                if let win = ws.windows.first(where: {
-                    !$0.isHidden && $0.windowLevel == .normal && !NSStringFromClass(type(of: $0)).contains("WriteNow")
-                }) {
-                    return win
-                }
-            }
-            return nil
-        }()
+        }
+        return nil
+    }
+
+    func launchScreenOCRFromHeader() {
+        let hostWin = resolveUnderlyingHostWindow()
         if isRunning {
             stopStreaming()
         }
@@ -184,9 +293,29 @@ extension WritingToolsView {
         }
     }
 
+    func launchScreenRegionCapture() {
+        let hostWin = resolveUnderlyingHostWindow()
+        let preservedText = textProxy.selectedText
+        let preservedImages = attachedImages
+        if isRunning {
+            stopStreaming()
+        }
+        dismiss()
+        if let hostWin {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                ScreenPickerCoordinator.shared.presentRegionCapture(
+                    in: hostWin,
+                    existingText: preservedText,
+                    existingImages: preservedImages,
+                    mode: .attachImage
+                )
+            }
+        }
+    }
+
     var closeButton: some View {
         Image(systemName: "xmark")
-            .font(.footnote.bold())
+            .font(.system(size: 11.5, weight: .bold))
             .foregroundStyle(.white)
             .opacity(isClosePressed ? 0.5 : 1)
             .frame(width: 26, height: 26)

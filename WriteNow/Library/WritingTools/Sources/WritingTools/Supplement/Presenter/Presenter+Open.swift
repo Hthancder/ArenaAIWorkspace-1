@@ -376,7 +376,31 @@ public extension Presenter {
         presentPopover(with: context)
     }
 
+    func dismissActivePopoverIfNeeded() {
+        if let active = activeToolController {
+            activeToolController = nil
+            active.dismiss(animated: false)
+        }
+        if let activeWin = activePopoverHostWindow {
+            activePopoverHostWindow = nil
+            activeWin.isHidden = true
+        }
+        for scene in UIApplication.shared.connectedScenes {
+            guard let ws = scene as? UIWindowScene else { continue }
+            for win in ws.windows where win is WriteNowPopoverHostWindow {
+                win.rootViewController?.dismiss(animated: false)
+                win.isHidden = true
+            }
+        }
+    }
+
     private func presentPopover(with context: Context) {
+        let now = Date()
+        if now.timeIntervalSince(lastPopoverPresentAt) < 0.16, activeToolController != nil {
+            return
+        }
+        lastPopoverPresentAt = now
+        dismissActivePopoverIfNeeded()
 
         Configurator.shared.refreshRuntimeConfig { [weak context] _ in
             guard let context else { return }
@@ -400,13 +424,19 @@ public extension Presenter {
 
         let toolController = WritingToolController(context: context)
         let screenBounds = UIScreen.main.bounds
-        let maxWidth = max(280, min(400, screenBounds.width - 18))
+        let sizePreset = Configurator.shared.settings.popoverSizePreset
+        let isInitiallyExpanded = sizePreset == "expanded"
+        let maxWidth = isInitiallyExpanded
+            ? max(300, min(680, screenBounds.width - 14))
+            : max(280, min(400, screenBounds.width - 18))
         let targetHeight: CGFloat
-        switch Configurator.shared.settings.popoverSizePreset {
+        switch sizePreset {
         case "compact":
-            targetHeight = min(320, screenBounds.height * 0.52)
+            targetHeight = min(310, screenBounds.height * 0.48)
         case "large":
-            targetHeight = min(460, screenBounds.height * 0.72)
+            targetHeight = min(470, screenBounds.height * 0.72)
+        case "expanded":
+            targetHeight = min(680, screenBounds.height * 0.78)
         default:
             targetHeight = min(390, screenBounds.height * 0.62)
         }
@@ -419,6 +449,12 @@ public extension Presenter {
             height: max(targetHeight, min(fittingSize.height, targetHeight))
         )
 
+        let compactWidth = max(280, min(400, screenBounds.width - 18))
+        let compactHeight = min(390, screenBounds.height * 0.62)
+        toolController.compactPreferredSize = isInitiallyExpanded
+            ? CGSize(width: compactWidth, height: compactHeight)
+            : contentSize
+        toolController.isExpandedSize = isInitiallyExpanded
         toolController.basePreferredSize = contentSize
         toolController.view.backgroundColor = .black.withAlphaComponent(0.88)
         toolController.modalPresentationStyle = .popover
@@ -466,10 +502,14 @@ public extension Presenter {
             toolController.hostedOverlayWindow = hostWindow
             toolController.popoverPresentationController?.sourceView = hostRoot.view
             toolController.popoverPresentationController?.sourceRect = rectInHost.insetBy(dx: -2, dy: -2)
+            activeToolController = toolController
+            activePopoverHostWindow = hostWindow
             hostRoot.present(toolController, animated: true)
         } else {
             toolController.popoverPresentationController?.sourceView = context.anchorView
             toolController.popoverPresentationController?.sourceRect = context.anchorView.bounds.insetBy(dx: -2, dy: -2)
+            activeToolController = toolController
+            activePopoverHostWindow = nil
             candidatePresenter.present(toolController, animated: true)
         }
     }

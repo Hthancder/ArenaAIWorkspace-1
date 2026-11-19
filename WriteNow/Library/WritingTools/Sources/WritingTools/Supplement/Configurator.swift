@@ -382,9 +382,22 @@ public struct RuntimeSettings: Codable, Equatable {
     public var editContextTTLSeconds: Int
     public var speechRate: Double
     public var autoFallbackEndpointEnabled: Bool
+    public var minimalUIMode: Bool
+    public var uiShowInputPreview: Bool
+    public var uiShowHeaderOCR: Bool
+    public var uiShowAttachmentButton: Bool
+    public var uiShowVoiceButton: Bool
+    public var uiShowQuickActionsBar: Bool
+    public var uiShowRecentBar: Bool
+    public var uiShowSmartReplyButton: Bool
+    public var uiShowPresetGrid: Bool
+    public var uiShowOutputQuickActions: Bool
+    public var uiShowOutputSpeakButton: Bool
+    public var uiShowOutputDiffButton: Bool
+    public var inPlaceOverlayEnabled: Bool
 
     public static let `default` = RuntimeSettings(
-        menuTitle: "Write Now",
+        menuTitle: "OmniAI",
         globalSystemPrompt: "",
         useFewShotExamples: true,
         stripThinkingTags: true,
@@ -435,7 +448,20 @@ public struct RuntimeSettings: Codable, Equatable {
         editContextMaxTurns: 3,
         editContextTTLSeconds: 300,
         speechRate: 1.0,
-        autoFallbackEndpointEnabled: false
+        autoFallbackEndpointEnabled: false,
+        minimalUIMode: false,
+        uiShowInputPreview: true,
+        uiShowHeaderOCR: true,
+        uiShowAttachmentButton: true,
+        uiShowVoiceButton: true,
+        uiShowQuickActionsBar: true,
+        uiShowRecentBar: true,
+        uiShowSmartReplyButton: true,
+        uiShowPresetGrid: true,
+        uiShowOutputQuickActions: true,
+        uiShowOutputSpeakButton: true,
+        uiShowOutputDiffButton: true,
+        inPlaceOverlayEnabled: true
     )
 
     enum CodingKeys: String, CodingKey {
@@ -456,10 +482,14 @@ public struct RuntimeSettings: Codable, Equatable {
         case ocrPreferredLanguages
         case keepEditContextEnabled, editContextMatchMode, editContextMaxTurns, editContextTTLSeconds
         case speechRate, autoFallbackEndpointEnabled
+        case minimalUIMode, uiShowInputPreview, uiShowHeaderOCR, uiShowAttachmentButton
+        case uiShowVoiceButton, uiShowQuickActionsBar, uiShowRecentBar, uiShowSmartReplyButton
+        case uiShowPresetGrid, uiShowOutputQuickActions, uiShowOutputSpeakButton, uiShowOutputDiffButton
+        case inPlaceOverlayEnabled
     }
 
     public init(
-        menuTitle: String = "Write Now",
+        menuTitle: String = "OmniAI",
         globalSystemPrompt: String = "",
         useFewShotExamples: Bool = true,
         stripThinkingTags: Bool = true,
@@ -510,7 +540,20 @@ public struct RuntimeSettings: Codable, Equatable {
         editContextMaxTurns: Int = 3,
         editContextTTLSeconds: Int = 300,
         speechRate: Double = 1.0,
-        autoFallbackEndpointEnabled: Bool = false
+        autoFallbackEndpointEnabled: Bool = false,
+        minimalUIMode: Bool = false,
+        uiShowInputPreview: Bool = true,
+        uiShowHeaderOCR: Bool = true,
+        uiShowAttachmentButton: Bool = true,
+        uiShowVoiceButton: Bool = true,
+        uiShowQuickActionsBar: Bool = true,
+        uiShowRecentBar: Bool = true,
+        uiShowSmartReplyButton: Bool = true,
+        uiShowPresetGrid: Bool = true,
+        uiShowOutputQuickActions: Bool = true,
+        uiShowOutputSpeakButton: Bool = true,
+        uiShowOutputDiffButton: Bool = true,
+        inPlaceOverlayEnabled: Bool = true
     ) {
         self.menuTitle = menuTitle
         self.globalSystemPrompt = globalSystemPrompt
@@ -564,11 +607,24 @@ public struct RuntimeSettings: Codable, Equatable {
         self.editContextTTLSeconds = editContextTTLSeconds
         self.speechRate = speechRate
         self.autoFallbackEndpointEnabled = autoFallbackEndpointEnabled
+        self.minimalUIMode = minimalUIMode
+        self.uiShowInputPreview = uiShowInputPreview
+        self.uiShowHeaderOCR = uiShowHeaderOCR
+        self.uiShowAttachmentButton = uiShowAttachmentButton
+        self.uiShowVoiceButton = uiShowVoiceButton
+        self.uiShowQuickActionsBar = uiShowQuickActionsBar
+        self.uiShowRecentBar = uiShowRecentBar
+        self.uiShowSmartReplyButton = uiShowSmartReplyButton
+        self.uiShowPresetGrid = uiShowPresetGrid
+        self.uiShowOutputQuickActions = uiShowOutputQuickActions
+        self.uiShowOutputSpeakButton = uiShowOutputSpeakButton
+        self.uiShowOutputDiffButton = uiShowOutputDiffButton
+        self.inPlaceOverlayEnabled = inPlaceOverlayEnabled
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        menuTitle = try c.decodeIfPresent(String.self, forKey: .menuTitle) ?? "Write Now"
+        menuTitle = try c.decodeIfPresent(String.self, forKey: .menuTitle) ?? "OmniAI"
         globalSystemPrompt = try c.decodeIfPresent(String.self, forKey: .globalSystemPrompt) ?? ""
         useFewShotExamples = try c.decodeIfPresent(Bool.self, forKey: .useFewShotExamples) ?? true
         stripThinkingTags = try c.decodeIfPresent(Bool.self, forKey: .stripThinkingTags) ?? true
@@ -620,6 +676,19 @@ public struct RuntimeSettings: Codable, Equatable {
         editContextTTLSeconds = try c.decodeIfPresent(Int.self, forKey: .editContextTTLSeconds) ?? 300
         speechRate = try c.decodeIfPresent(Double.self, forKey: .speechRate) ?? 1.0
         autoFallbackEndpointEnabled = try c.decodeIfPresent(Bool.self, forKey: .autoFallbackEndpointEnabled) ?? false
+        minimalUIMode = try c.decodeIfPresent(Bool.self, forKey: .minimalUIMode) ?? false
+        uiShowInputPreview = try c.decodeIfPresent(Bool.self, forKey: .uiShowInputPreview) ?? true
+        uiShowHeaderOCR = try c.decodeIfPresent(Bool.self, forKey: .uiShowHeaderOCR) ?? true
+        uiShowAttachmentButton = try c.decodeIfPresent(Bool.self, forKey: .uiShowAttachmentButton) ?? true
+        uiShowVoiceButton = try c.decodeIfPresent(Bool.self, forKey: .uiShowVoiceButton) ?? true
+        uiShowQuickActionsBar = try c.decodeIfPresent(Bool.self, forKey: .uiShowQuickActionsBar) ?? true
+        uiShowRecentBar = try c.decodeIfPresent(Bool.self, forKey: .uiShowRecentBar) ?? true
+        uiShowSmartReplyButton = try c.decodeIfPresent(Bool.self, forKey: .uiShowSmartReplyButton) ?? true
+        uiShowPresetGrid = try c.decodeIfPresent(Bool.self, forKey: .uiShowPresetGrid) ?? true
+        uiShowOutputQuickActions = try c.decodeIfPresent(Bool.self, forKey: .uiShowOutputQuickActions) ?? true
+        uiShowOutputSpeakButton = try c.decodeIfPresent(Bool.self, forKey: .uiShowOutputSpeakButton) ?? true
+        uiShowOutputDiffButton = try c.decodeIfPresent(Bool.self, forKey: .uiShowOutputDiffButton) ?? true
+        inPlaceOverlayEnabled = try c.decodeIfPresent(Bool.self, forKey: .inPlaceOverlayEnabled) ?? true
     }
 }
 
@@ -788,6 +857,20 @@ public struct RuntimeConfig: Codable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case model, activated_endpoint_id, model_list, presets, settings
+    }
+
+    public init(
+        model: String? = nil,
+        activated_endpoint_id: UUID,
+        model_list: [EndpointItem],
+        presets: [WritingPresetItem],
+        settings: RuntimeSettings
+    ) {
+        self.model = model
+        self.activated_endpoint_id = activated_endpoint_id
+        self.model_list = model_list
+        self.presets = presets
+        self.settings = settings
     }
 
     public init(from decoder: Decoder) throws {
@@ -986,6 +1069,48 @@ public class Configurator: ObservableObject {
             UserDefaults.standard.set(data, forKey: cachedConfigDefaultsKey)
         }
         NotificationCenter.default.post(name: Notification.Name("WriteNowRuntimeSettingsDidUpdate"), object: nil)
+    }
+
+    public func updateUISettings(_ mutate: (inout RuntimeSettings) -> Void) {
+        var next = settings
+        mutate(&next)
+        settings = next
+        let cached = RuntimeConfig(
+            model: nil,
+            activated_endpoint_id: activatedEndpointID,
+            model_list: endpoints,
+            presets: presets,
+            settings: next
+        )
+        if let data = try? JSONEncoder().encode(cached) {
+            UserDefaults.standard.set(data, forKey: cachedConfigDefaultsKey)
+        }
+        let bodyDict: [String: Any] = [
+            "minimalUIMode": next.minimalUIMode,
+            "popoverSizePreset": next.popoverSizePreset,
+            "uiShowInputPreview": next.uiShowInputPreview,
+            "uiShowHeaderOCR": next.uiShowHeaderOCR,
+            "uiShowAttachmentButton": next.uiShowAttachmentButton,
+            "uiShowVoiceButton": next.uiShowVoiceButton,
+            "uiShowQuickActionsBar": next.uiShowQuickActionsBar,
+            "uiShowRecentBar": next.uiShowRecentBar,
+            "uiShowSmartReplyButton": next.uiShowSmartReplyButton,
+            "uiShowPresetGrid": next.uiShowPresetGrid,
+            "uiShowOutputQuickActions": next.uiShowOutputQuickActions,
+            "uiShowOutputSpeakButton": next.uiShowOutputSpeakButton,
+            "uiShowOutputDiffButton": next.uiShowOutputDiffButton,
+            "inPlaceOverlayEnabled": next.inPlaceOverlayEnabled,
+        ]
+        guard let url = URL(string: "http://127.0.0.1:5540/action?command=update_ui_settings"),
+              let body = try? JSONSerialization.data(withJSONObject: bodyDict)
+        else { return }
+        var req = URLRequest(url: url, timeoutInterval: 4)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = body
+        localSession.dataTask(with: req) { [weak self] _, _, _ in
+            self?.lastConfigRefreshTime = .distantPast
+        }.resume()
     }
 
     public func switchEndpoint(id: UUID, model: String? = nil, completion: ((Bool) -> Void)? = nil) {

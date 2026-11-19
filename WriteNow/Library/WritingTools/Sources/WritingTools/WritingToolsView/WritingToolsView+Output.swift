@@ -84,7 +84,7 @@ extension WritingToolsView {
                             .disabled(isRunning)
                         }
 
-                        if cfg.settings.wordDiffEnabled && !textProxy.selectedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        if cfg.settings.uiShowOutputDiffButton && cfg.settings.wordDiffEnabled && !textProxy.selectedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             Button {
                                 diffDisplayMode = (diffDisplayMode == .wordDiff) ? .none : .wordDiff
                                 if diffDisplayMode != .none { isEditingOutput = false }
@@ -133,7 +133,7 @@ extension WritingToolsView {
                         .buttonStyle(.plain)
                         .disabled(isRunning)
 
-                        if cfg.settings.readOnlyShowSpeakButton && !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        if cfg.settings.uiShowOutputSpeakButton && cfg.settings.readOnlyShowSpeakButton && !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             Button {
                                 toggleSpeakOutput()
                             } label: {
@@ -252,7 +252,7 @@ extension WritingToolsView {
             // Inline refine chips + follow-up prompt input (when idle with output)
             if !isRunning, !output.isEmpty {
                 VStack(spacing: 6) {
-                    if !enabledOutputQuickActions.isEmpty {
+                    if cfg.settings.uiShowOutputQuickActions && !enabledOutputQuickActions.isEmpty {
                         ResponsiveHorizontalScrollView {
                             HStack(spacing: 6) {
                                 ForEach(enabledOutputQuickActions) { chip in
@@ -333,11 +333,11 @@ extension WritingToolsView {
                                 }
                         }
 
-                        if !(isRecordingVoice || isProcessingVoice) {
+                        if !(isRecordingVoice || isProcessingVoice), cfg.settings.uiShowAttachmentButton {
                             attachmentMenuButton
                         }
 
-                        if cfg.settings.stt.enabled {
+                        if cfg.settings.stt.enabled && cfg.settings.uiShowVoiceButton {
                             makeMicButton(isFollowUp: true)
                         }
 
@@ -442,6 +442,13 @@ extension WritingToolsView {
             BeautifulButton(title: "Discard".localized) { discard() }
             BeautifulButton(title: "Again".localized) { executeCurrentTask() }
 
+            if cfg.settings.inPlaceOverlayEnabled {
+                BeautifulButton(title: "On Screen".localized) {
+                    replaceOnScreenInPlace()
+                }
+                .contextMenu { readOnlyContextMenu }
+            }
+
             if primary == "share" {
                 BeautifulButton(title: copiedToast ? "Copied".localized : "Copy".localized) {
                     copyOutputToPasteboard(output, closeAfter: false)
@@ -451,7 +458,7 @@ extension WritingToolsView {
                 }
                 .contextMenu { readOnlyContextMenu }
             } else {
-                if cfg.settings.readOnlyShowShareButton {
+                if cfg.settings.readOnlyShowShareButton && !cfg.settings.inPlaceOverlayEnabled {
                     BeautifulButton(title: "Share".localized) {
                         presentShareSheet(text: output)
                     }
@@ -473,6 +480,13 @@ extension WritingToolsView {
 
     @ViewBuilder
     private var readOnlyContextMenu: some View {
+        if cfg.settings.inPlaceOverlayEnabled {
+            Button {
+                replaceOnScreenInPlace()
+            } label: {
+                Label("Show Replaced Text On Screen", systemImage: "rectangle.on.rectangle.angled")
+            }
+        }
         Button {
             copyOutputToPasteboard(output, closeAfter: false)
         } label: {
@@ -493,6 +507,37 @@ extension WritingToolsView {
             presentShareSheet(text: output)
         } label: {
             Label("Share...", systemImage: "square.and.arrow.up")
+        }
+    }
+
+    private func replaceOnScreenInPlace() {
+        let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let hostWin = resolveUnderlyingHostWindow() else { return }
+
+        let candidateRect = context.anchorRectsInWindow.first ?? .zero
+        let resolvedRect: CGRect
+        if candidateRect.width > 16, candidateRect.height > 12,
+           candidateRect.width < hostWin.bounds.width * 0.96 || candidateRect.height < hostWin.bounds.height * 0.85
+        {
+            resolvedRect = candidateRect
+        } else {
+            resolvedRect = CGRect(
+                x: 20,
+                y: max(90, hostWin.bounds.midY - 90),
+                width: max(180, hostWin.bounds.width - 40),
+                height: 150
+            )
+        }
+
+        let original = textProxy.selectedText
+        let closeOverlay = context.onCompleteAndClose
+        dismiss()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            closeOverlay?()
+            InPlaceTextReplacementManager.shared.showReplacements(
+                entries: [(resolvedRect, original, trimmed)],
+                in: hostWin
+            )
         }
     }
 

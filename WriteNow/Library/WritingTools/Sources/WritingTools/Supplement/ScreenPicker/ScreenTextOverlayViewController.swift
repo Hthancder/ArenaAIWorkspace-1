@@ -3,6 +3,7 @@
 //  WritingTools
 //
 
+import OpenAI
 import UIKit
 
 final class ScreenTextOverlayViewController: UIViewController {
@@ -37,6 +38,7 @@ final class ScreenTextOverlayViewController: UIViewController {
     private let hintLabel = UILabel()
     private let selectAllMultiButton = UIButton(type: .system)
     private let copyMultiButton = UIButton(type: .system)
+    private let translateHereButton = UIButton(type: .system)
     private let askMultiButton = UIButton(type: .system)
     private let ocrSpinner = UIActivityIndicatorView(style: .medium)
 
@@ -180,24 +182,35 @@ final class ScreenTextOverlayViewController: UIViewController {
         selectAllMultiButton.addTarget(self, action: #selector(didTapSelectAllMulti), for: .touchUpInside)
 
         copyMultiButton.setTitle("Copy", for: .normal)
-        copyMultiButton.titleLabel?.font = .systemFont(ofSize: 13, weight: .semibold)
+        copyMultiButton.titleLabel?.font = .systemFont(ofSize: 12.5, weight: .semibold)
         copyMultiButton.backgroundColor = UIColor.white.withAlphaComponent(0.18)
         copyMultiButton.setTitleColor(.white, for: .normal)
         copyMultiButton.layer.cornerRadius = 10
-        copyMultiButton.contentEdgeInsets = UIEdgeInsets(top: 6, left: 10, bottom: 6, right: 10)
+        copyMultiButton.contentEdgeInsets = UIEdgeInsets(top: 6, left: 9, bottom: 6, right: 9)
         copyMultiButton.isHidden = true
         copyMultiButton.addTarget(self, action: #selector(didTapCopyMulti), for: .touchUpInside)
 
-        askMultiButton.setTitle("Ask WriteNow", for: .normal)
-        askMultiButton.titleLabel?.font = .systemFont(ofSize: 13, weight: .bold)
+        translateHereButton.setImage(UIImage(systemName: "rectangle.on.rectangle.angled"), for: .normal)
+        translateHereButton.setTitle(" On Screen", for: .normal)
+        translateHereButton.titleLabel?.font = .systemFont(ofSize: 12.5, weight: .bold)
+        translateHereButton.backgroundColor = UIColor.systemGreen.withAlphaComponent(0.85)
+        translateHereButton.setTitleColor(.black, for: .normal)
+        translateHereButton.tintColor = .black
+        translateHereButton.layer.cornerRadius = 10
+        translateHereButton.contentEdgeInsets = UIEdgeInsets(top: 6, left: 9, bottom: 6, right: 10)
+        translateHereButton.isHidden = true
+        translateHereButton.addTarget(self, action: #selector(didTapTranslateOnScreen), for: .touchUpInside)
+
+        askMultiButton.setTitle("OmniAI", for: .normal)
+        askMultiButton.titleLabel?.font = .systemFont(ofSize: 12.5, weight: .bold)
         askMultiButton.backgroundColor = UIColor.systemCyan.withAlphaComponent(0.85)
         askMultiButton.setTitleColor(.black, for: .normal)
         askMultiButton.layer.cornerRadius = 10
-        askMultiButton.contentEdgeInsets = UIEdgeInsets(top: 6, left: 12, bottom: 6, right: 12)
+        askMultiButton.contentEdgeInsets = UIEdgeInsets(top: 6, left: 10, bottom: 6, right: 10)
         askMultiButton.isHidden = true
         askMultiButton.addTarget(self, action: #selector(didTapAskMulti), for: .touchUpInside)
 
-        let stack = UIStackView(arrangedSubviews: [ocrSpinner, hintLabel, selectAllMultiButton, copyMultiButton, askMultiButton])
+        let stack = UIStackView(arrangedSubviews: [ocrSpinner, hintLabel, selectAllMultiButton, copyMultiButton, translateHereButton, askMultiButton])
         stack.axis = .horizontal
         stack.spacing = 8
         stack.alignment = .center
@@ -273,23 +286,28 @@ final class ScreenTextOverlayViewController: UIViewController {
         case .tap:
             hintLabel.text = blocks.isEmpty
                 ? "Drag a box over any text to scan with OCR"
-                : "Tap box • Long-press to copy • Drag for OCR"
+                : "Tap box • Hold to copy • Drag for OCR"
             selectAllMultiButton.isHidden = true
             copyMultiButton.isHidden = true
+            translateHereButton.isHidden = blocks.isEmpty
+            translateHereButton.setTitle(" Translate Screen", for: .normal)
             askMultiButton.isHidden = true
         case .multiSelect:
             hintLabel.text = selectedIndices.isEmpty
-                ? "Tap blocks in order to combine them"
+                ? "Tap blocks in order"
                 : "\(selectedIndices.count) selected"
             selectAllMultiButton.isHidden = blocks.isEmpty
             selectAllMultiButton.setTitle(selectedIndices.count == blocks.count && !blocks.isEmpty ? "None" : "All", for: .normal)
             copyMultiButton.isHidden = selectedIndices.isEmpty
+            translateHereButton.isHidden = selectedIndices.isEmpty
+            translateHereButton.setTitle(" On Screen", for: .normal)
             askMultiButton.isHidden = selectedIndices.isEmpty
-            askMultiButton.setTitle("WriteNow (\(selectedIndices.count))", for: .normal)
+            askMultiButton.setTitle("OmniAI (\(selectedIndices.count))", for: .normal)
         case .drawOCR:
             hintLabel.text = "Drag a rectangle over any text, image, or video"
             selectAllMultiButton.isHidden = true
             copyMultiButton.isHidden = true
+            translateHereButton.isHidden = true
             askMultiButton.isHidden = true
         }
     }
@@ -407,6 +425,109 @@ final class ScreenTextOverlayViewController: UIViewController {
             .compactMap { blocks.indices.contains($0) ? blocks[$0].rectInWindow : nil }
             .reduce(CGRect.null) { $0.isNull ? $1 : $0.union($1) }
         presentWriteNow(withText: combined, anchorRect: unionRect.isNull ? view.bounds : unionRect, sourceView: nil)
+    }
+
+    @objc private func didTapTranslateOnScreen() {
+        let targetBlocks: [DetectedScreenTextBlock]
+        if currentMode == .multiSelect && !selectedIndices.isEmpty {
+            targetBlocks = selectedIndices.compactMap { blocks.indices.contains($0) ? blocks[$0] : nil }
+        } else {
+            targetBlocks = blocks
+        }
+        guard !targetBlocks.isEmpty, !isProcessingOCR else { return }
+        translateBlocksOnScreen(targetBlocks)
+    }
+
+    private func translateBlocksOnScreen(_ targetBlocks: [DetectedScreenTextBlock]) {
+        isProcessingOCR = true
+        ocrSpinner.startAnimating()
+        translateHereButton.isEnabled = false
+        hintLabel.text = "Translating \(targetBlocks.count) block(s)..."
+
+        let limited = Array(targetBlocks.prefix(24))
+        let numberedInput = limited.enumerated().map { idx, blk in
+            "[\(idx + 1)] \(blk.text.replacingOccurrences(of: "\n", with: " "))"
+        }.joined(separator: "\n")
+
+        let preferredLang = Locale.preferredLanguages.first?.lowercased() ?? "vi"
+        let defaultTarget = preferredLang.hasPrefix("vi") ? "natural Vietnamese" : "natural English (or Vietnamese if already English)"
+        let sysPrompt = """
+        Translate each numbered line below into \(defaultTarget) (if a line is already in that language, keep or lightly refine it naturally).
+        CRITICAL OUTPUT FORMAT:
+        Return ONLY the translated lines using the EXACT same [1], [2], ... numbering on separate lines, with no extra commentary.
+        """
+
+        let query = ChatQuery(
+            messages: [
+                .system(.init(content: .textContent(sysPrompt))),
+                .user(.init(content: .string(numberedInput))),
+            ],
+            model: Configurator.shared.mid,
+            temperature: 0.2
+        )
+
+        Configurator.shared.openAI.chats(query: query) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.isProcessingOCR = false
+                self.ocrSpinner.stopAnimating()
+                self.translateHereButton.isEnabled = true
+
+                switch result {
+                case let .success(res):
+                    let raw = res.choices.first?.message.content ?? ""
+                    let parsed = Self.parseNumberedTranslations(raw, expectedCount: limited.count)
+                    var entries: [(frameInWindow: CGRect, originalText: String, replacedText: String)] = []
+                    for (idx, blk) in limited.enumerated() {
+                        if let translated = parsed[idx], !translated.isEmpty {
+                            entries.append((blk.rectInWindow, blk.text, translated))
+                        }
+                    }
+                    if entries.isEmpty {
+                        let fallback = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !fallback.isEmpty, let first = limited.first {
+                            let union = limited.map(\.rectInWindow).reduce(first.rectInWindow) { $0.union($1) }
+                            entries.append((union, limited.map(\.text).joined(separator: "\n"), fallback))
+                        }
+                    }
+                    guard !entries.isEmpty else {
+                        self.hintLabel.text = "Translation returned empty."
+                        return
+                    }
+                    let win = self.sourceWindow
+                    let snap = self.snapshot
+                    self.didTapClose()
+                    InPlaceTextReplacementManager.shared.showReplacements(entries: entries, in: win, snapshot: snap)
+
+                case let .failure(err):
+                    self.hintLabel.text = err.localizedDescription
+                }
+            }
+        }
+    }
+
+    private static func parseNumberedTranslations(_ raw: String, expectedCount: Int) -> [Int: String] {
+        var result: [Int: String] = [:]
+        let lines = raw.components(separatedBy: .newlines)
+        var currentIdx: Int?
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { continue }
+            if trimmed.hasPrefix("["),
+               let closeIdx = trimmed.firstIndex(of: "]"),
+               let num = Int(trimmed[trimmed.index(after: trimmed.startIndex) ..< closeIdx]),
+               num >= 1, num <= expectedCount
+            {
+                let after = trimmed[trimmed.index(after: closeIdx)...].trimmingCharacters(in: .whitespaces)
+                currentIdx = num - 1
+                if !after.isEmpty {
+                    result[num - 1] = after
+                }
+            } else if let idx = currentIdx {
+                result[idx] = (result[idx].map { $0 + " " } ?? "") + trimmed
+            }
+        }
+        return result
     }
 
     @objc private func handleDrag(_ gesture: UIPanGestureRecognizer) {
