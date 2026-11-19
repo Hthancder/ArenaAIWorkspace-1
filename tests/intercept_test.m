@@ -31,6 +31,12 @@ static BOOL testIncognito;
 - (BOOL)speakErrors { return NO; }
 - (NSString *)timeoutAction { return testTimeoutAction; }
 - (NSInteger)contextTurns { return 8; }
+- (SXProvider)provider { return SXProviderOpenAI; }
+- (NSArray<NSDictionary *> *)openaiHeaders { return @[]; }
+- (NSArray<NSDictionary *> *)geminiHeaders { return @[]; }
+- (NSArray<NSDictionary *> *)headersForProvider:(SXProvider)provider { (void)provider; return @[]; }
+- (NSSet<NSString *> *)disabledTools { return [NSSet set]; }
+- (id)valueFor:(NSString *)key { (void)key; return nil; }
 @end
 @implementation SXLLM
 + (void)askQuestion:(NSString *)question history:(NSArray *)history tools:(NSArray *)tools executor:(SXToolExec)executor completion:(SXLLMCompletion)completion {

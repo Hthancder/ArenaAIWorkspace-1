@@ -29,6 +29,7 @@ FOUNDATION_EXPORT NSArray<NSDictionary *> *SXModelPresets(SXProvider provider);
 /// `@implementation SXPrefs` với các giá trị cố định; chỉ cần những selector
 /// dưới đây tồn tại. Phần API dùng chung vẫn lấy từ category `SharedAPI`.
 @interface SXPrefs : NSObject
++ (instancetype)shared;
 @property (nonatomic, readonly) BOOL enabled;
 @property (nonatomic, readonly) SXReplyMode mode;
 @property (nonatomic, readonly) SXProvider provider;
