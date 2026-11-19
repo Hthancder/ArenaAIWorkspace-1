@@ -81,6 +81,8 @@ jobs:
           unzip -p work/original.apk assets/audiogroup1.dat > work/diagnostic/audiogroup1.dat
           unzip -p work/original.apk assets/audiogroup2.dat > work/diagnostic/audiogroup2.dat
           grep -F 'POISON_INSTRUMENT:' work/instrument.log
+          grep -F 'POISON_INSTRUMENT: disposable desktop VM only' work/instrument.log >/dev/null
+          test -s work/diagnostic/data.win
       - name: Restore runner build cache
         id: runner-cache
         uses: actions/cache/restore@v4
@@ -119,17 +121,17 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
-          for name in ('compile.log', 'instrument.log', 'probe.log'):
+          for name in ('probe.log', 'instrument.log', 'compile.log'):
               path = Path('work') / name
               if not path.exists():
+                  print('::notice::' + name + ': not created')
                   continue
               lines = path.read_text(errors='replace').splitlines()
               selected = [line for line in lines if 'DT_POISON|' in line or 'PROBE:' in line or
                           'POISON_INSTRUMENT' in line or 'error' in line.lower() or 'exception' in line.lower()]
-              if name == 'probe.log':
-                  selected += lines[-12:]
-              for line in selected[-35:]:
-                  print('::notice::' + name + ': ' + line.replace('%', '%25')[:900])
+              for label, group in (('markers', selected[-20:]), ('tail', lines[-12:])):
+                  text = ' | '.join(group).replace('%', '%25').replace('\r', ' ')
+                  print('::notice::' + name + ' ' + label + ': ' + text[:3500])
           PY
       - name: Preserve research logs only
         if: always()
