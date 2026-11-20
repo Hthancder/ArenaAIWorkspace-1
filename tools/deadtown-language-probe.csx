@@ -9,11 +9,11 @@ using UndertaleModLib.Compiler;
 
 EnsureDataLoaded();
 string mode = Environment.GetEnvironmentVariable("LANG_PROBE_MODE");
-if (mode != "legacy" && mode != "candidate") throw new Exception("Unexpected LANG_PROBE_MODE");
+if (mode != "legacy" && mode != "candidate" && mode != "candidate_native_table") throw new Exception("Unexpected LANG_PROBE_MODE");
 string events = Environment.GetEnvironmentVariable("GML_PROBE_EVENTS");
 if (string.IsNullOrEmpty(events)) throw new Exception("GML_PROBE_EVENTS is not set");
 var group = new CodeImportGroup(Data);
-if (mode == "candidate")
+if (mode != "legacy")
 {
     var code = Data.Code.ByName("gml_Script_lang_get") ?? throw new Exception("lang_get missing");
     // This only covers source language selectors 0..3 and a map-existence
@@ -36,6 +36,29 @@ switch(global.language_type)
         return argument0;
 }
 ");
+}
+if (mode == "candidate_native_table")
+{
+    string nativeEvents = Environment.GetEnvironmentVariable("GML_PROBE_NATIVE_EVENTS");
+    if (string.IsNullOrEmpty(nativeEvents)) throw new Exception("GML_PROBE_NATIVE_EVENTS is not set");
+    var nativeDoc = JsonDocument.Parse(File.ReadAllText(nativeEvents));
+    int nativeIndex = 0, nativeFound = 0;
+    foreach (var evt in nativeDoc.RootElement.EnumerateArray())
+    {
+        var attr = evt.GetProperty("attributes");
+        if (evt.GetProperty("object").GetString() == "sys_global" &&
+            attr.GetProperty("eventtype").GetString() == "0" && attr.GetProperty("enumb").GetString() == "0")
+        {
+            nativeFound++;
+            string name = "probe_sys_global_" + nativeIndex;
+            var code = Data.Code.ByName(name) ?? throw new Exception("Expected sys_global probe missing: " + name);
+            group.QueueReplace(code, evt.GetProperty("gml").GetString());
+            Console.WriteLine("LANG_PROBE_INSTRUMENT: candidate native-table event " + name);
+        }
+        nativeIndex++;
+    }
+    nativeDoc.Dispose();
+    if (nativeFound != 1) throw new Exception("Expected one candidate native-table event");
 }
 var doc = JsonDocument.Parse(File.ReadAllText(events));
 int index = 0, found = 0;
@@ -87,7 +110,21 @@ ds_map_delete(global.language_map_japanese, dt_lang_empty);
 global.language_type = dt_lang_old;
 show_debug_message(""DT_LANG_DONE"");
 ";
-        group.QueueReplace(code, body + "\n" + trace);
+        string tableTrace = "";
+        if (mode == "candidate_native_table") tableTrace = @"
+// Candidate table and duplicate-key behavior in this runner only.
+var dt_table_old = global.language_type;
+show_debug_message(""DT_LANG_TABLE|sizes|"" + string(ds_map_size(global.language_map_korean)) + ""|"" + string(ds_map_size(global.language_map_chinese)) + ""|"" + string(ds_map_size(global.language_map_japanese)));
+global.language_type = 1;
+show_debug_message(""DT_LANG_TABLE|ko|"" + string(lang_get(""Gas mask"")) + ""|"" + string(lang_get(""Splint"")) + ""|"" + string(lang_get(""Light machine gun"")) + ""|"" + string(lang_get(""Heavy machine gun"")));
+global.language_type = 2;
+show_debug_message(""DT_LANG_TABLE|zh|"" + string(ds_map_exists(global.language_map_chinese, ""Gas mask"")) + ""|"" + string(string_length(lang_get(""Gas mask""))));
+global.language_type = 3;
+show_debug_message(""DT_LANG_TABLE|ja|"" + string(ds_map_exists(global.language_map_japanese, ""Gas mask"")) + ""|"" + string(string_length(lang_get(""Gas mask""))));
+global.language_type = dt_table_old;
+show_debug_message(""DT_LANG_TABLE_DONE"");
+";
+        group.QueueReplace(code, body + "\n" + trace + "\n" + tableTrace);
         Console.WriteLine("LANG_PROBE_INSTRUMENT: " + mode + " " + name);
     }
     index++;

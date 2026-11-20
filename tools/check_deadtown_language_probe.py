@@ -41,17 +41,46 @@ def check(old, candidate):
     return {'cases': 4, 'limitations': 'Forced synthetic map keys in incomplete desktop VM only; not APK or iOS.'}
 
 
+def check_table(log):
+    if log.count('DT_LANG_TABLE_DONE') != 1:
+        raise ValueError('candidate table probe did not complete exactly once')
+    if 'DT_LANG_ERROR|' in log:
+        raise ValueError('candidate table probe key collision')
+    rows = {}
+    for line in log.splitlines():
+        pos = line.find('DT_LANG_TABLE|')
+        if pos < 0:
+            continue
+        fields = line[pos + len('DT_LANG_TABLE|'):].strip().split('|')
+        if not fields or fields[0] in rows:
+            raise ValueError('invalid or duplicate table record')
+        rows[fields[0]] = fields[1:]
+    if rows != {'sizes': ['463', '463', '463'],
+                'ko': ['방독면', '부목', '라이트 머신건', '헤비 머신건'],
+                'zh': ['1', '0'], 'ja': ['1', '0']}:
+        raise ValueError('candidate table translation, map size or duplicate behavior mismatch')
+    return {'limitations': 'Inferred APK literal order in incomplete desktop VM; not native or iOS behavior.'}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('legacy', type=Path)
     parser.add_argument('candidate', type=Path)
+    parser.add_argument('table', type=Path, nargs='?', help='optional candidate-table VM log')
     args = parser.parse_args()
     try:
         result = check(args.legacy.read_text(errors='replace'), args.candidate.read_text(errors='replace'))
+        if args.table:
+            table_log = args.table.read_text(errors='replace')
+            check(args.legacy.read_text(errors='replace'), table_log)
+            table_result = check_table(table_log)
     except (OSError, ValueError) as exc:
         parser.exit(1, f'LANG_PROBE_FAIL: {exc}\n')
     print('LANG_PROBE_PASS: known, empty and missing synthetic keys for selectors 0..3')
     print('LANG_PROBE_LIMIT:', result['limitations'])
+    if args.table:
+        print('LANG_TABLE_PROBE_PASS: candidate maps, translations, empty values and duplicate keys')
+        print('LANG_TABLE_PROBE_LIMIT:', table_result['limitations'])
 
 
 if __name__ == '__main__':

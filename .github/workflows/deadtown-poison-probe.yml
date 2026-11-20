@@ -13,6 +13,8 @@ on:
       - tests/test_check_deadtown_accessor_bytecode.py
       - tools/deadtown-poison-probe.csx
       - tools/deadtown-language-probe.csx
+      - tools/prepare_deadtown_lang_table_probe.py
+      - tests/test_prepare_deadtown_lang_table_probe.py
       - tools/check_deadtown_language_probe.py
       - tools/deadtown_lang_fallback_evidence.py
       - tests/test_check_deadtown_language_probe.py
@@ -55,6 +57,7 @@ jobs:
         env:
           DEADTOWN_TEST_OFFLINE: ${{ github.workspace }}/work/offline
           DEADTOWN_TEST_APK: ${{ github.workspace }}/work/original.apk
+          DEADTOWN_TEST_EVENTS: ${{ github.workspace }}/work/events.json
         run: |
           set -euo pipefail
           python -m unittest discover -s tests -p 'test_prepare_deadtown_poison_probe.py' -v
@@ -64,6 +67,8 @@ jobs:
           python tools/deadtown_lang_fallback_evidence.py work/original.apk --output work/language-static.json
           python tools/prepare_deadtown_poison_probe.py work/offline work/original.apk work/candidate
           python tools/deadtown_event_probe.py work/candidate work/events.json
+          python -m unittest discover -s tests -p 'test_prepare_deadtown_lang_table_probe.py' -v
+          python tools/prepare_deadtown_lang_table_probe.py work/events.json work/offline work/original.apk work/lang-events.json
       - name: Download pinned UndertaleModTool CLI
         shell: bash
         env:
@@ -144,9 +149,10 @@ jobs:
         shell: bash
         env:
           GML_PROBE_EVENTS: ${{ github.workspace }}/work/events.json
+          GML_PROBE_NATIVE_EVENTS: ${{ github.workspace }}/work/lang-events.json
         run: |
           set -euo pipefail
-          for mode in legacy candidate; do
+          for mode in legacy candidate candidate_native_table; do
             mkdir -p "work/lang-$mode" "work/save-$mode"
             LANG_PROBE_MODE="$mode" "$UTMT_EXE" load work/candidate.win -s tools/deadtown-language-probe.csx -o "work/lang-$mode/data.win" > "work/lang-$mode-instrument.log" 2>&1 || { tail -100 "work/lang-$mode-instrument.log"; exit 1; }
             cp work/diagnostic/audiogroup*.dat "work/lang-$mode/"
@@ -155,14 +161,14 @@ jobs:
             grep -F '[room] -> rom_play' "work/lang-$mode.log"
             grep -F 'DT_LANG' "work/lang-$mode.log" || true
           done
-          python tools/check_deadtown_language_probe.py work/lang-legacy.log work/lang-candidate.log | tee work/lang-check.log
+          python tools/check_deadtown_language_probe.py work/lang-legacy.log work/lang-candidate.log work/lang-candidate_native_table.log | tee work/lang-check.log
       - name: Summarize probe diagnostics
         if: always()
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
-          for name in ('lang-check.log', 'lang-legacy.log', 'lang-candidate.log', 'lang-legacy-instrument.log', 'lang-candidate-instrument.log', 'check.log', 'probe.log', 'instrument.log', 'compile.log'):
+          for name in ('lang-check.log', 'lang-legacy.log', 'lang-candidate.log', 'lang-candidate_native_table.log', 'lang-legacy-instrument.log', 'lang-candidate-instrument.log', 'lang-candidate_native_table-instrument.log', 'check.log', 'probe.log', 'instrument.log', 'compile.log'):
               path = Path('work') / name
               if not path.exists():
                   print('::notice::' + name + ': not created')
