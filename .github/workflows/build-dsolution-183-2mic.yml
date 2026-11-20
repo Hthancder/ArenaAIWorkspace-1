@@ -4,6 +4,10 @@ name: Bruce build (DSolution 1.83 2-Mic)
 # The sandbox that produced the port has no cross toolchain, so this workflow is the
 # compile check: it clones upstream Bruce, applies firmware/dsolution-183-2mic-bruce.patch
 # and runs the board's PlatformIO environment end to end.
+#
+# The size/link report at the end is emitted as workflow annotations (::notice::) because
+# the artifact and raw log endpoints are not reachable from the sandbox: `gh run view`
+# prints them.
 
 on:
   push:
@@ -50,7 +54,36 @@ jobs:
 
       - name: Build dsolution-183-2mic
         working-directory: /tmp/Bruce
-        run: pio run -e dsolution-183-2mic
+        run: |
+          set -o pipefail
+          pio run -e dsolution-183-2mic 2>&1 | tee build.log
+
+      - name: Build report (sizes + link check)
+        if: always()
+        working-directory: /tmp/Bruce
+        run: |
+          BIN=.pio/build/dsolution-183-2mic/firmware.bin
+          ELF=.pio/build/dsolution-183-2mic/firmware.elf
+          {
+            echo "== memory =="
+            grep -E "^(RAM|Flash):" build.log || echo "(no memory line)"
+            echo "== binary =="
+            ls -l "$BIN" "$ELF" 2>/dev/null || echo "(missing)"
+            echo "== board symbols linked =="
+            NM=$(find "$HOME/.platformio/packages" -name 'xtensa-esp32s3-elf-nm' 2>/dev/null | head -1)
+            if [ -n "$NM" ] && [ -f "$ELF" ]; then
+              for sym in _setup_codec_speaker _setup_codec_mic _setup_gpio InputHandler isCharging powerOff; do
+                if "$NM" -C "$ELF" | grep -qE " [Tt] $sym$"; then echo "OK   $sym"; else echo "MISS $sym"; fi
+              done
+              "$NM" -C "$ELF" | grep -E "Panel_NV3030B|Panel_LCD" | head -3
+            else
+              echo "(no nm/elf)"
+            fi
+            echo "== warnings in board files =="
+            grep -iE "warning:.*(NV3030B|dsolution|interface\.cpp|lovyan)" build.log | head -20 || echo "(none)"
+          } > report.txt
+          cat report.txt
+          while IFS= read -r line; do [ -n "$line" ] && echo "::notice title=build report::$line"; done < report.txt
 
       - name: Upload firmware
         if: always()
@@ -60,4 +93,5 @@ jobs:
           path: |
             /tmp/Bruce/.pio/build/dsolution-183-2mic/firmware.bin
             /tmp/Bruce/.pio/build/dsolution-183-2mic/firmware.elf
+            /tmp/Bruce/build.log
           if-no-files-found: warn
