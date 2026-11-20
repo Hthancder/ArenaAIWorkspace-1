@@ -199,6 +199,20 @@ trước khi phát hành. Game Unity `com.Ccentury.DeadTownSurvival` là remake 
   có hai slot số lượng 0 và stack đầu ra có sẵn cũng chạy. Đây là các kịch bản
   ép trong VM từ **nguồn cũ**, không chứng minh logic APK, mọi loại trang bị,
   ID, UI, input hay iOS.
+- Đối chiếu ARM mới cho `item_drop` tại `0x1a31e0` cho thấy selector 1–4
+  chọn `g_pGlobal` index 0–3, ghi vào instance slot 7; argument 1 làm key.
+  Nhánh key thiếu trả 0; nhánh có giá trị đọc, trừ 1, gọi native
+  `ds_map_set`, đọc lại, có thể `ds_map_delete` rồi trả 1. Chưa chứng minh
+  đăng ký tên các index/slot, hành vi selector không hợp lệ hay chạy Android.
+- Phân tích native cho thấy nhánh xóa so sánh với `g_GMLMathEpsilon`, khởi
+  tạo trong ELF bằng 1e-10 nhưng có thể đổi lúc chạy. gmrunner mặc định 1e-5.
+  Forced VM [44681106676](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44681106676)
+  với stack phân số tổng hợp 1.000001: epsilon mặc định thì xóa sau trừ 1,
+  epsilon 1e-10 thì giữ; probe hoàn nguyên epsilon sau đó. Nếu APK vẫn dùng
+  giá trị khởi tạo, nhánh ARM cho kết quả như trường hợp thứ hai; chưa chạy
+  native để xác minh. Không kết luận stack phân số có trong gameplay bình
+  thường và không tự đổi epsilon toàn game. Bốn selector cũng đã được thử
+  trên các map riêng trong VM. Công cụ tĩnh: `tools/deadtown_item_drop_evidence.py`.
 
 ## 10. Hình, frame và collision mask
 
@@ -266,8 +280,8 @@ Các công cụ chính: `deadtown_native_inventory.py`, `deadtown_native_callgra
 và các `check_deadtown_*`/`.csx` tương ứng. Đọc help/docstring trước khi dùng;
 các probe candidate chỉ dành cho dữ liệu tạm, không được đưa vào IPA.
 
-Kết quả gần nhất tại thời điểm lập hồ sơ: **95 unittest local đạt**;
-run VM `44671590170` đạt, static RE `44669995946` đạt. CI/địa chỉ trong báo
+Kết quả gần nhất: **97 unittest local đạt**;
+run VM `44681106676` đạt, static RE `44680884702` đạt. CI/địa chỉ trong báo
 cáo là dấu vết có thể đối chiếu, không thay thế dữ liệu/bằng chứng cần tái tạo.
 
 ## 12. Các việc chưa xong và gate

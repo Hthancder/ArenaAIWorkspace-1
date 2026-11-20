@@ -335,6 +335,38 @@ input, UI, or iOS. In particular, the native implementations differ in size
 and may differ in logic; no candidate here is included in release workflows.
 The probe output and saves are disposable, and only diagnostics are uploaded.
 
+#### Native item-drop path and comparison tolerance
+
+`tools/deadtown_item_drop_evidence.py` pins the original `gml_Script_item_drop`
+(`0x1a31e0`, 2,100 bytes) and traces exact ARM instructions, the switch table,
+GOT and PLT. It converts argument 0 to an integer for cases 1–4, which copy
+`g_pGlobal` indices 0–3 respectively into instance slot 7; argument 1 is the
+map key. This use does not independently prove the names registered for those
+indices or slot 7, or behavior for invalid selectors. The defined-key path
+reads via `ds_map_find_value`, subtracts integer 1, calls **`ds_map_set`** with
+map/key/result, reads again and conditionally calls `ds_map_delete`; it returns
+1. If `is_undefined` after the first read is above 0.5, it returns 0. This
+supports a correspondence with the old-source candidate for ordinary positive
+integer stacks, but does not execute the native function or verify native DS
+implementation, global registration or all value types.
+
+For finite values, the native deletion branch uses the runtime
+`g_GMLMathEpsilon` directly as its upper threshold; its value in the ELF is
+initially `1e-10`, but can change at runtime. The pinned gmrunner instead
+initializes its comparison epsilon to `1e-5`, uses it for numeric VM
+comparisons, and aliases its `ds_map_set` to `ds_map_replace`. Run
+[44681106676](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44681106676)
+forced the candidate to drop synthetic fractional stacks of `1.000001`: at
+the observed VM default `1e-5` it deleted the remaining near-zero stack, while
+setting the VM epsilon to `1e-10` retained it; the diagnostic restored the old
+epsilon afterward. If the APK epsilon remained at its ELF initializer, its
+pinned finite-value branch would take the latter route; that is a conditional
+inference, **not an observed Android result**. Real inventory quantities may
+be integers, so this synthetic case is a comparison-semantic probe, not a claim
+that ordinary gameplay exhibits fractional stacks. The run also exercised the
+four old-source candidate selectors using separate maps. No project-wide
+change to epsilon has been made: it could affect many other comparisons.
+
 For the isolated probe only, `item_use` uses explicit DS-map operations for an
 existing numeric key. The run [44562072708](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44562072708)
 then observed the candidate mask entry 3, consumed a one-item mask, transferred
