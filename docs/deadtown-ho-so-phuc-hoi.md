@@ -380,3 +380,15 @@ chiếu, không thay thế dữ liệu/bằng chứng cần tái tạo.
    chưa xác minh thành build phát hành.
 5. Không hứa thời điểm hay khẳng định “hoàn toàn không lỗi” khi chưa có chứng
    cứ; **không gửi IPA / yêu cầu người dùng thử** trước khi đáp ứng chỉ dẫn.
+
+### Tiếp tục: lưu và tải vũ khí (phân tích tĩnh)
+
+Nhánh save/load thường trong binary gốc ghi riêng `equip/weapon` (global 5)
+ và `equip/weaponlevel` (global 6); khi tải dùng mặc định lần lượt -1 và 0.
+Sau đó binary so sánh global 24 với level qua `YYCompareVal` và, nếu kết quả
+âm, chép global 24 vào level. Mã Create tĩnh khởi tạo global 24 bằng 20.0;
+chưa chứng minh giá trị lúc chạy hay ngữ nghĩa toàn bộ phép so sánh. Mã GMX cũ
+chỉ lưu `weapon`, không có trường level. Điều này củng cố việc không thể coi
+bản nguồn cũ là tương đương bản gốc. Probe VM với khóa giả 100001 chỉ là phép
+thử cô lập, không chứng minh tương thích save hoặc hành vi Android/iOS. Chi
+tiết và giới hạn trong `docs/deadtown-original-re.md`.

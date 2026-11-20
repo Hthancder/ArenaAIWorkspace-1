@@ -65,10 +65,15 @@ def check(log, save_file):
         rows[fields[0]] = fields[1:]
     if rows != {'loaded': ['11', '22', '33', '44'], 'cleared': ['0', '0', '0', '0']}:
         raise ValueError('inventory save/load or cleared-marker mismatch')
+    weapon_rows = [line[line.find('DT_WEAPON_SAVE|'):].strip() for line in log.splitlines() if 'DT_WEAPON_SAVE|' in line]
+    if weapon_rows != ['DT_WEAPON_SAVE|loaded|100001|100001']:
+        raise ValueError('weapon save/load marker mismatch')
     try:
         raw = base64.b64decode(Path(save_file).read_bytes().strip(), validate=True)
         ini = configparser.ConfigParser(interpolation=None, strict=True)
         ini.read_string(raw.decode('utf-8'))
+        if ini.getfloat('equip', 'weapon') != 100001 or ini.has_option('equip', 'weaponlevel'):
+            raise ValueError('unexpected legacy weapon fields')
         for key, expected in EXPECTED.items():
             value = ini.get('inventory', key).strip()
             if len(value) >= 2 and value[0] == '"' and value[-1] == '"':

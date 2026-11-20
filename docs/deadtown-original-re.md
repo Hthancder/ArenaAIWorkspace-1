@@ -769,3 +769,26 @@ there is no proven automatic route from this APK's Android native code to a
 faithful iOS IPA. A claim of zero bugs or full equivalence cannot be guaranteed
 by static analysis or CI alone. Multiplayer/server behavior also conflicts with
 the requested offline-only scope and must be explicitly accounted for.
+
+### Native normal-save weapon fields and load cap (static)
+
+The pinned ARM binary's normal `game_save_protect` writes global slots 5 and 6
+as real values to INI `equip/weapon` and `equip/weaponlevel` respectively at
+`0x1db050` and `0x1db08c`. Its normal `game_load_protect` reads those fields
+at `0x21ecb8` and `0x21ed3c` with defaults -1 and 0, then assigns the results
+back to slots 5 and 6. The subsequent `YYCompareVal(global[24], global[6],
+epsilon)` at `0x21edc0` branches around copying slot 24 to slot 6 when the
+comparison returns nonnegative; otherwise the copy occurs at `0x21ede4`.
+The separate static `sys_global_Create_0` code initializes slot 24 to 20.0
+(`0x3f4e54–0x3f4e6c`). These are static instruction/dataflow observations, not
+proof of runtime execution order, registered variable names, exact comparator
+semantics or immutable runtime globals. This analysis does not cover every
+save path or establish native save compatibility.
+
+The old GMX normal save/load has `equip/weapon` but no `equip/weaponlevel` and
+copies its raw `equip_weapon` into the newly created weapon pointer. The
+candidate-only VM now probes a synthetic 100001 save/load and resets its
+pointer before Step. This does not establish that the original game accepts
+that key, that normal load is reached, or that desktop GMRM/INI files are
+compatible with native Android/iOS. Static verifier:
+`tools/deadtown_weapon_save_evidence.py` (SHA-pinned APK/ELF).

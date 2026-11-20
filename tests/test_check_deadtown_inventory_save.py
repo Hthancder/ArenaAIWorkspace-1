@@ -8,8 +8,11 @@ from tools.check_deadtown_inventory_save import check, parse_numeric_gmrm
 LOG = '''
 DT_INVENTORY_SAVE|loaded|11|22|33|44
 DT_INVENTORY_SAVE|cleared|0|0|0|0
+DT_WEAPON_SAVE|loaded|100001|100001
 '''
-SAVE = b'''[inventory]
+SAVE = b'''[equip]
+weapon=100001
+[inventory]
 weapon="GMRM1;r0;r11;"
 equip="GMRM1;r0;r22;"
 use="GMRM1;r0;r33;"
