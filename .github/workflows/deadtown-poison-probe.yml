@@ -13,6 +13,11 @@ on:
       - tests/test_check_deadtown_accessor_bytecode.py
       - tools/deadtown-poison-probe.csx
       - tools/deadtown-language-probe.csx
+      - tools/deadtown-inventory-probe.csx
+      - tools/prepare_deadtown_inventory_probe.py
+      - tools/check_deadtown_inventory_probe.py
+      - tests/test_prepare_deadtown_inventory_probe.py
+      - tests/test_check_deadtown_inventory_probe.py
       - tools/prepare_deadtown_lang_table_probe.py
       - tests/test_prepare_deadtown_lang_table_probe.py
       - tools/check_deadtown_language_probe.py
@@ -67,6 +72,9 @@ jobs:
           python -m unittest discover -s tests -p 'test_check_deadtown_accessor_bytecode.py' -v
           python -m unittest discover -s tests -p 'test_check_deadtown_language_probe.py' -v
           python -m unittest discover -s tests -p 'test_check_deadtown_lang_maps.py' -v
+          python -m unittest discover -s tests -p 'test_prepare_deadtown_inventory_probe.py' -v
+          python -m unittest discover -s tests -p 'test_check_deadtown_inventory_probe.py' -v
+          python tools/prepare_deadtown_inventory_probe.py work/offline work/inventory-scripts
           python tools/deadtown_lang_fallback_evidence.py work/original.apk --output work/language-static.json
           python tools/prepare_deadtown_poison_probe.py work/offline work/original.apk work/candidate
           python tools/deadtown_event_probe.py work/candidate work/events.json
@@ -148,6 +156,26 @@ jobs:
           grep -F '[room] -> rom_play' work/probe.log
           grep -F 'DT_POISON|' work/probe.log || true
           python tools/check_deadtown_poison_probe.py work/probe.log work/save/dt_poison_probe.sav 2>&1 | tee work/check.log
+      - name: Diagnose source inventory compiler workaround in a disposable VM
+        shell: bash
+        env:
+          GML_PROBE_EVENTS: ${{ github.workspace }}/work/events.json
+          INVENTORY_PROBE_SCRIPTS: ${{ github.workspace }}/work/inventory-scripts
+          INVENTORY_PROBE_LEGACY: ${{ github.workspace }}/work/offline/scripts
+        run: |
+          set -euo pipefail
+          mkdir -p work/inventory work/inventory-save work/inventory-disasm
+          "$UTMT_EXE" load work/candidate.win -s tools/deadtown-inventory-probe.csx -o work/inventory/data.win > work/inventory-instrument.log 2>&1 || { tail -100 work/inventory-instrument.log; exit 1; }
+          cp work/diagnostic/audiogroup*.dat work/inventory/
+          for name in item_get item_drop item_equip item_make; do
+            work/runner-build/gmdump work/inventory/data.win code "probe_${name}_old_unlinked" > "work/inventory-disasm/${name}-old.log"
+            work/runner-build/gmdump work/inventory/data.win code "gml_Script_${name}" > "work/inventory-disasm/${name}-candidate.log"
+          done
+          timeout 90 work/runner-build/gmrunner work/inventory --headless --fast --mute --seed 1 \
+            --frames 180 --trace --goto rom_play@160 --save-dir work/inventory-save > work/inventory-run.log 2>&1 || { tail -80 work/inventory-run.log; exit 1; }
+          grep -F '[room] -> rom_play' work/inventory-run.log
+          grep -F 'DT_INV' work/inventory-run.log || true
+          python tools/check_deadtown_inventory_probe.py work/inventory-run.log work/inventory-disasm | tee work/inventory-check.log
       - name: Compare legacy and candidate missing-key language behavior
         shell: bash
         env:
@@ -172,13 +200,13 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
-          for name in ('lang-check.log', 'lang-legacy.log', 'lang-candidate.log', 'lang-candidate_native_table.log', 'lang-legacy-instrument.log', 'lang-candidate-instrument.log', 'lang-candidate_native_table-instrument.log', 'check.log', 'probe.log', 'instrument.log', 'compile.log'):
+          for name in ('inventory-check.log', 'inventory-run.log', 'inventory-instrument.log', 'lang-check.log', 'lang-legacy.log', 'lang-candidate.log', 'lang-candidate_native_table.log', 'lang-legacy-instrument.log', 'lang-candidate-instrument.log', 'lang-candidate_native_table-instrument.log', 'check.log', 'probe.log', 'instrument.log', 'compile.log'):
               path = Path('work') / name
               if not path.exists():
                   print('::notice::' + name + ': not created')
                   continue
               lines = path.read_text(errors='replace').splitlines()
-              selected = [line for line in lines if 'DT_LANG' in line or 'LANG_PROBE' in line or 'DT_POISON|' in line or 'PROBE:' in line or
+              selected = [line for line in lines if 'DT_LANG' in line or 'DT_INV' in line or 'INVENTORY_' in line or 'LANG_PROBE' in line or 'DT_POISON|' in line or 'PROBE:' in line or
                           'POISON_INSTRUMENT' in line or 'error' in line.lower() or 'exception' in line.lower() or
                           ('[call]' in line and ('gml_Script_item_use' in line or 'probe_obj_player_200' in line))]
               markers = [line for line in lines if 'DT_POISON|' in line] if name == 'probe.log' else selected
@@ -199,6 +227,8 @@ jobs:
             work/legacy-disasm.log
             work/candidate-disasm.log
             work/lang-*.log
+            work/inventory-*.log
+            work/inventory-disasm/*.log
             work/language-static.json
           if-no-files-found: ignore
           retention-days: 3
