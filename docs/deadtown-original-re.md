@@ -384,7 +384,19 @@ into global 6. The literal `1` is verified from the ARM relocation and RValue
 bytes, not inferred from the old source. With global 18 still `100000`, this
 reconstructs a key such as `1 + 1 * 100000 = 100001`. Neither name nor runtime
 values of globals 5/6 are proven by this path; other equipment branches and
-actual map acceptance require separate investigation.
+actual map acceptance require separate investigation. Static verifier run
+[44730980746](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44730980746)
+passed.
+
+In the forced disposable old-source VM candidate run
+[44730980693](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44730980693),
+a synthetic weapon key `100001` was inserted and equipped while key 1 was
+previously equipped. The candidate removed `100001`, returned another unit of
+key 1, and stored the **raw `100001`** in both its weapon global and instance
+pointer; the temporary pointer was reset before a game Step. This illustrates
+why the old-source candidate cannot be assumed to implement the native split;
+it does not establish that the APK accepts that key or how its runtime behaves.
+The synthetic scenario and its log are not included in an IPA.
 
 A forced disposable old-source candidate VM run
 [44727391503](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44727391503)

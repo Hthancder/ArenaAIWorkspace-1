@@ -215,6 +215,12 @@ trước khi phát hành. Game Unity `com.Ccentury.DeadTownSurvival` là remake 
   cũ luôn trừ trước. Đây là phân tích tĩnh có điều kiện, **chưa chạy APK**;
   tên đăng ký global, schema, giá trị divisor, tác động equip đầy đủ và đường
   chạy thực tế còn chưa rõ. Công cụ `tools/deadtown_item_equip_evidence.py`.
+- Forced VM [44730980693](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44730980693)
+  cho candidate cũ equip key tổng hợp 100001: key được lấy khỏi map, key 1
+  cũ được trả thêm một, nhưng global và instance vũ khí giữ nguyên 100001,
+  không tách; đã hoàn nguyên pointer trước Step. Kịch bản chỉ chứng minh
+  candidate, không chứng minh APK chấp nhận key hay hoạt động runtime. Static
+  CI [44730980746](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44730980746) đạt.
 - Forced VM [44727391503](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44727391503)
   thử candidate nguồn cũ với hai item trang bị key 17: equip xong còn một,
   global và instance deco đều 17; probe hoàn nguyên state. Điều này xác nhận
@@ -355,8 +361,8 @@ Các công cụ chính: `deadtown_native_inventory.py`, `deadtown_native_callgra
 và các `check_deadtown_*`/`.csx` tương ứng. Đọc help/docstring trước khi dùng;
 các probe candidate chỉ dành cho dữ liệu tạm, không được đưa vào IPA.
 
-Kết quả gần nhất: **105 unittest local đạt**; run VM `44727391503` đạt,
-static RE `44727391462` đạt. CI/địa chỉ trong báo cáo là dấu vết có thể đối
+Kết quả gần nhất: **105 unittest local đạt**; run VM `44730980693` đạt,
+static RE `44730980746` đạt. CI/địa chỉ trong báo cáo là dấu vết có thể đối
 chiếu, không thay thế dữ liệu/bằng chứng cần tái tạo.
 
 ## 12. Các việc chưa xong và gate
