@@ -1,0 +1,97 @@
+{
+  "$comment": [
+    "Nguồn sự thật duy nhất cho một board: dùng để sinh build_flags (Bruce), YAML (ESPHome)",
+    "hoặc config.h (firmware tự viết). Quy ước: mỗi giá trị PHẢI có evidence; giá trị chưa",
+    "kiểm chứng ghi 'unverified' và để trong 'open_questions' thay vì đoán.",
+    "Đây là manifest của board DSolution 1.83\" 2-Mic / OSTB-2ST-WIFI tính đến 2026-11-20."
+  ],
+  "name": "DSolution 1.83 2-Mic (OSTB-2ST-WIFI / Xingzhi cube 1.83 2mic)",
+  "mcu": {
+    "chip": "ESP32-S3",
+    "flash": { "size_mb": 16, "mode": "qio", "freq_mhz": 80 },
+    "psram": { "type": "octal", "freq_mhz": 80, "arduino_memory_type": "qio_opi" },
+    "usb": {
+      "kind": "usb-serial-jtag",
+      "vid_pid": "303a:1001",
+      "note": "Native USB (GPIO19/20). ROM banner 'ESP-ROM:esp32s3-...' luôn in trên cổng này kể cả khi app không chạy.",
+      "evidence": ["boot-log:2026-11-20"]
+    },
+    "evidence": ["esptool:flash_id", "community:esphome-yaml(psram octal 80MHz)"]
+  },
+
+  "panel": {
+    "controller": "NV3023",
+    "glass": { "width": 284, "height": 240 },
+    "controller_ram": { "width": 240, "height": 320 },
+    "offset": { "x": 36, "y": 0 },
+    "madctl_landscape": "0xA8",
+    "invert": true,
+    "rgb_order": "bgr",
+    "spi": { "sclk": 9, "mosi": 10, "cs": 14, "dc": 8, "rst": 18, "mode": 0, "clock_mhz": 40 },
+    "backlight": { "gpio": 13, "pwm": true, "active": "high" },
+    "init_table": "boards/dsolution-183-2mic/NV3023_Panel.h",
+    "evidence": ["community:esphome-yaml(mipi_spi CUSTOM 284x240 offset_width 36, 40MHz, bgr, invert)",
+                 "community:maerchenbox(NV3023 284x240 x-offset 36)",
+                 "community:espressif-esp_lcd_nv3023"]
+  },
+
+  "bus": {
+    "i2c": { "sda": 12, "scl": 11, "freq_khz": 100, "evidence": ["community:esphome-yaml", "community:maerchenbox"] },
+    "i2s": { "mclk": 5, "bclk": 15, "ws": 16, "din": 7, "dout": 6, "evidence": ["community:esphome-yaml", "community:maerchenbox"] }
+  },
+
+  "codecs": {
+    "dac":  { "chip": "ES8311", "i2c_addr": "0x18", "role": "loa", "sample_rate_hz": 48000 },
+    "adc":  { "chip": "ES7210", "i2c_addr": "0x40", "role": "2 mic", "sample_rate_hz": 16000,
+              "note": "MIC3 loopback ES8311 làm AEC reference" },
+    "amp":  { "chip": "NS4150", "enable_gpio": 4, "active": "high", "when": "ngay trong _setup_gpio()" },
+    "evidence": ["community:esphome-yaml", "community:maerchenbox"]
+  },
+
+  "power": {
+    "battery_adc": { "gpio": 17, "adc_channel": 6, "divider": 2.0, "evidence": ["community:maerchenbox(pin dump từ firmware gốc)"] },
+    "charge_detect": { "gpio": 47, "active": "low", "evidence": ["community:maerchenbox"] },
+    "power_latch": {
+      "gpio": 21,
+      "state_when_running": "high",
+      "status": "unverified",
+      "note": "Bảng của người bán gọi là 'Sleep Control'. Firmware gốc không thấy dùng. Triệu chứng USB ngắt–kết nối lặp lại (kể cả trong ROM download mode) khớp với board cần phần mềm giữ nguồn. Firmware đang kéo HIGH từ lệnh đầu tiên của _setup_gpio() để thử.",
+      "evidence": ["vendor-sheet", "experiment:2026-11-20(-DDSOLUTION_LATCH_PIN=21)"]
+    },
+    "unknown_gpio_38": { "status": "unverified", "note": "Bảng người bán gọi là 'battery status'; S3 không có ADC trên GPIO38 nên không thể là chia áp pin." }
+  },
+
+  "buttons": {
+    "count": 3,
+    "map": [
+      { "gpio": 0,  "label": "Boot/Sel", "pull": "up", "active": "low", "bruce": "Sel" },
+      { "gpio": 39, "label": "Vol+",     "pull": "up", "active": "low", "bruce": "Next" },
+      { "gpio": 40, "label": "Vol-",     "pull": "up", "active": "low", "bruce": "Prev" }
+    ],
+    "evidence": ["community:esphome-yaml", "community:maerchenbox"]
+  },
+
+  "led": { "type": "WS2812B", "gpio": 48, "order": "GRB", "count": 1, "evidence": ["community:esphome-yaml"] },
+
+  "quirks": [
+    "mic.cpp gọi gpio_reset_pin(GPIO_NUM_0) khi kết thúc ghi âm → mất nút Sel nếu không re-arm.",
+    "Không dùng BOOT để nạp: giữ BOOT khi cắm cáp ⇒ 'waiting for download', tưởng như treo.",
+    "Nút Reset trên web flasher phải kéo DTR (EN), giữ RTS (GPIO0) buông — nếu kéo RTS xuống là chip vào chế độ nạp.",
+    "Bảng thông số của người bán sai 3 chỗ: controller (NV3030B→NV3023), battery (38→17), sleep (21 → chưa xác định)."
+  ],
+
+  "open_questions": [
+    "GPIO21 có thật là chân giữ nguồn không? (thử: nạp bản không kéo / có kéo, xem board có trụ nguồn qua 10s)",
+    "GPIO38 nối tới đâu? (continuity + input pull thử)",
+    "Đèn nền 13 có PWM mượt không? (thử LEDC 0/50/100%)",
+    "Mic trái/phải tương ứng MIC1/MIC2 của ES7210? (che từng lỗ mic khi ghi âm)",
+    "Có cảm ứng / cảm biến nào trên I2C không? (I2C scan)"
+  ],
+
+  "evidence_sources": {
+    "community:esphome-yaml": "https://github.com/RealDeco/xiaozhi-esphome -> devices/Xingzhi/xingzhi-cube-1.83-2mic.yaml",
+    "community:maerchenbox": "https://github.com/ProD-byte/Maerchenbox (bảng chân đọc từ firmware gốc + dump 16MB cứu máy)",
+    "community:espressif-esp_lcd_nv3023": "components.espressif.com/components/espressif/esp_lcd_nv3023",
+    "boot-log:2026-11-20": "log serial thực tế từ máy của bạn"
+  }
+}
