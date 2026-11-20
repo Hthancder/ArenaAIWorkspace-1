@@ -3,70 +3,145 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>DSolution 1.83" 2-Mic — Nạp Firmware Dual-OTA &amp; Xem Log</title>
+<title>DSolution 1.83" 2-Mic — Dual-Boot (XiaoZhi HeyLily + Bruce) &amp; Web Flasher</title>
 <style>
-  :root { color-scheme: dark; --accent: #00f0ff; --accent2: #50aebd; }
+  :root {
+    color-scheme: dark;
+    --bg: #070c11;
+    --panel: #0e1620;
+    --card: #121d2a;
+    --border: #223447;
+    --accent: #00f0ff;
+    --accent2: #50aebd;
+    --green: #3fb950;
+    --amber: #f0b429;
+    --red: #ff6b78;
+    --muted: #889bae;
+  }
   * { box-sizing: border-box; }
   body {
     margin: 0; padding: 24px 16px 64px;
-    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    background: #090e13; color: #e6edf3;
+    font: 14.5px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: #e6edf3;
   }
-  main { max-width: 900px; margin: 0 auto; }
+  main { max-width: 980px; margin: 0 auto; }
   .hero { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
-  .hero svg { width: 40px; height: 40px; color: var(--accent); flex-shrink: 0; }
-  h1 { font-size: 21px; margin: 0 0 2px; color: var(--accent); }
-  p.sub { margin: 0; color: #8b98a5; font-size: 13.5px; }
+  .hero svg { width: 42px; height: 42px; color: var(--accent); flex-shrink: 0; }
+  h1 { font-size: 21px; margin: 0 0 2px; color: var(--accent); letter-spacing: -0.01em; }
+  p.sub { margin: 0; color: var(--muted); font-size: 13.5px; }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .tab {
+    padding: 10px 16px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--panel); color: #b7c8d6; font-weight: 700; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .tab:hover { border-color: var(--accent2); color: #fff; }
+  .tab.active { background: #0a2a36; border-color: var(--accent); color: var(--accent); }
+  .tab .pill {
+    font-size: 11px; padding: 1px 7px; border-radius: 999px;
+    background: #0d4b58; color: #9ff8ff; font-weight: 700;
+  }
+
   section {
-    background: #101720; border: 1px solid #223244; border-radius: 12px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
     padding: 18px; margin-bottom: 16px;
   }
   h2 { font-size: 16px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
   h2 .n {
     display: inline-flex; align-items: center; justify-content: center;
     width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: #041317;
-    font-size: 13px; font-weight: 800;
+    font-size: 13px; font-weight: 800; flex-shrink: 0;
   }
   .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-  button {
-    font: inherit; font-weight: 600; padding: 10px 16px; border-radius: 8px;
+  .col { display: flex; flex-direction: column; gap: 8px; }
+  button, .btn-file {
+    font: inherit; font-weight: 600; padding: 9px 15px; border-radius: 8px;
     border: 1px solid var(--accent); background: #0c4d5b; color: #e6f9fc; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
   }
-  button:hover:not(:disabled) { background: var(--accent); color: #041317; }
-  button.secondary { background: #1c2430; border-color: #364556; color: #e6edf3; }
-  button.secondary:hover:not(:disabled) { background: #2c3849; color: #fff; }
+  button:hover:not(:disabled), .btn-file:hover { background: var(--accent); color: #041317; }
+  button.secondary, .btn-file.secondary { background: #18222e; border-color: #324457; color: #dce6ef; }
+  button.secondary:hover:not(:disabled), .btn-file.secondary:hover { background: #263547; color: #fff; }
   button.danger { background: #3b1920; border-color: #9e3b49; color: #ffb8c0; }
   button.danger:hover:not(:disabled) { background: #c93748; color: #fff; }
   button:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-sm { padding: 6px 11px; font-size: 12.5px; border-radius: 7px; }
+  input[type=file].hidden-file { display: none; }
   input[type=file], select {
     font: inherit; color: #cfe2ea; background: #0a1017; border: 1px solid #27394d;
     border-radius: 8px; padding: 7px 10px; max-width: 100%;
   }
-  label.check { display: flex; gap: 8px; align-items: center; font-size: 13.5px; color: #9db0be; }
+  label.check { display: flex; gap: 8px; align-items: center; font-size: 13px; color: #9db0be; cursor: pointer; }
+
   .badge {
-    display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 600;
+    display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 600;
     border: 1px solid #29465b; background: #0b1e29; color: var(--accent);
   }
-  .status { margin-top: 12px; font-size: 14px; color: #9ab0bf; min-height: 20px; }
-  .status.ok { color: #3fb950; }
-  .status.err { color: #ff6b78; }
-  progress { width: 100%; height: 10px; margin-top: 12px; accent-color: var(--accent); }
+  .badge.ok { border-color: #266039; background: #0c2617; color: #5ce174; }
+  .badge.warn { border-color: #6e521b; background: #261d09; color: #f6c453; }
+  .badge.err { border-color: #7b2833; background: #2c1015; color: #ff8592; }
+
+  .status { margin-top: 10px; font-size: 13.5px; color: #9ab0bf; min-height: 20px; }
+  .status.ok { color: #5ce174; }
+  .status.err { color: var(--red); }
+  .status.warn { color: var(--amber); }
+
+  progress { width: 100%; height: 11px; margin-top: 10px; accent-color: var(--accent); }
   pre#term {
-    margin: 12px 0 0; padding: 12px; height: 320px; overflow: auto;
-    background: #05080b; border: 1px solid #223244; border-radius: 8px;
+    margin: 12px 0 0; padding: 12px; height: 280px; overflow: auto;
+    background: #05080b; border: 1px solid var(--border); border-radius: 8px;
     font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     white-space: pre-wrap; word-break: break-word; color: #c9d1d9;
   }
   pre#term:empty::before { content: "(chưa có dữ liệu)"; color: #4d5866; }
-  code { background: #1c2633; padding: 1px 6px; border-radius: 4px; font-size: 13px; color: var(--accent); }
-  .hint { font-size: 13px; color: #8b9cac; margin: 10px 0 0; line-height: 1.55; }
+  code { background: #1a2532; padding: 1px 6px; border-radius: 4px; font-size: 12.5px; color: var(--accent); }
+  .hint { font-size: 13px; color: var(--muted); margin: 10px 0 0; line-height: 1.55; }
   .hint b { color: #e2ecf4; font-weight: 600; }
-  .warn { border-left: 3px solid #d29922; padding-left: 12px; margin-top: 12px; }
-  .warn p { margin: 0; font-size: 13px; color: #cbb275; }
-  .ports { font-size: 13px; color: #8b9cac; margin-top: 10px; }
+  .ports { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+
+  .dropzone {
+    border: 1.5px dashed #2e4b61; border-radius: 10px; padding: 16px; background: #0a1118;
+    text-align: center; transition: border-color .15s, background .15s;
+  }
+  .dropzone.drag { border-color: var(--accent); background: #0d222e; }
+  .dropzone strong { display: block; color: #eef7fb; margin-bottom: 4px; font-size: 14.5px; }
+  .dropzone small { color: var(--muted); font-size: 12.5px; }
+
+  .slot-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 12px; }
+  .slot-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 9px; padding: 11px 12px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .slot-card.ready { border-color: #245c38; }
+  .slot-card.missing { border-color: #6b4c18; }
+  .slot-card .head { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+  .slot-card .title { font-weight: 700; font-size: 13.5px; color: #edf5fa; }
+  .slot-card .meta { font-size: 12px; color: var(--muted); word-break: break-all; }
+
+  .flash-bar {
+    display: flex; width: 100%; height: 26px; border-radius: 7px; overflow: hidden;
+    border: 1px solid #2b4257; background: #070c11; margin: 12px 0 8px;
+  }
+  .flash-seg {
+    height: 100%; display: flex; align-items: center; justify-content: center;
+    font-size: 10.5px; font-weight: 700; color: #051117; overflow: hidden; white-space: nowrap;
+    border-right: 1px solid rgba(0,0,0,0.35); padding: 0 3px;
+  }
+  .flash-seg.darktext { color: #e8f3fa; }
+
+  table.parttbl { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 8px; }
+  table.parttbl th, table.parttbl td {
+    text-align: left; padding: 6px 8px; border-bottom: 1px solid #1a2836;
+  }
+  table.parttbl th { color: var(--accent2); font-weight: 600; font-size: 11.5px; text-transform: uppercase; }
+  table.parttbl td.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #cbe1ee; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+
   .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 10px; }
   .cardlet { background: #0b1118; border: 1px solid #1e2d3d; border-radius: 9px; padding: 12px; font-size: 13px; color: #a7bac9; }
   .cardlet strong { display: block; color: var(--accent); margin-bottom: 4px; font-size: 13.5px; }
+  [hidden] { display: none !important; }
 </style>
 </head>
 <body>
@@ -78,45 +153,153 @@
       <circle cx="47" cy="34" r="2.3" fill="currentColor"/>
     </svg>
     <div>
-      <h1>DSolution 1.83" 2-Mic — Bruce Flasher &amp; Serial Monitor</h1>
-      <p class="sub">ESP32-S3 · OSTB-2ST-WIFI · 16 MB Dual-OTA + 8 MB OPI PSRAM · WebSerial (Chrome / Edge)</p>
+      <h1>DSolution 1.83" 2-Mic — Dual-Boot &amp; Bruce Web Flasher</h1>
+      <p class="sub">ESP32-S3 · OSTB-2ST-WIFI (Lily Box) · 16 MB Flash + 8 MB OPI PSRAM · WebSerial (Chrome / Edge)</p>
     </div>
   </div>
 
-  <section>
-    <h2><span class="n">1</span>Nạp Firmware qua USB (WebSerial)</h2>
-    <div class="row">
-      <input type="file" id="file" accept=".bin,application/octet-stream" />
-      <label class="row" style="gap:6px;font-size:13.5px;color:#9db0be">
-        Địa chỉ:
-        <select id="addrMode">
-          <option value="auto" selected>Tự nhận diện (khuyên dùng)</option>
-          <option value="0x0">0x0 — Factory Image</option>
-          <option value="0x10000">0x10000 — App / OTA</option>
-        </select>
-      </label>
-      <span class="badge" id="binBadge">Chưa chọn file</span>
-    </div>
-    <div class="row" style="margin-top:14px">
-      <button id="flash" disabled>Nạp firmware</button>
-      <button id="erase" class="danger">Xoá toàn bộ chip</button>
-      <label class="check"><input type="checkbox" id="safe" /> chế độ chậm (dio / 40 MHz)</label>
-    </div>
-    <progress id="prog" value="0" max="100" hidden></progress>
-    <div class="status" id="flashStatus"></div>
-    <div class="ports" id="portInfo"></div>
-    <p class="hint">
-      <b>Nạp lần đầu / chuyển từ bản cũ sang Dual-OTA:</b> Chọn <code>DSolution-183-2mic-factory.bin</code> (~3.7 MB, ghi tại <b>0x0</b>) — nên bấm <b>Xoá toàn bộ chip</b> trước.<br/>
-      <b>Cập nhật ứng dụng:</b> Chọn <code>DSolution-183-2mic-ota.bin</code> (tự nhận diện ghi tại <b>0x10000</b>, giữ nguyên LittleFS/Wi-Fi), hoặc dùng <b>WebOTA không dây</b> tại <code>http://bruce.local/ota</code>.<br/>
-      Nếu chưa thấy cổng USB: bật <b>Config &rarr; Enter Bootloader</b> trên máy, hoặc giữ nút <b>BOOT</b> rồi cắm cáp.
-    </p>
-    <div class="warn">
-      <p><b>Bảng phân vùng Dual-OTA 16 MB mới:</b> <code>app0</code> 4 MB (0x10000) · <code>app1</code> 4 MB (0x410000) · <code>LittleFS</code> 7.875 MB (0x810000). Đừng rút cáp trong 1–2 phút khi đang nạp.</p>
-    </div>
-  </section>
+  <div class="tabs">
+    <button type="button" class="tab active" id="tabBtnDual" data-tab="dual">
+      Dual-Boot: XiaoZhi HeyLily + Bruce <span class="pill">MỚI</span>
+    </button>
+    <button type="button" class="tab" id="tabBtnSingle" data-tab="single">
+      Single-Boot: Chỉ Bruce Firmware
+    </button>
+  </div>
 
+  <!-- ==================== TAB 1: DUAL-BOOT ==================== -->
+  <div id="paneDual">
+    <section>
+      <h2><span class="n">1</span>Chọn thư mục / các file Lily Box (XiaoZhi HeyLily)</h2>
+      <div class="dropzone" id="dbDrop">
+        <strong>Kéo thả cả thư mục Lily Box OSTB-2ST hoặc bấm nút chọn bên dưới</strong>
+        <small>Tự động nhận diện <code>partition-table.bin</code>, <code>xiaozhi.bin</code>, <code>generated_assets.bin</code>, <code>ota_data_initial.bin</code></small>
+        <div class="row" style="justify-content:center;margin-top:12px">
+          <label class="btn-file">
+            Chọn thư mục Lily Box
+            <input type="file" id="dbDirInput" class="hidden-file" webkitdirectory directory multiple />
+          </label>
+          <label class="btn-file secondary">
+            Chọn nhiều file (.bin)
+            <input type="file" id="dbMultiInput" class="hidden-file" multiple accept=".bin,.json" />
+          </label>
+          <button type="button" id="dbDefaultSysBtn" class="secondary btn-sm">Dùng sys mặc định nếu thiếu partition-table.bin</button>
+        </div>
+      </div>
+
+      <div class="slot-grid">
+        <div class="slot-card missing" id="cardPart">
+          <div class="head">
+            <span class="title">partition-table.bin</span>
+            <span class="badge warn" id="bPart">Cần chọn</span>
+          </div>
+          <div class="meta" id="mPart">Đọc bố cục nvs / otadata / assets gốc của HeyLily</div>
+          <div class="row"><label class="btn-file secondary btn-sm">Chọn file<input type="file" id="pickPart" class="hidden-file" accept=".bin" /></label></div>
+        </div>
+
+        <div class="slot-card missing" id="cardXiao">
+          <div class="head">
+            <span class="title">xiaozhi.bin (ota_0)</span>
+            <span class="badge warn" id="bXiao">Cần chọn</span>
+          </div>
+          <div class="meta" id="mXiao">Firmware XiaoZhi HeyLily (~7 MB)</div>
+          <div class="row"><label class="btn-file secondary btn-sm">Chọn file<input type="file" id="pickXiao" class="hidden-file" accept=".bin" /></label></div>
+        </div>
+
+        <div class="slot-card" id="cardAssets">
+          <div class="head">
+            <span class="title">generated_assets.bin</span>
+            <span class="badge" id="bAssets">Tuỳ chọn</span>
+          </div>
+          <div class="meta" id="mAssets">Tài nguyên giọng nói / UI / wakeword của HeyLily</div>
+          <div class="row">
+            <label class="btn-file secondary btn-sm">Chọn file<input type="file" id="pickAssets" class="hidden-file" accept=".bin" /></label>
+            <button type="button" class="secondary btn-sm" id="clearAssets" hidden>Xoá</button>
+          </div>
+        </div>
+
+        <div class="slot-card" id="cardBruce">
+          <div class="head">
+            <span class="title">Bootloader + Menu + Bruce (ota_1)</span>
+            <span class="badge" id="bBruce">Đang tải...</span>
+          </div>
+          <div class="meta" id="mBruce">Tự nạp từ bản build CI mới nhất</div>
+          <div class="row">
+            <button type="button" class="secondary btn-sm" id="reloadCiFw">Tải lại bản CI</button>
+            <label class="btn-file secondary btn-sm">Thay Bruce .bin<input type="file" id="pickBruceOta" class="hidden-file" accept=".bin" /></label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="n">2</span>Bố cục Flash 16 MB Dual-Boot &amp; Kiểm tra dung lượng</h2>
+      <div id="layoutSummary" class="status">Chọn <code>partition-table.bin</code> và <code>xiaozhi.bin</code> để tính bảng phân vùng Dual-Boot 16 MB tự động.</div>
+      <div class="flash-bar" id="flashBar" hidden></div>
+      <div style="overflow-x:auto">
+        <table class="parttbl" id="partTable" hidden>
+          <thead>
+            <tr><th>Phân vùng</th><th>Loại</th><th>Offset</th><th>Kích thước</th><th>Vai trò / Dữ liệu nạp</th></tr>
+          </thead>
+          <tbody id="partBody"></tbody>
+        </table>
+      </div>
+
+      <div class="row" style="margin-top:14px">
+        <button id="dbFlashBtn" disabled>Nạp Dual-Boot qua USB (1 lần)</button>
+        <button id="dbEraseBtn" class="danger">Xoá toàn bộ chip 16 MB</button>
+        <label class="check"><input type="checkbox" id="dbSafeMode" /> chế độ chậm (dio / 40 MHz)</label>
+        <label class="check" title="Khi tắt, NVS gốc (Wi-Fi &amp; kích hoạt XiaoZhi) ở 0x9000 được giữ nguyên nếu offset khớp"><input type="checkbox" id="dbWipeNvs" /> xoá NVS (cài mới từ đầu)</label>
+      </div>
+      <progress id="dbProg" value="0" max="100" hidden></progress>
+      <div class="status" id="dbStatus"></div>
+      <div class="ports" id="dbPortInfo"></div>
+
+      <p class="hint">
+        <b>Cách hoạt động sau khi nạp:</b> Mỗi lần bật nguồn hoặc bấm Reset, màn hình 1.83" sẽ hiện <b>Boot Menu</b> đếm ngược <code>2.5s</code> (mặc định vào <b>XiaoZhi HeyLily</b>). Bấm <b>Vol+ / Vol-</b> để chọn <b>Bruce Firmware</b> hoặc đổi thời gian chờ (thậm chí chọn <code>0s</code> giữ nút mới mở Menu). Từ trong Bruce, vào <b>Others &rarr; Boot XiaoZhi</b> hoặc <b>WebUI &rarr; /ota</b> để quay lại HeyLily bất kỳ lúc nào.<br/>
+        <b>An toàn dữ liệu:</b> LittleFS của Bruce được gắn nhãn riêng <code>brucefs</code> nằm trước <code>assets</code>, và WebOTA trong Bruce tự động khoá ghi đè <code>ota_0</code> để không bao giờ làm hỏng XiaoZhi HeyLily.
+      </p>
+    </section>
+  </div>
+
+  <!-- ==================== TAB 2: SINGLE-BOOT ==================== -->
+  <div id="paneSingle" hidden>
+    <section>
+      <h2><span class="n">1</span>Nạp Bruce Firmware (Single-Boot Dual-OTA)</h2>
+      <div class="row">
+        <input type="file" id="file" accept=".bin,application/octet-stream" />
+        <label class="row" style="gap:6px;font-size:13.5px;color:#9db0be">
+          Địa chỉ:
+          <select id="addrMode">
+            <option value="auto" selected>Tự nhận diện (khuyên dùng)</option>
+            <option value="0x0">0x0 — Factory Image</option>
+            <option value="0x10000">0x10000 — App / OTA</option>
+          </select>
+        </label>
+        <span class="badge" id="binBadge">Chưa chọn file</span>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button type="button" class="secondary btn-sm" id="useLatestFactory">Dùng Bruce Factory mới nhất (0x0)</button>
+        <button type="button" class="secondary btn-sm" id="useLatestOta">Dùng Bruce OTA mới nhất (0x10000)</button>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <button id="flash" disabled>Nạp firmware</button>
+        <button id="erase" class="danger">Xoá toàn bộ chip</button>
+        <label class="check"><input type="checkbox" id="safe" /> chế độ chậm (dio / 40 MHz)</label>
+      </div>
+      <progress id="prog" value="0" max="100" hidden></progress>
+      <div class="status" id="flashStatus"></div>
+      <div class="ports" id="portInfo"></div>
+      <p class="hint">
+        <b>Cài mới từ đầu (chỉ Bruce):</b> chọn Factory Image (~3.7 MB, ghi tại <b>0x0</b>). Nếu trước đó máy đang ở Dual-Boot, nên bấm <b>Xoá toàn bộ chip</b> trước.<br/>
+        <b>Cập nhật ứng dụng:</b> chọn OTA Image (tự ghi tại <b>0x10000</b>) hoặc dùng WebOTA không dây tại <code>http://bruce.local/ota</code>.
+      </p>
+    </section>
+  </div>
+
+  <!-- ==================== SERIAL MONITOR ==================== -->
   <section>
-    <h2><span class="n">2</span>Xem Log Serial (115200 bps)</h2>
+    <h2><span class="n">3</span>Xem Log Serial (115200 bps)</h2>
     <div class="row">
       <button id="monConnect">Kết nối &amp; xem log</button>
       <button id="monReset" class="secondary" disabled>Reset board</button>
@@ -127,54 +310,289 @@
     <div class="status" id="monStatus"></div>
     <pre id="term"></pre>
     <p class="hint">
-      Cắm USB bình thường (không giữ BOOT) rồi bấm <b>Kết nối &amp; xem log</b>, sau đó bấm <b>Reset board</b> để xem log khởi động từ đầu.
+      Cắm USB bình thường (không giữ BOOT) rồi bấm <b>Kết nối &amp; xem log</b>, sau đó bấm <b>Reset board</b> để xem log từ khi khởi động. Nếu chưa vào được cổng nạp: mở <b>Config &rarr; Power &rarr; Enter Bootloader</b> trên Bruce, hoặc giữ nút <b>BOOT (GPIO0)</b> rồi bấm Reset / cắm lại cáp.
     </p>
-  </section>
-
-  <section>
-    <h2><span class="n">3</span>Điều khiển &amp; Tính năng mới trên DSolution 1.83" 2-Mic</h2>
-    <div class="grid2">
-      <div class="cardlet">
-        <strong>3 Nút bấm (Boot / Vol+ / Vol-)</strong>
-        • Menu chính: <b>Vol+/Vol-</b> đổi mục · <b>Boot</b> mở · <b>Giữ Vol+ / Vol-</b> chuyển trang · <b>Giữ Boot</b> (hoặc <b>Double Boot</b>) mở Hướng dẫn chi tiết.<br/>
-        • Menu con: <b>Vol+/Vol-</b> di chuyển · <b>Boot</b> chọn · <b>Giữ Boot</b> quay lại · <b>Boot+Vol+</b> mở Hướng dẫn mục hiện tại.
-      </div>
-      <div class="cardlet">
-        <strong>Tiết kiệm Pin, WebUI nền &amp; WebOTA</strong>
-        • Tự làm mờ (Dim) &amp; tắt hẳn panel NV3023 (<code>Screen Off</code>), Eco Saver CPU 160/80 MHz, làm mượt ADC2 Pin, cắt loa idle.<br/>
-        • WebUI nền tự chạy tại <code>http://bruce.local</code> (fallback AP <code>BruceNet</code>), giao diện mới + WebOTA <code>/ota</code> + Enter Bootloader từ menu &amp; WebUI.
-      </div>
-    </div>
   </section>
 </main>
 
 <script type="module">
 const ESPTOOL_CDN = "https://unpkg.com/esptool-js@0.7.1/bundle.js";
+const FLASH_SIZE = 0x1000000; // 16 MB
+const PART_TABLE_ADDR = 0x8000;
 const $ = (id) => document.getElementById(id);
+
+// ---------- Tab switching ----------
+function switchTab(mode) {
+  const isDual = mode === "dual";
+  $("paneDual").hidden = !isDual;
+  $("paneSingle").hidden = isDual;
+  $("tabBtnDual").classList.toggle("active", isDual);
+  $("tabBtnSingle").classList.toggle("active", !isDual);
+}
+$("tabBtnDual").addEventListener("click", () => switchTab("dual"));
+$("tabBtnSingle").addEventListener("click", () => switchTab("single"));
+
+// ---------- Helpers ----------
 const flashStatus = $("flashStatus");
+const dbStatus = $("dbStatus");
 const monStatus = $("monStatus");
-const portInfo = $("portInfo");
-const prog = $("prog");
 const term = $("term");
-const binBadge = $("binBadge");
+const alignUp = (v, a) => Math.ceil(v / a) * a;
+const alignDown = (v, a) => Math.floor(v / a) * a;
+const hex = (v) => "0x" + v.toString(16).toUpperCase();
+const fmtSize = (b) => b >= 1048576 ? (b / 1048576).toFixed(2) + " MB" : (b / 1024).toFixed(1) + " KB";
 
 function setStatus(el, text, kind = "") {
   el.textContent = text;
   el.className = "status" + (kind ? " " + kind : "");
 }
 
+// ---------- RFC 1321 MD5 (for ESP-IDF Partition Table 0xEB 0xEB block) ----------
+function md5Bytes(msg) {
+  const S = [
+    7,12,17,22,7,12,17,22,7,12,17,22,7,12,17,22,
+    5,9,14,20,5,9,14,20,5,9,14,20,5,9,14,20,
+    4,11,16,23,4,11,16,23,4,11,16,23,4,11,16,23,
+    6,10,15,21,6,10,15,21,6,10,15,21,6,10,15,21
+  ];
+  const K = new Uint32Array(64);
+  for (let i = 0; i < 64; i++) K[i] = Math.floor(Math.abs(Math.sin(i + 1)) * 0x100000000) >>> 0;
+
+  const bitLen = msg.length * 8;
+  const padLen = ((msg.length + 8) >> 6 << 6) + 64;
+  const buf = new Uint8Array(padLen);
+  buf.set(msg);
+  buf[msg.length] = 0x80;
+  const dv = new DataView(buf.buffer);
+  dv.setUint32(padLen - 8, bitLen >>> 0, true);
+  dv.setUint32(padLen - 4, Math.floor(bitLen / 0x100000000) >>> 0, true);
+
+  let a0 = 0x67452301 >>> 0;
+  let b0 = 0xefcdab89 >>> 0;
+  let c0 = 0x98badcfe >>> 0;
+  let d0 = 0x10325476 >>> 0;
+
+  for (let off = 0; off < padLen; off += 64) {
+    let A = a0, B = b0, C = c0, D = d0;
+    for (let i = 0; i < 64; i++) {
+      let F, g;
+      if (i < 16) { F = (B & C) | (~B & D); g = i; }
+      else if (i < 32) { F = (D & B) | (~D & C); g = (5 * i + 1) % 16; }
+      else if (i < 48) { F = B ^ C ^ D; g = (3 * i + 5) % 16; }
+      else { F = C ^ (B | ~D); g = (7 * i) % 16; }
+      const word = dv.getUint32(off + g * 4, true);
+      const sum = (F + A + K[i] + word) >>> 0;
+      const s = S[i];
+      const rot = ((sum << s) | (sum >>> (32 - s))) >>> 0;
+      A = D; D = C; C = B; B = (B + rot) >>> 0;
+    }
+    a0 = (a0 + A) >>> 0;
+    b0 = (b0 + B) >>> 0;
+    c0 = (c0 + C) >>> 0;
+    d0 = (d0 + D) >>> 0;
+  }
+
+  const out = new Uint8Array(16);
+  const odv = new DataView(out.buffer);
+  odv.setUint32(0, a0, true);
+  odv.setUint32(4, b0, true);
+  odv.setUint32(8, c0, true);
+  odv.setUint32(12, d0, true);
+  return out;
+}
+
+// ---------- ESP-IDF Partition Table Parser & Rebuilder ----------
+function parsePartitionTable(u8) {
+  if (!u8 || u8.length < 32) throw new Error("File partition-table.bin quá nhỏ.");
+  const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  const dec = new TextDecoder();
+  const entries = [];
+  let md5Present = false;
+  let md5Valid = false;
+
+  for (let off = 0; off + 32 <= Math.min(u8.length, 0xC00); off += 32) {
+    const m0 = u8[off], m1 = u8[off + 1];
+    if (m0 === 0xaa && m1 === 0x50) {
+      const type = u8[off + 2];
+      const subtype = u8[off + 3];
+      const offset = dv.getUint32(off + 4, true);
+      const size = dv.getUint32(off + 8, true);
+      let nameEnd = 16;
+      for (let i = 0; i < 16; i++) {
+        const b = u8[off + 12 + i];
+        if (b === 0x00 || b === 0xff) { nameEnd = i; break; }
+      }
+      const name = dec.decode(u8.subarray(off + 12, off + 12 + nameEnd));
+      const flags = dv.getUint32(off + 28, true);
+      entries.push({ type, subtype, offset, size, name, flags });
+    } else if (m0 === 0xeb && m1 === 0xeb) {
+      md5Present = true;
+      const calc = md5Bytes(u8.subarray(0, off));
+      md5Valid = true;
+      for (let i = 0; i < 16; i++) {
+        if (calc[i] !== u8[off + 16 + i]) { md5Valid = false; break; }
+      }
+      break;
+    } else if (m0 === 0xff && m1 === 0xff) {
+      break;
+    } else {
+      throw new Error(`Magic bảng phân vùng không hợp lệ tại +0x${off.toString(16)}: 0x${m0.toString(16)} 0x${m1.toString(16)}`);
+    }
+  }
+  if (!entries.length) throw new Error("Không tìm thấy phân vùng nào trong partition-table.bin.");
+  return { entries, md5Present, md5Valid };
+}
+
+function serializePartitionTable(entries) {
+  const out = new Uint8Array(4096);
+  out.fill(0xff);
+  const dv = new DataView(out.buffer);
+  const enc = new TextEncoder();
+
+  entries.forEach((e, idx) => {
+    const off = idx * 32;
+    out[off] = 0xaa;
+    out[off + 1] = 0x50;
+    out[off + 2] = e.type & 0xff;
+    out[off + 3] = e.subtype & 0xff;
+    dv.setUint32(off + 4, e.offset >>> 0, true);
+    dv.setUint32(off + 8, e.size >>> 0, true);
+    out.fill(0, off + 12, off + 28);
+    const nameBytes = enc.encode(e.name).subarray(0, 15);
+    out.set(nameBytes, off + 12);
+    dv.setUint32(off + 28, (e.flags || 0) >>> 0, true);
+  });
+
+  const md5Off = entries.length * 32;
+  out[md5Off] = 0xeb;
+  out[md5Off + 1] = 0xeb;
+  const digest = md5Bytes(out.subarray(0, md5Off));
+  out.set(digest, md5Off + 16);
+  return out;
+}
+
+function defaultStockPartitions() {
+  return [
+    { type: 0x01, subtype: 0x02, offset: 0x9000, size: 0x4000, name: "nvs", flags: 0 },
+    { type: 0x01, subtype: 0x00, offset: 0xd000, size: 0x2000, name: "otadata", flags: 0 },
+    { type: 0x01, subtype: 0x01, offset: 0xf000, size: 0x1000, name: "phy_init", flags: 0 },
+    { type: 0x00, subtype: 0x10, offset: 0x20000, size: 0x800000, name: "ota_0", flags: 0 },
+    { type: 0x01, subtype: 0x82, offset: 0x9c0000, size: 0x600000, name: "assets", flags: 0 },
+  ];
+}
+
+function buildDualBootPlan({ stockEntries, dualbootMenuLen, xiaozhiLen, bruceOtaLen, assetsLen }) {
+  const firstAppIdx = stockEntries.findIndex((e) => e.type === 0x00);
+  const preApp = firstAppIdx >= 0
+    ? stockEntries.slice(0, firstAppIdx).map((e) => ({ ...e }))
+    : stockEntries.filter((e) => e.type === 0x01 && e.offset < 0x20000).map((e) => ({ ...e }));
+
+  let preAppEnd = 0x10000;
+  for (const e of preApp) {
+    if (e.offset + e.size > preAppEnd) preAppEnd = e.offset + e.size;
+  }
+
+  // Keep factory aligned to 64 KB (0x10000). If stock pre-app fits within 64 KB (0x10000),
+  // place factory at 0x10000 to reclaim 64 KB extra flash for assets!
+  const factoryStart = alignUp(Math.max(0x10000, preAppEnd), 0x10000);
+  const factorySize = alignUp(Math.max(0x30000, dualbootMenuLen + 4096), 0x10000);
+
+  let ota0Size = alignUp(xiaozhiLen, 0x10000);
+  let ota1Size = alignUp(bruceOtaLen, 0x10000);
+
+  // Preserve non-app post-ota partitions from stock (e.g. assets, model, storage),
+  // excluding brucefs/spiffs if already named brucefs.
+  const rawPost = stockEntries
+    .filter((e, idx) => (firstAppIdx < 0 || idx > firstAppIdx) && e.type !== 0x00 && e.name !== "brucefs")
+    .map((e) => ({ ...e }));
+
+  let assetsTarget = rawPost.find((e) => e.name === "assets");
+  if (!assetsTarget && assetsLen > 0) {
+    assetsTarget = rawPost.find((e) => e.type === 0x01 && (e.subtype === 0x82 || e.subtype === 0x40 || e.subtype === 0x81));
+    if (!assetsTarget) {
+      assetsTarget = { type: 0x01, subtype: 0x82, offset: 0, size: 0, name: "assets", flags: 0 };
+      rawPost.push(assetsTarget);
+    }
+  }
+  for (const e of rawPost) {
+    if (e === assetsTarget && assetsLen > 0) {
+      e.size = alignUp(assetsLen, 0x1000);
+    } else {
+      e.size = alignUp(e.size, 0x1000);
+    }
+  }
+
+  const postTotal = rawPost.reduce((acc, e) => acc + e.size, 0);
+  const minBruceFs = 0x20000; // 128 KB minimum for Bruce LittleFS
+  const usedFixed = factoryStart + factorySize + ota0Size + ota1Size + postTotal;
+  const remaining = FLASH_SIZE - usedFixed;
+
+  if (remaining < minBruceFs) {
+    return {
+      ok: false,
+      overflowBytes: minBruceFs - remaining,
+      neededBytes: usedFixed + minBruceFs,
+      remaining,
+      entries: [],
+      assetsName: assetsTarget ? assetsTarget.name : null,
+    };
+  }
+
+  // Distribute leftover flash cleanly:
+  // 1) brucefs: 256 KB (or up to 512 KB if plenty of spare space, or whatever fits >= 128 KB)
+  // 2) optional 64 KB padding for ota_0 if >= 192 KB remains after 256 KB brucefs
+  let slack = remaining;
+  let bruceFsSize = Math.min(0x40000, alignDown(slack, 0x1000));
+  if (slack >= 0x100000) bruceFsSize = 0x80000; // 512 KB for Bruce LittleFS when > 1 MB free
+  slack -= bruceFsSize;
+
+  if (slack >= 0x10000) { ota0Size += 0x10000; slack -= 0x10000; }
+  if (slack >= 0x10000 && bruceFsSize < 0x80000) {
+    const extraFs = Math.min(0x80000 - bruceFsSize, alignDown(slack, 0x10000));
+    bruceFsSize += extraFs;
+    slack -= extraFs;
+  }
+
+  const factoryPart = { type: 0x00, subtype: 0x00, offset: factoryStart, size: factorySize, name: "factory", flags: 0 };
+  const ota0Part = { type: 0x00, subtype: 0x10, offset: factoryPart.offset + factoryPart.size, size: ota0Size, name: "ota_0", flags: 0 };
+  const ota1Part = { type: 0x00, subtype: 0x11, offset: ota0Part.offset + ota0Part.size, size: ota1Size, name: "ota_1", flags: 0 };
+  const bruceFsPart = { type: 0x01, subtype: 0x82, offset: ota1Part.offset + ota1Part.size, size: bruceFsSize, name: "brucefs", flags: 0 };
+
+  let cursor = bruceFsPart.offset + bruceFsPart.size;
+  for (const e of rawPost) {
+    e.offset = cursor;
+    cursor += e.size;
+  }
+
+  const entries = [...preApp, factoryPart, ota0Part, ota1Part, bruceFsPart, ...rawPost];
+  return {
+    ok: true,
+    entries,
+    factoryPart,
+    ota0Part,
+    ota1Part,
+    bruceFsPart,
+    assetsPart: assetsTarget || null,
+    otadataPart: preApp.find((e) => e.type === 0x01 && e.subtype === 0x00) || null,
+    nvsPart: preApp.find((e) => e.type === 0x01 && e.subtype === 0x02) || null,
+    freeBytes: FLASH_SIZE - cursor,
+  };
+}
+
+// ---------- Serial Port Sharing & esptool-js ----------
 let sharedPort = null;
+let esptool = null;
+let busyFlashing = false;
 
 async function refreshPortInfo() {
   try {
     const ports = await navigator.serial.getPorts();
-    const connected = sharedPort ? " · cổng đang dùng: đã mở" : "";
-    portInfo.textContent = ports.length
-      ? `Đã cấp quyền ${ports.length} cổng${connected}.`
-      : "Chưa cấp quyền cổng nào — bấm nút thao tác để chọn cổng USB ESP32-S3.";
-  } catch (_) {
-    portInfo.textContent = "";
-  }
+    const txt = ports.length
+      ? `Đã cấp quyền ${ports.length} cổng${sharedPort ? " · cổng sẵn sàng" : ""}.`
+      : "Chưa cấp quyền cổng USB — bấm nút Nạp để chọn cổng USB ESP32-S3.";
+    $("portInfo").textContent = txt;
+    $("dbPortInfo").textContent = txt;
+  } catch (_) {}
 }
 
 async function acquirePort() {
@@ -193,7 +611,7 @@ async function acquirePort() {
   } catch (err) {
     await refreshPortInfo();
     if (err && err.name === "NotFoundError") {
-      throw new Error("Chưa chọn cổng nào. Hãy bấm lại và chọn USB JTAG/serial debug unit (hoặc giữ BOOT + cắm lại cáp).");
+      throw new Error("Chưa chọn cổng USB. Hãy bấm lại và chọn USB JTAG/serial debug unit.");
     }
     throw err;
   }
@@ -201,88 +619,26 @@ async function acquirePort() {
   return sharedPort;
 }
 
-let esptool = null;
-async function loadEsptool() {
+async function loadEsptool(statusEl) {
   if (esptool) return esptool;
-  setStatus(flashStatus, "Đang tải esptool-js…");
+  setStatus(statusEl, "Đang tải esptool-js…");
   esptool = await import(ESPTOOL_CDN);
   return esptool;
 }
 
-let firmwareBytes = null;
-function detectBinTarget(buf) {
-  if (!buf || buf.length < 36) return { valid: false, addr: 0x0, kind: "invalid" };
-  if (buf[0] !== 0xe9) return { valid: false, addr: 0x0, kind: "invalid" };
-  // ESP32-S3 application image contains esp_app_desc_t magic 0xABCD5432 at offset 0x20 (32..35)
-  const isApp = buf[32] === 0x32 && buf[33] === 0x54 && buf[34] === 0xcd && buf[35] === 0xab;
-  return isApp
-    ? { valid: true, addr: 0x10000, kind: "app" }
-    : { valid: true, addr: 0x0, kind: "factory" };
-}
-
-function resolveFlashAddress() {
-  const mode = $("addrMode").value;
-  if (mode === "0x0") return 0x0;
-  if (mode === "0x10000") return 0x10000;
-  return firmwareBytes ? firmwareBytes.detected.addr : 0x0;
-}
-
-function refreshFlashButtonLabel() {
-  if (!firmwareBytes) {
-    $("flash").textContent = "Nạp firmware";
-    $("flash").disabled = true;
-    return;
-  }
-  const addr = resolveFlashAddress();
-  const hex = "0x" + addr.toString(16);
-  $("flash").textContent = `Nạp vào ${hex}`;
-  $("flash").disabled = false;
-}
-
-$("addrMode").addEventListener("change", refreshFlashButtonLabel);
-
-$("file").addEventListener("change", async (e) => {
-  const f = e.target.files[0];
-  firmwareBytes = null;
-  binBadge.textContent = "Chưa chọn file";
-  refreshFlashButtonLabel();
-  if (!f) return;
-  const buf = new Uint8Array(await f.arrayBuffer());
-  if (buf.length < 1024) {
-    setStatus(flashStatus, "File quá nhỏ, không phải firmware hợp lệ.", "err");
-    return;
-  }
-  const detected = detectBinTarget(buf);
-  if (!detected.valid) {
-    binBadge.textContent = "Không phải ảnh 0xE9";
-    setStatus(flashStatus, `Cảnh báo: byte đầu là 0x${buf[0].toString(16).padStart(2, "0")}, không phải 0xE9!`, "err");
-  } else if (detected.kind === "app") {
-    binBadge.textContent = "App / OTA (0x10000)";
-    setStatus(flashStatus, `Đã chọn OTA/App: ${f.name} (${(buf.length / 1048576).toFixed(2)} MB) — sẽ nạp tại 0x10000 (hoặc dùng WebOTA).`);
-  } else {
-    binBadge.textContent = "Factory Image (0x0)";
-    setStatus(flashStatus, `Đã chọn Factory: ${f.name} (${(buf.length / 1048576).toFixed(2)} MB) — sẽ nạp tại 0x0.`);
-  }
-  firmwareBytes = { name: f.name, data: buf, detected };
-  refreshFlashButtonLabel();
-});
-
-function terminal() {
-  return {
-    clean() {},
-    writeLine(data) { setStatus(flashStatus, data); },
-    write(data) { setStatus(flashStatus, data); },
-  };
-}
-
-async function connectLoader() {
-  const { ESPLoader, Transport } = await loadEsptool();
+async function connectLoader(statusEl) {
+  const { ESPLoader, Transport } = await loadEsptool(statusEl);
   const port = await acquirePort();
   const transport = new Transport(port, true);
-  const loader = new ESPLoader({ transport, baudrate: 921600, terminal: terminal(), romBaudrate: 115200 });
-  setStatus(flashStatus, "Đang kết nối chip… (nếu treo: bật Config -> Enter Bootloader hoặc giữ BOOT + cắm lại)");
+  const termLogger = {
+    clean() {},
+    writeLine(d) { setStatus(statusEl, d); },
+    write(d) { setStatus(statusEl, d); },
+  };
+  const loader = new ESPLoader({ transport, baudrate: 921600, terminal: termLogger, romBaudrate: 115200 });
+  setStatus(statusEl, "Đang kết nối ESP32-S3… (nếu chờ lâu: bật Enter Bootloader hoặc giữ BOOT + cắm lại)");
   const chip = await loader.main();
-  setStatus(flashStatus, `Đã kết nối: ${chip}`);
+  setStatus(statusEl, `Đã kết nối: ${chip}`);
   return { loader, transport };
 }
 
@@ -291,20 +647,563 @@ async function closeLoader(loader, transport) {
   try { await transport.disconnect(); } catch (_) {}
 }
 
+// ---------- Dual-Boot State & CI Firmware Auto-Fetch ----------
+const dbState = {
+  stockPartBytes: null,
+  stockPartParsed: null,
+  stockPartName: "",
+  xiaozhiBytes: null,
+  xiaozhiName: "",
+  assetsBytes: null,
+  assetsName: "",
+  otaDataBytes: null,
+  otaDataName: "",
+  bootloaderBytes: null,
+  menuBytes: null,
+  bruceOtaBytes: null,
+  bruceOtaName: "DSolution-183-2mic-ota.bin",
+  bruceFactoryBytes: null,
+  plan: null,
+};
+
+function isEspAppImage(buf) {
+  return buf && buf.length >= 36 && buf[0] === 0xe9 &&
+    buf[32] === 0x32 && buf[33] === 0x54 && buf[34] === 0xcd && buf[35] === 0xab;
+}
+
+async function fetchCiFirmware() {
+  $("bBruce").textContent = "Đang tải...";
+  $("bBruce").className = "badge";
+  try {
+    const fetchBin = async (url) => {
+      const r = await fetch(url, { cache: "no-store" });
+      if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
+      return new Uint8Array(await r.arrayBuffer());
+    };
+    const [bl, menu, bruceOta] = await Promise.all([
+      fetchBin("/fw/bootloader_dualboot.bin"),
+      fetchBin("/fw/dualboot_menu.bin"),
+      fetchBin("/fw/DSolution-183-2mic-ota.bin"),
+    ]);
+    dbState.bootloaderBytes = bl;
+    dbState.menuBytes = menu;
+    if (!dbState.bruceOtaBytes || dbState.bruceOtaName === "DSolution-183-2mic-ota.bin") {
+      dbState.bruceOtaBytes = bruceOta;
+      dbState.bruceOtaName = "DSolution-183-2mic-ota.bin";
+    }
+    $("cardBruce").className = "slot-card ready";
+    $("bBruce").textContent = "Sẵn sàng (CI)";
+    $("bBruce").className = "badge ok";
+    $("mBruce").textContent = `Bootloader ${fmtSize(bl.length)} · Menu ${fmtSize(menu.length)} · ${dbState.bruceOtaName} ${fmtSize(dbState.bruceOtaBytes.length)}`;
+  } catch (err) {
+    $("cardBruce").className = "slot-card missing";
+    $("bBruce").textContent = "Chưa tải được";
+    $("bBruce").className = "badge err";
+    $("mBruce").textContent = "Lỗi tải /fw/: " + (err?.message || err) + ". Có thể chọn file thủ công.";
+  }
+  recomputeDualBootPlan();
+}
+
+function updateSlotCards() {
+  if (dbState.stockPartParsed) {
+    $("cardPart").className = "slot-card ready";
+    $("bPart").textContent = dbState.stockPartParsed.md5Valid ? "Hợp lệ (MD5 OK)" : "Hợp lệ";
+    $("bPart").className = "badge ok";
+    $("mPart").textContent = `${dbState.stockPartName} (${dbState.stockPartParsed.entries.length} phân vùng)`;
+  } else {
+    $("cardPart").className = "slot-card missing";
+    $("bPart").textContent = "Cần chọn";
+    $("bPart").className = "badge warn";
+  }
+
+  if (dbState.xiaozhiBytes) {
+    $("cardXiao").className = "slot-card ready";
+    $("bXiao").textContent = fmtSize(dbState.xiaozhiBytes.length);
+    $("bXiao").className = "badge ok";
+    $("mXiao").textContent = `${dbState.xiaozhiName} · ESP32-S3 App OK`;
+  } else {
+    $("cardXiao").className = "slot-card missing";
+    $("bXiao").textContent = "Cần chọn";
+    $("bXiao").className = "badge warn";
+  }
+
+  if (dbState.assetsBytes) {
+    $("cardAssets").className = "slot-card ready";
+    $("bAssets").textContent = fmtSize(dbState.assetsBytes.length);
+    $("bAssets").className = "badge ok";
+    $("mAssets").textContent = dbState.assetsName;
+    $("clearAssets").hidden = false;
+  } else {
+    $("cardAssets").className = "slot-card";
+    $("bAssets").textContent = "Tuỳ chọn";
+    $("bAssets").className = "badge";
+    $("mAssets").textContent = "Chưa chọn generated_assets.bin (bỏ qua nếu bản XiaoZhi không dùng assets)";
+    $("clearAssets").hidden = true;
+  }
+}
+
+const PART_COLORS = {
+  sys: "#5c7084",
+  factory: "#00f0ff",
+  ota_0: "#ff9f43",
+  ota_1: "#3fb950",
+  brucefs: "#52a8ff",
+  assets: "#c084fc",
+  free: "#1a2532",
+};
+
+function renderFlashBarAndTable(plan) {
+  const bar = $("flashBar");
+  const tbl = $("partTable");
+  const body = $("partBody");
+  bar.innerHTML = "";
+  body.innerHTML = "";
+
+  if (!plan || !plan.entries.length) {
+    bar.hidden = true;
+    tbl.hidden = true;
+    return;
+  }
+  bar.hidden = false;
+  tbl.hidden = false;
+
+  const colorFor = (e) => {
+    if (e.name === "factory") return PART_COLORS.factory;
+    if (e.name === "ota_0") return PART_COLORS.ota_0;
+    if (e.name === "ota_1") return PART_COLORS.ota_1;
+    if (e.name === "brucefs") return PART_COLORS.brucefs;
+    if (e.name === "assets") return PART_COLORS.assets;
+    return PART_COLORS.sys;
+  };
+
+  let prevEnd = 0;
+  for (const e of plan.entries) {
+    if (e.offset > prevEnd) {
+      const gap = e.offset - prevEnd;
+      if (gap >= 0x40000) {
+        const gdiv = document.createElement("div");
+        gdiv.className = "flash-seg darktext";
+        gdiv.style.width = ((gap / FLASH_SIZE) * 100).toFixed(3) + "%";
+        gdiv.style.background = PART_COLORS.free;
+        gdiv.title = `Trống ${hex(prevEnd)}..${hex(e.offset)} (${fmtSize(gap)})`;
+        bar.appendChild(gdiv);
+      }
+    }
+    const seg = document.createElement("div");
+    const col = colorFor(e);
+    seg.className = "flash-seg" + (e.name === "nvs" || e.name === "otadata" || e.name === "phy_init" ? " darktext" : "");
+    seg.style.width = Math.max(0.8, (e.size / FLASH_SIZE) * 100).toFixed(3) + "%";
+    seg.style.background = col;
+    seg.title = `${e.name} @ ${hex(e.offset)} (${fmtSize(e.size)})`;
+    if ((e.size / FLASH_SIZE) * 100 > 5.5) seg.textContent = e.name;
+    bar.appendChild(seg);
+    prevEnd = e.offset + e.size;
+
+    const tr = document.createElement("tr");
+    const typeLabel = e.type === 0x00 ? `app / 0x${e.subtype.toString(16)}` : `data / 0x${e.subtype.toString(16)}`;
+    let role = "Giữ nguyên cấu trúc gốc";
+    if (e.name === "nvs") role = $("dbWipeNvs").checked ? "Xoá trắng (cài mới)" : "Giữ nguyên (Wi-Fi / kích hoạt XiaoZhi)";
+    else if (e.name === "otadata") role = dbState.otaDataBytes ? `Nạp ${dbState.otaDataName}` : "Reset sạch 8 KB 0xFF";
+    else if (e.name === "factory") role = `Dual-Boot Menu (${fmtSize(dbState.menuBytes.length)})`;
+    else if (e.name === "ota_0") role = `XiaoZhi HeyLily (${fmtSize(dbState.xiaozhiBytes.length)})`;
+    else if (e.name === "ota_1") role = `Bruce Firmware (${fmtSize(dbState.bruceOtaBytes.length)})`;
+    else if (e.name === "brucefs") role = "Bruce LittleFS (reset 8 KB đầu để tự format sạch)";
+    else if (e === plan.assetsPart) role = dbState.assetsBytes ? `Nạp ${dbState.assetsName} (${fmtSize(dbState.assetsBytes.length)})` : "Giữ phân vùng assets gốc";
+
+    tr.innerHTML =
+      `<td><span class="dot" style="background:${col}"></span><b>${e.name}</b></td>` +
+      `<td class="mono">${typeLabel}</td>` +
+      `<td class="mono">${hex(e.offset)}</td>` +
+      `<td class="mono">${fmtSize(e.size)} (${hex(e.size)})</td>` +
+      `<td></td>`;
+    tr.children[4].textContent = role;
+    body.appendChild(tr);
+  }
+}
+
+function recomputeDualBootPlan() {
+  updateSlotCards();
+  dbState.plan = null;
+  $("dbFlashBtn").disabled = true;
+
+  if (!dbState.stockPartParsed || !dbState.xiaozhiBytes) {
+    setStatus($("layoutSummary"), "Chọn partition-table.bin và xiaozhi.bin để tính bảng phân vùng Dual-Boot 16 MB.");
+    renderFlashBarAndTable(null);
+    return;
+  }
+  if (!dbState.bootloaderBytes || !dbState.menuBytes || !dbState.bruceOtaBytes) {
+    setStatus($("layoutSummary"), "Đang chờ tải xong Bootloader / Boot Menu / Bruce OTA từ CI...", "warn");
+    renderFlashBarAndTable(null);
+    return;
+  }
+
+  const plan = buildDualBootPlan({
+    stockEntries: dbState.stockPartParsed.entries,
+    dualbootMenuLen: dbState.menuBytes.length,
+    xiaozhiLen: dbState.xiaozhiBytes.length,
+    bruceOtaLen: dbState.bruceOtaBytes.length,
+    assetsLen: dbState.assetsBytes ? dbState.assetsBytes.length : 0,
+  });
+
+  if (!plan.ok) {
+    const overKb = Math.ceil(plan.overflowBytes / 1024);
+    setStatus(
+      $("layoutSummary"),
+      `Không đủ chỗ trong 16 MB Flash (thiếu ${overKb.toLocaleString("vi-VN")} KB = ${(overKb / 1024).toFixed(2)} MB). Cần thu gọn assets hoặc giảm bớt firmware.`,
+      "err"
+    );
+    renderFlashBarAndTable(null);
+    return;
+  }
+
+  dbState.plan = plan;
+  renderFlashBarAndTable(plan);
+  setStatus(
+    $("layoutSummary"),
+    `Hợp lệ! Đã sắp xếp ${plan.entries.length} phân vùng trong 16 MB (còn dư ${fmtSize(plan.freeBytes)}, BruceFS ${fmtSize(plan.bruceFsPart.size)}). Sẵn sàng nạp!`,
+    "ok"
+  );
+  $("dbFlashBtn").disabled = busyFlashing;
+}
+
+$("dbWipeNvs").addEventListener("change", () => { if (dbState.plan) renderFlashBarAndTable(dbState.plan); });
+$("reloadCiFw").addEventListener("click", fetchCiFirmware);
+$("clearAssets").addEventListener("click", () => {
+  dbState.assetsBytes = null;
+  dbState.assetsName = "";
+  recomputeDualBootPlan();
+});
+$("dbDefaultSysBtn").addEventListener("click", () => {
+  const entries = defaultStockPartitions();
+  dbState.stockPartParsed = { entries, md5Present: false, md5Valid: false };
+  dbState.stockPartBytes = serializePartitionTable(entries);
+  dbState.stockPartName = "OSTB-2ST default sys (nvs/otadata/phy)";
+  recomputeDualBootPlan();
+});
+
+async function ingestLilyFiles(fileList) {
+  const files = Array.from(fileList || []);
+  for (const f of files) {
+    const lower = f.name.toLowerCase();
+    if (!lower.endsWith(".bin")) continue;
+    const u8 = new Uint8Array(await f.arrayBuffer());
+    if (lower.includes("partition") && u8.length >= 64 && u8.length <= 16384 && u8[0] === 0xaa && u8[1] === 0x50) {
+      dbState.stockPartBytes = u8;
+      dbState.stockPartParsed = parsePartitionTable(u8);
+      dbState.stockPartName = f.name;
+    } else if (lower.includes("ota_data")) {
+      dbState.otaDataBytes = u8;
+      dbState.otaDataName = f.name;
+    } else if (lower.includes("asset")) {
+      dbState.assetsBytes = u8;
+      dbState.assetsName = f.name;
+    } else if ((lower.includes("xiaozhi") || lower.includes("heylily") || (u8.length > 4 * 1048576 && isEspAppImage(u8))) && !lower.includes("bruce")) {
+      dbState.xiaozhiBytes = u8;
+      dbState.xiaozhiName = f.name;
+    }
+  }
+  recomputeDualBootPlan();
+}
+
+$("dbDirInput").addEventListener("change", (e) => ingestLilyFiles(e.target.files).catch((err) => setStatus(dbStatus, err.message, "err")));
+$("dbMultiInput").addEventListener("change", (e) => ingestLilyFiles(e.target.files).catch((err) => setStatus(dbStatus, err.message, "err")));
+
+$("pickPart").addEventListener("change", async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const u8 = new Uint8Array(await f.arrayBuffer());
+    dbState.stockPartParsed = parsePartitionTable(u8);
+    dbState.stockPartBytes = u8;
+    dbState.stockPartName = f.name;
+    recomputeDualBootPlan();
+  } catch (err) { setStatus(dbStatus, err.message, "err"); }
+});
+
+$("pickXiao").addEventListener("change", async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  const u8 = new Uint8Array(await f.arrayBuffer());
+  if (!isEspAppImage(u8)) {
+    setStatus(dbStatus, `Cảnh báo: ${f.name} không phải ảnh ứng dụng ESP32-S3 (0xE9 / 0xABCD5432).`, "err");
+    return;
+  }
+  dbState.xiaozhiBytes = u8;
+  dbState.xiaozhiName = f.name;
+  recomputeDualBootPlan();
+});
+
+$("pickAssets").addEventListener("change", async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  dbState.assetsBytes = new Uint8Array(await f.arrayBuffer());
+  dbState.assetsName = f.name;
+  recomputeDualBootPlan();
+});
+
+$("pickBruceOta").addEventListener("change", async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  const u8 = new Uint8Array(await f.arrayBuffer());
+  if (!isEspAppImage(u8)) {
+    setStatus(dbStatus, `${f.name} không phải OTA app binary (hãy chọn DSolution-183-2mic-ota.bin, không chọn factory.bin).`, "err");
+    return;
+  }
+  dbState.bruceOtaBytes = u8;
+  dbState.bruceOtaName = f.name;
+  $("bBruce").textContent = "Tuỳ chỉnh";
+  $("bBruce").className = "badge ok";
+  $("mBruce").textContent = `Bootloader + Menu (CI) · ${f.name} (${fmtSize(u8.length)})`;
+  recomputeDualBootPlan();
+});
+
+const dbDrop = $("dbDrop");
+dbDrop.addEventListener("dragover", (e) => { e.preventDefault(); dbDrop.classList.add("drag"); });
+dbDrop.addEventListener("dragleave", () => dbDrop.classList.remove("drag"));
+dbDrop.addEventListener("drop", async (e) => {
+  e.preventDefault();
+  dbDrop.classList.remove("drag");
+  const dropped = [];
+  if (e.dataTransfer.items) {
+    const readEntry = async (entry) => {
+      if (entry.isFile) {
+        dropped.push(await new Promise((res) => entry.file(res)));
+      } else if (entry.isDirectory) {
+        const rd = entry.createReader();
+        const ents = await new Promise((res) => rd.readEntries(res));
+        for (const sub of ents) await readEntry(sub);
+      }
+    };
+    for (const item of e.dataTransfer.items) {
+      const ent = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+      if (ent) await readEntry(ent);
+    }
+  } else {
+    dropped.push(...e.dataTransfer.files);
+  }
+  ingestLilyFiles(dropped).catch((err) => setStatus(dbStatus, err.message, "err"));
+});
+
+$("dbFlashBtn").addEventListener("click", async () => {
+  const plan = dbState.plan;
+  if (!plan || !plan.ok) return;
+
+  const partTableBin = serializePartitionTable(plan.entries);
+  const blank8k = new Uint8Array(8192);
+  blank8k.fill(0xff);
+
+  const segments = [
+    { label: "bootloader_dualboot.bin", address: 0x0, data: dbState.bootloaderBytes },
+    { label: "partition-table-dualboot.bin", address: PART_TABLE_ADDR, data: partTableBin },
+  ];
+
+  if (plan.nvsPart && $("dbWipeNvs").checked) {
+    const blankNvs = new Uint8Array(Math.min(plan.nvsPart.size, 16384));
+    blankNvs.fill(0xff);
+    segments.push({ label: "nvs (erase)", address: plan.nvsPart.offset, data: blankNvs });
+  }
+  if (plan.otadataPart) {
+    const otaData = (dbState.otaDataBytes && dbState.otaDataBytes.length <= plan.otadataPart.size)
+      ? dbState.otaDataBytes
+      : blank8k.slice(0, Math.min(plan.otadataPart.size, 8192));
+    segments.push({ label: "otadata", address: plan.otadataPart.offset, data: otaData });
+  }
+  segments.push({ label: "dualboot_menu.bin", address: plan.factoryPart.offset, data: dbState.menuBytes });
+  segments.push({ label: dbState.xiaozhiName, address: plan.ota0Part.offset, data: dbState.xiaozhiBytes });
+  segments.push({ label: dbState.bruceOtaName, address: plan.ota1Part.offset, data: dbState.bruceOtaBytes });
+  segments.push({ label: "brucefs (init)", address: plan.bruceFsPart.offset, data: blank8k });
+
+  if (dbState.assetsBytes && plan.assetsPart) {
+    segments.push({ label: dbState.assetsName, address: plan.assetsPart.offset, data: dbState.assetsBytes });
+  }
+
+  segments.sort((a, b) => a.address - b.address);
+  for (let i = 1; i < segments.length; i++) {
+    const prev = segments[i - 1], cur = segments[i];
+    if (prev.address + prev.data.length > cur.address) {
+      setStatus(dbStatus, `Lỗi chồng vùng: ${prev.label} tràn sang ${cur.label}`, "err");
+      return;
+    }
+  }
+
+  const grandTotal = segments.reduce((acc, s) => acc + s.data.length, 0);
+  const cumOffset = [];
+  let run = 0;
+  for (const s of segments) { cumOffset.push(run); run += s.data.length; }
+
+  busyFlashing = true;
+  $("dbFlashBtn").disabled = $("dbEraseBtn").disabled = true;
+  $("dbProg").hidden = false;
+  $("dbProg").value = 0;
+
+  let loader, transport;
+  try {
+    ({ loader, transport } = await connectLoader(dbStatus));
+    const safe = $("dbSafeMode").checked;
+    setStatus(dbStatus, `Đang nạp ${segments.length} phân đoạn Dual-Boot (${fmtSize(grandTotal)})... đừng rút cáp USB.`);
+
+    await loader.writeFlash({
+      fileArray: segments.map((s) => ({ data: s.data, address: s.address })),
+      flashMode: safe ? "dio" : "qio",
+      flashFreq: safe ? "40m" : "80m",
+      flashSize: "16MB",
+      eraseAll: false,
+      compress: true,
+      reportProgress: (idx, written, total) => {
+        const seg = segments[idx] || { label: "", address: 0 };
+        const overall = (cumOffset[idx] || 0) + written;
+        const pct = grandTotal ? (overall / grandTotal) * 100 : 0;
+        $("dbProg").value = Math.min(100, pct);
+        const segPct = total ? ((written / total) * 100).toFixed(0) : "100";
+        setStatus(
+          dbStatus,
+          `[${idx + 1}/${segments.length}] ${seg.label} @ ${hex(seg.address)} (${segPct}%) — Tổng ${pct.toFixed(1)}% (${fmtSize(overall)} / ${fmtSize(grandTotal)})`
+        );
+      },
+    });
+
+    $("dbProg").value = 100;
+    setStatus(dbStatus, "Đang xác minh dữ liệu bootloader, bảng phân vùng và 2 OS trong flash...");
+    const verifyTargets = [
+      segments[0],
+      segments[1],
+      segments.find((s) => s.address === plan.factoryPart.offset),
+      segments.find((s) => s.address === plan.ota0Part.offset),
+      segments.find((s) => s.address === plan.ota1Part.offset),
+    ].filter(Boolean);
+
+    let allMatch = true;
+    for (const seg of verifyTargets) {
+      const back = await loader.readFlash(seg.address, 32);
+      for (let i = 0; i < 32; i++) {
+        if (back[i] !== seg.data[i]) { allMatch = false; break; }
+      }
+      if (!allMatch) break;
+    }
+
+    setStatus(
+      dbStatus,
+      allMatch
+        ? "Nạp Dual-Boot thành công! Đã xác minh khớp 100%. Bấm Reset (hoặc rút cắm lại cáp) để thấy Boot Menu trên màn hình 1.83\"!"
+        : "Nạp xong nhưng cảnh báo xác minh 32 byte có khác biệt!",
+      allMatch ? "ok" : "warn"
+    );
+  } catch (err) {
+    setStatus(dbStatus, "Lỗi: " + (err?.message || err), "err");
+  } finally {
+    busyFlashing = false;
+    if (loader) await closeLoader(loader, transport);
+    if (sharedPort) { try { await sharedPort.close(); } catch (_) {} }
+    $("dbFlashBtn").disabled = !dbState.plan;
+    $("dbEraseBtn").disabled = false;
+    await refreshPortInfo();
+  }
+});
+
+$("dbEraseBtn").addEventListener("click", async () => {
+  if (!confirm("Xoá toàn bộ flash 16 MB? XiaoZhi, Bruce và toàn bộ dữ liệu trên máy sẽ mất.")) return;
+  $("dbFlashBtn").disabled = $("dbEraseBtn").disabled = true;
+  let loader, transport;
+  try {
+    ({ loader, transport } = await connectLoader(dbStatus));
+    setStatus(dbStatus, "Đang xoá toàn bộ chip 16 MB...");
+    await loader.eraseFlash();
+    setStatus(dbStatus, "Đã xoá sạch chip 16 MB! Giờ bấm 'Nạp Dual-Boot qua USB (1 lần)' để cài mới.", "ok");
+  } catch (err) {
+    setStatus(dbStatus, "Lỗi: " + (err?.message || err), "err");
+  } finally {
+    if (loader) await closeLoader(loader, transport);
+    if (sharedPort) { try { await sharedPort.close(); } catch (_) {} }
+    $("dbFlashBtn").disabled = !dbState.plan;
+    $("dbEraseBtn").disabled = false;
+    await refreshPortInfo();
+  }
+});
+
+// ---------- Single-Boot Flasher ----------
+let firmwareBytes = null;
+function detectBinTarget(buf) {
+  if (!buf || buf.length < 36 || buf[0] !== 0xe9) return { valid: false, addr: 0x0, kind: "invalid" };
+  return isEspAppImage(buf) ? { valid: true, addr: 0x10000, kind: "app" } : { valid: true, addr: 0x0, kind: "factory" };
+}
+function resolveFlashAddress() {
+  const mode = $("addrMode").value;
+  if (mode === "0x0") return 0x0;
+  if (mode === "0x10000") return 0x10000;
+  return firmwareBytes ? firmwareBytes.detected.addr : 0x0;
+}
+function refreshFlashButtonLabel() {
+  if (!firmwareBytes) {
+    $("flash").textContent = "Nạp firmware";
+    $("flash").disabled = true;
+    return;
+  }
+  const addr = resolveFlashAddress();
+  $("flash").textContent = `Nạp vào 0x${addr.toString(16)}`;
+  $("flash").disabled = false;
+}
+function setSingleFirmware(name, buf) {
+  const detected = detectBinTarget(buf);
+  if (!detected.valid) {
+    $("binBadge").textContent = "Không phải ảnh 0xE9";
+    setStatus(flashStatus, `Cảnh báo: byte đầu là 0x${buf[0].toString(16).padStart(2, "0")}, không phải 0xE9!`, "err");
+  } else if (detected.kind === "app") {
+    $("binBadge").textContent = "App / OTA (0x10000)";
+    setStatus(flashStatus, `Đã chọn OTA/App: ${name} (${fmtSize(buf.length)}) — nạp tại 0x10000.`);
+  } else {
+    $("binBadge").textContent = "Factory Image (0x0)";
+    setStatus(flashStatus, `Đã chọn Factory: ${name} (${fmtSize(buf.length)}) — nạp tại 0x0.`);
+  }
+  firmwareBytes = { name, data: buf, detected };
+  refreshFlashButtonLabel();
+}
+
+$("addrMode").addEventListener("change", refreshFlashButtonLabel);
+$("file").addEventListener("change", async (e) => {
+  const f = e.target.files[0];
+  firmwareBytes = null;
+  $("binBadge").textContent = "Chưa chọn file";
+  refreshFlashButtonLabel();
+  if (!f) return;
+  const buf = new Uint8Array(await f.arrayBuffer());
+  if (buf.length < 1024) { setStatus(flashStatus, "File quá nhỏ.", "err"); return; }
+  setSingleFirmware(f.name, buf);
+});
+
+$("useLatestFactory").addEventListener("click", async () => {
+  try {
+    setStatus(flashStatus, "Đang tải DSolution-183-2mic-factory.bin từ server...");
+    const r = await fetch("/fw/DSolution-183-2mic-factory.bin", { cache: "no-store" });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const buf = new Uint8Array(await r.arrayBuffer());
+    $("addrMode").value = "0x0";
+    setSingleFirmware("DSolution-183-2mic-factory.bin", buf);
+  } catch (err) { setStatus(flashStatus, "Không tải được Factory binary: " + (err?.message || err), "err"); }
+});
+
+$("useLatestOta").addEventListener("click", async () => {
+  try {
+    if (!dbState.bruceOtaBytes) {
+      setStatus(flashStatus, "Đang tải DSolution-183-2mic-ota.bin từ server...");
+      const r = await fetch("/fw/DSolution-183-2mic-ota.bin", { cache: "no-store" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      dbState.bruceOtaBytes = new Uint8Array(await r.arrayBuffer());
+    }
+    $("addrMode").value = "0x10000";
+    setSingleFirmware("DSolution-183-2mic-ota.bin", dbState.bruceOtaBytes);
+  } catch (err) { setStatus(flashStatus, "Không tải được OTA binary: " + (err?.message || err), "err"); }
+});
+
 $("flash").addEventListener("click", async () => {
   if (!firmwareBytes) return;
   const targetAddr = resolveFlashAddress();
   if (firmwareBytes.detected.kind === "factory" && targetAddr === 0x10000 &&
-      !confirm("File này trông giống factory.bin (nên nạp ở 0x0). Vẫn tiếp tục nạp ở 0x10000?")) return;
+      !confirm("File này giống factory.bin (nên nạp tại 0x0). Vẫn nạp tại 0x10000?")) return;
   if (firmwareBytes.detected.kind === "app" && targetAddr === 0x0 &&
-      !confirm("File này là OTA app binary (nên nạp ở 0x10000, không có bootloader). Vẫn nạp ở 0x0?")) return;
+      !confirm("File này là OTA app (nên nạp tại 0x10000). Vẫn nạp tại 0x0?")) return;
 
   const btn = $("flash"), eraseBtn = $("erase");
   btn.disabled = eraseBtn.disabled = true;
-  prog.hidden = false; prog.value = 0;
+  $("prog").hidden = false; $("prog").value = 0;
   let loader, transport;
   try {
-    ({ loader, transport } = await connectLoader());
+    ({ loader, transport } = await connectLoader(flashStatus));
     const safe = $("safe").checked;
     setStatus(flashStatus, `Đang nạp vào 0x${targetAddr.toString(16)}… đừng rút cáp.`);
     await loader.writeFlash({
@@ -316,25 +1215,15 @@ $("flash").addEventListener("click", async () => {
       compress: true,
       reportProgress: (_i, written, total) => {
         const pct = total ? (written / total) * 100 : 0;
-        prog.value = pct;
+        $("prog").value = pct;
         setStatus(flashStatus, `Đang nạp ${pct.toFixed(1)}% (${written.toLocaleString("vi-VN")} / ${total.toLocaleString("vi-VN")} byte)`);
       },
     });
-    prog.value = 100;
-    setStatus(flashStatus, "Đang kiểm tra 32 byte đầu trong flash…");
-    let verdict = "";
-    try {
-      const back = await loader.readFlash(targetAddr, 32);
-      const want = firmwareBytes.data.slice(0, 32);
-      let same = back.length >= 32;
-      for (let i = 0; same && i < 32; i++) if (back[i] !== want[i]) same = false;
-      verdict = same
-        ? ` Đã xác minh 32 byte tại 0x${targetAddr.toString(16)} khớp 100%.`
-        : " CẢNH BÁO: đọc lại không khớp!";
-    } catch (err) {
-      verdict = " (không đọc lại được: " + (err?.message || err) + ")";
-    }
-    setStatus(flashStatus, "Nạp thành công!" + verdict + " Rút & cắm lại USB hoặc reset để chạy.", "ok");
+    $("prog").value = 100;
+    const back = await loader.readFlash(targetAddr, 32);
+    let same = back.length >= 32;
+    for (let i = 0; same && i < 32; i++) if (back[i] !== firmwareBytes.data[i]) same = false;
+    setStatus(flashStatus, same ? "Nạp thành công! Đã xác minh 32 byte khớp 100%." : "Nạp xong nhưng đọc lại không khớp!", same ? "ok" : "warn");
   } catch (err) {
     setStatus(flashStatus, "Lỗi: " + (err?.message || err), "err");
   } finally {
@@ -347,26 +1236,26 @@ $("flash").addEventListener("click", async () => {
 });
 
 $("erase").addEventListener("click", async () => {
-  if (!confirm("Xoá toàn bộ flash 16 MB? Firmware và LittleFS hiện tại trên máy sẽ mất.")) return;
-  const btn = $("flash"), eraseBtn = $("erase");
-  btn.disabled = eraseBtn.disabled = true;
+  if (!confirm("Xoá toàn bộ flash 16 MB?")) return;
+  $("flash").disabled = $("erase").disabled = true;
   let loader, transport;
   try {
-    ({ loader, transport } = await connectLoader());
+    ({ loader, transport } = await connectLoader(flashStatus));
     setStatus(flashStatus, "Đang xoá toàn bộ chip 16 MB…");
     await loader.eraseFlash();
-    setStatus(flashStatus, "Đã xoá sạch! Giờ chọn factory.bin và bấm Nạp vào 0x0.", "ok");
+    setStatus(flashStatus, "Đã xoá sạch! Hãy nạp factory.bin tại 0x0.", "ok");
   } catch (err) {
     setStatus(flashStatus, "Lỗi: " + (err?.message || err), "err");
   } finally {
     if (loader) await closeLoader(loader, transport);
     if (sharedPort) { try { await sharedPort.close(); } catch (_) {} }
     refreshFlashButtonLabel();
-    eraseBtn.disabled = false;
+    $("erase").disabled = false;
     await refreshPortInfo();
   }
 });
 
+// ---------- Serial Monitor ----------
 let monReader = null, monStopped = false, monText = "", monitorOpen = false;
 function setMonButtons(connected) {
   monitorOpen = connected;
@@ -438,14 +1327,17 @@ $("monSave").addEventListener("click", () => {
 $("monStop").addEventListener("click", () => stopMonitor());
 
 if (!("serial" in navigator)) {
-  setStatus(flashStatus, "Trình duyệt này không có WebSerial. Dùng Chrome hoặc Edge trên máy tính.", "err");
+  setStatus(dbStatus, "Trình duyệt này không có WebSerial. Vui lòng dùng Chrome hoặc Edge trên máy tính.", "err");
+  setStatus(flashStatus, "Trình duyệt này không có WebSerial. Dùng Chrome hoặc Edge.", "err");
   setStatus(monStatus, "Trình duyệt này không có WebSerial.", "err");
-  $("flash").disabled = $("erase").disabled = $("monConnect").disabled = true;
+  $("dbFlashBtn").disabled = $("dbEraseBtn").disabled = $("flash").disabled = $("erase").disabled = $("monConnect").disabled = true;
 } else {
   refreshPortInfo();
   navigator.serial.addEventListener("connect", refreshPortInfo);
   navigator.serial.addEventListener("disconnect", refreshPortInfo);
 }
+
+fetchCiFirmware();
 </script>
 </body>
 </html>
