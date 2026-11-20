@@ -40,6 +40,20 @@ def final(log, expected_mode, expected_initial):
     return {'initial_marked_pixels': initial, 'remaining_after_room_draw': remaining}
 
 
+def next_frame(log, expected_mode, expected_initial):
+    rows = [line[line.find('DT_BG_NEXT|'):].strip().split('|')
+            for line in log.splitlines() if 'DT_BG_NEXT|' in line]
+    if len(rows) != 1 or len(rows[0]) != 4 or rows[0][1] != expected_mode:
+        raise ValueError('expected one next-frame marker')
+    try:
+        initial, remaining = map(int, rows[0][2:])
+    except ValueError as exc:
+        raise ValueError('invalid next-frame marker') from exc
+    if initial != expected_initial or not 0 <= remaining <= initial:
+        raise ValueError('invalid next-frame counts')
+    return {'marked_after_previous_frame': initial, 'remaining_after_next_frame': remaining}
+
+
 def check(zero_log, live_log, fix_log):
     zero, live, fix = one(zero_log, 'zero'), one(live_log, 'live'), one(fix_log, 'fix')
     if zero['angle'] != 0 or abs(live['angle']) < 1 or abs(fix['angle'] - live['angle']) > 0.05:
@@ -50,8 +64,9 @@ def check(zero_log, live_log, fix_log):
         raise ValueError('rotated measurement diverges from idealized geometry')
     for mode, report, log in (('zero', zero, zero_log), ('live', live, live_log), ('fix', fix, fix_log)):
         report['after_room_draw'] = final(log, mode, report['magenta_pixels'])
+        report['next_room_draw'] = next_frame(log, mode, report['after_room_draw']['remaining_after_room_draw'])
     return {'zero': zero, 'rotated': live, 'synthetic_fix': fix,
-            'limitations': 'Single prepainted desktop GLES pass, intentionally changes target; '
+            'limitations': 'One prepainted desktop GLES pass plus follow-up, intentionally changes target; '
                            'not natural gameplay, iOS, original renderer or proof of device defect.'}
 
 

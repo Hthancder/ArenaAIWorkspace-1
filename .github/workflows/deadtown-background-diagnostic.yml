@@ -62,6 +62,7 @@ jobs:
             grep -F '[room] -> rom_play' "work/$mode.log"
             grep -F 'DT_BG_COVERAGE|' "work/$mode.log"
             grep -F 'DT_BG_FINAL|' "work/$mode.log"
+            grep -F 'DT_BG_NEXT|' "work/$mode.log"
           done
           python tools/check_deadtown_background_probe.py work/zero.log work/live.log work/fix.log --output work/result.json | tee work/check.log
       - name: Summarize diagnostic results
@@ -75,7 +76,7 @@ jobs:
                   print('::warning::' + name + ' missing')
                   continue
               lines = p.read_text(errors='replace').splitlines()
-              selected = [s for s in lines if any(x in s for x in ('DT_BG_COVERAGE', 'DT_BG_FINAL', 'BACKGROUND_PROBE', 'error:', 'Error', 'Traceback'))]
+              selected = [s for s in lines if any(x in s for x in ('DT_BG_COVERAGE', 'DT_BG_FINAL', 'DT_BG_NEXT', 'BACKGROUND_PROBE', 'error:', 'Error', 'Traceback'))]
               print('::notice::' + name + ': ' + ' | '.join(selected[-6:]).replace('%', '%25')[:3500])
           PY
       - name: Preserve research logs only

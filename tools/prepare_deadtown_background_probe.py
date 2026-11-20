@@ -22,6 +22,8 @@ RECT_PROBE = '''        auto dt_bg_state = currentState();
 BEGIN_PROBE = '''void Graphics::drawRoomPass() {
     // Diagnostic only: prepaint a known color on one isolated desktop pass.
     static bool dt_measured = false;
+    static bool dt_pending_next = false;
+    static std::vector<uint8_t> dt_previous;
     const char* dt_mode = getenv("GMR_BACKGROUND_PROBE");
     bool dt_active = dt_mode && !dt_measured && enabled_ && rt_.bgShowColor && !customMats_
         && appSurface_ >= 0 && curTarget_ == surfaces_[appSurface_]
@@ -63,14 +65,37 @@ FINISH_PROBE = '''    drawRoomBackgrounds(true);
         if (readCurrentTarget(0, 0, curTargetW_, curTargetH_, dt_final_pixels)
             && dt_final_pixels.size() / 4 == dt_mask.size()) {
             size_t dt_initial = 0, dt_surviving = 0;
+            dt_previous.assign(dt_mask.size(), 0);
             for (size_t i = 0; i < dt_mask.size(); i++) {
                 if (!dt_mask[i]) continue;
                 dt_initial++;
                 size_t p = i * 4;
-                if (dt_final_pixels[p] >= 250 && dt_final_pixels[p+1] <= 5 && dt_final_pixels[p+2] >= 250)
+                if (dt_final_pixels[p] >= 250 && dt_final_pixels[p+1] <= 5 && dt_final_pixels[p+2] >= 250) {
                     dt_surviving++;
+                    dt_previous[i] = 1;
+                }
             }
             std::fprintf(stderr, "DT_BG_FINAL|%s|%zu|%zu\\n", dt_mode, dt_initial, dt_surviving);
+            dt_pending_next = true;
+        }
+        restoreState(dt_after_game);
+    } else if (dt_pending_next && dt_mode && appSurface_ >= 0 && dt_saved.target == surfaces_[appSurface_]
+               && curTargetW_ == 1232 && curTargetH_ == 693) {
+        auto dt_after_game = currentState();
+        restoreState(dt_saved);
+        std::vector<uint8_t> dt_followup;
+        if (readCurrentTarget(0, 0, curTargetW_, curTargetH_, dt_followup)
+            && dt_followup.size() / 4 == dt_previous.size()) {
+            size_t dt_before = 0, dt_still = 0;
+            for (size_t i = 0; i < dt_previous.size(); i++) {
+                if (!dt_previous[i]) continue;
+                dt_before++;
+                size_t p = i * 4;
+                if (dt_followup[p] >= 250 && dt_followup[p+1] <= 5 && dt_followup[p+2] >= 250)
+                    dt_still++;
+            }
+            std::fprintf(stderr, "DT_BG_NEXT|%s|%zu|%zu\\n", dt_mode, dt_before, dt_still);
+            dt_pending_next = false;
         }
         restoreState(dt_after_game);
     }
