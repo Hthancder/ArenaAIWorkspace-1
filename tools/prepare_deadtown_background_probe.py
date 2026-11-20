@@ -12,6 +12,12 @@ from pathlib import Path
 SOURCE_SHA = 'e17d59e8ec81d26acff54b25e32216a186ec68a23c90b19354283627239430ac'
 START = 'void Graphics::drawRoomPass() {\n    if (rt_.bgShowColor) {'
 END = '    drawRoomBackgrounds(false);\n    runDrawEvent(DRAW_BEGIN, true);'
+RECT = '''        drawRect(projX_ - 1, projY_ - 1, projX_ + projW_ + 1, projY_ + projH_ + 1, false, rt_.bgColor, rt_.bgColor,
+                 rt_.bgColor, rt_.bgColor, 1);'''
+RECT_PROBE = '''        auto dt_bg_state = currentState();
+        if (dt_active && dt_mode[0] == 'f') { auto state = dt_bg_state; state.pa = 0; restoreState(state); }
+''' + RECT + '''
+        if (dt_active && dt_mode[0] == 'f') restoreState(dt_bg_state);'''
 BEGIN_PROBE = '''void Graphics::drawRoomPass() {
     // Diagnostic only: prepaint a known color on one isolated desktop pass.
     static bool dt_measured = false;
@@ -43,9 +49,9 @@ END_PROBE = '''    if (dt_active) {
 
 
 def patch_source(source):
-    if source.count(START) != 1 or source.count(END) != 1 or 'DT_BG_COVERAGE' in source:
+    if source.count(START) != 1 or source.count(END) != 1 or source.count(RECT) != 1 or 'DT_BG_COVERAGE' in source:
         raise ValueError('unexpected source layout')
-    return source.replace(START, BEGIN_PROBE).replace(END, END_PROBE)
+    return source.replace(START, BEGIN_PROBE).replace(RECT, RECT_PROBE).replace(END, END_PROBE)
 
 
 def prepare(path):

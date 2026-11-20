@@ -26,15 +26,15 @@ def one(log, expected_mode):
             'idealized_gap_fraction': idealized_background_gap(width, height, angle)}
 
 
-def check(zero_log, live_log):
-    zero, live = one(zero_log, 'zero'), one(live_log, 'live')
-    if zero['angle'] != 0 or abs(live['angle']) < 1:
+def check(zero_log, live_log, fix_log):
+    zero, live, fix = one(zero_log, 'zero'), one(live_log, 'live'), one(fix_log, 'fix')
+    if zero['angle'] != 0 or abs(live['angle']) < 1 or abs(fix['angle'] - live['angle']) > 0.05:
         raise ValueError('control and rotated angle mismatch')
-    if zero['observed_fraction'] > 0.005 or live['observed_fraction'] < 0.05:
+    if zero['observed_fraction'] > 0.005 or fix['observed_fraction'] > 0.005 or live['observed_fraction'] < 0.05:
         raise ValueError('expected control coverage and rotated uncovered region were not observed')
     if abs(live['observed_fraction'] - live['idealized_gap_fraction']) > 0.02:
         raise ValueError('rotated measurement diverges from idealized geometry')
-    return {'zero': zero, 'rotated': live,
+    return {'zero': zero, 'rotated': live, 'synthetic_fix': fix,
             'limitations': 'Single prepainted desktop GLES pass, intentionally changes target; '
                            'not natural gameplay, iOS, original renderer or proof of device defect.'}
 
@@ -43,9 +43,11 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('zero', type=Path)
     p.add_argument('live', type=Path)
+    p.add_argument('fix', type=Path)
     p.add_argument('--output', type=Path, required=True)
     a = p.parse_args()
-    report = check(a.zero.read_text(errors='replace'), a.live.read_text(errors='replace'))
+    report = check(a.zero.read_text(errors='replace'), a.live.read_text(errors='replace'),
+                   a.fix.read_text(errors='replace'))
     a.output.write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
     print('BACKGROUND_PROBE_PASS:', json.dumps(report, separators=(',', ':')))
 

@@ -54,7 +54,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for mode in zero live; do
+          for mode in zero live fix; do
             mkdir -p "work/save-$mode"
             GMR_BACKGROUND_PROBE="$mode" timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' work/runner-build/gmrunner work/game \
               --hidden --gles --fast --mute --seed 1 --frames 190 --trace --goto rom_play@160 \
@@ -62,13 +62,13 @@ jobs:
             grep -F '[room] -> rom_play' "work/$mode.log"
             grep -F 'DT_BG_COVERAGE|' "work/$mode.log"
           done
-          python tools/check_deadtown_background_probe.py work/zero.log work/live.log --output work/result.json | tee work/check.log
+          python tools/check_deadtown_background_probe.py work/zero.log work/live.log work/fix.log --output work/result.json | tee work/check.log
       - name: Summarize diagnostic results
         if: always()
         run: |
           python - <<'PY'
           from pathlib import Path
-          for name in ('build.log', 'zero.log', 'live.log', 'check.log'):
+          for name in ('build.log', 'zero.log', 'live.log', 'fix.log', 'check.log'):
               p = Path('work') / name
               if not p.exists():
                   print('::warning::' + name + ' missing')
@@ -86,6 +86,7 @@ jobs:
             work/build.log
             work/zero.log
             work/live.log
+            work/fix.log
             work/check.log
             work/result.json
           if-no-files-found: ignore
