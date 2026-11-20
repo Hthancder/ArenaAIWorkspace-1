@@ -369,9 +369,14 @@ $("monReset").addEventListener("click", async () => {
   if (!sharedPort) return;
   try {
     // Standard ESP auto-reset: hold EN low via RTS, release, then let IO0 float.
-    await sharedPort.setSignals({ dataTerminalReady: false, requestToSend: true });
-    await new Promise((r) => setTimeout(r, 120));
-    await sharedPort.setSignals({ dataTerminalReady: false, requestToSend: false });
+    // On the ESP32-S3 USB-Serial-JTAG bridge DTR is wired to EN and RTS to GPIO0
+    // (BOOT). Pulling RTS low during a reset latches GPIO0 = 0, which is exactly what
+    // the ROM reports as "boot:0x0 (DOWNLOAD)" / "waiting for download" -- the chip
+    // then sits in the flasher instead of booting the application. So: keep RTS high
+    // (GPIO0 released) and pulse EN through DTR.
+    await sharedPort.setSignals({ requestToSend: false, dataTerminalReady: true });
+    await new Promise((r) => setTimeout(r, 150));
+    await sharedPort.setSignals({ requestToSend: false, dataTerminalReady: false });
     append("\n--- reset ---\n");
   } catch (err) {
     setStatus(monStatus, "Không reset được: " + (err?.message || err) + " (rút cắm cáp thay thế)", "err");

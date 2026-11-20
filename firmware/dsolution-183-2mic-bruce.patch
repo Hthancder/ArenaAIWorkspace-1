@@ -395,10 +395,10 @@ index 0000000..ea4f2b6
 +* `espressif/esp_lcd_nv3023` (components.espressif.com) -- Espressif's own NV3023 driver.
 diff --git a/boards/dsolution-183-2mic/dsolution-183-2mic.ini b/boards/dsolution-183-2mic/dsolution-183-2mic.ini
 new file mode 100644
-index 0000000..3058069
+index 0000000..be43bba
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/dsolution-183-2mic.ini
-@@ -0,0 +1,143 @@
+@@ -0,0 +1,149 @@
 +; =====================================================================================
 +;  DSolution 1.83" 2-Mic  --  ESP32-S3 / NV3023 / ES7210 + ES8311
 +;
@@ -529,6 +529,12 @@ index 0000000..3058069
 +	-DHAS_3_BUTTONS=1
 +
 +	; ==================== Power / sleep ====================
++	; Drive the vendor's "Sleep Control" pin HIGH as soon as the firmware starts.
++	; Symptom that led here: the USB device disappears and re-appears over and over,
++	; including in ROM download mode where none of this code runs -- the classic
++	; signature of a power latch that software has to hold up. If the board turns out
++	; not to have one, this pin is simply an unused output.
++	-DDSOLUTION_LATCH_PIN=21
 +	; Boot (GPIO0) is both the Sel button and the deep-sleep wake source, so the shared
 +	; goToDeepSleep()/power-save path has something to wake the board with.
 +	-DDEEPSLEEP_WAKEUP_PIN=0
@@ -544,10 +550,10 @@ index 0000000..3058069
 +	https://github.com/lovyan03/LovyanGFX#develop
 diff --git a/boards/dsolution-183-2mic/interface.cpp b/boards/dsolution-183-2mic/interface.cpp
 new file mode 100644
-index 0000000..408673a
+index 0000000..d517187
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/interface.cpp
-@@ -0,0 +1,349 @@
+@@ -0,0 +1,351 @@
 +// =====================================================================================
 +//  boards/dsolution-183-2mic/interface.cpp
 +//
@@ -775,6 +781,14 @@ index 0000000..408673a
 +**                the filesystem and brucePins.conf.
 +***************************************************************************************/
 +void _setup_gpio() {
++#ifdef DSOLUTION_LATCH_PIN
++    // First instruction on purpose: if this board latches its own power rail, giving the
++    // pin up costs the whole board, and USB re-enumerating in a loop is what that looks
++    // like from the host side.
++    pinMode(DSOLUTION_LATCH_PIN, OUTPUT);
++    digitalWrite(DSOLUTION_LATCH_PIN, HIGH);
++#endif
++
 +    Serial.begin(115200);
 +    Serial.println("[board] DSolution 1.83 2-Mic: NV3023 + ES7210/ES8311");
 +
@@ -803,14 +817,8 @@ index 0000000..408673a
 +    digitalWrite(PIN_PA_ENABLE, HIGH);
 +
 +    // ---- Power / sleep control ----
-+    // Deliberately NOT driven. No community source documents a power latch on this
-+    // board (the pin dump from the stock firmware has no GPIO21 at all), and driving an
-+    // unknown pin HIGH at boot is a plausible cause of the boot/reset loop that shows up
-+    // as an intermittent USB connection. Build with -DDSOLUTION_LATCH_PIN=21 to test it.
-+#ifdef DSOLUTION_LATCH_PIN
-+    pinMode(DSOLUTION_LATCH_PIN, OUTPUT);
-+    digitalWrite(DSOLUTION_LATCH_PIN, HIGH);
-+#endif
++    // Already driven at the top of this function (see DSOLUTION_LATCH_PIN); nothing left
++    // to do here, and powerOff() releases it.
 +
 +    // ---- Charge detect + battery status ----
 +    pinMode(PIN_CHARGE_DETECT, INPUT_PULLUP);
