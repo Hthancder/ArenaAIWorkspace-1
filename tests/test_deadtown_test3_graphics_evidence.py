@@ -41,7 +41,7 @@ class Test3GraphicsEvidenceTests(unittest.TestCase):
         self.assertEqual(result['apk_room_background_defaults'], result['test_room_background_defaults'])
         for room in ('rom_play', 'rom_play_sewer', 'rom_play_defence'):
             self.assertTrue(result['test_room_background_defaults'][room]['show_color'])
-        self.assertIn('not yet identified', result['limitations'])
+        self.assertIn('test builds 1, 2 and 3', result['limitations'])
 
 
 if __name__ == '__main__':

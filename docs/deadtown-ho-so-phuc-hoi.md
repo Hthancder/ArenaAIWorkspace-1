@@ -423,8 +423,8 @@ sửa IPA; chưa có bằng chứng chạy game trên iOS.
 
 ### Phản hồi hình ảnh trên iPhone
 
-Người dùng cho biết IPA test cũ bị lệch sprite và có vệt màu khi nhân vật di
-chuyển. Chưa rõ phiên bản test cụ thể; chưa có video tái hiện. Kiểm tĩnh riêng
+Người dùng xác nhận cả test 1, 2 và 3 đều bị lệch sprite và có vệt màu khi
+nhân vật di chuyển. Chưa có video tái hiện. Kiểm tĩnh riêng
 RE-test3 (`tools/deadtown_test3_graphics_evidence.py`) thấy 6 PNG atlas, 402
 metadata sprite, texture-page entries và masks giống APK từng byte ở các mục
 đã so; ba room gameplay có cờ vẽ màu nền mặc định được bật. Không thể từ đó
@@ -434,3 +434,7 @@ dung được vẽ; đây mới là giả thuyết, không chứng minh nguyên 
 và giới hạn ở `docs/deadtown-original-re.md`; chưa có bản sửa hay IPA mới.
 
 CI kiểm tra tĩnh RE-test3 `44766640996` đạt; không có thử render hay iPhone.
+
+Cả ba workflow đóng gói dùng cùng runner từ run `44509744633`; test 1 và 2
+dùng cùng data, test 3 là data debug-fix riêng. Đây là các điểm chung cần
+điều tra, chưa xác nhận nguyên nhân lỗi trên iPhone.

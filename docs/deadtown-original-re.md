@@ -855,10 +855,10 @@ GMX and analysis dependencies. No IPA was built or modified by this analysis.
 
 ## iPhone report: misplaced sprites and movement trails
 
-The user reports the previous experimental IPA had misplaced sprites and
-colored streaks/smearing while the character moves. Which test IPA produced
-this observation has not yet been identified. Do not mistake the successful
-static iOS/Android sprite comparison above for validation of that test build.
+The user confirmed that experimental tests 1, 2 and 3 all had misplaced sprites
+and colored streaks/smearing while the character moves, including test 3. Do
+not mistake the successful static iOS/Android sprite comparison above for
+validation of those test builds. No recording has been supplied here.
 
 For the specific old `DeadTown-iOS15-RE-test3.ipa` (SHA-256
 `7e0f10c8761fe1160baa855a4e825aa31974f02cb2b2205a27b0df9d5aefe781`), the
@@ -889,3 +889,14 @@ clear or coordinate patch based solely on these static observations.
 
 The pinned test3 static verifier and its regression tests also passed in CI
 run `44766640996`; this did not render or reproduce the reported iPhone issue.
+
+The packaging workflows for test 1, 2 and 3 each retrieve the same iOS runner
+artifact from run `44509744633`. Tests 1 and 2 retrieve the same incomplete
+game data from run `44509744719`; test 3 uses the separate debug-fix data from
+run `44517643086`. This makes shared runner/rendering and shared incomplete
+game logic useful investigation targets, but does not prove which component
+caused the device report. Tests 1 and 2 use the same bundle ID and the launcher
+preserves existing files; test 3 uses a separate ID. The user-supplied iOS IPA
+contains native `gml_Object_sys_view_*`, `obj_player_*` and
+`sys_spawn_time_light_*` name strings as research targets, but those names
+alone do not prove the matching native control flow or behavior.

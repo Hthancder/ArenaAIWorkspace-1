@@ -2,7 +2,7 @@
 """Compare the old RE-test3 IPA graphics data to the pinned Android APK.
 
 Static asset comparison only. This does not render, execute on iOS, diagnose
-motion trails, or prove that the reported device used this particular build.
+motion trails, or reproduce the reported on-device failure.
 """
 import argparse
 import json
@@ -71,7 +71,7 @@ def compare(ipa_path, apk_path):
             'test_room_background_defaults': room_background_defaults(test),
             'limitations': 'Static original-resource and room defaults only; runtime code may alter drawing state. '
                            'Not a render, on-device reproduction, an iOS/native equivalence claim, or a diagnosis. '
-                           'The reported device build is not yet identified.'}
+                           'The user reported these symptoms on test builds 1, 2 and 3.'}
 
 
 def main():
