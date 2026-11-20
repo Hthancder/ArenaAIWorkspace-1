@@ -315,6 +315,23 @@ five old-source inventory/crafting scripts (`item_use`, `item_get`, `item_drop`,
 this one test. `tools/check_deadtown_accessor_bytecode.py` checks only this
 specific legacy/candidate disassembly, not general compiler support.
 
+The follow-up [44671590170](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44671590170)
+compiled untouched `item_get`, `item_drop`, `item_equip`, and `item_make` as
+unlinked entries and confirmed each has `[array]...target_inven` in its bytecode.
+A separate candidate generated from exact hashed source scripts uses explicit
+`ds_map_find_value` and `ds_map_replace` at the affected sites; its disassembly
+has those calls and no target-inventory array accessor. In a disposable VM,
+forced scenarios observed: add 2 then 3 -> 5; drop missing -> 0, existing -> 1
+and 4 remaining, final drop deletes the entry; equip and swap return the old
+weapon; insufficient ingredients leave three stacks unchanged, and a synthetic
+three-ingredient recipe removes exact stacks and produces two items. A second
+synthetic recipe with two zero-quantity slots consumes its one ingredient and
+adds to an existing output stack. These are narrow tests of the **old-source
+candidate**, not proof of native semantics, equipment varieties, item IDs,
+input, UI, or iOS. In particular, the native implementations differ in size
+and may differ in logic; no candidate here is included in release workflows.
+The probe output and saves are disposable, and only diagnostics are uploaded.
+
 For the isolated probe only, `item_use` uses explicit DS-map operations for an
 existing numeric key. The run [44562072708](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44562072708)
 then observed the candidate mask entry 3, consumed a one-item mask, transferred
