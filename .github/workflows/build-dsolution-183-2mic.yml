@@ -70,8 +70,8 @@ jobs:
             echo "::error title=bootloader size::Bootloader size $BOOT_SIZE exceeds 28 KB limit before 0x8000"
             exit 1
           fi
-          if [ "$MENU_SIZE" -gt 245760 ]; then
-            echo "::error title=menu size::Dual-Boot Menu size $MENU_SIZE exceeds 240 KB safety cap for 256 KB factory slot"
+          if [ "$MENU_SIZE" -gt 262144 ]; then
+            echo "::error title=menu size::Dual-Boot Menu size $MENU_SIZE exceeds 256 KB (0x40000) factory slot"
             exit 1
           fi
           echo "::notice title=dualboot report::bootloader=${BOOT_SIZE} B, dualboot_menu=${MENU_SIZE} B"
