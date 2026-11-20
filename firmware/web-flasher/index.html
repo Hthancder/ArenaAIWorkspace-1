@@ -262,7 +262,25 @@ $("flash").addEventListener("click", async () => {
       },
     });
     prog.value = 100;
-    setStatus(flashStatus, "Nạp xong. Board đang reset — chuyển sang mục 2 để xem log.", "ok");
+    setStatus(flashStatus, "Nạp xong, đang đọc lại để kiểm tra…");
+    // Read the first 32 bytes back: if the image is really in flash, they must be the
+    // first 32 bytes of the file. This catches the case that just bit us -- a chip that
+    // was erased but never written still flashes happily and then only prints the ROM
+    // banner.
+    let verdict = "";
+    try {
+      const back = await loader.readFlash(0x0, 32);
+      const want = firmwareBytes.data.slice(0, 32);
+      let same = back.length >= 32;
+      for (let i = 0; same && i < 32; i++) if (back[i] !== want[i]) same = false;
+      verdict = same
+        ? " Đã kiểm tra: 32 byte đầu đọc lại khớp file."
+        : " CẢNH BÁO: đọc lại không khớp — lần nạp này không ghi được!";
+    } catch (err) {
+      verdict = " (không đọc lại được để kiểm tra: " + (err?.message || err) + ")";
+    }
+    setStatus(flashStatus,
+      "Nạp xong." + verdict + " Rút cáp, cắm lại rồi sang mục 2 xem log.", "ok");
   } catch (err) {
     setStatus(flashStatus, "Lỗi: " + (err?.message || err), "err");
   } finally {
