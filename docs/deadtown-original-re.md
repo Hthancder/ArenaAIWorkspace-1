@@ -381,10 +381,34 @@ global indices used by `item_drop` are serialized under these keys:
 | 3 | 2 | `inventory/use` | `0x1dadd4` | `0x1dae14` |
 | 4 | 3 | `inventory/etc` | `0x1daf3c` | `0x1daf7c` |
 
-This corroborates the old-source categories with independent string keys, not
-symbol-name registration or native execution. It covers normal save only, not
-other modes, and does not recover or validate the original `ds_map_write`
-encoding.
+The same SHA-pinned verifier now also traces normal load
+`gml_Script_game_load_protect` (`0x21a4a8`, 208,304 bytes). Its getter results
+for indices 0–3 are stored at stack offsets `0xec`, `0xe8`, `0xe4`, `0xe0`.
+In the following observed code sequence each is supplied to `ds_map_clear`,
+and then paired with a three-argument `ini_read_string` result passed into
+`ds_map_read`:
+
+| Global index | Normal load key | `ds_map_clear` | `ini_read_string` | `ds_map_read` |
+|---:|---|---|---|---|
+| 0 | `inventory/weapon` | `0x21e410` | `0x21e6d4` | `0x21e718` |
+| 1 | `inventory/equip` | `0x21e4a4` | `0x21e868` | `0x21e8ac` |
+| 2 | `inventory/use` | `0x21e538` | `0x21ea00` | `0x21ea44` |
+| 3 | `inventory/etc` | `0x21e5cc` | `0x21eb98` | `0x21ebdc` |
+
+The verifier checks the GOT relocations, strings, vector base/argument counts,
+map pointers and returned values, plus the nearby conditional cleanup branches.
+The four default-string relocations each point to a one-byte `SHT_NOBITS` BSS
+symbol: the ELF loader initially zeroes these bytes, consistent with an empty
+default, but BSS is writable and **its contents at the calls are not observed**.
+Unlike the old GMX script, the native inventory block appears after other load
+operations; do not infer the full native load order from GMX. The local branches
+checked skip RValue cleanup, not a clear/read call, but this is not a complete
+control-flow or exception analysis, and reaching the block is unproven.
+
+Together these corroborate the old-source categories with independent string
+keys, not symbol-name registration or native execution. They cover normal
+save/load only, not other modes, and do not recover or validate the original
+`ds_map_write`/`ds_map_read` encoding or behavior on missing/malformed keys.
 
 In disposable VM run [44683394932](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44683394932),
 the candidate saved four synthetic map entries `(0 -> 11, 22, 33, 44)`,

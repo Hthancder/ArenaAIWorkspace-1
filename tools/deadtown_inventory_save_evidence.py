@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Trace four inventory global indices to normal-save keys in pinned ARM.
+"""Trace four inventory global indices to normal-save/load keys in pinned ARM.
 
 Only static evidence from a SHA-pinned APK, not a native or iOS execution, a
 save-format converter, or a release patch. Never touches game save files.
@@ -42,6 +42,9 @@ def inspect(apk):
     func = [s for s in symbols.iter_symbols() if s.name.startswith('_Z28gml_Script_game_save_protect')]
     if len(func) != 1 or (func[0]['st_value'], func[0]['st_size']) != (0x1d97f8, 265392):
         raise ValueError('unexpected normal save export')
+    load_func = [s for s in symbols.iter_symbols() if s.name.startswith('_Z28gml_Script_game_load_protect')]
+    if len(load_func) != 1 or (load_func[0]['st_value'], load_func[0]['st_size']) != (0x21a4a8, 208304):
+        raise ValueError('unexpected normal load export')
     rel = elf.get_section_by_name('.rel.dyn')
     relsyms = elf.get_section(rel['sh_link'])
     got = {r['r_offset']: relsyms.get_symbol(r['r_info_sym']) for r in rel.iter_relocations()
@@ -202,10 +205,151 @@ def inspect(apk):
         result.append({'selector': index + 1, 'global_index': index, 'save_section': 'inventory',
                        'save_key': key, 'map_write_call': f'0x{map_call:x}',
                        'ini_write_string_call': f'0x{ini_call:x}'})
+    # Independently pin the corresponding normal-load global getters and four
+    # clear calls. BSS-backed one-byte literals are initially zero but writable;
+    # the exact runtime default is not observed in this static experiment.
+    for base, add in ((0x21a574, 0x21a578), (0x21a598, 0x21a59c),
+                      (0x21a5bc, 0x21a5c0), (0x21a5e0, 0x21a5e4)):
+        require_symbol(base, add, 0x21a4d0, 'g_pGlobal')
+        for delta, mnemonic, operands in (
+            (0, 'add', 'r0, pc, r0'), (4, 'ldr', 'r0, [r4, r0]'),
+            (8, 'ldr', 'r0, [r0]'), (12, 'ldr', 'r1, [r0]'),
+            (16, 'ldr', 'r2, [r1, #8]')):
+            inst(add + delta, mnemonic, operands)
+    for address, mnemonic, operands in (
+        (0x21a58c,'mov','r1, #0'),(0x21a590,'blx','r2'),(0x21a594,'str','r0, [sp, #0xec]'),
+        (0x21a5b0,'mov','r1, #1'),(0x21a5b4,'blx','r2'),(0x21a5b8,'str','r0, [sp, #0xe8]'),
+        (0x21a5d4,'mov','r1, #2'),(0x21a5d8,'blx','r2'),(0x21a5dc,'str','r0, [sp, #0xe4]'),
+        (0x21a5f8,'mov','r1, #3'),(0x21a5fc,'blx','r2'),(0x21a600,'str','r0, [sp, #0xe0]'),
+        (0x21e3b0,'ldr','r4, [pc, #-0x408]'),
+        (0x21e3b4,'add','r0, pc, r0'),(0x21e3c8,'ldr','r1, [r4, r0]'),(0x21e3d8,'ldr','r1, [r1, #4]'),
+        (0x21e3dc,'add','r5, sp, #0x2000'),(0x21e3e4,'add','r2, r5, #0x5d0'),(0x21e3f4,'add','r5, sp, #0x2800'),
+        (0x21e3e8,'ldr','r3, [sp, #0xec]'),(0x21e3ec,'str','r3, [r2, #0x318]'),
+        (0x21e3f8,'str','r1, [sp]'),(0x21e3fc,'add','r0, r5, #0xe8'),(0x21e400,'str','r0, [sp, #4]'),
+        (0x21e408,'mov','r3, #1'),
+        (0x21e454,'add','r0, pc, r0'),(0x21e45c,'ldr','r0, [r4, r0]'),(0x21e478,'ldr','r0, [r0, #4]'),
+        (0x21e474,'add','r5, sp, #0x2000'),(0x21e480,'add','r1, r5, #0x5d0'),(0x21e48c,'add','r5, sp, #0x2800'),
+        (0x21e484,'ldr','r3, [sp, #0xe8]'),(0x21e488,'str','r3, [r1, #0x314]'),
+        (0x21e490,'mov','r3, #1'),(0x21e494,'add','r1, r5, #0xe4'),(0x21e498,'stm','sp, {r0, r1}'),
+        (0x21e4e8,'add','r0, pc, r0'),(0x21e4f0,'ldr','r0, [r4, r0]'),(0x21e50c,'ldr','r0, [r0, #4]'),
+        (0x21e508,'add','r5, sp, #0x2000'),(0x21e514,'add','r1, r5, #0x5d0'),(0x21e520,'add','r5, sp, #0x2000'),
+        (0x21e518,'ldr','r3, [sp, #0xe4]'),(0x21e51c,'str','r3, [r1, #0x310]'),
+        (0x21e524,'mov','r3, #1'),(0x21e528,'add','r1, r5, #0x8e0'),(0x21e52c,'stm','sp, {r0, r1}'),
+        (0x21e578,'add','r0, pc, r0'),(0x21e580,'ldr','r0, [r4, r0]'),(0x21e5a0,'ldr','r0, [r0, #4]'),
+        (0x21e59c,'add','r4, sp, #0x2000'),(0x21e5a8,'add','r1, r4, #0x5d0'),(0x21e5b4,'add','r4, sp, #0x2800'),
+        (0x21e5ac,'ldr','r3, [sp, #0xe0]'),(0x21e5b0,'str','r3, [r1, #0x30c]'),
+        (0x21e5b8,'mov','r3, #1'),(0x21e5bc,'add','r1, r4, #0xdc'),(0x21e5c0,'stm','sp, {r0, r1}'),
+    ):
+        inst(address, mnemonic, operands)
+    for base, add in ((0x21e3a0,0x21e3b4),(0x21e444,0x21e454),
+                      (0x21e4d8,0x21e4e8),(0x21e56c,0x21e578)):
+        require_symbol(base, add, 0x21e3b0, 'g_FUNC_ds_map_clear')
+    for address in (0x21e410,0x21e4a4,0x21e538,0x21e5cc):
+        call(address, 'YYGML_CallLegacyFunction')
+    # The local conditional branches here skip RValue cleanup calls, not one
+    # of the clear/read calls. This does not establish entry to the block.
+    for branch, target, free_call in (
+        (0x21e430,0x21e444,0x21e440),(0x21e4c4,0x21e4d8,0x21e4d4),
+        (0x21e558,0x21e56c,0x21e568),(0x21e5ec,0x21e600,0x21e5fc),
+        (0x21e73c,0x21e754,0x21e750),(0x21e78c,0x21e79c,0x21e798),
+        (0x21e8d0,0x21e8e8,0x21e8e4),(0x21e920,0x21e930,0x21e92c),
+        (0x21ea68,0x21ea80,0x21ea7c),(0x21eab8,0x21eac8,0x21eac4),
+    ):
+        inst(branch, 'bne', f'#0x{target:x}')
+        call(free_call, 'FREE_RValue')
+
+    # section, key, BSS default, three string calls, ini and map call,
+    # vector sites and offsets: all dataflow pinned for the four maps.
+    load_rows = [
+        ((0x21e600,0x21e610,0x21e608),(0x21e648,0x21e650,0x21e64c),(0x21e668,0x21e670,0x21e66c),
+         (0x21e644,0x21e664,0x21e684),(0x21e688,0x21e694,0x21e690),0x21e6d4,
+         (0x21e6d8,0x21e6e8,0x21e6e0),0x21e718,0x21e6a4,0x21e6ac,0x21e6b0,0x21e6ec,
+         'r2, [sp, #0xec]','r2, [r1, #0x2c4]','r0, [r3, #0x2c8]'),
+        ((0x21e79c,0x21e7ac,0x21e7a4),(0x21e7dc,0x21e7e4,0x21e7e0),(0x21e7fc,0x21e804,0x21e800),
+         (0x21e7d8,0x21e7f8,0x21e818),(0x21e81c,0x21e828,0x21e824),0x21e868,
+         (0x21e86c,0x21e87c,0x21e874),0x21e8ac,0x21e838,0x21e840,0x21e844,0x21e880,
+         'r2, [sp, #0xe8]','r2, [r1, #0x27c]','r0, [r3, #0x280]'),
+        ((0x21e930,0x21e940,0x21e938),(0x21e974,0x21e97c,0x21e978),(0x21e994,0x21e99c,0x21e998),
+         (0x21e970,0x21e990,0x21e9b0),(0x21e9b4,0x21e9c0,0x21e9bc),0x21ea00,
+         (0x21ea04,0x21ea14,0x21ea0c),0x21ea44,0x21e9d0,0x21e9d8,0x21e9dc,0x21ea18,
+         'r2, [sp, #0xe4]','r2, [r1, #0x234]','r0, [r3, #0x238]'),
+        ((0x21eac8,0x21ead8,0x21ead0),(0x21eb0c,0x21eb14,0x21eb10),(0x21eb2c,0x21eb34,0x21eb30),
+         (0x21eb08,0x21eb28,0x21eb48),(0x21eb4c,0x21eb58,0x21eb54),0x21eb98,
+         (0x21eb9c,0x21ebac,0x21eba4),0x21ebdc,0x21eb68,0x21eb70,0x21eb74,0x21ebb0,
+         'r2, [sp, #0xe0]','r2, [r1, #0x1ec]','r0, [r3, #0x1f0]'),
+    ]
+    # Verify each vector base and call ABI: r4/r5/r6 are section/key/default;
+    # the map_read vector starts one pointer before the ini argument vector,
+    # with the saved map handle followed by the returned ini value.
+    for address, mnemonic, operands in (
+        (0x21e638,'add','r5, sp, #0x2800'),(0x21e63c,'add','r4, r5, #0xc8'),(0x21e618,'ldr','r1, [r1, r0]'),
+        (0x21e654,'add','r6, sp, #0x2800'),(0x21e658,'add','r5, r6, #0xb8'),(0x21e65c,'ldr','r1, [r1, r0]'),
+        (0x21e674,'add','r7, sp, #0x2800'),(0x21e678,'add','r6, r7, #0xa8'),(0x21e67c,'ldr','r1, [r1, r0]'),
+        (0x21e7d0,'add','r4, sp, #0x2880'),(0x21e7b4,'ldr','r1, [r0, r1]'),
+        (0x21e7e8,'add','r6, sp, #0x2000'),(0x21e7ec,'add','r5, r6, #0x870'),(0x21e7f0,'ldr','r1, [r1, r0]'),
+        (0x21e808,'add','r7, sp, #0x2000'),(0x21e80c,'add','r6, r7, #0x860'),(0x21e810,'ldr','r1, [r1, r0]'),
+        (0x21e964,'add','r5, sp, #0x2800'),(0x21e968,'add','r4, r5, #0x38'),(0x21e948,'ldr','r1, [r0, r1]'),
+        (0x21e980,'add','r6, sp, #0x2800'),(0x21e984,'add','r5, r6, #0x28'),(0x21e988,'ldr','r1, [r1, r0]'),
+        (0x21e9a0,'add','r7, sp, #0x2800'),(0x21e9a4,'add','r6, r7, #0x18'),(0x21e9a8,'ldr','r1, [r1, r0]'),
+        (0x21eafc,'add','r5, sp, #0x2000'),(0x21eb00,'add','r4, r5, #0x7f0'),(0x21eae0,'ldr','r1, [r0, r1]'),
+        (0x21eb18,'add','r6, sp, #0x2000'),(0x21eb1c,'add','r5, r6, #0x7e0'),(0x21eb20,'ldr','r1, [r1, r0]'),
+        (0x21eb38,'add','r7, sp, #0x2000'),(0x21eb3c,'add','r6, r7, #0x7d0'),(0x21eb40,'ldr','r1, [r1, r0]'),
+        (0x21e69c,'add','r1, r7, #0x5d0'),(0x21e6a0,'add','r2, r1, #0x2cc'),
+        (0x21e6b4,'add','r4, sp, #0x2800'),(0x21e6b8,'mov','r3, #3'),(0x21e6bc,'add','r1, r4, #0x9c'),(0x21e6c4,'stm','sp, {r0, r1}'),
+        (0x21e6dc,'add','r4, sp, #0x2000'),(0x21e6e4,'add','r3, r4, #0x5d0'),
+        (0x21e6f0,'ldr','r2, [r2, r1]'),(0x21e6f4,'ldr','r0, [r2, #4]'),(0x21e700,'add','r4, sp, #0x2800'),
+        (0x21e704,'mov','r3, #2'),(0x21e708,'add','r1, r4, #0x94'),(0x21e70c,'stm','sp, {r0, r1}'),
+        (0x21e830,'add','r1, r7, #0x5d0'),(0x21e834,'add','r2, r1, #0x284'),
+        (0x21e848,'add','r4, sp, #0x2800'),(0x21e84c,'mov','r3, #3'),(0x21e850,'add','r1, r4, #0x54'),(0x21e858,'stm','sp, {r0, r1}'),
+        (0x21e870,'add','r4, sp, #0x2000'),(0x21e878,'add','r3, r4, #0x5d0'),
+        (0x21e884,'ldr','r2, [r2, r1]'),(0x21e888,'ldr','r0, [r2, #4]'),(0x21e894,'add','r4, sp, #0x2800'),
+        (0x21e898,'mov','r3, #2'),(0x21e89c,'add','r1, r4, #0x4c'),(0x21e8a0,'stm','sp, {r0, r1}'),
+        (0x21e9c8,'add','r1, r7, #0x5d0'),(0x21e9cc,'add','r2, r1, #0x23c'),
+        (0x21e9e0,'add','r4, sp, #0x2800'),(0x21e9e4,'mov','r3, #3'),(0x21e9e8,'add','r1, r4, #0xc'),(0x21e9f0,'stm','sp, {r0, r1}'),
+        (0x21ea08,'add','r4, sp, #0x2000'),(0x21ea10,'add','r3, r4, #0x5d0'),
+        (0x21ea1c,'ldr','r2, [r2, r1]'),(0x21ea20,'ldr','r0, [r2, #4]'),(0x21ea2c,'add','r4, sp, #0x2800'),
+        (0x21ea30,'mov','r3, #2'),(0x21ea34,'add','r1, r4, #4'),(0x21ea38,'stm','sp, {r0, r1}'),
+        (0x21eb60,'add','r1, r7, #0x5d0'),(0x21eb64,'add','r2, r1, #0x1f4'),
+        (0x21eb78,'add','r4, sp, #0x2400'),(0x21eb7c,'mov','r3, #3'),(0x21eb80,'add','r1, r4, #0x3c4'),(0x21eb88,'stm','sp, {r0, r1}'),
+        (0x21eba0,'add','r4, sp, #0x2000'),(0x21eba8,'add','r3, r4, #0x5d0'),
+        (0x21ebb4,'ldr','r2, [r2, r1]'),(0x21ebb8,'ldr','r0, [r2, #4]'),(0x21ebc4,'add','r4, sp, #0x2400'),
+        (0x21ebc8,'mov','r3, #2'),(0x21ebcc,'add','r1, r4, #0x3bc'),(0x21ebd0,'stm','sp, {r0, r1}'),
+    ):
+        inst(address, mnemonic, operands)
+    for index, (section, key_str, default, string_calls, ini_sym, ini_call, map_sym, map_call,
+                vector, load, target_store, result_store, load_op, target_op, result_op) in enumerate(load_rows):
+        key = result[index]['save_key']
+        require_string(*section, 'inventory')
+        require_string(*key_str, key)
+        default_sym = relocation(*default)
+        section_def = elf.get_section(default_sym['st_shndx'])
+        if (not default_sym.name.startswith('g_pString') or default_sym['st_size'] != 1 or
+                section_def is None or section_def['sh_type'] != 'SHT_NOBITS' or
+                not section_def['sh_addr'] <= default_sym['st_value'] < section_def['sh_addr'] + section_def['sh_size']):
+            raise ValueError('unexpected BSS-initialized default string')
+        require_symbol(*ini_sym, 'g_FUNC_ini_read_string')
+        require_symbol(*map_sym, 'g_FUNC_ds_map_read')
+        inst(ini_sym[1], 'add', 'r0, pc, r0')
+        inst(ini_sym[1] + 4, 'ldr', 'r0, [r1, r0]')
+        inst(vector + 4, 'ldr', 'r0, [r0, #4]')
+        inst(map_sym[1], 'add', 'r1, pc, r1')
+        for addr, reg in zip(string_calls, ('r4','r5','r6')):
+            inst(addr-4, 'mov', 'r0, ' + reg)
+            call(addr, 'YYSetString')
+        inst(vector, 'stm', 'r2, {r4, r5, r6}')
+        inst(load, 'ldr', load_op)
+        inst(target_store, 'str', target_op)
+        inst(result_store, 'str', result_op)
+        for addr in (ini_call, map_call):
+            call(addr, 'YYGML_CallLegacyFunction')
+        result[index].update({'clear_call': f'0x{(0x21e410,0x21e4a4,0x21e538,0x21e5cc)[index]:x}',
+                              'ini_read_string_call': f'0x{ini_call:x}', 'map_read_call': f'0x{map_call:x}',
+                              'default_literal_initial': 'zero-initialized BSS byte'})
     return {'apk_sha256': APK_SHA256, 'function': 'gml_Script_game_save_protect',
-            'address': '0x1d97f8', 'mapping': result,
-            'limitations': 'Static normal-save and item_drop dataflow only. Key names corroborate use, not global registration, '
-                           'runtime reachability, native save compatibility, other modes, or iOS.'}
+            'address': '0x1d97f8', 'load_function': 'gml_Script_game_load_protect',
+            'load_address': '0x21a4a8', 'mapping': result,
+            'limitations': 'Static normal-save/load and item_drop dataflow only. Key names corroborate use, not global registration, '
+                           'runtime reachability, writable BSS contents, native save compatibility, other modes, or iOS.'}
 
 
 def main():
@@ -215,8 +359,8 @@ def main():
     args = parser.parse_args()
     result = inspect(args.apk)
     args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
-    print('INVENTORY_SAVE_EVIDENCE: four native item_drop global indices matched to inventory save keys')
-    print('INVENTORY_SAVE_LIMIT: static only; no native execution or save-format equivalence')
+    print('INVENTORY_SAVE_LOAD_EVIDENCE: four native item_drop global indices matched to normal save/load keys')
+    print('INVENTORY_SAVE_LOAD_LIMIT: static only; no native execution or save-format equivalence')
 
 
 if __name__ == '__main__':

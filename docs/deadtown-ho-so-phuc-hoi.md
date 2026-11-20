@@ -16,6 +16,8 @@
 - Người dùng yêu cầu mổ sâu nhất; **không gửi build lẻ hoặc yêu cầu thử IPA**
   cho đến khi logic đầy đủ, UI không lệch và các chi tiết trong game không lỗi
   theo yêu cầu của họ. Đừng coi biên dịch hoặc vài kịch bản thành công là đủ.
+  Khi thực sự có IPA đạt yêu cầu, cung cấp tệp tải trực tiếp trong hội thoại,
+  không bắt người dùng đăng nhập GitHub.
 - Không thể bảo đảm tuyệt đối không có lỗi chỉ từ phân tích tĩnh hoặc CI. Cần
   ghi rõ phần nào đã chứng minh, phần nào suy luận và phần nào chưa kiểm chứng.
 
@@ -218,6 +220,17 @@ trước khi phát hành. Game Unity `com.Ccentury.DeadTownSurvival` là remake 
   key `inventory/weapon`, `inventory/equip`, `inventory/use`, `inventory/etc`
   tương ứng. Điều này củng cố ý nghĩa bốn selector của `item_drop`, nhưng
   không chứng minh tên đăng ký biến hay đường chạy native.
+- Native normal load `game_load_protect` tại `0x21a4a8`: cùng bốn global
+  index được đưa vào `ds_map_clear` (`0x21e410`, `0x21e4a4`, `0x21e538`,
+  `0x21e5cc`); tiếp đó kết quả `ini_read_string` bốn key trên được đưa cùng
+  map tương ứng vào `ds_map_read` (`0x21e718`, `0x21e8ac`, `0x21ea44`,
+  `0x21ebdc`). Bộ kiểm tĩnh xác nhận literal, con trỏ và vector đối số; các
+  nhánh cleanup gần đó chỉ bỏ qua giải phóng RValue, không bỏ qua các lời gọi
+  này. Chưa chứng minh thực sự vào được đoạn đó hoặc toàn bộ CFG. Mỗi literal
+  mặc định trỏ tới một byte BSS ban đầu bằng 0, phù hợp chuỗi rỗng, nhưng vùng
+  này ghi được nên chưa quan sát giá trị khi chạy. Không suy ra hành vi khi
+  key thiếu/hỏng, định dạng save gốc hay tính tương thích iOS. Vị trí khối
+  inventory native khác thứ tự đầu script GMX cũ; xem báo cáo RE chi tiết.
 - Forced VM [44683394932](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44683394932)
   lưu bốn map với key 0 mang giá trị 11/22/33/44, cố ý đổi giá trị và thêm
   key 900, rồi tải lại: bốn giá trị được khôi phục và key 900 bị xóa. Bộ kiểm
