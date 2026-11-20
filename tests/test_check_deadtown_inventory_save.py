@@ -11,7 +11,7 @@ DT_INVENTORY_SAVE|cleared|0|0|0|0
 DT_WEAPON_SAVE|loaded|100001|100001
 '''
 SAVE = b'''[equip]
-weapon=100001
+weapon="100001.000000"
 [inventory]
 weapon="GMRM1;r0;r11;"
 equip="GMRM1;r0;r22;"
@@ -33,6 +33,10 @@ class InventorySaveCheckTests(unittest.TestCase):
             path = Path(tmp) / 'probe.sav'
             path.write_bytes(base64.b64encode(SAVE))
             self.assertEqual(check(LOG, path), 4)
+            path.write_bytes(base64.b64encode(SAVE.replace(b'100001.000000', b'100002.000000')))
+            with self.assertRaisesRegex(ValueError, 'weapon'):
+                check(LOG, path)
+            path.write_bytes(base64.b64encode(SAVE))
             with self.assertRaisesRegex(ValueError, 'marker'):
                 check(LOG.replace('cleared|0|0|0|0', 'cleared|0|1|0|0'), path)
             with self.assertRaisesRegex(ValueError, 'duplicate'):

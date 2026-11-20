@@ -72,7 +72,10 @@ def check(log, save_file):
         raw = base64.b64decode(Path(save_file).read_bytes().strip(), validate=True)
         ini = configparser.ConfigParser(interpolation=None, strict=True)
         ini.read_string(raw.decode('utf-8'))
-        if ini.getfloat('equip', 'weapon') != 100001 or ini.has_option('equip', 'weaponlevel'):
+        weapon = ini.get('equip', 'weapon').strip()
+        if len(weapon) >= 2 and weapon[0] == '"' and weapon[-1] == '"':
+            weapon = weapon[1:-1]
+        if float(weapon) != 100001 or ini.has_option('equip', 'weaponlevel'):
             raise ValueError('unexpected legacy weapon fields')
         for key, expected in EXPECTED.items():
             value = ini.get('inventory', key).strip()
