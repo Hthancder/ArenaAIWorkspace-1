@@ -371,6 +371,19 @@ vectors, guard targets and helper comparisons; it is not a complete CFG,
 invalid IDs/maps, mutable epsilon or divisor, exceptions, other pet/equipment
 updates and original save compatibility remain open.
 
+A forced disposable old-source candidate VM run
+[44727391503](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44727391503)
+started with two units of source-GMX equipment key 17 and an empty equipped
+slot. After `item_equip(2,17)`, it observed one remaining, with the global and
+instance deco pointers both 17. The probe restored the previous equipment
+global, instance pointer/instance existence, and map handles afterward. This
+confirms **only the old-source candidate's** forced behavior. Under the native
+guard conditions stated above, the pinned native path skips the decrement;
+we have not measured the native runtime or proved that its actual divisor and
+field values meet those conditions in gameplay. The separate static workflow
+[44727391462](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44727391462)
+passed.
+
 #### Native item-drop path and comparison tolerance
 
 `tools/deadtown_item_drop_evidence.py` pins the original `gml_Script_item_drop`
