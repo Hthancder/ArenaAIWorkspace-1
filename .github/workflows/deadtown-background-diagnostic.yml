@@ -1,0 +1,92 @@
+name: Dead Town background coverage diagnostic (no IPA)
+
+on:
+  push:
+    branches:
+      - arena/78062d86-arenaaiworkspace-1
+    paths:
+      - .github/workflows/deadtown-background-diagnostic.yml
+      - tools/prepare_deadtown_background_probe.py
+      - tools/check_deadtown_background_probe.py
+      - tests/test_deadtown_background_probe.py
+      - tools/check_deadtown_motion_probe.py
+
+permissions:
+  contents: read
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install desktop graphics tools and test diagnostics
+        run: |
+          python -m pip install Pillow==11.3.0
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libsdl2-dev libbz2-dev libgl1-mesa-dri xvfb
+          python -m unittest discover -s tests -p 'test_check_deadtown_motion_probe.py' -v
+          python -m unittest discover -s tests -p 'test_deadtown_background_probe.py' -v
+      - name: Fetch pinned test3 data and runner source
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p work/game work/runner
+          gh release download deadtown-ios15-re-test-3 -R "$GITHUB_REPOSITORY" -p 'DeadTown-iOS15-RE-test3.ipa' -O work/test3.ipa
+          echo '7e0f10c8761fe1160baa855a4e825aa31974f02cb2b2205a27b0df9d5aefe781  work/test3.ipa' | sha256sum -c
+          unzip -p work/test3.ipa Payload/gmRunner.app/BundledGame/data.win > work/game/data.win
+          echo '313da9db0f0f74b1e9eea100b8f0de0e7d315e3f21697d638a44a9e2014608b0  work/game/data.win' | sha256sum -c
+          for n in 1 2; do unzip -p work/test3.ipa "Payload/gmRunner.app/BundledGame/audiogroup$n.dat" > "work/game/audiogroup$n.dat"; done
+          curl -fsSL --retry 2 'https://codeload.github.com/andronep/gmrunner/tar.gz/e7121381d38b03a24242812fc22b0a7386d545c6' | tar xz -C work/runner --strip-components=1
+      - name: Instrument and build a disposable desktop runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/prepare_deadtown_background_probe.py work/runner/src/runtime/Graphics.cpp
+          cmake -S work/runner -B work/runner-build -DCMAKE_BUILD_TYPE=Release > work/build.log 2>&1
+          cmake --build work/runner-build --target gmrunner --parallel 4 >> work/build.log 2>&1 || { tail -100 work/build.log; exit 1; }
+      - name: Measure synthetic fill with and without rotation
+        shell: bash
+        run: |
+          set -euo pipefail
+          for mode in zero live; do
+            mkdir -p "work/save-$mode"
+            GMR_BACKGROUND_PROBE="$mode" timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' work/runner-build/gmrunner work/game \
+              --hidden --gles --fast --mute --seed 1 --frames 190 --trace --goto rom_play@160 \
+              --save-dir "work/save-$mode" > "work/$mode.log" 2>&1 || { tail -80 "work/$mode.log"; exit 1; }
+            grep -F '[room] -> rom_play' "work/$mode.log"
+            grep -F 'DT_BG_COVERAGE|' "work/$mode.log"
+          done
+          python tools/check_deadtown_background_probe.py work/zero.log work/live.log --output work/result.json | tee work/check.log
+      - name: Summarize diagnostic results
+        if: always()
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          for name in ('build.log', 'zero.log', 'live.log', 'check.log'):
+              p = Path('work') / name
+              if not p.exists():
+                  print('::warning::' + name + ' missing')
+                  continue
+              lines = p.read_text(errors='replace').splitlines()
+              selected = [s for s in lines if any(x in s for x in ('DT_BG_COVERAGE', 'BACKGROUND_PROBE', 'error:', 'Error', 'Traceback'))]
+              print('::notice::' + name + ': ' + ' | '.join(selected[-6:]).replace('%', '%25')[:3500])
+          PY
+      - name: Preserve research logs only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deadtown-background-coverage-report
+          path: |
+            work/build.log
+            work/zero.log
+            work/live.log
+            work/check.log
+            work/result.json
+          if-no-files-found: ignore
+          retention-days: 3
