@@ -78,13 +78,30 @@ Thứ tự khởi tạo theo yêu cầu: **I2C → I2S → ES8311 → ES7210 →
 3. **GPIO21 (Sleep Control)**: giữ HIGH khi chạy, kéo LOW trong `powerOff()` trước khi vào
    deep sleep (coi như chân giữ nguồn). Nếu là chân input thì vẫn deep sleep bình thường.
 
-## 7. Trạng thái
+## 7. Trạng thái build
 
-* `.ini` đã được kiểm tra bằng `pio project config` (parse OK, flag đúng).
-* **Chưa build/nạp được trong môi trường này**: sandbox chỉ mở `github.com`, `pypi.org`…
-  nên PlatformIO không tải được platform zip (redirect sang `objects.githubusercontent.com`
-  bị chặn) và toolchain xtensa. Trên máy bạn có Internet bình thường thì `pio run -e
-  dsolution-183-2mic` sẽ chạy.
-* Chưa test trên phần cứng thật — thứ tự tinh chỉnh khi có board: (1) đèn nền + hướng/màu
-  (`TFT_INVERTION`, `getMadCtl()`), (2) tốc độ SPI, (3) thanh ghi ES8311 nếu tiếng méo,
-  (4) gain ES7210 / MCLK nếu mic im.
+Đã build **thành công** trên GitHub Actions (workflow `.github/workflows/build-dsolution-183-2mic.yml`
+trong repo này: clone Bruce đúng commit `2b6ba4d`, apply patch, chạy `pio run -e dsolution-183-2mic`):
+
+```
+Flash: [===       ]  27.4%  (4.601.383 / 16.777.216 bytes)
+RAM:   [====      ]  39.8%  (130.260 / 327.680 bytes)
+firmware.bin = 4.601.920 bytes     (0 warning từ file của board)
+```
+
+Các kiểm tra đi kèm trong CI (đều PASS):
+* `interface.cpp.o` được biên dịch và **chuỗi banner của board có trong firmware.bin** →
+  code của board thật sự nằm trong ảnh, không bị thay bằng default rỗng.
+* `Panel_NV3030B::getInitCommands` / `getMadCtl` / `setRotation` xuất hiện trong object của
+  backend LovyanGFX → panel class được dùng đúng.
+* 0 warning từ `NV3030B_Panel.h`, `interface.cpp`, `mic.cpp`.
+
+Tải firmware: mở tab **Actions** của repo → run "Bruce build (DSolution 1.83 2-Mic)" → mục
+**Artifacts** → `dsolution-183-2mic-firmware` (chứa `firmware.bin`, `firmware.elf`, `build.log`).
+
+Nạp bằng web flasher (esptool) tại địa chỉ `0x0` với file `firmware.bin`, hoặc trên máy có
+PlatformIO thì `pio run -e dsolution-183-2mic -t upload`.
+
+**Chưa test trên phần cứng thật.** Thứ tự tinh chỉnh khi có board: (1) đèn nền + hướng/màu
+(`TFT_INVERTION`, `getMadCtl()`), (2) tốc độ SPI (`-DTFT_WRITE_FREQ=40000000` nếu hình nhiễu),
+(3) thanh ghi ES8311 nếu tiếng méo/rè, (4) gain ES7210 + MCLK nếu mic im.

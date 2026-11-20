@@ -154,10 +154,10 @@ index 0000000..e452ec7
 +#endif // DSOLUTION_NV3030B_PANEL_H
 diff --git a/boards/dsolution-183-2mic/README.md b/boards/dsolution-183-2mic/README.md
 new file mode 100644
-index 0000000..de32602
+index 0000000..d1c0dfb
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/README.md
-@@ -0,0 +1,163 @@
+@@ -0,0 +1,173 @@
 +# DSolution 1.83" 2-Mic
 +
 +Bruce port for the **DSolution 1.83 inch 2-Mic** board (ESP32-S3 + NV3030B panel +
@@ -312,10 +312,20 @@ index 0000000..de32602
 +
 +## Status / what is not verified on hardware
 +
-+This port was written from the vendor table and cross-checked against the upstream
-+drivers (LovyanGFX `Panel_LCD`, Espressif `esp_codec_dev`, the working ES8311 board
-+`boards/ES3C28P`), but **it has not been flashed on a real board**. Expect to tune,
-+in this order:
++Compile status: the environment builds cleanly on CI (`.github/workflows/build-dsolution-183-2mic.yml`
++in the parent workspace repo, which applies the port to upstream Bruce at the pinned commit):
++
++```
++Flash: [===       ]  27.4% (used 4 601 383 bytes from 16 777 216 bytes)
++RAM:   [====      ]  39.8% (used 130 260 bytes from 327 680 bytes)
++firmware.bin  4 601 920 bytes        0 warnings from the board's own files
++NV3030B init table, MADCTL table and the board's _setup_gpio()/codec hooks are in the image
++```
++
++The port was written from the vendor table and cross-checked against the upstream drivers
++(LovyanGFX `Panel_LCD`, Espressif `esp_codec_dev`, the working ES8311 board
++`boards/ES3C28P`), but **it has not been flashed on a real board** — nothing here has been
++seen driving actual glass, a codec or a battery. Expect to tune, in this order:
 +
 +1. backlight and orientation (`TFT_INVERTION`, `getMadCtl()`),
 +2. SPI clock (drop to 40 MHz if the image tears or the panel stays dark on a cold boot),
