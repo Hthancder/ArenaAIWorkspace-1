@@ -54,18 +54,26 @@ def next_frame(log, expected_mode, expected_initial):
     return {'marked_after_previous_frame': initial, 'remaining_after_next_frame': remaining}
 
 
-def check(zero_log, live_log, fix_log):
-    zero, live, fix = one(zero_log, 'zero'), one(live_log, 'live'), one(fix_log, 'fix')
-    if zero['angle'] != 0 or abs(live['angle']) < 1 or abs(fix['angle'] - live['angle']) > 0.05:
+def check(zero_log, live_log, fix_log, repair_log):
+    zero, live, fix, repair = (one(zero_log, 'zero'), one(live_log, 'live'),
+                               one(fix_log, 'fix'), one(repair_log, 'repair'))
+    if zero['angle'] != 0 or abs(live['angle']) < 1 or abs(fix['angle'] - live['angle']) > 0.05 or abs(repair['angle'] - live['angle']) > 0.05:
         raise ValueError('control and rotated angle mismatch')
     if zero['observed_fraction'] > 0.005 or fix['observed_fraction'] > 0.005 or live['observed_fraction'] < 0.05:
         raise ValueError('expected control coverage and rotated uncovered region were not observed')
     if abs(live['observed_fraction'] - live['idealized_gap_fraction']) > 0.02:
         raise ValueError('rotated measurement diverges from idealized geometry')
-    for mode, report, log in (('zero', zero, zero_log), ('live', live, live_log), ('fix', fix, fix_log)):
+    for mode, report, log in (('zero', zero, zero_log), ('live', live, live_log),
+                              ('fix', fix, fix_log), ('repair', repair, repair_log)):
         report['after_room_draw'] = final(log, mode, report['magenta_pixels'])
         report['next_room_draw'] = next_frame(log, mode, report['after_room_draw']['remaining_after_room_draw'])
-    return {'zero': zero, 'rotated': live, 'synthetic_fix': fix,
+    previous = repair['after_room_draw']['remaining_after_room_draw']
+    remaining = repair['next_room_draw']['remaining_after_next_frame']
+    if previous < 1000 or remaining > previous * 0.005:
+        raise ValueError('next-frame diagnostic correction did not clear the synthetic marker')
+    if abs(repair['observed_fraction'] - live['observed_fraction']) > 0.005:
+        raise ValueError('repair first pass is not comparable to baseline')
+    return {'zero': zero, 'rotated': live, 'synthetic_fix': fix, 'next_frame_repair': repair,
             'limitations': 'One prepainted desktop GLES pass plus follow-up, intentionally changes target; '
                            'not natural gameplay, iOS, original renderer or proof of device defect.'}
 
@@ -75,10 +83,11 @@ def main():
     p.add_argument('zero', type=Path)
     p.add_argument('live', type=Path)
     p.add_argument('fix', type=Path)
+    p.add_argument('repair', type=Path)
     p.add_argument('--output', type=Path, required=True)
     a = p.parse_args()
     report = check(a.zero.read_text(errors='replace'), a.live.read_text(errors='replace'),
-                   a.fix.read_text(errors='replace'))
+                   a.fix.read_text(errors='replace'), a.repair.read_text(errors='replace'))
     a.output.write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
     print('BACKGROUND_PROBE_PASS:', json.dumps(report, separators=(',', ':')))
 

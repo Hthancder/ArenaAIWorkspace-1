@@ -16,9 +16,9 @@ FINISH = '    drawRoomBackgrounds(true);\n    runDrawEvent(DRAW_END, true);\n}'
 RECT = '''        drawRect(projX_ - 1, projY_ - 1, projX_ + projW_ + 1, projY_ + projH_ + 1, false, rt_.bgColor, rt_.bgColor,
                  rt_.bgColor, rt_.bgColor, 1);'''
 RECT_PROBE = '''        auto dt_bg_state = currentState();
-        if (dt_active && dt_mode[0] == 'f') { auto state = dt_bg_state; state.pa = 0; restoreState(state); }
+        if ((dt_active && dt_mode[0] == 'f') || dt_repair_next) { auto state = dt_bg_state; state.pa = 0; restoreState(state); }
 ''' + RECT + '''
-        if (dt_active && dt_mode[0] == 'f') restoreState(dt_bg_state);'''
+        if ((dt_active && dt_mode[0] == 'f') || dt_repair_next) restoreState(dt_bg_state);'''
 BEGIN_PROBE = '''void Graphics::drawRoomPass() {
     // Diagnostic only: prepaint a known color on one isolated desktop pass.
     static bool dt_measured = false;
@@ -29,6 +29,10 @@ BEGIN_PROBE = '''void Graphics::drawRoomPass() {
         && appSurface_ >= 0 && curTarget_ == surfaces_[appSurface_]
         && vpX_ == 0 && vpY_ == 0 && vpW_ == curTargetW_ && vpH_ == curTargetH_
         && curTargetW_ == 1232 && curTargetH_ == 693 && std::fabs(projAngle_) > 1.0;
+    bool dt_repair_next = dt_pending_next && dt_mode && dt_mode[0] == 'r' && enabled_ && rt_.bgShowColor
+        && !customMats_ && appSurface_ >= 0 && curTarget_ == surfaces_[appSurface_]
+        && vpX_ == 0 && vpY_ == 0 && vpW_ == curTargetW_ && vpH_ == curTargetH_
+        && curTargetW_ == 1232 && curTargetH_ == 693;
     TargetState dt_saved = currentState();
     std::vector<uint8_t> dt_mask;
     if (dt_active) {

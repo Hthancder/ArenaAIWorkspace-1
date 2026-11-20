@@ -28,14 +28,16 @@ class BackgroundProbeTests(unittest.TestCase):
         zero = 'DT_BG_COVERAGE|zero|0|1232|693|0\nDT_BG_FINAL|zero|0|0\nDT_BG_NEXT|zero|0|0\n'
         live = 'DT_BG_COVERAGE|live|-56.32|1232|693|277000\nDT_BG_FINAL|live|277000|50000\nDT_BG_NEXT|live|50000|30000\n'
         fix = 'DT_BG_COVERAGE|fix|-56.32|1232|693|0\nDT_BG_FINAL|fix|0|0\nDT_BG_NEXT|fix|0|0\n'
-        result = check(zero, live, fix)
+        repair = 'DT_BG_COVERAGE|repair|-56.32|1232|693|277000\nDT_BG_FINAL|repair|277000|50000\nDT_BG_NEXT|repair|50000|0\n'
+        result = check(zero, live, fix, repair)
         self.assertGreater(result['rotated']['observed_fraction'], 0.3)
         self.assertEqual(result['rotated']['after_room_draw']['remaining_after_room_draw'], 50000)
         self.assertEqual(result['rotated']['next_room_draw']['remaining_after_next_frame'], 30000)
+        self.assertEqual(result['next_frame_repair']['next_room_draw']['remaining_after_next_frame'], 0)
         for bad in (live + live, live.replace('277000', '0'), live.replace('-56.32', 'nan'),
                     live.replace('1232', '0')):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
-                check(zero, bad, fix)
+                check(zero, bad, fix, repair)
 
 
 if __name__ == '__main__':
