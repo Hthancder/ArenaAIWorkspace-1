@@ -16,6 +16,8 @@ on:
       - tools/prepare_deadtown_lang_table_probe.py
       - tests/test_prepare_deadtown_lang_table_probe.py
       - tools/check_deadtown_language_probe.py
+      - tools/check_deadtown_lang_maps.py
+      - tests/test_check_deadtown_lang_maps.py
       - tools/deadtown_lang_fallback_evidence.py
       - tests/test_check_deadtown_language_probe.py
       - tools/deadtown-vm-probe.csx
@@ -64,6 +66,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_check_deadtown_poison_probe.py' -v
           python -m unittest discover -s tests -p 'test_check_deadtown_accessor_bytecode.py' -v
           python -m unittest discover -s tests -p 'test_check_deadtown_language_probe.py' -v
+          python -m unittest discover -s tests -p 'test_check_deadtown_lang_maps.py' -v
           python tools/deadtown_lang_fallback_evidence.py work/original.apk --output work/language-static.json
           python tools/prepare_deadtown_poison_probe.py work/offline work/original.apk work/candidate
           python tools/deadtown_event_probe.py work/candidate work/events.json
@@ -162,6 +165,7 @@ jobs:
             grep -F 'DT_LANG' "work/lang-$mode.log" || true
           done
           python tools/check_deadtown_language_probe.py work/lang-legacy.log work/lang-candidate.log work/lang-candidate_native_table.log | tee work/lang-check.log
+          python tools/check_deadtown_lang_maps.py work/original.apk work/save-candidate_native_table | tee -a work/lang-check.log
       - name: Summarize probe diagnostics
         if: always()
         shell: bash

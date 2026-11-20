@@ -122,6 +122,17 @@ show_debug_message(""DT_LANG_TABLE|zh|"" + string(ds_map_exists(global.language_
 global.language_type = 3;
 show_debug_message(""DT_LANG_TABLE|ja|"" + string(ds_map_exists(global.language_map_japanese, ""Gas mask"")) + ""|"" + string(string_length(lang_get(""Gas mask""))));
 global.language_type = dt_table_old;
+// Write disposable runner-specific map serializations for independent checking.
+// These files are never uploaded or used as game saves.
+var dt_table_file = file_text_open_write(""dt_lang_ko.dat"");
+file_text_write_string(dt_table_file, ds_map_write(global.language_map_korean));
+file_text_close(dt_table_file);
+dt_table_file = file_text_open_write(""dt_lang_zh.dat"");
+file_text_write_string(dt_table_file, ds_map_write(global.language_map_chinese));
+file_text_close(dt_table_file);
+dt_table_file = file_text_open_write(""dt_lang_ja.dat"");
+file_text_write_string(dt_table_file, ds_map_write(global.language_map_japanese));
+file_text_close(dt_table_file);
 show_debug_message(""DT_LANG_TABLE_DONE"");
 ";
         group.QueueReplace(code, body + "\n" + trace + "\n" + tableTrace);
