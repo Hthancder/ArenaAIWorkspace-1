@@ -151,7 +151,45 @@ def inspect(apk):
                       'map_exists': exists, 'map_find_value': find,
                       'exists_call': f'0x{exists_call:x}', 'find_call': f'0x{find_call:x}',
                       'missing_branch_target': f'0x{fallback:x}', 'fallback_argument': 0})
+    # Independently trace the native lang_add's four argument values into the
+    # three map-add argument arrays. This corroborates the selector/map usage
+    # above without assuming that g_Vars order is global-name registration.
+    add_export = [s for s in symbols.iter_symbols() if s.name.startswith('_Z19gml_Script_lang_add')]
+    if len(add_export) != 1 or (add_export[0]['st_value'], add_export[0]['st_size']) != (0x2df3cc, 1184):
+        raise ValueError('unexpected lang_add export')
+    relocation(0x2df3d8, 0x2df3e4, 0x2df3e0, 'g_pGlobal')
+    for address, mnemonic, operand in (
+        (0x2df44c, 'mov', 'r1, #0x3f'), (0x2df450, 'blx', 'r2'), (0x2df454, 'mov', 'r7, r0'),
+        (0x2df470, 'mov', 'r1, #0x40'), (0x2df474, 'blx', 'r2'), (0x2df478, 'str', 'r0, [sp, #0x14]'),
+        (0x2df494, 'mov', 'r1, #0x41'), (0x2df498, 'blx', 'r2'), (0x2df49c, 'str', 'r0, [sp, #0x10]'),
+        (0x2df4a0, 'ldr', 'r4, [sp, #0xb0]'),
+        (0x2df4ac, 'ldr', 'r1, [r4]'), (0x2df4b0, 'add', 'r0, sp, #0x70'), (0x2df4b4, 'mov', 'r8, r0'),
+        (0x2df4c4, 'ldr', 'r1, [r4, #4]'), (0x2df4c8, 'add', 'sl, sp, #0x60'), (0x2df4cc, 'mov', 'r0, sl'),
+        (0x2df4dc, 'ldr', 'r1, [r4, #8]'), (0x2df4e0, 'add', 'r0, sp, #0x50'), (0x2df4e4, 'mov', 'r5, r0'),
+        (0x2df4f4, 'ldr', 'r1, [r4, #0xc]'), (0x2df4f8, 'add', 'r4, sp, #0x40'), (0x2df4fc, 'mov', 'r0, r4'),
+        (0x2df510, 'add', 'r2, sp, #0x34'), (0x2df514, 'add', 'r0, pc, r0'),
+        (0x2df51c, 'stm', 'r2, {r7, r8, sl}'), (0x2df53c, 'mov', 'r3, #3'),
+        (0x2df590, 'add', 'r0, pc, r0'), (0x2df5b0, 'ldr', 'r1, [sp, #0x14]'),
+        (0x2df5b8, 'str', 'r1, [sp, #0x28]'), (0x2df5bc, 'str', 'r8, [sp, #0x2c]'),
+        (0x2df5c0, 'str', 'r5, [sp, #0x30]'), (0x2df5c8, 'mov', 'r3, #3'),
+        (0x2df618, 'add', 'r0, pc, r0'), (0x2df638, 'ldr', 'r1, [sp, #0x10]'),
+        (0x2df640, 'str', 'r1, [sp, #0x1c]'), (0x2df644, 'str', 'r8, [sp, #0x20]'),
+        (0x2df648, 'str', 'r4, [sp, #0x24]'), (0x2df650, 'mov', 'r3, #3'),
+    ):
+        inst(address, mnemonic, operand)
+    for address in (0x2df4b8, 0x2df4d0, 0x2df4e8, 0x2df500):
+        call(address, 'YYRValueaSERKS_')
+    for base, add, call_address in ((0x2df504, 0x2df514, 0x2df548),
+                                    (0x2df584, 0x2df590, 0x2df5d8),
+                                    (0x2df60c, 0x2df618, 0x2df660)):
+        relocation(base, add, 0x2df50c, 'g_FUNC_ds_map_add')
+        call(call_address, 'YYGML_CallLegacyFunction')
+    language_add = {'address': '0x2df3cc', 'key_argument': 0,
+                    'map_global_indices_to_value_arguments': {'63': 1, '64': 2, '65': 3},
+                    'add_calls': ['0x2df548', '0x2df5d8', '0x2df660'],
+                    'got_symbol': 'g_FUNC_ds_map_add'}
     return {'apk_sha256': APK_SHA256, 'function': 'gml_Script_lang_get', 'address': '0x2df86c',
+            'language_add_evidence': language_add,
             'selector_global_index': 62, 'case_zero_returns_argument': 0, 'cases': cases,
             'limitations': 'Pinned ARM patterns and branch targets only; no native execution, no full CFG, '
                            'no proof of global-index registration, map contents, out-of-range behavior or UI equivalence.'}

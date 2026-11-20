@@ -27,6 +27,11 @@ class LanguageFallbackTests(unittest.TestCase):
     def test_pinned_language_branches(self):
         result = inspect(APK)
         self.assertEqual((result['selector_global_index'], result['case_zero_returns_argument']), (62, 0))
+        addition = result['language_add_evidence']
+        self.assertEqual(addition['key_argument'], 0)
+        self.assertEqual(addition['map_global_indices_to_value_arguments'], {'63': 1, '64': 2, '65': 3})
+        self.assertEqual(addition['got_symbol'], 'g_FUNC_ds_map_add')
+        self.assertEqual(addition['add_calls'], ['0x2df548', '0x2df5d8', '0x2df660'])
         self.assertEqual([c['candidate_map_global_index'] for c in result['cases']], [63, 64, 65])
         self.assertEqual([c['missing_branch_target'] for c in result['cases']],
                          ['0x2dfcb8', '0x2dfcd0', '0x2dfce8'])

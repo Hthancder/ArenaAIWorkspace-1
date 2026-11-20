@@ -172,6 +172,29 @@ duplicated (`Light machine gun`, `Heavy machine gun`); map insertion order and
 actual outcome need separate validation. Neither audit injects translations or
 claims that all UI text has been recovered.
 
+The static inspector additionally follows `gml_Script_lang_add` (`0x2df3cc`):
+arguments 0–3 are copied to separate values, then three `g_FUNC_ds_map_add`
+legacy calls at `0x2df548`, `0x2df5d8`, and `0x2df660` use global indices
+63, 64, 65 respectively, argument 0 as the key, and arguments 1, 2, 3 as
+values. This supports the candidate field mapping and matches the three indices
+used by `lang_get`; it still does not prove registration names, dynamic call
+order, native duplicate-key semantics, or execution.
+
+The strictly disposable language-table probe replaces the 362 literal calls
+in the event JSON (not the project or release) with the 465 static candidates,
+keeping extracted linear order. In forced desktop VM run
+[44669577897](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44669577897),
+the candidate initialized three 463-key maps; an independent parser compared
+**every key and value** in the runner's `GMRM` serializations with candidates
+under gmrunner's first-insertion rule. It also checked known/missing synthetic
+keys, the actual Korean `Gas mask` and `Splint` values, present empty Chinese
+and Japanese entries, and both duplicate Korean keys. The runner kept
+`라이트 머신건` and `헤비 머신건`, the first values in the inferred order.
+These are observations of a forced, incomplete desktop VM using an assumed
+linear insertion order. They do **not** establish which calls the Android APK
+executes or what its runner does with duplicate keys, nor do they validate iOS,
+the UI, or a playable build. The disposable serialized maps are not artifacts.
+
 ### Original table arguments: deeper static analysis
 
 `tools/deadtown_native_tables.py` follows static GOT relocations, `YYSetString`
