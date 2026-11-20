@@ -165,10 +165,10 @@ index 0000000..d021320
 +#endif // DSOLUTION_NV3023_PANEL_H
 diff --git a/boards/dsolution-183-2mic/README.md b/boards/dsolution-183-2mic/README.md
 new file mode 100644
-index 0000000..ea4f2b6
+index 0000000..7738be6
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/README.md
-@@ -0,0 +1,224 @@
+@@ -0,0 +1,243 @@
 +# DSolution 1.83" 2-Mic
 +
 +Bruce port for the **DSolution 1.83 inch 2-Mic** board (ESP32-S3 + NV3023 panel +
@@ -298,9 +298,15 @@ index 0000000..ea4f2b6
 +
 +## Buttons
 +
-+`HAS_3_BUTTONS`: **Prev** = Vol- (40), **Next** = Vol+ (39), **Sel** = Boot (0),
-+**Prev+Next** together = Esc. All three are wired to GND (`pullup = true`,
-+`activeHigh = false`) and polled through `hal_buttons_poll_3()`.
++Full-coverage 3-button multi-gesture driver (`-DHAS_6_BUTTONS=1` in `dsolution-183-2mic.ini`,
++custom debounced state machine in `boards/dsolution-183-2mic/interface.cpp`):
++
++* **Tap**: `Vol-` (GPIO40) = `Prev`, `Vol+` (GPIO39) = `Next`, `Boot` (GPIO0) = `Sel`
++* **Hold**: `Vol-` (360 ms+) = `Up` (repeats every 130 ms), `Vol+` (360 ms+) = `Down` (repeats every 130 ms), `Boot` (520 ms+) = `Esc` (one-shot)
++* **Combos**: `Boot+Vol-` = `PrevPage`, `Boot+Vol+` = `NextPage`, `Vol-+Vol+` = `Esc` (instant)
++
++When waking the screen from sleep/dim, the waking press is swallowed cleanly until released
++so it never triggers an unintended menu action.
 +
 +Note: `src/modules/others/mic.cpp` calls `gpio_reset_pin(GPIO_NUM_0)` when a capture
 +session ends (a leftover from boards whose mic power rail sits on GPIO0). Here GPIO0 is
@@ -317,10 +323,23 @@ index 0000000..ea4f2b6
 +  GPIO17 = ADC2 channel 6 through a 1:2 divider. The vendor sheet's "Battery Status:
 +  GPIO38" cannot be right — the S3 has no ADC channel above GPIO20 — and an earlier
 +  revision of this port used it, which is why the gauge read 0 %.
-+* **Sleep control (21)** — **not driven any more.** No community source documents a
-+  power latch on this board, and driving an unknown pin HIGH at boot is a plausible
-+  cause of a boot/reset loop (which a host sees as an intermittent USB connection).
-+  Build with `-DDSOLUTION_LATCH_PIN=21` to bring the old behaviour back.
++* **Sleep control / power latch (`-DDSOLUTION_LATCH_PIN=21`)** — driven HIGH from the
++  very first instruction of `_setup_gpio()` and left HIGH during normal operation;
++  hardware-verified on the real device to keep USB/system power stable without dropouts.
++
++## Module trimming & 284x240 UI
++
++* **Native-only build (`-DDSOLUTION_NO_EXT_HW=1`)** — excludes external radio/sensor
++  modules that have no physical hardware on this board (`RF/CC1101`, `NRF24`, `LoRa`,
++  `FM`, `IR`, `RFID`, `GPS`, `WireTools`, `EthernetMenu`, `iButton`, plus unused
++  `lib_deps`), keeping all native ESP32-S3 subsystems (`WiFi`, `BLE`, `Audio/Mic`,
++  `BadUSB/HID`, `WebUI`, `Clock`, `Connect`, `Files`, and `BruceJS` with safe stubs).
++* **Default theme & Grid layout** — boots in Cyber Cyan (`#00F0FF`, `0x079F`) + Ice-Teal
++  (`0x5577`) on black (`-DDEFAULT_MAIN_MENU_STYLE=1`) with an 8-item symmetrical 4x2
++  bento grid (`WiFi`, `BLE`, `Files`, `JS`, `Clock`, `Connect`, `Others`, `Config`) and
++  a framed `284x240` submenu layout with `[idx/total]` header, pill highlight, and
++  button legend footer. (If a prior `/bruce.conf` exists in LittleFS, clear it via
++  `Config -> Factory Reset` or set `UI Color -> Default` + `Main Menu Style -> Grid`.)
 +
 +## Files touched outside this folder
 +
@@ -1339,7 +1358,7 @@ index 72d69eb..2485d35 100644
      uint16_t badUSBBLEKeyDelay = 10;
      bool badUSBBLEShowOutput = true;
 diff --git a/src/core/display.cpp b/src/core/display.cpp
-index d3fe50a..8fc88e2 100644
+index d3fe50a..e76b19e 100644
 --- a/src/core/display.cpp
 +++ b/src/core/display.cpp
 @@ -823,7 +823,7 @@ int loopOptions(
@@ -1351,7 +1370,7 @@ index d3fe50a..8fc88e2 100644
                  check(PrevPress);
                  int prevEnabled = findNextEnabled(index, -1);
                  if (prevEnabled >= 0) index = prevEnabled;
-@@ -1152,6 +1152,138 @@ Opt_Coord drawOptions(
+@@ -1152,6 +1152,137 @@ Opt_Coord drawOptions(
  void drawSubmenu(int index, std::vector<Option> &options, const char *title) {
      drawStatusBar();
      int menuSize = options.size();
@@ -1377,7 +1396,7 @@ index d3fe50a..8fc88e2 100644
 +    int maxTitleChars = max(4, (innerW - counterW - 14) / (LW * FP));
 +    tft.setTextSize(FP);
 +    tft.setTextColor(bruceConfig.priColor, hdrBg);
-+    tft.drawString(String(title).substring(0, maxTitleChars), innerL + 6, hdrY + 4);
++    tft.drawString(String(title ? title : "").substring(0, maxTitleChars), innerL + 6, hdrY + 4);
 +    tft.setTextColor(badgeFg, hdrBg);
 +    tft.drawRightString(counterStr, innerR - 6, hdrY + 4, 1);
 +
@@ -1484,12 +1503,19 @@ index d3fe50a..8fc88e2 100644
 +            tft.fillRoundRect(barX, thumbY, 3, thumbH, 1, bruceConfig.priColor);
 +        }
 +    }
-+    return;
-+#endif
++#else
 +
      tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
      tft.setTextSize(FP);
      tft.drawPixel(0, 0, 0);
+@@ -1267,6 +1398,7 @@ void drawSubmenu(int index, std::vector<Option> &options, const char *title) {
+     );
+     TouchFooter();
+ #endif
++#endif
+ }
+ 
+ void drawStatusBar() {
 diff --git a/src/core/main_menu.cpp b/src/core/main_menu.cpp
 index 7420b9e..7845622 100644
 --- a/src/core/main_menu.cpp
