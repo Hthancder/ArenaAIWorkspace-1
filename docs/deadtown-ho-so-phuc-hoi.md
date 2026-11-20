@@ -455,3 +455,18 @@ trên desktop. Chưa đưa thay đổi vào IPA, chưa yêu cầu người dùng
 tra: `tools/deadtown-motion-diagnostic.csx`,
 `tools/check_deadtown_motion_probe.py`, `tools/prepare_deadtown_background_probe.py`,
 `tools/check_deadtown_background_probe.py`; workflow chỉ xuất log nghiên cứu.
+
+Thử tiếp theo dõi màu thử qua cả lượt vẽ room và lượt kế tiếp. Lúc đứng yên
+`44778152971`, còn 60.360 pixel sau lượt đầu và 60.357 pixel trong số đó vẫn
+cùng vị trí sau lượt sau. Lúc cho nhân vật thực sự di chuyển bằng phím trong
+probe desktop `44778680557`, hai vị trí đo cách nhau 6,50 đơn vị; còn 87.009
+pixel màu thử sau lượt đầu và 78.759 pixel trong số đó vẫn cùng vị trí sau lượt
+sau. Khi chỉ thử vẽ nền không xoay ở lượt sau, số pixel còn lại là 0 trong cả
+hai tình huống. Toàn bộ 117 test cục bộ đạt, 20 test bỏ qua vì thiếu đầu vào
+tùy chọn; CI probe đạt.
+
+Màu được cố ý tô trước, game chạy trong room ép với VM desktop chưa đầy đủ;
+đo ở application surface sau room draw, không phải toàn bộ các bước xuất hình.
+Vì vậy đây là bằng chứng vệt thử có thể tồn tại trong cấu hình desktop, **không
+phải** bằng chứng vệt tự nhiên hoặc nguyên nhân trên iPhone, cũng không xác
+nhận đã sửa sprite lệch. Chưa thay runner sản phẩm hay tạo IPA mới.

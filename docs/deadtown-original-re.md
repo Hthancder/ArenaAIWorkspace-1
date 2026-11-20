@@ -938,3 +938,28 @@ other room types, iOS or sprite positioning. Continue with non-invasive temporal
 coverage and draw/coordinate diagnostics before deciding on a production fix.
 The local suite ran 117 tests, 20 skipped due to absent optional inputs; the
 motion and controlled coverage workflows above passed.
+
+#### Following the marker across room passes, including movement
+
+Run `44778152971` tracked the same intentionally painted pixels after the
+whole room draw and through the next room draw. In the stationary setup,
+60,360 of the 276,119 markers survived the first room draw, and 60,357 of
+those remained magenta at the same surface positions after the next room draw.
+A research-only intervention that drew the background unrotated on that next
+pass reduced the retained count to zero.
+
+Run `44778680557` delayed the injection until scripted D input was moving the
+player. Its recorded player position changed from (15001.235281, 7706.134279)
+to (15004.840432, 7700.724724), a distance of 6.5008 world units between
+samples. Of the original 276,119 markers, 87,009 remained after the first
+room draw; 78,759 of those remained at the same pixels after the next. The
+separately run next-pass intervention retained zero of those 87,009 pixels,
+with the same recorded player coordinates. The 0-degree, unrotated-fill,
+stationary and moving controls and checker all passed; local suite: 117 tests,
+20 skipped for optional inputs.
+
+These readings concern an intentionally prepainted application surface in a
+forced-room, incomplete desktop VM; they are not observations of naturally
+occurring trails, the final display after every presentation stage, or iOS.
+The intervention is a diagnostic, not a generally validated fix. They do not
+establish the cause of the iPhone report or address misplaced sprites.
