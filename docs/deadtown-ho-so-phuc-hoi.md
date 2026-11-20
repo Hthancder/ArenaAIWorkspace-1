@@ -432,3 +432,5 @@ kết luận lỗi không phải renderer, camera, event hay state khi chạy. R
 nhánh không clear application surface cho GMS1 và phụ thuộc `bgShowColor`/nội
 dung được vẽ; đây mới là giả thuyết, không chứng minh nguyên nhân. Chi tiết
 và giới hạn ở `docs/deadtown-original-re.md`; chưa có bản sửa hay IPA mới.
+
+CI kiểm tra tĩnh RE-test3 `44766640996` đạt; không có thử render hay iPhone.

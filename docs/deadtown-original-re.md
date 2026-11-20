@@ -886,3 +886,6 @@ and a second view surface; the test uses an incomplete old-source VM and does
 not reproduce all native events. Sprite placement, camera/view scaling and
 surface clearing each need independent investigation. Do not ship an assumed
 clear or coordinate patch based solely on these static observations.
+
+The pinned test3 static verifier and its regression tests also passed in CI
+run `44766640996`; this did not render or reproduce the reported iPhone issue.
