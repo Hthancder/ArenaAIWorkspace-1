@@ -438,3 +438,20 @@ CI kiểm tra tĩnh RE-test3 `44766640996` đạt; không có thử render hay i
 Cả ba workflow đóng gói dùng cùng runner từ run `44509744633`; test 1 và 2
 dùng cùng data, test 3 là data debug-fix riêng. Đây là các điểm chung cần
 điều tra, chưa xác nhận nguyên nhân lỗi trên iPhone.
+
+### Kết quả tìm nguyên nhân vệt màu
+
+Probe desktop `44773983060` cho nhân vật di chuyển bằng phím trong room ép:
+`background_showcolor=1`, view và application surface 1232×693, góc camera
+-56,32°. Kiểm tra có kiểm soát `44775942814` tô sẵn màu thử rồi chỉ đo ngay sau
+lệnh vẽ màu nền: ở góc 0° còn 0 pixel màu thử, ở -56,3189° còn 276.119/853.776
+pixel (32,34%). Khi **chỉ trong phép thử** vẽ màu nền không xoay rồi khôi phục
+camera, còn 0 pixel màu thử. Đây chứng minh runner desktop có trường hợp nền
+không phủ hết viewport khi camera xoay, và có hướng sửa cần khảo sát thêm.
+
+Không được coi đây là bằng chứng lỗi iPhone đã được sửa: game có thể vẽ đè
+vùng trống, iOS và sprite lệch chưa được kiểm tra, sửa thử chỉ cho một lượt vẽ
+trên desktop. Chưa đưa thay đổi vào IPA, chưa yêu cầu người dùng thử. Bộ kiểm
+tra: `tools/deadtown-motion-diagnostic.csx`,
+`tools/check_deadtown_motion_probe.py`, `tools/prepare_deadtown_background_probe.py`,
+`tools/check_deadtown_background_probe.py`; workflow chỉ xuất log nghiên cứu.

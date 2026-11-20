@@ -900,3 +900,41 @@ preserves existing files; test 3 uses a separate ID. The user-supplied iOS IPA
 contains native `gml_Object_sys_view_*`, `obj_player_*` and
 `sys_spawn_time_light_*` name strings as research targets, but those names
 alone do not prove the matching native control flow or behavior.
+
+### Desktop motion trace and controlled rotated-background experiment
+
+For the pinned RE-test3 `data.win`, run `44773983060` instrumented disposable
+copies of `obj_player` Create and End Step and ran paired still/moving scenarios
+in Linux Mesa GLES under Xvfb. The test forced `rom_play` at frame 160 and
+held D during frames 170–199. For 65 recorded samples, player displacement
+relative to the still baseline reached 195.04 world units; runtime
+`background_showcolor` stayed 1, view 0 and application surface measured
+1232×693, view 1 stayed invisible, and view 0 reported angle -56.32 degrees.
+This is an incomplete VM, keyboard and forced room, not a natural iOS/touch
+session. Screenshot difference counts are reported only as comparisons and
+are *not* a motion-trail detector.
+
+Review of pinned `Graphics.cpp` and `Renderer.cpp` shows `drawRoomPass` paints
+the background as a world-axis-aligned rectangle spanning view width/height
+plus a one-unit margin, using the active rotated view projection. Geometry
+predicts the rectangle may not cover the viewport when rotated. Run
+`44775942814` measured this at 1232×693 on a specially instrumented disposable
+desktop GLES runner: it intentionally prepainted the application surface
+magenta and read it immediately after the background-color rectangle, **before
+other game draws**. At 0° the rectangle left 0 magenta pixels; at -56.3189° it
+left 276,119 of 853,776 (32.34%). An isolated one-pass candidate drawing the
+background with zero rotation then restoring the original projection left 0
+magenta pixels at the same -56.3189° view. `tools/prepare_deadtown_background_probe.py`
+pins the exact runner source, and `tools/check_deadtown_background_probe.py`
+checks the measured samples against a separate idealized clipping calculation.
+
+This is a demonstrated **background-fill coverage defect in the tested desktop
+runner configuration**, not proof that it causes the user's iPhone trails:
+other game draws can cover the missing area, iOS driver/state and view angles
+were not observed, and the marker and candidate intentionally modify one test
+pass. The isolated fill candidate is not in an IPA or release pipeline and has
+not been verified for multiple views, custom projections, transparency, depth,
+other room types, iOS or sprite positioning. Continue with non-invasive temporal
+coverage and draw/coordinate diagnostics before deciding on a production fix.
+The local suite ran 117 tests, 20 skipped due to absent optional inputs; the
+motion and controlled coverage workflows above passed.
