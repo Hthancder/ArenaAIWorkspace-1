@@ -161,18 +161,19 @@ kỳ flasher nào ghi ở 0x0.
 
 ### Không có log thì xem bằng gì?
 
-Kèm trong repo có một trang tự viết: **`firmware/web-flasher/index.html`** — mở bằng
-Chrome/Edge trên máy tính, nó làm cả hai việc:
+Trang tự viết, **đã deploy sẵn**: <https://dsolution-183-flasher.vercel.app/>
+(nguồn: `firmware/web-flasher/index.html`, Vercel project `dsolution-183-flasher`).
+Mở bằng Chrome/Edge trên máy tính, nó làm cả hai việc:
 
 * **Nạp**: chọn file `.bin` → bấm “Nạp vào 0x0” (địa chỉ cố định, không cần nhập tay),
   có nút **Xoá toàn bộ chip** và thanh tiến trình. Dùng `esptool-js` 0.7.1.
 * **Xem log**: bấm “Kết nối &amp; xem log” (115200) → hiện thẳng log ra trang, có nút
   **Reset board**, **Lưu log** (tải về .txt) và **Xoá màn hình**.
 
-Trang này cần **https hoặc localhost** (yêu cầu của WebSerial) và cần mở ở **tab riêng**,
-không nhúng trong iframe — Chrome chặn cổng serial trong iframe khác origin. Nếu chạy trên
-máy có Python: `python3 -m http.server 8000` trong thư mục `firmware/web-flasher` rồi mở
-`http://localhost:8000`.
+Trang này cần **https** (yêu cầu của WebSerial) và phải mở ở **tab riêng**, không nhúng
+trong iframe — Chrome chặn cổng serial trong iframe khác origin, nên bản live-preview của
+sandbox **không dùng được**, phải dùng URL Vercel ở trên (hoặc tự chạy
+`python3 -m http.server 8000` trong `firmware/web-flasher` rồi mở `http://localhost:8000`).
 
 ### Trước khi cần đến log: 3 dấu hiệu nhìn bằng mắt
 
