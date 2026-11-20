@@ -95,7 +95,7 @@ trong repo này: clone Bruce đúng commit `2b6ba4d`, apply patch, chạy `pio r
 Flash: [===       ]  27.4%  (4.601.355 / 16.777.216 bytes)
 RAM:   [====      ]  39.8%  (130.260 / 327.680 bytes)
 firmware.bin          = 4.601.904 bytes
-firmware-factory.bin  = 16.777.216 bytes  (ảnh gộp, nạp ở 0x0)
+firmware-factory.bin  = 4.732.528 bytes   (ảnh gộp, nạp ở 0x0)
 ```
 
 Run CI mới nhất: **44718198693** (commit `cf7f03b`) — PASS. Ảnh gộp được ghép bằng Python
@@ -122,11 +122,42 @@ esptool.py --chip esp32s3 erase_flash
 ```
 
 File này = bootloader (0x0) + partition table (0x8000) + boot_app0 (0xE000) + app (0x10000),
-đã đệm đủ 16 MB, nên nạp ở 0x0 là ghi đè cả layout cũ.
+đúng ~4,7 MB (không đệm cho đủ 16 MB — nạp qua web nhanh gấp ba, ít rủi ro rớt kết nối hơn).
+Nạp **sau khi Erase chip** là sạch hoàn toàn; muốn bản đệm 16 MB thì build với
+`DSOLUTION_PAD_FACTORY=1`.
 
 > ⚠️ **Đừng nạp `firmware.bin` ở 0x0.** `firmware.bin` được link cho 0x10000; ghi nó vào
 > 0x0 là xoá bootloader → chip reset vô hạn, màn hình đen, USB chập chờn. Đây chính là
 > lỗi của lần nạp đầu tiên (hướng dẫn cũ trong file này ghi sai).
+
+### Nạp bằng web (online, không cần cài gì)
+
+Dùng được, vì file gộp **vốn đã ở địa chỉ 0x0**. Chỉ cần đúng 3 điều:
+
+1. **Giải nén** artifact trước — GitHub trả về `.zip`, nhiều web flasher từ chối file nén.
+   Lấy đúng `DSolution-183-2mic-factory.bin` (~4,7 MB, **không** phải `firmware.bin`).
+2. **Địa chỉ = 0x0** và **Flash size = 16MB**. Nếu web flasher không có ô địa chỉ (kiểu
+   ESP Web Tools / web.esphome.io) thì nó luôn ghi ở 0x0 → đúng luôn. Nếu có ô địa chỉ
+   (espressif.github.io/esptool-js, esptool.spacehuhn.com) thì phải tự nhập `0x0` —
+   đừng để mặc định `0x10000`.
+3. **Xoá chip trước** nếu tool có nút Erase (esptool-js có nút **Erase**). Máy đang mang
+   bootloader hỏng từ lần nạp trước nên bước này đáng làm.
+
+Thao tác:
+
+* Trình duyệt **Chrome hoặc Edge trên máy tính** (cần WebSerial; Firefox/Safari không có).
+  Đóng Arduino IDE / PlatformIO Monitor / mọi tab khác đang mở cổng COM — "Failed to
+  connect" gần như luôn là do cổng bị chiếm.
+* Cắm USB **trong khi giữ nút BOOT** (GPIO0) để vào chế độ download — ở chế độ này kết nối
+  ổn định nhất, kể cả khi máy đang treo.
+* Baud để **921600**; 4,7 MB sẽ mất **khoảng 1–2 phút**. Đừng rút cáp, đừng đóng tab giữa
+  chừng. Nếu đường USB hay rớt thì hạ xuống 460800 (chậm hơn nhưng chắc hơn).
+* Xong: rút cáp, cắm lại **không giữ BOOT** để máy chạy firmware. Web flasher đôi khi để
+  chip nằm lại ở chế độ download nên lần cắm đầu có thể không thấy gì — rút ra cắm lại.
+
+Công cụ: **espressif.github.io/esptool-js** (chính chủ Espressif, có ô Address + nút
+Erase + Flash size), **esptool.spacehuhn.com** (giao diện đơn giản, có ô địa chỉ), hoặc bất
+kỳ flasher nào ghi ở 0x0.
 
 ### Nếu vẫn đen
 

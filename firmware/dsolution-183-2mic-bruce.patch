@@ -165,10 +165,10 @@ index 0000000..d021320
 +#endif // DSOLUTION_NV3023_PANEL_H
 diff --git a/boards/dsolution-183-2mic/README.md b/boards/dsolution-183-2mic/README.md
 new file mode 100644
-index 0000000..2865a5d
+index 0000000..ea2ca7a
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/README.md
-@@ -0,0 +1,222 @@
+@@ -0,0 +1,224 @@
 +# DSolution 1.83" 2-Mic
 +
 +Bruce port for the **DSolution 1.83 inch 2-Mic** board (ESP32-S3 + NV3023 panel +
@@ -340,7 +340,7 @@ index 0000000..2865a5d
 +Flash: [===       ]  27.4% (used 4 601 355 bytes from 16 777 216 bytes)
 +RAM:   [====      ]  39.8% (used 130 260 bytes from 327 680 bytes)
 +firmware.bin          4 601 904 bytes     0 warnings from the board's own files
-+firmware-factory.bin 16 777 216 bytes     bootloader+partitions+boot_app0+app, flash at 0x0
++firmware-factory.bin  4 732 528 bytes     bootloader+partitions+boot_app0+app, flash at 0x0
 +NV3023 init table, MADCTL table and the board's _setup_gpio()/codec hooks are in the image
 +```
 +
@@ -359,7 +359,9 @@ index 0000000..2865a5d
 +2. **Flashing the app image at 0x0.** `firmware.bin` is linked for 0x10000; writing it at
 +   offset 0 overwrites the bootloader and leaves the ROM loader resetting forever. That
 +   looks exactly like "black screen + flaky USB". The build now also emits one merged
-+   image, `firmware-factory.bin`, which is the only thing to flash, always at **0x0**:
++   image, `firmware-factory.bin` (~4.7 MB, not padded), which is the only thing to flash,
++   always at **0x0** -- and it is small enough to send through a browser WebSerial
++   flasher in a couple of minutes:
 +
 +   ```
 +   esptool.py --chip esp32s3 write_flash 0x0 firmware-factory.bin
@@ -897,10 +899,10 @@ index 0000000..408673a
 +}
 diff --git a/boards/dsolution-183-2mic/merge_bin.py b/boards/dsolution-183-2mic/merge_bin.py
 new file mode 100644
-index 0000000..ea15999
+index 0000000..372b2f9
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/merge_bin.py
-@@ -0,0 +1,119 @@
+@@ -0,0 +1,133 @@
 +# =====================================================================================
 +#  boards/dsolution-183-2mic/merge_bin.py
 +#
@@ -911,9 +913,13 @@ index 0000000..ea15999
 +#
 +#      esptool.py --chip esp32s3 write_flash 0x0 firmware-factory.bin
 +#
-+#  The image is padded to the full 16 MB, so writing it also erases the partition table
-+#  and the LittleFS area of whatever firmware was on the board before -- the filesystem
-+#  is re-created on first boot instead of inheriting a stale one.
++#  The image is *not* padded to the flash size: it ends right after the application
++#  (~4.7 MB instead of 16 MB), because the whole point of this file is to be flashed
++#  through a browser over WebSerial, and a third of the transfer time is a third of the
++#  chances to drop the link on a board whose USB is already flaky. Erase the chip first
++#  (one click in esptool-js, or `esptool.py erase_flash`) and the stale partition table /
++#  filesystem are gone anyway. Build with DSOLUTION_PAD_FACTORY=1 in the environment to
++#  get the padded 16 MB variant back.
 +#
 +#  The merge itself is done here, in pure Python, instead of shelling out to
 +#  `esptool merge_bin`. esptool renamed that subcommand *and* its --flash_* options
@@ -952,6 +958,12 @@ index 0000000..ea15999
 +def _flash_size_bytes(value, default="16MB"):
 +    key = str(value or default).strip().upper().replace(" ", "")
 +    return FLASH_SIZES.get(key, FLASH_SIZES[default])
++
++
++def _pad_wanted():
++    """DSOLUTION_PAD_FACTORY=1 in the shell (or in project options) -> 16 MB image."""
++    import os
++    return str(os.environ.get("DSOLUTION_PAD_FACTORY", "")).strip() not in ("", "0", "no", "false")
 +
 +
 +def merge_bin(source, target, env):
@@ -995,7 +1007,11 @@ index 0000000..ea15999
 +
 +    if len(image) > flash_size:
 +        raise SystemExit(f"{TAG} merged image {len(image)} B does not fit in {flash_size} B")
-+    image.extend(b"\xff" * (flash_size - len(image)))
++    if _pad_wanted():
++        image.extend(b"\xff" * (flash_size - len(image)))
++        size_note = f"padded to {flash_size} B"
++    else:
++        size_note = f"{len(image)} B, not padded (DSOLUTION_PAD_FACTORY=1 for the 16 MB variant)"
 +
 +    # Sanity: every image we placed must still be byte-identical where we put it and the
 +    # bootloader/app must carry the ESP image magic. A silent offset mistake here is a
@@ -1016,7 +1032,7 @@ index 0000000..ea15999
 +
 +    for name, offset, length in placed:
 +        print(f"{TAG}   0x{offset:06X}  {name:<18} {length:>9} B")
-+    print(f"{TAG} OK: {out.name} {len(image)} B (16 MB padded) -- flash it at 0x0")
++    print(f"{TAG} OK: {out.name} {len(image)} B ({size_note}) -- flash it at 0x0")
 +
 +
 +env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", merge_bin)
