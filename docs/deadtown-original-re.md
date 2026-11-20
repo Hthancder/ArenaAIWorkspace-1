@@ -852,3 +852,37 @@ Verification: integration and malformed-input tests passed locally; full local
 suite ran 110 tests with 20 skips for unavailable optional inputs. GitHub
 Actions native research run `44763810611` passed with the pinned IPA, APK,
 GMX and analysis dependencies. No IPA was built or modified by this analysis.
+
+## iPhone report: misplaced sprites and movement trails
+
+The user reports the previous experimental IPA had misplaced sprites and
+colored streaks/smearing while the character moves. Which test IPA produced
+this observation has not yet been identified. Do not mistake the successful
+static iOS/Android sprite comparison above for validation of that test build.
+
+For the specific old `DeadTown-iOS15-RE-test3.ipa` (SHA-256
+`7e0f10c8761fe1160baa855a4e825aa31974f02cb2b2205a27b0df9d5aefe781`), the
+bundled `data.win` has SHA-256
+`313da9db0f0f74b1e9eea100b8f0de0e7d315e3f21697d638a44a9e2014608b0`.
+The verifier `tools/deadtown_test3_graphics_evidence.py` compares it to the
+pinned Android `game.droid`: all six encoded texture PNGs are byte-identical
+in the same order; all 402 sprite metadata, texture-page entries and packed
+masks match, and 402 sprite, 240 object and 15 room names match in order.
+The three gameplay room resource headers all have draw-background-color set
+in both datasets; all 15 room background defaults match. Runtime code can
+change those values. These observations do not rule out wrong sprite usage,
+coordinate conversion, view setup, renderer bugs or missing event logic.
+
+In the pinned gmrunner source `e7121381d38b03a24242812fc22b0a7386d545c6`,
+`Graphics::drawFrame` clears the backbuffer every frame but clears the
+application surface explicitly only on the GMS2 path. For GMS1,
+`drawRoomPass` paints background color only when runtime `bgShowColor` is true;
+when false, prior application-surface contents may remain unless other drawing
+covers them. This is a hypothesis worth isolating, not proof of the iPhone
+failure: the original headers set show-color, it can change during gameplay,
+views and surfaces have separate paths, and no reproduction has yet been run.
+Source `sys_view` adjusts view/port geometry and uses `application_surface`
+and a second view surface; the test uses an incomplete old-source VM and does
+not reproduce all native events. Sprite placement, camera/view scaling and
+surface clearing each need independent investigation. Do not ship an assumed
+clear or coordinate patch based solely on these static observations.

@@ -6,6 +6,8 @@ on:
       - arena/78062d86-arenaaiworkspace-1
     paths:
       - .github/workflows/deadtown-native-re.yml
+      - tools/deadtown_test3_graphics_evidence.py
+      - tests/test_deadtown_test3_graphics_evidence.py
       - tools/deadtown_ios_compare.py
       - tests/test_deadtown_ios_compare.py
       - tools/deadtown_native_tables.py
@@ -72,10 +74,17 @@ jobs:
           unzip -p .cache/ios-original/combined.zip 'Dead Town-1.4.2.ipa' > '.cache/ios-original/Dead Town-1.4.2.ipa'
           cp .cache/deadtown-original.apk .cache/ios-original/android-original.apk
           echo '0212db7196f54894476d902bf8832e2e1db9f6de2121757c2740ec46283b0c09  .cache/ios-original/Dead Town-1.4.2.ipa' | sha256sum -c
+      - name: Retrieve the existing test3 IPA for a static graphics comparison
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download deadtown-ios15-re-test-3 -R "$GITHUB_REPOSITORY" -p 'DeadTown-iOS15-RE-test3.ipa'
+          echo '7e0f10c8761fe1160baa855a4e825aa31974f02cb2b2205a27b0df9d5aefe781  DeadTown-iOS15-RE-test3.ipa' | sha256sum -c
       - name: Run regression tests and generate research reports
         shell: bash
         run: |
           set -euo pipefail
+          python -m unittest discover -s tests -p 'test_deadtown_test3_graphics_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_ios_compare.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_native_tables.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_native_callgraph.py' -v
@@ -93,6 +102,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_deadtown_lang_fallback_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_lang_coverage.py' -v
           mkdir -p work/reports
+          python tools/deadtown_test3_graphics_evidence.py DeadTown-iOS15-RE-test3.ipa .cache/deadtown-original.apk --output work/reports/test3-graphics.json
           python tools/deadtown_ios_compare.py '.cache/ios-original/Dead Town-1.4.2.ipa' .cache/deadtown-original.apk --output work/reports/ios-android-assets.json
           python tools/deadtown_poison_evidence.py .cache/deadtown-original.apk --output work/reports/poison-evidence.json
           python tools/deadtown_item_drop_evidence.py .cache/deadtown-original.apk --output work/reports/item-drop-evidence.json

@@ -420,3 +420,15 @@ Android**. Mã so sánh `tools/deadtown_ios_compare.py` và kết quả/giới h
 Kiểm tra đối chiếu và CI phân tích tĩnh `44763810611` đã đạt. Lượt cục bộ chạy
 110 test, 20 test bỏ qua do thiếu đầu vào tùy chọn. Phân tích này không tạo hay
 sửa IPA; chưa có bằng chứng chạy game trên iOS.
+
+### Phản hồi hình ảnh trên iPhone
+
+Người dùng cho biết IPA test cũ bị lệch sprite và có vệt màu khi nhân vật di
+chuyển. Chưa rõ phiên bản test cụ thể; chưa có video tái hiện. Kiểm tĩnh riêng
+RE-test3 (`tools/deadtown_test3_graphics_evidence.py`) thấy 6 PNG atlas, 402
+metadata sprite, texture-page entries và masks giống APK từng byte ở các mục
+đã so; ba room gameplay có cờ vẽ màu nền mặc định được bật. Không thể từ đó
+kết luận lỗi không phải renderer, camera, event hay state khi chạy. Runner có
+nhánh không clear application surface cho GMS1 và phụ thuộc `bgShowColor`/nội
+dung được vẽ; đây mới là giả thuyết, không chứng minh nguyên nhân. Chi tiết
+và giới hạn ở `docs/deadtown-original-re.md`; chưa có bản sửa hay IPA mới.
