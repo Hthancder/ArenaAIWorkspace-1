@@ -213,6 +213,19 @@ trước khi phát hành. Game Unity `com.Ccentury.DeadTownSurvival` là remake 
   native để xác minh. Không kết luận stack phân số có trong gameplay bình
   thường và không tự đổi epsilon toàn game. Bốn selector cũng đã được thử
   trên các map riêng trong VM. Công cụ tĩnh: `tools/deadtown_item_drop_evidence.py`.
+- Đối chiếu độc lập trong native normal save `game_save_protect` tại
+  `0x1d97f8`: global index 0, 1, 2, 3 được `ds_map_write` rồi ghi vào các
+  key `inventory/weapon`, `inventory/equip`, `inventory/use`, `inventory/etc`
+  tương ứng. Điều này củng cố ý nghĩa bốn selector của `item_drop`, nhưng
+  không chứng minh tên đăng ký biến hay đường chạy native.
+- Forced VM [44683394932](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44683394932)
+  lưu bốn map với key 0 mang giá trị 11/22/33/44, cố ý đổi giá trị và thêm
+  key 900, rồi tải lại: bốn giá trị được khôi phục và key 900 bị xóa. Bộ kiểm
+  tra độc lập giải mã save tạm để đối chiếu. gmrunner dùng định dạng riêng
+  `GMRM`; **chưa chứng minh tương thích save Android/GameMaker hoặc iOS**.
+  Không sử dụng save thật của người dùng. Công cụ tĩnh
+  `tools/deadtown_inventory_save_evidence.py`; checker
+  `tools/check_deadtown_inventory_save.py`.
 
 ## 10. Hình, frame và collision mask
 
@@ -280,8 +293,8 @@ Các công cụ chính: `deadtown_native_inventory.py`, `deadtown_native_callgra
 và các `check_deadtown_*`/`.csx` tương ứng. Đọc help/docstring trước khi dùng;
 các probe candidate chỉ dành cho dữ liệu tạm, không được đưa vào IPA.
 
-Kết quả gần nhất: **97 unittest local đạt**;
-run VM `44681106676` đạt, static RE `44680884702` đạt. CI/địa chỉ trong báo
+Kết quả gần nhất: **101 unittest local đạt**;
+run VM `44683394932` đạt, static RE `44683395035` đạt. CI/địa chỉ trong báo
 cáo là dấu vết có thể đối chiếu, không thay thế dữ liệu/bằng chứng cần tái tạo.
 
 ## 12. Các việc chưa xong và gate

@@ -367,6 +367,35 @@ that ordinary gameplay exhibits fractional stacks. The run also exercised the
 four old-source candidate selectors using separate maps. No project-wide
 change to epsilon has been made: it could affect many other comparisons.
 
+#### Corroborating inventory selection against native save keys
+
+`tools/deadtown_inventory_save_evidence.py` independently traces native normal
+save `gml_Script_game_save_protect` (`0x1d97f8`) through the global getters,
+string literals, `ds_map_write` and `ini_write_string` call vectors. The same
+global indices used by `item_drop` are serialized under these keys:
+
+| `item_drop` selector | Global index | Normal save key | `ds_map_write` call | `ini_write_string` call |
+|---:|---:|---|---|---|
+| 1 | 0 | `inventory/weapon` | `0x1dab04` | `0x1dab44` |
+| 2 | 1 | `inventory/equip` | `0x1dac6c` | `0x1dacac` |
+| 3 | 2 | `inventory/use` | `0x1dadd4` | `0x1dae14` |
+| 4 | 3 | `inventory/etc` | `0x1daf3c` | `0x1daf7c` |
+
+This corroborates the old-source categories with independent string keys, not
+symbol-name registration or native execution. It covers normal save only, not
+other modes, and does not recover or validate the original `ds_map_write`
+encoding.
+
+In disposable VM run [44683394932](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44683394932),
+the candidate saved four synthetic map entries `(0 -> 11, 22, 33, 44)`,
+replaced them with `-1` and inserted a temporary key 900, then loaded the
+throwaway save: all four original values returned and each temporary key was
+absent. The separate checker decoded the base64 INI and inspected the four
+serialized maps. The pinned gmrunner writes its **own `GMRM` representation**;
+this round trip tests only that runner and candidate, not interoperability with
+an Android/GameMaker save or the behavior of an iOS build. Neither the save nor
+game data is published, and user saves are never used for this diagnostic.
+
 For the isolated probe only, `item_use` uses explicit DS-map operations for an
 existing numeric key. The run [44562072708](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44562072708)
 then observed the candidate mask entry 3, consumed a one-item mask, transferred
