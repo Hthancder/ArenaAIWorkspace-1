@@ -76,6 +76,13 @@ show_debug_message(""DT_INV|short|"" + string(dt_missing) + ""|"" + string(dt_sh
 ds_map_replace(global.inven_use,0,2);
 var dt_made = item_make(dt_recipe);
 show_debug_message(""DT_INV|craft|"" + string(dt_made) + ""|"" + string(ds_map_exists(global.inven_use,0)) + ""|"" + string(ds_map_find_value(global.inven_use,1)) + ""|"" + string(ds_map_exists(global.inven_use,2)) + ""|"" + string(ds_map_find_value(global.inven_use,3)));
+// Recipe with two optional, zero-quantity slots and existing output stack.
+global.craft_db[dt_recipe,1] = 3; global.craft_db[dt_recipe,2] = 1; global.craft_db[dt_recipe,3] = 1;
+global.craft_db[dt_recipe,4] = 0; global.craft_db[dt_recipe,5] = 0; global.craft_db[dt_recipe,6] = 0;
+global.craft_db[dt_recipe,7] = 0; global.craft_db[dt_recipe,8] = 0; global.craft_db[dt_recipe,9] = 0;
+global.craft_db[dt_recipe,12] = 1;
+var dt_optional = item_make(dt_recipe);
+show_debug_message(""DT_INV|optional|"" + string(dt_optional) + ""|"" + string(ds_map_exists(global.inven_use,1)) + ""|"" + string(ds_map_find_value(global.inven_use,3)));
 ds_map_destroy(global.inven_use); ds_map_destroy(global.inven_weapon); ds_map_destroy(global.inven_null);
 global.inven_use = dt_old_use; global.inven_weapon = dt_old_weapon; global.inven_null = dt_old_null;
 global.equip_weapon = dt_old_equipped;

@@ -25,6 +25,7 @@ def check_log(log):
         'get': ['5'], 'drop': ['0', '1', '4'], 'last': ['1', '0'],
         'equip_first': ['0', '0', '0'], 'equip_swap': ['1', '1', '1', '1'],
         'short': ['0', '0', '1', '2', '3'], 'craft': ['1', '0', '1', '0', '2'],
+        'optional': ['1', '0', '3'],
     }
     if log.count('DT_INV_DONE') != 1:
         raise ValueError('probe completion missing or duplicated')
