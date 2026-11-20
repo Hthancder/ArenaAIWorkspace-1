@@ -95,10 +95,10 @@ trong repo này: clone Bruce đúng commit `2b6ba4d`, apply patch, chạy `pio r
 Flash: [===       ]  27.4%  (4.601.355 / 16.777.216 bytes)
 RAM:   [====      ]  39.8%  (130.260 / 327.680 bytes)
 firmware.bin          = 4.601.904 bytes
-firmware-factory.bin  = 4.732.528 bytes   (ảnh gộp, nạp ở 0x0)
+firmware-factory.bin  = 4.667.440 bytes   (ảnh gộp, nạp ở 0x0)
 ```
 
-Run CI mới nhất: **44718198693** (commit `cf7f03b`) — PASS. Ảnh gộp được ghép bằng Python
+Run CI mới nhất: **44722383672** (commit `abd84f4`) — PASS. Ảnh gộp được ghép bằng Python
 thuần trong `merge_bin.py` (đọc/ghi theo offset, đệm 0xFF đủ 16 MB, kiểm tra lại từng byte và
 magic `0xE9`), không phụ thuộc phiên bản esptool nữa — bản trước gọi `esptool merge_bin` và
 fail vì esptool đổi tên subcommand/option giữa v4 và v5.

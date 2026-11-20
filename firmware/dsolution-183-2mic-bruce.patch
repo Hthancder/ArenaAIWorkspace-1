@@ -165,7 +165,7 @@ index 0000000..d021320
 +#endif // DSOLUTION_NV3023_PANEL_H
 diff --git a/boards/dsolution-183-2mic/README.md b/boards/dsolution-183-2mic/README.md
 new file mode 100644
-index 0000000..ea2ca7a
+index 0000000..ea4f2b6
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/README.md
 @@ -0,0 +1,224 @@
@@ -340,11 +340,11 @@ index 0000000..ea2ca7a
 +Flash: [===       ]  27.4% (used 4 601 355 bytes from 16 777 216 bytes)
 +RAM:   [====      ]  39.8% (used 130 260 bytes from 327 680 bytes)
 +firmware.bin          4 601 904 bytes     0 warnings from the board's own files
-+firmware-factory.bin  4 732 528 bytes     bootloader+partitions+boot_app0+app, flash at 0x0
++firmware-factory.bin  4 667 440 bytes     bootloader+partitions+boot_app0+app, flash at 0x0
 +NV3023 init table, MADCTL table and the board's _setup_gpio()/codec hooks are in the image
 +```
 +
-+(CI run 44718198693 on `cf7f03b`.)
++(CI run 44722383672 on `abd84f4`.)
 +
 +### First flash on real hardware -- what it showed
 +
