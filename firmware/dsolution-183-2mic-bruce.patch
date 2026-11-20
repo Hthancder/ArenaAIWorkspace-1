@@ -894,10 +894,10 @@ index 0000000..408673a
 +}
 diff --git a/boards/dsolution-183-2mic/merge_bin.py b/boards/dsolution-183-2mic/merge_bin.py
 new file mode 100644
-index 0000000..34d2300
+index 0000000..ea15999
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/merge_bin.py
-@@ -0,0 +1,109 @@
+@@ -0,0 +1,119 @@
 +# =====================================================================================
 +#  boards/dsolution-183-2mic/merge_bin.py
 +#
@@ -908,9 +908,16 @@ index 0000000..34d2300
 +#
 +#      esptool.py --chip esp32s3 write_flash 0x0 firmware-factory.bin
 +#
-+#  `--fill-flash-size` pads the image to the full 16 MB, so writing it also erases the
-+#  partition table and the LittleFS area of whatever firmware was on the board before --
-+#  the filesystem is re-created on first boot instead of inheriting a stale one.
++#  The image is padded to the full 16 MB, so writing it also erases the partition table
++#  and the LittleFS area of whatever firmware was on the board before -- the filesystem
++#  is re-created on first boot instead of inheriting a stale one.
++#
++#  The merge itself is done here, in pure Python, instead of shelling out to
++#  `esptool merge_bin`. esptool renamed that subcommand *and* its --flash_* options
++#  between v4 and v5, which is what made the first CI run of this hook fail with a bare
++#  "unrecognized arguments"; laying the images down at their offsets is exactly what
++#  merge_bin does internally anyway, and PlatformIO has already written the flash
++#  parameters into the bootloader image header.
 +#
 +#  PlatformIO's own upload target still works (`pio run -t upload` writes the four
 +#  separate images); this is only the "one file" output.
@@ -922,45 +929,40 @@ index 0000000..34d2300
 +
 +Import("env")
 +
-+import subprocess
-+import sys
 +from pathlib import Path
 +
 +TAG = "[merge_bin]"
-+FLASH_MODE_DEFAULT = "qio"
++
++# ESP32-S3 boot loader / application images start with the 0xE9 magic byte.
++IMAGE_MAGIC = 0xE9
++
++FLASH_SIZES = {
++    "1MB": 1 << 20,
++    "2MB": 2 << 20,
++    "4MB": 4 << 20,
++    "8MB": 8 << 20,
++    "16MB": 16 << 20,
++    "32MB": 32 << 20,
++}
 +
 +
-+def _esptool_command(env):
-+    """esptool v4 ships esptool.py, v5 may only install the console script."""
-+    pkg = env.PioPlatform().get_package_dir("tool-esptoolpy") or ""
-+    for exe in ("esptool.py", "esptool"):
-+        path = Path(pkg) / exe
-+        if path.is_file():
-+            return [sys.executable, str(path)]
-+    return [sys.executable, "-m", "esptool"]
-+
-+
-+def _flash_freq(value):
-+    digits = "".join(ch for ch in str(value) if ch.isdigit())
-+    try:
-+        return f"{int(digits) // 1000000}m"
-+    except (TypeError, ValueError):
-+        return "80m"
++def _flash_size_bytes(value, default="16MB"):
++    key = str(value or default).strip().upper().replace(" ", "")
++    return FLASH_SIZES.get(key, FLASH_SIZES[default])
 +
 +
 +def merge_bin(source, target, env):
 +    build = Path(env.subst("$BUILD_DIR"))
 +    app = build / f"{env.subst('$PROGNAME')}.bin"
++
 +    bootloader = build / "bootloader.bin"
 +    partitions = build / "partitions.bin"
 +    boot_app0 = build / "boot_app0.bin"
-+
 +    if not boot_app0.is_file():
 +        # Framework layout differences: the file lives somewhere under the packages dir.
-+        packages = Path(env.subst("$PROJECT_PACKAGES_DIR"))
-+        boot_app0 = next(packages.rglob("boot_app0.bin"), boot_app0)
++        boot_app0 = next(Path(env.subst("$PROJECT_PACKAGES_DIR")).rglob("boot_app0.bin"), boot_app0)
 +
-+    segments = [(0x0000, bootloader), (0x8000, partitions)]
++    segments = [(0x0, bootloader), (0x8000, partitions)]
 +    if boot_app0.is_file():
 +        segments.append((0xE000, boot_app0))
 +    else:
@@ -971,39 +973,47 @@ index 0000000..34d2300
 +        if not image.is_file():
 +            raise SystemExit(f"{TAG} missing segment: {image}")
 +
++    flash_size = _flash_size_bytes(env.BoardConfig().get("upload.flash_size", "16MB"))
++
++    image = bytearray()
++    placed = []
++    for offset, path in segments:  # already ascending
++        data = path.read_bytes()
++        if not data:
++            raise SystemExit(f"{TAG} empty segment: {path}")
++        if len(image) > offset:
++            raise SystemExit(
++                f"{TAG} {path.name} at 0x{offset:X} overlaps the previous segment "
++                f"(which already reaches 0x{len(image):X})"
++            )
++        image.extend(b"\xff" * (offset - len(image)))
++        image.extend(data)
++        placed.append((path.name, offset, len(data)))
++
++    if len(image) > flash_size:
++        raise SystemExit(f"{TAG} merged image {len(image)} B does not fit in {flash_size} B")
++    image.extend(b"\xff" * (flash_size - len(image)))
++
++    # Sanity: every image we placed must still be byte-identical where we put it and the
++    # bootloader/app must carry the ESP image magic. A silent offset mistake here is a
++    # bricked-looking board, so fail the build instead of shipping it.
++    for offset, path in segments:
++        data = path.read_bytes()
++        if image[offset:offset + len(data)] != data:
++            raise SystemExit(f"{TAG} verification failed for {path.name} at 0x{offset:X}")
++    for offset, path in ((0x0, bootloader), (0x10000, app)):
++        if image[offset] != IMAGE_MAGIC:
++            raise SystemExit(
++                f"{TAG} {path.name} at 0x{offset:X} does not start with 0x{IMAGE_MAGIC:02X} "
++                f"(got 0x{image[offset]:02X}) -- wrong file at that offset?"
++            )
++
 +    out = build / f"{env.subst('$PROGNAME')}-factory.bin"
-+    mode = env.BoardConfig().get("build.flash_mode", FLASH_MODE_DEFAULT)
-+    freq = _flash_freq(env.BoardConfig().get("build.f_flash", "80000000"))
-+    size = env.BoardConfig().get("upload.flash_size", "16MB")
++    out.write_bytes(image)
 +
-+    offsets = []
-+    for offset, image in segments:
-+        offsets += [f"0x{offset:X}", str(image)]
-+
-+    # esptool v4 spells the command merge_bin, v5 accepts merge-bin; --fill-flash-size
-+    # is not available on very old builds. Try the combinations, accept the first that works.
-+    attempts = [
-+        ("merge_bin", ["--fill-flash-size", size]),
-+        ("merge-bin", ["--fill-flash-size", size]),
-+        ("merge_bin", []),
-+        ("merge-bin", []),
-+    ]
-+    for subcommand, extra in attempts:
-+        cmd = (
-+            _esptool_command(env)
-+            + ["--chip", "esp32s3", subcommand, "-o", str(out)]
-+            + ["--flash_mode", mode, "--flash_freq", freq, "--flash_size", size]
-+            + extra
-+            + offsets
-+        )
-+        print(f"{TAG} trying: {' '.join(cmd)}")
-+        if out.is_file():
-+            out.unlink()
-+        if subprocess.call(cmd) == 0 and out.is_file():
-+            print(f"{TAG} OK: {out} ({out.stat().st_size} bytes) -- flash it at 0x0")
-+            return
-+
-+    raise SystemExit(f"{TAG} failed to merge the image (see the command above)")
++    for name, offset, length in placed:
++        print(f"{TAG}   0x{offset:06X}  {name:<18} {length:>9} B")
++    print(f"{TAG} OK: {out.name} {len(image)} B (16 MB padded) -- flash it at 0x0")
 +
 +
 +env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", merge_bin)
