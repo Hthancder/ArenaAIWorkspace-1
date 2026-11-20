@@ -1,0 +1,31 @@
+name: Transfer existing Dead Town test IPA
+
+on:
+  push:
+    branches:
+      - arena/78062d86-arenaaiworkspace-1
+    paths:
+      - .github/workflows/deadtown-ipa-transfer.yml
+
+permissions:
+  contents: write
+
+jobs:
+  transfer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Retrieve and verify the existing public test IPA
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download deadtown-ios15-re-test-3 -R "$GITHUB_REPOSITORY" -p 'DeadTown-iOS15-RE-test3.ipa'
+          echo '7e0f10c8761fe1160baa855a4e825aa31974f02cb2b2205a27b0df9d5aefe781  DeadTown-iOS15-RE-test3.ipa' | sha256sum -c
+          python - <<'PY'
+          import base64, json
+          from pathlib import Path
+          payload = base64.b64encode(Path('DeadTown-iOS15-RE-test3.ipa').read_bytes()).decode('ascii')
+          Path('blob.json').write_text(json.dumps({'content': payload, 'encoding': 'base64'}))
+          PY
+          gh api "repos/$GITHUB_REPOSITORY/git/blobs" --method POST --input blob.json --jq '"::notice::IPA_TRANSFER_BLOB=" + .sha'
