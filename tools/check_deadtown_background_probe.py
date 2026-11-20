@@ -26,6 +26,20 @@ def one(log, expected_mode):
             'idealized_gap_fraction': idealized_background_gap(width, height, angle)}
 
 
+def final(log, expected_mode, expected_initial):
+    rows = [line[line.find('DT_BG_FINAL|'):].strip().split('|')
+            for line in log.splitlines() if 'DT_BG_FINAL|' in line]
+    if len(rows) != 1 or len(rows[0]) != 4 or rows[0][1] != expected_mode:
+        raise ValueError('expected one final-pass marker')
+    try:
+        initial, remaining = map(int, rows[0][2:])
+    except ValueError as exc:
+        raise ValueError('invalid final-pass marker') from exc
+    if initial != expected_initial or not 0 <= remaining <= initial:
+        raise ValueError('invalid final-pass counts')
+    return {'initial_marked_pixels': initial, 'remaining_after_room_draw': remaining}
+
+
 def check(zero_log, live_log, fix_log):
     zero, live, fix = one(zero_log, 'zero'), one(live_log, 'live'), one(fix_log, 'fix')
     if zero['angle'] != 0 or abs(live['angle']) < 1 or abs(fix['angle'] - live['angle']) > 0.05:
@@ -34,6 +48,8 @@ def check(zero_log, live_log, fix_log):
         raise ValueError('expected control coverage and rotated uncovered region were not observed')
     if abs(live['observed_fraction'] - live['idealized_gap_fraction']) > 0.02:
         raise ValueError('rotated measurement diverges from idealized geometry')
+    for mode, report, log in (('zero', zero, zero_log), ('live', live, live_log), ('fix', fix, fix_log)):
+        report['after_room_draw'] = final(log, mode, report['magenta_pixels'])
     return {'zero': zero, 'rotated': live, 'synthetic_fix': fix,
             'limitations': 'Single prepainted desktop GLES pass, intentionally changes target; '
                            'not natural gameplay, iOS, original renderer or proof of device defect.'}

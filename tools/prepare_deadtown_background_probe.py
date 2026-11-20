@@ -12,6 +12,7 @@ from pathlib import Path
 SOURCE_SHA = 'e17d59e8ec81d26acff54b25e32216a186ec68a23c90b19354283627239430ac'
 START = 'void Graphics::drawRoomPass() {\n    if (rt_.bgShowColor) {'
 END = '    drawRoomBackgrounds(false);\n    runDrawEvent(DRAW_BEGIN, true);'
+FINISH = '    drawRoomBackgrounds(true);\n    runDrawEvent(DRAW_END, true);\n}'
 RECT = '''        drawRect(projX_ - 1, projY_ - 1, projX_ + projW_ + 1, projY_ + projH_ + 1, false, rt_.bgColor, rt_.bgColor,
                  rt_.bgColor, rt_.bgColor, 1);'''
 RECT_PROBE = '''        auto dt_bg_state = currentState();
@@ -27,6 +28,7 @@ BEGIN_PROBE = '''void Graphics::drawRoomPass() {
         && vpX_ == 0 && vpY_ == 0 && vpW_ == curTargetW_ && vpH_ == curTargetH_
         && curTargetW_ == 1232 && curTargetH_ == 693 && std::fabs(projAngle_) > 1.0;
     TargetState dt_saved = currentState();
+    std::vector<uint8_t> dt_mask;
     if (dt_active) {
         if (dt_mode[0] == 'z') { auto state = dt_saved; state.pa = 0; restoreState(state); }
         r_.clear(0xff00ff, 1);
@@ -36,8 +38,12 @@ END_PROBE = '''    if (dt_active) {
         std::vector<uint8_t> dt_pixels;
         if (readCurrentTarget(0, 0, curTargetW_, curTargetH_, dt_pixels)) {
             size_t dt_pink = 0;
+            dt_mask.resize(dt_pixels.size() / 4, 0);
             for (size_t i = 0; i + 3 < dt_pixels.size(); i += 4)
-                if (dt_pixels[i] >= 250 && dt_pixels[i+1] <= 5 && dt_pixels[i+2] >= 250) dt_pink++;
+                if (dt_pixels[i] >= 250 && dt_pixels[i+1] <= 5 && dt_pixels[i+2] >= 250) {
+                    dt_pink++;
+                    dt_mask[i / 4] = 1;
+                }
             std::fprintf(stderr, "DT_BG_COVERAGE|%s|%.4f|%d|%d|%zu\\n", dt_mode,
                          projAngle_, curTargetW_, curTargetH_, dt_pink);
             dt_measured = true;
@@ -48,10 +54,33 @@ END_PROBE = '''    if (dt_active) {
     runDrawEvent(DRAW_BEGIN, true);'''
 
 
+FINISH_PROBE = '''    drawRoomBackgrounds(true);
+    runDrawEvent(DRAW_END, true);
+    if (dt_active && !dt_mask.empty()) {
+        auto dt_after_game = currentState();
+        restoreState(dt_saved);
+        std::vector<uint8_t> dt_final_pixels;
+        if (readCurrentTarget(0, 0, curTargetW_, curTargetH_, dt_final_pixels)
+            && dt_final_pixels.size() / 4 == dt_mask.size()) {
+            size_t dt_initial = 0, dt_surviving = 0;
+            for (size_t i = 0; i < dt_mask.size(); i++) {
+                if (!dt_mask[i]) continue;
+                dt_initial++;
+                size_t p = i * 4;
+                if (dt_final_pixels[p] >= 250 && dt_final_pixels[p+1] <= 5 && dt_final_pixels[p+2] >= 250)
+                    dt_surviving++;
+            }
+            std::fprintf(stderr, "DT_BG_FINAL|%s|%zu|%zu\\n", dt_mode, dt_initial, dt_surviving);
+        }
+        restoreState(dt_after_game);
+    }
+}'''
+
+
 def patch_source(source):
-    if source.count(START) != 1 or source.count(END) != 1 or source.count(RECT) != 1 or 'DT_BG_COVERAGE' in source:
+    if source.count(START) != 1 or source.count(END) != 1 or source.count(RECT) != 1 or source.count(FINISH) != 1 or 'DT_BG_COVERAGE' in source:
         raise ValueError('unexpected source layout')
-    return source.replace(START, BEGIN_PROBE).replace(RECT, RECT_PROBE).replace(END, END_PROBE)
+    return source.replace(START, BEGIN_PROBE).replace(RECT, RECT_PROBE).replace(END, END_PROBE).replace(FINISH, FINISH_PROBE)
 
 
 def prepare(path):
