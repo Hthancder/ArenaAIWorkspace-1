@@ -400,6 +400,17 @@ compare equal in all runtime states is not established. Invalid selector,
 regular map loop, actual Android behavior and iOS remain unproven. This is a
 static observation, not a release patch.
 
+In the separate forced, disposable old-source VM candidate run
+[44715781079](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44715781079),
+initial counter values 100/200/300/400/500 became 102/203/304/405/506 after
+five `item_get(4, index, amount)` calls for indices 44–48 and amounts 2–6.
+All five returned 0 and the temporary `etc` map remained empty; the probe
+restored the prior counters and map handles afterward. This verifies only those
+forced calls in the old-source candidate and gmrunner, not the native names,
+all branches or execution on Android/iOS. Static verifier CI run
+[44715781099](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44715781099)
+passed independently.
+
 #### Corroborating inventory selection against native save keys
 
 `tools/deadtown_inventory_save_evidence.py` independently traces native normal

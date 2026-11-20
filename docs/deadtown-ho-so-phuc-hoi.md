@@ -224,6 +224,12 @@ trước khi phát hành. Game Unity `com.Ccentury.DeadTownSurvival` là remake 
   xác minh đăng ký tên global native, runtime, giá trị phi hữu hạn hay toàn
   bộ vòng lặp map. Công cụ tĩnh `tools/deadtown_item_get_evidence.py`; không
   sửa release hoặc coi source cũ đã tương đương APK.
+- Forced VM [44715781079](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44715781079)
+  thử riêng candidate nguồn cũ: năm counter 100/200/300/400/500 lần lượt
+  thành 102/203/304/405/506 sau khi lấy index 44–48 với số lượng 2–6; năm
+  lời gọi trả 0 và map etc tạm vẫn rỗng. Probe hoàn nguyên counter và handle;
+  đây không phải chạy native hay chứng minh tương đương Android/iOS. Static CI
+  [44715781099](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44715781099) đạt.
 - Đối chiếu độc lập trong native normal save `game_save_protect` tại
   `0x1d97f8`: global index 0, 1, 2, 3 được `ds_map_write` rồi ghi vào các
   key `inventory/weapon`, `inventory/equip`, `inventory/use`, `inventory/etc`
@@ -307,7 +313,8 @@ CI có thời hạn ngắn nên không coi là bản sao lưu duy nhất.
 Các công cụ chính: `deadtown_native_inventory.py`, `deadtown_native_callgraph.py`,
 `deadtown_native_tables.py`, `deadtown_native_lang.py`,
 `deadtown_lang_fallback_evidence.py`, `deadtown_lang_coverage.py`,
-`deadtown_poison_evidence.py`, `deadtown_sprite_metadata.py`,
+`deadtown_poison_evidence.py`, `deadtown_item_drop_evidence.py`,
+`deadtown_item_get_evidence.py`, `deadtown_inventory_save_evidence.py`, `deadtown_sprite_metadata.py`,
 `deadtown_sprite_pixels.py`, `deadtown_sprite_masks.py`,
 `recover_deadtown_sprites.py`, `recover_deadtown_audio.py`,
 `prepare_deadtown_offline.py`, `prepare_deadtown_poison_probe.py`,
@@ -315,9 +322,9 @@ Các công cụ chính: `deadtown_native_inventory.py`, `deadtown_native_callgra
 và các `check_deadtown_*`/`.csx` tương ứng. Đọc help/docstring trước khi dùng;
 các probe candidate chỉ dành cho dữ liệu tạm, không được đưa vào IPA.
 
-Kết quả gần nhất: **101 unittest local đạt**;
-run VM `44683394932` đạt, static RE `44683395035` đạt. CI/địa chỉ trong báo
-cáo là dấu vết có thể đối chiếu, không thay thế dữ liệu/bằng chứng cần tái tạo.
+Kết quả gần nhất: **103 unittest local đạt**; run VM `44715781079` đạt,
+static RE `44715781099` đạt. CI/địa chỉ trong báo cáo là dấu vết có thể đối
+chiếu, không thay thế dữ liệu/bằng chứng cần tái tạo.
 
 ## 12. Các việc chưa xong và gate
 
