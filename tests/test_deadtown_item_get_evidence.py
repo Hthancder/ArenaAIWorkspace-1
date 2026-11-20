@@ -35,6 +35,12 @@ class ItemGetEvidenceTests(unittest.TestCase):
         self.assertEqual([x['add_call'] for x in evidence['special_cases']],
                          ['0x1a037c', '0x1a03c0', '0x1a0404', '0x1a0448', '0x1a04a4'])
         self.assertEqual(evidence['epsilon_initial'], 1e-10)
+        self.assertEqual(evidence['ordinary_map_path'], {
+            'size_call': '0x19fdb0', 'find_first_call': '0x19fe54',
+            'find_next_call': '0x1a0044', 'find_value_call': '0x1a01a0',
+            'set_call': '0x1a0204', 'add_call': '0x1a032c',
+            'size_instance_slot': 2, 'found_instance_slot': 3, 'loop_instance_slot': 4,
+        })
         self.assertIn('global name registration', evidence['limitations'])
 
 

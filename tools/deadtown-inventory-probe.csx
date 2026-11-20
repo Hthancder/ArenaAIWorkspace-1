@@ -63,6 +63,11 @@ var dt_ammo_1 = item_get(4,44,2); var dt_ammo_2 = item_get(4,45,3);
 var dt_ammo_3 = item_get(4,46,4); var dt_ammo_4 = item_get(4,47,5);
 var dt_ammo_5 = item_get(4,48,6);
 show_debug_message(""DT_INV|ammo|"" + string(dt_ammo_1) + ""|"" + string(dt_ammo_2) + ""|"" + string(dt_ammo_3) + ""|"" + string(dt_ammo_4) + ""|"" + string(dt_ammo_5) + ""|"" + string(global.item_ammo_normal) + ""|"" + string(global.item_ammo_shotgun) + ""|"" + string(global.item_ammo_machinegun) + ""|"" + string(global.item_ammo_arrow) + ""|"" + string(global.item_oil) + ""|"" + string(ds_map_size(global.inven_etc)));
+// Exercise empty, missing, and later existing entries in a four-key map.
+item_get(4,0,2); item_get(4,1,4); item_get(4,2,6);
+item_get(4,2,3); item_get(4,1,5); item_get(4,3,8);
+show_debug_message(""DT_INV|scan|"" + string(ds_map_size(global.inven_etc)) + ""|"" + string(ds_map_find_value(global.inven_etc,0)) + ""|"" + string(ds_map_find_value(global.inven_etc,1)) + ""|"" + string(ds_map_find_value(global.inven_etc,2)) + ""|"" + string(ds_map_find_value(global.inven_etc,3)));
+ds_map_clear(global.inven_etc);
 item_get(3,0,2);
 item_get(3,0,3);
 show_debug_message(""DT_INV|get|"" + string(ds_map_find_value(global.inven_use,0)));

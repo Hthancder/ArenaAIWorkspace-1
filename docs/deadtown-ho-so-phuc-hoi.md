@@ -221,9 +221,15 @@ trước khi phát hành. Game Unity `com.Ccentury.DeadTownSurvival` là remake 
   12–16, trả 0 và bỏ qua vòng xử lý map thông thường. So sánh item dùng
   epsilon runtime, ELF khởi tạo 1e-10; nguồn GMX cũ dùng cùng các item index
   và đặt tên counter là đạn thường, shotgun, machinegun, tên và dầu. Chưa
-  xác minh đăng ký tên global native, runtime, giá trị phi hữu hạn hay toàn
-  bộ vòng lặp map. Công cụ tĩnh `tools/deadtown_item_get_evidence.py`; không
-  sửa release hoặc coi source cũ đã tương đương APK.
+  xác minh đăng ký tên global native, runtime hoặc giá trị phi hữu hạn.
+  Công cụ tĩnh `tools/deadtown_item_get_evidence.py`; không sửa release hoặc
+  coi source cũ đã tương đương APK.
+- Nhánh `item_get` thông thường: lấy size và key đầu, duyệt bằng `find_next`;
+  nếu tìm thấy key thì `find_value` cộng số lượng và `ds_map_set`, còn nhánh
+  cờ chưa tìm thấy gọi `ds_map_add`. Bộ verifier pin vector, các call, nhánh
+  và instance slot 2/3/4, không đoán tên slot. `YYCompareVal` nhận epsilon
+  runtime; thứ tự duyệt map, loại key, điều kiện bất thường, giá trị trả về
+  thường và hành vi chạy Android/iOS chưa được chứng minh.
 - Forced VM [44715781079](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44715781079)
   thử riêng candidate nguồn cũ: năm counter 100/200/300/400/500 lần lượt
   thành 102/203/304/405/506 sau khi lấy index 44–48 với số lượng 2–6; năm

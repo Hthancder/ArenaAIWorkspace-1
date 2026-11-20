@@ -397,8 +397,8 @@ indices, but the native global-index registration/names have not been proven.
 Selector 4 selects index 3 on the checked jump table, but whether target values
 compare equal in all runtime states is not established. Invalid selector,
 `YYCompareVal`/`RValue +=` internals, execution order across all branches,
-regular map loop, actual Android behavior and iOS remain unproven. This is a
-static observation, not a release patch.
+actual Android behavior and iOS remain unproven. This is a static observation,
+not a release patch.
 
 In the separate forced, disposable old-source VM candidate run
 [44715781079](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44715781079),
@@ -410,6 +410,31 @@ forced calls in the old-source candidate and gmrunner, not the native names,
 all branches or execution on Android/iOS. Static verifier CI run
 [44715781099](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44715781099)
 passed independently.
+
+#### Native `item_get` ordinary map path
+
+The verifier also pins the ordinary path entered after the special checks:
+
+- `ds_map_size(target)` (`0x19fdb0`) is assigned to instance slot 2 and
+  `ds_map_find_first(target)` (`0x19fe54`) to a local key. Instance slots 3
+  and 4 are initialized to zero; these are identified only by indices.
+- The loop compares slot 4 with slot 2 using `YYCompareVal` and the mutable
+  epsilon. If less, it compares the current key with argument 1 using the
+  same comparison helper. A nonmatch calls `ds_map_find_next` (`0x1a0044`),
+  updates the local key and increments slot 4 before looping.
+- A match sets slot 3 to 1, calls `ds_map_find_value(target, current key)`
+  (`0x1a01a0`), adds argument 2, and calls `ds_map_set(target, current key,
+  sum)` (`0x1a0204`). After leaving the loop, the zero/near-zero flag branch
+  calls `ds_map_add(target, argument 1, argument 2)` (`0x1a032c`); otherwise
+  it skips that call. This is consistent with old GMX's search-and-stack
+  shape but is **not** proof that its runner implementation matches APK.
+
+The checks include branch targets, local/instance-slot and vector operands,
+GOT/PLT symbols, and the epsilon pointer. They do not resolve slot names,
+fully model `YYCompareVal`, DS-map internals, iteration order, exceptions,
+invalid maps/keys, unusual numeric values, return values on the ordinary
+path or runtime reachability. In particular, do not assume a different key
+iteration order or equality policy on Android or iOS.
 
 #### Corroborating inventory selection against native save keys
 
