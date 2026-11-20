@@ -95,6 +95,15 @@ jobs:
             echo "warnings in board files: $(grep -icE 'warning:.*(NV3023|dsolution|interface\.cpp|mic\.cpp)' build.log)"
           } > report.txt
           cat report.txt
+          if [ ! -f "$BIN" ] || [ ! -f "$FACTORY" ]; then
+            ERR_LINES=$(grep -E '(: error:|fatal error:|undefined reference|multiple definition|No such file|BuildError|Traceback|Error:|\*\*\* \[)' build.log | head -n 10)
+            if [ -z "$ERR_LINES" ]; then
+              ERR_LINES=$(tail -n 10 build.log)
+            fi
+            while IFS= read -r line; do
+              [ -n "$line" ] && echo "::error title=build error::$line"
+            done <<< "$ERR_LINES"
+          fi
           # One annotation per line, the first 10 are the ones GitHub keeps.
           while IFS= read -r line; do [ -n "$line" ] && echo "::notice title=build report::$line"; done < report.txt
 
