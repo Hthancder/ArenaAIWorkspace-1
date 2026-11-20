@@ -1,9 +1,10 @@
+import math
 import tempfile
 import unittest
 from pathlib import Path
 try:
     from PIL import Image
-    from tools.check_deadtown_motion_probe import parse, compare, FRAMES
+    from tools.check_deadtown_motion_probe import parse, compare, FRAMES, idealized_background_gap
     HAS_PIL = True
 except ImportError:
     HAS_PIL = False
@@ -14,7 +15,7 @@ def log(moving=False):
     for tick in range(1, 31):
         key = int(moving and 8 <= tick <= 20)
         x = min(max(tick - 7, 0), 13) * 3 if moving else 0
-        vals = [tick, x, 0, max(0, x - 3), 0, 1, 0, 0, 1120, 630, 1120, 630, 0, 1120, 630, key, 1]
+        vals = [tick, x, 0, max(0, x - 3), 0, 1, 0, 0, 1120, 630, 0, 1120, 630, 0, 1120, 630, key, 1]
         rows.append('DT_MOTION|' + '|'.join(map(str, vals)))
     return '\n'.join(rows)
 
@@ -24,9 +25,17 @@ class MotionProbeTests(unittest.TestCase):
     def test_rejects_invalid_markers(self):
         self.assertEqual(len(parse(log())), 30)
         for invalid in (log() + '\n' + log().splitlines()[0], log().replace('DT_MOTION|5|', 'DT_MOTION|nan|'),
-                        '\n'.join(log().splitlines()[1:]), log().replace('|1120|630|0|1120|630|0|1', '|1120|630|0|1120|630|0|2')):
+                        '\n'.join(log().splitlines()[1:]), log().replace('|630|0|1\n', '|630|0|2\n')):
             with self.subTest(value=invalid[:40]), self.assertRaises(ValueError):
                 parse(invalid)
+
+    def test_background_geometry(self):
+        self.assertEqual(idealized_background_gap(1120, 630, 0), 0)
+        self.assertGreater(idealized_background_gap(1120, 630, 45), 0.1)
+        self.assertAlmostEqual(idealized_background_gap(1120, 630, 90),
+                               1 - 632 / 1120, places=6)
+        with self.assertRaises(ValueError):
+            idealized_background_gap(0, 630, math.nan)
 
     def test_compare_and_detect_no_movement(self):
         with tempfile.TemporaryDirectory() as tmp:

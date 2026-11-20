@@ -42,7 +42,7 @@ if dt_motion_tick <= 65
     show_debug_message(""DT_MOTION|"" + string(dt_motion_tick) + ""|"" + string(x) + ""|"" + string(y)
         + ""|"" + string(xprevious) + ""|"" + string(yprevious) + ""|"" + string(background_showcolor)
         + ""|"" + string(view_xview[0]) + ""|"" + string(view_yview[0]) + ""|"" + string(view_wview[0])
-        + ""|"" + string(view_hview[0]) + ""|"" + string(view_wport[0]) + ""|"" + string(view_hport[0])
+        + ""|"" + string(view_hview[0]) + ""|"" + string(view_angle[0]) + ""|"" + string(view_wport[0]) + ""|"" + string(view_hport[0])
         + ""|"" + string(view_visible[1]) + ""|"" + string(dt_appw) + ""|"" + string(dt_apph)
         + ""|"" + string(keyboard_check(ord(""D""))) + ""|"" + string(instance_number(obj_player)));
 }
