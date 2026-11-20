@@ -3,70 +3,102 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>DSolution 1.83" 2-Mic — nạp firmware &amp; xem log</title>
+<title>DSolution 1.83" 2-Mic — Nạp Firmware Dual-OTA &amp; Xem Log</title>
 <style>
-  :root { color-scheme: dark; }
+  :root { color-scheme: dark; --accent: #00f0ff; --accent2: #50aebd; }
   * { box-sizing: border-box; }
   body {
     margin: 0; padding: 24px 16px 64px;
     font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    background: #0e1116; color: #e6edf3;
+    background: #090e13; color: #e6edf3;
   }
-  main { max-width: 880px; margin: 0 auto; }
-  h1 { font-size: 21px; margin: 0 0 4px; }
-  p.sub { margin: 0 0 24px; color: #8b98a5; font-size: 14px; }
+  main { max-width: 900px; margin: 0 auto; }
+  .hero { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+  .hero svg { width: 40px; height: 40px; color: var(--accent); flex-shrink: 0; }
+  h1 { font-size: 21px; margin: 0 0 2px; color: var(--accent); }
+  p.sub { margin: 0; color: #8b98a5; font-size: 13.5px; }
   section {
-    background: #161b22; border: 1px solid #263041; border-radius: 12px;
+    background: #101720; border: 1px solid #223244; border-radius: 12px;
     padding: 18px; margin-bottom: 16px;
   }
-  h2 { font-size: 16px; margin: 0 0 12px; }
+  h2 { font-size: 16px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
   h2 .n {
-    display: inline-block; width: 22px; height: 22px; line-height: 22px; text-align: center;
-    border-radius: 50%; background: #2f81f7; color: #fff; font-size: 13px; margin-right: 8px;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: #041317;
+    font-size: 13px; font-weight: 800;
   }
   .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
   button {
     font: inherit; font-weight: 600; padding: 10px 16px; border-radius: 8px;
-    border: 1px solid #2f81f7; background: #1f6feb; color: #fff; cursor: pointer;
+    border: 1px solid var(--accent); background: #0c4d5b; color: #e6f9fc; cursor: pointer;
   }
-  button.secondary { background: #21262d; border-color: #3d444d; color: #e6edf3; }
-  button.danger { background: #3d1d1d; border-color: #8b3a3a; color: #ffb3b3; }
+  button:hover:not(:disabled) { background: var(--accent); color: #041317; }
+  button.secondary { background: #1c2430; border-color: #364556; color: #e6edf3; }
+  button.secondary:hover:not(:disabled) { background: #2c3849; color: #fff; }
+  button.danger { background: #3b1920; border-color: #9e3b49; color: #ffb8c0; }
+  button.danger:hover:not(:disabled) { background: #c93748; color: #fff; }
   button:disabled { opacity: .45; cursor: not-allowed; }
-  input[type=file] { font: inherit; color: #8b98a5; max-width: 100%; }
-  label.check { display: flex; gap: 8px; align-items: center; font-size: 14px; color: #8b98a5; }
-  .status { margin-top: 12px; font-size: 14px; color: #8b98a5; min-height: 20px; }
+  input[type=file], select {
+    font: inherit; color: #cfe2ea; background: #0a1017; border: 1px solid #27394d;
+    border-radius: 8px; padding: 7px 10px; max-width: 100%;
+  }
+  label.check { display: flex; gap: 8px; align-items: center; font-size: 13.5px; color: #9db0be; }
+  .badge {
+    display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 600;
+    border: 1px solid #29465b; background: #0b1e29; color: var(--accent);
+  }
+  .status { margin-top: 12px; font-size: 14px; color: #9ab0bf; min-height: 20px; }
   .status.ok { color: #3fb950; }
-  .status.err { color: #f85149; }
-  progress { width: 100%; height: 10px; margin-top: 12px; accent-color: #2f81f7; }
+  .status.err { color: #ff6b78; }
+  progress { width: 100%; height: 10px; margin-top: 12px; accent-color: var(--accent); }
   pre#term {
     margin: 12px 0 0; padding: 12px; height: 320px; overflow: auto;
-    background: #05070a; border: 1px solid #263041; border-radius: 8px;
+    background: #05080b; border: 1px solid #223244; border-radius: 8px;
     font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     white-space: pre-wrap; word-break: break-word; color: #c9d1d9;
   }
   pre#term:empty::before { content: "(chưa có dữ liệu)"; color: #4d5866; }
-  code { background: #21262d; padding: 1px 5px; border-radius: 4px; font-size: 13px; }
-  .hint { font-size: 13px; color: #7d8896; margin: 10px 0 0; }
-  .hint b { color: #c9d1d9; font-weight: 600; }
-  .warn { border-left: 3px solid #d29922; padding-left: 12px; margin-top: 14px; }
-  .warn p { margin: 0; font-size: 13px; color: #b8a165; }
-  .ports { font-size: 13px; color: #7d8896; margin-top: 10px; }
+  code { background: #1c2633; padding: 1px 6px; border-radius: 4px; font-size: 13px; color: var(--accent); }
+  .hint { font-size: 13px; color: #8b9cac; margin: 10px 0 0; line-height: 1.55; }
+  .hint b { color: #e2ecf4; font-weight: 600; }
+  .warn { border-left: 3px solid #d29922; padding-left: 12px; margin-top: 12px; }
+  .warn p { margin: 0; font-size: 13px; color: #cbb275; }
+  .ports { font-size: 13px; color: #8b9cac; margin-top: 10px; }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 10px; }
+  .cardlet { background: #0b1118; border: 1px solid #1e2d3d; border-radius: 9px; padding: 12px; font-size: 13px; color: #a7bac9; }
+  .cardlet strong { display: block; color: var(--accent); margin-bottom: 4px; font-size: 13.5px; }
 </style>
 </head>
 <body>
 <main>
-  <h1>DSolution 1.83" 2-Mic — nạp firmware &amp; xem log</h1>
-  <p class="sub">
-    ESP32-S3 · OSTB-2ST-WIFI · Bruce. Chạy bằng Chrome / Edge trên máy tính (WebSerial).
-  </p>
+  <div class="hero">
+    <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M8 38C15 35 22 25 32 13C34 22 39 27 48 28C54 29 58 32 58 36C58 41 51 45 40 46L34 52L32 46C22 46 14 43 8 38Z" fill="currentColor" fill-opacity="0.22" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/>
+      <path d="M6 34L14 39L8 46" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="47" cy="34" r="2.3" fill="currentColor"/>
+    </svg>
+    <div>
+      <h1>DSolution 1.83" 2-Mic — Bruce Flasher &amp; Serial Monitor</h1>
+      <p class="sub">ESP32-S3 · OSTB-2ST-WIFI · 16 MB Dual-OTA + 8 MB OPI PSRAM · WebSerial (Chrome / Edge)</p>
+    </div>
+  </div>
 
   <section>
-    <h2><span class="n">1</span>Nạp firmware</h2>
+    <h2><span class="n">1</span>Nạp Firmware qua USB (WebSerial)</h2>
     <div class="row">
       <input type="file" id="file" accept=".bin,application/octet-stream" />
+      <label class="row" style="gap:6px;font-size:13.5px;color:#9db0be">
+        Địa chỉ:
+        <select id="addrMode">
+          <option value="auto" selected>Tự nhận diện (khuyên dùng)</option>
+          <option value="0x0">0x0 — Factory Image</option>
+          <option value="0x10000">0x10000 — App / OTA</option>
+        </select>
+      </label>
+      <span class="badge" id="binBadge">Chưa chọn file</span>
     </div>
     <div class="row" style="margin-top:14px">
-      <button id="flash" disabled>Nạp vào 0x0</button>
+      <button id="flash" disabled>Nạp firmware</button>
       <button id="erase" class="danger">Xoá toàn bộ chip</button>
       <label class="check"><input type="checkbox" id="safe" /> chế độ chậm (dio / 40 MHz)</label>
     </div>
@@ -74,18 +106,17 @@
     <div class="status" id="flashStatus"></div>
     <div class="ports" id="portInfo"></div>
     <p class="hint">
-      Chọn file <b>DSolution-183-2mic-factory.bin</b> (~4,7 MB) đã giải nén từ artifact —
-      <b>không</b> phải <code>firmware.bin</code>. File này ghi ở địa chỉ <b>0x0</b>.
-      Nếu hộp chọn cổng không hiện ra cổng nào: giữ nút <b>BOOT</b> rồi cắm lại cáp USB.
+      <b>Nạp lần đầu / chuyển từ bản cũ sang Dual-OTA:</b> Chọn <code>DSolution-183-2mic-factory.bin</code> (~3.7 MB, ghi tại <b>0x0</b>) — nên bấm <b>Xoá toàn bộ chip</b> trước.<br/>
+      <b>Cập nhật ứng dụng:</b> Chọn <code>DSolution-183-2mic-ota.bin</code> (tự nhận diện ghi tại <b>0x10000</b>, giữ nguyên LittleFS/Wi-Fi), hoặc dùng <b>WebOTA không dây</b> tại <code>http://bruce.local/ota</code>.<br/>
+      Nếu chưa thấy cổng USB: bật <b>Config &rarr; Enter Bootloader</b> trên máy, hoặc giữ nút <b>BOOT</b> rồi cắm cáp.
     </p>
     <div class="warn">
-      <p>Đang nghi máy chưa lên được. Nạp lại luôn nên bấm <b>Xoá toàn bộ chip</b> trước,
-         rồi nạp — mất khoảng 1–2 phút, đừng rút cáp giữa chừng.</p>
+      <p><b>Bảng phân vùng Dual-OTA 16 MB mới:</b> <code>app0</code> 4 MB (0x10000) · <code>app1</code> 4 MB (0x410000) · <code>LittleFS</code> 7.875 MB (0x810000). Đừng rút cáp trong 1–2 phút khi đang nạp.</p>
     </div>
   </section>
 
   <section>
-    <h2><span class="n">2</span>Xem log (serial 115200)</h2>
+    <h2><span class="n">2</span>Xem Log Serial (115200 bps)</h2>
     <div class="row">
       <button id="monConnect">Kết nối &amp; xem log</button>
       <button id="monReset" class="secondary" disabled>Reset board</button>
@@ -96,41 +127,41 @@
     <div class="status" id="monStatus"></div>
     <pre id="term"></pre>
     <p class="hint">
-      Cắm USB <b>không</b> giữ BOOT rồi bấm “Kết nối &amp; xem log”, sau đó bấm
-      <b>Reset board</b> để thấy log từ đầu. Không thấy gì sau khi reset =
-      chip không chạy hoặc cáp chỉ sạc.
+      Cắm USB bình thường (không giữ BOOT) rồi bấm <b>Kết nối &amp; xem log</b>, sau đó bấm <b>Reset board</b> để xem log khởi động từ đầu.
     </p>
+  </section>
+
+  <section>
+    <h2><span class="n">3</span>Điều khiển &amp; Tính năng mới trên DSolution 1.83" 2-Mic</h2>
+    <div class="grid2">
+      <div class="cardlet">
+        <strong>3 Nút bấm (Boot / Vol+ / Vol-)</strong>
+        • Menu chính: <b>Vol+/Vol-</b> đổi mục · <b>Boot</b> mở · <b>Giữ Vol+ / Vol-</b> chuyển trang · <b>Giữ Boot</b> (hoặc <b>Double Boot</b>) mở Hướng dẫn chi tiết.<br/>
+        • Menu con: <b>Vol+/Vol-</b> di chuyển · <b>Boot</b> chọn · <b>Giữ Boot</b> quay lại · <b>Boot+Vol+</b> mở Hướng dẫn mục hiện tại.
+      </div>
+      <div class="cardlet">
+        <strong>Tiết kiệm Pin, WebUI nền &amp; WebOTA</strong>
+        • Tự làm mờ (Dim) &amp; tắt hẳn panel NV3023 (<code>Screen Off</code>), Eco Saver CPU 160/80 MHz, làm mượt ADC2 Pin, cắt loa idle.<br/>
+        • WebUI nền tự chạy tại <code>http://bruce.local</code> (fallback AP <code>BruceNet</code>), giao diện mới + WebOTA <code>/ota</code> + Enter Bootloader từ menu &amp; WebUI.
+      </div>
+    </div>
   </section>
 </main>
 
 <script type="module">
 const ESPTOOL_CDN = "https://unpkg.com/esptool-js@0.7.1/bundle.js";
-
 const $ = (id) => document.getElementById(id);
 const flashStatus = $("flashStatus");
 const monStatus = $("monStatus");
 const portInfo = $("portInfo");
 const prog = $("prog");
 const term = $("term");
+const binBadge = $("binBadge");
 
 function setStatus(el, text, kind = "") {
   el.textContent = text;
   el.className = "status" + (kind ? " " + kind : "");
 }
-
-/* ------------------------------------------------------------------ ports
- *
- * One page, two jobs, one device. Both the flasher and the monitor need the
- * serial port, and Chrome only lets one of them hold it. So the port is picked
- * once and reused:
- *
- *   - if the origin already has permission for exactly one port, it is used
- *     without showing the picker at all (this is the case after the user has
- *     connected once -- clicking "Nạp" must not open a second dialog);
- *   - only when nothing has been authorised yet does requestPort() show the
- *     chooser, and cancelling it is reported as "chưa chọn cổng", not as a
- *     cryptic DOMException.
- */
 
 let sharedPort = null;
 
@@ -140,7 +171,7 @@ async function refreshPortInfo() {
     const connected = sharedPort ? " · cổng đang dùng: đã mở" : "";
     portInfo.textContent = ports.length
       ? `Đã cấp quyền ${ports.length} cổng${connected}.`
-      : "Chưa cấp quyền cổng nào — lần bấm đầu tiên sẽ hiện hộp chọn cổng.";
+      : "Chưa cấp quyền cổng nào — bấm nút thao tác để chọn cổng USB ESP32-S3.";
   } catch (_) {
     portInfo.textContent = "";
   }
@@ -148,11 +179,9 @@ async function refreshPortInfo() {
 
 async function acquirePort() {
   if (!("serial" in navigator)) {
-    throw new Error("Trình duyệt không có WebSerial — dùng Chrome/Edge trên máy tính.");
+    throw new Error("Trình duyệt không hỗ trợ WebSerial — vui lòng dùng Chrome hoặc Edge trên máy tính.");
   }
-  // Close the monitor first: an open port cannot be claimed twice.
   await stopMonitor({ quiet: true });
-
   const ports = await navigator.serial.getPorts();
   if (ports.length === 1) {
     sharedPort = ports[0];
@@ -164,19 +193,13 @@ async function acquirePort() {
   } catch (err) {
     await refreshPortInfo();
     if (err && err.name === "NotFoundError") {
-      throw new Error(
-        "chưa chọn cổng nào. Bấm lại và chọn đúng cổng của máy trong hộp thoại " +
-        "(thường tên là “USB JTAG/serial debug unit” hoặc “USB 串行设备”). " +
-        "Không thấy cổng nào = giữ nút BOOT rồi cắm lại cáp."
-      );
+      throw new Error("Chưa chọn cổng nào. Hãy bấm lại và chọn USB JTAG/serial debug unit (hoặc giữ BOOT + cắm lại cáp).");
     }
     throw err;
   }
   await refreshPortInfo();
   return sharedPort;
 }
-
-/* ---------------------------------------------------------------- flashing */
 
 let esptool = null;
 async function loadEsptool() {
@@ -187,26 +210,61 @@ async function loadEsptool() {
 }
 
 let firmwareBytes = null;
+function detectBinTarget(buf) {
+  if (!buf || buf.length < 36) return { valid: false, addr: 0x0, kind: "invalid" };
+  if (buf[0] !== 0xe9) return { valid: false, addr: 0x0, kind: "invalid" };
+  // ESP32-S3 application image contains esp_app_desc_t magic 0xABCD5432 at offset 0x20 (32..35)
+  const isApp = buf[32] === 0x32 && buf[33] === 0x54 && buf[34] === 0xcd && buf[35] === 0xab;
+  return isApp
+    ? { valid: true, addr: 0x10000, kind: "app" }
+    : { valid: true, addr: 0x0, kind: "factory" };
+}
+
+function resolveFlashAddress() {
+  const mode = $("addrMode").value;
+  if (mode === "0x0") return 0x0;
+  if (mode === "0x10000") return 0x10000;
+  return firmwareBytes ? firmwareBytes.detected.addr : 0x0;
+}
+
+function refreshFlashButtonLabel() {
+  if (!firmwareBytes) {
+    $("flash").textContent = "Nạp firmware";
+    $("flash").disabled = true;
+    return;
+  }
+  const addr = resolveFlashAddress();
+  const hex = "0x" + addr.toString(16);
+  $("flash").textContent = `Nạp vào ${hex}`;
+  $("flash").disabled = false;
+}
+
+$("addrMode").addEventListener("change", refreshFlashButtonLabel);
+
 $("file").addEventListener("change", async (e) => {
   const f = e.target.files[0];
   firmwareBytes = null;
-  $("flash").disabled = true;
+  binBadge.textContent = "Chưa chọn file";
+  refreshFlashButtonLabel();
   if (!f) return;
   const buf = new Uint8Array(await f.arrayBuffer());
   if (buf.length < 1024) {
-    setStatus(flashStatus, "File quá nhỏ, không phải firmware.", "err");
+    setStatus(flashStatus, "File quá nhỏ, không phải firmware hợp lệ.", "err");
     return;
   }
-  if (buf[0] !== 0xe9) {
-    setStatus(flashStatus,
-      "Cảnh báo: byte đầu là 0x" + buf[0].toString(16).padStart(2, "0") +
-      ", không phải 0xE9 — file này không giống ảnh bootloader (có thể bạn chọn nhầm file).",
-      "err");
+  const detected = detectBinTarget(buf);
+  if (!detected.valid) {
+    binBadge.textContent = "Không phải ảnh 0xE9";
+    setStatus(flashStatus, `Cảnh báo: byte đầu là 0x${buf[0].toString(16).padStart(2, "0")}, không phải 0xE9!`, "err");
+  } else if (detected.kind === "app") {
+    binBadge.textContent = "App / OTA (0x10000)";
+    setStatus(flashStatus, `Đã chọn OTA/App: ${f.name} (${(buf.length / 1048576).toFixed(2)} MB) — sẽ nạp tại 0x10000 (hoặc dùng WebOTA).`);
   } else {
-    setStatus(flashStatus, `Đã chọn ${f.name} — ${buf.length.toLocaleString("vi-VN")} byte.`);
+    binBadge.textContent = "Factory Image (0x0)";
+    setStatus(flashStatus, `Đã chọn Factory: ${f.name} (${(buf.length / 1048576).toFixed(2)} MB) — sẽ nạp tại 0x0.`);
   }
-  firmwareBytes = { name: f.name, data: buf };
-  $("flash").disabled = false;
+  firmwareBytes = { name: f.name, data: buf, detected };
+  refreshFlashButtonLabel();
 });
 
 function terminal() {
@@ -221,13 +279,8 @@ async function connectLoader() {
   const { ESPLoader, Transport } = await loadEsptool();
   const port = await acquirePort();
   const transport = new Transport(port, true);
-  const loader = new ESPLoader({
-    transport,
-    baudrate: 921600,
-    terminal: terminal(),
-    romBaudrate: 115200,
-  });
-  setStatus(flashStatus, "Đang kết nối chip… (nếu treo: giữ BOOT rồi cắm lại cáp)");
+  const loader = new ESPLoader({ transport, baudrate: 921600, terminal: terminal(), romBaudrate: 115200 });
+  setStatus(flashStatus, "Đang kết nối chip… (nếu treo: bật Config -> Enter Bootloader hoặc giữ BOOT + cắm lại)");
   const chip = await loader.main();
   setStatus(flashStatus, `Đã kết nối: ${chip}`);
   return { loader, transport };
@@ -240,6 +293,12 @@ async function closeLoader(loader, transport) {
 
 $("flash").addEventListener("click", async () => {
   if (!firmwareBytes) return;
+  const targetAddr = resolveFlashAddress();
+  if (firmwareBytes.detected.kind === "factory" && targetAddr === 0x10000 &&
+      !confirm("File này trông giống factory.bin (nên nạp ở 0x0). Vẫn tiếp tục nạp ở 0x10000?")) return;
+  if (firmwareBytes.detected.kind === "app" && targetAddr === 0x0 &&
+      !confirm("File này là OTA app binary (nên nạp ở 0x10000, không có bootloader). Vẫn nạp ở 0x0?")) return;
+
   const btn = $("flash"), eraseBtn = $("erase");
   btn.disabled = eraseBtn.disabled = true;
   prog.hidden = false; prog.value = 0;
@@ -247,9 +306,9 @@ $("flash").addEventListener("click", async () => {
   try {
     ({ loader, transport } = await connectLoader());
     const safe = $("safe").checked;
-    setStatus(flashStatus, "Đang nạp… đừng rút cáp.");
+    setStatus(flashStatus, `Đang nạp vào 0x${targetAddr.toString(16)}… đừng rút cáp.`);
     await loader.writeFlash({
-      fileArray: [{ data: firmwareBytes.data, address: 0x0 }],
+      fileArray: [{ data: firmwareBytes.data, address: targetAddr }],
       flashMode: safe ? "dio" : "qio",
       flashFreq: safe ? "40m" : "80m",
       flashSize: "16MB",
@@ -262,59 +321,53 @@ $("flash").addEventListener("click", async () => {
       },
     });
     prog.value = 100;
-    setStatus(flashStatus, "Nạp xong, đang đọc lại để kiểm tra…");
-    // Read the first 32 bytes back: if the image is really in flash, they must be the
-    // first 32 bytes of the file. This catches the case that just bit us -- a chip that
-    // was erased but never written still flashes happily and then only prints the ROM
-    // banner.
+    setStatus(flashStatus, "Đang kiểm tra 32 byte đầu trong flash…");
     let verdict = "";
     try {
-      const back = await loader.readFlash(0x0, 32);
+      const back = await loader.readFlash(targetAddr, 32);
       const want = firmwareBytes.data.slice(0, 32);
       let same = back.length >= 32;
       for (let i = 0; same && i < 32; i++) if (back[i] !== want[i]) same = false;
       verdict = same
-        ? " Đã kiểm tra: 32 byte đầu đọc lại khớp file."
-        : " CẢNH BÁO: đọc lại không khớp — lần nạp này không ghi được!";
+        ? ` Đã xác minh 32 byte tại 0x${targetAddr.toString(16)} khớp 100%.`
+        : " CẢNH BÁO: đọc lại không khớp!";
     } catch (err) {
-      verdict = " (không đọc lại được để kiểm tra: " + (err?.message || err) + ")";
+      verdict = " (không đọc lại được: " + (err?.message || err) + ")";
     }
-    setStatus(flashStatus,
-      "Nạp xong." + verdict + " Rút cáp, cắm lại rồi sang mục 2 xem log.", "ok");
+    setStatus(flashStatus, "Nạp thành công!" + verdict + " Rút & cắm lại USB hoặc reset để chạy.", "ok");
   } catch (err) {
     setStatus(flashStatus, "Lỗi: " + (err?.message || err), "err");
   } finally {
     if (loader) await closeLoader(loader, transport);
     if (sharedPort) { try { await sharedPort.close(); } catch (_) {} }
-    btn.disabled = eraseBtn.disabled = false;
+    refreshFlashButtonLabel();
+    eraseBtn.disabled = false;
     await refreshPortInfo();
   }
 });
 
 $("erase").addEventListener("click", async () => {
-  if (!confirm("Xoá toàn bộ flash 16 MB? Firmware hiện tại trên máy sẽ mất.")) return;
+  if (!confirm("Xoá toàn bộ flash 16 MB? Firmware và LittleFS hiện tại trên máy sẽ mất.")) return;
   const btn = $("flash"), eraseBtn = $("erase");
   btn.disabled = eraseBtn.disabled = true;
   let loader, transport;
   try {
     ({ loader, transport } = await connectLoader());
-    setStatus(flashStatus, "Đang xoá chip…");
+    setStatus(flashStatus, "Đang xoá toàn bộ chip 16 MB…");
     await loader.eraseFlash();
-    setStatus(flashStatus, "Đã xoá xong. Giờ chọn file và bấm “Nạp vào 0x0”.", "ok");
+    setStatus(flashStatus, "Đã xoá sạch! Giờ chọn factory.bin và bấm Nạp vào 0x0.", "ok");
   } catch (err) {
     setStatus(flashStatus, "Lỗi: " + (err?.message || err), "err");
   } finally {
     if (loader) await closeLoader(loader, transport);
     if (sharedPort) { try { await sharedPort.close(); } catch (_) {} }
-    btn.disabled = eraseBtn.disabled = false;
+    refreshFlashButtonLabel();
+    eraseBtn.disabled = false;
     await refreshPortInfo();
   }
 });
 
-/* ------------------------------------------------------------ serial monitor */
-
 let monReader = null, monStopped = false, monText = "", monitorOpen = false;
-
 function setMonButtons(connected) {
   monitorOpen = connected;
   $("monConnect").disabled = connected;
@@ -323,7 +376,6 @@ function setMonButtons(connected) {
   $("monSave").disabled = false;
   $("monClear").disabled = false;
 }
-
 function append(chunk) {
   monText += chunk;
   if (monText.length > 400000) monText = monText.slice(-300000);
@@ -331,7 +383,6 @@ function append(chunk) {
   term.textContent = monText;
   if (atBottom) term.scrollTop = term.scrollHeight;
 }
-
 async function stopMonitor({ quiet = false } = {}) {
   if (!monitorOpen && !sharedPort) return;
   monStopped = true;
@@ -348,7 +399,7 @@ $("monConnect").addEventListener("click", async () => {
     await port.open({ baudRate: 115200, bufferSize: 8192 });
     monStopped = false;
     monReader = port.readable.getReader();
-    setStatus(monStatus, "Đang xem log. Bấm “Reset board” để log từ đầu.", "ok");
+    setStatus(monStatus, "Đang xem log. Bấm “Reset board” để xem từ lúc khởi động.", "ok");
     setMonButtons(true);
     const decoder = new TextDecoder();
     while (!monStopped) {
@@ -357,8 +408,6 @@ $("monConnect").addEventListener("click", async () => {
       if (value) append(decoder.decode(value, { stream: true }));
     }
   } catch (err) {
-    // A stop (flashing or the "Ngắt" button) closes the port under the reader;
-    // that is not an error worth showing.
     if (!monStopped) setStatus(monStatus, "Lỗi: " + (err?.message || err), "err");
   } finally {
     setMonButtons(false);
@@ -368,23 +417,16 @@ $("monConnect").addEventListener("click", async () => {
 $("monReset").addEventListener("click", async () => {
   if (!sharedPort) return;
   try {
-    // Standard ESP auto-reset: hold EN low via RTS, release, then let IO0 float.
-    // On the ESP32-S3 USB-Serial-JTAG bridge DTR is wired to EN and RTS to GPIO0
-    // (BOOT). Pulling RTS low during a reset latches GPIO0 = 0, which is exactly what
-    // the ROM reports as "boot:0x0 (DOWNLOAD)" / "waiting for download" -- the chip
-    // then sits in the flasher instead of booting the application. So: keep RTS high
-    // (GPIO0 released) and pulse EN through DTR.
     await sharedPort.setSignals({ requestToSend: false, dataTerminalReady: true });
     await new Promise((r) => setTimeout(r, 150));
     await sharedPort.setSignals({ requestToSend: false, dataTerminalReady: false });
     append("\n--- reset ---\n");
   } catch (err) {
-    setStatus(monStatus, "Không reset được: " + (err?.message || err) + " (rút cắm cáp thay thế)", "err");
+    setStatus(monStatus, "Không reset được: " + (err?.message || err), "err");
   }
 });
 
 $("monClear").addEventListener("click", () => { monText = ""; term.textContent = ""; });
-
 $("monSave").addEventListener("click", () => {
   const blob = new Blob([monText || "(trống)"], { type: "text/plain" });
   const a = document.createElement("a");
@@ -393,13 +435,10 @@ $("monSave").addEventListener("click", () => {
   a.click();
   URL.revokeObjectURL(a.href);
 });
-
-$("monStop").addEventListener("click", async () => {
-  await stopMonitor();
-});
+$("monStop").addEventListener("click", () => stopMonitor());
 
 if (!("serial" in navigator)) {
-  setStatus(flashStatus, "Trình duyệt này không có WebSerial. Mở bằng Chrome hoặc Edge trên máy tính.", "err");
+  setStatus(flashStatus, "Trình duyệt này không có WebSerial. Dùng Chrome hoặc Edge trên máy tính.", "err");
   setStatus(monStatus, "Trình duyệt này không có WebSerial.", "err");
   $("flash").disabled = $("erase").disabled = $("monConnect").disabled = true;
 } else {

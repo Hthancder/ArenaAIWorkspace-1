@@ -1,0 +1,19 @@
+diff --git a/src/backends/lovyan.cpp b/src/backends/lovyan.cpp
+index ec76418..216077f 100644
+--- a/src/backends/lovyan.cpp
++++ b/src/backends/lovyan.cpp
+@@ -252,7 +252,13 @@ void tft_display::invertDisplay(bool i) {
+     lgfx::LGFX_Device::invertDisplay(i);
+ }
+ 
+-void tft_display::sleep(bool value) {}
++void tft_display::sleep(bool value) {
++    if (value) {
++        RUN_ON_MUTEX(lgfx::LGFX_Device::sleep());
++    } else {
++        RUN_ON_MUTEX(lgfx::LGFX_Device::wakeup());
++    }
++}
+ 
+ void tft_display::setSwapBytes(bool swap) { _swapBytes = swap; }
+ 

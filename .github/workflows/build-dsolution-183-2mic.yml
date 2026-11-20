@@ -3,11 +3,8 @@ name: Bruce build (DSolution 1.83 2-Mic)
 # Compiles the DSolution 1.83" 2-Mic board port against the pinned Bruce revision.
 # The sandbox that produced the port has no cross toolchain, so this workflow is the
 # compile check: it clones upstream Bruce, applies firmware/dsolution-183-2mic-bruce.patch
-# and runs the board's PlatformIO environment end to end.
-#
-# The size/link report at the end is emitted as workflow annotations (::notice::) because
-# the artifact and raw log endpoints are not reachable from the sandbox: `gh run view`
-# prints them.
+# + firmware/dsolution-183-2mic-displaydrivers.patch, builds with BRUCE_OFFLINE_WEB_ASSETS=1,
+# and emits both factory (0x0) and Dual-OTA (.bin) firmware images.
 
 on:
   push:
@@ -15,6 +12,7 @@ on:
       - arena/99e7eeb4-arenaaiworkspace-1
     paths:
       - 'firmware/dsolution-183-2mic-bruce.patch'
+      - 'firmware/dsolution-183-2mic-displaydrivers.patch'
       - '.github/workflows/build-dsolution-183-2mic.yml'
   workflow_dispatch:
 
@@ -33,8 +31,10 @@ jobs:
           git checkout 2b6ba4d490bfcf94ce2574c6154537dbd5838c3d
           git submodule update --init --recursive
 
-      - name: Apply the board port
-        run: git -C /tmp/Bruce apply --verbose "$GITHUB_WORKSPACE/firmware/dsolution-183-2mic-bruce.patch"
+      - name: Apply the board port & DisplayDrivers patches
+        run: |
+          git -C /tmp/Bruce apply --verbose "$GITHUB_WORKSPACE/firmware/dsolution-183-2mic-bruce.patch"
+          git -C /tmp/Bruce/lib/DisplayDrivers apply --verbose "$GITHUB_WORKSPACE/firmware/dsolution-183-2mic-displaydrivers.patch"
 
       - uses: actions/setup-python@v5
         with:
@@ -46,7 +46,7 @@ jobs:
           path: |
             ~/.cache/pip
             ~/.platformio
-          key: pio-${{ runner.os }}-${{ hashFiles('firmware/dsolution-183-2mic-bruce.patch') }}
+          key: pio-${{ runner.os }}-${{ hashFiles('firmware/dsolution-183-2mic-bruce.patch', 'firmware/dsolution-183-2mic-displaydrivers.patch') }}
           restore-keys: pio-${{ runner.os }}-
 
       - name: Install PlatformIO
@@ -54,6 +54,8 @@ jobs:
 
       - name: Build dsolution-183-2mic
         working-directory: /tmp/Bruce
+        env:
+          BRUCE_OFFLINE_WEB_ASSETS: '1'
         run: |
           set -o pipefail
           pio run -e dsolution-183-2mic 2>&1 | tee build.log
@@ -63,20 +65,16 @@ jobs:
         working-directory: /tmp/Bruce
         run: |
           BIN=.pio/build/dsolution-183-2mic/firmware.bin
-          ELF=.pio/build/dsolution-183-2mic/firmware.elf
+          FACTORY=.pio/build/dsolution-183-2mic/firmware-factory.bin
           NM=$(find "$HOME/.platformio/packages" -name 'xtensa-esp32s3-elf-nm' 2>/dev/null | head -1)
           {
             echo "RAM/Flash: $(grep -E '^(RAM|Flash):' build.log | tr -s ' ' | tr '\n' ' ')"
-            echo "binary: $(ls -l "$BIN" 2>/dev/null | awk '{print $5}') bytes"
-            # Bruce builds with -flto, so board functions are usually inlined into their
-            # only caller and gone from the final ELF. Check the pre-LTO objects instead,
-            # and prove the image really contains this board's code by looking for the
-            # banner string in the binary.
+            echo "ota binary: $(ls -l "$BIN" 2>/dev/null | awk '{print $5}') bytes (Dual-OTA 4MB slot)"
             IFACE_OBJ=$(find .pio/build/dsolution-183-2mic -name 'interface.cpp.o' | head -1)
             LOVYAN_OBJ=$(find .pio/build/dsolution-183-2mic -name 'lovyan.cpp.o' | head -1)
             echo "interface object: ${IFACE_OBJ:-MISSING}"
             if [ -n "$IFACE_OBJ" ] && [ -n "$NM" ]; then
-              echo "board symbols: $(for s in _setup_gpio _setup_codec_speaker _setup_codec_mic InputHandler isCharging powerOff; do "$NM" -C "$IFACE_OBJ" | grep -qE " [Tt] $s$" && echo "$s" ; done | tr '\n' ' ')"
+              echo "board symbols: $(for s in _setup_gpio _setup_codec_speaker _setup_codec_mic InputHandler isCharging powerOff getBatteryMv enterBootloaderMode; do "$NM" -C "$IFACE_OBJ" | grep -qE " [Tt] $s" && echo "$s" ; done | tr '\n' ' ')"
             fi
             if [ -n "$LOVYAN_OBJ" ] && [ -n "$NM" ]; then
               echo "panel class: $(for s in getInitCommands getMadCtl setRotation; do "$NM" -C "$LOVYAN_OBJ" | grep -q "Panel_NV3023::$s" && echo "$s"; done | tr '\n' ' ')"
@@ -86,13 +84,12 @@ jobs:
             else
               echo "banner string: NOT FOUND in firmware.bin"
             fi
-            FACTORY=.pio/build/dsolution-183-2mic/firmware-factory.bin
             if [ -f "$FACTORY" ]; then
               echo "factory image: $(ls -l "$FACTORY" | awk '{print $5}') bytes (flash at 0x0)"
             else
               echo "factory image: MISSING -- merge step output: $(grep -i '\[merge_bin\]' build.log | tail -3 | tr '\n' ' ')"
             fi
-            echo "warnings in board files: $(grep -icE 'warning:.*(NV3023|dsolution|interface\.cpp|mic\.cpp)' build.log)"
+            echo "warnings in board files: $(grep -icE 'warning:.*(NV3023|dsolution|interface\.cpp|mic\.cpp|feature_guide)' build.log)"
           } > report.txt
           cat report.txt
           if [ ! -f "$BIN" ] || [ ! -f "$FACTORY" ]; then
@@ -104,20 +101,29 @@ jobs:
               [ -n "$line" ] && echo "::error title=build error::$line"
             done <<< "$ERR_LINES"
           fi
-          # One annotation per line, the first 10 are the ones GitHub keeps.
           while IFS= read -r line; do [ -n "$line" ] && echo "::notice title=build report::$line"; done < report.txt
 
-      - name: Rename the single flashable image
+      - name: Stage firmware artifacts (factory + ota)
         if: always()
         run: |
-          src=/tmp/Bruce/.pio/build/dsolution-183-2mic/firmware-factory.bin
-          [ -f "$src" ] && cp "$src" DSolution-183-2mic-factory.bin
-          ls -l DSolution-183-2mic-factory.bin 2>/dev/null || echo "no factory image produced"
+          FACTORY=/tmp/Bruce/.pio/build/dsolution-183-2mic/firmware-factory.bin
+          OTA=/tmp/Bruce/.pio/build/dsolution-183-2mic/firmware.bin
+          [ -f "$FACTORY" ] && cp "$FACTORY" DSolution-183-2mic-factory.bin
+          [ -f "$OTA" ] && cp "$OTA" DSolution-183-2mic-ota.bin
+          ls -l DSolution-183-2mic-*.bin 2>/dev/null || echo "no firmware images produced"
 
-      - name: Upload firmware (one .bin)
+      - name: Upload Factory Image (flash at 0x0)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: DSolution-183-2mic-factory
           path: DSolution-183-2mic-factory.bin
+          if-no-files-found: warn
+
+      - name: Upload Dual-OTA App Binary (for WebOTA /ota)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DSolution-183-2mic-ota
+          path: DSolution-183-2mic-ota.bin
           if-no-files-found: warn
