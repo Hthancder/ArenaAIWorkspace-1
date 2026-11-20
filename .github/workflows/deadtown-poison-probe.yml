@@ -209,7 +209,8 @@ jobs:
               if p.exists():
                   lines = p.read_text(errors='replace').splitlines()
                   keep = [x for x in lines if 'DT_WEAPON_SAVE' in x or 'CHECK_FAIL' in x or 'error' in x.lower() or 'exception' in x.lower()]
-                  print('::warning::' + name + ': ' + ' | '.join(keep[-8:]).replace('%', '%25')[:3000])
+                  if keep:
+                      print('::notice::' + name + ': ' + ' | '.join(keep[-8:]).replace('%', '%25')[:3000])
           for name in ('inventory-check.log', 'inventory-run.log', 'inventory-instrument.log', 'lang-check.log', 'lang-legacy.log', 'lang-candidate.log', 'lang-candidate_native_table.log', 'lang-legacy-instrument.log', 'lang-candidate-instrument.log', 'lang-candidate_native_table-instrument.log', 'check.log', 'probe.log', 'instrument.log', 'compile.log'):
               path = Path('work') / name
               if not path.exists():

@@ -392,3 +392,9 @@ chỉ lưu `weapon`, không có trường level. Điều này củng cố việc
 bản nguồn cũ là tương đương bản gốc. Probe VM với khóa giả 100001 chỉ là phép
 thử cô lập, không chứng minh tương thích save hoặc hành vi Android/iOS. Chi
 tiết và giới hạn trong `docs/deadtown-original-re.md`.
+
+Đã kiểm tra: 107 test cục bộ và CI phân tích tĩnh `44732951476` đạt; VM cô lập
+`44733479785` cũng đạt với khóa giả 100001 được tải lại nguyên vẹn vào global
+và pointer của instance mới, rồi đặt lại trước Step. Hai lượt đầu thất bại do
+checker chưa xử lý dấu ngoặc kép của giá trị INI, đã sửa và thêm test. Kết quả
+VM không chứng minh hành vi native hay tương thích tệp lưu.

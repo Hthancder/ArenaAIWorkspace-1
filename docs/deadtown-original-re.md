@@ -792,3 +792,13 @@ pointer before Step. This does not establish that the original game accepts
 that key, that normal load is reached, or that desktop GMRM/INI files are
 compatible with native Android/iOS. Static verifier:
 `tools/deadtown_weapon_save_evidence.py` (SHA-pinned APK/ELF).
+
+Validation: local 107 tests passed. Static CI `44732951476` passed. In
+disposable desktop VM run `44733479785`, the old-source save/load restored
+synthetic raw key 100001 to both `global.equip_weapon` and the newly created
+weapon instance pointer; the decoded save contained `equip/weapon` and no
+`weaponlevel`. Both values were reset before Step. The first checks
+(`44732951457`, `44733269741`) failed because the checker did not strip the
+runner's quotes around the real INI value, not because the runtime observation
+failed; the corrected checker has a quoted-value regression test. None of
+these results proves native runtime behavior or cross-platform save format.
