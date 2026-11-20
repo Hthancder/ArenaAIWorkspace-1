@@ -1,5 +1,8 @@
 # Dead Town 1.4.2: original APK investigation
 
+Vietnamese consolidated handoff and current readiness gate:
+[`deadtown-ho-so-phuc-hoi.md`](deadtown-ho-so-phuc-hoi.md).
+
 This is an evidence inventory, not a recovery of the original source or a new IPA.
 The current experimental build combines assets from the APK with code from a
 separate GMX project and a third-party VM runner. A name match does not imply

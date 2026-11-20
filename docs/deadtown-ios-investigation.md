@@ -1,5 +1,9 @@
 # Dead Town iOS port investigation
 
+For the consolidated Vietnamese handoff and current readiness gate, see
+[`deadtown-ho-so-phuc-hoi.md`](deadtown-ho-so-phuc-hoi.md). Sections below
+are historical records and may describe the state at the time they were written.
+
 ## Scope and source
 
 Upstream: https://github.com/kjs104901/deadtown, commit
