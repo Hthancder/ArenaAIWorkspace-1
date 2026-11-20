@@ -32,18 +32,30 @@ jobs:
       - name: Build Dual-Boot custom bootloader + NV3023 Boot Menu
         working-directory: firmware/dualboot-launcher
         run: |
-          set -e
           set -o pipefail
           if [ -f /opt/esp/idf/export.sh ]; then
             . /opt/esp/idf/export.sh
           elif [ -n "${IDF_PATH:-}" ] && [ -f "$IDF_PATH/export.sh" ]; then
             . "$IDF_PATH/export.sh"
           fi
-          idf.py set-target esp32s3
-          idf.py build 2>&1 | tee idf-build.log
+          idf.py set-target esp32s3 2>&1 | tee idf-build.log
+          idf.py build 2>&1 | tee -a idf-build.log
+
+      - name: Report Dual-Boot build & errors
+        if: always()
+        working-directory: firmware/dualboot-launcher
+        run: |
           BOOTLOADER_BIN=build/bootloader/bootloader.bin
           MENU_BIN=build/dualboot_launcher.bin
           PART_BIN=build/partition_table/partition-table.bin
+          if [ ! -f "$BOOTLOADER_BIN" ] || [ ! -f "$MENU_BIN" ]; then
+            ERR=$(grep -E '(: error:|fatal error:|FAILED:|CMake Error|undefined reference|ninja: build stopped)' idf-build.log | head -n 15)
+            [ -z "$ERR" ] && ERR=$(tail -n 25 idf-build.log)
+            while IFS= read -r line; do
+              [ -n "$line" ] && echo "::error title=idf-build::$line"
+            done <<< "$ERR"
+            exit 1
+          fi
           ls -lh "$BOOTLOADER_BIN" "$MENU_BIN" "$PART_BIN"
           BOOT_SIZE=$(stat -c%s "$BOOTLOADER_BIN")
           MENU_SIZE=$(stat -c%s "$MENU_BIN")
