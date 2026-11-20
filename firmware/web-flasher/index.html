@@ -50,6 +50,7 @@
   .hint b { color: #c9d1d9; font-weight: 600; }
   .warn { border-left: 3px solid #d29922; padding-left: 12px; margin-top: 14px; }
   .warn p { margin: 0; font-size: 13px; color: #b8a165; }
+  .ports { font-size: 13px; color: #7d8896; margin-top: 10px; }
 </style>
 </head>
 <body>
@@ -71,10 +72,11 @@
     </div>
     <progress id="prog" value="0" max="100" hidden></progress>
     <div class="status" id="flashStatus"></div>
+    <div class="ports" id="portInfo"></div>
     <p class="hint">
       Chọn file <b>DSolution-183-2mic-factory.bin</b> (~4,7 MB) đã giải nén từ artifact —
       <b>không</b> phải <code>firmware.bin</code>. File này ghi ở địa chỉ <b>0x0</b>.
-      Nếu bấm Connect mà không thấy cổng: giữ nút <b>BOOT</b> rồi cắm lại cáp USB.
+      Nếu hộp chọn cổng không hiện ra cổng nào: giữ nút <b>BOOT</b> rồi cắm lại cáp USB.
     </p>
     <div class="warn">
       <p>Đang nghi máy chưa lên được. Nạp lại luôn nên bấm <b>Xoá toàn bộ chip</b> trước,
@@ -107,12 +109,71 @@ const ESPTOOL_CDN = "https://unpkg.com/esptool-js@0.7.1/bundle.js";
 const $ = (id) => document.getElementById(id);
 const flashStatus = $("flashStatus");
 const monStatus = $("monStatus");
+const portInfo = $("portInfo");
 const prog = $("prog");
 const term = $("term");
 
 function setStatus(el, text, kind = "") {
   el.textContent = text;
   el.className = "status" + (kind ? " " + kind : "");
+}
+
+/* ------------------------------------------------------------------ ports
+ *
+ * One page, two jobs, one device. Both the flasher and the monitor need the
+ * serial port, and Chrome only lets one of them hold it. So the port is picked
+ * once and reused:
+ *
+ *   - if the origin already has permission for exactly one port, it is used
+ *     without showing the picker at all (this is the case after the user has
+ *     connected once -- clicking "Nạp" must not open a second dialog);
+ *   - only when nothing has been authorised yet does requestPort() show the
+ *     chooser, and cancelling it is reported as "chưa chọn cổng", not as a
+ *     cryptic DOMException.
+ */
+
+let sharedPort = null;
+
+async function refreshPortInfo() {
+  try {
+    const ports = await navigator.serial.getPorts();
+    const connected = sharedPort ? " · cổng đang dùng: đã mở" : "";
+    portInfo.textContent = ports.length
+      ? `Đã cấp quyền ${ports.length} cổng${connected}.`
+      : "Chưa cấp quyền cổng nào — lần bấm đầu tiên sẽ hiện hộp chọn cổng.";
+  } catch (_) {
+    portInfo.textContent = "";
+  }
+}
+
+async function acquirePort() {
+  if (!("serial" in navigator)) {
+    throw new Error("Trình duyệt không có WebSerial — dùng Chrome/Edge trên máy tính.");
+  }
+  // Close the monitor first: an open port cannot be claimed twice.
+  await stopMonitor({ quiet: true });
+
+  const ports = await navigator.serial.getPorts();
+  if (ports.length === 1) {
+    sharedPort = ports[0];
+    await refreshPortInfo();
+    return sharedPort;
+  }
+  try {
+    sharedPort = await navigator.serial.requestPort();
+  } catch (err) {
+    await refreshPortInfo();
+    if (err && err.name === "NotFoundError") {
+      throw new Error(
+        "chưa chọn cổng nào. Bấm lại và chọn đúng cổng của máy trong hộp thoại " +
+        "(thường tên là “USB JTAG/serial debug unit” hoặc “USB 串行设备”). " +
+        "Không thấy cổng nào = giữ nút BOOT rồi cắm lại cáp."
+      );
+    }
+    throw err;
+  }
+  await refreshPortInfo();
+  return sharedPort;
 }
 
 /* ---------------------------------------------------------------- flashing */
@@ -136,11 +197,10 @@ $("file").addEventListener("change", async (e) => {
     setStatus(flashStatus, "File quá nhỏ, không phải firmware.", "err");
     return;
   }
-  // 0xE9 is the ESP image magic: a merged image starts with the bootloader.
   if (buf[0] !== 0xe9) {
     setStatus(flashStatus,
       "Cảnh báo: byte đầu là 0x" + buf[0].toString(16).padStart(2, "0") +
-      ", không phải 0xE9 — file này không giống ảnh bootloader. Nạp vẫn được nhưng hãy chắc chắn bạn dùng firmware-factory.bin.",
+      ", không phải 0xE9 — file này không giống ảnh bootloader (có thể bạn chọn nhầm file).",
       "err");
   } else {
     setStatus(flashStatus, `Đã chọn ${f.name} — ${buf.length.toLocaleString("vi-VN")} byte.`);
@@ -159,7 +219,7 @@ function terminal() {
 
 async function connectLoader() {
   const { ESPLoader, Transport } = await loadEsptool();
-  const port = await navigator.serial.requestPort();
+  const port = await acquirePort();
   const transport = new Transport(port, true);
   const loader = new ESPLoader({
     transport,
@@ -167,7 +227,7 @@ async function connectLoader() {
     terminal: terminal(),
     romBaudrate: 115200,
   });
-  setStatus(flashStatus, "Đang kết nối chip…");
+  setStatus(flashStatus, "Đang kết nối chip… (nếu treo: giữ BOOT rồi cắm lại cáp)");
   const chip = await loader.main();
   setStatus(flashStatus, `Đã kết nối: ${chip}`);
   return { loader, transport };
@@ -207,7 +267,9 @@ $("flash").addEventListener("click", async () => {
     setStatus(flashStatus, "Lỗi: " + (err?.message || err), "err");
   } finally {
     if (loader) await closeLoader(loader, transport);
+    if (sharedPort) { try { await sharedPort.close(); } catch (_) {} }
     btn.disabled = eraseBtn.disabled = false;
+    await refreshPortInfo();
   }
 });
 
@@ -225,15 +287,18 @@ $("erase").addEventListener("click", async () => {
     setStatus(flashStatus, "Lỗi: " + (err?.message || err), "err");
   } finally {
     if (loader) await closeLoader(loader, transport);
+    if (sharedPort) { try { await sharedPort.close(); } catch (_) {} }
     btn.disabled = eraseBtn.disabled = false;
+    await refreshPortInfo();
   }
 });
 
 /* ------------------------------------------------------------ serial monitor */
 
-let monPort = null, monReader = null, monStopped = false, monText = "";
+let monReader = null, monStopped = false, monText = "", monitorOpen = false;
 
 function setMonButtons(connected) {
+  monitorOpen = connected;
   $("monConnect").disabled = connected;
   $("monReset").disabled = !connected;
   $("monStop").disabled = !connected;
@@ -249,16 +314,22 @@ function append(chunk) {
   if (atBottom) term.scrollTop = term.scrollHeight;
 }
 
+async function stopMonitor({ quiet = false } = {}) {
+  if (!monitorOpen && !sharedPort) return;
+  monStopped = true;
+  try { await monReader?.cancel(); } catch (_) {}
+  monReader = null;
+  if (sharedPort) { try { await sharedPort.close(); } catch (_) {} }
+  setMonButtons(false);
+  if (!quiet) setStatus(monStatus, "Đã ngắt.");
+}
+
 $("monConnect").addEventListener("click", async () => {
   try {
-    if (!("serial" in navigator)) {
-      setStatus(monStatus, "Trình duyệt không hỗ trợ WebSerial — dùng Chrome/Edge trên máy tính.", "err");
-      return;
-    }
-    monPort = await navigator.serial.requestPort();
-    await monPort.open({ baudRate: 115200, bufferSize: 8192 });
+    const port = await acquirePort();
+    await port.open({ baudRate: 115200, bufferSize: 8192 });
     monStopped = false;
-    monReader = monPort.readable.getReader();
+    monReader = port.readable.getReader();
     setStatus(monStatus, "Đang xem log. Bấm “Reset board” để log từ đầu.", "ok");
     setMonButtons(true);
     const decoder = new TextDecoder();
@@ -268,19 +339,21 @@ $("monConnect").addEventListener("click", async () => {
       if (value) append(decoder.decode(value, { stream: true }));
     }
   } catch (err) {
-    setStatus(monStatus, "Lỗi: " + (err?.message || err), "err");
+    // A stop (flashing or the "Ngắt" button) closes the port under the reader;
+    // that is not an error worth showing.
+    if (!monStopped) setStatus(monStatus, "Lỗi: " + (err?.message || err), "err");
   } finally {
     setMonButtons(false);
   }
 });
 
 $("monReset").addEventListener("click", async () => {
-  if (!monPort) return;
+  if (!sharedPort) return;
   try {
     // Standard ESP auto-reset: hold EN low via RTS, release, then let IO0 float.
-    await monPort.setSignals({ dataTerminalReady: false, requestToSend: true });
+    await sharedPort.setSignals({ dataTerminalReady: false, requestToSend: true });
     await new Promise((r) => setTimeout(r, 120));
-    await monPort.setSignals({ dataTerminalReady: false, requestToSend: false });
+    await sharedPort.setSignals({ dataTerminalReady: false, requestToSend: false });
     append("\n--- reset ---\n");
   } catch (err) {
     setStatus(monStatus, "Không reset được: " + (err?.message || err) + " (rút cắm cáp thay thế)", "err");
@@ -299,18 +372,17 @@ $("monSave").addEventListener("click", () => {
 });
 
 $("monStop").addEventListener("click", async () => {
-  monStopped = true;
-  try { await monReader?.cancel(); } catch (_) {}
-  try { monPort?.close(); } catch (_) {}
-  monPort = null; monReader = null;
-  setMonButtons(false);
-  setStatus(monStatus, "Đã ngắt.");
+  await stopMonitor();
 });
 
 if (!("serial" in navigator)) {
   setStatus(flashStatus, "Trình duyệt này không có WebSerial. Mở bằng Chrome hoặc Edge trên máy tính.", "err");
   setStatus(monStatus, "Trình duyệt này không có WebSerial.", "err");
   $("flash").disabled = $("erase").disabled = $("monConnect").disabled = true;
+} else {
+  refreshPortInfo();
+  navigator.serial.addEventListener("connect", refreshPortInfo);
+  navigator.serial.addEventListener("disconnect", refreshPortInfo);
 }
 </script>
 </body>
