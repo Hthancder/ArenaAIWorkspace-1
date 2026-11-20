@@ -6,7 +6,8 @@
 #import <notify.h>
 
 @interface SXAPIChoiceController () <UITableViewDataSource, UITableViewDelegate>
-@property (nonatomic, strong) UITableView *table;
+// Không khai báo lại `table`: PSListController đã có thuộc tính này, khai báo
+// trùng làm clang báo -Wobjc-property-synthesis (thành lỗi vì -Werror).
 @property (nonatomic, strong) NSArray *values;          // NSString hoặc NSNumber
 @property (nonatomic, strong) NSArray<NSString *> *titles;
 @property (nonatomic, strong) NSArray<NSString *> *hints;
@@ -16,27 +17,26 @@
 
 @implementation SXAPIChoiceController
 
+- (void)loadView {
+	// Không gọi `[super loadView]`: nó dựng bảng grouped mặc định rồi ta lại
+	// thay ở viewDidLoad. Dựng thẳng bảng inset-grouped và gắn datasource.
+	UITableView *table = [[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStyleInsetGrouped];
+	table.dataSource = self;
+	table.delegate = self;
+	table.rowHeight = UITableViewAutomaticDimension;
+	table.estimatedRowHeight = 56;
+	table.backgroundColor = UIColor.systemGroupedBackgroundColor;
+	self.view = table;
+}
+
 - (void)viewDidLoad {
 	[super viewDidLoad];
 	[self sx_loadFromSpecifier];
 	self.title = self.screenTitle.length ? self.screenTitle : @"Chọn giá trị";
 
-	// Tự dựng bảng thay vì để Preferences dựng cell từ specifier: cell của
-	// Preferences chỉ hiện chữ ở ô "value" và không cho ta vẽ dấu ✓ chắc chắn.
+	// Bảng đã được dựng ở `loadView` (cell của Preferences chỉ hiện chữ ở ô
+	// "value" và không cho kiểm soát dấu ✓, nên ta tự vẽ).
 	self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
-	self.table = [[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStyleInsetGrouped];
-	self.table.translatesAutoresizingMaskIntoConstraints = NO;
-	self.table.dataSource = self;
-	self.table.delegate = self;
-	self.table.rowHeight = UITableViewAutomaticDimension;
-	self.table.estimatedRowHeight = 56;
-	[self.view addSubview:self.table];
-	[NSLayoutConstraint activateConstraints:@[
-		[self.table.topAnchor constraintEqualToAnchor:self.view.topAnchor],
-		[self.table.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
-		[self.table.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
-		[self.table.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
-	]];
 
 	SXLogDbg(@"pref", @"bộ chọn giá trị mở: key=%@, %lu lựa chọn, specifier=%@",
 			 self.prefsKey ?: @"(trống)", (unsigned long)self.values.count,
@@ -215,7 +215,7 @@
 	[SXUI tapFeedback];
 	SXLogInf(@"pref", @"chọn %@ = %@ (nhãn “%@”)", self.prefsKey, stored,
 			 index < self.titles.count ? self.titles[index] : @"?");
-	[self.table reloadData];
+	if ([self.view isKindOfClass:[UITableView class]]) [(UITableView *)self.view reloadData];
 	if (self.navigationController.viewControllers.count > 1) {
 		[self.navigationController popViewControllerAnimated:YES];
 	} else {

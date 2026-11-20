@@ -189,6 +189,35 @@ for path in sorted(glob.glob("Prefs/*.m")):
             if bad in body.group(0):
                 fail(f"{path}: {name} vừa xử lý gõ chữ vừa gọi {bad} — bàn phím sẽ tắt sau mỗi ký tự")
 
+# ----------------------------- khai báo lại thuộc tính của lớp cha (lỗi build)
+# `table`/`view`/`specifiers`/`specifier`/`bundle` đã có trong PSListController.
+# Khai báo lại trong @interface (kể cả extension) của lớp con PSListController
+# làm clang báo -Wobjc-property-synthesis; CI build với -Werror nên đỏ ngay
+# trong khi lint tĩnh vẫn xanh. Chỉ xét các lớp thật sự kế thừa PSListController
+# để không báo nhầm lớp thường có thuộc tính cùng tên.
+LIST_INHERITED = {"table", "view", "specifiers", "specifier", "bundle"}
+list_classes = set()
+for path in sorted(glob.glob("Prefs/*.h") + glob.glob("Prefs/*.m")):
+    for match in re.finditer(r"@interface\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*PSListController\b",
+                             read(path)):
+        list_classes.add(match.group(1))
+for path in sorted(glob.glob("Prefs/*.h") + glob.glob("Prefs/*.m")):
+    code = read(path)
+    # `[^@]*?` không dùng được: chính `@property` chứa '@' nên khối không bao giờ khớp.
+    for match in re.finditer(r"@interface\s+([A-Za-z_][A-Za-z0-9_]*)[^\n]*\n(.*?)@end",
+                             code, re.DOTALL):
+        if match.group(1) not in list_classes:
+            continue
+        body = match.group(0)
+        for prop in re.finditer(
+                r"@property\s*\([^)]*\)\s*[A-Za-z_][A-Za-z0-9_<>, ]*?\*?\s*([A-Za-z_][A-Za-z0-9_]*)\s*;",
+                body):
+            if prop.group(1) in LIST_INHERITED:
+                line = code[:match.start() + prop.start()].count("\n") + 1
+                fail(f"{path}:{line}: lớp {match.group(1)} (PSListController) khai báo lại "
+                     f"thuộc tính '{prop.group(1)}' — clang báo -Wobjc-property-synthesis "
+                     "và build -Werror sẽ đỏ")
+
 # ------------------------------------------- setProperty trên biểu thức `id`
 # `items.firstObject` có kiểu `id`, nên `-setProperty:forKey:` nhập nhằng với
 # `NSStream` và clang báo "multiple methods named 'setProperty:forKey:' found
