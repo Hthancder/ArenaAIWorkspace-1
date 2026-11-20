@@ -367,6 +367,39 @@ that ordinary gameplay exhibits fractional stacks. The run also exercised the
 four old-source candidate selectors using separate maps. No project-wide
 change to epsilon has been made: it could affect many other comparisons.
 
+#### Native `item_get` special ammunition/resource pickups
+
+`tools/deadtown_item_get_evidence.py` pins the APK's 4,952-byte
+`gml_Script_item_get` at `0x19f528`, including selector jump table, argument
+copies, `g_pGlobal` relocations, comparisons and five early-return paths.
+Selector 1–4 copies global index 0–3 respectively into a local target. The
+script calls `ui_message_type` at `0x19fb00` before comparing the selected
+target against global index 3 using `YYCompareVal` with the runtime epsilon.
+When that comparison reports equality, it checks argument 1 against these
+numeric values; on a match it adds argument 2 to the indicated global RValue,
+sets the caller's return value to 0 and goes to cleanup, bypassing the ordinary
+inventory-map loop:
+
+| Item index | Updated global index | Addition call |
+|---:|---:|---|
+| 44 | 12 | `0x1a037c` |
+| 45 | 13 | `0x1a03c0` |
+| 46 | 14 | `0x1a0404` |
+| 47 | 15 | `0x1a0448` |
+| 48 | 16 | `0x1a04a4` |
+
+Each comparison converts argument 1 to real and, for finite numeric values,
+checks the absolute difference against mutable `g_GMLMathEpsilon` (ELF
+initially `1e-10`). This is not strictly integer identity for arbitrary inputs;
+nonfinite behavior and epsilon changes are not tested. The old GMX names these
+five counters normal, shotgun, machinegun, arrow and oil, and uses the same
+indices, but the native global-index registration/names have not been proven.
+Selector 4 selects index 3 on the checked jump table, but whether target values
+compare equal in all runtime states is not established. Invalid selector,
+`YYCompareVal`/`RValue +=` internals, execution order across all branches,
+regular map loop, actual Android behavior and iOS remain unproven. This is a
+static observation, not a release patch.
+
 #### Corroborating inventory selection against native save keys
 
 `tools/deadtown_inventory_save_evidence.py` independently traces native normal

@@ -2,6 +2,7 @@ import unittest
 from tools.check_deadtown_inventory_probe import NAMES, check_bytecode, check_log
 
 LOG = '''
+DT_INV|ammo|0|0|0|0|0|102|203|304|405|506|0
 DT_INV|get|5
 DT_INV|drop|0|1|4
 DT_INV|last|1|0
@@ -22,7 +23,8 @@ class InventoryCheckTests(unittest.TestCase):
         check_log(LOG)
         for bad in (LOG.replace('DT_INV_DONE', ''), LOG.replace('get|5', 'get|4'),
                     LOG + 'DT_INV|get|5\n', LOG.replace('short|0|0', 'short|1|0'),
-                    LOG.replace('epsilon|10|1|0|1|1', 'epsilon|10|1|1|1|1')):
+                    LOG.replace('epsilon|10|1|0|1|1', 'epsilon|10|1|1|1|1'),
+                    LOG.replace('|102|203|304|405|506|0', '|102|203|304|405|506|1')):
             with self.assertRaises(ValueError):
                 check_log(bad)
 

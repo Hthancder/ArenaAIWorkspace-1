@@ -12,6 +12,8 @@ on:
       - tools/deadtown_poison_evidence.py
       - tools/deadtown_item_drop_evidence.py
       - tests/test_deadtown_item_drop_evidence.py
+      - tools/deadtown_item_get_evidence.py
+      - tests/test_deadtown_item_get_evidence.py
       - tools/deadtown_inventory_save_evidence.py
       - tests/test_deadtown_inventory_save_evidence.py
       - tools/deadtown_sprite_metadata.py
@@ -64,6 +66,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_deadtown_native_callgraph.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_poison_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_item_drop_evidence.py' -v
+          python -m unittest discover -s tests -p 'test_deadtown_item_get_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_inventory_save_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_sprite_metadata.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_sprite_pixels.py' -v
@@ -75,6 +78,7 @@ jobs:
           mkdir -p work/reports
           python tools/deadtown_poison_evidence.py .cache/deadtown-original.apk --output work/reports/poison-evidence.json
           python tools/deadtown_item_drop_evidence.py .cache/deadtown-original.apk --output work/reports/item-drop-evidence.json
+          python tools/deadtown_item_get_evidence.py .cache/deadtown-original.apk --output work/reports/item-get-evidence.json
           python tools/deadtown_inventory_save_evidence.py .cache/deadtown-original.apk --output work/reports/inventory-save-evidence.json
           python tools/deadtown_sprite_metadata.py .cache/deadtown-original.apk .cache/deadtown/deadtown.gmx --output work/reports/sprite-metadata.json
           python tools/deadtown_sprite_pixels.py .cache/deadtown-original.apk .cache/deadtown/deadtown.gmx --output work/reports/sprite-pixels.json

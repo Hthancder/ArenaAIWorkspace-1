@@ -215,6 +215,15 @@ trước khi phát hành. Game Unity `com.Ccentury.DeadTownSurvival` là remake 
   native để xác minh. Không kết luận stack phân số có trong gameplay bình
   thường và không tự đổi epsilon toàn game. Bốn selector cũng đã được thử
   trên các map riêng trong VM. Công cụ tĩnh: `tools/deadtown_item_drop_evidence.py`.
+- Phân tích `item_get` native tại `0x19f528`: selector 1–4 chọn global index
+  0–3. Sau lời gọi `ui_message_type`, khi target so bằng global index 3, năm
+  nhánh item index 44–48 lần lượt cộng argument số lượng vào global index
+  12–16, trả 0 và bỏ qua vòng xử lý map thông thường. So sánh item dùng
+  epsilon runtime, ELF khởi tạo 1e-10; nguồn GMX cũ dùng cùng các item index
+  và đặt tên counter là đạn thường, shotgun, machinegun, tên và dầu. Chưa
+  xác minh đăng ký tên global native, runtime, giá trị phi hữu hạn hay toàn
+  bộ vòng lặp map. Công cụ tĩnh `tools/deadtown_item_get_evidence.py`; không
+  sửa release hoặc coi source cũ đã tương đương APK.
 - Đối chiếu độc lập trong native normal save `game_save_protect` tại
   `0x1d97f8`: global index 0, 1, 2, 3 được `ds_map_write` rồi ghi vào các
   key `inventory/weapon`, `inventory/equip`, `inventory/use`, `inventory/etc`
