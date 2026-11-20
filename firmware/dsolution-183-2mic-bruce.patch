@@ -1,16 +1,25 @@
-diff --git a/boards/dsolution-183-2mic/NV3030B_Panel.h b/boards/dsolution-183-2mic/NV3030B_Panel.h
+diff --git a/boards/dsolution-183-2mic/NV3023_Panel.h b/boards/dsolution-183-2mic/NV3023_Panel.h
 new file mode 100644
-index 0000000..e452ec7
+index 0000000..d021320
 --- /dev/null
-+++ b/boards/dsolution-183-2mic/NV3030B_Panel.h
-@@ -0,0 +1,148 @@
++++ b/boards/dsolution-183-2mic/NV3023_Panel.h
+@@ -0,0 +1,159 @@
 +// =====================================================================================
-+//  boards/dsolution-183-2mic/NV3030B_Panel.h
++//  boards/dsolution-183-2mic/NV3023_Panel.h
 +//
-+//  LovyanGFX panel class for the NewVision NV3030B 1.83" IPS panel (240x284 glass,
-+//  240x320 controller RAM) used on the DSolution 1.83" 2-Mic board.
++//  LovyanGFX panel class for the NewVision NV3023 1.83" IPS panel (284x240 glass in
++//  landscape, 240x320 controller RAM) used on the DSolution 1.83" 2-Mic board.
 +//
-+//  The NV3030B is NOT an ST7789. Its registers only accept writes after the 0xFD
++//  Identity: the retail device is the OSTB-2ST-WIFI cube ("Xingzhi cube 1.83 2mic" in
++//  the ESPHome/Chinese community). Its panel is an NV3023 -- Espressif even ships an
++//  esp_lcd_nv3023 component for it. Our earlier NV3030B label came from the vendor sheet
++//  and was wrong, which is why the first flash stayed black. The register table below was
++//  checked line by line against the init_sequence of a working ESPHome config for this
++//  exact box (RealDeco/xiaozhi-esphome, devices/Xingzhi/xingzhi-cube-1.83-2mic.yaml) and
++//  they match, so what is left of the display side is bus speed (40 MHz, see the .ini)
++//  and the MADCTL/offset pair below.
++//
++//  The NV3023 is NOT an ST7789. Its registers only accept writes after the 0xFD
 +//  "unlock" pages are selected, and its power/gamma tables are its own -- driving it
 +//  with an ST7789 init sequence (LovyanGFX's Panel_ST7789, TFT_eSPI's ST7789_DRIVER,
 +//  Arduino_GFX's Arduino_ST7789) leaves the panel black. That is why this board ships
@@ -19,15 +28,15 @@ index 0000000..e452ec7
 +//  This header is pulled in from Bruce's include/DisplayDrivers_User_Setup.h (the
 +//  documented extension point of the DisplayDrivers library) when the board macro
 +//  DSOLUTION_183_2MIC is set, so the class exists before DisplayDrivers' LovyanGFX
-+//  backend names it via -DLOVYAN_PANEL=Panel_NV3030B.
++//  backend names it via -DLOVYAN_PANEL=Panel_NV3023.
 +//
 +//  Everything else -- pins, geometry, offsets, orientation -- is configured at runtime
 +//  from DisplayConfig (the -DTFT_* flags in this board's .ini); this file only carries
 +//  the part no build flag can express: the init table and the MADCTL rotation table.
 +// =====================================================================================
 +
-+#ifndef DSOLUTION_NV3030B_PANEL_H
-+#define DSOLUTION_NV3030B_PANEL_H
++#ifndef DSOLUTION_NV3023_PANEL_H
++#define DSOLUTION_NV3023_PANEL_H
 +
 +#include <Arduino.h>
 +#include <LovyanGFX.hpp>
@@ -35,13 +44,13 @@ index 0000000..e452ec7
 +
 +namespace lgfx {
 +
-+// MADCTL bits of the NV3030B (same layout as ST7789/NV30xx family).
++// MADCTL bits of the NV3023 (same layout as ST7789/NV30xx family).
 +//   MY = 0x80 : mirror Y (vertical flip / 180 degree flip together with MX)
 +//   MX = 0x40 : mirror X
 +//   MV = 0x20 : swap X and Y (transpose)
 +//   0x08      : BGR colour order instead of RGB
-+struct Panel_NV3030B : public Panel_LCD {
-+    Panel_NV3030B() {
++struct Panel_NV3023 : public Panel_LCD {
++    Panel_NV3023() {
 +        // Native (untransposed) geometry: 240 columns x 284 visible rows.
 +        // The controller has 320 rows of RAM and the visible 284 are the *last* ones,
 +        // i.e. the window starts at row 36 -- see the setRotation() override below for how
@@ -117,8 +126,10 @@ index 0000000..e452ec7
 +    //
 +    //      MV | MY  = 0xA0 | BGR = 0xA8
 +    //
-+    //  which is exactly the vendor's "Swap XY = true, Mirror X = false, Mirror Y = true,
-+    //  BGR" for this panel. The other three entries keep the usual four-step cycle, so
++    //  which is exactly what the working ESPHome config asks for on this panel:
++    //  transform swap_xy (MV) + mirror_y (MY), mirror_x off, color_order bgr.
++    //  The same config puts the 284-pixel window at x-offset 36 of the 320-pixel RAM
++    //  axis, which Panel_LCD derives by itself from memory_width - (panel_width + ox). The other three entries keep the usual four-step cycle, so
 +    //  rotating from Config > Rotation stays correct instead of mirroring the image.
 +    // -----------------------------------------------------------------------------
 +    uint8_t getMadCtl(uint8_t r) const override {
@@ -151,17 +162,22 @@ index 0000000..e452ec7
 +
 +} // namespace lgfx
 +
-+#endif // DSOLUTION_NV3030B_PANEL_H
++#endif // DSOLUTION_NV3023_PANEL_H
 diff --git a/boards/dsolution-183-2mic/README.md b/boards/dsolution-183-2mic/README.md
 new file mode 100644
-index 0000000..d1c0dfb
+index 0000000..38826d2
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/README.md
-@@ -0,0 +1,173 @@
+@@ -0,0 +1,219 @@
 +# DSolution 1.83" 2-Mic
 +
-+Bruce port for the **DSolution 1.83 inch 2-Mic** board (ESP32-S3 + NV3030B panel +
++Bruce port for the **DSolution 1.83 inch 2-Mic** board (ESP32-S3 + NV3023 panel +
 +ES7210 mic ADC + ES8311 speaker DAC).
++
++The retail device this board ships in is the **OSTB-2ST-WIFI** cube, which the
++ESPHome/Chinese community calls **"Xingzhi cube 1.83 2mic"**. That name matters: it is
++what makes an independent, working reference for every pin and for the panel
++init/transform available (see *References* at the end).
 +
 +```
 +pio run -e dsolution-183-2mic            # build
@@ -174,13 +190,13 @@ index 0000000..d1c0dfb
 +| Block | Part | Notes |
 +| --- | --- | --- |
 +| MCU | ESP32-S3, 16 MB QSPI flash, 8 MB octal PSRAM @80 MHz | `qio_opi`, `custom_16Mb.csv` |
-+| Display | 1.83" IPS, **NV3030B** (NewVision) | 240x284 glass, 240x320 controller RAM, 4-wire SPI |
++| Display | 1.83" IPS, **NV3023** (NewVision) | 240x284 glass, 240x320 controller RAM, 4-wire SPI |
 +| Mic ADC | ES7210 @ I2C **0x40** | 2 mics, MIC3 carries the ES8311 echo loopback (AEC reference) |
 +| Speaker DAC | ES8311 @ I2C **0x18** | I2S slave, MCLK from the ESP32 |
 +| Amplifier | NS4150 class-D | enabled by PA Enable, **GPIO4 = HIGH** |
 +| LED | 1x WS2812 | GPIO48, GRB |
 +| Buttons | Boot (0), Vol+ (39), Vol- (40) | all active LOW |
-+| Power | charge detect 47, battery status 38, sleep control 21 | see caveats |
++| Power | charge detect 47, battery ADC **17** (1:2 divider, ADC2 ch6) | GPIO38 in the vendor sheet is wrong |
 +
 +### Pinout
 +
@@ -195,25 +211,25 @@ index 0000000..d1c0dfb
 +| LED WS2812 | 48 | | I2S DOUT (ESP32 -> ES8311) | 6 |
 +| Button Boot/Sel | 0 | | PA Enable | 4 |
 +| Button Vol+ | 39 | | Charge detect | 47 |
-+| Button Vol- | 40 | | Battery status | 38 |
-+| Sleep control | 21 | | | |
++| Button Vol- | 40 | | Battery ADC | 17 |
++| (sleep ctrl) | 21 | | | |
 +
-+## Display (NV3030B)
++## Display (NV3023)
 +
-+The NV3030B is **not** an ST7789. It only accepts register writes after the `0xFD`
++The NV3023 is **not** an ST7789. It only accepts register writes after the `0xFD`
 +unlock pages are selected, and its power/gamma tables are its own; an ST7789 init
 +sequence (LovyanGFX `Panel_ST7789`, TFT_eSPI `ST7789_DRIVER`, Arduino_GFX
-+`Arduino_ST7789`) leaves the panel black. DisplayDrivers has no NV3030B profile, so
++`Arduino_ST7789`) leaves the panel black. DisplayDrivers has no NV3023 profile, so
 +this board ships its own panel class:
 +
-+* `NV3030B_Panel.h` — `lgfx::Panel_NV3030B : public lgfx::Panel_LCD`, carrying the
++* `NV3023_Panel.h` — `lgfx::Panel_NV3023 : public lgfx::Panel_LCD`, carrying the
 +  vendor init table verbatim plus the MADCTL table (rotation -> MV/MX/MY, BGR bit).
 +* `include/DisplayDrivers_User_Setup.h` includes it when `DSOLUTION_183_2MIC` is set.
 +  That header is the documented DisplayDrivers extension point and the only
 +  project-owned file read early enough for `LOVYAN_PANEL` to resolve.
-+* The `.ini` selects the backend (`-DUSE_LOVYANGFX=1`, `-DLOVYAN_PANEL=Panel_NV3030B`)
++* The `.ini` selects the backend (`-DUSE_LOVYANGFX=1`, `-DLOVYAN_PANEL=Panel_NV3023`)
 +  and describes the panel geometry (`TFT_WIDTH/HEIGHT/MEM_*`, `TFT_ROTATION`,
-+  `TFT_INVERTION`, pins, 80 MHz SPI).
++  `TFT_INVERTION`, pins, 40 MHz SPI).
 +
 +Why LovyanGFX and not the Arduino_GFX default: Arduino_GFX builds its panels from a
 +fixed factory table, so a board cannot inject a controller it does not know. LovyanGFX
@@ -227,12 +243,20 @@ index 0000000..d1c0dfb
 +| Color order BGR | bit 3 (`0x08`) OR'd in `getMadCtl()` -- independent of `TFT_RGB_ORDER` |
 +| Invert colors = true | `-DTFT_INVERTION=1` -> `Panel_LCD::setInvert()` sends `0x21` |
 +| Offset X = 36 | derived by Panel_LCD (`memory_height - panel_height`); **not** set as `TFT_OFFSET_*` |
++| Frame 284x240, offset_width 36, offset_height 0 | same window as above: CASET 36..319, RASET 0..239 in landscape |
 +| 240x280 panel, 284x240 effective | `TFT_WIDTH=240`, `TFT_HEIGHT=284`, `TFT_MEM_HEIGHT=320` |
-+| SPI 40-80 MHz | `-DTFT_WRITE_FREQ=80000000` (drop to 40000000 if the ribbon is long) |
++| SPI 40 MHz | `-DTFT_WRITE_FREQ=40000000` -- the rate the working ESPHome config uses; 80 MHz was tried first and is a suspect for the black screen |
 +
 +Orientation: `-DTFT_ROTATION=3` is the panel's *mounting* offset and `-DROTATION=0`
 +the runtime rotation, so the board boots in the vendor landscape (284x240) and
 +Config > Rotation cycles through the normal four orientations.
++
++The init table, the MADCTL value (`0xA8` = MV|MY|BGR) and the 36-pixel offset were all
++checked line by line against a working ESPHome config for this exact box
++(`mipi_spi`, `model: CUSTOM`, `data_rate: 40MHz`, `color_order: bgr`,
++`invert_colors: true`, `dimensions 284x240 offset_width 36`,
++`transform swap_xy + mirror_y`) — they match. So if the panel is still dark, the bus is
++the first thing to look at, not the register table.
 +
 +If the colours come out inverted or the wrong way round on a different production
 +batch, the two knobs are `-DTFT_INVERTION` and the `| 0x08` in `getMadCtl()`.
@@ -288,25 +312,22 @@ index 0000000..d1c0dfb
 +* **Charge detect (47)** — driven by the charger's open-drain status output; pulled up,
 +  `isCharging()` returns true while it reads LOW. Flip the comparison in
 +  `interface.cpp` if this board's charger is active HIGH.
-+* **Battery status (38)** — declared as `ANALOG_BAT_PIN` exactly as the vendor table
-+  says. **Caveat:** on the ESP32-S3 the ADC channels are GPIO1-GPIO10 (ADC1) and
-+  GPIO11-GPIO20 (ADC2); GPIO38 has no ADC channel, so `analogRead(38)` cannot return a
-+  battery voltage. If the battery gauge reads 0 % (or jumps), that pin needs verifying
-+  against the schematic — most likely it is a digital "battery low" input, or the divider
-+  is on a different pin. Change `ANALOG_BAT_PIN` in the `.ini` (or override
-+  `getBattery()` in `interface.cpp`) once confirmed.
-+* **Sleep control (21)** — held HIGH while running, driven LOW in `powerOff()` before
-+  deep sleep, which releases the board's power latch. If GPIO21 turns out to be an input
-+  rather than a latch enable, `powerOff()` still ends in deep sleep and nothing is lost;
-+  if the pin is *inverted* on this revision, swap HIGH/LOW in `_setup_gpio()` and
-+  `powerOff()`.
++* **Battery ADC (17)** — `ANALOG_BAT_PIN=17` with `ANALOG_BAT_MULTIPLIER=2.0f`: a pin
++  dump taken from the stock firmware of this exact box puts the battery divider on
++  GPIO17 = ADC2 channel 6 through a 1:2 divider. The vendor sheet's "Battery Status:
++  GPIO38" cannot be right — the S3 has no ADC channel above GPIO20 — and an earlier
++  revision of this port used it, which is why the gauge read 0 %.
++* **Sleep control (21)** — **not driven any more.** No community source documents a
++  power latch on this board, and driving an unknown pin HIGH at boot is a plausible
++  cause of a boot/reset loop (which a host sees as an intermittent USB connection).
++  Build with `-DDSOLUTION_LATCH_PIN=21` to bring the old behaviour back.
 +
 +## Files touched outside this folder
 +
 +Two one-line-ish hooks, both documented in place:
 +
-+1. `include/DisplayDrivers_User_Setup.h` — includes `NV3030B_Panel.h` for this board so
-+   `-DLOVYAN_PANEL=Panel_NV3030B` resolves.
++1. `include/DisplayDrivers_User_Setup.h` — includes `NV3023_Panel.h` for this board so
++   `-DLOVYAN_PANEL=Panel_NV3023` resolves.
 +2. `src/modules/others/mic.cpp` — routes an MCLK to `MIC_TYPE_I2S_MSB` capture when the
 +   board declares one on its speaker bus (needed by the ES7210).
 +
@@ -319,40 +340,77 @@ index 0000000..d1c0dfb
 +Flash: [===       ]  27.4% (used 4 601 383 bytes from 16 777 216 bytes)
 +RAM:   [====      ]  39.8% (used 130 260 bytes from 327 680 bytes)
 +firmware.bin  4 601 920 bytes        0 warnings from the board's own files
-+NV3030B init table, MADCTL table and the board's _setup_gpio()/codec hooks are in the image
++NV3023 init table, MADCTL table and the board's _setup_gpio()/codec hooks are in the image
 +```
 +
-+The port was written from the vendor table and cross-checked against the upstream drivers
-+(LovyanGFX `Panel_LCD`, Espressif `esp_codec_dev`, the working ES8311 board
-+`boards/ES3C28P`), but **it has not been flashed on a real board** — nothing here has been
-+seen driving actual glass, a codec or a battery. Expect to tune, in this order:
++### First flash on real hardware -- what it showed
 +
-+1. backlight and orientation (`TFT_INVERTION`, `getMadCtl()`),
-+2. SPI clock (drop to 40 MHz if the image tears or the panel stays dark on a cold boot),
-+3. ES8311 volume/clock registers if playback is distorted,
-+4. ES7210 gain and the MCLK patch if capture is silent.
++The first build was flashed on the real box and came up **black, with a USB connection
++that kept dropping** ("chập chờn"). Two things caused that and both are now fixed here:
++
++1. **Identity.** The panel is an NV3023, and the vendor sheet this port was written from
++   (NV3030B label, battery on GPIO38, sleep latch on GPIO21) does not describe this
++   revision. The init table survived the correction unchanged -- it matches the working
++   ESPHome config for this board -- but the name, the battery pin and the SPI clock did
++   not.
++2. **Flashing the app image at 0x0.** `firmware.bin` is linked for 0x10000; writing it at
++   offset 0 overwrites the bootloader and leaves the ROM loader resetting forever. That
++   looks exactly like "black screen + flaky USB". The build now also emits one merged
++   image, `firmware-factory.bin`, which is the only thing to flash, always at **0x0**:
++
++   ```
++   esptool.py --chip esp32s3 write_flash 0x0 firmware-factory.bin
++   ```
++
++### If it is still dead
++
++Do these in order -- each one produces a different symptom, so they pinpoint the fault:
++
++1. `esptool.py --chip esp32s3 erase_flash`, then write `firmware-factory.bin` at 0x0.
++2. Open the serial monitor at 115200 and reset the board. You should see the ROM banner,
++   then `[board] DSolution 1.83 2-Mic: NV3023 + ES7210/ES8311`. No banner but a repeating
++   ROM banner = the app crashes before `_setup_gpio()` (then it is PSRAM/flash config,
++   not the panel). Banner but no picture = the display bus (try
++   `-DTFT_WRITE_FREQ=20000000`, then check `TFT_BL=13` with a multimeter).
++3. Backlight is GPIO13 and it is *active HIGH* through `hal_bright_attach()`; if the panel
++   is lit but grey/white, the init table ran and only MADCTL/COLMOD are left.
++4. Recovery: the community keeps a **full 16 MB dump of the stock Xiaozhi firmware** for
++   this exact box (`ostb-2st`). Restoring it puts the device back to factory state:
++   `esptool.py --chip esp32s3 write_flash 0x0 xiaozhi_ostb-2st_full16MB.bin`.
++
++## References
++
++* `RealDeco/xiaozhi-esphome` -> `devices/Xingzhi/xingzhi-cube-1.83-2mic.yaml` -- working
++  ESPHome config for this exact board: pins, `psram: octal/80MHz`, `USB_SERIAL_JTAG`
++  logger, and the full `mipi_spi` display block (init sequence, transform, offset, BGR,
++  invert, 40 MHz).
++* `ProD-byte/Maerchenbox` -- pin table "read out of the Xiaozhi firmware" for
++  `ostb-2st-wifi-double-mic`: NV3023 284x240 x-offset 36, battery ADC GPIO17 (ADC2 ch6,
++  1:2), plus the 16 MB recovery image instructions.
++* `espressif/esp_lcd_nv3023` (components.espressif.com) -- Espressif's own NV3023 driver.
 diff --git a/boards/dsolution-183-2mic/dsolution-183-2mic.ini b/boards/dsolution-183-2mic/dsolution-183-2mic.ini
 new file mode 100644
-index 0000000..ccd285e
+index 0000000..3058069
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/dsolution-183-2mic.ini
-@@ -0,0 +1,138 @@
+@@ -0,0 +1,143 @@
 +; =====================================================================================
-+;  DSolution 1.83" 2-Mic  --  ESP32-S3 / NV3030B / ES7210 + ES8311
++;  DSolution 1.83" 2-Mic  --  ESP32-S3 / NV3023 / ES7210 + ES8311
 +;
 +;  Hardware
 +;    - ESP32-S3, 16 MB QSPI flash, 8 MB octal (OPI) PSRAM at 80 MHz
-+;    - 1.83" IPS 240x284, NewVision NV3030B controller, 4-wire SPI  (284x240 in use)
++;    - 1.83" IPS 284x240, NewVision NV3023 controller, 4-wire SPI  (284x240 landscape)
 +;    - ES7210 2-channel mic ADC + ES8311 speaker DAC + NS4150 class-D amplifier
 +;    - 1x WS2812 (NeoPixel) on GPIO48
 +;    - Buttons: Boot/Sel (GPIO0), Vol+ (GPIO39), Vol- (GPIO40)
-+;    - Charge detect GPIO47, battery status GPIO38, sleep control GPIO21
++;    - Charge detect GPIO47, battery ADC GPIO17 (1:2 divider)
++;    - Retail name: OSTB-2ST-WIFI ("Xingzhi cube 1.83 2mic") -- see README.md
 +;
 +;  Build:  pio run -e dsolution-183-2mic
 +;  Flash:  pio run -e dsolution-183-2mic -t upload
 +;
 +;  Read README.md in this folder before flashing: the display needs a panel class of
-+;  its own (NV3030B_Panel.h) and audio needs the board's codec hooks in interface.cpp.
++;  its own (NV3023_Panel.h) and audio needs the board's codec hooks in interface.cpp.
 +; =====================================================================================
 +
 +[env:dsolution-183-2mic]
@@ -386,16 +444,16 @@ index 0000000..ccd285e
 +	-DDISABLE_ALL_LIBRARY_WARNINGS
 +
 +	; ==================== Board identity ====================
-+	-DDSOLUTION_183_2MIC=1        ; selects the NV3030B panel class in include/DisplayDrivers_User_Setup.h
++	-DDSOLUTION_183_2MIC=1        ; selects the NV3023 panel class in include/DisplayDrivers_User_Setup.h
 +	-DDEVICE_NAME='"DSolution 1.83 2Mic"'
 +
-+	; ==================== Display: NV3030B, LovyanGFX backend ====================
++	; ==================== Display: NV3023, LovyanGFX backend ====================
 +	; LovyanGFX is used (instead of the Arduino_GFX default) because it lets the board
-+	; supply a panel class with its own init table -- the NV3030B is not an ST7789 and
-+	; must not be driven with the ST7789 table. See NV3030B_Panel.h.
++	; supply a panel class with its own init table -- the NV3023 is not an ST7789 and
++	; must not be driven with the ST7789 table. See NV3023_Panel.h.
 +	-DUSE_LOVYANGFX=1
 +	-DLOVYAN_BUS=Bus_SPI
-+	-DLOVYAN_PANEL=Panel_NV3030B
++	-DLOVYAN_PANEL=Panel_NV3023
 +
 +	; Pins (from the vendor pinout)
 +	-DTFT_CS=14
@@ -424,11 +482,13 @@ index 0000000..ccd285e
 +	-DTFT_ROTATION=3
 +	-DROTATION=0
 +
-+	-DTFT_INVERTION=1             ; vendor: "Invert colors = true" -- mandatory on NV3030B
++	-DTFT_INVERTION=1             ; vendor: "Invert colors = true" -- mandatory on NV3023
 +	-DTFT_IPS=1
 +	-DTFT_SPI_HOST=1              ; SPI2_HOST on the S3 (0 is SPI1, unusable for displays)
 +	-DTFT_SPI_MODE=0
-+	-DTFT_WRITE_FREQ=80000000     ; vendor allows 40-80 MHz
++	-DTFT_WRITE_FREQ=40000000     ; 40 MHz: the only rate a working config uses for this
++	                              ; panel (ESPHome mipi_spi, data_rate 40MHz). 80 MHz was
++	                              ; tried and is a prime suspect for the black screen.
 +	-DTFT_READ_FREQ=16000000
 +	-DTFT_BUS_SHARED=false        ; nothing else on the display SPI bus
 +
@@ -449,9 +509,11 @@ index 0000000..ccd285e
 +	-DLED_COLOR_STEP=5
 +
 +	; ==================== Battery ====================
-+	; Vendor: "Battery Status" on GPIO38 through a divider. NOTE: on the ESP32-S3 the
-+	; ADC pins are GPIO1-GPIO20 only, GPIO38 has no ADC channel -- see README.md.
-+	-DANALOG_BAT_PIN=38
++	; Battery is on GPIO17 = ADC2 channel 6 through a 1:2 divider (confirmed against a
++	; pin dump taken from the stock firmware of this exact box). The vendor sheet's
++	; "Battery Status: GPIO38" is wrong for this revision -- GPIO38 has no ADC channel
++	; on the ESP32-S3 -- see README.md.
++	-DANALOG_BAT_PIN=17
 +	-DANALOG_BAT_MULTIPLIER=2.0f
 +	-DANALOG_BAT_MIN_MV=3000
 +	-DANALOG_BAT_MAX_MV=4200
@@ -477,14 +539,14 @@ index 0000000..ccd285e
 +	https://github.com/lovyan03/LovyanGFX#develop
 diff --git a/boards/dsolution-183-2mic/interface.cpp b/boards/dsolution-183-2mic/interface.cpp
 new file mode 100644
-index 0000000..a14c8b4
+index 0000000..408673a
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/interface.cpp
-@@ -0,0 +1,340 @@
+@@ -0,0 +1,349 @@
 +// =====================================================================================
 +//  boards/dsolution-183-2mic/interface.cpp
 +//
-+//  DSolution 1.83" 2-Mic -- ESP32-S3, NV3030B 240x284 IPS, ES7210 mic ADC + ES8311
++//  DSolution 1.83" 2-Mic -- ESP32-S3, NV3023 240x284 IPS, ES7210 mic ADC + ES8311
 +//  speaker DAC + NS4150 amplifier, WS2812 on GPIO48.
 +//
 +//  What this file does, in boot order:
@@ -497,7 +559,7 @@ index 0000000..a14c8b4
 +//    isCharging() / powerOff()
 +//
 +//  The display is configured entirely by the .ini (LovyanGFX panel class
-+//  NV3030B_Panel.h); nothing display-related is needed here.
++//  NV3023_Panel.h); nothing display-related is needed here.
 +// =====================================================================================
 +
 +#include "core/bus_HAL.h"
@@ -528,8 +590,8 @@ index 0000000..a14c8b4
 +#define PIN_BTN_SEL 0   // Boot
 +
 +#define PIN_CHARGE_DETECT 47 // charger status in (active LOW on most charger ICs)
-+#define PIN_BAT_STATUS 38    // vendor calls this the battery ADC pin
-+#define PIN_SLEEP_CTRL 21    // sleep / power-latch control (RTC domain)
++#define PIN_BAT_ADC 17       // battery divider -> ADC2 channel 6 (1:2), *not* GPIO38
++#define PIN_SLEEP_CTRL 21    // from the vendor sheet; not driven by default (see _setup_gpio)
 +
 +// Codec I2C addresses (7-bit)
 +#define ES8311_ADDR 0x18
@@ -709,7 +771,7 @@ index 0000000..a14c8b4
 +***************************************************************************************/
 +void _setup_gpio() {
 +    Serial.begin(115200);
-+    Serial.println("[board] DSolution 1.83 2-Mic: NV3030B + ES7210/ES8311");
++    Serial.println("[board] DSolution 1.83 2-Mic: NV3023 + ES7210/ES8311");
 +
 +    // ---- I2C: codec control bus (100 kHz, the vendor's recommended speed) ----
 +    bruceConfigPins.sys_i2c = {(gpio_num_t)PIN_I2C_SDA, (gpio_num_t)PIN_I2C_SCL};
@@ -735,13 +797,19 @@ index 0000000..a14c8b4
 +    pinMode(PIN_PA_ENABLE, OUTPUT);
 +    digitalWrite(PIN_PA_ENABLE, HIGH);
 +
-+    // ---- Power / sleep control: keep the rail latched while running ----
-+    pinMode(PIN_SLEEP_CTRL, OUTPUT);
-+    digitalWrite(PIN_SLEEP_CTRL, HIGH);
++    // ---- Power / sleep control ----
++    // Deliberately NOT driven. No community source documents a power latch on this
++    // board (the pin dump from the stock firmware has no GPIO21 at all), and driving an
++    // unknown pin HIGH at boot is a plausible cause of the boot/reset loop that shows up
++    // as an intermittent USB connection. Build with -DDSOLUTION_LATCH_PIN=21 to test it.
++#ifdef DSOLUTION_LATCH_PIN
++    pinMode(DSOLUTION_LATCH_PIN, OUTPUT);
++    digitalWrite(DSOLUTION_LATCH_PIN, HIGH);
++#endif
 +
 +    // ---- Charge detect + battery status ----
 +    pinMode(PIN_CHARGE_DETECT, INPUT_PULLUP);
-+    pinMode(PIN_BAT_STATUS, INPUT);
++    pinMode(PIN_BAT_ADC, INPUT);
 +
 +    // ---- Buttons ----
 +    hal_buttons_init(buttonsCfg(), 3);
@@ -808,14 +876,17 @@ index 0000000..a14c8b4
 +
 +/*********************************************************************
 +** Function: powerOff
-+** Mutes the amplifier, kills the backlight, releases the sleep/power latch and goes to
-+** deep sleep with the Boot button (GPIO0) as the wake-up source.
++** Mutes the amplifier, kills the backlight and goes to deep sleep with the Boot button
++** (GPIO0) as the wake-up source. The power latch (if this board has one) is only released
++** when the build defines DSOLUTION_LATCH_PIN.
 +**********************************************************************/
 +void powerOff() {
 +    hal_bright_set(TFT_BL, 0);
 +    digitalWrite(PIN_PA_ENABLE, LOW);
 +    es8311Write(0x0D, 0xFC);
-+    digitalWrite(PIN_SLEEP_CTRL, LOW); // release the power latch (board powers down)
++#ifdef DSOLUTION_LATCH_PIN
++    digitalWrite(DSOLUTION_LATCH_PIN, LOW); // release the power latch (board powers down)
++#endif
 +    delay(50);
 +
 +    esp_sleep_enable_ext0_wakeup((gpio_num_t)PIN_BTN_SEL, 0); // wake on Boot = LOW
@@ -937,7 +1008,7 @@ index 0000000..34d2300
 +
 +env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", merge_bin)
 diff --git a/include/DisplayDrivers_User_Setup.h b/include/DisplayDrivers_User_Setup.h
-index f67b633..7c63a84 100644
+index f67b633..9dd4164 100644
 --- a/include/DisplayDrivers_User_Setup.h
 +++ b/include/DisplayDrivers_User_Setup.h
 @@ -26,4 +26,19 @@
@@ -953,10 +1024,10 @@ index f67b633..7c63a84 100644
 +// LOVYAN_PANEL, and this header is the only project-owned place that is read
 +// that early -- hence the include here rather than in the board's sources.
 +//
-+//   dsolution-183-2mic : NewVision NV3030B, 240x284 IPS  (not an ST7789)
++//   dsolution-183-2mic : NewVision NV3023, 240x284 IPS  (not an ST7789)
 +// ---------------------------------------------------------------------------
 +#if defined(USE_LOVYANGFX) && defined(DSOLUTION_183_2MIC)
-+#include <NV3030B_Panel.h>
++#include <NV3023_Panel.h>
 +#endif
 +
  #endif // _BRUCE_DISPLAYDRIVERS_USER_SETUP_H

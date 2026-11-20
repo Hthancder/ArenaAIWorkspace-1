@@ -79,7 +79,7 @@ jobs:
               echo "board symbols: $(for s in _setup_gpio _setup_codec_speaker _setup_codec_mic InputHandler isCharging powerOff; do "$NM" -C "$IFACE_OBJ" | grep -qE " [Tt] $s$" && echo "$s" ; done | tr '\n' ' ')"
             fi
             if [ -n "$LOVYAN_OBJ" ] && [ -n "$NM" ]; then
-              echo "panel class: $(for s in getInitCommands getMadCtl setRotation; do "$NM" -C "$LOVYAN_OBJ" | grep -q "Panel_NV3030B::$s" && echo "$s"; done | tr '\n' ' ')"
+              echo "panel class: $(for s in getInitCommands getMadCtl setRotation; do "$NM" -C "$LOVYAN_OBJ" | grep -q "Panel_NV3023::$s" && echo "$s"; done | tr '\n' ' ')"
             fi
             if grep -aq "DSolution 1.83 2-Mic" "$BIN" 2>/dev/null; then
               echo "banner string: present in firmware.bin"
@@ -92,7 +92,7 @@ jobs:
             else
               echo "factory image: MISSING -- merge step output: $(grep -i '\[merge_bin\]' build.log | tail -3 | tr '\n' ' ')"
             fi
-            echo "warnings in board files: $(grep -icE 'warning:.*(NV3030B|dsolution|interface\.cpp|mic\.cpp)' build.log)"
+            echo "warnings in board files: $(grep -icE 'warning:.*(NV3023|dsolution|interface\.cpp|mic\.cpp)' build.log)"
           } > report.txt
           cat report.txt
           # One annotation per line, the first 10 are the ones GitHub keeps.
