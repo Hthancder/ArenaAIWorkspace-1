@@ -32,30 +32,34 @@ jobs:
       - name: Build Dual-Boot custom bootloader + NV3023 Boot Menu
         working-directory: firmware/dualboot-launcher
         run: |
-          set -o pipefail
+          set +e
           if [ -f /opt/esp/idf/export.sh ]; then
             . /opt/esp/idf/export.sh
           elif [ -n "${IDF_PATH:-}" ] && [ -f "$IDF_PATH/export.sh" ]; then
             . "$IDF_PATH/export.sh"
           fi
-          idf.py set-target esp32s3 2>&1 | tee idf-build.log
-          idf.py build 2>&1 | tee -a idf-build.log
+          idf.py set-target esp32s3 > idf-build.log 2>&1
+          RC=$?
+          if [ $RC -eq 0 ]; then
+            idf.py build >> idf-build.log 2>&1
+            RC=$?
+          fi
+          if [ $RC -ne 0 ]; then
+            ERR=$(grep -E '(: error:|fatal error:|FAILED:|CMake Error|undefined reference|ninja: build stopped|Error:)' idf-build.log | head -n 15 || true)
+            [ -z "$ERR" ] && ERR=$(tail -n 25 idf-build.log || true)
+            while IFS= read -r line; do
+              [ -n "$line" ] && echo "::error title=idf-build::$line"
+            done <<< "$ERR"
+            tail -n 60 idf-build.log || true
+            exit $RC
+          fi
 
-      - name: Report Dual-Boot build & errors
-        if: always()
+      - name: Report Dual-Boot build
         working-directory: firmware/dualboot-launcher
         run: |
           BOOTLOADER_BIN=build/bootloader/bootloader.bin
           MENU_BIN=build/dualboot_launcher.bin
           PART_BIN=build/partition_table/partition-table.bin
-          if [ ! -f "$BOOTLOADER_BIN" ] || [ ! -f "$MENU_BIN" ]; then
-            ERR=$(grep -E '(: error:|fatal error:|FAILED:|CMake Error|undefined reference|ninja: build stopped)' idf-build.log | head -n 15)
-            [ -z "$ERR" ] && ERR=$(tail -n 25 idf-build.log)
-            while IFS= read -r line; do
-              [ -n "$line" ] && echo "::error title=idf-build::$line"
-            done <<< "$ERR"
-            exit 1
-          fi
           ls -lh "$BOOTLOADER_BIN" "$MENU_BIN" "$PART_BIN"
           BOOT_SIZE=$(stat -c%s "$BOOTLOADER_BIN")
           MENU_SIZE=$(stat -c%s "$MENU_BIN")
@@ -190,3 +194,30 @@ jobs:
           name: DSolution-183-2mic-ota
           path: DSolution-183-2mic-ota.bin
           if-no-files-found: warn
+
+  publish-release:
+    needs: [build-dualboot-launcher, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Update dualboot-latest pre-release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p release-files
+          find artifacts -type f -name '*.bin' -exec cp {} release-files/ \;
+          ls -lh release-files/
+          if gh release view dualboot-latest --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release upload dualboot-latest release-files/*.bin --clobber --repo "${{ github.repository }}"
+          else
+            gh release create dualboot-latest release-files/*.bin \
+              --repo "${{ github.repository }}" \
+              --title "DSolution 1.83 2-Mic Dual-Boot & Bruce Firmware" \
+              --notes "Latest CI-built Dual-Boot bootloader, NV3023 Boot Menu, and Bruce firmware images." \
+              --prerelease
+          fi

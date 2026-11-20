@@ -193,11 +193,11 @@ static void draw_os_card(int y, bool selected, bool is_default, const char *titl
 
     nv3023_draw_text(26, y + 10, title, COL_WHITE, bg, 2);
 
-    char meta[44];
+    char meta[80];
     if (info->valid) {
-        snprintf(meta, sizeof(meta), "%s  (%s)", sub, info->version);
+        snprintf(meta, sizeof(meta), "%.16s  (%.24s)", sub, info->version);
     } else {
-        snprintf(meta, sizeof(meta), "%s  (Not flashed)", sub);
+        snprintf(meta, sizeof(meta), "%.16s  (Not flashed)", sub);
     }
     nv3023_draw_text(26, y + 34, meta, info->valid ? COL_TEAL : COL_RED, bg, 1);
 
@@ -221,22 +221,24 @@ static void draw_main_menu(int sel, bool countdown_active, int remain_ms)
     uint16_t opt_bd = (sel == 2) ? COL_CYAN : COL_BORDER;
     nv3023_fill_round_rect(12, 172, LCD_WIDTH - 24, 24, 6, opt_bg);
     nv3023_draw_round_rect(12, 172, LCD_WIDTH - 24, 24, 6, opt_bd);
-    char opt_lbl[44];
+    char opt_lbl[80];
     if (s_cfg.timeout_ms == 0) {
         snprintf(opt_lbl, sizeof(opt_lbl), "Boot Options  (Def:%s | 0s Instant)",
                  s_cfg.def_os == 0 ? "HeyLily" : "Bruce");
     } else {
-        snprintf(opt_lbl, sizeof(opt_lbl), "Boot Options  (Def:%s | %d.%ds)",
-                 s_cfg.def_os == 0 ? "HeyLily" : "Bruce",
-                 s_cfg.timeout_ms / 1000, (s_cfg.timeout_ms % 1000) / 100);
+        unsigned secs = s_cfg.timeout_ms / 1000U;
+        unsigned decs = (s_cfg.timeout_ms % 1000U) / 100U;
+        snprintf(opt_lbl, sizeof(opt_lbl), "Boot Options  (Def:%s | %u.%us)",
+                 s_cfg.def_os == 0 ? "HeyLily" : "Bruce", secs, decs);
     }
     nv3023_draw_text(24, 180, opt_lbl, sel == 2 ? COL_WHITE : COL_TEAL, opt_bg, 1);
 
     // Footer status / countdown bar
     nv3023_fill_rect(12, 202, LCD_WIDTH - 24, 34, COL_BG);
     if (countdown_active && s_cfg.timeout_ms > 0) {
-        char line[48];
+        char line[80];
         int tenths = (remain_ms + 99) / 100;
+        if (tenths < 0) tenths = 0;
         snprintf(line, sizeof(line), "Auto-boot %s in %d.%ds",
                  s_cfg.def_os == 0 ? "HeyLily" : "Bruce", tenths / 10, tenths % 10);
         nv3023_draw_text_centered(LCD_WIDTH / 2, 204, line, COL_AMBER, COL_BG, 1);
@@ -259,8 +261,9 @@ static void draw_main_menu(int sel, bool countdown_active, int remain_ms)
 static void update_countdown_bar_only(int remain_ms)
 {
     if (s_cfg.timeout_ms == 0) return;
-    char line[48];
+    char line[80];
     int tenths = (remain_ms + 99) / 100;
+    if (tenths < 0) tenths = 0;
     snprintf(line, sizeof(line), "Auto-boot %s in %d.%ds   ",
              s_cfg.def_os == 0 ? "HeyLily" : "Bruce", tenths / 10, tenths % 10);
     nv3023_draw_text_centered(LCD_WIDTH / 2, 204, line, COL_AMBER, COL_BG, 1);
@@ -285,12 +288,14 @@ static void draw_options_screen(int opt_sel)
         "Auto-Boot Timer",
         "Save & Back"
     };
-    char vals[3][28];
+    char vals[3][48];
     snprintf(vals[0], sizeof(vals[0]), "%s", s_cfg.def_os == 0 ? "XiaoZhi HeyLily" : "Bruce Firmware");
     if (s_cfg.timeout_ms == 0) {
         snprintf(vals[1], sizeof(vals[1]), "0s (Hold key=Menu)");
     } else {
-        snprintf(vals[1], sizeof(vals[1]), "%d.%ds", s_cfg.timeout_ms / 1000, (s_cfg.timeout_ms % 1000) / 100);
+        unsigned secs = s_cfg.timeout_ms / 1000U;
+        unsigned decs = (s_cfg.timeout_ms % 1000U) / 100U;
+        snprintf(vals[1], sizeof(vals[1]), "%u.%us", secs, decs);
     }
     snprintf(vals[2], sizeof(vals[2]), "Return to Boot Menu");
 
