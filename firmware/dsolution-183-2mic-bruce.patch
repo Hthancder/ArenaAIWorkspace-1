@@ -1420,10 +1420,10 @@ index 0000000..fcf16fe
 +spiffs,   data, spiffs,   0x810000, 0x7E0000,
 +coredump, data, coredump, 0xFF0000, 0x10000,
 diff --git a/embedded_resources/web_interface/index.css b/embedded_resources/web_interface/index.css
-index bda7b42..9e846cc 100644
+index bda7b42..b4e4267 100644
 --- a/embedded_resources/web_interface/index.css
 +++ b/embedded_resources/web_interface/index.css
-@@ -1,310 +1,636 @@
+@@ -1,310 +1,646 @@
  :root {
 -  --color: #ff3ec8;
 -  --background: #242424;
@@ -1665,8 +1665,6 @@ index bda7b42..9e846cc 100644
  }
 -.container .header .title {
 -  padding: 9px 12px;
--  cursor: pointer;
--  text-align: center;
 +
 +/* Telemetry bar */
 +.telemetry-bar {
@@ -1676,10 +1674,7 @@ index bda7b42..9e846cc 100644
 +  padding: 9px 16px;
 +  border-bottom: 1px solid var(--border);
 +  background: color-mix(in srgb, var(--color) 3%, var(--background));
- }
--.left-part,
--.right-part {
--  padding: 4px 6px;
++}
 +
 +.tele-pill {
 +  display: inline-flex;
@@ -1691,19 +1686,26 @@ index bda7b42..9e846cc 100644
 +  background: var(--surface);
 +  font-size: 11px;
 +  color: var(--muted);
- }
--.left-part {
--  border-left: 1px solid var(--color);
--  margin-right: auto;
--  width: auto;
++}
 +
 +.tele-pill b {
 +  color: var(--text);
 +  font-weight: 600;
++}
++
++.tele-pill-btn {
+   cursor: pointer;
+-  text-align: center;
++  transition: 0.15s ease;
  }
+-.left-part,
 -.right-part {
--  margin-left: auto;
--  text-align: right;
+-  padding: 4px 6px;
++
++.tele-pill-btn:hover {
++  border-color: var(--color);
++  background: var(--surface-2);
++}
 +
 +/* Storage switcher */
 +.free-space {
@@ -1713,10 +1715,10 @@ index bda7b42..9e846cc 100644
 +  padding: 12px 16px;
 +  border-bottom: 1px solid var(--border);
  }
--.container .header button {
--  margin-top: 2px;
--  margin-bottom: 2px;
--  width: 100px;
+-.left-part {
+-  border-left: 1px solid var(--color);
+-  margin-right: auto;
+-  width: auto;
 +
 +.block-space {
 +  display: flex;
@@ -1730,27 +1732,49 @@ index bda7b42..9e846cc 100644
 +  transition: 0.15s ease;
 +  text-align: left;
  }
--.container .free-space {
--  border-bottom: 1px solid var(--color);
--  justify-content: space-between;
+-.right-part {
+-  margin-left: auto;
+-  text-align: right;
 +
 +.block-space:hover {
 +  border-color: var(--border-strong);
 +  background: var(--surface-2);
-+}
+ }
+-.container .header button {
+-  margin-top: 2px;
+-  margin-bottom: 2px;
+-  width: 100px;
 +
 +.block-space.active {
 +  border-color: var(--color);
 +  background: color-mix(in srgb, var(--color) 12%, var(--background));
 +  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color) 35%, transparent) inset;
-+}
+ }
+-.container .free-space {
+-  border-bottom: 1px solid var(--color);
+-  justify-content: space-between;
 +
 +.block-space .drive-top {
    display: flex;
 +  align-items: center;
 +  justify-content: space-between;
 +  font-size: 12px;
-+}
+ }
+-.container .free-space .block-space {
+-  width: 50%;
+-  border: 0px;
+-  border-right: 1px solid var(--color);
+-  padding: 5px;
+-  white-space: normal;
+-  word-wrap: break-word;
+-  overflow: visible;
+-}
+-.container .free-space .block-space:last-child {
+-  border: 0px;
+-}
+-.container .action-content {
+-  padding: 5px;
+-  border-bottom: 1px solid var(--color);
 +
 +.block-space .drive-top strong {
 +  color: var(--color);
@@ -1774,22 +1798,7 @@ index bda7b42..9e846cc 100644
 +  width: 0%;
 +  background: linear-gradient(90deg, var(--sec-color), var(--color));
 +  transition: width 0.25s ease;
- }
--.container .free-space .block-space {
--  width: 50%;
--  border: 0px;
--  border-right: 1px solid var(--color);
--  padding: 5px;
--  white-space: normal;
--  word-wrap: break-word;
--  overflow: visible;
--}
--.container .free-space .block-space:last-child {
--  border: 0px;
--}
--.container .action-content {
--  padding: 5px;
--  border-bottom: 1px solid var(--color);
++}
 +
 +/* Action & breadcrumb bar */
 +.action-content {
@@ -1800,17 +1809,17 @@ index bda7b42..9e846cc 100644
    align-items: center;
 +  flex-wrap: wrap;
 +  gap: 10px;
- }
--.container .action-content .breadcrumb {
++}
 +
 +.breadcrumb {
-   display: flex;
-   align-items: center;
++  display: flex;
++  align-items: center;
 +  gap: 8px;
 +  color: var(--color);
 +  font-weight: 600;
 +  min-width: 0;
-+}
+ }
+-.container .action-content .breadcrumb {
 +
 +.current-path {
 +  font-family: ui-monospace, Consolas, monospace;
@@ -1823,8 +1832,8 @@ index bda7b42..9e846cc 100644
 +}
 +
 +.body-actions {
-+  display: flex;
-+  align-items: center;
+   display: flex;
+   align-items: center;
 +  gap: 6px;
 +}
 +
@@ -1926,8 +1935,7 @@ index bda7b42..9e846cc 100644
 +  background: var(--color);
 +  border-color: var(--color);
 +  color: var(--background);
- }
--.container .content .table {
++}
 +
 +.inp-uploader {
 +  position: absolute;
@@ -1939,7 +1947,8 @@ index bda7b42..9e846cc 100644
 +/* File table */
 +.content {
 +  overflow-x: auto;
-+}
+ }
+-.container .content .table {
 +
 +.table.explorer {
    width: 100%;
@@ -2145,7 +2154,7 @@ index bda7b42..9e846cc 100644
 +  justify-content: flex-end;
 +  gap: 8px;
 +  background: var(--surface);
-+}
+ }
 +
 +/* Settings dialog */
 +.dialog.settings .dialog-body {
@@ -2158,7 +2167,7 @@ index bda7b42..9e846cc 100644
 +  width: 100%;
 +  padding: 9px 12px;
 +  justify-content: center;
- }
++}
 +
 +/* Navigator dialog */
 +.dialog.navigator {
@@ -2252,7 +2261,7 @@ index bda7b42..9e846cc 100644
  .dialog.navigator .navigator-canvas .nav.nav-page-up svg {
    transform: rotate(-90deg);
  }
-@@ -320,56 +646,37 @@ svg > path {
+@@ -320,56 +656,37 @@ svg > path {
  .dialog.navigator .navigator-canvas .nav.nav-right svg {
    transform: rotate(90deg);
  }
@@ -2326,7 +2335,7 @@ index bda7b42..9e846cc 100644
    padding: 0;
    overflow: hidden;
  }
-@@ -377,18 +684,15 @@ svg > path {
+@@ -377,18 +694,15 @@ svg > path {
    display: flex;
    width: 100%;
    height: 100%;
@@ -2352,7 +2361,7 @@ index bda7b42..9e846cc 100644
    text-align: right;
    user-select: none;
    white-space: pre;
-@@ -396,131 +700,155 @@ svg > path {
+@@ -396,131 +710,191 @@ svg > path {
  }
  .dialog.editor .file-content {
    flex: 1;
@@ -2417,15 +2426,18 @@ index bda7b42..9e846cc 100644
    z-index: 1;
  }
  .dialog.upload .upload-loading .upload-name {
-+  position: relative;
-   z-index: 2;
-+  font-size: 12px;
-+  font-weight: 600;
-+}
-+
-+.ota-drop {
+-  z-index: 2;
    position: relative;
 -  font-weight: bold;
++  z-index: 2;
++  font-size: 12px;
++  font-weight: 600;
+ }
+-.hidden {
+-  display: none !important;
++
++.ota-drop {
++  position: relative;
 +  display: block;
 +  border: 2px dashed var(--border-strong);
 +  border-radius: 10px;
@@ -2435,24 +2447,55 @@ index bda7b42..9e846cc 100644
 +  background: var(--surface);
 +  transition: 0.15s ease;
  }
--.hidden {
--  display: none !important;
+-.upload-area,
+-.loading-area {
+-  position: fixed;
+-  top: 0;
+-  left: 0;
+-  background-color: rgba(0, 0, 0, 0.8);
+-  width: 100%;
+-  height: 100%;
+-  display: flex;
+-  justify-content: center;
+-  align-items: center;
 +.ota-drop:hover,
 +.ota-drop.drag {
 +  border-color: var(--color);
 +  background: var(--surface-2);
-+}
+ }
+-.upload-area::before {
+-  content: "Drop files here to upload them to current folder";
+-  border: 3px dashed var(--color);
+-  background-color: var(--background);
+-  font-size: 24px;
+-  padding: 20px;
+-  height: 300px;
+-  width: 300px;
+-  text-align: center;
+-  font-weight: bold;
+-  vertical-align: center;
+-  display: flex;
+-  align-items: center;
 +.ota-drop input {
 +  position: absolute;
 +  inset: 0;
 +  opacity: 0;
 +  cursor: pointer;
  }
+-.loading-area .text {
 +.ota-drop strong {
 +  display: block;
-+  color: var(--color);
+   color: var(--color);
+-  border: 1px solid var(--color);
+-  padding: 10px 20px;
+-  min-width: 250px;
+-  text-align: center;
+-  max-width: 350px;
+-  background-color: var(--background);
 +  margin-bottom: 4px;
-+}
+ }
+-.oinput-file-name {
+-  white-space: nowrap;
 +.ota-drop small {
 +  color: var(--muted);
 +  font-size: 11.5px;
@@ -2482,8 +2525,11 @@ index bda7b42..9e846cc 100644
 +  border-radius: 999px;
 +  background: var(--surface);
 +  border: 1px solid var(--border);
-+  overflow: hidden;
-+}
+   overflow: hidden;
+-  text-overflow: ellipsis;
+-  max-width: 250px;
+ }
+-.dialog.navigator .dialog-head div {
 +.ota-bar-fill {
 +  height: 100%;
 +  width: 0%;
@@ -2499,31 +2545,68 @@ index bda7b42..9e846cc 100644
 +  font-family: ui-monospace, Consolas, monospace;
 +}
 +
++.wifi-scan-list {
++  max-height: 156px;
++  overflow-y: auto;
+   display: flex;
++  flex-direction: column;
+   gap: 5px;
++  margin-bottom: 10px;
+ }
+-::selection {
+-  background: var(--color);
+-  color: var(--background);
++
++.wifi-net-item {
++  display: flex;
++  justify-content: space-between;
++  align-items: center;
++  gap: 8px;
++  padding: 7px 10px;
++  border-radius: 8px;
++  border: 1px solid var(--border);
++  background: var(--surface);
++  cursor: pointer;
++  font-size: 12px;
++  color: var(--text);
+ }
+-#force-reload,
+-#refresh-folder {
+-  padding: 0;
+-  height: 21px;
++
++.wifi-net-item:hover,
++.wifi-net-item.sel {
++  border-color: var(--color);
++  background: var(--surface-2);
++}
++
++.wifi-net-meta {
++  font-size: 11px;
++  color: var(--muted);
++  font-family: ui-monospace, Consolas, monospace;
++  white-space: nowrap;
++}
++
 +/* Overlays */
- .upload-area,
- .loading-area {
-   position: fixed;
--  top: 0;
--  left: 0;
--  background-color: rgba(0, 0, 0, 0.8);
--  width: 100%;
--  height: 100%;
++.upload-area,
++.loading-area {
++  position: fixed;
 +  inset: 0;
 +  z-index: 60;
 +  background: rgba(2, 6, 10, 0.82);
    display: flex;
+-  width: 21px;
    justify-content: center;
    align-items: center;
+-  border: 0;
  }
- .upload-area::before {
--  content: "Drop files here to upload them to current folder";
+-#force-reload svg path,
+-#refresh-folder svg path {
+-  fill: var(--background);
++.upload-area::before {
 +  content: "Drop files or folders here to upload";
-   border: 3px dashed var(--color);
--  background-color: var(--background);
--  font-size: 24px;
--  padding: 20px;
--  height: 300px;
--  width: 300px;
++  border: 3px dashed var(--color);
 +  border-radius: 16px;
 +  background: var(--background);
 +  color: var(--color);
@@ -2531,58 +2614,20 @@ index bda7b42..9e846cc 100644
 +  font-weight: 700;
 +  padding: 36px;
 +  max-width: 85vw;
-   text-align: center;
--  font-weight: bold;
--  vertical-align: center;
--  display: flex;
--  align-items: center;
++  text-align: center;
  }
- .loading-area .text {
-   color: var(--color);
--  border: 1px solid var(--color);
--  padding: 10px 20px;
--  min-width: 250px;
+-#force-reload:hover svg path,
+-#refresh-folder:hover svg path {
+-  fill: var(--color);
+-  stroke: var(--background);
++.loading-area .text {
++  color: var(--color);
 +  border: 1px solid var(--border-strong);
 +  border-radius: 10px;
 +  padding: 12px 22px;
 +  min-width: 240px;
 +  max-width: 88vw;
-   text-align: center;
--  max-width: 350px;
--  background-color: var(--background);
--}
--.oinput-file-name {
--  white-space: nowrap;
--  overflow: hidden;
--  text-overflow: ellipsis;
--  max-width: 250px;
--}
--.dialog.navigator .dialog-head div {
--  display: flex;
--  gap: 5px;
--}
--::selection {
--  background: var(--color);
--  color: var(--background);
--}
--#force-reload,
--#refresh-folder {
--  padding: 0;
--  height: 21px;
--  display: flex;
--  width: 21px;
--  justify-content: center;
--  align-items: center;
--  border: 0;
--}
--#force-reload svg path,
--#refresh-folder svg path {
--  fill: var(--background);
--}
--#force-reload:hover svg path,
--#refresh-folder:hover svg path {
--  fill: var(--color);
--  stroke: var(--background);
++  text-align: center;
 +  background: var(--background);
  }
 -#force-reload.reloading svg path,
@@ -2595,7 +2640,7 @@ index bda7b42..9e846cc 100644
  }
  @keyframes rotation {
    100% {
-@@ -528,57 +856,20 @@ svg > path {
+@@ -528,57 +902,20 @@ svg > path {
    }
  }
  
@@ -2664,10 +2709,10 @@ index bda7b42..9e846cc 100644
    }
  }
 diff --git a/embedded_resources/web_interface/index.html b/embedded_resources/web_interface/index.html
-index 5290300..395fcd8 100644
+index 5290300..4a8ccb7 100644
 --- a/embedded_resources/web_interface/index.html
 +++ b/embedded_resources/web_interface/index.html
-@@ -1,700 +1,347 @@
+@@ -1,700 +1,373 @@
  <!doctype html>
  <html lang="en">
 -  <head>
@@ -2722,6 +2767,7 @@ index 5290300..395fcd8 100644
 +      <div class="nav-actions">
 +        <button class="btn-action act-oinput" data-action="serial">Serial Cmd</button>
 +        <button class="btn-action act-navigation" onclick="openNavigator()">Navigator</button>
++        <button class="btn-action" onclick="openWifiModal()">LAN WiFi</button>
 +        <button class="btn-action" onclick="openOtaModal()">WebOTA</button>
 +        <button class="btn-action" onclick="Dialog.show('settings')">Settings</button>
 +        <button class="btn-action" onclick="window.location.href='/logout'">Log Out</button>
@@ -2733,7 +2779,7 @@ index 5290300..395fcd8 100644
 +      <span class="tele-pill">CPU: <b id="tele-cpu">-- MHz</b></span>
 +      <span class="tele-pill">RAM / PSRAM: <b id="tele-ram">-- / --</b></span>
 +      <span class="tele-pill">OTA Slot: <b id="tele-ota">--</b></span>
-+      <span class="tele-pill">Network: <b id="tele-net">--</b></span>
++      <button type="button" class="tele-pill tele-pill-btn" onclick="openWifiModal()" title="Configure LAN WiFi (192.168.x.x)">Network: <b id="tele-net">--</b></button>
 +    </div>
 +
 +    <div class="free-space">
@@ -3011,14 +3057,18 @@ index 5290300..395fcd8 100644
 +    <div class="dialog ota hidden">
 +      <div class="dialog-head">
 +        <span>Wireless Dual-OTA Update</span>
-+        <a class="btn-action" href="/ota" target="_blank" style="padding:3px 8px;font-size:11px">Standalone Page</a>
++        <div style="display:flex;gap:6px;align-items:center">
++          <button type="button" class="btn-action" onclick="openWifiModal()" style="padding:3px 8px;font-size:11px">LAN WiFi</button>
++          <a class="btn-action" href="/ota" target="_blank" style="padding:3px 8px;font-size:11px">Standalone Page</a>
++        </div>
 +      </div>
 +      <div class="dialog-body">
-+        <p style="font-size:12px;color:var(--muted);margin-bottom:10px">
++        <p style="font-size:12px;color:var(--muted);margin-bottom:6px">
 +          Active: <b id="ota-cur-slot" style="color:var(--color)">--</b> &bull;
 +          Target: <b id="ota-nxt-slot" style="color:var(--color)">--</b> &bull;
 +          Max: <b id="ota-max-sz">--</b>
 +        </p>
++        <p id="ota-net-line" style="font-size:11.5px;color:var(--sec-color);margin:0 0 10px">Network: --</p>
 +        <label class="ota-drop" id="ota-drop-zone">
 +          <input type="file" id="ota-file-input" accept=".bin" />
 +          <strong>Choose or Drop OTA Binary (.bin)</strong>
@@ -3042,6 +3092,7 @@ index 5290300..395fcd8 100644
 -          <tbody></tbody>
 -        </table>
 +      <div class="dialog-footer">
++        <button id="ota-cancel-btn" class="btn-action btn-danger hidden">Cancel</button>
 +        <button id="ota-start-btn" class="btn-action btn-default" disabled>Flash OTA Firmware</button>
 +        <button class="btn-action act-dialog-close act-escape">Close</button>
        </div>
@@ -3152,21 +3203,24 @@ index 5290300..395fcd8 100644
 -        <span class="upload-name"></span>
 -        <div class="bar"></div>
 +
-+    <div class="dialog settings hidden">
-+      <div class="dialog-head">Device Settings &amp; Power</div>
-+      <div class="dialog-body">
-+        <button class="btn-action act-cred" onclick="Dialog.show('credential')">Change WebUI Credentials</button>
-+        <button class="btn-action act-hide-show-navigating"></button>
-+        <button class="btn-action btn-warn act-reboot">Reboot Device</button>
-+        <button class="btn-action btn-danger act-bootloader">Enter USB ROM Bootloader</button>
++    <div class="dialog wifi hidden">
++      <div class="dialog-head">
++        <span>LAN Wi-Fi Setup (192.168.x.x)</span>
++        <button type="button" id="wifi-rescan-btn" class="btn-action" style="padding:3px 9px;font-size:11px">Rescan</button>
        </div>
 -    </template>
 -    <div class="dialog-background hidden">
 -      <div class="dialog upload hidden">
 -        <div class="dialog-head">Uploading</div>
 -        <div class="dialog-body"></div>
-+      <div class="dialog-footer">
-+        <button class="btn-action act-dialog-close act-escape">Close</button>
++      <div class="dialog-body">
++        <p id="wifi-cur-status" style="font-size:12px;color:var(--muted);margin:0 0 8px">Checking Wi-Fi status...</p>
++        <div id="wifi-scan-list" class="wifi-scan-list"></div>
++        <label for="wifi-ssid-input" class="oinput-label">Wi-Fi SSID</label>
++        <input type="text" id="wifi-ssid-input" placeholder="Select a network above or type SSID" style="margin-bottom:8px" />
++        <label for="wifi-pwd-input" class="oinput-label">Password</label>
++        <input type="password" id="wifi-pwd-input" placeholder="Leave blank if already saved or open network" />
++        <div id="wifi-conn-msg" class="ota-status hidden"></div>
        </div>
 -      <div class="dialog settings hidden">
 -        <div class="dialog-head">Settings</div>
@@ -3183,21 +3237,9 @@ index 5290300..395fcd8 100644
 -        <div class="dialog-footer">
 -          <button class="btn-action act-dialog-close act-escape">Close</button>
 -        </div>
-+    </div>
-+
-+    <div class="dialog navigator-shortcut hidden">
-+      <div class="dialog-head">Navigator Keyboard Shortcuts</div>
-+      <div class="dialog-body">
-+        <p>Control the device directly from your keyboard while Navigator is open:</p>
-+        <ul>
-+          <li>Arrow Keys — Up / Down / Left / Right</li>
-+          <li>Enter — OK / Select</li>
-+          <li>M — Long Press (Back / Menu)</li>
-+          <li>Backspace — Back / Esc</li>
-+          <li>Page Up / Page Down — Page Up / Down</li>
-+          <li>R — Reload Screen</li>
-+          <li>Escape — Close Navigator</li>
-+        </ul>
++      <div class="dialog-footer">
++        <button type="button" id="wifi-connect-btn" class="btn-action btn-default">Connect &amp; Switch to LAN</button>
++        <button class="btn-action act-dialog-close act-escape">Close</button>
        </div>
 -      <div class="dialog navigator-shortcut hidden">
 -        <div class="dialog-head">Navigator Shortcut</div>
@@ -3223,6 +3265,35 @@ index 5290300..395fcd8 100644
 -            onclick="Dialog.show('navigator')"
 -          >
 -            Close
++    </div>
++
++    <div class="dialog settings hidden">
++      <div class="dialog-head">Device Settings &amp; Power</div>
++      <div class="dialog-body">
++        <button class="btn-action act-cred" onclick="Dialog.show('credential')">Change WebUI Credentials</button>
++        <button class="btn-action act-hide-show-navigating"></button>
++        <button class="btn-action btn-warn act-reboot">Reboot Device</button>
++        <button class="btn-action btn-danger act-bootloader">Enter USB ROM Bootloader</button>
++      </div>
++      <div class="dialog-footer">
++        <button class="btn-action act-dialog-close act-escape">Close</button>
++      </div>
++    </div>
++
++    <div class="dialog navigator-shortcut hidden">
++      <div class="dialog-head">Navigator Keyboard Shortcuts</div>
++      <div class="dialog-body">
++        <p>Control the device directly from your keyboard while Navigator is open:</p>
++        <ul>
++          <li>Arrow Keys — Up / Down / Left / Right</li>
++          <li>Enter — OK / Select</li>
++          <li>M — Long Press (Back / Menu)</li>
++          <li>Backspace — Back / Esc</li>
++          <li>Page Up / Page Down — Page Up / Down</li>
++          <li>R — Reload Screen</li>
++          <li>Escape — Close Navigator</li>
++        </ul>
++      </div>
 +      <div class="dialog-footer">
 +        <button class="btn-action act-escape" onclick="Dialog.show('navigator')">Back</button>
 +      </div>
@@ -3632,10 +3703,8 @@ index 5290300..395fcd8 100644
 +      <div class="dialog-footer">
 +        <button class="btn-action btn-default act-save-oinput-file"></button>
 +        <button class="btn-action act-dialog-close act-escape">Close</button>
-       </div>
-     </div>
--    <div class="loading-area hidden">
--      <div class="text"></div>
++      </div>
++    </div>
 +
 +    <div class="dialog credential hidden">
 +      <div class="dialog-head">Change WebUI Credentials</div>
@@ -3648,11 +3717,10 @@ index 5290300..395fcd8 100644
 +      <div class="dialog-footer">
 +        <button class="btn-action btn-default act-save-credential">Save</button>
 +        <button class="btn-action act-escape" onclick="Dialog.show('settings')">Back</button>
-+      </div>
+       </div>
      </div>
--    <div class="upload-area hidden"></div>
--    <script src="/index.js"></script>
--  </body>
+-    <div class="loading-area hidden">
+-      <div class="text"></div>
 +
 +    <div class="dialog editor hidden">
 +      <div class="dialog-head">Edit: <span class="editor-file-name mono"></span></div>
@@ -3667,7 +3735,10 @@ index 5290300..395fcd8 100644
 +        <button class="btn-action btn-default act-run-edit-file" title="ALT + ENTER">Run</button>
 +        <button class="btn-action act-dialog-close act-escape">Close</button>
 +      </div>
-+    </div>
+     </div>
+-    <div class="upload-area hidden"></div>
+-    <script src="/index.js"></script>
+-  </body>
 +  </div>
 +
 +  <div class="loading-area hidden"><div class="text"></div></div>
@@ -3676,7 +3747,7 @@ index 5290300..395fcd8 100644
 +</body>
  </html>
 diff --git a/embedded_resources/web_interface/index.js b/embedded_resources/web_interface/index.js
-index fd61602..409ea97 100644
+index fd61602..6993b6e 100644
 --- a/embedded_resources/web_interface/index.js
 +++ b/embedded_resources/web_interface/index.js
 @@ -6,20 +6,17 @@ const T = {
@@ -3703,7 +3774,7 @@ index fd61602..409ea97 100644
      return tmp.content;
    },
  };
-@@ -37,25 +34,16 @@ const EXECUTABLE = {
+@@ -37,25 +34,17 @@ const EXECUTABLE = {
  const Dialog = {
    _bg: function (show) {
      let bg = $(".dialog-background");
@@ -3726,13 +3797,14 @@ index fd61602..409ea97 100644
 +    $(".dialog." + dialogName).classList.remove("hidden");
    },
    hide: function () {
++    if (otaBusy) return;
      this._bg(false);
      this.loading.hide();
 -
      if (currentDrive && currentPath) {
        updateURL(currentDrive, currentPath, null);
      }
-@@ -71,40 +59,14 @@ const Dialog = {
+@@ -71,40 +60,14 @@ const Dialog = {
    },
    showOneInput: function (name, inputVal, data) {
      const dbForm = {
@@ -3779,7 +3851,7 @@ index fd61602..409ea97 100644
      let dialog = $(".dialog.oinput");
      dialog.setAttribute("data-cache", data);
      dialog.querySelector(".oinput-title").textContent = config.title;
-@@ -118,11 +80,7 @@ const Dialog = {
+@@ -118,11 +81,7 @@ const Dialog = {
  };
  
  function handleAuthError() {
@@ -3792,7 +3864,7 @@ index fd61602..409ea97 100644
      window.location.href = "/";
    } else {
      Dialog.loading.hide();
-@@ -132,26 +90,17 @@ function handleAuthError() {
+@@ -132,26 +91,17 @@ function handleAuthError() {
  async function requestGet(url, data) {
    return new Promise((resolve, reject) => {
      let req = new XMLHttpRequest();
@@ -3826,7 +3898,7 @@ index fd61602..409ea97 100644
      req.send();
    });
  }
-@@ -160,22 +109,16 @@ async function requestPost(url, data) {
+@@ -160,22 +110,16 @@ async function requestPost(url, data) {
    return new Promise((resolve, reject) => {
      let fd = new FormData();
      for (let key in data) {
@@ -3855,7 +3927,7 @@ index fd61602..409ea97 100644
      };
      req.onerror = () => reject(new Error("Network error"));
      req.send(fd);
-@@ -183,43 +126,45 @@ async function requestPost(url, data) {
+@@ -183,43 +127,45 @@ async function requestPost(url, data) {
  }
  
  function stringToId(str) {
@@ -3922,7 +3994,7 @@ index fd61602..409ea97 100644
          appendFileToQueue([fileWithPath]);
          _queueUpload.push(fileWithPath);
          resolve();
-@@ -229,52 +174,44 @@ async function appendDroppedFiles(entry) {
+@@ -229,52 +175,44 @@ async function appendDroppedFiles(entry) {
        let reader = entry.createReader();
        reader.readEntries((entries) => {
          for (let e of entries) proms.push(appendDroppedFiles(e));
@@ -3985,7 +4057,7 @@ index fd61602..409ea97 100644
      req.send(fd);
    });
  }
-@@ -291,12 +228,8 @@ async function runCommand(cmd) {
+@@ -291,12 +229,8 @@ async function runCommand(cmd) {
  }
  
  function getSerialCommand(fileName) {
@@ -4000,7 +4072,7 @@ index fd61602..409ea97 100644
    return undefined;
  }
  
-@@ -304,39 +237,25 @@ function calcHash(str) {
+@@ -304,39 +238,25 @@ function calcHash(str) {
    let hash = 5381;
    str = str.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
    for (let i = 0; i < str.length; i++) {
@@ -4046,7 +4118,7 @@ index fd61602..409ea97 100644
  }
  
  function renderFileRow(fileList) {
-@@ -346,131 +265,113 @@ function renderFileRow(fileList) {
+@@ -346,131 +266,122 @@ function renderFileRow(fileList) {
      .sort((a, b) => {
        let [aFirst, ...aRest] = a.split(":");
        let [bFirst, ...bRest] = b.split(":");
@@ -4206,7 +4278,16 @@ index fd61602..409ea97 100644
 +    if ($("#tele-cpu") && info.CPU_MHZ) $("#tele-cpu").textContent = `${info.CPU_MHZ} MHz`;
 +    if ($("#tele-ram")) $("#tele-ram").textContent = `${info.HEAP_FREE || "--"} / ${info.PSRAM_FREE || "--"}`;
 +    if ($("#tele-ota")) $("#tele-ota").textContent = info.OTA_SLOT ? `${info.OTA_SLOT} → ${info.OTA_NEXT || "-"}` : "--";
-+    if ($("#tele-net")) $("#tele-net").textContent = info.WIFI_MODE ? `${info.WIFI_MODE} (${info.WIFI_IP || "-"})` : "--";
++    if ($("#tele-net")) {
++      if (info.WIFI_MODE === "STA") {
++        const rssiTxt = info.WIFI_RSSI ? ` • ${info.WIFI_RSSI}dBm` : "";
++        $("#tele-net").textContent = `LAN ${info.WIFI_SSID || ""} (${info.WIFI_IP || "-"}${rssiTxt})`;
++      } else if (info.WIFI_MODE === "AP") {
++        $("#tele-net").textContent = `AP ${info.AP_SSID || "BruceNet"} (${info.WIFI_IP || "192.168.4.1"})`;
++      } else {
++        $("#tele-net").textContent = "--";
++      }
++    }
 +
 +    const sdTotalBytes = parseHumanBytes(info.SD?.total);
 +    const sdUsedBytes = parseHumanBytes(info.SD?.used);
@@ -4224,7 +4305,7 @@ index fd61602..409ea97 100644
  }
  
  async function saveEditorFile(runFile = false) {
-@@ -480,26 +381,17 @@ async function saveEditorFile(runFile = false) {
+@@ -480,26 +391,17 @@ async function saveEditorFile(runFile = false) {
    if (isModified(editor)) {
      $(".act-save-edit-file").disabled = true;
      editor.setAttribute("data-hash", calcHash(editor.value));
@@ -4254,21 +4335,94 @@ index fd61602..409ea97 100644
  }
  
  async function openNavigator() {
-@@ -508,6 +400,46 @@ async function openNavigator() {
+@@ -508,6 +410,119 @@ async function openNavigator() {
    autoReloadScreen();
  }
  
 +let selectedOtaFile = null;
++let otaBusy = false;
++let otaAbortCtrl = null;
++let otaCancelled = false;
++
++window.addEventListener("beforeunload", (e) => {
++  if (otaBusy) {
++    e.preventDefault();
++    e.returnValue = "";
++  }
++});
++
 +function openOtaModal() {
++  if (otaBusy) {
++    Dialog.show("ota");
++    return;
++  }
 +  selectedOtaFile = null;
 +  $("#ota-start-btn").disabled = true;
++  $("#ota-cancel-btn").classList.add("hidden");
 +  $("#ota-status").className = "ota-status hidden";
 +  $("#ota-prog").classList.add("hidden");
 +  $("#ota-file-input").value = "";
 +  $("#ota-cur-slot").textContent = lastSysInfo.OTA_SLOT || "--";
 +  $("#ota-nxt-slot").textContent = lastSysInfo.OTA_NEXT || "--";
 +  $("#ota-max-sz").textContent = lastSysInfo.OTA_MAX || "4.0 MB";
++  const netMode = lastSysInfo.WIFI_MODE === "STA"
++    ? `LAN WiFi (${lastSysInfo.WIFI_SSID || ""}) • http://${lastSysInfo.WIFI_IP || "-"}/ota`
++    : `AP Hotspot (${lastSysInfo.AP_SSID || "BruceNet"}) • Switch to LAN WiFi for faster router OTA`;
++  $("#ota-net-line").textContent = netMode;
 +  Dialog.show("ota");
++}
++
++async function scanWifiNets() {
++  const list = $("#wifi-scan-list");
++  list.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:6px">Scanning 2.4 GHz networks...</div>';
++  try {
++    const res = JSON.parse(await requestGet("/wifiscan"));
++    if (!res.nets || res.nets.length === 0) {
++      list.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:6px">No networks found.</div>';
++      return;
++    }
++    list.innerHTML = "";
++    res.nets.forEach((n) => {
++      const item = document.createElement("div");
++      item.className = "wifi-net-item";
++      const badge = n.saved ? "Saved" : (n.enc ? "Locked" : "Open");
++      const nameSpan = document.createElement("span");
++      nameSpan.textContent = n.ssid;
++      const metaSpan = document.createElement("span");
++      metaSpan.className = "wifi-net-meta";
++      metaSpan.textContent = `${badge} • ${n.rssi} dBm`;
++      item.appendChild(nameSpan);
++      item.appendChild(metaSpan);
++      item.onclick = () => {
++        document.querySelectorAll(".wifi-net-item").forEach((x) => x.classList.remove("sel"));
++        item.classList.add("sel");
++        $("#wifi-ssid-input").value = n.ssid;
++        $("#wifi-pwd-input").placeholder = n.saved ? "Saved credential (leave blank or enter new)" : "Enter Wi-Fi password";
++      };
++      list.appendChild(item);
++    });
++  } catch (err) {
++    list.innerHTML = "";
++    const msgEl = document.createElement("div");
++    msgEl.style.cssText = "color:#ffb3ba;font-size:12px;padding:6px";
++    msgEl.textContent = err.message || "Scan failed";
++    list.appendChild(msgEl);
++  }
++}
++
++async function openWifiModal() {
++  if (otaBusy) return;
++  $("#wifi-conn-msg").className = "ota-status hidden";
++  try {
++    const st = JSON.parse(await requestGet("/wifistatus"));
++    $("#wifi-cur-status").textContent = st.mode === "STA"
++      ? `Connected to LAN: ${st.ssid} (${st.ip} • ${st.rssi} dBm)`
++      : `Currently in AP Mode (${st.ssid} at ${st.ip}). Connect below to expose WebUI & OTA on 192.168.x.x.`;
++  } catch (_) {
++    $("#wifi-cur-status").textContent = "Select your router below to switch device to LAN Wi-Fi.";
++  }
++  Dialog.show("wifi");
++  scanWifiNets();
 +}
 +
 +async function validateOtaFile(file) {
@@ -4301,7 +4455,7 @@ index fd61602..409ea97 100644
  let SCREEN_NAVIGATING = false;
  async function runNavigation(direction) {
    if (SCREEN_NAVIGATING) return;
-@@ -518,7 +450,6 @@ async function runNavigation(direction) {
+@@ -518,7 +533,6 @@ async function runNavigation(direction) {
      await reloadScreen();
    } catch (error) {
      alert("Failed to run command: " + error.message);
@@ -4309,7 +4463,7 @@ index fd61602..409ea97 100644
    } finally {
      SCREEN_NAVIGATING = false;
    }
-@@ -533,8 +464,7 @@ async function reloadScreen() {
+@@ -533,8 +547,7 @@ async function reloadScreen() {
    try {
      let binResponse = await fetch((IS_DEV ? "/bruce" : "") + "/getscreen");
      let arrayBuffer = await binResponse.arrayBuffer();
@@ -4319,7 +4473,7 @@ index fd61602..409ea97 100644
    } catch (error) {
      console.error("Failed to reload screen:", error);
      alert("Failed to reload screen: " + error.message);
-@@ -548,34 +478,23 @@ const eConfigAutoReload = $("#navigator-auto-reload");
+@@ -548,34 +561,23 @@ const eConfigAutoReload = $("#navigator-auto-reload");
  let AUTO_RELOAD_SCREEN = null;
  async function taskReloader() {
    let timer = parseInt(eConfigAutoReload.value);
@@ -4361,7 +4515,7 @@ index fd61602..409ea97 100644
  async function renderTFT(data) {
    loadingDrawn = false;
    const canvas = $("#navigator-screen");
-@@ -585,11 +504,8 @@ async function renderTFT(data) {
+@@ -585,11 +587,8 @@ async function renderTFT(data) {
      if (imageCache[url]) return imageCache[url];
      return new Promise((resolve, reject) => {
        const img = new Image();
@@ -4375,7 +4529,7 @@ index fd61602..409ea97 100644
        img.src = url;
      });
    };
-@@ -599,7 +515,6 @@ async function renderTFT(data) {
+@@ -599,7 +598,6 @@ async function renderTFT(data) {
      let img = await loadImage(img_url);
      let drawX = input.x;
      let drawY = input.y;
@@ -4383,7 +4537,7 @@ index fd61602..409ea97 100644
      if (input.center === 1) {
        drawX += (canvas.width - img.width) / 2;
        drawY += (canvas.height - img.height) / 2;
-@@ -607,12 +522,7 @@ async function renderTFT(data) {
+@@ -607,12 +605,7 @@ async function renderTFT(data) {
      ctx.drawImage(img, drawX, drawY);
    };
  
@@ -4397,7 +4551,7 @@ index fd61602..409ea97 100644
  
    const drawRoundRect = (ctx, input, fill) => {
      const { x, y, w, h, r } = input;
-@@ -629,57 +539,40 @@ async function renderTFT(data) {
+@@ -629,57 +622,40 @@ async function renderTFT(data) {
  
    let startData = 0;
    const getByteValue = (dataType) => {
@@ -4476,7 +4630,7 @@ index fd61602..409ea97 100644
        } else {
          lengthLeft -= 2;
          r[key] = getByteValue("int16");
-@@ -690,221 +583,156 @@ async function renderTFT(data) {
+@@ -690,221 +666,156 @@ async function renderTFT(data) {
  
    let offset = 0;
    ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -4551,6 +4705,16 @@ index fd61602..409ea97 100644
          break;
 -      case 7: // DRAWTRIANGLE
 -        ctx.strokeStyle = color565toCSS(input.fg);
+-        ctx.beginPath();
+-        ctx.moveTo(input.x, input.y);
+-        ctx.lineTo(input.x2, input.y2);
+-        ctx.lineTo(input.x3, input.y3);
+-        ctx.closePath();
+-        ctx.stroke();
+-        break;
+-
+-      case 8: // FILLTRIANGLE
+-        ctx.fillStyle = color565toCSS(input.fg);
 +      case 7:
 +      case 8:
          ctx.beginPath();
@@ -4558,37 +4722,27 @@ index fd61602..409ea97 100644
          ctx.lineTo(input.x2, input.y2);
          ctx.lineTo(input.x3, input.y3);
          ctx.closePath();
+-        ctx.fill();
+-        break;
+-      case 9: // DRAWELLIPSE
+-        ctx.strokeStyle = color565toCSS(input.fg);
+-        ctx.beginPath();
+-        ctx.ellipse(input.x, input.y, input.rx, input.ry, 0, 0, Math.PI * 2);
 -        ctx.stroke();
 +        if (fn === 8) { ctx.fillStyle = color565toCSS(input.fg); ctx.fill(); }
 +        else { ctx.strokeStyle = color565toCSS(input.fg); ctx.stroke(); }
          break;
 -
--      case 8: // FILLTRIANGLE
+-      case 10: // FILLELLIPSE
 -        ctx.fillStyle = color565toCSS(input.fg);
--        ctx.beginPath();
--        ctx.moveTo(input.x, input.y);
--        ctx.lineTo(input.x2, input.y2);
--        ctx.lineTo(input.x3, input.y3);
--        ctx.closePath();
--        ctx.fill();
--        break;
--      case 9: // DRAWELLIPSE
--        ctx.strokeStyle = color565toCSS(input.fg);
 +      case 9:
 +      case 10:
          ctx.beginPath();
          ctx.ellipse(input.x, input.y, input.rx, input.ry, 0, 0, Math.PI * 2);
--        ctx.stroke();
+-        ctx.fill();
 +        if (fn === 10) { ctx.fillStyle = color565toCSS(input.fg); ctx.fill(); }
 +        else { ctx.strokeStyle = color565toCSS(input.fg); ctx.stroke(); }
          break;
--
--      case 10: // FILLELLIPSE
--        ctx.fillStyle = color565toCSS(input.fg);
--        ctx.beginPath();
--        ctx.ellipse(input.x, input.y, input.rx, input.ry, 0, 0, Math.PI * 2);
--        ctx.fill();
--        break;
 -
 -      case 11: // DRAWLINE
 +      case 11:
@@ -4746,7 +4900,7 @@ index fd61602..409ea97 100644
    e.preventDefault();
    autoReloadScreen();
    sessionStorage.setItem("autoReload", eConfigAutoReload.value);
-@@ -916,7 +744,67 @@ btnForceReload.addEventListener("click", async (e) => {
+@@ -916,7 +827,159 @@ btnForceReload.addEventListener("click", async (e) => {
    await reloadScreen();
  });
  
@@ -4760,50 +4914,142 @@ index fd61602..409ea97 100644
 +  otaDrop.classList.remove("drag");
 +  if (e.dataTransfer.files[0]) validateOtaFile(e.dataTransfer.files[0]);
 +});
-+$("#ota-start-btn").addEventListener("click", () => {
-+  if (!selectedOtaFile) return;
++$("#ota-cancel-btn").addEventListener("click", async () => {
++  if (!otaBusy) return;
++  otaCancelled = true;
++  if (otaAbortCtrl) otaAbortCtrl.abort();
++  await fetch((IS_DEV ? "/bruce" : "") + "/ota/abort", { method: "POST" }).catch(() => {});
++});
++
++$("#ota-start-btn").addEventListener("click", async () => {
++  if (!selectedOtaFile || otaBusy) return;
++  otaBusy = true;
++  otaCancelled = false;
 +  $("#ota-start-btn").disabled = true;
++  $("#ota-cancel-btn").classList.remove("hidden");
 +  $("#ota-prog").classList.remove("hidden");
 +  $("#ota-bar-fill").style.width = "0%";
 +  $("#ota-prog-pct").textContent = "0%";
-+  $("#ota-prog-msg").textContent = "Uploading & writing OTA slot...";
-+  const fd = new FormData();
-+  fd.append("firmware", selectedOtaFile, selectedOtaFile.name);
-+  const xhr = new XMLHttpRequest();
-+  xhr.open("POST", IS_DEV ? "/bruce/ota" : "/ota", true);
-+  xhr.upload.onprogress = (e) => {
-+    if (e.lengthComputable) {
-+      const pct = Math.min(100, Math.round((e.loaded * 100) / e.total));
++  $("#ota-prog-msg").textContent = "Initializing OTA slot...";
++  $("#ota-status").className = "ota-status ok";
++  const base = IS_DEV ? "/bruce" : "";
++  const t0 = Date.now();
++  try {
++    const beginFd = new FormData();
++    beginFd.append("size", String(selectedOtaFile.size));
++    const br = await fetch(base + "/ota/begin", { method: "POST", body: beginFd });
++    const bd = await br.json().catch(() => ({}));
++    if (!br.ok || !bd.ok) throw new Error(bd.msg || "Failed to initialize OTA");
++
++    const chunkSize = bd.chunkSize || 32768;
++    let offset = 0;
++    let retries = 0;
++    while (offset < selectedOtaFile.size) {
++      if (otaCancelled) throw new Error("OTA cancelled by user.");
++      const end = Math.min(offset + chunkSize, selectedOtaFile.size);
++      const slice = selectedOtaFile.slice(offset, end);
++      let ok = false;
++      let lastErr = "Network error";
++      for (let attempt = 0; attempt < 5 && !otaCancelled; attempt++) {
++        otaAbortCtrl = new AbortController();
++        const timer = setTimeout(() => otaAbortCtrl.abort(), 12000);
++        try {
++          const cr = await fetch(`${base}/ota/chunk?offset=${offset}`, {
++            method: "POST",
++            headers: { "Content-Type": "application/octet-stream" },
++            body: slice,
++            signal: otaAbortCtrl.signal,
++          });
++          clearTimeout(timer);
++          const cd = await cr.json().catch(() => ({}));
++          if (cr.ok && cd.ok) {
++            offset = typeof cd.written === "number" ? cd.written : end;
++            ok = true;
++            break;
++          }
++          if (cr.status === 409 && typeof cd.written === "number") {
++            offset = cd.written;
++            ok = true;
++            break;
++          }
++          lastErr = cd.msg || `HTTP ${cr.status}`;
++          if (cr.status >= 400 && cr.status < 500 && cr.status !== 408) break;
++        } catch (err) {
++          clearTimeout(timer);
++          lastErr = otaCancelled ? "OTA cancelled by user." : (err.message || "Connection reset");
++        }
++        retries++;
++        $("#ota-prog-msg").textContent = `Retrying chunk (${retries})...`;
++        await new Promise((r) => setTimeout(r, 350 * (attempt + 1)));
++      }
++      if (!ok) throw new Error(lastErr);
++      const pct = Math.min(100, Math.round((offset * 100) / selectedOtaFile.size));
++      const sec = Math.max(0.2, (Date.now() - t0) / 1000);
++      const kbps = (offset / 1024 / sec).toFixed(0);
++      const eta = offset > 0 ? Math.max(0, Math.round((selectedOtaFile.size - offset) / (offset / sec))) : 0;
 +      $("#ota-bar-fill").style.width = pct + "%";
 +      $("#ota-prog-pct").textContent = pct + "%";
++      $("#ota-prog-msg").textContent = `${(offset / 1048576).toFixed(2)}/${(selectedOtaFile.size / 1048576).toFixed(2)} MB • ${kbps} KB/s • ETA ${eta}s${retries ? ` • ${retries} retries` : ""}`;
 +    }
-+  };
-+  xhr.onload = () => {
-+    let res = { ok: xhr.status === 200, msg: xhr.responseText };
-+    try { res = JSON.parse(xhr.responseText); } catch (_) {}
-+    if (xhr.status === 200 && res.ok) {
-+      $("#ota-bar-fill").style.width = "100%";
-+      $("#ota-prog-pct").textContent = "100%";
-+      $("#ota-status").className = "ota-status ok";
-+      $("#ota-status").textContent = "OTA Flash Complete! Rebooting device...";
-+      let s = 8;
-+      const timer = setInterval(() => {
-+        s--;
-+        $("#ota-prog-msg").textContent = `Reconnecting in ${s}s...`;
-+        if (s <= 0) { clearInterval(timer); location.reload(); }
-+      }, 1000);
-+    } else {
-+      $("#ota-status").className = "ota-status err";
-+      $("#ota-status").textContent = res.msg || "OTA upload failed";
-+      $("#ota-start-btn").disabled = false;
++
++    $("#ota-prog-msg").textContent = "Verifying & committing OTA slot...";
++    const fr = await fetch(base + "/ota/commit", { method: "POST" });
++    const fd = await fr.json().catch(() => ({}));
++    if (!fr.ok || !fd.ok) throw new Error(fd.msg || "OTA commit failed");
++
++    $("#ota-bar-fill").style.width = "100%";
++    $("#ota-prog-pct").textContent = "100%";
++    $("#ota-status").className = "ota-status ok";
++    $("#ota-status").textContent = "OTA Flash Complete! Rebooting device...";
++    otaBusy = false;
++    $("#ota-cancel-btn").classList.add("hidden");
++    for (let s = 1; s <= 20; s++) {
++      $("#ota-prog-msg").textContent = `Waiting for reboot (${Math.floor(s * 1.5)}s)...`;
++      await new Promise((r) => setTimeout(r, 1500));
++      try {
++        const ping = await fetch(base + "/systeminfo", { cache: "no-store" });
++        if (ping.ok) {
++          $("#ota-prog-msg").textContent = "Device back online! Reloading...";
++          setTimeout(() => location.reload(), 600);
++          return;
++        }
++      } catch (_) {}
 +    }
-+  };
-+  xhr.onerror = () => {
++    location.reload();
++  } catch (err) {
++    otaBusy = false;
++    $("#ota-cancel-btn").classList.add("hidden");
++    await fetch(base + "/ota/abort", { method: "POST" }).catch(() => {});
 +    $("#ota-status").className = "ota-status err";
-+    $("#ota-status").textContent = "Connection error during OTA flash.";
++    $("#ota-status").textContent = err.message || "OTA upload failed.";
 +    $("#ota-start-btn").disabled = false;
-+  };
-+  xhr.send(fd);
++  }
++});
++
++$("#wifi-pwd-input").addEventListener("keyup", (e) => {
++  if (e.key === "Enter" || e.keyCode === 13) {
++    e.preventDefault();
++    $("#wifi-connect-btn").click();
++  }
++});
++$("#wifi-rescan-btn").addEventListener("click", () => scanWifiNets());
++$("#wifi-connect-btn").addEventListener("click", async () => {
++  const ssid = $("#wifi-ssid-input").value.trim();
++  const pwd = $("#wifi-pwd-input").value;
++  const msg = $("#wifi-conn-msg");
++  if (!ssid) return alert("Please select or enter a Wi-Fi SSID.");
++  $("#wifi-connect-btn").disabled = true;
++  try {
++    const res = JSON.parse(await requestPost("/wificonnect", { ssid, pwd }));
++    if (!res.ok) throw new Error(res.msg || "Connection failed");
++    msg.className = "ota-status ok";
++    msg.textContent = `Switching to "${ssid}"... Connect your computer to "${ssid}" and visit http://bruce.local/ota (or check the 192.168.x.x IP on the Bruce display).`;
++  } catch (err) {
++    msg.className = "ota-status err";
++    msg.textContent = err.message || "Failed to switch Wi-Fi";
++  } finally {
++    $("#wifi-connect-btn").disabled = false;
++  }
 +});
 +
 +window.ondragenter = (e) => {
@@ -4815,7 +5061,7 @@ index fd61602..409ea97 100644
  $(".upload-area").ondragleave = () => $(".upload-area").classList.add("hidden");
  $(".upload-area").ondragover = (e) => e.preventDefault();
  $(".upload-area").ondrop = async (e) => {
-@@ -924,30 +812,21 @@ $(".upload-area").ondrop = async (e) => {
+@@ -924,30 +987,21 @@ $(".upload-area").ondrop = async (e) => {
    $(".upload-area").classList.add("hidden");
    const items = e.dataTransfer.items;
    if (!items || items.length === 0) return;
@@ -4850,7 +5096,7 @@ index fd61602..409ea97 100644
    });
  });
  
-@@ -955,14 +834,9 @@ $(".container").addEventListener("click", async (e) => {
+@@ -955,14 +1009,9 @@ $(".container").addEventListener("click", async (e) => {
    let browseAction = e.target.closest(".act-browse");
    if (browseAction) {
      e.preventDefault();
@@ -4867,7 +5113,7 @@ index fd61602..409ea97 100644
      fetchFiles(drive, path);
      return;
    }
-@@ -975,31 +849,15 @@ $(".container").addEventListener("click", async (e) => {
+@@ -975,31 +1024,15 @@ $(".container").addEventListener("click", async (e) => {
      if (!file) return;
      $(".dialog.editor .editor-file-name").textContent = file;
      editor.value = "";
@@ -4901,7 +5147,7 @@ index fd61602..409ea97 100644
      updateURL(currentDrive, currentPath, file);
      return;
    }
-@@ -1009,24 +867,17 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1009,24 +1042,17 @@ $(".container").addEventListener("click", async (e) => {
      e.preventDefault();
      let action = oActionOInput.getAttribute("data-action");
      if (!action) return;
@@ -4931,7 +5177,7 @@ index fd61602..409ea97 100644
      Dialog.showOneInput(action, value, data);
      return;
    }
-@@ -1034,26 +885,13 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1034,26 +1060,13 @@ $(".container").addEventListener("click", async (e) => {
    let actDeleteFile = e.target.closest(".act-delete");
    if (actDeleteFile) {
      e.preventDefault();
@@ -4963,7 +5209,7 @@ index fd61602..409ea97 100644
      fetchFiles(currentDrive, currentPath);
      return;
    }
-@@ -1062,662 +900,203 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1062,662 +1075,204 @@ $(".container").addEventListener("click", async (e) => {
    if (actPlay) {
      e.preventDefault();
      let cmd = actPlay.getAttribute("data-cmd");
@@ -5199,6 +5445,7 @@ index fd61602..409ea97 100644
 -          return;
 -        }
 -      }
++    if (otaBusy) return;
 +    if ($(".dialog.editor:not(.hidden)") && isModified($(".dialog.editor .file-content"))) {
 +      if (!confirm("Discard unsaved changes?")) return;
      }
@@ -5701,7 +5948,7 @@ index fd61602..409ea97 100644
    }
 +
 +  setInterval(() => {
-+    if ($(".dialog-background.hidden") && !_runningUpload) {
++    if ($(".dialog-background.hidden") && !_runningUpload && !otaBusy) {
 +      fetchSystemInfo(true).catch(() => {});
 +    }
 +  }, 15000);
@@ -6440,10 +6687,10 @@ index 0345168..7502c90 100644
  
 diff --git a/src/core/feature_guide.cpp b/src/core/feature_guide.cpp
 new file mode 100644
-index 0000000..83b5e33
+index 0000000..eba3ef0
 --- /dev/null
 +++ b/src/core/feature_guide.cpp
-@@ -0,0 +1,831 @@
+@@ -0,0 +1,829 @@
 +#include "feature_guide.h"
 +#include "display.h"
 +#include "mykeyboard.h"
@@ -6603,17 +6850,15 @@ index 0000000..83b5e33
 +        "WebUI & WebOTA Server",
 +        "Browser UI, Navigator & OTA",
 +        "# OVERVIEW\n"
-+        "Hosts the full Bruce web control panel, remote screen Navigator, LittleFS file manager, Serial console, and Wi-Fi WebOTA.\n"
++        "Hosts the full Bruce web control panel, remote screen Navigator, LittleFS file manager, Serial console, and resumable Wi-Fi WebOTA.\n"
 +        "# HOW IT WORKS\n"
-+        "- Starts AsyncWebServer on port 80 and registers mDNS http://bruce.local.\n"
-+        "- Background AutoStart tries saved Wi-Fi first; if none connects, falls back to AP BruceNet (pass: brucenet) at 172.0.0.1.\n"
-+        "- Screen commands are mirrored via PSRAM tftLogger into your browser canvas.\n"
++        "- LAN WiFi auto-connects saved routers so you can open http://192.168.x.x/ota directly without leaving home internet.\n"
++        "- AP Mode starts BruceNet (pass: brucenet) at 192.168.4.1; you can also switch to LAN WiFi right from the browser.\n"
++        "- WebOTA uses 32 KB chunked uploads with power-save lock & auto-retry.\n"
 +        "# HOW TO USE\n"
-+        "1. Connect PC/phone to same Wi-Fi (or join BruceNet AP).\n"
-+        "2. Browse http://bruce.local (or shown IP), login admin / bruce.\n"
-+        "3. Click OTA Update to flash DSolution-183-2mic-ota.bin over Wi-Fi.\n"
-+        "# CONTROLS & TIPS\n"
-+        "- To always run WebUI silently at boot, enable Config -> System -> WebUI AutoStart."
++        "1. Pick LAN WiFi (192.168) or AP Mode.\n"
++        "2. Open shown http://<ip>/ota or http://bruce.local/ota (login admin / bruce).\n"
++        "3. Flash DSolution-183-2mic-ota.bin safely over Wi-Fi."
 +    },
 +    {
 +        "Connect to Wifi",
@@ -6637,12 +6882,12 @@ index 0000000..83b5e33
 +        "Wi-Fi Access Point",
 +        "Host BruceNet standalone hotspot",
 +        "# OVERVIEW\n"
-+        "Turns the device into a standalone Wi-Fi router (default SSID: BruceNet, pass: brucenet, IP: 172.0.0.1).\n"
++        "Turns the device into a standalone Wi-Fi router (default SSID: BruceNet, pass: brucenet, IP: 192.168.4.1).\n"
 +        "# HOW IT WORKS\n"
 +        "- Useful outdoors or when no home router is available to open WebUI or Evil Portal.\n"
 +        "# HOW TO USE\n"
 +        "1. Select Start WiFi AP.\n"
-+        "2. Join BruceNet from your phone/laptop and visit http://172.0.0.1.\n"
++        "2. Join BruceNet from your phone/laptop and visit http://192.168.4.1.\n"
 +        "# CONTROLS & TIPS\n"
 +        "- Turn Off WiFi when done to save ~60-80 mA."
 +    },
@@ -6928,7 +7173,7 @@ index 0000000..83b5e33
 +        "Automatically brings up WebUI + Navigator silently in the background right after boot without blocking the screen.\n"
 +        "# HOW IT WORKS\n"
 +        "- Tries saved Wi-Fi networks first (STA + http://bruce.local + NTP time).\n"
-+        "- If no saved Wi-Fi connects, starts AP BruceNet (pass: brucenet, IP 172.0.0.1).\n"
++        "- If no saved Wi-Fi connects, starts AP BruceNet (pass: brucenet, IP 192.168.4.1).\n"
 +        "# CONTROLS & TIPS\n"
 +        "- Disable if you never use WebUI and want maximum battery life."
 +    },
@@ -7715,6 +7960,20 @@ index 40f9956..c335115 100644
          {"iButton",      setup_ibutton                },
  #endif
  
+diff --git a/src/core/menu_items/WifiMenu.cpp b/src/core/menu_items/WifiMenu.cpp
+index 2e6512c..7c80b2d 100644
+--- a/src/core/menu_items/WifiMenu.cpp
++++ b/src/core/menu_items/WifiMenu.cpp
+@@ -63,6 +63,9 @@ void WifiMenu::optionsMenu() {
+     if (WiFi.getMode() != WIFI_MODE_NULL) { options.push_back({"Turn Off WiFi", wifiDisconnect}); }
+     if (WiFi.getMode() & WIFI_MODE_STA && WiFi.isConnected()) {
+         options.push_back({"AP info", displayAPInfo});
++        options.push_back(
++            {isWebUIActive ? "WebUI Info (LAN)" : "Open WebUI (LAN)", lambdaHelper(startWebUi, false)}
++        );
+     }
+     options.push_back({"Wifi Atks", wifi_atk_menu});
+     options.push_back({"Evil Portal", [=]() {
 diff --git a/src/core/mykeyboard.cpp b/src/core/mykeyboard.cpp
 index 1b3c43c..e59dea1 100644
 --- a/src/core/mykeyboard.cpp
@@ -7774,11 +8033,12 @@ index 1b3c43c..e59dea1 100644
                  /* Down Btn to move in X axis (to the right) */
                  if (check(NextPress)) {
 diff --git a/src/core/powerSave.cpp b/src/core/powerSave.cpp
-index 718e3bf..c3c4261 100644
+index 718e3bf..e67b94b 100644
 --- a/src/core/powerSave.cpp
 +++ b/src/core/powerSave.cpp
-@@ -1,43 +1,89 @@
+@@ -1,43 +1,103 @@
  #include "powerSave.h"
++#include "core/wifi/webInterface.h"
  #include "display.h"
  #include "settings.h"
 +#include "utils.h"
@@ -7795,6 +8055,10 @@ index 718e3bf..c3c4261 100644
 +    if (mode == WIFI_MODE_NULL || !(mode & WIFI_MODE_STA)) return;
 +
 +#if !defined(CONFIG_IDF_TARGET_ESP32P4)
++    if (isOtaInProgress()) {
++        WiFi.setSleep(WIFI_PS_NONE);
++        return;
++    }
 +    if (bruceConfig.powerMode == POWER_MODE_ECO) {
 +        WiFi.setSleep(WIFI_PS_MAX_MODEM);
 +    } else if (bruceConfig.powerMode == POWER_MODE_PERFORMANCE) {
@@ -7806,6 +8070,11 @@ index 718e3bf..c3c4261 100644
 +}
 +
 +void applyPowerProfile(bool idleScreenOff) {
++    if (isOtaInProgress()) {
++        setCpuFrequencyMhz(CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ);
++        applyWifiPowerProfile();
++        return;
++    }
 +    if (idleScreenOff && bruceConfig.powerMode != POWER_MODE_PERFORMANCE) {
 +        if (!isSpeakerActive()) { setCpuFrequencyMhz(80); }
 +#ifdef HAS_RGB_LED
@@ -7840,6 +8109,10 @@ index 718e3bf..c3c4261 100644
  void checkPowerSaveTime() {
 -    if (bruceConfig.dimmerSet == 0) return;
 -
++    if (isOtaInProgress()) {
++        previousMillis = millis();
++        return;
++    }
      unsigned long elapsed = millis() - previousMillis;
 -    int startDimmerBright = bruceConfig.bright / 3;
 -    int dimmerSetMs = bruceConfig.dimmerSet * 1000;
@@ -7883,7 +8156,7 @@ index 718e3bf..c3c4261 100644
  
      disableCore0WDT();
  #if SOC_CPU_CORES_NUM > 1
-@@ -49,8 +95,7 @@ void sleepModeOn() {
+@@ -49,8 +109,7 @@ void sleepModeOn() {
  
  void sleepModeOff() {
      isSleeping = false;
@@ -7893,7 +8166,7 @@ index 718e3bf..c3c4261 100644
      panelSleep(false); // wake the screen back up
  
      getBrightness();
-@@ -60,5 +105,5 @@ void sleepModeOff() {
+@@ -60,5 +119,5 @@ void sleepModeOff() {
  #endif
      enableLoopWDT();
      feedLoopWDT();
@@ -8566,10 +8839,10 @@ index 043a5d2..ba5fd2d 100644
  #if !defined(HAS_RTC)
  void restorePersistedClock();
 diff --git a/src/core/wifi/webInterface.cpp b/src/core/wifi/webInterface.cpp
-index a8679bd..695e223 100644
+index a8679bd..27f88da 100644
 --- a/src/core/wifi/webInterface.cpp
 +++ b/src/core/wifi/webInterface.cpp
-@@ -2,6 +2,8 @@
+@@ -2,18 +2,25 @@
  #include "core/display.h"    // using displayRedStripe as error msg
  #include "core/mykeyboard.h" // using keyboard when calling rename
  #include "core/passwords.h"
@@ -8578,14 +8851,16 @@ index a8679bd..695e223 100644
  #include "core/ram_profile.h"
  #include "core/sd_functions.h" // using sd functions called to rename and manage sd files
  #include "core/serialcmds.h"
-@@ -9,11 +11,14 @@
+ #include "core/settings.h"
  #include "core/utils.h"
  #include "core/wifi/wifi_common.h" // using common wifisetup
++#include "core/wifi/wifi_mac.h"
  #include "esp_task_wdt.h"
 +#include "modules/ble/ble_common.h"
  #include "webFiles.h"
  #include <MD5Builder.h>
 +#include <Update.h>
++#include <algorithm>
  #include <cstddef>
  #include <esp32-hal-psram.h>
  #include <esp_heap_caps.h>
@@ -8593,20 +8868,121 @@ index a8679bd..695e223 100644
  #include <globals.h>
  
  File uploadFile;
-@@ -28,6 +33,178 @@ AsyncWebServer *server = nullptr; // initialise webserver
+@@ -22,12 +29,460 @@ FS _webFS = LittleFS;
+ const int default_webserverporthttp = 80;
+ 
+ // WiFi as an Access Point
+-IPAddress AP_GATEWAY(172, 0, 0, 1); // Gateway
++IPAddress AP_GATEWAY(192, 168, 4, 1); // Gateway
+ 
+ AsyncWebServer *server = nullptr; // initialise webserver
  const char *host = "bruce";
  String uploadFolder = "";
  static bool mdnsRunning = false;
 +static volatile bool s_webUiStarting = false;
 +static volatile bool s_webUiQueued = false;
 +static volatile bool s_webUiCancelRequested = false;
++
++static constexpr size_t kOtaChunkCap = 32 * 1024;
++static constexpr uint32_t kOtaIdleTimeoutMs = 90000UL;
++static volatile bool s_otaInProgress = false;
++static volatile uint32_t s_otaLastActivityMs = 0;
++static volatile size_t s_otaTotal = 0;
++static volatile bool s_otaScreenDirty = false;
++static volatile bool s_otaScreenDone = false;
++static volatile uint8_t s_otaScreenPct = 0;
++static volatile bool s_webUiScreenDirty = false;
++static uint8_t *s_otaChunkBuf = nullptr;
++static uint8_t s_otaLegacyBuf[4096];
++static size_t s_otaLegacyBufLen = 0;
 +static bool s_otaValid = false;
 +static String s_otaError = "";
 +static size_t s_otaWritten = 0;
 +
++static volatile bool s_wifiSwitchBusy = false;
++static String s_pendingWifiSsid = "";
++static String s_pendingWifiPwd = "";
++
++static bool startMdnsResponder();
++
++static String jsonEscape(const String &in) {
++    String out;
++    out.reserve(in.length() + 8);
++    for (size_t i = 0; i < in.length(); i++) {
++        char c = in[i];
++        if (c == '\\') out += "\\\\";
++        else if (c == '"') out += "\\\"";
++        else if (c == '\n') out += "\\n";
++        else if (c == '\r') out += "\\r";
++        else if (c == '\t') out += "\\t";
++        else if ((uint8_t)c >= 0x20) out += c;
++    }
++    return out;
++}
++
++static String activeWifiIpString() {
++    wifi_mode_t wm = WiFi.getMode();
++    if (wm == WIFI_MODE_AP || wm == WIFI_MODE_APSTA) return WiFi.softAPIP().toString();
++    if (WiFi.isConnected()) return WiFi.localIP().toString();
++    return wifiIP;
++}
++
++static String activeWifiSsidString() {
++    wifi_mode_t wm = WiFi.getMode();
++    if (wm == WIFI_MODE_AP || wm == WIFI_MODE_APSTA) return bruceConfig.wifiAp.ssid;
++    if (WiFi.isConnected()) return WiFi.SSID();
++    return "";
++}
++
++bool isOtaInProgress() {
++    if (!s_otaInProgress) return false;
++    if ((uint32_t)(millis() - s_otaLastActivityMs) > kOtaIdleTimeoutMs) return false;
++    return true;
++}
++
++static void otaFreeBuf() {
++    if (s_otaChunkBuf) {
++        free(s_otaChunkBuf);
++        s_otaChunkBuf = nullptr;
++    }
++}
++
++static bool otaAllocChunkBuf() {
++    if (s_otaChunkBuf) return true;
++    if (heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT) >= kOtaChunkCap + 32768) {
++        s_otaChunkBuf = (uint8_t *)malloc(kOtaChunkCap);
++    }
++    if (!s_otaChunkBuf && psramFound()) { s_otaChunkBuf = (uint8_t *)ps_malloc(kOtaChunkCap); }
++    if (!s_otaChunkBuf) { s_otaChunkBuf = (uint8_t *)malloc(kOtaChunkCap); }
++    return s_otaChunkBuf != nullptr;
++}
++
++static void otaAcquireLock(size_t totalBytes) {
++    s_otaWritten = 0;
++    s_otaLegacyBufLen = 0;
++    s_otaTotal = totalBytes;
++    s_otaError = "";
++    s_otaValid = false;
++    s_otaScreenDone = false;
++    s_otaScreenPct = 0;
++    s_otaScreenDirty = true;
++    s_otaInProgress = true;
++    s_otaLastActivityMs = millis();
++    setCpuFrequencyMhz(CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ);
++    WiFi.setSleep(WIFI_PS_NONE);
++}
++
++static void otaReleaseLock(bool restorePower) {
++    s_otaInProgress = false;
++    s_otaLegacyBufLen = 0;
++    s_otaScreenDirty = true;
++    otaFreeBuf();
++    if (restorePower) { applyPowerProfile(false); }
++}
++
 +static void delayedRestartTask(void *pv) {
 +    (void)pv;
-+    vTaskDelay(pdMS_TO_TICKS(500));
++    vTaskDelay(pdMS_TO_TICKS(750));
 +    ESP.restart();
 +    vTaskDelete(NULL);
 +}
@@ -8615,6 +8991,52 @@ index a8679bd..695e223 100644
 +    (void)pv;
 +    vTaskDelay(pdMS_TO_TICKS(350));
 +    enterBootloaderMode();
++    vTaskDelete(NULL);
++}
++
++static void wifiSwitchStaTask(void *pv) {
++    (void)pv;
++    String ssid = s_pendingWifiSsid;
++    String pwd = s_pendingWifiPwd;
++    vTaskDelay(pdMS_TO_TICKS(250));
++
++    if (mdnsRunning) {
++        MDNS.end();
++        mdnsRunning = false;
++    }
++    if (WiFi.getMode() & WIFI_MODE_AP) {
++        WiFi.softAPdisconnect(true);
++        vTaskDelay(pdMS_TO_TICKS(100));
++    }
++
++    ensureWifiPlatform();
++    WiFi.mode(WIFI_MODE_STA);
++    applyConfiguredMAC();
++    WiFi.begin(ssid.c_str(), pwd.length() > 0 ? pwd.c_str() : NULL);
++
++    for (int i = 0; i < 120; i++) {
++        if (WiFi.isConnected()) break;
++        vTaskDelay(pdMS_TO_TICKS(100));
++    }
++
++    if (WiFi.isConnected()) {
++        wifiConnected = true;
++        wifiIP = WiFi.localIP().toString();
++        applyWifiPowerProfile();
++        mdnsRunning = startMdnsResponder();
++        xTaskCreate(updateTimezoneTask, "updateTimezone", 4096, NULL, 1, NULL);
++        Serial.println("[WebUI] Switched to LAN WiFi: " + wifiIP);
++    } else {
++        Serial.println("[WebUI] LAN WiFi connect failed, falling back to AP");
++        WiFi.disconnect(false, true);
++        vTaskDelay(pdMS_TO_TICKS(80));
++        WiFi.mode(WIFI_MODE_AP);
++        _setupAP();
++        mdnsRunning = startMdnsResponder();
++    }
++
++    s_webUiScreenDirty = true;
++    s_wifiSwitchBusy = false;
 +    vTaskDelete(NULL);
 +}
 +
@@ -8641,34 +9063,47 @@ index a8679bd..695e223 100644
 +<style>
 +:root{--color:#00f0ff;--sec-color:#50aebd;--background:#070c10}
 +*{box-sizing:border-box}
-+body{margin:0;min-height:100vh;background:radial-gradient(circle at top right,color-mix(in srgb,var(--color) 12%,#070c10),var(--background) 60%);color:#e6f7fa;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:flex;align-items:center;justify-content:center;padding:18px}
-+.card{width:100%;max-width:540px;background:rgba(12,20,27,.88);border:1px solid color-mix(in srgb,var(--color) 35%,transparent);border-radius:16px;padding:24px;box-shadow:0 18px 50px rgba(0,0,0,.55);backdrop-filter:blur(10px)}
-+.hdr{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid color-mix(in srgb,var(--color) 20%,transparent)}
++body{margin:0;min-height:100vh;background:radial-gradient(circle at top right,color-mix(in srgb,var(--color) 12%,#070c10),var(--background) 60%);color:#e6f7fa;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:flex;align-items:center;justify-content:center;padding:16px}
++.card{width:100%;max-width:560px;background:rgba(12,20,27,.9);border:1px solid color-mix(in srgb,var(--color) 35%,transparent);border-radius:16px;padding:22px;box-shadow:0 18px 50px rgba(0,0,0,.55);backdrop-filter:blur(10px)}
++.hdr{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid color-mix(in srgb,var(--color) 20%,transparent);flex-wrap:wrap}
 +.brand{display:flex;align-items:center;gap:10px}
 +.brand svg{width:34px;height:34px;color:var(--color);filter:drop-shadow(0 0 8px color-mix(in srgb,var(--color) 45%,transparent))}
 +.brand h1{margin:0;font-size:18px;color:var(--color);letter-spacing:.3px}
 +.brand p{margin:2px 0 0;font-size:12px;color:var(--sec-color)}
-+.back{color:var(--color);text-decoration:none;border:1px solid color-mix(in srgb,var(--color) 45%,transparent);padding:6px 12px;border-radius:8px;font-size:12px;font-weight:600}
-+.back:hover{background:var(--color);color:#041014}
-+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px}
-+.stat{background:color-mix(in srgb,var(--color) 6%,#0a1218);border:1px solid color-mix(in srgb,var(--color) 18%,transparent);border-radius:10px;padding:10px 12px}
-+.stat b{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--sec-color);margin-bottom:3px}
-+.stat span{font-family:ui-monospace,Consolas,monospace;font-size:13px;color:#fff}
-+.drop{position:relative;border:2px dashed color-mix(in srgb,var(--color) 45%,transparent);border-radius:12px;padding:24px 16px;text-align:center;cursor:pointer;background:color-mix(in srgb,var(--color) 4%,transparent);transition:.2s}
++.hdr-btns{display:flex;gap:8px;align-items:center}
++.back,.btn-sm{color:var(--color);text-decoration:none;border:1px solid color-mix(in srgb,var(--color) 45%,transparent);background:transparent;padding:6px 11px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
++.back:hover,.btn-sm:hover{background:var(--color);color:#041014}
++.netbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border-radius:10px;margin-bottom:14px;background:color-mix(in srgb,var(--color) 7%,#091117);border:1px solid color-mix(in srgb,var(--color) 22%,transparent);font-size:12px;flex-wrap:wrap}
++.netbar b{color:var(--color);font-family:ui-monospace,Consolas,monospace}
++.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin-bottom:14px}
++.stat{background:color-mix(in srgb,var(--color) 6%,#0a1218);border:1px solid color-mix(in srgb,var(--color) 18%,transparent);border-radius:10px;padding:9px 11px}
++.stat b{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--sec-color);margin-bottom:3px}
++.stat span{font-family:ui-monospace,Consolas,monospace;font-size:12.5px;color:#fff}
++.wifi-box{display:none;margin-bottom:14px;padding:12px;border-radius:12px;background:#081016;border:1px solid color-mix(in srgb,var(--color) 32%,transparent)}
++.wifi-box.open{display:block}
++.wifi-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:12.5px;font-weight:600;color:var(--color)}
++.wifi-list{max-height:148px;overflow:auto;display:flex;flex-direction:column;gap:5px;margin-bottom:8px}
++.wifi-item{display:flex;justify-content:space-between;align-items:center;padding:7px 10px;border-radius:8px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);cursor:pointer;font-size:12px;color:#e6f7fa}
++.wifi-item:hover,.wifi-item.sel{border-color:var(--color);background:color-mix(in srgb,var(--color) 12%,transparent)}
++.wifi-form{display:flex;gap:7px;flex-wrap:wrap}
++.wifi-form input{flex:1;min-width:130px;padding:8px 10px;border-radius:8px;border:1px solid color-mix(in srgb,var(--color) 30%,transparent);background:#0c1720;color:#fff;font-size:12.5px}
++.drop{position:relative;border:2px dashed color-mix(in srgb,var(--color) 45%,transparent);border-radius:12px;padding:22px 14px;text-align:center;cursor:pointer;background:color-mix(in srgb,var(--color) 4%,transparent);transition:.2s}
 +.drop:hover,.drop.drag{border-color:var(--color);background:color-mix(in srgb,var(--color) 10%,transparent)}
 +.drop input{position:absolute;inset:0;opacity:0;cursor:pointer}
-+.drop strong{display:block;color:var(--color);margin-bottom:6px;font-size:14px}
++.drop strong{display:block;color:var(--color);margin-bottom:5px;font-size:14px}
 +.drop small{color:var(--sec-color);font-size:12px;line-height:1.45;display:block}
-+.fileinfo{margin-top:12px;padding:10px 12px;border-radius:8px;font-size:12px;font-family:ui-monospace,Consolas,monospace;display:none}
++.fileinfo{margin-top:11px;padding:9px 12px;border-radius:8px;font-size:12px;font-family:ui-monospace,Consolas,monospace;display:none;word-break:break-word}
 +.fileinfo.ok{display:block;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.4);color:#6ee7b7}
 +.fileinfo.err{display:block;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.45);color:#fca5a5}
-+.prog{margin-top:14px;display:none}
++.prog{margin-top:13px;display:none}
 +.barwrap{height:10px;border-radius:999px;background:#0d1a22;overflow:hidden;border:1px solid color-mix(in srgb,var(--color) 25%,transparent)}
-+.bar{height:100%;width:0%;background:linear-gradient(90deg,var(--sec-color),var(--color));transition:width .15s}
-+.proglbl{margin-top:6px;font-size:12px;color:var(--color);display:flex;justify-content:space-between;font-family:ui-monospace,Consolas,monospace}
-+.btn{margin-top:16px;width:100%;padding:11px 16px;border-radius:10px;border:none;background:var(--color);color:#031317;font-weight:700;font-size:14px;cursor:pointer;transition:.15s}
++.bar{height:100%;width:0%;background:linear-gradient(90deg,var(--sec-color),var(--color));transition:width .12s}
++.proglbl{margin-top:6px;font-size:12px;color:var(--color);display:flex;justify-content:space-between;gap:8px;font-family:ui-monospace,Consolas,monospace}
++.actions{display:flex;gap:8px;margin-top:14px}
++.btn{flex:1;padding:11px 16px;border-radius:10px;border:none;background:var(--color);color:#031317;font-weight:700;font-size:14px;cursor:pointer;transition:.15s}
 +.btn:disabled{opacity:.45;cursor:not-allowed}
-+.note{margin-top:14px;font-size:12px;color:#9bb6bf;line-height:1.5;background:rgba(255,255,255,.03);border-radius:8px;padding:10px 12px}
++.btn-cancel{padding:11px 14px;border-radius:10px;border:1px solid rgba(255,93,108,.45);background:rgba(255,93,108,.12);color:#ffb3ba;font-weight:700;font-size:13px;cursor:pointer;display:none}
++.note{margin-top:13px;font-size:12px;color:#9bb6bf;line-height:1.5;background:rgba(255,255,255,.03);border-radius:8px;padding:10px 12px}
 +.note code{color:var(--color);font-family:ui-monospace,Consolas,monospace}
 +</style>
 +</head>
@@ -8681,9 +9116,28 @@ index a8679bd..695e223 100644
 +        <path d="M6 34L14 39L8 46" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
 +        <circle cx="47" cy="34" r="2.3" fill="currentColor"/>
 +      </svg>
-+      <div><h1>BRUCE WebOTA</h1><p>Wireless Dual-OTA Firmware Updater</p></div>
++      <div><h1>BRUCE WebOTA</h1><p>Resumable 32 KB Chunked Dual-OTA</p></div>
 +    </div>
-+    <a class="back" href="/">Back to WebUI</a>
++    <div class="hdr-btns">
++      <button class="btn-sm" id="toggleWifiBtn" type="button">LAN WiFi</button>
++      <a class="back" href="/">WebUI</a>
++    </div>
++  </div>
++  <div class="netbar">
++    <span id="s-net">Detecting network...</span>
++    <span id="s-otaurl" style="opacity:.85"></span>
++  </div>
++  <div class="wifi-box" id="wifiBox">
++    <div class="wifi-head">
++      <span>Connect Device to Home LAN WiFi (192.168.x.x)</span>
++      <button class="btn-sm" id="scanWifiBtn" type="button">Rescan</button>
++    </div>
++    <div class="wifi-list" id="wifiList"><small style="color:#8aa6b0">Click LAN WiFi or Rescan to list networks...</small></div>
++    <div class="wifi-form">
++      <input type="text" id="w-ssid" placeholder="Wi-Fi SSID">
++      <input type="password" id="w-pwd" placeholder="Password (blank if saved/open)">
++      <button class="btn-sm" id="connectWifiBtn" type="button">Connect</button>
++    </div>
 +  </div>
 +  <div class="grid">
 +    <div class="stat"><b>Board</b><span id="s-board">Loading...</span></div>
@@ -8694,25 +9148,81 @@ index a8679bd..695e223 100644
 +  <label class="drop" id="drop">
 +    <input type="file" id="binfile" accept=".bin">
 +    <strong>Select or Drop OTA Firmware (.bin)</strong>
-+    <small>Upload <b>DSolution-183-2mic-ota.bin</b> (app binary).<br>Do NOT upload factory.bin here (offset 0x0 images are blocked automatically).</small>
++    <small>Upload <b>DSolution-183-2mic-ota.bin</b>.<br>Bootloader / <code>factory.bin</code> images are automatically blocked.</small>
 +  </label>
 +  <div class="fileinfo" id="fileinfo"></div>
 +  <div class="prog" id="prog">
 +    <div class="barwrap"><div class="bar" id="bar"></div></div>
-+    <div class="proglbl"><span id="p-msg">Uploading...</span><span id="p-pct">0%</span></div>
++    <div class="proglbl"><span id="p-msg">Preparing...</span><span id="p-pct">0%</span></div>
 +  </div>
-+  <button class="btn" id="uploadBtn" disabled>Upload &amp; Flash OTA</button>
-+  <div class="note">Dual-OTA keeps your previous working slot safe if an update fails. Your saved config &amp; LittleFS files (<code>/bruce.conf</code>) remain intact after reboot.</div>
++  <div class="actions">
++    <button class="btn" id="uploadBtn" disabled>Upload &amp; Flash OTA</button>
++    <button class="btn-cancel" id="cancelBtn" type="button">Cancel</button>
++  </div>
++  <div class="note">Chunked transfer keeps CPU at 240 MHz &amp; Wi-Fi awake, writes 32 KB blocks cleanly between packets, and auto-retries on drops. Saved config &amp; LittleFS files (<code>/bruce.conf</code>) stay intact.</div>
 +</div>
 +<script>
 +const $=id=>document.getElementById(id);
-+let validFile=null;
-+fetch('/systeminfo').then(r=>r.json()).then(d=>{
-+  $('s-board').textContent=d.BOARD||'ESP32-S3';
-+  $('s-ver').textContent=d.BRUCE_VERSION||'-';
-+  $('s-slot').textContent=d.OTA_SLOT||'-';
-+  $('s-next').textContent=(d.OTA_NEXT||'-')+(d.OTA_MAX?' ('+d.OTA_MAX+')':'');
-+}).catch(()=>{});
++let validFile=null,otaBusy=false,otaAbortCtrl=null,otaCancelled=false;
++window.addEventListener('beforeunload',e=>{if(otaBusy){e.preventDefault();e.returnValue='';}});
++function loadSysInfo(){
++  fetch('/systeminfo').then(r=>r.json()).then(d=>{
++    $('s-board').textContent=d.BOARD||'ESP32-S3';
++    $('s-ver').textContent=d.BRUCE_VERSION||'-';
++    $('s-slot').textContent=d.OTA_SLOT||'-';
++    $('s-next').textContent=(d.OTA_NEXT||'-')+(d.OTA_MAX?' ('+d.OTA_MAX+')':'');
++    const mode=d.WIFI_MODE||'';
++    const ssid=d.WIFI_SSID||d.AP_SSID||'';
++    const rssi=d.WIFI_RSSI?` (${d.WIFI_RSSI} dBm)`:'';
++    $('s-net').textContent=(mode==='STA'?'LAN WiFi: ':'AP Hotspot: ')+ssid+rssi;
++    $('s-otaurl').textContent=d.WIFI_IP?`http://${d.WIFI_IP}/ota`:'';
++  }).catch(()=>{});
++}
++loadSysInfo();
++async function scanWifi(){
++  const list=$('wifiList');
++  list.innerHTML='<small style="color:#8aa6b0">Scanning nearby 2.4 GHz networks...</small>';
++  try{
++    const r=await fetch('/wifiscan');const d=await r.json();
++    if(!r.ok){list.innerHTML='';const sm=document.createElement('small');sm.style.color='#fca5a5';sm.textContent=d.msg||'Scan busy';list.appendChild(sm);return;}
++    if(!d.nets||!d.nets.length){list.innerHTML='<small style="color:#8aa6b0">No networks found.</small>';return;}
++    list.innerHTML='';
++    d.nets.forEach(n=>{
++      const el=document.createElement('div');el.className='wifi-item';
++      const tag=n.saved?' [Saved]':(n.enc?' [Lock]':' [Open]');
++      const s1=document.createElement('span');s1.textContent=n.ssid+tag;
++      const s2=document.createElement('span');s2.style.opacity='.75';s2.textContent=n.rssi+' dBm';
++      el.appendChild(s1);el.appendChild(s2);
++      el.onclick=()=>{
++        document.querySelectorAll('.wifi-item').forEach(x=>x.classList.remove('sel'));
++        el.classList.add('sel');$('w-ssid').value=n.ssid;
++        if(n.saved)$('w-pwd').placeholder='Saved (leave blank or re-enter)';
++      };
++      list.appendChild(el);
++    });
++  }catch(e){list.innerHTML='<small style="color:#fca5a5">Scan failed.</small>';}
++}
++$('toggleWifiBtn').addEventListener('click',()=>{
++  const box=$('wifiBox');box.classList.toggle('open');
++  if(box.classList.contains('open'))scanWifi();
++});
++$('scanWifiBtn').addEventListener('click',scanWifi);
++$('connectWifiBtn').addEventListener('click',async()=>{
++  const ssid=$('w-ssid').value.trim(),pwd=$('w-pwd').value;
++  if(!ssid){alert('Please select or enter a Wi-Fi SSID.');return;}
++  $('connectWifiBtn').disabled=true;
++  const info=$('fileinfo');
++  try{
++    const fd=new FormData();fd.append('ssid',ssid);fd.append('pwd',pwd);
++    const r=await fetch('/wificonnect',{method:'POST',body:fd});
++    const d=await r.json().catch(()=>({}));
++    if(!r.ok||!d.ok)throw new Error(d.msg||'Connect request failed');
++    info.className='fileinfo ok';
++    info.textContent=`Switching device to "${ssid}"... Join "${ssid}" on your PC and open http://bruce.local/ota (or check the 192.168.x.x IP shown on the Bruce screen).`;
++  }catch(e){
++    info.className='fileinfo err';info.textContent=e.message;
++  }finally{$('connectWifiBtn').disabled=false;}
++});
 +async function checkBin(file){
 +  validFile=null;$('uploadBtn').disabled=true;
 +  const info=$('fileinfo');info.className='fileinfo';
@@ -8738,33 +9248,81 @@ index a8679bd..695e223 100644
 +drop.addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('drag');});
 +drop.addEventListener('dragleave',()=>drop.classList.remove('drag'));
 +drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('drag');if(e.dataTransfer.files[0])checkBin(e.dataTransfer.files[0]);});
-+$('uploadBtn').addEventListener('click',()=>{
-+  if(!validFile)return;
-+  $('uploadBtn').disabled=true;$('prog').style.display='block';
-+  $('p-msg').textContent='Flashing to next OTA slot...';$('p-pct').textContent='0%';$('bar').style.width='0%';
-+  const fd=new FormData();fd.append('firmware',validFile,validFile.name);
-+  const xhr=new XMLHttpRequest();
-+  xhr.open('POST','/ota',true);
-+  xhr.upload.onprogress=e=>{
-+    if(e.lengthComputable){
-+      const pct=Math.min(100,Math.round(e.loaded*100/e.total));
-+      $('bar').style.width=pct+'%';$('p-pct').textContent=pct+'%';
++$('cancelBtn').addEventListener('click',async()=>{
++  if(!otaBusy)return;
++  otaCancelled=true;
++  if(otaAbortCtrl)otaAbortCtrl.abort();
++  await fetch('/ota/abort',{method:'POST'}).catch(()=>{});
++});
++$('uploadBtn').addEventListener('click',async()=>{
++  if(!validFile||otaBusy)return;
++  otaBusy=true;otaCancelled=false;
++  $('uploadBtn').disabled=true;$('cancelBtn').style.display='inline-block';
++  $('prog').style.display='block';$('bar').style.width='0%';$('p-pct').textContent='0%';
++  $('p-msg').textContent='Initializing OTA slot...';
++  const info=$('fileinfo');info.className='fileinfo ok';
++  const t0=Date.now();
++  try{
++    const beginFd=new FormData();beginFd.append('size',String(validFile.size));
++    const br=await fetch('/ota/begin',{method:'POST',body:beginFd});
++    const bd=await br.json();
++    if(!br.ok||!bd.ok)throw new Error(bd.msg||'Failed to initialize OTA');
++    const chunkSize=bd.chunkSize||32768;
++    let offset=0,retries=0;
++    while(offset<validFile.size){
++      if(otaCancelled)throw new Error('Cancelled by user.');
++      const end=Math.min(offset+chunkSize,validFile.size);
++      const slice=validFile.slice(offset,end);
++      let ok=false,lastErr='Network error';
++      for(let attempt=0;attempt<5&&!otaCancelled;attempt++){
++        otaAbortCtrl=new AbortController();
++        const timer=setTimeout(()=>otaAbortCtrl.abort(),12000);
++        try{
++          const cr=await fetch(`/ota/chunk?offset=${offset}`,{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:slice,signal:otaAbortCtrl.signal});
++          clearTimeout(timer);
++          const cd=await cr.json().catch(()=>({}));
++          if(cr.ok&&cd.ok){offset=cd.written??end;ok=true;break;}
++          if(cr.status===409&&typeof cd.written==='number'){offset=cd.written;ok=true;break;}
++          lastErr=cd.msg||`HTTP ${cr.status}`;
++          if(cr.status>=400&&cr.status<500&&cr.status!==408)break;
++        }catch(err){
++          clearTimeout(timer);
++          lastErr=otaCancelled?'Cancelled by user.':(err.message||'Connection reset');
++        }
++        retries++;
++        $('p-msg').textContent=`Retrying chunk (${retries})...`;
++        await new Promise(r=>setTimeout(r,350*(attempt+1)));
++      }
++      if(!ok)throw new Error(lastErr);
++      const pct=Math.min(100,Math.round(offset*100/validFile.size));
++      const sec=Math.max(0.2,(Date.now()-t0)/1000);
++      const kbps=(offset/1024/sec).toFixed(0);
++      const eta=offset>0?Math.max(0,Math.round((validFile.size-offset)/(offset/sec))):0;
++      $('bar').style.width=pct+'%';$('p-pct').textContent=`${pct}%`;
++      $('p-msg').textContent=`${(offset/1048576).toFixed(2)}/${(validFile.size/1048576).toFixed(2)} MB • ${kbps} KB/s • ETA ${eta}s${retries?` • ${retries} retries`:''}`;
 +    }
-+  };
-+  xhr.onload=()=>{
-+    let res={ok:xhr.status===200,msg:xhr.responseText};
-+    try{res=JSON.parse(xhr.responseText);}catch(_){}
-+    if(xhr.status===200&&res.ok){
-+      $('bar').style.width='100%';$('p-pct').textContent='100%';
-+      $('p-msg').textContent='Success! Rebooting device...';
-+      let sec=8;const t=setInterval(()=>{sec--;$('p-msg').textContent=`Rebooting... reconnecting in ${sec}s`;if(sec<=0){clearInterval(t);location.href='/';}},1000);
-+    }else{
-+      $('fileinfo').className='fileinfo err';$('fileinfo').textContent=res.msg||'OTA failed';
-+      $('uploadBtn').disabled=false;
++    $('p-msg').textContent='Verifying image & committing boot slot...';
++    const fr=await fetch('/ota/commit',{method:'POST'});
++    const fd=await fr.json().catch(()=>({}));
++    if(!fr.ok||!fd.ok)throw new Error(fd.msg||'Commit failed');
++    $('bar').style.width='100%';$('p-pct').textContent='100%';
++    info.className='fileinfo ok';info.textContent='OTA Flash Complete! Rebooting device...';
++    otaBusy=false;$('cancelBtn').style.display='none';
++    for(let s=1;s<=20;s++){
++      $('p-msg').textContent=`Waiting for reboot (${s*1.5|0}s)...`;
++      await new Promise(r=>setTimeout(r,1500));
++      try{
++        const ping=await fetch('/systeminfo',{cache:'no-store'});
++        if(ping.ok){$('p-msg').textContent='Device back online! Reloading...';setTimeout(()=>location.href='/',600);return;}
++      }catch(_){}
 +    }
-+  };
-+  xhr.onerror=()=>{$('fileinfo').className='fileinfo err';$('fileinfo').textContent='Connection lost during upload.';$('uploadBtn').disabled=false;};
-+  xhr.send(fd);
++    location.href='/';
++  }catch(e){
++    otaBusy=false;$('cancelBtn').style.display='none';
++    await fetch('/ota/abort',{method:'POST'}).catch(()=>{});
++    info.className='fileinfo err';info.textContent=e.message||'OTA upload failed.';
++    $('uploadBtn').disabled=false;
++  }
 +});
 +</script>
 +</body>
@@ -8772,7 +9330,7 @@ index a8679bd..695e223 100644
  
  // Generate random token
  String generateToken(int length = 24) {
-@@ -42,36 +219,40 @@ String generateToken(int length = 24) {
+@@ -42,36 +497,40 @@ String generateToken(int length = 24) {
  **  Turn off the WebUI
  **********************************************************************/
  void stopWebUi() {
@@ -8827,7 +9385,7 @@ index a8679bd..695e223 100644
  
      // Disconnect WiFi AP mode if it's the WebUI's AP
      // Check if we're in AP or APSTA mode (used by WebUI)
-@@ -82,7 +263,7 @@ void cleanlyStopWebUiForWiFiFeature() {
+@@ -82,7 +541,7 @@ void cleanlyStopWebUiForWiFiFeature() {
          vTaskDelay(pdMS_TO_TICKS(250));
      }
  
@@ -8836,29 +9394,241 @@ index a8679bd..695e223 100644
  }
  /**********************************************************************
  **  Function: loopOptionsWebUi
-@@ -280,14 +461,14 @@ void drawWebUiScreen(bool mode_ap) {
-     else txt = WiFi.softAPIP().toString();
- 
-     int padX = 14;
--    int currentY = 55;
-+    int currentY = tftHeight <= 240 ? 48 : 55;
- 
-     tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
-     tft.setTextSize(FP);
- 
-     if (mode_ap) {
-         tft.setCursor(padX, currentY);
--        tft.print("Net: BruceNet/brucenet");
-+        tft.print("Net: " + bruceConfig.wifiAp.ssid + "/" + bruceConfig.wifiAp.pwd);
-         currentY += LH * FP + 6;
+@@ -90,22 +549,36 @@ void cleanlyStopWebUiForWiFiFeature() {
+ **********************************************************************/
+ void loopOptionsWebUi() {
+     if (isWebUIActive) {
+-        bool opt = WiFi.getMode() - 1;
++        bool isAp = (WiFi.getMode() == WIFI_MODE_AP || WiFi.getMode() == WIFI_MODE_APSTA);
+         options = {
+-            {"Stop WebUI", stopWebUi},
+-            {"WebUi screen", lambdaHelper(startWebUi, opt)}
++            {"WebUI Info / URLs", lambdaHelper(startWebUi, isAp)},
++            {isAp ? "Switch to LAN WiFi" : "Switch to AP Mode",
++             [isAp]() {
++                 if (isAp) startWebUi(false);
++                 else startWebUi(true);
++             }},
++            {"Stop WebUI & WiFi",
++             []() {
++                 stopWebUi();
++                 vTaskDelay(pdMS_TO_TICKS(100));
++                 wifiDisconnect();
++             }},
+         };
+         addOptionToMainMenu();
+         loopOptions(options);
+         return;
      }
+     options = {
+-        {"my Network", lambdaHelper(startWebUi, false)},
+-        {"AP mode",    lambdaHelper(startWebUi, true) },
++        {"LAN WiFi (192.168)", lambdaHelper(startWebUi, false)},
++        {"AP Mode (192.168.4.1)", lambdaHelper(startWebUi, true)},
++        {String("AutoStart: ") + (bruceConfig.webUiAutoStart ? "ON" : "OFF"),
++         []() {
++             bruceConfig.setWebUiAutoStart(!bruceConfig.webUiAutoStart);
++             loopOptionsWebUi();
++         }},
+     };
  
-@@ -460,35 +641,136 @@ void configureWebServer() {
+     loopOptions(options);
+-    // On fail installing will run the following line
+ }
+ 
+ /**********************************************************************
+@@ -168,19 +641,21 @@ String listFiles(FS &fs, const String &folder) {
+ ** used by server->on functions to discern whether a user has the correct
+ ** httpapitoken OR is authenticated by username and password
+ **********************************************************************/
++static bool isWebSessionValid(AsyncWebServerRequest *request) {
++    if (!request->hasHeader("Cookie")) return false;
++    const AsyncWebHeader *cookie = request->getHeader("Cookie");
++    String c = cookie->value();
++    int idx = c.indexOf("BRUCESESSION=");
++    if (idx == -1) return false;
++    int start = idx + 13;
++    int end = c.indexOf(';', start);
++    if (end == -1) end = c.length();
++    String token = c.substring(start, end);
++    return bruceConfig.isValidWebUISession(token);
++}
++
+ bool checkUserWebAuth(AsyncWebServerRequest *request, bool onFailureReturnLoginPage = false) {
+-    if (request->hasHeader("Cookie")) {
+-        const AsyncWebHeader *cookie = request->getHeader("Cookie");
+-        String c = cookie->value();
+-        int idx = c.indexOf("BRUCESESSION=");
+-        if (idx != -1) {
+-            int start = idx + 13;
+-            int end = c.indexOf(';', start);
+-            if (end == -1) end = c.length();
+-            String token = c.substring(start, end);
+-            if (bruceConfig.isValidWebUISession(token)) { return true; }
+-        }
+-    }
++    if (isWebSessionValid(request)) return true;
+     if (onFailureReturnLoginPage) {
+         serveWebUIFile(request, "login.html", "text/html", true, login_html, login_html_size);
+     } else {
+@@ -272,43 +747,117 @@ void notFound(AsyncWebServerRequest *request) { request->send(404, "text/plain",
+ **  Function: drawWebUiScreen
+ **  Draw information on screen of WebUI.
+ **********************************************************************/
+-void drawWebUiScreen(bool mode_ap) {
+-    drawMainBorderWithTitle("WebUI", true);
++static void drawWebUiFittedText(int x, int y, const String &text, uint16_t fg, uint8_t preferredScale) {
++    int maxWidth = tftWidth - x - 12;
++    uint8_t scale = preferredScale;
++    if ((int)text.length() * LW * scale > maxWidth) scale = 1;
++    String clipped = text;
++    int maxChars = max(8, maxWidth / (LW * scale));
++    if ((int)clipped.length() > maxChars) {
++        clipped = clipped.substring(0, maxChars - 2) + "..";
++    }
++    tft.setTextSize(scale);
++    tft.setTextColor(fg, bruceConfig.bgColor);
++    tft.setCursor(x, y);
++    tft.print(clipped);
++}
+ 
+-    String txt;
+-    if (!mode_ap) txt = WiFi.localIP().toString();
+-    else txt = WiFi.softAPIP().toString();
++static void drawWebUiOtaOverlay() {
++    const int boxX = 16;
++    const int boxY = 66;
++    const int boxW = tftWidth - 32;
++    const int boxH = 104;
++    const uint16_t cardBg = blendColors(bruceConfig.bgColor, bruceConfig.priColor, 18);
++    const uint16_t borderCol = bruceConfig.priColor;
+ 
+-    int padX = 14;
+-    int currentY = 55;
++    tft.fillRoundRect(boxX, boxY, boxW, boxH, 8, cardBg);
++    tft.drawRoundRect(boxX, boxY, boxW, boxH, 8, borderCol);
+ 
+-    tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
+     tft.setTextSize(FP);
++    tft.setTextColor(bruceConfig.priColor, cardBg);
++    tft.drawCentreString(s_otaScreenDone ? "OTA Complete!" : "WebOTA Flashing", tftWidth / 2, boxY + 12, 1);
++
++    const int barX = boxX + 14;
++    const int barY = boxY + 42;
++    const int barW = boxW - 28;
++    const int barH = 16;
++    tft.drawRoundRect(barX, barY, barW, barH, 4, bruceConfig.secColor);
++    int fillW = ((barW - 4) * (int)s_otaScreenPct) / 100;
++    if (fillW > 0) {
++        tft.fillRoundRect(barX + 2, barY + 2, fillW, barH - 4, 2, bruceConfig.priColor);
++    }
+ 
+-    if (mode_ap) {
+-        tft.setCursor(padX, currentY);
+-        tft.print("Net: BruceNet/brucenet");
+-        currentY += LH * FP + 6;
++    char progLine[44];
++    unsigned long kbDone = (unsigned long)(s_otaWritten / 1024);
++    unsigned long kbTotal = (unsigned long)(s_otaTotal / 1024);
++    if (kbTotal > 0) {
++        snprintf(progLine, sizeof(progLine), "%u%%  (%lu / %lu KB)", s_otaScreenPct, kbDone, kbTotal);
++    } else {
++        snprintf(progLine, sizeof(progLine), "%lu KB written", kbDone);
+     }
++    tft.setTextSize(1);
++    tft.setTextColor(TFT_WHITE, cardBg);
++    tft.drawCentreString(progLine, tftWidth / 2, boxY + 68, 1);
+ 
+-    tft.setCursor(padX, currentY);
+-    if (mdnsRunning) tft.print("Url: http://bruce.local");
+-    currentY += LH * FP + 6;
++    tft.setTextColor(bruceConfig.secColor, cardBg);
++    tft.drawCentreString("Do not power off device", tftWidth / 2, boxY + 84, 1);
++}
+ 
+-    tft.setCursor(padX, currentY);
+-    tft.print("IP:  " + txt);
+-    currentY += LH * FP + 6;
++void drawWebUiScreen(bool mode_ap) {
++    drawMainBorderWithTitle(mode_ap ? "WebUI (AP)" : "WebUI (LAN)", true);
+ 
+-    tft.setCursor(padX, currentY);
+-    tft.print("Usr: " + String(bruceConfig.webUI.user));
+-    currentY += LH * FP + 6;
++    String ip = activeWifiIpString();
++    wifiIP = ip;
++    int padX = 14;
++    int y = tftHeight <= 240 ? 44 : 52;
+ 
+-    tft.setCursor(padX, currentY);
+-    tft.print("Pwd: " + String(bruceConfig.webUI.pwd));
++    if (mode_ap) {
++        drawWebUiFittedText(
++            padX, y, "AP: " + bruceConfig.wifiAp.ssid + " / " + bruceConfig.wifiAp.pwd,
++            bruceConfig.priColor, FP
++        );
++    } else {
++        String ssidLine = "LAN: " + WiFi.SSID();
++        if (WiFi.isConnected()) ssidLine += " (" + String(WiFi.RSSI()) + "dBm)";
++        drawWebUiFittedText(padX, y, ssidLine, TFT_GREEN, FP);
++    }
++    y += LH * FP + 8;
++
++    const int cardY = y;
++    const int cardH = 44;
++    const uint16_t cardBg = blendColors(bruceConfig.bgColor, bruceConfig.priColor, 14);
++    tft.fillRoundRect(padX - 2, cardY, tftWidth - (padX - 2) * 2, cardH, 6, cardBg);
++    tft.drawRoundRect(padX - 2, cardY, tftWidth - (padX - 2) * 2, cardH, 6, bruceConfig.secColor);
++
++    tft.setTextSize(1);
++    tft.setTextColor(bruceConfig.secColor, cardBg);
++    tft.setCursor(padX + 6, cardY + 6);
++    tft.print("Direct WebOTA URL:");
++
++    String otaUrl = "http://" + ip + "/ota";
++    uint8_t urlScale = ((int)otaUrl.length() * LW * FP <= (tftWidth - padX * 2 - 12)) ? FP : 1;
++    tft.setTextSize(urlScale);
++    tft.setTextColor(bruceConfig.priColor, cardBg);
++    tft.setCursor(padX + 6, cardY + (urlScale == 1 ? 23 : 19));
++    tft.print(otaUrl);
++
++    y = cardY + cardH + 10;
++
++    drawWebUiFittedText(padX, y, "Web:  http://" + ip, TFT_WHITE, 1);
++    y += 14;
++    drawWebUiFittedText(
++        padX, y, mdnsRunning ? "mDNS: http://bruce.local/ota" : "mDNS: unavailable",
++        mdnsRunning ? bruceConfig.secColor : TFT_DARKGREY, 1
++    );
++    y += 14;
++    drawWebUiFittedText(
++        padX, y, "Auth: " + String(bruceConfig.webUI.user) + " / " + String(bruceConfig.webUI.pwd),
++        TFT_LIGHTGREY, 1
++    );
+ 
+-    tft.setTextColor(TFT_RED, bruceConfig.bgColor);
+-    tft.setTextSize(FP);
+-    tft.drawCentreString("press Esc to stop", tftWidth / 2, tftHeight - 2 * LH * FP - 5, 1);
++    tft.setTextColor(bruceConfig.secColor, bruceConfig.bgColor);
++    tft.setTextSize(1);
++    tft.drawCentreString("[Esc / Boot Hold] Options & Background", tftWidth / 2, tftHeight - 20, 1);
+ 
+ #if defined(HAS_TOUCH)
+     TouchFooter();
+@@ -384,6 +933,7 @@ static bool startMdnsResponder() {
+         Serial.printf("Error setting up MDNS responder!\n");
+         return false;
+     }
++    MDNS.addService("http", "tcp", default_webserverporthttp);
+ 
+     RAM_LOG("after MDNS");
+     return true;
+@@ -460,35 +1010,492 @@ void configureWebServer() {
      // System Info
      server->on("/systeminfo", HTTP_GET, [](AsyncWebServerRequest *request) {
          if (checkUserWebAuth(request)) {
 -            char response_body[300];
-+            char response_body[768];
++            char response_body[896];
              uint64_t LittleFSTotalBytes = LittleFS.totalBytes();
              uint64_t LittleFSUsedBytes = LittleFS.usedBytes();
              uint64_t SDTotalBytes = SD.totalBytes();
@@ -8875,6 +9645,9 @@ index a8679bd..695e223 100644
 +            wifi_mode_t wm = WiFi.getMode();
 +            if (wm == WIFI_MODE_AP || wm == WIFI_MODE_APSTA) wifiModeStr = "AP";
 +            else if (wm == WIFI_MODE_STA) wifiModeStr = "STA";
++            String curIp = activeWifiIpString();
++            String curSsid = jsonEscape(activeWifiSsidString());
++            int curRssi = (wm == WIFI_MODE_STA && WiFi.isConnected()) ? WiFi.RSSI() : 0;
 +
              snprintf(
                  response_body,
@@ -8888,7 +9661,7 @@ index a8679bd..695e223 100644
 +                "\"BAT\":%d,\"BAT_MV\":%d,\"CHG\":%s,\"CPU_MHZ\":%lu,"
 +                "\"HEAP_FREE\":\"%s\",\"PSRAM_FREE\":\"%s\","
 +                "\"OTA_SLOT\":\"%s\",\"OTA_NEXT\":\"%s\",\"OTA_MAX\":\"%s\","
-+                "\"WIFI_MODE\":\"%s\",\"WIFI_IP\":\"%s\",\"AP_SSID\":\"%s\"}",
++                "\"WIFI_MODE\":\"%s\",\"WIFI_IP\":\"%s\",\"WIFI_SSID\":\"%s\",\"WIFI_RSSI\":%d,\"AP_SSID\":\"%s\"}",
                  BRUCE_VERSION,
 -                "free",
 +                boardName,
@@ -8914,14 +9687,338 @@ index a8679bd..695e223 100644
 +                nextPart ? nextPart->label : "none",
 +                nextPart ? humanReadableSize(nextPart->size).c_str() : "0 B",
 +                wifiModeStr.c_str(),
-+                wifiIP.c_str(),
-+                bruceConfig.wifiAp.ssid.c_str()
++                curIp.c_str(),
++                curSsid.c_str(),
++                curRssi,
++                jsonEscape(bruceConfig.wifiAp.ssid).c_str()
              );
              request->send(200, "application/json", response_body);
          }
      });
  
-+    // WebOTA Firmware Update UI & Upload handler
++    // Wi-Fi Status & LAN Wi-Fi Setup (allows switching from AP to 192.168.x.x LAN from browser)
++    server->on("/wifistatus", HTTP_GET, [](AsyncWebServerRequest *request) {
++        if (!checkUserWebAuth(request)) return;
++        wifi_mode_t wm = WiFi.getMode();
++        const char *modeStr = "OFF";
++        if (wm == WIFI_MODE_AP || wm == WIFI_MODE_APSTA) modeStr = "AP";
++        else if (wm == WIFI_MODE_STA) modeStr = "STA";
++        String ip = activeWifiIpString();
++        int rssi = (wm == WIFI_MODE_STA && WiFi.isConnected()) ? WiFi.RSSI() : 0;
++        String json = "{\"mode\":\"" + String(modeStr) + "\",\"ssid\":\"" +
++                      jsonEscape(activeWifiSsidString()) + "\",\"ip\":\"" + ip +
++                      "\",\"rssi\":" + String(rssi) + ",\"ota_url\":\"http://" + ip + "/ota\"}";
++        request->send(200, "application/json", json);
++    });
++
++    server->on("/wifiscan", HTTP_GET, [](AsyncWebServerRequest *request) {
++        if (!checkUserWebAuth(request)) return;
++        if (isOtaInProgress() || s_wifiSwitchBusy) {
++            request->send(409, "application/json", "{\"ok\":false,\"msg\":\"Busy, try again shortly\"}");
++            return;
++        }
++        struct NetEntry {
++            String ssid;
++            int rssi;
++            bool enc;
++            bool saved;
++        };
++        std::vector<NetEntry> netsList;
++        int n = WiFi.scanNetworks();
++        for (int i = 0; i < n; i++) {
++            String ssid = WiFi.SSID(i);
++            if (ssid.isEmpty()) continue;
++            int rssi = WiFi.RSSI(i);
++            bool enc = (WiFi.encryptionType(i) != WIFI_AUTH_OPEN);
++            bool found = false;
++            for (auto &e : netsList) {
++                if (e.ssid == ssid) {
++                    if (rssi > e.rssi) {
++                        e.rssi = rssi;
++                        e.enc = enc;
++                    }
++                    found = true;
++                    break;
++                }
++            }
++            if (!found) { netsList.push_back({ssid, rssi, enc, bruceConfig.hasWifiCredential(ssid)}); }
++        }
++        WiFi.scanDelete();
++        std::sort(netsList.begin(), netsList.end(), [](const NetEntry &a, const NetEntry &b) {
++            return a.rssi > b.rssi;
++        });
++        if (netsList.size() > 20) netsList.resize(20);
++
++        String json = "{\"nets\":[";
++        for (size_t i = 0; i < netsList.size(); i++) {
++            if (i > 0) json += ",";
++            json += "{\"ssid\":\"" + jsonEscape(netsList[i].ssid) + "\",\"rssi\":" +
++                    String(netsList[i].rssi) + ",\"enc\":" + (netsList[i].enc ? "true" : "false") +
++                    ",\"saved\":" + (netsList[i].saved ? "true" : "false") + "}";
++        }
++        json += "]}";
++        request->send(200, "application/json", json);
++    });
++
++    server->on("/wificonnect", HTTP_POST, [](AsyncWebServerRequest *request) {
++        if (!checkUserWebAuth(request)) return;
++        if (isOtaInProgress() || s_wifiSwitchBusy) {
++            request->send(409, "application/json", "{\"ok\":false,\"msg\":\"Operation already in progress\"}");
++            return;
++        }
++        if (!request->hasArg("ssid") || request->arg("ssid").length() == 0) {
++            request->send(400, "application/json", "{\"ok\":false,\"msg\":\"SSID is required\"}");
++            return;
++        }
++        String ssid = request->arg("ssid");
++        String pwd = request->hasArg("pwd") ? request->arg("pwd") : "";
++        if (pwd.length() > 0) {
++            bruceConfig.addWifiCredential(ssid, pwd);
++        } else if (bruceConfig.hasWifiCredential(ssid)) {
++            pwd = bruceConfig.getWifiPassword(ssid);
++        } else {
++            bruceConfig.addWifiCredential(ssid, "");
++        }
++
++        s_pendingWifiSsid = ssid;
++        s_pendingWifiPwd = pwd;
++        s_wifiSwitchBusy = true;
++
++        String respJson = "{\"ok\":true,\"ssid\":\"" + jsonEscape(ssid) +
++                          "\",\"msg\":\"Connecting to LAN WiFi...\"}";
++        AsyncWebServerResponse *resp = request->beginResponse(200, "application/json", respJson);
++        resp->addHeader("Connection", "close");
++        request->send(resp);
++        xTaskCreate(wifiSwitchStaTask, "wifiSwitchSta", 4096, NULL, 1, NULL);
++    });
++
++    // Chunked Resumable WebOTA API (/ota/begin -> /ota/chunk -> /ota/commit | /ota/abort)
++    struct OtaChunkReqState {
++        bool authOk;
++        bool valid;
++        size_t offset;
++        size_t expectedTotal;
++        size_t received;
++        char err[80];
++    };
++
++    server->on("/ota/begin", HTTP_POST, [](AsyncWebServerRequest *request) {
++        if (!checkUserWebAuth(request)) return;
++        if (!request->hasArg("size")) {
++            request->send(400, "application/json", "{\"ok\":false,\"msg\":\"Missing firmware size\"}");
++            return;
++        }
++        size_t totalSize = (size_t)strtoul(request->arg("size").c_str(), nullptr, 10);
++        const esp_partition_t *nextPart = esp_ota_get_next_update_partition(NULL);
++        if (!nextPart) {
++            request->send(400, "application/json", "{\"ok\":false,\"msg\":\"No OTA partition found\"}");
++            return;
++        }
++        if (totalSize < 65536 || totalSize > nextPart->size) {
++            request->send(
++                400, "application/json",
++                "{\"ok\":false,\"msg\":\"Invalid firmware size for OTA slot (max " +
++                    humanReadableSize(nextPart->size) + ")\"}"
++            );
++            return;
++        }
++        if (s_otaInProgress) {
++            Update.abort();
++            otaFreeBuf();
++        }
++        if (!otaAllocChunkBuf()) {
++            request->send(503, "application/json", "{\"ok\":false,\"msg\":\"Insufficient RAM for OTA\"}");
++            return;
++        }
++        otaAcquireLock(totalSize);
++        if (!Update.begin(totalSize, U_FLASH)) {
++            String err = Update.errorString();
++            err.replace("\"", "'");
++            otaReleaseLock(true);
++            request->send(500, "application/json", "{\"ok\":false,\"msg\":\"" + err + "\"}");
++            return;
++        }
++        s_otaValid = true;
++        String ok = "{\"ok\":true,\"chunkSize\":" + String((unsigned long)kOtaChunkCap) +
++                    ",\"maxSize\":" + String((unsigned long)nextPart->size) + "}";
++        request->send(200, "application/json", ok);
++    });
++
++    server->on(
++        "/ota/chunk",
++        HTTP_POST,
++        [](AsyncWebServerRequest *request) {
++            OtaChunkReqState *st = (OtaChunkReqState *)request->_tempObject;
++            request->_tempObject = nullptr;
++            if (!st) {
++                if (!checkUserWebAuth(request)) return;
++                request->send(400, "application/json", "{\"ok\":false,\"msg\":\"Empty OTA chunk body\"}");
++                return;
++            }
++            if (!st->authOk) {
++                free(st);
++                request->send(401, "text/plain", "Unauthorized");
++                return;
++            }
++            if (!st->valid || st->received != st->expectedTotal || st->received == 0) {
++                String msg = st->err[0] ? String(st->err) : String("Incomplete chunk received");
++                msg.replace("\"", "'");
++                free(st);
++                request->send(400, "application/json", "{\"ok\":false,\"msg\":\"" + msg + "\"}");
++                return;
++            }
++
++            size_t offset = st->offset;
++            size_t chunkLen = st->received;
++            free(st);
++
++            if (!s_otaInProgress || !s_otaValid || !s_otaChunkBuf) {
++                request->send(409, "application/json", "{\"ok\":false,\"msg\":\"OTA session not active\"}");
++                return;
++            }
++
++            // Idempotent retry: chunk already written on an earlier attempt whose ACK was lost
++            if (offset + chunkLen <= s_otaWritten) {
++                s_otaLastActivityMs = millis();
++                request->send(
++                    200, "application/json",
++                    "{\"ok\":true,\"written\":" + String((unsigned long)s_otaWritten) + ",\"dup\":true}"
++                );
++                return;
++            }
++
++            if (offset != s_otaWritten) {
++                request->send(
++                    409, "application/json",
++                    "{\"ok\":false,\"written\":" + String((unsigned long)s_otaWritten) +
++                        ",\"msg\":\"Offset mismatch\"}"
++                );
++                return;
++            }
++
++            if (offset == 0) {
++                if (chunkLen < 36 || s_otaChunkBuf[0] != 0xE9 || s_otaChunkBuf[32] != 0x32 ||
++                    s_otaChunkBuf[33] != 0x54 || s_otaChunkBuf[34] != 0xCD || s_otaChunkBuf[35] != 0xAB) {
++                    Update.abort();
++                    otaReleaseLock(true);
++                    request->send(
++                        400, "application/json",
++                        "{\"ok\":false,\"msg\":\"Invalid OTA image! Upload ota.bin, not factory.bin.\"}"
++                    );
++                    return;
++                }
++            }
++
++            if (offset + chunkLen > s_otaTotal) {
++                Update.abort();
++                otaReleaseLock(true);
++                request->send(400, "application/json", "{\"ok\":false,\"msg\":\"Firmware exceeds expected size\"}");
++                return;
++            }
++
++            // Write full RAM-buffered chunk to flash AFTER TCP payload finished (no XIP stall during TCP RX)
++            size_t writtenNow = Update.write(s_otaChunkBuf, chunkLen);
++            if (writtenNow != chunkLen) {
++                String err = Update.errorString();
++                err.replace("\"", "'");
++                Update.abort();
++                otaReleaseLock(true);
++                request->send(500, "application/json", "{\"ok\":false,\"msg\":\"" + err + "\"}");
++                return;
++            }
++
++            s_otaWritten += writtenNow;
++            s_otaLastActivityMs = millis();
++            s_otaScreenPct = s_otaTotal > 0 ? (uint8_t)min<uint64_t>(100, (uint64_t)s_otaWritten * 100ULL / s_otaTotal)
++                                            : 0;
++            s_otaScreenDirty = true;
++
++            request->send(
++                200, "application/json",
++                "{\"ok\":true,\"written\":" + String((unsigned long)s_otaWritten) + "}"
++            );
++        },
++        nullptr,
++        [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
++            if (index == 0) {
++                OtaChunkReqState *st = (OtaChunkReqState *)calloc(1, sizeof(OtaChunkReqState));
++                request->_tempObject = st;
++                if (!st) return;
++                st->expectedTotal = total;
++                st->authOk = isWebSessionValid(request);
++                if (!st->authOk) return;
++                if (!s_otaInProgress || !s_otaValid || !s_otaChunkBuf) {
++                    snprintf(st->err, sizeof(st->err), "OTA session not initialized");
++                    return;
++                }
++                if (total == 0 || total > kOtaChunkCap) {
++                    snprintf(st->err, sizeof(st->err), "Invalid chunk size");
++                    return;
++                }
++                if (!request->hasArg("offset")) {
++                    snprintf(st->err, sizeof(st->err), "Missing offset");
++                    return;
++                }
++                st->offset = (size_t)strtoul(request->arg("offset").c_str(), nullptr, 10);
++                st->valid = true;
++            }
++            OtaChunkReqState *st = (OtaChunkReqState *)request->_tempObject;
++            if (!st || !st->authOk || !st->valid) return;
++            if (index + len > kOtaChunkCap || index + len > total) {
++                st->valid = false;
++                snprintf(st->err, sizeof(st->err), "Chunk bounds exceeded");
++                return;
++            }
++            if (len > 0) {
++                memcpy(s_otaChunkBuf + index, data, len);
++                st->received = index + len;
++                s_otaLastActivityMs = millis();
++            }
++        }
++    );
++
++    server->on("/ota/commit", HTTP_POST, [](AsyncWebServerRequest *request) {
++        if (!checkUserWebAuth(request)) return;
++        if (!s_otaInProgress || !s_otaValid) {
++            request->send(400, "application/json", "{\"ok\":false,\"msg\":\"No active OTA session\"}");
++            return;
++        }
++        if (s_otaWritten != s_otaTotal) {
++            Update.abort();
++            otaReleaseLock(true);
++            request->send(400, "application/json", "{\"ok\":false,\"msg\":\"Incomplete firmware transfer\"}");
++            return;
++        }
++        if (!Update.end(true)) {
++            String err = Update.errorString();
++            err.replace("\"", "'");
++            otaReleaseLock(true);
++            request->send(400, "application/json", "{\"ok\":false,\"msg\":\"" + err + "\"}");
++            return;
++        }
++        size_t finalBytes = s_otaWritten;
++        s_otaScreenDone = true;
++        s_otaScreenPct = 100;
++        otaReleaseLock(false);
++
++        String okJson = "{\"ok\":true,\"bytes\":" + String((unsigned long)finalBytes) +
++                        ",\"msg\":\"Firmware updated! Rebooting...\"}";
++        AsyncWebServerResponse *resp = request->beginResponse(200, "application/json", okJson);
++        resp->addHeader("Connection", "close");
++        request->send(resp);
++        xTaskCreate(delayedRestartTask, "otaRestart", 2048, NULL, 1, NULL);
++    });
++
++    server->on("/ota/abort", HTTP_POST, [](AsyncWebServerRequest *request) {
++        if (!checkUserWebAuth(request)) return;
++        if (s_otaInProgress) {
++            Update.abort();
++            otaReleaseLock(true);
++        }
++        request->send(200, "application/json", "{\"ok\":true,\"msg\":\"OTA aborted\"}");
++    });
++
++    // WebOTA Firmware Update UI & Legacy Multipart Upload handler
 +    server->on("/ota", HTTP_GET, [](AsyncWebServerRequest *request) {
 +        if (checkUserWebAuth(request, true)) {
 +            request->send(200, "text/html", kOtaPageHtml);
@@ -8934,6 +10031,9 @@ index a8679bd..695e223 100644
 +        [](AsyncWebServerRequest *request) {
 +            if (!checkUserWebAuth(request)) return;
 +            if (s_otaValid && !Update.hasError()) {
++                s_otaScreenDone = true;
++                s_otaScreenPct = 100;
++                otaReleaseLock(false);
 +                String okJson =
 +                    "{\"ok\":true,\"bytes\":" + String((unsigned long)s_otaWritten) +
 +                    ",\"msg\":\"Firmware updated! Rebooting...\"}";
@@ -8942,44 +10042,70 @@ index a8679bd..695e223 100644
 +                request->send(resp);
 +                xTaskCreate(delayedRestartTask, "otaRestart", 2048, NULL, 1, NULL);
 +            } else {
-+                applyWifiPowerProfile();
++                Update.abort();
++                otaReleaseLock(true);
 +                String msg = s_otaError.length() > 0 ? s_otaError : "OTA update failed";
 +                msg.replace("\"", "'");
 +                request->send(400, "application/json", "{\"ok\":false,\"msg\":\"" + msg + "\"}");
 +            }
 +        },
 +        [](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
-+            if (!checkUserWebAuth(request)) {
-+                s_otaValid = false;
-+                s_otaError = "Unauthorized";
-+                return;
-+            }
 +            if (index == 0) {
-+                s_otaValid = false;
-+                s_otaWritten = 0;
-+                s_otaError = "";
++                if (!isWebSessionValid(request)) {
++                    s_otaValid = false;
++                    s_otaError = "Unauthorized";
++                    return;
++                }
 +                if (len < 36 || data[0] != 0xE9 || data[32] != 0x32 || data[33] != 0x54 ||
 +                    data[34] != 0xCD || data[35] != 0xAB) {
++                    s_otaValid = false;
 +                    s_otaError = "Invalid OTA image! Upload app binary (ota.bin), not factory.bin.";
 +                    return;
 +                }
-+                WiFi.setSleep(WIFI_PS_NONE);
++                otaAcquireLock(0);
 +                if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) {
 +                    s_otaError = Update.errorString();
++                    otaReleaseLock(true);
 +                    return;
 +                }
 +                s_otaValid = true;
 +            }
 +            if (s_otaValid && len > 0) {
-+                if (Update.write(data, len) != len) {
-+                    s_otaError = Update.errorString();
-+                    s_otaValid = false;
-+                    Update.abort();
-+                    return;
++                size_t pos = 0;
++                while (pos < len) {
++                    size_t space = sizeof(s_otaLegacyBuf) - s_otaLegacyBufLen;
++                    size_t take = min(space, len - pos);
++                    memcpy(s_otaLegacyBuf + s_otaLegacyBufLen, data + pos, take);
++                    s_otaLegacyBufLen += take;
++                    pos += take;
++                    if (s_otaLegacyBufLen == sizeof(s_otaLegacyBuf)) {
++                        if (Update.write(s_otaLegacyBuf, s_otaLegacyBufLen) != s_otaLegacyBufLen) {
++                            s_otaError = Update.errorString();
++                            s_otaValid = false;
++                            s_otaLegacyBufLen = 0;
++                            Update.abort();
++                            otaReleaseLock(true);
++                            return;
++                        }
++                        s_otaWritten += s_otaLegacyBufLen;
++                        s_otaLegacyBufLen = 0;
++                        s_otaLastActivityMs = millis();
++                    }
 +                }
-+                s_otaWritten += len;
 +            }
 +            if (final && s_otaValid) {
++                if (s_otaLegacyBufLen > 0) {
++                    if (Update.write(s_otaLegacyBuf, s_otaLegacyBufLen) != s_otaLegacyBufLen) {
++                        s_otaError = Update.errorString();
++                        s_otaValid = false;
++                        s_otaLegacyBufLen = 0;
++                        Update.abort();
++                        otaReleaseLock(true);
++                        return;
++                    }
++                    s_otaWritten += s_otaLegacyBufLen;
++                    s_otaLegacyBufLen = 0;
++                }
 +                if (!Update.end(true)) {
 +                    s_otaError = Update.errorString();
 +                    s_otaValid = false;
@@ -9001,10 +10127,156 @@ index a8679bd..695e223 100644
      // Get Screen
      server->on("/getscreen", HTTP_GET, [](AsyncWebServerRequest *request) {
          if (checkUserWebAuth(request)) {
-@@ -792,3 +1074,113 @@ void startWebUi(bool mode_ap) {
-         if (!keepWifiConnected) { wifiDisconnect(); }
+@@ -745,19 +1752,66 @@ void configureWebServer() {
+ **  Function: startWebUi
+ **  Start the WebUI
+ **********************************************************************/
+-void startWebUi(bool mode_ap) {
+-    bool keepWifiConnected = false;
+-    if (!WiFi.isConnected()) {
+-        if (mode_ap) wifiConnectMenu(WIFI_AP);
+-        else wifiConnectMenu(WIFI_STA);
+-    } else {
+-        keepWifiConnected = true;
++static bool ensureWebUiNetwork(bool targetAp) {
++    if (targetAp) {
++        if (WiFi.getMode() == WIFI_MODE_AP || WiFi.getMode() == WIFI_MODE_APSTA) {
++            wifiIP = WiFi.softAPIP().toString();
++            return true;
++        }
++        if (server || isWebUIActive) {
++            if (mdnsRunning) {
++                MDNS.end();
++                mdnsRunning = false;
++            }
++            if (WiFi.getMode() & WIFI_MODE_STA) {
++                WiFi.disconnect(false, true);
++                vTaskDelay(pdMS_TO_TICKS(80));
++            }
++            if (!radioHasMemForWifi()) {
++                displayError("Low RAM: free BLE/SD first", true);
++                return false;
++            }
++            WiFi.mode(WIFI_AP);
++            _setupAP();
++            mdnsRunning = startMdnsResponder();
++            return true;
++        }
++        return wifiConnectMenu(WIFI_AP);
++    }
++
++    if (WiFi.isConnected()) {
++        wifiIP = WiFi.localIP().toString();
++        if (server && !mdnsRunning) mdnsRunning = startMdnsResponder();
++        return true;
++    }
++
++    if (WiFi.getMode() & WIFI_MODE_AP) {
++        if (mdnsRunning) {
++            MDNS.end();
++            mdnsRunning = false;
++        }
++        WiFi.softAPdisconnect(true);
++        vTaskDelay(pdMS_TO_TICKS(80));
++    }
++
++    if (!bruceConfig.wifi.empty() && wifiConnecttoKnownNet()) {
++        wifiIP = WiFi.localIP().toString();
++        if (server) mdnsRunning = startMdnsResponder();
++        return true;
      }
- }
+ 
+-    // configure web server
++    return wifiConnectMenu(WIFI_STA);
++}
++
++void startWebUi(bool mode_ap) {
++    if (!ensureWebUiNetwork(mode_ap)) {
++        if (!WiFi.isConnected() && WiFi.getMode() != WIFI_MODE_AP) {
++            displayWarning("WiFi not connected", true);
++            return;
++        }
++    }
+ 
+     if (!server) {
+-        // Clear this vector to free stack memory
+         options.clear();
+ 
+         Serial.println("Configuring Webserver ...");
+@@ -771,24 +1825,179 @@ void startWebUi(bool mode_ap) {
+         isWebUIActive = true;
+     }
+     tft.setLogging();
+-    drawWebUiScreen(mode_ap);
+ 
+-    while (!check(EscPress)) {
+-        // nothing here, just to hold the screen until the server is on.
+-        vTaskDelay(pdMS_TO_TICKS(70));
++    bool exitWebUiLoop = false;
++    while (!exitWebUiLoop) {
++        bool isApMode = (WiFi.getMode() == WIFI_MODE_AP || WiFi.getMode() == WIFI_MODE_APSTA);
++        drawWebUiScreen(isApMode);
++
++        bool prevOtaDrawn = false;
++        uint8_t prevOtaPct = 255;
++        s_webUiScreenDirty = false;
++
++        while (!check(EscPress)) {
++            if (isOtaInProgress()) {
++                if (isScreenOff) wakeUpScreen();
++                if (!prevOtaDrawn || s_otaScreenDirty || s_otaScreenPct != prevOtaPct) {
++                    s_otaScreenDirty = false;
++                    prevOtaPct = s_otaScreenPct;
++                    prevOtaDrawn = true;
++                    drawWebUiOtaOverlay();
++                }
++            } else if (prevOtaDrawn || s_webUiScreenDirty) {
++                prevOtaDrawn = false;
++                s_webUiScreenDirty = false;
++                isApMode = (WiFi.getMode() == WIFI_MODE_AP || WiFi.getMode() == WIFI_MODE_APSTA);
++                drawWebUiScreen(isApMode);
++            }
++            vTaskDelay(pdMS_TO_TICKS(60));
++        }
++
++        int choice = 0; // 0 = run bg, 1 = switch mode, 2 = stop all
++        options.clear();
++        options.emplace_back("Run in background", [&choice]() { choice = 0; });
++        options.emplace_back(
++            isApMode ? "Switch to LAN WiFi" : "Switch to AP Mode", [&choice]() { choice = 1; }
++        );
++        options.emplace_back("Stop WebUI & WiFi", [&choice]() { choice = 2; });
++
++        loopOptions(options);
++
++        if (choice == 0) {
++            exitWebUiLoop = true;
++        } else if (choice == 1) {
++            bool targetAp = !isApMode;
++            if (ensureWebUiNetwork(targetAp)) {
++                if (!server) {
++                    if (psramFound()) server = (AsyncWebServer *)ps_malloc(sizeof(AsyncWebServer));
++                    else server = (AsyncWebServer *)malloc(sizeof(AsyncWebServer));
++                    new (server) AsyncWebServer(default_webserverporthttp);
++                    configureWebServer();
++                    isWebUIActive = true;
++                    tft.setLogging();
++                }
++            } else {
++                // If user cancelled STA menu and server was stopped, exit cleanly
++                if (!server) {
++                    wifiDisconnect();
++                    exitWebUiLoop = true;
++                }
++            }
++        } else if (choice == 2) {
++            stopWebUi();
++            vTaskDelay(pdMS_TO_TICKS(100));
++            wifiDisconnect();
++            exitWebUiLoop = true;
++        }
++    }
++}
 +
 +/**********************************************************************
 +**  Function: startWebUiHeadless
@@ -9016,7 +10288,7 @@ index a8679bd..695e223 100644
 +    if (s_webUiStarting || s_webUiCancelRequested) {
 +        s_webUiQueued = false;
 +        return false;
-+    }
+     }
 +    s_webUiStarting = true;
 +    s_webUiQueued = false;
 +
@@ -9026,7 +10298,8 @@ index a8679bd..695e223 100644
 +            stopBLEStack();
 +            vTaskDelay(pdMS_TO_TICKS(100));
 +        }
-+
+ 
+-    bool closeServer = false;
 +        if (!s_webUiCancelRequested && radioHasMemForWifi()) {
 +            ensureWifiPlatform();
 +            if (!bruceConfig.wifi.empty() && !s_webUiCancelRequested) {
@@ -9055,13 +10328,17 @@ index a8679bd..695e223 100644
 +                }
 +                WiFi.scanDelete();
 +            }
-+
+ 
+-    options.clear();
+-    options.emplace_back("Run in background", []() {});
+-    options.emplace_back("Exit", [&closeServer]() { closeServer = true; });
 +            if (s_webUiCancelRequested) {
 +                wifiDisconnect();
 +                s_webUiStarting = false;
 +                return false;
 +            }
-+
+ 
+-    loopOptions(options);
 +            if (WiFi.isConnected()) {
 +                hasNetwork = true;
 +            } else if (allowApFallback && !s_webUiCancelRequested) {
@@ -9070,7 +10347,11 @@ index a8679bd..695e223 100644
 +            }
 +        }
 +    }
-+
+ 
+-    if (closeServer) {
+-        stopWebUi();
+-        vTaskDelay(pdMS_TO_TICKS(100));
+-        if (!keepWifiConnected) { wifiDisconnect(); }
 +    if (s_webUiCancelRequested) {
 +        if (!isWebUIActive) wifiDisconnect();
 +        s_webUiStarting = false;
@@ -9090,7 +10371,7 @@ index a8679bd..695e223 100644
 +            RAM_LOG("webui-headless-ready");
 +            Serial.println("[WebUI] Ready at http://bruce.local (" + wifiIP + ")");
 +        }
-+    }
+     }
 +
 +    s_webUiStarting = false;
 +    return isWebUIActive;
@@ -9114,12 +10395,12 @@ index a8679bd..695e223 100644
 +    s_webUiCancelRequested = false;
 +    s_webUiQueued = true;
 +    xTaskCreate(webUiAutoStartTask, "webUiAutoStart", 6144, NULL, 1, NULL);
-+}
+ }
 diff --git a/src/core/wifi/webInterface.h b/src/core/wifi/webInterface.h
-index d14ae9f..0f6e230 100644
+index d14ae9f..ec18844 100644
 --- a/src/core/wifi/webInterface.h
 +++ b/src/core/wifi/webInterface.h
-@@ -23,5 +23,10 @@ void serveWebUIFile(
+@@ -23,5 +23,11 @@ void serveWebUIFile(
  );
  void configureWebServer();
  void startWebUi(bool mode_ap = false);
@@ -9128,10 +10409,11 @@ index d14ae9f..0f6e230 100644
 +void cancelWebUiAutoStart();
 +bool isWebUiStarting();
 +bool isWebUiActiveOrStarting();
++bool isOtaInProgress();
  void stopWebUi();
  void cleanlyStopWebUiForWiFiFeature();
 diff --git a/src/core/wifi/wifi_common.cpp b/src/core/wifi/wifi_common.cpp
-index 0e32e4d..cdc5e38 100644
+index 0e32e4d..93762e8 100644
 --- a/src/core/wifi/wifi_common.cpp
 +++ b/src/core/wifi/wifi_common.cpp
 @@ -6,6 +6,7 @@
@@ -9142,7 +10424,7 @@ index 0e32e4d..cdc5e38 100644
  #include "core/wifi/wifi_mac.h"
  #include "esp_wifi.h"
  #include "modules/ble/ble_common.h"
-@@ -134,6 +135,7 @@ bool _connectToWifiNetwork(const String &ssid, const String &pwd, int32_t channe
+@@ -134,11 +135,12 @@ bool _connectToWifiNetwork(const String &ssid, const String &pwd, int32_t channe
          i++;
      }
  
@@ -9150,6 +10432,12 @@ index 0e32e4d..cdc5e38 100644
      return WiFi.isConnected();
  }
  
+ bool _setupAP() {
+-    IPAddress AP_GATEWAY(172, 0, 0, 1);
++    IPAddress AP_GATEWAY(192, 168, 4, 1);
+     WiFi.softAPConfig(AP_GATEWAY, AP_GATEWAY, IPAddress(255, 255, 255, 0));
+     WiFi.softAP(bruceConfig.wifiAp.ssid, bruceConfig.wifiAp.pwd, 6, 0, 4, false);
+     wifiIP = WiFi.softAPIP().toString(); // update global var
 @@ -149,6 +151,7 @@ bool _setupAP() {
  
  void wifiDisconnect() {
@@ -9209,6 +10497,48 @@ index 0e32e4d..cdc5e38 100644
  
                  // Start timezone update in background if not already running
                  if (timezoneTaskHandle == NULL) {
+@@ -377,19 +409,22 @@ bool wifiConnecttoKnownNet(void) {
+ 
+     bool result = false;
+     int nets;
+-    // WiFi.mode(WIFI_MODE_STA);
+-    displayTextLine("Scanning Networks..");
+-    WiFi.disconnect(true, true);
++    ensureWifiPlatform();
++    WiFi.mode(WIFI_MODE_STA);
++    applyConfiguredMAC();
++    displayTextLine("Scanning saved WiFi..");
++    WiFi.disconnect(false, true);
+     vTaskDelay(10 / portTICK_PERIOD_MS);
+     nets = WiFi.scanNetworks();
+     for (int i = 0; i < nets; i++) {
+         vTaskDelay(10 / portTICK_PERIOD_MS);
+         String ssid = WiFi.SSID(i);
+         String password = bruceConfig.getWifiPassword(ssid);
+-        if (password != "") {
+-            Serial.println("Connecting to: " + ssid);
+-            result = _connectToWifiNetwork(ssid, password);
+-        }
++        bool knownOpen = WiFi.encryptionType(i) == WIFI_AUTH_OPEN && bruceConfig.hasWifiCredential(ssid);
++        if (password == "" && !knownOpen) continue;
++
++        Serial.println("Connecting to: " + ssid);
++        result = _connectToWifiNetwork(ssid, password, WiFi.channel(i), WiFi.BSSID(i));
+         // Maybe it finds a known network and can't connect, then try the next
+         // until it gets connected (or not)
+         if (result) {
+@@ -397,9 +432,11 @@ bool wifiConnecttoKnownNet(void) {
+             break;
+         }
+     }
++    WiFi.scanDelete();
+     if (WiFi.isConnected()) {
+         wifiConnected = true;
+         wifiIP = WiFi.localIP().toString();
++        applyWifiPowerProfile();
+ 
+         // Start timezone update in background if not already running
+         if (timezoneTaskHandle == NULL) {
 diff --git a/src/core/wifi/wifi_common.h b/src/core/wifi/wifi_common.h
 index 8d97a20..e0d8453 100644
 --- a/src/core/wifi/wifi_common.h
