@@ -416,3 +416,7 @@ sau khi chỉ bỏ qua serial và CRC từng trang Ogg (không kiểm CRC hay ph
 thanh). Điều này hữu ích để đối chiếu, **không chứng minh code iOS giống
 Android**. Mã so sánh `tools/deadtown_ios_compare.py` và kết quả/giới hạn đầy
 đủ ở `docs/deadtown-original-re.md`.
+
+Kiểm tra đối chiếu và CI phân tích tĩnh `44763810611` đã đạt. Lượt cục bộ chạy
+110 test, 20 test bỏ qua do thiếu đầu vào tùy chọn. Phân tích này không tạo hay
+sửa IPA; chưa có bằng chứng chạy game trên iOS.

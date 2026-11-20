@@ -847,3 +847,8 @@ uses fixed ZIP members and never executes code or creates a build. Tests live in
 and publishes only the small comparison report. Similar assets strongly support
 further comparison, but do not establish iOS/Android native logic equivalence,
 original signing, safe installation, or compatibility with iOS 15/TrollStore.
+
+Verification: integration and malformed-input tests passed locally; full local
+suite ran 110 tests with 20 skips for unavailable optional inputs. GitHub
+Actions native research run `44763810611` passed with the pinned IPA, APK,
+GMX and analysis dependencies. No IPA was built or modified by this analysis.
