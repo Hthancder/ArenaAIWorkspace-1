@@ -1,6 +1,7 @@
 #import "SXPrefs.h"
 #import "SXRootListController.h"
 #import "SXLogViewController.h"
+#import "SXChoiceRow.h"
 #import "SXUISupport.h"
 #import "PSSpecifier.h"
 #import "SXLog.h"
@@ -561,7 +562,14 @@ static SXChoiceDefinition *SXChoiceDefinitionFor(NSString *key) {
 																cell:PSListItemCell
 																edit:nil];
 			[row setProperty:@(option.value) forKey:@"sxValue"];
-			[row setProperty:fabs(option.value - current) < 0.001 ? @"✓" : @"" forKey:PSValueKey];
+			// Dấu "đang dùng" phải nằm trên HÀNG (dấu ✓ của cell), không phải trong
+			// chữ của ô value: hàng PSListItemCell chỉ hiện chữ ở ô value nên trước
+			// đây nó trông như một phần của tên mức.
+			BOOL active = fabs(option.value - current) < 0.001;
+			[row setProperty:@(active) forKey:SXChoiceActiveKey];
+			[row setProperty:@(SXChoiceCellModeOption) forKey:SXChoiceModeKey];
+			[row setProperty:option.hint forKey:SXChoiceHintKey];
+			[row setProperty:NSClassFromString(@"SXChoiceRow") forKey:PSCellClassKey];
 			[items addObject:row];
 		}
 		_specifiers = items;
@@ -663,9 +671,21 @@ static SXChoiceDefinition *SXChoiceDefinitionFor(NSString *key) {
 	};
 	for (PSSpecifier *specifier in specifiers) {
 		NSString *key = [specifier propertyForKey:@"key"];
+		if (!key.length) continue;
+
+		// Mọi hàng "chọn một giá trị" được vẽ bằng SXChoiceRow. Cell của
+		// Preferences hiện trạng thái bằng cách tra `readPreferenceValue:` trong
+		// `validValues`; ta trả nhãn đã dịch nên nó không khớp và ô phải rỗng.
+		// Cell riêng thì luôn vẽ được "giá trị đang dùng" (hoặc ✓ ở trang chọn).
+		if (specifier.cellType == PSLinkListCell) {
+			[specifier setProperty:NSClassFromString(@"SXChoiceRow") forKey:PSCellClassKey];
+			[specifier setProperty:@(SXChoiceCellModeValue) forKey:SXChoiceModeKey];
+			[specifier setProperty:[self sx_valueLabelForSpecifier:specifier] ?: @""
+							forKey:SXChoiceTrailingKey];
+		}
+
 		Class chooser = choosers[key];
-		if (!chooser) continue;
-		[specifier setProperty:chooser forKey:@"detail"];
+		if (chooser) [specifier setProperty:chooser forKey:@"detail"];
 	}
 	return specifiers;
 }
@@ -687,19 +707,23 @@ static SXChoiceDefinition *SXChoiceDefinitionFor(NSString *key) {
 			return [NSString stringWithFormat:@"%lu/%lu công cụ đang bật",
 					(unsigned long)enabled, (unsigned long)tools.count];
 		}
+		// Trả GIÁ TRỊ THẬT (`smart`, `prefix`, `gemini`, `bubble`…), không phải nhãn
+		// đã dịch: `PSLinkListCell` hiện "đang chọn" bằng cách tra giá trị này
+		// trong `validValues`. Trả nhãn thì không khớp ⇒ ô bên phải rỗng, không có
+		// dấu ✓ — đúng hiện tượng "chọn xong không thấy trạng thái gì".
+		// Nhãn dễ đọc được thêm vào `sx_valueLabelForSpecifier:` (chú thích dưới
+		// hàng) nên người dùng vẫn đọc được nghĩa.
 		if ([key isEqualToString:@"mode"]) {
-			return prefs.mode == SXReplyModeFull ? @"Thay thế mọi câu" : @"Thông minh";
+			return prefs.mode == SXReplyModeFull ? @"full" : @"smart";
 		}
 		if ([key isEqualToString:@"triggerMode"]) {
-			return [prefs.triggerMode isEqualToString:@"prefix"] ? @"Tiền tố @ai" : @"Tự động";
+			return [prefs.triggerMode isEqualToString:@"prefix"] ? @"prefix" : @"auto";
 		}
 		if ([key isEqualToString:@"provider"]) {
-			return prefs.provider == SXProviderGemini ? @"Google Gemini" : @"OpenAI tương thích";
+			return prefs.provider == SXProviderGemini ? @"gemini" : @"openai";
 		}
 		if ([key isEqualToString:@"timeoutAction"]) {
-			if ([prefs.timeoutAction isEqualToString:@"keep"]) return @"Giữ Siri gốc";
-			if ([prefs.timeoutAction isEqualToString:@"retry"]) return @"Thử lại bằng model dự phòng";
-			return @"Bubble “chưa kịp”";
+			return prefs.timeoutAction;
 		}
 		if ([key isEqualToString:@"temperature"]) {
 			NSString *hint = prefs.temperature <= 0.05 ? @"máy móc"
@@ -736,6 +760,31 @@ static SXChoiceDefinition *SXChoiceDefinitionFor(NSString *key) {
 				 [specifier propertyForKey:@"key"], exception.name, exception.reason);
 		return nil;
 	}
+}
+
+/// Nhãn dễ đọc cho giá trị đã lưu ("smart" → "Thông minh (khuyến nghị)").
+/// Dùng để gắn vào hàng dưới dạng chú thích: ô giá trị bên phải phải là giá trị
+/// thật (để Preferences vẽ ✓), còn nghĩa tiếng Việt hiện ngay dưới nhãn.
+- (NSString *)sx_valueLabelForSpecifier:(PSSpecifier *)specifier {
+	NSString *key = [specifier propertyForKey:@"key"];
+	id raw = [self readPreferenceValue:specifier];
+	NSString *value = [raw isKindOfClass:[NSString class]] ? raw : [raw description];
+	if (!value.length) return nil;
+	if ([key isEqualToString:@"mode"]) {
+		return [value isEqualToString:@"full"] ? @"Thay thế mọi câu" : @"Thông minh (khuyến nghị)";
+	}
+	if ([key isEqualToString:@"triggerMode"]) {
+		return [value isEqualToString:@"prefix"] ? @"Chỉ khi nói “@ai”" : @"Tự động — mọi câu";
+	}
+	if ([key isEqualToString:@"provider"]) {
+		return [value isEqualToString:@"gemini"] ? @"Google Gemini" : @"OpenAI / tương thích";
+	}
+	if ([key isEqualToString:@"timeoutAction"]) {
+		if ([value isEqualToString:@"keep"]) return @"Giữ nguyên câu trả lời Siri";
+		if ([value isEqualToString:@"retry"]) return @"Thử lại bằng model dự phòng";
+		return @"Bubble “chưa kịp trả lời”";
+	}
+	return nil;
 }
 
 - (void)setPreferenceValue:(id)value specifier:(PSSpecifier *)specifier {
@@ -792,6 +841,7 @@ static SXChoiceDefinition *SXChoiceDefinitionFor(NSString *key) {
 		if (!strongSelf) return;
 		@try {
 			[strongSelf sx_updateStatusPill];
+			[strongSelf sx_refreshChoiceTrailingValues];
 			[strongSelf sx_scheduleTableRefresh];
 		} @catch (NSException *exception) {
 			SXLogErr(@"pref", @"notify handler EXCEPTION: %@", exception.reason);
@@ -802,6 +852,22 @@ static SXChoiceDefinition *SXChoiceDefinitionFor(NSString *key) {
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
 	[self sx_updateStatusPill];
+	[self sx_refreshChoiceTrailingValues];
+}
+
+/// Cập nhật "giá trị đang dùng" ở mép phải của các hàng chọn. Cell không tự đọc
+/// prefs (nó chỉ vẽ theo specifier) nên mỗi lần quay lại trang là làm mới — nhờ
+/// vậy chọn xong ở trang con là thấy ngay giá trị mới ở trang gốc.
+- (void)sx_refreshChoiceTrailingValues {
+	for (PSSpecifier *specifier in self.specifiers) {
+		if (specifier.cellType != PSLinkListCell) continue;
+		[specifier setProperty:NSClassFromString(@"SXChoiceRow") forKey:PSCellClassKey];
+		[specifier setProperty:@(SXChoiceCellModeValue) forKey:SXChoiceModeKey];
+		id raw = [self readPreferenceValue:specifier];
+		NSString *text = [self sx_valueLabelForSpecifier:specifier];
+		if (!text.length && [raw isKindOfClass:[NSString class]]) text = raw;
+		[specifier setProperty:text ?: @"" forKey:SXChoiceTrailingKey];
+	}
 }
 
 - (void)viewDidAppear:(BOOL)animated {

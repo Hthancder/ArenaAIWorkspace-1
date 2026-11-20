@@ -1,10 +1,12 @@
 #import "SXAPIChoiceController.h"
+#import "SXChoiceRow.h"
 #import "SXUISupport.h"
 #import "PSSpecifier.h"
 #import "SXLog.h"
 #import <notify.h>
 
-@interface SXAPIChoiceController ()
+@interface SXAPIChoiceController () <UITableViewDataSource, UITableViewDelegate>
+@property (nonatomic, strong) UITableView *table;
 @property (nonatomic, strong) NSArray *values;          // NSString hoặc NSNumber
 @property (nonatomic, strong) NSArray<NSString *> *titles;
 @property (nonatomic, strong) NSArray<NSString *> *hints;
@@ -18,9 +20,89 @@
 	[super viewDidLoad];
 	[self sx_loadFromSpecifier];
 	self.title = self.screenTitle.length ? self.screenTitle : @"Chọn giá trị";
+
+	// Tự dựng bảng thay vì để Preferences dựng cell từ specifier: cell của
+	// Preferences chỉ hiện chữ ở ô "value" và không cho ta vẽ dấu ✓ chắc chắn.
+	self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
+	self.table = [[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStyleInsetGrouped];
+	self.table.translatesAutoresizingMaskIntoConstraints = NO;
+	self.table.dataSource = self;
+	self.table.delegate = self;
+	self.table.rowHeight = UITableViewAutomaticDimension;
+	self.table.estimatedRowHeight = 56;
+	[self.view addSubview:self.table];
+	[NSLayoutConstraint activateConstraints:@[
+		[self.table.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+		[self.table.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+		[self.table.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+		[self.table.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
+	]];
+
 	SXLogDbg(@"pref", @"bộ chọn giá trị mở: key=%@, %lu lựa chọn, specifier=%@",
 			 self.prefsKey ?: @"(trống)", (unsigned long)self.values.count,
 			 NSStringFromClass([self.specifier class]));
+}
+
+#pragma mark - Bảng
+
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
+	(void)tableView;
+	return 1;
+}
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+	(void)tableView;
+	(void)section;
+	return (NSInteger)self.values.count;
+}
+
+- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
+	(void)tableView;
+	(void)section;
+	return self.screenTitle.length ? self.screenTitle : @"Chọn giá trị";
+}
+
+- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
+	(void)tableView;
+	(void)section;
+	return [self.specifier propertyForKey:@"footerText"];
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+	if (indexPath.row < 0 || (NSUInteger)indexPath.row >= self.values.count) {
+		return [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil];
+	}
+	NSString *current = [self sx_current];
+	NSString *value = [self sx_storedValueAtIndex:(NSUInteger)indexPath.row];
+	NSString *title = self.titles[(NSUInteger)indexPath.row];
+	PSSpecifier *specifier = [PSSpecifier preferenceSpecifierNamed:title
+															target:nil set:NULL get:NULL
+															detail:nil cell:PSListItemCell edit:nil];
+	[specifier setProperty:@(SXChoiceCellModeOption) forKey:SXChoiceModeKey];
+	[specifier setProperty:@([value isEqualToString:current]) forKey:SXChoiceActiveKey];
+	[specifier setProperty:[self sx_hintAtIndex:(NSUInteger)indexPath.row] forKey:SXChoiceHintKey];
+	return [SXChoiceRow cellForTable:tableView specifier:specifier];
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+	[tableView deselectRowAtIndexPath:indexPath animated:YES];
+	if (indexPath.row < 0 || (NSUInteger)indexPath.row >= self.values.count) return;
+	[self sx_choose:(NSUInteger)indexPath.row];
+}
+
+/// Chuỗi thật được lưu cho lựa chọn thứ `index` (khác với nhãn hiển thị).
+- (NSString *)sx_storedValueAtIndex:(NSUInteger)index {
+	id candidate = self.values[index];
+	NSString *stored = [candidate isKindOfClass:[NSString class]] ? candidate : [candidate description];
+	if ([self.prefsKey isEqualToString:@"openaiApi"]) {
+		stored = SXOpenAIApiStorageKey([candidate isKindOfClass:[NSNumber class]]
+			? (SXOpenAIApi)[candidate integerValue] : SXOpenAIApiAuto);
+	}
+	return stored;
+}
+
+- (NSString *)sx_hintAtIndex:(NSUInteger)index {
+	return index < self.hints.count ? self.hints[index] : nil;
 }
 
 - (void)viewDidAppear:(BOOL)animated {
@@ -87,8 +169,9 @@
 	(void)footer;
 }
 
-/// Giá trị đang lưu, đọc lại từ đĩa mỗi lần vẽ để không hiện ✓ cũ.
-- (id)sx_current {
+/// Giá trị đang lưu (dạng chuỗi đã chuẩn hoá), đọc lại từ đĩa mỗi lần vẽ để
+/// không hiện ✓ cũ. Dùng chung phép chuẩn hoá với lúc ghi.
+- (NSString *)sx_current {
 	if (!self.prefsKey.length) return [self sx_defaultValue];
 	[[SXPrefs shared] reload];
 	if ([self.prefsKey isEqualToString:@"openaiApi"]) {
@@ -105,79 +188,39 @@
 	return [self.values.firstObject isKindOfClass:[NSString class]] ? self.values.firstObject : @"";
 }
 
-- (NSArray *)specifiers {
-	if (!_specifiers) {
-		[self sx_refreshFromSpecifierIfNeeded];
-		NSMutableArray *items = [NSMutableArray array];
-		PSSpecifier *group = [PSSpecifier groupSpecifierWithName:self.screenTitle ?: @"Chọn giá trị"];
-		NSString *footer = [self.specifier propertyForKey:@"footerText"];
-		if (footer.length) [group setProperty:footer forKey:@"footerText"];
-		[items addObject:group];
-
-		id current = [self sx_current];
-		for (NSUInteger i = 0; i < self.values.count; i++) {
-			id candidate = self.values[i];
-			NSString *value = [candidate isKindOfClass:[NSString class]]
-				? candidate : [candidate description];
-			BOOL active = [value isEqual:current] ||
-				([candidate isKindOfClass:[NSNumber class]] && [current isKindOfClass:[NSNumber class]] &&
-				 [candidate isEqual:current]);
-			PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:self.titles[i]
-															 target:self
-																set:@selector(sx_pick:specifier:)
-																get:nil
-															 detail:nil
-															   cell:PSListItemCell
-															   edit:nil];
-			[row setProperty:@(active) forKey:@"sxActive"];
-			if (i < self.hints.count) [row setProperty:self.hints[i] forKey:@"sxHint"];
-			[items addObject:row];
-		}
-		if (items.count <= 1) {
-			SXLogErr(@"pref", @"bộ chọn %@ không có lựa chọn nào (validValues=? )",
-					 self.prefsKey ?: @"(trống)");
-			// `items.firstObject` là `id`; gán qua biến PSSpecifier* để trình biên
-			// dịch chọn đúng `-setProperty:forKey:` của PSSpecifier (nếu không sẽ
-			// nhập nhằng với `NSStream` và báo lỗi kiểu).
-			PSSpecifier *group = items.firstObject;
-			NSString *footerText = [NSString stringWithFormat:
-					@"Chưa đọc được danh sách lựa chọn cho “%@”. Mở lại từ trang chính.",
-					self.prefsKey.length ? self.prefsKey : @"(không rõ)"];
-			[group setProperty:footerText forKey:@"footerText"];
-		}
-		_specifiers = items;
-	}
-	return _specifiers;
-}
-
 /// `PSListController` không tự hiện dấu "đang chọn" cho PSListItemCell — giá trị
 /// trả về ở đây được cell vẽ ở phía phải (cùng chỗ với chữ "Giá trị" của hàng
 /// số), nên chỉ cần trả "✓" cho hàng đang dùng.
 - (id)readPreferenceValue:(PSSpecifier *)specifier {
-	return [[specifier propertyForKey:@"sxActive"] boolValue] ? @"✓" : @"";
+	// Trả giá trị THẬT (không phải "✓"): cell của Preferences tra giá trị này
+	// trong `validValues`, trả chuỗi trang trí thì ô giá trị sẽ rỗng.
+	(void)specifier;
+	return [self sx_current];
 }
 
-- (void)sx_pick:(PSSpecifier *)specifier {
+/// Ghi lựa chọn và quay lại trang trước. Không có bước "lưu xong mà không thấy
+/// gì": ghi → đọc lại → phát notify → rung → log → pop, và trang gốc vẽ lại giá
+/// trị mới nhờ notify.
+- (void)sx_choose:(NSUInteger)index {
 	if (!self.prefsKey.length) {
 		[SXUI alertOn:self title:@"Chưa xác định được khoá cài đặt"
 			  message:@"Mở lại trang này từ màn hình chính SiriX. Nếu vẫn lỗi, vào Gỡ lỗi → Xem log để gửi lại."];
 		return;
 	}
-	NSInteger index = [self.specifiers indexOfObjectIdenticalTo:specifier];
-	NSInteger valueIndex = index - 1;   // trừ hàng nhóm ở đầu
-	if (valueIndex < 0 || (NSUInteger)valueIndex >= self.values.count) return;
-	id chosen = self.values[(NSUInteger)valueIndex];
-	NSString *stored = [chosen isKindOfClass:[NSString class]] ? chosen : [chosen description];
-	if ([self.prefsKey isEqualToString:@"openaiApi"]) {
-		stored = SXOpenAIApiStorageKey([chosen isKindOfClass:[NSNumber class]]
-			? (SXOpenAIApi)[chosen integerValue] : SXOpenAIApiAuto);
-	}
+	if (index >= self.values.count) return;
+	NSString *stored = [self sx_storedValueAtIndex:index];
 	[SXPrefs setString:stored forKey:self.prefsKey];
 	[[SXPrefs shared] reload];
 	notify_post("com.sirix.tweak/prefs.changed");
 	[SXUI tapFeedback];
-	SXLogInf(@"pref", @"chọn %@ = %@", self.prefsKey, stored);
-	[self.navigationController popViewControllerAnimated:YES];
+	SXLogInf(@"pref", @"chọn %@ = %@ (nhãn “%@”)", self.prefsKey, stored,
+			 index < self.titles.count ? self.titles[index] : @"?");
+	[self.table reloadData];
+	if (self.navigationController.viewControllers.count > 1) {
+		[self.navigationController popViewControllerAnimated:YES];
+	} else {
+		[self dismissViewControllerAnimated:YES completion:nil];
+	}
 }
 
 @end

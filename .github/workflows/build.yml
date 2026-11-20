@@ -29,6 +29,7 @@ jobs:
           failed=""
           python3 scripts/check-declared-methods.py || { echo "::error title=Selector thiếu thân hàm::Khai báo trong header nhưng chưa viết trong .m"; exit 1; }
           python3 scripts/check-specifier-types.py || { echo "::error title=Specifier sai kiểu::Plist khai báo boolean cho khoá phải là chuỗi"; exit 1; }
+          python3 scripts/check-choice-state.py || { echo "::error title=Thiếu trạng thái hàng chọn::readPreferenceValue trả nhãn thay vì giá trị thật, hoặc cell không vẽ dấu ✓"; exit 1; }
           for script in check-prefs test-prefs-fallback test-log-file test-intercept-macos test-sxllm-macos test-store-macos test-toolkit-macos test-headers-macos test-update-macos test-prefs-shared-macos; do
             echo "===== $script =====" | tee -a "$log"
             if ! "./scripts/${script}.sh" >> "$log" 2>&1; then

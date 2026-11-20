@@ -112,6 +112,7 @@ cd /tmp/sdks && git sparse-checkout set iPhoneOS15.6.sdk
 ./scripts/local-check.sh         # Logos → compile toàn bộ (aarch64-ios, -Werror) → validate plist
 ./scripts/check-prefs.sh         # lint tầng Settings (plist, selector, cân bằng ngoặc)
 ./scripts/test-prefs-fallback.sh # mọi trang Settings phải có lưới an toàn chống trang trắng
+python3 scripts/check-choice-state.py # hàng chọn giá trị phải hiện ✓ / giá trị đang dùng
 ./scripts/test-log-file.sh       # regression xóa/xoay vòng log (Linux/macOS)
 ```
 
@@ -119,6 +120,12 @@ Không trang cài đặt nào được để trắng: mỗi màn hình gọi
 `SXShowContentFallbackIfNeeded` trong `viewDidAppear:` để hiện lý do, nút sao chép
 log và nút quay lại khi dữ liệu không tải được (bảo vệ bằng
 `scripts/test-prefs-fallback.sh` trong CI).
+
+Mọi hàng "chọn một giá trị" được vẽ bằng `Prefs/SXChoiceRow` để trạng thái luôn
+nhìn thấy: hàng ở trang gốc hiện giá trị đang dùng ở mép phải, trang chọn hiện ✓
+ở mục đang dùng. `readPreferenceValue:` trả giá trị thật (`smart`, `gemini`…) vì
+cell của Preferences tra giá trị đó trong `validValues`; trả nhãn đã dịch sẽ làm
+ô giá trị rỗng và mất ✓ (`scripts/check-choice-state.py` canh lỗi này).
 
 Trên macOS, `./scripts/test-intercept-macos.sh` chạy regression của state machine với ACE/LLM giả và `./scripts/test-store-macos.sh` kiểm tra kho lịch sử/thống kê. CI chạy cả hai bộ test. Chúng không thay thế việc thử Siri trên thiết bị thật.
 

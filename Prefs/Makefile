@@ -28,6 +28,7 @@ SiriXPreferences_FILES = \
 	SXUISupport.m \
 	SXDiagnosticsController.m \
 	SXAPIChoiceController.m \
+	SXChoiceRow.m \
 	SXNavigationSupport.m \
 	UIViewController+SXBack.m \
 	../Sources/SXUpdate.m

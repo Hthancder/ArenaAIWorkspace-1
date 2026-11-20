@@ -31,6 +31,7 @@ echo "── [0/3] Selector khai báo phải có thân hàm"
 # (Objective-C chỉ cảnh báo), nên kiểm ở đây.
 python3 scripts/check-declared-methods.py || FAIL=1
 python3 scripts/check-specifier-types.py || FAIL=1
+python3 scripts/check-choice-state.py || FAIL=1
 
 echo "── [0/3] Lưới an toàn cho mọi trang Settings"
 # Trang con mở ra trống là lỗi người dùng thấy rõ nhất mà trình biên dịch không

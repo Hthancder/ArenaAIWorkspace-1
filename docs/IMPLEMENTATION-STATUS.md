@@ -530,3 +530,37 @@ thay vì vá riêng từng trang.
    và hai nút **Sao chép log** / **Quay lại**.
 4. `SXLogInf("pref", "load … thành công với bundle tường minh")` xuất hiện nghĩa là
    máy roothide trước đây nạp sai bundle — báo lại để mình bỏ hẳn đường cũ.
+
+## 1.2.2 — Trạng thái của tuỳ chọn luôn nhìn thấy được
+
+Triệu chứng: trang con đã có nội dung, nhưng chọn một tuỳ chọn xong không thấy
+dấu ✓, cũng không thấy giá trị đang dùng.
+
+**Nguyên nhân (không phải lỗi lưu).** Giá trị vẫn được ghi đúng; lỗi nằm ở chỗ
+vẽ. `PSLinkListCell` của Preferences hiện "đang chọn" bằng cách tra giá trị trả
+về của `readPreferenceValue:` trong `validValues` của chính hàng. Ta trả nhãn đã
+dịch (`Thông minh`, `Google Gemini`, `Bubble “chưa kịp”`) trong khi `validValues`
+là `smart`, `gemini`, `bubble` ⇒ không khớp nên ô bên phải rỗng và không có ✓.
+Với hàng `PSListItemCell` dựng tay, dấu "đang dùng" bị nhét vào chữ của ô value
+nên trông như một phần của tên mức, và trên một số bản iOS 15 hàng do plist tạo
+không được truyền setter nên chạm không có phản hồi.
+
+**Sửa:**
+- `readPreferenceValue:` trả **giá trị thật** (`smart`, `auto`, `openai`,
+  `bubble`…) — khớp `validValues` nên ô giá trị và ✓ của Preferences hoạt động
+  trở lại. Nhãn dễ đọc chuyển sang phần hiển thị riêng.
+- `Prefs/SXChoiceRow.{h,m}`: cell tự vẽ (kế thừa `PSTableCell`) — nhãn bên trái,
+  giá trị đang dùng ở mép phải (`SXChoiceCellModeValue`) hoặc dấu ✓
+  (`SXChoiceCellModeOption`). Gắn cho mọi hàng `PSLinkListCell` qua `cellClass`,
+  nên trạng thái không còn phụ thuộc hành vi của cell Apple.
+- `SXRootListController`: mỗi lần `viewWillAppear:`/notify đều cập nhật lại
+  "giá trị đang dùng" trên từng hàng ⇒ chọn ở trang con, quay lại là thấy ngay.
+- `SXChoiceController` (Nhiệt độ, Ngữ cảnh, Thời gian chờ, Trần chờ, Số vòng):
+  các mức gợi ý dùng cùng cell với ✓ trên mức đang dùng, kèm chú thích của mức.
+- `SXAPIChoiceController` (Chế độ trả lời, Cách kích hoạt, Nhà cung cấp, Khi hết
+  giờ chờ, Giao thức API): dựng bảng riêng bằng `SXChoiceRow`, có ✓ ở mục đang
+  chọn; chọn xong thì ghi → đọc lại → phát notify → rung → log → quay lại.
+- Test mới `scripts/check-choice-state.py` (chạy trong CI): bắt lỗi "getter trả
+  nhãn thay vì giá trị trong `validValues`", thiếu `cellClass`, thiếu đánh dấu
+  ở bảng chọn, và thiếu notify sau khi chọn. Chạy trên mã 1.2.1 cũ báo đúng 17
+  lỗi; trên mã mới pass.
