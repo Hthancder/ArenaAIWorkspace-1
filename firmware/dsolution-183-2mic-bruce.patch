@@ -154,10 +154,10 @@ index 0000000..e452ec7
 +#endif // DSOLUTION_NV3030B_PANEL_H
 diff --git a/boards/dsolution-183-2mic/README.md b/boards/dsolution-183-2mic/README.md
 new file mode 100644
-index 0000000..06a56d6
+index 0000000..de32602
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/README.md
-@@ -0,0 +1,165 @@
+@@ -0,0 +1,163 @@
 +# DSolution 1.83" 2-Mic
 +
 +Bruce port for the **DSolution 1.83 inch 2-Mic** board (ESP32-S3 + NV3030B panel +
@@ -280,10 +280,8 @@ index 0000000..06a56d6
 +
 +Note: `src/modules/others/mic.cpp` calls `gpio_reset_pin(GPIO_NUM_0)` when a capture
 +session ends (a leftover from boards whose mic power rail sits on GPIO0). Here GPIO0 is
-+the Sel button, so it is re-armed by the boot strap's pull-up and keeps working, but if
-+Sel ever stops responding after using the microphone, that call is the reason --
-+re-run `hal_buttons_init(buttonsCfg(), 3)` (or `pinMode(0, INPUT_PULLUP)`) from
-+`_late_setup_gpio()`.
++the Sel button, so `InputHandler()` re-arms the pin (`pinMode(0, INPUT_PULLUP)`) once a
++second -- otherwise Sel would go quiet after the first recording.
 +
 +## Power / battery
 +
@@ -463,10 +461,10 @@ index 0000000..bfc8d74
 +	https://github.com/lovyan03/LovyanGFX#develop
 diff --git a/boards/dsolution-183-2mic/interface.cpp b/boards/dsolution-183-2mic/interface.cpp
 new file mode 100644
-index 0000000..bf6ee18
+index 0000000..a14c8b4
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/interface.cpp
-@@ -0,0 +1,328 @@
+@@ -0,0 +1,340 @@
 +// =====================================================================================
 +//  boards/dsolution-183-2mic/interface.cpp
 +//
@@ -694,6 +692,9 @@ index 0000000..bf6ee18
 +**                the filesystem and brucePins.conf.
 +***************************************************************************************/
 +void _setup_gpio() {
++    Serial.begin(115200);
++    Serial.println("[board] DSolution 1.83 2-Mic: NV3030B + ES7210/ES8311");
++
 +    // ---- I2C: codec control bus (100 kHz, the vendor's recommended speed) ----
 +    bruceConfigPins.sys_i2c = {(gpio_num_t)PIN_I2C_SDA, (gpio_num_t)PIN_I2C_SCL};
 +    setSysI2CBus(&Wire);
@@ -734,8 +735,6 @@ index 0000000..bf6ee18
 +    bruceConfigPins.irRx = GPIO_NUM_NC;
 +    bruceConfigPins.rfTx = GPIO_NUM_NC;
 +    bruceConfigPins.rfRx = GPIO_NUM_NC;
-+
-+    Serial.begin(115200);
 +}
 +
 +/***************************************************************************************
@@ -766,7 +765,18 @@ index 0000000..bf6ee18
 +** Runs in taskInputHandler every ~10 ms. The task clears the input globals and holds
 +** the input lock around this call, so it only has to poll the button HAL.
 +**********************************************************************/
-+void InputHandler(void) { hal_buttons_poll_3(buttonsCfg()); }
++void InputHandler(void) {
++    // deinitMicroPhone() in src/modules/others/mic.cpp calls gpio_reset_pin(GPIO_NUM_0) when
++    // a capture session ends (a leftover from boards whose mic power rail sits there). On
++    // this board GPIO0 is the Sel button, so re-arm it instead of losing the button after
++    // the first recording. pinMode() on an input is cheap and idempotent.
++    static uint32_t lastArm = 0;
++    if (millis() - lastArm > 1000) {
++        lastArm = millis();
++        pinMode(PIN_BTN_SEL, INPUT_PULLUP);
++    }
++    hal_buttons_poll_3(buttonsCfg());
++}
 +
 +// =====================================================================================
 +//  Power
