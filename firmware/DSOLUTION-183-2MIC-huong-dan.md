@@ -159,6 +159,35 @@ Công cụ: **espressif.github.io/esptool-js** (chính chủ Espressif, có ô A
 Erase + Flash size), **esptool.spacehuhn.com** (giao diện đơn giản, có ô địa chỉ), hoặc bất
 kỳ flasher nào ghi ở 0x0.
 
+### Không có log thì xem bằng gì?
+
+Kèm trong repo có một trang tự viết: **`firmware/web-flasher/index.html`** — mở bằng
+Chrome/Edge trên máy tính, nó làm cả hai việc:
+
+* **Nạp**: chọn file `.bin` → bấm “Nạp vào 0x0” (địa chỉ cố định, không cần nhập tay),
+  có nút **Xoá toàn bộ chip** và thanh tiến trình. Dùng `esptool-js` 0.7.1.
+* **Xem log**: bấm “Kết nối &amp; xem log” (115200) → hiện thẳng log ra trang, có nút
+  **Reset board**, **Lưu log** (tải về .txt) và **Xoá màn hình**.
+
+Trang này cần **https hoặc localhost** (yêu cầu của WebSerial) và cần mở ở **tab riêng**,
+không nhúng trong iframe — Chrome chặn cổng serial trong iframe khác origin. Nếu chạy trên
+máy có Python: `python3 -m http.server 8000` trong thư mục `firmware/web-flasher` rồi mở
+`http://localhost:8000`.
+
+### Trước khi cần đến log: 3 dấu hiệu nhìn bằng mắt
+
+Máy đang đen nên hãy xác định **chip có chạy hay không** trước đã — cái này không cần
+công cụ gì:
+
+| Dấu hiệu | Nếu CÓ | Nếu KHÔNG |
+| --- | --- | --- |
+| Cắm USB, PC có thấy thiết bị/cổng COM mới (Device Manager, `ls /dev/ttyACM*`) | chip sống, USB ổn | cáp chỉ sạc, hoặc chip không khởi động |
+| Đèn **WS2812 GPIO48** (LED nhỏ) sáng/đổi màu sau khi cấp nguồn | firmware đã chạy tới phần LED → lỗi ở màn hình | app chưa chạy tới `setup()` (boot/PSRAM) hoặc chết sớm |
+| **Đèn nền màn hình** (GPIO13) sáng, dù hình trắng/đen | backlight OK → còn lại là bus SPI/init | backlight chưa bật → app chưa chạy tới `_post_setup_gpio()` |
+
+Đọc bảng này theo hàng: LED sáng mà màn đen = lỗi hiển thị; LED không sáng = lỗi boot
+(PSRAM/flash/partition), lúc đó log mới là thứ cần.
+
 ### Nếu vẫn đen
 
 1. `erase_flash` rồi nạp lại file factory ở 0x0.

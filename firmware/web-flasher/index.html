@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DSolution 1.83" 2-Mic — nạp firmware &amp; xem log</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 16px 64px;
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: #0e1116; color: #e6edf3;
+  }
+  main { max-width: 880px; margin: 0 auto; }
+  h1 { font-size: 21px; margin: 0 0 4px; }
+  p.sub { margin: 0 0 24px; color: #8b98a5; font-size: 14px; }
+  section {
+    background: #161b22; border: 1px solid #263041; border-radius: 12px;
+    padding: 18px; margin-bottom: 16px;
+  }
+  h2 { font-size: 16px; margin: 0 0 12px; }
+  h2 .n {
+    display: inline-block; width: 22px; height: 22px; line-height: 22px; text-align: center;
+    border-radius: 50%; background: #2f81f7; color: #fff; font-size: 13px; margin-right: 8px;
+  }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  button {
+    font: inherit; font-weight: 600; padding: 10px 16px; border-radius: 8px;
+    border: 1px solid #2f81f7; background: #1f6feb; color: #fff; cursor: pointer;
+  }
+  button.secondary { background: #21262d; border-color: #3d444d; color: #e6edf3; }
+  button.danger { background: #3d1d1d; border-color: #8b3a3a; color: #ffb3b3; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  input[type=file] { font: inherit; color: #8b98a5; max-width: 100%; }
+  label.check { display: flex; gap: 8px; align-items: center; font-size: 14px; color: #8b98a5; }
+  .status { margin-top: 12px; font-size: 14px; color: #8b98a5; min-height: 20px; }
+  .status.ok { color: #3fb950; }
+  .status.err { color: #f85149; }
+  progress { width: 100%; height: 10px; margin-top: 12px; accent-color: #2f81f7; }
+  pre#term {
+    margin: 12px 0 0; padding: 12px; height: 320px; overflow: auto;
+    background: #05070a; border: 1px solid #263041; border-radius: 8px;
+    font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    white-space: pre-wrap; word-break: break-word; color: #c9d1d9;
+  }
+  pre#term:empty::before { content: "(chưa có dữ liệu)"; color: #4d5866; }
+  code { background: #21262d; padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+  .hint { font-size: 13px; color: #7d8896; margin: 10px 0 0; }
+  .hint b { color: #c9d1d9; font-weight: 600; }
+  .warn { border-left: 3px solid #d29922; padding-left: 12px; margin-top: 14px; }
+  .warn p { margin: 0; font-size: 13px; color: #b8a165; }
+</style>
+</head>
+<body>
+<main>
+  <h1>DSolution 1.83" 2-Mic — nạp firmware &amp; xem log</h1>
+  <p class="sub">
+    ESP32-S3 · OSTB-2ST-WIFI · Bruce. Chạy bằng Chrome / Edge trên máy tính (WebSerial).
+  </p>
+
+  <section>
+    <h2><span class="n">1</span>Nạp firmware</h2>
+    <div class="row">
+      <input type="file" id="file" accept=".bin,application/octet-stream" />
+    </div>
+    <div class="row" style="margin-top:14px">
+      <button id="flash" disabled>Nạp vào 0x0</button>
+      <button id="erase" class="danger">Xoá toàn bộ chip</button>
+      <label class="check"><input type="checkbox" id="safe" /> chế độ chậm (dio / 40 MHz)</label>
+    </div>
+    <progress id="prog" value="0" max="100" hidden></progress>
+    <div class="status" id="flashStatus"></div>
+    <p class="hint">
+      Chọn file <b>DSolution-183-2mic-factory.bin</b> (~4,7 MB) đã giải nén từ artifact —
+      <b>không</b> phải <code>firmware.bin</code>. File này ghi ở địa chỉ <b>0x0</b>.
+      Nếu bấm Connect mà không thấy cổng: giữ nút <b>BOOT</b> rồi cắm lại cáp USB.
+    </p>
+    <div class="warn">
+      <p>Đang nghi máy chưa lên được. Nạp lại luôn nên bấm <b>Xoá toàn bộ chip</b> trước,
+         rồi nạp — mất khoảng 1–2 phút, đừng rút cáp giữa chừng.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">2</span>Xem log (serial 115200)</h2>
+    <div class="row">
+      <button id="monConnect">Kết nối &amp; xem log</button>
+      <button id="monReset" class="secondary" disabled>Reset board</button>
+      <button id="monSave" class="secondary" disabled>Lưu log</button>
+      <button id="monClear" class="secondary" disabled>Xoá màn hình</button>
+      <button id="monStop" class="secondary" disabled>Ngắt</button>
+    </div>
+    <div class="status" id="monStatus"></div>
+    <pre id="term"></pre>
+    <p class="hint">
+      Cắm USB <b>không</b> giữ BOOT rồi bấm “Kết nối &amp; xem log”, sau đó bấm
+      <b>Reset board</b> để thấy log từ đầu. Không thấy gì sau khi reset =
+      chip không chạy hoặc cáp chỉ sạc.
+    </p>
+  </section>
+</main>
+
+<script type="module">
+const ESPTOOL_CDN = "https://unpkg.com/esptool-js@0.7.1/bundle.js";
+
+const $ = (id) => document.getElementById(id);
+const flashStatus = $("flashStatus");
+const monStatus = $("monStatus");
+const prog = $("prog");
+const term = $("term");
+
+function setStatus(el, text, kind = "") {
+  el.textContent = text;
+  el.className = "status" + (kind ? " " + kind : "");
+}
+
+/* ---------------------------------------------------------------- flashing */
+
+let esptool = null;
+async function loadEsptool() {
+  if (esptool) return esptool;
+  setStatus(flashStatus, "Đang tải esptool-js…");
+  esptool = await import(ESPTOOL_CDN);
+  return esptool;
+}
+
+let firmwareBytes = null;
+$("file").addEventListener("change", async (e) => {
+  const f = e.target.files[0];
+  firmwareBytes = null;
+  $("flash").disabled = true;
+  if (!f) return;
+  const buf = new Uint8Array(await f.arrayBuffer());
+  if (buf.length < 1024) {
+    setStatus(flashStatus, "File quá nhỏ, không phải firmware.", "err");
+    return;
+  }
+  // 0xE9 is the ESP image magic: a merged image starts with the bootloader.
+  if (buf[0] !== 0xe9) {
+    setStatus(flashStatus,
+      "Cảnh báo: byte đầu là 0x" + buf[0].toString(16).padStart(2, "0") +
+      ", không phải 0xE9 — file này không giống ảnh bootloader. Nạp vẫn được nhưng hãy chắc chắn bạn dùng firmware-factory.bin.",
+      "err");
+  } else {
+    setStatus(flashStatus, `Đã chọn ${f.name} — ${buf.length.toLocaleString("vi-VN")} byte.`);
+  }
+  firmwareBytes = { name: f.name, data: buf };
+  $("flash").disabled = false;
+});
+
+function terminal() {
+  return {
+    clean() {},
+    writeLine(data) { setStatus(flashStatus, data); },
+    write(data) { setStatus(flashStatus, data); },
+  };
+}
+
+async function connectLoader() {
+  const { ESPLoader, Transport } = await loadEsptool();
+  const port = await navigator.serial.requestPort();
+  const transport = new Transport(port, true);
+  const loader = new ESPLoader({
+    transport,
+    baudrate: 921600,
+    terminal: terminal(),
+    romBaudrate: 115200,
+  });
+  setStatus(flashStatus, "Đang kết nối chip…");
+  const chip = await loader.main();
+  setStatus(flashStatus, `Đã kết nối: ${chip}`);
+  return { loader, transport };
+}
+
+async function closeLoader(loader, transport) {
+  try { await loader.after("hard_reset"); } catch (_) {}
+  try { await transport.disconnect(); } catch (_) {}
+}
+
+$("flash").addEventListener("click", async () => {
+  if (!firmwareBytes) return;
+  const btn = $("flash"), eraseBtn = $("erase");
+  btn.disabled = eraseBtn.disabled = true;
+  prog.hidden = false; prog.value = 0;
+  let loader, transport;
+  try {
+    ({ loader, transport } = await connectLoader());
+    const safe = $("safe").checked;
+    setStatus(flashStatus, "Đang nạp… đừng rút cáp.");
+    await loader.writeFlash({
+      fileArray: [{ data: firmwareBytes.data, address: 0x0 }],
+      flashMode: safe ? "dio" : "qio",
+      flashFreq: safe ? "40m" : "80m",
+      flashSize: "16MB",
+      eraseAll: false,
+      compress: true,
+      reportProgress: (_i, written, total) => {
+        const pct = total ? (written / total) * 100 : 0;
+        prog.value = pct;
+        setStatus(flashStatus, `Đang nạp ${pct.toFixed(1)}% (${written.toLocaleString("vi-VN")} / ${total.toLocaleString("vi-VN")} byte)`);
+      },
+    });
+    prog.value = 100;
+    setStatus(flashStatus, "Nạp xong. Board đang reset — chuyển sang mục 2 để xem log.", "ok");
+  } catch (err) {
+    setStatus(flashStatus, "Lỗi: " + (err?.message || err), "err");
+  } finally {
+    if (loader) await closeLoader(loader, transport);
+    btn.disabled = eraseBtn.disabled = false;
+  }
+});
+
+$("erase").addEventListener("click", async () => {
+  if (!confirm("Xoá toàn bộ flash 16 MB? Firmware hiện tại trên máy sẽ mất.")) return;
+  const btn = $("flash"), eraseBtn = $("erase");
+  btn.disabled = eraseBtn.disabled = true;
+  let loader, transport;
+  try {
+    ({ loader, transport } = await connectLoader());
+    setStatus(flashStatus, "Đang xoá chip…");
+    await loader.eraseFlash();
+    setStatus(flashStatus, "Đã xoá xong. Giờ chọn file và bấm “Nạp vào 0x0”.", "ok");
+  } catch (err) {
+    setStatus(flashStatus, "Lỗi: " + (err?.message || err), "err");
+  } finally {
+    if (loader) await closeLoader(loader, transport);
+    btn.disabled = eraseBtn.disabled = false;
+  }
+});
+
+/* ------------------------------------------------------------ serial monitor */
+
+let monPort = null, monReader = null, monStopped = false, monText = "";
+
+function setMonButtons(connected) {
+  $("monConnect").disabled = connected;
+  $("monReset").disabled = !connected;
+  $("monStop").disabled = !connected;
+  $("monSave").disabled = false;
+  $("monClear").disabled = false;
+}
+
+function append(chunk) {
+  monText += chunk;
+  if (monText.length > 400000) monText = monText.slice(-300000);
+  const atBottom = term.scrollTop + term.clientHeight >= term.scrollHeight - 24;
+  term.textContent = monText;
+  if (atBottom) term.scrollTop = term.scrollHeight;
+}
+
+$("monConnect").addEventListener("click", async () => {
+  try {
+    if (!("serial" in navigator)) {
+      setStatus(monStatus, "Trình duyệt không hỗ trợ WebSerial — dùng Chrome/Edge trên máy tính.", "err");
+      return;
+    }
+    monPort = await navigator.serial.requestPort();
+    await monPort.open({ baudRate: 115200, bufferSize: 8192 });
+    monStopped = false;
+    monReader = monPort.readable.getReader();
+    setStatus(monStatus, "Đang xem log. Bấm “Reset board” để log từ đầu.", "ok");
+    setMonButtons(true);
+    const decoder = new TextDecoder();
+    while (!monStopped) {
+      const { value, done } = await monReader.read();
+      if (done) break;
+      if (value) append(decoder.decode(value, { stream: true }));
+    }
+  } catch (err) {
+    setStatus(monStatus, "Lỗi: " + (err?.message || err), "err");
+  } finally {
+    setMonButtons(false);
+  }
+});
+
+$("monReset").addEventListener("click", async () => {
+  if (!monPort) return;
+  try {
+    // Standard ESP auto-reset: hold EN low via RTS, release, then let IO0 float.
+    await monPort.setSignals({ dataTerminalReady: false, requestToSend: true });
+    await new Promise((r) => setTimeout(r, 120));
+    await monPort.setSignals({ dataTerminalReady: false, requestToSend: false });
+    append("\n--- reset ---\n");
+  } catch (err) {
+    setStatus(monStatus, "Không reset được: " + (err?.message || err) + " (rút cắm cáp thay thế)", "err");
+  }
+});
+
+$("monClear").addEventListener("click", () => { monText = ""; term.textContent = ""; });
+
+$("monSave").addEventListener("click", () => {
+  const blob = new Blob([monText || "(trống)"], { type: "text/plain" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "dsolution-183-2mic-log.txt";
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+$("monStop").addEventListener("click", async () => {
+  monStopped = true;
+  try { await monReader?.cancel(); } catch (_) {}
+  try { monPort?.close(); } catch (_) {}
+  monPort = null; monReader = null;
+  setMonButtons(false);
+  setStatus(monStatus, "Đã ngắt.");
+});
+
+if (!("serial" in navigator)) {
+  setStatus(flashStatus, "Trình duyệt này không có WebSerial. Mở bằng Chrome hoặc Edge trên máy tính.", "err");
+  setStatus(monStatus, "Trình duyệt này không có WebSerial.", "err");
+  $("flash").disabled = $("erase").disabled = $("monConnect").disabled = true;
+}
+</script>
+</body>
+</html>
