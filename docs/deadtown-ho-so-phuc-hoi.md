@@ -230,6 +230,12 @@ trước khi phát hành. Game Unity `com.Ccentury.DeadTownSurvival` là remake 
   và instance slot 2/3/4, không đoán tên slot. `YYCompareVal` nhận epsilon
   runtime; thứ tự duyệt map, loại key, điều kiện bất thường, giá trị trả về
   thường và hành vi chạy Android/iOS chưa được chứng minh.
+- Forced VM [44718892668](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44718892668)
+  cho candidate nguồn cũ: thêm key 0/1/2 với 2/4/6, tăng key 2 thêm 3 và
+  key 1 thêm 5, rồi thêm key 3 với 8; map tạm có bốn key với giá trị
+  2/9/9/8. Đã xóa map tạm và hoàn nguyên handle; đây chỉ là case số nguyên
+  trong gmrunner, không chứng minh thứ tự duyệt hoặc tương đương APK/iOS.
+  Static CI [44718892746](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44718892746) đạt.
 - Forced VM [44715781079](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44715781079)
   thử riêng candidate nguồn cũ: năm counter 100/200/300/400/500 lần lượt
   thành 102/203/304/405/506 sau khi lấy index 44–48 với số lượng 2–6; năm
@@ -328,8 +334,8 @@ Các công cụ chính: `deadtown_native_inventory.py`, `deadtown_native_callgra
 và các `check_deadtown_*`/`.csx` tương ứng. Đọc help/docstring trước khi dùng;
 các probe candidate chỉ dành cho dữ liệu tạm, không được đưa vào IPA.
 
-Kết quả gần nhất: **103 unittest local đạt**; run VM `44715781079` đạt,
-static RE `44715781099` đạt. CI/địa chỉ trong báo cáo là dấu vết có thể đối
+Kết quả gần nhất: **103 unittest local đạt**; run VM `44718892668` đạt,
+static RE `44718892746` đạt. CI/địa chỉ trong báo cáo là dấu vết có thể đối
 chiếu, không thay thế dữ liệu/bằng chứng cần tái tạo.
 
 ## 12. Các việc chưa xong và gate

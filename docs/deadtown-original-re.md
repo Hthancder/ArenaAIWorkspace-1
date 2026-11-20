@@ -436,6 +436,17 @@ invalid maps/keys, unusual numeric values, return values on the ordinary
 path or runtime reachability. In particular, do not assume a different key
 iteration order or equality policy on Android or iOS.
 
+In forced disposable VM run
+[44718892668](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44718892668),
+the old-source candidate inserted keys 0, 1 and 2 with values 2, 4 and 6,
+then added 3 to key 2 and 5 to key 1, and inserted key 3 with 8. The checker
+observed a map of size 4 with values `2, 9, 9, 8` for keys 0–3. It then
+cleared the temporary map and restored the original handles at probe end. This
+covers those integer cases only on gmrunner; it does not validate native
+iteration order or make the candidate a release patch. Static CI run
+[44718892746](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44718892746)
+passed separately.
+
 #### Corroborating inventory selection against native save keys
 
 `tools/deadtown_inventory_save_evidence.py` independently traces native normal
