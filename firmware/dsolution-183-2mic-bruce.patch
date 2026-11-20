@@ -8393,7 +8393,7 @@ index 1e7c94e..8c58e95 100644
  
      // UI Color
 diff --git a/src/core/utils.cpp b/src/core/utils.cpp
-index aacdf98..495b3f9 100644
+index aacdf98..1a61973 100644
 --- a/src/core/utils.cpp
 +++ b/src/core/utils.cpp
 @@ -3,6 +3,11 @@
@@ -8415,7 +8415,7 @@ index aacdf98..495b3f9 100644
 +
 +int getBatteryMv() {
 +    DeviceGaugeInfo info{};
-+    if (hal_gauge_get_info(info) && info.voltageMv > 0) return info.voltageMv;
++    if (hal_gauge_get_info(info) && info.volt_mv > 0) return info.volt_mv;
 +    return 0;
 +}
 +
