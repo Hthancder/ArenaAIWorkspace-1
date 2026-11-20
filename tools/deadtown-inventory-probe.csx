@@ -34,6 +34,8 @@ foreach (var evt in doc.RootElement.EnumerateArray())
 // Fresh disposable map, restore handles afterward. Not original game execution.
 var dt_old_use = global.inven_use;
 var dt_old_weapon = global.inven_weapon;
+var dt_old_equip = global.inven_equip;
+var dt_old_etc = global.inven_etc;
 var dt_old_equipped = global.equip_weapon;
 var dt_had_weapon_instance = instance_exists(sys_player_weapon);
 var dt_old_pointer = -1;
@@ -43,6 +45,8 @@ var dt_old_lang = global.language_type;
 var dt_old_messages = global.ui_message_number;
 global.inven_use = ds_map_create();
 global.inven_weapon = ds_map_create();
+global.inven_equip = ds_map_create();
+global.inven_etc = ds_map_create();
 global.equip_weapon = -1;
 global.inven_null = ds_map_create();
 global.language_type = 0;
@@ -67,6 +71,15 @@ var dt_eps_small_return = item_drop(3,11);
 var dt_eps_small_exists = ds_map_exists(global.inven_use,11);
 math_set_epsilon(dt_old_epsilon);
 show_debug_message(""DT_INV|epsilon|"" + string(round(dt_old_epsilon * 1000000)) + ""|"" + string(dt_eps_default_return) + ""|"" + string(dt_eps_default_exists) + ""|"" + string(dt_eps_small_return) + ""|"" + string(dt_eps_small_exists));
+// Distinct keys show each of the four selector cases updates only its own map.
+ds_map_add(global.inven_weapon,88,2); ds_map_add(global.inven_equip,88,2);
+ds_map_add(global.inven_use,88,2); ds_map_add(global.inven_etc,88,2);
+var dt_case1 = item_drop(1,88);
+show_debug_message(""DT_INV|case1|"" + string(dt_case1) + ""|"" + string(ds_map_find_value(global.inven_weapon,88)) + ""|"" + string(ds_map_find_value(global.inven_equip,88)) + ""|"" + string(ds_map_find_value(global.inven_use,88)) + ""|"" + string(ds_map_find_value(global.inven_etc,88)));
+var dt_case2 = item_drop(2,88);
+var dt_case3 = item_drop(3,88);
+var dt_case4 = item_drop(4,88);
+show_debug_message(""DT_INV|cases234|"" + string(dt_case2) + ""|"" + string(dt_case3) + ""|"" + string(dt_case4) + ""|"" + string(ds_map_find_value(global.inven_weapon,88)) + ""|"" + string(ds_map_find_value(global.inven_equip,88)) + ""|"" + string(ds_map_find_value(global.inven_use,88)) + ""|"" + string(ds_map_find_value(global.inven_etc,88)));
 // Force two weapon equips, including returning the previously equipped item.
 ds_map_add(global.inven_weapon,0,1); ds_map_add(global.inven_weapon,1,2);
 item_equip(1,0);
@@ -94,8 +107,8 @@ global.craft_db[dt_recipe,7] = 0; global.craft_db[dt_recipe,8] = 0; global.craft
 global.craft_db[dt_recipe,12] = 1;
 var dt_optional = item_make(dt_recipe);
 show_debug_message(""DT_INV|optional|"" + string(dt_optional) + ""|"" + string(ds_map_exists(global.inven_use,1)) + ""|"" + string(ds_map_find_value(global.inven_use,3)));
-ds_map_destroy(global.inven_use); ds_map_destroy(global.inven_weapon); ds_map_destroy(global.inven_null);
-global.inven_use = dt_old_use; global.inven_weapon = dt_old_weapon; global.inven_null = dt_old_null;
+ds_map_destroy(global.inven_use); ds_map_destroy(global.inven_weapon); ds_map_destroy(global.inven_equip); ds_map_destroy(global.inven_etc); ds_map_destroy(global.inven_null);
+global.inven_use = dt_old_use; global.inven_weapon = dt_old_weapon; global.inven_equip = dt_old_equip; global.inven_etc = dt_old_etc; global.inven_null = dt_old_null;
 global.equip_weapon = dt_old_equipped;
 if dt_had_weapon_instance sys_player_weapon.pointer = dt_old_pointer;
 else if instance_exists(sys_player_weapon) with (sys_player_weapon) instance_destroy();
