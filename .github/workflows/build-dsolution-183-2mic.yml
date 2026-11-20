@@ -23,6 +23,9 @@ jobs:
     timeout-minutes: 25
     container:
       image: espressif/idf:v5.4
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Allow git workspace in container
         run: git config --global --add safe.directory '*'
