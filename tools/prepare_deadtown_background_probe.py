@@ -24,16 +24,31 @@ BEGIN_PROBE = '''void Graphics::drawRoomPass() {
     static bool dt_measured = false;
     static bool dt_pending_next = false;
     static std::vector<uint8_t> dt_previous;
+    static int dt_wait = -1;
+    if (dt_wait < 0) {
+        const char* delay = getenv("GMR_BG_WAIT");
+        dt_wait = delay ? std::max(0, std::min(120, atoi(delay))) : 0;
+    }
     const char* dt_mode = getenv("GMR_BACKGROUND_PROBE");
     bool dt_active = dt_mode && !dt_measured && enabled_ && rt_.bgShowColor && !customMats_
         && appSurface_ >= 0 && curTarget_ == surfaces_[appSurface_]
         && vpX_ == 0 && vpY_ == 0 && vpW_ == curTargetW_ && vpH_ == curTargetH_
         && curTargetW_ == 1232 && curTargetH_ == 693 && std::fabs(projAngle_) > 1.0;
+    if (dt_active && dt_wait > 0) { dt_wait--; dt_active = false; }
     bool dt_repair_next = dt_pending_next && dt_mode && dt_mode[0] == 'r' && enabled_ && rt_.bgShowColor
         && !customMats_ && appSurface_ >= 0 && curTarget_ == surfaces_[appSurface_]
         && vpX_ == 0 && vpY_ == 0 && vpW_ == curTargetW_ && vpH_ == curTargetH_
         && curTargetW_ == 1232 && curTargetH_ == 693;
     TargetState dt_saved = currentState();
+    auto dt_log_player = [&](const char* stage) {
+        for (auto* inst : rt_.instances) {
+            if (Runner::live(inst) && inst->object >= 0 && static_cast<size_t>(inst->object) < rt_.dw.objects.size()
+                && rt_.dw.objects[inst->object].name == "obj_player") {
+                std::fprintf(stderr, "DT_BG_PLAYER|%s|%s|%.6f|%.6f\\n", dt_mode, stage, inst->x, inst->y);
+                break;
+            }
+        }
+    };
     std::vector<uint8_t> dt_mask;
     if (dt_active) {
         if (dt_mode[0] == 'z') { auto state = dt_saved; state.pa = 0; restoreState(state); }
@@ -81,6 +96,7 @@ FINISH_PROBE = '''    drawRoomBackgrounds(true);
             }
             std::fprintf(stderr, "DT_BG_FINAL|%s|%zu|%zu\\n", dt_mode, dt_initial, dt_surviving);
             dt_pending_next = true;
+            dt_log_player("first");
         }
         restoreState(dt_after_game);
     } else if (dt_pending_next && dt_mode && appSurface_ >= 0 && dt_saved.target == surfaces_[appSurface_]
@@ -100,6 +116,7 @@ FINISH_PROBE = '''    drawRoomBackgrounds(true);
             }
             std::fprintf(stderr, "DT_BG_NEXT|%s|%zu|%zu\\n", dt_mode, dt_before, dt_still);
             dt_pending_next = false;
+            dt_log_player("next");
         }
         restoreState(dt_after_game);
     }
