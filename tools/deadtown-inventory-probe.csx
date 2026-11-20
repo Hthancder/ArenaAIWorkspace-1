@@ -56,6 +56,17 @@ show_debug_message(""DT_INV|drop|"" + string(dt_absent) + ""|"" + string(dt_drop
 ds_map_replace(global.inven_use,0,1);
 var dt_last = item_drop(3,0);
 show_debug_message(""DT_INV|last|"" + string(dt_last) + ""|"" + string(ds_map_exists(global.inven_use,0)));
+// Fractional stacks intentionally probe comparison tolerance, not normal gameplay.
+var dt_old_epsilon = math_get_epsilon();
+ds_map_add(global.inven_use,10,1.000001);
+var dt_eps_default_return = item_drop(3,10);
+var dt_eps_default_exists = ds_map_exists(global.inven_use,10);
+math_set_epsilon(0.0000000001);
+ds_map_add(global.inven_use,11,1.000001);
+var dt_eps_small_return = item_drop(3,11);
+var dt_eps_small_exists = ds_map_exists(global.inven_use,11);
+math_set_epsilon(dt_old_epsilon);
+show_debug_message(""DT_INV|epsilon|"" + string(round(dt_old_epsilon * 1000000)) + ""|"" + string(dt_eps_default_return) + ""|"" + string(dt_eps_default_exists) + ""|"" + string(dt_eps_small_return) + ""|"" + string(dt_eps_small_exists));
 // Force two weapon equips, including returning the previously equipped item.
 ds_map_add(global.inven_weapon,0,1); ds_map_add(global.inven_weapon,1,2);
 item_equip(1,0);
