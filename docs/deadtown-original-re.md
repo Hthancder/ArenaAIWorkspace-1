@@ -342,8 +342,13 @@ original ARM `item_equip` (`0x1a0d8c`, 6,668 bytes) and the native-only
 `item_check_pet` (`0x1ba9c4`, 732 bytes). Unlike old `item_equip.gml`, native
 computes a quotient and remainder from argument 1 and mutable global index 18:
 `floor(argument1 / global[18])` goes to instance slot 5 and `fmod(argument1,
-global[18])` goes to slot 6. This does **not** establish the registered name,
-initial/runtime value or meaning of global 18. Native type selector 1/2 selects
+global[18])` goes to slot 6. An independent getter in
+`sys_global_Create_0` (`0x3b75a4–0x3b75c4`) captures global 18, and code at
+`0x3f4dc4–0x3f4ddc` writes the double `100000.0` to that pointer. This is a
+static assignment, not proof of reachability, ordering relative to equip,
+absence of intervening writes, the value at runtime or its registered name.
+If that value holds at equip time, a nonnegative integer key `100001` splits
+into quotient 1 and remainder 1. Native type selector 1/2 selects
 global map 0/1 into instance slot 7; invalid/fractional selectors and aliasing
 are not established.
 
@@ -370,6 +375,16 @@ vectors, guard targets and helper comparisons; it is not a complete CFG,
 `item_equip` reconstruction, DS-map implementation or iOS patch. Behavior with
 invalid IDs/maps, mutable epsilon or divisor, exceptions, other pet/equipment
 updates and original save compatibility remain open.
+
+The checked weapon branch also uses global indices 5 and 6: for selector
+approximately 1 and finite global 5 at least `-epsilon`, it calculates
+`global[5] + global[6] * global[18]` and calls `item_get(1, calculated, 1)`
+at `0x1a1754`, before copying the new remainder into global 5 and quotient
+into global 6. The literal `1` is verified from the ARM relocation and RValue
+bytes, not inferred from the old source. With global 18 still `100000`, this
+reconstructs a key such as `1 + 1 * 100000 = 100001`. Neither name nor runtime
+values of globals 5/6 are proven by this path; other equipment branches and
+actual map acceptance require separate investigation.
 
 A forced disposable old-source candidate VM run
 [44727391503](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44727391503)

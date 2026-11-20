@@ -34,7 +34,8 @@ def inspect(apk):
     segments = list(elf.iter_segments())
     syms = elf.get_section_by_name('.dynsym')
     for name, address, size in (('_Z21gml_Script_item_equipP', 0x1a0d8c, 6668),
-                                ('_Z25gml_Script_item_check_petP', 0x1ba9c4, 732)):
+                                ('_Z25gml_Script_item_check_petP', 0x1ba9c4, 732),
+                                ('_Z30gml_Object_sys_global_Create_0P', 0x3b7330, 517488)):
         matches = [s for s in syms.iter_symbols() if s.name.startswith(name)]
         if len(matches) != 1 or (matches[0]['st_value'], matches[0]['st_size']) != (address, size):
             raise ValueError('unexpected native script export: ' + name)
@@ -91,8 +92,13 @@ def inspect(apk):
     # global 19 supplies the array used for the field-4 check. Registration
     # names and runtime values are intentionally not guessed from g_Vars.
     for base, add in ((0x1a0d9c,0x1a0dac), (0x1a0e0c,0x1a0e10),
-                      (0x1a0e30,0x1a0e34), (0x1a0e54,0x1a0e58)):
+                      (0x1a0e30,0x1a0e34), (0x1a0e54,0x1a0e58),
+                      (0x1a0e78,0x1a0e7c), (0x1a0e9c,0x1a0ea0)):
         reloc(base, add, 0x1a0da4, 'g_pGlobal')
+    reloc(0x3b75a4,0x3b75a8,0x3b7350,'g_pGlobal')
+    one = reloc(0x1a1720,0x1a1728,0x1a1724,'gs_constArg0_4')
+    if one['st_size'] != 16 or read(one['st_value'],16) != struct.pack('<dII', 1.0, 0, 0):
+        raise ValueError('unexpected item_get literal argument')
     for base, add, offset, name in (
         (0x1a1044,0x1a104c,0x1a1048,'g_FUNC_floor'),
         (0x1a1268,0x1a1270,0x1a1260,'g_GMLMathEpsilon'),
@@ -103,6 +109,8 @@ def inspect(apk):
         (0x1a1518,0x1a1528,0x1a1444,'g_FUNC_ds_map_find_value'),
         (0x1a156c,0x1a1574,0x1a1260,'g_GMLMathEpsilon'),
         (0x1a15d8,0x1a15e0,0x1a15dc,'g_FUNC_ds_map_delete'),
+        (0x1a1678,0x1a1680,0x1a1260,'g_GMLMathEpsilon'),
+        (0x1a16b8,0x1a16bc,0x1a1260,'g_GMLMathEpsilon'),
         (0x1bab18,0x1bab1c,0x1bab10,'g_GMLMathEpsilon'),
         (0x1bab48,0x1bab4c,0x1bab10,'g_GMLMathEpsilon'),
     ):
@@ -123,6 +131,12 @@ def inspect(apk):
         (0x1a0e58,'add','r0, pc, r0'),(0x1a0e5c,'ldr','r0, [r4, r0]'),(0x1a0e60,'ldr','r0, [r0]'),
         (0x1a0e64,'ldr','r1, [r0]'),(0x1a0e68,'ldr','r2, [r1, #8]'),(0x1a0e6c,'mov','r1, #0x13'),
         (0x1a0e70,'blx','r2'),(0x1a0e74,'str','r0, [sp, #0x28]'),
+        (0x1a0e7c,'add','r0, pc, r0'),(0x1a0e80,'ldr','r0, [r4, r0]'),(0x1a0e84,'ldr','r0, [r0]'),
+        (0x1a0e88,'ldr','r1, [r0]'),(0x1a0e8c,'ldr','r2, [r1, #8]'),(0x1a0e90,'mov','r1, #5'),
+        (0x1a0e94,'blx','r2'),(0x1a0e98,'str','r0, [sp, #0x2c]'),
+        (0x1a0ea0,'add','r0, pc, r0'),(0x1a0ea4,'ldr','r0, [r4, r0]'),(0x1a0ea8,'ldr','r0, [r0]'),
+        (0x1a0eac,'ldr','r1, [r0]'),(0x1a0eb0,'ldr','r2, [r1, #8]'),(0x1a0eb4,'mov','r1, #6'),
+        (0x1a0eb8,'blx','r2'),(0x1a0ebc,'str','r0, [sp, #0x20]'),
         (0x1a0f90,'mov','sb, r6'),(0x1a0fb0,'ldr','r4, [sp, #0x200]'),(0x1a0fbc,'mov','r6, fp'),
         (0x1a0ff0,'ldr','r1, [r4]'),(0x1a0ff4,'add','r0, sp, #0x1a8'),
         (0x1a1004,'ldr','r1, [r4, #4]'),(0x1a1008,'add','r0, sp, #0x198'),
@@ -199,6 +213,33 @@ def inspect(apk):
         (0x1a15e4,'str','r0, [sp, #0xbc]'),(0x1a15e8,'add','r0, sp, #0x198'),(0x1a15ec,'str','r0, [sp, #0xc0]'),
         (0x1a15f0,'ldr','r1, [r2, r1]'),(0x1a15f4,'ldr','r0, [r1, #4]'),
         (0x1a15f8,'add','r1, sp, #0xbc'),(0x1a1600,'stm','sp, {r0, r1}'),(0x1a1608,'mov','r3, #2'),
+        # Weapon branch: conditionally return global5 + global6*global18 as
+        # item_get(1, packed key, 1), then assign new remainder and quotient.
+        (0x1a1668,'add','r0, sp, #0x1a8'),(0x1a1670,'vmov.f64','d8, #-1.000000e+00'),
+        (0x1a167c,'vadd.f64','d0, d0, d8'),(0x1a1688,'vcmpe.f64','d0, #0'),
+        (0x1a1690,'vldr','d1, [r0]'),(0x1a1694,'vnegmi.f64','d0, d0'),
+        (0x1a1698,'vcmpe.f64','d0, d1'),(0x1a16a0,'bhi','#0x1a1914'),
+        (0x1a16ac,'ldr','r0, [sp, #0x2c]'),(0x1a16c4,'vldr','d1, [r0]'),
+        (0x1a16c8,'vneg.f64','d1, d1'),(0x1a16cc,'vcmpe.f64','d0, d1'),(0x1a16d4,'blt','#0x1a17a0'),
+        (0x1a16e0,'ldr','r1, [sp, #0x20]'),(0x1a16e4,'add','r0, sp, #0x98'),(0x1a16e8,'ldr','r2, [sp, #0x30]'),
+        (0x1a16f0,'add','r4, sp, #0xa8'),(0x1a16f4,'ldr','r1, [sp, #0x2c]'),(0x1a16f8,'add','r2, sp, #0x98'),
+        (0x1a16fc,'mov','r0, r4'),(0x1a1728,'add','r0, pc, r0'),(0x1a172c,'ldr','r0, [r1, r0]'),
+        (0x1a1730,'str','r0, [sp, #0x8c]'),(0x1a1734,'str','r4, [sp, #0x90]'),
+        (0x1a1738,'str','r0, [sp, #0x94]'),(0x1a1740,'add','r0, sp, #0x8c'),
+        (0x1a1748,'str','r0, [sp]'),(0x1a1750,'mov','r3, #3'),
+        (0x1a17a8,'ldr','r0, [r8]'),(0x1a17ac,'ldr','r2, [r0, #8]'),(0x1a17b0,'mov','r0, r8'),
+        (0x1a17b4,'mov','r1, #6'),(0x1a17b8,'blx','r2'),(0x1a17bc,'mov','r1, r0'),(0x1a17c0,'ldr','r0, [sp, #0x2c]'),
+        (0x1a17d0,'ldr','r0, [r8]'),(0x1a17d4,'ldr','r2, [r0, #8]'),(0x1a17d8,'mov','r0, r8'),
+        (0x1a17dc,'mov','r1, #5'),(0x1a17e0,'blx','r2'),(0x1a17e4,'mov','r1, r0'),(0x1a17e8,'ldr','r0, [sp, #0x20]'),
+        # In sys_global Create, global 18's getter pointer is retained on stack
+        # and is assigned IEEE754 100000.0 via the two RValue data words.
+        (0x3b75a8,'add','r0, pc, r0'),(0x3b75ac,'ldr','r0, [r5, r0]'),(0x3b75b0,'ldr','r0, [r0]'),
+        (0x3b75b4,'ldr','r1, [r0]'),(0x3b75b8,'ldr','r2, [r1, #8]'),(0x3b75bc,'mov','r1, #0x12'),
+        (0x3b75c0,'blx','r2'),(0x3b75c4,'str','r0, [sp, #0x40]'),(0x3f4c20,'ldr','r5, [sp, #0x40]'),
+        (0x3f4d80,'mov','fp, #0'),(0x3f4dac,'ldr','r0, [r5, #0xc]'),
+        (0x3f4db8,'bne','#0x3f4dc4'),(0x3f4dbc,'mov','r0, r5'),
+        (0x3f4dc4,'movw','r0, #0x6a00'),(0x3f4dc8,'str','fp, [r5, #0xc]'),
+        (0x3f4dcc,'movt','r0, #0x40f8'),(0x3f4dd4,'str','r0, [r5, #4]'),(0x3f4ddc,'str','fp, [r5]'),
         # item_check_pet: numeric argument is compared to 17 and 22 using
         # epsilon; return RValue is set to 0 or 1.
         (0x1ba9d0,'mov','r4, r2'),(0x1ba9e0,'ldr','r3, [sp, #0x38]'),
@@ -223,16 +264,18 @@ def inspect(apk):
         (0x1babdc,'str','r0, [r4, #0xc]'),(0x1babe0,'str','r1, [r4, #4]'),(0x1babe4,'str','r0, [r4]'),
     ):
         inst(address,op,operands)
-    for address in (0x1a0ff8,0x1a100c,0x1a108c,0x1a11c0,0x1a11f4):
+    for address in (0x1a0ff8,0x1a100c,0x1a108c,0x1a11c0,0x1a11f4,0x1a17c4,0x1a17ec):
         call(address,'YYRValueaSERKS_')
     for address in (0x1a1188,0x1a1114,0x1a1124,0x1a1258,0x1a12b0,0x1a12d4,
-                    0x1a1348,0x1a13ec,0x1a1564,0x1bab08,0x1bab3c):
+                    0x1a1348,0x1a13ec,0x1a1564,0x1a166c,0x1a16b0,0x1bab08,0x1bab3c):
         call(address,'REAL_RValue')
     for address in (0x1a1080,0x1a1474,0x1a14cc,0x1a1560,0x1a1610):
         call(address,'YYGML_CallLegacyFunction')
     for address, name in ((0x1a1040,'_ZdvRK8YYRValueS1_'),(0x1a1138,'fmod'),
                           (0x1a12d0,'YYRValueixEi'),(0x1a1344,'gml_Script_item_check_pet'),
-                          (0x1a1488,'_ZmiRK8YYRValuei')):
+                          (0x1a1488,'_ZmiRK8YYRValuei'), (0x1a16ec,'_ZmlRK8YYRValueS1_'),
+                          (0x1a1700,'_ZplRK8YYRValueS1_'), (0x1a1754,'gml_Script_item_get'),
+                          (0x3f4dc0,'FREE_RValue')):
         call(address,name)
     targets = [(0x1baa54 + n) & 0xffffffff for n in struct.unpack('<15I', read(0x1baa54,60))]
     if targets[0] != 0x1baa98:
@@ -240,6 +283,10 @@ def inspect(apk):
     return {'apk_sha256': APK_SHA256, 'native_library_sha256': LIB_SHA256,
             'function': 'gml_Script_item_equip', 'address': '0x1a0d8c', 'size': 6668,
             'key_argument': 1, 'divisor_global_index': 18,
+            'divisor_create_assignment': {'function': 'gml_Object_sys_global_Create_0',
+                                          'address': '0x3f4dc4', 'value': 100000.0},
+            'weapon_return': {'item_get_call': '0x1a1754', 'selector': 1, 'amount': 1,
+                              'base_global_index': 5, 'quotient_global_index': 6},
             'quotient_instance_slot': 5, 'remainder_instance_slot': 6,
             'target_map_instance_slot': 7, 'skip_consumption_instance_slot': 8,
             'field_array_global_index': 19, 'field_array_column': 4,

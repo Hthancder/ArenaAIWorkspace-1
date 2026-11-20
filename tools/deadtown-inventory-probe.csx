@@ -107,6 +107,11 @@ item_equip(1,0);
 show_debug_message(""DT_INV|equip_first|"" + string(global.equip_weapon) + ""|"" + string(ds_map_exists(global.inven_weapon,0)) + ""|"" + string(sys_player_weapon.pointer));
 item_equip(1,1);
 show_debug_message(""DT_INV|equip_swap|"" + string(global.equip_weapon) + ""|"" + string(ds_map_find_value(global.inven_weapon,0)) + ""|"" + string(ds_map_find_value(global.inven_weapon,1)) + ""|"" + string(sys_player_weapon.pointer));
+// A synthetic packed key probes old-source behavior only; restore before any Step.
+ds_map_add(global.inven_weapon,100001,1);
+item_equip(1,100001);
+show_debug_message(""DT_INV|packed_old|"" + string(global.equip_weapon) + ""|"" + string(sys_player_weapon.pointer) + ""|"" + string(ds_map_exists(global.inven_weapon,100001)) + ""|"" + string(ds_map_find_value(global.inven_weapon,1)));
+global.equip_weapon = 1; sys_player_weapon.pointer = 1;
 // GMX index 17 is a kind-4 pet: record old-source consumption, not native.
 global.equip_deco = -1;
 ds_map_add(global.inven_equip,17,2);

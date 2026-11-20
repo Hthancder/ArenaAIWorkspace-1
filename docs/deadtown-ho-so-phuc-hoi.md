@@ -202,8 +202,13 @@ trước khi phát hành. Game Unity `com.Ccentury.DeadTownSurvival` là remake 
   ép trong VM từ **nguồn cũ**, không chứng minh logic APK, mọi loại trang bị,
   ID, UI, input hay iOS.
 - Phát hiện khác biệt quan trọng ở `item_equip` native `0x1a0d8c`:
-  argument key được chia lấy `floor` và `fmod` với global index 18 (giá trị
-  lúc chạy chưa biết); source GMX cũ không có tách này. Nếu type gần 2, trường
+  argument key được chia lấy `floor` và `fmod` với global index 18; source GMX
+  cũ không có tách này. `sys_global_Create_0` có lệnh gán global 18 bằng
+  100000.0 (`0x3f4dc4`); chưa chứng minh lệnh được chạy, thứ tự hay giá trị
+  tại thời điểm equip. Nếu còn bằng 100000, key nguyên 100001 tách thành phần
+  thương 1 và dư 1. Nhánh vũ khí có điều kiện gọi `item_get(1, global[5] +
+  global[6] * global[18], 1)` rồi cập nhật global 5/6 bằng dư/thương; chưa xác
+  minh tên đăng ký hay giá trị lúc chạy. Nếu type gần 2, trường
   cột 4 của global array index 19 gần 4, và `item_check_pet` của native xác
   định phần dư nằm trong khoảng 17–22 (theo epsilon), cờ slot 8 được đặt 1;
   khi epsilon runtime nhỏ hơn 1, nhánh này bỏ qua khối trừ inventory. Source

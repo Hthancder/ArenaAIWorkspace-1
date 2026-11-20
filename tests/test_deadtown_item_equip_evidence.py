@@ -28,6 +28,11 @@ class ItemEquipEvidenceTests(unittest.TestCase):
         report = inspect(APK)
         self.assertEqual((report['address'], report['size']), ('0x1a0d8c', 6668))
         self.assertEqual((report['key_argument'], report['divisor_global_index']), (1, 18))
+        self.assertEqual(report['divisor_create_assignment'], {
+            'function': 'gml_Object_sys_global_Create_0', 'address': '0x3f4dc4', 'value': 100000.0})
+        self.assertEqual(report['weapon_return'], {
+            'item_get_call': '0x1a1754', 'selector': 1, 'amount': 1,
+            'base_global_index': 5, 'quotient_global_index': 6})
         self.assertEqual((report['quotient_instance_slot'], report['remainder_instance_slot']), (5, 6))
         self.assertEqual((report['target_map_instance_slot'], report['skip_consumption_instance_slot']), (7, 8))
         self.assertEqual((report['field_array_global_index'], report['field_array_column']), (19, 4))
