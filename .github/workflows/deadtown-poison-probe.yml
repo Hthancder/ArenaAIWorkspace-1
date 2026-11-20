@@ -9,6 +9,8 @@ on:
       - .github/workflows/deadtown-poison-probe.yml
       - tools/prepare_deadtown_poison_probe.py
       - tools/check_deadtown_poison_probe.py
+      - tools/check_deadtown_inventory_save.py
+      - tests/test_check_deadtown_inventory_save.py
       - tools/check_deadtown_accessor_bytecode.py
       - tests/test_check_deadtown_accessor_bytecode.py
       - tools/deadtown-poison-probe.csx
@@ -69,6 +71,7 @@ jobs:
           set -euo pipefail
           python -m unittest discover -s tests -p 'test_prepare_deadtown_poison_probe.py' -v
           python -m unittest discover -s tests -p 'test_check_deadtown_poison_probe.py' -v
+          python -m unittest discover -s tests -p 'test_check_deadtown_inventory_save.py' -v
           python -m unittest discover -s tests -p 'test_check_deadtown_accessor_bytecode.py' -v
           python -m unittest discover -s tests -p 'test_check_deadtown_language_probe.py' -v
           python -m unittest discover -s tests -p 'test_check_deadtown_lang_maps.py' -v
@@ -156,6 +159,7 @@ jobs:
           grep -F '[room] -> rom_play' work/probe.log
           grep -F 'DT_POISON|' work/probe.log || true
           python tools/check_deadtown_poison_probe.py work/probe.log work/save/dt_poison_probe.sav 2>&1 | tee work/check.log
+          python tools/check_deadtown_inventory_save.py work/probe.log work/save/dt_poison_probe.sav 2>&1 | tee -a work/check.log
       - name: Diagnose source inventory compiler workaround in a disposable VM
         shell: bash
         env:
@@ -209,7 +213,7 @@ jobs:
               selected = [line for line in lines if 'DT_LANG' in line or 'DT_INV' in line or 'INVENTORY_' in line or 'LANG_PROBE' in line or 'DT_POISON|' in line or 'PROBE:' in line or
                           'POISON_INSTRUMENT' in line or 'error' in line.lower() or 'exception' in line.lower() or
                           ('[call]' in line and ('gml_Script_item_use' in line or 'probe_obj_player_200' in line))]
-              markers = [line for line in lines if 'DT_POISON|' in line] if name == 'probe.log' else selected
+              markers = [line for line in lines if 'DT_POISON|' in line or 'DT_INVENTORY_SAVE|' in line] if name == 'probe.log' else selected
               for label, group in (('markers', markers[-20:]), ('tail', lines[-12:])):
                   text = ' | '.join(group).replace('%', '%25').replace('\r', ' ')
                   print('::notice::' + name + ' ' + label + ': ' + text[:3500])

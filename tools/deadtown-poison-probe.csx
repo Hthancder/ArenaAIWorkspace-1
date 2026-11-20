@@ -82,13 +82,28 @@ if (dt_poison_probe_tick == 10)
 {
     buff_poison = 2;
     buff_poison_protect = 321;
+    // Four synthetic map entries are checked in a disposable save only.
+    ds_map_replace(global.inven_weapon, 0, 11);
+    ds_map_replace(global.inven_equip, 0, 22);
+    ds_map_replace(global.inven_use, 0, 33);
+    ds_map_replace(global.inven_etc, 0, 44);
     show_debug_message(""DT_POISON|save_start"");
     game_save_protect(""dt_poison_probe.sav"");
     show_debug_message(""DT_POISON|save_done|"" + string(file_exists(""dt_poison_probe.sav"")));
     buff_poison = 0;
     buff_poison_protect = 0;
+    ds_map_replace(global.inven_weapon, 0, -1);
+    ds_map_replace(global.inven_equip, 0, -1);
+    ds_map_replace(global.inven_use, 0, -1);
+    ds_map_replace(global.inven_etc, 0, -1);
+    ds_map_replace(global.inven_weapon, 900, 9);
+    ds_map_replace(global.inven_equip, 900, 9);
+    ds_map_replace(global.inven_use, 900, 9);
+    ds_map_replace(global.inven_etc, 900, 9);
     var dt_load_result = game_load_protect(""dt_poison_probe.sav"");
     show_debug_message(""DT_POISON|load_done|"" + string(dt_load_result) + ""|"" + string(buff_poison_protect) + ""|"" + string(buff_poison));
+    show_debug_message(""DT_INVENTORY_SAVE|loaded|"" + string(ds_map_find_value(global.inven_weapon,0)) + ""|"" + string(ds_map_find_value(global.inven_equip,0)) + ""|"" + string(ds_map_find_value(global.inven_use,0)) + ""|"" + string(ds_map_find_value(global.inven_etc,0)));
+    show_debug_message(""DT_INVENTORY_SAVE|cleared|"" + string(ds_map_exists(global.inven_weapon,900)) + ""|"" + string(ds_map_exists(global.inven_equip,900)) + ""|"" + string(ds_map_exists(global.inven_use,900)) + ""|"" + string(ds_map_exists(global.inven_etc,900)));
     // Prepare two isolated poison-damage blocks, with and without skill 20.
     global.skill_level[20] = 0;
     buff_poison = 20;
