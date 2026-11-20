@@ -5,6 +5,8 @@ LOG = '''
 DT_INV|get|5
 DT_INV|drop|0|1|4
 DT_INV|last|1|0
+DT_INV|equip_first|0|0|0
+DT_INV|equip_swap|1|1|1|1
 DT_INV|short|0|0|1|2|3
 DT_INV|craft|1|0|1|0|2
 DT_INV_DONE

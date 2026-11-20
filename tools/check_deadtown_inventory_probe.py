@@ -23,6 +23,7 @@ def check_bytecode(name, old, candidate):
 def check_log(log):
     expected = {
         'get': ['5'], 'drop': ['0', '1', '4'], 'last': ['1', '0'],
+        'equip_first': ['0', '0', '0'], 'equip_swap': ['1', '1', '1', '1'],
         'short': ['0', '0', '1', '2', '3'], 'craft': ['1', '0', '1', '0', '2'],
     }
     if log.count('DT_INV_DONE') != 1:
@@ -52,7 +53,7 @@ def main():
                            (args.disassembly / (name + '-candidate.log')).read_text())
     except (OSError, ValueError) as exc:
         parser.exit(1, f'INVENTORY_CHECK_FAIL: {exc}\n')
-    print('INVENTORY_CHECK_PASS: four bytecode comparisons; forced get/drop/craft scenarios')
+    print('INVENTORY_CHECK_PASS: four bytecode comparisons; forced get/drop/equip/craft scenarios')
     print('INVENTORY_CHECK_LIMIT: old-source candidate on incomplete desktop VM, not APK or iOS')
 
 

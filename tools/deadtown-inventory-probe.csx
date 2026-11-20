@@ -33,10 +33,17 @@ foreach (var evt in doc.RootElement.EnumerateArray())
         string scenario = @"
 // Fresh disposable map, restore handles afterward. Not original game execution.
 var dt_old_use = global.inven_use;
+var dt_old_weapon = global.inven_weapon;
+var dt_old_equipped = global.equip_weapon;
+var dt_had_weapon_instance = instance_exists(sys_player_weapon);
+var dt_old_pointer = -1;
+if dt_had_weapon_instance dt_old_pointer = sys_player_weapon.pointer;
 var dt_old_null = global.inven_null;
 var dt_old_lang = global.language_type;
 var dt_old_messages = global.ui_message_number;
 global.inven_use = ds_map_create();
+global.inven_weapon = ds_map_create();
+global.equip_weapon = -1;
 global.inven_null = ds_map_create();
 global.language_type = 0;
 global.ui_message_number = 1;
@@ -49,6 +56,12 @@ show_debug_message(""DT_INV|drop|"" + string(dt_absent) + ""|"" + string(dt_drop
 ds_map_replace(global.inven_use,0,1);
 var dt_last = item_drop(3,0);
 show_debug_message(""DT_INV|last|"" + string(dt_last) + ""|"" + string(ds_map_exists(global.inven_use,0)));
+// Force two weapon equips, including returning the previously equipped item.
+ds_map_add(global.inven_weapon,0,1); ds_map_add(global.inven_weapon,1,2);
+item_equip(1,0);
+show_debug_message(""DT_INV|equip_first|"" + string(global.equip_weapon) + ""|"" + string(ds_map_exists(global.inven_weapon,0)) + ""|"" + string(sys_player_weapon.pointer));
+item_equip(1,1);
+show_debug_message(""DT_INV|equip_swap|"" + string(global.equip_weapon) + ""|"" + string(ds_map_find_value(global.inven_weapon,0)) + ""|"" + string(ds_map_find_value(global.inven_weapon,1)) + ""|"" + string(sys_player_weapon.pointer));
 // A synthetic three-ingredient recipe, not an APK recipe.
 var dt_recipe = 200;
 global.craft_db[dt_recipe,0] = 0;
@@ -63,8 +76,11 @@ show_debug_message(""DT_INV|short|"" + string(dt_missing) + ""|"" + string(dt_sh
 ds_map_replace(global.inven_use,0,2);
 var dt_made = item_make(dt_recipe);
 show_debug_message(""DT_INV|craft|"" + string(dt_made) + ""|"" + string(ds_map_exists(global.inven_use,0)) + ""|"" + string(ds_map_find_value(global.inven_use,1)) + ""|"" + string(ds_map_exists(global.inven_use,2)) + ""|"" + string(ds_map_find_value(global.inven_use,3)));
-ds_map_destroy(global.inven_use); ds_map_destroy(global.inven_null);
-global.inven_use = dt_old_use; global.inven_null = dt_old_null;
+ds_map_destroy(global.inven_use); ds_map_destroy(global.inven_weapon); ds_map_destroy(global.inven_null);
+global.inven_use = dt_old_use; global.inven_weapon = dt_old_weapon; global.inven_null = dt_old_null;
+global.equip_weapon = dt_old_equipped;
+if dt_had_weapon_instance sys_player_weapon.pointer = dt_old_pointer;
+else if instance_exists(sys_player_weapon) with (sys_player_weapon) instance_destroy();
 global.language_type = dt_old_lang; global.ui_message_number = dt_old_messages;
 show_debug_message(""DT_INV_DONE"");
 ";
