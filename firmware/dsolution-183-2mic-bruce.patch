@@ -1,6 +1,6 @@
 diff --git a/boards/dsolution-183-2mic/NV3023_Panel.h b/boards/dsolution-183-2mic/NV3023_Panel.h
 new file mode 100644
-index 0000000..d021320
+index 00000000..d021320f
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/NV3023_Panel.h
 @@ -0,0 +1,159 @@
@@ -165,7 +165,7 @@ index 0000000..d021320
 +#endif // DSOLUTION_NV3023_PANEL_H
 diff --git a/boards/dsolution-183-2mic/README.md b/boards/dsolution-183-2mic/README.md
 new file mode 100644
-index 0000000..7738be6
+index 00000000..7738be66
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/README.md
 @@ -0,0 +1,243 @@
@@ -414,7 +414,7 @@ index 0000000..7738be6
 +* `espressif/esp_lcd_nv3023` (components.espressif.com) -- Espressif's own NV3023 driver.
 diff --git a/boards/dsolution-183-2mic/dsolution-183-2mic.ini b/boards/dsolution-183-2mic/dsolution-183-2mic.ini
 new file mode 100644
-index 0000000..5197f90
+index 00000000..5197f900
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/dsolution-183-2mic.ini
 @@ -0,0 +1,206 @@
@@ -626,7 +626,7 @@ index 0000000..5197f90
 +	https://github.com/lovyan03/LovyanGFX#develop
 diff --git a/boards/dsolution-183-2mic/interface.cpp b/boards/dsolution-183-2mic/interface.cpp
 new file mode 100644
-index 0000000..373c94e
+index 00000000..373c94eb
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/interface.cpp
 @@ -0,0 +1,625 @@
@@ -1257,7 +1257,7 @@ index 0000000..373c94e
 +}
 diff --git a/boards/dsolution-183-2mic/merge_bin.py b/boards/dsolution-183-2mic/merge_bin.py
 new file mode 100644
-index 0000000..372b2f9
+index 00000000..372b2f96
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/merge_bin.py
 @@ -0,0 +1,133 @@
@@ -1396,7 +1396,7 @@ index 0000000..372b2f9
 +env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", merge_bin)
 diff --git a/boards/dsolution-183-2mic/partitions_16Mb_ota.csv b/boards/dsolution-183-2mic/partitions_16Mb_ota.csv
 new file mode 100644
-index 0000000..fcf16fe
+index 00000000..fcf16fef
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/partitions_16Mb_ota.csv
 @@ -0,0 +1,19 @@
@@ -1420,7 +1420,7 @@ index 0000000..fcf16fe
 +spiffs,   data, spiffs,   0x810000, 0x7E0000,
 +coredump, data, coredump, 0xFF0000, 0x10000,
 diff --git a/embedded_resources/web_interface/index.css b/embedded_resources/web_interface/index.css
-index bda7b42..b4e4267 100644
+index bda7b42a..b4e42670 100644
 --- a/embedded_resources/web_interface/index.css
 +++ b/embedded_resources/web_interface/index.css
 @@ -1,310 +1,646 @@
@@ -2709,7 +2709,7 @@ index bda7b42..b4e4267 100644
    }
  }
 diff --git a/embedded_resources/web_interface/index.html b/embedded_resources/web_interface/index.html
-index 5290300..4a8ccb7 100644
+index 5290300b..4a8ccb77 100644
 --- a/embedded_resources/web_interface/index.html
 +++ b/embedded_resources/web_interface/index.html
 @@ -1,700 +1,373 @@
@@ -3747,7 +3747,7 @@ index 5290300..4a8ccb7 100644
 +</body>
  </html>
 diff --git a/embedded_resources/web_interface/index.js b/embedded_resources/web_interface/index.js
-index fd61602..6993b6e 100644
+index fd616029..6993b6eb 100644
 --- a/embedded_resources/web_interface/index.js
 +++ b/embedded_resources/web_interface/index.js
 @@ -6,20 +6,17 @@ const T = {
@@ -5954,7 +5954,7 @@ index fd61602..6993b6e 100644
 +  }, 15000);
  })();
 diff --git a/embedded_resources/web_interface/login.html b/embedded_resources/web_interface/login.html
-index f3947c8..c165f33 100644
+index f3947c88..c165f33b 100644
 --- a/embedded_resources/web_interface/login.html
 +++ b/embedded_resources/web_interface/login.html
 @@ -1,43 +1,50 @@
@@ -6047,7 +6047,7 @@ index f3947c8..c165f33 100644
 -
  </html>
 diff --git a/include/DisplayDrivers_User_Setup.h b/include/DisplayDrivers_User_Setup.h
-index f67b633..9dd4164 100644
+index f67b6331..9dd4164c 100644
 --- a/include/DisplayDrivers_User_Setup.h
 +++ b/include/DisplayDrivers_User_Setup.h
 @@ -26,4 +26,19 @@
@@ -6071,7 +6071,7 @@ index f67b633..9dd4164 100644
 +
  #endif // _BRUCE_DISPLAYDRIVERS_USER_SETUP_H
 diff --git a/platformio.ini b/platformio.ini
-index d8ec5e0..d1c5953 100644
+index d8ec5e0b..d1c5953f 100644
 --- a/platformio.ini
 +++ b/platformio.ini
 @@ -20,6 +20,7 @@ default_envs =
@@ -6083,7 +6083,7 @@ index d8ec5e0..d1c5953 100644
  	; elecrow-28B
  	; elecrow-35B
 diff --git a/src/core/config.cpp b/src/core/config.cpp
-index e7ceca1..5cb3458 100644
+index e7ceca14..5cb34588 100644
 --- a/src/core/config.cpp
 +++ b/src/core/config.cpp
 @@ -14,6 +14,8 @@ JsonDocument BruceConfig::toJson() const {
@@ -6195,7 +6195,7 @@ index e7ceca1..5cb3458 100644
  
  void BruceConfig::setBadUSBBLEKeyboardLayout(int value) {
 diff --git a/src/core/config.h b/src/core/config.h
-index 72d69eb..21a7a0d 100644
+index 72d69eba..21a7a0de 100644
 --- a/src/core/config.h
 +++ b/src/core/config.h
 @@ -17,6 +17,32 @@
@@ -6279,7 +6279,7 @@ index 72d69eb..21a7a0d 100644
  #ifdef HAS_RGB_LED
      // Led
 diff --git a/src/core/display.cpp b/src/core/display.cpp
-index d3fe50a..355bf7f 100644
+index d3fe50ac..355bf7f0 100644
 --- a/src/core/display.cpp
 +++ b/src/core/display.cpp
 @@ -1,8 +1,10 @@
@@ -6658,7 +6658,7 @@ index d3fe50a..355bf7f 100644
      }
  
 diff --git a/src/core/display.h b/src/core/display.h
-index 0345168..7502c90 100644
+index 0345168b..7502c904 100644
 --- a/src/core/display.h
 +++ b/src/core/display.h
 @@ -7,6 +7,7 @@
@@ -6687,7 +6687,7 @@ index 0345168..7502c90 100644
  
 diff --git a/src/core/feature_guide.cpp b/src/core/feature_guide.cpp
 new file mode 100644
-index 0000000..eba3ef0
+index 00000000..eba3ef03
 --- /dev/null
 +++ b/src/core/feature_guide.cpp
 @@ -0,0 +1,829 @@
@@ -7522,7 +7522,7 @@ index 0000000..eba3ef0
 +}
 diff --git a/src/core/feature_guide.h b/src/core/feature_guide.h
 new file mode 100644
-index 0000000..e9a47f7
+index 00000000..e9a47f79
 --- /dev/null
 +++ b/src/core/feature_guide.h
 @@ -0,0 +1,13 @@
@@ -7540,7 +7540,7 @@ index 0000000..e9a47f7
 +
 +#endif
 diff --git a/src/core/main_menu.cpp b/src/core/main_menu.cpp
-index 7420b9e..2d90dad 100644
+index 7420b9e8..2d90dadd 100644
 --- a/src/core/main_menu.cpp
 +++ b/src/core/main_menu.cpp
 @@ -1,5 +1,6 @@
@@ -7765,7 +7765,7 @@ index 7420b9e..2d90dad 100644
      int thumbH = max(6, trackH * _grid.visibleRows / _grid.rows);
      int thumbY = trackY + (trackH - thumbH) * _gridScroll / (_grid.rows - _grid.visibleRows);
 diff --git a/src/core/main_menu.h b/src/core/main_menu.h
-index e8ba931..c850162 100644
+index e8ba9314..c8501629 100644
 --- a/src/core/main_menu.h
 +++ b/src/core/main_menu.h
 @@ -7,19 +7,21 @@
@@ -7845,7 +7845,7 @@ index e8ba931..c850162 100644
      int _currentIndex = 0;
      int _totalItems = 0;
 diff --git a/src/core/menu_items/ConfigMenu.cpp b/src/core/menu_items/ConfigMenu.cpp
-index 6e44fd4..ef79e23 100644
+index 6e44fd4d..f5c577ea 100644
 --- a/src/core/menu_items/ConfigMenu.cpp
 +++ b/src/core/menu_items/ConfigMenu.cpp
 @@ -65,6 +65,7 @@ void ConfigMenu::displayUIMenu() {
@@ -7892,7 +7892,7 @@ index 6e44fd4..ef79e23 100644
              {"Power Off",
               []() {
                   // Confirmation dialog for power off
-@@ -251,8 +268,8 @@ void ConfigMenu::powerMenu() {
+@@ -251,10 +268,15 @@ void ConfigMenu::powerMenu() {
                   int8_t choice = displayMessage("Power Off Device?", "No", nullptr, "Yes", TFT_RED);
  
                   if (choice == 1) { powerOff(); }
@@ -7902,8 +7902,15 @@ index 6e44fd4..ef79e23 100644
 +            {"Back",            []() {}                  },
          };
  
++        if (isDualBootActive()) {
++            localOptions.insert(localOptions.begin(), {"Dual-Boot Menu", []() { rebootToBootMenu(true); }});
++            localOptions.insert(localOptions.begin(), {"Boot XiaoZhi",   []() { rebootToXiaoZhi(true); }});
++        }
++
          int selected = loopOptions(localOptions, MENU_TYPE_SUBMENU, "Power Menu");
-@@ -298,6 +315,7 @@ void ConfigMenu::pinsMenu() {
+ 
+         // Exit to Config menu
+@@ -298,6 +320,7 @@ void ConfigMenu::pinsMenu() {
      while (true) {
          std::vector<Option> localOptions = {
              {"I2C Finder",     [this]() { find_i2c_addresses(); }                       },
@@ -7911,7 +7918,7 @@ index 6e44fd4..ef79e23 100644
              {"CC1101 Pins",    [this]() { setSPIPinsMenu(bruceConfigPins.CC1101_bus); } },
              {"NRF24  Pins",    [this]() { setSPIPinsMenu(bruceConfigPins.NRF24_bus); }  },
  #if !defined(LITE_VERSION)
-@@ -306,9 +324,12 @@ void ConfigMenu::pinsMenu() {
+@@ -306,9 +329,12 @@ void ConfigMenu::pinsMenu() {
              {"W5500 Pins",     [this]() { setSPIPinsMenu(bruceConfigPins.W5500_bus); }  },
  #endif
              {"SDCard Pins",    [this]() { setSPIPinsMenu(bruceConfigPins.SDCARD_bus); } },
@@ -7925,7 +7932,7 @@ index 6e44fd4..ef79e23 100644
  #if defined(HAS_SPEAKER)
              {"Speaker Pins",   []() { setSpeakerPinsMenu(bruceConfigPins.speaker_bus); }},
 diff --git a/src/core/menu_items/FileMenu.cpp b/src/core/menu_items/FileMenu.cpp
-index 443e395..221367e 100644
+index 443e395c..221367eb 100644
 --- a/src/core/menu_items/FileMenu.cpp
 +++ b/src/core/menu_items/FileMenu.cpp
 @@ -26,7 +26,7 @@ void FileMenu::optionsMenu() {
@@ -7938,7 +7945,7 @@ index 443e395..221367e 100644
  #endif
      addOptionToMainMenu();
 diff --git a/src/core/menu_items/OthersMenu.cpp b/src/core/menu_items/OthersMenu.cpp
-index 40f9956..c335115 100644
+index 40f99560..f445a67e 100644
 --- a/src/core/menu_items/OthersMenu.cpp
 +++ b/src/core/menu_items/OthersMenu.cpp
 @@ -5,7 +5,9 @@
@@ -7951,7 +7958,7 @@ index 40f9956..c335115 100644
  #include "modules/others/mic.h"
  #include "modules/others/qrcode_menu.h"
  #include "modules/others/tururururu.h"
-@@ -26,7 +28,7 @@ void OthersMenu::optionsMenu() {
+@@ -26,13 +28,18 @@ void OthersMenu::optionsMenu() {
          {"BadUSB & HID", [this]() { badUsbHidMenu(); }},
  #endif
  
@@ -7960,8 +7967,19 @@ index 40f9956..c335115 100644
          {"iButton",      setup_ibutton                },
  #endif
  
+         // Timer removed - moved to another "Clock"
+     };
+ 
++    if (isDualBootActive()) {
++        options.insert(options.begin(), {"Dual-Boot Menu", []() { rebootToBootMenu(true); }});
++        options.insert(options.begin(), {"Boot XiaoZhi",   []() { rebootToXiaoZhi(true); }});
++    }
++
+     addOptionToMainMenu();
+     loopOptions(options, MENU_TYPE_SUBMENU, "Others");
+ }
 diff --git a/src/core/menu_items/WifiMenu.cpp b/src/core/menu_items/WifiMenu.cpp
-index 2e6512c..7c80b2d 100644
+index 2e6512c1..7c80b2d5 100644
 --- a/src/core/menu_items/WifiMenu.cpp
 +++ b/src/core/menu_items/WifiMenu.cpp
 @@ -63,6 +63,9 @@ void WifiMenu::optionsMenu() {
@@ -7975,7 +7993,7 @@ index 2e6512c..7c80b2d 100644
      options.push_back({"Wifi Atks", wifi_atk_menu});
      options.push_back({"Evil Portal", [=]() {
 diff --git a/src/core/mykeyboard.cpp b/src/core/mykeyboard.cpp
-index 1b3c43c..e59dea1 100644
+index 1b3c43c2..e59dea12 100644
 --- a/src/core/mykeyboard.cpp
 +++ b/src/core/mykeyboard.cpp
 @@ -1,9 +1,11 @@
@@ -8033,7 +8051,7 @@ index 1b3c43c..e59dea1 100644
                  /* Down Btn to move in X axis (to the right) */
                  if (check(NextPress)) {
 diff --git a/src/core/powerSave.cpp b/src/core/powerSave.cpp
-index 718e3bf..e67b94b 100644
+index 718e3bfe..e67b94bb 100644
 --- a/src/core/powerSave.cpp
 +++ b/src/core/powerSave.cpp
 @@ -1,43 +1,103 @@
@@ -8174,7 +8192,7 @@ index 718e3bf..e67b94b 100644
 +    delay(120);
  }
 diff --git a/src/core/powerSave.h b/src/core/powerSave.h
-index 5bb1c61..e3324ac 100644
+index 5bb1c613..e3324ac4 100644
 --- a/src/core/powerSave.h
 +++ b/src/core/powerSave.h
 @@ -1,3 +1,6 @@
@@ -8195,7 +8213,7 @@ index 5bb1c61..e3324ac 100644
 +
 +#endif
 diff --git a/src/core/radio_mem.h b/src/core/radio_mem.h
-index 0d88860..1bc151a 100644
+index 0d88860f..1bc151a2 100644
 --- a/src/core/radio_mem.h
 +++ b/src/core/radio_mem.h
 @@ -15,11 +15,17 @@
@@ -8316,7 +8334,7 @@ index 0d88860..1bc151a 100644
  }
  
 diff --git a/src/core/sd_functions.cpp b/src/core/sd_functions.cpp
-index 054b629..0540b1a 100644
+index 054b6298..99454343 100644
 --- a/src/core/sd_functions.cpp
 +++ b/src/core/sd_functions.cpp
 @@ -3,16 +3,20 @@
@@ -8340,7 +8358,27 @@ index 054b629..0540b1a 100644
  #include "mykeyboard.h" // using keyboard when calling rename
  #include "passwords.h"
  #include "scrollableTextArea.h"
-@@ -746,6 +750,7 @@ String loopSD(FS &fs, bool filePicker, const String &allowed_ext, String rootPat
+@@ -20,6 +24,7 @@
+ 
+ #include <MD5Builder.h>
+ #include <algorithm> // for std::sort
++#include <esp_partition.h>
+ #include <esp_rom_crc.h>
+ 
+ // SPIClass sdcardSPI;
+@@ -32,7 +37,10 @@ std::vector<FileList> fileList;
+ ***************************************************************************************/
+ bool setupLittleFS(uint8_t maxFiles) {
+     if (maxFiles < 1) { maxFiles = 1; }
+-    return LittleFS.begin(false, "/littlefs", maxFiles);
++    if (esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, "brucefs")) {
++        return LittleFS.begin(false, "/littlefs", maxFiles, "brucefs");
++    }
++    return LittleFS.begin(false, "/littlefs", maxFiles, "spiffs");
+ }
+ 
+ /***************************************************************************************
+@@ -746,6 +754,7 @@ String loopSD(FS &fs, bool filePicker, const String &allowed_ext, String rootPat
                                                       while (!check(AnyKeyPress))
                                                           vTaskDelay(10 / portTICK_PERIOD_MS);
                                                   }});
@@ -8348,7 +8386,7 @@ index 054b629..0540b1a 100644
              if (filepath.endsWith(".ir")) {
                  options.insert(options.begin(), {"IR Choose cmd", [&]() {
                                                       delay(200);
-@@ -785,6 +790,7 @@ String loopSD(FS &fs, bool filePicker, const String &allowed_ext, String rootPat
+@@ -785,6 +794,7 @@ String loopSD(FS &fs, bool filePicker, const String &allowed_ext, String rootPat
                                                       wdg.upload_all(&fs, Folder);
                                                   }});
              }
@@ -8357,7 +8395,7 @@ index 054b629..0540b1a 100644
              if (filepath.endsWith(".bjs") || filepath.endsWith(".js")) {
                  options.insert(options.begin(), {"JS Script Run", [&]() {
 diff --git a/src/core/serial_commands/cli.cpp b/src/core/serial_commands/cli.cpp
-index 1fd4750..5f28de5 100644
+index 1fd47501..5f28de59 100644
 --- a/src/core/serial_commands/cli.cpp
 +++ b/src/core/serial_commands/cli.cpp
 @@ -4,18 +4,20 @@
@@ -8406,7 +8444,7 @@ index 1fd4750..5f28de5 100644
  #endif
  
 diff --git a/src/core/serial_commands/power_commands.cpp b/src/core/serial_commands/power_commands.cpp
-index 49138d4..0bea13f 100644
+index 49138d4a..0bea13fb 100644
 --- a/src/core/serial_commands/power_commands.cpp
 +++ b/src/core/serial_commands/power_commands.cpp
 @@ -1,5 +1,6 @@
@@ -8444,7 +8482,7 @@ index 49138d4..0bea13f 100644
      createPowerCommand(cli);
  }
 diff --git a/src/core/serial_commands/settings_commands.cpp b/src/core/serial_commands/settings_commands.cpp
-index 9c26f28..38fc0ae 100644
+index 9c26f281..38fc0aeb 100644
 --- a/src/core/serial_commands/settings_commands.cpp
 +++ b/src/core/serial_commands/settings_commands.cpp
 @@ -62,10 +62,13 @@ uint32_t settingsCallback(cmd *c) {
@@ -8462,7 +8500,7 @@ index 9c26f28..38fc0ae 100644
          bruceConfig.setWebUICreds(
              setting_value.substring(0, setting_value.indexOf(",")),
 diff --git a/src/core/settings.cpp b/src/core/settings.cpp
-index df8bbcb..6956e5c 100644
+index df8bbcb6..6956e5c9 100644
 --- a/src/core/settings.cpp
 +++ b/src/core/settings.cpp
 @@ -8,13 +8,17 @@
@@ -8663,7 +8701,7 @@ index df8bbcb..6956e5c 100644
               bruceConfig.ledBright = 50;
               bruceConfig.ledColor = 0x960064;
 diff --git a/src/core/settings.h b/src/core/settings.h
-index eed52ee..063a2f7 100644
+index eed52ee9..063a2f70 100644
 --- a/src/core/settings.h
 +++ b/src/core/settings.h
 @@ -60,6 +60,7 @@ void setEvilPasswordMode();
@@ -8694,7 +8732,7 @@ index eed52ee..063a2f7 100644
  
  void runClockLoop(bool showMenuHint = false);
 diff --git a/src/core/startup_app.cpp b/src/core/startup_app.cpp
-index 4663a0d..7e647cc 100644
+index 4663a0d5..7e647cc0 100644
 --- a/src/core/startup_app.cpp
 +++ b/src/core/startup_app.cpp
 @@ -13,14 +13,16 @@
@@ -8741,7 +8779,7 @@ index 4663a0d..7e647cc 100644
  #if !defined(LITE_VERSION) && !defined(DISABLE_INTERPRETER)
      _startupApps["JS Interpreter"] = []() {
 diff --git a/src/core/theme.cpp b/src/core/theme.cpp
-index c32e864..0ba5698 100644
+index c32e8644..0ba5698f 100644
 --- a/src/core/theme.cpp
 +++ b/src/core/theme.cpp
 @@ -140,6 +140,12 @@ bool BruceTheme::validateImgFile(FS *fs, String filepath) {
@@ -8758,7 +8796,7 @@ index c32e864..0ba5698 100644
      bgColor = background == nullptr ? 0x0 : *background;
  }
 diff --git a/src/core/theme.h b/src/core/theme.h
-index 1e7c94e..8c58e95 100644
+index 1e7c94ef..8c58e95f 100644
 --- a/src/core/theme.h
 +++ b/src/core/theme.h
 @@ -3,8 +3,12 @@
@@ -8787,22 +8825,27 @@ index 1e7c94e..8c58e95 100644
  
      // UI Color
 diff --git a/src/core/utils.cpp b/src/core/utils.cpp
-index aacdf98..1a61973 100644
+index aacdf98b..2c6e09c8 100644
 --- a/src/core/utils.cpp
 +++ b/src/core/utils.cpp
-@@ -3,6 +3,11 @@
+@@ -1,8 +1,16 @@
+ #include "utils.h"
++#include "core/display.h"
++#include "core/powerSave.h"
+ #include "core/wifi/wifi_common.h" //to return MAC addr
  #include "scrollableTextArea.h"
  #include <Preferences.h>
++#include <esp_ota_ops.h>
++#include <esp_partition.h>
  #include <globals.h>
 +#if defined(CONFIG_IDF_TARGET_ESP32S3)
-+#if defined(CONFIG_IDF_TARGET_ESP32S3)
 +#include "soc/rtc_cntl_reg.h"
-+#endif
++#include "soc/soc.h"
 +#endif
  
  /*********************************************************************
  **  Function: backToMenu
-@@ -360,3 +365,21 @@ String formatBytes(uint64_t bytes) {
+@@ -360,3 +368,77 @@ String formatBytes(uint64_t bytes) {
          return String(size, 2) + " " + units[unitIndex];
      }
  }
@@ -8824,22 +8867,81 @@ index aacdf98..1a61973 100644
 +    ESP.restart();
 +#endif
 +}
++
++bool isDualBootActive() {
++    const esp_partition_t *factory =
++        esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_FACTORY, nullptr);
++    const esp_partition_t *ota0 =
++        esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_OTA_0, nullptr);
++    const esp_partition_t *ota1 =
++        esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_OTA_1, nullptr);
++    return factory != nullptr && ota0 != nullptr && ota1 != nullptr;
++}
++
++void rebootToXiaoZhi(bool showUi) {
++    const esp_partition_t *ota0 =
++        esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_OTA_0, nullptr);
++    if (ota0) {
++        const esp_partition_t *curBoot = esp_ota_get_boot_partition();
++        if (!curBoot || curBoot->address != ota0->address) {
++            esp_ota_set_boot_partition(ota0);
++        }
++    }
++    if (showUi) {
++        wakeUpScreen();
++        tft.fillScreen(bruceConfig.bgColor);
++        tft.drawRoundRect(4, 4, tftWidth - 8, tftHeight - 8, 6, bruceConfig.priColor);
++        tft.setTextSize(FM);
++        tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
++        tft.drawCentreString("XiaoZhi HeyLily", tftWidth / 2, tftHeight / 2 - 18, 1);
++        tft.setTextSize(FP);
++        tft.setTextColor(bruceConfig.secColor, bruceConfig.bgColor);
++        tft.drawCentreString("Switching OS...", tftWidth / 2, tftHeight / 2 + 8, 1);
++        delay(200);
++    }
++#if defined(CONFIG_IDF_TARGET_ESP32S3)
++    REG_WRITE(RTC_CNTL_STORE5_REG, 0xD8000000U);
++#endif
++    esp_restart();
++}
++
++void rebootToBootMenu(bool showUi) {
++    if (showUi) {
++        wakeUpScreen();
++        tft.fillScreen(bruceConfig.bgColor);
++        tft.drawRoundRect(4, 4, tftWidth - 8, tftHeight - 8, 6, bruceConfig.priColor);
++        tft.setTextSize(FM);
++        tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
++        tft.drawCentreString("Dual-Boot Menu", tftWidth / 2, tftHeight / 2 - 18, 1);
++        tft.setTextSize(FP);
++        tft.setTextColor(bruceConfig.secColor, bruceConfig.bgColor);
++        tft.drawCentreString("Restarting to boot menu...", tftWidth / 2, tftHeight / 2 + 8, 1);
++        delay(200);
++    }
++#if defined(CONFIG_IDF_TARGET_ESP32S3)
++    REG_WRITE(RTC_CNTL_STORE5_REG, 0);
++#endif
++    esp_restart();
++}
 diff --git a/src/core/utils.h b/src/core/utils.h
-index 043a5d2..ba5fd2d 100644
+index 043a5d2d..a88505e3 100644
 --- a/src/core/utils.h
 +++ b/src/core/utils.h
-@@ -5,6 +5,9 @@
+@@ -5,6 +5,12 @@
  void backToMenu();
  void addOptionToMainMenu();
  int getBattery() __attribute__((weak));
 +int getBatteryMv() __attribute__((weak));
 +bool isSpeakerActive() __attribute__((weak));
 +void enterBootloaderMode() __attribute__((weak));
++bool isDualBootActive();
++void rebootToXiaoZhi(bool showUi = true);
++void rebootToBootMenu(bool showUi = true);
  void updateClockTimezone();
  #if !defined(HAS_RTC)
  void restorePersistedClock();
 diff --git a/src/core/wifi/webInterface.cpp b/src/core/wifi/webInterface.cpp
-index a8679bd..27f88da 100644
+index a8679bd6..7f7c83fc 100644
 --- a/src/core/wifi/webInterface.cpp
 +++ b/src/core/wifi/webInterface.cpp
 @@ -2,18 +2,25 @@
@@ -8868,7 +8970,7 @@ index a8679bd..27f88da 100644
  #include <globals.h>
  
  File uploadFile;
-@@ -22,12 +29,460 @@ FS _webFS = LittleFS;
+@@ -22,12 +29,493 @@ FS _webFS = LittleFS;
  const int default_webserverporthttp = 80;
  
  // WiFi as an Access Point
@@ -8992,6 +9094,25 @@ index a8679bd..27f88da 100644
 +    vTaskDelay(pdMS_TO_TICKS(350));
 +    enterBootloaderMode();
 +    vTaskDelete(NULL);
++}
++
++static void delayedXiaoZhiTask(void *pv) {
++    (void)pv;
++    vTaskDelay(pdMS_TO_TICKS(350));
++    rebootToXiaoZhi(false);
++    vTaskDelete(NULL);
++}
++
++static void delayedBootMenuTask(void *pv) {
++    (void)pv;
++    vTaskDelay(pdMS_TO_TICKS(350));
++    rebootToBootMenu(false);
++    vTaskDelete(NULL);
++}
++
++static bool isDualBootOtaProtected(const esp_partition_t *nextPart) {
++    if (!isDualBootActive()) return false;
++    return !nextPart || nextPart->subtype != ESP_PARTITION_SUBTYPE_APP_OTA_1;
 +}
 +
 +static void wifiSwitchStaTask(void *pv) {
@@ -9145,6 +9266,14 @@ index a8679bd..27f88da 100644
 +    <div class="stat"><b>Active Slot</b><span id="s-slot">-</span></div>
 +    <div class="stat"><b>Next Slot / Max</b><span id="s-next">-</span></div>
 +  </div>
++  <div id="dualbootBox" style="display:none;background:#0a222d;border:1px solid #00f0ff55;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:.82rem;line-height:1.45">
++    <div style="color:#00f0ff;font-weight:700;margin-bottom:6px">Dual-Boot Active (ota_0 = XiaoZhi HeyLily)</div>
++    <div style="color:#9cc3cd;margin-bottom:8px">WebOTA is protected so HeyLily in <code>ota_0</code> cannot be overwritten. Use the USB Web Flasher to update Bruce in <code>ota_1</code>, or switch OS directly:</div>
++    <div style="display:flex;gap:8px;flex-wrap:wrap">
++      <button type="button" class="btn-sm" onclick="switchOs('xiaozhi')">Boot XiaoZhi HeyLily</button>
++      <button type="button" class="btn-sm" onclick="switchOs('menu')">Open Dual-Boot Menu</button>
++    </div>
++  </div>
 +  <label class="drop" id="drop">
 +    <input type="file" id="binfile" accept=".bin">
 +    <strong>Select or Drop OTA Firmware (.bin)</strong>
@@ -9176,6 +9305,12 @@ index a8679bd..27f88da 100644
 +    const rssi=d.WIFI_RSSI?` (${d.WIFI_RSSI} dBm)`:'';
 +    $('s-net').textContent=(mode==='STA'?'LAN WiFi: ':'AP Hotspot: ')+ssid+rssi;
 +    $('s-otaurl').textContent=d.WIFI_IP?`http://${d.WIFI_IP}/ota`:'';
++    if(d.DUALBOOT){$('dualbootBox').style.display='block';}
++  }).catch(()=>{});
++}
++function switchOs(target){
++  fetch('/reboot?target='+encodeURIComponent(target)).then(r=>r.json()).then(d=>{
++    const info=$('fileinfo');info.className='fileinfo ok';info.textContent=d.msg||'Switching OS...';
 +  }).catch(()=>{});
 +}
 +loadSysInfo();
@@ -9330,7 +9465,7 @@ index a8679bd..27f88da 100644
  
  // Generate random token
  String generateToken(int length = 24) {
-@@ -42,36 +497,40 @@ String generateToken(int length = 24) {
+@@ -42,36 +530,40 @@ String generateToken(int length = 24) {
  **  Turn off the WebUI
  **********************************************************************/
  void stopWebUi() {
@@ -9385,7 +9520,7 @@ index a8679bd..27f88da 100644
  
      // Disconnect WiFi AP mode if it's the WebUI's AP
      // Check if we're in AP or APSTA mode (used by WebUI)
-@@ -82,7 +541,7 @@ void cleanlyStopWebUiForWiFiFeature() {
+@@ -82,7 +574,7 @@ void cleanlyStopWebUiForWiFiFeature() {
          vTaskDelay(pdMS_TO_TICKS(250));
      }
  
@@ -9394,7 +9529,7 @@ index a8679bd..27f88da 100644
  }
  /**********************************************************************
  **  Function: loopOptionsWebUi
-@@ -90,22 +549,36 @@ void cleanlyStopWebUiForWiFiFeature() {
+@@ -90,22 +582,36 @@ void cleanlyStopWebUiForWiFiFeature() {
  **********************************************************************/
  void loopOptionsWebUi() {
      if (isWebUIActive) {
@@ -9437,7 +9572,7 @@ index a8679bd..27f88da 100644
  }
  
  /**********************************************************************
-@@ -168,19 +641,21 @@ String listFiles(FS &fs, const String &folder) {
+@@ -168,19 +674,21 @@ String listFiles(FS &fs, const String &folder) {
  ** used by server->on functions to discern whether a user has the correct
  ** httpapitoken OR is authenticated by username and password
  **********************************************************************/
@@ -9471,7 +9606,7 @@ index a8679bd..27f88da 100644
      if (onFailureReturnLoginPage) {
          serveWebUIFile(request, "login.html", "text/html", true, login_html, login_html_size);
      } else {
-@@ -272,43 +747,117 @@ void notFound(AsyncWebServerRequest *request) { request->send(404, "text/plain",
+@@ -272,43 +780,117 @@ void notFound(AsyncWebServerRequest *request) { request->send(404, "text/plain",
  **  Function: drawWebUiScreen
  **  Draw information on screen of WebUI.
  **********************************************************************/
@@ -9615,7 +9750,7 @@ index a8679bd..27f88da 100644
  
  #if defined(HAS_TOUCH)
      TouchFooter();
-@@ -384,6 +933,7 @@ static bool startMdnsResponder() {
+@@ -384,6 +966,7 @@ static bool startMdnsResponder() {
          Serial.printf("Error setting up MDNS responder!\n");
          return false;
      }
@@ -9623,18 +9758,20 @@ index a8679bd..27f88da 100644
  
      RAM_LOG("after MDNS");
      return true;
-@@ -460,35 +1010,492 @@ void configureWebServer() {
+@@ -460,35 +1043,507 @@ void configureWebServer() {
      // System Info
      server->on("/systeminfo", HTTP_GET, [](AsyncWebServerRequest *request) {
          if (checkUserWebAuth(request)) {
 -            char response_body[300];
-+            char response_body[896];
++            char response_body[960];
              uint64_t LittleFSTotalBytes = LittleFS.totalBytes();
              uint64_t LittleFSUsedBytes = LittleFS.usedBytes();
              uint64_t SDTotalBytes = SD.totalBytes();
              uint64_t SDUsedBytes = SD.usedBytes();
 +            const esp_partition_t *runPart = esp_ota_get_running_partition();
 +            const esp_partition_t *nextPart = esp_ota_get_next_update_partition(NULL);
++            const bool dualBoot = isDualBootActive();
++            const bool otaProtected = isDualBootOtaProtected(nextPart);
 +            const char *boardName =
 +#ifdef DEVICE_NAME
 +                DEVICE_NAME;
@@ -9660,7 +9797,7 @@ index a8679bd..27f88da 100644
 +                "\"LittleFS\":{\"free\":\"%s\",\"used\":\"%s\",\"total\":\"%s\"},"
 +                "\"BAT\":%d,\"BAT_MV\":%d,\"CHG\":%s,\"CPU_MHZ\":%lu,"
 +                "\"HEAP_FREE\":\"%s\",\"PSRAM_FREE\":\"%s\","
-+                "\"OTA_SLOT\":\"%s\",\"OTA_NEXT\":\"%s\",\"OTA_MAX\":\"%s\","
++                "\"DUALBOOT\":%s,\"OTA_SLOT\":\"%s\",\"OTA_NEXT\":\"%s\",\"OTA_MAX\":\"%s\","
 +                "\"WIFI_MODE\":\"%s\",\"WIFI_IP\":\"%s\",\"WIFI_SSID\":\"%s\",\"WIFI_RSSI\":%d,\"AP_SSID\":\"%s\"}",
                  BRUCE_VERSION,
 -                "free",
@@ -9683,9 +9820,10 @@ index a8679bd..27f88da 100644
 +                (unsigned long)getCpuFrequencyMhz(),
 +                humanReadableSize(ESP.getFreeHeap()).c_str(),
 +                humanReadableSize(ESP.getFreePsram()).c_str(),
++                dualBoot ? "true" : "false",
 +                runPart ? runPart->label : "app0",
-+                nextPart ? nextPart->label : "none",
-+                nextPart ? humanReadableSize(nextPart->size).c_str() : "0 B",
++                otaProtected ? "protected (XiaoZhi)" : (nextPart ? nextPart->label : "none"),
++                otaProtected ? "USB Flasher only" : (nextPart ? humanReadableSize(nextPart->size).c_str() : "0 B"),
 +                wifiModeStr.c_str(),
 +                curIp.c_str(),
 +                curSsid.c_str(),
@@ -9812,6 +9950,13 @@ index a8679bd..27f88da 100644
 +        const esp_partition_t *nextPart = esp_ota_get_next_update_partition(NULL);
 +        if (!nextPart) {
 +            request->send(400, "application/json", "{\"ok\":false,\"msg\":\"No OTA partition found\"}");
++            return;
++        }
++        if (isDualBootOtaProtected(nextPart)) {
++            request->send(
++                409, "application/json",
++                "{\"ok\":false,\"msg\":\"Dual-Boot active: ota_0 holds XiaoZhi HeyLily. Update Bruce via USB Web Flasher (ota_1) so HeyLily is protected.\"}"
++            );
 +            return;
 +        }
 +        if (totalSize < 65536 || totalSize > nextPart->size) {
@@ -10062,6 +10207,11 @@ index a8679bd..27f88da 100644
 +                    s_otaError = "Invalid OTA image! Upload app binary (ota.bin), not factory.bin.";
 +                    return;
 +                }
++                if (isDualBootOtaProtected(esp_ota_get_next_update_partition(NULL))) {
++                    s_otaValid = false;
++                    s_otaError = "Dual-Boot active: ota_0 holds XiaoZhi HeyLily (use USB Flasher for ota_1).";
++                    return;
++                }
 +                otaAcquireLock(0);
 +                if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) {
 +                    s_otaError = Update.errorString();
@@ -10127,7 +10277,32 @@ index a8679bd..27f88da 100644
      // Get Screen
      server->on("/getscreen", HTTP_GET, [](AsyncWebServerRequest *request) {
          if (checkUserWebAuth(request)) {
-@@ -745,19 +1752,66 @@ void configureWebServer() {
+@@ -576,9 +1631,22 @@ void configureWebServer() {
+         }
+     });
+ 
+-    // Reboot device
++    // Reboot device (supports ?target=xiaozhi | ?target=menu for Dual-Boot)
+     server->on("/reboot", HTTP_GET, [](AsyncWebServerRequest *request) {
+-        if (checkUserWebAuth(request)) { ESP.restart(); }
++        if (!checkUserWebAuth(request)) return;
++        String target = request->hasArg("target") ? request->arg("target") : "";
++        if (target == "xiaozhi" && isDualBootActive()) {
++            request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Switching to XiaoZhi HeyLily...\"}");
++            xTaskCreate(delayedXiaoZhiTask, "webXiaoZhi", 3072, NULL, 1, NULL);
++            return;
++        }
++        if (target == "menu" && isDualBootActive()) {
++            request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Opening Dual-Boot Menu...\"}");
++            xTaskCreate(delayedBootMenuTask, "webBootMenu", 3072, NULL, 1, NULL);
++            return;
++        }
++        request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Rebooting...\"}");
++        xTaskCreate(delayedRestartTask, "webReboot", 2048, NULL, 1, NULL);
+     });
+ 
+     // List files
+@@ -745,19 +1813,66 @@ void configureWebServer() {
  **  Function: startWebUi
  **  Start the WebUI
  **********************************************************************/
@@ -10203,7 +10378,7 @@ index a8679bd..27f88da 100644
          options.clear();
  
          Serial.println("Configuring Webserver ...");
-@@ -771,24 +1825,179 @@ void startWebUi(bool mode_ap) {
+@@ -771,24 +1886,179 @@ void startWebUi(bool mode_ap) {
          isWebUIActive = true;
      }
      tft.setLogging();
@@ -10371,7 +10546,7 @@ index a8679bd..27f88da 100644
 +            RAM_LOG("webui-headless-ready");
 +            Serial.println("[WebUI] Ready at http://bruce.local (" + wifiIP + ")");
 +        }
-     }
++    }
 +
 +    s_webUiStarting = false;
 +    return isWebUIActive;
@@ -10381,7 +10556,7 @@ index a8679bd..27f88da 100644
 +    (void)pvParameters;
 +    for (int i = 0; i < 9 && !s_webUiCancelRequested; i++) {
 +        vTaskDelay(pdMS_TO_TICKS(50));
-+    }
+     }
 +    if (!s_webUiCancelRequested) {
 +        startWebUiHeadless(true);
 +    } else {
@@ -10397,7 +10572,7 @@ index a8679bd..27f88da 100644
 +    xTaskCreate(webUiAutoStartTask, "webUiAutoStart", 6144, NULL, 1, NULL);
  }
 diff --git a/src/core/wifi/webInterface.h b/src/core/wifi/webInterface.h
-index d14ae9f..ec18844 100644
+index d14ae9f0..ec18844b 100644
 --- a/src/core/wifi/webInterface.h
 +++ b/src/core/wifi/webInterface.h
 @@ -23,5 +23,11 @@ void serveWebUIFile(
@@ -10413,7 +10588,7 @@ index d14ae9f..ec18844 100644
  void stopWebUi();
  void cleanlyStopWebUiForWiFiFeature();
 diff --git a/src/core/wifi/wifi_common.cpp b/src/core/wifi/wifi_common.cpp
-index 0e32e4d..93762e8 100644
+index 0e32e4dd..93762e8f 100644
 --- a/src/core/wifi/wifi_common.cpp
 +++ b/src/core/wifi/wifi_common.cpp
 @@ -6,6 +6,7 @@
@@ -10540,7 +10715,7 @@ index 0e32e4d..93762e8 100644
          // Start timezone update in background if not already running
          if (timezoneTaskHandle == NULL) {
 diff --git a/src/core/wifi/wifi_common.h b/src/core/wifi/wifi_common.h
-index 8d97a20..e0d8453 100644
+index 8d97a20f..e0d84536 100644
 --- a/src/core/wifi/wifi_common.h
 +++ b/src/core/wifi/wifi_common.h
 @@ -11,6 +11,8 @@
@@ -10553,7 +10728,7 @@ index 8d97a20..e0d8453 100644
  /**
   * @brief Opens a menu to connect to a wifi
 diff --git a/src/main.cpp b/src/main.cpp
-index eebc4a9..7692e49 100644
+index eebc4a91..7692e49b 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
 @@ -109,7 +109,7 @@ void __attribute__((weak)) taskInputHandler(void *parameter) {
@@ -10619,7 +10794,7 @@ index eebc4a9..7692e49 100644
          xTaskCreate(
              wifiConnectTask,   // Task function
 diff --git a/src/modules/bjs_interpreter/ir_js.cpp b/src/modules/bjs_interpreter/ir_js.cpp
-index e23370d..fb1d66e 100644
+index e23370d7..fb1d66e0 100644
 --- a/src/modules/bjs_interpreter/ir_js.cpp
 +++ b/src/modules/bjs_interpreter/ir_js.cpp
 @@ -1,11 +1,24 @@
@@ -10657,7 +10832,7 @@ index e23370d..fb1d66e 100644
  
  #endif
 diff --git a/src/modules/bjs_interpreter/nrf24_js.cpp b/src/modules/bjs_interpreter/nrf24_js.cpp
-index a3015ff..c23e9d7 100644
+index a3015ffe..c23e9d77 100644
 --- a/src/modules/bjs_interpreter/nrf24_js.cpp
 +++ b/src/modules/bjs_interpreter/nrf24_js.cpp
 @@ -1,6 +1,24 @@
@@ -10693,7 +10868,7 @@ index a3015ff..c23e9d7 100644
  
  #endif
 diff --git a/src/modules/bjs_interpreter/protopirate_js.cpp b/src/modules/bjs_interpreter/protopirate_js.cpp
-index 09920d5..6f964a1 100644
+index 09920d59..6f964a12 100644
 --- a/src/modules/bjs_interpreter/protopirate_js.cpp
 +++ b/src/modules/bjs_interpreter/protopirate_js.cpp
 @@ -1,6 +1,20 @@
@@ -10724,7 +10899,7 @@ index 09920d5..6f964a1 100644
  #endif
 +#endif
 diff --git a/src/modules/bjs_interpreter/rfid_js.cpp b/src/modules/bjs_interpreter/rfid_js.cpp
-index 6c58542..54ffa9b 100644
+index 6c585422..54ffa9b0 100644
 --- a/src/modules/bjs_interpreter/rfid_js.cpp
 +++ b/src/modules/bjs_interpreter/rfid_js.cpp
 @@ -7,6 +7,28 @@
@@ -10764,7 +10939,7 @@ index 6c58542..54ffa9b 100644
  
  #endif
 diff --git a/src/modules/bjs_interpreter/subghz_js.cpp b/src/modules/bjs_interpreter/subghz_js.cpp
-index ffd58b4..0e2ad2b 100644
+index ffd58b47..0e2ad2bd 100644
 --- a/src/modules/bjs_interpreter/subghz_js.cpp
 +++ b/src/modules/bjs_interpreter/subghz_js.cpp
 @@ -1,11 +1,20 @@
@@ -10798,7 +10973,7 @@ index ffd58b4..0e2ad2b 100644
  
  #endif
 diff --git a/src/modules/ble/BLE_Suite.cpp b/src/modules/ble/BLE_Suite.cpp
-index 27c887d..1126e98 100644
+index 27c887d0..1126e984 100644
 --- a/src/modules/ble/BLE_Suite.cpp
 +++ b/src/modules/ble/BLE_Suite.cpp
 @@ -20,7 +20,9 @@
@@ -10875,7 +11050,7 @@ index 27c887d..1126e98 100644
  
  void showPayloadSubMenu(NimBLEAddress target, SelectedDevice deviceInfo) {
 diff --git a/src/modules/ble/ble_common.cpp b/src/modules/ble/ble_common.cpp
-index 5494bfb..0992d18 100644
+index 5494bfba..0992d181 100644
 --- a/src/modules/ble/ble_common.cpp
 +++ b/src/modules/ble/ble_common.cpp
 @@ -97,15 +97,15 @@ void stopBLEStack() {
@@ -10899,7 +11074,7 @@ index 5494bfb..0992d18 100644
      }
  
 diff --git a/src/modules/others/mic.cpp b/src/modules/others/mic.cpp
-index 6409d53..0d3f65d 100644
+index 6409d539..0d3f65de 100644
 --- a/src/modules/others/mic.cpp
 +++ b/src/modules/others/mic.cpp
 @@ -170,7 +170,14 @@ static esp_err_t micInitChannel(i2s_chan_handle_t chan, uint32_t sampleRate) {

@@ -13,10 +13,61 @@ on:
     paths:
       - 'firmware/dsolution-183-2mic-bruce.patch'
       - 'firmware/dsolution-183-2mic-displaydrivers.patch'
+      - 'firmware/dualboot-launcher/**'
       - '.github/workflows/build-dsolution-183-2mic.yml'
   workflow_dispatch:
 
 jobs:
+  build-dualboot-launcher:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    container:
+      image: espressif/idf:v5.4
+    steps:
+      - name: Allow git workspace in container
+        run: git config --global --add safe.directory '*'
+
+      - uses: actions/checkout@v4
+
+      - name: Build Dual-Boot custom bootloader + NV3023 Boot Menu
+        working-directory: firmware/dualboot-launcher
+        run: |
+          set -e
+          set -o pipefail
+          if [ -f /opt/esp/idf/export.sh ]; then
+            . /opt/esp/idf/export.sh
+          elif [ -n "${IDF_PATH:-}" ] && [ -f "$IDF_PATH/export.sh" ]; then
+            . "$IDF_PATH/export.sh"
+          fi
+          idf.py set-target esp32s3
+          idf.py build 2>&1 | tee idf-build.log
+          BOOTLOADER_BIN=build/bootloader/bootloader.bin
+          MENU_BIN=build/dualboot_launcher.bin
+          PART_BIN=build/partition_table/partition-table.bin
+          ls -lh "$BOOTLOADER_BIN" "$MENU_BIN" "$PART_BIN"
+          BOOT_SIZE=$(stat -c%s "$BOOTLOADER_BIN")
+          MENU_SIZE=$(stat -c%s "$MENU_BIN")
+          if [ "$BOOT_SIZE" -gt 28672 ]; then
+            echo "::error title=bootloader size::Bootloader size $BOOT_SIZE exceeds 28 KB limit before 0x8000"
+            exit 1
+          fi
+          if [ "$MENU_SIZE" -gt 245760 ]; then
+            echo "::error title=menu size::Dual-Boot Menu size $MENU_SIZE exceeds 240 KB safety cap for 256 KB factory slot"
+            exit 1
+          fi
+          echo "::notice title=dualboot report::bootloader=${BOOT_SIZE} B, dualboot_menu=${MENU_SIZE} B"
+          mkdir -p dist
+          cp "$BOOTLOADER_BIN" dist/bootloader_dualboot.bin
+          cp "$MENU_BIN" dist/dualboot_menu.bin
+          cp "$PART_BIN" dist/partition-table-default.bin
+
+      - name: Upload Dual-Boot Launcher Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: DSolution-183-2mic-dualboot-launcher
+          path: firmware/dualboot-launcher/dist/*
+          if-no-files-found: error
+
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 120
