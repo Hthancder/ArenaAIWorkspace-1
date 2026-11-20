@@ -1,0 +1,3 @@
+# The upstream Bruce checkout used while porting the DSolution 1.83 2-Mic board.
+# Only the board port itself is tracked (as a patch): firmware/dsolution-183-2mic-bruce.patch
+firmware/Bruce/

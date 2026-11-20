@@ -1,0 +1,853 @@
+diff --git a/boards/dsolution-183-2mic/NV3030B_Panel.h b/boards/dsolution-183-2mic/NV3030B_Panel.h
+new file mode 100644
+index 0000000..e452ec7
+--- /dev/null
++++ b/boards/dsolution-183-2mic/NV3030B_Panel.h
+@@ -0,0 +1,148 @@
++// =====================================================================================
++//  boards/dsolution-183-2mic/NV3030B_Panel.h
++//
++//  LovyanGFX panel class for the NewVision NV3030B 1.83" IPS panel (240x284 glass,
++//  240x320 controller RAM) used on the DSolution 1.83" 2-Mic board.
++//
++//  The NV3030B is NOT an ST7789. Its registers only accept writes after the 0xFD
++//  "unlock" pages are selected, and its power/gamma tables are its own -- driving it
++//  with an ST7789 init sequence (LovyanGFX's Panel_ST7789, TFT_eSPI's ST7789_DRIVER,
++//  Arduino_GFX's Arduino_ST7789) leaves the panel black. That is why this board ships
++//  its own panel class instead of reusing a stock one.
++//
++//  This header is pulled in from Bruce's include/DisplayDrivers_User_Setup.h (the
++//  documented extension point of the DisplayDrivers library) when the board macro
++//  DSOLUTION_183_2MIC is set, so the class exists before DisplayDrivers' LovyanGFX
++//  backend names it via -DLOVYAN_PANEL=Panel_NV3030B.
++//
++//  Everything else -- pins, geometry, offsets, orientation -- is configured at runtime
++//  from DisplayConfig (the -DTFT_* flags in this board's .ini); this file only carries
++//  the part no build flag can express: the init table and the MADCTL rotation table.
++// =====================================================================================
++
++#ifndef DSOLUTION_NV3030B_PANEL_H
++#define DSOLUTION_NV3030B_PANEL_H
++
++#include <Arduino.h>
++#include <LovyanGFX.hpp>
++#include <lgfx/v1/panel/Panel_LCD.hpp>
++
++namespace lgfx {
++
++// MADCTL bits of the NV3030B (same layout as ST7789/NV30xx family).
++//   MY = 0x80 : mirror Y (vertical flip / 180 degree flip together with MX)
++//   MX = 0x40 : mirror X
++//   MV = 0x20 : swap X and Y (transpose)
++//   0x08      : BGR colour order instead of RGB
++struct Panel_NV3030B : public Panel_LCD {
++    Panel_NV3030B() {
++        // Native (untransposed) geometry: 240 columns x 284 visible rows.
++        // The controller has 320 rows of RAM and the visible 284 are the *last* ones,
++        // i.e. the window starts at row 36 -- see the setRotation() override below for how
++        // that offset is applied in each orientation.
++        _cfg.panel_width = 240;
++        _cfg.panel_height = 284;
++        _cfg.memory_width = 240;
++        _cfg.memory_height = 320;
++
++        _cfg.dummy_read_pixel = 8;
++        _cfg.dummy_read_bits = 1;
++        _cfg.readable = false; // no MISO on this board
++    }
++
++protected:
++    // -----------------------------------------------------------------------------
++    //  Init sequence -- the vendor table, verbatim.
++    //
++    //  Encoding (LovyanGFX command_list): {cmd, arg_count | CMD_INIT_DELAY, args...,
++    //  [delay_ms]}, terminated by {0xFF, 0xFF}. CMD_INIT_DELAY is 0x80, so a delay is
++    //  written as <cmd>, 0x80, <ms>.
++    //
++    //  Deliberately absent from this table, because LovyanGFX sends them itself once
++    //  the table has run (Panel_LCD::update_madctl / setInvert):
++    //      0x3A COLMOD -> 0x55 (RGB565)    0x36 MADCTL -> getMadCtl() below
++    //      0x21 INVON  (invert=true from -DTFT_INVERTION=1)
++    // -----------------------------------------------------------------------------
++    const uint8_t *getInitCommands(uint8_t listno) const override {
++        static constexpr uint8_t list0[] = {
++            0xFD, 2, 0x06, 0x08,                   // unlock manufacturer page 1
++            0x61, 2, 0x07, 0x04,                   //
++            0x62, 3, 0x00, 0x44, 0x45,             //
++            0x63, 4, 0x41, 0x07, 0x12, 0x12,       //
++            0x64, 1, 0x37,                         //
++            0x65, 3, 0x09, 0x10, 0x21,             //
++            0x66, 3, 0x09, 0x10, 0x21,             //
++            0x67, 2, 0x20, 0x40,                   //
++            0x68, 4, 0x90, 0x4C, 0x7C, 0x66,       //
++            0xB1, 3, 0x0F, 0x02, 0x01,             //
++            0xB4, 1, 0x01,                         //
++            0xB5, 4, 0x02, 0x02, 0x0A, 0x14,       //
++            0xB6, 5, 0x04, 0x01, 0x9F, 0x00, 0x02, //
++            0xDF, 1, 0x11,                         //
++            0xE2, 6, 0x13, 0x00, 0x00, 0x30, 0x33, 0x3F, //
++            0xE5, 6, 0x3F, 0x33, 0x30, 0x00, 0x00, 0x13, //
++            0xE1, 2, 0x00, 0x57,                   //
++            0xE4, 2, 0x58, 0x00,                   //
++            0xE0, 8, 0x01, 0x03, 0x0D, 0x0E, 0x0E, 0x0C, 0x15, 0x19, //
++            0xE3, 8, 0x1A, 0x16, 0x0C, 0x0F, 0x0E, 0x0D, 0x02, 0x01, //
++            0xE6, 2, 0x00, 0xFF,                   //
++            0xE7, 6, 0x01, 0x04, 0x03, 0x03, 0x00, 0x12, //
++            0xE8, 3, 0x00, 0x70, 0x00,             //
++            0xEC, 1, 0x52,                         //
++            0xF1, 3, 0x01, 0x01, 0x02,             //
++            0xF6, 4, 0x09, 0x10, 0x00, 0x00,       //
++            0xFD, 2, 0xFA, 0xFC,                   // unlock manufacturer page 2
++            0x35, 1, 0x00,                         // TEON: tearing effect line off
++            0x11, 0x80, 200,                       // SLPOUT, wait 200 ms
++            0x29, 0x80, 10,                        // DISPON, wait 10 ms
++            0xFF, 0xFF,                            // end of table
++        };
++        switch (listno) {
++            case 0: return list0;
++            default: return nullptr;
++        }
++    }
++
++    // -----------------------------------------------------------------------------
++    //  Rotation -> MADCTL.
++    //
++    //  index: internal rotation (user rotation + TFT_ROTATION). The board boots with
++    //  -DROTATION=0 and -DTFT_ROTATION=3, so the boot orientation is index 3:
++    //
++    //      MV | MY  = 0xA0 | BGR = 0xA8
++    //
++    //  which is exactly the vendor's "Swap XY = true, Mirror X = false, Mirror Y = true,
++    //  BGR" for this panel. The other three entries keep the usual four-step cycle, so
++    //  rotating from Config > Rotation stays correct instead of mirroring the image.
++    // -----------------------------------------------------------------------------
++    uint8_t getMadCtl(uint8_t r) const override {
++        static constexpr uint8_t madctl_table[] = {
++            0x00, // 0: no transform (portrait, 240 x 284)
++            0x60, // 1: MV | MX
++            0xC0, // 2: MX | MY (portrait, flipped)
++            0xA0, // 3: MV | MY (landscape 284 x 240 -- the board's default)
++        };
++        // Bit 3 of MADCTL selects BGR; the panel is wired BGR, so it is always set here.
++        // Keeping it here (instead of relying on -DTFT_RGB_ORDER) makes the colour order
++        // independent of how the backend maps the rgbOrder flag.
++        return madctl_table[r & 3] | 0x08;
++    }
++
++    // -----------------------------------------------------------------------------
++    //  Row offset for the portrait rotations.
++    //
++    //  The 284 visible rows are the *last* ones of the controller's 320, i.e. the window
++    //  starts at row 36. Panel_LCD lands there by itself for the transposed (MV) rotations,
++    //  because it swaps the axes and computes _colstart = memory_width - (panel_width +
++    //  offset_x) = 320 - 284 = 36. For the two portrait rotations there is no swap, and it
++    //  would leave the window at rows 0..283 instead -- visible as a 36-pixel shift.
++    // -----------------------------------------------------------------------------
++    void setRotation(uint_fast8_t r) override {
++        Panel_LCD::setRotation(r);
++        if ((_internal_rotation & 1) == 0) { _rowstart = _cfg.memory_height - (_cfg.panel_height + _cfg.offset_y); }
++    }
++};
++
++} // namespace lgfx
++
++#endif // DSOLUTION_NV3030B_PANEL_H
+diff --git a/boards/dsolution-183-2mic/README.md b/boards/dsolution-183-2mic/README.md
+new file mode 100644
+index 0000000..06a56d6
+--- /dev/null
++++ b/boards/dsolution-183-2mic/README.md
+@@ -0,0 +1,165 @@
++# DSolution 1.83" 2-Mic
++
++Bruce port for the **DSolution 1.83 inch 2-Mic** board (ESP32-S3 + NV3030B panel +
++ES7210 mic ADC + ES8311 speaker DAC).
++
++```
++pio run -e dsolution-183-2mic            # build
++pio run -e dsolution-183-2mic -t upload  # flash (USB-C, native USB-CDC)
++pio device monitor                       # 115200
++```
++
++## Hardware
++
++| Block | Part | Notes |
++| --- | --- | --- |
++| MCU | ESP32-S3, 16 MB QSPI flash, 8 MB octal PSRAM @80 MHz | `qio_opi`, `custom_16Mb.csv` |
++| Display | 1.83" IPS, **NV3030B** (NewVision) | 240x284 glass, 240x320 controller RAM, 4-wire SPI |
++| Mic ADC | ES7210 @ I2C **0x40** | 2 mics, MIC3 carries the ES8311 echo loopback (AEC reference) |
++| Speaker DAC | ES8311 @ I2C **0x18** | I2S slave, MCLK from the ESP32 |
++| Amplifier | NS4150 class-D | enabled by PA Enable, **GPIO4 = HIGH** |
++| LED | 1x WS2812 | GPIO48, GRB |
++| Buttons | Boot (0), Vol+ (39), Vol- (40) | all active LOW |
++| Power | charge detect 47, battery status 38, sleep control 21 | see caveats |
++
++### Pinout
++
++| Function | GPIO | | Function | GPIO |
++| --- | --- | --- | --- | --- |
++| LCD CS | 14 | | I2C SDA (codecs) | 12 |
++| LCD DC | 8 | | I2C SCL (codecs) | 11 |
++| LCD RES | 18 | | I2S MCLK | 5 |
++| LCD SCL/CLK | 9 | | I2S BCLK | 15 |
++| LCD SDA/MOSI | 10 | | I2S WS/LRCK | 16 |
++| LCD BL (PWM) | 13 | | I2S DIN (ES7210 -> ESP32) | 7 |
++| LED WS2812 | 48 | | I2S DOUT (ESP32 -> ES8311) | 6 |
++| Button Boot/Sel | 0 | | PA Enable | 4 |
++| Button Vol+ | 39 | | Charge detect | 47 |
++| Button Vol- | 40 | | Battery status | 38 |
++| Sleep control | 21 | | | |
++
++## Display (NV3030B)
++
++The NV3030B is **not** an ST7789. It only accepts register writes after the `0xFD`
++unlock pages are selected, and its power/gamma tables are its own; an ST7789 init
++sequence (LovyanGFX `Panel_ST7789`, TFT_eSPI `ST7789_DRIVER`, Arduino_GFX
++`Arduino_ST7789`) leaves the panel black. DisplayDrivers has no NV3030B profile, so
++this board ships its own panel class:
++
++* `NV3030B_Panel.h` — `lgfx::Panel_NV3030B : public lgfx::Panel_LCD`, carrying the
++  vendor init table verbatim plus the MADCTL table (rotation -> MV/MX/MY, BGR bit).
++* `include/DisplayDrivers_User_Setup.h` includes it when `DSOLUTION_183_2MIC` is set.
++  That header is the documented DisplayDrivers extension point and the only
++  project-owned file read early enough for `LOVYAN_PANEL` to resolve.
++* The `.ini` selects the backend (`-DUSE_LOVYANGFX=1`, `-DLOVYAN_PANEL=Panel_NV3030B`)
++  and describes the panel geometry (`TFT_WIDTH/HEIGHT/MEM_*`, `TFT_ROTATION`,
++  `TFT_INVERTION`, pins, 80 MHz SPI).
++
++Why LovyanGFX and not the Arduino_GFX default: Arduino_GFX builds its panels from a
++fixed factory table, so a board cannot inject a controller it does not know. LovyanGFX
++allows a panel class of its own without patching a library.
++
++Mapping of the vendor's panel table to this port:
++
++| Vendor | Here |
++| --- | --- |
++| Swap XY = true, Mirror X = false, Mirror Y = true | `getMadCtl()` index 3 = `MV|MY` (`0xA0`) |
++| Color order BGR | bit 3 (`0x08`) OR'd in `getMadCtl()` -- independent of `TFT_RGB_ORDER` |
++| Invert colors = true | `-DTFT_INVERTION=1` -> `Panel_LCD::setInvert()` sends `0x21` |
++| Offset X = 36 | derived by Panel_LCD (`memory_height - panel_height`); **not** set as `TFT_OFFSET_*` |
++| 240x280 panel, 284x240 effective | `TFT_WIDTH=240`, `TFT_HEIGHT=284`, `TFT_MEM_HEIGHT=320` |
++| SPI 40-80 MHz | `-DTFT_WRITE_FREQ=80000000` (drop to 40000000 if the ribbon is long) |
++
++Orientation: `-DTFT_ROTATION=3` is the panel's *mounting* offset and `-DROTATION=0`
++the runtime rotation, so the board boots in the vendor landscape (284x240) and
++Config > Rotation cycles through the normal four orientations.
++
++If the colours come out inverted or the wrong way round on a different production
++batch, the two knobs are `-DTFT_INVERTION` and the `| 0x08` in `getMadCtl()`.
++
++## Audio
++
++Init order follows the vendor's mandatory sequence — **I2C, I2S, ES8311, ES7210, PA
++Enable** — split across the two hooks Bruce calls:
++
++* `_setup_gpio()`: I2C on 12/11 (`sys_i2c`, 100 kHz), I2S pins
++  (`speaker_bus` = bclk 15 / ws 16 / dout 6 / mclk 5, `mic_bus` = bclk 15 / din 7 /
++  ws 16 / `MIC_TYPE_I2S_MSB`), and **PA Enable GPIO4 HIGH immediately**, so the amp is
++  never left floating.
++* `_setup_codec_speaker(true)` (called before playback): ES8311 bring-up at `0x18`
++  (reset, clocks, 16-bit I2S slave, DAC power, 0 dB digital volume), then PA Enable HIGH.
++* `_setup_codec_mic(true)` (called before capture): ES7210 bring-up at `0x40` — the
++  Espressif `esp_codec_dev` register sequence: reset, HPF, analog power, 16-bit I2S
++  slave, clock dividers for MCLK = 256 x fs, MIC1/MIC2 gain 24 dB, MIC3 (AEC
++  reference) 0 dB, then power-on.
++
++MCLK: the ESP32 is the I2S master, so MCLK follows the sample rate at a fixed 256x
++ratio — 6.144 MHz at 24 kHz (vendor table) and 12.288 MHz at 48 kHz, which is the rate
++Bruce's own audio paths run at (speaker playback follows the file, capture is fixed at
++48 kHz). The ES7210 dividers are therefore programmed for the 48 kHz row of the
++Espressif coefficient table; the 256x rule the vendor insists on is unchanged.
++
++The ES7210 needs an MCLK pin, and Bruce's microphone path never routed one. The small
++patch in `src/modules/others/mic.cpp` reuses `bruceConfigPins.speaker_bus.mclk` for the
++mic I2S channel when the board declared one (nothing else drives that pin while the mic
++runs). Without it the mic ADC stays silent.
++
++Volume: `bruceConfig.soundVolume` scales the samples in software; the ES8311 DAC
++volume is left at 0 dB (`0x32 = 0xBF`). The vendor's "42 dB" is the chip's *maximum*
++gain setting, not the default.
++
++ES7210 echo reference: MIC3 is the internal ES8311 -> ES7210 loopback, configured at
++unity gain. Nothing in Bruce consumes it yet (there is no AEC in the firmware), but the
++register setup keeps it clean if an AEC-enabled app is added.
++
++## Buttons
++
++`HAS_3_BUTTONS`: **Prev** = Vol- (40), **Next** = Vol+ (39), **Sel** = Boot (0),
++**Prev+Next** together = Esc. All three are wired to GND (`pullup = true`,
++`activeHigh = false`) and polled through `hal_buttons_poll_3()`.
++
++Note: `src/modules/others/mic.cpp` calls `gpio_reset_pin(GPIO_NUM_0)` when a capture
++session ends (a leftover from boards whose mic power rail sits on GPIO0). Here GPIO0 is
++the Sel button, so it is re-armed by the boot strap's pull-up and keeps working, but if
++Sel ever stops responding after using the microphone, that call is the reason --
++re-run `hal_buttons_init(buttonsCfg(), 3)` (or `pinMode(0, INPUT_PULLUP)`) from
++`_late_setup_gpio()`.
++
++## Power / battery
++
++* **Charge detect (47)** — driven by the charger's open-drain status output; pulled up,
++  `isCharging()` returns true while it reads LOW. Flip the comparison in
++  `interface.cpp` if this board's charger is active HIGH.
++* **Battery status (38)** — declared as `ANALOG_BAT_PIN` exactly as the vendor table
++  says. **Caveat:** on the ESP32-S3 the ADC channels are GPIO1-GPIO10 (ADC1) and
++  GPIO11-GPIO20 (ADC2); GPIO38 has no ADC channel, so `analogRead(38)` cannot return a
++  battery voltage. If the battery gauge reads 0 % (or jumps), that pin needs verifying
++  against the schematic — most likely it is a digital "battery low" input, or the divider
++  is on a different pin. Change `ANALOG_BAT_PIN` in the `.ini` (or override
++  `getBattery()` in `interface.cpp`) once confirmed.
++* **Sleep control (21)** — held HIGH while running, driven LOW in `powerOff()` before
++  deep sleep, which releases the board's power latch. If GPIO21 turns out to be an input
++  rather than a latch enable, `powerOff()` still ends in deep sleep and nothing is lost;
++  if the pin is *inverted* on this revision, swap HIGH/LOW in `_setup_gpio()` and
++  `powerOff()`.
++
++## Files touched outside this folder
++
++Two one-line-ish hooks, both documented in place:
++
++1. `include/DisplayDrivers_User_Setup.h` — includes `NV3030B_Panel.h` for this board so
++   `-DLOVYAN_PANEL=Panel_NV3030B` resolves.
++2. `src/modules/others/mic.cpp` — routes an MCLK to `MIC_TYPE_I2S_MSB` capture when the
++   board declares one on its speaker bus (needed by the ES7210).
++
++## Status / what is not verified on hardware
++
++This port was written from the vendor table and cross-checked against the upstream
++drivers (LovyanGFX `Panel_LCD`, Espressif `esp_codec_dev`, the working ES8311 board
++`boards/ES3C28P`), but **it has not been flashed on a real board**. Expect to tune,
++in this order:
++
++1. backlight and orientation (`TFT_INVERTION`, `getMadCtl()`),
++2. SPI clock (drop to 40 MHz if the image tears or the panel stays dark on a cold boot),
++3. ES8311 volume/clock registers if playback is distorted,
++4. ES7210 gain and the MCLK patch if capture is silent.
+diff --git a/boards/dsolution-183-2mic/dsolution-183-2mic.ini b/boards/dsolution-183-2mic/dsolution-183-2mic.ini
+new file mode 100644
+index 0000000..bfc8d74
+--- /dev/null
++++ b/boards/dsolution-183-2mic/dsolution-183-2mic.ini
+@@ -0,0 +1,132 @@
++; =====================================================================================
++;  DSolution 1.83" 2-Mic  --  ESP32-S3 / NV3030B / ES7210 + ES8311
++;
++;  Hardware
++;    - ESP32-S3, 16 MB QSPI flash, 8 MB octal (OPI) PSRAM at 80 MHz
++;    - 1.83" IPS 240x284, NewVision NV3030B controller, 4-wire SPI  (284x240 in use)
++;    - ES7210 2-channel mic ADC + ES8311 speaker DAC + NS4150 class-D amplifier
++;    - 1x WS2812 (NeoPixel) on GPIO48
++;    - Buttons: Boot/Sel (GPIO0), Vol+ (GPIO39), Vol- (GPIO40)
++;    - Charge detect GPIO47, battery status GPIO38, sleep control GPIO21
++;
++;  Build:  pio run -e dsolution-183-2mic
++;  Flash:  pio run -e dsolution-183-2mic -t upload
++;
++;  Read README.md in this folder before flashing: the display needs a panel class of
++;  its own (NV3030B_Panel.h) and audio needs the board's codec hooks in interface.cpp.
++; =====================================================================================
++
++[env:dsolution-183-2mic]
++board = esp32s3
++board_build.partitions = custom_16Mb.csv
++board_upload.flash_size = 16MB
++board_upload.maximum_size = 16777216
++; Octal (OPI) PSRAM -> qio_opi. Flash itself stays QIO.
++board_build.arduino.memory_type = qio_opi
++board_upload.speed = 921600
++
++; Compiles this folder's interface.cpp. Without it the weak no-op defaults win and the
++; board boots with no pins, no buttons and no codec initialisation at all.
++build_src_filter = ${env.build_src_filter} +<../boards/dsolution-183-2mic>
++
++build_flags =
++	${env.build_flags}
++	-Iboards/dsolution-183-2mic
++
++	; ==================== Framework control ====================
++	-DCORE_DEBUG_LEVEL=1
++	-DARDUINO_USB_CDC_ON_BOOT=1   ; Serial over the native USB-CDC port (Serial Commands)
++	-DARDUINO_USB_MODE=1
++	-DBOARD_HAS_PSRAM=1           ; must match board_build.arduino.memory_type above
++	-DDISABLE_ALL_LIBRARY_WARNINGS
++
++	; ==================== Board identity ====================
++	-DDSOLUTION_183_2MIC=1        ; selects the NV3030B panel class in include/DisplayDrivers_User_Setup.h
++	-DDEVICE_NAME='"DSolution 1.83 2Mic"'
++
++	; ==================== Display: NV3030B, LovyanGFX backend ====================
++	; LovyanGFX is used (instead of the Arduino_GFX default) because it lets the board
++	; supply a panel class with its own init table -- the NV3030B is not an ST7789 and
++	; must not be driven with the ST7789 table. See NV3030B_Panel.h.
++	-DUSE_LOVYANGFX=1
++	-DLOVYAN_BUS=Bus_SPI
++	-DLOVYAN_PANEL=Panel_NV3030B
++
++	; Pins (from the vendor pinout)
++	-DTFT_CS=14
++	-DTFT_DC=8
++	-DTFT_RST=18
++	-DTFT_SCLK=9
++	-DTFT_MOSI=10
++	-DTFT_MISO=-1                 ; panel is write-only on this board
++	-DTFT_BL=13                   ; backlight, PWM through hal_bright_*
++
++	; Panel geometry, expressed in the controller's native (untransposed) frame:
++	; 240 columns x 320 rows of RAM, of which the 240x284 glass covers the last 284 rows.
++	;
++	; No -DTFT_OFFSET_* on purpose: the 36-row offset the vendor quotes ("Offset X = 36")
++	; is simply where a 284-pixel window sits inside 320 rows of RAM, and Panel_LCD already
++	; derives it (mw - (pw + ox)). Adding it here as well would shift the image by 36px.
++	-DTFT_WIDTH=240
++	-DTFT_HEIGHT=284
++	-DTFT_MEM_WIDTH=240
++	-DTFT_MEM_HEIGHT=320
++
++	; Mounting. TFT_ROTATION is the panel's mounting offset (not the runtime rotation):
++	; 3 makes the boot orientation index 3 = MADCTL MV|MY|BGR, i.e. the vendor's
++	; "Swap XY, Mirror Y, BGR" landscape. ROTATION is the runtime rotation the user sees
++	; and can change from Config > Rotation; 0 keeps that vendor landscape as the default.
++	-DTFT_ROTATION=3
++	-DROTATION=0
++
++	-DTFT_INVERTION=1             ; vendor: "Invert colors = true" -- mandatory on NV3030B
++	-DTFT_IPS=1
++	-DTFT_SPI_HOST=1              ; SPI2_HOST on the S3 (0 is SPI1, unusable for displays)
++	-DTFT_SPI_MODE=0
++	-DTFT_WRITE_FREQ=80000000     ; vendor allows 40-80 MHz
++	-DTFT_READ_FREQ=16000000
++	-DTFT_BUS_SHARED=false        ; nothing else on the display SPI bus
++
++	; ==================== Audio (ES7210 mic ADC + ES8311 DAC + NS4150) ====================
++	; Pins and the codec register programming live in interface.cpp:
++	;   _setup_codec_speaker()  -> ES8311 @0x18, then PA Enable (GPIO4) HIGH
++	;   _setup_codec_mic()      -> ES7210 @0x40
++	; I2C (SDA 12 / SCL 11) is registered as sys_i2c in _setup_gpio().
++	-DHAS_SPEAKER=1
++	-DHAS_MICROPHONE=1
++
++	; ==================== LED ====================
++	-DHAS_RGB_LED=1
++	-DRGB_LED=48
++	-DLED_TYPE=WS2812B
++	-DLED_ORDER=GRB
++	-DLED_COUNT=1
++	-DLED_COLOR_STEP=5
++
++	; ==================== Battery ====================
++	; Vendor: "Battery Status" on GPIO38 through a divider. NOTE: on the ESP32-S3 the
++	; ADC pins are GPIO1-GPIO20 only, GPIO38 has no ADC channel -- see README.md.
++	-DANALOG_BAT_PIN=38
++	-DANALOG_BAT_MULTIPLIER=2.0f
++	-DANALOG_BAT_MIN_MV=3000
++	-DANALOG_BAT_MAX_MV=4200
++
++	; ==================== Buttons ====================
++	; 3 buttons: btn1 = Vol- = Prev, btn2 = Vol+ = Next, btn3 = Boot = Sel.
++	; Prev+Next together = Esc.
++	-DHAS_3_BUTTONS=1
++
++	; ==================== Power / sleep ====================
++	; Boot (GPIO0) is both the Sel button and the deep-sleep wake source, so the shared
++	; goToDeepSleep()/power-save path has something to wake the board with.
++	-DDEEPSLEEP_WAKEUP_PIN=0
++	-DDEEPSLEEP_PIN_ACT=0
++
++	; ==================== USB ====================
++	-DUSB_as_HID=1
++
++lib_deps =
++	${env.lib_deps}
++	; The S3 + Arduino 3.3.x combination needs LovyanGFX from develop: the 1.2.7 release
++	; predates Arduino 3.3.4 (see lib/DisplayDrivers/README.md, "Installing").
++	https://github.com/lovyan03/LovyanGFX#develop
+diff --git a/boards/dsolution-183-2mic/interface.cpp b/boards/dsolution-183-2mic/interface.cpp
+new file mode 100644
+index 0000000..bf6ee18
+--- /dev/null
++++ b/boards/dsolution-183-2mic/interface.cpp
+@@ -0,0 +1,328 @@
++// =====================================================================================
++//  boards/dsolution-183-2mic/interface.cpp
++//
++//  DSolution 1.83" 2-Mic -- ESP32-S3, NV3030B 240x284 IPS, ES7210 mic ADC + ES8311
++//  speaker DAC + NS4150 amplifier, WS2812 on GPIO48.
++//
++//  What this file does, in boot order:
++//    _setup_gpio()        runtime pin defaults (I2C / I2S / IR / RF), PA Enable HIGH,
++//                         sleep control HIGH, charge detect input, button HAL
++//    _post_setup_gpio()   backlight PWM (needs the TFT to be initialised first)
++//    InputHandler()       3-button poll (Vol- = Prev, Vol+ = Next, Boot = Sel)
++//    _setup_codec_speaker()   ES8311 register bring-up (0x18) -> PA Enable HIGH
++//    _setup_codec_mic()       ES7210 register bring-up (0x40)
++//    isCharging() / powerOff()
++//
++//  The display is configured entirely by the .ini (LovyanGFX panel class
++//  NV3030B_Panel.h); nothing display-related is needed here.
++// =====================================================================================
++
++#include "core/bus_HAL.h"
++#include "core/powerSave.h"
++#include "hal/bright/bright.h"
++#include "hal/device.h"
++#include "hal/inputs/buttons.h"
++#include <Wire.h>
++#include <esp_sleep.h>
++#include <globals.h>
++#include <interface.h>
++
++// -------------------------------------------------------------------------------------
++//  Wiring (vendor pinout)
++// -------------------------------------------------------------------------------------
++#define PIN_I2C_SDA 12 // codec control bus (ES7210 + ES8311)
++#define PIN_I2C_SCL 11
++
++#define PIN_I2S_MCLK 5  // 6.144 MHz at 24 kHz; 12.288 MHz at 48 kHz (ratio 256)
++#define PIN_I2S_BCLK 15
++#define PIN_I2S_WS 16
++#define PIN_I2S_DIN 7  // ES7210 -> ESP32 (mic data)
++#define PIN_I2S_DOUT 6 // ESP32 -> ES8311 (speaker data)
++#define PIN_PA_ENABLE 4 // NS4150 enable: HIGH = speaker on (mandatory)
++
++#define PIN_BTN_PREV 40 // Volume down
++#define PIN_BTN_NEXT 39 // Volume up
++#define PIN_BTN_SEL 0   // Boot
++
++#define PIN_CHARGE_DETECT 47 // charger status in (active LOW on most charger ICs)
++#define PIN_BAT_STATUS 38    // vendor calls this the battery ADC pin
++#define PIN_SLEEP_CTRL 21    // sleep / power-latch control (RTC domain)
++
++// Codec I2C addresses (7-bit)
++#define ES8311_ADDR 0x18
++#define ES7210_ADDR 0x40
++
++// -------------------------------------------------------------------------------------
++//  Buttons -- HAS_3_BUTTONS in the .ini: btn1 = Prev, btn2 = Next, btn3 = Sel,
++//  Prev+Next together = Esc. All three are wired to GND, so active LOW + pull-up.
++// -------------------------------------------------------------------------------------
++static DeviceButtons buttonsCfg() {
++    DeviceButtons cfg;
++    cfg.btn1 = PIN_BTN_PREV;
++    cfg.btn2 = PIN_BTN_NEXT;
++    cfg.btn3 = PIN_BTN_SEL;
++    cfg.pullup = true;
++    cfg.activeHigh = false;
++    return cfg;
++}
++
++// =====================================================================================
++//  Codec helpers
++// =====================================================================================
++
++static void codecWrite(uint8_t addr, uint8_t reg, uint8_t value) {
++    TwoWire *wire = getSysI2CBus();
++    if (!wire) return;
++    wire->beginTransmission(addr);
++    wire->write(reg);
++    wire->write(value);
++    wire->endTransmission();
++}
++
++static inline void es8311Write(uint8_t reg, uint8_t value) { codecWrite(ES8311_ADDR, reg, value); }
++static inline void es7210Write(uint8_t reg, uint8_t value) { codecWrite(ES7210_ADDR, reg, value); }
++
++// -------------------------------------------------------------------------------------
++//  ES8311 (speaker DAC)
++//
++//  I2S slave, 16-bit, MCLK taken from the MCLK pin with a 256 x fs ratio (vendor:
++//  6.144 MHz at 24 kHz). The register values mirror the ES8311 bring-up already used by
++//  boards/ES3C28P, which runs this chip at that same 256 x fs ratio.
++// -------------------------------------------------------------------------------------
++static void es8311Init() {
++    es8311Write(0x00, 0x1F); // reset
++    delay(20);
++    es8311Write(0x00, 0x00); // release reset
++    es8311Write(0x00, 0x80); // power on
++
++    es8311Write(0x01, 0x3F); // all clocks on, MCLK from the MCLK pin
++    es8311Write(0x02, 0x00); // pre_div = 1, pre_multi = 1x  -> 256 x fs
++    es8311Write(0x03, 0x10); // ADC OSR
++    es8311Write(0x04, 0x10); // DAC OSR
++    es8311Write(0x05, 0x00); // ADC/DAC clock divider = 1
++    es8311Write(0x06, 0x03); // BCLK divider (master mode only)
++    es8311Write(0x07, 0x00); // LRCK divider high
++    es8311Write(0x08, 0xFF); // LRCK divider low
++
++    es8311Write(0x09, 0x0C); // SDP in : 16-bit I2S
++    es8311Write(0x0A, 0x0C); // SDP out: 16-bit I2S
++
++    es8311Write(0x0D, 0x01); // power up analog
++    es8311Write(0x0E, 0x02); // analog PGA / modulator
++    es8311Write(0x12, 0x00); // power up DAC
++    es8311Write(0x13, 0x10); // enable HP drive output
++    es8311Write(0x1C, 0x6A); // ADC EQ bypass / DC offset cancel
++    es8311Write(0x37, 0x08); // bypass DAC equaliser
++
++    es8311Write(0x32, 0xBF); // DAC digital volume: 0 dB (software volume scales this)
++}
++
++// -------------------------------------------------------------------------------------
++//  ES7210 (2-mic ADC, with the ES8311 output looped back on MIC3 as the AEC reference)
++//
++//  Sequence and clock coefficients are the ones from Espressif's esp_codec_dev driver:
++//  software reset, high-pass filters, analog power, I2S format, sample-rate dividers
++//  for MCLK = 256 x fs, mic gains, then power-on.
++//
++//  Bruce's microphone path runs at 48 kHz, so MCLK is 12.288 MHz (coefficient
++//  {12288000, 48000, adc_div 1, dll on, doubler on, osr 0x20, lrck 0x01/0x00}).
++//  Same 256 x fs rule as the vendor's 24 kHz / 6.144 MHz pair.
++// -------------------------------------------------------------------------------------
++static void es7210Init() {
++    // --- reset + high-pass filters ---
++    es7210Write(0x00, 0xFF); // software reset
++    es7210Write(0x00, 0x32);
++    es7210Write(0x01, 0x3F); // ADC clocks off while configuring
++    es7210Write(0x09, 0x30);
++    es7210Write(0x0A, 0x30);
++    es7210Write(0x23, 0x2A); // HPF, ADC1/2
++    es7210Write(0x22, 0x0A);
++    es7210Write(0x20, 0x0A); // HPF, ADC3/4
++    es7210Write(0x21, 0x2A);
++
++    // --- slave I2S (bit0 = 0) ---
++    es7210Write(0x08, 0x00);
++
++    // --- analog power + mic bias ---
++    es7210Write(0x40, 0xC3);
++    es7210Write(0x41, 0x70); // MIC1/2 bias
++    es7210Write(0x42, 0x70); // MIC3/4 bias
++
++    // --- data format: 16-bit, MIC1/2 on SDOUT1 ---
++    es7210Write(0x11, 0x60);
++    es7210Write(0x12, 0x00);
++
++    // --- clock dividers for MCLK = 12.288 MHz / fs = 48 kHz ---
++    es7210Write(0x02, 0x01 | 0x40 | 0x80); // adc_div 1, doubler on, dll on  -> 0xC1
++    es7210Write(0x07, 0x20);               // OSR
++    es7210Write(0x04, 0x01);               // LRCK divider high
++    es7210Write(0x05, 0x00);               // LRCK divider low
++
++    // --- mic power + enable ---
++    es7210Write(0x47, 0x08);
++    es7210Write(0x48, 0x08);
++    es7210Write(0x49, 0x08);
++    es7210Write(0x4A, 0x08);
++    es7210Write(0x06, 0x04); // power down DLL (as the Espressif driver does)
++    es7210Write(0x4B, 0x0F); // MIC1/2 bias + ADC + PGA on
++    es7210Write(0x4C, 0x0F); // MIC3/4 bias + ADC + PGA on
++    es7210Write(0x00, 0x71);
++    es7210Write(0x00, 0x41); // device enabled
++
++    // --- gains: MIC1/MIC2 = 24 dB (reg value 8), MIC3 (AEC reference) = 0 dB ---
++    // Bit 4 of each gain register selects the differential input pair.
++    es7210Write(0x43, 0x10 | 8); // MIC1
++    es7210Write(0x44, 0x10 | 8); // MIC2
++    es7210Write(0x45, 0x10 | 0); // MIC3 -- ES8311 echo reference, unity gain
++    es7210Write(0x46, 0x10 | 0); // MIC4 -- unused
++}
++
++// =====================================================================================
++//  Codec hooks called by the audio modules (weak defaults in src/modules/others/*.cpp)
++// =====================================================================================
++
++/*********************************************************************
++** Function: _setup_codec_speaker
++** Enables / disables the speaker path.
++**
++** The order here is the vendor's mandatory one: the codec is configured over I2C
++** first, and the amplifier (PA Enable, GPIO4) is only driven HIGH afterwards. GPIO4 is
++** also set HIGH early in _setup_gpio() so the amp is never left floating.
++**********************************************************************/
++void _setup_codec_speaker(bool enable) {
++    if (enable) {
++        es8311Init();
++        delay(10);
++        digitalWrite(PIN_PA_ENABLE, HIGH); // NS4150: HIGH = amplified output on
++    } else {
++        digitalWrite(PIN_PA_ENABLE, LOW);
++        es8311Write(0x0D, 0xFC); // power down the analog block
++        es8311Write(0x00, 0x00); // hold the codec in reset
++    }
++}
++
++/*********************************************************************
++** Function: _setup_codec_mic
++** Enables / disables the ES7210 microphone ADC.
++**********************************************************************/
++void _setup_codec_mic(bool enable) {
++    if (enable) {
++        es7210Init();
++    } else {
++        es7210Write(0x00, 0x00); // reset / power down
++        es7210Write(0x4B, 0x00);
++        es7210Write(0x4C, 0x00);
++    }
++}
++
++// =====================================================================================
++//  Setup
++// =====================================================================================
++
++/***************************************************************************************
++** Function name: _setup_gpio()
++** Description:   first stage -- pins, buses, input HAL. Runs before the display,
++**                the filesystem and brucePins.conf.
++***************************************************************************************/
++void _setup_gpio() {
++    // ---- I2C: codec control bus (100 kHz, the vendor's recommended speed) ----
++    bruceConfigPins.sys_i2c = {(gpio_num_t)PIN_I2C_SDA, (gpio_num_t)PIN_I2C_SCL};
++    setSysI2CBus(&Wire);
++
++    // No second, user-facing I2C header on this board: the only exposed pins are the
++    // two volume buttons. Pointing i2c_bus at the codec bus keeps the Config > I2C
++    // menus usable (shared sys/i2c pins are handled by bus_HAL).
++    bruceConfigPins.i2c_bus = {(gpio_num_t)PIN_I2C_SDA, (gpio_num_t)PIN_I2C_SCL};
++
++    // ---- Audio ----
++    // Speaker: {bclk, ws/LRCK, dout, mclk}. MCLK comes from the ESP32 (the ES8311 is an
++    // I2S slave) at 256 x fs.
++    bruceConfigPins.speaker_bus = {
++        (gpio_num_t)PIN_I2S_BCLK, (gpio_num_t)PIN_I2S_WS, (gpio_num_t)PIN_I2S_DOUT, (gpio_num_t)PIN_I2S_MCLK
++    };
++    // Microphone: {clk/bclk, data/din, ws, type}. The ES7210 is an I2S ADC feeding DIN.
++    bruceConfigPins.mic_bus = {
++        (gpio_num_t)PIN_I2S_BCLK, (gpio_num_t)PIN_I2S_DIN, (gpio_num_t)PIN_I2S_WS, MIC_TYPE_I2S_MSB
++    };
++
++    // ---- Amplifier enable: HIGH immediately after boot (vendor requirement) ----
++    pinMode(PIN_PA_ENABLE, OUTPUT);
++    digitalWrite(PIN_PA_ENABLE, HIGH);
++
++    // ---- Power / sleep control: keep the rail latched while running ----
++    pinMode(PIN_SLEEP_CTRL, OUTPUT);
++    digitalWrite(PIN_SLEEP_CTRL, HIGH);
++
++    // ---- Charge detect + battery status ----
++    pinMode(PIN_CHARGE_DETECT, INPUT_PULLUP);
++    pinMode(PIN_BAT_STATUS, INPUT);
++
++    // ---- Buttons ----
++    hal_buttons_init(buttonsCfg(), 3);
++
++    // ---- No expansion header on this board: leave IR/RF/UART unset ----
++    bruceConfigPins.irTx = GPIO_NUM_NC;
++    bruceConfigPins.irRx = GPIO_NUM_NC;
++    bruceConfigPins.rfTx = GPIO_NUM_NC;
++    bruceConfigPins.rfRx = GPIO_NUM_NC;
++
++    Serial.begin(115200);
++}
++
++/***************************************************************************************
++** Function name: _pre_storage_gpio()
++** Description:   runs after the first TFT use, before LittleFS/SD are mounted.
++***************************************************************************************/
++void _pre_storage_gpio() {}
++
++/***************************************************************************************
++** Function name: _post_setup_gpio()
++** Description:   display + storage are up: backlight and anything sharing their buses.
++***************************************************************************************/
++void _post_setup_gpio() {
++    // Backlight on GPIO13, PWM through the shared brightness HAL. main.cpp applies the
++    // user's saved brightness right after this returns; 100% here only covers boot.
++    hal_bright_attach(TFT_BL);
++    hal_bright_set(TFT_BL, 100);
++}
++
++/*********************************************************************
++** Function: _setBrightness
++** Applies a 0-100 brightness value (settings / screen-dim).
++**********************************************************************/
++void _setBrightness(uint8_t brightval) { hal_bright_set(TFT_BL, brightval); }
++
++/*********************************************************************
++** Function: InputHandler
++** Runs in taskInputHandler every ~10 ms. The task clears the input globals and holds
++** the input lock around this call, so it only has to poll the button HAL.
++**********************************************************************/
++void InputHandler(void) { hal_buttons_poll_3(buttonsCfg()); }
++
++// =====================================================================================
++//  Power
++// =====================================================================================
++
++/*********************************************************************
++** Function: isCharging
++** Charge detect on GPIO47. Charger ICs drive their status pin open-drain, so the pin is
++** pulled up and reads LOW while charging. If this board's charger works the other way
++** round, flip the comparison below.
++**********************************************************************/
++bool isCharging() { return digitalRead(PIN_CHARGE_DETECT) == LOW; }
++
++/*********************************************************************
++** Function: powerOff
++** Mutes the amplifier, kills the backlight, releases the sleep/power latch and goes to
++** deep sleep with the Boot button (GPIO0) as the wake-up source.
++**********************************************************************/
++void powerOff() {
++    hal_bright_set(TFT_BL, 0);
++    digitalWrite(PIN_PA_ENABLE, LOW);
++    es8311Write(0x0D, 0xFC);
++    digitalWrite(PIN_SLEEP_CTRL, LOW); // release the power latch (board powers down)
++    delay(50);
++
++    esp_sleep_enable_ext0_wakeup((gpio_num_t)PIN_BTN_SEL, 0); // wake on Boot = LOW
++    esp_deep_sleep_start();
++}
+diff --git a/include/DisplayDrivers_User_Setup.h b/include/DisplayDrivers_User_Setup.h
+index f67b633..7c63a84 100644
+--- a/include/DisplayDrivers_User_Setup.h
++++ b/include/DisplayDrivers_User_Setup.h
+@@ -26,4 +26,19 @@
+ #define TFT_ROTATION ROTATION
+ #endif
+ 
++// ---------------------------------------------------------------------------
++// Board-supplied panels
++//
++// A panel whose controller has no profile in DisplayDrivers ships its own
++// LovyanGFX panel class next to its interface.cpp (−Iboards/<board> is set in
++// the board's .ini). It has to be declared before lovyan.h names it through
++// LOVYAN_PANEL, and this header is the only project-owned place that is read
++// that early -- hence the include here rather than in the board's sources.
++//
++//   dsolution-183-2mic : NewVision NV3030B, 240x284 IPS  (not an ST7789)
++// ---------------------------------------------------------------------------
++#if defined(USE_LOVYANGFX) && defined(DSOLUTION_183_2MIC)
++#include <NV3030B_Panel.h>
++#endif
++
+ #endif // _BRUCE_DISPLAYDRIVERS_USER_SETUP_H
+diff --git a/platformio.ini b/platformio.ini
+index d8ec5e0..d1c5953 100644
+--- a/platformio.ini
++++ b/platformio.ini
+@@ -20,6 +20,7 @@ default_envs =
+ 	; CYD-2USB
+ 	; CYD-3248S035C
+ 	; CYD-3248S035R
++	; dsolution-183-2mic
+ 	; elecrow-24B
+ 	; elecrow-28B
+ 	; elecrow-35B
+diff --git a/src/modules/others/mic.cpp b/src/modules/others/mic.cpp
+index 6409d53..0d3f65d 100644
+--- a/src/modules/others/mic.cpp
++++ b/src/modules/others/mic.cpp
+@@ -170,7 +170,14 @@ static esp_err_t micInitChannel(i2s_chan_handle_t chan, uint32_t sampleRate) {
+         i2s_config.gpio_cfg.bclk = mic.clk;
+         i2s_config.gpio_cfg.ws = mic.ws;
+         i2s_config.gpio_cfg.dout = (gpio_num_t)I2S_PIN_NO_CHANGE;
+-        i2s_config.gpio_cfg.mclk = (gpio_num_t)I2S_PIN_NO_CHANGE;
++        // Some mic ADCs (an ES7210 behind an I2S ADC, for instance) need an external master
++        // clock, and the only MCLK pin a board declares is the speaker bus'. Nothing else
++        // drives it while the mic runs, so reuse it when the board set one.
++        gpio_num_t micMclk = (gpio_num_t)I2S_PIN_NO_CHANGE;
++#if defined(HAS_SPEAKER)
++        if (bruceConfigPins.speaker_bus.mclk != GPIO_NUM_NC) micMclk = bruceConfigPins.speaker_bus.mclk;
++#endif
++        i2s_config.gpio_cfg.mclk = micMclk;
+         i2s_config.gpio_cfg.din = mic.data;
+         return i2s_channel_init_std_mode(chan, &i2s_config);
+     }

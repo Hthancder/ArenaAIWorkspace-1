@@ -1,0 +1,63 @@
+name: Bruce build (DSolution 1.83 2-Mic)
+
+# Compiles the DSolution 1.83" 2-Mic board port against the pinned Bruce revision.
+# The sandbox that produced the port has no cross toolchain, so this workflow is the
+# compile check: it clones upstream Bruce, applies firmware/dsolution-183-2mic-bruce.patch
+# and runs the board's PlatformIO environment end to end.
+
+on:
+  push:
+    branches:
+      - arena/99e7eeb4-arenaaiworkspace-1
+    paths:
+      - 'firmware/dsolution-183-2mic-bruce.patch'
+      - '.github/workflows/build-dsolution-183-2mic.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout upstream Bruce at the pin the patch was made against
+        run: |
+          git clone --filter=blob:none https://github.com/pr3y/Bruce.git /tmp/Bruce
+          cd /tmp/Bruce
+          git fetch --depth 1 origin 2b6ba4d490bfcf94ce2574c6154537dbd5838c3d
+          git checkout 2b6ba4d490bfcf94ce2574c6154537dbd5838c3d
+          git submodule update --init --recursive
+
+      - name: Apply the board port
+        run: git -C /tmp/Bruce apply --verbose "$GITHUB_WORKSPACE/firmware/dsolution-183-2mic-bruce.patch"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache PlatformIO packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.platformio
+          key: pio-${{ runner.os }}-${{ hashFiles('firmware/dsolution-183-2mic-bruce.patch') }}
+          restore-keys: pio-${{ runner.os }}-
+
+      - name: Install PlatformIO
+        run: pip install --upgrade platformio
+
+      - name: Build dsolution-183-2mic
+        working-directory: /tmp/Bruce
+        run: pio run -e dsolution-183-2mic
+
+      - name: Upload firmware
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsolution-183-2mic-firmware
+          path: |
+            /tmp/Bruce/.pio/build/dsolution-183-2mic/firmware.bin
+            /tmp/Bruce/.pio/build/dsolution-183-2mic/firmware.elf
+          if-no-files-found: warn
