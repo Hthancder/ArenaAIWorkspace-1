@@ -414,7 +414,7 @@ index 0000000..7738be6
 +* `espressif/esp_lcd_nv3023` (components.espressif.com) -- Espressif's own NV3023 driver.
 diff --git a/boards/dsolution-183-2mic/dsolution-183-2mic.ini b/boards/dsolution-183-2mic/dsolution-183-2mic.ini
 new file mode 100644
-index 0000000..82a5e09
+index 0000000..5197f90
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/dsolution-183-2mic.ini
 @@ -0,0 +1,206 @@
@@ -502,7 +502,7 @@ index 0000000..82a5e09
 +	-DDEFAULT_PRICOLOR=0x079F     ; Cyber Cyan (#00F0FF) primary accent
 +	-DDEFAULT_SECCOLOR=0x5577     ; Ice-Teal (#50AEBD) secondary text for high readability
 +	-DDEFAULT_MAIN_MENU_STYLE=1   ; Boot directly into 4x2 Grid main menu
-+	-DDEFAULT_WEBUI_AUTOSTART=1   ; Start headless WebUI + mDNS in background at boot
++	-DDEFAULT_WEBUI_AUTOSTART=0   ; Off at boot by default to preserve internal DMA RAM & battery; toggle in Config > WebUI AutoStart
 +	-DDEFAULT_DIMMER_TIME=30      ; Dim display after 30s idle
 +	-DDEFAULT_SCREEN_OFF_TIME=45  ; Power down NV3023 panel + backlight after 45s idle
 +	-DDEFAULT_POWER_MODE=0        ; 0 = Balanced (Auto Eco on idle), 1 = Eco, 2 = Perf
@@ -7921,6 +7921,127 @@ index 5bb1c61..e3324ac 100644
 +void applyWifiPowerProfile();
 +
 +#endif
+diff --git a/src/core/radio_mem.h b/src/core/radio_mem.h
+index 0d88860..1bc151a 100644
+--- a/src/core/radio_mem.h
++++ b/src/core/radio_mem.h
+@@ -15,11 +15,17 @@
+     there isn't enough contiguous DMA memory, turning an unavoidable crash into a
+     clean, user-visible error.
+ */
++#include <Arduino.h>
+ #include <esp_heap_caps.h>
+ #include <stddef.h>
++#ifdef BOARD_HAS_PSRAM
++#include <esp32-hal-psram.h>
++#endif
+ #include "core/wifi/wifi_common.h"
+ #include <WiFi.h>
+ 
++bool isWebUiActiveOrStarting();
++
+ // Largest contiguous DMA-capable internal block, in bytes. This is the number
+ // that gates Wi-Fi/BLE controller init.
+ static inline size_t radioLargestDmaBlock() { return heap_caps_get_largest_free_block(MALLOC_CAP_DMA); }
+@@ -29,11 +35,15 @@ static inline size_t radioLargestDmaBlock() { return heap_caps_get_largest_free_
+ constexpr size_t RADIO_WIFI_MIN_DMA_BLOCK = 15 * 1024;
+ 
+ // Minimum contiguous DMA block required before bringing the BLE stack up.
+-// Measured on Cardputer ADV: with the SDR bank reserved the menu heap only has
+-// ~15.8 kB contiguous and the controller still fails ("Malloc failed"), so the
+-// threshold must sit comfortably above that; the SDR bank hand-off below gives
+-// the heap ~64 kB more when the check fails.
++// Measured on Cardputer ADV (no PSRAM): with the SDR bank reserved the menu heap
++// only has ~15.8 kB contiguous and the controller still fails ("Malloc failed").
+ constexpr size_t RADIO_BLE_MIN_DMA_BLOCK = 48 * 1024;
++#ifdef BOARD_HAS_PSRAM
++// On boards with PSRAM (e.g. ESP32-S3 OPI PSRAM), NimBLE host/task buffers >4 KB
++// live in SPIRAM; only the BT controller requires internal DMA DRAM.
++constexpr size_t RADIO_BLE_MIN_DMA_BLOCK_PSRAM = 28 * 1024;
++constexpr size_t RADIO_BLE_MIN_DMA_FREE_PSRAM = 48 * 1024;
++#endif
+ 
+ // SDR bank hand-off (implemented in modules/wifi/sdr.cpp): the SDR engine's
+ // 64 KiB SRAM bank is kept out of the heap behind a fence allocation so the IQ
+@@ -53,42 +63,59 @@ static inline bool radioHasMemForWifi() {
+     // Heap looks tight: hand the SDR bank back to the heap before Wi-Fi init
+     sdrBankHeapInit();
+     sdrBankReleaseForRadio();
++    if (radioLargestDmaBlock() >= RADIO_WIFI_MIN_DMA_BLOCK) return true;
++    radioFreeBleForWifi();
+     return radioLargestDmaBlock() >= RADIO_WIFI_MIN_DMA_BLOCK;
+ }
+ 
+ static inline bool radioHasMemForBle() {
+     // return true; // uncomment to disable it
+-    if (radioLargestDmaBlock() >= RADIO_BLE_MIN_DMA_BLOCK) return true;
++    bool webUiActive = isWebUiActiveOrStarting();
++    if (!webUiActive && radioLargestDmaBlock() >= RADIO_BLE_MIN_DMA_BLOCK) return true;
+ 
+-    // Not enough DMA memory - first hand the SDR bank back to the heap
++    // Not enough DMA memory (or WebUI background server is holding radio/DMA heap):
++    // first hand the SDR bank back to the heap if present
+     sdrBankHeapInit();
+     sdrBankReleaseForRadio();
+-    if (radioLargestDmaBlock() >= RADIO_BLE_MIN_DMA_BLOCK) {
++    if (!webUiActive && radioLargestDmaBlock() >= RADIO_BLE_MIN_DMA_BLOCK) {
+         return true;
+     }
+ 
+-    // Still not enough - try to free WiFi
+-    Serial.println("[RAM] Low contiguous DMA memory for BLE, attempting to free WiFi...");
+-
+-    // Disconnect WiFi if active
+-    if (WiFi.getMode() != WIFI_MODE_NULL || wifiConnected) {
+-        wifiDisconnect();
+-        delay(200);
+-        #ifdef WIFI_DEINIT_ON_DISCONNECT
+-        WiFi.mode(WIFI_OFF);
+-        #endif
+-        delay(300);
++    // Stop any active/starting WebUI + mDNS + logging buffer and deinit Wi-Fi
++    if (webUiActive || WiFi.getMode() != WIFI_MODE_NULL ||
++        radioLargestDmaBlock() < RADIO_BLE_MIN_DMA_BLOCK) {
++        Serial.println("[RAM] Freeing WebUI/WiFi to reclaim contiguous DMA memory for BLE...");
++        radioFreeWiFiForBle();
+     }
+ 
+-    // Recheck after freeing WiFi
+-    if (radioLargestDmaBlock() >= RADIO_BLE_MIN_DMA_BLOCK) {
+-        Serial.printf("[RAM] WiFi freed, DMA block: %d bytes\n", radioLargestDmaBlock());
++    size_t dmaBlock = radioLargestDmaBlock();
++    if (dmaBlock >= RADIO_BLE_MIN_DMA_BLOCK) {
++        Serial.printf("[RAM] WebUI/WiFi freed, DMA block: %u bytes\n", (unsigned)dmaBlock);
+         return true;
+     }
+ 
++#ifdef BOARD_HAS_PSRAM
++    if (psramFound() && WiFi.getMode() == WIFI_MODE_NULL) {
++        size_t dmaFree = heap_caps_get_free_size(MALLOC_CAP_DMA);
++        if (dmaBlock >= RADIO_BLE_MIN_DMA_BLOCK_PSRAM && dmaFree >= RADIO_BLE_MIN_DMA_FREE_PSRAM) {
++            Serial.printf(
++                "[RAM] PSRAM board OK for BLE (DMA block=%u, free=%u, psram=%u)\n",
++                (unsigned)dmaBlock,
++                (unsigned)dmaFree,
++                (unsigned)ESP.getFreePsram()
++            );
++            return true;
++        }
++    }
++#endif
++
+     // Still not enough - return false, caller shows error
+-    Serial.printf("[RAM] Still only %d bytes DMA block, minimum %d needed\n",
+-                  radioLargestDmaBlock(), RADIO_BLE_MIN_DMA_BLOCK);
++    Serial.printf(
++        "[RAM] Still only %u bytes DMA block (%u DMA free), minimum %u needed\n",
++        (unsigned)dmaBlock,
++        (unsigned)heap_caps_get_free_size(MALLOC_CAP_DMA),
++        (unsigned)RADIO_BLE_MIN_DMA_BLOCK
++    );
+     return false;
+ }
+ 
 diff --git a/src/core/sd_functions.cpp b/src/core/sd_functions.cpp
 index 054b629..0540b1a 100644
 --- a/src/core/sd_functions.cpp
@@ -8445,7 +8566,7 @@ index 043a5d2..ba5fd2d 100644
  #if !defined(HAS_RTC)
  void restorePersistedClock();
 diff --git a/src/core/wifi/webInterface.cpp b/src/core/wifi/webInterface.cpp
-index a8679bd..22acaaf 100644
+index a8679bd..695e223 100644
 --- a/src/core/wifi/webInterface.cpp
 +++ b/src/core/wifi/webInterface.cpp
 @@ -2,6 +2,8 @@
@@ -8472,11 +8593,13 @@ index a8679bd..22acaaf 100644
  #include <globals.h>
  
  File uploadFile;
-@@ -28,6 +33,166 @@ AsyncWebServer *server = nullptr; // initialise webserver
+@@ -28,6 +33,178 @@ AsyncWebServer *server = nullptr; // initialise webserver
  const char *host = "bruce";
  String uploadFolder = "";
  static bool mdnsRunning = false;
 +static volatile bool s_webUiStarting = false;
++static volatile bool s_webUiQueued = false;
++static volatile bool s_webUiCancelRequested = false;
 +static bool s_otaValid = false;
 +static String s_otaError = "";
 +static size_t s_otaWritten = 0;
@@ -8495,7 +8618,17 @@ index a8679bd..22acaaf 100644
 +    vTaskDelete(NULL);
 +}
 +
-+bool isWebUiStarting() { return s_webUiStarting; }
++bool isWebUiStarting() { return s_webUiStarting || s_webUiQueued; }
++
++bool isWebUiActiveOrStarting() { return isWebUIActive || server != nullptr || mdnsRunning || isWebUiStarting(); }
++
++void cancelWebUiAutoStart() {
++    s_webUiCancelRequested = true;
++    uint32_t deadline = millis() + 1200;
++    while ((s_webUiStarting || s_webUiQueued) && (int32_t)(millis() - deadline) < 0) {
++        vTaskDelay(pdMS_TO_TICKS(25));
++    }
++}
 +
 +// Standalone WebOTA page served directly from PROGMEM so it always works even with custom WebUI themes
 +static const char kOtaPageHtml[] PROGMEM = R"rawliteral(<!doctype html>
@@ -8639,8 +8772,11 @@ index a8679bd..22acaaf 100644
  
  // Generate random token
  String generateToken(int length = 24) {
-@@ -44,10 +209,12 @@ String generateToken(int length = 24) {
+@@ -42,36 +219,40 @@ String generateToken(int length = 24) {
+ **  Turn off the WebUI
+ **********************************************************************/
  void stopWebUi() {
++    bool hadResources = (server != nullptr || mdnsRunning);
      tft.setLogging(false);
      isWebUIActive = false;
 -    server->end();
@@ -8656,7 +8792,51 @@ index a8679bd..22acaaf 100644
      if (mdnsRunning) {
          MDNS.end();
          mdnsRunning = false;
-@@ -280,14 +447,14 @@ void drawWebUiScreen(bool mode_ap) {
+     }
++    if (hadResources) { vTaskDelay(pdMS_TO_TICKS(50)); }
+ }
+ 
+ /**********************************************************************
+ **  Function: cleanlyStopWebUiForWiFiFeature
+-**  Cleanly stop WebUI and AP mode before starting a WiFi feature
+-**  This prevents WiFi mode conflicts when features need exclusive control
++**  Cleanly stop WebUI and AP mode before starting a WiFi/Radio feature
++**  This prevents WiFi mode conflicts and frees internal DMA memory
+ **********************************************************************/
+ void cleanlyStopWebUiForWiFiFeature() {
+-    // Only proceed if WebUI is active
+-    if (!isWebUIActive && !server) { return; }
++    cancelWebUiAutoStart();
++
++    // Only proceed if WebUI or mDNS is active
++    if (!isWebUIActive && !server && !mdnsRunning) { return; }
+ 
+     // Brief notification (non-blocking)
+-    Serial.println("Stopping WebUI for WiFi feature...");
++    Serial.println("Stopping WebUI for WiFi/Radio feature...");
+ 
+     // Stop the WebUI
+-    if (server) {
+-        stopWebUi();
+-        // Give the web server time to fully shut down
+-        vTaskDelay(pdMS_TO_TICKS(100));
+-    }
++    stopWebUi();
++    // Give AsyncTCP / lwIP time to fully close sockets
++    vTaskDelay(pdMS_TO_TICKS(100));
+ 
+     // Disconnect WiFi AP mode if it's the WebUI's AP
+     // Check if we're in AP or APSTA mode (used by WebUI)
+@@ -82,7 +263,7 @@ void cleanlyStopWebUiForWiFiFeature() {
+         vTaskDelay(pdMS_TO_TICKS(250));
+     }
+ 
+-    Serial.println("WebUI stopped, starting WiFi feature...");
++    Serial.println("WebUI stopped, starting WiFi/Radio feature...");
+ }
+ /**********************************************************************
+ **  Function: loopOptionsWebUi
+@@ -280,14 +461,14 @@ void drawWebUiScreen(bool mode_ap) {
      else txt = WiFi.softAPIP().toString();
  
      int padX = 14;
@@ -8673,7 +8853,7 @@ index a8679bd..22acaaf 100644
          currentY += LH * FP + 6;
      }
  
-@@ -460,35 +627,136 @@ void configureWebServer() {
+@@ -460,35 +641,136 @@ void configureWebServer() {
      // System Info
      server->on("/systeminfo", HTTP_GET, [](AsyncWebServerRequest *request) {
          if (checkUserWebAuth(request)) {
@@ -8821,7 +9001,7 @@ index a8679bd..22acaaf 100644
      // Get Screen
      server->on("/getscreen", HTTP_GET, [](AsyncWebServerRequest *request) {
          if (checkUserWebAuth(request)) {
-@@ -792,3 +1060,87 @@ void startWebUi(bool mode_ap) {
+@@ -792,3 +1074,113 @@ void startWebUi(bool mode_ap) {
          if (!keepWifiConnected) { wifiDisconnect(); }
      }
  }
@@ -8833,22 +9013,26 @@ index a8679bd..22acaaf 100644
 +**********************************************************************/
 +bool startWebUiHeadless(bool allowApFallback) {
 +    if (server || isWebUIActive) return true;
-+    if (s_webUiStarting) return false;
++    if (s_webUiStarting || s_webUiCancelRequested) {
++        s_webUiQueued = false;
++        return false;
++    }
 +    s_webUiStarting = true;
++    s_webUiQueued = false;
 +
 +    bool hasNetwork = WiFi.isConnected() || (WiFi.getMode() == WIFI_MODE_AP);
-+    if (!hasNetwork) {
++    if (!hasNetwork && !s_webUiCancelRequested) {
 +        if (FORCE_RADIO_TEARDOWN_ON_SWITCH) {
 +            stopBLEStack();
 +            vTaskDelay(pdMS_TO_TICKS(100));
 +        }
 +
-+        if (radioHasMemForWifi()) {
++        if (!s_webUiCancelRequested && radioHasMemForWifi()) {
 +            ensureWifiPlatform();
-+            if (!bruceConfig.wifi.empty()) {
++            if (!bruceConfig.wifi.empty() && !s_webUiCancelRequested) {
 +                WiFi.mode(WIFI_MODE_STA);
 +                int nets = WiFi.scanNetworks();
-+                for (int i = 0; i < nets && !WiFi.isConnected(); i++) {
++                for (int i = 0; i < nets && !WiFi.isConnected() && !s_webUiCancelRequested; i++) {
 +                    String ssid = WiFi.SSID(i);
 +                    String pwd = bruceConfig.getWifiPassword(ssid);
 +                    bool knownOpen =
@@ -8858,7 +9042,7 @@ index a8679bd..22acaaf 100644
 +                    int32_t ch = WiFi.channel(i);
 +                    uint8_t *bssid = WiFi.BSSID(i);
 +                    WiFi.begin(ssid.c_str(), pwd.length() > 0 ? pwd.c_str() : NULL, ch, bssid);
-+                    for (int attempt = 0; attempt < 50; attempt++) {
++                    for (int attempt = 0; attempt < 50 && !s_webUiCancelRequested; attempt++) {
 +                        if (WiFi.isConnected()) {
 +                            wifiConnected = true;
 +                            wifiIP = WiFi.localIP().toString();
@@ -8872,13 +9056,25 @@ index a8679bd..22acaaf 100644
 +                WiFi.scanDelete();
 +            }
 +
++            if (s_webUiCancelRequested) {
++                wifiDisconnect();
++                s_webUiStarting = false;
++                return false;
++            }
++
 +            if (WiFi.isConnected()) {
 +                hasNetwork = true;
-+            } else if (allowApFallback) {
++            } else if (allowApFallback && !s_webUiCancelRequested) {
 +                WiFi.mode(WIFI_MODE_AP);
 +                hasNetwork = _setupAP();
 +            }
 +        }
++    }
++
++    if (s_webUiCancelRequested) {
++        if (!isWebUIActive) wifiDisconnect();
++        s_webUiStarting = false;
++        return false;
 +    }
 +
 +    if (hasNetwork && !server) {
@@ -8889,7 +9085,9 @@ index a8679bd..22acaaf 100644
 +        if (server) {
 +            new (server) AsyncWebServer(default_webserverporthttp);
 +            configureWebServer();
++            tft.setLogging(true);
 +            isWebUIActive = true;
++            RAM_LOG("webui-headless-ready");
 +            Serial.println("[WebUI] Ready at http://bruce.local (" + wifiIP + ")");
 +        }
 +    }
@@ -8900,33 +9098,51 @@ index a8679bd..22acaaf 100644
 +
 +static void webUiAutoStartTask(void *pvParameters) {
 +    (void)pvParameters;
-+    vTaskDelay(pdMS_TO_TICKS(450));
-+    startWebUiHeadless(true);
++    for (int i = 0; i < 9 && !s_webUiCancelRequested; i++) {
++        vTaskDelay(pdMS_TO_TICKS(50));
++    }
++    if (!s_webUiCancelRequested) {
++        startWebUiHeadless(true);
++    } else {
++        s_webUiQueued = false;
++    }
 +    vTaskDelete(NULL);
 +}
 +
 +void startWebUiBackgroundTask() {
-+    if (server || isWebUIActive || s_webUiStarting) return;
++    if (server || isWebUIActive || s_webUiStarting || s_webUiQueued) return;
++    s_webUiCancelRequested = false;
++    s_webUiQueued = true;
 +    xTaskCreate(webUiAutoStartTask, "webUiAutoStart", 6144, NULL, 1, NULL);
 +}
 diff --git a/src/core/wifi/webInterface.h b/src/core/wifi/webInterface.h
-index d14ae9f..cbdfe10 100644
+index d14ae9f..0f6e230 100644
 --- a/src/core/wifi/webInterface.h
 +++ b/src/core/wifi/webInterface.h
-@@ -23,5 +23,8 @@ void serveWebUIFile(
+@@ -23,5 +23,10 @@ void serveWebUIFile(
  );
  void configureWebServer();
  void startWebUi(bool mode_ap = false);
 +bool startWebUiHeadless(bool allowApFallback = true);
 +void startWebUiBackgroundTask();
++void cancelWebUiAutoStart();
 +bool isWebUiStarting();
++bool isWebUiActiveOrStarting();
  void stopWebUi();
  void cleanlyStopWebUiForWiFiFeature();
 diff --git a/src/core/wifi/wifi_common.cpp b/src/core/wifi/wifi_common.cpp
-index 0e32e4d..e098463 100644
+index 0e32e4d..cdc5e38 100644
 --- a/src/core/wifi/wifi_common.cpp
 +++ b/src/core/wifi/wifi_common.cpp
-@@ -134,6 +134,7 @@ bool _connectToWifiNetwork(const String &ssid, const String &pwd, int32_t channe
+@@ -6,6 +6,7 @@
+ #include "core/ram_profile.h"
+ #include "core/settings.h"
+ #include "core/utils.h"
++#include "core/wifi/webInterface.h"
+ #include "core/wifi/wifi_mac.h"
+ #include "esp_wifi.h"
+ #include "modules/ble/ble_common.h"
+@@ -134,6 +135,7 @@ bool _connectToWifiNetwork(const String &ssid, const String &pwd, int32_t channe
          i++;
      }
  
@@ -8934,7 +9150,58 @@ index 0e32e4d..e098463 100644
      return WiFi.isConnected();
  }
  
-@@ -335,6 +336,7 @@ void wifiConnectTask(void *pvParameters) {
+@@ -149,6 +151,7 @@ bool _setupAP() {
+ 
+ void wifiDisconnect() {
+     wifiTransitioning = true;
++    WiFi.scanDelete();
+ 
+     wifi_mode_t mode = WiFi.getMode();
+     if (mode & WIFI_MODE_AP) {
+@@ -170,7 +173,31 @@ void wifiDisconnect() {
+     wifiTransitioning = false;
+ }
+ 
++bool radioFreeWiFiForBle() {
++    cancelWebUiAutoStart();
++    cleanlyStopWebUiForWiFiFeature();
++    if (WiFi.getMode() != WIFI_MODE_NULL || wifiConnected) {
++        wifiDisconnect();
++        vTaskDelay(pdMS_TO_TICKS(150));
++#ifndef CONFIG_IDF_TARGET_ESP32P4
++        if (WiFi.getMode() != WIFI_MODE_NULL) {
++            WiFi.mode(WIFI_OFF);
++            vTaskDelay(pdMS_TO_TICKS(150));
++        }
++#endif
++    }
++    vTaskDelay(pdMS_TO_TICKS(150));
++    return WiFi.getMode() == WIFI_MODE_NULL;
++}
++
++bool radioFreeBleForWifi() {
++    stopBLEStack();
++    vTaskDelay(pdMS_TO_TICKS(150));
++    return true;
++}
++
+ bool wifiConnectMenu(wifi_mode_t mode) {
++    if (isWebUiActiveOrStarting()) { cleanlyStopWebUiForWiFiFeature(); }
+     if (WiFi.isConnected()) return false; // safeguard
+ 
+     if (FORCE_RADIO_TEARDOWN_ON_SWITCH) {
+@@ -187,6 +214,10 @@ bool wifiConnectMenu(wifi_mode_t mode) {
+ 
+     switch (mode) {
+         case WIFI_AP: // access point
++            if (!radioHasMemForWifi()) {
++                displayError("Low RAM: free BLE/SD first", true);
++                return false;
++            }
+             WiFi.mode(WIFI_AP);
+             return _setupAP();
+             break;
+@@ -335,6 +366,7 @@ void wifiConnectTask(void *pvParameters) {
              if (WiFi.isConnected()) {
                  wifiConnected = true;
                  wifiIP = WiFi.localIP().toString();
@@ -8942,8 +9209,21 @@ index 0e32e4d..e098463 100644
  
                  // Start timezone update in background if not already running
                  if (timezoneTaskHandle == NULL) {
+diff --git a/src/core/wifi/wifi_common.h b/src/core/wifi/wifi_common.h
+index 8d97a20..e0d8453 100644
+--- a/src/core/wifi/wifi_common.h
++++ b/src/core/wifi/wifi_common.h
+@@ -11,6 +11,8 @@
+  * @brief disconnects and turns off wifi module
+  */
+ void wifiDisconnect();
++bool radioFreeWiFiForBle();
++bool radioFreeBleForWifi();
+ 
+ /**
+  * @brief Opens a menu to connect to a wifi
 diff --git a/src/main.cpp b/src/main.cpp
-index eebc4a9..9ff1d71 100644
+index eebc4a9..7692e49 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
 @@ -109,7 +109,7 @@ void __attribute__((weak)) taskInputHandler(void *parameter) {
@@ -8989,7 +9269,7 @@ index eebc4a9..9ff1d71 100644
  }
  
  /*********************************************************************
-@@ -545,13 +550,18 @@ void setup() {
+@@ -545,13 +550,17 @@ void setup() {
          &xHandle                       // Task handle (not used)
      );
      _late_setup_gpio();
@@ -9003,7 +9283,6 @@ index eebc4a9..9ff1d71 100644
 -    if (bruceConfig.wifiAtStartup) {
 +    if (bruceConfig.webUiAutoStart) {
 +        log_i("Starting headless WebUI in background");
-+        tft.setLogging(true);
 +        startWebUiBackgroundTask();
 +    } else if (bruceConfig.wifiAtStartup) {
          log_i("Loading Wifi at Startup");
@@ -9265,6 +9544,30 @@ index 27c887d..1126e98 100644
  }
  
  void showPayloadSubMenu(NimBLEAddress target, SelectedDevice deviceInfo) {
+diff --git a/src/modules/ble/ble_common.cpp b/src/modules/ble/ble_common.cpp
+index 5494bfb..0992d18 100644
+--- a/src/modules/ble/ble_common.cpp
++++ b/src/modules/ble/ble_common.cpp
+@@ -97,15 +97,15 @@ void stopBLEStack() {
+         pBLEScan = nullptr;
+     }
+ 
+-    if (is_ble_inited) {
++    if (is_ble_inited || NimBLEDevice::isInitialized() || BLEDevice::getScan() != nullptr ||
++        BLEDevice::getAdvertising() != nullptr || BLEDevice::getServer() != nullptr || BLEConnected) {
+ #if !defined(LITE_VERSION)
+         if (BLEStateManager::isBLEActive() || BLEStateManager::getActiveClientCount() > 0) {
+             BLEStateManager::deinitBLE(true);
+         } else
+ #endif
+-            if (BLEDevice::getScan() != nullptr || BLEDevice::getAdvertising() != nullptr ||
+-                BLEDevice::getServer() != nullptr || BLEConnected) {
+-            BLEDevice::deinit();
++            if (NimBLEDevice::isInitialized()) {
++            BLEDevice::deinit(true);
+         }
+     }
+ 
 diff --git a/src/modules/others/mic.cpp b/src/modules/others/mic.cpp
 index 6409d53..0d3f65d 100644
 --- a/src/modules/others/mic.cpp
