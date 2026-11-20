@@ -6,6 +6,8 @@ on:
       - arena/78062d86-arenaaiworkspace-1
     paths:
       - .github/workflows/deadtown-native-re.yml
+      - tools/deadtown_ios_compare.py
+      - tests/test_deadtown_ios_compare.py
       - tools/deadtown_native_tables.py
       - tools/deadtown_native_callgraph.py
       - tools/deadtown_native_inventory.py
@@ -62,10 +64,19 @@ jobs:
           git show '8643abdda26944002384bc216bf555717a9e1e42:Dead+Town+-+Zombie+survival_1.4.2_APKPure.apk' > .cache/deadtown-original.apk
           echo 'bc8fa1990cb2cdde8d184f2a942fe4010820f0592d88a36e1cbee0a6aac081fb  .cache/deadtown-original.apk' | sha256sum -c
           curl -fsSL --retry 2 'https://codeload.github.com/kjs104901/deadtown/tar.gz/5e3d798f914c8cd3b066c8289323005d63111f37' | tar xz -C .cache/deadtown --strip-components=1
+          mkdir -p .cache/ios-original
+          git fetch --no-tags origin d111b8605447c0aa65832b574c77645101340b73
+          git show 'd111b8605447c0aa65832b574c77645101340b73:Dead Town-1.4.2.zip.001' > .cache/ios-original/part1
+          git show 'd111b8605447c0aa65832b574c77645101340b73:Dead Town-1.4.2.zip.002' > .cache/ios-original/part2
+          cat .cache/ios-original/part1 .cache/ios-original/part2 > .cache/ios-original/combined.zip
+          unzip -p .cache/ios-original/combined.zip 'Dead Town-1.4.2.ipa' > '.cache/ios-original/Dead Town-1.4.2.ipa'
+          cp .cache/deadtown-original.apk .cache/ios-original/android-original.apk
+          echo '0212db7196f54894476d902bf8832e2e1db9f6de2121757c2740ec46283b0c09  .cache/ios-original/Dead Town-1.4.2.ipa' | sha256sum -c
       - name: Run regression tests and generate research reports
         shell: bash
         run: |
           set -euo pipefail
+          python -m unittest discover -s tests -p 'test_deadtown_ios_compare.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_native_tables.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_native_callgraph.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_poison_evidence.py' -v
@@ -82,6 +93,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_deadtown_lang_fallback_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_lang_coverage.py' -v
           mkdir -p work/reports
+          python tools/deadtown_ios_compare.py '.cache/ios-original/Dead Town-1.4.2.ipa' .cache/deadtown-original.apk --output work/reports/ios-android-assets.json
           python tools/deadtown_poison_evidence.py .cache/deadtown-original.apk --output work/reports/poison-evidence.json
           python tools/deadtown_item_drop_evidence.py .cache/deadtown-original.apk --output work/reports/item-drop-evidence.json
           python tools/deadtown_weapon_save_evidence.py .cache/deadtown-original.apk --output work/reports/weapon-save-evidence.json

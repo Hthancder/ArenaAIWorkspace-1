@@ -398,3 +398,21 @@ tiết và giới hạn trong `docs/deadtown-original-re.md`.
 và pointer của instance mới, rồi đặt lại trước Step. Hai lượt đầu thất bại do
 checker chưa xử lý dấu ngoặc kép của giá trị INI, đã sửa và thêm test. Kết quả
 VM không chứng minh hành vi native hay tương thích tệp lưu.
+
+### IPA iOS do người dùng bổ sung
+
+Người dùng đưa hai phần `Dead Town-1.4.2.zip.001/.002` ở commit
+`d111b8605447c0aa65832b574c77645101340b73`; ghép theo thứ tự thu được IPA
+SHA-256 `0212db7196f54894476d902bf8832e2e1db9f6de2121757c2740ec46283b0c09`.
+IPA ghi version 1.4.2, chứa framework bên thứ ba được chèn; người dùng yêu cầu
+bỏ qua framework khi nghiên cứu. Chưa chạy hay xác nhận bản này an toàn/nguyên
+vẹn. Dữ liệu GameMaker nằm trong executable, không phải file `game.ios` nhỏ.
+
+So sánh tĩnh IPA và APK: 90 sound, 402 sprite, 30 background, 192 script,
+1 font, 240 object và 15 room cùng tên theo cùng thứ tự; 402 metadata sprite và
+packed masks giống nhau. Tái dựng 1.028 frame không scale cho RGBA giống nhau;
+1 frame `mask_noone` scale chưa so. 3/90 âm thanh giống byte gốc; cả 90 giống
+sau khi chỉ bỏ qua serial và CRC từng trang Ogg (không kiểm CRC hay phát âm
+thanh). Điều này hữu ích để đối chiếu, **không chứng minh code iOS giống
+Android**. Mã so sánh `tools/deadtown_ios_compare.py` và kết quả/giới hạn đầy
+đủ ở `docs/deadtown-original-re.md`.

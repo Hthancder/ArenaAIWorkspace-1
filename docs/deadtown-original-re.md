@@ -802,3 +802,48 @@ weapon instance pointer; the decoded save contained `equip/weapon` and no
 runner's quotes around the real INI value, not because the runtime observation
 failed; the corrected checker has a quoted-value regression test. None of
 these results proves native runtime behavior or cross-platform save format.
+
+## User-supplied iOS 1.4.2 IPA: initial static asset comparison
+
+The user uploaded `Dead Town-1.4.2.zip.001` and `.002` to the repository in
+commit `d111b8605447c0aa65832b574c77645101340b73`. Concatenating them in order
+produces a valid ZIP containing `Dead Town-1.4.2.ipa` (SHA-256
+`0212db7196f54894476d902bf8832e2e1db9f6de2121757c2740ec46283b0c09`).
+The IPA's Info.plist says `com.lemonpuppy.deadtown`, version 1.4.2, minimum
+iOS 10.0. That metadata does not prove provenance, identical version to
+Android, or device compatibility. The IPA is modified and has an injected
+third-party framework; the user asked us to disregard it for research. We have
+not trusted or executed it, and do not claim the backup executable is pristine.
+
+The ARM64 executable's `LC_ENCRYPTION_INFO_64` has `cryptid=0`; this only
+records the Mach-O header's encryption flag and does not prove that every byte
+is genuine or that the app will run. Both the modified executable and its
+`.troll-fools.bak` contain byte-identical GameMaker `FORM` at `0x896600`
+(SHA-256 `d377806aff85cb9d082d531c4ae6eeb4b15d61db311f43d62bbc55a58bba8a33`).
+The app's six-byte `games/game.ios` is not that embedded data. FORM `CODE`,
+`VARI`, and `FUNC` chunks have zero length; matching native GML-related name
+strings are visible in the binary, but source code was not recovered.
+
+Static comparison with the SHA-pinned Android 1.4.2 `game.droid`:
+
+- The ordered resource names agree for all 90 sounds, 402 sprites, 30
+  backgrounds, 192 scripts, one font, 240 objects and 15 rooms. This compares
+  names and IDs only, not native code bodies or runtime behavior.
+- All 402 sprite metadata records and packed collision mask bytes match. TPAG
+  page entries differ for 17 sprites. Three of six encoded PNG atlas payloads
+  are byte-identical at the same index. Reconstructed unscaled sprite frames
+  compare exact RGBA for 1,028 frames; `mask_noone` is scaled and was not
+  compared. Transparent pixels outside trimmed atlas rectangles are filled in
+  during reconstruction; no rendering, filtering, collision or timing claim.
+- 3 of 90 sound payloads are byte-identical. The remaining 87 are Ogg files;
+  after zeroing each Ogg page's serial number and CRC bytes, all 90 match.
+  This is a structural byte comparison, not CRC validation, decoded audio or
+  playback testing; no audio was re-encoded.
+
+Reproduce with `tools/deadtown_ios_compare.py <ipa> <apk> --output <json>`
+(Pillow required). It pins IPA, APK, both iOS executable hashes, and FORM hash,
+uses fixed ZIP members and never executes code or creates a build. Tests live in
+`tests/test_deadtown_ios_compare.py`; CI retrieves inputs from the pinned commits
+and publishes only the small comparison report. Similar assets strongly support
+further comparison, but do not establish iOS/Android native logic equivalence,
+original signing, safe installation, or compatibility with iOS 15/TrollStore.
