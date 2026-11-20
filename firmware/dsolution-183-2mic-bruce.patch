@@ -395,10 +395,10 @@ index 0000000..ea4f2b6
 +* `espressif/esp_lcd_nv3023` (components.espressif.com) -- Espressif's own NV3023 driver.
 diff --git a/boards/dsolution-183-2mic/dsolution-183-2mic.ini b/boards/dsolution-183-2mic/dsolution-183-2mic.ini
 new file mode 100644
-index 0000000..be43bba
+index 0000000..cb66216
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/dsolution-183-2mic.ini
-@@ -0,0 +1,149 @@
+@@ -0,0 +1,202 @@
 +; =====================================================================================
 +;  DSolution 1.83" 2-Mic  --  ESP32-S3 / NV3023 / ES7210 + ES8311
 +;
@@ -427,9 +427,35 @@ index 0000000..be43bba
 +board_build.arduino.memory_type = qio_opi
 +board_upload.speed = 921600
 +
-+; Compiles this folder's interface.cpp. Without it the weak no-op defaults win and the
-+; board boots with no pins, no buttons and no codec initialisation at all.
-+build_src_filter = ${env.build_src_filter} +<../boards/dsolution-183-2mic>
++; Compiles this folder's interface.cpp and excludes external radio/sensor modules
++; that have no hardware on this board (RF/CC1101, NRF24, LoRa, FM, IR, RFID, GPS,
++; WireTools, Ethernet menu, iButton), cutting Flash, RAM, and build dependencies while
++; keeping every native ESP32-S3 feature (WiFi, BLE, Audio/Mic, BadUSB/HID, JS, WebUI).
++build_src_filter =
++	${env.build_src_filter}
++	+<../boards/dsolution-183-2mic>
++	-<modules/NRF24/>
++	-<modules/fm/>
++	-<modules/gps/>
++	-<modules/ir/>
++	-<modules/lora/>
++	-<modules/rf/>
++	-<modules/rfid/>
++	-<modules/wire/>
++	-<modules/others/ibutton.cpp>
++	-<core/serial_commands/ir_commands.cpp>
++	-<core/serial_commands/rf_commands.cpp>
++	-<core/serial_commands/rfid_commands.cpp>
++	-<core/serial_commands/wire_commands.cpp>
++	-<core/menu_items/EthernetMenu.cpp>
++	-<core/menu_items/FMMenu.cpp>
++	-<core/menu_items/GpsMenu.cpp>
++	-<core/menu_items/IRMenu.cpp>
++	-<core/menu_items/LoRaMenu.cpp>
++	-<core/menu_items/NRF24.cpp>
++	-<core/menu_items/RFIDMenu.cpp>
++	-<core/menu_items/RFMenu.cpp>
++	-<core/menu_items/WireToolsMenu.cpp>
 +
 +; Post-build: merge bootloader + partitions + boot_app0 + app into ONE image
 +; (.pio/build/dsolution-183-2mic/firmware-factory.bin) that is flashed at 0x0.
@@ -450,7 +476,13 @@ index 0000000..be43bba
 +
 +	; ==================== Board identity ====================
 +	-DDSOLUTION_183_2MIC=1        ; selects the NV3023 panel class in include/DisplayDrivers_User_Setup.h
++	-DDSOLUTION_NO_EXT_HW=1       ; prune hardware-absent external modules (RF/IR/RFID/GPS/LoRa/Wire/iButton)
 +	-DDEVICE_NAME='"DSolution 1.83 2Mic"'
++
++	; ==================== UI Defaults (284x240 IPS) ====================
++	-DDEFAULT_PRICOLOR=0x079F     ; Cyber Cyan (#00F0FF) primary accent
++	-DDEFAULT_SECCOLOR=0x5577     ; Ice-Teal (#50AEBD) secondary text for high readability
++	-DDEFAULT_MAIN_MENU_STYLE=1   ; Boot directly into 4x2 Grid main menu
 +
 +	; ==================== Display: NV3023, LovyanGFX backend ====================
 +	; LovyanGFX is used (instead of the Arduino_GFX default) because it lets the board
@@ -524,9 +556,11 @@ index 0000000..be43bba
 +	-DANALOG_BAT_MAX_MV=4200
 +
 +	; ==================== Buttons ====================
-+	; 3 buttons: btn1 = Vol- = Prev, btn2 = Vol+ = Next, btn3 = Boot = Sel.
-+	; Prev+Next together = Esc.
-+	-DHAS_3_BUTTONS=1
++	; Full-coverage 3-button multi-gesture HAL (Vol- = GPIO40, Vol+ = GPIO39, Boot = GPIO0):
++	;   Tap:   Vol- = Prev, Vol+ = Next, Boot = Sel
++	;   Hold:  Vol- = Up (repeat), Vol+ = Down (repeat), Boot = Esc
++	;   Combo: Boot+Vol- = PrevPage, Boot+Vol+ = NextPage, Vol-+Vol+ = Esc (instant)
++	-DHAS_6_BUTTONS=1
 +
 +	; ==================== Power / sleep ====================
 +	; Drive the vendor's "Sleep Control" pin HIGH as soon as the firmware starts.
@@ -544,16 +578,35 @@ index 0000000..be43bba
 +	-DUSB_as_HID=1
 +
 +lib_deps =
-+	${env.lib_deps}
++	https://github.com/sayacom/WireGuard-ESP32-Arduino#feature/esp-netif
++	paulstoffregen/Time@1.6.1
++	LibSSH-ESP32
++	Adafruit BusIO=symlink://lib/Adafruit-BusIO
++	https://github.com/rennancockles/SimpleCLI
++	NTPClient@3.2.1
++	ESP32Time@2.0.6
++	FFat
++	bblanchon/ArduinoJson
++	ESP8266Audio@^2.4.1
++	earlephilhower/ESP8266SAM@^1.1.0
++	tinyu-zhao/FFT@^0.0.1
++	h2zero/NimBLE-Arduino@2.5.1
++	Bodmer/JPEGDecoder
++	mquickjs=https://github.com/BruceDevices/mquickjs#0.0.6
++	https://github.com/bmorcelli/ESP32-PsRamFS#patch-1
++	bitbank2/AnimatedGIF
++	bitbank2/PNGdec @ ^1.1.2
++	ESP32Async/ESPAsyncWebServer
++	fastled/FastLED @ 3.10.3
 +	; The S3 + Arduino 3.3.x combination needs LovyanGFX from develop: the 1.2.7 release
 +	; predates Arduino 3.3.4 (see lib/DisplayDrivers/README.md, "Installing").
 +	https://github.com/lovyan03/LovyanGFX#develop
 diff --git a/boards/dsolution-183-2mic/interface.cpp b/boards/dsolution-183-2mic/interface.cpp
 new file mode 100644
-index 0000000..d517187
+index 0000000..9a853c0
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/interface.cpp
-@@ -0,0 +1,351 @@
+@@ -0,0 +1,519 @@
 +// =====================================================================================
 +//  boards/dsolution-183-2mic/interface.cpp
 +//
@@ -577,7 +630,6 @@ index 0000000..d517187
 +#include "core/powerSave.h"
 +#include "hal/bright/bright.h"
 +#include "hal/device.h"
-+#include "hal/inputs/buttons.h"
 +#include <Wire.h>
 +#include <esp_sleep.h>
 +#include <globals.h>
@@ -609,18 +661,64 @@ index 0000000..d517187
 +#define ES7210_ADDR 0x40
 +
 +// -------------------------------------------------------------------------------------
-+//  Buttons -- HAS_3_BUTTONS in the .ini: btn1 = Prev, btn2 = Next, btn3 = Sel,
-+//  Prev+Next together = Esc. All three are wired to GND, so active LOW + pull-up.
++//  Buttons -- Full-coverage 3-button multi-gesture driver (HAS_6_BUTTONS):
++//    Vol- (GPIO40): Tap = Prev, Hold (360ms+) = Up (repeats 130ms)
++//    Vol+ (GPIO39): Tap = Next, Hold (360ms+) = Down (repeats 130ms)
++//    Boot (GPIO0):  Tap = Sel,  Hold (520ms+) = Esc (1-shot)
++//    Combos:        Boot+Vol- = PrevPage, Boot+Vol+ = NextPage, Vol-+Vol+ = Esc
 +// -------------------------------------------------------------------------------------
-+static DeviceButtons buttonsCfg() {
-+    DeviceButtons cfg;
-+    cfg.btn1 = PIN_BTN_PREV;
-+    cfg.btn2 = PIN_BTN_NEXT;
-+    cfg.btn3 = PIN_BTN_SEL;
-+    cfg.pullup = true;
-+    cfg.activeHigh = false;
-+    return cfg;
++namespace {
++struct DSolutionBtn {
++    uint8_t pin;
++    bool stableDown = false;
++    bool rawLast = false;
++    uint32_t rawChangedAt = 0;
++    uint32_t downAt = 0;
++    uint32_t lastRepeatAt = 0;
++    bool holdFired = false;
++    bool consumed = false;
++};
++
++static DSolutionBtn s_btnPrev{PIN_BTN_PREV};
++static DSolutionBtn s_btnNext{PIN_BTN_NEXT};
++static DSolutionBtn s_btnSel{PIN_BTN_SEL};
++static bool s_swallowWake = false;
++static uint32_t s_lastComboAt = 0;
++
++constexpr uint32_t kBtnDebounceMs = 20;
++constexpr uint32_t kNavHoldMs = 360;
++constexpr uint32_t kNavRepeatMs = 130;
++constexpr uint32_t kEscHoldMs = 520;
++constexpr uint32_t kComboRepeatMs = 250;
++
++static void initButtons3() {
++    pinMode(PIN_BTN_PREV, INPUT_PULLUP);
++    pinMode(PIN_BTN_NEXT, INPUT_PULLUP);
++    pinMode(PIN_BTN_SEL, INPUT_PULLUP);
 +}
++
++static void updateBtnDebounce(DSolutionBtn &b, uint32_t now, bool &justPressed, bool &justReleased) {
++    justPressed = false;
++    justReleased = false;
++    bool raw = (digitalRead(b.pin) == LOW);
++    if (raw != b.rawLast) {
++        b.rawLast = raw;
++        b.rawChangedAt = now;
++    }
++    if ((now - b.rawChangedAt) >= kBtnDebounceMs && raw != b.stableDown) {
++        b.stableDown = raw;
++        if (raw) {
++            b.downAt = now;
++            b.lastRepeatAt = now;
++            b.holdFired = false;
++            b.consumed = false;
++            justPressed = true;
++        } else {
++            justReleased = true;
++        }
++    }
++}
++} // namespace
 +
 +// =====================================================================================
 +//  Codec helpers
@@ -825,7 +923,7 @@ index 0000000..d517187
 +    pinMode(PIN_BAT_ADC, INPUT);
 +
 +    // ---- Buttons ----
-+    hal_buttons_init(buttonsCfg(), 3);
++    initButtons3();
 +
 +    // ---- No expansion header on this board: leave IR/RF/UART unset ----
 +    bruceConfigPins.irTx = GPIO_NUM_NC;
@@ -868,11 +966,134 @@ index 0000000..d517187
 +    // this board GPIO0 is the Sel button, so re-arm it instead of losing the button after
 +    // the first recording. pinMode() on an input is cheap and idempotent.
 +    static uint32_t lastArm = 0;
-+    if (millis() - lastArm > 1000) {
-+        lastArm = millis();
++    uint32_t now = millis();
++    if (now - lastArm > 1000) {
++        lastArm = now;
 +        pinMode(PIN_BTN_SEL, INPUT_PULLUP);
 +    }
-+    hal_buttons_poll_3(buttonsCfg());
++
++    bool prevJP = false, prevJR = false;
++    bool nextJP = false, nextJR = false;
++    bool selJP = false, selJR = false;
++    updateBtnDebounce(s_btnPrev, now, prevJP, prevJR);
++    updateBtnDebounce(s_btnNext, now, nextJP, nextJR);
++    updateBtnDebounce(s_btnSel, now, selJP, selJR);
++
++    if (s_btnPrev.stableDown || s_btnNext.stableDown || s_btnSel.stableDown) {
++        previousMillis = now;
++    }
++
++    if (s_swallowWake) {
++        if (!s_btnPrev.stableDown && !s_btnNext.stableDown && !s_btnSel.stableDown) {
++            s_swallowWake = false;
++        }
++        if (prevJR) { s_btnPrev.holdFired = false; s_btnPrev.consumed = false; }
++        if (nextJR) { s_btnNext.holdFired = false; s_btnNext.consumed = false; }
++        if (selJR) { s_btnSel.holdFired = false; s_btnSel.consumed = false; }
++        return;
++    }
++
++    if ((prevJP || nextJP || selJP) && wakeUpScreen()) {
++        s_swallowWake = true;
++        if (s_btnPrev.stableDown) s_btnPrev.consumed = true;
++        if (s_btnNext.stableDown) s_btnNext.consumed = true;
++        if (s_btnSel.stableDown) s_btnSel.consumed = true;
++        return;
++    }
++
++    // 1. Two-button combos (checked first to suppress single-button tap/hold)
++    if (s_btnPrev.stableDown && s_btnNext.stableDown) {
++        if (!s_btnPrev.consumed || !s_btnNext.consumed) {
++            EscPress = true;
++            AnyKeyPress = true;
++            s_btnPrev.consumed = true;
++            s_btnNext.consumed = true;
++            s_lastComboAt = now;
++        }
++    } else if (s_btnSel.stableDown && s_btnPrev.stableDown) {
++        if (!s_btnSel.consumed || !s_btnPrev.consumed) {
++            PrevPagePress = true;
++            AnyKeyPress = true;
++            s_btnSel.consumed = true;
++            s_btnPrev.consumed = true;
++            s_lastComboAt = now;
++        } else if (now - s_lastComboAt >= kComboRepeatMs) {
++            PrevPagePress = true;
++            AnyKeyPress = true;
++            s_lastComboAt = now;
++        }
++    } else if (s_btnSel.stableDown && s_btnNext.stableDown) {
++        if (!s_btnSel.consumed || !s_btnNext.consumed) {
++            NextPagePress = true;
++            AnyKeyPress = true;
++            s_btnSel.consumed = true;
++            s_btnNext.consumed = true;
++            s_lastComboAt = now;
++        } else if (now - s_lastComboAt >= kComboRepeatMs) {
++            NextPagePress = true;
++            AnyKeyPress = true;
++            s_lastComboAt = now;
++        }
++    } else {
++        // 2. Single-button Hold (repeats for Up/Down, 1-shot for Esc)
++        if (s_btnPrev.stableDown && !s_btnPrev.consumed) {
++            if (!s_btnPrev.holdFired && (now - s_btnPrev.downAt >= kNavHoldMs)) {
++                s_btnPrev.holdFired = true;
++                s_btnPrev.lastRepeatAt = now;
++                UpPress = true;
++                AnyKeyPress = true;
++            } else if (s_btnPrev.holdFired && (now - s_btnPrev.lastRepeatAt >= kNavRepeatMs)) {
++                s_btnPrev.lastRepeatAt = now;
++                UpPress = true;
++                AnyKeyPress = true;
++            }
++        }
++        if (s_btnNext.stableDown && !s_btnNext.consumed) {
++            if (!s_btnNext.holdFired && (now - s_btnNext.downAt >= kNavHoldMs)) {
++                s_btnNext.holdFired = true;
++                s_btnNext.lastRepeatAt = now;
++                DownPress = true;
++                AnyKeyPress = true;
++            } else if (s_btnNext.holdFired && (now - s_btnNext.lastRepeatAt >= kNavRepeatMs)) {
++                s_btnNext.lastRepeatAt = now;
++                DownPress = true;
++                AnyKeyPress = true;
++            }
++        }
++        if (s_btnSel.stableDown && !s_btnSel.consumed) {
++            if (!s_btnSel.holdFired && (now - s_btnSel.downAt >= kEscHoldMs)) {
++                s_btnSel.holdFired = true;
++                EscPress = true;
++                AnyKeyPress = true;
++            }
++        }
++    }
++
++    // 3. Clean short-tap release events
++    if (prevJR) {
++        if (!s_btnPrev.consumed && !s_btnPrev.holdFired) {
++            PrevPress = true;
++            AnyKeyPress = true;
++        }
++        s_btnPrev.holdFired = false;
++        s_btnPrev.consumed = false;
++    }
++    if (nextJR) {
++        if (!s_btnNext.consumed && !s_btnNext.holdFired) {
++            NextPress = true;
++            AnyKeyPress = true;
++        }
++        s_btnNext.holdFired = false;
++        s_btnNext.consumed = false;
++    }
++    if (selJR) {
++        if (!s_btnSel.consumed && !s_btnSel.holdFired) {
++            SelPress = true;
++            AnyKeyPress = true;
++        }
++        s_btnSel.holdFired = false;
++        s_btnSel.consumed = false;
++    }
 +}
 +
 +// =====================================================================================
@@ -1080,6 +1301,1004 @@ index d8ec5e0..d1c5953 100644
  	; elecrow-24B
  	; elecrow-28B
  	; elecrow-35B
+diff --git a/src/core/config.cpp b/src/core/config.cpp
+index e7ceca1..ef2bc3e 100644
+--- a/src/core/config.cpp
++++ b/src/core/config.cpp
+@@ -801,7 +801,7 @@ void BruceConfig::setMainMenuStyle(int value) {
+ 
+ void BruceConfig::validateMainMenuStyle() {
+     if (mainMenuStyle < MAIN_MENU_CAROUSEL || mainMenuStyle > MAIN_MENU_GRID)
+-        mainMenuStyle = MAIN_MENU_CAROUSEL;
++        mainMenuStyle = DEFAULT_MAIN_MENU_STYLE;
+ }
+ 
+ void BruceConfig::setBadUSBBLEKeyboardLayout(int value) {
+diff --git a/src/core/config.h b/src/core/config.h
+index 72d69eb..2485d35 100644
+--- a/src/core/config.h
++++ b/src/core/config.h
+@@ -17,6 +17,10 @@
+ 
+ enum EvilPortalPasswordMode { FULL_PASSWORD = 0, FIRST_LAST_CHAR = 1, HIDE_PASSWORD = 2, SAVE_LENGTH = 3 };
+ 
++#ifndef DEFAULT_MAIN_MENU_STYLE
++#define DEFAULT_MAIN_MENU_STYLE MAIN_MENU_CAROUSEL
++#endif
++
+ // How the main menu presents the modules:
+ // CAROUSEL shows one big icon at a time, GRID exposes every module as a selectable cell
+ enum MainMenuStyle { MAIN_MENU_CAROUSEL = 0, MAIN_MENU_GRID = 1 };
+@@ -98,7 +102,7 @@ public:
+     int devMode = 0;
+ 
+     int colorInverted = DEFAULT_COLOR_INVERTED;
+-    int mainMenuStyle = MAIN_MENU_CAROUSEL;
++    int mainMenuStyle = DEFAULT_MAIN_MENU_STYLE;
+     int badUSBBLEKeyboardLayout = 0;
+     uint16_t badUSBBLEKeyDelay = 10;
+     bool badUSBBLEShowOutput = true;
+diff --git a/src/core/display.cpp b/src/core/display.cpp
+index d3fe50a..8fc88e2 100644
+--- a/src/core/display.cpp
++++ b/src/core/display.cpp
+@@ -823,7 +823,7 @@ int loopOptions(
+         {
+             if (PrevPress || check(UpPress)) {
+                 devModeCounter = 0;
+-#ifdef HAS_KEYBOARD
++#if defined(HAS_KEYBOARD) || defined(DSOLUTION_183_2MIC)
+                 check(PrevPress);
+                 int prevEnabled = findNextEnabled(index, -1);
+                 if (prevEnabled >= 0) index = prevEnabled;
+@@ -1152,6 +1152,138 @@ Opt_Coord drawOptions(
+ void drawSubmenu(int index, std::vector<Option> &options, const char *title) {
+     drawStatusBar();
+     int menuSize = options.size();
++    if (menuSize <= 0) return;
++    if (index < 0 || index >= menuSize) index = 0;
++
++#if defined(DSOLUTION_183_2MIC)
++    const int innerL = BORDER_OFFSET_FROM_SCREEN_EDGE + 1;
++    const int innerR = tftWidth - BORDER_OFFSET_FROM_SCREEN_EDGE - 1;
++    const int innerW = innerR - innerL;
++
++    // Header band: title on the left, [index/total] counter on the right
++    const int hdrY = STATUS_BAR_HEIGHT - 1;
++    const int hdrH = LH * FP + 7;
++    uint16_t hdrBg = blendColors(bruceConfig.bgColor, bruceConfig.priColor, 22);
++    uint16_t hdrLine = blendColors(bruceConfig.bgColor, bruceConfig.priColor, 78);
++    uint16_t badgeFg = blendColors(bruceConfig.bgColor, bruceConfig.priColor, 200);
++    tft.fillRect(innerL, hdrY, innerW, hdrH, hdrBg);
++    tft.drawFastHLine(innerL, hdrY + hdrH, innerW, hdrLine);
++
++    String counterStr = "[" + String(index + 1) + "/" + String(menuSize) + "]";
++    int counterW = counterStr.length() * LW * FP + 8;
++    int maxTitleChars = max(4, (innerW - counterW - 14) / (LW * FP));
++    tft.setTextSize(FP);
++    tft.setTextColor(bruceConfig.priColor, hdrBg);
++    tft.drawString(String(title).substring(0, maxTitleChars), innerL + 6, hdrY + 4);
++    tft.setTextColor(badgeFg, hdrBg);
++    tft.drawRightString(counterStr, innerR - 6, hdrY + 4, 1);
++
++    // Bottom key legend strip
++    const int footH = LH * FP + 4;
++    const int footY = tftHeight - BORDER_OFFSET_FROM_SCREEN_EDGE - footH - 1;
++    uint16_t footBg = blendColors(bruceConfig.bgColor, bruceConfig.priColor, 14);
++    uint16_t footLine = blendColors(bruceConfig.bgColor, bruceConfig.priColor, 55);
++    uint16_t footFg = blendColors(bruceConfig.bgColor, bruceConfig.priColor, 145);
++    tft.drawFastHLine(innerL, footY - 1, innerW, footLine);
++    tft.fillRect(innerL, footY, innerW, footH, footBg);
++    tft.setTextSize(FP);
++    tft.setTextColor(footFg, footBg);
++    String legend = "[-/+] Nav  [Boot] OK  [Hold] Back";
++    int maxLegendChars = (innerW - 8) / (LW * FP);
++    tft.drawCentreString(legend.substring(0, maxLegendChars), tftWidth / 2, footY + 2, 1);
++
++    // Content area
++    const int contentTop = hdrY + hdrH + 2;
++    const int contentBottom = footY - 2;
++    const int middle = contentTop + (contentBottom - contentTop) / 2;
++    tft.fillRect(innerL, contentTop, innerW, contentBottom - contentTop, bruceConfig.bgColor);
++
++    const int pillX = innerL + 7;
++    const int pillW = innerW - 20; // leave right room for slim scrollbar
++    const int pillH = 32;
++    const int pillCenterX = pillX + pillW / 2;
++    const int step1 = 33;
++    const int step2 = 59;
++
++    auto drawNeighbor = [&](int optIdx, int centerY, uint16_t fgColor) {
++        int maxNChars = (pillW - 8) / (LW * FM);
++        String lbl = options[optIdx].label;
++        if ((int)lbl.length() > maxNChars) lbl = lbl.substring(0, maxNChars - 1) + "~";
++        tft.setTextSize(FM);
++        tft.setTextColor(options[optIdx].enabled ? fgColor : TFT_DARKGREY, bruceConfig.bgColor);
++        tft.drawCentreString(lbl, pillCenterX, centerY - (FM * LH) / 2, SMOOTH_FONT);
++    };
++
++    uint16_t nearColor = blendColors(bruceConfig.bgColor, bruceConfig.priColor, 200);
++    uint16_t farColor = blendColors(bruceConfig.bgColor, bruceConfig.priColor, 115);
++
++    int aboveCount = 0;
++    int belowCount = 0;
++    if (menuSize == 2) {
++        if (index == 1) aboveCount = 1;
++        else belowCount = 1;
++    } else if (menuSize == 3) {
++        aboveCount = 1;
++        belowCount = 1;
++    } else if (menuSize == 4) {
++        aboveCount = 1;
++        belowCount = 2;
++    } else if (menuSize >= 5) {
++        aboveCount = 2;
++        belowCount = 2;
++    }
++
++    if (middle - step2 - (FM * LH) / 2 < contentTop) {
++        if (aboveCount > 1) aboveCount = 1;
++        if (belowCount > 1) belowCount = 1;
++    }
++    if (middle - step1 - (FM * LH) / 2 < contentTop) {
++        aboveCount = 0;
++        belowCount = 0;
++    }
++
++    for (int k = aboveCount; k >= 1; k--) {
++        int idx = ((index - k) % menuSize + menuSize) % menuSize;
++        int cy = middle - (k == 1 ? step1 : step2);
++        drawNeighbor(idx, cy, k == 1 ? nearColor : farColor);
++    }
++
++    for (int k = 1; k <= belowCount; k++) {
++        int idx = (index + k) % menuSize;
++        int cy = middle + (k == 1 ? step1 : step2);
++        drawNeighbor(idx, cy, k == 1 ? nearColor : farColor);
++    }
++
++    // Selected option pill
++    uint16_t selBg = options[index].enabled ? bruceConfig.priColor : TFT_DARKGREY;
++    tft.fillRoundRect(pillX, middle - pillH / 2, pillW, pillH, 6, selBg);
++
++    String selLbl = options[index].label;
++    int selSize = FG;
++    if ((int)selLbl.length() > (pillW - 12) / (LW * FG)) selSize = FM;
++    if ((int)selLbl.length() > (pillW - 12) / (LW * FM)) selSize = FP;
++    int maxSelChars = (pillW - 10) / (LW * selSize);
++    if ((int)selLbl.length() > maxSelChars) selLbl = selLbl.substring(0, maxSelChars - 1) + "~";
++    tft.setTextSize(selSize);
++    tft.setTextColor(bruceConfig.bgColor, selBg);
++    tft.drawCentreString(selLbl, pillCenterX, middle - (selSize * LH) / 2, SMOOTH_FONT);
++
++    // Slim right-edge scrollbar inside content area
++    if (menuSize > 1) {
++        const int barX = innerR - 5;
++        const int trackY = contentTop + 4;
++        const int trackH = contentBottom - contentTop - 8;
++        if (trackH > 16) {
++            uint16_t trackCol = blendColors(bruceConfig.bgColor, bruceConfig.priColor, 38);
++            tft.fillRoundRect(barX, trackY, 3, trackH, 1, trackCol);
++            int thumbH = max(12, trackH / menuSize);
++            int thumbY = trackY + (trackH - thumbH) * index / (menuSize - 1);
++            tft.fillRoundRect(barX, thumbY, 3, thumbH, 1, bruceConfig.priColor);
++        }
++    }
++    return;
++#endif
++
+     tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
+     tft.setTextSize(FP);
+     tft.drawPixel(0, 0, 0);
+diff --git a/src/core/main_menu.cpp b/src/core/main_menu.cpp
+index 7420b9e..7845622 100644
+--- a/src/core/main_menu.cpp
++++ b/src/core/main_menu.cpp
+@@ -7,6 +7,7 @@ MainMenu::MainMenu() {
+     _menuItems = {
+         &wifiMenu,
+         &bleMenu,
++#if !defined(DSOLUTION_NO_EXT_HW)
+         &rfMenu,
+         &nrf24Menu,
+ #if !defined(LITE_VERSION)
+@@ -21,13 +22,17 @@ MainMenu::MainMenu() {
+ #endif
+         &gpsMenu,
+         &rfidMenu,
++#endif
+         &fileMenu,
+ #if !defined(LITE_VERSION) && !defined(DISABLE_INTERPRETER)
+         &scriptsMenu,
+ #endif
+         &clockMenu,
++#if defined(DSOLUTION_NO_EXT_HW)
++        &connectMenu,
++#endif
+         &othersMenu,
+-#if !defined(LITE_VERSION)
++#if !defined(LITE_VERSION) && !defined(DSOLUTION_NO_EXT_HW)
+         &wireToolsMenu,
+ #endif
+         &configMenu,
+@@ -129,9 +134,13 @@ void MainMenu::buildGridLayout(int itemCount) {
+     // preferred size. Scaled by FP so it still means something on high-res boards.
+     const int MIN_CELL_W = 54 * FP;
+     const int MIN_CELL_H = 40 * FP;
+-    // Right-edge column reserved for the scrollbar and the page-up/page-down tap zone (see
+-    // MainMenu::handleGridPageTap()) — wide enough to actually tap, not just the 3px bar itself.
++    // Right-edge column reserved for the scrollbar and (on touch boards) the page-up/page-down
++    // tap zone. Non-touch boards reclaim this strip whenever everything fits on a single page.
++#if defined(HAS_TOUCH)
+     const int PAGE_TAP_W = 4 * BORDER_OFFSET_FROM_SCREEN_EDGE;
++#else
++    const int PAGE_TAP_W = 0;
++#endif
+ 
+     if (itemCount < 1) itemCount = 1;
+ 
+@@ -147,9 +156,12 @@ void MainMenu::buildGridLayout(int itemCount) {
+     int maxCols = max(1, min(itemCount, areaW / MIN_CELL_W));
+     int bestCols = 1;
+     int bestScore = -1;
++    int maxVisRows = max(1, areaH / MIN_CELL_H);
+     for (int cols = 1; cols <= maxCols; cols++) {
+         int rows = (itemCount + cols - 1) / cols;
+         int score = min(areaW / cols, areaH / rows);
++        // Prefer balanced grids that fill every slot without leaving trailing orphan cells.
++        if (itemCount % cols == 0 && rows <= maxVisRows) score += 4;
+         if (score > bestScore) {
+             bestScore = score;
+             bestCols = cols;
+@@ -157,19 +169,27 @@ void MainMenu::buildGridLayout(int itemCount) {
+     }
+ 
+     _grid.cols = bestCols;
+-    _grid.cellW = areaW / _grid.cols;
+     _grid.rows = (itemCount + _grid.cols - 1) / _grid.cols;
+-
+-    // Rows still get capped to what fits at MIN_CELL_H — that's the paging trigger when there
+-    // are simply too many items for one screen even at the smallest usable size.
+-    _grid.visibleRows = max(1, areaH / MIN_CELL_H);
++    _grid.visibleRows = maxVisRows;
+     if (_grid.visibleRows > _grid.rows) _grid.visibleRows = _grid.rows;
++
++#if !defined(HAS_TOUCH)
++    if (_grid.rows > _grid.visibleRows) {
++        areaW -= 5; // slim scrollbar channel only when multi-page
++    }
++#endif
++
++    _grid.cellW = areaW / _grid.cols;
+     _grid.cellH = areaH / _grid.visibleRows; // fills whatever height is actually available
+ 
+     _grid.labelSize = _grid.cellW >= 8 * LW * FM ? FM : FP;
++#if defined(DSOLUTION_183_2MIC)
++    _grid.iconBox = min(_grid.cellW - 14, _grid.cellH - LH * _grid.labelSize - 22);
++#else
+     // Everything the cell has left once the label and a thin margin are taken out
+     _grid.iconBox = _grid.cellH - LH * _grid.labelSize - 6;
+     if (_grid.iconBox > _grid.cellW - 4) _grid.iconBox = _grid.cellW - 4; // narrow cells cap it
++#endif
+     if (_grid.iconBox < 12) _grid.iconBox = 12;
+ 
+     // Center whatever is left over so the grid doesn't hug the border
+@@ -251,6 +271,38 @@ void MainMenu::drawGridCell(int index, bool selected) {
+     options[index].w = _grid.cellW;
+     options[index].h = _grid.cellH;
+ 
++#if defined(DSOLUTION_183_2MIC)
++    const int pad = 2;
++    const int cardW = _grid.cellW - 2 * pad;
++    const int cardH = _grid.cellH - 2 * pad;
++    uint16_t cardBg = selected ? bruceConfig.priColor : blendColors(bruceConfig.bgColor, bruceConfig.priColor, 18);
++    uint16_t cardBorder = selected ? bruceConfig.priColor : blendColors(bruceConfig.bgColor, bruceConfig.priColor, 72);
++    uint16_t fgColor = selected ? bruceConfig.bgColor : bruceConfig.priColor;
++
++    tft.fillRect(x, y, _grid.cellW, _grid.cellH, bruceConfig.bgColor);
++    tft.fillRoundRect(x + pad, y + pad, cardW, cardH, 6, cardBg);
++    if (!selected) {
++        tft.drawRoundRect(x + pad, y + pad, cardW, cardH, 6, cardBorder);
++    }
++
++    int labelH = LH * _grid.labelSize;
++    int contentH = _grid.iconBox + 6 + labelH;
++    int topY = y + pad + max(4, (cardH - contentH) / 2);
++
++    MenuItemInterface *item = static_cast<MenuItemInterface *>(options[index].hoverPointer);
++    if (item)
++        item->drawIconInBox(x + _grid.cellW / 2, topY + _grid.iconBox / 2, _grid.iconBox, fgColor, cardBg);
++
++    int maxChars = (cardW - 4) / (LW * _grid.labelSize);
++    tft.setTextSize(_grid.labelSize);
++    tft.setTextColor(fgColor, cardBg);
++    tft.drawCentreString(
++        options[index].label.substring(0, maxChars),
++        x + _grid.cellW / 2,
++        topY + _grid.iconBox + 6,
++        1
++    );
++#else
+     uint16_t bgColor = selected ? bruceConfig.priColor : bruceConfig.bgColor;
+     uint16_t fgColor = selected ? bruceConfig.bgColor : bruceConfig.priColor;
+ 
+@@ -270,6 +322,7 @@ void MainMenu::drawGridCell(int index, bool selected) {
+         y + _grid.cellH - LH * _grid.labelSize - 3,
+         1
+     );
++#endif
+ }
+ 
+ /*********************************************************************
+@@ -277,12 +330,13 @@ void MainMenu::drawGridCell(int index, bool selected) {
+ **  Thin indicator on the right telling there are more rows off screen
+ **********************************************************************/
+ void MainMenu::drawGridScrollBar() {
++    if (_grid.rows <= _grid.visibleRows) return;
++
+     int barX = tftWidth - BORDER_OFFSET_FROM_SCREEN_EDGE - 4;
+     int trackY = _grid.y;
+     int trackH = _grid.visibleRows * _grid.cellH;
+ 
+     tft.fillRect(barX, trackY, 3, trackH, bruceConfig.bgColor);
+-    if (_grid.rows <= _grid.visibleRows) return;
+ 
+     int thumbH = max(6, trackH * _grid.visibleRows / _grid.rows);
+     int thumbY = trackY + (trackH - thumbH) * _gridScroll / (_grid.rows - _grid.visibleRows);
+diff --git a/src/core/main_menu.h b/src/core/main_menu.h
+index e8ba931..046b055 100644
+--- a/src/core/main_menu.h
++++ b/src/core/main_menu.h
+@@ -7,19 +7,21 @@
+ #include "menu_items/ClockMenu.h"
+ #include "menu_items/ConfigMenu.h"
+ #include "menu_items/ConnectMenu.h"
++#include "menu_items/FileMenu.h"
++#include "menu_items/OthersMenu.h"
++#include "menu_items/ScriptsMenu.h"
++#include "menu_items/WifiMenu.h"
++#if !defined(DSOLUTION_NO_EXT_HW)
+ #include "menu_items/EthernetMenu.h"
+ #include "menu_items/FMMenu.h"
+-#include "menu_items/FileMenu.h"
+ #include "menu_items/GpsMenu.h"
+ #include "menu_items/IRMenu.h"
+ #include "menu_items/LoRaMenu.h"
+ #include "menu_items/NRF24.h"
+-#include "menu_items/OthersMenu.h"
+ #include "menu_items/RFIDMenu.h"
+ #include "menu_items/RFMenu.h"
+-#include "menu_items/ScriptsMenu.h"
+-#include "menu_items/WifiMenu.h"
+ #include "menu_items/WireToolsMenu.h"
++#endif
+ class MainMenu {
+ public:
+     FileMenu fileMenu;
+@@ -27,19 +29,21 @@ public:
+     ClockMenu clockMenu;
+     ConnectMenu connectMenu;
+     ConfigMenu configMenu;
++    OthersMenu othersMenu;
++    ScriptsMenu scriptsMenu;
++    WifiMenu wifiMenu;
++#if !defined(DSOLUTION_NO_EXT_HW)
+     FMMenu fmMenu;
+     GpsMenu gpsMenu;
+     IRMenu irMenu;
+     NRF24Menu nrf24Menu;
+-    OthersMenu othersMenu;
+     RFIDMenu rfidMenu;
+     RFMenu rfMenu;
+-    ScriptsMenu scriptsMenu;
+-    WifiMenu wifiMenu;
+ #if !defined(LITE_VERSION)
+     LoRaMenu loraMenu;
+     EthernetMenu ethernetMenu;
+     WireToolsMenu wireToolsMenu;
++#endif
+ #endif
+ 
+     MainMenu();
+diff --git a/src/core/menu_items/ConfigMenu.cpp b/src/core/menu_items/ConfigMenu.cpp
+index 6e44fd4..bb0a5d1 100644
+--- a/src/core/menu_items/ConfigMenu.cpp
++++ b/src/core/menu_items/ConfigMenu.cpp
+@@ -298,6 +298,7 @@ void ConfigMenu::pinsMenu() {
+     while (true) {
+         std::vector<Option> localOptions = {
+             {"I2C Finder",     [this]() { find_i2c_addresses(); }                       },
++#if !defined(DSOLUTION_NO_EXT_HW)
+             {"CC1101 Pins",    [this]() { setSPIPinsMenu(bruceConfigPins.CC1101_bus); } },
+             {"NRF24  Pins",    [this]() { setSPIPinsMenu(bruceConfigPins.NRF24_bus); }  },
+ #if !defined(LITE_VERSION)
+@@ -306,9 +307,12 @@ void ConfigMenu::pinsMenu() {
+             {"W5500 Pins",     [this]() { setSPIPinsMenu(bruceConfigPins.W5500_bus); }  },
+ #endif
+             {"SDCard Pins",    [this]() { setSPIPinsMenu(bruceConfigPins.SDCARD_bus); } },
++#endif
+             {"I2C Pins",       [this]() { setI2CPinsMenu(bruceConfigPins.i2c_bus); }    },
+             {"UART Pins",      [this]() { setUARTPinsMenu(bruceConfigPins.uart_bus); }  },
++#if !defined(DSOLUTION_NO_EXT_HW)
+             {"GPS Pins",       [this]() { setUARTPinsMenu(bruceConfigPins.gps_bus); }   },
++#endif
+             {"BadUSB Pins",    [this]() { setUARTPinsMenu(bruceConfigPins.badusb_bus); }},
+ #if defined(HAS_SPEAKER)
+             {"Speaker Pins",   []() { setSpeakerPinsMenu(bruceConfigPins.speaker_bus); }},
+diff --git a/src/core/menu_items/FileMenu.cpp b/src/core/menu_items/FileMenu.cpp
+index 443e395..221367e 100644
+--- a/src/core/menu_items/FileMenu.cpp
++++ b/src/core/menu_items/FileMenu.cpp
+@@ -26,7 +26,7 @@ void FileMenu::optionsMenu() {
+     }});
+ #endif
+ 
+-#if defined(SOC_USB_OTG_SUPPORTED)
++#if defined(SOC_USB_OTG_SUPPORTED) && !defined(DSOLUTION_NO_EXT_HW)
+     options.push_back({"Mass Storage", [=]() { MassStorage(); }});
+ #endif
+     addOptionToMainMenu();
+diff --git a/src/core/menu_items/OthersMenu.cpp b/src/core/menu_items/OthersMenu.cpp
+index 40f9956..c335115 100644
+--- a/src/core/menu_items/OthersMenu.cpp
++++ b/src/core/menu_items/OthersMenu.cpp
+@@ -5,7 +5,9 @@
+ #include "modules/badusb_ble/ducky_typer.h"
+ #include "modules/bjs_interpreter/interpreter.h"
+ #include "modules/others/clicker.h"
++#if !defined(DSOLUTION_NO_EXT_HW)
+ #include "modules/others/ibutton.h"
++#endif
+ #include "modules/others/mic.h"
+ #include "modules/others/qrcode_menu.h"
+ #include "modules/others/tururururu.h"
+@@ -26,7 +28,7 @@ void OthersMenu::optionsMenu() {
+         {"BadUSB & HID", [this]() { badUsbHidMenu(); }},
+ #endif
+ 
+-#ifndef LITE_VERSION
++#if !defined(LITE_VERSION) && !defined(DSOLUTION_NO_EXT_HW)
+         {"iButton",      setup_ibutton                },
+ #endif
+ 
+diff --git a/src/core/mykeyboard.cpp b/src/core/mykeyboard.cpp
+index 1b3c43c..fe3ce4a 100644
+--- a/src/core/mykeyboard.cpp
++++ b/src/core/mykeyboard.cpp
+@@ -1,9 +1,11 @@
+ #include "mykeyboard.h"
+ #include "core/utils.h"
+ #include "core/wifi/webInterface.h"
++#if !defined(DSOLUTION_NO_EXT_HW)
+ #include "modules/ir/TV-B-Gone.h"
+ #include "modules/ir/custom_ir.h"
+ #include "modules/rf/rf_send.h"
++#endif
+ #include "powerSave.h"
+ #include "sd_functions.h"
+ #include <ArduinoJson.h>
+@@ -1103,6 +1105,11 @@ String generalKeyboard(
+ #elif defined(HAS_5_BUTTONS) // Smoochie and Marauder-Mini
+             if (check(SelPress)) {
+                 selection_made = true;
++#if defined(DSOLUTION_183_2MIC)
++            } else if (check(EscPress)) {
++                current_text = "\x1B";
++                break;
++#endif
+             } else {
+                 /* Down Btn to move in X axis (to the right) */
+                 if (check(NextPress)) {
+diff --git a/src/core/sd_functions.cpp b/src/core/sd_functions.cpp
+index 054b629..0540b1a 100644
+--- a/src/core/sd_functions.cpp
++++ b/src/core/sd_functions.cpp
+@@ -3,16 +3,20 @@
+ #include "display.h" // using displayRedStripe as error msg
+ #include "modules/badusb_ble/ducky_typer.h"
+ #include "modules/bjs_interpreter/interpreter.h"
++#if !defined(DSOLUTION_NO_EXT_HW)
+ #include "modules/gps/wdgwars.h"
+ #include "modules/gps/wigle.h"
+ #include "modules/ir/TV-B-Gone.h"
+ #include "modules/ir/custom_ir.h"
++#endif
+ #include "modules/others/audio.h"
+ #if defined(HAS_SPEAKER)
+ #include "modules/others/audio_player.h"
+ #endif
+ #include "modules/others/qrcode_menu.h"
++#if !defined(DSOLUTION_NO_EXT_HW)
+ #include "modules/rf/rf_send.h"
++#endif
+ #include "mykeyboard.h" // using keyboard when calling rename
+ #include "passwords.h"
+ #include "scrollableTextArea.h"
+@@ -746,6 +750,7 @@ String loopSD(FS &fs, bool filePicker, const String &allowed_ext, String rootPat
+                                                      while (!check(AnyKeyPress))
+                                                          vTaskDelay(10 / portTICK_PERIOD_MS);
+                                                  }});
++#if !defined(DSOLUTION_NO_EXT_HW)
+             if (filepath.endsWith(".ir")) {
+                 options.insert(options.begin(), {"IR Choose cmd", [&]() {
+                                                      delay(200);
+@@ -785,6 +790,7 @@ String loopSD(FS &fs, bool filePicker, const String &allowed_ext, String rootPat
+                                                      wdg.upload_all(&fs, Folder);
+                                                  }});
+             }
++#endif
+ #if !defined(LITE_VERSION) && !defined(DISABLE_INTERPRETER)
+             if (filepath.endsWith(".bjs") || filepath.endsWith(".js")) {
+                 options.insert(options.begin(), {"JS Script Run", [&]() {
+diff --git a/src/core/serial_commands/cli.cpp b/src/core/serial_commands/cli.cpp
+index 1fd4750..5f28de5 100644
+--- a/src/core/serial_commands/cli.cpp
++++ b/src/core/serial_commands/cli.cpp
+@@ -4,18 +4,20 @@
+ #include "crypto_commands.h"
+ #include "gpio_commands.h"
+ #include "interpreter_commands.h"
++#if !defined(DSOLUTION_NO_EXT_HW)
+ #include "ir_commands.h"
+-#include "led_commands.h"
+-#include "power_commands.h"
+ #include "rf_commands.h"
+ #include "rfid_commands.h"
++#include "wire_commands.h"
++#endif
++#include "led_commands.h"
++#include "power_commands.h"
+ #include "screen_commands.h"
+ #include "settings_commands.h"
+ #include "sound_commands.h"
+ #include "storage_commands.h"
+ #include "util_commands.h"
+ #include "wifi_commands.h"
+-#include "wire_commands.h"
+ #include <globals.h>
+ 
+ void cliErrorCallback(cmd_error *e) {
+@@ -38,16 +40,18 @@ void SerialCli::setup() {
+ 
+     createCryptoCommands(&_cli);
+     createGpioCommands(&_cli);
+-    createIrCommands(&_cli);
+     createPowerCommands(&_cli);
++#if !defined(DSOLUTION_NO_EXT_HW)
++    createIrCommands(&_cli);
+     createRfCommands(&_cli);
+     createRfidCommands(&_cli);
++#endif
+     createSettingsCommands(&_cli);
+     createStorageCommands(&_cli);
+     createUtilCommands(&_cli);
+     createWifiCommands(&_cli);
+ 
+-#ifndef LITE_VERSION
++#if !defined(LITE_VERSION) && !defined(DSOLUTION_NO_EXT_HW)
+     createWireCommands(&_cli);
+ #endif
+ 
+diff --git a/src/core/settings.cpp b/src/core/settings.cpp
+index df8bbcb..6b929ed 100644
+--- a/src/core/settings.cpp
++++ b/src/core/settings.cpp
+@@ -8,13 +8,17 @@
+ #endif
+ #include "modules/ble_api/ble_api.hpp"
+ #include "modules/others/qrcode_menu.h"
++#if !defined(DSOLUTION_NO_EXT_HW)
+ #include "modules/rf/rf_utils.h" // for initRfModule
++#endif
+ #include "mykeyboard.h"
+ #include "powerSave.h"
+ #include "sd_functions.h"
+ #include "settingsColor.h"
+ #include "utils.h"
++#if !defined(DSOLUTION_NO_EXT_HW)
+ #include <ELECHOUSE_CC1101_SRC_DRV.h>
++#endif
+ #include <globals.h>
+ #include <nvs.h>
+ #if defined(HAS_RESISTIVE_TOUCH)
+@@ -705,6 +709,7 @@ void setEvilGatewayIp() {
+     loopOptions(options, bruceConfig.evilPortalGatewayIp == "192.168.4.1" ? 1 : 0);
+ }
+ 
++#if !defined(DSOLUTION_NO_EXT_HW)
+ /*********************************************************************
+ **  Function: setRFModuleMenu
+ **  Handles Menu to set the RF module in use
+@@ -843,6 +848,7 @@ void addMifareKeyMenu() {
+     String key = keyboard("", 12, "MIFARE key");
+     if (key != "\x1B") bruceConfig.addMifareKey(key);
+ }
++#endif
+ 
+ /*********************************************************************
+ **  Function: setClock
+diff --git a/src/core/settings.h b/src/core/settings.h
+index eed52ee..caf3a86 100644
+--- a/src/core/settings.h
++++ b/src/core/settings.h
+@@ -60,6 +60,7 @@ void setEvilPasswordMode();
+ 
+ void setEvilGatewayIp();
+ 
++#if !defined(DSOLUTION_NO_EXT_HW)
+ void setRFModuleMenu();
+ 
+ void setRFFreqMenu();
+@@ -67,6 +68,7 @@ void setRFFreqMenu();
+ void setRFIDModuleMenu();
+ 
+ void addMifareKeyMenu();
++#endif
+ 
+ void setSleepMode();
+ 
+diff --git a/src/core/startup_app.cpp b/src/core/startup_app.cpp
+index 4663a0d..7e647cc 100644
+--- a/src/core/startup_app.cpp
++++ b/src/core/startup_app.cpp
+@@ -13,14 +13,16 @@
+ #include "core/wifi/webInterface.h"
+ #include "core/wifi/wifi_common.h"
+ #include "modules/bjs_interpreter/interpreter.h"
++#include "modules/pwnagotchi/pwnagotchi.h"
++#include "modules/wifi/sniffer.h"
++#if !defined(DSOLUTION_NO_EXT_HW)
+ #include "modules/gps/gps_tracker.h"
+ #include "modules/gps/wardriving.h"
+-#include "modules/pwnagotchi/pwnagotchi.h"
+ #include "modules/rf/rf_send.h"
+ #include "modules/rfid/PN532KillerTools.h"
+ #include "modules/rfid/pn532ble.h"
+-#include "modules/wifi/sniffer.h"
+-#ifdef SOC_USB_OTG_SUPPORTED
++#endif
++#if defined(SOC_USB_OTG_SUPPORTED) && !defined(DSOLUTION_NO_EXT_HW)
+ #include "core/massStorage.h"
+ #endif
+ 
+@@ -28,11 +30,14 @@ StartupApp::StartupApp() {
+ #ifndef LITE_VERSION
+     _startupApps["Brucegotchi"] = []() { brucegotchi_start(); };
+     _startupApps["Sniffer"] = []() { sniffer_setup(); };
++#if !defined(DSOLUTION_NO_EXT_HW)
+     _startupApps["GPS Tracker"] = []() { GPSTracker(); };
+     _startupApps["PN532 BLE"] = []() { Pn532ble(); };
+     _startupApps["PN532 UART"] = []() { PN532KillerTools(); };
++#endif
+ #endif
+     _startupApps["Clock"] = []() { runClockLoop(); };
++#if !defined(DSOLUTION_NO_EXT_HW)
+     _startupApps["Custom SubGHz"] = []() { sendCustomRF(); };
+ #if defined(SOC_USB_OTG_SUPPORTED)
+     _startupApps["Mass Storage"] = []() { MassStorage(); };
+@@ -41,6 +46,7 @@ StartupApp::StartupApp() {
+     _startupApps["WardrivingNoRadio"] = []() { Wardriving(); };
+     _startupApps["WardrivingBTEOnly"] = []() { Wardriving(false, true); };
+     _startupApps["WardrivingWifiOnly"] = []() { Wardriving(true, false); };
++#endif
+     _startupApps["WebUI"] = []() { startWebUi(!wifiConnecttoKnownNet()); };
+ #if !defined(LITE_VERSION) && !defined(DISABLE_INTERPRETER)
+     _startupApps["JS Interpreter"] = []() {
+diff --git a/src/core/theme.h b/src/core/theme.h
+index 1e7c94e..8c58e95 100644
+--- a/src/core/theme.h
++++ b/src/core/theme.h
+@@ -3,8 +3,12 @@
+ #include "sd_functions.h"
+ #include <ArduinoJson.h>
+ 
++#ifndef DEFAULT_PRICOLOR
+ #define DEFAULT_PRICOLOR 0xA80F
++#endif
++#ifndef DEFAULT_SECCOLOR
+ #define DEFAULT_SECCOLOR 0xCB76
++#endif
+ 
+ struct themeFiles {
+     String wifi = "";
+@@ -66,7 +70,11 @@ public:
+ 
+     // Theme colors in RGB565 format
+     uint16_t priColor = DEFAULT_PRICOLOR;
++#ifdef DSOLUTION_183_2MIC
++    uint16_t secColor = DEFAULT_SECCOLOR;
++#else
+     uint16_t secColor = DEFAULT_PRICOLOR - 0x2000;
++#endif
+     uint16_t bgColor = 0x0000;
+ 
+     // UI Color
+diff --git a/src/main.cpp b/src/main.cpp
+index eebc4a9..32386bb 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -172,7 +172,9 @@ volatile int tftHeight = TFT_WIDTH;
+ #include "core/wifi/wifi_common.h"
+ #include "modules/bjs_interpreter/interpreter.h" // for JavaScript interpreter
+ #include "modules/others/audio.h"                // for playAudioFile
++#if !defined(DSOLUTION_NO_EXT_HW)
+ #include "modules/rf/rf_utils.h"                 // for initCC1101once
++#endif
+ #include <Wire.h>
+ 
+ /*********************************************************************
+@@ -233,6 +235,7 @@ void setup_gpio() {
+     // apart from values loaded from /brucePins.conf (see applyBoardDefault() in configPins.h).
+     brucePinsSetupDefaults = bruceConfigPins;
+ 
++#if !defined(DSOLUTION_NO_EXT_HW)
+     // IO expander (AW9523/PCA9555: Smoochiee, Reaper, T-Lora Pager, Mako, Pebble) switching GPS,
+     // MIC, Vibro, CC1101 RX/TX, NFC... powerlines. It is an onboard peripheral, so it lives on the
+     // sys_i2c bus each board registers in _setup_gpio() via setSysI2CBus(); &Wire only for a board
+@@ -246,6 +249,7 @@ void setup_gpio() {
+     // acquireSPIBus() returns nullptr when these pins have no hardware controller left (e.g.
+     // ARDUINO_M5STICK_C_PLUS and others that don't share SPI with the display/SD/aux bus);
+     // initCC1101once(NULL) lets the driver fall back to managing the default SPI object itself.
++#endif
+ }
+ 
+ /*********************************************************************
+diff --git a/src/modules/bjs_interpreter/ir_js.cpp b/src/modules/bjs_interpreter/ir_js.cpp
+index e23370d..fb1d66e 100644
+--- a/src/modules/bjs_interpreter/ir_js.cpp
++++ b/src/modules/bjs_interpreter/ir_js.cpp
+@@ -1,11 +1,24 @@
+ #if !defined(LITE_VERSION) && !defined(DISABLE_INTERPRETER)
+ #include "ir_js.h"
++#include "helpers_js.h"
+ 
++#if defined(DSOLUTION_NO_EXT_HW)
++JSValue native_irTransmitFile(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
++    return JS_NewBool(false);
++}
++JSValue native_irTransmit(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
++    return JS_NewBool(false);
++}
++JSValue native_irRead(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
++    return JS_NewString(ctx, "");
++}
++JSValue native_irReadRaw(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
++    return JS_NewString(ctx, "");
++}
++#else
+ #include "modules/ir/custom_ir.h"
+ #include "modules/ir/ir_read.h"
+ 
+-#include "helpers_js.h"
+-
+ // Module registration is performed in `mqjs_stdlib.c`.
+ 
+ JSValue native_irTransmitFile(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
+@@ -52,5 +65,6 @@ JSValue native_irReadRaw(JSContext *ctx, JSValue *this_val, int argc, JSValue *a
+     String result = irRead.loop_headless(timeout);
+     return JS_NewString(ctx, result.c_str());
+ }
++#endif
+ 
+ #endif
+diff --git a/src/modules/bjs_interpreter/nrf24_js.cpp b/src/modules/bjs_interpreter/nrf24_js.cpp
+index a3015ff..c23e9d7 100644
+--- a/src/modules/bjs_interpreter/nrf24_js.cpp
++++ b/src/modules/bjs_interpreter/nrf24_js.cpp
+@@ -1,6 +1,24 @@
+ #if !defined(LITE_VERSION) && !defined(DISABLE_INTERPRETER)
+ #include "nrf24_js.h"
+ #include "helpers_js.h"
++
++#if defined(DSOLUTION_NO_EXT_HW)
++JSValue native_nrf24Begin(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
++    return JS_NewBool(false);
++}
++JSValue native_nrf24Send(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
++    return JS_NewBool(false);
++}
++JSValue native_nrf24Receive(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
++    return JS_UNDEFINED;
++}
++JSValue native_nrf24SetChannel(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
++    return JS_UNDEFINED;
++}
++JSValue native_nrf24IsConnected(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
++    return JS_NewBool(false);
++}
++#else
+ #include "modules/NRF24/nrf_common.h"
+ 
+ JSValue native_nrf24Begin(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
+@@ -118,5 +136,6 @@ JSValue native_nrf24SetChannel(JSContext *ctx, JSValue *this_val, int argc, JSVa
+ JSValue native_nrf24IsConnected(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
+     return JS_NewBool(NRFradio.isChipConnected());
+ }
++#endif
+ 
+ #endif
+diff --git a/src/modules/bjs_interpreter/protopirate_js.cpp b/src/modules/bjs_interpreter/protopirate_js.cpp
+index 09920d5..6f964a1 100644
+--- a/src/modules/bjs_interpreter/protopirate_js.cpp
++++ b/src/modules/bjs_interpreter/protopirate_js.cpp
+@@ -1,6 +1,20 @@
+ #if !defined(LITE_VERSION) && !defined(DISABLE_INTERPRETER)
+-#include "modules/rf/protocols/rf_protocol_engine.h"
+ #include "subghz_js.h"
++#if defined(DSOLUTION_NO_EXT_HW)
++JSValue native_subghzProtoInfo(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
++    return JS_NewString(ctx, "[]");
++}
++JSValue native_subghzProtoDecode(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
++    return JS_NewString(ctx, "{\"ok\":false,\"error\":\"SubGHz not supported on this board\"}");
++}
++JSValue native_subghzProtoEncode(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
++    return JS_NewString(ctx, "{\"ok\":false,\"error\":\"SubGHz not supported on this board\"}");
++}
++JSValue native_subghzProtoTransmit(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
++    return JS_NewBool(false);
++}
++#else
++#include "modules/rf/protocols/rf_protocol_engine.h"
+ 
+ JSValue native_subghzProtoInfo(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
+     return JS_NewString(ctx, rf_protocol_catalog_json().c_str());
+@@ -29,3 +43,4 @@ JSValue native_subghzProtoTransmit(JSContext *ctx, JSValue *this_val, int argc,
+     return JS_NewBool(rf_protocol_transmit_raw(input));
+ }
+ #endif
++#endif
+diff --git a/src/modules/bjs_interpreter/rfid_js.cpp b/src/modules/bjs_interpreter/rfid_js.cpp
+index 6c58542..54ffa9b 100644
+--- a/src/modules/bjs_interpreter/rfid_js.cpp
++++ b/src/modules/bjs_interpreter/rfid_js.cpp
+@@ -7,6 +7,28 @@
+ #include "rfid_js.h"
+ #include "globals.h"
+ #include "helpers_js.h"
++
++#if defined(DSOLUTION_NO_EXT_HW)
++static JSValue rfidUnsupportedObj(JSContext *ctx) {
++    JSValue obj = JS_NewObject(ctx);
++    JS_SetPropertyStr(ctx, obj, "success", JS_NewBool(false));
++    JS_SetPropertyStr(ctx, obj, "message", JS_NewString(ctx, "RFID not supported on this board"));
++    return obj;
++}
++JSValue native_rfidRead(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) { return rfidUnsupportedObj(ctx); }
++JSValue native_rfidReadUID(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) { return JS_NewString(ctx, ""); }
++JSValue native_rfidWrite(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) { return rfidUnsupportedObj(ctx); }
++JSValue native_rfidSave(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) { return JS_NewBool(false); }
++JSValue native_rfidLoad(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) { return rfidUnsupportedObj(ctx); }
++JSValue native_rfidClear(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) { return JS_UNDEFINED; }
++JSValue native_rfid_AddMifareKey(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) { return JS_NewBool(false); }
++JSValue native_srixRead(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) { return rfidUnsupportedObj(ctx); }
++JSValue native_srixWrite(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) { return rfidUnsupportedObj(ctx); }
++JSValue native_srixSave(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) { return JS_NewBool(false); }
++JSValue native_srixLoad(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) { return rfidUnsupportedObj(ctx); }
++JSValue native_srixClear(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) { return JS_UNDEFINED; }
++JSValue native_srixWriteBlock(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) { return rfidUnsupportedObj(ctx); }
++#else
+ #include "modules/rfid/srix_tool.h"
+ #include "modules/rfid/tag_o_matic.h"
+ 
+@@ -515,5 +537,6 @@ JSValue native_srixWriteBlock(JSContext *ctx, JSValue *this_val, int argc, JSVal
+ 
+     return obj;
+ }
++#endif
+ 
+ #endif
+diff --git a/src/modules/bjs_interpreter/subghz_js.cpp b/src/modules/bjs_interpreter/subghz_js.cpp
+index ffd58b4..0e2ad2b 100644
+--- a/src/modules/bjs_interpreter/subghz_js.cpp
++++ b/src/modules/bjs_interpreter/subghz_js.cpp
+@@ -1,11 +1,20 @@
+ #if !defined(LITE_VERSION) && !defined(DISABLE_INTERPRETER)
+ #include "subghz_js.h"
++#include "helpers_js.h"
+ 
++#if defined(DSOLUTION_NO_EXT_HW)
++JSValue native_subghzTransmitFile(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) { return JS_NewBool(false); }
++JSValue native_subghzTransmit(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) { return JS_NewBool(false); }
++JSValue native_subghzRead(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) { return JS_NewString(ctx, ""); }
++JSValue native_subghzReadRaw(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) { return JS_NewString(ctx, ""); }
++JSValue native_subghzSetFrequency(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) { return JS_NewBool(false); }
++JSValue native_subghzTxSetup(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) { return JS_NewBool(false); }
++JSValue native_subghzTxPulses(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) { return JS_NewBool(false); }
++JSValue native_subghzTxEnd(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) { return JS_UNDEFINED; }
++#else
+ #include "modules/rf/rf_scan.h"
+ #include "modules/rf/rf_utils.h"
+ 
+-#include "helpers_js.h"
+-
+ // Tracks whether txSetup() has been called (raw pulse TX session is active)
+ static bool _txSessionActive = false;
+ static int _txPin = -1;
+@@ -184,5 +193,6 @@ JSValue native_subghzTxEnd(JSContext *ctx, JSValue *this_val, int argc, JSValue
+     _txPin = -1;
+     return JS_UNDEFINED;
+ }
++#endif
+ 
+ #endif
+diff --git a/src/modules/ble/BLE_Suite.cpp b/src/modules/ble/BLE_Suite.cpp
+index 27c887d..1126e98 100644
+--- a/src/modules/ble/BLE_Suite.cpp
++++ b/src/modules/ble/BLE_Suite.cpp
+@@ -20,7 +20,9 @@
+ #include "core/utils.h"
+ #include "core/wifi/wifi_common.h"
+ #include "fastpair_crypto.h"
++#if !defined(DSOLUTION_NO_EXT_HW)
+ #include "modules/NRF24/nrf_jammer_api.h"
++#endif
+ #include <SD.h>
+ #include <algorithm>
+ #include <functional>
+@@ -2475,6 +2477,11 @@ bool MultiConnectionAttack::advertisingSpam(std::vector<NimBLEAddress> targets)
+ }
+ 
+ bool MultiConnectionAttack::nrf24JamAttack(int jamMode) {
++#if defined(DSOLUTION_NO_EXT_HW)
++    (void)jamMode;
++    showAttackResult(false, "NRF24 hardware not present");
++    return false;
++#else
+     AutoCleanup cleanup([]() { BLEStateManager::deinitBLE(true); });
+ 
+     if (!confirmAttack("Jam BLE frequencies? This may disrupt nearby devices.")) return false;
+@@ -2517,9 +2524,15 @@ bool MultiConnectionAttack::nrf24JamAttack(int jamMode) {
+     }
+     showAttackResult(false, "Failed to start BLE jamming");
+     return false;
++#endif
+ }
+ 
+ bool MultiConnectionAttack::jamAndConnect(NimBLEAddress target) {
++#if defined(DSOLUTION_NO_EXT_HW)
++    (void)target;
++    showAttackResult(false, "NRF24 hardware not present");
++    return false;
++#else
+     AutoCleanup cleanup([]() { BLEStateManager::deinitBLE(true); });
+ 
+     if (!confirmAttack("Jam BLE while attempting exploit connection?")) return false;
+@@ -2556,6 +2569,7 @@ bool MultiConnectionAttack::jamAndConnect(NimBLEAddress target) {
+     }
+     showAttackResult(false, "Jam & Connect attack failed");
+     return false;
++#endif
+ }
+ 
+ void MultiConnectionAttack::cleanup() {
+@@ -5186,6 +5200,18 @@ void showMemorySubMenu(NimBLEAddress target, SelectedDevice deviceInfo) {
+ }
+ 
+ void showDoSSubMenu(NimBLEAddress target, SelectedDevice deviceInfo) {
++#if defined(DSOLUTION_NO_EXT_HW)
++    const char *options[] = {"Connection Flood", "Advertising Spam", "Protocol Fuzzer"};
++    int choice = showSubMenu("DoS Attacks", options, 3);
++    if (choice == -1) return;
++
++    DoSAttackServiceClass dos;
++    switch (choice) {
++        case 0: dos.connectionFlood(target); break;
++        case 1: dos.advertisingSpam(target); break;
++        case 2: runProtocolFuzzer(target); break;
++    }
++#else
+     const char *options[] = {
+         "Connection Flood", "Advertising Spam", "Jam & Connect (NRF24)", "Protocol Fuzzer"
+     };
+@@ -5202,6 +5228,7 @@ void showDoSSubMenu(NimBLEAddress target, SelectedDevice deviceInfo) {
+         case 2: multi.jamAndConnect(target); break;
+         case 3: runProtocolFuzzer(target); break;
+     }
++#endif
+ }
+ 
+ void showPayloadSubMenu(NimBLEAddress target, SelectedDevice deviceInfo) {
 diff --git a/src/modules/others/mic.cpp b/src/modules/others/mic.cpp
 index 6409d53..0d3f65d 100644
 --- a/src/modules/others/mic.cpp
