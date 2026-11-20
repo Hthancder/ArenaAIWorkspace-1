@@ -74,7 +74,7 @@ jobs:
             LOVYAN_OBJ=$(find .pio/build/dsolution-183-2mic -name 'lovyan.cpp.o' | head -1)
             echo "interface object: ${IFACE_OBJ:-MISSING}"
             if [ -n "$IFACE_OBJ" ] && [ -n "$NM" ]; then
-              echo "board symbols: $(for s in _setup_gpio _setup_codec_speaker _setup_codec_mic InputHandler isCharging powerOff getBatteryMv enterBootloaderMode; do "$NM" -C "$IFACE_OBJ" | grep -qE " [Tt] $s" && echo "$s" ; done | tr '\n' ' ')"
+              echo "board symbols: $(for s in _setup_gpio _setup_codec_speaker _setup_codec_mic InputHandler isCharging powerOff getBatteryMv enterBootloaderMode; do "$NM" -C "$IFACE_OBJ" | grep -qE " [TtWw] ${s}(\(|$)" && echo "$s" ; done | tr '\n' ' ')"
             fi
             if [ -n "$LOVYAN_OBJ" ] && [ -n "$NM" ]; then
               echo "panel class: $(for s in getInitCommands getMadCtl setRotation; do "$NM" -C "$LOVYAN_OBJ" | grep -q "Panel_NV3023::$s" && echo "$s"; done | tr '\n' ' ')"

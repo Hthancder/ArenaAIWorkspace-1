@@ -6411,10 +6411,18 @@ index d3fe50a..355bf7f 100644
      }
  
 diff --git a/src/core/display.h b/src/core/display.h
-index 0345168..896abeb 100644
+index 0345168..7502c90 100644
 --- a/src/core/display.h
 +++ b/src/core/display.h
-@@ -23,6 +23,7 @@ extern uint8_t mainMenuGridColumns;
+@@ -7,6 +7,7 @@
+ #include <LittleFS.h>
+ #include <SD.h>
+ #include <globals.h>
++#include <vector>
+ #define BORDER_OFFSET_FROM_SCREEN_EDGE 5
+ #define BORDER_PAD_X (LW * FP + 4)
+ #define STATUS_BAR_HEIGHT (LH * FM + 14)
+@@ -23,6 +24,7 @@ extern uint8_t mainMenuGridColumns;
  // the grid without display.cpp depending on MainMenu's header. Returns true and writes newIndex
  // when (x, y) landed in the page zone (only meaningful when mainMenuGridColumns > 1).
  extern bool (*gridPageTapHandler)(int x, int y, int currentIndex, int &newIndex);
@@ -6422,6 +6430,14 @@ index 0345168..896abeb 100644
  
  void panelSleep(bool on);
  void turnOffDisplay();
+@@ -36,6 +38,7 @@ struct Opt_Coord {
+     uint16_t bgcolor = bruceConfig.bgColor;
+ };
+ void displayScrollingText(const String &text, Opt_Coord &coord, bool highlight = false);
++std::vector<String> wrapText(const String &text, int maxCharsPerLine);
+ 
+ #if !defined(LITE_VERSION)
+ 
 diff --git a/src/core/feature_guide.cpp b/src/core/feature_guide.cpp
 new file mode 100644
 index 0000000..83b5e33
@@ -8377,20 +8393,22 @@ index 1e7c94e..8c58e95 100644
  
      // UI Color
 diff --git a/src/core/utils.cpp b/src/core/utils.cpp
-index aacdf98..37576c0 100644
+index aacdf98..495b3f9 100644
 --- a/src/core/utils.cpp
 +++ b/src/core/utils.cpp
-@@ -3,6 +3,9 @@
+@@ -3,6 +3,11 @@
  #include "scrollableTextArea.h"
  #include <Preferences.h>
  #include <globals.h>
 +#if defined(CONFIG_IDF_TARGET_ESP32S3)
++#if defined(CONFIG_IDF_TARGET_ESP32S3)
 +#include "soc/rtc_cntl_reg.h"
++#endif
 +#endif
  
  /*********************************************************************
  **  Function: backToMenu
-@@ -360,3 +363,21 @@ String formatBytes(uint64_t bytes) {
+@@ -360,3 +365,21 @@ String formatBytes(uint64_t bytes) {
          return String(size, 2) + " " + units[unitIndex];
      }
  }
