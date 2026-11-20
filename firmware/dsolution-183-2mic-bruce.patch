@@ -333,10 +333,10 @@ index 0000000..d1c0dfb
 +4. ES7210 gain and the MCLK patch if capture is silent.
 diff --git a/boards/dsolution-183-2mic/dsolution-183-2mic.ini b/boards/dsolution-183-2mic/dsolution-183-2mic.ini
 new file mode 100644
-index 0000000..bfc8d74
+index 0000000..ccd285e
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/dsolution-183-2mic.ini
-@@ -0,0 +1,132 @@
+@@ -0,0 +1,138 @@
 +; =====================================================================================
 +;  DSolution 1.83" 2-Mic  --  ESP32-S3 / NV3030B / ES7210 + ES8311
 +;
@@ -367,6 +367,12 @@ index 0000000..bfc8d74
 +; Compiles this folder's interface.cpp. Without it the weak no-op defaults win and the
 +; board boots with no pins, no buttons and no codec initialisation at all.
 +build_src_filter = ${env.build_src_filter} +<../boards/dsolution-183-2mic>
++
++; Post-build: merge bootloader + partitions + boot_app0 + app into ONE image
++; (.pio/build/dsolution-183-2mic/firmware-factory.bin) that is flashed at 0x0.
++extra_scripts =
++	${env.extra_scripts}
++	post:boards/dsolution-183-2mic/merge_bin.py
 +
 +build_flags =
 +	${env.build_flags}
@@ -815,6 +821,121 @@ index 0000000..a14c8b4
 +    esp_sleep_enable_ext0_wakeup((gpio_num_t)PIN_BTN_SEL, 0); // wake on Boot = LOW
 +    esp_deep_sleep_start();
 +}
+diff --git a/boards/dsolution-183-2mic/merge_bin.py b/boards/dsolution-183-2mic/merge_bin.py
+new file mode 100644
+index 0000000..34d2300
+--- /dev/null
++++ b/boards/dsolution-183-2mic/merge_bin.py
+@@ -0,0 +1,109 @@
++# =====================================================================================
++#  boards/dsolution-183-2mic/merge_bin.py
++#
++#  Post-build hook: merges bootloader + partition table + boot_app0 + application into
++#  ONE image that is flashed at 0x0, so the board only ever needs a single .bin:
++#
++#      .pio/build/dsolution-183-2mic/firmware-factory.bin
++#
++#      esptool.py --chip esp32s3 write_flash 0x0 firmware-factory.bin
++#
++#  `--fill-flash-size` pads the image to the full 16 MB, so writing it also erases the
++#  partition table and the LittleFS area of whatever firmware was on the board before --
++#  the filesystem is re-created on first boot instead of inheriting a stale one.
++#
++#  PlatformIO's own upload target still works (`pio run -t upload` writes the four
++#  separate images); this is only the "one file" output.
++#
++#  Registered from the board .ini:
++#      extra_scripts = ${env.extra_scripts}
++#          post:boards/dsolution-183-2mic/merge_bin.py
++# =====================================================================================
++
++Import("env")
++
++import subprocess
++import sys
++from pathlib import Path
++
++TAG = "[merge_bin]"
++FLASH_MODE_DEFAULT = "qio"
++
++
++def _esptool_command(env):
++    """esptool v4 ships esptool.py, v5 may only install the console script."""
++    pkg = env.PioPlatform().get_package_dir("tool-esptoolpy") or ""
++    for exe in ("esptool.py", "esptool"):
++        path = Path(pkg) / exe
++        if path.is_file():
++            return [sys.executable, str(path)]
++    return [sys.executable, "-m", "esptool"]
++
++
++def _flash_freq(value):
++    digits = "".join(ch for ch in str(value) if ch.isdigit())
++    try:
++        return f"{int(digits) // 1000000}m"
++    except (TypeError, ValueError):
++        return "80m"
++
++
++def merge_bin(source, target, env):
++    build = Path(env.subst("$BUILD_DIR"))
++    app = build / f"{env.subst('$PROGNAME')}.bin"
++    bootloader = build / "bootloader.bin"
++    partitions = build / "partitions.bin"
++    boot_app0 = build / "boot_app0.bin"
++
++    if not boot_app0.is_file():
++        # Framework layout differences: the file lives somewhere under the packages dir.
++        packages = Path(env.subst("$PROJECT_PACKAGES_DIR"))
++        boot_app0 = next(packages.rglob("boot_app0.bin"), boot_app0)
++
++    segments = [(0x0000, bootloader), (0x8000, partitions)]
++    if boot_app0.is_file():
++        segments.append((0xE000, boot_app0))
++    else:
++        print(f"{TAG} boot_app0.bin not found -- otadata stays erased, factory app still boots")
++    segments.append((0x10000, app))
++
++    for _, image in segments:
++        if not image.is_file():
++            raise SystemExit(f"{TAG} missing segment: {image}")
++
++    out = build / f"{env.subst('$PROGNAME')}-factory.bin"
++    mode = env.BoardConfig().get("build.flash_mode", FLASH_MODE_DEFAULT)
++    freq = _flash_freq(env.BoardConfig().get("build.f_flash", "80000000"))
++    size = env.BoardConfig().get("upload.flash_size", "16MB")
++
++    offsets = []
++    for offset, image in segments:
++        offsets += [f"0x{offset:X}", str(image)]
++
++    # esptool v4 spells the command merge_bin, v5 accepts merge-bin; --fill-flash-size
++    # is not available on very old builds. Try the combinations, accept the first that works.
++    attempts = [
++        ("merge_bin", ["--fill-flash-size", size]),
++        ("merge-bin", ["--fill-flash-size", size]),
++        ("merge_bin", []),
++        ("merge-bin", []),
++    ]
++    for subcommand, extra in attempts:
++        cmd = (
++            _esptool_command(env)
++            + ["--chip", "esp32s3", subcommand, "-o", str(out)]
++            + ["--flash_mode", mode, "--flash_freq", freq, "--flash_size", size]
++            + extra
++            + offsets
++        )
++        print(f"{TAG} trying: {' '.join(cmd)}")
++        if out.is_file():
++            out.unlink()
++        if subprocess.call(cmd) == 0 and out.is_file():
++            print(f"{TAG} OK: {out} ({out.stat().st_size} bytes) -- flash it at 0x0")
++            return
++
++    raise SystemExit(f"{TAG} failed to merge the image (see the command above)")
++
++
++env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", merge_bin)
 diff --git a/include/DisplayDrivers_User_Setup.h b/include/DisplayDrivers_User_Setup.h
 index f67b633..7c63a84 100644
 --- a/include/DisplayDrivers_User_Setup.h

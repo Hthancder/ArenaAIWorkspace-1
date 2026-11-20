@@ -86,19 +86,29 @@ jobs:
             else
               echo "banner string: NOT FOUND in firmware.bin"
             fi
+            FACTORY=.pio/build/dsolution-183-2mic/firmware-factory.bin
+            if [ -f "$FACTORY" ]; then
+              echo "factory image: $(ls -l "$FACTORY" | awk '{print $5}') bytes (flash at 0x0)"
+            else
+              echo "factory image: MISSING -- merge step output: $(grep -i '\[merge_bin\]' build.log | tail -3 | tr '\n' ' ')"
+            fi
             echo "warnings in board files: $(grep -icE 'warning:.*(NV3030B|dsolution|interface\.cpp|mic\.cpp)' build.log)"
           } > report.txt
           cat report.txt
           # One annotation per line, the first 10 are the ones GitHub keeps.
           while IFS= read -r line; do [ -n "$line" ] && echo "::notice title=build report::$line"; done < report.txt
 
-      - name: Upload firmware
+      - name: Rename the single flashable image
+        if: always()
+        run: |
+          src=/tmp/Bruce/.pio/build/dsolution-183-2mic/firmware-factory.bin
+          [ -f "$src" ] && cp "$src" DSolution-183-2mic-factory.bin
+          ls -l DSolution-183-2mic-factory.bin 2>/dev/null || echo "no factory image produced"
+
+      - name: Upload firmware (one .bin)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: dsolution-183-2mic-firmware
-          path: |
-            /tmp/Bruce/.pio/build/dsolution-183-2mic/firmware.bin
-            /tmp/Bruce/.pio/build/dsolution-183-2mic/firmware.elf
-            /tmp/Bruce/build.log
+          name: DSolution-183-2mic-factory
+          path: DSolution-183-2mic-factory.bin
           if-no-files-found: warn
