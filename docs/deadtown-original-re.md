@@ -335,6 +335,42 @@ input, UI, or iOS. In particular, the native implementations differ in size
 and may differ in logic; no candidate here is included in release workflows.
 The probe output and saves are disposable, and only diagnostics are uploaded.
 
+#### Native equipment key split and pet-related consumption guard
+
+`tools/deadtown_item_equip_evidence.py` pins selected control/data flow in the
+original ARM `item_equip` (`0x1a0d8c`, 6,668 bytes) and the native-only
+`item_check_pet` (`0x1ba9c4`, 732 bytes). Unlike old `item_equip.gml`, native
+computes a quotient and remainder from argument 1 and mutable global index 18:
+`floor(argument1 / global[18])` goes to instance slot 5 and `fmod(argument1,
+global[18])` goes to slot 6. This does **not** establish the registered name,
+initial/runtime value or meaning of global 18. Native type selector 1/2 selects
+global map 0/1 into instance slot 7; invalid/fractional selectors and aliasing
+are not established.
+
+A separate guard initializes instance slot 8 to zero. For a type approximately
+2, it indexes global array 19 with slot 6 and column 4; when the field is
+approximately 4 it calls `item_check_pet(slot 6)`. The helper's finite numeric
+comparison checks the interval against 17 and 22 with mutable epsilon; at the
+ELF initializer `1e-10`, exact integer values 17–22 return 1, while 16 and 23
+return 0. If the helper returns above 0.5, the guard sets slot 8 to 1. When
+slot 8 is above epsilon, the branch skips the ordinary inventory decrement
+block. Consequently, **if** the relevant map/field values and runtime epsilon
+satisfy those conditions, native does not call the pinned map mutation block
+for that equip operation. This is a static, conditional finding, not an
+observed native gameplay result or proof of all equip effects. The old GMX
+has no such guard and always decrements the selected map before its equip
+logic; its entries 17–22 are labelled pets, but native array/global registration
+and the runtime item table are not proved from names alone.
+
+The non-skipped block calls `ds_map_find_value(target, original argument1)`
+`0x1a1474`, subtracts one, calls `ds_map_set` `0x1a14cc`, reads again at
+`0x1a1560` and conditionally calls `ds_map_delete` `0x1a1610` on the
+post-decrement comparison against epsilon. The test verifies the encoded call
+vectors, guard targets and helper comparisons; it is not a complete CFG,
+`item_equip` reconstruction, DS-map implementation or iOS patch. Behavior with
+invalid IDs/maps, mutable epsilon or divisor, exceptions, other pet/equipment
+updates and original save compatibility remain open.
+
 #### Native item-drop path and comparison tolerance
 
 `tools/deadtown_item_drop_evidence.py` pins the original `gml_Script_item_drop`

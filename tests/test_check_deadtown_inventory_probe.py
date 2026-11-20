@@ -12,6 +12,7 @@ DT_INV|case1|1|1|2|2|2
 DT_INV|cases234|1|1|1|1|1|1|1
 DT_INV|equip_first|0|0|0
 DT_INV|equip_swap|1|1|1|1
+DT_INV|pet_equip_old|17|1|17
 DT_INV|short|0|0|1|2|3
 DT_INV|craft|1|0|1|0|2
 DT_INV|optional|1|0|3
@@ -26,7 +27,8 @@ class InventoryCheckTests(unittest.TestCase):
                     LOG + 'DT_INV|get|5\n', LOG.replace('short|0|0', 'short|1|0'),
                     LOG.replace('epsilon|10|1|0|1|1', 'epsilon|10|1|1|1|1'),
                     LOG.replace('|102|203|304|405|506|0', '|102|203|304|405|506|1'),
-                    LOG.replace('scan|4|2|9|9|8', 'scan|4|2|4|9|8')):
+                    LOG.replace('scan|4|2|9|9|8', 'scan|4|2|4|9|8'),
+                    LOG.replace('pet_equip_old|17|1|17', 'pet_equip_old|17|2|17')):
             with self.assertRaises(ValueError):
                 check_log(bad)
 

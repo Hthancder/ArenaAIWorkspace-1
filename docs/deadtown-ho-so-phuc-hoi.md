@@ -201,6 +201,15 @@ trước khi phát hành. Game Unity `com.Ccentury.DeadTownSurvival` là remake 
   có hai slot số lượng 0 và stack đầu ra có sẵn cũng chạy. Đây là các kịch bản
   ép trong VM từ **nguồn cũ**, không chứng minh logic APK, mọi loại trang bị,
   ID, UI, input hay iOS.
+- Phát hiện khác biệt quan trọng ở `item_equip` native `0x1a0d8c`:
+  argument key được chia lấy `floor` và `fmod` với global index 18 (giá trị
+  lúc chạy chưa biết); source GMX cũ không có tách này. Nếu type gần 2, trường
+  cột 4 của global array index 19 gần 4, và `item_check_pet` của native xác
+  định phần dư nằm trong khoảng 17–22 (theo epsilon), cờ slot 8 được đặt 1;
+  khi epsilon runtime nhỏ hơn 1, nhánh này bỏ qua khối trừ inventory. Source
+  cũ luôn trừ trước. Đây là phân tích tĩnh có điều kiện, **chưa chạy APK**;
+  tên đăng ký global, schema, giá trị divisor, tác động equip đầy đủ và đường
+  chạy thực tế còn chưa rõ. Công cụ `tools/deadtown_item_equip_evidence.py`.
 - Đối chiếu ARM mới cho `item_drop` tại `0x1a31e0` cho thấy selector 1–4
   chọn `g_pGlobal` index 0–3, ghi vào instance slot 7; argument 1 làm key.
   Nhánh key thiếu trả 0; nhánh có giá trị đọc, trừ 1, gọi native
