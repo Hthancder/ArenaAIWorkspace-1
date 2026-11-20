@@ -165,10 +165,10 @@ index 0000000..d021320
 +#endif // DSOLUTION_NV3023_PANEL_H
 diff --git a/boards/dsolution-183-2mic/README.md b/boards/dsolution-183-2mic/README.md
 new file mode 100644
-index 0000000..38826d2
+index 0000000..2865a5d
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/README.md
-@@ -0,0 +1,219 @@
+@@ -0,0 +1,222 @@
 +# DSolution 1.83" 2-Mic
 +
 +Bruce port for the **DSolution 1.83 inch 2-Mic** board (ESP32-S3 + NV3023 panel +
@@ -337,11 +337,14 @@ index 0000000..38826d2
 +in the parent workspace repo, which applies the port to upstream Bruce at the pinned commit):
 +
 +```
-+Flash: [===       ]  27.4% (used 4 601 383 bytes from 16 777 216 bytes)
++Flash: [===       ]  27.4% (used 4 601 355 bytes from 16 777 216 bytes)
 +RAM:   [====      ]  39.8% (used 130 260 bytes from 327 680 bytes)
-+firmware.bin  4 601 920 bytes        0 warnings from the board's own files
++firmware.bin          4 601 904 bytes     0 warnings from the board's own files
++firmware-factory.bin 16 777 216 bytes     bootloader+partitions+boot_app0+app, flash at 0x0
 +NV3023 init table, MADCTL table and the board's _setup_gpio()/codec hooks are in the image
 +```
++
++(CI run 44718198693 on `cf7f03b`.)
 +
 +### First flash on real hardware -- what it showed
 +
