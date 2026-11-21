@@ -4,8 +4,8 @@
 bản có thể phát hành. Các file `project/**/*.gml` và `project/**/*.gmx` được
 lưu trong Git để có thể sửa và theo dõi thay đổi. Tên trùng với APK không chứng
 minh logic trùng; 68 script, 94 object và 369 event native vẫn chưa có khóa
-nguồn tương ứng ở mốc ban đầu. Nguồn hiện còn thiếu 90 object và 4 sprite APK
-theo tên trong tập file nguồn;
+nguồn tương ứng ở mốc ban đầu. Nguồn hiện còn thiếu 68 script, 90 object,
+368 event key và 4 sprite APK theo tên trong tập file nguồn;
 398 sprite cùng tên hiện khớp các trường metadata tĩnh được so, nhưng không
 chứng minh mask khi biên dịch hoặc hành vi. Không dùng project hiện tại để tuyên
 bố game hoàn chỉnh hoặc đem phát hành IPA.
@@ -50,7 +50,10 @@ cha của `obj_gps`/`obj_trap` theo APK. Thêm ba object không có event riêng
 trích dựng từ atlas. Mask ước tính từ alpha được so với bitmask APK, nhưng chưa
 chứng minh compiler tạo mask tương đương; `obj_defence_house` kế thừa `par_solid`
 của nguồn cũ. Đây là phục hồi cấu trúc tĩnh, không tự khôi phục code sử dụng
-những object này hay bảo đảm hành vi và ID sau biên dịch.
+những object này hay bảo đảm hành vi và ID sau biên dịch. Đã bổ sung event
+collision comment-only của `obj_player` với `par_action` dựa trên một event
+native có thân lệnh ARM `bx lr`; chưa kiểm cách GameMaker xử lý collision,
+kế thừa và runtime trên thiết bị.
 
 ## Chỉnh sửa và quản lý tài nguyên
 

@@ -855,3 +855,20 @@ Chưa thêm script này vào project: `rom_play_defence` và logic tương ứng
 thiếu, ID native 14 không bảo đảm giữ nguyên khi compile GMX, và phép so tĩnh
 không xác nhận Android/iOS runtime. Công cụ không tạo source từ số 14 hay coi
 script là đã phục hồi hoàn chỉnh.
+
+### Event collision rỗng của player
+
+Tiếp tục đối chiếu các event chưa có trong source: bảng OBJT của APK ghi
+`obj_player` có collision với object index 184 (`par_action`) và một action
+code; export ARM32 `gml_Object_obj_player_Collision_184` dài 4 byte và chỉ là
+`bx lr` (không có thân lệnh). Đã thêm event tương ứng vào GMX với một code
+comment-only, theo định dạng event rỗng sẵn có trong project. Phân biệt event
+rỗng với không khai báo event là quan trọng khi có cơ chế kế thừa/dispatch,
+nhưng chưa xác nhận GameMaker biên dịch hoặc dispatch tương đương.
+
+`tools/deadtown_empty_collision_evidence.py` kiểm SHA APK/library, event target
+và action tĩnh, symbol cùng bốn byte ARM, và action comment-only trong source;
+test từ chối APK khác, descriptor bị đổi và ELF sai. Đây không kiểm nhánh
+collision thực tế, behavior kế thừa, iOS, hoặc gameplay. Tính theo tên/key,
+nay thiếu 368 event native, 90 object và 68 script; một key được thêm không có
+nghĩa các sự kiện cùng tên khác đã tương đương bản gốc.
