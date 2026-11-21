@@ -46,5 +46,6 @@
     <frame index="23">images\spr_item_equip_23.png</frame>
     <frame index="24">images\spr_item_equip_24.png</frame>
     <frame index="25">images\spr_item_equip_25.png</frame>
+    <frame index="26">images\spr_item_equip_26.png</frame>
   </frames>
 </sprite>

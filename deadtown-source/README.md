@@ -4,9 +4,17 @@
 bản có thể phát hành. Các file `project/**/*.gml` và `project/**/*.gmx` được
 lưu trong Git để có thể sửa và theo dõi thay đổi. Tên trùng với APK không chứng
 minh logic trùng; 68 script, 94 object và 369 event native vẫn chưa có khóa
-nguồn tương ứng ở mốc ban đầu. Nguồn cũ cũng thiếu 111 sprite APK theo tên,
-và 24 sprite cùng tên có metadata khác. Không dùng project hiện tại để tuyên
-bố game hoàn chỉnh hoặc đem phát hành IPA.
+nguồn tương ứng ở mốc ban đầu. Nguồn hiện vẫn thiếu 111 sprite APK theo tên;
+15 sprite cùng tên còn khác metadata được so. Không dùng project hiện tại để
+tuyên bố game hoàn chỉnh hoặc đem phát hành IPA.
+
+Đã bổ sung 47 frame thiếu cho 9 sprite dùng chung tên từ atlas APK (biểu tượng
+vật phẩm, nút hành động, chân zombie), lưu dưới `assets/sprites/images/` và
+tham chiếu trong descriptor. Kiểm tra tĩnh xác nhận pixel RGBA dựng lại khớp
+vùng atlas đã giải mã và metadata được chọn khớp; RGB của vùng trong suốt ngoài
+vùng cắt không xác định, PNG được mã hóa lại. Mask va chạm, tốc độ animation,
+render, logic sử dụng frame và iPhone chưa được kiểm chứng. Việc khôi phục các
+frame này không có nghĩa là sửa được lỗi hiển thị đã báo.
 
 ## Chỉnh sửa và quản lý tài nguyên
 

@@ -59,7 +59,7 @@ class WorkspaceIntegrationTests(unittest.TestCase):
             removed = source / 'project/scripts/leaderboard_post.gml'
             removed.unlink()
             asset = source / 'assets/sprites/images/spr_player_0.png'
-            asset.parent.mkdir(parents=True)
+            asset.parent.mkdir(parents=True, exist_ok=True)
             asset.write_bytes(b'user override sentinel')
             result = root / 'result'
             status = materialize(UPSTREAM, APK, source, result)
@@ -89,7 +89,7 @@ class WorkspaceIntegrationTests(unittest.TestCase):
             source = root / 'source'
             shutil.copytree(SOURCE, source)
             asset = source / 'assets/secret.pfx'
-            asset.parent.mkdir()
+            asset.parent.mkdir(exist_ok=True)
             asset.write_bytes(b'sentinel, not a real key')
             with self.assertRaisesRegex(ValueError, 'forbidden asset'):
                 validate_inputs(UPSTREAM, APK, source, root / 'output')

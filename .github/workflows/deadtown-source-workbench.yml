@@ -14,6 +14,10 @@ on:
       - 'tools/recover_deadtown_audio.py'
       - 'tools/deadtown_native_inventory.py'
       - 'tools/deadtown_sprite_metadata.py'
+      - 'tools/deadtown_sprite_pixels.py'
+      - 'tools/recover_deadtown_sprites.py'
+      - 'tools/check_deadtown_restored_frames.py'
+      - 'tests/test_check_deadtown_restored_frames.py'
       - 'tools/audit_deadtown_gmx.py'
 
 permissions:
@@ -28,6 +32,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Install pinned image analysis dependency
+        run: python -m pip install Pillow==11.3.0
       - name: Retrieve and verify pinned inputs
         shell: bash
         run: |
@@ -41,14 +47,23 @@ jobs:
         run: |
           set -euo pipefail
           python -m unittest discover -s tests -p 'test_materialize_deadtown_source.py' -v
+          python -m unittest discover -s tests -p 'test_check_deadtown_restored_frames.py' -v
           python tools/materialize_deadtown_source.py .cache/gmx/deadtown.gmx .cache/deadtown-original.apk .cache/result
+          python tools/check_deadtown_restored_frames.py .cache/deadtown-original.apk deadtown-source --output .cache/result/restored-frames.json
+          python tools/deadtown_sprite_pixels.py .cache/deadtown-original.apk .cache/result/project --output .cache/result/sprite-pixels.json
           python - <<'PY'
           import json
           from pathlib import Path
           status = json.loads(Path('.cache/result/status.json').read_text())
           assert status['state'] == 'INCOMPLETE_NOT_FOR_RELEASE'
           assert not status['missing_referenced_files']
+          frames = json.loads(Path('.cache/result/restored-frames.json').read_text())
+          pixels = json.loads(Path('.cache/result/sprite-pixels.json').read_text())
+          for name, detail in frames['sprites'].items():
+              for frame in detail['restored']:
+                  assert pixels['sprites'][name]['frames'][frame['index']] == 'exact_rgba'
           print('::notice::INCOMPLETE workspace: ' + json.dumps(status, separators=(',', ':'))[:3500])
+          print('::notice::Restored candidates: ' + str(frames['sprite_count']) + ' sprites, ' + str(frames['frame_count']) + ' frames; static only')
           PY
       - name: Preserve comparison reports, not packaged game assets
         uses: actions/upload-artifact@v4
@@ -58,5 +73,7 @@ jobs:
             .cache/result/status.json
             .cache/result/comparison.json
             .cache/result/sprite-metadata.json
+            .cache/result/restored-frames.json
+            .cache/result/sprite-pixels.json
           if-no-files-found: error
           retention-days: 3
