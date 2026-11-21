@@ -37,7 +37,8 @@ RESTORED = {'spr_action_button': (10, 11), 'spr_item_equip': (26, 27),
 # Additional frame-zero replacements; frame 1 in the two event sprites was
 # already exact and is intentionally left in the original upstream assets.
 REPLACED = {'ih_dagger': (1, (0,)), 'spr_event_eng': (2, (0,)),
-            'spr_event_kor': (2, (0,)), 'spr_gps_sign': (1, (0,))}
+            'spr_event_kor': (2, (0,)), 'spr_gps_sign': (1, (0,)),
+            'spr_part_bull': (1, (0,)), 'spr_setting_cradits': (2, (0, 1))}
 
 # These pre-existing bbox values are deliberately not changed. Each pair is
 # (native, GMX); numeric equality/differences do not prove collision semantics.

@@ -5,11 +5,11 @@ bản có thể phát hành. Các file `project/**/*.gml` và `project/**/*.gmx`
 lưu trong Git để có thể sửa và theo dõi thay đổi. Tên trùng với APK không chứng
 minh logic trùng; 68 script, 94 object và 369 event native vẫn chưa có khóa
 nguồn tương ứng ở mốc ban đầu. Nguồn hiện vẫn thiếu 111 sprite APK theo tên;
-14 sprite cùng tên còn khác metadata được so. Không dùng project hiện tại để
+12 sprite cùng tên còn khác metadata được so. Không dùng project hiện tại để
 tuyên bố game hoàn chỉnh hoặc đem phát hành IPA.
 
-Đã bổ sung 63 frame thiếu và thay 5 frame cũ khác pixel nhìn thấy bằng ảnh
-dựng lại từ atlas APK: tổng 68 ảnh cho 21 sprite, lưu dưới
+Đã bổ sung 63 frame thiếu và thay 8 frame cũ khác pixel hoặc kích thước bằng
+ảnh dựng lại từ atlas APK: tổng 71 ảnh cho 23 sprite, lưu dưới
 `assets/sprites/images/` và tham chiếu trong descriptor. Ảnh cũ vẫn có trong
 đầu vào GMX ghim, không bị sửa. Kiểm tra tĩnh xác nhận RGBA dựng lại khớp vùng
 atlas đã giải mã; 8 sprite vẫn có bbox khác APK và được giữ nguyên, các trường

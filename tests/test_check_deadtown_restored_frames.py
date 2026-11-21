@@ -39,8 +39,8 @@ class RestoredFrameUnitTests(unittest.TestCase):
 class RestoredFrameIntegrationTests(unittest.TestCase):
     def test_pinned_frames_and_metadata(self):
         result = verify(APK, SOURCE)
-        self.assertEqual(result['sprite_count'], 21)
-        self.assertEqual(result['frame_count'], 68)
+        self.assertEqual(result['sprite_count'], 23)
+        self.assertEqual(result['frame_count'], 71)
         self.assertEqual(result['sprites']['spr_item_use']['known_metadata_differences']['bbox_top'],
                          {'apk': 2, 'gmx': 5})
         for name, (start, end) in RESTORED.items():

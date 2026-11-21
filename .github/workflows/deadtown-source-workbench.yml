@@ -18,6 +18,8 @@ on:
       - 'tools/recover_deadtown_sprites.py'
       - 'tools/check_deadtown_restored_frames.py'
       - 'tests/test_check_deadtown_restored_frames.py'
+      - 'tools/deadtown_sprite_order_evidence.py'
+      - 'tests/test_deadtown_sprite_order_evidence.py'
       - 'tools/audit_deadtown_gmx.py'
 
 permissions:
@@ -48,9 +50,11 @@ jobs:
           set -euo pipefail
           python -m unittest discover -s tests -p 'test_materialize_deadtown_source.py' -v
           python -m unittest discover -s tests -p 'test_check_deadtown_restored_frames.py' -v
+          python -m unittest discover -s tests -p 'test_deadtown_sprite_order_evidence.py' -v
           python tools/materialize_deadtown_source.py .cache/gmx/deadtown.gmx .cache/deadtown-original.apk .cache/result
           python tools/check_deadtown_restored_frames.py .cache/deadtown-original.apk deadtown-source --output .cache/result/restored-frames.json
           python tools/deadtown_sprite_pixels.py .cache/deadtown-original.apk .cache/result/project --output .cache/result/sprite-pixels.json
+          python tools/deadtown_sprite_order_evidence.py .cache/deadtown-original.apk .cache/result/project --output .cache/result/sprite-order.json
           python - <<'PY'
           import json
           from pathlib import Path
@@ -59,11 +63,14 @@ jobs:
           assert not status['missing_referenced_files']
           frames = json.loads(Path('.cache/result/restored-frames.json').read_text())
           pixels = json.loads(Path('.cache/result/sprite-pixels.json').read_text())
+          order = json.loads(Path('.cache/result/sprite-order.json').read_text())
+          assert len(order['missing_from_gmx']) == status['native_sprites_missing_by_name']
           for name, detail in frames['sprites'].items():
               for frame in detail['restored']:
                   assert pixels['sprites'][name]['frames'][frame['index']] == 'exact_rgba'
           print('::notice::INCOMPLETE workspace: ' + json.dumps(status, separators=(',', ':'))[:3500])
           print('::notice::Restored candidates: ' + str(frames['sprite_count']) + ' sprites, ' + str(frames['frame_count']) + ' frames; static only')
+          print('::notice::XML common sprite rank differences: ' + str(order['different_common_rank']) + '; not compiled IDs')
           PY
       - name: Preserve comparison reports, not packaged game assets
         uses: actions/upload-artifact@v4
@@ -75,5 +82,6 @@ jobs:
             .cache/result/sprite-metadata.json
             .cache/result/restored-frames.json
             .cache/result/sprite-pixels.json
+            .cache/result/sprite-order.json
           if-no-files-found: error
           retention-days: 3
