@@ -1,0 +1,62 @@
+name: Dead Town editable source workbench (no IPA)
+
+on:
+  push:
+    branches:
+      - arena/78062d86-arenaaiworkspace-1
+    paths:
+      - '.github/workflows/deadtown-source-workbench.yml'
+      - 'deadtown-source/**'
+      - 'tools/materialize_deadtown_source.py'
+      - 'tests/test_materialize_deadtown_source.py'
+      - 'tools/stage_deadtown_gmx.py'
+      - 'tools/prepare_deadtown_offline.py'
+      - 'tools/recover_deadtown_audio.py'
+      - 'tools/deadtown_native_inventory.py'
+      - 'tools/deadtown_sprite_metadata.py'
+      - 'tools/audit_deadtown_gmx.py'
+
+permissions:
+  contents: read
+
+jobs:
+  source-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Retrieve and verify pinned inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .cache/gmx
+          curl -fsSL --retry 2 'https://codeload.github.com/kjs104901/deadtown/tar.gz/5e3d798f914c8cd3b066c8289323005d63111f37' | tar xz -C .cache/gmx --strip-components=1
+          git fetch --no-tags origin 8643abdda26944002384bc216bf555717a9e1e42
+          git show '8643abdda26944002384bc216bf555717a9e1e42:Dead+Town+-+Zombie+survival_1.4.2_APKPure.apk' > .cache/deadtown-original.apk
+          echo 'bc8fa1990cb2cdde8d184f2a942fe4010820f0592d88a36e1cbee0a6aac081fb  .cache/deadtown-original.apk' | sha256sum -c
+      - name: Test and materialize the incomplete editable workspace
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s tests -p 'test_materialize_deadtown_source.py' -v
+          python tools/materialize_deadtown_source.py .cache/gmx/deadtown.gmx .cache/deadtown-original.apk .cache/result
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          status = json.loads(Path('.cache/result/status.json').read_text())
+          assert status['state'] == 'INCOMPLETE_NOT_FOR_RELEASE'
+          assert not status['missing_referenced_files']
+          print('::notice::INCOMPLETE workspace: ' + json.dumps(status, separators=(',', ':'))[:3500])
+          PY
+      - name: Preserve comparison reports, not packaged game assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: deadtown-source-comparison
+          path: |
+            .cache/result/status.json
+            .cache/result/comparison.json
+            .cache/result/sprite-metadata.json
+          if-no-files-found: error
+          retention-days: 3

@@ -1,0 +1,1 @@
+// Offline: store consumption disabled.

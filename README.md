@@ -59,3 +59,11 @@ An experimental GitHub Actions workflow is provided in `.github/workflows/experi
 3. If feasible, prepare an AIR iOS descriptor and a GitHub Actions build, then test on the target iOS device. An interpreter test build may avoid the reload restriction, but has not been validated and may be slower.
 
 Do not commit game files unless you have the rights to store and distribute them. Do not commit signing credentials or provisioning profiles.
+
+## Dead Town — source workbench (incomplete)
+
+The editable GMX/GML baseline and reconstruction instructions are in
+[`deadtown-source/README.md`](deadtown-source/README.md). It is an older,
+offline-adapted source baseline, **not** recovered 1.4.2 source and not a
+release or verified IPA. The workbench rebuilds a separate project from pinned
+inputs without overwriting edits and produces a missing-content report.
