@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Probe the candidate item's alarm scheduling in a disposable desktop VM.
 
-This replaces obj_item Step with a no-op to avoid pickup/motion side effects.
-It is not original gameplay, a native Android comparison, or iOS validation.
+This replaces obj_item Step with a no-op and makes two test instances persistent
+to avoid pickup/motion and room transition side effects. It is not original
+gameplay, a native Android comparison, or iOS validation.
 """
 import argparse
 import json
@@ -31,8 +32,8 @@ global.__dt_schedule_last_alarm = -999;
 global.__dt_schedule_reported = 0;
 global.__dt_schedule_timed = instance_create(0, 0, obj_item);
 global.__dt_schedule_untimed = instance_create(0, 0, obj_item);
-with (global.__dt_schedule_timed) { __dt_item_timed = 1; global.__dt_schedule_init_timed = alarm[0]; }
-with (global.__dt_schedule_untimed) global.__dt_schedule_init_untimed = alarm[0];
+with (global.__dt_schedule_timed) { persistent = true; __dt_item_timed = 1; global.__dt_schedule_init_timed = alarm[0]; }
+with (global.__dt_schedule_untimed) { persistent = true; global.__dt_schedule_init_untimed = alarm[0]; }
 show_debug_message("ITEM_SCHEDULE_VM:init:" + string(global.__dt_schedule_init_timed) + ":" + string(global.__dt_schedule_init_untimed));
 ''' + create['gml']
     step['gml'] = '''global.__dt_schedule_tick += 1;
