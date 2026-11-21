@@ -530,3 +530,26 @@ và 24 sprite cùng tên khác metadata. Đây chỉ là đối chiếu tên/fil
 không phải bằng chứng hành vi bằng nhau. CI workbench `44885131061` đạt, local
 129 test đạt, 12 bỏ qua do thiếu đầu vào tùy chọn. Sprite lệch/vệt màu trên
 thiết bị và gameplay/iOS vẫn chưa được xửa hoặc xác nhận; chưa có IPA mới.
+
+### Phục hồi nhóm frame còn thiếu trong source
+
+Đã bổ sung 47 frame từ atlas APK vào 9 sprite đã tồn tại trong nền GMX:
+`spr_action_button`, `spr_item_equip`, `spr_item_equip_small`, `spr_item_etc`,
+`spr_item_etc_small`, `spr_item_weapon`, `spr_item_weapon_small`,
+`spr_zombie_foot_left` và `spr_zombie_foot_right`. Các frame cũ cùng index của
+9 sprite này đã được so trước: giống RGBA hoặc chỉ khác RGB tại alpha 0;
+metadata đã so chỉ khác số frame. Không tự sửa `spr_ui_day` vì frame cũ đã khác
+pixel nhìn thấy dù metadata chỉ khác số frame.
+
+Các frame mới là PNG dựng lại từ các vùng atlas **không scale**, không phải
+PNG gốc trước khi đóng gói. `tools/check_deadtown_restored_frames.py` kiểm cả
+47 PNG, thứ tự/đường dẫn frame và các trường metadata đã chọn so với APK;
+`tools/deadtown_sprite_pixels.py` kiểm thêm trong project được materialize.
+CI `44885569922` đạt. Metadata khác nhau giảm từ 24 xuống 15 sprite có cùng
+tên; vẫn thiếu theo tên 111 sprite, 68 script, 94 object và 369 event. Local
+133 test đạt, 12 bỏ qua do thiếu đầu vào tùy chọn.
+
+Đây mới là dữ liệu hình ảnh và đối chiếu tĩnh: chưa xác nhận collision mask
+sau biên dịch, thời gian animation, UI, logic game, kết quả render hay iPhone.
+RGB trong suốt ngoài vùng atlas cắt là không biết; không coi việc này là sửa
+lỗi sprite lệch/vệt màu. Bản source và IPA hoàn chỉnh vẫn chưa có.

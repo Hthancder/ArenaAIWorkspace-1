@@ -1033,3 +1033,32 @@ layers are correct relative to original game behavior. It is not a trace of
 native Android, original iOS, or any real iPhone, and does not explain or fix
 the reported misplaced sprite or trail. Research CI passed; local suite ran
 124 tests with 23 skipped because optional inputs were absent.
+
+### First shared-sprite frame restoration into editable source
+
+For nine existing project sprites (`spr_action_button`, both equip and etc
+item sprites, both weapon item sprites, and both zombie feet), the previous
+metadata comparison differed only in frame count, and every existing
+same-index PNG was either exact RGBA or differed only at fully transparent RGB.
+The editable project now appends 47 unscaled APK atlas-frame reconstructions
+and the corresponding GMX frame references. The frame candidates are tracked
+under `deadtown-source/assets/sprites/images/` and overlaid into each newly
+materialized workspace; nothing is written over an existing workspace. These
+are reconstructed, re-encoded PNGs, not original source PNGs.
+
+`tools/check_deadtown_restored_frames.py` validates pinned APK identity,
+selected metadata, exact frame indices and references, and 47 reconstructed
+RGBA canvases against the unscaled TPAG rectangles. The materialized-project
+pixel checker independently categorizes all shared-index frames. After this
+change it reports 268 exact RGBA, 517 transparent-RGB-only, 5 visible-different
+and 3 dimension-mismatch frame pairs, with 16 native extra frames still not
+represented in shared sprites. The number of shared sprites differing in the
+selected metadata falls from 24 to 15; 111 native sprite names remain absent.
+Run `44885569922` passed; local suite ran 133 tests, 12 skipped for absent
+optional inputs.
+
+This is not proof of original source, image sampling/filtering, GPU display,
+mask generation after GMX compilation, timing, gameplay, or device behavior.
+`spr_ui_day` was deliberately excluded despite a count-only metadata mismatch
+because its existing common frame has visible pixel differences. The source,
+renderer/iPhone issues and eventual IPA remain incomplete.
