@@ -21675,10 +21675,10 @@ index 0000000..6c351d8
 +#endif
 diff --git a/src/modules/wifi/lan_guard.cpp b/src/modules/wifi/lan_guard.cpp
 new file mode 100644
-index 0000000..cad140b
+index 0000000..88c206a
 --- /dev/null
 +++ b/src/modules/wifi/lan_guard.cpp
-@@ -0,0 +1,404 @@
+@@ -0,0 +1,405 @@
 +#include "lan_guard.h"
 +#if !defined(LITE_VERSION)
 +
@@ -21699,6 +21699,7 @@ index 0000000..cad140b
 +#include <globals.h>
 +#include <lwip/etharp.h>
 +#include <lwip/ip4_addr.h>
++#include <lwip/tcpip.h> // LOCK_TCPIP_CORE / UNLOCK_TCPIP_CORE helpers
 +#include <vector>
 +
 +namespace {
