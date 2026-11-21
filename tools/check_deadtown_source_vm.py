@@ -24,6 +24,8 @@ except ModuleNotFoundError:
     from deadtown_native_lang import APK_SHA256
     from recover_deadtown_audio import read_zip_member
 
+GAME_DATA_SHA256 = '0900da067462bd48040da6e217a86e2d5411397b05f07d55d13c58440b82a7b8'
+
 
 def one(pattern, text, label):
     values = re.findall(pattern, text, flags=re.MULTILINE)
@@ -72,6 +74,8 @@ def compare_resources(apk, candidate):
         raise ValueError('unexpected APK SHA-256')
     with zipfile.ZipFile(apk) as archive:
         original = read_zip_member(archive, 'assets/game.droid')
+    if hashlib.sha256(original).hexdigest() != GAME_DATA_SHA256:
+        raise ValueError('unexpected APK game data SHA-256')
     probe = Path(candidate).read_bytes()
     resources = {}
     for kind in (b'SPRT', b'OBJT', b'ROOM', b'SCPT'):

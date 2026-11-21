@@ -1,7 +1,10 @@
+import hashlib
+from pathlib import Path
 import unittest
+import zipfile
 
 try:
-    from tools.check_deadtown_source_vm import parse_probe, summarize_runtime
+    from tools.check_deadtown_source_vm import GAME_DATA_SHA256, parse_probe, summarize_runtime
     HAS_PIL = True
 except ImportError:
     HAS_PIL = False
@@ -29,6 +32,13 @@ class SourceVMTests(unittest.TestCase):
             parse_probe(LOG + 'PROBE: compile_success=True,\n', 138, 539)
         with self.assertRaisesRegex(ValueError, 'do not add up'):
             parse_probe(LOG, 137, 539)
+
+    @unittest.skipUnless((Path(__file__).resolve().parents[1] / '.cache/deadtown-original.apk').is_file(),
+                         'requires pinned APK')
+    def test_game_data_hash_matches_pinned_apk(self):
+        apk = Path(__file__).resolve().parents[1] / '.cache/deadtown-original.apk'
+        with zipfile.ZipFile(apk) as archive:
+            self.assertEqual(hashlib.sha256(archive.read('assets/game.droid')).hexdigest(), GAME_DATA_SHA256)
 
     def test_runtime_errors_not_hidden_and_room_required(self):
         sample = ('[room] -> rom_play\n[gml] error in probe_obj_player: issue\n'

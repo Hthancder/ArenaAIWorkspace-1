@@ -42,7 +42,7 @@
 | Đầu vào | Vị trí / phiên bản | SHA-256 |
 |---|---|---|
 | APK do người dùng cung cấp | commit `8643abdda26944002384bc216bf555717a9e1e42`, `Dead+Town+-+Zombie+survival_1.4.2_APKPure.apk` | `bc8fa1990cb2cdde8d184f2a942fe4010820f0592d88a36e1cbee0a6aac081fb` |
-| Dữ liệu APK | `assets/game.droid` | `0900da067462bd48040da6e217e86e2d5411397b05f07d55d13c58440b82a7b8` |
+| Dữ liệu APK | `assets/game.droid` | `0900da067462bd48040da6e217a86e2d5411397b05f07d55d13c58440b82a7b8` |
 | Thư viện APK ARM32 | `lib/armeabi-v7a/libyoyo.so` | `7f3895e245d83edc498859d0869017acf55ec1e92fc801cb734f7fe8315e1c23` |
 | Nguồn GMX | `https://github.com/kjs104901/deadtown`, commit `5e3d798f914c8cd3b066c8289323005d63111f37`, `deadtown.gmx` | Git commit cố định |
 | Runner nghiên cứu | `https://github.com/andronep/gmrunner`, commit `e7121381d38b03a24242812fc22b0a7386d545c6`, GPL-3.0-or-later | Git commit cố định |

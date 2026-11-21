@@ -42,7 +42,7 @@ jobs:
           git show '8643abdda26944002384bc216bf555717a9e1e42:Dead+Town+-+Zombie+survival_1.4.2_APKPure.apk' > work/original.apk
           echo 'bc8fa1990cb2cdde8d184f2a942fe4010820f0592d88a36e1cbee0a6aac081fb  work/original.apk' | sha256sum -c
           unzip -p work/original.apk assets/game.droid > work/game.droid
-          echo '0900da067462bd48040da6e217e86e2d5411397b05f07d55c13c58440b82a7b8  work/game.droid' | sha256sum -c
+          echo "$(python -c 'from tools.check_deadtown_source_vm import GAME_DATA_SHA256; print(GAME_DATA_SHA256)')  work/game.droid" | sha256sum -c
           python tools/deadtown_event_probe.py deadtown-source/project work/events.json
           for n in 1 2; do unzip -p work/original.apk "assets/audiogroup$n.dat" > "work/game/audiogroup$n.dat"; done
       - name: Compile editable scripts and events into disposable data
