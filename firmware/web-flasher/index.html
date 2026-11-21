@@ -547,6 +547,11 @@ function buildDualBootPlan({ stockEntries, dualbootMenuLen, xiaozhiLen, bruceOta
   slack -= bruceFsSize;
 
   if (slack >= 0x10000) { ota0Size += 0x10000; slack -= 0x10000; }
+  if (slack >= 0x20000) {
+    const extraOta1 = Math.min(0x20000, alignDown(slack, 0x10000));
+    ota1Size += extraOta1;
+    slack -= extraOta1;
+  }
   if (slack >= 0x10000 && bruceFsSize < 0x80000) {
     const extraFs = Math.min(0x80000 - bruceFsSize, alignDown(slack, 0x10000));
     bruceFsSize += extraFs;
