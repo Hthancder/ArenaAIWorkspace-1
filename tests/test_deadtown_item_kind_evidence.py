@@ -37,6 +37,7 @@ class ItemKindEvidenceTests(unittest.TestCase):
         instrument([event])
         self.assertTrue(event['gml'].endswith('original();'))
         markers = [f'ITEM_KIND_VM:{name}:{value}:{answer}' for name, value, answer in cases()]
+        markers.append('ITEM_KIND_VM:basic_string:' + 'A' * 20)
         self.assertEqual(check('\n'.join(markers)), len(markers))
         with self.assertRaises(ValueError):
             check('\n'.join(markers[:-1]))

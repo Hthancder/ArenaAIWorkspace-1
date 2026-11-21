@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Instrument disposable VM boot to test candidate scripts on integer indices.
+"""Instrument disposable VM boot to test item indices and a fixed string candidate.
 
 Never modify source or package instrumented data. This is a desktop runner probe,
 not Android execution, a GameMaker build, or a test of iOS/gameplay.
@@ -30,12 +30,14 @@ def instrument(events):
         raise ValueError('expected exactly one sys_global Create')
     lines = [f'show_debug_message("{MARKER}{name}:{value}:" + string({name}({value})));'
              for name, value, _ in cases()]
+    lines.append(f'show_debug_message("{MARKER}basic_string:" + generate_basic_string());')
     matches[0]['gml'] = '\n'.join(lines) + '\n' + matches[0]['gml']
     return events
 
 
 def check(log):
     expected = [f'{MARKER}{name}:{value}:{answer}' for name, value, answer in cases()]
+    expected.append(f'{MARKER}basic_string:' + 'A' * 20)
     observed = [line.strip() for line in log.splitlines() if line.strip().startswith(MARKER)]
     if observed != expected:
         raise ValueError(f'VM markers differ: expected {expected!r}, observed {observed!r}')
@@ -57,7 +59,7 @@ def main():
         events = json.loads(args.input.read_text(encoding='utf-8'))
         args.output.write_text(json.dumps(instrument(events), ensure_ascii=False), encoding='utf-8')
     else:
-        print(f'{MARKER}PASS {check(args.log.read_text(errors="replace"))} integer cases, disposable desktop VM only')
+        print(f'{MARKER}PASS {check(args.log.read_text(errors="replace"))} cases, disposable desktop VM only')
 
 
 if __name__ == '__main__':

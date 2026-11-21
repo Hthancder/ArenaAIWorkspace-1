@@ -959,3 +959,14 @@ bytes hàm, các lệnh tạo mảng đối số, relocation của hàm legacy v
 RValue hằng. Đây là đối chiếu tĩnh, không chứng minh tương đương thuật toán RNG,
 chuyển đổi HSV, compiler, ID resource hay runtime/iOS. Tên script native còn
 thiếu hiện là 65; các code gọi GPS còn thiếu, chưa phục hồi gameplay.
+
+### Chuỗi cơ bản ứng viên
+
+`generate_basic_string` bắt đầu bằng chuỗi rỗng và nối chữ `A` 20 lần trong
+ARM32; GML ứng viên trả chuỗi cố định 20 chữ A cho đường chạy bình thường.
+Công cụ `tools/deadtown_basic_string_evidence.py` kiểm export, bytes hàm,
+relocation và dữ liệu hai chuỗi, giá trị 20, nhánh vòng lặp và lời gọi tạo/nối
+chuỗi. Kiểm tra này không chứng minh xử lý lỗi cấp phát, internals chuỗi, native
+runtime, GameMaker compiler hoặc iOS. Probe VM desktop chỉ kiểm giá trị trả về
+trong bản diagnostic bị instrument, không phải game hoàn chỉnh. Tên script
+native còn thiếu trong project hiện là 64.
