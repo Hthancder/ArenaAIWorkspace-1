@@ -851,10 +851,11 @@ Tên script không đủ chứng minh mục đích hoặc toàn bộ hành vi mu
 Callgraph tĩnh còn ghi hai lời gọi ứng viên từ `multi_logic_play` và
 `multi_logic_room`, không chứng minh đường chạy thực tế.
 
-Chưa thêm script này vào project: `rom_play_defence` và logic tương ứng còn
-thiếu, ID native 14 không bảo đảm giữ nguyên khi compile GMX, và phép so tĩnh
-không xác nhận Android/iOS runtime. Công cụ không tạo source từ số 14 hay coi
-script là đã phục hồi hoàn chỉnh.
+Tại mốc phân tích này chưa thêm script vì `rom_play_defence` và logic tương
+ứng còn thiếu, ID native 14 không bảo đảm giữ nguyên khi compile GMX, và phép
+so tĩnh không xác nhận Android/iOS runtime. Sau đó đã thêm ứng viên dùng tên
+room, không dùng số 14; xem mục “Kiểm tra room phòng thủ ứng viên” bên dưới.
+Script vẫn chưa được coi là phục hồi hoàn chỉnh.
 
 ### Event collision rỗng của player
 
