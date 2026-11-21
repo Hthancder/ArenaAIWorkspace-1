@@ -39,8 +39,10 @@ class RestoredFrameUnitTests(unittest.TestCase):
 class RestoredFrameIntegrationTests(unittest.TestCase):
     def test_pinned_frames_and_metadata(self):
         result = verify(APK, SOURCE)
-        self.assertEqual(result['sprite_count'], 9)
-        self.assertEqual(result['frame_count'], 47)
+        self.assertEqual(result['sprite_count'], 17)
+        self.assertEqual(result['frame_count'], 64)
+        self.assertEqual(result['sprites']['spr_item_use']['known_metadata_differences']['bbox_top'],
+                         {'apk': 2, 'gmx': 5})
         for name, (start, end) in RESTORED.items():
             self.assertEqual([r['index'] for r in result['sprites'][name]['restored']], list(range(start, end)))
 
@@ -60,6 +62,11 @@ class RestoredFrameIntegrationTests(unittest.TestCase):
             desc = dest / 'project/sprites/spr_zombie_foot_left.sprite.gmx'
             desc.write_text(desc.read_text().replace('spr_zombie_foot_left_1.png', 'incorrect.png'))
             with self.assertRaisesRegex(ValueError, 'unexpected frame reference'):
+                verify(APK, dest)
+            shutil.copy2(SOURCE / 'project/sprites/spr_zombie_foot_left.sprite.gmx', desc)
+            bbox = dest / 'project/sprites/spr_item_use.sprite.gmx'
+            bbox.write_text(bbox.read_text().replace('<bbox_top>5</bbox_top>', '<bbox_top>6</bbox_top>'))
+            with self.assertRaisesRegex(ValueError, 'metadata mismatch: spr_item_use'):
                 verify(APK, dest)
 
 

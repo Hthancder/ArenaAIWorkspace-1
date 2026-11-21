@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify 47 editable-frame candidates against the pinned Android atlas.
+"""Verify editable-frame candidates against the pinned Android atlas.
 
 Static pixels and a limited metadata subset only; no proof of masks, renderer,
 frame timing, gameplay or iOS. Intended project is explicitly incomplete.
@@ -23,12 +23,29 @@ except ModuleNotFoundError:
     from deadtown_sprite_pixels import compare_frame
     from deadtown_sprite_metadata import FIELDS, source_sprites
 
-# First newly appended frame and total frames in the pinned APK.
+# First verified replacement/added frame and total frames in the pinned APK.
+# spr_ui_day starts at 0: the existing first image differed visibly and is
+# intentionally replaced in the overlay; frames 1 and 2 are new.
 RESTORED = {'spr_action_button': (10, 11), 'spr_item_equip': (26, 27),
             'spr_item_equip_small': (26, 27), 'spr_item_etc': (49, 65),
             'spr_item_etc_small': (49, 65), 'spr_item_weapon': (30, 35),
             'spr_item_weapon_small': (30, 35), 'spr_zombie_foot_left': (1, 2),
-            'spr_zombie_foot_right': (1, 2)}
+            'spr_zombie_foot_right': (1, 2), 'spr_item_use': (20, 22),
+            'spr_item_use_small': (20, 22), 'spr_parcel': (1, 4),
+            'spr_save_button': (2, 4), 'spr_skills': (21, 23),
+            'spr_ui_buff': (6, 7), 'spr_ui_health': (4, 6), 'spr_ui_day': (0, 3)}
+
+# These pre-existing bbox values are deliberately not changed. Each pair is
+# (native, GMX); numeric equality/differences do not prove collision semantics.
+BBOX_DIFFERENCES = {
+    'spr_item_use': {'bbox_top': (2, 5), 'bbox_bottom': (118, 115)},
+    'spr_item_use_small': {'bbox_top': (4, 5)},
+    'spr_parcel': {'bbox_top': (4, 5)},
+    'spr_save_button': {'bbox_top': (9, 10)},
+    'spr_skills': {'bbox_left': (8, 10), 'bbox_right': (64, 63), 'bbox_top': (9, 10)},
+    'spr_ui_buff': {'bbox_top': (1, 5), 'bbox_bottom': (68, 64)},
+    'spr_ui_health': {'bbox_top': (4, 5)},
+}
 
 
 def safe_asset(root, relative):
@@ -57,7 +74,9 @@ def verify(apk, source):
     for name, (first, count) in RESTORED.items():
         if name not in native or name not in gmx or name not in positions:
             raise ValueError(f'missing sprite: {name}')
-        if native[name]['frames'] != count or any(native[name][f] != gmx[name][f] for f in FIELDS):
+        differences = {f: (native[name][f], gmx[name][f]) for f in FIELDS
+                       if native[name][f] != gmx[name][f]}
+        if native[name]['frames'] != count or differences != BBOX_DIFFERENCES.get(name, {}):
             raise ValueError(f'metadata mismatch: {name}')
         root = ET.parse(project / 'sprites' / (name + '.sprite.gmx')).getroot()
         frames = root.findall('./frames/frame')
@@ -90,7 +109,9 @@ def verify(apk, source):
             entries.append({'index': i, 'atlas': page[-1], 'atlas_rect': list(page[:4]),
                             'target_rect': list(page[4:8]), 'sha256_png': hashlib.sha256(png).hexdigest(),
                             'sha256_rgba': hashlib.sha256(image.tobytes()).hexdigest()})
-        report[name] = {'restored': entries, 'metadata_matches_fields': list(FIELDS)}
+        report[name] = {'restored': entries,
+                        'metadata_matches_fields': [f for f in FIELDS if f not in differences],
+                        'known_metadata_differences': {f: {'apk': a, 'gmx': b} for f, (a, b) in differences.items()}}
     return {'sprites': report, 'sprite_count': len(report),
             'frame_count': sum(len(x['restored']) for x in report.values()),
             'limitations': 'Static unscaled atlas reconstruction; outside trimmed rectangles transparent RGB '
