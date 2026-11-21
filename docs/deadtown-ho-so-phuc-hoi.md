@@ -489,3 +489,23 @@ máy, chưa sửa game hay tạo IPA.
 
 CI nghiên cứu `44874094290` đạt; chạy cục bộ 121 test, bỏ qua 6 do thiếu đầu
 vào tùy chọn. Chi tiết và giới hạn khác ở `docs/deadtown-original-re.md`.
+
+### Đo tọa độ các lớp nhân vật khi chạy desktop
+
+Probe `44881439577` chạy data test3 trong runner desktop dùng riêng để đo,
+không tô màu thử. Trong 45 lượt Draw của nhân vật ở mỗi tình huống đứng yên
+và nhấn D, nó ghi 180 lệnh vẽ: thân, hai chân và bóng. Chưa thấy sprite vũ
+khí trong đúng tình huống này nên chưa đo được lớp vũ khí. Khi di chuyển,
+nhân vật lệch tối đa 195,04 đơn vị so với lượt đứng yên tương ứng.
+
+Trong những mẫu đó, tọa độ gọi vẽ thân trùng `x,y` nhân vật; tọa độ hai chân
+khớp `x,y` cộng biến lệch chân đang lưu. Khoảng cách từ điểm neo chân tới thân
+thay đổi khoảng 0,20–23,25 đơn vị với chân trái và 0,07–14,25 với chân phải.
+Đây là biến thiên **được mã của bản thử yêu cầu**, không tự chứng minh bất kỳ
+lớp nào đúng hay sai so với game gốc. Tọa độ bốn góc CPU khớp phép tính lại
+cùng công thức của runner, không phải kiểm hình ảnh thực tế.
+
+Phép đo chỉ là VM desktop chưa đầy đủ, room ép, một chuỗi điều khiển và một
+lượt Draw; chưa đo ảnh GPU cuối, camera sau trình bày, iPhone hay vị trí theo
+bản gốc. Chưa xác định hay sửa lỗi sprite lệch/vệt màu. CI probe đạt; 124 test
+cục bộ đạt, 23 test bỏ qua do thiếu đầu vào tùy chọn. Không tạo IPA mới.
