@@ -948,3 +948,14 @@ Probe chỉ chạy bản VM desktop bị instrument và thiếu nhiều hành vi
 thực thi native Android, GameMaker compiler hay bằng chứng iOS/gameplay.
 Số tên script native chưa có trong project là 66; trùng tên không chứng minh
 hành vi, thứ tự resource hoặc tính tương thích toàn bộ.
+
+### Màu GPS ngẫu nhiên ứng viên
+
+Phân tích `gps_colour_random` ARM32: gọi `YYGML_irandom(255)`, chuyển kết quả
+sang real, rồi truyền ba RValue theo thứ tự vào `g_FUNC_make_colour_hsv`: giá
+trị vừa sinh, hằng 180 và hằng 120. Đã thêm GML ứng viên tương ứng và khai
+báo trong project. `tools/deadtown_gps_colour_evidence.py` kiểm SHA APK, export,
+bytes hàm, các lệnh tạo mảng đối số, relocation của hàm legacy và nội dung hai
+RValue hằng. Đây là đối chiếu tĩnh, không chứng minh tương đương thuật toán RNG,
+chuyển đổi HSV, compiler, ID resource hay runtime/iOS. Tên script native còn
+thiếu hiện là 65; các code gọi GPS còn thiếu, chưa phục hồi gameplay.

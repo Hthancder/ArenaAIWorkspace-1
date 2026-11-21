@@ -591,6 +591,7 @@
   <paths name="paths" />
   <scripts name="scripts">
     <script>scripts\lobby_message_type.gml</script>
+    <script>scripts\gps_colour_random.gml</script>
     <scripts name="inven">
       <script>scripts\item_init.gml</script>
       <script>scripts\item_get.gml</script>

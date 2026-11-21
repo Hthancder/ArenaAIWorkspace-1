@@ -4,7 +4,7 @@
 bản có thể phát hành. Các file `project/**/*.gml` và `project/**/*.gmx` được
 lưu trong Git để có thể sửa và theo dõi thay đổi. Tên trùng với APK không chứng
 minh logic trùng; 68 script, 94 object và 369 event native vẫn chưa có khóa
-nguồn tương ứng ở mốc ban đầu. Nguồn hiện còn thiếu 66 script, 90 object,
+nguồn tương ứng ở mốc ban đầu. Nguồn hiện còn thiếu 65 script, 90 object,
 368 event key và 4 sprite APK theo tên trong tập file nguồn;
 398 sprite cùng tên hiện khớp các trường metadata tĩnh được so, nhưng không
 chứng minh mask khi biên dịch hoặc hành vi. Không dùng project hiện tại để tuyên
@@ -70,7 +70,10 @@ kế thừa và runtime trên thiết bị.
 native Android cho chỉ số số nguyên: lần lượt từ 17 đến 22 và 23 đến 26,
 bao gồm hai đầu. Chưa chứng minh hành vi đối với giá trị khác số, số thực sát
 ngưỡng hay trên iOS; đây không khôi phục logic sử dụng hai script còn thiếu.
-Chi tiết phân tích và phạm vi kiểm tra nằm trong hồ sơ phục hồi.
+Thêm `gps_colour_random` ứng viên theo lời gọi native tạo màu HSV từ hue
+ngẫu nhiên và hai hằng số 180, 120; chưa kiểm tương đương bộ sinh số ngẫu
+nhiên hay chuyển đổi màu trên thiết bị. Chi tiết và phạm vi kiểm tra nằm trong
+hồ sơ phục hồi.
 
 ## Chỉnh sửa và quản lý tài nguyên
 
