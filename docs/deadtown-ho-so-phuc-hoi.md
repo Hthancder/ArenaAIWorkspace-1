@@ -910,3 +910,24 @@ chiếu ảnh, thử đổi pixel và đường dẫn; không kiểm trên iOS.
 Để tránh bỏ sót nhóm tài nguyên như trên, `status.json` của các workspace dựng
 mới giờ còn báo số tên native thiếu cho background, room và sound. Hiện các số
 này lần lượt là 0, 8 và 0; đếm tên không kiểm texture, âm thanh hoặc logic.
+
+### Phục hồi atlas và bảng glyph font_24
+
+FONT trong APK khai báo `font_24`, tên hiển thị `나눔고딕 ExtraBold`, cỡ 24,
+2.499 glyph duy nhất; GMX cũ có 490 glyph và 490 ký tự là tập con của native.
+Đối chiếu 490 glyph chung: kích thước, shift và offset giống nhau, pixel RGBA
+trong từng hình chữ cũng giống; chỉ vị trí đóng gói atlas khác. Còn 2.009 glyph
+native chưa có trong GMX cũ, phần lớn là Hangul/Jamo.
+
+Đã dựng descriptor GMX ứng viên chứa đủ 2.499 bản ghi `(character, x, y, w, h,
+shift, offset)` theo bảng native và 1.615 khoảng ký tự gộp; lưu font atlas
+2048×2048 từ vùng FONT TPAG trong `assets/fonts/font_24.png`. Không đưa thêm
+TTF vào project; PNG được mã hóa lại. Atlas candidate có SHA-256 trên raw RGBA
+`6dd099d5bae4d540fe553890965f3f245927200718e0d0894bbf78cd795ee733`.
+`tools/recover_deadtown_font.py` kiểm APK ghim, 490 glyph cũ, đọc lại toàn bộ
+bảng native và atlas, sau đó kiểm candidate; test cố tình đổi glyph/atlas để
+phát hiện sai. Audit hiện kiểm luôn file `font_data` mà descriptor tham chiếu.
+
+Đây là phục hồi bitmap và metadata tĩnh, không phải font TTF gốc; chưa chứng
+minh GameMaker giữ atlas này hay có font hệ thống phù hợp khi build, chưa kiểm
+text shaping, cách đóng gói, runtime/iOS hay hiển thị tiếng Hàn trên thiết bị.

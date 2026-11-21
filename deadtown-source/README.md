@@ -50,6 +50,11 @@ lập gốc hay cách dùng trong game. Cả 30 background cùng tên có pixel 
 atlas APK. Native đặt `tile_sewer` ở đầu bảng còn XML thêm ở cuối để giữ thứ tự
 XML cũ; không coi thứ tự XML là ID sau compile hoặc bảo đảm tương thích ID.
 
+Font `font_24` đã cập nhật từ 490 lên 2.499 glyph theo bảng FONT APK; atlas
+2048×2048 và 2.499 bộ số liệu glyph được đối chiếu tĩnh. Không có TTF gốc;
+GameMaker có thể tự tạo lại hoặc đóng gói font khác, chưa kiểm build, cách
+hiển thị chữ hay iPhone. PNG font nằm trong `assets/fonts/` để dựng workspace.
+
 Đã thêm `par_action_nosolid` không có sự kiện theo bảng APK và đặt lại object
 cha của `obj_gps`/`obj_trap` theo APK. Thêm ba object không có event riêng:
 `par_defence_shop`, `par_map_door`, `obj_defence_house`, cùng sprite nhà được

@@ -26,10 +26,10 @@ def audit(project_dir):
         if not file.is_file():
             missing.append((node.tag, rel))
             continue
-        if node.tag not in ('sprite', 'background', 'sound'):
+        if node.tag not in ('sprite', 'background', 'sound', 'font'):
             continue
         resource = ET.parse(file).getroot()
-        tag = {'sprite': 'frame', 'background': 'data', 'sound': 'data'}[node.tag]
+        tag = {'sprite': 'frame', 'background': 'data', 'sound': 'data', 'font': 'image'}[node.tag]
         for asset in resource.iter(tag):
             if not (asset.text and asset.text.strip()):
                 continue

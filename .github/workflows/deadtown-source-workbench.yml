@@ -16,6 +16,9 @@ on:
       - 'tests/test_check_deadtown_sound_evidence.py'
       - 'tools/deadtown_background_evidence.py'
       - 'tests/test_deadtown_background_evidence.py'
+      - 'tools/recover_deadtown_font.py'
+      - 'tests/test_recover_deadtown_font.py'
+      - 'tests/test_audit_deadtown_gmx.py'
       - 'tools/deadtown_native_inventory.py'
       - 'tools/deadtown_sprite_metadata.py'
       - 'tools/deadtown_sprite_pixels.py'
@@ -85,6 +88,8 @@ jobs:
           python -m unittest discover -s tests -p 'test_deadtown_eating_sound.py' -v
           python -m unittest discover -s tests -p 'test_check_deadtown_sound_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_background_evidence.py' -v
+          python -m unittest discover -s tests -p 'test_recover_deadtown_font.py' -v
+          python -m unittest discover -s tests -p 'test_audit_deadtown_gmx.py' -v
           python tools/materialize_deadtown_source.py .cache/gmx/deadtown.gmx .cache/deadtown-original.apk .cache/result
           python tools/check_deadtown_restored_frames.py .cache/deadtown-original.apk deadtown-source --output .cache/result/restored-frames.json
           python tools/check_deadtown_bbox_candidates.py .cache/deadtown-original.apk .cache/result/project --output .cache/result/bbox-candidates.json
@@ -99,6 +104,7 @@ jobs:
           python tools/deadtown_empty_collision_evidence.py .cache/deadtown-original.apk .cache/result/project --output .cache/result/empty-collision-evidence.json
           python tools/check_deadtown_sound_evidence.py .cache/deadtown-original.apk .cache/result/project --output .cache/result/sound-evidence.json
           python tools/deadtown_background_evidence.py .cache/deadtown-original.apk .cache/result/project --output .cache/result/background-evidence.json
+          python tools/recover_deadtown_font.py verify .cache/deadtown-original.apk deadtown-source --output .cache/result/font-evidence.json
           python - <<'PY'
           import json
           from pathlib import Path
@@ -110,6 +116,11 @@ jobs:
           assert status['native_backgrounds_missing_by_name'] == 0
           assert status['native_sounds_missing_by_name'] == 0
           assert status['native_rooms_missing_by_name'] == 8
+          assert status['resource_reference_counts']['font_data'] == 1
+          font = json.loads(Path('.cache/result/font-evidence.json').read_text())
+          assert font['glyph_count'] == 2499
+          assert Path('.cache/result/project/fonts/font_24.png').read_bytes() == Path('deadtown-source/assets/fonts/font_24.png').read_bytes()
+          assert Path('.cache/result/project/fonts/font_24.font.gmx').read_bytes() == Path('deadtown-source/project/fonts/font_24.font.gmx').read_bytes()
           assert backgrounds['pixel_counts'] == {'exact_rgba': 30}
           assert backgrounds['backgrounds']['tile_sewer']['native_index'] == 0
           assert backgrounds['backgrounds']['tile_sewer']['xml_index'] == 29
@@ -152,5 +163,6 @@ jobs:
             .cache/result/empty-collision-evidence.json
             .cache/result/sound-evidence.json
             .cache/result/background-evidence.json
+            .cache/result/font-evidence.json
           if-no-files-found: error
           retention-days: 3

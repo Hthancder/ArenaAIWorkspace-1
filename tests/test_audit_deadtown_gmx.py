@@ -6,6 +6,18 @@ from tools.audit_deadtown_gmx import audit
 
 
 class DeadTownAuditTest(unittest.TestCase):
+    def test_missing_font_atlas_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp)
+            (p / 'fonts').mkdir()
+            (p / 'fonts/font_24.font.gmx').write_text('<font><image>font_24.png</image></font>')
+            (p / 'deadtown.project.gmx').write_text('<assets><font>fonts\\font_24</font></assets>')
+            totals, missing = audit(p)
+            self.assertEqual(totals['font_data'], 1)
+            self.assertEqual(missing, [('font_data', 'fonts/font_24.png')])
+            (p / 'fonts/font_24.png').write_bytes(b'present')
+            self.assertFalse(audit(p)[1])
+
     def test_resource_and_asset_paths(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp)
