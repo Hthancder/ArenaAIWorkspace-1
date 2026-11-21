@@ -1073,3 +1073,21 @@ Tại `f7b71c7`, 206 test local thành công (12 skip), CI native
 probe gamepad mock cũng qua ba marker. Audit thực tế xác nhận 58 script thiếu
 so tên. VM dịch 148 file script, liên kết 505 event, bỏ qua 35. Không có kết
 quả này chứng minh tay cầm vật lý, gameplay hoặc iOS.
+
+### Mở rộng ứng viên item có thời hạn: zombie3
+
+`obj_zombie3:Alarm:6` Android ARM32 tại `0x668a38`, 6.936 byte, SHA-256
+`f758909f83cc6499d0c57ee11307573e4322428823586af099589e2d8ad2a757`, có hai
+đường tạo `obj_item` index 161 rồi ghi real 1 vào slot 1096 của instance vừa
+tạo, sau ghi số lượng và trước hướng/động lượng. Một nhánh quantity nhỏ hơn 1
+có thêm phép thử random; nhánh kia dùng quantity từ mảng. Verifier item ghim
+hash, kiểm phân nhánh, identity, dữ liệu và thanh ghi giữ handle cho từng đường.
+Đã thêm `ins.__dt_item_timed = 1` vào hai nhánh tương ứng ở source cũ. Alias
+này không phải tên biến native đã được biết; phần còn lại của event chưa được
+chứng minh tương đương, và các đường item khác vẫn có thể thiếu setter.
+
+Probe VM mới trích đúng fragment hai nhánh từ source, thay **chỉ** `random(1)`
+bằng 0 để ép tình huống, chạy trong `sys_global` trên bản VM dùng một lần;
+kiểm quantity 0 không tạo item, 0,5 tạo item số lượng 1 và 2 tạo số lượng 2,
+cả hai có cờ 1. Đây không chạy toàn bộ Alarm 6, không xác minh RNG, sự kiện,
+lịch 900 bước, gameplay, Android native hoặc iOS. Cần chờ kết quả CI riêng.

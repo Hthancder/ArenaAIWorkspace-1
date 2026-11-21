@@ -13,6 +13,7 @@ on:
       - 'tools/deadtown_random_string_vm_probe.py'
       - 'tools/deadtown_room_check_vm_probe.py'
       - 'tools/deadtown_item_lifetime_vm_probe.py'
+      - 'tools/deadtown_zombie_item_vm_probe.py'
       - 'tools/deadtown_gamepad_evidence.py'
       - 'tools/deadtown_gamepad_vm_probe.py'
       - 'tests/test_deadtown_gamepad_evidence.py'
@@ -82,7 +83,8 @@ jobs:
           set -euo pipefail
           python tools/deadtown_room_check_vm_probe.py instrument work/events-original.json work/events-room.json
           python tools/deadtown_item_lifetime_vm_probe.py instrument work/events-room.json work/events-item-lifetime.json
-          python tools/deadtown_random_string_vm_probe.py instrument work/events-item-lifetime.json work/events-random.json
+          python tools/deadtown_zombie_item_vm_probe.py instrument deadtown-source/project work/events-item-lifetime.json work/events-zombie-item.json
+          python tools/deadtown_random_string_vm_probe.py instrument work/events-zombie-item.json work/events-random.json
           mkdir -p work/random-game work/save-random
           cp work/game/audiogroup*.dat work/random-game/
           exe=$(find work/utmt -type f -name UndertaleModCli | head -1)
@@ -137,6 +139,7 @@ jobs:
           python tools/deadtown_random_string_vm_probe.py check work/random.log
           python tools/deadtown_room_check_vm_probe.py check work/random.log
           python tools/deadtown_item_lifetime_vm_probe.py check work/random.log
+          python tools/deadtown_zombie_item_vm_probe.py check work/random.log
       - name: Exercise mocked-gamepad candidates
         run: |
           set -euo pipefail

@@ -28,6 +28,7 @@ FUNCTIONS = {
     'gml_Object_obj_item_Create_0': (0x6242f0, 1140, '0c10fa52f80d8134b69c3e307e8567ab351b502c26c19f3cc87e23dfbe49a86c'),
     'gml_Object_obj_item_Alarm_0': (0x625454, 196, 'b6f8d30bbc6079b82d2a24824280eb374173186c9bf18079c85958df69f3e448'),
     'gml_Object_obj_parcel_Step_0': (0x62eb58, 4104, '149ecb7c36ca228e6441746d11faf4d19705d1ebeaed21af70ac16f40a141182'),
+    'gml_Object_obj_zombie3_Alarm_6': (0x668a38, 6936, 'f758909f83cc6499d0c57ee11307573e4322428823586af099589e2d8ad2a757'),
 }
 
 
@@ -58,6 +59,18 @@ def verify_source(project):
                '            ins.__dt_item_timed = 1\n')
     if texts.count(snippet) != 1:
         raise ValueError('missing parcel candidate assignment')
+    zombie = ET.parse(project / 'objects/obj_zombie3.object.gmx')
+    events = zombie.findall('./events/event[@eventtype="2"][@enumb="6"]')
+    if len(events) != 1:
+        raise ValueError('expected one zombie3 Alarm 6')
+    text = '\n'.join(x.text or '' for x in events[0].findall('./action/arguments/argument/string'))
+    for quantity, indent in (('1', '            '), ('item_number[ran]', '        ')):
+        snippet = (f'ins.item_number = {quantity}\n{indent}// Partial native candidate: this zombie drop is timed.\n'
+                   f'{indent}ins.__dt_item_timed = 1\n{indent}\n{indent}ins.dir = random(360)')
+        if text.count(snippet) != 1:
+            raise ValueError('missing zombie3 candidate assignment: ' + quantity)
+    if text.count('ins.__dt_item_timed = 1') != 2:
+        raise ValueError('unexpected zombie3 timed assignments')
 
 
 def inspect(apk):
@@ -145,13 +158,48 @@ def inspect(apk):
         (0x62f474, 'mov', 'r0, sb'), (0x62f478, 'bl', '#0x176474'),
         (0x62f47c, 'add', 'r3, sp, #0xf8'), (0x62f480, 'movw', 'r1, #0x448'),
         (0x62f484, 'mov', 'r2, #0x80000000'), (0x62f488, 'bl', '#0x176480'),
+        # Zombie3 Alarm 6 has two paths: below-one quantity with random gate,
+        # and the other quantity branch. Both create object 161 and set the
+        # same 1096 slot on the instance handle stored in the RValue at r6.
+        (0x668f54, 'mov', 'r1, #0xc2'), (0x668f78, 'bl', '#0x1765f4'),
+        (0x668f88, 'vmov.f64', 'd1, #-1.000000e+00'),
+        (0x668fa8, 'bpl', '#0x66940c'), (0x668fe4, 'vmov.f64', 'd0, #1.000000e+00'),
+        (0x668fec, 'bl', '#0x1766a8'), (0x669088, 'bpl', '#0x669730'),
+        (0x6690a0, 'mov', 'r1, #0'), (0x6690a4, 'blx', 'r2'),
+        (0x6690a8, 'mov', 'r6, r0'),
+        (0x669124, 'mov', 'r2, #0xa1'), (0x669128, 'bl', '#0x17645c'),
+        (0x66912c, 'mov', 'r5, r0'), (0x66914c, 'vmov', 's0, r5'),
+        (0x669154, 'str', 'r0, [r6, #0xc]'), (0x66915c, 'vcvt.f64.s32', 'd0, s0'),
+        (0x669160, 'vstr', 'd0, [r0]'), (0x669164, 'ldr', 'r0, [sp, #0x10]'),
+        (0x669168, 'ldr', 'r1, [sp, #0x14]'), (0x66916c, 'stm', 'r6, {r0, r1}'),
+        (0x66926c, 'movw', 'r5, #0'), (0x669270, 'mov', 'r0, #0'),
+        (0x669274, 'movt', 'r5, #0x3ff0'), (0x6692c0, 'mov', 'r0, #0'),
+        (0x6692c4, 'str', 'r0, [sp, #0x1e4]'), (0x6692c8, 'str', 'r5, [sp, #0x1dc]'),
+        (0x6692cc, 'str', 'r0, [sp, #0x1d8]'), (0x6692d0, 'mov', 'r0, r6'),
+        (0x6692d4, 'bl', '#0x176474'), (0x6692d8, 'add', 'r3, sp, #0x1d8'),
+        (0x6692dc, 'movw', 'r1, #0x448'), (0x6692e0, 'mov', 'r2, #0x80000000'),
+        (0x6692e4, 'bl', '#0x176480'), (0x66939c, 'b', '#0x669730'),
+        (0x669420, 'mov', 'r1, #0'), (0x669424, 'blx', 'r2'),
+        (0x669428, 'mov', 'r6, r0'), (0x6694a4, 'mov', 'r2, #0xa1'),
+        (0x6694a8, 'bl', '#0x17645c'), (0x6694ac, 'mov', 'r5, r0'),
+        (0x6694cc, 'vmov', 's0, r5'), (0x6694d4, 'str', 'r0, [r6, #0xc]'),
+        (0x6694dc, 'vcvt.f64.s32', 'd0, s0'), (0x6694e0, 'vstr', 'd0, [r0, #8]'),
+        (0x6694e4, 'ldr', 'r0, [sp, #0x18]'), (0x6694e8, 'ldr', 'r1, [sp, #0x1c]'),
+        (0x6694ec, 'stm', 'r6, {r0, r1}'),
+        (0x66964c, 'movw', 'r1, #0'), (0x669650, 'mov', 'r0, #0'),
+        (0x669654, 'movt', 'r1, #0x3ff0'), (0x669658, 'str', 'r0, [sp, #0x184]'),
+        (0x66965c, 'str', 'r1, [sp, #0x17c]'), (0x669660, 'str', 'r0, [sp, #0x178]'),
+        (0x669664, 'mov', 'r0, r6'), (0x669668, 'bl', '#0x176474'),
+        (0x66966c, 'add', 'r3, sp, #0x178'), (0x669670, 'movw', 'r1, #0x448'),
+        (0x669674, 'mov', 'r2, #0x80000000'), (0x669678, 'bl', '#0x176480'),
     ):
         i = instruction(address)
         if (i.mnemonic, i.op_str) != (op, operands):
             raise ValueError(f'instruction mismatch at {address:#x}')
     for addr, expected in ((0x176444, 'REAL_RValue'), (0x176c30, 'YYGML_action_set_alarm'),
                            (0x176408, 'YYGML_instance_destroy'), (0x17645c, 'YYGML_instance_create'),
-                           (0x176474, 'INT32_RValue'), (0x176480, 'YYGML_Variable_SetValue')):
+                           (0x176474, 'INT32_RValue'), (0x176480, 'YYGML_Variable_SetValue'),
+                           (0x1765f4, 'YYRValueix'), (0x1766a8, 'YYGML_random')):
         if expected not in calls.get(addr, ''):
             raise ValueError('unexpected function call relocation')
     trace = list(dis.disasm(read(0x62f2ac, 0x62f474 - 0x62f2ac), 0x62f2ac))
@@ -160,11 +208,23 @@ def inspect(apk):
     for i in trace:
         if any(i.reg_name(reg) in ('sb', 'r9') for reg in i.regs_access()[1]):
             raise ValueError('parcel instance pointer register unexpectedly overwritten')
+    for begin, end in ((0x669170, 0x6692d0), (0x6694f0, 0x669664)):
+        trace = list(dis.disasm(read(begin, end - begin), begin))
+        if len(trace) != (end - begin) // 4:
+            raise ValueError('incomplete zombie instance register trace')
+        for i in trace:
+            if any(i.reg_name(reg) == 'r6' for reg in i.regs_access()[1]):
+                raise ValueError('zombie instance pointer register unexpectedly overwritten')
+    trace = list(dis.disasm(read(0x669278, 0x6692c8 - 0x669278), 0x669278))
+    if len(trace) != (0x6692c8 - 0x669278) // 4 or any(
+            i.reg_name(reg) == 'r5' for i in trace for reg in i.regs_access()[1]):
+        raise ValueError('zombie constant register unexpectedly overwritten')
     return {'apk_sha256': APK_SHA256, 'native_library_sha256': LIB_SHA256,
             'native_item_object_index': 161, 'native_flag_slot': 1096, 'native_delay_slot': 1097,
             'create': 'flag 0, delay 900, alarm 0 set to delay, alarm 1 set to 1',
             'alarm_0': 'destroy self when real flag > 0.5',
             'parcel_representative_path': 'create obj_item and set its flag to 1',
+            'zombie3_alarm_6': 'two drop paths create obj_item and set its flag to 1',
             'source_only_alias': '__dt_item_timed',
             'limitations': 'Partial candidate only; original variable names unknown, other setters and Alarm 1 are missing. '
                            'Static ARM32, no native/iOS execution, no proof of scheduling or all parcel paths.'}

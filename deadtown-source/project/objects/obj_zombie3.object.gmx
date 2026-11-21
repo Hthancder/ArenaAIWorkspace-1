@@ -264,6 +264,8 @@ if random(100) &lt; global.zombie_item_percent + rpg_skill_get_level(9)*10
             ins.item_type = item_type[ran]
             ins.item_index = item_index[ran]
             ins.item_number = 1
+            // Partial native candidate: this zombie drop is timed.
+            ins.__dt_item_timed = 1
             
             ins.dir = random(360)
             ins.sp = 5
@@ -275,6 +277,8 @@ if random(100) &lt; global.zombie_item_percent + rpg_skill_get_level(9)*10
         ins.item_type = item_type[ran]
         ins.item_index = item_index[ran]
         ins.item_number = item_number[ran]
+        // Partial native candidate: this zombie drop is timed.
+        ins.__dt_item_timed = 1
         
         ins.dir = random(360)
         ins.sp = 5

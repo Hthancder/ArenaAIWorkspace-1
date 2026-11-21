@@ -85,7 +85,9 @@ Có ứng viên một phần cho item rơi từ parcel: Create đặt cờ nội
 alarm 900 bước; parcel đặt cờ 1; Alarm 0 hủy item khi cờ đúng. Cờ
 `__dt_item_timed` là tên mới do dự án đặt, **không phải tên native đã xác
 định**. Các đường tạo item khác và Alarm 1 còn thiếu; chưa chứng minh thời gian,
-save, dispatch hoặc gameplay trên thiết bị.
+save, dispatch hoặc gameplay trên thiết bị. Hai nhánh rơi item trong Alarm 6
+của `obj_zombie3` cũng có ứng viên đặt cờ này; các zombie và đường rơi khác
+không tự động được coi là đã phục hồi.
 
 Bốn script `gp_button_check`, `gp_button_check_pressed`,
 `gp_button_check_released`, `gp_axis_value` là ứng viên theo native Android:

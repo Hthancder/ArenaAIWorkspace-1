@@ -25,9 +25,11 @@ on:
       - deadtown-source/project/scripts/gp_axis_value.gml
       - tools/deadtown_item_lifetime_evidence.py
       - tools/deadtown_item_lifetime_vm_probe.py
+      - tools/deadtown_zombie_item_vm_probe.py
       - tests/test_deadtown_item_lifetime_evidence.py
       - deadtown-source/project/objects/obj_item.object.gmx
       - deadtown-source/project/objects/obj_parcel.object.gmx
+      - deadtown-source/project/objects/obj_zombie3.object.gmx
       - tools/deadtown_deactivate_auto_evidence.py
       - tests/test_deadtown_deactivate_auto_evidence.py
       - tools/deadtown_random_string_evidence.py
