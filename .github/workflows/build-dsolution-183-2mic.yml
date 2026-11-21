@@ -10,6 +10,7 @@ on:
   push:
     branches:
       - arena/99e7eeb4-arenaaiworkspace-1
+      - arena/8d69f494-arenaaiworkspace-1
     paths:
       - 'firmware/dsolution-183-2mic-bruce.patch'
       - 'firmware/dsolution-183-2mic-displaydrivers.patch'
