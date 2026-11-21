@@ -1150,3 +1150,10 @@ bằng cùng giá trị). Nó không thực thi cơ sở dữ liệu thực, to�
 thực hay lifecycle. Chưa kiểm Android runtime, gameplay và iOS; CI mới cần
 được xem riêng. Những zombie 6/7 không có source object tương ứng nên chưa
 được phục hồi bằng thay đổi này.
+
+Tại `29355cc`, CI native `44924671799` và workbench `44924671796` cũng thành
+công. Tại `b8c15c6`, kiểm thử local 207 test (12 skip), CI native
+`44925050055`, workbench `44925050088`, VM `44925050182` đều thành công; VM
+qua 18 marker fragment, bao gồm nhánh database đã giả lập, không phải database
+thật. Audit không đổi: thiếu 58 script, 90 object, 367 event key, 4 sprite và
+8 room so tên/key. Chưa build IPA mới hoặc kiểm gameplay trên iPhone.
