@@ -30,6 +30,8 @@ on:
       - 'tests/test_check_deadtown_empty_mask.py'
       - 'tools/deadtown_unresolved_sprites.py'
       - 'tests/test_deadtown_unresolved_sprites.py'
+      - 'tools/deadtown_unresolved_rooms.py'
+      - 'tests/test_deadtown_unresolved_rooms.py'
       - 'tests/test_deadtown_eating_sound.py'
       - 'tools/deadtown_sprite_masks.py'
       - 'tools/audit_deadtown_gmx.py'
@@ -68,12 +70,14 @@ jobs:
           python -m unittest discover -s tests -p 'test_deadtown_rect_sprite_candidates.py' -v
           python -m unittest discover -s tests -p 'test_check_deadtown_empty_mask.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_unresolved_sprites.py' -v
+          python -m unittest discover -s tests -p 'test_deadtown_unresolved_rooms.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_eating_sound.py' -v
           python tools/materialize_deadtown_source.py .cache/gmx/deadtown.gmx .cache/deadtown-original.apk .cache/result
           python tools/check_deadtown_restored_frames.py .cache/deadtown-original.apk deadtown-source --output .cache/result/restored-frames.json
           python tools/deadtown_rect_sprite_candidates.py verify .cache/deadtown-original.apk deadtown-source --output .cache/result/rect-candidates.json
           python tools/check_deadtown_empty_mask.py .cache/deadtown-original.apk deadtown-source --output .cache/result/empty-mask.json
           python tools/deadtown_unresolved_sprites.py verify .cache/deadtown-original.apk deadtown-source/unresolved/sprites
+          python tools/deadtown_unresolved_rooms.py verify .cache/deadtown-original.apk deadtown-source/unresolved/rooms
           python tools/deadtown_sprite_pixels.py .cache/deadtown-original.apk .cache/result/project --output .cache/result/sprite-pixels.json
           python tools/deadtown_sprite_order_evidence.py .cache/deadtown-original.apk .cache/result/project --output .cache/result/sprite-order.json
           python tools/deadtown_room_evidence.py .cache/deadtown-original.apk .cache/result/project --output .cache/result/room-evidence.json

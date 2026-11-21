@@ -796,3 +796,19 @@ Dựng workspace hiện báo 90 sound có file tham chiếu; `status.json` vẫn
 cấp tự động cho nền GMX trước khi overlay, không tính WAV mới. Kiểm thử so
 byte file kết quả với overlay; 90 sound theo tên không chứng minh runtime hay
 trật tự ID sound sau compile.
+
+### Lưu dữ liệu tĩnh tám room chưa phục hồi
+
+`deadtown-source/unresolved/rooms/rooms.json` lưu riêng các trường tĩnh đã đọc
+của tám room chưa có trong project: thứ tự và index room native, caption,
+kích thước/tốc độ/các cờ được chọn, views, backgrounds, 120 instance và 239
+tile theo thứ tự, gồm ID và index tham chiếu code. Tất cả tám room và 120
+instance có index code −1 trong APK; điều này không khôi phục hoặc chứng minh
+hành vi các object, vốn có sự kiện và nhiều object vẫn thiếu. 239 tile đều
+thuộc `rom_play_defence` (56 instance); `rom_play_sewer` có 14 instance.
+
+Bộ kiểm `tools/deadtown_unresolved_rooms.py verify` đọc lại APK ghim, so toàn
+bộ dữ liệu đã lưu; extraction không ghi đè thư mục đã có. Các trường chưa đọc
+(bao gồm physics/flags khác), tile pixels, nội dung GML, mã native, trạng thái
+runtime và ID sau compiler không được kiểm chứng. Đây là dữ liệu nghiên cứu,
+không phải GMX room, không materialize vào project; vẫn thiếu 8 room theo tên.

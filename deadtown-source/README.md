@@ -29,7 +29,17 @@ hiển thị đã báo.
 cấu hình tĩnh trong APK, giữ port 1334×750. `sys_view` có thể tính lại kích
 thước khi chạy; thay đổi này chưa được chứng minh là sửa lỗi iPhone hoặc đúng
 với mọi tỉ lệ màn hình. So sánh room qua `tools/deadtown_room_evidence.py` chỉ
-kiểm dữ liệu tĩnh, không khôi phục code hay xác nhận gameplay.
+kiểm dữ liệu tĩnh, không khôi phục code hay xác nhận gameplay. Với tám room
+còn thiếu, `unresolved/rooms/rooms.json` lưu riêng một số trường, danh sách
+instance/tile theo thứ tự và ID native để nghiên cứu; không khai báo chúng vào
+project vì còn thiếu object và logic. Kiểm lại bằng:
+
+```sh
+python3 tools/deadtown_unresolved_rooms.py verify .cache/deadtown-original.apk deadtown-source/unresolved/rooms
+```
+
+Đây không phải room có thể chạy, không bao gồm mọi trường room/physics hay nội
+dung code, và ID native không bảo đảm dùng được sau biên dịch.
 
 Đã thêm `par_action_nosolid` không có sự kiện theo bảng APK và đặt lại object
 cha của `obj_gps`/`obj_trap` theo APK. Thêm ba object không có event riêng:
