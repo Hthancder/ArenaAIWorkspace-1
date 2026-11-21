@@ -1,0 +1,108 @@
+name: Dead Town editable source VM diagnostic (no IPA)
+
+on:
+  push:
+    branches:
+      - arena/78062d86-arenaaiworkspace-1
+    paths:
+      - '.github/workflows/deadtown-source-vm-diagnostic.yml'
+      - 'deadtown-source/project/**'
+      - 'tools/deadtown-vm-probe.csx'
+      - 'tools/deadtown_event_probe.py'
+      - 'tools/check_deadtown_source_vm.py'
+      - 'tests/test_check_deadtown_source_vm.py'
+      - 'tools/deadtown_ios_compare.py'
+      - 'tools/deadtown_native_inventory.py'
+      - 'tools/deadtown_sprite_metadata.py'
+      - 'tools/recover_deadtown_audio.py'
+
+permissions:
+  contents: read
+
+jobs:
+  source-vm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install diagnostic dependencies
+        run: |
+          python -m pip install Pillow==11.3.0
+          python -m unittest discover -s tests -p 'test_check_deadtown_source_vm.py' -v
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libsdl2-dev libbz2-dev pkg-config
+      - name: Retrieve pinned APK and generate events from editable source
+        run: |
+          set -euo pipefail
+          mkdir -p work/utmt work/game work/save-boot work/save-play
+          git fetch --no-tags origin 8643abdda26944002384bc216bf555717a9e1e42
+          git show '8643abdda26944002384bc216bf555717a9e1e42:Dead+Town+-+Zombie+survival_1.4.2_APKPure.apk' > work/original.apk
+          echo 'bc8fa1990cb2cdde8d184f2a942fe4010820f0592d88a36e1cbee0a6aac081fb  work/original.apk' | sha256sum -c
+          unzip -p work/original.apk assets/game.droid > work/game.droid
+          echo '0900da067462bd48040da6e217e86e2d5411397b05f07d55c13c58440b82a7b8  work/game.droid' | sha256sum -c
+          python tools/deadtown_event_probe.py deadtown-source/project work/events.json
+          for n in 1 2; do unzip -p work/original.apk "assets/audiogroup$n.dat" > "work/game/audiogroup$n.dat"; done
+      - name: Compile editable scripts and events into disposable data
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GML_PROBE_SOURCE: ${{ github.workspace }}/deadtown-source/project/scripts/lang_type_set.gml
+          GML_PROBE_EVENTS: ${{ github.workspace }}/work/events.json
+        run: |
+          set -euo pipefail
+          gh release download 0.9.2.0 -R UnderminersTeam/UndertaleModTool -p 'UTMT_CLI_v0.9.2.0-Ubuntu.zip' -O work/utmt.zip
+          echo 'd182f00c0e5ced8d9252aa1f796374cfee077a3889a658e70b68685f9cd559c7  work/utmt.zip' | sha256sum -c
+          unzip -q work/utmt.zip -d work/utmt
+          exe=$(find work/utmt -type f -name UndertaleModCli | head -1)
+          test -n "$exe"
+          chmod +x "$exe"
+          "$exe" load work/game.droid -s tools/deadtown-vm-probe.csx -o work/game/data.win > work/compile.log 2>&1 || { tail -120 work/compile.log; exit 1; }
+          grep -F 'PROBE: incomplete data' work/compile.log
+      - name: Restore pinned desktop runner cache
+        id: runner-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: work/runner-build
+          key: gmrunner-linux-e7121381d38b03a24242812fc22b0a7386d545c6-v1
+      - name: Build desktop runner if necessary
+        run: |
+          set -euo pipefail
+          if [ '${{ steps.runner-cache.outputs.cache-hit }}' != 'true' ] || ! test -x work/runner-build/gmrunner; then
+            mkdir -p work/runner
+            curl -fsSL --retry 2 'https://codeload.github.com/andronep/gmrunner/tar.gz/e7121381d38b03a24242812fc22b0a7386d545c6' | tar xz -C work/runner --strip-components=1
+            cmake -S work/runner -B work/runner-build -DCMAKE_BUILD_TYPE=Release > work/build.log 2>&1
+            cmake --build work/runner-build --target gmrunner --parallel 4 >> work/build.log 2>&1 || { tail -100 work/build.log; exit 1; }
+          fi
+      - name: Exercise isolated headless boot and forced room
+        run: |
+          set -euo pipefail
+          timeout 90 work/runner-build/gmrunner work/game --headless --fast --mute --seed 1 --frames 300 --trace --stats --save-dir work/save-boot > work/boot.log 2>&1 || { tail -100 work/boot.log; exit 1; }
+          timeout 90 work/runner-build/gmrunner work/game --headless --fast --mute --seed 1 --frames 400 --trace --stats --goto rom_play@160 --save-dir work/save-play > work/play.log 2>&1 || { tail -100 work/play.log; exit 1; }
+      - name: Compare resource IDs and report observed warnings
+        run: |
+          set -euo pipefail
+          python tools/check_deadtown_source_vm.py work/original.apk work/game/data.win deadtown-source/project work/events.json work/compile.log work/boot.log work/play.log --output work/report.json | tee work/check.log
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          r = json.loads(Path('work/report.json').read_text())
+          for key in ('compile', 'resources', 'boot', 'forced_play'):
+              print('::notice::SOURCE_VM_' + key.upper() + ': ' + json.dumps(r[key], separators=(',', ':')).replace('%', '%25')[:3500])
+          print('::notice::SOURCE_VM_LIMIT: disposable VM only, original APK sprite data, no IPA or iOS verification')
+          PY
+      - name: Preserve diagnostics only, not game data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deadtown-source-vm-diagnostics
+          path: |
+            work/build.log
+            work/compile.log
+            work/boot.log
+            work/play.log
+            work/check.log
+            work/report.json
+          if-no-files-found: ignore
+          retention-days: 3
