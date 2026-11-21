@@ -1015,3 +1015,26 @@ relocation của hai hàm và ba RValue hằng, đối chiếu bảng tên objec
 xác định được tên global từ slot này, `sys_multi` cũng thiếu trong project; vì
 vậy chưa thêm GML suy đoán. Các ID native không portable, và phân tích tĩnh
 không chứng minh semantics active/deactive, thứ tự event hay runtime/iOS.
+
+### Ứng viên một phần: item từ parcel có thời hạn
+
+Đã phục hồi một nhánh nhỏ liên quan item rơi, không coi toàn bộ lifecycle là
+hoàn chỉnh. `obj_item` native Create khởi tạo slot instance 1096 bằng 0, slot
+1097 bằng real 900, đặt Alarm 0 theo slot 1097 và Alarm 1 bằng 1. Alarm 0 đọc
+slot 1096, với real hữu hạn lớn hơn 0,5 gọi `instance_destroy()` trên self.
+Trong một đường `obj_parcel` Step, native tạo object index 161 (`obj_item`),
+giữ instance ID trả về và đặt slot 1096 của instance đó bằng 1. Tool
+`tools/deadtown_item_lifetime_evidence.py` ghim SHA, export và bytes ba event,
+đối chiếu object ID, các lệnh, call, và thanh ghi giữ ID giữa Create và setter.
+
+Trong source, thêm biến **mới** `__dt_item_timed` làm alias nội bộ cho subset
+này: Create đặt 0, Alarm 0 được đặt 900, parcel đặt 1 cho item mới, và Alarm 0
+hủy item nếu cờ đúng. Đây không phải tên biến native đã được xác định; không
+suy từ vị trí `g_Vars`. Các đường khác của native cũng có thể đặt cờ, native
+Alarm 1 và logic item/parcel khác chưa được phục hồi hoặc chứng minh tương
+đương. Probe VM riêng tạo ba item và gọi Alarm 0 **thủ công** để kiểm flag 0,
+0,5, 1; kiểm giá trị alarm ban đầu 900. Nó không kiểm lịch chạy 900 bước,
+luồng parcel đầy đủ, save, Android, GameMaker compiler hay iOS. 900 bước chỉ
+khoảng 30 giây ở 30 bước/giây ổn định, không phải thời gian đo thực tế. Sau
+khi thêm một event key, còn thiếu 367 key theo so tên; trùng key không chứng
+minh event hoàn chỉnh.

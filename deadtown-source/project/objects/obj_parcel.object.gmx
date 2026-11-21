@@ -129,6 +129,8 @@ if item_exists_check &lt;= 1
             ins.item_type = item_type[i]
             ins.item_index = item_index[i]
             ins.item_number = item_number[i]
+            // Partial native candidate: parcel marks the dropped item as timed.
+            ins.__dt_item_timed = 1
             
             ins.dir = dir
             if i&lt;=2

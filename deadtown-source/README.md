@@ -5,7 +5,7 @@ bản có thể phát hành. Các file `project/**/*.gml` và `project/**/*.gmx`
 lưu trong Git để có thể sửa và theo dõi thay đổi. Tên trùng với APK không chứng
 minh logic trùng; 68 script, 94 object và 369 event native vẫn chưa có khóa
 nguồn tương ứng ở mốc ban đầu. Nguồn hiện còn thiếu 62 script, 90 object,
-368 event key và 4 sprite APK theo tên trong tập file nguồn;
+367 event key và 4 sprite APK theo tên trong tập file nguồn;
 398 sprite cùng tên hiện khớp các trường metadata tĩnh được so, nhưng không
 chứng minh mask khi biên dịch hoặc hành vi. Không dùng project hiện tại để tuyên
 bố game hoàn chỉnh hoặc đem phát hành IPA.
@@ -80,6 +80,12 @@ nhưng chưa chứng minh RNG, mã hóa hay kết quả trên Android/iOS. Scrip
 viên `check_room_is_multiplay_room` dùng tên room thay cho ID Android không
 portable; room phòng thủ và phần multiplayer vẫn chưa có trong project. Chi
 tiết và phạm vi kiểm tra nằm trong hồ sơ phục hồi.
+
+Có ứng viên một phần cho item rơi từ parcel: Create đặt cờ nội bộ bằng 0 và
+alarm 900 bước; parcel đặt cờ 1; Alarm 0 hủy item khi cờ đúng. Cờ
+`__dt_item_timed` là tên mới do dự án đặt, **không phải tên native đã xác
+định**. Các đường tạo item khác và Alarm 1 còn thiếu; chưa chứng minh thời gian,
+save, dispatch hoặc gameplay trên thiết bị.
 
 ## Chỉnh sửa và quản lý tài nguyên
 
