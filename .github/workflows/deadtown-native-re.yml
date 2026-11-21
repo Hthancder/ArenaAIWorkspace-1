@@ -12,6 +12,8 @@ on:
       - tests/test_deadtown_ios_compare.py
       - tools/deadtown_native_tables.py
       - tools/deadtown_native_callgraph.py
+      - tools/deadtown_draw_call_evidence.py
+      - tests/test_deadtown_draw_call_evidence.py
       - tools/deadtown_native_inventory.py
       - tools/deadtown_poison_evidence.py
       - tools/deadtown_item_drop_evidence.py
@@ -88,6 +90,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_deadtown_ios_compare.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_native_tables.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_native_callgraph.py' -v
+          python -m unittest discover -s tests -p 'test_deadtown_draw_call_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_poison_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_item_drop_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_weapon_save_evidence.py' -v
@@ -114,6 +117,7 @@ jobs:
           python tools/deadtown_sprite_pixels.py .cache/deadtown-original.apk .cache/deadtown/deadtown.gmx --output work/reports/sprite-pixels.json
           python tools/deadtown_sprite_masks.py .cache/deadtown-original.apk --output work/reports/sprite-masks.json
           python tools/deadtown_native_callgraph.py .cache/deadtown-original.apk --output work/reports/native-callgraph.json
+          python tools/deadtown_draw_call_evidence.py .cache/deadtown-original.apk .cache/deadtown/deadtown.gmx --output work/reports/draw-calls.json
           python tools/deadtown_native_tables.py .cache/deadtown-original.apk --output work/reports/native-tables.json
           python tools/deadtown_native_lang.py .cache/deadtown-original.apk --compare-gmx .cache/deadtown/deadtown.gmx --output work/reports/native-language.json
           python tools/deadtown_lang_fallback_evidence.py .cache/deadtown-original.apk --output work/reports/language-fallback.json
