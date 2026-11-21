@@ -1091,3 +1091,19 @@ bằng 0 để ép tình huống, chạy trong `sys_global` trên bản VM dùng
 kiểm quantity 0 không tạo item, 0,5 tạo item số lượng 1 và 2 tạo số lượng 2,
 cả hai có cờ 1. Đây không chạy toàn bộ Alarm 6, không xác minh RNG, sự kiện,
 lịch 900 bước, gameplay, Android native hoặc iOS. Cần chờ kết quả CI riêng.
+
+Tại `5cdccc9`, kiểm thử local chạy 207 test, 12 skip; CI native
+`44923636384`, source-workbench `44923636244` và VM `44923636328` thành công.
+VM qua ba marker của fragment zombie3; các giới hạn nêu trên vẫn áp dụng.
+
+### Mở rộng ứng viên item có thời hạn: zombie2
+
+`obj_zombie2:Step:0` tại `0x658910`, 40.784 byte, SHA-256
+`9a7cb64db9fe3a7c94ac56f0b69c095899cf32f1b0f37c6077d512f5f1e5f1f5` cũng có
+hai đường tạo object 161 rồi ghi real 1 vào slot 1096 của item vừa tạo. Đã thêm
+hai assignment alias tương ứng vào source. Verifier ghim bytes, nhánh, handle
+và giá trị cho cả hai đường. Probe fragment VM mở rộng để kiểm cả zombie2 và
+zombie3 với đầu vào 0, 0,5, 2; phép thử random vẫn bị ép 0, không chạy event
+đầy đủ. Chưa xác định tên native hoặc chứng minh các zombie khác, toàn bộ
+lifecycle, compiler chính thức, gameplay, Android thực thi hay iOS. Cần xem
+kết quả CI mới cho thay đổi zombie2.

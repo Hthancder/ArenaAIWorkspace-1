@@ -24,7 +24,7 @@ class ItemLifetimeEvidenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             project = Path(tmp)
             (project / 'objects').mkdir()
-            for name in ('obj_item', 'obj_parcel', 'obj_zombie3'):
+            for name in ('obj_item', 'obj_parcel', 'obj_zombie3', 'obj_zombie2'):
                 shutil.copyfile(PROJECT / 'objects' / (name + '.object.gmx'), project / 'objects' / (name + '.object.gmx'))
             path = project / 'objects/obj_item.object.gmx'
             path.write_text(path.read_text().replace('alarm[0] = 900', 'alarm[0] = 1'))
@@ -47,16 +47,17 @@ class ItemLifetimeEvidenceTests(unittest.TestCase):
             instrument([])
 
     def test_zombie_fragment_probe(self):
-        fragment = extract(PROJECT)
-        self.assertEqual(fragment.count('ins.__dt_item_timed = 1'), 2)
-        self.assertNotIn('random(1)', fragment)
+        fragments = {obj: extract(PROJECT, obj) for obj in ('zombie2', 'zombie3')}
+        for fragment in fragments.values():
+            self.assertEqual(fragment.count('ins.__dt_item_timed = 1'), 2)
+            self.assertNotIn('random(1)', fragment)
         e = {'object': 'sys_global', 'attributes': {'eventtype': '0', 'enumb': '0'}, 'gml': 'original();'}
-        self.assertTrue(instrument_zombie([e], fragment)[0]['gml'].endswith('original();'))
-        self.assertEqual(check_zombie('\n'.join(ZOMBIE_EXPECTED)), 3)
+        self.assertTrue(instrument_zombie([e], fragments)[0]['gml'].endswith('original();'))
+        self.assertEqual(check_zombie('\n'.join(ZOMBIE_EXPECTED)), 6)
         with self.assertRaises(ValueError):
             check_zombie('\n'.join(ZOMBIE_EXPECTED).replace('whole:1:2', 'whole:0:2'))
         with self.assertRaises(ValueError):
-            instrument_zombie([], fragment)
+            instrument_zombie([], fragments)
 
     @unittest.skipUnless(HAS_DEPS, 'requires capstone and pyelftools')
     def test_wrong_apk(self):
@@ -73,6 +74,7 @@ class ItemLifetimeEvidenceTests(unittest.TestCase):
         self.assertEqual(result['native_flag_slot'], 1096)
         self.assertEqual(result['native_delay_slot'], 1097)
         self.assertIn('two drop paths', result['zombie3_alarm_6'])
+        self.assertIn('two drop paths', result['zombie2_step_0'])
         self.assertIn('Alarm 1 are missing', result['limitations'])
 
 

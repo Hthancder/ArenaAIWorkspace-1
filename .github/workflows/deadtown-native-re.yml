@@ -30,6 +30,7 @@ on:
       - deadtown-source/project/objects/obj_item.object.gmx
       - deadtown-source/project/objects/obj_parcel.object.gmx
       - deadtown-source/project/objects/obj_zombie3.object.gmx
+      - deadtown-source/project/objects/obj_zombie2.object.gmx
       - tools/deadtown_deactivate_auto_evidence.py
       - tests/test_deadtown_deactivate_auto_evidence.py
       - tools/deadtown_random_string_evidence.py

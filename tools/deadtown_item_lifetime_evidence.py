@@ -29,6 +29,7 @@ FUNCTIONS = {
     'gml_Object_obj_item_Alarm_0': (0x625454, 196, 'b6f8d30bbc6079b82d2a24824280eb374173186c9bf18079c85958df69f3e448'),
     'gml_Object_obj_parcel_Step_0': (0x62eb58, 4104, '149ecb7c36ca228e6441746d11faf4d19705d1ebeaed21af70ac16f40a141182'),
     'gml_Object_obj_zombie3_Alarm_6': (0x668a38, 6936, 'f758909f83cc6499d0c57ee11307573e4322428823586af099589e2d8ad2a757'),
+    'gml_Object_obj_zombie2_Step_0': (0x658910, 40784, '9a7cb64db9fe3a7c94ac56f0b69c095899cf32f1b0f37c6077d512f5f1e5f1f5'),
 }
 
 
@@ -59,18 +60,21 @@ def verify_source(project):
                '            ins.__dt_item_timed = 1\n')
     if texts.count(snippet) != 1:
         raise ValueError('missing parcel candidate assignment')
-    zombie = ET.parse(project / 'objects/obj_zombie3.object.gmx')
-    events = zombie.findall('./events/event[@eventtype="2"][@enumb="6"]')
-    if len(events) != 1:
-        raise ValueError('expected one zombie3 Alarm 6')
-    text = '\n'.join(x.text or '' for x in events[0].findall('./action/arguments/argument/string'))
-    for quantity, indent in (('1', '            '), ('item_number[ran]', '        ')):
-        snippet = (f'ins.item_number = {quantity}\n{indent}// Partial native candidate: this zombie drop is timed.\n'
-                   f'{indent}ins.__dt_item_timed = 1\n{indent}\n{indent}ins.dir = random(360)')
-        if text.count(snippet) != 1:
-            raise ValueError('missing zombie3 candidate assignment: ' + quantity)
-    if text.count('ins.__dt_item_timed = 1') != 2:
-        raise ValueError('unexpected zombie3 timed assignments')
+    for obj, typ, sub, indents in (('obj_zombie3', '2', '6', (12, 8)),
+                                     ('obj_zombie2', '3', '0', (16, 12))):
+        zombie = ET.parse(project / 'objects' / (obj + '.object.gmx'))
+        events = zombie.findall(f'./events/event[@eventtype="{typ}"][@enumb="{sub}"]')
+        if len(events) != 1:
+            raise ValueError('expected one event: ' + obj)
+        text = '\n'.join(x.text or '' for x in events[0].findall('./action/arguments/argument/string'))
+        for quantity, spaces in zip(('1', 'item_number[ran]'), indents):
+            indent = ' ' * spaces
+            snippet = (f'ins.item_number = {quantity}\n{indent}// Partial native candidate: this zombie drop is timed.\n'
+                       f'{indent}ins.__dt_item_timed = 1\n{indent}\n{indent}ins.dir = random(360)')
+            if text.count(snippet) != 1:
+                raise ValueError(f'missing {obj} candidate assignment: {quantity}')
+        if text.count('ins.__dt_item_timed = 1') != 2:
+            raise ValueError(f'unexpected {obj} timed assignments')
 
 
 def inspect(apk):
@@ -192,6 +196,36 @@ def inspect(apk):
         (0x669664, 'mov', 'r0, r6'), (0x669668, 'bl', '#0x176474'),
         (0x66966c, 'add', 'r3, sp, #0x178'), (0x669670, 'movw', 'r1, #0x448'),
         (0x669674, 'mov', 'r2, #0x80000000'), (0x669678, 'bl', '#0x176480'),
+        # Zombie2 Step has the same two quantity branches. Its instance handle
+        # is kept in the RValue addressed by r5.
+        (0x65bfa4, 'mov', 'r1, #0xc2'), (0x65bfcc, 'bl', '#0x1765f4'),
+        (0x65bffc, 'bpl', '#0x65c4cc'), (0x65c040, 'bl', '#0x1766a8'),
+        (0x65c0e8, 'bpl', '#0x65c818'),
+        (0x65c100, 'mov', 'r1, #0'), (0x65c108, 'blx', 'r2'),
+        (0x65c10c, 'mov', 'r5, r0'), (0x65c188, 'mov', 'r2, #0xa1'),
+        (0x65c18c, 'bl', '#0x17645c'), (0x65c190, 'mov', 'r4, r0'),
+        (0x65c1b8, 'vmov', 's0, r4'), (0x65c1c0, 'str', 'r0, [r5, #0xc]'),
+        (0x65c1c4, 'vcvt.f64.s32', 'd0, s0'), (0x65c1c8, 'vstr', 'd0, [sb, #0x58]'),
+        (0x65c1cc, 'ldrd', 'r0, r1, [sb, #0x58]'), (0x65c1d0, 'stm', 'r5, {r0, r1}'),
+        (0x65c2e0, 'movw', 'r4, #0'), (0x65c2e4, 'mov', 'r0, #0'),
+        (0x65c2e8, 'movt', 'r4, #0x3ff0'), (0x65c33c, 'mov', 'r0, #0'),
+        (0x65c340, 'str', 'r0, [sp, #0xb5c]'), (0x65c344, 'str', 'r4, [sp, #0xb54]'),
+        (0x65c348, 'str', 'r0, [sp, #0xb50]'), (0x65c34c, 'mov', 'r0, r5'),
+        (0x65c350, 'bl', '#0x176474'), (0x65c354, 'add', 'r3, sp, #0xb50'),
+        (0x65c358, 'movw', 'r1, #0x448'), (0x65c35c, 'mov', 'r2, #0x80000000'),
+        (0x65c360, 'bl', '#0x176480'),
+        (0x65c4e0, 'mov', 'r1, #0'), (0x65c4e8, 'blx', 'r2'),
+        (0x65c4ec, 'mov', 'r5, r0'), (0x65c568, 'mov', 'r2, #0xa1'),
+        (0x65c56c, 'bl', '#0x17645c'), (0x65c570, 'mov', 'r4, r0'),
+        (0x65c598, 'vmov', 's0, r4'), (0x65c5a0, 'str', 'r0, [r5, #0xc]'),
+        (0x65c5a4, 'vcvt.f64.s32', 'd0, s0'), (0x65c5a8, 'vstr', 'd0, [sb, #0x60]'),
+        (0x65c5ac, 'ldrd', 'r0, r1, [sb, #0x60]'), (0x65c5b0, 'stm', 'r5, {r0, r1}'),
+        (0x65c720, 'movw', 'r1, #0'), (0x65c724, 'mov', 'r0, #0'),
+        (0x65c728, 'movt', 'r1, #0x3ff0'), (0x65c72c, 'str', 'r0, [sp, #0xafc]'),
+        (0x65c730, 'str', 'r1, [sp, #0xaf4]'), (0x65c734, 'str', 'r0, [sp, #0xaf0]'),
+        (0x65c738, 'mov', 'r0, r5'), (0x65c73c, 'bl', '#0x176474'),
+        (0x65c740, 'add', 'r3, sp, #0xaf0'), (0x65c744, 'movw', 'r1, #0x448'),
+        (0x65c748, 'mov', 'r2, #0x80000000'), (0x65c74c, 'bl', '#0x176480'),
     ):
         i = instruction(address)
         if (i.mnemonic, i.op_str) != (op, operands):
@@ -215,6 +249,15 @@ def inspect(apk):
         for i in trace:
             if any(i.reg_name(reg) == 'r6' for reg in i.regs_access()[1]):
                 raise ValueError('zombie instance pointer register unexpectedly overwritten')
+    for begin, end in ((0x65c1d4, 0x65c34c), (0x65c5b4, 0x65c738)):
+        trace = list(dis.disasm(read(begin, end - begin), begin))
+        if len(trace) != (end - begin) // 4 or any(
+                i.reg_name(reg) == 'r5' for i in trace for reg in i.regs_access()[1]):
+            raise ValueError('zombie2 instance pointer register unexpectedly overwritten')
+    trace = list(dis.disasm(read(0x65c2ec, 0x65c344 - 0x65c2ec), 0x65c2ec))
+    if len(trace) != (0x65c344 - 0x65c2ec) // 4 or any(
+            i.reg_name(reg) == 'r4' for i in trace for reg in i.regs_access()[1]):
+        raise ValueError('zombie2 constant register unexpectedly overwritten')
     trace = list(dis.disasm(read(0x669278, 0x6692c8 - 0x669278), 0x669278))
     if len(trace) != (0x6692c8 - 0x669278) // 4 or any(
             i.reg_name(reg) == 'r5' for i in trace for reg in i.regs_access()[1]):
@@ -225,6 +268,7 @@ def inspect(apk):
             'alarm_0': 'destroy self when real flag > 0.5',
             'parcel_representative_path': 'create obj_item and set its flag to 1',
             'zombie3_alarm_6': 'two drop paths create obj_item and set its flag to 1',
+            'zombie2_step_0': 'two drop paths create obj_item and set its flag to 1',
             'source_only_alias': '__dt_item_timed',
             'limitations': 'Partial candidate only; original variable names unknown, other setters and Alarm 1 are missing. '
                            'Static ARM32, no native/iOS execution, no proof of scheduling or all parcel paths.'}
