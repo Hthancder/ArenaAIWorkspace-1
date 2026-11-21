@@ -532,6 +532,8 @@ if (hp &lt; 0)
                 ins.item_type = item_type[ran]
                 ins.item_index = item_index[ran]
                 ins.item_number = 1
+                // Partial native candidate: this zombie drop is timed.
+                ins.__dt_item_timed = 1
                 
                 ins.dir = random(360)
                 ins.sp = 5
@@ -543,6 +545,8 @@ if (hp &lt; 0)
             ins.item_type = item_type[ran]
             ins.item_index = item_index[ran]
             ins.item_number = item_number[ran]
+            // Partial native candidate: this zombie drop is timed.
+            ins.__dt_item_timed = 1
             
             ins.dir = random(360)
             ins.sp = 5
@@ -557,6 +561,8 @@ if (hp &lt; 0)
                 ins.item_type = db_spawn_info_get(ran,1)
                 ins.item_index = db_spawn_info_get(ran,2)
                 ins.item_number = 1
+                // Partial native candidate: this zombie drop is timed.
+                ins.__dt_item_timed = 1
                 
                 ins.dir = random(360)
                 ins.sp = 5
@@ -568,6 +574,8 @@ if (hp &lt; 0)
             ins.item_type = db_spawn_info_get(ran,1)
             ins.item_index = db_spawn_info_get(ran,2)
             ins.item_number = irandom_range(db_spawn_info_get(ran,3),db_spawn_info_get(ran,4))
+            // Partial native candidate: this zombie drop is timed.
+            ins.__dt_item_timed = 1
             
             ins.dir = random(360)
             ins.sp = 5

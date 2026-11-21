@@ -32,6 +32,7 @@ FUNCTIONS = {
     'gml_Object_obj_zombie2_Step_0': (0x658910, 40784, '9a7cb64db9fe3a7c94ac56f0b69c095899cf32f1b0f37c6077d512f5f1e5f1f5'),
     'gml_Object_obj_zombie4_Step_0': (0x679698, 37992, 'ada019456226f637c40f2282afa0405870bd09217a6a5c22dd405cf2cb06cb78'),
     'gml_Object_obj_zombie5_Step_0': (0x687fc8, 34880, '9f5f3373755778960b45ec66a04ca27771deefe88443ccbcb2ff0db9cd500b0d'),
+    'gml_Object_obj_zombie_Step_0': (0x647a08, 44536, '422271b0202040eb4b4e79c905e54428183f744b40a5943a8c119a1e5c89dd05'),
 }
 
 
@@ -79,6 +80,20 @@ def verify_source(project):
                 raise ValueError(f'missing {obj} candidate assignment: {quantity}')
         if text.count('ins.__dt_item_timed = 1') != 2:
             raise ValueError(f'unexpected {obj} timed assignments')
+    zombie = ET.parse(project / 'objects/obj_zombie.object.gmx')
+    events = zombie.findall('./events/event[@eventtype="3"][@enumb="0"]')
+    if len(events) != 1:
+        raise ValueError('expected one zombie Step')
+    text = '\n'.join(x.text or '' for x in events[0].findall('./action/arguments/argument/string'))
+    for quantity, spaces, count in (('1', 16, 2), ('item_number[ran]', 12, 1),
+                                    ('irandom_range(db_spawn_info_get(ran,3),db_spawn_info_get(ran,4))', 12, 1)):
+        indent = ' ' * spaces
+        snippet = (f'ins.item_number = {quantity}\n{indent}// Partial native candidate: this zombie drop is timed.\n'
+                   f'{indent}ins.__dt_item_timed = 1\n{indent}\n{indent}ins.dir = random(360)')
+        if text.count(snippet) != count:
+            raise ValueError('missing zombie candidate assignments: ' + quantity)
+    if text.count('ins.__dt_item_timed = 1') != 4:
+        raise ValueError('unexpected zombie timed assignments')
 
 
 def inspect(apk):
@@ -291,10 +306,53 @@ def inspect(apk):
             i = instruction(start + delta)
             if (i.mnemonic, i.op_str) != (op, operands):
                 raise ValueError(f'zombie4/5 creation mismatch at {start + delta:#x}')
+    # Normal zombie: two array-backed and two database-backed paths.
+    checks = (
+        (0x64ba58, 'mov', 'r1, #0xc2'), (0x64ba80, 'bl', '#0x1765f4'),
+        (0x64bab0, 'bpl', '#0x64bf50'), (0x64baf8, 'bl', '#0x1766a8'),
+        (0x64bbac, 'bpl', '#0x64c2a0'), (0x64bbc4, 'mov', 'r1, #0'),
+        (0x64bbcc, 'blx', 'r2'), (0x64bbd0, 'mov', 'r6, r0'),
+        (0x64bf64, 'mov', 'r1, #0'), (0x64bf6c, 'blx', 'r2'), (0x64bf70, 'mov', 'r6, r0'),
+        (0x64c2dc, 'bl', '#0x17696c'), (0x64c384, 'bl', '#0x176978'),
+        (0x64c3b4, 'bpl', '#0x64c9b0'), (0x64c430, 'bl', '#0x1766a8'),
+        (0x64c458, 'bl', '#0x176978'), (0x64c4dc, 'bpl', '#0x64ced4'),
+        (0x64c52c, 'mov', 'r1, #0'), (0x64c534, 'blx', 'r2'), (0x64c538, 'mov', 'r5, r0'),
+        (0x64c9c4, 'mov', 'r1, #0'), (0x64c9cc, 'blx', 'r2'), (0x64c9d0, 'mov', 'r5, r0'),
+        (0x64bda8, 'movw', 'r4, #0'), (0x64bdac, 'mov', 'r0, #0'), (0x64bdb0, 'movt', 'r4, #0x3ff0'),
+        (0x64c7d8, 'movw', 'r4, #0'), (0x64c7dc, 'mov', 'r0, #0'), (0x64c7e0, 'movt', 'r4, #0x3ff0'),
+    )
+    for address, op, operands in checks:
+        i = instruction(address)
+        if (i.mnemonic, i.op_str) != (op, operands):
+            raise ValueError(f'zombie branch mismatch at {address:#x}')
+    for start, handle, offset in ((0x64bc50, 'r6', '0x30'), (0x64bff0, 'r6', '0x38'),
+                                  (0x64c5b8, 'r5', '0x20'), (0x64ca50, 'r5', '0x28')):
+        for delta, op, operands in ((-4, 'mov', 'r2, #0xa1'), (0, 'bl', '#0x17645c'),
+            (4, 'mov', 'r4, r0'), (0x2c, 'vmov', 's0, r4'), (0x30, 'mov', 'r0, #0'),
+            (0x34, 'str', f'r0, [{handle}, #0xc]'), (0x38, 'vcvt.f64.s32', 'd0, s0'),
+            (0x3c, 'vstr', f'd0, [sl, #{offset}]'), (0x40, 'ldrd', f'r0, r1, [sl, #{offset}]'),
+            (0x44, 'stm', f'{handle}, {{r0, r1}}')):
+            i = instruction(start + delta)
+            if (i.mnemonic, i.op_str) != (op, operands):
+                raise ValueError(f'zombie creation mismatch at {start+delta:#x}')
+    for start, handle, address, const in ((0x64be04, 'r6', '0xbf0', True), (0x64c1a8, 'r6', '0xb90', False),
+                                         (0x64c834, 'r5', '0xb30', True), (0x64cdcc, 'r5', '0xad0', False)):
+        checks = ([('mov', 'r0, #0'), ('str', f'r0, [sp, #{hex(int(address, 16)+12)}]'),
+                   ('str', f'r4, [sp, #{hex(int(address, 16)+4)}]'), ('str', f'r0, [sp, #{address}]')]
+                  if const else [('movw', 'r1, #0'), ('mov', 'r0, #0'), ('movt', 'r1, #0x3ff0'),
+                    ('str', f'r0, [sp, #{hex(int(address, 16)+12)}]'),
+                    ('str', f'r1, [sp, #{hex(int(address, 16)+4)}]'), ('str', f'r0, [sp, #{address}]')])
+        checks += [('mov', f'r0, {handle}'), ('bl', '#0x176474'), ('add', f'r3, sp, #{address}'),
+                   ('movw', 'r1, #0x448'), ('mov', 'r2, #0x80000000'), ('bl', '#0x176480')]
+        for index, (op, operands) in enumerate(checks):
+            i = instruction(start + 4*index)
+            if (i.mnemonic, i.op_str) != (op, operands):
+                raise ValueError(f'zombie setter mismatch at {start+4*index:#x}')
     for addr, expected in ((0x176444, 'REAL_RValue'), (0x176c30, 'YYGML_action_set_alarm'),
                            (0x176408, 'YYGML_instance_destroy'), (0x17645c, 'YYGML_instance_create'),
                            (0x176474, 'INT32_RValue'), (0x176480, 'YYGML_Variable_SetValue'),
-                           (0x1765f4, 'YYRValueix'), (0x1766a8, 'YYGML_random')):
+                           (0x1765f4, 'YYRValueix'), (0x1766a8, 'YYGML_random'),
+                           (0x17696c, 'gml_Script_db_spawn_random'), (0x176978, 'gml_Script_db_spawn_info_get')):
         if expected not in calls.get(addr, ''):
             raise ValueError('unexpected function call relocation')
     trace = list(dis.disasm(read(0x62f2ac, 0x62f474 - 0x62f2ac), 0x62f2ac))
@@ -315,13 +373,16 @@ def inspect(apk):
         if len(trace) != (end - begin) // 4 or any(
                 i.reg_name(reg) == 'r5' for i in trace for reg in i.regs_access()[1]):
             raise ValueError('zombie2 instance pointer register unexpectedly overwritten')
-    for begin, end, register in ((0x67d4d0, 0x67d740, 'r5'), (0x67d8dc, 0x67db58, 'r5'),
+    for begin, end, register in ((0x64bbd4, 0x64be14, 'r6'), (0x64bf74, 0x64c1c0, 'r6'),
+                                 (0x64c53c, 0x64c844, 'r5'), (0x64c9d4, 0x64cde4, 'r5'),
+                                 (0x64bdb4, 0x64be0c, 'r4'), (0x64c7e4, 0x64c83c, 'r4'),
+                                 (0x67d4d0, 0x67d740, 'r5'), (0x67d8dc, 0x67db58, 'r5'),
                                  (0x68b118, 0x68b388, 'r4'), (0x68b54c, 0x68b7c8, 'r4'),
                                  (0x67d6d8, 0x67d738, 'r4'), (0x68b320, 0x68b380, 'r5')):
         trace = list(dis.disasm(read(begin, end - begin), begin))
         if len(trace) != (end - begin) // 4 or any(
                 i.reg_name(reg) == register for i in trace for reg in i.regs_access()[1]):
-            raise ValueError(f'zombie4/5 register trace mismatch: {begin:#x} {register}')
+            raise ValueError(f'zombie register trace mismatch: {begin:#x} {register}')
     trace = list(dis.disasm(read(0x65c2ec, 0x65c344 - 0x65c2ec), 0x65c2ec))
     if len(trace) != (0x65c344 - 0x65c2ec) // 4 or any(
             i.reg_name(reg) == 'r4' for i in trace for reg in i.regs_access()[1]):
@@ -339,6 +400,7 @@ def inspect(apk):
             'zombie2_step_0': 'two drop paths create obj_item and set its flag to 1',
             'zombie4_step_0': 'two drop paths create obj_item and set its flag to 1',
             'zombie5_step_0': 'two drop paths create obj_item and set its flag to 1',
+            'zombie_step_0': 'four array/database-backed drop paths create obj_item and set its flag to 1',
             'source_only_alias': '__dt_item_timed',
             'limitations': 'Partial candidate only; original variable names unknown, other setters and Alarm 1 are missing. '
                            'Static ARM32, no native/iOS execution, no proof of scheduling or all parcel paths.'}

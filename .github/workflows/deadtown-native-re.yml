@@ -30,6 +30,7 @@ on:
       - deadtown-source/project/objects/obj_item.object.gmx
       - deadtown-source/project/objects/obj_parcel.object.gmx
       - deadtown-source/project/objects/obj_zombie3.object.gmx
+      - deadtown-source/project/objects/obj_zombie.object.gmx
       - deadtown-source/project/objects/obj_zombie2.object.gmx
       - deadtown-source/project/objects/obj_zombie4.object.gmx
       - deadtown-source/project/objects/obj_zombie5.object.gmx

@@ -24,14 +24,14 @@ class ItemLifetimeEvidenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             project = Path(tmp)
             (project / 'objects').mkdir()
-            for name in ('obj_item', 'obj_parcel', 'obj_zombie2', 'obj_zombie3', 'obj_zombie4', 'obj_zombie5'):
+            for name in ('obj_item', 'obj_parcel', 'obj_zombie', 'obj_zombie2', 'obj_zombie3', 'obj_zombie4', 'obj_zombie5'):
                 shutil.copyfile(PROJECT / 'objects' / (name + '.object.gmx'), project / 'objects' / (name + '.object.gmx'))
             path = project / 'objects/obj_item.object.gmx'
             path.write_text(path.read_text().replace('alarm[0] = 900', 'alarm[0] = 1'))
             with self.assertRaises(ValueError):
                 verify_source(project)
             shutil.copyfile(PROJECT / 'objects/obj_item.object.gmx', path)
-            for name in ('obj_zombie2', 'obj_zombie3', 'obj_zombie4', 'obj_zombie5'):
+            for name in ('obj_zombie', 'obj_zombie2', 'obj_zombie3', 'obj_zombie4', 'obj_zombie5'):
                 path = project / 'objects' / (name + '.object.gmx')
                 text = path.read_text()
                 path.write_text(text.replace('ins.__dt_item_timed = 1', 'ins.__dt_item_timed = 0', 1))
@@ -55,7 +55,7 @@ class ItemLifetimeEvidenceTests(unittest.TestCase):
             self.assertNotIn('random(1)', fragment)
         e = {'object': 'sys_global', 'attributes': {'eventtype': '0', 'enumb': '0'}, 'gml': 'original();'}
         self.assertTrue(instrument_zombie([e], fragments)[0]['gml'].endswith('original();'))
-        self.assertEqual(check_zombie('\n'.join(ZOMBIE_EXPECTED)), 12)
+        self.assertEqual(check_zombie('\n'.join(ZOMBIE_EXPECTED)), 18)
         with self.assertRaises(ValueError):
             check_zombie('\n'.join(ZOMBIE_EXPECTED).replace('whole:1:2', 'whole:0:2'))
         with self.assertRaises(ValueError):
@@ -79,6 +79,7 @@ class ItemLifetimeEvidenceTests(unittest.TestCase):
         self.assertIn('two drop paths', result['zombie2_step_0'])
         self.assertIn('two drop paths', result['zombie4_step_0'])
         self.assertIn('two drop paths', result['zombie5_step_0'])
+        self.assertIn('four array/database-backed drop paths', result['zombie_step_0'])
         self.assertIn('Alarm 1 are missing', result['limitations'])
 
 

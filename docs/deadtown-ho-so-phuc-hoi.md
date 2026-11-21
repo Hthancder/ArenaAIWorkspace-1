@@ -1130,3 +1130,23 @@ Probe fragment VM mở rộng chạy các nhánh của bốn zombie 2/3/4/5 vớ
 được thay bằng 0 và chỉ kiểm kết quả trong môi trường mô phỏng. Chưa chạy toàn
 bộ event, chưa xác minh RNG, các zombie khác, Android runtime, gameplay hoặc
 iOS. Kết quả CI của thay đổi zombie4/5 cần xem riêng.
+
+Tại `29355cc`, 207 test local thành công (12 skip); CI VM `44924671784` đã
+chạy thành công 12 marker fragment của bốn zombie. CI native và workbench
+được theo dõi riêng; không suy ra gameplay hoặc iOS từ các kết quả này.
+
+### Mở rộng ứng viên item có thời hạn: zombie thường
+
+`obj_zombie:Step:0` Android tại `0x647a08`, 44.536 byte, SHA-256
+`422271b0202040eb4b4e79c905e54428183f744b40a5943a8c119a1e5c89dd05`: hai
+đường drop theo mảng và hai đường theo database đều tạo object 161 và đặt slot
+1096 của item mới bằng 1. Verifier ghim nhánh, lời gọi database, handle và
+real 1 cùng thanh ghi; source thêm bốn assignment alias vào các đường tương
+ứng. Phần còn lại event không được chứng minh tương đương.
+
+Probe fragment nay kiểm thêm zombie thường: tách đường mảng và đường database,
+thay random(1) bằng 0 và các truy vấn database bằng input giả (cả min và max
+bằng cùng giá trị). Nó không thực thi cơ sở dữ liệu thực, toàn bộ event, RNG
+thực hay lifecycle. Chưa kiểm Android runtime, gameplay và iOS; CI mới cần
+được xem riêng. Những zombie 6/7 không có source object tương ứng nên chưa
+được phục hồi bằng thay đổi này.

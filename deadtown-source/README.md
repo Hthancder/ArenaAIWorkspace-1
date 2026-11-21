@@ -86,7 +86,7 @@ alarm 900 bước; parcel đặt cờ 1; Alarm 0 hủy item khi cờ đúng. C�
 `__dt_item_timed` là tên mới do dự án đặt, **không phải tên native đã xác
 định**. Các đường tạo item khác và Alarm 1 còn thiếu; chưa chứng minh thời gian,
 save, dispatch hoặc gameplay trên thiết bị. Hai nhánh rơi item trong Alarm 6
-của `obj_zombie2`, `obj_zombie3`, `obj_zombie4` và `obj_zombie5` cũng có ứng viên
+của `obj_zombie`, `obj_zombie2`, `obj_zombie3`, `obj_zombie4` và `obj_zombie5` cũng có ứng viên
 đặt cờ này; các zombie và đường rơi khác
 không tự động được coi là đã phục hồi.
 

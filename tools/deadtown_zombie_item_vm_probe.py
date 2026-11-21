@@ -1,40 +1,50 @@
 #!/usr/bin/env python3
-"""Run extracted zombie2/3/4/5 drop branches in an isolated desktop VM.
+"""Run extracted zombie drop branches in an isolated desktop VM.
 
-The event fragment is copied from source, with random(1) replaced by zero for
-repeatability. It runs in sys_global, not the complete zombie event; this is
-not a gameplay, native Android, scheduler, or iOS test.
+The fragments are copied from source, with random(1) and zombie database calls
+replaced by deterministic test values. They run in sys_global, not complete
+events; this is not a gameplay, native Android, scheduler, or iOS test.
 """
 import argparse
 import json
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
-ZOMBIES = ('zombie2', 'zombie3', 'zombie4', 'zombie5')
+ZOMBIES = ('zombie', 'zombie_db', 'zombie2', 'zombie3', 'zombie4', 'zombie5')
 EXPECTED = [f'ZOMBIE_ITEM_VM:{obj}:{case}' for obj in ZOMBIES
             for case in ('zero:0', 'fraction:1:1', 'whole:1:2')]
 
 
 def extract(project, obj):
-    config = {'zombie2': ('3', '0', 8), 'zombie3': ('2', '6', 4),
+    config = {'zombie': ('3', '0', 8), 'zombie_db': ('3', '0', 8),
+              'zombie2': ('3', '0', 8), 'zombie3': ('2', '6', 4),
               'zombie4': ('3', '0', 8), 'zombie5': ('3', '0', 8)}
     if obj not in config:
         raise ValueError('unsupported zombie')
     typ, sub, indent = config[obj]
-    root = ET.parse(Path(project) / 'objects' / ('obj_' + obj + '.object.gmx'))
+    name = 'zombie' if obj == 'zombie_db' else obj
+    root = ET.parse(Path(project) / 'objects' / ('obj_' + name + '.object.gmx'))
     events = root.findall(f'./events/event[@eventtype="{typ}"][@enumb="{sub}"]')
     if len(events) != 1:
         raise ValueError('expected one zombie event: ' + obj)
     text = '\n'.join(x.text or '' for x in events[0].findall('./action/arguments/argument/string'))
-    begin = ' ' * indent + 'if item_number[ran]<1\n'
-    end = '\n' + ' ' * indent + '\n' + ' ' * (indent-4) + '}\n' + ('\n' if indent == 4 else '    \n    ') + 'particle_burst'
+    begin = ' ' * indent + ('if db_spawn_info_get(ran,3) < 1\n' if obj == 'zombie_db' else 'if item_number[ran]<1\n')
+    end = ('\n        \n        ran = db_spawn_random(0)' if obj == 'zombie' else
+           '\n' + ' ' * indent + '\n' + ' ' * (indent-4) + '}\n' + ('\n' if indent == 4 else '    \n    ') + 'particle_burst')
     if text.count(begin) != 1 or text.count(end) != 1:
         raise ValueError('unexpected zombie drop fragment')
     fragment = text.split(begin, 1)[1].split(end, 1)[0]
     fragment = begin + fragment
     if fragment.count('random(1)') != 1 or fragment.count('ins.__dt_item_timed = 1') != 2:
         raise ValueError('unexpected zombie drop operations')
-    return fragment.replace('random(1)', '0')
+    fragment = fragment.replace('random(1)', '0')
+    if obj == 'zombie_db':
+        for field, value in ((1, '3'), (2, '0'), (3, 'item_number[0]'), (4, 'item_number[0]')):
+            call = f'db_spawn_info_get(ran,{field})'
+            if call not in fragment:
+                raise ValueError('missing database call: ' + call)
+            fragment = fragment.replace(call, value)
+    return fragment
 
 
 def instrument(events, fragments):
