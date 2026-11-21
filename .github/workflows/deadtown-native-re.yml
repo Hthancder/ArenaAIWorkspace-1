@@ -16,6 +16,8 @@ on:
       - tools/deadtown_room_check_vm_probe.py
       - deadtown-source/project/scripts/check_room_is_multiplay_room.gml
       - tests/test_deadtown_room_check_evidence.py
+      - tools/deadtown_deactivate_auto_evidence.py
+      - tests/test_deadtown_deactivate_auto_evidence.py
       - tools/deadtown_random_string_evidence.py
       - tools/deadtown_random_string_vm_probe.py
       - tests/test_deadtown_random_string_evidence.py
@@ -115,6 +117,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_deadtown_gps_colour_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_basic_string_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_random_string_evidence.py' -v
+          python -m unittest discover -s tests -p 'test_deadtown_deactivate_auto_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_draw_call_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_poison_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_item_drop_evidence.py' -v
@@ -147,6 +150,7 @@ jobs:
           python tools/deadtown_gps_colour_evidence.py .cache/deadtown-original.apk deadtown-source/project --output work/reports/gps-colour-evidence.json
           python tools/deadtown_basic_string_evidence.py .cache/deadtown-original.apk deadtown-source/project --output work/reports/basic-string-evidence.json
           python tools/deadtown_random_string_evidence.py .cache/deadtown-original.apk deadtown-source/project --output work/reports/random-string-evidence.json
+          python tools/deadtown_deactivate_auto_evidence.py .cache/deadtown-original.apk --output work/reports/deactivate-auto-evidence.json
           python tools/deadtown_draw_call_evidence.py .cache/deadtown-original.apk .cache/deadtown/deadtown.gmx --output work/reports/draw-calls.json
           python tools/deadtown_native_tables.py .cache/deadtown-original.apk --output work/reports/native-tables.json
           python tools/deadtown_native_lang.py .cache/deadtown-original.apk --compare-gmx .cache/deadtown/deadtown.gmx --output work/reports/native-language.json

@@ -1003,3 +1003,14 @@ không làm chế độ này hoạt động. Công cụ static kiểm export, re
 bảng room và GML ứng viên. Workflow diagnostic có probe trên bản VM riêng với
 room từ APK, thử chuyển cưỡng bức tới room phòng thủ; không phục hồi behavior
 room đó. Tên script native chưa có trong project là 62.
+
+### Bằng chứng deactivate_all_auto, chưa thêm script
+
+ARM32 `deactivate_all_auto` đọc một slot 48 từ `g_pGlobal`, chuyển sang real và,
+với giá trị hữu hạn lớn hơn 0,5, lần lượt gọi `instance_deactivate_all(1)`,
+`instance_activate_object` với native object 38 (`sys_global`) và 74
+(`sys_multi`). `tools/deadtown_deactivate_auto_evidence.py` ghim bytes, branch,
+relocation của hai hàm và ba RValue hằng, đối chiếu bảng tên object APK. Không
+xác định được tên global từ slot này, `sys_multi` cũng thiếu trong project; vì
+vậy chưa thêm GML suy đoán. Các ID native không portable, và phân tích tĩnh
+không chứng minh semantics active/deactive, thứ tự event hay runtime/iOS.
