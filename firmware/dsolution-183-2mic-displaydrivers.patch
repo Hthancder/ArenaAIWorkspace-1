@@ -1,8 +1,18 @@
 diff --git a/src/backends/lovyan.cpp b/src/backends/lovyan.cpp
-index ec76418..216077f 100644
+index ec76418..eafac10 100644
 --- a/src/backends/lovyan.cpp
 +++ b/src/backends/lovyan.cpp
-@@ -252,7 +252,13 @@ void tft_display::invertDisplay(bool i) {
+@@ -6,6 +6,9 @@
+ 
+ #if defined(USE_LOVYANGFX)
+ 
++#if defined(BOARD_HAS_PSRAM)
++#include <esp32-hal-psram.h>
++#endif
+ #include "freertos/FreeRTOS.h"
+ #include "freertos/queue.h"
+ #include "freertos/semphr.h"
+@@ -252,7 +255,13 @@ void tft_display::invertDisplay(bool i) {
      lgfx::LGFX_Device::invertDisplay(i);
  }
  
@@ -16,4 +26,14 @@ index ec76418..216077f 100644
 +}
  
  void tft_display::setSwapBytes(bool swap) { _swapBytes = swap; }
+ 
+@@ -420,6 +429,9 @@ tft_sprite::tft_sprite(tft_display *parent)
+ 
+ void *tft_sprite::createSprite(int16_t w, int16_t h, uint8_t frames) {
+     (void)frames;
++#if defined(BOARD_HAS_PSRAM)
++    lgfx::LGFX_Sprite::setPsram(((int32_t)w * (int32_t)h > 4096) ? psramFound() : false);
++#endif
+     return lgfx::LGFX_Sprite::createSprite(w, h);
+ }
  
