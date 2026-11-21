@@ -12984,7 +12984,7 @@ index ca5806a0..18d2aa25 100644
      std::function<bool(void)> onProgress = nullptr
 diff --git a/src/modules/wifi/wids_csi_ftm.cpp b/src/modules/wifi/wids_csi_ftm.cpp
 new file mode 100644
-index 00000000..fb3dc3f2
+index 00000000..0db562a8
 --- /dev/null
 +++ b/src/modules/wifi/wids_csi_ftm.cpp
 @@ -0,0 +1,933 @@
@@ -13533,7 +13533,7 @@ index 00000000..fb3dc3f2
 +    frame.setColorDepth(16);
 +    if (!frame.createSprite(tftWidth, tftHeight)) {
 +        esp_wifi_set_csi(false);
-+        esp_wifi_set_csi_rx_cb(NULL);
++        esp_wifi_set_csi_rx_cb(NULL, NULL);
 +        if (!useApLink) stopPromiscuousWifi();
 +        else wifiDisconnect();
 +        displayError("Out of RAM for UI", true);
@@ -13680,7 +13680,7 @@ index 00000000..fb3dc3f2
 +    }
 +
 +    esp_wifi_set_csi(false);
-+    esp_wifi_set_csi_rx_cb(NULL);
++    esp_wifi_set_csi_rx_cb(NULL, NULL);
 +    frame.deleteSprite();
 +    if (useApLink) {
 +        udp.stop();
