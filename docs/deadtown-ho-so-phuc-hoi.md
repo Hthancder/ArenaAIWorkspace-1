@@ -887,3 +887,26 @@ Phép so byte không decode audio, không xác nhận pitch runtime, audio group
 loading, âm thanh sau GameMaker encode, thứ tự ID hoặc phát trên iPhone.
 `audio_descriptors_populated_without_transcoding` trong status vẫn là 89 vì
 đếm ở bước nền trước overlay, dù 90 file kết quả đã được so riêng.
+
+### Background `tile_sewer` từ atlas
+
+Đối chiếu BGND tìm thấy 30 tên trong APK, trong khi project cũ chỉ khai báo
+29 và thiếu `tile_sewer`. Đã dựng ảnh 130×130 từ atlas 4 tại (1092,1384),
+không scale/cắt bớt; pixel RGBA ảnh kết quả khớp vùng gốc. Ảnh PNG được mã hóa
+lại. Thêm descriptor và khai báo background trong project; chia tile 128×128,
+offset 0 được mượn từ `tile_basic` cùng kích thước, **chỉ là ứng viên** vì BGND
+GMS1 không cung cấp các thiết lập editor đó. Không thêm hoặc khôi phục code
+`sewer_map_init` hay room sewer, do đó ảnh hiện không chứng minh chế độ sewer
+hoạt động.
+
+`tools/deadtown_background_evidence.py` so 30 ảnh BGND đã materialize theo tên:
+cả 30 RGBA exact với atlas, không có tên thiếu, nhưng không kiểm pixel sau
+compile, padding, sampler, thiết lập editor, render hoặc gameplay. `tile_sewer`
+ở native index 0 và ở vị trí XML 29: có 29 cặp đảo trong thứ tự XML so với APK.
+Thêm ở cuối giữ nguyên thứ tự XML cũ, nhưng không chứng minh ID compiler hoặc
+an toàn khi code dùng số ID trực tiếp; phải kiểm khi build. CI và test có đối
+chiếu ảnh, thử đổi pixel và đường dẫn; không kiểm trên iOS.
+
+Để tránh bỏ sót nhóm tài nguyên như trên, `status.json` của các workspace dựng
+mới giờ còn báo số tên native thiếu cho background, room và sound. Hiện các số
+này lần lượt là 0, 8 và 0; đếm tên không kiểm texture, âm thanh hoặc logic.

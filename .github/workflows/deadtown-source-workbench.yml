@@ -14,6 +14,8 @@ on:
       - 'tools/recover_deadtown_audio.py'
       - 'tools/check_deadtown_sound_evidence.py'
       - 'tests/test_check_deadtown_sound_evidence.py'
+      - 'tools/deadtown_background_evidence.py'
+      - 'tests/test_deadtown_background_evidence.py'
       - 'tools/deadtown_native_inventory.py'
       - 'tools/deadtown_sprite_metadata.py'
       - 'tools/deadtown_sprite_pixels.py'
@@ -82,6 +84,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_deadtown_unresolved_rooms.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_eating_sound.py' -v
           python -m unittest discover -s tests -p 'test_check_deadtown_sound_evidence.py' -v
+          python -m unittest discover -s tests -p 'test_deadtown_background_evidence.py' -v
           python tools/materialize_deadtown_source.py .cache/gmx/deadtown.gmx .cache/deadtown-original.apk .cache/result
           python tools/check_deadtown_restored_frames.py .cache/deadtown-original.apk deadtown-source --output .cache/result/restored-frames.json
           python tools/check_deadtown_bbox_candidates.py .cache/deadtown-original.apk .cache/result/project --output .cache/result/bbox-candidates.json
@@ -95,12 +98,21 @@ jobs:
           python tools/deadtown_object_evidence.py .cache/deadtown-original.apk .cache/result/project --output .cache/result/object-evidence.json
           python tools/deadtown_empty_collision_evidence.py .cache/deadtown-original.apk .cache/result/project --output .cache/result/empty-collision-evidence.json
           python tools/check_deadtown_sound_evidence.py .cache/deadtown-original.apk .cache/result/project --output .cache/result/sound-evidence.json
+          python tools/deadtown_background_evidence.py .cache/deadtown-original.apk .cache/result/project --output .cache/result/background-evidence.json
           python - <<'PY'
           import json
           from pathlib import Path
           status = json.loads(Path('.cache/result/status.json').read_text())
           assert status['state'] == 'INCOMPLETE_NOT_FOR_RELEASE'
           assert not status['missing_referenced_files']
+          backgrounds = json.loads(Path('.cache/result/background-evidence.json').read_text())
+          assert backgrounds['native_only'] == [] and backgrounds['source_only'] == []
+          assert status['native_backgrounds_missing_by_name'] == 0
+          assert status['native_sounds_missing_by_name'] == 0
+          assert status['native_rooms_missing_by_name'] == 8
+          assert backgrounds['pixel_counts'] == {'exact_rgba': 30}
+          assert backgrounds['backgrounds']['tile_sewer']['native_index'] == 0
+          assert backgrounds['backgrounds']['tile_sewer']['xml_index'] == 29
           frames = json.loads(Path('.cache/result/restored-frames.json').read_text())
           pixels = json.loads(Path('.cache/result/sprite-pixels.json').read_text())
           order = json.loads(Path('.cache/result/sprite-order.json').read_text())
@@ -139,5 +151,6 @@ jobs:
             .cache/result/object-evidence.json
             .cache/result/empty-collision-evidence.json
             .cache/result/sound-evidence.json
+            .cache/result/background-evidence.json
           if-no-files-found: error
           retention-days: 3

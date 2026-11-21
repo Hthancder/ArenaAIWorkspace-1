@@ -117,7 +117,7 @@ def compare(apk_path, project):
     with zipfile.ZipFile(apk_path) as archive:
         data = read_zip_member(archive, 'assets/game.droid')
         native = read_zip_member(archive, 'lib/armeabi-v7a/libyoyo.so')
-    names = {key: resource_names(data, key) for key in (b'OBJT', b'SCPT', b'ROOM')}
+    names = {key: resource_names(data, key) for key in (b'OBJT', b'SCPT', b'ROOM', b'BGND', b'SOND')}
     if len(set(names[b'OBJT'])) != len(names[b'OBJT']):
         raise ValueError('duplicate object names')
     with tempfile.TemporaryDirectory() as temp:
@@ -131,6 +131,8 @@ def compare(apk_path, project):
     declared_scripts = project_names(project, 'scripts', 'script')
     declared_objects = project_names(project, 'objects', 'object')
     declared_rooms = project_names(project, 'rooms', 'room')
+    declared_backgrounds = project_names(project, 'backgrounds', 'background')
+    declared_sounds = project_names(project, 'sounds', 'sound')
     object_ids = {name: i for i, name in enumerate(names[b'OBJT'])}
     all_events, unresolved_all = source_events(project, all_objects, object_ids)
     declared_events, unresolved_declared = source_events(project, declared_objects, object_ids)
@@ -159,6 +161,13 @@ def compare(apk_path, project):
         'apk_resource_counts': {key.decode(): len(value) for key, value in names.items()},
         'apk_room_names': names[b'ROOM'],
         'project_room_names': sorted(declared_rooms),
+        'native_rooms_missing_by_name': sorted(set(names[b'ROOM']) - declared_rooms),
+        'apk_background_names': names[b'BGND'],
+        'project_background_names': sorted(declared_backgrounds),
+        'native_backgrounds_missing_by_name': sorted(set(names[b'BGND']) - declared_backgrounds),
+        'apk_sound_names': names[b'SOND'],
+        'project_sound_names': sorted(declared_sounds),
+        'native_sounds_missing_by_name': sorted(set(names[b'SOND']) - declared_sounds),
         'native_exported_script_count': len(native_scripts),
         'native_exported_event_count': len(native_events),
         'native_event_types': dict(sorted(Counter(key[1] for key in native_events).items())),

@@ -139,6 +139,9 @@ def materialize(upstream, apk, source, output):
                   'native_objects_missing_by_name': len(summary['native_objects_missing_in_source']),
                   'native_events_missing_by_key': len(summary['native_event_keys_missing_in_source']),
                   'native_sprites_missing_by_name': len(sprites['apk_only']),
+                  'native_backgrounds_missing_by_name': len(report['native_backgrounds_missing_by_name']),
+                  'native_rooms_missing_by_name': len(report['native_rooms_missing_by_name']),
+                  'native_sounds_missing_by_name': len(report['native_sounds_missing_by_name']),
                   'shared_sprites_differing_metadata': sprites['differing_metadata'],
                   'limitations': 'Names and file existence do not establish matching behavior or a successful build. '
                                  'Native YYC logic is not automatically recovered. No iPhone test or IPA is produced.'}

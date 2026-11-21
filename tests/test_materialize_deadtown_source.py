@@ -70,7 +70,13 @@ class WorkspaceIntegrationTests(unittest.TestCase):
             self.assertEqual(status['native_events_missing_by_key'], len(report['native_event_keys_missing_in_source']))
             self.assertEqual(status['audio_descriptors_populated_without_transcoding'], 89)
             self.assertEqual(status['resource_reference_counts']['sound'], 90)
+            self.assertEqual(status['resource_reference_counts']['background'], 30)
+            self.assertEqual(status['native_backgrounds_missing_by_name'], 0)
+            self.assertEqual(status['native_rooms_missing_by_name'], 8)
+            self.assertEqual(status['native_sounds_missing_by_name'], 0)
             project = result / 'project'
+            self.assertEqual((project / 'background/images/tile_sewer.png').read_bytes(),
+                             (SOURCE / 'assets/background/images/tile_sewer.png').read_bytes())
             self.assertEqual((project / 'sound/audio/snd_eating.wav').read_bytes(),
                              (SOURCE / 'assets/sound/audio/snd_eating.wav').read_bytes())
             self.assertIn('// workspace test edit', (project / 'scripts/achievement_plus.gml').read_text())
@@ -81,6 +87,32 @@ class WorkspaceIntegrationTests(unittest.TestCase):
             self.assertFalse((project / 'datafiles/UnityAdsExt.gmez').exists())
             self.assertEqual(json.loads((result / 'status.json').read_text())['state'], status['state'])
             self.assertTrue((result / 'comparison.json').is_file())
+
+    def test_status_reports_removed_room_background_and_sound(self):
+        import xml.etree.ElementTree as ET
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / 'source'
+            shutil.copytree(SOURCE, source)
+            path = source / 'project/deadtown.project.gmx'
+            tree = ET.parse(path)
+            for section, tag, name in (('backgrounds', 'background', 'tile_sewer'),
+                                       ('rooms', 'room', 'rom_credits'),
+                                       ('sounds', 'sound', 'snd_eating')):
+                group = tree.getroot().find(section)
+                for parent in group.iter():
+                    found = next((item for item in parent if item.tag == tag and item.text and
+                                  item.text.replace('\\', '/').split('/')[-1] == name), None)
+                    if found is not None:
+                        parent.remove(found)
+                        break
+                else:
+                    self.fail(f'missing test resource {name}')
+            tree.write(path, encoding='unicode')
+            status = materialize(UPSTREAM, APK, source, root / 'result')
+            self.assertEqual(status['native_backgrounds_missing_by_name'], 1)
+            self.assertEqual(status['native_rooms_missing_by_name'], 9)
+            self.assertEqual(status['native_sounds_missing_by_name'], 1)
 
     def test_bad_apk_and_credential_asset_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:

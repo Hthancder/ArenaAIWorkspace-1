@@ -44,6 +44,12 @@ python3 tools/deadtown_unresolved_rooms.py verify .cache/deadtown-original.apk d
 Đây không phải room có thể chạy, không bao gồm mọi trường room/physics hay nội
 dung code, và ID native không bảo đảm dùng được sau biên dịch.
 
+Đã bổ sung background ứng viên `tile_sewer`: ảnh 130×130 dựng lại từ atlas
+APK, descriptor chia tile 128×128 mượn từ `tile_basic`, chưa chứng minh thiết
+lập gốc hay cách dùng trong game. Cả 30 background cùng tên có pixel tĩnh khớp
+atlas APK. Native đặt `tile_sewer` ở đầu bảng còn XML thêm ở cuối để giữ thứ tự
+XML cũ; không coi thứ tự XML là ID sau compile hoặc bảo đảm tương thích ID.
+
 Đã thêm `par_action_nosolid` không có sự kiện theo bảng APK và đặt lại object
 cha của `obj_gps`/`obj_trap` theo APK. Thêm ba object không có event riêng:
 `par_defence_shop`, `par_map_door`, `obj_defence_house`, cùng sprite nhà được

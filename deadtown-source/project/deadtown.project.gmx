@@ -586,6 +586,7 @@
     <background>background\tile_obj_play3</background>
     <background>background\tile_boss</background>
     <background>background\tile_onroad</background>
+    <background>background\tile_sewer</background>
   </backgrounds>
   <paths name="paths" />
   <scripts name="scripts">
