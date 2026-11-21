@@ -728,3 +728,71 @@ Cần kiểm build thật trước khi đánh giá an toàn hoặc equivalence.
 
 Chưa có kiểm trên GameMaker/iPhone, chưa chứng minh sửa lỗi sprite/vệt màu,
 và chưa có IPA mới.
+
+### Bộ ứng viên sprite và bốn mask chưa giải quyết
+
+Tiếp tục theo hướng có thể đối chiếu lại, đã thêm 105 sprite còn thiếu gồm 206
+frame atlas **không scale**. Với từng sprite, dữ liệu APK có đúng một mask, dạng
+chữ nhật khớp bbox theo cách đọc bit MSB-first; hợp alpha khác 0 của các frame
+cũng có bbox khớp. `tools/deadtown_rect_sprite_candidates.py` tạo ứng viên vào
+thư mục mới không ghi đè và kiểm descriptor/ảnh trong source với APK đã ghim.
+105 descriptor chọn colkind chữ nhật, tolerance 0 và metadata đã đọc; đây là
+**giả thuyết compile**, không xác nhận compiler tạo mask, cách texture packing,
+ID hoặc render giống APK. Ảnh PNG được mã hóa lại, RGB trong suốt ngoài vùng
+atlas không xác định. Những sprite này vẫn không có nghĩa là object/logic sử
+dụng chúng đã được phục hồi; sprite multiplayer không biến game thành online.
+
+Sprite `mask_noone` là trường hợp scale: atlas 32×32 hướng tới vùng 1×1, nhưng
+cả vùng atlas RGBA và native packed mask đều toàn byte 0. Đã tạo ảnh nguồn
+32×32 trong suốt và descriptor ứng viên, với bộ kiểm chuyên biệt; so frame tổng
+quát vẫn phân loại **scaled_not_compared**, không tự tuyên bố đã so phép scale
+hay mask do compiler tạo. Vẫn cần kiểm output compiler và runtime.
+
+Bốn sprite chưa được khai báo trong project: `spr_map_info`, `ih_slingshot`,
+`spr_multi_slot_kind`, `spr_player_kind`. 12 frame và bốn mask nguyên gốc của
+chúng được lưu riêng trong `deadtown-source/unresolved/sprites/` với manifest và
+`RESEARCH-ONLY.txt`; tool `deadtown_unresolved_sprites.py` kiểm lại với APK.
+Trong mô hình tĩnh hợp alpha các frame với mọi ngưỡng 0–255, sai số nhỏ nhất so
+với native mask lần lượt 1007, 380, 1125, 246 bit; không tự chọn mask chữ nhật
+hoặc precise rồi coi là đúng. Các file lưu riêng không được materialize như
+sprite hoạt động. Đây không loại trừ cách dựng mask khác hoặc công cụ phù hợp.
+
+Tính đến mốc này project có 398/402 sprite APK theo tên, 1.017 frame chung:
+499 RGBA khớp bản dựng atlas, 517 chỉ khác RGB dưới alpha 0, 1 frame scale chưa
+được phép so tổng quát. Có 279 ảnh ứng viên trong overlay (271 frame bổ sung,
+8 frame cũ được thay) cho 130 sprite, đã tính cả `mask_noone`; bốn sprite
+nghiên cứu riêng không được tính vào project. 12 sprite chung vẫn khác metadata
+được so; 90 object, 68 script, 369 event key và 8 room chưa có tương ứng.
+Trong 398 tên sprite chung, thứ tự XML có 396 thứ hạng tương đối khác và 7256
+cặp đảo so với APK; thêm ở cuối XML giữ thứ tự XML cũ nhưng không chứng minh ID
+compiler, do vậy không thể kết luận an toàn khi build. Không tự thay sprite của
+các object lobby tương ứng chỉ vì đã có ảnh: code cũ dùng index 3/9 và 4/10,
+trong khi hai sprite mới chỉ có hai frame.
+
+Đã kiểm tra thêm hai bản sao nguồn công khai tìm được: nhánh `main` của
+`Workspaacing/deadtown` cùng commit `5e3d798f914c8cd3b066c8289323005d63111f37`
+như input cũ. Tree `lmppgms/deadtown` commit
+`a6baa018914f0e6e7f8ac1cb69b89ce3fd4834a4` có 2.406 file dưới `deadtown.gmx`:
+2.030 file input cũ đều có Git blob ID giống nhau, 376 file còn lại là bổ sung,
+bao gồm audio nguồn/extension, không phải bằng chứng có GML 1.4.2 mới. Không
+thay audio APK đã trích bằng audio từ bản sao này và không lấy extension ads
+vào project. Phép tìm kiếm không chứng minh không tồn tại nguồn khác.
+
+Chưa có source đầy đủ hay IPA đạt yêu cầu; chưa kiểm GameMaker/iPhone hoặc sửa
+được lỗi sprite lệch và vệt màu trên thiết bị.
+
+### Âm thanh thứ 90
+
+Đã thêm descriptor ứng viên `snd_eating` vào source và đặt WAV trích trực tiếp
+APK trong `assets/sound/audio/snd_eating.wav`. Bytes khớp payload APK, SHA-256
+`27d5de6a73dee0cfcc2e604d2c14cf68a0a5fa88080054f8941f89807deb4cfe`;
+WAV PCM mono 16-bit 44.100 Hz, 9.585 mẫu, không chuyển mã. Native SOND báo
+flags 101, effects 0, volume 1, pitch 0, audio group 1; descriptor thử chọn
+không nén/không stream và group 1. Các cờ/thiết lập khi GameMaker compile và
+việc phát đúng trong game/iOS chưa được xác nhận. Chưa thêm code sử dụng sound.
+
+Dựng workspace hiện báo 90 sound có file tham chiếu; `status.json` vẫn đếm 89
+ở trường `audio_descriptors_populated_without_transcoding`, vì đó là số sound
+cấp tự động cho nền GMX trước khi overlay, không tính WAV mới. Kiểm thử so
+byte file kết quả với overlay; 90 sound theo tên không chứng minh runtime hay
+trật tự ID sound sau compile.

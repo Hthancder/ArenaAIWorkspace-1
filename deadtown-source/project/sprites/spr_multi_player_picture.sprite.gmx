@@ -1,0 +1,42 @@
+<sprite>
+  <type>0</type>
+  <xorig>32</xorig>
+  <yorigin>32</yorigin>
+  <colkind>1</colkind>
+  <coltolerance>0</coltolerance>
+  <sepmasks>0</sepmasks>
+  <bboxmode>0</bboxmode>
+  <bbox_left>0</bbox_left>
+  <bbox_right>63</bbox_right>
+  <bbox_top>0</bbox_top>
+  <bbox_bottom>63</bbox_bottom>
+  <HTile>0</HTile>
+  <VTile>0</VTile>
+  <TextureGroups>
+    <TextureGroup0>0</TextureGroup0>
+  </TextureGroups>
+  <For3D>0</For3D>
+  <width>64</width>
+  <height>64</height>
+  <frames>
+    <frame index="0">images\spr_multi_player_picture_0.png</frame>
+    <frame index="1">images\spr_multi_player_picture_1.png</frame>
+    <frame index="2">images\spr_multi_player_picture_2.png</frame>
+    <frame index="3">images\spr_multi_player_picture_3.png</frame>
+    <frame index="4">images\spr_multi_player_picture_4.png</frame>
+    <frame index="5">images\spr_multi_player_picture_5.png</frame>
+    <frame index="6">images\spr_multi_player_picture_6.png</frame>
+    <frame index="7">images\spr_multi_player_picture_7.png</frame>
+    <frame index="8">images\spr_multi_player_picture_8.png</frame>
+    <frame index="9">images\spr_multi_player_picture_9.png</frame>
+    <frame index="10">images\spr_multi_player_picture_10.png</frame>
+    <frame index="11">images\spr_multi_player_picture_11.png</frame>
+    <frame index="12">images\spr_multi_player_picture_12.png</frame>
+    <frame index="13">images\spr_multi_player_picture_13.png</frame>
+    <frame index="14">images\spr_multi_player_picture_14.png</frame>
+    <frame index="15">images\spr_multi_player_picture_15.png</frame>
+    <frame index="16">images\spr_multi_player_picture_16.png</frame>
+    <frame index="17">images\spr_multi_player_picture_17.png</frame>
+    <frame index="18">images\spr_multi_player_picture_18.png</frame>
+  </frames>
+</sprite>

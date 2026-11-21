@@ -1,0 +1,25 @@
+<sprite>
+  <type>0</type>
+  <xorig>202</xorig>
+  <yorigin>67</yorigin>
+  <colkind>1</colkind>
+  <coltolerance>0</coltolerance>
+  <sepmasks>0</sepmasks>
+  <bboxmode>0</bboxmode>
+  <bbox_left>10</bbox_left>
+  <bbox_right>399</bbox_right>
+  <bbox_top>10</bbox_top>
+  <bbox_bottom>130</bbox_bottom>
+  <HTile>0</HTile>
+  <VTile>0</VTile>
+  <TextureGroups>
+    <TextureGroup0>0</TextureGroup0>
+  </TextureGroups>
+  <For3D>0</For3D>
+  <width>410</width>
+  <height>141</height>
+  <frames>
+    <frame index="0">images\spr_setting_save_0.png</frame>
+    <frame index="1">images\spr_setting_save_1.png</frame>
+  </frames>
+</sprite>

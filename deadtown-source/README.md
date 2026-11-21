@@ -4,20 +4,26 @@
 bản có thể phát hành. Các file `project/**/*.gml` và `project/**/*.gmx` được
 lưu trong Git để có thể sửa và theo dõi thay đổi. Tên trùng với APK không chứng
 minh logic trùng; 68 script, 94 object và 369 event native vẫn chưa có khóa
-nguồn tương ứng ở mốc ban đầu. Nguồn hiện còn thiếu 90 object và 110 sprite APK
+nguồn tương ứng ở mốc ban đầu. Nguồn hiện còn thiếu 90 object và 4 sprite APK
 theo tên trong tập file nguồn;
 12 sprite cùng tên còn khác metadata được so. Không dùng project hiện tại để
 tuyên bố game hoàn chỉnh hoặc đem phát hành IPA.
 
-Đã bổ sung 64 frame thiếu (gồm một sprite mới) và thay 8 frame cũ khác pixel
-hoặc kích thước bằng ảnh dựng lại từ atlas APK: tổng 72 ảnh cho 24 sprite, lưu dưới
-`assets/sprites/images/` và tham chiếu trong descriptor. Ảnh cũ vẫn có trong
-đầu vào GMX ghim, không bị sửa. Kiểm tra tĩnh xác nhận RGBA dựng lại khớp vùng
-atlas đã giải mã; 8 sprite vẫn có bbox khác APK và được giữ nguyên, các trường
-metadata còn lại trong nhóm này khớp theo phép so số. RGB trong suốt ngoài vùng
-cắt không xác định, PNG được mã hóa lại. Mask va chạm, tốc độ animation, render,
-logic sử dụng frame và iPhone chưa được kiểm chứng. Việc khôi phục các frame này
-không có nghĩa là sửa được lỗi hiển thị đã báo.
+Đã bổ sung 271 frame thiếu và thay 8 frame cũ khác pixel hoặc kích thước:
+279 ảnh cho 130 sprite, lưu trong `assets/sprites/images/` và tham chiếu trong
+descriptor. Hầu hết được dựng lại từ atlas không scale; riêng `mask_noone` có
+vùng atlas scale nhưng toàn bộ RGBA và mask native bằng 0, nên được lưu làm ảnh
+trong suốt 32×32, chưa kiểm phép dựng thực tế sau compile. Ảnh cũ trong đầu vào
+GMX ghim không bị sửa. RGB trong suốt ngoài vùng atlas cắt không xác định, PNG
+được mã hóa lại; 8 sprite cũ vẫn có bbox khác APK và được giữ nguyên.
+
+105 sprite mới là ứng viên mask chữ nhật: bitmask APK có hình chữ nhật khớp
+bbox theo phép đọc tĩnh và bbox của alpha khác 0 khớp số liệu APK. Descriptor
+GMX là giả thuyết, chưa kiểm mask do compiler tạo, đóng gói texture, ID, tốc độ
+animation, logic sử dụng frame hay iPhone. Bốn sprite còn thiếu trong project
+đã lưu frame và mask gốc riêng tại `unresolved/sprites/`; chưa thêm descriptor
+vì chưa chứng minh cách tạo mask native. Các bước này không có nghĩa là sửa lỗi
+hiển thị đã báo.
 
 `rom_play` view 0 đã đổi kích thước khởi tạo từ 1334×750 sang 1232×693 theo
 cấu hình tĩnh trong APK, giữ port 1334×750. `sys_view` có thể tính lại kích
@@ -67,9 +73,11 @@ python3 tools/materialize_deadtown_source.py .cache/gmx/deadtown.gmx .cache/dead
 Đích không được tồn tại trước: công cụ không ghi đè dự án/save hiện có. Nguồn
 GMX được kiểm toàn cây, APK được kiểm SHA-256. `project/deadtown.project.gmx`
 là project làm việc; `status.json`, `comparison.json` và `sprite-metadata.json`
-là kết quả đối chiếu. 89 descriptor âm thanh được cấp file gốc không encode
-lại; APK có âm thanh thứ 90 nhưng project cũ chưa khai báo. Công cụ không đưa
-các tệp ký hoặc archive extension quảng cáo cũ vào project kết quả.
+là kết quả đối chiếu. 89 descriptor nền được cấp file APK không encode lại;
+`snd_eating` thứ 90 có descriptor ứng viên và WAV APK nguyên byte trong overlay.
+`status.json` vẫn báo 89 vì chỉ đếm bước cấp audio cho nền cũ, không đếm override;
+project kết quả khai báo 90 sound. Chưa chứng minh thiết lập âm thanh sau compile.
+Công cụ không đưa các tệp ký hoặc archive extension quảng cáo cũ vào kết quả.
 
 Thư mục `.cache/` là tạm thời: đừng dùng nó làm nơi lưu mod duy nhất. Nếu có
 lỗi giữa chừng, thư mục kết quả có `INCOMPLETE.txt`; kiểm tra và tự xóa hoặc

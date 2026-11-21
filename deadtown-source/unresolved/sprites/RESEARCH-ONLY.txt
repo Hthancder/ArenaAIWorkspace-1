@@ -1,0 +1,2 @@
+RESEARCH-ONLY unresolved sprites. These are NOT included in the GMX project.
+Native masks are preserved, not reconstructed by a GameMaker compiler.

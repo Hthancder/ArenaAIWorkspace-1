@@ -1,0 +1,306 @@
+{
+  "format": 1,
+  "apk_sha256": "bc8fa1990cb2cdde8d184f2a942fe4010820f0592d88a36e1cbee0a6aac081fb",
+  "sprites": [
+    {
+      "name": "spr_map_info",
+      "metadata": {
+        "width": 99,
+        "height": 83,
+        "origin_x": 49,
+        "origin_y": 41,
+        "bbox_left": 10,
+        "bbox_right": 88,
+        "bbox_top": 10,
+        "bbox_bottom": 72,
+        "bbox_mode": 0,
+        "separate_masks": 0,
+        "frames": 5
+      },
+      "native_mask": {
+        "file": "spr_map_info/mask.bin",
+        "sha256": "96185a63afe5426cd129ce4fc496b9827db8fd09a9d0d7f4c0c5cb4f66af764f",
+        "shape": "irregular",
+        "best_union_alpha_threshold_bit_difference": 1007
+      },
+      "frames": [
+        {
+          "file": "spr_map_info/0.png",
+          "sha256_rgba": "a7a2c900f7d3287505e95523a96f2671fab90df396c0ba6c401b97ef35e1dd9b",
+          "atlas_region": {
+            "source_x": 1450,
+            "source_y": 222,
+            "source_width": 79,
+            "source_height": 61,
+            "target_x": 10,
+            "target_y": 11,
+            "target_width": 79,
+            "target_height": 61,
+            "bound_width": 99,
+            "bound_height": 83,
+            "atlas_index": 5
+          }
+        },
+        {
+          "file": "spr_map_info/1.png",
+          "sha256_rgba": "f7af637fe7d7b9c0fd166fe5209497843eca803fac40e39089286412cb0844d8",
+          "atlas_region": {
+            "source_x": 530,
+            "source_y": 1594,
+            "source_width": 63,
+            "source_height": 63,
+            "target_x": 18,
+            "target_y": 10,
+            "target_width": 63,
+            "target_height": 63,
+            "bound_width": 99,
+            "bound_height": 83,
+            "atlas_index": 5
+          }
+        },
+        {
+          "file": "spr_map_info/2.png",
+          "sha256_rgba": "aa4aac32bffd118abc9178e0e26b6f33daa567c3cad54d34727ddc7d34fd2f26",
+          "atlas_region": {
+            "source_x": 522,
+            "source_y": 1394,
+            "source_width": 70,
+            "source_height": 58,
+            "target_x": 15,
+            "target_y": 13,
+            "target_width": 70,
+            "target_height": 58,
+            "bound_width": 99,
+            "bound_height": 83,
+            "atlas_index": 5
+          }
+        },
+        {
+          "file": "spr_map_info/3.png",
+          "sha256_rgba": "a5185dcac123cf3418f2224a7b30bd9a84aa2af29615257d7f7c62dd175791f3",
+          "atlas_region": {
+            "source_x": 1206,
+            "source_y": 790,
+            "source_width": 52,
+            "source_height": 52,
+            "target_x": 24,
+            "target_y": 16,
+            "target_width": 52,
+            "target_height": 52,
+            "bound_width": 99,
+            "bound_height": 83,
+            "atlas_index": 5
+          }
+        },
+        {
+          "file": "spr_map_info/4.png",
+          "sha256_rgba": "64715b6f91dcd8be8b2aa7023e3eaf671f7e27e374a001f212992a789fa2a4a5",
+          "atlas_region": {
+            "source_x": 566,
+            "source_y": 1458,
+            "source_width": 58,
+            "source_height": 58,
+            "target_x": 21,
+            "target_y": 13,
+            "target_width": 58,
+            "target_height": 58,
+            "bound_width": 99,
+            "bound_height": 83,
+            "atlas_index": 5
+          }
+        }
+      ]
+    },
+    {
+      "name": "ih_slingshot",
+      "metadata": {
+        "width": 100,
+        "height": 80,
+        "origin_x": 5,
+        "origin_y": 40,
+        "bbox_left": 17,
+        "bbox_right": 35,
+        "bbox_top": 24,
+        "bbox_bottom": 58,
+        "bbox_mode": 0,
+        "separate_masks": 0,
+        "frames": 2
+      },
+      "native_mask": {
+        "file": "ih_slingshot/mask.bin",
+        "sha256": "d9e1c42414443eb2622faefcad1603a3d2e514ac4371e9f2fca420ea4d8698d0",
+        "shape": "irregular",
+        "best_union_alpha_threshold_bit_difference": 380
+      },
+      "frames": [
+        {
+          "file": "ih_slingshot/0.png",
+          "sha256_rgba": "30463b849d48e8d72fb4e1518e1b55cd3e45b390e1c6eff0687090f3a3430d6a",
+          "atlas_region": {
+            "source_x": 2034,
+            "source_y": 1162,
+            "source_width": 9,
+            "source_height": 34,
+            "target_x": 27,
+            "target_y": 25,
+            "target_width": 9,
+            "target_height": 34,
+            "bound_width": 100,
+            "bound_height": 80,
+            "atlas_index": 4
+          }
+        },
+        {
+          "file": "ih_slingshot/1.png",
+          "sha256_rgba": "23796fb06bb48b7eb959ba57a09ce12db3f8d526855c487207d709c3a0960eda",
+          "atlas_region": {
+            "source_x": 1538,
+            "source_y": 1174,
+            "source_width": 19,
+            "source_height": 34,
+            "target_x": 17,
+            "target_y": 24,
+            "target_width": 19,
+            "target_height": 34,
+            "bound_width": 100,
+            "bound_height": 80,
+            "atlas_index": 3
+          }
+        }
+      ]
+    },
+    {
+      "name": "spr_multi_slot_kind",
+      "metadata": {
+        "width": 86,
+        "height": 92,
+        "origin_x": 43,
+        "origin_y": 46,
+        "bbox_left": 5,
+        "bbox_right": 80,
+        "bbox_top": 5,
+        "bbox_bottom": 86,
+        "bbox_mode": 0,
+        "separate_masks": 0,
+        "frames": 3
+      },
+      "native_mask": {
+        "file": "spr_multi_slot_kind/mask.bin",
+        "sha256": "5f4edf4f58562edc9e3266f1d8aa4a73d234df27312624453af08409f0c25c21",
+        "shape": "irregular",
+        "best_union_alpha_threshold_bit_difference": 1125
+      },
+      "frames": [
+        {
+          "file": "spr_multi_slot_kind/0.png",
+          "sha256_rgba": "7bf139ef1ec1a448d82c5a3d3a716e3f8c142c84a58439c5cb9d072801720719",
+          "atlas_region": {
+            "source_x": 238,
+            "source_y": 1930,
+            "source_width": 71,
+            "source_height": 82,
+            "target_x": 8,
+            "target_y": 5,
+            "target_width": 71,
+            "target_height": 82,
+            "bound_width": 86,
+            "bound_height": 92,
+            "atlas_index": 5
+          }
+        },
+        {
+          "file": "spr_multi_slot_kind/1.png",
+          "sha256_rgba": "2c756b076d54024ae3d93ca6f8f729f742280b0d2b65f3bd9ba2d45866cdd8db",
+          "atlas_region": {
+            "source_x": 226,
+            "source_y": 1118,
+            "source_width": 76,
+            "source_height": 76,
+            "target_x": 5,
+            "target_y": 8,
+            "target_width": 76,
+            "target_height": 76,
+            "bound_width": 86,
+            "bound_height": 92,
+            "atlas_index": 5
+          }
+        },
+        {
+          "file": "spr_multi_slot_kind/2.png",
+          "sha256_rgba": "0bc26ddc7e45cf715a091d272b02b5985e32d5fe7b5291e061278c5e740f966d",
+          "atlas_region": {
+            "source_x": 370,
+            "source_y": 1550,
+            "source_width": 61,
+            "source_height": 82,
+            "target_x": 13,
+            "target_y": 5,
+            "target_width": 61,
+            "target_height": 82,
+            "bound_width": 86,
+            "bound_height": 92,
+            "atlas_index": 5
+          }
+        }
+      ]
+    },
+    {
+      "name": "spr_player_kind",
+      "metadata": {
+        "width": 35,
+        "height": 28,
+        "origin_x": 17,
+        "origin_y": 14,
+        "bbox_left": 3,
+        "bbox_right": 31,
+        "bbox_top": 3,
+        "bbox_bottom": 24,
+        "bbox_mode": 0,
+        "separate_masks": 0,
+        "frames": 2
+      },
+      "native_mask": {
+        "file": "spr_player_kind/mask.bin",
+        "sha256": "1a200b511bc3c0df609b8e9087e74701dc65c670869ec95293aa23622b470325",
+        "shape": "irregular",
+        "best_union_alpha_threshold_bit_difference": 246
+      },
+      "frames": [
+        {
+          "file": "spr_player_kind/0.png",
+          "sha256_rgba": "8b66bda1ba1e54c43d0fdd762ffe9034a36097ee466c7125ce4d7947940f1f7f",
+          "atlas_region": {
+            "source_x": 1238,
+            "source_y": 454,
+            "source_width": 29,
+            "source_height": 21,
+            "target_x": 3,
+            "target_y": 4,
+            "target_width": 29,
+            "target_height": 21,
+            "bound_width": 35,
+            "bound_height": 28,
+            "atlas_index": 4
+          }
+        },
+        {
+          "file": "spr_player_kind/1.png",
+          "sha256_rgba": "6f07982895e21bb85dfe47766caf01ea1cbb221048d47a6a73e8dff1c618e983",
+          "atlas_region": {
+            "source_x": 1342,
+            "source_y": 1330,
+            "source_width": 24,
+            "source_height": 22,
+            "target_x": 5,
+            "target_y": 3,
+            "target_width": 24,
+            "target_height": 22,
+            "bound_width": 35,
+            "bound_height": 28,
+            "atlas_index": 4
+          }
+        }
+      ]
+    }
+  ]
+}

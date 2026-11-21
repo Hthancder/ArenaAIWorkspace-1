@@ -69,7 +69,10 @@ class WorkspaceIntegrationTests(unittest.TestCase):
             self.assertEqual(status['native_objects_missing_by_name'], len(report['native_objects_missing_in_source']))
             self.assertEqual(status['native_events_missing_by_key'], len(report['native_event_keys_missing_in_source']))
             self.assertEqual(status['audio_descriptors_populated_without_transcoding'], 89)
+            self.assertEqual(status['resource_reference_counts']['sound'], 90)
             project = result / 'project'
+            self.assertEqual((project / 'sound/audio/snd_eating.wav').read_bytes(),
+                             (SOURCE / 'assets/sound/audio/snd_eating.wav').read_bytes())
             self.assertIn('// workspace test edit', (project / 'scripts/achievement_plus.gml').read_text())
             self.assertFalse((project / 'scripts/leaderboard_post.gml').exists())
             self.assertEqual((project / 'sprites/images/spr_player_0.png').read_bytes(), b'user override sentinel')
