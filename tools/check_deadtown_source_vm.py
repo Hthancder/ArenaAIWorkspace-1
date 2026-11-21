@@ -51,17 +51,33 @@ def parse_probe(text, expected_scripts, expected_events):
             'events_linked': linked, 'event_links_skipped': skipped, 'native_code_references_cleared': cleared}
 
 
-def summarize_runtime(log, expected_room):
+def summarize_runtime(log, expected_room, minimum_frame):
     lines = log.splitlines()
-    if not any(f'[room] -> {expected_room}' in line for line in lines):
+    if not any(line.strip() == f'[room] -> {expected_room}' for line in lines):
         raise ValueError(f'expected room not observed: {expected_room}')
+    stats = re.findall(r'^\[stats\] frame (\d+) room (\S+): step [\d.]+ ms, (\d+) draw calls, (\d+) instances$', log, flags=re.MULTILINE)
+    if not stats or int(stats[-1][0]) < minimum_frame:
+        raise ValueError(f'expected stats through frame {minimum_frame}')
+    unsupported = re.findall(r'^\[runner\] (\d+) functions are not implemented yet:(.*)$', log, flags=re.MULTILINE)
+    if len(unsupported) > 1:
+        raise ValueError('multiple unsupported function reports')
+    unsupported_count = int(unsupported[0][0]) if unsupported else 0
+    unsupported_names = unsupported[0][1].split() if unsupported else []
+    if len(unsupported_names) != unsupported_count:
+        raise ValueError('unsupported function count does not match report')
+    extension_stubs = [line for line in lines if line.startswith('[runner] extension functions (no native library;')]
     # Runner prints some messages only once, so these are logged entries, not
     # counts of actual failures in all execution paths.
     errors = [s for s in lines if '[gml] error in ' in s or '[gml] internal error in ' in s or '[vm]' in s]
     unknown = [s for s in lines if 'call to unknown function ' in s]
     warnings = [s for s in lines if '[gml]' in s and s not in errors and s not in unknown]
     counts = Counter(errors)
-    return {'expected_room_observed': expected_room, 'diagnostic_lines': len(errors),
+    last_frame, last_room, draws, instances = stats[-1]
+    return {'expected_room_observed': expected_room,
+            'last_stats': {'frame': int(last_frame), 'room': last_room, 'draw_calls': int(draws), 'instances': int(instances)},
+            'unsupported_functions_at_load': unsupported_count, 'unsupported_function_names': unsupported_names,
+            'extension_stub_reports': extension_stubs,
+            'diagnostic_lines': len(errors),
             'distinct_diagnostics': [{'line': msg[:1200], 'occurrences': n} for msg, n in counts.most_common(15)],
             'unknown_function_lines': len(unknown), 'other_gml_lines': len(warnings),
             'limitations': 'Headless forced scenario only. Logged entries may be suppressed/deduplicated; '
@@ -109,8 +125,8 @@ def report(apk, candidate, project, events, compile_log, boot_log, play_log):
         raise ValueError('source scripts or events missing')
     return {'compile': parse_probe(Path(compile_log).read_text(errors='replace'), len(scripts), len(event_list)),
             'resources': compare_resources(apk, candidate),
-            'boot': summarize_runtime(Path(boot_log).read_text(errors='replace'), 'rom_lobby'),
-            'forced_play': summarize_runtime(Path(play_log).read_text(errors='replace'), 'rom_play'),
+            'boot': summarize_runtime(Path(boot_log).read_text(errors='replace'), 'rom_lobby', 300),
+            'forced_play': summarize_runtime(Path(play_log).read_text(errors='replace'), 'rom_play', 360),
             'release_ready': False,
             'limitations': 'Disposable YYC-to-VM experiment. Old native code and missing links are removed; '
                            'sprites/masks/textures come from the APK, NOT the editable source PNG overrides. '
