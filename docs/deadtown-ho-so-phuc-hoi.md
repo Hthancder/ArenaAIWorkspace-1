@@ -576,3 +576,26 @@ luận từ đó rằng 111 sprite thiếu theo tên đã được phục hồi.
 tên khác các trường metadata được kiểm; collision mask/timing/render và game
 iPhone chưa kiểm. 133 test local đạt, 12 bỏ qua do thiếu đầu vào tùy chọn;
 chưa tạo IPA, chưa chứng minh sửa lỗi sprite lệch/vệt màu.
+
+### Kích thước hai sprite và thứ tự tài nguyên
+
+Đã thay ảnh, kích thước, điểm neo và bbox số của `spr_part_bull` và
+`spr_setting_cradits` trong project thử bằng các giá trị đối chiếu được từ APK;
+3 frame PNG được dựng lại từ atlas không scale. Đây là thay đổi có thể ảnh
+hưởng kích thước/va chạm và bố cục, chưa xác nhận đúng trong game sau biên
+dịch. Ảnh cũ trong đầu vào ghim vẫn được giữ nguyên. Trong 291 sprite cùng tên,
+809 cặp frame hiện phân loại thành 292 RGBA khớp bản dựng atlas và 517 chỉ khác
+RGB tại alpha 0; không còn cặp khác kích thước trong phép so này. 12 sprite
+cùng tên vẫn khác một số metadata. 111 sprite APK chưa có tên trong project.
+
+Trước khi thêm các sprite thiếu, `tools/deadtown_sprite_order_evidence.py` so
+thứ tự bảng SPRT APK với thứ tự khai báo XML GMX: trong 291 tên chung có 32 tên
+khác vị trí tương đối, 188 cặp đảo thứ tự; ví dụ `spr_player` ở index APK 182
+và thứ tự khai báo GMX 154. **Thứ tự XML không được chứng minh là ID do
+GameMaker biên dịch**, nên không được dùng phép so này để tự ý đổi ID hay kết
+luận lỗi trên iPhone. Cần quan sát project sau biên dịch và kiểm những chỗ dùng
+ID số trước khi đưa thêm nhóm tài nguyên lớn.
+
+CI source `44888154327` đạt; local 137 test đạt, 12 bỏ qua do thiếu đầu vào tùy
+chọn. Vẫn thiếu logic native, chưa kiểm collision/animation/UI/gameplay trên
+thiết bị, chưa có source hoàn chỉnh hoặc IPA mới.

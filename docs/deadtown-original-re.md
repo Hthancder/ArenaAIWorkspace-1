@@ -1090,3 +1090,30 @@ All PNGs are reconstructed and re-encoded, not original source artwork. The
 results do not validate masks after compilation, animation, frame selection,
 filtering, gameplay, device rendering, or the iPhone trails and misplacement.
 The workbench is still explicitly incomplete and not an IPA release.
+
+### Shared dimension candidates and declaration-order evidence
+
+The three remaining dimension-mismatch frame pairs belong to `spr_part_bull`
+and `spr_setting_cradits`. The editable-source candidate now uses the APK's
+width/height, origin and bbox numeric values, and overlays the three unscaled
+atlas reconstructions. These changes may affect layout and collisions. Static
+inspection of the native mask bytes found rectangles matching the respective
+native bbox values, but we have not established the collision masks produced
+by compiling these GMX files or observed the resulting game behavior.
+
+The materialized project now yields 809 same-index frame comparisons across
+291 shared names: 292 exact reconstructed RGBA, 517 differing only in RGB at
+zero alpha, and zero dimension mismatches. That excludes 111 native-only names
+and does not test texture filtering, animation, placement or compiled masks.
+The selected numeric metadata still differ for 12 shared sprite names.
+
+Before inserting missing sprites, `tools/deadtown_sprite_order_evidence.py`
+compares the order of native SPRT entries with depth-first GMX XML sprite
+declarations. Among 291 shared names, 32 have different relative common ranks
+and there are 188 relative-order inversions. `spr_player` is APK table index
+182 and GMX XML ordinal 154. **XML declaration order is not an observed
+GameMaker compiled ID**, so these data do not prove a runtime mismatch or
+justify automatically reordering the project; compiled-resource and numeric
+reference checks are needed. CI `44888154327` passed, and the local suite ran
+137 tests with 12 skipped due to absent optional inputs. The game source and
+iOS behavior remain incomplete and no IPA was produced.
