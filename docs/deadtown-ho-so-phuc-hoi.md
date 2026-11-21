@@ -1067,3 +1067,9 @@ thật, giá trị trả ngầm, native Android hay iOS; kết quả CI phải x
 Không có gọi tên trực tiếp bốn script này trong source hiện tại, nên không coi
 chúng đã khôi phục điều khiển game. Dự kiến còn thiếu 58 script so tên, các
 số khác giữ nguyên; so tên không chứng minh tương đương logic.
+
+Tại `f7b71c7`, 206 test local thành công (12 skip), CI native
+`44914925038`, source-workbench `44914924947` và VM `44914924944` thành công;
+probe gamepad mock cũng qua ba marker. Audit thực tế xác nhận 58 script thiếu
+so tên. VM dịch 148 file script, liên kết 505 event, bỏ qua 35. Không có kết
+quả này chứng minh tay cầm vật lý, gameplay hoặc iOS.
