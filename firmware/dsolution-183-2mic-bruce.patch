@@ -18052,10 +18052,10 @@ index 0000000..0f4c3c9
 +#endif
 diff --git a/src/modules/ble/ble_security_audit.cpp b/src/modules/ble/ble_security_audit.cpp
 new file mode 100644
-index 0000000..3da5427
+index 0000000..4cfc7cc
 --- /dev/null
 +++ b/src/modules/ble/ble_security_audit.cpp
-@@ -0,0 +1,758 @@
+@@ -0,0 +1,759 @@
 +#include "ble_security_audit.h"
 +#if !defined(LITE_VERSION)
 +
@@ -18285,7 +18285,8 @@ index 0000000..3da5427
 +                NimBLEAttValue v = c.remote->readValue();
 +                reads++;
 +                bool echo = v.size() == payload.size() &&
-+                            (payload.empty() || memcmp(v.data(), ptr, std::min(v.size(), payload.size())) == 0);
++                            (payload.empty() || memcmp(v.data(), ptr,
++                                                       std::min<size_t>(v.size(), payload.size())) == 0);
 +                if (echo && !payload.empty()) {
 +                    appendFinding(findings, c, "FUZZ_LEAK", "MEDIUM",
 +                                  String("Read-back echoed ") + labels[b], v.data(), v.size());
