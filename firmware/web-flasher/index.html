@@ -228,6 +228,15 @@
             <button type="button" class="secondary btn-sm" id="reloadCiFw">Tải lại bản CI</button>
             <label class="btn-file secondary btn-sm">Thay Bruce .bin<input type="file" id="pickBruceOta" class="hidden-file" accept=".bin" /></label>
           </div>
+          <div class="row" style="margin-top:4px;font-size:12px">
+            <a href="/fw/DSolution-183-2mic-ota.bin" download="DSolution-183-2mic-ota.bin" style="color:var(--accent);text-decoration:none">&darr; Tải OTA (.bin)</a>
+            <span style="color:var(--muted)">&middot;</span>
+            <a href="/fw/DSolution-183-2mic-factory.bin" download="DSolution-183-2mic-factory.bin" style="color:var(--accent);text-decoration:none">&darr; Tải Factory 0x0 (.bin)</a>
+            <span style="color:var(--muted)">&middot;</span>
+            <a href="/fw/dualboot_menu.bin" download="dualboot_menu.bin" style="color:var(--accent);text-decoration:none">&darr; Menu</a>
+            <span style="color:var(--muted)">&middot;</span>
+            <a href="/fw/bootloader_dualboot.bin" download="bootloader_dualboot.bin" style="color:var(--accent);text-decoration:none">&darr; Bootloader</a>
+          </div>
         </div>
       </div>
     </section>
@@ -247,6 +256,7 @@
 
       <div class="row" style="margin-top:14px">
         <button id="dbFlashBtn" disabled>Nạp Dual-Boot qua USB (1 lần)</button>
+        <button type="button" id="dbPickPortBtn" class="secondary">Chọn lại cổng USB</button>
         <button id="dbEraseBtn" class="danger">Xoá toàn bộ chip 16 MB</button>
         <label class="check"><input type="checkbox" id="dbSafeMode" /> chế độ chậm (dio / 40 MHz)</label>
         <label class="check" title="Khi tắt, NVS gốc (Wi-Fi &amp; kích hoạt XiaoZhi) ở 0x9000 được giữ nguyên nếu offset khớp"><input type="checkbox" id="dbWipeNvs" /> xoá NVS (cài mới từ đầu)</label>
@@ -281,9 +291,12 @@
       <div class="row" style="margin-top:10px">
         <button type="button" class="secondary btn-sm" id="useLatestFactory">Dùng Bruce Factory mới nhất (0x0)</button>
         <button type="button" class="secondary btn-sm" id="useLatestOta">Dùng Bruce OTA mới nhất (0x10000)</button>
+        <a class="btn-file secondary btn-sm" href="/fw/DSolution-183-2mic-factory.bin" download="DSolution-183-2mic-factory.bin" style="text-decoration:none">&darr; Tải Factory (.bin)</a>
+        <a class="btn-file secondary btn-sm" href="/fw/DSolution-183-2mic-ota.bin" download="DSolution-183-2mic-ota.bin" style="text-decoration:none">&darr; Tải OTA (.bin)</a>
       </div>
       <div class="row" style="margin-top:14px">
         <button id="flash" disabled>Nạp firmware</button>
+        <button type="button" id="pickPortBtn" class="secondary">Chọn lại cổng USB</button>
         <button id="erase" class="danger">Xoá toàn bộ chip</button>
         <label class="check"><input type="checkbox" id="safe" /> chế độ chậm (dio / 40 MHz)</label>
       </div>
@@ -588,40 +601,99 @@ function buildDualBootPlan({ stockEntries, dualbootMenuLen, xiaozhiLen, bruceOta
 let sharedPort = null;
 let esptool = null;
 let busyFlashing = false;
+let forcePortPromptNext = false;
+
+async function forceClosePort(port) {
+  if (!port) return;
+  try {
+    if (port.readable && port.readable.locked) {
+      const r = port.readable.getReader();
+      await r.cancel();
+      r.releaseLock();
+    }
+  } catch (_) {}
+  try {
+    if (port.writable && port.writable.locked) {
+      const w = port.writable.getWriter();
+      await w.abort();
+      w.releaseLock();
+    }
+  } catch (_) {}
+  try { await port.close(); } catch (_) {}
+}
+
+function explainSerialError(err) {
+  const msg = String(err?.message || err || "");
+  if (/Failed to open serial port|NetworkError|Access is denied|Permission denied|busy/i.test(msg)) {
+    forcePortPromptNext = true;
+    sharedPort = null;
+    return (
+      "Không mở được cổng USB (" + msg + "). Nguyên nhân thường gặp: " +
+      "(1) Cổng COM đang bị chiếm bởi tab trình duyệt khác, Arduino IDE, PlatformIO hoặc phần mềm đọc Serial — hãy đóng chúng lại; " +
+      "(2) Máy vừa chuyển sang chế độ Bootloader (303a:1001) nên đổi sang số cổng COM mới — hãy bấm 'Chọn lại cổng USB' (hoặc bấm Nạp lại) để chọn đúng cổng mới; " +
+      "(3) Cáp USB lỏng — hãy rút ra cắm lại."
+    );
+  }
+  return msg;
+}
 
 async function refreshPortInfo() {
   try {
     const ports = await navigator.serial.getPorts();
     const txt = ports.length
-      ? `Đã cấp quyền ${ports.length} cổng${sharedPort ? " · cổng sẵn sàng" : ""}.`
-      : "Chưa cấp quyền cổng USB — bấm nút Nạp để chọn cổng USB ESP32-S3.";
+      ? `Đã cấp quyền ${ports.length} cổng${sharedPort ? " · đã chọn cổng" : " · bấm 'Chọn lại cổng USB' nếu đổi cổng COM"}.`
+      : "Chưa cấp quyền cổng USB — bấm nút Nạp hoặc 'Chọn lại cổng USB' để chọn cổng ESP32-S3.";
     $("portInfo").textContent = txt;
     $("dbPortInfo").textContent = txt;
   } catch (_) {}
 }
 
-async function acquirePort() {
+async function acquirePort({ forcePrompt = false } = {}) {
   if (!("serial" in navigator)) {
     throw new Error("Trình duyệt không hỗ trợ WebSerial — vui lòng dùng Chrome hoặc Edge trên máy tính.");
   }
   await stopMonitor({ quiet: true });
-  const ports = await navigator.serial.getPorts();
-  if (ports.length === 1) {
-    sharedPort = ports[0];
+  if (sharedPort) {
+    await forceClosePort(sharedPort);
+  }
+
+  const mustPrompt = forcePrompt || forcePortPromptNext;
+  if (!mustPrompt && sharedPort) {
     await refreshPortInfo();
     return sharedPort;
   }
+
+  const ports = await navigator.serial.getPorts();
+  if (!mustPrompt && ports.length === 1) {
+    sharedPort = ports[0];
+    await forceClosePort(sharedPort);
+    await refreshPortInfo();
+    return sharedPort;
+  }
+
   try {
-    sharedPort = await navigator.serial.requestPort();
+    const picked = await navigator.serial.requestPort();
+    await forceClosePort(picked);
+    sharedPort = picked;
+    forcePortPromptNext = false;
   } catch (err) {
     await refreshPortInfo();
     if (err && err.name === "NotFoundError") {
-      throw new Error("Chưa chọn cổng USB. Hãy bấm lại và chọn USB JTAG/serial debug unit.");
+      throw new Error("Chưa chọn cổng USB. Hãy bấm lại và chọn cổng USB JTAG/serial debug unit (303a:1001).");
     }
     throw err;
   }
   await refreshPortInfo();
   return sharedPort;
+}
+
+async function promptPortManually(statusEl) {
+  try {
+    await acquirePort({ forcePrompt: true });
+    setStatus(statusEl, "Đã chọn cổng USB mới thành công! Giờ bạn có thể bấm Nạp.", "ok");
+  } catch (err) {
+    setStatus(statusEl, explainSerialError(err), "err");
+  }
 }
 
 async function loadEsptool(statusEl) {
@@ -632,8 +704,9 @@ async function loadEsptool(statusEl) {
 }
 
 async function connectLoader(statusEl) {
-  const { ESPLoader, Transport } = await loadEsptool(statusEl);
+  // Acquire port BEFORE async dynamic import so browser user-gesture activation stays intact
   const port = await acquirePort();
+  const { ESPLoader, Transport } = await loadEsptool(statusEl);
   const transport = new Transport(port, true);
   const termLogger = {
     clean() {},
@@ -642,14 +715,21 @@ async function connectLoader(statusEl) {
   };
   const loader = new ESPLoader({ transport, baudrate: 921600, terminal: termLogger, romBaudrate: 115200 });
   setStatus(statusEl, "Đang kết nối ESP32-S3… (nếu chờ lâu: bật Enter Bootloader hoặc giữ BOOT + cắm lại)");
-  const chip = await loader.main();
-  setStatus(statusEl, `Đã kết nối: ${chip}`);
-  return { loader, transport };
+  try {
+    const chip = await loader.main();
+    setStatus(statusEl, `Đã kết nối: ${chip}`);
+    return { loader, transport };
+  } catch (err) {
+    try { await transport.disconnect(); } catch (_) {}
+    await forceClosePort(port);
+    throw new Error(explainSerialError(err));
+  }
 }
 
 async function closeLoader(loader, transport) {
-  try { await loader.after("hard_reset"); } catch (_) {}
-  try { await transport.disconnect(); } catch (_) {}
+  try { if (loader) await loader.after("hard_reset"); } catch (_) {}
+  try { if (transport) await transport.disconnect(); } catch (_) {}
+  if (sharedPort) await forceClosePort(sharedPort);
 }
 
 // ---------- Dual-Boot State & CI Firmware Auto-Fetch ----------
@@ -1306,11 +1386,14 @@ $("monConnect").addEventListener("click", async () => {
       if (value) append(decoder.decode(value, { stream: true }));
     }
   } catch (err) {
-    if (!monStopped) setStatus(monStatus, "Lỗi: " + (err?.message || err), "err");
+    if (!monStopped) setStatus(monStatus, "Lỗi: " + explainSerialError(err), "err");
   } finally {
     setMonButtons(false);
   }
 });
+
+$("dbPickPortBtn").addEventListener("click", () => promptPortManually(dbStatus));
+$("pickPortBtn").addEventListener("click", () => promptPortManually(flashStatus));
 
 $("monReset").addEventListener("click", async () => {
   if (!sharedPort) return;
