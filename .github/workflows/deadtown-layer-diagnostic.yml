@@ -1,0 +1,87 @@
+name: Dead Town player layer coordinate diagnostic (no IPA)
+
+on:
+  push:
+    branches:
+      - arena/78062d86-arenaaiworkspace-1
+    paths:
+      - .github/workflows/deadtown-layer-diagnostic.yml
+      - tools/prepare_deadtown_layer_probe.py
+      - tools/check_deadtown_layer_probe.py
+      - tests/test_deadtown_layer_probe.py
+
+permissions:
+  contents: read
+
+jobs:
+  layer-trace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install desktop diagnostics and test checker
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libsdl2-dev libbz2-dev libgl1-mesa-dri xvfb
+          python -m unittest discover -s tests -p 'test_deadtown_layer_probe.py' -v
+      - name: Fetch pinned game data and runner for research
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p work/game work/runner
+          gh release download deadtown-ios15-re-test-3 -R "$GITHUB_REPOSITORY" -p 'DeadTown-iOS15-RE-test3.ipa' -O work/test3.ipa
+          echo '7e0f10c8761fe1160baa855a4e825aa31974f02cb2b2205a27b0df9d5aefe781  work/test3.ipa' | sha256sum -c
+          unzip -p work/test3.ipa Payload/gmRunner.app/BundledGame/data.win > work/game/data.win
+          echo '313da9db0f0f74b1e9eea100b8f0de0e7d315e3f21697d638a44a9e2014608b0  work/game/data.win' | sha256sum -c
+          for n in 1 2; do unzip -p work/test3.ipa "Payload/gmRunner.app/BundledGame/audiogroup$n.dat" > "work/game/audiogroup$n.dat"; done
+          curl -fsSL --retry 2 'https://codeload.github.com/andronep/gmrunner/tar.gz/e7121381d38b03a24242812fc22b0a7386d545c6' | tar xz -C work/runner --strip-components=1
+      - name: Instrument and build disposable desktop runner
+        run: |
+          set -euo pipefail
+          python tools/prepare_deadtown_layer_probe.py work/runner/src/runtime/Graphics.cpp
+          cmake -S work/runner -B work/runner-build -DCMAKE_BUILD_TYPE=Release > work/build.log 2>&1
+          cmake --build work/runner-build --target gmrunner --parallel 4 >> work/build.log 2>&1 || { tail -100 work/build.log; exit 1; }
+      - name: Trace normal player draw with and without scripted movement
+        run: |
+          set -euo pipefail
+          for mode in still moving; do
+            mkdir -p "work/save-$mode"
+            input=()
+            if [ "$mode" = moving ]; then input=(--input '170:D:down,200:D:up'); fi
+            GMR_LAYER_PROBE=1 timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' work/runner-build/gmrunner work/game \
+              --hidden --gles --fast --mute --seed 1 --frames 220 --trace --goto rom_play@160 \
+              --save-dir "work/save-$mode" "${input[@]}" > "work/$mode.log" 2>&1 || { tail -80 "work/$mode.log"; exit 1; }
+            grep -F '[room] -> rom_play' "work/$mode.log"
+            grep -F 'DT_LAYER_EVENT|' "work/$mode.log" | head -2 || true
+          done
+          python tools/check_deadtown_layer_probe.py work/still.log work/moving.log --output work/result.json | tee work/check.log
+      - name: Summarize research trace
+        if: always()
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          for name in ('build.log', 'still.log', 'moving.log', 'check.log'):
+              p = Path('work') / name
+              if not p.exists():
+                  print('::warning::' + name + ' missing')
+                  continue
+              rows = [s for s in p.read_text(errors='replace').splitlines() if any(x in s for x in ('DT_LAYER_', 'LAYER_PROBE', 'error:', 'Error', 'Traceback', 'ValueError'))]
+              print('::notice::' + name + ': ' + ' | '.join(rows[-8:]).replace('%', '%25')[:3500])
+          PY
+      - name: Preserve logs only, not game data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deadtown-player-layer-research
+          path: |
+            work/build.log
+            work/still.log
+            work/moving.log
+            work/check.log
+            work/result.json
+          if-no-files-found: ignore
+          retention-days: 3
