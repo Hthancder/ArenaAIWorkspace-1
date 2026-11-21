@@ -1046,3 +1046,24 @@ CI native `44913067792`, source-workbench `44913067864` và source-VM
 được tham chiếu nào thiếu, nhưng vẫn thiếu 62 script, 90 object, 367 event key,
 4 sprite và 8 room khi so tên/key với APK. Các số này không bảo đảm logic đã
 khớp. Chưa build IPA mới, chưa xác minh gameplay hoặc iPhone.
+
+### Ứng viên wrapper gamepad
+
+Bốn export Android ARM32 `gp_button_check`, `gp_button_check_pressed`,
+`gp_button_check_released`, `gp_axis_value` mỗi cái dài 1.812 byte, cùng cấu
+trúc điều khiển. Khi `gamepad_is_supported()` đúng, native lấy số thiết bị một
+lần, duyệt index tăng dần bắt đầu từ 0 và trả kết quả builtin tương ứng với
+`(index, argument0)` ngay khi thiết bị đầu tiên báo kết nối. Nếu không hỗ trợ
+hoặc không có thiết bị kết nối, native đi tới cuối mà không thấy lệnh ghi kết
+quả rõ ràng. Source ứng viên cũng không thêm `return 0` vào đường này; giá trị
+trả ngầm và tương thích compiler/runtime cần nghiên cứu tiếp.
+
+`tools/deadtown_gamepad_evidence.py` ghim SHA của từng export và kiểm các
+relocation builtin, lệnh/nhánh, truyền tham số; không thực thi native. Probe
+VM riêng thay builtin bằng mock trong **bản sao tạm**, kiểm trường hợp không
+hỗ trợ, số thiết bị 0 và hai thiết bị 1, 3 cùng kết nối: script phải dừng ở
+thiết bị 1 và mỗi lần chỉ đọc số thiết bị một lần. Probe không kiểm tay cầm
+thật, giá trị trả ngầm, native Android hay iOS; kết quả CI phải xem riêng.
+Không có gọi tên trực tiếp bốn script này trong source hiện tại, nên không coi
+chúng đã khôi phục điều khiển game. Dự kiến còn thiếu 58 script so tên, các
+số khác giữ nguyên; so tên không chứng minh tương đương logic.

@@ -13,6 +13,9 @@ on:
       - 'tools/deadtown_random_string_vm_probe.py'
       - 'tools/deadtown_room_check_vm_probe.py'
       - 'tools/deadtown_item_lifetime_vm_probe.py'
+      - 'tools/deadtown_gamepad_evidence.py'
+      - 'tools/deadtown_gamepad_vm_probe.py'
+      - 'tests/test_deadtown_gamepad_evidence.py'
       - 'tests/test_deadtown_item_lifetime_evidence.py'
       - 'tests/test_deadtown_room_check_evidence.py'
       - 'tools/deadtown_random_string_reference.cpp'
@@ -86,6 +89,19 @@ jobs:
           test -n "$exe"
           "$exe" load work/game.droid -s tools/deadtown-vm-probe.csx -o work/random-game/data.win > work/random-compile.log 2>&1 || { tail -120 work/random-compile.log; exit 1; }
           grep -F 'PROBE: incomplete data' work/random-compile.log
+      - name: Compile a separate mocked-gamepad diagnostic
+        env:
+          GML_PROBE_SOURCE: ${{ github.workspace }}/work/gamepad-project/scripts/lang_type_set.gml
+          GML_PROBE_EVENTS: ${{ github.workspace }}/work/events-gamepad.json
+        run: |
+          set -euo pipefail
+          python tools/deadtown_gamepad_vm_probe.py instrument deadtown-source/project work/gamepad-project work/events-original.json work/events-gamepad.json
+          mkdir -p work/gamepad-game work/save-gamepad
+          cp work/game/audiogroup*.dat work/gamepad-game/
+          exe=$(find work/utmt -type f -name UndertaleModCli | head -1)
+          test -n "$exe"
+          "$exe" load work/game.droid -s tools/deadtown-vm-probe.csx -o work/gamepad-game/data.win > work/gamepad-compile.log 2>&1 || { tail -120 work/gamepad-compile.log; exit 1; }
+          grep -F 'PROBE: incomplete data' work/gamepad-compile.log
       - name: Restore pinned desktop runner cache
         id: runner-cache
         uses: actions/cache/restore@v4
@@ -121,6 +137,11 @@ jobs:
           python tools/deadtown_random_string_vm_probe.py check work/random.log
           python tools/deadtown_room_check_vm_probe.py check work/random.log
           python tools/deadtown_item_lifetime_vm_probe.py check work/random.log
+      - name: Exercise mocked-gamepad candidates
+        run: |
+          set -euo pipefail
+          timeout 90 work/runner-build/gmrunner work/gamepad-game --headless --fast --mute --seed 1 --frames 90 --trace --stats --save-dir work/save-gamepad > work/gamepad.log 2>&1 || { tail -100 work/gamepad.log; exit 1; }
+          python tools/deadtown_gamepad_vm_probe.py check work/gamepad.log
       - name: Compare resource IDs and report observed warnings
         run: |
           set -euo pipefail
@@ -142,6 +163,8 @@ jobs:
             work/build.log
             work/compile.log
             work/random-compile.log
+            work/gamepad-compile.log
+            work/gamepad.log
             work/random.log
             work/random-reference.log
             work/boot.log

@@ -4,7 +4,7 @@
 bản có thể phát hành. Các file `project/**/*.gml` và `project/**/*.gmx` được
 lưu trong Git để có thể sửa và theo dõi thay đổi. Tên trùng với APK không chứng
 minh logic trùng; 68 script, 94 object và 369 event native vẫn chưa có khóa
-nguồn tương ứng ở mốc ban đầu. Nguồn hiện còn thiếu 62 script, 90 object,
+nguồn tương ứng ở mốc ban đầu. Nguồn hiện còn thiếu 58 script, 90 object,
 367 event key và 4 sprite APK theo tên trong tập file nguồn;
 398 sprite cùng tên hiện khớp các trường metadata tĩnh được so, nhưng không
 chứng minh mask khi biên dịch hoặc hành vi. Không dùng project hiện tại để tuyên
@@ -86,6 +86,11 @@ alarm 900 bước; parcel đặt cờ 1; Alarm 0 hủy item khi cờ đúng. C�
 `__dt_item_timed` là tên mới do dự án đặt, **không phải tên native đã xác
 định**. Các đường tạo item khác và Alarm 1 còn thiếu; chưa chứng minh thời gian,
 save, dispatch hoặc gameplay trên thiết bị.
+
+Bốn script `gp_button_check`, `gp_button_check_pressed`,
+`gp_button_check_released`, `gp_axis_value` là ứng viên theo native Android:
+chọn thiết bị gamepad đầu tiên được báo kết nối. Giá trị trả về ngầm khi không
+có thiết bị, compiler, tay cầm thật và iOS vẫn chưa được xác minh.
 
 ## Chỉnh sửa và quản lý tài nguyên
 
