@@ -6,8 +6,9 @@ lưu trong Git để có thể sửa và theo dõi thay đổi. Tên trùng vớ
 minh logic trùng; 68 script, 94 object và 369 event native vẫn chưa có khóa
 nguồn tương ứng ở mốc ban đầu. Nguồn hiện còn thiếu 90 object và 4 sprite APK
 theo tên trong tập file nguồn;
-12 sprite cùng tên còn khác metadata được so. Không dùng project hiện tại để
-tuyên bố game hoàn chỉnh hoặc đem phát hành IPA.
+398 sprite cùng tên hiện khớp các trường metadata tĩnh được so, nhưng không
+chứng minh mask khi biên dịch hoặc hành vi. Không dùng project hiện tại để tuyên
+bố game hoàn chỉnh hoặc đem phát hành IPA.
 
 Đã bổ sung 271 frame thiếu và thay 8 frame cũ khác pixel hoặc kích thước:
 279 ảnh cho 130 sprite, lưu trong `assets/sprites/images/` và tham chiếu trong
@@ -15,7 +16,9 @@ descriptor. Hầu hết được dựng lại từ atlas không scale; riêng `m
 vùng atlas scale nhưng toàn bộ RGBA và mask native bằng 0, nên được lưu làm ảnh
 trong suốt 32×32, chưa kiểm phép dựng thực tế sau compile. Ảnh cũ trong đầu vào
 GMX ghim không bị sửa. RGB trong suốt ngoài vùng atlas cắt không xác định, PNG
-được mã hóa lại; 8 sprite cũ vẫn có bbox khác APK và được giữ nguyên.
+được mã hóa lại. Đã cập nhật bbox của 8 sprite cũ và một số cờ của 4 sprite
+mask một frame theo số liệu tĩnh APK; kiểm alpha và mask gốc được mô tả trong
+hồ sơ. Các thay đổi này là ứng viên, chưa kiểm mask được compiler tạo.
 
 105 sprite mới là ứng viên mask chữ nhật: bitmask APK có hình chữ nhật khớp
 bbox theo phép đọc tĩnh và bbox của alpha khác 0 khớp số liệu APK. Descriptor

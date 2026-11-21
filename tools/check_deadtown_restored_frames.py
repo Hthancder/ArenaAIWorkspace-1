@@ -42,18 +42,9 @@ REPLACED = {'ih_dagger': (1, (0,)), 'spr_event_eng': (2, (0,)),
             'spr_event_kor': (2, (0,)), 'spr_gps_sign': (1, (0,)),
             'spr_part_bull': (1, (0,)), 'spr_setting_cradits': (2, (0, 1))}
 
-# These pre-existing bbox values are deliberately not changed. Each pair is
-# (native, GMX); numeric equality/differences do not prove collision semantics.
-BBOX_DIFFERENCES = {
-    'ih_dagger': {'bbox_left': (11, 9), 'bbox_right': (45, 43)},
-    'spr_item_use': {'bbox_top': (2, 5), 'bbox_bottom': (118, 115)},
-    'spr_item_use_small': {'bbox_top': (4, 5)},
-    'spr_parcel': {'bbox_top': (4, 5)},
-    'spr_save_button': {'bbox_top': (9, 10)},
-    'spr_skills': {'bbox_left': (8, 10), 'bbox_right': (64, 63), 'bbox_top': (9, 10)},
-    'spr_ui_buff': {'bbox_top': (1, 5), 'bbox_bottom': (68, 64)},
-    'spr_ui_health': {'bbox_top': (4, 5)},
-}
+# All selected metadata for restored sprites now matches the static APK values.
+# This does not validate compiler-generated collision masks or behavior.
+BBOX_DIFFERENCES = {}
 
 
 def safe_asset(root, relative):

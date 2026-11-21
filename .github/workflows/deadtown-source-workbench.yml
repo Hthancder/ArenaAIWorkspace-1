@@ -18,6 +18,8 @@ on:
       - 'tools/recover_deadtown_sprites.py'
       - 'tools/check_deadtown_restored_frames.py'
       - 'tests/test_check_deadtown_restored_frames.py'
+      - 'tools/check_deadtown_bbox_candidates.py'
+      - 'tests/test_check_deadtown_bbox_candidates.py'
       - 'tools/deadtown_sprite_order_evidence.py'
       - 'tests/test_deadtown_sprite_order_evidence.py'
       - 'tools/deadtown_room_evidence.py'
@@ -64,6 +66,7 @@ jobs:
           set -euo pipefail
           python -m unittest discover -s tests -p 'test_materialize_deadtown_source.py' -v
           python -m unittest discover -s tests -p 'test_check_deadtown_restored_frames.py' -v
+          python -m unittest discover -s tests -p 'test_check_deadtown_bbox_candidates.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_sprite_order_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_room_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_object_evidence.py' -v
@@ -74,6 +77,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_deadtown_eating_sound.py' -v
           python tools/materialize_deadtown_source.py .cache/gmx/deadtown.gmx .cache/deadtown-original.apk .cache/result
           python tools/check_deadtown_restored_frames.py .cache/deadtown-original.apk deadtown-source --output .cache/result/restored-frames.json
+          python tools/check_deadtown_bbox_candidates.py .cache/deadtown-original.apk .cache/result/project --output .cache/result/bbox-candidates.json
           python tools/deadtown_rect_sprite_candidates.py verify .cache/deadtown-original.apk deadtown-source --output .cache/result/rect-candidates.json
           python tools/check_deadtown_empty_mask.py .cache/deadtown-original.apk deadtown-source --output .cache/result/empty-mask.json
           python tools/deadtown_unresolved_sprites.py verify .cache/deadtown-original.apk deadtown-source/unresolved/sprites
@@ -117,6 +121,7 @@ jobs:
             .cache/result/comparison.json
             .cache/result/sprite-metadata.json
             .cache/result/restored-frames.json
+            .cache/result/bbox-candidates.json
             .cache/result/rect-candidates.json
             .cache/result/empty-mask.json
             .cache/result/sprite-pixels.json

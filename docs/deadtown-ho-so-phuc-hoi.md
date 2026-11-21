@@ -812,3 +812,30 @@ bộ dữ liệu đã lưu; extraction không ghi đè thư mục đã có. Các
 (bao gồm physics/flags khác), tile pixels, nội dung GML, mã native, trạng thái
 runtime và ID sau compiler không được kiểm chứng. Đây là dữ liệu nghiên cứu,
 không phải GMX room, không materialize vào project; vẫn thiếu 8 room theo tên.
+
+### Đối chiếu metadata và alpha cho 12 sprite cũ
+
+Đã cập nhật các giá trị bbox lưu trong GMX cho `ih_dagger`, `spr_item_use`,
+`spr_item_use_small`, `spr_parcel`, `spr_save_button`, `spr_skills`,
+`spr_ui_buff`, `spr_ui_health` theo metadata APK. Các descriptor vẫn giữ
+`bboxmode=0`, `colkind=1`, tolerance 0 như trước. Trên workspace được materialize,
+đối chiếu alpha của mọi frame với atlas APK và tính hộp bao hợp alpha khác 0:
+89 frame đều có alpha giống atlas và tám bbox hợp khớp số APK. Việc sửa số
+lưu trong descriptor không chứng minh compiler sẽ sử dụng hay sinh ra cùng mask.
+Đặc biệt native masks của `spr_item_use`, `spr_item_use_small`, `spr_ui_buff`
+được đọc là không hình chữ nhật, vì vậy không coi cài đặt `colkind=1` cũ là
+bằng chứng mask hoặc va chạm khớp; giữ lại cờ cũ, không đoán kiểu collision.
+
+Bốn sprite `mask_200_100`, `mask_40_40`, `mask_arrow`, `mask_player` có một
+frame không scale, alpha toàn 255 và native mask kín canvas theo mô hình bit
+MSB-first. Đã điều chỉnh `sepmasks` của hai sprite đầu và `bboxmode` của hai
+sprite sau (cùng `sepmasks` của `mask_arrow`) để khớp giá trị đã đọc từ APK;
+giữ `colkind`/tolerance cũ. Đây vẫn là ứng viên, không xác nhận ý nghĩa đầy đủ
+của các cờ sau biên dịch hay hành vi collision trên thiết bị.
+
+`tools/check_deadtown_bbox_candidates.py` kiểm tra 12 descriptor, alpha của
+93 frame đã materialize, bbox hợp và các điều kiện của bốn mask đơn frame;
+test cũng sửa alpha/metadata để xác nhận công cụ báo sai. Metadata được so của
+398 sprite cùng tên hiện đều bằng APK; vẫn có 4 sprite chưa khai báo, và so
+metadata **không** đồng nghĩa khôi phục hoàn toàn hình ảnh, mask, animation,
+resource ID, renderer hoặc iOS.

@@ -73,14 +73,12 @@ class RestoredFrameIntegrationTests(unittest.TestCase):
         self.assertEqual(result['sprite_count'], 24)
         self.assertEqual(result['frame_count'], 72)
         self.assertTrue(result['sprites']['spr_defence_house']['candidate_precise_mask']['candidate_matches_native_packed_bytes'])
-        self.assertEqual(result['sprites']['spr_item_use']['known_metadata_differences']['bbox_top'],
-                         {'apk': 2, 'gmx': 5})
+        self.assertEqual(result['sprites']['spr_item_use']['known_metadata_differences'], {})
         for name, (start, end) in RESTORED.items():
             self.assertEqual([r['index'] for r in result['sprites'][name]['restored']], list(range(start, end)))
         for name, (_, indices) in REPLACED.items():
             self.assertEqual([r['index'] for r in result['sprites'][name]['restored']], list(indices))
-        self.assertEqual(result['sprites']['ih_dagger']['known_metadata_differences']['bbox_left'],
-                         {'apk': 11, 'gmx': 9})
+        self.assertEqual(result['sprites']['ih_dagger']['known_metadata_differences'], {})
 
     def test_tampered_image_and_descriptor_are_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -101,7 +99,7 @@ class RestoredFrameIntegrationTests(unittest.TestCase):
                 verify(APK, dest)
             shutil.copy2(SOURCE / 'project/sprites/spr_zombie_foot_left.sprite.gmx', desc)
             bbox = dest / 'project/sprites/spr_item_use.sprite.gmx'
-            bbox.write_text(bbox.read_text().replace('<bbox_top>5</bbox_top>', '<bbox_top>6</bbox_top>'))
+            bbox.write_text(bbox.read_text().replace('<bbox_top>2</bbox_top>', '<bbox_top>6</bbox_top>'))
             with self.assertRaisesRegex(ValueError, 'metadata mismatch: spr_item_use'):
                 verify(APK, dest)
 
