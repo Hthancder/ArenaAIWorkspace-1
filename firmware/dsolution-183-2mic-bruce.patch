@@ -3877,7 +3877,7 @@ index 5290300b..eb5b3f05 100644
 +</body>
  </html>
 diff --git a/embedded_resources/web_interface/index.js b/embedded_resources/web_interface/index.js
-index fd616029..5e9dd9cb 100644
+index fd616029..b36218cb 100644
 --- a/embedded_resources/web_interface/index.js
 +++ b/embedded_resources/web_interface/index.js
 @@ -6,20 +6,17 @@ const T = {
@@ -5637,7 +5637,7 @@ index fd616029..5e9dd9cb 100644
      fetchFiles(currentDrive, currentPath);
      return;
    }
-@@ -1062,662 +1343,379 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1062,662 +1343,384 @@ $(".container").addEventListener("click", async (e) => {
    if (actPlay) {
      e.preventDefault();
      let cmd = actPlay.getAttribute("data-cmd");
@@ -6379,8 +6379,13 @@ index fd616029..5e9dd9cb 100644
 +    const n = d.napt || {};
 +    const nb = $("#sl-napt-badge");
 +    if (nb) {
-+      nb.textContent = n.running ? `ON (${n.uptimeSec || 0}s)` : "OFF";
-+      nb.className = "sl-badge " + (n.running ? "on" : "");
++      nb.textContent = n.running ? `ON (${n.uptimeSec || 0}s)` : (n.starting ? "STARTING..." : "OFF");
++      nb.className = "sl-badge " + (n.running ? "on" : (n.starting ? "alert" : ""));
++    }
++    if (!n.running && !n.starting && n.lastErr && $("#sl-napt-msg")) {
++      const box = $("#sl-napt-msg");
++      box.className = "ota-status err";
++      box.textContent = n.lastErr;
 +    }
 +    if ($("#sl-napt-up")) $("#sl-napt-up").textContent = n.staConnected ? `${n.staSsid} (${n.staIp})` : "Not connected";
 +    if ($("#sl-napt-ap")) $("#sl-napt-ap").textContent = `${n.apSsid || "BruceNet"} (${n.apIp || "192.168.4.1"})`;
@@ -9496,7 +9501,7 @@ index 9c26f281..38fc0aeb 100644
          bruceConfig.setWebUICreds(
              setting_value.substring(0, setting_value.indexOf(",")),
 diff --git a/src/core/serial_commands/wifi_commands.cpp b/src/core/serial_commands/wifi_commands.cpp
-index 95c54ced..abb14a6a 100644
+index 95c54ced..7e3efce7 100644
 --- a/src/core/serial_commands/wifi_commands.cpp
 +++ b/src/core/serial_commands/wifi_commands.cpp
 @@ -5,6 +5,9 @@
@@ -9509,7 +9514,7 @@ index 95c54ced..abb14a6a 100644
  #include "modules/wifi/sniffer.h"
  #include "modules/wifi/tcp_utils.h"
  #include <modules/ethernet/ARPScanner.h>
-@@ -93,6 +96,31 @@ uint32_t listenTCPCallback(cmd *c) {
+@@ -93,6 +96,43 @@ uint32_t listenTCPCallback(cmd *c) {
  
      return true;
  }
@@ -9538,15 +9543,30 @@ index 95c54ced..abb14a6a 100644
 +    serialDevice->println("Usage: napt [status|start|stop]");
 +    return false;
 +}
++
++uint32_t probeRadarCallback(cmd *c) {
++    (void)c;
++    probe_radar_setup();
++    return true;
++}
++
++uint32_t chAnalyzerCallback(cmd *c) {
++    (void)c;
++    channel_analyzer_setup();
++    return true;
++}
  #endif
  /*
  uint32_t responderCallback(cmd *c) {
-@@ -126,6 +154,9 @@ void createWifiCommands(SimpleCLI *cli) {
+@@ -126,6 +166,12 @@ void createWifiCommands(SimpleCLI *cli) {
      Command snifferCmd =
          cli->addCommand("sniffer", snifferCallback); // TODO: be able to exit from it from Serial
  
 +    Command naptCmd = cli->addCommand("napt", naptCallback);
 +    naptCmd.addPosArg("action", "status");
++
++    cli->addCommand("probe_radar", probeRadarCallback);
++    cli->addCommand("ch_analyzer", chAnalyzerCallback);
 +
  #endif
      // Command responderCmd = cli->addCommand("responder", responderCallback); TODO
@@ -11160,7 +11180,7 @@ index 00000000..21fb03f2
 +
 +#endif
 diff --git a/src/core/wifi/webInterface.cpp b/src/core/wifi/webInterface.cpp
-index a8679bd6..c9a2336f 100644
+index a8679bd6..634e504c 100644
 --- a/src/core/wifi/webInterface.cpp
 +++ b/src/core/wifi/webInterface.cpp
 @@ -2,18 +2,30 @@
@@ -12411,7 +12431,7 @@ index a8679bd6..c9a2336f 100644
              );
 -            request->send(200, "application/json", response_body);
 +            return;
-+        }
+         }
 +        if (totalSize < 65536 || totalSize > nextPart->size) {
 +            request->send(
 +                400, "application/json",
@@ -12423,7 +12443,7 @@ index a8679bd6..c9a2336f 100644
 +        if (s_otaInProgress) {
 +            Update.abort();
 +            otaFreeBuf();
-         }
++        }
 +        if (!otaAllocChunkBuf()) {
 +            request->send(503, "application/json", "{\"ok\":false,\"msg\":\"Insufficient RAM for OTA\"}");
 +            return;
@@ -12802,7 +12822,7 @@ index a8679bd6..c9a2336f 100644
      });
  
      // List files
-@@ -737,6 +2019,71 @@ void configureWebServer() {
+@@ -737,6 +2019,84 @@ void configureWebServer() {
              }
          }
      });
@@ -12839,10 +12859,23 @@ index a8679bd6..c9a2336f 100644
 +            String err;
 +            String s = request->hasArg("ssid") ? request->arg("ssid") : "";
 +            String p = request->hasArg("pwd") ? request->arg("pwd") : "";
-+            if (naptStartBackground(s, p, &err)) {
-+                request->send(200, "application/json", "{\"ok\":true,\"msg\":\"NAPT Router ON (192.168.4.1)\"}");
++            s.trim();
++            if (WiFi.isConnected() && s.isEmpty()) {
++                if (naptStartBackground("", "", &err)) {
++                    request->send(200, "application/json", "{\"ok\":true,\"msg\":\"NAPT Router ON (192.168.4.1)\"}");
++                } else {
++                    request->send(400, "application/json", "{\"ok\":false,\"msg\":\"" + jsonEscape(err) + "\"}");
++                }
 +            } else {
-+                request->send(400, "application/json", "{\"ok\":false,\"msg\":\"" + jsonEscape(err) + "\"}");
++                if (naptStartAsync(s, p, &err)) {
++                    request->send(
++                        202,
++                        "application/json",
++                        "{\"ok\":true,\"starting\":true,\"msg\":\"Connecting uplink WiFi & starting NAPT...\"}"
++                    );
++                } else {
++                    request->send(409, "application/json", "{\"ok\":false,\"msg\":\"" + jsonEscape(err) + "\"}");
++                }
 +            }
 +        } else if (act == "stop") {
 +            naptStop(false);
@@ -12874,7 +12907,7 @@ index a8679bd6..c9a2336f 100644
      server->begin();
      Serial.println("Webserver started");
  }
-@@ -745,19 +2092,66 @@ void configureWebServer() {
+@@ -745,19 +2105,66 @@ void configureWebServer() {
  **  Function: startWebUi
  **  Start the WebUI
  **********************************************************************/
@@ -12910,8 +12943,9 @@ index a8679bd6..c9a2336f 100644
 +            return true;
 +        }
 +        return wifiConnectMenu(WIFI_AP);
-+    }
-+
+     }
+ 
+-    // configure web server
 +    if (WiFi.isConnected()) {
 +        wifiIP = WiFi.localIP().toString();
 +        if (server && !mdnsRunning) mdnsRunning = startMdnsResponder();
@@ -12931,9 +12965,8 @@ index a8679bd6..c9a2336f 100644
 +        wifiIP = WiFi.localIP().toString();
 +        if (server) mdnsRunning = startMdnsResponder();
 +        return true;
-     }
- 
--    // configure web server
++    }
++
 +    return wifiConnectMenu(WIFI_STA);
 +}
 +
@@ -12950,7 +12983,7 @@ index a8679bd6..c9a2336f 100644
          options.clear();
  
          Serial.println("Configuring Webserver ...");
-@@ -771,24 +2165,179 @@ void startWebUi(bool mode_ap) {
+@@ -771,24 +2178,179 @@ void startWebUi(bool mode_ap) {
          isWebUIActive = true;
      }
      tft.setLogging();
@@ -16899,10 +16932,10 @@ index 353b8641..5a067470 100644
  #endif
 diff --git a/src/modules/wifi/napt_router.cpp b/src/modules/wifi/napt_router.cpp
 new file mode 100644
-index 00000000..2a12cd39
+index 00000000..27d32031
 --- /dev/null
 +++ b/src/modules/wifi/napt_router.cpp
-@@ -0,0 +1,894 @@
+@@ -0,0 +1,951 @@
 +#if !defined(LITE_VERSION)
 +#include "napt_router.h"
 +
@@ -16957,8 +16990,15 @@ index 00000000..2a12cd39
 +static SemaphoreHandle_t s_naptMutex = nullptr;
 +static TaskHandle_t s_naptTask = nullptr;
 +static volatile bool s_naptRunning = false;
++static volatile bool s_naptStarting = false;
 +static volatile bool s_naptStopReq = false;
 +static volatile bool s_autoBlockTrackers = true;
++static char s_lastStartErr[96] = {0};
++
++struct NaptAsyncArgs {
++    String ssid;
++    String pwd;
++};
 +
 +static DnsFeedEntry s_feed[kNaptLogCap];
 +static int s_feedHead = 0;
@@ -17346,6 +17386,48 @@ index 00000000..2a12cd39
 +} // namespace
 +
 +bool naptIsRunning() { return s_naptRunning; }
++bool naptIsStarting() { return s_naptStarting; }
++
++static void naptAsyncStartTask(void *pv) {
++    NaptAsyncArgs *args = static_cast<NaptAsyncArgs *>(pv);
++    String err;
++    if (!naptStartBackground(args ? args->ssid : "", args ? args->pwd : "", &err)) {
++        snprintf(s_lastStartErr, sizeof(s_lastStartErr), "%s", err.c_str());
++    } else {
++        s_lastStartErr[0] = '\0';
++    }
++    delete args;
++    s_naptStarting = false;
++    vTaskDelete(NULL);
++}
++
++bool naptStartAsync(const String &staSsid, const String &staPwd, String *errOut) {
++    if (s_naptRunning) return true;
++    if (s_naptStarting) {
++        if (errOut) *errOut = "NAPT startup already in progress";
++        return false;
++    }
++    if (!radioHasMemForWifi()) {
++        if (errOut) *errOut = "Low DMA RAM for Wi-Fi";
++        return false;
++    }
++    s_lastStartErr[0] = '\0';
++    s_naptStarting = true;
++    NaptAsyncArgs *args = new (std::nothrow) NaptAsyncArgs{staSsid, staPwd};
++    if (!args) {
++        s_naptStarting = false;
++        if (errOut) *errOut = "Out of memory";
++        return false;
++    }
++    BaseType_t ok = xTaskCreatePinnedToCore(naptAsyncStartTask, "naptBoot", 5120, args, 1, NULL, 0);
++    if (ok != pdPASS) {
++        delete args;
++        s_naptStarting = false;
++        if (errOut) *errOut = "Failed to launch NAPT worker task";
++        return false;
++    }
++    return true;
++}
 +
 +void naptSetAutoBlockTrackers(bool enable) { s_autoBlockTrackers = enable; }
 +bool naptGetAutoBlockTrackers() { return s_autoBlockTrackers; }
@@ -17424,6 +17506,7 @@ index 00000000..2a12cd39
 +
 +bool naptStartBackground(const String &staSsid, const String &staPwd, String *errOut) {
 +    if (s_naptRunning) return true;
++    s_naptStopReq = false;
 +    if (!radioHasMemForWifi()) {
 +        if (errOut) *errOut = "Low DMA RAM for Wi-Fi";
 +        return false;
@@ -17434,9 +17517,9 @@ index 00000000..2a12cd39
 +
 +    if (!staSsid.isEmpty()) {
 +        WiFi.begin(staSsid.c_str(), staPwd.length() > 0 ? staPwd.c_str() : NULL);
-+        for (int i = 0; i < 100 && !WiFi.isConnected(); i++) vTaskDelay(pdMS_TO_TICKS(100));
-+        if (!WiFi.isConnected()) {
-+            if (errOut) *errOut = "Could not connect to uplink Wi-Fi";
++        for (int i = 0; i < 100 && !WiFi.isConnected() && !s_naptStopReq; i++) vTaskDelay(pdMS_TO_TICKS(100));
++        if (s_naptStopReq || !WiFi.isConnected()) {
++            if (errOut) *errOut = s_naptStopReq ? "Aborted" : "Could not connect to uplink Wi-Fi";
 +            return false;
 +        }
 +        bruceConfig.addWifiCredential(staSsid, staPwd);
@@ -17489,8 +17572,9 @@ index 00000000..2a12cd39
 +
 +void naptStop(bool disconnectSta) {
 +    s_naptStopReq = true;
-+    for (int i = 0; i < 40 && s_naptTask != nullptr; i++) vTaskDelay(pdMS_TO_TICKS(25));
++    for (int i = 0; i < 40 && (s_naptTask != nullptr || s_naptStarting); i++) vTaskDelay(pdMS_TO_TICKS(25));
 +    s_naptRunning = false;
++    s_lastStartErr[0] = '\0';
 +    WiFi.AP.enableNAPT(false);
 +    if (disconnectSta) {
 +        WiFi.softAPdisconnect(true);
@@ -17509,7 +17593,11 @@ index 00000000..2a12cd39
 +    json.reserve(2400);
 +    json += "{\"running\":";
 +    json += (s_naptRunning ? "true" : "false");
-+    json += ",\"staConnected\":";
++    json += ",\"starting\":";
++    json += (s_naptStarting ? "true" : "false");
++    json += ",\"lastErr\":\"";
++    json += jsonEscNapt(s_lastStartErr);
++    json += "\",\"staConnected\":";
 +    json += (WiFi.isConnected() ? "true" : "false");
 +    json += ",\"staSsid\":\"";
 +    json += jsonEscNapt(WiFi.isConnected() ? WiFi.SSID() : "");
@@ -17787,7 +17875,9 @@ index 00000000..2a12cd39
 +#else
 +void napt_router_setup() {}
 +bool naptIsRunning() { return false; }
++bool naptIsStarting() { return false; }
 +bool naptStartBackground(const String &, const String &, String *) { return false; }
++bool naptStartAsync(const String &, const String &, String *) { return false; }
 +void naptStop(bool) {}
 +void naptSetAutoBlockTrackers(bool) {}
 +bool naptGetAutoBlockTrackers() { return false; }
@@ -17799,10 +17889,10 @@ index 00000000..2a12cd39
 +#endif
 diff --git a/src/modules/wifi/napt_router.h b/src/modules/wifi/napt_router.h
 new file mode 100644
-index 00000000..8be0160d
+index 00000000..f47f2363
 --- /dev/null
 +++ b/src/modules/wifi/napt_router.h
-@@ -0,0 +1,19 @@
+@@ -0,0 +1,21 @@
 +#ifndef __NAPT_ROUTER_H__
 +#define __NAPT_ROUTER_H__
 +
@@ -17811,7 +17901,9 @@ index 00000000..8be0160d
 +void napt_router_setup();
 +
 +bool naptIsRunning();
++bool naptIsStarting();
 +bool naptStartBackground(const String &staSsid = "", const String &staPwd = "", String *errOut = nullptr);
++bool naptStartAsync(const String &staSsid = "", const String &staPwd = "", String *errOut = nullptr);
 +void naptStop(bool disconnectSta = false);
 +void naptSetAutoBlockTrackers(bool enable);
 +bool naptGetAutoBlockTrackers();
