@@ -963,3 +963,38 @@ forced-room, incomplete desktop VM; they are not observations of naturally
 occurring trails, the final display after every presentation stage, or iOS.
 The intervention is a diagnostic, not a generally validated fix. They do not
 establish the cause of the iPhone report or address misplaced sprites.
+
+### Static draw-path leads for misplaced sprites (not a device diagnosis)
+
+The pinned old GMX `obj_player` Draw 0 explicitly draws separate feet, player,
+weapon and other layers with `draw_sprite_ext`. Some positions deliberately
+differ: feet use `x+foot_*_x, y+foot_*_y`; the daytime shadow uses an offset
+computed with `lengthdir_*`. This describes that old source, not what is
+actually displayed on iPhone; a displaced visual layer is not automatically a
+bad atlas origin or proof of this particular code path being responsible.
+
+`tools/deadtown_draw_call_evidence.py` compares lexical calls in those pinned
+GMX files with candidate direct ARM32 callsites to exact named drawing
+functions in the pinned Android ELF (including PLT targets):
+
+| Event and function | Android direct candidates | Old GMX lexical calls |
+|---|---:|---:|
+| `obj_player:Draw:0`, `draw_sprite_ext` | 12 | 12 |
+| `sys_view:Draw:64`, `draw_sprite_ext` | 13 | 8 |
+| `sys_spawn_time_light:Draw:74`, `draw_surface_part_ext` | 1 | 2 |
+
+The JSON includes candidate addresses, symbol names, pinned hashes and event
+sizes. These counts are **not an equivalence or behavior test**: compiler
+optimizations, helpers, indirect calls, control flow, and literal data decoded
+as instructions can affect the comparison; arguments and actual execution
+were not checked. In particular, equal player counts do not imply matching
+positions, and unequal counts do not on their own prove a source bug. The
+Android scan is not a scan of the iOS binary; the old GMX source is not a
+verified decompilation of the actual test 1–3 events. No conclusion about the
+reported iPhone displacement or a production fix follows. An eventual
+coordinate trace must identify the drawn layer, positions, transforms and
+camera on a reproducible runtime before attributing the symptom.
+
+Research workflow `44874094290` passed with the pinned inputs; the local suite
+ran 121 tests, with 6 skipped due to absent optional inputs. No IPA was built
+by this research workflow.

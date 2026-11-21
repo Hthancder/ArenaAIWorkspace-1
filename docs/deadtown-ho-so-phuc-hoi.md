@@ -470,3 +470,22 @@ Màu được cố ý tô trước, game chạy trong room ép với VM desktop 
 Vì vậy đây là bằng chứng vệt thử có thể tồn tại trong cấu hình desktop, **không
 phải** bằng chứng vệt tự nhiên hoặc nguyên nhân trên iPhone, cũng không xác
 nhận đã sửa sprite lệch. Chưa thay runner sản phẩm hay tạo IPA mới.
+
+### Tiếp tục kiểm tra sprite lệch
+
+Nguồn GMX cũ vẽ nhân vật thành nhiều lớp: chân, thân, vũ khí và các lớp khác;
+bóng ban ngày và chân có vị trí lệch chủ ý so với `x,y`. Vì vậy cần phân biệt
+lớp nào bị lệch thay vì chỉ nhìn một sprite hay atlas.
+
+So sánh tĩnh bằng `tools/deadtown_draw_call_evidence.py`: sự kiện Draw của
+nhân vật có 12 điểm gọi `draw_sprite_ext` trực tiếp dạng ứng viên trong mã
+Android và 12 lệnh trong nguồn cũ; Draw GUI của `sys_view` có 13 ứng viên so
+với 8 lệnh nguồn. Đây chỉ là **đếm tĩnh**, không kiểm đối số, thứ tự hay tọa
+độ thực thi; tối ưu biên dịch và gọi gián tiếp cũng có thể làm số khác nhau.
+Số bằng nhau không chứng minh vị trí đúng, số khác nhau không tự chứng minh
+lỗi. Android không phải binary iOS; nguồn cũ cũng chưa được xác nhận tương
+đương sự kiện thực của bản thử. Chưa xác định nguyên nhân sprite lệch trên
+máy, chưa sửa game hay tạo IPA.
+
+CI nghiên cứu `44874094290` đạt; chạy cục bộ 121 test, bỏ qua 6 do thiếu đầu
+vào tùy chọn. Chi tiết và giới hạn khác ở `docs/deadtown-original-re.md`.
