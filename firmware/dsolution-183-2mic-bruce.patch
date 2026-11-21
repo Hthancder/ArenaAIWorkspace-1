@@ -10173,10 +10173,10 @@ index 043a5d2d..1f05180b 100644
  #endif
 diff --git a/src/core/virtual_msc.cpp b/src/core/virtual_msc.cpp
 new file mode 100644
-index 00000000..217748e6
+index 00000000..547489c9
 --- /dev/null
 +++ b/src/core/virtual_msc.cpp
-@@ -0,0 +1,961 @@
+@@ -0,0 +1,964 @@
 +#include "virtual_msc.h"
 +#if defined(SOC_USB_OTG_SUPPORTED) && !defined(LITE_VERSION)
 +
@@ -10912,7 +10912,10 @@ index 00000000..217748e6
 +        }
 +        if (f) f.close();
 +    } else {
-+        if (s_backedByFlash && LittleFS.freeBytes() < s_diskBytes + 65536) {
++        size_t lfsFree = (LittleFS.totalBytes() > LittleFS.usedBytes())
++                             ? (LittleFS.totalBytes() - LittleFS.usedBytes())
++                             : 0;
++        if (s_backedByFlash && lfsFree < s_diskBytes + 65536) {
 +            free(s_diskMem);
 +            s_diskMem = nullptr;
 +            free(s_dirtyMap);
@@ -13726,6 +13729,18 @@ index eebc4a91..c3405e59 100644
          log_i("Loading Wifi at Startup");
          xTaskCreate(
              wifiConnectTask,   // Task function
+diff --git a/src/modules/badusb_ble/ducky_typer.h b/src/modules/badusb_ble/ducky_typer.h
+index bb5aeb4f..3b18bbdb 100644
+--- a/src/modules/badusb_ble/ducky_typer.h
++++ b/src/modules/badusb_ble/ducky_typer.h
+@@ -16,6 +16,7 @@
+ extern HIDInterface *hid_usb;
+ extern HIDInterface *hid_ble;
+ extern int activeBLEInstances;
++extern const uint8_t *keyboardLayouts[];
+ 
+ struct DuckyCommand;
+ struct DuckyCommandLookup;
 diff --git a/src/modules/bjs_interpreter/ir_js.cpp b/src/modules/bjs_interpreter/ir_js.cpp
 index e23370d7..fb1d66e0 100644
 --- a/src/modules/bjs_interpreter/ir_js.cpp
