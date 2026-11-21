@@ -509,3 +509,24 @@ Phép đo chỉ là VM desktop chưa đầy đủ, room ép, một chuỗi đi�
 lượt Draw; chưa đo ảnh GPU cuối, camera sau trình bày, iPhone hay vị trí theo
 bản gốc. Chưa xác định hay sửa lỗi sprite lệch/vệt màu. CI probe đạt; 124 test
 cục bộ đạt, 23 test bỏ qua do thiếu đầu vào tùy chọn. Không tạo IPA mới.
+
+### Yêu cầu mới: phục hồi mã nguồn để sửa/mod và build IPA
+
+Người dùng yêu cầu tiếp tục phục hồi một mã nguồn đầy đủ, có thể chỉnh sửa,
+sau đó build IPA tốt. Đây thay đổi việc tạm dừng chuyển game trước đó; tuy
+nhiên không đồng nghĩa game đã đầy đủ hoặc cho phép khẳng định không lỗi.
+
+Đã đặt 872 file GMX/GML nền cũ và chỉnh sửa offline vào
+`deadtown-source/project/`, kèm hướng dẫn `deadtown-source/README.md`. Công cụ
+`tools/materialize_deadtown_source.py` dựng một bản làm việc mới từ nguồn và
+APK đã ghim hash, ghép 89 file âm thanh không encode lại, cho phép asset mod
+ở `deadtown-source/assets/`, không ghi đè thư mục kết quả đã có và loại tệp
+ký cùng archive extension quảng cáo cũ. Không tự đồng bộ sửa đổi từ bản dựng
+về source Git. Công cụ không build IPA; nếu dừng giữa chừng giữ dấu chưa xong.
+
+Đối chiếu mốc ban đầu: không thiếu file theo tham chiếu của project cũ nhưng
+so APK vẫn thiếu theo tên 68 script, 94 object và 369 event, thiếu 111 sprite
+và 24 sprite cùng tên khác metadata. Đây chỉ là đối chiếu tên/file/metadata,
+không phải bằng chứng hành vi bằng nhau. CI workbench `44885131061` đạt, local
+129 test đạt, 12 bỏ qua do thiếu đầu vào tùy chọn. Sprite lệch/vệt màu trên
+thiết bị và gameplay/iOS vẫn chưa được xửa hoặc xác nhận; chưa có IPA mới.
