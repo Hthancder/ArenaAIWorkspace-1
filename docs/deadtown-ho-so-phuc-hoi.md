@@ -1107,3 +1107,9 @@ zombie3 với đầu vào 0, 0,5, 2; phép thử random vẫn bị ép 0, không
 đầy đủ. Chưa xác định tên native hoặc chứng minh các zombie khác, toàn bộ
 lifecycle, compiler chính thức, gameplay, Android thực thi hay iOS. Cần xem
 kết quả CI mới cho thay đổi zombie2.
+
+Tại `9560179`, kiểm thử local 207 test (12 skip); CI native `44924020730`,
+source-workbench `44924020845` và source-VM `44924020725` thành công. VM qua
+sáu marker fragment zombie2/zombie3; các giới hạn về event và thiết bị vẫn giữ
+nguyên. Audit vẫn thiếu 58 script, 90 object, 367 event key, 4 sprite và 8 room
+so tên/key; đây không phải phép đo tương đương gameplay.
