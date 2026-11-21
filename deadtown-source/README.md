@@ -92,7 +92,9 @@ là project làm việc; `status.json`, `comparison.json` và `sprite-metadata.j
 là kết quả đối chiếu. 89 descriptor nền được cấp file APK không encode lại;
 `snd_eating` thứ 90 có descriptor ứng viên và WAV APK nguyên byte trong overlay.
 `status.json` vẫn báo 89 vì chỉ đếm bước cấp audio cho nền cũ, không đếm override;
-project kết quả khai báo 90 sound. Chưa chứng minh thiết lập âm thanh sau compile.
+project kết quả khai báo 90 sound. `tools/check_deadtown_sound_evidence.py` so
+90 payload của project mới với APK và kiểm nhóm, effects, volume cùng các thiết
+lập ứng viên. Chưa chứng minh decode hoặc thiết lập âm thanh sau compile.
 Công cụ không đưa các tệp ký hoặc archive extension quảng cáo cũ vào kết quả.
 
 Thư mục `.cache/` là tạm thời: đừng dùng nó làm nơi lưu mod duy nhất. Nếu có

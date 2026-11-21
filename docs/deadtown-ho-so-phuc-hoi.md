@@ -872,3 +872,18 @@ test từ chối APK khác, descriptor bị đổi và ELF sai. Đây không ki�
 collision thực tế, behavior kế thừa, iOS, hoặc gameplay. Tính theo tên/key,
 nay thiếu 368 event native, 90 object và 68 script; một key được thêm không có
 nghĩa các sự kiện cùng tên khác đã tương đương bản gốc.
+
+### Đối chiếu toàn bộ 90 sound của workspace
+
+`tools/check_deadtown_sound_evidence.py` kiểm APK ghim và project đã materialize:
+90 tên/descriptor, tham chiếu file và toàn bộ payload audio đều khớp byte APK;
+`audioGroup`, `effects`, `volume` tương ứng cũng khớp. Phân bố group native
+là 0:2, 1:86, 2:2; flags native 101:3, 103:87. Cấu hình GMX có 3 WAV không nén
+và 87 Ogg nén tương ứng theo mô hình ứng viên, không suy ra ý nghĩa đầy đủ của
+flags hoặc thiết lập compiler. Bộ test xác nhận phát hiện khi payload, group
+hoặc cờ candidate bị thay đổi.
+
+Phép so byte không decode audio, không xác nhận pitch runtime, audio group
+loading, âm thanh sau GameMaker encode, thứ tự ID hoặc phát trên iPhone.
+`audio_descriptors_populated_without_transcoding` trong status vẫn là 89 vì
+đếm ở bước nền trước overlay, dù 90 file kết quả đã được so riêng.
