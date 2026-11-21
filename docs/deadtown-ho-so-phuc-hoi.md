@@ -1038,3 +1038,11 @@ luồng parcel đầy đủ, save, Android, GameMaker compiler hay iOS. 900 bư�
 khoảng 30 giây ở 30 bước/giây ổn định, không phải thời gian đo thực tế. Sau
 khi thêm một event key, còn thiếu 367 key theo so tên; trùng key không chứng
 minh event hoàn chỉnh.
+
+Kết quả tại commit `1a436fd`: bộ kiểm thử local 202 test, 12 skip;
+CI native `44913067792`, source-workbench `44913067864` và source-VM
+`44913068178` thành công. VM xác nhận marker của phép gọi Alarm thủ công;
+540 thân event dịch, 505 liên kết, 35 bỏ qua. Audit workbench không thấy file
+được tham chiếu nào thiếu, nhưng vẫn thiếu 62 script, 90 object, 367 event key,
+4 sprite và 8 room khi so tên/key với APK. Các số này không bảo đảm logic đã
+khớp. Chưa build IPA mới, chưa xác minh gameplay hoặc iPhone.
