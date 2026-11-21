@@ -5,7 +5,7 @@ from pathlib import Path
 
 try:
     from PIL import Image
-    from tools.check_deadtown_restored_frames import RESTORED, safe_asset, verify
+    from tools.check_deadtown_restored_frames import RESTORED, REPLACED, safe_asset, verify
     HAS_PILLOW = True
 except ImportError:
     HAS_PILLOW = False
@@ -39,12 +39,16 @@ class RestoredFrameUnitTests(unittest.TestCase):
 class RestoredFrameIntegrationTests(unittest.TestCase):
     def test_pinned_frames_and_metadata(self):
         result = verify(APK, SOURCE)
-        self.assertEqual(result['sprite_count'], 17)
-        self.assertEqual(result['frame_count'], 64)
+        self.assertEqual(result['sprite_count'], 21)
+        self.assertEqual(result['frame_count'], 68)
         self.assertEqual(result['sprites']['spr_item_use']['known_metadata_differences']['bbox_top'],
                          {'apk': 2, 'gmx': 5})
         for name, (start, end) in RESTORED.items():
             self.assertEqual([r['index'] for r in result['sprites'][name]['restored']], list(range(start, end)))
+        for name, (_, indices) in REPLACED.items():
+            self.assertEqual([r['index'] for r in result['sprites'][name]['restored']], list(indices))
+        self.assertEqual(result['sprites']['ih_dagger']['known_metadata_differences']['bbox_left'],
+                         {'apk': 11, 'gmx': 9})
 
     def test_tampered_image_and_descriptor_are_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -8,15 +8,15 @@ nguồn tương ứng ở mốc ban đầu. Nguồn hiện vẫn thiếu 111 spr
 14 sprite cùng tên còn khác metadata được so. Không dùng project hiện tại để
 tuyên bố game hoàn chỉnh hoặc đem phát hành IPA.
 
-Đã bổ sung 63 frame thiếu và thay frame 0 của `spr_ui_day` bằng ảnh dựng lại
-từ atlas APK: tổng 64 ảnh cho 17 sprite, lưu dưới `assets/sprites/images/` và
-tham chiếu trong descriptor. Frame 0 cũ khác pixel nhìn thấy; ảnh cũ vẫn có
-trong đầu vào GMX ghim, không bị sửa. Kiểm tra tĩnh xác nhận RGBA dựng lại
-khớp vùng atlas đã giải mã; 7 sprite vẫn có bbox khác APK và được giữ nguyên,
-các trường metadata còn lại trong nhóm này khớp theo phép so số. RGB trong suốt
-ngoài vùng cắt không xác định, PNG được mã hóa lại. Mask va chạm, tốc độ
-animation, render, logic sử dụng frame và iPhone chưa được kiểm chứng. Việc
-khôi phục các frame này không có nghĩa là sửa được lỗi hiển thị đã báo.
+Đã bổ sung 63 frame thiếu và thay 5 frame cũ khác pixel nhìn thấy bằng ảnh
+dựng lại từ atlas APK: tổng 68 ảnh cho 21 sprite, lưu dưới
+`assets/sprites/images/` và tham chiếu trong descriptor. Ảnh cũ vẫn có trong
+đầu vào GMX ghim, không bị sửa. Kiểm tra tĩnh xác nhận RGBA dựng lại khớp vùng
+atlas đã giải mã; 8 sprite vẫn có bbox khác APK và được giữ nguyên, các trường
+metadata còn lại trong nhóm này khớp theo phép so số. RGB trong suốt ngoài vùng
+cắt không xác định, PNG được mã hóa lại. Mask va chạm, tốc độ animation, render,
+logic sử dụng frame và iPhone chưa được kiểm chứng. Việc khôi phục các frame này
+không có nghĩa là sửa được lỗi hiển thị đã báo.
 
 ## Chỉnh sửa và quản lý tài nguyên
 

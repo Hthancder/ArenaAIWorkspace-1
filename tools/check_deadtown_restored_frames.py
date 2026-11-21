@@ -34,10 +34,15 @@ RESTORED = {'spr_action_button': (10, 11), 'spr_item_equip': (26, 27),
             'spr_item_use_small': (20, 22), 'spr_parcel': (1, 4),
             'spr_save_button': (2, 4), 'spr_skills': (21, 23),
             'spr_ui_buff': (6, 7), 'spr_ui_health': (4, 6), 'spr_ui_day': (0, 3)}
+# Additional frame-zero replacements; frame 1 in the two event sprites was
+# already exact and is intentionally left in the original upstream assets.
+REPLACED = {'ih_dagger': (1, (0,)), 'spr_event_eng': (2, (0,)),
+            'spr_event_kor': (2, (0,)), 'spr_gps_sign': (1, (0,))}
 
 # These pre-existing bbox values are deliberately not changed. Each pair is
 # (native, GMX); numeric equality/differences do not prove collision semantics.
 BBOX_DIFFERENCES = {
+    'ih_dagger': {'bbox_left': (11, 9), 'bbox_right': (45, 43)},
     'spr_item_use': {'bbox_top': (2, 5), 'bbox_bottom': (118, 115)},
     'spr_item_use_small': {'bbox_top': (4, 5)},
     'spr_parcel': {'bbox_top': (4, 5)},
@@ -71,7 +76,11 @@ def verify(apk, source):
     positions = {read_string(data, u32(data, pos), regions[b'STRG']): pos
                  for pos in pointers(data, regions[b'SPRT'])}
     report = {}
-    for name, (first, count) in RESTORED.items():
+    targets = {name: (count, tuple(range(first, count))) for name, (first, count) in RESTORED.items()}
+    if targets.keys() & REPLACED.keys():
+        raise ValueError('duplicate restored/replaced sprite')
+    targets.update(REPLACED)
+    for name, (count, indexes) in targets.items():
         if name not in native or name not in gmx or name not in positions:
             raise ValueError(f'missing sprite: {name}')
         differences = {f: (native[name][f], gmx[name][f]) for f in FIELDS
@@ -84,7 +93,7 @@ def verify(apk, source):
             raise ValueError(f'noncontiguous frame table: {name}')
         by_index = {int(f.get('index')): f.text for f in frames}
         entries = []
-        for i in range(first, count):
+        for i in indexes:
             filename = f'{name}_{i}.png'
             if by_index[i] != 'images\\' + filename:
                 raise ValueError(f'unexpected frame reference: {name}[{i}]')
