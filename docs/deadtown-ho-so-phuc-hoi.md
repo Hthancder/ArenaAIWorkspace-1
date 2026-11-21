@@ -839,3 +839,19 @@ test cũng sửa alpha/metadata để xác nhận công cụ báo sai. Metadata 
 398 sprite cùng tên hiện đều bằng APK; vẫn có 4 sprite chưa khai báo, và so
 metadata **không** đồng nghĩa khôi phục hoàn toàn hình ảnh, mask, animation,
 resource ID, renderer hoặc iOS.
+
+### Dấu vết một script kiểm room trong ARM32
+
+`tools/deadtown_room_check_evidence.py` ghim APK/library, xác nhận export
+`check_room_is_multiplay_room`, relocation `g_VAR_room`, lời gọi đọc giá trị,
+so sánh và hai nhánh trả real 0/1. Với giá trị hữu hạn, mã ARM so
+`abs(room - 14)` với epsilon hiện tại; initializer tĩnh của epsilon là `1e-10`,
+nhưng có thể đổi khi chạy. ROOM table APK đặt `rom_play_defence` ở index 14.
+Tên script không đủ chứng minh mục đích hoặc toàn bộ hành vi multiplayer.
+Callgraph tĩnh còn ghi hai lời gọi ứng viên từ `multi_logic_play` và
+`multi_logic_room`, không chứng minh đường chạy thực tế.
+
+Chưa thêm script này vào project: `rom_play_defence` và logic tương ứng còn
+thiếu, ID native 14 không bảo đảm giữ nguyên khi compile GMX, và phép so tĩnh
+không xác nhận Android/iOS runtime. Công cụ không tạo source từ số 14 hay coi
+script là đã phục hồi hoàn chỉnh.
