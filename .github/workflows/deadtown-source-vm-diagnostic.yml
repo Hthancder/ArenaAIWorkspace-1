@@ -161,6 +161,18 @@ jobs:
           set -euo pipefail
           timeout 90 work/runner-build/gmrunner work/item-schedule-game --headless --fast --mute --seed 1 --frames 930 --trace --stats --save-dir work/save-item-schedule > work/item-schedule.log 2>&1 || { tail -100 work/item-schedule.log; exit 1; }
           python tools/deadtown_item_schedule_vm_probe.py check work/item-schedule.log
+      - name: Report isolated scheduling markers
+        if: always()
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('work/item-schedule.log')
+          if p.exists():
+              lines = [line for line in p.read_text(errors='replace').splitlines() if 'ITEM_SCHEDULE_VM:' in line]
+              print('::notice::ITEM_SCHEDULE_DIAGNOSTIC: ' + ' | '.join(lines).replace('%', '%25')[:3000])
+          else:
+              print('::notice::ITEM_SCHEDULE_DIAGNOSTIC: no log')
+          PY
       - name: Exercise mocked-gamepad candidates
         run: |
           set -euo pipefail
