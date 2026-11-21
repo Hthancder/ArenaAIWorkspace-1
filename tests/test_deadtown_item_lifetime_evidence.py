@@ -5,7 +5,7 @@ import unittest
 
 from tools.deadtown_item_lifetime_evidence import inspect, verify_source
 from tools.deadtown_item_lifetime_vm_probe import EXPECTED, check, instrument
-from tools.deadtown_zombie_item_vm_probe import EXPECTED as ZOMBIE_EXPECTED, check as check_zombie, extract, instrument as instrument_zombie
+from tools.deadtown_zombie_item_vm_probe import EXPECTED as ZOMBIE_EXPECTED, ZOMBIES, check as check_zombie, extract, instrument as instrument_zombie
 
 ROOT = Path(__file__).resolve().parents[1]
 APK = ROOT / '.cache/deadtown-original.apk'
@@ -24,18 +24,20 @@ class ItemLifetimeEvidenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             project = Path(tmp)
             (project / 'objects').mkdir()
-            for name in ('obj_item', 'obj_parcel', 'obj_zombie3', 'obj_zombie2'):
+            for name in ('obj_item', 'obj_parcel', 'obj_zombie2', 'obj_zombie3', 'obj_zombie4', 'obj_zombie5'):
                 shutil.copyfile(PROJECT / 'objects' / (name + '.object.gmx'), project / 'objects' / (name + '.object.gmx'))
             path = project / 'objects/obj_item.object.gmx'
             path.write_text(path.read_text().replace('alarm[0] = 900', 'alarm[0] = 1'))
             with self.assertRaises(ValueError):
                 verify_source(project)
             shutil.copyfile(PROJECT / 'objects/obj_item.object.gmx', path)
-            path = project / 'objects/obj_zombie3.object.gmx'
-            text = path.read_text()
-            path.write_text(text.replace('ins.__dt_item_timed = 1', 'ins.__dt_item_timed = 0', 1))
-            with self.assertRaises(ValueError):
-                verify_source(project)
+            for name in ('obj_zombie2', 'obj_zombie3', 'obj_zombie4', 'obj_zombie5'):
+                path = project / 'objects' / (name + '.object.gmx')
+                text = path.read_text()
+                path.write_text(text.replace('ins.__dt_item_timed = 1', 'ins.__dt_item_timed = 0', 1))
+                with self.assertRaises(ValueError):
+                    verify_source(project)
+                path.write_text(text)
 
     def test_instrumented_vm_markers(self):
         e = {'object': 'sys_global', 'attributes': {'eventtype': '0', 'enumb': '0'}, 'gml': 'original();'}
@@ -47,13 +49,13 @@ class ItemLifetimeEvidenceTests(unittest.TestCase):
             instrument([])
 
     def test_zombie_fragment_probe(self):
-        fragments = {obj: extract(PROJECT, obj) for obj in ('zombie2', 'zombie3')}
+        fragments = {obj: extract(PROJECT, obj) for obj in ZOMBIES}
         for fragment in fragments.values():
             self.assertEqual(fragment.count('ins.__dt_item_timed = 1'), 2)
             self.assertNotIn('random(1)', fragment)
         e = {'object': 'sys_global', 'attributes': {'eventtype': '0', 'enumb': '0'}, 'gml': 'original();'}
         self.assertTrue(instrument_zombie([e], fragments)[0]['gml'].endswith('original();'))
-        self.assertEqual(check_zombie('\n'.join(ZOMBIE_EXPECTED)), 6)
+        self.assertEqual(check_zombie('\n'.join(ZOMBIE_EXPECTED)), 12)
         with self.assertRaises(ValueError):
             check_zombie('\n'.join(ZOMBIE_EXPECTED).replace('whole:1:2', 'whole:0:2'))
         with self.assertRaises(ValueError):
@@ -75,6 +77,8 @@ class ItemLifetimeEvidenceTests(unittest.TestCase):
         self.assertEqual(result['native_delay_slot'], 1097)
         self.assertIn('two drop paths', result['zombie3_alarm_6'])
         self.assertIn('two drop paths', result['zombie2_step_0'])
+        self.assertIn('two drop paths', result['zombie4_step_0'])
+        self.assertIn('two drop paths', result['zombie5_step_0'])
         self.assertIn('Alarm 1 are missing', result['limitations'])
 
 

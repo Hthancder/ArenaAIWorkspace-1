@@ -30,6 +30,8 @@ FUNCTIONS = {
     'gml_Object_obj_parcel_Step_0': (0x62eb58, 4104, '149ecb7c36ca228e6441746d11faf4d19705d1ebeaed21af70ac16f40a141182'),
     'gml_Object_obj_zombie3_Alarm_6': (0x668a38, 6936, 'f758909f83cc6499d0c57ee11307573e4322428823586af099589e2d8ad2a757'),
     'gml_Object_obj_zombie2_Step_0': (0x658910, 40784, '9a7cb64db9fe3a7c94ac56f0b69c095899cf32f1b0f37c6077d512f5f1e5f1f5'),
+    'gml_Object_obj_zombie4_Step_0': (0x679698, 37992, 'ada019456226f637c40f2282afa0405870bd09217a6a5c22dd405cf2cb06cb78'),
+    'gml_Object_obj_zombie5_Step_0': (0x687fc8, 34880, '9f5f3373755778960b45ec66a04ca27771deefe88443ccbcb2ff0db9cd500b0d'),
 }
 
 
@@ -61,7 +63,9 @@ def verify_source(project):
     if texts.count(snippet) != 1:
         raise ValueError('missing parcel candidate assignment')
     for obj, typ, sub, indents in (('obj_zombie3', '2', '6', (12, 8)),
-                                     ('obj_zombie2', '3', '0', (16, 12))):
+                                     ('obj_zombie2', '3', '0', (16, 12)),
+                                     ('obj_zombie4', '3', '0', (16, 12)),
+                                     ('obj_zombie5', '3', '0', (16, 12))):
         zombie = ET.parse(project / 'objects' / (obj + '.object.gmx'))
         events = zombie.findall(f'./events/event[@eventtype="{typ}"][@enumb="{sub}"]')
         if len(events) != 1:
@@ -226,10 +230,67 @@ def inspect(apk):
         (0x65c738, 'mov', 'r0, r5'), (0x65c73c, 'bl', '#0x176474'),
         (0x65c740, 'add', 'r3, sp, #0xaf0'), (0x65c744, 'movw', 'r1, #0x448'),
         (0x65c748, 'mov', 'r2, #0x80000000'), (0x65c74c, 'bl', '#0x176480'),
+        # Zombie4 and zombie5 Step: quantity and probability branches, and
+        # access the native local handle slot before each item creation.
+        (0x67d34c, 'mov', 'r1, #0xc2'), (0x67d374, 'bl', '#0x1765f4'),
+        (0x67d3a4, 'bpl', '#0x67d8b8'), (0x67d3e8, 'vmov.f64', 'd0, #1.000000e+00'),
+        (0x67d3f0, 'bl', '#0x1766a8'), (0x67d4a8, 'bpl', '#0x67dc4c'),
+        (0x67d4c0, 'mov', 'r1, #0'), (0x67d4c8, 'blx', 'r2'), (0x67d4cc, 'mov', 'r5, r0'),
+        (0x67d8cc, 'mov', 'r1, #0'), (0x67d8d4, 'blx', 'r2'), (0x67d8d8, 'mov', 'r5, r0'),
+        (0x68afa4, 'mov', 'r1, #0xc2'), (0x68afcc, 'bl', '#0x1765f4'),
+        (0x68affc, 'bpl', '#0x68b528'), (0x68b040, 'vmov.f64', 'd0, #1.000000e+00'),
+        (0x68b048, 'bl', '#0x1766a8'), (0x68b0f0, 'bpl', '#0x68b8c0'),
+        (0x68b108, 'mov', 'r1, #0'), (0x68b110, 'blx', 'r2'), (0x68b114, 'mov', 'r4, r0'),
+        (0x68b53c, 'mov', 'r1, #0'), (0x68b544, 'blx', 'r2'), (0x68b548, 'mov', 'r4, r0'),
+        # Each low-quantity path reuses the real 1 placed in r4/r5 for
+        # item_number. Each whole-quantity path constructs its own real 1.
+        (0x67d6cc, 'movw', 'r4, #0'), (0x67d6d0, 'mov', 'r0, #0'),
+        (0x67d6d4, 'movt', 'r4, #0x3ff0'), (0x67d730, 'mov', 'r0, #0'),
+        (0x67d734, 'str', 'r0, [sp, #0x9f4]'), (0x67d738, 'str', 'r4, [sp, #0x9ec]'),
+        (0x67d73c, 'str', 'r0, [sp, #0x9e8]'), (0x67d740, 'mov', 'r0, r5'),
+        (0x67d744, 'bl', '#0x176474'), (0x67d748, 'add', 'r4, sp, #0x800'),
+        (0x67d74c, 'movw', 'r1, #0x448'), (0x67d750, 'add', 'r3, r4, #0x1e8'),
+        (0x67d754, 'mov', 'r2, #0x80000000'), (0x67d758, 'bl', '#0x176480'),
+        (0x67db40, 'movw', 'r1, #0'), (0x67db44, 'mov', 'r0, #0'),
+        (0x67db48, 'movt', 'r1, #0x3ff0'), (0x67db4c, 'str', 'r0, [sp, #0x994]'),
+        (0x67db50, 'str', 'r1, [sp, #0x98c]'), (0x67db54, 'str', 'r0, [sp, #0x988]'),
+        (0x67db58, 'mov', 'r0, r5'), (0x67db5c, 'bl', '#0x176474'),
+        (0x67db60, 'add', 'r4, sp, #0x800'), (0x67db64, 'movw', 'r1, #0x448'),
+        (0x67db68, 'add', 'r3, r4, #0x188'), (0x67db6c, 'mov', 'r2, #0x80000000'),
+        (0x67db70, 'bl', '#0x176480'),
+        (0x68b314, 'movw', 'r5, #0'), (0x68b318, 'mov', 'r0, #0'),
+        (0x68b31c, 'movt', 'r5, #0x3ff0'), (0x68b378, 'mov', 'r0, #0'),
+        (0x68b37c, 'str', 'r0, [sp, #0x8d4]'), (0x68b380, 'str', 'r5, [sp, #0x8cc]'),
+        (0x68b384, 'str', 'r0, [sp, #0x8c8]'), (0x68b388, 'mov', 'r0, r4'),
+        (0x68b38c, 'bl', '#0x176474'), (0x68b390, 'add', 'r5, sp, #0x800'),
+        (0x68b394, 'movw', 'r1, #0x448'), (0x68b398, 'add', 'r3, r5, #0xc8'),
+        (0x68b39c, 'mov', 'r2, #0x80000000'), (0x68b3a0, 'bl', '#0x176480'),
+        (0x68b7b0, 'movw', 'r1, #0'), (0x68b7b4, 'mov', 'r0, #0'),
+        (0x68b7b8, 'movt', 'r1, #0x3ff0'), (0x68b7bc, 'str', 'r0, [sp, #0x874]'),
+        (0x68b7c0, 'str', 'r1, [sp, #0x86c]'), (0x68b7c4, 'str', 'r0, [sp, #0x868]'),
+        (0x68b7c8, 'mov', 'r0, r4'), (0x68b7cc, 'bl', '#0x176474'),
+        (0x68b7d0, 'add', 'r5, sp, #0x800'), (0x68b7d4, 'movw', 'r1, #0x448'),
+        (0x68b7d8, 'add', 'r3, r5, #0x68'), (0x68b7dc, 'mov', 'r2, #0x80000000'),
+        (0x68b7e0, 'bl', '#0x176480'),
     ):
         i = instruction(address)
         if (i.mnemonic, i.op_str) != (op, operands):
             raise ValueError(f'instruction mismatch at {address:#x}')
+    for start, handle, result, tmp, offset in (
+        (0x67d55c, 'r5', 'r4', '0x120', '0x30'), (0x67d968, 'r5', 'r4', '0x120', '0x38'),
+        (0x68b1a4, 'r4', 'r5', '0x118', '0x20'), (0x68b5d8, 'r4', 'r5', '0x118', '0x28'),
+    ):
+        for delta, op, operands in (
+            (-4, 'mov', 'r2, #0xa1'), (0, 'bl', '#0x17645c'),
+            (4, 'mov', f'{result}, r0'), (0x2c, 'vmov', f's0, {result}'),
+            (0x30, 'mov', 'r0, #0'), (0x34, 'str', f'r0, [{handle}, #0xc]'),
+            (0x38, 'add', f'r0, sp, #{tmp}'), (0x3c, 'vcvt.f64.s32', 'd0, s0'),
+            (0x40, 'vstr', f'd0, [r0, #{offset}]'), (0x44, 'ldrd', f'r0, r1, [r0, #{offset}]'),
+            (0x48, 'stm', f'{handle}, {{r0, r1}}'),
+        ):
+            i = instruction(start + delta)
+            if (i.mnemonic, i.op_str) != (op, operands):
+                raise ValueError(f'zombie4/5 creation mismatch at {start + delta:#x}')
     for addr, expected in ((0x176444, 'REAL_RValue'), (0x176c30, 'YYGML_action_set_alarm'),
                            (0x176408, 'YYGML_instance_destroy'), (0x17645c, 'YYGML_instance_create'),
                            (0x176474, 'INT32_RValue'), (0x176480, 'YYGML_Variable_SetValue'),
@@ -254,6 +315,13 @@ def inspect(apk):
         if len(trace) != (end - begin) // 4 or any(
                 i.reg_name(reg) == 'r5' for i in trace for reg in i.regs_access()[1]):
             raise ValueError('zombie2 instance pointer register unexpectedly overwritten')
+    for begin, end, register in ((0x67d4d0, 0x67d740, 'r5'), (0x67d8dc, 0x67db58, 'r5'),
+                                 (0x68b118, 0x68b388, 'r4'), (0x68b54c, 0x68b7c8, 'r4'),
+                                 (0x67d6d8, 0x67d738, 'r4'), (0x68b320, 0x68b380, 'r5')):
+        trace = list(dis.disasm(read(begin, end - begin), begin))
+        if len(trace) != (end - begin) // 4 or any(
+                i.reg_name(reg) == register for i in trace for reg in i.regs_access()[1]):
+            raise ValueError(f'zombie4/5 register trace mismatch: {begin:#x} {register}')
     trace = list(dis.disasm(read(0x65c2ec, 0x65c344 - 0x65c2ec), 0x65c2ec))
     if len(trace) != (0x65c344 - 0x65c2ec) // 4 or any(
             i.reg_name(reg) == 'r4' for i in trace for reg in i.regs_access()[1]):
@@ -269,6 +337,8 @@ def inspect(apk):
             'parcel_representative_path': 'create obj_item and set its flag to 1',
             'zombie3_alarm_6': 'two drop paths create obj_item and set its flag to 1',
             'zombie2_step_0': 'two drop paths create obj_item and set its flag to 1',
+            'zombie4_step_0': 'two drop paths create obj_item and set its flag to 1',
+            'zombie5_step_0': 'two drop paths create obj_item and set its flag to 1',
             'source_only_alias': '__dt_item_timed',
             'limitations': 'Partial candidate only; original variable names unknown, other setters and Alarm 1 are missing. '
                            'Static ARM32, no native/iOS execution, no proof of scheduling or all parcel paths.'}

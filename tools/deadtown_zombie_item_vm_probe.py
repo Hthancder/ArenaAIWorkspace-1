@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run extracted zombie2 and zombie3 drop branches in an isolated desktop VM.
+"""Run extracted zombie2/3/4/5 drop branches in an isolated desktop VM.
 
 The event fragment is copied from source, with random(1) replaced by zero for
 repeatability. It runs in sys_global, not the complete zombie event; this is
@@ -10,12 +10,14 @@ import json
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
-EXPECTED = [f'ZOMBIE_ITEM_VM:{obj}:{case}' for obj in ('zombie2', 'zombie3')
+ZOMBIES = ('zombie2', 'zombie3', 'zombie4', 'zombie5')
+EXPECTED = [f'ZOMBIE_ITEM_VM:{obj}:{case}' for obj in ZOMBIES
             for case in ('zero:0', 'fraction:1:1', 'whole:1:2')]
 
 
 def extract(project, obj):
-    config = {'zombie2': ('3', '0', 8), 'zombie3': ('2', '6', 4)}
+    config = {'zombie2': ('3', '0', 8), 'zombie3': ('2', '6', 4),
+              'zombie4': ('3', '0', 8), 'zombie5': ('3', '0', 8)}
     if obj not in config:
         raise ValueError('unsupported zombie')
     typ, sub, indent = config[obj]
@@ -41,10 +43,10 @@ def instrument(events, fragments):
              and e.get('attributes', {}).get('enumb') == '0']
     if len(found) != 1:
         raise ValueError('expected one sys_global Create')
-    if set(fragments) != {'zombie2', 'zombie3'}:
-        raise ValueError('expected both zombie fragments')
+    if set(fragments) != set(ZOMBIES):
+        raise ValueError('expected all four zombie fragments')
     prefix = ''
-    for obj in ('zombie2', 'zombie3'):
+    for obj in ZOMBIES:
         fragment = fragments[obj]
         prefix += '''ran = 0;
 item_type[0] = 3;
@@ -86,7 +88,7 @@ def main():
         if a.output.exists() or a.output.resolve() == a.input.resolve():
             raise ValueError('output must be new and distinct from input')
         events = json.loads(a.input.read_text(encoding='utf-8'))
-        fragments = {obj: extract(a.project, obj) for obj in ('zombie2', 'zombie3')}
+        fragments = {obj: extract(a.project, obj) for obj in ZOMBIES}
         a.output.write_text(json.dumps(instrument(events, fragments), ensure_ascii=False), encoding='utf-8')
     else:
         print(f'ZOMBIE_ITEM_VM:PASS {check(a.log.read_text(errors="replace"))} markers; fragment with deterministic random, desktop VM only')

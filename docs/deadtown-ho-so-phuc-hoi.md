@@ -1113,3 +1113,20 @@ source-workbench `44924020845` và source-VM `44924020725` thành công. VM qua
 sáu marker fragment zombie2/zombie3; các giới hạn về event và thiết bị vẫn giữ
 nguyên. Audit vẫn thiếu 58 script, 90 object, 367 event key, 4 sprite và 8 room
 so tên/key; đây không phải phép đo tương đương gameplay.
+
+### Mở rộng ứng viên item có thời hạn: zombie4 và zombie5
+
+Phân tích tĩnh hai event Android `obj_zombie4:Step:0` (`0x679698`, 37.992
+byte, SHA-256 `ada019456226f637c40f2282afa0405870bd09217a6a5c22dd405cf2cb06cb78`)
+và `obj_zombie5:Step:0` (`0x687fc8`, 34.880 byte, SHA-256
+`9f5f3373755778960b45ec66a04ca27771deefe88443ccbcb2ff0db9cd500b0d`). Trong mỗi
+event, hai đường rơi item tạo object 161, ghi slot 1096 bằng real 1 trên handle
+đó. Verifier ghim hash, nhánh, giá trị, ID và lệnh truyền handle; kiểm thanh
+ghi giữ handle/giá trị không bị thay trong các đoạn liên quan. Source cũ thêm
+cờ alias vào hai nhánh ở mỗi zombie, nhưng không khẳng định các phần còn lại
+của Step khớp native.
+
+Probe fragment VM mở rộng chạy các nhánh của bốn zombie 2/3/4/5 với random(1)
+được thay bằng 0 và chỉ kiểm kết quả trong môi trường mô phỏng. Chưa chạy toàn
+bộ event, chưa xác minh RNG, các zombie khác, Android runtime, gameplay hoặc
+iOS. Kết quả CI của thay đổi zombie4/5 cần xem riêng.
