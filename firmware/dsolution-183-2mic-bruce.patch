@@ -11709,10 +11709,10 @@ index 043a5d2..1f05180 100644
  #endif
 diff --git a/src/core/virtual_msc.cpp b/src/core/virtual_msc.cpp
 new file mode 100644
-index 0000000..5d12855
+index 0000000..fd6b2cb
 --- /dev/null
 +++ b/src/core/virtual_msc.cpp
-@@ -0,0 +1,1032 @@
+@@ -0,0 +1,1034 @@
 +#include "virtual_msc.h"
 +#if defined(SOC_USB_OTG_SUPPORTED) && !defined(LITE_VERSION)
 +
@@ -11770,8 +11770,6 @@ index 0000000..5d12855
 +#ifdef USB_as_HID
 +static USBHIDKeyboard s_vmscKbd;
 +static bool s_vmscKbdBegan = false;
-+
-+USBHIDKeyboard *virtualMscKeyboard() { return &s_vmscKbd; }
 +#endif
 +static SemaphoreHandle_t s_diskMux = nullptr;
 +
@@ -12298,6 +12296,10 @@ index 0000000..5d12855
 +}
 +
 +} // namespace
++
++#ifdef USB_as_HID
++USBHIDKeyboard *virtualMscKeyboard() { return &s_vmscKbd; }
++#endif
 +
 +bool virtualMscEnsureVaultDir() {
 +    if (!LittleFS.exists(kVaultDir)) return LittleFS.mkdir(kVaultDir);
