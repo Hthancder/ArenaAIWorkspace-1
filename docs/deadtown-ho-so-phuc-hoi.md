@@ -988,3 +988,18 @@ chiếu C++ dùng `Random.h` của runner desktop đã ghim. Cả hai phép th�
 cùng runner desktop, không chứng minh chuỗi hoặc trạng thái RNG của Android hay
 iOS. Probe thay đổi seed và không được đóng gói thành game. Tên script native
 còn thiếu theo đối chiếu project là 63; vẫn còn thiếu logic sử dụng chúng.
+
+### Kiểm tra room phòng thủ ứng viên
+
+`check_room_is_multiplay_room` native kiểm `room` với native room index 14;
+bảng APK tại index đó là `rom_play_defence`, với tên room duy nhất trong bảng.
+Không dùng số 14 trong GMX vì ID sau compile có thể khác. GML ứng viên dùng
+`room_get_name(room) == "rom_play_defence"`; với room hợp lệ, tên room duy nhất
+và epsilon mặc định `1e-10`, kết quả khớp phép so native trên 15 ID nguyên.
+Nếu runtime đổi epsilon đủ lớn hoặc room/name lookup khác thường thì cách này
+không nhất thiết tương đương; chưa kiểm compiler GameMaker hay native/iOS.
+Project vẫn thiếu chính room phòng thủ và các hành vi multiplayer; thêm hàm
+không làm chế độ này hoạt động. Công cụ static kiểm export, relocation epsilon,
+bảng room và GML ứng viên. Workflow diagnostic có probe trên bản VM riêng với
+room từ APK, thử chuyển cưỡng bức tới room phòng thủ; không phục hồi behavior
+room đó. Tên script native chưa có trong project là 62.

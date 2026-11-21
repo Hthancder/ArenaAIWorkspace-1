@@ -594,6 +594,7 @@
     <script>scripts\gps_colour_random.gml</script>
     <script>scripts\generate_basic_string.gml</script>
     <script>scripts\generate_random_string.gml</script>
+    <script>scripts\check_room_is_multiplay_room.gml</script>
     <scripts name="inven">
       <script>scripts\item_init.gml</script>
       <script>scripts\item_get.gml</script>

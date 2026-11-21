@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pin one YYC room-check script's ARM32 comparison, without adding GML.
+"""Pin one YYC room-check script's ARM32 comparison and a source candidate.
 
 This is static analysis of the pinned APK, not a decompiler or execution test.
 The constant is an Android native resource index, not a portable GMX room ID.
@@ -13,13 +13,24 @@ import struct
 import zipfile
 
 try:
-    from tools.deadtown_native_inventory import exported_name, resource_names
+    from tools.deadtown_native_inventory import exported_name, project_names, resource_names
     from tools.deadtown_native_lang import APK_SHA256, LIB_SHA256
     from tools.recover_deadtown_audio import read_zip_member
 except ModuleNotFoundError:
-    from deadtown_native_inventory import exported_name, resource_names
+    from deadtown_native_inventory import exported_name, project_names, resource_names
     from deadtown_native_lang import APK_SHA256, LIB_SHA256
     from recover_deadtown_audio import read_zip_member
+
+
+def verify_source(project):
+    project = Path(project)
+    if 'check_room_is_multiplay_room' not in project_names(project, 'scripts', 'script'):
+        raise ValueError('candidate is not declared')
+    expected = ('/// Candidate for valid rooms at the default comparison tolerance.\n'
+                '/// Name lookup avoids assuming a portable numeric room ID.\n'
+                'return room_get_name(room) == "rom_play_defence";\n')
+    if (project / 'scripts/check_room_is_multiplay_room.gml').read_text(encoding='utf-8') != expected:
+        raise ValueError('unexpected room-check candidate')
 
 
 def inspect(apk):
@@ -35,8 +46,12 @@ def inspect(apk):
     if hashlib.sha256(raw).hexdigest() != LIB_SHA256:
         raise ValueError('unexpected ARM library SHA-256')
     names = resource_names(data, b'ROOM')
-    if len(names) != 15 or names[14] != 'rom_play_defence':
+    if len(names) != 15 or len(set(names)) != len(names) or names[14] != 'rom_play_defence':
         raise ValueError('unexpected native room table')
+    integer_case_agreement = all((abs(index - 14) <= 1e-10) == (name == 'rom_play_defence')
+                                 for index, name in enumerate(names))
+    if not integer_case_agreement:
+        raise ValueError('room names do not match integer comparison at default epsilon')
     elf = ELFFile(io.BytesIO(raw))
     syms = elf.get_section_by_name('.dynsym')
     target = [s for s in syms.iter_symbols() if exported_name(s.name) == 'gml_Script_check_room_is_multiplay_room']
@@ -117,20 +132,25 @@ def inspect(apk):
             'script': 'check_room_is_multiplay_room', 'function_address': '0x2f5ec4',
             'builtin_variable': 'room', 'compared_native_room_index': 14,
             'room_name_at_native_index': names[14], 'epsilon_static_initializer': 1e-10,
+            'native_room_names': names, 'all_room_indices_agree_at_default_epsilon': integer_case_agreement,
             'static_rule_for_finite_values': 'return 1 when abs(room - 14) <= current epsilon, otherwise 0',
+            'candidate_rule': 'room_get_name(room) == "rom_play_defence"',
             'limitations': 'Static Android ARM32 only; epsilon can change at runtime, no native or iOS execution. '
-                           'Native index is not a portable GMX ID. Room and multiplayer logic are missing; '
-                           'no script has been added to the project.'}
+                           'Native index is not a portable GMX ID. Candidate assumes valid named rooms and default '
+                           'tolerance. The defence room and multiplayer logic are missing in source.'}
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('apk', type=Path)
+    parser.add_argument('--project', type=Path, help='also verify the declared candidate')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
+    if args.project is not None:
+        verify_source(args.project)
     result = inspect(args.apk)
     args.output.write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
-    print('ROOM_CHECK_EVIDENCE: native room index 14; static only, no GML added')
+    print('ROOM_CHECK_EVIDENCE: native room index 14; source name-lookup candidate, static only')
 
 
 if __name__ == '__main__':

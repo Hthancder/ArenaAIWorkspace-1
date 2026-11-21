@@ -4,7 +4,7 @@
 bản có thể phát hành. Các file `project/**/*.gml` và `project/**/*.gmx` được
 lưu trong Git để có thể sửa và theo dõi thay đổi. Tên trùng với APK không chứng
 minh logic trùng; 68 script, 94 object và 369 event native vẫn chưa có khóa
-nguồn tương ứng ở mốc ban đầu. Nguồn hiện còn thiếu 63 script, 90 object,
+nguồn tương ứng ở mốc ban đầu. Nguồn hiện còn thiếu 62 script, 90 object,
 368 event key và 4 sprite APK theo tên trong tập file nguồn;
 398 sprite cùng tên hiện khớp các trường metadata tĩnh được so, nhưng không
 chứng minh mask khi biên dịch hoặc hành vi. Không dùng project hiện tại để tuyên
@@ -76,8 +76,10 @@ nhiên hay chuyển đổi màu trên thiết bị. `generate_basic_string` là 
 trả 20 chữ A theo đường chạy thông thường trong native; chưa kiểm runtime gốc.
 `generate_random_string` ứng viên tạo chuỗi 20 ký tự từ ba nhóm chữ hoa,
 chữ thường và chữ số; đã giữ thứ tự các lệnh sinh ngẫu nhiên như trong ARM32,
-nhưng chưa chứng minh RNG, mã hóa hay kết quả trên Android/iOS. Chi tiết và
-phạm vi kiểm tra nằm trong hồ sơ phục hồi.
+nhưng chưa chứng minh RNG, mã hóa hay kết quả trên Android/iOS. Script ứng
+viên `check_room_is_multiplay_room` dùng tên room thay cho ID Android không
+portable; room phòng thủ và phần multiplayer vẫn chưa có trong project. Chi
+tiết và phạm vi kiểm tra nằm trong hồ sơ phục hồi.
 
 ## Chỉnh sửa và quản lý tài nguyên
 

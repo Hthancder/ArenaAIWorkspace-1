@@ -13,6 +13,8 @@ on:
       - tools/deadtown_native_tables.py
       - tools/deadtown_native_callgraph.py
       - tools/deadtown_room_check_evidence.py
+      - tools/deadtown_room_check_vm_probe.py
+      - deadtown-source/project/scripts/check_room_is_multiplay_room.gml
       - tests/test_deadtown_room_check_evidence.py
       - tools/deadtown_random_string_evidence.py
       - tools/deadtown_random_string_vm_probe.py
@@ -140,7 +142,7 @@ jobs:
           python tools/deadtown_sprite_pixels.py .cache/deadtown-original.apk .cache/deadtown/deadtown.gmx --output work/reports/sprite-pixels.json
           python tools/deadtown_sprite_masks.py .cache/deadtown-original.apk --output work/reports/sprite-masks.json
           python tools/deadtown_native_callgraph.py .cache/deadtown-original.apk --output work/reports/native-callgraph.json
-          python tools/deadtown_room_check_evidence.py .cache/deadtown-original.apk --output work/reports/room-check-evidence.json
+          python tools/deadtown_room_check_evidence.py .cache/deadtown-original.apk --project deadtown-source/project --output work/reports/room-check-evidence.json
           python tools/deadtown_item_kind_evidence.py .cache/deadtown-original.apk deadtown-source/project --output work/reports/item-kind-evidence.json
           python tools/deadtown_gps_colour_evidence.py .cache/deadtown-original.apk deadtown-source/project --output work/reports/gps-colour-evidence.json
           python tools/deadtown_basic_string_evidence.py .cache/deadtown-original.apk deadtown-source/project --output work/reports/basic-string-evidence.json
