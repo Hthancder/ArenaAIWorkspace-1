@@ -60,6 +60,16 @@ Thư mục `.cache/` là tạm thời: đừng dùng nó làm nơi lưu mod duy 
 lỗi giữa chừng, thư mục kết quả có `INCOMPLETE.txt`; kiểm tra và tự xóa hoặc
 chọn đích mới, không xóa bản sửa của người dùng.
 
+## Kiểm tra VM thử nghiệm
+
+Workflow `.github/workflows/deadtown-source-vm-diagnostic.yml` compile GML hiện
+có bằng UndertaleModTool và chạy headless trong runner desktop trên một bản dữ
+liệu **chỉ để chẩn đoán**. Nó xóa tham chiếu native không giải quyết được, bỏ
+qua một số liên kết sự kiện, dùng sprite/mask/atlas từ APK thay vì ảnh trong
+source; không phải bản GameMaker hay iOS. Kết quả CI đạt nghĩa là phép thử chạy
+xong, không phải game đạt chất lượng. Chi tiết và số lượng thiếu nằm trong hồ sơ
+`docs/deadtown-ho-so-phuc-hoi.md`.
+
 ## Trước khi có IPA tốt
 
 Cần phục hồi và kiểm chứng các logic/asset còn thiếu, kiểm tra renderer, camera,

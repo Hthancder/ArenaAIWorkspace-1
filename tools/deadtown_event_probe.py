@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Translate the limited legacy GMX actions used by Dead Town for VM compilation probes.
 
-This is not a game converter: generated code is not linked to object events,
-packaged, or proven equivalent to GameMaker's action execution semantics.
+This is not a game converter: generated code alone is not a packaged game and
+is not proven equivalent to GameMaker's action execution semantics. A separate
+disposable VM experiment may attach matching events for diagnostics only.
 Unknown action kinds fail closed instead of being dropped.
 """
 from __future__ import annotations

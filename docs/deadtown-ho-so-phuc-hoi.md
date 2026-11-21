@@ -599,3 +599,35 @@ ID số trước khi đưa thêm nhóm tài nguyên lớn.
 CI source `44888154327` đạt; local 137 test đạt, 12 bỏ qua do thiếu đầu vào tùy
 chọn. Vẫn thiếu logic native, chưa kiểm collision/animation/UI/gameplay trên
 thiết bị, chưa có source hoàn chỉnh hoặc IPA mới.
+
+### Thử compile GML hiện tại vào VM disposable
+
+CI `44890519123` dựng một bản dữ liệu VM **chỉ để chẩn đoán**, không tạo IPA.
+Bộ kiểm đã sửa và đối chiếu SHA-256 thật của `assets/game.droid`; lần thử đầu
+`44890283800` thất bại vì chuỗi hash trong workflow bị gõ sai, không phải vì
+đã tìm được lỗi game. Bản thử dùng APK đã ghim, UndertaleModTool 0.9.2.0 và
+runner desktop tại `e7121381d38b03a24242812fc22b0a7386d545c6`.
+
+- UTMT báo compile thành công 138 file script nguồn và 538 body sự kiện chuyển
+  từ GMX; 503 sự kiện được gắn vào object cùng tên, 35 liên kết bỏ qua vì
+  object/đích collision không có. Có 68 script APK vắng tên trong nguồn, 14
+  script nguồn không có tên trong APK, và 68 tham chiếu native không giải quyết
+  được bị xóa khỏi bản thử. Đó không phải logic đã phục hồi.
+- Thứ tự/tên 402 sprite, 240 object, 15 room cùng metadata/mask sprite được
+  phép so kiểm và 6 atlas PNG giữ như APK; bảng script thành 206 thay vì 192.
+  Thử nghiệm **không dùng PNG overlay của source**, không chứng minh GameMaker
+  sẽ gán ID hoặc dựng tài nguyên như thế.
+- Headless boot báo tới frame 300 tại `rom_lobby`, 15 instance; kịch bản cưỡng
+  bức chuyển sang `rom_play` báo frame 360, 1.682 instance. Cả hai báo 0 draw
+  call ở điểm đo headless, vì vậy không có bằng chứng hình ảnh hay UI tại đây.
+  Không có dòng lỗi GML/unknown function được ghi trong các bước chạy này;
+  không có nghĩa là tất cả event chạy hoặc không có lỗi trong gameplay khác.
+  Runner báo 2 hàm chưa hỗ trợ (`audio_debug`, `draw_enable_drawevent`) và
+  nhiều extension trả giá trị giả; danh sách chi tiết nằm trong log/report CI.
+- Runner có thể bắt lỗi GML rồi tiếp tục và log có thể bị hạn chế. Hai kịch bản
+  không kiểm các màn chơi/tương tác/save hay hành vi tự nhiên; số instance cũng
+  không khẳng định đúng hay sai nếu chưa có mốc đối chiếu. Không xem CI xanh là
+  chứng nhận gameplay, va chạm, sửa sprite/vệt màu hoặc kiểm thử iPhone.
+
+Nguồn đầy đủ và IPA đạt yêu cầu vẫn chưa có; cần khôi phục logic thiếu dựa trên
+bằng chứng và kiểm thật trên thiết bị sau khi có bản đủ điều kiện.
