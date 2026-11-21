@@ -9,6 +9,9 @@ on:
       - 'deadtown-source/project/**'
       - 'tools/deadtown-vm-probe.csx'
       - 'tools/deadtown_event_probe.py'
+      - 'tools/deadtown_item_kind_vm_probe.py'
+      - 'tools/deadtown_item_kind_evidence.py'
+      - 'tests/test_deadtown_item_kind_evidence.py'
       - 'tools/check_deadtown_source_vm.py'
       - 'tests/test_check_deadtown_source_vm.py'
       - 'tools/deadtown_ios_compare.py'
@@ -43,7 +46,8 @@ jobs:
           echo 'bc8fa1990cb2cdde8d184f2a942fe4010820f0592d88a36e1cbee0a6aac081fb  work/original.apk' | sha256sum -c
           unzip -p work/original.apk assets/game.droid > work/game.droid
           echo "$(python -c 'from tools.check_deadtown_source_vm import GAME_DATA_SHA256; print(GAME_DATA_SHA256)')  work/game.droid" | sha256sum -c
-          python tools/deadtown_event_probe.py deadtown-source/project work/events.json
+          python tools/deadtown_event_probe.py deadtown-source/project work/events-original.json
+          python tools/deadtown_item_kind_vm_probe.py instrument work/events-original.json work/events.json
           for n in 1 2; do unzip -p work/original.apk "assets/audiogroup$n.dat" > "work/game/audiogroup$n.dat"; done
       - name: Compile editable scripts and events into disposable data
         env:
@@ -79,6 +83,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 90 work/runner-build/gmrunner work/game --headless --fast --mute --seed 1 --frames 300 --trace --stats --save-dir work/save-boot > work/boot.log 2>&1 || { tail -100 work/boot.log; exit 1; }
+          python tools/deadtown_item_kind_vm_probe.py check work/boot.log
           timeout 90 work/runner-build/gmrunner work/game --headless --fast --mute --seed 1 --frames 400 --trace --stats --goto rom_play@160 --save-dir work/save-play > work/play.log 2>&1 || { tail -100 work/play.log; exit 1; }
       - name: Compare resource IDs and report observed warnings
         run: |

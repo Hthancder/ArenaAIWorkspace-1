@@ -931,3 +931,20 @@ phát hiện sai. Audit hiện kiểm luôn file `font_data` mà descriptor tham
 Đây là phục hồi bitmap và metadata tĩnh, không phải font TTF gốc; chưa chứng
 minh GameMaker giữ atlas này hay có font hệ thống phù hợp khi build, chưa kiểm
 text shaping, cách đóng gói, runtime/iOS hay hiển thị tiếng Hàn trên thiết bị.
+
+### Hai script phân loại vật phẩm ứng viên
+
+Đã thêm `item_check_pet` và `item_check_skin` dựa trên phân tích ARM32 của
+APK ghim. Với chỉ số số nguyên, hai hàm lần lượt trả 1 cho 17–22 và 23–26,
+kể cả hai đầu; ngoài khoảng trả 0. Công cụ `tools/deadtown_item_kind_evidence.py`
+kiểm export, địa chỉ, lời gọi chuyển REAL, chuỗi lệnh so sánh và relocation của
+`g_GMLMathEpsilon` cùng giá trị khởi tạo `1e-10`. Quy tắc tĩnh với số hữu hạn
+là `lower - value <= epsilon` và `value - upper <= epsilon`; epsilon có thể
+thay đổi lúc chạy. GML dùng toán tử GameMaker thay vì hard-code epsilon, nên
+không khẳng định tương đương với số thực sát biên, NaN, kiểu khác số hoặc
+trường hợp thiếu đối số. Các phép thử Python kiểm mô hình và biên số nguyên;
+workflow source VM có probe headless riêng cho các chỉ số nguyên quanh khoảng.
+Probe chỉ chạy bản VM desktop bị instrument và thiếu nhiều hành vi; không phải
+thực thi native Android, GameMaker compiler hay bằng chứng iOS/gameplay.
+Số tên script native chưa có trong project là 66; trùng tên không chứng minh
+hành vi, thứ tự resource hoặc tính tương thích toàn bộ.

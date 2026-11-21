@@ -594,6 +594,8 @@
     <scripts name="inven">
       <script>scripts\item_init.gml</script>
       <script>scripts\item_get.gml</script>
+      <script>scripts\item_check_pet.gml</script>
+      <script>scripts\item_check_skin.gml</script>
       <script>scripts\item_equip.gml</script>
       <script>scripts\item_drop.gml</script>
       <script>scripts\item_use.gml</script>

@@ -4,7 +4,7 @@
 bản có thể phát hành. Các file `project/**/*.gml` và `project/**/*.gmx` được
 lưu trong Git để có thể sửa và theo dõi thay đổi. Tên trùng với APK không chứng
 minh logic trùng; 68 script, 94 object và 369 event native vẫn chưa có khóa
-nguồn tương ứng ở mốc ban đầu. Nguồn hiện còn thiếu 68 script, 90 object,
+nguồn tương ứng ở mốc ban đầu. Nguồn hiện còn thiếu 66 script, 90 object,
 368 event key và 4 sprite APK theo tên trong tập file nguồn;
 398 sprite cùng tên hiện khớp các trường metadata tĩnh được so, nhưng không
 chứng minh mask khi biên dịch hoặc hành vi. Không dùng project hiện tại để tuyên
@@ -65,6 +65,12 @@ những object này hay bảo đảm hành vi và ID sau biên dịch. Đã bổ
 collision comment-only của `obj_player` với `par_action` dựa trên một event
 native có thân lệnh ARM `bx lr`; chưa kiểm cách GameMaker xử lý collision,
 kế thừa và runtime trên thiết bị.
+
+Đã thêm `item_check_pet` và `item_check_skin` ứng viên theo phép so sánh
+native Android cho chỉ số số nguyên: lần lượt từ 17 đến 22 và 23 đến 26,
+bao gồm hai đầu. Chưa chứng minh hành vi đối với giá trị khác số, số thực sát
+ngưỡng hay trên iOS; đây không khôi phục logic sử dụng hai script còn thiếu.
+Chi tiết phân tích và phạm vi kiểm tra nằm trong hồ sơ phục hồi.
 
 ## Chỉnh sửa và quản lý tài nguyên
 
