@@ -16899,16 +16899,17 @@ index 353b8641..5a067470 100644
  #endif
 diff --git a/src/modules/wifi/napt_router.cpp b/src/modules/wifi/napt_router.cpp
 new file mode 100644
-index 00000000..d4b11a70
+index 00000000..2a12cd39
 --- /dev/null
 +++ b/src/modules/wifi/napt_router.cpp
-@@ -0,0 +1,893 @@
+@@ -0,0 +1,894 @@
 +#if !defined(LITE_VERSION)
 +#include "napt_router.h"
 +
 +#include "core/display.h"
 +#include "core/led_control.h"
 +#include "core/mykeyboard.h"
++#include "core/powerSave.h"
 +#include "core/radio_mem.h"
 +#include "core/settings.h"
 +#include "core/utils.h"
