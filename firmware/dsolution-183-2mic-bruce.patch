@@ -1424,10 +1424,10 @@ index 00000000..fcf16fef
 +spiffs,   data, spiffs,   0x810000, 0x7E0000,
 +coredump, data, coredump, 0xFF0000, 0x10000,
 diff --git a/embedded_resources/web_interface/index.css b/embedded_resources/web_interface/index.css
-index bda7b42a..150b90f8 100644
+index bda7b42a..5c4f8d2f 100644
 --- a/embedded_resources/web_interface/index.css
 +++ b/embedded_resources/web_interface/index.css
-@@ -1,584 +1,631 @@
+@@ -1,584 +1,641 @@
  :root {
 -  --color: #ff3ec8;
 -  --background: #242424;
@@ -2541,7 +2541,7 @@ index bda7b42a..150b90f8 100644
 +
 +@media (max-width: 760px) {
 +  body { padding: 8px; }
-+  .dash-grid, .pers-layout, .free-space, .quick-grid, .kv-grid, .log-links, .form-grid, .sl-split { grid-template-columns: 1fr; }
++  .dash-grid, .pers-layout, .free-space, .quick-grid, .kv-grid, .log-links, .form-grid, .sl-split, .sl-napt-creds { grid-template-columns: 1fr; }
 +  .table.explorer .col-size { width: 68px; }
 +  .table.explorer .col-action { width: 124px; }
 +  .current-path { max-width: 72vw; }
@@ -2551,6 +2551,13 @@ index bda7b42a..150b90f8 100644
 +.seclab-bar { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
 +.sl-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 +.sl-mt { margin-top: 9px; display: block; }
++.sl-napt-creds { display: grid; grid-template-columns: 1fr 1fr auto; gap: 6px; align-items: center; }
++.sl-napt-creds input {
++  background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 8px;
++  padding: 6px 9px; font-size: 12px; min-width: 0; outline: 0;
++}
++.sl-napt-creds input:focus { border-color: var(--color); }
++.sl-audio { width: 100%; height: 32px; margin-top: 8px; border-radius: 7px; }
 +.sl-badge { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--color); background: var(--surface); font-family: ui-monospace, Consolas, monospace; }
 +.sl-badge.on { color: var(--ok); border-color: rgba(44,229,155,0.5); background: rgba(44,229,155,0.12); }
 +.sl-badge.alert { color: #ff9aa4; border-color: rgba(255,93,108,0.5); background: rgba(255,93,108,0.14); }
@@ -2564,20 +2571,23 @@ index bda7b42a..150b90f8 100644
 +.sl-scroll { max-height: 158px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); padding: 4px; font-size: 11.5px; }
 +.sl-item { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 4px 6px; border-bottom: 1px solid rgba(255,255,255,0.04); font-family: ui-monospace, Consolas, monospace; }
 +.sl-item:last-child { border-bottom: 0; }
-+.sl-tag { font-size: 10px; padding: 1px 6px; border-radius: 4px; cursor: pointer; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); }
++.sl-item > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
++.sl-tag { font-size: 10px; padding: 1px 6px; border-radius: 4px; cursor: pointer; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); text-decoration: none; white-space: nowrap; }
 +.sl-tag.blk { color: #ff9aa4; border-color: rgba(255,93,108,0.45); }
 +.sl-tag.ok { color: var(--ok); border-color: rgba(44,229,155,0.45); }
 +.sl-bars { display: grid; grid-template-columns: repeat(13, 1fr); gap: 4px; align-items: end; height: 76px; padding: 6px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); margin-top: 6px; }
-+.sl-bar-col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 3px; }
++.sl-bar-col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 3px; border-radius: 4px; padding: 1px 0; }
++.sl-bar-col.best { background: rgba(44,229,155,0.12); box-shadow: inset 0 0 0 1px rgba(44,229,155,0.55); }
++.sl-bar-col.best span { color: var(--ok); font-weight: 700; }
 +.sl-bar-fill { width: 100%; min-height: 3px; border-radius: 3px 3px 0 0; background: var(--ok); }
 +.sl-bar-col span { font-size: 9.5px; color: var(--muted); font-family: ui-monospace, Consolas, monospace; }
 +.sl-file-btn { position: relative; overflow: hidden; display: inline-flex; align-items: center; }
 +.sl-file-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 diff --git a/embedded_resources/web_interface/index.html b/embedded_resources/web_interface/index.html
-index 5290300b..eb5b3f05 100644
+index 5290300b..125303b4 100644
 --- a/embedded_resources/web_interface/index.html
 +++ b/embedded_resources/web_interface/index.html
-@@ -1,700 +1,686 @@
+@@ -1,700 +1,693 @@
  <!doctype html>
  <html lang="en">
 -  <head>
@@ -3410,7 +3420,7 @@ index 5290300b..eb5b3f05 100644
 +          <div class="dash-card">
 +            <div class="dash-card-head">
 +              <h3>Live 1.83" Display Preview</h3>
-+              <span class="mono muted-sm">284&times;240 ST7789</span>
++              <span class="mono muted-sm">284&times;240 NV3023</span>
 +            </div>
 +            <div id="boot-preview" class="boot-mockup">
 +              <div class="bm-status">
@@ -3557,7 +3567,12 @@ index 5290300b..eb5b3f05 100644
 +            <h3>#1 Wi-Fi NAPT Travel Router &amp; Live DNS Blocker</h3>
 +            <span id="sl-napt-badge" class="sl-badge">OFF</span>
 +          </div>
-+          <div class="sl-row">
++          <div class="sl-napt-creds sl-mt">
++            <input type="text" id="sl-napt-ssid" placeholder="Optional uplink SSID (blank = current STA)" />
++            <input type="password" id="sl-napt-pwd" placeholder="Uplink Wi-Fi password (if needed)" />
++            <button type="button" class="btn-action" onclick="openWifiModal()">Scan WiFi</button>
++          </div>
++          <div class="sl-row sl-mt">
 +            <button type="button" class="btn-action btn-default" id="sl-napt-start">Start NAPT Router</button>
 +            <button type="button" class="btn-action btn-danger" id="sl-napt-stop">Stop NAPT</button>
 +            <button type="button" class="btn-action" id="sl-napt-auto">Auto-Block Trackers: ON</button>
@@ -3614,6 +3629,7 @@ index 5290300b..eb5b3f05 100644
 +            <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/sonar_guard.log')">View Guard Log</button>
 +            <button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/BruceMIC')">Audio Clips</button>
 +          </div>
++          <audio id="sl-sonar-player" class="sl-audio hidden" controls preload="none"></audio>
 +          <div id="sl-sonar-events" class="sl-scroll sl-mt"></div>
          </div>
 -      </div>
@@ -3628,7 +3644,7 @@ index 5290300b..eb5b3f05 100644
 +            <span id="sl-usb-badge" class="sl-badge">PSRAM + FLASH</span>
 +          </div>
 +          <div class="kv-grid">
-+            <div class="kv-item"><span>PSRAM Free</span><b id="sl-usb-psram">--</b></div>
++            <div class="kv-item"><span>PSRAM / Vault</span><b id="sl-usb-psram">--</b></div>
 +            <div class="kv-item"><span>Saved /usb_disk.img</span><b id="sl-usb-img">None</b></div>
 +          </div>
 +          <div class="sl-row sl-mt">
@@ -3636,6 +3652,7 @@ index 5290300b..eb5b3f05 100644
 +            <button type="button" class="btn-action" id="sl-vault-newtxt">+ New Ducky .txt</button>
 +            <button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/usb_vault')">Open Folder</button>
 +          </div>
++          <div id="sl-vault-msg" class="ota-status hidden"></div>
 +          <div id="sl-vault-list" class="sl-scroll sl-mt"></div>
          </div>
 -        <div class="dialog-body">
@@ -3815,8 +3832,8 @@ index 5290300b..eb5b3f05 100644
 +    <div class="dialog info hidden">
 +      <div class="dialog-head">About Bruce SecLab WebUI</div>
 +      <div class="dialog-body">
-+        <p>Customized ESP32-S3 multipurpose security firmware for DSolution 1.83" 2-Mic hardware.</p>
-+        <p>Includes WIDS Guard, Wi-Fi CSI Motion Radar, 802.11mc FTM Ranging, BLE Privacy Guard, Dual-Mic dB Monitor, Personalization, Console Capture, Dual-OTA updates, and Dual-Boot control.</p>
++        <p>Customized ESP32-S3 multipurpose security firmware for DSolution 1.83" 2-Mic (NV3023 284&times;240, ES7210/ES8311) hardware.</p>
++        <p>Includes NAPT Travel Router &amp; DNS Blocker, Probe Request IE Radar, CH1-13 Air-Time &amp; Hidden SSID Decloaker, Acoustic Sonar Motion Guard, Virtual USB MSC + BadUSB, BLE 5.x GATT Explorer/Cloner, WIDS/CSI/FTM, BLE Privacy Guard, Personalization, Live Screen Mirror, WebOTA &amp; Dual-Boot control.</p>
 +      </div>
 +      <div class="dialog-footer">
 +        <button class="btn-action act-dialog-close act-escape">Close</button>
@@ -3877,7 +3894,7 @@ index 5290300b..eb5b3f05 100644
 +</body>
  </html>
 diff --git a/embedded_resources/web_interface/index.js b/embedded_resources/web_interface/index.js
-index fd616029..b36218cb 100644
+index fd616029..363ffd52 100644
 --- a/embedded_resources/web_interface/index.js
 +++ b/embedded_resources/web_interface/index.js
 @@ -6,20 +6,17 @@ const T = {
@@ -4980,16 +4997,16 @@ index fd616029..b36218cb 100644
          ctx.beginPath();
          ctx.ellipse(input.x, input.y, input.rx, input.ry, 0, 0, Math.PI * 2);
 -        ctx.stroke();
-+        if (fn === 10) { ctx.fillStyle = color565toCSS(input.fg); ctx.fill(); }
-+        else { ctx.strokeStyle = color565toCSS(input.fg); ctx.stroke(); }
-         break;
+-        break;
 -
 -      case 10: // FILLELLIPSE
 -        ctx.fillStyle = color565toCSS(input.fg);
 -        ctx.beginPath();
 -        ctx.ellipse(input.x, input.y, input.rx, input.ry, 0, 0, Math.PI * 2);
 -        ctx.fill();
--        break;
++        if (fn === 10) { ctx.fillStyle = color565toCSS(input.fg); ctx.fill(); }
++        else { ctx.strokeStyle = color565toCSS(input.fg); ctx.stroke(); }
+         break;
 -
 -      case 11: // DRAWLINE
 +      case 11:
@@ -5637,7 +5654,7 @@ index fd616029..b36218cb 100644
      fetchFiles(currentDrive, currentPath);
      return;
    }
-@@ -1062,662 +1343,384 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1062,662 +1343,432 @@ $(".container").addEventListener("click", async (e) => {
    if (actPlay) {
      e.preventDefault();
      let cmd = actPlay.getAttribute("data-cmd");
@@ -5921,8 +5938,7 @@ index fd616029..b36218cb 100644
 -    } else {
 -      textarea.setSelectionRange(newStart, newStart);
 -    }
-+    textarea.setSelectionRange(newStart, newEnd);
-   };
+-  };
 -
 -  const getCurrentLine = (pos) => {
 -    const lineStart = textarea.value.lastIndexOf("\n", pos - 1) + 1;
@@ -5936,7 +5952,8 @@ index fd616029..b36218cb 100644
 -      lineStart,
 -      lineEnd: lineEnd === -1 ? textarea.value.length : lineEnd,
 -    };
--  };
++    textarea.setSelectionRange(newStart, newEnd);
+   };
 -
 -  const handleTab = (shift) => {
 -    if (start === end) {
@@ -6427,9 +6444,12 @@ index fd616029..b36218cb 100644
 +    if ($("#sl-sonar-pk")) $("#sl-sonar-pk").textContent = `${sn.peak || 0}%`;
 +    if ($("#sl-sonar-dir")) $("#sl-sonar-dir").textContent = sn.lastDir || "--";
 +    if ($("#sl-sonar-events")) {
-+      $("#sl-sonar-events").innerHTML = (sn.events || []).slice().reverse().map((ev) =>
-+        `<div class="sl-item"><span>${slEsc(ev.dir)} (${ev.pct}%)</span><small class="muted-sm">${slEsc(ev.wav || (ev.ts + "s"))}</small></div>`
-+      ).join("") || `<div class="sl-item muted-sm">Launch Others -> Sonar Guard on device</div>`;
++      $("#sl-sonar-events").innerHTML = (sn.events || []).slice().reverse().map((ev) => {
++        const right = ev.wav
++          ? `<span><button type="button" class="sl-tag ok" onclick="playSonarWav('${slEsc(ev.wav)}')">Play</button> <a class="sl-tag" href="${IS_DEV ? "/bruce" : ""}/file?fs=LittleFS&action=download&name=${encodeURIComponent(ev.wav)}">WAV</a></span>`
++          : `<small class="muted-sm">${ev.ts || 0}s</small>`;
++        return `<div class="sl-item"><span>${slEsc(ev.dir)} (${ev.pct ?? ev.score ?? 0}%)</span>${right}</div>`;
++      }).join("") || `<div class="sl-item muted-sm">Launch Others -> Sonar Guard on device</div>`;
 +    }
  
 -  // Validate and fallback to defaults if needed
@@ -6441,10 +6461,16 @@ index fd616029..b36218cb 100644
 -  }
 +    // #8 Virtual USB Vault
 +    const u = d.usb || {};
-+    if ($("#sl-usb-psram")) $("#sl-usb-psram").textContent = u.psramFree ? (u.psramFree / 1048576).toFixed(2) + " MB" : "--";
++    const vaultFiles = u.vaultFiles || [];
++    const vaultTotalBytes = vaultFiles.reduce((acc, f) => acc + (Number(f.size) || 0), 0);
++    const vaultSzStr = vaultTotalBytes >= 1024 ? (vaultTotalBytes / 1024).toFixed(1) + " KB" : vaultTotalBytes + " B";
++    if ($("#sl-usb-psram")) {
++      const psStr = u.psramFree ? (u.psramFree / 1048576).toFixed(2) + " MB" : "--";
++      $("#sl-usb-psram").textContent = `${psStr} / ${vaultFiles.length}f (${vaultSzStr})`;
++    }
 +    if ($("#sl-usb-img")) $("#sl-usb-img").textContent = u.flashImgBytes ? Math.round(u.flashImgBytes / 1024) + " KB saved" : "None";
 +    if ($("#sl-vault-list")) {
-+      $("#sl-vault-list").innerHTML = (u.vaultFiles || []).map((vf) => {
++      $("#sl-vault-list").innerHTML = vaultFiles.map((vf) => {
 +        const fp = "/usb_vault/" + vf.name;
 +        return `<div class="sl-item"><span>${slEsc(vf.name)} <small class="muted-sm">${vf.size}B</small></span><span><a class="sl-tag" href="${IS_DEV ? "/bruce" : ""}/file?fs=LittleFS&action=download&name=${encodeURIComponent(fp)}">Get</a> <button type="button" class="sl-tag blk" onclick="deleteVaultFile('${slEsc(fp)}')">Del</button></span></div>`;
 +      }).join("") || `<div class="sl-item muted-sm">/usb_vault is empty. Upload files or Ducky .txt!</div>`;
@@ -6458,7 +6484,8 @@ index fd616029..b36218cb 100644
 +      const chs = air.channels || [];
 +      $("#sl-air-bars").innerHTML = chs.length ? chs.map((c) => {
 +        const col = c.load < 30 ? "#2ce59b" : (c.load < 65 ? "#ffb020" : "#ff5d6c");
-+        return `<div class="sl-bar-col" title="CH${c.ch}: ${c.load}% load, ${c.retry}% retry, ${c.rssi}dBm"><div class="sl-bar-fill" style="height:${Math.max(4, c.load)}%;background:${col}"></div><span>${c.ch}</span></div>`;
++        const bestCls = (air.bestCh && Number(c.ch) === Number(air.bestCh)) ? " best" : "";
++        return `<div class="sl-bar-col${bestCls}" title="CH${c.ch}: ${c.load}% load, ${c.retry}% retry, ${c.rssi}dBm"><div class="sl-bar-fill" style="height:${Math.max(4, c.load)}%;background:${col}"></div><span>${c.ch}</span></div>`;
 +      }).join("") : `<div class="muted-sm" style="grid-column:span 13;text-align:center;margin:auto">Run WiFi -> Channel Analyzer to populate</div>`;
 +    }
 +    if ($("#sl-air-hidden")) {
@@ -6502,15 +6529,7 @@ index fd616029..b36218cb 100644
 +        `<div class="sl-item"><span>#${p.id} ${slEsc(p.os)} (${p.rot} MACs) <small class="muted-sm">${slEsc((p.pnls || []).join(", "))}</small></span><span class="sl-tag ${p.watched ? "blk" : ""}">${p.rssi}dB</span></div>`
 +      ).join("") || `<div class="sl-item muted-sm">Run WiFi -> Probe Radar to cluster devices</div>`;
 +    }
- 
--        Dialog.loading.hide();
--        Dialog.show("editor");
--      } catch (error) {
--        console.error("Failed to open file for editing:", error);
--        // Remove edit parameter from URL if file loading fails
--        updateURL(currentDrive, currentPath, null);
--      }
--    }, 100); // Small delay to ensure the file list is loaded first
++
 +    const bg = d.bleGatt || {};
 +    if ($("#sl-ble-phy")) {
 +      $("#sl-ble-phy").textContent = `PHY ${bg.txPhy || "1M"}`;
@@ -6525,14 +6544,37 @@ index fd616029..b36218cb 100644
 +  } catch (_) {}
 +}
 +
++function playSonarWav(path) {
++  const pl = $("#sl-sonar-player");
++  if (!pl) return;
++  pl.classList.remove("hidden");
++  pl.src = (IS_DEV ? "/bruce" : "") + "/file?fs=LittleFS&action=audio&name=" + encodeURIComponent(path);
++  pl.play().catch(() => {});
++}
++
 +async function deleteVaultFile(path) {
 +  if (!confirm("Delete " + path + "?")) return;
 +  await requestGet("/file", { fs: "LittleFS", action: "delete", name: path });
 +  refreshSecLab();
 +}
-+
+ 
+-        Dialog.loading.hide();
+-        Dialog.show("editor");
+-      } catch (error) {
+-        console.error("Failed to open file for editing:", error);
+-        // Remove edit parameter from URL if file loading fails
+-        updateURL(currentDrive, currentPath, null);
 +$("#sl-refresh")?.addEventListener("click", () => refreshSecLab());
-+$("#sl-napt-start")?.addEventListener("click", () => naptPost({ action: "start" }));
++$("#sl-napt-start")?.addEventListener("click", () => {
++  const ssid = $("#sl-napt-ssid")?.value.trim() || "";
++  const pwd = $("#sl-napt-pwd")?.value || "";
++  const p = { action: "start" };
++  if (ssid) {
++    p.ssid = ssid;
++    p.pwd = pwd;
++  }
++  naptPost(p);
++});
 +$("#sl-napt-stop")?.addEventListener("click", () => naptPost({ action: "stop" }));
 +$("#sl-napt-auto")?.addEventListener("click", () => naptPost({ action: "autoblock" }));
 +$("#sl-napt-export")?.addEventListener("click", async () => {
@@ -6550,17 +6592,39 @@ index fd616029..b36218cb 100644
 +
 +$("#sl-vault-up")?.addEventListener("change", async function () {
 +  if (!this.files.length) return;
-+  await requestGet("/listfiles", { fs: "LittleFS", folder: "/usb_vault" }).catch(() => {});
-+  for (const file of this.files) {
-+    const fd = new FormData();
-+    fd.append("folder", "/usb_vault");
-+    fd.append("fs", "LittleFS");
-+    fd.append("file", file, file.name);
-+    await fetch(IS_DEV ? "/bruce/upload" : "/upload", { method: "POST", body: fd });
++  const msg = $("#sl-vault-msg");
++  try {
++    await requestGet("/listfiles", { fs: "LittleFS", folder: "/usb_vault" }).catch(() => {});
++    const total = this.files.length;
++    let i = 0;
++    for (const file of this.files) {
++      i++;
++      if (msg) {
++        msg.className = "ota-status ok";
++        msg.textContent = `Uploading ${i}/${total}: ${file.name}...`;
+       }
+-    }, 100); // Small delay to ensure the file list is loaded first
++      const fd = new FormData();
++      fd.append("folder", "/usb_vault");
++      fd.append("fs", "LittleFS");
++      fd.append("file", file, file.name);
++      const res = await fetch(IS_DEV ? "/bruce/upload" : "/upload", { method: "POST", body: fd });
++      if (!res.ok) throw new Error(`HTTP ${res.status}`);
++    }
++    if (msg) {
++      msg.className = "ota-status ok";
++      msg.textContent = `Uploaded ${total} file(s) to /usb_vault`;
++    }
++  } catch (e) {
++    if (msg) {
++      msg.className = "ota-status err";
++      msg.textContent = `Upload failed: ${e?.message || e}`;
++    }
++  } finally {
++    this.value = "";
++    refreshSecLab();
    }
 -})();
-+  this.value = "";
-+  refreshSecLab();
 +});
 +
 +$("#sl-vault-newtxt")?.addEventListener("click", async () => {
@@ -10193,10 +10257,10 @@ index 043a5d2d..1f05180b 100644
  #endif
 diff --git a/src/core/virtual_msc.cpp b/src/core/virtual_msc.cpp
 new file mode 100644
-index 00000000..547489c9
+index 00000000..b8cc9023
 --- /dev/null
 +++ b/src/core/virtual_msc.cpp
-@@ -0,0 +1,964 @@
+@@ -0,0 +1,1030 @@
 +#include "virtual_msc.h"
 +#if defined(SOC_USB_OTG_SUPPORTED) && !defined(LITE_VERSION)
 +
@@ -10642,8 +10706,10 @@ index 00000000..547489c9
 +        }
 +        lfnBuf[0] = '\0';
 +        fname.trim();
-+        if (fname.isEmpty() || fname.startsWith(".") || fname.startsWith("WPSettings") ||
-+            fname.startsWith("IndexerVolumeGuid")) {
++        fname.replace("/", "_");
++        fname.replace("\\", "_");
++        if (fname.isEmpty() || fname.startsWith(".") || fname.indexOf("..") >= 0 ||
++            fname.startsWith("WPSettings") || fname.startsWith("IndexerVolumeGuid")) {
 +            continue;
 +        }
 +
@@ -10990,6 +11056,7 @@ index 00000000..547489c9
 +    bool hasSprite = (frame.createSprite(tftWidth, tftHeight) != nullptr);
 +
 +    bool badUsbExecuted = false;
++    bool wasMounted = false;
 +    uint32_t mountedAtMs = 0;
 +    uint32_t lastDraw = 0;
 +    String toastMsg = preloadedFiles > 0 ? ("Preloaded " + String(preloadedFiles) + " vault file(s)") : "";
@@ -10997,7 +11064,6 @@ index 00000000..547489c9
 +    returnToMenu = false;
 +
 +    while (!returnToMenu && !s_ejectRequested) {
-+        InputHandler();
 +        if (check(EscPress)) {
 +            returnToMenu = true;
 +            break;
@@ -11005,12 +11071,76 @@ index 00000000..547489c9
 +
 +        bool isMounted = tud_mounted() || (s_usbEventState == ARDUINO_USB_STARTED_EVENT);
 +        if (isMounted && mountedAtMs == 0) mountedAtMs = millis();
++        if (wasMounted && !isMounted) {
++            toastMsg = "USB Host Disconnected";
++            toastUntil = millis() + 2600UL;
++            lastDraw = 0;
++        }
++        wasMounted = isMounted;
 +
 +        // Periodically flush dirty sectors to /usb_disk.img after 700ms idle
 +        if (s_backedByFlash && s_dirtyAny && (millis() - s_lastWriteMs) > 700UL) {
 +            saveMemoryToFlashImage();
 +            toastMsg = "Synced changes to Flash";
 +            toastUntil = millis() + 2000UL;
++        }
++
++        if (check(PrevPress)) {
++            // Vol-: quickly inspect files currently inside the virtual FAT disk
++            if (hasSprite) {
++                frame.deleteSprite();
++                hasSprite = false;
++            }
++            FatGeom dg;
++            String listStr = "Virtual USB Root Files:\n";
++            if (parseFatGeomFromMemory(s_diskMem, s_diskBytes, dg)) {
++                const uint8_t *root = s_diskMem + dg.rootStartSec * kSecSize;
++                char lfn[128] = {0};
++                int fc = 0;
++                for (uint16_t ri = 0; ri < dg.rootEntries && fc < 12; ri++) {
++                    const uint8_t *ent = root + ri * 32;
++                    if (ent[0] == 0x00) break;
++                    if (ent[0] == 0xE5) {
++                        lfn[0] = '\0';
++                        continue;
++                    }
++                    if (ent[11] == 0x0F) {
++                        uint8_t ord = ent[0] & 0x1F;
++                        if (ord >= 1 && ord <= 9) {
++                            static const uint8_t co[13] = {1, 3, 5, 7, 9, 14, 16, 18, 20, 22, 24, 28, 30};
++                            if (ent[0] & 0x40) memset(lfn, 0, sizeof(lfn));
++                            int base = (ord - 1) * 13;
++                            for (int k = 0; k < 13; k++) {
++                                uint16_t uc = (uint16_t)ent[co[k]] | ((uint16_t)ent[co[k] + 1] << 8);
++                                if (uc == 0 || uc == 0xFFFF) break;
++                                if (base + k < 120) lfn[base + k] = (uc < 0x80) ? (char)uc : '_';
++                            }
++                        }
++                        continue;
++                    }
++                    if (ent[11] & 0x1A) {
++                        lfn[0] = '\0';
++                        continue;
++                    }
++                    String fn = (lfn[0] != '\0') ? String(lfn) : String("");
++                    if (fn.isEmpty()) {
++                        for (int b = 0; b < 8 && ent[b] != ' '; b++) fn += (char)ent[b];
++                        String ext;
++                        for (int e = 0; e < 3 && ent[8 + e] != ' '; e++) ext += (char)ent[8 + e];
++                        if (!ext.isEmpty()) fn += "." + ext;
++                    }
++                    lfn[0] = '\0';
++                    uint32_t fsz = rd32(ent + 28);
++                    listStr += " - " + fn + " (" + String((unsigned long)fsz) + "B)\n";
++                    fc++;
++                }
++                if (fc == 0) listStr += "  (Disk is empty)";
++            } else {
++                listStr += "  (FAT table unavailable)";
++            }
++            displayInfo(listStr, true);
++            hasSprite = (frame.createSprite(tftWidth, tftHeight) != nullptr);
++            lastDraw = 0;
 +        }
 +
 +        if (check(SelPress)) {
@@ -11123,8 +11253,8 @@ index 00000000..547489c9
 +                frame.setTextDatum(MC_DATUM);
 +                frame.setTextColor(sec, blendColors(bg, pri, 14));
 +                frame.drawString(
-+                    compositeBadUsb ? "Boot:RunPayload   Vol+:SaveVault   Hold:Eject"
-+                                    : "Boot/Vol+:Save->Vault   Hold:Safely Eject",
++                    compositeBadUsb ? "Boot:Run   Vol-:Files   Vol+:Save   Hold:Eject"
++                                    : "Boot/Vol+:Save   Vol-:Files   Hold:Eject",
 +                    tftWidth / 2,
 +                    tftHeight - 10
 +                );
@@ -11180,7 +11310,7 @@ index 00000000..21fb03f2
 +
 +#endif
 diff --git a/src/core/wifi/webInterface.cpp b/src/core/wifi/webInterface.cpp
-index a8679bd6..634e504c 100644
+index a8679bd6..8253e6d8 100644
 --- a/src/core/wifi/webInterface.cpp
 +++ b/src/core/wifi/webInterface.cpp
 @@ -2,18 +2,30 @@
@@ -12822,7 +12952,19 @@ index a8679bd6..634e504c 100644
      });
  
      // List files
-@@ -737,6 +2019,84 @@ void configureWebServer() {
+@@ -632,6 +1914,11 @@ void configureWebServer() {
+                 } else {
+                     if (strcmp(fileAction.c_str(), "download") == 0) {
+                         request->send(*fs, fileName, "application/octet-stream", true);
++                    } else if (strcmp(fileAction.c_str(), "audio") == 0) {
++                        String low = fileName;
++                        low.toLowerCase();
++                        String mime = low.endsWith(".mp3") ? "audio/mpeg" : "audio/wav";
++                        request->send(*fs, fileName, mime, false);
+                     } else if (strcmp(fileAction.c_str(), "image") == 0) {
+                         String extension = fileName.substring(fileName.lastIndexOf('.') + 1);
+                         // https://www.iana.org/assignments/media-types/media-types.xhtml#image
+@@ -737,6 +2024,84 @@ void configureWebServer() {
              }
          }
      });
@@ -12907,7 +13049,7 @@ index a8679bd6..634e504c 100644
      server->begin();
      Serial.println("Webserver started");
  }
-@@ -745,19 +2105,66 @@ void configureWebServer() {
+@@ -745,19 +2110,66 @@ void configureWebServer() {
  **  Function: startWebUi
  **  Start the WebUI
  **********************************************************************/
@@ -12983,7 +13125,7 @@ index a8679bd6..634e504c 100644
          options.clear();
  
          Serial.println("Configuring Webserver ...");
-@@ -771,24 +2178,179 @@ void startWebUi(bool mode_ap) {
+@@ -771,24 +2183,179 @@ void startWebUi(bool mode_ap) {
          isWebUIActive = true;
      }
      tft.setLogging();
@@ -14067,10 +14209,10 @@ index 5494bfba..47a65ef9 100644
          returnToMenu = true;
 diff --git a/src/modules/ble/ble_gatt_cloner.cpp b/src/modules/ble/ble_gatt_cloner.cpp
 new file mode 100644
-index 00000000..98df8b84
+index 00000000..52970591
 --- /dev/null
 +++ b/src/modules/ble/ble_gatt_cloner.cpp
-@@ -0,0 +1,983 @@
+@@ -0,0 +1,1101 @@
 +#include "ble_gatt_cloner.h"
 +#if !defined(LITE_VERSION)
 +#include "ble_common.h"
@@ -14155,10 +14297,29 @@ index 00000000..98df8b84
 +static String s_lastEventStr = "Ready";
 +static String s_activeMode = "IDLE";
 +static String s_activeTarget = "";
++static GattProfile * volatile s_activeProfPtr = nullptr;
 +static std::vector<WriteLogItem> s_recentWrites;
 +
 +static void ensureBleMux() {
 +    if (!s_bleUiMux) s_bleUiMux = xSemaphoreCreateMutex();
++}
++
++static void setLastBleEvent(const String &ev) {
++    ensureBleMux();
++    if (xSemaphoreTake(s_bleUiMux, pdMS_TO_TICKS(40)) == pdTRUE) {
++        s_lastEventStr = ev;
++        xSemaphoreGive(s_bleUiMux);
++    }
++}
++
++static String getLastBleEvent() {
++    String out = "Ready";
++    ensureBleMux();
++    if (xSemaphoreTake(s_bleUiMux, pdMS_TO_TICKS(40)) == pdTRUE) {
++        out = s_lastEventStr;
++        xSemaphoreGive(s_bleUiMux);
++    }
++    return out;
 +}
 +
 +static const char *phyCodeToStr(uint8_t p) {
@@ -14343,23 +14504,23 @@ index 00000000..98df8b84
 +    }
 +    void onDisconnect(NimBLEClient *, int reason) override {
 +        s_clientConnected = false;
-+        s_lastEventStr = "Disconnected (" + String(reason) + ")";
++        setLastBleEvent("Disconnected (" + String(reason) + ")");
 +    }
 +    void onPhyUpdate(NimBLEClient *, uint8_t txPhy, uint8_t rxPhy) override {
 +        s_txPhy = txPhy;
 +        s_rxPhy = rxPhy;
-+        s_lastEventStr = String("PHY -> TX:") + phyCodeToStr(txPhy) + " RX:" + phyCodeToStr(rxPhy);
++        setLastBleEvent(String("PHY -> TX:") + phyCodeToStr(txPhy) + " RX:" + phyCodeToStr(rxPhy));
 +    }
 +};
 +
 +class ClonerServerCb : public NimBLEServerCallbacks {
 +    void onConnect(NimBLEServer *, NimBLEConnInfo &) override {
 +        s_cloneClientConn = true;
-+        s_lastEventStr = "Target App Connected!";
++        setLastBleEvent("Target App Connected!");
 +    }
 +    void onDisconnect(NimBLEServer *, NimBLEConnInfo &, int) override {
 +        s_cloneClientConn = false;
-+        s_lastEventStr = "Client Disconnected (Adv...)";
++        setLastBleEvent("Client Disconnected (Adv...)");
 +    }
 +};
 +
@@ -14416,6 +14577,7 @@ index 00000000..98df8b84
 +    int builtSvcs = 0;
 +    int builtChrs = 0;
 +    String firstUserSvc;
++    std::vector<NimBLECharacteristic *> notifyChrs;
 +
 +    for (const auto &svcSnap : prof.services) {
 +        if (isSystemServiceUuid(svcSnap.uuid)) continue;
@@ -14438,6 +14600,7 @@ index 00000000..98df8b84
 +            if (pChr) {
 +                if (!chrSnap.val.empty()) pChr->setValue(chrSnap.val.data(), chrSnap.val.size());
 +                pChr->setCallbacks(&s_cloneChrCb);
++                if (chrSnap.props & (0x08 | 0x10)) notifyChrs.push_back(pChr);
 +                builtChrs++;
 +            }
 +        }
@@ -14450,7 +14613,10 @@ index 00000000..98df8b84
 +        if (pSvc) {
 +            NimBLECharacteristic *pChr =
 +                pSvc->createCharacteristic("FFE1", NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::NOTIFY);
-+            if (pChr) pChr->setCallbacks(&s_cloneChrCb);
++            if (pChr) {
++                pChr->setCallbacks(&s_cloneChrCb);
++                notifyChrs.push_back(pChr);
++            }
 +            pSvc->start();
 +            builtSvcs = 1;
 +            builtChrs = 1;
@@ -14477,29 +14643,75 @@ index 00000000..98df8b84
 +    s_activeTarget = devName;
 +    s_cloneWrites = 0;
 +    s_cloneClientConn = false;
-+    s_lastEventStr = "Advertising Clone (" + String(builtSvcs) + "S/" + String(builtChrs) + "C)";
-+    s_recentWrites.clear();
++    setLastBleEvent("Advertising Clone (" + String(builtSvcs) + "S/" + String(builtChrs) + "C)");
++    ensureBleMux();
++    if (xSemaphoreTake(s_bleUiMux, pdMS_TO_TICKS(50)) == pdTRUE) {
++        s_recentWrites.clear();
++        xSemaphoreGive(s_bleUiMux);
++    }
 +
 +    tft_sprite frame(&tft);
 +    frame.setColorDepth(16);
 +    bool hasSprite = (frame.createSprite(tftWidth, tftHeight) != nullptr);
 +
++    int writeScroll = 0;
++    bool showAscii = false;
 +    uint32_t lastDraw = 0;
 +    returnToMenu = false;
 +
 +    while (!returnToMenu) {
-+        InputHandler();
 +        if (check(EscPress)) {
 +            returnToMenu = true;
 +            break;
 +        }
++        if (check(PrevPress) || check(UpPress)) {
++            if (writeScroll > 0) writeScroll--;
++            lastDraw = 0;
++        }
++        if (check(NextPress) || check(DownPress)) {
++            writeScroll++;
++            lastDraw = 0;
++        }
 +        if (check(SelPress)) {
-+            // Clear write log view
-+            ensureBleMux();
-+            if (xSemaphoreTake(s_bleUiMux, pdMS_TO_TICKS(50)) == pdTRUE) {
-+                s_recentWrites.clear();
-+                xSemaphoreGive(s_bleUiMux);
++            if (hasSprite) {
++                frame.deleteSprite();
++                hasSprite = false;
 +            }
++            int cact = -1;
++            options.clear();
++            if (!notifyChrs.empty()) {
++                options.push_back({"Send Notify Test", [&]() { cact = 0; }});
++            }
++            options.push_back({showAscii ? "View: HEX Payload" : "View: ASCII Payload", [&]() { cact = 1; }});
++            options.push_back({"Clear Write Log", [&]() { cact = 2; }});
++            options.push_back({"Stop Cloner & Exit", [&]() { cact = 3; }});
++            loopOptions(options, MENU_TYPE_SUBMENU, "GATT Cloner Menu");
++            options.clear();
++
++            if (cact == 0) {
++                int sent = 0;
++                const uint8_t pingData[5] = {0x42, 0x52, 0x55, 0x43, 0x45}; // "BRUCE"
++                for (NimBLECharacteristic *nc : notifyChrs) {
++                    if (nc) {
++                        nc->setValue(pingData, sizeof(pingData));
++                        if (nc->notify()) sent++;
++                    }
++                }
++                setLastBleEvent("Notified " + String(sent) + " char(s)");
++            } else if (cact == 1) {
++                showAscii = !showAscii;
++            } else if (cact == 2) {
++                ensureBleMux();
++                if (xSemaphoreTake(s_bleUiMux, pdMS_TO_TICKS(50)) == pdTRUE) {
++                    s_recentWrites.clear();
++                    xSemaphoreGive(s_bleUiMux);
++                }
++                writeScroll = 0;
++            } else if (cact == 3) {
++                returnToMenu = true;
++                break;
++            }
++            hasSprite = (frame.createSprite(tftWidth, tftHeight) != nullptr);
 +            lastDraw = 0;
 +        }
 +        if (millis() - lastDraw >= 180) {
@@ -14526,7 +14738,11 @@ index 00000000..98df8b84
 +                frame.setTextColor(TFT_WHITE, blendColors(bg, pri, 12));
 +                frame.drawString("Clone: " + devName + " (" + String(builtSvcs) + "S/" + String(builtChrs) + "C)", 16, 44);
 +                frame.setTextColor(sec, blendColors(bg, pri, 12));
-+                frame.drawString("Captured Writes: " + String((unsigned long)s_cloneWrites), 16, 62);
++                frame.drawString(
++                    "Writes:" + String((unsigned long)s_cloneWrites) + "  [" + (showAscii ? "ASCII" : "HEX") + "]",
++                    16,
++                    62
++                );
 +
 +                frame.setTextDatum(ML_DATUM);
 +                frame.setTextColor(pri, bg);
@@ -14540,20 +14756,24 @@ index 00000000..98df8b84
 +                }
 +
 +                if (snap.empty()) {
++                    writeScroll = 0;
 +                    frame.setTextDatum(MC_DATUM);
 +                    frame.setTextColor(sec, bg);
 +                    frame.drawString("Waiting for target app to connect", tftWidth / 2, 145);
 +                    frame.drawString("& write to cloned characteristics", tftWidth / 2, 162);
 +                } else {
++                    int maxScroll = std::max(0, (int)snap.size() - 5);
++                    if (writeScroll > maxScroll) writeScroll = maxScroll;
 +                    int y = 104;
 +                    int shown = 0;
-+                    for (int i = (int)snap.size() - 1; i >= 0 && shown < 5; i--, shown++) {
++                    for (int i = (int)snap.size() - 1 - writeScroll; i >= 0 && shown < 5; i--, shown++) {
 +                        frame.fillRoundRect(8, y, tftWidth - 16, 21, 3, blendColors(bg, pri, 8));
 +                        frame.setTextDatum(ML_DATUM);
 +                        frame.setTextColor(warnCol, blendColors(bg, pri, 8));
 +                        frame.drawString(snap[i].chrUuid.substring(0, 10), 12, y + 10);
 +                        frame.setTextColor(TFT_WHITE, blendColors(bg, pri, 8));
-+                        frame.drawString(snap[i].hex.substring(0, 26), 84, y + 10);
++                        const String &payload = showAscii && !snap[i].ascii.isEmpty() ? snap[i].ascii : snap[i].hex;
++                        frame.drawString(payload.substring(0, 26), 84, y + 10);
 +                        y += 23;
 +                    }
 +                }
@@ -14561,7 +14781,7 @@ index 00000000..98df8b84
 +                frame.fillRect(0, tftHeight - 20, tftWidth, 20, blendColors(bg, pri, 14));
 +                frame.setTextDatum(MC_DATUM);
 +                frame.setTextColor(sec, blendColors(bg, pri, 14));
-+                frame.drawString("Boot:Clear Log   Log:/ble_clone_writes.log   Hold:Stop", tftWidth / 2, tftHeight - 10);
++                frame.drawString("Vol-/+:Scroll   Boot:Menu/Notify   Hold:Stop", tftWidth / 2, tftHeight - 10);
 +                frame.pushSprite(0, 0);
 +            }
 +            wakeUpScreen();
@@ -14670,7 +14890,12 @@ index 00000000..98df8b84
 +    s_activeMode = "EXPLORER";
 +    s_activeTarget = prof.name;
 +    s_notifyCount = 0;
-+    s_lastEventStr = "Loaded " + String(prof.services.size()) + "S / " + String(prof.chars.size()) + "C";
++    setLastBleEvent("Loaded " + String(prof.services.size()) + "S / " + String(prof.chars.size()) + "C");
++    ensureBleMux();
++    if (xSemaphoreTake(s_bleUiMux, pdMS_TO_TICKS(50)) == pdTRUE) {
++        s_activeProfPtr = &prof;
++        xSemaphoreGive(s_bleUiMux);
++    }
 +
 +    tft_sprite frame(&tft);
 +    frame.setColorDepth(16);
@@ -14683,7 +14908,6 @@ index 00000000..98df8b84
 +    returnToMenu = false;
 +
 +    while (!returnToMenu && !triggerClone) {
-+        InputHandler();
 +        if (check(EscPress)) {
 +            returnToMenu = true;
 +            break;
@@ -14706,14 +14930,17 @@ index 00000000..98df8b84
 +                frame.deleteSprite();
 +                hasSprite = false;
 +            }
++            bool isConnNow = pClient->isConnected();
 +            int act = -1;
 +            options.clear();
-+            if (cur.props & 0x01) options.push_back({"Read Value", [&]() { act = 0; }});
-+            if (cur.props & (0x02 | 0x04)) options.push_back({"Write ASCII / Hex", [&]() { act = 1; }});
-+            if (cur.props & (0x08 | 0x10)) {
++            if (isConnNow && (cur.props & 0x01)) options.push_back({"Read Value", [&]() { act = 0; }});
++            if (isConnNow && (cur.props & (0x02 | 0x04))) options.push_back({"Write ASCII / Hex", [&]() { act = 1; }});
++            if (isConnNow && (cur.props & (0x08 | 0x10))) {
 +                options.push_back({cur.subscribed ? "Unsubscribe Notify" : "Subscribe Live Notify", [&]() { act = 2; }});
 +            }
-+            options.push_back({String("PHY Mode (Now ") + phyCodeToStr(s_txPhy) + ")", [&]() { act = 3; }});
++            if (isConnNow) {
++                options.push_back({String("PHY Mode (Now ") + phyCodeToStr(s_txPhy) + ")", [&]() { act = 3; }});
++            }
 +            options.push_back({"Save Profile to Flash", [&]() { act = 4; }});
 +            options.push_back({"[CLONE & EMULATE THIS!]", [&]() { act = 5; }});
 +            options.push_back({"Back", [&]() { act = 6; }});
@@ -14722,8 +14949,12 @@ index 00000000..98df8b84
 +
 +            if (act == 0 && cur.remote && pClient->isConnected()) {
 +                NimBLEAttValue v = cur.remote->readValue();
-+                cur.val.assign(v.data(), v.data() + std::min<size_t>(v.size(), 64));
-+                s_lastEventStr = "Read: " + toHexStr(cur.val.data(), cur.val.size(), 16);
++                ensureBleMux();
++                if (xSemaphoreTake(s_bleUiMux, pdMS_TO_TICKS(40)) == pdTRUE) {
++                    cur.val.assign(v.data(), v.data() + std::min<size_t>(v.size(), 64));
++                    s_lastEventStr = "Read: " + toHexStr(cur.val.data(), cur.val.size(), 16);
++                    xSemaphoreGive(s_bleUiMux);
++                }
 +            } else if (act == 1 && cur.remote && pClient->isConnected()) {
 +                String inp = keyboard("", 40, "Text or hex:AABBCC");
 +                if (!inp.isEmpty()) {
@@ -14739,24 +14970,27 @@ index 00000000..98df8b84
 +                        ok = cur.remote->writeValue((const uint8_t *)inp.c_str(), inp.length(), needResp);
 +                        if (ok) cur.val.assign((const uint8_t *)inp.c_str(), (const uint8_t *)inp.c_str() + inp.length());
 +                    }
-+                    s_lastEventStr = ok ? "Write OK" : "Write Failed";
++                    setLastBleEvent(ok ? "Write OK" : "Write Failed");
 +                }
 +            } else if (act == 2 && cur.remote && pClient->isConnected()) {
 +                if (cur.subscribed) {
 +                    cur.remote->unsubscribe();
 +                    cur.subscribed = false;
-+                    s_lastEventStr = "Unsubscribed";
++                    setLastBleEvent("Unsubscribed");
 +                } else {
 +                    bool useNotify = (cur.props & 0x08) != 0;
 +                    int idxCapture = cursor;
 +                    bool ok = cur.remote->subscribe(
 +                        useNotify,
-+                        [&prof, idxCapture](NimBLERemoteCharacteristic *rc, uint8_t *pData, size_t len, bool) {
++                        [idxCapture](NimBLERemoteCharacteristic *rc, uint8_t *pData, size_t len, bool) {
 +                            ensureBleMux();
 +                            if (xSemaphoreTake(s_bleUiMux, pdMS_TO_TICKS(30)) == pdTRUE) {
 +                                s_notifyCount++;
-+                                if (idxCapture >= 0 && idxCapture < (int)prof.chars.size()) {
-+                                    prof.chars[idxCapture].val.assign(pData, pData + std::min<size_t>(len, 64));
++                                if (s_activeProfPtr && idxCapture >= 0 &&
++                                    idxCapture < (int)s_activeProfPtr->chars.size()) {
++                                    s_activeProfPtr->chars[idxCapture].val.assign(
++                                        pData, pData + std::min<size_t>(len, 64)
++                                    );
 +                                }
 +                                s_lastEventStr = "Ntf " + shortUuidLabel(rc->getUUID().toString().c_str()) + ": " +
 +                                                 toHexStr(pData, len, 12);
@@ -14765,7 +14999,7 @@ index 00000000..98df8b84
 +                        }
 +                    );
 +                    cur.subscribed = ok;
-+                    s_lastEventStr = ok ? "Subscribed Live Notify!" : "Subscribe Failed";
++                    setLastBleEvent(ok ? "Subscribed Live Notify!" : "Subscribe Failed");
 +                }
 +            } else if (act == 3 && pClient->isConnected()) {
 +                int psel = -1;
@@ -14787,10 +15021,10 @@ index 00000000..98df8b84
 +                    pClient->getPhy(&tx, &rx);
 +                    s_txPhy = tx;
 +                    s_rxPhy = rx;
-+                    s_lastEventStr = ok ? (String("PHY -> ") + phyCodeToStr(tx)) : "Peer rejected PHY";
++                    setLastBleEvent(ok ? (String("PHY -> ") + phyCodeToStr(tx)) : "Peer rejected PHY");
 +                }
 +            } else if (act == 4) {
-+                s_lastEventStr = saveGattProfileJson(prof) ? ("Saved " + prof.addr.substring(9)) : "Save failed";
++                setLastBleEvent(saveGattProfileJson(prof) ? ("Saved " + prof.addr.substring(9)) : "Save failed");
 +            } else if (act == 5) {
 +                saveGattProfileJson(prof);
 +                triggerClone = true;
@@ -14850,20 +15084,34 @@ index 00000000..98df8b84
 +                    y += 26;
 +                }
 +
-+                // Selected Characteristic Value Inspector Box
-+                const GattChrSnap &selChr = prof.chars[cursor];
++                // Selected Characteristic Value Inspector Box (mutex-safe snapshot of value & event)
++                std::vector<uint8_t> valSnap;
++                String svcSnap = prof.chars[cursor].svcUuid;
++                ensureBleMux();
++                if (xSemaphoreTake(s_bleUiMux, pdMS_TO_TICKS(30)) == pdTRUE) {
++                    valSnap = prof.chars[cursor].val;
++                    xSemaphoreGive(s_bleUiMux);
++                }
++                String lastEv = getLastBleEvent();
++
 +                frame.fillRoundRect(6, 160, tftWidth - 12, 56, 6, blendColors(bg, pri, 10));
 +                frame.setTextDatum(ML_DATUM);
 +                frame.setTextColor(sec, blendColors(bg, pri, 10));
-+                frame.drawString("Svc: " + shortUuidLabel(selChr.svcUuid) + "  [" + String(cursor + 1) + "/" +
++                frame.drawString("Svc: " + shortUuidLabel(svcSnap) + "  [" + String(cursor + 1) + "/" +
 +                                     String((int)prof.chars.size()) + "]",
 +                                 12,
 +                                 171);
++                if (s_notifyCount > 0) {
++                    frame.setTextDatum(MR_DATUM);
++                    frame.setTextColor(okCol, blendColors(bg, pri, 10));
++                    frame.drawString("Ntf:" + String((unsigned long)s_notifyCount), tftWidth - 12, 171);
++                }
++                frame.setTextDatum(ML_DATUM);
 +                frame.setTextColor(TFT_WHITE, blendColors(bg, pri, 10));
-+                frame.drawString("HEX: " + toHexStr(selChr.val.data(), selChr.val.size(), 12), 12, 187);
++                frame.drawString("HEX: " + toHexStr(valSnap.data(), valSnap.size(), 12), 12, 187);
 +                frame.setTextColor(warnCol, blendColors(bg, pri, 10));
-+                String asc = toAsciiStr(selChr.val.data(), selChr.val.size(), 18);
-+                frame.drawString(asc.isEmpty() ? s_lastEventStr.substring(0, 32) : ("TXT: " + asc), 12, 203);
++                String asc = toAsciiStr(valSnap.data(), valSnap.size(), 18);
++                frame.drawString(asc.isEmpty() ? lastEv.substring(0, 32) : ("TXT: " + asc), 12, 203);
 +
 +                frame.fillRect(0, tftHeight - 20, tftWidth, 20, blendColors(bg, pri, 14));
 +                frame.setTextDatum(MC_DATUM);
@@ -14876,8 +15124,19 @@ index 00000000..98df8b84
 +        vTaskDelay(pdMS_TO_TICKS(20));
 +    }
 +
++    ensureBleMux();
++    if (xSemaphoreTake(s_bleUiMux, pdMS_TO_TICKS(50)) == pdTRUE) {
++        s_activeProfPtr = nullptr;
++        xSemaphoreGive(s_bleUiMux);
++    }
++    if (pClient->isConnected()) {
++        for (auto &c : prof.chars) {
++            if (c.subscribed && c.remote) c.remote->unsubscribe();
++            c.subscribed = false;
++        }
++        pClient->disconnect();
++    }
 +    if (hasSprite) frame.deleteSprite();
-+    if (pClient->isConnected()) pClient->disconnect();
 +    BLEDevice::deleteClient(pClient);
 +    stopBLEStack();
 +    s_activeMode = "IDLE";
@@ -14929,6 +15188,7 @@ index 00000000..98df8b84
 +}
 +
 +String bleGattGetStateJson() {
++    String lastEv = getLastBleEvent();
 +    String j = "{";
 +    j += "\"mode\":\"" + s_activeMode + "\",";
 +    j += "\"target\":\"" + jsonEscBle(s_activeTarget) + "\",";
@@ -14937,7 +15197,7 @@ index 00000000..98df8b84
 +    j += "\"rxPhy\":\"" + String(phyCodeToStr(s_rxPhy)) + "\",";
 +    j += "\"notifyCount\":" + String((unsigned long)s_notifyCount) + ",";
 +    j += "\"cloneWrites\":" + String((unsigned long)s_cloneWrites) + ",";
-+    j += "\"lastEvent\":\"" + jsonEscBle(s_lastEventStr) + "\",";
++    j += "\"lastEvent\":\"" + jsonEscBle(lastEv) + "\",";
 +    j += "\"profiles\":" + bleGattSavedProfilesJson();
 +    j += "}";
 +    return j;
@@ -15652,10 +15912,10 @@ index ca5806a0..18d2aa25 100644
      std::function<bool(void)> onProgress = nullptr
 diff --git a/src/modules/others/sonar_guard.cpp b/src/modules/others/sonar_guard.cpp
 new file mode 100644
-index 00000000..99a7fb97
+index 00000000..84e7d402
 --- /dev/null
 +++ b/src/modules/others/sonar_guard.cpp
-@@ -0,0 +1,688 @@
+@@ -0,0 +1,732 @@
 +#if defined(HAS_MICROPHONE) && !defined(LITE_VERSION)
 +#include "sonar_guard.h"
 +
@@ -15802,14 +16062,19 @@ index 00000000..99a7fb97
 +    return pwr > 0.0f ? sqrtf(pwr) : 0.0f;
 +}
 +
++static const char *sonarDirStr(int8_t d) {
++    return (d < 0) ? "LEFT" : ((d > 0) ? "RIGHT" : "CENTER");
++}
++
 +static void saveSonarStateAndLog(
 +    bool armed, SonarActionMode actMode, SonarSensitivity sens, uint16_t carrierHz,
-+    uint8_t curMotion, bool triggered, const std::vector<SonarEventRec> &events, const SonarEventRec *newEv
++    uint8_t curMotion, uint8_t sessionPeak, const char *lastDir, bool triggered,
++    const std::vector<SonarEventRec> &events, const SonarEventRec *newEv
 +) {
 +    if (newEv) {
 +        File lf = LittleFS.open("/sonar_guard.log", LittleFS.exists("/sonar_guard.log") ? FILE_APPEND : FILE_WRITE);
 +        if (lf) {
-+            const char *dirStr = (newEv->dir < 0) ? "LEFT" : ((newEv->dir > 0) ? "RIGHT" : "CENTER");
++            const char *dirStr = sonarDirStr(newEv->dir);
 +            lf.printf(
 +                "[%lus] MOTION score=%u%% dir=%s %s%s%s\n",
 +                (unsigned long)newEv->tsSec,
@@ -15829,23 +16094,28 @@ index 00000000..99a7fb97
 +                          : ((actMode == SONAR_ACT_SILENT_LOG) ? "Silent" : "AutoRec-WAV");
 +    const char *sensName = (sens == SONAR_SENS_LOW) ? "Low" : ((sens == SONAR_SENS_MED) ? "Med" : "High");
 +    sf.printf(
-+        "{\"armed\":%s,\"triggered\":%s,\"action\":\"%s\",\"sens\":\"%s\",\"carrierHz\":%u,\"motion\":%u,\"events\":[",
++        "{\"armed\":%s,\"alarm\":%s,\"triggered\":%s,\"action\":\"%s\",\"sens\":\"%s\",\"carrierHz\":%u,"
++        "\"motion\":%u,\"peak\":%u,\"lastDir\":\"%s\",\"events\":[",
 +        armed ? "true" : "false",
++        triggered ? "true" : "false",
 +        triggered ? "true" : "false",
 +        actName,
 +        sensName,
 +        (unsigned)carrierHz,
-+        (unsigned)curMotion
++        (unsigned)curMotion,
++        (unsigned)sessionPeak,
++        (lastDir && lastDir[0]) ? lastDir : "--"
 +    );
 +    int n = (int)events.size();
 +    for (int i = 0; i < n; i++) {
-+        const auto &e = events[n - 1 - i];
++        const auto &e = events[i];
 +        if (i > 0) sf.print(",");
 +        sf.printf(
-+            "{\"ts\":%lu,\"score\":%u,\"dir\":%d,\"approach\":%s,\"wav\":\"%s\"}",
++            "{\"ts\":%lu,\"score\":%u,\"pct\":%u,\"dir\":\"%s\",\"approach\":%s,\"wav\":\"%s\"}",
 +            (unsigned long)e.tsSec,
 +            (unsigned)e.score,
-+            (int)e.dir,
++            (unsigned)e.score,
++            sonarDirStr(e.dir),
 +            e.approach ? "true" : "false",
 +            e.wavFile
 +        );
@@ -15890,7 +16160,6 @@ index 00000000..99a7fb97
 +    uint32_t dataBytes = 0;
 +    int16_t monoDown[kSonarFrames / 3 + 4];
 +    while ((millis() - t0) < durationMs) {
-+        InputHandler();
 +        if (check(EscPress)) {
 +            returnToMenu = true;
 +            break;
@@ -16011,26 +16280,28 @@ index 00000000..99a7fb97
 +    uint32_t alertBannerUntil = 0;
 +    uint32_t armedStartedMs = 0;
 +    uint32_t sweepTick = 0;
++    uint8_t sessionPeak = 0;
++    const char *lastDirLbl = "--";
++    uint32_t lastJsonSync = 0;
 +    std::vector<SonarEventRec> events;
-+    saveSonarStateAndLog(false, actionMode, sens, carrierHz, 0, false, events, nullptr);
++    saveSonarStateAndLog(false, actionMode, sens, carrierHz, 0, 0, lastDirLbl, false, events, nullptr);
 +
 +    float txPhase = 0.0f;
 +    uint32_t lastDraw = 0;
 +    returnToMenu = false;
 +
 +    while (!returnToMenu) {
-+        InputHandler();
 +        if (check(EscPress)) {
 +            returnToMenu = true;
 +            break;
 +        }
 +
-+        // Vol+ / Vol- quickly cycles sensitivity when in live mode
-+        if (check(PrevPress)) {
++        // Vol+ / Vol- (tap or hold) cycles sensitivity in live mode
++        if (check(PrevPress) || check(DownPress)) {
 +            sens = (SonarSensitivity)(((int)sens + 2) % 3);
 +            lastDraw = 0;
 +        }
-+        if (check(NextPress)) {
++        if (check(NextPress) || check(UpPress)) {
 +            sens = (SonarSensitivity)(((int)sens + 1) % 3);
 +            lastDraw = 0;
 +        }
@@ -16040,8 +16311,14 @@ index 00000000..99a7fb97
 +                armCountdown = false;
 +                setBrightness(bruceConfig.bright, false);
 +                setLedColor(CRGB::Black);
-+                saveSonarStateAndLog(false, actionMode, sens, carrierHz, (uint8_t)smoothMotion, false, events, nullptr);
++                saveSonarStateAndLog(
++                    false, actionMode, sens, carrierHz, (uint8_t)smoothMotion, sessionPeak, lastDirLbl, false, events, nullptr
++                );
 +            } else {
++                if (hasSprite) {
++                    frame.deleteSprite();
++                    hasSprite = false;
++                }
 +                int act = -1;
 +                options.clear();
 +                options.push_back({"ARM Motion Guard (8s)", [&]() { act = 0; }});
@@ -16060,7 +16337,9 @@ index 00000000..99a7fb97
 +                    armAtMs = millis() + 8000UL;
 +                } else if (act == 1) {
 +                    actionMode = (SonarActionMode)(((int)actionMode + 1) % 3);
-+                    saveSonarStateAndLog(false, actionMode, sens, carrierHz, (uint8_t)smoothMotion, false, events, nullptr);
++                    saveSonarStateAndLog(
++                        false, actionMode, sens, carrierHz, (uint8_t)smoothMotion, sessionPeak, lastDirLbl, false, events, nullptr
++                    );
 +                } else if (act == 2) {
 +                    if (carrierHz == 18500) carrierHz = 17500;
 +                    else if (carrierHz == 17500) carrierHz = 19200;
@@ -16074,10 +16353,12 @@ index 00000000..99a7fb97
 +                    calibStart = millis();
 +                    calibSum = 0.0;
 +                    calibCount = 0;
++                    sessionPeak = 0;
 +                } else if (act == 4) {
 +                    returnToMenu = true;
 +                    break;
 +                }
++                hasSprite = (frame.createSprite(tftWidth, tftHeight) != nullptr);
 +            }
 +            lastDraw = 0;
 +        }
@@ -16091,7 +16372,8 @@ index 00000000..99a7fb97
 +            calibSum = 0.0;
 +            calibCount = 0;
 +            consecHits = 0;
-+            saveSonarStateAndLog(true, actionMode, sens, carrierHz, 0, false, events, nullptr);
++            sessionPeak = 0;
++            saveSonarStateAndLog(true, actionMode, sens, carrierHz, 0, 0, lastDirLbl, false, events, nullptr);
 +        }
 +
 +        // Generate smooth continuous carrier tone (safe amplitude ~7500 avoids codec clipping)
@@ -16155,15 +16437,26 @@ index 00000000..99a7fb97
 +            }
 +
 +            float thresh = (sens == SONAR_SENS_LOW) ? 45.0f : ((sens == SONAR_SENS_MED) ? 28.0f : 16.0f);
++            uint8_t mPct = (uint8_t)std::min(100.0f, smoothMotion);
++            if (mPct > sessionPeak) sessionPeak = mPct;
++            lastDirLbl = (smoothDir < -0.22f) ? "LEFT" : ((smoothDir > 0.22f) ? "RIGHT" : "CENTER");
 +            if (smoothMotion >= thresh) consecHits++;
 +            else consecHits = 0;
++
++            if (isWebUIActive && (millis() - lastJsonSync) >= 3000UL) {
++                lastJsonSync = millis();
++                saveSonarStateAndLog(
++                    armed, actionMode, sens, carrierHz, mPct, sessionPeak, lastDirLbl,
++                    millis() < alertBannerUntil, events, nullptr
++                );
++            }
 +
 +            if (armed && consecHits >= 3 && (millis() - lastAlertAt) > 6000UL) {
 +                lastAlertAt = millis();
 +                alertBannerUntil = millis() + 4500UL;
 +                SonarEventRec ev = {};
 +                ev.tsSec = millis() / 1000UL;
-+                ev.score = (uint8_t)std::min(100.0f, smoothMotion);
++                ev.score = mPct;
 +                ev.dir = (smoothDir < -0.22f) ? -1 : ((smoothDir > 0.22f) ? 1 : 0);
 +                ev.approach = smoothApproach;
 +                ev.wavFile[0] = '\0';
@@ -16177,14 +16470,14 @@ index 00000000..99a7fb97
 +                } else if (actionMode == SONAR_ACT_SIREN_LED) {
 +                    setBrightness(bruceConfig.bright, false);
 +                    playSirenBurst(txBuf, rxBuf);
-+                } else {
-+                    // Silent mode: subtle log only, keep screen dim
 +                }
 +
 +                if ((int)events.size() >= kMaxSonarHistory) events.erase(events.begin());
 +                events.push_back(ev);
-+                saveSonarStateAndLog(true, actionMode, sens, carrierHz, (uint8_t)smoothMotion, true, events, &ev);
++                lastJsonSync = millis();
++                saveSonarStateAndLog(true, actionMode, sens, carrierHz, mPct, sessionPeak, lastDirLbl, true, events, &ev);
 +                consecHits = 0;
++                if (returnToMenu) break;
 +            }
 +        }
 +
@@ -16260,6 +16553,17 @@ index 00000000..99a7fb97
 +                    frame.drawLine(rCx, rCy, rCx - 79, rCy - 79, gridCol);
 +                    frame.drawLine(rCx, rCy, rCx + 79, rCy - 79, gridCol);
 +
++                    // Direction labels around radar arc (284px wide display)
++                    frame.setTextDatum(MC_DATUM);
++                    frame.setTextColor(sec, bg);
++                    frame.drawString("L", rCx - maxR - 10, rCy - 6);
++                    frame.drawString("C", rCx, rCy - maxR - 8);
++                    frame.drawString("R", rCx + maxR + 10, rCy - 6);
++                    frame.setTextDatum(ML_DATUM);
++                    const char *actTag = (actionMode == SONAR_ACT_SIREN_LED) ? "SIREN"
++                                         : ((actionMode == SONAR_ACT_SILENT_LOG) ? "SILENT" : "WAV");
++                    frame.drawString(String("Act:") + actTag, 8, 34);
++
 +                    // Sweeping ping arc line
 +                    float sweepAng = (float)M_PI * (0.12f + 0.76f * (0.5f + 0.5f * sinf((float)sweepTick * 0.08f)));
 +                    int sx = rCx + (int)(cosf(sweepAng) * maxR);
@@ -16320,7 +16624,7 @@ index 00000000..99a7fb97
 +
 +    setBrightness(bruceConfig.bright, false);
 +    setLedColor(CRGB::Black);
-+    saveSonarStateAndLog(false, actionMode, sens, carrierHz, 0, false, events, nullptr);
++    saveSonarStateAndLog(false, actionMode, sens, carrierHz, 0, sessionPeak, lastDirLbl, false, events, nullptr);
 +    if (hasSprite) frame.deleteSprite();
 +    deinitFullDuplexSonarI2S();
 +
@@ -16357,7 +16661,7 @@ index 00000000..028022a3
 +
 +#endif
 diff --git a/src/modules/wifi/channel_analyzer.cpp b/src/modules/wifi/channel_analyzer.cpp
-index 353b8641..5a067470 100644
+index 353b8641..3f229381 100644
 --- a/src/modules/wifi/channel_analyzer.cpp
 +++ b/src/modules/wifi/channel_analyzer.cpp
 @@ -9,32 +9,139 @@
@@ -16519,7 +16823,7 @@ index 353b8641..5a067470 100644
      wifi_promiscuous_filter_t filt = {};
      filt.filter_mask = WIFI_PROMIS_FILTER_MASK_ALL;
      esp_wifi_set_promiscuous_filter(&filt);
-@@ -63,17 +170,221 @@ static void ca_stop_wifi() {
+@@ -63,17 +170,227 @@ static void ca_stop_wifi() {
      vTaskDelay(1 / portTICK_RATE_MS);
  }
  
@@ -16674,10 +16978,16 @@ index 353b8641..5a067470 100644
 +        if (h.decloaked) decloakedCnt++;
 +    }
 +    frame.drawString(
-+        "HIDDEN SSID DECLOAKER (" + String(decloakedCnt) + "/" + String(hidden.size()) + " found)",
++        "HIDDEN SSID DECLOAKER (" + String(decloakedCnt) + "/" + String(hidden.size()) + ")",
 +        8,
 +        hy
 +    );
++    if ((int)hidden.size() > 4) {
++        int endIdx = std::min((int)hidden.size(), hidScroll + 4);
++        frame.setTextDatum(MR_DATUM);
++        frame.setTextColor(sec, bg);
++        frame.drawString(String(hidScroll + 1) + "-" + String(endIdx) + "/" + String(hidden.size()), tftWidth - 8, hy);
++    }
 +
 +    int listY = hy + 12;
 +    if (hidden.empty()) {
@@ -16731,12 +17041,12 @@ index 353b8641..5a067470 100644
 +    uint8_t retryPct[14] = {0};
 +    int8_t rssiAll[14];
 +    for (int i = 0; i < 14; i++) rssiAll[i] = -128;
-+
+ 
+-    uint16_t dwell = 350; // ms per channel, adjustable with Up/Down
 +    std::vector<HiddenApEntry> hiddenAps;
 +    s_hidHead = 0;
 +    s_hidTail = 0;
- 
--    uint16_t dwell = 350; // ms per channel, adjustable with Up/Down
++
 +    uint16_t dwell = 350;
      int idx = 0;
 +    int viewMode = 0; // 0 = Live Spectrum, 1 = Advisor + Hidden SSID
@@ -16744,7 +17054,7 @@ index 353b8641..5a067470 100644
  
      WifiSpectrumView view;
      if (!view.begin("Channel Analyzer")) {
-@@ -81,9 +392,13 @@ void channel_analyzer_setup() {
+@@ -81,9 +398,13 @@ void channel_analyzer_setup() {
          return;
      }
  
@@ -16759,7 +17069,7 @@ index 353b8641..5a067470 100644
  
      for (;;) {
          if (returnToMenu) break;
-@@ -91,16 +406,40 @@ void channel_analyzer_setup() {
+@@ -91,16 +412,48 @@ void channel_analyzer_setup() {
              returnToMenu = true;
              break;
          }
@@ -16784,8 +17094,16 @@ index 353b8641..5a067470 100644
 +            if (check(UpPress) && dwell < 1000) dwell += 100;
 +            if (check(DownPress) && dwell > 150) dwell -= 100;
 +        } else {
-+            if (check(PrevPress) && hidScroll > 0) hidScroll--;
-+            if (check(NextPress) && hidScroll + 4 < (int)hiddenAps.size()) hidScroll++;
++            bool scrolled = false;
++            if ((check(PrevPress) || check(UpPress)) && hidScroll > 0) {
++                hidScroll--;
++                scrolled = true;
++            }
++            if ((check(NextPress) || check(DownPress)) && hidScroll + 4 < (int)hiddenAps.size()) {
++                hidScroll++;
++                scrolled = true;
++            }
++            if (scrolled) drawAdvisorPage(advFrame, hasAdvSprite, loadAll, retryPct, hiddenAps, hidScroll, CA_CHANNELS[idx]);
 +        }
  
          uint8_t ch = CA_CHANNELS[idx];
@@ -16803,7 +17121,7 @@ index 353b8641..5a067470 100644
  
          uint32_t t0 = millis();
          uint32_t lastFrame = 0;
-@@ -109,39 +448,110 @@ void channel_analyzer_setup() {
+@@ -109,39 +462,110 @@ void channel_analyzer_setup() {
                  returnToMenu = true;
                  break;
              }
@@ -16932,10 +17250,10 @@ index 353b8641..5a067470 100644
  #endif
 diff --git a/src/modules/wifi/napt_router.cpp b/src/modules/wifi/napt_router.cpp
 new file mode 100644
-index 00000000..27d32031
+index 00000000..1b9857f5
 --- /dev/null
 +++ b/src/modules/wifi/napt_router.cpp
-@@ -0,0 +1,951 @@
+@@ -0,0 +1,994 @@
 +#if !defined(LITE_VERSION)
 +#include "napt_router.h"
 +
@@ -17691,27 +18009,49 @@ index 00000000..27d32031
 +    bool hasSprite = (frame.createSprite(tftWidth, tftHeight) != nullptr);
 +
 +    int viewMode = 0; // 0 = Live DNS Feed, 1 = Clients
++    int cursor = 0;
 +    int scroll = 0;
 +    uint32_t lastDraw = 0;
++    bool keepBgOnExit = false;
++    std::vector<DnsFeedEntry> snap;
 +    returnToMenu = false;
 +
 +    while (!returnToMenu) {
-+        InputHandler();
 +        if (check(EscPress)) {
++            if (isWebUiActiveOrStarting()) keepBgOnExit = true;
 +            returnToMenu = true;
 +            break;
 +        }
-+        if (check(PrevPress)) {
-+            if (scroll > 0) scroll--;
++        if (check(PrevPress) || check(UpPress)) {
++            if (viewMode == 0) {
++                if (cursor > 0) cursor--;
++            } else if (scroll > 0) {
++                scroll--;
++            }
 +            lastDraw = 0;
 +        }
-+        if (check(NextPress)) {
-+            scroll++;
++        if (check(NextPress) || check(DownPress)) {
++            if (viewMode == 0) cursor++;
++            else scroll++;
 +            lastDraw = 0;
 +        }
 +        if (check(SelPress)) {
++            if (hasSprite) {
++                frame.deleteSprite();
++                hasSprite = false;
++            }
++            String selDom;
++            bool selBlocked = false;
++            if (viewMode == 0 && !snap.empty() && cursor < (int)snap.size()) {
++                selDom = String(snap[cursor].domain);
++                selBlocked = snap[cursor].blocked;
++            }
 +            int act = -1;
 +            options.clear();
++            if (!selDom.isEmpty()) {
++                String lbl = (selBlocked ? "Unblock: " : "Block: ") + selDom.substring(0, 18);
++                options.push_back({lbl, [&]() { act = 10; }});
++            }
 +            options.push_back({viewMode == 0 ? "View: Connected Clients" : "View: Live DNS Feed", [&]() { act = 0; }});
 +            options.push_back({String("Block Trackers: ") + (s_autoBlockTrackers ? "ON" : "OFF"), [&]() { act = 1; }});
 +            options.push_back({"Run Background (keep AP)", [&]() { act = 2; }});
@@ -17721,38 +18061,44 @@ index 00000000..27d32031
 +            loopOptions(options, MENU_TYPE_SUBMENU, "Travel Router Menu");
 +            options.clear();
 +
-+            if (act == 0) {
++            if (act == 10 && !selDom.isEmpty()) {
++                if (selBlocked) naptRemoveBlockDomain(selDom);
++                else naptAddBlockDomain(selDom);
++            } else if (act == 0) {
 +                viewMode = 1 - viewMode;
++                cursor = 0;
 +                scroll = 0;
 +            } else if (act == 1) {
 +                s_autoBlockTrackers = !s_autoBlockTrackers;
 +            } else if (act == 2) {
-+                if (hasSprite) frame.deleteSprite();
 +                displayInfo("NAPT running in background!\nAP: " + bruceConfig.wifiAp.ssid, true);
 +                return;
 +            } else if (act == 3) {
 +                displayInfo(naptExportLog() ? "Saved /napt_dns.log" : "Export failed", true);
 +            } else if (act == 4) {
 +                naptClearLog();
++                cursor = 0;
 +                scroll = 0;
 +            } else if (act == 5) {
++                keepBgOnExit = false;
 +                returnToMenu = true;
 +                break;
 +            }
++            hasSprite = (frame.createSprite(tftWidth, tftHeight) != nullptr);
 +            lastDraw = 0;
 +        }
 +
 +        if (millis() - lastDraw >= 300) {
 +            lastDraw = millis();
 +            std::vector<NaptClientInfo> clients = queryApClients();
-+            std::vector<DnsFeedEntry> snap;
++            snap.clear();
 +            uint32_t tot = 0, blk = 0, trk = 0;
 +            ensureNaptMutex();
 +            if (xSemaphoreTake(s_naptMutex, pdMS_TO_TICKS(40)) == pdTRUE) {
 +                tot = s_totalQueries;
 +                blk = s_blockedQueries;
 +                trk = s_trackerQueries;
-+                int cnt = std::min(s_feedCount, 24);
++                int cnt = std::min(s_feedCount, 32);
 +                for (int i = 0; i < cnt; i++) {
 +                    int idx = (s_feedHead - 1 - i + kNaptLogCap) % kNaptLogCap;
 +                    snap.push_back(s_feed[idx]);
@@ -17796,20 +18142,26 @@ index 00000000..27d32031
 +                int maxRows = 6;
 +
 +                if (viewMode == 0) {
-+                    int maxScroll = std::max(0, (int)snap.size() - maxRows);
-+                    if (scroll > maxScroll) scroll = maxScroll;
 +                    if (snap.empty()) {
++                        cursor = 0;
++                        scroll = 0;
 +                        frame.setTextDatum(MC_DATUM);
 +                        frame.setTextColor(sec, bg);
 +                        frame.drawString("Join '" + bruceConfig.wifiAp.ssid + "' to browse", tftWidth / 2, 132);
 +                        frame.drawString("DNS domains appear live here", tftWidth / 2, 148);
 +                    } else {
++                        if (cursor >= (int)snap.size()) cursor = (int)snap.size() - 1;
++                        if (cursor < scroll) scroll = cursor;
++                        if (cursor >= scroll + maxRows) scroll = cursor - maxRows + 1;
 +                        for (int r = 0; r < maxRows && (scroll + r) < (int)snap.size(); r++) {
-+                            const DnsFeedEntry &e = snap[scroll + r];
++                            int si = scroll + r;
++                            const DnsFeedEntry &e = snap[si];
++                            bool sel = (si == cursor);
 +                            int ry = listY + r * rowH;
-+                            uint16_t rowBg = (r % 2 == 0) ? blendColors(bg, pri, 8) : bg;
++                            uint16_t rowBg = sel ? blendColors(bg, pri, 26) : ((r % 2 == 0) ? blendColors(bg, pri, 8) : bg);
 +                            uint16_t dotCol = e.blocked ? errCol : (e.tracker ? warnCol : okCol);
 +                            frame.fillRoundRect(6, ry, tftWidth - 12, rowH - 2, 4, rowBg);
++                            if (sel) frame.drawRoundRect(6, ry, tftWidth - 12, rowH - 2, 4, pri);
 +                            frame.fillCircle(14, ry + (rowH - 2) / 2, 3, dotCol);
 +
 +                            // Short last octet of client IP
@@ -17821,7 +18173,7 @@ index 00000000..27d32031
 +                            frame.drawString(tag, 22, ry + (rowH - 2) / 2);
 +
 +                            String dom(e.domain);
-+                            if (dom.length() > 29) dom = dom.substring(0, 27) + "..";
++                            if (dom.length() > 28) dom = dom.substring(0, 26) + "..";
 +                            frame.setTextColor(e.blocked ? errCol : TFT_WHITE, rowBg);
 +                            frame.drawString(dom, 52, ry + (rowH - 2) / 2);
 +
@@ -17860,16 +18212,25 @@ index 00000000..27d32031
 +                frame.fillRect(0, tftHeight - 20, tftWidth, 20, blendColors(bg, pri, 14));
 +                frame.setTextDatum(MC_DATUM);
 +                frame.setTextColor(sec, blendColors(bg, pri, 14));
-+                frame.drawString("Vol-/+:Scroll   Boot:Menu   Hold:Stop", tftWidth / 2, tftHeight - 10);
++                frame.drawString(
++                    keepBgOnExit || isWebUiActiveOrStarting() ? "Vol-/+:Select   Boot:Block/Menu   Hold:BG"
++                                                              : "Vol-/+:Select   Boot:Block/Menu   Hold:Stop",
++                    tftWidth / 2,
++                    tftHeight - 10
++                );
 +                frame.pushSprite(0, 0);
 +            }
 +            wakeUpScreen();
 +        }
-+        vTaskDelay(pdMS_TO_TICKS(25));
++        vTaskDelay(pdMS_TO_TICKS(15));
 +    }
 +
 +    if (hasSprite) frame.deleteSprite();
-+    naptStop(true);
++    if (keepBgOnExit) {
++        displayInfo("NAPT keeps running in background", true);
++    } else {
++        naptStop(true);
++    }
 +    tft.fillScreen(bruceConfig.bgColor);
 +}
 +#else
@@ -17916,10 +18277,10 @@ index 00000000..f47f2363
 +#endif
 diff --git a/src/modules/wifi/probe_radar.cpp b/src/modules/wifi/probe_radar.cpp
 new file mode 100644
-index 00000000..ec0f84ed
+index 00000000..c6f474c1
 --- /dev/null
 +++ b/src/modules/wifi/probe_radar.cpp
-@@ -0,0 +1,681 @@
+@@ -0,0 +1,731 @@
 +#if !defined(LITE_VERSION)
 +#include "probe_radar.h"
 +
@@ -18257,6 +18618,8 @@ index 00000000..ec0f84ed
 +    int viewMode = 0; // 0 = Real Devices, 1 = PNL Hotlist
 +    int cursor = 0;
 +    int scroll = 0;
++    uint32_t selectedDevId = 0;
++    String selectedSsid = "";
 +    uint32_t lastChHop = millis();
 +    uint32_t lastDraw = 0;
 +    uint32_t lastWatchAlertAt = 0;
@@ -18265,7 +18628,6 @@ index 00000000..ec0f84ed
 +    returnToMenu = false;
 +
 +    while (!returnToMenu) {
-+        InputHandler();
 +        if (check(EscPress)) {
 +            returnToMenu = true;
 +            break;
@@ -18382,21 +18744,38 @@ index 00000000..ec0f84ed
 +            }
 +        }
 +
-+        if (check(PrevPress)) {
-+            if (cursor > 0) cursor--;
++        if (check(PrevPress) || check(UpPress)) {
++            int sz = (viewMode == 0) ? (int)devs.size() : (int)pnls.size();
++            if (sz > 0) {
++                cursor = (cursor > 0) ? (cursor - 1) : (sz - 1);
++                if (viewMode == 0) selectedDevId = devs[cursor].id;
++                else selectedSsid = pnls[cursor].ssid;
++            }
 +            lastDraw = 0;
 +        }
-+        if (check(NextPress)) {
-+            cursor++;
++        if (check(NextPress) || check(DownPress)) {
++            int sz = (viewMode == 0) ? (int)devs.size() : (int)pnls.size();
++            if (sz > 0) {
++                cursor = (cursor + 1) % sz;
++                if (viewMode == 0) selectedDevId = devs[cursor].id;
++                else selectedSsid = pnls[cursor].ssid;
++            }
 +            lastDraw = 0;
 +        }
 +        if (check(SelPress)) {
++            if (hasSprite) {
++                frame.deleteSprite();
++                hasSprite = false;
++            }
 +            int act = -1;
 +            bool hasDev = (viewMode == 0 && !devs.empty() && cursor < (int)devs.size());
++            bool hasPnl = (viewMode == 1 && !pnls.empty() && cursor < (int)pnls.size());
 +            options.clear();
 +            if (hasDev) {
 +                options.push_back({"Inspect Selected Device", [&]() { act = 0; }});
 +                options.push_back({devs[cursor].watched ? "Unwatch Device" : "Pin / Watch Device", [&]() { act = 1; }});
++            } else if (hasPnl) {
++                options.push_back({"Who Probed '" + pnls[cursor].ssid.substring(0, 14) + "'?", [&]() { act = 7; }});
 +            }
 +            options.push_back({viewMode == 0 ? "View: PNL Hotlist" : "View: Real Devices", [&]() { act = 2; }});
 +            options.push_back({chLocked ? "Unlock Channel Sweep" : ("Lock CH " + String(curCh)), [&]() { act = 3; }});
@@ -18420,10 +18799,24 @@ index 00000000..ec0f84ed
 +                displayInfo(info, true);
 +            } else if (act == 1 && hasDev) {
 +                devs[cursor].watched = !devs[cursor].watched;
++            } else if (act == 7 && hasPnl) {
++                String targetSsid = pnls[cursor].ssid;
++                String who = "SSID: " + targetSsid + "\nSeeking Devices:\n";
++                int found = 0;
++                for (const auto &d : devs) {
++                    if (std::find(d.pnls.begin(), d.pnls.end(), targetSsid) != d.pnls.end()) {
++                        who += "  #" + String(d.id) + " [" + String(d.osHint) + "] " + String(d.rssi) + "dB\n";
++                        found++;
++                    }
++                }
++                if (found == 0) who += "  (No clustered device cached)";
++                displayInfo(who, true);
 +            } else if (act == 2) {
 +                viewMode = 1 - viewMode;
 +                cursor = 0;
 +                scroll = 0;
++                selectedDevId = 0;
++                selectedSsid = "";
 +            } else if (act == 3) {
 +                chLocked = !chLocked;
 +            } else if (act == 4) {
@@ -18439,10 +18832,13 @@ index 00000000..ec0f84ed
 +                s_totalMacSeen = 0;
 +                cursor = 0;
 +                scroll = 0;
++                selectedDevId = 0;
++                selectedSsid = "";
 +            } else if (act == 6) {
 +                returnToMenu = true;
 +                break;
 +            }
++            hasSprite = (frame.createSprite(tftWidth, tftHeight) != nullptr);
 +            lastDraw = 0;
 +        }
 +
@@ -18459,6 +18855,21 @@ index 00000000..ec0f84ed
 +            std::sort(pnls.begin(), pnls.end(), [](const PnlCount &a, const PnlCount &b) {
 +                return a.hits > b.hits;
 +            });
++            if (viewMode == 0 && selectedDevId != 0) {
++                for (size_t i = 0; i < devs.size(); i++) {
++                    if (devs[i].id == selectedDevId) {
++                        cursor = (int)i;
++                        break;
++                    }
++                }
++            } else if (viewMode == 1 && !selectedSsid.isEmpty()) {
++                for (size_t i = 0; i < pnls.size(); i++) {
++                    if (pnls[i].ssid == selectedSsid) {
++                        cursor = (int)i;
++                        break;
++                    }
++                }
++            }
 +
 +            if (hasSprite) {
 +                const uint16_t bg = bruceConfig.bgColor;

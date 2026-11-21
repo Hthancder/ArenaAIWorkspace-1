@@ -257,7 +257,7 @@
 
       <p class="hint">
         <b>Cách hoạt động sau khi nạp:</b> Mỗi lần bật nguồn hoặc bấm Reset, màn hình 1.83" sẽ hiện <b>Boot Menu</b> đếm ngược <code>2.5s</code> (mặc định vào <b>XiaoZhi HeyLily</b>). Bấm <b>Vol+ / Vol-</b> để chọn <b>Bruce Firmware</b> hoặc đổi thời gian chờ (thậm chí chọn <code>0s</code> giữ nút mới mở Menu). Từ trong Bruce, vào <b>Others &rarr; Boot XiaoZhi</b> hoặc <b>WebUI &rarr; /ota</b> để quay lại HeyLily bất kỳ lúc nào.<br/>
-        <b>An toàn dữ liệu:</b> LittleFS của Bruce được gắn nhãn riêng <code>brucefs</code> nằm trước <code>assets</code>, và WebOTA trong Bruce tự động khoá ghi đè <code>ota_0</code> để không bao giờ làm hỏng XiaoZhi HeyLily.
+        <b>An toàn &amp; nâng cấp phân vùng:</b> LittleFS của Bruce được gắn nhãn riêng <code>brucefs</code> nằm trước <code>assets</code>, WebOTA trong Bruce khoá ghi đè <code>ota_0</code>. Nếu máy từng nạp bố cục Dual-Boot đời cũ có <code>ota_1 &lt; 3.81 MB</code>, chỉ cần nạp lại 1 lần ở Tab 1 này để tự giãn <code>ota_1</code>; từ sau đó có thể cập nhật không dây qua WebOTA bình thường.
       </p>
     </section>
   </div>
@@ -685,10 +685,11 @@ async function fetchCiFirmware() {
       if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
       return new Uint8Array(await r.arrayBuffer());
     };
-    const [bl, menu, bruceOta] = await Promise.all([
+    const [bl, menu, bruceOta, manifest] = await Promise.all([
       fetchBin("/fw/bootloader_dualboot.bin"),
       fetchBin("/fw/dualboot_menu.bin"),
       fetchBin("/fw/DSolution-183-2mic-ota.bin"),
+      fetch("/fw/manifest.json", { cache: "no-store" }).then((r) => r.ok ? r.json() : null).catch(() => null),
     ]);
     dbState.bootloaderBytes = bl;
     dbState.menuBytes = menu;
@@ -696,10 +697,13 @@ async function fetchCiFirmware() {
       dbState.bruceOtaBytes = bruceOta;
       dbState.bruceOtaName = "DSolution-183-2mic-ota.bin";
     }
+    const ciStamp = manifest?.generatedAt
+      ? ` · CI ${new Date(manifest.generatedAt).toLocaleString("vi-VN")}`
+      : "";
     $("cardBruce").className = "slot-card ready";
     $("bBruce").textContent = "Sẵn sàng (CI)";
     $("bBruce").className = "badge ok";
-    $("mBruce").textContent = `Bootloader ${fmtSize(bl.length)} · Menu ${fmtSize(menu.length)} · ${dbState.bruceOtaName} ${fmtSize(dbState.bruceOtaBytes.length)}`;
+    $("mBruce").textContent = `Bootloader ${fmtSize(bl.length)} · Menu ${fmtSize(menu.length)} · ${dbState.bruceOtaName} ${fmtSize(dbState.bruceOtaBytes.length)}${ciStamp}`;
   } catch (err) {
     $("cardBruce").className = "slot-card missing";
     $("bBruce").textContent = "Chưa tải được";
