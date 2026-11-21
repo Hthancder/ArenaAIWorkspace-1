@@ -4,7 +4,8 @@
 bản có thể phát hành. Các file `project/**/*.gml` và `project/**/*.gmx` được
 lưu trong Git để có thể sửa và theo dõi thay đổi. Tên trùng với APK không chứng
 minh logic trùng; 68 script, 94 object và 369 event native vẫn chưa có khóa
-nguồn tương ứng ở mốc ban đầu. Nguồn hiện vẫn thiếu 111 sprite APK theo tên;
+nguồn tương ứng ở mốc ban đầu. Sau phục hồi object cha rỗng, còn 93 object APK
+thiếu theo tên trong tập file nguồn. Nguồn hiện vẫn thiếu 111 sprite APK theo tên;
 12 sprite cùng tên còn khác metadata được so. Không dùng project hiện tại để
 tuyên bố game hoàn chỉnh hoặc đem phát hành IPA.
 
@@ -23,6 +24,10 @@ cấu hình tĩnh trong APK, giữ port 1334×750. `sys_view` có thể tính l�
 thước khi chạy; thay đổi này chưa được chứng minh là sửa lỗi iPhone hoặc đúng
 với mọi tỉ lệ màn hình. So sánh room qua `tools/deadtown_room_evidence.py` chỉ
 kiểm dữ liệu tĩnh, không khôi phục code hay xác nhận gameplay.
+
+Đã thêm `par_action_nosolid` không có sự kiện theo bảng APK và đặt lại object
+cha của `obj_gps`/`obj_trap` theo APK. Đây là phục hồi cấu trúc tĩnh, không tự
+khôi phục code sử dụng nhóm object này hay bảo đảm hành vi và ID sau biên dịch.
 
 ## Chỉnh sửa và quản lý tài nguyên
 

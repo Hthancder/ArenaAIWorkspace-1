@@ -662,3 +662,34 @@ thay đổi offline có chủ đích; không suy ra hai bản gameplay tương �
 Local chạy 144 test, 12 bỏ qua do đầu vào tùy chọn; workspace materialize vẫn
 `INCOMPLETE_NOT_FOR_RELEASE`. Báo cáo chi tiết được workflow source tạo lại;
 chưa có IPA mới.
+
+### Object cha và các phụ thuộc room còn thiếu
+
+Đối chiếu trường mặc định OBJT với các object **khai báo** trong project qua
+`tools/deadtown_object_evidence.py`: sprite, visible, solid, depth, persistent,
+parent, mask và cờ physics. Tên tham chiếu được giải theo bảng từng bên, không
+giả định ID sau biên dịch trùng APK. Trước thay đổi 146 object cùng tên có 5
+khác các trường này; hai object `obj_gps` và `obj_trap` có parent APK là
+`par_action_nosolid`, nhưng GMX không có parent đó.
+
+Đã thêm `par_action_nosolid` vào cuối danh sách object GMX, với các trường đã
+so khớp APK; 12 nhóm sự kiện trong OBJT APK đều có 0 event và bản nguồn cũng
+không khai báo event. Gắn parent đó cho `obj_gps` và `obj_trap`. Việc này chỉ
+phục hồi cấu trúc/hệ phân cấp ban đầu, **không** khôi phục các phần logic mới
+sử dụng nhóm này; source `obj_player` cũ vẫn xét nhóm `par_action`, không suy
+ra tương đương APK. Thứ tự khai báo không bảo đảm ID GameMaker; chưa build bằng
+GameMaker hay kiểm hành vi/va chạm. Không coi đây là sửa lỗi hình ảnh iPhone.
+
+Sau thay đổi: 147 object khai báo cùng tên, 144 khớp các trường đã chọn; ba
+khác biệt còn giữ nguyên gồm sprite của `obj_lobby_ach`, `obj_lobby_leader`
+(sprite APK chưa có trong source) và cờ solid của `sys_player_equipment` (chưa
+đổi vì ảnh hưởng hành vi chưa được kiểm). Trong toàn bộ file nguồn, 93 object
+APK còn thiếu theo tên; 369 event key, 68 script và 111 sprite vẫn thiếu. Tên
+trùng không xác nhận event/logic giống nhau.
+
+Báo cáo room mở rộng để liệt kê phụ thuộc các room chưa có: ví dụ
+`rom_play_defence` có 56 instance/239 tile trong APK, 29 instance tham chiếu
+các object chưa khai báo; `rom_play_sewer` có 14 instance, 6 instance thiếu
+object tương ứng. Ba room settings thiếu 3, 7 và 14 instance tương ứng theo
+object chưa khai báo. Không thêm room rỗng hoặc object giả chỉ để giảm số thiếu;
+không phục hồi được hành vi từ vị trí tĩnh.

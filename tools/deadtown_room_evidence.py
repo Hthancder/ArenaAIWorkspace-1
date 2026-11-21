@@ -26,7 +26,7 @@ except ModuleNotFoundError:
 
 def checked(data, offset, size, region):
     if offset < region[0] or size < 0 or offset + size > region[1]:
-        raise ValueError('room data outside ROOM chunk')
+        raise ValueError('data outside permitted chunk')
     return data[offset:offset + size]
 
 
@@ -178,8 +178,22 @@ def compare(apk, project):
                        'tiles': tile_comparison(a['tiles'], b['tiles']),
                        'creation_code': {'apk_room_ref': a['creation_code_reference'], 'gmx_room_text': b['room_code_present'],
                                          'apk_instance_refs': a['instances_with_creation_code'], 'gmx_instance_texts': b['instances_with_creation_code']}}
+    declared_objects = project_names(Path(project), 'objects', 'object')
+    declared_backgrounds = project_names(Path(project), 'backgrounds', 'background')
+    missing_details = {}
+    for name in sorted(native.keys() - names):
+        room = native[name]
+        missing_objects = Counter(instance[0] for instance in room['instances'] if instance[0] not in declared_objects)
+        used_backgrounds = {item[2] for item in room['backgrounds'] if item[2] is not None}
+        used_backgrounds.update(tile[0] for tile in room['tiles'])
+        missing_details[name] = {'fields': room['fields'], 'instance_count': len(room['instances']),
+                                 'tile_count': len(room['tiles']), 'missing_object_instances': dict(sorted(missing_objects.items())),
+                                 'missing_background_names': sorted(used_backgrounds - declared_backgrounds),
+                                 'creation_code_reference': room['creation_code_reference'],
+                                 'instances_with_creation_code': room['instances_with_creation_code']}
     return {'apk_rooms': sorted(native), 'gmx_declared_rooms': sorted(names),
             'apk_only': sorted(native.keys() - names), 'gmx_only': sorted(names - native.keys()), 'shared': rooms,
+            'missing_room_details': missing_details,
             'limitations': 'Static initial state only, compares selected fields and placements without instance/tile IDs or order. '
                            'Tile pixels, creation code contents, physics, runtime behavior and iOS are not compared.'}
 

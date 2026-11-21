@@ -822,6 +822,7 @@
       <object>objects\obj_boss4</object>
       <object>objects\obj_boss4_niddle</object>
     </objects>
+    <object>objects\par_action_nosolid</object>
   </objects>
   <rooms name="rooms">
     <room>rooms\rom_lemon</room>
