@@ -840,6 +840,14 @@ test cũng sửa alpha/metadata để xác nhận công cụ báo sai. Metadata 
 metadata **không** đồng nghĩa khôi phục hoàn toàn hình ảnh, mask, animation,
 resource ID, renderer hoặc iOS.
 
+### Kiểm tra bổ sung lịch item
+
+VM desktop đã kiểm 900 bước trong điều kiện cô lập: hai instance thử persistent,
+Step item bị thay no-op chỉ trong probe; item có cờ biến mất tại bước 900,
+item không cờ còn sau bước 905. Chi tiết và giới hạn trong
+[deadtown-item-alarm-schedule.md](deadtown-item-alarm-schedule.md); chưa chứng minh
+lịch runtime native, gameplay hay iOS, và Alarm 1 vẫn chưa phục hồi.
+
 ### Dấu vết một script kiểm room trong ARM32
 
 `tools/deadtown_room_check_evidence.py` ghim APK/library, xác nhận export
