@@ -25154,16 +25154,17 @@ index 0000000..021ceb4
 +#endif
 diff --git a/src/modules/wifi/portal_napt.cpp b/src/modules/wifi/portal_napt.cpp
 new file mode 100644
-index 0000000..19d6d92
+index 0000000..7e98652
 --- /dev/null
 +++ b/src/modules/wifi/portal_napt.cpp
-@@ -0,0 +1,374 @@
+@@ -0,0 +1,375 @@
 +#include "portal_napt.h"
 +#if !defined(LITE_VERSION)
 +
 +#include "core/config.h"
 +#include "core/display.h"
 +#include "core/mykeyboard.h"
++#include "core/radio_mem.h"
 +#include "core/seclab_util.h"
 +#include "core/utils.h"
 +#include "core/wifi/webInterface.h"

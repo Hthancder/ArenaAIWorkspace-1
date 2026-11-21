@@ -130,6 +130,7 @@ jobs:
         working-directory: /tmp/Bruce
         env:
           BRUCE_OFFLINE_WEB_ASSETS: '1'
+          SCONSFLAGS: '-k'
         run: |
           set -o pipefail
           pio run -e dsolution-183-2mic 2>&1 | tee build.log
