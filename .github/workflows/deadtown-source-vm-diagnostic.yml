@@ -10,6 +10,9 @@ on:
       - 'tools/deadtown-vm-probe.csx'
       - 'tools/deadtown_event_probe.py'
       - 'tools/deadtown_item_kind_vm_probe.py'
+      - 'tools/deadtown_random_string_vm_probe.py'
+      - 'tools/deadtown_random_string_reference.cpp'
+      - 'tests/test_deadtown_random_string_evidence.py'
       - 'tools/deadtown_item_kind_evidence.py'
       - 'tests/test_deadtown_item_kind_evidence.py'
       - 'tools/check_deadtown_source_vm.py'
@@ -64,6 +67,19 @@ jobs:
           chmod +x "$exe"
           "$exe" load work/game.droid -s tools/deadtown-vm-probe.csx -o work/game/data.win > work/compile.log 2>&1 || { tail -120 work/compile.log; exit 1; }
           grep -F 'PROBE: incomplete data' work/compile.log
+      - name: Compile a separate disposable seeded random-string probe
+        env:
+          GML_PROBE_SOURCE: ${{ github.workspace }}/deadtown-source/project/scripts/lang_type_set.gml
+          GML_PROBE_EVENTS: ${{ github.workspace }}/work/events-random.json
+        run: |
+          set -euo pipefail
+          python tools/deadtown_random_string_vm_probe.py instrument work/events-original.json work/events-random.json
+          mkdir -p work/random-game work/save-random
+          cp work/game/audiogroup*.dat work/random-game/
+          exe=$(find work/utmt -type f -name UndertaleModCli | head -1)
+          test -n "$exe"
+          "$exe" load work/game.droid -s tools/deadtown-vm-probe.csx -o work/random-game/data.win > work/random-compile.log 2>&1 || { tail -120 work/random-compile.log; exit 1; }
+          grep -F 'PROBE: incomplete data' work/random-compile.log
       - name: Restore pinned desktop runner cache
         id: runner-cache
         uses: actions/cache/restore@v4
@@ -85,6 +101,18 @@ jobs:
           timeout 90 work/runner-build/gmrunner work/game --headless --fast --mute --seed 1 --frames 300 --trace --stats --save-dir work/save-boot > work/boot.log 2>&1 || { tail -100 work/boot.log; exit 1; }
           python tools/deadtown_item_kind_vm_probe.py check work/boot.log
           timeout 90 work/runner-build/gmrunner work/game --headless --fast --mute --seed 1 --frames 400 --trace --stats --goto rom_play@160 --save-dir work/save-play > work/play.log 2>&1 || { tail -100 work/play.log; exit 1; }
+      - name: Exercise separately instrumented seeded random-string candidate
+        run: |
+          set -euo pipefail
+          if ! test -f work/runner/src/runtime/Random.h; then
+            mkdir -p work/runner
+            curl -fsSL --retry 2 'https://codeload.github.com/andronep/gmrunner/tar.gz/e7121381d38b03a24242812fc22b0a7386d545c6' | tar xz -C work/runner --strip-components=1
+          fi
+          g++ -std=c++17 -Iwork/runner/src tools/deadtown_random_string_reference.cpp -o work/random-reference
+          work/random-reference > work/random-reference.log
+          python tools/deadtown_random_string_vm_probe.py check work/random-reference.log
+          timeout 90 work/runner-build/gmrunner work/random-game --headless --fast --mute --seed 1 --frames 180 --trace --stats --save-dir work/save-random > work/random.log 2>&1 || { tail -100 work/random.log; exit 1; }
+          python tools/deadtown_random_string_vm_probe.py check work/random.log
       - name: Compare resource IDs and report observed warnings
         run: |
           set -euo pipefail
@@ -105,6 +133,9 @@ jobs:
           path: |
             work/build.log
             work/compile.log
+            work/random-compile.log
+            work/random.log
+            work/random-reference.log
             work/boot.log
             work/play.log
             work/check.log

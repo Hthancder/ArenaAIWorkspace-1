@@ -970,3 +970,21 @@ chuỗi. Kiểm tra này không chứng minh xử lý lỗi cấp phát, interna
 runtime, GameMaker compiler hoặc iOS. Probe VM desktop chỉ kiểm giá trị trả về
 trong bản diagnostic bị instrument, không phải game hoàn chỉnh. Tên script
 native còn thiếu trong project hiện là 64.
+
+### Chuỗi ngẫu nhiên ứng viên
+
+`generate_random_string` ARM32 bắt đầu bằng chuỗi rỗng, lặp 20 lần. Trong mỗi
+lần lặp, native gọi lần lượt `irandom_range(65,90)`, `(97,122)`, `(48,57)`,
+sau đó `choose` trong ba kết quả theo thứ tự ấy, gọi legacy `chr` rồi nối.
+Ứng viên GML dùng ba biến tạm để giữ thứ tự phát sinh ngay cả khi compiler xử
+lý đối số biểu thức khác nhau. `tools/deadtown_random_string_evidence.py` kiểm
+hash, export, relocation `chr`, chuỗi rỗng, luồng lặp, thứ tự các lệnh và lời
+gọi. Đây là phân tích tĩnh đường bình thường, không chứng minh thuật toán RNG,
+`choose`, `chr`, xử lý lỗi, thứ tự resource hay hành vi của compiler/iOS.
+
+Workflow VM có một bản dữ liệu **riêng** instrument `sys_global` để đặt lại
+bốn seed, gọi hàm và lấy số ngẫu nhiên tiếp theo; so với chương trình tham
+chiếu C++ dùng `Random.h` của runner desktop đã ghim. Cả hai phép thử dựa trên
+cùng runner desktop, không chứng minh chuỗi hoặc trạng thái RNG của Android hay
+iOS. Probe thay đổi seed và không được đóng gói thành game. Tên script native
+còn thiếu theo đối chiếu project là 63; vẫn còn thiếu logic sử dụng chúng.
