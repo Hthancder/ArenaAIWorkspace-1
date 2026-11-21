@@ -1062,3 +1062,31 @@ mask generation after GMX compilation, timing, gameplay, or device behavior.
 `spr_ui_day` was deliberately excluded despite a count-only metadata mismatch
 because its existing common frame has visible pixel differences. The source,
 renderer/iPhone issues and eventual IPA remain incomplete.
+
+### Remaining shared-index frame coverage and visible-difference candidates
+
+The next reconstruction appended the remaining 16 missing frames within
+already declared, shared-name sprites: seven sprites with pre-existing numeric
+bbox differences plus `spr_ui_day`. Its old first frame differed visibly, so
+frame 0 was replaced in the overlay as well; the pinned original GMX file is
+untouched. Four other frame-zero PNGs that visibly differed (`ih_dagger`,
+`spr_event_eng`, `spr_event_kor`, `spr_gps_sign`) were also replaced in the
+overlay with unscaled atlas reconstructions. Existing `ih_dagger` bbox values
+and the seven other differing bboxes were intentionally preserved and checked
+as known differences, not interpreted as equivalent collision behavior.
+
+The checker now validates **68 candidate images across 21 sprites**: 63 added
+frame references and 5 replacements of pre-existing images. The materialized
+workbench has 291 shared-name sprites and zero additional frames on either side
+of those paired names. Of the compared pairs, 289 are exact RGBA, 517 differ
+only at RGB under alpha zero and 3 have dimension mismatches (`spr_part_bull`
+and two `spr_setting_cradits` frames). These counts exclude all sprites absent
+from the GMX. After these changes 14 shared sprites still have differences in
+selected numeric metadata; 111 native sprite names, 68 script names, 94 object
+names and 369 event keys remain absent from this source. Run `44886967353`
+passed; local suite ran 133 tests, 12 skipped for absent optional inputs.
+
+All PNGs are reconstructed and re-encoded, not original source artwork. The
+results do not validate masks after compilation, animation, frame selection,
+filtering, gameplay, device rendering, or the iPhone trails and misplacement.
+The workbench is still explicitly incomplete and not an IPA release.

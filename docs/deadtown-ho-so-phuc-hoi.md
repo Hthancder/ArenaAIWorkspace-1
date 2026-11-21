@@ -553,3 +553,26 @@ tên; vẫn thiếu theo tên 111 sprite, 68 script, 94 object và 369 event. Lo
 sau biên dịch, thời gian animation, UI, logic game, kết quả render hay iPhone.
 RGB trong suốt ngoài vùng atlas cắt là không biết; không coi việc này là sửa
 lỗi sprite lệch/vệt màu. Bản source và IPA hoàn chỉnh vẫn chưa có.
+
+### Tiếp tục các frame của sprite đã có
+
+Đã bổ sung thêm 16 frame cho 8 sprite còn thiếu frame cùng tên, gồm nhóm item
+use, parcel, save button, skills, UI buff, UI health và UI day. Với 7 sprite
+có bbox số khác APK, giữ bbox GMX cũ và ghi rõ khác biệt, không tự suy ra mask
+va chạm. `spr_ui_day` có frame 0 cũ khác pixel nhìn thấy: ảnh đó được thay
+bằng bản dựng lại từ atlas APK trong asset overlay, còn ảnh cũ trong đầu vào
+GMX ghim không bị sửa.
+
+Bốn frame 0 cũ khác pixel nhìn thấy của `ih_dagger`, `spr_event_eng`,
+`spr_event_kor`, `spr_gps_sign` cũng được thay bằng ảnh dựng lại trong overlay;
+bbox khác của `ih_dagger` vẫn giữ nguyên. Tổng cộng từ đầu đợt đã thêm 63 frame
+thiếu và thay 5 frame cũ, kiểm tĩnh 68 ảnh của 21 sprite. Các PNG được mã hóa
+lại; RGB trong suốt ngoài vùng atlas không biết.
+
+CI `44886967353` đạt: trong **291 sprite cùng tên**, không còn frame thừa ở
+một trong hai phía theo phép so số frame; 289 cặp frame RGBA giống bản dựng
+atlas, 517 chỉ khác RGB ở pixel alpha 0 và 3 cặp khác kích thước. Không kết
+luận từ đó rằng 111 sprite thiếu theo tên đã được phục hồi. Còn 14 sprite cùng
+tên khác các trường metadata được kiểm; collision mask/timing/render và game
+iPhone chưa kiểm. 133 test local đạt, 12 bỏ qua do thiếu đầu vào tùy chọn;
+chưa tạo IPA, chưa chứng minh sửa lỗi sprite lệch/vệt màu.
