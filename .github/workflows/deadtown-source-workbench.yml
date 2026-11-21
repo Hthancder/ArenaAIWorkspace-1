@@ -20,6 +20,8 @@ on:
       - 'tests/test_check_deadtown_restored_frames.py'
       - 'tools/deadtown_sprite_order_evidence.py'
       - 'tests/test_deadtown_sprite_order_evidence.py'
+      - 'tools/deadtown_room_evidence.py'
+      - 'tests/test_deadtown_room_evidence.py'
       - 'tools/audit_deadtown_gmx.py'
 
 permissions:
@@ -51,10 +53,12 @@ jobs:
           python -m unittest discover -s tests -p 'test_materialize_deadtown_source.py' -v
           python -m unittest discover -s tests -p 'test_check_deadtown_restored_frames.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_sprite_order_evidence.py' -v
+          python -m unittest discover -s tests -p 'test_deadtown_room_evidence.py' -v
           python tools/materialize_deadtown_source.py .cache/gmx/deadtown.gmx .cache/deadtown-original.apk .cache/result
           python tools/check_deadtown_restored_frames.py .cache/deadtown-original.apk deadtown-source --output .cache/result/restored-frames.json
           python tools/deadtown_sprite_pixels.py .cache/deadtown-original.apk .cache/result/project --output .cache/result/sprite-pixels.json
           python tools/deadtown_sprite_order_evidence.py .cache/deadtown-original.apk .cache/result/project --output .cache/result/sprite-order.json
+          python tools/deadtown_room_evidence.py .cache/deadtown-original.apk .cache/result/project --output .cache/result/room-evidence.json
           python - <<'PY'
           import json
           from pathlib import Path
@@ -71,6 +75,8 @@ jobs:
           print('::notice::INCOMPLETE workspace: ' + json.dumps(status, separators=(',', ':'))[:3500])
           print('::notice::Restored candidates: ' + str(frames['sprite_count']) + ' sprites, ' + str(frames['frame_count']) + ' frames; static only')
           print('::notice::XML common sprite rank differences: ' + str(order['different_common_rank']) + '; not compiled IDs')
+          rooms = json.loads(Path('.cache/result/room-evidence.json').read_text())
+          print('::notice::Room comparison: ' + str(len(rooms['shared'])) + ' shared, ' + str(len(rooms['apk_only'])) + ' absent; static fields/placements only')
           PY
       - name: Preserve comparison reports, not packaged game assets
         uses: actions/upload-artifact@v4
@@ -83,5 +89,6 @@ jobs:
             .cache/result/restored-frames.json
             .cache/result/sprite-pixels.json
             .cache/result/sprite-order.json
+            .cache/result/room-evidence.json
           if-no-files-found: error
           retention-days: 3

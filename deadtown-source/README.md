@@ -18,6 +18,12 @@ cắt không xác định, PNG được mã hóa lại. Mask va chạm, tốc đ
 logic sử dụng frame và iPhone chưa được kiểm chứng. Việc khôi phục các frame này
 không có nghĩa là sửa được lỗi hiển thị đã báo.
 
+`rom_play` view 0 đã đổi kích thước khởi tạo từ 1334×750 sang 1232×693 theo
+cấu hình tĩnh trong APK, giữ port 1334×750. `sys_view` có thể tính lại kích
+thước khi chạy; thay đổi này chưa được chứng minh là sửa lỗi iPhone hoặc đúng
+với mọi tỉ lệ màn hình. So sánh room qua `tools/deadtown_room_evidence.py` chỉ
+kiểm dữ liệu tĩnh, không khôi phục code hay xác nhận gameplay.
+
 ## Chỉnh sửa và quản lý tài nguyên
 
 - Chỉnh GML trong `project/scripts/`, sự kiện trong `project/objects/`, và các

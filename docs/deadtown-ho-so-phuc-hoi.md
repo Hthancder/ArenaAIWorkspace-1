@@ -631,3 +631,34 @@ runner desktop tại `e7121381d38b03a24242812fc22b0a7386d545c6`.
 
 Nguồn đầy đủ và IPA đạt yêu cầu vẫn chưa có; cần khôi phục logic thiếu dựa trên
 bằng chứng và kiểm thật trên thiết bị sau khi có bản đủ điều kiện.
+
+### Đối chiếu cấu hình và vị trí room
+
+`tools/deadtown_room_evidence.py` đọc ROOM của APK ghim (GMS 1, bytecode 15)
+so với các room được khai báo trong GMX. Có 7 room chung, còn thiếu theo tên:
+`rom_multi_lobby`, `rom_multi_login`, `rom_multi_room`, `rom_play_defence`,
+`rom_play_sewer`, `rom_setting_display`, `rom_setting_effect`, `rom_setting_save`.
+So sánh giá trị tĩnh đã chọn, view, background và đa tập vị trí/biến đổi của
+instance, tile; không so ID/thứ tự instance hoặc tile, pixel tile, mã khởi tạo,
+physics, logic runtime hay iOS.
+
+Trong `rom_play`, view 0 APK bắt đầu với view **1232×693**, port **1334×750**;
+GMX cũ ghi view **1334×750**, cùng port. Đã đổi đúng hai số wview/hview trong
+source sang giá trị APK, giữ nguyên port và các view khác. `sys_view` nguồn
+đọc các giá trị ban đầu rồi có thể tính lại theo tỉ lệ màn hình và resize
+surface: thay đổi này có thể ảnh hưởng khung nhìn/zoom, nhưng chưa được kiểm
+trong GameMaker hoặc iPhone, không chứng minh là nguyên nhân hay cách sửa lỗi
+sprite lệch/vệt màu ở IPA test 1–3. Không thay đổi các bản IPA đã gửi.
+
+Sau thay đổi, 8 view và background trong 7 room chung khớp theo các trường đã
+so. Room chơi có 1.664 instance APK, 1.658 trong GMX, 1.658 trùng đa tập thuộc
+tính đã chọn; APK có thêm bốn `obj_sewer_door1`–`4`, `sys_game_type`,
+`sys_test`. 17.175 tile room chơi trùng đa tập vị trí, background, vùng nguồn,
+kích thước, depth, scale và màu; không so ID/thứ tự hoặc pixel. Room lobby:
+13 APK so với 7 GMX, 5 placement trùng; setting: 10 so với 14, 3 trùng; shop:
+7 và 7, 6 trùng. Không tự thêm/thay instance vì có object/logic bị thiếu và các
+thay đổi offline có chủ đích; không suy ra hai bản gameplay tương đương.
+
+Local chạy 144 test, 12 bỏ qua do đầu vào tùy chọn; workspace materialize vẫn
+`INCOMPLETE_NOT_FOR_RELEASE`. Báo cáo chi tiết được workflow source tạo lại;
+chưa có IPA mới.
