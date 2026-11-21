@@ -57,14 +57,15 @@ class ObjectEvidenceTests(unittest.TestCase):
         self.assertEqual(hashlib.sha256(APK.read_bytes()).hexdigest(), APK_SHA256)
         with zipfile.ZipFile(APK) as z:
             native = native_objects(z.read('assets/game.droid'))
-        parent = native['par_action_nosolid']
-        self.assertEqual(parent['event_counts'], [0] * 12)
-        self.assertFalse(ET.parse(PROJECT / 'objects/par_action_nosolid.object.gmx').findall('./events/event'))
-        for name in ('par_action_nosolid', 'obj_trap', 'obj_gps'):
+        empty = ('par_action_nosolid', 'par_defence_shop', 'par_map_door', 'obj_defence_house')
+        for name in empty:
+            self.assertEqual(native[name]['event_counts'], [0] * 12)
+            self.assertFalse(ET.parse(PROJECT / 'objects' / (name + '.object.gmx')).findall('./events/event'))
+        for name in (*empty, 'obj_trap', 'obj_gps'):
             source = source_object(PROJECT / 'objects' / (name + '.object.gmx'))
             self.assertEqual({field: native[name][field] for field in FIELDS}, source)
         report = compare(APK, PROJECT)
-        self.assertEqual((report['apk_count'], report['gmx_declared_count'], report['common_count']), (240, 151, 147))
+        self.assertEqual((report['apk_count'], report['gmx_declared_count'], report['common_count']), (240, 154, 150))
         self.assertEqual(report['differing_defaults_count'], 3)
         self.assertEqual(set(report['differences']), {'obj_lobby_ach', 'obj_lobby_leader', 'sys_player_equipment'})
 

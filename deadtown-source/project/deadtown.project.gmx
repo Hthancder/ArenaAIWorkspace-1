@@ -445,6 +445,7 @@
       <sprite>sprites\outline_boss4</sprite>
       <sprite>sprites\spr_boss4_niddle</sprite>
     </sprites>
+    <sprite>sprites\spr_defence_house</sprite>
   </sprites>
   <backgrounds name="background">
     <backgrounds name="road">
@@ -823,6 +824,9 @@
       <object>objects\obj_boss4_niddle</object>
     </objects>
     <object>objects\par_action_nosolid</object>
+    <object>objects\par_defence_shop</object>
+    <object>objects\par_map_door</object>
+    <object>objects\obj_defence_house</object>
   </objects>
   <rooms name="rooms">
     <room>rooms\rom_lemon</room>

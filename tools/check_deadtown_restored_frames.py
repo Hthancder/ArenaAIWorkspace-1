@@ -36,6 +36,8 @@ RESTORED = {'spr_action_button': (10, 11), 'spr_item_equip': (26, 27),
             'spr_ui_buff': (6, 7), 'spr_ui_health': (4, 6), 'spr_ui_day': (0, 3)}
 # Additional frame-zero replacements; frame 1 in the two event sprites was
 # already exact and is intentionally left in the original upstream assets.
+# New sprite descriptor reconstructed from APK (not merely a replacement).
+RESTORED['spr_defence_house'] = (0, 1)
 REPLACED = {'ih_dagger': (1, (0,)), 'spr_event_eng': (2, (0,)),
             'spr_event_kor': (2, (0,)), 'spr_gps_sign': (1, (0,)),
             'spr_part_bull': (1, (0,)), 'spr_setting_cradits': (2, (0, 1))}
@@ -69,13 +71,51 @@ def safe_asset(root, relative):
     return path
 
 
+def alpha_mask(image, threshold):
+    """Candidate MSB-first mask from alpha > threshold, not a GameMaker compiler."""
+    if image.mode != 'RGBA' or not 0 <= threshold <= 255:
+        raise ValueError('invalid mask input')
+    width, height = image.size
+    stride = (width + 7) // 8
+    mask = bytearray(stride * height)
+    pixels = image.getchannel('A').tobytes()
+    for y in range(height):
+        for x in range(width):
+            if pixels[y * width + x] > threshold:
+                mask[y * stride + x // 8] |= 0x80 >> (x % 8)
+    return bytes(mask)
+
+
+def verify_precise_mask_candidate(data, bound, position, info, path, root):
+    if root.findtext('colkind') != '0' or root.findtext('coltolerance') != '128':
+        raise ValueError('unexpected precise mask candidate settings')
+    header = position + 60 + 4 * info['frames']
+    if header + 4 > bound or u32(data, header) != 1:
+        raise ValueError('unexpected native mask count')
+    size = ((info['width'] + 7) // 8) * info['height']
+    if header + 4 + size > bound:
+        raise ValueError('truncated native mask')
+    native_mask = data[header + 4:header + 4 + size]
+    with Image.open(path) as image:
+        candidate = alpha_mask(image.convert('RGBA'), 128)
+    if candidate != native_mask:
+        raise ValueError('candidate alpha mask differs from APK mask bytes')
+    return {'threshold_rule': 'alpha > 128', 'candidate_matches_native_packed_bytes': True,
+            'native_mask_sha256': hashlib.sha256(native_mask).hexdigest(),
+            'limitations': 'MSB-first static model only; GameMaker compiler and runtime collision not validated.'}
+
+
 def verify(apk, source):
     source = Path(source)
     project, assets = source / 'project', source / 'assets'
     data, native, regions, atlases = open_apk(apk)
     gmx = source_sprites(project)
-    positions = {read_string(data, u32(data, pos), regions[b'STRG']): pos
-                 for pos in pointers(data, regions[b'SPRT'])}
+    sprite_pointers = pointers(data, regions[b'SPRT'])
+    if sprite_pointers != sorted(set(sprite_pointers)):
+        raise ValueError('overlapping or unsorted sprite entries')
+    positions = {read_string(data, u32(data, pos), regions[b'STRG']): pos for pos in sprite_pointers}
+    bounds = {pos: sprite_pointers[i + 1] if i + 1 < len(sprite_pointers) else regions[b'SPRT'][1]
+              for i, pos in enumerate(sprite_pointers)}
     report = {}
     targets = {name: (count, tuple(range(first, count))) for name, (first, count) in RESTORED.items()}
     if targets.keys() & REPLACED.keys():
@@ -122,6 +162,10 @@ def verify(apk, source):
         report[name] = {'restored': entries,
                         'metadata_matches_fields': [f for f in FIELDS if f not in differences],
                         'known_metadata_differences': {f: {'apk': a, 'gmx': b} for f, (a, b) in differences.items()}}
+        if name == 'spr_defence_house':
+            path = safe_asset(assets, Path('sprites/images/spr_defence_house_0.png'))
+            report[name]['candidate_precise_mask'] = verify_precise_mask_candidate(
+                data, bounds[positions[name]], positions[name], native[name], path, root)
     return {'sprites': report, 'sprite_count': len(report),
             'frame_count': sum(len(x['restored']) for x in report.values()),
             'limitations': 'Static unscaled atlas reconstruction; outside trimmed rectangles transparent RGB '

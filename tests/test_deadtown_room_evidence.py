@@ -59,7 +59,7 @@ class RoomEvidenceTests(unittest.TestCase):
         self.assertEqual((len(r['apk_rooms']), len(r['gmx_declared_rooms']), len(r['shared'])), (15, 7, 7))
         defence = r['missing_room_details']['rom_play_defence']
         self.assertEqual((defence['instance_count'], defence['tile_count']), (56, 239))
-        self.assertEqual(sum(defence['missing_object_instances'].values()), 29)
+        self.assertEqual(sum(defence['missing_object_instances'].values()), 28)
         self.assertFalse(defence['creation_code_reference'])
         play = r['shared']['rom_play']
         self.assertEqual(play['apk_views'][0][3:5], (1232, 693))

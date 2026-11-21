@@ -4,13 +4,13 @@
 bản có thể phát hành. Các file `project/**/*.gml` và `project/**/*.gmx` được
 lưu trong Git để có thể sửa và theo dõi thay đổi. Tên trùng với APK không chứng
 minh logic trùng; 68 script, 94 object và 369 event native vẫn chưa có khóa
-nguồn tương ứng ở mốc ban đầu. Sau phục hồi object cha rỗng, còn 93 object APK
-thiếu theo tên trong tập file nguồn. Nguồn hiện vẫn thiếu 111 sprite APK theo tên;
+nguồn tương ứng ở mốc ban đầu. Nguồn hiện còn thiếu 90 object và 110 sprite APK
+theo tên trong tập file nguồn;
 12 sprite cùng tên còn khác metadata được so. Không dùng project hiện tại để
 tuyên bố game hoàn chỉnh hoặc đem phát hành IPA.
 
-Đã bổ sung 63 frame thiếu và thay 8 frame cũ khác pixel hoặc kích thước bằng
-ảnh dựng lại từ atlas APK: tổng 71 ảnh cho 23 sprite, lưu dưới
+Đã bổ sung 64 frame thiếu (gồm một sprite mới) và thay 8 frame cũ khác pixel
+hoặc kích thước bằng ảnh dựng lại từ atlas APK: tổng 72 ảnh cho 24 sprite, lưu dưới
 `assets/sprites/images/` và tham chiếu trong descriptor. Ảnh cũ vẫn có trong
 đầu vào GMX ghim, không bị sửa. Kiểm tra tĩnh xác nhận RGBA dựng lại khớp vùng
 atlas đã giải mã; 8 sprite vẫn có bbox khác APK và được giữ nguyên, các trường
@@ -26,8 +26,12 @@ với mọi tỉ lệ màn hình. So sánh room qua `tools/deadtown_room_evidenc
 kiểm dữ liệu tĩnh, không khôi phục code hay xác nhận gameplay.
 
 Đã thêm `par_action_nosolid` không có sự kiện theo bảng APK và đặt lại object
-cha của `obj_gps`/`obj_trap` theo APK. Đây là phục hồi cấu trúc tĩnh, không tự
-khôi phục code sử dụng nhóm object này hay bảo đảm hành vi và ID sau biên dịch.
+cha của `obj_gps`/`obj_trap` theo APK. Thêm ba object không có event riêng:
+`par_defence_shop`, `par_map_door`, `obj_defence_house`, cùng sprite nhà được
+trích dựng từ atlas. Mask ước tính từ alpha được so với bitmask APK, nhưng chưa
+chứng minh compiler tạo mask tương đương; `obj_defence_house` kế thừa `par_solid`
+của nguồn cũ. Đây là phục hồi cấu trúc tĩnh, không tự khôi phục code sử dụng
+những object này hay bảo đảm hành vi và ID sau biên dịch.
 
 ## Chỉnh sửa và quản lý tài nguyên
 

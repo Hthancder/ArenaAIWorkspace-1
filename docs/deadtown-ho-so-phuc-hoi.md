@@ -693,3 +693,38 @@ các object chưa khai báo; `rom_play_sewer` có 14 instance, 6 instance thiế
 object tương ứng. Ba room settings thiếu 3, 7 và 14 instance tương ứng theo
 object chưa khai báo. Không thêm room rỗng hoặc object giả chỉ để giảm số thiếu;
 không phục hồi được hành vi từ vị trí tĩnh.
+
+### Ba object không có event riêng và sprite nhà phòng thủ
+
+Trong 93 object APK chưa có theo tên ở mốc trước, có ba object mà cả 12 danh
+sách event OBJT đều rỗng: `par_defence_shop`, `par_map_door`,
+`obj_defence_house`. Đã thêm cả ba vào cuối danh sách object GMX; giá trị tĩnh
+sprite/mask/parent/visible/solid/depth/persistent/physics được so với APK.
+`par_defence_shop` kế thừa `par_action_nosolid`, dùng `mask_24_24` đã có;
+`par_map_door` không có parent; `obj_defence_house` kế thừa `par_solid` và dùng
+sprite mới `spr_defence_house`. Không có event riêng không có nghĩa là không có
+hành vi: object nhà kế thừa event từ parent, mà logic parent GMX chưa chứng
+minh tương đương native, và những object con khác vẫn chưa được phục hồi.
+
+Sprite `spr_defence_house` có kích thước 501×276, gốc (250,138), một frame;
+PNG được dựng lại từ vùng atlas không scale, pixel được kiểm so sánh với APK.
+Native có một mask không đều; mô hình tĩnh MSB-first từ alpha PNG > 128 cho
+bytes giống mask APK, với SHA-256
+`8551330a71c1e9b6890af57a11ec08fd39aa25e78b3ec69dd761d8cc13ff2f5e`.
+Descriptor đặt `colkind=0`, `coltolerance=128`, `sepmasks=-1` như một **ứng
+viên**, không khẳng định GameMaker sẽ tạo lại cùng mask hay các va chạm đúng;
+phải kiểm đầu ra compiler và runtime. PNG đã mã hóa lại và RGB trong suốt ngoài
+vùng atlas không xác định.
+
+Trong project mới, còn thiếu theo tên 90 object, 110 sprite, 68 script, 369
+khóa event; 8 room chưa có. `rom_play_defence` vẫn thiếu 28 instance do object
+không khai báo; chưa thêm room và không khẳng định tính năng phòng thủ hoạt
+động. 292 sprite chung, 810 cặp frame được so: 293 RGBA trùng bản dựng atlas,
+517 chỉ khác RGB tại alpha 0. Trong 150 object khai báo cùng tên, 3 vẫn khác
+trường mặc định được so. Việc thêm sprite vào cuối XML không làm xáo trộn thứ
+tự khai báo cũ nhưng làm 191 vị trí tương đối và 379 cặp đảo so với thứ tự APK
+trong tập 292 tên chung; XML ordinal không phải ID compiler được quan sát.
+Cần kiểm build thật trước khi đánh giá an toàn hoặc equivalence.
+
+Chưa có kiểm trên GameMaker/iPhone, chưa chứng minh sửa lỗi sprite/vệt màu,
+và chưa có IPA mới.
