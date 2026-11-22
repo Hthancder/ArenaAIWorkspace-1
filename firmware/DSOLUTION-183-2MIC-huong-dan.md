@@ -227,3 +227,11 @@ Nguồn: `RealDeco/xiaozhi-esphome` → `devices/Xingzhi/xingzhi-cube-1.83-2mic.
 **Chưa test được trên phần cứng thật** (máy đang ở trạng thái đen + USB chập chờn sau lần
 nạp sai địa chỉ). Thứ tự kiểm tra khi có log serial: (1) banner board, (2) đèn nền GPIO13,
 (3) bus SPI, (4) ES8311 nếu tiếng méo/rè, (5) gain ES7210 + MCLK nếu mic im.
+
+## Thử loa và tính năng dễ dùng
+
+- Vào **Config → Audio Config**, bật **Sound**, đặt **Sound Volume** khoảng 30–50%, rồi chọn **Test speaker**. Máy báo "Test sent" nghĩa là firmware đã gửi mẫu âm thanh, **không phải xác nhận tai nghe thấy tiếng**. Chọn **Menu tones OFF** để tắt tiếng điều hướng nhưng vẫn giữ cảnh báo (khi Sound ON). Khi ở menu chính, máy kiểm tra pin định kỳ; cần hai lần đọc thấp liên tiếp trước khi báo và thông số pin chỉ là ước tính.
+- Mapping của board này: I²C SDA GPIO12 / SCL GPIO11, ES8311 địa chỉ `0x18`; I²S MCLK GPIO5, BCLK GPIO15, WS GPIO16, DOUT GPIO6; bật ampli GPIO4 HIGH. Firmware khởi động bus I²C và khôi phục chân codec cố định sau khi nạp cấu hình cũ. Nếu vẫn im, kiểm tra log serial `[audio]`, kết nối loa, nguồn ampli và xung I²S; cần đo thực tế để xác định.
+- Mở **Quick** ở menu chính để chạy nhanh các mục đã ghim. **Edit favorites** cho ghim/bỏ ghim; **Recent** là mục gần nhất đã chạy *từ Quick*. Cài đặt được lưu trong NVS namespace `dsquick`.
+- Trong Dashboard WebUI, **Find device** yêu cầu thiết bị đang có kết nối WebUI. Máy phát tối đa ba tiếng khi đang ở vòng lặp menu, yêu cầu hết hạn sau 15 giây; nút **Stop finding** hủy các tiếng còn lại. Tính năng tôn trọng cài đặt tắt tiếng, âm lượng và LED blink; nếu đang bận/tắt tiếng, máy vẫn thử nháy LED nếu LED blink được bật, và WebUI báo không thể phát âm thanh thay vì khẳng định loa đã kêu.
+- WebUI có công tắc âm thanh, menu tones, âm lượng và độ sáng; bấm **Save sound & display** để lưu. Các thao tác này cần đăng nhập WebUI. Tín hiệu âm thanh và chia sẻ I²S cần được kiểm tra trên máy thật, đặc biệt khi các tác vụ âm thanh/serial khác đang chạy đồng thời.

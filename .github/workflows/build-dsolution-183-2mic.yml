@@ -10,10 +10,12 @@ on:
   push:
     branches:
       - arena/99e7eeb4-arenaaiworkspace-1
+      - arena/8d69f494-arenaaiworkspace-1
     paths:
       - 'firmware/dsolution-183-2mic-bruce.patch'
       - 'firmware/dsolution-183-2mic-displaydrivers.patch'
       - 'firmware/dualboot-launcher/**'
+      - 'tests/**'
       - '.github/workflows/build-dsolution-183-2mic.yml'
   workflow_dispatch:
 
@@ -90,6 +92,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@v4
 
@@ -105,6 +110,15 @@ jobs:
         run: |
           git -C /tmp/Bruce apply --verbose "$GITHUB_WORKSPACE/firmware/dsolution-183-2mic-bruce.patch"
           git -C /tmp/Bruce/lib/DisplayDrivers apply --verbose "$GITHUB_WORKSPACE/firmware/dsolution-183-2mic-displaydrivers.patch"
+
+      - name: Run host regression checks
+        run: |
+          ./tests/radio-observation/run.sh /tmp/Bruce
+          ./tests/device-ux/run.sh /tmp/Bruce
+          ./tests/lan-guard/run.sh /tmp/Bruce
+          ./tests/ble-audit/run.sh /tmp/Bruce
+          ./tests/web-mirror/run.sh /tmp/Bruce
+          node --check /tmp/Bruce/embedded_resources/web_interface/index.js
 
       - uses: actions/setup-python@v5
         with:
@@ -126,6 +140,7 @@ jobs:
         working-directory: /tmp/Bruce
         env:
           BRUCE_OFFLINE_WEB_ASSETS: '1'
+          SCONSFLAGS: '-k'
         run: |
           set -o pipefail
           pio run -e dsolution-183-2mic 2>&1 | tee build.log
@@ -173,6 +188,36 @@ jobs:
           fi
           while IFS= read -r line; do [ -n "$line" ] && echo "::notice title=build report::$line"; done < report.txt
 
+      - name: Publish build diagnostics issue
+        if: failure() && github.ref != 'refs/heads/arena/8d69f494-arenaaiworkspace-1'
+        working-directory: /tmp/Bruce
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "Automated build diagnostics for run ${GITHUB_RUN_ID}."
+            echo "Commit: ${GITHUB_SHA}"
+            echo ""
+            echo "## Report"
+            echo '```'
+            cat report.txt 2>/dev/null || echo "report.txt missing"
+            echo '```'
+            echo ""
+            echo "## Compiler / linker errors"
+            echo '```'
+            grep -aE '(: error:|fatal error:|undefined reference|multiple definition|No such file|BuildError|Traceback|Error:|\*\*\* \[)' build.log 2>/dev/null | tail -n 120 || true
+            echo '```'
+            echo ""
+            echo "## Build log tail"
+            echo '```'
+            tail -n 120 build.log 2>/dev/null | sed -r 's/\x1B\[[0-9;]*[mK]//g' || true
+            echo '```'
+          } > /tmp/build-diagnostic.md
+          gh issue create \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Build diagnostics run ${GITHUB_RUN_ID}" \
+            --body-file /tmp/build-diagnostic.md
+
       - name: Stage firmware artifacts (factory + ota)
         if: always()
         run: |
@@ -199,6 +244,8 @@ jobs:
           if-no-files-found: warn
 
   publish-release:
+    # Session builds are artifacts only: do not overwrite the shared release.
+    if: github.ref != 'refs/heads/arena/8d69f494-arenaaiworkspace-1'
     needs: [build-dualboot-launcher, build]
     runs-on: ubuntu-latest
     permissions:
