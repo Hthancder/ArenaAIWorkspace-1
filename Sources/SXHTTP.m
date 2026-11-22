@@ -3,6 +3,17 @@
 
 NSString *const SXHTTPErrorDomain = @"com.sirix.http";
 
+@interface SXHTTP (Internal)
++ (SXHTTPResult *)executeRequest:(NSURLRequest *)request
+						  maxBytes:(NSUInteger)maxBytes
+						  onData:(nullable SXHTTPDataHandler)onData
+						onStatus:(nullable SXHTTPStatusHandler)onStatus
+				  rejectRedirect:(nullable BOOL (^)(NSURL *target))rejectRedirect
+						  label:(nullable NSString *)label
+						 timeout:(NSTimeInterval)timeout
+					 idleTimeout:(NSTimeInterval)idleTimeout;
+@end
+
 #pragma mark - Kết quả
 
 @implementation SXHTTPResult
@@ -29,6 +40,13 @@ NSString *const SXHTTPErrorDomain = @"com.sirix.http";
 @property (nonatomic) NSInteger status;
 @property (nonatomic, copy, nullable) NSString *mimeType;
 @property (nonatomic, copy, nullable) NSURLRequest *redirectedRequest;
+/// Hỏi lại cho mỗi bước chuyển hướng; nil = bỏ qua chuyển hướng (mặc định của
+/// GET). Trả YES ⇒ dừng, trả 3xx về cho bên gọi để nó tự xét đích.
+@property (nonatomic, copy, nullable) BOOL (^rejectRedirect)(NSURL *target);
+/// Địa chỉ của request cuối cùng đã đi theo (nil = không chuyển hướng).
+@property (nonatomic, copy, nullable) NSURL *finalURL;
+/// Nhãn phiên (@"chat-test"…) — dùng để huỷ mọi request của phiên đó.
+@property (nonatomic, copy, nullable) NSString *label;
 @end
 
 @implementation SXHTTPReceiver
@@ -38,9 +56,11 @@ NSString *const SXHTTPErrorDomain = @"com.sirix.http";
 		newRequest:(NSURLRequest *)request
  completionHandler:(void (^)(NSURLRequest * _Nullable))completionHandler {
 	(void)session;
-	// Không lặng lẽ đi sang host khác: tầng công cụ đọc web yêu cầu giữ 3xx.
-	if (self.onData == nil) {
+	(void)task;
+	// Chỉ đi theo khi bên gọi đã cho phép rõ ràng và đích qua được luật của nó.
+	if (self.rejectRedirect && !self.rejectRedirect(request.URL)) {
 		self.redirectedRequest = request;
+		self.finalURL = request.URL;
 		completionHandler(request);
 		return;
 	}
@@ -86,9 +106,67 @@ NSString *const SXHTTPErrorDomain = @"com.sirix.http";
 
 @end
 
+#pragma mark - Sổ request đang chạy (để huỷ theo nhãn)
+
+static NSMutableDictionary<NSString *, NSMutableArray<NSURLSessionTask *> *> *SXHTTPTasks(void) {
+	static NSMutableDictionary *tasks;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{ tasks = [NSMutableDictionary dictionary]; });
+	return tasks;
+}
+
+static NSLock *SXHTTPTasksLock(void) {
+	static NSLock *lock;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{ lock = [[NSLock alloc] init]; });
+	return lock;
+}
+
+static void SXHTTPTrack(NSURLSessionTask *task, NSString *label) {
+	if (!task || !label.length) return;
+	NSLock *lock = SXHTTPTasksLock();
+	[lock lock];
+	NSMutableArray *list = SXHTTPTasks()[label];
+	if (!list) { list = [NSMutableArray array]; SXHTTPTasks()[label] = list; }
+	[list addObject:task];
+	[lock unlock];
+}
+
+static void SXHTTPUntrack(NSURLSessionTask *task, NSString *label) {
+	if (!task || !label.length) return;
+	NSLock *lock = SXHTTPTasksLock();
+	[lock lock];
+	NSMutableArray *list = SXHTTPTasks()[label];
+	[list removeObjectIdenticalTo:task];
+	if (!list.count) [SXHTTPTasks() removeObjectForKey:label];
+	[lock unlock];
+}
+
 #pragma mark - SXHTTP
 
 @implementation SXHTTP
+
++ (void)setCurrentRequestLabel:(NSString *)label {
+	NSMutableDictionary *info = [NSThread currentThread].threadDictionary;
+	if (!info) return;
+	if (label.length) info[@"com.sirix.http.label"] = label;
+	else [info removeObjectForKey:@"com.sirix.http.label"];
+}
+
++ (NSString *)currentRequestLabel {
+	return [NSThread currentThread].threadDictionary[@"com.sirix.http.label"];
+}
+
++ (void)cancelRequestsWithLabel:(NSString *)label {
+	if (!label.length) return;
+	NSLock *lock = SXHTTPTasksLock();
+	[lock lock];
+	NSArray<NSURLSessionTask *> *tasks = [SXHTTPTasks()[label] copy] ?: @[];
+	[SXHTTPTasks() removeObjectForKey:label];
+	[lock unlock];
+	for (NSURLSessionTask *task in tasks) [task cancel];
+	if (tasks.count) SXLogDbg(@"http", @"huỷ %lu request của phiên %@", (unsigned long)tasks.count, label);
+}
 
 + (NSString *)userAgent {
 #ifdef SX_VERSION
@@ -198,6 +276,18 @@ NSString *const SXHTTPErrorDomain = @"com.sirix.http";
 						onStatus:(SXHTTPStatusHandler)onStatus
 						 timeout:(NSTimeInterval)timeout
 					 idleTimeout:(NSTimeInterval)idleTimeout {
+	return [self executeRequest:request maxBytes:maxBytes onData:onData onStatus:onStatus
+						rejectRedirect:nil label:nil timeout:timeout idleTimeout:idleTimeout];
+}
+
++ (SXHTTPResult *)executeRequest:(NSURLRequest *)request
+						  maxBytes:(NSUInteger)maxBytes
+						  onData:(SXHTTPDataHandler)onData
+						onStatus:(SXHTTPStatusHandler)onStatus
+				  rejectRedirect:(BOOL (^)(NSURL *))rejectRedirect
+						  label:(NSString *)label
+						 timeout:(NSTimeInterval)timeout
+					 idleTimeout:(NSTimeInterval)idleTimeout {
 	SXHTTPResult *result = [[SXHTTPResult alloc] init];
 
 	NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration ephemeralSessionConfiguration];
@@ -213,6 +303,9 @@ NSString *const SXHTTPErrorDomain = @"com.sirix.http";
 	receiver.maxBytes = maxBytes;
 	receiver.onData = onData;
 	receiver.onStatus = onStatus;
+	receiver.rejectRedirect = rejectRedirect;
+	label = label ?: [self currentRequestLabel];
+	receiver.label = label;
 
 	NSURLSession *session = [NSURLSession sessionWithConfiguration:configuration
 														  delegate:receiver
@@ -227,9 +320,11 @@ NSString *const SXHTTPErrorDomain = @"com.sirix.http";
 		dispatch_semaphore_signal(semaphore);
 	}];
 	[task resume];
+	SXHTTPTrack(task, label);
 
 	long waited = dispatch_semaphore_wait(semaphore, dispatch_time(DISPATCH_TIME_NOW,
 		(int64_t)((MAX(1.0, timeout) + 1.0) * NSEC_PER_SEC)));
+	SXHTTPUntrack(task, label);
 	[session finishTasksAndInvalidate];
 
 	if (waited != 0) {
@@ -243,6 +338,7 @@ NSString *const SXHTTPErrorDomain = @"com.sirix.http";
 	result.status = receiver.status;
 	result.mimeType = receiver.mimeType;
 	result.body = receiver.buffer ?: [NSData data];
+	result.finalURL = receiver.finalURL;
 
 	if (receiver.overflowError) {
 		result.error = receiver.overflowError;
@@ -265,7 +361,18 @@ NSString *const SXHTTPErrorDomain = @"com.sirix.http";
 			  idleTimeout:(NSTimeInterval)idleTimeout
 				   onData:(SXHTTPDataHandler)onData {
 	return [self postURL:urlString body:body headers:headers timeout:timeout
-			 idleTimeout:idleTimeout onStatus:nil onData:onData];
+			 idleTimeout:idleTimeout onStatus:nil onData:onData label:nil];
+}
+
++ (SXHTTPResult *)postURL:(NSString *)urlString
+					 body:(NSDictionary *)body
+				  headers:(NSDictionary<NSString *, NSString *> *)headers
+				  timeout:(NSTimeInterval)timeout
+			  idleTimeout:(NSTimeInterval)idleTimeout
+				   onData:(SXHTTPDataHandler)onData
+					label:(NSString *)label {
+	return [self postURL:urlString body:body headers:headers timeout:timeout
+			 idleTimeout:idleTimeout onStatus:nil onData:onData label:label];
 }
 
 + (SXHTTPResult *)postURL:(NSString *)urlString
@@ -275,6 +382,18 @@ NSString *const SXHTTPErrorDomain = @"com.sirix.http";
 			  idleTimeout:(NSTimeInterval)idleTimeout
 				 onStatus:(SXHTTPStatusHandler)onStatus
 				   onData:(SXHTTPDataHandler)onData {
+	return [self postURL:urlString body:body headers:headers timeout:timeout
+			 idleTimeout:idleTimeout onStatus:onStatus onData:onData label:nil];
+}
+
++ (SXHTTPResult *)postURL:(NSString *)urlString
+					 body:(NSDictionary *)body
+				  headers:(NSDictionary<NSString *, NSString *> *)headers
+				  timeout:(NSTimeInterval)timeout
+			  idleTimeout:(NSTimeInterval)idleTimeout
+				 onStatus:(SXHTTPStatusHandler)onStatus
+				   onData:(SXHTTPDataHandler)onData
+					label:(NSString *)label {
 	NSURL *url = [NSURL URLWithString:urlString ?: @""];
 	if (!url || !url.scheme.length) {
 		SXHTTPResult *result = [[SXHTTPResult alloc] init];
@@ -310,6 +429,8 @@ NSString *const SXHTTPErrorDomain = @"com.sirix.http";
 					  maxBytes:0
 						onData:onData
 					  onStatus:onStatus
+			  rejectRedirect:nil
+						  label:label
 					   timeout:timeout
 				   idleTimeout:idleTimeout];
 }
@@ -319,6 +440,16 @@ NSString *const SXHTTPErrorDomain = @"com.sirix.http";
 				 timeout:(NSTimeInterval)timeout
 			 idleTimeout:(NSTimeInterval)idleTimeout
 				maxBytes:(NSUInteger)maxBytes {
+	return [self getURL:urlString headers:headers timeout:timeout idleTimeout:idleTimeout
+			   maxBytes:maxBytes rejectRedirect:nil];
+}
+
++ (SXHTTPResult *)getURL:(NSString *)urlString
+				 headers:(NSDictionary<NSString *, NSString *> *)headers
+				 timeout:(NSTimeInterval)timeout
+			 idleTimeout:(NSTimeInterval)idleTimeout
+				maxBytes:(NSUInteger)maxBytes
+		rejectRedirect:(BOOL (^)(NSURL *))rejectRedirect {
 	NSURL *url = [NSURL URLWithString:urlString ?: @""];
 	if (!url || !url.scheme.length) {
 		SXHTTPResult *result = [[SXHTTPResult alloc] init];
@@ -339,6 +470,8 @@ NSString *const SXHTTPErrorDomain = @"com.sirix.http";
 					  maxBytes:maxBytes
 						onData:nil
 					  onStatus:nil
+			  rejectRedirect:rejectRedirect
+						  label:nil
 					   timeout:timeout
 				   idleTimeout:idleTimeout];
 }

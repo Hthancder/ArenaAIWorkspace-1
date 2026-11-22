@@ -17,6 +17,8 @@ FOUNDATION_EXPORT NSString *const SXHTTPErrorDomain;
 @property (nonatomic) NSInteger status;
 @property (nonatomic, strong) NSData *body;
 @property (nonatomic, copy, nullable) NSString *mimeType;
+/// Địa chỉ cuối cùng sau các lần chuyển hướng đã được chấp nhận (nil = như cũ).
+@property (nonatomic, copy, nullable) NSURL *finalURL;
 @property (nonatomic, strong, nullable) NSError *error;
 @end
 
@@ -28,6 +30,27 @@ typedef BOOL (^SXHTTPDataHandler)(NSData *data);
 typedef void (^SXHTTPStatusHandler)(NSInteger status);
 
 @interface SXHTTP : NSObject
+
+/// Nhãn request mặc định cho LUỒNG hiện tại. Bên gọi đặt một lần (ví dụ màn
+/// trò chuyện thử đặt @"chat-test" trước khi lên luồng nền), mọi request phát
+/// sinh trên luồng đó — kể cả stream — tự mang nhãn ấy và huỷ được theo nhóm.
++ (void)setCurrentRequestLabel:(nullable NSString *)label;
++ (nullable NSString *)currentRequestLabel;
+
+/// Huỷ mọi request đang chạy của một "phiên" (nhãn bất kỳ, ví dụ @"chat-test").
+/// Màn trò chuyện thử dùng nó để nút Dừng thật sự dừng mạng, thay vì chỉ ẩn
+/// bong bóng và để request chạy tới hết ngân sách (tốn token, giữ kết nối).
+/// Gọi được từ luồng bất kỳ; request đã bị huỷ trả lỗi NSURLErrorCancelled.
++ (void)cancelRequestsWithLabel:(nullable NSString *)label;
+
+/// Như `+postURL:…onData:` nhưng có nhãn để huỷ về sau.
++ (SXHTTPResult *)postURL:(NSString *)urlString
+					 body:(NSDictionary *)body
+				  headers:(NSDictionary<NSString *, NSString *> *)headers
+				  timeout:(NSTimeInterval)timeout
+			  idleTimeout:(NSTimeInterval)idleTimeout
+				   onData:(nullable SXHTTPDataHandler)onData
+					label:(nullable NSString *)label;
 
 /// POST JSON. `onData` (tuỳ chọn) được gọi liên tục với từng mẩu thân nhận
 /// được — stream dùng nó để đọc SSE ngay khi có byte, không chờ hết body.
@@ -47,12 +70,25 @@ typedef void (^SXHTTPStatusHandler)(NSInteger status);
 				 onStatus:(nullable SXHTTPStatusHandler)onStatus
 				   onData:(nullable SXHTTPDataHandler)onData;
 
-/// GET không đi theo redirect (công cụ đọc web). Chặn body quá `maxBytes`.
+/// GET mặc định KHÔNG đi theo redirect: bên gọi (công cụ đọc web) cần tự xét
+/// đích chuyển hướng bằng SXNetPolicy trước khi đi tiếp. Chặn body quá `maxBytes`.
 + (SXHTTPResult *)getURL:(NSString *)urlString
 				 headers:(NSDictionary<NSString *, NSString *> *)headers
 				 timeout:(NSTimeInterval)timeout
 				idleTimeout:(NSTimeInterval)idleTimeout
 				  maxBytes:(NSUInteger)maxBytes;
+
+/// Như trên nhưng cho phép đi theo chuyển hướng. `rejectRedirect` được hỏi cho
+/// MỖI bước nhảy (nhận URL đích): trả YES để DỪNG và trả 3xx về cho bên gọi.
+/// Nhờ vậy một redirect không thể lọt qua host nội bộ hay hạ cấp https→http.
++ (SXHTTPResult *)getURL:(NSString *)urlString
+				 headers:(NSDictionary<NSString *, NSString *> *)headers
+				 timeout:(NSTimeInterval)timeout
+				idleTimeout:(NSTimeInterval)idleTimeout
+				  maxBytes:(NSUInteger)maxBytes
+	rejectRedirect:(BOOL (^ _Nullable)(NSURL *target))rejectRedirect;
+
+
 
 /// Thông điệp lỗi tiếng Việt đọc được từ thân JSON `{error:{message}}`
 /// (OpenAI, Gemini) — dùng chung cho mọi tầng hiển thị.

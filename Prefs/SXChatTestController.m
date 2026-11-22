@@ -6,6 +6,7 @@
 #import "SXTools.h"
 #import "SXLog.h"
 #import "SXUISupport.h"
+#import "SXHTTP.h"
 #import <UIKit/UIKit.h>
 
 typedef NS_ENUM(NSInteger, SXChatRole) {
@@ -360,6 +361,10 @@ typedef NS_ENUM(NSInteger, SXChatRole) {
 /// đang gõ, thay vì khoá UI cho tới khi hết ngân sách.
 - (void)sx_cancel {
 	if (!self.busy) return;
+	// Huỷ THẬT ở tầng mạng: trước đây nút chỉ đổi giao diện, còn request (và
+	// stream) vẫn chạy tới hết ngân sách — tốn token và giữ kết nối dù người
+	// dùng đã bấm Dừng. Nhãn được đặt trên luồng gửi request (xem `sx_send`).
+	[SXHTTP cancelRequestsWithLabel:@"chat-test"];
 	self.generation++;
 	self.busy = NO;
 	NSUInteger count = self.messages.count;
@@ -451,6 +456,9 @@ typedef NS_ENUM(NSInteger, SXChatRole) {
 
 	__weak typeof(self) weakSelf = self;
 	dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+		// Mọi request phát sinh trên luồng này mang nhãn của màn thử, nên nút
+		// Dừng huỷ được cả stream đang mở.
+		[SXHTTP setCurrentRequestLabel:@"chat-test"];
 		// Bật đúng bộ công cụ như Siri thật để kiểm chứng ngay trong Settings.
 		SXToolExec executor = ^NSDictionary *(NSString *name, NSDictionary *arguments, NSError **error) {
 			return [SXTools execute:name arguments:arguments error:error];
@@ -479,6 +487,7 @@ typedef NS_ENUM(NSInteger, SXChatRole) {
 									   markdown:markdown firstTokenMs:firstTokenMs deltas:deltaCount];
 			});
 		}];
+		[SXHTTP setCurrentRequestLabel:nil];
 	});
 }
 

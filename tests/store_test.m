@@ -13,14 +13,26 @@ int main(void) {
 		assert(snapshot);
 		NSString *epoch = snapshot[@"historyEpoch"];
 		NSTimeInterval startedAt = CFAbsoluteTimeGetCurrent();
+		// `limit` là ngữ cảnh AI, KHÔNG cắt kho Lịch sử: ngữ cảnh 0 câu (cấu hình
+		// hợp lệ) vẫn phải giữ được các lượt cho màn Lịch sử.
 		assert([store appendQuestion:@"q1" answer:@"a1" limit:2 epoch:epoch startedAt:startedAt]);
 		assert([store appendQuestion:@"q2" answer:@"a2" limit:2 epoch:epoch startedAt:startedAt]);
-		assert([store appendQuestion:@"q3" answer:@"a3" limit:2 epoch:epoch startedAt:startedAt]);
+		assert([store appendQuestion:@"q3" answer:@"a3" limit:0 epoch:epoch startedAt:startedAt]);
 		snapshot = [store snapshot];
 		NSArray *history = snapshot[@"history"];
-		assert(history.count == 2 && [history[0][@"q"] isEqualToString:@"q2"]);
+		assert(history.count == 3 && [history[0][@"q"] isEqualToString:@"q1"]);
+		// Kho có trần riêng, cao hơn hẳn "ngữ cảnh hội thoại" (tối đa 40 câu).
+		for (NSUInteger i = history.count; i < (NSUInteger)SXStoreHistoryCapacity + 5; i++) {
+			NSString *question = [NSString stringWithFormat:@"q%lu", (unsigned long)i];
+			assert([store appendQuestion:question answer:@"a" limit:0 epoch:epoch startedAt:startedAt]);
+		}
+		history = [store snapshot][@"history"];
+		assert(history.count == (NSUInteger)SXStoreHistoryCapacity);
+		assert([history.lastObject[@"q"] isEqualToString:
+				[NSString stringWithFormat:@"q%lu", (unsigned long)(SXStoreHistoryCapacity + 4)]]);
+		history = [store snapshot][@"history"];
 		assert([store deleteHistoryID:history[0][@"id"]]);
-		assert([[[store snapshot] objectForKey:@"history"] count] == 1);
+		assert([[[store snapshot] objectForKey:@"history"] count] == (NSUInteger)SXStoreHistoryCapacity - 1);
 		assert([store clearHistory]);
 		assert(![store appendQuestion:@"old" answer:@"old" limit:2 epoch:epoch startedAt:startedAt]);
 		assert([[[store snapshot] objectForKey:@"history"] count] == 0);

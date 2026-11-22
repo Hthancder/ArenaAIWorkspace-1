@@ -71,7 +71,9 @@
 		if (![item[@"id"] isKindOfClass:NSString.class] || ![item[@"q"] isKindOfClass:NSString.class] || ![item[@"a"] isKindOfClass:NSString.class]) continue;
 		[history addObject:item];
 	}
-	if (history.count > 40) [history removeObjectsInRange:NSMakeRange(0, history.count - 40)];
+	if (history.count > (NSUInteger)SXStoreHistoryCapacity) {
+		[history removeObjectsInRange:NSMakeRange(0, history.count - (NSUInteger)SXStoreHistoryCapacity)];
+	}
 	NSDictionary *rawStats = [saved[@"stats"] isKindOfClass:NSDictionary.class] ? saved[@"stats"] : @{};
 	NSMutableDictionary *stats = [NSMutableDictionary dictionary];
 	for (NSString *key in @[@"replaced", @"kept", @"timeout", @"error", @"msAvg",
@@ -134,9 +136,12 @@
 	if ([state[@"historyEpoch"] isEqualToString:epoch] && startedAt > [state[@"historyClearedAt"] doubleValue]) {
 		NSMutableArray *items = [state[@"history"] mutableCopy];
 		[items addObject:@{@"id": NSUUID.UUID.UUIDString, @"q": question, @"a": answer, @"date": NSDate.date}];
-		// Kho giữ tối đa 40 lượt để UI lịch sử vẫn đọc được; `limit` (ngữ cảnh) có thể 0.
-		NSUInteger max = MIN(MAX(limit, (NSUInteger)1), (NSUInteger)40);
-		while (items.count > max) [items removeObjectAtIndex:0];
+		// `limit` là KÍCH THƯỚC NGỮ CẢNH AI (0 = "không nhớ gì"), không phải số lượt
+		// được lưu để xem Lịch sử. Trước đây hai thứ bị trộn làm một nên đặt ngữ
+		// cảnh 0 câu là mỗi lần chỉ còn đúng 1 mục trong Lịch sử, và đặt ngữ cảnh
+		// 2 câu thì cả kho chỉ giữ 2 lượt — trái với mô tả "kho giữ tối đa 40 lượt".
+		while (items.count > (NSUInteger)SXStoreHistoryCapacity) [items removeObjectAtIndex:0];
+		(void)limit;   // giữ tham số cho API cũ; xem chú thích ở SXStore.h
 		state[@"history"] = items;
 		ok = [self writeLocked:state];
 	}

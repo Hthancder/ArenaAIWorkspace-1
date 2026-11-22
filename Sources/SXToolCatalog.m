@@ -3,12 +3,11 @@
 #import "SXLog.h"
 #import "SXPrefs.h"
 #import "SXHTTP.h"
+#import "SXNetPolicy.h"
 #import <UIKit/UIKit.h>
 #import <objc/message.h>
 #import <SystemConfiguration/SystemConfiguration.h>
 #include <sys/utsname.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
 #include <math.h>
 #include <string.h>
 
@@ -143,27 +142,10 @@ static NSDictionary *SXClipboardClear(NSDictionary *arguments, NSError **error) 
 
 #pragma mark - Đọc web
 
+/// Luật thật nằm ở SXNetPolicy.h (C thuần, có test): xét cả IPv4 viết tắt,
+/// IPv6, ::ffff:, CGNAT… — những dạng mà so chuỗi + inet_pton(AF_INET) bỏ sót.
 static BOOL SXHostIsPrivate(NSString *host) {
-	if (!host.length) return YES;
-	NSString *lower = host.lowercaseString;
-	if ([lower isEqualToString:@"localhost"] || [lower hasSuffix:@".local"] ||
-		[lower hasSuffix:@".internal"] || [lower hasSuffix:@".lan"]) return YES;
-	if ([lower containsString:@":"]) {
-		if ([lower isEqualToString:@"::1"] || [lower hasPrefix:@"fc"] || [lower hasPrefix:@"fd"] ||
-			[lower hasPrefix:@"fe80"] || [lower isEqualToString:@"::"]) return YES;
-	}
-	struct in_addr address;
-	if (inet_pton(AF_INET, lower.UTF8String, &address) == 1) {
-		uint32_t value = ntohl(address.s_addr);
-		uint32_t a = (value >> 24) & 0xFF, b = (value >> 16) & 0xFF;
-		if (a == 0 || a == 10 || a == 127) return YES;
-		if (a == 169 && b == 254) return YES;
-		if (a == 172 && b >= 16 && b <= 31) return YES;
-		if (a == 192 && b == 168) return YES;
-		return NO;
-	}
-	if ([lower rangeOfCharacterFromSet:[NSCharacterSet decimalDigitCharacterSet].invertedSet].location == NSNotFound) return YES;
-	return NO;
+	return SXNetHostIsPrivate(host.UTF8String) ? YES : NO;
 }
 
 /// Bỏ script/style/tag, giải mã entity, gộp khoảng trắng.
@@ -235,17 +217,34 @@ static NSDictionary *SXWebFetch(NSDictionary *arguments, NSError **error) {
 		return nil;
 	}
 	if (SXHostIsPrivate(url.host)) {
-		if (error) *error = SXErr(403, @"Không cho phép đọc địa chỉ mạng nội bộ (localhost, 192.168.x…).");
+		NSString *hint = SXNetHostIsLoopback(url.host.UTF8String)
+			? @"địa chỉ của chính máy này (loopback)"
+			: @"một địa chỉ mạng nội bộ";
+		if (error) *error = SXErr(403, [NSString stringWithFormat:
+			@"Không đọc được %@ vì đó là %@. Chỉ tải được trang trên Internet công khai.",
+			url.host ?: @"?", hint]);
 		return nil;
 	}
 
-	// Không đi theo redirect (SXHTTP.getURL không theo): một bookmark công khai
-	// có thể chuyển hướng vào mạng nội bộ, nên 3xx được trả về cho model biết.
+	// Đi theo tối đa 3 chuyển hướng, nhưng xét lại TỪNG đích: một trang công
+	// khai hoàn toàn có thể chuyển vào 127.0.0.1/metadata nội bộ, hoặc hạ cấp
+	// https→http. Bản trước ghi "không đi theo redirect" trong chú thích nhưng
+	// URLSession vẫn đi theo — đó là lỗ hổng đọc mạng nội bộ qua trang trung gian.
+	__block NSUInteger hops = 0;
 	SXHTTPResult *response = [SXHTTP getURL:url.absoluteString
 									headers:@{@"Accept": @"text/html,application/json,text/plain;q=0.9,*/*;q=0.5"}
 									timeout:8.0
 								idleTimeout:6.0
-								   maxBytes:2 * 1024 * 1024];
+								   maxBytes:2 * 1024 * 1024
+							 rejectRedirect:^BOOL(NSURL *target) {
+		const char *scheme = target.scheme.UTF8String;
+		const char *host = target.host.UTF8String;
+		BOOL allowed = SXNetRedirectAllowed(url.scheme.UTF8String, scheme, host) && hops < 3;
+		if (allowed) hops++;
+		else SXLogWrn(@"tool", @"web_fetch: chặn chuyển hướng tới %@ (hạ cấp giao thức, host nội bộ hoặc quá 3 bước)",
+					target.host ?: @"?");
+		return !allowed;
+	}];
 	if (response.error) {
 		if (error) *error = SXErr(response.error.code ?: 502, [NSString stringWithFormat:
 			@"Không tải được trang: %@", response.error.localizedDescription]);
