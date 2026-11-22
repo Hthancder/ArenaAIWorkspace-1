@@ -277,7 +277,6 @@ int main(void) {
 		pendingCompletion(@"Đã gọi [sđt-1] xong", nil, nil);
 		say = sayCommand();
 		assert([intercept handleIncomingCommand:say]);
-		fprintf(stderr, "DEBUG say.message=%s\n", say.message.UTF8String);
 		assert([say.message containsString:@"0912345678"]);
 		assert([say.message rangeOfString:@"[sđt-1]"].location == NSNotFound);
 

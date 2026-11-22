@@ -69,6 +69,14 @@ int main(void) {
 		mustNotContain(@"mở https://shop.example.com/order?token=abc123secret xem giúp",
 					   @[@"abc123secret"], "URL có token");
 
+		// --- Nhãn tiếng Việt có dấu phải khôi phục được (lỗi thật: `[sđt-1]`
+		//     từng không khớp vì `đ` chuẩn hoá khác nhau ở hai bước).
+		SXAnonTurn *viet = [SXAnonTurn new];
+		NSString *vietIn = @"nhắc mẹ gọi 0912345678 lúc 8 giờ";
+		NSString *vietHidden = [viet redact:vietIn];
+		assert([vietHidden containsString:@"[sđt-1]"]);
+		assert([[viet restore:vietHidden] isEqualToString:vietIn]);
+
 		// --- Nhiều giá trị CÙNG loại: nhãn phải khác nhau để khôi phục đúng
 		SXAnonTurn *two = [SXAnonTurn new];
 		NSString *input = @"gọi 0912345678 hoặc 0987654321";

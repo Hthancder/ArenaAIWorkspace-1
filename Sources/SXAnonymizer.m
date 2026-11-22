@@ -41,8 +41,15 @@ static NSString *SXAnonLabelForKind(NSString *kind, NSUInteger index) {
 
 /// Bỏ dấu tiếng Việt + viết thường + bỏ mọi ký tự không phải chữ/số.
 /// Model có thể trả `[SDT 1]`, `[sđt-1]` hay `(sđt 1)` — tất cả phải khớp.
+///
+/// `đ` không có dạng NFD nên `stringByFoldingWithOptions:` xử lý tuỳ phiên bản
+/// ICU (có bản trả "d", có bản để nguyên "đ"). Vì nhãn `[sđt-1]` do chính hàm
+/// này chuẩn hoá, nếu hai bên chuẩn hoá khác nhau thì việc khôi phục hỏng đúng
+/// với cái nhãn phổ biến nhất — nên đổi `đ`→`d` NGAY, trước mọi bước khác.
 static NSString *SXAnonNormalize(NSString *text) {
-	NSString *lower = text.lowercaseString;
+	NSString *lower = [text.lowercaseString stringByFoldingWithOptions:NSDiacriticInsensitiveSearch
+																 locale:nil];
+	lower = [lower stringByReplacingOccurrencesOfString:@"đ" withString:@"d"];
 	NSData *data = [lower dataUsingEncoding:NSASCIIStringEncoding allowLossyConversion:YES];
 	NSString *ascii = data ? [[NSString alloc] initWithData:data encoding:NSASCIIStringEncoding] : lower;
 	NSMutableString *out = [NSMutableString stringWithCapacity:ascii.length];
@@ -139,21 +146,28 @@ static NSArray<NSDictionary *> *SXAnonPatterns(void) {
 - (NSString *)restore:(NSString *)text {
 	if (!text.length || !_map.count) return text;
 	NSMutableString *result = [text mutableCopy];
-	// Quét mọi cụm trong ngoặc vuông hoặc trần `sđt-1`, chuẩn hoá rồi tra bảng.
+	// Ba hình dạng model thường trả về:
+	//  1. trong ngoặc vuông — `[sđt-1]`, `[SDT 1]` (chuẩn, do ta chèn);
+	//  2. trong ngoặc tròn — `(sđt 1)`;
+	//  3. trần — `sđt-1`, `sdt 1`.
+	// Mẫu 1 nhận MỌI cụm trong ngoặc vuông (rồi tra bảng, không khớp thì để
+	// nguyên) vì viết một mẫu "bắt đầu bằng từ khoá" dễ hỏng: bản trước dùng
+	// lượng tử lười `{0,12}?` nên chỉ khớp được `[sđt` — thiếu số và dấu đóng.
 	static NSRegularExpression *candidateRe;
 	static dispatch_once_t once;
 	dispatch_once(&once, ^{
 		candidateRe = [NSRegularExpression regularExpressionWithPattern:
-					   @"\\[?[^\\[\\]]{0,12}?(?:sđt|sdt|email|thẻ|the|cccd|tk|ip|link|ẩn|an)[^\\[\\]]{0,12}?\\]?"
+					   @"\\[[^\\[\\]]{1,24}\\]"
+					   @"|\\([^()]{1,16}\\)"
+					   @"|\\b(?:sđt|sdt|email|thẻ|the|cccd|tk|ip|link|ẩn|an)[\\s\\-_]?\\d{1,3}\\b"
 					   options:NSRegularExpressionCaseInsensitive error:NULL];
 	});
 	NSArray<NSTextCheckingResult *> *matches =
 		[candidateRe matchesInString:result options:0 range:NSMakeRange(0, result.length)];
 	for (NSTextCheckingResult *match in [matches reverseObjectEnumerator]) {
 		NSString *candidate = [result substringWithRange:match.range];
-		NSString *key = SXAnonNormalize(candidate);
-		NSString *label = _normalized[key];
-		if (!label) continue;   // cụm vô hại ("sđt của tôi"…) — để nguyên
+		NSString *label = _normalized[SXAnonNormalize(candidate)];
+		if (!label) continue;   // cụm vô hại ("sđt của tôi", "[ảnh]"…) — để nguyên
 		NSString *original = _map[label];
 		if (!original.length) continue;
 		[result replaceCharactersInRange:match.range withString:original];
