@@ -58,4 +58,16 @@ gamepad khi setting tắt, đồng thời kiểm tra các nhánh gamepad và kho
 Nó không kiểm controller thật hay thao tác hiển thị trên Android/iOS. Alias
 slot 82 là tên tự đặt; `gp_connect_check` cũng là ứng viên với giới hạn riêng.
 
+## Khảo sát crosshair — chưa sửa source
+
+`obj_player:Draw:64` ARM32 tại `0x5d2168` dài 37.228 byte; slot 85 được
+lưu tại `[sp,#0x18]` và so sánh > 0,5 ở `0x5d7400`–`0x5d7418`. Nhánh
+không lớn hơn nhảy qua một vùng có lời gọi `draw_line_crosshair` tại
+`0x5d75a8`. Tuy nhiên một lời gọi cùng script đã xuất hiện trước gate tại
+`0x5d4450`, nên không có cơ sở tắt toàn bộ event cũ khi setting tắt. Phần
+`draw_line_crosshair` và vùng event tương ứng chưa phục hồi; chỉ ghi bằng chứng,
+không thêm gate hay khẳng định hành vi crosshair đã khớp. Verifier ghim hash
+export, chuỗi instruction và địa chỉ relocation, quét word ghi đè trực tiếp;
+đó không phải phân tích đầy đủ mọi đường nhánh hay stack alias.
+
 Kết quả CI cần xem riêng; chưa tạo IPA.

@@ -89,6 +89,8 @@ class SettingsParticleEvidenceTests(unittest.TestCase):
         self.assertEqual(len(report['settings']), 7)
         self.assertEqual(report['settings'][-1]['native_slot'], 49)
         self.assertEqual(report['feedback_gate']['slot'], 82)
+        self.assertEqual(report['crosshair_partial_gate']['slot'], 85)
+        self.assertFalse(report['crosshair_partial_gate']['source_changed'])
         self.assertEqual(set(report['particle_gates']), set(PARTICLES))
         self.assertEqual(set(report['shadow_gates']), set(SHADOW_OBJECTS) | set(ACTION_SHADOW_OBJECTS) | {'par_building', 'obj_player'})
         self.assertEqual(len(SETTINGS), 7)

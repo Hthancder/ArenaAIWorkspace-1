@@ -403,10 +403,40 @@ def inspect(apk):
             raise ValueError('player threshold overwritten')
         if instruction.mnemonic.startswith(('str', 'stm')) and '[sp, #0x30]' in instruction.op_str:
             raise ValueError('player shadow pointer overwritten')
+    gui_start = 0x5d2168
+    gui_hash = 'f7b519502cd56e58a7fb426e42b1d88de84a69df5818c15a2d7cb6ce21d99758'
+    gui = [s for s in dyn.iter_symbols() if exported_name(s.name) == 'gml_Object_obj_player_Draw_64']
+    if len(gui) != 1 or (gui[0]['st_value'], gui[0]['st_size']) != (gui_start, 37228) or hashlib.sha256(read(gui_start, 37228)).hexdigest() != gui_hash:
+        raise ValueError('unexpected player GUI Draw bytes')
+    if sym(gui_start+0x14, gui_start+0x24, gui_start+0x18).name != 'g_pGlobal':
+        raise ValueError('unexpected player GUI global pointer')
+    if 'gml_Script_draw_line_crosshair' not in calls.get(0x176780, ''):
+        raise ValueError('unexpected GUI crosshair call relocation')
+    gui_checks = {
+        0x38: ('ldr', 'r0, [r4, r0]'), 0x48: ('ldr', 'r0, [r0]'),
+        0xb0: ('ldr', 'r1, [r0]'), 0xb4: ('ldr', 'r2, [r1, #8]'),
+        0xb8: ('mov', 'r1, #0x55'), 0xbc: ('blx', 'r2'),
+        0xc0: ('mov', 'r5, r0'), 0x100: ('str', 'r5, [sp, #0x18]'),
+        0x22e8: ('bl', '#0x176780'), 0x5298: ('ldr', 'r0, [sp, #0x18]'),
+        0x529c: ('bl', '#0x176444'), 0x52a0: ('vmov.f64', 'd1, #5.000000e-01'),
+        0x52a4: ('vmov', 'd0, r0, r1'), 0x52a8: ('vcmpe.f64', 'd0, d1'),
+        0x52ac: ('vmrs', 'apsr_nzcv, fpscr'), 0x52b0: ('ble', '#0x5d8250'),
+        0x5440: ('bl', '#0x176780'),
+    }
+    for off, (op, args) in gui_checks.items():
+        check(gui_start+off, op, args)
+    for instruction in arm_words(dis, read, gui_start+0xc4, gui_start+0x100):
+        _, writes = instruction.regs_access()
+        if 'r5' in (instruction.reg_name(r) for r in writes):
+            raise ValueError('GUI crosshair pointer register overwritten')
+    for instruction in arm_words(dis, read, gui_start+0x104, gui_start+0x5298):
+        if instruction.mnemonic.startswith(('str', 'stm')) and '[sp, #0x18]' in instruction.op_str:
+            raise ValueError('GUI crosshair pointer stack slot overwritten')
     return {'apk_sha256': APK_SHA256, 'native_library_sha256': LIB_SHA256,
             'settings': [{'section': x[0], 'key': x[1], 'alias': '__dt_setting_'+x[2], 'native_slot': x[3], 'default': 1} for x in SETTINGS],
             'particle_gates': {name: {'address': hex(v[0]), 'sha256': v[2], 'slot': 49} for name, v in PARTICLES.items()},
             'feedback_gate': {'event': 'obj_player:Draw:0', 'address': hex(start), 'slot': 82, 'gamepad_check': 'gp_connect_check', 'sha256': player_hash},
+            'crosshair_partial_gate': {'event': 'obj_player:Draw:64', 'address': hex(gui_start), 'slot': 85, 'sha256': gui_hash, 'call_before_gate': '0x5d4450', 'call_in_guarded_region': '0x5d75a8', 'source_changed': False},
             'shadow_gates': {name: {'address': hex(v[0]), 'sha256': v[1], 'slot': 86} for name, v in {**SHADOW_OBJECTS, **ACTION_SHADOW_OBJECTS, 'par_building': (0x3936e0, '9bb63888bd5e63c006e5238daabbd08185b25a8ee9e6f154f7313589b965dcb7'), 'obj_player': (start, player_hash)}.items()},
             'limitations': 'Static ARM32 and partial source only; original names, full particle functions, non-finite values, GameMaker compiler, actual display/settings UI, gameplay and iOS unverified.'}
 
