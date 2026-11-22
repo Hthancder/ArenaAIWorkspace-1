@@ -1,0 +1,94 @@
+name: Dead Town current source experimental IPA
+
+on:
+  push:
+    branches:
+      - arena/78062d86-arenaaiworkspace-1
+    paths:
+      - .github/workflows/deadtown-source-test-ipa.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-ipa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Retrieve pinned source containers and tooling
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p work/utmt work/game output
+          git fetch --no-tags origin 8643abdda26944002384bc216bf555717a9e1e42
+          git show '8643abdda26944002384bc216bf555717a9e1e42:Dead+Town+-+Zombie+survival_1.4.2_APKPure.apk' > work/original.apk
+          echo 'bc8fa1990cb2cdde8d184f2a942fe4010820f0592d88a36e1cbee0a6aac081fb  work/original.apk' | sha256sum -c
+          unzip -p work/original.apk assets/game.droid > work/game.droid
+          echo '0900da067462bd48040da6e217a86e2d5411397b05f07d55d13c58440b82a7b8  work/game.droid' | sha256sum -c
+          for n in 1 2; do unzip -p work/original.apk "assets/audiogroup$n.dat" > "work/game/audiogroup$n.dat"; test -s "work/game/audiogroup$n.dat"; done
+          gh release download 0.9.2.0 -R UnderminersTeam/UndertaleModTool -p 'UTMT_CLI_v0.9.2.0-Ubuntu.zip' -O work/utmt.zip
+          echo 'd182f00c0e5ced8d9252aa1f796374cfee077a3889a658e70b68685f9cd559c7  work/utmt.zip' | sha256sum -c
+          unzip -q work/utmt.zip -d work/utmt
+          gh release download deadtown-ios15-re-test-3 -R "$GITHUB_REPOSITORY" -p 'DeadTown-iOS15-RE-test3.ipa' -O work/runner.ipa
+          echo '7e0f10c8761fe1160baa855a4e825aa31974f02cb2b2205a27b0df9d5eefe781  work/runner.ipa' | sha256sum -c
+      - name: Compile current editable source into experimental VM data
+        env:
+          GML_PROBE_SOURCE: ${{ github.workspace }}/deadtown-source/project/scripts/lang_type_set.gml
+          GML_PROBE_EVENTS: ${{ github.workspace }}/work/events-original.json
+        run: |
+          set -euo pipefail
+          python tools/deadtown_event_probe.py deadtown-source/project work/events-original.json
+          exe=$(find work/utmt -type f -name UndertaleModCli | head -1)
+          test -n "$exe"
+          chmod +x "$exe"
+          "$exe" load work/game.droid -s tools/deadtown-vm-probe.csx -o work/game/data.win > output/compile.log 2>&1 || { tail -120 output/compile.log; exit 1; }
+          grep -F 'PROBE: incomplete data' output/compile.log
+          grep -E 'PROBE: (attempting|compiling|compile_success|linked|removed)' output/compile.log
+          test -s work/game/data.win
+      - name: Package unsigned diagnostic IPA with isolated app identity
+        run: |
+          set -euo pipefail
+          mkdir -p work/unpacked
+          unzip -q work/runner.ipa -d work/unpacked
+          app=work/unpacked/Payload/gmRunner.app
+          test -f "$app/Info.plist"
+          rm -rf "$app/BundledGame"
+          printf 'touch = 1\ntouch_controls = off\n' > work/game/gmrunner.ini
+          cp -R work/game "$app/BundledGame"
+          python tools/prepare_deadtown_ios_plist.py "$app/Info.plist"
+          python - <<'PY'
+          import plistlib, struct, hashlib, os
+          from pathlib import Path
+          from tools.prepare_deadtown_ios_plist import LANDSCAPE
+          app = Path('work/unpacked/Payload/gmRunner.app')
+          path = app/'Info.plist'
+          info = plistlib.loads(path.read_bytes())
+          assert info['MinimumOSVersion'] == '15.0'
+          assert info['UISupportedInterfaceOrientations'] == LANDSCAPE
+          assert info['UISupportedInterfaceOrientations~ipad'] == LANDSCAPE
+          binary = app/info['CFBundleExecutable']
+          assert struct.unpack('<II', binary.read_bytes()[:8]) == (0xfeedfacf, 0x100000c)
+          assert not (app/'_CodeSignature').exists()
+          info['CFBundleIdentifier'] = 'org.gmrunner.deadtown.sourcetest4'
+          info['CFBundleDisplayName'] = 'Dead Town Source Test'
+          path.write_bytes(plistlib.dumps(info, fmt=plistlib.FMT_BINARY, sort_keys=False))
+          sha = hashlib.sha256((app/'BundledGame/data.win').read_bytes()).hexdigest()
+          Path('output/BUILD_INFO.txt').write_text('SOURCE_REVISION=' + os.environ['GITHUB_SHA'] + '\nDATA_WIN_SHA256=' + sha + '\nUNSIGNED; EXPERIMENTAL; INCOMPLETE; NOT TESTED ON IPHONE\n', encoding='utf-8')
+          print('::notice::Unsigned arm64 iOS 15 experimental source test; no gameplay or device validation')
+          PY
+          (cd work/unpacked && zip -qry ../../output/DeadTown-iOS15-source-test4.ipa Payload)
+          unzip -tq output/DeadTown-iOS15-source-test4.ipa
+          sha256sum output/DeadTown-iOS15-source-test4.ipa | tee output/SHA256.txt
+      - name: Upload experimental IPA and build report
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeadTown-iOS15-source-test4
+          path: output/
+          if-no-files-found: error
+          retention-days: 7
