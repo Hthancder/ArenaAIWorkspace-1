@@ -408,7 +408,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>Lượt riêng tư không lưu câu mới, không gửi ngữ cảnh cũ cho AI và không đưa đáp án trễ vào thông báo. Câu hiện tại vẫn được gửi tới nhà cung cấp để trả lời; log và Siri vẫn có thể xử lý nội dung. Lịch sử cũ phải xoá riêng.</string>
+			<string>Lượt riêng tư không lưu câu mới, không gửi ngữ cảnh cũ cho AI và không đưa đáp án trễ vào thông báo. Câu hiện tại vẫn được gửi tới nhà cung cấp để trả lời. Bật “Ẩn dữ liệu nhận dạng” để số điện thoại, email, số thẻ, CCCD, số tài khoản, địa chỉ IP và liên kết có token được thay bằng nhãn trước khi gửi, rồi khôi phục trong câu trả lời. Tên người và địa chỉ KHÔNG được ẩn. Lịch sử cũ phải xoá riêng.</string>
 			<key>label</key>
 			<string>Dữ liệu</string>
 		</dict>
@@ -449,6 +449,20 @@
 			<string>incognito</string>
 			<key>label</key>
 			<string>Không lưu lịch sử</string>
+		</dict>
+		<dict>
+			<key>PostNotification</key>
+			<string>com.sirix.tweak/prefs.changed</string>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>default</key>
+			<true/>
+			<key>defaults</key>
+			<string>com.sirix.tweak</string>
+			<key>key</key>
+			<string>anonymize</string>
+			<key>label</key>
+			<string>Ẩn dữ liệu nhận dạng khi gửi AI</string>
 		</dict>
 		<dict>
 			<key>cell</key>

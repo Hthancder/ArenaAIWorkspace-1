@@ -5,6 +5,7 @@
 #import "SXTools.h"
 #import "SXMarkdown.h"
 #import "SXDisplayPolicy.h"
+#import "SXAnonymizer.h"
 #import "SXStore.h"
 #import <objc/message.h>
 #import <notify.h>
@@ -612,18 +613,27 @@ static dispatch_queue_t SXTurnQueue(void) {
 							  NSMakeRange(requestHistory.count - maxTurns, maxTurns)];
 		}
 
+		// Ẩn số điện thoại/email/thẻ/CCCD/tài khoản/IP/URL có token TRƯỚC khi gửi
+		// lên nhà cung cấp, và giữ bảng để khôi phục trong đáp án. Không có bước
+		// này thì "Không lưu lịch sử" chỉ ngừng ghi trên máy, còn dữ liệu vẫn đi.
+		SXAnonTurn *anon = [SXAnonTurn new];
+		anon.enabled = [SXPrefs shared].anonymize;
+		NSString *questionForModel = [anon redact:clean];
+
 		SXToolExec executor = ^NSDictionary *(NSString *name, NSDictionary *arguments, NSError **error) {
 			// Mỗi lần gọi công cụ là một mốc tiến triển: hook ACE đang chờ sẽ được
 			// gia hạn thay vì tưởng model bị treo rồi hiện bubble hết giờ.
 			[self noteToolProgress];
 			return [SXTools execute:name arguments:arguments error:error];
 		};
-		[SXLLM askQuestion:clean
+		[SXLLM askQuestion:questionForModel
 				   history:requestHistory
 					 tools:[SXTools definitions]
 				  executor:executor
 				completion:^(NSString *answer, NSError *error, NSDictionary *info) {
-			[self applyAnswer:answer error:error info:info forGeneration:myGeneration];
+			// Khôi phục trên luồng nền TRƯỚC khi đáp án vào state hiển thị, để
+			// người dùng đọc số thật và lịch sử cũng lưu số thật.
+			[self applyAnswer:[anon restore:answer] error:error info:info forGeneration:myGeneration];
 		}];
 	});
 }

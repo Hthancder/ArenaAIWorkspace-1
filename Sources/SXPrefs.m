@@ -225,6 +225,7 @@ static double SXClamp(double v, double lo, double hi) {
 	_streaming = [self boolFor:@"streaming" default:YES];
 	_deferLongReplies = [self boolFor:@"deferLongReplies" default:YES];
 	_markdown = [self boolFor:@"markdown" default:YES];
+	_anonymize = [self boolFor:@"anonymize" default:YES];
 	NSString *timeoutAction = [self stringFor:@"timeoutAction" default:@"bubble"];
 	_timeoutAction = ([timeoutAction isEqualToString:@"keep"] || [timeoutAction isEqualToString:@"retry"])
 		? [timeoutAction copy] : @"bubble";

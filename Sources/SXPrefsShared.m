@@ -33,7 +33,7 @@ NSArray<NSString *> *SXPreferenceKeys(void) {
 				 @"geminiKey", @"geminiModel", @"geminiFallbackModel",
 				 @"temperature", @"contextTurns", @"timeout", @"replyDeadline", @"timeoutAction",
 				 @"streaming", @"markdown", @"hideWebCards", @"showOriginal", @"speakErrors",
-				 @"customPrompt", @"incognito", @"deferLongReplies",
+				 @"customPrompt", @"incognito", @"deferLongReplies", @"anonymize",
 				 @"maxToolRounds", @"toolsDisabled",
 				 @"openaiHeaders", @"geminiHeaders",
 				 @"verbose"];

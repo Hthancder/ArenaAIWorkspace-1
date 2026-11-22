@@ -24,7 +24,8 @@ SiriX_FILES = \
 	Sources/SXIntercept.m \
 	Sources/SXStream.m \
 	Sources/SXMarkdown.m \
-	Sources/SXDisplayPolicy.m
+	Sources/SXDisplayPolicy.m \
+	Sources/SXAnonymizer.m
 
 SiriX_CFLAGS = -fobjc-arc -Wno-deprecated-declarations \
 	-I$(THEOS_PROJECT_DIR)/include \

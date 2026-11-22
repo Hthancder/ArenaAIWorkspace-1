@@ -132,6 +132,10 @@ FOUNDATION_EXPORT NSArray<NSDictionary *> *SXModelPresets(SXProvider provider);
 /// (mặc định bật). Chỉ áp cho lượt vượt trần chờ.
 @property (nonatomic, readonly) BOOL deferLongReplies;
 @property (nonatomic, readonly) BOOL markdown;                  // trình bày Markdown khi hiển thị (v1.1)
+/// Ẩn số điện thoại/email/số thẻ/CCCD/số tài khoản/IP/URL có token trong câu hỏi
+/// trước khi gửi lên nhà cung cấp AI, rồi khôi phục trong đáp án (mặc định BẬT
+/// vì đây là dữ liệu không cần thiết cho câu trả lời). Xem `SXAnonymizer.h`.
+@property (nonatomic, readonly) BOOL anonymize;
 /// "bubble" (báo chưa kịp) | "keep" (giữ Siri gốc) | "retry" (thử lại một lần
 /// bằng model dự phòng khi hết giờ hoặc lỗi mạng) — khi hết giờ, chế độ Thay thế.
 @property (nonatomic, readonly, copy) NSString *timeoutAction;
