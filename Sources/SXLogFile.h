@@ -4,6 +4,7 @@
 // File operations shared by the iOS logger and the portable regression test.
 // Open every time so other processes can remove or rotate the path safely.
 #include <errno.h>
+#include <stdio.h>
 #include <fcntl.h>
 #include <stddef.h>
 #include <string.h>
@@ -11,13 +12,48 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+// Ghi cả dòng trong MỘT descriptor với O_APPEND. `write` trên tệp thường có
+// thể trả về ngắn (hoặc EINTR khi có signal — SpringBoard nhận khá nhiều), nên
+// phải lặp tới khi ghi hết; trước đây một lần ghi ngắn là cả dòng log mất,
+// đúng lúc log cần nhất (lỗi, exception).
 static inline int SXLogFileAppend(const char *path, const char *bytes, size_t length) {
+	if (!path || !bytes) return -1;
 	int fd = open(path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
 	if (fd < 0) return -1;
-	ssize_t written = write(fd, bytes, length);
-	int result = (written >= 0 && (size_t)written == length) ? 0 : -1;
-	close(fd);
+	size_t total = 0;
+	int result = 0;
+	while (total < length) {
+		ssize_t written = write(fd, bytes + total, length - total);
+		if (written < 0) {
+			if (errno == EINTR) continue;
+			result = -1;
+			break;
+		}
+		if (written == 0) { result = -1; break; }
+		total += (size_t)written;
+	}
+	if (close(fd) != 0 && result == 0) result = -1;
 	return result;
+}
+
+/// Kích thước tệp (byte) hoặc -1 nếu không đọc được.
+static inline off_t SXLogFileSize(const char *path) {
+	struct stat st;
+	if (!path || stat(path, &st) != 0) return -1;
+	return st.st_size;
+}
+
+/// Xoay vòng khi tệp vượt `limit`: SiriX.log → SiriX.log.old (bản cũ bị xoá).
+/// Trả về 1 nếu đã xoay, 0 nếu không cần, -1 nếu lỗi. Không bao giờ làm mất
+/// tệp hiện tại khi bước đổi tên thất bại: khi đó chỉ cắt bớt bằng cách bỏ qua
+/// và để lần gọi sau thử lại.
+static inline int SXLogFileRotateIfLargerThan(const char *path, const char *oldPath, off_t limit) {
+	off_t size = SXLogFileSize(path);
+	if (size < 0) return 0;
+	if (size <= limit) return 0;
+	if (oldPath) (void)unlink(oldPath);
+	if (rename(path, oldPath ? oldPath : path) != 0) return -1;
+	return 1;
 }
 
 static inline int SXLogFileClear(const char *path) {

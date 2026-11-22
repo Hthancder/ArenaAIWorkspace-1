@@ -70,8 +70,64 @@ static void test_read_tail(void) {
 	assert(unlink(path) == 0 && rmdir(dir) == 0);
 }
 
+// Ghi một dòng dài hơn một lần write() của kernel và kiểm tra không mất byte.
+// (SpringBoard hay nhận signal; một write ngắn làm cả dòng log biến mất.)
+static void test_partial_writes(void) {
+	char dir[] = "/tmp/sirix-log-partial-XXXXXX";
+	assert(mkdtemp(dir));
+	char path[256];
+	snprintf(path, sizeof(path), "%s/SiriX.log", dir);
+	size_t length = 200000;
+	char *payload = malloc(length);
+	assert(payload);
+	for (size_t i = 0; i < length; i++) payload[i] = (char)('a' + (i % 26));
+	assert(SXLogFileAppend(path, payload, length) == 0);
+	assert(SXLogFileSize(path) == (off_t)length);
+	FILE *f = fopen(path, "rb");
+	assert(f);
+	char *readback = malloc(length);
+	assert(readback);
+	assert(fread(readback, 1, length, f) == length);
+	fclose(f);
+	assert(memcmp(readback, payload, length) == 0);
+	free(readback);
+	free(payload);
+	assert(unlink(path) == 0 && rmdir(dir) == 0);
+}
+
+static void test_rotate(void) {
+	char dir[] = "/tmp/sirix-log-rotate-XXXXXX";
+	assert(mkdtemp(dir));
+	char path[256], old[256];
+	snprintf(path, sizeof(path), "%s/SiriX.log", dir);
+	snprintf(old, sizeof(old), "%s/SiriX.log.old", dir);
+
+	// Tệp nhỏ: không xoay, tệp giữ nguyên.
+	append(path, "small\n");
+	assert(SXLogFileRotateIfLargerThan(path, old, 1024) == 0);
+	expect(path, "small\n");
+
+	// Vượt trần: chuyển sang .old, tệp mới bắt đầu rỗng; bản .old cũ bị thay.
+	assert(SXLogFileRotateIfLargerThan(path, old, 1) == 1);
+	// Sau khi xoay, tệp hiện tại chưa tồn tại cho tới lần ghi kế tiếp.
+	assert(SXLogFileSize(path) == -1);
+	expect(old, "small\n");
+	append(path, "fresh\n");
+	assert(SXLogFileRotateIfLargerThan(path, old, 1) == 1);
+	expect(old, "fresh\n");
+
+	// Tệp không tồn tại: không phải lỗi, cũng không xoay.
+	assert(SXLogFileRotateIfLargerThan("/tmp/sirix-khong-co.log", old, 1) == 0);
+	// `path` không tồn tại sau lần xoay ở trên — chỉ dọn những gì còn lại.
+	assert(unlink(old) == 0);
+	if (SXLogFileSize(path) >= 0) assert(unlink(path) == 0);
+	assert(rmdir(dir) == 0);
+}
+
 int main(void) {
 	test_read_tail();
+	test_partial_writes();
+	test_rotate();
 	char dir[] = "/tmp/sirix-log-test-XXXXXX";
 	assert(mkdtemp(dir));
 	char path[256], old[256];

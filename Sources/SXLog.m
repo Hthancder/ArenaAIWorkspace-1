@@ -71,8 +71,28 @@ void SXLogInit(void) {
 	});
 }
 
+/// Xoay vòng giữa phiên: SpringBoard chạy hàng ngày và bản verbose ghi rất
+/// nhiều, nên chỉ xoay lúc khởi động là tệp phình lên hàng chục MB trên máy
+/// người dùng. Kiểm tra mỗi 256 dòng (stat rẻ hơn nhiều so với open+write).
+static void SXMaybeRotateDuringSession(void) {
+	static int counter = 0;
+	if (__sync_add_and_fetch(&counter, 1) % 256 != 0) return;
+	@try {
+		NSString *path = SXLogFilePath();
+		if (SXLogFileRotateIfLargerThan(path.fileSystemRepresentation,
+										[[path stringByAppendingString:@".old"] fileSystemRepresentation],
+										1024 * 1024) == 1) {
+			const char *marker = "----- log xoay vòng giữa phiên (>1 MB) -----\n";
+			SXLogFileAppend(path.fileSystemRepresentation, marker, strlen(marker));
+		}
+	} @catch (NSException *exception) {
+		(void)exception;
+	}
+}
+
 void SXLogWrite(SXLogLevel level, NSString *category, NSString *format, ...) {
 	if (level == SXLogLevelDebug && !gVerbose) return;
+	SXMaybeRotateDuringSession();
 
 	va_list args;
 	va_start(args, format);
