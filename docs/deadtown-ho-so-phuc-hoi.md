@@ -851,8 +851,11 @@ bóng ở tám Draw event (`par_solid`, `par_vehicle`, `obj_parcel`, `par_buildi
 `gp_connect_check`. Room Start của `sys_global` có ứng viên truyền slot 83 vào
 `texture_set_interpolation`. Script `draw_line_crosshair` cũng đã có ứng viên
 riêng từ ARM32, nhưng chưa được nối vào Draw GUI cũ. Kiểm tĩnh và VM mock, cùng giới hạn, được trình bày tại
-[deadtown-settings-particle.md](deadtown-settings-particle.md). Không coi UI,
-hiệu ứng thực, gameplay hoặc iOS đã được xác nhận.
+[deadtown-settings-particle.md](deadtown-settings-particle.md). Ở commit
+`b81a274`, 221 test local đạt (12 bỏ qua); CI source VM `45003419408`,
+workbench `45003419357` và ARM `45003419430` đạt. Audit so tên/key còn thiếu
+56 script, 90 object, 366 event key, 4 sprite và 8 room, không báo file tham
+chiếu bị thiếu. Đây không xác nhận UI, hiệu ứng thực, gameplay hay iOS.
 
 ### Bổ sung ứng viên cài đặt và kết nối gamepad
 
@@ -860,7 +863,7 @@ hiệu ứng thực, gameplay hoặc iOS đã được xác nhận.
 `setting_load`/`setting_save` và thêm alias trung tính cùng script ứng viên
 `gp_connect_check`. Script quét mọi thiết bị kết nối, đặt deadzone 0,2 và trả
 cờ có thiết bị; nó chỉ chạy theo gate native `os_type == 4` và cài đặt. CI ARM `44983267378`, workbench `44983267306` và VM giả lập
-`44983566301` đạt; kiểm toán nay thiếu 57 script, 90 object, 367 event key,
+`44983566301` đạt; kiểm toán tại mốc đó thiếu 57 script, 90 object, 367 event key,
 4 sprite và 8 room so tên/key. Xem
 [deadtown-gamepad-connect.md](deadtown-gamepad-connect.md) về giới hạn enum,
 giá trị bất thường, UI thiếu và kiểm thử giả lập; không suy ra iOS hoạt động.

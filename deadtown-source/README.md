@@ -4,8 +4,8 @@
 bản có thể phát hành. Các file `project/**/*.gml` và `project/**/*.gmx` được
 lưu trong Git để có thể sửa và theo dõi thay đổi. Tên trùng với APK không chứng
 minh logic trùng; 68 script, 94 object và 369 event native vẫn chưa có khóa
-nguồn tương ứng ở mốc ban đầu. Nguồn hiện còn thiếu 58 script, 90 object,
-367 event key và 4 sprite APK theo tên trong tập file nguồn;
+nguồn tương ứng ở mốc ban đầu. Nguồn hiện còn thiếu 56 script, 90 object,
+366 event key, 4 sprite và 8 room APK theo tên hoặc key;
 398 sprite cùng tên hiện khớp các trường metadata tĩnh được so, nhưng không
 chứng minh mask khi biên dịch hoặc hành vi. Không dùng project hiện tại để tuyên
 bố game hoàn chỉnh hoặc đem phát hành IPA.
