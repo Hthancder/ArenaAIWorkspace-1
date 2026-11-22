@@ -856,8 +856,12 @@ toàn bộ gameplay. CI `45025948709` probe boss 2 pass.
 Event cha `par_boss:Step:2` tại `0x709a30` dùng khoảng cách đến `xstart,ystart`,
 nếu vượt 8000 theo epsilon thì hủy instance rồi gọi
 `ui_message_type(lang_get("The boss fled"))`. Verifier ghim cả export cha,
-relocation, thứ tự tham số, thông điệp và call; đã thêm event ứng viên. Chưa
-có probe VM cho event cha hoặc xác minh thực thi sau `instance_destroy` trên
+relocation, thứ tự tham số, thông điệp và call; đã thêm event ứng viên.
+Probe desktop cô lập CI `45030163914` tạo trực tiếp ba instance cha, dịch x
+khỏi điểm xuất phát lần lượt 7999, 8000, 8001: còn, còn, bị hủy; lệnh ghi
+thông điệp giả sau `instance_destroy` chạy một lần với nội dung `The boss fled`.
+Probe thay `lang_get`/`ui_message_type` bằng ghi nhận giả, không kiểm tra hai
+script thật hay tiếng hiển thị; cũng không xác minh thực thi sau hủy trên
 native/iOS. `obj_boss2` có End Step riêng, không tự thêm `event_inherited()`;
 hành vi thừa kế ở runner chưa được xác minh. Audit sau thay đổi thiếu 357 event
 key; trùng key không chứng minh toàn bộ logic đã phục hồi.
