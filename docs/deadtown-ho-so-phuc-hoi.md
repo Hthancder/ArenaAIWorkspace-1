@@ -852,7 +852,9 @@ sử dụng `light_obj` hoặc `craft_light_obj`. Ánh xạ tên là **ứng vi�
 không phải tên biến native được chứng minh. Bộ kiểm
 `tools/deadtown_light_cleanup_evidence.py` ghim hash của 12 export, call,
 instruction, inventory và source; test sửa từng event. Probe desktop riêng
-thay Create của object và light bằng stub, không chạy gameplay thật. Thứ tự
+thay Create của object và light bằng stub, không chạy gameplay thật. CI VM
+`45025085073` xác nhận cả sáu light tồn tại trước và không còn sau khi hủy
+owner; native `45025085016` và workbench `45025084992` cũng pass. Thứ tự
 Destroy/Step, hiệu ứng dọn trùng, lifecycle Android/iOS và toàn bộ object
 vẫn chưa được xác minh. Audit sau thay đổi thiếu 359 event key; khớp key
 không chứng minh khôi phục đầy đủ sự kiện.
