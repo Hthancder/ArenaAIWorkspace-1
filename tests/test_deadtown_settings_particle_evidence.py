@@ -3,7 +3,7 @@ import shutil
 import tempfile
 import unittest
 
-from tools.deadtown_settings_particle_evidence import SETTINGS, PARTICLES, inspect, verify_source
+from tools.deadtown_settings_particle_evidence import SETTINGS, PARTICLES, SHADOW_OBJECTS, inspect, verify_source
 from tools.deadtown_settings_particle_vm_probe import EXPECTED, check, instrument, make_project
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,6 +27,9 @@ class SettingsParticleEvidenceTests(unittest.TestCase):
             (dest/'scripts').mkdir()
             for name in (*PARTICLES, 'setting_load', 'setting_save'):
                 shutil.copy(PROJECT/'scripts'/(name+'.gml'), dest/'scripts')
+            (dest/'objects').mkdir()
+            for name in SHADOW_OBJECTS:
+                shutil.copy(PROJECT/'objects'/(name+'.object.gmx'), dest/'objects')
             verify_source(dest)
             p = dest/'scripts/setting_load.gml'
             p.write_text(p.read_text().replace('"particle",1', '"particle",0'))
@@ -48,12 +51,12 @@ class SettingsParticleEvidenceTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 make_project(PROJECT, dest)
         event = {'object': 'sys_global', 'attributes': {'eventtype': '0', 'enumb': '0'}, 'gml': 'original();'}
-        self.assertTrue(instrument([event])[0]['gml'].endswith('original();'))
-        self.assertEqual(check('\n'.join(EXPECTED)), 6)
+        self.assertTrue(instrument([event], PROJECT)[0]['gml'].endswith('original();'))
+        self.assertEqual(check('\n'.join(EXPECTED)), 9)
         with self.assertRaises(ValueError):
             check('\n'.join(EXPECTED).replace('threshold:0', 'threshold:123'))
         with self.assertRaises(ValueError):
-            instrument([])
+            instrument([], PROJECT)
 
     @unittest.skipUnless(HAS_DEPS, 'requires capstone and pyelftools')
     def test_reject_bad_apk(self):
@@ -69,6 +72,7 @@ class SettingsParticleEvidenceTests(unittest.TestCase):
         self.assertEqual(len(report['settings']), 7)
         self.assertEqual(report['settings'][-1]['native_slot'], 49)
         self.assertEqual(set(report['particle_gates']), set(PARTICLES))
+        self.assertEqual(set(report['shadow_gates']), set(SHADOW_OBJECTS))
         self.assertEqual(len(SETTINGS), 7)
 
 

@@ -10,9 +10,9 @@ from pathlib import Path
 import shutil
 
 try:
-    from tools.deadtown_settings_particle_evidence import PARTICLES, SETTINGS, verify_source
+    from tools.deadtown_settings_particle_evidence import PARTICLES, SETTINGS, SHADOW, SHADOW_OBJECTS, shadow_source, verify_source
 except ModuleNotFoundError:
-    from deadtown_settings_particle_evidence import PARTICLES, SETTINGS, verify_source
+    from deadtown_settings_particle_evidence import PARTICLES, SETTINGS, SHADOW, SHADOW_OBJECTS, shadow_source, verify_source
 
 EXPECTED = [
     'SETTINGS_PARTICLE_VM:new:1111111',
@@ -21,12 +21,23 @@ EXPECTED = [
     'SETTINGS_PARTICLE_VM:disabled:0',
     'SETTINGS_PARTICLE_VM:threshold:0',
     'SETTINGS_PARTICLE_VM:enabled:123:123:1243:1253',
+    'SETTINGS_PARTICLE_VM:shadow-off:0:3',
+    'SETTINGS_PARTICLE_VM:shadow-half:0:3',
+    'SETTINGS_PARTICLE_VM:shadow-on:3:3',
 ]
 PART_BUILTINS = {'part_emitter_region': 1, 'part_type_direction': 2,
                  'part_emitter_burst': 3, 'part_type_size': 4, 'part_type_orientation': 5}
 
 
-def instrument(events):
+def instrument(events, project):
+    # Exercise only the exact gate+draw fragment, replacing actual draw calls
+    # with counters. The surrounding original Draw events are not executed.
+    fragment = ''
+    for name in SHADOW_OBJECTS:
+        text = shadow_source(project, name)
+        if text.count(SHADOW) != 1:
+            raise ValueError('unexpected Draw fragment')
+        fragment += SHADOW.replace('draw_sprite_ext(sprite_index,image_index,xx,yy,image_xscale,image_yscale,image_angle,c_black,0.5)', 'global.__dt_shadow_calls += 1;').replace('draw_self()', 'global.__dt_self_calls += 1;') + '\n'
     found = [e for e in events if e.get('object') == 'sys_global' and
              e.get('attributes', {}).get('eventtype') == '0' and
              e.get('attributes', {}).get('enumb') == '0']
@@ -57,6 +68,15 @@ particle_burst_up(1,2,3,4,5,6); var pt_b = global.__dt_pt_order; global.__dt_pt_
 particle_burst_up_size(1,2,3,4,5,6,7); var pt_c = global.__dt_pt_order; global.__dt_pt_order = 0;
 particle_burst_up_out(1,2,3,4,5,6); var pt_d = global.__dt_pt_order;
 show_debug_message("SETTINGS_PARTICLE_VM:enabled:" + string(pt_a) + ":" + string(pt_b) + ":" + string(pt_c) + ":" + string(pt_d));
+global.__dt_shadow_calls = 0; global.__dt_self_calls = 0; global.__dt_setting_shadow = 0;
+{fragment}
+show_debug_message("SETTINGS_PARTICLE_VM:shadow-off:" + string(global.__dt_shadow_calls) + ":" + string(global.__dt_self_calls));
+global.__dt_shadow_calls = 0; global.__dt_self_calls = 0; global.__dt_setting_shadow = 0.5;
+{fragment}
+show_debug_message("SETTINGS_PARTICLE_VM:shadow-half:" + string(global.__dt_shadow_calls) + ":" + string(global.__dt_self_calls));
+global.__dt_shadow_calls = 0; global.__dt_self_calls = 0; global.__dt_setting_shadow = 1;
+{fragment}
+show_debug_message("SETTINGS_PARTICLE_VM:shadow-on:" + string(global.__dt_shadow_calls) + ":" + string(global.__dt_self_calls));
 global.__dt_ini_has = 0;
 '''
     found[0]['gml'] = prefix + found[0]['gml']
@@ -129,7 +149,7 @@ def main():
     if a.mode == 'instrument':
         if a.output.exists() or a.output.resolve() == a.events.resolve():
             raise ValueError('events output must be new and distinct')
-        events = instrument(json.loads(a.events.read_text(encoding='utf-8')))
+        events = instrument(json.loads(a.events.read_text(encoding='utf-8')), a.project)
         make_project(a.project, a.dest)
         a.output.write_text(json.dumps(events, ensure_ascii=False), encoding='utf-8')
     else:

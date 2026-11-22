@@ -10,6 +10,7 @@ import io
 import json
 from pathlib import Path
 import struct
+import xml.etree.ElementTree as ET
 import zipfile
 
 try:
@@ -40,6 +41,26 @@ PARTICLES = {
     'particle_burst_up_out': (0x1cdf44, 2352, '01b6ec149bb41d801871a822a38599d03d96184c0e3aa2ade05297c1927aff11', 0x1cdfd4, 0x1ce060, 0x1ce4c0, 'r4'),
 }
 GATE = '// Partial candidate: native global slot 49 controls particle emission.\nif (global.__dt_setting_particle > 0.5)\n{\n'
+SHADOW_OBJECTS = {
+    'par_solid': (0x39ec20, '680aab026db2e55a4b7f4797aa5e8c426f53f1cdb4520be58f74720d121ae76d'),
+    'par_vehicle': (0x5f8894, '94f9ff7a157e20efb6fc7ff4af3ffd40872ef64d8755af25e435ddd9a7bbf9b1'),
+    'obj_parcel': (0x62fb60, '0826af5c78b0bc109791e1d66b0bf6627c002d702b422701490f8205da076bef'),
+}
+SHADOW = ('// Partial native candidate: global slot 86 gates this shadow draw.\n'
+          'if (global.__dt_setting_shadow > 0.5)\n{\n'
+          '    draw_sprite_ext(sprite_index,image_index,xx,yy,image_xscale,image_yscale,image_angle,c_black,0.5)\n'
+          '}\ndraw_self()')
+
+
+def shadow_source(project, name):
+    root = ET.parse(Path(project) / 'objects' / (name+'.object.gmx')).getroot()
+    events = root.findall('./events/event[@eventtype="8"][@enumb="0"]')
+    if len(events) != 1:
+        raise ValueError('expected one Draw event: '+name)
+    strings = events[0].findall('./action/arguments/argument/string')
+    if len(strings) != 1 or (strings[0].text or '').count(SHADOW) != 1:
+        raise ValueError('unexpected shadow gate: '+name)
+    return strings[0].text
 
 
 def verify_source(project):
@@ -68,6 +89,8 @@ def verify_source(project):
                 raise ValueError('missing particle call: '+name)
         if body.count('part_type_size(') != int(name.endswith('_size')) or body.count('part_type_orientation(') != int(name.endswith('_out')):
             raise ValueError('unexpected particle operation: '+name)
+    for name in SHADOW_OBJECTS:
+        shadow_source(p, name)
 
 
 def inspect(apk):
@@ -193,9 +216,40 @@ def inspect(apk):
                              (16, 'vcmpe.f64', 'd0, d1'), (20, 'vmrs', 'apsr_nzcv, fpscr'),
                              (24, 'ble', '#'+hex(target))):
             check(gate+off, op, arg)
+    rp, plt = elf.get_section_by_name('.rel.plt'), elf.get_section_by_name('.plt')
+    ps = elf.get_section(rp['sh_link'])
+    calls = {plt['sh_addr'] + 20 + i * 12: ps.get_symbol(r['r_info_sym']).name for i, r in enumerate(rp.iter_relocations())}
+    for addr, name in ((0x176444, 'REAL_RValue'), (0x176738, 'YYGML_draw_sprite_ext'), (0x176990, 'YYGML_draw_self')):
+        if name not in calls.get(addr, ''):
+            raise ValueError('unexpected draw call relocation')
+    for name, (start, digest) in SHADOW_OBJECTS.items():
+        target = [s for s in dyn.iter_symbols() if exported_name(s.name) == 'gml_Object_'+name+'_Draw_0']
+        if len(target) != 1 or (target[0]['st_value'], target[0]['st_size']) != (start, 3932) or hashlib.sha256(read(start, 3932)).hexdigest() != digest:
+            raise ValueError('unexpected Draw bytes: '+name)
+        if sym(start+0x10, start+0x20, start+0x14).name != 'g_pGlobal':
+            raise ValueError('unexpected Draw global pointer: '+name)
+        checks = {
+            0x38: ('ldr', 'r0, [r1, r0]'), 0x44: ('ldr', 'r0, [r0]'),
+            0x74: ('ldr', 'r1, [r0]'), 0x78: ('ldr', 'r2, [r1, #8]'),
+            0x7c: ('mov', 'r1, #0x56'), 0x80: ('blx', 'r2'),
+            0x84: ('str', 'r0, [sp, #0x34]'), 0x7c4: ('ldr', 'r0, [sp, #0x34]'),
+            0x7c8: ('bl', '#0x176444'), 0x7cc: ('vmov.f64', 'd1, #5.000000e-01'),
+            0x7d0: ('vmov', 'd0, r0, r1'), 0x7d4: ('vcmpe.f64', 'd0, d1'),
+            0x7d8: ('vmrs', 'apsr_nzcv, fpscr'), 0x7dc: ('ble', '#'+hex(start+0x9bc)),
+            0x990: ('mov', 'r1, #0'), 0x994: ('mov', 'r0, #0x3f000000'),
+            0x998: ('str', 'r1, [sp, #0x10]'), 0x9a0: ('str', 'r0, [sp, #0x14]'),
+            0x9b8: ('bl', '#0x176738'), 0x9c4: ('mov', 'r0, sb'), 0x9c8: ('bl', '#0x176990'),
+        }
+        for off, (op, args) in checks.items():
+            check(start+off, op, args)
+        # The retained global pointer must not be overwritten before the gate.
+        for instruction in dis.disasm(read(start+0x88, 0x7c4-0x88), start+0x88):
+            if instruction.mnemonic.startswith(('str', 'stm')) and '[sp, #0x34]' in instruction.op_str:
+                raise ValueError('shadow global pointer overwritten: '+name)
     return {'apk_sha256': APK_SHA256, 'native_library_sha256': LIB_SHA256,
             'settings': [{'section': x[0], 'key': x[1], 'alias': '__dt_setting_'+x[2], 'native_slot': x[3], 'default': 1} for x in SETTINGS],
             'particle_gates': {name: {'address': hex(v[0]), 'sha256': v[2], 'slot': 49} for name, v in PARTICLES.items()},
+            'shadow_gates': {name: {'address': hex(v[0]), 'sha256': v[1], 'slot': 86} for name, v in SHADOW_OBJECTS.items()},
             'limitations': 'Static ARM32 and partial source only; original names, full particle functions, non-finite values, GameMaker compiler, actual display/settings UI, gameplay and iOS unverified.'}
 
 

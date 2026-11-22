@@ -29,4 +29,12 @@ slot/đọc/ghi, chuỗi INI, mặc định và nhánh gate.
 Probe VM riêng dùng INI và particle mock: đối chiếu mặc định, đọc/ghi qua mock,
 nhánh 0, 0,5 và 1 cùng thứ tự gọi trong bốn script. Mock không chứng minh tệp
 save thật, hạt/rendering, thao tác UI, gameplay, compiler GameMaker hay iOS.
+
+Bổ sung gate bóng cho ba Draw event `par_solid`, `par_vehicle`, `obj_parcel`:
+ARM đọc slot 86, sau khi tính vị trí bóng thì chỉ gọi `draw_sprite_ext` màu
+đen alpha 0,5 khi slot > 0,5; `draw_self` vẫn gọi ở cả hai nhánh. Ứng viên
+chỉ bao lệnh vẽ bóng, giữ tính vị trí và `draw_self` bên ngoài. Bằng chứng ARM
+ghim từng export và nhánh; probe chỉ lấy fragment này và thay lệnh vẽ bằng
+bộ đếm, không kiểm toàn event, renderer hoặc hình ảnh trên thiết bị.
+
 Kết quả CI cần xem riêng; chưa tạo IPA.
