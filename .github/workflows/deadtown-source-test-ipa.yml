@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   test-ipa:
@@ -93,6 +93,26 @@ jobs:
           (cd work/unpacked && zip -qry ../../output/DeadTown-iOS15-source-test4.ipa Payload)
           unzip -tq output/DeadTown-iOS15-source-test4.ipa
           sha256sum output/DeadTown-iOS15-source-test4.ipa | tee output/SHA256.txt
+      - name: Make test IPA retrievable as an unreferenced Git blob
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64, json
+          from pathlib import Path
+          data = Path('output/DeadTown-iOS15-source-test4.ipa').read_bytes()
+          Path('work/blob-request.json').write_text(json.dumps({'content': base64.b64encode(data).decode('ascii'), 'encoding': 'base64'}), encoding='utf-8')
+          PY
+          gh api "repos/$GITHUB_REPOSITORY/git/blobs" --method POST --input work/blob-request.json > work/blob-response.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          sha = json.loads(Path('work/blob-response.json').read_text())['sha']
+          assert len(sha)==40 and all(c in '0123456789abcdef' for c in sha)
+          Path('output/BLOB_SHA.txt').write_text(sha+'\n')
+          print('::notice::IPA_GIT_BLOB: '+sha)
+          PY
       - name: Upload experimental IPA and build report
         uses: actions/upload-artifact@v4
         with:
