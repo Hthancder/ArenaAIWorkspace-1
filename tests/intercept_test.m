@@ -267,6 +267,22 @@ int main(void) {
 		dispatch_sync([SXStore queue], ^{});
 		assert([[[SXStore shared] snapshot][@"history"] count] == 0);
 
+		// Xoá lịch sử của SXIntercept KHÔNG chặn luồng gọi (trước đây là
+		// `dispatch_sync` vào hàng đợi kho, tức chặn luồng chính của Settings).
+		// Việc ghi tệp vẫn phải hoàn tất: đợi hàng đợi kho rồi kiểm tra.
+		begin(@"question to clear");
+		pendingCompletion(@"answer to clear", nil, nil);
+		say = sayCommand();
+		assert([intercept handleIncomingCommand:say]);
+		// Lượt hỏi chạy trên hàng đợi riêng (com.sirix.turn) và chỉ trả đáp án cho
+		// ACE; lịch sử được ghi ngay sau đó, nên đọc kho trên luồng này có thể
+		// chạy trước. Chờ tới khi MỘT trong hai hàng đợi ghi xong, rồi kiểm tra
+		// theo hướng xoá (điều cần chứng minh), không phụ thuộc thứ tự còn lại.
+		dispatch_sync([SXStore queue], ^{});
+		assert([intercept clearHistory]);   // trả về NGAY, không chặn luồng gọi
+		dispatch_sync([SXStore queue], ^{});
+		assert([[[SXStore shared] snapshot][@"history"] count] == 0);
+
 		// Tác vụ tới trong lúc chờ: full cũng phải giữ Siri gốc.
 		begin(@"question action");
 		dispatch_semaphore_t done = dispatch_semaphore_create(0);
