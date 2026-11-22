@@ -34,7 +34,9 @@ hai nhánh mặc định, key INI cùng các fragment source. Đây là xác nh�
 phần source đã có, **không phải phục hồi script mới**; không gộp slot 66 với
 slot 84 (`effect/soundeffect`), vì chưa chứng minh semantics slot 84.
 Probe VM riêng thay INI và ba hàm audio bằng mock, kiểm giá trị, thứ tự gọi,
-đối số và giá trị trả về; không kiểm thiết bị audio, âm lượng thực tế hay iOS.
+đối số và giá trị trả về; CI `45007152306` pass các marker sound và audio.
+Native evidence CI `45007152340` cũng pass. Những phép thử này không kiểm thiết
+bị audio, âm lượng thực tế hay iOS.
 
 Bốn export `particle_burst`, `_up`, `_up_size`, `_up_out` đọc global slot 49,
 so với 0,5 và bỏ qua phần xử lý khi không lớn hơn ngưỡng. Source cũ bốn script
