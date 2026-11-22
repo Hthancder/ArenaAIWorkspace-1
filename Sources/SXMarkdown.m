@@ -4,12 +4,23 @@ static NSString *SXMDTrim(NSString *s) {
 	return [s stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
 }
 
-/// Thay regex đầu tiên khớp (trả về nguyên bản nếu không khớp).
-static NSString *SXMDReplaceFirst(NSRegularExpression *re, NSString *input, NSString *tmpl) {
+/// Thay MỌI lần khớp của `re` (trả về nguyên bản nếu không khớp).
+/// Tên cũ là `SXMDReplaceFirst`, nhưng hàm luôn thay toàn bộ — `rangeOfFirstMatch`
+/// chỉ dùng để thoát sớm. Tên sai khiến người đọc sau tưởng chỉ một chỗ được
+/// thay rồi "sửa" lại đúng hành vi hiện tại, nên đã đổi tên cho khớp việc nó làm.
+static NSString *SXMDReplaceAll(NSRegularExpression *re, NSString *input, NSString *tmpl) {
 	NSRange full = NSMakeRange(0, input.length);
-	NSRange r = [re rangeOfFirstMatchInString:input options:0 range:full];
-	if (r.location == NSNotFound) return input;
+	if ([re rangeOfFirstMatchInString:input options:0 range:full].location == NSNotFound) return input;
 	return [re stringByReplacingMatchesInString:input options:0 range:full withTemplate:tmpl];
+}
+
+/// Bỏ ký hiệu đầu dòng danh sách khỏi văn bản, nhưng KHÔNG trả về thân rỗng:
+/// nếu văn bản chỉ còn toàn khoảng trắng (ví dụ dòng "- " hoặc "- **" lạc từ
+/// model) thì giữ nguyên, để còn thấy dòng đó thay vì một gạch đầu dòng trống.
+static NSString *SXMDStripMarker(NSRegularExpression *re, NSString *text) {
+	NSString *body = [re stringByReplacingMatchesInString:text options:0
+												 range:NSMakeRange(0, text.length) withTemplate:@""];
+	return SXMDTrim(body).length ? body : text;
 }
 
 NSString *SXMarkdownRender(NSString *markdown) {
@@ -30,7 +41,10 @@ NSString *SXMarkdownRender(NSString *markdown) {
 														  options:NSRegularExpressionAnchorsMatchLines error:NULL];
 		italicStarRe = [NSRegularExpression regularExpressionWithPattern:@"(?<!\\*)\\*(?!\\*)(.+?)(?<!\\*)\\*(?!\\*)"
 																options:NSRegularExpressionAnchorsMatchLines error:NULL];
-		italicUnderRe = [NSRegularExpression regularExpressionWithPattern:@"(?<!\\w)_(?!\\w)(.+?)(?<!\\w)_(?!\\w)"
+		// `_nghiêng_` có chữ ngay sát dấu gạch dưới, nên mẫu cũ `(?<!\w)_(?!\w)`
+		// KHÔNG BAO GIỜ khớp (nó đòi khoảng trắng hai bên). Nay chỉ cấm khi hai bên
+		// là chữ/số, để `snake_case_name` vẫn nguyên vẹn.
+		italicUnderRe = [NSRegularExpression regularExpressionWithPattern:@"(?<![\\w])_(?!\\s)(.+?)(?<!\\s)_(?![\\w])"
 																  options:NSRegularExpressionAnchorsMatchLines error:NULL];
 		headingRe = [NSRegularExpression regularExpressionWithPattern:@"^#{1,6}\\s+(.+)$"
 															 options:NSRegularExpressionAnchorsMatchLines error:NULL];
@@ -42,7 +56,10 @@ NSString *SXMarkdownRender(NSString *markdown) {
 															 options:NSRegularExpressionAnchorsMatchLines error:NULL];
 		quoteRe = [NSRegularExpression regularExpressionWithPattern:@"^[ \\t]*>[ \\t]?"
 														  options:NSRegularExpressionAnchorsMatchLines error:NULL];
-		tableSepRe = [NSRegularExpression regularExpressionWithPattern:@"^\\s*\\|?\\s*:?-{2,}[^|]*$"
+		// Dòng phân cách bảng có thể có NHIỀU ô (`|---|---|`). Mẫu cũ `[^|]*$`
+		// chỉ cho một ô, nên bảng chuẩn của model vẫn lọt ra thành
+		// "• --- · ---" — người dùng đọc lên một hàng toàn gạch.
+		tableSepRe = [NSRegularExpression regularExpressionWithPattern:@"^\\s*\\|?\\s*:?-{2,}:?\\s*(\\|\\s*:?-{2,}:?\\s*)*\\|?\\s*$"
 															  options:NSRegularExpressionAnchorsMatchLines error:NULL];
 		hrRe = [NSRegularExpression regularExpressionWithPattern:@"^[ \\t]*(-{3,}|\\*{3,}|_{3,})[ \\t]*$"
 														options:NSRegularExpressionAnchorsMatchLines error:NULL];
@@ -106,7 +123,12 @@ NSString *SXMarkdownRender(NSString *markdown) {
 		// Ghi nhận dạng đầu dòng trước khi làm sạch inline
 		BOOL wasQuote = [quoteRe numberOfMatchesInString:line options:0 range:NSMakeRange(0, line.length)] > 0;
 		BOOL wasBullet = [bulletRe numberOfMatchesInString:line options:0 range:NSMakeRange(0, line.length)] > 0;
-		BOOL wasOrdered = [orderedRe numberOfMatchesInString:line options:0 range:NSMakeRange(0, line.length)] > 0;
+		// Danh sách chỉ khi phần số nằm ở ĐẦU dòng. Dùng vị trí khớp (không chỉ
+		// "có khớp") để điều kiện này đọc rõ ngay tại chỗ và không phụ thuộc vào
+		// việc dòng đang xét chắc chắn không chứa ký tự xuống dòng.
+		NSRange orderedMatch = [orderedRe rangeOfFirstMatchInString:line options:0
+														  range:NSMakeRange(0, line.length)];
+		BOOL wasOrdered = orderedMatch.location == 0 && orderedMatch.length > 0;
 
 		NSString *rendered = line;
 		if (wasQuote) {
@@ -115,19 +137,17 @@ NSString *SXMarkdownRender(NSString *markdown) {
 													 withTemplate:@"▍"];
 		}
 		// Inline (thứ tự: link → code → bold → italic)
-		rendered = SXMDReplaceFirst(linkRe, rendered, @"$1 ($2)");
-		rendered = SXMDReplaceFirst(codeRe, rendered, @"$1");
-		rendered = SXMDReplaceFirst(boldStarRe, rendered, @"$1");
-		rendered = SXMDReplaceFirst(boldUnderRe, rendered, @"$1");
-		rendered = SXMDReplaceFirst(italicStarRe, rendered, @"$1");
-		rendered = SXMDReplaceFirst(italicUnderRe, rendered, @"$1");
+		rendered = SXMDReplaceAll(linkRe, rendered, @"$1 ($2)");
+		rendered = SXMDReplaceAll(codeRe, rendered, @"$1");
+		rendered = SXMDReplaceAll(boldStarRe, rendered, @"$1");
+		rendered = SXMDReplaceAll(boldUnderRe, rendered, @"$1");
+		rendered = SXMDReplaceAll(italicStarRe, rendered, @"$1");
+		rendered = SXMDReplaceAll(italicUnderRe, rendered, @"$1");
 
 		if (wasQuote) {
 			[outLines addObject:rendered];
 		} else if (wasBullet) {
-			NSString *body = [bulletRe stringByReplacingMatchesInString:rendered options:0
-																	range:NSMakeRange(0, rendered.length)
-															  withTemplate:@""];
+			NSString *body = SXMDStripMarker(bulletRe, rendered);
 			[outLines addObject:[@"• " stringByAppendingString:body]];
 		} else if (wasOrdered) {
 			NSString *body = [orderedRe stringByReplacingMatchesInString:rendered options:0
