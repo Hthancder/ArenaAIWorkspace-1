@@ -862,9 +862,18 @@ khỏi điểm xuất phát lần lượt 7999, 8000, 8001: còn, còn, bị h�
 thông điệp giả sau `instance_destroy` chạy một lần với nội dung `The boss fled`.
 Probe thay `lang_get`/`ui_message_type` bằng ghi nhận giả, không kiểm tra hai
 script thật hay tiếng hiển thị; cũng không xác minh thực thi sau hủy trên
-native/iOS. `obj_boss2` có End Step riêng, không tự thêm `event_inherited()`;
-hành vi thừa kế ở runner chưa được xác minh. Audit sau thay đổi thiếu 357 event
-key; trùng key không chứng minh toàn bộ logic đã phục hồi.
+native/iOS. `obj_boss2` có End Step riêng, không tự thêm `event_inherited()`.
+Probe desktop CI `45036206950` tạo boss 1 và boss 2 ở cách điểm xuất phát
+8001, rồi đặt cả hai sát player: boss 1 bị hủy bởi End Step cha, boss 2 còn
+sống và chỉ một thông điệp giả được ghi. Probe stub Create/Step/Destroy của
+hai boss và thay hàm thông điệp; nó kiểm tra hành vi thừa kế trong runner
+chẩn đoán, không chứng minh runner Android/iOS. Audit thiếu 357 event key;
+trùng key không chứng minh toàn bộ logic đã phục hồi.
+
+`sys_credits:Alarm:1` (`0x4c9388`, 208 byte) đang nghiên cứu: static ARM tạo
+object ID 116 (`obj_credits_effect`) tại (0,0), rồi đọc slot 0x208 của self
+và dùng giá trị chuyển sang integer để đặt alarm 1. Object effect hiện thiếu
+và tên slot chưa được chứng minh, nên chưa thêm event ứng viên.
 
 ### Sáu ứng viên dọn ánh sáng khi Destroy
 
