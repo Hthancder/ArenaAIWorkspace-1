@@ -851,9 +851,11 @@ object ID 0 trong APK là `par_building`. Do đó đã bổ sung kiểm tra ứn
 **Chưa chắc chắn tuyệt đối**: RValue nằm trong bộ nhớ ghi được, chưa chứng minh
 nó không bị thay đổi khi chạy; tên biến suy luận từ source cũ và xử lý gần
 ngưỡng epsilon có thể khác. Verifier `tools/deadtown_item_motion_evidence.py`
-ghim export, relocation và cấu trúc zero-initialized này. Probe VM dùng kết quả
-va chạm giả, không kiểm engine va chạm hoặc gameplay/iOS. Event đã tồn tại trước
-đây nên số event key thiếu không đổi.
+ghim export, relocation và cấu trúc zero-initialized này. CI native
+`45042270172` và workbench `45042270168` đạt; VM `45042270144` đạt bốn trường
+hợp đứng yên, đường trống, chặn bởi nhà và chặn bởi action. Probe VM dùng kết
+quả va chạm giả, không kiểm engine va chạm hoặc gameplay/iOS. Event đã tồn tại
+trước đây nên số event key thiếu không đổi.
 
 ### Ứng viên điều khiển túi đồ và tạm dừng
 
