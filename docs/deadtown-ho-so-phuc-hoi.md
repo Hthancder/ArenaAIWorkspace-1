@@ -868,8 +868,19 @@ native gọi chọn riêng từ bảng `[1,0,0,0,0]`; nếu > 0,5 thì đặt sl
 Source ứng viên vì vậy cập nhật `move_speed` 7 thành 8 và thêm nhánh 9, đặt sau
 nhánh đảo hướng. Bộ kiểm ARM ghim instruction, call và relocation của cả hai
 bảng; probe VM ép kết quả lựa chọn, không kiểm phân bố RNG thật. Ánh xạ tên
-biến vẫn là suy luận có bằng chứng, và phần còn lại Create/Step chưa được
-chứng minh tương đương. Không suy ra boss, RNG, gameplay hay iOS đã hoạt động đúng. Audit mới thiếu 56
+biến vẫn là suy luận có bằng chứng. CI workbench `45021888216` và VM
+`45021888187` và native `45021888168` pass cho thay đổi tốc độ.
+
+Đối chiếu tiếp cho thấy Create ghi slot 1197 bằng 0 và slot 1200 bằng 0,4;
+nhánh Step so slot 1197 gần 0 rồi trừ slot 1200 chia 2 khỏi slot 28 của
+object 142 (`obj_player`). Bộ poison evidence độc lập liên hệ slot 28 với
+key lưu `hp`. Đây là bằng chứng một phần để ánh xạ các biến source cũ
+`type`, `blood_speed`, `obj_player.hp`; đã sửa `blood_speed` từ 0,5 thành
+0,4. Verifier ghim hash export, lệnh ghi/đọc, phép chia/trừ, object ID và
+fragment source nhánh type 0; test sửa giá trị và nhánh. So sánh native dùng
+ngưỡng epsilon, và các nhánh type 1/2, điều kiện dẫn tới sát thương, hành vi
+runtime và phần còn lại Create/Step chưa được xác minh hoàn toàn. Không suy ra
+boss, RNG, gameplay hay iOS đã hoạt động đúng. Audit mới thiếu 56
 script, 90 object, 365 event key, 4 sprite và 8 room theo tên/key; 0 file tham
 chiếu thiếu. Trùng key không chứng minh toàn event tương đương.
 

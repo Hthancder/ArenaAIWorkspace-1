@@ -14,12 +14,12 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 try:
-    from tools.deadtown_native_inventory import exported_name
+    from tools.deadtown_native_inventory import exported_name, resource_names
     from tools.deadtown_native_lang import APK_SHA256, LIB_SHA256
     from tools.deadtown_object_evidence import native_objects
     from tools.recover_deadtown_audio import read_zip_member
 except ModuleNotFoundError:
-    from deadtown_native_inventory import exported_name
+    from deadtown_native_inventory import exported_name, resource_names
     from deadtown_native_lang import APK_SHA256, LIB_SHA256
     from deadtown_object_evidence import native_objects
     from recover_deadtown_audio import read_zip_member
@@ -34,6 +34,9 @@ if (choose(1,0,0) > 0.5)
 '''
 SPEED_INITIAL = '''// Partial native candidate: slot 180 is the tentacle move speed.
 move_speed = 8
+'''
+DAMAGE_INITIAL = '''// Partial native candidate: slot 1200 controls the tentacle's damage.
+blood_speed = 0.4
 '''
 SPEED_CHOICE = '''// Partial native candidate: independent rare faster tentacle.
 if (choose(1,0,0,0,0) > 0.5)
@@ -71,11 +74,14 @@ def fragments(project):
     create, step, alarm = action('0','0'), action('3','0'), action('2','0')
     if (create.count(INIT) != 1 or create.count('__dt_reverse_turn') != 2 or
             create.count(SPEED_INITIAL) != 1 or create.count(SPEED_CHOICE) != 1 or
-            create.count('move_speed =') != 2 or not create.index(SPEED_INITIAL) < create.index(INIT) < create.index(SPEED_CHOICE)):
+            create.count('move_speed =') != 2 or create.count(DAMAGE_INITIAL) != 1 or
+            create.count('blood_speed =') != 1 or not create.index(SPEED_INITIAL) < create.index(DAMAGE_INITIAL) < create.index(INIT) < create.index(SPEED_CHOICE)):
         raise ValueError('unexpected boss Create candidate')
     before = '{go_dir = point_direction(x,y,obj_player.x,obj_player.y)-bangle}\n\n            '
     after = '            \n            body_x[0] += lengthdir_x(body_length,bangle+go_dir)'
-    if step.count(before + TURN + after) != 1 or step.count('__dt_reverse_turn') != 1:
+    damage = 'if type == 0\n        {\n            obj_player.hp -= blood_speed/2\n        }'
+    if (step.count(before + TURN + after) != 1 or step.count('__dt_reverse_turn') != 1 or
+            step.count(damage) != 1):
         raise ValueError('unexpected boss Step candidate')
     if alarm != ALARM:
         raise ValueError('unexpected boss Alarm candidate')
@@ -93,6 +99,8 @@ def inspect(apk):
         raw = read_zip_member(z, 'lib/armeabi-v7a/libyoyo.so')
     if hashlib.sha256(raw).hexdigest() != LIB_SHA256:
         raise ValueError('unexpected native library SHA-256')
+    if resource_names(data, b'OBJT')[142] != 'obj_player':
+        raise ValueError('unexpected damage target object')
     obj = native_objects(data)['obj_boss2_ten']
     if any(obj['event_counts'][i] != 1 for i in (0, 2, 3)):
         raise ValueError('unexpected boss event inventory')
@@ -136,10 +144,33 @@ def inspect(apk):
         (0x7150ac,'movw','r1, #0x427'), (0x7150b4,'mov','r5, r0'),
         (0x7150d4,'mov','r0, #0'), (0x7150d8,'str','r0, [r5, #0xc]'),
         (0x7150dc,'str','r0, [r5, #4]'), (0x7150e0,'str','r0, [r5]'),
+        # Slot 1200 starts as the binary64 0.4 (low word r7 retained from
+        # the earlier alpha-speed initialization).
+        (0x7155a4,'movw','r7, #0x999a'), (0x7155b4,'movt','r7, #0x9999'),
+        (0x715620,'movw','r1, #0x4ad'), (0x715624,'blx','r2'), (0x715628,'mov','r5, r0'),
+        (0x715648,'mov','r0, #0'), (0x71564c,'str','r0, [r5, #0xc]'),
+        (0x715650,'str','r0, [r5, #4]'), (0x715654,'str','r0, [r5]'),
+        (0x7156bc,'mov','r1, #0x4b0'), (0x7156c0,'blx','r2'), (0x7156c4,'mov','r5, r0'),
+        (0x7156ec,'movw','r0, #0x9999'), (0x7156f0,'movt','r0, #0x3fd9'),
+        (0x7156f4,'str','r0, [r5, #4]'), (0x7156fc,'str','r7, [r5]'),
         (0x71683c,'movw','r1, #0x427'), (0x716840,'blx','r2'), (0x716844,'mov','r4, r0'),
         (0x716854,'mov','r1, #0xb4'), (0x716858,'blx','r2'),
         (0x71685c,'mov','r1, r0'), (0x716860,'mov','r0, r4'), (0x716864,'bl','#0x1765b8'),
         (0x71687c,'movw','r1, #0x4a9'), (0x71689c,'mov','r1, r4'), (0x7168a0,'bl','#0x176594'),
+        # Type 0 path reads slot 1200 / 2, subtracts from slot 28 on
+        # native object 142, then writes it back to that object and slot.
+        (0x7170b8,'movw','r1, #0x4ad'), (0x7170bc,'blx','r2'), (0x7170c0,'mov','r4, r0'),
+        (0x7170c8,'bl','#0x176444'), (0x7170d4,'vcmpe.f64','d0, #0'),
+        (0x7170ec,'vnegmi.f64','d0, d0'), (0x7170f0,'vcmpe.f64','d0, d1'),
+        (0x7170f8,'bhi','#0x717344'), (0x717120,'mov','r1, #0x4b0'),
+        (0x717124,'blx','r2'), (0x717128,'mov','r5, r0'),
+        (0x717130,'mov','r0, #0x8e'), (0x717134,'mov','r1, #0x1c'),
+        (0x717138,'mov','r2, #0x80000000'), (0x71713c,'bl','#0x176654'),
+        (0x717140,'vmov.f64','d0, #2.000000e+00'), (0x71714c,'mov','r1, r5'),
+        (0x717150,'bl','#0x176438'), (0x7172a4,'add','r0, sp, #0x2a0'),
+        (0x7172a8,'bl','#0x176444'), (0x7172b8,'vsub.f64','d0, d1, d0'),
+        (0x717310,'mov','r0, #0x8e'), (0x717314,'mov','r1, #0x1c'),
+        (0x717318,'mov','r2, #0x80000000'), (0x71731c,'bl','#0x176480'),
         (0x715710,'movw','r1, #0x4b1'), (0x715714,'blx','r2'), (0x715718,'mov','r5, r0'),
         (0x715748,'str','r2, [r5, #0xc]'), (0x71574c,'str','r2, [r5, #4]'), (0x715750,'str','r2, [r5]'),
         (0x715744,'add','r1, pc, r1'), (0x715760,'ldr','r2, [r0, r1]!'),
@@ -184,6 +215,11 @@ def inspect(apk):
         (0x715b84,'str','r1, [r4, #0xc]'), (0x715b8c,'str','r1, [r4, #4]'),
         (0x715b90,'str','r1, [r4]')):
         check(a, op, operands)
+    for a in range(0x7155b8, 0x7156fc, 4):
+        for inst in dis.disasm(read(a, 4), a):
+            _, writes = inst.regs_access()
+            if any(inst.reg_name(reg) == 'r7' for reg in writes):
+                raise ValueError('damage initializer low word overwritten')
     # choose's relocated pointer array refers to real RValues [1,0,0].
     table = (0x715744+8+literal(0x715738)+literal(0x715740)) & 0xffffffff
     if table != 0xb7bd28:
@@ -206,12 +242,15 @@ def inspect(apk):
     ps = elf.get_section(rp['sh_link'])
     calls = {plt['sh_addr']+20+i*12: ps.get_symbol(r['r_info_sym']).name for i,r in enumerate(rp.iter_relocations())}
     for addr, name in ((0x176954, 'YYGML_choose'), (0x1768dc, 'Variable_SetValue_Direct'),
-                       (0x176444, 'REAL_RValue'), (0x1765b8, 'YYRValuepLERKS_')):
+                       (0x176444, 'REAL_RValue'), (0x1765b8, 'YYRValuepLERKS_'),
+                       (0x176438, '_ZdvRK8YYRValued'), (0x176654, 'YYGML_Variable_GetValue'),
+                       (0x176480, 'YYGML_Variable_SetValue')):
         if name not in calls.get(addr, ''):
             raise ValueError('unexpected native call')
     return {'object': 'obj_boss2_ten', 'flag_slot': 1201, 'turn_slot': 1088,
             'choose_values': [1, 0, 0], 'alarm': 0, 'alarm_steps': 20,
             'speed_slot': 180, 'speed_initial': 8, 'speed_choose_values': [1, 0, 0, 0, 0], 'speed_if_chosen': 9,
+            'damage_slot': 1200, 'damage_initial': 0.4, 'target_object': 'obj_player', 'target_slot': 28,
             'functions': {name: {'address': hex(row[0]), 'size': row[1], 'sha256': row[2]} for name, row in FUNCTIONS.items()},
             'limitations': 'Partial static ARM evidence and source matching only; variable names inferred, remaining Create/Step behavior, RNG, scheduler, gameplay and iOS unverified.'}
 

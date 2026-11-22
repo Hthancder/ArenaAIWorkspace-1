@@ -46,7 +46,8 @@ catch = 0
 type = 0 // 0 :normal 1:bloody 2:poison
 
 pull_speed = 7
-blood_speed = 0.5
+// Partial native candidate: slot 1200 controls the tentacle's damage.
+blood_speed = 0.4
 
 // Partial native candidate: slot 1201 temporarily reverses the turn.
 __dt_reverse_turn = 0
