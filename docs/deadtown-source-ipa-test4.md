@@ -4,7 +4,7 @@
 bản phát hành hay bản game gốc. Build từ revision
 `ea13c7a659a334d22ecdab3c215c2ce9f787f9ba` bằng Actions
 [45043018147](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/45043018147).
-Không công bố release; artifact Actions lưu 7 ngày và IPA cũng được lưu dưới
+Đã công bố [link tải thử nghiệm](https://github.com/Hthancder/ArenaAIWorkspace-1/releases/download/deadtown-ios15-source-test4/DeadTown-iOS15-source-test4.ipa) dưới dạng prerelease. Artifact Actions lưu 7 ngày; IPA cũng được lưu dưới
 Git blob không gắn vào nhánh `9f321080b3126cfc76ecf5d4c2e27ef12f70c9a0`.
 
 - IPA `DeadTown-iOS15-source-test4.ipa`: SHA-256
