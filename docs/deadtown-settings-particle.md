@@ -88,6 +88,7 @@ Source dùng tên sprite và biến local mới; riêng GML/runner/platform có 
 Draw GUI cũ vì các lời gọi và ngữ cảnh native chưa khôi phục. Probe VM dùng
 mock cho phép tính và vẽ, đồng thời có hai ca riêng gọi `point_distance` và
 `point_direction` thật trong runner desktop (ngang 50 và dọc 150 pixel); lệnh
-vẽ vẫn mock. Probe không chứng minh renderer hoặc caller event.
+vẽ vẫn mock. CI `45005225487` pass cả hai ca, kiểm frame, tỉ lệ và góc trong
+đối số draw mock. Probe không chứng minh renderer hoặc caller event.
 
 Kết quả CI cần xem riêng; chưa tạo IPA.
