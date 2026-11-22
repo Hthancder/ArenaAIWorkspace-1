@@ -5,5 +5,5 @@ cd "$(dirname "$0")/.."
 out=$(mktemp -d)
 trap 'rm -rf "$out"' EXIT
 clang -fobjc-arc -Wall -Wextra -Werror -Wno-unused-parameter -I Sources \
-  tests/anonymizer_test.m Sources/SXAnonymizer.m -framework Foundation -o "$out/anonymizer_test"
+  tests/anonymizer_test.m Sources/SXAnonymizer.m tests/log_stub.m -framework Foundation -o "$out/anonymizer_test"
 "$out/anonymizer_test"
