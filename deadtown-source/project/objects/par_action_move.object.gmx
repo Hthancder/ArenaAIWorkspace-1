@@ -43,7 +43,11 @@ else
     yy = y + lengthdir_y(10,dir)
 }
 
-draw_sprite_ext(sprite_index,image_index,xx+shake_x,yy+shake_y,image_xscale,image_yscale,image_angle,c_black,0.5)
+// Partial native candidate: global slot 86 gates this shadow draw.
+if (global.__dt_setting_shadow > 0.5)
+{
+    draw_sprite_ext(sprite_index,image_index,xx+shake_x,yy+shake_y,image_xscale,image_yscale,image_angle,c_black,0.5)
+}
 
 </string>
           </argument>

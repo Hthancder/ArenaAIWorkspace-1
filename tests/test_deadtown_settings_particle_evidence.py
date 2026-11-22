@@ -3,7 +3,7 @@ import shutil
 import tempfile
 import unittest
 
-from tools.deadtown_settings_particle_evidence import SETTINGS, PARTICLES, SHADOW_OBJECTS, inspect, verify_source
+from tools.deadtown_settings_particle_evidence import SETTINGS, PARTICLES, SHADOW_OBJECTS, ACTION_SHADOW_OBJECTS, inspect, verify_source
 from tools.deadtown_settings_particle_vm_probe import EXPECTED, check, instrument, make_project
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,7 +28,7 @@ class SettingsParticleEvidenceTests(unittest.TestCase):
             for name in (*PARTICLES, 'setting_load', 'setting_save'):
                 shutil.copy(PROJECT/'scripts'/(name+'.gml'), dest/'scripts')
             (dest/'objects').mkdir()
-            for name in SHADOW_OBJECTS:
+            for name in (*SHADOW_OBJECTS, *ACTION_SHADOW_OBJECTS):
                 shutil.copy(PROJECT/'objects'/(name+'.object.gmx'), dest/'objects')
             verify_source(dest)
             p = dest/'scripts/setting_load.gml'
@@ -52,7 +52,7 @@ class SettingsParticleEvidenceTests(unittest.TestCase):
                 make_project(PROJECT, dest)
         event = {'object': 'sys_global', 'attributes': {'eventtype': '0', 'enumb': '0'}, 'gml': 'original();'}
         self.assertTrue(instrument([event], PROJECT)[0]['gml'].endswith('original();'))
-        self.assertEqual(check('\n'.join(EXPECTED)), 9)
+        self.assertEqual(check('\n'.join(EXPECTED)), 12)
         with self.assertRaises(ValueError):
             check('\n'.join(EXPECTED).replace('threshold:0', 'threshold:123'))
         with self.assertRaises(ValueError):
@@ -72,7 +72,7 @@ class SettingsParticleEvidenceTests(unittest.TestCase):
         self.assertEqual(len(report['settings']), 7)
         self.assertEqual(report['settings'][-1]['native_slot'], 49)
         self.assertEqual(set(report['particle_gates']), set(PARTICLES))
-        self.assertEqual(set(report['shadow_gates']), set(SHADOW_OBJECTS))
+        self.assertEqual(set(report['shadow_gates']), set(SHADOW_OBJECTS) | set(ACTION_SHADOW_OBJECTS))
         self.assertEqual(len(SETTINGS), 7)
 
 

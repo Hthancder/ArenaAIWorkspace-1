@@ -33,8 +33,10 @@ save thật, hạt/rendering, thao tác UI, gameplay, compiler GameMaker hay iOS
 Bổ sung gate bóng cho ba Draw event `par_solid`, `par_vehicle`, `obj_parcel`:
 ARM đọc slot 86, sau khi tính vị trí bóng thì chỉ gọi `draw_sprite_ext` màu
 đen alpha 0,5 khi slot > 0,5; `draw_self` vẫn gọi ở cả hai nhánh. Ứng viên
-chỉ bao lệnh vẽ bóng, giữ tính vị trí và `draw_self` bên ngoài. Bằng chứng ARM
-ghim từng export và nhánh; probe chỉ lấy fragment này và thay lệnh vẽ bằng
-bộ đếm, không kiểm toàn event, renderer hoặc hình ảnh trên thiết bị.
+chỉ bao lệnh vẽ bóng, giữ tính vị trí và `draw_self` bên ngoài. Ba Draw event
+`par_action`, `par_action_move`, `par_action_door` cũng có gate slot 86 cho
+lệnh vẽ bóng, nhưng không có `draw_self` trong source cũ; không thêm lệnh đó.
+Bằng chứng ARM ghim từng export và nhánh; probe chỉ lấy fragment này và thay
+lệnh vẽ bằng bộ đếm, không kiểm toàn event, renderer hoặc hình ảnh trên thiết bị.
 
 Kết quả CI cần xem riêng; chưa tạo IPA.

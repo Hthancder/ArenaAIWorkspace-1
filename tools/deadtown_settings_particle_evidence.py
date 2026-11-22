@@ -46,6 +46,15 @@ SHADOW_OBJECTS = {
     'par_vehicle': (0x5f8894, '94f9ff7a157e20efb6fc7ff4af3ffd40872ef64d8755af25e435ddd9a7bbf9b1'),
     'obj_parcel': (0x62fb60, '0826af5c78b0bc109791e1d66b0bf6627c002d702b422701490f8205da076bef'),
 }
+ACTION_SHADOW_OBJECTS = {
+    'par_action': (0x6b2f9c, 'fa8ee3fc857a11914993a0ecd47a0246b9a353f598ac03c7bbbda07bf25ece47'),
+    'par_action_move': (0x6b41a4, 'abb8245fd4b4a6ffa095b860cc7779f3bb96aa1343ed35d791407ea6b441b2c6'),
+    'par_action_door': (0x6b53ac, 'cbcbae342a5b23ca3215c024bef834a07d512c4d8700b00ea13bf71d7041ca0c'),
+}
+ACTION_SHADOW = ('// Partial native candidate: global slot 86 gates this shadow draw.\n'
+                 'if (global.__dt_setting_shadow > 0.5)\n{\n'
+                 '    draw_sprite_ext(sprite_index,image_index,xx+shake_x,yy+shake_y,image_xscale,image_yscale,image_angle,c_black,0.5)\n'
+                 '}')
 SHADOW = ('// Partial native candidate: global slot 86 gates this shadow draw.\n'
           'if (global.__dt_setting_shadow > 0.5)\n{\n'
           '    draw_sprite_ext(sprite_index,image_index,xx,yy,image_xscale,image_yscale,image_angle,c_black,0.5)\n'
@@ -58,7 +67,8 @@ def shadow_source(project, name):
     if len(events) != 1:
         raise ValueError('expected one Draw event: '+name)
     strings = events[0].findall('./action/arguments/argument/string')
-    if len(strings) != 1 or (strings[0].text or '').count(SHADOW) != 1:
+    fragment = ACTION_SHADOW if name in ACTION_SHADOW_OBJECTS else SHADOW
+    if len(strings) != 1 or (strings[0].text or '').count(fragment) != 1:
         raise ValueError('unexpected shadow gate: '+name)
     return strings[0].text
 
@@ -89,7 +99,7 @@ def verify_source(project):
                 raise ValueError('missing particle call: '+name)
         if body.count('part_type_size(') != int(name.endswith('_size')) or body.count('part_type_orientation(') != int(name.endswith('_out')):
             raise ValueError('unexpected particle operation: '+name)
-    for name in SHADOW_OBJECTS:
+    for name in (*SHADOW_OBJECTS, *ACTION_SHADOW_OBJECTS):
         shadow_source(p, name)
 
 
@@ -246,10 +256,36 @@ def inspect(apk):
         for instruction in dis.disasm(read(start+0x88, 0x7c4-0x88), start+0x88):
             if instruction.mnemonic.startswith(('str', 'stm')) and '[sp, #0x34]' in instruction.op_str:
                 raise ValueError('shadow global pointer overwritten: '+name)
+    for name, (start, digest) in ACTION_SHADOW_OBJECTS.items():
+        target = [s for s in dyn.iter_symbols() if exported_name(s.name) == 'gml_Object_'+name+'_Draw_0']
+        if len(target) != 1 or (target[0]['st_value'], target[0]['st_size']) != (start, 4616) or hashlib.sha256(read(start, 4616)).hexdigest() != digest:
+            raise ValueError('unexpected action Draw bytes: '+name)
+        if sym(start+0x10, start+0x20, start+0x14).name != 'g_pGlobal':
+            raise ValueError('unexpected action Draw global pointer: '+name)
+        checks = {
+            0x38: ('ldr', 'r0, [r1, r0]'), 0x44: ('ldr', 'r0, [r0]'),
+            0x74: ('ldr', 'r1, [r0]'), 0x78: ('ldr', 'r2, [r1, #8]'),
+            0x7c: ('mov', 'r1, #0x56'), 0x80: ('blx', 'r2'),
+            0x84: ('str', 'r0, [sp, #0x34]'), 0x144: ('vmov.f64', 'd8, #5.000000e-01'),
+            0x930: ('ldr', 'r0, [sp, #0x34]'), 0x934: ('bl', '#0x176444'),
+            0x938: ('vmov', 'd0, r0, r1'), 0x93c: ('vcmpe.f64', 'd0, d8'),
+            0x940: ('vmrs', 'apsr_nzcv, fpscr'), 0x944: ('ble', '#'+hex(start+0xbc4)),
+            0xb54: ('mov', 'r1, #0'), 0xb58: ('mov', 'r0, #0x3f000000'),
+            0xb5c: ('str', 'r1, [sp, #0x10]'), 0xb64: ('str', 'r0, [sp, #0x14]'),
+            0xb7c: ('bl', '#0x176738'),
+        }
+        for off, (op, args) in checks.items():
+            check(start+off, op, args)
+        for instruction in dis.disasm(read(start+0x88, 0x930-0x88), start+0x88):
+            _, writes = instruction.regs_access()
+            if instruction.address > start+0x144 and 'd8' in (instruction.reg_name(r) for r in writes):
+                raise ValueError('action threshold overwritten: '+name)
+            if instruction.mnemonic.startswith(('str', 'stm')) and '[sp, #0x34]' in instruction.op_str:
+                raise ValueError('action shadow pointer overwritten: '+name)
     return {'apk_sha256': APK_SHA256, 'native_library_sha256': LIB_SHA256,
             'settings': [{'section': x[0], 'key': x[1], 'alias': '__dt_setting_'+x[2], 'native_slot': x[3], 'default': 1} for x in SETTINGS],
             'particle_gates': {name: {'address': hex(v[0]), 'sha256': v[2], 'slot': 49} for name, v in PARTICLES.items()},
-            'shadow_gates': {name: {'address': hex(v[0]), 'sha256': v[1], 'slot': 86} for name, v in SHADOW_OBJECTS.items()},
+            'shadow_gates': {name: {'address': hex(v[0]), 'sha256': v[1], 'slot': 86} for name, v in {**SHADOW_OBJECTS, **ACTION_SHADOW_OBJECTS}.items()},
             'limitations': 'Static ARM32 and partial source only; original names, full particle functions, non-finite values, GameMaker compiler, actual display/settings UI, gameplay and iOS unverified.'}
 
 

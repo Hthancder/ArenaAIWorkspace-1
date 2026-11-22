@@ -43,6 +43,9 @@ on:
       - deadtown-source/project/objects/obj_parcel.object.gmx
       - deadtown-source/project/objects/par_solid.object.gmx
       - deadtown-source/project/objects/par_vehicle.object.gmx
+      - deadtown-source/project/objects/par_action.object.gmx
+      - deadtown-source/project/objects/par_action_move.object.gmx
+      - deadtown-source/project/objects/par_action_door.object.gmx
       - deadtown-source/project/objects/obj_zombie3.object.gmx
       - deadtown-source/project/objects/obj_zombie.object.gmx
       - deadtown-source/project/objects/obj_zombie2.object.gmx
