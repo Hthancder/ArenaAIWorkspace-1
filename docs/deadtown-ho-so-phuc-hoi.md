@@ -850,8 +850,10 @@ khi gọi `backpack_close()`, tránh yêu cầu bị lặp lại. Verifier ARM
 Step và các lệnh then chốt. Tên slot được suy ra từ mã cũ và quan hệ truy cập;
 so sánh gần zero của native có epsilon nên giá trị bất thường gần ngưỡng có thể
 khác. Probe VM chỉ chạy các mảnh code và giả lập thao tác đóng, không kiểm tra
-nhập phím, giao diện túi thật, gameplay Android hay iOS. Hai event mới giảm số
-key thiếu, nhưng không chứng minh toàn bộ hệ thống túi đồ đúng.
+nhập phím, giao diện túi thật, gameplay Android hay iOS. CI VM `45039480602`
+đã đạt các trường hợp mở, đóng, xóa cờ và tạm dừng; native `45039480629` và
+workbench `45039480558` đạt. Hai event mới giảm số key thiếu, nhưng không chứng
+minh toàn bộ hệ thống túi đồ đúng.
 
 ### Ứng viên End Step boss 2 theo khoảng cách
 
