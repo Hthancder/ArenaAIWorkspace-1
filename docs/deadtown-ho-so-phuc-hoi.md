@@ -856,9 +856,12 @@ hash ba export, các lệnh ARM, relocation và bảng hằng chọn, đồng th
 vị trí các fragment source. Probe VM dùng `choose` giả và chạy fragment riêng,
 không chạy toàn event hay bộ lập lịch thật. CI `45019864629` pass các marker
 fragment; CI workbench `45019864696` và native `45019864590` cũng pass.
-Bổ sung một probe khác để chạy Alarm 0 qua scheduler desktop, với Create rút
-còn fragment, ép nhánh chọn 1, bỏ Step và đặt instance persistent; kết quả CI
-của probe scheduler mới cần theo dõi riêng. Source cũ còn nhiều chi tiết khác
+Probe scheduler desktop riêng chạy Alarm 0, với Create rút còn fragment,
+ép nhánh chọn 1, bỏ Step và đặt instance persistent. CI `45020401098` pass:
+bắt đầu `1:20`, cờ về 0 ở bước 20, giá trị alarm vừa quan sát trước đó là 1;
+trong frame kích hoạt, runner báo alarm 0. CI trước `45020208679` fail vì
+checker giả định alarm lúc đó phải là -1; checker đã sửa để chấp nhận 0 hoặc
+-1, không sửa gameplay. Source cũ còn nhiều chi tiết khác
 chưa khớp; ví dụ Create native đặt `move_speed` ban đầu 8 trong khi source cũ
 đặt 7 và chưa đối chiếu đầy đủ các nhánh sau, nên không tự sửa giá trị này.
 Không suy ra boss, RNG, gameplay hay iOS đã hoạt động đúng. Audit mới thiếu 56
