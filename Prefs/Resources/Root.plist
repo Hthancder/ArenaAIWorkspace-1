@@ -424,6 +424,14 @@
 			<key>cell</key>
 			<string>PSLinkCell</string>
 			<key>detail</key>
+			<string>SXMemoryController</string>
+			<key>label</key>
+			<string>Ghi nhớ</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSLinkCell</string>
+			<key>detail</key>
 			<string>SXStatsController</string>
 			<key>label</key>
 			<string>Thống kê</string>

@@ -514,12 +514,63 @@ static NSDictionary *SXRunShortcut(NSDictionary *arguments, NSError **error) {
 
 #pragma mark - Ghi nhớ
 
+@implementation SXMemoryNote
+- (NSString *)description {
+	return [NSString stringWithFormat:@"<SXMemoryNote %@ %@>", self.identifier,
+			SXCut(self.text, 40)];
+}
+@end
+
+#pragma mark - Kho ghi nhớ (dùng chung với màn Cài đặt → Ghi nhớ)
+
+/// Kho ghi chú. Giữ trong một lớp nội bộ, `SXMemory` chỉ là mặt tiền đọc/xoá
+/// cho màn cài đặt — nhờ vậy UI không phải biết chi tiết lưu trữ.
 @interface SXMemoryStore : NSObject
 + (instancetype)shared;
 - (NSArray<NSDictionary *> *)notes;
 - (NSString *)addText:(NSString *)text tags:(NSString *)tags;
 - (NSUInteger)removeMatching:(NSString *)query;
+- (BOOL)removeIdentifier:(NSString *)identifier;
 - (NSUInteger)removeAll;
+@end
+
+@implementation SXMemory
+
++ (instancetype)shared {
+	static SXMemory *memory;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{ memory = [[SXMemory alloc] init]; });
+	return memory;
+}
+
++ (NSUInteger)capacity {
+	return 200;
+}
+
+- (NSArray<SXMemoryNote *> *)notes {
+	NSMutableArray<SXMemoryNote *> *result = [NSMutableArray array];
+	for (NSDictionary *raw in [[SXMemoryStore shared] notes]) {
+		if (![raw isKindOfClass:[NSDictionary class]]) continue;
+		NSString *text = [raw[@"text"] isKindOfClass:[NSString class]] ? raw[@"text"] : nil;
+		if (!text.length) continue;
+		SXMemoryNote *note = [[SXMemoryNote alloc] init];
+		note.identifier = [raw[@"id"] isKindOfClass:[NSString class]] ? raw[@"id"] : @"?";
+		note.text = text;
+		note.tags = [raw[@"tags"] isKindOfClass:[NSString class]] ? raw[@"tags"] : nil;
+		note.date = [raw[@"date"] isKindOfClass:[NSDate class]] ? raw[@"date"] : nil;
+		[result addObject:note];
+	}
+	return result;
+}
+
+- (BOOL)removeNoteWithIdentifier:(NSString *)identifier {
+	return [[SXMemoryStore shared] removeIdentifier:identifier];
+}
+
+- (NSUInteger)removeAllNotes {
+	return [[SXMemoryStore shared] removeAll];
+}
+
 @end
 
 @implementation SXMemoryStore {
@@ -595,6 +646,23 @@ static NSDictionary *SXRunShortcut(NSDictionary *arguments, NSError **error) {
 			[self->_notes removeObjectsAtIndexes:indexes];
 			[self persist];
 		}
+	});
+	return removed;
+}
+
+- (BOOL)removeIdentifier:(NSString *)identifier {
+	if (!identifier.length) return NO;
+	__block BOOL removed = NO;
+	dispatch_sync(_queue, ^{
+		NSIndexSet *indexes = [self->_notes indexesOfObjectsPassingTest:^BOOL(NSDictionary *note,
+																		   NSUInteger idx, BOOL *stop) {
+			(void)idx; (void)stop;
+			return [note[@"id"] isEqual:identifier];
+		}];
+		if (!indexes.count) return;
+		[self->_notes removeObjectsAtIndexes:indexes];
+		[self persist];
+		removed = YES;
 	});
 	return removed;
 }

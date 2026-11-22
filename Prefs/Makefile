@@ -9,6 +9,7 @@ SiriXPreferences_FILES = \
 	SXChatTestController.m \
 	SXHistoryController.m \
 	SXStatsController.m \
+	SXMemoryController.m \
 	SXToolsController.m \
 	SXHeadersController.m \
 	../Sources/SXLog.m \
