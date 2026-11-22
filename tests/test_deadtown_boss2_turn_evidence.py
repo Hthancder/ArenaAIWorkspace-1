@@ -28,6 +28,7 @@ class BossTurnTests(unittest.TestCase):
             for old, new in (('choose(1,0,0)', 'choose(1,0)'), ('alarm[0] = 20', 'alarm[0] = 21'),
                              ('move_speed = 8', 'move_speed = 7'), ('move_speed = 9', 'move_speed = 8'),
                              ('blood_speed = 0.4', 'blood_speed = 0.5'),
+                             ('type = 0 //', 'type = 1 //'), ('pull_speed = 7', 'pull_speed = 8'),
                              ('if type == 0', 'if type == 1'),
                              ('obj_player.hp -= blood_speed/2', 'obj_player.hp -= blood_speed'),
                              ('choose(1,0,0,0,0)', 'choose(1,0,0)'),

@@ -75,7 +75,9 @@ def fragments(project):
     if (create.count(INIT) != 1 or create.count('__dt_reverse_turn') != 2 or
             create.count(SPEED_INITIAL) != 1 or create.count(SPEED_CHOICE) != 1 or
             create.count('move_speed =') != 2 or create.count(DAMAGE_INITIAL) != 1 or
-            create.count('blood_speed =') != 1 or not create.index(SPEED_INITIAL) < create.index(DAMAGE_INITIAL) < create.index(INIT) < create.index(SPEED_CHOICE)):
+            create.count('blood_speed =') != 1 or
+            create.count('type = 0 // 0 :normal 1:bloody 2:poison\n\npull_speed = 7\n' + DAMAGE_INITIAL) != 1 or
+            not create.index(SPEED_INITIAL) < create.index(DAMAGE_INITIAL) < create.index(INIT) < create.index(SPEED_CHOICE)):
         raise ValueError('unexpected boss Create candidate')
     before = '{go_dir = point_direction(x,y,obj_player.x,obj_player.y)-bangle}\n\n            '
     after = '            \n            body_x[0] += lengthdir_x(body_length,bangle+go_dir)'
@@ -150,6 +152,9 @@ def inspect(apk):
         (0x715620,'movw','r1, #0x4ad'), (0x715624,'blx','r2'), (0x715628,'mov','r5, r0'),
         (0x715648,'mov','r0, #0'), (0x71564c,'str','r0, [r5, #0xc]'),
         (0x715650,'str','r0, [r5, #4]'), (0x715654,'str','r0, [r5]'),
+        (0x71566c,'movw','r1, #0x4af'), (0x715670,'blx','r2'), (0x715674,'mov','r5, r0'),
+        (0x715694,'movw','r1, #0'), (0x715698,'mov','r0, #0'), (0x71569c,'movt','r1, #0x401c'),
+        (0x7156a0,'str','r0, [r5, #0xc]'), (0x7156a4,'stm','r5, {r0, r1}'),
         (0x7156bc,'mov','r1, #0x4b0'), (0x7156c0,'blx','r2'), (0x7156c4,'mov','r5, r0'),
         (0x7156ec,'movw','r0, #0x9999'), (0x7156f0,'movt','r0, #0x3fd9'),
         (0x7156f4,'str','r0, [r5, #4]'), (0x7156fc,'str','r7, [r5]'),

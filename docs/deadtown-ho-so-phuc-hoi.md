@@ -871,7 +871,8 @@ bảng; probe VM ép kết quả lựa chọn, không kiểm phân bố RNG th�
 biến vẫn là suy luận có bằng chứng. CI workbench `45021888216` và VM
 `45021888187` và native `45021888168` pass cho thay đổi tốc độ.
 
-Đối chiếu tiếp cho thấy Create ghi slot 1197 bằng 0 và slot 1200 bằng 0,4;
+Đối chiếu tiếp cho thấy Create ghi slot 1197 bằng 0, slot 1199 bằng 7
+và slot 1200 bằng 0,4;
 nhánh Step so slot 1197 gần 0 rồi trừ slot 1200 chia 2 khỏi slot 28 của
 object 142 (`obj_player`). Bộ poison evidence độc lập liên hệ slot 28 với
 key lưu `hp`. Đây là bằng chứng một phần để ánh xạ các biến source cũ
