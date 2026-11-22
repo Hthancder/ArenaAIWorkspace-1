@@ -19,3 +19,4 @@ node "$root/tests/device-ux/file-ux-test.js" "$src/embedded_resources/web_interf
 g++ -std=c++17 -Wall -Wextra -Werror -I"$src/src" "$root/tests/device-ux/pet-layout-test.cpp" -o "$tmp/pet-layout-test"
 "$tmp/pet-layout-test"
 python3 "$root/tests/device-ux/prepare-sound-test.py"
+node "$root/tests/device-ux/wav-browser-test.js" "$src/embedded_resources/web_interface/index.js"

@@ -2682,10 +2682,10 @@ index bda7b42a..6d8080e0 100644
 +
 +:focus-visible { outline: 2px solid var(--color); outline-offset: 2px; }
 diff --git a/embedded_resources/web_interface/index.html b/embedded_resources/web_interface/index.html
-index 5290300b..ba5fc2e6 100644
+index 5290300b..d8ce3c86 100644
 --- a/embedded_resources/web_interface/index.html
 +++ b/embedded_resources/web_interface/index.html
-@@ -1,700 +1,926 @@
+@@ -1,700 +1,937 @@
  <!doctype html>
  <html lang="en">
 -  <head>
@@ -2788,6 +2788,17 @@ index 5290300b..ba5fc2e6 100644
 +            <input id="ux-brightness" type="range" min="5" max="100" step="5" />
 +            <button type="button" class="btn-action" id="ux-save">Save sound &amp; display</button>
 +            <small>Find waits for a device menu (up to 15 seconds). Sound and LED settings are respected.</small>
++            <details class="ux-sound-upload">
++              <summary>Upload a custom UI sound</summary>
++              <p>Use a 48 kHz, 16-bit PCM WAV (mono or stereo). Longer clips are trimmed after confirmation. Existing event files are overwritten.</p>
++              <label for="ux-wav-event">Event</label>
++              <select id="ux-wav-event"><option value="select">Select (250 ms)</option><option value="back">Back (250 ms)</option><option value="success">Success (1 s)</option><option value="warning">Warning (1 s)</option><option value="find">Find (1 s)</option></select>
++              <label for="ux-wav-file">Sound file</label>
++              <input id="ux-wav-file" type="file" accept=".wav,audio/wav" />
++              <button type="button" class="btn-action" id="ux-wav-upload">Prepare and upload</button>
++              <small>After uploading, select WAV for that event in Config → Audio Config → UI sound events on the device.</small>
++              <div id="ux-wav-status" role="status" aria-live="polite"></div>
++            </details>
 +            <div id="ux-status" role="status" aria-live="polite">Loading controls...</div>
 +          </div>
 +          <div id="dash-action-status" class="ota-status hidden"></div>
@@ -4238,7 +4249,7 @@ index 5290300b..ba5fc2e6 100644
 +</body>
  </html>
 diff --git a/embedded_resources/web_interface/index.js b/embedded_resources/web_interface/index.js
-index fd616029..1e472b2b 100644
+index fd616029..3d4adad2 100644
 --- a/embedded_resources/web_interface/index.js
 +++ b/embedded_resources/web_interface/index.js
 @@ -6,20 +6,17 @@ const T = {
@@ -5002,12 +5013,12 @@ index fd616029..1e472b2b 100644
 +    if (isModified(editor)) {
 +      await requestPost("/edit", { fs: drive, name: filename, content });
 +      editor.setAttribute("data-hash", calcHash(content));
-+    }
+     }
 +    if (runFile) {
 +      if (isModified(editor)) throw new Error("File changed during save. Save again before running.");
 +      const serial = getSerialCommand(filename);
 +      if (serial !== undefined) await runCommand(serial + ' "' + filename + '"');
-     }
++    }
 +  } catch (error) {
 +    alert("Save or run failed: " + error.message + ". Check the file before retrying.");
 +  } finally {
@@ -5558,15 +5569,15 @@ index fd616029..1e472b2b 100644
          ctx.lineTo(input.x3, input.y3);
          ctx.closePath();
 -        ctx.fill();
-+        if (fn === 8) { ctx.fillStyle = color565toCSS(input.fg); ctx.fill(); }
-+        else { ctx.strokeStyle = color565toCSS(input.fg); ctx.stroke(); }
-         break;
+-        break;
 -      case 9: // DRAWELLIPSE
 -        ctx.strokeStyle = color565toCSS(input.fg);
 -        ctx.beginPath();
 -        ctx.ellipse(input.x, input.y, input.rx, input.ry, 0, 0, Math.PI * 2);
 -        ctx.stroke();
--        break;
++        if (fn === 8) { ctx.fillStyle = color565toCSS(input.fg); ctx.fill(); }
++        else { ctx.strokeStyle = color565toCSS(input.fg); ctx.stroke(); }
+         break;
 -
 -      case 10: // FILLELLIPSE
 -        ctx.fillStyle = color565toCSS(input.fg);
@@ -6287,7 +6298,7 @@ index fd616029..1e472b2b 100644
      return;
    }
  
-@@ -1062,662 +1492,827 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1062,662 +1492,887 @@ $(".container").addEventListener("click", async (e) => {
    if (actPlay) {
      e.preventDefault();
      let cmd = actPlay.getAttribute("data-cmd");
@@ -7512,15 +7523,61 @@ index fd616029..1e472b2b 100644
 -  let initialDrive = urlParams.drive;
 -  let initialPath = urlParams.path;
 -  let editFile = urlParams.editFile;
--
++$("#sl-vault-newtxt")?.addEventListener("click", async () => {
++  let nm = prompt("Payload filename in /usb_vault (e.g. demo.txt):", "payload.txt");
++  if (!nm) return;
++  nm = nm.trim().replace(/^\/+/, "");
++  if (!nm) return;
++  const full = "/usb_vault/" + nm;
++  await requestGet("/file", { fs: "LittleFS", action: "createfile", name: full });
++  await openFileInEditor("LittleFS", full);
++  refreshSecLab();
++});
+ 
 -  // Validate and fallback to defaults if needed
 -  if (!initialDrive) {
 -    initialDrive = sdCardAvailable ? "SD" : "LittleFS";
 -  }
 -  if (!initialPath) {
 -    initialPath = "/";
--  }
--
++// Canonicalise 16-bit PCM WAV files for the board without decoding or inventing audio.
++// Metadata chunks are safely skipped; long clips are trimmed only after confirmation.
++function prepareUiSound(input, event) {
++  const limits = {select:250, back:250, success:1000, warning:1000, find:1000};
++  if (!Object.prototype.hasOwnProperty.call(limits, event)) throw new Error("Unknown sound event.");
++  const bytes = new Uint8Array(input);
++  if (bytes.length < 12 || bytes.length > 2 * 1024 * 1024) throw new Error("WAV must be between 12 bytes and 2 MB.");
++  const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
++  const tag = (p, t) => p + 4 <= bytes.length && [...t].every((c, i) => bytes[p + i] === c.charCodeAt(0));
++  if (!tag(0, "RIFF") || !tag(8, "WAVE")) throw new Error("Select a RIFF WAV file.");
++  const end = v.getUint32(4, true) + 8;
++  if (end > bytes.length || end < 12) throw new Error("WAV is incomplete.");
++  let fmt = null, data = null;
++  for (let p = 12; p + 8 <= end;) {
++    const len = v.getUint32(p + 4, true), start = p + 8;
++    if (len > end - start) throw new Error("WAV chunk is incomplete.");
++    if (tag(p, "fmt ") && !fmt) {
++      if (len < 16) throw new Error("Invalid WAV format.");
++      fmt = {type:v.getUint16(start,true), channels:v.getUint16(start+2,true), rate:v.getUint32(start+4,true),
++        byteRate:v.getUint32(start+8,true), align:v.getUint16(start+12,true), bits:v.getUint16(start+14,true)};
++    } else if (tag(p, "data") && !data) data = {start, len};
++    p = start + len + (len & 1);
+   }
++  if (!fmt || !data || fmt.type !== 1 || ![1,2].includes(fmt.channels) || fmt.rate !== 48000 ||
++      fmt.bits !== 16 || fmt.align !== fmt.channels * 2 || fmt.byteRate !== 48000 * fmt.align ||
++      !data.len || data.len % fmt.align) throw new Error("Use uncompressed PCM, 16-bit, 48 kHz, mono or stereo.");
++  const max = 48000 * fmt.align * limits[event] / 1000;
++  const count = Math.min(data.len, max);
++  const result = new Uint8Array(44 + count), out = new DataView(result.buffer);
++  const put = (p, t) => [...t].forEach((c, i) => { result[p + i] = c.charCodeAt(0); });
++  put(0,"RIFF"); out.setUint32(4, count + 36, true); put(8,"WAVE"); put(12,"fmt ");
++  out.setUint32(16,16,true); out.setUint16(20,1,true); out.setUint16(22,fmt.channels,true);
++  out.setUint32(24,48000,true); out.setUint32(28,fmt.byteRate,true); out.setUint16(32,fmt.align,true);
++  out.setUint16(34,16,true); put(36,"data"); out.setUint32(40,count,true);
++  result.set(bytes.subarray(data.start,data.start+count),44);
++  return {bytes:result, trimmed:data.len > count, maxMs:limits[event]};
++}
+ 
 -  await fetchFiles(initialDrive, initialPath);
 -
 -  // If there's an edit file parameter, open the file editor
@@ -7550,15 +7607,26 @@ index fd616029..1e472b2b 100644
 -        } else {
 -          $(".act-run-edit-file").classList.remove("hidden");
 -        }
-+$("#sl-vault-newtxt")?.addEventListener("click", async () => {
-+  let nm = prompt("Payload filename in /usb_vault (e.g. demo.txt):", "payload.txt");
-+  if (!nm) return;
-+  nm = nm.trim().replace(/^\/+/, "");
-+  if (!nm) return;
-+  const full = "/usb_vault/" + nm;
-+  await requestGet("/file", { fs: "LittleFS", action: "createfile", name: full });
-+  await openFileInEditor("LittleFS", full);
-+  refreshSecLab();
++$("#ux-wav-upload")?.addEventListener("click", async () => {
++  const status = $("#ux-wav-status"), button = $("#ux-wav-upload");
++  const file = $("#ux-wav-file").files[0], event = $("#ux-wav-event").value;
++  if (!file) { status.textContent = "Choose a WAV file first."; return; }
++  if (file.size > 2 * 1024 * 1024) { status.textContent = "File exceeds the 2 MB preparation limit."; return; }
++  if (_runningUpload || otaBusy) { status.textContent = "Wait for the current upload or OTA to finish."; return; }
++  button.disabled = true;
++  try {
++    const prepared = prepareUiSound(await file.arrayBuffer(), event);
++    const note = prepared.trimmed ? ` It will be trimmed to ${prepared.maxMs} ms.` : "";
++    if (!confirm(`Upload ${event}.wav to LittleFS? Any existing ${event}.wav will be overwritten.${note}`)) return;
++    if (_runningUpload || otaBusy) throw new Error("Another upload has started. Try again.");
++    _uploadFailures = 0;
++    $(".dialog.upload .dialog-body").innerHTML = "";
++    const normalized = new File([prepared.bytes], `${event}.wav`, {type:"audio/wav"});
++    appendFileToQueue([normalized], "LittleFS", "/ui-sounds");
++    status.textContent = "See upload status. Then enable WAV for this event on the device.";
++    uploadFile();
++  } catch (error) { status.textContent = `Cannot prepare sound: ${error.message}`; }
++  finally { button.disabled = false; }
 +});
  
 -        Dialog.loading.hide();
