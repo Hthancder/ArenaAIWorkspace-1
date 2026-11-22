@@ -30,6 +30,8 @@ class BossDistanceTests(unittest.TestCase):
             (dest/'objects').mkdir()
             p = dest/'objects/obj_boss2.object.gmx'
             shutil.copy(PROJECT/'objects/obj_boss2.object.gmx', p)
+            parent = dest/'objects/par_boss.object.gmx'
+            shutil.copy(PROJECT/'objects/par_boss.object.gmx', parent)
             original = p.read_text()
             for old, new in ((' &gt; 8000', ' &gt; 800'),
                              ('point_distance(x,y,obj_player.x,obj_player.y)', 'point_distance(x,y,obj_player.x,obj_player.x)'),
@@ -41,6 +43,10 @@ class BossDistanceTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     verify_source(dest)
                 p.write_text(original)
+            parent_text = parent.read_text()
+            parent.write_text(parent_text.replace('The boss fled', 'changed'))
+            with self.assertRaises(ValueError):
+                verify_source(dest)
 
     def test_probe_and_markers(self):
         events = [event('sys_global', '0', '0'), event('sys_global', '3', '0'),

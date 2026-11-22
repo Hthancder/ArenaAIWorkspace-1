@@ -24,6 +24,7 @@ on:
       - tools/deadtown_boss2_distance_vm_probe.py
       - tests/test_deadtown_boss2_distance_evidence.py
       - deadtown-source/project/objects/obj_boss2.object.gmx
+      - deadtown-source/project/objects/par_boss.object.gmx
       - tests/test_deadtown_boss2_turn_evidence.py
       - tools/deadtown_light_cleanup_evidence.py
       - tests/test_deadtown_light_cleanup_evidence.py

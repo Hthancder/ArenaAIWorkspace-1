@@ -851,8 +851,16 @@ native dùng epsilon (khởi tạo tĩnh 1e-10), nên GML có thể khác gần 
 không thêm guard tồn tại player vì native không cho thấy guard trong event này.
 Chưa xác minh trường hợp thiếu player, NaN, thừa kế, gameplay hay iOS. Probe
 VM cô lập thay Create/Step/Destroy của player và boss bằng stub; không đại diện
-toàn bộ gameplay. Audit sau thay đổi thiếu 358 event key; trùng key không
-chứng minh toàn bộ logic đã phục hồi.
+toàn bộ gameplay. CI `45025948709` probe boss 2 pass.
+
+Event cha `par_boss:Step:2` tại `0x709a30` dùng khoảng cách đến `xstart,ystart`,
+nếu vượt 8000 theo epsilon thì hủy instance rồi gọi
+`ui_message_type(lang_get("The boss fled"))`. Verifier ghim cả export cha,
+relocation, thứ tự tham số, thông điệp và call; đã thêm event ứng viên. Chưa
+có probe VM cho event cha hoặc xác minh thực thi sau `instance_destroy` trên
+native/iOS. `obj_boss2` có End Step riêng, không tự thêm `event_inherited()`;
+hành vi thừa kế ở runner chưa được xác minh. Audit sau thay đổi thiếu 357 event
+key; trùng key không chứng minh toàn bộ logic đã phục hồi.
 
 ### Sáu ứng viên dọn ánh sáng khi Destroy
 
@@ -915,7 +923,7 @@ fragment source nhánh type 0; test sửa giá trị và nhánh. So sánh native
 ngưỡng epsilon, và các nhánh type 1/2, điều kiện dẫn tới sát thương, hành vi
 runtime và phần còn lại Create/Step chưa được xác minh hoàn toàn. Không suy ra
 boss, RNG, gameplay hay iOS đã hoạt động đúng. Audit mới thiếu 56
-script, 90 object, 358 event key, 4 sprite và 8 room theo tên/key; 0 file tham
+script, 90 object, 357 event key, 4 sprite và 8 room theo tên/key; 0 file tham
 chiếu thiếu. Trùng key không chứng minh toàn event tương đương.
 
 ### Bổ sung ứng viên cài đặt hiệu ứng và gate particle
