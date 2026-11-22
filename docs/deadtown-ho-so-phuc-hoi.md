@@ -840,6 +840,19 @@ test cũng sửa alpha/metadata để xác nhận công cụ báo sai. Metadata 
 metadata **không** đồng nghĩa khôi phục hoàn toàn hình ảnh, mask, animation,
 resource ID, renderer hoặc iOS.
 
+### Ứng viên điều khiển túi đồ và tạm dừng
+
+Đã thêm hai event `sys_UI` KeyPress Space và Escape: Space yêu cầu mở/đóng
+túi đồ, Escape yêu cầu tạm dừng hoặc tiếp tục nếu phù hợp. Event I hiện chỉ
+yêu cầu mở khi túi đang đóng. Trong Step, đã thêm xóa cờ yêu cầu đóng trước
+khi gọi `backpack_close()`, tránh yêu cầu bị lặp lại. Verifier ARM
+`tools/deadtown_inventory_keys_evidence.py` ghim các export KeyPress, Create,
+Step và các lệnh then chốt. Tên slot được suy ra từ mã cũ và quan hệ truy cập;
+so sánh gần zero của native có epsilon nên giá trị bất thường gần ngưỡng có thể
+khác. Probe VM chỉ chạy các mảnh code và giả lập thao tác đóng, không kiểm tra
+nhập phím, giao diện túi thật, gameplay Android hay iOS. Hai event mới giảm số
+key thiếu, nhưng không chứng minh toàn bộ hệ thống túi đồ đúng.
+
 ### Ứng viên End Step boss 2 theo khoảng cách
 
 Native `obj_boss2:Step:2` tại `0x712520` lấy `x,y` của instance và
@@ -867,7 +880,7 @@ Probe desktop CI `45036206950` tạo boss 1 và boss 2 ở cách điểm xuất 
 8001, rồi đặt cả hai sát player: boss 1 bị hủy bởi End Step cha, boss 2 còn
 sống và chỉ một thông điệp giả được ghi. Probe stub Create/Step/Destroy của
 hai boss và thay hàm thông điệp; nó kiểm tra hành vi thừa kế trong runner
-chẩn đoán, không chứng minh runner Android/iOS. Audit thiếu 357 event key;
+chẩn đoán, không chứng minh runner Android/iOS. Audit thiếu 355 event key;
 trùng key không chứng minh toàn bộ logic đã phục hồi.
 
 `sys_credits:Alarm:1` (`0x4c9388`, 208 byte) đang nghiên cứu: static ARM tạo
@@ -936,7 +949,7 @@ fragment source nhánh type 0; test sửa giá trị và nhánh. So sánh native
 ngưỡng epsilon, và các nhánh type 1/2, điều kiện dẫn tới sát thương, hành vi
 runtime và phần còn lại Create/Step chưa được xác minh hoàn toàn. Không suy ra
 boss, RNG, gameplay hay iOS đã hoạt động đúng. Audit mới thiếu 56
-script, 90 object, 357 event key, 4 sprite và 8 room theo tên/key; 0 file tham
+script, 90 object, 355 event key, 4 sprite và 8 room theo tên/key; 0 file tham
 chiếu thiếu. Trùng key không chứng minh toàn event tương đương.
 
 ### Bổ sung ứng viên cài đặt hiệu ứng và gate particle

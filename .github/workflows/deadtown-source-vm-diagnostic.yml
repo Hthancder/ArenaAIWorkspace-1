@@ -20,6 +20,9 @@ on:
       - 'tools/deadtown_gamepad_vm_probe.py'
       - 'tools/deadtown_settings_particle_evidence.py'
       - 'tools/deadtown_boss2_turn_evidence.py'
+      - 'tools/deadtown_inventory_keys_evidence.py'
+      - 'tools/deadtown_inventory_keys_vm_probe.py'
+      - 'tests/test_deadtown_inventory_keys_evidence.py'
       - 'tools/deadtown_boss2_distance_evidence.py'
       - 'tools/deadtown_boss2_distance_vm_probe.py'
       - 'tests/test_deadtown_boss2_distance_evidence.py'
@@ -66,6 +69,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_deadtown_item_schedule_vm_probe.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_boss2_schedule_vm_probe.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_boss2_distance_evidence.py' -v
+          python -m unittest discover -s tests -p 'test_deadtown_inventory_keys_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_light_cleanup_evidence.py' -v
           sudo apt-get update -qq
           sudo apt-get install -y -qq libsdl2-dev libbz2-dev pkg-config
@@ -115,13 +119,14 @@ jobs:
       - name: Compile separate item alarm scheduling diagnostic
         env:
           GML_PROBE_SOURCE: ${{ github.workspace }}/deadtown-source/project/scripts/lang_type_set.gml
-          GML_PROBE_EVENTS: ${{ github.workspace }}/work/events-item-boss-distance.json
+          GML_PROBE_EVENTS: ${{ github.workspace }}/work/events-item-boss-inventory.json
         run: |
           set -euo pipefail
           python tools/deadtown_item_schedule_vm_probe.py instrument work/events-original.json work/events-item-schedule.json
           python tools/deadtown_boss2_schedule_vm_probe.py instrument deadtown-source/project work/events-item-schedule.json work/events-item-boss-schedule.json
           python tools/deadtown_light_cleanup_vm_probe.py instrument deadtown-source/project work/events-item-boss-schedule.json work/events-item-boss-light.json
           python tools/deadtown_boss2_distance_vm_probe.py instrument deadtown-source/project work/events-item-boss-light.json work/events-item-boss-distance.json
+          python tools/deadtown_inventory_keys_vm_probe.py instrument deadtown-source/project work/events-item-boss-distance.json work/events-item-boss-inventory.json
           mkdir -p work/item-schedule-game work/save-item-schedule
           cp work/game/audiogroup*.dat work/item-schedule-game/
           exe=$(find work/utmt -type f -name UndertaleModCli | head -1)
@@ -198,6 +203,7 @@ jobs:
           python tools/deadtown_boss2_schedule_vm_probe.py check work/item-schedule.log
           python tools/deadtown_light_cleanup_vm_probe.py check work/item-schedule.log
           python tools/deadtown_boss2_distance_vm_probe.py check work/item-schedule.log
+          python tools/deadtown_inventory_keys_vm_probe.py check work/item-schedule.log
       - name: Report isolated scheduling markers
         if: always()
         run: |
@@ -217,6 +223,8 @@ jobs:
               print('::notice::PARENT_BOSS_DISTANCE_DIAGNOSTIC: ' + ' | '.join(lines).replace('%', '%25')[:3000])
               lines = [line for line in p.read_text(errors='replace').splitlines() if 'BOSS_INHERIT_VM:' in line]
               print('::notice::BOSS_INHERIT_DIAGNOSTIC: ' + ' | '.join(lines).replace('%', '%25')[:3000])
+              lines = [line for line in p.read_text(errors='replace').splitlines() if 'INVENTORY_KEYS_VM:' in line]
+              print('::notice::INVENTORY_KEYS_DIAGNOSTIC: ' + ' | '.join(lines).replace('%', '%25')[:3000])
           else:
               print('::notice::ITEM_SCHEDULE_DIAGNOSTIC: no log')
           PY
