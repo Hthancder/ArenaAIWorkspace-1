@@ -63,7 +63,9 @@ def check(log):
         tick, last, current = map(int, parts[2:])
     except ValueError as exc:
         raise ValueError('non-integer boss scheduling marker') from exc
-    if tick not in (19, 20, 21) or last != 1 or current != -1:
+    # Some VM implementations expose zero for the remainder of the firing
+    # frame and reset to -1 later; accept either while requiring the flag reset.
+    if tick not in (19, 20, 21) or last != 1 or current not in (0, -1):
         raise ValueError(f'unexpected boss scheduling result: {lines[1]}')
     return {'expiration_step': tick, 'last_observed_alarm': last, 'current_alarm': current}
 

@@ -36,6 +36,7 @@ class BossScheduleTests(unittest.TestCase):
     def test_markers_and_rejections(self):
         text = 'BOSS2_SCHEDULE_VM:init:1:20\nBOSS2_SCHEDULE_VM:expired:20:1:-1\n'
         self.assertEqual(check(text)['expiration_step'], 20)
+        self.assertEqual(check(text.replace(':20:1:-1', ':20:1:0'))['current_alarm'], 0)
         for mutation in (text.replace(':20:1:-1', ':18:1:-1'),
                          text.replace('init:1:20', 'init:0:20'),
                          text.replace(':20:1:-1', ':20:2:-1'), text+'BOSS2_SCHEDULE_VM:init:1:20\n'):
