@@ -28,6 +28,9 @@ Nhà cung cấp: **OpenAI tương thích** (mặc định) hoặc **Google Gemin
   bước 0,05, ngữ cảnh 0–40 câu, số vòng công cụ 1–6: chọn mức gợi ý hoặc tự nhập số.
 - **Chẩn đoán nhanh** — một màn hình chỉ ra vì sao Siri chưa trả lời (thiếu khoá, endpoint sai,
   trần chờ ngắn hơn ngân sách…) kèm báo cáo chia sẻ được.
+- **Log không lộ khoá** — mọi dòng log được lọc trước khi ghi: khoá `sk-…`, `AIza…`,
+  `gsk_…`, `Bearer …`, `?api_key=…` đều thành `••••(đã ẩn)`. Log hay được sao chép dán vào
+  chat nhờ hỗ trợ, nên đây là bước bắt buộc, không phải tuỳ chọn.
 - **Xem & xoá điều AI ghi nhớ** — Cài đặt → *Ghi nhớ*: danh sách ghi chú công cụ `remember`
   lưu trên máy, tìm kiếm, chạm để xem/sao chép, vuốt để xoá, xoá tất cả. Không còn dữ liệu AI
   ghi mà bạn không thấy.
@@ -119,6 +122,7 @@ cd /tmp/sdks && git sparse-checkout set iPhoneOS15.6.sdk
 
 ./scripts/local-check.sh         # Logos → compile toàn bộ (aarch64-ios, -Werror) → validate plist
 ./scripts/test-net-policy.sh     # luật chặn địa chỉ nội bộ của web_fetch (C thuần, không cần SDK)
+./scripts/test-log-file.sh       # ghi đủ dòng khi write ngắn/EINTR + xoay vòng (C thuần)
 ./scripts/check-prefs.sh         # lint tầng Settings (plist, selector, cân bằng ngoặc)
 ./scripts/test-prefs-fallback.sh # mọi trang Settings phải có lưới an toàn chống trang trắng
 python3 scripts/check-choice-state.py # hàng chọn giá trị phải hiện ✓ / giá trị đang dùng
