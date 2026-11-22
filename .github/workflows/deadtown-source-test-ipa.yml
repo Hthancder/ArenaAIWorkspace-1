@@ -42,7 +42,8 @@ jobs:
           echo 'd182f00c0e5ced8d9252aa1f796374cfee077a3889a658e70b68685f9cd559c7  work/utmt.zip' | sha256sum -c
           unzip -q work/utmt.zip -d work/utmt
           phase='download prior runner IPA'
-          gh release download deadtown-ios15-re-test-3 -R "$GITHUB_REPOSITORY" -p 'DeadTown-iOS15-RE-test3.ipa' -O work/runner.ipa
+          gh release download deadtown-ios15-re-test-3 -R "$GITHUB_REPOSITORY" -p 'DeadTown-iOS15-RE-test3.ipa' -O work/runner.ipa 2>work/runner-download-error.log || { echo "::error::Runner download: $(head -c 900 work/runner-download-error.log)"; exit 1; }
+          phase='verify prior runner IPA'
           echo '7e0f10c8761fe1160baa855a4e825aa31974f02cb2b2205a27b0df9d5eefe781  work/runner.ipa' | sha256sum -c
       - name: Compile current editable source into experimental VM data
         env:
