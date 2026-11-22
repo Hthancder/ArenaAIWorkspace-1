@@ -30,6 +30,8 @@ static void SXRetireValues(NSArray *values) {
 
 @interface SXPrefs () {
 	NSDictionary *_fileFallback;
+	/// Có đáng tin đọc `_fileFallback` không (xem `-reload`).
+	BOOL _fallbackUsable;
 }
 @end
 
@@ -55,7 +57,11 @@ static void SXRetireValues(NSArray *values) {
 - (id)valueFor:(NSString *)key {
 	id v = CFBridgingRelease(CFPreferencesCopyAppValue((__bridge CFStringRef)key,
 													   (__bridge CFStringRef)kSXDomain));
-	if (!v) v = _fileFallback[key];
+	// Chỉ dùng bản đọc từ tệp khi cả miền CFPreferences không đọc được gì.
+	// Trước đây nó là "phương án hai cho MỌI key": một khoá đã bị xoá (Khôi
+	// phục mặc định, hoặc Cài đặt gỡ bỏ) vẫn sống lại nhờ bản sao cũ trong
+	// tệp — người dùng bấm "Khôi phục mặc định" mà cài đặt không đổi.
+	if (!v && _fallbackUsable) v = _fileFallback[key];
 	return v;
 }
 
@@ -121,6 +127,9 @@ static double SXClamp(double v, double lo, double hi) {
 		CFPreferencesSetAppValue((__bridge CFStringRef)key, NULL, (__bridge CFStringRef)kSXDomain);
 	}
 	CFPreferencesAppSynchronize((__bridge CFStringRef)kSXDomain);
+	// Bản sao trên đĩa phải biến mất cùng lúc, nếu không lần `-reload` sau sẽ đọc
+	// lại đúng những giá trị vừa xoá (xem `_fallbackUsable`).
+	[[NSFileManager defaultManager] removeItemAtPath:kSXFilePath error:NULL];
 	SXLogInf(@"pref", @"đã khôi phục toàn bộ cài đặt mặc định (%lu key)", (unsigned long)keys.count);
 }
 
@@ -167,11 +176,22 @@ static double SXClamp(double v, double lo, double hi) {
 					 _disabledTools ?: [NSNull null],
 					 _openaiHeaders ?: [NSNull null], _geminiHeaders ?: [NSNull null]]);
 
+	// CFPreferences là nguồn sự thật. Chỉ khi nó trả về rỗng hoàn toàn (một số
+	// bản rootless/roothide không đọc được miền của tweak) mới dùng bản sao trên
+	// đĩa, và khi đó mới coi bản sao ấy là đáng tin.
+	CFArrayRef rawKeys = CFPreferencesCopyKeyList((__bridge CFStringRef)kSXDomain,
+												  kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+	NSArray *domainKeys = rawKeys ? CFBridgingRelease(rawKeys) : nil;
 	NSDictionary *file = nil;
-	if ([[NSFileManager defaultManager] fileExistsAtPath:kSXFilePath]) {
+	if (domainKeys.count == 0 && [[NSFileManager defaultManager] fileExistsAtPath:kSXFilePath]) {
 		file = [NSDictionary dictionaryWithContentsOfFile:kSXFilePath];
 	}
 	_fileFallback = file;
+	_fallbackUsable = (file != nil);
+	if (file) {
+		SXLogWrn(@"pref", @"CFPreferences rỗng — đọc %lu key từ %@ (chế độ dự phòng)",
+				 (unsigned long)file.count, kSXFilePath);
+	}
 
 	_enabled = [self boolFor:@"enabled" default:YES];
 	_mode = [[self stringFor:@"mode" default:@"smart"] isEqualToString:@"full"]
