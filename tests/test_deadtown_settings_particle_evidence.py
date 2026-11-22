@@ -3,7 +3,7 @@ import shutil
 import tempfile
 import unittest
 
-from tools.deadtown_settings_particle_evidence import SETTINGS, PARTICLES, SHADOW_OBJECTS, ACTION_SHADOW_OBJECTS, inspect, verify_source
+from tools.deadtown_settings_particle_evidence import SETTINGS, PARTICLES, SHADOW_OBJECTS, ACTION_SHADOW_OBJECTS, arm_words, inspect, verify_source
 from tools.deadtown_settings_particle_vm_probe import EXPECTED, check, instrument, make_project
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,6 +18,17 @@ except ImportError:
 
 
 class SettingsParticleEvidenceTests(unittest.TestCase):
+    def test_word_scan_continues_after_undecodable_literal(self):
+        class FakeDisassembler:
+            def disasm(self, data, address):
+                return [] if data == b'xxxx' else [(address, data)]
+        data = b'aaaa' + b'xxxx' + b'bbbb'
+        def read(address, size):
+            return data[address:address+size]
+        self.assertEqual(list(arm_words(FakeDisassembler(), read, 0, 12)), [(0, b'aaaa'), (8, b'bbbb')])
+        with self.assertRaises(ValueError):
+            list(arm_words(FakeDisassembler(), read, 1, 12))
+
     def test_source_and_mutations(self):
         verify_source(PROJECT)
         with tempfile.TemporaryDirectory() as tmp:

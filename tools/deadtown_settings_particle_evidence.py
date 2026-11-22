@@ -144,6 +144,19 @@ def verify_source(project):
         raise ValueError('unexpected player feedback fragment')
 
 
+def arm_words(dis, read, start, end):
+    """Decode each aligned ARM word independently, even after inline literal data.
+
+    This conservative scan includes literal pools: a pool word may decode as an
+    instruction and cause a false positive. Export hashes pin the actual bytes;
+    this scan is not a complete control-flow or alias analysis.
+    """
+    if start % 4 or end % 4 or end < start:
+        raise ValueError('unaligned ARM scan')
+    for address in range(start, end, 4):
+        yield from dis.disasm(read(address, 4), address)
+
+
 def inspect(apk):
     from capstone import Cs, CS_ARCH_ARM, CS_MODE_ARM
     from capstone.arm import ARM_OP_MEM
@@ -258,7 +271,7 @@ def inspect(apk):
         check(get, 'mov', 'r1, #0x31')
         check(get+4, 'blx', 'r2')
         check(get+8, 'mov', f'{reg}, r0')
-        for instruction in dis.disasm(read(get+12, gate-(get+12)), get+12):
+        for instruction in arm_words(dis, read, get+12, gate):
             _, writes = instruction.regs_access()
             if reg in (instruction.reg_name(r) for r in writes):
                 raise ValueError('particle gate pointer overwritten: '+name)
@@ -294,7 +307,7 @@ def inspect(apk):
         for off, (op, args) in checks.items():
             check(start+off, op, args)
         # The retained global pointer must not be overwritten before the gate.
-        for instruction in dis.disasm(read(start+0x88, 0x7c4-0x88), start+0x88):
+        for instruction in arm_words(dis, read, start+0x88, start+0x7c4):
             if instruction.mnemonic.startswith(('str', 'stm')) and '[sp, #0x34]' in instruction.op_str:
                 raise ValueError('shadow global pointer overwritten: '+name)
     for name, (start, digest) in ACTION_SHADOW_OBJECTS.items():
@@ -317,9 +330,9 @@ def inspect(apk):
         }
         for off, (op, args) in checks.items():
             check(start+off, op, args)
-        for instruction in dis.disasm(read(start+0x88, 0x930-0x88), start+0x88):
+        for instruction in arm_words(dis, read, start+0x88, start+0x930):
             _, writes = instruction.regs_access()
-            if instruction.address > start+0x144 and 'd8' in (instruction.reg_name(r) for r in writes):
+            if instruction.address > start+0x144 and any(instruction.reg_name(r) in ('d8', 's16', 's17', 'q4') for r in writes):
                 raise ValueError('action threshold overwritten: '+name)
             if instruction.mnemonic.startswith(('str', 'stm')) and '[sp, #0x34]' in instruction.op_str:
                 raise ValueError('action shadow pointer overwritten: '+name)
@@ -342,7 +355,7 @@ def inspect(apk):
     }
     for off, (op, args) in checks.items():
         check(start+off, op, args)
-    for instruction in dis.disasm(read(start+0x88, 0x7d0-0x88), start+0x88):
+    for instruction in arm_words(dis, read, start+0x88, start+0x7d0):
         if instruction.mnemonic.startswith(('str', 'stm')) and '[sp, #0x40]' in instruction.op_str:
             raise ValueError('building shadow pointer overwritten')
     start = 0x5db2d8
@@ -377,16 +390,16 @@ def inspect(apk):
     }
     for off, (op, args) in checks.items():
         check(start+off, op, args)
-    for instruction in dis.disasm(read(start+0x84, 0x1c0-0x84), start+0x84):
+    for instruction in arm_words(dis, read, start+0x84, start+0x1c0):
         _, writes = instruction.regs_access()
         if 'r6' in (instruction.reg_name(r) for r in writes):
             raise ValueError('player feedback pointer register overwritten')
-    for instruction in dis.disasm(read(start+0x1c4, 0x3e8-0x1c4), start+0x1c4):
+    for instruction in arm_words(dis, read, start+0x1c4, start+0x3e8):
         if instruction.mnemonic.startswith(('str', 'stm')) and '[sp, #0x2c]' in instruction.op_str:
             raise ValueError('player feedback pointer stack slot overwritten')
-    for instruction in dis.disasm(read(start+0xa8, 0xef0-0xa8), start+0xa8):
+    for instruction in arm_words(dis, read, start+0xa8, start+0xef0):
         _, writes = instruction.regs_access()
-        if instruction.address > start+0x3fc and 'd8' in (instruction.reg_name(r) for r in writes):
+        if instruction.address > start+0x3fc and any(instruction.reg_name(r) in ('d8', 's16', 's17', 'q4') for r in writes):
             raise ValueError('player threshold overwritten')
         if instruction.mnemonic.startswith(('str', 'stm')) and '[sp, #0x30]' in instruction.op_str:
             raise ValueError('player shadow pointer overwritten')

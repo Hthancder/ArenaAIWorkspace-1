@@ -24,7 +24,9 @@ so với 0,5 và bỏ qua phần xử lý khi không lớn hơn ngưỡng. Sourc
 đã được bao bằng gate tương ứng, giữ nội dung cũ bên trong; điều này không
 chứng minh các lời gọi và tham số bên trong hoàn toàn khớp native. Bộ kiểm
 `tools/deadtown_settings_particle_evidence.py` ghim APK, hash export, chỉ dẫn
-slot/đọc/ghi, chuỗi INI, mặc định và nhánh gate.
+slot/đọc/ghi, chuỗi INI, mặc định và nhánh gate. Các phép quét ghi đè thanh
+ghi/stack giải mã từng word ARM riêng để không dừng sớm ở literal pool; pool có
+thể gây báo động giả, và phép quét không thay thế phân tích control-flow/alias.
 
 Probe VM riêng dùng INI và particle mock: đối chiếu mặc định, đọc/ghi qua mock,
 nhánh 0, 0,5 và 1 cùng thứ tự gọi trong bốn script. Mock không chứng minh tệp
