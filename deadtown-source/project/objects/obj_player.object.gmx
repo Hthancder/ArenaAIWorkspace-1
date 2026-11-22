@@ -1825,13 +1825,17 @@ if 6 &lt; sys_spawn_time_light.day_time and sys_spawn_time_light.day_time &lt; 1
 {
     xx = x + lengthdir_x(12,sys_spawn_time_light.day_time/24*360-180-45)
     yy = y + lengthdir_y(12,sys_spawn_time_light.day_time/24*360-180-45)
-    if (weapon_kind == 3) and (weapon_launched == 1)
+    // Partial native candidate: global slot 86 gates both player shadow branches.
+    if (global.__dt_setting_shadow > 0.5)
     {
-        draw_sprite_ext(player_sprite,player_costume,xx,yy,global.char_aspect,global.char_aspect,player_near_angle,c_black,0.5) // shadow
-    }
-    else
-    {
-        draw_sprite_ext(player_sprite,player_costume,xx,yy,global.char_aspect,global.char_aspect,player_gun_angle,c_black,0.5) // shadow
+        if (weapon_kind == 3) and (weapon_launched == 1)
+        {
+            draw_sprite_ext(player_sprite,player_costume,xx,yy,global.char_aspect,global.char_aspect,player_near_angle,c_black,0.5) // shadow
+        }
+        else
+        {
+            draw_sprite_ext(player_sprite,player_costume,xx,yy,global.char_aspect,global.char_aspect,player_gun_angle,c_black,0.5) // shadow
+        }
     }
 }
 

@@ -10,9 +10,9 @@ from pathlib import Path
 import shutil
 
 try:
-    from tools.deadtown_settings_particle_evidence import ROOF_SHADOW
+    from tools.deadtown_settings_particle_evidence import ROOF_SHADOW, PLAYER_SHADOW
 except ModuleNotFoundError:
-    from deadtown_settings_particle_evidence import ROOF_SHADOW
+    from deadtown_settings_particle_evidence import ROOF_SHADOW, PLAYER_SHADOW
 
 try:
     from tools.deadtown_settings_particle_evidence import PARTICLES, SETTINGS, SHADOW, SHADOW_OBJECTS, ACTION_SHADOW, ACTION_SHADOW_OBJECTS, shadow_source, verify_source
@@ -35,6 +35,10 @@ EXPECTED = [
     'SETTINGS_PARTICLE_VM:roof-off:0:2',
     'SETTINGS_PARTICLE_VM:roof-half:0:2',
     'SETTINGS_PARTICLE_VM:roof-on:1:2',
+    'SETTINGS_PARTICLE_VM:player-off:0',
+    'SETTINGS_PARTICLE_VM:player-half:0',
+    'SETTINGS_PARTICLE_VM:player-near:1',
+    'SETTINGS_PARTICLE_VM:player-gun:10',
 ]
 PART_BUILTINS = {'part_emitter_region': 1, 'part_type_direction': 2,
                  'part_emitter_burst': 3, 'part_type_size': 4, 'part_type_orientation': 5}
@@ -65,6 +69,12 @@ def instrument(events, project):
     if foreground.count('global.__dt_self_calls += 1;') != 2 or 'draw_' in foreground:
         raise ValueError('unexpected roof foreground fragment')
     roof_fragment += foreground
+    player = PLAYER_SHADOW
+    for angle, count in [('player_near_angle', 1), ('player_gun_angle', 10)]:
+        draw = f'draw_sprite_ext(player_sprite,player_costume,xx,yy,global.char_aspect,global.char_aspect,{angle},c_black,0.5)'
+        if player.count(draw) != 1:
+            raise ValueError('unexpected player shadow branch')
+        player = player.replace(draw, f'global.__dt_shadow_calls += {count};')
     found = [e for e in events if e.get('object') == 'sys_global' and
              e.get('attributes', {}).get('eventtype') == '0' and
              e.get('attributes', {}).get('enumb') == '0']
@@ -122,6 +132,19 @@ show_debug_message("SETTINGS_PARTICLE_VM:roof-half:" + string(global.__dt_shadow
 global.__dt_shadow_calls = 0; global.__dt_self_calls = 0; global.__dt_setting_shadow = 1;
 {roof_fragment}
 show_debug_message("SETTINGS_PARTICLE_VM:roof-on:" + string(global.__dt_shadow_calls) + ":" + string(global.__dt_self_calls));
+weapon_kind = 3; weapon_launched = 1;
+global.__dt_shadow_calls = 0; global.__dt_setting_shadow = 0;
+{player}
+show_debug_message("SETTINGS_PARTICLE_VM:player-off:" + string(global.__dt_shadow_calls));
+global.__dt_shadow_calls = 0; global.__dt_setting_shadow = 0.5;
+{player}
+show_debug_message("SETTINGS_PARTICLE_VM:player-half:" + string(global.__dt_shadow_calls));
+global.__dt_shadow_calls = 0; global.__dt_setting_shadow = 1;
+{player}
+show_debug_message("SETTINGS_PARTICLE_VM:player-near:" + string(global.__dt_shadow_calls));
+global.__dt_shadow_calls = 0; weapon_kind = 0;
+{player}
+show_debug_message("SETTINGS_PARTICLE_VM:player-gun:" + string(global.__dt_shadow_calls));
 global.__dt_ini_has = 0;
 '''
     found[0]['gml'] = prefix + found[0]['gml']

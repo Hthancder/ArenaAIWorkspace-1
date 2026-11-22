@@ -41,6 +41,18 @@ PARTICLES = {
     'particle_burst_up_out': (0x1cdf44, 2352, '01b6ec149bb41d801871a822a38599d03d96184c0e3aa2ade05297c1927aff11', 0x1cdfd4, 0x1ce060, 0x1ce4c0, 'r4'),
 }
 GATE = '// Partial candidate: native global slot 49 controls particle emission.\nif (global.__dt_setting_particle > 0.5)\n{\n'
+PLAYER_SHADOW = '''    // Partial native candidate: global slot 86 gates both player shadow branches.
+    if (global.__dt_setting_shadow > 0.5)
+    {
+        if (weapon_kind == 3) and (weapon_launched == 1)
+        {
+            draw_sprite_ext(player_sprite,player_costume,xx,yy,global.char_aspect,global.char_aspect,player_near_angle,c_black,0.5) // shadow
+        }
+        else
+        {
+            draw_sprite_ext(player_sprite,player_costume,xx,yy,global.char_aspect,global.char_aspect,player_gun_angle,c_black,0.5) // shadow
+        }
+    }'''
 ROOF_SHADOW = ('// Partial native candidate: global slot 86 gates this roof shadow.\n'
                'if (global.__dt_setting_shadow > 0.5)\n{\n'
                '    draw_sprite_ext(roof_sprite,0,xx,yy,image_xscale,image_yscale,image_angle,c_black,0.3*roof_alpha)\n'
@@ -109,6 +121,10 @@ def verify_source(project):
             remaining = text.split(ROOF_SHADOW)[1]
             if 'draw_sprite_ext(mask_index,0,x,y,image_xscale,image_yscale,image_angle,c_white,1)' not in remaining or 'draw_sprite_ext(roof_sprite,0,x,y,image_xscale,image_yscale,image_angle,roof_color,roof_alpha)' not in remaining:
                 raise ValueError('building foreground calls missing')
+    player = ET.parse(p/'objects'/'obj_player.object.gmx').getroot()
+    actions = player.findall('./events/event[@eventtype="8"][@enumb="0"]/action/arguments/argument/string')
+    if len(actions) != 3 or (actions[2].text or '').count(PLAYER_SHADOW) != 1 or 'draw_sprite_ext(spr_player_foot_right' not in (actions[2].text or '').split(PLAYER_SHADOW)[1]:
+        raise ValueError('unexpected player shadow fragment')
 
 
 def inspect(apk):
@@ -312,10 +328,35 @@ def inspect(apk):
     for instruction in dis.disasm(read(start+0x88, 0x7d0-0x88), start+0x88):
         if instruction.mnemonic.startswith(('str', 'stm')) and '[sp, #0x40]' in instruction.op_str:
             raise ValueError('building shadow pointer overwritten')
+    start = 0x5db2d8
+    target = [s for s in dyn.iter_symbols() if exported_name(s.name) == 'gml_Object_obj_player_Draw_0']
+    player_hash = 'd751b67200bf3e14b4c27ed06090d479f81d97824880af8acdd5633363177fbe'
+    if len(target) != 1 or (target[0]['st_value'], target[0]['st_size']) != (start, 11820) or hashlib.sha256(read(start, 11820)).hexdigest() != player_hash:
+        raise ValueError('unexpected player Draw bytes')
+    if sym(start+0x10, start+0x88, start+0x84).name != 'g_pGlobal':
+        raise ValueError('unexpected player global pointer')
+    checks = {
+        0x90: ('ldr', 'r0, [r0]'), 0x94: ('ldr', 'r1, [r0]'),
+        0x98: ('ldr', 'r2, [r1, #8]'), 0x9c: ('mov', 'r1, #0x56'),
+        0xa0: ('blx', 'r2'), 0xa4: ('str', 'r0, [sp, #0x30]'),
+        0x3fc: ('vmov.f64', 'd8, #5.000000e-01'), 0xef0: ('ldr', 'r0, [sp, #0x30]'),
+        0xef4: ('bl', '#0x176444'), 0xef8: ('vmov', 'd0, r0, r1'),
+        0xefc: ('vcmpe.f64', 'd0, d8'), 0xf00: ('vmrs', 'apsr_nzcv, fpscr'),
+        0xf04: ('ble', '#'+hex(start+0x12e0)), 0x1120: ('bl', '#0x176738'),
+        0x12dc: ('bl', '#0x176738'),
+    }
+    for off, (op, args) in checks.items():
+        check(start+off, op, args)
+    for instruction in dis.disasm(read(start+0xa8, 0xef0-0xa8), start+0xa8):
+        _, writes = instruction.regs_access()
+        if instruction.address > start+0x3fc and 'd8' in (instruction.reg_name(r) for r in writes):
+            raise ValueError('player threshold overwritten')
+        if instruction.mnemonic.startswith(('str', 'stm')) and '[sp, #0x30]' in instruction.op_str:
+            raise ValueError('player shadow pointer overwritten')
     return {'apk_sha256': APK_SHA256, 'native_library_sha256': LIB_SHA256,
             'settings': [{'section': x[0], 'key': x[1], 'alias': '__dt_setting_'+x[2], 'native_slot': x[3], 'default': 1} for x in SETTINGS],
             'particle_gates': {name: {'address': hex(v[0]), 'sha256': v[2], 'slot': 49} for name, v in PARTICLES.items()},
-            'shadow_gates': {name: {'address': hex(v[0]), 'sha256': v[1], 'slot': 86} for name, v in {**SHADOW_OBJECTS, **ACTION_SHADOW_OBJECTS, 'par_building': (0x3936e0, '9bb63888bd5e63c006e5238daabbd08185b25a8ee9e6f154f7313589b965dcb7')}.items()},
+            'shadow_gates': {name: {'address': hex(v[0]), 'sha256': v[1], 'slot': 86} for name, v in {**SHADOW_OBJECTS, **ACTION_SHADOW_OBJECTS, 'par_building': (0x3936e0, '9bb63888bd5e63c006e5238daabbd08185b25a8ee9e6f154f7313589b965dcb7'), 'obj_player': (start, player_hash)}.items()},
             'limitations': 'Static ARM32 and partial source only; original names, full particle functions, non-finite values, GameMaker compiler, actual display/settings UI, gameplay and iOS unverified.'}
 
 

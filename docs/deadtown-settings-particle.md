@@ -37,8 +37,9 @@ chỉ bao lệnh vẽ bóng, giữ tính vị trí và `draw_self` bên ngoài. 
 `par_action`, `par_action_move`, `par_action_door` cũng có gate slot 86 cho
 lệnh vẽ bóng, nhưng không có `draw_self` trong source cũ; không thêm lệnh đó.
 `par_building` có gate cùng slot cho bóng mái, hai lệnh vẽ mái và mask sau đó
-vẫn ngoài gate. Bằng chứng ARM ghim từng export và nhánh; probe chỉ lấy các
-fragment và thay lệnh vẽ bằng bộ đếm, không kiểm toàn event, renderer hoặc hình
-ảnh trên thiết bị.
+vẫn ngoài gate. `obj_player` cũng gate cả hai nhánh bóng nhân vật sau khi tính
+vị trí; các lệnh vẽ nhân vật phía sau vẫn ngoài gate. Bằng chứng ARM ghim từng
+export và nhánh; probe chỉ lấy các fragment và thay lệnh vẽ bằng bộ đếm, không
+kiểm toàn event, renderer hoặc hình ảnh trên thiết bị.
 
 Kết quả CI cần xem riêng; chưa tạo IPA.
