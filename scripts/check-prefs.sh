@@ -269,6 +269,20 @@ for path in NET_FILES:
     if "SXNetHostIsPrivate" not in text and "SXHostIsPrivate" not in text:
         fail(f"{path}: phải kiểm tra host bằng SXNetPolicy trước khi tải URL do model chọn")
 
+# ------------------------------------------- log: category phải nằm trong danh mục
+# §8 của DESIGN-SYSTEM: `boot · pref · hook · capture · llm · resp · stt · tts · err`
+# (cộng `tool`, `http`, `update` đã dùng thật và có trong màn Nhật ký). Một
+# category lạ không bị lọc đúng trong màn Nhật ký và làm log rối khi gỡ lỗi.
+KNOWN_LOG_CATEGORIES = {"boot", "pref", "hook", "capture", "llm", "resp",
+                        "stt", "tts", "err", "tool", "http", "update"}
+for path in sorted(glob.glob("Prefs/*.m") + glob.glob("Sources/*.m")):
+    for match in re.finditer(r'SXLog(?:Dbg|Inf|Wrn|Err)\(@"([^"]*)"', read(path)):
+        category = match.group(1)
+        if category not in KNOWN_LOG_CATEGORIES:
+            line = read(path)[:match.start()].count("\n") + 1
+            fail(f"{path}:{line}: log category “{category}” không có trong danh mục "
+                 f"cố định ({', '.join(sorted(KNOWN_LOG_CATEGORIES))})")
+
 # ---------------------------------------------------------------- report
 for message in WARNINGS:
     print(f"⚠️  {message}")

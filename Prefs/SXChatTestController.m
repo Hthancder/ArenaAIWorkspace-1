@@ -199,7 +199,7 @@ typedef NS_ENUM(NSInteger, SXChatRole) {
 	if (self.busy) {
 		self.generation++;
 		self.busy = NO;
-		SXLogDbg(@"chat-test", @"rời màn hình khi đang trả lời — bỏ lượt");
+		SXLogDbg(@"pref", @"trò chuyện thử: rời màn hình khi đang trả lời — bỏ lượt");
 	}
 }
 
@@ -383,7 +383,7 @@ typedef NS_ENUM(NSInteger, SXChatRole) {
 	[self.table reloadData];
 	[self sx_scrollToBottom];
 	[self sx_updateSendEnabled];
-	SXLogDbg(@"chat-test", @"người dùng huỷ lượt đang chạy");
+	SXLogDbg(@"pref", @"trò chuyện thử: người dùng huỷ lượt đang chạy");
 }
 
 - (void)sx_scrollToBottom {
