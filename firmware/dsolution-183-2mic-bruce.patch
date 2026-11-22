@@ -8676,7 +8676,7 @@ index 0345168b..7502c904 100644
  
 diff --git a/src/core/dsolution_ux.cpp b/src/core/dsolution_ux.cpp
 new file mode 100644
-index 00000000..75d0f414
+index 00000000..5053368a
 --- /dev/null
 +++ b/src/core/dsolution_ux.cpp
 @@ -0,0 +1,169 @@
@@ -8722,7 +8722,7 @@ index 00000000..75d0f414
 +// Claim I2S0 before enabling the codec. No auto port: the shared clock pins must
 +// not be rerouted while a microphone/sonar or another audio player owns them.
 +// This is deliberately called only by the main menu task; network handlers queue.
-+static bool tone(unsigned hz, unsigned duration) {
++static bool playUiTone(unsigned hz, unsigned duration) {
 +    if (!s_menuTask || xTaskGetCurrentTaskHandle() != s_menuTask || !bruceConfig.soundEnabled ||
 +        bruceConfig.soundVolume <= 0 || isSpeakerActive() || isBoardMicActive() || isAudioPlaying()) return false;
 +    i2s_chan_handle_t tx = nullptr;
@@ -8783,13 +8783,13 @@ index 00000000..75d0f414
 +        warned = true; lastWarning = now;
 +    }
 +    switch (e) {
-+        case UiSound::Select: tone(1050, 55); break;
-+        case UiSound::Back: tone(700, 65); break;
-+        case UiSound::Success: tone(1300, 110); break;
-+        case UiSound::Warning: tone(500, 180); break;
++        case UiSound::Select: playUiTone(1050, 55); break;
++        case UiSound::Back: playUiTone(700, 65); break;
++        case UiSound::Success: playUiTone(1300, 110); break;
++        case UiSound::Warning: playUiTone(500, 180); break;
 +    }
 +}
-+bool uxSpeakerTest() { return tone(1000, 350); }
++bool uxSpeakerTest() { return playUiTone(1000, 350); }
 +
 +// Debounce an estimated gauge: two low readings 30s apart; repeat at most
 +// once per ten minutes. Never interpret an unavailable zero reading as low.
@@ -8836,7 +8836,7 @@ index 00000000..75d0f414
 +    }
 +    portEXIT_CRITICAL(&s_mux);
 +    if (!play) return;
-+    bool played = tone(1100, 220);
++    bool played = playUiTone(1100, 220);
 +    // Respect the user's LED blink setting; never clobber their configured effect/color.
 +    blinkLed(70);
 +    portENTER_CRITICAL(&s_mux);
