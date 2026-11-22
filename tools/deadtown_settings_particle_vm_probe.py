@@ -50,6 +50,8 @@ EXPECTED = [
     'SETTINGS_PARTICLE_VM:crosshair-short:0:1:1:1',
     'SETTINGS_PARTICLE_VM:crosshair-boundary:0:1:1:1',
     'SETTINGS_PARTICLE_VM:crosshair-long:1:1:1:1',
+    'SETTINGS_PARTICLE_VM:crosshair-geometry-short:0:1:1',
+    'SETTINGS_PARTICLE_VM:crosshair-geometry-vertical:1:1:1',
     'SETTINGS_PARTICLE_VM:interpolate-off:0:1',
     'SETTINGS_PARTICLE_VM:interpolate-on:1:1',
     'SETTINGS_PARTICLE_VM:interpolate-raw:7:1',
@@ -189,7 +191,7 @@ show_debug_message("SETTINGS_PARTICLE_VM:feedback-idle:" + string(global.__dt_fe
 global.__dt_feedback_checks = 0; global.__dt_feedback_distance = 0.8;
 {feedback}
 show_debug_message("SETTINGS_PARTICLE_VM:feedback-active:" + string(global.__dt_feedback_checks) + ":" + string(global.__dt_feedback_draws));
-global.__dt_cross_distance = 50; global.__dt_cross_scale = 0.5;
+global.__dt_cross_distance = 50; global.__dt_cross_scale = 0.5; global.__dt_cross_angle = 45;
 global.__dt_cross_args = 0; global.__dt_cross_draw_ok = 0; global.__dt_cross_calls = 0;
 draw_line_crosshair(11, 22, 33, 44);
 show_debug_message("SETTINGS_PARTICLE_VM:crosshair-short:" + string(global.__dt_cross_frame) + ":" + string(global.__dt_cross_args) + ":" + string(global.__dt_cross_draw_ok) + ":" + string(global.__dt_cross_calls));
@@ -201,6 +203,12 @@ global.__dt_cross_distance = 150; global.__dt_cross_scale = 1.5;
 global.__dt_cross_args = 0; global.__dt_cross_draw_ok = 0; global.__dt_cross_calls = 0;
 draw_line_crosshair(11, 22, 33, 44);
 show_debug_message("SETTINGS_PARTICLE_VM:crosshair-long:" + string(global.__dt_cross_frame) + ":" + string(global.__dt_cross_args) + ":" + string(global.__dt_cross_draw_ok) + ":" + string(global.__dt_cross_calls));
+global.__dt_cross_draw_ok = 0; global.__dt_cross_calls = 0; global.__dt_cross_scale = 0.5; global.__dt_cross_angle = 0;
+__dt_cross_geometry(11, 22, 61, 22);
+show_debug_message("SETTINGS_PARTICLE_VM:crosshair-geometry-short:" + string(global.__dt_cross_frame) + ":" + string(global.__dt_cross_draw_ok) + ":" + string(global.__dt_cross_calls));
+global.__dt_cross_draw_ok = 0; global.__dt_cross_calls = 0; global.__dt_cross_scale = 1.5; global.__dt_cross_angle = 270;
+__dt_cross_geometry(11, 22, 11, 172);
+show_debug_message("SETTINGS_PARTICLE_VM:crosshair-geometry-vertical:" + string(global.__dt_cross_frame) + ":" + string(global.__dt_cross_draw_ok) + ":" + string(global.__dt_cross_calls));
 global.__dt_setting_interpolate = 0; global.__dt_interp_calls = 0;
 {interpolation}
 show_debug_message("SETTINGS_PARTICLE_VM:interpolate-off:" + string(global.__dt_interp_value) + ":" + string(global.__dt_interp_calls));
@@ -243,10 +251,15 @@ def make_project(project, dest):
                 text = text.replace(builtin+'(', '__dt_probe_'+builtin+'(')
             path.write_text(text, encoding='utf-8')
         crosshair = scripts/'draw_line_crosshair.gml'
-        text = crosshair.read_text(encoding='utf-8')
+        original_crosshair = crosshair.read_text(encoding='utf-8')
+        text = original_crosshair
         for builtin in ('point_direction', 'point_distance', 'draw_get_colour', 'draw_get_alpha', 'draw_sprite_ext'):
             text = text.replace(builtin+'(', '__dt_cross_'+builtin+'(')
         crosshair.write_text(text.replace('spr_crosshair', '181'), encoding='utf-8')
+        geometry = original_crosshair
+        for builtin in ('draw_get_colour', 'draw_get_alpha', 'draw_sprite_ext'):
+            geometry = geometry.replace(builtin+'(', '__dt_cross_'+builtin+'(')
+        (scripts/'__dt_cross_geometry.gml').write_text(geometry.replace('spr_crosshair', '181'), encoding='utf-8')
         for name in ('setting_load', 'setting_save'):
             path = scripts / (name+'.gml')
             text = path.read_text(encoding='utf-8')
@@ -258,7 +271,7 @@ def make_project(project, dest):
             'point_direction': 'if (argument0 == 11 && argument1 == 22 && argument2 == 33 && argument3 == 44) global.__dt_cross_args += 1; return 45;\n',
             'point_distance': 'if (argument0 != 11 || argument1 != 22 || argument2 != 33 || argument3 != 44) global.__dt_cross_args = 0; return global.__dt_cross_distance;\n',
             'draw_get_colour': 'return 123;\n', 'draw_get_alpha': 'return 0.75;\n',
-            'draw_sprite_ext': 'global.__dt_cross_calls += 1; global.__dt_cross_frame = argument1; if (argument0 == 181 && argument2 == 11 && argument3 == 22 && argument4 == global.__dt_cross_scale && argument5 == 1 && argument6 == 45 && argument7 == 123 && argument8 == 0.75) global.__dt_cross_draw_ok = 1;\n',
+            'draw_sprite_ext': 'global.__dt_cross_calls += 1; global.__dt_cross_frame = argument1; if (argument0 == 181 && argument2 == 11 && argument3 == 22 && argument4 == global.__dt_cross_scale && argument5 == 1 && argument6 == global.__dt_cross_angle && argument7 == 123 && argument8 == 0.75) global.__dt_cross_draw_ok = 1;\n',
         }
         for name, text in cross_mocks.items():
             (scripts/('__dt_cross_'+name+'.gml')).write_text(text, encoding='utf-8')

@@ -43,7 +43,7 @@ class CrosshairEvidenceTests(unittest.TestCase):
         event = {'object': 'sys_global', 'attributes': {'eventtype': '0', 'enumb': '0'}, 'gml': 'original();'}
         text = instrument([event], PROJECT)[0]['gml']
         self.assertIn('draw_line_crosshair(11, 22, 33, 44)', text)
-        self.assertEqual(check('\n'.join(EXPECTED)), 30)
+        self.assertEqual(check('\n'.join(EXPECTED)), 32)
         with self.assertRaises(ValueError):
             check('\n'.join(EXPECTED).replace('crosshair-long:1:', 'crosshair-long:0:'))
         with tempfile.TemporaryDirectory() as tmp:
@@ -51,6 +51,11 @@ class CrosshairEvidenceTests(unittest.TestCase):
             make_project(PROJECT, dest)
             script = (dest/'scripts/draw_line_crosshair.gml').read_text()
             self.assertIn('__dt_cross_draw_sprite_ext(181,', script)
+            geometry = (dest/'scripts/__dt_cross_geometry.gml').read_text()
+            self.assertIn('point_distance(argument0, argument1, argument2, argument3)', geometry)
+            self.assertIn('point_direction(argument0, argument1, argument2, argument3)', geometry)
+            self.assertNotIn('__dt_cross_point_distance', geometry)
+            self.assertIn('__dt_cross_draw_sprite_ext(181,', geometry)
             self.assertIn('spr_crosshair', (PROJECT/'scripts/draw_line_crosshair.gml').read_text())
 
     @unittest.skipUnless(HAS_DEPS, 'requires capstone and pyelftools')

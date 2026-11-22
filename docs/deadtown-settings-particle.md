@@ -85,7 +85,9 @@ lấy từ trạng thái vẽ. `tools/deadtown_crosshair_evidence.py` ghim hash 
 call relocation, hằng số, branch và tên/2 frame của sprite trong game data.
 Source dùng tên sprite và biến local mới; riêng GML/runner/platform có thể khác
 ở ngưỡng epsilon, số không hữu hạn, float và rendering. Chưa gắn script này vào
-Draw GUI cũ vì các lời gọi và ngữ cảnh native chưa khôi phục. Probe VM chỉ dùng
-mock cho phép tính và vẽ, không chứng minh renderer hoặc caller event.
+Draw GUI cũ vì các lời gọi và ngữ cảnh native chưa khôi phục. Probe VM dùng
+mock cho phép tính và vẽ, đồng thời có hai ca riêng gọi `point_distance` và
+`point_direction` thật trong runner desktop (ngang 50 và dọc 150 pixel); lệnh
+vẽ vẫn mock. Probe không chứng minh renderer hoặc caller event.
 
 Kết quả CI cần xem riêng; chưa tạo IPA.
