@@ -26,6 +26,10 @@ EXPECTED = [
     'SETTINGS_PARTICLE_VM:new:1111111',
     'SETTINGS_PARTICLE_VM:load:2345678',
     'SETTINGS_PARTICLE_VM:save:7:2345678',
+    'SETTINGS_PARTICLE_VM:sound-new:1:1',
+    'SETTINGS_PARTICLE_VM:sound-load:2:3',
+    'SETTINGS_PARTICLE_VM:sound-save:1:1',
+    'SETTINGS_PARTICLE_VM:audio-play:1:1:1',
     'SETTINGS_PARTICLE_VM:disabled:0',
     'SETTINGS_PARTICLE_VM:threshold:0',
     'SETTINGS_PARTICLE_VM:enabled:123:123:1243:1253',
@@ -114,14 +118,21 @@ def instrument(events, project):
     all_calls = 'particle_burst(1,2,3,4,5,6); particle_burst_up(1,2,3,4,5,6); particle_burst_up_size(1,2,3,4,5,6,7); particle_burst_up_out(1,2,3,4,5,6);'
     prefix = f'''global.__dt_ini_has = 0;
 global.__dt_ini_write_count = 0;
-global.__dt_ini_write_values = "";
+global.__dt_ini_write_values = ""; global.__dt_sound_new = 0; global.__dt_bgm_new = 0;
 setting_load();
+global.__dt_sound_new = (global.setting_sound_effect == 0.5); global.__dt_bgm_new = (global.setting_bgm == 0.5);
 show_debug_message("SETTINGS_PARTICLE_VM:new:" + {values});
 global.__dt_ini_has = 1;
 setting_load();
 show_debug_message("SETTINGS_PARTICLE_VM:load:" + {values});
 setting_save();
 show_debug_message("SETTINGS_PARTICLE_VM:save:" + string(global.__dt_ini_write_count) + ":" + global.__dt_ini_write_values);
+show_debug_message("SETTINGS_PARTICLE_VM:sound-new:" + string(global.__dt_sound_new) + ":" + string(global.__dt_bgm_new));
+show_debug_message("SETTINGS_PARTICLE_VM:sound-load:" + string(global.setting_sound_effect) + ":" + string(global.setting_bgm));
+show_debug_message("SETTINGS_PARTICLE_VM:sound-save:" + string(global.__dt_sound_write) + ":" + string(global.__dt_bgm_write));
+global.__dt_audio_gain_ok = 0; global.__dt_audio_play_ok = 0; global.__dt_audio_order = 0;
+emitter = 77; var sound_result = audio_play(123);
+show_debug_message("SETTINGS_PARTICLE_VM:audio-play:" + string(global.__dt_audio_gain_ok) + ":" + string(global.__dt_audio_play_ok) + ":" + string(sound_result == 456 && global.__dt_audio_order == 12));
 global.__dt_pt_order = 0; global.__dt_setting_particle = 0;
 {all_calls}
 show_debug_message("SETTINGS_PARTICLE_VM:disabled:" + string(global.__dt_pt_order));
@@ -266,7 +277,14 @@ def make_project(project, dest):
             for builtin in ('ini_open', 'ini_close', 'ini_read_real', 'ini_write_real', 'display_get_width', 'os_get_language', 'lang_type_set'):
                 text = text.replace(builtin+'(', '__dt_probe_'+builtin+'(')
             path.write_text(text, encoding='utf-8')
+        audio_play = scripts/'audio_play.gml'
+        audio_text = audio_play.read_text(encoding='utf-8')
+        for builtin in ('audio_emitter_gain', 'audio_play_sound_on'):
+            audio_text = audio_text.replace(builtin+'(', '__dt_probe_'+builtin+'(')
+        audio_play.write_text(audio_text, encoding='utf-8')
         mocks = {name: f'global.__dt_pt_order = global.__dt_pt_order * 10 + {number};\n' for name, number in PART_BUILTINS.items()}
+        mocks['audio_emitter_gain'] = 'global.__dt_audio_order = global.__dt_audio_order * 10 + 1; global.__dt_audio_gain_ok = (argument0 == 77 && argument1 == 2);\n'
+        mocks['audio_play_sound_on'] = 'global.__dt_audio_order = global.__dt_audio_order * 10 + 2; global.__dt_audio_play_ok = (argument0 == 77 && argument1 == 123 && argument2 == 0 && argument3 == 0); return 456;\n'
         cross_mocks = {
             'point_direction': 'if (argument0 == 11 && argument1 == 22 && argument2 == 33 && argument3 == 44) global.__dt_cross_args += 1; return 45;\n',
             'point_distance': 'if (argument0 != 11 || argument1 != 22 || argument2 != 33 || argument3 != 44) global.__dt_cross_args = 0; return global.__dt_cross_distance;\n',
@@ -279,8 +297,11 @@ def make_project(project, dest):
         mocks['texture_set_interpolation'] = 'global.__dt_interp_value = argument0; global.__dt_interp_calls += 1;\n'
         mocks.update({'ini_open': '', 'ini_close': '', 'display_get_width': 'return 1334;\n',
                       'os_get_language': 'return "en";\n', 'lang_type_set': ''})
-        read = 'if (argument0 == "setting" && argument1 == "check") return global.__dt_ini_has;\n'
-        write = ''
+        read = ('if (argument0 == "setting" && argument1 == "check") return global.__dt_ini_has;\n'
+                'if (argument0 == "sound" && argument1 == "effect") return 2;\n'
+                'if (argument0 == "sound" && argument1 == "bgm") return 3;\n')
+        write = ('if (argument0 == "sound" && argument1 == "effect") global.__dt_sound_write = (argument2 == 2);\n'
+                 'if (argument0 == "sound" && argument1 == "bgm") global.__dt_bgm_write = (argument2 == 3);\n')
         for i, (section, key, *_rest) in enumerate(SETTINGS, 2):
             cond = f'argument0 == "{section}" && argument1 == "{key}"'
             read += f'if ({cond}) return {i};\n'

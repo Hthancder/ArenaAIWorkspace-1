@@ -19,6 +19,23 @@ Alias là tên mới, không phải tên GML gốc đã được khôi phục. C
 script cũ khớp native. UI thiết lập tương ứng còn thiếu, nên không coi các
 setting đã có chức năng UI hoàn chỉnh.
 
+## Âm lượng và audio từ source cũ
+
+Đối chiếu bổ sung nhánh `setting_load`/`setting_save` với ARM ghim: global
+slot 66 dùng INI `sound/effect`, slot 75 dùng `sound/bgm`; cả hai có mặc định
+0,5 khi key thiếu và khi tạo cài đặt mới. Source cũ dùng tên tương ứng
+`global.setting_sound_effect` và `global.setting_bgm`; đây là đối chiếu theo
+key và cách sử dụng, không phải chứng minh tên gốc YYC.
+
+`audio_init` gán kết quả `audio_emitter_create` vào instance slot 216;
+`audio_play` dùng cùng slot và global slot 66 cho `audio_emitter_gain`, sau đó
+gọi `audio_play_sound_on`. Verifier ghim hash export, instruction và GOT, kiểm
+hai nhánh mặc định, key INI cùng các fragment source. Đây là xác nhận một
+phần source đã có, **không phải phục hồi script mới**; không gộp slot 66 với
+slot 84 (`effect/soundeffect`), vì chưa chứng minh semantics slot 84.
+Probe VM riêng thay INI và hai hàm audio bằng mock, kiểm giá trị, thứ tự gọi,
+đối số và giá trị trả về; không kiểm thiết bị audio, âm lượng thực tế hay iOS.
+
 Bốn export `particle_burst`, `_up`, `_up_size`, `_up_out` đọc global slot 49,
 so với 0,5 và bỏ qua phần xử lý khi không lớn hơn ngưỡng. Source cũ bốn script
 đã được bao bằng gate tương ứng, giữ nội dung cũ bên trong; điều này không

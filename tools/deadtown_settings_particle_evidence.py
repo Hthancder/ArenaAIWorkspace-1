@@ -111,6 +111,17 @@ def verify_source(project):
     load = (p / 'scripts/setting_load.gml').read_text(encoding='utf-8')
     save = (p / 'scripts/setting_save.gml').read_text(encoding='utf-8')
     marker = load.index('else // new')
+    for key, name in (('effect', 'setting_sound_effect'), ('bgm', 'setting_bgm')):
+        read = f'global.{name} = ini_read_real("sound","{key}",0.5)'
+        new = f'global.{name} = 0.5'
+        write = f'ini_write_real("sound","{key}",global.{name})'
+        if load.count(read) != 1 or load.count(new) != 1 or save.count(write) != 1 or not load.index(read) < marker < load.index(new):
+            raise ValueError('unexpected sound volume settings: '+name)
+    if (p / 'scripts/audio_init.gml').read_text(encoding='utf-8') != 'emitter = audio_emitter_create();\n':
+        raise ValueError('unexpected audio_init source')
+    audio = (p / 'scripts/audio_play.gml').read_text(encoding='utf-8')
+    if audio != 'audio_emitter_gain(emitter, global.setting_sound_effect);\nreturn audio_play_sound_on(emitter, argument0, 0, 0);\n':
+        raise ValueError('unexpected audio_play source')
     for section, key, alias, *_ in SETTINGS:
         read = f'global.__dt_setting_{alias} = ini_read_real("{section}","{key}",1)'
         new = f'global.__dt_setting_{alias} = 1'
@@ -222,6 +233,8 @@ def inspect(apk):
     fixed = {
         'setting_load': (0x2ec430, 7344, '6dd19e3c8f09a8db1413aa916bfceeedd1a463ca7b22640812929a6eccf48a36'),
         'setting_save': (0x2ee0e0, 2232, '5bf074aad1be0f4566ac777b183062604481ca23f797c6d5287d4e3bef00f7f5'),
+        'audio_play': (0x2e10fc, 740, '16bd8e68443ba9b302b2688d8d04a1a99bb6b6e0eb0e09ab4b586f39634e0e94'),
+        'audio_init': (0x2e0c28, 596, '8c7e4e8578ad2a363f688170f5694177e27561adac014a9ae49efb4e3b36fe51'),
     }
     fixed.update({name: row[:3] for name, row in PARTICLES.items()})
     for name, (start, size, digest) in fixed.items():
@@ -230,6 +243,45 @@ def inspect(apk):
             raise ValueError('unexpected export or bytes: '+name)
     if sym(0x2ec444, 0x2ec450, 0x2ec448).name != 'g_pGlobal' or sym(0x2ee0f4, 0x2ee0fc, 0x2ee0ec).name != 'g_pGlobal':
         raise ValueError('unexpected global pointer')
+    # Sound effect and BGM volumes are older source names, linked by INI keys.
+    # Both use real 0.5 in the existing/new paths; only effect feeds audio_play.
+    for a, op, args in (
+        (0x2ec490, 'mov', 'r1, #0x42'), (0x2ec494, 'blx', 'r2'), (0x2ec498, 'mov', 'r4, r0'),
+        (0x2ec4b4, 'mov', 'r1, #0x4b'), (0x2ec4b8, 'blx', 'r2'), (0x2ec4bc, 'mov', 'r8, r0'),
+        (0x2ec758, 'vmov.f64', 'd8, #5.000000e-01'), (0x2ec76c, 'vmov', 'sl, sb, d8'),
+        (0x2ec790, 'mov', 'r2, sl'), (0x2ec794, 'mov', 'r3, sb'), (0x2ec798, 'bl', '#0x176828'),
+        (0x2ec7fc, 'stm', 'r4, {r3, r7}'), (0x2ec804, 'mov', 'r2, sl'), (0x2ec808, 'mov', 'r3, sb'),
+        (0x2ec80c, 'bl', '#0x176828'), (0x2ec868, 'stm', 'r8, {r3, r7}'),
+        (0x2ed060, 'movw', 'r7, #0'), (0x2ed064, 'mov', 'r6, #0'),
+        (0x2ed068, 'movt', 'r7, #0x3fe0'), (0x2ed074, 'stm', 'r4, {r6, r7}'),
+        (0x2ed0a4, 'str', 'r7, [r8, #4]'), (0x2ed0b0, 'str', 'r6, [r8]'),
+        (0x2ee138, 'mov', 'r1, #0x42'), (0x2ee140, 'mov', 'sb, r0'),
+        (0x2ee15c, 'mov', 'r1, #0x4b'), (0x2ee164, 'mov', 'r8, r0'),
+        (0x2ee3dc, 'mov', 'r0, sb'), (0x2ee3e0, 'bl', '#0x176444'), (0x2ee404, 'bl', '#0x17681c'),
+        (0x2ee410, 'mov', 'r0, r8'), (0x2ee414, 'bl', '#0x176444'), (0x2ee438, 'bl', '#0x17681c'),
+        (0x2e0c7c, 'mov', 'r1, #0xd8'), (0x2e0c80, 'blx', 'r2'), (0x2e0c84, 'mov', 'r5, r0'),
+        (0x2e0cb0, 'mov', 'r3, #0'), (0x2e0cb4, 'bl', '#0x17654c'), (0x2e0cb8, 'mov', 'r6, r0'),
+        (0x2e1158, 'mov', 'r1, #0x42'), (0x2e115c, 'blx', 'r2'), (0x2e1160, 'mov', 'r5, r0'),
+        (0x2e1174, 'mov', 'r1, #0xd8'), (0x2e1178, 'blx', 'r2'), (0x2e117c, 'mov', 'r7, r0'),
+        (0x2e1190, 'str', 'r7, [sp, #0x28]'), (0x2e1198, 'str', 'r5, [sp, #0x2c]'),
+        (0x2e11b8, 'mov', 'r3, #2'), (0x2e11bc, 'bl', '#0x17654c'),
+        (0x2e1234, 'ldr', 'r0, [ip]'), (0x2e123c, 'str', 'r0, [sp, #0x1c]'),
+        (0x2e1250, 'mov', 'r3, #4'), (0x2e1260, 'bl', '#0x17654c')):
+        check(a, op, args)
+    for base, add, off, expected in (
+        (0x2ec770, 0x2ec778, 0x2ec774, 'sound'), (0x2ec770, 0x2ec778, 0x2ec77c, 'effect'),
+        (0x2ec7c8, 0x2ec7dc, 0x2ec7d8, 'sound'), (0x2ec7c8, 0x2ec7dc, 0x2ec7d0, 'bgm'),
+        (0x2ee3e8, 0x2ee3f4, 0x2ee3ec, 'sound'), (0x2ee3e8, 0x2ee3f4, 0x2ee3f0, 'effect'),
+        (0x2ee41c, 0x2ee428, 0x2ee420, 'sound'), (0x2ee41c, 0x2ee428, 0x2ee424, 'bgm')):
+        s = sym(base, add, off)
+        if not s.name.startswith('g_pString') or payload(s) != expected.encode() + b'\0':
+            raise ValueError('unexpected sound setting key')
+    for base, add, off, name in ((0x2e0c88, 0x2e0c90, 0x2e0c8c, 'g_FUNC_audio_emitter_create'),
+                                 (0x2e1108, 0x2e111c, 0x2e1110, 'g_pGlobal'),
+                                 (0x2e1180, 0x2e1188, 0x2e1184, 'g_FUNC_audio_emitter_gain'),
+                                 (0x2e11f8, 0x2e1204, 0x2e1200, 'g_FUNC_audio_play_sound_on')):
+        if sym(base, add, off).name != name:
+            raise ValueError('unexpected audio symbol')
     check(0x2ec98c, 'vmov.f64', 'd1, #1.000000e+00')
     check(0x2ec9b0, 'vmov', 'r6, r4, d1')
     check(0x2ed238, 'movw', 'r8, #0')
@@ -461,6 +513,9 @@ def inspect(apk):
         if instruction.mnemonic.startswith(('str', 'stm')) and '[sp, #0x18]' in instruction.op_str:
             raise ValueError('GUI crosshair pointer stack slot overwritten')
     return {'apk_sha256': APK_SHA256, 'native_library_sha256': LIB_SHA256,
+            'sound_volumes': [{'section': 'sound', 'key': 'effect', 'source_name': 'setting_sound_effect', 'native_slot': 66, 'default': 0.5},
+                              {'section': 'sound', 'key': 'bgm', 'source_name': 'setting_bgm', 'native_slot': 75, 'default': 0.5}],
+            'audio_play_partial': {'global_volume_slot': 66, 'instance_emitter_slot': 216, 'gain': 'audio_emitter_gain', 'play': 'audio_play_sound_on', 'init': 'audio_emitter_create'},
             'settings': [{'section': x[0], 'key': x[1], 'alias': '__dt_setting_'+x[2], 'native_slot': x[3], 'default': 1} for x in SETTINGS],
             'particle_gates': {name: {'address': hex(v[0]), 'sha256': v[2], 'slot': 49} for name, v in PARTICLES.items()},
             'feedback_gate': {'event': 'obj_player:Draw:0', 'address': hex(start), 'slot': 82, 'gamepad_check': 'gp_connect_check', 'sha256': player_hash},

@@ -36,7 +36,7 @@ class SettingsParticleEvidenceTests(unittest.TestCase):
             dest.mkdir()
             shutil.copy(PROJECT/'deadtown.project.gmx', dest)
             (dest/'scripts').mkdir()
-            for name in (*PARTICLES, 'setting_load', 'setting_save'):
+            for name in (*PARTICLES, 'setting_load', 'setting_save', 'audio_play', 'audio_init'):
                 shutil.copy(PROJECT/'scripts'/(name+'.gml'), dest/'scripts')
             (dest/'objects').mkdir()
             for name in (*SHADOW_OBJECTS, *ACTION_SHADOW_OBJECTS, 'par_building', 'obj_player', 'sys_global'):
@@ -47,6 +47,18 @@ class SettingsParticleEvidenceTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 verify_source(dest)
             p.write_text((PROJECT/'scripts/setting_load.gml').read_text())
+            p = dest/'scripts/audio_play.gml'
+            original = p.read_text()
+            p.write_text(original.replace('global.setting_sound_effect', 'global.setting_bgm'))
+            with self.assertRaisesRegex(ValueError, 'audio_play'):
+                verify_source(dest)
+            p.write_text(original)
+            p = dest/'scripts/setting_save.gml'
+            original = p.read_text()
+            p.write_text(original.replace('"sound","effect",global.setting_sound_effect', '"sound","effect",global.setting_bgm'))
+            with self.assertRaisesRegex(ValueError, 'sound volume'):
+                verify_source(dest)
+            p.write_text(original)
             p = dest/'objects/sys_global.object.gmx'
             original = p.read_text()
             p.write_text(original.replace('texture_set_interpolation(global.__dt_setting_interpolate)', 'texture_set_interpolation(1)'))
@@ -75,7 +87,7 @@ class SettingsParticleEvidenceTests(unittest.TestCase):
                 make_project(PROJECT, dest)
         event = {'object': 'sys_global', 'attributes': {'eventtype': '0', 'enumb': '0'}, 'gml': 'original();'}
         self.assertTrue(instrument([event], PROJECT)[0]['gml'].endswith('original();'))
-        self.assertEqual(check('\n'.join(EXPECTED)), 32)
+        self.assertEqual(check('\n'.join(EXPECTED)), 36)
         with self.assertRaises(ValueError):
             check('\n'.join(EXPECTED).replace('threshold:0', 'threshold:123'))
         with self.assertRaises(ValueError):
@@ -92,6 +104,9 @@ class SettingsParticleEvidenceTests(unittest.TestCase):
     @unittest.skipUnless(HAS_DEPS and APK.is_file(), 'requires pinned APK and analysis dependencies')
     def test_native(self):
         report = inspect(APK)
+        self.assertEqual([(x['key'], x['native_slot'], x['default']) for x in report['sound_volumes']],
+                         [('effect', 66, 0.5), ('bgm', 75, 0.5)])
+        self.assertEqual(report['audio_play_partial']['instance_emitter_slot'], 216)
         self.assertEqual(len(report['settings']), 7)
         self.assertEqual(report['settings'][-1]['native_slot'], 49)
         self.assertEqual(report['feedback_gate']['slot'], 82)
