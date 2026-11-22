@@ -215,6 +215,8 @@ jobs:
               print('::notice::BOSS2_DISTANCE_DIAGNOSTIC: ' + ' | '.join(lines).replace('%', '%25')[:3000])
               lines = [line for line in p.read_text(errors='replace').splitlines() if 'PARENT_BOSS_DISTANCE_VM:' in line]
               print('::notice::PARENT_BOSS_DISTANCE_DIAGNOSTIC: ' + ' | '.join(lines).replace('%', '%25')[:3000])
+              lines = [line for line in p.read_text(errors='replace').splitlines() if 'BOSS_INHERIT_VM:' in line]
+              print('::notice::BOSS_INHERIT_DIAGNOSTIC: ' + ' | '.join(lines).replace('%', '%25')[:3000])
           else:
               print('::notice::ITEM_SCHEDULE_DIAGNOSTIC: no log')
           PY

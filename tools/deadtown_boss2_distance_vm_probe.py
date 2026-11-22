@@ -17,12 +17,14 @@ except ModuleNotFoundError:
 
 MARKER = 'BOSS2_DISTANCE_VM:1:1:0'
 PARENT_MARKER = 'PARENT_BOSS_DISTANCE_VM:1:1:0:1:The boss fled'
+INHERIT_MARKER = 'BOSS_INHERIT_VM:0:1:1:The boss fled'
 
 
 def instrument(events, project):
     verify_source(project)
     for obj, types in (('obj_player', [('0','0'), ('1','0'), ('3','0'), ('3','1'), ('3','2')]),
-                       ('obj_boss2', [('0','0'), ('1','0'), ('3','0')])):
+                       ('obj_boss2', [('0','0'), ('1','0'), ('3','0')]),
+                       ('obj_boss1', [('0','0'), ('1','0'), ('3','0')])):
         for typ, sub in types:
             find(events, obj, typ, sub)['gml'] = '/// Isolated distance probe: disabled.\n'
     end = find(events, 'obj_boss2', '3', '2')
@@ -68,6 +70,18 @@ if (global.__dt_distance_tick == 2)
     with (global.__dt_distance_near) instance_destroy();
     with (global.__dt_distance_edge) instance_destroy();
     with (global.__dt_distance_far) instance_destroy();
+    global.__dt_parent_message_count = 0;
+    global.__dt_parent_message = "";
+    global.__dt_inherit_boss1 = instance_create(-8001, 0, obj_boss1);
+    global.__dt_inherit_boss2 = instance_create(-8001, 0, obj_boss2);
+    with (global.__dt_inherit_boss1) { persistent = true; x = 0; }
+    with (global.__dt_inherit_boss2) { persistent = true; x = 0; }
+}
+if (global.__dt_distance_tick == 4)
+{
+    show_debug_message("BOSS_INHERIT_VM:" + string(instance_exists(global.__dt_inherit_boss1)) + ":" + string(instance_exists(global.__dt_inherit_boss2)) + ":" + string(global.__dt_parent_message_count) + ":" + global.__dt_parent_message);
+    with (global.__dt_inherit_boss1) instance_destroy();
+    with (global.__dt_inherit_boss2) instance_destroy();
     with (global.__dt_distance_player) instance_destroy();
 }
 ''' + step['gml']
@@ -77,9 +91,10 @@ if (global.__dt_distance_tick == 2)
 def check(log):
     lines = [line.strip() for line in log.splitlines() if line.strip().startswith('BOSS2_DISTANCE_VM:')]
     parent_lines = [line.strip() for line in log.splitlines() if line.strip().startswith('PARENT_BOSS_DISTANCE_VM:')]
-    if lines != [MARKER] or parent_lines != [PARENT_MARKER]:
-        raise ValueError(f'unexpected boss distance markers: {lines!r}, {parent_lines!r}')
-    return len(lines) + len(parent_lines)
+    inherit_lines = [line.strip() for line in log.splitlines() if line.strip().startswith('BOSS_INHERIT_VM:')]
+    if lines != [MARKER] or parent_lines != [PARENT_MARKER] or inherit_lines != [INHERIT_MARKER]:
+        raise ValueError(f'unexpected boss distance markers: {lines!r}, {parent_lines!r}, {inherit_lines!r}')
+    return len(lines) + len(parent_lines) + len(inherit_lines)
 
 
 def main():

@@ -4,7 +4,7 @@ import tempfile
 import unittest
 
 from tools.deadtown_boss2_distance_evidence import CANDIDATE, PARENT_CANDIDATE, inspect, verify_source
-from tools.deadtown_boss2_distance_vm_probe import MARKER, PARENT_MARKER, check, instrument
+from tools.deadtown_boss2_distance_vm_probe import MARKER, PARENT_MARKER, INHERIT_MARKER, check, instrument
 
 ROOT = Path(__file__).resolve().parents[1]
 PROJECT = ROOT/'deadtown-source/project'
@@ -53,17 +53,21 @@ class BossDistanceTests(unittest.TestCase):
                   event('obj_boss2', '3', '2', '{\n'+CANDIDATE+'\n}'),
                   event('par_boss', '3', '2', '{\n'+PARENT_CANDIDATE+'\n}')]
         for obj, items in (('obj_player', [('0','0'), ('1','0'), ('3','0'), ('3','1'), ('3','2')]),
-                           ('obj_boss2', [('0','0'), ('1','0'), ('3','0')])):
+                           ('obj_boss2', [('0','0'), ('1','0'), ('3','0')]),
+                           ('obj_boss1', [('0','0'), ('1','0'), ('3','0')])):
             events.extend(event(obj, typ, sub) for typ, sub in items)
         instrument(events, PROJECT)
         self.assertIn('8001', events[0]['gml'])
         self.assertIn('global.__dt_parent_message_count += 1', events[3]['gml'])
         self.assertLess(events[3]['gml'].index('instance_destroy()'), events[3]['gml'].index('global.__dt_parent_message_count'))
-        self.assertEqual(check(MARKER+'\n'+PARENT_MARKER), 2)
+        markers = MARKER+'\n'+PARENT_MARKER+'\n'+INHERIT_MARKER
+        self.assertEqual(check(markers), 3)
         with self.assertRaises(ValueError):
-            check(MARKER.replace('1:1:0', '1:1:1')+'\n'+PARENT_MARKER)
+            check(markers.replace(MARKER, MARKER.replace('1:1:0', '1:1:1')))
         with self.assertRaises(ValueError):
-            check(MARKER+'\n'+PARENT_MARKER.replace(':0:1:', ':0:0:'))
+            check(markers.replace(PARENT_MARKER, PARENT_MARKER.replace(':0:1:', ':0:0:')))
+        with self.assertRaises(ValueError):
+            check(markers.replace(INHERIT_MARKER, INHERIT_MARKER.replace(':0:1:1:', ':0:0:1:')))
         with self.assertRaises(ValueError):
             instrument(events[1:], PROJECT)
 
