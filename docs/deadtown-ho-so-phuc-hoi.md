@@ -840,6 +840,19 @@ test cũng sửa alpha/metadata để xác nhận công cụ báo sai. Metadata 
 metadata **không** đồng nghĩa khôi phục hoàn toàn hình ảnh, mask, animation,
 resource ID, renderer hoặc iOS.
 
+### Ứng viên va chạm khi vật phẩm rơi di chuyển
+
+`obj_item:Step:0` native kiểm tra tốc độ, tính độ dịch và ma sát rồi thử hình
+chữ nhật cách tâm dự kiến 20 đơn vị với object `par_action` (precise và notme
+đều 1); chỉ dịch vị trí nếu kiểm tra không thấy vật cản. Đã thêm phần kiểm tra
+`par_action` vào mã cũ, giúp vật phẩm rơi không đi xuyên nhóm vật thể này trong
+trường hợp tương ứng. Đây là **phục hồi một phần**: native còn một phép kiểm
+va chạm trước đó mà mục tiêu chưa xác định, nên chưa mô phỏng; tên biến suy
+luận từ source cũ, gần ngưỡng epsilon có thể khác. Verifier
+`tools/deadtown_item_motion_evidence.py` ghim export và phần lệnh đối chiếu.
+Probe VM dùng kết quả va chạm giả, không kiểm engine va chạm hoặc gameplay/iOS.
+Event đã tồn tại trước đây nên số event key thiếu không đổi.
+
 ### Ứng viên điều khiển túi đồ và tạm dừng
 
 Đã thêm hai event `sys_UI` KeyPress Space và Escape: Space yêu cầu mở/đóng

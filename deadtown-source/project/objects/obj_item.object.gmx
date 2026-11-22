@@ -88,16 +88,24 @@ if __dt_item_timed
         <arguments>
           <argument>
             <kind>1</kind>
-            <string>xx = lengthdir_x(sp,dir)
-yy = lengthdir_y(sp,dir)
+            <string>/// Partial Android ARM candidate: prevent dropped items entering action objects.
+if sp &gt; 0
+{
+    xx = lengthdir_x(sp,dir)
+    yy = lengthdir_y(sp,dir)
 
-if fric &lt; sp
-{sp -= fric}
-else
-{sp = 0}
+    if fric &lt; sp
+    {sp -= fric}
+    else
+    {sp = 0}
 
-x += xx
-y += yy
+    // Native performs another collision check first; its target is unresolved.
+    if collision_rectangle(x+xx-20,y+yy-20,x+xx+20,y+yy+20,par_action,1,1) == noone
+    {
+        x += xx
+        y += yy
+    }
+}
 </string>
           </argument>
         </arguments>

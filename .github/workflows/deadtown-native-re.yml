@@ -60,6 +60,9 @@ on:
       - deadtown-source/project/scripts/gp_button_check_pressed.gml
       - deadtown-source/project/scripts/gp_button_check_released.gml
       - deadtown-source/project/scripts/gp_axis_value.gml
+      - tools/deadtown_item_motion_evidence.py
+      - tools/deadtown_item_motion_vm_probe.py
+      - tests/test_deadtown_item_motion_evidence.py
       - tools/deadtown_item_lifetime_evidence.py
       - tools/deadtown_item_lifetime_vm_probe.py
       - tools/deadtown_zombie_item_vm_probe.py
@@ -182,6 +185,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_deadtown_random_string_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_deactivate_auto_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_item_lifetime_evidence.py' -v
+          python -m unittest discover -s tests -p 'test_deadtown_item_motion_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_gamepad_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_gamepad_connect_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_settings_particle_evidence.py' -v
@@ -224,6 +228,7 @@ jobs:
           python tools/deadtown_random_string_evidence.py .cache/deadtown-original.apk deadtown-source/project --output work/reports/random-string-evidence.json
           python tools/deadtown_deactivate_auto_evidence.py .cache/deadtown-original.apk --output work/reports/deactivate-auto-evidence.json
           python tools/deadtown_item_lifetime_evidence.py .cache/deadtown-original.apk deadtown-source/project --output work/reports/item-lifetime-evidence.json
+          python tools/deadtown_item_motion_evidence.py .cache/deadtown-original.apk deadtown-source/project --output work/reports/item-motion-evidence.json
           python tools/deadtown_gamepad_evidence.py .cache/deadtown-original.apk deadtown-source/project --output work/reports/gamepad-evidence.json
           python tools/deadtown_gamepad_connect_evidence.py .cache/deadtown-original.apk deadtown-source/project --output work/reports/gamepad-connect-evidence.json
           python tools/deadtown_settings_particle_evidence.py .cache/deadtown-original.apk deadtown-source/project --output work/reports/settings-particle-evidence.json
