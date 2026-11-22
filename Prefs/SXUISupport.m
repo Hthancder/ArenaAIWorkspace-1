@@ -1,5 +1,6 @@
 #import "SXUISupport.h"
 #import "SXLog.h"
+#import "SXLogFile.h"
 #import "UIViewController+SXBack.h"
 
 @implementation SXUI
@@ -250,6 +251,42 @@ static BOOL SXTableHasRows(UITableView *table) {
 /// hiện, rồi tới các nhãn có chữ. Màn hình chỉ có nền và thanh điều hướng bị
 /// coi là trống. `ignoreTag` bỏ qua chính khối dự phòng (nếu không thì lần kiểm
 /// tra sau sẽ thấy nhãn của nó và tưởng trang đã có nội dung).
+/// Nút "Sao chép log" của khối dự phòng đang chạy việc nặng.
+///
+/// Trước đây nó đọc **toàn bộ** tệp log (tới 512 KB, hoặc 1 MB sau khi thêm
+/// xoay vòng giữa phiên) bằng `stringWithContentsOfFile:` ngay trong action —
+/// tức là trên luồng chính của Preferences, đúng lúc người dùng đang cần thoát
+/// khỏi một màn hình hỏng. Nay đọc phần đuôi trên luồng nền (cùng hàm với màn
+/// Nhật ký), giới hạn 160 KB, rồi mới sao chép trên luồng chính.
+static void SXCopyLogTailAsync(UILabel *detailLabel) {
+	__weak UILabel *weakDetail = detailLabel;
+	dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+		char *buffer = malloc(160 * 1024 + 1);
+		NSString *text = nil;
+		if (buffer) {
+			off_t size = 0;
+			int truncated = 0;
+			ssize_t got = SXLogFileReadTail(SXLogFilePath().fileSystemRepresentation,
+											buffer, 160 * 1024, &size, &truncated);
+			if (got > 0) {
+				text = [[NSString alloc] initWithBytes:buffer length:(NSUInteger)got encoding:NSUTF8StringEncoding];
+				if (!text) text = [[NSString alloc] initWithBytes:buffer length:(NSUInteger)got
+													  encoding:NSISOLatin1StringEncoding];
+				if (text.length && truncated) text = [@"(đã cắt phần đầu)\n" stringByAppendingString:text];
+			}
+			free(buffer);
+		}
+		dispatch_async(dispatch_get_main_queue(), ^{
+			UILabel *label = weakDetail;
+			if (!text.length) {
+				if (label) label.text = [NSString stringWithFormat:@"Không đọc được %@", SXLogFilePath()];
+				return;
+			}
+			if (![SXUI copyText:text] && label) label.text = @"Không có nội dung log để sao chép.";
+		});
+	});
+}
+
 static BOOL SXHasVisibleContentIgnoringTag(UIView *view, NSInteger ignoreTag) {
 	if (!view) return NO;
 	// `PSListController` dùng chính `view` làm bảng ⇒ phải xét cả gốc, không chỉ
@@ -345,12 +382,7 @@ BOOL SXShowContentFallbackIfNeeded(UIViewController *controller, NSString *title
 	logButton.titleLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleSubheadline];
 	[logButton addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
 		(void)action;
-		NSString *log = [NSString stringWithContentsOfFile:SXLogFilePath()
-												 encoding:NSUTF8StringEncoding error:NULL];
-		if (![SXUI copyText:log.length ? log : [NSString stringWithFormat:
-																@"Không đọc được %@", SXLogFilePath()]]) {
-			detailLabel.text = @"Không có nội dung log để sao chép.";
-		}
+		SXCopyLogTailAsync(detailLabel);
 	}] forControlEvents:UIControlEventTouchUpInside];
 
 	UIButton *backButton = [UIButton buttonWithType:UIButtonTypeSystem];
