@@ -43,7 +43,7 @@ class CrosshairEvidenceTests(unittest.TestCase):
         event = {'object': 'sys_global', 'attributes': {'eventtype': '0', 'enumb': '0'}, 'gml': 'original();'}
         text = instrument([event], PROJECT)[0]['gml']
         self.assertIn('draw_line_crosshair(11, 22, 33, 44)', text)
-        self.assertEqual(check('\n'.join(EXPECTED)), 36)
+        self.assertEqual(check('\n'.join(EXPECTED)), 37)
         with self.assertRaises(ValueError):
             check('\n'.join(EXPECTED).replace('crosshair-long:1:', 'crosshair-long:0:'))
         with tempfile.TemporaryDirectory() as tmp:

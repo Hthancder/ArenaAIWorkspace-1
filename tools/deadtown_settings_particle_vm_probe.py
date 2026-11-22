@@ -29,6 +29,7 @@ EXPECTED = [
     'SETTINGS_PARTICLE_VM:sound-new:1:1',
     'SETTINGS_PARTICLE_VM:sound-load:2:3',
     'SETTINGS_PARTICLE_VM:sound-save:1:1',
+    'SETTINGS_PARTICLE_VM:audio-init:1:1',
     'SETTINGS_PARTICLE_VM:audio-play:1:1:1',
     'SETTINGS_PARTICLE_VM:disabled:0',
     'SETTINGS_PARTICLE_VM:threshold:0',
@@ -130,8 +131,10 @@ show_debug_message("SETTINGS_PARTICLE_VM:save:" + string(global.__dt_ini_write_c
 show_debug_message("SETTINGS_PARTICLE_VM:sound-new:" + string(global.__dt_sound_new) + ":" + string(global.__dt_bgm_new));
 show_debug_message("SETTINGS_PARTICLE_VM:sound-load:" + string(global.setting_sound_effect) + ":" + string(global.setting_bgm));
 show_debug_message("SETTINGS_PARTICLE_VM:sound-save:" + string(global.__dt_sound_write) + ":" + string(global.__dt_bgm_write));
+global.__dt_audio_init_calls = 0; audio_init();
+show_debug_message("SETTINGS_PARTICLE_VM:audio-init:" + string(emitter == 77) + ":" + string(global.__dt_audio_init_calls));
 global.__dt_audio_gain_ok = 0; global.__dt_audio_play_ok = 0; global.__dt_audio_order = 0;
-emitter = 77; var sound_result = audio_play(123);
+var sound_result = audio_play(123);
 show_debug_message("SETTINGS_PARTICLE_VM:audio-play:" + string(global.__dt_audio_gain_ok) + ":" + string(global.__dt_audio_play_ok) + ":" + string(sound_result == 456 && global.__dt_audio_order == 12));
 global.__dt_pt_order = 0; global.__dt_setting_particle = 0;
 {all_calls}
@@ -277,12 +280,15 @@ def make_project(project, dest):
             for builtin in ('ini_open', 'ini_close', 'ini_read_real', 'ini_write_real', 'display_get_width', 'os_get_language', 'lang_type_set'):
                 text = text.replace(builtin+'(', '__dt_probe_'+builtin+'(')
             path.write_text(text, encoding='utf-8')
+        audio_init = scripts/'audio_init.gml'
+        audio_init.write_text(audio_init.read_text(encoding='utf-8').replace('audio_emitter_create(', '__dt_probe_audio_emitter_create('), encoding='utf-8')
         audio_play = scripts/'audio_play.gml'
         audio_text = audio_play.read_text(encoding='utf-8')
         for builtin in ('audio_emitter_gain', 'audio_play_sound_on'):
             audio_text = audio_text.replace(builtin+'(', '__dt_probe_'+builtin+'(')
         audio_play.write_text(audio_text, encoding='utf-8')
         mocks = {name: f'global.__dt_pt_order = global.__dt_pt_order * 10 + {number};\n' for name, number in PART_BUILTINS.items()}
+        mocks['audio_emitter_create'] = 'global.__dt_audio_init_calls += 1; return 77;\n'
         mocks['audio_emitter_gain'] = 'global.__dt_audio_order = global.__dt_audio_order * 10 + 1; global.__dt_audio_gain_ok = (argument0 == 77 && argument1 == 2);\n'
         mocks['audio_play_sound_on'] = 'global.__dt_audio_order = global.__dt_audio_order * 10 + 2; global.__dt_audio_play_ok = (argument0 == 77 && argument1 == 123 && argument2 == 0 && argument3 == 0); return 456;\n'
         cross_mocks = {
