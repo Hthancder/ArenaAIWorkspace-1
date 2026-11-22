@@ -25,16 +25,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          phase='initialize'
+          trap 'echo "::error::Retrieval failed during: $phase"' ERR
           mkdir -p work/utmt work/game output
+          phase='fetch APK'
           git fetch --no-tags origin 8643abdda26944002384bc216bf555717a9e1e42
           git show '8643abdda26944002384bc216bf555717a9e1e42:Dead+Town+-+Zombie+survival_1.4.2_APKPure.apk' > work/original.apk
           echo 'bc8fa1990cb2cdde8d184f2a942fe4010820f0592d88a36e1cbee0a6aac081fb  work/original.apk' | sha256sum -c
+          phase='extract and verify game data'
           unzip -p work/original.apk assets/game.droid > work/game.droid
           echo '0900da067462bd48040da6e217a86e2d5411397b05f07d55d13c58440b82a7b8  work/game.droid' | sha256sum -c
+          phase='extract audio groups'
           for n in 1 2; do unzip -p work/original.apk "assets/audiogroup$n.dat" > "work/game/audiogroup$n.dat"; test -s "work/game/audiogroup$n.dat"; done
+          phase='download UTMT'
           gh release download 0.9.2.0 -R UnderminersTeam/UndertaleModTool -p 'UTMT_CLI_v0.9.2.0-Ubuntu.zip' -O work/utmt.zip
           echo 'd182f00c0e5ced8d9252aa1f796374cfee077a3889a658e70b68685f9cd559c7  work/utmt.zip' | sha256sum -c
           unzip -q work/utmt.zip -d work/utmt
+          phase='download prior runner IPA'
           gh release download deadtown-ios15-re-test-3 -R "$GITHUB_REPOSITORY" -p 'DeadTown-iOS15-RE-test3.ipa' -O work/runner.ipa
           echo '7e0f10c8761fe1160baa855a4e825aa31974f02cb2b2205a27b0df9d5eefe781  work/runner.ipa' | sha256sum -c
       - name: Compile current editable source into experimental VM data
