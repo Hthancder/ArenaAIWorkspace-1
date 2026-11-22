@@ -861,10 +861,15 @@ Probe scheduler desktop riêng chạy Alarm 0, với Create rút còn fragment,
 bắt đầu `1:20`, cờ về 0 ở bước 20, giá trị alarm vừa quan sát trước đó là 1;
 trong frame kích hoạt, runner báo alarm 0. CI trước `45020208679` fail vì
 checker giả định alarm lúc đó phải là -1; checker đã sửa để chấp nhận 0 hoặc
--1, không sửa gameplay. Source cũ còn nhiều chi tiết khác
-chưa khớp; ví dụ Create native đặt `move_speed` ban đầu 8 trong khi source cũ
-đặt 7 và chưa đối chiếu đầy đủ các nhánh sau, nên không tự sửa giá trị này.
-Không suy ra boss, RNG, gameplay hay iOS đã hoạt động đúng. Audit mới thiếu 56
+-1, không sửa gameplay. Đối chiếu tiếp Create cho thấy slot 180 khởi tạo 8;
+Step cộng slot này vào slot được khởi tạo 0 và so với slot độ dài 35, phù hợp
+với `move_position += move_speed` trong source cũ. Sau lựa chọn đảo hướng,
+native gọi chọn riêng từ bảng `[1,0,0,0,0]`; nếu > 0,5 thì đặt slot 180 bằng 9.
+Source ứng viên vì vậy cập nhật `move_speed` 7 thành 8 và thêm nhánh 9, đặt sau
+nhánh đảo hướng. Bộ kiểm ARM ghim instruction, call và relocation của cả hai
+bảng; probe VM ép kết quả lựa chọn, không kiểm phân bố RNG thật. Ánh xạ tên
+biến vẫn là suy luận có bằng chứng, và phần còn lại Create/Step chưa được
+chứng minh tương đương. Không suy ra boss, RNG, gameplay hay iOS đã hoạt động đúng. Audit mới thiếu 56
 script, 90 object, 365 event key, 4 sprite và 8 room theo tên/key; 0 file tham
 chiếu thiếu. Trùng key không chứng minh toàn event tương đương.
 

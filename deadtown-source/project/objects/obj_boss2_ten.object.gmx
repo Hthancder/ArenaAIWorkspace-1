@@ -25,7 +25,8 @@
         <arguments>
           <argument>
             <kind>1</kind>
-            <string>move_speed = 7
+            <string>// Partial native candidate: slot 180 is the tentacle move speed.
+move_speed = 8
 body_number = 50
 body_length = 35
 body_angle_max = 18
@@ -53,6 +54,12 @@ if (choose(1,0,0) &gt; 0.5)
 {
     __dt_reverse_turn = 1
     alarm[0] = 20
+}
+
+// Partial native candidate: independent rare faster tentacle.
+if (choose(1,0,0,0,0) &gt; 0.5)
+{
+    move_speed = 9
 }
 </string>
           </argument>

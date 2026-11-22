@@ -26,6 +26,8 @@ class BossTurnTests(unittest.TestCase):
             shutil.copy(PROJECT/'objects/obj_boss2_ten.object.gmx', p)
             original = p.read_text()
             for old, new in (('choose(1,0,0)', 'choose(1,0)'), ('alarm[0] = 20', 'alarm[0] = 21'),
+                             ('move_speed = 8', 'move_speed = 7'), ('move_speed = 9', 'move_speed = 8'),
+                             ('choose(1,0,0,0,0)', 'choose(1,0,0)'),
                              ('go_dir *= -1', 'go_dir *= 1'), ('eventtype="2" enumb="0"', 'eventtype="2" enumb="1"'),
                              ('slot 1201; original name unknown.\n__dt_reverse_turn = 0', 'slot 1201; original name unknown.\n__dt_reverse_turn = 1')):
                 self.assertIn(old, original)
@@ -48,6 +50,8 @@ class BossTurnTests(unittest.TestCase):
         self.assertEqual(report['turn_slot'], 1088)
         self.assertEqual(report['choose_values'], [1, 0, 0])
         self.assertEqual((report['alarm'], report['alarm_steps']), (0, 20))
+        self.assertEqual((report['speed_slot'], report['speed_initial'], report['speed_if_chosen']), (180, 8, 9))
+        self.assertEqual(report['speed_choose_values'], [1, 0, 0, 0, 0])
 
 
 if __name__ == '__main__':

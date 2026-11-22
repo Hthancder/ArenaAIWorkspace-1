@@ -13,11 +13,11 @@ import xml.etree.ElementTree as ET
 try:
     from tools.deadtown_settings_particle_evidence import ROOF_SHADOW, PLAYER_SHADOW, PLAYER_FEEDBACK, INTERPOLATION_EVENT
     from tools.deadtown_crosshair_evidence import verify_source as verify_crosshair_source
-    from tools.deadtown_boss2_turn_evidence import fragments as boss_fragments
+    from tools.deadtown_boss2_turn_evidence import fragments as boss_fragments, SPEED_INITIAL, SPEED_CHOICE
 except ModuleNotFoundError:
     from deadtown_settings_particle_evidence import ROOF_SHADOW, PLAYER_SHADOW, PLAYER_FEEDBACK, INTERPOLATION_EVENT
     from deadtown_crosshair_evidence import verify_source as verify_crosshair_source
-    from deadtown_boss2_turn_evidence import fragments as boss_fragments
+    from deadtown_boss2_turn_evidence import fragments as boss_fragments, SPEED_INITIAL, SPEED_CHOICE
 
 try:
     from tools.deadtown_settings_particle_evidence import PARTICLES, SETTINGS, SHADOW, SHADOW_OBJECTS, ACTION_SHADOW, ACTION_SHADOW_OBJECTS, shadow_source, verify_source
@@ -37,6 +37,7 @@ EXPECTED = [
     'SETTINGS_PARTICLE_VM:boss-reverse:1:20:1',
     'SETTINGS_PARTICLE_VM:boss-turn:30:-30:30',
     'SETTINGS_PARTICLE_VM:boss-alarm:0:30',
+    'SETTINGS_PARTICLE_VM:boss-speed:8:9:2',
     'SETTINGS_PARTICLE_VM:disabled:0',
     'SETTINGS_PARTICLE_VM:threshold:0',
     'SETTINGS_PARTICLE_VM:enabled:123:123:1243:1253',
@@ -75,6 +76,7 @@ def instrument(events, project):
     verify_crosshair_source(project)
     boss_init, boss_turn, boss_alarm = boss_fragments(project)
     boss_init = boss_init.replace('choose(', '__dt_probe_boss_choose(')
+    boss_speed = SPEED_CHOICE.replace('choose(', '__dt_probe_boss_speed_choose(')
     # Exercise only the exact gate+draw fragment, replacing actual draw calls
     # with counters. The surrounding original Draw events are not executed.
     fragment = ''
@@ -164,6 +166,14 @@ __dt_reverse_turn = 1;
 go_dir = 30;
 {boss_turn}
 show_debug_message("SETTINGS_PARTICLE_VM:boss-alarm:" + string(__dt_reverse_turn) + ":" + string(go_dir));
+global.__dt_boss_speed_choice = 0; global.__dt_boss_speed_args = 0;
+{SPEED_INITIAL}
+{boss_speed}
+var boss_normal_speed = move_speed;
+global.__dt_boss_speed_choice = 1;
+{SPEED_INITIAL}
+{boss_speed}
+show_debug_message("SETTINGS_PARTICLE_VM:boss-speed:" + string(boss_normal_speed) + ":" + string(move_speed) + ":" + string(global.__dt_boss_speed_args));
 alarm[0] = -1;
 global.__dt_pt_order = 0; global.__dt_setting_particle = 0;
 {all_calls}
@@ -318,6 +328,7 @@ def make_project(project, dest):
         audio_play.write_text(audio_text, encoding='utf-8')
         mocks = {name: f'global.__dt_pt_order = global.__dt_pt_order * 10 + {number};\n' for name, number in PART_BUILTINS.items()}
         mocks['boss_choose'] = 'global.__dt_boss_args = (argument_count == 3 && argument0 == 1 && argument1 == 0 && argument2 == 0); return global.__dt_boss_choice;\n'
+        mocks['boss_speed_choose'] = 'if (argument_count == 5 && argument0 == 1 && argument1 == 0 && argument2 == 0 && argument3 == 0 && argument4 == 0) global.__dt_boss_speed_args += 1; return global.__dt_boss_speed_choice;\n'
         mocks['audio_emitter_create'] = 'global.__dt_audio_init_calls += 1; return 77;\n'
         mocks['audio_emitter_gain'] = 'global.__dt_audio_order = global.__dt_audio_order * 10 + 1; global.__dt_audio_gain_ok = (argument0 == 77 && argument1 == 2);\n'
         mocks['audio_play_sound_on'] = 'global.__dt_audio_order = global.__dt_audio_order * 10 + 2; global.__dt_audio_play_ok = (argument0 == 77 && argument1 == 123 && argument2 == 0 && argument3 == 0); return 456;\n'

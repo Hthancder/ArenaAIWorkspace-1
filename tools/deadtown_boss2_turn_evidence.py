@@ -32,6 +32,15 @@ if (choose(1,0,0) > 0.5)
     alarm[0] = 20
 }
 '''
+SPEED_INITIAL = '''// Partial native candidate: slot 180 is the tentacle move speed.
+move_speed = 8
+'''
+SPEED_CHOICE = '''// Partial native candidate: independent rare faster tentacle.
+if (choose(1,0,0,0,0) > 0.5)
+{
+    move_speed = 9
+}
+'''
 TURN = '''// Partial native candidate: the temporary flag reverses the turn.
             if (__dt_reverse_turn > 0.5)
             {
@@ -60,7 +69,9 @@ def fragments(project):
             raise ValueError('unexpected boss event actions')
         return '\n'.join(x.text or '' for x in texts)
     create, step, alarm = action('0','0'), action('3','0'), action('2','0')
-    if create.count(INIT) != 1 or create.count('__dt_reverse_turn') != 2:
+    if (create.count(INIT) != 1 or create.count('__dt_reverse_turn') != 2 or
+            create.count(SPEED_INITIAL) != 1 or create.count(SPEED_CHOICE) != 1 or
+            create.count('move_speed =') != 2 or not create.index(SPEED_INITIAL) < create.index(INIT) < create.index(SPEED_CHOICE)):
         raise ValueError('unexpected boss Create candidate')
     before = '{go_dir = point_direction(x,y,obj_player.x,obj_player.y)-bangle}\n\n            '
     after = '            \n            body_x[0] += lengthdir_x(body_length,bangle+go_dir)'
@@ -117,6 +128,18 @@ def inspect(apk):
         if len(found) != 1 or (found[0]['st_value'], found[0]['st_size']) != (address, size) or hashlib.sha256(read(address, size)).hexdigest() != digest:
             raise ValueError('unexpected boss export '+name)
     for a, op, operands in (
+        # Source move_position starts at zero, is increased by slot 180,
+        # and is subsequently compared to the slot initialized to length 35.
+        (0x714f64,'mov','r1, #0xb4'), (0x714f68,'blx','r2'), (0x714f6c,'mov','r5, r0'),
+        (0x714f94,'movw','r1, #0'), (0x714f98,'mov','r0, #0'),
+        (0x714f9c,'movt','r1, #0x4020'), (0x714fa4,'stm','r5, {r0, r1}'),
+        (0x7150ac,'movw','r1, #0x427'), (0x7150b4,'mov','r5, r0'),
+        (0x7150d4,'mov','r0, #0'), (0x7150d8,'str','r0, [r5, #0xc]'),
+        (0x7150dc,'str','r0, [r5, #4]'), (0x7150e0,'str','r0, [r5]'),
+        (0x71683c,'movw','r1, #0x427'), (0x716840,'blx','r2'), (0x716844,'mov','r4, r0'),
+        (0x716854,'mov','r1, #0xb4'), (0x716858,'blx','r2'),
+        (0x71685c,'mov','r1, r0'), (0x716860,'mov','r0, r4'), (0x716864,'bl','#0x1765b8'),
+        (0x71687c,'movw','r1, #0x4a9'), (0x71689c,'mov','r1, r4'), (0x7168a0,'bl','#0x176594'),
         (0x715710,'movw','r1, #0x4b1'), (0x715714,'blx','r2'), (0x715718,'mov','r5, r0'),
         (0x715748,'str','r2, [r5, #0xc]'), (0x71574c,'str','r2, [r5, #4]'), (0x715750,'str','r2, [r5]'),
         (0x715744,'add','r1, pc, r1'), (0x715760,'ldr','r2, [r0, r1]!'),
@@ -130,6 +153,16 @@ def inspect(apk):
         (0x715868,'movw','r1, #0'), (0x71586c,'movt','r1, #0x4034'),
         (0x715870,'str','r1, [sp, #0x5c]'), (0x715878,'str','r6, [sp, #0x58]'),
         (0x715880,'mov','r0, r4'), (0x715884,'mov','r2, #0'), (0x715888,'bl','#0x1768dc'),
+        (0x71589c,'add','r0, pc, r0'), (0x7158a4,'ldr','r2, [r1, r0]!'),
+        (0x7158ac,'ldmib','r1, {r3, r7}'), (0x7158b0,'ldr','r6, [r1, #0xc]'),
+        (0x7158b4,'ldr','r1, [r1, #0x10]'), (0x7158b8,'str','r1, [sp, #0x28]'),
+        (0x7158bc,'str','r6, [sp, #0x24]'), (0x7158c0,'stm','r5, {r2, r3, r7}'),
+        (0x7158c8,'mov','r1, #5'), (0x7158cc,'bl','#0x176954'), (0x7158d0,'bl','#0x176444'),
+        (0x7158d8,'vcmpe.f64','d0, d8'), (0x7158e0,'ble','#0x715984'),
+        (0x715948,'mov','r1, #0xb4'), (0x71594c,'blx','r2'), (0x715950,'mov','r4, r0'),
+        (0x715970,'movw','r1, #0'), (0x715974,'mov','r0, #0'),
+        (0x715978,'movt','r1, #0x4022'), (0x71597c,'str','r0, [r4, #0xc]'),
+        (0x715980,'stm','r4, {r0, r1}'),
         # Source's body_angle_max is 18 at create; in Step it is assigned to
         # the turn delta, which is zeroed before the angle comparisons.
         (0x71505c,'movw','r1, #0x4aa'), (0x715084,'movw','r1, #0'),
@@ -162,16 +195,23 @@ def inspect(apk):
         raise ValueError('unexpected choose one')
     if zero1['st_value'] != zero2['st_value'] or zero1['st_size'] != 16 or elf.get_section(zero1['st_shndx'])['sh_type'] != 'SHT_NOBITS':
         raise ValueError('unexpected choose zeros')
+    speed_table = (0x71589c+8+literal(0x71588c)+literal(0x715894)) & 0xffffffff
+    if speed_table != 0xb7bd34:
+        raise ValueError('unexpected speed choose table address')
+    for i in range(5):
+        relocation(speed_table+4*i, 2, 'gs_constArg0_963' if i == 0 else 'gs_constArg1_963')
     alarm = (0x71585c+8+literal(0x715854)+literal(0x715858)) & 0xffffffff
     relocation(alarm, 21, 'g_VAR_alarm')
     rp, plt = elf.get_section_by_name('.rel.plt'), elf.get_section_by_name('.plt')
     ps = elf.get_section(rp['sh_link'])
     calls = {plt['sh_addr']+20+i*12: ps.get_symbol(r['r_info_sym']).name for i,r in enumerate(rp.iter_relocations())}
-    for addr, name in ((0x176954, 'YYGML_choose'), (0x1768dc, 'Variable_SetValue_Direct'), (0x176444, 'REAL_RValue')):
+    for addr, name in ((0x176954, 'YYGML_choose'), (0x1768dc, 'Variable_SetValue_Direct'),
+                       (0x176444, 'REAL_RValue'), (0x1765b8, 'YYRValuepLERKS_')):
         if name not in calls.get(addr, ''):
             raise ValueError('unexpected native call')
     return {'object': 'obj_boss2_ten', 'flag_slot': 1201, 'turn_slot': 1088,
             'choose_values': [1, 0, 0], 'alarm': 0, 'alarm_steps': 20,
+            'speed_slot': 180, 'speed_initial': 8, 'speed_choose_values': [1, 0, 0, 0, 0], 'speed_if_chosen': 9,
             'functions': {name: {'address': hex(row[0]), 'size': row[1], 'sha256': row[2]} for name, row in FUNCTIONS.items()},
             'limitations': 'Partial static ARM evidence and source matching only; variable names inferred, remaining Create/Step behavior, RNG, scheduler, gameplay and iOS unverified.'}
 
