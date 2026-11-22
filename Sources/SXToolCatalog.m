@@ -6,6 +6,8 @@
 #import "SXNetPolicy.h"
 #import <UIKit/UIKit.h>
 #import <objc/message.h>
+#include <errno.h>
+#include <stdio.h>
 #import <SystemConfiguration/SystemConfiguration.h>
 #include <sys/utsname.h>
 #include <math.h>
@@ -602,9 +604,28 @@ static NSDictionary *SXRunShortcut(NSDictionary *arguments, NSError **error) {
 	NSString *directory = [[self filePath] stringByDeletingLastPathComponent];
 	[[NSFileManager defaultManager] createDirectoryAtPath:directory
 							  withIntermediateDirectories:YES
-											   attributes:nil
+											   attributes:@{NSFilePosixPermissions: @(0700)}
 													error:NULL];
-	[_notes writeToFile:[self filePath] atomically:YES];
+	// Ghi tệp tạm rồi đổi tên: cùng cách với SXStore. `writeToFile:atomically:`
+	// cũng làm vậy nhưng tạo tệp với quyền mặc định của umask (0644) và nuốt
+	// lỗi — ghi chú AI nhớ về người dùng có thể chứa tên, số điện thoại, địa chỉ,
+	// nên phần còn lại của tweak đều để 0600. Tệp còn được dọn nếu ghi lỗi để
+	// lần sau không đọc phải tệp hỏng.
+	NSData *data = [NSPropertyListSerialization dataWithPropertyList:_notes
+															format:NSPropertyListBinaryFormat_v1_0
+													   options:0 error:NULL];
+	NSString *temp = [[self filePath] stringByAppendingString:@".tmp"];
+	if (!data.length || ![data writeToFile:temp atomically:NO]) {
+		SXLogWrn(@"tool", @"không ghi được bộ nhớ tạm %@", temp);
+		[[NSFileManager defaultManager] removeItemAtPath:temp error:NULL];
+		return;
+	}
+	[[NSFileManager defaultManager] setAttributes:@{NSFilePosixPermissions: @(0600)}
+									 ofItemAtPath:temp error:NULL];
+	if (rename(temp.fileSystemRepresentation, [self filePath].fileSystemRepresentation) != 0) {
+		SXLogErr(@"err", @"không thay được memory.plist (errno %d)", errno);
+		[[NSFileManager defaultManager] removeItemAtPath:temp error:NULL];
+	}
 }
 
 - (NSArray<NSDictionary *> *)notes {
@@ -708,7 +729,11 @@ static NSDictionary *SXRecall(NSDictionary *arguments, NSError **error) {
 	NSInteger shown = 0;
 	for (NSDictionary *note in [notes reverseObjectEnumerator]) {
 		NSString *text = [note[@"text"] isKindOfClass:[NSString class]] ? note[@"text"] : @"";
-		if (query.length && ![text.lowercaseString containsString:query]) continue;
+		// Tìm cả trong thẻ: AI ghi "tags":"sức khoẻ" mà `recall` lại bỏ qua thẻ thì
+		// nó không tìm thấy ghi chú của chính nó vừa lưu (màn Ghi nhớ vẫn tìm thấy).
+		NSString *tags = [note[@"tags"] isKindOfClass:[NSString class]] ? note[@"tags"] : @"";
+		if (query.length && ![text.lowercaseString containsString:query] &&
+			![tags.lowercaseString containsString:query]) continue;
 		NSString *identifier = [note[@"id"] isKindOfClass:[NSString class]] ? note[@"id"] : @"?";
 		NSDate *date = [note[@"date"] isKindOfClass:[NSDate class]] ? note[@"date"] : nil;
 		[lines addObject:[NSString stringWithFormat:@"[%@ · %@] %@", identifier,
