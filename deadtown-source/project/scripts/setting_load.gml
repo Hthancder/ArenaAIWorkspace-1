@@ -16,7 +16,14 @@ if (ini_read_real("setting","check",0))
     global.setting_right_size = ini_read_real("right","size",0.5)
     global.setting_right_pos = ini_read_real("right","pos",0.5)
     
-    // Partial native candidate: neutral alias for global slot 88.
+    // Partial native candidates: neutral aliases for unidentified global names.
+    global.__dt_setting_feedback = ini_read_real("feedback","feedback",1)
+    global.__dt_setting_interpolate = ini_read_real("effect","interpolate",1)
+    global.__dt_setting_soundeffect = ini_read_real("effect","soundeffect",1)
+    global.__dt_setting_crosshair = ini_read_real("effect","crosshair",1)
+    global.__dt_setting_shadow = ini_read_real("effect","shadow",1)
+    global.__dt_setting_finger = ini_read_real("left","finger",1)
+    global.__dt_setting_particle = ini_read_real("effect","particle",1)
     global.__dt_setting_gamepad = ini_read_real("control","gamepad",0)
     global.setting_lang = ini_read_real("lang","type",0)
     lang_type_set(global.setting_lang); 
@@ -38,7 +45,14 @@ else // new
     global.setting_right_size = 0.5 * ratio
     global.setting_right_pos = 0.5 * ratio
 
-    // Partial native candidate: the new-settings path initializes slot 88 to zero.
+    // Partial native candidates: the new-settings defaults in Android ARM32.
+    global.__dt_setting_feedback = 1
+    global.__dt_setting_interpolate = 1
+    global.__dt_setting_soundeffect = 1
+    global.__dt_setting_crosshair = 1
+    global.__dt_setting_shadow = 1
+    global.__dt_setting_finger = 1
+    global.__dt_setting_particle = 1
     global.__dt_setting_gamepad = 0
     
     switch(os_get_language())

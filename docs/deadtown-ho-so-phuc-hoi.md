@@ -840,6 +840,15 @@ test cũng sửa alpha/metadata để xác nhận công cụ báo sai. Metadata 
 metadata **không** đồng nghĩa khôi phục hoàn toàn hình ảnh, mask, animation,
 resource ID, renderer hoặc iOS.
 
+### Bổ sung ứng viên cài đặt hiệu ứng và gate particle
+
+Đã đối chiếu bảy global slot với key INI và mặc định, thêm alias trung tính
+vào setting_load/save. Slot 49 tương ứng `effect/particle` cũng được bốn script
+particle đọc trước khi vào phần xử lý; source cũ thêm gate 0,5. Kiểm tĩnh và
+VM mock, cùng giới hạn, được trình bày tại
+[deadtown-settings-particle.md](deadtown-settings-particle.md). Không coi UI,
+hiệu ứng thực, gameplay hoặc iOS đã được xác nhận.
+
 ### Bổ sung ứng viên cài đặt và kết nối gamepad
 
 Đã đối chiếu global slot 88 với key INI `control/gamepad` trong ARM của

@@ -18,6 +18,9 @@ on:
       - 'tools/deadtown_zombie_item_vm_probe.py'
       - 'tools/deadtown_gamepad_evidence.py'
       - 'tools/deadtown_gamepad_vm_probe.py'
+      - 'tools/deadtown_settings_particle_evidence.py'
+      - 'tools/deadtown_settings_particle_vm_probe.py'
+      - 'tests/test_deadtown_settings_particle_evidence.py'
       - 'tests/test_deadtown_gamepad_evidence.py'
       - 'tests/test_deadtown_item_lifetime_evidence.py'
       - 'tests/test_deadtown_room_check_evidence.py'
@@ -120,6 +123,19 @@ jobs:
           test -n "$exe"
           "$exe" load work/game.droid -s tools/deadtown-vm-probe.csx -o work/gamepad-game/data.win > work/gamepad-compile.log 2>&1 || { tail -120 work/gamepad-compile.log; exit 1; }
           grep -F 'PROBE: incomplete data' work/gamepad-compile.log
+      - name: Compile a separate mocked settings and particle diagnostic
+        env:
+          GML_PROBE_SOURCE: ${{ github.workspace }}/work/settings-project/scripts/lang_type_set.gml
+          GML_PROBE_EVENTS: ${{ github.workspace }}/work/events-settings.json
+        run: |
+          set -euo pipefail
+          python tools/deadtown_settings_particle_vm_probe.py instrument deadtown-source/project work/settings-project work/events-original.json work/events-settings.json
+          mkdir -p work/settings-game work/save-settings
+          cp work/game/audiogroup*.dat work/settings-game/
+          exe=$(find work/utmt -type f -name UndertaleModCli | head -1)
+          test -n "$exe"
+          "$exe" load work/game.droid -s tools/deadtown-vm-probe.csx -o work/settings-game/data.win > work/settings-compile.log 2>&1 || { tail -120 work/settings-compile.log; exit 1; }
+          grep -F 'PROBE: incomplete data' work/settings-compile.log
       - name: Restore pinned desktop runner cache
         id: runner-cache
         uses: actions/cache/restore@v4
@@ -178,6 +194,23 @@ jobs:
           set -euo pipefail
           timeout 90 work/runner-build/gmrunner work/gamepad-game --headless --fast --mute --seed 1 --frames 90 --trace --stats --save-dir work/save-gamepad > work/gamepad.log 2>&1 || { tail -100 work/gamepad.log; exit 1; }
           python tools/deadtown_gamepad_vm_probe.py check work/gamepad.log
+      - name: Exercise mocked settings and particle candidates
+        run: |
+          set -euo pipefail
+          timeout 90 work/runner-build/gmrunner work/settings-game --headless --fast --mute --seed 1 --frames 90 --trace --stats --save-dir work/save-settings > work/settings.log 2>&1 || { tail -100 work/settings.log; exit 1; }
+          python tools/deadtown_settings_particle_vm_probe.py check work/settings.log
+      - name: Report mocked settings and particle markers
+        if: always()
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('work/settings.log')
+          if p.exists():
+              lines = [line for line in p.read_text(errors='replace').splitlines() if 'SETTINGS_PARTICLE_VM:' in line]
+              print('::notice::SETTINGS_PARTICLE_DIAGNOSTIC: ' + ' | '.join(lines).replace('%', '%25')[:3000])
+          else:
+              print('::notice::SETTINGS_PARTICLE_DIAGNOSTIC: no log')
+          PY
       - name: Report mocked gamepad markers
         if: always()
         run: |
@@ -213,6 +246,8 @@ jobs:
             work/random-compile.log
             work/gamepad-compile.log
             work/gamepad.log
+            work/settings-compile.log
+            work/settings.log
             work/item-schedule-compile.log
             work/item-schedule.log
             work/random.log

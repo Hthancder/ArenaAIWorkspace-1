@@ -1,0 +1,214 @@
+#!/usr/bin/env python3
+"""Verify partial settings persistence and particle gating from Android ARM32.
+
+Names prefixed __dt are invented aliases. This verifies only selected native
+instructions/strings and source fragments, not full scripts or gameplay.
+"""
+import argparse
+import hashlib
+import io
+import json
+from pathlib import Path
+import struct
+import zipfile
+
+try:
+    from tools.deadtown_native_inventory import exported_name, project_names
+    from tools.deadtown_native_lang import APK_SHA256, LIB_SHA256
+    from tools.recover_deadtown_audio import read_zip_member
+except ModuleNotFoundError:
+    from deadtown_native_inventory import exported_name, project_names
+    from deadtown_native_lang import APK_SHA256, LIB_SHA256
+    from recover_deadtown_audio import read_zip_member
+
+# section, key, alias, native slot, load temporary pointer, load GOT addresses,
+# load call, new-setting write, save temporary pointer
+SETTINGS = (
+    ('feedback', 'feedback', 'feedback', 0x52, 0x50, 0x2ecaf0, 0x2ecb04, 0x2ecb08, 0x2ecaf8, 0x2ecb38, 0x2ed2f8, 0x40),
+    ('effect', 'interpolate', 'interpolate', 0x53, 0x4c, 0x2ecb64, 0x2ecb78, 0x2ecb7c, 0x2ecb6c, 0x2ecbac, 0x2ed334, 0x20),
+    ('effect', 'soundeffect', 'soundeffect', 0x54, 0x48, 0x2ecbd8, 0x2ecbec, 0x2ecbf0, 0x2ecbe0, 0x2ecc20, 0x2ed368, 0x24),
+    ('effect', 'crosshair', 'crosshair', 0x55, 0x44, 0x2ecc4c, 0x2ecc60, 0x2ecc64, 0x2ecc54, 0x2ecc94, 0x2ed3a4, 0x28),
+    ('effect', 'shadow', 'shadow', 0x56, 0x40, 0x2eccc0, 0x2eccd4, 0x2eccd8, 0x2eccc8, 0x2ecd08, 0x2ed3d8, 0x10),
+    ('left', 'finger', 'finger', 0x57, 0x3c, 0x2ecd34, 0x2ecd48, 0x2ecd4c, 0x2ecd3c, 0x2ecd7c, 0x2ed414, 0x14),
+    ('effect', 'particle', 'particle', 0x31, 0x38, 0x2ecda8, 0x2ecdbc, 0x2ecdb8, 0x2ecdb0, 0x2ecdf0, 0x2ed448, 0x18),
+)
+# address, size, SHA256, slot-get address, gate real-conversion address, false branch target, pointer register
+PARTICLES = {
+    'particle_burst': (0x1cc4a0, 2176, '6172ef12a6007730e5d0e85e6a903f91c9f7180197dd3f36e0cba36f70b48170', 0x1cc530, 0x1cc5bc, 0x1cc97c, 'r7'),
+    'particle_burst_up': (0x1ccd20, 2176, '48c8dda474db91d6eda417c7811768a490732e93c616a53986fa0195e54ce0ae', 0x1ccdb0, 0x1cce3c, 0x1cd1fc, 'r7'),
+    'particle_burst_up_size': (0x1cd5a0, 2468, '5b3e478d11de58889360fa4267d66aac8569251ac88d19e11210cf272a9aaed3', 0x1cd638, 0x1cd6dc, 0x1cdb44, 'r7'),
+    'particle_burst_up_out': (0x1cdf44, 2352, '01b6ec149bb41d801871a822a38599d03d96184c0e3aa2ade05297c1927aff11', 0x1cdfd4, 0x1ce060, 0x1ce4c0, 'r4'),
+}
+GATE = '// Partial candidate: native global slot 49 controls particle emission.\nif (global.__dt_setting_particle > 0.5)\n{\n'
+
+
+def verify_source(project):
+    p = Path(project)
+    load = (p / 'scripts/setting_load.gml').read_text(encoding='utf-8')
+    save = (p / 'scripts/setting_save.gml').read_text(encoding='utf-8')
+    marker = load.index('else // new')
+    for section, key, alias, *_ in SETTINGS:
+        read = f'global.__dt_setting_{alias} = ini_read_real("{section}","{key}",1)'
+        new = f'global.__dt_setting_{alias} = 1'
+        write = f'ini_write_real("{section}","{key}",global.__dt_setting_{alias})'
+        if load.count(read) != 1 or load.count(new) != 1 or save.count(write) != 1:
+            raise ValueError('missing/changed settings candidate: '+alias)
+        if not load.index(read) < marker < load.index(new):
+            raise ValueError('wrong setting branch: '+alias)
+    declared = project_names(p, 'scripts', 'script')
+    for name in PARTICLES:
+        text = (p / 'scripts' / (name+'.gml')).read_text(encoding='utf-8')
+        if name not in declared or text.count(GATE) != 1:
+            raise ValueError('missing particle gate: '+name)
+        before, body = text.split(GATE)
+        if 'part_' in before or text.count('{') != 1 or text.count('}') != 1 or not body.rstrip().endswith('}'):
+            raise ValueError('unexpected particle gate structure: '+name)
+        for call in ('part_emitter_region(', 'part_type_direction(', 'part_emitter_burst('):
+            if body.count(call) != 1:
+                raise ValueError('missing particle call: '+name)
+        if body.count('part_type_size(') != int(name.endswith('_size')) or body.count('part_type_orientation(') != int(name.endswith('_out')):
+            raise ValueError('unexpected particle operation: '+name)
+
+
+def inspect(apk):
+    from capstone import Cs, CS_ARCH_ARM, CS_MODE_ARM
+    from capstone.arm import ARM_OP_MEM
+    from elftools.elf.elffile import ELFFile
+    if hashlib.sha256(Path(apk).read_bytes()).hexdigest() != APK_SHA256:
+        raise ValueError('unexpected APK SHA-256')
+    with zipfile.ZipFile(apk) as z:
+        raw = read_zip_member(z, 'lib/armeabi-v7a/libyoyo.so')
+    if hashlib.sha256(raw).hexdigest() != LIB_SHA256:
+        raise ValueError('unexpected ARM library SHA-256')
+    elf = ELFFile(io.BytesIO(raw))
+    dyn = elf.get_section_by_name('.dynsym')
+    rel = elf.get_section_by_name('.rel.dyn')
+    syms = elf.get_section(rel['sh_link'])
+    got = {r['r_offset']: syms.get_symbol(r['r_info_sym']) for r in rel.iter_relocations() if r['r_info_type'] == 21}
+    dis = Cs(CS_ARCH_ARM, CS_MODE_ARM)
+    dis.detail = True
+
+    def read(a, n):
+        for seg in elf.iter_segments():
+            if seg['p_type'] == 'PT_LOAD' and seg['p_vaddr'] <= a and a+n <= seg['p_vaddr']+seg['p_filesz']:
+                off = seg['p_offset'] + a - seg['p_vaddr']
+                return raw[off:off+n]
+        raise ValueError('address outside ELF')
+
+    def check(a, op, arg):
+        instructions = list(dis.disasm(read(a, 4), a))
+        if len(instructions) != 1 or (instructions[0].mnemonic, instructions[0].op_str) != (op, arg):
+            raise ValueError(f'instruction mismatch at {a:#x}')
+
+    def lit(a):
+        instructions = list(dis.disasm(read(a, 4), a))
+        if len(instructions) != 1:
+            raise ValueError('instruction decoding failed')
+        i = instructions[0]
+        if i.mnemonic != 'ldr' or len(i.operands) != 2 or i.operands[1].type != ARM_OP_MEM or i.reg_name(i.operands[1].mem.base) != 'pc':
+            raise ValueError('expected pc-relative literal')
+        return struct.unpack('<I', read(a+8+i.operands[1].mem.disp, 4))[0]
+
+    def sym(base, add, off):
+        address = (add + 8 + lit(base) + lit(off)) & 0xffffffff
+        result = got.get(address)
+        if result is None:
+            raise ValueError(f'missing GOT symbol at {address:#x}')
+        return result
+
+    def payload(s):
+        section = elf.get_section(s['st_shndx'])
+        offset = s['st_value'] - section['sh_addr']
+        if section['sh_type'] == 'SHT_NOBITS' or offset < 0 or offset+s['st_size'] > section['sh_size']:
+            raise ValueError('invalid symbol data')
+        return section.data()[offset:offset+s['st_size']]
+
+    fixed = {
+        'setting_load': (0x2ec430, 7344, '6dd19e3c8f09a8db1413aa916bfceeedd1a463ca7b22640812929a6eccf48a36'),
+        'setting_save': (0x2ee0e0, 2232, '5bf074aad1be0f4566ac777b183062604481ca23f797c6d5287d4e3bef00f7f5'),
+    }
+    fixed.update({name: row[:3] for name, row in PARTICLES.items()})
+    for name, (start, size, digest) in fixed.items():
+        exports = [s for s in dyn.iter_symbols() if exported_name(s.name) == 'gml_Script_'+name]
+        if len(exports) != 1 or (exports[0]['st_value'], exports[0]['st_size']) != (start, size) or hashlib.sha256(read(start, size)).hexdigest() != digest:
+            raise ValueError('unexpected export or bytes: '+name)
+    if sym(0x2ec444, 0x2ec450, 0x2ec448).name != 'g_pGlobal' or sym(0x2ee0f4, 0x2ee0fc, 0x2ee0ec).name != 'g_pGlobal':
+        raise ValueError('unexpected global pointer')
+    check(0x2ec98c, 'vmov.f64', 'd1, #1.000000e+00')
+    check(0x2ec9b0, 'vmov', 'r6, r4, d1')
+    check(0x2ed238, 'movw', 'r8, #0')
+    check(0x2ed240, 'movt', 'r8, #0x3ff0')
+    for i, (section, key, alias, slot, loadptr, base, add, s_off, k_off, call, new, saveptr) in enumerate(SETTINGS):
+        # The global handle is retrieved in each function prologue and retained.
+        get_load = 0x2ec5b0 + 0x24*i if i < 6 else 0x2ec688
+        get_save = 0x2ee258 + 0x24*i if i < 6 else 0x2ee330
+        check(get_load, 'mov', f'r1, #{hex(slot)}')
+        check(get_load+4, 'blx', 'r2')
+        check(get_load+8, 'str', f'r0, [sp, #{hex(loadptr)}]')
+        check(get_save, 'mov', f'r1, #{hex(slot)}')
+        check(get_save+4, 'blx', 'r2')
+        check(get_save+8, 'str', f'r0, [sp, #{hex(saveptr)}]')
+        for off, expected in ((s_off, section), (k_off, key)):
+            s = sym(base, add, off)
+            if not s.name.startswith('g_pString') or payload(s) != expected.encode()+b'\0':
+                raise ValueError('unexpected read INI key '+alias)
+        check(call-8, 'mov', 'r2, r6')
+        check(call-4, 'mov', 'r3, r4')
+        check(call, 'bl', '#0x176828')
+        check(call+12, 'ldr', f'r0, [sp, #{hex(loadptr)}]')
+        # In the normal branch the returned real is written to this slot.
+        destreg = 'r6' if alias == 'particle' else 'r5'
+        offset = 0x44 if alias in ('finger', 'particle') else 0x3c
+        check(call+offset, 'ldr', f'{destreg}, [sp, #{hex(loadptr)}]')
+        check(call+0x64, 'stm', f'{destreg}, {{r3, r7}}')
+        check(new, 'ldr', f'r0, [sp, #{hex(loadptr)}]')
+        # Two of the new-path sequences reload zero before writing the same real 1.
+        lines = list(dis.disasm(read(new, 24), new))
+        writes = [(x.mnemonic, x.op_str) for x in lines]
+        for required in [('str', 'r4, [r0, #0xc]'), ('str', 'r8, [r0, #4]'), ('str', 'r4, [r0]')]:
+            if required not in writes:
+                raise ValueError('unexpected new-setting write: '+alias)
+        savebase = 0x2ee588 + i*0x34
+        for off, expected in ((savebase+4, section), (savebase+8, key)):
+            s = sym(savebase, savebase+12, off)
+            if not s.name.startswith('g_pString') or payload(s) != expected.encode()+b'\0':
+                raise ValueError('unexpected write INI key '+alias)
+        check(savebase-0xc, 'ldr', f'r0, [sp, #{hex(saveptr)}]')
+        check(savebase-8, 'bl', '#0x176444')
+        check(savebase+0x1c, 'bl', '#0x17681c')
+    for name, (start, _, _, get, gate, target, reg) in PARTICLES.items():
+        if sym(start+0xc, start+0x18, start+0x1c).name != 'g_pGlobal':
+            raise ValueError('particle gate did not read global')
+        check(get-8, 'ldr', 'r1, [r0]')
+        check(get-4, 'ldr', 'r2, [r1, #8]')
+        check(get, 'mov', 'r1, #0x31')
+        check(get+4, 'blx', 'r2')
+        check(get+8, 'mov', f'{reg}, r0')
+        for instruction in dis.disasm(read(get+12, gate-(get+12)), get+12):
+            _, writes = instruction.regs_access()
+            if reg in (instruction.reg_name(r) for r in writes):
+                raise ValueError('particle gate pointer overwritten: '+name)
+        for off, op, arg in ((0, 'mov', f'r0, {reg}'), (4, 'bl', '#0x176444'),
+                             (8, 'vmov.f64', 'd1, #5.000000e-01'), (12, 'vmov', 'd0, r0, r1'),
+                             (16, 'vcmpe.f64', 'd0, d1'), (20, 'vmrs', 'apsr_nzcv, fpscr'),
+                             (24, 'ble', '#'+hex(target))):
+            check(gate+off, op, arg)
+    return {'apk_sha256': APK_SHA256, 'native_library_sha256': LIB_SHA256,
+            'settings': [{'section': x[0], 'key': x[1], 'alias': '__dt_setting_'+x[2], 'native_slot': x[3], 'default': 1} for x in SETTINGS],
+            'particle_gates': {name: {'address': hex(v[0]), 'sha256': v[2], 'slot': 49} for name, v in PARTICLES.items()},
+            'limitations': 'Static ARM32 and partial source only; original names, full particle functions, non-finite values, GameMaker compiler, actual display/settings UI, gameplay and iOS unverified.'}
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('apk', type=Path)
+    p.add_argument('project', type=Path)
+    p.add_argument('--output', required=True, type=Path)
+    a = p.parse_args()
+    verify_source(a.project)
+    a.output.write_text(json.dumps(inspect(a.apk), indent=2)+'\n', encoding='utf-8')
+    print('SETTINGS_PARTICLE_EVIDENCE: partial static ARM32 candidates only')
+
+
+if __name__ == '__main__':
+    main()

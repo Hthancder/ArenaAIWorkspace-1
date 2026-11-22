@@ -6,7 +6,12 @@ var dir_range = argument4;
 var num = argument5;
 var size = argument6;
 
-part_emitter_region(sys_particle.p_system_up, sys_particle.p_emitter_up, xx-3, xx+3, yy-3, yy+3, ps_shape_ellipse, ps_distr_gaussian);
-part_type_direction(p_type, dir-dir_range, dir+dir_range, 0, 0);
-part_type_size(p_type, size, size, -0.01, 0)
-part_emitter_burst(sys_particle.p_system_up, sys_particle.p_emitter_up, p_type, num);
+// Partial candidate: native global slot 49 controls particle emission.
+if (global.__dt_setting_particle > 0.5)
+{
+    part_emitter_region(sys_particle.p_system_up, sys_particle.p_emitter_up, xx-3, xx+3, yy-3, yy+3, ps_shape_ellipse, ps_distr_gaussian);
+    part_type_direction(p_type, dir-dir_range, dir+dir_range, 0, 0);
+    part_type_size(p_type, size, size, -0.01, 0)
+    part_emitter_burst(sys_particle.p_system_up, sys_particle.p_emitter_up, p_type, num);
+
+}
