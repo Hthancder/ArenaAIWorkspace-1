@@ -28,8 +28,10 @@ int main(void) {
 		}
 		history = [store snapshot][@"history"];
 		assert(history.count == (NSUInteger)SXStoreHistoryCapacity);
-		assert([history.lastObject[@"q"] isEqualToString:
-				[NSString stringWithFormat:@"q%lu", (unsigned long)(SXStoreHistoryCapacity + 4)]]);
+		// Dấu phẩy trong `assert(...)` tách thành hai đối số macro — phải tách biến.
+		NSString *expectedLast = [NSString stringWithFormat:@"q%lu",
+														 (unsigned long)(SXStoreHistoryCapacity + 4)];
+		assert([history.lastObject[@"q"] isEqualToString:expectedLast]);
 		history = [store snapshot][@"history"];
 		assert([store deleteHistoryID:history[0][@"id"]]);
 		assert([[[store snapshot] objectForKey:@"history"] count] == (NSUInteger)SXStoreHistoryCapacity - 1);

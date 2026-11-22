@@ -283,6 +283,60 @@ for path in sorted(glob.glob("Prefs/*.m") + glob.glob("Sources/*.m")):
             fail(f"{path}:{line}: log category “{category}” không có trong danh mục "
                  f"cố định ({', '.join(sorted(KNOWN_LOG_CATEGORIES))})")
 
+# -------------------------------- test: `assert(a, b)` không biên dịch được
+# `assert` là macro một đối số: một dấu phẩy ở mức ngoặc ngoài (thường gặp khi
+# viết `assert([x isEqualToString:[NSString stringWithFormat:..., arg]])`) làm
+# clang báo "too many arguments" chỉ trên macOS — Linux local-check không thấy.
+# Chỉ kiểm tests/*.m vì đó là nơi dùng assert() thật.
+def mask_code(text):
+    """Thay ký tự trong chuỗi ký tự và chú thích bằng khoảng trắng, giữ nguyên
+    độ dài — để bộ đếm ngoặc không bị lừa bởi `@"]("` hay `// (`."""
+    out = list(text)
+    i, n = 0, len(text)
+    while i < n:
+        ch = text[i]
+        if ch == '/' and i + 1 < n and text[i + 1] == '/':
+            while i < n and text[i] != '\n':
+                out[i] = ' '; i += 1
+        elif ch == '/' and i + 1 < n and text[i + 1] == '*':
+            while i < n and not (text[i] == '*' and i + 1 < n and text[i + 1] == '/'):
+                if text[i] != '\n': out[i] = ' '
+                i += 1
+            for _ in range(2):
+                if i < n: out[i] = ' '; i += 1
+        elif ch in ('"', "'"):
+            quote = ch
+            out[i] = ' '; i += 1
+            while i < n and text[i] != quote:
+                if text[i] == '\\' and i + 1 < n:
+                    out[i] = ' '; i += 1
+                if text[i] != '\n': out[i] = ' '
+                i += 1
+            if i < n: out[i] = ' '; i += 1
+        else:
+            i += 1
+    return ''.join(out)
+
+for path in sorted(glob.glob("tests/*.m")):
+    text = read(path)
+    masked = mask_code(text)
+    for match in re.finditer(r"\bassert\(", masked):
+        depth, i = 1, match.end()
+        while i < len(masked) and depth > 0:
+            ch = masked[i]
+            # Bộ tiền xử lý CHỈ đếm ngoặc tròn (và ngoặc nhọn); ngoặc vuông
+            # của Objective-C không che được dấu phẩy.
+            if ch in "({":
+                depth += 1
+            elif ch in ")}":
+                depth -= 1
+            elif ch == "," and depth == 1:
+                line = text[:i].count("\n") + 1
+                fail(f"{path}:{line}: dấu phẩy ở mức ngoặc ngoài trong assert(...) — "
+                     "tách biểu thức ra biến trước, assert chỉ nhận một đối số")
+                break
+            i += 1
+
 # ---------------------------------------------------------------- report
 for message in WARNINGS:
     print(f"⚠️  {message}")
