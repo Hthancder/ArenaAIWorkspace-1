@@ -647,6 +647,41 @@ nhau nên thứ tự ngẫu nhiên: một khối lấy epoch của lượt **cũ
 của lượt **mới**, khiến lượt mới không đọc được gì và trả lời "quá muộn". Nay cả
 vòng đời chạy trên một hàng đợi tuần tự `com.sirix.turn`.
 
+### Lượt gia cố thứ hai (1.3.0, CI xanh)
+
+Sau khi bản đầu của 1.3.0 lên CI, một lượt rà tiếp tìm thêm các lỗi sau — tất cả
+đều đã sửa và đã có test đi kèm:
+
+- **Bảng Markdown lọt ra thành `• --- · ---`.** Mẫu nhận diện dòng phân cách bảng
+  chỉ cho một ô (`[^|]*$`), nên bảng chuẩn `|---|---|` của model vẫn đi qua và
+  người dùng đọc lên một hàng toàn gạch. Đã sửa mẫu + thêm `tests/markdown_test.m`
+  (18 ca, chạy trên macOS CI) — bộ render là thứ DUY NHẤT người dùng nhìn thấy nên
+  từ nay có test riêng.
+- **`_nghiêng_` không bao giờ hoạt động.** Mẫu cũ `(?<!\w)_(?!\w)` đòi khoảng
+  trắng hai bên dấu gạch dưới, tức là không khớp được với chữ — nay chỉ cấm khi
+  hai bên là chữ/số, nên `snake_case_name` vẫn nguyên vẹn.
+- **Xoá lịch sử chặn luồng chính.** `SXIntercept -clearHistory` và màn Lịch sử
+  đều `dispatch_sync` vào hàng đợi kho; gọi từ luồng chính là chặn giao diện
+  trong lúc chờ `flock` + `rename`. Nay ghi tệp chạy bất đồng bộ
+  (`-clearHistoryWithCompletion:` cho ai cần biết kết quả), còn công cụ
+  `reset_conversation` chờ kết quả thật trên luồng công cụ để không báo "đã xoá"
+  khi ghi hỏng.
+- **`memory.plist` để quyền 0644.** Ghi chú AI nhớ về người dùng (tên, số điện
+  thoại, địa chỉ) nằm trong tệp mà mọi tiến trình đọc được, trong khi `state.plist`
+  cạnh đó là 0600. Nay ghi tệp tạm → `chmod 0600` → `rename`, có log khi lỗi.
+  `recall` cũng tìm được theo **thẻ** (trước chỉ tìm trong nội dung, nên AI ghi
+  `tags:"sức khoẻ"` rồi tự hỏi lại thì không thấy).
+- **Log có thể chứa khoá API.** Log hay được sao chép rồi dán vào chat hỗ trợ.
+  Thêm `SXRedactLogLine` lọc **mọi** dòng trước khi ra đĩa/os_log: `sk-…`,
+  `AIza…`, `gsk_…`, `Bearer …`, `?api_key=…`, `"api_key": "…"`. Có
+  `tests/log_redact_test.m` cho cả hai chiều (phải ẩn / không được phá dòng log
+  thường).
+- **Category log lạ.** Hai dòng dùng `"chat-test"` (không có trong danh mục §8),
+  nên `check-prefs.sh` không kiểm được và màn Nhật ký lọc không tới. Nay `pref`.
+- **`tests/store_test.m` không biên dịch được** (dấu phẩy trong `assert(...)`) —
+  chỉ lộ trên macOS, `local-check.sh` trên Linux không thấy. Đã sửa và thêm luật
+  lint đếm ngoặc để bắt đúng lỗi này (có che chuỗi/chú thích trước khi đếm).
+
 ### Cần kiểm trên thiết bị (1.3.0)
 
 1. Cài đặt → SiriX → Ghi nhớ: xoá từng mục và xoá tất cả.
@@ -657,4 +692,7 @@ vòng đời chạy trên một hàng đợi tuần tự `com.sirix.turn`.
 4. Đặt "Ngữ cảnh hội thoại" = 0, hỏi 5 câu → Lịch sử phải có 5 mục.
 5. Đặt ngữ cảnh 0 và xem lại lịch sử cũ: dữ liệu trước đây đã bị cắt, không
    khôi phục được (chỉ ảnh hưởng máy đã dùng tuỳ chọn 0).
+6. Hỏi một câu có bảng Markdown → không còn hàng `• --- · ---`.
+7. Sau khi dùng SiriX một lúc, mở Nhật ký → tìm `sk-` / `Bearer` → không có khoá
+   thật nào trong tệp log.
 
