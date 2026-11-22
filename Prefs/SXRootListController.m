@@ -589,6 +589,8 @@ static SXChoiceDefinition *SXChoiceDefinitionFor(NSString *key) {
 @interface SXRootListController ()
 @property (nonatomic, strong) UIView *headerView;
 @property (nonatomic, strong) UIView *statusPill;
+/// Nhãn "có bản mới" trong header (ẩn cho tới khi tự kiểm tra thấy bản mới).
+@property (nonatomic, strong) UILabel *updateLabel;
 @property (nonatomic, strong) UILabel *statusLabel;
 @property (nonatomic, strong) UIView *statusDot;
 @end
@@ -874,6 +876,8 @@ static SXChoiceDefinition *SXChoiceDefinitionFor(NSString *key) {
 	[super viewDidAppear:animated];
 	// Trang gốc cũng có thể trắng nếu Preferences dựng cell hỏng im lặng.
 	SXShowContentFallbackIfNeeded(self, @"Cài đặt SiriX", @"không dựng được các hàng cài đặt");
+	// Tự nhắc bản mới (tối đa mỗi 6 giờ) — không chặn giao diện, im lặng khi offline.
+	[self sx_checkUpdateInBackgroundIfDue];
 }
 
 - (void)dealloc {
@@ -924,7 +928,19 @@ static SXChoiceDefinition *SXChoiceDefinitionFor(NSString *key) {
 	UIColor *statusColor = [SXUI colorForStatusText:status];
 	UIView *pill = [SXUI statusPillWithText:status color:statusColor];
 
-	UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[iconView, titleLabel, subtitleLabel, pill]];
+	UILabel *updateLabel = [SXUI footnoteLabel:@""];
+	updateLabel.textAlignment = NSTextAlignmentCenter;
+	updateLabel.textColor = [SXUI accentColor];
+	updateLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleCaption1];
+	updateLabel.adjustsFontForContentSizeCategory = YES;
+	updateLabel.numberOfLines = 0;
+	updateLabel.hidden = YES;
+	updateLabel.userInteractionEnabled = YES;
+	[updateLabel addGestureRecognizer:[[UITapGestureRecognizer alloc] initWithTarget:self
+																				  action:@selector(sx_checkUpdate:)]];
+
+	UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[iconView, titleLabel,
+																subtitleLabel, pill, updateLabel]];
 	stack.axis = UILayoutConstraintAxisVertical;
 	stack.alignment = UIStackViewAlignmentCenter;
 	stack.spacing = 5;
@@ -940,6 +956,7 @@ static SXChoiceDefinition *SXChoiceDefinitionFor(NSString *key) {
 	table.tableHeaderView = header;
 
 	self.headerView = header;
+	self.updateLabel = updateLabel;
 	self.statusPill = pill;
 	self.statusDot = pill.subviews.firstObject;
 	self.statusLabel = pill.subviews.lastObject;
@@ -950,6 +967,9 @@ static SXChoiceDefinition *SXChoiceDefinitionFor(NSString *key) {
 	if (!self.statusPill || !self.statusLabel) return;
 	NSString *status = [SXPrefs shared].statusSummary;
 	UIColor *color = [SXUI colorForStatusText:status];
+	// Trạng thái đổi (dán khoá, bật/tắt) thì bản mới đã biết hay chưa cũng đổi
+	// theo — ví dụ vừa bật SiriX lần đầu trên bản cũ thì nhắc cập nhật ngay.
+	[self sx_checkUpdateInBackgroundIfDue];
 	self.statusLabel.text = status;
 	self.statusLabel.textColor = color;
 	self.statusDot.backgroundColor = color;
@@ -1010,6 +1030,11 @@ static SXChoiceDefinition *SXChoiceDefinitionFor(NSString *key) {
 					return;
 				}
 				NSString *latest = result[@"latest"];
+				if ([result[@"newer"] boolValue]) {
+					[strongSelf sx_showUpdateBanner:latest];
+				} else {
+					[strongSelf sx_hideUpdateBanner];
+				}
 				if (![result[@"newer"] boolValue]) {
 					[SXUI alertOn:strongSelf
 							 title:@"Đã là bản mới nhất"
@@ -1067,6 +1092,52 @@ static SXChoiceDefinition *SXChoiceDefinitionFor(NSString *key) {
 		SXLogInf(@"pref", @"người dùng yêu cầu khởi động lại SpringBoard");
 		notify_post("com.sirix.respring");
 	}];
+}
+
+
+#pragma mark - Có bản mới
+
+/// Header nhắc nhẹ khi có bản mới. Trước đây chỉ ai bấm "Kiểm tra cập nhật" mới
+/// biết, nên phần lớn người dùng chạy bản cũ hàng tháng trời.
+- (void)sx_showUpdateBanner:(NSString *)latest {
+	if (![NSThread isMainThread]) {
+		dispatch_async(dispatch_get_main_queue(), ^{ [self sx_showUpdateBanner:latest]; });
+		return;
+	}
+	if (!latest.length || !self.updateLabel) return;
+	self.updateLabel.text = [NSString stringWithFormat:@"Bản mới %@ — chạm để xem", latest];
+	self.updateLabel.accessibilityLabel = [NSString stringWithFormat:
+			@"Đã có bản SiriX mới: %@. Chạm để xem bản phát hành.", latest];
+	self.updateLabel.hidden = NO;
+}
+
+- (void)sx_hideUpdateBanner {
+	if (![NSThread isMainThread]) {
+		dispatch_async(dispatch_get_main_queue(), ^{ [self sx_hideUpdateBanner]; });
+		return;
+	}
+	self.updateLabel.hidden = YES;
+	self.updateLabel.text = @"";
+}
+
+/// Tự kiểm tra bản mới khi mở trang chính — tối đa một lần mỗi 6 giờ, im lặng
+/// khi offline (không báo lỗi, không chặn giao diện).
+- (void)sx_checkUpdateInBackgroundIfDue {
+	static NSString *const key = @"lastUpdateCheck";
+	id stored = [[SXPrefs shared] valueFor:key];
+	double previous = [stored respondsToSelector:@selector(doubleValue)] ? [stored doubleValue] : 0;
+	NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+	if (previous > 0 && now - previous < 6 * 3600) return;
+	[SXPrefs setValue:@(now) forKey:key];
+	__weak typeof(self) weakSelf = self;
+	dispatch_async(dispatch_get_global_queue(QOS_CLASS_BACKGROUND, 0), ^{
+		NSError *error = nil;
+		NSDictionary *result = [SXUpdate checkWithTimeout:7.0 error:&error];
+		if (!result) return;
+		typeof(self) strongSelf = weakSelf;
+		if (!strongSelf) return;
+		if ([result[@"newer"] boolValue]) [strongSelf sx_showUpdateBanner:result[@"latest"]];
+	});
 }
 
 @end

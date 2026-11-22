@@ -353,7 +353,14 @@ static NSString *SXAPIPathSuffix(SXOpenAIApi api) {
 		}
 		if ([key isEqualToString:@"modelDisplay"]) return [self currentModel];
 		if ([key isEqualToString:@"endpointDisplay"]) {
-			if (self.provider == SXProviderGemini) return @"generativelanguage.googleapis.com";
+			if (self.provider == SXProviderGemini) {
+				// Hiện ĐÚNG đường dẫn sẽ gọi, không chỉ tên máy chủ: trước đây dòng
+				// này ghi "generativelanguage.googleapis.com" nên người dùng không
+				// biết model nào thật sự được gọi (và model sai vẫn 404 dù nhìn
+				// như đã cấu hình xong).
+				return [NSString stringWithFormat:@"…/v1beta/models/%@:generateContent",
+						[[SXPrefs shared] activeModel]];
+			}
 			NSString *raw = [SXPrefs shared].openaiBase;
 			NSString *normalized = [SXPrefs normalizedBaseURL:raw];
 			NSString *base = normalized.length ? normalized
@@ -392,7 +399,8 @@ static NSString *SXAPIPathSuffix(SXOpenAIApi api) {
 	NSString *rawBase = prefs.openaiBase;
 	NSString *endpoint = nil;
 	if (self.provider == SXProviderGemini) {
-		endpoint = @"generativelanguage.googleapis.com";
+		endpoint = [NSString stringWithFormat:@"…/v1beta/models/%@:generateContent",
+					prefs.activeModel];
 	} else {
 		NSString *base = [SXPrefs normalizedBaseURL:rawBase];
 		if (!base.length) base = rawBase.length ? @"⚠️ địa chỉ không hợp lệ" : @"Mặc định";

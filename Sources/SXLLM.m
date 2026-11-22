@@ -30,6 +30,22 @@ static NSInteger SXToolRoundLimit(SXPrefs *prefs) {
 	return MAX(1, MIN(prefs.maxToolRounds, 6));
 }
 
+/// Hết trần vòng công cụ mà model vẫn đòi gọi công cụ ⇒ trước đây người dùng
+/// nhận "Model trả về nội dung rỗng" (một lỗi vô nghĩa) dù model đã làm xong
+/// việc thật. Giờ trả một câu giải thích đọc được, kèm số vòng đã chạy — đúng
+/// điều người dùng cần biết để tăng "Số vòng công cụ" trong Cài đặt.
+static NSString *SXToolBudgetMessage(NSInteger rounds) {
+	return [NSString stringWithFormat:
+			@"Mình đã làm %ld bước (gọi công cụ) nhưng chưa gom được câu trả lời trong giới hạn hiện tại. "
+			@"Bạn hỏi lại cụ thể hơn, hoặc tăng “Số vòng công cụ” trong Cài đặt → SiriX → Công cụ AI.",
+			(long)MAX(rounds, 1)];
+}
+
+/// Model có đòi gọi công cụ nhưng đã hết trần vòng?
+static BOOL SXToolBudgetExhausted(NSInteger rounds, SXPrefs *prefs, BOOL wantsTools) {
+	return wantsTools && rounds >= SXToolRoundLimit(prefs);
+}
+
 static void SXPostToolActivity(NSString *name, NSTimeInterval elapsed, NSError *error) {
 	NSDictionary *info = @{@"name": name ?: @"?",
 						   @"ms": @((NSInteger)(elapsed * 1000.0)),
@@ -532,6 +548,14 @@ static void SXAskOpenAIChat(SXPrefs *prefs, NSString *question, NSArray<NSDictio
 		}
 
 		if (!content.length) {
+			BOOL wantsTools = [toolCalls isKindOfClass:[NSArray class]] && [(NSArray *)toolCalls count] > 0;
+			if (SXToolBudgetExhausted(rounds, prefs, wantsTools)) {
+				SXLogWrn(@"llm", @"hết trần %ld vòng công cụ mà model vẫn cần gọi công cụ", (long)rounds);
+				completion(SXToolBudgetMessage(rounds), nil,
+						   SXInfoWithUsage(SXInfo(@"openai", model, lastStatus, rounds, start),
+										   @{@"in": @(usageIn), @"out": @(usageOut)}));
+				return;
+			}
 			NSError *err = [SXHTTP errorWithCode:-4 message:@"Model trả về nội dung rỗng."];
 			SXLogErr(@"llm", @"%@", err.localizedDescription);
 			completion(nil, err, SXInfo(@"openai", model, lastStatus, rounds, start));
@@ -889,6 +913,13 @@ static void SXAskOpenAIResponses(SXPrefs *prefs, NSString *question, NSArray<NSD
 		}
 
 		if (!content.length) {
+			if (SXToolBudgetExhausted(rounds, prefs, calls.count > 0)) {
+				SXLogWrn(@"llm", @"responses: hết trần %ld vòng công cụ", (long)rounds);
+				completion(SXToolBudgetMessage(rounds), nil,
+						   SXInfoWithUsage(SXInfo(@"openai/responses", model, lastStatus, rounds, start),
+										   @{@"in": @(usageIn), @"out": @(usageOut)}));
+				return;
+			}
 			NSError *err = [SXHTTP errorWithCode:-4 message:@"Model trả về nội dung rỗng."];
 			SXLogErr(@"llm", @"%@", err.localizedDescription);
 			completion(nil, err, SXInfo(@"openai/responses", model, lastStatus, rounds, start));
@@ -1288,6 +1319,13 @@ static void SXAskGemini(SXPrefs *prefs, NSString *question, NSArray<NSDictionary
 		}
 
 		if (!text.length) {
+			if (SXToolBudgetExhausted(rounds, prefs, functionCalls.count > 0)) {
+				SXLogWrn(@"llm", @"gemini: hết trần %ld vòng công cụ", (long)rounds);
+				completion(SXToolBudgetMessage(rounds), nil,
+						   SXInfoWithUsage(SXInfo(@"gemini", model, lastStatus, rounds, start),
+										   @{@"in": @(usageIn), @"out": @(usageOut)}));
+				return;
+			}
 			NSError *err = [SXHTTP errorWithCode:-4 message:@"Model trả về nội dung rỗng."];
 			SXLogErr(@"llm", @"%@", err.localizedDescription);
 			completion(nil, err, SXInfo(@"gemini", model, lastStatus, rounds, start));
