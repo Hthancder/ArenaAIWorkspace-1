@@ -44,7 +44,7 @@ jobs:
           phase='download prior runner IPA'
           gh release download deadtown-ios15-re-test-3 -R "$GITHUB_REPOSITORY" -p 'DeadTown-iOS15-RE-test3.ipa' -O work/runner.ipa 2>work/runner-download-error.log || { echo "::error::Runner download: $(head -c 900 work/runner-download-error.log)"; exit 1; }
           phase='verify prior runner IPA'
-          echo '7e0f10c8761fe1160baa855a4e825aa31974f02cb2b2205a27b0df9d5eefe781  work/runner.ipa' | sha256sum -c
+          echo '7e0f10c8761fe1160baa855a4e825aa31974f02cb2b2205a27b0df9d5aefe781  work/runner.ipa' | sha256sum -c
       - name: Compile current editable source into experimental VM data
         env:
           GML_PROBE_SOURCE: ${{ github.workspace }}/deadtown-source/project/scripts/lang_type_set.gml
