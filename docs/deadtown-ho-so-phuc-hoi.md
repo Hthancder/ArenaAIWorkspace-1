@@ -893,7 +893,7 @@ so tĩnh không xác nhận Android/iOS runtime. Sau đó đã thêm ứng viên
 room, không dùng số 14; xem mục “Kiểm tra room phòng thủ ứng viên” bên dưới.
 Script vẫn chưa được coi là phục hồi hoàn chỉnh.
 
-### Event collision rỗng của player
+### Bốn event collision rỗng
 
 Tiếp tục đối chiếu các event chưa có trong source: bảng OBJT của APK ghi
 `obj_player` có collision với object index 184 (`par_action`) và một action
@@ -903,12 +903,15 @@ comment-only, theo định dạng event rỗng sẵn có trong project. Phân bi
 rỗng với không khai báo event là quan trọng khi có cơ chế kế thừa/dispatch,
 nhưng chưa xác nhận GameMaker biên dịch hoặc dispatch tương đương.
 
-`tools/deadtown_empty_collision_evidence.py` kiểm SHA APK/library, event target
-và action tĩnh, symbol cùng bốn byte ARM, và action comment-only trong source;
-test từ chối APK khác, descriptor bị đổi và ELF sai. Đây không kiểm nhánh
-collision thực tế, behavior kế thừa, iOS, hoặc gameplay. Tính theo tên/key,
-nay thiếu 368 event native, 90 object và 68 script; một key được thêm không có
-nghĩa các sự kiện cùng tên khác đã tương đương bản gốc.
+Đã mở rộng kiểm tra sang ba event rỗng vốn có trong source: `obj_zombie4` với
+`obj_player_body` (index 144), `obj_zombie5` với `par_action_door` (187) và
+`par_action` (184). Cả ba export đều dài 4 byte `bx lr`, OBJT chứa một action
+code và source chứa một comment-only action. `tools/deadtown_empty_collision_evidence.py`
+kiểm SHA APK/library, event target, action tĩnh, export cùng bốn byte ARM và
+source cho cả bốn event; test từ chối APK khác, descriptor bị đổi và ELF sai.
+Đây không kiểm dispatch collision thực tế, behavior kế thừa, iOS hay gameplay.
+Tại mốc bổ sung event player trước đây còn thiếu 368 event native, 90 object và
+68 script theo tên/key; số hiện tại ở mục kiểm toán phía trên.
 
 ### Đối chiếu toàn bộ 90 sound của workspace
 

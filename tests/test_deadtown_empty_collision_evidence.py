@@ -39,19 +39,31 @@ class EmptyCollisionTests(unittest.TestCase):
     @unittest.skipUnless(APK.is_file(), 'requires pinned APK')
     def test_pinned_event_and_tampering(self):
         result = verify(APK, PROJECT)
-        self.assertEqual((result['collision_target'], result['native_target_index']), ('par_action', 184))
-        self.assertEqual(result['native_arm_bytes'], '1eff2fe1')
+        self.assertEqual([(x['object'], x['collision_target'], x['native_target_index']) for x in result['events']], [
+            ('obj_player', 'par_action', 184), ('obj_zombie4', 'obj_player_body', 144),
+            ('obj_zombie5', 'par_action_door', 187), ('obj_zombie5', 'par_action', 184)])
+        self.assertTrue(all(x['native_arm_bytes'] == '1eff2fe1' for x in result['events']))
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / 'objects').mkdir()
+            for name in ('obj_player', 'obj_zombie4', 'obj_zombie5'):
+                shutil.copy(PROJECT / 'objects' / (name+'.object.gmx'), root/'objects')
             path = root / 'objects/obj_player.object.gmx'
-            shutil.copy(PROJECT / 'objects/obj_player.object.gmx', path)
             text = path.read_text()
             path.write_text(text.replace('/// not inherited\n', 'x = 42;\n'))
             with self.assertRaisesRegex(ValueError, 'comment-only'):
                 verify(APK, root)
             path.write_text(text.replace('eventtype="4" ename="par_action"', 'eventtype="4" ename="par_solid"'))
             with self.assertRaisesRegex(ValueError, 'source collision event'):
+                verify(APK, root)
+            path.write_text(text)
+            zombie = root/'objects/obj_zombie5.object.gmx'
+            zombie_text = zombie.read_text()
+            zombie.write_text(zombie_text.replace('eventtype="4" ename="par_action_door"', 'eventtype="4" ename="par_solid"'))
+            with self.assertRaisesRegex(ValueError, 'source collision event'):
+                verify(APK, root)
+            zombie.write_text(zombie_text.replace('/// not inherited\n', 'event_inherited();\n', 1))
+            with self.assertRaisesRegex(ValueError, 'comment-only'):
                 verify(APK, root)
 
 
