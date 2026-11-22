@@ -19,6 +19,8 @@ on:
       - 'tools/deadtown_gamepad_evidence.py'
       - 'tools/deadtown_gamepad_vm_probe.py'
       - 'tools/deadtown_settings_particle_evidence.py'
+      - 'tools/deadtown_boss2_turn_evidence.py'
+      - 'tests/test_deadtown_boss2_turn_evidence.py'
       - 'tools/deadtown_crosshair_evidence.py'
       - 'tests/test_deadtown_crosshair_evidence.py'
       - 'tools/deadtown_settings_particle_vm_probe.py'

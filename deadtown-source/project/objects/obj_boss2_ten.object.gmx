@@ -46,6 +46,38 @@ type = 0 // 0 :normal 1:bloody 2:poison
 
 pull_speed = 7
 blood_speed = 0.5
+
+// Partial native candidate: slot 1201 temporarily reverses the turn.
+__dt_reverse_turn = 0
+if (choose(1,0,0) &gt; 0.5)
+{
+    __dt_reverse_turn = 1
+    alarm[0] = 20
+}
+</string>
+          </argument>
+        </arguments>
+      </action>
+    </event>
+    <event eventtype="2" enumb="0">
+      <action>
+        <libid>1</libid>
+        <id>603</id>
+        <kind>7</kind>
+        <userelative>0</userelative>
+        <isquestion>0</isquestion>
+        <useapplyto>-1</useapplyto>
+        <exetype>2</exetype>
+        <functionname></functionname>
+        <codestring></codestring>
+        <whoName>self</whoName>
+        <relative>0</relative>
+        <isnot>0</isnot>
+        <arguments>
+          <argument>
+            <kind>1</kind>
+            <string>/// Partial native candidate: slot 1201; original name unknown.
+__dt_reverse_turn = 0
 </string>
           </argument>
         </arguments>
@@ -107,6 +139,12 @@ else
             
             if abs(angle_difference(bangle,point_direction(x,y,obj_player.x,obj_player.y))) &lt; body_angle_max
             {go_dir = point_direction(x,y,obj_player.x,obj_player.y)-bangle}
+
+            // Partial native candidate: the temporary flag reverses the turn.
+            if (__dt_reverse_turn &gt; 0.5)
+            {
+                go_dir *= -1
+            }
             
             body_x[0] += lengthdir_x(body_length,bangle+go_dir)
             body_y[0] += lengthdir_y(body_length,bangle+go_dir)

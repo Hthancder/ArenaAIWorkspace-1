@@ -840,6 +840,27 @@ test cũng sửa alpha/metadata để xác nhận công cụ báo sai. Metadata 
 metadata **không** đồng nghĩa khôi phục hoàn toàn hình ảnh, mask, animation,
 resource ID, renderer hoặc iOS.
 
+### Ứng viên đảo hướng tạm thời của xúc tu boss 2
+
+APK ARM32 `obj_boss2_ten:Create:0` tại `0x714ef4` đặt slot instance 1201
+về 0, sau đó chọn từ bảng hằng `[1,0,0]`; khi kết quả > 0,5, slot thành 1 và
+`alarm[0]` được đặt 20. `Alarm:0` tại `0x715b08` đặt slot này về 0.
+Trong `Step:0` tại `0x715bd8`, slot 1201 > 0,5 khiến slot 1088 nhân -1
+trước khi tiếp tục tính tọa độ. Mẫu khởi tạo slot 1088 về 0, gán từ slot được
+khởi tạo 18, rồi sử dụng như góc bù khớp cấu trúc `go_dir`/`body_angle_max`
+trong source cũ. Ánh xạ đó là **ứng viên**, không phải tên native chứng minh.
+
+Đã thêm `__dt_reverse_turn` (alias tự đặt), nhánh khởi tạo, một đoạn đảo
+`go_dir` và event Alarm 0. Bộ `tools/deadtown_boss2_turn_evidence.py` ghim
+hash ba export, các lệnh ARM, relocation và bảng hằng chọn, đồng thời kiểm
+vị trí các fragment source. Probe VM dùng `choose` giả và chạy fragment riêng,
+không chạy toàn event hay bộ lập lịch thật. Source cũ còn nhiều chi tiết khác
+chưa khớp; ví dụ Create native đặt `move_speed` ban đầu 8 trong khi source cũ
+đặt 7 và chưa đối chiếu đầy đủ các nhánh sau, nên không tự sửa giá trị này.
+Không suy ra boss, RNG, gameplay hay iOS đã hoạt động đúng. Audit mới thiếu 56
+script, 90 object, 365 event key, 4 sprite và 8 room theo tên/key; 0 file tham
+chiếu thiếu. Trùng key không chứng minh toàn event tương đương.
+
 ### Bổ sung ứng viên cài đặt hiệu ứng và gate particle
 
 Đã đối chiếu bảy global slot với key INI và mặc định, thêm alias trung tính
