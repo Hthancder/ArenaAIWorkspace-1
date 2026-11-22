@@ -39,6 +39,23 @@ vm.createContext(ctx); vm.runInContext(source.slice(source.indexOf(marker)),ctx)
   resolveOld(JSON.stringify({find:'playing'}));
   await old;
   assert.strictEqual(elements['ux-status'].textContent, stoppedMessage);
+  let finishFind;
+  const ordered = [];
+  ctx.fetch = async (url, opts) => {
+    const action = opts.body.values.action; ordered.push(action);
+    if (action === 'find') await new Promise(resolve => { finishFind = resolve; });
+    return {ok:true,json:async()=>({ok:true,msg:action})};
+  };
+  const finding = elements['ux-find'].handlers.click();
+  const stopping = elements['ux-stop'].handlers.click();
+  await new Promise(r=>setImmediate(r));
+  assert.deepStrictEqual(ordered,['find']);
+  assert(elements['ux-find'].disabled);
+  finishFind(); await finding; await stopping;
+  assert.deepStrictEqual(ordered,['find','stop']);
+  assert(!elements['ux-find'].disabled);
+  assert.strictEqual(elements['ux-status'].textContent, 'stop');
+
 
   console.log('Device UX browser regression tests passed');
 })().catch(err=>{ console.error(err); process.exitCode=1; });
