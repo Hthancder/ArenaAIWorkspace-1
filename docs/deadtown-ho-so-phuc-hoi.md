@@ -843,16 +843,17 @@ resource ID, renderer hoặc iOS.
 ### Ứng viên va chạm khi vật phẩm rơi di chuyển
 
 `obj_item:Step:0` native kiểm tra tốc độ, tính độ dịch và ma sát rồi thử hình
-chữ nhật cách tâm dự kiến 20 đơn vị với object `par_action` (precise và notme
-đều 1); chỉ dịch vị trí nếu kiểm tra không thấy vật cản. Đã thêm phần kiểm tra
-`par_action` vào mã cũ, giúp vật phẩm rơi không đi xuyên nhóm vật thể này trong
-trường hợp tương ứng. Đây là **phục hồi một phần**: native còn một phép kiểm
-va chạm trước đó mà mục tiêu chưa xác định, nên chưa mô phỏng; tên biến suy
-luận từ source cũ, gần ngưỡng epsilon có thể khác. Verifier
-`tools/deadtown_item_motion_evidence.py` ghim export và phần lệnh đối chiếu.
-CI native `45040319183`, workbench `45040319179` và VM `45040319234` đạt;
-probe VM dùng kết quả va chạm giả, không kiểm engine va chạm hoặc gameplay/iOS.
-Event đã tồn tại trước đây nên số event key thiếu không đổi.
+chữ nhật cách tâm dự kiến 20 đơn vị với hai nhóm vật thể, precise và notme đều
+1; chỉ dịch vị trí nếu cả hai không có vật cản. Nhóm thứ hai là `par_action`.
+Đối số thứ nhất là RValue 16 byte trong `.bss`, giá trị khởi tạo toàn số 0;
+object ID 0 trong APK là `par_building`. Do đó đã bổ sung kiểm tra ứng viên
+`par_building` trước `par_action`, có thể giúp vật phẩm không trượt xuyên nhà.
+**Chưa chắc chắn tuyệt đối**: RValue nằm trong bộ nhớ ghi được, chưa chứng minh
+nó không bị thay đổi khi chạy; tên biến suy luận từ source cũ và xử lý gần
+ngưỡng epsilon có thể khác. Verifier `tools/deadtown_item_motion_evidence.py`
+ghim export, relocation và cấu trúc zero-initialized này. Probe VM dùng kết quả
+va chạm giả, không kiểm engine va chạm hoặc gameplay/iOS. Event đã tồn tại trước
+đây nên số event key thiếu không đổi.
 
 ### Ứng viên điều khiển túi đồ và tạm dừng
 

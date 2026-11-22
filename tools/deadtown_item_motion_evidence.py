@@ -30,11 +30,14 @@ if sp > 0
     else
     {sp = 0}
 
-    // Native performs another collision check first; its target is unresolved.
-    if collision_rectangle(x+xx-20,y+yy-20,x+xx+20,y+yy+20,par_action,1,1) == noone
+    // First native target uses a zero-initialized RValue: object 0 is par_building.
+    if collision_rectangle(x+xx-20,y+yy-20,x+xx+20,y+yy+20,par_building,1,1) == noone
     {
-        x += xx
-        y += yy
+        if collision_rectangle(x+xx-20,y+yy-20,x+xx+20,y+yy+20,par_action,1,1) == noone
+        {
+            x += xx
+            y += yy
+        }
     }
 }
 '''
@@ -64,7 +67,8 @@ def inspect(apk):
     with zipfile.ZipFile(apk) as z:
         raw=read_zip_member(z,'lib/armeabi-v7a/libyoyo.so')
         data=read_zip_member(z,'assets/game.droid')
-    if hashlib.sha256(raw).hexdigest()!=LIB_SHA256 or resource_names(data,b'OBJT')[184]!='par_action':
+    objects=resource_names(data,b'OBJT')
+    if hashlib.sha256(raw).hexdigest()!=LIB_SHA256 or objects[0]!='par_building' or objects[184]!='par_action':
         raise ValueError('unexpected native inputs')
     elf=ELFFile(io.BytesIO(raw)); symbols=elf.get_section_by_name('.dynsym')
     for name,addr,size,digest in [('gml_Object_obj_item_Step_0',START,SIZE,DIGEST),
@@ -96,6 +100,13 @@ def inspect(apk):
         s=got.get((add+8+lit(base)+lit(off))&0xffffffff)
         if s is None or s.name!=name:raise ValueError('unexpected relocation '+name)
         return s
+    symbol(0x625b18,0x625b24,0x625b20,'g_FUNC_collision_rectangle')
+    first=symbol(0x625b18,0x625b24,0x625b28,'gs_constArg0_703')
+    section=elf.get_section(first['st_shndx'])
+    if first['st_size']!=16 or section.name!='.bss' or section['sh_type']!='SHT_NOBITS' or not section['sh_flags'] & 1:
+        raise ValueError('unexpected zero-initialized first target')
+    # BSS starts as a 16-byte all-zero RValue, whose real payload and kind
+    # are zero. It is writable: runtime mutation cannot be ruled out here.
     symbol(0x625da8,0x625db0,0x625dac,'g_FUNC_collision_rectangle')
     target=symbol(0x625da8,0x625db0,0x625db4,'gs_constArg2_703')
     precise=symbol(0x625da8,0x625db0,0x625b2c,'gs_constArg1_703')
@@ -109,6 +120,12 @@ def inspect(apk):
         (0x625818,'movw','r1, #0x447'),(0x62583c,'bl','#0x176594'),
         (0x625844,'blt','#0x625898'),(0x62585c,'movw','r1, #0x12d'),
         (0x6258ac,'movw','r1, #0x12d'),(0x6258c4,'movw','r1, #0x447'),
+        (0x6259d0,'bl','#0x17660c'),(0x625a34,'bl','#0x17660c'),
+        (0x625a98,'bl','#0x176660'),(0x625af8,'bl','#0x176660'),
+        (0x625b4c,'str','r1, [sp, #0x21c]'), (0x625b50,'str','r0, [sp, #0x220]'),
+        (0x625b54,'str','r0, [sp, #0x224]'),(0x625b70,'ldr','r1, [sp, #0x24]'),
+        (0x625b74,'bl','#0x17654c'),(0x625b80,'vmov.f64','d9, #4.000000e+00'),
+        (0x625b90,'vadd.f64','d0, d0, d9'),(0x625bb4,'bhi','#0x625fb4'),
         (0x625c60,'bl','#0x17660c'),(0x625cc4,'bl','#0x17660c'),
         (0x625d24,'bl','#0x176660'),(0x625d88,'bl','#0x176660'),
         (0x625db0,'add','r0, pc, r0'),(0x625dd4,'str','r1, [sp, #0x17c]'),
@@ -119,8 +136,8 @@ def inspect(apk):
         (0x625edc,'bl','#0x1768dc'),(0x625ef4,'mov','r1, #0xcb'),
         (0x625f48,'bl','#0x1768dc')):check(a,op,args)
     return {'event':'obj_item:Step:0','address':hex(START),'sha256':DIGEST,
-        'recovered':'moving item rectangle with 20-unit margins checks par_action, precise=1, notme=1; update x/y only when clear',
-        'limitations':'Partial: earlier native collision check is omitted because its target is unresolved; aliases are inferred from older source, near-zero epsilon and float behavior may differ. No native or iOS execution.'}
+        'recovered':'moving item rectangle with 20-unit margins checks zero-initialized object 0 (par_building), then par_action, precise=1, notme=1; update x/y only when both clear',
+        'limitations':'First argument is in writable BSS; runtime mutation is not ruled out. Aliases are inferred from older source, near-zero epsilon and float behavior may differ. No native or iOS execution.'}
 
 
 def main():

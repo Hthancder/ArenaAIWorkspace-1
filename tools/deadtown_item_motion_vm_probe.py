@@ -13,17 +13,19 @@ except ModuleNotFoundError:
     from deadtown_item_motion_evidence import MOTION, verify_source
     from deadtown_item_schedule_vm_probe import find
 
-MARKER='ITEM_MOTION_VM:1:1:1'
-EXPR='collision_rectangle(x+xx-20,y+yy-20,x+xx+20,y+yy+20,par_action,1,1)'
+MARKER='ITEM_MOTION_VM:1:1:1:1'
+BUILDING='collision_rectangle(x+xx-20,y+yy-20,x+xx+20,y+yy+20,par_building,1,1)'
+ACTION='collision_rectangle(x+xx-20,y+yy-20,x+xx+20,y+yy+20,par_action,1,1)'
 
 
 def instrument(events,project):
     verify_source(project)
     # The scheduling diagnostic intentionally stubs item Step. Confirm its
     # original source separately, then embed the same movement fragment here.
-    if MOTION.count(EXPR)!=1: raise ValueError('unexpected collision expression')
-    clear=MOTION.replace(EXPR,'noone')
-    blocked=MOTION.replace(EXPR,'123456')
+    if MOTION.count(BUILDING)!=1 or MOTION.count(ACTION)!=1: raise ValueError('unexpected collision expression')
+    clear=MOTION.replace(BUILDING,'noone').replace(ACTION,'noone')
+    blocked_building=MOTION.replace(BUILDING,'123456').replace(ACTION,'noone')
+    blocked_action=MOTION.replace(BUILDING,'noone').replace(ACTION,'123456')
     create=find(events,'sys_global','0','0')
     create['gml']='''__dt_old_x = x; __dt_old_y = y;
 x = 100; y = 200; sp = 0; dir = 0; fric = 0.2; xx = 99; yy = 99;
@@ -33,9 +35,12 @@ x = 100; y = 200; sp = 3; dir = 0; fric = 0.2;
 '''+clear+'''
 __dt_clear = abs(x-103) < 0.001 && abs(y-200) < 0.001 && abs(sp-2.8) < 0.001;
 x = 100; y = 200; sp = 3; dir = 0; fric = 0.2;
-'''+blocked+'''
-__dt_blocked = x == 100 && y == 200 && abs(sp-2.8) < 0.001;
-show_debug_message("ITEM_MOTION_VM:" + string(__dt_stationary) + ":" + string(__dt_clear) + ":" + string(__dt_blocked));
+'''+blocked_building+'''
+__dt_blocked_building = x == 100 && y == 200 && abs(sp-2.8) < 0.001;
+x = 100; y = 200; sp = 3; dir = 0; fric = 0.2;
+'''+blocked_action+'''
+__dt_blocked_action = x == 100 && y == 200 && abs(sp-2.8) < 0.001;
+show_debug_message("ITEM_MOTION_VM:" + string(__dt_stationary) + ":" + string(__dt_clear) + ":" + string(__dt_blocked_building) + ":" + string(__dt_blocked_action));
 x = __dt_old_x; y = __dt_old_y;
 '''+create['gml']
     return events

@@ -24,7 +24,7 @@ class ItemMotionTests(unittest.TestCase):
             dest=Path(tmp)/'objects';dest.mkdir()
             path=dest/'obj_item.object.gmx';shutil.copy(PROJECT/'objects/obj_item.object.gmx',path)
             original=path.read_text(encoding='utf-8')
-            for a,b in [('x+xx-20','x+xx-10'),('par_action,1,1','par_solid,1,1'),('if sp &gt; 0','if sp &gt; 1')]:
+            for a,b in [('x+xx-20','x+xx-10'),('par_building,1,1','par_solid,1,1'),('par_action,1,1','par_solid,1,1'),('if sp &gt; 0','if sp &gt; 1')]:
                 self.assertIn(a,original);path.write_text(original.replace(a,b,1),encoding='utf-8')
                 with self.assertRaises(ValueError):verify_source(Path(tmp))
                 path.write_text(original,encoding='utf-8')
@@ -32,7 +32,8 @@ class ItemMotionTests(unittest.TestCase):
     def test_probe(self):
         ev=extract_events(PROJECT);instrument(ev,PROJECT)
         self.assertEqual(check(MARKER),1)
-        with self.assertRaises(ValueError):check('ITEM_MOTION_VM:1:1:0')
+        with self.assertRaises(ValueError):check('ITEM_MOTION_VM:1:1:0:1')
+        with self.assertRaises(ValueError):check('ITEM_MOTION_VM:1:1:1:0')
 
     @unittest.skipUnless(DEPS and APK.is_file(),'requires pinned APK and analysis dependencies')
     def test_native(self):

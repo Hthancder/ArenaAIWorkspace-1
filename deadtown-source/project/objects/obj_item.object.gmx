@@ -99,11 +99,14 @@ if sp &gt; 0
     else
     {sp = 0}
 
-    // Native performs another collision check first; its target is unresolved.
-    if collision_rectangle(x+xx-20,y+yy-20,x+xx+20,y+yy+20,par_action,1,1) == noone
+    // First native target uses a zero-initialized RValue: object 0 is par_building.
+    if collision_rectangle(x+xx-20,y+yy-20,x+xx+20,y+yy+20,par_building,1,1) == noone
     {
-        x += xx
-        y += yy
+        if collision_rectangle(x+xx-20,y+yy-20,x+xx+20,y+yy+20,par_action,1,1) == noone
+        {
+            x += xx
+            y += yy
+        }
     }
 }
 </string>
