@@ -48,6 +48,7 @@ on:
       - deadtown-source/project/objects/par_solid.object.gmx
       - deadtown-source/project/objects/par_building.object.gmx
       - deadtown-source/project/objects/obj_player.object.gmx
+      - deadtown-source/project/objects/sys_global.object.gmx
       - deadtown-source/project/objects/par_vehicle.object.gmx
       - deadtown-source/project/objects/par_action.object.gmx
       - deadtown-source/project/objects/par_action_move.object.gmx

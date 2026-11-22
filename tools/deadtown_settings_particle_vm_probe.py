@@ -8,12 +8,13 @@ import argparse
 import json
 from pathlib import Path
 import shutil
+import xml.etree.ElementTree as ET
 
 try:
-    from tools.deadtown_settings_particle_evidence import ROOF_SHADOW, PLAYER_SHADOW, PLAYER_FEEDBACK
+    from tools.deadtown_settings_particle_evidence import ROOF_SHADOW, PLAYER_SHADOW, PLAYER_FEEDBACK, INTERPOLATION_EVENT
     from tools.deadtown_crosshair_evidence import verify_source as verify_crosshair_source
 except ModuleNotFoundError:
-    from deadtown_settings_particle_evidence import ROOF_SHADOW, PLAYER_SHADOW, PLAYER_FEEDBACK
+    from deadtown_settings_particle_evidence import ROOF_SHADOW, PLAYER_SHADOW, PLAYER_FEEDBACK, INTERPOLATION_EVENT
     from deadtown_crosshair_evidence import verify_source as verify_crosshair_source
 
 try:
@@ -49,6 +50,9 @@ EXPECTED = [
     'SETTINGS_PARTICLE_VM:crosshair-short:0:1:1:1',
     'SETTINGS_PARTICLE_VM:crosshair-boundary:0:1:1:1',
     'SETTINGS_PARTICLE_VM:crosshair-long:1:1:1:1',
+    'SETTINGS_PARTICLE_VM:interpolate-off:0:1',
+    'SETTINGS_PARTICLE_VM:interpolate-on:1:1',
+    'SETTINGS_PARTICLE_VM:interpolate-raw:7:1',
 ]
 PART_BUILTINS = {'part_emitter_region': 1, 'part_type_direction': 2,
                  'part_emitter_burst': 3, 'part_type_size': 4, 'part_type_orientation': 5}
@@ -86,6 +90,11 @@ def instrument(events, project):
         if player.count(draw) != 1:
             raise ValueError('unexpected player shadow branch')
         player = player.replace(draw, f'global.__dt_shadow_calls += {count};')
+    system = ET.parse(Path(project)/'objects/sys_global.object.gmx').getroot()
+    events_room_start = system.findall('./events/event[@eventtype="7"][@enumb="4"]/action/arguments/argument/string')
+    if len(events_room_start) != 1 or events_room_start[0].text != INTERPOLATION_EVENT:
+        raise ValueError('unexpected interpolation event')
+    interpolation = INTERPOLATION_EVENT.replace('texture_set_interpolation(', '__dt_probe_texture_set_interpolation(')
     feedback = PLAYER_FEEDBACK.replace('gp_connect_check()', '__dt_probe_gp_feedback()')
     feedback = feedback.replace('sys_view.left_distance_ratio', 'global.__dt_feedback_distance')
     feedback = feedback.replace('fx = x+lengthdir_x(global.__dt_feedback_distance*100,sys_view.view_a+sys_view.left_direction)', 'global.__dt_feedback_fx = 1;')
@@ -192,6 +201,15 @@ global.__dt_cross_distance = 150; global.__dt_cross_scale = 1.5;
 global.__dt_cross_args = 0; global.__dt_cross_draw_ok = 0; global.__dt_cross_calls = 0;
 draw_line_crosshair(11, 22, 33, 44);
 show_debug_message("SETTINGS_PARTICLE_VM:crosshair-long:" + string(global.__dt_cross_frame) + ":" + string(global.__dt_cross_args) + ":" + string(global.__dt_cross_draw_ok) + ":" + string(global.__dt_cross_calls));
+global.__dt_setting_interpolate = 0; global.__dt_interp_calls = 0;
+{interpolation}
+show_debug_message("SETTINGS_PARTICLE_VM:interpolate-off:" + string(global.__dt_interp_value) + ":" + string(global.__dt_interp_calls));
+global.__dt_setting_interpolate = 1; global.__dt_interp_calls = 0;
+{interpolation}
+show_debug_message("SETTINGS_PARTICLE_VM:interpolate-on:" + string(global.__dt_interp_value) + ":" + string(global.__dt_interp_calls));
+global.__dt_setting_interpolate = 7; global.__dt_interp_calls = 0;
+{interpolation}
+show_debug_message("SETTINGS_PARTICLE_VM:interpolate-raw:" + string(global.__dt_interp_value) + ":" + string(global.__dt_interp_calls));
 global.__dt_ini_has = 0;
 '''
     found[0]['gml'] = prefix + found[0]['gml']
@@ -245,6 +263,7 @@ def make_project(project, dest):
         for name, text in cross_mocks.items():
             (scripts/('__dt_cross_'+name+'.gml')).write_text(text, encoding='utf-8')
         mocks['gp_feedback'] = 'global.__dt_feedback_checks += 1; return global.__dt_feedback_gp;\n'
+        mocks['texture_set_interpolation'] = 'global.__dt_interp_value = argument0; global.__dt_interp_calls += 1;\n'
         mocks.update({'ini_open': '', 'ini_close': '', 'display_get_width': 'return 1334;\n',
                       'os_get_language': 'return "en";\n', 'lang_type_set': ''})
         read = 'if (argument0 == "setting" && argument1 == "check") return global.__dt_ini_has;\n'

@@ -848,8 +848,9 @@ particle đọc trước khi vào phần xử lý; source cũ thêm gate 0,5. Th
 bóng ở tám Draw event (`par_solid`, `par_vehicle`, `obj_parcel`, `par_building`,
 `obj_player` và ba object `par_action`) theo slot 86; không tắt các lệnh vẽ foreground.
 Ứng viên Draw của player cũng gate feedback di chuyển bằng slot 82 và kết quả
-`gp_connect_check`. Script `draw_line_crosshair` cũng đã có ứng viên riêng từ
-ARM32, nhưng chưa được nối vào Draw GUI cũ. Kiểm tĩnh và VM mock, cùng giới hạn, được trình bày tại
+`gp_connect_check`. Room Start của `sys_global` có ứng viên truyền slot 83 vào
+`texture_set_interpolation`. Script `draw_line_crosshair` cũng đã có ứng viên
+riêng từ ARM32, nhưng chưa được nối vào Draw GUI cũ. Kiểm tĩnh và VM mock, cùng giới hạn, được trình bày tại
 [deadtown-settings-particle.md](deadtown-settings-particle.md). Không coi UI,
 hiệu ứng thực, gameplay hoặc iOS đã được xác nhận.
 

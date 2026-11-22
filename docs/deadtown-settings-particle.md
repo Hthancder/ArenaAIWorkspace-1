@@ -28,6 +28,12 @@ slot/đọc/ghi, chuỗi INI, mặc định và nhánh gate. Các phép quét gh
 ghi/stack giải mã từng word ARM riêng để không dừng sớm ở literal pool; pool có
 thể gây báo động giả, và phép quét không thay thế phân tích control-flow/alias.
 
+Room Start `sys_global:Other:4` ARM32 tại `0x43b36c` đọc slot 83 và truyền
+nguyên giá trị tới `texture_set_interpolation` qua hàm legacy. Source nay có
+ứng viên event tương ứng, dùng alias tự đặt. Probe riêng chỉ thay hàm đó bằng
+mock để kiểm tra đối số 0, 1 và 7, không xác minh GPU, interpolation thực tế,
+thứ tự chuyển room trên thiết bị hay nguyên nhân vệt màu iOS.
+
 Probe VM riêng dùng INI và particle mock: đối chiếu mặc định, đọc/ghi qua mock,
 nhánh 0, 0,5 và 1 cùng thứ tự gọi trong bốn script. Mock không chứng minh tệp
 save thật, hạt/rendering, thao tác UI, gameplay, compiler GameMaker hay iOS.
