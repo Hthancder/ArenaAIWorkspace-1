@@ -840,6 +840,20 @@ test cũng sửa alpha/metadata để xác nhận công cụ báo sai. Metadata 
 metadata **không** đồng nghĩa khôi phục hoàn toàn hình ảnh, mask, animation,
 resource ID, renderer hoặc iOS.
 
+### Ứng viên End Step boss 2 theo khoảng cách
+
+Native `obj_boss2:Step:2` tại `0x712520` lấy `x,y` của instance và
+`x,y` của object ID 142 (`obj_player`), gọi `point_distance` và hủy boss
+khi khoảng cách lớn hơn 8000 theo ngưỡng epsilon hiện hành. Đã thêm event
+End Step ứng viên; verifier `tools/deadtown_boss2_distance_evidence.py` ghim
+hash export, OBJT, relocation, thứ tự 4 tham số, hằng số và nhánh hủy. So sánh
+native dùng epsilon (khởi tạo tĩnh 1e-10), nên GML có thể khác gần ranh giới;
+không thêm guard tồn tại player vì native không cho thấy guard trong event này.
+Chưa xác minh trường hợp thiếu player, NaN, thừa kế, gameplay hay iOS. Probe
+VM cô lập thay Create/Step/Destroy của player và boss bằng stub; không đại diện
+toàn bộ gameplay. Audit sau thay đổi thiếu 358 event key; trùng key không
+chứng minh toàn bộ logic đã phục hồi.
+
 ### Sáu ứng viên dọn ánh sáng khi Destroy
 
 Đã thêm Destroy 0 cho `obj_bettery`, `obj_lightaction`, `obj_cooker`,
@@ -901,7 +915,7 @@ fragment source nhánh type 0; test sửa giá trị và nhánh. So sánh native
 ngưỡng epsilon, và các nhánh type 1/2, điều kiện dẫn tới sát thương, hành vi
 runtime và phần còn lại Create/Step chưa được xác minh hoàn toàn. Không suy ra
 boss, RNG, gameplay hay iOS đã hoạt động đúng. Audit mới thiếu 56
-script, 90 object, 359 event key, 4 sprite và 8 room theo tên/key; 0 file tham
+script, 90 object, 358 event key, 4 sprite và 8 room theo tên/key; 0 file tham
 chiếu thiếu. Trùng key không chứng minh toàn event tương đương.
 
 ### Bổ sung ứng viên cài đặt hiệu ứng và gate particle
