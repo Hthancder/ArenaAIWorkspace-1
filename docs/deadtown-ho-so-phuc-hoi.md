@@ -850,7 +850,8 @@ trường hợp tương ứng. Đây là **phục hồi một phần**: native c
 va chạm trước đó mà mục tiêu chưa xác định, nên chưa mô phỏng; tên biến suy
 luận từ source cũ, gần ngưỡng epsilon có thể khác. Verifier
 `tools/deadtown_item_motion_evidence.py` ghim export và phần lệnh đối chiếu.
-Probe VM dùng kết quả va chạm giả, không kiểm engine va chạm hoặc gameplay/iOS.
+CI native `45040319183`, workbench `45040319179` và VM `45040319234` đạt;
+probe VM dùng kết quả va chạm giả, không kiểm engine va chạm hoặc gameplay/iOS.
 Event đã tồn tại trước đây nên số event key thiếu không đổi.
 
 ### Ứng viên điều khiển túi đồ và tạm dừng
