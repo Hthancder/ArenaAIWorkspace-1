@@ -26,6 +26,11 @@ FOUNDATION_EXPORT void SXLogWrite(SXLogLevel level, NSString *category, NSString
 /// "sk-…abcd (51 ký tự)" — không bao giờ ghi khóa API đầy đủ vào log.
 FOUNDATION_EXPORT NSString *SXRedactKey(NSString * _Nullable key);
 
+/// Ẩn khoá/token lọt vào một DÒNG log (kể cả từ thông báo lỗi của máy chủ hay
+/// URL có `?api_key=…`). `SXLogWrite` gọi hàm này cho mọi dòng. Xuất ra để test
+/// được mà không phải bật ghi tệp; xem `tests/log_file_test.c`.
+FOUNDATION_EXPORT NSString *SXRedactLogLine(NSString *line);
+
 #define SXLogDbg(cat, ...) SXLogWrite(SXLogLevelDebug, (cat), __VA_ARGS__)
 #define SXLogInf(cat, ...) SXLogWrite(SXLogLevelInfo, (cat), __VA_ARGS__)
 #define SXLogWrn(cat, ...) SXLogWrite(SXLogLevelWarn, (cat), __VA_ARGS__)

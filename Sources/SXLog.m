@@ -90,6 +90,49 @@ static void SXMaybeRotateDuringSession(void) {
 	}
 }
 
+/// Bộ lọc cuối cùng trước khi một dòng log ra đĩa / os_log.
+///
+/// Vì sao cần: log này được người dùng **sao chép rồi dán vào chat/issue** để
+/// nhờ gỡ lỗi. Mọi chỗ ghi khoá đều đã dùng `SXRedactKey`, nhưng một thông báo
+/// lỗi của thư viện, một URL có `?api_key=…`, hay `NSError.userInfo` do máy chủ
+/// trả về có thể vô tình chứa khoá/số điện thoại. Thay hình dạng đã biết bằng
+/// dấu •, không đổi phần còn lại để log vẫn đọc được.
+NSString *SXRedactLogLine(NSString *line) {
+	if (!line.length) return line;
+	// Mỗi mục: @[regex, template]. Template viết riêng cho từng mẫu — mẫu "khoá
+	// trần" không có nhóm bắt nên KHÔNG được dùng `$1` (ICU coi đó là tham chiếu
+	// nhóm không tồn tại và có thể ném ngoại lệ ngay giữa đường ghi log).
+	static NSArray<NSArray *> *rules;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		NSMutableArray *list = [NSMutableArray array];
+		void (^add)(NSString *, NSString *) = ^(NSString *pattern, NSString *template) {
+			NSRegularExpression *re = [NSRegularExpression regularExpressionWithPattern:pattern
+																				options:NSRegularExpressionCaseInsensitive error:NULL];
+			if (re) [list addObject:@[re, template]];
+		};
+		// Khoá kiểu OpenAI/Anthropic/Groq/Gemini: thay cả chuỗi.
+		add(@"\\b(?:sk-[A-Za-z0-9_\\-]{8,}|sk_live_[A-Za-z0-9]{8,}|gsk_[A-Za-z0-9]{20,})",
+			@"••••(đã ẩn)");
+		add(@"\\bAIza[0-9A-Za-z_\\-]{20,}", @"••••(đã ẩn)");
+		// `Authorization: Bearer …` và tham số khoá trong URL/JSON: giữ tiền tố để
+		// dòng log vẫn đọc được (`Bearer ••••`).
+		add(@"(Bearer )[A-Za-z0-9_\\-\\.]{16,}", @"$1••••(đã ẩn)");
+		add(@"([?&](?:api_key|apikey|key|token|access_token)=)[^&\\s\"]{8,}",
+			@"$1••••(đã ẩn)");
+		add(@"(\"(?:api_key|apiKey|key|token)\"\\s*:\\s*\")[^\"]{8,}", @"$1••••(đã ẩn)");
+		rules = list;
+	});
+	NSString *result = line;
+	for (NSArray *rule in rules) {
+		NSRegularExpression *re = rule[0];
+		NSRange full = NSMakeRange(0, result.length);
+		if ([re rangeOfFirstMatchInString:result options:0 range:full].location == NSNotFound) continue;
+		result = [re stringByReplacingMatchesInString:result options:0 range:full withTemplate:rule[1]];
+	}
+	return result;
+}
+
 void SXLogWrite(SXLogLevel level, NSString *category, NSString *format, ...) {
 	if (level == SXLogLevelDebug && !gVerbose) return;
 	SXMaybeRotateDuringSession();
@@ -114,6 +157,8 @@ void SXLogWrite(SXLogLevel level, NSString *category, NSString *format, ...) {
 					  category.UTF8String ?: "?",
 					  gProc.UTF8String ?: "?",
 					  msg];
+
+	line = SXRedactLogLine(line);
 
 	// Mở theo đường dẫn cho từng dòng: xóa/đổi tên/xoay vòng trong process khác
 	// không khiến descriptor tiếp tục ghi vào inode đã bị tách khỏi SiriX.log.
