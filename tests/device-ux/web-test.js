@@ -30,5 +30,15 @@ vm.createContext(ctx); vm.runInContext(source.slice(source.indexOf(marker)),ctx)
   assert(elements['ux-status'].textContent.includes('Saved'));
   await elements['ux-stop'].handlers.click();
   assert.strictEqual(calls[4].opts.body.values.action,'stop');
+  // A status request begun before Stop cannot overwrite its newer message.
+  let resolveOld;
+  ctx.requestGet = () => new Promise(resolve => { resolveOld = resolve; });
+  const old = ctx.uxLoad(false);
+  await elements['ux-stop'].handlers.click();
+  const stoppedMessage = elements['ux-status'].textContent;
+  resolveOld(JSON.stringify({find:'playing'}));
+  await old;
+  assert.strictEqual(elements['ux-status'].textContent, stoppedMessage);
+
   console.log('Device UX browser regression tests passed');
 })().catch(err=>{ console.error(err); process.exitCode=1; });

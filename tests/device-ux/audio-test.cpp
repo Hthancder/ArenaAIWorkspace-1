@@ -10,6 +10,7 @@ SerialStub Serial; WireStub Wire; Config bruceConfig;
 static unsigned nowMs; static bool mic, speaker, playing, i2sBusy, writeError, codecOk = true;
 static TaskHandle_t task = (void*)1;
 static int starts, stops, deleted, blinks, addr, begins;
+static bool restartFindDuringWrite = false;
 static std::vector<int16_t> output;
 uint32_t millis() { return nowMs; }
 TaskHandle_t xTaskGetCurrentTaskHandle() { return task; }
@@ -31,6 +32,10 @@ int i2s_channel_init_std_mode(i2s_chan_handle_t, const i2s_std_config_t *cfg) {
 }
 int i2s_channel_enable(i2s_chan_handle_t) { return 0; }
 int i2s_channel_write(i2s_chan_handle_t,const void *buf,size_t n,size_t *written,unsigned) {
+    if (restartFindDuringWrite) {
+        restartFindDuringWrite = false; uxFindStop(); nowMs += 10001;
+        const char *err = nullptr; assert(uxFindStart(&err));
+    }
     if (writeError) { *written = 0; return 1; }
     const int16_t *p = (const int16_t*)buf; output.insert(output.end(), p, p + n / 2); *written=n; return 0;
 }
@@ -65,5 +70,9 @@ int main() {
     nowMs += 10000; assert(uxFindStart(&err)); nowMs += 15001; assert(uxFindStatus() == "expired");
     nowMs += 10000; assert(uxFindStart(&err)); bruceConfig.soundEnabled = 0; uxService(); assert(uxFindStatus() == "playing_silent");
     nowMs += 700; uxService(); nowMs += 700; uxService(); assert(uxFindStatus() == "silent_or_busy" && blinks == 6);
+    bruceConfig.soundEnabled = 1; nowMs += 10000; assert(uxFindStart(&err));
+    restartFindDuringWrite = true; uxService();
+    assert(uxFindStatus() == "queued"); // old audio must not finish the replacement request
+    uxService(); assert(uxFindStatus() == "playing");
     std::cout << "Device UX audio and find regression tests passed\n";
 }

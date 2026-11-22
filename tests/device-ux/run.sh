@@ -13,3 +13,5 @@ g++ -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-fram
   "$src/src/core/menu_items/QuickMenu.cpp" "$root/tests/device-ux/quick-test.cpp" -o "$tmp/quick-test"
 "$tmp/quick-test"
 node "$root/tests/device-ux/web-test.js" "$src/embedded_resources/web_interface/index.js" "$src/embedded_resources/web_interface/index.html"
+
+node "$root/tests/device-ux/file-ux-test.js" "$src/embedded_resources/web_interface/index.js"

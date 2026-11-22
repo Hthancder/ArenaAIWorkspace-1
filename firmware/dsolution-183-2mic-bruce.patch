@@ -1461,10 +1461,10 @@ index 00000000..fcf16fef
 +spiffs,   data, spiffs,   0x810000, 0x7E0000,
 +coredump, data, coredump, 0xFF0000, 0x10000,
 diff --git a/embedded_resources/web_interface/index.css b/embedded_resources/web_interface/index.css
-index bda7b42a..dc25ca9a 100644
+index bda7b42a..ba9bbc76 100644
 --- a/embedded_resources/web_interface/index.css
 +++ b/embedded_resources/web_interface/index.css
-@@ -1,584 +1,700 @@
+@@ -1,584 +1,702 @@
  :root {
 -  --color: #ff3ec8;
 -  --background: #242424;
@@ -2265,12 +2265,16 @@ index bda7b42a..dc25ca9a 100644
 -  white-space: pre;
 -  overflow-wrap: normal;
 -  overflow: auto;
--}
+ }
 -.dialog.upload {
 -  width: 100%;
 -  max-width: 420px;
 -  max-height: calc(100vh - 20px);
--  display: flex;
++.field input:focus { border-color: var(--color); }
++.field input[type="range"] { width: 100%; accent-color: var(--color); margin-top: 6px; }
++.color-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
++.color-box {
+   display: flex;
 -  flex-direction: column;
 -}
 -.dialog.upload .dialog-body {
@@ -2301,39 +2305,7 @@ index bda7b42a..dc25ca9a 100644
 -  z-index: 2;
 -  position: relative;
 -  font-weight: bold;
--}
--.hidden {
--  display: none !important;
--}
--.upload-area,
--.loading-area {
--  position: fixed;
--  top: 0;
--  left: 0;
--  background-color: rgba(0, 0, 0, 0.8);
--  width: 100%;
--  height: 100%;
--  display: flex;
--  justify-content: center;
--  align-items: center;
- }
--.upload-area::before {
--  content: "Drop files here to upload them to current folder";
--  border: 3px dashed var(--color);
--  background-color: var(--background);
--  font-size: 24px;
--  padding: 20px;
--  height: 300px;
--  width: 300px;
--  text-align: center;
--  font-weight: bold;
--  vertical-align: center;
-+.field input:focus { border-color: var(--color); }
-+.field input[type="range"] { width: 100%; accent-color: var(--color); margin-top: 6px; }
-+.color-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
-+.color-box {
-   display: flex;
-   align-items: center;
++  align-items: center;
 +  justify-content: space-between;
 +  padding: 7px 10px;
 +  border: 1px solid var(--border);
@@ -2341,7 +2313,8 @@ index bda7b42a..dc25ca9a 100644
 +  background: color-mix(in srgb, var(--color) 4%, var(--background));
 +  font-size: 12px;
  }
--.loading-area .text {
+-.hidden {
+-  display: none !important;
 +.color-box input[type="color"] { width: 32px; height: 24px; border: 0; background: transparent; cursor: pointer; padding: 0; }
 +.pers-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
 +
@@ -2353,18 +2326,21 @@ index bda7b42a..dc25ca9a 100644
 +  border-radius: 999px;
 +  border: 1px solid var(--border);
 +  background: var(--surface);
-   color: var(--color);
--  border: 1px solid var(--color);
--  padding: 10px 20px;
--  min-width: 250px;
--  text-align: center;
--  max-width: 350px;
--  background-color: var(--background);
++  color: var(--color);
 +  font-size: 11.5px;
 +  font-family: ui-monospace, Consolas, monospace;
  }
--.oinput-file-name {
--  white-space: nowrap;
+-.upload-area,
+-.loading-area {
+-  position: fixed;
+-  top: 0;
+-  left: 0;
+-  background-color: rgba(0, 0, 0, 0.8);
+-  width: 100%;
+-  height: 100%;
+-  display: flex;
+-  justify-content: center;
+-  align-items: center;
 +.chip-cmd:hover { background: var(--color); color: var(--background); }
 +.console-out {
 +  margin: 0;
@@ -2392,7 +2368,20 @@ index bda7b42a..dc25ca9a 100644
 +  font-size: 13px;
 +  font-family: ui-monospace, Consolas, monospace;
 +  outline: 0;
-+}
+ }
+-.upload-area::before {
+-  content: "Drop files here to upload them to current folder";
+-  border: 3px dashed var(--color);
+-  background-color: var(--background);
+-  font-size: 24px;
+-  padding: 20px;
+-  height: 300px;
+-  width: 300px;
+-  text-align: center;
+-  font-weight: bold;
+-  vertical-align: center;
+-  display: flex;
+-  align-items: center;
 +#console-in:focus { border-color: var(--color); }
 +
 +/* Dialogs */
@@ -2401,20 +2390,28 @@ index bda7b42a..dc25ca9a 100644
 +  background: rgba(2, 6, 10, 0.8);
 +  backdrop-filter: blur(5px);
 +  display: flex; justify-content: center; align-items: center; padding: 14px;
-+}
+ }
+-.loading-area .text {
+-  color: var(--color);
+-  border: 1px solid var(--color);
+-  padding: 10px 20px;
+-  min-width: 250px;
+-  text-align: center;
+-  max-width: 350px;
+-  background-color: var(--background);
 +.dialog {
 +  width: 100%; max-width: 430px;
 +  border: 1px solid var(--border-strong);
 +  border-radius: 14px;
 +  background: color-mix(in srgb, var(--background) 96%, #0d1a24);
 +  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.65);
-   overflow: hidden;
++  overflow: auto; max-height: calc(100vh - 28px);
+ }
+-.oinput-file-name {
+-  white-space: nowrap;
+-  overflow: hidden;
 -  text-overflow: ellipsis;
 -  max-width: 250px;
- }
--.dialog.navigator .dialog-head div {
--  display: flex;
--  gap: 5px;
 +.dialog .dialog-head {
 +  padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--surface);
 +  font-size: 14px; font-weight: 700; color: var(--color);
@@ -2433,9 +2430,9 @@ index bda7b42a..dc25ca9a 100644
 +  padding: 10px 16px; border-top: 1px solid var(--border);
 +  display: flex; justify-content: flex-end; gap: 8px; background: var(--surface);
  }
--::selection {
--  background: var(--color);
--  color: var(--background);
+-.dialog.navigator .dialog-head div {
+-  display: flex;
+-  gap: 5px;
 +.dialog.settings .dialog-body { display: flex; flex-direction: column; gap: 8px; }
 +.dialog.settings .dialog-body .btn-action { width: 100%; padding: 9px 12px; justify-content: center; }
 +
@@ -2448,6 +2445,13 @@ index bda7b42a..dc25ca9a 100644
 +  border-right: 1px solid var(--border); color: var(--muted);
 +  padding: 8px 10px; text-align: right; user-select: none; white-space: pre; overflow: hidden;
  }
+-::selection {
+-  background: var(--color);
+-  color: var(--background);
++.dialog.editor .file-content {
++  flex: 1; background: transparent; color: var(--text); border: 0; padding: 8px 10px;
++  outline: 0; resize: none; font-size: 13.5px; line-height: 1.45; white-space: pre; overflow: auto;
+ }
 -#force-reload,
 -#refresh-folder {
 -  padding: 0;
@@ -2457,13 +2461,6 @@ index bda7b42a..dc25ca9a 100644
 -  justify-content: center;
 -  align-items: center;
 -  border: 0;
-+.dialog.editor .file-content {
-+  flex: 1; background: transparent; color: var(--text); border: 0; padding: 8px 10px;
-+  outline: 0; resize: none; font-size: 13.5px; line-height: 1.45; white-space: pre; overflow: auto;
- }
--#force-reload svg path,
--#refresh-folder svg path {
--  fill: var(--background);
 +
 +/* Upload queue & OTA */
 +.dialog.upload .dialog-body { max-height: 60vh; overflow-y: auto; }
@@ -2489,13 +2486,12 @@ index bda7b42a..dc25ca9a 100644
 +
 +.wifi-scan-list { max-height: 156px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
 +.wifi-net-item {
-+  display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 10px;
++  display: flex; width: 100%; text-align: left; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 10px;
 +  border-radius: 8px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; font-size: 12px; color: var(--text);
  }
--#force-reload:hover svg path,
--#refresh-folder:hover svg path {
--  fill: var(--color);
--  stroke: var(--background);
+-#force-reload svg path,
+-#refresh-folder svg path {
+-  fill: var(--background);
 +.wifi-net-item:hover, .wifi-net-item.sel { border-color: var(--color); background: var(--surface-2); }
 +.wifi-net-meta { font-size: 11px; color: var(--muted); font-family: ui-monospace, Consolas, monospace; white-space: nowrap; }
 +
@@ -2504,15 +2500,19 @@ index bda7b42a..dc25ca9a 100644
 +  position: fixed; inset: 0; z-index: 60; background: rgba(2, 6, 10, 0.82);
 +  display: flex; justify-content: center; align-items: center;
  }
--#force-reload.reloading svg path,
--#refresh-folder.reloading svg path {
--  animation: rotation 1s linear infinite;
--  transform-origin: 50% 50%;
+-#force-reload:hover svg path,
+-#refresh-folder:hover svg path {
+-  fill: var(--color);
+-  stroke: var(--background);
 +.upload-area::before {
 +  content: "Drop files or folders here to upload";
 +  border: 3px dashed var(--color); border-radius: 16px; background: var(--background); color: var(--color);
 +  font-size: 20px; font-weight: 700; padding: 36px; max-width: 85vw; text-align: center;
-+}
+ }
+-#force-reload.reloading svg path,
+-#refresh-folder.reloading svg path {
+-  animation: rotation 1s linear infinite;
+-  transform-origin: 50% 50%;
 +.loading-area .text {
 +  color: var(--color); border: 1px solid var(--border-strong); border-radius: 10px; padding: 12px 22px;
 +  min-width: 240px; max-width: 88vw; text-align: center; background: var(--background);
@@ -2678,11 +2678,13 @@ index bda7b42a..dc25ca9a 100644
 +.ux-settings small { opacity: .8; line-height: 1.4; }
 +#ux-status { overflow-wrap: anywhere; min-height: 1.3em; }
 +@media (max-width: 600px) { .quick-grid .btn-action, .ux-settings .btn-action { min-height: 44px; } }
++
++:focus-visible { outline: 2px solid var(--color); outline-offset: 2px; }
 diff --git a/embedded_resources/web_interface/index.html b/embedded_resources/web_interface/index.html
-index 5290300b..f17ecb22 100644
+index 5290300b..15aaf08b 100644
 --- a/embedded_resources/web_interface/index.html
 +++ b/embedded_resources/web_interface/index.html
-@@ -1,700 +1,924 @@
+@@ -1,700 +1,925 @@
  <!doctype html>
  <html lang="en">
 -  <head>
@@ -4078,6 +4080,7 @@ index 5290300b..f17ecb22 100644
 +    <div class="dialog upload hidden">
 +      <div class="dialog-head">Uploading Files</div>
 +      <div class="dialog-body"></div>
++      <div class="dialog-footer"><span class="upload-summary" role="status" aria-live="polite"></span><button type="button" class="btn-action act-dialog-close upload-close" disabled>Close</button></div>
 +    </div>
 +
 +    <div class="dialog ota hidden">
@@ -4231,7 +4234,7 @@ index 5290300b..f17ecb22 100644
 +</body>
  </html>
 diff --git a/embedded_resources/web_interface/index.js b/embedded_resources/web_interface/index.js
-index fd616029..f60bb349 100644
+index fd616029..28eb40ac 100644
 --- a/embedded_resources/web_interface/index.js
 +++ b/embedded_resources/web_interface/index.js
 @@ -6,20 +6,17 @@ const T = {
@@ -4258,7 +4261,7 @@ index fd616029..f60bb349 100644
      return tmp.content;
    },
  };
-@@ -37,25 +34,17 @@ const EXECUTABLE = {
+@@ -37,25 +34,19 @@ const EXECUTABLE = {
  const Dialog = {
    _bg: function (show) {
      let bg = $(".dialog-background");
@@ -4281,14 +4284,16 @@ index fd616029..f60bb349 100644
 +    $(".dialog." + dialogName).classList.remove("hidden");
    },
    hide: function () {
-+    if (otaBusy) return;
++    if (otaBusy || _runningUpload) return;
++    const editor = $(".dialog.editor:not(.hidden) .file-content");
++    if (editor && (editorSaving || (isModified(editor) && !confirm("Discard unsaved changes?")))) return;
      this._bg(false);
      this.loading.hide();
 -
      if (currentDrive && currentPath) {
        updateURL(currentDrive, currentPath, null);
      }
-@@ -71,40 +60,14 @@ const Dialog = {
+@@ -71,40 +62,14 @@ const Dialog = {
    },
    showOneInput: function (name, inputVal, data) {
      const dbForm = {
@@ -4335,7 +4340,7 @@ index fd616029..f60bb349 100644
      let dialog = $(".dialog.oinput");
      dialog.setAttribute("data-cache", data);
      dialog.querySelector(".oinput-title").textContent = config.title;
-@@ -118,11 +81,7 @@ const Dialog = {
+@@ -118,11 +83,7 @@ const Dialog = {
  };
  
  function handleAuthError() {
@@ -4348,7 +4353,7 @@ index fd616029..f60bb349 100644
      window.location.href = "/";
    } else {
      Dialog.loading.hide();
-@@ -132,94 +91,132 @@ function handleAuthError() {
+@@ -132,151 +93,182 @@ function handleAuthError() {
  async function requestGet(url, data) {
    return new Promise((resolve, reject) => {
      let req = new XMLHttpRequest();
@@ -4498,103 +4503,148 @@ index fd616029..f60bb349 100644
 +
  const _queueUpload = [];
  let _runningUpload = false;
- function appendFileToQueue(files) {
+-function appendFileToQueue(files) {
++let _uploadFailures = 0;
++function appendFileToQueue(files, drive = currentDrive, path = currentPath) {
    Dialog.show("upload");
 -  let d = $(".dialog.upload");
-+  let d = $(".dialog.upload .dialog-body");
-   for (let i = 0; i < files.length; i++) {
+-  for (let i = 0; i < files.length; i++) {
 -    let file = files[i];
 -    let filename = file.webkitRelativePath || file.name;
 -    let fileId = stringToId(filename);
-+    let filename = files[i].webkitRelativePath || files[i].name;
-     let progressBar = T.uploadLoading();
-     progressBar.querySelector(".upload-name").textContent = filename;
+-    let progressBar = T.uploadLoading();
+-    progressBar.querySelector(".upload-name").textContent = filename;
 -    progressBar
 -      .querySelector(".upload-loading .bar")
 -      .setAttribute("id", fileId);
 -
 -    d.querySelector(".dialog-body").appendChild(progressBar);
-+    progressBar.querySelector(".upload-loading .bar").setAttribute("id", stringToId(filename));
-+    d.appendChild(progressBar);
++  const body = $(".dialog.upload .dialog-body");
++  for (const file of files) {
++    const filename = file.webkitRelativePath || file.name;
++    const row = T.uploadLoading();
++    row.querySelector(".upload-name").textContent = filename + " — waiting";
++    const bar = row.querySelector(".upload-loading .bar");
++    const label = row.querySelector(".upload-name");
++    body.appendChild(row);
++    _queueUpload.push({file, filename, drive, path, bar, label});
    }
  }
-+
- async function appendDroppedFiles(entry) {
+-async function appendDroppedFiles(entry) {
 -  return new Promise((resolve, reject) => {
-+  return new Promise((resolve) => {
-     if (entry.isFile) {
-       entry.file((file) => {
+-    if (entry.isFile) {
+-      entry.file((file) => {
 -        let fileWithPath = new File([file], entry.fullPath.substring(1), {
 -          type: file.type,
 -        });
-+        let fileWithPath = new File([file], entry.fullPath.substring(1), { type: file.type });
-         appendFileToQueue([fileWithPath]);
-         _queueUpload.push(fileWithPath);
-         resolve();
-@@ -229,52 +226,44 @@ async function appendDroppedFiles(entry) {
-       let reader = entry.createReader();
-       reader.readEntries((entries) => {
-         for (let e of entries) proms.push(appendDroppedFiles(e));
-+        Promise.all(proms).then(resolve);
-       });
+-        appendFileToQueue([fileWithPath]);
+-        _queueUpload.push(fileWithPath);
+-        resolve();
+-      });
+-    } else if (entry.isDirectory) {
+-      let proms = [];
+-      let reader = entry.createReader();
+-      reader.readEntries((entries) => {
+-        for (let e of entries) proms.push(appendDroppedFiles(e));
+-      });
 -
 -      Promise.all(proms).then(resolve);
--    }
-+    } else resolve();
-   });
++
++async function appendDroppedFiles(entry, drive, path) {
++  if (entry.isFile) {
++    const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
++    appendFileToQueue([new File([file], entry.fullPath.substring(1), { type: file.type })], drive, path);
++  } else if (entry.isDirectory) {
++    const reader = entry.createReader();
++    while (true) {
++      const entries = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
++      if (!entries.length) break;
++      for (const child of entries) await appendDroppedFiles(child, drive, path);
+     }
+-  });
++  }
  }
 +
  async function uploadFile() {
-   if (_queueUpload.length === 0) {
+-  if (_queueUpload.length === 0) {
++  if (_runningUpload) return;
++  _runningUpload = true;
++  $(".upload-close").disabled = true;
++  $(".upload-summary").textContent = "Uploading… Do not close this page.";
++  try {
++    while (_queueUpload.length) {
++      const item = _queueUpload.shift();
++      item.label.textContent = item.filename + " — uploading";
++      try {
++        await new Promise((resolve, reject) => {
++          const fd = new FormData();
++          fd.append("file", item.file, item.filename);
++          const req = new XMLHttpRequest();
++          req.upload.onprogress = (e) => {
++            if (e.lengthComputable) item.bar.style.width = Math.round(e.loaded / e.total * 100) + "%";
++          };
++          req.onload = () => req.status >= 200 && req.status < 300 ? resolve() : reject(new Error(`HTTP ${req.status}: ${req.responseText || "Upload failed"}`));
++          req.onerror = () => reject(new Error("Connection lost; the file may be incomplete"));
++          req.onabort = () => reject(new Error("Upload interrupted; the file may be incomplete"));
++          req.ontimeout = () => reject(new Error("Upload timed out; the file may be incomplete"));
++          req.open("POST", (IS_DEV ? "/bruce" : "") + "/upload?" + new URLSearchParams({fs:item.drive, folder:item.path}), true);
++          req.timeout = 600000;
++          req.send(fd);
++        });
++        item.label.textContent = item.filename + " — complete";
++      } catch (error) {
++        _uploadFailures++;
++        item.label.textContent = item.filename + " — failed: " + error.message;
++      }
++    }
++  } finally {
      _runningUpload = false;
-     $(".dialog.upload .dialog-body").innerHTML = "";
+-    $(".dialog.upload .dialog-body").innerHTML = "";
 -    fetchSystemInfo();
-+    fetchSystemInfo(true);
++    $(".upload-close").disabled = false;
++    $(".upload-summary").textContent = _uploadFailures ? `${_uploadFailures} file(s) failed. Check storage/connection and retry them.` : "All files uploaded.";
++    fetchSystemInfo(true).catch(() => {});
      fetchFiles(currentDrive, currentPath);
-     Dialog.hide();
-     return;
+-    Dialog.hide();
+-    return;
    }
 -
-   return new Promise((resolve, reject) => {
-     _runningUpload = true;
-     let file = _queueUpload.shift();
+-  return new Promise((resolve, reject) => {
+-    _runningUpload = true;
+-    let file = _queueUpload.shift();
 -    let fd = new FormData();
-     let filename = file.webkitRelativePath || file.name;
-     let fileId = stringToId(filename);
-+    let fd = new FormData();
-     fd.append("file", file, filename);
-     fd.append("folder", currentPath);
-     fd.append("fs", currentDrive);
+-    let filename = file.webkitRelativePath || file.name;
+-    let fileId = stringToId(filename);
+-    fd.append("file", file, filename);
+-    fd.append("folder", currentPath);
+-    fd.append("fs", currentDrive);
 -
 -    let realUrl = `/upload`;
 -    if (IS_DEV) realUrl = "/bruce" + realUrl;
-     let req = new XMLHttpRequest();
-     req.upload.onprogress = (e) => {
+-    let req = new XMLHttpRequest();
+-    req.upload.onprogress = (e) => {
 -      if (e.lengthComputable) {
 -        var percent = (e.loaded / e.total) * 100;
 -        $("#" + fileId).style.width = Math.round(percent) + "%";
-+      if (e.lengthComputable && $("#" + fileId)) {
-+        $("#" + fileId).style.width = Math.round((e.loaded / e.total) * 100) + "%";
-       }
-     };
-     req.onload = () => {
-       uploadFile();
+-      }
+-    };
+-    req.onload = () => {
+-      uploadFile();
 -      if (req.status >= 200 && req.status < 300) {
 -        resolve(req.responseText);
 -      } else {
 -        reject();
 -      }
-+      if (req.status >= 200 && req.status < 300) resolve(req.responseText);
-+      else reject();
-     };
-     req.onabort = () => reject();
-     req.onerror = () => reject();
+-    };
+-    req.onabort = () => reject();
+-    req.onerror = () => reject();
 -    req.open("POST", realUrl, true);
-+    req.open("POST", IS_DEV ? "/bruce/upload" : "/upload", true);
-     req.send(fd);
-   });
+-    req.send(fd);
+-  });
  }
-@@ -290,13 +279,21 @@ async function runCommand(cmd) {
+ 
+ async function runCommand(cmd) {
+@@ -290,13 +282,21 @@ async function runCommand(cmd) {
    }
  }
  
@@ -4621,7 +4671,7 @@ index fd616029..f60bb349 100644
    return undefined;
  }
  
-@@ -304,39 +301,25 @@ function calcHash(str) {
+@@ -304,39 +304,25 @@ function calcHash(str) {
    let hash = 5381;
    str = str.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
    for (let i = 0; i < str.length; i++) {
@@ -4667,7 +4717,7 @@ index fd616029..f60bb349 100644
  }
  
  function renderFileRow(fileList) {
-@@ -346,131 +329,173 @@ function renderFileRow(fileList) {
+@@ -346,251 +332,496 @@ function renderFileRow(fileList) {
      .sort((a, b) => {
        let [aFirst, ...aRest] = a.split(":");
        let [bFirst, ...bRest] = b.split(":");
@@ -4749,6 +4799,7 @@ index fd616029..f60bb349 100644
  let currentDrive;
  let currentPath;
 +let lastSysInfo = {};
++let filesRequestGeneration = 0;
  const btnRefreshFolder = $("#refresh-folder");
  
 -// URL state management
@@ -4776,32 +4827,53 @@ index fd616029..f60bb349 100644
  }
  
  async function fetchFiles(drive, path) {
++  const generation = ++filesRequestGeneration;
    btnRefreshFolder.classList.add("reloading");
 -  $("table.explorer tbody").innerHTML =
 -    '<tr><td colspan="3" style="text-align:center">Loading...</td></tr>';
 +  $("table.explorer tbody").innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--muted)">Loading...</td></tr>';
    currentDrive = drive;
    currentPath = path;
--
++  updateURL(drive, path, getURLParams().editFile);
++  $(`.act-browse.active`)?.classList.remove("active");
++  $(`.act-browse[data-drive='${drive}']`)?.classList.add("active");
++  $(".current-path").textContent = drive + ":/" + (path === "/" ? "" : path.replace(/^\/+/, ""));
++  try {
++    const req = await requestGet("/listfiles", { fs: drive, folder: path });
++    if (generation !== filesRequestGeneration) return;
++    renderFileRow(req);
++    if (!$("table.explorer tbody").children.length) $("table.explorer tbody").innerHTML = '<tr><td colspan="3">This folder is empty.</td></tr>';
++  } catch (error) {
++    if (generation !== filesRequestGeneration) return;
++    const tbody = $("table.explorer tbody");
++    tbody.innerHTML = '<tr><td colspan="3"></td></tr>';
++    tbody.querySelector("td").textContent = `Could not load folder: ${error.message}. Use refresh to retry.`;
++  } finally {
++    if (generation === filesRequestGeneration) btnRefreshFolder.classList.remove("reloading");
++  }
++}
+ 
 -  // Update URL state (preserving edit file if still valid)
 -  const urlParams = getURLParams();
 -  updateURL(drive, path, urlParams.editFile);
--
-+  updateURL(drive, path, getURLParams().editFile);
-   $(`.act-browse.active`)?.classList.remove("active");
++function applyThemeCss(pri, sec, bg) {
++  const root = document.documentElement.style;
++  if (pri) root.setProperty("--color", pri);
++  if (sec) root.setProperty("--sec-color", sec);
++  if (bg) root.setProperty("--background", bg);
++}
+ 
+-  $(`.act-browse.active`)?.classList.remove("active");
 -  $(`.act-browse[data-drive='${drive}']`).classList.add("active");
 -  $(".current-path").textContent = drive + ":/" + path;
 -  let req = await requestGet("/listfiles", {
 -    fs: drive,
 -    folder: path,
 -  });
-+  $(`.act-browse[data-drive='${drive}']`)?.classList.add("active");
-+  $(".current-path").textContent = drive + ":/" + (path === "/" ? "" : path.replace(/^\/+/, ""));
-+  let req = await requestGet("/listfiles", { fs: drive, folder: path });
-   renderFileRow(req);
-   btnRefreshFolder.classList.remove("reloading");
- }
- 
+-  renderFileRow(req);
+-  btnRefreshFolder.classList.remove("reloading");
+-}
+-
 -async function fetchSystemInfo() {
 -  Dialog.loading.show("Fetching system info...");
 -  let req = await requestGet("/systeminfo");
@@ -4813,13 +4885,6 @@ index fd616029..f60bb349 100644
 -    `${info.LittleFS.used} / ${info.LittleFS.total}`;
 -  sdCardAvailable = info.SD.total != "0 B";
 -  Dialog.loading.hide();
-+function applyThemeCss(pri, sec, bg) {
-+  const root = document.documentElement.style;
-+  if (pri) root.setProperty("--color", pri);
-+  if (sec) root.setProperty("--sec-color", sec);
-+  if (bg) root.setProperty("--background", bg);
-+}
-+
 +async function fetchSystemInfo(silent = false) {
 +  if (!silent) Dialog.loading.show("Fetching system info...");
 +  try {
@@ -4880,10 +4945,14 @@ index fd616029..f60bb349 100644
 +  } finally {
 +    if (!silent) Dialog.loading.hide();
 +  }
-+}
-+
+ }
+ 
+-async function saveEditorFile(runFile = false) {
+-  Dialog.loading.show("Saving...");
 +async function openFileInEditor(drive, filePath) {
-+  let editor = $(".dialog.editor .file-content");
+   let editor = $(".dialog.editor .file-content");
+-  let filename = $(".dialog.editor .editor-file-name").textContent.trim();
+-  if (isModified(editor)) {
 +  $(".dialog.editor .editor-file-name").textContent = filePath;
 +  editor.value = "";
 +  Dialog.loading.show("Fetching content...");
@@ -4893,7 +4962,13 @@ index fd616029..f60bb349 100644
 +    editor.value = r;
 +    editor.setAttribute("data-hash", calcHash(r));
 +    updateLineNumbers();
-+    $(".act-save-edit-file").disabled = true;
+     $(".act-save-edit-file").disabled = true;
+-    editor.setAttribute("data-hash", calcHash(editor.value));
+-    await requestPost("/edit", {
+-      fs: currentDrive,
+-      name: filename,
+-      content: editor.value,
+-    });
 +    $(".act-run-edit-file").classList.toggle("hidden", getSerialCommand(filePath) === undefined);
 +    Dialog.show("editor");
 +    updateURL(currentDrive, currentPath, filePath);
@@ -4901,30 +4976,43 @@ index fd616029..f60bb349 100644
 +    alert("Cannot open file: " + err.message);
 +  } finally {
 +    Dialog.loading.hide();
-+  }
- }
- 
- async function saveEditorFile(runFile = false) {
-@@ -480,117 +505,292 @@ async function saveEditorFile(runFile = false) {
-   if (isModified(editor)) {
-     $(".act-save-edit-file").disabled = true;
-     editor.setAttribute("data-hash", calcHash(editor.value));
--    await requestPost("/edit", {
--      fs: currentDrive,
--      name: filename,
--      content: editor.value,
--    });
-+    await requestPost("/edit", { fs: currentDrive, name: filename, content: editor.value });
    }
--
-   if (runFile) {
-     let serial = getSerialCommand(filename);
++}
+ 
+-  if (runFile) {
+-    let serial = getSerialCommand(filename);
 -    if (serial !== undefined) {
 -      await runCommand(serial + ' "' + filename + '"');
--    }
-+    if (serial !== undefined) await runCommand(serial + ' "' + filename + '"');
++let editorSaving = false;
++async function saveEditorFile(runFile = false) {
++  if (editorSaving) return;
++  editorSaving = true;
++  const editor = $(".dialog.editor .file-content");
++  const filename = $(".dialog.editor .editor-file-name").textContent.trim();
++  const content = editor.value;
++  const drive = currentDrive;
++  $(".act-save-edit-file").disabled = true;
++  $(".act-run-edit-file").disabled = true;
++  Dialog.loading.show("Saving...");
++  try {
++    if (isModified(editor)) {
++      await requestPost("/edit", { fs: drive, name: filename, content });
++      editor.setAttribute("data-hash", calcHash(content));
++    }
++    if (runFile) {
++      if (isModified(editor)) throw new Error("File changed during save. Save again before running.");
++      const serial = getSerialCommand(filename);
++      if (serial !== undefined) await runCommand(serial + ' "' + filename + '"');
+     }
++  } catch (error) {
++    alert("Save or run failed: " + error.message + ". Check the file before retrying.");
++  } finally {
++    editorSaving = false;
++    $(".act-save-edit-file").disabled = !isModified(editor);
++    $(".act-run-edit-file").disabled = false;
++    Dialog.loading.hide();
    }
-   Dialog.loading.hide();
+-  Dialog.loading.hide();
  }
  
  function isModified(target) {
@@ -4986,7 +5074,8 @@ index fd616029..f60bb349 100644
 +    }
 +    list.innerHTML = "";
 +    res.nets.forEach((n) => {
-+      const item = document.createElement("div");
++      const item = document.createElement("button");
++      item.type = "button";
 +      item.className = "wifi-net-item";
 +      const badge = n.saved ? "Saved" : (n.enc ? "Locked" : "Open");
 +      const nameSpan = document.createElement("span");
@@ -5261,7 +5350,7 @@ index fd616029..f60bb349 100644
      });
    };
  
-@@ -599,7 +799,6 @@ async function renderTFT(data) {
+@@ -599,7 +830,6 @@ async function renderTFT(data) {
      let img = await loadImage(img_url);
      let drawX = input.x;
      let drawY = input.y;
@@ -5269,7 +5358,7 @@ index fd616029..f60bb349 100644
      if (input.center === 1) {
        drawX += (canvas.width - img.width) / 2;
        drawY += (canvas.height - img.height) / 2;
-@@ -607,12 +806,7 @@ async function renderTFT(data) {
+@@ -607,12 +837,7 @@ async function renderTFT(data) {
      ctx.drawImage(img, drawX, drawY);
    };
  
@@ -5283,7 +5372,7 @@ index fd616029..f60bb349 100644
  
    const drawRoundRect = (ctx, input, fill) => {
      const { x, y, w, h, r } = input;
-@@ -629,60 +823,45 @@ async function renderTFT(data) {
+@@ -629,60 +854,45 @@ async function renderTFT(data) {
  
    let startData = 0;
    const getByteValue = (dataType) => {
@@ -5367,7 +5456,7 @@ index fd616029..f60bb349 100644
        }
      }
      return r;
-@@ -690,317 +869,541 @@ async function renderTFT(data) {
+@@ -690,279 +900,546 @@ async function renderTFT(data) {
  
    let offset = 0;
    ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -5465,15 +5554,15 @@ index fd616029..f60bb349 100644
          ctx.lineTo(input.x3, input.y3);
          ctx.closePath();
 -        ctx.fill();
--        break;
++        if (fn === 8) { ctx.fillStyle = color565toCSS(input.fg); ctx.fill(); }
++        else { ctx.strokeStyle = color565toCSS(input.fg); ctx.stroke(); }
+         break;
 -      case 9: // DRAWELLIPSE
 -        ctx.strokeStyle = color565toCSS(input.fg);
 -        ctx.beginPath();
 -        ctx.ellipse(input.x, input.y, input.rx, input.ry, 0, 0, Math.PI * 2);
 -        ctx.stroke();
-+        if (fn === 8) { ctx.fillStyle = color565toCSS(input.fg); ctx.fill(); }
-+        else { ctx.strokeStyle = color565toCSS(input.fg); ctx.stroke(); }
-         break;
+-        break;
 -
 -      case 10: // FILLELLIPSE
 -        ctx.fillStyle = color565toCSS(input.fg);
@@ -5716,49 +5805,26 @@ index fd616029..f60bb349 100644
 -      uploadFile();
 -    }, 100);
 -};
--
--document.querySelectorAll(".inp-uploader").forEach((el) => {
--  el.addEventListener("change", async (e) => {
--    let files = e.target.files;
--    if (!files || files.length === 0) return;
--
--    appendFileToQueue(files);
--    _queueUpload.push(...files);
--    if (!_runningUpload) uploadFile();
 +["#pers-owner", "#pers-tag", "#pers-mdns", "#pers-pri", "#pers-sec", "#pers-bg", "#pers-bright"].forEach((sel) => {
 +  $(sel)?.addEventListener("input", updateBootPreview);
 +});
- 
--    this.value = "";
++
 +document.querySelectorAll(".preset-chip").forEach((chip) => {
 +  chip.addEventListener("click", () => {
 +    $("#pers-pri").value = chip.getAttribute("data-pri").toLowerCase();
 +    $("#pers-sec").value = chip.getAttribute("data-sec").toLowerCase();
 +    $("#pers-bg").value = chip.getAttribute("data-bg").toLowerCase();
 +    updateBootPreview();
-   });
- });
- 
--$(".container").addEventListener("click", async (e) => {
--  let browseAction = e.target.closest(".act-browse");
--  if (browseAction) {
--    e.preventDefault();
--    let drive =
--      browseAction.getAttribute("data-drive") || currentDrive || "LittleFS";
--    let path =
--      browseAction.getAttribute("data-path") ||
--      browseAction.closest("tr").getAttribute("data-path") ||
--      "/";
--    if (drive === currentDrive && path === currentPath) return;
--
--    fetchFiles(drive, path);
++  });
++});
++
 +$("#btn-reload-pers")?.addEventListener("click", loadPersonalizeForm);
 +$("#btn-save-pers")?.addEventListener("click", async () => {
 +  const pwd = $("#pers-appwd").value;
 +  if (pwd.length > 0 && pwd.length < 8) {
 +    alert("AP password must be blank (open) or at least 8 characters.");
-     return;
-   }
++    return;
++  }
 +  const st = $("#pers-status");
 +  try {
 +    const res = JSON.parse(await requestPost("/personalize", {
@@ -5781,26 +5847,7 @@ index fd616029..f60bb349 100644
 +    st.textContent = err.message || "Failed to save";
 +  }
 +});
- 
--  let editFileAction = e.target.closest(".act-edit-file");
--  if (editFileAction) {
--    e.preventDefault();
--    let editor = $(".dialog.editor .file-content");
--    let file = editFileAction.closest("tr").getAttribute("data-file");
--    if (!file) return;
--    $(".dialog.editor .editor-file-name").textContent = file;
--    editor.value = "";
--
--    // Load file content
--    Dialog.loading.show("Fetching content...");
--    let r = await requestGet(
--      `/file?fs=${currentDrive}&name=${encodeURIComponent(file)}&action=edit`,
--    );
--    editor.value = r;
--    editor.setAttribute("data-hash", calcHash(r));
--
--    // Update line numbers
--    updateLineNumbers();
++
 +const cmdHistory = [];
 +let cmdHistIdx = -1;
 +async function execConsoleCmd(cmdText) {
@@ -5820,18 +5867,14 @@ index fd616029..f60bb349 100644
 +  }
 +  out.scrollTop = out.scrollHeight;
 +}
- 
--    $(".act-save-edit-file").disabled = true;
++
 +$("#console-run")?.addEventListener("click", () => {
 +  const inp = $("#console-in");
 +  const val = inp.value;
 +  inp.value = "";
 +  execConsoleCmd(val);
 +});
- 
--    let serial = getSerialCommand(file);
--    if (serial === undefined) {
--      $(".act-run-edit-file").classList.add("hidden");
++
 +$("#console-clear")?.addEventListener("click", () => {
 +  $("#console-out").textContent = "";
 +});
@@ -5849,16 +5892,13 @@ index fd616029..f60bb349 100644
 +    if (cmdHistIdx > 0) {
 +      cmdHistIdx--;
 +      $("#console-in").value = cmdHistory[cmdHistIdx];
-     } else {
--      $(".act-run-edit-file").classList.remove("hidden");
++    } else {
 +      cmdHistIdx = -1;
 +      $("#console-in").value = "";
-     }
++    }
 +  }
 +});
- 
--    Dialog.loading.hide();
--    Dialog.show("editor");
++
 +document.querySelectorAll(".chip-cmd").forEach((ch) => {
 +  ch.addEventListener("click", () => execConsoleCmd(ch.getAttribute("data-cmd")));
 +});
@@ -6040,9 +6080,7 @@ index fd616029..f60bb349 100644
 +    $("#ota-start-btn").disabled = false;
 +  }
 +});
- 
--    // Update URL to include edit state
--    updateURL(currentDrive, currentPath, file);
++
 +$("#wifi-pwd-input").addEventListener("keyup", (e) => {
 +  if (e.key === "Enter" || e.keyCode === 13) {
 +    e.preventDefault();
@@ -6081,47 +6119,104 @@ index fd616029..f60bb349 100644
 +$(".upload-area").ondrop = async (e) => {
 +  e.preventDefault();
 +  $(".upload-area").classList.add("hidden");
-+  const items = e.dataTransfer.items;
-+  if (!items || items.length === 0) return;
-+  for (let i of items) {
-+    let entry = i.webkitGetAsEntry();
-+    if (entry) await appendDroppedFiles(entry);
++  const drive = currentDrive, path = currentPath;
++  if (!drive || !path || _runningUpload) return;
++  _uploadFailures = 0;
++  $(".dialog.upload .dialog-body").innerHTML = "";
++  try {
++    const items = Array.from(e.dataTransfer.items || []);
++    if (items.length && items.some(i => typeof i.webkitGetAsEntry === "function")) {
++      for (const item of items) {
++        const entry = item.webkitGetAsEntry && item.webkitGetAsEntry();
++        if (entry) await appendDroppedFiles(entry, drive, path);
++        else if (item.getAsFile && item.getAsFile()) appendFileToQueue([item.getAsFile()], drive, path);
++      }
++    } else appendFileToQueue(e.dataTransfer.files || [], drive, path);
++  } catch (error) {
++    _uploadFailures++;
++    Dialog.show("upload");
++    $(".upload-summary").textContent = "Could not read all dropped files: " + error.message;
 +  }
-+  if (!_runningUpload) setTimeout(() => { if (_queueUpload.length > 0) uploadFile(); }, 100);
++  if (_queueUpload.length) uploadFile();
++  else if (_uploadFailures) $(".upload-close").disabled = false;
 +};
-+
-+document.querySelectorAll(".inp-uploader").forEach((el) => {
+ 
+ document.querySelectorAll(".inp-uploader").forEach((el) => {
+-  el.addEventListener("change", async (e) => {
 +  el.addEventListener("change", (e) => {
-+    let files = e.target.files;
-+    if (!files || files.length === 0) return;
-+    appendFileToQueue(files);
-+    _queueUpload.push(...files);
-+    if (!_runningUpload) uploadFile();
+     let files = e.target.files;
+     if (!files || files.length === 0) return;
+-
++    if (!currentDrive || !currentPath) { alert("Choose a folder before uploading."); return; }
++    if (!_runningUpload) { _uploadFailures = 0; $(".dialog.upload .dialog-body").innerHTML = ""; }
+     appendFileToQueue(files);
+-    _queueUpload.push(...files);
+     if (!_runningUpload) uploadFile();
+-
+-    this.value = "";
 +    e.target.value = "";
-+  });
-+});
-+
+   });
+ });
+ 
+-$(".container").addEventListener("click", async (e) => {
 +$("#tab-files").addEventListener("click", async (e) => {
-+  let browseAction = e.target.closest(".act-browse");
-+  if (browseAction) {
-+    e.preventDefault();
+   let browseAction = e.target.closest(".act-browse");
+   if (browseAction) {
+     e.preventDefault();
+-    let drive =
+-      browseAction.getAttribute("data-drive") || currentDrive || "LittleFS";
+-    let path =
+-      browseAction.getAttribute("data-path") ||
+-      browseAction.closest("tr").getAttribute("data-path") ||
+-      "/";
 +    let drive = browseAction.getAttribute("data-drive") || currentDrive || "LittleFS";
 +    if (drive === "SD" && lastSysInfo.HAS_SD === false) return;
 +    let path = browseAction.getAttribute("data-path") || browseAction.closest("tr")?.getAttribute("data-path") || "/";
-+    if (drive === currentDrive && path === currentPath) return;
-+    fetchFiles(drive, path);
-+    return;
-+  }
-+
-+  let editFileAction = e.target.closest(".act-edit-file");
-+  if (editFileAction) {
-+    e.preventDefault();
-+    let file = editFileAction.closest("tr").getAttribute("data-file");
+     if (drive === currentDrive && path === currentPath) return;
+-
+     fetchFiles(drive, path);
+     return;
+   }
+@@ -970,37 +1447,8 @@ $(".container").addEventListener("click", async (e) => {
+   let editFileAction = e.target.closest(".act-edit-file");
+   if (editFileAction) {
+     e.preventDefault();
+-    let editor = $(".dialog.editor .file-content");
+     let file = editFileAction.closest("tr").getAttribute("data-file");
+-    if (!file) return;
+-    $(".dialog.editor .editor-file-name").textContent = file;
+-    editor.value = "";
+-
+-    // Load file content
+-    Dialog.loading.show("Fetching content...");
+-    let r = await requestGet(
+-      `/file?fs=${currentDrive}&name=${encodeURIComponent(file)}&action=edit`,
+-    );
+-    editor.value = r;
+-    editor.setAttribute("data-hash", calcHash(r));
+-
+-    // Update line numbers
+-    updateLineNumbers();
+-
+-    $(".act-save-edit-file").disabled = true;
+-
+-    let serial = getSerialCommand(file);
+-    if (serial === undefined) {
+-      $(".act-run-edit-file").classList.add("hidden");
+-    } else {
+-      $(".act-run-edit-file").classList.remove("hidden");
+-    }
+-
+-    Dialog.loading.hide();
+-    Dialog.show("editor");
+-
+-    // Update URL to include edit state
+-    updateURL(currentDrive, currentPath, file);
 +    if (file) openFileInEditor(currentDrive, file);
      return;
    }
  
-@@ -1009,24 +1412,17 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1009,24 +1457,17 @@ $(".container").addEventListener("click", async (e) => {
      e.preventDefault();
      let action = oActionOInput.getAttribute("data-action");
      if (!action) return;
@@ -6151,7 +6246,7 @@ index fd616029..f60bb349 100644
      Dialog.showOneInput(action, value, data);
      return;
    }
-@@ -1034,26 +1430,13 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1034,27 +1475,16 @@ $(".container").addEventListener("click", async (e) => {
    let actDeleteFile = e.target.closest(".act-delete");
    if (actDeleteFile) {
      e.preventDefault();
@@ -6176,14 +6271,19 @@ index fd616029..f60bb349 100644
 -      action: "delete",
 -      name: file,
 -    });
-+    await requestGet("/file", { fs: currentDrive, action: "delete", name: file });
-     Dialog.loading.hide();
+-    Dialog.loading.hide();
 -    fetchSystemInfo();
-+    fetchSystemInfo(true);
-     fetchFiles(currentDrive, currentPath);
+-    fetchFiles(currentDrive, currentPath);
++    try {
++      await requestGet("/file", { fs: currentDrive, action: "delete", name: file });
++      fetchSystemInfo(true).catch(() => {});
++      fetchFiles(currentDrive, currentPath);
++    } catch (error) { alert("Delete failed: " + error.message); }
++    finally { Dialog.loading.hide(); }
      return;
    }
-@@ -1062,662 +1445,805 @@ $(".container").addEventListener("click", async (e) => {
+ 
+@@ -1062,662 +1492,815 @@ $(".container").addEventListener("click", async (e) => {
    if (actPlay) {
      e.preventDefault();
      let cmd = actPlay.getAttribute("data-cmd");
@@ -6225,6 +6325,7 @@ index fd616029..f60bb349 100644
 +  if (!action) return;
    let refreshList = true;
    let [actionType, path] = action.split("|");
++  try {
    if (actionType.startsWith("rename")) {
      Dialog.loading.show("Renaming...");
 -    await requestPost("/rename", {
@@ -6260,6 +6361,8 @@ index fd616029..f60bb349 100644
 -
    if (refreshList) fetchFiles(currentDrive, currentPath);
    Dialog.hide();
++  } catch (error) { alert("Action failed: " + error.message); }
++  finally { Dialog.loading.hide(); }
  });
  
 -$(".act-save-credential").addEventListener("click", async (e) => {
@@ -6396,8 +6499,8 @@ index fd616029..f60bb349 100644
 -      e.preventDefault();
 -      e.stopImmediatePropagation();
 -      reloadScreen();
-       return;
-     }
+-      return;
+-    }
 -
 -    if (key in map_navigator) {
 -      e.preventDefault();
@@ -6405,8 +6508,19 @@ index fd616029..f60bb349 100644
 -      $(
 -        `.navigator-canvas .nav[data-direction="${map_navigator[key]}"]`,
 -      ).click();
--      return;
-+  }
+       return;
+     }
+   }
+-
+-  if (key === "escape" && $(".dialog-background:not(.hidden)")) {
+-    if ($(".dialog.editor:not(.hidden)")) {
+-      let editor = $(".dialog.editor .file-content");
+-      if (isModified(editor)) {
+-        if (
+-          !confirm("You have unsaved changes. Do you want to discard them?")
+-        ) {
+-          return;
+-        }
 +  if (activeTab === "screen" && $(".dialog-background.hidden")) {
 +    const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
 +    if (!["input", "textarea", "select", "button", "a"].includes(tag) && !e.target?.isContentEditable) {
@@ -6419,28 +6533,15 @@ index fd616029..f60bb349 100644
 +        e.preventDefault(); e.stopImmediatePropagation();
 +        $(`.navigator-canvas .nav[data-direction="${map_navigator[key]}"]`)?.click();
 +        return;
-+      }
-     }
-   }
--
-   if (key === "escape" && $(".dialog-background:not(.hidden)")) {
--    if ($(".dialog.editor:not(.hidden)")) {
--      let editor = $(".dialog.editor .file-content");
--      if (isModified(editor)) {
--        if (
--          !confirm("You have unsaved changes. Do you want to discard them?")
--        ) {
--          return;
--        }
--      }
-+    if (otaBusy) return;
-+    if ($(".dialog.editor:not(.hidden)") && isModified($(".dialog.editor .file-content"))) {
-+      if (!confirm("Discard unsaved changes?")) return;
+       }
      }
 -
 -    let btnEscape = $(".dialog:not(.hidden) .act-escape");
 -    if (btnEscape) btnEscape.click();
 -    return;
++  }
++  if (key === "escape" && $(".dialog-background:not(.hidden)")) {
++    if (otaBusy) return;
 +    $(".dialog:not(.hidden) .act-escape")?.click();
    }
  });
@@ -6509,7 +6610,7 @@ index fd616029..f60bb349 100644
 +  }
 +});
 +$(".file-content").addEventListener("scroll", () => { if ($(".dialog.editor:not(.hidden)")) syncScrolling(); });
-+$(".file-content").addEventListener("input", () => { if ($(".dialog.editor:not(.hidden)")) updateLineNumbers(); });
++$(".file-content").addEventListener("input", (e) => { if ($(".dialog.editor:not(.hidden)")) { updateLineNumbers(); $(".act-save-edit-file").disabled = editorSaving || !isModified(e.target); } });
  
 -  const handleTab = (shift) => {
 -    if (start === end) {
@@ -6534,7 +6635,7 @@ index fd616029..f60bb349 100644
 +});
 +
 +(async function () {
-+  await fetchSystemInfo();
++  try { await fetchSystemInfo(); } catch (_) { /* Folder view remains available for retry. */ }
 +  const urlParams = getURLParams();
 +  let initialDrive = urlParams.drive || (sdCardAvailable ? "SD" : "LittleFS");
 +  let initialPath = urlParams.path || "/";
@@ -7480,11 +7581,13 @@ index fd616029..f60bb349 100644
 +  if (!response.ok) throw new Error(data.msg || `Request failed (${response.status})`);
 +  return data;
 +}
-+async function uxLoad(showSettings = false) {
++let uxGeneration = 0;
++async function uxLoad(showSettings = false, generation = uxGeneration) {
 +  const status = $("#ux-status");
 +  if (!status) return;
 +  try {
 +    const data = JSON.parse(await requestGet("/ux"));
++    if (generation !== uxGeneration) return;
 +    if (showSettings) {
 +      $("#ux-sound").checked = !!data.sound;
 +      $("#ux-menu-tones").checked = !!data.menuTones;
@@ -7500,7 +7603,7 @@ index fd616029..f60bb349 100644
 +      silent_or_busy: "Speaker muted, busy, or unavailable. Check Sound settings and try again."
 +    };
 +    status.textContent = states[data.find] || "Status unavailable.";
-+  } catch (err) { status.textContent = "Controls unavailable. Check your connection or sign in again."; }
++  } catch (err) { if (generation === uxGeneration) status.textContent = "Controls unavailable. Check your connection or sign in again."; }
 +}
 +function uxRangeLabels() {
 +  const vol = $("#ux-volume"), bright = $("#ux-brightness");
@@ -7523,16 +7626,24 @@ index fd616029..f60bb349 100644
 +});
 +$("#ux-find")?.addEventListener("click", async () => {
 +  const status = $("#ux-status"), button = $("#ux-find");
++  const generation = ++uxGeneration;
 +  button.disabled = true;
 +  try {
-+    const data = await uxPost("find"); status.textContent = data.msg;
-+    for (let i = 0; i < 9; i++) { await new Promise(resolve => setTimeout(resolve, 2000)); await uxLoad(false); }
-+  } catch (err) { status.textContent = err.message; }
-+  finally { button.disabled = false; }
++    const data = await uxPost("find");
++    if (generation !== uxGeneration) return;
++    status.textContent = data.msg;
++    for (let i = 0; i < 9 && generation === uxGeneration; i++) {
++      await new Promise(resolve => setTimeout(resolve, 2000));
++      if (generation === uxGeneration) await uxLoad(false, generation);
++    }
++  } catch (err) { if (generation === uxGeneration) status.textContent = err.message; }
++  finally { if (generation === uxGeneration) button.disabled = false; }
 +});
 +$("#ux-stop")?.addEventListener("click", async () => {
-+  try { const data = await uxPost("stop"); $("#ux-status").textContent = data.msg; }
-+  catch (err) { $("#ux-status").textContent = err.message; }
++  const generation = ++uxGeneration;
++  $("#ux-find").disabled = false;
++  try { const data = await uxPost("stop"); if (generation === uxGeneration) $("#ux-status").textContent = data.msg; }
++  catch (err) { if (generation === uxGeneration) $("#ux-status").textContent = err.message; }
 +});
 +if ($("#ux-status")) uxLoad(true);
 diff --git a/embedded_resources/web_interface/login.html b/embedded_resources/web_interface/login.html
@@ -8676,10 +8787,10 @@ index 0345168b..7502c904 100644
  
 diff --git a/src/core/dsolution_ux.cpp b/src/core/dsolution_ux.cpp
 new file mode 100644
-index 00000000..5053368a
+index 00000000..37e8519a
 --- /dev/null
 +++ b/src/core/dsolution_ux.cpp
-@@ -0,0 +1,169 @@
+@@ -0,0 +1,170 @@
 +#include "dsolution_ux.h"
 +#if defined(DSOLUTION_183_2MIC)
 +#include "core/led_control.h"
@@ -8699,6 +8810,7 @@ index 00000000..5053368a
 +static portMUX_TYPE s_mux = portMUX_INITIALIZER_UNLOCKED;
 +static bool s_find = false;
 +static unsigned s_findPlayed = 0;
++static uint32_t s_findGeneration = 0;
 +static uint32_t s_findStart = 0, s_findLast = 0, s_findCooldown = 0;
 +static bool s_findAttempted = false;
 +static bool s_findAudioSent = false;
@@ -8815,12 +8927,12 @@ index 00000000..5053368a
 +        if (error) *error = "Please wait 10 seconds before trying again";
 +        portEXIT_CRITICAL(&s_mux); return false;
 +    }
-+    s_findAttempted = true; s_findCooldown = now; s_find = true; s_findPlayed = 0;
++    s_findAttempted = true; s_findCooldown = now; s_find = true; s_findPlayed = 0; ++s_findGeneration;
 +    s_findStart = now; s_findLast = 0; s_findAudioSent = false; s_result = "queued";
 +    portEXIT_CRITICAL(&s_mux);
 +    return true;
 +}
-+void uxFindStop() { portENTER_CRITICAL(&s_mux); s_find = false; s_result = "cancelled"; portEXIT_CRITICAL(&s_mux); }
++void uxFindStop() { portENTER_CRITICAL(&s_mux); s_find = false; ++s_findGeneration; s_result = "cancelled"; portEXIT_CRITICAL(&s_mux); }
 +String uxFindStatus() {
 +    portENTER_CRITICAL(&s_mux);
 +    if (s_find && (uint32_t)(millis() - s_findStart) > 15000) { s_find = false; s_result = "expired"; }
@@ -8828,11 +8940,11 @@ index 00000000..5053368a
 +    return String(r);
 +}
 +void uxService() {
-+    uint32_t now = millis(); bool play = false;
++    uint32_t now = millis(); bool play = false; uint32_t generation = 0;
 +    portENTER_CRITICAL(&s_mux);
 +    if (s_find && (uint32_t)(now - s_findStart) > 15000) { s_find = false; s_result = "expired"; }
 +    if (s_find && (s_findPlayed == 0 || (uint32_t)(now - s_findLast) >= 700)) {
-+        s_findLast = now; play = true;
++        s_findLast = now; play = true; generation = s_findGeneration;
 +    }
 +    portEXIT_CRITICAL(&s_mux);
 +    if (!play) return;
@@ -8840,7 +8952,7 @@ index 00000000..5053368a
 +    // Respect the user's LED blink setting; never clobber their configured effect/color.
 +    blinkLed(70);
 +    portENTER_CRITICAL(&s_mux);
-+    if (s_find) {
++    if (s_find && generation == s_findGeneration) {
 +        s_findAudioSent = s_findAudioSent || played;
 +        if (++s_findPlayed >= 3) {
 +            s_find = false; s_result = s_findAudioSent ? "finished" : "silent_or_busy";
@@ -14169,7 +14281,7 @@ index 00000000..a28c8b56
 +
 +#endif
 diff --git a/src/core/wifi/webInterface.cpp b/src/core/wifi/webInterface.cpp
-index a8679bd6..1591d267 100644
+index a8679bd6..fface4c2 100644
 --- a/src/core/wifi/webInterface.cpp
 +++ b/src/core/wifi/webInterface.cpp
 @@ -1,19 +1,43 @@
@@ -14920,7 +15032,112 @@ index a8679bd6..1591d267 100644
      if (onFailureReturnLoginPage) {
          serveWebUIFile(request, "login.html", "text/html", true, login_html, login_html_size);
      } else {
-@@ -272,43 +856,117 @@ void notFound(AsyncWebServerRequest *request) { request->send(404, "text/plain",
+@@ -220,49 +804,66 @@ void createDirRecursive(const String &path, FS fs) {
+ **  Function: handleUpload
+ ** handles uploads to the filserver
+ **********************************************************************/
++// Request-local state prevents another browser's file listing from redirecting an upload.
++// AsyncWebServer frees _tempObject on disconnect as well as after a response.
++struct WebUploadState {
++    fs::FS *fs;
++    bool failed;
++    bool complete;
++    bool encryptedChunk;
++    char path[512];
++};
++static bool safeUploadPath(const String &path, bool absolute) {
++    if (!path.length() || (path[0] == '/') != absolute || path.indexOf('\\') >= 0) return false;
++    int start = absolute ? 1 : 0;
++    while (start < (int)path.length()) {
++        int end = path.indexOf('/', start);
++        if (end < 0) end = path.length();
++        String part = path.substring(start, end);
++        if (!part.length() || part == "." || part == "..") return false;
++        start = end + 1;
++    }
++    return true;
++}
+ void handleUpload(
+     AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final
+ ) {
+-    if (checkUserWebAuth(request)) {
+-        if (uploadFolder == "/") uploadFolder = "";
+-        if (!index) {
+-            if (request->hasArg("password")) filename = filename + ".enc";
+-            // Serial.println("File: " + uploadFolder + "/" + filename);
+-            String relativePath = filename;
+-            String fullPath = uploadFolder + "/" + relativePath;
+-            String dirPath = fullPath.substring(0, fullPath.lastIndexOf("/"));
+-            if (dirPath.length() > 0) { createDirRecursive(dirPath, _webFS); }
+-        RETRY:
+-            request->_tempFile = _webFS.open(uploadFolder + "/" + filename, "w");
+-            if (!request->_tempFile) {
+-                // Serial.println("Failed to open file for writing: " + uploadFolder + "/" + filename);
+-                goto RETRY;
+-            }
+-        }
+-
+-        if (len) {
+-            if (request->hasArg("password")) {
+-                // encryption requested
+-                static int chunck_no = 0;
+-                if (chunck_no != 0) {
+-                    // TODO: handle multiple chunks
+-                    request->send(404, "text/html", "file is too big");
+-                    return;
+-                } else chunck_no += 1;
+-                String enc_password = request->arg("password");
++    if (!isWebSessionValid(request)) return;
++    WebUploadState *st = (WebUploadState *)request->_tempObject;
++    if (!index) {
++        if (st) { st->failed = true; return; } // Only one file per request.
++        st = (WebUploadState *)calloc(1, sizeof(WebUploadState));
++        request->_tempObject = st;
++        if (!st) return;
++        String folder = request->hasArg("folder") ? request->arg("folder") : uploadFolder;
++        if (request->hasArg("fs") && request->arg("fs") != "SD" && request->arg("fs") != "LittleFS") { st->failed = true; return; }
++        st->fs = request->hasArg("fs") ? (request->arg("fs") == "SD" ? (fs::FS *)&SD : (fs::FS *)&LittleFS) : &_webFS;
++        if (request->hasArg("password")) filename += ".enc";
++        if (!safeUploadPath(folder, true) || !safeUploadPath(filename, false)) { st->failed = true; return; }
++        String fullPath = (folder == "/" ? "" : folder) + "/" + filename;
++        if (fullPath.length() >= sizeof(st->path)) { st->failed = true; return; }
++        strlcpy(st->path, fullPath.c_str(), sizeof(st->path));
++        String dirPath = fullPath.substring(0, fullPath.lastIndexOf('/'));
++        if (dirPath.length()) createDirRecursive(dirPath, *st->fs);
++        request->_tempFile = st->fs->open(fullPath, "w");
++        if (!request->_tempFile) { st->failed = true; return; }
++    }
++    if (!st || st->failed || st->complete) return;
++    if (len) {
++        if (request->hasArg("password")) {
++            if (st->encryptedChunk) { st->failed = true; }
++            else {
++                st->encryptedChunk = true;
+                 String plaintext = String((char *)data).substring(0, len);
+-                String cyphertxt = encryptString(plaintext, enc_password);
+-                if (cyphertxt == "") { return; }
+-                if (request->_tempFile)
+-                    request->_tempFile.write((const uint8_t *)cyphertxt.c_str(), cyphertxt.length());
+-            } else {
+-                if (request->_tempFile) request->_tempFile.write(data, len);
++                String ciphertext = encryptString(plaintext, request->arg("password"));
++                if (!ciphertext.length() || request->_tempFile.write((const uint8_t *)ciphertext.c_str(), ciphertext.length()) != ciphertext.length()) st->failed = true;
+             }
+-        }
+-        if (final) {
+-            // close the file handle as the upload is now done
+-            if (request->_tempFile) request->_tempFile.close();
+-        }
++        } else if (request->_tempFile.write(data, len) != len) st->failed = true;
++    }
++    if (st->failed || final) {
++        request->_tempFile.close();
++        if (st->failed) st->fs->remove(st->path);
++        else st->complete = true;
+     }
+ }
+ 
+@@ -272,43 +873,117 @@ void notFound(AsyncWebServerRequest *request) { request->send(404, "text/plain",
  **  Function: drawWebUiScreen
  **  Draw information on screen of WebUI.
  **********************************************************************/
@@ -15064,7 +15281,7 @@ index a8679bd6..1591d267 100644
  
  #if defined(HAS_TOUCH)
      TouchFooter();
-@@ -379,11 +1037,12 @@ void serveWebUIFile(
+@@ -379,11 +1054,12 @@ void serveWebUIFile(
  static bool startMdnsResponder() {
      RAM_LOG("before MDNS");
  
@@ -15079,7 +15296,7 @@ index a8679bd6..1591d267 100644
  
      RAM_LOG("after MDNS");
      return true;
-@@ -460,59 +1119,765 @@ void configureWebServer() {
+@@ -460,59 +1136,765 @@ void configureWebServer() {
      // System Info
      server->on("/systeminfo", HTTP_GET, [](AsyncWebServerRequest *request) {
          if (checkUserWebAuth(request)) {
@@ -15444,16 +15661,16 @@ index a8679bd6..1591d267 100644
 +            request->send(
 +                409, "application/json",
 +                "{\"ok\":false,\"msg\":\"Dual-Boot active: ota_0 holds XiaoZhi HeyLily. Update Bruce via USB Web Flasher (ota_1) so HeyLily is protected.\"}"
-             );
--            request->send(200, "application/json", response_body);
++            );
 +            return;
-         }
++        }
 +        if (totalSize < 65536 || totalSize > nextPart->size) {
 +            request->send(
 +                400, "application/json",
 +                "{\"ok\":false,\"msg\":\"Invalid firmware size for OTA slot (max " +
 +                    humanReadableSize(nextPart->size) + ")\"}"
-+            );
+             );
+-            request->send(200, "application/json", response_body);
 +            return;
 +        }
 +        if (s_otaInProgress) {
@@ -15471,7 +15688,7 @@ index a8679bd6..1591d267 100644
 +            otaReleaseLock(true);
 +            request->send(500, "application/json", "{\"ok\":false,\"msg\":\"" + err + "\"}");
 +            return;
-+        }
+         }
 +        s_otaValid = true;
 +        String ok = "{\"ok\":true,\"chunkSize\":" + String((unsigned long)kOtaChunkCap) +
 +                    ",\"maxSize\":" + String((unsigned long)nextPart->size) + "}";
@@ -15551,10 +15768,11 @@ index a8679bd6..1591d267 100644
 +                        400, "application/json",
 +                        "{\"ok\":false,\"msg\":\"Invalid OTA image! Upload ota.bin, not factory.bin.\"}"
 +                    );
-+                    return;
-+                }
-+            }
-+
+                     return;
+                 }
+-                screenBinBufferSize = desiredSize;
+             }
+ 
 +            if (offset + chunkLen > s_otaTotal) {
 +                Update.abort();
 +                otaReleaseLock(true);
@@ -15599,9 +15817,8 @@ index a8679bd6..1591d267 100644
 +                }
 +                if (total == 0 || total > kOtaChunkCap) {
 +                    snprintf(st->err, sizeof(st->err), "Invalid chunk size");
-                     return;
-                 }
--                screenBinBufferSize = desiredSize;
++                    return;
++                }
 +                if (!request->hasArg("offset")) {
 +                    snprintf(st->err, sizeof(st->err), "Missing offset");
 +                    return;
@@ -15615,7 +15832,7 @@ index a8679bd6..1591d267 100644
 +                st->valid = false;
 +                snprintf(st->err, sizeof(st->err), "Chunk bounds exceeded");
 +                return;
-             }
++            }
 +            if (len > 0) {
 +                memcpy(s_otaChunkBuf + index, data, len);
 +                st->received = index + len;
@@ -15623,7 +15840,7 @@ index a8679bd6..1591d267 100644
 +            }
 +        }
 +    );
- 
++
 +    server->on("/ota/commit", HTTP_POST, [](AsyncWebServerRequest *request) {
 +        if (!checkUserWebAuth(request)) return;
 +        if (!s_otaInProgress || !s_otaValid) {
@@ -15883,7 +16100,7 @@ index a8679bd6..1591d267 100644
          }
      });
  
-@@ -544,25 +1909,70 @@ void configureWebServer() {
+@@ -544,25 +1926,70 @@ void configureWebServer() {
          if (!checkUserWebAuth(request)) { return; }
          if (request->hasArg("cmnd")) {
              String cmnd = request->arg("cmnd");
@@ -15973,7 +16190,7 @@ index a8679bd6..1591d267 100644
                  }
              } else {
                  if (parseSerialCommand(cmnd, false)) {
-@@ -576,9 +1986,22 @@ void configureWebServer() {
+@@ -576,9 +2003,22 @@ void configureWebServer() {
          }
      });
  
@@ -15998,7 +16215,7 @@ index a8679bd6..1591d267 100644
      });
  
      // List files
-@@ -632,6 +2055,11 @@ void configureWebServer() {
+@@ -632,6 +2072,11 @@ void configureWebServer() {
                  } else {
                      if (strcmp(fileAction.c_str(), "download") == 0) {
                          request->send(*fs, fileName, "application/octet-stream", true);
@@ -16010,7 +16227,31 @@ index a8679bd6..1591d267 100644
                      } else if (strcmp(fileAction.c_str(), "image") == 0) {
                          String extension = fileName.substring(fileName.lastIndexOf('.') + 1);
                          // https://www.iana.org/assignments/media-types/media-types.xhtml#image
-@@ -737,6 +2165,348 @@ void configureWebServer() {
+@@ -700,7 +2145,7 @@ void configureWebServer() {
+ 
+                 File editFile = fs->open(fileName, FILE_WRITE);
+                 if (editFile) {
+-                    if (editFile.write((const uint8_t *)fileContent.c_str(), fileContent.length())) {
++                    if (editFile.write((const uint8_t *)fileContent.c_str(), fileContent.length()) == fileContent.length()) {
+                         request->send(200, "text/plain", "File edited: " + fileName);
+                     } else {
+                         request->send(500, "text/plain", "Failed to write to file: " + fileName);
+@@ -720,7 +2165,13 @@ void configureWebServer() {
+     server->on(
+         "/upload",
+         HTTP_POST,
+-        [](AsyncWebServerRequest *request) { request->send(200, "text/plain", "File upload completed"); },
++        [](AsyncWebServerRequest *request) {
++            if (!checkUserWebAuth(request)) return;
++            WebUploadState *st = (WebUploadState *)request->_tempObject;
++            if (!st || st->failed || !st->complete) {
++                request->send(500, "text/plain", "Upload failed or incomplete; check storage and retry");
++            } else request->send(200, "text/plain", "File upload completed");
++        },
+         handleUpload
+     );
+ 
+@@ -737,6 +2188,348 @@ void configureWebServer() {
              }
          }
      });
@@ -16359,7 +16600,7 @@ index a8679bd6..1591d267 100644
      server->begin();
      Serial.println("Webserver started");
  }
-@@ -745,19 +2515,66 @@ void configureWebServer() {
+@@ -745,19 +2538,66 @@ void configureWebServer() {
  **  Function: startWebUi
  **  Start the WebUI
  **********************************************************************/
@@ -16435,7 +16676,7 @@ index a8679bd6..1591d267 100644
          options.clear();
  
          Serial.println("Configuring Webserver ...");
-@@ -771,24 +2588,180 @@ void startWebUi(bool mode_ap) {
+@@ -771,24 +2611,180 @@ void startWebUi(bool mode_ap) {
          isWebUIActive = true;
      }
      tft.setLogging();
@@ -16507,9 +16748,10 @@ index a8679bd6..1591d267 100644
 +            wifiDisconnect();
 +            exitWebUiLoop = true;
 +        }
-+    }
+     }
 +}
-+
+ 
+-    bool closeServer = false;
 +/**********************************************************************
 +**  Function: startWebUiHeadless
 +**  Silently connects to saved Wi-Fi (or falls back to AP) and starts the
@@ -16530,7 +16772,10 @@ index a8679bd6..1591d267 100644
 +            stopBLEStack();
 +            vTaskDelay(pdMS_TO_TICKS(100));
 +        }
-+
+ 
+-    options.clear();
+-    options.emplace_back("Run in background", []() {});
+-    options.emplace_back("Exit", [&closeServer]() { closeServer = true; });
 +        if (!s_webUiCancelRequested && radioHasMemForWifi()) {
 +            ensureWifiPlatform();
 +            if (!bruceConfig.wifi.empty() && !s_webUiCancelRequested) {
@@ -16559,13 +16804,18 @@ index a8679bd6..1591d267 100644
 +                }
 +                WiFi.scanDelete();
 +            }
-+
+ 
+-    loopOptions(options);
 +            if (s_webUiCancelRequested) {
 +                wifiDisconnect();
 +                s_webUiStarting = false;
 +                return false;
 +            }
-+
+ 
+-    if (closeServer) {
+-        stopWebUi();
+-        vTaskDelay(pdMS_TO_TICKS(100));
+-        if (!keepWifiConnected) { wifiDisconnect(); }
 +            if (WiFi.isConnected()) {
 +                hasNetwork = true;
 +            } else if (allowApFallback && !s_webUiCancelRequested) {
@@ -16579,17 +16829,13 @@ index a8679bd6..1591d267 100644
 +        if (!isWebUIActive) wifiDisconnect();
 +        s_webUiStarting = false;
 +        return false;
-     }
- 
--    bool closeServer = false;
++    }
++
 +    if (hasNetwork && !server) {
 +        Serial.println("[WebUI] Starting headless background server...");
 +        if (psramFound()) server = (AsyncWebServer *)ps_malloc(sizeof(AsyncWebServer));
 +        else server = (AsyncWebServer *)malloc(sizeof(AsyncWebServer));
- 
--    options.clear();
--    options.emplace_back("Run in background", []() {});
--    options.emplace_back("Exit", [&closeServer]() { closeServer = true; });
++
 +        if (server) {
 +            new (server) AsyncWebServer(default_webserverporthttp);
 +            configureWebServer();
@@ -16600,16 +16846,11 @@ index a8679bd6..1591d267 100644
 +            Serial.println("[WebUI] Ready at http://" + bruceConfig.mdnsHost + ".local (" + wifiIP + ")");
 +        }
 +    }
- 
--    loopOptions(options);
++
 +    s_webUiStarting = false;
 +    return isWebUIActive;
 +}
- 
--    if (closeServer) {
--        stopWebUi();
--        vTaskDelay(pdMS_TO_TICKS(100));
--        if (!keepWifiConnected) { wifiDisconnect(); }
++
 +static void webUiAutoStartTask(void *pvParameters) {
 +    (void)pvParameters;
 +    for (int i = 0; i < 9 && !s_webUiCancelRequested; i++) {
