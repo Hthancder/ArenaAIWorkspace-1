@@ -682,6 +682,37 @@ Sau khi bản đầu của 1.3.0 lên CI, một lượt rà tiếp tìm thêm c�
   chỉ lộ trên macOS, `local-check.sh` trên Linux không thấy. Đã sửa và thêm luật
   lint đếm ngoặc để bắt đúng lỗi này (có che chuỗi/chú thích trước khi đếm).
 
+### Ẩn dữ liệu nhận dạng trước khi gửi AI (mới, mặc định BẬT)
+
+Trước đây "Không lưu lịch sử" chỉ ngừng **ghi trên máy**; số điện thoại, email,
+số thẻ vẫn đi nguyên tới OpenAI/Google. Nay `SXAnonymizer` thay chúng bằng nhãn
+trước khi gửi và khôi phục trong đáp án — người dùng vẫn đọc số thật.
+
+| Loại | Ẩn | Ví dụ |
+|---|---|---|
+| Số điện thoại VN | ✔ | `0912345678`, `+84912345678`, `0912 345 678` |
+| Email | ✔ | `minh.anh+x@example.com.vn` |
+| Số thẻ | ✔ | `4111 1111 1111 1111` |
+| CCCD/CMND | ✔ | `001203004567`, `123456789` |
+| Số tài khoản | ✔ | `19001234567890` |
+| Địa chỉ IP | ✔ | `192.168.1.10` |
+| URL có tham số | ✔ | `https://…/order?token=…` |
+| **Tên người, địa chỉ, tên trường/công ty** | **✘ (cố ý)** | không thể nhận đúng mà không phá nghĩa câu hỏi |
+
+- Nhãn: `[sđt-1]`, `[email-1]`, `[thẻ-1]`, `[cccd-1]`, `[tk-1]`, `[ip-1]`, `[link-1]`.
+  Bảng nhãn → giá trị chỉ nằm trong RAM của lượt đó, không ghi đĩa.
+- Khôi phục chịu được model viết lại nhãn: `[SDT 1]`, `[sdt-1]`, `(sđt 1)`,
+  `sdt-1` đều đổi lại đúng. **Lỗi thật đã gặp:** bản đầu chỉ khớp `[sđt` (lượng
+  tử lười `{0,12}?` dừng ngay sau từ khoá) và `đ` chuẩn hoá lệch giữa hai bước —
+  nên nhãn phổ biến nhất không bao giờ được khôi phục. Đã sửa + có test.
+- `tests/anonymizer_test.m` (khoảng 30 khẳng định, chạy macOS CI) kiểm cả ba
+  chiều: phải ẩn, phải khôi phục đúng, và không được phá câu vô hại.
+- `tests/intercept_test.m` kiểm thêm ở tầng pipeline: model **không** nhận được
+  số, đáp án về người dùng **có** số; tắt công tắc thì số đi nguyên.
+- Công tắc: Cài đặt → Dữ liệu → **Ẩn dữ liệu nhận dạng khi gửi AI** (mặc định
+  bật). Ẩn nhầm một con số vô hại rẻ hơn nhiều so với lộ số điện thoại, nên mặc
+  định bật là lựa chọn có chủ ý.
+
 ### Cần kiểm trên thiết bị (1.3.0)
 
 1. Cài đặt → SiriX → Ghi nhớ: xoá từng mục và xoá tất cả.
@@ -695,4 +726,7 @@ Sau khi bản đầu của 1.3.0 lên CI, một lượt rà tiếp tìm thêm c�
 6. Hỏi một câu có bảng Markdown → không còn hàng `• --- · ---`.
 7. Sau khi dùng SiriX một lúc, mở Nhật ký → tìm `sk-` / `Bearer` → không có khoá
    thật nào trong tệp log.
+8. Hỏi "nhắc mẹ gọi 0912345678 lúc 8 giờ" → log phải ghi `ẩn 1 giá trị nhận dạng`;
+   đáp án hiện lại đúng số, không hiện `[sđt-1]`.
+9. Tắt "Ẩn dữ liệu nhận dạng khi gửi AI" → câu hỏi đi nguyên văn.
 

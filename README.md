@@ -28,6 +28,11 @@ Nhà cung cấp: **OpenAI tương thích** (mặc định) hoặc **Google Gemin
   bước 0,05, ngữ cảnh 0–40 câu, số vòng công cụ 1–6: chọn mức gợi ý hoặc tự nhập số.
 - **Chẩn đoán nhanh** — một màn hình chỉ ra vì sao Siri chưa trả lời (thiếu khoá, endpoint sai,
   trần chờ ngắn hơn ngân sách…) kèm báo cáo chia sẻ được.
+- **Ẩn dữ liệu nhận dạng trước khi gửi AI** — số điện thoại, email, số thẻ, CCCD, số tài
+  khoản, địa chỉ IP và liên kết có `?token=` được thay bằng nhãn (`[sđt-1]`) **trước khi rời
+  máy**, rồi khôi phục trong câu trả lời để bạn vẫn đọc được số thật. Danh sách nhãn chỉ nằm
+  trong RAM của lượt đó. Tên người và địa chỉ không được ẩn (sẽ phá nghĩa câu hỏi) — nói rõ
+  để không hứa quá. Cài đặt → Dữ liệu → *Ẩn dữ liệu nhận dạng khi gửi AI* (mặc định bật).
 - **Log không lộ khoá** — mọi dòng log được lọc trước khi ghi: khoá `sk-…`, `AIza…`,
   `gsk_…`, `Bearer …`, `?api_key=…` đều thành `••••(đã ẩn)`. Log hay được sao chép dán vào
   chat nhờ hỗ trợ, nên đây là bước bắt buộc, không phải tuỳ chọn.
