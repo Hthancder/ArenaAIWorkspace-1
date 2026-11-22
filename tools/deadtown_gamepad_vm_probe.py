@@ -19,7 +19,7 @@ EXPECTED = ['GAMEPAD_VM:unsupported:0:0:0', 'GAMEPAD_VM:none:4:0:0',
             'GAMEPAD_VM:first:111:211:311:411:4:8:4',
             'GAMEPAD_VM:connect-gates:0:0:0:0:0:0',
             'GAMEPAD_VM:connect-empty:0:1:0:0',
-            'GAMEPAD_VM:connect-active:1:1:4:2:13:0.2']
+            'GAMEPAD_VM:connect-active:1:1:4:2:13:0.20']
 
 MOCKS = {
     'is_supported': 'return global.__dt_gp_supported;\n',
