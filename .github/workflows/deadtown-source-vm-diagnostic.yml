@@ -20,7 +20,9 @@ on:
       - 'tools/deadtown_gamepad_vm_probe.py'
       - 'tools/deadtown_settings_particle_evidence.py'
       - 'tools/deadtown_boss2_turn_evidence.py'
+      - 'tools/deadtown_boss2_schedule_vm_probe.py'
       - 'tests/test_deadtown_boss2_turn_evidence.py'
+      - 'tests/test_deadtown_boss2_schedule_vm_probe.py'
       - 'tools/deadtown_crosshair_evidence.py'
       - 'tests/test_deadtown_crosshair_evidence.py'
       - 'tools/deadtown_settings_particle_vm_probe.py'
@@ -56,6 +58,7 @@ jobs:
           python -m pip install Pillow==11.3.0
           python -m unittest discover -s tests -p 'test_check_deadtown_source_vm.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_item_schedule_vm_probe.py' -v
+          python -m unittest discover -s tests -p 'test_deadtown_boss2_schedule_vm_probe.py' -v
           sudo apt-get update -qq
           sudo apt-get install -y -qq libsdl2-dev libbz2-dev pkg-config
       - name: Retrieve pinned APK and generate events from editable source
@@ -104,10 +107,11 @@ jobs:
       - name: Compile separate item alarm scheduling diagnostic
         env:
           GML_PROBE_SOURCE: ${{ github.workspace }}/deadtown-source/project/scripts/lang_type_set.gml
-          GML_PROBE_EVENTS: ${{ github.workspace }}/work/events-item-schedule.json
+          GML_PROBE_EVENTS: ${{ github.workspace }}/work/events-item-boss-schedule.json
         run: |
           set -euo pipefail
           python tools/deadtown_item_schedule_vm_probe.py instrument work/events-original.json work/events-item-schedule.json
+          python tools/deadtown_boss2_schedule_vm_probe.py instrument deadtown-source/project work/events-item-schedule.json work/events-item-boss-schedule.json
           mkdir -p work/item-schedule-game work/save-item-schedule
           cp work/game/audiogroup*.dat work/item-schedule-game/
           exe=$(find work/utmt -type f -name UndertaleModCli | head -1)
@@ -181,6 +185,7 @@ jobs:
           set -euo pipefail
           timeout 90 work/runner-build/gmrunner work/item-schedule-game --headless --fast --mute --seed 1 --frames 930 --trace --stats --save-dir work/save-item-schedule > work/item-schedule.log 2>&1 || { tail -100 work/item-schedule.log; exit 1; }
           python tools/deadtown_item_schedule_vm_probe.py check work/item-schedule.log
+          python tools/deadtown_boss2_schedule_vm_probe.py check work/item-schedule.log
       - name: Report isolated scheduling markers
         if: always()
         run: |
@@ -190,6 +195,8 @@ jobs:
           if p.exists():
               lines = [line for line in p.read_text(errors='replace').splitlines() if 'ITEM_SCHEDULE_VM:' in line]
               print('::notice::ITEM_SCHEDULE_DIAGNOSTIC: ' + ' | '.join(lines).replace('%', '%25')[:3000])
+              lines = [line for line in p.read_text(errors='replace').splitlines() if 'BOSS2_SCHEDULE_VM:' in line]
+              print('::notice::BOSS2_SCHEDULE_DIAGNOSTIC: ' + ' | '.join(lines).replace('%', '%25')[:3000])
           else:
               print('::notice::ITEM_SCHEDULE_DIAGNOSTIC: no log')
           PY
