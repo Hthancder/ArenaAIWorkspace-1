@@ -15,3 +15,7 @@ g++ -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-fram
 node "$root/tests/device-ux/web-test.js" "$src/embedded_resources/web_interface/index.js" "$src/embedded_resources/web_interface/index.html"
 
 node "$root/tests/device-ux/file-ux-test.js" "$src/embedded_resources/web_interface/index.js"
+
+g++ -std=c++17 -Wall -Wextra -Werror -I"$src/src" "$root/tests/device-ux/pet-layout-test.cpp" -o "$tmp/pet-layout-test"
+"$tmp/pet-layout-test"
+python3 "$root/tests/device-ux/prepare-sound-test.py"

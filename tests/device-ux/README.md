@@ -5,3 +5,5 @@
 These are mocked host tests, not an ESP32 build and not a hardware/audio/acoustic test. They cannot prove actual GPIO clocks, speaker audibility, register correctness, race freedom with concurrent serial/audio tasks, LED behavior, timing, flash fit or WebUI response on the device. Build the board and verify on real hardware before relying on the result.
 
 The file UI regression tests cover multi-batch folder drops, per-file destinations and failure recovery, out-of-order folder responses, and failed editor saves. The audio test also simulates cancelling and restarting Find while a tone is being written. These mocks do not exercise the real filesystem or browser/device network.
+
+The suite also checks pet geometry in portrait/landscape, strict bounded PCM WAV parsing, volume-scaled mono-to-stereo playback, missing/invalid custom sound fallback, and busy microphone behavior. It does not test physical display layout, codec acoustics, or simultaneous hardware tasks.

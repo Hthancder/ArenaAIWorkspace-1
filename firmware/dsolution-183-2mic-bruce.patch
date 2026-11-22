@@ -8803,16 +8803,18 @@ index 0345168b..7502c904 100644
  
 diff --git a/src/core/dsolution_ux.cpp b/src/core/dsolution_ux.cpp
 new file mode 100644
-index 00000000..37e8519a
+index 00000000..6f439bf4
 --- /dev/null
 +++ b/src/core/dsolution_ux.cpp
-@@ -0,0 +1,170 @@
+@@ -0,0 +1,270 @@
 +#include "dsolution_ux.h"
 +#if defined(DSOLUTION_183_2MIC)
 +#include "core/led_control.h"
 +#include "modules/others/audio.h"
 +#include <globals.h>
 +#include <Wire.h>
++#include <LittleFS.h>
++#include "ui_sound_wav.h"
 +#include <Preferences.h>
 +#include <driver/i2s_std.h>
 +#include <math.h>
@@ -8831,6 +8833,22 @@ index 00000000..37e8519a
 +static bool s_findAttempted = false;
 +static bool s_findAudioSent = false;
 +static const char *s_result = "idle";
++static uint8_t s_soundModes[5] = {0, 0, 0, 0, 0};
++static const char *const s_soundKeys[] = {"select", "back", "success", "warning", "find"};
++static const char *const s_soundPaths[] = {"/ui-sounds/select.wav", "/ui-sounds/back.wav",
++    "/ui-sounds/success.wav", "/ui-sounds/warning.wav", "/ui-sounds/find.wav"};
++static unsigned soundIndex(UiSound e) { unsigned n = (unsigned)e; return n < 5 ? n : 0; }
++unsigned uxSoundMode(UiSound e) { return s_soundModes[soundIndex(e)]; }
++const char *uxSoundModeName(UiSound e) {
++    const char *const names[] = {"Built-in", "Off", "WAV"};
++    return names[uxSoundMode(e)];
++}
++void uxCycleSoundMode(UiSound e) {
++    const unsigned n = soundIndex(e);
++    s_soundModes[n] = (s_soundModes[n] + 1) % 3;
++    Preferences p;
++    if (p.begin("dsounds", false)) { p.putUChar(s_soundKeys[n], s_soundModes[n]); p.end(); }
++}
 +
 +void uxInitMenuTask() {
 +    s_menuTask = xTaskGetCurrentTaskHandle();
@@ -8838,6 +8856,14 @@ index 00000000..37e8519a
 +        Preferences p;
 +        if (p.begin("dsquick", true)) { s_uiFeedback = p.getBool("ui_feedback", true); p.end(); }
 +        s_feedbackLoaded = true;
++        Preferences sounds;
++        if (sounds.begin("dsounds", true)) {
++            for (unsigned i = 0; i < 5; ++i) {
++                uint8_t mode = sounds.getUChar(s_soundKeys[i], 0);
++                s_soundModes[i] = mode <= 2 ? mode : 0;
++            }
++            sounds.end();
++        }
 +    }
 +}
 +bool uxUiFeedbackEnabled() { return s_uiFeedback; }
@@ -8901,6 +8927,85 @@ index 00000000..37e8519a
 +    return ok;
 +}
 +
++// Validated short PCM cues use the same fixed clocks as built-in tones. Playback
++// stays on the menu task and never stops an existing audio/mic session.
++static bool playUiWav(unsigned which) {
++    if (!s_menuTask || xTaskGetCurrentTaskHandle() != s_menuTask || !bruceConfig.soundEnabled ||
++        bruceConfig.soundVolume <= 0 || isSpeakerActive() || isBoardMicActive() || isAudioPlaying()) return false;
++    File f = LittleFS.open(s_soundPaths[which], "r");
++    if (!f || f.isDirectory()) return false;
++    uint8_t header[44]; UiWavInfo info;
++    const unsigned limit = which < 2 ? 250 : 1000;
++    if (f.read(header, sizeof(header)) != sizeof(header) || !uiParseWav(header, f.size(), limit, info)) { f.close(); return false; }
++    i2s_chan_handle_t tx = nullptr;
++    i2s_chan_config_t chan = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
++    chan.dma_desc_num = 3; chan.dma_frame_num = 128;
++    if (i2s_new_channel(&chan, &tx, nullptr) != ESP_OK) { f.close(); return false; }
++    i2s_std_config_t cfg = {
++        .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(48000),
++        .slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO),
++        .gpio_cfg = {.mclk = GPIO_NUM_5, .bclk = GPIO_NUM_15, .ws = GPIO_NUM_16,
++                     .dout = GPIO_NUM_6, .din = I2S_GPIO_UNUSED,
++                     .invert_flags = {.mclk_inv = false, .bclk_inv = false, .ws_inv = false}},
++    };
++    cfg.slot_cfg.bit_shift = true;
++    bool enabled = false, codec = false, ok = false;
++    if (i2s_channel_init_std_mode(tx, &cfg) != ESP_OK) goto wav_done;
++    if (i2s_channel_enable(tx) != ESP_OK) goto wav_done;
++    enabled = true;
++    Wire.beginTransmission(0x18);
++    if (Wire.endTransmission() != 0) goto wav_done;
++    _setup_codec_speaker(true); codec = true;
++    {
++        uint8_t input[512]; int16_t out[256]; uint32_t remaining = info.bytes;
++        const int volume = min(100, max(0, bruceConfig.soundVolume));
++        while (remaining) {
++            const unsigned frameBytes = info.channels * 2;
++            unsigned frames = min(128U, (unsigned)(remaining / frameBytes));
++            unsigned count = frames * frameBytes;
++            if (f.read(input, count) != count) goto wav_done;
++            for (unsigned i = 0; i < frames; ++i) {
++                int16_t left = (int16_t)uiLe16(input + i * frameBytes);
++                int16_t right = info.channels == 2 ? (int16_t)uiLe16(input + i * frameBytes + 2) : left;
++                out[2*i] = (int16_t)((int32_t)left * volume / 100);
++                out[2*i+1] = (int16_t)((int32_t)right * volume / 100);
++            }
++            size_t written = 0;
++            if (i2s_channel_write(tx, out, frames * 4, &written, pdMS_TO_TICKS(100)) != ESP_OK || written != frames * 4) goto wav_done;
++            remaining -= count;
++        }
++        memset(out, 0, sizeof(out));
++        for (unsigned i = 0; i < 12; ++i) {
++            size_t written = 0;
++            if (i2s_channel_write(tx, out, sizeof(out), &written, pdMS_TO_TICKS(100)) != ESP_OK || written != sizeof(out)) goto wav_done;
++        }
++    }
++    vTaskDelay(pdMS_TO_TICKS(10)); ok = true;
++wav_done:
++    f.close();
++    if (codec) _setup_codec_speaker(false);
++    if (enabled) i2s_channel_disable(tx);
++    i2s_del_channel(tx);
++    return ok;
++}
++static bool playUiEvent(UiSound e) {
++    const unsigned n = soundIndex(e), mode = uxSoundMode(e);
++    if (mode == 1) return false;
++    if (mode == 2) {
++        if (playUiWav(n)) return true;
++        Serial.println("[audio] Custom WAV unavailable or invalid; using built-in tone");
++    }
++    switch (e) {
++        case UiSound::Select: return playUiTone(1050, 55);
++        case UiSound::Back: return playUiTone(700, 65);
++        case UiSound::Success: return playUiTone(1300, 110);
++        case UiSound::Warning: return playUiTone(500, 180);
++        case UiSound::Find: return playUiTone(1100, 220);
++    }
++    return false;
++}
++bool uxPreviewSound(UiSound e) { return playUiEvent(e); }
++
 +void uxSound(UiSound e) {
 +    if ((e == UiSound::Select || e == UiSound::Back) && !s_uiFeedback) return;
 +    static uint32_t lastWarning = 0;
@@ -8910,12 +9015,7 @@ index 00000000..37e8519a
 +        if (warned && (uint32_t)(now - lastWarning) < 3000) return;
 +        warned = true; lastWarning = now;
 +    }
-+    switch (e) {
-+        case UiSound::Select: playUiTone(1050, 55); break;
-+        case UiSound::Back: playUiTone(700, 65); break;
-+        case UiSound::Success: playUiTone(1300, 110); break;
-+        case UiSound::Warning: playUiTone(500, 180); break;
-+    }
++    playUiEvent(e);
 +}
 +bool uxSpeakerTest() { return playUiTone(1000, 350); }
 +
@@ -8964,7 +9064,7 @@ index 00000000..37e8519a
 +    }
 +    portEXIT_CRITICAL(&s_mux);
 +    if (!play) return;
-+    bool played = playUiTone(1100, 220);
++    bool played = playUiEvent(UiSound::Find);
 +    // Respect the user's LED blink setting; never clobber their configured effect/color.
 +    blinkLed(70);
 +    portENTER_CRITICAL(&s_mux);
@@ -8979,15 +9079,20 @@ index 00000000..37e8519a
 +#endif
 diff --git a/src/core/dsolution_ux.h b/src/core/dsolution_ux.h
 new file mode 100644
-index 00000000..3986c6b6
+index 00000000..d8f06f6b
 --- /dev/null
 +++ b/src/core/dsolution_ux.h
-@@ -0,0 +1,18 @@
+@@ -0,0 +1,23 @@
 +#pragma once
 +#if defined(DSOLUTION_183_2MIC)
 +#include <Arduino.h>
 +// Audio always runs on the menu task, never in AsyncTCP or an input callback.
-+enum class UiSound { Select, Back, Success, Warning };
++enum class UiSound { Select, Back, Success, Warning, Find };
++// Each event has its own built-in/off/custom setting, persisted locally.
++unsigned uxSoundMode(UiSound event);
++void uxCycleSoundMode(UiSound event);
++const char *uxSoundModeName(UiSound event);
++bool uxPreviewSound(UiSound event);
 +void uxInitMenuTask();
 +bool uxUiFeedbackEnabled();
 +void uxSetUiFeedback(bool enabled);
@@ -10474,7 +10579,7 @@ index ed144ba6..c39cac4c 100644
                             ibeacon("Bruce", "e4c159a0-8c82-11e6-bdf4-0800200c9a66", 0x004C);
                         }});
 diff --git a/src/core/menu_items/ConfigMenu.cpp b/src/core/menu_items/ConfigMenu.cpp
-index 6e44fd4d..e1a9cd90 100644
+index 6e44fd4d..c6a80eaf 100644
 --- a/src/core/menu_items/ConfigMenu.cpp
 +++ b/src/core/menu_items/ConfigMenu.cpp
 @@ -1,4 +1,5 @@
@@ -10547,7 +10652,34 @@ index 6e44fd4d..e1a9cd90 100644
  /*********************************************************************
  **  Function: ledMenu
  **  LED configuration submenu with auto-rebuild for toggles
-@@ -139,6 +181,18 @@ void ConfigMenu::audioMenu() {
+@@ -123,6 +165,26 @@ void ConfigMenu::ledMenu() {
+     }
+ }
+ #endif
++#if defined(DSOLUTION_183_2MIC) && !defined(LITE_VERSION)
++static void uiSoundsMenu() {
++    while (true) {
++        std::vector<Option> items;
++        const UiSound events[] = {UiSound::Select, UiSound::Back, UiSound::Success, UiSound::Warning, UiSound::Find};
++        const char *names[] = {"Select", "Back", "Success", "Warning", "Find"};
++        for (unsigned i = 0; i < 5; ++i) {
++            UiSound event = events[i];
++            items.push_back({String(names[i]) + ": " + uxSoundModeName(event), [event]() { uxCycleSoundMode(event); if (uxSoundMode(event) != 1) uxPreviewSound(event); }});
++        }
++        items.push_back({"WAV file help", []() {
++            displayInfo("LittleFS /ui-sounds: select, back, success, warning, find.wav. PCM 16-bit 48k. Missing/invalid uses built-in. See guide.", true);
++        }});
++        items.push_back({"Back", []() {}});
++        int chosen = loopOptions(items, MENU_TYPE_SUBMENU, "UI sound events");
++        if (chosen < 0 || chosen == (int)items.size() - 1 || returnToMenu) return;
++    }
++}
++#endif
++
+ /*********************************************************************
+ **  Function: audioMenu
+ **  Audio configuration submenu with auto-rebuild for toggles
+@@ -139,6 +201,19 @@ void ConfigMenu::audioMenu() {
               }                                                                            },
  #if defined(HAS_SPEAKER)
              {"Sound Volume",                                                [this]() { setSoundVolume(); }},
@@ -10555,6 +10687,7 @@ index 6e44fd4d..e1a9cd90 100644
 +            {String("Menu tones: ") + (uxUiFeedbackEnabled() ? "ON" : "OFF"), []() {
 +                 uxSetUiFeedback(!uxUiFeedbackEnabled());
 +             }},
++            {"UI sound events", uiSoundsMenu},
 +            {"Test speaker", []() {
 +                 if (!bruceConfig.soundEnabled || bruceConfig.soundVolume == 0)
 +                     displayWarning("Sound is muted. Enable sound and set volume first.", true);
@@ -10566,7 +10699,7 @@ index 6e44fd4d..e1a9cd90 100644
  #endif  //  HAS_SPEAKER
  #endif  //  LITE_VERSION
              {"Back",                                                        []() {}                       },
-@@ -171,6 +225,10 @@ void ConfigMenu::systemMenu() {
+@@ -171,6 +246,10 @@ void ConfigMenu::systemMenu() {
                   bruceConfig.wifiAtStartup = !bruceConfig.wifiAtStartup;
                   bruceConfig.saveFile();
               }                                                                                                           },
@@ -10577,7 +10710,7 @@ index 6e44fd4d..e1a9cd90 100644
              {"Startup App",                                                         [this]() { setStartupApp(); }        },
              {"Hide/Show Apps",                                                      [this]() { mainMenu.hideAppsMenu(); }},
              {"Clock",                                                               [this]() { setClock(); }             },
-@@ -241,9 +299,21 @@ void ConfigMenu::advancedMenu() {
+@@ -241,9 +320,21 @@ void ConfigMenu::advancedMenu() {
  void ConfigMenu::powerMenu() {
      while (true) {
          std::vector<Option> localOptions = {
@@ -10602,7 +10735,7 @@ index 6e44fd4d..e1a9cd90 100644
              {"Power Off",
               []() {
                   // Confirmation dialog for power off
-@@ -251,10 +321,15 @@ void ConfigMenu::powerMenu() {
+@@ -251,10 +342,15 @@ void ConfigMenu::powerMenu() {
                   int8_t choice = displayMessage("Power Off Device?", "No", nullptr, "Yes", TFT_RED);
  
                   if (choice == 1) { powerOff(); }
@@ -10620,7 +10753,7 @@ index 6e44fd4d..e1a9cd90 100644
          int selected = loopOptions(localOptions, MENU_TYPE_SUBMENU, "Power Menu");
  
          // Exit to Config menu
-@@ -298,6 +373,7 @@ void ConfigMenu::pinsMenu() {
+@@ -298,6 +394,7 @@ void ConfigMenu::pinsMenu() {
      while (true) {
          std::vector<Option> localOptions = {
              {"I2C Finder",     [this]() { find_i2c_addresses(); }                       },
@@ -10628,7 +10761,7 @@ index 6e44fd4d..e1a9cd90 100644
              {"CC1101 Pins",    [this]() { setSPIPinsMenu(bruceConfigPins.CC1101_bus); } },
              {"NRF24  Pins",    [this]() { setSPIPinsMenu(bruceConfigPins.NRF24_bus); }  },
  #if !defined(LITE_VERSION)
-@@ -306,17 +382,28 @@ void ConfigMenu::pinsMenu() {
+@@ -306,17 +403,28 @@ void ConfigMenu::pinsMenu() {
              {"W5500 Pins",     [this]() { setSPIPinsMenu(bruceConfigPins.W5500_bus); }  },
  #endif
              {"SDCard Pins",    [this]() { setSPIPinsMenu(bruceConfigPins.SDCARD_bus); } },
@@ -13089,6 +13222,33 @@ index 1e7c94ef..8c58e95f 100644
      uint16_t bgColor = 0x0000;
  
      // UI Color
+diff --git a/src/core/ui_sound_wav.h b/src/core/ui_sound_wav.h
+new file mode 100644
+index 00000000..7aa98f0f
+--- /dev/null
++++ b/src/core/ui_sound_wav.h
+@@ -0,0 +1,21 @@
++#pragma once
++#include <stdint.h>
++#include <stddef.h>
++#include <string.h>
++// Strict, bounded PCM WAV profile for short UI cues. No allocations.
++struct UiWavInfo { uint16_t channels; uint32_t bytes; };
++inline uint16_t uiLe16(const uint8_t *p) { return (uint16_t)p[0] | ((uint16_t)p[1] << 8); }
++inline uint32_t uiLe32(const uint8_t *p) { return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24); }
++inline bool uiParseWav(const uint8_t *h, size_t fileSize, unsigned maxMs, UiWavInfo &info) {
++    if (fileSize < 44 || memcmp(h,"RIFF",4) || memcmp(h+8,"WAVEfmt ",8) ||
++        uiLe32(h+16) != 16 || uiLe16(h+20) != 1 || uiLe32(h+24) != 48000 ||
++        uiLe16(h+34) != 16 || memcmp(h+36,"data",4)) return false;
++    const uint16_t channels = uiLe16(h+22);
++    const uint32_t bytes = uiLe32(h+40);
++    if ((channels != 1 && channels != 2) || uiLe16(h+32) != channels * 2 ||
++        uiLe32(h+28) != 48000U * channels * 2 || !bytes || bytes % (channels * 2) ||
++        bytes > 48000U * channels * 2 * maxMs / 1000U || bytes > fileSize - 44 ||
++        uiLe32(h+4) != bytes + 36 || fileSize != bytes + 44U) return false;
++    info = {channels, bytes};
++    return true;
++}
 diff --git a/src/core/utils.cpp b/src/core/utils.cpp
 index aacdf98b..e66d0771 100644
 --- a/src/core/utils.cpp
@@ -20962,10 +21122,10 @@ index 00000000..bafd4e40
 +#endif
 diff --git a/src/modules/ble/ble_tracker_guard.cpp b/src/modules/ble/ble_tracker_guard.cpp
 new file mode 100644
-index 00000000..40fc0b29
+index 00000000..afbf7171
 --- /dev/null
 +++ b/src/modules/ble/ble_tracker_guard.cpp
-@@ -0,0 +1,320 @@
+@@ -0,0 +1,324 @@
 +#include "ble_tracker_guard.h"
 +#include "ble_guard_logic.h"
 +
@@ -21200,13 +21360,17 @@ index 00000000..40fc0b29
 +            frame.fillRoundRect(8, 8, tftWidth - 16, 24, 4, blendColors(bg, accent, warn ? 30 : 20));
 +            frame.setTextDatum(ML_DATUM);
 +            frame.setTextSize(1);
-+            frame.setTextColor(accent, blendColors(bg, accent, warn ? 30 : 20));
-+            frame.drawString(
-+                floodAlert ? "BLE GUARD [BUSY SWEEP]"
-+                           : (paused ? "BLE GUARD [PAUSED]" : "BLE PRIVACY GUARD"),
-+                14,
-+                20
-+            );
++            const uint16_t headerBg = blendColors(bg, accent, warn ? 30 : 20);
++            // A sweep indicator advances only when a real scan completes. Paused is static.
++            frame.drawCircle(17, 20, 5, accent);
++            if (!paused) {
++                const int dx[] = {0, 3, 0, -3};
++                const int dy[] = {-3, 0, 3, 0};
++                frame.drawLine(17, 20, 17 + dx[sweeps % 4], 20 + dy[sweeps % 4], accent);
++            } else frame.drawLine(15, 20, 19, 20, accent);
++            frame.setTextColor(accent, headerBg);
++            const String heading = floodAlert ? "BLE GUARD: BUSY" : (paused ? "BLE GUARD: PAUSED" : "BLE GUARD: SCAN");
++            frame.drawString(heading, 27, 20);
 +            frame.setTextDatum(MR_DATUM);
 +            frame.setTextColor(TFT_WHITE, blendColors(bg, accent, warn ? 30 : 20));
 +            frame.drawString("Hints:" + String(trackers.size()) + ((scanLimited || listFull) ? "+" : ""), tftWidth - 14, 20);
@@ -21254,7 +21418,7 @@ index 00000000..40fc0b29
 +                frame.drawString(bannerHint, tftWidth / 2, tftHeight - 14);
 +            } else {
 +                frame.setTextColor(sec, bg);
-+                frame.drawString("Sel:Save  Next:Pause  Prev:Clr  Esc:Exit", tftWidth / 2, tftHeight - 14);
++                frame.drawString("SEL save  > pause  < clear  ESC exit", tftWidth / 2, tftHeight - 14);
 +            }
 +            frame.pushSprite(0, 0);
 +            tft.markUnmappedPixels();
@@ -22415,6 +22579,227 @@ index 4d2ea723..6d3408a4 100644
      // draw.pushToSprite(&sprite,f.x,f.y,TFT_TRANSPARENT);
  }
  #define STEP (tftHeight) / 44
+diff --git a/src/modules/pwnagotchi/pet_layout.h b/src/modules/pwnagotchi/pet_layout.h
+new file mode 100644
+index 00000000..9df0a69a
+--- /dev/null
++++ b/src/modules/pwnagotchi/pet_layout.h
+@@ -0,0 +1,15 @@
++#pragma once
++// Board-independent layout. All rectangles are inside the content region.
++struct PetLayout {
++    int left, top, width, height, phraseY, phraseWidth;
++};
++inline PetLayout petLayout(int w, int /*h*/, int header, int footer) {
++    const int margin = 8;
++    int availableW = w - 2 * margin;
++    int availableH = footer - header - 48;
++    int size = availableW < availableH ? availableW : availableH;
++    if (size > 136) size = 136;
++    if (size < 20) size = 20;
++    return {(w - size) / 2, header + 5, size, size,
++            footer - 20, availableW};
++}
+diff --git a/src/modules/pwnagotchi/pwnagotchi.cpp b/src/modules/pwnagotchi/pwnagotchi.cpp
+index f0eaee5d..6af9b1d9 100644
+--- a/src/modules/pwnagotchi/pwnagotchi.cpp
++++ b/src/modules/pwnagotchi/pwnagotchi.cpp
+@@ -384,6 +384,10 @@ void brucegotchi_start() {
+                 {"Find friends", yield},
+                 {"Pwngrid spam", send_pwnagotchi_beacon_main},
+                 {channel_status.c_str(), toggle_all_channels},
++#if defined(DSOLUTION_183_2MIC)
++                {String("Pet: ") + petSkinName(), petNextSkin},
++                {String("Animation: ") + (petAnimationEnabled() ? "ON" : "OFF"), petToggleAnimation},
++#endif
+                 {"Main Menu", lambdaHelper(set_pwnagotchi_exit, true)},
+             };
+             loopOptions(options);
+@@ -412,7 +416,11 @@ void brucegotchi_start() {
+ 
+         // --- Periodic UI update ---
+         static unsigned long lastUiUpdate = 0;
++#if defined(DSOLUTION_183_2MIC)
++        if (millis() - lastUiUpdate > (petAnimationEnabled() ? 250UL : 2000UL)) {
++#else
+         if (millis() - lastUiUpdate > 2000) {
++#endif
+             updateUi(true);
+             lastUiUpdate = millis();
+         }
+diff --git a/src/modules/pwnagotchi/ui.cpp b/src/modules/pwnagotchi/ui.cpp
+index ca1f9def..3e535c14 100644
+--- a/src/modules/pwnagotchi/ui.cpp
++++ b/src/modules/pwnagotchi/ui.cpp
+@@ -9,6 +9,35 @@ Thanks to @bmorcelli for his help doing a better code.
+ #if !defined(LITE_VERSION)
+ #include "ui.h"
+ #include "../wifi/sniffer.h"
++#if defined(DSOLUTION_183_2MIC)
++#include "pet_layout.h"
++#include <Preferences.h>
++
++static uint8_t petSkin = 1; // 0 classic, 1 cyber bot, 2 ghost, 3 cat
++static bool petAnimated = true;
++const char *petSkinName() {
++    const char *names[] = {"Classic", "Cyber Bot", "Ghost", "Cyber Cat"};
++    return names[petSkin < 4 ? petSkin : 0];
++}
++bool petAnimationEnabled() { return petAnimated; }
++void petNextSkin() {
++    petSkin = (petSkin + 1) % 4;
++    Preferences p;
++    if (p.begin("dspet", false)) { p.putUChar("skin", petSkin); p.end(); }
++}
++void petToggleAnimation() {
++    petAnimated = !petAnimated;
++    Preferences p;
++    if (p.begin("dspet", false)) { p.putBool("animate", petAnimated); p.end(); }
++}
++// Font size is set by the caller. Ellipsis rather than drawing outside a region.
++static String petFit(String text, int maxWidth) {
++    if (maxWidth <= 0) return "";
++    if (tft.textWidth(text) <= maxWidth) return text;
++    while (text.length() && tft.textWidth(text + "...") > maxWidth) text.remove(text.length() - 1);
++    return tft.textWidth("...") <= maxWidth ? text + "..." : "";
++}
++#endif
+ 
+ #define ROW_SIZE 40
+ #define PADDING 10
+@@ -26,6 +55,15 @@ uint8_t menu_current_cmd = 0;
+ uint8_t menu_current_opt = 0;
+ 
+ void initUi() {
++#if defined(DSOLUTION_183_2MIC)
++    Preferences p;
++    if (p.begin("dspet", true)) {
++        petSkin = p.getUChar("skin", 1);
++        if (petSkin > 3) petSkin = 1;
++        petAnimated = p.getBool("animate", true);
++        p.end();
++    }
++#endif
+     tft.setTextSize(FP);
+     tft.fillScreen(bruceConfig.bgColor);
+     tft.setTextColor(bruceConfig.priColor);
+@@ -59,6 +97,15 @@ String getRssiBars(signed int rssi) {
+ }
+ 
+ void drawTime() {
++#if defined(DSOLUTION_183_2MIC)
++    tft.setTextSize(1);
++    tft.setTextDatum(TR_DATUM);
++    tft.setTextColor(bruceConfig.secColor, bruceConfig.bgColor);
++    const unsigned long sec = millis() / 1000UL;
++    char right[32];
++    snprintf(right, sizeof(right), "%d%%  %02lu:%02lu", getBattery(), (sec / 60UL) % 100UL, sec % 60UL);
++    tft.drawString(right, display_w - 5, 4);
++#else
+     tft.drawPixel(0, 0, 0);
+     tft.fillRect(80, 0, display_w, canvas_top_h - 3, bruceConfig.bgColor);
+     tft.setTextDatum(TR_DATUM);
+@@ -70,9 +117,17 @@ void drawTime() {
+     char right_str[50] = "UPS 0%  UP 00:00:00";
+     sprintf(right_str, "UPS %i%% UP %02d:%02d:%02d", getBattery(), h, m, s);
+     tft.drawString(right_str, display_w, 3);
++#endif
+ }
+ 
+ void drawFooterData(uint8_t friends_run, uint8_t friends_tot, const String &last_friend_name, signed int rssi) {
++#if defined(DSOLUTION_183_2MIC)
++    tft.fillRect(0, canvas_bot_h + 1, display_w, display_h - canvas_bot_h - 1, bruceConfig.bgColor);
++    tft.setTextSize(1); tft.setTextDatum(TL_DATUM); tft.setTextColor(bruceConfig.secColor, bruceConfig.bgColor);
++    String stats = "PEERS " + String(friends_run) + "/" + String(friends_tot);
++    if (friends_run > 0) stats += "  " + last_friend_name + " " + getRssiBars(rssi);
++    tft.drawString(petFit(stats, display_w - 10), 5, canvas_bot_h + 5);
++#else
+     tft.drawPixel(0, 0, 0);
+     tft.fillRect(0, canvas_bot_h + 1, display_w - 50, canvas_bot_h + 10, bruceConfig.bgColor);
+     tft.setTextSize(FP);
+@@ -87,6 +142,7 @@ void drawFooterData(uint8_t friends_run, uint8_t friends_tot, const String &last
+     }
+ 
+     tft.drawString(stats, 0, canvas_bot_h + 5);
++#endif
+ }
+ 
+ void updateUi(bool show_toolbars) {
+@@ -125,7 +181,12 @@ void drawTopCanvas() {
+     // draw screen
+     tft.drawPixel(0, 0, 0);
+     tft.fillRect(0, 0, display_w, canvas_top_h, bruceConfig.bgColor);
++#if defined(DSOLUTION_183_2MIC)
++    tft.setTextSize(1);
++    tft.drawString(petFit(buffer, display_w / 2), 5, 4);
++#else
+     tft.drawString(buffer, 0, 3);
++#endif
+     tft.drawLine(0, canvas_top_h - 1, display_w, canvas_top_h - 1, bruceConfig.priColor);
+ }
+ 
+@@ -142,6 +203,44 @@ void drawBottomCanvas() {
+ }
+ 
+ void drawMood(const String &face, const String &phrase, bool broken) {
++#if defined(DSOLUTION_183_2MIC)
++    tft.fillRect(0, canvas_top_h + 1, display_w, canvas_bot_h - canvas_top_h - 1, bruceConfig.bgColor);
++    const PetLayout g = petLayout(display_w, display_h, canvas_top_h, canvas_bot_h);
++    const int x = g.left, y = g.top, n = g.width;
++    const uint16_t color = broken ? TFT_RED : bruceConfig.priColor;
++    if (petSkin != 0) {
++        // Silhouettes are deliberately geometric: no external assets or animation heap.
++        if (petSkin == 1) {
++            tft.drawRoundRect(x + n/8, y + n/6, n*3/4, n*2/3, 12, color);
++            tft.drawLine(x + n/2, y + n/6, x + n/2, y + n/12, color);
++            tft.fillCircle(x + n/2, y + n/12, 3, color);
++            tft.drawLine(x + n/4, y + n*3/4, x + n*3/4, y + n*3/4, bruceConfig.secColor);
++        } else if (petSkin == 2) {
++            tft.drawRoundRect(x + n/8, y + n/8, n*3/4, n*3/4, n/3, color);
++            for (int i = 0; i < 3; ++i) tft.fillCircle(x + n/4 + i*n/4, y + n*3/4, 3, color);
++        } else {
++            tft.drawRoundRect(x + n/8, y + n/4, n*3/4, n*3/5, 12, color);
++            tft.drawTriangle(x+n/8, y+n/3, x+n/5, y+n/10, x+n*2/5, y+n/4, color);
++            tft.drawTriangle(x+n*7/8, y+n/3, x+n*4/5, y+n/10, x+n*3/5, y+n/4, color);
++        }
++    }
++    tft.setTextDatum(MC_DATUM);
++    tft.setTextSize(2);
++    tft.setTextColor(color, bruceConfig.bgColor);
++    const bool blink = petAnimated && !broken && (millis() % 4200UL) < 240UL;
++    String expression = blink ? "(-_-)" : face;
++    tft.drawString(petFit(expression, n * 3 / 4), x + n/2, y + n/2);
++    tft.setTextSize(1);
++    tft.setTextColor(bruceConfig.secColor, bruceConfig.bgColor);
++    tft.drawString(petFit(phrase, g.phraseWidth), display_w / 2, g.phraseY);
++    // Small phase indicator is decorative, not a signal-strength measurement.
++    if (petAnimated) {
++        int active = (millis() / 500UL) % 3;
++        for (int i = 0; i < 3; ++i) tft.fillCircle(display_w / 2 - 8 + i * 8, g.phraseY + 11, i == active ? 2 : 1, color);
++    }
++    tft.setTextDatum(TL_DATUM);
++    return;
++#endif
+     // prepare canvas
+     tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
+ #if defined(STACKCHAN)
+diff --git a/src/modules/pwnagotchi/ui.h b/src/modules/pwnagotchi/ui.h
+index 23e8e3c4..4cf0b591 100644
+--- a/src/modules/pwnagotchi/ui.h
++++ b/src/modules/pwnagotchi/ui.h
+@@ -12,6 +12,12 @@ Thanks to @bmorcelli for his help doing a better code.
+ #include "pwngrid.h"
+ 
+ void initUi();
++#if defined(DSOLUTION_183_2MIC)
++const char *petSkinName();
++void petNextSkin();
++bool petAnimationEnabled();
++void petToggleAnimation();
++#endif
+ void wakeUp();
+ void drawMood(const String &face, const String &phrase, bool broken = false);
+ void drawTime();
 diff --git a/src/modules/wifi/channel_analyzer.cpp b/src/modules/wifi/channel_analyzer.cpp
 index 353b8641..006bee36 100644
 --- a/src/modules/wifi/channel_analyzer.cpp
@@ -30299,3 +30684,34 @@ index 00000000..297064ff
 +    }
 +    return best;
 +}
+diff --git a/src/modules/wifi/wifite.cpp b/src/modules/wifi/wifite.cpp
+index 327074a1..8cf95db8 100644
+--- a/src/modules/wifi/wifite.cpp
++++ b/src/modules/wifi/wifite.cpp
+@@ -129,9 +129,14 @@ class App {
+         String paintedInfo,paintedStatus;
+         int scroll=0,paintedSelected=-1,top=0;
+         bool force=true,stopping=false,open=false;uint32_t lastDraw=0;bool dirty=true;
++        uint32_t lastScanFrame = UINT32_MAX;
+         clearNavigation();
+         for(;;) {
+             if(drain()) dirty=true;
++            if (scanning && job) {
++                const uint32_t frame = millis() / 500;
++                if (frame != lastScanFrame) { lastScanFrame = frame; dirty = true; }
++            }
+             if(job && wifite_finished(job)) {finish();scanning=false;dirty=true;}
+             if(stopping && !job) { if(open && !targets.empty()) {actions(selected);force=true;dirty=true;stopping=false;open=false;} else return; }
+             if(check(EscPress)) {if(job) {wifite_cancel(job);stopping=true;dirty=true;} else return;}
+@@ -198,8 +203,10 @@ class App {
+                     const auto &t=targets[selected];
+                     info=fit(t.ssid[0]?String(t.ssid):String("<hidden>"),columns)+"\n"+mac(t.bssid);
+                 }
++                const char spinner[] = {'|', '/', '-', '\\'};
+                 String status=String(targets.empty()?0:selected+1)+"/"+String(targets.size())+" "+
+-                    (stopping?"Stopping...":scanning?"Scan SEL:select BACK:stop":"SEL:actions BACK:menu");
++                    (stopping?"Stopping...":scanning?(String("Scan ")+spinner[lastScanFrame % 4]+" SEL:select BACK:stop") : "SEL:actions BACK:menu");
++                status = fit(status, columns);
+                 if(force || info!=paintedInfo || status!=paintedStatus) {
+                     tft.fillRect(left,footer,width,34,bruceConfig.bgColor);
+                     tft.setTextColor(bruceConfig.priColor,bruceConfig.bgColor);

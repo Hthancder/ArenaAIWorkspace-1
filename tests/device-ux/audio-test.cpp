@@ -4,6 +4,8 @@
 #include <vector>
 #include "globals.h"
 #include "Wire.h"
+#include "LittleFS.h"
+#include "core/ui_sound_wav.h"
 #include "driver/i2s_std.h"
 #include "core/dsolution_ux.h"
 SerialStub Serial; WireStub Wire; Config bruceConfig;
@@ -74,5 +76,26 @@ int main() {
     restartFindDuringWrite = true; uxService();
     assert(uxFindStatus() == "queued"); // old audio must not finish the replacement request
     uxService(); assert(uxFindStatus() == "playing");
+    // A valid custom mono WAV is duplicated to stereo at the configured volume.
+    auto wav = std::vector<uint8_t>(44 + 4, 0);
+    auto put16 = [&](int at, uint16_t v) { wav[at] = v & 255; wav[at+1] = v >> 8; };
+    auto put32 = [&](int at, uint32_t v) { for (int i=0; i<4; ++i) wav[at+i] = (v >> (8*i)) & 255; };
+    memcpy(wav.data(), "RIFF", 4); memcpy(wav.data()+8, "WAVEfmt ", 8); memcpy(wav.data()+36,"data",4);
+    put32(4,40); put32(16,16); put16(20,1); put16(22,1); put32(24,48000); put32(28,96000);
+    put16(32,2); put16(34,16); put32(40,4); put16(44,10000); put16(46,20000);
+    fakeFiles["/ui-sounds/select.wav"] = wav;
+    uxCycleSoundMode(UiSound::Select); // off
+    before = starts; uxSound(UiSound::Select); assert(starts == before);
+    uxCycleSoundMode(UiSound::Select); // custom
+    output.clear(); bruceConfig.soundVolume = 50;
+    uxSound(UiSound::Select);
+    assert(starts == before + 1 && output[0] == 5000 && output[1] == 5000 && output[2] == 10000 && output[3] == 10000);
+    assert(output.back() == 0);
+    fakeFiles["/ui-sounds/select.wav"][24] = 0; // bad sample rate -> built-in fallback
+    output.clear(); before = starts; uxSound(UiSound::Select);
+    assert(starts == before + 1 && output.size() > 100);
+    mic = true; before = starts; uxSound(UiSound::Select); assert(starts == before); mic = false;
+    UiWavInfo info{}; assert(uiParseWav(wav.data(), wav.size(), 250, info));
+    wav[40] = 8; assert(!uiParseWav(wav.data(), wav.size(), 250, info));
     std::cout << "Device UX audio and find regression tests passed\n";
 }
