@@ -10647,16 +10647,19 @@ index ed144ba6..c39cac4c 100644
                             ibeacon("Bruce", "e4c159a0-8c82-11e6-bdf4-0800200c9a66", 0x004C);
                         }});
 diff --git a/src/core/menu_items/ConfigMenu.cpp b/src/core/menu_items/ConfigMenu.cpp
-index 6e44fd4d..c6a80eaf 100644
+index 6e44fd4d..99fd08cb 100644
 --- a/src/core/menu_items/ConfigMenu.cpp
 +++ b/src/core/menu_items/ConfigMenu.cpp
-@@ -1,4 +1,5 @@
+@@ -1,4 +1,8 @@
  #include "ConfigMenu.h"
 +#include "core/dsolution_ux.h"
++#if defined(DSOLUTION_183_2MIC) && !defined(LITE_VERSION)
++#include "modules/pwnagotchi/ui.h"
++#endif
  #include "../mykeyboard.h"
  #include "core/display.h"
  #include "core/i2c_finder.h"
-@@ -24,7 +25,8 @@ void ConfigMenu::optionsMenu() {
+@@ -24,7 +28,8 @@ void ConfigMenu::optionsMenu() {
          }
  
          std::vector<Option> localOptions = {
@@ -10666,7 +10669,7 @@ index 6e44fd4d..c6a80eaf 100644
  #ifdef HAS_RGB_LED
              {"LED Config",    [this]() { ledMenu(); }      },
  #endif
-@@ -65,6 +67,7 @@ void ConfigMenu::displayUIMenu() {
+@@ -65,10 +70,14 @@ void ConfigMenu::displayUIMenu() {
          std::vector<Option> localOptions = {
              {"Brightness",  [this]() { setBrightnessMenu(); }               },
              {"Dim Time",    [this]() { setDimmerTimeMenu(); }               },
@@ -10674,7 +10677,14 @@ index 6e44fd4d..c6a80eaf 100644
              {"Orientation", [this]() { lambdaHelper(gsetRotation, true)(); }},
              {"Menu Layout", [this]() { setMainMenuStyleMenu(); }            },
              {"UI Color",    [this]() { setUIColor(); }                      },
-@@ -83,6 +86,45 @@ void ConfigMenu::displayUIMenu() {
+             {"UI Theme",    [this]() { setTheme(); }                        },
++#if defined(DSOLUTION_183_2MIC) && !defined(LITE_VERSION)
++            {"Pet preview", []() { petPreview(); }                          },
++#endif
+ #if defined(HAS_RESISTIVE_TOUCH)
+             {"Calibrate Touch", []() { calibrateTouch(); }                  },
+ #endif
+@@ -83,6 +92,45 @@ void ConfigMenu::displayUIMenu() {
      }
  }
  
@@ -10720,7 +10730,7 @@ index 6e44fd4d..c6a80eaf 100644
  /*********************************************************************
  **  Function: ledMenu
  **  LED configuration submenu with auto-rebuild for toggles
-@@ -123,6 +165,26 @@ void ConfigMenu::ledMenu() {
+@@ -123,6 +171,26 @@ void ConfigMenu::ledMenu() {
      }
  }
  #endif
@@ -10747,7 +10757,7 @@ index 6e44fd4d..c6a80eaf 100644
  /*********************************************************************
  **  Function: audioMenu
  **  Audio configuration submenu with auto-rebuild for toggles
-@@ -139,6 +201,19 @@ void ConfigMenu::audioMenu() {
+@@ -139,6 +207,19 @@ void ConfigMenu::audioMenu() {
               }                                                                            },
  #if defined(HAS_SPEAKER)
              {"Sound Volume",                                                [this]() { setSoundVolume(); }},
@@ -10767,7 +10777,7 @@ index 6e44fd4d..c6a80eaf 100644
  #endif  //  HAS_SPEAKER
  #endif  //  LITE_VERSION
              {"Back",                                                        []() {}                       },
-@@ -171,6 +246,10 @@ void ConfigMenu::systemMenu() {
+@@ -171,6 +252,10 @@ void ConfigMenu::systemMenu() {
                   bruceConfig.wifiAtStartup = !bruceConfig.wifiAtStartup;
                   bruceConfig.saveFile();
               }                                                                                                           },
@@ -10778,7 +10788,7 @@ index 6e44fd4d..c6a80eaf 100644
              {"Startup App",                                                         [this]() { setStartupApp(); }        },
              {"Hide/Show Apps",                                                      [this]() { mainMenu.hideAppsMenu(); }},
              {"Clock",                                                               [this]() { setClock(); }             },
-@@ -241,9 +320,21 @@ void ConfigMenu::advancedMenu() {
+@@ -241,9 +326,21 @@ void ConfigMenu::advancedMenu() {
  void ConfigMenu::powerMenu() {
      while (true) {
          std::vector<Option> localOptions = {
@@ -10803,7 +10813,7 @@ index 6e44fd4d..c6a80eaf 100644
              {"Power Off",
               []() {
                   // Confirmation dialog for power off
-@@ -251,10 +342,15 @@ void ConfigMenu::powerMenu() {
+@@ -251,10 +348,15 @@ void ConfigMenu::powerMenu() {
                   int8_t choice = displayMessage("Power Off Device?", "No", nullptr, "Yes", TFT_RED);
  
                   if (choice == 1) { powerOff(); }
@@ -10821,7 +10831,7 @@ index 6e44fd4d..c6a80eaf 100644
          int selected = loopOptions(localOptions, MENU_TYPE_SUBMENU, "Power Menu");
  
          // Exit to Config menu
-@@ -298,6 +394,7 @@ void ConfigMenu::pinsMenu() {
+@@ -298,6 +400,7 @@ void ConfigMenu::pinsMenu() {
      while (true) {
          std::vector<Option> localOptions = {
              {"I2C Finder",     [this]() { find_i2c_addresses(); }                       },
@@ -10829,7 +10839,7 @@ index 6e44fd4d..c6a80eaf 100644
              {"CC1101 Pins",    [this]() { setSPIPinsMenu(bruceConfigPins.CC1101_bus); } },
              {"NRF24  Pins",    [this]() { setSPIPinsMenu(bruceConfigPins.NRF24_bus); }  },
  #if !defined(LITE_VERSION)
-@@ -306,17 +403,28 @@ void ConfigMenu::pinsMenu() {
+@@ -306,17 +409,28 @@ void ConfigMenu::pinsMenu() {
              {"W5500 Pins",     [this]() { setSPIPinsMenu(bruceConfigPins.W5500_bus); }  },
  #endif
              {"SDCard Pins",    [this]() { setSPIPinsMenu(bruceConfigPins.SDCARD_bus); } },
@@ -22669,10 +22679,23 @@ index 00000000..9df0a69a
 +            footer - 20, availableW};
 +}
 diff --git a/src/modules/pwnagotchi/pwnagotchi.cpp b/src/modules/pwnagotchi/pwnagotchi.cpp
-index f0eaee5d..6af9b1d9 100644
+index f0eaee5d..dbfc0ad2 100644
 --- a/src/modules/pwnagotchi/pwnagotchi.cpp
 +++ b/src/modules/pwnagotchi/pwnagotchi.cpp
-@@ -384,6 +384,10 @@ void brucegotchi_start() {
+@@ -318,6 +318,12 @@ static void advertisePhase(BruceState &s) {
+ // brucegotchi_start — main entry point
+ // ---------------------------------------------------------------------------
+ void brucegotchi_start() {
++#if defined(DSOLUTION_183_2MIC)
++    drawMainBorderWithTitle("Active WiFi warning");
++    displayWarning("This mode sends deauth to nearby APs and broadcasts. It can disrupt WiFi. Use only in an isolated authorized lab.", true);
++    std::vector<Option> consent = {{"Cancel", []() {}}, {"Start active mode", []() {}}};
++    if (loopOptions(consent, MENU_TYPE_SUBMENU, "Proceed?") != 1) return;
++#endif
+     set_pwnagotchi_exit(false);
+ 
+     tft.fillScreen(bruceConfig.bgColor);
+@@ -384,6 +390,10 @@ void brucegotchi_start() {
                  {"Find friends", yield},
                  {"Pwngrid spam", send_pwnagotchi_beacon_main},
                  {channel_status.c_str(), toggle_all_channels},
@@ -22683,7 +22706,7 @@ index f0eaee5d..6af9b1d9 100644
                  {"Main Menu", lambdaHelper(set_pwnagotchi_exit, true)},
              };
              loopOptions(options);
-@@ -412,7 +416,11 @@ void brucegotchi_start() {
+@@ -412,7 +422,11 @@ void brucegotchi_start() {
  
          // --- Periodic UI update ---
          static unsigned long lastUiUpdate = 0;
@@ -22696,7 +22719,7 @@ index f0eaee5d..6af9b1d9 100644
              lastUiUpdate = millis();
          }
 diff --git a/src/modules/pwnagotchi/ui.cpp b/src/modules/pwnagotchi/ui.cpp
-index ca1f9def..3e535c14 100644
+index ca1f9def..82603dcc 100644
 --- a/src/modules/pwnagotchi/ui.cpp
 +++ b/src/modules/pwnagotchi/ui.cpp
 @@ -9,6 +9,35 @@ Thanks to @bmorcelli for his help doing a better code.
@@ -22751,7 +22774,57 @@ index ca1f9def..3e535c14 100644
      tft.setTextSize(FP);
      tft.fillScreen(bruceConfig.bgColor);
      tft.setTextColor(bruceConfig.priColor);
-@@ -59,6 +97,15 @@ String getRssiBars(signed int rssi) {
+@@ -40,6 +78,49 @@ void initUi() {
+     canvas_peers_menu_w = display_w * .8;
+ }
+ 
++#if defined(DSOLUTION_183_2MIC)
++// Pet-only view: no radio setup, packets, capture, or fabricated observations.
++void petPreview() {
++    static const char *const faces[] = {"(o_o)", "(^_^)", "(O_O)", "(-@_@)", "(v_v)", "(*_*)"};
++    static const char *const captions[] = {"Hello!", "Happy", "Curious", "Cool", "Sleepy", "Celebrating"};
++    unsigned face = 0;
++    uint32_t lastDraw = 0;
++    bool redraw = true;
++    initUi();
++    while (true) {
++        if (check(EscPress)) break;
++        if (check(NextPress)) { face = (face + 1) % 6; redraw = true; }
++        if (check(PrevPress)) { face = (face + 5) % 6; redraw = true; }
++        if (check(SelPress)) {
++            std::vector<Option> choices = {
++                {String("Skin: ") + petSkinName(), petNextSkin},
++                {String("Animation: ") + (petAnimationEnabled() ? "ON" : "OFF"), petToggleAnimation},
++                {"Back to pet", []() {}}
++            };
++            loopOptions(choices, MENU_TYPE_SUBMENU, "Pet options");
++            redraw = true;
++        }
++        if (redraw) {
++            tft.fillScreen(bruceConfig.bgColor);
++            tft.setTextSize(1); tft.setTextDatum(TL_DATUM);
++            tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
++            tft.drawString("PET PREVIEW - NO RADIO", 5, 4);
++            tft.drawLine(0, canvas_top_h - 1, display_w - 1, canvas_top_h - 1, bruceConfig.priColor);
++            tft.drawLine(0, canvas_bot_h, display_w - 1, canvas_bot_h, bruceConfig.priColor);
++            tft.setTextColor(bruceConfig.secColor, bruceConfig.bgColor);
++            tft.drawString(petFit("SEL options  <> face  HOLD SEL back", display_w - 10), 5, canvas_bot_h + 5);
++            lastDraw = 0;
++            redraw = false;
++        }
++        if (!lastDraw || (petAnimated && (uint32_t)(millis() - lastDraw) >= 250)) {
++            drawMood(faces[face], captions[face], false);
++            lastDraw = millis();
++        }
++        vTaskDelay(pdMS_TO_TICKS(25));
++    }
++}
++#endif
++
+ String getRssiBars(signed int rssi) {
+     String rssi_bars = "";
+ 
+@@ -59,6 +140,15 @@ String getRssiBars(signed int rssi) {
  }
  
  void drawTime() {
@@ -22767,7 +22840,7 @@ index ca1f9def..3e535c14 100644
      tft.drawPixel(0, 0, 0);
      tft.fillRect(80, 0, display_w, canvas_top_h - 3, bruceConfig.bgColor);
      tft.setTextDatum(TR_DATUM);
-@@ -70,9 +117,17 @@ void drawTime() {
+@@ -70,9 +160,17 @@ void drawTime() {
      char right_str[50] = "UPS 0%  UP 00:00:00";
      sprintf(right_str, "UPS %i%% UP %02d:%02d:%02d", getBattery(), h, m, s);
      tft.drawString(right_str, display_w, 3);
@@ -22785,7 +22858,7 @@ index ca1f9def..3e535c14 100644
      tft.drawPixel(0, 0, 0);
      tft.fillRect(0, canvas_bot_h + 1, display_w - 50, canvas_bot_h + 10, bruceConfig.bgColor);
      tft.setTextSize(FP);
-@@ -87,6 +142,7 @@ void drawFooterData(uint8_t friends_run, uint8_t friends_tot, const String &last
+@@ -87,6 +185,7 @@ void drawFooterData(uint8_t friends_run, uint8_t friends_tot, const String &last
      }
  
      tft.drawString(stats, 0, canvas_bot_h + 5);
@@ -22793,7 +22866,7 @@ index ca1f9def..3e535c14 100644
  }
  
  void updateUi(bool show_toolbars) {
-@@ -125,7 +181,12 @@ void drawTopCanvas() {
+@@ -125,7 +224,12 @@ void drawTopCanvas() {
      // draw screen
      tft.drawPixel(0, 0, 0);
      tft.fillRect(0, 0, display_w, canvas_top_h, bruceConfig.bgColor);
@@ -22806,7 +22879,7 @@ index ca1f9def..3e535c14 100644
      tft.drawLine(0, canvas_top_h - 1, display_w, canvas_top_h - 1, bruceConfig.priColor);
  }
  
-@@ -142,6 +203,44 @@ void drawBottomCanvas() {
+@@ -142,6 +246,44 @@ void drawBottomCanvas() {
  }
  
  void drawMood(const String &face, const String &phrase, bool broken) {
@@ -22852,10 +22925,10 @@ index ca1f9def..3e535c14 100644
      tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
  #if defined(STACKCHAN)
 diff --git a/src/modules/pwnagotchi/ui.h b/src/modules/pwnagotchi/ui.h
-index 23e8e3c4..4cf0b591 100644
+index 23e8e3c4..697864a2 100644
 --- a/src/modules/pwnagotchi/ui.h
 +++ b/src/modules/pwnagotchi/ui.h
-@@ -12,6 +12,12 @@ Thanks to @bmorcelli for his help doing a better code.
+@@ -12,6 +12,13 @@ Thanks to @bmorcelli for his help doing a better code.
  #include "pwngrid.h"
  
  void initUi();
@@ -22864,6 +22937,7 @@ index 23e8e3c4..4cf0b591 100644
 +void petNextSkin();
 +bool petAnimationEnabled();
 +void petToggleAnimation();
++void petPreview();
 +#endif
  void wakeUp();
  void drawMood(const String &face, const String &phrase, bool broken = false);
