@@ -10,9 +10,9 @@ from pathlib import Path
 import shutil
 
 try:
-    from tools.deadtown_settings_particle_evidence import ROOF_SHADOW, PLAYER_SHADOW
+    from tools.deadtown_settings_particle_evidence import ROOF_SHADOW, PLAYER_SHADOW, PLAYER_FEEDBACK
 except ModuleNotFoundError:
-    from deadtown_settings_particle_evidence import ROOF_SHADOW, PLAYER_SHADOW
+    from deadtown_settings_particle_evidence import ROOF_SHADOW, PLAYER_SHADOW, PLAYER_FEEDBACK
 
 try:
     from tools.deadtown_settings_particle_evidence import PARTICLES, SETTINGS, SHADOW, SHADOW_OBJECTS, ACTION_SHADOW, ACTION_SHADOW_OBJECTS, shadow_source, verify_source
@@ -39,6 +39,11 @@ EXPECTED = [
     'SETTINGS_PARTICLE_VM:player-half:0',
     'SETTINGS_PARTICLE_VM:player-near:1',
     'SETTINGS_PARTICLE_VM:player-gun:10',
+    'SETTINGS_PARTICLE_VM:feedback-off:0:0',
+    'SETTINGS_PARTICLE_VM:feedback-half:0:0',
+    'SETTINGS_PARTICLE_VM:feedback-gamepad:1:0',
+    'SETTINGS_PARTICLE_VM:feedback-idle:1:0',
+    'SETTINGS_PARTICLE_VM:feedback-active:1:1',
 ]
 PART_BUILTINS = {'part_emitter_region': 1, 'part_type_direction': 2,
                  'part_emitter_burst': 3, 'part_type_size': 4, 'part_type_orientation': 5}
@@ -75,6 +80,13 @@ def instrument(events, project):
         if player.count(draw) != 1:
             raise ValueError('unexpected player shadow branch')
         player = player.replace(draw, f'global.__dt_shadow_calls += {count};')
+    feedback = PLAYER_FEEDBACK.replace('gp_connect_check()', '__dt_probe_gp_feedback()')
+    feedback = feedback.replace('sys_view.left_distance_ratio', 'global.__dt_feedback_distance')
+    feedback = feedback.replace('fx = x+lengthdir_x(global.__dt_feedback_distance*100,sys_view.view_a+sys_view.left_direction)', 'global.__dt_feedback_fx = 1;')
+    feedback = feedback.replace('fy = y+lengthdir_y(global.__dt_feedback_distance*100,sys_view.view_a+sys_view.left_direction)', 'global.__dt_feedback_fy = 1;')
+    feedback = feedback.replace('draw_sprite_ext(spr_player_move,0,fx,fy,0.8,0.8,sys_view.view_a+sys_view.left_direction-90,c_white,0.5)', 'global.__dt_feedback_draws += global.__dt_feedback_fx * global.__dt_feedback_fy;')
+    if 'sys_view.' in feedback or 'draw_sprite_ext(' in feedback:
+        raise ValueError('unexpected player feedback operations')
     found = [e for e in events if e.get('object') == 'sys_global' and
              e.get('attributes', {}).get('eventtype') == '0' and
              e.get('attributes', {}).get('enumb') == '0']
@@ -145,6 +157,23 @@ show_debug_message("SETTINGS_PARTICLE_VM:player-near:" + string(global.__dt_shad
 global.__dt_shadow_calls = 0; weapon_kind = 0;
 {player}
 show_debug_message("SETTINGS_PARTICLE_VM:player-gun:" + string(global.__dt_shadow_calls));
+global.__dt_feedback_distance = 0.8; global.__dt_feedback_gp = 0;
+global.__dt_feedback_fx = 0; global.__dt_feedback_fy = 0;
+global.__dt_feedback_checks = 0; global.__dt_feedback_draws = 0; global.__dt_setting_feedback = 0;
+{feedback}
+show_debug_message("SETTINGS_PARTICLE_VM:feedback-off:" + string(global.__dt_feedback_checks) + ":" + string(global.__dt_feedback_draws));
+global.__dt_setting_feedback = 0.5;
+{feedback}
+show_debug_message("SETTINGS_PARTICLE_VM:feedback-half:" + string(global.__dt_feedback_checks) + ":" + string(global.__dt_feedback_draws));
+global.__dt_setting_feedback = 1; global.__dt_feedback_gp = 1;
+{feedback}
+show_debug_message("SETTINGS_PARTICLE_VM:feedback-gamepad:" + string(global.__dt_feedback_checks) + ":" + string(global.__dt_feedback_draws));
+global.__dt_feedback_checks = 0; global.__dt_feedback_gp = 0; global.__dt_feedback_distance = 0;
+{feedback}
+show_debug_message("SETTINGS_PARTICLE_VM:feedback-idle:" + string(global.__dt_feedback_checks) + ":" + string(global.__dt_feedback_draws));
+global.__dt_feedback_checks = 0; global.__dt_feedback_distance = 0.8;
+{feedback}
+show_debug_message("SETTINGS_PARTICLE_VM:feedback-active:" + string(global.__dt_feedback_checks) + ":" + string(global.__dt_feedback_draws));
 global.__dt_ini_has = 0;
 '''
     found[0]['gml'] = prefix + found[0]['gml']
@@ -183,6 +212,7 @@ def make_project(project, dest):
                 text = text.replace(builtin+'(', '__dt_probe_'+builtin+'(')
             path.write_text(text, encoding='utf-8')
         mocks = {name: f'global.__dt_pt_order = global.__dt_pt_order * 10 + {number};\n' for name, number in PART_BUILTINS.items()}
+        mocks['gp_feedback'] = 'global.__dt_feedback_checks += 1; return global.__dt_feedback_gp;\n'
         mocks.update({'ini_open': '', 'ini_close': '', 'display_get_width': 'return 1334;\n',
                       'os_get_language': 'return "en";\n', 'lang_type_set': ''})
         read = 'if (argument0 == "setting" && argument1 == "check") return global.__dt_ini_has;\n'

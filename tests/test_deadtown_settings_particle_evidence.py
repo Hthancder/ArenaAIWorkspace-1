@@ -36,6 +36,12 @@ class SettingsParticleEvidenceTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 verify_source(dest)
             p.write_text((PROJECT/'scripts/setting_load.gml').read_text())
+            p = dest/'objects/obj_player.object.gmx'
+            original = p.read_text()
+            p.write_text(original.replace('gp_connect_check() &lt;= 0.5', 'gp_connect_check() &gt; 0.5'))
+            with self.assertRaises(ValueError):
+                verify_source(dest)
+            p.write_text(original)
             p = dest/'scripts/particle_burst.gml'
             p.write_text(p.read_text().replace('> 0.5', '>= 0.5'))
             with self.assertRaises(ValueError):
@@ -52,7 +58,7 @@ class SettingsParticleEvidenceTests(unittest.TestCase):
                 make_project(PROJECT, dest)
         event = {'object': 'sys_global', 'attributes': {'eventtype': '0', 'enumb': '0'}, 'gml': 'original();'}
         self.assertTrue(instrument([event], PROJECT)[0]['gml'].endswith('original();'))
-        self.assertEqual(check('\n'.join(EXPECTED)), 19)
+        self.assertEqual(check('\n'.join(EXPECTED)), 24)
         with self.assertRaises(ValueError):
             check('\n'.join(EXPECTED).replace('threshold:0', 'threshold:123'))
         with self.assertRaises(ValueError):
@@ -71,6 +77,7 @@ class SettingsParticleEvidenceTests(unittest.TestCase):
         report = inspect(APK)
         self.assertEqual(len(report['settings']), 7)
         self.assertEqual(report['settings'][-1]['native_slot'], 49)
+        self.assertEqual(report['feedback_gate']['slot'], 82)
         self.assertEqual(set(report['particle_gates']), set(PARTICLES))
         self.assertEqual(set(report['shadow_gates']), set(SHADOW_OBJECTS) | set(ACTION_SHADOW_OBJECTS) | {'par_building', 'obj_player'})
         self.assertEqual(len(SETTINGS), 7)

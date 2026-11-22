@@ -42,4 +42,18 @@ vị trí; các lệnh vẽ nhân vật phía sau vẫn ngoài gate. Bằng ch�
 export và nhánh; probe chỉ lấy các fragment và thay lệnh vẽ bằng bộ đếm, không
 kiểm toàn event, renderer hoặc hình ảnh trên thiết bị.
 
+## Feedback hướng di chuyển
+
+Trong `obj_player:Draw:0` ARM32 tại `0x5db2d8`, slot 82 được lấy từ
+`g_pGlobal`, giữ qua bước vẽ outline, rồi so sánh với 0,5 ở `0x5db6cc`;
+nhánh không lớn hơn bỏ qua khối feedback. Với giá trị hữu hạn lớn hơn 0,5,
+native gọi `gp_connect_check` tại `0x5db714`, bỏ qua khối nếu kết quả lớn hơn
+0,5, sau đó kiểm tra ngưỡng khoảng cách và vẽ `spr_player_move` tại `0x5dbb44`.
+Ứng viên giữ khối khoảng cách/vẽ từ source cũ và chỉ bọc hai điều kiện mới;
+chưa chứng minh mọi biểu thức trong khối hoặc so sánh sát epsilon khớp native.
+Probe VM thay gamepad, vị trí và lệnh vẽ bằng mock/bộ đếm, kiểm tra không gọi
+gamepad khi setting tắt, đồng thời kiểm tra các nhánh gamepad và khoảng cách.
+Nó không kiểm controller thật hay thao tác hiển thị trên Android/iOS. Alias
+slot 82 là tên tự đặt; `gp_connect_check` cũng là ứng viên với giới hạn riêng.
+
 Kết quả CI cần xem riêng; chưa tạo IPA.

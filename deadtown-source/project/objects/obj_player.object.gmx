@@ -1782,12 +1782,20 @@ if outline_ins != noone
           <argument>
             <kind>1</kind>
             <string>/// feedback
-if 0.01&lt;sys_view.left_distance_ratio
+// Partial native candidate: slot 82 enables feedback; a connected gamepad suppresses it.
+if (global.__dt_setting_feedback > 0.5)
 {
-    fx = x+lengthdir_x(sys_view.left_distance_ratio*100,sys_view.view_a+sys_view.left_direction)
-    fy = y+lengthdir_y(sys_view.left_distance_ratio*100,sys_view.view_a+sys_view.left_direction)
-    draw_sprite_ext(spr_player_move,0,fx,fy,0.8,0.8,sys_view.view_a+sys_view.left_direction-90,c_white,0.5)
+    if (gp_connect_check() &lt;= 0.5)
+    {
+        if 0.01&lt;sys_view.left_distance_ratio
+        {
+            fx = x+lengthdir_x(sys_view.left_distance_ratio*100,sys_view.view_a+sys_view.left_direction)
+            fy = y+lengthdir_y(sys_view.left_distance_ratio*100,sys_view.view_a+sys_view.left_direction)
+            draw_sprite_ext(spr_player_move,0,fx,fy,0.8,0.8,sys_view.view_a+sys_view.left_direction-90,c_white,0.5)
+        }
+    }
 }
+
 </string>
           </argument>
         </arguments>

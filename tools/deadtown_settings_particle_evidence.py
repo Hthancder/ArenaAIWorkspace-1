@@ -41,6 +41,21 @@ PARTICLES = {
     'particle_burst_up_out': (0x1cdf44, 2352, '01b6ec149bb41d801871a822a38599d03d96184c0e3aa2ade05297c1927aff11', 0x1cdfd4, 0x1ce060, 0x1ce4c0, 'r4'),
 }
 GATE = '// Partial candidate: native global slot 49 controls particle emission.\nif (global.__dt_setting_particle > 0.5)\n{\n'
+PLAYER_FEEDBACK = '''/// feedback
+// Partial native candidate: slot 82 enables feedback; a connected gamepad suppresses it.
+if (global.__dt_setting_feedback > 0.5)
+{
+    if (gp_connect_check() <= 0.5)
+    {
+        if 0.01<sys_view.left_distance_ratio
+        {
+            fx = x+lengthdir_x(sys_view.left_distance_ratio*100,sys_view.view_a+sys_view.left_direction)
+            fy = y+lengthdir_y(sys_view.left_distance_ratio*100,sys_view.view_a+sys_view.left_direction)
+            draw_sprite_ext(spr_player_move,0,fx,fy,0.8,0.8,sys_view.view_a+sys_view.left_direction-90,c_white,0.5)
+        }
+    }
+}
+'''
 PLAYER_SHADOW = '''    // Partial native candidate: global slot 86 gates both player shadow branches.
     if (global.__dt_setting_shadow > 0.5)
     {
@@ -125,6 +140,8 @@ def verify_source(project):
     actions = player.findall('./events/event[@eventtype="8"][@enumb="0"]/action/arguments/argument/string')
     if len(actions) != 3 or (actions[2].text or '').count(PLAYER_SHADOW) != 1 or 'draw_sprite_ext(spr_player_foot_right' not in (actions[2].text or '').split(PLAYER_SHADOW)[1]:
         raise ValueError('unexpected player shadow fragment')
+    if (actions[1].text or '').strip() != PLAYER_FEEDBACK.strip():
+        raise ValueError('unexpected player feedback fragment')
 
 
 def inspect(apk):
@@ -333,9 +350,22 @@ def inspect(apk):
     player_hash = 'd751b67200bf3e14b4c27ed06090d479f81d97824880af8acdd5633363177fbe'
     if len(target) != 1 or (target[0]['st_value'], target[0]['st_size']) != (start, 11820) or hashlib.sha256(read(start, 11820)).hexdigest() != player_hash:
         raise ValueError('unexpected player Draw bytes')
-    if sym(start+0x10, start+0x88, start+0x84).name != 'g_pGlobal':
+    if sym(start+0x10, start+0x88, start+0x84).name != 'g_pGlobal' or sym(start+0xc, start+0x1c, start+0x10).name != 'g_pGlobal':
         raise ValueError('unexpected player global pointer')
+    if 'gml_Script_gp_connect_check' not in calls.get(0x176e28, ''):
+        raise ValueError('unexpected feedback gamepad call')
     checks = {
+        0x30: ('ldr', 'r0, [r4, r0]'), 0x40: ('ldr', 'r0, [r0]'),
+        0x70: ('ldr', 'r1, [r0]'), 0x74: ('ldr', 'r2, [r1, #8]'),
+        0x78: ('mov', 'r1, #0x52'), 0x7c: ('blx', 'r2'), 0x80: ('mov', 'r6, r0'),
+        0x1c0: ('str', 'r6, [sp, #0x2c]'), 0x3e8: ('ldr', 'r6, [sp, #0x2c]'),
+        0x3f4: ('mov', 'r0, r6'), 0x3f8: ('bl', '#0x176444'),
+        0x400: ('vmov', 'd0, r0, r1'), 0x404: ('vcmpe.f64', 'd0, d8'),
+        0x408: ('vmrs', 'apsr_nzcv, fpscr'), 0x40c: ('ble', '#0x5dbbe4'),
+        0x43c: ('bl', '#0x176e28'), 0x440: ('bl', '#0x176444'),
+        0x444: ('vmov', 'd0, r0, r1'), 0x448: ('vcmpe.f64', 'd0, d8'),
+        0x44c: ('vmrs', 'apsr_nzcv, fpscr'), 0x450: ('bgt', '#0x5dbbe4'),
+        0x558: ('bpl', '#0x5dbbc8'), 0x86c: ('bl', '#0x176738'),
         0x90: ('ldr', 'r0, [r0]'), 0x94: ('ldr', 'r1, [r0]'),
         0x98: ('ldr', 'r2, [r1, #8]'), 0x9c: ('mov', 'r1, #0x56'),
         0xa0: ('blx', 'r2'), 0xa4: ('str', 'r0, [sp, #0x30]'),
@@ -347,6 +377,13 @@ def inspect(apk):
     }
     for off, (op, args) in checks.items():
         check(start+off, op, args)
+    for instruction in dis.disasm(read(start+0x84, 0x1c0-0x84), start+0x84):
+        _, writes = instruction.regs_access()
+        if 'r6' in (instruction.reg_name(r) for r in writes):
+            raise ValueError('player feedback pointer register overwritten')
+    for instruction in dis.disasm(read(start+0x1c4, 0x3e8-0x1c4), start+0x1c4):
+        if instruction.mnemonic.startswith(('str', 'stm')) and '[sp, #0x2c]' in instruction.op_str:
+            raise ValueError('player feedback pointer stack slot overwritten')
     for instruction in dis.disasm(read(start+0xa8, 0xef0-0xa8), start+0xa8):
         _, writes = instruction.regs_access()
         if instruction.address > start+0x3fc and 'd8' in (instruction.reg_name(r) for r in writes):
@@ -356,6 +393,7 @@ def inspect(apk):
     return {'apk_sha256': APK_SHA256, 'native_library_sha256': LIB_SHA256,
             'settings': [{'section': x[0], 'key': x[1], 'alias': '__dt_setting_'+x[2], 'native_slot': x[3], 'default': 1} for x in SETTINGS],
             'particle_gates': {name: {'address': hex(v[0]), 'sha256': v[2], 'slot': 49} for name, v in PARTICLES.items()},
+            'feedback_gate': {'event': 'obj_player:Draw:0', 'address': hex(start), 'slot': 82, 'gamepad_check': 'gp_connect_check', 'sha256': player_hash},
             'shadow_gates': {name: {'address': hex(v[0]), 'sha256': v[1], 'slot': 86} for name, v in {**SHADOW_OBJECTS, **ACTION_SHADOW_OBJECTS, 'par_building': (0x3936e0, '9bb63888bd5e63c006e5238daabbd08185b25a8ee9e6f154f7313589b965dcb7'), 'obj_player': (start, player_hash)}.items()},
             'limitations': 'Static ARM32 and partial source only; original names, full particle functions, non-finite values, GameMaker compiler, actual display/settings UI, gameplay and iOS unverified.'}
 
