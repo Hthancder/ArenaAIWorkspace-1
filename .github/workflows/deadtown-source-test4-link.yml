@@ -1,0 +1,34 @@
+name: Publish Dead Town source test 4 download
+
+on:
+  push:
+    branches:
+      - arena/78062d86-arenaaiworkspace-1
+    paths:
+      - .github/workflows/deadtown-source-test4-link.yml
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify and publish the already-built experimental IPA
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api -H 'Accept: application/vnd.github.raw+json' "repos/$GITHUB_REPOSITORY/git/blobs/9f321080b3126cfc76ecf5d4c2e27ef12f70c9a0" > DeadTown-iOS15-source-test4.ipa
+          echo '2918742162a98f541c56941d1f4b26ffbb43d9183409fbd0b022f3daa5f85284  DeadTown-iOS15-source-test4.ipa' | sha256sum -c
+          unzip -tq DeadTown-iOS15-source-test4.ipa
+          sha256sum DeadTown-iOS15-source-test4.ipa > SHA256.txt
+          cat > notes.md <<'EOF'
+          **IPA thử nghiệm, chưa hoàn chỉnh và chưa được kiểm tra trên iPhone.** Được dựng từ mã nguồn phục hồi revision `ea13c7a659a334d22ecdab3c215c2ce9f787f9ba`. Đây không phải bản phát hành hay bản game gốc; gameplay, điều khiển, lưu dữ liệu và đồ họa chưa được xác minh. Bản trước từng có lỗi vệt màu khi di chuyển, chưa chứng minh bản này sửa được.
+
+          ARM64, iOS 15 trở lên. IPA chưa ký; dùng TrollStore nếu thiết bị tương thích hoặc ký lại bằng công cụ của bạn. App có ID riêng `org.gmrunner.deadtown.sourcetest4`, không tự chuyển save từ bản trước; sao lưu trước khi thử.
+
+          Build: https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/45043018147. Runner: https://github.com/andronep/gmrunner (GPL-3.0-or-later), commit `e7121381d38b03a24242812fc22b0a7386d545c6`. Adaptation, limitations, and source: this repository, `docs/deadtown-source-ipa-test4.md`.
+          EOF
+          gh release create deadtown-ios15-source-test4 DeadTown-iOS15-source-test4.ipa SHA256.txt --repo "$GITHUB_REPOSITORY" --target ea13c7a659a334d22ecdab3c215c2ce9f787f9ba --prerelease --title 'Dead Town iOS 15 — source test 4' --notes-file notes.md
