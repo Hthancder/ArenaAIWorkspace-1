@@ -28,13 +28,26 @@ static void SXRegisterHostTools(void) {
 								parameters:@{@"type": @"object", @"properties": @{}, @"required": @[]}
 								   handler:^NSDictionary *(NSDictionary *arguments, NSError **error) {
 			(void)arguments;
-			if (![[SXIntercept shared] clearHistory]) {
+			// Chờ kết quả GHI TỆP thật (handler chạy ngoài luồng chính) để không báo
+			// "đã xoá" khi thực ra `flock`/`rename` thất bại.
+			__block BOOL ok = NO;
+			dispatch_semaphore_t done = dispatch_semaphore_create(0);
+			dispatch_async([SXStore queue], ^{
+				ok = [[SXStore shared] clearHistory];
+				dispatch_semaphore_signal(done);
+			});
+			[[SXIntercept shared] clearHistoryMemory];
+			dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, 4 * NSEC_PER_SEC));
+			if (!ok) {
 				if (error) {
 					*error = [NSError errorWithDomain:SXToolErrorDomain code:1
 											userInfo:@{NSLocalizedDescriptionKey: @"Không xoá được lịch sử đã lưu."}];
 				}
 				return nil;
 			}
+#ifndef SX_TESTING
+			notify_post("com.sirix.tweak/resetHistory");
+#endif
 			return @{@"result": @"Đã xoá lịch sử hội thoại."};
 		}];
 		tool.sideEffect = YES;
@@ -936,14 +949,23 @@ static dispatch_queue_t SXTurnQueue(void) {
 }
 
 - (BOOL)clearHistory {
+	[self clearHistoryWithCompletion:nil];
+	return YES;
+}
+
+- (void)clearHistoryWithCompletion:(void (^)(BOOL))completion {
 	[self clearHistoryMemory];
-	__block BOOL ok = NO;
-	dispatch_sync([SXStore queue], ^{ ok = [[SXStore shared] clearHistory]; });
-	if (!ok) SXLogErr(@"err", @"không xóa được lịch sử đã lưu");
+	// Không chặn luồng gọi (thường là luồng chính của Preferences): chỉ xếp việc
+	// ghi tệp vào hàng đợi của kho. Epoch trong kho tự loại các đáp án đang bay,
+	// nên xoá "trước" hay "sau" một microsecond không đổi kết quả.
+	dispatch_async([SXStore queue], ^{
+		BOOL ok = [[SXStore shared] clearHistory];
+		if (!ok) SXLogErr(@"err", @"không xóa được lịch sử đã lưu");
 #ifndef SX_TESTING
-	notify_post("com.sirix.tweak/resetHistory");
+		notify_post("com.sirix.tweak/resetHistory");
 #endif
-	return ok;
+		if (completion) dispatch_async(dispatch_get_main_queue(), ^{ completion(ok); });
+	});
 }
 
 @end

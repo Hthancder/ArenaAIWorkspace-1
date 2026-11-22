@@ -558,10 +558,12 @@ static NSString *SXHistoryTimeText(NSDate *date) {
 					 [SXUI groupedNumber:(NSInteger)self.allItems.count]]
 		confirmText:@"Xoá tất cả"
 			 action:^{
-		__block BOOL ok = NO;
 		NSUInteger generation = ++weakSelf.loadGeneration;
-		dispatch_sync([SXStore queue], ^{ ok = [[SXStore shared] clearHistory]; });
-		dispatch_async(dispatch_get_main_queue(), ^{
+		// Xoá trên hàng đợi của kho, KHÔNG chặn luồng chính (trước đây
+		// `dispatch_sync` ở đây làm giao diện đứng hình trong lúc chờ `flock`).
+		dispatch_async([SXStore queue], ^{
+			BOOL ok = [[SXStore shared] clearHistory];
+			dispatch_async(dispatch_get_main_queue(), ^{
 			typeof(self) strongSelf = weakSelf;
 			if (!strongSelf || generation != strongSelf.loadGeneration) return;
 			if (!ok) {
@@ -575,6 +577,7 @@ static NSString *SXHistoryTimeText(NSDate *date) {
 			[strongSelf sx_rebuildSections];
 			[SXUI tapFeedback];
 			SXLogInf(@"pref", @"đã xoá toàn bộ lịch sử trên thiết bị");
+			});
 		});
 	}];
 }

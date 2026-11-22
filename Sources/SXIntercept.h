@@ -28,7 +28,18 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)handleAddViewsInsertion:(id)command;
 
 /// Xoá lịch sử đã lưu + ngữ cảnh trong bộ nhớ (công cụ reset_conversation).
+/// Trả về NGAY: phần ghi tệp chạy trên hàng đợi của kho. Trước đây hàm này
+/// `dispatch_sync` vào hàng đợi kho, nên gọi từ luồng chính (công cụ
+/// `reset_conversation`, `notify`, màn Lịch sử) là chặn giao diện trong lúc
+/// chờ `flock` + `rename` trên đĩa — có khi hàng trăm mili giây.
 - (BOOL)clearHistory;
+
+/// Chỉ xoá ngữ cảnh trong bộ nhớ (không chạm tệp) — phần "trước" của việc xoá.
+- (void)clearHistoryMemory;
+
+/// Như trên nhưng gọi `completion` trên luồng chính SAU khi tệp đã được ghi
+/// xong (BOOL = thành công). Dùng khi giao diện cần biết kết quả thật.
+- (void)clearHistoryWithCompletion:(void (^ _Nullable)(BOOL ok))completion;
 
 @end
 
