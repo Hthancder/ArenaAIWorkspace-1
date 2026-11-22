@@ -69,7 +69,7 @@ class SettingsParticleEvidenceTests(unittest.TestCase):
                 make_project(PROJECT, dest)
         event = {'object': 'sys_global', 'attributes': {'eventtype': '0', 'enumb': '0'}, 'gml': 'original();'}
         self.assertTrue(instrument([event], PROJECT)[0]['gml'].endswith('original();'))
-        self.assertEqual(check('\n'.join(EXPECTED)), 24)
+        self.assertEqual(check('\n'.join(EXPECTED)), 27)
         with self.assertRaises(ValueError):
             check('\n'.join(EXPECTED).replace('threshold:0', 'threshold:123'))
         with self.assertRaises(ValueError):

@@ -19,6 +19,10 @@ on:
       - tools/deadtown_gamepad_evidence.py
       - tools/deadtown_gamepad_connect_evidence.py
       - tools/deadtown_settings_particle_evidence.py
+      - tools/deadtown_crosshair_evidence.py
+      - tests/test_deadtown_crosshair_evidence.py
+      - deadtown-source/project/scripts/draw_line_crosshair.gml
+      - deadtown-source/project/sprites/spr_crosshair.sprite.gmx
       - tools/deadtown_settings_particle_vm_probe.py
       - tests/test_deadtown_settings_particle_evidence.py
       - deadtown-source/project/scripts/particle_burst.gml
@@ -159,6 +163,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_deadtown_gamepad_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_gamepad_connect_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_settings_particle_evidence.py' -v
+          python -m unittest discover -s tests -p 'test_deadtown_crosshair_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_draw_call_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_poison_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_item_drop_evidence.py' -v
@@ -196,6 +201,7 @@ jobs:
           python tools/deadtown_gamepad_evidence.py .cache/deadtown-original.apk deadtown-source/project --output work/reports/gamepad-evidence.json
           python tools/deadtown_gamepad_connect_evidence.py .cache/deadtown-original.apk deadtown-source/project --output work/reports/gamepad-connect-evidence.json
           python tools/deadtown_settings_particle_evidence.py .cache/deadtown-original.apk deadtown-source/project --output work/reports/settings-particle-evidence.json
+          python tools/deadtown_crosshair_evidence.py .cache/deadtown-original.apk deadtown-source/project --output work/reports/crosshair-evidence.json
           python tools/deadtown_draw_call_evidence.py .cache/deadtown-original.apk .cache/deadtown/deadtown.gmx --output work/reports/draw-calls.json
           python tools/deadtown_native_tables.py .cache/deadtown-original.apk --output work/reports/native-tables.json
           python tools/deadtown_native_lang.py .cache/deadtown-original.apk --compare-gmx .cache/deadtown/deadtown.gmx --output work/reports/native-language.json

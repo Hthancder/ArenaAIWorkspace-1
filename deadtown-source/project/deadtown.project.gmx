@@ -592,6 +592,7 @@
   <scripts name="scripts">
     <script>scripts\lobby_message_type.gml</script>
     <script>scripts\gps_colour_random.gml</script>
+    <script>scripts\draw_line_crosshair.gml</script>
     <script>scripts\generate_basic_string.gml</script>
     <script>scripts\generate_random_string.gml</script>
     <script>scripts\check_room_is_multiplay_room.gml</script>

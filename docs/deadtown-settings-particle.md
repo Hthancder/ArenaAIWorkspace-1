@@ -64,10 +64,22 @@ slot 82 là tên tự đặt; `gp_connect_check` cũng là ứng viên với gi�
 lưu tại `[sp,#0x18]` và so sánh > 0,5 ở `0x5d7400`–`0x5d7418`. Nhánh
 không lớn hơn nhảy qua một vùng có lời gọi `draw_line_crosshair` tại
 `0x5d75a8`. Tuy nhiên một lời gọi cùng script đã xuất hiện trước gate tại
-`0x5d4450`, nên không có cơ sở tắt toàn bộ event cũ khi setting tắt. Phần
-`draw_line_crosshair` và vùng event tương ứng chưa phục hồi; chỉ ghi bằng chứng,
-không thêm gate hay khẳng định hành vi crosshair đã khớp. Verifier ghim hash
-export, chuỗi instruction và địa chỉ relocation, quét word ghi đè trực tiếp;
-đó không phải phân tích đầy đủ mọi đường nhánh hay stack alias.
+`0x5d4450`, nên không có cơ sở tắt toàn bộ event cũ khi setting tắt. Vùng
+caller tương ứng chưa phục hồi; không thêm gate hay khẳng định hành vi GUI đã
+khớp. Verifier ghim hash export, chuỗi instruction và địa chỉ relocation, quét
+word ghi đè trực tiếp; đó không phải phân tích đầy đủ mọi đường nhánh hay stack
+alias.
+
+Script `draw_line_crosshair` còn thiếu nay có ứng viên riêng: ARM32 tại
+`0x1cff00` lấy bốn tham số, gọi `point_direction` và `point_distance`, chọn
+frame 1 khi khoảng cách vượt 100 (nhánh so sánh native dùng epsilon), ngược lại
+frame 0; hai nhánh vẽ sprite native index 181 (`spr_crosshair`) tại hai tham số
+đầu, xscale khoảng cách/100, yscale 1, góc từ `point_direction`, màu và alpha
+lấy từ trạng thái vẽ. `tools/deadtown_crosshair_evidence.py` ghim hash export,
+call relocation, hằng số, branch và tên/2 frame của sprite trong game data.
+Source dùng tên sprite và biến local mới; riêng GML/runner/platform có thể khác
+ở ngưỡng epsilon, số không hữu hạn, float và rendering. Chưa gắn script này vào
+Draw GUI cũ vì các lời gọi và ngữ cảnh native chưa khôi phục. Probe VM chỉ dùng
+mock cho phép tính và vẽ, không chứng minh renderer hoặc caller event.
 
 Kết quả CI cần xem riêng; chưa tạo IPA.

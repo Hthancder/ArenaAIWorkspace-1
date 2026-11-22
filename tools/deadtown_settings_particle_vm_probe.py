@@ -11,8 +11,10 @@ import shutil
 
 try:
     from tools.deadtown_settings_particle_evidence import ROOF_SHADOW, PLAYER_SHADOW, PLAYER_FEEDBACK
+    from tools.deadtown_crosshair_evidence import verify_source as verify_crosshair_source
 except ModuleNotFoundError:
     from deadtown_settings_particle_evidence import ROOF_SHADOW, PLAYER_SHADOW, PLAYER_FEEDBACK
+    from deadtown_crosshair_evidence import verify_source as verify_crosshair_source
 
 try:
     from tools.deadtown_settings_particle_evidence import PARTICLES, SETTINGS, SHADOW, SHADOW_OBJECTS, ACTION_SHADOW, ACTION_SHADOW_OBJECTS, shadow_source, verify_source
@@ -44,12 +46,16 @@ EXPECTED = [
     'SETTINGS_PARTICLE_VM:feedback-gamepad:1:0',
     'SETTINGS_PARTICLE_VM:feedback-idle:1:0',
     'SETTINGS_PARTICLE_VM:feedback-active:1:1',
+    'SETTINGS_PARTICLE_VM:crosshair-short:0:1:1:1',
+    'SETTINGS_PARTICLE_VM:crosshair-boundary:0:1:1:1',
+    'SETTINGS_PARTICLE_VM:crosshair-long:1:1:1:1',
 ]
 PART_BUILTINS = {'part_emitter_region': 1, 'part_type_direction': 2,
                  'part_emitter_burst': 3, 'part_type_size': 4, 'part_type_orientation': 5}
 
 
 def instrument(events, project):
+    verify_crosshair_source(project)
     # Exercise only the exact gate+draw fragment, replacing actual draw calls
     # with counters. The surrounding original Draw events are not executed.
     fragment = ''
@@ -174,6 +180,18 @@ show_debug_message("SETTINGS_PARTICLE_VM:feedback-idle:" + string(global.__dt_fe
 global.__dt_feedback_checks = 0; global.__dt_feedback_distance = 0.8;
 {feedback}
 show_debug_message("SETTINGS_PARTICLE_VM:feedback-active:" + string(global.__dt_feedback_checks) + ":" + string(global.__dt_feedback_draws));
+global.__dt_cross_distance = 50; global.__dt_cross_scale = 0.5;
+global.__dt_cross_args = 0; global.__dt_cross_draw_ok = 0; global.__dt_cross_calls = 0;
+draw_line_crosshair(11, 22, 33, 44);
+show_debug_message("SETTINGS_PARTICLE_VM:crosshair-short:" + string(global.__dt_cross_frame) + ":" + string(global.__dt_cross_args) + ":" + string(global.__dt_cross_draw_ok) + ":" + string(global.__dt_cross_calls));
+global.__dt_cross_distance = 100; global.__dt_cross_scale = 1;
+global.__dt_cross_args = 0; global.__dt_cross_draw_ok = 0; global.__dt_cross_calls = 0;
+draw_line_crosshair(11, 22, 33, 44);
+show_debug_message("SETTINGS_PARTICLE_VM:crosshair-boundary:" + string(global.__dt_cross_frame) + ":" + string(global.__dt_cross_args) + ":" + string(global.__dt_cross_draw_ok) + ":" + string(global.__dt_cross_calls));
+global.__dt_cross_distance = 150; global.__dt_cross_scale = 1.5;
+global.__dt_cross_args = 0; global.__dt_cross_draw_ok = 0; global.__dt_cross_calls = 0;
+draw_line_crosshair(11, 22, 33, 44);
+show_debug_message("SETTINGS_PARTICLE_VM:crosshair-long:" + string(global.__dt_cross_frame) + ":" + string(global.__dt_cross_args) + ":" + string(global.__dt_cross_draw_ok) + ":" + string(global.__dt_cross_calls));
 global.__dt_ini_has = 0;
 '''
     found[0]['gml'] = prefix + found[0]['gml']
@@ -190,6 +208,7 @@ def check(log):
 def make_project(project, dest):
     project, dest = Path(project), Path(dest)
     verify_source(project)
+    verify_crosshair_source(project)
     if dest.exists() or project.resolve() in dest.resolve().parents:
         raise ValueError('destination must be new and outside source')
     dest.mkdir(parents=True)
@@ -205,6 +224,11 @@ def make_project(project, dest):
             for builtin in PART_BUILTINS:
                 text = text.replace(builtin+'(', '__dt_probe_'+builtin+'(')
             path.write_text(text, encoding='utf-8')
+        crosshair = scripts/'draw_line_crosshair.gml'
+        text = crosshair.read_text(encoding='utf-8')
+        for builtin in ('point_direction', 'point_distance', 'draw_get_colour', 'draw_get_alpha', 'draw_sprite_ext'):
+            text = text.replace(builtin+'(', '__dt_cross_'+builtin+'(')
+        crosshair.write_text(text.replace('spr_crosshair', '181'), encoding='utf-8')
         for name in ('setting_load', 'setting_save'):
             path = scripts / (name+'.gml')
             text = path.read_text(encoding='utf-8')
@@ -212,6 +236,14 @@ def make_project(project, dest):
                 text = text.replace(builtin+'(', '__dt_probe_'+builtin+'(')
             path.write_text(text, encoding='utf-8')
         mocks = {name: f'global.__dt_pt_order = global.__dt_pt_order * 10 + {number};\n' for name, number in PART_BUILTINS.items()}
+        cross_mocks = {
+            'point_direction': 'if (argument0 == 11 && argument1 == 22 && argument2 == 33 && argument3 == 44) global.__dt_cross_args += 1; return 45;\n',
+            'point_distance': 'if (argument0 != 11 || argument1 != 22 || argument2 != 33 || argument3 != 44) global.__dt_cross_args = 0; return global.__dt_cross_distance;\n',
+            'draw_get_colour': 'return 123;\n', 'draw_get_alpha': 'return 0.75;\n',
+            'draw_sprite_ext': 'global.__dt_cross_calls += 1; global.__dt_cross_frame = argument1; if (argument0 == 181 && argument2 == 11 && argument3 == 22 && argument4 == global.__dt_cross_scale && argument5 == 1 && argument6 == 45 && argument7 == 123 && argument8 == 0.75) global.__dt_cross_draw_ok = 1;\n',
+        }
+        for name, text in cross_mocks.items():
+            (scripts/('__dt_cross_'+name+'.gml')).write_text(text, encoding='utf-8')
         mocks['gp_feedback'] = 'global.__dt_feedback_checks += 1; return global.__dt_feedback_gp;\n'
         mocks.update({'ini_open': '', 'ini_close': '', 'display_get_width': 'return 1334;\n',
                       'os_get_language': 'return "en";\n', 'lang_type_set': ''})
