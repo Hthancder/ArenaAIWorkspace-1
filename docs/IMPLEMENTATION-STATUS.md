@@ -1,6 +1,6 @@
 # SiriX — tiến độ thực hiện
 
-**Phiên bản hiện tại: 1.3.0** (mục 1.3.0 ở cuối tài liệu là những gì vừa thay đổi
+**Phiên bản hiện tại: 1.4.0** (mục 1.3.0/1.4.0 ở cuối tài liệu là những gì vừa thay đổi
 trong mã; phần lớn vẫn cần một lượt thử trên thiết bị thật trước khi tin tuyệt đối).
 
 **Working tree (chưa phát hành):**
@@ -682,7 +682,7 @@ Sau khi bản đầu của 1.3.0 lên CI, một lượt rà tiếp tìm thêm c�
   chỉ lộ trên macOS, `local-check.sh` trên Linux không thấy. Đã sửa và thêm luật
   lint đếm ngoặc để bắt đúng lỗi này (có che chuỗi/chú thích trước khi đếm).
 
-### Ẩn dữ liệu nhận dạng trước khi gửi AI (mới, mặc định BẬT)
+### 1.4.0 — Ẩn dữ liệu nhận dạng trước khi gửi AI (mặc định BẬT)
 
 Trước đây "Không lưu lịch sử" chỉ ngừng **ghi trên máy**; số điện thoại, email,
 số thẻ vẫn đi nguyên tới OpenAI/Google. Nay `SXAnonymizer` thay chúng bằng nhãn

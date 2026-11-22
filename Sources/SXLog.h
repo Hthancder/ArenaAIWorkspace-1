@@ -2,7 +2,7 @@
 
 /// Số phiên bản hiển thị. Khi phát hành, `scripts/bump-version.sh x.y.z`
 /// cập nhật đồng thời `control`, manifest và dòng này — một nguồn sự thật.
-#define SX_VERSION @"1.3.0"
+#define SX_VERSION @"1.4.0"
 
 typedef NS_ENUM(NSInteger, SXLogLevel) {
 	SXLogLevelDebug = 0,
