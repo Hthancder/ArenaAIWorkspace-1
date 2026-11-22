@@ -36,7 +36,7 @@ class GamepadEvidenceTests(unittest.TestCase):
     def test_instrument_and_negative_markers(self):
         evt = {'object': 'sys_global', 'attributes': {'eventtype': '0', 'enumb': '0'}, 'gml': 'original();'}
         self.assertTrue(instrument([evt])[0]['gml'].endswith('original();'))
-        self.assertEqual(check('\n'.join(EXPECTED)), 3)
+        self.assertEqual(check('\n'.join(EXPECTED)), 6)
         with self.assertRaises(ValueError):
             check('\n'.join(EXPECTED).replace('111:211', '131:231'))
         with self.assertRaises(ValueError):

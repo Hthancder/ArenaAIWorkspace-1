@@ -16,6 +16,8 @@ if (ini_read_real("setting","check",0))
     global.setting_right_size = ini_read_real("right","size",0.5)
     global.setting_right_pos = ini_read_real("right","pos",0.5)
     
+    // Partial native candidate: neutral alias for global slot 88.
+    global.__dt_setting_gamepad = ini_read_real("control","gamepad",0)
     global.setting_lang = ini_read_real("lang","type",0)
     lang_type_set(global.setting_lang); 
 }
@@ -35,6 +37,9 @@ else // new
     
     global.setting_right_size = 0.5 * ratio
     global.setting_right_pos = 0.5 * ratio
+
+    // Partial native candidate: the new-settings path initializes slot 88 to zero.
+    global.__dt_setting_gamepad = 0
     
     switch(os_get_language())
     {

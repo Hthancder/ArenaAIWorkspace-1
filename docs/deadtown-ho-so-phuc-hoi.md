@@ -840,6 +840,15 @@ test cũng sửa alpha/metadata để xác nhận công cụ báo sai. Metadata 
 metadata **không** đồng nghĩa khôi phục hoàn toàn hình ảnh, mask, animation,
 resource ID, renderer hoặc iOS.
 
+### Bổ sung ứng viên cài đặt và kết nối gamepad
+
+Đã đối chiếu global slot 88 với key INI `control/gamepad` trong ARM của
+`setting_load`/`setting_save` và thêm alias trung tính cùng script ứng viên
+`gp_connect_check`. Script quét mọi thiết bị kết nối, đặt deadzone 0,2 và trả
+cờ có thiết bị; nó chỉ chạy theo gate native `os_type == 4` và cài đặt. Xem
+[deadtown-gamepad-connect.md](deadtown-gamepad-connect.md) về giới hạn enum,
+giá trị bất thường, UI thiếu và kiểm thử giả lập; không suy ra iOS hoạt động.
+
 ### Kiểm tra bổ sung lịch item
 
 VM desktop đã kiểm 900 bước trong điều kiện cô lập: hai instance thử persistent,

@@ -15,6 +15,8 @@ ini_write_real("left","relative",global.setting_left_relative)
 ini_write_real("right","size",global.setting_right_size)
 ini_write_real("right","pos",global.setting_right_pos)
 
+// Partial native candidate: neutral alias for global slot 88.
+ini_write_real("control","gamepad",global.__dt_setting_gamepad)
 ini_write_real("lang","type",global.setting_lang)
 
 ini_close()
