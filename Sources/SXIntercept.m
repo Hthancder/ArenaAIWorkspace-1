@@ -779,11 +779,17 @@ static dispatch_queue_t SXTurnQueue(void) {
 		// Trần chờ do người dùng đặt (2–20 s); ngân sách AI chỉ là mức trần trên.
 		// Trước đây trần cứng 8/16 s khiến đặt “chờ 30 giây” mà vẫn bị cắt ở 8 s.
 		NSTimeInterval hardCap = MIN(budget, MAX(2.0, prefs.replyDeadline));
+		// Luật thiết kế: không stage nào giữ luồng ACE quá 5 s. `hardCap` vẫn là
+		// trần tổng (dùng khi báo log/quyết định), nhưng đồng hồ CHỜ ở đây không
+		// bao giờ vượt 5 s — trước đây `_lastProgressAt + 3` đẩy mốc chờ lên tới
+		// `hardCap` (20 s), làm giao diện Siri đứng hình đúng như luật cấm.
+		// Chờ quá 5 s cũng vô ích: đáp án tới sau vẫn được đưa vào bằng bubble.
+		NSTimeInterval aceCap = MIN(hardCap, 5.0);
 		NSTimeInterval captureAt = _captureTime > 0 ? _captureTime : CFAbsoluteTimeGetCurrent();
-		NSTimeInterval baseDeadline = captureAt + MIN(hardCap, 5.0);
+		NSTimeInterval baseDeadline = captureAt + aceCap;
 		while (!_ready && !_errored && !_decided && _generation == myGeneration && !_actionSeen) {
-			NSTimeInterval target = MIN(MAX(baseDeadline, _lastProgressAt + 3.0),
-										captureAt + hardCap);
+			NSTimeInterval target = MIN(MAX(baseDeadline, MIN(_lastProgressAt + 3.0, captureAt + aceCap)),
+										captureAt + aceCap);
 			if (target <= CFAbsoluteTimeGetCurrent()) break;
 			NSDate *deadline = [NSDate dateWithTimeIntervalSinceReferenceDate:target];
 			if (![_condition waitUntilDate:deadline]) break;
