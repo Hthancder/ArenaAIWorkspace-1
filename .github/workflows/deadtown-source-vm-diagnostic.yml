@@ -178,6 +178,18 @@ jobs:
           set -euo pipefail
           timeout 90 work/runner-build/gmrunner work/gamepad-game --headless --fast --mute --seed 1 --frames 90 --trace --stats --save-dir work/save-gamepad > work/gamepad.log 2>&1 || { tail -100 work/gamepad.log; exit 1; }
           python tools/deadtown_gamepad_vm_probe.py check work/gamepad.log
+      - name: Report mocked gamepad markers
+        if: always()
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('work/gamepad.log')
+          if p.exists():
+              lines = [line for line in p.read_text(errors='replace').splitlines() if 'GAMEPAD_VM:' in line]
+              print('::notice::GAMEPAD_DIAGNOSTIC: ' + ' | '.join(lines).replace('%', '%25')[:3000])
+          else:
+              print('::notice::GAMEPAD_DIAGNOSTIC: no log')
+          PY
       - name: Compare resource IDs and report observed warnings
         run: |
           set -euo pipefail
