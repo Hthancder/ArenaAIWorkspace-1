@@ -840,6 +840,23 @@ test cũng sửa alpha/metadata để xác nhận công cụ báo sai. Metadata 
 metadata **không** đồng nghĩa khôi phục hoàn toàn hình ảnh, mask, animation,
 resource ID, renderer hoặc iOS.
 
+### Sáu ứng viên dọn ánh sáng khi Destroy
+
+Đã thêm Destroy 0 cho `obj_bettery`, `obj_lightaction`, `obj_cooker`,
+`obj_craftdesk`, `obj_craftdesk_pro`, `obj_brazier_electric`: kiểm tra light
+được liên kết còn tồn tại rồi hủy các instance được tham chiếu. Native ARM32
+của cả sáu event cùng có chuỗi `instance_exists`, with iterator,
+`instance_destroy`; hai object đầu dùng slot 344, bốn object sau dùng slot
+1162. Step native của từng object có cùng mẫu dọn, khớp với đoạn source cũ
+sử dụng `light_obj` hoặc `craft_light_obj`. Ánh xạ tên là **ứng viên**,
+không phải tên biến native được chứng minh. Bộ kiểm
+`tools/deadtown_light_cleanup_evidence.py` ghim hash của 12 export, call,
+instruction, inventory và source; test sửa từng event. Probe desktop riêng
+thay Create của object và light bằng stub, không chạy gameplay thật. Thứ tự
+Destroy/Step, hiệu ứng dọn trùng, lifecycle Android/iOS và toàn bộ object
+vẫn chưa được xác minh. Audit sau thay đổi thiếu 359 event key; khớp key
+không chứng minh khôi phục đầy đủ sự kiện.
+
 ### Ứng viên đảo hướng tạm thời của xúc tu boss 2
 
 APK ARM32 `obj_boss2_ten:Create:0` tại `0x714ef4` đặt slot instance 1201
@@ -882,7 +899,7 @@ fragment source nhánh type 0; test sửa giá trị và nhánh. So sánh native
 ngưỡng epsilon, và các nhánh type 1/2, điều kiện dẫn tới sát thương, hành vi
 runtime và phần còn lại Create/Step chưa được xác minh hoàn toàn. Không suy ra
 boss, RNG, gameplay hay iOS đã hoạt động đúng. Audit mới thiếu 56
-script, 90 object, 365 event key, 4 sprite và 8 room theo tên/key; 0 file tham
+script, 90 object, 359 event key, 4 sprite và 8 room theo tên/key; 0 file tham
 chiếu thiếu. Trùng key không chứng minh toàn event tương đương.
 
 ### Bổ sung ứng viên cài đặt hiệu ứng và gate particle

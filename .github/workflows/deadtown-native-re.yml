@@ -21,6 +21,15 @@ on:
       - tools/deadtown_settings_particle_evidence.py
       - tools/deadtown_boss2_turn_evidence.py
       - tests/test_deadtown_boss2_turn_evidence.py
+      - tools/deadtown_light_cleanup_evidence.py
+      - tests/test_deadtown_light_cleanup_evidence.py
+      - tools/deadtown_light_cleanup_vm_probe.py
+      - deadtown-source/project/objects/obj_bettery.object.gmx
+      - deadtown-source/project/objects/obj_lightaction.object.gmx
+      - deadtown-source/project/objects/obj_cooker.object.gmx
+      - deadtown-source/project/objects/obj_craftdesk.object.gmx
+      - deadtown-source/project/objects/obj_craftdesk_pro.object.gmx
+      - deadtown-source/project/objects/obj_brazier_electric.object.gmx
       - deadtown-source/project/objects/obj_boss2_ten.object.gmx
       - tools/deadtown_crosshair_evidence.py
       - tests/test_deadtown_crosshair_evidence.py
@@ -168,6 +177,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_deadtown_gamepad_connect_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_settings_particle_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_boss2_turn_evidence.py' -v
+          python -m unittest discover -s tests -p 'test_deadtown_light_cleanup_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_crosshair_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_draw_call_evidence.py' -v
           python -m unittest discover -s tests -p 'test_deadtown_poison_evidence.py' -v
@@ -207,6 +217,7 @@ jobs:
           python tools/deadtown_gamepad_connect_evidence.py .cache/deadtown-original.apk deadtown-source/project --output work/reports/gamepad-connect-evidence.json
           python tools/deadtown_settings_particle_evidence.py .cache/deadtown-original.apk deadtown-source/project --output work/reports/settings-particle-evidence.json
           python tools/deadtown_boss2_turn_evidence.py .cache/deadtown-original.apk deadtown-source/project --output work/reports/boss2-turn-evidence.json
+          python tools/deadtown_light_cleanup_evidence.py .cache/deadtown-original.apk deadtown-source/project --output work/reports/light-cleanup-evidence.json
           python tools/deadtown_crosshair_evidence.py .cache/deadtown-original.apk deadtown-source/project --output work/reports/crosshair-evidence.json
           python tools/deadtown_draw_call_evidence.py .cache/deadtown-original.apk .cache/deadtown/deadtown.gmx --output work/reports/draw-calls.json
           python tools/deadtown_native_tables.py .cache/deadtown-original.apk --output work/reports/native-tables.json
