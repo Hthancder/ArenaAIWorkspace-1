@@ -845,7 +845,9 @@ resource ID, renderer hoặc iOS.
 Đã đối chiếu global slot 88 với key INI `control/gamepad` trong ARM của
 `setting_load`/`setting_save` và thêm alias trung tính cùng script ứng viên
 `gp_connect_check`. Script quét mọi thiết bị kết nối, đặt deadzone 0,2 và trả
-cờ có thiết bị; nó chỉ chạy theo gate native `os_type == 4` và cài đặt. Xem
+cờ có thiết bị; nó chỉ chạy theo gate native `os_type == 4` và cài đặt. CI ARM `44983267378`, workbench `44983267306` và VM giả lập
+`44983566301` đạt; kiểm toán nay thiếu 57 script, 90 object, 367 event key,
+4 sprite và 8 room so tên/key. Xem
 [deadtown-gamepad-connect.md](deadtown-gamepad-connect.md) về giới hạn enum,
 giá trị bất thường, UI thiếu và kiểm thử giả lập; không suy ra iOS hoạt động.
 

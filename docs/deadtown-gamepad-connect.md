@@ -23,3 +23,15 @@ thay `os_type` bằng biến test; nó không kiểm thiết bị thật. Việc
 0 và 1); các giá trị bất thường/ngoài miền, epsilon và enum OS sau compile
 chưa xác minh. Không giả định số 4 mang cùng ý nghĩa trên mọi runtime; chưa kiểm
 compiler GameMaker, Android đang chạy, cài đặt/gameplay hoặc iOS.
+
+Tại `8274f11`, 212 test local thành công, 12 skip; CI native
+[44983267378](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44983267378)
+và workbench [44983267306](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44983267306)
+đạt. VM [44983566301](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44983566301)
+tại `cd12a42` đạt sau khi sửa cách viết số trong kỳ vọng probe: runner in
+`0.20`, không phải `0.2`. Kịch bản giả cho hai index kết nối 1 và 3 ghi hai
+lần deadzone 0,20 theo đúng thứ tự; các gate và trường hợp rỗng cũng đạt. Đây
+không phải bằng chứng phần cứng hoặc hệ điều hành thật. Các lần chạy VM trước
+[44983267339](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44983267339)
+và [44983487109](https://github.com/Hthancder/ArenaAIWorkspace-1/actions/runs/44983487109)
+thất bại vì kỳ vọng marker chuỗi, không phải do thay đổi GML sau đó.
