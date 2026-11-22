@@ -1,4 +1,7 @@
-# SiriX — tiến độ thực hiện thiết kế v1.2
+# SiriX — tiến độ thực hiện
+
+**Phiên bản hiện tại: 1.3.0** (mục 1.3.0 ở cuối tài liệu là những gì vừa thay đổi
+trong mã; phần lớn vẫn cần một lượt thử trên thiết bị thật trước khi tin tuyệt đối).
 
 **Working tree (chưa phát hành):**
 - Lượt riêng tư không gửi hội thoại cũ (kể cả ngữ cảnh RAM) tới nhà cung cấp và không đưa
@@ -564,3 +567,94 @@ không được truyền setter nên chạm không có phản hồi.
   nhãn thay vì giá trị trong `validValues`", thiếu `cellClass`, thiếu đánh dấu
   ở bảng chọn, và thiếu notify sau khi chọn. Chạy trên mã 1.2.1 cũ báo đúng 17
   lỗi; trên mã mới pass.
+
+## 1.3.0 — Sửa lỗi thật tìm thấy khi rà soát toàn bộ mã
+
+Không thêm màn hình trang trí; sửa những chỗ **người dùng gặp lỗi thật** và thêm
+test để lỗi không quay lại.
+
+### An toàn mạng — `web_fetch` thật sự bị chặn
+
+- **Lỗ hổng redirect.** Chú thích trong mã ghi "không đi theo redirect" nhưng
+  `URLSession` vẫn đi theo (delegate chỉ chặn khi có `onData`). Một trang công
+  khai hoàn toàn có thể chuyển hướng vào `http://127.0.0.1:8080` hay
+  `http://metadata.internal` và model đọc được nội dung. Nay `SXHTTP.getURL:`
+  mặc định KHÔNG theo redirect; biến thể mới có `rejectRedirect:` được hỏi cho
+  **từng** đích nhảy (tối đa 3 bước, chặn hạ cấp https→http).
+- **Luật "host nội bộ" đầy đủ — `Sources/SXNetPolicy.h`** (C thuần, có test):
+  xét IPv4 viết tắt (`127.1`, `2130706433`, `0x7f000001`, `017700000001`), IPv6
+  (`::1`, `[::1]`, `fe80::/10`, `fc00::/7`, `ff00::/8`), IPv4-mapped
+  (`::ffff:127.0.0.1`), CGNAT `100.64/10`, benchmark `198.18/15`, và các đuôi
+  tên `localhost/.local/.internal/.lan/.home/.localdomain`. Bản cũ chỉ dùng
+  `inet_pton(AF_INET)`, nên gần như mọi dạng viết tắt đều lọt.
+- **Test + lint giữ chỗ:** `tests/net_policy_test.c` (chạy trong CI qua
+  `scripts/test-net-policy.sh`); `check-prefs.sh` báo lỗi nếu ai gọi
+  `SXHTTP getURL:` mà không truyền `rejectRedirect:`.
+
+### Lịch sử không còn bị cắt theo "Ngữ cảnh hội thoại"
+
+`SXStore.appendQuestion:…limit:` dùng **một** tham số cho hai việc khác nhau:
+kích thước ngữ cảnh gửi AI và số lượt lưu trong kho Lịch sử. Hệ quả: đặt ngữ
+cảnh 0 câu (tuỳ chọn hợp lệ, có trong Settings) thì mỗi lần chỉ còn **1** mục
+trong Lịch sử; đặt 2 câu thì cả kho chỉ giữ 2 lượt. Nay kho có trần riêng
+`SXStoreHistoryCapacity` (40), `limit` không còn cắt kho. Test `store_test.m`
+phủ trường hợp ngữ cảnh 0, trần kho, và xoá một mục.
+
+### Nút "Dừng" của trò chuyện thử dừng được thật
+
+Trước đây bấm Dừng chỉ đổi giao diện: request (và stream) vẫn chạy tới hết ngân
+sách — tốn token, giữ kết nối, và đáp án vẫn về. Thêm
+`+[SXHTTP cancelRequestsWithLabel:]` + nhãn theo luồng
+(`setCurrentRequestLabel:`): mọi request của màn thử (kể cả stream SSE) bị huỷ
+ngay khi bấm.
+
+### Hết vòng công cụ không còn là "nội dung rỗng"
+
+Khi model vẫn muốn gọi công cụ nhưng đã chạm "Số vòng công cụ", cả ba đường
+(chat completions, Responses, Gemini) trả lỗi `Model trả về nội dung rỗng` — vô
+nghĩa với người dùng. Nay trả một câu giải thích đọc được kèm số bước đã chạy và
+gợi ý tăng số vòng.
+
+### Nhắc bản mới + endpoint Gemini đúng
+
+- Trang chính tự kiểm tra GitHub Releases (tối đa mỗi 6 giờ, im lặng khi
+  offline) và hiện nhãn **"Bản mới x.y.z — chạm để xem"** dưới pill trạng thái.
+  Trước đây chỉ ai bấm "Kiểm tra cập nhật" mới biết có bản mới.
+- Dòng *Endpoint đang dùng* của Gemini giờ ghi đúng đường dẫn sẽ gọi
+  (`…/v1beta/models/<model>:generateContent`) thay vì chỉ tên máy chủ — model
+  sai không còn trông như "đã cấu hình xong".
+
+### Màn "Ghi nhớ" (mới)
+
+`remember` ghi xuống `/var/mobile/Library/SiriX/memory.plist` nhưng **không có
+chỗ nào** trong Settings đọc hay xoá. Nay Cài đặt → SiriX → Dữ liệu → **Ghi nhớ**:
+danh sách mới nhất trước, tìm kiếm (debounce), chạm để xem/sao chép, vuốt để
+xoá, xoá tất cả có xác nhận, hiện `x/200` ghi chú và lý do AI dùng chúng.
+`SXMemory` (`SXToolCatalog.h`) là mặt tiền đọc/xoá dùng chung với công cụ.
+
+### Log không mất dòng
+
+`SXLogFileAppend` gọi `write()` một lần: một lần ghi ngắn (hoặc `EINTR` — SpringBoard
+nhận nhiều signal) là **cả dòng log biến mất**, đúng lúc cần nhất. Nay lặp tới khi
+hết, và **xoay vòng giữa phiên** khi tệp vượt 1 MB (trước chỉ xoay lúc khởi động,
+nên SpringBoard chạy lâu làm tệp phình hàng chục MB). Test mới cho ghi một phần và
+xoay vòng.
+
+### Thứ tự lượt hỏi được bảo đảm
+
+Ba khối của một lượt (đọc kho, gọi AI, ghi nhận kết quả) chạy trên ba luồng khác
+nhau nên thứ tự ngẫu nhiên: một khối lấy epoch của lượt **cũ** có thể ghi đè epoch
+của lượt **mới**, khiến lượt mới không đọc được gì và trả lời "quá muộn". Nay cả
+vòng đời chạy trên một hàng đợi tuần tự `com.sirix.turn`.
+
+### Cần kiểm trên thiết bị (1.3.0)
+
+1. Cài đặt → SiriX → Ghi nhớ: xoá từng mục và xoá tất cả.
+2. Hỏi một câu cần 2 công cụ với "Số vòng công cụ" = 1 → phải nhận câu giải thích
+   thay vì lỗi "nội dung rỗng".
+3. Trò chuyện thử: gửi câu dài rồi bấm Dừng ngay → log phải ghi
+   `huỷ N request của phiên chat-test`.
+4. Đặt "Ngữ cảnh hội thoại" = 0, hỏi 5 câu → Lịch sử phải có 5 mục.
+5. Đặt ngữ cảnh 0 và xem lại lịch sử cũ: dữ liệu trước đây đã bị cắt, không
+   khôi phục được (chỉ ảnh hưởng máy đã dùng tuỳ chọn 0).
+

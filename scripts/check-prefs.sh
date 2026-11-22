@@ -252,6 +252,23 @@ for plist_path in sorted(glob.glob("Prefs/Resources/*.plist")):
             fail(f"{plist_path}: hàng '{spec.get('label')}' dùng SXChoiceController "
                  f"nhưng key '{key}' không có định nghĩa")
 
+# ------------------------------------- luật mạng: mọi redirect phải được xét lại
+# Lỗi thật: `web_fetch` ghi chú "không đi theo redirect" nhưng URLSession vẫn
+# đi theo, nên một trang công khai có thể chuyển hướng vào 127.0.0.1. Từ nay
+# tầng HTTP hỏi lại từng đích; ai gọi GET mà không truyền `rejectRedirect`
+# trong khi đọc URL do AI/người dùng nhập là lỗi.
+NET_FILES = ["Sources/SXToolCatalog.m"]
+for path in NET_FILES:
+    text = read(path)
+    for match in re.finditer(r"\[SXHTTP getURL:", text):
+        tail = text[match.start():match.start() + 1200]
+        if "rejectRedirect:" not in tail:
+            line = text[:match.start()].count("\n") + 1
+            fail(f"{path}:{line}: gọi SXHTTP getURL: mà không truyền rejectRedirect: — "
+                 "redirect có thể nhảy vào mạng nội bộ")
+    if "SXNetHostIsPrivate" not in text and "SXHostIsPrivate" not in text:
+        fail(f"{path}: phải kiểm tra host bằng SXNetPolicy trước khi tải URL do model chọn")
+
 # ---------------------------------------------------------------- report
 for message in WARNINGS:
     print(f"⚠️  {message}")

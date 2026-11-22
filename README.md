@@ -28,7 +28,15 @@ Nhà cung cấp: **OpenAI tương thích** (mặc định) hoặc **Google Gemin
   bước 0,05, ngữ cảnh 0–40 câu, số vòng công cụ 1–6: chọn mức gợi ý hoặc tự nhập số.
 - **Chẩn đoán nhanh** — một màn hình chỉ ra vì sao Siri chưa trả lời (thiếu khoá, endpoint sai,
   trần chờ ngắn hơn ngân sách…) kèm báo cáo chia sẻ được.
+- **Xem & xoá điều AI ghi nhớ** — Cài đặt → *Ghi nhớ*: danh sách ghi chú công cụ `remember`
+  lưu trên máy, tìm kiếm, chạm để xem/sao chép, vuốt để xoá, xoá tất cả. Không còn dữ liệu AI
+  ghi mà bạn không thấy.
+- **Tự nhắc bản mới** — trang chính tự so với GitHub Releases (tối đa mỗi 6 giờ, im lặng khi
+  offline) và hiện “Bản mới x.y.z — chạm để xem”.
 - **Sao lưu cấu hình** — xuất ra plist (không kèm lịch sử) và phục hồi bằng cách dán nội dung tệp.
+- **`web_fetch` bị chặn chặt** — chỉ tải trang Internet công khai: chặn mọi dạng địa chỉ nội
+  bộ (IPv4 viết tắt, IPv6, `::ffff:`, `.local/.internal/…`) và **xét lại từng bước chuyển
+  hướng** (không nhảy vào `127.0.0.1`, không hạ cấp https→http, tối đa 3 bước).
 - **Số liệu token** — Thống kê cộng dồn token gửi/nhận theo `usage` máy chủ báo (OpenAI, Responses, Gemini),
   kèm dải 7 ngày và tỉ lệ nhận/gửi.
 - **Kiểm tra cập nhật** — so số phiên bản với GitHub Releases, có bản mới thì mở thẳng trang tải.
@@ -74,7 +82,7 @@ Khi có gì đó chưa đúng (Siri không trả lời bằng AI, trả lời ch
 
 Log ghi mọi bước: hook nào đã cài / thiếu, câu hỏi bắt được từ đâu, lệnh ACE nào đến, quyết định thay thế hay cho qua, request AI (URL, model, số message — **không bao giờ ghi khóa API đầy đủ**), thời gian chờ, lỗi chi tiết. Nhờ log đó mình sẽ chỉnh đúng chỗ thay vì đoán.
 
-Log nằm tại: `/var/mobile/Library/Logs/SiriX.log` (kiểm tra xoay vòng khi tiến trình khởi động nếu vượt 512 KB, có `.old`). Xóa log cũng xóa bản `.old`; các dòng mới tiếp tục được ghi mà không cần respring. Log có thể chứa nội dung câu hỏi và URL: hãy kiểm tra thông tin riêng tư trước khi chia sẻ.
+Log nằm tại: `/var/mobile/Library/Logs/SiriX.log` (kiểm tra xoay vòng khi tiến trình khởi động nếu vượt 512 KB, và **giữa phiên** nếu vượt 1 MB, có `.old`). Xóa log cũng xóa bản `.old`; các dòng mới tiếp tục được ghi mà không cần respring. Log có thể chứa nội dung câu hỏi và URL: hãy kiểm tra thông tin riêng tư trước khi chia sẻ.
 
 ## Cách hoạt động (ngắn gọn)
 
@@ -110,6 +118,7 @@ git clone --depth 1 --filter=blob:none --sparse https://github.com/theos/sdks /t
 cd /tmp/sdks && git sparse-checkout set iPhoneOS15.6.sdk
 
 ./scripts/local-check.sh         # Logos → compile toàn bộ (aarch64-ios, -Werror) → validate plist
+./scripts/test-net-policy.sh     # luật chặn địa chỉ nội bộ của web_fetch (C thuần, không cần SDK)
 ./scripts/check-prefs.sh         # lint tầng Settings (plist, selector, cân bằng ngoặc)
 ./scripts/test-prefs-fallback.sh # mọi trang Settings phải có lưới an toàn chống trang trắng
 python3 scripts/check-choice-state.py # hàng chọn giá trị phải hiện ✓ / giá trị đang dùng
