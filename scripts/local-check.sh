@@ -33,6 +33,12 @@ python3 scripts/check-declared-methods.py || FAIL=1
 python3 scripts/check-specifier-types.py || FAIL=1
 python3 scripts/check-choice-state.py || FAIL=1
 
+echo "── [0/3] Chính sách mạng & tệp log (C thuần)"
+# web_fetch cho model tự đặt URL: luật "host nội bộ" phải chặn cả dạng IPv4
+# viết tắt / IPv6 / ::ffff: — xem tests/net_policy_test.c.
+./scripts/test-net-policy.sh || FAIL=1
+./scripts/test-log-file.sh || FAIL=1
+
 echo "── [0/3] Lưới an toàn cho mọi trang Settings"
 # Trang con mở ra trống là lỗi người dùng thấy rõ nhất mà trình biên dịch không
 # bắt được: mỗi lớp SX*Controller phải gọi SXShowContentFallbackIfNeeded.

@@ -425,6 +425,16 @@ static void SXPostDeferredAnswer(NSString *question, NSString *display) {
 #endif
 }
 
+/// Hàng đợi tuần tự cho toàn bộ vòng đời một lượt hỏi (xem `noteQuestion:`).
+static dispatch_queue_t SXTurnQueue(void) {
+	static dispatch_queue_t queue;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		queue = dispatch_queue_create("com.sirix.turn", DISPATCH_QUEUE_SERIAL);
+	});
+	return queue;
+}
+
 @implementation SXIntercept
 
 + (instancetype)shared {
@@ -559,8 +569,13 @@ static void SXPostDeferredAnswer(NSString *question, NSString *display) {
 				  (unsigned long long)myGeneration, source, clean);
 	[_condition unlock];
 
-	dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
-		// Đọc kho và epoch trên luồng nền, không chặn hook ACE bằng I/O.
+	// Một hàng đợi riêng, TUẦN TỰ cho toàn bộ việc "một lượt hỏi": đọc kho → gọi
+	// AI → nhận đáp án → ghi thống kê/lịch sử/thông báo. Trước đây ba khối chạy
+	// trên ba luồng khác nhau nên thứ tự là ngẫu nhiên, và một khối lấy epoch
+	// của lượt CŨ có thể ghi đè epoch của lượt MỚI — lượt hỏi mới sẽ không đọc
+	// được gì và trả lời "quá muộn" dù mạng nhanh.
+	dispatch_async(SXTurnQueue(), ^{
+		// Đọc kho và epoch trên hàng đợi của kho, không chặn hook ACE bằng I/O.
 		__block NSDictionary *stored = nil;
 		dispatch_sync([SXStore queue], ^{ stored = [[SXStore shared] snapshot]; });
 		[self->_condition lock];
