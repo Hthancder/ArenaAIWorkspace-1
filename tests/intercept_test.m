@@ -19,6 +19,7 @@ static NSString *lastQuestion;
 static NSArray *lastHistory;
 static BOOL testShowOriginal;
 static BOOL testIncognito;
+static BOOL testAnonymize = YES;
 
 @implementation SXPrefs
 + (instancetype)shared { static SXPrefs *p; static dispatch_once_t once; dispatch_once(&once, ^{ p = [SXPrefs new]; }); return p; }
@@ -28,6 +29,7 @@ static BOOL testIncognito;
 - (NSTimeInterval)responseTimeout { return 2; }
 - (NSTimeInterval)replyDeadline { return 2; }
 - (BOOL)markdown { return NO; }
+- (BOOL)anonymize { return testAnonymize; }
 - (BOOL)hideWebCards { return YES; }
 - (BOOL)showOriginal { return testShowOriginal; }
 - (BOOL)incognito { return testIncognito; }
@@ -266,6 +268,26 @@ int main(void) {
 		say = sayCommand(); assert([intercept handleIncomingCommand:say]);
 		dispatch_sync([SXStore queue], ^{});
 		assert([[[SXStore shared] snapshot][@"history"] count] == 0);
+
+		// Ẩn dữ liệu nhận dạng: model KHÔNG được thấy số điện thoại, nhưng đáp án
+		// trả về người dùng phải có lại số thật (khôi phục sau khi gọi).
+		begin(@"gọi 0912345678 giúp tôi");
+		assert([lastQuestion rangeOfString:@"0912345678"].location == NSNotFound);
+		assert([lastQuestion containsString:@"[sđt-1]"]);
+		pendingCompletion(@"Đã gọi [sđt-1] xong", nil, nil);
+		say = sayCommand();
+		assert([intercept handleIncomingCommand:say]);
+		assert([say.message containsString:@"0912345678"]);
+		assert([say.message rangeOfString:@"[sđt-1]"].location == NSNotFound);
+
+		// Tắt công tắc thì số đi nguyên vẹn lên model.
+		testAnonymize = NO;
+		begin(@"gọi 0987654321 giúp tôi");
+		assert([lastQuestion containsString:@"0987654321"]);
+		pendingCompletion(@"xong", nil, nil);
+		say = sayCommand();
+		assert([intercept handleIncomingCommand:say]);
+		testAnonymize = YES;
 
 		// Xoá lịch sử của SXIntercept KHÔNG chặn luồng gọi (trước đây là
 		// `dispatch_sync` vào hàng đợi kho, tức chặn luồng chính của Settings).
