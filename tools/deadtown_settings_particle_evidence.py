@@ -41,6 +41,10 @@ PARTICLES = {
     'particle_burst_up_out': (0x1cdf44, 2352, '01b6ec149bb41d801871a822a38599d03d96184c0e3aa2ade05297c1927aff11', 0x1cdfd4, 0x1ce060, 0x1ce4c0, 'r4'),
 }
 GATE = '// Partial candidate: native global slot 49 controls particle emission.\nif (global.__dt_setting_particle > 0.5)\n{\n'
+ROOF_SHADOW = ('// Partial native candidate: global slot 86 gates this roof shadow.\n'
+               'if (global.__dt_setting_shadow > 0.5)\n{\n'
+               '    draw_sprite_ext(roof_sprite,0,xx,yy,image_xscale,image_yscale,image_angle,c_black,0.3*roof_alpha)\n'
+               '}')
 SHADOW_OBJECTS = {
     'par_solid': (0x39ec20, '680aab026db2e55a4b7f4797aa5e8c426f53f1cdb4520be58f74720d121ae76d'),
     'par_vehicle': (0x5f8894, '94f9ff7a157e20efb6fc7ff4af3ffd40872ef64d8755af25e435ddd9a7bbf9b1'),
@@ -67,7 +71,7 @@ def shadow_source(project, name):
     if len(events) != 1:
         raise ValueError('expected one Draw event: '+name)
     strings = events[0].findall('./action/arguments/argument/string')
-    fragment = ACTION_SHADOW if name in ACTION_SHADOW_OBJECTS else SHADOW
+    fragment = ROOF_SHADOW if name == 'par_building' else (ACTION_SHADOW if name in ACTION_SHADOW_OBJECTS else SHADOW)
     if len(strings) != 1 or (strings[0].text or '').count(fragment) != 1:
         raise ValueError('unexpected shadow gate: '+name)
     return strings[0].text
@@ -99,8 +103,12 @@ def verify_source(project):
                 raise ValueError('missing particle call: '+name)
         if body.count('part_type_size(') != int(name.endswith('_size')) or body.count('part_type_orientation(') != int(name.endswith('_out')):
             raise ValueError('unexpected particle operation: '+name)
-    for name in (*SHADOW_OBJECTS, *ACTION_SHADOW_OBJECTS):
-        shadow_source(p, name)
+    for name in (*SHADOW_OBJECTS, *ACTION_SHADOW_OBJECTS, 'par_building'):
+        text = shadow_source(p, name)
+        if name == 'par_building':
+            remaining = text.split(ROOF_SHADOW)[1]
+            if 'draw_sprite_ext(mask_index,0,x,y,image_xscale,image_yscale,image_angle,c_white,1)' not in remaining or 'draw_sprite_ext(roof_sprite,0,x,y,image_xscale,image_yscale,image_angle,roof_color,roof_alpha)' not in remaining:
+                raise ValueError('building foreground calls missing')
 
 
 def inspect(apk):
@@ -282,10 +290,32 @@ def inspect(apk):
                 raise ValueError('action threshold overwritten: '+name)
             if instruction.mnemonic.startswith(('str', 'stm')) and '[sp, #0x34]' in instruction.op_str:
                 raise ValueError('action shadow pointer overwritten: '+name)
+    start = 0x3936e0
+    target = [s for s in dyn.iter_symbols() if exported_name(s.name) == 'gml_Object_par_building_Draw_0']
+    if len(target) != 1 or (target[0]['st_value'], target[0]['st_size']) != (start, 4952) or hashlib.sha256(read(start, 4952)).hexdigest() != '9bb63888bd5e63c006e5238daabbd08185b25a8ee9e6f154f7313589b965dcb7':
+        raise ValueError('unexpected building Draw bytes')
+    if sym(start+0x10, start+0x20, start+0x14).name != 'g_pGlobal':
+        raise ValueError('unexpected building global pointer')
+    checks = {
+        0x38: ('ldr', 'r0, [r1, r0]'), 0x44: ('ldr', 'r0, [r0]'),
+        0x74: ('ldr', 'r1, [r0]'), 0x78: ('ldr', 'r2, [r1, #8]'),
+        0x7c: ('mov', 'r1, #0x56'), 0x80: ('blx', 'r2'), 0x84: ('str', 'r0, [sp, #0x40]'),
+        0x7d0: ('ldr', 'r0, [sp, #0x40]'), 0x7d4: ('bl', '#0x176444'),
+        0x7d8: ('vmov.f64', 'd1, #5.000000e-01'), 0x7dc: ('vmov', 'd0, r0, r1'),
+        0x7e0: ('vcmpe.f64', 'd0, d1'), 0x7e4: ('vmrs', 'apsr_nzcv, fpscr'),
+        0x7e8: ('ble', '#'+hex(start+0x9f4)), 0x9a4: ('mov', 'r0, #0'),
+        0x9ac: ('str', 'r0, [sp, #0x10]'), 0x9cc: ('bl', '#0x176738'),
+        0xb98: ('bl', '#0x176738'), 0xdac: ('bl', '#0x176738'),
+    }
+    for off, (op, args) in checks.items():
+        check(start+off, op, args)
+    for instruction in dis.disasm(read(start+0x88, 0x7d0-0x88), start+0x88):
+        if instruction.mnemonic.startswith(('str', 'stm')) and '[sp, #0x40]' in instruction.op_str:
+            raise ValueError('building shadow pointer overwritten')
     return {'apk_sha256': APK_SHA256, 'native_library_sha256': LIB_SHA256,
             'settings': [{'section': x[0], 'key': x[1], 'alias': '__dt_setting_'+x[2], 'native_slot': x[3], 'default': 1} for x in SETTINGS],
             'particle_gates': {name: {'address': hex(v[0]), 'sha256': v[2], 'slot': 49} for name, v in PARTICLES.items()},
-            'shadow_gates': {name: {'address': hex(v[0]), 'sha256': v[1], 'slot': 86} for name, v in {**SHADOW_OBJECTS, **ACTION_SHADOW_OBJECTS}.items()},
+            'shadow_gates': {name: {'address': hex(v[0]), 'sha256': v[1], 'slot': 86} for name, v in {**SHADOW_OBJECTS, **ACTION_SHADOW_OBJECTS, 'par_building': (0x3936e0, '9bb63888bd5e63c006e5238daabbd08185b25a8ee9e6f154f7313589b965dcb7')}.items()},
             'limitations': 'Static ARM32 and partial source only; original names, full particle functions, non-finite values, GameMaker compiler, actual display/settings UI, gameplay and iOS unverified.'}
 
 

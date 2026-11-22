@@ -10,6 +10,11 @@ from pathlib import Path
 import shutil
 
 try:
+    from tools.deadtown_settings_particle_evidence import ROOF_SHADOW
+except ModuleNotFoundError:
+    from deadtown_settings_particle_evidence import ROOF_SHADOW
+
+try:
     from tools.deadtown_settings_particle_evidence import PARTICLES, SETTINGS, SHADOW, SHADOW_OBJECTS, ACTION_SHADOW, ACTION_SHADOW_OBJECTS, shadow_source, verify_source
 except ModuleNotFoundError:
     from deadtown_settings_particle_evidence import PARTICLES, SETTINGS, SHADOW, SHADOW_OBJECTS, ACTION_SHADOW, ACTION_SHADOW_OBJECTS, shadow_source, verify_source
@@ -27,6 +32,9 @@ EXPECTED = [
     'SETTINGS_PARTICLE_VM:action-off:0',
     'SETTINGS_PARTICLE_VM:action-half:0',
     'SETTINGS_PARTICLE_VM:action-on:3',
+    'SETTINGS_PARTICLE_VM:roof-off:0:2',
+    'SETTINGS_PARTICLE_VM:roof-half:0:2',
+    'SETTINGS_PARTICLE_VM:roof-on:1:2',
 ]
 PART_BUILTINS = {'part_emitter_region': 1, 'part_type_direction': 2,
                  'part_emitter_burst': 3, 'part_type_size': 4, 'part_type_orientation': 5}
@@ -47,6 +55,16 @@ def instrument(events, project):
         if text.count(ACTION_SHADOW) != 1:
             raise ValueError('unexpected action Draw fragment')
         action_fragment += ACTION_SHADOW.replace('draw_sprite_ext(sprite_index,image_index,xx+shake_x,yy+shake_y,image_xscale,image_yscale,image_angle,c_black,0.5)', 'global.__dt_shadow_calls += 1;') + '\n'
+    roof_text = shadow_source(project, 'par_building')
+    if roof_text.count(ROOF_SHADOW) != 1:
+        raise ValueError('unexpected roof Draw fragment')
+    roof_fragment = ROOF_SHADOW.replace('draw_sprite_ext(roof_sprite,0,xx,yy,image_xscale,image_yscale,image_angle,c_black,0.3*roof_alpha)', 'global.__dt_shadow_calls += 1;')
+    foreground = roof_text.split(ROOF_SHADOW)[1]
+    foreground = foreground.replace('draw_sprite_ext(mask_index,0,x,y,image_xscale,image_yscale,image_angle,c_white,1)', 'global.__dt_self_calls += 1;')
+    foreground = foreground.replace('draw_sprite_ext(roof_sprite,0,x,y,image_xscale,image_yscale,image_angle,roof_color,roof_alpha)', 'global.__dt_self_calls += 1;')
+    if foreground.count('global.__dt_self_calls += 1;') != 2 or 'draw_' in foreground:
+        raise ValueError('unexpected roof foreground fragment')
+    roof_fragment += foreground
     found = [e for e in events if e.get('object') == 'sys_global' and
              e.get('attributes', {}).get('eventtype') == '0' and
              e.get('attributes', {}).get('enumb') == '0']
@@ -95,6 +113,15 @@ show_debug_message("SETTINGS_PARTICLE_VM:action-half:" + string(global.__dt_shad
 global.__dt_shadow_calls = 0; global.__dt_setting_shadow = 1;
 {action_fragment}
 show_debug_message("SETTINGS_PARTICLE_VM:action-on:" + string(global.__dt_shadow_calls));
+global.__dt_shadow_calls = 0; global.__dt_self_calls = 0; global.__dt_setting_shadow = 0;
+{roof_fragment}
+show_debug_message("SETTINGS_PARTICLE_VM:roof-off:" + string(global.__dt_shadow_calls) + ":" + string(global.__dt_self_calls));
+global.__dt_shadow_calls = 0; global.__dt_self_calls = 0; global.__dt_setting_shadow = 0.5;
+{roof_fragment}
+show_debug_message("SETTINGS_PARTICLE_VM:roof-half:" + string(global.__dt_shadow_calls) + ":" + string(global.__dt_self_calls));
+global.__dt_shadow_calls = 0; global.__dt_self_calls = 0; global.__dt_setting_shadow = 1;
+{roof_fragment}
+show_debug_message("SETTINGS_PARTICLE_VM:roof-on:" + string(global.__dt_shadow_calls) + ":" + string(global.__dt_self_calls));
 global.__dt_ini_has = 0;
 '''
     found[0]['gml'] = prefix + found[0]['gml']

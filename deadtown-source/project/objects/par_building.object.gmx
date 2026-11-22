@@ -199,7 +199,11 @@ else
     yy = y + lengthdir_y(20,dir)
 }
 
-draw_sprite_ext(roof_sprite,0,xx,yy,image_xscale,image_yscale,image_angle,c_black,0.3*roof_alpha)
+// Partial native candidate: global slot 86 gates this roof shadow.
+if (global.__dt_setting_shadow > 0.5)
+{
+    draw_sprite_ext(roof_sprite,0,xx,yy,image_xscale,image_yscale,image_angle,c_black,0.3*roof_alpha)
+}
 
 
 draw_sprite_ext(mask_index,0,x,y,image_xscale,image_yscale,image_angle,c_white,1)

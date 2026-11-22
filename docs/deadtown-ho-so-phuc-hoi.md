@@ -845,8 +845,8 @@ resource ID, renderer hoặc iOS.
 Đã đối chiếu bảy global slot với key INI và mặc định, thêm alias trung tính
 vào setting_load/save. Slot 49 tương ứng `effect/particle` cũng được bốn script
 particle đọc trước khi vào phần xử lý; source cũ thêm gate 0,5. Thêm gate
-bóng ở sáu Draw event (`par_solid`, `par_vehicle`, `obj_parcel` và ba object
-`par_action`) theo slot 86; không tắt `draw_self` ở ba event có lời gọi đó.
+bóng ở bảy Draw event (`par_solid`, `par_vehicle`, `obj_parcel`, `par_building`
+và ba object `par_action`) theo slot 86; không tắt các lệnh vẽ foreground.
 Kiểm tĩnh và VM mock, cùng giới hạn, được trình bày tại
 [deadtown-settings-particle.md](deadtown-settings-particle.md). Không coi UI,
 hiệu ứng thực, gameplay hoặc iOS đã được xác nhận.
