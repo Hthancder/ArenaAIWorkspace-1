@@ -2758,10 +2758,10 @@ index bda7b42..0bbd995 100644
 +.monitor-bar { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
 +#mon-last { font-size:11px; }
 diff --git a/embedded_resources/web_interface/index.html b/embedded_resources/web_interface/index.html
-index 5290300..2bcae33 100644
+index 5290300..654e707 100644
 --- a/embedded_resources/web_interface/index.html
 +++ b/embedded_resources/web_interface/index.html
-@@ -1,700 +1,1172 @@
+@@ -1,700 +1,1218 @@
  <!doctype html>
  <html lang="en">
 -  <head>
@@ -2943,8 +2943,8 @@ index 5290300..2bcae33 100644
 +          <label class="sl-inline-label" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="mon-auto" checked /> Auto 3s</label>
 +          <button type="button" class="btn-action btn-default" id="mon-refresh">Refresh Now</button>
 +          <span id="mon-last" class="mono muted-sm">--</span>
-+        </div>
-+      </div>
+         </div>
+       </div>
 +
 +      <div class="seclab-subtabs" role="tablist" aria-label="Monitor sections">
 +        <button type="button" class="slab-btn active" data-monslab="overview" aria-selected="true">Tổng quan</button>
@@ -3068,10 +3068,10 @@ index 5290300..2bcae33 100644
 +          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/sonar_guard.log')">Sonar Log</button>
 +          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/lan_audit.json')">LAN JSON</button>
 +          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/napt_http_findings.json')">HTTP Findings</button>
-         </div>
++        </div>
 +        <strong class="sl-sub sl-mt">SecLab+ Live Feed (mirror)</strong>
 +        <div id="mon-plus-feed" class="sl-scroll sl-mt"></div>
-       </div>
++      </div>
 +
 +    </section>
 +      </div>
@@ -3097,6 +3097,7 @@ index 5290300..2bcae33 100644
 +        <button type="button" class="slab-btn" data-stslab="mic">Mic & Sonar</button>
 +        <button type="button" class="slab-btn" data-stslab="qr">QRCodes</button>
 +        <button type="button" class="slab-btn" data-stslab="clock">Clock & More</button>
++        <button type="button" class="slab-btn" data-stslab="badusb">BadUSB Auto-Run</button>
 +      </div>
 +      <div id="st-msg" class="ota-status hidden" role="status" aria-live="polite" style="margin:10px 16px 0"></div>
 +
@@ -3204,6 +3205,51 @@ index 5290300..2bcae33 100644
 +            <div class="kv-item"><span>OTA Max</span><b id="st-dual-max">--</b></div>
 +          </div>
 +          <div class="sl-row sl-mt"><button type="button" class="btn-action" id="st-dual-xiaozhi">Switch to XiaoZhi</button><button type="button" class="btn-action" id="st-dual-menu">Reboot to Boot Menu</button></div>
++        </details>
++      </div>
++
++      <!-- BadUSB Auto-Run -->
++      <div id="stslab-badusb" class="slab-view hidden">
++        <div class="dash-card dash-card-wide">
++          <div class="dash-card-head"><h3>BadUSB Auto-Run — Plug & Run Payload</h3><span id="st-badusb-badge" class="sl-badge">OFF</span></div>
++          <p class="muted-sm">Cắm vào máy là chạy luôn DuckyScript đã chuẩn bị. 3s đếm ngược để hủy bằng bất kỳ nút nào. Lưu trong <code>bruce.conf</code>.</p>
++          <div class="kv-grid sl-mt">
++            <div class="kv-item"><span>Enabled</span><b id="st-badusb-enabled">--</b></div>
++            <div class="kv-item"><span>Armed</span><b id="st-badusb-armed">--</b></div>
++            <div class="kv-item"><span>Payload</span><b id="st-badusb-payload">--</b></div>
++            <div class="kv-item"><span>Trigger / RunOnce</span><b id="st-badusb-trigger">--</b></div>
++            <div class="kv-item"><span>Delay after mount</span><b id="st-badusb-delay">--</b></div>
++            <div class="kv-item"><span>Confirm Window</span><b id="st-badusb-confirm">--</b></div>
++          </div>
++          <div class="sl-row sl-mt">
++            <label class="sl-inline-label" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="st-badusb-enabled-toggle" /> Enable Auto-Run</label>
++            <button type="button" class="btn-action" id="st-badusb-test">Test Run Now</button>
++            <button type="button" class="btn-action" id="st-badusb-clear">Clear Payload</button>
++          </div>
++          <div class="sl-row sl-mt">
++            <input type="text" id="st-badusb-fs" placeholder="FS (LittleFS or SD)" class="sl-input" style="max-width:140px" value="LittleFS" />
++            <input type="text" id="st-badusb-path" placeholder="/payload.txt or /badusb/demo.txt" class="sl-input" style="flex:1;min-width:180px" />
++            <button type="button" class="btn-action btn-default" id="st-badusb-set-payload">Set Payload</button>
++          </div>
++          <div class="sl-row sl-mt">
++            <input type="number" id="st-badusb-delayMs" min="0" max="10000" step="100" placeholder="delayMs" class="sl-input" style="max-width:120px" />
++            <button type="button" class="btn-action" id="st-badusb-set-delay">Set Delay (ms)</button>
++            <select id="st-badusb-trigger-sel" class="sl-input" style="max-width:160px"><option value="0">On Enumeration</option><option value="1">On VBUS</option><option value="2">Delayed +2s</option></select>
++            <button type="button" class="btn-action" id="st-badusb-set-trigger">Set Trigger</button>
++          </div>
++          <div class="sl-row sl-mt">
++            <label class="sl-inline-label" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="st-badusb-confirm-toggle" /> Confirm 3s window</label>
++            <input type="number" id="st-badusb-confirmMs" min="1000" max="10000" step="500" placeholder="confirmMs" class="sl-input" style="max-width:120px" />
++            <button type="button" class="btn-action" id="st-badusb-set-confirm">Set Confirm</button>
++            <label class="sl-inline-label" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="st-badusb-once-toggle" /> Run once per plug</label>
++            <button type="button" class="btn-action" id="st-badusb-set-once">Set Once</button>
++          </div>
++          <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/')">Browse Files → Pick payload</button><button type="button" class="btn-action" onclick="quickCli('badusb')">Open BadUSB (device)</button></div>
++          <div id="st-badusb-msg" class="ota-status hidden" style="margin-top:8px"></div>
++        </div>
++        <details class="sl-group" open>
++          <summary><span>How it works</span><span class="sl-badge">3s cancel</span></summary>
++          <p class="muted-sm sl-mt">1. Chọn payload DuckyScript trong <b>LittleFS</b> hoặc <b>SD</b> (ví dụ <code>/payload.txt</code>). 2. Bật <b>Enable</b>. 3. Cắm USB vào host — firmware đợi <b>delayMs</b> sau khi <code>tud_mounted()</code>, hiện countdown <b>confirmMs</b> (mặc định 3000ms), bấm bất kỳ nút để hủy, không thì chạy <code>key_input()</code>. Lưu persistent trong <code>bruce.conf → badUsbAutoRun</code>. Trigger: Enumeration (mặc định), VBUS, hoặc Delayed thêm 2s.</p>
 +        </details>
 +      </div>
 +
@@ -4077,11 +4123,8 @@ index 5290300..2bcae33 100644
 +          <input type="text" id="console-in" placeholder="Enter Bruce CLI command (Arrow Up/Down for history)..." autocomplete="off" />
 +          <button type="button" class="btn-action btn-default" id="console-run">Run</button>
 +          <button type="button" class="btn-action" id="console-clear">Clear</button>
-         </div>
-       </div>
--      <div class="dialog editor hidden">
--        <div class="dialog-head">
--          Edit: <span class="editor-file-name"></span>
++        </div>
++      </div>
 +    </section>
 +
 +    <!-- TAB 6: SECLAB -->
@@ -4095,8 +4138,11 @@ index 5290300..2bcae33 100644
 +        <div class="seclab-bar-actions">
 +          <button type="button" class="btn-action" id="sl-refresh">Refresh Now</button>
 +          <button type="button" class="btn-action btn-danger" data-sl-action="stop_all" data-sl-confirm="Stop all stoppable SecLab+ tools? An in-progress pairing audit will finish on its own.">Stop All</button>
-+        </div>
-+      </div>
+         </div>
+       </div>
+-      <div class="dialog editor hidden">
+-        <div class="dialog-head">
+-          Edit: <span class="editor-file-name"></span>
 +
 +      <!-- Sub-tabs inside SecLab -->
 +      <div class="seclab-subtabs" role="tablist" aria-label="SecLab sections">
@@ -4122,11 +4168,7 @@ index 5290300..2bcae33 100644
 +          <div class="ov-tile"><strong>LAN Audit</strong><b id="ov-lan">0 / 0</b><small class="muted-sm">Devices / Findings</small><button type="button" class="btn-action sl-mt" data-slab-jump="lan">Mở LAN & HTTP →</button></div>
 +          <div class="ov-tile"><strong>BLE / HID</strong><b id="ov-ble">IDLE</b><small class="muted-sm"><span id="ov-ble-detail">GATT findings · LED link</span></small><button type="button" class="btn-action sl-mt" data-slab-jump="ble">Mở BLE & HID →</button></div>
 +          <div class="ov-tile"><strong>USB Vault</strong><b id="ov-studio">IDLE · 0 files</b><small class="muted-sm"><span id="ov-studio-detail">/usb_vault · BadUSB payloads</span></small><button type="button" class="btn-action sl-mt" data-slab-jump="studio">Mở USB Vault →</button></div>
-         </div>
--        <div class="dialog-body">
--          <div class="editor-container">
--            <div class="line-numbers"></div>
--            <textarea class="file-content" style="resize: none"></textarea>
++        </div>
 +
 +        <!-- Hidden compact kv summary (IDs kept for JS, visually compact) -->
 +        <div class="ov-kv-compact sl-mt">
@@ -4147,11 +4189,8 @@ index 5290300..2bcae33 100644
 +          <div class="sl-row sl-mt">
 +            <span id="sl-plus-badge" class="sl-badge">READY</span>
 +            <small class="muted-sm">Dừng nhanh: <em>Stop All</em> không hủy pairing audit đang chạy.</small>
-           </div>
-         </div>
--        <div class="dialog-footer">
--          <button class="btn-action act-save-edit-file" title="CTRL + S">
--            Save
++          </div>
++        </div>
 +
 +        <div class="sl-row sl-mt">
 +          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/pmkid/all.hc22000')">PMKID Hash</button>
@@ -4159,7 +4198,11 @@ index 5290300..2bcae33 100644
 +          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/napt_http_findings.json')">HTTP Findings</button>
 +          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/led_link/exfil.txt')">LED Exfil</button>
 +          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/ble_security_audit.json')">GATT Audit</button>
-+        </div>
+         </div>
+-        <div class="dialog-body">
+-          <div class="editor-container">
+-            <div class="line-numbers"></div>
+-            <textarea class="file-content" style="resize: none"></textarea>
 +        <strong class="sl-sub sl-mt">Live SecLab+ Feed</strong>
 +        <div id="sl-plus-feed" class="sl-scroll sl-mt"></div>
 +      </div>
@@ -4176,7 +4219,7 @@ index 5290300..2bcae33 100644
 +            <input type="text" id="sl-napt-ssid" placeholder="Optional uplink SSID (blank = current STA)" />
 +            <input type="password" id="sl-napt-pwd" placeholder="Uplink Wi-Fi password (if needed)" />
 +            <button type="button" class="btn-action" onclick="openWifiModal()">Scan WiFi</button>
-+          </div>
+           </div>
 +          <div class="sl-row sl-mt">
 +            <button type="button" class="btn-action btn-default" id="sl-napt-start">Start NAPT Router</button>
 +            <button type="button" class="btn-action btn-danger" id="sl-napt-stop">Stop NAPT</button>
@@ -4209,7 +4252,10 @@ index 5290300..2bcae33 100644
 +              </div>
 +            </div>
 +          </details>
-+        </div>
+         </div>
+-        <div class="dialog-footer">
+-          <button class="btn-action act-save-edit-file" title="CTRL + S">
+-            Save
 +
 +        <details class="sl-group">
 +          <summary><span>CH1–13 Estimated Load &amp; Hidden SSIDs <small class="muted-sm">— packet-based, not measured airtime</small></span><span id="sl-air-best" class="sl-badge">BEST CH --</span></summary>
@@ -4425,8 +4471,8 @@ index 5290300..2bcae33 100644
 +        <div style="display:flex;gap:6px;align-items:center">
 +          <button type="button" class="btn-action" onclick="openWifiModal()" style="padding:3px 8px;font-size:11px">LAN WiFi</button>
 +          <a class="btn-action" href="/ota" target="_blank" style="padding:3px 8px;font-size:11px">Standalone Page</a>
-         </div>
-       </div>
++        </div>
++      </div>
 +      <div class="dialog-body">
 +        <p style="font-size:12px;color:var(--muted);margin-bottom:6px">
 +          Active: <b id="ota-cur-slot" style="color:var(--color)">--</b> &bull;
@@ -4443,8 +4489,8 @@ index 5290300..2bcae33 100644
 +        <div id="ota-prog" class="ota-prog hidden">
 +          <div class="ota-bar-bg"><div id="ota-bar-fill" class="ota-bar-fill"></div></div>
 +          <div class="ota-prog-txt"><span id="ota-prog-msg">Uploading...</span><span id="ota-prog-pct">0%</span></div>
-+        </div>
-+      </div>
+         </div>
+       </div>
 +      <div class="dialog-footer">
 +        <button id="ota-cancel-btn" class="btn-action btn-danger hidden">Cancel</button>
 +        <button id="ota-start-btn" class="btn-action btn-default" disabled>Flash OTA Firmware</button>
@@ -4570,7 +4616,7 @@ index 5290300..2bcae33 100644
 +</body>
  </html>
 diff --git a/embedded_resources/web_interface/index.js b/embedded_resources/web_interface/index.js
-index fd61602..a0cd7fa 100644
+index fd61602..1b39823 100644
 --- a/embedded_resources/web_interface/index.js
 +++ b/embedded_resources/web_interface/index.js
 @@ -6,20 +6,17 @@ const T = {
@@ -6651,7 +6697,7 @@ index fd61602..a0cd7fa 100644
      return;
    }
  
-@@ -1062,662 +1531,1397 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1062,662 +1531,1470 @@ $(".container").addEventListener("click", async (e) => {
    if (actPlay) {
      e.preventDefault();
      let cmd = actPlay.getAttribute("data-cmd");
@@ -7082,6 +7128,52 @@ index fd61602..a0cd7fa 100644
 +let studioLastSys = null;
 +let studioLastSecLab = null;
 +let studioLastQr = null;
++let studioLastBadusb = null;
++
++// BadUSB Auto-Run — WebUI controls
++document.getElementById("st-badusb-set-payload")?.addEventListener("click", async ()=>{
++  const fs=document.getElementById("st-badusb-fs")?.value.trim()||"LittleFS";
++  const path=document.getElementById("st-badusb-path")?.value.trim();
++  const msgBox=document.getElementById("st-badusb-msg");
++  if(!path){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent="Enter payload path"; msgBox.classList.remove("hidden"); } return; }
++  try{ const raw=await requestPost("/badusb/autorun",{action:"setpayload", payloadFs:fs, payloadPath:path}); const d=JSON.parse(raw); if(msgBox){ msgBox.className="ota-status "+(d.ok?"ok":"err"); msgBox.textContent=d.msg||""; msgBox.classList.remove("hidden"); } refreshStudio(); } catch(e){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message; msgBox.classList.remove("hidden"); } }
++});
++document.getElementById("st-badusb-enabled-toggle")?.addEventListener("change", async (e)=>{
++  const msgBox=document.getElementById("st-badusb-msg");
++  try{ const raw=await requestPost("/badusb/autorun",{action:"enable", enabled: e.target.checked?"1":"0"}); const d=JSON.parse(raw); if(msgBox){ msgBox.className="ota-status "+(d.ok?"ok":"err"); msgBox.textContent=d.msg||""; msgBox.classList.remove("hidden"); } refreshStudio(); } catch(err){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=err.message; msgBox.classList.remove("hidden"); } }
++});
++document.getElementById("st-badusb-test")?.addEventListener("click", async ()=>{
++  const msgBox=document.getElementById("st-badusb-msg");
++  try{ const raw=await requestPost("/badusb/autorun",{action:"testrun"}); const d=JSON.parse(raw); if(msgBox){ msgBox.className="ota-status "+(d.ok?"ok":"err"); msgBox.textContent=d.msg||""; msgBox.classList.remove("hidden"); } } catch(e){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message; msgBox.classList.remove("hidden"); } }
++});
++document.getElementById("st-badusb-clear")?.addEventListener("click", async ()=>{
++  const msgBox=document.getElementById("st-badusb-msg");
++  try{ const raw=await requestPost("/badusb/autorun",{action:"clearpayload"}); const d=JSON.parse(raw); if(msgBox){ msgBox.className="ota-status "+(d.ok?"ok":"err"); msgBox.textContent=d.msg||""; msgBox.classList.remove("hidden"); } const pathEl=document.getElementById("st-badusb-path"); if(pathEl) pathEl.value=""; refreshStudio(); } catch(e){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message; msgBox.classList.remove("hidden"); } }
++});
++document.getElementById("st-badusb-set-delay")?.addEventListener("click", async ()=>{
++  const v=document.getElementById("st-badusb-delayMs")?.value.trim();
++  const msgBox=document.getElementById("st-badusb-msg");
++  if(!v){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent="Enter delayMs 0-10000"; msgBox.classList.remove("hidden"); } return; }
++  try{ const raw=await requestPost("/badusb/autorun",{action:"setdelay", delayMs:v}); const d=JSON.parse(raw); if(msgBox){ msgBox.className="ota-status "+(d.ok?"ok":"err"); msgBox.textContent=d.msg||""; msgBox.classList.remove("hidden"); } refreshStudio(); } catch(e){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message; msgBox.classList.remove("hidden"); } }
++});
++document.getElementById("st-badusb-set-trigger")?.addEventListener("click", async ()=>{
++  const v=document.getElementById("st-badusb-trigger-sel")?.value||"0";
++  const msgBox=document.getElementById("st-badusb-msg");
++  try{ const raw=await requestPost("/badusb/autorun",{action:"settrigger", trigger:v}); const d=JSON.parse(raw); if(msgBox){ msgBox.className="ota-status "+(d.ok?"ok":"err"); msgBox.textContent=d.msg||""; msgBox.classList.remove("hidden"); } refreshStudio(); } catch(e){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message; msgBox.classList.remove("hidden"); } }
++});
++document.getElementById("st-badusb-set-confirm")?.addEventListener("click", async ()=>{
++  const cw=document.getElementById("st-badusb-confirm-toggle")?.checked?"1":"0";
++  const ms=document.getElementById("st-badusb-confirmMs")?.value.trim()||"3000";
++  const msgBox=document.getElementById("st-badusb-msg");
++  try{ const raw=await requestPost("/badusb/autorun",{action:"setconfirm", confirmWindow:cw, confirmMs:ms}); const d=JSON.parse(raw); if(msgBox){ msgBox.className="ota-status "+(d.ok?"ok":"err"); msgBox.textContent=d.msg||""; msgBox.classList.remove("hidden"); } refreshStudio(); } catch(e){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message; msgBox.classList.remove("hidden"); } }
++});
++document.getElementById("st-badusb-set-once")?.addEventListener("click", async ()=>{
++  const ro=document.getElementById("st-badusb-once-toggle")?.checked?"1":"0";
++  const msgBox=document.getElementById("st-badusb-msg");
++  try{ const raw=await requestPost("/badusb/autorun",{action:"setrunonce", runOncePerPlug:ro}); const d=JSON.parse(raw); if(msgBox){ msgBox.className="ota-status "+(d.ok?"ok":"err"); msgBox.textContent=d.msg||""; msgBox.classList.remove("hidden"); } refreshStudio(); } catch(e){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message; msgBox.classList.remove("hidden"); } }
++});
++document.getElementById("st-badusb-path")?.addEventListener("input", (e)=>{ e.target.dataset.touched="1"; });
++
 +function startStudioPoll(){
 +  stopStudioPoll();
 +  studioTimer = setInterval(()=>{
@@ -7376,10 +7468,15 @@ index fd61602..a0cd7fa 100644
 +    const sysP = requestGet("/systeminfo").then(j=>JSON.parse(j)).catch(()=>null);
 +    const secP = requestGet("/seclab/status").then(j=>JSON.parse(j)).catch(()=>null);
 +    const qrP = requestGet("/studio/qrcodes").then(j=>JSON.parse(j)).catch(()=>null);
-+    const [sys, sec, qr] = await Promise.all([sysP, secP, qrP]);
++    const badusbP = requestGet("/badusb/autorun").then(j=>JSON.parse(j)).catch(()=>null);
++    const [sys, sec, qr, badusb] = await Promise.all([sysP, secP, qrP, badusbP]);
 +    if(sys) studioLastSys = sys;
 +    if(sec) studioLastSecLab = sec;
 +    if(qr && qr.qrcodes) studioLastQr = qr.qrcodes;
++    if(badusb) studioLastBadusb = badusb;
++    if(!studioLastBadusb && isPreview){
++      studioLastBadusb = {enabled:false, armed:false, running:false, payloadFs:"LittleFS", payloadPath:"/payload.txt", payloadLabel:"LittleFS:/payload.txt", delayMs:1500, confirmWindow:true, confirmMs:3000, trigger:0, runOncePerPlug:true, lastMounted:false};
++    }
 +    if(!studioLastSys && isPreview){
 +      studioLastSys = {BRUCE_VERSION:"1.17-preview", BOARD:"DSolution 1.83 2-Mic", OWNER:"DSolution", MAC:"AA:BB:CC:DD:EE:FF", UPTIME_SEC: 3421, BAT:76, BAT_MV:3980, CHG:true, CPU_MHZ:240, DUALBOOT:true, OTA_SLOT:"ota_1", OTA_NEXT:"ota_0", OTA_MAX:"4.0 MB"};
 +    }
@@ -7396,6 +7493,7 @@ index fd61602..a0cd7fa 100644
 +    renderStudioMic(studioLastSys, studioLastSecLab);
 +    renderStudioQr(studioLastQr);
 +    renderStudioClock(studioLastSys);
++    renderStudioBadusb(studioLastBadusb);
 +    if(msgBox){
 +      if(isPreview && !sys){ msgBox.className="ota-status ok"; msgBox.textContent="Preview mode \u2014 showing mock Studio data. Connect device for live."; msgBox.classList.remove("hidden"); }
 +      else msgBox.classList.add("hidden");
@@ -7494,6 +7592,27 @@ index fd61602..a0cd7fa 100644
 +  if(b){ b.textContent=sys.DUALBOOT?"DUAL":"single"; b.className="sl-badge "+(sys.DUALBOOT?"on":""); }
 +}
 +
++function renderStudioBadusb(b){
++  const d=b||studioLastBadusb||{};
++  const set=(id,txt)=>{ const el=document.getElementById(id); if(el) el.textContent=txt; };
++  const badge=(id,txt,cls)=>{ const el=document.getElementById(id); if(!el) return; el.textContent=txt; el.className="sl-badge "+(cls||""); };
++  const enabled = !!d.enabled; const armed=!!d.armed; const running=!!d.running;
++  set("st-badusb-enabled", enabled?"ON":"OFF");
++  set("st-badusb-armed", armed?"YES":"NO");
++  set("st-badusb-payload", d.payloadLabel|| (d.payloadPath? d.payloadFs+":"+d.payloadPath : "—"));
++  set("st-badusb-trigger", (d.trigger==1?"VBUS": d.trigger==2?"Delayed":"Enumeration")+" · " + (d.runOncePerPlug?"Once":"Loop"));
++  set("st-badusb-delay", (d.delayMs||0)+"ms");
++  set("st-badusb-confirm", d.confirmWindow? "ON "+(d.confirmMs||3000)+"ms":"OFF");
++  badge("st-badusb-badge", running?"RUNNING": enabled? (armed?"ARMED":"IDLE"):"OFF", running?"alert": enabled?"on":"");
++  const enToggle=document.getElementById("st-badusb-enabled-toggle"); if(enToggle) enToggle.checked=enabled;
++  const cToggle=document.getElementById("st-badusb-confirm-toggle"); if(cToggle) cToggle.checked=!!d.confirmWindow;
++  const onceToggle=document.getElementById("st-badusb-once-toggle"); if(onceToggle) onceToggle.checked=!!d.runOncePerPlug;
++  const fsEl=document.getElementById("st-badusb-fs"); if(fsEl && !fsEl.value) fsEl.value=d.payloadFs||"LittleFS";
++  const pathEl=document.getElementById("st-badusb-path"); if(pathEl && !pathEl.dataset.touched) pathEl.placeholder=d.payloadPath||"/payload.txt";
++  const delayEl=document.getElementById("st-badusb-delayMs"); if(delayEl) delayEl.placeholder=String(d.delayMs||1500);
++  const trigEl=document.getElementById("st-badusb-trigger-sel"); if(trigEl) trigEl.value=String(d.trigger||0);
++  const cmEl=document.getElementById("st-badusb-confirmMs"); if(cmEl) cmEl.placeholder=String(d.confirmMs||3000);
++}
 +function slEsc(s) {
 +  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 +}
@@ -7785,11 +7904,7 @@ index fd61602..a0cd7fa 100644
 +        `<div class="sl-item"><span>${slEsc(c.ip)}</span><small class="muted-sm">${slEsc(c.mac)}</small></div>`
 +      ).join("") || `<div class="sl-item muted-sm">No clients connected to AP</div>`;
 +    }
- 
--    if (start === end) {
--      // Single line - toggle comment
--      const { line, lineStart, lineEnd } = getCurrentLine(start);
--      const { line: newLine, offset: cursorOffset } = toggleComment(line);
++
 +    // #6 Sonar
 +    const sn = d.sonar || {};
 +    if ($("#sl-sonar-badge")) {
@@ -7809,10 +7924,10 @@ index fd61602..a0cd7fa 100644
 +      }).join("") || `<div class="sl-item muted-sm">Launch Others -> Sonar Guard on device</div>`;
 +    }
  
--      textarea.setSelectionRange(lineStart, lineEnd);
--      document.execCommand("insertText", false, newLine);
--      textarea.setSelectionRange(start + cursorOffset, start + cursorOffset);
--      return;
+-    if (start === end) {
+-      // Single line - toggle comment
+-      const { line, lineStart, lineEnd } = getCurrentLine(start);
+-      const { line: newLine, offset: cursorOffset } = toggleComment(line);
 +    // #8 Virtual USB Vault
 +    const u = d.usb || {};
 +    const vaultFiles = u.vaultFiles || [];
@@ -7828,6 +7943,26 @@ index fd61602..a0cd7fa 100644
 +        const fp = "/usb_vault/" + vf.name;
 +        return `<div class="sl-item"><span>${slEsc(vf.name)} <small class="muted-sm">${vf.size}B</small></span><span><a class="sl-tag" href="${IS_DEV ? "/bruce" : ""}/file?fs=LittleFS&amp;action=download&amp;name=${encodeURIComponent(fp)}">Get</a> <button type="button" class="sl-tag blk" data-sl-delete-vault="${slEsc(fp)}">Del</button></span></div>`;
 +      }).join("") || `<div class="sl-item muted-sm">/usb_vault is empty. Upload files or Ducky .txt!</div>`;
++    }
+ 
+-      textarea.setSelectionRange(lineStart, lineEnd);
+-      document.execCommand("insertText", false, newLine);
+-      textarea.setSelectionRange(start + cursorOffset, start + cursorOffset);
+-      return;
++    // #4 Air-Time & Hidden SSID
++    const air = d.airtime || {};
++    if ($("#sl-air-best")) {
++      const ch = Number(air.bestCh);
++      const score = Number(air.bestScore);
++      const partial = air.neighborsComplete === false ? " · PARTIAL" : "";
++      $("#sl-air-best").textContent = Number.isInteger(ch) && ch >= 1 && ch <= 13 && Number.isFinite(score) && score >= 0
++        ? `EST. BEST CH ${ch} (${score}%)${partial}` : Array.isArray(air.channels) && air.channels.length ? "SCAN INCOMPLETE" : "NO SCAN YET";
++    }
++    if ($("#sl-air-bars")) $("#sl-air-bars").innerHTML = renderAirChannelBars(air);
++    if ($("#sl-air-hidden")) {
++      $("#sl-air-hidden").innerHTML = (air.hidden || []).map((h) =>
++        `<div class="sl-item"><span>${slEsc(h.decloaked ? h.ssid : "<Hidden>")} <small class="muted-sm">${slEsc(h.bssid)}</small></span><span class="sl-tag ${h.decloaked ? "ok" : ""}">C${h.ch} ${h.rssi}dB</span></div>`
++      ).join("") || `<div class="sl-item muted-sm">No hidden SSIDs cached</div>`;
      }
  
 -    // Multiple lines - toggle comment for all lines
@@ -7872,20 +8007,13 @@ index fd61602..a0cd7fa 100644
 -        return commentIndent + commentStr + " " + line.slice(minIndentation);
 -      }
 -    });
-+    // #4 Air-Time & Hidden SSID
-+    const air = d.airtime || {};
-+    if ($("#sl-air-best")) {
-+      const ch = Number(air.bestCh);
-+      const score = Number(air.bestScore);
-+      const partial = air.neighborsComplete === false ? " · PARTIAL" : "";
-+      $("#sl-air-best").textContent = Number.isInteger(ch) && ch >= 1 && ch <= 13 && Number.isFinite(score) && score >= 0
-+        ? `EST. BEST CH ${ch} (${score}%)${partial}` : Array.isArray(air.channels) && air.channels.length ? "SCAN INCOMPLETE" : "NO SCAN YET";
-+    }
-+    if ($("#sl-air-bars")) $("#sl-air-bars").innerHTML = renderAirChannelBars(air);
-+    if ($("#sl-air-hidden")) {
-+      $("#sl-air-hidden").innerHTML = (air.hidden || []).map((h) =>
-+        `<div class="sl-item"><span>${slEsc(h.decloaked ? h.ssid : "<Hidden>")} <small class="muted-sm">${slEsc(h.bssid)}</small></span><span class="sl-tag ${h.decloaked ? "ok" : ""}">C${h.ch} ${h.rssi}dB</span></div>`
-+      ).join("") || `<div class="sl-item muted-sm">No hidden SSIDs cached</div>`;
++    // #2 Probe Radar & #12 BLE GATT
++    const prb = d.probe || {};
++    if ($("#sl-prb-stat")) $("#sl-prb-stat").textContent = `${(prb.devices || []).length} / ${prb.totalMacs || 0}`;
++    if ($("#sl-prb-list")) {
++      $("#sl-prb-list").innerHTML = (prb.devices || []).slice(0, 15).map((p) =>
++        `<div class="sl-item"><span>#${p.id} ${slEsc(p.os)} (${p.rot} MACs) <small class="muted-sm">${slEsc((p.pnls || []).join(", "))}</small></span><span class="sl-tag ${p.watched ? "blk" : ""}">${p.rssi}dB</span></div>`
++      ).join("") || `<div class="sl-item muted-sm">Run WiFi -> Probe Radar to cluster devices</div>`;
 +    }
  
 -    textarea.setSelectionRange(firstLineStart, lastLineEnd);
@@ -7895,13 +8023,16 @@ index fd61602..a0cd7fa 100644
 -      firstLineStart + newTextLines.join("\n").length,
 -    );
 -  };
-+    // #2 Probe Radar & #12 BLE GATT
-+    const prb = d.probe || {};
-+    if ($("#sl-prb-stat")) $("#sl-prb-stat").textContent = `${(prb.devices || []).length} / ${prb.totalMacs || 0}`;
-+    if ($("#sl-prb-list")) {
-+      $("#sl-prb-list").innerHTML = (prb.devices || []).slice(0, 15).map((p) =>
-+        `<div class="sl-item"><span>#${p.id} ${slEsc(p.os)} (${p.rot} MACs) <small class="muted-sm">${slEsc((p.pnls || []).join(", "))}</small></span><span class="sl-tag ${p.watched ? "blk" : ""}">${p.rssi}dB</span></div>`
-+      ).join("") || `<div class="sl-item muted-sm">Run WiFi -> Probe Radar to cluster devices</div>`;
++    const bg = d.bleGatt || {};
++    if ($("#sl-ble-phy")) {
++      $("#sl-ble-phy").textContent = `PHY ${bg.txPhy || "1M"}`;
++      $("#sl-ble-phy").className = "sl-badge " + (bg.connected ? "on" : "");
++    }
++    if ($("#sl-ble-mode")) $("#sl-ble-mode").textContent = `${bg.mode || "IDLE"}${bg.target ? " (" + bg.target + ")" : ""}`;
++    if ($("#sl-ble-profs")) {
++      $("#sl-ble-profs").innerHTML = (bg.profiles || []).map((gp) =>
++        `<div class="sl-item"><span>${slEsc(gp.name)} <small class="muted-sm">${slEsc(gp.addr)}</small></span><button type="button" class="sl-tag" data-sl-open-file="${slEsc(gp.path)}">${gp.services}S/${gp.chars}C</button></div>`
++      ).join("") || `<div class="sl-item muted-sm">No saved GATT profiles in /ble_gatt</div>`;
 +    }
  
 -  switch (e.key) {
@@ -7927,25 +8058,6 @@ index fd61602..a0cd7fa 100644
 -        return;
 -      }
 -      break;
--  }
-+    const bg = d.bleGatt || {};
-+    if ($("#sl-ble-phy")) {
-+      $("#sl-ble-phy").textContent = `PHY ${bg.txPhy || "1M"}`;
-+      $("#sl-ble-phy").className = "sl-badge " + (bg.connected ? "on" : "");
-+    }
-+    if ($("#sl-ble-mode")) $("#sl-ble-mode").textContent = `${bg.mode || "IDLE"}${bg.target ? " (" + bg.target + ")" : ""}`;
-+    if ($("#sl-ble-profs")) {
-+      $("#sl-ble-profs").innerHTML = (bg.profiles || []).map((gp) =>
-+        `<div class="sl-item"><span>${slEsc(gp.name)} <small class="muted-sm">${slEsc(gp.addr)}</small></span><button type="button" class="sl-tag" data-sl-open-file="${slEsc(gp.path)}">${gp.services}S/${gp.chars}C</button></div>`
-+      ).join("") || `<div class="sl-item muted-sm">No saved GATT profiles in /ble_gatt</div>`;
-+    }
- 
--  const nextChar = start < textarea.value.length ? textarea.value[start] : "";
--  const closers = [")", "}", "]", ">", '"', "'", "`"];
--  if (closers.includes(e.key) && nextChar === e.key) {
--    e.preventDefault();
--    handleSkipCloser();
--    return;
 -  }
 +    // SecLab+ 1A-4B control center
 +    const plus = d.plus || {};
@@ -7993,18 +8105,11 @@ index fd61602..a0cd7fa 100644
 +      pairMode.value = plus.pairJustWorks ? "justworks" : "mitm";
 +    }
  
--  const pairs = {
--    "(": ")",
--    "{": "}",
--    "[": "]",
--    '"': '"',
--    "'": "'",
--    "`": "`",
--    "<": ">",
--  };
--  if (e.key in pairs) {
+-  const nextChar = start < textarea.value.length ? textarea.value[start] : "";
+-  const closers = [")", "}", "]", ">", '"', "'", "`"];
+-  if (closers.includes(e.key) && nextChar === e.key) {
 -    e.preventDefault();
--    handleAutoPair(e.key);
+-    handleSkipCloser();
 -    return;
 +    const feed = [];
 +    const push = (label, value, cls) => feed.push(`<div class="sl-item"><span>${slEsc(label)}</span><span class="sl-tag ${cls || ""}">${slEsc(value)}</span></div>`);
@@ -8032,14 +8137,21 @@ index fd61602..a0cd7fa 100644
 +      secLabStatusErrShown = true;
 +    }
    }
--});
 +}
  
--$(".file-content").addEventListener("keyup", function (e) {
--  if ($(".dialog.editor:not(.hidden)")) {
--    $(".act-save-edit-file").disabled = !isModified(e.target);
--    // Update line numbers when content changes
--    updateLineNumbers();
+-  const pairs = {
+-    "(": ")",
+-    "{": "}",
+-    "[": "]",
+-    '"': '"',
+-    "'": "'",
+-    "`": "`",
+-    "<": ">",
+-  };
+-  if (e.key in pairs) {
+-    e.preventDefault();
+-    handleAutoPair(e.key);
+-    return;
 -  }
 -});
 +function playSonarWav(path) {
@@ -8050,10 +8162,11 @@ index fd61602..a0cd7fa 100644
 +  pl.play().catch(() => {});
 +}
  
--$(".file-content").addEventListener("scroll", function (e) {
+-$(".file-content").addEventListener("keyup", function (e) {
 -  if ($(".dialog.editor:not(.hidden)")) {
--    // Sync scrolling between textarea and line numbers
--    syncScrolling();
+-    $(".act-save-edit-file").disabled = !isModified(e.target);
+-    // Update line numbers when content changes
+-    updateLineNumbers();
 -  }
 -});
 +async function deleteVaultFile(path) {
@@ -8062,10 +8175,10 @@ index fd61602..a0cd7fa 100644
 +  refreshSecLab();
 +}
  
--$(".file-content").addEventListener("input", function (e) {
+-$(".file-content").addEventListener("scroll", function (e) {
 -  if ($(".dialog.editor:not(.hidden)")) {
--    // Update line numbers on any input change
--    updateLineNumbers();
+-    // Sync scrolling between textarea and line numbers
+-    syncScrolling();
 -  }
 +function slDelegatedAction(containerId, selector, handler) {
 +  const root = $(containerId);
@@ -8077,7 +8190,13 @@ index fd61602..a0cd7fa 100644
 +}
 +slDelegatedAction("#sl-blk-chips", "[data-napt-domain]", (el) => {
 +  naptPost({ action: el.dataset.naptAction || "unblock", domain: el.dataset.naptDomain || "" });
-+});
+ });
+-
+-$(".file-content").addEventListener("input", function (e) {
+-  if ($(".dialog.editor:not(.hidden)")) {
+-    // Update line numbers on any input change
+-    updateLineNumbers();
+-  }
 +slDelegatedAction("#sl-dns-feed", "[data-napt-domain]", (el) => {
 +  naptPost({ action: el.dataset.naptAction || "block", domain: el.dataset.naptDomain || "" });
 +});
@@ -8824,7 +8943,7 @@ index d8ec5e0..d1c5953 100644
  	; elecrow-28B
  	; elecrow-35B
 diff --git a/src/core/config.cpp b/src/core/config.cpp
-index e7ceca1..c855f38 100644
+index e7ceca1..3bc596c 100644
 --- a/src/core/config.cpp
 +++ b/src/core/config.cpp
 @@ -14,6 +14,8 @@ JsonDocument BruceConfig::toJson() const {
@@ -8849,7 +8968,7 @@ index e7ceca1..c855f38 100644
  
  #ifdef HAS_RGB_LED
      setting["ledBright"] = ledBright;
-@@ -74,6 +80,28 @@ JsonDocument BruceConfig::toJson() const {
+@@ -74,6 +80,38 @@ JsonDocument BruceConfig::toJson() const {
      setting["badUSBBLEKeyDelay"] = badUSBBLEKeyDelay;
      setting["badUSBBLEShowOutput"] = badUSBBLEShowOutput;
  
@@ -8875,10 +8994,20 @@ index e7ceca1..c855f38 100644
 +    _seclabPlus["chainPortalLanAuto"] = seclabPlus.chainPortalLanAuto;
 +    _seclabPlus["chainGuardAuditAuto"] = seclabPlus.chainGuardAuditAuto;
 +
++    JsonObject _badUsbAuto = setting["badUsbAutoRun"].to<JsonObject>();
++    _badUsbAuto["enabled"] = badUsbAutoRun.enabled;
++    _badUsbAuto["payloadPath"] = badUsbAutoRun.payloadPath;
++    _badUsbAuto["payloadFs"] = badUsbAutoRun.payloadFs;
++    _badUsbAuto["delayMs"] = badUsbAutoRun.delayMs;
++    _badUsbAuto["confirmWindow"] = badUsbAutoRun.confirmWindow;
++    _badUsbAuto["confirmMs"] = badUsbAutoRun.confirmMs;
++    _badUsbAuto["runOncePerPlug"] = badUsbAutoRun.runOncePerPlug;
++    _badUsbAuto["trigger"] = badUsbAutoRun.trigger;
++
      JsonArray dm = setting["disabledMenus"].to<JsonArray>();
      for (int i = 0; i < disabledMenus.size(); i++) { dm.add(disabledMenus[i]); }
  
-@@ -160,6 +188,16 @@ void BruceConfig::fromFile(bool checkFS) {
+@@ -160,6 +198,16 @@ void BruceConfig::fromFile(bool checkFS) {
          count++;
          log_e("Fail");
      }
@@ -8895,7 +9024,7 @@ index e7ceca1..c855f38 100644
      if (!setting["bright"].isNull()) {
          bright = setting["bright"].as<int>();
      } else {
-@@ -208,6 +246,11 @@ void BruceConfig::fromFile(bool checkFS) {
+@@ -208,6 +256,11 @@ void BruceConfig::fromFile(bool checkFS) {
          count++;
          log_e("Fail");
      }
@@ -8907,7 +9036,7 @@ index e7ceca1..c855f38 100644
      if (!setting["instantBoot"].isNull()) {
          instantBoot = setting["instantBoot"].as<int>();
      } else {
-@@ -219,6 +262,21 @@ void BruceConfig::fromFile(bool checkFS) {
+@@ -219,6 +272,21 @@ void BruceConfig::fromFile(bool checkFS) {
      } else {
          keyboardLang = "QWERTY";
      }
@@ -8929,7 +9058,7 @@ index e7ceca1..c855f38 100644
  
  #ifdef HAS_RGB_LED
      if (!setting["ledBright"].isNull()) {
-@@ -415,6 +473,34 @@ void BruceConfig::fromFile(bool checkFS) {
+@@ -415,6 +483,46 @@ void BruceConfig::fromFile(bool checkFS) {
          log_e("Fail");
      }
  
@@ -8960,11 +9089,23 @@ index e7ceca1..c855f38 100644
 +        if (!sp["chainGuardAuditAuto"].isNull()) seclabPlus.chainGuardAuditAuto = sp["chainGuardAuditAuto"].as<bool>();
 +        validateSecLabPlus();
 +    }
++    if (!setting["badUsbAutoRun"].isNull()) {
++        JsonObject ba = setting["badUsbAutoRun"].as<JsonObject>();
++        if (!ba["enabled"].isNull()) badUsbAutoRun.enabled = ba["enabled"].as<bool>();
++        if (!ba["payloadPath"].isNull()) badUsbAutoRun.payloadPath = ba["payloadPath"].as<String>();
++        if (!ba["payloadFs"].isNull()) badUsbAutoRun.payloadFs = ba["payloadFs"].as<String>();
++        if (!ba["delayMs"].isNull()) badUsbAutoRun.delayMs = ba["delayMs"].as<uint16_t>();
++        if (!ba["confirmWindow"].isNull()) badUsbAutoRun.confirmWindow = ba["confirmWindow"].as<bool>();
++        if (!ba["confirmMs"].isNull()) badUsbAutoRun.confirmMs = ba["confirmMs"].as<uint16_t>();
++        if (!ba["runOncePerPlug"].isNull()) badUsbAutoRun.runOncePerPlug = ba["runOncePerPlug"].as<bool>();
++        if (!ba["trigger"].isNull()) badUsbAutoRun.trigger = ba["trigger"].as<uint8_t>();
++        validateBadUsbAutoRun();
++    }
 +
      if (!setting["disabledMenus"].isNull()) {
          disabledMenus.clear();
          JsonArray dm = setting["disabledMenus"].as<JsonArray>();
-@@ -474,11 +560,16 @@ void BruceConfig::factoryReset() {
+@@ -474,11 +582,16 @@ void BruceConfig::factoryReset() {
  
  void BruceConfig::validateConfig() {
      validateDimmerValue();
@@ -8981,7 +9122,7 @@ index e7ceca1..c855f38 100644
  #ifdef HAS_RGB_LED
      validateLedBrightValue();
      validateLedColorValue();
-@@ -493,6 +584,7 @@ void BruceConfig::validateConfig() {
+@@ -493,6 +606,7 @@ void BruceConfig::validateConfig() {
      validateMainMenuStyle();
      validateBadUSBBLEKeyboardLayout();
      validateBadUSBBLEKeyDelay();
@@ -8989,7 +9130,7 @@ index e7ceca1..c855f38 100644
      validateEvilEndpointCreds();
      validateEvilEndpointSsid();
      validateEvilPasswordMode();
-@@ -511,8 +603,29 @@ void BruceConfig::setDimmer(int value) {
+@@ -511,8 +625,29 @@ void BruceConfig::setDimmer(int value) {
  }
  
  void BruceConfig::validateDimmerValue() {
@@ -9021,7 +9162,7 @@ index e7ceca1..c855f38 100644
  }
  
  void BruceConfig::setBright(uint8_t value) {
-@@ -580,6 +693,58 @@ void BruceConfig::validateWifiAtStartupValue() {
+@@ -580,6 +715,58 @@ void BruceConfig::validateWifiAtStartupValue() {
      if (wifiAtStartup > 1) wifiAtStartup = 1;
  }
  
@@ -9080,7 +9221,7 @@ index e7ceca1..c855f38 100644
  #ifdef HAS_RGB_LED
  void BruceConfig::setLedBright(int value) {
      ledBright = value;
-@@ -801,7 +966,7 @@ void BruceConfig::setMainMenuStyle(int value) {
+@@ -801,7 +988,7 @@ void BruceConfig::setMainMenuStyle(int value) {
  
  void BruceConfig::validateMainMenuStyle() {
      if (mainMenuStyle < MAIN_MENU_CAROUSEL || mainMenuStyle > MAIN_MENU_GRID)
@@ -9089,7 +9230,7 @@ index e7ceca1..c855f38 100644
  }
  
  void BruceConfig::setBadUSBBLEKeyboardLayout(int value) {
-@@ -829,6 +994,23 @@ void BruceConfig::setBadUSBBLEShowOutput(bool value) {
+@@ -829,6 +1016,44 @@ void BruceConfig::setBadUSBBLEShowOutput(bool value) {
      badUSBBLEShowOutput = value;
      saveFile();
  }
@@ -9110,14 +9251,35 @@ index e7ceca1..c855f38 100644
 +    if (seclabPlus.csaBursts > 20) seclabPlus.csaBursts = 20;
 +}
 +
++void BruceConfig::setBadUsbAutoRunEnabled(bool v) { badUsbAutoRun.enabled = v; validateBadUsbAutoRun(); saveFile(); }
++void BruceConfig::setBadUsbAutoRunPayload(const String &fs, const String &path) { badUsbAutoRun.payloadFs = fs; badUsbAutoRun.payloadPath = path; validateBadUsbAutoRun(); saveFile(); }
++void BruceConfig::setBadUsbAutoRunDelayMs(uint16_t v) { badUsbAutoRun.delayMs = v; validateBadUsbAutoRun(); saveFile(); }
++void BruceConfig::setBadUsbAutoRunConfirm(bool v, uint16_t ms) { badUsbAutoRun.confirmWindow = v; if (ms) badUsbAutoRun.confirmMs = ms; validateBadUsbAutoRun(); saveFile(); }
++void BruceConfig::setBadUsbAutoRunTrigger(uint8_t v) { badUsbAutoRun.trigger = v; validateBadUsbAutoRun(); saveFile(); }
++void BruceConfig::validateBadUsbAutoRun() {
++    if (badUsbAutoRun.delayMs > 10000) badUsbAutoRun.delayMs = 10000;
++    if (badUsbAutoRun.confirmMs < 1000) badUsbAutoRun.confirmMs = 1000;
++    if (badUsbAutoRun.confirmMs > 10000) badUsbAutoRun.confirmMs = 10000;
++    if (badUsbAutoRun.trigger > 2) badUsbAutoRun.trigger = 0;
++    if (badUsbAutoRun.payloadFs != "LittleFS" && badUsbAutoRun.payloadFs != "SD") badUsbAutoRun.payloadFs = "LittleFS";
++    if (badUsbAutoRun.payloadPath.length() > 128) badUsbAutoRun.payloadPath = badUsbAutoRun.payloadPath.substring(0,128);
++}
++bool BruceConfig::hasValidBadUsbAutoPayload() const {
++    if (badUsbAutoRun.payloadPath.isEmpty()) return false;
++    if (badUsbAutoRun.payloadPath.length() > 128) return false;
++    if (badUsbAutoRun.payloadFs != "LittleFS" && badUsbAutoRun.payloadFs != "SD") return false;
++    // Existence is verified at runtime (SD may not be mounted here); treat non-empty as valid
++    return true;
++}
++
  void BruceConfig::ensureMifareKeysLoaded() {
      if (!_mifareKeysLoaded) {
          MifareKeysManager::ensureLoaded(mifareKeys);
 diff --git a/src/core/config.h b/src/core/config.h
-index 72d69eb..f3d2472 100644
+index 72d69eb..6277583 100644
 --- a/src/core/config.h
 +++ b/src/core/config.h
-@@ -17,12 +17,65 @@
+@@ -17,12 +17,77 @@
  
  enum EvilPortalPasswordMode { FULL_PASSWORD = 0, FIRST_LAST_CHAR = 1, HIDE_PASSWORD = 2, SAVE_LENGTH = 3 };
  
@@ -9155,6 +9317,18 @@ index 72d69eb..f3d2472 100644
 +// and the $OS$ / $OS_TERMINAL$ DuckyScript tokens).
 +enum BadUsbOsProfile : uint8_t { BADUSB_OS_WINDOWS = 0, BADUSB_OS_MACOS = 1, BADUSB_OS_LINUX = 2 };
 +
++// BadUSB Auto-Run on USB plug — runs prepared DuckyScript when host enumerates
++struct BadUsbAutoRunSettings {
++    bool enabled = false;
++    String payloadPath = "";      // e.g. "/LittleFS/payload.txt" or "LittleFS:/payload.txt" — stored as FS+path
++    String payloadFs = "LittleFS"; // "LittleFS" or "SD" — explicit FS for payload
++    uint16_t delayMs = 1500;      // wait after host mount before running (driver settle)
++    bool confirmWindow = true;    // show 3s countdown to cancel
++    uint16_t confirmMs = 3000;    // countdown duration
++    bool runOncePerPlug = true;   // run once per physical plug, not loop
++    uint8_t trigger = 0;          // 0=on enumeration (tud_mounted), 1=on VBUS, 2=delayed (extra 2s)
++};
++
  class BruceConfig : public BruceTheme {
  public:
 +    // Settings shared by the "SecLab+" modules. Everything here is optional:
@@ -9183,7 +9357,7 @@ index 72d69eb..f3d2472 100644
      struct WiFiCredential {
          String ssid;
          String pwd;
-@@ -46,7 +99,9 @@ public:
+@@ -46,7 +111,9 @@ public:
      const char *filepath = "/bruce.conf";
  
      //  Settings
@@ -9194,7 +9368,7 @@ index 72d69eb..f3d2472 100644
      int bright = 100;
      bool automaticTimeUpdateViaNTP = true;
      float tmz = 0;
-@@ -55,8 +110,12 @@ public:
+@@ -55,8 +122,12 @@ public:
      int soundEnabled = 1;
      int soundVolume = 100;
      int wifiAtStartup = 0;
@@ -9207,7 +9381,7 @@ index 72d69eb..f3d2472 100644
  
  #ifdef HAS_RGB_LED
      // Led
-@@ -98,7 +157,8 @@ public:
+@@ -98,10 +169,12 @@ public:
      int devMode = 0;
  
      int colorInverted = DEFAULT_COLOR_INVERTED;
@@ -9217,7 +9391,11 @@ index 72d69eb..f3d2472 100644
      int badUSBBLEKeyboardLayout = 0;
      uint16_t badUSBBLEKeyDelay = 10;
      bool badUSBBLEShowOutput = true;
-@@ -138,6 +198,10 @@ public:
++    BadUsbAutoRunSettings badUsbAutoRun;
+ 
+     std::vector<String> disabledMenus = {};
+ 
+@@ -138,6 +211,10 @@ public:
      // Settings
      void setDimmer(int value);
      void validateDimmerValue();
@@ -9228,7 +9406,7 @@ index 72d69eb..f3d2472 100644
      void setBright(uint8_t value);
      void validateBrightValue();
      void setAutomaticTimeUpdateViaNTP(bool value);
-@@ -151,6 +215,13 @@ public:
+@@ -151,6 +228,13 @@ public:
      void validateSoundVolumeValue();
      void setWifiAtStartup(int value);
      void validateWifiAtStartupValue();
@@ -9242,7 +9420,7 @@ index 72d69eb..f3d2472 100644
  
  #ifdef HAS_RGB_LED
      // Led
-@@ -212,6 +283,8 @@ public:
+@@ -212,8 +296,18 @@ public:
      void setBadUSBBLEKeyDelay(uint16_t value);
      void validateBadUSBBLEKeyDelay();
      void setBadUSBBLEShowOutput(bool value);
@@ -9250,7 +9428,17 @@ index 72d69eb..f3d2472 100644
 +    void validateSecLabPlus();
      void addDisabledMenu(String value);
      void removeDisabledMenu(String value);
++    // BadUSB Auto-Run
++    void setBadUsbAutoRunEnabled(bool v);
++    void setBadUsbAutoRunPayload(const String &fs, const String &path);
++    void setBadUsbAutoRunDelayMs(uint16_t v);
++    void setBadUsbAutoRunConfirm(bool v, uint16_t ms = 0);
++    void setBadUsbAutoRunTrigger(uint8_t v);
++    void validateBadUsbAutoRun();
++    bool hasValidBadUsbAutoPayload() const;
  
+     void addWebUISession(const String &token);
+     void removeWebUISession(const String &token);
 diff --git a/src/core/display.cpp b/src/core/display.cpp
 index d3fe50a..0b38b63 100644
 --- a/src/core/display.cpp
@@ -11598,14 +11786,15 @@ index e8ba931..18327ac 100644
      int _totalItems = 0;
 diff --git a/src/core/menu_items/BadUsbMenu.cpp b/src/core/menu_items/BadUsbMenu.cpp
 new file mode 100644
-index 0000000..2df9480
+index 0000000..efcdeb9
 --- /dev/null
 +++ b/src/core/menu_items/BadUsbMenu.cpp
-@@ -0,0 +1,53 @@
+@@ -0,0 +1,55 @@
 +#include "BadUsbMenu.h"
 +#include "core/display.h"
 +#include "core/utils.h"
 +#include "core/virtual_msc.h"
++#include "modules/badusb_ble/badusb_autorun.h"
 +#include "modules/badusb_ble/ducky_typer.h"
 +#include "modules/badusb_ble/smart_badusb.h"
 +#include "modules/others/clicker.h"
@@ -11619,6 +11808,7 @@ index 0000000..2df9480
 +#endif
 +#if defined(USB_as_HID) && !defined(LITE_VERSION)
 +        {"Smart BadUSB Suite", [=]() { smart_badusb_setup(); }},
++        {"Auto-Run on Plug",   [=]() { badUsbAutoRunMenu(); }},
 +#endif
 +#if defined(SOC_USB_OTG_SUPPORTED) && !defined(LITE_VERSION)
 +        {"USB Drive + BadUSB", [=]() { virtual_msc_setup(true); }},
@@ -16170,10 +16360,10 @@ index 0000000..a28c8b5
 +
 +#endif
 diff --git a/src/core/wifi/webInterface.cpp b/src/core/wifi/webInterface.cpp
-index a8679bd..025ce37 100644
+index a8679bd..0cddb8e 100644
 --- a/src/core/wifi/webInterface.cpp
 +++ b/src/core/wifi/webInterface.cpp
-@@ -1,19 +1,46 @@
+@@ -1,19 +1,47 @@
  #include "webInterface.h"
 +#include "web_navigation.h"
 +#include "core/dsolution_ux.h"
@@ -16194,6 +16384,7 @@ index a8679bd..025ce37 100644
  #include "esp_task_wdt.h"
 +#include "modules/ble/ble_common.h"
 +#if !defined(LITE_VERSION)
++#include "modules/badusb_ble/badusb_autorun.h"
 +#include "modules/badusb_ble/smart_badusb.h"
 +#include "modules/ble/ble_gatt_cloner.h"
 +#include "modules/ble/ble_security_audit.h"
@@ -16220,7 +16411,7 @@ index a8679bd..025ce37 100644
  #include <globals.h>
  
  File uploadFile;
-@@ -22,12 +49,601 @@ FS _webFS = LittleFS;
+@@ -22,12 +50,601 @@ FS _webFS = LittleFS;
  const int default_webserverporthttp = 80;
  
  // WiFi as an Access Point
@@ -16824,7 +17015,7 @@ index a8679bd..025ce37 100644
  
  // Generate random token
  String generateToken(int length = 24) {
-@@ -42,36 +658,73 @@ String generateToken(int length = 24) {
+@@ -42,36 +659,73 @@ String generateToken(int length = 24) {
  **  Turn off the WebUI
  **********************************************************************/
  void stopWebUi() {
@@ -16913,7 +17104,7 @@ index a8679bd..025ce37 100644
  
      // Disconnect WiFi AP mode if it's the WebUI's AP
      // Check if we're in AP or APSTA mode (used by WebUI)
-@@ -82,30 +735,41 @@ void cleanlyStopWebUiForWiFiFeature() {
+@@ -82,30 +736,41 @@ void cleanlyStopWebUiForWiFiFeature() {
          vTaskDelay(pdMS_TO_TICKS(250));
      }
  
@@ -16972,7 +17163,7 @@ index a8679bd..025ce37 100644
  }
  
  /**********************************************************************
-@@ -127,6 +791,7 @@ String humanReadableSize(uint64_t bytes) {
+@@ -127,6 +792,7 @@ String humanReadableSize(uint64_t bytes) {
  String listFiles(FS &fs, const String &folder) {
      // log_i("Listfiles Start");
      String returnText = "pa:" + folder + ":0\n";
@@ -16980,7 +17171,7 @@ index a8679bd..025ce37 100644
      // Serial.println("Listing files stored on SD");
  
      _webFS = fs;
-@@ -168,19 +833,26 @@ String listFiles(FS &fs, const String &folder) {
+@@ -168,19 +834,26 @@ String listFiles(FS &fs, const String &folder) {
  ** used by server->on functions to discern whether a user has the correct
  ** httpapitoken OR is authenticated by username and password
  **********************************************************************/
@@ -17019,7 +17210,7 @@ index a8679bd..025ce37 100644
      if (onFailureReturnLoginPage) {
          serveWebUIFile(request, "login.html", "text/html", true, login_html, login_html_size);
      } else {
-@@ -220,49 +892,68 @@ void createDirRecursive(const String &path, FS fs) {
+@@ -220,49 +893,68 @@ void createDirRecursive(const String &path, FS fs) {
  **  Function: handleUpload
  ** handles uploads to the filserver
  **********************************************************************/
@@ -17127,7 +17318,7 @@ index a8679bd..025ce37 100644
      }
  }
  
-@@ -272,43 +963,162 @@ void notFound(AsyncWebServerRequest *request) { request->send(404, "text/plain",
+@@ -272,43 +964,162 @@ void notFound(AsyncWebServerRequest *request) { request->send(404, "text/plain",
  **  Function: drawWebUiScreen
  **  Draw information on screen of WebUI.
  **********************************************************************/
@@ -17211,7 +17402,10 @@ index a8679bd..025ce37 100644
 +    tft.setTextColor(bruceConfig.secColor, cardBg);
 +    tft.drawCentreString("Do not power off device", tftWidth / 2, boxY + 84, 1);
 +}
-+
+ 
+-    tft.setCursor(padX, currentY);
+-    tft.print("IP:  " + txt);
+-    currentY += LH * FP + 6;
 +#if defined(DSOLUTION_183_2MIC)
 +bool otaUiConsumeRedraw() {
 +    if (!uxIsMenuTask()) return false;
@@ -17219,7 +17413,10 @@ index a8679bd..025ce37 100644
 +    s_otaUiNeedsRedraw = false;
 +    return redraw;
 +}
-+
+ 
+-    tft.setCursor(padX, currentY);
+-    tft.print("Usr: " + String(bruceConfig.webUI.user));
+-    currentY += LH * FP + 6;
 +void otaUiCheckpoint() {
 +    if (!uxIsMenuTask() || !isOtaInProgress()) return;
 +    wakeUpScreen();
@@ -17248,21 +17445,18 @@ index a8679bd..025ce37 100644
 +#endif
  
 -    tft.setCursor(padX, currentY);
--    tft.print("IP:  " + txt);
--    currentY += LH * FP + 6;
+-    tft.print("Pwd: " + String(bruceConfig.webUI.pwd));
 +void drawWebUiScreen(bool mode_ap) {
 +    drawMainBorderWithTitle(mode_ap ? "WebUI (AP)" : "WebUI (LAN)", true);
  
--    tft.setCursor(padX, currentY);
--    tft.print("Usr: " + String(bruceConfig.webUI.user));
--    currentY += LH * FP + 6;
+-    tft.setTextColor(TFT_RED, bruceConfig.bgColor);
+-    tft.setTextSize(FP);
+-    tft.drawCentreString("press Esc to stop", tftWidth / 2, tftHeight - 2 * LH * FP - 5, 1);
 +    String ip = activeWifiIpString();
 +    wifiIP = ip;
 +    int padX = 14;
 +    int y = tftHeight <= 240 ? 44 : 52;
- 
--    tft.setCursor(padX, currentY);
--    tft.print("Pwd: " + String(bruceConfig.webUI.pwd));
++
 +    if (mode_ap) {
 +        drawWebUiFittedText(
 +            padX, y, "AP: " + bruceConfig.wifiAp.ssid + " / " + bruceConfig.wifiAp.pwd,
@@ -17306,17 +17500,14 @@ index a8679bd..025ce37 100644
 +        padX, y, "Auth: " + String(bruceConfig.webUI.user) + " / " + String(bruceConfig.webUI.pwd),
 +        TFT_LIGHTGREY, 1
 +    );
- 
--    tft.setTextColor(TFT_RED, bruceConfig.bgColor);
--    tft.setTextSize(FP);
--    tft.drawCentreString("press Esc to stop", tftWidth / 2, tftHeight - 2 * LH * FP - 5, 1);
++
 +    tft.setTextColor(bruceConfig.secColor, bruceConfig.bgColor);
 +    tft.setTextSize(1);
 +    tft.drawCentreString("[Esc / Boot Hold] Options & Background", tftWidth / 2, tftHeight - 20, 1);
  
  #if defined(HAS_TOUCH)
      TouchFooter();
-@@ -379,11 +1189,12 @@ void serveWebUIFile(
+@@ -379,11 +1190,12 @@ void serveWebUIFile(
  static bool startMdnsResponder() {
      RAM_LOG("before MDNS");
  
@@ -17331,7 +17522,7 @@ index a8679bd..025ce37 100644
  
      RAM_LOG("after MDNS");
      return true;
-@@ -460,59 +1271,906 @@ void configureWebServer() {
+@@ -460,59 +1272,964 @@ void configureWebServer() {
      // System Info
      server->on("/systeminfo", HTTP_GET, [](AsyncWebServerRequest *request) {
          if (checkUserWebAuth(request)) {
@@ -17510,6 +17701,64 @@ index a8679bd..025ce37 100644
 +            request->send(400, "application/json", "{\"ok\":false,\"msg\":\"Invalid action\"}");
 +        }
 +    });
++
++    // BadUSB Auto-Run — config + status for WebUI & Studio
++#if !defined(LITE_VERSION)
++    server->on("/badusb/autorun", HTTP_GET, [](AsyncWebServerRequest *request) {
++        if (!checkUserWebAuth(request)) return;
++        String resp = badUsbAutoRunGetStatusJson();
++        request->send(200, "application/json", resp);
++    });
++    server->on("/badusb/autorun", HTTP_POST, [](AsyncWebServerRequest *request) {
++        if (!checkUserWebAuth(request)) return;
++        String act = request->hasArg("action") ? request->arg("action") : "";
++        act.trim(); act.toLowerCase();
++        if (act == "enable" && request->hasArg("enabled")) {
++            bool en = request->arg("enabled") == "1" || request->arg("enabled").equalsIgnoreCase("true");
++            bruceConfig.setBadUsbAutoRunEnabled(en);
++            if (en) badUsbAutoRunStartTask(); else badUsbAutoRunStopTask();
++            request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Auto-Run " + String(en?"enabled":"disabled") + "\"}");
++        } else if (act == "setpayload" && request->hasArg("payloadFs") && request->hasArg("payloadPath")) {
++            String fs = request->arg("payloadFs"); fs.trim();
++            String path = request->arg("payloadPath"); path.trim();
++            if (fs != "LittleFS" && fs != "SD") { request->send(400, "application/json", "{\"ok\":false,\"msg\":\"payloadFs must be LittleFS or SD\"}"); return; }
++            if (path.isEmpty() || path.length()>128) { request->send(400, "application/json", "{\"ok\":false,\"msg\":\"Invalid payloadPath\"}"); return; }
++            bruceConfig.setBadUsbAutoRunPayload(fs, path);
++            request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Payload set to \"" + jsonEscape(fs+":"+path) + "\"\"}");
++        } else if (act == "setdelay" && request->hasArg("delayMs")) {
++            int v = request->arg("delayMs").toInt();
++            if (v<0) v=0; if (v>10000) v=10000;
++            bruceConfig.setBadUsbAutoRunDelayMs((uint16_t)v);
++            request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Delay set\"}");
++        } else if (act == "setconfirm" && request->hasArg("confirmWindow")) {
++            bool cw = request->arg("confirmWindow")=="1" || request->arg("confirmWindow").equalsIgnoreCase("true");
++            uint16_t ms = 0;
++            if (request->hasArg("confirmMs")) { int m=request->arg("confirmMs").toInt(); if(m>=1000 && m<=10000) ms=(uint16_t)m; }
++            bruceConfig.setBadUsbAutoRunConfirm(cw, ms);
++            request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Confirm window updated\"}");
++        } else if (act == "settrigger" && request->hasArg("trigger")) {
++            int tr=request->arg("trigger").toInt();
++            if (tr<0||tr>2) { request->send(400, "application/json", "{\"ok\":false,\"msg\":\"trigger 0..2\"}"); return; }
++            bruceConfig.setBadUsbAutoRunTrigger((uint8_t)tr);
++            request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Trigger set\"}");
++        } else if (act == "setrunonce" && request->hasArg("runOncePerPlug")) {
++            bool ro = request->arg("runOncePerPlug")=="1" || request->arg("runOncePerPlug").equalsIgnoreCase("true");
++            bruceConfig.badUsbAutoRun.runOncePerPlug=ro;
++            bruceConfig.saveFile();
++            request->send(200, "application/json", "{\"ok\":true,\"msg\":\"RunOnce updated\"}");
++        } else if (act == "testrun") {
++            if (!badUsbAutoRunIsArmed()) { request->send(400, "application/json", "{\"ok\":false,\"msg\":\"No payload set\"}"); return; }
++            // Don't block HTTP task — schedule via quick display hint
++            request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Test run triggered — watch device screen\"}");
++            xTaskCreate(badUsbAutoRunTestTask, "badUsbAutoTest", 6144, nullptr, 1, nullptr);
++        } else if (act == "clearpayload") {
++            bruceConfig.setBadUsbAutoRunPayload("LittleFS", "");
++            request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Payload cleared\"}");
++        } else {
++            request->send(400, "application/json", "{\"ok\":false,\"msg\":\"Invalid action\"}");
++        }
++    });
++#endif
 +
 +    // Personalization & Theme API
 +    server->on("/personalize", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -17781,7 +18030,7 @@ index a8679bd..025ce37 100644
 +        if (s_otaRestartPending || s_wifiSwitchBusy) {
 +            request->send(409, "application/json", "{\"ok\":false,\"msg\":\"Restart or WiFi change in progress\"}");
 +            return;
-         }
++        }
 +        if (s_otaInProgress) {
 +            if (isOtaInProgress()) {
 +                request->send(409, "application/json", "{\"ok\":false,\"msg\":\"Another OTA transfer is active\"}");
@@ -17803,7 +18052,7 @@ index a8679bd..025ce37 100644
 +            otaReleaseLock(true);
 +            request->send(500, "application/json", "{\"ok\":false,\"msg\":\"" + err + "\"}");
 +            return;
-+        }
+         }
 +        s_otaValid = true;
 +        String ok = "{\"ok\":true,\"chunkSize\":" + String((unsigned long)kOtaChunkCap) +
 +                    ",\"maxSize\":" + String((unsigned long)nextPart->size) +
@@ -17940,9 +18189,8 @@ index a8679bd..025ce37 100644
 +                }
 +                if (total == 0 || total > kOtaChunkCap) {
 +                    snprintf(st->err, sizeof(st->err), "Invalid chunk size");
-                     return;
-                 }
--                screenBinBufferSize = desiredSize;
++                    return;
++                }
 +                if (!request->hasArg("offset")) {
 +                    snprintf(st->err, sizeof(st->err), "Missing offset");
 +                    return;
@@ -17978,7 +18226,7 @@ index a8679bd..025ce37 100644
 +                memcpy(s_otaChunkBuf + index, data, len);
 +                st->received = index + len;
 +                s_otaLastActivityMs = millis();
-             }
++            }
 +        }
 +    );
 +
@@ -18029,7 +18277,7 @@ index a8679bd..025ce37 100644
 +        otaReleaseLock(true);
 +        request->send(200, "application/json", "{\"ok\":true,\"msg\":\"OTA aborted\"}");
 +    });
- 
++
 +    // WebOTA Firmware Update UI & Legacy Multipart Upload handler
 +    server->on("/ota", HTTP_GET, [](AsyncWebServerRequest *request) {
 +        if (checkUserWebAuth(request, true)) {
@@ -18146,8 +18394,9 @@ index a8679bd..025ce37 100644
 +                    snprintf(st->error, sizeof(st->error), "%s", Update.errorString());
 +                    s_otaLegacyOwner = nullptr;
 +                    Update.abort(); otaReleaseLock(true);
-+                    return;
-+                }
+                     return;
+                 }
+-                screenBinBufferSize = desiredSize;
 +                st->finalized = true;
 +            }
 +        }
@@ -18189,7 +18438,7 @@ index a8679bd..025ce37 100644
 +            const char *error = nullptr;
 +            if (!uxFindStart(&error)) {
 +                request->send(429, "application/json", String("{\"ok\":false,\"msg\":\"") + error + "\"}"); return;
-+            }
+             }
 +            request->send(202, "application/json", "{\"ok\":true,\"msg\":\"Queued; rings on the WebUI screen or an idle menu.\"}"); return;
 +        }
 +        if (action == "stop") { uxFindStop(); request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Stopped\"}"); return; }
@@ -18208,7 +18457,7 @@ index a8679bd..025ce37 100644
 +        request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Saved\"}");
 +    });
 +#endif
-+
+ 
 +    // Screen timeouts and power profile (shared with the device settings menu).
 +    server->on("/screen/settings", HTTP_GET, [](AsyncWebServerRequest *request) {
 +        if (!checkUserWebAuth(request)) return;
@@ -18276,7 +18525,7 @@ index a8679bd..025ce37 100644
          }
      });
  
-@@ -544,25 +2202,70 @@ void configureWebServer() {
+@@ -544,25 +2261,70 @@ void configureWebServer() {
          if (!checkUserWebAuth(request)) { return; }
          if (request->hasArg("cmnd")) {
              String cmnd = request->arg("cmnd");
@@ -18366,7 +18615,7 @@ index a8679bd..025ce37 100644
                  }
              } else {
                  if (parseSerialCommand(cmnd, false)) {
-@@ -576,9 +2279,28 @@ void configureWebServer() {
+@@ -576,9 +2338,28 @@ void configureWebServer() {
          }
      });
  
@@ -18397,7 +18646,7 @@ index a8679bd..025ce37 100644
      });
  
      // List files
-@@ -632,6 +2354,11 @@ void configureWebServer() {
+@@ -632,6 +2413,11 @@ void configureWebServer() {
                  } else {
                      if (strcmp(fileAction.c_str(), "download") == 0) {
                          request->send(*fs, fileName, "application/octet-stream", true);
@@ -18409,7 +18658,7 @@ index a8679bd..025ce37 100644
                      } else if (strcmp(fileAction.c_str(), "image") == 0) {
                          String extension = fileName.substring(fileName.lastIndexOf('.') + 1);
                          // https://www.iana.org/assignments/media-types/media-types.xhtml#image
-@@ -700,7 +2427,7 @@ void configureWebServer() {
+@@ -700,7 +2486,7 @@ void configureWebServer() {
  
                  File editFile = fs->open(fileName, FILE_WRITE);
                  if (editFile) {
@@ -18418,7 +18667,7 @@ index a8679bd..025ce37 100644
                          request->send(200, "text/plain", "File edited: " + fileName);
                      } else {
                          request->send(500, "text/plain", "Failed to write to file: " + fileName);
-@@ -720,7 +2447,13 @@ void configureWebServer() {
+@@ -720,7 +2506,13 @@ void configureWebServer() {
      server->on(
          "/upload",
          HTTP_POST,
@@ -18433,7 +18682,7 @@ index a8679bd..025ce37 100644
          handleUpload
      );
  
-@@ -737,6 +2470,362 @@ void configureWebServer() {
+@@ -737,6 +2529,362 @@ void configureWebServer() {
              }
          }
      });
@@ -18796,7 +19045,7 @@ index a8679bd..025ce37 100644
      server->begin();
      Serial.println("Webserver started");
  }
-@@ -745,25 +2834,78 @@ void configureWebServer() {
+@@ -745,25 +2893,78 @@ void configureWebServer() {
  **  Function: startWebUi
  **  Start the WebUI
  **********************************************************************/
@@ -18847,15 +19096,15 @@ index a8679bd..025ce37 100644
 +        }
 +        WiFi.softAPdisconnect(true);
 +        vTaskDelay(pdMS_TO_TICKS(80));
-+    }
-+
+     }
+ 
+-    // configure web server
 +    if (!bruceConfig.wifi.empty() && wifiConnecttoKnownNet()) {
 +        wifiIP = WiFi.localIP().toString();
 +        if (server) mdnsRunning = startMdnsResponder();
 +        return true;
-     }
- 
--    // configure web server
++    }
++
 +    return wifiConnectMenu(WIFI_STA);
 +}
 +
@@ -18884,7 +19133,7 @@ index a8679bd..025ce37 100644
          new (server) AsyncWebServer(default_webserverporthttp);
  
          configureWebServer();
-@@ -771,24 +2913,198 @@ void startWebUi(bool mode_ap) {
+@@ -771,24 +2972,198 @@ void startWebUi(bool mode_ap) {
          isWebUIActive = true;
      }
      tft.setLogging();
@@ -18968,10 +19217,9 @@ index a8679bd..025ce37 100644
 +        } else if (choice == 2 || choice == 3) {
 +            if (stopWebUiFromMenu(choice == 3)) exitWebUiLoop = true;
 +        }
-     }
++    }
 +}
- 
--    bool closeServer = false;
++
 +/**********************************************************************
 +**  Function: startWebUiHeadless
 +**  Silently connects to saved Wi-Fi (or falls back to AP) and starts the
@@ -18982,7 +19230,7 @@ index a8679bd..025ce37 100644
 +    if (s_webUiStarting || s_webUiCancelRequested) {
 +        s_webUiQueued = false;
 +        return false;
-+    }
+     }
 +    s_webUiStarting = true;
 +    s_webUiQueued = false;
 +
@@ -18993,9 +19241,7 @@ index a8679bd..025ce37 100644
 +            vTaskDelay(pdMS_TO_TICKS(100));
 +        }
  
--    options.clear();
--    options.emplace_back("Run in background", []() {});
--    options.emplace_back("Exit", [&closeServer]() { closeServer = true; });
+-    bool closeServer = false;
 +        if (!s_webUiCancelRequested && radioHasMemForWifi()) {
 +            ensureWifiPlatform();
 +            if (!bruceConfig.wifi.empty() && !s_webUiCancelRequested) {
@@ -19025,17 +19271,16 @@ index a8679bd..025ce37 100644
 +                WiFi.scanDelete();
 +            }
  
--    loopOptions(options);
+-    options.clear();
+-    options.emplace_back("Run in background", []() {});
+-    options.emplace_back("Exit", [&closeServer]() { closeServer = true; });
 +            if (s_webUiCancelRequested) {
 +                wifiDisconnect();
 +                s_webUiStarting = false;
 +                return false;
 +            }
  
--    if (closeServer) {
--        stopWebUi();
--        vTaskDelay(pdMS_TO_TICKS(100));
--        if (!keepWifiConnected) { wifiDisconnect(); }
+-    loopOptions(options);
 +            if (WiFi.isConnected()) {
 +                hasNetwork = true;
 +            } else if (allowApFallback && !s_webUiCancelRequested) {
@@ -19044,7 +19289,11 @@ index a8679bd..025ce37 100644
 +            }
 +        }
 +    }
-+
+ 
+-    if (closeServer) {
+-        stopWebUi();
+-        vTaskDelay(pdMS_TO_TICKS(100));
+-        if (!keepWifiConnected) { wifiDisconnect(); }
 +    if (s_webUiCancelRequested) {
 +        if (!isWebUIActive) wifiDisconnect();
 +        s_webUiStarting = false;
@@ -19319,7 +19568,7 @@ index 8d97a20..e0d8453 100644
  /**
   * @brief Opens a menu to connect to a wifi
 diff --git a/src/main.cpp b/src/main.cpp
-index eebc4a9..67838d5 100644
+index eebc4a9..c3d0478 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
 @@ -1,3 +1,4 @@
@@ -19327,11 +19576,12 @@ index eebc4a9..67838d5 100644
  #include "core/main_menu.h"
  #include <globals.h>
  
-@@ -7,10 +8,18 @@
+@@ -7,10 +8,19 @@
  #include "core/serial_commands/cli.h"
  #include "core/utils.h"
  #include "current_year.h"
 +#if !defined(LITE_VERSION)
++#include "modules/badusb_ble/badusb_autorun.h"
 +#include "modules/badusb_ble/smart_badusb.h"
 +#include "modules/wifi/lan_guard.h"
 +#endif
@@ -19346,7 +19596,7 @@ index eebc4a9..67838d5 100644
  #include <functional>
  #include <string>
  #include <vector>
-@@ -109,7 +118,7 @@ void __attribute__((weak)) taskInputHandler(void *parameter) {
+@@ -109,7 +119,7 @@ void __attribute__((weak)) taskInputHandler(void *parameter) {
              inputUnlock();
              timer = millis();
          }
@@ -19355,7 +19605,7 @@ index eebc4a9..67838d5 100644
      }
  }
  // Public Globals Variables
-@@ -165,6 +174,7 @@ volatile int tftHeight = TFT_WIDTH;
+@@ -165,6 +175,7 @@ volatile int tftHeight = TFT_WIDTH;
  #include "core/display.h"
  #include "core/led_control.h"
  #include "core/mykeyboard.h"
@@ -19363,7 +19613,7 @@ index eebc4a9..67838d5 100644
  #include "core/sd_functions.h"
  #include "core/serialcmds.h"
  #include "core/settings.h"
-@@ -172,7 +182,9 @@ volatile int tftHeight = TFT_WIDTH;
+@@ -172,7 +183,9 @@ volatile int tftHeight = TFT_WIDTH;
  #include "core/wifi/wifi_common.h"
  #include "modules/bjs_interpreter/interpreter.h" // for JavaScript interpreter
  #include "modules/others/audio.h"                // for playAudioFile
@@ -19373,7 +19623,7 @@ index eebc4a9..67838d5 100644
  #include <Wire.h>
  
  /*********************************************************************
-@@ -233,6 +245,7 @@ void setup_gpio() {
+@@ -233,6 +246,7 @@ void setup_gpio() {
      // apart from values loaded from /brucePins.conf (see applyBoardDefault() in configPins.h).
      brucePinsSetupDefaults = bruceConfigPins;
  
@@ -19381,7 +19631,7 @@ index eebc4a9..67838d5 100644
      // IO expander (AW9523/PCA9555: Smoochiee, Reaper, T-Lora Pager, Mako, Pebble) switching GPS,
      // MIC, Vibro, CC1101 RX/TX, NFC... powerlines. It is an onboard peripheral, so it lives on the
      // sys_i2c bus each board registers in _setup_gpio() via setSysI2CBus(); &Wire only for a board
-@@ -246,6 +259,7 @@ void setup_gpio() {
+@@ -246,6 +260,7 @@ void setup_gpio() {
      // acquireSPIBus() returns nullptr when these pins have no hardware controller left (e.g.
      // ARDUINO_M5STICK_C_PLUS and others that don't share SPI with the display/SD/aux bus);
      // initCC1101once(NULL) lets the driver fall back to managing the default SPI object itself.
@@ -19389,7 +19639,7 @@ index eebc4a9..67838d5 100644
  }
  
  /*********************************************************************
-@@ -271,106 +285,279 @@ void begin_tft() {
+@@ -271,106 +286,279 @@ void begin_tft() {
   **  Draw boot screen
   *********************************************************************/
  void boot_screen() {
@@ -19716,7 +19966,7 @@ index eebc4a9..67838d5 100644
 +            frame.setTextSize(ownerScale);
 +            frame.setTextColor(blendColors(bg, cWhite, (uint8_t)(255.0f * pillP)), pFill);
 +            frame.drawString(owner, cx, curPillY + pillH / 2 + 1);
-+        }
+         }
 +
 +        // 7. Personalized Subtitle & Version
 +        float tagP = bootEaseOutCubic((t - 0.34f) / 0.30f);
@@ -19734,7 +19984,7 @@ index eebc4a9..67838d5 100644
 +        if (fillW >= 6) {
 +            frame.fillRoundRect(barX, barY, fillW, 6, 3, cPri);
 +            frame.fillCircle(barX + fillW - 3, barY + 3, 2, cWhite);
-         }
++        }
 +
 +        frame.pushSprite(0, 0);
 +
@@ -19747,7 +19997,7 @@ index eebc4a9..67838d5 100644
      tft.fillScreen(bruceConfig.bgColor);
  }
  
-@@ -455,6 +642,19 @@ void startup_sound() {
+@@ -455,6 +643,19 @@ void startup_sound() {
   **  Function: setup
   **  Where the devices are started and variables set
   *********************************************************************/
@@ -19767,7 +20017,7 @@ index eebc4a9..67838d5 100644
  void setup() {
      Serial.setRxBufferSize(
          SAFE_STACK_BUFFER_SIZE / 4
-@@ -499,6 +699,9 @@ void setup() {
+@@ -499,6 +700,9 @@ void setup() {
  
      _pre_storage_gpio();
      begin_storage();
@@ -19777,7 +20027,7 @@ index eebc4a9..67838d5 100644
      RAM_LOG("after-storage"); // bruceConfig/bruceConfigPins loaded from FS
      begin_tft();
      init_clock();
-@@ -545,13 +748,17 @@ void setup() {
+@@ -545,13 +749,17 @@ void setup() {
          &xHandle                       // Task handle (not used)
      );
      _late_setup_gpio();
@@ -19796,7 +20046,7 @@ index eebc4a9..67838d5 100644
          log_i("Loading Wifi at Startup");
          xTaskCreate(
              wifiConnectTask,   // Task function
-@@ -565,6 +772,11 @@ void setup() {
+@@ -565,6 +773,14 @@ void setup() {
  #endif
      //  start a task to handle serial commands while the webui is running
      startSerialCommandsHandlerTask(true);
@@ -19804,10 +20054,448 @@ index eebc4a9..67838d5 100644
 +    if (bruceConfig.seclabPlus.hidLedAutoArm || bruceConfig.seclabPlus.lanGuardAutoArm) {
 +        xTaskCreate(seclabAutoArmTask, "seclabAuto", 4096, NULL, 1, NULL);
 +    }
++#if !defined(LITE_VERSION)
++    badUsbAutoRunInit();
++#endif
 +#endif
  
      wakeUpScreen();
      if (bruceConfig.startupApp != "" && !startupApp.startApp(bruceConfig.startupApp)) {
+diff --git a/src/modules/badusb_ble/badusb_autorun.cpp b/src/modules/badusb_ble/badusb_autorun.cpp
+new file mode 100644
+index 0000000..f99af95
+--- /dev/null
++++ b/src/modules/badusb_ble/badusb_autorun.cpp
+@@ -0,0 +1,398 @@
++#if !defined(LITE_VERSION)
++#include "badusb_autorun.h"
++#include "ducky_typer.h"
++#include "core/config.h"
++#include "core/display.h"
++#include "core/mykeyboard.h"
++#include "core/sd_functions.h"
++#include "core/utils.h"
++#include <globals.h>
++#include <FS.h>
++#include <LittleFS.h>
++#include <SD.h>
++
++#if defined(USB_as_HID)
++#include "USB.h"
++#include "USBHIDKeyboard.h"
++extern "C" bool tud_mounted(void);
++void badUsbAutoRunTestTask(void *param) {
++    vTaskDelay(pdMS_TO_TICKS(300));
++    badUsbAutoRunExecuteNow(false);
++    vTaskDelete(NULL);
++}
++
++#endif
++
++static TaskHandle_t s_task = nullptr;
++static volatile bool s_running = false;
++static volatile bool s_armed = false;
++static bool s_lastMounted = false;
++static bool s_usbInitialized = false;
++static unsigned long s_lastPlugMs = 0;
++
++static void badUsbAutoRunTask(void *param);
++static bool ensureUsbHidReady();
++static bool runPayloadFile(const String &fsName, const String &path);
++static bool doConfirmCountdown(uint16_t confirmMs);
++
++static String jsonEscapeLocal(const String &in) {
++    String out; out.reserve(in.length()+8);
++    for (size_t i=0;i<in.length();i++){ char c=in[i]; if(c=='\\') out+="\\\\"; else if(c=='"') out+="\\\""; else if(c=='\n') out+="\\n"; else if(c=='\r') out+="\\r"; else if((uint8_t)c>=0x20) out+=c; }
++    return out;
++}
++
++bool badUsbAutoRunIsArmed() {
++    if (!bruceConfig.badUsbAutoRun.enabled) return false;
++    if (bruceConfig.badUsbAutoRun.payloadPath.isEmpty()) return false;
++    FS *fs = nullptr;
++    String p = bruceConfig.badUsbAutoRun.payloadPath;
++    String fsName = bruceConfig.badUsbAutoRun.payloadFs;
++    if (fsName == "SD") {
++        if (!setupSdCard()) return false;
++        fs = &SD;
++    } else {
++        fs = &LittleFS;
++    }
++    if (!fs) return false;
++    return fs->exists(p);
++}
++
++bool badUsbAutoRunIsRunning() { return s_running; }
++
++String badUsbAutoRunGetPayloadLabel() {
++    if (bruceConfig.badUsbAutoRun.payloadPath.isEmpty()) return String("—");
++    return bruceConfig.badUsbAutoRun.payloadFs + ":" + bruceConfig.badUsbAutoRun.payloadPath;
++}
++
++String badUsbAutoRunGetStatusJson() {
++    String label = badUsbAutoRunGetPayloadLabel();
++    String j = "{";
++    j += "\"enabled\":" + String(bruceConfig.badUsbAutoRun.enabled ? "true" : "false") + ",";
++    j += "\"armed\":" + String(badUsbAutoRunIsArmed() ? "true" : "false") + ",";
++    j += "\"running\":" + String(s_running ? "true" : "false") + ",";
++    j += "\"payloadFs\":\"" + jsonEscapeLocal(bruceConfig.badUsbAutoRun.payloadFs) + "\",";
++    j += "\"payloadPath\":\"" + jsonEscapeLocal(bruceConfig.badUsbAutoRun.payloadPath) + "\",";
++    j += "\"payloadLabel\":\"" + jsonEscapeLocal(label) + "\",";
++    j += "\"delayMs\":" + String(bruceConfig.badUsbAutoRun.delayMs) + ",";
++    j += "\"confirmWindow\":" + String(bruceConfig.badUsbAutoRun.confirmWindow ? "true" : "false") + ",";
++    j += "\"confirmMs\":" + String(bruceConfig.badUsbAutoRun.confirmMs) + ",";
++    j += "\"trigger\":" + String(bruceConfig.badUsbAutoRun.trigger) + ",";
++    j += "\"runOncePerPlug\":" + String(bruceConfig.badUsbAutoRun.runOncePerPlug ? "true" : "false") + ",";
++    j += "\"lastMounted\":" + String(s_lastMounted ? "true" : "false") + ",";
++    j += "\"lastPlugMs\":" + String(s_lastPlugMs);
++    j += "}";
++    return j;
++}
++
++void badUsbAutoRunInit() {
++    bruceConfig.validateBadUsbAutoRun();
++    s_armed = badUsbAutoRunIsArmed();
++    if (s_armed) badUsbAutoRunStartTask();
++}
++
++void badUsbAutoRunStartTask() {
++    if (s_task) return;
++    if (!bruceConfig.badUsbAutoRun.enabled) return;
++    xTaskCreate(badUsbAutoRunTask, "badUsbAutoRun", 6144, nullptr, 1, &s_task);
++}
++
++void badUsbAutoRunStopTask() {
++    if (s_task) { vTaskDelete(s_task); s_task = nullptr; }
++    s_usbInitialized = false;
++    s_lastMounted = false;
++    s_armed = false;
++}
++
++static bool ensureUsbHidReady() {
++#if !defined(USB_as_HID)
++    return true;
++#else
++    if (s_usbInitialized && hid_usb) return true;
++    if (!hid_usb) {
++        hid_usb = new USBHIDKeyboard();
++        USB.begin();
++        s_usbInitialized = true;
++        vTaskDelay(pdMS_TO_TICKS(300));
++    }
++    return hid_usb != nullptr;
++void badUsbAutoRunTestTask(void *param) {
++    vTaskDelay(pdMS_TO_TICKS(300));
++    badUsbAutoRunExecuteNow(false);
++    vTaskDelete(NULL);
++}
++
++#endif
++}
++
++static bool doConfirmCountdown(uint16_t confirmMs) {
++    unsigned long start = millis();
++    unsigned long end = start + confirmMs;
++    // drain
++    inputLock();
++    NextPress=false; PrevPress=false; UpPress=false; DownPress=false; SelPress=false; EscPress=false; AnyKeyPress=false; NextPagePress=false; PrevPagePress=false;
++    inputUnlock();
++    bool cancelled=false;
++    while (millis() < end) {
++        unsigned long now=millis();
++        int remainingMs=(int)(end-now);
++        int sec=(remainingMs+999)/1000;
++        inputLock();
++        tft.fillScreen(bruceConfig.bgColor);
++        tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
++        tft.setTextSize(FM);
++        tft.drawCentreString("BadUSB Auto-Run", tftWidth/2, tftHeight/2 - 40, 1);
++        tft.setTextSize(FP);
++        String payload=badUsbAutoRunGetPayloadLabel();
++        if (payload.length()>26) payload=payload.substring(0,23)+"...";
++        tft.drawCentreString(payload, tftWidth/2, tftHeight/2 - 16, 1);
++        tft.setTextSize(FM);
++        tft.drawCentreString(String(sec)+"s", tftWidth/2, tftHeight/2 + 10, 1);
++        tft.setTextSize(FP);
++        tft.drawCentreString("Press any key to CANCEL", tftWidth/2, tftHeight/2 + 36, 1);
++        int barW=tftWidth-40; int barH=6; int barX=20; int barY=tftHeight/2+50;
++        float progress=1.0f - (float)remainingMs/(float)confirmMs;
++        int fillW=(int)(barW*progress);
++        tft.drawRect(barX, barY, barW, barH, bruceConfig.priColor);
++        tft.fillRect(barX, barY, fillW, barH, bruceConfig.priColor);
++        inputUnlock();
++        vTaskDelay(pdMS_TO_TICKS(50));
++        inputLock();
++        bool any = NextPress||PrevPress||UpPress||DownPress||SelPress||EscPress||AnyKeyPress||NextPagePress||PrevPagePress;
++        inputUnlock();
++        if (any) { cancelled=true; break; }
++#if defined(USB_as_HID)
++        if (!tud_mounted()) { cancelled=true; break; }
++void badUsbAutoRunTestTask(void *param) {
++    vTaskDelay(pdMS_TO_TICKS(300));
++    badUsbAutoRunExecuteNow(false);
++    vTaskDelete(NULL);
++}
++
++#endif
++    }
++    if (cancelled) {
++        inputLock(); tft.fillScreen(bruceConfig.bgColor); displayInfo("Auto-Run CANCELLED", true); delay(800); inputUnlock();
++        return false; // shouldRun = false
++    }
++    return true;
++}
++
++static bool runPayloadFile(const String &fsName, const String &path) {
++    FS *fs = nullptr;
++    if (fsName == "SD") {
++        if (!setupSdCard()) { inputLock(); displayError("SD not found", true); inputUnlock(); return false; }
++        fs = &SD;
++    } else {
++        fs = &LittleFS;
++    }
++    if (!fs || !fs->exists(path)) { inputLock(); displayError("Payload not found: " + path, true); inputUnlock(); return false; }
++    s_running = true;
++    if (!ensureUsbHidReady()) { inputLock(); displayError("USB HID init failed", true); inputUnlock(); s_running=false; return false; }
++#if defined(USB_as_HID)
++    unsigned long t0=millis();
++    inputLock(); printStatusBadUSBBLE("Waiting USB Host..."); inputUnlock();
++    while (!tud_mounted() && millis()-t0 < 10000) {
++        vTaskDelay(pdMS_TO_TICKS(100));
++        inputLock(); bool cancel=EscPress||AnyKeyPress; inputUnlock();
++        if (cancel) { inputLock(); displayInfo("Cancelled — host not ready", true); inputUnlock(); s_running=false; return false; }
++    }
++    if (!tud_mounted()) { inputLock(); displayError("USB host not connected", true); inputUnlock(); s_running=false; return false; }
++    uint16_t delayMs=bruceConfig.badUsbAutoRun.delayMs;
++    if (delayMs) { inputLock(); printStatusBadUSBBLE("Host connected, delay "+String(delayMs)+"ms"); inputUnlock(); vTaskDelay(pdMS_TO_TICKS(delayMs)); }
++void badUsbAutoRunTestTask(void *param) {
++    vTaskDelay(pdMS_TO_TICKS(300));
++    badUsbAutoRunExecuteNow(false);
++    vTaskDelete(NULL);
++}
++
++#endif
++    inputLock(); printHeaderBadUSBBLE(path); printStatusBadUSBBLE("Running Auto-Run..."); inputUnlock();
++    // key_input takes FS by value
++    key_input(*fs, path, hid_usb);
++    inputLock(); displayInfo("Auto-Run Done", true); delay(1000); inputUnlock();
++    s_running=false;
++    return true;
++}
++
++static void badUsbAutoRunTask(void *param) {
++    vTaskDelay(pdMS_TO_TICKS(2000));
++    if (bruceConfig.badUsbAutoRun.enabled && bruceConfig.badUsbAutoRun.trigger==0) ensureUsbHidReady();
++    while (true) {
++        if (!bruceConfig.badUsbAutoRun.enabled) { vTaskDelay(pdMS_TO_TICKS(1000)); continue; }
++        if (!badUsbAutoRunIsArmed()) { s_armed=false; vTaskDelay(pdMS_TO_TICKS(1000)); continue; }
++        s_armed=true;
++        bool mounted=false;
++#if defined(USB_as_HID)
++        if (!s_usbInitialized) ensureUsbHidReady();
++        mounted=tud_mounted();
++void badUsbAutoRunTestTask(void *param) {
++    vTaskDelay(pdMS_TO_TICKS(300));
++    badUsbAutoRunExecuteNow(false);
++    vTaskDelete(NULL);
++}
++
++#endif
++        if (mounted && !s_lastMounted) {
++            s_lastPlugMs=millis();
++            uint8_t trig=bruceConfig.badUsbAutoRun.trigger;
++            if (trig==2) {
++                vTaskDelay(pdMS_TO_TICKS(2000));
++#if defined(USB_as_HID)
++                if (!tud_mounted()) { s_lastMounted=false; vTaskDelay(pdMS_TO_TICKS(500)); continue; }
++void badUsbAutoRunTestTask(void *param) {
++    vTaskDelay(pdMS_TO_TICKS(300));
++    badUsbAutoRunExecuteNow(false);
++    vTaskDelete(NULL);
++}
++
++#endif
++            }
++            bool shouldRun=true;
++            if (bruceConfig.badUsbAutoRun.confirmWindow) {
++                shouldRun=doConfirmCountdown(bruceConfig.badUsbAutoRun.confirmMs);
++            }
++            if (shouldRun) {
++                runPayloadFile(bruceConfig.badUsbAutoRun.payloadFs, bruceConfig.badUsbAutoRun.payloadPath);
++                if (bruceConfig.badUsbAutoRun.runOncePerPlug) {
++                    while (true) {
++#if defined(USB_as_HID)
++                        if (!tud_mounted()) break;
++                        vTaskDelay(pdMS_TO_TICKS(500));
++#else
++                        break;
++void badUsbAutoRunTestTask(void *param) {
++    vTaskDelay(pdMS_TO_TICKS(300));
++    badUsbAutoRunExecuteNow(false);
++    vTaskDelete(NULL);
++}
++
++#endif
++                    }
++                    vTaskDelay(pdMS_TO_TICKS(1000));
++                } else {
++                    vTaskDelay(pdMS_TO_TICKS(2000));
++                }
++            } else {
++                while (true) {
++#if defined(USB_as_HID)
++                    if (!tud_mounted()) break;
++                    vTaskDelay(pdMS_TO_TICKS(500));
++#else
++                    break;
++void badUsbAutoRunTestTask(void *param) {
++    vTaskDelay(pdMS_TO_TICKS(300));
++    badUsbAutoRunExecuteNow(false);
++    vTaskDelete(NULL);
++}
++
++#endif
++                }
++                vTaskDelay(pdMS_TO_TICKS(1000));
++            }
++        }
++        s_lastMounted=mounted;
++        vTaskDelay(pdMS_TO_TICKS(300));
++    }
++}
++
++bool badUsbAutoRunExecuteNow(bool fromMenu) {
++    if (!badUsbAutoRunIsArmed()) { displayError("No payload set", true); return false; }
++    bool ok=runPayloadFile(bruceConfig.badUsbAutoRun.payloadFs, bruceConfig.badUsbAutoRun.payloadPath);
++    return ok;
++}
++
++void badUsbAutoRunSetPayloadInteractive() {
++    FS *fs=nullptr;
++    options={};
++    if (setupSdCard()) options.push_back({"SD Card", [&](){ fs=&SD; }});
++    options.push_back({"LittleFS", [&](){ fs=&LittleFS; }});
++    options.push_back({"Cancel", [&](){ fs=nullptr; }});
++    loopOptions(options);
++    if (fs==nullptr) return;
++    String bad_script=loopSD(*fs, true);
++    if (bad_script=="" || bad_script=="/") { displayWarning("Cancelled", true); return; }
++    String fsName=(fs==&SD)?"SD":"LittleFS";
++    bruceConfig.setBadUsbAutoRunPayload(fsName, bad_script);
++    displayInfo("Auto-Run payload set:\n"+fsName+":"+bad_script, true);
++}
++
++void badUsbAutoRunShowStatus() {
++    String txt="BadUSB Auto-Run Status:\n\n";
++    txt+="Enabled: "+String(bruceConfig.badUsbAutoRun.enabled?"ON":"OFF")+"\n";
++    txt+="Armed: "+String(badUsbAutoRunIsArmed()?"YES":"NO")+"\n";
++    txt+="Payload: "+badUsbAutoRunGetPayloadLabel()+"\n";
++    txt+="Delay: "+String(bruceConfig.badUsbAutoRun.delayMs)+"ms\n";
++    txt+="Confirm: "+String(bruceConfig.badUsbAutoRun.confirmWindow? "ON ("+String(bruceConfig.badUsbAutoRun.confirmMs)+"ms)":"OFF")+"\n";
++    txt+="Trigger: "+String(bruceConfig.badUsbAutoRun.trigger==0?"Enumeration":bruceConfig.badUsbAutoRun.trigger==1?"VBUS":"Delayed")+"\n";
++    txt+="OncePerPlug: "+String(bruceConfig.badUsbAutoRun.runOncePerPlug?"YES":"NO")+"\n";
++    txt+="Running: "+String(s_running?"YES":"NO");
++    displayInfo(txt, true);
++}
++
++void badUsbAutoRunMenu() {
++    while (true) {
++        options={};
++        String enLabel="Auto-Run: "+String(bruceConfig.badUsbAutoRun.enabled?"ON":"OFF");
++        String payloadLabel="Payload: "+(bruceConfig.badUsbAutoRun.payloadPath.isEmpty()?"Not set":bruceConfig.badUsbAutoRun.payloadPath);
++        String delayLabel="Delay: "+String(bruceConfig.badUsbAutoRun.delayMs)+"ms";
++        String confirmLabel="Confirm Window: "+String(bruceConfig.badUsbAutoRun.confirmWindow?"ON":"OFF");
++        String triggerLabel="Trigger: "+String(bruceConfig.badUsbAutoRun.trigger==0?"Enumeration":bruceConfig.badUsbAutoRun.trigger==1?"VBUS":"Delayed");
++        String onceLabel="Run Once Per Plug: "+String(bruceConfig.badUsbAutoRun.runOncePerPlug?"ON":"OFF");
++        options.push_back({enLabel, [](){
++            bruceConfig.setBadUsbAutoRunEnabled(!bruceConfig.badUsbAutoRun.enabled);
++            if (bruceConfig.badUsbAutoRun.enabled){ badUsbAutoRunStartTask(); displayInfo("Auto-Run ENABLED", true); }
++            else { badUsbAutoRunStopTask(); displayInfo("Auto-Run DISABLED", true); }
++        }});
++        options.push_back({"Set Payload...", [](){ badUsbAutoRunSetPayloadInteractive(); }});
++        options.push_back({"Show Status", [](){ badUsbAutoRunShowStatus(); }});
++        options.push_back({delayLabel, [](){
++            options={
++                {"0 ms", [](){ bruceConfig.setBadUsbAutoRunDelayMs(0); }},
++                {"500 ms", [](){ bruceConfig.setBadUsbAutoRunDelayMs(500); }},
++                {"1000 ms", [](){ bruceConfig.setBadUsbAutoRunDelayMs(1000); }},
++                {"1500 ms", [](){ bruceConfig.setBadUsbAutoRunDelayMs(1500); }},
++                {"2000 ms", [](){ bruceConfig.setBadUsbAutoRunDelayMs(2000); }},
++                {"3000 ms", [](){ bruceConfig.setBadUsbAutoRunDelayMs(3000); }},
++                {"5000 ms", [](){ bruceConfig.setBadUsbAutoRunDelayMs(5000); }},
++                {"Back", [](){}}
++            };
++            loopOptions(options, MENU_TYPE_SUBMENU, "Auto Delay");
++        }});
++        options.push_back({confirmLabel, [](){
++            bruceConfig.setBadUsbAutoRunConfirm(!bruceConfig.badUsbAutoRun.confirmWindow);
++            displayInfo(bruceConfig.badUsbAutoRun.confirmWindow?"Confirm ON":"Confirm OFF", true);
++        }});
++        options.push_back({triggerLabel, [](){
++            options={
++                {"On Enumeration", [](){ bruceConfig.setBadUsbAutoRunTrigger(0); }},
++                {"On VBUS", [](){ bruceConfig.setBadUsbAutoRunTrigger(1); }},
++                {"Delayed (enum+2s)", [](){ bruceConfig.setBadUsbAutoRunTrigger(2); }},
++                {"Back", [](){}}
++            };
++            loopOptions(options, MENU_TYPE_SUBMENU, "Trigger");
++        }});
++        options.push_back({onceLabel, [](){
++            bruceConfig.badUsbAutoRun.runOncePerPlug=!bruceConfig.badUsbAutoRun.runOncePerPlug;
++            bruceConfig.saveFile();
++            displayInfo(bruceConfig.badUsbAutoRun.runOncePerPlug?"Once per plug ON":"Once per plug OFF", true);
++        }});
++        options.push_back({"Test Run Now", [](){
++            if (!badUsbAutoRunIsArmed()){ displayError("No payload set", true); return; }
++            displayInfo("Test run in 1s...", true); delay(1000);
++            badUsbAutoRunExecuteNow(true);
++        }});
++        options.push_back({"Back", [](){ return; }});
++        addOptionToMainMenu();
++        int idx=loopOptions(options, MENU_TYPE_SUBMENU, "BadUSB Auto-Run");
++        if (idx<0 || returnToMenu) break;
++        if (idx==(int)options.size()-1) break;
++    }
++}
++
++void badUsbAutoRunTestTask(void *param) {
++    vTaskDelay(pdMS_TO_TICKS(300));
++    badUsbAutoRunExecuteNow(false);
++    vTaskDelete(NULL);
++}
++
++#endif
+diff --git a/src/modules/badusb_ble/badusb_autorun.h b/src/modules/badusb_ble/badusb_autorun.h
+new file mode 100644
+index 0000000..2779eda
+--- /dev/null
++++ b/src/modules/badusb_ble/badusb_autorun.h
+@@ -0,0 +1,25 @@
++#pragma once
++#if !defined(LITE_VERSION)
++#include <Arduino.h>
++
++// BadUSB Auto-Run on USB plug
++// - Runs prepared DuckyScript when host enumerates USB HID
++// - Config persisted in bruce.conf via bruceConfig.badUsbAutoRun
++// - Safety: 3s countdown window to cancel with any button
++
++void badUsbAutoRunInit();                    // call from setup() after config loaded
++void badUsbAutoRunStartTask();               // start FreeRTOS monitor task if enabled
++void badUsbAutoRunStopTask();                // stop task (when disabled)
++bool badUsbAutoRunIsArmed();                 // enabled && valid payload
++bool badUsbAutoRunIsRunning();               // currently in countdown/execution
++String badUsbAutoRunGetPayloadLabel();       // "LittleFS:/path" or "—"
++String badUsbAutoRunGetStatusJson();         // for WebUI / seclab/status
++
++// Menu helpers
++void badUsbAutoRunMenu();                    // full submenu for BadUsbMenu
++void badUsbAutoRunSetPayloadInteractive();   // pick file via loopSD
++void badUsbAutoRunShowStatus();              // display current config
++bool badUsbAutoRunExecuteNow(bool fromMenu); // manual test run (fromMenu=true shows extra UI)
++void badUsbAutoRunTestTask(void *param);     // for WebUI background test run
++
++#endif
 diff --git a/src/modules/badusb_ble/ducky_typer.cpp b/src/modules/badusb_ble/ducky_typer.cpp
 index c6fd084..b6f39cf 100644
 --- a/src/modules/badusb_ble/ducky_typer.cpp
