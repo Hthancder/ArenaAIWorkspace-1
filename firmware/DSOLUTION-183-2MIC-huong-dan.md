@@ -252,3 +252,10 @@ nạp sai địa chỉ). Thứ tự kiểm tra khi có log serial: (1) banner bo
 - Để điều khiển ngay mà không đổi AutoStart, vào **WiFi → WebUI control**, **Files → WebUI**, hoặc **Quick → WebUI control**. Các đường này mở cùng menu trạng thái: bắt đầu, xem thông tin, dừng WebUI giữ Wi‑Fi, hoặc dừng cả hai. Bật/tắt thủ công không đổi cấu hình tự khởi động lần sau.
 - Khi đang OTA hoặc đang chuyển mạng, lệnh dừng từ menu sẽ báo bận thay vì cố ngắt. Nếu quá trình tự khởi động đang hủy, chờ và thử lại. AutoStart OFF được lưu ngay cả khi WebUI chưa thể dừng vì đang bận; khi xong hãy vào WebUI control để dừng.
 - Evil Portal hiển thị **Deauth not configured** khi phiên hiện tại không được cấu hình chức năng đó, thay vì chỉ ghi OFF và gây hiểu nhầm; nhãn **paused** khác với chưa cấu hình.
+
+
+## Tự thu hồi RAM và xử lý Low RAM
+
+- Khi trở về menu chính, firmware giải phóng vùng nhớ còn giữ của danh sách menu cũ; sau quét BLE, kết quả quét tạm được giải phóng khi đã sao chép thông tin để hiển thị. Việc này không xóa tệp hay cài đặt. Không phải mọi module đều có bộ nhớ đệm đã được thu hồi tự động.
+- Với quét BLE và BLE Suite, firmware không áp lại ngưỡng RAM **khởi tạo controller** khi NimBLE đã khởi tạo. Kiểm tra thiếu RAM của board này không tự tắt Wi‑Fi/WebUI hoặc BLE để lấy bộ nhớ; một số tính năng chuyển radio riêng vẫn có hành vi dừng radio như trước.
+- Nếu vẫn báo Low RAM, dừng các tác vụ không cần dùng, thử lại; nếu không hồi phục, lưu công việc và khởi động lại. Trong **Device Info**, xem DMA free và DMA max block: tổng RAM còn nhiều vẫn có thể không đủ khối liên tục. Serial `[RAM]` cho biết số đo khi guard từ chối. Không có cách an toàn để tự gom các vùng heap còn đang sử dụng; kiểm thử trên board thật vẫn cần thiết.

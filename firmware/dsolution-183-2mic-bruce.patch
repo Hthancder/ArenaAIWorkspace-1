@@ -10305,7 +10305,7 @@ index 00000000..e9a47f79
 +
 +#endif
 diff --git a/src/core/main_menu.cpp b/src/core/main_menu.cpp
-index 7420b9e8..91022152 100644
+index 7420b9e8..1439c251 100644
 --- a/src/core/main_menu.cpp
 +++ b/src/core/main_menu.cpp
 @@ -1,12 +1,17 @@
@@ -10345,7 +10345,7 @@ index 7420b9e8..91022152 100644
          &wireToolsMenu,
  #endif
          &configMenu,
-@@ -40,6 +49,7 @@ MainMenu::MainMenu() {
+@@ -40,13 +49,20 @@ MainMenu::MainMenu() {
          return mainMenu.handleGridPageTap(x, y, currentIndex, newIndex);
      };
  #endif
@@ -10353,7 +10353,20 @@ index 7420b9e8..91022152 100644
  }
  
  MainMenu::~MainMenu() {}
-@@ -129,16 +139,25 @@ void MainMenu::buildGridLayout(int itemCount) {
+ 
+ void MainMenu::begin(void) {
+     returnToMenu = false;
++#if defined(DSOLUTION_183_2MIC)
++    // No menu callback is executing here: release the previous menu's backing
++    // allocation as well as its entries, rather than retaining a huge scan list.
++    std::vector<Option>().swap(options);
++#else
+     options = {};
++#endif
+ 
+     bool gridStyle = bruceConfig.mainMenuStyle == MAIN_MENU_GRID;
+ 
+@@ -129,16 +145,25 @@ void MainMenu::buildGridLayout(int itemCount) {
      // preferred size. Scaled by FP so it still means something on high-res boards.
      const int MIN_CELL_W = 54 * FP;
      const int MIN_CELL_H = 40 * FP;
@@ -10381,7 +10394,7 @@ index 7420b9e8..91022152 100644
  
      // Try every column count down to the MIN_CELL_W floor and keep the one whose resulting cells
      // are largest in their smaller dimension (min(cellW, cellH)) — that's what a lopsided grid
-@@ -147,9 +166,12 @@ void MainMenu::buildGridLayout(int itemCount) {
+@@ -147,9 +172,12 @@ void MainMenu::buildGridLayout(int itemCount) {
      int maxCols = max(1, min(itemCount, areaW / MIN_CELL_W));
      int bestCols = 1;
      int bestScore = -1;
@@ -10394,7 +10407,7 @@ index 7420b9e8..91022152 100644
          if (score > bestScore) {
              bestScore = score;
              bestCols = cols;
-@@ -157,19 +179,27 @@ void MainMenu::buildGridLayout(int itemCount) {
+@@ -157,19 +185,27 @@ void MainMenu::buildGridLayout(int itemCount) {
      }
  
      _grid.cols = bestCols;
@@ -10427,7 +10440,7 @@ index 7420b9e8..91022152 100644
      if (_grid.iconBox < 12) _grid.iconBox = 12;
  
      // Center whatever is left over so the grid doesn't hug the border
-@@ -232,6 +262,42 @@ void MainMenu::drawGrid(int index) {
+@@ -232,6 +268,42 @@ void MainMenu::drawGrid(int index) {
  
      _gridLastIndex = index;
      _gridRedrawAll = false;
@@ -10470,7 +10483,7 @@ index 7420b9e8..91022152 100644
  }
  
  /*********************************************************************
-@@ -251,6 +317,38 @@ void MainMenu::drawGridCell(int index, bool selected) {
+@@ -251,6 +323,38 @@ void MainMenu::drawGridCell(int index, bool selected) {
      options[index].w = _grid.cellW;
      options[index].h = _grid.cellH;
  
@@ -10509,7 +10522,7 @@ index 7420b9e8..91022152 100644
      uint16_t bgColor = selected ? bruceConfig.priColor : bruceConfig.bgColor;
      uint16_t fgColor = selected ? bruceConfig.bgColor : bruceConfig.priColor;
  
-@@ -270,6 +368,7 @@ void MainMenu::drawGridCell(int index, bool selected) {
+@@ -270,6 +374,7 @@ void MainMenu::drawGridCell(int index, bool selected) {
          y + _grid.cellH - LH * _grid.labelSize - 3,
          1
      );
@@ -10517,7 +10530,7 @@ index 7420b9e8..91022152 100644
  }
  
  /*********************************************************************
-@@ -277,12 +376,13 @@ void MainMenu::drawGridCell(int index, bool selected) {
+@@ -277,12 +382,13 @@ void MainMenu::drawGridCell(int index, bool selected) {
  **  Thin indicator on the right telling there are more rows off screen
  **********************************************************************/
  void MainMenu::drawGridScrollBar() {
@@ -11411,7 +11424,7 @@ index 5bb1c613..e3324ac4 100644
 +
 +#endif
 diff --git a/src/core/radio_mem.h b/src/core/radio_mem.h
-index 0d88860f..1bc151a2 100644
+index 0d88860f..4daad610 100644
 --- a/src/core/radio_mem.h
 +++ b/src/core/radio_mem.h
 @@ -15,11 +15,17 @@
@@ -11452,20 +11465,34 @@ index 0d88860f..1bc151a2 100644
  
  // SDR bank hand-off (implemented in modules/wifi/sdr.cpp): the SDR engine's
  // 64 KiB SRAM bank is kept out of the heap behind a fence allocation so the IQ
-@@ -53,42 +63,59 @@ static inline bool radioHasMemForWifi() {
+@@ -53,42 +63,78 @@ static inline bool radioHasMemForWifi() {
      // Heap looks tight: hand the SDR bank back to the heap before Wi-Fi init
      sdrBankHeapInit();
      sdrBankReleaseForRadio();
+-    return radioLargestDmaBlock() >= RADIO_WIFI_MIN_DMA_BLOCK;
 +    if (radioLargestDmaBlock() >= RADIO_WIFI_MIN_DMA_BLOCK) return true;
++#if !defined(DSOLUTION_183_2MIC)
 +    radioFreeBleForWifi();
-     return radioLargestDmaBlock() >= RADIO_WIFI_MIN_DMA_BLOCK;
++#endif
++    size_t block = radioLargestDmaBlock();
++    if (block < RADIO_WIFI_MIN_DMA_BLOCK) {
++        Serial.printf("[RAM] WiFi needs DMA block %u; largest=%u free=%u\n",
++                      (unsigned)RADIO_WIFI_MIN_DMA_BLOCK, (unsigned)block,
++                      (unsigned)heap_caps_get_free_size(MALLOC_CAP_DMA));
++    }
++    return block >= RADIO_WIFI_MIN_DMA_BLOCK;
  }
  
  static inline bool radioHasMemForBle() {
      // return true; // uncomment to disable it
--    if (radioLargestDmaBlock() >= RADIO_BLE_MIN_DMA_BLOCK) return true;
++#if !defined(DSOLUTION_183_2MIC)
 +    bool webUiActive = isWebUiActiveOrStarting();
++#endif
++#if defined(DSOLUTION_183_2MIC)
+     if (radioLargestDmaBlock() >= RADIO_BLE_MIN_DMA_BLOCK) return true;
++#else
 +    if (!webUiActive && radioLargestDmaBlock() >= RADIO_BLE_MIN_DMA_BLOCK) return true;
++#endif
  
 -    // Not enough DMA memory - first hand the SDR bank back to the heap
 +    // Not enough DMA memory (or WebUI background server is holding radio/DMA heap):
@@ -11473,9 +11500,13 @@ index 0d88860f..1bc151a2 100644
      sdrBankHeapInit();
      sdrBankReleaseForRadio();
 -    if (radioLargestDmaBlock() >= RADIO_BLE_MIN_DMA_BLOCK) {
-+    if (!webUiActive && radioLargestDmaBlock() >= RADIO_BLE_MIN_DMA_BLOCK) {
-         return true;
-     }
+-        return true;
+-    }
++#if defined(DSOLUTION_183_2MIC)
++    if (radioLargestDmaBlock() >= RADIO_BLE_MIN_DMA_BLOCK) return true;
++#else
++    if (!webUiActive && radioLargestDmaBlock() >= RADIO_BLE_MIN_DMA_BLOCK) return true;
++#endif
  
 -    // Still not enough - try to free WiFi
 -    Serial.println("[RAM] Low contiguous DMA memory for BLE, attempting to free WiFi...");
@@ -11488,6 +11519,7 @@ index 0d88860f..1bc151a2 100644
 -        WiFi.mode(WIFI_OFF);
 -        #endif
 -        delay(300);
++#if !defined(DSOLUTION_183_2MIC)
 +    // Stop any active/starting WebUI + mDNS + logging buffer and deinit Wi-Fi
 +    if (webUiActive || WiFi.getMode() != WIFI_MODE_NULL ||
 +        radioLargestDmaBlock() < RADIO_BLE_MIN_DMA_BLOCK) {
@@ -11498,9 +11530,11 @@ index 0d88860f..1bc151a2 100644
 -    // Recheck after freeing WiFi
 -    if (radioLargestDmaBlock() >= RADIO_BLE_MIN_DMA_BLOCK) {
 -        Serial.printf("[RAM] WiFi freed, DMA block: %d bytes\n", radioLargestDmaBlock());
++#endif
++
 +    size_t dmaBlock = radioLargestDmaBlock();
 +    if (dmaBlock >= RADIO_BLE_MIN_DMA_BLOCK) {
-+        Serial.printf("[RAM] WebUI/WiFi freed, DMA block: %u bytes\n", (unsigned)dmaBlock);
++        Serial.printf("[RAM] BLE DMA block: %u bytes\n", (unsigned)dmaBlock);
          return true;
      }
  
@@ -19103,7 +19137,7 @@ index ffd58b47..0e2ad2bd 100644
  
  #endif
 diff --git a/src/modules/ble/BLE_Suite.cpp b/src/modules/ble/BLE_Suite.cpp
-index 27c887d0..1126e984 100644
+index 27c887d0..7e069c9a 100644
 --- a/src/modules/ble/BLE_Suite.cpp
 +++ b/src/modules/ble/BLE_Suite.cpp
 @@ -20,7 +20,9 @@
@@ -19116,7 +19150,21 @@ index 27c887d0..1126e984 100644
  #include <SD.h>
  #include <algorithm>
  #include <functional>
-@@ -2475,6 +2477,11 @@ bool MultiConnectionAttack::advertisingSpam(std::vector<NimBLEAddress> targets)
+@@ -300,8 +302,12 @@ bool BLEStateManager::initBLE(const String &name, int powerLevel) {
+         }
+     }
+ 
++#if defined(DSOLUTION_183_2MIC)
++    if (!NimBLEDevice::isInitialized() && !radioHasMemForBle()) {
++#else
+     if (!radioHasMemForBle()) {
+-        displayError("Low RAM: free WiFi/SD first", true);
++#endif
++        displayError("Low RAM: stop WiFi/BLE, retry", true);
+         return false;
+     }
+ 
+@@ -2475,6 +2481,11 @@ bool MultiConnectionAttack::advertisingSpam(std::vector<NimBLEAddress> targets)
  }
  
  bool MultiConnectionAttack::nrf24JamAttack(int jamMode) {
@@ -19128,7 +19176,7 @@ index 27c887d0..1126e984 100644
      AutoCleanup cleanup([]() { BLEStateManager::deinitBLE(true); });
  
      if (!confirmAttack("Jam BLE frequencies? This may disrupt nearby devices.")) return false;
-@@ -2517,9 +2524,15 @@ bool MultiConnectionAttack::nrf24JamAttack(int jamMode) {
+@@ -2517,9 +2528,15 @@ bool MultiConnectionAttack::nrf24JamAttack(int jamMode) {
      }
      showAttackResult(false, "Failed to start BLE jamming");
      return false;
@@ -19144,7 +19192,7 @@ index 27c887d0..1126e984 100644
      AutoCleanup cleanup([]() { BLEStateManager::deinitBLE(true); });
  
      if (!confirmAttack("Jam BLE while attempting exploit connection?")) return false;
-@@ -2556,6 +2569,7 @@ bool MultiConnectionAttack::jamAndConnect(NimBLEAddress target) {
+@@ -2556,6 +2573,7 @@ bool MultiConnectionAttack::jamAndConnect(NimBLEAddress target) {
      }
      showAttackResult(false, "Jam & Connect attack failed");
      return false;
@@ -19152,7 +19200,7 @@ index 27c887d0..1126e984 100644
  }
  
  void MultiConnectionAttack::cleanup() {
-@@ -5186,6 +5200,18 @@ void showMemorySubMenu(NimBLEAddress target, SelectedDevice deviceInfo) {
+@@ -5186,6 +5204,18 @@ void showMemorySubMenu(NimBLEAddress target, SelectedDevice deviceInfo) {
  }
  
  void showDoSSubMenu(NimBLEAddress target, SelectedDevice deviceInfo) {
@@ -19171,7 +19219,7 @@ index 27c887d0..1126e984 100644
      const char *options[] = {
          "Connection Flood", "Advertising Spam", "Jam & Connect (NRF24)", "Protocol Fuzzer"
      };
-@@ -5202,6 +5228,7 @@ void showDoSSubMenu(NimBLEAddress target, SelectedDevice deviceInfo) {
+@@ -5202,6 +5232,7 @@ void showDoSSubMenu(NimBLEAddress target, SelectedDevice deviceInfo) {
          case 2: multi.jamAndConnect(target); break;
          case 3: runProtocolFuzzer(target); break;
      }
@@ -19209,7 +19257,7 @@ index 00000000..ce6f7d28
 +    return selection == 2 && enabled;
 +}
 diff --git a/src/modules/ble/ble_common.cpp b/src/modules/ble/ble_common.cpp
-index 5494bfba..a6993a73 100644
+index 5494bfba..7d16fab8 100644
 --- a/src/modules/ble/ble_common.cpp
 +++ b/src/modules/ble/ble_common.cpp
 @@ -1,4 +1,5 @@
@@ -19238,18 +19286,39 @@ index 5494bfba..a6993a73 100644
          }
      }
  
-@@ -139,7 +140,9 @@ bool ble_scan_setup() {
+@@ -139,9 +140,15 @@ bool ble_scan_setup() {
  
      RAM_LOG("ble-scan pre-init");
  
 -    // FIX: Always try to init - if already init'd, it's a no-op
-+    if (!radioHasMemForBle()) {
-+        radioFreeWiFiForBle();
-+    }
++#if defined(DSOLUTION_183_2MIC)
++    // The controller's initial allocation was already made; requiring another
++    // full init-sized block here produces a false Low RAM on subsequent scans.
++    if (!NimBLEDevice::isInitialized() && !radioHasMemForBle()) {
++#else
++    if (!radioHasMemForBle()) { radioFreeWiFiForBle(); }
      if (!radioHasMemForBle()) {
-         displayError("Low RAM: free WiFi/SD first", true);
+-        displayError("Low RAM: free WiFi/SD first", true);
++#endif
++        displayError("Low RAM: stop WiFi/BLE, retry", true);
          returnToMenu = true;
-@@ -243,12 +246,15 @@ void ble_scan() {
+         return false;
+     }
+@@ -233,7 +240,12 @@ void ble_scan() {
+         return;
+     }
+ 
+-    if (pBLEScan) { pBLEScan->stop(); }
++    if (pBLEScan) {
++        pBLEScan->stop();
++        // Menu entries own copies of names/addresses; the scan cache is no
++        // longer needed even when the BLE stack remains active for another app.
++        pBLEScan->clearResults();
++    }
+ 
+     if (!bleWasActiveBefore) {
+ #if !defined(LITE_VERSION)
+@@ -243,12 +255,15 @@ void ble_scan() {
  #endif
      }
  
@@ -19268,10 +19337,10 @@ index 5494bfba..a6993a73 100644
  }
 diff --git a/src/modules/ble/ble_gatt_cloner.cpp b/src/modules/ble/ble_gatt_cloner.cpp
 new file mode 100644
-index 00000000..c6e865f2
+index 00000000..594ca01a
 --- /dev/null
 +++ b/src/modules/ble/ble_gatt_cloner.cpp
-@@ -0,0 +1,1097 @@
+@@ -0,0 +1,1101 @@
 +#include "ble_gatt_cloner.h"
 +#include "ble_audit_logic.h"
 +#include "ble_gatt_types.h"
@@ -19581,7 +19650,9 @@ index 00000000..c6e865f2
 +    stopBLEStack();
 +    vTaskDelay(pdMS_TO_TICKS(120));
 +
++#if !defined(DSOLUTION_183_2MIC)
 +    if (!radioHasMemForBle()) radioFreeWiFiForBle();
++#endif
 +    if (!radioHasMemForBle()) {
 +        displayError("Low RAM for BLE Cloner", true);
 +        return;
@@ -19826,7 +19897,9 @@ index 00000000..c6e865f2
 +static void inspectAndExploreTarget(const ScanTarget &tgt, bool autoAudit = false, bool safeFuzzer = false) {
 +    stopBLEStack();
 +    vTaskDelay(pdMS_TO_TICKS(80));
++#if !defined(DSOLUTION_183_2MIC)
 +    if (!radioHasMemForBle()) radioFreeWiFiForBle();
++#endif
 +    if (!radioHasMemForBle()) {
 +        displayError("Low RAM for BLE Client", true);
 +        return;
@@ -20479,10 +20552,10 @@ index 00000000..0cd28104
 +inline uint16_t bleGuardIncrement(uint16_t hits) { return hits == UINT16_MAX ? hits : hits + 1; }
 diff --git a/src/modules/ble/ble_security_audit.cpp b/src/modules/ble/ble_security_audit.cpp
 new file mode 100644
-index 00000000..5e4c2f22
+index 00000000..15fa7aad
 --- /dev/null
 +++ b/src/modules/ble/ble_security_audit.cpp
-@@ -0,0 +1,781 @@
+@@ -0,0 +1,785 @@
 +#include "ble_security_audit.h"
 +#include "ble_audit_logic.h"
 +#if !defined(LITE_VERSION)
@@ -20813,7 +20886,9 @@ index 00000000..5e4c2f22
 +    if (bleTagBeaconIsRunning()) bleTagBeaconStop();
 +    stopBLEStack();
 +    vTaskDelay(pdMS_TO_TICKS(100));
++#if !defined(DSOLUTION_183_2MIC)
 +    if (!radioHasMemForBle()) radioFreeWiFiForBle();
++#endif
 +    if (!radioHasMemForBle()) { if (errOut) *errOut = "Low RAM for BLE pairing audit"; return false; }
 +
 +    s_pairAuthComplete = false;
@@ -21028,7 +21103,9 @@ index 00000000..5e4c2f22
 +    if (s_tagRunning) return true;
 +    stopBLEStack();
 +    vTaskDelay(pdMS_TO_TICKS(100));
++#if !defined(DSOLUTION_183_2MIC)
 +    if (!radioHasMemForBle()) radioFreeWiFiForBle();
++#endif
 +    if (!radioHasMemForBle()) { if (errOut) *errOut = "Low RAM for BLE beacon"; return false; }
 +    s_tagDurationSec = durationSec ? durationSec : 60;
 +    s_tagStartedMs = millis();
