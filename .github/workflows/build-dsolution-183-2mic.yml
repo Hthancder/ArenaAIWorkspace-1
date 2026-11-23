@@ -160,7 +160,7 @@ jobs:
           NM=$(find "$HOME/.platformio/packages" -name 'xtensa-esp32s3-elf-nm' 2>/dev/null | head -1)
           {
             echo "RAM/Flash: $(grep -E '^(RAM|Flash):' build.log | tr -s ' ' | tr '\n' ' ')"
-            echo "ota binary: $(ls -l "$BIN" 2>/dev/null | awk '{print $5}') bytes (Dual-OTA 4MB slot)"
+            echo "ota binary: $(ls -l "$BIN" 2>/dev/null | awk '{print $5}') bytes (Dual-OTA 4.0625MB slot)"
             IFACE_OBJ=$(find .pio/build/dsolution-183-2mic -name 'interface.cpp.o' | head -1)
             LOVYAN_OBJ=$(find .pio/build/dsolution-183-2mic -name 'lovyan.cpp.o' | head -1)
             echo "interface object: ${IFACE_OBJ:-MISSING}"
