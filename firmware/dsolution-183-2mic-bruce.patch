@@ -12007,10 +12007,10 @@ index 0000000..83c7f4b
 +
 +#endif
 diff --git a/src/core/menu_items/BleMenu.cpp b/src/core/menu_items/BleMenu.cpp
-index ed144ba..0b5d5e9 100644
+index ed144ba..a062d22 100644
 --- a/src/core/menu_items/BleMenu.cpp
 +++ b/src/core/menu_items/BleMenu.cpp
-@@ -3,8 +3,12 @@
+@@ -3,8 +3,11 @@
  #include "core/utils.h"
  #include "modules/badusb_ble/ducky_typer.h"
  #include "modules/ble/ble_common.h"
@@ -12019,43 +12019,47 @@ index ed144ba..0b5d5e9 100644
  #include "modules/ble/ble_ninebot.h"
  #include "modules/ble/ble_spam.h"
 +#include "modules/ble/ble_tracker_guard.h"
-+#include "modules/ble/ble_ducky.h"
  #if !defined(LITE_VERSION)
  #include "modules/ble/BLE_Suite.h"
  #else
-@@ -25,20 +29,22 @@ void BleMenu::optionsMenu() {
+@@ -25,22 +28,29 @@ void BleMenu::optionsMenu() {
      }
  #endif
  #if !defined(LITE_VERSION)
 -    options.push_back({"Media Cmds", [=]() { MediaCommands(hid_ble, true); }});
 -    options.push_back({"BLE Scan", ble_scan});
--    options.push_back({"iBeacon", [=]() {
-+    options.push_back({"🔍 BLE Scan & Guard", ble_scan});
-+    options.push_back({"🛡 Privacy Guard", ble_guard_setup});
-+    options.push_back({"🔬 GATT / Security Audit", ble_gatt_cloner_setup});
-+    options.push_back({"🛰 BLE Tracker Guard", ble_guard_setup});
-+    options.push_back({"🔥 BLE Spam Lab", [=]() { spamMenu(); }});
-+    options.push_back({"⌨ BLE Ducky (Wireless)", ble_ducky_setup});
-+    options.push_back({"⌨ BLE Keyboard Live", [=]() { ducky_keyboard(hid_ble, true); }});
-+    options.push_back({"🎬 Media & Presenter", [=]() { MediaCommands(hid_ble, true); }});
-+    options.push_back({"📍 iBeacon", [=]() {
++    // Discovery and defensive tools first, then active lab tools and HID utilities.
++    options.push_back({"Scan & Discover", ble_scan});
++    options.push_back({"Privacy Guard", ble_guard_setup});
++    options.push_back({"GATT Explorer / Clone", ble_gatt_cloner_setup});
++    options.push_back({"Security Audit", ble_security_audit_setup});
++    options.push_back({"BLE Spam Lab", [=]() { spamMenu(); }});
+     options.push_back({"iBeacon", [=]() {
                             ibeacon("Bruce", "e4c159a0-8c82-11e6-bdf4-0800200c9a66", 0x004C);
                         }});
 -    options.push_back({"Bad BLE", [=]() { ducky_setup(hid_ble, true); }});
 -    options.push_back({"BLE Keyboard", [=]() { ducky_keyboard(hid_ble, true); }});
- #endif
+-#endif
 -    options.push_back({"BLE Spam", [=]() { spamMenu(); }});
 -
- #if !defined(LITE_VERSION)
--    options.push_back({"BLE Suite", [=]() { BleSuiteMenu(); }});
--    options.push_back({"Ninebot", [=]() { BLENinebot(); }});
--    options.push_back({"Presenter mode", [=]() { PresenterMode(hid_ble, true); }});
-+    options.push_back({"🧪 BLE Suite", [=]() { BleSuiteMenu(); }});
-+    options.push_back({"🛴 Ninebot", [=]() { BLENinebot(); }});
-+    options.push_back({"🎤 Presenter Mode", [=]() { PresenterMode(hid_ble, true); }});
+-#if !defined(LITE_VERSION)
++    options.push_back({"BLE HID Payloads", [=]() {
++                           std::vector<Option> hidOptions = {
++                               {"DuckyScript Keyboard", [=]() { ducky_setup(hid_ble, true); }},
++                                {"Live BLE Keyboard", [=]() { ducky_keyboard(hid_ble, true); }},
++                                {"Media Commands", [=]() { MediaCommands(hid_ble, true); }},
++                                {"Back", []() {}}};
++                           loopOptions(hidOptions, MENU_TYPE_SUBMENU, "BLE HID");
++                       }});
+     options.push_back({"BLE Suite", [=]() { BleSuiteMenu(); }});
+     options.push_back({"Ninebot", [=]() { BLENinebot(); }});
+     options.push_back({"Presenter mode", [=]() { PresenterMode(hid_ble, true); }});
  #else
      options.push_back({"BLE Sniffer", [=]() { BLE_SnifferMenu(); }});
++    options.push_back({"BLE Spam Lab", [=]() { spamMenu(); }});
  #endif
+     addOptionToMainMenu();
+ 
 diff --git a/src/core/menu_items/ConfigMenu.cpp b/src/core/menu_items/ConfigMenu.cpp
 index 6e44fd4..c0ee131 100644
 --- a/src/core/menu_items/ConfigMenu.cpp
@@ -12326,10 +12330,10 @@ index 443e395..4c4346f 100644
      addOptionToMainMenu();
  
 diff --git a/src/core/menu_items/OthersMenu.cpp b/src/core/menu_items/OthersMenu.cpp
-index 40f9956..d7765e9 100644
+index 40f9956..a9e14f4 100644
 --- a/src/core/menu_items/OthersMenu.cpp
 +++ b/src/core/menu_items/OthersMenu.cpp
-@@ -2,13 +2,19 @@
+@@ -2,12 +2,17 @@
  
  #include "core/display.h"
  #include "core/utils.h"
@@ -12345,15 +12349,9 @@ index 40f9956..d7765e9 100644
  #include "modules/others/qrcode_menu.h"
 +#include "modules/others/sonar_guard.h"
  #include "modules/others/tururururu.h"
-+#include "modules/others/sonic_link.h"
  #include "modules/others/u2f.h"
  // Removed: #include "modules/others/timer.h"
- 
-@@ -16,9 +22,13 @@ void OthersMenu::optionsMenu() {
-     options = {
-         {"QRCodes",      qrcode_menu                  },
-         {"Megalodon",    shark_setup                  },
-+        {"🔊 Sonic Link (18kHz)", sonic_link_setup     },
+@@ -19,6 +24,9 @@ void OthersMenu::optionsMenu() {
  
  #if defined(HAS_MICROPHONE)
          {"Microphone",   [this]() { micMenu(); }      }, //@deveclipse
@@ -12363,7 +12361,7 @@ index 40f9956..d7765e9 100644
  #endif
  
  // New consolidated BadUSB & HID submenu
-@@ -26,13 +36,18 @@ void OthersMenu::optionsMenu() {
+@@ -26,13 +34,18 @@ void OthersMenu::optionsMenu() {
          {"BadUSB & HID", [this]() { badUsbHidMenu(); }},
  #endif
  
@@ -12383,7 +12381,7 @@ index 40f9956..d7765e9 100644
      addOptionToMainMenu();
      loopOptions(options, MENU_TYPE_SUBMENU, "Others");
  }
-@@ -44,6 +59,15 @@ void OthersMenu::badUsbHidMenu() {
+@@ -44,6 +57,15 @@ void OthersMenu::badUsbHidMenu() {
          {"USB Keyboard", [=]() { ducky_keyboard(hid_usb, false); }},
  #endif
  
@@ -12399,7 +12397,7 @@ index 40f9956..d7765e9 100644
  #ifdef USB_as_HID
          {"USB Clicker",  clicker_setup                            },
          {"USB U2F",      u2f_setup                                },
-@@ -58,10 +82,14 @@ void OthersMenu::badUsbHidMenu() {
+@@ -58,10 +80,14 @@ void OthersMenu::badUsbHidMenu() {
  void OthersMenu::micMenu() {
      options = {
  #if defined(HAS_MICROPHONE)
@@ -22095,65 +22093,6 @@ index 5494bfb..7d16fab 100644
          delay(1000);
      }
  }
-diff --git a/src/modules/ble/ble_ducky.cpp b/src/modules/ble/ble_ducky.cpp
-new file mode 100644
-index 0000000..9d3f28f
---- /dev/null
-+++ b/src/modules/ble/ble_ducky.cpp
-@@ -0,0 +1,44 @@
-+#include "ble_ducky.h"
-+#include "core/display.h"
-+#include "core/mykeyboard.h"
-+#include "modules/badusb_ble/ducky_typer.h"
-+
-+void ble_ducky_setup(){
-+    // Polished intro for wireless BadUSB
-+    drawMainBorderWithTitle("BLE DUCKY (Wireless)");
-+    tft.setTextSize(FP);
-+    tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
-+    padprintln("Cube = Bluetooth Keyboard");
-+    padprintln("No USB cable needed!");
-+    padprintln("");
-+    padprintln("1. Pair cube in target BT");
-+    padprintln("2. Pick DuckyScript file");
-+    padprintln("3. Auto-type payload");
-+    padprintln("");
-+    padprintln("Range 5-10m. Re-pair after");
-+    padprintln("reboot. Check layout!");
-+    padprintln("");
-+    tft.setTextColor(TFT_YELLOW, bruceConfig.bgColor);
-+    padprintln("Press Sel to continue");
-+    waitForButtonPress();
-+
-+    // Reuse existing Bad BLE runner (BLE HID)
-+    if(!BLEConnected){
-+        ducky_setup(hid_ble, true);
-+    } else {
-+        // Already connected
-+        int ch=-1;
-+        options = {
-+            {"Run DuckyScript", [&](){ ch=0; }},
-+            {"Live BLE Keyboard", [&](){ ch=1; }},
-+            {"Media Keys", [&](){ ch=2; }},
-+            {"Disconnect", [&](){ ch=3; }},
-+        };
-+        loopOptions(options, MENU_TYPE_SUBMENU, "BLE Ducky — Connected");
-+        options.clear();
-+        if(ch==0) ducky_setup(hid_ble, true);
-+        else if(ch==1) ducky_keyboard(hid_ble, true);
-+        else if(ch==2) MediaCommands(hid_ble, true);
-+        else if(ch==3){ BLEDevice::deinit(); BLEConnected=false; delete hid_ble; hid_ble=nullptr; }
-+    }
-+}
-diff --git a/src/modules/ble/ble_ducky.h b/src/modules/ble/ble_ducky.h
-new file mode 100644
-index 0000000..e98cb8a
---- /dev/null
-+++ b/src/modules/ble/ble_ducky.h
-@@ -0,0 +1,3 @@
-+#pragma once
-+#include <Arduino.h>
-+void ble_ducky_setup();
 diff --git a/src/modules/ble/ble_gatt_cloner.cpp b/src/modules/ble/ble_gatt_cloner.cpp
 new file mode 100644
 index 0000000..594ca01
@@ -24196,132 +24135,51 @@ index 0000000..bafd4e4
 +
 +#endif
 diff --git a/src/modules/ble/ble_spam.cpp b/src/modules/ble/ble_spam.cpp
-index a702b84..5943293 100644
+index a702b84..545a9b8 100644
 --- a/src/modules/ble/ble_spam.cpp
 +++ b/src/modules/ble/ble_spam.cpp
-@@ -569,7 +569,10 @@ enum BleSpamAttackType {
+@@ -569,7 +569,8 @@ enum BleSpamAttackType {
      BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR,
      BLE_SPAM_ATTACK_SAMSUNG,
      BLE_SPAM_ATTACK_BLE_BEACON,
 -    BLE_SPAM_ATTACK_RANDOM_ALL
 +    BLE_SPAM_ATTACK_RANDOM_ALL,
-+    BLE_SPAM_ATTACK_PARTY,
-+    BLE_SPAM_ATTACK_NAME_FLOOD,
-+    BLE_SPAM_ATTACK_FINDMY
++    BLE_SPAM_ATTACK_PARTY
  };
  
  #define BLE_SPAM_MAX_CUSTOM_NAMES 20
-@@ -696,7 +699,10 @@ static const BleSpamAttackOption BLE_SPAM_ATTACK_OPTIONS[] = {
+@@ -696,7 +697,8 @@ static const BleSpamAttackOption BLE_SPAM_ATTACK_OPTIONS[] = {
      {BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR,    "Windows Swift Pair"   },
      {BLE_SPAM_ATTACK_SAMSUNG,               "Samsung BLE Spam"     },
      {BLE_SPAM_ATTACK_BLE_BEACON,            "BLE Beacon Spam"      },
 -    {BLE_SPAM_ATTACK_RANDOM_ALL,            "Random / All"         }
 +    {BLE_SPAM_ATTACK_RANDOM_ALL,            "Random / All"         },
-+    {BLE_SPAM_ATTACK_PARTY,                 "🎉 Party Mode (All Devices)"},
-+    {BLE_SPAM_ATTACK_NAME_FLOOD,            "📋 Name Flood (Settings)" },
-+    {BLE_SPAM_ATTACK_FINDMY,                "📍 FindMy Spoof (AirTag)" }
++    {BLE_SPAM_ATTACK_PARTY,                 "🎉 Party Mode (All Devices)"}
  };
  
  #if !defined(LITE_VERSION)
-@@ -1045,6 +1051,12 @@ static int bleSpamGetDeviceCount(BleSpamAttackType type) {
+@@ -1045,6 +1047,8 @@ static int bleSpamGetDeviceCount(BleSpamAttackType type) {
          }
          case BLE_SPAM_ATTACK_SAMSUNG:
              return sizeof(BLE_SPAM_SAMSUNG_DEVICES) / sizeof(BLE_SPAM_SAMSUNG_DEVICES[0]);
 +        case BLE_SPAM_ATTACK_PARTY:
 +            return 1; // single "rotating" entry; menu bypasses device list anyway
-+        case BLE_SPAM_ATTACK_NAME_FLOOD:
-+            return 1; // no sub-selection, floods many names
-+        case BLE_SPAM_ATTACK_FINDMY:
-+            return 1;
          case BLE_SPAM_ATTACK_BLE_BEACON: {
              int nPresets = (int)(sizeof(BLE_SPAM_BEACON_PRESETS) / sizeof(BLE_SPAM_BEACON_PRESETS[0]));
              std::vector<String> saved = bleSpamLoadCustomNames("bs_bn");
-@@ -1107,6 +1119,12 @@ static const char *bleSpamGetDeviceName(BleSpamAttackType type, int index) {
+@@ -1107,6 +1111,8 @@ static const char *bleSpamGetDeviceName(BleSpamAttackType type, int index) {
                  index < (int)(sizeof(BLE_SPAM_SAMSUNG_DEVICES) / sizeof(BLE_SPAM_SAMSUNG_DEVICES[0])))
                  return BLE_SPAM_SAMSUNG_DEVICES[index];
              return "Samsung";
 +        case BLE_SPAM_ATTACK_PARTY:
 +            return "All Devices — rotating";
-+        case BLE_SPAM_ATTACK_NAME_FLOOD:
-+            return "Flood BT Settings List";
-+        case BLE_SPAM_ATTACK_FINDMY:
-+            return "Fake AirTag / SmartTag";
          case BLE_SPAM_ATTACK_BLE_BEACON: {
              int nPresets = (int)(sizeof(BLE_SPAM_BEACON_PRESETS) / sizeof(BLE_SPAM_BEACON_PRESETS[0]));
              if (index >= 0 && index < nPresets) return BLE_SPAM_BEACON_PRESETS[index];
-@@ -1186,7 +1204,9 @@ static void bleSpamPickRandomSelection(BleSpamAttackType &attackType, int &devic
-         {BLE_SPAM_ATTACK_ANDROID_ALERT,      2                                                      }, // only Pixel + Generic, not Random/All
-         {BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR,
-                                   (int)(sizeof(BLE_SPAM_WINDOWS_PRESETS) / sizeof(BLE_SPAM_WINDOWS_PRESETS[0]))              },
--        {BLE_SPAM_ATTACK_SAMSUNG,            3                                                      }  // Galaxy Buds/Watch/Generic only
-+        {BLE_SPAM_ATTACK_SAMSUNG,            3                                                      },  // Galaxy Buds/Watch/Generic only
-+        {BLE_SPAM_ATTACK_NAME_FLOOD,         1                                                      },
-+        {BLE_SPAM_ATTACK_FINDMY,             1                                                      }
-     };
- 
-     int total = 0;
-@@ -1294,6 +1314,53 @@ static bool bleSpamGetNextMac(BleSpamRunState &state, BleSpamMacRandMode mode, u
- // where static payloads failed. Only used by the new BLE spam UI Apple paths.
- // ============================================================================
- 
-+
-+static const char *BLE_NAME_FLOOD_POOL[] = {
-+    "AirPods Pro", "AirPods Max", "Galaxy Buds2", "Galaxy Watch6", "iPhone 15 Pro",
-+    "Pixel 8 Pro", "WH-1000XM5", "Bose QC45", "JBL Flip 6", "FreeBuds Pro",
-+    "AirTag", "SmartTag+", "Tile Pro", "Surface Headset", "Marshall Emberton",
-+    "Beats Studio", "Echo Dot", "HomePod mini", "Nothing Ear", "OnePlus Buds",
-+    "Bruce Cube", "DSolution Box", "Megalodon", "Rick Astley", "Never Gonna",
-+    "FBISurveillanceVan", "Skibidi Toilet", "67", "Baby Shark", "Chill Guy"
-+};
-+static const int BLE_NAME_FLOOD_COUNT = sizeof(BLE_NAME_FLOOD_POOL)/sizeof(BLE_NAME_FLOOD_POOL[0]);
-+
-+static bool bleSpamBuildNameFloodAdvertisement(BLEAdvertisementData &advertisementData) {
-+    char name[24];
-+    const char *base = BLE_NAME_FLOOD_POOL[esp_random() % BLE_NAME_FLOOD_COUNT];
-+    // Add suffix to avoid dedup: e.g. "AirPods Pro #4821"
-+    snprintf(name, sizeof(name), "%s #%lu", base, (unsigned long)(esp_random() % 9000 + 1000));
-+    uint8_t appearance = (uint8_t)(esp_random() % 8);
-+    uint16_t appearances[] = {0x0040, 0x03C0, 0x00C0, 0x00C2, 0x0380, 0x00CC, 0x0410, 0x0440};
-+    uint8_t pkt[31];
-+    uint8_t i=0;
-+    pkt[i++]=2; pkt[i++]=0x01; pkt[i++]=0x06; // Flags
-+    pkt[i++]=3; pkt[i++]=0x03; pkt[i++]=0x0F; pkt[i++]=0x18; // Battery service hint
-+    pkt[i++]=3; pkt[i++]=0x19; pkt[i++]=(appearance>>8)&0xFF; pkt[i++]=appearance & 0xFF; // Appearance
-+    uint8_t nl = (uint8_t)strlen(name);
-+    if (i + 2 + nl > 31) nl = 31 - i - 2;
-+    pkt[i++]=nl+1; pkt[i++]=0x09; memcpy(&pkt[i], name, nl); i+=nl;
-+    advertisementData = BLEAdvertisementData();
-+    advertisementData.addData(pkt, i);
-+    return true;
-+}
-+
-+static bool bleSpamBuildFindMyAdvertisement(BLEAdvertisementData &advertisementData) {
-+    // Simplified OpenHaystack / FindMy: Apple Co (0x004C) Type 0x12, 1 status + 22B key + 1 hint
-+    uint8_t pkt[31];
-+    uint8_t i=0;
-+    pkt[i++]=2; pkt[i++]=0x01; pkt[i++]=0x06;
-+    pkt[i++]=0x1E; pkt[i++]=0xFF; pkt[i++]=0x4C; pkt[i++]=0x00; pkt[i++]=0x12; pkt[i++]=0x19;
-+    // 25B payload: status(0x00) + 22B pubkey + 2B hint
-+    pkt[i++]=0x00; // status
-+    esp_fill_random(&pkt[i], 22); i+=22;
-+    pkt[i++]= (uint8_t)(esp_random() & 0xFF); // battery / hint
-+    pkt[i++]= 0x00;
-+    advertisementData = BLEAdvertisementData();
-+    advertisementData.addData(pkt, i);
-+    return true;
-+}
-+
- static size_t bleSpamBuildContinuityNearbyAction(uint8_t *buf) {
-     uint8_t action = continuity_na_actions[esp_random() % continuity_na_actions_count];
-     uint8_t flags = 0xC0;
-@@ -1455,6 +1522,17 @@ static bool bleSpamBuildAdvertisementData(
+@@ -1455,6 +1461,13 @@ static bool bleSpamBuildAdvertisementData(
              advertisementData = AdvData;
              return true;
          }
-+        case BLE_SPAM_ATTACK_NAME_FLOOD:
-+            return bleSpamBuildNameFloodAdvertisement(advertisementData);
-+        case BLE_SPAM_ATTACK_FINDMY:
-+            return bleSpamBuildFindMyAdvertisement(advertisementData);
 +        case BLE_SPAM_ATTACK_PARTY: {
 +            // Fallback: if ever called directly, pick a random real type
 +            BleSpamAttackType rndType = BLE_SPAM_ATTACK_APPLE_PAIRING;
@@ -24332,7 +24190,7 @@ index a702b84..5943293 100644
          case BLE_SPAM_ATTACK_BLE_BEACON: {
              advertisementData = BLEAdvertisementData();
              int nBeaconPresets = (int)(sizeof(BLE_SPAM_BEACON_PRESETS) / sizeof(BLE_SPAM_BEACON_PRESETS[0]));
-@@ -1662,7 +1740,35 @@ bleSpamSendTick(BleSpamRunState &state, const BleSpamConfig &config, const BleSp
+@@ -1662,7 +1675,35 @@ bleSpamSendTick(BleSpamRunState &state, const BleSpamConfig &config, const BleSp
          BleSpamAttackType attackType = selection.attack_type;
          int deviceIndex = selection.device_index;
  
@@ -24369,7 +24227,7 @@ index a702b84..5943293 100644
              bleSpamPickRandomSelection(attackType, deviceIndex);
          }
  
-@@ -1693,6 +1799,7 @@ bleSpamSendTick(BleSpamRunState &state, const BleSpamConfig &config, const BleSp
+@@ -1693,6 +1734,7 @@ bleSpamSendTick(BleSpamRunState &state, const BleSpamConfig &config, const BleSp
          state.packet_counter++;
          state.sent_count++;
          state.window_packets++;
@@ -24377,7 +24235,7 @@ index a702b84..5943293 100644
      }
  }
  
-@@ -2228,8 +2335,9 @@ static void bleSpamMenuUi() {
+@@ -2228,8 +2270,9 @@ static void bleSpamMenuUi() {
          selection.device_index = 0;
  
          // Types that go straight to config without a device list
@@ -26029,288 +25887,6 @@ index 0000000..2104303
 +        return false;
 +    }
 +};
-diff --git a/src/modules/others/sonic_link.cpp b/src/modules/others/sonic_link.cpp
-new file mode 100644
-index 0000000..7e2ca39
---- /dev/null
-+++ b/src/modules/others/sonic_link.cpp
-@@ -0,0 +1,267 @@
-+#include "sonic_link.h"
-+#if defined(HAS_SPEAKER) && defined(HAS_MICROPHONE)
-+#include "core/display.h"
-+#include "core/mykeyboard.h"
-+#include "core/powerSave.h"
-+#include "core/settings.h"
-+#include "core/utils.h"
-+#include <globals.h>
-+#include "modules/others/audio.h"
-+#include <driver/i2s_std.h>
-+#include <math.h>
-+
-+extern void _setup_codec_speaker(bool);
-+extern void _setup_codec_mic(bool);
-+#if defined(DSOLUTION_183_2MIC)
-+extern bool isBoardMicReady();
-+extern bool isBoardSpeakerReady();
-+#endif
-+
-+// SonicLink — ultrasonic covert channel 18kHz/19kHz FSK
-+// TX: generate sine via I2S speaker at 48kHz, 256x MCLK 12.288MHz (board's 48kHz mode)
-+// RX: Goertzel detect on mic 48kHz stream, FSK demod
-+// Frame: preamble 0x55 0xAA len(1) payload(<=32) crc8 — sent bit-by-bit with Manchester-like sync
-+
-+#define SL_SR 48000
-+#define SL_F0 18000 // bit 0
-+#define SL_F1 19000 // bit 1
-+#define SL_BIT_MS 20  // 50 bps, reliable for room acoustics
-+#define SL_SAMPLES_PER_BIT (SL_SR * SL_BIT_MS / 1000) // 960 samples
-+#define SL_PREAMBLE0 0xAA
-+#define SL_PREAMBLE1 0x55
-+
-+static uint8_t sl_crc8(const uint8_t *d, size_t n){ uint8_t c=0; for(size_t i=0;i<n;i++){ c^=d[i]; for(int k=0;k<8;k++) c = c & 0x80 ? (c<<1)^0x07 : c<<1; } return c; }
-+
-+// Goertzel for single freq detection
-+struct Goertzel { float coeff; float s1,s2; float omega; void init(float f){ omega=2*M_PI*f/SL_SR; coeff=2*cos(omega); s1=s2=0; } inline void reset(){ s1=s2=0; } inline void feed(float s){ float s0=s+coeff*s1 - s2; s2=s1; s1=s0; } float mag() const { return sqrt(s1*s1 + s2*s2 - coeff*s1*s2); } };
-+
-+static bool sl_tx_i2s(const uint8_t *bytes, size_t n){
-+    _setup_codec_speaker(true);
-+    delay(30);
-+    // Create temp I2S speaker channel directly (reuse audio's pins via bruceConfigPins)
-+    i2s_chan_handle_t chan=nullptr;
-+    i2s_chan_config_t ccfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
-+    ccfg.dma_desc_num=4; ccfg.dma_frame_num=240;
-+    if(i2s_new_channel(&ccfg,nullptr,&chan)!=ESP_OK) return false;
-+    i2s_std_config_t scfg = {};
-+    scfg.clk_cfg.clk_src = I2S_CLK_SRC_PLL_160M;
-+    scfg.clk_cfg.sample_rate_hz=SL_SR;
-+    scfg.clk_cfg.mclk_multiple=I2S_MCLK_MULTIPLE_256;
-+    scfg.slot_cfg.data_bit_width=I2S_DATA_BIT_WIDTH_16BIT;
-+    scfg.slot_cfg.slot_bit_width=I2S_SLOT_BIT_WIDTH_16BIT;
-+    scfg.slot_cfg.slot_mode=I2S_SLOT_MODE_MONO;
-+    scfg.slot_cfg.slot_mask=I2S_STD_SLOT_LEFT;
-+    scfg.slot_cfg.ws_width=16;
-+    scfg.slot_cfg.bit_shift=true;
-+    scfg.gpio_cfg.mclk=bruceConfigPins.speaker_bus.mclk;
-+    scfg.gpio_cfg.bclk=bruceConfigPins.speaker_bus.bclk;
-+    scfg.gpio_cfg.ws=bruceConfigPins.speaker_bus.ws;
-+    scfg.gpio_cfg.dout=bruceConfigPins.speaker_bus.dout;
-+    scfg.gpio_cfg.din=I2S_GPIO_UNUSED;
-+    if(i2s_channel_init_std_mode(chan,&scfg)!=ESP_OK){ i2s_del_channel(chan); return false; }
-+    if(i2s_channel_enable(chan)!=ESP_OK){ i2s_del_channel(chan); return false; }
-+    const float amp = 28000; // near max, NS4150 enabled
-+    float phase=0;
-+    auto tx_freq = [&](float f, int samples){
-+        int16_t buf[240];
-+        float step = 2*M_PI*f/SL_SR;
-+        int done=0;
-+        while(done < samples){
-+            int chunk = min(240, samples-done);
-+            for(int i=0;i<chunk;i++){ buf[i]=(int16_t)(sin(phase)*amp); phase+=step; if(phase>2*M_PI) phase-=2*M_PI; }
-+            size_t w=0; i2s_channel_write(chan, buf, chunk*sizeof(int16_t), &w, portMAX_DELAY);
-+            done+=chunk;
-+        }
-+    };
-+    // Preamble tone 18.5kHz 80ms for AGC lock
-+    tx_freq(18500, SL_SR*80/1000);
-+    // Send bytes MSB first, FSK
-+    for(size_t bi=0; bi<n; bi++){
-+        for(int b=7;b>=0;--b){
-+            int bit = (bytes[bi]>>b)&1;
-+            tx_freq(bit?SL_F1:SL_F0, SL_SAMPLES_PER_BIT);
-+        }
-+    }
-+    // Tail silence
-+    tx_freq(0, SL_SR*40/1000); // silence (phase not used, but we generate zeros)
-+    i2s_channel_disable(chan); i2s_del_channel(chan);
-+    _setup_codec_speaker(false);
-+    return true;
-+}
-+
-+static bool sl_send_frame(const String &msg){
-+    if(msg.length()==0 || msg.length()>32) return false;
-+    uint8_t frame[36]; frame[0]=SL_PREAMBLE0; frame[1]=SL_PREAMBLE1; frame[2]=(uint8_t)msg.length();
-+    memcpy(&frame[3], msg.c_str(), msg.length());
-+    frame[3+msg.length()] = sl_crc8((uint8_t*)msg.c_str(), msg.length());
-+    return sl_tx_i2s(frame, 4+msg.length());
-+}
-+
-+static void sl_draw_header(const char *title){
-+    drawMainBorderWithTitle(title);
-+    tft.setTextSize(FP);
-+    tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
-+}
-+
-+void sonic_link_setup(){
-+    // Menu for TX/RX/Chat
-+    while(true){
-+        int ch=-1;
-+        options = {
-+            {"📤 Send Text (TX 18/19kHz)", [&](){ ch=0; }},
-+            {"📥 Listen (RX)", [&](){ ch=1; }},
-+            {"💬 Chat (TX/RX loop)", [&](){ ch=2; }},
-+            {"ℹ About", [&](){ ch=3; }},
-+            {"← Back", [&](){ ch=-1; }},
-+        };
-+        loopOptions(options, MENU_TYPE_SUBMENU, "Sonic Link — Ultrasonic");
-+        options.clear();
-+        if(ch==-1) return;
-+        if(ch==3){
-+            displayInfo("SonicLink: 2 cube nói qua loa-mic 18/19kHz FSK 50bps. Không WiFi/BLE. Tầm 3-6m. Mỗi frame <=32B CRC8. Dùng demo air-gap covert channel.", true);
-+            continue;
-+        }
-+        if(ch==0){
-+            String msg = keyboard("", 32, "Text to send (<=32B):");
-+            if(msg=="" || msg=="\x1B") continue;
-+            sl_draw_header("SONIC TX — Sending...");
-+            padprintln("TX: " + msg);
-+            padprintln("Freq: 18k=0 19k=1 20ms/bit");
-+            padprintln("Put volume MAX, distance 1-3m");
-+            bool ok = sl_send_frame(msg);
-+            padprintln(ok ? "✓ Sent" : "✗ TX failed");
-+            padprintln("Press any key");
-+            while(!check(SelPress) && !check(EscPress)) { vTaskDelay(10); }
-+        } else if(ch==1 || ch==2){
-+            // RX mode — mic capture + Goertzel demod
-+            sl_draw_header(ch==1 ? "SONIC RX — Listening..." : "SONIC CHAT — Listen, Sel to send");
-+            padprintln("RX 18/19kHz FSK — quiet room");
-+            padprintln("Mic: ES7210 48kHz Goertzel");
-+            padprintln("Waiting preamble AA55...");
-+            // Init mic I2S
-+            bool micOk=false;
-+            i2s_chan_handle_t rxChan=nullptr;
-+            // Reuse mic.cpp's channel init via InitI2SMicroPhone logic but minimal
-+            // We'll create own RX channel
-+            i2s_chan_config_t ccfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
-+            ccfg.dma_desc_num=8; ccfg.dma_frame_num=256;
-+            if(i2s_new_channel(&ccfg,nullptr,&rxChan)==ESP_OK){
-+                // Use mic_bus pins
-+                i2s_std_config_t scfg={};
-+                scfg.clk_cfg.clk_src=I2S_CLK_SRC_PLL_160M;
-+                scfg.clk_cfg.sample_rate_hz=SL_SR;
-+                scfg.clk_cfg.mclk_multiple=I2S_MCLK_MULTIPLE_256;
-+                scfg.slot_cfg.data_bit_width=I2S_DATA_BIT_WIDTH_16BIT;
-+                scfg.slot_cfg.slot_bit_width=I2S_SLOT_BIT_WIDTH_16BIT;
-+                scfg.slot_cfg.slot_mode=I2S_SLOT_MODE_MONO;
-+                scfg.slot_cfg.slot_mask=I2S_STD_SLOT_LEFT;
-+                scfg.slot_cfg.ws_width=16;
-+                scfg.slot_cfg.bit_shift=true;
-+                scfg.gpio_cfg.bclk=bruceConfigPins.mic_bus.clk;
-+                scfg.gpio_cfg.ws=bruceConfigPins.mic_bus.ws;
-+                scfg.gpio_cfg.dout=I2S_GPIO_UNUSED;
-+                scfg.gpio_cfg.din=bruceConfigPins.mic_bus.data;
-+                scfg.gpio_cfg.mclk=bruceConfigPins.speaker_bus.mclk; // reuse MCLK
-+                if(i2s_channel_init_std_mode(rxChan,&scfg)==ESP_OK && i2s_channel_enable(rxChan)==ESP_OK){
-+                    _setup_codec_mic(true); delay(20);
-+                    micOk = isBoardMicReady();
-+                }
-+            }
-+            if(!micOk){
-+                displayError("Mic init failed", true);
-+                if(rxChan){ i2s_channel_disable(rxChan); i2s_del_channel(rxChan); }
-+                continue;
-+            }
-+            Goertzel g0,g1; g0.init(SL_F0); g1.init(SL_F1);
-+            int16_t buf[256];
-+            uint32_t bitStartMs=0;
-+            int bitPos=-1; // -1 = hunting preamble
-+            uint8_t rxBytes[36]; int rxBitCnt=0; int rxBytePos=0;
-+            String lastMsg="";
-+            uint32_t lastDraw=millis();
-+            bool running=true;
-+            while(running){
-+                if(check(EscPress)) { running=false; break; }
-+                if(ch==2 && check(SelPress)){
-+                    // Quick send in chat mode
-+                    String m = keyboard("", 32, "Reply:");
-+                    if(m!="" && m!="\x1B"){
-+                        // Pause RX, TX, resume
-+                        i2s_channel_disable(rxChan); _setup_codec_mic(false);
-+                        sl_send_frame(m);
-+                        _setup_codec_mic(true); i2s_channel_enable(rxChan);
-+                        padprintln("TX: " + m);
-+                    }
-+                }
-+                size_t br=0;
-+                if(i2s_channel_read(rxChan, buf, sizeof(buf), &br, pdMS_TO_TICKS(100))!=ESP_OK) continue;
-+                size_t samples = br/2;
-+                // Process bit window: accumulate Goertzel over SL_SAMPLES_PER_BIT
-+                for(size_t s=0; s<samples; ){
-+                    if(bitPos==-1){
-+                        // Hunt: feed 1 bit window, decide 0/1, shift bitstream hunting AA55
-+                        size_t take = min((size_t)SL_SAMPLES_PER_BIT, samples-s);
-+                        g0.reset(); g1.reset();
-+                        for(size_t k=0;k<take;k++){ float v=(float)buf[s+k]/32768.0f; g0.feed(v); g1.feed(v); }
-+                        float m0=g0.mag(), m1=g1.mag();
-+                        int bit = (m1>m0 && m1>0.08) ? 1 : 0; // threshold
-+                        // Shift into hunt register (8 bits)
-+                        rxBytes[0] = (rxBytes[0]<<1)|bit; rxBitCnt++;
-+                        if(rxBitCnt>=16){
-+                            // Check AA55 = 10101010 01010101
-+                            if(rxBytes[0]==SL_PREAMBLE1 && rxBitCnt>=16){
-+                                // need previous byte, we only keep 1 byte, so check pattern via history: we can just look for 0xAA followed by 0x55 in bitstream
-+                                // Simplified: if we see 16 bits = AA55, lock
-+                                // Our rxBytes[0] is last 8 bits = 0x55, need previous = 0xAA -> we lost it. So keep 16-bit history
-+                            }
-+                        }
-+                        // Keep 16-bit history in rxBytePos
-+                        static uint16_t hist=0; hist=(hist<<1)|bit; rxBitCnt++;
-+                        if(hist==0xAA55){ bitPos=0; rxBitCnt=0; rxBytePos=0; memset(rxBytes,0,sizeof(rxBytes)); bitStartMs=millis(); }
-+                        s+=take;
-+                    } else {
-+                        // Locked: demod byte-wise
-+                        size_t take = min((size_t)SL_SAMPLES_PER_BIT, samples-s);
-+                        // If not enough for full bit, wait next buffer
-+                        if(take < SL_SAMPLES_PER_BIT) { s+=take; continue; }
-+                        g0.reset(); g1.reset();
-+                        for(size_t k=0;k<take;k++){ float v=(float)buf[s+k]/32768.0f; g0.feed(v); g1.feed(v); }
-+                        float m0=g0.mag(), m1=g1.mag();
-+                        int bit = (m1>m0) ? 1 : 0;
-+                        int byteIdx = bitPos/8, bitInByte = 7 - (bitPos%8);
-+                        rxBytes[byteIdx] |= (bit<<bitInByte);
-+                        bitPos++;
-+                        s+=take;
-+                        if(bitPos >= (int)((rxBytes[2]+4)*8) && rxBytes[2]<=32){ // preamble(2)+len(1)+payload+CRC(1)
-+                            uint8_t len = rxBytes[2];
-+                            uint8_t crc = rxBytes[3+len];
-+                            uint8_t calc = sl_crc8(&rxBytes[3], len);
-+                            if(crc==calc){
-+                                char tmp[33]; memcpy(tmp, &rxBytes[3], len); tmp[len]=0;
-+                                lastMsg = String(tmp);
-+                                padprintln("RX: " + lastMsg + " ✓");
-+                                // buzz
-+                                if(bruceConfig.soundEnabled) _tone(1200,60, 500, false);
-+                            } else {
-+                                padprintln("RX CRC fail");
-+                            }
-+                            // Reset to hunt again
-+                            bitPos=-1; rxBitCnt=0; rxBytePos=0; memset(rxBytes,0,sizeof(rxBytes));
-+                        }
-+                    }
-+                }
-+                if(millis()-lastDraw > 300){
-+                    lastDraw=millis();
-+                    // Tiny spectrum hint
-+                    // keep responsive
-+                    wakeUpScreen();
-+                }
-+                vTaskDelay(1);
-+            }
-+            i2s_channel_disable(rxChan); i2s_del_channel(rxChan); _setup_codec_mic(false);
-+        }
-+    }
-+}
-+#else
-+void sonic_link_setup(){ displayError("Speaker+Mic required", true); }
-+#endif
-diff --git a/src/modules/others/sonic_link.h b/src/modules/others/sonic_link.h
-new file mode 100644
-index 0000000..652152e
---- /dev/null
-+++ b/src/modules/others/sonic_link.h
-@@ -0,0 +1,3 @@
-+#pragma once
-+#include <Arduino.h>
-+void sonic_link_setup();
 diff --git a/src/modules/others/tururururu.cpp b/src/modules/others/tururururu.cpp
 index 4d2ea72..eab4882 100644
 --- a/src/modules/others/tururururu.cpp
