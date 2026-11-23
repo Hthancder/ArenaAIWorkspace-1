@@ -102,6 +102,55 @@ int main(void) {
 		assert([result[@"result"] isEqualToString:@"xin chào"]);
 		assert(handlerCalls == 1);
 
+		// --- thứ tự khoá tham số KHÔNG được làm hỏng bộ nhớ đệm
+		[SXToolkit resetCallCache];
+		handlerCalls = 0;
+		SXTool *pair = [SXTool toolWithName:@"pair" title:@"Hai tham số"
+								  summary:@"Nhận hai tham số để kiểm tra chữ ký bộ nhớ đệm."
+								 parameters:@{@"type": @"object", @"properties": @{
+									 @"a": @{@"type": @"string"}, @"b": @{@"type": @"string"}},
+									 @"required": @[@"a", @"b"]}
+								  category:SXToolCategoryDevice
+								   handler:^NSDictionary *(NSDictionary *arguments, NSError **error) {
+			(void)error;
+			handlerCalls++;
+			return @{@"result": [NSString stringWithFormat:@"%@%@", arguments[@"a"], arguments[@"b"]]};
+		}];
+		[SXToolkit registerTool:pair];
+		// Hai dictionary cùng nội dung nhưng thứ tự chèn khác nhau: chữ ký phải
+		// trùng, nên handler chỉ chạy MỘT lần.
+		NSMutableDictionary *argOne = [NSMutableDictionary dictionary];
+		argOne[@"a"] = @"1"; argOne[@"b"] = @"2";
+		NSMutableDictionary *argTwo = [NSMutableDictionary dictionary];
+		argTwo[@"b"] = @"2"; argTwo[@"a"] = @"1";
+		NSError *cacheError = nil;
+		NSDictionary *first = [SXToolkit execute:@"pair" arguments:argOne
+										 excluded:[NSSet set] error:&cacheError];
+		NSDictionary *second = [SXToolkit execute:@"pair" arguments:argTwo
+										  excluded:[NSSet set] error:&cacheError];
+		assert([first[@"result"] isEqualToString:@"12"]);
+		assert([second[@"result"] isEqualToString:@"12"]);
+		assert(handlerCalls == 1);
+
+		// --- công cụ ghi (sideEffect) KHÔNG được lấy từ bộ nhớ đệm
+		[SXToolkit resetCallCache];
+		__block NSInteger writes = 0;
+		SXTool *writer = [SXTool toolWithName:@"writer" title:@"Ghi"
+									summary:@"Có tác dụng phụ, không được cache."
+								   parameters:@{@"type": @"object", @"properties": @{}, @"required": @[]}
+								   category:SXToolCategoryDevice
+									handler:^NSDictionary *(NSDictionary *arguments, NSError **error) {
+			(void)arguments; (void)error;
+			writes++;
+			return @{@"result": @"ok"};
+		}];
+		writer.sideEffect = YES;
+		writer.liveData = YES;
+		[SXToolkit registerTool:writer];
+		(void)[SXToolkit execute:@"writer" arguments:@{} excluded:[NSSet set] error:NULL];
+		(void)[SXToolkit execute:@"writer" arguments:@{} excluded:[NSSet set] error:NULL];
+		assert(writes == 2);
+
 		// --- lượt mới: cache xoá, handler chạy lại
 		[SXToolkit resetCallCache];
 		result = [SXToolkit execute:@"echo" arguments:@{@"text": @"xin chào"}

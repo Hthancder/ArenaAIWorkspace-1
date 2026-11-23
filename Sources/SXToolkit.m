@@ -266,9 +266,32 @@ static NSString *SXToolJSONPayload(NSString *text) {
 	return SXToolJSONString(@{@"result": text ?: @""});
 }
 
+/// Sắp xếp đệ quy khoá của một object JSON-plist để chữ ký bộ nhớ đệm ổn định.
+static id SXToolStableArguments(id object) {
+	if ([object isKindOfClass:[NSDictionary class]]) {
+		NSMutableDictionary *sorted = [NSMutableDictionary dictionary];
+		for (id key in [[(NSDictionary *)object allKeys] sortedArrayUsingSelector:@selector(compare:)]) {
+			sorted[key] = SXToolStableArguments([(NSDictionary *)object objectForKey:key]);
+		}
+		return sorted;
+	}
+	if ([object isKindOfClass:[NSArray class]]) {
+		NSMutableArray *list = [NSMutableArray array];
+		for (id item in (NSArray *)object) [list addObject:SXToolStableArguments(item)];
+		return list;
+	}
+	return object;
+}
+
 static NSString *SXToolCacheKey(NSString *name, NSDictionary *arguments) {
-	NSData *data = [NSJSONSerialization dataWithJSONObject:(arguments ?: @{})
-												   options:NSJSONWritingSortedKeys
+	// `NSJSONWritingSortedKeys` chỉ có từ iOS 11 nhưng KHÔNG bảo đảm thứ tự khoá
+	// theo đúng nghĩa từ điển ổn định giữa các lần gọi trên mọi bản Foundation, và
+	// khi hai tham số chỉ khác thứ tự khoá, JSON có thể ra hai chuỗi khác nhau ⇒
+	// cùng một lời gọi bị chạy HAI lần trong một lượt. Với công cụ chỉ đọc thì chỉ
+	// tốn thời gian, nhưng đây là bước quyết định bộ nhớ đệm nên phải ổn định:
+	// tự sắp khoá rồi mới serialize.
+	NSData *data = [NSJSONSerialization dataWithJSONObject:SXToolStableArguments(arguments ?: @{})
+												   options:0
 													 error:NULL];
 	NSString *signature = data ? [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] : @"{}";
 	return [NSString stringWithFormat:@"%@\x01%@", name, signature];
@@ -282,19 +305,41 @@ static NSDictionary *SXRunHandler(SXTool *tool, NSDictionary *arguments, NSError
 		: dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0);
 
 	if (tool.requiresMainThread && onMain) {
-		// Đã ở luồng chính: chạy trực tiếp, tránh tự khoá mình.
+		// Đã ở luồng chính: chạy trực tiếp, tránh tự khoá mình. Vẫn phải chặn
+		// handler chạy quá lâu: trước đây nhánh này KHÔNG có trần thời gian, nên
+		// một handler bị treo (chờ mạng, chờ khoá) làm đứng luồng chính — tức
+		// đứng cả Preferences/SpringBoard — mãi mãi trên cùng một lời gọi.
+		NSTimeInterval timeout = tool.timeout > 0 ? tool.timeout : 8.0;
 		NSDictionary *result = nil;
 		NSError *error = nil;
+		CFAbsoluteTime began = CFAbsoluteTimeGetCurrent();
 		@try {
 			result = tool.handler(arguments, &error);
 		} @catch (NSException *exception) {
 			error = SXToolError(500, [NSString stringWithFormat:@"Công cụ %@ gặp lỗi nội bộ (%@).",
 									  tool.name, exception.name]);
 		}
+		NSTimeInterval elapsed = CFAbsoluteTimeGetCurrent() - began;
+		if (!error && elapsed > timeout) {
+			// Đã chạy xong nhưng quá trần: báo lỗi giống nhánh bất đồng bộ để model
+			// nhận cùng một hành vi, và ghi log để thấy handler nào chậm.
+			error = SXToolError(504, [NSString stringWithFormat:
+				@"Công cụ %@ chạy %.0f giây (trần %.0f) trên luồng chính.",
+				tool.name, elapsed, timeout]);
+			SXLogWrn(@"tool", @"%@ chạy %.0fms trên luồng chính — quá trần %.0fs",
+					 tool.name, elapsed * 1000.0, timeout);
+			result = nil;
+		}
 		if (error && outError) *outError = error;
 		return result;
 	}
 
+	// `requiresMainThread` mà KHÔNG ở luồng chính (ví dụ trò chuyện thử gọi từ
+	// luồng mạng): xếp vào luồng chính rồi chờ. Nếu người gọi lại đang giữ một
+	// khoá mà luồng chính cần để chạy handler, ta tự khoá mình tới hết `timeout`
+	// — nhưng có trần, nên tệ nhất là một lần lỗi 504 chứ không treo Siri.
+	// (Bất biến mà lint kiểm: không công cụ nào vừa `requiresMainThread` vừa
+	// `liveData`/`sideEffect`, vì hai cờ đó khiến handler chạy lặp trên luồng UI.)
 	__block NSDictionary *result = nil;
 	__block NSError *error = nil;
 	dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);

@@ -337,6 +337,27 @@ for path in sorted(glob.glob("tests/*.m")):
                 break
             i += 1
 
+# ------------------------- công cụ chạy trên luồng chính phải có trần ngắn
+# `requiresMainThread` = handler chạy trên luồng UI của SpringBoard/Preferences.
+# Mỗi giây handler giữ luồng đó là một giây giao diện đứng hình, nên trần phải
+# ngắn. (Đã sửa một lỗi thật: nhánh "đã ở luồng chính" từng chạy handler KHÔNG
+# có trần nào cả.) `liveData`/`sideEffect` không liên quan ở đây — chúng chỉ nói
+# "đừng lấy từ bộ nhớ đệm trong lượt", đúng cho công cụ ghi/đọc trạng thái mới.
+CATALOG = "Sources/SXToolCatalog.m"
+if os.path.exists(CATALOG):
+    text = read(CATALOG)
+    for match in re.finditer(r"(\w+)\.requiresMainThread\s*=\s*YES", text):
+        var = match.group(1)
+        timeout_match = re.search(r"\b" + re.escape(var) + r"\.timeout\s*=\s*([0-9.]+)",
+                                  text[max(0, match.start() - 400):match.end() + 400])
+        if not timeout_match:
+            continue   # dùng trần mặc định 8 s — cũng vượt ngưỡng dưới, báo lỗi luôn
+        value = float(timeout_match.group(1))
+        if value > 5.0:
+            line = text[:match.start()].count("\n") + 1
+            fail(f"{CATALOG}:{line}: công cụ “{var}” chạy trên luồng chính với trần "
+                 f"{value:g}s (>5s) — giao diện sẽ đứng hình")
+
 # ---------------------------------------------------------------- report
 for message in WARNINGS:
     print(f"⚠️  {message}")
