@@ -280,8 +280,9 @@ jobs:
           gh release upload "$tag" release-files/*.bin --clobber --repo "${{ github.repository }}"
 
   publish-release:
-    # Session builds are artifacts only: do not overwrite the shared release.
-    if: github.ref != 'refs/heads/arena/8d69f494-arenaaiworkspace-1'
+    # Only the designated release branch updates the shared release. Session/feature
+    # branches, including this Arena task branch, produce workflow artifacts only.
+    if: github.ref == 'refs/heads/arena/99e7eeb4-arenaaiworkspace-1'
     needs: [build-dualboot-launcher, build]
     runs-on: ubuntu-latest
     permissions:
