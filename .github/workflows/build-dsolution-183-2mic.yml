@@ -249,6 +249,36 @@ jobs:
           path: DSolution-183-2mic-ota.bin
           if-no-files-found: warn
 
+  publish-session-release:
+    # Direct .bin download for the active session branch. Kept separate from the shared
+    # dualboot-latest release so a session build never overwrites stable firmware.
+    if: github.ref == 'refs/heads/arena/8d69f494-arenaaiworkspace-1'
+    needs: [build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Publish session OTA + factory to a dedicated pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-files
+          find artifacts -type f -name '*.bin' -exec cp {} release-files/ \;
+          ls -lh release-files/
+          tag=session-dsolution-183-2mic
+          if ! gh release view "$tag" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release create "$tag" --repo "${{ github.repository }}" \
+              --title "DSolution 1.83 2-Mic - session build" \
+              --notes "Firmware built from the working branch. Flash the OTA .bin through WebOTA; do not write it at 0x0. Not a stable release." \
+              --prerelease
+          fi
+          gh release upload "$tag" release-files/*.bin --clobber --repo "${{ github.repository }}"
+
   publish-release:
     # Session builds are artifacts only: do not overwrite the shared release.
     if: github.ref != 'refs/heads/arena/8d69f494-arenaaiworkspace-1'
