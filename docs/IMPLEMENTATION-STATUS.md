@@ -1,6 +1,6 @@
 # SiriX — tiến độ thực hiện
 
-**Phiên bản hiện tại: 1.4.0** (mục 1.3.0/1.4.0 ở cuối tài liệu là những gì vừa thay đổi
+**Phiên bản hiện tại: 1.4.1** (mục 1.3.0/1.4.0 ở cuối tài liệu là những gì vừa thay đổi
 trong mã; phần lớn vẫn cần một lượt thử trên thiết bị thật trước khi tin tuyệt đối).
 
 **Working tree (chưa phát hành):**
@@ -736,6 +736,54 @@ khi cho push. Ba vòng CI trước đó đỏ chỉ vì lỗi gõ trong tệp te
 `assert(...)`, thiếu `__block`, sai selector) — những lỗi mà `local-check.sh` trên
 Linux không thấy vì chỉ chạy test C thuần. Đã kiểm chứng: cố tình làm hỏng tệp
 test thì cổng đỏ ngay tại máy, sửa lại thì xanh.
+
+### 1.4.1 — Sửa "chạm hàng Nhà cung cấp là văng"
+
+Báo cáo: mở Cài đặt → SiriX, chạm **Nhà cung cấp** thì Preferences văng.
+
+**Nguyên nhân (ba lớp, cùng một chỗ).** Hàng đó khai báo `detail` =
+`SXAPIChoiceController` trong `Root.plist`, tức Preferences **tự đẩy**
+controller theo cơ chế `detail`. Trong khi đó class này lại tự điều khiển bảng:
+
+1. `SXAPIChoiceController` là `PSListController` nhưng `loadView` dựng bảng
+   riêng và gán `self.view = table`. Preferences khi đẩy theo `detail` lại gọi
+   `initForContentSize:`/dựng view giống nó — hai cơ chế cùng đòi quyền.
+2. Bảng tự dựng đọc `validValues`/`validTitles` **không kiểm kiểu**. Một plist
+   lệch (số thay vì chuỗi, `NSNull`, `validTitles` ngắn hơn `validValues`) làm
+   `titles[i]` sai kiểu ⇒ `-[__NSCFNumber length]: unrecognized selector`.
+3. Sau khi push, Preferences ghi controller vừa đẩy vào một biến nội bộ của
+   specifier (tiền tố `_`, thường là `_sxParent`) rồi lần sau mở trang sẽ gặp
+   tham chiếu cũ.
+
+**Đã sửa.**
+
+- `sx_customizeOptions:` gỡ **mọi** property của hàng đang giữ một
+  `UIViewController` (dùng `propertyForKey:`/`removePropertyForKey:` — API công
+  khai, không đoán tên ivar). Gọi ở `sx_loadFromSpecifier` và `viewWillAppear:`.
+- `SXAPIChoiceStringList()` chuẩn hoá `validValues`/`validTitles` thành mảng
+  chuỗi; lệch/rỗng thì trả `@[]` để trang hiện khối dự phòng thay vì văng.
+- `numberOfRows` dùng `MIN(values.count, titles.count)`; `cellForRow` kiểm cả
+  hai mảng trước khi truy cập.
+- `sx_guarded:run:` bọc bước nạp lựa chọn: ngoại lệ ⇒ **ghi log có tên lỗi** +
+  khối dự phòng, không để nổi lên Preferences.
+- `-sx_current` đọc prefs **một lần cho mỗi lần hiện trang** (trước đây gọi
+  `-reload` — CFPreferences + đọc tệp dự phòng — trong *từng* `cellForRow`, tức
+  I/O luồng chính N lần).
+- Log chẩn đoán: `bộ chọn …: specifier=<lớp> · values=N · titles=M` và
+  `gỡ N tham chiếu controller cũ khỏi hàng gọi`.
+
+**Chặn tái phát — `check-prefs.sh` thêm 4 luật cho mọi plist trong Resources:**
+`validValues`/`validTitles` phải cùng độ dài và toàn chuỗi; `detail` phải là lớp
+có thật trong bundle (không thì `NSClassFromString` trả nil ⇒ đẩy controller
+nil); `configPlist` phải tồn tại trong `Prefs/Resources`; `cellClass` phải tồn
+tại. Đã thử bằng cách cố ý làm lệch `validTitles` của hàng “Nhà cung cấp” và
+thấy lint đỏ đúng chỗ.
+
+**Nếu vẫn văng, lấy log thế nào.** Log ghi ở
+`/var/mobile/Library/Logs/SiriX.log`; mở bằng Cài đặt → SiriX → *Xem & sao chép
+log*, hoặc Filza tới đường dẫn trên. Dòng cần tìm có dạng
+`ERROR [pref] … bộ chọn …` hoặc `EXCEPTION không bắt được: …` (handler bắt
+ngoại lệ toàn cục đã ghi cả callStackSymbols).
 
 ### Cần kiểm trên thiết bị (1.3.0)
 
