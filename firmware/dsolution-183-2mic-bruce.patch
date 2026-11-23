@@ -9176,10 +9176,10 @@ index 00000000..d8f06f6b
 +#endif
 diff --git a/src/core/feature_guide.cpp b/src/core/feature_guide.cpp
 new file mode 100644
-index 00000000..7c7ff0ef
+index 00000000..44314dbf
 --- /dev/null
 +++ b/src/core/feature_guide.cpp
-@@ -0,0 +1,1104 @@
+@@ -0,0 +1,1105 @@
 +#include "feature_guide.h"
 +#include "display.h"
 +#include "mykeyboard.h"
@@ -9795,7 +9795,8 @@ index 00000000..7c7ff0ef
 +        "- Tries saved Wi-Fi networks first (STA + http://bruce.local + NTP time).\n"
 +        "- If no saved Wi-Fi connects, starts AP BruceNet (pass: brucenet, IP 192.168.4.1).\n"
 +        "# CONTROLS & TIPS\n"
-+        "- Disable if you never use WebUI and want maximum battery life."
++        "- OFF disables startup and stops current WebUI (WiFi stays on); OTA must finish first.\n"
++        "- Use WebUI control to start/stop it now without changing this startup setting."
 +    },
 +    {
 +        "System Config",
@@ -10647,7 +10648,7 @@ index ed144ba6..c39cac4c 100644
                             ibeacon("Bruce", "e4c159a0-8c82-11e6-bdf4-0800200c9a66", 0x004C);
                         }});
 diff --git a/src/core/menu_items/ConfigMenu.cpp b/src/core/menu_items/ConfigMenu.cpp
-index 6e44fd4d..99fd08cb 100644
+index 6e44fd4d..c0ee131c 100644
 --- a/src/core/menu_items/ConfigMenu.cpp
 +++ b/src/core/menu_items/ConfigMenu.cpp
 @@ -1,4 +1,8 @@
@@ -10659,7 +10660,15 @@ index 6e44fd4d..99fd08cb 100644
  #include "../mykeyboard.h"
  #include "core/display.h"
  #include "core/i2c_finder.h"
-@@ -24,7 +28,8 @@ void ConfigMenu::optionsMenu() {
+@@ -6,6 +10,7 @@
+ #include "core/settings.h"
+ #include "core/utils.h"
+ #include "core/wifi/wifi_common.h"
++#include "core/wifi/webInterface.h"
+ #ifdef HAS_RGB_LED
+ #include "core/led_control.h"
+ #endif
+@@ -24,7 +29,8 @@ void ConfigMenu::optionsMenu() {
          }
  
          std::vector<Option> localOptions = {
@@ -10669,7 +10678,7 @@ index 6e44fd4d..99fd08cb 100644
  #ifdef HAS_RGB_LED
              {"LED Config",    [this]() { ledMenu(); }      },
  #endif
-@@ -65,10 +70,14 @@ void ConfigMenu::displayUIMenu() {
+@@ -65,10 +71,14 @@ void ConfigMenu::displayUIMenu() {
          std::vector<Option> localOptions = {
              {"Brightness",  [this]() { setBrightnessMenu(); }               },
              {"Dim Time",    [this]() { setDimmerTimeMenu(); }               },
@@ -10684,7 +10693,7 @@ index 6e44fd4d..99fd08cb 100644
  #if defined(HAS_RESISTIVE_TOUCH)
              {"Calibrate Touch", []() { calibrateTouch(); }                  },
  #endif
-@@ -83,6 +92,45 @@ void ConfigMenu::displayUIMenu() {
+@@ -83,6 +93,45 @@ void ConfigMenu::displayUIMenu() {
      }
  }
  
@@ -10730,7 +10739,7 @@ index 6e44fd4d..99fd08cb 100644
  /*********************************************************************
  **  Function: ledMenu
  **  LED configuration submenu with auto-rebuild for toggles
-@@ -123,6 +171,26 @@ void ConfigMenu::ledMenu() {
+@@ -123,6 +172,26 @@ void ConfigMenu::ledMenu() {
      }
  }
  #endif
@@ -10757,7 +10766,7 @@ index 6e44fd4d..99fd08cb 100644
  /*********************************************************************
  **  Function: audioMenu
  **  Audio configuration submenu with auto-rebuild for toggles
-@@ -139,6 +207,19 @@ void ConfigMenu::audioMenu() {
+@@ -139,6 +208,19 @@ void ConfigMenu::audioMenu() {
               }                                                                            },
  #if defined(HAS_SPEAKER)
              {"Sound Volume",                                                [this]() { setSoundVolume(); }},
@@ -10777,18 +10786,21 @@ index 6e44fd4d..99fd08cb 100644
  #endif  //  HAS_SPEAKER
  #endif  //  LITE_VERSION
              {"Back",                                                        []() {}                       },
-@@ -171,6 +252,10 @@ void ConfigMenu::systemMenu() {
+@@ -171,6 +253,13 @@ void ConfigMenu::systemMenu() {
                   bruceConfig.wifiAtStartup = !bruceConfig.wifiAtStartup;
                   bruceConfig.saveFile();
               }                                                                                                           },
++#if defined(DSOLUTION_183_2MIC)
++            {String("WebUI AutoStart: ") + ((bruceConfig.webUiAutoStart || bruceConfig.startupApp == "WebUI") ? "ON" : "OFF"),
++             []() { toggleWebUiAutoStartFromMenu(); }},
++#else
 +            {String("WebUI AutoStart: ") + (bruceConfig.webUiAutoStart ? "ON" : "OFF"),
-+             [this]() {
-+                 bruceConfig.setWebUiAutoStart(!bruceConfig.webUiAutoStart);
-+             }                                                                                                           },
++             []() { bruceConfig.setWebUiAutoStart(!bruceConfig.webUiAutoStart); }},
++#endif
              {"Startup App",                                                         [this]() { setStartupApp(); }        },
              {"Hide/Show Apps",                                                      [this]() { mainMenu.hideAppsMenu(); }},
              {"Clock",                                                               [this]() { setClock(); }             },
-@@ -241,9 +326,21 @@ void ConfigMenu::advancedMenu() {
+@@ -241,9 +330,21 @@ void ConfigMenu::advancedMenu() {
  void ConfigMenu::powerMenu() {
      while (true) {
          std::vector<Option> localOptions = {
@@ -10813,7 +10825,7 @@ index 6e44fd4d..99fd08cb 100644
              {"Power Off",
               []() {
                   // Confirmation dialog for power off
-@@ -251,10 +348,15 @@ void ConfigMenu::powerMenu() {
+@@ -251,10 +352,15 @@ void ConfigMenu::powerMenu() {
                   int8_t choice = displayMessage("Power Off Device?", "No", nullptr, "Yes", TFT_RED);
  
                   if (choice == 1) { powerOff(); }
@@ -10831,7 +10843,7 @@ index 6e44fd4d..99fd08cb 100644
          int selected = loopOptions(localOptions, MENU_TYPE_SUBMENU, "Power Menu");
  
          // Exit to Config menu
-@@ -298,6 +400,7 @@ void ConfigMenu::pinsMenu() {
+@@ -298,6 +404,7 @@ void ConfigMenu::pinsMenu() {
      while (true) {
          std::vector<Option> localOptions = {
              {"I2C Finder",     [this]() { find_i2c_addresses(); }                       },
@@ -10839,7 +10851,7 @@ index 6e44fd4d..99fd08cb 100644
              {"CC1101 Pins",    [this]() { setSPIPinsMenu(bruceConfigPins.CC1101_bus); } },
              {"NRF24  Pins",    [this]() { setSPIPinsMenu(bruceConfigPins.NRF24_bus); }  },
  #if !defined(LITE_VERSION)
-@@ -306,17 +409,28 @@ void ConfigMenu::pinsMenu() {
+@@ -306,17 +413,28 @@ void ConfigMenu::pinsMenu() {
              {"W5500 Pins",     [this]() { setSPIPinsMenu(bruceConfigPins.W5500_bus); }  },
  #endif
              {"SDCard Pins",    [this]() { setSPIPinsMenu(bruceConfigPins.SDCARD_bus); } },
@@ -10992,7 +11004,7 @@ index 40f99560..a9e14f42 100644
      loopOptions(options, MENU_TYPE_SUBMENU, "Microphone");
 diff --git a/src/core/menu_items/QuickMenu.cpp b/src/core/menu_items/QuickMenu.cpp
 new file mode 100644
-index 00000000..0a3a7b11
+index 00000000..f42af790
 --- /dev/null
 +++ b/src/core/menu_items/QuickMenu.cpp
 @@ -0,0 +1,81 @@
@@ -11008,7 +11020,7 @@ index 00000000..0a3a7b11
 +
 +namespace {
 +constexpr unsigned count = 5;
-+const char *labels[count] = {"WiFi Connect", "Channel Analyzer", "BLE Scan", "BLE Privacy Guard", "Open WebUI"};
++const char *labels[count] = {"WiFi Connect", "Channel Analyzer", "BLE Scan", "BLE Privacy Guard", "WebUI control"};
 +uint32_t favorites = 0x1f;
 +int recent = -1;
 +bool loaded = false;
@@ -11038,7 +11050,7 @@ index 00000000..0a3a7b11
 +        case 1: channel_analyzer_setup(); break;
 +        case 2: ble_scan(); break;
 +        case 3: ble_guard_setup(); break;
-+        case 4: startWebUi(false); break;
++        case 4: loopOptionsWebUi(); break;
 +    }
 +}
 +void configure() {
@@ -11096,7 +11108,7 @@ index 00000000..d4117a2c
 +};
 +#endif
 diff --git a/src/core/menu_items/WifiMenu.cpp b/src/core/menu_items/WifiMenu.cpp
-index 2e6512c1..6acd6562 100644
+index 2e6512c1..6d9faac8 100644
 --- a/src/core/menu_items/WifiMenu.cpp
 +++ b/src/core/menu_items/WifiMenu.cpp
 @@ -16,6 +16,8 @@
@@ -11123,17 +11135,25 @@ index 2e6512c1..6acd6562 100644
  #include "modules/wifi/wifi_recover.h"
  #endif
  
-@@ -63,6 +73,9 @@ void WifiMenu::optionsMenu() {
-     if (WiFi.getMode() != WIFI_MODE_NULL) { options.push_back({"Turn Off WiFi", wifiDisconnect}); }
+@@ -60,10 +70,16 @@ void WifiMenu::optionsMenu() {
+              }},
+         };
+     }
+-    if (WiFi.getMode() != WIFI_MODE_NULL) { options.push_back({"Turn Off WiFi", wifiDisconnect}); }
++    if (WiFi.getMode() != WIFI_MODE_NULL) { options.push_back({"Turn Off WiFi", []() {
++        if (isWebUiActiveOrStarting()) { stopWebUiFromMenu(true); }
++        else wifiDisconnect();
++    }}); }
      if (WiFi.getMode() & WIFI_MODE_STA && WiFi.isConnected()) {
          options.push_back({"AP info", displayAPInfo});
-+        options.push_back(
-+            {isWebUIActive ? "WebUI Info (LAN)" : "Open WebUI (LAN)", lambdaHelper(startWebUi, false)}
-+        );
++
      }
++    options.push_back({isWebUiStarting() ? "WebUI [starting]" :
++                       (isWebUIActive ? "WebUI control [ON]" : "WebUI control"), loopOptionsWebUi});
      options.push_back({"Wifi Atks", wifi_atk_menu});
      options.push_back({"Evil Portal", [=]() {
-@@ -78,11 +91,16 @@ void WifiMenu::optionsMenu() {
+                            // WebUI cleanup now handled automatically inside EvilPortal constructor
+@@ -78,11 +94,16 @@ void WifiMenu::optionsMenu() {
      options.push_back({"TelNET", telnet_setup});
      options.push_back({"SSH", lambdaHelper(ssh_setup, String(""))});
      options.push_back({"Sniffer", sniffer_setup});
@@ -11150,7 +11170,7 @@ index 2e6512c1..6acd6562 100644
  #if defined(CONFIG_IDF_TARGET_ESP32S3) && !defined(BRUCE_NO_SDR_JAMMER)
      options.push_back({"SDR", sdr_menu});
  #endif
-@@ -109,6 +127,19 @@ void WifiMenu::optionsMenu() {
+@@ -109,6 +130,19 @@ void WifiMenu::optionsMenu() {
      options.push_back({"WiFi Pass Recovery", wifi_recover_menu});
  #endif
  
@@ -12536,7 +12556,7 @@ index fbef2fe2..46c3d25b 100644
 +bool parseSerialCommandCapture(const String &command, String &output, uint32_t timeoutMs = 1500);
  #endif
 diff --git a/src/core/settings.cpp b/src/core/settings.cpp
-index df8bbcb6..6956e5c9 100644
+index df8bbcb6..08dd98ad 100644
 --- a/src/core/settings.cpp
 +++ b/src/core/settings.cpp
 @@ -8,13 +8,17 @@
@@ -12723,7 +12743,17 @@ index df8bbcb6..6956e5c9 100644
  
  /*********************************************************************
  **  Function: setClock
-@@ -1832,9 +1956,9 @@ void setTheme() {
+@@ -1305,6 +1429,9 @@ void setStartupApp() {
+ 
+     int index = 0;
+     for (String appName : startupApp.getAppNames()) {
++#if defined(DSOLUTION_183_2MIC)
++        if (appName == "WebUI") continue; // managed by System Config / WebUI AutoStart
++#endif
+         index++;
+         if (bruceConfig.startupApp == appName) idx = index;
+ 
+@@ -1832,9 +1959,9 @@ void setTheme() {
               bruceConfig.removeTheme();
               bruceConfig.themePath = "";
               bruceConfig.theme.fs = 0;
@@ -14535,7 +14565,7 @@ index 00000000..a28c8b56
 +
 +#endif
 diff --git a/src/core/wifi/webInterface.cpp b/src/core/wifi/webInterface.cpp
-index a8679bd6..7a2af36c 100644
+index a8679bd6..113a4a38 100644
 --- a/src/core/wifi/webInterface.cpp
 +++ b/src/core/wifi/webInterface.cpp
 @@ -1,19 +1,43 @@
@@ -15135,7 +15165,7 @@ index a8679bd6..7a2af36c 100644
  
  // Generate random token
  String generateToken(int length = 24) {
-@@ -42,36 +604,41 @@ String generateToken(int length = 24) {
+@@ -42,36 +604,73 @@ String generateToken(int length = 24) {
  **  Turn off the WebUI
  **********************************************************************/
  void stopWebUi() {
@@ -15159,6 +15189,38 @@ index a8679bd6..7a2af36c 100644
          mdnsRunning = false;
      }
 +    if (hadResources) { vTaskDelay(pdMS_TO_TICKS(50)); }
++}
++
++// Preserve the WiFi connection unless explicitly asked to turn it off.
++bool stopWebUiFromMenu(bool stopWifi) {
++    if (isOtaInProgress() || s_wifiSwitchBusy) {
++        displayWarning("WebUI busy with OTA or WiFi change. Wait, then try again.", true);
++        return false;
++    }
++    cancelWebUiAutoStart();
++    if (isWebUiStarting()) {
++        displayWarning("WebUI startup is cancelling. Wait and try again.", true);
++        return false;
++    }
++    if (isOtaInProgress() || s_wifiSwitchBusy) {
++        displayWarning("WebUI busy with OTA or WiFi change. Wait, then try again.", true);
++        return false;
++    }
++    stopWebUi();
++    if (stopWifi) {
++        vTaskDelay(pdMS_TO_TICKS(100));
++        wifiDisconnect();
++    }
++    return true;
++}
++
++// A legacy Startup App named WebUI and the background auto-start switch must
++// not silently keep each other enabled when the user disables auto-start.
++void toggleWebUiAutoStartFromMenu() {
++    const bool enable = !(bruceConfig.webUiAutoStart || bruceConfig.startupApp == "WebUI");
++    if (bruceConfig.startupApp == "WebUI") bruceConfig.setStartupApp("");
++    bruceConfig.setWebUiAutoStart(enable);
++    if (!enable && isWebUiActiveOrStarting()) stopWebUiFromMenu(false);
  }
  
  /**********************************************************************
@@ -15192,7 +15254,7 @@ index a8679bd6..7a2af36c 100644
  
      // Disconnect WiFi AP mode if it's the WebUI's AP
      // Check if we're in AP or APSTA mode (used by WebUI)
-@@ -82,7 +649,7 @@ void cleanlyStopWebUiForWiFiFeature() {
+@@ -82,30 +681,41 @@ void cleanlyStopWebUiForWiFiFeature() {
          vTaskDelay(pdMS_TO_TICKS(250));
      }
  
@@ -15201,50 +15263,57 @@ index a8679bd6..7a2af36c 100644
  }
  /**********************************************************************
  **  Function: loopOptionsWebUi
-@@ -90,22 +657,36 @@ void cleanlyStopWebUiForWiFiFeature() {
+ **  Display options to launch the WebUI
  **********************************************************************/
  void loopOptionsWebUi() {
-     if (isWebUIActive) {
+-    if (isWebUIActive) {
 -        bool opt = WiFi.getMode() - 1;
-+        bool isAp = (WiFi.getMode() == WIFI_MODE_AP || WiFi.getMode() == WIFI_MODE_APSTA);
-         options = {
+-        options = {
 -            {"Stop WebUI", stopWebUi},
 -            {"WebUi screen", lambdaHelper(startWebUi, opt)}
-+            {"WebUI Info / URLs", lambdaHelper(startWebUi, isAp)},
-+            {isAp ? "Switch to LAN WiFi" : "Switch to AP Mode",
-+             [isAp]() {
-+                 if (isAp) startWebUi(false);
-+                 else startWebUi(true);
-+             }},
-+            {"Stop WebUI & WiFi",
-+             []() {
-+                 stopWebUi();
-+                 vTaskDelay(pdMS_TO_TICKS(100));
-+                 wifiDisconnect();
-+             }},
-         };
-         addOptionToMainMenu();
-         loopOptions(options);
-         return;
+-        };
+-        addOptionToMainMenu();
+-        loopOptions(options);
+-        return;
++    while (true) {
++        std::vector<Option> actions;
++        if (isWebUiStarting()) {
++            actions.push_back({"Cancel starting", []() { stopWebUiFromMenu(false); }});
++        } else if (isWebUIActive) {
++            bool isAp = (WiFi.getMode() == WIFI_MODE_AP || WiFi.getMode() == WIFI_MODE_APSTA);
++            actions.push_back({"WebUI info", [isAp]() { startWebUi(isAp); }});
++            actions.push_back({isAp ? "Switch to LAN WiFi" : "Switch to AP Mode", [isAp]() {
++                if (isOtaInProgress() || s_wifiSwitchBusy) {
++                    displayWarning("WebUI busy with OTA or WiFi change.", true);
++                    return;
++                }
++                startWebUi(!isAp);
++            }});
++            actions.push_back({"Stop WebUI (keep WiFi)", []() { stopWebUiFromMenu(false); }});
++            actions.push_back({"Stop WebUI and WiFi", []() { stopWebUiFromMenu(true); }});
++        } else if (isWebUiActiveOrStarting()) {
++            actions.push_back({"Clean up WebUI", []() { stopWebUiFromMenu(false); }});
++        } else {
++            actions.push_back({"Start on LAN WiFi", []() { startWebUi(false); }});
++            actions.push_back({"Start in AP mode", []() { startWebUi(true); }});
++        }
++        actions.push_back({"Back", []() {}});
++        const int chosen = loopOptions(actions, MENU_TYPE_SUBMENU,
++                                       isWebUiStarting() ? "WebUI starting" : (isWebUIActive ? "WebUI ON" :
++                                       (isWebUiActiveOrStarting() ? "WebUI cleanup" : "WebUI OFF")));
++        if (chosen < 0 || chosen == (int)actions.size() - 1 || returnToMenu) break;
      }
-     options = {
+-    options = {
 -        {"my Network", lambdaHelper(startWebUi, false)},
 -        {"AP mode",    lambdaHelper(startWebUi, true) },
-+        {"LAN WiFi (192.168)", lambdaHelper(startWebUi, false)},
-+        {"AP Mode (192.168.4.1)", lambdaHelper(startWebUi, true)},
-+        {String("AutoStart: ") + (bruceConfig.webUiAutoStart ? "ON" : "OFF"),
-+         []() {
-+             bruceConfig.setWebUiAutoStart(!bruceConfig.webUiAutoStart);
-+             loopOptionsWebUi();
-+         }},
-     };
- 
-     loopOptions(options);
+-    };
+-
+-    loopOptions(options);
 -    // On fail installing will run the following line
  }
  
  /**********************************************************************
-@@ -127,6 +708,7 @@ String humanReadableSize(uint64_t bytes) {
+@@ -127,6 +737,7 @@ String humanReadableSize(uint64_t bytes) {
  String listFiles(FS &fs, const String &folder) {
      // log_i("Listfiles Start");
      String returnText = "pa:" + folder + ":0\n";
@@ -15252,7 +15321,7 @@ index a8679bd6..7a2af36c 100644
      // Serial.println("Listing files stored on SD");
  
      _webFS = fs;
-@@ -168,19 +750,21 @@ String listFiles(FS &fs, const String &folder) {
+@@ -168,19 +779,21 @@ String listFiles(FS &fs, const String &folder) {
  ** used by server->on functions to discern whether a user has the correct
  ** httpapitoken OR is authenticated by username and password
  **********************************************************************/
@@ -15286,7 +15355,7 @@ index a8679bd6..7a2af36c 100644
      if (onFailureReturnLoginPage) {
          serveWebUIFile(request, "login.html", "text/html", true, login_html, login_html_size);
      } else {
-@@ -220,49 +804,68 @@ void createDirRecursive(const String &path, FS fs) {
+@@ -220,49 +833,68 @@ void createDirRecursive(const String &path, FS fs) {
  **  Function: handleUpload
  ** handles uploads to the filserver
  **********************************************************************/
@@ -15394,7 +15463,7 @@ index a8679bd6..7a2af36c 100644
      }
  }
  
-@@ -272,43 +875,117 @@ void notFound(AsyncWebServerRequest *request) { request->send(404, "text/plain",
+@@ -272,43 +904,117 @@ void notFound(AsyncWebServerRequest *request) { request->send(404, "text/plain",
  **  Function: drawWebUiScreen
  **  Draw information on screen of WebUI.
  **********************************************************************/
@@ -15538,7 +15607,7 @@ index a8679bd6..7a2af36c 100644
  
  #if defined(HAS_TOUCH)
      TouchFooter();
-@@ -379,11 +1056,12 @@ void serveWebUIFile(
+@@ -379,11 +1085,12 @@ void serveWebUIFile(
  static bool startMdnsResponder() {
      RAM_LOG("before MDNS");
  
@@ -15553,7 +15622,7 @@ index a8679bd6..7a2af36c 100644
  
      RAM_LOG("after MDNS");
      return true;
-@@ -460,59 +1138,765 @@ void configureWebServer() {
+@@ -460,59 +1167,765 @@ void configureWebServer() {
      // System Info
      server->on("/systeminfo", HTTP_GET, [](AsyncWebServerRequest *request) {
          if (checkUserWebAuth(request)) {
@@ -16357,7 +16426,7 @@ index a8679bd6..7a2af36c 100644
          }
      });
  
-@@ -544,25 +1928,70 @@ void configureWebServer() {
+@@ -544,25 +1957,70 @@ void configureWebServer() {
          if (!checkUserWebAuth(request)) { return; }
          if (request->hasArg("cmnd")) {
              String cmnd = request->arg("cmnd");
@@ -16447,7 +16516,7 @@ index a8679bd6..7a2af36c 100644
                  }
              } else {
                  if (parseSerialCommand(cmnd, false)) {
-@@ -576,9 +2005,22 @@ void configureWebServer() {
+@@ -576,9 +2034,22 @@ void configureWebServer() {
          }
      });
  
@@ -16472,7 +16541,7 @@ index a8679bd6..7a2af36c 100644
      });
  
      // List files
-@@ -632,6 +2074,11 @@ void configureWebServer() {
+@@ -632,6 +2103,11 @@ void configureWebServer() {
                  } else {
                      if (strcmp(fileAction.c_str(), "download") == 0) {
                          request->send(*fs, fileName, "application/octet-stream", true);
@@ -16484,7 +16553,7 @@ index a8679bd6..7a2af36c 100644
                      } else if (strcmp(fileAction.c_str(), "image") == 0) {
                          String extension = fileName.substring(fileName.lastIndexOf('.') + 1);
                          // https://www.iana.org/assignments/media-types/media-types.xhtml#image
-@@ -700,7 +2147,7 @@ void configureWebServer() {
+@@ -700,7 +2176,7 @@ void configureWebServer() {
  
                  File editFile = fs->open(fileName, FILE_WRITE);
                  if (editFile) {
@@ -16493,7 +16562,7 @@ index a8679bd6..7a2af36c 100644
                          request->send(200, "text/plain", "File edited: " + fileName);
                      } else {
                          request->send(500, "text/plain", "Failed to write to file: " + fileName);
-@@ -720,7 +2167,13 @@ void configureWebServer() {
+@@ -720,7 +2196,13 @@ void configureWebServer() {
      server->on(
          "/upload",
          HTTP_POST,
@@ -16508,7 +16577,7 @@ index a8679bd6..7a2af36c 100644
          handleUpload
      );
  
-@@ -737,6 +2190,348 @@ void configureWebServer() {
+@@ -737,6 +2219,348 @@ void configureWebServer() {
              }
          }
      });
@@ -16857,7 +16926,7 @@ index a8679bd6..7a2af36c 100644
      server->begin();
      Serial.println("Webserver started");
  }
-@@ -745,19 +2540,66 @@ void configureWebServer() {
+@@ -745,25 +2569,78 @@ void configureWebServer() {
  **  Function: startWebUi
  **  Start the WebUI
  **********************************************************************/
@@ -16893,8 +16962,9 @@ index a8679bd6..7a2af36c 100644
 +            return true;
 +        }
 +        return wifiConnectMenu(WIFI_AP);
-+    }
-+
+     }
+ 
+-    // configure web server
 +    if (WiFi.isConnected()) {
 +        wifiIP = WiFi.localIP().toString();
 +        if (server && !mdnsRunning) mdnsRunning = startMdnsResponder();
@@ -16914,13 +16984,17 @@ index a8679bd6..7a2af36c 100644
 +        wifiIP = WiFi.localIP().toString();
 +        if (server) mdnsRunning = startMdnsResponder();
 +        return true;
-     }
- 
--    // configure web server
++    }
++
 +    return wifiConnectMenu(WIFI_STA);
 +}
 +
 +void startWebUi(bool mode_ap) {
++    cancelWebUiAutoStart();
++    if (isWebUiStarting()) {
++        displayWarning("WebUI startup is cancelling. Wait and try again.", true);
++        return;
++    }
 +    if (!ensureWebUiNetwork(mode_ap)) {
 +        if (!WiFi.isConnected() && WiFi.getMode() != WIFI_MODE_AP) {
 +            displayWarning("WiFi not connected. Connect WiFi first, then open WebUI.", true);
@@ -16933,7 +17007,14 @@ index a8679bd6..7a2af36c 100644
          options.clear();
  
          Serial.println("Configuring Webserver ...");
-@@ -771,24 +2613,180 @@ void startWebUi(bool mode_ap) {
+         if (psramFound()) server = (AsyncWebServer *)ps_malloc(sizeof(AsyncWebServer));
+         else server = (AsyncWebServer *)malloc(sizeof(AsyncWebServer));
+ 
++        if (!server) { displayError("Not enough memory for WebUI", true); return; }
+         new (server) AsyncWebServer(default_webserverporthttp);
+ 
+         configureWebServer();
+@@ -771,24 +2648,193 @@ void startWebUi(bool mode_ap) {
          isWebUIActive = true;
      }
      tft.setLogging();
@@ -16969,24 +17050,34 @@ index a8679bd6..7a2af36c 100644
 +            vTaskDelay(pdMS_TO_TICKS(60));
 +        }
 +
-+        int choice = 0; // 0 = run bg, 1 = switch mode, 2 = stop all
++        int choice = 0; // 0 = background, 1 = switch, 2 = stop WebUI, 3 = stop all
 +        options.clear();
 +        options.emplace_back("Run in background", [&choice]() { choice = 0; });
 +        options.emplace_back(
 +            isApMode ? "Switch to LAN WiFi" : "Switch to AP Mode", [&choice]() { choice = 1; }
 +        );
-+        options.emplace_back("Stop WebUI & WiFi", [&choice]() { choice = 2; });
++        options.emplace_back("Stop WebUI (keep WiFi)", [&choice]() { choice = 2; });
++        options.emplace_back("Stop WebUI and WiFi", [&choice]() { choice = 3; });
 +
 +        loopOptions(options);
 +
 +        if (choice == 0) {
 +            exitWebUiLoop = true;
 +        } else if (choice == 1) {
++            if (isOtaInProgress() || s_wifiSwitchBusy) {
++                displayWarning("WebUI busy with OTA or WiFi change.", true);
++                continue;
++            }
 +            bool targetAp = !isApMode;
 +            if (ensureWebUiNetwork(targetAp)) {
 +                if (!server) {
 +                    if (psramFound()) server = (AsyncWebServer *)ps_malloc(sizeof(AsyncWebServer));
 +                    else server = (AsyncWebServer *)malloc(sizeof(AsyncWebServer));
++                    if (!server) {
++                        displayError("Not enough memory for WebUI", true);
++                        exitWebUiLoop = true;
++                        continue;
++                    }
 +                    new (server) AsyncWebServer(default_webserverporthttp);
 +                    configureWebServer();
 +                    isWebUIActive = true;
@@ -16999,11 +17090,8 @@ index a8679bd6..7a2af36c 100644
 +                    exitWebUiLoop = true;
 +                }
 +            }
-+        } else if (choice == 2) {
-+            stopWebUi();
-+            vTaskDelay(pdMS_TO_TICKS(100));
-+            wifiDisconnect();
-+            exitWebUiLoop = true;
++        } else if (choice == 2 || choice == 3) {
++            if (stopWebUiFromMenu(choice == 3)) exitWebUiLoop = true;
 +        }
      }
 +}
@@ -17104,6 +17192,9 @@ index a8679bd6..7a2af36c 100644
 +        }
 +    }
 +
++    // Cancellation can arrive while configureWebServer is running. Do not leave
++    // a late-started server behind after the user asked to stop it.
++    if (s_webUiCancelRequested && isWebUIActive) stopWebUi();
 +    s_webUiStarting = false;
 +    return isWebUIActive;
 +}
@@ -17117,7 +17208,7 @@ index a8679bd6..7a2af36c 100644
 +        startWebUiHeadless(true);
 +    } else {
 +        s_webUiQueued = false;
-     }
++    }
 +    vTaskDelete(NULL);
 +}
 +
@@ -17125,13 +17216,16 @@ index a8679bd6..7a2af36c 100644
 +    if (server || isWebUIActive || s_webUiStarting || s_webUiQueued) return;
 +    s_webUiCancelRequested = false;
 +    s_webUiQueued = true;
-+    xTaskCreate(webUiAutoStartTask, "webUiAutoStart", 6144, NULL, 1, NULL);
++    if (xTaskCreate(webUiAutoStartTask, "webUiAutoStart", 6144, NULL, 1, NULL) != pdPASS) {
++        s_webUiQueued = false;
++        Serial.println("[WebUI] Failed to create autostart task");
+     }
  }
 diff --git a/src/core/wifi/webInterface.h b/src/core/wifi/webInterface.h
-index d14ae9f0..ec18844b 100644
+index d14ae9f0..a9708c0b 100644
 --- a/src/core/wifi/webInterface.h
 +++ b/src/core/wifi/webInterface.h
-@@ -23,5 +23,11 @@ void serveWebUIFile(
+@@ -23,5 +23,14 @@ void serveWebUIFile(
  );
  void configureWebServer();
  void startWebUi(bool mode_ap = false);
@@ -17142,6 +17236,9 @@ index d14ae9f0..ec18844b 100644
 +bool isWebUiActiveOrStarting();
 +bool isOtaInProgress();
  void stopWebUi();
++// Menu-driven stop refuses to interrupt OTA or an ongoing network transition.
++bool stopWebUiFromMenu(bool stopWifi = false);
++void toggleWebUiAutoStartFromMenu();
  void cleanlyStopWebUiForWiFiFeature();
 diff --git a/src/core/wifi/web_navigation.h b/src/core/wifi/web_navigation.h
 new file mode 100644
@@ -23564,7 +23661,7 @@ index 353b8641..006bee36 100644
  
  #endif
 diff --git a/src/modules/wifi/evil_portal.cpp b/src/modules/wifi/evil_portal.cpp
-index 59ed80ed..fd29e416 100644
+index 59ed80ed..375f7dda 100644
 --- a/src/modules/wifi/evil_portal.cpp
 +++ b/src/modules/wifi/evil_portal.cpp
 @@ -8,6 +8,7 @@
@@ -23626,7 +23723,20 @@ index 59ed80ed..fd29e416 100644
      if (_pendingWifiRestart) {
          _pendingWifiRestart = false;
          restartWiFi();
-@@ -738,6 +769,10 @@ void EvilPortal::credsController(AsyncWebServerRequest *request) {
+@@ -484,8 +515,10 @@ void EvilPortal::printLastCapturedCredential() {
+ }
+ 
+ void EvilPortal::printDeauthStatus() {
+-    if (!_deauth || isDeauthHeld) {
+-        printFootnote("Deauth OFF");
++    if (!_deauth) {
++        printFootnote("Deauth not configured");
++    } else if (isDeauthHeld) {
++        printFootnote("Deauth paused");
+     } else {
+         tft.setTextColor(TFT_RED);
+         printFootnote("Deauth ON");
+@@ -738,6 +771,10 @@ void EvilPortal::credsController(AsyncWebServerRequest *request) {
  
      capturedCredentialsHtml = htmlResponse + capturedCredentialsHtml;
      totalCapturedCredentials++;

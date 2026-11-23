@@ -245,3 +245,10 @@ nạp sai địa chỉ). Thứ tự kiểm tra khi có log serial: (1) banner bo
 - Có thể xuất PCM 16-bit 48 kHz từ Audacity rồi chuẩn hóa header/giới hạn bằng Python trên máy tính: `python tools/prepare-ui-sound.py select input.wav select.wav --trim` (thay `select` bằng tên sự kiện). Công cụ chỉ chuẩn hóa/cắt, không chuyển sample rate hay giải mã MP3.
 - Các âm ngắn phát trên task menu; sẽ bỏ qua nếu loa/mic đang bận. Chưa có bộ điều phối I²S nguyên tử giữa mọi task, vì vậy vẫn cần thử thật khi phát nhạc/thu mic đồng thời. Màn pet ở hai chiều đã có kiểm thử hình học, nhưng chưa được kiểm tra căn chỉnh, màu sắc hay độ mượt trên màn NV3023 thực.
 - Muốn chỉ ngắm và đổi biểu cảm mà **không khởi động radio**, vào **Config → Display & UI → Pet preview**. Nhấn Prev/Next để đổi biểu cảm, Select mở tùy chọn skin/chuyển động, giữ Select để thoát. Brucegotchi thực tế có phát beacon và deauth tới các AP lân cận, không chỉ ngắm pet: bản này hiển thị cảnh báo và yêu cầu xác nhận trước khi chạy; chỉ dùng trong môi trường cô lập được phép.
+
+## WebUI: tự khởi động và bật/tắt ngay
+
+- **Config → System Config → WebUI AutoStart** điều khiển khởi động sau mỗi lần bật máy. Chuyển **OFF** cũng hủy lượt khởi động nền đang chờ và yêu cầu dừng WebUI hiện tại, nhưng giữ kết nối Wi‑Fi. Nếu cấu hình cũ chọn `Startup App = WebUI`, công tắc này tính cả cấu hình đó và xóa lựa chọn trùng khi chuyển OFF. Các Startup App khác không bị thay đổi.
+- Để điều khiển ngay mà không đổi AutoStart, vào **WiFi → WebUI control**, **Files → WebUI**, hoặc **Quick → WebUI control**. Các đường này mở cùng menu trạng thái: bắt đầu, xem thông tin, dừng WebUI giữ Wi‑Fi, hoặc dừng cả hai. Bật/tắt thủ công không đổi cấu hình tự khởi động lần sau.
+- Khi đang OTA hoặc đang chuyển mạng, lệnh dừng từ menu sẽ báo bận thay vì cố ngắt. Nếu quá trình tự khởi động đang hủy, chờ và thử lại. AutoStart OFF được lưu ngay cả khi WebUI chưa thể dừng vì đang bận; khi xong hãy vào WebUI control để dừng.
+- Evil Portal hiển thị **Deauth not configured** khi phiên hiện tại không được cấu hình chức năng đó, thay vì chỉ ghi OFF và gây hiểu nhầm; nhãn **paused** khác với chưa cấu hình.

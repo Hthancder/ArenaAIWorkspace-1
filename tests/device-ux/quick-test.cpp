@@ -10,7 +10,7 @@ bool wifiConnectMenu() { return true; }
 void channel_analyzer_setup() {}
 void ble_scan() { ++calls; }
 void ble_guard_setup() {}
-void startWebUi(bool) {}
+void loopOptionsWebUi() {}
 int loopOptions(std::vector<Option>& opts, int, const char *title) {
     std::vector<String> labels; for (auto &o: opts) labels.push_back(o.label); seen.push_back(labels);
     String want;
