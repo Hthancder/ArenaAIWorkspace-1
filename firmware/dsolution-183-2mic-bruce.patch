@@ -8033,7 +8033,7 @@ index d8ec5e0b..d1c5953f 100644
  	; elecrow-28B
  	; elecrow-35B
 diff --git a/src/core/config.cpp b/src/core/config.cpp
-index e7ceca14..c55cd8ea 100644
+index e7ceca14..c855f385 100644
 --- a/src/core/config.cpp
 +++ b/src/core/config.cpp
 @@ -14,6 +14,8 @@ JsonDocument BruceConfig::toJson() const {
@@ -8058,7 +8058,7 @@ index e7ceca14..c55cd8ea 100644
  
  #ifdef HAS_RGB_LED
      setting["ledBright"] = ledBright;
-@@ -74,6 +80,25 @@ JsonDocument BruceConfig::toJson() const {
+@@ -74,6 +80,28 @@ JsonDocument BruceConfig::toJson() const {
      setting["badUSBBLEKeyDelay"] = badUSBBLEKeyDelay;
      setting["badUSBBLEShowOutput"] = badUSBBLEShowOutput;
  
@@ -8080,11 +8080,14 @@ index e7ceca14..c55cd8ea 100644
 +    _seclabPlus["csaBursts"] = seclabPlus.csaBursts;
 +    _seclabPlus["lanGuardAutoArm"] = seclabPlus.lanGuardAutoArm;
 +    _seclabPlus["pmkidAutoExport"] = seclabPlus.pmkidAutoExport;
++    _seclabPlus["chainNaptLanAuto"] = seclabPlus.chainNaptLanAuto;
++    _seclabPlus["chainPortalLanAuto"] = seclabPlus.chainPortalLanAuto;
++    _seclabPlus["chainGuardAuditAuto"] = seclabPlus.chainGuardAuditAuto;
 +
      JsonArray dm = setting["disabledMenus"].to<JsonArray>();
      for (int i = 0; i < disabledMenus.size(); i++) { dm.add(disabledMenus[i]); }
  
-@@ -160,6 +185,16 @@ void BruceConfig::fromFile(bool checkFS) {
+@@ -160,6 +188,16 @@ void BruceConfig::fromFile(bool checkFS) {
          count++;
          log_e("Fail");
      }
@@ -8101,7 +8104,7 @@ index e7ceca14..c55cd8ea 100644
      if (!setting["bright"].isNull()) {
          bright = setting["bright"].as<int>();
      } else {
-@@ -208,6 +243,11 @@ void BruceConfig::fromFile(bool checkFS) {
+@@ -208,6 +246,11 @@ void BruceConfig::fromFile(bool checkFS) {
          count++;
          log_e("Fail");
      }
@@ -8113,7 +8116,7 @@ index e7ceca14..c55cd8ea 100644
      if (!setting["instantBoot"].isNull()) {
          instantBoot = setting["instantBoot"].as<int>();
      } else {
-@@ -219,6 +259,21 @@ void BruceConfig::fromFile(bool checkFS) {
+@@ -219,6 +262,21 @@ void BruceConfig::fromFile(bool checkFS) {
      } else {
          keyboardLang = "QWERTY";
      }
@@ -8135,7 +8138,7 @@ index e7ceca14..c55cd8ea 100644
  
  #ifdef HAS_RGB_LED
      if (!setting["ledBright"].isNull()) {
-@@ -415,6 +470,31 @@ void BruceConfig::fromFile(bool checkFS) {
+@@ -415,6 +473,34 @@ void BruceConfig::fromFile(bool checkFS) {
          log_e("Fail");
      }
  
@@ -8161,13 +8164,16 @@ index e7ceca14..c55cd8ea 100644
 +        if (!sp["csaBursts"].isNull()) seclabPlus.csaBursts = sp["csaBursts"].as<uint16_t>();
 +        if (!sp["lanGuardAutoArm"].isNull()) seclabPlus.lanGuardAutoArm = sp["lanGuardAutoArm"].as<bool>();
 +        if (!sp["pmkidAutoExport"].isNull()) seclabPlus.pmkidAutoExport = sp["pmkidAutoExport"].as<bool>();
++        if (!sp["chainNaptLanAuto"].isNull()) seclabPlus.chainNaptLanAuto = sp["chainNaptLanAuto"].as<bool>();
++        if (!sp["chainPortalLanAuto"].isNull()) seclabPlus.chainPortalLanAuto = sp["chainPortalLanAuto"].as<bool>();
++        if (!sp["chainGuardAuditAuto"].isNull()) seclabPlus.chainGuardAuditAuto = sp["chainGuardAuditAuto"].as<bool>();
 +        validateSecLabPlus();
 +    }
 +
      if (!setting["disabledMenus"].isNull()) {
          disabledMenus.clear();
          JsonArray dm = setting["disabledMenus"].as<JsonArray>();
-@@ -474,11 +554,16 @@ void BruceConfig::factoryReset() {
+@@ -474,11 +560,16 @@ void BruceConfig::factoryReset() {
  
  void BruceConfig::validateConfig() {
      validateDimmerValue();
@@ -8184,7 +8190,7 @@ index e7ceca14..c55cd8ea 100644
  #ifdef HAS_RGB_LED
      validateLedBrightValue();
      validateLedColorValue();
-@@ -493,6 +578,7 @@ void BruceConfig::validateConfig() {
+@@ -493,6 +584,7 @@ void BruceConfig::validateConfig() {
      validateMainMenuStyle();
      validateBadUSBBLEKeyboardLayout();
      validateBadUSBBLEKeyDelay();
@@ -8192,7 +8198,7 @@ index e7ceca14..c55cd8ea 100644
      validateEvilEndpointCreds();
      validateEvilEndpointSsid();
      validateEvilPasswordMode();
-@@ -511,8 +597,29 @@ void BruceConfig::setDimmer(int value) {
+@@ -511,8 +603,29 @@ void BruceConfig::setDimmer(int value) {
  }
  
  void BruceConfig::validateDimmerValue() {
@@ -8224,7 +8230,7 @@ index e7ceca14..c55cd8ea 100644
  }
  
  void BruceConfig::setBright(uint8_t value) {
-@@ -580,6 +687,58 @@ void BruceConfig::validateWifiAtStartupValue() {
+@@ -580,6 +693,58 @@ void BruceConfig::validateWifiAtStartupValue() {
      if (wifiAtStartup > 1) wifiAtStartup = 1;
  }
  
@@ -8283,7 +8289,7 @@ index e7ceca14..c55cd8ea 100644
  #ifdef HAS_RGB_LED
  void BruceConfig::setLedBright(int value) {
      ledBright = value;
-@@ -801,7 +960,7 @@ void BruceConfig::setMainMenuStyle(int value) {
+@@ -801,7 +966,7 @@ void BruceConfig::setMainMenuStyle(int value) {
  
  void BruceConfig::validateMainMenuStyle() {
      if (mainMenuStyle < MAIN_MENU_CAROUSEL || mainMenuStyle > MAIN_MENU_GRID)
@@ -8292,7 +8298,7 @@ index e7ceca14..c55cd8ea 100644
  }
  
  void BruceConfig::setBadUSBBLEKeyboardLayout(int value) {
-@@ -829,6 +988,23 @@ void BruceConfig::setBadUSBBLEShowOutput(bool value) {
+@@ -829,6 +994,23 @@ void BruceConfig::setBadUSBBLEShowOutput(bool value) {
      badUSBBLEShowOutput = value;
      saveFile();
  }
@@ -8317,10 +8323,10 @@ index e7ceca14..c55cd8ea 100644
      if (!_mifareKeysLoaded) {
          MifareKeysManager::ensureLoaded(mifareKeys);
 diff --git a/src/core/config.h b/src/core/config.h
-index 72d69eba..91ea5cd9 100644
+index 72d69eba..f3d24724 100644
 --- a/src/core/config.h
 +++ b/src/core/config.h
-@@ -17,12 +17,62 @@
+@@ -17,12 +17,65 @@
  
  enum EvilPortalPasswordMode { FULL_PASSWORD = 0, FIRST_LAST_CHAR = 1, HIDE_PASSWORD = 2, SAVE_LENGTH = 3 };
  
@@ -8378,12 +8384,15 @@ index 72d69eba..91ea5cd9 100644
 +        uint16_t csaBursts = 3;
 +        bool lanGuardAutoArm = false;
 +        bool pmkidAutoExport = true;
++        bool chainNaptLanAuto = false;
++        bool chainPortalLanAuto = false;
++        bool chainGuardAuditAuto = false;
 +    };
 +
      struct WiFiCredential {
          String ssid;
          String pwd;
-@@ -46,7 +96,9 @@ public:
+@@ -46,7 +99,9 @@ public:
      const char *filepath = "/bruce.conf";
  
      //  Settings
@@ -8394,7 +8403,7 @@ index 72d69eba..91ea5cd9 100644
      int bright = 100;
      bool automaticTimeUpdateViaNTP = true;
      float tmz = 0;
-@@ -55,8 +107,12 @@ public:
+@@ -55,8 +110,12 @@ public:
      int soundEnabled = 1;
      int soundVolume = 100;
      int wifiAtStartup = 0;
@@ -8407,7 +8416,7 @@ index 72d69eba..91ea5cd9 100644
  
  #ifdef HAS_RGB_LED
      // Led
-@@ -98,7 +154,8 @@ public:
+@@ -98,7 +157,8 @@ public:
      int devMode = 0;
  
      int colorInverted = DEFAULT_COLOR_INVERTED;
@@ -8417,7 +8426,7 @@ index 72d69eba..91ea5cd9 100644
      int badUSBBLEKeyboardLayout = 0;
      uint16_t badUSBBLEKeyDelay = 10;
      bool badUSBBLEShowOutput = true;
-@@ -138,6 +195,10 @@ public:
+@@ -138,6 +198,10 @@ public:
      // Settings
      void setDimmer(int value);
      void validateDimmerValue();
@@ -8428,7 +8437,7 @@ index 72d69eba..91ea5cd9 100644
      void setBright(uint8_t value);
      void validateBrightValue();
      void setAutomaticTimeUpdateViaNTP(bool value);
-@@ -151,6 +212,13 @@ public:
+@@ -151,6 +215,13 @@ public:
      void validateSoundVolumeValue();
      void setWifiAtStartup(int value);
      void validateWifiAtStartupValue();
@@ -8442,7 +8451,7 @@ index 72d69eba..91ea5cd9 100644
  
  #ifdef HAS_RGB_LED
      // Led
-@@ -212,6 +280,8 @@ public:
+@@ -212,6 +283,8 @@ public:
      void setBadUSBBLEKeyDelay(uint16_t value);
      void validateBadUSBBLEKeyDelay();
      void setBadUSBBLEShowOutput(bool value);
@@ -9270,10 +9279,10 @@ index 00000000..c56d7aef
 +#endif
 diff --git a/src/core/feature_guide.cpp b/src/core/feature_guide.cpp
 new file mode 100644
-index 00000000..4db9e473
+index 00000000..e5aeff1f
 --- /dev/null
 +++ b/src/core/feature_guide.cpp
-@@ -0,0 +1,1105 @@
+@@ -0,0 +1,1125 @@
 +#include "feature_guide.h"
 +#include "display.h"
 +#include "mykeyboard.h"
@@ -10048,6 +10057,26 @@ index 00000000..4db9e473
 +        "- BLE Security Audit+ -> scan or manually enter a MAC, then pick public/random address type.\n"
 +        "- Pair mode toggles between Just Works and MITM baseline and is shared by WebUI and CLI.\n"
 +        "- Tag verification supports 30/60/120s or a custom 5-300s sanitized beacon."
++    },
++    {
++        "Chains",
++        "WIFI",
++        "Chains",
++        "Recon->Capture, NAPT->LAN, Guard->Audit, BLE->Clone, USB->Verify, Sonar->Evidence",
++        "# OVERVIEW\n"
++        "Coordinates existing SecLab+ tools into 7 guided chains. The chain does not reimplement the member tool; it only sequences Start/Stop and feeds one tool's snapshot into the next.\n"
++        "# CHAINS\n"
++        "- Recon->Capture: Probe Radar + Analyzer hidden APs -> PMKID/CSA target scoring (decloaked bonus).\n"
++        "- NAPT->LAN: after NAPT is up, auto-start LAN Auditor (deep), HTTP Inspector and Responder+.\n"
++        "- Portal->NAPT->LAN: same as above after the portal handoff.\n"
++        "- Guard->Audit: when Guard sees ARP/DHCP alerts, fire a deep LAN audit and bundle evidence.\n"
++        "- BLE Guard->Audit->Clone: Privacy Guard candidates (sorted hits/RSSI) -> pairing audit -> GATT clone.\n"
++        "- USB Generate->Verify: generate payload -> arm LED receiver -> run -> verify/export.\n"
++        "- Sonar->Evidence: bundle Sonar WAV/session into one evidence file.\n"
++        "# HOW TO USE\n"
++        "- WiFi -> Chains menu, or CLI `seclab chain start <id>` / WebUI SecLab+ chain buttons.\n"
++        "- Three auto-arm toggles persist in bruce.conf (seclabPlus.chain*Auto); the watcher fires when the trigger is already up.\n"
++        "- Observations (probe fingerprints, guard alerts, sonar) are never proof of an attack."
 +    },
 +    {
 +        "SecLab+ Control Center",
@@ -11215,10 +11244,10 @@ index 00000000..d4117a2c
 +};
 +#endif
 diff --git a/src/core/menu_items/WifiMenu.cpp b/src/core/menu_items/WifiMenu.cpp
-index 2e6512c1..2fb19429 100644
+index 2e6512c1..2e455fa7 100644
 --- a/src/core/menu_items/WifiMenu.cpp
 +++ b/src/core/menu_items/WifiMenu.cpp
-@@ -16,6 +16,8 @@
+@@ -16,149 +16,267 @@
  #include "modules/wifi/netcut.h"
  #include "modules/wifi/responder.h"
  #include "modules/wifi/scan_hosts.h"
@@ -11227,7 +11256,11 @@ index 2e6512c1..2fb19429 100644
  #include "modules/wifi/sniffer.h"
  #include "modules/wifi/wifi_atks.h"
  
-@@ -26,139 +28,251 @@
+ #ifndef LITE_VERSION
+ #include "modules/pwnagotchi/pwnagotchi.h"
++#include "modules/wifi/chain_orchestrator.h"
+ #include "modules/wifi/channel_analyzer.h"
+ #if defined(CONFIG_IDF_TARGET_ESP32C5)
  #include "modules/wifi/dual_band_analyzer.h"
  #endif
  #include "modules/wifi/jam_detect.h"
@@ -11333,6 +11366,7 @@ index 2e6512c1..2fb19429 100644
 +        options.push_back({"Scan & Analyze", [this]() { scanMenu(); }});
 +        options.push_back({"Defense", [this]() { defenseMenu(); }});
 +        options.push_back({"LAN & HTTP", [this]() { lanMenu(); }});
++        options.push_back({"Chains", [this]() { chainsMenu(); }});
 +        options.push_back({"Remote Access", [this]() { remoteMenu(); }});
 +#endif
 +        addOptionToMainMenu();
@@ -11355,13 +11389,13 @@ index 2e6512c1..2fb19429 100644
 -                 displayInfo("pwd: " + bruceConfig.wifiAp.pwd, true);
 -             }},
 -        };
-+        list.push_back({"Connect to WiFi", []() { wifiConnectMenu(WIFI_STA); }});
-+        list.push_back({"Start WiFi AP", startWifiAp});
-     }
+-    }
 -    if (WiFi.getMode() != WIFI_MODE_NULL) { options.push_back({"Turn Off WiFi", wifiDisconnect}); }
 -    if (WiFi.getMode() & WIFI_MODE_STA && WiFi.isConnected()) {
 -        options.push_back({"AP info", displayAPInfo});
--    }
++        list.push_back({"Connect to WiFi", []() { wifiConnectMenu(WIFI_STA); }});
++        list.push_back({"Start WiFi AP", startWifiAp});
+     }
 -    options.push_back({"Wifi Atks", wifi_atk_menu});
 -    options.push_back({"Evil Portal", [=]() {
 -                           // WebUI cleanup now handled automatically inside EvilPortal constructor
@@ -11417,12 +11451,10 @@ index 2e6512c1..2fb19429 100644
 -    options.push_back({"Brucegotchi", brucegotchi_start});
 -#if defined(CONFIG_IDF_TARGET_ESP32S3)
 -    options.push_back({"WiFite", wifite_menu});
+-#endif
+-    options.push_back({"WiFi Pass Recovery", wifi_recover_menu});
 +        list.push_back({"5 GHz Analyzer", dual_band_analyzer_setup});
  #endif
--    options.push_back({"WiFi Pass Recovery", wifi_recover_menu});
--#endif
--
--    options.push_back({"Config", [this]() { configMenu(); }});
 +        list.push_back({"Packet Sniffer (PCAP)", sniffer_setup});
 +        list.push_back({"FTM Distance", ftm_ranging_setup});
 +        list.push_back({"CSI Motion Radar", csi_radar_setup});
@@ -11432,6 +11464,8 @@ index 2e6512c1..2fb19429 100644
 +    }
 +}
  
+-    options.push_back({"Config", [this]() { configMenu(); }});
+-
 -    addOptionToMainMenu();
 +void WifiMenu::defenseMenu() {
 +    std::vector<Option> list;
@@ -11523,6 +11557,8 @@ index 2e6512c1..2fb19429 100644
 -        });
 -
 -        wifiOptions.push_back(opt);
++void WifiMenu::chainsMenu() { chain_orchestrator_setup(); }
++
 +void WifiMenu::toolsMenu() {
 +    bool rebuild = true;
 +    while (rebuild) {
@@ -11586,7 +11622,7 @@ index 2e6512c1..2fb19429 100644
  }
  
  void WifiMenu::drawIcon(float scale) {
-@@ -168,23 +282,11 @@ void WifiMenu::drawIcon(float scale) {
+@@ -168,23 +286,11 @@ void WifiMenu::drawIcon(float scale) {
  
      tft.fillCircle(iconCenterX, iconCenterY + deltaY, radius, bruceConfig.priColor);
      tft.drawArc(
@@ -11613,10 +11649,10 @@ index 2e6512c1..2fb19429 100644
      );
  }
 diff --git a/src/core/menu_items/WifiMenu.h b/src/core/menu_items/WifiMenu.h
-index 9dee9d7b..ed68e827 100644
+index 9dee9d7b..543660fd 100644
 --- a/src/core/menu_items/WifiMenu.h
 +++ b/src/core/menu_items/WifiMenu.h
-@@ -13,7 +13,15 @@ public:
+@@ -13,7 +13,16 @@ public:
      const String& themePath() override { return bruceConfig.theme.paths.wifi; }
  
  private:
@@ -11629,6 +11665,7 @@ index 9dee9d7b..ed68e827 100644
 +    void defenseMenu(void);
 +    void lanMenu(void);
 +    void remoteMenu(void);
++    void chainsMenu(void);
 +#endif
  };
  
@@ -12308,10 +12345,10 @@ index 49138d4a..0bea13fb 100644
  }
 diff --git a/src/core/serial_commands/seclab_commands.cpp b/src/core/serial_commands/seclab_commands.cpp
 new file mode 100644
-index 00000000..d8acc1f1
+index 00000000..61c7f2c0
 --- /dev/null
 +++ b/src/core/serial_commands/seclab_commands.cpp
-@@ -0,0 +1,418 @@
+@@ -0,0 +1,479 @@
 +#include "seclab_commands.h"
 +#include <Arduino.h>
 +#include <globals.h>
@@ -12322,6 +12359,7 @@ index 00000000..d8acc1f1
 +#include "core/seclab_util.h"
 +#include "modules/badusb_ble/smart_badusb.h"
 +#include "modules/ble/ble_security_audit.h"
++#include "modules/wifi/chain_orchestrator.h"
 +#include "modules/wifi/lan_auditor.h"
 +#include "modules/wifi/lan_guard.h"
 +#include "modules/wifi/napt_http_inspector.h"
@@ -12349,8 +12387,10 @@ index 00000000..d8acc1f1
 +    slPrint("  seclab led start|stop|export|clear|generate|status [windows|macos|linux]");
 +    slPrint("  seclab os windows|macos|linux");
 +    slPrint("  seclab ble tag_start|tag_stop|pair|fuzzer|clear|status [addr] [type] [justworks|mitm|duration]");
++    slPrint("  seclab chain list | start <id> | stop <id> | status  (ids: recon-capture napt-lan portal-lan guard-audit ble-pipeline usb-verify sonar-evidence)");
++    slPrint("  seclab chain auto napt-lan|portal-lan|guard-audit [on|off]");
 +    slPrint("  KEYS: pairmode perm hidauto oswarn hidtimeout httpport httpauto redact handoff");
-+    slPrint("        lanauto fuzzer autoexport csa(channel,bursts)");
++    slPrint("        lanauto fuzzer autoexport csa(channel,bursts) chainNaptLanAuto chainPortalLanAuto chainGuardAuditAuto");
 +}
 +
 +static void slResult(bool ok, const String &success, const String &err) {
@@ -12383,7 +12423,7 @@ index 00000000..d8acc1f1
 +    slPrint("  PMKID auto-exp  : " + String(bruceConfig.seclabPlus.pmkidAutoExport ? "ON" : "OFF"));
 +    slPrint("  CSA defaults    : CH" + String(bruceConfig.seclabPlus.csaChannel) + " / " +
 +            String(bruceConfig.seclabPlus.csaBursts) + " bursts");
-+}
++    slPrint("  Chain autos     : NAPT->LAN \" + String(bruceConfig.seclabPlus.chainNaptLanAuto ? \"ON\" : \"OFF\") + \" | Portal->LAN \" + String(bruceConfig.seclabPlus.chainPortalLanAuto ? \"ON\" : \"OFF\") + \" | Guard->Audit \" + String(bruceConfig.seclabPlus.chainGuardAuditAuto ? \"ON\" : \"OFF\"));
 +
 +static void slStopAll() {
 +    pmkidStop();
@@ -12396,6 +12436,12 @@ index 00000000..d8acc1f1
 +    smartBadUsbStopLedLink();
 +    bleTagBeaconStop();
 +    naptStop(false);
++    // Stop any active chain members (best-effort; chains are just compositions).
++    chainStop("napt-lan");
++    chainStop("portal-lan");
++    chainStop("guard-audit");
++    chainStop("recon-capture");
++    chainStop("usb-verify");
 +    slPrint("All stoppable SecLab+ tools stopped");
 +    if (blePairingAuditIsRunning()) slPrint("Pairing audit will finish on its own");
 +}
@@ -12412,6 +12458,7 @@ index 00000000..d8acc1f1
 +    slPrint("BLE_AUDIT: " + bleSecurityAuditGetStateJson());
 +    slPrint("PAIR: " + blePairingAuditGetStateJson());
 +    slPrint("TAG: " + bleTagBeaconGetStateJson());
++    slPrint("CHAIN: " + chainGetStateJson());
 +    slSettings();
 +}
 +
@@ -12495,6 +12542,24 @@ index 00000000..d8acc1f1
 +                                    : slTruth(val, bruceConfig.seclabPlus.portalNaptHandoff);
 +            portalNaptSetArmed(en);
 +            slPrint(String("Portal handoff ") + (en ? "ON" : "OFF"));
++            return true;
++        } else if (key == "chainNaptLanAuto" || key == "chain_napt_lan_auto") {
++            bool en = val.isEmpty() ? !bruceConfig.seclabPlus.chainNaptLanAuto : slTruth(val, bruceConfig.seclabPlus.chainNaptLanAuto);
++            bruceConfig.seclabPlus.chainNaptLanAuto = en;
++            chainWatcherEnsure();
++            slPrint(String("Chain NAPT->LAN auto ") + (en ? "ON" : "OFF"));
++            return true;
++        } else if (key == "chainPortalLanAuto" || key == "chain_portal_lan_auto") {
++            bool en = val.isEmpty() ? !bruceConfig.seclabPlus.chainPortalLanAuto : slTruth(val, bruceConfig.seclabPlus.chainPortalLanAuto);
++            bruceConfig.seclabPlus.chainPortalLanAuto = en;
++            chainWatcherEnsure();
++            slPrint(String("Chain Portal->LAN auto ") + (en ? "ON" : "OFF"));
++            return true;
++        } else if (key == "chainGuardAuditAuto" || key == "chain_guard_audit_auto") {
++            bool en = val.isEmpty() ? !bruceConfig.seclabPlus.chainGuardAuditAuto : slTruth(val, bruceConfig.seclabPlus.chainGuardAuditAuto);
++            bruceConfig.seclabPlus.chainGuardAuditAuto = en;
++            chainWatcherEnsure();
++            slPrint(String("Chain Guard->Audit auto ") + (en ? "ON" : "OFF"));
 +            return true;
 +        } else if (key == "lanauto") {
 +            bool en = val.isEmpty() ? !lanGuardGetAuto() : slTruth(val, lanGuardGetAuto());
@@ -12707,6 +12772,39 @@ index 00000000..d8acc1f1
 +        slPrint("PAIR: " + blePairingAuditGetStateJson());
 +        slPrint("TAG: " + bleTagBeaconGetStateJson());
 +        return true;
++    }
++
++    if (m == "chain") {
++        if (a == "list" || a == "status" || a.isEmpty()) { slPrint(chainGetStateJson()); return true; }
++        if (a == "start") {
++            if (v.isEmpty()) { slPrint("Usage: seclab chain start <id>  (recon-capture|napt-lan|portal-lan|guard-audit|ble-pipeline|usb-verify|sonar-evidence)"); return false; }
++            bool ok = chainStart(v, &err);
++            slResult(ok, String("Chain \"") + v + "\" started", err);
++            return ok;
++        }
++        if (a == "stop") {
++            if (v.isEmpty()) { slPrint("Usage: seclab chain stop <id>"); return false; }
++            chainStop(v);
++            slPrint(String("Chain \"") + v + "\" stopped (members stopped where possible)");
++            return true;
++        }
++        if (a == "auto") {
++            String which = v; which.toLowerCase();
++            String val = x; val.toLowerCase();
++            bool *flag = nullptr;
++            String label;
++            if (which == "napt-lan" || which == "napt_lan") { flag = &bruceConfig.seclabPlus.chainNaptLanAuto; label = "NAPT->LAN"; }
++            else if (which == "portal-lan" || which == "portal_lan") { flag = &bruceConfig.seclabPlus.chainPortalLanAuto; label = "Portal->LAN"; }
++            else if (which == "guard-audit" || which == "guard_audit") { flag = &bruceConfig.seclabPlus.chainGuardAuditAuto; label = "Guard->Audit"; }
++            else { slPrint("Usage: seclab chain auto <napt-lan|portal-lan|guard-audit> [on|off]"); return false; }
++            *flag = val.isEmpty() ? !(*flag) : slTruth(val, *flag);
++            bruceConfig.saveFile();
++            chainWatcherEnsure();
++            slPrint(label + " auto " + (*flag ? "ON" : "OFF"));
++            return true;
++        }
++        slPrint("Usage: seclab chain <list|start|stop|auto> [id] [on|off]");
++        return false;
 +    }
 +
 +    slHelp();
@@ -15048,10 +15146,10 @@ index 00000000..a28c8b56
 +
 +#endif
 diff --git a/src/core/wifi/webInterface.cpp b/src/core/wifi/webInterface.cpp
-index a8679bd6..dfed7bf3 100644
+index a8679bd6..d55b43c0 100644
 --- a/src/core/wifi/webInterface.cpp
 +++ b/src/core/wifi/webInterface.cpp
-@@ -1,19 +1,45 @@
+@@ -1,19 +1,46 @@
  #include "webInterface.h"
 +#include "web_navigation.h"
 +#include "core/dsolution_ux.h"
@@ -15075,6 +15173,7 @@ index a8679bd6..dfed7bf3 100644
 +#include "modules/badusb_ble/smart_badusb.h"
 +#include "modules/ble/ble_gatt_cloner.h"
 +#include "modules/ble/ble_security_audit.h"
++#include "modules/wifi/chain_orchestrator.h"
 +#include "modules/wifi/lan_auditor.h"
 +#include "modules/wifi/lan_guard.h"
 +#include "modules/wifi/napt_http_inspector.h"
@@ -15097,7 +15196,7 @@ index a8679bd6..dfed7bf3 100644
  #include <globals.h>
  
  File uploadFile;
-@@ -22,12 +48,601 @@ FS _webFS = LittleFS;
+@@ -22,12 +49,601 @@ FS _webFS = LittleFS;
  const int default_webserverporthttp = 80;
  
  // WiFi as an Access Point
@@ -15701,7 +15800,7 @@ index a8679bd6..dfed7bf3 100644
  
  // Generate random token
  String generateToken(int length = 24) {
-@@ -42,36 +657,73 @@ String generateToken(int length = 24) {
+@@ -42,36 +658,73 @@ String generateToken(int length = 24) {
  **  Turn off the WebUI
  **********************************************************************/
  void stopWebUi() {
@@ -15790,7 +15889,7 @@ index a8679bd6..dfed7bf3 100644
  
      // Disconnect WiFi AP mode if it's the WebUI's AP
      // Check if we're in AP or APSTA mode (used by WebUI)
-@@ -82,30 +734,41 @@ void cleanlyStopWebUiForWiFiFeature() {
+@@ -82,30 +735,41 @@ void cleanlyStopWebUiForWiFiFeature() {
          vTaskDelay(pdMS_TO_TICKS(250));
      }
  
@@ -15849,7 +15948,7 @@ index a8679bd6..dfed7bf3 100644
  }
  
  /**********************************************************************
-@@ -127,6 +790,7 @@ String humanReadableSize(uint64_t bytes) {
+@@ -127,6 +791,7 @@ String humanReadableSize(uint64_t bytes) {
  String listFiles(FS &fs, const String &folder) {
      // log_i("Listfiles Start");
      String returnText = "pa:" + folder + ":0\n";
@@ -15857,7 +15956,7 @@ index a8679bd6..dfed7bf3 100644
      // Serial.println("Listing files stored on SD");
  
      _webFS = fs;
-@@ -168,19 +832,26 @@ String listFiles(FS &fs, const String &folder) {
+@@ -168,19 +833,26 @@ String listFiles(FS &fs, const String &folder) {
  ** used by server->on functions to discern whether a user has the correct
  ** httpapitoken OR is authenticated by username and password
  **********************************************************************/
@@ -15896,7 +15995,7 @@ index a8679bd6..dfed7bf3 100644
      if (onFailureReturnLoginPage) {
          serveWebUIFile(request, "login.html", "text/html", true, login_html, login_html_size);
      } else {
-@@ -220,49 +891,68 @@ void createDirRecursive(const String &path, FS fs) {
+@@ -220,49 +892,68 @@ void createDirRecursive(const String &path, FS fs) {
  **  Function: handleUpload
  ** handles uploads to the filserver
  **********************************************************************/
@@ -16004,7 +16103,7 @@ index a8679bd6..dfed7bf3 100644
      }
  }
  
-@@ -272,43 +962,162 @@ void notFound(AsyncWebServerRequest *request) { request->send(404, "text/plain",
+@@ -272,43 +963,162 @@ void notFound(AsyncWebServerRequest *request) { request->send(404, "text/plain",
  **  Function: drawWebUiScreen
  **  Draw information on screen of WebUI.
  **********************************************************************/
@@ -16193,7 +16292,7 @@ index a8679bd6..dfed7bf3 100644
  
  #if defined(HAS_TOUCH)
      TouchFooter();
-@@ -379,11 +1188,12 @@ void serveWebUIFile(
+@@ -379,11 +1189,12 @@ void serveWebUIFile(
  static bool startMdnsResponder() {
      RAM_LOG("before MDNS");
  
@@ -16208,7 +16307,7 @@ index a8679bd6..dfed7bf3 100644
  
      RAM_LOG("after MDNS");
      return true;
-@@ -460,59 +1270,863 @@ void configureWebServer() {
+@@ -460,59 +1271,863 @@ void configureWebServer() {
      // System Info
      server->on("/systeminfo", HTTP_GET, [](AsyncWebServerRequest *request) {
          if (checkUserWebAuth(request)) {
@@ -16725,10 +16824,11 @@ index a8679bd6..dfed7bf3 100644
 +                        400, "application/json",
 +                        "{\"ok\":false,\"msg\":\"Invalid OTA image! Upload ota.bin, not factory.bin.\"}"
 +                    );
-+                    return;
-+                }
-+            }
-+
+                     return;
+                 }
+-                screenBinBufferSize = desiredSize;
+             }
+ 
 +            if (offset > s_otaTotal || chunkLen > s_otaTotal - offset) {
 +                Update.abort();
 +                otaReleaseLock(true);
@@ -16979,11 +17079,10 @@ index a8679bd6..dfed7bf3 100644
 +                    snprintf(st->error, sizeof(st->error), "%s", Update.errorString());
 +                    s_otaLegacyOwner = nullptr;
 +                    Update.abort(); otaReleaseLock(true);
-                     return;
-                 }
--                screenBinBufferSize = desiredSize;
++                    return;
++                }
 +                st->finalized = true;
-             }
++            }
 +        }
 +    );
 +
@@ -17073,7 +17172,7 @@ index a8679bd6..dfed7bf3 100644
 +        applyPowerProfile(isScreenOff);
 +        request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Screen settings saved\"}");
 +    });
- 
++
 +    // Get Screen
 +    server->on("/getscreen", HTTP_GET, [](AsyncWebServerRequest *request) {
 +        if (checkUserWebAuth(request)) {
@@ -17110,7 +17209,7 @@ index a8679bd6..dfed7bf3 100644
          }
      });
  
-@@ -544,25 +2158,70 @@ void configureWebServer() {
+@@ -544,25 +2159,70 @@ void configureWebServer() {
          if (!checkUserWebAuth(request)) { return; }
          if (request->hasArg("cmnd")) {
              String cmnd = request->arg("cmnd");
@@ -17200,7 +17299,7 @@ index a8679bd6..dfed7bf3 100644
                  }
              } else {
                  if (parseSerialCommand(cmnd, false)) {
-@@ -576,9 +2235,28 @@ void configureWebServer() {
+@@ -576,9 +2236,28 @@ void configureWebServer() {
          }
      });
  
@@ -17231,7 +17330,7 @@ index a8679bd6..dfed7bf3 100644
      });
  
      // List files
-@@ -632,6 +2310,11 @@ void configureWebServer() {
+@@ -632,6 +2311,11 @@ void configureWebServer() {
                  } else {
                      if (strcmp(fileAction.c_str(), "download") == 0) {
                          request->send(*fs, fileName, "application/octet-stream", true);
@@ -17243,7 +17342,7 @@ index a8679bd6..dfed7bf3 100644
                      } else if (strcmp(fileAction.c_str(), "image") == 0) {
                          String extension = fileName.substring(fileName.lastIndexOf('.') + 1);
                          // https://www.iana.org/assignments/media-types/media-types.xhtml#image
-@@ -700,7 +2383,7 @@ void configureWebServer() {
+@@ -700,7 +2384,7 @@ void configureWebServer() {
  
                  File editFile = fs->open(fileName, FILE_WRITE);
                  if (editFile) {
@@ -17252,7 +17351,7 @@ index a8679bd6..dfed7bf3 100644
                          request->send(200, "text/plain", "File edited: " + fileName);
                      } else {
                          request->send(500, "text/plain", "Failed to write to file: " + fileName);
-@@ -720,7 +2403,13 @@ void configureWebServer() {
+@@ -720,7 +2404,13 @@ void configureWebServer() {
      server->on(
          "/upload",
          HTTP_POST,
@@ -17267,7 +17366,7 @@ index a8679bd6..dfed7bf3 100644
          handleUpload
      );
  
-@@ -737,6 +2426,348 @@ void configureWebServer() {
+@@ -737,6 +2427,362 @@ void configureWebServer() {
              }
          }
      });
@@ -17316,6 +17415,7 @@ index a8679bd6..dfed7bf3 100644
 +                ",\"pmkidAutoExport\":" + (bruceConfig.seclabPlus.pmkidAutoExport ? "true" : "false") +
 +                ",\"csaChannel\":" + String(bruceConfig.seclabPlus.csaChannel) +
 +                ",\"csaBursts\":" + String(bruceConfig.seclabPlus.csaBursts) + "}";
++        resp += ",\"chain\":" + chainGetStateJson();
 +#else
 +        resp += ",\"plus\":{\"available\":false}";
 +#endif
@@ -17600,6 +17700,7 @@ index a8679bd6..dfed7bf3 100644
 +            smartBadUsbStopLedLink();
 +            bleTagBeaconStop();
 +            naptStop(false);
++            chainStop("napt-lan"); chainStop("portal-lan"); chainStop("guard-audit"); chainStop("recon-capture"); chainStop("usb-verify");
 +            String msg = "All stoppable SecLab+ tools stopped";
 +            if (blePairingAuditIsRunning()) msg += ". Pairing audit will finish on its own";
 +            reply(true, msg);
@@ -17609,6 +17710,18 @@ index a8679bd6..dfed7bf3 100644
 +            reply(ok, ok ? "Saved /ble_security_audit.json" : "BLE report export failed");
 +        }
 +        else if (act == "ble_clear") { bleSecurityAuditClear(); reply(true, "BLE reports cleared"); }
++        else if (act == "chain_start") { String id = request->hasArg("id") ? request->arg("id") : request->arg("chain"); if (id.isEmpty()) { reply(false, "Missing chain id"); return; } bool ok = chainStart(id, &err); reply(ok, ok ? String("Chain \"") + id + "\" started" : err); }
++        else if (act == "chain_stop") { String id = request->hasArg("id") ? request->arg("id") : request->arg("chain"); if (id.isEmpty()) { reply(false, "Missing chain id"); return; } chainStop(id); reply(true, String("Chain \"") + id + "\" stopped"); }
++        else if (act == "chain_auto") {
++            String which = request->hasArg("which") ? request->arg("which") : request->arg("chain"); which.toLowerCase();
++            bool en = request->hasArg("enable") ? argBool("enable", false) : !bruceConfig.seclabPlus.chainNaptLanAuto;
++            if (which == "napt-lan" || which == "napt_lan") bruceConfig.seclabPlus.chainNaptLanAuto = en;
++            else if (which == "portal-lan" || which == "portal_lan") bruceConfig.seclabPlus.chainPortalLanAuto = en;
++            else if (which == "guard-audit" || which == "guard_audit") bruceConfig.seclabPlus.chainGuardAuditAuto = en;
++            else { reply(false, "Unknown chain auto target"); return; }
++            bruceConfig.saveFile(); chainWatcherEnsure();
++            reply(true, String("Chain ") + which + " auto " + (en ? "ON" : "OFF"));
++        }
 +        else reply(false, "Unknown SecLab+ action", 400);
 +#endif
 +    });
@@ -17616,7 +17729,7 @@ index a8679bd6..dfed7bf3 100644
      server->begin();
      Serial.println("Webserver started");
  }
-@@ -745,25 +2776,78 @@ void configureWebServer() {
+@@ -745,25 +2791,78 @@ void configureWebServer() {
  **  Function: startWebUi
  **  Start the WebUI
  **********************************************************************/
@@ -17704,7 +17817,7 @@ index a8679bd6..dfed7bf3 100644
          new (server) AsyncWebServer(default_webserverporthttp);
  
          configureWebServer();
-@@ -771,24 +2855,198 @@ void startWebUi(bool mode_ap) {
+@@ -771,24 +2870,198 @@ void startWebUi(bool mode_ap) {
          isWebUIActive = true;
      }
      tft.setLogging();
@@ -23982,6 +24095,1444 @@ index 23e8e3c4..697864a2 100644
  void wakeUp();
  void drawMood(const String &face, const String &phrase, bool broken = false);
  void drawTime();
+diff --git a/src/modules/wifi/chain_logic.h b/src/modules/wifi/chain_logic.h
+new file mode 100644
+index 00000000..2fd8c23f
+--- /dev/null
++++ b/src/modules/wifi/chain_logic.h
+@@ -0,0 +1,555 @@
++#pragma once
++// Chain orchestration logic — Arduino-free, host-testable.
++//
++// Every SecLab+ tool already exposes a Start/Stop/IsRunning API and a JSON
++// state snapshot. What was missing is coordination: feeding the output of
++// one tool into the next (recon -> capture, NAPT -> LAN audit, Guard alert
++// -> deep audit, BLE Guard candidate -> pairing audit, Sonar session ->
++// evidence bundle). This header holds the pure decisions behind those
++// chains (target scoring, precondition checks, snapshot parsing) so they
++// can be unit-tested on a host without ESP-IDF, exactly like
++// wifi_observation_logic.h / lan_guard_logic.h / ble_audit_logic.h.
++//
++// All parsers are bounded and treat truncated/malformed input as "no data",
++// never as a valid target. Observations are not proof of an attack.
++
++#include <cctype>
++#include <cstddef>
++#include <cstdint>
++#include <cstdio>
++#include <cstdlib>
++#include <cstring>
++
++// ---------------------------------------------------------------------------
++// Chain identity
++// ---------------------------------------------------------------------------
++
++enum ChainId : uint8_t {
++    CHAIN_NONE = 0,
++    CHAIN_RECON_CAPTURE,   // Probe Radar + Analyzer -> PMKID / CSA target
++    CHAIN_NAPT_LAN,        // NAPT Router -> LAN Auditor + HTTP + Responder+
++    CHAIN_PORTAL_LAN,      // Portal -> NAPT -> LAN Guard + HTTP Inspector
++    CHAIN_GUARD_AUDIT,     // LAN Guard alert -> LAN Auditor deep + export
++    CHAIN_BLE_PIPELINE,    // BLE Privacy Guard -> Pairing Audit -> GATT Clone
++    CHAIN_USB_VERIFY,      // Smart BadUSB Generate -> Arm LED -> Run -> Verify
++    CHAIN_SONAR_EVIDENCE,  // Sonar Guard session -> evidence bundle
++    CHAIN_COUNT
++};
++
++inline const char *chainIdName(ChainId id) {
++    switch (id) {
++        case CHAIN_RECON_CAPTURE: return "recon-capture";
++        case CHAIN_NAPT_LAN: return "napt-lan";
++        case CHAIN_PORTAL_LAN: return "portal-lan";
++        case CHAIN_GUARD_AUDIT: return "guard-audit";
++        case CHAIN_BLE_PIPELINE: return "ble-pipeline";
++        case CHAIN_USB_VERIFY: return "usb-verify";
++        case CHAIN_SONAR_EVIDENCE: return "sonar-evidence";
++        default: return "none";
++    }
++}
++
++inline const char *chainIdTitle(ChainId id) {
++    switch (id) {
++        case CHAIN_RECON_CAPTURE: return "Recon -> Capture";
++        case CHAIN_NAPT_LAN: return "NAPT -> LAN";
++        case CHAIN_PORTAL_LAN: return "Portal -> NAPT -> LAN";
++        case CHAIN_GUARD_AUDIT: return "Guard -> Audit";
++        case CHAIN_BLE_PIPELINE: return "BLE Guard -> Audit -> Clone";
++        case CHAIN_USB_VERIFY: return "USB Generate -> Verify";
++        case CHAIN_SONAR_EVIDENCE: return "Sonar -> Evidence";
++        default: return "None";
++    }
++}
++
++// Case-insensitive match on the canonical id. Returns CHAIN_NONE on no match.
++inline ChainId chainIdFromString(const char *s) {
++    if (!s || !*s) return CHAIN_NONE;
++    char buf[32];
++    size_t n = 0;
++    for (; s[n] && n + 1 < sizeof(buf); n++) buf[n] = (char)std::tolower((unsigned char)s[n]);
++    buf[n] = 0;
++    if (s[n]) return CHAIN_NONE; // overlong input
++    for (uint8_t i = CHAIN_RECON_CAPTURE; i < CHAIN_COUNT; i++) {
++        if (std::strcmp(buf, chainIdName((ChainId)i)) == 0) return (ChainId)i;
++    }
++    return CHAIN_NONE;
++}
++
++struct ChainStep {
++    const char *tool;   // short tool label, e.g. "NAPT"
++    const char *action; // "start" | "wait" | "audit" | "export" | "bundle" ...
++};
++
++// Ordered steps for docs / status. Returns step count (0 for CHAIN_NONE).
++inline int chainSteps(ChainId id, ChainStep *out, int cap) {
++    static const ChainStep kRecon[] = {
++        {"Probe Radar", "observe"}, {"Analyzer", "observe"},
++        {"PMKID/CSA", "capture"}, {"Export", "export"},
++    };
++    static const ChainStep kNaptLan[] = {
++        {"NAPT", "start"}, {"LAN Auditor", "audit"},
++        {"HTTP Inspector", "start"}, {"Responder+", "start"},
++    };
++    static const ChainStep kPortalLan[] = {
++        {"Portal->NAPT", "start"}, {"LAN Guard", "start"},
++        {"HTTP Inspector", "start"},
++    };
++    static const ChainStep kGuardAudit[] = {
++        {"LAN Guard", "start"}, {"LAN Auditor", "audit"},
++        {"Export", "export"},
++    };
++    static const ChainStep kBle[] = {
++        {"BLE Privacy Guard", "observe"}, {"Pairing Audit", "audit"},
++        {"GATT Explorer/Clone", "clone"},
++    };
++    static const ChainStep kUsb[] = {
++        {"Generate", "build"}, {"LED Link", "arm"},
++        {"Run Payload", "run"}, {"LED Verify", "verify"},
++    };
++    static const ChainStep kSonar[] = {
++        {"Sonar Guard", "observe"}, {"Evidence Bundle", "bundle"},
++    };
++    const ChainStep *src = nullptr;
++    int count = 0;
++    switch (id) {
++        case CHAIN_RECON_CAPTURE: src = kRecon; count = 4; break;
++        case CHAIN_NAPT_LAN: src = kNaptLan; count = 4; break;
++        case CHAIN_PORTAL_LAN: src = kPortalLan; count = 3; break;
++        case CHAIN_GUARD_AUDIT: src = kGuardAudit; count = 3; break;
++        case CHAIN_BLE_PIPELINE: src = kBle; count = 3; break;
++        case CHAIN_USB_VERIFY: src = kUsb; count = 4; break;
++        case CHAIN_SONAR_EVIDENCE: src = kSonar; count = 2; break;
++        default: return 0;
++    }
++    if (out && cap > 0) {
++        int m = count < cap ? count : cap;
++        for (int i = 0; i < m; i++) out[i] = src[i];
++    }
++    return count;
++}
++
++// ---------------------------------------------------------------------------
++// Recon -> Capture: target scoring (Analyzer hidden APs + best channel)
++// ---------------------------------------------------------------------------
++
++struct ChainTarget {
++    uint8_t bssid[6] = {};
++    char ssid[33] = {};
++    uint8_t channel = 0;
++    int rssi = -128;      // dBm, -128..0
++    int cleanScore = -1;  // 0..100 from wifiCleanScore, -1 = unknown
++    bool decloaked = false;
++    int score = 0;        // filled by chainScoreTarget
++};
++
++// Bounded score: stronger signal + cleaner channel + decloaked SSID wins.
++// Range is roughly 0..300; higher is better. Pure and overflow-safe.
++inline int chainScoreTarget(int rssi, int cleanScore, bool decloaked) {
++    int r = rssi;
++    if (r < -128) r = -128;
++    if (r > 0) r = 0;
++    int sig = r + 128; // 0..128
++    int clean = (cleanScore >= 0 && cleanScore <= 100) ? cleanScore : 0;
++    int score = sig + clean + (decloaked ? 50 : 0);
++    return score;
++}
++
++inline void chainScoreTargetInPlace(ChainTarget &t) {
++    t.score = chainScoreTarget(t.rssi, t.cleanScore, t.decloaked);
++}
++
++// Index of the best target, or -1 when the list is empty / all invalid.
++// A target is valid only with a non-empty SSID and a channel in 1..14.
++inline int chainPickBestTarget(const ChainTarget *list, size_t n) {
++    if (!list || n == 0) return -1;
++    int best = -1;
++    int bestScore = -1;
++    for (size_t i = 0; i < n; i++) {
++        const ChainTarget &t = list[i];
++        if (t.ssid[0] == 0 || t.channel < 1 || t.channel > 14) continue;
++        int s = chainScoreTarget(t.rssi, t.cleanScore, t.decloaked);
++        if (s > bestScore) { bestScore = s; best = (int)i; }
++    }
++    return best;
++}
++
++// ---------------------------------------------------------------------------
++// Preconditions (pure; the orchestrator fills the flags from live state)
++// ---------------------------------------------------------------------------
++
++struct ChainPreconditions {
++    bool wifiMemOk = false;     // radioHasMemForWifi()
++    bool bleMemOk = false;      // radioHasMemForBle()
++    bool webUiActive = false;   // exclusive radio tools pause WebUI themselves
++    bool naptRunning = false;
++    bool portalRunning = false;
++    bool guardRunning = false;
++    bool auditRunning = false;
++    bool bleRunning = false;    // BLE stack / pairing audit busy
++    bool usbHidOk = false;      // USB_as_HID build with TinyUSB HID
++    bool micOk = false;         // HAS_MICROPHONE build
++};
++
++enum ChainBlock : uint8_t {
++    CHAIN_OK = 0,
++    CHAIN_NEED_WIFI_MEM,
++    CHAIN_NEED_BLE_MEM,
++    CHAIN_NEED_USB_HID,
++    CHAIN_NEED_MIC,
++    CHAIN_NEED_NAPT,     // chain expects NAPT already up (watcher path)
++    CHAIN_NEED_PORTAL,   // chain expects Portal->NAPT already up
++    CHAIN_NEED_GUARD,    // chain expects Guard already up
++    CHAIN_BUSY,          // a member tool is already running
++    CHAIN_UNKNOWN
++};
++
++inline const char *chainBlockReason(ChainBlock b) {
++    switch (b) {
++        case CHAIN_OK: return "ready";
++        case CHAIN_NEED_WIFI_MEM: return "Low DMA RAM for Wi-Fi; stop BLE/WebUI and retry";
++        case CHAIN_NEED_BLE_MEM: return "Low DMA RAM for BLE; stop Wi-Fi/WebUI and retry";
++        case CHAIN_NEED_USB_HID: return "USB HID not enabled on this build";
++        case CHAIN_NEED_MIC: return "Microphone not available on this build";
++        case CHAIN_NEED_NAPT: return "Start NAPT Router first";
++        case CHAIN_NEED_PORTAL: return "Start Portal -> NAPT first";
++        case CHAIN_NEED_GUARD: return "Start LAN Guard first";
++        case CHAIN_BUSY: return "A member tool is already running";
++        default: return "Unknown chain";
++    }
++}
++
++// Headless (CLI/WebUI) start preconditions. Interactive observe steps
++// (Probe Radar, Analyzer, BLE Guard scan, Sonar run, GATT Explorer, USB run)
++// are menu-only and are not checked here.
++inline ChainBlock chainCheckPreconditions(ChainId id, const ChainPreconditions &p) {
++    switch (id) {
++        case CHAIN_RECON_CAPTURE:
++            if (!p.wifiMemOk) return CHAIN_NEED_WIFI_MEM;
++            return CHAIN_OK;
++        case CHAIN_NAPT_LAN:
++        case CHAIN_PORTAL_LAN:
++            if (!p.wifiMemOk) return CHAIN_NEED_WIFI_MEM;
++            return CHAIN_OK;
++        case CHAIN_GUARD_AUDIT:
++            if (!p.wifiMemOk) return CHAIN_NEED_WIFI_MEM;
++            return CHAIN_OK;
++        case CHAIN_BLE_PIPELINE:
++            if (!p.bleMemOk) return CHAIN_NEED_BLE_MEM;
++            return CHAIN_OK;
++        case CHAIN_USB_VERIFY:
++            if (!p.usbHidOk) return CHAIN_NEED_USB_HID;
++            return CHAIN_OK;
++        case CHAIN_SONAR_EVIDENCE:
++            if (!p.micOk) return CHAIN_NEED_MIC;
++            return CHAIN_OK;
++        default:
++            return CHAIN_UNKNOWN;
++    }
++}
++
++// Watcher-path preconditions: the auto-arm only fires when its trigger tool
++// is already running (NAPT / Portal / Guard). Returns CHAIN_OK to fire.
++inline ChainBlock chainCheckWatcher(ChainId id, const ChainPreconditions &p) {
++    switch (id) {
++        case CHAIN_NAPT_LAN:
++            return p.naptRunning ? CHAIN_OK : CHAIN_NEED_NAPT;
++        case CHAIN_PORTAL_LAN:
++            return p.portalRunning ? CHAIN_OK : CHAIN_NEED_PORTAL;
++        case CHAIN_GUARD_AUDIT:
++            return p.guardRunning ? CHAIN_OK : CHAIN_NEED_GUARD;
++        default:
++            return CHAIN_UNKNOWN;
++    }
++}
++
++// ---------------------------------------------------------------------------
++// Minimal JSON readers (bounded; missing key -> default)
++// ---------------------------------------------------------------------------
++
++// Find `"key"` then parse the following integer (handles whitespace and
++// a leading '-'). Returns def when the key or a valid integer is absent.
++inline long chainJsonInt(const char *json, const char *key, long def) {
++    if (!json || !key || !*key) return def;
++    size_t klen = std::strlen(key);
++    const char *p = json;
++    while ((p = std::strstr(p, key)) != nullptr) {
++        const char *q = p + klen;
++        while (*q == ' ' || *q == '\t' || *q == '\n' || *q == '\r') q++;
++        if (*q != ':') { p += klen; continue; }
++        q++;
++        while (*q == ' ' || *q == '\t' || *q == '\n' || *q == '\r') q++;
++        bool neg = false;
++        if (*q == '-') { neg = true; q++; }
++        if (*q < '0' || *q > '9') { p += klen; continue; }
++        long v = 0;
++        while (*q >= '0' && *q <= '9') {
++            v = v * 10 + (*q - '0');
++            if (v > 1000000000L) { v = 1000000000L; }
++            q++;
++        }
++        return neg ? -v : v;
++    }
++    return def;
++}
++
++// Guard alert total = ARP changes + DHCP mismatches (legacy key rogueDhcp
++// is accepted when dhcpMismatch is absent). Missing counters count as 0.
++inline uint32_t chainGuardAlertCount(const char *guardJson) {
++    if (!guardJson) return 0;
++    long arp = chainJsonInt(guardJson, "\"arpChanges\"", 0);
++    long dhcp = chainJsonInt(guardJson, "\"dhcpMismatch\"", -1);
++    if (dhcp < 0) dhcp = chainJsonInt(guardJson, "\"rogueDhcp\"", 0);
++    if (arp < 0) arp = 0;
++    if (dhcp < 0) dhcp = 0;
++    return (uint32_t)(arp + dhcp);
++}
++
++// ---------------------------------------------------------------------------
++// /wifi_airtime.json parsing (Channel Analyzer snapshot)
++// ---------------------------------------------------------------------------
++
++inline int chainParseAirtimeBestCh(const char *json) {
++    long v = chainJsonInt(json, "\"bestCh\"", 0);
++    if (v < 0 || v > 14) return 0;
++    return (int)v;
++}
++
++inline int chainParseAirtimeBestScore(const char *json) {
++    return (int)chainJsonInt(json, "\"bestScore\"", -1);
++}
++
++namespace chain_detail {
++inline bool parseMacColon(const char *s, size_t len, uint8_t out[6]) {
++    if (!s || len != 17) return false;
++    for (int i = 0; i < 6; i++) {
++        char b[3] = {s[i * 3], s[i * 3 + 1], 0};
++        if (i < 5 && s[i * 3 + 2] != ':') return false;
++        char *end = nullptr;
++        long v = std::strtol(b, &end, 16);
++        if (end != b + 2 || v < 0 || v > 255) return false;
++        out[i] = (uint8_t)v;
++    }
++    return true;
++}
++inline const char *skipWs(const char *p) {
++    while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
++    return p;
++}
++// Parse a JSON string starting at '"'. Copies unescaped bytes (bounded).
++inline const char *parseJsonString(const char *p, char *out, size_t cap) {
++    if (!p || *p != '"' || !out || cap == 0) return nullptr;
++    p++;
++    size_t n = 0;
++    while (*p && *p != '"') {
++        if (*p == '\\' && p[1]) p++; // skip escape introducer; keep escaped char
++        if (n + 1 < cap) out[n++] = *p;
++        p++;
++    }
++    if (*p != '"') return nullptr;
++    out[n] = 0;
++    return p + 1;
++}
++} // namespace chain_detail
++
++// Parse the "hidden" array of /wifi_airtime.json. Each entry is
++// {"bssid":"AA:..","ch":N,"rssi":N,"decloaked":bool,"ssid":"..."}.
++// Returns the number of valid entries written (0 when absent/malformed).
++inline size_t chainParseHiddenTargets(const char *json, ChainTarget *out, size_t cap) {
++    if (!json || !out || cap == 0) return 0;
++    const char *p = std::strstr(json, "\"hidden\"");
++    if (!p) return 0;
++    p = std::strchr(p, '[');
++    if (!p) return 0;
++    p++;
++    size_t count = 0;
++    while (*p && count < cap) {
++        p = chain_detail::skipWs(p);
++        if (*p == ']') break;
++        if (*p != '{') return count;
++        p++;
++        ChainTarget t;
++        bool haveBssid = false, haveCh = false;
++        while (*p && *p != '}') {
++            p = chain_detail::skipWs(p);
++            if (*p == ',') { p++; continue; }
++            if (*p == '}') break;
++            char key[24] = {};
++            const char *np = chain_detail::parseJsonString(p, key, sizeof(key));
++            if (!np) return count;
++            p = chain_detail::skipWs(np);
++            if (*p != ':') return count;
++            p = chain_detail::skipWs(p + 1);
++            if (std::strcmp(key, "bssid") == 0) {
++                char mac[24] = {};
++                np = chain_detail::parseJsonString(p, mac, sizeof(mac));
++                if (!np) return count;
++                if (chain_detail::parseMacColon(mac, std::strlen(mac), t.bssid)) haveBssid = true;
++                p = np;
++            } else if (std::strcmp(key, "ssid") == 0) {
++                np = chain_detail::parseJsonString(p, t.ssid, sizeof(t.ssid));
++                if (!np) return count;
++                p = np;
++            } else if (std::strcmp(key, "ch") == 0) {
++                // Strict parse at p (chainJsonInt would search forward).
++                const char *r = p;
++                bool neg = (*r == '-');
++                if (neg) r++;
++                if (*r < '0' || *r > '9') return count;
++                long w = 0;
++                while (*r >= '0' && *r <= '9') { w = w * 10 + (*r - '0'); r++; }
++                long v = neg ? -w : w;
++                p = r;
++                if (v >= 1 && v <= 14) { t.channel = (uint8_t)v; haveCh = true; }
++            } else if (std::strcmp(key, "rssi") == 0) {
++                const char *r = p;
++                bool neg = (*r == '-');
++                if (neg) r++;
++                if (*r < '0' || *r > '9') return count;
++                long w = 0;
++                while (*r >= '0' && *r <= '9') { w = w * 10 + (*r - '0'); r++; }
++                t.rssi = (int)(neg ? -w : w);
++                p = r;
++            } else if (std::strcmp(key, "decloaked") == 0) {
++                if (std::strncmp(p, "true", 4) == 0) { t.decloaked = true; p += 4; }
++                else if (std::strncmp(p, "false", 5) == 0) { t.decloaked = false; p += 5; }
++                else return count;
++            } else {
++                // Skip unknown value (string, number, bool, null).
++                if (*p == '"') {
++                    char tmp[8] = {};
++                    np = chain_detail::parseJsonString(p, tmp, sizeof(tmp));
++                    if (!np) return count;
++                    p = np;
++                } else if (*p == '-' || (*p >= '0' && *p <= '9')) {
++                    while (*p == '-' || (*p >= '0' && *p <= '9') || *p == '.') p++;
++                } else if (std::strncmp(p, "true", 4) == 0) p += 4;
++                else if (std::strncmp(p, "false", 5) == 0) p += 5;
++                else if (std::strncmp(p, "null", 4) == 0) p += 4;
++                else return count;
++            }
++        }
++        if (*p != '}') return count;
++        p++;
++        if (haveBssid && haveCh && t.ssid[0]) {
++            chainScoreTargetInPlace(t);
++            out[count++] = t;
++        }
++        p = chain_detail::skipWs(p);
++        if (*p == ',') p++;
++    }
++    return count;
++}
++
++// ---------------------------------------------------------------------------
++// /ble_guard.log parsing (BLE Privacy Guard -> Pairing Audit handoff)
++// ---------------------------------------------------------------------------
++
++struct BleChainCandidate {
++    char mac[18] = {};   // AA:BB:CC:DD:EE:FF
++    uint8_t addrType = 0;
++    int rssi = -128;
++    uint16_t hits = 0;   // sweeps seen
++    char kind[24] = {};  // Tile-like / SmartTag-like / FMD-like / FindMy-like
++};
++
++// Parse Guard report lines:
++//   Kind | MAC | addrType=N | RSSI=N dBm | sweeps=N | age=Ns
++// Header lines (starting with '#') and malformed lines are skipped.
++// Results are sorted by hits desc, then RSSI desc. Returns count written.
++inline size_t chainParseBleGuardCandidates(const char *text, size_t len, BleChainCandidate *out, size_t cap) {
++    if (!text || !out || cap == 0 || len == 0) return 0;
++    size_t count = 0;
++    size_t pos = 0;
++    while (pos < len) {
++        size_t eol = pos;
++        while (eol < len && text[eol] != '\n') eol++;
++        size_t lineLen = eol - pos;
++        // Copy one line (bounded) for field parsing.
++        char line[192];
++        if (lineLen >= sizeof(line)) lineLen = sizeof(line) - 1;
++        std::memcpy(line, text + pos, lineLen);
++        line[lineLen] = 0;
++        pos = (eol < len) ? eol + 1 : len;
++        if (lineLen == 0 || line[0] == '#') continue;
++        // Split on '|'.
++        char *fields[6] = {};
++        int nf = 0;
++        char *cur = line;
++        for (char *q = line;; q++) {
++            if (*q == '|' || *q == 0) {
++                bool last = (*q == 0);
++                *q = 0;
++                if (nf < 6) fields[nf++] = cur;
++                if (last) break;
++                cur = q + 1;
++            }
++        }
++        if (nf < 2) continue;
++        // Trim spaces around fields.
++        for (int i = 0; i < nf; i++) {
++            char *s = fields[i];
++            while (*s == ' ' || *s == '\t' || *s == '\r') s++;
++            fields[i] = s;
++            size_t L = std::strlen(s);
++            while (L > 0 && (s[L - 1] == ' ' || s[L - 1] == '\t' || s[L - 1] == '\r')) s[--L] = 0;
++        }
++        BleChainCandidate c;
++        // fields[0] = kind, fields[1] = MAC
++        std::strncpy(c.kind, fields[0], sizeof(c.kind) - 1);
++        {
++            uint8_t mac[6] = {};
++            if (!chain_detail::parseMacColon(fields[1], std::strlen(fields[1]), mac)) continue;
++            std::memcpy(c.mac, fields[1], 17);
++            c.mac[17] = 0;
++        }
++        for (int i = 2; i < nf; i++) {
++            const char *f = fields[i];
++            if (std::strncmp(f, "addrType=", 9) == 0) {
++                long v = std::strtol(f + 9, nullptr, 10);
++                if (v >= 0 && v <= 1) c.addrType = (uint8_t)v;
++            } else if (std::strncmp(f, "RSSI=", 5) == 0) {
++                long v = std::strtol(f + 5, nullptr, 10);
++                if (v >= -128 && v <= 0) c.rssi = (int)v;
++            } else if (std::strncmp(f, "sweeps=", 7) == 0) {
++                long v = std::strtol(f + 7, nullptr, 10);
++                if (v >= 0 && v <= 65535) c.hits = (uint16_t)v;
++            }
++        }
++        if (count < cap) out[count++] = c;
++    }
++    // Insertion sort: hits desc, then RSSI desc (cap is small).
++    for (size_t i = 1; i < count; i++) {
++        BleChainCandidate tmp = out[i];
++        size_t j = i;
++        while (j > 0 && (out[j - 1].hits < tmp.hits ||
++                         (out[j - 1].hits == tmp.hits && out[j - 1].rssi < tmp.rssi))) {
++            out[j] = out[j - 1];
++            j--;
++        }
++        out[j] = tmp;
++    }
++    return count;
++}
++
++// ---------------------------------------------------------------------------
++// Evidence correlation (Guard alert + LAN audit -> one-line summary)
++// ---------------------------------------------------------------------------
++
++// Writes a bounded one-line summary, e.g.
++// "guard alerts=3 (arp=2 dhcp=1) | lan devices=5 findings=1".
++// Returns bytes written (excluding NUL), 0 on bad input.
++inline size_t chainGuardAuditSummary(const char *guardJson, const char *auditJson, char *out, size_t cap) {
++    if (!out || cap == 0) return 0;
++    long arp = chainJsonInt(guardJson, "\"arpChanges\"", 0);
++    long dhcp = chainJsonInt(guardJson, "\"dhcpMismatch\"", -1);
++    if (dhcp < 0) dhcp = chainJsonInt(guardJson, "\"rogueDhcp\"", 0);
++    long devs = chainJsonInt(auditJson, "\"devices\"", -1);
++    if (devs < 0) devs = chainJsonInt(auditJson, "\"deviceCount\"", 0);
++    long finds = chainJsonInt(auditJson, "\"findings\"", -1);
++    if (finds < 0) finds = chainJsonInt(auditJson, "\"findingCount\"", 0);
++    int n = std::snprintf(out, cap, "guard alerts=%ld (arp=%ld dhcp=%ld) | lan devices=%ld findings=%ld",
++                          arp + (dhcp < 0 ? 0 : dhcp), arp, dhcp < 0 ? 0 : dhcp, devs, finds);
++    if (n < 0) { out[0] = 0; return 0; }
++    return (size_t)n < cap ? (size_t)n : cap - 1;
++}
+diff --git a/src/modules/wifi/chain_orchestrator.cpp b/src/modules/wifi/chain_orchestrator.cpp
+new file mode 100644
+index 00000000..89d309e6
+--- /dev/null
++++ b/src/modules/wifi/chain_orchestrator.cpp
+@@ -0,0 +1,830 @@
++#include "chain_orchestrator.h"
++#if !defined(LITE_VERSION)
++
++#include "chain_logic.h"
++
++#include "core/config.h"
++#include "core/display.h"
++#include "core/mykeyboard.h"
++#include "core/radio_mem.h"
++#include "core/seclab_util.h"
++#include "core/utils.h"
++#include "core/wifi/webInterface.h"
++#include "modules/badusb_ble/smart_badusb.h"
++#include "modules/ble/ble_gatt_cloner.h"
++#include "modules/ble/ble_security_audit.h"
++#include "modules/ble/ble_tracker_guard.h"
++#include "modules/wifi/channel_analyzer.h"
++#include "modules/wifi/lan_auditor.h"
++#include "modules/wifi/lan_guard.h"
++#include "modules/wifi/napt_http_inspector.h"
++#include "modules/wifi/napt_router.h"
++#include "modules/wifi/pmf_csa_test.h"
++#include "modules/wifi/pmkid_capture.h"
++#include "modules/wifi/portal_napt.h"
++#include "modules/wifi/probe_radar.h"
++#include "modules/wifi/responder_plus.h"
++#if defined(HAS_MICROPHONE)
++#include "modules/others/sonar_guard.h"
++#endif
++#include <Arduino.h>
++#include <LittleFS.h>
++#include <WiFi.h>
++#include <globals.h>
++
++// ---------------------------------------------------------------------------
++// Chain orchestration (SecLab+).
++//
++// Design rules (see firmware/CHAIN-TECHNIQUES.md):
++//  - One orchestrator, one menu entry (WiFi Tools -> Chains). Member tools
++//    keep their own menu entries; chains never duplicate them.
++//  - Radio exclusivity is respected: WiFi chains need WiFi DMA memory,
++//    the BLE chain needs BLE memory, USB/Sonar chains need their hardware.
++//    Member Start APIs already pause WebUI / free the other radio.
++//  - Interactive observe steps run as blocking menu calls on the device;
++//    headless starts only sequence the programmatic Start APIs.
++//  - Every step is logged to /chain.log and summarized in /chain_state.json.
++//    Observations (Guard alerts, Probe fingerprints, Sonar motion) are
++//    reported as observations, never as proof of an attack.
++// ---------------------------------------------------------------------------
++
++namespace {
++
++constexpr const char *kChainLogPath = "/chain.log";
++constexpr const char *kAirtimePath = "/wifi_airtime.json";
++constexpr const char *kBleGuardLogPath = "/ble_guard.log";
++constexpr const char *kSonarStatePath = "/sonar_state.json";
++constexpr const char *kSonarLogPath = "/sonar_guard.log";
++constexpr const char *kSonarEvidencePath = "/chain_sonar_evidence.json";
++constexpr const char *kGuardAuditLogPath = "/chain_guard_audit.log";
++
++static ChainId s_activeChain = CHAIN_NONE;
++static uint32_t s_activeSinceMs = 0;
++static char s_lastErr[128] = {0};
++static char s_lastChainId[32] = "none";
++static uint32_t s_lastGuardAlerts = 0;
++static bool s_guardAuditFired = false;
++static bool s_naptLanFired = false;
++static bool s_portalLanFired = false;
++static TaskHandle_t s_watcherTask = nullptr;
++static volatile bool s_watcherStop = false;
++
++static void setErr(const String &e) {
++    strncpy(s_lastErr, e.c_str(), sizeof(s_lastErr) - 1);
++    s_lastErr[sizeof(s_lastErr) - 1] = 0;
++}
++
++static void chainLog(const char *chain, const char *step, bool ok, const String &detail) {
++    String line = String(seclabUptimeSec()) + "," + chain + "," + step + "," + (ok ? "ok" : "fail");
++    if (!detail.isEmpty()) line += "," + seclabSafeText(detail, 80);
++    seclabAppendLog(kChainLogPath, line);
++    Serial.println("[CHAIN] " + line);
++}
++
++static String readFileCapped(const char *path, size_t maxBytes) {
++    if (!LittleFS.exists(path)) return "";
++    File f = LittleFS.open(path, FILE_READ);
++    if (!f) return "";
++    size_t sz = f.size();
++    if (sz == 0 || sz > maxBytes) { f.close(); return ""; }
++    String out;
++    out.reserve(sz + 1);
++    while (f.available()) out += (char)f.read();
++    f.close();
++    return out;
++}
++
++static ChainPreconditions livePreconditions() {
++    ChainPreconditions p;
++    p.wifiMemOk = radioHasMemForWifi();
++    p.bleMemOk = radioHasMemForBle();
++    p.webUiActive = isWebUiActiveOrStarting();
++    p.naptRunning = naptIsRunning();
++    p.portalRunning = portalNaptIsRunning();
++    p.guardRunning = lanGuardIsRunning();
++    p.auditRunning = lanAuditIsRunning();
++    p.bleRunning = blePairingAuditIsRunning();
++#if defined(USB_as_HID) && CONFIG_TINYUSB_HID_ENABLED
++    p.usbHidOk = true;
++#else
++    p.usbHidOk = false;
++#endif
++#if defined(HAS_MICROPHONE)
++    p.micOk = true;
++#else
++    p.micOk = false;
++#endif
++    return p;
++}
++
++// --- Recon -> Capture target pick (Analyzer snapshot -> PMKID/CSA) --------
++static bool pickReconTarget(ChainTarget &out, int &bestCh, String &err) {
++    bestCh = 0;
++    String js = readFileCapped(kAirtimePath, 6144);
++    if (js.isEmpty()) {
++        err = "No /wifi_airtime.json. Run 2.4 GHz Analyzer first.";
++        return false;
++    }
++    bestCh = chainParseAirtimeBestCh(js.c_str());
++    ChainTarget list[8];
++    size_t n = chainParseHiddenTargets(js.c_str(), list, 8);
++    if (n == 0) {
++        err = "No decloaked AP in Analyzer snapshot. Run Analyzer longer.";
++        return false;
++    }
++    int pick = chainPickBestTarget(list, n);
++    if (pick < 0) {
++        err = "No usable AP target in Analyzer snapshot.";
++        return false;
++    }
++    out = list[pick];
++    return true;
++}
++
++// --- BLE Guard -> Audit candidate pick (/ble_guard.log) -------------------
++static bool pickBleCandidate(BleChainCandidate &out, String &err) {
++    String log = readFileCapped(kBleGuardLogPath, 8192);
++    if (log.isEmpty()) {
++        err = "No /ble_guard.log. Run BLE Privacy Guard first.";
++        return false;
++    }
++    BleChainCandidate list[8];
++    size_t n = chainParseBleGuardCandidates(log.c_str(), log.length(), list, 8);
++    if (n == 0) {
++        err = "No tracker candidates in Guard log.";
++        return false;
++    }
++    out = list[0]; // sorted by hits desc, then RSSI desc
++    return true;
++}
++
++// --- Member sequences ------------------------------------------------------
++static bool startNaptLanMembers(String *errOut) {
++    String err;
++    if (!naptIsRunning()) {
++        if (!naptStartBackground("", "", &err)) {
++            if (errOut) *errOut = err.isEmpty() ? "NAPT start failed" : err;
++            chainLog("napt-lan", "napt-start", false, err);
++            return false;
++        }
++        chainLog("napt-lan", "napt-start", true, "NAPT running");
++    }
++    // LAN tools need the AP/STA network up; NAPT start is synchronous here.
++    if (!lanAuditIsRunning()) {
++        if (!lanAuditStart(true, &err)) {
++            if (errOut) *errOut = "LAN audit: " + err;
++            chainLog("napt-lan", "lan-audit", false, err);
++            return false;
++        }
++        chainLog("napt-lan", "lan-audit", true, "deep audit running");
++    }
++    if (!naptHttpInspectorIsRunning()) {
++        if (!naptHttpInspectorStart(0, &err)) {
++            if (errOut) *errOut = "HTTP inspector: " + err;
++            chainLog("napt-lan", "http-inspector", false, err);
++            return false;
++        }
++        chainLog("napt-lan", "http-inspector", true, "proxy running");
++    }
++    if (!responderPlusIsRunning()) {
++        if (!responderPlusStart(&err)) {
++            if (errOut) *errOut = "Responder+: " + err;
++            chainLog("napt-lan", "responder", false, err);
++            return false;
++        }
++        chainLog("napt-lan", "responder", true, "Responder+ running");
++    }
++    return true;
++}
++
++static void stopNaptLanMembers() {
++    responderPlusStop();
++    naptHttpInspectorStop();
++    lanAuditStop();
++    chainLog("napt-lan", "stop", true, "LAN members stopped (NAPT kept)");
++}
++
++static bool startPortalLanMembers(String *errOut) {
++    String err;
++    if (!portalNaptIsRunning()) {
++        if (!portalNaptStartAuto(&err)) {
++            if (errOut) *errOut = err.isEmpty() ? "Portal->NAPT start failed" : err;
++            chainLog("portal-lan", "portal-start", false, err);
++            return false;
++        }
++        chainLog("portal-lan", "portal-start", true, "Portal->NAPT running");
++    }
++    if (!lanGuardIsRunning()) {
++        if (!lanGuardStart(&err)) {
++            if (errOut) *errOut = "LAN Guard: " + err;
++            chainLog("portal-lan", "lan-guard", false, err);
++            return false;
++        }
++        chainLog("portal-lan", "lan-guard", true, "Guard running");
++    }
++    if (!naptHttpInspectorIsRunning()) {
++        if (!naptHttpInspectorStart(0, &err)) {
++            if (errOut) *errOut = "HTTP inspector: " + err;
++            chainLog("portal-lan", "http-inspector", false, err);
++            return false;
++        }
++        chainLog("portal-lan", "http-inspector", true, "proxy running");
++    }
++    return true;
++}
++
++static void stopPortalLanMembers() {
++    naptHttpInspectorStop();
++    lanGuardStop();
++    chainLog("portal-lan", "stop", true, "LAN members stopped (Portal->NAPT kept)");
++}
++
++static bool startGuardAuditMembers(String *errOut) {
++    String err;
++    if (!lanGuardIsRunning()) {
++        if (!lanGuardStart(&err)) {
++            if (errOut) *errOut = "LAN Guard: " + err;
++            chainLog("guard-audit", "lan-guard", false, err);
++            return false;
++        }
++        chainLog("guard-audit", "lan-guard", true, "Guard running");
++    }
++    // Baseline: only alerts after this point trigger the deep audit.
++    String js = lanGuardGetStateJson();
++    s_lastGuardAlerts = chainGuardAlertCount(js.c_str());
++    s_guardAuditFired = false;
++    chainWatcherEnsure();
++    chainLog("guard-audit", "armed", true, "watching for new alerts");
++    return true;
++}
++
++static void fireGuardAudit() {
++    String err;
++    if (lanAuditIsRunning()) return;
++    if (!lanAuditStart(true, &err)) {
++        chainLog("guard-audit", "lan-audit", false, err);
++        return;
++    }
++    chainLog("guard-audit", "lan-audit", true, "deep audit triggered by Guard alert");
++    // Correlate Guard + Audit snapshots into one evidence line.
++    String guardJs = lanGuardGetStateJson();
++    String auditJs = lanAuditGetStateJson();
++    char summary[160] = {};
++    chainGuardAuditSummary(guardJs.c_str(), auditJs.c_str(), summary, sizeof(summary));
++    seclabAppendLog(kGuardAuditLogPath, String(seclabUptimeSec()) + "," + summary);
++    // Export is best-effort; the audit keeps running for inspection.
++    lanAuditExport();
++    s_guardAuditFired = true;
++}
++
++static void watcherTask(void *) {
++    while (!s_watcherStop) {
++        vTaskDelay(pdMS_TO_TICKS(2000));
++        if (s_watcherStop) break;
++        // NAPT -> LAN auto-arm.
++        if (bruceConfig.seclabPlus.chainNaptLanAuto && naptIsRunning() && !s_naptLanFired &&
++            !lanAuditIsRunning()) {
++            String err;
++            if (startNaptLanMembers(&err)) {
++                s_naptLanFired = true;
++                chainLog("napt-lan", "auto-arm", true, "fired after NAPT up");
++            } else {
++                chainLog("napt-lan", "auto-arm", false, err);
++            }
++        }
++        if (!naptIsRunning()) s_naptLanFired = false;
++        // Portal -> NAPT -> LAN auto-arm.
++        if (bruceConfig.seclabPlus.chainPortalLanAuto && portalNaptIsRunning() && !s_portalLanFired &&
++            !lanGuardIsRunning()) {
++            String err;
++            if (startPortalLanMembers(&err)) {
++                s_portalLanFired = true;
++                chainLog("portal-lan", "auto-arm", true, "fired after Portal->NAPT up");
++            } else {
++                chainLog("portal-lan", "auto-arm", false, err);
++            }
++        }
++        if (!portalNaptIsRunning()) s_portalLanFired = false;
++        // Guard alert -> deep audit.
++        if (bruceConfig.seclabPlus.chainGuardAuditAuto && lanGuardIsRunning() && !s_guardAuditFired) {
++            String js = lanGuardGetStateJson();
++            uint32_t now = chainGuardAlertCount(js.c_str());
++            if (now > s_lastGuardAlerts) {
++                s_lastGuardAlerts = now;
++                fireGuardAudit();
++            }
++        }
++    }
++    s_watcherTask = nullptr;
++    vTaskDelete(nullptr);
++}
++
++static void markActive(ChainId id) {
++    s_activeChain = id;
++    s_activeSinceMs = millis();
++    strncpy(s_lastChainId, chainIdName(id), sizeof(s_lastChainId) - 1);
++    s_lastChainId[sizeof(s_lastChainId) - 1] = 0;
++    s_lastErr[0] = 0;
++}
++
++static void markIdle(const char *chain, const char *step, bool ok, const String &detail) {
++    chainLog(chain, step, ok, detail);
++    s_activeChain = CHAIN_NONE;
++    if (!ok) setErr(detail);
++}
++
++// --- Interactive chain menus ----------------------------------------------
++// Each submenu uses the choice-int pattern (like lan_guard_setup): Back is
++// a no-op selection, loopOptions returns after one pick.
++
++static void reconCaptureMenu() {
++    int choice = -1;
++    options = {
++        {"1. Probe Radar (observe)", [&]() { choice = 0; }},
++        {"2. Analyzer (observe)", [&]() { choice = 1; }},
++        {"3. Start PMKID (auto-target)", [&]() { choice = 2; }},
++        {"4. Start CSA/PMF (auto-target)", [&]() { choice = 3; }},
++        {"5. Auto-run: Probe+Analyzer+PMKID", [&]() { choice = 4; }},
++        {"Stop capture", [&]() { choice = 5; }},
++        {"Back", [&]() { choice = -1; }},
++    };
++    loopOptions(options, MENU_TYPE_SUBMENU, "Recon -> Capture");
++    options.clear();
++    if (choice == 0) { probe_radar_setup(); return; }
++    if (choice == 1) { channel_analyzer_setup(); return; }
++    if (choice == 5) { pmkidStop(); csaStop(); displayInfo("Capture stopped", true); return; }
++    if (choice == 4) {
++        probe_radar_setup();
++        channel_analyzer_setup();
++        choice = 2; // fall through to PMKID with fresh snapshots
++    }
++    if (choice == 2 || choice == 3) {
++        ChainTarget t;
++        int bestCh = 0;
++        String err;
++        if (!pickReconTarget(t, bestCh, err)) { displayError(err, true); return; }
++        String bssid = seclabMacColon(t.bssid);
++        String info = String(t.ssid) + " " + bssid + " CH" + String(t.channel) +
++                      " RSSI" + String(t.rssi) + "dBm score" + String(t.score);
++        if (bestCh && bestCh != t.channel) info += " (best CH" + String(bestCh) + ")";
++        displayInfo(info, true);
++        if (choice == 2) {
++            String e;
++            if (!pmkidStart(bssid, t.ssid, t.channel, &e)) { displayError("PMKID start failed: " + e, true); return; }
++            markActive(CHAIN_RECON_CAPTURE);
++            chainLog("recon-capture", "pmkid-start", true, info);
++            displaySuccess("PMKID capture running", true);
++        } else {
++            uint8_t newCh = bruceConfig.seclabPlus.csaChannel;
++            if (newCh == t.channel) newCh = (t.channel == 1) ? 6 : 1;
++            String e;
++            if (!csaStart(bssid, t.ssid, t.channel, newCh, bruceConfig.seclabPlus.csaBursts, &e)) {
++                displayError("CSA start failed: " + e, true);
++                return;
++            }
++            markActive(CHAIN_RECON_CAPTURE);
++            chainLog("recon-capture", "csa-start", true, info);
++            displaySuccess("CSA/PMF test running", true);
++        }
++    }
++}
++
++static void naptLanMenu() {
++    int choice = -1;
++    String autoLbl = String("Auto-arm with NAPT: ") + (bruceConfig.seclabPlus.chainNaptLanAuto ? "ON" : "OFF");
++    options = {
++        {naptIsRunning() ? "NAPT [ON] - Stop LAN members" : "Start NAPT -> LAN", [&]() { choice = 0; }},
++        {autoLbl, [&]() { choice = 1; }},
++        {"Back", [&]() { choice = -1; }},
++    };
++    loopOptions(options, MENU_TYPE_SUBMENU, "NAPT -> LAN");
++    options.clear();
++    if (choice == 1) {
++        bruceConfig.seclabPlus.chainNaptLanAuto = !bruceConfig.seclabPlus.chainNaptLanAuto;
++        bruceConfig.saveFile();
++        chainWatcherEnsure();
++        displayInfo(String("Auto-arm ") + (bruceConfig.seclabPlus.chainNaptLanAuto ? "ON" : "OFF"), true);
++        return;
++    }
++    if (choice != 0) return;
++    if (naptIsRunning()) { stopNaptLanMembers(); displayInfo("LAN members stopped", true); return; }
++    String err;
++    if (!startNaptLanMembers(&err)) { displayError("Chain failed: " + err, true); return; }
++    markActive(CHAIN_NAPT_LAN);
++    displaySuccess("NAPT -> LAN running", true);
++}
++
++static void portalLanMenu() {
++    int choice = -1;
++    String autoLbl = String("Auto-arm with Portal: ") + (bruceConfig.seclabPlus.chainPortalLanAuto ? "ON" : "OFF");
++    options = {
++        {portalNaptIsRunning() ? "Portal [ON] - Stop LAN members" : "Start Portal -> NAPT -> LAN", [&]() { choice = 0; }},
++        {autoLbl, [&]() { choice = 1; }},
++        {"Back", [&]() { choice = -1; }},
++    };
++    loopOptions(options, MENU_TYPE_SUBMENU, "Portal -> NAPT -> LAN");
++    options.clear();
++    if (choice == 1) {
++        bruceConfig.seclabPlus.chainPortalLanAuto = !bruceConfig.seclabPlus.chainPortalLanAuto;
++        bruceConfig.saveFile();
++        chainWatcherEnsure();
++        displayInfo(String("Auto-arm ") + (bruceConfig.seclabPlus.chainPortalLanAuto ? "ON" : "OFF"), true);
++        return;
++    }
++    if (choice != 0) return;
++    if (portalNaptIsRunning()) { stopPortalLanMembers(); displayInfo("LAN members stopped", true); return; }
++    String err;
++    if (!startPortalLanMembers(&err)) { displayError("Chain failed: " + err, true); return; }
++    markActive(CHAIN_PORTAL_LAN);
++    displaySuccess("Portal -> NAPT -> LAN running", true);
++}
++
++static void guardAuditMenu() {
++    int choice = -1;
++    String autoLbl = String("Auto-audit on alert: ") + (bruceConfig.seclabPlus.chainGuardAuditAuto ? "ON" : "OFF");
++    options = {
++        {lanGuardIsRunning() ? "Guard [ON] - Stop Guard+Audit" : "Start Guard -> Audit", [&]() { choice = 0; }},
++        {autoLbl, [&]() { choice = 1; }},
++        {"Back", [&]() { choice = -1; }},
++    };
++    loopOptions(options, MENU_TYPE_SUBMENU, "Guard -> Audit");
++    options.clear();
++    if (choice == 1) {
++        bruceConfig.seclabPlus.chainGuardAuditAuto = !bruceConfig.seclabPlus.chainGuardAuditAuto;
++        bruceConfig.saveFile();
++        chainWatcherEnsure();
++        displayInfo(String("Auto-audit ") + (bruceConfig.seclabPlus.chainGuardAuditAuto ? "ON" : "OFF"), true);
++        return;
++    }
++    if (choice != 0) return;
++    if (lanGuardIsRunning()) {
++        lanAuditStop();
++        lanGuardStop();
++        chainLog("guard-audit", "stop", true, "Guard+Audit stopped");
++        displayInfo("Guard + Audit stopped", true);
++        return;
++    }
++    String err;
++    if (!startGuardAuditMembers(&err)) { displayError("Chain failed: " + err, true); return; }
++    markActive(CHAIN_GUARD_AUDIT);
++    displaySuccess("Guard armed; audit fires on alert", true);
++}
++
++static void blePipelineMenu() {
++    int choice = -1;
++    options = {
++        {"1. Privacy Guard (observe)", [&]() { choice = 0; }},
++        {"2. Pairing Audit (auto-target)", [&]() { choice = 1; }},
++        {"3. GATT Explorer/Clone", [&]() { choice = 2; }},
++        {"4. Auto-run: Guard+Audit+Explorer", [&]() { choice = 3; }},
++        {"Back", [&]() { choice = -1; }},
++    };
++    loopOptions(options, MENU_TYPE_SUBMENU, "BLE Guard -> Audit -> Clone");
++    options.clear();
++    if (choice == 0) { ble_guard_setup(); return; }
++    if (choice == 2) { ble_gatt_cloner_setup(); return; }
++    if (choice == 3) {
++        ble_guard_setup();
++        choice = 1; // fall through to pairing audit with fresh Guard log
++    }
++    if (choice == 1) {
++        BleChainCandidate c;
++        String err;
++        if (!pickBleCandidate(c, err)) { displayError(err, true); return; }
++        displayInfo(String(c.kind) + " " + c.mac + " hits" + String(c.hits), true);
++        String e;
++        bool jw = bruceConfig.seclabPlus.blePairAuditJustWorks;
++        if (!blePairingAuditStartAsync(c.mac, c.addrType, jw, &e)) {
++            displayError("Pairing audit failed: " + e, true);
++            return;
++        }
++        markActive(CHAIN_BLE_PIPELINE);
++        chainLog("ble-pipeline", "pair-audit", true, String(c.mac) + " " + c.kind);
++        displaySuccess("Pairing audit queued", true);
++    }
++}
++
++static void usbVerifyMenu() {
++    int choice = -1;
++    options = {
++        {"1. Generate Payload", [&]() { choice = 0; }},
++        {"2. Arm LED Receiver", [&]() { choice = 1; }},
++        {"3. Run Payload (USB host)", [&]() { choice = 2; }},
++        {"4. Check LED Result + Export", [&]() { choice = 3; }},
++        {"5. Auto-run: Generate+Arm+Run", [&]() { choice = 4; }},
++        {"Back", [&]() { choice = -1; }},
++    };
++    loopOptions(options, MENU_TYPE_SUBMENU, "USB Generate -> Verify");
++    options.clear();
++    auto doGenerate = [&]() -> bool {
++        String path, err;
++        bool ok = smartBadUsbGeneratePayload(smartBadUsbGetOsProfile(),
++                                             bruceConfig.seclabPlus.badUsbPermissionCheck, &path, &err);
++        chainLog("usb-verify", "generate", ok, ok ? path : err);
++        if (!ok) displayError("Generate failed: " + err, true);
++        return ok;
++    };
++    auto doArm = [&]() -> bool {
++        String err;
++        bool ok = smartBadUsbStartLedLink(0, &err);
++        chainLog("usb-verify", "led-arm", ok, err);
++        if (!ok) displayError("LED arm failed: " + err, true);
++        return ok;
++    };
++    auto doRun = [&]() -> bool {
++        String err;
++        bool ok = smartBadUsbRunPayload(smartBadUsbGetOsProfile(),
++                                        bruceConfig.seclabPlus.badUsbPermissionCheck, &err);
++        chainLog("usb-verify", "run", ok, err);
++        if (!ok) displayError("Run failed: " + err, true);
++        return ok;
++    };
++    auto doCheck = [&]() {
++        String js = smartBadUsbGetLedLinkStateJson();
++        bool done = js.indexOf("\"phase\":\"DONE\"") >= 0;
++        bool exported = smartBadUsbExportLedLink();
++        chainLog("usb-verify", "verify", done, done ? "LED frame decoded" : "no DONE frame yet");
++        displayInfo(done ? "LED verify: DONE (exported)" : "LED verify: no DONE frame yet", true);
++        (void)exported;
++    };
++    if (choice == 0) { doGenerate(); return; }
++    if (choice == 1) { doArm(); return; }
++    if (choice == 2) { doRun(); return; }
++    if (choice == 3) { doCheck(); return; }
++    if (choice == 4) {
++        if (!doGenerate()) return;
++        if (!doArm()) return;
++        displayInfo("Plug Bruce into the test host, then confirm", true);
++        if (!doRun()) return;
++        doCheck();
++        markActive(CHAIN_USB_VERIFY);
++    }
++}
++
++#if defined(HAS_MICROPHONE)
++static void sonarEvidenceMenu() {
++    int choice = -1;
++    options = {
++        {"1. Sonar Guard (AutoRec-WAV)", [&]() { choice = 0; }},
++        {"2. Bundle Evidence", [&]() { choice = 1; }},
++        {"Back", [&]() { choice = -1; }},
++    };
++    loopOptions(options, MENU_TYPE_SUBMENU, "Sonar -> Evidence");
++    options.clear();
++    if (choice == 0) { sonar_guard_setup(); return; }
++    if (choice == 1) {
++        String state = readFileCapped(kSonarStatePath, 4096);
++        String log = readFileCapped(kSonarLogPath, 8192);
++        if (state.isEmpty() && log.isEmpty()) {
++            displayWarning("No Sonar session yet. Run Sonar first.", true);
++            return;
++        }
++        int wavCount = 0;
++        if (LittleFS.exists("/BruceMIC")) {
++            File dir = LittleFS.open("/BruceMIC");
++            if (dir) {
++                File f = dir.openNextFile();
++                while (f) {
++                    String n = f.name();
++                    if (n.endsWith(".wav")) wavCount++;
++                    f = dir.openNextFile();
++                }
++                dir.close();
++            }
++        }
++        String bundle = "{\"chain\":\"sonar-evidence\",\"uptimeSec\":" + String((unsigned long)seclabUptimeSec()) +
++                        ",\"wavClips\":" + String(wavCount) + ",\"sonar\":" + (state.isEmpty() ? "{}" : state) +
++                        ",\"logBytes\":" + String((unsigned long)log.length()) + "}";
++        bool ok = seclabWriteState(kSonarEvidencePath, bundle);
++        chainLog("sonar-evidence", "bundle", ok, String(wavCount) + " WAV clips");
++        if (ok) displaySuccess(String("Evidence bundled: ") + kSonarEvidencePath, true);
++        else displayError("Bundle failed", true);
++        if (ok) markActive(CHAIN_SONAR_EVIDENCE);
++    }
++}
++#endif
++
++} // namespace
++
++// ---------------------------------------------------------------------------
++// Public API
++// ---------------------------------------------------------------------------
++
++void chainWatcherEnsure() {
++    if (s_watcherTask) return;
++    if (!bruceConfig.seclabPlus.chainNaptLanAuto && !bruceConfig.seclabPlus.chainPortalLanAuto &&
++        !bruceConfig.seclabPlus.chainGuardAuditAuto) {
++        return;
++    }
++    s_watcherStop = false;
++    if (xTaskCreatePinnedToCore(watcherTask, "chainWatch", 4096, nullptr, 1, &s_watcherTask, 0) != pdPASS) {
++        s_watcherTask = nullptr;
++        Serial.println("[CHAIN] watcher spawn failed");
++    }
++}
++
++bool chainStart(const String &id, String *errOut) {
++    ChainId cid = chainIdFromString(id.c_str());
++    if (cid == CHAIN_NONE) {
++        if (errOut) *errOut = "Unknown chain. Use: recon-capture, napt-lan, portal-lan, guard-audit, ble-pipeline, usb-verify, sonar-evidence";
++        return false;
++    }
++    ChainPreconditions p = livePreconditions();
++    ChainBlock block = chainCheckPreconditions(cid, p);
++    if (block != CHAIN_OK) {
++        if (errOut) *errOut = chainBlockReason(block);
++        chainLog(chainIdName(cid), "precheck", false, *errOut);
++        return false;
++    }
++    String err;
++    bool ok = false;
++    switch (cid) {
++        case CHAIN_NAPT_LAN:
++            ok = startNaptLanMembers(&err);
++            break;
++        case CHAIN_PORTAL_LAN:
++            ok = startPortalLanMembers(&err);
++            break;
++        case CHAIN_GUARD_AUDIT:
++            ok = startGuardAuditMembers(&err);
++            break;
++        case CHAIN_RECON_CAPTURE: {
++            // Headless: capture phase only (observe steps are menu-only).
++            ChainTarget t;
++            int bestCh = 0;
++            if (!pickReconTarget(t, bestCh, err)) {
++                if (errOut) *errOut = err;
++                chainLog("recon-capture", "pick-target", false, err);
++                return false;
++            }
++            String bssid = seclabMacColon(t.bssid);
++            ok = pmkidStart(bssid, t.ssid, t.channel, &err);
++            chainLog("recon-capture", "pmkid-start", ok, ok ? bssid : err);
++            break;
++        }
++        case CHAIN_BLE_PIPELINE: {
++            // Headless: pairing audit against the top Guard candidate only.
++            BleChainCandidate c;
++            if (!pickBleCandidate(c, err)) {
++                if (errOut) *errOut = err;
++                chainLog("ble-pipeline", "pick-candidate", false, err);
++                return false;
++            }
++            bool jw = bruceConfig.seclabPlus.blePairAuditJustWorks;
++            ok = blePairingAuditStartAsync(c.mac, c.addrType, jw, &err);
++            chainLog("ble-pipeline", "pair-audit", ok, ok ? String(c.mac) : err);
++            break;
++        }
++        case CHAIN_USB_VERIFY: {
++            // Headless: generate + arm only. Running the payload needs a
++            // USB host and blocks on the device; use the menu for that step.
++            String path;
++            ok = smartBadUsbGeneratePayload(smartBadUsbGetOsProfile(),
++                                            bruceConfig.seclabPlus.badUsbPermissionCheck, &path, &err);
++            chainLog("usb-verify", "generate", ok, ok ? path : err);
++            if (ok) {
++                ok = smartBadUsbStartLedLink(0, &err);
++                chainLog("usb-verify", "led-arm", ok, err);
++            }
++            if (errOut && !ok) *errOut = err;
++            break;
++        }
++        case CHAIN_SONAR_EVIDENCE: {
++            // Headless: bundle only (Sonar run is menu-only).
++            String state = readFileCapped(kSonarStatePath, 4096);
++            if (state.isEmpty()) {
++                if (errOut) *errOut = "No Sonar session yet. Run Sonar from the device menu.";
++                chainLog("sonar-evidence", "bundle", false, "no session");
++                return false;
++            }
++            String bundle = "{\"chain\":\"sonar-evidence\",\"uptimeSec\":" + String((unsigned long)seclabUptimeSec()) +
++                            ",\"sonar\":" + state + "}";
++            ok = seclabWriteState(kSonarEvidencePath, bundle);
++            chainLog("sonar-evidence", "bundle", ok, "");
++            if (errOut && !ok) *errOut = "Bundle failed";
++            break;
++        }
++        default:
++            if (errOut) *errOut = "Unknown chain";
++            return false;
++    }
++    if (ok) {
++        markActive(cid);
++        chainWatcherEnsure();
++    } else {
++        setErr(err);
++        if (errOut && errOut->isEmpty()) *errOut = err;
++    }
++    return ok;
++}
++
++void chainStop(const String &id) {
++    ChainId cid = chainIdFromString(id.c_str());
++    if (cid == CHAIN_NONE) return;
++    switch (cid) {
++        case CHAIN_NAPT_LAN: stopNaptLanMembers(); break;
++        case CHAIN_PORTAL_LAN: stopPortalLanMembers(); break;
++        case CHAIN_GUARD_AUDIT:
++            lanAuditStop();
++            lanGuardStop();
++            chainLog("guard-audit", "stop", true, "Guard+Audit stopped");
++            break;
++        case CHAIN_RECON_CAPTURE:
++            pmkidStop();
++            csaStop();
++            chainLog("recon-capture", "stop", true, "capture stopped");
++            break;
++        case CHAIN_BLE_PIPELINE:
++            // Pairing audit finishes on its own (same as stop_all).
++            chainLog("ble-pipeline", "stop", true, "pairing audit finishes on its own");
++            break;
++        case CHAIN_USB_VERIFY:
++            smartBadUsbStopLedLink();
++            chainLog("usb-verify", "stop", true, "LED Link stopped");
++            break;
++        case CHAIN_SONAR_EVIDENCE:
++            chainLog("sonar-evidence", "stop", true, "nothing to stop (bundle only)");
++            break;
++        default: break;
++    }
++    if (s_activeChain == cid) s_activeChain = CHAIN_NONE;
++}
++
++bool chainIsRunning(const String &id) {
++    ChainId cid = chainIdFromString(id.c_str());
++    switch (cid) {
++        case CHAIN_NAPT_LAN: return naptIsRunning() && (lanAuditIsRunning() || naptHttpInspectorIsRunning());
++        case CHAIN_PORTAL_LAN: return portalNaptIsRunning() && (lanGuardIsRunning() || naptHttpInspectorIsRunning());
++        case CHAIN_GUARD_AUDIT: return lanGuardIsRunning();
++        case CHAIN_RECON_CAPTURE: return pmkidIsRunning() || csaIsRunning();
++        case CHAIN_BLE_PIPELINE: return blePairingAuditIsRunning();
++        case CHAIN_USB_VERIFY: return smartBadUsbIsLedLinkRunning();
++        case CHAIN_SONAR_EVIDENCE: return s_activeChain == CHAIN_SONAR_EVIDENCE;
++        default: return false;
++    }
++}
++
++String chainGetStateJson() {
++    String j = "{";
++    j += "\"active\":\"" + String(chainIdName(s_activeChain)) + "\",";
++    j += "\"lastChain\":\"" + String(s_lastChainId) + "\",";
++    j += "\"uptimeSec\":" + String(s_activeChain != CHAIN_NONE ? (unsigned long)((millis() - s_activeSinceMs) / 1000UL) : 0UL) + ",";
++    j += "\"lastErr\":\"" + seclabJsonEscape(s_lastErr) + "\",";
++    j += "\"auto\":{\"naptLan\":" + String(bruceConfig.seclabPlus.chainNaptLanAuto ? "true" : "false") +
++         ",\"portalLan\":" + String(bruceConfig.seclabPlus.chainPortalLanAuto ? "true" : "false") +
++         ",\"guardAudit\":" + String(bruceConfig.seclabPlus.chainGuardAuditAuto ? "true" : "false") + "},";
++    j += "\"chains\":[";
++    for (uint8_t i = CHAIN_RECON_CAPTURE; i < CHAIN_COUNT; i++) {
++        if (i > CHAIN_RECON_CAPTURE) j += ",";
++        ChainId cid = (ChainId)i;
++        j += "{\"id\":\"" + String(chainIdName(cid)) + "\",\"title\":\"" + String(chainIdTitle(cid)) +
++             "\",\"running\":" + String(chainIsRunning(chainIdName(cid)) ? "true" : "false") + "}";
++    }
++    j += "]}";
++    return j;
++}
++
++String chainListJson() { return chainGetStateJson(); }
++
++void chain_orchestrator_setup() {
++    chainWatcherEnsure();
++    int choice = -1;
++    options = {
++        {"Recon -> Capture", [&]() { choice = 0; }},
++        {"NAPT -> LAN", [&]() { choice = 1; }},
++        {"Portal -> NAPT -> LAN", [&]() { choice = 2; }},
++        {"Guard -> Audit", [&]() { choice = 3; }},
++        {"BLE Guard -> Audit -> Clone", [&]() { choice = 4; }},
++        {"USB Generate -> Verify", [&]() { choice = 5; }},
++#if defined(HAS_MICROPHONE)
++        {"Sonar -> Evidence", [&]() { choice = 6; }},
++#endif
++        {"Back", [&]() { choice = -1; }},
++    };
++    loopOptions(options, MENU_TYPE_SUBMENU, "Chains");
++    options.clear();
++    switch (choice) {
++        case 0: reconCaptureMenu(); break;
++        case 1: naptLanMenu(); break;
++        case 2: portalLanMenu(); break;
++        case 3: guardAuditMenu(); break;
++        case 4: blePipelineMenu(); break;
++        case 5: usbVerifyMenu(); break;
++#if defined(HAS_MICROPHONE)
++        case 6: sonarEvidenceMenu(); break;
++#endif
++        default: break;
++    }
++}
++
++#else // LITE_VERSION
++
++void chain_orchestrator_setup() {}
++bool chainStart(const String &, String *errOut) { if (errOut) *errOut = "LITE build"; return false; }
++void chainStop(const String &) {}
++bool chainIsRunning(const String &) { return false; }
++String chainGetStateJson() { return "{}"; }
++String chainListJson() { return "{}"; }
++void chainWatcherEnsure() {}
++
++#endif
+diff --git a/src/modules/wifi/chain_orchestrator.h b/src/modules/wifi/chain_orchestrator.h
+new file mode 100644
+index 00000000..cdfa3faa
+--- /dev/null
++++ b/src/modules/wifi/chain_orchestrator.h
+@@ -0,0 +1,35 @@
++#ifndef __CHAIN_ORCHESTRATOR_H__
++#define __CHAIN_ORCHESTRATOR_H__
++
++#include <Arduino.h>
++
++// SecLab+ chain orchestration: coordinates existing SecLab+ tools into
++// guided multi-step workflows (recon -> capture, NAPT -> LAN, Guard ->
++// Audit, BLE Guard -> Audit -> Clone, USB Generate -> Verify, Sonar ->
++// Evidence). Each chain reuses the member tools' own Start/Stop APIs and
++// JSON snapshots; the orchestrator only sequences them, checks radio /
++// memory preconditions, and writes a unified /chain_state.json + /chain.log.
++//
++// Interactive observe steps (Probe Radar, Channel Analyzer, BLE Guard scan,
++// Sonar run, GATT Explorer, USB payload run) are menu-only: they block on
++// the device UI and cannot run headlessly from CLI/WebUI. Headless
++// chainStart() therefore covers the programmatic steps only and reports
++// "run from device menu" for the rest. See chain_logic.h for the pure
++// decisions (target scoring, snapshot parsing, preconditions).
++
++// Device menu entry (WiFi Tools -> Chains).
++void chain_orchestrator_setup();
++
++// Headless start for CLI / WebUI. Returns false with *errOut when the chain
++// needs an interactive step or a precondition fails.
++bool chainStart(const String &id, String *errOut = nullptr);
++void chainStop(const String &id);
++bool chainIsRunning(const String &id);
++String chainGetStateJson();
++String chainListJson();
++
++// Start the auto-arm watcher (NAPT/Portal/Guard -> LAN tools) if any chain
++// auto flag is enabled. Safe to call repeatedly; runs once per boot.
++void chainWatcherEnsure();
++
++#endif
 diff --git a/src/modules/wifi/channel_analyzer.cpp b/src/modules/wifi/channel_analyzer.cpp
 index 353b8641..006bee36 100644
 --- a/src/modules/wifi/channel_analyzer.cpp
