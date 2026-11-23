@@ -4450,7 +4450,7 @@ index 5290300..bae5526 100644
 +</body>
  </html>
 diff --git a/embedded_resources/web_interface/index.js b/embedded_resources/web_interface/index.js
-index fd61602..3292cd2 100644
+index fd61602..c46012f 100644
 --- a/embedded_resources/web_interface/index.js
 +++ b/embedded_resources/web_interface/index.js
 @@ -6,20 +6,17 @@ const T = {
@@ -6171,7 +6171,11 @@ index fd61602..3292cd2 100644
 +  autoReloadScreen();
 +  sessionStorage.setItem("autoReload", eConfigAutoReload.value);
 +});
-+
+ 
+-  for (let i of items) {
+-    let entry = i.webkitGetAsEntry();
+-    if (!entry) continue;
+-    await appendDroppedFiles(entry);
 +btnForceReload.addEventListener("click", async (e) => {
 +  e.preventDefault();
 +  imageCache.clear();
@@ -6179,11 +6183,7 @@ index fd61602..3292cd2 100644
 +  drawCanvasLoading();
 +  await reloadScreen(true);
 +});
- 
--  for (let i of items) {
--    let entry = i.webkitGetAsEntry();
--    if (!entry) continue;
--    await appendDroppedFiles(entry);
++
 +$("#ota-file-input").addEventListener("change", (e) => validateOtaFile(e.target.files[0]));
 +const otaDrop = $("#ota-drop-zone");
 +otaDrop.addEventListener("dragover", (e) => { e.preventDefault(); otaDrop.classList.add("drag"); });
@@ -6324,7 +6324,7 @@ index fd61602..3292cd2 100644
 +  if (e.key === "Enter" || e.keyCode === 13) {
 +    e.preventDefault();
 +    $("#wifi-connect-btn").click();
-   }
++  }
 +});
 +$("#wifi-rescan-btn").addEventListener("click", () => scanWifiNets());
 +$("#wifi-connect-btn").addEventListener("click", async () => {
@@ -6344,7 +6344,7 @@ index fd61602..3292cd2 100644
 +    msg.textContent = err.message || "Failed to switch Wi-Fi";
 +  } finally {
 +    $("#wifi-connect-btn").disabled = false;
-+  }
+   }
 +});
  
 -  if (!_runningUpload)
@@ -6527,7 +6527,7 @@ index fd61602..3292cd2 100644
      return;
    }
  
-@@ -1062,662 +1525,1200 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1062,662 +1525,1212 @@ $(".container").addEventListener("click", async (e) => {
    if (actPlay) {
      e.preventDefault();
      let cmd = actPlay.getAttribute("data-cmd");
@@ -6963,28 +6963,39 @@ index fd61602..3292cd2 100644
 +async function refreshMonitor(){
 +  const msgBox=document.getElementById("mon-msg");
 +  const lastEl=document.getElementById("mon-last");
++  const isPreview = window.location.hostname==="127.0.0.1" || window.location.hostname==="localhost" || window.location.port==="8002" || window.location.port==="8001";
 +  try{
-+    // reuse lastSysInfo if fresh? but fetch fresh for monitor
 +    const sysP = requestGet("/systeminfo").then(j=>JSON.parse(j));
 +    const secP = requestGet("/seclab/status").then(j=>JSON.parse(j));
 +    const [sys, sec] = await Promise.all([sysP.catch(()=>null), secP.catch(()=>null)]);
 +    if(sys) monLastSys = sys;
 +    if(sec) monLastSecLab = sec;
-+    if(!sys && !sec) throw new Error("no data");
-+    lastSysInfo = monLastSys || lastSysInfo; // keep global in sync
-+    if(lastEl) lastEl.textContent = new Date().toLocaleTimeString();
++    // Preview fallback: if no device backend, use mock data so tab is not empty
++    if(!monLastSys && isPreview){
++      monLastSys = {BRUCE_VERSION:"1.17-preview", BOARD:"DSolution 1.83 2-Mic", OWNER:"DSolution", MAC:"AA:BB:CC:DD:EE:FF", UPTIME_SEC: 3421, BAT: 76, BAT_MV: 3980, CHG:true, CPU_MHZ:240, HEAP_FREE:"68 KB", PSRAM_FREE:"2.1 MB", DMA_FREE:"41 KB", DMA_BLOCK:"32 KB", DUALBOOT:true, OTA_SLOT:"ota_1", OTA_NEXT:"ota_0", OTA_MAX:"4.0 MB", WIFI_MODE:"AP", WIFI_IP:"192.168.4.1", WIFI_SSID:"", WIFI_RSSI:0, AP_SSID:"BruceNet", MDNS:"bruce", SD:{free:"1.2 GB", used:"800 MB", total:"2.0 GB"}, LittleFS:{free:"1.4 MB", used:"600 KB", total:"2.0 MB"}, HAS_SD:true, WIDS_LOG:true, BLE_LOG:true, PRI_COLOR:"#00f0ff", SEC_COLOR:"#50aebd", BG_COLOR:"#070d12", MENU_STYLE:0, BRIGHT:80};
++    }
++    if(!monLastSecLab && isPreview){
++      monLastSecLab = {napt:{running:true, starting:false, uptimeSec:128, staConnected:true, staSsid:"MyHomeWiFi", staIp:"192.168.1.23", apSsid:"BruceNet", apIp:"192.168.4.1", clients:[{ip:"192.168.4.2", mac:"11:22:33:44:55:66"}], total:24, blocked:3, trackers:5, autoBlock:true, blockList:["ads.example.com"], feed:[{dom:"ads.example.com", ip:"0.0.0.0", blk:true},{dom:"api.example.com", ip:"1.2.3.4", trk:true}]}, probe:{devices:[{id:1, os:"iPhone", rot:2, pnls:["MyHomeWiFi"], rssi:-52, watched:false}], totalMacs:3}, bleGatt:{mode:"SCAN", txPhy:"1M", connected:false, profiles:[{name:"HeartRate", addr:"AA:BB:CC:DD:EE:01", path:"/ble_gatt/hr.json", services:2, chars:5}]}, airtime:{bestCh:6, bestScore:78, channels:[{ch:1, load:22, retry:5, rssi:-45, sampled:true},{ch:6, load:12, retry:2, rssi:-52, sampled:true},{ch:11, load:65, retry:12, rssi:-60, sampled:true}], hidden:[{ssid:"HiddenNet", bssid:"AA:BB:CC:DD:EE:FF", ch:6, rssi:-58, decloaked:true}]}, sonar:{armed:true, alarm:false, carrierHz:18000, sens:"mid", peak:12, signal:"OK", events:[{dir:"left", pct:34, ts:12}]}, usb:{psramFree:2100000, flashImgBytes:65536, vaultFiles:[{name:"payload.txt", size:124}]}, plus:{available:true, osProfile:"windows", portalHandoff:true, httpAuto:true, httpRedact:true, bleSafeFuzzer:false, lanGuardAuto:true, permissionCheck:true, pairJustWorks:true, hidAutoArm:false, hidTimeoutSec:25, httpPort:3128, osWarn:true, pmkidAutoExport:false, csaChannel:1, csaBursts:3}, pmkid:{running:false, hashes:2}, csa:{running:false}, portal:{running:false, armed:true, napt:false, handoffDone:false}, lanAudit:{running:false, devices:3, findings:1, findingList:[{ip:"192.168.4.1", port:80, proto:"http", verdict:"open", risk:"HIGH"}]}, responderPlus:{running:false}, lanGuard:{running:true, alerts:[{kind:"ARP", ip:"192.168.4.5", detail:"new MAC"}], arpChanges:1, dhcpMismatch:0, arpWatch:true, dhcpSniff:true, dhcpComparison:"ok"}, httpInspector:{running:false, port:3128, findings:[{host:"example.com", kind:"GET", detail:"cleartext"}]}, ledLink:{running:false, bytes:0}, bleAudit:{findings:2, findingList:[{verdict:"WEAK", uuid:"0x1800", detail:"no auth"}]}, pairAudit:{verdict:"NOT_RUN"}, tagBeacon:{running:false}, chain:{running:[{id:"evil-twin-route", step:"Verify", status:"RUN"}]}};
++    }
++    if(!monLastSys && !monLastSecLab) throw new Error("no data");
++    lastSysInfo = monLastSys || lastSysInfo;
++    if(lastEl) lastEl.textContent = new Date().toLocaleTimeString() + (isPreview && !sys ? " · preview mock" : "");
 +    renderMonitorOverview(monLastSys, monLastSecLab);
 +    renderMonitorNetwork(monLastSys, monLastSecLab);
 +    renderMonitorSystem(monLastSys);
 +    renderMonitorAlerts(monLastSecLab);
-+    if(msgBox){ msgBox.classList.add("hidden"); }
++    if(msgBox){
++      if(isPreview && !sys){ msgBox.className="ota-status ok"; msgBox.textContent="Preview mode — no device backend, showing mock data. Connect device for live data."; msgBox.classList.remove("hidden"); }
++      else msgBox.classList.add("hidden");
++    }
 +  }catch(e){
 +    if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message||"Monitor refresh failed"; msgBox.classList.remove("hidden"); }
 +    console.warn("refreshMonitor",e);
 +  }
 +}
 +function renderMonitorOverview(sys, sec){
-+  if(!sys || !sec) return;
++  if(!sys && !sec) return;
++  sys = sys||monLastSys||{}; sec = sec||monLastSecLab||{};
 +  const set=(id,txt)=>{ const el=document.getElementById(id); if(el) el.textContent=txt; };
 +  const badge=(id,txt,cls)=>{ const el=document.getElementById(id); if(!el) return; el.textContent=txt; el.className="sl-badge "+(cls||""); };
 +  // device
@@ -7029,7 +7040,8 @@ index fd61602..3292cd2 100644
 +  // keep wifi badge
 +}
 +function renderMonitorNetwork(sys, sec){
-+  if(!sys) return;
++  if(!sys && !sec) return;
++  sys = sys||monLastSys||{}; sec = sec||monLastSecLab||{};
 +  const set=(id,txt)=>{ const el=document.getElementById(id); if(el) el.textContent=txt; };
 +  const badge=(id,txt,cls)=>{ const el=document.getElementById(id); if(!el) return; el.textContent=txt; el.className="sl-badge "+(cls||""); };
 +  set("mon-net-mode", `${sys.WIFI_MODE||"--"} / ${sys.WIFI_IP||"--"}`);
@@ -7060,7 +7072,7 @@ index fd61602..3292cd2 100644
 +  if(prb){ prb.innerHTML=(probe.devices||[]).slice(0,10).map(p=>`<div class="sl-item"><span>#${p.id} ${slEsc(p.os)} (${p.rot} MACs) <small class="muted-sm">${slEsc((p.pnls||[]).join(", "))}</small></span><span class="sl-tag ${p.watched?"blk":""}">${p.rssi}dB</span></div>`).join("")||`<div class="sl-item muted-sm">No probe data</div>`; }
 +}
 +function renderMonitorSystem(sys){
-+  if(!sys) return;
++  if(!sys) sys=monLastSys||{}; if(!sys || !Object.keys(sys).length) return;
 +  const set=(id,txt)=>{ const el=document.getElementById(id); if(el) el.textContent=txt; };
 +  set("mon-sys-uptime", `Up ${formatUptime(sys.UPTIME_SEC)}`);
 +  set("mon-sys-bat", `${sys.BAT!==undefined? sys.BAT+"%":"--"} ${sys.BAT_MV? `(${(sys.BAT_MV/1000).toFixed(2)}V)`:""} ${sys.CHG?"CHG":""}`);
@@ -7083,7 +7095,7 @@ index fd61602..3292cd2 100644
 +  const msd=document.getElementById("mon-meter-sd"); if(msd) msd.style.width = sdTotal? Math.min(100,(sdUsed*100)/sdTotal).toFixed(1)+"%":"0%";
 +}
 +function renderMonitorAlerts(sec){
-+  if(!sec) return;
++  if(!sec) sec=monLastSecLab||{}; if(!sec || !Object.keys(sec).length) return;
 +  const feed=document.getElementById("mon-alerts-feed");
 +  const plusFeed=document.getElementById("mon-plus-feed");
 +  const plus = sec.plus||{}, pm=sec.pmkid||{}, cs=sec.csa||{}, pt=sec.portal||{}, la=sec.lanAudit||{}, rp=sec.responderPlus||{}, lg=sec.lanGuard||{}, hi=sec.httpInspector||{}, ll=sec.ledLink||{}, ba=sec.bleAudit||{}, pa=sec.pairAudit||{}, tb=sec.tagBeacon||{}, sn=sec.sonar||{};
@@ -7913,12 +7925,12 @@ index fd61602..3292cd2 100644
 +    if (msg) {
 +      msg.className = "ota-status ok";
 +      msg.textContent = `Uploaded ${total} file(s) to /usb_vault`;
-+    }
+     }
 +  } catch (e) {
 +    if (msg) {
 +      msg.className = "ota-status err";
 +      msg.textContent = `Upload failed: ${e?.message || e}`;
-     }
++    }
 +  } finally {
 +    this.value = "";
 +    refreshSecLab();
