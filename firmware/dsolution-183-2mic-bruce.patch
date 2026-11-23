@@ -2758,10 +2758,10 @@ index bda7b42..0bbd995 100644
 +.monitor-bar { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
 +#mon-last { font-size:11px; }
 diff --git a/embedded_resources/web_interface/index.html b/embedded_resources/web_interface/index.html
-index 5290300..bae5526 100644
+index 5290300..2bcae33 100644
 --- a/embedded_resources/web_interface/index.html
 +++ b/embedded_resources/web_interface/index.html
-@@ -1,700 +1,1052 @@
+@@ -1,700 +1,1172 @@
  <!doctype html>
  <html lang="en">
 -  <head>
@@ -2836,6 +2836,7 @@ index 5290300..bae5526 100644
 +    <div class="tab-bar" role="tablist">
 +      <button type="button" class="tab-btn active" data-tab="dashboard">Dashboard</button>
 +      <button type="button" class="tab-btn" data-tab="monitor">Monitor</button>
++      <button type="button" class="tab-btn" data-tab="studio">Studio</button>
 +      <button type="button" class="tab-btn" data-tab="files">Files</button>
 +      <button type="button" class="tab-btn" data-tab="screen">Screen</button>
 +      <button type="button" class="tab-btn" data-tab="personalize">Personalize</button>
@@ -3030,7 +3031,7 @@ index 5290300..bae5526 100644
 +          <div class="kv-item"><span>PSRAM Free</span><b id="mon-sys-psram" class="mono">--</b></div>
 +          <div class="kv-item"><span>DMA Free / Max Block</span><b id="mon-sys-dma" class="mono">--</b></div>
 +          <div class="kv-item"><span>Build / Menu Style</span><b id="mon-sys-build">--</b></div>
-         </div>
++        </div>
 +        <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="fetchSystemInfo()">Refresh SystemInfo</button><button type="button" class="btn-action" onclick="quickCli('free')">CLI: free</button><button type="button" class="btn-action" onclick="quickCli('info')">CLI: info</button></div>
 +
 +        <div class="dash-grid sl-mt" style="padding:0">
@@ -3067,15 +3068,148 @@ index 5290300..bae5526 100644
 +          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/sonar_guard.log')">Sonar Log</button>
 +          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/lan_audit.json')">LAN JSON</button>
 +          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/napt_http_findings.json')">HTTP Findings</button>
-+        </div>
+         </div>
 +        <strong class="sl-sub sl-mt">SecLab+ Live Feed (mirror)</strong>
 +        <div id="mon-plus-feed" class="sl-scroll sl-mt"></div>
+       </div>
++
++    </section>
++      </div>
++    </section>
++
++
++    <!-- TAB 1.6: STUDIO — Mic & Media Tools (non-pentest) -->
++    <section id="tab-studio" class="tab-pane hidden">
++      <div class="seclab-bar">
++        <div>
++          <strong>Studio — Mic & Media Tools</strong>
++          <small class="muted-sm">Clock, Microphone, QRCodes & Megalodon · non-pentest — mirror <code>/studio/status</code> + <code>/systeminfo</code></small>
++        </div>
++        <div class="seclab-bar-actions">
++          <label class="sl-inline-label" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="st-auto" checked /> Auto 3s</label>
++          <button type="button" class="btn-action btn-default" id="st-refresh">Refresh Now</button>
++          <span id="st-last" class="mono muted-sm">--</span>
++        </div>
++      </div>
++
++      <div class="seclab-subtabs" role="tablist" aria-label="Studio sections">
++        <button type="button" class="slab-btn active" data-stslab="overview" aria-selected="true">Tổng quan</button>
++        <button type="button" class="slab-btn" data-stslab="mic">Mic & Sonar</button>
++        <button type="button" class="slab-btn" data-stslab="qr">QRCodes</button>
++        <button type="button" class="slab-btn" data-stslab="clock">Clock & More</button>
++      </div>
++      <div id="st-msg" class="ota-status hidden" role="status" aria-live="polite" style="margin:10px 16px 0"></div>
++
++      <!-- Studio Overview -->
++      <div id="stslab-overview" class="slab-view">
++        <div class="overview-grid">
++          <div class="ov-tile"><strong>Clock</strong><b id="st-ov-clock">--:--</b><small class="muted-sm" id="st-ov-clock-sub">NTP -- · Timer idle</small><span id="st-ov-clock-badge" class="sl-badge">TIME</span>
++            <div class="sl-row sl-mt"><button type="button" class="btn-action" data-stslab-jump="clock">Mở Clock →</button><button type="button" class="btn-action" id="st-sync-time">Sync Browser Time</button></div>
++          </div>
++          <div class="ov-tile"><strong>Microphone</strong><b id="st-ov-mic">--</b><small class="muted-sm" id="st-ov-mic-sub">Spectrum / Record / dB</small><span id="st-ov-mic-badge" class="sl-badge">ES7210</span>
++            <div class="sl-row sl-mt"><button type="button" class="btn-action" data-stslab-jump="mic">Mở Mic →</button><button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/BruceMIC')">Recordings →</button></div>
++          </div>
++          <div class="ov-tile"><strong>Sonar Guard</strong><b id="st-ov-sonar">IDLE</b><small class="muted-sm" id="st-ov-sonar-sub">Carrier --Hz · Sens --</small><span id="st-ov-sonar-badge" class="sl-badge">IDLE</span>
++            <div class="sl-row sl-mt"><button type="button" class="btn-action" data-stslab-jump="mic">Mở Sonar →</button></div>
++          </div>
++          <div class="ov-tile"><strong>QRCodes</strong><b id="st-ov-qr">-- codes</b><small class="muted-sm" id="st-ov-qr-sub">Tap để hiện trên device</small><span id="st-ov-qr-badge" class="sl-badge">QR</span>
++            <div class="sl-row sl-mt"><button type="button" class="btn-action" data-stslab-jump="qr">Mở QR →</button></div>
++          </div>
++          <div class="ov-tile"><strong>Megalodon</strong><b id="st-ov-mega">Ready</b><small class="muted-sm" id="st-ov-mega-sub">Soundboard · shark game</small><span id="st-ov-mega-badge" class="sl-badge">♪</span>
++            <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="quickCli('megalodon')">Launch via Console</button></div>
++          </div>
++          <div class="ov-tile"><strong>Dual-Boot</strong><b id="st-ov-dual">--</b><small class="muted-sm" id="st-ov-dual-sub">ota_0 / ota_1</small><span id="st-ov-dual-badge" class="sl-badge">--</span>
++            <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/bruce.conf')">bruce.conf</button></div>
++          </div>
++        </div>
++        <div class="dash-grid sl-mt" style="padding:0">
++          <div class="dash-card">
++            <div class="dash-card-head"><h3>Mic Recent Files</h3><span id="st-ov-mic-badge2" class="sl-badge">WAV</span></div>
++            <div id="st-ov-mic-files" class="sl-scroll" style="max-height:132px"></div>
++            <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/BruceMIC')">Open /BruceMIC →</button><button type="button" class="btn-action" onclick="quickCli('mic record')">CLI: mic</button></div>
++          </div>
++          <div class="dash-card">
++            <div class="dash-card-head"><h3>Sonar Events</h3><span id="st-ov-sonar-badge2" class="sl-badge">LIVE</span></div>
++            <div id="st-ov-sonar-events" class="sl-scroll" style="max-height:132px"></div>
++            <div class="sl-row sl-mt"><button type="button" class="btn-action" data-stslab-jump="mic">Chi tiết →</button></div>
++          </div>
++        </div>
++      </div>
++
++      <!-- Mic & Sonar -->
++      <div id="stslab-mic" class="slab-view hidden">
++        <div class="dash-card dash-card-wide">
++          <div class="dash-card-head"><h3>Microphone — ES7210 Dual-Mic</h3><span class="sl-badge">48 kHz</span></div>
++          <div class="kv-grid">
++            <div class="kv-item"><span>Mode</span><b id="st-mic-mode">Spectrum / dB / Record</b></div>
++            <div class="kv-item"><span>Last WAV</span><b id="st-mic-last">--</b></div>
++            <div class="kv-item"><span>Storage</span><b id="st-mic-storage">LittleFS /BruceMIC</b></div>
++            <div class="kv-item"><span>Gain</span><b id="st-mic-gain">24 dB</b></div>
++          </div>
++          <div class="sl-row sl-mt"><button type="button" class="btn-action btn-default" onclick="quickCli('mic spectrum')">Spectrum (device)</button><button type="button" class="btn-action" onclick="quickCli('mic db')">dB Meter</button><button type="button" class="btn-action" onclick="quickCli('mic record')">Record WAV</button><button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/BruceMIC')">Open Recordings</button></div>
++          <strong class="sl-sub sl-mt">Recent WAV Recordings</strong>
++          <div id="st-mic-files" class="sl-scroll sl-mt"></div>
++        </div>
++        <details class="sl-group" open>
++          <summary><span>Sonar Motion Guard — Acoustic Doppler</span><span id="st-sonar-badge" class="sl-badge">IDLE</span></summary>
++          <div class="kv-grid sl-mt">
++            <div class="kv-item"><span>Carrier / Sens</span><b id="st-sonar-cfg">--</b></div>
++            <div class="kv-item"><span>Alert Action</span><b id="st-sonar-act">--</b></div>
++            <div class="kv-item"><span>Motion Peak</span><b id="st-sonar-pk">0%</b></div>
++            <div class="kv-item"><span>Signal</span><b id="st-sonar-dir">--</b></div>
++          </div>
++          <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="quickCli('sonar')">Launch Sonar Guard (device)</button><button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/sonar_guard.log')">View Log</button><button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/BruceMIC')">Audio Clips</button></div>
++          <audio id="st-sonar-player" class="sl-audio hidden" controls preload="none"></audio>
++          <div id="st-sonar-events" class="sl-scroll sl-mt"></div>
++        </details>
++      </div>
++
++      <!-- QR Codes -->
++      <div id="stslab-qr" class="slab-view hidden">
++        <div class="dash-card dash-card-wide">
++          <div class="dash-card-head"><h3>QRCodes — Wi-Fi Share & Links</h3><span id="st-qr-count" class="sl-badge">--</span></div>
++          <div class="sl-row sl-mt"><input type="text" id="st-qr-name" placeholder="Name (e.g. MyWiFi)" class="sl-input" style="flex:1;min-width:120px" /><input type="text" id="st-qr-content" placeholder="WIFI:T:WPA;S:MySSID;... hoặc https://..." class="sl-input" style="flex:2;min-width:160px" /><button type="button" class="btn-action btn-default" id="st-qr-add">Add QR</button></div>
++          <div id="st-qr-msg" class="ota-status hidden" style="margin-top:8px"></div>
++          <div id="st-qr-list" class="sl-scroll sl-mt" style="max-height:340px"></div>
++          <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/')">Files</button><button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/bruce.conf')">Edit bruce.conf (qrCodes)</button></div>
++        </div>
++        <div id="st-qr-preview" class="dash-card dash-card-wide hidden" style="text-align:center;padding:16px">
++          <h3 id="st-qr-preview-title">QR Preview</h3>
++          <div id="st-qr-preview-box" style="margin:12px auto;max-width:260px"></div>
++          <small class="muted-sm" id="st-qr-preview-content">--</small>
++          <div class="sl-row sl-mt" style="justify-content:center"><button type="button" class="btn-action" onclick="document.getElementById('st-qr-preview').classList.add('hidden')">Close</button></div>
++        </div>
++      </div>
++
++      <!-- Clock & More -->
++      <div id="stslab-clock" class="slab-view hidden">
++        <div class="kv-grid">
++          <div class="kv-item"><span>Device Time (NTP RTC)</span><b id="st-clock-time">--:--:--</b></div>
++          <div class="kv-item"><span>Timezone / DST</span><b id="st-clock-tz">UTC+0 · DST off</b></div>
++          <div class="kv-item"><span>Uptime</span><b id="st-clock-uptime">--</b></div>
++          <div class="kv-item"><span>NTP Sync</span><b id="st-clock-ntp">--</b></div>
++        </div>
++        <div class="sl-row sl-mt"><button type="button" class="btn-action btn-default" id="st-clock-sync">Sync Browser Time → Device</button><button type="button" class="btn-action" onclick="quickCli('date')">CLI: date</button><button type="button" class="btn-action" onclick="quickCli('timer')">Timer (device)</button><button type="button" class="btn-action" onclick="switchTab('screen')">Open Screen Mirror</button></div>
++        <details class="sl-group" open>
++          <summary><span>Megalodon — Soundboard & Game</span><span class="sl-badge">♪</span></summary>
++          <p class="muted-sm sl-mt">Retro shark game + soundboard trên device. Chạy trực tiếp trên màn hình 1.83″.</p>
++          <div class="sl-row sl-mt"><button type="button" class="btn-action btn-default" onclick="quickCli('megalodon')">Launch Megalodon (device)</button><button type="button" class="btn-action" onclick="quickCli('tone 1000 500')">Test Tone</button></div>
++        </details>
++        <details class="sl-group">
++          <summary><span>Dual-Boot Switcher</span><span id="st-dual-badge" class="sl-badge">--</span></summary>
++          <div id="st-dual-info" class="kv-grid sl-mt">
++            <div class="kv-item"><span>Running Slot</span><b id="st-dual-slot">--</b></div>
++            <div class="kv-item"><span>Next Slot</span><b id="st-dual-next">--</b></div>
++            <div class="kv-item"><span>Dual-Boot</span><b id="st-dual-active">--</b></div>
++            <div class="kv-item"><span>OTA Max</span><b id="st-dual-max">--</b></div>
++          </div>
++          <div class="sl-row sl-mt"><button type="button" class="btn-action" id="st-dual-xiaozhi">Switch to XiaoZhi</button><button type="button" class="btn-action" id="st-dual-menu">Reboot to Boot Menu</button></div>
++        </details>
 +      </div>
 +
 +    </section>
-       </div>
-+    </section>
 +
++    <!-- TAB 2: FILES -->
 +    <!-- TAB 2: FILES -->
 +    <section id="tab-files" class="tab-pane hidden">
        <div class="free-space">
@@ -3580,7 +3714,15 @@ index 5290300..bae5526 100644
 -                    fill="currentColor"
 -                    d="M43.7,38H8.3c-1,0-1.7-1.3-0.9-2.2l17.3-21.2c0.6-0.8,1.9-0.8,2.5,0l17.5,21.2C45.4,36.7,44.8,38,43.7,38z"
 -                  />
--                </svg>
++              </button>
++              <button type="button" class="nav nav-up" data-direction="Up" title="Up" aria-label="Up">
++                <svg width="18" height="18" viewBox="0 0 52 52"><path fill="currentColor" d="M43.7,38H8.3c-1,0-1.7-1.3-0.9-2.2l17.3-21.2c0.6-0.8,1.9-0.8,2.5,0l17.5,21.2C45.4,36.7,44.8,38,43.7,38z"/></svg>
++              </button>
++              <button type="button" class="nav nav-menu" data-direction="Menu" title="Hold Select (Back)" aria-label="Hold Select (Back)">
++                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
++                  <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
++                  <circle cx="12" cy="12" r="3" fill="currentColor"/>
+                 </svg>
 -              </div>
 -              <div
 -                class="nav nav-menu"
@@ -3625,15 +3767,7 @@ index 5290300..bae5526 100644
 -                    cy="128"
 -                    r="112"
 -                  />
-+              </button>
-+              <button type="button" class="nav nav-up" data-direction="Up" title="Up" aria-label="Up">
-+                <svg width="18" height="18" viewBox="0 0 52 52"><path fill="currentColor" d="M43.7,38H8.3c-1,0-1.7-1.3-0.9-2.2l17.3-21.2c0.6-0.8,1.9-0.8,2.5,0l17.5,21.2C45.4,36.7,44.8,38,43.7,38z"/></svg>
-+              </button>
-+              <button type="button" class="nav nav-menu" data-direction="Menu" title="Hold Select (Back)" aria-label="Hold Select (Back)">
-+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-+                  <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
-+                  <circle cx="12" cy="12" r="3" fill="currentColor"/>
-                 </svg>
+-                </svg>
 -              </div>
 +              </button>
              </div>
@@ -3708,13 +3842,13 @@ index 5290300..bae5526 100644
 +              <div class="bm-status">
 +                <span id="bm-owner-pill" class="bm-pill">DSolution</span>
 +                <span class="bm-bat">98%</span>
-+              </div>
+               </div>
 +              <div class="bm-center">
 +                <div class="bm-fin"></div>
 +                <div id="bm-title" class="bm-title">DSolution</div>
 +                <div id="bm-sub" class="bm-sub">ESP32-S3 SEC LAB</div>
 +                <div class="bm-bar"><i></i></div>
-               </div>
++              </div>
 +              <div class="bm-foot">v1.14 &bull; <span id="bm-mdns">http://bruce.local</span></div>
              </div>
 -            <div class="p-bot">
@@ -3806,11 +3940,11 @@ index 5290300..bae5526 100644
 +              <div class="field">
 +                <label for="pers-bright">LCD Brightness: <b id="pers-bright-val">80%</b></label>
 +                <input type="range" id="pers-bright" min="10" max="100" value="80" />
-               </div>
++              </div>
 +              <div class="field">
 +                <label for="pers-apssid">AP Hotspot SSID</label>
 +                <input type="text" id="pers-apssid" maxlength="32" placeholder="BruceNet" />
-+              </div>
+               </div>
 +              <div class="field">
 +                <label for="pers-appwd">AP Password (8+ chars or blank)</label>
 +                <input type="text" id="pers-appwd" maxlength="63" placeholder="brucenet" />
@@ -3820,7 +3954,7 @@ index 5290300..bae5526 100644
 +              <label for="pers-style">Main menu layout &amp; WebUI style</label>
 +              <select id="pers-style"><option value="0">Carousel · rounded</option><option value="1">Grid · technical</option></select>
 +              <small>Same setting as Config → Display &amp; UI → Menu Layout. Custom JSON theme images apply to the device only.</small>
-             </div>
++            </div>
 +            <div class="color-grid">
 +              <label class="color-box">
 +                <span>Primary</span>
@@ -3838,7 +3972,7 @@ index 5290300..bae5526 100644
 +            <div class="pers-actions">
 +              <button type="button" class="btn-action btn-default" id="btn-save-pers">Apply &amp; Save to Flash</button>
 +              <button type="button" class="btn-action" id="btn-reload-pers">Reset Form</button>
-+            </div>
+             </div>
 +            <div id="pers-status" class="ota-status hidden"></div>
            </div>
          </div>
@@ -3957,11 +4091,7 @@ index 5290300..bae5526 100644
 +        <div>
 +          <strong>DSolution 1.83″ SecLab Center</strong>
 +          <small class="muted-sm">NAPT, PMKID/CSA, Portal-NAPT, LAN Audit, Responder+, HTTP Inspector, HID LED Link, BLE Audit &amp; USB Vault — mở nhóm khi cần</small>
-         </div>
--        <div class="dialog-body">
--          <div class="editor-container">
--            <div class="line-numbers"></div>
--            <textarea class="file-content" style="resize: none"></textarea>
++        </div>
 +        <div class="seclab-bar-actions">
 +          <button type="button" class="btn-action" id="sl-refresh">Refresh Now</button>
 +          <button type="button" class="btn-action btn-danger" data-sl-action="stop_all" data-sl-confirm="Stop all stoppable SecLab+ tools? An in-progress pairing audit will finish on its own.">Stop All</button>
@@ -3974,7 +4104,7 @@ index 5290300..bae5526 100644
 +        <button type="button" class="slab-btn" data-slab="wifi">Wi-Fi & NAPT</button>
 +        <button type="button" class="slab-btn" data-slab="lan">LAN & HTTP</button>
 +        <button type="button" class="slab-btn" data-slab="ble">BLE & HID</button>
-+        <button type="button" class="slab-btn" data-slab="studio">Sensors & USB</button>
++        <button type="button" class="slab-btn" data-slab="studio">USB Vault</button>
 +      </div>
 +      <div id="sl-plus-msg" class="ota-status hidden" role="status" aria-live="polite" aria-busy="false" style="margin:10px 16px 0"></div>
 +
@@ -3991,8 +4121,12 @@ index 5290300..bae5526 100644
 +          <div class="ov-tile"><strong>Probe & BLE GATT</strong><b id="ov-probe">0 / 0 · PHY 1M</b><small class="muted-sm"><span id="ov-probe-detail">Clusters/MACs</span></small><button type="button" class="btn-action sl-mt" data-slab-jump="wifi">Xem Radar →</button></div>
 +          <div class="ov-tile"><strong>LAN Audit</strong><b id="ov-lan">0 / 0</b><small class="muted-sm">Devices / Findings</small><button type="button" class="btn-action sl-mt" data-slab-jump="lan">Mở LAN & HTTP →</button></div>
 +          <div class="ov-tile"><strong>BLE / HID</strong><b id="ov-ble">IDLE</b><small class="muted-sm"><span id="ov-ble-detail">GATT findings · LED link</span></small><button type="button" class="btn-action sl-mt" data-slab-jump="ble">Mở BLE & HID →</button></div>
-+          <div class="ov-tile"><strong>Sonar & USB Vault</strong><b id="ov-studio">IDLE · 0 files</b><small class="muted-sm"><span id="ov-studio-detail">Motion guard · Vault</span></small><button type="button" class="btn-action sl-mt" data-slab-jump="studio">Mở Sensors & USB →</button></div>
-+        </div>
++          <div class="ov-tile"><strong>USB Vault</strong><b id="ov-studio">IDLE · 0 files</b><small class="muted-sm"><span id="ov-studio-detail">/usb_vault · BadUSB payloads</span></small><button type="button" class="btn-action sl-mt" data-slab-jump="studio">Mở USB Vault →</button></div>
+         </div>
+-        <div class="dialog-body">
+-          <div class="editor-container">
+-            <div class="line-numbers"></div>
+-            <textarea class="file-content" style="resize: none"></textarea>
 +
 +        <!-- Hidden compact kv summary (IDs kept for JS, visually compact) -->
 +        <div class="ov-kv-compact sl-mt">
@@ -4013,8 +4147,11 @@ index 5290300..bae5526 100644
 +          <div class="sl-row sl-mt">
 +            <span id="sl-plus-badge" class="sl-badge">READY</span>
 +            <small class="muted-sm">Dừng nhanh: <em>Stop All</em> không hủy pairing audit đang chạy.</small>
-+          </div>
-+        </div>
+           </div>
+         </div>
+-        <div class="dialog-footer">
+-          <button class="btn-action act-save-edit-file" title="CTRL + S">
+-            Save
 +
 +        <div class="sl-row sl-mt">
 +          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/pmkid/all.hc22000')">PMKID Hash</button>
@@ -4046,7 +4183,7 @@ index 5290300..bae5526 100644
 +            <button type="button" class="btn-action btn-default" id="sl-napt-auto" aria-pressed="true">Auto-Block Trackers: ON</button>
 +            <button type="button" class="btn-action" id="sl-napt-export">Export Log</button>
 +            <button type="button" class="btn-action" id="sl-napt-clear">Clear Feed</button>
-           </div>
++          </div>
 +          <div id="sl-napt-msg" class="ota-status hidden" role="status" aria-live="polite" aria-busy="false"></div>
 +          <div class="kv-grid sl-mt">
 +            <div class="kv-item"><span>Uplink Wi-Fi</span><b id="sl-napt-up">--</b></div>
@@ -4072,10 +4209,7 @@ index 5290300..bae5526 100644
 +              </div>
 +            </div>
 +          </details>
-         </div>
--        <div class="dialog-footer">
--          <button class="btn-action act-save-edit-file" title="CTRL + S">
--            Save
++        </div>
 +
 +        <details class="sl-group">
 +          <summary><span>CH1–13 Estimated Load &amp; Hidden SSIDs <small class="muted-sm">— packet-based, not measured airtime</small></span><span id="sl-air-best" class="sl-badge">BEST CH --</span></summary>
@@ -4215,25 +4349,11 @@ index 5290300..bae5526 100644
 +        </details>
 +      </div>
 +
-+      <!-- ========== SENSORS & USB ========== -->
++      <!-- ========== USB VAULT — Sonar moved to Studio tab ========== -->
 +      <div id="slab-studio" class="slab-view hidden">
++        <div class="sl-note">Sonar Guard đã chuyển sang <b>Studio → Mic & Sonar</b> để SecLab tập trung pentest. Ở đây chỉ còn USB Vault phục vụ BadUSB HID.</div>
++        <div class="sl-row sl-mt"><button type="button" class="btn-action btn-default" onclick="switchTab('studio')">Mở Studio → Mic & Sonar</button></div>
 +        <details class="sl-group" open>
-+          <summary><span>#6 Acoustic Sonar &amp; Motion Guard</span><span id="sl-sonar-badge" class="sl-badge">IDLE</span></summary>
-+          <div class="kv-grid sl-mt">
-+            <div class="kv-item"><span>Carrier / Sens</span><b id="sl-sonar-cfg">--</b></div>
-+            <div class="kv-item"><span>Alert Action</span><b id="sl-sonar-act">--</b></div>
-+            <div class="kv-item"><span>Motion Peak</span><b id="sl-sonar-pk">0%</b></div>
-+            <div class="kv-item"><span>Signal status</span><b id="sl-sonar-dir">--</b></div>
-+          </div>
-+          <div class="sl-row sl-mt">
-+            <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/sonar_guard.log')">View Guard Log</button>
-+            <button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/BruceMIC')">Audio Clips</button>
-+          </div>
-+          <audio id="sl-sonar-player" class="sl-audio hidden" controls preload="none"></audio>
-+          <div id="sl-sonar-events" class="sl-scroll sl-mt"></div>
-+        </details>
-+
-+        <details class="sl-group">
 +          <summary><span>#8 Virtual USB Drive &amp; /usb_vault</span><span id="sl-usb-badge" class="sl-badge">PSRAM + FLASH</span></summary>
 +          <div class="kv-grid sl-mt">
 +            <div class="kv-item"><span>PSRAM / Vault</span><b id="sl-usb-psram">--</b></div>
@@ -4264,9 +4384,7 @@ index 5290300..bae5526 100644
 +            <svg viewBox="0 0 24 24" fill="none">
 +              <path d="M7 5v14l11-7-11-7Z" fill="currentColor"/>
 +            </svg>
-           </button>
--          <button class="btn-action act-run-edit-file" title="ALT + ENTER">
--            Run
++          </button>
 +          <a class="icon-action act-download" title="Download">
 +            <svg viewBox="0 0 24 24" fill="none">
 +              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -4277,12 +4395,14 @@ index 5290300..bae5526 100644
 +              <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 +            </svg>
            </button>
--          <button class="btn-action act-dialog-close act-escape">Close</button>
+-          <button class="btn-action act-run-edit-file" title="ALT + ENTER">
+-            Run
 +          <button class="icon-action act-delete" title="Delete">
 +            <svg viewBox="0 0 24 24" fill="none">
 +              <path d="M3 6h18M8 6V4h8v2m-9 0v14a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V6M10 11v6m4-6v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 +            </svg>
-+          </button>
+           </button>
+-          <button class="btn-action act-dialog-close act-escape">Close</button>
 +        </td>
 +      </tr>
 +    </table>
@@ -4330,7 +4450,9 @@ index 5290300..bae5526 100644
 +        <button id="ota-start-btn" class="btn-action btn-default" disabled>Flash OTA Firmware</button>
 +        <button class="btn-action act-dialog-close act-escape">Close</button>
 +      </div>
-+    </div>
+     </div>
+-    <div class="loading-area hidden">
+-      <div class="text"></div>
 +
 +    <div class="dialog wifi hidden">
 +      <div class="dialog-head">
@@ -4381,9 +4503,7 @@ index 5290300..bae5526 100644
 +      <div class="dialog-footer">
 +        <button class="btn-action act-dialog-close act-escape">Close</button>
 +      </div>
-     </div>
--    <div class="loading-area hidden">
--      <div class="text"></div>
++    </div>
 +
 +    <div class="dialog info hidden">
 +      <div class="dialog-head">About Bruce SecLab WebUI</div>
@@ -4450,7 +4570,7 @@ index 5290300..bae5526 100644
 +</body>
  </html>
 diff --git a/embedded_resources/web_interface/index.js b/embedded_resources/web_interface/index.js
-index fd61602..c46012f 100644
+index fd61602..a0cd7fa 100644
 --- a/embedded_resources/web_interface/index.js
 +++ b/embedded_resources/web_interface/index.js
 @@ -6,20 +6,17 @@ const T = {
@@ -4569,7 +4689,7 @@ index fd61602..c46012f 100644
      window.location.href = "/";
    } else {
      Dialog.loading.hide();
-@@ -132,151 +93,188 @@ function handleAuthError() {
+@@ -132,151 +93,194 @@ function handleAuthError() {
  async function requestGet(url, data) {
    return new Promise((resolve, reject) => {
      let req = new XMLHttpRequest();
@@ -4716,6 +4836,12 @@ index fd61602..c46012f 100644
 +    startMonitorPoll();
 +  } else {
 +    stopMonitorPoll();
++  }
++  if (tabName === "studio") {
++    refreshStudio();
++    startStudioPoll();
++  } else {
++    stopStudioPoll();
 +  }
 +}
 +
@@ -4866,7 +4992,7 @@ index fd61602..c46012f 100644
  }
  
  async function runCommand(cmd) {
-@@ -290,13 +288,21 @@ async function runCommand(cmd) {
+@@ -290,13 +294,21 @@ async function runCommand(cmd) {
    }
  }
  
@@ -4893,7 +5019,7 @@ index fd61602..c46012f 100644
    return undefined;
  }
  
-@@ -304,39 +310,25 @@ function calcHash(str) {
+@@ -304,39 +316,25 @@ function calcHash(str) {
    let hash = 5381;
    str = str.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
    for (let i = 0; i < str.length; i++) {
@@ -4939,7 +5065,7 @@ index fd61602..c46012f 100644
  }
  
  function renderFileRow(fileList) {
-@@ -346,251 +338,499 @@ function renderFileRow(fileList) {
+@@ -346,251 +344,499 @@ function renderFileRow(fileList) {
      .sort((a, b) => {
        let [aFirst, ...aRest] = a.split(":");
        let [bFirst, ...bRest] = b.split(":");
@@ -5575,7 +5701,7 @@ index fd61602..c46012f 100644
      });
    };
  
-@@ -599,7 +839,6 @@ async function renderTFT(data) {
+@@ -599,7 +845,6 @@ async function renderTFT(data) {
      let img = await loadImage(img_url);
      let drawX = input.x;
      let drawY = input.y;
@@ -5583,7 +5709,7 @@ index fd61602..c46012f 100644
      if (input.center === 1) {
        drawX += (canvas.width - img.width) / 2;
        drawY += (canvas.height - img.height) / 2;
-@@ -607,12 +846,7 @@ async function renderTFT(data) {
+@@ -607,12 +852,7 @@ async function renderTFT(data) {
      ctx.drawImage(img, drawX, drawY);
    };
  
@@ -5597,7 +5723,7 @@ index fd61602..c46012f 100644
  
    const drawRoundRect = (ctx, input, fill) => {
      const { x, y, w, h, r } = input;
-@@ -629,60 +863,45 @@ async function renderTFT(data) {
+@@ -629,60 +869,45 @@ async function renderTFT(data) {
  
    let startData = 0;
    const getByteValue = (dataType) => {
@@ -5681,7 +5807,7 @@ index fd61602..c46012f 100644
        }
      }
      return r;
-@@ -690,279 +909,570 @@ async function renderTFT(data) {
+@@ -690,279 +915,570 @@ async function renderTFT(data) {
  
    let offset = 0;
    ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -6025,9 +6151,6 @@ index fd61602..c46012f 100644
  });
  
 -window.ondragenter = () => $(".upload-area").classList.remove("hidden");
--$(".upload-area").ondragleave = () => $(".upload-area").classList.add("hidden");
--$(".upload-area").ondragover = (e) => e.preventDefault();
--$(".upload-area").ondrop = async (e) => {
 +$("#btn-reload-pers")?.addEventListener("click", loadPersonalizeForm);
 +$("#btn-save-pers")?.addEventListener("click", async () => {
 +  const pwd = $("#pers-appwd").value;
@@ -6164,18 +6287,11 @@ index fd61602..c46012f 100644
 +  eConfigAutoReload.querySelector(`option[value="${oldTimerSession}"]`).selected = true;
 +}
 +eConfigAutoReload.addEventListener("change", (e) => {
-   e.preventDefault();
--  $(".upload-area").classList.add("hidden");
--  const items = e.dataTransfer.items;
--  if (!items || items.length === 0) return;
++  e.preventDefault();
 +  autoReloadScreen();
 +  sessionStorage.setItem("autoReload", eConfigAutoReload.value);
 +});
- 
--  for (let i of items) {
--    let entry = i.webkitGetAsEntry();
--    if (!entry) continue;
--    await appendDroppedFiles(entry);
++
 +btnForceReload.addEventListener("click", async (e) => {
 +  e.preventDefault();
 +  imageCache.clear();
@@ -6344,25 +6460,27 @@ index fd61602..c46012f 100644
 +    msg.textContent = err.message || "Failed to switch Wi-Fi";
 +  } finally {
 +    $("#wifi-connect-btn").disabled = false;
-   }
++  }
 +});
- 
--  if (!_runningUpload)
--    setTimeout(() => {
--      if (_queueUpload.length === 0) return;
--      uploadFile();
--    }, 100);
++
 +window.ondragenter = (e) => {
 +  if ($(".dialog.ota:not(.hidden)") || activeTab !== "files") return;
 +  if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files")) {
 +    $(".upload-area").classList.remove("hidden");
 +  }
 +};
-+$(".upload-area").ondragleave = () => $(".upload-area").classList.add("hidden");
-+$(".upload-area").ondragover = (e) => e.preventDefault();
-+$(".upload-area").ondrop = async (e) => {
-+  e.preventDefault();
-+  $(".upload-area").classList.add("hidden");
+ $(".upload-area").ondragleave = () => $(".upload-area").classList.add("hidden");
+ $(".upload-area").ondragover = (e) => e.preventDefault();
+ $(".upload-area").ondrop = async (e) => {
+   e.preventDefault();
+   $(".upload-area").classList.add("hidden");
+-  const items = e.dataTransfer.items;
+-  if (!items || items.length === 0) return;
+-
+-  for (let i of items) {
+-    let entry = i.webkitGetAsEntry();
+-    if (!entry) continue;
+-    await appendDroppedFiles(entry);
 +  const drive = currentDrive, path = currentPath;
 +  if (!drive || !path || _runningUpload) return;
 +  _uploadFailures = 0;
@@ -6380,7 +6498,13 @@ index fd61602..c46012f 100644
 +    _uploadFailures++;
 +    Dialog.show("upload");
 +    $(".upload-summary").textContent = "Could not read all dropped files: " + error.message;
-+  }
+   }
+-
+-  if (!_runningUpload)
+-    setTimeout(() => {
+-      if (_queueUpload.length === 0) return;
+-      uploadFile();
+-    }, 100);
 +  if (_queueUpload.length) uploadFile();
 +  else if (_uploadFailures) $(".upload-close").disabled = false;
  };
@@ -6421,7 +6545,7 @@ index fd61602..c46012f 100644
      fetchFiles(drive, path);
      return;
    }
-@@ -970,37 +1480,8 @@ $(".container").addEventListener("click", async (e) => {
+@@ -970,37 +1486,8 @@ $(".container").addEventListener("click", async (e) => {
    let editFileAction = e.target.closest(".act-edit-file");
    if (editFileAction) {
      e.preventDefault();
@@ -6460,7 +6584,7 @@ index fd61602..c46012f 100644
      return;
    }
  
-@@ -1009,24 +1490,17 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1009,24 +1496,17 @@ $(".container").addEventListener("click", async (e) => {
      e.preventDefault();
      let action = oActionOInput.getAttribute("data-action");
      if (!action) return;
@@ -6490,7 +6614,7 @@ index fd61602..c46012f 100644
      Dialog.showOneInput(action, value, data);
      return;
    }
-@@ -1034,27 +1508,16 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1034,27 +1514,16 @@ $(".container").addEventListener("click", async (e) => {
    let actDeleteFile = e.target.closest(".act-delete");
    if (actDeleteFile) {
      e.preventDefault();
@@ -6527,7 +6651,7 @@ index fd61602..c46012f 100644
      return;
    }
  
-@@ -1062,662 +1525,1212 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1062,662 +1531,1397 @@ $(".container").addEventListener("click", async (e) => {
    if (actPlay) {
      e.preventDefault();
      let cmd = actPlay.getAttribute("data-cmd");
@@ -6953,13 +7077,115 @@ index fd61602..c46012f 100644
 +  }, 3000);
 +}
 +function stopMonitorPoll(){ if(monTimer){ clearInterval(monTimer); monTimer=null; } }
++
++let studioTimer = null;
++let studioLastSys = null;
++let studioLastSecLab = null;
++let studioLastQr = null;
++function startStudioPoll(){
++  stopStudioPoll();
++  studioTimer = setInterval(()=>{
++    const auto = document.getElementById("st-auto");
++    if(activeTab==="studio" && (!auto || auto.checked) && !document.hidden && !otaBusy){
++      refreshStudio().catch(()=>{});
++    }
++  }, 3000);
++}
++function stopStudioPoll(){ if(studioTimer){ clearInterval(studioTimer); studioTimer=null; } }
++function switchStSlab(name){
++  document.querySelectorAll('[id^="stslab-"]').forEach(v=>v.classList.toggle("hidden", v.id!=="stslab-"+name));
++  document.querySelectorAll("[data-stslab]").forEach(b=>{ const on=b.dataset.stslab===name; b.classList.toggle("active", on); b.setAttribute("aria-selected", on?"true":"false"); });
++  try{ localStorage.setItem("studioSlab", name);}catch(e){}
++}
++document.querySelectorAll("[data-stslab]").forEach(b=> b.addEventListener("click", ()=> switchStSlab(b.dataset.stslab)));
++document.querySelectorAll("[data-stslab-jump]").forEach(b=> b.addEventListener("click", ()=> switchStSlab(b.dataset.stslabJump)));
++try{ const savedSt=localStorage.getItem("studioSlab"); if(savedSt) switchStSlab(savedSt); }catch(e){}
++document.getElementById("st-refresh")?.addEventListener("click", ()=> refreshStudio());
++document.getElementById("st-auto")?.addEventListener("change", (e)=>{ if(e.target.checked) refreshStudio(); });
++document.getElementById("st-sync-time")?.addEventListener("click", ()=>{ const btn=document.getElementById("st-sync-time"); if(btn) btn.textContent="Syncing..."; fetch("/api/time",{method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"}, body:"t="+Math.floor(Date.now()/1000)}).then(()=>{ if(btn) btn.textContent="Synced ✔"; setTimeout(()=>{ if(btn) btn.textContent="Sync Browser Time"; },2000); }).catch(()=>{ if(btn) btn.textContent="Sync failed"; }); if(window.quickCli) quickCli("date"); refreshStudio(); });
++document.getElementById("st-clock-sync")?.addEventListener("click", ()=>{ const b=document.getElementById("st-clock-sync"); if(b) b.textContent="Syncing..."; fetch("/api/time",{method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"}, body:"t="+Math.floor(Date.now()/1000)}).then(()=>{ if(b) b.textContent="Synced ✔"; setTimeout(()=>{ if(b) b.textContent="Sync Browser Time \u2192 Device"; },2000); }).catch(()=>{ if(b) b.textContent="Sync failed"; }); });
++document.getElementById("st-qr-add")?.addEventListener("click", async ()=>{
++  const nameEl=document.getElementById("st-qr-name"), contEl=document.getElementById("st-qr-content"), msg=document.getElementById("st-qr-msg");
++  const name=(nameEl?.value||"").trim(), content=(contEl?.value||"").trim();
++  if(!name || !content){ if(msg){ msg.className="ota-status err"; msg.textContent="Enter both name and content"; msg.classList.remove("hidden"); } return; }
++  try{
++    const raw=await requestPost("/studio/qrcodes", {action:"add", name, content});
++    const d=JSON.parse(raw); if(d.ok){ if(msg){ msg.className="ota-status ok"; msg.textContent=d.msg||"Added"; msg.classList.remove("hidden"); } if(nameEl) nameEl.value=""; if(contEl) contEl.value=""; refreshStudio(); } else { if(msg){ msg.className="ota-status err"; msg.textContent=d.msg||"Add failed"; msg.classList.remove("hidden"); } }
++  } catch(e){ if(msg){ msg.className="ota-status err"; msg.textContent=(e.message||"Add failed"); msg.classList.remove("hidden"); } }
++});
++document.getElementById("st-dual-xiaozhi")?.addEventListener("click", ()=> requestGet("/reboot?target=xiaozhi").then(()=>{}).catch(()=>{}));
++document.getElementById("st-dual-menu")?.addEventListener("click", ()=> requestGet("/reboot?target=menu").then(()=>{}).catch(()=>{}));
+ 
+-      const leadingSpaces = line.match(leadingSpacesRegex)[0].length;
++// delegated actions for QR preview/delete
++document.addEventListener("click", (e)=>{
++  const t=e.target.closest("[data-st-qr-show]");
++  if(t){ e.preventDefault(); const name=t.dataset.stQrShow, content=t.dataset.stQrContent||""; const box=document.getElementById("st-qr-preview"); const title=document.getElementById("st-qr-preview-title"); const cont=document.getElementById("st-qr-preview-content"); const qb=document.getElementById("st-qr-preview-box"); if(title) title.textContent=name; if(cont) cont.textContent=content; if(qb){ const enc=encodeURIComponent(content); qb.innerHTML=`<img src="https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${enc}" alt="QR" style="max-width:100%;border:1px solid var(--border);border-radius:8px;padding:8px;background:#fff" /><div class="sl-row sl-mt" style="justify-content:center"><button type="button" class="btn-action" data-st-qr-device="${slEsc(name)}">Show on device</button></div>`; } if(box) box.classList.remove("hidden"); }
++});
++document.addEventListener("click", (e)=>{
++  const t=e.target.closest("[data-st-qr-del]");
++  if(t){ e.preventDefault(); const name=t.dataset.stQrDel; if(!confirm("Delete QR '"+name+"'?")) return; requestPost("/studio/qrcodes", {action:"delete", name}).then(raw=>{ const d=JSON.parse(raw); const msg=document.getElementById("st-qr-msg"); if(msg){ msg.className="ota-status "+(d.ok?"ok":"err"); msg.textContent=d.msg||""; msg.classList.remove("hidden"); } refreshStudio(); }).catch(e=>{ const msg=document.getElementById("st-qr-msg"); if(msg){ msg.className="ota-status err"; msg.textContent=e.message||"Delete failed"; msg.classList.remove("hidden"); } }); }
++});
++document.addEventListener("click", (e)=>{
++  const t=e.target.closest("[data-st-play-wav]");
++  if(t){ e.preventDefault(); const path=t.dataset.stPlayWav; const pl=document.getElementById("st-sonar-player"); if(pl && path){ pl.src=(IS_DEV?"/bruce":"")+"/file?fs=LittleFS&action=download&name="+encodeURIComponent(path); pl.classList.remove("hidden"); pl.play().catch(()=>{}); } }
++});
++document.addEventListener("click", (e)=>{
++  const t=e.target.closest("[data-st-qr-device]");
++  if(t){ e.preventDefault(); const nm=t.dataset.stQrDevice||""; if(nm && window.quickCli) quickCli("qrcode \""+nm.replace(/"/g,'\\"')+"\""); }
++});
+ 
+-      if (shift) {
+-        const remove = Math.min(leadingSpaces, TAB_SIZE);
+-        totalChange -= remove;
+-        return line.slice(remove);
+-      } else {
+-        const add = TAB_SIZE - (leadingSpaces % TAB_SIZE);
+-        totalChange += add;
+-        return " ".repeat(add) + line;
+-      }
+-    });
+ 
+-    // Replace the expanded selection using execCommand to preserve undo
+-    // This may become an issue when execCommand is removed since it's deprecated but only way to preserve undo for now
+-    textarea.setSelectionRange(firstLineStart, lastLineEnd);
+-    document.execCommand("insertText", false, newTextLines.join("\n"));
+-    textarea.setSelectionRange(
+-      firstLineStart,
+-      firstLineStart + newTextLines.join("\n").length,
+-    );
+-  };
 +function switchMonSlab(name){
 +  document.querySelectorAll('[id^="monslab-"]').forEach(v=>v.classList.toggle("hidden", v.id!=="monslab-"+name));
 +  document.querySelectorAll("[data-monslab]").forEach(b=>{ const on=b.dataset.monslab===name; b.classList.toggle("active", on); b.setAttribute("aria-selected", on?"true":"false"); });
 +  try{ localStorage.setItem("monitorSlab", name);}catch(e){}
 +}
  
--      const leadingSpaces = line.match(leadingSpacesRegex)[0].length;
+-  const handleEnter = () => {
+-    const { line } = getCurrentLine(start);
+-    const indentation = line.match(leadingSpacesRegex)[0] || "";
+-
+-    const nextChar = start < textarea.value.length ? textarea.value[start] : "";
+-    const prevChar = start > 0 ? textarea.value[start - 1] : "";
+-    const pairs = { "{": "}", "(": ")", "[": "]" };
+-
+-    if (pairs[prevChar] === nextChar) {
+-      const extraIndent = " ".repeat(TAB_SIZE);
+-      const insert = `\n${indentation + extraIndent}\n${indentation}`;
+-      insertText(
+-        insert,
+-        start + indentation.length + extraIndent.length + 1,
+-        start + indentation.length + extraIndent.length + 1,
+-      );
+-    } else {
+-      const closingLine = closingCharRegex.test(nextChar)
+-        ? "\n" + indentation
+-        : "";
+-      insertText(
+-        "\n" + indentation + closingLine,
+-        start + indentation.length + 1,
+-        start + indentation.length + 1,
+-      );
 +async function refreshMonitor(){
 +  const msgBox=document.getElementById("mon-msg");
 +  const lastEl=document.getElementById("mon-last");
@@ -6973,7 +7199,8 @@ index fd61602..c46012f 100644
 +    // Preview fallback: if no device backend, use mock data so tab is not empty
 +    if(!monLastSys && isPreview){
 +      monLastSys = {BRUCE_VERSION:"1.17-preview", BOARD:"DSolution 1.83 2-Mic", OWNER:"DSolution", MAC:"AA:BB:CC:DD:EE:FF", UPTIME_SEC: 3421, BAT: 76, BAT_MV: 3980, CHG:true, CPU_MHZ:240, HEAP_FREE:"68 KB", PSRAM_FREE:"2.1 MB", DMA_FREE:"41 KB", DMA_BLOCK:"32 KB", DUALBOOT:true, OTA_SLOT:"ota_1", OTA_NEXT:"ota_0", OTA_MAX:"4.0 MB", WIFI_MODE:"AP", WIFI_IP:"192.168.4.1", WIFI_SSID:"", WIFI_RSSI:0, AP_SSID:"BruceNet", MDNS:"bruce", SD:{free:"1.2 GB", used:"800 MB", total:"2.0 GB"}, LittleFS:{free:"1.4 MB", used:"600 KB", total:"2.0 MB"}, HAS_SD:true, WIDS_LOG:true, BLE_LOG:true, PRI_COLOR:"#00f0ff", SEC_COLOR:"#50aebd", BG_COLOR:"#070d12", MENU_STYLE:0, BRIGHT:80};
-+    }
+     }
+-  };
 +    if(!monLastSecLab && isPreview){
 +      monLastSecLab = {napt:{running:true, starting:false, uptimeSec:128, staConnected:true, staSsid:"MyHomeWiFi", staIp:"192.168.1.23", apSsid:"BruceNet", apIp:"192.168.4.1", clients:[{ip:"192.168.4.2", mac:"11:22:33:44:55:66"}], total:24, blocked:3, trackers:5, autoBlock:true, blockList:["ads.example.com"], feed:[{dom:"ads.example.com", ip:"0.0.0.0", blk:true},{dom:"api.example.com", ip:"1.2.3.4", trk:true}]}, probe:{devices:[{id:1, os:"iPhone", rot:2, pnls:["MyHomeWiFi"], rssi:-52, watched:false}], totalMacs:3}, bleGatt:{mode:"SCAN", txPhy:"1M", connected:false, profiles:[{name:"HeartRate", addr:"AA:BB:CC:DD:EE:01", path:"/ble_gatt/hr.json", services:2, chars:5}]}, airtime:{bestCh:6, bestScore:78, channels:[{ch:1, load:22, retry:5, rssi:-45, sampled:true},{ch:6, load:12, retry:2, rssi:-52, sampled:true},{ch:11, load:65, retry:12, rssi:-60, sampled:true}], hidden:[{ssid:"HiddenNet", bssid:"AA:BB:CC:DD:EE:FF", ch:6, rssi:-58, decloaked:true}]}, sonar:{armed:true, alarm:false, carrierHz:18000, sens:"mid", peak:12, signal:"OK", events:[{dir:"left", pct:34, ts:12}]}, usb:{psramFree:2100000, flashImgBytes:65536, vaultFiles:[{name:"payload.txt", size:124}]}, plus:{available:true, osProfile:"windows", portalHandoff:true, httpAuto:true, httpRedact:true, bleSafeFuzzer:false, lanGuardAuto:true, permissionCheck:true, pairJustWorks:true, hidAutoArm:false, hidTimeoutSec:25, httpPort:3128, osWarn:true, pmkidAutoExport:false, csaChannel:1, csaBursts:3}, pmkid:{running:false, hashes:2}, csa:{running:false}, portal:{running:false, armed:true, napt:false, handoffDone:false}, lanAudit:{running:false, devices:3, findings:1, findingList:[{ip:"192.168.4.1", port:80, proto:"http", verdict:"open", risk:"HIGH"}]}, responderPlus:{running:false}, lanGuard:{running:true, alerts:[{kind:"ARP", ip:"192.168.4.5", detail:"new MAC"}], arpChanges:1, dhcpMismatch:0, arpWatch:true, dhcpSniff:true, dhcpComparison:"ok"}, httpInspector:{running:false, port:3128, findings:[{host:"example.com", kind:"GET", detail:"cleartext"}]}, ledLink:{running:false, bytes:0}, bleAudit:{findings:2, findingList:[{verdict:"WEAK", uuid:"0x1800", detail:"no auth"}]}, pairAudit:{verdict:"NOT_RUN"}, tagBeacon:{running:false}, chain:{running:[{id:"evil-twin-route", step:"Verify", status:"RUN"}]}};
 +    }
@@ -7127,16 +7354,146 @@ index fd61602..c46012f 100644
 +  }
 +}
  
--      if (shift) {
--        const remove = Math.min(leadingSpaces, TAB_SIZE);
--        totalChange -= remove;
--        return line.slice(remove);
--      } else {
--        const add = TAB_SIZE - (leadingSpaces % TAB_SIZE);
--        totalChange += add;
--        return " ".repeat(add) + line;
--      }
--    });
+-  const handleAutoPair = (key) => {
+-    const pairs = {
+-      "(": ")",
+-      "{": "}",
+-      "[": "]",
+-      '"': '"',
+-      "'": "'",
+-      "`": "`",
+-      "<": ">",
+-    };
+ 
+-    if (start === end) {
+-      // No selection - insert pair at cursor
+-      insertText(key + pairs[key], start + 1, start + 1, false);
++async function refreshStudio(){
++  const msgBox=document.getElementById("st-msg");
++  const lastEl=document.getElementById("st-last");
++  const isPreview = window.location.hostname==="127.0.0.1" || window.location.hostname==="localhost" || window.location.port==="8002" || window.location.port==="8001";
++  try{
++    const sysP = requestGet("/systeminfo").then(j=>JSON.parse(j)).catch(()=>null);
++    const secP = requestGet("/seclab/status").then(j=>JSON.parse(j)).catch(()=>null);
++    const qrP = requestGet("/studio/qrcodes").then(j=>JSON.parse(j)).catch(()=>null);
++    const [sys, sec, qr] = await Promise.all([sysP, secP, qrP]);
++    if(sys) studioLastSys = sys;
++    if(sec) studioLastSecLab = sec;
++    if(qr && qr.qrcodes) studioLastQr = qr.qrcodes;
++    if(!studioLastSys && isPreview){
++      studioLastSys = {BRUCE_VERSION:"1.17-preview", BOARD:"DSolution 1.83 2-Mic", OWNER:"DSolution", MAC:"AA:BB:CC:DD:EE:FF", UPTIME_SEC: 3421, BAT:76, BAT_MV:3980, CHG:true, CPU_MHZ:240, DUALBOOT:true, OTA_SLOT:"ota_1", OTA_NEXT:"ota_0", OTA_MAX:"4.0 MB"};
++    }
++    if(!studioLastSecLab && isPreview){
++      studioLastSecLab = {sonar:{armed:true, alarm:false, carrierHz:18000, sens:"mid", peak:12, signal:"OK", events:[{dir:"left", pct:34, ts:12},{dir:"right", pct:22, ts:45}], action:"Arm"}, usb:{psramFree:2100000, flashImgBytes:65536, vaultFiles:[{name:"payload.txt", size:124}]}, plus:{available:true}};
++    }
++    if(!studioLastQr && isPreview){
++      studioLastQr = [{name:"Bruce AP", content:"WIFI:T:WPA;S:BruceNet;P:brucenet;;"}, {name:"Bruce Wiki", content:"https://github.com/pr3y/Bruce/wiki"}, {name:"Bruce Site", content:"https://bruce.computer"}];
++    }
++    if(!studioLastSys && !studioLastSecLab) throw new Error("no studio data");
++    lastSysInfo = studioLastSys || lastSysInfo;
++    if(lastEl) lastEl.textContent = new Date().toLocaleTimeString() + (isPreview && !sys ? " \u00b7 preview mock" : "");
++    renderStudioOverview(studioLastSys, studioLastSecLab, studioLastQr);
++    renderStudioMic(studioLastSys, studioLastSecLab);
++    renderStudioQr(studioLastQr);
++    renderStudioClock(studioLastSys);
++    if(msgBox){
++      if(isPreview && !sys){ msgBox.className="ota-status ok"; msgBox.textContent="Preview mode \u2014 showing mock Studio data. Connect device for live."; msgBox.classList.remove("hidden"); }
++      else msgBox.classList.add("hidden");
++    }
++  }catch(e){
++    if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message||"Studio refresh failed"; msgBox.classList.remove("hidden"); }
++    console.warn("refreshStudio",e);
++  }
++}
++function renderStudioOverview(sys, sec, qr){
++  if(!sys && !sec) { sys=studioLastSys||{}; sec=studioLastSecLab||{}; } else { sys=sys||studioLastSys||{}; sec=sec||studioLastSecLab||{}; }
++  const set=(id,txt)=>{ const el=document.getElementById(id); if(el) el.textContent=txt; };
++  const badge=(id,txt,cls)=>{ const el=document.getElementById(id); if(!el) return; el.textContent=txt; el.className="sl-badge "+(cls||""); };
++  const now=new Date();
++  const timeStr=now.toLocaleTimeString();
++  set("st-ov-clock", timeStr);
++  set("st-ov-clock-sub", `${sys.BOARD||"Bruce"} \u00b7 Up ${formatUptime(sys.UPTIME_SEC)}`);
++  badge("st-ov-clock-badge", sys.DUALBOOT? "DUAL":"TIME", sys.DUALBOOT?"on":"");
++  // mic
++  set("st-ov-mic", "ES7210 48kHz");
++  set("st-ov-mic-sub", `Gain 24 dB \u00b7 DMA ${sys.DMA_FREE||"--"}`);
++  // sonar
++  const sn=sec?.sonar||{};
++  set("st-ov-sonar", sn.armed ? (sn.alarm?"ALERT!":"ARMED") : "IDLE");
++  set("st-ov-sonar-sub", `${sn.carrierHz||"--"} Hz \u00b7 ${sn.sens||"--"} \u00b7 ${sn.peak||0}%`);
++  badge("st-ov-sonar-badge", sn.armed? (sn.alarm?"ALERT":"ARMED"):"IDLE", sn.alarm?"alert":(sn.armed?"on":""));
++  // qr
++  const qrCount = Array.isArray(qr)? qr.length : (Array.isArray(studioLastQr)? studioLastQr.length:0);
++  set("st-ov-qr", `${qrCount} codes`);
++  set("st-ov-qr-sub", qrCount? `${qrCount} saved \u00b7 tap QR tab to view` : "No QR yet");
++  // dual
++  set("st-ov-dual", sys.OTA_SLOT||"--");
++  set("st-ov-dual-sub", `${sys.OTA_SLOT||"--"} \u2192 ${sys.OTA_NEXT||"--"}`);
++  badge("st-ov-dual-badge", sys.DUALBOOT?"DUAL":"single", sys.DUALBOOT?"on":"");
++  // mic files overview
++  const micBox=document.getElementById("st-ov-mic-files");
++  if(micBox){
++    // try to list mic files via existing file API cache if any, else mock
++    micBox.innerHTML = `<div class="sl-item"><span>Record via device: <b>Others</b> \u2192 <b>Microphone</b> \u2192 <b>Record</b></span><span class="sl-tag ok">ES7210</span></div><div class="sl-item"><span>/BruceMIC \u00b7 LittleFS</span><button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/BruceMIC')">Browse</button></div>`;
++  }
++  const sonarBox=document.getElementById("st-ov-sonar-events");
++  if(sonarBox){
++    const evs=(sn.events||[]).slice(-4).reverse();
++    sonarBox.innerHTML = evs.map(ev=> `<div class="sl-item"><span>${slEsc(ev.dir||"")} ${ev.pct||0}% <small class="muted-sm">${ev.ts||0}s</small></span><span class="sl-tag ${ev.alarm?"alert":""}">${ev.alarm?"ALERT":"EVT"}</span></div>`).join("") || `<div class="sl-item muted-sm">No sonar events \u2014 arm on device</div>`;
++  }
++}
++function renderStudioMic(sys, sec){
++  if(!sys) sys=studioLastSys||{}; if(!sec) sec=studioLastSecLab||{};
++  const set=(id,txt)=>{ const el=document.getElementById(id); if(el) el.textContent=txt; };
++  const sn=sec?.sonar||{};
++  set("st-sonar-cfg", sn.carrierHz? `${sn.carrierHz} Hz / ${sn.sens||"-"}` : "Not run yet");
++  set("st-sonar-act", sn.action||sn.signal||"--");
++  set("st-sonar-pk", `${sn.peak||0}%`);
++  set("st-sonar-dir", sn.signal||"--");
++  const badge=document.getElementById("st-sonar-badge");
++  if(badge){ badge.textContent=sn.armed? (sn.alarm?"ALERT!":"ARMED"):"IDLE"; badge.className="sl-badge "+(sn.alarm?"alert":(sn.armed?"on":"")); }
++  const evBox=document.getElementById("st-sonar-events");
++  if(evBox){
++    evBox.innerHTML=(sn.events||[]).slice().reverse().map(ev=>{
++      const wav = ev.wav? `<button type="button" class="sl-tag ok" data-st-play-wav="${slEsc(ev.wav)}">Play</button>` : "";
++      return `<div class="sl-item"><span>${slEsc(ev.dir||ev.type||"evt")} ${ev.pct||ev.score||0}% <small class="muted-sm">${ev.ts||0}s ${slEsc(ev.detail||"")}</small></span><span>${wav}</span></div>`;
++    }).join("") || `<div class="sl-item muted-sm">Launch Studio \u2192 Microphone \u2192 Sonar Guard on device</div>`;
++  }
++  // mic files list
++  const micList=document.getElementById("st-mic-files");
++  if(micList){
++    // attempt to fetch file list if we have file browser cache, else show hint
++    micList.innerHTML = `<div class="sl-item muted-sm">Recent WAVs live in <code>/BruceMIC</code> & <code>/record</code>. Use <b>Files</b> tab or device <b>Record</b>.</div><div class="sl-item"><span>Quick open</span><span><button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/BruceMIC')">/BruceMIC</button> <button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/')">/LittleFS</button></span></div>`;
++  }
++}
++function renderStudioQr(qr){
++  const list=Array.isArray(qr)? qr : (studioLastQr||[]);
++  const badge=document.getElementById("st-qr-count");
++  if(badge) badge.textContent = `${list.length} codes`;
++  const box=document.getElementById("st-qr-list");
++  if(!box) return;
++  if(!list.length){
++    box.innerHTML=`<div class="sl-item muted-sm">No QRCodes yet \u2014 add one above or via device <b>Studio \u2192 QRCodes \u2192 Save&amp;Display</b></div>`;
++    return;
++  }
++  box.innerHTML = list.map(q=> `<div class="sl-item"><span><strong>${slEsc(q.name||q.menuName)}</strong><br><small class="mono muted-sm">${slEsc((q.content||"").slice(0,64))}${(q.content||"").length>64?"\u2026":""}</small></span><span style="display:flex;gap:6px"><button type="button" class="sl-tag ok" data-st-qr-show="${slEsc(q.name||q.menuName)}" data-st-qr-content="${slEsc(q.content||"")}">View</button><button type="button" class="sl-tag blk" data-st-qr-del="${slEsc(q.name||q.menuName)}">Del</button></span></div>`).join("");
++}
++function renderStudioClock(sys){
++  if(!sys) sys=studioLastSys||{};
++  const set=(id,txt)=>{ const el=document.getElementById(id); if(el) el.textContent=txt; };
++  const now=new Date();
++  set("st-clock-time", now.toLocaleTimeString());
++  set("st-clock-tz", `Uptime ${formatUptime(sys.UPTIME_SEC)} \u00b7 Bright ${sys.BRIGHT||"--"}%`);
++  set("st-clock-uptime", formatUptime(sys.UPTIME_SEC));
++  set("st-clock-ntp", sys.UPTIME_SEC? "NTP via WiFi STA (if connected)":"--");
++  set("st-dual-slot", sys.OTA_SLOT||"--");
++  set("st-dual-next", sys.OTA_NEXT||"--");
++  set("st-dual-active", sys.DUALBOOT? "active":"--");
++  set("st-dual-max", sys.OTA_MAX||"--");
++  const b=document.getElementById("st-dual-badge");
++  if(b){ b.textContent=sys.DUALBOOT?"DUAL":"single"; b.className="sl-badge "+(sys.DUALBOOT?"on":""); }
++}
++
 +function slEsc(s) {
 +  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 +}
@@ -7174,16 +7531,7 @@ index fd61602..c46012f 100644
 +  const box = $("#sl-napt-msg");
 +  if (box) box.setAttribute("aria-busy", busy ? "true" : "false");
 +}
- 
--    // Replace the expanded selection using execCommand to preserve undo
--    // This may become an issue when execCommand is removed since it's deprecated but only way to preserve undo for now
--    textarea.setSelectionRange(firstLineStart, lastLineEnd);
--    document.execCommand("insertText", false, newTextLines.join("\n"));
--    textarea.setSelectionRange(
--      firstLineStart,
--      firstLineStart + newTextLines.join("\n").length,
--    );
--  };
++
 +async function naptPost(params) {
 +  if (params.action === "block" || params.action === "unblock") {
 +    const domain = String(params.domain || "").trim();
@@ -7213,23 +7561,7 @@ index fd61602..c46012f 100644
 +  }
 +  return ok;
 +}
- 
--  const handleEnter = () => {
--    const { line } = getCurrentLine(start);
--    const indentation = line.match(leadingSpacesRegex)[0] || "";
--
--    const nextChar = start < textarea.value.length ? textarea.value[start] : "";
--    const prevChar = start > 0 ? textarea.value[start - 1] : "";
--    const pairs = { "{": "}", "(": ")", "[": "]" };
--
--    if (pairs[prevChar] === nextChar) {
--      const extraIndent = " ".repeat(TAB_SIZE);
--      const insert = `\n${indentation + extraIndent}\n${indentation}`;
--      insertText(
--        insert,
--        start + indentation.length + extraIndent.length + 1,
--        start + indentation.length + extraIndent.length + 1,
--      );
++
 +async function seclabPlusPost(params) {
 +  if (secLabBusy) return;
 +  secLabBusy = true;
@@ -7242,28 +7574,13 @@ index fd61602..c46012f 100644
 +    if (d.ok === false) {
 +      slShowMsg(box, d.msg || "SecLab+ action failed", false, 0);
      } else {
--      const closingLine = closingCharRegex.test(nextChar)
--        ? "\n" + indentation
--        : "";
--      insertText(
--        "\n" + indentation + closingLine,
--        start + indentation.length + 1,
--        start + indentation.length + 1,
--      );
+-      // Has selection - wrap selected text with pair
+-      const selectedText = textarea.value.slice(start, end);
+-      const wrappedText = key + selectedText + pairs[key];
+-      insertText(wrappedText, start + 1, start + 1 + selectedText.length, true);
 +      slShowMsg(box, d.msg || "SecLab+ action OK", true, 4500);
      }
 -  };
--
--  const handleAutoPair = (key) => {
--    const pairs = {
--      "(": ")",
--      "{": "}",
--      "[": "]",
--      '"': '"',
--      "'": "'",
--      "`": "`",
--      "<": ">",
--    };
 +    await refreshSecLab();
 +  } catch (e) {
 +    slShowMsg(box, slErrorText(e, "SecLab+ action failed"), false, 0);
@@ -7273,14 +7590,9 @@ index fd61602..c46012f 100644
 +  }
 +}
  
--    if (start === end) {
--      // No selection - insert pair at cursor
--      insertText(key + pairs[key], start + 1, start + 1, false);
--    } else {
--      // Has selection - wrap selected text with pair
--      const selectedText = textarea.value.slice(start, end);
--      const wrappedText = key + selectedText + pairs[key];
--      insertText(wrappedText, start + 1, start + 1 + selectedText.length, true);
+-  const handleSkipCloser = () => {
+-    textarea.setSelectionRange(start + 1, start + 1);
+-  };
 +function slNumber(id, min, max, label) {
 +  const el = $(id);
 +  const raw = el ? String(el.value || "").trim() : "";
@@ -7331,30 +7643,13 @@ index fd61602..c46012f 100644
 +      slShowMsg($("#sl-plus-msg"), "Enter BLE MAC as AA:BB:CC:DD:EE:FF", false, 0);
 +      addrEl?.focus();
 +      return null;
-     }
--  };
++    }
 +    p.addr = addr;
 +    p.type = $("#sl-plus-pair-type")?.value || "0";
 +    p.justworks = ($("#sl-plus-pair-mode")?.value || "justworks") === "justworks" ? "1" : "0";
 +  }
 +  return p;
 +}
- 
--  const handleSkipCloser = () => {
--    textarea.setSelectionRange(start + 1, start + 1);
--  };
-+document.querySelectorAll("[data-sl-action]").forEach((btn) => {
-+  btn.addEventListener("click", () => {
-+    if (secLabBusy) return;
-+    const confirmText = btn.dataset.slConfirm;
-+    if (confirmText && !window.confirm(confirmText)) return;
-+    const p = slBuildParams(btn, btn.dataset.slAction);
-+    if (!p) return;
-+    if (p.action === "ble_fuzzer" && p.enable === "1" &&
-+        !window.confirm("Boundary writes may modify or disrupt the target. Enable only for authorized devices?")) return;
-+    seclabPlusPost(p);
-+  });
-+});
  
 -  const handleComment = (commentStr) => {
 -    const toggleComment = (line) => {
@@ -7376,6 +7671,19 @@ index fd61602..c46012f 100644
 -          line: indentation + commentStr + " " + content,
 -          offset: commentStr.length + 1,
 -        };
++document.querySelectorAll("[data-sl-action]").forEach((btn) => {
++  btn.addEventListener("click", () => {
++    if (secLabBusy) return;
++    const confirmText = btn.dataset.slConfirm;
++    if (confirmText && !window.confirm(confirmText)) return;
++    const p = slBuildParams(btn, btn.dataset.slAction);
++    if (!p) return;
++    if (p.action === "ble_fuzzer" && p.enable === "1" &&
++        !window.confirm("Boundary writes may modify or disrupt the target. Enable only for authorized devices?")) return;
++    seclabPlusPost(p);
++  });
++});
++
 +$("#sl-plus-pair-mode")?.addEventListener("change", (ev) => {
 +  const jw = ev.target.value === "justworks";
 +  secLabPlusState.pairJustWorks = jw;
@@ -7925,12 +8233,12 @@ index fd61602..c46012f 100644
 +    if (msg) {
 +      msg.className = "ota-status ok";
 +      msg.textContent = `Uploaded ${total} file(s) to /usb_vault`;
-     }
++    }
 +  } catch (e) {
 +    if (msg) {
 +      msg.className = "ota-status err";
 +      msg.textContent = `Upload failed: ${e?.message || e}`;
-+    }
+     }
 +  } finally {
 +    this.value = "";
 +    refreshSecLab();
@@ -15862,7 +16170,7 @@ index 0000000..a28c8b5
 +
 +#endif
 diff --git a/src/core/wifi/webInterface.cpp b/src/core/wifi/webInterface.cpp
-index a8679bd..d55b43c 100644
+index a8679bd..025ce37 100644
 --- a/src/core/wifi/webInterface.cpp
 +++ b/src/core/wifi/webInterface.cpp
 @@ -1,19 +1,46 @@
@@ -16903,10 +17211,7 @@ index a8679bd..d55b43c 100644
 +    tft.setTextColor(bruceConfig.secColor, cardBg);
 +    tft.drawCentreString("Do not power off device", tftWidth / 2, boxY + 84, 1);
 +}
- 
--    tft.setCursor(padX, currentY);
--    tft.print("IP:  " + txt);
--    currentY += LH * FP + 6;
++
 +#if defined(DSOLUTION_183_2MIC)
 +bool otaUiConsumeRedraw() {
 +    if (!uxIsMenuTask()) return false;
@@ -16914,10 +17219,7 @@ index a8679bd..d55b43c 100644
 +    s_otaUiNeedsRedraw = false;
 +    return redraw;
 +}
- 
--    tft.setCursor(padX, currentY);
--    tft.print("Usr: " + String(bruceConfig.webUI.user));
--    currentY += LH * FP + 6;
++
 +void otaUiCheckpoint() {
 +    if (!uxIsMenuTask() || !isOtaInProgress()) return;
 +    wakeUpScreen();
@@ -16946,18 +17248,21 @@ index a8679bd..d55b43c 100644
 +#endif
  
 -    tft.setCursor(padX, currentY);
--    tft.print("Pwd: " + String(bruceConfig.webUI.pwd));
+-    tft.print("IP:  " + txt);
+-    currentY += LH * FP + 6;
 +void drawWebUiScreen(bool mode_ap) {
 +    drawMainBorderWithTitle(mode_ap ? "WebUI (AP)" : "WebUI (LAN)", true);
  
--    tft.setTextColor(TFT_RED, bruceConfig.bgColor);
--    tft.setTextSize(FP);
--    tft.drawCentreString("press Esc to stop", tftWidth / 2, tftHeight - 2 * LH * FP - 5, 1);
+-    tft.setCursor(padX, currentY);
+-    tft.print("Usr: " + String(bruceConfig.webUI.user));
+-    currentY += LH * FP + 6;
 +    String ip = activeWifiIpString();
 +    wifiIP = ip;
 +    int padX = 14;
 +    int y = tftHeight <= 240 ? 44 : 52;
-+
+ 
+-    tft.setCursor(padX, currentY);
+-    tft.print("Pwd: " + String(bruceConfig.webUI.pwd));
 +    if (mode_ap) {
 +        drawWebUiFittedText(
 +            padX, y, "AP: " + bruceConfig.wifiAp.ssid + " / " + bruceConfig.wifiAp.pwd,
@@ -17001,7 +17306,10 @@ index a8679bd..d55b43c 100644
 +        padX, y, "Auth: " + String(bruceConfig.webUI.user) + " / " + String(bruceConfig.webUI.pwd),
 +        TFT_LIGHTGREY, 1
 +    );
-+
+ 
+-    tft.setTextColor(TFT_RED, bruceConfig.bgColor);
+-    tft.setTextSize(FP);
+-    tft.drawCentreString("press Esc to stop", tftWidth / 2, tftHeight - 2 * LH * FP - 5, 1);
 +    tft.setTextColor(bruceConfig.secColor, bruceConfig.bgColor);
 +    tft.setTextSize(1);
 +    tft.drawCentreString("[Esc / Boot Hold] Options & Background", tftWidth / 2, tftHeight - 20, 1);
@@ -17023,7 +17331,7 @@ index a8679bd..d55b43c 100644
  
      RAM_LOG("after MDNS");
      return true;
-@@ -460,59 +1271,863 @@ void configureWebServer() {
+@@ -460,59 +1271,906 @@ void configureWebServer() {
      // System Info
      server->on("/systeminfo", HTTP_GET, [](AsyncWebServerRequest *request) {
          if (checkUserWebAuth(request)) {
@@ -17157,6 +17465,49 @@ index a8679bd..d55b43c 100644
 +            resp += jsonEscape(bruceConfig.wifiAp.ssid);
 +            resp += "\"}";
 +            request->send(200, "application/json", resp);
++        }
++    });
++
++    // Studio — QR Codes & Mic/Sonar status (non-pentest group)
++    server->on("/studio/qrcodes", HTTP_GET, [](AsyncWebServerRequest *request) {
++        if (!checkUserWebAuth(request)) return;
++        String resp="{\"ok\":true,\"qrcodes\":[";
++        bool first=true;
++        for (auto &e : bruceConfig.qrCodes) {
++            if (!first) resp += ",";
++            first=false;
++            resp += "{\"name\":\"" + jsonEscape(e.menuName) + "\",\"content\":\"" + jsonEscape(e.content) + "\"}";
++        }
++        resp += "]}";
++        request->send(200, "application/json", resp);
++    });
++    server->on("/studio/qrcodes", HTTP_POST, [](AsyncWebServerRequest *request) {
++        if (!checkUserWebAuth(request)) return;
++        String act = request->hasArg("action") ? request->arg("action") : "";
++        act.trim(); act.toLowerCase();
++        if (act == "add" && request->hasArg("name") && request->hasArg("content")) {
++            String name = request->arg("name"); name.trim();
++            String content = request->arg("content"); content.trim();
++            if (name.isEmpty() || content.isEmpty()) {
++                request->send(400, "application/json", "{\"ok\":false,\"msg\":\"Name and content required\"}");
++                return;
++            }
++            bool updated=false;
++            for (auto &e : bruceConfig.qrCodes) {
++                if (e.menuName.equalsIgnoreCase(name)) { e.content = content; updated=true; break; }
++            }
++            if (!updated) bruceConfig.addQrCodeEntry(name, content);
++            else bruceConfig.saveFile();
++            request->send(200, "application/json", "{\"ok\":true,\"msg\":\"QR \'"+jsonEscape(name)+"\' saved\"}");
++        } else if (act == "delete" && request->hasArg("name")) {
++            String name = request->arg("name"); name.trim();
++            if (name.isEmpty()) { request->send(400, "application/json", "{\"ok\":false,\"msg\":\"Name required\"}"); return; }
++            size_t before = bruceConfig.qrCodes.size();
++            bruceConfig.removeQrCodeEntry(name);
++            if (bruceConfig.qrCodes.size() < before) request->send(200, "application/json", "{\"ok\":true,\"msg\":\"QR \'"+jsonEscape(name)+"\' deleted\"}");
++            else request->send(404, "application/json", "{\"ok\":false,\"msg\":\"QR not found\"}");
++        } else {
++            request->send(400, "application/json", "{\"ok\":false,\"msg\":\"Invalid action\"}");
 +        }
 +    });
 +
@@ -17430,7 +17781,7 @@ index a8679bd..d55b43c 100644
 +        if (s_otaRestartPending || s_wifiSwitchBusy) {
 +            request->send(409, "application/json", "{\"ok\":false,\"msg\":\"Restart or WiFi change in progress\"}");
 +            return;
-+        }
+         }
 +        if (s_otaInProgress) {
 +            if (isOtaInProgress()) {
 +                request->send(409, "application/json", "{\"ok\":false,\"msg\":\"Another OTA transfer is active\"}");
@@ -17444,7 +17795,7 @@ index a8679bd..d55b43c 100644
 +        if (!otaAllocChunkBuf()) {
 +            request->send(503, "application/json", "{\"ok\":false,\"msg\":\"Insufficient RAM for OTA\"}");
 +            return;
-         }
++        }
 +        otaAcquireLock(totalSize);
 +        if (!Update.begin(totalSize, U_FLASH)) {
 +            String err = Update.errorString();
@@ -17540,11 +17891,10 @@ index a8679bd..d55b43c 100644
 +                        400, "application/json",
 +                        "{\"ok\":false,\"msg\":\"Invalid OTA image! Upload ota.bin, not factory.bin.\"}"
 +                    );
-                     return;
-                 }
--                screenBinBufferSize = desiredSize;
-             }
- 
++                    return;
++                }
++            }
++
 +            if (offset > s_otaTotal || chunkLen > s_otaTotal - offset) {
 +                Update.abort();
 +                otaReleaseLock(true);
@@ -17590,8 +17940,9 @@ index a8679bd..d55b43c 100644
 +                }
 +                if (total == 0 || total > kOtaChunkCap) {
 +                    snprintf(st->err, sizeof(st->err), "Invalid chunk size");
-+                    return;
-+                }
+                     return;
+                 }
+-                screenBinBufferSize = desiredSize;
 +                if (!request->hasArg("offset")) {
 +                    snprintf(st->err, sizeof(st->err), "Missing offset");
 +                    return;
@@ -17627,7 +17978,7 @@ index a8679bd..d55b43c 100644
 +                memcpy(s_otaChunkBuf + index, data, len);
 +                st->received = index + len;
 +                s_otaLastActivityMs = millis();
-+            }
+             }
 +        }
 +    );
 +
@@ -17678,7 +18029,7 @@ index a8679bd..d55b43c 100644
 +        otaReleaseLock(true);
 +        request->send(200, "application/json", "{\"ok\":true,\"msg\":\"OTA aborted\"}");
 +    });
-+
+ 
 +    // WebOTA Firmware Update UI & Legacy Multipart Upload handler
 +    server->on("/ota", HTTP_GET, [](AsyncWebServerRequest *request) {
 +        if (checkUserWebAuth(request, true)) {
@@ -17925,7 +18276,7 @@ index a8679bd..d55b43c 100644
          }
      });
  
-@@ -544,25 +2159,70 @@ void configureWebServer() {
+@@ -544,25 +2202,70 @@ void configureWebServer() {
          if (!checkUserWebAuth(request)) { return; }
          if (request->hasArg("cmnd")) {
              String cmnd = request->arg("cmnd");
@@ -18015,7 +18366,7 @@ index a8679bd..d55b43c 100644
                  }
              } else {
                  if (parseSerialCommand(cmnd, false)) {
-@@ -576,9 +2236,28 @@ void configureWebServer() {
+@@ -576,9 +2279,28 @@ void configureWebServer() {
          }
      });
  
@@ -18046,7 +18397,7 @@ index a8679bd..d55b43c 100644
      });
  
      // List files
-@@ -632,6 +2311,11 @@ void configureWebServer() {
+@@ -632,6 +2354,11 @@ void configureWebServer() {
                  } else {
                      if (strcmp(fileAction.c_str(), "download") == 0) {
                          request->send(*fs, fileName, "application/octet-stream", true);
@@ -18058,7 +18409,7 @@ index a8679bd..d55b43c 100644
                      } else if (strcmp(fileAction.c_str(), "image") == 0) {
                          String extension = fileName.substring(fileName.lastIndexOf('.') + 1);
                          // https://www.iana.org/assignments/media-types/media-types.xhtml#image
-@@ -700,7 +2384,7 @@ void configureWebServer() {
+@@ -700,7 +2427,7 @@ void configureWebServer() {
  
                  File editFile = fs->open(fileName, FILE_WRITE);
                  if (editFile) {
@@ -18067,7 +18418,7 @@ index a8679bd..d55b43c 100644
                          request->send(200, "text/plain", "File edited: " + fileName);
                      } else {
                          request->send(500, "text/plain", "Failed to write to file: " + fileName);
-@@ -720,7 +2404,13 @@ void configureWebServer() {
+@@ -720,7 +2447,13 @@ void configureWebServer() {
      server->on(
          "/upload",
          HTTP_POST,
@@ -18082,7 +18433,7 @@ index a8679bd..d55b43c 100644
          handleUpload
      );
  
-@@ -737,6 +2427,362 @@ void configureWebServer() {
+@@ -737,6 +2470,362 @@ void configureWebServer() {
              }
          }
      });
@@ -18445,7 +18796,7 @@ index a8679bd..d55b43c 100644
      server->begin();
      Serial.println("Webserver started");
  }
-@@ -745,25 +2791,78 @@ void configureWebServer() {
+@@ -745,25 +2834,78 @@ void configureWebServer() {
  **  Function: startWebUi
  **  Start the WebUI
  **********************************************************************/
@@ -18533,7 +18884,7 @@ index a8679bd..d55b43c 100644
          new (server) AsyncWebServer(default_webserverporthttp);
  
          configureWebServer();
-@@ -771,24 +2870,198 @@ void startWebUi(bool mode_ap) {
+@@ -771,24 +2913,198 @@ void startWebUi(bool mode_ap) {
          isWebUIActive = true;
      }
      tft.setLogging();
@@ -18617,9 +18968,10 @@ index a8679bd..d55b43c 100644
 +        } else if (choice == 2 || choice == 3) {
 +            if (stopWebUiFromMenu(choice == 3)) exitWebUiLoop = true;
 +        }
-+    }
+     }
 +}
-+
+ 
+-    bool closeServer = false;
 +/**********************************************************************
 +**  Function: startWebUiHeadless
 +**  Silently connects to saved Wi-Fi (or falls back to AP) and starts the
@@ -18630,7 +18982,7 @@ index a8679bd..d55b43c 100644
 +    if (s_webUiStarting || s_webUiCancelRequested) {
 +        s_webUiQueued = false;
 +        return false;
-     }
++    }
 +    s_webUiStarting = true;
 +    s_webUiQueued = false;
 +
@@ -18641,7 +18993,9 @@ index a8679bd..d55b43c 100644
 +            vTaskDelay(pdMS_TO_TICKS(100));
 +        }
  
--    bool closeServer = false;
+-    options.clear();
+-    options.emplace_back("Run in background", []() {});
+-    options.emplace_back("Exit", [&closeServer]() { closeServer = true; });
 +        if (!s_webUiCancelRequested && radioHasMemForWifi()) {
 +            ensureWifiPlatform();
 +            if (!bruceConfig.wifi.empty() && !s_webUiCancelRequested) {
@@ -18671,16 +19025,17 @@ index a8679bd..d55b43c 100644
 +                WiFi.scanDelete();
 +            }
  
--    options.clear();
--    options.emplace_back("Run in background", []() {});
--    options.emplace_back("Exit", [&closeServer]() { closeServer = true; });
+-    loopOptions(options);
 +            if (s_webUiCancelRequested) {
 +                wifiDisconnect();
 +                s_webUiStarting = false;
 +                return false;
 +            }
  
--    loopOptions(options);
+-    if (closeServer) {
+-        stopWebUi();
+-        vTaskDelay(pdMS_TO_TICKS(100));
+-        if (!keepWifiConnected) { wifiDisconnect(); }
 +            if (WiFi.isConnected()) {
 +                hasNetwork = true;
 +            } else if (allowApFallback && !s_webUiCancelRequested) {
@@ -18689,11 +19044,7 @@ index a8679bd..d55b43c 100644
 +            }
 +        }
 +    }
- 
--    if (closeServer) {
--        stopWebUi();
--        vTaskDelay(pdMS_TO_TICKS(100));
--        if (!keepWifiConnected) { wifiDisconnect(); }
++
 +    if (s_webUiCancelRequested) {
 +        if (!isWebUIActive) wifiDisconnect();
 +        s_webUiStarting = false;
