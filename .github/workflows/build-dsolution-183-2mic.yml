@@ -117,6 +117,7 @@ jobs:
           ./tests/device-ux/run.sh /tmp/Bruce
           ./tests/audio-board/run.sh /tmp/Bruce
           ./tests/webui-control/run.sh /tmp/Bruce
+          ./tests/ota-stability/run.sh /tmp/Bruce
           ./tests/ram-recovery/run.sh /tmp/Bruce
           ./tests/lan-guard/run.sh /tmp/Bruce
           ./tests/ble-audit/run.sh /tmp/Bruce

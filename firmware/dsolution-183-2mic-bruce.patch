@@ -4268,7 +4268,7 @@ index 5290300b..d8ce3c86 100644
 +</body>
  </html>
 diff --git a/embedded_resources/web_interface/index.js b/embedded_resources/web_interface/index.js
-index fd616029..bf00c560 100644
+index fd616029..9df58c7f 100644
 --- a/embedded_resources/web_interface/index.js
 +++ b/embedded_resources/web_interface/index.js
 @@ -6,20 +6,17 @@ const T = {
@@ -4751,7 +4751,7 @@ index fd616029..bf00c560 100644
  }
  
  function renderFileRow(fileList) {
-@@ -346,251 +332,496 @@ function renderFileRow(fileList) {
+@@ -346,251 +332,497 @@ function renderFileRow(fileList) {
      .sort((a, b) => {
        let [aFirst, ...aRest] = a.split(":");
        let [bFirst, ...bRest] = b.split(":");
@@ -5066,6 +5066,7 @@ index fd616029..bf00c560 100644
 +
 +let selectedOtaFile = null;
 +let otaBusy = false;
++let otaCommitting = false;
 +let otaAbortCtrl = null;
 +let otaCancelled = false;
 +
@@ -5384,7 +5385,7 @@ index fd616029..bf00c560 100644
      });
    };
  
-@@ -599,7 +830,6 @@ async function renderTFT(data) {
+@@ -599,7 +831,6 @@ async function renderTFT(data) {
      let img = await loadImage(img_url);
      let drawX = input.x;
      let drawY = input.y;
@@ -5392,7 +5393,7 @@ index fd616029..bf00c560 100644
      if (input.center === 1) {
        drawX += (canvas.width - img.width) / 2;
        drawY += (canvas.height - img.height) / 2;
-@@ -607,12 +837,7 @@ async function renderTFT(data) {
+@@ -607,12 +838,7 @@ async function renderTFT(data) {
      ctx.drawImage(img, drawX, drawY);
    };
  
@@ -5406,7 +5407,7 @@ index fd616029..bf00c560 100644
  
    const drawRoundRect = (ctx, input, fill) => {
      const { x, y, w, h, r } = input;
-@@ -629,60 +854,45 @@ async function renderTFT(data) {
+@@ -629,60 +855,45 @@ async function renderTFT(data) {
  
    let startData = 0;
    const getByteValue = (dataType) => {
@@ -5490,7 +5491,7 @@ index fd616029..bf00c560 100644
        }
      }
      return r;
-@@ -690,279 +900,546 @@ async function renderTFT(data) {
+@@ -690,279 +901,563 @@ async function renderTFT(data) {
  
    let offset = 0;
    ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -5961,11 +5962,13 @@ index fd616029..bf00c560 100644
 +
 +$("#btn-switch-xiaozhi")?.addEventListener("click", async () => {
 +  if (!confirm("Switch device to XiaoZhi HeyLily?")) return;
-+  try { await requestGet("/reboot", { target: "xiaozhi" }); } catch (_) {}
++  try { await requestGet("/reboot", { target: "xiaozhi" }); }
++  catch (_) { alert("Could not switch OS. If OTA is running, wait or cancel it first."); }
 +});
 +$("#btn-switch-bootmenu")?.addEventListener("click", async () => {
 +  if (!confirm("Reboot into Dual-Boot Launcher Menu?")) return;
-+  try { await requestGet("/reboot", { target: "menu" }); } catch (_) {}
++  try { await requestGet("/reboot", { target: "menu" }); }
++  catch (_) { alert("Could not open boot menu. If OTA is running, wait or cancel it first."); }
 +});
 +
 +$("#btn-save-png")?.addEventListener("click", () => {
@@ -6004,16 +6007,18 @@ index fd616029..bf00c560 100644
 +  if (e.dataTransfer.files[0]) validateOtaFile(e.dataTransfer.files[0]);
 +});
 +$("#ota-cancel-btn").addEventListener("click", async () => {
-+  if (!otaBusy) return;
++  if (!otaBusy || otaCommitting) return;
 +  otaCancelled = true;
++  $("#ota-prog-msg").textContent = "Cancelling...";
 +  if (otaAbortCtrl) otaAbortCtrl.abort();
-+  await fetch((IS_DEV ? "/bruce" : "") + "/ota/abort", { method: "POST" }).catch(() => {});
 +});
 +
 +$("#ota-start-btn").addEventListener("click", async () => {
 +  if (!selectedOtaFile || otaBusy) return;
 +  otaBusy = true;
 +  otaCancelled = false;
++  otaCommitting = false;
++  let session = "";
 +  $("#ota-start-btn").disabled = true;
 +  $("#ota-cancel-btn").classList.remove("hidden");
 +  $("#ota-prog").classList.remove("hidden");
@@ -6029,6 +6034,9 @@ index fd616029..bf00c560 100644
 +    const br = await fetch(base + "/ota/begin", { method: "POST", body: beginFd });
 +    const bd = await br.json().catch(() => ({}));
 +    if (!br.ok || !bd.ok) throw new Error(bd.msg || "Failed to initialize OTA");
++    if (typeof bd.session !== "string" || !bd.session) throw new Error("OTA session missing. Refresh the page and try again.");
++    session = bd.session;
++    if (otaCancelled) throw new Error("OTA cancelled by user.");
 +
 +    const chunkSize = bd.chunkSize || 32768;
 +    let offset = 0;
@@ -6045,19 +6053,17 @@ index fd616029..bf00c560 100644
 +        try {
 +          const cr = await fetch(`${base}/ota/chunk?offset=${offset}`, {
 +            method: "POST",
-+            headers: { "Content-Type": "application/octet-stream" },
++            headers: { "Content-Type": "application/octet-stream", "X-OTA-Session": session },
 +            body: slice,
 +            signal: otaAbortCtrl.signal,
 +          });
 +          clearTimeout(timer);
 +          const cd = await cr.json().catch(() => ({}));
-+          if (cr.ok && cd.ok) {
-+            offset = typeof cd.written === "number" ? cd.written : end;
-+            ok = true;
-+            break;
-+          }
-+          if (cr.status === 409 && typeof cd.written === "number") {
-+            offset = cd.written;
++          if ((cr.ok && cd.ok) || (cr.status === 409 && typeof cd.written === "number")) {
++            const next = cd.written;
++            if (!Number.isSafeInteger(next) || next <= offset || next > selectedOtaFile.size)
++              throw new Error("Invalid OTA offset from device");
++            offset = next;
 +            ok = true;
 +            break;
 +          }
@@ -6081,10 +6087,20 @@ index fd616029..bf00c560 100644
 +      $("#ota-prog-msg").textContent = `${(offset / 1048576).toFixed(2)}/${(selectedOtaFile.size / 1048576).toFixed(2)} MB • ${kbps} KB/s • ETA ${eta}s${retries ? ` • ${retries} retries` : ""}`;
 +    }
 +
++    if (otaCancelled) throw new Error("OTA cancelled by user.");
++    otaCommitting = true;
++    $("#ota-cancel-btn").classList.add("hidden");
 +    $("#ota-prog-msg").textContent = "Verifying & committing OTA slot...";
-+    const fr = await fetch(base + "/ota/commit", { method: "POST" });
++    const fr = await fetch(base + "/ota/commit", { method: "POST", headers: { "X-OTA-Session": session } });
 +    const fd = await fr.json().catch(() => ({}));
 +    if (!fr.ok || !fd.ok) throw new Error(fd.msg || "OTA commit failed");
++    if (fd.restartScheduled === false) {
++      otaBusy = false;
++      $("#ota-status").className = "ota-status err";
++      $("#ota-status").textContent = "Firmware verified, but automatic restart failed. Restart the device manually.";
++      $("#ota-prog-msg").textContent = "Restart manually to use the update.";
++      return;
++    }
 +
 +    $("#ota-bar-fill").style.width = "100%";
 +    $("#ota-prog-pct").textContent = "100%";
@@ -6108,9 +6124,11 @@ index fd616029..bf00c560 100644
 +  } catch (err) {
 +    otaBusy = false;
 +    $("#ota-cancel-btn").classList.add("hidden");
-+    await fetch(base + "/ota/abort", { method: "POST" }).catch(() => {});
++    if (session && !otaCommitting) await fetch(base + "/ota/abort", { method: "POST", headers: { "X-OTA-Session": session } }).catch(() => {});
 +    $("#ota-status").className = "ota-status err";
-+    $("#ota-status").textContent = err.message || "OTA upload failed.";
++    $("#ota-status").textContent = otaCommitting
++      ? "Commit reply lost or failed. Check the device and do not power it off; the update may have completed."
++      : (err.message || "OTA upload failed.");
 +    $("#ota-start-btn").disabled = false;
 +  }
 +});
@@ -6211,7 +6229,7 @@ index fd616029..bf00c560 100644
      fetchFiles(drive, path);
      return;
    }
-@@ -970,37 +1447,8 @@ $(".container").addEventListener("click", async (e) => {
+@@ -970,37 +1465,8 @@ $(".container").addEventListener("click", async (e) => {
    let editFileAction = e.target.closest(".act-edit-file");
    if (editFileAction) {
      e.preventDefault();
@@ -6250,7 +6268,7 @@ index fd616029..bf00c560 100644
      return;
    }
  
-@@ -1009,24 +1457,17 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1009,24 +1475,17 @@ $(".container").addEventListener("click", async (e) => {
      e.preventDefault();
      let action = oActionOInput.getAttribute("data-action");
      if (!action) return;
@@ -6280,7 +6298,7 @@ index fd616029..bf00c560 100644
      Dialog.showOneInput(action, value, data);
      return;
    }
-@@ -1034,27 +1475,16 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1034,27 +1493,16 @@ $(".container").addEventListener("click", async (e) => {
    let actDeleteFile = e.target.closest(".act-delete");
    if (actDeleteFile) {
      e.preventDefault();
@@ -6317,7 +6335,7 @@ index fd616029..bf00c560 100644
      return;
    }
  
-@@ -1062,662 +1492,888 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1062,662 +1510,894 @@ $(".container").addEventListener("click", async (e) => {
    if (actPlay) {
      e.preventDefault();
      let cmd = actPlay.getAttribute("data-cmd");
@@ -6459,8 +6477,13 @@ index fd616029..bf00c560 100644
 +    e.preventDefault();
 +    if (!confirm("Reboot the device now?")) return;
 +    Dialog.loading.show("Rebooting...");
-+    try { await requestGet("/reboot"); } catch (_) {}
-+    setTimeout(() => location.reload(), 2500);
++    try {
++      await requestGet("/reboot");
++      setTimeout(() => location.reload(), 2500);
++    } catch (_) {
++      Dialog.loading.hide();
++      alert("Could not reboot. If OTA is running, wait or cancel it first.");
++    }
 +  });
 +});
  
@@ -6477,7 +6500,8 @@ index fd616029..bf00c560 100644
 +    e.preventDefault();
 +    if (!confirm("Reboot into USB ROM Download Bootloader?\n(Device Wi-Fi/WebUI will stop until reflashed or reset)")) return;
 +    Dialog.loading.show("Entering USB ROM Bootloader...");
-+    try { await requestPost("/bootloader", {}); } catch (_) {}
++    try { await requestPost("/bootloader", {}); }
++    catch (_) { Dialog.loading.hide(); alert("Could not enter bootloader. If OTA is running, wait or cancel it first."); }
 +  });
  });
  
@@ -7867,6 +7891,25 @@ index f67b6331..9dd4164c 100644
 +#endif
 +
  #endif // _BRUCE_DISPLAYDRIVERS_USER_SETUP_H
+diff --git a/include/globals.h b/include/globals.h
+index 180e105e..61f922e7 100644
+--- a/include/globals.h
++++ b/include/globals.h
+@@ -242,7 +242,14 @@ void inputLockInit();
+ void inputLock();
+ void inputUnlock();
+ 
++#if defined(DSOLUTION_183_2MIC)
++// Draw on the UI owner task only, never from input or network callbacks.
++void otaUiCheckpoint();
++#endif
+ extern inline bool check(volatile bool &btn, bool resetButtonStatus = true) {
++#if defined(DSOLUTION_183_2MIC)
++    otaUiCheckpoint();
++#endif
+     if (!btn) return false;
+ #ifdef HAS_ENCODER
+     // NextPress/PrevPress here are rotary-encoder-derived, not raw mechanical
 diff --git a/include/tftLogger.h b/include/tftLogger.h
 index ffb96fe4..0ff81d97 100644
 --- a/include/tftLogger.h
@@ -8384,7 +8427,7 @@ index 72d69eba..91ea5cd9 100644
      void removeDisabledMenu(String value);
  
 diff --git a/src/core/display.cpp b/src/core/display.cpp
-index d3fe50ac..5034e06c 100644
+index d3fe50ac..0b38b63d 100644
 --- a/src/core/display.cpp
 +++ b/src/core/display.cpp
 @@ -1,8 +1,11 @@
@@ -8491,17 +8534,23 @@ index d3fe50ac..5034e06c 100644
  
      bool useTapToSelect = menuType == MENU_TYPE_REGULAR ||
                            (bruceConfig.mainMenuStyle == MAIN_MENU_GRID && menuType == MENU_TYPE_MAIN);
-@@ -625,6 +652,9 @@ int loopOptions(
+@@ -625,6 +652,15 @@ int loopOptions(
      while (1) {
          // Check for shutdown before drawing menu to avoid drawing a black bar on the screen
          if (exit) break;
 +#if defined(DSOLUTION_183_2MIC)
++        otaUiCheckpoint();
++        if (otaUiConsumeRedraw()) {
++            if (gridInvalidateHandler) gridInvalidateHandler();
++            firstRender = true;
++            redraw = true;
++        }
 +        uxService();
 +#endif
          if (menuType == MENU_TYPE_MAIN) {
              checkReboot();
              if (devModeCounter >= 5 && !bruceConfig.devMode) {
-@@ -634,6 +664,9 @@ int loopOptions(
+@@ -634,6 +670,9 @@ int loopOptions(
              if (millis() - _clock_bat_timer > 30000) {
                  _clock_bat_timer = millis();
                  drawStatusBar(); // update clock and battery status each 30s
@@ -8511,7 +8560,7 @@ index d3fe50ac..5034e06c 100644
              }
          }
  
-@@ -762,9 +795,29 @@ int loopOptions(
+@@ -762,9 +801,29 @@ int loopOptions(
          if (EscPress && PrevPress) EscPress = false;
  #endif
          if (menuType != MENU_TYPE_MAIN && check(EscPress)) {
@@ -8541,7 +8590,7 @@ index d3fe50ac..5034e06c 100644
          if (menuType == MENU_TYPE_MAIN && mainMenuGridColumns > 1 &&
              mainMenuGridColumns < static_cast<int>(options.size())) {
              int rowStep = 0;
-@@ -823,7 +876,7 @@ int loopOptions(
+@@ -823,7 +882,7 @@ int loopOptions(
          {
              if (PrevPress || check(UpPress)) {
                  devModeCounter = 0;
@@ -8550,7 +8599,7 @@ index d3fe50ac..5034e06c 100644
                  check(PrevPress);
                  int prevEnabled = findNextEnabled(index, -1);
                  if (prevEnabled >= 0) index = prevEnabled;
-@@ -890,6 +943,9 @@ int loopOptions(
+@@ -890,6 +949,9 @@ int loopOptions(
              }
              if (chosen >= options.size() || !options[chosen].enabled) continue;
              Serial.println("Selected: " + String(options[chosen].label));
@@ -8560,7 +8609,7 @@ index d3fe50ac..5034e06c 100644
              options[chosen].operation();
              break;
          }
-@@ -1022,12 +1078,26 @@ Opt_Coord drawOptions(
+@@ -1022,12 +1084,26 @@ Opt_Coord drawOptions(
      // drawStatusBar();
  
      tft.drawPixel(0, 0, bruceConfig.bgColor);
@@ -8587,7 +8636,7 @@ index d3fe50ac..5034e06c 100644
      last_init = init;
      tft.setTextColor(fgcolor, bgcolor);
      tft.setTextSize(FM);
-@@ -1065,6 +1135,11 @@ Opt_Coord drawOptions(
+@@ -1065,6 +1141,11 @@ Opt_Coord drawOptions(
  #endif
  
      cont = 1;
@@ -8599,7 +8648,7 @@ index d3fe50ac..5034e06c 100644
      for (i = 0; i < options.size(); i++) {
          if (i >= init) {
              int16_t cursorY = tft.getCursorY();
-@@ -1072,6 +1147,39 @@ Opt_Coord drawOptions(
+@@ -1072,6 +1153,39 @@ Opt_Coord drawOptions(
              options[i].y = cursorY;
              options[i].w = boxW;
              options[i].h = FM * LH + 4;
@@ -8639,7 +8688,7 @@ index d3fe50ac..5034e06c 100644
              // Erase previously highlited element,
              if (i == last_index) {
                  tft.fillRoundRect(boxX + 2, cursorY + 2, boxW - 4, FM * LH + 2, 3, bruceConfig.bgColor);
-@@ -1107,6 +1215,7 @@ Opt_Coord drawOptions(
+@@ -1107,6 +1221,7 @@ Opt_Coord drawOptions(
  
              // Reset text color for next item
              tft.setTextColor(fgcolor, bgcolor);
@@ -8647,7 +8696,7 @@ index d3fe50ac..5034e06c 100644
  
              cont++;
          }
-@@ -1129,9 +1238,23 @@ Opt_Coord drawOptions(
+@@ -1129,9 +1244,23 @@ Opt_Coord drawOptions(
      int rowsDrawnThisPage = menuSize + (showPageUp ? 1 : 0) + (showPageDown ? 1 : 0);
      for (int r = rowsDrawnThisPage; r < totalRows; r++) {
          int16_t cursorY = tft.getCursorY();
@@ -8672,7 +8721,7 @@ index d3fe50ac..5034e06c 100644
      // update history
      last_index = index;
  #if defined(HAS_TOUCH)
-@@ -1152,6 +1275,137 @@ Opt_Coord drawOptions(
+@@ -1152,6 +1281,137 @@ Opt_Coord drawOptions(
  void drawSubmenu(int index, std::vector<Option> &options, const char *title) {
      drawStatusBar();
      int menuSize = options.size();
@@ -8810,7 +8859,7 @@ index d3fe50ac..5034e06c 100644
      tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
      tft.setTextSize(FP);
      tft.drawPixel(0, 0, 0);
-@@ -1267,6 +1521,7 @@ void drawSubmenu(int index, std::vector<Option> &options, const char *title) {
+@@ -1267,6 +1527,7 @@ void drawSubmenu(int index, std::vector<Option> &options, const char *title) {
      );
      TouchFooter();
  #endif
@@ -8818,7 +8867,7 @@ index d3fe50ac..5034e06c 100644
  }
  
  void drawStatusBar() {
-@@ -1274,20 +1529,27 @@ void drawStatusBar() {
+@@ -1274,20 +1535,27 @@ void drawStatusBar() {
      if (bat > 0) drawBatteryStatus(bat);
  
      if (bruceConfig.theme.border) {
@@ -8848,7 +8897,7 @@ index d3fe50ac..5034e06c 100644
          );
      }
  
-@@ -1302,7 +1564,11 @@ void drawStatusBar() {
+@@ -1302,7 +1570,11 @@ void drawStatusBar() {
          tft.print(timeStr);
      } else {
          setTftDisplay(BORDER_PAD_X, BORDER_PAD_X, bruceConfig.priColor, FP, bruceConfig.bgColor);
@@ -8891,10 +8940,10 @@ index 0345168b..7502c904 100644
  
 diff --git a/src/core/dsolution_ux.cpp b/src/core/dsolution_ux.cpp
 new file mode 100644
-index 00000000..da58194a
+index 00000000..c5e88f71
 --- /dev/null
 +++ b/src/core/dsolution_ux.cpp
-@@ -0,0 +1,273 @@
+@@ -0,0 +1,274 @@
 +#include "dsolution_ux.h"
 +#if defined(DSOLUTION_183_2MIC)
 +#include "core/led_control.h"
@@ -8955,6 +9004,7 @@ index 00000000..da58194a
 +        }
 +    }
 +}
++bool uxIsMenuTask() { return s_menuTask && xTaskGetCurrentTaskHandle() == s_menuTask; }
 +bool uxUiFeedbackEnabled() { return s_uiFeedback; }
 +void uxSetUiFeedback(bool enabled) {
 +    s_uiFeedback = enabled;
@@ -9170,10 +9220,10 @@ index 00000000..da58194a
 +#endif
 diff --git a/src/core/dsolution_ux.h b/src/core/dsolution_ux.h
 new file mode 100644
-index 00000000..d8f06f6b
+index 00000000..c56d7aef
 --- /dev/null
 +++ b/src/core/dsolution_ux.h
-@@ -0,0 +1,23 @@
+@@ -0,0 +1,24 @@
 +#pragma once
 +#if defined(DSOLUTION_183_2MIC)
 +#include <Arduino.h>
@@ -9185,6 +9235,7 @@ index 00000000..d8f06f6b
 +const char *uxSoundModeName(UiSound event);
 +bool uxPreviewSound(UiSound event);
 +void uxInitMenuTask();
++bool uxIsMenuTask();
 +bool uxUiFeedbackEnabled();
 +void uxSetUiFeedback(bool enabled);
 +void uxSound(UiSound event);
@@ -14622,10 +14673,10 @@ index 00000000..a28c8b56
 +
 +#endif
 diff --git a/src/core/wifi/webInterface.cpp b/src/core/wifi/webInterface.cpp
-index a8679bd6..657feb6f 100644
+index a8679bd6..953bb09a 100644
 --- a/src/core/wifi/webInterface.cpp
 +++ b/src/core/wifi/webInterface.cpp
-@@ -1,19 +1,43 @@
+@@ -1,19 +1,45 @@
  #include "webInterface.h"
 +#include "web_navigation.h"
 +#include "core/dsolution_ux.h"
@@ -14662,14 +14713,16 @@ index a8679bd6..657feb6f 100644
  #include <MD5Builder.h>
 +#include <Update.h>
 +#include <algorithm>
++#include <atomic>
  #include <cstddef>
  #include <esp32-hal-psram.h>
  #include <esp_heap_caps.h>
 +#include <esp_ota_ops.h>
++#include <esp_system.h>
  #include <globals.h>
  
  File uploadFile;
-@@ -22,12 +46,550 @@ FS _webFS = LittleFS;
+@@ -22,12 +48,601 @@ FS _webFS = LittleFS;
  const int default_webserverporthttp = 80;
  
  // WiFi as an Access Point
@@ -14743,8 +14796,8 @@ index a8679bd6..657feb6f 100644
 +
 +static constexpr size_t kOtaChunkCap = 32 * 1024;
 +static constexpr uint32_t kOtaIdleTimeoutMs = 90000UL;
-+static volatile bool s_otaInProgress = false;
-+static volatile uint32_t s_otaLastActivityMs = 0;
++static std::atomic<bool> s_otaInProgress{false};
++static std::atomic<uint32_t> s_otaLastActivityMs{0};
 +static volatile size_t s_otaTotal = 0;
 +static volatile bool s_otaScreenDirty = false;
 +static volatile bool s_otaScreenDone = false;
@@ -14756,6 +14809,34 @@ index a8679bd6..657feb6f 100644
 +static bool s_otaValid = false;
 +static String s_otaError = "";
 +static size_t s_otaWritten = 0;
++// All HTTP upload callbacks run on the AsyncTCP task. The transfer token and
++// request owner prevent another tab or a stale/disconnected chunk from writing
++// into the shared 32 KiB buffer or aborting a newer transfer.
++static char s_otaSession[33] = {};
++static uint32_t s_otaEpoch = 0;
++static AsyncWebServerRequest *s_otaChunkOwner = nullptr;
++static AsyncWebServerRequest *s_otaLegacyOwner = nullptr;
++static bool s_otaRestartPending = false;
++#if defined(DSOLUTION_183_2MIC)
++struct OtaUiSnapshot { bool active; bool done; uint8_t pct; size_t written; size_t total; };
++static portMUX_TYPE s_otaUiMux = portMUX_INITIALIZER_UNLOCKED;
++static OtaUiSnapshot s_otaUiSnapshot = {};
++static bool s_otaUiNeedsRedraw = false; // only the UI task reads/writes this
++static void otaUiPublish() {
++    OtaUiSnapshot next = {s_otaInProgress, s_otaScreenDone, s_otaScreenPct, s_otaWritten, s_otaTotal};
++    portENTER_CRITICAL(&s_otaUiMux);
++    s_otaUiSnapshot = next;
++    portEXIT_CRITICAL(&s_otaUiMux);
++}
++static OtaUiSnapshot otaUiSnapshot() {
++    portENTER_CRITICAL(&s_otaUiMux);
++    OtaUiSnapshot out = s_otaUiSnapshot;
++    portEXIT_CRITICAL(&s_otaUiMux);
++    return out;
++}
++#else
++static void otaUiPublish() {}
++#endif
 +
 +static volatile bool s_wifiSwitchBusy = false;
 +static String s_pendingWifiSsid = "";
@@ -14817,6 +14898,10 @@ index a8679bd6..657feb6f 100644
 +
 +static void otaAcquireLock(size_t totalBytes) {
 +    s_otaWritten = 0;
++    ++s_otaEpoch;
++    snprintf(s_otaSession, sizeof(s_otaSession), "%08lx%08lx%08lx%08lx",
++             (unsigned long)esp_random(), (unsigned long)esp_random(),
++             (unsigned long)esp_random(), (unsigned long)esp_random());
 +    s_otaLegacyBufLen = 0;
 +    s_otaTotal = totalBytes;
 +    s_otaError = "";
@@ -14824,16 +14909,23 @@ index a8679bd6..657feb6f 100644
 +    s_otaScreenDone = false;
 +    s_otaScreenPct = 0;
 +    s_otaScreenDirty = true;
-+    s_otaInProgress = true;
 +    s_otaLastActivityMs = millis();
++    s_otaInProgress = true;
++    otaUiPublish();
 +    setCpuFrequencyMhz(CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ);
 +    WiFi.setSleep(WIFI_PS_NONE);
 +}
 +
 +static void otaReleaseLock(bool restorePower) {
 +    s_otaInProgress = false;
++    s_otaValid = false;
++    ++s_otaEpoch;
++    s_otaSession[0] = '\0';
++    s_otaChunkOwner = nullptr;
++    s_otaLegacyOwner = nullptr;
 +    s_otaLegacyBufLen = 0;
 +    s_otaScreenDirty = true;
++    otaUiPublish();
 +    otaFreeBuf();
 +    if (restorePower) { applyPowerProfile(false); }
 +}
@@ -15048,7 +15140,7 @@ index a8679bd6..657feb6f 100644
 +</div>
 +<script>
 +const $=id=>document.getElementById(id);
-+let validFile=null,otaBusy=false,otaAbortCtrl=null,otaCancelled=false;
++let validFile=null,otaBusy=false,otaAbortCtrl=null,otaCancelled=false,otaCommitting=false;
 +window.addEventListener('beforeunload',e=>{if(otaBusy){e.preventDefault();e.returnValue='';}});
 +function loadSysInfo(){
 +  fetch('/systeminfo').then(r=>r.json()).then(d=>{
@@ -15066,9 +15158,11 @@ index a8679bd6..657feb6f 100644
 +  }).catch(()=>{});
 +}
 +function switchOs(target){
-+  fetch('/reboot?target='+encodeURIComponent(target)).then(r=>r.json()).then(d=>{
-+    const info=$('fileinfo');info.className='fileinfo ok';info.textContent=d.msg||'Switching OS...';
-+  }).catch(()=>{});
++  fetch('/reboot?target='+encodeURIComponent(target)).then(async r=>{
++    const d=await r.json();
++    const info=$('fileinfo');info.className=r.ok?'fileinfo ok':'fileinfo err';
++    info.textContent=d.msg||(r.ok?'Switching OS...':'Unable to switch OS.');
++  }).catch(()=>{const info=$('fileinfo');info.className='fileinfo err';info.textContent='Could not reach device.';});
 +}
 +loadSysInfo();
 +async function scanWifi(){
@@ -15141,14 +15235,15 @@ index a8679bd6..657feb6f 100644
 +drop.addEventListener('dragleave',()=>drop.classList.remove('drag'));
 +drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('drag');if(e.dataTransfer.files[0])checkBin(e.dataTransfer.files[0]);});
 +$('cancelBtn').addEventListener('click',async()=>{
-+  if(!otaBusy)return;
++  if(!otaBusy||otaCommitting)return;
 +  otaCancelled=true;
++  $('p-msg').textContent='Cancelling...';
 +  if(otaAbortCtrl)otaAbortCtrl.abort();
-+  await fetch('/ota/abort',{method:'POST'}).catch(()=>{});
 +});
 +$('uploadBtn').addEventListener('click',async()=>{
 +  if(!validFile||otaBusy)return;
-+  otaBusy=true;otaCancelled=false;
++  otaBusy=true;otaCancelled=false;otaCommitting=false;
++  let session='';
 +  $('uploadBtn').disabled=true;$('cancelBtn').style.display='inline-block';
 +  $('prog').style.display='block';$('bar').style.width='0%';$('p-pct').textContent='0%';
 +  $('p-msg').textContent='Initializing OTA slot...';
@@ -15159,6 +15254,9 @@ index a8679bd6..657feb6f 100644
 +    const br=await fetch('/ota/begin',{method:'POST',body:beginFd});
 +    const bd=await br.json();
 +    if(!br.ok||!bd.ok)throw new Error(bd.msg||'Failed to initialize OTA');
++    if(typeof bd.session!=='string'||!bd.session)throw new Error('OTA session missing. Refresh the page and try again.');
++    session=bd.session;
++    if(otaCancelled)throw new Error('Cancelled by user.');
 +    const chunkSize=bd.chunkSize||32768;
 +    let offset=0,retries=0;
 +    while(offset<validFile.size){
@@ -15170,11 +15268,14 @@ index a8679bd6..657feb6f 100644
 +        otaAbortCtrl=new AbortController();
 +        const timer=setTimeout(()=>otaAbortCtrl.abort(),12000);
 +        try{
-+          const cr=await fetch(`/ota/chunk?offset=${offset}`,{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:slice,signal:otaAbortCtrl.signal});
++          const cr=await fetch(`/ota/chunk?offset=${offset}`,{method:'POST',headers:{'Content-Type':'application/octet-stream','X-OTA-Session':session},body:slice,signal:otaAbortCtrl.signal});
 +          clearTimeout(timer);
 +          const cd=await cr.json().catch(()=>({}));
-+          if(cr.ok&&cd.ok){offset=cd.written??end;ok=true;break;}
-+          if(cr.status===409&&typeof cd.written==='number'){offset=cd.written;ok=true;break;}
++          if((cr.ok&&cd.ok)||(cr.status===409&&typeof cd.written==='number')){
++            const next=cd.written;
++            if(!Number.isSafeInteger(next)||next<=offset||next>validFile.size)throw new Error('Invalid OTA offset from device');
++            offset=next;ok=true;break;
++          }
 +          lastErr=cd.msg||`HTTP ${cr.status}`;
 +          if(cr.status>=400&&cr.status<500&&cr.status!==408)break;
 +        }catch(err){
@@ -15193,10 +15294,13 @@ index a8679bd6..657feb6f 100644
 +      $('bar').style.width=pct+'%';$('p-pct').textContent=`${pct}%`;
 +      $('p-msg').textContent=`${(offset/1048576).toFixed(2)}/${(validFile.size/1048576).toFixed(2)} MB • ${kbps} KB/s • ETA ${eta}s${retries?` • ${retries} retries`:''}`;
 +    }
++    if(otaCancelled)throw new Error('Cancelled by user.');
++    otaCommitting=true;$('cancelBtn').style.display='none';
 +    $('p-msg').textContent='Verifying image & committing boot slot...';
-+    const fr=await fetch('/ota/commit',{method:'POST'});
++    const fr=await fetch('/ota/commit',{method:'POST',headers:{'X-OTA-Session':session}});
 +    const fd=await fr.json().catch(()=>({}));
 +    if(!fr.ok||!fd.ok)throw new Error(fd.msg||'Commit failed');
++    if(fd.restartScheduled===false){otaBusy=false;$('cancelBtn').style.display='none';info.className='fileinfo err';info.textContent='Firmware verified, but automatic restart failed. Restart the device manually.';$('p-msg').textContent='Restart manually to use the update.';return;}
 +    $('bar').style.width='100%';$('p-pct').textContent='100%';
 +    info.className='fileinfo ok';info.textContent='OTA Flash Complete! Rebooting device...';
 +    otaBusy=false;$('cancelBtn').style.display='none';
@@ -15211,8 +15315,8 @@ index a8679bd6..657feb6f 100644
 +    location.href='/';
 +  }catch(e){
 +    otaBusy=false;$('cancelBtn').style.display='none';
-+    await fetch('/ota/abort',{method:'POST'}).catch(()=>{});
-+    info.className='fileinfo err';info.textContent=e.message||'OTA upload failed.';
++    if(session&&!otaCommitting)await fetch('/ota/abort',{method:'POST',headers:{'X-OTA-Session':session}}).catch(()=>{});
++    info.className='fileinfo err';info.textContent=otaCommitting?'Commit reply lost or failed. Check the device and do not power it off; the update may have completed.':(e.message||'OTA upload failed.');
 +    $('uploadBtn').disabled=false;
 +  }
 +});
@@ -15222,7 +15326,7 @@ index a8679bd6..657feb6f 100644
  
  // Generate random token
  String generateToken(int length = 24) {
-@@ -42,36 +604,73 @@ String generateToken(int length = 24) {
+@@ -42,36 +657,73 @@ String generateToken(int length = 24) {
  **  Turn off the WebUI
  **********************************************************************/
  void stopWebUi() {
@@ -15311,7 +15415,7 @@ index a8679bd6..657feb6f 100644
  
      // Disconnect WiFi AP mode if it's the WebUI's AP
      // Check if we're in AP or APSTA mode (used by WebUI)
-@@ -82,30 +681,41 @@ void cleanlyStopWebUiForWiFiFeature() {
+@@ -82,30 +734,41 @@ void cleanlyStopWebUiForWiFiFeature() {
          vTaskDelay(pdMS_TO_TICKS(250));
      }
  
@@ -15370,7 +15474,7 @@ index a8679bd6..657feb6f 100644
  }
  
  /**********************************************************************
-@@ -127,6 +737,7 @@ String humanReadableSize(uint64_t bytes) {
+@@ -127,6 +790,7 @@ String humanReadableSize(uint64_t bytes) {
  String listFiles(FS &fs, const String &folder) {
      // log_i("Listfiles Start");
      String returnText = "pa:" + folder + ":0\n";
@@ -15378,7 +15482,7 @@ index a8679bd6..657feb6f 100644
      // Serial.println("Listing files stored on SD");
  
      _webFS = fs;
-@@ -168,19 +779,21 @@ String listFiles(FS &fs, const String &folder) {
+@@ -168,19 +832,26 @@ String listFiles(FS &fs, const String &folder) {
  ** used by server->on functions to discern whether a user has the correct
  ** httpapitoken OR is authenticated by username and password
  **********************************************************************/
@@ -15393,6 +15497,11 @@ index a8679bd6..657feb6f 100644
 +    if (end == -1) end = c.length();
 +    String token = c.substring(start, end);
 +    return bruceConfig.isValidWebUISession(token);
++}
++
++static bool otaSessionMatches(AsyncWebServerRequest *request) {
++    if (!isOtaInProgress() || !s_otaSession[0] || !request->hasHeader("X-OTA-Session")) return false;
++    return request->getHeader("X-OTA-Session")->value() == s_otaSession;
 +}
 +
  bool checkUserWebAuth(AsyncWebServerRequest *request, bool onFailureReturnLoginPage = false) {
@@ -15412,7 +15521,7 @@ index a8679bd6..657feb6f 100644
      if (onFailureReturnLoginPage) {
          serveWebUIFile(request, "login.html", "text/html", true, login_html, login_html_size);
      } else {
-@@ -220,49 +833,68 @@ void createDirRecursive(const String &path, FS fs) {
+@@ -220,49 +891,68 @@ void createDirRecursive(const String &path, FS fs) {
  **  Function: handleUpload
  ** handles uploads to the filserver
  **********************************************************************/
@@ -15520,7 +15629,7 @@ index a8679bd6..657feb6f 100644
      }
  }
  
-@@ -272,43 +904,117 @@ void notFound(AsyncWebServerRequest *request) { request->send(404, "text/plain",
+@@ -272,43 +962,162 @@ void notFound(AsyncWebServerRequest *request) { request->send(404, "text/plain",
  **  Function: drawWebUiScreen
  **  Draw information on screen of WebUI.
  **********************************************************************/
@@ -15545,6 +15654,16 @@ index a8679bd6..657feb6f 100644
 -    if (!mode_ap) txt = WiFi.localIP().toString();
 -    else txt = WiFi.softAPIP().toString();
 +static void drawWebUiOtaOverlay() {
++#if defined(DSOLUTION_183_2MIC)
++    const OtaUiSnapshot snapshot = otaUiSnapshot();
++    const bool done = snapshot.done;
++    const uint8_t pct = snapshot.pct;
++    const size_t written = snapshot.written, total = snapshot.total;
++#else
++    const bool done = s_otaScreenDone;
++    const uint8_t pct = s_otaScreenPct;
++    const size_t written = s_otaWritten, total = s_otaTotal;
++#endif
 +    const int boxX = 16;
 +    const int boxY = 66;
 +    const int boxW = tftWidth - 32;
@@ -15560,14 +15679,14 @@ index a8679bd6..657feb6f 100644
 -    tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
      tft.setTextSize(FP);
 +    tft.setTextColor(bruceConfig.priColor, cardBg);
-+    tft.drawCentreString(s_otaScreenDone ? "OTA Complete!" : "WebOTA Flashing", tftWidth / 2, boxY + 12, 1);
++    tft.drawCentreString(done ? "OTA Complete!" : "WebOTA Flashing", tftWidth / 2, boxY + 12, 1);
 +
 +    const int barX = boxX + 14;
 +    const int barY = boxY + 42;
 +    const int barW = boxW - 28;
 +    const int barH = 16;
 +    tft.drawRoundRect(barX, barY, barW, barH, 4, bruceConfig.secColor);
-+    int fillW = ((barW - 4) * (int)s_otaScreenPct) / 100;
++    int fillW = ((barW - 4) * (int)pct) / 100;
 +    if (fillW > 0) {
 +        tft.fillRoundRect(barX + 2, barY + 2, fillW, barH - 4, 2, bruceConfig.priColor);
 +    }
@@ -15577,10 +15696,10 @@ index a8679bd6..657feb6f 100644
 -        tft.print("Net: BruceNet/brucenet");
 -        currentY += LH * FP + 6;
 +    char progLine[44];
-+    unsigned long kbDone = (unsigned long)(s_otaWritten / 1024);
-+    unsigned long kbTotal = (unsigned long)(s_otaTotal / 1024);
++    unsigned long kbDone = (unsigned long)(written / 1024);
++    unsigned long kbTotal = (unsigned long)(total / 1024);
 +    if (kbTotal > 0) {
-+        snprintf(progLine, sizeof(progLine), "%u%%  (%lu / %lu KB)", s_otaScreenPct, kbDone, kbTotal);
++        snprintf(progLine, sizeof(progLine), "%u%%  (%lu / %lu KB)", pct, kbDone, kbTotal);
 +    } else {
 +        snprintf(progLine, sizeof(progLine), "%lu KB written", kbDone);
      }
@@ -15598,19 +15717,57 @@ index a8679bd6..657feb6f 100644
 -    tft.setCursor(padX, currentY);
 -    tft.print("IP:  " + txt);
 -    currentY += LH * FP + 6;
-+void drawWebUiScreen(bool mode_ap) {
-+    drawMainBorderWithTitle(mode_ap ? "WebUI (AP)" : "WebUI (LAN)", true);
++#if defined(DSOLUTION_183_2MIC)
++bool otaUiConsumeRedraw() {
++    if (!uxIsMenuTask()) return false;
++    bool redraw = s_otaUiNeedsRedraw;
++    s_otaUiNeedsRedraw = false;
++    return redraw;
++}
  
 -    tft.setCursor(padX, currentY);
 -    tft.print("Usr: " + String(bruceConfig.webUI.user));
 -    currentY += LH * FP + 6;
++void otaUiCheckpoint() {
++    if (!uxIsMenuTask() || !isOtaInProgress()) return;
++    wakeUpScreen();
++    OtaUiSnapshot previous = {};
++    bool first = true;
++    while (isOtaInProgress()) {
++        const OtaUiSnapshot current = otaUiSnapshot();
++        if (first || current.pct != previous.pct || current.written != previous.written ||
++            current.total != previous.total || current.done != previous.done) {
++            drawWebUiOtaOverlay();
++            previous = current;
++            first = false;
++        }
++        if (esp_task_wdt_status(nullptr) == ESP_OK) esp_task_wdt_reset();
++        vTaskDelay(pdMS_TO_TICKS(100));
++    }
++    // Discard keys pressed while the transfer owned the screen, so an old
++    // click cannot launch an action immediately after cancel/failure.
++    inputLock();
++    NextPress = PrevPress = UpPress = DownPress = SelPress = EscPress = AnyKeyPress = false;
++    NextPagePress = PrevPagePress = LongPress = SerialCmdPress = false;
++    inputUnlock();
++    s_otaUiNeedsRedraw = true;
++    s_webUiScreenDirty = true;
++}
++#endif
+ 
+-    tft.setCursor(padX, currentY);
+-    tft.print("Pwd: " + String(bruceConfig.webUI.pwd));
++void drawWebUiScreen(bool mode_ap) {
++    drawMainBorderWithTitle(mode_ap ? "WebUI (AP)" : "WebUI (LAN)", true);
+ 
+-    tft.setTextColor(TFT_RED, bruceConfig.bgColor);
+-    tft.setTextSize(FP);
+-    tft.drawCentreString("press Esc to stop", tftWidth / 2, tftHeight - 2 * LH * FP - 5, 1);
 +    String ip = activeWifiIpString();
 +    wifiIP = ip;
 +    int padX = 14;
 +    int y = tftHeight <= 240 ? 44 : 52;
- 
--    tft.setCursor(padX, currentY);
--    tft.print("Pwd: " + String(bruceConfig.webUI.pwd));
++
 +    if (mode_ap) {
 +        drawWebUiFittedText(
 +            padX, y, "AP: " + bruceConfig.wifiAp.ssid + " / " + bruceConfig.wifiAp.pwd,
@@ -15654,17 +15811,14 @@ index a8679bd6..657feb6f 100644
 +        padX, y, "Auth: " + String(bruceConfig.webUI.user) + " / " + String(bruceConfig.webUI.pwd),
 +        TFT_LIGHTGREY, 1
 +    );
- 
--    tft.setTextColor(TFT_RED, bruceConfig.bgColor);
--    tft.setTextSize(FP);
--    tft.drawCentreString("press Esc to stop", tftWidth / 2, tftHeight - 2 * LH * FP - 5, 1);
++
 +    tft.setTextColor(bruceConfig.secColor, bruceConfig.bgColor);
 +    tft.setTextSize(1);
 +    tft.drawCentreString("[Esc / Boot Hold] Options & Background", tftWidth / 2, tftHeight - 20, 1);
  
  #if defined(HAS_TOUCH)
      TouchFooter();
-@@ -379,11 +1085,12 @@ void serveWebUIFile(
+@@ -379,11 +1188,12 @@ void serveWebUIFile(
  static bool startMdnsResponder() {
      RAM_LOG("before MDNS");
  
@@ -15679,7 +15833,7 @@ index a8679bd6..657feb6f 100644
  
      RAM_LOG("after MDNS");
      return true;
-@@ -460,59 +1167,769 @@ void configureWebServer() {
+@@ -460,59 +1270,853 @@ void configureWebServer() {
      // System Info
      server->on("/systeminfo", HTTP_GET, [](AsyncWebServerRequest *request) {
          if (checkUserWebAuth(request)) {
@@ -16026,6 +16180,8 @@ index a8679bd6..657feb6f 100644
 +    struct OtaChunkReqState {
 +        bool authOk;
 +        bool valid;
++        bool busy;
++        uint32_t epoch;
 +        size_t offset;
 +        size_t expectedTotal;
 +        size_t received;
@@ -16038,7 +16194,18 @@ index a8679bd6..657feb6f 100644
 +            request->send(400, "application/json", "{\"ok\":false,\"msg\":\"Missing firmware size\"}");
 +            return;
 +        }
-+        size_t totalSize = (size_t)strtoul(request->arg("size").c_str(), nullptr, 10);
++        String sizeText = request->arg("size");
++        if (sizeText.isEmpty()) {
++            request->send(400, "application/json", "{\"ok\":false,\"msg\":\"Invalid firmware size\"}");
++            return;
++        }
++        for (size_t i = 0; i < sizeText.length(); ++i) {
++            if (sizeText[i] < '0' || sizeText[i] > '9') {
++                request->send(400, "application/json", "{\"ok\":false,\"msg\":\"Invalid firmware size\"}");
++                return;
++            }
++        }
++        size_t totalSize = (size_t)strtoul(sizeText.c_str(), nullptr, 10);
 +        const esp_partition_t *nextPart = esp_ota_get_next_update_partition(NULL);
 +        if (!nextPart) {
 +            request->send(400, "application/json", "{\"ok\":false,\"msg\":\"No OTA partition found\"}");
@@ -16060,14 +16227,24 @@ index a8679bd6..657feb6f 100644
 -            request->send(200, "application/json", response_body);
 +            return;
 +        }
++        if (s_otaRestartPending || s_wifiSwitchBusy) {
++            request->send(409, "application/json", "{\"ok\":false,\"msg\":\"Restart or WiFi change in progress\"}");
++            return;
++        }
 +        if (s_otaInProgress) {
++            if (isOtaInProgress()) {
++                request->send(409, "application/json", "{\"ok\":false,\"msg\":\"Another OTA transfer is active\"}");
++                return;
++            }
++            // A previous transfer has been idle for 90 seconds; invalidate its
++            // request epoch before freeing the buffer and reclaim it here.
 +            Update.abort();
-+            otaFreeBuf();
++            otaReleaseLock(true);
 +        }
 +        if (!otaAllocChunkBuf()) {
 +            request->send(503, "application/json", "{\"ok\":false,\"msg\":\"Insufficient RAM for OTA\"}");
 +            return;
-+        }
+         }
 +        otaAcquireLock(totalSize);
 +        if (!Update.begin(totalSize, U_FLASH)) {
 +            String err = Update.errorString();
@@ -16075,10 +16252,11 @@ index a8679bd6..657feb6f 100644
 +            otaReleaseLock(true);
 +            request->send(500, "application/json", "{\"ok\":false,\"msg\":\"" + err + "\"}");
 +            return;
-         }
++        }
 +        s_otaValid = true;
 +        String ok = "{\"ok\":true,\"chunkSize\":" + String((unsigned long)kOtaChunkCap) +
-+                    ",\"maxSize\":" + String((unsigned long)nextPart->size) + "}";
++                    ",\"maxSize\":" + String((unsigned long)nextPart->size) +
++                    ",\"session\":\"" + String(s_otaSession) + "\"}";
 +        request->send(200, "application/json", ok);
      });
  
@@ -16100,6 +16278,7 @@ index a8679bd6..657feb6f 100644
 +        [](AsyncWebServerRequest *request) {
 +            OtaChunkReqState *st = (OtaChunkReqState *)request->_tempObject;
 +            request->_tempObject = nullptr;
++            if (s_otaChunkOwner == request) s_otaChunkOwner = nullptr;
 +            if (!st) {
 +                if (!checkUserWebAuth(request)) return;
 +                request->send(400, "application/json", "{\"ok\":false,\"msg\":\"Empty OTA chunk body\"}");
@@ -16110,7 +16289,13 @@ index a8679bd6..657feb6f 100644
 +                request->send(401, "text/plain", "Unauthorized");
 +                return;
 +            }
-+            if (!st->valid || st->received != st->expectedTotal || st->received == 0) {
++            if (st->busy) {
++                free(st);
++                request->send(503, "application/json", "{\"ok\":false,\"msg\":\"Another chunk is being received; retry\"}");
++                return;
++            }
++            if (!st->valid || st->received != st->expectedTotal || st->received == 0 ||
++                st->epoch != s_otaEpoch || !otaSessionMatches(request)) {
 +                String msg = st->err[0] ? String(st->err) : String("Incomplete chunk received");
 +                msg.replace("\"", "'");
 +                free(st);
@@ -16128,7 +16313,7 @@ index a8679bd6..657feb6f 100644
 +            }
 +
 +            // Idempotent retry: chunk already written on an earlier attempt whose ACK was lost
-+            if (offset + chunkLen <= s_otaWritten) {
++            if (offset <= s_otaWritten && chunkLen <= s_otaWritten - offset) {
 +                s_otaLastActivityMs = millis();
 +                request->send(
 +                    200, "application/json",
@@ -16155,12 +16340,11 @@ index a8679bd6..657feb6f 100644
 +                        400, "application/json",
 +                        "{\"ok\":false,\"msg\":\"Invalid OTA image! Upload ota.bin, not factory.bin.\"}"
 +                    );
-                     return;
-                 }
--                screenBinBufferSize = desiredSize;
-             }
- 
-+            if (offset + chunkLen > s_otaTotal) {
++                    return;
++                }
++            }
++
++            if (offset > s_otaTotal || chunkLen > s_otaTotal - offset) {
 +                Update.abort();
 +                otaReleaseLock(true);
 +                request->send(400, "application/json", "{\"ok\":false,\"msg\":\"Firmware exceeds expected size\"}");
@@ -16183,6 +16367,7 @@ index a8679bd6..657feb6f 100644
 +            s_otaScreenPct = s_otaTotal > 0 ? (uint8_t)min<uint64_t>(100, (uint64_t)s_otaWritten * 100ULL / s_otaTotal)
 +                                            : 0;
 +            s_otaScreenDirty = true;
++            otaUiPublish();
 +
 +            request->send(
 +                200, "application/json",
@@ -16198,8 +16383,8 @@ index a8679bd6..657feb6f 100644
 +                st->expectedTotal = total;
 +                st->authOk = isWebSessionValid(request);
 +                if (!st->authOk) return;
-+                if (!s_otaInProgress || !s_otaValid || !s_otaChunkBuf) {
-+                    snprintf(st->err, sizeof(st->err), "OTA session not initialized");
++                if (!otaSessionMatches(request) || !s_otaValid || !s_otaChunkBuf) {
++                    snprintf(st->err, sizeof(st->err), "OTA session not initialized or token invalid");
 +                    return;
 +                }
 +                if (total == 0 || total > kOtaChunkCap) {
@@ -16210,12 +16395,29 @@ index a8679bd6..657feb6f 100644
 +                    snprintf(st->err, sizeof(st->err), "Missing offset");
 +                    return;
 +                }
-+                st->offset = (size_t)strtoul(request->arg("offset").c_str(), nullptr, 10);
++                String offsetText = request->arg("offset");
++                if (offsetText.isEmpty()) { snprintf(st->err, sizeof(st->err), "Invalid offset"); return; }
++                for (size_t i = 0; i < offsetText.length(); ++i) {
++                    if (offsetText[i] < '0' || offsetText[i] > '9') {
++                        snprintf(st->err, sizeof(st->err), "Invalid offset"); return;
++                    }
++                }
++                st->offset = (size_t)strtoul(offsetText.c_str(), nullptr, 10);
++                if (st->offset > s_otaTotal) { snprintf(st->err, sizeof(st->err), "Invalid offset"); return; }
++                if (s_otaChunkOwner && s_otaChunkOwner != request) { st->busy = true; return; }
++                s_otaChunkOwner = request;
++                st->epoch = s_otaEpoch;
++                request->onDisconnect([request]() {
++                    if (s_otaChunkOwner == request) s_otaChunkOwner = nullptr;
++                });
 +                st->valid = true;
 +            }
 +            OtaChunkReqState *st = (OtaChunkReqState *)request->_tempObject;
 +            if (!st || !st->authOk || !st->valid) return;
-+            if (index + len > kOtaChunkCap || index + len > total) {
++            if (st->epoch != s_otaEpoch || s_otaChunkOwner != request || !s_otaChunkBuf ||
++                !otaSessionMatches(request)) { st->valid = false; return; }
++            if (index != st->received || index > total || len > total - index ||
++                index > kOtaChunkCap || len > kOtaChunkCap - index) {
 +                st->valid = false;
 +                snprintf(st->err, sizeof(st->err), "Chunk bounds exceeded");
 +                return;
@@ -16230,8 +16432,12 @@ index a8679bd6..657feb6f 100644
 +
 +    server->on("/ota/commit", HTTP_POST, [](AsyncWebServerRequest *request) {
 +        if (!checkUserWebAuth(request)) return;
-+        if (!s_otaInProgress || !s_otaValid) {
-+            request->send(400, "application/json", "{\"ok\":false,\"msg\":\"No active OTA session\"}");
++        if (!otaSessionMatches(request) || !s_otaValid) {
++            request->send(409, "application/json", "{\"ok\":false,\"msg\":\"No active OTA session or invalid token\"}");
++            return;
++        }
++        if (s_otaChunkOwner) {
++            request->send(409, "application/json", "{\"ok\":false,\"msg\":\"Chunk still receiving\"}");
 +            return;
 +        }
 +        if (s_otaWritten != s_otaTotal) {
@@ -16252,20 +16458,23 @@ index a8679bd6..657feb6f 100644
 +        s_otaScreenPct = 100;
 +        otaReleaseLock(false);
 +
++        bool restartQueued = xTaskCreate(delayedRestartTask, "otaRestart", 2048, NULL, 1, NULL) == pdPASS;
++        s_otaRestartPending = restartQueued;
 +        String okJson = "{\"ok\":true,\"bytes\":" + String((unsigned long)finalBytes) +
-+                        ",\"msg\":\"Firmware updated! Rebooting...\"}";
++                        ",\"restartScheduled\":" + (restartQueued ? "true" : "false") + "}";
 +        AsyncWebServerResponse *resp = request->beginResponse(200, "application/json", okJson);
 +        resp->addHeader("Connection", "close");
 +        request->send(resp);
-+        xTaskCreate(delayedRestartTask, "otaRestart", 2048, NULL, 1, NULL);
 +    });
 +
 +    server->on("/ota/abort", HTTP_POST, [](AsyncWebServerRequest *request) {
 +        if (!checkUserWebAuth(request)) return;
-+        if (s_otaInProgress) {
-+            Update.abort();
-+            otaReleaseLock(true);
++        if (!otaSessionMatches(request)) {
++            request->send(409, "application/json", "{\"ok\":false,\"msg\":\"Invalid or expired OTA session\"}");
++            return;
 +        }
++        Update.abort();
++        otaReleaseLock(true);
 +        request->send(200, "application/json", "{\"ok\":true,\"msg\":\"OTA aborted\"}");
 +    });
 +
@@ -16276,57 +16485,76 @@ index a8679bd6..657feb6f 100644
 +        }
 +    });
 +
++    // Legacy multipart remains available, but each request owns its errors and
++    // cannot abort, finish, or overwrite a different active transfer.
++    struct LegacyOtaState { bool started; bool finalized; char error[128]; };
 +    server->on(
 +        "/ota",
 +        HTTP_POST,
 +        [](AsyncWebServerRequest *request) {
 +            if (!checkUserWebAuth(request)) return;
-+            if (s_otaValid && !Update.hasError()) {
-+                s_otaScreenDone = true;
-+                s_otaScreenPct = 100;
-+                otaReleaseLock(false);
-+                String okJson =
-+                    "{\"ok\":true,\"bytes\":" + String((unsigned long)s_otaWritten) +
-+                    ",\"msg\":\"Firmware updated! Rebooting...\"}";
-+                AsyncWebServerResponse *resp = request->beginResponse(200, "application/json", okJson);
-+                resp->addHeader("Connection", "close");
-+                request->send(resp);
-+                xTaskCreate(delayedRestartTask, "otaRestart", 2048, NULL, 1, NULL);
-+            } else {
-+                Update.abort();
-+                otaReleaseLock(true);
-+                String msg = s_otaError.length() > 0 ? s_otaError : "OTA update failed";
++            LegacyOtaState *st = (LegacyOtaState *)request->_tempObject;
++            if (!st || !st->started || s_otaLegacyOwner != request || !st->finalized ||
++                !s_otaInProgress || !s_otaValid || Update.hasError()) {
++                String msg = st && st->error[0] ? String(st->error) : String("OTA upload failed or incomplete");
++                if (s_otaLegacyOwner == request) {
++                    s_otaLegacyOwner = nullptr;
++                    if (s_otaInProgress) { Update.abort(); otaReleaseLock(true); }
++                }
 +                msg.replace("\"", "'");
 +                request->send(400, "application/json", "{\"ok\":false,\"msg\":\"" + msg + "\"}");
++                return;
 +            }
++            size_t finalBytes = s_otaWritten;
++            s_otaLegacyOwner = nullptr;
++            s_otaScreenDone = true;
++            s_otaScreenPct = 100;
++            otaReleaseLock(false);
++            bool restartQueued = xTaskCreate(delayedRestartTask, "otaRestart", 2048, NULL, 1, NULL) == pdPASS;
++            s_otaRestartPending = restartQueued;
++            String okJson = "{\"ok\":true,\"bytes\":" + String((unsigned long)finalBytes) +
++                            ",\"restartScheduled\":" + (restartQueued ? "true" : "false") + "}";
++            AsyncWebServerResponse *resp = request->beginResponse(200, "application/json", okJson);
++            resp->addHeader("Connection", "close");
++            request->send(resp);
 +        },
 +        [](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
++            (void)filename;
++            LegacyOtaState *st = (LegacyOtaState *)request->_tempObject;
 +            if (index == 0) {
-+                if (!isWebSessionValid(request)) {
-+                    s_otaValid = false;
-+                    s_otaError = "Unauthorized";
-+                    return;
++                if (st) return; // no second file in the same multipart request
++                st = (LegacyOtaState *)calloc(1, sizeof(LegacyOtaState));
++                request->_tempObject = st;
++                if (!st) return;
++                if (!isWebSessionValid(request)) { snprintf(st->error, sizeof(st->error), "Unauthorized"); return; }
++                if (s_otaInProgress || s_otaRestartPending || s_wifiSwitchBusy) {
++                    snprintf(st->error, sizeof(st->error), "Another OTA, restart or WiFi change is active"); return;
 +                }
 +                if (len < 36 || data[0] != 0xE9 || data[32] != 0x32 || data[33] != 0x54 ||
 +                    data[34] != 0xCD || data[35] != 0xAB) {
-+                    s_otaValid = false;
-+                    s_otaError = "Invalid OTA image! Upload app binary (ota.bin), not factory.bin.";
-+                    return;
++                    snprintf(st->error, sizeof(st->error), "Invalid OTA image; use ota.bin"); return;
 +                }
 +                if (isDualBootOtaProtected(esp_ota_get_next_update_partition(NULL))) {
-+                    s_otaValid = false;
-+                    s_otaError = "Dual-Boot active: ota_0 holds XiaoZhi HeyLily (use USB Flasher for ota_1).";
-+                    return;
++                    snprintf(st->error, sizeof(st->error), "Dual-Boot protected; use USB flasher"); return;
 +                }
 +                otaAcquireLock(0);
 +                if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) {
-+                    s_otaError = Update.errorString();
++                    snprintf(st->error, sizeof(st->error), "%s", Update.errorString());
 +                    otaReleaseLock(true);
 +                    return;
 +                }
++                s_otaLegacyOwner = request;
++                st->started = true;
 +                s_otaValid = true;
++                request->onDisconnect([request]() {
++                    if (s_otaLegacyOwner == request) {
++                        s_otaLegacyOwner = nullptr;
++                        if (s_otaInProgress) { Update.abort(); otaReleaseLock(true); }
++                    }
++                });
 +            }
-+            if (s_otaValid && len > 0) {
++            if (!st || !st->started || st->finalized || s_otaLegacyOwner != request || !s_otaValid) return;
++            if (len > 0) {
 +                size_t pos = 0;
 +                while (pos < len) {
 +                    size_t space = sizeof(s_otaLegacyBuf) - s_otaLegacyBufLen;
@@ -16336,46 +16564,56 @@ index a8679bd6..657feb6f 100644
 +                    pos += take;
 +                    if (s_otaLegacyBufLen == sizeof(s_otaLegacyBuf)) {
 +                        if (Update.write(s_otaLegacyBuf, s_otaLegacyBufLen) != s_otaLegacyBufLen) {
-+                            s_otaError = Update.errorString();
-+                            s_otaValid = false;
-+                            s_otaLegacyBufLen = 0;
-+                            Update.abort();
-+                            otaReleaseLock(true);
++                            snprintf(st->error, sizeof(st->error), "%s", Update.errorString());
++                            s_otaLegacyOwner = nullptr;
++                            Update.abort(); otaReleaseLock(true);
 +                            return;
 +                        }
 +                        s_otaWritten += s_otaLegacyBufLen;
++                        s_otaScreenDirty = true;
++                        otaUiPublish();
 +                        s_otaLegacyBufLen = 0;
 +                        s_otaLastActivityMs = millis();
 +                    }
 +                }
 +            }
-+            if (final && s_otaValid) {
++            if (final) {
 +                if (s_otaLegacyBufLen > 0) {
 +                    if (Update.write(s_otaLegacyBuf, s_otaLegacyBufLen) != s_otaLegacyBufLen) {
-+                        s_otaError = Update.errorString();
-+                        s_otaValid = false;
-+                        s_otaLegacyBufLen = 0;
-+                        Update.abort();
-+                        otaReleaseLock(true);
++                        snprintf(st->error, sizeof(st->error), "%s", Update.errorString());
++                        s_otaLegacyOwner = nullptr;
++                        Update.abort(); otaReleaseLock(true);
 +                        return;
 +                    }
 +                    s_otaWritten += s_otaLegacyBufLen;
++                    s_otaScreenDirty = true;
++                    otaUiPublish();
 +                    s_otaLegacyBufLen = 0;
 +                }
 +                if (!Update.end(true)) {
-+                    s_otaError = Update.errorString();
-+                    s_otaValid = false;
-+                }
-+            }
++                    snprintf(st->error, sizeof(st->error), "%s", Update.errorString());
++                    s_otaLegacyOwner = nullptr;
++                    Update.abort(); otaReleaseLock(true);
+                     return;
+                 }
+-                screenBinBufferSize = desiredSize;
++                st->finalized = true;
+             }
 +        }
 +    );
 +
 +    // Software USB ROM Bootloader trigger
 +    auto handleBootloaderReq = [](AsyncWebServerRequest *request) {
-+        if (checkUserWebAuth(request)) {
-+            request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Rebooting to USB Bootloader...\"}");
-+            xTaskCreate(delayedBootloaderTask, "webBootloader", 3072, NULL, 1, NULL);
++        if (!checkUserWebAuth(request)) return;
++        if (isOtaInProgress() || s_otaRestartPending) {
++            request->send(409, "application/json", "{\"ok\":false,\"msg\":\"OTA in progress; wait or cancel first\"}");
++            return;
 +        }
++        if (xTaskCreate(delayedBootloaderTask, "webBootloader", 3072, NULL, 1, NULL) != pdPASS) {
++            request->send(503, "application/json", "{\"ok\":false,\"msg\":\"Unable to schedule restart\"}");
++            return;
++        }
++        request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Rebooting to USB Bootloader...\"}");
 +    };
 +    server->on("/bootloader", HTTP_POST, handleBootloaderReq);
 +    server->on("/bootloader", HTTP_GET, handleBootloaderReq);
@@ -16450,7 +16688,7 @@ index a8679bd6..657feb6f 100644
 +        applyPowerProfile(isScreenOff);
 +        request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Screen settings saved\"}");
 +    });
-+
+ 
 +    // Get Screen
 +    server->on("/getscreen", HTTP_GET, [](AsyncWebServerRequest *request) {
 +        if (checkUserWebAuth(request)) {
@@ -16487,7 +16725,7 @@ index a8679bd6..657feb6f 100644
          }
      });
  
-@@ -544,25 +1961,70 @@ void configureWebServer() {
+@@ -544,25 +2148,70 @@ void configureWebServer() {
          if (!checkUserWebAuth(request)) { return; }
          if (request->hasArg("cmnd")) {
              String cmnd = request->arg("cmnd");
@@ -16577,7 +16815,7 @@ index a8679bd6..657feb6f 100644
                  }
              } else {
                  if (parseSerialCommand(cmnd, false)) {
-@@ -576,9 +2038,22 @@ void configureWebServer() {
+@@ -576,9 +2225,28 @@ void configureWebServer() {
          }
      });
  
@@ -16586,23 +16824,29 @@ index a8679bd6..657feb6f 100644
      server->on("/reboot", HTTP_GET, [](AsyncWebServerRequest *request) {
 -        if (checkUserWebAuth(request)) { ESP.restart(); }
 +        if (!checkUserWebAuth(request)) return;
++        if (isOtaInProgress() || s_otaRestartPending) {
++            request->send(409, "application/json", "{\"ok\":false,\"msg\":\"OTA in progress; wait or cancel first\"}");
++            return;
++        }
 +        String target = request->hasArg("target") ? request->arg("target") : "";
++        TaskFunction_t task = delayedRestartTask;
++        const char *taskName = "webReboot";
++        const char *message = "Rebooting...";
++        int stack = 2048;
 +        if (target == "xiaozhi" && isDualBootActive()) {
-+            request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Switching to XiaoZhi HeyLily...\"}");
-+            xTaskCreate(delayedXiaoZhiTask, "webXiaoZhi", 3072, NULL, 1, NULL);
++            task = delayedXiaoZhiTask; taskName = "webXiaoZhi"; message = "Switching to XiaoZhi HeyLily..."; stack = 3072;
++        } else if (target == "menu" && isDualBootActive()) {
++            task = delayedBootMenuTask; taskName = "webBootMenu"; message = "Opening Dual-Boot Menu..."; stack = 3072;
++        }
++        if (xTaskCreate(task, taskName, stack, NULL, 1, NULL) != pdPASS) {
++            request->send(503, "application/json", "{\"ok\":false,\"msg\":\"Unable to schedule restart\"}");
 +            return;
 +        }
-+        if (target == "menu" && isDualBootActive()) {
-+            request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Opening Dual-Boot Menu...\"}");
-+            xTaskCreate(delayedBootMenuTask, "webBootMenu", 3072, NULL, 1, NULL);
-+            return;
-+        }
-+        request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Rebooting...\"}");
-+        xTaskCreate(delayedRestartTask, "webReboot", 2048, NULL, 1, NULL);
++        request->send(200, "application/json", String("{\"ok\":true,\"msg\":\"") + message + "\"}");
      });
  
      // List files
-@@ -632,6 +2107,11 @@ void configureWebServer() {
+@@ -632,6 +2300,11 @@ void configureWebServer() {
                  } else {
                      if (strcmp(fileAction.c_str(), "download") == 0) {
                          request->send(*fs, fileName, "application/octet-stream", true);
@@ -16614,7 +16858,7 @@ index a8679bd6..657feb6f 100644
                      } else if (strcmp(fileAction.c_str(), "image") == 0) {
                          String extension = fileName.substring(fileName.lastIndexOf('.') + 1);
                          // https://www.iana.org/assignments/media-types/media-types.xhtml#image
-@@ -700,7 +2180,7 @@ void configureWebServer() {
+@@ -700,7 +2373,7 @@ void configureWebServer() {
  
                  File editFile = fs->open(fileName, FILE_WRITE);
                  if (editFile) {
@@ -16623,7 +16867,7 @@ index a8679bd6..657feb6f 100644
                          request->send(200, "text/plain", "File edited: " + fileName);
                      } else {
                          request->send(500, "text/plain", "Failed to write to file: " + fileName);
-@@ -720,7 +2200,13 @@ void configureWebServer() {
+@@ -720,7 +2393,13 @@ void configureWebServer() {
      server->on(
          "/upload",
          HTTP_POST,
@@ -16638,7 +16882,7 @@ index a8679bd6..657feb6f 100644
          handleUpload
      );
  
-@@ -737,6 +2223,348 @@ void configureWebServer() {
+@@ -737,6 +2416,348 @@ void configureWebServer() {
              }
          }
      });
@@ -16987,7 +17231,7 @@ index a8679bd6..657feb6f 100644
      server->begin();
      Serial.println("Webserver started");
  }
-@@ -745,25 +2573,78 @@ void configureWebServer() {
+@@ -745,25 +2766,78 @@ void configureWebServer() {
  **  Function: startWebUi
  **  Start the WebUI
  **********************************************************************/
@@ -17029,9 +17273,8 @@ index a8679bd6..657feb6f 100644
 +        wifiIP = WiFi.localIP().toString();
 +        if (server && !mdnsRunning) mdnsRunning = startMdnsResponder();
 +        return true;
-     }
- 
--    // configure web server
++    }
++
 +    if (WiFi.getMode() & WIFI_MODE_AP) {
 +        if (mdnsRunning) {
 +            MDNS.end();
@@ -17045,8 +17288,9 @@ index a8679bd6..657feb6f 100644
 +        wifiIP = WiFi.localIP().toString();
 +        if (server) mdnsRunning = startMdnsResponder();
 +        return true;
-+    }
-+
+     }
+ 
+-    // configure web server
 +    return wifiConnectMenu(WIFI_STA);
 +}
 +
@@ -17075,7 +17319,7 @@ index a8679bd6..657feb6f 100644
          new (server) AsyncWebServer(default_webserverporthttp);
  
          configureWebServer();
-@@ -771,24 +2652,198 @@ void startWebUi(bool mode_ap) {
+@@ -771,24 +2845,198 @@ void startWebUi(bool mode_ap) {
          isWebUIActive = true;
      }
      tft.setLogging();
@@ -17159,10 +17403,9 @@ index a8679bd6..657feb6f 100644
 +        } else if (choice == 2 || choice == 3) {
 +            if (stopWebUiFromMenu(choice == 3)) exitWebUiLoop = true;
 +        }
-     }
++    }
 +}
- 
--    bool closeServer = false;
++
 +/**********************************************************************
 +**  Function: startWebUiHeadless
 +**  Silently connects to saved Wi-Fi (or falls back to AP) and starts the
@@ -17173,7 +17416,7 @@ index a8679bd6..657feb6f 100644
 +    if (s_webUiStarting || s_webUiCancelRequested) {
 +        s_webUiQueued = false;
 +        return false;
-+    }
+     }
 +    s_webUiStarting = true;
 +    s_webUiQueued = false;
 +
@@ -17184,9 +17427,7 @@ index a8679bd6..657feb6f 100644
 +            vTaskDelay(pdMS_TO_TICKS(100));
 +        }
  
--    options.clear();
--    options.emplace_back("Run in background", []() {});
--    options.emplace_back("Exit", [&closeServer]() { closeServer = true; });
+-    bool closeServer = false;
 +        if (!s_webUiCancelRequested && radioHasMemForWifi()) {
 +            ensureWifiPlatform();
 +            if (!bruceConfig.wifi.empty() && !s_webUiCancelRequested) {
@@ -17216,17 +17457,16 @@ index a8679bd6..657feb6f 100644
 +                WiFi.scanDelete();
 +            }
  
--    loopOptions(options);
+-    options.clear();
+-    options.emplace_back("Run in background", []() {});
+-    options.emplace_back("Exit", [&closeServer]() { closeServer = true; });
 +            if (s_webUiCancelRequested) {
 +                wifiDisconnect();
 +                s_webUiStarting = false;
 +                return false;
 +            }
  
--    if (closeServer) {
--        stopWebUi();
--        vTaskDelay(pdMS_TO_TICKS(100));
--        if (!keepWifiConnected) { wifiDisconnect(); }
+-    loopOptions(options);
 +            if (WiFi.isConnected()) {
 +                hasNetwork = true;
 +            } else if (allowApFallback && !s_webUiCancelRequested) {
@@ -17235,7 +17475,11 @@ index a8679bd6..657feb6f 100644
 +            }
 +        }
 +    }
-+
+ 
+-    if (closeServer) {
+-        stopWebUi();
+-        vTaskDelay(pdMS_TO_TICKS(100));
+-        if (!keepWifiConnected) { wifiDisconnect(); }
 +    if (s_webUiCancelRequested) {
 +        if (!isWebUIActive) wifiDisconnect();
 +        s_webUiStarting = false;
@@ -17288,10 +17532,10 @@ index a8679bd6..657feb6f 100644
      }
  }
 diff --git a/src/core/wifi/webInterface.h b/src/core/wifi/webInterface.h
-index d14ae9f0..a9708c0b 100644
+index d14ae9f0..775ed9f3 100644
 --- a/src/core/wifi/webInterface.h
 +++ b/src/core/wifi/webInterface.h
-@@ -23,5 +23,14 @@ void serveWebUIFile(
+@@ -23,5 +23,18 @@ void serveWebUIFile(
  );
  void configureWebServer();
  void startWebUi(bool mode_ap = false);
@@ -17301,6 +17545,10 @@ index d14ae9f0..a9708c0b 100644
 +bool isWebUiStarting();
 +bool isWebUiActiveOrStarting();
 +bool isOtaInProgress();
++#if defined(DSOLUTION_183_2MIC)
++void otaUiCheckpoint();
++bool otaUiConsumeRedraw();
++#endif
  void stopWebUi();
 +// Menu-driven stop refuses to interrupt OTA or an ongoing network transition.
 +bool stopWebUiFromMenu(bool stopWifi = false);
