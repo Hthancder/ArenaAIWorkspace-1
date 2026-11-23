@@ -12007,7 +12007,7 @@ index 0000000..83c7f4b
 +
 +#endif
 diff --git a/src/core/menu_items/BleMenu.cpp b/src/core/menu_items/BleMenu.cpp
-index ed144ba..2643555 100644
+index ed144ba..be16b12 100644
 --- a/src/core/menu_items/BleMenu.cpp
 +++ b/src/core/menu_items/BleMenu.cpp
 @@ -3,8 +3,11 @@
@@ -12022,7 +12022,7 @@ index ed144ba..2643555 100644
  #if !defined(LITE_VERSION)
  #include "modules/ble/BLE_Suite.h"
  #else
-@@ -25,22 +28,30 @@ void BleMenu::optionsMenu() {
+@@ -25,22 +28,29 @@ void BleMenu::optionsMenu() {
      }
  #endif
  #if !defined(LITE_VERSION)
@@ -12030,7 +12030,7 @@ index ed144ba..2643555 100644
 -    options.push_back({"BLE Scan", ble_scan});
 +    // Discovery and defensive tools first, then active lab tools and HID utilities.
 +    options.push_back({"Scan & Discover", ble_scan});
-+    options.push_back({"Privacy Guard", ble_guard_setup});
++    options.push_back({"Privacy & Anomaly Guard", ble_guard_setup});
 +    options.push_back({"GATT Explorer / Clone", ble_gatt_cloner_setup});
 +    options.push_back({"Security Audit", ble_security_audit_setup});
 +    options.push_back({"BLE Spam Lab", [=]() { spamMenu(); }});
@@ -12045,7 +12045,6 @@ index ed144ba..2643555 100644
 -#if !defined(LITE_VERSION)
 +    options.push_back({"BLE HID Payloads", [=]() {
 +                           std::vector<Option> hidOptions = {
-+                               {"Fixed-text Lab Test", []() { hid_text_smoke_test(true); }},
 +                               {"Interactive BLE Keyboard", [=]() { ducky_keyboard(hid_ble, true); }},
 +                               {"DuckyScript Payloads", [=]() { ducky_setup(hid_ble, true); }},
 +                               {"Media Commands", [=]() { MediaCommands(hid_ble, true); }},
@@ -12331,10 +12330,10 @@ index 443e395..4c4346f 100644
      addOptionToMainMenu();
  
 diff --git a/src/core/menu_items/OthersMenu.cpp b/src/core/menu_items/OthersMenu.cpp
-index 40f9956..63e53b8 100644
+index 40f9956..5ddee2f 100644
 --- a/src/core/menu_items/OthersMenu.cpp
 +++ b/src/core/menu_items/OthersMenu.cpp
-@@ -2,12 +2,17 @@
+@@ -2,16 +2,43 @@
  
  #include "core/display.h"
  #include "core/utils.h"
@@ -12352,7 +12351,33 @@ index 40f9956..63e53b8 100644
  #include "modules/others/tururururu.h"
  #include "modules/others/u2f.h"
  // Removed: #include "modules/others/timer.h"
-@@ -19,6 +24,9 @@ void OthersMenu::optionsMenu() {
+ 
++namespace {
++void showUsbDescriptorInfo() {
++    String info = "Firmware USB identity\n";
++#ifdef USB_VID
++    info += "VID: 0x";
++    info += String((uint32_t)USB_VID, HEX);
++    info += '\n';
++#else
++    info += "VID: not set by this board config\n";
++#endif
++#ifdef USB_PID
++    info += "PID: 0x";
++    info += String((uint32_t)USB_PID, HEX);
++    info += '\n';
++#else
++    info += "PID: not set by this board config\n";
++#endif
++    info += "Build-time identity only; no spoofing.";
++    displayInfo(info, true);
++}
++} // namespace
++
+ void OthersMenu::optionsMenu() {
+     options = {
+         {"QRCodes",      qrcode_menu                  },
+@@ -19,6 +46,9 @@ void OthersMenu::optionsMenu() {
  
  #if defined(HAS_MICROPHONE)
          {"Microphone",   [this]() { micMenu(); }      }, //@deveclipse
@@ -12362,7 +12387,7 @@ index 40f9956..63e53b8 100644
  #endif
  
  // New consolidated BadUSB & HID submenu
-@@ -26,13 +34,18 @@ void OthersMenu::optionsMenu() {
+@@ -26,13 +56,18 @@ void OthersMenu::optionsMenu() {
          {"BadUSB & HID", [this]() { badUsbHidMenu(); }},
  #endif
  
@@ -12382,13 +12407,13 @@ index 40f9956..63e53b8 100644
      addOptionToMainMenu();
      loopOptions(options, MENU_TYPE_SUBMENU, "Others");
  }
-@@ -40,8 +53,18 @@ void OthersMenu::optionsMenu() {
+@@ -40,8 +75,18 @@ void OthersMenu::optionsMenu() {
  void OthersMenu::badUsbHidMenu() {
      options = {
  #ifndef LITE_VERSION
 -        {"BadUSB",       [=]() { ducky_setup(hid_usb, false); }   },
 -        {"USB Keyboard", [=]() { ducky_keyboard(hid_usb, false); }},
-+        {"Fixed-text USB Lab Test", []() { hid_text_smoke_test(false); }},
++        {"USB Descriptor Info", showUsbDescriptorInfo},
 +        {"Interactive USB Keyboard", [=]() { ducky_keyboard(hid_usb, false); }},
 +        {"DuckyScript Payloads", [=]() { ducky_setup(hid_usb, false); }},
 +#endif
@@ -12403,7 +12428,7 @@ index 40f9956..63e53b8 100644
  #endif
  
  #ifdef USB_as_HID
-@@ -58,10 +81,14 @@ void OthersMenu::badUsbHidMenu() {
+@@ -58,10 +103,14 @@ void OthersMenu::badUsbHidMenu() {
  void OthersMenu::micMenu() {
      options = {
  #if defined(HAS_MICROPHONE)
@@ -12628,10 +12653,10 @@ index 0000000..0fb739c
 +
 +#endif
 diff --git a/src/core/menu_items/WifiMenu.cpp b/src/core/menu_items/WifiMenu.cpp
-index 2e6512c..2e455fa 100644
+index 2e6512c..af2c415 100644
 --- a/src/core/menu_items/WifiMenu.cpp
 +++ b/src/core/menu_items/WifiMenu.cpp
-@@ -16,149 +16,267 @@
+@@ -16,149 +16,279 @@
  #include "modules/wifi/netcut.h"
  #include "modules/wifi/responder.h"
  #include "modules/wifi/scan_hosts.h"
@@ -12639,6 +12664,7 @@ index 2e6512c..2e455fa 100644
 +#include "modules/wifi/pmkid_capture.h"
  #include "modules/wifi/sniffer.h"
  #include "modules/wifi/wifi_atks.h"
++#include "modules/gps/wardriving.h"
  
  #ifndef LITE_VERSION
  #include "modules/pwnagotchi/pwnagotchi.h"
@@ -12729,6 +12755,16 @@ index 2e6512c..2e455fa 100644
 +    ARPScanner{netif};
 +}
 +
++void localWifiWardrive() {
++    std::vector<Option> consent = {
++        {"Start WiFi-only local survey", []() {}},
++        {"Cancel", []() {}},
++    };
++    if (loopOptions(consent, MENU_TYPE_SUBMENU, "Stores AP + GPS data locally") == 0) {
++        Wardriving(true, false);
++    }
++}
++
 +} // namespace
 +
  void WifiMenu::optionsMenu() {
@@ -12747,7 +12783,7 @@ index 2e6512c..2e455fa 100644
 +        options.push_back({webUiLabel, loopOptionsWebUi});
 +        options.push_back({"WiFi Tools", [this]() { toolsMenu(); }});
 +#ifndef LITE_VERSION
-+        options.push_back({"Scan & Analyze", [this]() { scanMenu(); }});
++        options.push_back({"Survey & Analyze", [this]() { scanMenu(); }});
 +        options.push_back({"Defense", [this]() { defenseMenu(); }});
 +        options.push_back({"LAN & HTTP", [this]() { lanMenu(); }});
 +        options.push_back({"Chains", [this]() { chainsMenu(); }});
@@ -12807,8 +12843,9 @@ index 2e6512c..2e455fa 100644
 +    while (rebuild) {
 +        rebuild = false;
 +        std::vector<Option> list;
-+        list.push_back({"Probe Radar", probe_radar_setup});
++        list.push_back({"Probe Radar (local report)", probe_radar_setup});
 +        list.push_back({"2.4 GHz Analyzer", channel_analyzer_setup});
++        list.push_back({"GPS Wardrive (local, WiFi only)", localWifiWardrive});
  #if defined(CONFIG_IDF_TARGET_ESP32C5)
 -    options.push_back({"Dual Band Analyzer", dual_band_analyzer_setup});
 -#endif
@@ -12844,7 +12881,7 @@ index 2e6512c..2e455fa 100644
 +        list.push_back({"CSI Motion Radar", csi_radar_setup});
 +        list.push_back(hiddenNetworksOption(rebuild));
 +        list.push_back(backOption());
-+        loopOptions(list, MENU_TYPE_SUBMENU, "Scan & Analyze");
++        loopOptions(list, MENU_TYPE_SUBMENU, "Survey & Analyze");
 +    }
 +}
  
@@ -12902,6 +12939,8 @@ index 2e6512c..2e455fa 100644
 +    }
  }
 +#endif
++
++void WifiMenu::chainsMenu() { chain_orchestrator_setup(); }
  
 -void WifiMenu::configMenu() {
 -    std::vector<Option> wifiOptions;
@@ -12941,8 +12980,6 @@ index 2e6512c..2e455fa 100644
 -        });
 -
 -        wifiOptions.push_back(opt);
-+void WifiMenu::chainsMenu() { chain_orchestrator_setup(); }
-+
 +void WifiMenu::toolsMenu() {
 +    bool rebuild = true;
 +    while (rebuild) {
@@ -13006,7 +13043,7 @@ index 2e6512c..2e455fa 100644
  }
  
  void WifiMenu::drawIcon(float scale) {
-@@ -168,23 +286,11 @@ void WifiMenu::drawIcon(float scale) {
+@@ -168,23 +298,11 @@ void WifiMenu::drawIcon(float scale) {
  
      tft.fillCircle(iconCenterX, iconCenterY + deltaY, radius, bruceConfig.priColor);
      tft.drawArc(
@@ -20732,7 +20769,7 @@ index 0000000..2779eda
 +
 +#endif
 diff --git a/src/modules/badusb_ble/ducky_typer.cpp b/src/modules/badusb_ble/ducky_typer.cpp
-index c6fd084..439b13b 100644
+index c6fd084..b6f39cf 100644
 --- a/src/modules/badusb_ble/ducky_typer.cpp
 +++ b/src/modules/badusb_ble/ducky_typer.cpp
 @@ -6,6 +6,7 @@
@@ -20764,29 +20801,7 @@ index c6fd084..439b13b 100644
      {"ALTCHAR",               0,                DuckyCommandType_AltChar           },
      {"ALTSTRING",             0,                DuckyCommandType_AltString         },
      {"ALTCODE",               0,                DuckyCommandType_AltString         },
-@@ -635,7 +641,9 @@ void ducky_startKb(HIDInterface *&hid, bool ble, int functionId) {
-                 return;
-             }
- 
--            // Set function-specific MAC address (Logitech OUIs)
-+            // Standard HID modes retain their existing function-specific addresses.
-+            // functionId 4 is reserved for the clearly named lab smoke test and does
-+            // not impersonate a third-party keyboard identity.
-             if (functionId >= 0 && functionId < 4) {
-                 Serial.printf("[ducky_startKb] Setting MAC for function %d: ", functionId);
-                 for (int i = 0; i < 6; i++) {
-@@ -647,8 +655,8 @@ void ducky_startKb(HIDInterface *&hid, bool ble, int functionId) {
-             }
- 
-             // Build device name with suffix for unique identification
--            String deviceName = bruceConfigPins.bleName;
--            if (deviceName.isEmpty()) { deviceName = "keyboard_99"; }
-+            String deviceName = functionId == 4 ? String("Bruce Lab HID") : bruceConfigPins.bleName;
-+            if (deviceName.isEmpty()) deviceName = "keyboard_99";
- 
-             Serial.printf("[ducky_startKb] Device name: %s\n", deviceName.c_str());
- 
-@@ -867,6 +875,11 @@ void key_input(FS fs, const String &bad_script, HIDInterface *_hid) {
+@@ -867,6 +873,11 @@ void key_input(FS fs, const String &bad_script, HIDInterface *_hid) {
      static int nextStringDelay = -1;
      static int defaultStringDelay = bruceConfig.badUSBBLEKeyDelay;
      currentOutputY = 0;
@@ -20798,7 +20813,7 @@ index c6fd084..439b13b 100644
  
      _hid->releaseAll();
  
-@@ -949,6 +962,19 @@ void key_input(FS fs, const String &bad_script, HIDInterface *_hid) {
+@@ -949,6 +960,19 @@ void key_input(FS fs, const String &bad_script, HIDInterface *_hid) {
                      if (strcmp(PriCmd->command, "STRINGLN") == 0) _hid->println();
  
                      if (nextStringDelay >= 0) { nextStringDelay = -1; }
@@ -20818,77 +20833,8 @@ index c6fd084..439b13b 100644
                  } else if (PriCmd->type == DuckyCommandType_WaitForButtonPress) {
                      printStatusBadUSBBLE("Waiting for button press");
                      bool waitSelect = false;
-@@ -1047,6 +1073,68 @@ void key_input_from_string(const String &text) {
- // DUCKY_KEYBOARD - Interactive keyboard mode (USB or BLE)
- // ============================================================================
- 
-+void hid_text_smoke_test(bool ble) {
-+    const String title = ble ? "BLE HID Text Test" : "USB HID Text Test";
-+    drawMainBorderWithTitle(title);
-+    padprintln("Lab-only keyboard check.");
-+    padprintln(ble ? "Pair only your own test host." : "Connect only your own test host.");
-+    padprintln("This test sends one fixed line only.");
-+    padprintln("No commands, shortcuts, or scripts.");
-+    std::vector<Option> startOptions = {
-+        {"Continue to setup", []() {}},
-+        {"Cancel", []() {}},
-+    };
-+    if (loopOptions(startOptions, MENU_TYPE_SUBMENU, title) != 0) return;
-+
-+    HIDInterface *&hid = ble ? hid_ble : hid_usb;
-+    if (ble && hid) safeCleanupDuckyBLE(hid);
-+    returnToMenu = false;
-+    // ID 4 is deliberately outside FUNC_MACS: the lab mode uses this device's
-+    // configured identity instead of impersonating a keyboard vendor.
-+    ducky_startKb(hid, ble, ble ? 4 : 0);
-+    if (returnToMenu || hid == nullptr) return;
-+
-+    if (ble) {
-+        displayInfo("Pair the visibly named Bruce Lab HID with your own test host. ESC cancels.", false);
-+        const uint32_t started = millis();
-+        while (hid && !hid->isConnected() && !check(EscPress) && millis() - started < 30000) {
-+            vTaskDelay(pdMS_TO_TICKS(10));
-+        }
-+        if (!hid || !hid->isConnected()) {
-+            if (hid) safeCleanupDuckyBLE(hid);
-+            displayWarning("Pairing canceled or timed out", true);
-+            return;
-+        }
-+        BLEConnected = true;
-+    }
-+
-+    drawMainBorderWithTitle("Confirm HID Text Test");
-+    padprintln("Focus a blank text editor on your own host.");
-+    padprintln("SEL sends exactly: Bruce HID test OK");
-+    padprintln("ESC cancels. Nothing else will be typed.");
-+    std::vector<Option> sendOptions = {
-+        {"Send fixed test text", []() {}},
-+        {"Cancel", []() {}},
-+    };
-+    const bool send = loopOptions(sendOptions, MENU_TYPE_SUBMENU, "HID Test Confirmation") == 0;
-+    if (send && hid) {
-+        hid->print("Bruce HID test OK");
-+        hid->releaseAll();
-+    }
-+
-+    if (ble) {
-+        safeCleanupDuckyBLE(hid);
-+    } else if (hid) {
-+        hid->releaseAll();
-+        delete hid;
-+        hid = nullptr;
-+#if !defined(USB_as_HID)
-+        mySerial.end();
-+#endif
-+    }
-+    displayInfo(send ? "Fixed text test complete" : "HID test canceled", true);
-+}
-+
- void ducky_keyboard(HIDInterface *&hid, bool ble) {
-     String _mymsg = "";
-     keyStroke key;
 diff --git a/src/modules/badusb_ble/ducky_typer.h b/src/modules/badusb_ble/ducky_typer.h
-index bb5aeb4..803b347 100644
+index bb5aeb4..3b18bbd 100644
 --- a/src/modules/badusb_ble/ducky_typer.h
 +++ b/src/modules/badusb_ble/ducky_typer.h
 @@ -16,6 +16,7 @@
@@ -20899,16 +20845,6 @@ index bb5aeb4..803b347 100644
  
  struct DuckyCommand;
  struct DuckyCommandLookup;
-@@ -37,6 +38,9 @@ void key_input_from_string(const String &text);
- // Use device as a keyboard (USB or BLE)
- void ducky_keyboard(HIDInterface *&hid, bool ble = false);
- 
-+// Safe lab smoke test: sends one fixed, harmless line after on-device confirmation.
-+void hid_text_smoke_test(bool ble = false);
-+
- // Send media commands through BLE or USB HID
- void MediaCommands(HIDInterface *hid, bool ble = false);
- 
 diff --git a/src/modules/badusb_ble/smart_badusb.cpp b/src/modules/badusb_ble/smart_badusb.cpp
 new file mode 100644
 index 0000000..b5be732
