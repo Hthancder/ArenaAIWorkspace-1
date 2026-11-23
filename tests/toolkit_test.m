@@ -104,16 +104,17 @@ int main(void) {
 
 		// --- thứ tự khoá tham số KHÔNG được làm hỏng bộ nhớ đệm
 		[SXToolkit resetCallCache];
-		handlerCalls = 0;
+		NSInteger pairCalls = 0;
 		SXTool *pair = [SXTool toolWithName:@"pair" title:@"Hai tham số"
 								  summary:@"Nhận hai tham số để kiểm tra chữ ký bộ nhớ đệm."
-								 parameters:@{@"type": @"object", @"properties": @{
+								   prompt:@"Dùng trong test."
+								 category:SXToolCategoryDevice
+							 parameters:@{@"type": @"object", @"properties": @{
 									 @"a": @{@"type": @"string"}, @"b": @{@"type": @"string"}},
 									 @"required": @[@"a", @"b"]}
-								  category:SXToolCategoryDevice
 								   handler:^NSDictionary *(NSDictionary *arguments, NSError **error) {
 			(void)error;
-			handlerCalls++;
+			pairCalls++;
 			return @{@"result": [NSString stringWithFormat:@"%@%@", arguments[@"a"], arguments[@"b"]]};
 		}];
 		[SXToolkit registerTool:pair];
@@ -130,16 +131,17 @@ int main(void) {
 										  excluded:[NSSet set] error:&cacheError];
 		assert([first[@"result"] isEqualToString:@"12"]);
 		assert([second[@"result"] isEqualToString:@"12"]);
-		assert(handlerCalls == 1);
+		assert(pairCalls == 1);
 
 		// --- công cụ ghi (sideEffect) KHÔNG được lấy từ bộ nhớ đệm
 		[SXToolkit resetCallCache];
 		__block NSInteger writes = 0;
 		SXTool *writer = [SXTool toolWithName:@"writer" title:@"Ghi"
 									summary:@"Có tác dụng phụ, không được cache."
-								   parameters:@{@"type": @"object", @"properties": @{}, @"required": @[]}
-								   category:SXToolCategoryDevice
-									handler:^NSDictionary *(NSDictionary *arguments, NSError **error) {
+									 prompt:@"Dùng trong test."
+								 category:SXToolCategoryDevice
+								  parameters:@{@"type": @"object", @"properties": @{}, @"required": @[]}
+								   handler:^NSDictionary *(NSDictionary *arguments, NSError **error) {
 			(void)arguments; (void)error;
 			writes++;
 			return @{@"result": @"ok"};
