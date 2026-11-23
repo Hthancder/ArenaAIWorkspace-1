@@ -97,9 +97,9 @@ for name in functions[1:]:
 # The top level stays short: connection, WebUI, tools, plus the full-build groups and Main Menu.
 top = bodies["optionsMenu"]
 labels = re.findall(r'\{?"([^"]+)",', top)
-expected = ["WiFi Tools", "Scan & Analyze", "Defense", "LAN & HTTP", "Remote Access"]
+expected = ["WiFi Tools", "Survey & Analyze", "Defense", "LAN & HTTP", "Remote Access"]
 for label in expected:
     assert label in top, f"missing top-level group {label}"
 assert "addOptionToMainMenu()" in top
-assert top.index('"WiFi Tools"') < top.index('"Scan & Analyze"'), "WiFi Tools should come before the long tail"
+assert top.index('"WiFi Tools"') < top.index('"Survey & Analyze"'), "WiFi Tools should come before the long tail"
 print("WiFi menu dedupe, Back and group audit passed")

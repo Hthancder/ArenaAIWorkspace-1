@@ -4,7 +4,10 @@ const html = fs.readFileSync(process.argv[3], 'utf8');
 for (const id of ['ux-find','ux-stop','ux-sound','ux-menu-tones','ux-volume','ux-brightness','ux-save','ux-status'])
   assert(html.includes(`id="${id}"`));
 const marker = '// Board controls: all mutations';
-assert(source.includes(marker));
+const endMarker = '// Keep the browser\'s applied palette/layout in sync';
+const blockStart = source.indexOf(marker);
+const blockEnd = source.indexOf(endMarker, blockStart);
+assert(blockStart >= 0 && blockEnd > blockStart, 'device controls block markers are present');
 const elements = {};
 for (const id of ['ux-find','ux-stop','ux-sound','ux-menu-tones','ux-volume','ux-brightness','ux-save','ux-status','ux-volume-label','ux-brightness-label']) {
   elements[id] = { value:'', checked:false, disabled:false, textContent:'', handlers:{}, addEventListener(e,cb){this.handlers[e]=cb;} };
@@ -16,7 +19,7 @@ const ctx = {console, IS_DEV:false, FormData: FakeForm, setTimeout,
   requestGet: async () => JSON.stringify({sound:true,menuTones:true,volume:35,brightness:75,find:'idle'}),
   fetch: async (url,opts) => { calls.push({url,opts}); return {ok:true,json:async()=>({ok:true,msg:'queued'})}; }
 };
-vm.createContext(ctx); vm.runInContext(source.slice(source.indexOf(marker)),ctx);
+vm.createContext(ctx); vm.runInContext(source.slice(blockStart, blockEnd),ctx);
 (async()=>{
   await new Promise(r=>setImmediate(r));
   assert.strictEqual(elements['ux-sound'].checked,true);
