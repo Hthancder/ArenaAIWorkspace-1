@@ -80,6 +80,27 @@ for f in Sources/*.m "$OUT/Tweak.ii" Prefs/*.m; do
 	compile "$f"
 done
 
+echo "── [3/3] Cú pháp test Objective-C"
+# Vì sao có bước này: `tests/*.m` chỉ được biên dịch trên macOS CI, nên một lỗi
+# gõ (dấu phẩy trong `assert`, thiếu `__block`, sai selector) làm đỏ CI sau mỗi
+# lần push — 3 vòng CI đã mất chỉ vì những lỗi như vậy. Chỉ cần -fsyntax-only:
+# không cần link Foundation trên Linux, nhưng vẫn bắt được mọi lỗi khai báo.
+for f in tests/*.m; do
+	name=$(basename "$f" | tr '.' '_')
+	# `-c` phải đi kèm (zig luôn truyền nó; thiếu thì clang báo
+	# "-Wunused-command-line-argument" và -Werror biến nó thành lỗi).
+	# `-Wno-incomplete-implementation`: test cố ý khai báo lớp giả chỉ một phần
+	# (`@implementation SXPrefs` vài phương thức) — đó là cách mock, không phải lỗi.
+	if "$ZIG" cc "${ZIG_FLAGS[@]}" -Wno-incomplete-implementation \
+			-c "$f" -o /dev/null 2> "$OUT/$name.log"; then
+		echo "   ✓ $f"
+	else
+		echo "   ✗ $f"
+		grep -E "error:" "$OUT/$name.log" | head -5
+		FAIL=1
+	fi
+done
+
 echo "── [3/3] Plist validate"
 python3 - <<'PY' || FAIL=1
 import plistlib, sys, pathlib
