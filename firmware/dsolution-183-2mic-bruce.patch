@@ -9279,7 +9279,7 @@ index 00000000..c56d7aef
 +#endif
 diff --git a/src/core/feature_guide.cpp b/src/core/feature_guide.cpp
 new file mode 100644
-index 00000000..e5aeff1f
+index 00000000..5671b311
 --- /dev/null
 +++ b/src/core/feature_guide.cpp
 @@ -0,0 +1,1125 @@
@@ -10062,9 +10062,9 @@ index 00000000..e5aeff1f
 +        "Chains",
 +        "WIFI",
 +        "Chains",
-+        "Recon->Capture, NAPT->LAN, Guard->Audit, BLE->Clone, USB->Verify, Sonar->Evidence",
++        "Recon->Capture, NAPT->LAN, Guard->Audit, BLE->Clone, USB->Verify",
 +        "# OVERVIEW\n"
-+        "Coordinates existing SecLab+ tools into 7 guided chains. The chain does not reimplement the member tool; it only sequences Start/Stop and feeds one tool's snapshot into the next.\n"
++        "Coordinates existing SecLab+ tools into 6 guided chains. The chain does not reimplement the member tool; it only sequences Start/Stop and feeds one tool's snapshot into the next.\n"
 +        "# CHAINS\n"
 +        "- Recon->Capture: Probe Radar + Analyzer hidden APs -> PMKID/CSA target scoring (decloaked bonus).\n"
 +        "- NAPT->LAN: after NAPT is up, auto-start LAN Auditor (deep), HTTP Inspector and Responder+.\n"
@@ -10072,11 +10072,11 @@ index 00000000..e5aeff1f
 +        "- Guard->Audit: when Guard sees ARP/DHCP alerts, fire a deep LAN audit and bundle evidence.\n"
 +        "- BLE Guard->Audit->Clone: Privacy Guard candidates (sorted hits/RSSI) -> pairing audit -> GATT clone.\n"
 +        "- USB Generate->Verify: generate payload -> arm LED receiver -> run -> verify/export.\n"
-+        "- Sonar->Evidence: bundle Sonar WAV/session into one evidence file.\n"
++        ""
 +        "# HOW TO USE\n"
 +        "- WiFi -> Chains menu, or CLI `seclab chain start <id>` / WebUI SecLab+ chain buttons.\n"
 +        "- Three auto-arm toggles persist in bruce.conf (seclabPlus.chain*Auto); the watcher fires when the trigger is already up.\n"
-+        "- Observations (probe fingerprints, guard alerts, sonar) are never proof of an attack."
++        "- Observations (probe fingerprints, guard alerts) are never proof of an attack."
 +    },
 +    {
 +        "SecLab+ Control Center",
@@ -12345,7 +12345,7 @@ index 49138d4a..0bea13fb 100644
  }
 diff --git a/src/core/serial_commands/seclab_commands.cpp b/src/core/serial_commands/seclab_commands.cpp
 new file mode 100644
-index 00000000..61c7f2c0
+index 00000000..0dc56d82
 --- /dev/null
 +++ b/src/core/serial_commands/seclab_commands.cpp
 @@ -0,0 +1,479 @@
@@ -12387,7 +12387,7 @@ index 00000000..61c7f2c0
 +    slPrint("  seclab led start|stop|export|clear|generate|status [windows|macos|linux]");
 +    slPrint("  seclab os windows|macos|linux");
 +    slPrint("  seclab ble tag_start|tag_stop|pair|fuzzer|clear|status [addr] [type] [justworks|mitm|duration]");
-+    slPrint("  seclab chain list | start <id> | stop <id> | status  (ids: recon-capture napt-lan portal-lan guard-audit ble-pipeline usb-verify sonar-evidence)");
++    slPrint("  seclab chain list | start <id> | stop <id> | status  (ids: recon-capture napt-lan portal-lan guard-audit ble-pipeline usb-verify)");
 +    slPrint("  seclab chain auto napt-lan|portal-lan|guard-audit [on|off]");
 +    slPrint("  KEYS: pairmode perm hidauto oswarn hidtimeout httpport httpauto redact handoff");
 +    slPrint("        lanauto fuzzer autoexport csa(channel,bursts) chainNaptLanAuto chainPortalLanAuto chainGuardAuditAuto");
@@ -12777,7 +12777,7 @@ index 00000000..61c7f2c0
 +    if (m == "chain") {
 +        if (a == "list" || a == "status" || a.isEmpty()) { slPrint(chainGetStateJson()); return true; }
 +        if (a == "start") {
-+            if (v.isEmpty()) { slPrint("Usage: seclab chain start <id>  (recon-capture|napt-lan|portal-lan|guard-audit|ble-pipeline|usb-verify|sonar-evidence)"); return false; }
++            if (v.isEmpty()) { slPrint("Usage: seclab chain start <id>  (recon-capture|napt-lan|portal-lan|guard-audit|ble-pipeline|usb-verify)"); return false; }
 +            bool ok = chainStart(v, &err);
 +            slResult(ok, String("Chain \"") + v + "\" started", err);
 +            return ok;
@@ -24097,10 +24097,10 @@ index 23e8e3c4..697864a2 100644
  void drawTime();
 diff --git a/src/modules/wifi/chain_logic.h b/src/modules/wifi/chain_logic.h
 new file mode 100644
-index 00000000..2fd8c23f
+index 00000000..032945c8
 --- /dev/null
 +++ b/src/modules/wifi/chain_logic.h
-@@ -0,0 +1,555 @@
+@@ -0,0 +1,545 @@
 +#pragma once
 +// Chain orchestration logic — Arduino-free, host-testable.
 +//
@@ -24135,7 +24135,6 @@ index 00000000..2fd8c23f
 +    CHAIN_GUARD_AUDIT,     // LAN Guard alert -> LAN Auditor deep + export
 +    CHAIN_BLE_PIPELINE,    // BLE Privacy Guard -> Pairing Audit -> GATT Clone
 +    CHAIN_USB_VERIFY,      // Smart BadUSB Generate -> Arm LED -> Run -> Verify
-+    CHAIN_SONAR_EVIDENCE,  // Sonar Guard session -> evidence bundle
 +    CHAIN_COUNT
 +};
 +
@@ -24147,7 +24146,6 @@ index 00000000..2fd8c23f
 +        case CHAIN_GUARD_AUDIT: return "guard-audit";
 +        case CHAIN_BLE_PIPELINE: return "ble-pipeline";
 +        case CHAIN_USB_VERIFY: return "usb-verify";
-+        case CHAIN_SONAR_EVIDENCE: return "sonar-evidence";
 +        default: return "none";
 +    }
 +}
@@ -24160,7 +24158,6 @@ index 00000000..2fd8c23f
 +        case CHAIN_GUARD_AUDIT: return "Guard -> Audit";
 +        case CHAIN_BLE_PIPELINE: return "BLE Guard -> Audit -> Clone";
 +        case CHAIN_USB_VERIFY: return "USB Generate -> Verify";
-+        case CHAIN_SONAR_EVIDENCE: return "Sonar -> Evidence";
 +        default: return "None";
 +    }
 +}
@@ -24210,9 +24207,6 @@ index 00000000..2fd8c23f
 +        {"Generate", "build"}, {"LED Link", "arm"},
 +        {"Run Payload", "run"}, {"LED Verify", "verify"},
 +    };
-+    static const ChainStep kSonar[] = {
-+        {"Sonar Guard", "observe"}, {"Evidence Bundle", "bundle"},
-+    };
 +    const ChainStep *src = nullptr;
 +    int count = 0;
 +    switch (id) {
@@ -24222,7 +24216,6 @@ index 00000000..2fd8c23f
 +        case CHAIN_GUARD_AUDIT: src = kGuardAudit; count = 3; break;
 +        case CHAIN_BLE_PIPELINE: src = kBle; count = 3; break;
 +        case CHAIN_USB_VERIFY: src = kUsb; count = 4; break;
-+        case CHAIN_SONAR_EVIDENCE: src = kSonar; count = 2; break;
 +        default: return 0;
 +    }
 +    if (out && cap > 0) {
@@ -24342,9 +24335,6 @@ index 00000000..2fd8c23f
 +            return CHAIN_OK;
 +        case CHAIN_USB_VERIFY:
 +            if (!p.usbHidOk) return CHAIN_NEED_USB_HID;
-+            return CHAIN_OK;
-+        case CHAIN_SONAR_EVIDENCE:
-+            if (!p.micOk) return CHAIN_NEED_MIC;
 +            return CHAIN_OK;
 +        default:
 +            return CHAIN_UNKNOWN;
@@ -24658,10 +24648,10 @@ index 00000000..2fd8c23f
 +}
 diff --git a/src/modules/wifi/chain_orchestrator.cpp b/src/modules/wifi/chain_orchestrator.cpp
 new file mode 100644
-index 00000000..89d309e6
+index 00000000..3b6fa4d4
 --- /dev/null
 +++ b/src/modules/wifi/chain_orchestrator.cpp
-@@ -0,0 +1,830 @@
+@@ -0,0 +1,752 @@
 +#include "chain_orchestrator.h"
 +#if !defined(LITE_VERSION)
 +
@@ -24688,9 +24678,6 @@ index 00000000..89d309e6
 +#include "modules/wifi/portal_napt.h"
 +#include "modules/wifi/probe_radar.h"
 +#include "modules/wifi/responder_plus.h"
-+#if defined(HAS_MICROPHONE)
-+#include "modules/others/sonar_guard.h"
-+#endif
 +#include <Arduino.h>
 +#include <LittleFS.h>
 +#include <WiFi.h>
@@ -24717,9 +24704,6 @@ index 00000000..89d309e6
 +constexpr const char *kChainLogPath = "/chain.log";
 +constexpr const char *kAirtimePath = "/wifi_airtime.json";
 +constexpr const char *kBleGuardLogPath = "/ble_guard.log";
-+constexpr const char *kSonarStatePath = "/sonar_state.json";
-+constexpr const char *kSonarLogPath = "/sonar_guard.log";
-+constexpr const char *kSonarEvidencePath = "/chain_sonar_evidence.json";
 +constexpr const char *kGuardAuditLogPath = "/chain_guard_audit.log";
 +
 +static ChainId s_activeChain = CHAIN_NONE;
@@ -24773,11 +24757,7 @@ index 00000000..89d309e6
 +#else
 +    p.usbHidOk = false;
 +#endif
-+#if defined(HAS_MICROPHONE)
-+    p.micOk = true;
-+#else
-+    p.micOk = false;
-+#endif
++    p.micOk = false; // no mic-dependent chain remains
 +    return p;
 +}
 +
@@ -25225,49 +25205,6 @@ index 00000000..89d309e6
 +    }
 +}
 +
-+#if defined(HAS_MICROPHONE)
-+static void sonarEvidenceMenu() {
-+    int choice = -1;
-+    options = {
-+        {"1. Sonar Guard (AutoRec-WAV)", [&]() { choice = 0; }},
-+        {"2. Bundle Evidence", [&]() { choice = 1; }},
-+        {"Back", [&]() { choice = -1; }},
-+    };
-+    loopOptions(options, MENU_TYPE_SUBMENU, "Sonar -> Evidence");
-+    options.clear();
-+    if (choice == 0) { sonar_guard_setup(); return; }
-+    if (choice == 1) {
-+        String state = readFileCapped(kSonarStatePath, 4096);
-+        String log = readFileCapped(kSonarLogPath, 8192);
-+        if (state.isEmpty() && log.isEmpty()) {
-+            displayWarning("No Sonar session yet. Run Sonar first.", true);
-+            return;
-+        }
-+        int wavCount = 0;
-+        if (LittleFS.exists("/BruceMIC")) {
-+            File dir = LittleFS.open("/BruceMIC");
-+            if (dir) {
-+                File f = dir.openNextFile();
-+                while (f) {
-+                    String n = f.name();
-+                    if (n.endsWith(".wav")) wavCount++;
-+                    f = dir.openNextFile();
-+                }
-+                dir.close();
-+            }
-+        }
-+        String bundle = "{\"chain\":\"sonar-evidence\",\"uptimeSec\":" + String((unsigned long)seclabUptimeSec()) +
-+                        ",\"wavClips\":" + String(wavCount) + ",\"sonar\":" + (state.isEmpty() ? "{}" : state) +
-+                        ",\"logBytes\":" + String((unsigned long)log.length()) + "}";
-+        bool ok = seclabWriteState(kSonarEvidencePath, bundle);
-+        chainLog("sonar-evidence", "bundle", ok, String(wavCount) + " WAV clips");
-+        if (ok) displaySuccess(String("Evidence bundled: ") + kSonarEvidencePath, true);
-+        else displayError("Bundle failed", true);
-+        if (ok) markActive(CHAIN_SONAR_EVIDENCE);
-+    }
-+}
-+#endif
-+
 +} // namespace
 +
 +// ---------------------------------------------------------------------------
@@ -25290,7 +25227,7 @@ index 00000000..89d309e6
 +bool chainStart(const String &id, String *errOut) {
 +    ChainId cid = chainIdFromString(id.c_str());
 +    if (cid == CHAIN_NONE) {
-+        if (errOut) *errOut = "Unknown chain. Use: recon-capture, napt-lan, portal-lan, guard-audit, ble-pipeline, usb-verify, sonar-evidence";
++        if (errOut) *errOut = "Unknown chain. Use: recon-capture, napt-lan, portal-lan, guard-audit, ble-pipeline, usb-verify";
 +        return false;
 +    }
 +    ChainPreconditions p = livePreconditions();
@@ -25353,21 +25290,6 @@ index 00000000..89d309e6
 +            if (errOut && !ok) *errOut = err;
 +            break;
 +        }
-+        case CHAIN_SONAR_EVIDENCE: {
-+            // Headless: bundle only (Sonar run is menu-only).
-+            String state = readFileCapped(kSonarStatePath, 4096);
-+            if (state.isEmpty()) {
-+                if (errOut) *errOut = "No Sonar session yet. Run Sonar from the device menu.";
-+                chainLog("sonar-evidence", "bundle", false, "no session");
-+                return false;
-+            }
-+            String bundle = "{\"chain\":\"sonar-evidence\",\"uptimeSec\":" + String((unsigned long)seclabUptimeSec()) +
-+                            ",\"sonar\":" + state + "}";
-+            ok = seclabWriteState(kSonarEvidencePath, bundle);
-+            chainLog("sonar-evidence", "bundle", ok, "");
-+            if (errOut && !ok) *errOut = "Bundle failed";
-+            break;
-+        }
 +        default:
 +            if (errOut) *errOut = "Unknown chain";
 +            return false;
@@ -25406,9 +25328,6 @@ index 00000000..89d309e6
 +            smartBadUsbStopLedLink();
 +            chainLog("usb-verify", "stop", true, "LED Link stopped");
 +            break;
-+        case CHAIN_SONAR_EVIDENCE:
-+            chainLog("sonar-evidence", "stop", true, "nothing to stop (bundle only)");
-+            break;
 +        default: break;
 +    }
 +    if (s_activeChain == cid) s_activeChain = CHAIN_NONE;
@@ -25423,7 +25342,6 @@ index 00000000..89d309e6
 +        case CHAIN_RECON_CAPTURE: return pmkidIsRunning() || csaIsRunning();
 +        case CHAIN_BLE_PIPELINE: return blePairingAuditIsRunning();
 +        case CHAIN_USB_VERIFY: return smartBadUsbIsLedLinkRunning();
-+        case CHAIN_SONAR_EVIDENCE: return s_activeChain == CHAIN_SONAR_EVIDENCE;
 +        default: return false;
 +    }
 +}
@@ -25460,9 +25378,6 @@ index 00000000..89d309e6
 +        {"Guard -> Audit", [&]() { choice = 3; }},
 +        {"BLE Guard -> Audit -> Clone", [&]() { choice = 4; }},
 +        {"USB Generate -> Verify", [&]() { choice = 5; }},
-+#if defined(HAS_MICROPHONE)
-+        {"Sonar -> Evidence", [&]() { choice = 6; }},
-+#endif
 +        {"Back", [&]() { choice = -1; }},
 +    };
 +    loopOptions(options, MENU_TYPE_SUBMENU, "Chains");
@@ -25474,9 +25389,6 @@ index 00000000..89d309e6
 +        case 3: guardAuditMenu(); break;
 +        case 4: blePipelineMenu(); break;
 +        case 5: usbVerifyMenu(); break;
-+#if defined(HAS_MICROPHONE)
-+        case 6: sonarEvidenceMenu(); break;
-+#endif
 +        default: break;
 +    }
 +}
