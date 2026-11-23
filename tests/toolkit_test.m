@@ -104,7 +104,7 @@ int main(void) {
 
 		// --- thứ tự khoá tham số KHÔNG được làm hỏng bộ nhớ đệm
 		[SXToolkit resetCallCache];
-		NSInteger pairCalls = 0;
+		__block NSInteger pairCalls = 0;
 		SXTool *pair = [SXTool toolWithName:@"pair" title:@"Hai tham số"
 								  summary:@"Nhận hai tham số để kiểm tra chữ ký bộ nhớ đệm."
 								   prompt:@"Dùng trong test."
