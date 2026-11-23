@@ -14565,7 +14565,7 @@ index 00000000..a28c8b56
 +
 +#endif
 diff --git a/src/core/wifi/webInterface.cpp b/src/core/wifi/webInterface.cpp
-index a8679bd6..113a4a38 100644
+index a8679bd6..7f7692eb 100644
 --- a/src/core/wifi/webInterface.cpp
 +++ b/src/core/wifi/webInterface.cpp
 @@ -1,19 +1,43 @@
@@ -15622,7 +15622,7 @@ index a8679bd6..113a4a38 100644
  
      RAM_LOG("after MDNS");
      return true;
-@@ -460,59 +1167,765 @@ void configureWebServer() {
+@@ -460,59 +1167,769 @@ void configureWebServer() {
      // System Info
      server->on("/systeminfo", HTTP_GET, [](AsyncWebServerRequest *request) {
          if (checkUserWebAuth(request)) {
@@ -15952,13 +15952,17 @@ index a8679bd6..113a4a38 100644
 +        s_pendingWifiSsid = ssid;
 +        s_pendingWifiPwd = pwd;
 +        s_wifiSwitchBusy = true;
++        if (xTaskCreate(wifiSwitchStaTask, "wifiSwitchSta", 4096, NULL, 1, NULL) != pdPASS) {
++            s_wifiSwitchBusy = false;
++            request->send(503, "application/json", "{\"ok\":false,\"msg\":\"Unable to start WiFi switch task\"}");
++            return;
++        }
 +
 +        String respJson = "{\"ok\":true,\"ssid\":\"" + jsonEscape(ssid) +
 +                          "\",\"msg\":\"Connecting to LAN WiFi...\"}";
 +        AsyncWebServerResponse *resp = request->beginResponse(200, "application/json", respJson);
 +        resp->addHeader("Connection", "close");
 +        request->send(resp);
-+        xTaskCreate(wifiSwitchStaTask, "wifiSwitchSta", 4096, NULL, 1, NULL);
 +    });
 +
 +    // Chunked Resumable WebOTA API (/ota/begin -> /ota/chunk -> /ota/commit | /ota/abort)
@@ -15987,16 +15991,16 @@ index a8679bd6..113a4a38 100644
 +            request->send(
 +                409, "application/json",
 +                "{\"ok\":false,\"msg\":\"Dual-Boot active: ota_0 holds XiaoZhi HeyLily. Update Bruce via USB Web Flasher (ota_1) so HeyLily is protected.\"}"
-+            );
+             );
+-            request->send(200, "application/json", response_body);
 +            return;
-+        }
+         }
 +        if (totalSize < 65536 || totalSize > nextPart->size) {
 +            request->send(
 +                400, "application/json",
 +                "{\"ok\":false,\"msg\":\"Invalid firmware size for OTA slot (max " +
 +                    humanReadableSize(nextPart->size) + ")\"}"
-             );
--            request->send(200, "application/json", response_body);
++            );
 +            return;
 +        }
 +        if (s_otaInProgress) {
@@ -16014,7 +16018,7 @@ index a8679bd6..113a4a38 100644
 +            otaReleaseLock(true);
 +            request->send(500, "application/json", "{\"ok\":false,\"msg\":\"" + err + "\"}");
 +            return;
-         }
++        }
 +        s_otaValid = true;
 +        String ok = "{\"ok\":true,\"chunkSize\":" + String((unsigned long)kOtaChunkCap) +
 +                    ",\"maxSize\":" + String((unsigned long)nextPart->size) + "}";
@@ -16426,7 +16430,7 @@ index a8679bd6..113a4a38 100644
          }
      });
  
-@@ -544,25 +1957,70 @@ void configureWebServer() {
+@@ -544,25 +1961,70 @@ void configureWebServer() {
          if (!checkUserWebAuth(request)) { return; }
          if (request->hasArg("cmnd")) {
              String cmnd = request->arg("cmnd");
@@ -16516,7 +16520,7 @@ index a8679bd6..113a4a38 100644
                  }
              } else {
                  if (parseSerialCommand(cmnd, false)) {
-@@ -576,9 +2034,22 @@ void configureWebServer() {
+@@ -576,9 +2038,22 @@ void configureWebServer() {
          }
      });
  
@@ -16541,7 +16545,7 @@ index a8679bd6..113a4a38 100644
      });
  
      // List files
-@@ -632,6 +2103,11 @@ void configureWebServer() {
+@@ -632,6 +2107,11 @@ void configureWebServer() {
                  } else {
                      if (strcmp(fileAction.c_str(), "download") == 0) {
                          request->send(*fs, fileName, "application/octet-stream", true);
@@ -16553,7 +16557,7 @@ index a8679bd6..113a4a38 100644
                      } else if (strcmp(fileAction.c_str(), "image") == 0) {
                          String extension = fileName.substring(fileName.lastIndexOf('.') + 1);
                          // https://www.iana.org/assignments/media-types/media-types.xhtml#image
-@@ -700,7 +2176,7 @@ void configureWebServer() {
+@@ -700,7 +2180,7 @@ void configureWebServer() {
  
                  File editFile = fs->open(fileName, FILE_WRITE);
                  if (editFile) {
@@ -16562,7 +16566,7 @@ index a8679bd6..113a4a38 100644
                          request->send(200, "text/plain", "File edited: " + fileName);
                      } else {
                          request->send(500, "text/plain", "Failed to write to file: " + fileName);
-@@ -720,7 +2196,13 @@ void configureWebServer() {
+@@ -720,7 +2200,13 @@ void configureWebServer() {
      server->on(
          "/upload",
          HTTP_POST,
@@ -16577,7 +16581,7 @@ index a8679bd6..113a4a38 100644
          handleUpload
      );
  
-@@ -737,6 +2219,348 @@ void configureWebServer() {
+@@ -737,6 +2223,348 @@ void configureWebServer() {
              }
          }
      });
@@ -16926,7 +16930,7 @@ index a8679bd6..113a4a38 100644
      server->begin();
      Serial.println("Webserver started");
  }
-@@ -745,25 +2569,78 @@ void configureWebServer() {
+@@ -745,25 +2573,78 @@ void configureWebServer() {
  **  Function: startWebUi
  **  Start the WebUI
  **********************************************************************/
@@ -17014,7 +17018,7 @@ index a8679bd6..113a4a38 100644
          new (server) AsyncWebServer(default_webserverporthttp);
  
          configureWebServer();
-@@ -771,24 +2648,193 @@ void startWebUi(bool mode_ap) {
+@@ -771,24 +2652,193 @@ void startWebUi(bool mode_ap) {
          isWebUIActive = true;
      }
      tft.setLogging();
@@ -17103,7 +17107,7 @@ index a8679bd6..113a4a38 100644
 +**  AsyncWebServer + mDNS in the background without touching the TFT screen.
 +**********************************************************************/
 +bool startWebUiHeadless(bool allowApFallback) {
-+    if (server || isWebUIActive) return true;
++    if (server || isWebUIActive) { s_webUiQueued = false; return true; }
 +    if (s_webUiStarting || s_webUiCancelRequested) {
 +        s_webUiQueued = false;
 +        return false;

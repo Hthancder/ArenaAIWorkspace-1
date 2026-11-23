@@ -7,6 +7,8 @@ settings = (root / 'src/core/settings.cpp').read_text()
 quick = (root / 'src/core/menu_items/QuickMenu.cpp').read_text()
 wifi = (root / 'src/core/menu_items/WifiMenu.cpp').read_text()
 assert 's_webUiCancelRequested && isWebUIActive) stopWebUi()' in web
+assert 'if (server || isWebUIActive) { s_webUiQueued = false; return true; }' in web
+assert 'xTaskCreate(wifiSwitchStaTask' in web and 'Unable to start WiFi switch task' in web
 assert 'xTaskCreate(webUiAutoStartTask' in web and 's_webUiQueued = false;' in web[web.index('void startWebUiBackgroundTask'):]
 assert 'bruceConfig.webUiAutoStart || bruceConfig.startupApp == "WebUI"' in menu
 assert 'if (bruceConfig.startupApp == "WebUI") bruceConfig.setStartupApp("")' in web
