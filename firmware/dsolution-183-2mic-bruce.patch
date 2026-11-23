@@ -1479,10 +1479,10 @@ index 0000000..fcf16fe
 +spiffs,   data, spiffs,   0x810000, 0x7E0000,
 +coredump, data, coredump, 0xFF0000, 0x10000,
 diff --git a/embedded_resources/web_interface/index.css b/embedded_resources/web_interface/index.css
-index bda7b42..978abff 100644
+index bda7b42..0bbd995 100644
 --- a/embedded_resources/web_interface/index.css
 +++ b/embedded_resources/web_interface/index.css
-@@ -1,584 +1,755 @@
+@@ -1,584 +1,761 @@
  :root {
 -  --color: #ff3ec8;
 -  --background: #242424;
@@ -2688,7 +2688,7 @@ index bda7b42..978abff 100644
 -  }
 +  .sl-row input.sl-input, .sl-row input.sl-input-wide, .sl-row select[aria-label] { min-width: 0; width: 100%; }
 +  .sl-group legend small { display: block; margin-left: 0; }
-+}
+ }
 +
 +/* Compact, touch-friendly device controls */
 +.ux-settings { display: grid; gap: .55rem; margin-top: 1rem; padding: .8rem; border: 1px solid var(--border-color, #31515b); border-radius: .7rem; }
@@ -2750,12 +2750,18 @@ index bda7b42..978abff 100644
 +  .seclab-subtabs { padding-left: 8px; padding-right: 8px; gap: 4px; }
 +  .slab-btn { padding: 7px 10px; font-size: 11.5px; }
 +  .overview-grid { grid-template-columns: repeat(2, 1fr); }
- }
++}
++
++/* ==== Monitor Center (Network + System + Alerts) ==== */
++#tab-monitor .dash-grid { padding: 12px 16px; }
++.mon-filter.active { background: var(--color); color: var(--background); border-color: var(--color); }
++.monitor-bar { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
++#mon-last { font-size:11px; }
 diff --git a/embedded_resources/web_interface/index.html b/embedded_resources/web_interface/index.html
-index 5290300..8850f76 100644
+index 5290300..bae5526 100644
 --- a/embedded_resources/web_interface/index.html
 +++ b/embedded_resources/web_interface/index.html
-@@ -1,700 +1,908 @@
+@@ -1,700 +1,1052 @@
  <!doctype html>
  <html lang="en">
 -  <head>
@@ -2771,6 +2777,14 @@ index 5290300..8850f76 100644
 -      <div class="header">
 -        <div class="title" onclick="Dialog.show('info')">
 -          Bruce [<span class="bruce-version">dev</span>]
+-        </div>
+-        <div class="left-part">
+-          <button class="btn-action act-oinput" data-action="serial">
+-            Serial Cmd
+-          </button>
+-          <button class="btn-action act-navigation" onclick="openNavigator()">
+-            Navigator
+-          </button>
 +<head>
 +  <meta charset="UTF-8" />
 +  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -2794,12 +2808,12 @@ index 5290300..8850f76 100644
 +          </div>
 +          <small id="tele-board">ESP32-S3 Security Lab</small>
          </div>
--        <div class="left-part">
--          <button class="btn-action act-oinput" data-action="serial">
--            Serial Cmd
+-        <div class="right-part">
+-          <button class="btn-action" onclick="Dialog.show('settings')">
+-            Settings
 -          </button>
--          <button class="btn-action act-navigation" onclick="openNavigator()">
--            Navigator
+-          <button class="btn-action" onclick="window.location.href = '/logout'">
+-            Log Out
 -          </button>
 +      </div>
 +      <div class="nav-actions">
@@ -2821,6 +2835,7 @@ index 5290300..8850f76 100644
 +
 +    <div class="tab-bar" role="tablist">
 +      <button type="button" class="tab-btn active" data-tab="dashboard">Dashboard</button>
++      <button type="button" class="tab-btn" data-tab="monitor">Monitor</button>
 +      <button type="button" class="tab-btn" data-tab="files">Files</button>
 +      <button type="button" class="tab-btn" data-tab="screen">Screen</button>
 +      <button type="button" class="tab-btn" data-tab="personalize">Personalize</button>
@@ -2872,14 +2887,7 @@ index 5290300..8850f76 100644
 +            <div id="ux-status" role="status" aria-live="polite">Loading controls...</div>
 +          </div>
 +          <div id="dash-action-status" class="ota-status hidden"></div>
-         </div>
--        <div class="right-part">
--          <button class="btn-action" onclick="Dialog.show('settings')">
--            Settings
--          </button>
--          <button class="btn-action" onclick="window.location.href = '/logout'">
--            Log Out
--          </button>
++        </div>
 +
 +        <div class="dash-card">
 +          <div class="dash-card-head">
@@ -2921,7 +2929,150 @@ index 5290300..8850f76 100644
 +            <button type="button" class="btn-action btn-default" id="btn-switch-xiaozhi">Switch to XiaoZhi HeyLily</button>
 +            <button type="button" class="btn-action" id="btn-switch-bootmenu">Reboot to Dual-Boot Menu</button>
 +          </div>
++        </div>
++
++    <!-- TAB 1.5: MONITOR — Network + System + Alerts dashboard tổng -->
++    <section id="tab-monitor" class="tab-pane hidden">
++      <div class="seclab-bar">
++        <div>
++          <strong>Live Monitor Center</strong>
++          <small class="muted-sm">System · Network · Wi-Fi · WIDS/BLE/Sonar feeds — live từ <code>/systeminfo</code> + <code>/seclab/status</code></small>
++        </div>
++        <div class="seclab-bar-actions">
++          <label class="sl-inline-label" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="mon-auto" checked /> Auto 3s</label>
++          <button type="button" class="btn-action btn-default" id="mon-refresh">Refresh Now</button>
++          <span id="mon-last" class="mono muted-sm">--</span>
++        </div>
++      </div>
++
++      <div class="seclab-subtabs" role="tablist" aria-label="Monitor sections">
++        <button type="button" class="slab-btn active" data-monslab="overview" aria-selected="true">Tổng quan</button>
++        <button type="button" class="slab-btn" data-monslab="network">Network & Wi-Fi</button>
++        <button type="button" class="slab-btn" data-monslab="system">System & Storage</button>
++        <button type="button" class="slab-btn" data-monslab="alerts">Alerts Feed</button>
++      </div>
++      <div id="mon-msg" class="ota-status hidden" role="status" aria-live="polite" style="margin:10px 16px 0"></div>
++
++      <!-- Overview -->
++      <div id="monslab-overview" class="slab-view">
++        <div class="overview-grid">
++          <div class="ov-tile"><strong>Device</strong><b id="mon-ov-device">--</b><small class="muted-sm" id="mon-ov-device-sub">MAC -- · Up --</small><span id="mon-ov-device-badge" class="sl-badge">--</span></div>
++          <div class="ov-tile"><strong>Power & CPU</strong><b id="mon-ov-power">--</b><small class="muted-sm" id="mon-ov-power-sub">Bat --% · --V · CPU --MHz</small><span id="mon-ov-power-badge" class="sl-badge">--</span></div>
++          <div class="ov-tile"><strong>Memory</strong><b id="mon-ov-mem">--</b><small class="muted-sm" id="mon-ov-mem-sub">Heap -- · PSRAM -- · DMA --</small><span id="mon-ov-mem-badge" class="sl-badge">OK</span></div>
++          <div class="ov-tile"><strong>Network</strong><b id="mon-ov-net">--</b><small class="muted-sm" id="mon-ov-net-sub">--</small><span id="mon-ov-net-badge" class="sl-badge">--</span>
++            <div class="sl-row sl-mt"><button type="button" class="btn-action" data-monslab-jump="network">Mở Network →</button><button type="button" class="btn-action" onclick="openWifiModal()">LAN WiFi</button></div>
++          </div>
++          <div class="ov-tile"><strong>NAPT Router</strong><b id="mon-ov-napt">OFF</b><small class="muted-sm" id="mon-ov-napt-sub">Clients 0 · Queries 0 · Trackers 0</small>
++            <div class="sl-row sl-mt"><button type="button" class="btn-action" data-jump-tab="seclab" data-jump-slab="wifi">Mở NAPT →</button><button type="button" class="btn-action" id="mon-napt-toggle">Start/Stop</button></div>
++          </div>
++          <div class="ov-tile"><strong>Alerts</strong><b id="mon-ov-alerts">0 alerts</b><small class="muted-sm" id="mon-ov-alerts-sub">WIDS · LAN Guard · Sonar · BLE</small><span id="mon-ov-alerts-badge" class="sl-badge">IDLE</span>
++            <div class="sl-row sl-mt"><button type="button" class="btn-action" data-monslab-jump="alerts">Xem Alerts →</button><button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/wids_alerts.txt')">WIDS Log</button></div>
++          </div>
++        </div>
++        <div class="dash-grid sl-mt" style="padding:0">
++          <div class="dash-card">
++            <div class="dash-card-head"><h3>Active Chains & Tools</h3><span id="mon-ov-chain-badge" class="sl-badge">IDLE</span></div>
++            <div id="mon-ov-chains" class="sl-scroll" style="max-height:132px"></div>
++            <div class="sl-row sl-mt"><button type="button" class="btn-action" data-jump-tab="seclab" data-jump-slab="lan">Mở SecLab →</button><button type="button" class="btn-action" onclick="switchTab('console')">Console</button></div>
++          </div>
++          <div class="dash-card">
++            <div class="dash-card-head"><h3>Quick Wi-Fi Scan</h3><span class="sl-badge" id="mon-ov-wifi-badge">2.4 GHz</span></div>
++            <div class="sl-row"><button type="button" class="btn-action btn-default" id="mon-wifi-scan">Scan APs</button><button type="button" class="btn-action" onclick="openWifiModal()">LAN WiFi Modal</button></div>
++            <div id="mon-wifi-list" class="sl-scroll sl-mt"></div>
++          </div>
++        </div>
++      </div>
++
++      <!-- Network -->
++      <div id="monslab-network" class="slab-view hidden">
++        <div class="dash-card dash-card-wide">
++          <div class="dash-card-head"><h3>Wi-Fi Connection</h3><span id="mon-wifi-mode" class="sl-badge">--</span></div>
++          <div class="kv-grid">
++            <div class="kv-item"><span>Mode / IP</span><b id="mon-net-mode">--</b></div>
++            <div class="kv-item"><span>SSID / RSSI</span><b id="mon-net-ssid">--</b></div>
++            <div class="kv-item"><span>AP Hotspot</span><b id="mon-net-ap">--</b></div>
++            <div class="kv-item"><span>mDNS</span><b id="mon-net-mdns">--</b></div>
++          </div>
++          <div class="sl-row sl-mt"><button type="button" class="btn-action btn-default" id="mon-net-scan">Scan APs (2.4 GHz)</button><button type="button" class="btn-action" onclick="openWifiModal()">Open WiFi Modal</button><button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/probe_radar.csv')">Probe CSV</button></div>
++          <div id="mon-net-scanlist" class="sl-scroll sl-mt" style="max-height:220px"></div>
++        </div>
++
++        <details class="sl-group" open>
++          <summary><span>NAPT Router — live</span><span id="mon-napt-badge" class="sl-badge">OFF</span></summary>
++          <div class="kv-grid sl-mt">
++            <div class="kv-item"><span>Uplink Wi-Fi</span><b id="mon-napt-up">--</b></div>
++            <div class="kv-item"><span>Hotspot AP</span><b id="mon-napt-ap">192.168.4.1</b></div>
++            <div class="kv-item"><span>Clients / Queries</span><b id="mon-napt-stat">0 / 0</b></div>
++            <div class="kv-item"><span>Blocked / Trackers</span><b id="mon-napt-blk">0 / 0</b></div>
++          </div>
++          <div class="sl-row sl-mt"><button type="button" class="btn-action btn-default" data-jump-tab="seclab" data-jump-slab="wifi">Điều khiển NAPT →</button><button type="button" class="btn-action" id="mon-napt-export">Export DNS Log</button></div>
++          <div class="sl-split sl-mt"><div><strong class="sl-sub">Live DNS Queries (last 12)</strong><div id="mon-napt-dns" class="sl-scroll"></div></div><div><strong class="sl-sub">Connected Clients</strong><div id="mon-napt-clients" class="sl-scroll"></div></div></div>
++        </details>
++
++        <details class="sl-group">
++          <summary><span>Airtime & Probe Radar</span><span id="mon-air-badge" class="sl-badge">BEST CH --</span></summary>
++          <div id="mon-air-bars" class="sl-bars sl-mt"></div>
++          <div class="sl-split sl-mt"><div><strong class="sl-sub">Hidden & Decloaked APs</strong><div id="mon-air-hidden" class="sl-scroll"></div></div><div><strong class="sl-sub">Probe Clusters</strong><div id="mon-probe-list" class="sl-scroll"></div></div></div>
++          <div class="sl-row sl-mt"><button type="button" class="btn-action" data-jump-tab="seclab" data-jump-slab="wifi">Mở Wi-Fi chi tiết →</button></div>
++        </details>
++      </div>
++
++      <!-- System -->
++      <div id="monslab-system" class="slab-view hidden">
++        <div class="kv-grid">
++          <div class="kv-item"><span>Uptime</span><b id="mon-sys-uptime">--</b></div>
++          <div class="kv-item"><span>Battery / Charging</span><b id="mon-sys-bat">--</b></div>
++          <div class="kv-item"><span>CPU / Board</span><b id="mon-sys-cpu">--</b></div>
++          <div class="kv-item"><span>OTA Slot</span><b id="mon-sys-ota">--</b></div>
++        </div>
++        <div class="kv-grid sl-mt">
++          <div class="kv-item"><span>Heap Free</span><b id="mon-sys-heap" class="mono">--</b></div>
++          <div class="kv-item"><span>PSRAM Free</span><b id="mon-sys-psram" class="mono">--</b></div>
++          <div class="kv-item"><span>DMA Free / Max Block</span><b id="mon-sys-dma" class="mono">--</b></div>
++          <div class="kv-item"><span>Build / Menu Style</span><b id="mon-sys-build">--</b></div>
          </div>
++        <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="fetchSystemInfo()">Refresh SystemInfo</button><button type="button" class="btn-action" onclick="quickCli('free')">CLI: free</button><button type="button" class="btn-action" onclick="quickCli('info')">CLI: info</button></div>
++
++        <div class="dash-grid sl-mt" style="padding:0">
++          <div class="dash-card">
++            <div class="dash-card-head"><h3>LittleFS</h3><span id="mon-fs-free" class="sl-badge">--</span></div>
++            <div class="drive-meter"><i id="mon-meter-fs"></i></div>
++            <div class="kv-grid sl-mt"><div class="kv-item"><span>Used / Total</span><b id="mon-fs-used">--</b></div><div class="kv-item"><span>Free</span><b id="mon-fs-free2">--</b></div></div>
++            <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/')">Open Files →</button></div>
++          </div>
++          <div class="dash-card">
++            <div class="dash-card-head"><h3>SDCard</h3><span id="mon-sd-free" class="sl-badge">--</span></div>
++            <div class="drive-meter"><i id="mon-meter-sd"></i></div>
++            <div class="kv-grid sl-mt"><div class="kv-item"><span>Used / Total</span><b id="mon-sd-used">--</b></div><div class="kv-item"><span>Free</span><b id="mon-sd-free2">--</b></div></div>
++          </div>
++        </div>
++      </div>
++
++      <!-- Alerts -->
++      <div id="monslab-alerts" class="slab-view hidden">
++        <div class="sl-row sticky-alert-filter" style="position:sticky;top:0;z-index:1;background:var(--surface);padding:6px;border:1px solid var(--border);border-radius:8px">
++          <button type="button" class="btn-action btn-default mon-filter active" data-filter="all">All</button>
++          <button type="button" class="btn-action mon-filter" data-filter="wids">WIDS</button>
++          <button type="button" class="btn-action mon-filter" data-filter="guard">LAN Guard</button>
++          <button type="button" class="btn-action mon-filter" data-filter="http">HTTP</button>
++          <button type="button" class="btn-action mon-filter" data-filter="sonar">Sonar</button>
++          <button type="button" class="btn-action mon-filter" data-filter="ble">BLE</button>
++          <button type="button" class="btn-action mon-filter" data-filter="chain">Chains</button>
++          <button type="button" class="btn-action" id="mon-alerts-clear" style="margin-left:auto">Clear view filter</button>
++        </div>
++        <div id="mon-alerts-feed" class="sl-scroll sl-mt" style="max-height:360px"></div>
++        <div class="sl-row sl-mt">
++          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/wids_alerts.txt')">WIDS Log</button>
++          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/ble_guard.log')">BLE Guard Log</button>
++          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/sonar_guard.log')">Sonar Log</button>
++          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/lan_audit.json')">LAN JSON</button>
++          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/napt_http_findings.json')">HTTP Findings</button>
++        </div>
++        <strong class="sl-sub sl-mt">SecLab+ Live Feed (mirror)</strong>
++        <div id="mon-plus-feed" class="sl-scroll sl-mt"></div>
++      </div>
++
++    </section>
        </div>
 +    </section>
 +
@@ -3294,6 +3445,13 @@ index 5290300..8850f76 100644
 -            <li>Close Navigator = Escape</li>
 -            <li>Reload Screen = R</li>
 -          </ul>
+-        </div>
+-        <div class="dialog-footer">
+-          <button
+-            class="btn-action act-escape"
+-            onclick="Dialog.show('navigator')"
+-          >
+-            Close
 +    </section>
 +
 +    <!-- TAB 3: SCREEN MIRROR & REMOTE CONTROL -->
@@ -3302,13 +3460,7 @@ index 5290300..8850f76 100644
 +        <div class="screen-tb-left">
 +          <strong>Live 1.83" Display Mirror</strong>
 +          <small class="muted-sm">Arrows / Enter / Backspace / M (Back) / R (Refresh)</small>
-         </div>
--        <div class="dialog-footer">
--          <button
--            class="btn-action act-escape"
--            onclick="Dialog.show('navigator')"
--          >
--            Close
++        </div>
 +        <div class="screen-tb-right">
 +          <button id="force-reload" class="icon-action" title="Reload Screen">
 +            <svg viewBox="0 0 24 24" fill="none">
@@ -3354,6 +3506,12 @@ index 5290300..8850f76 100644
 -              <option value="10000">Auto Reload: 10s</option>
 -            </select>
 -          </div>
+-        </div>
+-        <div class="dialog-body">
+-          <div id="wifi-warning" class="navigator-warning hidden">
+-            ⚠️ WiFi features will stop the WebUI after configuration
+-          </div>
+-          <canvas id="navigator-screen"></canvas>
 +      <details class="sl-group">
 +        <summary>Advanced display &amp; power settings</summary>
 +        <div class="sl-row sl-mt">
@@ -3364,12 +3522,7 @@ index 5290300..8850f76 100644
 +          <label for="screen-power">Power profile</label>
 +          <select id="screen-power"><option value="0">Balanced</option><option value="1">Eco</option><option value="2">Performance</option></select>
 +          <button type="button" class="btn-action" id="screen-settings-save">Save display settings</button>
-         </div>
--        <div class="dialog-body">
--          <div id="wifi-warning" class="navigator-warning hidden">
--            ⚠️ WiFi features will stop the WebUI after configuration
--          </div>
--          <canvas id="navigator-screen"></canvas>
++        </div>
 +        <small class="muted-sm">Saved on the device. While WebUI is active, the display controller stays awake with the backlight off; this consumes more power.</small>
 +        <div id="screen-settings-status" class="ota-status hidden" role="status" aria-live="polite"></div>
 +      </details>
@@ -3496,26 +3649,6 @@ index 5290300..8850f76 100644
 -                    fill="currentColor"
 -                    d="M43.7,38H8.3c-1,0-1.7-1.3-0.9-2.2l17.3-21.2c0.6-0.8,1.9-0.8,2.5,0l17.5,21.2C45.4,36.7,44.8,38,43.7,38z"
 -                  />
--                </svg>
--              </div>
--              <div
--                class="nav nav-ok"
--                data-direction="Sel"
--                title="Select/OK"
--              ></div>
--              <div class="nav nav-right" data-direction="Next" title="Right">
--                <svg
--                  xmlns="http://www.w3.org/2000/svg"
--                  width="18"
--                  height="18"
--                  viewBox="0 0 52 52"
--                >
--                  <path
--                    fill="currentColor"
--                    d="M43.7,38H8.3c-1,0-1.7-1.3-0.9-2.2l17.3-21.2c0.6-0.8,1.9-0.8,2.5,0l17.5,21.2C45.4,36.7,44.8,38,43.7,38z"
--                  />
--                </svg>
--              </div>
 +              <button type="button" class="nav nav-left" data-direction="Prev" title="Left" aria-label="Left">
 +                <svg width="18" height="18" viewBox="0 0 52 52"><path fill="currentColor" d="M43.7,38H8.3c-1,0-1.7-1.3-0.9-2.2l17.3-21.2c0.6-0.8,1.9-0.8,2.5,0l17.5,21.2C45.4,36.7,44.8,38,43.7,38z"/></svg>
 +              </button>
@@ -3523,44 +3656,20 @@ index 5290300..8850f76 100644
 +              <button type="button" class="nav nav-right" data-direction="Next" title="Right" aria-label="Right">
 +                <svg width="18" height="18" viewBox="0 0 52 52"><path fill="currentColor" d="M43.7,38H8.3c-1,0-1.7-1.3-0.9-2.2l17.3-21.2c0.6-0.8,1.9-0.8,2.5,0l17.5,21.2C45.4,36.7,44.8,38,43.7,38z"/></svg>
 +              </button>
-             </div>
-             <div class="p-bot">
--              <div
--                class="nav nav-page-down"
--                data-direction="PrevPage"
--                title="Previous Page"
--              >
--                <svg
--                  xmlns="http://www.w3.org/2000/svg"
--                  width="18"
--                  height="18"
--                  viewBox="0 0 24 24"
--                  fill="none"
--                >
--                  <path
--                    d="M15.5 12L5.72222 19.1111L5.72222 4.88889L15.5 12Z"
--                    stroke="currentColor"
--                    stroke-width="1.77778"
--                    stroke-linecap="round"
--                    stroke-linejoin="round"
--                  />
--                  <line
--                    x1="18.1667"
--                    y1="4.88889"
--                    x2="18.1667"
--                    y2="19.1111"
--                    stroke="currentColor"
--                    stroke-width="1.77778"
--                    stroke-linecap="round"
--                    stroke-linejoin="round"
--                  />
++            </div>
++            <div class="p-bot">
 +              <button type="button" class="nav nav-page-down" data-direction="PrevPage" title="Previous Page" aria-label="Previous Page">
 +                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
 +                  <path d="M15.5 12L5.72 19.11V4.89L15.5 12Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
 +                  <line x1="18.2" y1="4.9" x2="18.2" y2="19.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
                  </svg>
 -              </div>
--              <div class="nav nav-down" data-direction="Down" title="Down">
+-              <div
+-                class="nav nav-ok"
+-                data-direction="Sel"
+-                title="Select/OK"
+-              ></div>
+-              <div class="nav nav-right" data-direction="Next" title="Right">
 -                <svg
 -                  xmlns="http://www.w3.org/2000/svg"
 -                  width="18"
@@ -3599,6 +3708,82 @@ index 5290300..8850f76 100644
 +              <div class="bm-status">
 +                <span id="bm-owner-pill" class="bm-pill">DSolution</span>
 +                <span class="bm-bat">98%</span>
++              </div>
++              <div class="bm-center">
++                <div class="bm-fin"></div>
++                <div id="bm-title" class="bm-title">DSolution</div>
++                <div id="bm-sub" class="bm-sub">ESP32-S3 SEC LAB</div>
++                <div class="bm-bar"><i></i></div>
+               </div>
++              <div class="bm-foot">v1.14 &bull; <span id="bm-mdns">http://bruce.local</span></div>
+             </div>
+-            <div class="p-bot">
+-              <div
+-                class="nav nav-page-down"
+-                data-direction="PrevPage"
+-                title="Previous Page"
+-              >
+-                <svg
+-                  xmlns="http://www.w3.org/2000/svg"
+-                  width="18"
+-                  height="18"
+-                  viewBox="0 0 24 24"
+-                  fill="none"
+-                >
+-                  <path
+-                    d="M15.5 12L5.72222 19.1111L5.72222 4.88889L15.5 12Z"
+-                    stroke="currentColor"
+-                    stroke-width="1.77778"
+-                    stroke-linecap="round"
+-                    stroke-linejoin="round"
+-                  />
+-                  <line
+-                    x1="18.1667"
+-                    y1="4.88889"
+-                    x2="18.1667"
+-                    y2="19.1111"
+-                    stroke="currentColor"
+-                    stroke-width="1.77778"
+-                    stroke-linecap="round"
+-                    stroke-linejoin="round"
+-                  />
+-                </svg>
++            <div class="preset-row">
++              <button type="button" class="preset-chip" data-pri="#00F0FF" data-sec="#50AEBD" data-bg="#070D12">Cyber Cyan</button>
++              <button type="button" class="preset-chip" data-pri="#2CE59B" data-sec="#4F9E7E" data-bg="#050D09">Matrix Green</button>
++              <button type="button" class="preset-chip" data-pri="#FFB020" data-sec="#B8873B" data-bg="#0E0A05">Amber Ops</button>
++              <button type="button" class="preset-chip" data-pri="#FF5566" data-sec="#B55B68" data-bg="#100608">Crimson Red</button>
++              <button type="button" class="preset-chip" data-pri="#B77CFF" data-sec="#8D6BC4" data-bg="#090612">Ultraviolet</button>
++              <button type="button" class="preset-chip" data-pri="#E8F6FF" data-sec="#8CB2CC" data-bg="#080D12">Arctic Ice</button>
++            </div>
++          </div>
++        </div>
++
++        <div class="pers-form-col">
++          <div class="dash-card">
++            <div class="dash-card-head">
++              <h3>Device Identity, Theme &amp; Access Point</h3>
++            </div>
++            <div class="form-grid">
++              <div class="field">
++                <label for="pers-owner">Owner / Handle (max 24)</label>
++                <input type="text" id="pers-owner" maxlength="24" placeholder="DSolution" />
+               </div>
+-              <div class="nav nav-down" data-direction="Down" title="Down">
+-                <svg
+-                  xmlns="http://www.w3.org/2000/svg"
+-                  width="18"
+-                  height="18"
+-                  viewBox="0 0 52 52"
+-                >
+-                  <path
+-                    fill="currentColor"
+-                    d="M43.7,38H8.3c-1,0-1.7-1.3-0.9-2.2l17.3-21.2c0.6-0.8,1.9-0.8,2.5,0l17.5,21.2C45.4,36.7,44.8,38,43.7,38z"
+-                  />
+-                </svg>
++              <div class="field">
++                <label for="pers-tag">Boot Banner Subtitle (max 28)</label>
++                <input type="text" id="pers-tag" maxlength="28" placeholder="ESP32-S3 SEC LAB" />
                </div>
 -              <div class="nav" data-direction="Esc" title="Back">
 -                <svg
@@ -3614,47 +3799,6 @@ index 5290300..8850f76 100644
 -                    fill="currentColor"
 -                  ></path>
 -                </svg>
-+              <div class="bm-center">
-+                <div class="bm-fin"></div>
-+                <div id="bm-title" class="bm-title">DSolution</div>
-+                <div id="bm-sub" class="bm-sub">ESP32-S3 SEC LAB</div>
-+                <div class="bm-bar"><i></i></div>
-               </div>
-+              <div class="bm-foot">v1.14 &bull; <span id="bm-mdns">http://bruce.local</span></div>
-+            </div>
-+            <div class="preset-row">
-+              <button type="button" class="preset-chip" data-pri="#00F0FF" data-sec="#50AEBD" data-bg="#070D12">Cyber Cyan</button>
-+              <button type="button" class="preset-chip" data-pri="#2CE59B" data-sec="#4F9E7E" data-bg="#050D09">Matrix Green</button>
-+              <button type="button" class="preset-chip" data-pri="#FFB020" data-sec="#B8873B" data-bg="#0E0A05">Amber Ops</button>
-+              <button type="button" class="preset-chip" data-pri="#FF5566" data-sec="#B55B68" data-bg="#100608">Crimson Red</button>
-+              <button type="button" class="preset-chip" data-pri="#B77CFF" data-sec="#8D6BC4" data-bg="#090612">Ultraviolet</button>
-+              <button type="button" class="preset-chip" data-pri="#E8F6FF" data-sec="#8CB2CC" data-bg="#080D12">Arctic Ice</button>
-             </div>
-           </div>
-         </div>
--        <div class="dialog-footer">
--          <button
--            class="btn-action"
--            onclick="Dialog.show('navigator-shortcut')"
--          >
--            Shortcut
--          </button>
--          <button class="btn-action act-dialog-close act-escape">Close</button>
-+
-+        <div class="pers-form-col">
-+          <div class="dash-card">
-+            <div class="dash-card-head">
-+              <h3>Device Identity, Theme &amp; Access Point</h3>
-+            </div>
-+            <div class="form-grid">
-+              <div class="field">
-+                <label for="pers-owner">Owner / Handle (max 24)</label>
-+                <input type="text" id="pers-owner" maxlength="24" placeholder="DSolution" />
-+              </div>
-+              <div class="field">
-+                <label for="pers-tag">Boot Banner Subtitle (max 28)</label>
-+                <input type="text" id="pers-tag" maxlength="28" placeholder="ESP32-S3 SEC LAB" />
-+              </div>
 +              <div class="field">
 +                <label for="pers-mdns">mDNS Hostname (.local)</label>
 +                <input type="text" id="pers-mdns" maxlength="24" placeholder="bruce" />
@@ -3662,7 +3806,7 @@ index 5290300..8850f76 100644
 +              <div class="field">
 +                <label for="pers-bright">LCD Brightness: <b id="pers-bright-val">80%</b></label>
 +                <input type="range" id="pers-bright" min="10" max="100" value="80" />
-+              </div>
+               </div>
 +              <div class="field">
 +                <label for="pers-apssid">AP Hotspot SSID</label>
 +                <input type="text" id="pers-apssid" maxlength="32" placeholder="BruceNet" />
@@ -3676,7 +3820,7 @@ index 5290300..8850f76 100644
 +              <label for="pers-style">Main menu layout &amp; WebUI style</label>
 +              <select id="pers-style"><option value="0">Carousel · rounded</option><option value="1">Grid · technical</option></select>
 +              <small>Same setting as Config → Display &amp; UI → Menu Layout. Custom JSON theme images apply to the device only.</small>
-+            </div>
+             </div>
 +            <div class="color-grid">
 +              <label class="color-box">
 +                <span>Primary</span>
@@ -3696,9 +3840,18 @@ index 5290300..8850f76 100644
 +              <button type="button" class="btn-action" id="btn-reload-pers">Reset Form</button>
 +            </div>
 +            <div id="pers-status" class="ota-status hidden"></div>
-+          </div>
+           </div>
          </div>
-       </div>
+-        <div class="dialog-footer">
+-          <button
+-            class="btn-action"
+-            onclick="Dialog.show('navigator-shortcut')"
+-          >
+-            Shortcut
+-          </button>
+-          <button class="btn-action act-dialog-close act-escape">Close</button>
+-        </div>
+-      </div>
 -      <div class="dialog info hidden">
 -        <div class="dialog-head">Info</div>
 -        <div class="dialog-body">
@@ -3724,6 +3877,49 @@ index 5290300..8850f76 100644
 -            >
 -            by <a href="https://github.com/lshaf" target="_blank">lshaf</a>.
 -          </p>
+-        </div>
+-        <div class="dialog-footer">
+-          <button class="btn-action act-dialog-close act-escape">Close</button>
+-        </div>
+-      </div>
+-      <div class="dialog oinput hidden">
+-        <div class="dialog-head">
+-          <span class="oinput-title"></span>
+-          <span class="oinput-text"></span>
+-        </div>
+-        <div class="dialog-body">
+-          <label for="oinput-input" class="oinput-label"></label>
+-          <input type="text" id="oinput-input" class="oinput-text-submit" />
+-        </div>
+-        <div class="dialog-footer">
+-          <button class="btn-action btn-default act-save-oinput-file"></button>
+-          <button class="btn-action act-dialog-close act-escape">Close</button>
+-        </div>
+-      </div>
+-      <div class="dialog credential hidden">
+-        <div class="dialog-head">Change WebUI Credentials</div>
+-        <div class="dialog-body">
+-          <label for="cred-username" class="oinput-label">Username</label>
+-          <input
+-            type="text"
+-            id="cred-username"
+-            class="oinput-text-submit"
+-            style="margin-bottom: 10px"
+-          />
+-          <label for="cred-password" class="oinput-label">Password</label>
+-          <input type="text" id="cred-password" class="oinput-text-submit" />
+-        </div>
+-        <div class="dialog-footer">
+-          <button class="btn-action btn-default act-save-credential">
+-            Save
+-          </button>
+-          <button
+-            class="btn-action act-escape"
+-            onclick="Dialog.show('settings')"
+-          >
+-            Close
+-          </button>
++      </div>
 +    </section>
 +
 +    <!-- TAB 5: CONSOLE -->
@@ -3740,9 +3936,7 @@ index 5290300..8850f76 100644
 +          <button type="button" class="chip-cmd" data-cmd="tone 2400 120">tone 2400 120</button>
 +          <button type="button" class="chip-cmd" data-cmd="led hex 00F0FF">led hex 00F0FF</button>
 +          <button type="button" class="chip-cmd" data-cmd="led off">led off</button>
-         </div>
--        <div class="dialog-footer">
--          <button class="btn-action act-dialog-close act-escape">Close</button>
++        </div>
 +        <pre id="console-out" class="console-out">Bruce SecLab Serial Console Ready. Type 'help' or click a command chip above.&#10;</pre>
 +        <div class="console-input-row">
 +          <span class="mono prompt-pfx">#</span>
@@ -3751,14 +3945,9 @@ index 5290300..8850f76 100644
 +          <button type="button" class="btn-action" id="console-clear">Clear</button>
          </div>
        </div>
--      <div class="dialog oinput hidden">
+-      <div class="dialog editor hidden">
 -        <div class="dialog-head">
--          <span class="oinput-title"></span>
--          <span class="oinput-text"></span>
--        </div>
--        <div class="dialog-body">
--          <label for="oinput-input" class="oinput-label"></label>
--          <input type="text" id="oinput-input" class="oinput-text-submit" />
+-          Edit: <span class="editor-file-name"></span>
 +    </section>
 +
 +    <!-- TAB 6: SECLAB -->
@@ -3769,26 +3958,15 @@ index 5290300..8850f76 100644
 +          <strong>DSolution 1.83″ SecLab Center</strong>
 +          <small class="muted-sm">NAPT, PMKID/CSA, Portal-NAPT, LAN Audit, Responder+, HTTP Inspector, HID LED Link, BLE Audit &amp; USB Vault — mở nhóm khi cần</small>
          </div>
--        <div class="dialog-footer">
--          <button class="btn-action btn-default act-save-oinput-file"></button>
--          <button class="btn-action act-dialog-close act-escape">Close</button>
+-        <div class="dialog-body">
+-          <div class="editor-container">
+-            <div class="line-numbers"></div>
+-            <textarea class="file-content" style="resize: none"></textarea>
 +        <div class="seclab-bar-actions">
 +          <button type="button" class="btn-action" id="sl-refresh">Refresh Now</button>
 +          <button type="button" class="btn-action btn-danger" data-sl-action="stop_all" data-sl-confirm="Stop all stoppable SecLab+ tools? An in-progress pairing audit will finish on its own.">Stop All</button>
-         </div>
-       </div>
--      <div class="dialog credential hidden">
--        <div class="dialog-head">Change WebUI Credentials</div>
--        <div class="dialog-body">
--          <label for="cred-username" class="oinput-label">Username</label>
--          <input
--            type="text"
--            id="cred-username"
--            class="oinput-text-submit"
--            style="margin-bottom: 10px"
--          />
--          <label for="cred-password" class="oinput-label">Password</label>
--          <input type="text" id="cred-password" class="oinput-text-submit" />
++        </div>
++      </div>
 +
 +      <!-- Sub-tabs inside SecLab -->
 +      <div class="seclab-subtabs" role="tablist" aria-label="SecLab sections">
@@ -3804,17 +3982,7 @@ index 5290300..8850f76 100644
 +      <div id="slab-overview" class="slab-view">
 +        <div class="sl-note">
 +          <strong>Authorized security audits only.</strong> Chỉ dùng trên hệ thống bạn sở hữu/được phép. 2C proxy chỉ xử lý cleartext HTTP/1.0 — TLS <code>CONNECT</code> luôn bị từ chối.
-         </div>
--        <div class="dialog-footer">
--          <button class="btn-action btn-default act-save-credential">
--            Save
--          </button>
--          <button
--            class="btn-action act-escape"
--            onclick="Dialog.show('settings')"
--          >
--            Close
--          </button>
++        </div>
 +
 +        <!-- Compact status tiles — 1 line overview -->
 +        <div class="overview-grid sl-mt">
@@ -3824,11 +3992,7 @@ index 5290300..8850f76 100644
 +          <div class="ov-tile"><strong>LAN Audit</strong><b id="ov-lan">0 / 0</b><small class="muted-sm">Devices / Findings</small><button type="button" class="btn-action sl-mt" data-slab-jump="lan">Mở LAN & HTTP →</button></div>
 +          <div class="ov-tile"><strong>BLE / HID</strong><b id="ov-ble">IDLE</b><small class="muted-sm"><span id="ov-ble-detail">GATT findings · LED link</span></small><button type="button" class="btn-action sl-mt" data-slab-jump="ble">Mở BLE & HID →</button></div>
 +          <div class="ov-tile"><strong>Sonar & USB Vault</strong><b id="ov-studio">IDLE · 0 files</b><small class="muted-sm"><span id="ov-studio-detail">Motion guard · Vault</span></small><button type="button" class="btn-action sl-mt" data-slab-jump="studio">Mở Sensors & USB →</button></div>
-         </div>
--      </div>
--      <div class="dialog editor hidden">
--        <div class="dialog-head">
--          Edit: <span class="editor-file-name"></span>
++        </div>
 +
 +        <!-- Hidden compact kv summary (IDs kept for JS, visually compact) -->
 +        <div class="ov-kv-compact sl-mt">
@@ -3858,11 +4022,7 @@ index 5290300..8850f76 100644
 +          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/napt_http_findings.json')">HTTP Findings</button>
 +          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/led_link/exfil.txt')">LED Exfil</button>
 +          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/ble_security_audit.json')">GATT Audit</button>
-         </div>
--        <div class="dialog-body">
--          <div class="editor-container">
--            <div class="line-numbers"></div>
--            <textarea class="file-content" style="resize: none"></textarea>
++        </div>
 +        <strong class="sl-sub sl-mt">Live SecLab+ Feed</strong>
 +        <div id="sl-plus-feed" class="sl-scroll sl-mt"></div>
 +      </div>
@@ -3874,7 +4034,7 @@ index 5290300..8850f76 100644
 +          <div class="dash-card-head">
 +            <h3>#1 Wi-Fi NAPT Travel Router &amp; Live DNS Blocker</h3>
 +            <span id="sl-napt-badge" class="sl-badge">OFF</span>
-           </div>
++          </div>
 +          <div class="sl-napt-creds sl-mt">
 +            <input type="text" id="sl-napt-ssid" placeholder="Optional uplink SSID (blank = current STA)" />
 +            <input type="password" id="sl-napt-pwd" placeholder="Uplink Wi-Fi password (if needed)" />
@@ -3886,7 +4046,7 @@ index 5290300..8850f76 100644
 +            <button type="button" class="btn-action btn-default" id="sl-napt-auto" aria-pressed="true">Auto-Block Trackers: ON</button>
 +            <button type="button" class="btn-action" id="sl-napt-export">Export Log</button>
 +            <button type="button" class="btn-action" id="sl-napt-clear">Clear Feed</button>
-+          </div>
+           </div>
 +          <div id="sl-napt-msg" class="ota-status hidden" role="status" aria-live="polite" aria-busy="false"></div>
 +          <div class="kv-grid sl-mt">
 +            <div class="kv-item"><span>Uplink Wi-Fi</span><b id="sl-napt-up">--</b></div>
@@ -4104,7 +4264,9 @@ index 5290300..8850f76 100644
 +            <svg viewBox="0 0 24 24" fill="none">
 +              <path d="M7 5v14l11-7-11-7Z" fill="currentColor"/>
 +            </svg>
-+          </button>
+           </button>
+-          <button class="btn-action act-run-edit-file" title="ALT + ENTER">
+-            Run
 +          <a class="icon-action act-download" title="Download">
 +            <svg viewBox="0 0 24 24" fill="none">
 +              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -4115,14 +4277,12 @@ index 5290300..8850f76 100644
 +              <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 +            </svg>
            </button>
--          <button class="btn-action act-run-edit-file" title="ALT + ENTER">
--            Run
+-          <button class="btn-action act-dialog-close act-escape">Close</button>
 +          <button class="icon-action act-delete" title="Delete">
 +            <svg viewBox="0 0 24 24" fill="none">
 +              <path d="M3 6h18M8 6V4h8v2m-9 0v14a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V6M10 11v6m4-6v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 +            </svg>
-           </button>
--          <button class="btn-action act-dialog-close act-escape">Close</button>
++          </button>
 +        </td>
 +      </tr>
 +    </table>
@@ -4145,8 +4305,8 @@ index 5290300..8850f76 100644
 +        <div style="display:flex;gap:6px;align-items:center">
 +          <button type="button" class="btn-action" onclick="openWifiModal()" style="padding:3px 8px;font-size:11px">LAN WiFi</button>
 +          <a class="btn-action" href="/ota" target="_blank" style="padding:3px 8px;font-size:11px">Standalone Page</a>
-+        </div>
-+      </div>
+         </div>
+       </div>
 +      <div class="dialog-body">
 +        <p style="font-size:12px;color:var(--muted);margin-bottom:6px">
 +          Active: <b id="ota-cur-slot" style="color:var(--color)">--</b> &bull;
@@ -4163,8 +4323,8 @@ index 5290300..8850f76 100644
 +        <div id="ota-prog" class="ota-prog hidden">
 +          <div class="ota-bar-bg"><div id="ota-bar-fill" class="ota-bar-fill"></div></div>
 +          <div class="ota-prog-txt"><span id="ota-prog-msg">Uploading...</span><span id="ota-prog-pct">0%</span></div>
-         </div>
-       </div>
++        </div>
++      </div>
 +      <div class="dialog-footer">
 +        <button id="ota-cancel-btn" class="btn-action btn-danger hidden">Cancel</button>
 +        <button id="ota-start-btn" class="btn-action btn-default" disabled>Flash OTA Firmware</button>
@@ -4203,9 +4363,7 @@ index 5290300..8850f76 100644
 +      <div class="dialog-footer">
 +        <button class="btn-action act-dialog-close act-escape">Close</button>
 +      </div>
-     </div>
--    <div class="loading-area hidden">
--      <div class="text"></div>
++    </div>
 +
 +    <div class="dialog navigator-shortcut hidden">
 +      <div class="dialog-head">Screen Keyboard Shortcuts</div>
@@ -4223,7 +4381,9 @@ index 5290300..8850f76 100644
 +      <div class="dialog-footer">
 +        <button class="btn-action act-dialog-close act-escape">Close</button>
 +      </div>
-+    </div>
+     </div>
+-    <div class="loading-area hidden">
+-      <div class="text"></div>
 +
 +    <div class="dialog info hidden">
 +      <div class="dialog-head">About Bruce SecLab WebUI</div>
@@ -4234,7 +4394,10 @@ index 5290300..8850f76 100644
 +      <div class="dialog-footer">
 +        <button class="btn-action act-dialog-close act-escape">Close</button>
 +      </div>
-+    </div>
+     </div>
+-    <div class="upload-area hidden"></div>
+-    <script src="/index.js"></script>
+-  </body>
 +
 +    <div class="dialog oinput hidden">
 +      <div class="dialog-head">
@@ -4263,10 +4426,7 @@ index 5290300..8850f76 100644
 +        <button class="btn-action btn-default act-save-credential">Save</button>
 +        <button class="btn-action act-escape" onclick="Dialog.show('settings')">Back</button>
 +      </div>
-     </div>
--    <div class="upload-area hidden"></div>
--    <script src="/index.js"></script>
--  </body>
++    </div>
 +
 +    <div class="dialog editor hidden">
 +      <div class="dialog-head">Edit: <span class="editor-file-name mono"></span></div>
@@ -4290,7 +4450,7 @@ index 5290300..8850f76 100644
 +</body>
  </html>
 diff --git a/embedded_resources/web_interface/index.js b/embedded_resources/web_interface/index.js
-index fd61602..1c09ba5 100644
+index fd61602..3292cd2 100644
 --- a/embedded_resources/web_interface/index.js
 +++ b/embedded_resources/web_interface/index.js
 @@ -6,20 +6,17 @@ const T = {
@@ -4409,7 +4569,7 @@ index fd61602..1c09ba5 100644
      window.location.href = "/";
    } else {
      Dialog.loading.hide();
-@@ -132,151 +93,182 @@ function handleAuthError() {
+@@ -132,151 +93,188 @@ function handleAuthError() {
  async function requestGet(url, data) {
    return new Promise((resolve, reject) => {
      let req = new XMLHttpRequest();
@@ -4550,6 +4710,12 @@ index fd61602..1c09ba5 100644
 +    startSecLabPoll();
 +  } else {
 +    stopSecLabPoll();
++  }
++  if (tabName === "monitor") {
++    refreshMonitor();
++    startMonitorPoll();
++  } else {
++    stopMonitorPoll();
 +  }
 +}
 +
@@ -4700,7 +4866,7 @@ index fd61602..1c09ba5 100644
  }
  
  async function runCommand(cmd) {
-@@ -290,13 +282,21 @@ async function runCommand(cmd) {
+@@ -290,13 +288,21 @@ async function runCommand(cmd) {
    }
  }
  
@@ -4727,7 +4893,7 @@ index fd61602..1c09ba5 100644
    return undefined;
  }
  
-@@ -304,39 +304,25 @@ function calcHash(str) {
+@@ -304,39 +310,25 @@ function calcHash(str) {
    let hash = 5381;
    str = str.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
    for (let i = 0; i < str.length; i++) {
@@ -4773,7 +4939,7 @@ index fd61602..1c09ba5 100644
  }
  
  function renderFileRow(fileList) {
-@@ -346,251 +332,499 @@ function renderFileRow(fileList) {
+@@ -346,251 +338,499 @@ function renderFileRow(fileList) {
      .sort((a, b) => {
        let [aFirst, ...aRest] = a.split(":");
        let [bFirst, ...bRest] = b.split(":");
@@ -5409,7 +5575,7 @@ index fd61602..1c09ba5 100644
      });
    };
  
-@@ -599,7 +833,6 @@ async function renderTFT(data) {
+@@ -599,7 +839,6 @@ async function renderTFT(data) {
      let img = await loadImage(img_url);
      let drawX = input.x;
      let drawY = input.y;
@@ -5417,7 +5583,7 @@ index fd61602..1c09ba5 100644
      if (input.center === 1) {
        drawX += (canvas.width - img.width) / 2;
        drawY += (canvas.height - img.height) / 2;
-@@ -607,12 +840,7 @@ async function renderTFT(data) {
+@@ -607,12 +846,7 @@ async function renderTFT(data) {
      ctx.drawImage(img, drawX, drawY);
    };
  
@@ -5431,7 +5597,7 @@ index fd61602..1c09ba5 100644
  
    const drawRoundRect = (ctx, input, fill) => {
      const { x, y, w, h, r } = input;
-@@ -629,60 +857,45 @@ async function renderTFT(data) {
+@@ -629,60 +863,45 @@ async function renderTFT(data) {
  
    let startData = 0;
    const getByteValue = (dataType) => {
@@ -5515,7 +5681,7 @@ index fd61602..1c09ba5 100644
        }
      }
      return r;
-@@ -690,279 +903,570 @@ async function renderTFT(data) {
+@@ -690,279 +909,570 @@ async function renderTFT(data) {
  
    let offset = 0;
    ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -5800,24 +5966,9 @@ index fd61602..1c09ba5 100644
 -  e.preventDefault();
 -  autoReloadScreen();
 -  sessionStorage.setItem("autoReload", eConfigAutoReload.value);
--});
--
--btnForceReload.addEventListener("click", async (e) => {
--  e.preventDefault();
--  drawCanvasLoading();
--  await reloadScreen();
--});
 +  $("#screen-status").textContent = "Navigating…";
 +}
- 
--window.ondragenter = () => $(".upload-area").classList.remove("hidden");
--$(".upload-area").ondragleave = () => $(".upload-area").classList.add("hidden");
--$(".upload-area").ondragover = (e) => e.preventDefault();
--$(".upload-area").ondrop = async (e) => {
--  e.preventDefault();
--  $(".upload-area").classList.add("hidden");
--  const items = e.dataTransfer.items;
--  if (!items || items.length === 0) return;
++
 +function updateBootPreview() {
 +  const owner = ($("#pers-owner").value || "DSolution").trim();
 +  const tag = ($("#pers-tag").value || "ESP32-S3 SEC LAB").trim();
@@ -5835,11 +5986,7 @@ index fd61602..1c09ba5 100644
 +  box.style.setProperty("--bm-sec", sec);
 +  box.style.setProperty("--bm-bg", bg);
 +}
- 
--  for (let i of items) {
--    let entry = i.webkitGetAsEntry();
--    if (!entry) continue;
--    await appendDroppedFiles(entry);
++
 +async function loadPersonalizeForm() {
 +  try {
 +    const p = JSON.parse(await requestGet("/personalize"));
@@ -5857,19 +6004,17 @@ index fd61602..1c09ba5 100644
 +    updateBootPreview();
 +  } catch (err) {
 +    console.error("Personalize load failed:", err);
-   }
++  }
 +}
- 
--  if (!_runningUpload)
--    setTimeout(() => {
--      if (_queueUpload.length === 0) return;
--      uploadFile();
--    }, 100);
--};
++
 +["#pers-owner", "#pers-tag", "#pers-mdns", "#pers-pri", "#pers-sec", "#pers-bg", "#pers-bright"].forEach((sel) => {
 +  $(sel)?.addEventListener("input", updateBootPreview);
-+});
-+
+ });
+ 
+-btnForceReload.addEventListener("click", async (e) => {
+-  e.preventDefault();
+-  drawCanvasLoading();
+-  await reloadScreen();
 +document.querySelectorAll(".preset-chip").forEach((chip) => {
 +  chip.addEventListener("click", () => {
 +    $("#pers-pri").value = chip.getAttribute("data-pri").toLowerCase();
@@ -5877,8 +6022,12 @@ index fd61602..1c09ba5 100644
 +    $("#pers-bg").value = chip.getAttribute("data-bg").toLowerCase();
 +    updateBootPreview();
 +  });
-+});
-+
+ });
+ 
+-window.ondragenter = () => $(".upload-area").classList.remove("hidden");
+-$(".upload-area").ondragleave = () => $(".upload-area").classList.add("hidden");
+-$(".upload-area").ondragover = (e) => e.preventDefault();
+-$(".upload-area").ondrop = async (e) => {
 +$("#btn-reload-pers")?.addEventListener("click", loadPersonalizeForm);
 +$("#btn-save-pers")?.addEventListener("click", async () => {
 +  const pwd = $("#pers-appwd").value;
@@ -6015,7 +6164,10 @@ index fd61602..1c09ba5 100644
 +  eConfigAutoReload.querySelector(`option[value="${oldTimerSession}"]`).selected = true;
 +}
 +eConfigAutoReload.addEventListener("change", (e) => {
-+  e.preventDefault();
+   e.preventDefault();
+-  $(".upload-area").classList.add("hidden");
+-  const items = e.dataTransfer.items;
+-  if (!items || items.length === 0) return;
 +  autoReloadScreen();
 +  sessionStorage.setItem("autoReload", eConfigAutoReload.value);
 +});
@@ -6027,7 +6179,11 @@ index fd61602..1c09ba5 100644
 +  drawCanvasLoading();
 +  await reloadScreen(true);
 +});
-+
+ 
+-  for (let i of items) {
+-    let entry = i.webkitGetAsEntry();
+-    if (!entry) continue;
+-    await appendDroppedFiles(entry);
 +$("#ota-file-input").addEventListener("change", (e) => validateOtaFile(e.target.files[0]));
 +const otaDrop = $("#ota-drop-zone");
 +otaDrop.addEventListener("dragover", (e) => { e.preventDefault(); otaDrop.classList.add("drag"); });
@@ -6168,7 +6324,7 @@ index fd61602..1c09ba5 100644
 +  if (e.key === "Enter" || e.keyCode === 13) {
 +    e.preventDefault();
 +    $("#wifi-connect-btn").click();
-+  }
+   }
 +});
 +$("#wifi-rescan-btn").addEventListener("click", () => scanWifiNets());
 +$("#wifi-connect-btn").addEventListener("click", async () => {
@@ -6190,7 +6346,12 @@ index fd61602..1c09ba5 100644
 +    $("#wifi-connect-btn").disabled = false;
 +  }
 +});
-+
+ 
+-  if (!_runningUpload)
+-    setTimeout(() => {
+-      if (_queueUpload.length === 0) return;
+-      uploadFile();
+-    }, 100);
 +window.ondragenter = (e) => {
 +  if ($(".dialog.ota:not(.hidden)") || activeTab !== "files") return;
 +  if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files")) {
@@ -6222,7 +6383,7 @@ index fd61602..1c09ba5 100644
 +  }
 +  if (_queueUpload.length) uploadFile();
 +  else if (_uploadFailures) $(".upload-close").disabled = false;
-+};
+ };
  
  document.querySelectorAll(".inp-uploader").forEach((el) => {
 -  el.addEventListener("change", async (e) => {
@@ -6260,7 +6421,7 @@ index fd61602..1c09ba5 100644
      fetchFiles(drive, path);
      return;
    }
-@@ -970,37 +1474,8 @@ $(".container").addEventListener("click", async (e) => {
+@@ -970,37 +1480,8 @@ $(".container").addEventListener("click", async (e) => {
    let editFileAction = e.target.closest(".act-edit-file");
    if (editFileAction) {
      e.preventDefault();
@@ -6299,7 +6460,7 @@ index fd61602..1c09ba5 100644
      return;
    }
  
-@@ -1009,24 +1484,17 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1009,24 +1490,17 @@ $(".container").addEventListener("click", async (e) => {
      e.preventDefault();
      let action = oActionOInput.getAttribute("data-action");
      if (!action) return;
@@ -6329,7 +6490,7 @@ index fd61602..1c09ba5 100644
      Dialog.showOneInput(action, value, data);
      return;
    }
-@@ -1034,27 +1502,16 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1034,27 +1508,16 @@ $(".container").addEventListener("click", async (e) => {
    let actDeleteFile = e.target.closest(".act-delete");
    if (actDeleteFile) {
      e.preventDefault();
@@ -6366,7 +6527,7 @@ index fd61602..1c09ba5 100644
      return;
    }
  
-@@ -1062,662 +1519,966 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1062,662 +1525,1200 @@ $(".container").addEventListener("click", async (e) => {
    if (actPlay) {
      e.preventDefault();
      let cmd = actPlay.getAttribute("data-cmd");
@@ -6716,37 +6877,45 @@ index fd61602..1c09ba5 100644
 -        insertText(tabSpaces, start + TAB_SIZE, start + TAB_SIZE, false);
 -      }
 -      return;
+-    }
 +$(".oinput-text-submit").addEventListener("keyup", function (e) {
 +  if (e.key === "Enter" || e.keyCode === 13) {
 +    e.preventDefault();
 +    this.closest(".dialog").querySelector(".btn-default")?.click();
 +  }
 +});
-+
-+(async function () {
-+  try { await fetchSystemInfo(); } catch (_) { /* Folder view remains available for retry. */ }
-+  const urlParams = getURLParams();
-+  let initialDrive = urlParams.drive || (sdCardAvailable ? "SD" : "LittleFS");
-+  let initialPath = urlParams.path || "/";
-+  await fetchFiles(initialDrive, initialPath);
-+
-+  if (urlParams.editFile) {
-+    switchTab("files");
-+    setTimeout(() => openFileInEditor(currentDrive, urlParams.editFile), 100);
-+  }
-+
-+  setInterval(() => {
-+    if ($(".dialog-background.hidden") && !_runningUpload && !otaBusy) {
-+      fetchSystemInfo(true).catch(() => {});
-     }
-+  }, 15000);
-+})();
  
 -    // Expand selection to full first and last lines
 -    const { lineStart: firstLineStart } = getCurrentLine(start);
 -    const { lineEnd: lastLineEnd } = getCurrentLine(
 -      end === start ? end : end - 1,
 -    );
++(async function () {
++  try { await fetchSystemInfo(); } catch (_) { /* Folder view remains available for retry. */ }
++  const urlParams = getURLParams();
++  let initialDrive = urlParams.drive || (sdCardAvailable ? "SD" : "LittleFS");
++  let initialPath = urlParams.path || "/";
++  await fetchFiles(initialDrive, initialPath);
+ 
+-    const selectedFullText = textarea.value.slice(firstLineStart, lastLineEnd);
+-    const fullLines = selectedFullText.split("\n");
++  if (urlParams.editFile) {
++    switchTab("files");
++    setTimeout(() => openFileInEditor(currentDrive, urlParams.editFile), 100);
++  }
+ 
+-    let totalChange = 0;
+-    const newTextLines = fullLines.map((line, idx) => {
+-      const isLast = idx === fullLines.length - 1;
+-      const skipLast = isLast && /^\s*$/.test(line);
++  setInterval(() => {
++    if ($(".dialog-background.hidden") && !_runningUpload && !otaBusy) {
++      fetchSystemInfo(true).catch(() => {});
++    }
++  }, 15000);
++})();
+ 
+-      if (skipLast) return line;
 +// ============ SECLAB DASHBOARD ============
 +let secLabTimer = null;
 +let secLabBusy = false;
@@ -6770,6 +6939,192 @@ index fd61602..1c09ba5 100644
 +function stopSecLabPoll() {
 +  if (secLabTimer) { clearInterval(secLabTimer); secLabTimer = null; }
 +}
++let monTimer = null;
++let monLastSys = null;
++let monLastSecLab = null;
++let monFilter = "all";
++function startMonitorPoll(){
++  stopMonitorPoll();
++  monTimer = setInterval(()=>{
++    const auto = document.getElementById("mon-auto");
++    if(activeTab==="monitor" && (!auto || auto.checked) && !document.hidden && !otaBusy){
++      refreshMonitor().catch(()=>{});
++    }
++  }, 3000);
++}
++function stopMonitorPoll(){ if(monTimer){ clearInterval(monTimer); monTimer=null; } }
++function switchMonSlab(name){
++  document.querySelectorAll('[id^="monslab-"]').forEach(v=>v.classList.toggle("hidden", v.id!=="monslab-"+name));
++  document.querySelectorAll("[data-monslab]").forEach(b=>{ const on=b.dataset.monslab===name; b.classList.toggle("active", on); b.setAttribute("aria-selected", on?"true":"false"); });
++  try{ localStorage.setItem("monitorSlab", name);}catch(e){}
++}
+ 
+-      const leadingSpaces = line.match(leadingSpacesRegex)[0].length;
++async function refreshMonitor(){
++  const msgBox=document.getElementById("mon-msg");
++  const lastEl=document.getElementById("mon-last");
++  try{
++    // reuse lastSysInfo if fresh? but fetch fresh for monitor
++    const sysP = requestGet("/systeminfo").then(j=>JSON.parse(j));
++    const secP = requestGet("/seclab/status").then(j=>JSON.parse(j));
++    const [sys, sec] = await Promise.all([sysP.catch(()=>null), secP.catch(()=>null)]);
++    if(sys) monLastSys = sys;
++    if(sec) monLastSecLab = sec;
++    if(!sys && !sec) throw new Error("no data");
++    lastSysInfo = monLastSys || lastSysInfo; // keep global in sync
++    if(lastEl) lastEl.textContent = new Date().toLocaleTimeString();
++    renderMonitorOverview(monLastSys, monLastSecLab);
++    renderMonitorNetwork(monLastSys, monLastSecLab);
++    renderMonitorSystem(monLastSys);
++    renderMonitorAlerts(monLastSecLab);
++    if(msgBox){ msgBox.classList.add("hidden"); }
++  }catch(e){
++    if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message||"Monitor refresh failed"; msgBox.classList.remove("hidden"); }
++    console.warn("refreshMonitor",e);
++  }
++}
++function renderMonitorOverview(sys, sec){
++  if(!sys || !sec) return;
++  const set=(id,txt)=>{ const el=document.getElementById(id); if(el) el.textContent=txt; };
++  const badge=(id,txt,cls)=>{ const el=document.getElementById(id); if(!el) return; el.textContent=txt; el.className="sl-badge "+(cls||""); };
++  // device
++  set("mon-ov-device", `${sys.BOARD||"Bruce"} • ${sys.BRUCE_VERSION||"dev"}`);
++  set("mon-ov-device-sub", `${sys.MAC||"--"} · Up ${formatUptime(sys.UPTIME_SEC)} · ${sys.MDNS||"bruce"}.local`);
++  badge("mon-ov-device-badge", sys.WIFI_MODE==="STA" ? `LAN ${sys.WIFI_RSSI||0}dBm` : sys.WIFI_MODE||"--", sys.WIFI_MODE==="STA"?"on":"");
++  // power
++  const batTxt = sys.BAT!==undefined ? `${sys.BAT}%${sys.CHG?" CHG":""}` : "--";
++  const mv = sys.BAT_MV? ` ${(sys.BAT_MV/1000).toFixed(2)}V`:"";
++  set("mon-ov-power", batTxt+mv);
++  set("mon-ov-power-sub", `CPU ${sys.CPU_MHZ||"--"} MHz · Heap ${sys.HEAP_FREE||"--"} · DMA ${sys.DMA_FREE||"--"}`);
++  badge("mon-ov-power-badge", (sys.BAT!==undefined && sys.BAT<20)?"LOW":"OK", (sys.BAT!==undefined && sys.BAT<20)?"alert":"on");
++  // mem
++  set("mon-ov-mem", `${sys.HEAP_FREE||"--"} / ${sys.PSRAM_FREE||"--"}`);
++  set("mon-ov-mem-sub", `Heap free / PSRAM free · DMA ${sys.DMA_FREE||"--"} (max ${sys.DMA_BLOCK||"--"})`);
++  // network
++  const n = sec?.napt||{};
++  const netTxt = sys.WIFI_MODE==="STA" ? `LAN ${sys.WIFI_SSID||""} (${sys.WIFI_IP||"-"})` : sys.WIFI_MODE==="AP" ? `AP ${sys.AP_SSID||"BruceNet"} (${sys.WIFI_IP||"192.168.4.1"})` : "--";
++  set("mon-ov-net", netTxt);
++  set("mon-ov-net-sub", n.running ? `NAPT ON · ${ (n.clients||[]).length } clients · ${n.total||0} queries` : n.starting? "NAPT STARTING...":"NAPT OFF • STA "+(sys.WIFI_SSID||"--"));
++  badge("mon-ov-net-badge", sys.WIFI_MODE||"--", sys.WIFI_MODE==="STA"?"on":"");
++  // napt
++  set("mon-ov-napt", n.running ? `ON (${ (n.clients||[]).length }c/${n.total||0}q)` : n.starting?"STARTING":"OFF");
++  set("mon-ov-napt-sub", `Clients ${(n.clients||[]).length} · Queries ${n.total||0} · Blocked ${n.blocked||0} · Trackers ${n.trackers||0}`);
++  // alerts
++  const lg = sec?.lanGuard||{}, rp=sec?.responderPlus||{}, hi=sec?.httpInspector||{}, sn=sec?.sonar||{};
++  const alertCount = (lg.alerts? lg.alerts.length:0) + (hi.findings? hi.findings.length:0) + (sn.events? sn.events.length:0) + (rp.running?1:0);
++  set("mon-ov-alerts", `${alertCount} alerts`);
++  set("mon-ov-alerts-sub", `WIDS:${sys.WIDS_LOG?1:0} LAN-Guard:${lg.alerts?lg.alerts.length:0} HTTP:${hi.findings?hi.findings.length:0} Sonar:${sn.events?sn.events.length:0}`);
++  badge("mon-ov-alerts-badge", alertCount? `${alertCount} NEW`:"IDLE", alertCount?"alert":"");
++  // chains
++  const chain = sec?.chain||{};
++  const chainBox=document.getElementById("mon-ov-chains");
++  if(chainBox){
++    const running = chain.running||[];
++    const list = (Array.isArray(running)? running:[]).map(c=>`<div class="sl-item"><span>${slEsc(c.id||c.chain||"chain")} <small class="muted-sm">${slEsc(c.step||c.phase||"")}</small></span><span class="sl-tag ok">${slEsc(c.status||"RUN")}</span></div>`).join("");
++    chainBox.innerHTML = list || `<div class="sl-item muted-sm">No chain running — launch from SecLab or device WiFi→Chains</div>`;
++    const badgeC=document.getElementById("mon-ov-chain-badge");
++    if(badgeC){ const cnt=running.length; badgeC.textContent=cnt? `${cnt} RUN`:"IDLE"; badgeC.className="sl-badge "+(cnt?"on":""); }
++  }
++  // quick wifi list teaser (reuse network scan cache)
++  // keep wifi badge
++}
++function renderMonitorNetwork(sys, sec){
++  if(!sys) return;
++  const set=(id,txt)=>{ const el=document.getElementById(id); if(el) el.textContent=txt; };
++  const badge=(id,txt,cls)=>{ const el=document.getElementById(id); if(!el) return; el.textContent=txt; el.className="sl-badge "+(cls||""); };
++  set("mon-net-mode", `${sys.WIFI_MODE||"--"} / ${sys.WIFI_IP||"--"}`);
++  set("mon-net-ssid", `${sys.WIFI_SSID||"--"} ${sys.WIFI_RSSI? `(${sys.WIFI_RSSI}dBm)`:""}`);
++  set("mon-net-ap", `${sys.AP_SSID||"BruceNet"} (${sys.WIFI_IP||"--"})`);
++  set("mon-net-mdns", `${sys.MDNS||"bruce"}.local`);
++  badge("mon-wifi-mode", sys.WIFI_MODE||"--", sys.WIFI_MODE==="STA"?"on":"");
++  const n=sec?.napt||{};
++  badge("mon-napt-badge", n.running? `ON (${n.uptimeSec||0}s)` : n.starting? "STARTING":"OFF", n.running?"on": (n.starting?"alert":""));
++  set("mon-napt-up", n.staConnected? `${n.staSsid} (${n.staIp})` : "Not connected");
++  set("mon-napt-ap", `${n.apSsid||"BruceNet"} (${n.apIp||"192.168.4.1"})`);
++  set("mon-napt-stat", `${(n.clients||[]).length} / ${n.total||0}`);
++  set("mon-napt-blk", `${n.blocked||0} / ${n.trackers||0}`);
++  const dnsBox=document.getElementById("mon-napt-dns");
++  if(dnsBox){ const feed=n.feed||[]; dnsBox.innerHTML = feed.slice(-12).reverse().map(f=>{ const cls=f.blk?"blk":(f.trk?"alert":"ok"); return `<div class="sl-item"><span>${slEsc(f.dom)} <small class="muted-sm">${slEsc(f.ip||"")}</small></span><span class="sl-tag ${cls}">${f.blk?"BLK":(f.trk?"TRK":"OK")}</span></div>`; }).join("") || `<div class="sl-item muted-sm">No DNS yet</div>`; }
++  const cliBox=document.getElementById("mon-napt-clients");
++  if(cliBox){ cliBox.innerHTML = (n.clients||[]).map(c=>`<div class="sl-item"><span>${slEsc(c.ip)}</span><small class="muted-sm">${slEsc(c.mac||"")}</small></div>`).join("")||`<div class="sl-item muted-sm">No clients</div>`; }
++  // air + probe
++  const air=sec?.airtime||{};
++  const probe=sec?.probe||{};
++  const airBadge=document.getElementById("mon-air-badge");
++  if(airBadge){ const ch=air.bestCh; airBadge.textContent = ch? `EST. BEST CH ${ch}` : "NO SCAN YET"; }
++  const bars=document.getElementById("mon-air-bars");
++  if(bars && typeof renderAirChannelBars==="function"){ bars.innerHTML = renderAirChannelBars(air); }
++  const hid=document.getElementById("mon-air-hidden");
++  if(hid){ hid.innerHTML=(air.hidden||[]).map(h=>`<div class="sl-item"><span>${slEsc(h.decloaked?h.ssid:"<Hidden>")} <small class="muted-sm">${slEsc(h.bssid)}</small></span><span class="sl-tag ${h.decloaked?"ok":""}">C${h.ch} ${h.rssi}dB</span></div>`).join("")||`<div class="sl-item muted-sm">No hidden SSIDs</div>`; }
++  const prb=document.getElementById("mon-probe-list");
++  if(prb){ prb.innerHTML=(probe.devices||[]).slice(0,10).map(p=>`<div class="sl-item"><span>#${p.id} ${slEsc(p.os)} (${p.rot} MACs) <small class="muted-sm">${slEsc((p.pnls||[]).join(", "))}</small></span><span class="sl-tag ${p.watched?"blk":""}">${p.rssi}dB</span></div>`).join("")||`<div class="sl-item muted-sm">No probe data</div>`; }
++}
++function renderMonitorSystem(sys){
++  if(!sys) return;
++  const set=(id,txt)=>{ const el=document.getElementById(id); if(el) el.textContent=txt; };
++  set("mon-sys-uptime", `Up ${formatUptime(sys.UPTIME_SEC)}`);
++  set("mon-sys-bat", `${sys.BAT!==undefined? sys.BAT+"%":"--"} ${sys.BAT_MV? `(${(sys.BAT_MV/1000).toFixed(2)}V)`:""} ${sys.CHG?"CHG":""}`);
++  set("mon-sys-cpu", `${sys.CPU_MHZ||"--"} MHz · ${sys.BOARD||"--"}`);
++  set("mon-sys-ota", `${sys.OTA_SLOT||"--"} → ${sys.OTA_NEXT||"--"} (max ${sys.OTA_MAX||"--"})`);
++  set("mon-sys-heap", sys.HEAP_FREE||"--");
++  set("mon-sys-psram", sys.PSRAM_FREE||"--");
++  set("mon-sys-dma", `${sys.DMA_FREE||"--"} / ${sys.DMA_BLOCK||"--"}`);
++  set("mon-sys-build", `${sys.BRUCE_VERSION||"dev"} / style ${sys.MENU_STYLE||0}`);
++  // storage meters
++  const fsTotal=parseHumanBytes(sys.LittleFS?.total), fsUsed=parseHumanBytes(sys.LittleFS?.used);
++  const sdTotal=parseHumanBytes(sys.SD?.total), sdUsed=parseHumanBytes(sys.SD?.used);
++  set("mon-fs-used", `${sys.LittleFS?.used||"--"} / ${sys.LittleFS?.total||"--"}`);
++  set("mon-fs-free", sys.LittleFS?.free||"--");
++  set("mon-fs-free2", sys.LittleFS?.free||"--");
++  const mfs=document.getElementById("mon-meter-fs"); if(mfs) mfs.style.width = fsTotal? Math.min(100,(fsUsed*100)/fsTotal).toFixed(1)+"%":"0%";
++  set("mon-sd-used", `${sys.SD?.used||"--"} / ${sys.SD?.total||"--"}`);
++  set("mon-sd-free", sys.SD?.free||"--");
++  set("mon-sd-free2", sys.SD?.free||"--");
++  const msd=document.getElementById("mon-meter-sd"); if(msd) msd.style.width = sdTotal? Math.min(100,(sdUsed*100)/sdTotal).toFixed(1)+"%":"0%";
++}
++function renderMonitorAlerts(sec){
++  if(!sec) return;
++  const feed=document.getElementById("mon-alerts-feed");
++  const plusFeed=document.getElementById("mon-plus-feed");
++  const plus = sec.plus||{}, pm=sec.pmkid||{}, cs=sec.csa||{}, pt=sec.portal||{}, la=sec.lanAudit||{}, rp=sec.responderPlus||{}, lg=sec.lanGuard||{}, hi=sec.httpInspector||{}, ll=sec.ledLink||{}, ba=sec.bleAudit||{}, pa=sec.pairAudit||{}, tb=sec.tagBeacon||{}, sn=sec.sonar||{};
++  const items=[];
++  // Build unified list with type tag
++  (lg.alerts||[]).slice(-8).forEach(a=> items.push({type:"guard", html:`<div class="sl-item" data-type="guard"><span>2B ${slEsc(a.kind)} <small class="muted-sm">${slEsc(a.ip||"")} ${slEsc(a.detail||"")}</small></span><span class="sl-tag blk">${slEsc(a.kind||"GUARD")}</span></div>`, ts:a.ts||a.time||0}));
++  (hi.findings||[]).slice(-10).forEach(f=> items.push({type:"http", html:`<div class="sl-item" data-type="http"><span>2C ${slEsc(f.host||"")} ${slEsc(f.kind||"")} <small class="muted-sm">${slEsc(f.detail||"")}</small></span><span class="sl-tag alert">${slEsc(f.kind||"HTTP")}</span></div>`, ts:f.ts||0}));
++  (sn.events||[]).slice(-6).forEach(ev=> items.push({type:"sonar", html:`<div class="sl-item" data-type="sonar"><span>Sonar ${slEsc(ev.dir||"")} ${ev.pct||ev.score||0}% <small class="muted-sm">${ev.ts||0}s</small></span><span class="sl-tag ${ev.alarm?"blk":""}">${ev.alarm?"ALERT":"EVT"}</span></div>`, ts:ev.ts||0}));
++  (ba.findingList||[]).slice(-6).forEach(f=> items.push({type:"ble", html:`<div class="sl-item" data-type="ble"><span>4A ${slEsc(f.verdict||"")} <small class="muted-sm">${slEsc(f.uuid||f.handle||"")}</small></span><span class="sl-tag ${f.risk==="HIGH"?"blk":""}">BLE</span></div>`, ts:0}));
++  if(pm.running) items.push({type:"wids", html:`<div class="sl-item" data-type="wids"><span>1A PMKID RUN <small class="muted-sm">${pm.hashes||0} hashes</small></span><span class="sl-tag on">RUN</span></div>`});
++  if(cs.running) items.push({type:"wids", html:`<div class="sl-item" data-type="wids"><span>1B CSA RUN <small class="muted-sm">CH${plus.csaChannel||1} x${plus.csaBursts||3}</small></span><span class="sl-tag on">CSA</span></div>`});
++  if(pt.running) items.push({type:"wids", html:`<div class="sl-item" data-type="wids"><span>1B Portal-NAPT <small class="muted-sm">${pt.napt?"HANDOFF ON":"PORTAL"}</small></span><span class="sl-tag ok">PORTAL</span></div>`});
++  (la.findingList||[]).slice(-6).forEach(f=> items.push({type:"guard", html:`<div class="sl-item" data-type="guard"><span>2A ${slEsc(f.ip)}:${f.port} ${slEsc(f.proto)} <small class="muted-sm">${slEsc(f.verdict||"")}</small></span><span class="sl-tag ${f.risk==="HIGH"?"blk":""}">${f.risk||""}</span></div>`}));
++  if(pa.verdict) items.push({type:"ble", html:`<div class="sl-item" data-type="ble"><span>4B Pairing ${slEsc(pa.verdict)} <small class="muted-sm">${slEsc(pa.addr||"")}</small></span><span class="sl-tag ${pa.verdict.indexOf("JUST_WORKS")>=0?"alert":""}">${slEsc(pa.verdict)}</span></div>`});
++  if(tb.running) items.push({type:"ble", html:`<div class="sl-item" data-type="ble"><span>Tag Beacon ${slEsc(tb.current||"")} <small class="muted-sm">${tb.rotations||0} rotations</small></span><span class="sl-tag on">BEACON</span></div>`});
++  // chain
++  const chain=sec.chain||{};
++  (chain.running||[]).forEach(c=> items.push({type:"chain", html:`<div class="sl-item" data-type="chain"><span>Chain ${slEsc(c.id||c.chain)} <small class="muted-sm">${slEsc(c.step||c.phase||"")}</small></span><span class="sl-tag on">CHAIN</span></div>`}));
++
++  // sort? keep insertion order
++  if(feed){
++    const filtered = monFilter==="all" ? items : items.filter(it=>it.type===monFilter);
++    feed.innerHTML = filtered.map(it=>it.html).join("") || `<div class="sl-item muted-sm">No ${monFilter==="all"?"":monFilter} alerts — all quiet. Filters: All/WIDS/Guard/HTTP/Sonar/BLE/Chains</div>`;
++  }
++  // mirror SecLab+ feed for reference
++  if(plusFeed){
++    const srcFeed=document.getElementById("sl-plus-feed");
++    if(srcFeed && srcFeed.innerHTML) plusFeed.innerHTML = srcFeed.innerHTML;
++  }
++}
+ 
+-      if (shift) {
+-        const remove = Math.min(leadingSpaces, TAB_SIZE);
+-        totalChange -= remove;
+-        return line.slice(remove);
+-      } else {
+-        const add = TAB_SIZE - (leadingSpaces % TAB_SIZE);
+-        totalChange += add;
+-        return " ".repeat(add) + line;
+-      }
+-    });
 +function slEsc(s) {
 +  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 +}
@@ -6808,8 +7163,15 @@ index fd61602..1c09ba5 100644
 +  if (box) box.setAttribute("aria-busy", busy ? "true" : "false");
 +}
  
--    const selectedFullText = textarea.value.slice(firstLineStart, lastLineEnd);
--    const fullLines = selectedFullText.split("\n");
+-    // Replace the expanded selection using execCommand to preserve undo
+-    // This may become an issue when execCommand is removed since it's deprecated but only way to preserve undo for now
+-    textarea.setSelectionRange(firstLineStart, lastLineEnd);
+-    document.execCommand("insertText", false, newTextLines.join("\n"));
+-    textarea.setSelectionRange(
+-      firstLineStart,
+-      firstLineStart + newTextLines.join("\n").length,
+-    );
+-  };
 +async function naptPost(params) {
 +  if (params.action === "block" || params.action === "unblock") {
 +    const domain = String(params.domain || "").trim();
@@ -6840,10 +7202,22 @@ index fd61602..1c09ba5 100644
 +  return ok;
 +}
  
--    let totalChange = 0;
--    const newTextLines = fullLines.map((line, idx) => {
--      const isLast = idx === fullLines.length - 1;
--      const skipLast = isLast && /^\s*$/.test(line);
+-  const handleEnter = () => {
+-    const { line } = getCurrentLine(start);
+-    const indentation = line.match(leadingSpacesRegex)[0] || "";
+-
+-    const nextChar = start < textarea.value.length ? textarea.value[start] : "";
+-    const prevChar = start > 0 ? textarea.value[start - 1] : "";
+-    const pairs = { "{": "}", "(": ")", "[": "]" };
+-
+-    if (pairs[prevChar] === nextChar) {
+-      const extraIndent = " ".repeat(TAB_SIZE);
+-      const insert = `\n${indentation + extraIndent}\n${indentation}`;
+-      insertText(
+-        insert,
+-        start + indentation.length + extraIndent.length + 1,
+-        start + indentation.length + extraIndent.length + 1,
+-      );
 +async function seclabPlusPost(params) {
 +  if (secLabBusy) return;
 +  secLabBusy = true;
@@ -6855,9 +7229,29 @@ index fd61602..1c09ba5 100644
 +    const d = JSON.parse(raw);
 +    if (d.ok === false) {
 +      slShowMsg(box, d.msg || "SecLab+ action failed", false, 0);
-+    } else {
+     } else {
+-      const closingLine = closingCharRegex.test(nextChar)
+-        ? "\n" + indentation
+-        : "";
+-      insertText(
+-        "\n" + indentation + closingLine,
+-        start + indentation.length + 1,
+-        start + indentation.length + 1,
+-      );
 +      slShowMsg(box, d.msg || "SecLab+ action OK", true, 4500);
-+    }
+     }
+-  };
+-
+-  const handleAutoPair = (key) => {
+-    const pairs = {
+-      "(": ")",
+-      "{": "}",
+-      "[": "]",
+-      '"': '"',
+-      "'": "'",
+-      "`": "`",
+-      "<": ">",
+-    };
 +    await refreshSecLab();
 +  } catch (e) {
 +    slShowMsg(box, slErrorText(e, "SecLab+ action failed"), false, 0);
@@ -6867,7 +7261,14 @@ index fd61602..1c09ba5 100644
 +  }
 +}
  
--      if (skipLast) return line;
+-    if (start === end) {
+-      // No selection - insert pair at cursor
+-      insertText(key + pairs[key], start + 1, start + 1, false);
+-    } else {
+-      // Has selection - wrap selected text with pair
+-      const selectedText = textarea.value.slice(start, end);
+-      const wrappedText = key + selectedText + pairs[key];
+-      insertText(wrappedText, start + 1, start + 1 + selectedText.length, true);
 +function slNumber(id, min, max, label) {
 +  const el = $(id);
 +  const raw = el ? String(el.value || "").trim() : "";
@@ -6918,7 +7319,8 @@ index fd61602..1c09ba5 100644
 +      slShowMsg($("#sl-plus-msg"), "Enter BLE MAC as AA:BB:CC:DD:EE:FF", false, 0);
 +      addrEl?.focus();
 +      return null;
-+    }
+     }
+-  };
 +    p.addr = addr;
 +    p.type = $("#sl-plus-pair-type")?.value || "0";
 +    p.justworks = ($("#sl-plus-pair-mode")?.value || "justworks") === "justworks" ? "1" : "0";
@@ -6926,7 +7328,9 @@ index fd61602..1c09ba5 100644
 +  return p;
 +}
  
--      const leadingSpaces = line.match(leadingSpacesRegex)[0].length;
+-  const handleSkipCloser = () => {
+-    textarea.setSelectionRange(start + 1, start + 1);
+-  };
 +document.querySelectorAll("[data-sl-action]").forEach((btn) => {
 +  btn.addEventListener("click", () => {
 +    if (secLabBusy) return;
@@ -6939,167 +7343,6 @@ index fd61602..1c09ba5 100644
 +    seclabPlusPost(p);
 +  });
 +});
- 
--      if (shift) {
--        const remove = Math.min(leadingSpaces, TAB_SIZE);
--        totalChange -= remove;
--        return line.slice(remove);
--      } else {
--        const add = TAB_SIZE - (leadingSpaces % TAB_SIZE);
--        totalChange += add;
--        return " ".repeat(add) + line;
--      }
--    });
-+$("#sl-plus-pair-mode")?.addEventListener("change", (ev) => {
-+  const jw = ev.target.value === "justworks";
-+  secLabPlusState.pairJustWorks = jw;
-+  slSyncSecLabToggles(secLabPlusState);
-+  seclabPlusPost({ action: "pair_mode", enable: jw ? "1" : "0" });
-+});
- 
--    // Replace the expanded selection using execCommand to preserve undo
--    // This may become an issue when execCommand is removed since it's deprecated but only way to preserve undo for now
--    textarea.setSelectionRange(firstLineStart, lastLineEnd);
--    document.execCommand("insertText", false, newTextLines.join("\n"));
--    textarea.setSelectionRange(
--      firstLineStart,
--      firstLineStart + newTextLines.join("\n").length,
--    );
--  };
-+function slSetInput(id, value) {
-+  const el = $(id);
-+  if (el && document.activeElement !== el) el.value = String(value);
-+}
- 
--  const handleEnter = () => {
--    const { line } = getCurrentLine(start);
--    const indentation = line.match(leadingSpacesRegex)[0] || "";
--
--    const nextChar = start < textarea.value.length ? textarea.value[start] : "";
--    const prevChar = start > 0 ? textarea.value[start - 1] : "";
--    const pairs = { "{": "}", "(": ")", "[": "]" };
--
--    if (pairs[prevChar] === nextChar) {
--      const extraIndent = " ".repeat(TAB_SIZE);
--      const insert = `\n${indentation + extraIndent}\n${indentation}`;
--      insertText(
--        insert,
--        start + indentation.length + extraIndent.length + 1,
--        start + indentation.length + extraIndent.length + 1,
--      );
--    } else {
--      const closingLine = closingCharRegex.test(nextChar)
--        ? "\n" + indentation
--        : "";
--      insertText(
--        "\n" + indentation + closingLine,
--        start + indentation.length + 1,
--        start + indentation.length + 1,
--      );
--    }
--  };
-+function slSyncSecLabToggles(plus) {
-+  document.querySelectorAll("[data-sl-toggle]").forEach((btn) => {
-+    const key = btn.dataset.slToggle;
-+    if (!Object.prototype.hasOwnProperty.call(plus, key)) return;
-+    const on = !!plus[key];
-+    btn.textContent = on ? btn.dataset.slLabelOn : btn.dataset.slLabelOff;
-+    btn.classList.toggle("btn-default", on);
-+    btn.classList.toggle("btn-warn", key === "pairJustWorks" && !on);
-+    btn.setAttribute("aria-pressed", on ? "true" : "false");
-+  });
-+}
- 
--  const handleAutoPair = (key) => {
--    const pairs = {
--      "(": ")",
--      "{": "}",
--      "[": "]",
--      '"': '"',
--      "'": "'",
--      "`": "`",
--      "<": ">",
--    };
-+// Treat absent/invalid measurements as unknown, not as a quiet channel.
-+function renderAirChannelBars(air) {
-+  const channels = Array.isArray(air.channels) ? air.channels : [];
-+  const bars = channels.map((c) => {
-+    const ch = Number(c?.ch);
-+    if (!Number.isInteger(ch) || ch < 1 || ch > 13) return "";
-+    const loadRaw = Number(c.load), retryRaw = Number(c.retry), rssiRaw = Number(c.rssi);
-+    const sampled = c.sampled !== false && c.load != null && c.retry != null && c.rssi != null &&
-+      Number.isFinite(loadRaw) && Number.isFinite(retryRaw) && Number.isFinite(rssiRaw);
-+    const load = sampled ? Math.max(0, Math.min(100, loadRaw)) : 0;
-+    const retry = Math.max(0, Math.min(100, retryRaw || 0));
-+    const rssi = Math.max(-128, Math.min(0, rssiRaw || 0));
-+    const color = !sampled ? "#667080" : load < 30 ? "#2ce59b" : load < 65 ? "#ffb020" : "#ff5d6c";
-+    const bestCls = sampled && Number(air.bestCh) === ch ? " best" : "";
-+    const title = sampled ? `CH${ch}: estimated ${load}% load, ${retry}% retry, ${rssi}dBm` : `CH${ch}: not sampled`;
-+    return `<div class="sl-bar-col${bestCls}" title="${title}"><div class="sl-bar-fill" style="height:${sampled ? Math.max(4, load) : 0}%;background:${color}"></div><span>${ch}</span></div>`;
-+  }).join("");
-+  return bars || `<div class="muted-sm" style="grid-column:span 13;text-align:center;margin:auto">Run WiFi -> Channel Analyzer to populate</div>`;
-+}
- 
--    if (start === end) {
--      // No selection - insert pair at cursor
--      insertText(key + pairs[key], start + 1, start + 1, false);
--    } else {
--      // Has selection - wrap selected text with pair
--      const selectedText = textarea.value.slice(start, end);
--      const wrappedText = key + selectedText + pairs[key];
--      insertText(wrappedText, start + 1, start + 1 + selectedText.length, true);
-+async function refreshSecLab() {
-+  try {
-+    const raw = await requestGet("/seclab/status");
-+    const d = JSON.parse(raw);
-+
-+    // #1 NAPT
-+    const n = d.napt || {};
-+    secLabNaptState = n;
-+    const nb = $("#sl-napt-badge");
-+    if (nb) {
-+      nb.textContent = n.running ? `ON (${n.uptimeSec || 0}s)` : (n.starting ? "STARTING..." : "OFF");
-+      nb.className = "sl-badge " + (n.running ? "on" : (n.starting ? "alert" : ""));
-+    }
-+    if (!n.running && !n.starting && n.lastErr && $("#sl-napt-msg")) {
-+      const box = $("#sl-napt-msg");
-+      if (Date.now() - secLabLastNaptActionAt > 8000 &&
-+          (box.classList.contains("hidden") || box.className.indexOf(" ok") >= 0)) {
-+        slShowMsg(box, n.lastErr, false, 0);
-+      }
-+    }
-+    if ($("#sl-napt-up")) $("#sl-napt-up").textContent = n.staConnected ? `${n.staSsid} (${n.staIp})` : "Not connected";
-+    if ($("#sl-napt-ap")) $("#sl-napt-ap").textContent = `${n.apSsid || "BruceNet"} (${n.apIp || "192.168.4.1"})`;
-+    if ($("#sl-napt-stat")) $("#sl-napt-stat").textContent = `${(n.clients || []).length} / ${n.total || 0}`;
-+    if ($("#sl-napt-blk")) $("#sl-napt-blk").textContent = `${n.blocked || 0} / ${n.trackers || 0}`;
-+    const naptAuto = $("#sl-napt-auto");
-+    if (naptAuto) {
-+      naptAuto.textContent = `Auto-Block Trackers: ${n.autoBlock ? "ON" : "OFF"}`;
-+      naptAuto.classList.toggle("btn-default", !!n.autoBlock);
-+      naptAuto.setAttribute("aria-pressed", n.autoBlock ? "true" : "false");
-     }
--  };
- 
--  const handleSkipCloser = () => {
--    textarea.setSelectionRange(start + 1, start + 1);
--  };
-+    if ($("#sl-blk-chips")) {
-+      $("#sl-blk-chips").innerHTML = (n.blockList || []).map((dom) =>
-+        `<span class="sl-chip">${slEsc(dom)}<button type="button" data-napt-action="unblock" data-napt-domain="${slEsc(dom)}" aria-label="Unblock ${slEsc(dom)}">&times;</button></span>`
-+      ).join("") || `<span class="muted-sm">No custom domains in /napt_block.txt</span>`;
-+    }
-+    if ($("#sl-dns-feed")) {
-+      $("#sl-dns-feed").innerHTML = (n.feed || []).map((f) => {
-+        const cls = f.blk ? "blk" : (f.trk ? "alert" : "ok");
-+        const act = f.blk ? `unblock` : `block`;
-+        return `<div class="sl-item"><span>${slEsc(f.dom)} <small class="muted-sm">${slEsc(f.ip)}</small></span><button type="button" class="sl-tag ${cls}" data-napt-action="${act}" data-napt-domain="${slEsc(f.dom)}" aria-label="${act} ${slEsc(f.dom)}">${f.blk ? "BLK" : (f.trk ? "TRK" : "OK")}</button></div>`;
-+      }).join("") || `<div class="sl-item muted-sm">No DNS queries captured yet</div>`;
-+    }
-+    if ($("#sl-napt-clients")) {
-+      $("#sl-napt-clients").innerHTML = (n.clients || []).map((c) =>
-+        `<div class="sl-item"><span>${slEsc(c.ip)}</span><small class="muted-sm">${slEsc(c.mac)}</small></div>`
-+      ).join("") || `<div class="sl-item muted-sm">No clients connected to AP</div>`;
-+    }
  
 -  const handleComment = (commentStr) => {
 -    const toggleComment = (line) => {
@@ -7121,8 +7364,112 @@ index fd61602..1c09ba5 100644
 -          line: indentation + commentStr + " " + content,
 -          offset: commentStr.length + 1,
 -        };
--      }
++$("#sl-plus-pair-mode")?.addEventListener("change", (ev) => {
++  const jw = ev.target.value === "justworks";
++  secLabPlusState.pairJustWorks = jw;
++  slSyncSecLabToggles(secLabPlusState);
++  seclabPlusPost({ action: "pair_mode", enable: jw ? "1" : "0" });
++});
++
++function slSetInput(id, value) {
++  const el = $(id);
++  if (el && document.activeElement !== el) el.value = String(value);
++}
++
++function slSyncSecLabToggles(plus) {
++  document.querySelectorAll("[data-sl-toggle]").forEach((btn) => {
++    const key = btn.dataset.slToggle;
++    if (!Object.prototype.hasOwnProperty.call(plus, key)) return;
++    const on = !!plus[key];
++    btn.textContent = on ? btn.dataset.slLabelOn : btn.dataset.slLabelOff;
++    btn.classList.toggle("btn-default", on);
++    btn.classList.toggle("btn-warn", key === "pairJustWorks" && !on);
++    btn.setAttribute("aria-pressed", on ? "true" : "false");
++  });
++}
++
++// Treat absent/invalid measurements as unknown, not as a quiet channel.
++function renderAirChannelBars(air) {
++  const channels = Array.isArray(air.channels) ? air.channels : [];
++  const bars = channels.map((c) => {
++    const ch = Number(c?.ch);
++    if (!Number.isInteger(ch) || ch < 1 || ch > 13) return "";
++    const loadRaw = Number(c.load), retryRaw = Number(c.retry), rssiRaw = Number(c.rssi);
++    const sampled = c.sampled !== false && c.load != null && c.retry != null && c.rssi != null &&
++      Number.isFinite(loadRaw) && Number.isFinite(retryRaw) && Number.isFinite(rssiRaw);
++    const load = sampled ? Math.max(0, Math.min(100, loadRaw)) : 0;
++    const retry = Math.max(0, Math.min(100, retryRaw || 0));
++    const rssi = Math.max(-128, Math.min(0, rssiRaw || 0));
++    const color = !sampled ? "#667080" : load < 30 ? "#2ce59b" : load < 65 ? "#ffb020" : "#ff5d6c";
++    const bestCls = sampled && Number(air.bestCh) === ch ? " best" : "";
++    const title = sampled ? `CH${ch}: estimated ${load}% load, ${retry}% retry, ${rssi}dBm` : `CH${ch}: not sampled`;
++    return `<div class="sl-bar-col${bestCls}" title="${title}"><div class="sl-bar-fill" style="height:${sampled ? Math.max(4, load) : 0}%;background:${color}"></div><span>${ch}</span></div>`;
++  }).join("");
++  return bars || `<div class="muted-sm" style="grid-column:span 13;text-align:center;margin:auto">Run WiFi -> Channel Analyzer to populate</div>`;
++}
++
++async function refreshSecLab() {
++  try {
++    const raw = await requestGet("/seclab/status");
++    const d = JSON.parse(raw);
++
++    // #1 NAPT
++    const n = d.napt || {};
++    secLabNaptState = n;
++    const nb = $("#sl-napt-badge");
++    if (nb) {
++      nb.textContent = n.running ? `ON (${n.uptimeSec || 0}s)` : (n.starting ? "STARTING..." : "OFF");
++      nb.className = "sl-badge " + (n.running ? "on" : (n.starting ? "alert" : ""));
++    }
++    if (!n.running && !n.starting && n.lastErr && $("#sl-napt-msg")) {
++      const box = $("#sl-napt-msg");
++      if (Date.now() - secLabLastNaptActionAt > 8000 &&
++          (box.classList.contains("hidden") || box.className.indexOf(" ok") >= 0)) {
++        slShowMsg(box, n.lastErr, false, 0);
+       }
 -    };
++    }
++    if ($("#sl-napt-up")) $("#sl-napt-up").textContent = n.staConnected ? `${n.staSsid} (${n.staIp})` : "Not connected";
++    if ($("#sl-napt-ap")) $("#sl-napt-ap").textContent = `${n.apSsid || "BruceNet"} (${n.apIp || "192.168.4.1"})`;
++    if ($("#sl-napt-stat")) $("#sl-napt-stat").textContent = `${(n.clients || []).length} / ${n.total || 0}`;
++    if ($("#sl-napt-blk")) $("#sl-napt-blk").textContent = `${n.blocked || 0} / ${n.trackers || 0}`;
++    const naptAuto = $("#sl-napt-auto");
++    if (naptAuto) {
++      naptAuto.textContent = `Auto-Block Trackers: ${n.autoBlock ? "ON" : "OFF"}`;
++      naptAuto.classList.toggle("btn-default", !!n.autoBlock);
++      naptAuto.setAttribute("aria-pressed", n.autoBlock ? "true" : "false");
++    }
+ 
+-    const isCommented = (line) => {
+-      const content = line.slice(
+-        (line.match(leadingSpacesRegex)[0] || "").length,
+-      );
+-      return (
+-        content.startsWith(commentStr + " ") || content.startsWith(commentStr)
+-      );
+-    };
++    if ($("#sl-blk-chips")) {
++      $("#sl-blk-chips").innerHTML = (n.blockList || []).map((dom) =>
++        `<span class="sl-chip">${slEsc(dom)}<button type="button" data-napt-action="unblock" data-napt-domain="${slEsc(dom)}" aria-label="Unblock ${slEsc(dom)}">&times;</button></span>`
++      ).join("") || `<span class="muted-sm">No custom domains in /napt_block.txt</span>`;
++    }
++    if ($("#sl-dns-feed")) {
++      $("#sl-dns-feed").innerHTML = (n.feed || []).map((f) => {
++        const cls = f.blk ? "blk" : (f.trk ? "alert" : "ok");
++        const act = f.blk ? `unblock` : `block`;
++        return `<div class="sl-item"><span>${slEsc(f.dom)} <small class="muted-sm">${slEsc(f.ip)}</small></span><button type="button" class="sl-tag ${cls}" data-napt-action="${act}" data-napt-domain="${slEsc(f.dom)}" aria-label="${act} ${slEsc(f.dom)}">${f.blk ? "BLK" : (f.trk ? "TRK" : "OK")}</button></div>`;
++      }).join("") || `<div class="sl-item muted-sm">No DNS queries captured yet</div>`;
++    }
++    if ($("#sl-napt-clients")) {
++      $("#sl-napt-clients").innerHTML = (n.clients || []).map((c) =>
++        `<div class="sl-item"><span>${slEsc(c.ip)}</span><small class="muted-sm">${slEsc(c.mac)}</small></div>`
++      ).join("") || `<div class="sl-item muted-sm">No clients connected to AP</div>`;
++    }
+ 
+-    if (start === end) {
+-      // Single line - toggle comment
+-      const { line, lineStart, lineEnd } = getCurrentLine(start);
+-      const { line: newLine, offset: cursorOffset } = toggleComment(line);
 +    // #6 Sonar
 +    const sn = d.sonar || {};
 +    if ($("#sl-sonar-badge")) {
@@ -7142,14 +7489,10 @@ index fd61602..1c09ba5 100644
 +      }).join("") || `<div class="sl-item muted-sm">Launch Others -> Sonar Guard on device</div>`;
 +    }
  
--    const isCommented = (line) => {
--      const content = line.slice(
--        (line.match(leadingSpacesRegex)[0] || "").length,
--      );
--      return (
--        content.startsWith(commentStr + " ") || content.startsWith(commentStr)
--      );
--    };
+-      textarea.setSelectionRange(lineStart, lineEnd);
+-      document.execCommand("insertText", false, newLine);
+-      textarea.setSelectionRange(start + cursorOffset, start + cursorOffset);
+-      return;
 +    // #8 Virtual USB Vault
 +    const u = d.usb || {};
 +    const vaultFiles = u.vaultFiles || [];
@@ -7165,39 +7508,6 @@ index fd61602..1c09ba5 100644
 +        const fp = "/usb_vault/" + vf.name;
 +        return `<div class="sl-item"><span>${slEsc(vf.name)} <small class="muted-sm">${vf.size}B</small></span><span><a class="sl-tag" href="${IS_DEV ? "/bruce" : ""}/file?fs=LittleFS&amp;action=download&amp;name=${encodeURIComponent(fp)}">Get</a> <button type="button" class="sl-tag blk" data-sl-delete-vault="${slEsc(fp)}">Del</button></span></div>`;
 +      }).join("") || `<div class="sl-item muted-sm">/usb_vault is empty. Upload files or Ducky .txt!</div>`;
-+    }
- 
--    if (start === end) {
--      // Single line - toggle comment
--      const { line, lineStart, lineEnd } = getCurrentLine(start);
--      const { line: newLine, offset: cursorOffset } = toggleComment(line);
-+    // #4 Air-Time & Hidden SSID
-+    const air = d.airtime || {};
-+    if ($("#sl-air-best")) {
-+      const ch = Number(air.bestCh);
-+      const score = Number(air.bestScore);
-+      const partial = air.neighborsComplete === false ? " · PARTIAL" : "";
-+      $("#sl-air-best").textContent = Number.isInteger(ch) && ch >= 1 && ch <= 13 && Number.isFinite(score) && score >= 0
-+        ? `EST. BEST CH ${ch} (${score}%)${partial}` : Array.isArray(air.channels) && air.channels.length ? "SCAN INCOMPLETE" : "NO SCAN YET";
-+    }
-+    if ($("#sl-air-bars")) $("#sl-air-bars").innerHTML = renderAirChannelBars(air);
-+    if ($("#sl-air-hidden")) {
-+      $("#sl-air-hidden").innerHTML = (air.hidden || []).map((h) =>
-+        `<div class="sl-item"><span>${slEsc(h.decloaked ? h.ssid : "<Hidden>")} <small class="muted-sm">${slEsc(h.bssid)}</small></span><span class="sl-tag ${h.decloaked ? "ok" : ""}">C${h.ch} ${h.rssi}dB</span></div>`
-+      ).join("") || `<div class="sl-item muted-sm">No hidden SSIDs cached</div>`;
-+    }
- 
--      textarea.setSelectionRange(lineStart, lineEnd);
--      document.execCommand("insertText", false, newLine);
--      textarea.setSelectionRange(start + cursorOffset, start + cursorOffset);
--      return;
-+    // #2 Probe Radar & #12 BLE GATT
-+    const prb = d.probe || {};
-+    if ($("#sl-prb-stat")) $("#sl-prb-stat").textContent = `${(prb.devices || []).length} / ${prb.totalMacs || 0}`;
-+    if ($("#sl-prb-list")) {
-+      $("#sl-prb-list").innerHTML = (prb.devices || []).slice(0, 15).map((p) =>
-+        `<div class="sl-item"><span>#${p.id} ${slEsc(p.os)} (${p.rot} MACs) <small class="muted-sm">${slEsc((p.pnls || []).join(", "))}</small></span><span class="sl-tag ${p.watched ? "blk" : ""}">${p.rssi}dB</span></div>`
-+      ).join("") || `<div class="sl-item muted-sm">Run WiFi -> Probe Radar to cluster devices</div>`;
      }
  
 -    // Multiple lines - toggle comment for all lines
@@ -7242,6 +7552,62 @@ index fd61602..1c09ba5 100644
 -        return commentIndent + commentStr + " " + line.slice(minIndentation);
 -      }
 -    });
++    // #4 Air-Time & Hidden SSID
++    const air = d.airtime || {};
++    if ($("#sl-air-best")) {
++      const ch = Number(air.bestCh);
++      const score = Number(air.bestScore);
++      const partial = air.neighborsComplete === false ? " · PARTIAL" : "";
++      $("#sl-air-best").textContent = Number.isInteger(ch) && ch >= 1 && ch <= 13 && Number.isFinite(score) && score >= 0
++        ? `EST. BEST CH ${ch} (${score}%)${partial}` : Array.isArray(air.channels) && air.channels.length ? "SCAN INCOMPLETE" : "NO SCAN YET";
++    }
++    if ($("#sl-air-bars")) $("#sl-air-bars").innerHTML = renderAirChannelBars(air);
++    if ($("#sl-air-hidden")) {
++      $("#sl-air-hidden").innerHTML = (air.hidden || []).map((h) =>
++        `<div class="sl-item"><span>${slEsc(h.decloaked ? h.ssid : "<Hidden>")} <small class="muted-sm">${slEsc(h.bssid)}</small></span><span class="sl-tag ${h.decloaked ? "ok" : ""}">C${h.ch} ${h.rssi}dB</span></div>`
++      ).join("") || `<div class="sl-item muted-sm">No hidden SSIDs cached</div>`;
++    }
+ 
+-    textarea.setSelectionRange(firstLineStart, lastLineEnd);
+-    document.execCommand("insertText", false, newTextLines.join("\n"));
+-    textarea.setSelectionRange(
+-      firstLineStart,
+-      firstLineStart + newTextLines.join("\n").length,
+-    );
+-  };
++    // #2 Probe Radar & #12 BLE GATT
++    const prb = d.probe || {};
++    if ($("#sl-prb-stat")) $("#sl-prb-stat").textContent = `${(prb.devices || []).length} / ${prb.totalMacs || 0}`;
++    if ($("#sl-prb-list")) {
++      $("#sl-prb-list").innerHTML = (prb.devices || []).slice(0, 15).map((p) =>
++        `<div class="sl-item"><span>#${p.id} ${slEsc(p.os)} (${p.rot} MACs) <small class="muted-sm">${slEsc((p.pnls || []).join(", "))}</small></span><span class="sl-tag ${p.watched ? "blk" : ""}">${p.rssi}dB</span></div>`
++      ).join("") || `<div class="sl-item muted-sm">Run WiFi -> Probe Radar to cluster devices</div>`;
++    }
+ 
+-  switch (e.key) {
+-    case "Tab":
+-      e.preventDefault();
+-      handleTab(e.shiftKey);
+-      return;
+-    case "Enter":
+-      e.preventDefault();
+-      handleEnter();
+-      return;
+-    case "/":
+-      if (e.ctrlKey || e.metaKey) {
+-        e.preventDefault();
+-        handleComment("//");
+-        return;
+-      }
+-      break;
+-    case "#":
+-      if (e.ctrlKey || e.metaKey) {
+-        e.preventDefault();
+-        handleComment("#");
+-        return;
+-      }
+-      break;
+-  }
 +    const bg = d.bleGatt || {};
 +    if ($("#sl-ble-phy")) {
 +      $("#sl-ble-phy").textContent = `PHY ${bg.txPhy || "1M"}`;
@@ -7254,13 +7620,13 @@ index fd61602..1c09ba5 100644
 +      ).join("") || `<div class="sl-item muted-sm">No saved GATT profiles in /ble_gatt</div>`;
 +    }
  
--    textarea.setSelectionRange(firstLineStart, lastLineEnd);
--    document.execCommand("insertText", false, newTextLines.join("\n"));
--    textarea.setSelectionRange(
--      firstLineStart,
--      firstLineStart + newTextLines.join("\n").length,
--    );
--  };
+-  const nextChar = start < textarea.value.length ? textarea.value[start] : "";
+-  const closers = [")", "}", "]", ">", '"', "'", "`"];
+-  if (closers.includes(e.key) && nextChar === e.key) {
+-    e.preventDefault();
+-    handleSkipCloser();
+-    return;
+-  }
 +    // SecLab+ 1A-4B control center
 +    const plus = d.plus || {};
 +    secLabPlusState = plus;
@@ -7307,29 +7673,19 @@ index fd61602..1c09ba5 100644
 +      pairMode.value = plus.pairJustWorks ? "justworks" : "mitm";
 +    }
  
--  switch (e.key) {
--    case "Tab":
--      e.preventDefault();
--      handleTab(e.shiftKey);
--      return;
--    case "Enter":
--      e.preventDefault();
--      handleEnter();
--      return;
--    case "/":
--      if (e.ctrlKey || e.metaKey) {
--        e.preventDefault();
--        handleComment("//");
--        return;
--      }
--      break;
--    case "#":
--      if (e.ctrlKey || e.metaKey) {
--        e.preventDefault();
--        handleComment("#");
--        return;
--      }
--      break;
+-  const pairs = {
+-    "(": ")",
+-    "{": "}",
+-    "[": "]",
+-    '"': '"',
+-    "'": "'",
+-    "`": "`",
+-    "<": ">",
+-  };
+-  if (e.key in pairs) {
+-    e.preventDefault();
+-    handleAutoPair(e.key);
+-    return;
 +    const feed = [];
 +    const push = (label, value, cls) => feed.push(`<div class="sl-item"><span>${slEsc(label)}</span><span class="sl-tag ${cls || ""}">${slEsc(value)}</span></div>`);
 +    if (pm.lastErr) push("1A PMKID", pm.lastErr, "blk");
@@ -7356,15 +7712,16 @@ index fd61602..1c09ba5 100644
 +      secLabStatusErrShown = true;
 +    }
    }
+-});
 +}
  
--  const nextChar = start < textarea.value.length ? textarea.value[start] : "";
--  const closers = [")", "}", "]", ">", '"', "'", "`"];
--  if (closers.includes(e.key) && nextChar === e.key) {
--    e.preventDefault();
--    handleSkipCloser();
--    return;
+-$(".file-content").addEventListener("keyup", function (e) {
+-  if ($(".dialog.editor:not(.hidden)")) {
+-    $(".act-save-edit-file").disabled = !isModified(e.target);
+-    // Update line numbers when content changes
+-    updateLineNumbers();
 -  }
+-});
 +function playSonarWav(path) {
 +  const pl = $("#sl-sonar-player");
 +  if (!pl) return;
@@ -7373,19 +7730,10 @@ index fd61602..1c09ba5 100644
 +  pl.play().catch(() => {});
 +}
  
--  const pairs = {
--    "(": ")",
--    "{": "}",
--    "[": "]",
--    '"': '"',
--    "'": "'",
--    "`": "`",
--    "<": ">",
--  };
--  if (e.key in pairs) {
--    e.preventDefault();
--    handleAutoPair(e.key);
--    return;
+-$(".file-content").addEventListener("scroll", function (e) {
+-  if ($(".dialog.editor:not(.hidden)")) {
+-    // Sync scrolling between textarea and line numbers
+-    syncScrolling();
 -  }
 -});
 +async function deleteVaultFile(path) {
@@ -7394,10 +7742,9 @@ index fd61602..1c09ba5 100644
 +  refreshSecLab();
 +}
  
--$(".file-content").addEventListener("keyup", function (e) {
+-$(".file-content").addEventListener("input", function (e) {
 -  if ($(".dialog.editor:not(.hidden)")) {
--    $(".act-save-edit-file").disabled = !isModified(e.target);
--    // Update line numbers when content changes
+-    // Update line numbers on any input change
 -    updateLineNumbers();
 -  }
 +function slDelegatedAction(containerId, selector, handler) {
@@ -7410,22 +7757,10 @@ index fd61602..1c09ba5 100644
 +}
 +slDelegatedAction("#sl-blk-chips", "[data-napt-domain]", (el) => {
 +  naptPost({ action: el.dataset.naptAction || "unblock", domain: el.dataset.naptDomain || "" });
- });
--
--$(".file-content").addEventListener("scroll", function (e) {
--  if ($(".dialog.editor:not(.hidden)")) {
--    // Sync scrolling between textarea and line numbers
--    syncScrolling();
--  }
++});
 +slDelegatedAction("#sl-dns-feed", "[data-napt-domain]", (el) => {
 +  naptPost({ action: el.dataset.naptAction || "block", domain: el.dataset.naptDomain || "" });
- });
--
--$(".file-content").addEventListener("input", function (e) {
--  if ($(".dialog.editor:not(.hidden)")) {
--    // Update line numbers on any input change
--    updateLineNumbers();
--  }
++});
 +slDelegatedAction("#sl-sonar-events", "[data-sl-play-wav]", (el) => {
 +  if (el.dataset.slPlayWav) playSonarWav(el.dataset.slPlayWav);
 +});
@@ -7841,6 +8176,65 @@ index fd61602..1c09ba5 100644
 + document.querySelectorAll(".slab-btn").forEach(btn=>{
 +   btn.addEventListener("click", ()=> switchSlab(btn.dataset.slab));
 + });
++ document.querySelectorAll("[data-monslab]").forEach(btn=>{
++   btn.addEventListener("click", ()=> switchMonSlab(btn.dataset.monslab));
++ });
++ document.querySelectorAll("[data-monslab-jump]").forEach(b=>{
++   b.addEventListener("click", ()=>{ switchMonSlab(b.dataset.monslabJump); });
++ });
++ document.querySelectorAll("[data-jump-tab]").forEach(b=>{
++   b.addEventListener("click", ()=>{
++     const tab=b.dataset.jumpTab, slab=b.dataset.jumpSlab;
++     switchTab(tab);
++     setTimeout(()=>{ if(slab && tab==="seclab") switchSlab(slab); }, 120);
++   });
++ });
++ document.querySelectorAll(".mon-filter").forEach(btn=>{
++   btn.addEventListener("click", ()=>{
++     document.querySelectorAll(".mon-filter").forEach(x=>x.classList.remove("active","btn-default"));
++     btn.classList.add("active","btn-default");
++     monFilter=btn.dataset.filter||"all";
++     renderMonitorAlerts(monLastSecLab);
++   });
++ });
++ document.getElementById("mon-refresh")?.addEventListener("click", ()=> refreshMonitor());
++ document.getElementById("mon-auto")?.addEventListener("change", (e)=>{ if(e.target.checked) refreshMonitor(); });
++ document.getElementById("mon-wifi-scan")?.addEventListener("click", async ()=>{
++   const box=document.getElementById("mon-wifi-list");
++   if(!box) return;
++   box.innerHTML='<div class="sl-item muted-sm">Scanning 2.4 GHz...</div>';
++   try{
++     const data=JSON.parse(await requestGet("/wifiscan"));
++     const nets=data.nets||[];
++     box.innerHTML = nets.slice(0,12).map(n=>`<div class="sl-item"><span>${slEsc(n.ssid)} <small class="muted-sm">${n.enc?"🔒":"🔓"} ${n.rssi}dBm</small></span><span class="sl-tag">${n.saved?"Saved":(n.enc?"WPA":"Open")}</span></div>`).join("") || '<div class="sl-item muted-sm">No APs</div>';
++   }catch(e){ box.innerHTML=`<div class="sl-item muted-sm">Scan failed: ${slEsc(e.message)}</div>`; }
++ });
++ document.getElementById("mon-net-scan")?.addEventListener("click", async ()=>{
++   const box=document.getElementById("mon-net-scanlist");
++   if(!box) return;
++   box.innerHTML='<div class="sl-item muted-sm">Scanning 2.4 GHz...</div>';
++   try{
++     const data=JSON.parse(await requestGet("/wifiscan"));
++     const nets=data.nets||[];
++     box.innerHTML = nets.map(n=>`<div class="sl-item"><span>${slEsc(n.ssid)} <small class="muted-sm">CH${n.channel||"?"} ${n.enc?"🔒":"🔓"} ${n.rssi}dBm ${n.bssid||""}</small></span><button type="button" class="sl-tag" onclick="document.getElementById('mon-net-scanlist').dataset.ssid='${slEsc(n.ssid)}'">Use</button></div>`).join("") || '<div class="sl-item muted-sm">No APs</div>';
++   }catch(e){ box.innerHTML=`<div class="sl-item muted-sm">Scan failed: ${slEsc(e.message)}</div>`; }
++ });
++ document.getElementById("mon-napt-toggle")?.addEventListener("click", ()=>{
++   const isOn = monLastSecLab?.napt?.running;
++   if(isOn) naptPost({action:"stop"}); else naptPost({action:"start"});
++   setTimeout(refreshMonitor, 900);
++ });
++ document.getElementById("mon-napt-export")?.addEventListener("click", ()=> naptPost({action:"export"}));
++ (function(){
++   let last="overview";
++   try{ const v=localStorage.getItem("monitorSlab"); if(v) last=v; }catch(e){}
++   const tryApply=()=>{ if(document.getElementById("monslab-overview")){ switchMonSlab(last); } else setTimeout(tryApply, 150); };
++   if(document.readyState==="complete") tryApply(); else window.addEventListener("load", tryApply);
++   // persist on switch
++   const orig=switchMonSlab;
++   window.switchMonSlab = function(name){ orig(name); try{ localStorage.setItem("monitorSlab", name);}catch(e){} };
++ })();
++
 + document.querySelectorAll("[data-slab-jump]").forEach(b=>{
 +   b.addEventListener("click", ()=>{ switchSlab(b.dataset.slabJump); document.getElementById("tab-seclab")?.scrollIntoView({behavior:"smooth", block:"start"}); });
 + });
