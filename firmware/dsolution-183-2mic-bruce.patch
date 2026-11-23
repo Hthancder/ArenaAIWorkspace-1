@@ -2761,7 +2761,7 @@ diff --git a/embedded_resources/web_interface/index.html b/embedded_resources/we
 index 5290300..eb7d2cf 100644
 --- a/embedded_resources/web_interface/index.html
 +++ b/embedded_resources/web_interface/index.html
-@@ -1,700 +1,1256 @@
+@@ -1,700 +1,1258 @@
  <!doctype html>
  <html lang="en">
 -  <head>
@@ -2931,6 +2931,8 @@ index 5290300..eb7d2cf 100644
 +            <button type="button" class="btn-action" id="btn-switch-bootmenu">Reboot to Dual-Boot Menu</button>
 +          </div>
 +        </div>
++      </div>
++    </section>
 +
 +    <!-- TAB 1.5: MONITOR — Network + System + Alerts dashboard tổng -->
 +    <section id="tab-monitor" class="tab-pane hidden">
@@ -16548,7 +16550,7 @@ diff --git a/src/core/wifi/webInterface.cpp b/src/core/wifi/webInterface.cpp
 index a8679bd..ddef479 100644
 --- a/src/core/wifi/webInterface.cpp
 +++ b/src/core/wifi/webInterface.cpp
-@@ -1,19 +1,48 @@
+@@ -1,19 +1,49 @@
  #include "webInterface.h"
 +#include "web_navigation.h"
 +#include "core/dsolution_ux.h"
@@ -16589,6 +16591,7 @@ index a8679bd..ddef479 100644
 +#include <Update.h>
 +#include <algorithm>
 +#include <atomic>
++#include <memory>
  #include <cstddef>
  #include <esp32-hal-psram.h>
  #include <esp_heap_caps.h>
@@ -17708,7 +17711,7 @@ index a8679bd..ddef479 100644
  
      RAM_LOG("after MDNS");
      return true;
-@@ -460,59 +1273,964 @@ void configureWebServer() {
+@@ -460,59 +1273,971 @@ void configureWebServer() {
      // System Info
      server->on("/systeminfo", HTTP_GET, [](AsyncWebServerRequest *request) {
          if (checkUserWebAuth(request)) {
@@ -18692,15 +18695,24 @@ index a8679bd..ddef479 100644
 -                request->send(500, "text/plain", "Screen buffer overflow");
 +            bool logging = false, truncated = false, base = false, unmapped = false;
 +            tft.getBinLog(buffer, binSize, &logging, &truncated, &base, &unmapped);
-+            AsyncResponseStream *response = request->beginResponseStream("application/octet-stream", binSize);
-+            if (!response || response->write(buffer, binSize) != binSize) {
-+                free(buffer);
-+                delete response;
++            // Stream directly from PSRAM; AsyncResponseStream duplicates the whole frame.
++            std::shared_ptr<uint8_t> frame(buffer, [](uint8_t *p) { free(p); });
++            AsyncWebServerResponse *response = request->beginResponse(
++                "application/octet-stream", binSize,
++                [frame, binSize](uint8_t *out, size_t maxLen, size_t index) -> size_t {
++                    if (index >= binSize) return 0;
++                    const size_t count = std::min(maxLen, binSize - index);
++                    memcpy(out, frame.get() + index, count);
++                    return count;
++                }
++            );
++            if (!response) {
 +                request->send(503, "text/plain", "Insufficient memory for screen response");
-                 return;
-             }
++                return;
++            }
+-                return;
+-            }
 -            request->send(200, "application/octet-stream", (const uint8_t *)screenBinBuffer, binSize);
-+            free(buffer);
 +            response->addHeader("Cache-Control", "no-store");
 +            response->addHeader("X-Screen-Logging", logging ? "active" : "inactive");
 +            response->addHeader("X-Screen-Truncated", truncated ? "1" : "0");
