@@ -11922,37 +11922,31 @@ index e8ba931..18327ac 100644
      int _totalItems = 0;
 diff --git a/src/core/menu_items/BadUsbMenu.cpp b/src/core/menu_items/BadUsbMenu.cpp
 new file mode 100644
-index 0000000..efcdeb9
+index 0000000..163e51e
 --- /dev/null
 +++ b/src/core/menu_items/BadUsbMenu.cpp
-@@ -0,0 +1,55 @@
+@@ -0,0 +1,49 @@
 +#include "BadUsbMenu.h"
 +#include "core/display.h"
 +#include "core/utils.h"
 +#include "core/virtual_msc.h"
-+#include "modules/badusb_ble/badusb_autorun.h"
 +#include "modules/badusb_ble/ducky_typer.h"
-+#include "modules/badusb_ble/smart_badusb.h"
++#include "modules/badusb_ble/usb_identity.h"
 +#include "modules/others/clicker.h"
 +#include "modules/others/u2f.h"
 +
 +void BadUsbMenu::optionsMenu() {
 +    options = {
 +#ifndef LITE_VERSION
-+        {"BadUSB",       [=]() { ducky_setup(hid_usb, false); }},
-+        {"USB Keyboard", [=]() { ducky_keyboard(hid_usb, false); }},
-+#endif
-+#if defined(USB_as_HID) && !defined(LITE_VERSION)
-+        {"Smart BadUSB Suite", [=]() { smart_badusb_setup(); }},
-+        {"Auto-Run on Plug",   [=]() { badUsbAutoRunMenu(); }},
++        {"USB Descriptor Info", showUsbDescriptorInfo},
++        {"Interactive USB Keyboard", [=]() { ducky_keyboard(hid_usb, false); }},
 +#endif
 +#if defined(SOC_USB_OTG_SUPPORTED) && !defined(LITE_VERSION)
-+        {"USB Drive + BadUSB", [=]() { virtual_msc_setup(true); }},
-+        {"Virtual USB Drive",  [=]() { virtual_msc_setup(false); }},
++        {"Virtual USB Drive", [=]() { virtual_msc_setup(false); }},
 +#endif
 +#ifdef USB_as_HID
-+        {"USB Clicker",  clicker_setup},
-+        {"USB U2F",      u2f_setup},
++        {"USB Clicker", clicker_setup},
++        {"USB U2F", u2f_setup},
 +#endif
 +    };
 +    addOptionToMainMenu();
@@ -12007,7 +12001,7 @@ index 0000000..83c7f4b
 +
 +#endif
 diff --git a/src/core/menu_items/BleMenu.cpp b/src/core/menu_items/BleMenu.cpp
-index ed144ba..be16b12 100644
+index ed144ba..d275f8b 100644
 --- a/src/core/menu_items/BleMenu.cpp
 +++ b/src/core/menu_items/BleMenu.cpp
 @@ -3,8 +3,11 @@
@@ -12022,7 +12016,7 @@ index ed144ba..be16b12 100644
  #if !defined(LITE_VERSION)
  #include "modules/ble/BLE_Suite.h"
  #else
-@@ -25,22 +28,29 @@ void BleMenu::optionsMenu() {
+@@ -25,22 +28,28 @@ void BleMenu::optionsMenu() {
      }
  #endif
  #if !defined(LITE_VERSION)
@@ -12046,7 +12040,6 @@ index ed144ba..be16b12 100644
 +    options.push_back({"BLE HID Payloads", [=]() {
 +                           std::vector<Option> hidOptions = {
 +                               {"Interactive BLE Keyboard", [=]() { ducky_keyboard(hid_ble, true); }},
-+                               {"DuckyScript Payloads", [=]() { ducky_setup(hid_ble, true); }},
 +                               {"Media Commands", [=]() { MediaCommands(hid_ble, true); }},
 +                               {"Back", []() {}}};
 +                           loopOptions(hidOptions, MENU_TYPE_SUBMENU, "BLE HID");
@@ -12330,16 +12323,16 @@ index 443e395..4c4346f 100644
      addOptionToMainMenu();
  
 diff --git a/src/core/menu_items/OthersMenu.cpp b/src/core/menu_items/OthersMenu.cpp
-index 40f9956..5ddee2f 100644
+index 40f9956..2bc47d9 100644
 --- a/src/core/menu_items/OthersMenu.cpp
 +++ b/src/core/menu_items/OthersMenu.cpp
-@@ -2,16 +2,43 @@
+@@ -2,16 +2,22 @@
  
  #include "core/display.h"
  #include "core/utils.h"
 +#include "core/virtual_msc.h"
  #include "modules/badusb_ble/ducky_typer.h"
-+#include "modules/badusb_ble/smart_badusb.h"
++#include "modules/badusb_ble/usb_identity.h"
  #include "modules/bjs_interpreter/interpreter.h"
  #include "modules/others/clicker.h"
 +#if !defined(DSOLUTION_NO_EXT_HW)
@@ -12352,32 +12345,11 @@ index 40f9956..5ddee2f 100644
  #include "modules/others/u2f.h"
  // Removed: #include "modules/others/timer.h"
  
-+namespace {
-+void showUsbDescriptorInfo() {
-+    String info = "Firmware USB identity\n";
-+#ifdef USB_VID
-+    info += "VID: 0x";
-+    info += String((uint32_t)USB_VID, HEX);
-+    info += '\n';
-+#else
-+    info += "VID: not set by this board config\n";
-+#endif
-+#ifdef USB_PID
-+    info += "PID: 0x";
-+    info += String((uint32_t)USB_PID, HEX);
-+    info += '\n';
-+#else
-+    info += "PID: not set by this board config\n";
-+#endif
-+    info += "Build-time identity only; no spoofing.";
-+    displayInfo(info, true);
-+}
-+} // namespace
 +
  void OthersMenu::optionsMenu() {
      options = {
          {"QRCodes",      qrcode_menu                  },
-@@ -19,6 +46,9 @@ void OthersMenu::optionsMenu() {
+@@ -19,6 +25,9 @@ void OthersMenu::optionsMenu() {
  
  #if defined(HAS_MICROPHONE)
          {"Microphone",   [this]() { micMenu(); }      }, //@deveclipse
@@ -12387,7 +12359,7 @@ index 40f9956..5ddee2f 100644
  #endif
  
  // New consolidated BadUSB & HID submenu
-@@ -26,13 +56,18 @@ void OthersMenu::optionsMenu() {
+@@ -26,13 +35,18 @@ void OthersMenu::optionsMenu() {
          {"BadUSB & HID", [this]() { badUsbHidMenu(); }},
  #endif
  
@@ -12407,7 +12379,7 @@ index 40f9956..5ddee2f 100644
      addOptionToMainMenu();
      loopOptions(options, MENU_TYPE_SUBMENU, "Others");
  }
-@@ -40,8 +75,18 @@ void OthersMenu::optionsMenu() {
+@@ -40,8 +54,12 @@ void OthersMenu::optionsMenu() {
  void OthersMenu::badUsbHidMenu() {
      options = {
  #ifndef LITE_VERSION
@@ -12415,20 +12387,14 @@ index 40f9956..5ddee2f 100644
 -        {"USB Keyboard", [=]() { ducky_keyboard(hid_usb, false); }},
 +        {"USB Descriptor Info", showUsbDescriptorInfo},
 +        {"Interactive USB Keyboard", [=]() { ducky_keyboard(hid_usb, false); }},
-+        {"DuckyScript Payloads", [=]() { ducky_setup(hid_usb, false); }},
-+#endif
-+
-+#if defined(USB_as_HID) && !defined(LITE_VERSION)
-+        {"Smart BadUSB Suite", [=]() { smart_badusb_setup(); }},
 +#endif
 +
 +#if defined(SOC_USB_OTG_SUPPORTED) && !defined(LITE_VERSION)
-+        {"USB Drive + BadUSB", [=]() { virtual_msc_setup(true); } },
 +        {"Virtual USB Drive",  [=]() { virtual_msc_setup(false); }},
  #endif
  
  #ifdef USB_as_HID
-@@ -58,10 +103,14 @@ void OthersMenu::badUsbHidMenu() {
+@@ -58,10 +76,14 @@ void OthersMenu::badUsbHidMenu() {
  void OthersMenu::micMenu() {
      options = {
  #if defined(HAS_MICROPHONE)
@@ -12653,7 +12619,7 @@ index 0000000..0fb739c
 +
 +#endif
 diff --git a/src/core/menu_items/WifiMenu.cpp b/src/core/menu_items/WifiMenu.cpp
-index 2e6512c..af2c415 100644
+index 2e6512c..e3f6d5d 100644
 --- a/src/core/menu_items/WifiMenu.cpp
 +++ b/src/core/menu_items/WifiMenu.cpp
 @@ -16,149 +16,279 @@
@@ -12760,7 +12726,7 @@ index 2e6512c..af2c415 100644
 +        {"Start WiFi-only local survey", []() {}},
 +        {"Cancel", []() {}},
 +    };
-+    if (loopOptions(consent, MENU_TYPE_SUBMENU, "Stores AP + GPS data locally") == 0) {
++    if (loopOptions(consent, MENU_TYPE_SUBMENU, "AP + GPS saved locally; no upload") == 0) {
 +        Wardriving(true, false);
 +    }
 +}
