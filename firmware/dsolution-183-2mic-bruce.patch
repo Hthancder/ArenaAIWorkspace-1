@@ -13737,10 +13737,10 @@ index 49138d4..0bea13f 100644
  }
 diff --git a/src/core/serial_commands/seclab_commands.cpp b/src/core/serial_commands/seclab_commands.cpp
 new file mode 100644
-index 0000000..ee8f684
+index 0000000..59e2ad0
 --- /dev/null
 +++ b/src/core/serial_commands/seclab_commands.cpp
-@@ -0,0 +1,479 @@
+@@ -0,0 +1,486 @@
 +#include "seclab_commands.h"
 +#include <Arduino.h>
 +#include <globals.h>
@@ -13815,7 +13815,14 @@ index 0000000..ee8f684
 +    slPrint("  PMKID auto-exp  : " + String(bruceConfig.seclabPlus.pmkidAutoExport ? "ON" : "OFF"));
 +    slPrint("  CSA defaults    : CH" + String(bruceConfig.seclabPlus.csaChannel) + " / " +
 +            String(bruceConfig.seclabPlus.csaBursts) + " bursts");
-+    slPrint("  Chain autos     : NAPT->LAN \" + String(bruceConfig.seclabPlus.chainNaptLanAuto ? \"ON\" : \"OFF\") + \" | Portal->LAN \" + String(bruceConfig.seclabPlus.chainPortalLanAuto ? \"ON\" : \"OFF\") + \" | Guard->Audit \" + String(bruceConfig.seclabPlus.chainGuardAuditAuto ? \"ON\" : \"OFF\"));
++    String chainAutos = "  Chain autos     : NAPT->LAN ";
++    chainAutos += bruceConfig.seclabPlus.chainNaptLanAuto ? "ON" : "OFF";
++    chainAutos += " | Portal->LAN ";
++    chainAutos += bruceConfig.seclabPlus.chainPortalLanAuto ? "ON" : "OFF";
++    chainAutos += " | Guard->Audit ";
++    chainAutos += bruceConfig.seclabPlus.chainGuardAuditAuto ? "ON" : "OFF";
++    slPrint(chainAutos);
++}
 +
 +static void slStopAll() {
 +    pmkidStop();
@@ -16538,10 +16545,10 @@ index 0000000..a28c8b5
 +
 +#endif
 diff --git a/src/core/wifi/webInterface.cpp b/src/core/wifi/webInterface.cpp
-index a8679bd..252f247 100644
+index a8679bd..ddef479 100644
 --- a/src/core/wifi/webInterface.cpp
 +++ b/src/core/wifi/webInterface.cpp
-@@ -1,19 +1,47 @@
+@@ -1,19 +1,48 @@
  #include "webInterface.h"
 +#include "web_navigation.h"
 +#include "core/dsolution_ux.h"
@@ -16566,6 +16573,7 @@ index a8679bd..252f247 100644
 +#include "modules/badusb_ble/smart_badusb.h"
 +#include "modules/ble/ble_gatt_cloner.h"
 +#include "modules/ble/ble_security_audit.h"
++#include "modules/wifi/evil_portal.h"
 +#include "modules/wifi/chain_orchestrator.h"
 +#include "modules/wifi/lan_auditor.h"
 +#include "modules/wifi/lan_guard.h"
@@ -16589,7 +16597,7 @@ index a8679bd..252f247 100644
  #include <globals.h>
  
  File uploadFile;
-@@ -22,12 +50,601 @@ FS _webFS = LittleFS;
+@@ -22,12 +51,601 @@ FS _webFS = LittleFS;
  const int default_webserverporthttp = 80;
  
  // WiFi as an Access Point
@@ -17193,7 +17201,7 @@ index a8679bd..252f247 100644
  
  // Generate random token
  String generateToken(int length = 24) {
-@@ -42,36 +659,73 @@ String generateToken(int length = 24) {
+@@ -42,36 +660,73 @@ String generateToken(int length = 24) {
  **  Turn off the WebUI
  **********************************************************************/
  void stopWebUi() {
@@ -17282,7 +17290,7 @@ index a8679bd..252f247 100644
  
      // Disconnect WiFi AP mode if it's the WebUI's AP
      // Check if we're in AP or APSTA mode (used by WebUI)
-@@ -82,30 +736,41 @@ void cleanlyStopWebUiForWiFiFeature() {
+@@ -82,30 +737,41 @@ void cleanlyStopWebUiForWiFiFeature() {
          vTaskDelay(pdMS_TO_TICKS(250));
      }
  
@@ -17341,7 +17349,7 @@ index a8679bd..252f247 100644
  }
  
  /**********************************************************************
-@@ -127,6 +792,7 @@ String humanReadableSize(uint64_t bytes) {
+@@ -127,6 +793,7 @@ String humanReadableSize(uint64_t bytes) {
  String listFiles(FS &fs, const String &folder) {
      // log_i("Listfiles Start");
      String returnText = "pa:" + folder + ":0\n";
@@ -17349,7 +17357,7 @@ index a8679bd..252f247 100644
      // Serial.println("Listing files stored on SD");
  
      _webFS = fs;
-@@ -168,19 +834,26 @@ String listFiles(FS &fs, const String &folder) {
+@@ -168,19 +835,26 @@ String listFiles(FS &fs, const String &folder) {
  ** used by server->on functions to discern whether a user has the correct
  ** httpapitoken OR is authenticated by username and password
  **********************************************************************/
@@ -17388,7 +17396,7 @@ index a8679bd..252f247 100644
      if (onFailureReturnLoginPage) {
          serveWebUIFile(request, "login.html", "text/html", true, login_html, login_html_size);
      } else {
-@@ -220,49 +893,68 @@ void createDirRecursive(const String &path, FS fs) {
+@@ -220,49 +894,68 @@ void createDirRecursive(const String &path, FS fs) {
  **  Function: handleUpload
  ** handles uploads to the filserver
  **********************************************************************/
@@ -17496,7 +17504,7 @@ index a8679bd..252f247 100644
      }
  }
  
-@@ -272,43 +964,162 @@ void notFound(AsyncWebServerRequest *request) { request->send(404, "text/plain",
+@@ -272,43 +965,162 @@ void notFound(AsyncWebServerRequest *request) { request->send(404, "text/plain",
  **  Function: drawWebUiScreen
  **  Draw information on screen of WebUI.
  **********************************************************************/
@@ -17685,7 +17693,7 @@ index a8679bd..252f247 100644
  
  #if defined(HAS_TOUCH)
      TouchFooter();
-@@ -379,11 +1190,12 @@ void serveWebUIFile(
+@@ -379,11 +1191,12 @@ void serveWebUIFile(
  static bool startMdnsResponder() {
      RAM_LOG("before MDNS");
  
@@ -17700,7 +17708,7 @@ index a8679bd..252f247 100644
  
      RAM_LOG("after MDNS");
      return true;
-@@ -460,59 +1272,964 @@ void configureWebServer() {
+@@ -460,59 +1273,964 @@ void configureWebServer() {
      // System Info
      server->on("/systeminfo", HTTP_GET, [](AsyncWebServerRequest *request) {
          if (checkUserWebAuth(request)) {
@@ -18703,7 +18711,7 @@ index a8679bd..252f247 100644
          }
      });
  
-@@ -544,25 +2261,70 @@ void configureWebServer() {
+@@ -544,25 +2262,70 @@ void configureWebServer() {
          if (!checkUserWebAuth(request)) { return; }
          if (request->hasArg("cmnd")) {
              String cmnd = request->arg("cmnd");
@@ -18793,7 +18801,7 @@ index a8679bd..252f247 100644
                  }
              } else {
                  if (parseSerialCommand(cmnd, false)) {
-@@ -576,9 +2338,28 @@ void configureWebServer() {
+@@ -576,9 +2339,28 @@ void configureWebServer() {
          }
      });
  
@@ -18824,7 +18832,7 @@ index a8679bd..252f247 100644
      });
  
      // List files
-@@ -632,6 +2413,11 @@ void configureWebServer() {
+@@ -632,6 +2414,11 @@ void configureWebServer() {
                  } else {
                      if (strcmp(fileAction.c_str(), "download") == 0) {
                          request->send(*fs, fileName, "application/octet-stream", true);
@@ -18836,7 +18844,7 @@ index a8679bd..252f247 100644
                      } else if (strcmp(fileAction.c_str(), "image") == 0) {
                          String extension = fileName.substring(fileName.lastIndexOf('.') + 1);
                          // https://www.iana.org/assignments/media-types/media-types.xhtml#image
-@@ -700,7 +2486,7 @@ void configureWebServer() {
+@@ -700,7 +2487,7 @@ void configureWebServer() {
  
                  File editFile = fs->open(fileName, FILE_WRITE);
                  if (editFile) {
@@ -18845,7 +18853,7 @@ index a8679bd..252f247 100644
                          request->send(200, "text/plain", "File edited: " + fileName);
                      } else {
                          request->send(500, "text/plain", "Failed to write to file: " + fileName);
-@@ -720,7 +2506,13 @@ void configureWebServer() {
+@@ -720,7 +2507,13 @@ void configureWebServer() {
      server->on(
          "/upload",
          HTTP_POST,
@@ -18860,7 +18868,7 @@ index a8679bd..252f247 100644
          handleUpload
      );
  
-@@ -737,6 +2529,427 @@ void configureWebServer() {
+@@ -737,6 +2530,427 @@ void configureWebServer() {
              }
          }
      });
@@ -19288,7 +19296,7 @@ index a8679bd..252f247 100644
      server->begin();
      Serial.println("Webserver started");
  }
-@@ -745,25 +2958,78 @@ void configureWebServer() {
+@@ -745,25 +2959,78 @@ void configureWebServer() {
  **  Function: startWebUi
  **  Start the WebUI
  **********************************************************************/
@@ -19376,7 +19384,7 @@ index a8679bd..252f247 100644
          new (server) AsyncWebServer(default_webserverporthttp);
  
          configureWebServer();
-@@ -771,24 +3037,198 @@ void startWebUi(bool mode_ap) {
+@@ -771,24 +3038,198 @@ void startWebUi(bool mode_ap) {
          isWebUIActive = true;
      }
      tft.setLogging();
@@ -20306,10 +20314,10 @@ index eebc4a9..c3d0478 100644
      if (bruceConfig.startupApp != "" && !startupApp.startApp(bruceConfig.startupApp)) {
 diff --git a/src/modules/badusb_ble/badusb_autorun.cpp b/src/modules/badusb_ble/badusb_autorun.cpp
 new file mode 100644
-index 0000000..f99af95
+index 0000000..62d2bea
 --- /dev/null
 +++ b/src/modules/badusb_ble/badusb_autorun.cpp
-@@ -0,0 +1,398 @@
+@@ -0,0 +1,350 @@
 +#if !defined(LITE_VERSION)
 +#include "badusb_autorun.h"
 +#include "ducky_typer.h"
@@ -20427,12 +20435,6 @@ index 0000000..f99af95
 +        vTaskDelay(pdMS_TO_TICKS(300));
 +    }
 +    return hid_usb != nullptr;
-+void badUsbAutoRunTestTask(void *param) {
-+    vTaskDelay(pdMS_TO_TICKS(300));
-+    badUsbAutoRunExecuteNow(false);
-+    vTaskDelete(NULL);
-+}
-+
 +#endif
 +}
 +
@@ -20474,12 +20476,6 @@ index 0000000..f99af95
 +        if (any) { cancelled=true; break; }
 +#if defined(USB_as_HID)
 +        if (!tud_mounted()) { cancelled=true; break; }
-+void badUsbAutoRunTestTask(void *param) {
-+    vTaskDelay(pdMS_TO_TICKS(300));
-+    badUsbAutoRunExecuteNow(false);
-+    vTaskDelete(NULL);
-+}
-+
 +#endif
 +    }
 +    if (cancelled) {
@@ -20511,12 +20507,6 @@ index 0000000..f99af95
 +    if (!tud_mounted()) { inputLock(); displayError("USB host not connected", true); inputUnlock(); s_running=false; return false; }
 +    uint16_t delayMs=bruceConfig.badUsbAutoRun.delayMs;
 +    if (delayMs) { inputLock(); printStatusBadUSBBLE("Host connected, delay "+String(delayMs)+"ms"); inputUnlock(); vTaskDelay(pdMS_TO_TICKS(delayMs)); }
-+void badUsbAutoRunTestTask(void *param) {
-+    vTaskDelay(pdMS_TO_TICKS(300));
-+    badUsbAutoRunExecuteNow(false);
-+    vTaskDelete(NULL);
-+}
-+
 +#endif
 +    inputLock(); printHeaderBadUSBBLE(path); printStatusBadUSBBLE("Running Auto-Run..."); inputUnlock();
 +    // key_input takes FS by value
@@ -20537,12 +20527,6 @@ index 0000000..f99af95
 +#if defined(USB_as_HID)
 +        if (!s_usbInitialized) ensureUsbHidReady();
 +        mounted=tud_mounted();
-+void badUsbAutoRunTestTask(void *param) {
-+    vTaskDelay(pdMS_TO_TICKS(300));
-+    badUsbAutoRunExecuteNow(false);
-+    vTaskDelete(NULL);
-+}
-+
 +#endif
 +        if (mounted && !s_lastMounted) {
 +            s_lastPlugMs=millis();
@@ -20551,12 +20535,6 @@ index 0000000..f99af95
 +                vTaskDelay(pdMS_TO_TICKS(2000));
 +#if defined(USB_as_HID)
 +                if (!tud_mounted()) { s_lastMounted=false; vTaskDelay(pdMS_TO_TICKS(500)); continue; }
-+void badUsbAutoRunTestTask(void *param) {
-+    vTaskDelay(pdMS_TO_TICKS(300));
-+    badUsbAutoRunExecuteNow(false);
-+    vTaskDelete(NULL);
-+}
-+
 +#endif
 +            }
 +            bool shouldRun=true;
@@ -20572,12 +20550,6 @@ index 0000000..f99af95
 +                        vTaskDelay(pdMS_TO_TICKS(500));
 +#else
 +                        break;
-+void badUsbAutoRunTestTask(void *param) {
-+    vTaskDelay(pdMS_TO_TICKS(300));
-+    badUsbAutoRunExecuteNow(false);
-+    vTaskDelete(NULL);
-+}
-+
 +#endif
 +                    }
 +                    vTaskDelay(pdMS_TO_TICKS(1000));
@@ -20591,12 +20563,6 @@ index 0000000..f99af95
 +                    vTaskDelay(pdMS_TO_TICKS(500));
 +#else
 +                    break;
-+void badUsbAutoRunTestTask(void *param) {
-+    vTaskDelay(pdMS_TO_TICKS(300));
-+    badUsbAutoRunExecuteNow(false);
-+    vTaskDelete(NULL);
-+}
-+
 +#endif
 +                }
 +                vTaskDelay(pdMS_TO_TICKS(1000));
@@ -20699,12 +20665,6 @@ index 0000000..f99af95
 +        if (idx<0 || returnToMenu) break;
 +        if (idx==(int)options.size()-1) break;
 +    }
-+}
-+
-+void badUsbAutoRunTestTask(void *param) {
-+    vTaskDelay(pdMS_TO_TICKS(300));
-+    badUsbAutoRunExecuteNow(false);
-+    vTaskDelete(NULL);
 +}
 +
 +#endif
@@ -21651,6 +21611,38 @@ index 0000000..8df9cc8
 +bool smartBadUsbWaitLock(bool capsLock, uint32_t timeoutMs);
 +
 +#endif
+diff --git a/src/modules/badusb_ble/usb_identity.h b/src/modules/badusb_ble/usb_identity.h
+new file mode 100644
+index 0000000..bb2cef9
+--- /dev/null
++++ b/src/modules/badusb_ble/usb_identity.h
+@@ -0,0 +1,26 @@
++#pragma once
++
++#include "core/display.h"
++
++// Show this firmware's build-time USB identity. This reports the configured
++// device descriptors only; it does not impersonate another vendor or inspect
++// the connected host.
++inline void showUsbDescriptorInfo() {
++    String info = "Firmware USB identity\n";
++#ifdef USB_VID
++    info += "VID: 0x";
++    info += String((uint32_t)USB_VID, HEX);
++    info += '\n';
++#else
++    info += "VID: not set by this board config\n";
++#endif
++#ifdef USB_PID
++    info += "PID: 0x";
++    info += String((uint32_t)USB_PID, HEX);
++    info += '\n';
++#else
++    info += "PID: not set by this board config\n";
++#endif
++    info += "Build-time identity only; no spoofing.";
++    displayInfo(info, true);
++}
 diff --git a/src/modules/bjs_interpreter/display_js.cpp b/src/modules/bjs_interpreter/display_js.cpp
 index 11423ba..5638ab0 100644
 --- a/src/modules/bjs_interpreter/display_js.cpp
@@ -27180,10 +27172,10 @@ index 0000000..819464c
 +}
 diff --git a/src/modules/wifi/chain_orchestrator.cpp b/src/modules/wifi/chain_orchestrator.cpp
 new file mode 100644
-index 0000000..7116b67
+index 0000000..c22391b
 --- /dev/null
 +++ b/src/modules/wifi/chain_orchestrator.cpp
-@@ -0,0 +1,846 @@
+@@ -0,0 +1,847 @@
 +#include "chain_orchestrator.h"
 +#if !defined(LITE_VERSION)
 +
@@ -27717,7 +27709,8 @@ index 0000000..7116b67
 +    }
 +    int choice=-1;
 +    options = {
-+        {hasPick ? String("Target: ")+targetSsid+" CH"+String(targetCh)+" (from scan)") : String("Target: <chọn từ Scan & Analyze trước>"), [&]() { choice=0; }},
++        {hasPick ? (String("Target: ") + targetSsid + " CH" + String(targetCh) + " (from scan)")
++                 : String("Target: <chọn từ Scan & Analyze trước>"), [&]() { choice = 0; }},
 +        {"Nhập SSID thủ công", [&]() { choice=1; }},
 +        {String("Bắt đầu Deauth+Clone+Verify+Route")+ (hasPick?"": " (cần target)"), [&]() { choice=2; }},
 +        {"Back", [&]() { choice=-1; }},
@@ -28848,10 +28841,10 @@ index 59ed80e..d218da9 100644
  
  String EvilPortal::getHtmlTemplate(const String &body) {
 diff --git a/src/modules/wifi/evil_portal.h b/src/modules/wifi/evil_portal.h
-index 4a8b438..47ba8cc 100644
+index 4a8b438..8a61319 100644
 --- a/src/modules/wifi/evil_portal.h
 +++ b/src/modules/wifi/evil_portal.h
-@@ -31,9 +31,19 @@ public:
+@@ -31,9 +31,23 @@ public:
      void loop(void);
      void processRequests(void);
  
@@ -28860,6 +28853,10 @@ index 4a8b438..47ba8cc 100644
 +    // napt_router can re-create it on 192.168.4.1 with the same SSID.
 +    void stop(void);
 +    void setGatewayIp(const IPAddress &ip) { apGateway = ip; }
++
++    static String portalTemplateActivePath();
++    static bool portalTemplateSetActive(const String &path);
++    static String portalTemplateListJson();
 +
      bool hasCredentials();
      String getCapturedSSID();
@@ -28871,7 +28868,7 @@ index 4a8b438..47ba8cc 100644
  
      DNSServer &getDNSServer() { return *dnsServer; }
      AsyncWebServer &getWebServer() { return webServer; }
-@@ -79,7 +89,13 @@ private:
+@@ -79,7 +93,13 @@ private:
      int previousTotalCapturedCredentials = -1;
      String capturedCredentialsHtml = "";
      bool verifyPass = false;
