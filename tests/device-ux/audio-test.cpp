@@ -9,7 +9,7 @@
 #include "driver/i2s_std.h"
 #include "core/dsolution_ux.h"
 SerialStub Serial; WireStub Wire; Config bruceConfig;
-static unsigned nowMs; static bool mic, speaker, playing, i2sBusy, writeError, codecOk = true;
+static unsigned nowMs; static bool mic, speaker, playing, i2sBusy, writeError, codecOk = true, speakerReady = true;
 static TaskHandle_t task = (void*)1;
 static int starts, stops, deleted, blinks, addr, begins;
 static bool restartFindDuringWrite = false;
@@ -20,6 +20,7 @@ void vTaskDelay(unsigned n) { nowMs += n; }
 void blinkLed(int) { ++blinks; }
 bool isBoardMicActive() { return mic; }
 bool isSpeakerActive() { return speaker; }
+bool isBoardSpeakerReady() { return speakerReady; }
 bool isAudioPlaying() { return playing; }
 void _setup_codec_speaker(bool on) { if (on) { ++starts; speaker = true; } else { ++stops; speaker = false; } }
 void WireStub::beginTransmission(int a) { addr = a; }
@@ -52,10 +53,13 @@ int main() {
     playing = true; assert(!uxSpeakerTest() && begins == 0); playing = false;
     i2sBusy = true; assert(!uxSpeakerTest()); i2sBusy = false;
     codecOk = false; assert(!uxSpeakerTest() && starts == 0 && deleted == 1 && addr == 0x18); codecOk = true;
-    assert(uxSpeakerTest() && starts == 1 && stops == 1 && !speaker);
+    speakerReady = false;
+    assert(!uxSpeakerTest() && starts == 1 && stops == 1 && !speaker);
+    speakerReady = true;
+    assert(uxSpeakerTest() && starts == 2 && stops == 2 && !speaker);
     bool nonzero = false; for (size_t i=0; i<output.size(); i+=2) { assert(output[i] == output[i+1]); nonzero |= output[i] != 0; }
     assert(nonzero && output.back() == 0);
-    writeError = true; assert(!uxSpeakerTest() && starts == 2 && stops == 2 && !speaker); writeError = false;
+    writeError = true; assert(!uxSpeakerTest() && starts == 3 && stops == 3 && !speaker); writeError = false;
     uxSetUiFeedback(false); int before = starts; uxSound(UiSound::Select); assert(starts == before);
     uxSound(UiSound::Warning); assert(starts == before + 1); uxSound(UiSound::Warning); assert(starts == before + 1);
     uxSetUiFeedback(true);

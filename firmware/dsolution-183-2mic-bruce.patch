@@ -165,7 +165,7 @@ index 00000000..d021320f
 +#endif // DSOLUTION_NV3023_PANEL_H
 diff --git a/boards/dsolution-183-2mic/README.md b/boards/dsolution-183-2mic/README.md
 new file mode 100644
-index 00000000..fbddf1dc
+index 00000000..a6aaafa7
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/README.md
 @@ -0,0 +1,263 @@
@@ -275,8 +275,8 @@ index 00000000..fbddf1dc
 +  (reset, clocks, 16-bit I2S slave, DAC power, 0 dB digital volume), then PA Enable HIGH.
 +* `_setup_codec_mic(true)` (called before capture): ES7210 bring-up at `0x40` — the
 +  Espressif `esp_codec_dev` register sequence: reset, HPF, analog power, 16-bit I2S
-+  slave, clock dividers for MCLK = 256 x fs, MIC1/MIC2 gain 24 dB, MIC3 (AEC
-+  reference) 0 dB, then power-on.
++  slave, MIC1/MIC2 gain 24 dB, MIC1/2 clocks and active-low power enabled.
++  I2C errors are reported; successful I2C writes do not prove that audio is captured.
 +
 +MCLK: the ESP32 is the I2S master, so MCLK follows the sample rate at a fixed 256x
 +ratio — 6.144 MHz at 24 kHz (vendor table) and 12.288 MHz at 48 kHz, which is the rate
@@ -293,9 +293,9 @@ index 00000000..fbddf1dc
 +volume is left at 0 dB (`0x32 = 0xBF`). The vendor's "42 dB" is the chip's *maximum*
 +gain setting, not the default.
 +
-+ES7210 echo reference: MIC3 is the internal ES8311 -> ES7210 loopback, configured at
-+unity gain. Nothing in Bruce consumes it yet (there is no AEC in the firmware), but the
-+register setup keeps it clean if an AEC-enabled app is added.
++ES7210 echo reference: MIC3/4 are powered down in the current two-channel capture;
++Bruce does not implement AEC. Sound direction and channel mapping require real hardware
++verification.
 +
 +## Buttons
 +
@@ -650,10 +650,10 @@ index 00000000..95814893
 +	https://github.com/lovyan03/LovyanGFX#develop
 diff --git a/boards/dsolution-183-2mic/interface.cpp b/boards/dsolution-183-2mic/interface.cpp
 new file mode 100644
-index 00000000..9ea1de9d
+index 00000000..5252cb2e
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/interface.cpp
-@@ -0,0 +1,642 @@
+@@ -0,0 +1,661 @@
 +// =====================================================================================
 +//  boards/dsolution-183-2mic/interface.cpp
 +//
@@ -778,17 +778,17 @@ index 00000000..9ea1de9d
 +//  Codec helpers
 +// =====================================================================================
 +
-+static void codecWrite(uint8_t addr, uint8_t reg, uint8_t value) {
++static bool codecWrite(uint8_t addr, uint8_t reg, uint8_t value) {
 +    TwoWire *wire = getSysI2CBus();
-+    if (!wire) return;
++    if (!wire) return false;
 +    wire->beginTransmission(addr);
 +    wire->write(reg);
 +    wire->write(value);
-+    wire->endTransmission();
++    return wire->endTransmission() == 0;
 +}
 +
-+static inline void es8311Write(uint8_t reg, uint8_t value) { codecWrite(ES8311_ADDR, reg, value); }
-+static inline void es7210Write(uint8_t reg, uint8_t value) { codecWrite(ES7210_ADDR, reg, value); }
++static inline bool es8311Write(uint8_t reg, uint8_t value) { return codecWrite(ES8311_ADDR, reg, value); }
++static inline bool es7210Write(uint8_t reg, uint8_t value) { return codecWrite(ES7210_ADDR, reg, value); }
 +
 +// -------------------------------------------------------------------------------------
 +//  ES8311 (speaker DAC)
@@ -797,36 +797,39 @@ index 00000000..9ea1de9d
 +//  6.144 MHz at 24 kHz). The register values mirror the ES8311 bring-up already used by
 +//  boards/ES3C28P, which runs this chip at that same 256 x fs ratio.
 +// -------------------------------------------------------------------------------------
-+static void es8311Init() {
-+    es8311Write(0x00, 0x1F); // reset
++static bool es8311Init() {
++    bool ok = true;
++    ok &= es8311Write(0x00, 0x1F); // reset
 +    delay(20);
-+    es8311Write(0x00, 0x00); // release reset
-+    es8311Write(0x00, 0x80); // power on
++    ok &= es8311Write(0x00, 0x00); // release reset
++    ok &= es8311Write(0x00, 0x80); // power on
 +
-+    es8311Write(0x01, 0x3F); // all clocks on, MCLK from the MCLK pin
-+    es8311Write(0x02, 0x00); // pre_div = 1, pre_multi = 1x  -> 256 x fs
-+    es8311Write(0x03, 0x10); // ADC OSR
-+    es8311Write(0x04, 0x10); // DAC OSR
-+    es8311Write(0x05, 0x00); // ADC/DAC clock divider = 1
-+    es8311Write(0x06, 0x03); // BCLK divider (master mode only)
-+    es8311Write(0x07, 0x00); // LRCK divider high
-+    es8311Write(0x08, 0xFF); // LRCK divider low
++    ok &= es8311Write(0x01, 0x3F); // all clocks on, MCLK from the MCLK pin
++    ok &= es8311Write(0x02, 0x00); // pre_div = 1, pre_multi = 1x  -> 256 x fs
++    ok &= es8311Write(0x03, 0x10); // ADC OSR
++    ok &= es8311Write(0x04, 0x10); // DAC OSR
++    ok &= es8311Write(0x05, 0x00); // ADC/DAC clock divider = 1
++    ok &= es8311Write(0x06, 0x03); // BCLK divider (master mode only)
++    ok &= es8311Write(0x07, 0x00); // LRCK divider high
++    ok &= es8311Write(0x08, 0xFF); // LRCK divider low
 +
-+    es8311Write(0x09, 0x0C); // SDP in : 16-bit I2S
-+    es8311Write(0x0A, 0x0C); // SDP out: 16-bit I2S
++    ok &= es8311Write(0x09, 0x0C); // SDP in : 16-bit I2S
++    ok &= es8311Write(0x0A, 0x0C); // SDP out: 16-bit I2S
 +
-+    es8311Write(0x0D, 0x01); // power up analog
-+    es8311Write(0x0E, 0x02); // analog PGA / modulator
-+    es8311Write(0x12, 0x00); // power up DAC
-+    es8311Write(0x13, 0x10); // enable HP drive output
-+    es8311Write(0x1C, 0x6A); // ADC EQ bypass / DC offset cancel
-+    es8311Write(0x37, 0x08); // bypass DAC equaliser
++    ok &= es8311Write(0x0D, 0x01); // power up analog
++    ok &= es8311Write(0x0E, 0x02); // analog PGA / modulator
++    ok &= es8311Write(0x12, 0x00); // power up DAC
++    ok &= es8311Write(0x13, 0x10); // enable HP drive output
++    ok &= es8311Write(0x1C, 0x6A); // ADC EQ bypass / DC offset cancel
++    ok &= es8311Write(0x37, 0x08); // bypass DAC equaliser
 +
-+    es8311Write(0x32, 0xBF); // DAC digital volume: 0 dB (software volume scales this)
++    ok &= es8311Write(0x32, 0xBF); // DAC digital volume: 0 dB (software volume scales this)
++    if (!ok) Serial.println("[audio] ES8311 I2C configuration failed at 0x18");
++    return ok;
 +}
 +
 +// -------------------------------------------------------------------------------------
-+//  ES7210 (2-mic ADC, with the ES8311 output looped back on MIC3 as the AEC reference)
++//  ES7210 (MIC1/2 I2S; MIC3/4 are not enabled by this two-channel capture)
 +//
 +//  Sequence and clock coefficients are the ones from Espressif's esp_codec_dev driver:
 +//  software reset, high-pass filters, analog power, I2S format, sample-rate dividers
@@ -836,53 +839,57 @@ index 00000000..9ea1de9d
 +//  {12288000, 48000, adc_div 1, dll on, doubler on, osr 0x20, lrck 0x01/0x00}).
 +//  Same 256 x fs rule as the vendor's 24 kHz / 6.144 MHz pair.
 +// -------------------------------------------------------------------------------------
-+static void es7210Init() {
++static bool es7210Init() {
++    bool ok = true;
 +    // --- reset + high-pass filters ---
-+    es7210Write(0x00, 0xFF); // software reset
-+    es7210Write(0x00, 0x32);
-+    es7210Write(0x01, 0x3F); // ADC clocks off while configuring
-+    es7210Write(0x09, 0x30);
-+    es7210Write(0x0A, 0x30);
-+    es7210Write(0x23, 0x2A); // HPF, ADC1/2
-+    es7210Write(0x22, 0x0A);
-+    es7210Write(0x20, 0x0A); // HPF, ADC3/4
-+    es7210Write(0x21, 0x2A);
++    ok &= es7210Write(0x00, 0xFF); // software reset
++    ok &= es7210Write(0x00, 0x41);
++    ok &= es7210Write(0x01, 0x3F); // ADC clocks off while configuring
++    ok &= es7210Write(0x09, 0x30);
++    ok &= es7210Write(0x0A, 0x30);
++    ok &= es7210Write(0x23, 0x2A); // HPF, ADC1/2
++    ok &= es7210Write(0x22, 0x0A);
++    ok &= es7210Write(0x20, 0x0A); // HPF, ADC3/4
++    ok &= es7210Write(0x21, 0x2A);
 +
 +    // --- slave I2S (bit0 = 0) ---
-+    es7210Write(0x08, 0x00);
++    ok &= es7210Write(0x08, 0x00);
 +
 +    // --- analog power + mic bias ---
-+    es7210Write(0x40, 0xC3);
-+    es7210Write(0x41, 0x70); // MIC1/2 bias
-+    es7210Write(0x42, 0x70); // MIC3/4 bias
++    ok &= es7210Write(0x40, 0x43);
++    ok &= es7210Write(0x41, 0x70); // MIC1/2 bias
++    ok &= es7210Write(0x42, 0x70); // MIC3/4 bias
 +
 +    // --- data format: 16-bit, MIC1/2 on SDOUT1 ---
-+    es7210Write(0x11, 0x60);
-+    es7210Write(0x12, 0x00);
++    ok &= es7210Write(0x11, 0x60);
++    ok &= es7210Write(0x12, 0x00);
 +
 +    // --- clock dividers for MCLK = 12.288 MHz / fs = 48 kHz ---
-+    es7210Write(0x02, 0x01 | 0x40 | 0x80); // adc_div 1, doubler on, dll on  -> 0xC1
-+    es7210Write(0x07, 0x20);               // OSR
-+    es7210Write(0x04, 0x01);               // LRCK divider high
-+    es7210Write(0x05, 0x00);               // LRCK divider low
++    ok &= es7210Write(0x02, 0x01 | 0x40 | 0x80); // adc_div 1, doubler on, dll on  -> 0xC1
++    ok &= es7210Write(0x07, 0x20);               // OSR
++    ok &= es7210Write(0x04, 0x01);               // LRCK divider high
++    ok &= es7210Write(0x05, 0x00);               // LRCK divider low
 +
 +    // --- mic power + enable ---
-+    es7210Write(0x47, 0x08);
-+    es7210Write(0x48, 0x08);
-+    es7210Write(0x49, 0x08);
-+    es7210Write(0x4A, 0x08);
-+    es7210Write(0x06, 0x04); // power down DLL (as the Espressif driver does)
-+    es7210Write(0x4B, 0x0F); // MIC1/2 bias + ADC + PGA on
-+    es7210Write(0x4C, 0x0F); // MIC3/4 bias + ADC + PGA on
-+    es7210Write(0x00, 0x71);
-+    es7210Write(0x00, 0x41); // device enabled
++    ok &= es7210Write(0x47, 0x08);
++    ok &= es7210Write(0x48, 0x08);
++    ok &= es7210Write(0x49, 0x08);
++    ok &= es7210Write(0x4A, 0x08);
++    ok &= es7210Write(0x06, 0x00); // power on (Espressif codec driver)
++    ok &= es7210Write(0x01, 0x34); // 0x3F with MIC1/2 clock-off bits 0x0B cleared
++    ok &= es7210Write(0x4B, 0x00); // MIC1/2 bias, ADC and PGA on (active low)
++    ok &= es7210Write(0x4C, 0xFF); // MIC3/4 off: two-channel MIC1/2 I2S
++    ok &= es7210Write(0x00, 0x71);
++    ok &= es7210Write(0x00, 0x41); // device enabled
 +
-+    // --- gains: MIC1/MIC2 = 24 dB (reg value 8), MIC3 (AEC reference) = 0 dB ---
++    // --- gains: MIC1/MIC2 = 24 dB (reg value 8); MIC3/4 remain powered down ---
 +    // Bit 4 of each gain register selects the differential input pair.
-+    es7210Write(0x43, 0x10 | 8); // MIC1
-+    es7210Write(0x44, 0x10 | 8); // MIC2
-+    es7210Write(0x45, 0x10 | 0); // MIC3 -- ES8311 echo reference, unity gain
-+    es7210Write(0x46, 0x10 | 0); // MIC4 -- unused
++    ok &= es7210Write(0x43, 0x10 | 8); // MIC1
++    ok &= es7210Write(0x44, 0x10 | 8); // MIC2
++    ok &= es7210Write(0x45, 0x10 | 0); // MIC3 -- not captured
++    ok &= es7210Write(0x46, 0x10 | 0); // MIC4 -- not captured
++    if (!ok) Serial.println("[audio] ES7210 I2C configuration failed at 0x40");
++    return ok;
 +}
 +
 +// =====================================================================================
@@ -890,11 +897,15 @@ index 00000000..9ea1de9d
 +// =====================================================================================
 +
 +static volatile bool s_speakerActive = false;
++static bool s_speakerReady = false;
 +static volatile bool s_micActive = false;
++static bool s_micReady = false;
 +
 +bool isBoardMicActive() { return s_micActive; }
++bool isBoardMicReady() { return s_micReady; }
 +
 +bool isSpeakerActive() { return s_speakerActive; }
++bool isBoardSpeakerReady() { return s_speakerReady; }
 +
 +/*********************************************************************
 +** Function: _setup_codec_speaker
@@ -907,14 +918,16 @@ index 00000000..9ea1de9d
 +void _setup_codec_speaker(bool enable) {
 +    if (enable) {
 +        s_speakerActive = true;
-+        es8311Init();
++        s_speakerReady = es8311Init();
 +        delay(10);
-+        digitalWrite(PIN_PA_ENABLE, HIGH); // NS4150: HIGH = amplified output on
++        // Never enable the amplifier after an incomplete codec configuration.
++        digitalWrite(PIN_PA_ENABLE, s_speakerReady ? HIGH : LOW);
 +    } else {
 +        digitalWrite(PIN_PA_ENABLE, LOW);
 +        es8311Write(0x0D, 0xFC); // power down the analog block
 +        es8311Write(0x01, 0x00); // gate codec clocks
 +        es8311Write(0x00, 0x00); // hold the codec in reset
++        s_speakerReady = false;
 +        s_speakerActive = false;
 +    }
 +}
@@ -926,12 +939,18 @@ index 00000000..9ea1de9d
 +void _setup_codec_mic(bool enable) {
 +    if (enable) {
 +        s_micActive = true;
-+        es7210Init();
++        s_micReady = es7210Init();
 +    } else {
-+        es7210Write(0x4B, 0x00); // MIC1/2 bias + ADC off
-+        es7210Write(0x4C, 0x00); // MIC3/4 bias + ADC off
-+        es7210Write(0x01, 0x3F); // gate ADC clocks
-+        es7210Write(0x00, 0x00); // reset / power down
++        es7210Write(0x47, 0xFF);
++        es7210Write(0x48, 0xFF);
++        es7210Write(0x49, 0xFF);
++        es7210Write(0x4A, 0xFF);
++        es7210Write(0x4B, 0xFF); // active-low MIC1/2 power off
++        es7210Write(0x4C, 0xFF);
++        es7210Write(0x40, 0xC0);
++        es7210Write(0x01, 0x7F);
++        es7210Write(0x06, 0x07);
++        s_micReady = false;
 +        s_micActive = false;
 +    }
 +}
@@ -4249,7 +4268,7 @@ index 5290300b..d8ce3c86 100644
 +</body>
  </html>
 diff --git a/embedded_resources/web_interface/index.js b/embedded_resources/web_interface/index.js
-index fd616029..3d4adad2 100644
+index fd616029..bf00c560 100644
 --- a/embedded_resources/web_interface/index.js
 +++ b/embedded_resources/web_interface/index.js
 @@ -6,20 +6,17 @@ const T = {
@@ -6298,7 +6317,7 @@ index fd616029..3d4adad2 100644
      return;
    }
  
-@@ -1062,662 +1492,887 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1062,662 +1492,888 @@ $(".container").addEventListener("click", async (e) => {
    if (actPlay) {
      e.preventDefault();
      let cmd = actPlay.getAttribute("data-cmd");
@@ -7669,10 +7688,10 @@ index fd616029..3d4adad2 100644
 +      uxRangeLabels();
 +    }
 +    const states = {
-+      idle: "Ready.", queued: "Waiting for a device menu...", playing: "Playing find signal...",
++      idle: "Ready.", queued: "Waiting for the WebUI screen or a device menu...", playing: "Playing find signal...",
 +      playing_silent: "Speaker muted or busy; LED may blink if enabled...",
 +      finished: "Signal sent. Check the device speaker.", cancelled: "Find cancelled.",
-+      expired: "Find expired. Return the device to a menu and try again.",
++      expired: "Find expired. Return to the WebUI screen or a menu and try again.",
 +      silent_or_busy: "Speaker muted, busy, or unavailable. Check Sound settings and try again."
 +    };
 +    status.textContent = states[data.find] || "Status unavailable.";
@@ -7701,6 +7720,7 @@ index fd616029..3d4adad2 100644
 +  const status = $("#ux-status"), button = $("#ux-find");
 +  const generation = ++uxGeneration;
 +  button.disabled = true;
++  status.textContent = "Sending find request…";
 +  try {
 +    uxFindStartRequest = uxPost("find");
 +    let data;
@@ -8871,10 +8891,10 @@ index 0345168b..7502c904 100644
  
 diff --git a/src/core/dsolution_ux.cpp b/src/core/dsolution_ux.cpp
 new file mode 100644
-index 00000000..6f439bf4
+index 00000000..da58194a
 --- /dev/null
 +++ b/src/core/dsolution_ux.cpp
-@@ -0,0 +1,270 @@
+@@ -0,0 +1,273 @@
 +#include "dsolution_ux.h"
 +#if defined(DSOLUTION_183_2MIC)
 +#include "core/led_control.h"
@@ -8889,6 +8909,7 @@ index 00000000..6f439bf4
 +
 +extern void _setup_codec_speaker(bool);
 +extern bool isSpeakerActive();
++extern bool isBoardSpeakerReady();
 +extern bool isBoardMicActive();
 +static TaskHandle_t s_menuTask = nullptr;
 +static bool s_feedbackLoaded = false;
@@ -8968,6 +8989,7 @@ index 00000000..6f439bf4
 +    if (Wire.endTransmission() != 0) { Serial.println("[audio] ES8311 not responding at 0x18"); goto done; }
 +    _setup_codec_speaker(true);
 +    codec = true;
++    if (!isBoardSpeakerReady()) goto done;
 +    {
 +        int16_t samples[128 * 2];
 +        const unsigned total = duration * 48;
@@ -9024,6 +9046,7 @@ index 00000000..6f439bf4
 +    Wire.beginTransmission(0x18);
 +    if (Wire.endTransmission() != 0) goto wav_done;
 +    _setup_codec_speaker(true); codec = true;
++    if (!isBoardSpeakerReady()) goto wav_done;
 +    {
 +        uint8_t input[512]; int16_t out[256]; uint32_t remaining = info.bytes;
 +        const int volume = min(100, max(0, bruceConfig.soundVolume));
@@ -14599,7 +14622,7 @@ index 00000000..a28c8b56
 +
 +#endif
 diff --git a/src/core/wifi/webInterface.cpp b/src/core/wifi/webInterface.cpp
-index a8679bd6..7f7692eb 100644
+index a8679bd6..657feb6f 100644
 --- a/src/core/wifi/webInterface.cpp
 +++ b/src/core/wifi/webInterface.cpp
 @@ -1,19 +1,43 @@
@@ -16025,16 +16048,16 @@ index a8679bd6..7f7692eb 100644
 +            request->send(
 +                409, "application/json",
 +                "{\"ok\":false,\"msg\":\"Dual-Boot active: ota_0 holds XiaoZhi HeyLily. Update Bruce via USB Web Flasher (ota_1) so HeyLily is protected.\"}"
-             );
--            request->send(200, "application/json", response_body);
++            );
 +            return;
-         }
++        }
 +        if (totalSize < 65536 || totalSize > nextPart->size) {
 +            request->send(
 +                400, "application/json",
 +                "{\"ok\":false,\"msg\":\"Invalid firmware size for OTA slot (max " +
 +                    humanReadableSize(nextPart->size) + ")\"}"
-+            );
+             );
+-            request->send(200, "application/json", response_body);
 +            return;
 +        }
 +        if (s_otaInProgress) {
@@ -16052,7 +16075,7 @@ index a8679bd6..7f7692eb 100644
 +            otaReleaseLock(true);
 +            request->send(500, "application/json", "{\"ok\":false,\"msg\":\"" + err + "\"}");
 +            return;
-+        }
+         }
 +        s_otaValid = true;
 +        String ok = "{\"ok\":true,\"chunkSize\":" + String((unsigned long)kOtaChunkCap) +
 +                    ",\"maxSize\":" + String((unsigned long)nextPart->size) + "}";
@@ -16378,7 +16401,7 @@ index a8679bd6..7f7692eb 100644
 +            if (!uxFindStart(&error)) {
 +                request->send(429, "application/json", String("{\"ok\":false,\"msg\":\"") + error + "\"}"); return;
 +            }
-+            request->send(202, "application/json", "{\"ok\":true,\"msg\":\"Queued; rings only when a menu is open.\"}"); return;
++            request->send(202, "application/json", "{\"ok\":true,\"msg\":\"Queued; rings on the WebUI screen or an idle menu.\"}"); return;
 +        }
 +        if (action == "stop") { uxFindStop(); request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Stopped\"}"); return; }
 +        String value = request->arg("value");
@@ -17000,15 +17023,15 @@ index a8679bd6..7f7692eb 100644
 +            return true;
 +        }
 +        return wifiConnectMenu(WIFI_AP);
-     }
- 
--    // configure web server
++    }
++
 +    if (WiFi.isConnected()) {
 +        wifiIP = WiFi.localIP().toString();
 +        if (server && !mdnsRunning) mdnsRunning = startMdnsResponder();
 +        return true;
-+    }
-+
+     }
+ 
+-    // configure web server
 +    if (WiFi.getMode() & WIFI_MODE_AP) {
 +        if (mdnsRunning) {
 +            MDNS.end();
@@ -17052,7 +17075,7 @@ index a8679bd6..7f7692eb 100644
          new (server) AsyncWebServer(default_webserverporthttp);
  
          configureWebServer();
-@@ -771,24 +2652,193 @@ void startWebUi(bool mode_ap) {
+@@ -771,24 +2652,198 @@ void startWebUi(bool mode_ap) {
          isWebUIActive = true;
      }
      tft.setLogging();
@@ -17071,6 +17094,11 @@ index a8679bd6..7f7692eb 100644
 +        s_webUiScreenDirty = false;
 +
 +        while (!check(EscPress)) {
++#if defined(DSOLUTION_183_2MIC)
++            // This screen is not loopOptions(): service queued Find requests on
++            // the same menu task, but do not start audio during a firmware update.
++            if (!isOtaInProgress()) uxService();
++#endif
 +            if (isOtaInProgress()) {
 +                if (isScreenOff) wakeUpScreen();
 +                if (!prevOtaDrawn || s_otaScreenDirty || s_otaScreenPct != prevOtaPct) {
@@ -21750,10 +21778,34 @@ index 89b670ea..3ca98cf5 100644
      if (waveType == 0) {
          file->addAudioGenerators([volumeScale, hz, toneSec](const float time) {
 diff --git a/src/modules/others/mic.cpp b/src/modules/others/mic.cpp
-index 6409d539..47882bed 100644
+index 6409d539..291d78e8 100644
 --- a/src/modules/others/mic.cpp
 +++ b/src/modules/others/mic.cpp
-@@ -170,7 +170,14 @@ static esp_err_t micInitChannel(i2s_chan_handle_t chan, uint32_t sampleRate) {
+@@ -50,6 +50,9 @@ static void apply_gain_to_buffer(int16_t *buffer, size_t samples, float gain) {
+ }
+ void _setup_codec_mic(bool enable) __attribute__((weak));
+ void _setup_codec_mic(bool enable) {}
++#if defined(DSOLUTION_183_2MIC)
++extern bool isBoardMicReady();
++#endif
+ 
+ const unsigned char ImageData[768] PROGMEM = {
+     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x04, 0x00, 0x01,
+@@ -106,8 +109,12 @@ static inline uint16_t rgb565(uint8_t r, uint8_t g, uint8_t b) {
+ }
+ 
+ bool deinitMicroPhone() {
+-    // Disable codec, if exists
++    // Only the successful RX owner may shut down the codec on this board.
++#if defined(DSOLUTION_183_2MIC)
++    if (i2s_chan) _setup_codec_mic(false);
++#else
+     _setup_codec_mic(false);
++#endif
+     esp_err_t err = ESP_OK;
+     if (i2s_chan) {
+         i2s_channel_disable(i2s_chan);
+@@ -170,7 +177,14 @@ static esp_err_t micInitChannel(i2s_chan_handle_t chan, uint32_t sampleRate) {
          i2s_config.gpio_cfg.bclk = mic.clk;
          i2s_config.gpio_cfg.ws = mic.ws;
          i2s_config.gpio_cfg.dout = (gpio_num_t)I2S_PIN_NO_CHANGE;
@@ -21769,20 +21821,42 @@ index 6409d539..47882bed 100644
          i2s_config.gpio_cfg.din = mic.data;
          return i2s_channel_init_std_mode(chan, &i2s_config);
      }
-@@ -201,6 +208,12 @@ bool InitI2SMicroPhone() {
+@@ -193,14 +207,33 @@ static esp_err_t micInitChannel(i2s_chan_handle_t chan, uint32_t sampleRate) {
+ }
+ 
+ bool InitI2SMicroPhone() {
+-    // Enable codec, if exists
++#if !defined(DSOLUTION_183_2MIC)
+     _setup_codec_mic(true);
++#endif
++#if defined(DSOLUTION_183_2MIC)
++    if (i2s_chan) return false; // never replace a live channel handle
++#endif
+     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
+     chan_cfg.dma_desc_num = 8;
+     chan_cfg.dma_frame_num = SPECTRUM_HEIGHT;
      esp_err_t err = i2s_new_channel(&chan_cfg, NULL, &i2s_chan);
      if (err == ESP_OK) err = micInitChannel(i2s_chan, MIC_SAMPLE_RATE);
      if (err == ESP_OK) err = i2s_channel_enable(i2s_chan);
 +#if defined(DSOLUTION_183_2MIC)
++    // Claim and clock I2S before touching the shared codec; failure must not
++    // power down a microphone or speaker owned by another task.
++    bool codecStarted = false;
++    if (err == ESP_OK) {
++        _setup_codec_mic(true);
++        codecStarted = true;
++        if (!isBoardMicReady()) err = ESP_FAIL;
++    }
 +    if (err != ESP_OK) {
-+        if (i2s_chan) { i2s_del_channel(i2s_chan); i2s_chan = nullptr; }
-+        _setup_codec_mic(false); // clear busy state and power on every failed init
++        Serial.printf("[audio] Mic initialization failed: %s\n", esp_err_to_name(err));
++        if (codecStarted) _setup_codec_mic(false);
++        if (i2s_chan) { i2s_channel_disable(i2s_chan); i2s_del_channel(i2s_chan); i2s_chan = nullptr; }
 +    }
 +#endif
      return (err == ESP_OK);
  }
  
-@@ -307,7 +320,16 @@ void mic_test() {
+@@ -307,7 +340,16 @@ void mic_test() {
          gpio_hold_en(GPIO_NUM_0);
      }
      Serial.println("Mic Spectrum start");
@@ -21799,7 +21873,7 @@ index 6409d539..47882bed 100644
      // Alloc buffers in PSRAM if available
      if (psramFound()) {
          i2s_buffer = (int16_t *)ps_malloc(FFT_SIZE * sizeof(int16_t));
-@@ -317,6 +339,12 @@ void mic_test() {
+@@ -317,6 +359,12 @@ void mic_test() {
          fftHistory = (uint8_t *)malloc(HISTORY_LEN * SPECTRUM_HEIGHT);
      }
      if (!i2s_buffer || !fftHistory) {
@@ -21812,7 +21886,7 @@ index 6409d539..47882bed 100644
          displayError("Fail to alloc buffers, exiting", true);
          return;
      }
-@@ -334,7 +362,11 @@ void mic_test() {
+@@ -334,7 +382,11 @@ void mic_test() {
      if (deinitMicroPhone()) Serial.println("Fail disabling I2S Driver");
      if (gpioInput) {
          gpio_hold_dis(GPIO_NUM_0);
@@ -21824,7 +21898,116 @@ index 6409d539..47882bed 100644
      } else {
          pinMode(GPIO_NUM_0, OUTPUT);
          digitalWrite(GPIO_NUM_0, LOW);
-@@ -1046,7 +1078,11 @@ cleanup:
+@@ -415,8 +467,10 @@ bool mic_record_wav_to_path(
+     }
+ 
+     bool ok = false;
++    bool micOwned = false;
+     do {
+         if (!InitI2SMicroPhone()) break;
++        micOwned = true;
+ 
+         // Buffer Allocation
+         if (psramFound()) i2s_buffer = (int16_t *)ps_malloc(FFT_SIZE * sizeof(int16_t));
+@@ -480,13 +534,13 @@ bool mic_record_wav_to_path(
+     } while (0);
+ 
+     // Cleanup
+-    if (i2s_buffer) {
++    if (micOwned && i2s_buffer) {
+         free(i2s_buffer);
+         i2s_buffer = nullptr;
+     }
+ 
+     delay(10);
+-    deinitMicroPhone();
++    if (micOwned) deinitMicroPhone();
+ 
+     // Restore GPIO
+     if (gpioInput) {
+@@ -981,10 +1035,15 @@ bool mic_capture_samples(
+ 
+     bool ok = false;
+     i2s_chan_handle_t temp_i2s_chan = nullptr;
++#if defined(DSOLUTION_183_2MIC)
++    bool codecStarted = false;
++#endif
+ 
+     do {
+         // Initialize I2S with custom sample rate
++#if !defined(DSOLUTION_183_2MIC)
+         _setup_codec_mic(true);
++#endif
+ 
+         i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
+         chan_cfg.dma_desc_num = 8;
+@@ -1000,6 +1059,11 @@ bool mic_capture_samples(
+ 
+         err = i2s_channel_enable(temp_i2s_chan);
+         if (err != ESP_OK) break;
++#if defined(DSOLUTION_183_2MIC)
++        _setup_codec_mic(true);
++        codecStarted = true;
++        if (!isBoardMicReady()) break;
++#endif
+ 
+         // Allocate buffer
+         int16_t *buffer;
+@@ -1010,7 +1074,20 @@ bool mic_capture_samples(
+         }
+         if (!buffer) break;
+ 
+-        // Capture samples
++        // I2S clocks samples in hardware; do not add per-sample sleeps on this board.
++#if defined(DSOLUTION_183_2MIC)
++        size_t filled = 0;
++        const size_t total = numSamples * sizeof(int16_t);
++        while (filled < total) {
++            size_t bytesRead = 0;
++            err = i2s_channel_read(temp_i2s_chan, (uint8_t *)buffer + filled, total - filled, &bytesRead, 1000);
++            if (err != ESP_OK || bytesRead == 0 || bytesRead > total - filled || bytesRead % sizeof(int16_t)) {
++                free(buffer);
++                goto cleanup;
++            }
++            filled += bytesRead;
++        }
++#else
+         uint32_t microsPerSample = 1000000 / sampleRate;
+         for (uint32_t i = 0; i < numSamples; i++) {
+             size_t bytesRead = 0;
+@@ -1019,11 +1096,10 @@ bool mic_capture_samples(
+                 free(buffer);
+                 goto cleanup;
+             }
+-
+-            // Timing for sample rate
+             delayMicroseconds(microsPerSample);
+             yield();
+         }
++#endif
+ 
+         // Apply gain
+         apply_gain_to_buffer(buffer, numSamples, gain);
+@@ -1034,19 +1110,29 @@ bool mic_capture_samples(
+     } while (0);
+ 
+ cleanup:
+-    // Cleanup I2S
++    // Stop the codec before releasing I2S, so a new owner cannot be powered
++    // down by this session's late cleanup.
++#if defined(DSOLUTION_183_2MIC)
++    if (codecStarted) _setup_codec_mic(false);
++#endif
+     if (temp_i2s_chan) {
+         i2s_channel_disable(temp_i2s_chan);
+         i2s_del_channel(temp_i2s_chan);
+     }
++#if !defined(DSOLUTION_183_2MIC)
+     _setup_codec_mic(false);
++#endif
+ 
+     delay(10);
+ 
      // Restore GPIO
      if (gpioInput) {
          gpio_hold_dis(GPIO_NUM_0);
@@ -21836,7 +22019,7 @@ index 6409d539..47882bed 100644
      } else {
          pinMode(GPIO_NUM_0, OUTPUT);
          digitalWrite(GPIO_NUM_0, LOW);
-@@ -1057,9 +1093,216 @@ cleanup:
+@@ -1057,9 +1143,216 @@ cleanup:
      return ok;
  }
  
@@ -22067,10 +22250,10 @@ index ca5806a0..18d2aa25 100644
      std::function<bool(void)> onProgress = nullptr
 diff --git a/src/modules/others/sonar_guard.cpp b/src/modules/others/sonar_guard.cpp
 new file mode 100644
-index 00000000..2342bf46
+index 00000000..274ab85b
 --- /dev/null
 +++ b/src/modules/others/sonar_guard.cpp
-@@ -0,0 +1,733 @@
+@@ -0,0 +1,746 @@
 +#if defined(HAS_MICROPHONE) && !defined(LITE_VERSION)
 +#include "sonar_guard.h"
 +
@@ -22093,6 +22276,9 @@ index 00000000..2342bf46
 +
 +extern void _setup_codec_mic(bool enable);
 +extern void _setup_codec_speaker(bool enable);
++#if defined(DSOLUTION_183_2MIC)
++extern bool isBoardMicReady();
++#endif
 +
 +namespace {
 +
@@ -22166,6 +22352,16 @@ index 00000000..2342bf46
 +    }
 +
 +    _setup_codec_mic(true);
++#if defined(DSOLUTION_183_2MIC)
++    if (!isBoardMicReady()) {
++        _setup_codec_mic(false);
++        i2s_del_channel(s_txChan);
++        i2s_del_channel(s_rxChan);
++        s_txChan = nullptr;
++        s_rxChan = nullptr;
++        return false;
++    }
++#endif
 +    _setup_codec_speaker(true);
 +    s_txCodecOn = true;
 +

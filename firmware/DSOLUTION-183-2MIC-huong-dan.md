@@ -259,3 +259,10 @@ nạp sai địa chỉ). Thứ tự kiểm tra khi có log serial: (1) banner bo
 - Khi trở về menu chính, firmware giải phóng vùng nhớ còn giữ của danh sách menu cũ; sau quét BLE, kết quả quét tạm được giải phóng khi đã sao chép thông tin để hiển thị. Việc này không xóa tệp hay cài đặt. Không phải mọi module đều có bộ nhớ đệm đã được thu hồi tự động.
 - Với quét BLE và BLE Suite, firmware không áp lại ngưỡng RAM **khởi tạo controller** khi NimBLE đã khởi tạo. Kiểm tra thiếu RAM của board này không tự tắt Wi‑Fi/WebUI hoặc BLE để lấy bộ nhớ; một số tính năng chuyển radio riêng vẫn có hành vi dừng radio như trước.
 - Nếu vẫn báo Low RAM, dừng các tác vụ không cần dùng, thử lại; nếu không hồi phục, lưu công việc và khởi động lại. Trong **Device Info**, xem DMA free và DMA max block: tổng RAM còn nhiều vẫn có thể không đủ khối liên tục. Serial `[RAM]` cho biết số đo khi guard từ chối. Không có cách an toàn để tự gom các vùng heap còn đang sử dụng; kiểm thử trên board thật vẫn cần thiết.
+
+
+## Kiểm tra loa và microphone sau bản sửa audio
+
+- Trên WebUI, bật **System sounds**, chỉnh âm lượng khoảng 50%, bấm **Save sound & display**, rồi chọn **Find device**. Có thể để màn hình WebUI đang mở trên máy hoặc quay về menu; nút báo trạng thái gửi/đang chờ/kết quả. Find bị hoãn khi đang OTA; tính năng vẫn tôn trọng Sound OFF, âm lượng 0 và cấu hình riêng của âm Find. "Signal sent" chỉ xác nhận dữ liệu đã được gửi, không chứng minh loa phát tiếng.
+- Trên thiết bị, thử **Config → Audio Config → Test speaker**; sau đó vào **Others → Microphone → dB Meter/Spectrum** hoặc **Record** và nói gần mic. Không phát loa/nhạc hoặc chạy sonar cùng lúc. Mở file WAV trên máy tính để nghe lại. Công cụ này thu âm trên thiết bị; WebUI không tự thu hay phát mic.
+- Firmware sửa clock và nguồn ES7210 theo driver Espressif, kiểm tra I²C và trả lỗi khi codec không phản hồi. Nếu còn im, gửi log serial 115200 có dòng `[audio]`, ảnh màn hình lỗi/trạng thái WebUI và cho biết Test speaker/đồng hồ dB/record có kết quả gì. Cần xác minh chân, clock, codec và âm thanh trên thiết bị thật; ACK I²C hay build thành công không chứng minh microphone/loa hoạt động.

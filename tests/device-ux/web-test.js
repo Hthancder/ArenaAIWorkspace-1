@@ -47,6 +47,7 @@ vm.createContext(ctx); vm.runInContext(source.slice(source.indexOf(marker)),ctx)
     return {ok:true,json:async()=>({ok:true,msg:action})};
   };
   const finding = elements['ux-find'].handlers.click();
+  assert(elements['ux-status'].textContent.includes('Sending find request'));
   const stopping = elements['ux-stop'].handlers.click();
   await new Promise(r=>setImmediate(r));
   assert.deepStrictEqual(ordered,['find']);
