@@ -9762,10 +9762,10 @@ index 0000000..c56d7ae
 +#endif
 diff --git a/src/core/feature_guide.cpp b/src/core/feature_guide.cpp
 new file mode 100644
-index 0000000..20d8813
+index 0000000..563f781
 --- /dev/null
 +++ b/src/core/feature_guide.cpp
-@@ -0,0 +1,1125 @@
+@@ -0,0 +1,1159 @@
 +#include "feature_guide.h"
 +#include "display.h"
 +#include "mykeyboard.h"
@@ -9907,6 +9907,40 @@ index 0000000..20d8813
 +        "3. Open BadUSB & HID for USB keyboard/mouse payloads.\n"
 +        "# CONTROLS & TIPS\n"
 +        "- Speaker amp stays OFF until audio plays to eliminate idle hiss and save power."
++    },
++    {
++        "Studio",
++        "STUDIO",
++        "Studio \u2014 Mic & Media Tools",
++        "Clock, Mic, QR & Megalodon",
++        "# OVERVIEW\n"
++        "Creative and utility studio grouped away from pentest: clock, microphone, QR codes and Megalodon audio sampler.\n"
++        "# HOW IT WORKS\n"
++        "- Microphone uses ES7210 dual-ADC over I2S; speaker uses ES8311 DAC + NS4150 amp (auto-muted at idle).\n"
++        "- Clock syncs via NTP when Wi-Fi is connected and offers a countdown Timer.\n"
++        "# HOW TO USE\n"
++        "1. Open Clock for live time and Timer.\n"
++        "2. Open Microphone -> Spectrum for FFT bars, Record for WAV, Sonar Guard for motion detection.\n"
++        "3. Open QRCodes to share Wi-Fi or links, Megalodon for soundboard.\n"
++        "# CONTROLS & TIPS\n"
++        "- Studio keeps non-pentest tools together so WiFi/BLE/BadUSB stay focused as pentest.\n"
++        "- For DSolution 1.83 2-Mic, FM/RF etc. are compiled out; Studio holds what remains."
++    },
++    {
++        "BadUSB",
++        "USB",
++        "USB HID & BadUSB Tools",
++        "BadUSB, Smart Suite & U2F",
++        "# OVERVIEW\n"
++        "Native USB-S3 HID attack and utility suite: BadUSB DuckyScript, Smart BadUSB Suite, Virtual USB Drive + U2F.\n"
++        "# HOW IT WORKS\n"
++        "- ESP32-S3 USB-OTG acts as HID keyboard/mouse/storage; payloads run from LittleFS.\n"
++        "- Smart BadUSB supports OS profiles (Win/macOS/Linux), LED exfil and permission checks.\n"
++        "# HOW TO USE\n"
++        "1. Connect USB-C data cable to target, pick BadUSB or USB Keyboard and choose a .txt payload.\n"
++        "2. Use Smart BadUSB Suite for LED exfil or Virtual USB Drive to mount storage.\n"
++        "# CONTROLS & TIPS\n"
++        "- Promoted to top-level so pentest HID stays visible; previously inside Others."
 +    },
 +    {
 +        "Config",
@@ -10911,7 +10945,7 @@ index 0000000..e9a47f7
 +
 +#endif
 diff --git a/src/core/main_menu.cpp b/src/core/main_menu.cpp
-index 7420b9e..1439c25 100644
+index 7420b9e..7ff0934 100644
 --- a/src/core/main_menu.cpp
 +++ b/src/core/main_menu.cpp
 @@ -1,12 +1,17 @@
@@ -10932,7 +10966,7 @@ index 7420b9e..1439c25 100644
          &rfMenu,
          &nrf24Menu,
  #if !defined(LITE_VERSION)
-@@ -21,13 +26,17 @@ MainMenu::MainMenu() {
+@@ -21,14 +26,27 @@ MainMenu::MainMenu() {
  #endif
          &gpsMenu,
          &rfidMenu,
@@ -10941,6 +10975,14 @@ index 7420b9e..1439c25 100644
  #if !defined(LITE_VERSION) && !defined(DISABLE_INTERPRETER)
          &scriptsMenu,
  #endif
++#if defined(DSOLUTION_183_2MIC)
++        // Regroup: pentest-focused top — BadUSB & HID promoted, misc moved to Studio
++        &badUsbMenu,
++        &studioMenu,
++#if defined(DSOLUTION_NO_EXT_HW)
++        &connectMenu,
++#endif
++#else
          &clockMenu,
 +#if defined(DSOLUTION_NO_EXT_HW)
 +        &connectMenu,
@@ -10949,9 +10991,11 @@ index 7420b9e..1439c25 100644
 -#if !defined(LITE_VERSION)
 +#if !defined(LITE_VERSION) && !defined(DSOLUTION_NO_EXT_HW)
          &wireToolsMenu,
++#endif
  #endif
          &configMenu,
-@@ -40,13 +49,20 @@ MainMenu::MainMenu() {
+     };
+@@ -40,13 +58,20 @@ MainMenu::MainMenu() {
          return mainMenu.handleGridPageTap(x, y, currentIndex, newIndex);
      };
  #endif
@@ -10972,7 +11016,7 @@ index 7420b9e..1439c25 100644
  
      bool gridStyle = bruceConfig.mainMenuStyle == MAIN_MENU_GRID;
  
-@@ -129,16 +145,25 @@ void MainMenu::buildGridLayout(int itemCount) {
+@@ -129,16 +154,25 @@ void MainMenu::buildGridLayout(int itemCount) {
      // preferred size. Scaled by FP so it still means something on high-res boards.
      const int MIN_CELL_W = 54 * FP;
      const int MIN_CELL_H = 40 * FP;
@@ -11000,7 +11044,7 @@ index 7420b9e..1439c25 100644
  
      // Try every column count down to the MIN_CELL_W floor and keep the one whose resulting cells
      // are largest in their smaller dimension (min(cellW, cellH)) — that's what a lopsided grid
-@@ -147,9 +172,12 @@ void MainMenu::buildGridLayout(int itemCount) {
+@@ -147,9 +181,12 @@ void MainMenu::buildGridLayout(int itemCount) {
      int maxCols = max(1, min(itemCount, areaW / MIN_CELL_W));
      int bestCols = 1;
      int bestScore = -1;
@@ -11013,7 +11057,7 @@ index 7420b9e..1439c25 100644
          if (score > bestScore) {
              bestScore = score;
              bestCols = cols;
-@@ -157,19 +185,27 @@ void MainMenu::buildGridLayout(int itemCount) {
+@@ -157,19 +194,27 @@ void MainMenu::buildGridLayout(int itemCount) {
      }
  
      _grid.cols = bestCols;
@@ -11046,7 +11090,7 @@ index 7420b9e..1439c25 100644
      if (_grid.iconBox < 12) _grid.iconBox = 12;
  
      // Center whatever is left over so the grid doesn't hug the border
-@@ -232,6 +268,42 @@ void MainMenu::drawGrid(int index) {
+@@ -232,6 +277,42 @@ void MainMenu::drawGrid(int index) {
  
      _gridLastIndex = index;
      _gridRedrawAll = false;
@@ -11089,7 +11133,7 @@ index 7420b9e..1439c25 100644
  }
  
  /*********************************************************************
-@@ -251,6 +323,38 @@ void MainMenu::drawGridCell(int index, bool selected) {
+@@ -251,6 +332,38 @@ void MainMenu::drawGridCell(int index, bool selected) {
      options[index].w = _grid.cellW;
      options[index].h = _grid.cellH;
  
@@ -11128,7 +11172,7 @@ index 7420b9e..1439c25 100644
      uint16_t bgColor = selected ? bruceConfig.priColor : bruceConfig.bgColor;
      uint16_t fgColor = selected ? bruceConfig.bgColor : bruceConfig.priColor;
  
-@@ -270,6 +374,7 @@ void MainMenu::drawGridCell(int index, bool selected) {
+@@ -270,6 +383,7 @@ void MainMenu::drawGridCell(int index, bool selected) {
          y + _grid.cellH - LH * _grid.labelSize - 3,
          1
      );
@@ -11136,7 +11180,7 @@ index 7420b9e..1439c25 100644
  }
  
  /*********************************************************************
-@@ -277,12 +382,13 @@ void MainMenu::drawGridCell(int index, bool selected) {
+@@ -277,12 +391,13 @@ void MainMenu::drawGridCell(int index, bool selected) {
  **  Thin indicator on the right telling there are more rows off screen
  **********************************************************************/
  void MainMenu::drawGridScrollBar() {
@@ -11152,10 +11196,10 @@ index 7420b9e..1439c25 100644
      int thumbH = max(6, trackH * _grid.visibleRows / _grid.rows);
      int thumbY = trackY + (trackH - thumbH) * _gridScroll / (_grid.rows - _grid.visibleRows);
 diff --git a/src/core/main_menu.h b/src/core/main_menu.h
-index e8ba931..ca97c62 100644
+index e8ba931..18327ac 100644
 --- a/src/core/main_menu.h
 +++ b/src/core/main_menu.h
-@@ -4,22 +4,27 @@
+@@ -4,22 +4,29 @@
  #include <MenuItemInterface.h>
  
  #include "menu_items/BleMenu.h"
@@ -11166,8 +11210,10 @@ index e8ba931..ca97c62 100644
  #include "menu_items/ConfigMenu.h"
  #include "menu_items/ConnectMenu.h"
 +#include "menu_items/FileMenu.h"
++#include "menu_items/BadUsbMenu.h"
 +#include "menu_items/OthersMenu.h"
 +#include "menu_items/ScriptsMenu.h"
++#include "menu_items/StudioMenu.h"
 +#include "menu_items/WifiMenu.h"
 +#if !defined(DSOLUTION_NO_EXT_HW)
  #include "menu_items/EthernetMenu.h"
@@ -11187,12 +11233,14 @@ index e8ba931..ca97c62 100644
  class MainMenu {
  public:
      FileMenu fileMenu;
-@@ -27,19 +32,24 @@ public:
+@@ -27,19 +34,26 @@ public:
      ClockMenu clockMenu;
      ConnectMenu connectMenu;
      ConfigMenu configMenu;
 +    OthersMenu othersMenu;
 +    ScriptsMenu scriptsMenu;
++    StudioMenu studioMenu;
++    BadUsbMenu badUsbMenu;
 +    WifiMenu wifiMenu;
 +#if defined(DSOLUTION_183_2MIC)
 +    QuickMenu quickMenu;
@@ -11215,7 +11263,7 @@ index e8ba931..ca97c62 100644
  #endif
  
      MainMenu();
-@@ -51,11 +61,15 @@ public:
+@@ -51,11 +65,15 @@ public:
  
      // Grid layout rendering (bruceConfig.mainMenuStyle == MAIN_MENU_GRID)
      void drawGrid(int index);
@@ -11232,7 +11280,7 @@ index e8ba931..ca97c62 100644
      bool handleGridPageTap(int x, int y, int currentIndex, int &newIndex);
  
  private:
-@@ -74,6 +88,7 @@ private:
+@@ -74,6 +92,7 @@ private:
      void buildGridLayout(int itemCount);
      void drawGridCell(int index, bool selected);
      void drawGridScrollBar();
@@ -11240,6 +11288,90 @@ index e8ba931..ca97c62 100644
  
      int _currentIndex = 0;
      int _totalItems = 0;
+diff --git a/src/core/menu_items/BadUsbMenu.cpp b/src/core/menu_items/BadUsbMenu.cpp
+new file mode 100644
+index 0000000..2df9480
+--- /dev/null
++++ b/src/core/menu_items/BadUsbMenu.cpp
+@@ -0,0 +1,53 @@
++#include "BadUsbMenu.h"
++#include "core/display.h"
++#include "core/utils.h"
++#include "core/virtual_msc.h"
++#include "modules/badusb_ble/ducky_typer.h"
++#include "modules/badusb_ble/smart_badusb.h"
++#include "modules/others/clicker.h"
++#include "modules/others/u2f.h"
++
++void BadUsbMenu::optionsMenu() {
++    options = {
++#ifndef LITE_VERSION
++        {"BadUSB",       [=]() { ducky_setup(hid_usb, false); }},
++        {"USB Keyboard", [=]() { ducky_keyboard(hid_usb, false); }},
++#endif
++#if defined(USB_as_HID) && !defined(LITE_VERSION)
++        {"Smart BadUSB Suite", [=]() { smart_badusb_setup(); }},
++#endif
++#if defined(SOC_USB_OTG_SUPPORTED) && !defined(LITE_VERSION)
++        {"USB Drive + BadUSB", [=]() { virtual_msc_setup(true); }},
++        {"Virtual USB Drive",  [=]() { virtual_msc_setup(false); }},
++#endif
++#ifdef USB_as_HID
++        {"USB Clicker",  clicker_setup},
++        {"USB U2F",      u2f_setup},
++#endif
++    };
++    addOptionToMainMenu();
++    loopOptions(options, MENU_TYPE_SUBMENU, "BadUSB & HID");
++}
++
++void BadUsbMenu::drawIcon(float scale) {
++    clearIconArea();
++    // USB plug + key hint
++    int w = scale * 28;
++    int h = scale * 42;
++    int cx = iconCenterX;
++    int cy = iconCenterY;
++    // USB body
++    tft.drawRoundRect(cx - w/2, cy - h/2, w, h, scale*4, bruceConfig.priColor);
++    // USB connector
++    int cw = scale * 16;
++    int ch = scale * 10;
++    tft.fillRect(cx - cw/2, cy - h/2 - ch + 2, cw, ch, bruceConfig.priColor);
++    // key pins inside
++    int pinW = scale * 2;
++    tft.fillRect(cx - cw/2 + 3, cy - h/2 - ch + 4, pinW, ch-4, bruceConfig.bgColor);
++    tft.fillRect(cx - pinW/2, cy - h/2 - ch + 4, pinW, ch-4, bruceConfig.bgColor);
++    tft.fillRect(cx + cw/2 - 3 - pinW, cy - h/2 - ch + 4, pinW, ch-4, bruceConfig.bgColor);
++    // HID key symbol bottom
++    tft.drawCircle(cx, cy + h/4, scale*6, bruceConfig.priColor);
++    tft.drawLine(cx, cy + h/4, cx, cy + h/4 + scale*8, bruceConfig.priColor);
++}
+diff --git a/src/core/menu_items/BadUsbMenu.h b/src/core/menu_items/BadUsbMenu.h
+new file mode 100644
+index 0000000..83c7f4b
+--- /dev/null
++++ b/src/core/menu_items/BadUsbMenu.h
+@@ -0,0 +1,19 @@
++#ifndef __BADUSB_MENU_H__
++#define __BADUSB_MENU_H__
++
++#include <MenuItemInterface.h>
++
++class BadUsbMenu : public MenuItemInterface {
++public:
++    BadUsbMenu() : MenuItemInterface("BadUSB") {}
++
++    void optionsMenu(void);
++    void drawIcon(float scale) override;
++    bool hasTheme() override { return false; }
++    const String& themePath() override {
++        static String empty = "";
++        return empty;
++    }
++};
++
++#endif
 diff --git a/src/core/menu_items/BleMenu.cpp b/src/core/menu_items/BleMenu.cpp
 index ed144ba..c39cac4 100644
 --- a/src/core/menu_items/BleMenu.cpp
@@ -11725,6 +11857,107 @@ index 0000000..d4117a2
 +    bool hasTheme() override { return false; }
 +    const String &themePath() override { static const String none; return none; }
 +};
++#endif
+diff --git a/src/core/menu_items/StudioMenu.cpp b/src/core/menu_items/StudioMenu.cpp
+new file mode 100644
+index 0000000..cb5ab38
+--- /dev/null
++++ b/src/core/menu_items/StudioMenu.cpp
+@@ -0,0 +1,69 @@
++#include "StudioMenu.h"
++#include "core/main_menu.h"
++#include "core/display.h"
++#include "core/settings.h"
++#include "core/utils.h"
++#include "modules/others/qrcode_menu.h"
++#include "modules/others/tururururu.h"
++#if defined(HAS_MICROPHONE)
++#include "modules/others/mic.h"
++#include "modules/others/sonar_guard.h"
++#endif
++#include "modules/others/timer.h"
++
++void StudioMenu::optionsMenu() {
++    options = {
++        {"Clock",      []() { mainMenu.clockMenu.optionsMenu(); }},
++        {"QRCodes",    qrcode_menu},
++        {"Megalodon",  shark_setup},
++#if defined(HAS_MICROPHONE)
++        {"Microphone", [this]() { micMenu(); }},
++#if !defined(LITE_VERSION)
++        {"Sonar Guard", sonar_guard_setup},
++#endif
++#endif
++    };
++
++    if (isDualBootActive()) {
++        options.insert(options.begin(), {"Dual-Boot Menu", []() { rebootToBootMenu(true); }});
++        options.insert(options.begin(), {"Boot XiaoZhi", []() { rebootToXiaoZhi(true); }});
++    }
++
++    addOptionToMainMenu();
++    loopOptions(options, MENU_TYPE_SUBMENU, "Studio");
++}
++
++void StudioMenu::micMenu() {
++    options = {
++#if defined(HAS_MICROPHONE)
++        {"Spectrum",       mic_test},
++        {"Audio dB Meter", mic_db_meter},
++        {"Record",         mic_record_app},
++#if !defined(LITE_VERSION)
++        {"Sonar Motion Guard", sonar_guard_setup},
++#endif
++#endif
++        {"Back",           [this]() { optionsMenu(); }},
++    };
++    loopOptions(options, MENU_TYPE_SUBMENU, "Microphone");
++}
++
++void StudioMenu::drawIcon(float scale) {
++    clearIconArea();
++    // Studio: palette + play button hint — simple geometric icon
++    // Outer rounded rect (palette)
++    int w = scale * 46;
++    int h = scale * 36;
++    int r = scale * 6;
++    int cx = iconCenterX;
++    int cy = iconCenterY;
++    // palette body
++    tft.drawRoundRect(cx - w/2, cy - h/2, w, h, r, bruceConfig.priColor);
++    // play triangle inside
++    int tri = scale * 12;
++    tft.fillTriangle(cx - tri/2, cy - tri/2, cx - tri/2, cy + tri/2, cx + tri/2, cy, bruceConfig.priColor);
++    // small dots for tools
++    int dot = scale * 3;
++    tft.fillCircle(cx + w/4, cy - h/4, dot, bruceConfig.priColor);
++    tft.fillCircle(cx - w/4, cy + h/4, dot, bruceConfig.priColor);
++}
+diff --git a/src/core/menu_items/StudioMenu.h b/src/core/menu_items/StudioMenu.h
+new file mode 100644
+index 0000000..0fb739c
+--- /dev/null
++++ b/src/core/menu_items/StudioMenu.h
+@@ -0,0 +1,20 @@
++#ifndef __STUDIO_MENU_H__
++#define __STUDIO_MENU_H__
++
++#include <MenuItemInterface.h>
++
++class StudioMenu : public MenuItemInterface {
++public:
++    StudioMenu() : MenuItemInterface("Studio") {}
++
++    void optionsMenu(void);
++    void micMenu(void);
++    void drawIcon(float scale) override;
++    bool hasTheme() override { return false; }
++    const String& themePath() override {
++        static String empty = "";
++        return empty;
++    }
++};
++
 +#endif
 diff --git a/src/core/menu_items/WifiMenu.cpp b/src/core/menu_items/WifiMenu.cpp
 index 2e6512c..2e455fa 100644
