@@ -100,21 +100,27 @@ static NSArray<NSString *> *SXAPIChoiceStringList(id raw) {
 	// Quét MỌI khoá thay vì đoán tên (`sxParent` là một trong các tên đã thấy ở
 	// các bản Preferences khác nhau): khoá nào đang giữ một UIViewController mà
 	// không phải `detail` thì đó chính là “đã push” — gỡ đi.
-	NSMutableDictionary *properties = [row.properties isKindOfClass:[NSMutableDictionary class]]
-		? row.properties : nil;
-	if (!properties) return;
+	// Dùng `propertyForKey:`/`removePropertyForKey:` (API công khai) thay vì sửa
+	// thẳng `.properties`: lớp của dictionary đó có thể là bản bất biến.
+	NSArray *keys = [row.properties isKindOfClass:[NSDictionary class]]
+		? [(NSDictionary *)row.properties allKeys] : @[];
 	NSMutableArray *staleKeys = [NSMutableArray array];
-	for (id key in [properties allKeys]) {
+	for (id key in keys) {
 		if (![key isKindOfClass:[NSString class]]) continue;
 		if ([key isEqualToString:PSCellClassKey] || [key isEqualToString:@"detail"]) continue;
 		// Chỉ gỡ giá trị là CONTROLLER: đó là dấu hiệu "hàng này đã push".
 		// (Không gỡ NSValue/UIView — chúng có thể là dữ liệu hợp lệ của cell.)
-		id value = properties[key];
+		id value = [row propertyForKey:key];
 		if ([value isKindOfClass:[UIViewController class]]) [staleKeys addObject:key];
 	}
 	for (NSString *key in staleKeys) {
 		[row removePropertyForKey:key];
 		SXLogDbg(@"pref", @"bộ chọn %@: gỡ khoá “%@” khỏi hàng gọi", self.prefsKey ?: @"(trống)", key);
+	}
+	if (staleKeys.count) {
+		SXLogInf(@"pref", @"bộ chọn %@: gỡ %lu tham chiếu controller cũ khỏi hàng gọi — "
+				 @"đây là nguyên nhân kinh điển của “chạm hàng là văng”",
+				 self.prefsKey ?: @"(trống)", (unsigned long)staleKeys.count);
 	}
 	// `detail` để nguyên cho lần mở sau (hàng vẫn hiện mũi tên), nhưng ta không
 	// phụ thuộc vào nó: bảng dưới đây là bảng thật.
