@@ -1,6 +1,6 @@
 diff --git a/boards/dsolution-183-2mic/NV3023_Panel.h b/boards/dsolution-183-2mic/NV3023_Panel.h
 new file mode 100644
-index 00000000..d021320f
+index 0000000..d021320
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/NV3023_Panel.h
 @@ -0,0 +1,159 @@
@@ -165,7 +165,7 @@ index 00000000..d021320f
 +#endif // DSOLUTION_NV3023_PANEL_H
 diff --git a/boards/dsolution-183-2mic/README.md b/boards/dsolution-183-2mic/README.md
 new file mode 100644
-index 00000000..0a5308a2
+index 0000000..0a5308a
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/README.md
 @@ -0,0 +1,262 @@
@@ -433,7 +433,7 @@ index 00000000..0a5308a2
 +  Concurrent serial/audio tasks are not covered by the host tests; hardware stress testing is required.
 diff --git a/boards/dsolution-183-2mic/dsolution-183-2mic.ini b/boards/dsolution-183-2mic/dsolution-183-2mic.ini
 new file mode 100644
-index 00000000..95814893
+index 0000000..9581489
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/dsolution-183-2mic.ini
 @@ -0,0 +1,210 @@
@@ -649,7 +649,7 @@ index 00000000..95814893
 +	https://github.com/lovyan03/LovyanGFX#develop
 diff --git a/boards/dsolution-183-2mic/interface.cpp b/boards/dsolution-183-2mic/interface.cpp
 new file mode 100644
-index 00000000..5252cb2e
+index 0000000..5252cb2
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/interface.cpp
 @@ -0,0 +1,661 @@
@@ -1316,7 +1316,7 @@ index 00000000..5252cb2e
 +}
 diff --git a/boards/dsolution-183-2mic/merge_bin.py b/boards/dsolution-183-2mic/merge_bin.py
 new file mode 100644
-index 00000000..372b2f96
+index 0000000..372b2f9
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/merge_bin.py
 @@ -0,0 +1,133 @@
@@ -1455,7 +1455,7 @@ index 00000000..372b2f96
 +env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", merge_bin)
 diff --git a/boards/dsolution-183-2mic/partitions_16Mb_ota.csv b/boards/dsolution-183-2mic/partitions_16Mb_ota.csv
 new file mode 100644
-index 00000000..fcf16fef
+index 0000000..fcf16fe
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/partitions_16Mb_ota.csv
 @@ -0,0 +1,19 @@
@@ -1479,10 +1479,10 @@ index 00000000..fcf16fef
 +spiffs,   data, spiffs,   0x810000, 0x7E0000,
 +coredump, data, coredump, 0xFF0000, 0x10000,
 diff --git a/embedded_resources/web_interface/index.css b/embedded_resources/web_interface/index.css
-index bda7b42a..74ac0494 100644
+index bda7b42..978abff 100644
 --- a/embedded_resources/web_interface/index.css
 +++ b/embedded_resources/web_interface/index.css
-@@ -1,584 +1,712 @@
+@@ -1,584 +1,755 @@
  :root {
 -  --color: #ff3ec8;
 -  --background: #242424;
@@ -1536,7 +1536,11 @@ index bda7b42a..74ac0494 100644
 -.act-edit-file {
 -  cursor: pointer;
 -  outline: 0;
--}
++  background: radial-gradient(circle at top right, color-mix(in srgb, var(--color) 12%, var(--background)), var(--background) 55%);
++  color: var(--text);
++  font-size: 13px;
++  padding: 14px;
+ }
 -.btn-action {
 -  border: 1px solid var(--color);
 -  background-color: transparent;
@@ -1550,11 +1554,7 @@ index bda7b42a..74ac0494 100644
 -.btn-action.active > * {
 -  background-color: var(--color);
 -  color: var(--background);
-+  background: radial-gradient(circle at top right, color-mix(in srgb, var(--color) 12%, var(--background)), var(--background) 55%);
-+  color: var(--text);
-+  font-size: 13px;
-+  padding: 14px;
- }
+-}
 -.btn-action:disabled {
 -  filter: brightness(50%);
 -  cursor: not-allowed;
@@ -2688,7 +2688,7 @@ index bda7b42a..74ac0494 100644
 -  }
 +  .sl-row input.sl-input, .sl-row input.sl-input-wide, .sl-row select[aria-label] { min-width: 0; width: 100%; }
 +  .sl-group legend small { display: block; margin-left: 0; }
- }
++}
 +
 +/* Compact, touch-friendly device controls */
 +.ux-settings { display: grid; gap: .55rem; margin-top: 1rem; padding: .8rem; border: 1px solid var(--border-color, #31515b); border-radius: .7rem; }
@@ -2708,11 +2708,54 @@ index bda7b42a..74ac0494 100644
 +html[data-menu-style="1"] .tele-pill { border-radius: 2px; box-shadow: none; }
 +html[data-menu-style="1"] .header { border-bottom: 2px solid var(--color); }
 +html[data-menu-style="1"] .tab-bar { letter-spacing: .08em; text-transform: uppercase; }
++
++/* ==== SecLab compact — overview + subtabs + accordions (2026-11) ==== */
++.seclab-bar-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
++.seclab-subtabs {
++  display: flex; gap: 6px; padding: 10px 16px 0; overflow-x: auto; scrollbar-width: thin;
++  border-bottom: 1px solid var(--border);
++  background: color-mix(in srgb, var(--color) 2%, var(--background));
++  position: sticky; top: 0; z-index: 2;
++}
++.slab-btn {
++  cursor: pointer; white-space: nowrap; border: 1px solid transparent; border-bottom: 0;
++  border-radius: 9px 9px 0 0; background: transparent; color: var(--muted);
++  padding: 7px 13px; font-size: 12px; font-weight: 700; transition: .14s ease;
++}
++.slab-btn:hover { color: var(--color); background: var(--surface); }
++.slab-btn.active { color: var(--color); background: var(--surface-2); border-color: var(--border); box-shadow: inset 0 2px 0 var(--color); }
++.slab-view { padding: 12px 16px; }
++.slab-view.hidden { display: none !important; }
++.overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 10px; }
++.ov-tile {
++  border: 1px solid var(--border); border-radius: 11px; background: var(--surface); padding: 11px 12px;
++  display: flex; flex-direction: column; gap: 4px; min-width: 0;
++}
++.ov-tile strong { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
++.ov-tile b { font-size: 12.5px; color: var(--text); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
++.ov-tile small { font-size: 11px; }
++.ov-kv-compact .kv-grid { margin-top: 10px; }
++details.sl-group { min-width: 0; margin: 10px 0 0; padding: 10px 12px 11px; border: 1px solid var(--border); border-radius: 11px; background: rgba(127,127,127,.035); }
++details.sl-group > summary {
++  cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 8px;
++  color: var(--color); font-size: 12.5px; font-weight: 700; user-select: none;
++}
++details.sl-group > summary::-webkit-details-marker { display: none; }
++details.sl-group > summary::after { content: "›"; font-size: 16px; line-height: 1; transition: transform .16s ease; color: var(--muted); }
++details.sl-group[open] > summary::after { transform: rotate(90deg); color: var(--color); }
++details.sl-group > summary small { color: var(--muted); font-weight: 400; font-size: 11px; }
++details.sl-group .sl-badge { margin-left: auto; }
++#slab-overview .sl-badge, #slab-wifi .sl-badge, #slab-lan .sl-badge, #slab-ble .sl-badge, #slab-studio .sl-badge { flex-shrink: 0; }
++@media (max-width: 640px){
++  .seclab-subtabs { padding-left: 8px; padding-right: 8px; gap: 4px; }
++  .slab-btn { padding: 7px 10px; font-size: 11.5px; }
++  .overview-grid { grid-template-columns: repeat(2, 1fr); }
+ }
 diff --git a/embedded_resources/web_interface/index.html b/embedded_resources/web_interface/index.html
-index 5290300b..2eca575d 100644
+index 5290300..8850f76 100644
 --- a/embedded_resources/web_interface/index.html
 +++ b/embedded_resources/web_interface/index.html
-@@ -1,700 +1,942 @@
+@@ -1,700 +1,908 @@
  <!doctype html>
  <html lang="en">
 -  <head>
@@ -3367,7 +3410,11 @@ index 5290300b..2eca575d 100644
 -                    stroke-linecap="round"
 -                    stroke-linejoin="round"
 -                  />
--                </svg>
++              <button type="button" class="nav nav-page-up" data-direction="NextPage" title="Next Page" aria-label="Next Page">
++                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
++                  <path d="M15.5 12L5.72 19.11V4.89L15.5 12Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
++                  <line x1="18.2" y1="4.9" x2="18.2" y2="19.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                 </svg>
 -              </div>
 -              <div class="nav nav-up" data-direction="Up" title="Up">
 -                <svg
@@ -3380,11 +3427,7 @@ index 5290300b..2eca575d 100644
 -                    fill="currentColor"
 -                    d="M43.7,38H8.3c-1,0-1.7-1.3-0.9-2.2l17.3-21.2c0.6-0.8,1.9-0.8,2.5,0l17.5,21.2C45.4,36.7,44.8,38,43.7,38z"
 -                  />
-+              <button type="button" class="nav nav-page-up" data-direction="NextPage" title="Next Page" aria-label="Next Page">
-+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-+                  <path d="M15.5 12L5.72 19.11V4.89L15.5 12Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-+                  <line x1="18.2" y1="4.9" x2="18.2" y2="19.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                 </svg>
+-                </svg>
 -              </div>
 -              <div
 -                class="nav nav-menu"
@@ -3712,28 +3755,126 @@ index 5290300b..2eca575d 100644
 -        <div class="dialog-head">
 -          <span class="oinput-title"></span>
 -          <span class="oinput-text"></span>
-+    </section>
-+
-+    <!-- TAB 6: SECLAB -->
-+    <section id="tab-seclab" class="tab-pane hidden">
-+      <div class="seclab-bar">
-+        <div>
-+          <strong>DSolution 1.83" SecLab Center</strong>
-+          <small class="muted-sm">NAPT, PMKID/CSA, Portal-NAPT, LAN Audit, Responder+, HTTP Inspector, HID LED Link, BLE Audit &amp; USB Vault</small>
-         </div>
+-        </div>
 -        <div class="dialog-body">
 -          <label for="oinput-input" class="oinput-label"></label>
 -          <input type="text" id="oinput-input" class="oinput-text-submit" />
-+        <button type="button" class="btn-action btn-default" id="sl-refresh">Refresh Now</button>
++    </section>
++
++    <!-- TAB 6: SECLAB -->
++    <!-- TAB 6: SECLAB — compact: overview + detail subtabs + accordions -->
++    <section id="tab-seclab" class="tab-pane hidden">
++      <div class="seclab-bar">
++        <div>
++          <strong>DSolution 1.83″ SecLab Center</strong>
++          <small class="muted-sm">NAPT, PMKID/CSA, Portal-NAPT, LAN Audit, Responder+, HTTP Inspector, HID LED Link, BLE Audit &amp; USB Vault — mở nhóm khi cần</small>
+         </div>
+-        <div class="dialog-footer">
+-          <button class="btn-action btn-default act-save-oinput-file"></button>
+-          <button class="btn-action act-dialog-close act-escape">Close</button>
++        <div class="seclab-bar-actions">
++          <button type="button" class="btn-action" id="sl-refresh">Refresh Now</button>
++          <button type="button" class="btn-action btn-danger" data-sl-action="stop_all" data-sl-confirm="Stop all stoppable SecLab+ tools? An in-progress pairing audit will finish on its own.">Stop All</button>
+         </div>
+       </div>
+-      <div class="dialog credential hidden">
+-        <div class="dialog-head">Change WebUI Credentials</div>
+-        <div class="dialog-body">
+-          <label for="cred-username" class="oinput-label">Username</label>
+-          <input
+-            type="text"
+-            id="cred-username"
+-            class="oinput-text-submit"
+-            style="margin-bottom: 10px"
+-          />
+-          <label for="cred-password" class="oinput-label">Password</label>
+-          <input type="text" id="cred-password" class="oinput-text-submit" />
++
++      <!-- Sub-tabs inside SecLab -->
++      <div class="seclab-subtabs" role="tablist" aria-label="SecLab sections">
++        <button type="button" class="slab-btn active" data-slab="overview" aria-selected="true">Tổng quan</button>
++        <button type="button" class="slab-btn" data-slab="wifi">Wi-Fi & NAPT</button>
++        <button type="button" class="slab-btn" data-slab="lan">LAN & HTTP</button>
++        <button type="button" class="slab-btn" data-slab="ble">BLE & HID</button>
++        <button type="button" class="slab-btn" data-slab="studio">Sensors & USB</button>
++      </div>
++      <div id="sl-plus-msg" class="ota-status hidden" role="status" aria-live="polite" aria-busy="false" style="margin:10px 16px 0"></div>
++
++      <!-- ========== OVERVIEW ========== -->
++      <div id="slab-overview" class="slab-view">
++        <div class="sl-note">
++          <strong>Authorized security audits only.</strong> Chỉ dùng trên hệ thống bạn sở hữu/được phép. 2C proxy chỉ xử lý cleartext HTTP/1.0 — TLS <code>CONNECT</code> luôn bị từ chối.
+         </div>
+-        <div class="dialog-footer">
+-          <button class="btn-action btn-default act-save-credential">
+-            Save
+-          </button>
+-          <button
+-            class="btn-action act-escape"
+-            onclick="Dialog.show('settings')"
+-          >
+-            Close
+-          </button>
++
++        <!-- Compact status tiles — 1 line overview -->
++        <div class="overview-grid sl-mt">
++          <div class="ov-tile"><strong>NAPT Router</strong><b><span id="ov-napt" class="mono">--</span> <span id="ov-napt-badge" class="sl-badge">OFF</span></b><small class="muted-sm"><span id="ov-napt-detail">Clients 0 · Queries 0</span></small><button type="button" class="btn-action sl-mt" data-slab-jump="wifi">Mở Wi-Fi & NAPT →</button></div>
++          <div class="ov-tile"><strong>Air & Hidden</strong><b id="ov-air">BEST CH --</b><small class="muted-sm"><span id="ov-air-detail">Ch load —</span></small><button type="button" class="btn-action sl-mt" data-slab-jump="wifi">Xem Air →</button></div>
++          <div class="ov-tile"><strong>Probe & BLE GATT</strong><b id="ov-probe">0 / 0 · PHY 1M</b><small class="muted-sm"><span id="ov-probe-detail">Clusters/MACs</span></small><button type="button" class="btn-action sl-mt" data-slab-jump="wifi">Xem Radar →</button></div>
++          <div class="ov-tile"><strong>LAN Audit</strong><b id="ov-lan">0 / 0</b><small class="muted-sm">Devices / Findings</small><button type="button" class="btn-action sl-mt" data-slab-jump="lan">Mở LAN & HTTP →</button></div>
++          <div class="ov-tile"><strong>BLE / HID</strong><b id="ov-ble">IDLE</b><small class="muted-sm"><span id="ov-ble-detail">GATT findings · LED link</span></small><button type="button" class="btn-action sl-mt" data-slab-jump="ble">Mở BLE & HID →</button></div>
++          <div class="ov-tile"><strong>Sonar & USB Vault</strong><b id="ov-studio">IDLE · 0 files</b><small class="muted-sm"><span id="ov-studio-detail">Motion guard · Vault</span></small><button type="button" class="btn-action sl-mt" data-slab-jump="studio">Mở Sensors & USB →</button></div>
+         </div>
+-      </div>
+-      <div class="dialog editor hidden">
+-        <div class="dialog-head">
+-          Edit: <span class="editor-file-name"></span>
++
++        <!-- Hidden compact kv summary (IDs kept for JS, visually compact) -->
++        <div class="ov-kv-compact sl-mt">
++          <div class="kv-grid">
++            <div class="kv-item"><span>1A PMKID / .hc22000</span><b id="sl-plus-pmkid">--</b></div>
++            <div class="kv-item"><span>1B CSA / Portal-NAPT</span><b id="sl-plus-csa">--</b></div>
++            <div class="kv-item"><span>2A LAN Devices / Findings</span><b id="sl-plus-lan">0 / 0</b></div>
++            <div class="kv-item"><span>2B Responder+ / Guard</span><b id="sl-plus-guard">--</b></div>
++            <div class="kv-item"><span>2C Cleartext HTTP</span><b id="sl-plus-http">--</b></div>
++            <div class="kv-item"><span>3A HID LED Link</span><b id="sl-plus-led">--</b></div>
++            <div class="kv-item"><span>3B Permission / Auto-arm</span><b id="sl-plus-perm">--</b></div>
++            <div class="kv-item"><span>4A GATT Audit / Fuzzer</span><b id="sl-plus-ble">--</b></div>
++            <div class="kv-item"><span>4B Pairing / Tag Beacon</span><b id="sl-plus-pair">--</b></div>
++            <div class="kv-item"><span>Proxy / Redaction</span><b id="sl-plus-network">--</b></div>
++            <div class="kv-item"><span>Pair Mode / CSA Defaults</span><b id="sl-plus-settings">--</b></div>
++            <div class="kv-item"><span>Build / OS / LED Timeout</span><b id="sl-plus-active">--</b></div>
++          </div>
++          <div class="sl-row sl-mt">
++            <span id="sl-plus-badge" class="sl-badge">READY</span>
++            <small class="muted-sm">Dừng nhanh: <em>Stop All</em> không hủy pairing audit đang chạy.</small>
++          </div>
++        </div>
++
++        <div class="sl-row sl-mt">
++          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/pmkid/all.hc22000')">PMKID Hash</button>
++          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/lan_audit.json')">LAN JSON</button>
++          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/napt_http_findings.json')">HTTP Findings</button>
++          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/led_link/exfil.txt')">LED Exfil</button>
++          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/ble_security_audit.json')">GATT Audit</button>
+         </div>
+-        <div class="dialog-body">
+-          <div class="editor-container">
+-            <div class="line-numbers"></div>
+-            <textarea class="file-content" style="resize: none"></textarea>
++        <strong class="sl-sub sl-mt">Live SecLab+ Feed</strong>
++        <div id="sl-plus-feed" class="sl-scroll sl-mt"></div>
 +      </div>
 +
-+      <div class="dash-grid">
-+        <!-- #1 NAPT TRAVEL ROUTER & DNS INSPECTOR -->
++      <!-- ========== WI-FI & NAPT ========== -->
++      <div id="slab-wifi" class="slab-view hidden">
++        <!-- NAPT — kept as primary wide card -->
 +        <div class="dash-card dash-card-wide">
 +          <div class="dash-card-head">
 +            <h3>#1 Wi-Fi NAPT Travel Router &amp; Live DNS Blocker</h3>
 +            <span id="sl-napt-badge" class="sl-badge">OFF</span>
-+          </div>
+           </div>
 +          <div class="sl-napt-creds sl-mt">
 +            <input type="text" id="sl-napt-ssid" placeholder="Optional uplink SSID (blank = current STA)" />
 +            <input type="password" id="sl-napt-pwd" placeholder="Uplink Wi-Fi password (if needed)" />
@@ -3758,28 +3899,167 @@ index 5290300b..2eca575d 100644
 +            <button type="button" class="btn-action btn-default" id="sl-blk-add">Block</button>
 +          </div>
 +          <div id="sl-blk-chips" class="sl-chips"></div>
-+          <div class="sl-split sl-mt">
-+            <div>
-+              <strong class="sl-sub">Live DNS Queries</strong>
-+              <div id="sl-dns-feed" class="sl-scroll"></div>
++          <details class="sl-group sl-mt">
++            <summary>Live DNS &amp; Clients </summary>
++            <div class="sl-split sl-mt">
++              <div>
++                <strong class="sl-sub">Live DNS Queries</strong>
++                <div id="sl-dns-feed" class="sl-scroll"></div>
++              </div>
++              <div>
++                <strong class="sl-sub">Connected Clients</strong>
++                <div id="sl-napt-clients" class="sl-scroll"></div>
++              </div>
 +            </div>
-+            <div>
-+              <strong class="sl-sub">Connected Clients</strong>
-+              <div id="sl-napt-clients" class="sl-scroll"></div>
-+            </div>
-+          </div>
++          </details>
          </div>
 -        <div class="dialog-footer">
--          <button class="btn-action btn-default act-save-oinput-file"></button>
--          <button class="btn-action act-dialog-close act-escape">Close</button>
+-          <button class="btn-action act-save-edit-file" title="CTRL + S">
+-            Save
 +
-+        <!-- #6 ACOUSTIC SONAR & DESK MOTION GUARD -->
-+        <div class="dash-card">
-+          <div class="dash-card-head">
-+            <h3>#6 Acoustic Sonar &amp; Motion Guard</h3>
-+            <span id="sl-sonar-badge" class="sl-badge">IDLE</span>
++        <details class="sl-group">
++          <summary><span>CH1–13 Estimated Load &amp; Hidden SSIDs <small class="muted-sm">— packet-based, not measured airtime</small></span><span id="sl-air-best" class="sl-badge">BEST CH --</span></summary>
++          <p class="muted-sm sl-mt">Unavailable channels and non-Wi-Fi interference may be missed.</p>
++          <div id="sl-air-bars" class="sl-bars"></div>
++          <strong class="sl-sub sl-mt">Hidden &amp; Decloaked APs</strong>
++          <div id="sl-air-hidden" class="sl-scroll"></div>
++        </details>
++
++        <details class="sl-group">
++          <summary><span>#2 Probe Radar &amp; #12 BLE GATT — sniffer</span><span id="sl-ble-phy" class="sl-badge">PHY 1M</span></summary>
++          <div class="kv-grid sl-mt">
++            <div class="kv-item"><span>Probe Clusters / MACs</span><b id="sl-prb-stat">0 / 0</b></div>
++            <div class="kv-item"><span>BLE GATT Mode</span><b id="sl-ble-mode">IDLE</b></div>
 +          </div>
-+          <div class="kv-grid">
++          <div class="sl-row sl-mt">
++            <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/probe_radar.csv')">Probe CSV</button>
++            <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/ble_clone_writes.log')">Clone Writes Log</button>
++          </div>
++          <div id="sl-prb-list" class="sl-scroll sl-mt"></div>
++          <strong class="sl-sub sl-mt">Saved BLE GATT Profiles</strong>
++          <div id="sl-ble-profs" class="sl-scroll"></div>
++        </details>
++
++        <details class="sl-group">
++          <summary><strong>1A / 1B</strong> <small>PMKID, CSA/PMF &amp; Portal handoff</small></summary>
++          <div class="sl-row sl-mt">
++            <button type="button" class="btn-action btn-default" data-sl-action="pmkid_start">PMKID Start</button>
++            <button type="button" class="btn-action" data-sl-action="pmkid_stop">Stop</button>
++            <button type="button" class="btn-action" data-sl-action="pmkid_export">Export .hc22000</button>
++            <button type="button" class="btn-action" data-sl-action="pmkid_clear" data-sl-confirm="Clear captured PMKID hashes from memory and storage?">Clear</button>
++            <button type="button" class="btn-action" data-sl-action="pmkid_auto" data-sl-toggle="pmkidAutoExport" data-sl-label-on="Auto-Export: ON" data-sl-label-off="Auto-Export: OFF" aria-pressed="false">Auto-Export: --</button>
++          </div>
++          <div class="sl-row">
++            <button type="button" class="btn-action btn-default" data-sl-action="csa_start">CSA/PMF Start</button>
++            <button type="button" class="btn-action" data-sl-action="csa_stop">Stop</button>
++            <button type="button" class="btn-action" data-sl-action="csa_clear" data-sl-confirm="Clear CSA/PMF test state and logs?">Clear</button>
++            <label class="sl-inline-label" for="sl-plus-csa-channel">CH</label><input class="sl-input" type="number" id="sl-plus-csa-channel" min="1" max="14" value="1" />
++            <label class="sl-inline-label" for="sl-plus-csa-bursts">Bursts</label><input class="sl-input" type="number" id="sl-plus-csa-bursts" min="1" max="20" value="3" />
++            <button type="button" class="btn-action" data-sl-action="csa_config">Save CSA Defaults</button>
++          </div>
++          <div class="sl-row">
++            <button type="button" class="btn-action" data-sl-action="portal_start">Portal-NAPT Start</button>
++            <button type="button" class="btn-action" data-sl-action="portal_stop">Stop</button>
++            <button type="button" class="btn-action" data-sl-action="portal_handoff" data-sl-toggle="portalHandoff" data-sl-label-on="Auto Handoff: ON" data-sl-label-off="Auto Handoff: OFF" aria-pressed="false">Auto Handoff: --</button>
++          </div>
++        </details>
++      </div>
++
++      <!-- ========== LAN & HTTP ========== -->
++      <div id="slab-lan" class="slab-view hidden">
++        <details class="sl-group" open>
++          <summary><strong>2A</strong> <small>LAN audit — scan subnet</small></summary>
++          <div class="sl-row sl-mt">
++            <select id="sl-plus-lan-mode" aria-label="LAN audit mode"><option value="1">Deep probes</option><option value="0">Quick scan</option></select>
++            <button type="button" class="btn-action btn-default" data-sl-action="lan_start">LAN Audit</button>
++            <button type="button" class="btn-action" data-sl-action="lan_stop">Stop</button>
++            <button type="button" class="btn-action" data-sl-action="lan_export">Export JSON/CSV</button>
++            <button type="button" class="btn-action" data-sl-action="lan_clear" data-sl-confirm="Clear the LAN audit report?">Clear</button>
++          </div>
++        </details>
++        <details class="sl-group">
++          <summary><strong>2B</strong> <small>Responder+ &amp; LAN Guard</small></summary>
++          <div class="sl-row sl-mt">
++            <button type="button" class="btn-action" data-sl-action="responder_start">Responder+</button>
++            <button type="button" class="btn-action" data-sl-action="responder_stop">Stop</button>
++            <button type="button" class="btn-action" data-sl-action="responder_clear" data-sl-confirm="Clear Responder+ hits?">Clear Hits</button>
++          </div>
++          <div class="sl-row">
++            <button type="button" class="btn-action" data-sl-action="guard_start">LAN Guard Start</button>
++            <button type="button" class="btn-action" data-sl-action="guard_stop">Stop</button>
++            <button type="button" class="btn-action" data-sl-action="guard_clear" data-sl-confirm="Clear LAN Guard alerts?">Clear Alerts</button>
++            <button type="button" class="btn-action" data-sl-action="guard_auto" data-sl-toggle="lanGuardAuto" data-sl-label-on="Auto-Arm: ON" data-sl-label-off="Auto-Arm: OFF" aria-pressed="false">Auto-Arm: --</button>
++          </div>
++          <p class="muted-sm sl-mt">LAN Guard observations are not proof of an attack. DHCP monitoring may be unavailable.</p>
++        </details>
++        <details class="sl-group">
++          <summary><strong>2C</strong> <small>Cleartext HTTP inspector / WPAD proxy</small></summary>
++          <div class="sl-row sl-mt">
++            <button type="button" class="btn-action btn-default" data-sl-action="http_start">HTTP Inspector</button>
++            <button type="button" class="btn-action" data-sl-action="http_stop">Stop</button>
++            <button type="button" class="btn-action" data-sl-action="http_export">Export Findings</button>
++            <button type="button" class="btn-action" data-sl-action="http_clear" data-sl-confirm="Clear cleartext HTTP findings?">Clear</button>
++          </div>
++          <div class="sl-row">
++            <button type="button" class="btn-action" data-sl-action="http_auto" data-sl-toggle="httpAuto" data-sl-label-on="Auto w/ NAPT: ON" data-sl-label-off="Auto w/ NAPT: OFF" aria-pressed="false">Auto w/ NAPT: --</button>
++            <button type="button" class="btn-action" data-sl-action="http_redact" data-sl-toggle="httpRedact" data-sl-label-on="Redact: ON" data-sl-label-off="Redact: OFF" aria-pressed="false">Redact: --</button>
++            <label class="sl-inline-label" for="sl-plus-http-port">Proxy port</label><input class="sl-input" type="number" id="sl-plus-http-port" min="1024" max="65535" value="3128" />
++            <button type="button" class="btn-action" data-sl-action="http_port">Save Port</button>
++          </div>
++        </details>
++      </div>
++
++      <!-- ========== BLE & HID ========== -->
++      <div id="slab-ble" class="slab-view hidden">
++        <details class="sl-group" open>
++          <summary><strong>3A / 3B</strong> <small>Smart BadUSB · LED Link · safety</small></summary>
++          <div class="sl-row sl-mt">
++            <select id="sl-plus-os" aria-label="BadUSB OS profile"><option value="windows">Windows</option><option value="macos">macOS</option><option value="linux">Linux</option></select>
++            <button type="button" class="btn-action" data-sl-action="os_profile">Save OS Profile</button>
++            <button type="button" class="btn-action btn-default" data-sl-action="led_generate">Generate Payload</button>
++            <button type="button" class="btn-action" data-sl-action="perm_check" data-sl-toggle="permissionCheck" data-sl-label-on="Permission Check: ON" data-sl-label-off="Permission Check: OFF" aria-pressed="false">Permission Check: --</button>
++          </div>
++          <div class="sl-row">
++            <button type="button" class="btn-action" data-sl-action="hid_auto" data-sl-toggle="hidAutoArm" data-sl-label-on="Auto-Arm LED: ON" data-sl-label-off="Auto-Arm LED: OFF" aria-pressed="false">Auto-Arm LED: --</button>
++            <button type="button" class="btn-action" data-sl-action="os_warn" data-sl-toggle="osWarn" data-sl-label-on="First-Run Warning: ON" data-sl-label-off="First-Run Warning: OFF" aria-pressed="false">First-Run Warning: --</button>
++            <label class="sl-inline-label" for="sl-plus-hid-timeout">Timeout</label><input class="sl-input" type="number" id="sl-plus-hid-timeout" min="3" max="300" value="25" /><span class="muted-sm">seconds</span>
++            <button type="button" class="btn-action" data-sl-action="hid_timeout">Save Timeout</button>
++          </div>
++          <div class="sl-row">
++            <button type="button" class="btn-action" data-sl-action="led_start">Arm LED Receiver</button>
++            <button type="button" class="btn-action" data-sl-action="led_stop">Stop</button>
++            <button type="button" class="btn-action" data-sl-action="led_export">Export Exfil</button>
++            <button type="button" class="btn-action" data-sl-action="led_clear" data-sl-confirm="Clear captured LED Link exfil data?">Clear</button>
++          </div>
++        </details>
++        <details class="sl-group">
++          <summary><strong>4A / 4B</strong> <small>GATT audit · pairing · tag beacon</small></summary>
++          <div class="sl-row sl-mt">
++            <button type="button" class="btn-action" data-sl-action="ble_fuzzer" data-sl-toggle="bleSafeFuzzer" data-sl-label-on="Boundary writes: ON" data-sl-label-off="Boundary writes: OFF" aria-pressed="false">Boundary writes: --</button>
++            <button type="button" class="btn-action" data-sl-action="ble_export">Export GATT Audit</button>
++            <button type="button" class="btn-action" data-sl-action="ble_clear" data-sl-confirm="Clear all BLE security reports?">Clear BLE Reports</button>
++          </div>
++          <p class="muted-sm">Boundary writes can change/disrupt the target — use only on authorized devices.</p>
++          <div class="sl-row">
++            <button type="button" class="btn-action btn-default" data-sl-action="tag_start">Tag Beacon</button>
++            <label class="sl-inline-label" for="sl-plus-tag-duration">Duration</label><input class="sl-input" type="number" id="sl-plus-tag-duration" min="5" max="300" value="60" /><span class="muted-sm">s</span>
++            <button type="button" class="btn-action" data-sl-action="tag_stop">Stop Beacon</button>
++          </div>
++          <div class="sl-row">
++            <input class="sl-input-wide" type="text" id="sl-plus-addr" placeholder="BLE AA:BB:CC:DD:EE:FF" aria-label="BLE target MAC" spellcheck="false" autocomplete="off" />
++            <select id="sl-plus-pair-type" aria-label="BLE address type"><option value="0">Public (0)</option><option value="1">Random (1)</option></select>
++            <select id="sl-plus-pair-mode" aria-label="Pairing audit mode"><option value="justworks">Just Works</option><option value="mitm">MITM baseline</option></select>
++            <button type="button" class="btn-action" data-sl-action="pair_mode" data-sl-toggle="pairJustWorks" data-sl-label-on="Pair Mode: Just Works" data-sl-label-off="Pair Mode: MITM" aria-pressed="false">Pair Mode: --</button>
++            <button type="button" class="btn-action btn-default" data-sl-action="pair_audit" data-sl-confirm="Run a BLE pairing audit against this MAC? Use authorized targets only.">Run Pairing Audit</button>
++          </div>
++        </details>
++      </div>
++
++      <!-- ========== SENSORS & USB ========== -->
++      <div id="slab-studio" class="slab-view hidden">
++        <details class="sl-group" open>
++          <summary><span>#6 Acoustic Sonar &amp; Motion Guard</span><span id="sl-sonar-badge" class="sl-badge">IDLE</span></summary>
++          <div class="kv-grid sl-mt">
 +            <div class="kv-item"><span>Carrier / Sens</span><b id="sl-sonar-cfg">--</b></div>
 +            <div class="kv-item"><span>Alert Action</span><b id="sl-sonar-act">--</b></div>
 +            <div class="kv-item"><span>Motion Peak</span><b id="sl-sonar-pk">0%</b></div>
@@ -3791,28 +4071,11 @@ index 5290300b..2eca575d 100644
 +          </div>
 +          <audio id="sl-sonar-player" class="sl-audio hidden" controls preload="none"></audio>
 +          <div id="sl-sonar-events" class="sl-scroll sl-mt"></div>
-         </div>
--      </div>
--      <div class="dialog credential hidden">
--        <div class="dialog-head">Change WebUI Credentials</div>
--        <div class="dialog-body">
--          <label for="cred-username" class="oinput-label">Username</label>
--          <input
--            type="text"
--            id="cred-username"
--            class="oinput-text-submit"
--            style="margin-bottom: 10px"
--          />
--          <label for="cred-password" class="oinput-label">Password</label>
--          <input type="text" id="cred-password" class="oinput-text-submit" />
++        </details>
 +
-+        <!-- #8 VIRTUAL USB DRIVE & /usb_vault -->
-+        <div class="dash-card">
-+          <div class="dash-card-head">
-+            <h3>#8 Virtual USB Drive &amp; /usb_vault</h3>
-+            <span id="sl-usb-badge" class="sl-badge">PSRAM + FLASH</span>
-+          </div>
-+          <div class="kv-grid">
++        <details class="sl-group">
++          <summary><span>#8 Virtual USB Drive &amp; /usb_vault</span><span id="sl-usb-badge" class="sl-badge">PSRAM + FLASH</span></summary>
++          <div class="kv-grid sl-mt">
 +            <div class="kv-item"><span>PSRAM / Vault</span><b id="sl-usb-psram">--</b></div>
 +            <div class="kv-item"><span>Saved /usb_disk.img</span><b id="sl-usb-img">None</b></div>
 +          </div>
@@ -3823,264 +4086,10 @@ index 5290300b..2eca575d 100644
 +          </div>
 +          <div id="sl-vault-msg" class="ota-status hidden"></div>
 +          <div id="sl-vault-list" class="sl-scroll sl-mt"></div>
-         </div>
--        <div class="dialog-footer">
--          <button class="btn-action btn-default act-save-credential">
--            Save
--          </button>
--          <button
--            class="btn-action act-escape"
--            onclick="Dialog.show('settings')"
--          >
--            Close
--          </button>
-+
-+        <!-- #4 WI-FI AIR-TIME ANALYZER & HIDDEN SSIDs -->
-+        <div class="dash-card">
-+          <div class="dash-card-head">
-+            <h3>#4 CH1-13 Estimated Load &amp; Hidden SSIDs</h3>
-+            <span id="sl-air-best" class="sl-badge">BEST CH --</span>
-+          </div>
-+          <p class="muted-sm">Packet-based estimates, not measured airtime; unavailable channels and non-Wi-Fi interference may be missed.</p>
-+          <div id="sl-air-bars" class="sl-bars"></div>
-+          <strong class="sl-sub sl-mt">Hidden &amp; Decloaked APs</strong>
-+          <div id="sl-air-hidden" class="sl-scroll"></div>
-         </div>
--      </div>
--      <div class="dialog editor hidden">
--        <div class="dialog-head">
--          Edit: <span class="editor-file-name"></span>
-+
-+        <!-- SECLAB+ 1A-4B CONTROL CENTER -->
-+        <div class="dash-card dash-card-wide">
-+          <div class="dash-card-head">
-+            <h3>SecLab+ 1A&ndash;4B Control Center</h3>
-+            <span id="sl-plus-badge" class="sl-badge">READY</span>
-+          </div>
-+          <div class="sl-note">
-+            <strong>Authorized security audits only.</strong> Use against systems you own or have written permission to test.
-+            The 2C proxy handles cleartext HTTP/1.0 only; TLS <code>CONNECT</code> is refused, never decrypted.
-+          </div>
-+          <div class="kv-grid">
-+            <div class="kv-item"><span>1A PMKID / .hc22000</span><b id="sl-plus-pmkid">--</b></div>
-+            <div class="kv-item"><span>1B CSA / Portal-NAPT</span><b id="sl-plus-csa">--</b></div>
-+            <div class="kv-item"><span>2A LAN Devices / Findings</span><b id="sl-plus-lan">0 / 0</b></div>
-+            <div class="kv-item"><span>2B Responder+ / Guard</span><b id="sl-plus-guard">--</b></div>
-+            <div class="kv-item"><span>2C Cleartext HTTP</span><b id="sl-plus-http">--</b></div>
-+            <div class="kv-item"><span>3A HID LED Link</span><b id="sl-plus-led">--</b></div>
-+            <div class="kv-item"><span>3B Permission / Auto-arm</span><b id="sl-plus-perm">--</b></div>
-+            <div class="kv-item"><span>4A GATT Audit / Fuzzer</span><b id="sl-plus-ble">--</b></div>
-+            <div class="kv-item"><span>4B Pairing / Tag Beacon</span><b id="sl-plus-pair">--</b></div>
-+            <div class="kv-item"><span>Proxy / Redaction</span><b id="sl-plus-network">--</b></div>
-+            <div class="kv-item"><span>Pair Mode / CSA Defaults</span><b id="sl-plus-settings">--</b></div>
-+            <div class="kv-item"><span>Build / OS Profile / LED Timeout</span><b id="sl-plus-active">--</b></div>
-+          </div>
-+
-+          <div class="sl-global sl-mt">
-+            <button type="button" class="btn-action btn-danger" data-sl-action="stop_all"
-+              data-sl-confirm="Stop all stoppable SecLab+ tools? An in-progress pairing audit will finish on its own.">
-+              Stop All Tools
-+            </button>
-+            <small class="muted-sm">Global stop does not cancel a queued BLE pairing audit; wait for its verdict.</small>
-+          </div>
-+
-+          <fieldset class="sl-group">
-+            <legend><strong>1A / 1B</strong> <small>PMKID, CSA/PMF and Portal handoff</small></legend>
-+            <div class="sl-row">
-+              <button type="button" class="btn-action btn-default" data-sl-action="pmkid_start">PMKID Start</button>
-+              <button type="button" class="btn-action" data-sl-action="pmkid_stop">Stop</button>
-+              <button type="button" class="btn-action" data-sl-action="pmkid_export">Export .hc22000</button>
-+              <button type="button" class="btn-action" data-sl-action="pmkid_clear"
-+                data-sl-confirm="Clear captured PMKID hashes from memory and storage?">Clear</button>
-+              <button type="button" class="btn-action" data-sl-action="pmkid_auto"
-+                data-sl-toggle="pmkidAutoExport" data-sl-label-on="Auto-Export: ON" data-sl-label-off="Auto-Export: OFF"
-+                aria-pressed="false">Auto-Export: --</button>
-+            </div>
-+            <div class="sl-row">
-+              <button type="button" class="btn-action btn-default" data-sl-action="csa_start">CSA/PMF Start</button>
-+              <button type="button" class="btn-action" data-sl-action="csa_stop">Stop</button>
-+              <button type="button" class="btn-action" data-sl-action="csa_clear"
-+                data-sl-confirm="Clear CSA/PMF test state and logs?">Clear</button>
-+              <label class="sl-inline-label" for="sl-plus-csa-channel">CH</label>
-+              <input class="sl-input" type="number" id="sl-plus-csa-channel" min="1" max="14" value="1" />
-+              <label class="sl-inline-label" for="sl-plus-csa-bursts">Bursts</label>
-+              <input class="sl-input" type="number" id="sl-plus-csa-bursts" min="1" max="20" value="3" />
-+              <button type="button" class="btn-action" data-sl-action="csa_config">Save CSA Defaults</button>
-+            </div>
-+            <div class="sl-row">
-+              <button type="button" class="btn-action" data-sl-action="portal_start">Portal-NAPT Start</button>
-+              <button type="button" class="btn-action" data-sl-action="portal_stop">Stop</button>
-+              <button type="button" class="btn-action" data-sl-action="portal_handoff"
-+                data-sl-toggle="portalHandoff" data-sl-label-on="Auto Handoff: ON" data-sl-label-off="Auto Handoff: OFF"
-+                aria-pressed="false">Auto Handoff: --</button>
-+            </div>
-+          </fieldset>
-+
-+          <fieldset class="sl-group">
-+            <legend><strong>2A / 2B</strong> <small>LAN audit, Responder+, LAN Guard</small></legend>
-+            <div class="sl-row">
-+              <select id="sl-plus-lan-mode" aria-label="LAN audit mode">
-+                <option value="1">Deep probes</option>
-+                <option value="0">Quick scan</option>
-+              </select>
-+              <button type="button" class="btn-action btn-default" data-sl-action="lan_start">LAN Audit</button>
-+              <button type="button" class="btn-action" data-sl-action="lan_stop">Stop</button>
-+              <button type="button" class="btn-action" data-sl-action="lan_export">Export JSON/CSV</button>
-+              <button type="button" class="btn-action" data-sl-action="lan_clear"
-+                data-sl-confirm="Clear the LAN audit report?">Clear</button>
-+            </div>
-+            <div class="sl-row">
-+              <button type="button" class="btn-action" data-sl-action="responder_start">Responder+</button>
-+              <button type="button" class="btn-action" data-sl-action="responder_stop">Stop</button>
-+              <button type="button" class="btn-action" data-sl-action="responder_clear"
-+                data-sl-confirm="Clear Responder+ hits?">Clear Hits</button>
-+            </div>
-+            <div class="sl-row">
-+              <button type="button" class="btn-action" data-sl-action="guard_start">LAN Guard Start</button>
-+              <button type="button" class="btn-action" data-sl-action="guard_stop">Stop</button>
-+              <button type="button" class="btn-action" data-sl-action="guard_clear"
-+                data-sl-confirm="Clear LAN Guard alerts?">Clear Alerts</button>
-+              <button type="button" class="btn-action" data-sl-action="guard_auto"
-+                data-sl-toggle="lanGuardAuto" data-sl-label-on="Auto-Arm: ON" data-sl-label-off="Auto-Arm: OFF"
-+                aria-pressed="false">Auto-Arm: --</button>
-+            </div>
-+            <p>LAN Guard observations are not proof of an attack. DHCP monitoring may be unavailable or incomplete; a DHCP server can differ from the gateway.</p>
-+          </fieldset>
-+
-+          <fieldset class="sl-group">
-+            <legend><strong>2C</strong> <small>Cleartext HTTP inspector / WPAD proxy</small></legend>
-+            <div class="sl-row">
-+              <button type="button" class="btn-action btn-default" data-sl-action="http_start">HTTP Inspector</button>
-+              <button type="button" class="btn-action" data-sl-action="http_stop">Stop</button>
-+              <button type="button" class="btn-action" data-sl-action="http_export">Export Findings</button>
-+              <button type="button" class="btn-action" data-sl-action="http_clear"
-+                data-sl-confirm="Clear cleartext HTTP findings?">Clear</button>
-+            </div>
-+            <div class="sl-row">
-+              <button type="button" class="btn-action" data-sl-action="http_auto"
-+                data-sl-toggle="httpAuto" data-sl-label-on="Auto w/ NAPT: ON" data-sl-label-off="Auto w/ NAPT: OFF"
-+                aria-pressed="false">Auto w/ NAPT: --</button>
-+              <button type="button" class="btn-action" data-sl-action="http_redact"
-+                data-sl-toggle="httpRedact" data-sl-label-on="Redact: ON" data-sl-label-off="Redact: OFF"
-+                aria-pressed="false">Redact: --</button>
-+              <label class="sl-inline-label" for="sl-plus-http-port">Proxy port</label>
-+              <input class="sl-input" type="number" id="sl-plus-http-port" min="1024" max="65535" value="3128" />
-+              <button type="button" class="btn-action" data-sl-action="http_port">Save Port</button>
-+            </div>
-+          </fieldset>
-+
-+          <fieldset class="sl-group">
-+            <legend><strong>3A / 3B</strong> <small>Smart BadUSB profiles, LED Link and safety settings</small></legend>
-+            <div class="sl-row">
-+              <select id="sl-plus-os" aria-label="BadUSB OS profile">
-+                <option value="windows">Windows</option>
-+                <option value="macos">macOS</option>
-+                <option value="linux">Linux</option>
-+              </select>
-+              <button type="button" class="btn-action" data-sl-action="os_profile">Save OS Profile</button>
-+              <button type="button" class="btn-action btn-default" data-sl-action="led_generate">Generate Payload</button>
-+              <button type="button" class="btn-action" data-sl-action="perm_check"
-+                data-sl-toggle="permissionCheck" data-sl-label-on="Permission Check: ON" data-sl-label-off="Permission Check: OFF"
-+                aria-pressed="false">Permission Check: --</button>
-+            </div>
-+            <div class="sl-row">
-+              <button type="button" class="btn-action" data-sl-action="hid_auto"
-+                data-sl-toggle="hidAutoArm" data-sl-label-on="Auto-Arm LED: ON" data-sl-label-off="Auto-Arm LED: OFF"
-+                aria-pressed="false">Auto-Arm LED: --</button>
-+              <button type="button" class="btn-action" data-sl-action="os_warn"
-+                data-sl-toggle="osWarn" data-sl-label-on="First-Run Warning: ON" data-sl-label-off="First-Run Warning: OFF"
-+                aria-pressed="false">First-Run Warning: --</button>
-+              <label class="sl-inline-label" for="sl-plus-hid-timeout">Timeout</label>
-+              <input class="sl-input" type="number" id="sl-plus-hid-timeout" min="3" max="300" value="25" />
-+              <span class="muted-sm">seconds</span>
-+              <button type="button" class="btn-action" data-sl-action="hid_timeout">Save Timeout</button>
-+            </div>
-+            <div class="sl-row">
-+              <button type="button" class="btn-action" data-sl-action="led_start">Arm LED Receiver</button>
-+              <button type="button" class="btn-action" data-sl-action="led_stop">Stop</button>
-+              <button type="button" class="btn-action" data-sl-action="led_export">Export Exfil</button>
-+              <button type="button" class="btn-action" data-sl-action="led_clear"
-+                data-sl-confirm="Clear captured LED Link exfil data?">Clear</button>
-+            </div>
-+          </fieldset>
-+
-+          <fieldset class="sl-group">
-+            <legend><strong>4A / 4B</strong> <small>GATT audit, pairing mode, tag verification</small></legend>
-+            <div class="sl-row">
-+              <button type="button" class="btn-action" data-sl-action="ble_fuzzer"
-+                data-sl-toggle="bleSafeFuzzer" data-sl-label-on="Boundary writes: ON" data-sl-label-off="Boundary writes: OFF"
-+                aria-pressed="false">Boundary writes: --</button>
-+              <button type="button" class="btn-action" data-sl-action="ble_export">Export GATT Audit</button>
-+              <button type="button" class="btn-action" data-sl-action="ble_clear"
-+                data-sl-confirm="Clear all BLE security reports?">Clear BLE Reports</button>
-+            </div>
-+            <p>Boundary writes can change or disrupt the target. Use only on devices you are authorized to test; ordinary audit does not perform test writes.</p>
-+            <div class="sl-row">
-+              <button type="button" class="btn-action btn-default" data-sl-action="tag_start">Tag Beacon</button>
-+              <label class="sl-inline-label" for="sl-plus-tag-duration">Duration</label>
-+              <input class="sl-input" type="number" id="sl-plus-tag-duration" min="5" max="300" value="60" />
-+              <span class="muted-sm">seconds (5-300)</span>
-+              <button type="button" class="btn-action" data-sl-action="tag_stop">Stop Beacon</button>
-+            </div>
-+            <div class="sl-row">
-+              <input class="sl-input-wide" type="text" id="sl-plus-addr" placeholder="BLE AA:BB:CC:DD:EE:FF"
-+                aria-label="BLE target MAC" spellcheck="false" autocomplete="off" />
-+              <select id="sl-plus-pair-type" aria-label="BLE address type">
-+                <option value="0">Public (0)</option>
-+                <option value="1">Random (1)</option>
-+              </select>
-+              <select id="sl-plus-pair-mode" aria-label="Pairing audit mode">
-+                <option value="justworks">Just Works</option>
-+                <option value="mitm">MITM baseline</option>
-+              </select>
-+              <button type="button" class="btn-action" data-sl-action="pair_mode"
-+                data-sl-toggle="pairJustWorks" data-sl-label-on="Pair Mode: Just Works" data-sl-label-off="Pair Mode: MITM"
-+                aria-pressed="false">Pair Mode: --</button>
-+              <button type="button" class="btn-action btn-default" data-sl-action="pair_audit"
-+                data-sl-confirm="Run a BLE pairing audit against this MAC? Use authorized targets only.">Run Pairing Audit</button>
-+            </div>
-+          </fieldset>
-+
-+<div id="sl-plus-msg" class="ota-status hidden" role="status" aria-live="polite" aria-busy="false"></div>
-+          <div class="sl-row sl-mt">
-+            <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/pmkid/all.hc22000')">PMKID Hash</button>
-+            <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/lan_audit.json')">LAN JSON</button>
-+            <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/napt_http_findings.json')">HTTP Findings</button>
-+            <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/led_link/exfil.txt')">LED Exfil</button>
-+            <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/ble_security_audit.json')">GATT Audit</button>
-+          </div>
-+          <strong class="sl-sub sl-mt">Live SecLab+ Feed</strong>
-+          <div id="sl-plus-feed" class="sl-scroll sl-mt"></div>
-         </div>
--        <div class="dialog-body">
--          <div class="editor-container">
--            <div class="line-numbers"></div>
--            <textarea class="file-content" style="resize: none"></textarea>
-+
-+        <!-- #2 PROBE REQUEST IE RADAR & #12 BLE GATT CLONER -->
-+        <div class="dash-card">
-+          <div class="dash-card-head">
-+            <h3>#2 Probe Radar &amp; #12 BLE GATT</h3>
-+            <span id="sl-ble-phy" class="sl-badge">PHY 1M</span>
-+          </div>
-+          <div class="kv-grid">
-+            <div class="kv-item"><span>Probe Clusters / MACs</span><b id="sl-prb-stat">0 / 0</b></div>
-+            <div class="kv-item"><span>BLE GATT Mode</span><b id="sl-ble-mode">IDLE</b></div>
-           </div>
-+          <div class="sl-row sl-mt">
-+            <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/probe_radar.csv')">Probe CSV</button>
-+            <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/ble_clone_writes.log')">Clone Writes Log</button>
-+          </div>
-+          <div id="sl-prb-list" class="sl-scroll sl-mt"></div>
-+          <strong class="sl-sub sl-mt">Saved BLE GATT Profiles</strong>
-+          <div id="sl-ble-profs" class="sl-scroll"></div>
-         </div>
--        <div class="dialog-footer">
--          <button class="btn-action act-save-edit-file" title="CTRL + S">
--            Save
++        </details>
 +      </div>
++
 +    </section>
-+  </div>
 +
 +  <template id="t">
 +    <table>
@@ -4136,8 +4145,8 @@ index 5290300b..2eca575d 100644
 +        <div style="display:flex;gap:6px;align-items:center">
 +          <button type="button" class="btn-action" onclick="openWifiModal()" style="padding:3px 8px;font-size:11px">LAN WiFi</button>
 +          <a class="btn-action" href="/ota" target="_blank" style="padding:3px 8px;font-size:11px">Standalone Page</a>
-         </div>
-       </div>
++        </div>
++      </div>
 +      <div class="dialog-body">
 +        <p style="font-size:12px;color:var(--muted);margin-bottom:6px">
 +          Active: <b id="ota-cur-slot" style="color:var(--color)">--</b> &bull;
@@ -4154,8 +4163,8 @@ index 5290300b..2eca575d 100644
 +        <div id="ota-prog" class="ota-prog hidden">
 +          <div class="ota-bar-bg"><div id="ota-bar-fill" class="ota-bar-fill"></div></div>
 +          <div class="ota-prog-txt"><span id="ota-prog-msg">Uploading...</span><span id="ota-prog-pct">0%</span></div>
-+        </div>
-+      </div>
+         </div>
+       </div>
 +      <div class="dialog-footer">
 +        <button id="ota-cancel-btn" class="btn-action btn-danger hidden">Cancel</button>
 +        <button id="ota-start-btn" class="btn-action btn-default" disabled>Flash OTA Firmware</button>
@@ -4194,7 +4203,9 @@ index 5290300b..2eca575d 100644
 +      <div class="dialog-footer">
 +        <button class="btn-action act-dialog-close act-escape">Close</button>
 +      </div>
-+    </div>
+     </div>
+-    <div class="loading-area hidden">
+-      <div class="text"></div>
 +
 +    <div class="dialog navigator-shortcut hidden">
 +      <div class="dialog-head">Screen Keyboard Shortcuts</div>
@@ -4212,9 +4223,7 @@ index 5290300b..2eca575d 100644
 +      <div class="dialog-footer">
 +        <button class="btn-action act-dialog-close act-escape">Close</button>
 +      </div>
-     </div>
--    <div class="loading-area hidden">
--      <div class="text"></div>
++    </div>
 +
 +    <div class="dialog info hidden">
 +      <div class="dialog-head">About Bruce SecLab WebUI</div>
@@ -4225,10 +4234,7 @@ index 5290300b..2eca575d 100644
 +      <div class="dialog-footer">
 +        <button class="btn-action act-dialog-close act-escape">Close</button>
 +      </div>
-     </div>
--    <div class="upload-area hidden"></div>
--    <script src="/index.js"></script>
--  </body>
++    </div>
 +
 +    <div class="dialog oinput hidden">
 +      <div class="dialog-head">
@@ -4257,7 +4263,10 @@ index 5290300b..2eca575d 100644
 +        <button class="btn-action btn-default act-save-credential">Save</button>
 +        <button class="btn-action act-escape" onclick="Dialog.show('settings')">Back</button>
 +      </div>
-+    </div>
+     </div>
+-    <div class="upload-area hidden"></div>
+-    <script src="/index.js"></script>
+-  </body>
 +
 +    <div class="dialog editor hidden">
 +      <div class="dialog-head">Edit: <span class="editor-file-name mono"></span></div>
@@ -4281,7 +4290,7 @@ index 5290300b..2eca575d 100644
 +</body>
  </html>
 diff --git a/embedded_resources/web_interface/index.js b/embedded_resources/web_interface/index.js
-index fd616029..e06effff 100644
+index fd61602..1c09ba5 100644
 --- a/embedded_resources/web_interface/index.js
 +++ b/embedded_resources/web_interface/index.js
 @@ -6,20 +6,17 @@ const T = {
@@ -6357,7 +6366,7 @@ index fd616029..e06effff 100644
      return;
    }
  
-@@ -1062,662 +1519,898 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1062,662 +1519,966 @@ $(".container").addEventListener("click", async (e) => {
    if (actPlay) {
      e.preventDefault();
      let cmd = actPlay.getAttribute("data-cmd");
@@ -7336,6 +7345,7 @@ index fd616029..e06effff 100644
 +    if (tb.current) push("4B Tag Verify", `${tb.current} (${tb.rotations || 0})`, tb.running ? "ok" : "");
 +    const feedEl = $("#sl-plus-feed");
 +    if (feedEl) feedEl.innerHTML = feed.join("") || `<div class="sl-item muted-sm">Launch a SecLab+ tool from the buttons above or from the device menu.</div>`;
++    syncOverviewTiles(n, air, prb, bg, sn, u, plus, la, hi, ll, ba, pa, tb);
 +  } catch (e) {
 +    secLabStatusOk = false;
 +    console.warn("SecLab+ status refresh failed", e);
@@ -7785,6 +7795,76 @@ index fd616029..e06effff 100644
 +  finally { stopButton.disabled = false; if (generation === uxGeneration) findButton.disabled = false; }
 +});
 +if ($("#ux-status")) uxLoad(true);
++
++// Keep the browser's applied palette/layout in sync with device-side changes.
++// Do not overwrite a potentially unsaved Personalize form.
++if (typeof setInterval === "function") setInterval(() => { if (!document.hidden && !otaBusy) fetchSystemInfo(true).catch(() => {}); }, 15000);
++
++ // ==== SecLab compact subtabs + overview mirror (2026-11) ====
++ function switchSlab(name){
++   const views=document.querySelectorAll(".slab-view");
++   const btns=document.querySelectorAll(".slab-btn");
++   views.forEach(v=>v.classList.toggle("hidden", v.id!=="slab-"+name));
++   btns.forEach(b=>{ const on=b.dataset.slab===name; b.classList.toggle("active", on); b.setAttribute("aria-selected", on?"true":"false"); });
++   try{ localStorage.setItem("seclabSlab", name);}catch(e){}
++   // re-trigger lazy resize for bars if switching to wifi
++   if(name==="wifi"){ const el=document.getElementById("sl-air-bars"); if(el && el.innerHTML.trim()==="") refreshSecLab(); }
++ }
++ function syncOverviewTiles(n, air, prb, bg, sn, u, plus, la, hi, ll, ba, pa, tb){
++   try{
++     const ovNapt=document.getElementById("ov-napt");
++     if(ovNapt) ovNapt.textContent = n.running ? (n.apSsid||"BruceNet")+" ON" : (n.starting ? "STARTING":"OFF");
++     const ovNaptBadge=document.getElementById("ov-napt-badge");
++     if(ovNaptBadge){ const nb=document.getElementById("sl-napt-badge"); if(nb){ ovNaptBadge.textContent=nb.textContent; ovNaptBadge.className=nb.className; } }
++     const ovNaptDetail=document.getElementById("ov-napt-detail");
++     if(ovNaptDetail) ovNaptDetail.textContent = `Clients ${(n.clients||[]).length} · Queries ${n.total||0} · Blk ${n.blocked||0}`;
++     const ovAir=document.getElementById("ov-air");
++     if(ovAir){ const ab=document.getElementById("sl-air-best"); if(ab) ovAir.textContent=ab.textContent; }
++     const ovAirDetail=document.getElementById("ov-air-detail");
++     if(ovAirDetail){ const chs=(air.channels||[]).length; ovAirDetail.textContent = chs? `${chs} ch scanned · best CH ${air.bestCh||"--"}` : "No scan yet"; }
++     const ovProbe=document.getElementById("ov-probe");
++     if(ovProbe){ const s=document.getElementById("sl-prb-stat"); const phy=document.getElementById("sl-ble-phy"); ovProbe.textContent=(s? s.textContent:"0 / 0")+" · "+(phy? phy.textContent:"PHY 1M"); }
++     const ovProbeDetail=document.getElementById("ov-probe-detail");
++     if(ovProbeDetail){ const devs=(prb.devices||[]).length; ovProbeDetail.textContent = `${devs} clusters · BLE ${(bg.mode||"IDLE")}`; }
++     const ovLan=document.getElementById("ov-lan");
++     if(ovLan){ const el=document.getElementById("sl-plus-lan"); if(el) ovLan.textContent=el.textContent; }
++     const ovBle=document.getElementById("ov-ble");
++     if(ovBle){ const el=document.getElementById("sl-plus-ble"); let txt=el? el.textContent:"IDLE"; ovBle.textContent=txt; }
++     const ovBleDetail=document.getElementById("ov-ble-detail");
++     if(ovBleDetail){ ovBleDetail.textContent = `${ba.findings||0} findings · ${(ll.running?"LED ARMED":"LED idle")} · ${pa.verdict||"no pairing"}`; }
++     const ovStudio=document.getElementById("ov-studio");
++     if(ovStudio){ const idle = (sn.alarm? "ALERT": (sn.armed? "ARMED":"IDLE")); const files=(u.vaultFiles||[]).length; ovStudio.textContent = `${idle} · ${files} files`; }
++     const ovStudioDetail=document.getElementById("ov-studio-detail");
++     if(ovStudioDetail){ const sig=sn.signal||"--"; ovStudioDetail.textContent=`Signal ${sig} · /usb_vault ${u.flashImgBytes? Math.round(u.flashImgBytes/1024)+"KB img":"no img"}`; }
++   }catch(e){ console.warn("syncOverviewTiles",e); }
++ }
++ document.querySelectorAll(".slab-btn").forEach(btn=>{
++   btn.addEventListener("click", ()=> switchSlab(btn.dataset.slab));
++ });
++ document.querySelectorAll("[data-slab-jump]").forEach(b=>{
++   b.addEventListener("click", ()=>{ switchSlab(b.dataset.slabJump); document.getElementById("tab-seclab")?.scrollIntoView({behavior:"smooth", block:"start"}); });
++ });
++ // restore last slab or default overview
++ (function(){
++   let last="overview";
++   try{ const v=localStorage.getItem("seclabSlab"); if(v) last=v; }catch(e){}
++   // ensure correct view active after DOM ready
++   const check=()=>{ if(document.getElementById("slab-overview")) switchSlab(last); else setTimeout(check, 120); };
++   if(document.readyState==="complete") check(); else window.addEventListener("load", check);
++ })();
++ // when switching main tab to seclab, ensure slab bar visible
++ (function(){
++   const origSwitchTab = window.switchTab;
++   if(typeof origSwitchTab==="function"){
++     window.switchTab = function(name){
++       origSwitchTab(name);
++       if(name==="seclab"){
++         // re-apply stored slab
++         try{ const s=localStorage.getItem("seclabSlab")||"overview"; switchSlab(s);}catch(e){}
++       }
++     };
++   }
++ })();
  
 -        Dialog.loading.hide();
 -        Dialog.show("editor");
@@ -7796,11 +7876,8 @@ index fd616029..e06effff 100644
 -    }, 100); // Small delay to ensure the file list is loaded first
 -  }
 -})();
-+// Keep the browser's applied palette/layout in sync with device-side changes.
-+// Do not overwrite a potentially unsaved Personalize form.
-+if (typeof setInterval === "function") setInterval(() => { if (!document.hidden && !otaBusy) fetchSystemInfo(true).catch(() => {}); }, 15000);
 diff --git a/embedded_resources/web_interface/login.html b/embedded_resources/web_interface/login.html
-index f3947c88..c165f33b 100644
+index f3947c8..c165f33 100644
 --- a/embedded_resources/web_interface/login.html
 +++ b/embedded_resources/web_interface/login.html
 @@ -1,43 +1,50 @@
@@ -7893,7 +7970,7 @@ index f3947c88..c165f33b 100644
 -
  </html>
 diff --git a/include/DisplayDrivers_User_Setup.h b/include/DisplayDrivers_User_Setup.h
-index f67b6331..9dd4164c 100644
+index f67b633..9dd4164 100644
 --- a/include/DisplayDrivers_User_Setup.h
 +++ b/include/DisplayDrivers_User_Setup.h
 @@ -26,4 +26,19 @@
@@ -7917,7 +7994,7 @@ index f67b6331..9dd4164c 100644
 +
  #endif // _BRUCE_DISPLAYDRIVERS_USER_SETUP_H
 diff --git a/include/globals.h b/include/globals.h
-index 180e105e..61f922e7 100644
+index 180e105..61f922e 100644
 --- a/include/globals.h
 +++ b/include/globals.h
 @@ -242,7 +242,14 @@ void inputLockInit();
@@ -7936,7 +8013,7 @@ index 180e105e..61f922e7 100644
  #ifdef HAS_ENCODER
      // NextPress/PrevPress here are rotary-encoder-derived, not raw mechanical
 diff --git a/include/tftLogger.h b/include/tftLogger.h
-index ffb96fe4..0ff81d97 100644
+index ffb96fe..0ff81d9 100644
 --- a/include/tftLogger.h
 +++ b/include/tftLogger.h
 @@ -27,22 +27,25 @@ enum tftFuncs : uint8_t { // DO NOT CHANGE THE ORDER, ADD NEW FUNCTIONS TO THE E
@@ -8021,7 +8098,7 @@ index ffb96fe4..0ff81d97 100644
      void drawRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t color);
      void fillRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t color);
 diff --git a/platformio.ini b/platformio.ini
-index d8ec5e0b..d1c5953f 100644
+index d8ec5e0..d1c5953 100644
 --- a/platformio.ini
 +++ b/platformio.ini
 @@ -20,6 +20,7 @@ default_envs =
@@ -8033,7 +8110,7 @@ index d8ec5e0b..d1c5953f 100644
  	; elecrow-28B
  	; elecrow-35B
 diff --git a/src/core/config.cpp b/src/core/config.cpp
-index e7ceca14..c855f385 100644
+index e7ceca1..c855f38 100644
 --- a/src/core/config.cpp
 +++ b/src/core/config.cpp
 @@ -14,6 +14,8 @@ JsonDocument BruceConfig::toJson() const {
@@ -8323,7 +8400,7 @@ index e7ceca14..c855f385 100644
      if (!_mifareKeysLoaded) {
          MifareKeysManager::ensureLoaded(mifareKeys);
 diff --git a/src/core/config.h b/src/core/config.h
-index 72d69eba..f3d24724 100644
+index 72d69eb..f3d2472 100644
 --- a/src/core/config.h
 +++ b/src/core/config.h
 @@ -17,12 +17,65 @@
@@ -8461,7 +8538,7 @@ index 72d69eba..f3d24724 100644
      void removeDisabledMenu(String value);
  
 diff --git a/src/core/display.cpp b/src/core/display.cpp
-index d3fe50ac..0b38b63d 100644
+index d3fe50a..0b38b63 100644
 --- a/src/core/display.cpp
 +++ b/src/core/display.cpp
 @@ -1,8 +1,11 @@
@@ -8945,7 +9022,7 @@ index d3fe50ac..0b38b63d 100644
  
      int iconCount = 0;
 diff --git a/src/core/display.h b/src/core/display.h
-index 0345168b..7502c904 100644
+index 0345168..7502c90 100644
 --- a/src/core/display.h
 +++ b/src/core/display.h
 @@ -7,6 +7,7 @@
@@ -8974,7 +9051,7 @@ index 0345168b..7502c904 100644
  
 diff --git a/src/core/dsolution_ux.cpp b/src/core/dsolution_ux.cpp
 new file mode 100644
-index 00000000..b49f5b4a
+index 0000000..b49f5b4
 --- /dev/null
 +++ b/src/core/dsolution_ux.cpp
 @@ -0,0 +1,269 @@
@@ -9249,7 +9326,7 @@ index 00000000..b49f5b4a
 +#endif
 diff --git a/src/core/dsolution_ux.h b/src/core/dsolution_ux.h
 new file mode 100644
-index 00000000..c56d7aef
+index 0000000..c56d7ae
 --- /dev/null
 +++ b/src/core/dsolution_ux.h
 @@ -0,0 +1,24 @@
@@ -9279,7 +9356,7 @@ index 00000000..c56d7aef
 +#endif
 diff --git a/src/core/feature_guide.cpp b/src/core/feature_guide.cpp
 new file mode 100644
-index 00000000..20d88135
+index 0000000..20d8813
 --- /dev/null
 +++ b/src/core/feature_guide.cpp
 @@ -0,0 +1,1125 @@
@@ -10410,7 +10487,7 @@ index 00000000..20d88135
 +}
 diff --git a/src/core/feature_guide.h b/src/core/feature_guide.h
 new file mode 100644
-index 00000000..e9a47f79
+index 0000000..e9a47f7
 --- /dev/null
 +++ b/src/core/feature_guide.h
 @@ -0,0 +1,13 @@
@@ -10428,7 +10505,7 @@ index 00000000..e9a47f79
 +
 +#endif
 diff --git a/src/core/main_menu.cpp b/src/core/main_menu.cpp
-index 7420b9e8..1439c251 100644
+index 7420b9e..1439c25 100644
 --- a/src/core/main_menu.cpp
 +++ b/src/core/main_menu.cpp
 @@ -1,12 +1,17 @@
@@ -10669,7 +10746,7 @@ index 7420b9e8..1439c251 100644
      int thumbH = max(6, trackH * _grid.visibleRows / _grid.rows);
      int thumbY = trackY + (trackH - thumbH) * _gridScroll / (_grid.rows - _grid.visibleRows);
 diff --git a/src/core/main_menu.h b/src/core/main_menu.h
-index e8ba9314..ca97c62c 100644
+index e8ba931..ca97c62 100644
 --- a/src/core/main_menu.h
 +++ b/src/core/main_menu.h
 @@ -4,22 +4,27 @@
@@ -10758,7 +10835,7 @@ index e8ba9314..ca97c62c 100644
      int _currentIndex = 0;
      int _totalItems = 0;
 diff --git a/src/core/menu_items/BleMenu.cpp b/src/core/menu_items/BleMenu.cpp
-index ed144ba6..c39cac4c 100644
+index ed144ba..c39cac4 100644
 --- a/src/core/menu_items/BleMenu.cpp
 +++ b/src/core/menu_items/BleMenu.cpp
 @@ -3,8 +3,11 @@
@@ -10784,7 +10861,7 @@ index ed144ba6..c39cac4c 100644
                             ibeacon("Bruce", "e4c159a0-8c82-11e6-bdf4-0800200c9a66", 0x004C);
                         }});
 diff --git a/src/core/menu_items/ConfigMenu.cpp b/src/core/menu_items/ConfigMenu.cpp
-index 6e44fd4d..c0ee131c 100644
+index 6e44fd4..c0ee131 100644
 --- a/src/core/menu_items/ConfigMenu.cpp
 +++ b/src/core/menu_items/ConfigMenu.cpp
 @@ -1,4 +1,8 @@
@@ -11017,7 +11094,7 @@ index 6e44fd4d..c0ee131c 100644
              //{"Serial use USB",  [this]() { switchToUSBSerial(); }                       },
              //{"Serial use UART", [this]() { switchToUARTSerial(); }                      },
 diff --git a/src/core/menu_items/ConfigMenu.h b/src/core/menu_items/ConfigMenu.h
-index 1854faa7..dbbb659d 100644
+index 1854faa..dbbb659 100644
 --- a/src/core/menu_items/ConfigMenu.h
 +++ b/src/core/menu_items/ConfigMenu.h
 @@ -15,6 +15,7 @@ public:
@@ -11029,7 +11106,7 @@ index 1854faa7..dbbb659d 100644
      void audioMenu(void);
      void systemMenu(void);
 diff --git a/src/core/menu_items/FileMenu.cpp b/src/core/menu_items/FileMenu.cpp
-index 443e395c..4c4346f9 100644
+index 443e395..4c4346f 100644
 --- a/src/core/menu_items/FileMenu.cpp
 +++ b/src/core/menu_items/FileMenu.cpp
 @@ -3,6 +3,7 @@
@@ -11053,7 +11130,7 @@ index 443e395c..4c4346f9 100644
      addOptionToMainMenu();
  
 diff --git a/src/core/menu_items/OthersMenu.cpp b/src/core/menu_items/OthersMenu.cpp
-index 40f99560..a9e14f42 100644
+index 40f9956..a9e14f4 100644
 --- a/src/core/menu_items/OthersMenu.cpp
 +++ b/src/core/menu_items/OthersMenu.cpp
 @@ -2,12 +2,17 @@
@@ -11140,7 +11217,7 @@ index 40f99560..a9e14f42 100644
      loopOptions(options, MENU_TYPE_SUBMENU, "Microphone");
 diff --git a/src/core/menu_items/QuickMenu.cpp b/src/core/menu_items/QuickMenu.cpp
 new file mode 100644
-index 00000000..f42af790
+index 0000000..f42af79
 --- /dev/null
 +++ b/src/core/menu_items/QuickMenu.cpp
 @@ -0,0 +1,81 @@
@@ -11227,7 +11304,7 @@ index 00000000..f42af790
 +#endif
 diff --git a/src/core/menu_items/QuickMenu.h b/src/core/menu_items/QuickMenu.h
 new file mode 100644
-index 00000000..d4117a2c
+index 0000000..d4117a2
 --- /dev/null
 +++ b/src/core/menu_items/QuickMenu.h
 @@ -0,0 +1,12 @@
@@ -11244,7 +11321,7 @@ index 00000000..d4117a2c
 +};
 +#endif
 diff --git a/src/core/menu_items/WifiMenu.cpp b/src/core/menu_items/WifiMenu.cpp
-index 2e6512c1..2e455fa7 100644
+index 2e6512c..2e455fa 100644
 --- a/src/core/menu_items/WifiMenu.cpp
 +++ b/src/core/menu_items/WifiMenu.cpp
 @@ -16,149 +16,267 @@
@@ -11649,7 +11726,7 @@ index 2e6512c1..2e455fa7 100644
      );
  }
 diff --git a/src/core/menu_items/WifiMenu.h b/src/core/menu_items/WifiMenu.h
-index 9dee9d7b..543660fd 100644
+index 9dee9d7..543660f 100644
 --- a/src/core/menu_items/WifiMenu.h
 +++ b/src/core/menu_items/WifiMenu.h
 @@ -13,7 +13,16 @@ public:
@@ -11671,7 +11748,7 @@ index 9dee9d7b..543660fd 100644
  
  #endif
 diff --git a/src/core/mykeyboard.cpp b/src/core/mykeyboard.cpp
-index 1b3c43c2..e59dea12 100644
+index 1b3c43c..e59dea1 100644
 --- a/src/core/mykeyboard.cpp
 +++ b/src/core/mykeyboard.cpp
 @@ -1,9 +1,11 @@
@@ -11729,7 +11806,7 @@ index 1b3c43c2..e59dea12 100644
                  /* Down Btn to move in X axis (to the right) */
                  if (check(NextPress)) {
 diff --git a/src/core/powerSave.cpp b/src/core/powerSave.cpp
-index 718e3bfe..e67b94bb 100644
+index 718e3bf..e67b94b 100644
 --- a/src/core/powerSave.cpp
 +++ b/src/core/powerSave.cpp
 @@ -1,43 +1,103 @@
@@ -11870,7 +11947,7 @@ index 718e3bfe..e67b94bb 100644
 +    delay(120);
  }
 diff --git a/src/core/powerSave.h b/src/core/powerSave.h
-index 5bb1c613..e3324ac4 100644
+index 5bb1c61..e3324ac 100644
 --- a/src/core/powerSave.h
 +++ b/src/core/powerSave.h
 @@ -1,3 +1,6 @@
@@ -11891,7 +11968,7 @@ index 5bb1c613..e3324ac4 100644
 +
 +#endif
 diff --git a/src/core/radio_mem.h b/src/core/radio_mem.h
-index 0d88860f..4daad610 100644
+index 0d88860..4daad61 100644
 --- a/src/core/radio_mem.h
 +++ b/src/core/radio_mem.h
 @@ -15,11 +15,17 @@
@@ -12033,7 +12110,7 @@ index 0d88860f..4daad610 100644
  }
  
 diff --git a/src/core/sd_functions.cpp b/src/core/sd_functions.cpp
-index 054b6298..99454343 100644
+index 054b629..9945434 100644
 --- a/src/core/sd_functions.cpp
 +++ b/src/core/sd_functions.cpp
 @@ -3,16 +3,20 @@
@@ -12095,7 +12172,7 @@ index 054b6298..99454343 100644
                  options.insert(options.begin(), {"JS Script Run", [&]() {
 diff --git a/src/core/seclab_util.cpp b/src/core/seclab_util.cpp
 new file mode 100644
-index 00000000..7f743fe8
+index 0000000..7f743fe
 --- /dev/null
 +++ b/src/core/seclab_util.cpp
 @@ -0,0 +1,123 @@
@@ -12224,7 +12301,7 @@ index 00000000..7f743fe8
 +}
 diff --git a/src/core/seclab_util.h b/src/core/seclab_util.h
 new file mode 100644
-index 00000000..13a9f7a9
+index 0000000..13a9f7a
 --- /dev/null
 +++ b/src/core/seclab_util.h
 @@ -0,0 +1,26 @@
@@ -12255,7 +12332,7 @@ index 00000000..13a9f7a9
 +
 +#endif
 diff --git a/src/core/serial_commands/cli.cpp b/src/core/serial_commands/cli.cpp
-index 1fd47501..35880ab5 100644
+index 1fd4750..35880ab 100644
 --- a/src/core/serial_commands/cli.cpp
 +++ b/src/core/serial_commands/cli.cpp
 @@ -4,18 +4,21 @@
@@ -12306,7 +12383,7 @@ index 1fd47501..35880ab5 100644
  #endif
  
 diff --git a/src/core/serial_commands/power_commands.cpp b/src/core/serial_commands/power_commands.cpp
-index 49138d4a..0bea13fb 100644
+index 49138d4..0bea13f 100644
 --- a/src/core/serial_commands/power_commands.cpp
 +++ b/src/core/serial_commands/power_commands.cpp
 @@ -1,5 +1,6 @@
@@ -12345,7 +12422,7 @@ index 49138d4a..0bea13fb 100644
  }
 diff --git a/src/core/serial_commands/seclab_commands.cpp b/src/core/serial_commands/seclab_commands.cpp
 new file mode 100644
-index 00000000..ee8f6845
+index 0000000..ee8f684
 --- /dev/null
 +++ b/src/core/serial_commands/seclab_commands.cpp
 @@ -0,0 +1,479 @@
@@ -12830,7 +12907,7 @@ index 00000000..ee8f6845
 +}
 diff --git a/src/core/serial_commands/seclab_commands.h b/src/core/serial_commands/seclab_commands.h
 new file mode 100644
-index 00000000..40f54b01
+index 0000000..40f54b0
 --- /dev/null
 +++ b/src/core/serial_commands/seclab_commands.h
 @@ -0,0 +1,8 @@
@@ -12843,7 +12920,7 @@ index 00000000..40f54b01
 +
 +#endif
 diff --git a/src/core/serial_commands/settings_commands.cpp b/src/core/serial_commands/settings_commands.cpp
-index 9c26f281..38fc0aeb 100644
+index 9c26f28..38fc0ae 100644
 --- a/src/core/serial_commands/settings_commands.cpp
 +++ b/src/core/serial_commands/settings_commands.cpp
 @@ -62,10 +62,13 @@ uint32_t settingsCallback(cmd *c) {
@@ -12861,7 +12938,7 @@ index 9c26f281..38fc0aeb 100644
          bruceConfig.setWebUICreds(
              setting_value.substring(0, setting_value.indexOf(",")),
 diff --git a/src/core/serial_commands/util_commands.cpp b/src/core/serial_commands/util_commands.cpp
-index af3650f3..669ce423 100644
+index af3650f..669ce42 100644
 --- a/src/core/serial_commands/util_commands.cpp
 +++ b/src/core/serial_commands/util_commands.cpp
 @@ -7,6 +7,7 @@
@@ -12892,7 +12969,7 @@ index af3650f3..669ce423 100644
          serialDevice->println(
              TFT_WIDTH + String("x") + TFT_HEIGHT + String("x") + bruceConfigPins.rotation
 diff --git a/src/core/serial_commands/wifi_commands.cpp b/src/core/serial_commands/wifi_commands.cpp
-index 95c54ced..7e3efce7 100644
+index 95c54ce..7e3efce 100644
 --- a/src/core/serial_commands/wifi_commands.cpp
 +++ b/src/core/serial_commands/wifi_commands.cpp
 @@ -5,6 +5,9 @@
@@ -12963,7 +13040,7 @@ index 95c54ced..7e3efce7 100644
      // Command responderCmd = cli->addCommand("responder", responderCallback); TODO
  }
 diff --git a/src/core/serialcmds.cpp b/src/core/serialcmds.cpp
-index 908c2c31..570d5280 100644
+index 908c2c3..570d528 100644
 --- a/src/core/serialcmds.cpp
 +++ b/src/core/serialcmds.cpp
 @@ -9,8 +9,71 @@ QueueHandle_t cmdQueue = nullptr;
@@ -13108,7 +13185,7 @@ index 908c2c31..570d5280 100644
  
      xTaskCreatePinnedToCore(
 diff --git a/src/core/serialcmds.h b/src/core/serialcmds.h
-index fbef2fe2..46c3d25b 100644
+index fbef2fe..46c3d25 100644
 --- a/src/core/serialcmds.h
 +++ b/src/core/serialcmds.h
 @@ -8,4 +8,5 @@ extern TaskHandle_t serialcmdsTaskHandle;
@@ -13118,7 +13195,7 @@ index fbef2fe2..46c3d25b 100644
 +bool parseSerialCommandCapture(const String &command, String &output, uint32_t timeoutMs = 1500);
  #endif
 diff --git a/src/core/settings.cpp b/src/core/settings.cpp
-index df8bbcb6..08dd98ad 100644
+index df8bbcb..08dd98a 100644
 --- a/src/core/settings.cpp
 +++ b/src/core/settings.cpp
 @@ -8,13 +8,17 @@
@@ -13329,7 +13406,7 @@ index df8bbcb6..08dd98ad 100644
               bruceConfig.ledBright = 50;
               bruceConfig.ledColor = 0x960064;
 diff --git a/src/core/settings.h b/src/core/settings.h
-index eed52ee9..063a2f70 100644
+index eed52ee..063a2f7 100644
 --- a/src/core/settings.h
 +++ b/src/core/settings.h
 @@ -60,6 +60,7 @@ void setEvilPasswordMode();
@@ -13360,7 +13437,7 @@ index eed52ee9..063a2f70 100644
  
  void runClockLoop(bool showMenuHint = false);
 diff --git a/src/core/settingsColor.h b/src/core/settingsColor.h
-index 035a8164..bad7141a 100644
+index 035a816..bad7141 100644
 --- a/src/core/settingsColor.h
 +++ b/src/core/settingsColor.h
 @@ -57,6 +57,14 @@ struct ColorEntry {
@@ -13379,7 +13456,7 @@ index 035a8164..bad7141a 100644
      {"White",         UI_COLOR_WHITE_PRI,         UI_COLOR_WHITE_SEC,         UI_COLOR_WHITE_BG        },
      {"Dark Gray",     UI_COLOR_DARK_GRAY_PRI,     UI_COLOR_DARK_GRAY_SEC,     UI_COLOR_DARK_GRAY_BG    },
 diff --git a/src/core/startup_app.cpp b/src/core/startup_app.cpp
-index 4663a0d5..7e647cc0 100644
+index 4663a0d..7e647cc 100644
 --- a/src/core/startup_app.cpp
 +++ b/src/core/startup_app.cpp
 @@ -13,14 +13,16 @@
@@ -13427,7 +13504,7 @@ index 4663a0d5..7e647cc0 100644
      _startupApps["JS Interpreter"] = []() {
 diff --git a/src/core/tftLogger/legacy_text_packet.h b/src/core/tftLogger/legacy_text_packet.h
 new file mode 100644
-index 00000000..147cd1fe
+index 0000000..147cd1f
 --- /dev/null
 +++ b/src/core/tftLogger/legacy_text_packet.h
 @@ -0,0 +1,16 @@
@@ -13448,7 +13525,7 @@ index 00000000..147cd1fe
 +    return size - 1;
 +}
 diff --git a/src/core/tftLogger/tftLogger.cpp b/src/core/tftLogger/tftLogger.cpp
-index 85b9dbe9..43b40406 100644
+index 85b9dbe..43b4040 100644
 --- a/src/core/tftLogger/tftLogger.cpp
 +++ b/src/core/tftLogger/tftLogger.cpp
 @@ -2,6 +2,10 @@
@@ -13866,7 +13943,7 @@ index 85b9dbe9..43b40406 100644
      uint8_t pos = 0;
      logWriteHeader(buffer, pos, PRINT);
 diff --git a/src/core/theme.cpp b/src/core/theme.cpp
-index c32e8644..0ba5698f 100644
+index c32e864..0ba5698 100644
 --- a/src/core/theme.cpp
 +++ b/src/core/theme.cpp
 @@ -140,6 +140,12 @@ bool BruceTheme::validateImgFile(FS *fs, String filepath) {
@@ -13883,7 +13960,7 @@ index c32e8644..0ba5698f 100644
      bgColor = background == nullptr ? 0x0 : *background;
  }
 diff --git a/src/core/theme.h b/src/core/theme.h
-index 1e7c94ef..8c58e95f 100644
+index 1e7c94e..8c58e95 100644
 --- a/src/core/theme.h
 +++ b/src/core/theme.h
 @@ -3,8 +3,12 @@
@@ -13913,7 +13990,7 @@ index 1e7c94ef..8c58e95f 100644
      // UI Color
 diff --git a/src/core/ui_sound_wav.h b/src/core/ui_sound_wav.h
 new file mode 100644
-index 00000000..7aa98f0f
+index 0000000..7aa98f0
 --- /dev/null
 +++ b/src/core/ui_sound_wav.h
 @@ -0,0 +1,21 @@
@@ -13939,7 +14016,7 @@ index 00000000..7aa98f0f
 +    return true;
 +}
 diff --git a/src/core/utils.cpp b/src/core/utils.cpp
-index aacdf98b..e66d0771 100644
+index aacdf98..e66d077 100644
 --- a/src/core/utils.cpp
 +++ b/src/core/utils.cpp
 @@ -1,8 +1,17 @@
@@ -14056,7 +14133,7 @@ index aacdf98b..e66d0771 100644
 +    esp_restart();
 +}
 diff --git a/src/core/utils.h b/src/core/utils.h
-index 043a5d2d..1f05180b 100644
+index 043a5d2..1f05180 100644
 --- a/src/core/utils.h
 +++ b/src/core/utils.h
 @@ -5,6 +5,12 @@
@@ -14080,7 +14157,7 @@ index 043a5d2d..1f05180b 100644
  #endif
 diff --git a/src/core/virtual_msc.cpp b/src/core/virtual_msc.cpp
 new file mode 100644
-index 00000000..713fb990
+index 0000000..713fb99
 --- /dev/null
 +++ b/src/core/virtual_msc.cpp
 @@ -0,0 +1,1035 @@
@@ -15121,7 +15198,7 @@ index 00000000..713fb990
 +#endif
 diff --git a/src/core/virtual_msc.h b/src/core/virtual_msc.h
 new file mode 100644
-index 00000000..a28c8b56
+index 0000000..a28c8b5
 --- /dev/null
 +++ b/src/core/virtual_msc.h
 @@ -0,0 +1,20 @@
@@ -15146,7 +15223,7 @@ index 00000000..a28c8b56
 +
 +#endif
 diff --git a/src/core/wifi/webInterface.cpp b/src/core/wifi/webInterface.cpp
-index a8679bd6..d55b43c0 100644
+index a8679bd..d55b43c 100644
 --- a/src/core/wifi/webInterface.cpp
 +++ b/src/core/wifi/webInterface.cpp
 @@ -1,19 +1,46 @@
@@ -18030,7 +18107,7 @@ index a8679bd6..d55b43c0 100644
      }
  }
 diff --git a/src/core/wifi/webInterface.h b/src/core/wifi/webInterface.h
-index d14ae9f0..775ed9f3 100644
+index d14ae9f..775ed9f 100644
 --- a/src/core/wifi/webInterface.h
 +++ b/src/core/wifi/webInterface.h
 @@ -23,5 +23,18 @@ void serveWebUIFile(
@@ -18054,7 +18131,7 @@ index d14ae9f0..775ed9f3 100644
  void cleanlyStopWebUiForWiFiFeature();
 diff --git a/src/core/wifi/web_navigation.h b/src/core/wifi/web_navigation.h
 new file mode 100644
-index 00000000..e5e30ea6
+index 0000000..e5e30ea
 --- /dev/null
 +++ b/src/core/wifi/web_navigation.h
 @@ -0,0 +1,37 @@
@@ -18096,7 +18173,7 @@ index 00000000..e5e30ea6
 +    return true;
 +}
 diff --git a/src/core/wifi/wifi_common.cpp b/src/core/wifi/wifi_common.cpp
-index 0e32e4dd..9040921c 100644
+index 0e32e4d..9040921 100644
 --- a/src/core/wifi/wifi_common.cpp
 +++ b/src/core/wifi/wifi_common.cpp
 @@ -1,11 +1,13 @@
@@ -18239,7 +18316,7 @@ index 0e32e4dd..9040921c 100644
          // Start timezone update in background if not already running
          if (timezoneTaskHandle == NULL) {
 diff --git a/src/core/wifi/wifi_common.h b/src/core/wifi/wifi_common.h
-index 8d97a20f..e0d84536 100644
+index 8d97a20..e0d8453 100644
 --- a/src/core/wifi/wifi_common.h
 +++ b/src/core/wifi/wifi_common.h
 @@ -11,6 +11,8 @@
@@ -18252,7 +18329,7 @@ index 8d97a20f..e0d84536 100644
  /**
   * @brief Opens a menu to connect to a wifi
 diff --git a/src/main.cpp b/src/main.cpp
-index eebc4a91..67838d59 100644
+index eebc4a9..67838d5 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
 @@ -1,3 +1,4 @@
@@ -18742,7 +18819,7 @@ index eebc4a91..67838d59 100644
      wakeUpScreen();
      if (bruceConfig.startupApp != "" && !startupApp.startApp(bruceConfig.startupApp)) {
 diff --git a/src/modules/badusb_ble/ducky_typer.cpp b/src/modules/badusb_ble/ducky_typer.cpp
-index c6fd084b..b6f39cfe 100644
+index c6fd084..b6f39cf 100644
 --- a/src/modules/badusb_ble/ducky_typer.cpp
 +++ b/src/modules/badusb_ble/ducky_typer.cpp
 @@ -6,6 +6,7 @@
@@ -18807,7 +18884,7 @@ index c6fd084b..b6f39cfe 100644
                      printStatusBadUSBBLE("Waiting for button press");
                      bool waitSelect = false;
 diff --git a/src/modules/badusb_ble/ducky_typer.h b/src/modules/badusb_ble/ducky_typer.h
-index bb5aeb4f..3b18bbdb 100644
+index bb5aeb4..3b18bbd 100644
 --- a/src/modules/badusb_ble/ducky_typer.h
 +++ b/src/modules/badusb_ble/ducky_typer.h
 @@ -16,6 +16,7 @@
@@ -18820,7 +18897,7 @@ index bb5aeb4f..3b18bbdb 100644
  struct DuckyCommandLookup;
 diff --git a/src/modules/badusb_ble/smart_badusb.cpp b/src/modules/badusb_ble/smart_badusb.cpp
 new file mode 100644
-index 00000000..b5be732d
+index 0000000..b5be732
 --- /dev/null
 +++ b/src/modules/badusb_ble/smart_badusb.cpp
 @@ -0,0 +1,783 @@
@@ -19609,7 +19686,7 @@ index 00000000..b5be732d
 +#endif
 diff --git a/src/modules/badusb_ble/smart_badusb.h b/src/modules/badusb_ble/smart_badusb.h
 new file mode 100644
-index 00000000..8df9cc85
+index 0000000..8df9cc8
 --- /dev/null
 +++ b/src/modules/badusb_ble/smart_badusb.h
 @@ -0,0 +1,40 @@
@@ -19654,7 +19731,7 @@ index 00000000..8df9cc85
 +
 +#endif
 diff --git a/src/modules/bjs_interpreter/display_js.cpp b/src/modules/bjs_interpreter/display_js.cpp
-index 11423ba3..5638ab00 100644
+index 11423ba..5638ab0 100644
 --- a/src/modules/bjs_interpreter/display_js.cpp
 +++ b/src/modules/bjs_interpreter/display_js.cpp
 @@ -37,13 +37,13 @@ void native_sprite_finalizer(JSContext *ctx, void *opaque) {
@@ -19732,7 +19809,7 @@ index 11423ba3..5638ab00 100644
      return JS_UNDEFINED;
  }
 diff --git a/src/modules/bjs_interpreter/ir_js.cpp b/src/modules/bjs_interpreter/ir_js.cpp
-index e23370d7..fb1d66e0 100644
+index e23370d..fb1d66e 100644
 --- a/src/modules/bjs_interpreter/ir_js.cpp
 +++ b/src/modules/bjs_interpreter/ir_js.cpp
 @@ -1,11 +1,24 @@
@@ -19770,7 +19847,7 @@ index e23370d7..fb1d66e0 100644
  
  #endif
 diff --git a/src/modules/bjs_interpreter/nrf24_js.cpp b/src/modules/bjs_interpreter/nrf24_js.cpp
-index a3015ffe..c23e9d77 100644
+index a3015ff..c23e9d7 100644
 --- a/src/modules/bjs_interpreter/nrf24_js.cpp
 +++ b/src/modules/bjs_interpreter/nrf24_js.cpp
 @@ -1,6 +1,24 @@
@@ -19806,7 +19883,7 @@ index a3015ffe..c23e9d77 100644
  
  #endif
 diff --git a/src/modules/bjs_interpreter/protopirate_js.cpp b/src/modules/bjs_interpreter/protopirate_js.cpp
-index 09920d59..6f964a12 100644
+index 09920d5..6f964a1 100644
 --- a/src/modules/bjs_interpreter/protopirate_js.cpp
 +++ b/src/modules/bjs_interpreter/protopirate_js.cpp
 @@ -1,6 +1,20 @@
@@ -19837,7 +19914,7 @@ index 09920d59..6f964a12 100644
  #endif
 +#endif
 diff --git a/src/modules/bjs_interpreter/rfid_js.cpp b/src/modules/bjs_interpreter/rfid_js.cpp
-index 6c585422..54ffa9b0 100644
+index 6c58542..54ffa9b 100644
 --- a/src/modules/bjs_interpreter/rfid_js.cpp
 +++ b/src/modules/bjs_interpreter/rfid_js.cpp
 @@ -7,6 +7,28 @@
@@ -19877,7 +19954,7 @@ index 6c585422..54ffa9b0 100644
  
  #endif
 diff --git a/src/modules/bjs_interpreter/subghz_js.cpp b/src/modules/bjs_interpreter/subghz_js.cpp
-index ffd58b47..0e2ad2bd 100644
+index ffd58b4..0e2ad2b 100644
 --- a/src/modules/bjs_interpreter/subghz_js.cpp
 +++ b/src/modules/bjs_interpreter/subghz_js.cpp
 @@ -1,11 +1,20 @@
@@ -19911,7 +19988,7 @@ index ffd58b47..0e2ad2bd 100644
  
  #endif
 diff --git a/src/modules/ble/BLE_Suite.cpp b/src/modules/ble/BLE_Suite.cpp
-index 27c887d0..7e069c9a 100644
+index 27c887d..7e069c9 100644
 --- a/src/modules/ble/BLE_Suite.cpp
 +++ b/src/modules/ble/BLE_Suite.cpp
 @@ -20,7 +20,9 @@
@@ -20003,7 +20080,7 @@ index 27c887d0..7e069c9a 100644
  void showPayloadSubMenu(NimBLEAddress target, SelectedDevice deviceInfo) {
 diff --git a/src/modules/ble/ble_audit_logic.h b/src/modules/ble/ble_audit_logic.h
 new file mode 100644
-index 00000000..ce6f7d28
+index 0000000..ce6f7d2
 --- /dev/null
 +++ b/src/modules/ble/ble_audit_logic.h
 @@ -0,0 +1,23 @@
@@ -20031,7 +20108,7 @@ index 00000000..ce6f7d28
 +    return selection == 2 && enabled;
 +}
 diff --git a/src/modules/ble/ble_common.cpp b/src/modules/ble/ble_common.cpp
-index 5494bfba..7d16fab8 100644
+index 5494bfb..7d16fab 100644
 --- a/src/modules/ble/ble_common.cpp
 +++ b/src/modules/ble/ble_common.cpp
 @@ -1,4 +1,5 @@
@@ -20111,7 +20188,7 @@ index 5494bfba..7d16fab8 100644
  }
 diff --git a/src/modules/ble/ble_gatt_cloner.cpp b/src/modules/ble/ble_gatt_cloner.cpp
 new file mode 100644
-index 00000000..594ca01a
+index 0000000..594ca01
 --- /dev/null
 +++ b/src/modules/ble/ble_gatt_cloner.cpp
 @@ -0,0 +1,1101 @@
@@ -21218,7 +21295,7 @@ index 00000000..594ca01a
 +#endif
 diff --git a/src/modules/ble/ble_gatt_cloner.h b/src/modules/ble/ble_gatt_cloner.h
 new file mode 100644
-index 00000000..a0ad8d2e
+index 0000000..a0ad8d2
 --- /dev/null
 +++ b/src/modules/ble/ble_gatt_cloner.h
 @@ -0,0 +1,12 @@
@@ -21236,7 +21313,7 @@ index 00000000..a0ad8d2e
 +#endif
 diff --git a/src/modules/ble/ble_gatt_types.h b/src/modules/ble/ble_gatt_types.h
 new file mode 100644
-index 00000000..0f4c3c93
+index 0000000..0f4c3c9
 --- /dev/null
 +++ b/src/modules/ble/ble_gatt_types.h
 @@ -0,0 +1,44 @@
@@ -21286,7 +21363,7 @@ index 00000000..0f4c3c93
 +#endif
 diff --git a/src/modules/ble/ble_guard_logic.h b/src/modules/ble/ble_guard_logic.h
 new file mode 100644
-index 00000000..0cd28104
+index 0000000..0cd2810
 --- /dev/null
 +++ b/src/modules/ble/ble_guard_logic.h
 @@ -0,0 +1,34 @@
@@ -21326,7 +21403,7 @@ index 00000000..0cd28104
 +inline uint16_t bleGuardIncrement(uint16_t hits) { return hits == UINT16_MAX ? hits : hits + 1; }
 diff --git a/src/modules/ble/ble_security_audit.cpp b/src/modules/ble/ble_security_audit.cpp
 new file mode 100644
-index 00000000..15fa7aad
+index 0000000..15fa7aa
 --- /dev/null
 +++ b/src/modules/ble/ble_security_audit.cpp
 @@ -0,0 +1,785 @@
@@ -22117,7 +22194,7 @@ index 00000000..15fa7aad
 +#endif
 diff --git a/src/modules/ble/ble_security_audit.h b/src/modules/ble/ble_security_audit.h
 new file mode 100644
-index 00000000..bafd4e40
+index 0000000..bafd4e4
 --- /dev/null
 +++ b/src/modules/ble/ble_security_audit.h
 @@ -0,0 +1,29 @@
@@ -22152,7 +22229,7 @@ index 00000000..bafd4e40
 +#endif
 diff --git a/src/modules/ble/ble_tracker_guard.cpp b/src/modules/ble/ble_tracker_guard.cpp
 new file mode 100644
-index 00000000..afbf7171
+index 0000000..afbf717
 --- /dev/null
 +++ b/src/modules/ble/ble_tracker_guard.cpp
 @@ -0,0 +1,324 @@
@@ -22482,7 +22559,7 @@ index 00000000..afbf7171
 +}
 diff --git a/src/modules/ble/ble_tracker_guard.h b/src/modules/ble/ble_tracker_guard.h
 new file mode 100644
-index 00000000..1464a9ef
+index 0000000..1464a9e
 --- /dev/null
 +++ b/src/modules/ble/ble_tracker_guard.h
 @@ -0,0 +1,6 @@
@@ -22493,7 +22570,7 @@ index 00000000..1464a9ef
 +
 +#endif
 diff --git a/src/modules/others/audio.cpp b/src/modules/others/audio.cpp
-index 89b670ea..3ca98cf5 100644
+index 89b670e..3ca98cf 100644
 --- a/src/modules/others/audio.cpp
 +++ b/src/modules/others/audio.cpp
 @@ -28,7 +28,12 @@ static const UBaseType_t AUDIO_TASK_PRIORITY = 1;
@@ -22524,7 +22601,7 @@ index 89b670ea..3ca98cf5 100644
      if (waveType == 0) {
          file->addAudioGenerators([volumeScale, hz, toneSec](const float time) {
 diff --git a/src/modules/others/mic.cpp b/src/modules/others/mic.cpp
-index 6409d539..291d78e8 100644
+index 6409d53..291d78e 100644
 --- a/src/modules/others/mic.cpp
 +++ b/src/modules/others/mic.cpp
 @@ -50,6 +50,9 @@ static void apply_gain_to_buffer(int16_t *buffer, size_t samples, float gain) {
@@ -22983,7 +23060,7 @@ index 6409d539..291d78e8 100644
  bool mic_record_wav_to_path(
      FS *fs, const String &path, uint32_t max_ms, uint32_t *out_bytes, float gain,
 diff --git a/src/modules/others/mic.h b/src/modules/others/mic.h
-index ca5806a0..18d2aa25 100644
+index ca5806a..18d2aa2 100644
 --- a/src/modules/others/mic.h
 +++ b/src/modules/others/mic.h
 @@ -53,6 +53,7 @@ struct MicConfig {
@@ -22996,7 +23073,7 @@ index ca5806a0..18d2aa25 100644
      std::function<bool(void)> onProgress = nullptr
 diff --git a/src/modules/others/sonar_guard.cpp b/src/modules/others/sonar_guard.cpp
 new file mode 100644
-index 00000000..9976780c
+index 0000000..9976780
 --- /dev/null
 +++ b/src/modules/others/sonar_guard.cpp
 @@ -0,0 +1,727 @@
@@ -23729,7 +23806,7 @@ index 00000000..9976780c
 +#endif
 diff --git a/src/modules/others/sonar_guard.h b/src/modules/others/sonar_guard.h
 new file mode 100644
-index 00000000..028022a3
+index 0000000..028022a
 --- /dev/null
 +++ b/src/modules/others/sonar_guard.h
 @@ -0,0 +1,6 @@
@@ -23741,7 +23818,7 @@ index 00000000..028022a3
 +#endif
 diff --git a/src/modules/others/sonar_signal.h b/src/modules/others/sonar_signal.h
 new file mode 100644
-index 00000000..21043031
+index 0000000..2104303
 --- /dev/null
 +++ b/src/modules/others/sonar_signal.h
 @@ -0,0 +1,46 @@
@@ -23792,7 +23869,7 @@ index 00000000..21043031
 +    }
 +};
 diff --git a/src/modules/others/tururururu.cpp b/src/modules/others/tururururu.cpp
-index 4d2ea723..6d3408a4 100644
+index 4d2ea72..6d3408a 100644
 --- a/src/modules/others/tururururu.cpp
 +++ b/src/modules/others/tururururu.cpp
 @@ -54,12 +54,14 @@ void initSprites() {
@@ -23812,7 +23889,7 @@ index 4d2ea723..6d3408a4 100644
  #define STEP (tftHeight) / 44
 diff --git a/src/modules/pwnagotchi/pet_layout.h b/src/modules/pwnagotchi/pet_layout.h
 new file mode 100644
-index 00000000..9df0a69a
+index 0000000..9df0a69
 --- /dev/null
 +++ b/src/modules/pwnagotchi/pet_layout.h
 @@ -0,0 +1,15 @@
@@ -23832,7 +23909,7 @@ index 00000000..9df0a69a
 +            footer - 20, availableW};
 +}
 diff --git a/src/modules/pwnagotchi/pwnagotchi.cpp b/src/modules/pwnagotchi/pwnagotchi.cpp
-index f0eaee5d..dbfc0ad2 100644
+index f0eaee5..dbfc0ad 100644
 --- a/src/modules/pwnagotchi/pwnagotchi.cpp
 +++ b/src/modules/pwnagotchi/pwnagotchi.cpp
 @@ -318,6 +318,12 @@ static void advertisePhase(BruceState &s) {
@@ -23872,7 +23949,7 @@ index f0eaee5d..dbfc0ad2 100644
              lastUiUpdate = millis();
          }
 diff --git a/src/modules/pwnagotchi/ui.cpp b/src/modules/pwnagotchi/ui.cpp
-index ca1f9def..82603dcc 100644
+index ca1f9de..82603dc 100644
 --- a/src/modules/pwnagotchi/ui.cpp
 +++ b/src/modules/pwnagotchi/ui.cpp
 @@ -9,6 +9,35 @@ Thanks to @bmorcelli for his help doing a better code.
@@ -24078,7 +24155,7 @@ index ca1f9def..82603dcc 100644
      tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
  #if defined(STACKCHAN)
 diff --git a/src/modules/pwnagotchi/ui.h b/src/modules/pwnagotchi/ui.h
-index 23e8e3c4..697864a2 100644
+index 23e8e3c..697864a 100644
 --- a/src/modules/pwnagotchi/ui.h
 +++ b/src/modules/pwnagotchi/ui.h
 @@ -12,6 +12,13 @@ Thanks to @bmorcelli for his help doing a better code.
@@ -24097,7 +24174,7 @@ index 23e8e3c4..697864a2 100644
  void drawTime();
 diff --git a/src/modules/wifi/chain_logic.h b/src/modules/wifi/chain_logic.h
 new file mode 100644
-index 00000000..819464cc
+index 0000000..819464c
 --- /dev/null
 +++ b/src/modules/wifi/chain_logic.h
 @@ -0,0 +1,554 @@
@@ -24657,7 +24734,7 @@ index 00000000..819464cc
 +}
 diff --git a/src/modules/wifi/chain_orchestrator.cpp b/src/modules/wifi/chain_orchestrator.cpp
 new file mode 100644
-index 00000000..7116b671
+index 0000000..7116b67
 --- /dev/null
 +++ b/src/modules/wifi/chain_orchestrator.cpp
 @@ -0,0 +1,846 @@
@@ -25509,7 +25586,7 @@ index 00000000..7116b671
 +#endif
 diff --git a/src/modules/wifi/chain_orchestrator.h b/src/modules/wifi/chain_orchestrator.h
 new file mode 100644
-index 00000000..cdfa3faa
+index 0000000..cdfa3fa
 --- /dev/null
 +++ b/src/modules/wifi/chain_orchestrator.h
 @@ -0,0 +1,35 @@
@@ -25549,7 +25626,7 @@ index 00000000..cdfa3faa
 +
 +#endif
 diff --git a/src/modules/wifi/channel_analyzer.cpp b/src/modules/wifi/channel_analyzer.cpp
-index 353b8641..006bee36 100644
+index 353b864..006bee3 100644
 --- a/src/modules/wifi/channel_analyzer.cpp
 +++ b/src/modules/wifi/channel_analyzer.cpp
 @@ -1,5 +1,6 @@
@@ -26170,7 +26247,7 @@ index 353b8641..006bee36 100644
  
  #endif
 diff --git a/src/modules/wifi/evil_portal.cpp b/src/modules/wifi/evil_portal.cpp
-index 59ed80ed..3458ca49 100644
+index 59ed80e..3458ca4 100644
 --- a/src/modules/wifi/evil_portal.cpp
 +++ b/src/modules/wifi/evil_portal.cpp
 @@ -8,6 +8,7 @@
@@ -26275,7 +26352,7 @@ index 59ed80ed..3458ca49 100644
  
  String EvilPortal::getHtmlTemplate(const String &body) {
 diff --git a/src/modules/wifi/evil_portal.h b/src/modules/wifi/evil_portal.h
-index 4a8b438e..47ba8ccd 100644
+index 4a8b438..47ba8cc 100644
 --- a/src/modules/wifi/evil_portal.h
 +++ b/src/modules/wifi/evil_portal.h
 @@ -31,9 +31,19 @@ public:
@@ -26314,7 +26391,7 @@ index 4a8b438e..47ba8ccd 100644
  
 diff --git a/src/modules/wifi/lan_auditor.cpp b/src/modules/wifi/lan_auditor.cpp
 new file mode 100644
-index 00000000..482d7034
+index 0000000..482d703
 --- /dev/null
 +++ b/src/modules/wifi/lan_auditor.cpp
 @@ -0,0 +1,776 @@
@@ -27096,7 +27173,7 @@ index 00000000..482d7034
 +#endif
 diff --git a/src/modules/wifi/lan_auditor.h b/src/modules/wifi/lan_auditor.h
 new file mode 100644
-index 00000000..6c351d84
+index 0000000..6c351d8
 --- /dev/null
 +++ b/src/modules/wifi/lan_auditor.h
 @@ -0,0 +1,18 @@
@@ -27120,7 +27197,7 @@ index 00000000..6c351d84
 +#endif
 diff --git a/src/modules/wifi/lan_guard.cpp b/src/modules/wifi/lan_guard.cpp
 new file mode 100644
-index 00000000..04ec986b
+index 0000000..04ec986
 --- /dev/null
 +++ b/src/modules/wifi/lan_guard.cpp
 @@ -0,0 +1,433 @@
@@ -27559,7 +27636,7 @@ index 00000000..04ec986b
 +#endif
 diff --git a/src/modules/wifi/lan_guard.h b/src/modules/wifi/lan_guard.h
 new file mode 100644
-index 00000000..38dfba00
+index 0000000..38dfba0
 --- /dev/null
 +++ b/src/modules/wifi/lan_guard.h
 @@ -0,0 +1,19 @@
@@ -27584,7 +27661,7 @@ index 00000000..38dfba00
 +#endif
 diff --git a/src/modules/wifi/lan_guard_logic.h b/src/modules/wifi/lan_guard_logic.h
 new file mode 100644
-index 00000000..662670e5
+index 0000000..662670e
 --- /dev/null
 +++ b/src/modules/wifi/lan_guard_logic.h
 @@ -0,0 +1,84 @@
@@ -27674,7 +27751,7 @@ index 00000000..662670e5
 +}
 diff --git a/src/modules/wifi/napt_http_inspector.cpp b/src/modules/wifi/napt_http_inspector.cpp
 new file mode 100644
-index 00000000..e21d023e
+index 0000000..e21d023
 --- /dev/null
 +++ b/src/modules/wifi/napt_http_inspector.cpp
 @@ -0,0 +1,585 @@
@@ -28265,7 +28342,7 @@ index 00000000..e21d023e
 +#endif
 diff --git a/src/modules/wifi/napt_http_inspector.h b/src/modules/wifi/napt_http_inspector.h
 new file mode 100644
-index 00000000..31ce051c
+index 0000000..31ce051
 --- /dev/null
 +++ b/src/modules/wifi/napt_http_inspector.h
 @@ -0,0 +1,20 @@
@@ -28291,7 +28368,7 @@ index 00000000..31ce051c
 +#endif
 diff --git a/src/modules/wifi/napt_router.cpp b/src/modules/wifi/napt_router.cpp
 new file mode 100644
-index 00000000..c24ad080
+index 0000000..c24ad08
 --- /dev/null
 +++ b/src/modules/wifi/napt_router.cpp
 @@ -0,0 +1,1013 @@
@@ -29310,7 +29387,7 @@ index 00000000..c24ad080
 +#endif
 diff --git a/src/modules/wifi/napt_router.h b/src/modules/wifi/napt_router.h
 new file mode 100644
-index 00000000..f47f2363
+index 0000000..f47f236
 --- /dev/null
 +++ b/src/modules/wifi/napt_router.h
 @@ -0,0 +1,21 @@
@@ -29337,7 +29414,7 @@ index 00000000..f47f2363
 +#endif
 diff --git a/src/modules/wifi/pmf_csa_test.cpp b/src/modules/wifi/pmf_csa_test.cpp
 new file mode 100644
-index 00000000..569e71f3
+index 0000000..569e71f
 --- /dev/null
 +++ b/src/modules/wifi/pmf_csa_test.cpp
 @@ -0,0 +1,549 @@
@@ -29892,7 +29969,7 @@ index 00000000..569e71f3
 +#endif
 diff --git a/src/modules/wifi/pmf_csa_test.h b/src/modules/wifi/pmf_csa_test.h
 new file mode 100644
-index 00000000..4a8c9ae8
+index 0000000..4a8c9ae
 --- /dev/null
 +++ b/src/modules/wifi/pmf_csa_test.h
 @@ -0,0 +1,20 @@
@@ -29918,7 +29995,7 @@ index 00000000..4a8c9ae8
 +#endif
 diff --git a/src/modules/wifi/pmkid_capture.cpp b/src/modules/wifi/pmkid_capture.cpp
 new file mode 100644
-index 00000000..9ddd5502
+index 0000000..9ddd550
 --- /dev/null
 +++ b/src/modules/wifi/pmkid_capture.cpp
 @@ -0,0 +1,769 @@
@@ -30693,7 +30770,7 @@ index 00000000..9ddd5502
 +#endif
 diff --git a/src/modules/wifi/pmkid_capture.h b/src/modules/wifi/pmkid_capture.h
 new file mode 100644
-index 00000000..021ceb4c
+index 0000000..021ceb4
 --- /dev/null
 +++ b/src/modules/wifi/pmkid_capture.h
 @@ -0,0 +1,19 @@
@@ -30718,7 +30795,7 @@ index 00000000..021ceb4c
 +#endif
 diff --git a/src/modules/wifi/portal_napt.cpp b/src/modules/wifi/portal_napt.cpp
 new file mode 100644
-index 00000000..9067c2a2
+index 0000000..9067c2a
 --- /dev/null
 +++ b/src/modules/wifi/portal_napt.cpp
 @@ -0,0 +1,410 @@
@@ -31134,7 +31211,7 @@ index 00000000..9067c2a2
 +#endif
 diff --git a/src/modules/wifi/portal_napt.h b/src/modules/wifi/portal_napt.h
 new file mode 100644
-index 00000000..06e746bc
+index 0000000..06e746b
 --- /dev/null
 +++ b/src/modules/wifi/portal_napt.h
 @@ -0,0 +1,30 @@
@@ -31170,7 +31247,7 @@ index 00000000..06e746bc
 +#endif
 diff --git a/src/modules/wifi/probe_radar.cpp b/src/modules/wifi/probe_radar.cpp
 new file mode 100644
-index 00000000..f6f0d502
+index 0000000..f6f0d50
 --- /dev/null
 +++ b/src/modules/wifi/probe_radar.cpp
 @@ -0,0 +1,732 @@
@@ -31908,7 +31985,7 @@ index 00000000..f6f0d502
 +#endif
 diff --git a/src/modules/wifi/probe_radar.h b/src/modules/wifi/probe_radar.h
 new file mode 100644
-index 00000000..0a6c76ab
+index 0000000..0a6c76a
 --- /dev/null
 +++ b/src/modules/wifi/probe_radar.h
 @@ -0,0 +1,6 @@
@@ -31920,7 +31997,7 @@ index 00000000..0a6c76ab
 +#endif
 diff --git a/src/modules/wifi/responder_plus.cpp b/src/modules/wifi/responder_plus.cpp
 new file mode 100644
-index 00000000..db9dba33
+index 0000000..db9dba3
 --- /dev/null
 +++ b/src/modules/wifi/responder_plus.cpp
 @@ -0,0 +1,467 @@
@@ -32393,7 +32470,7 @@ index 00000000..db9dba33
 +#endif
 diff --git a/src/modules/wifi/responder_plus.h b/src/modules/wifi/responder_plus.h
 new file mode 100644
-index 00000000..3264165b
+index 0000000..3264165
 --- /dev/null
 +++ b/src/modules/wifi/responder_plus.h
 @@ -0,0 +1,17 @@
@@ -32416,7 +32493,7 @@ index 00000000..3264165b
 +#endif
 diff --git a/src/modules/wifi/wids_csi_ftm.cpp b/src/modules/wifi/wids_csi_ftm.cpp
 new file mode 100644
-index 00000000..001fad76
+index 0000000..001fad7
 --- /dev/null
 +++ b/src/modules/wifi/wids_csi_ftm.cpp
 @@ -0,0 +1,936 @@
@@ -33358,7 +33435,7 @@ index 00000000..001fad76
 +#endif
 diff --git a/src/modules/wifi/wids_csi_ftm.h b/src/modules/wifi/wids_csi_ftm.h
 new file mode 100644
-index 00000000..8585d75f
+index 0000000..8585d75
 --- /dev/null
 +++ b/src/modules/wifi/wids_csi_ftm.h
 @@ -0,0 +1,10 @@
@@ -33373,7 +33450,7 @@ index 00000000..8585d75f
 +
 +#endif
 diff --git a/src/modules/wifi/wifi_atks.cpp b/src/modules/wifi/wifi_atks.cpp
-index 2e206e76..3ddb9da6 100644
+index 2e206e7..3ddb9da 100644
 --- a/src/modules/wifi/wifi_atks.cpp
 +++ b/src/modules/wifi/wifi_atks.cpp
 @@ -4,6 +4,8 @@
@@ -33406,7 +33483,7 @@ index 2e206e76..3ddb9da6 100644
      if (scanAtks) {
 diff --git a/src/modules/wifi/wifi_observation_logic.h b/src/modules/wifi/wifi_observation_logic.h
 new file mode 100644
-index 00000000..297064ff
+index 0000000..297064f
 --- /dev/null
 +++ b/src/modules/wifi/wifi_observation_logic.h
 @@ -0,0 +1,110 @@
@@ -33521,7 +33598,7 @@ index 00000000..297064ff
 +    return best;
 +}
 diff --git a/src/modules/wifi/wifite.cpp b/src/modules/wifi/wifite.cpp
-index 327074a1..8cf95db8 100644
+index 327074a..8cf95db 100644
 --- a/src/modules/wifi/wifite.cpp
 +++ b/src/modules/wifi/wifite.cpp
 @@ -129,9 +129,14 @@ class App {
