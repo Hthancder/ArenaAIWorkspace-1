@@ -116,6 +116,7 @@ jobs:
           ./tests/radio-observation/run.sh /tmp/Bruce
           ./tests/device-ux/run.sh /tmp/Bruce
           ./tests/sonar/run.sh /tmp/Bruce
+          ./tests/wifi-menu/run.sh /tmp/Bruce
           ./tests/audio-board/run.sh /tmp/Bruce
           ./tests/webui-control/run.sh /tmp/Bruce
           ./tests/ota-stability/run.sh /tmp/Bruce
