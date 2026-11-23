@@ -62,7 +62,6 @@ canonical = {
     "napt_http_inspector_setup": "lanMenu",
     "responder_plus_setup": "lanMenu",
     "lan_auditor_setup": "lanMenu",
-    "displayAPInfo": "connectionMenu",
     "wifiMACMenu": "connectionMenu",
     "wg_setup": "remoteMenu",
     "listenTcpPort": "remoteMenu",
@@ -73,6 +72,17 @@ canonical = {
 for token, owner in canonical.items():
     occurrences = [name for name, text in bodies.items() if token in text]
     assert occurrences == [owner], f"{token} should live only in {owner}, found {occurrences}"
+
+# Network info has one entry and handles STA and AP-only modes.
+assert code.count("displayAPInfo") == 1, "displayAPInfo must be referenced once, from showWifiInfo"
+assert "showWifiInfo" in bodies["connectionMenu"] and "softAPIP" in code
+assert "Network info" in bodies["connectionMenu"]
+
+# Renamed entries keep their on-device feature guide (exact or prefix match).
+guide = (src / "src/core/feature_guide.cpp").read_text()
+for label in ["Packet Sniffer", "2.4 GHz Analyzer", "WIDS / Deauth Guard", "ARP Scan Hosts"]:
+    assert f'"{label}"' in guide, f"feature guide lost {label}"
+    assert label in code, f"{label} is not in the WiFi menu"
 
 # menu lambdas that used to reopen the parent menu nested a loop per visit
 assert '"Back", [this]' not in code, "Back must be a no-op lambda; loopOptions already returns"

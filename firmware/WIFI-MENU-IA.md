@@ -57,6 +57,12 @@ các mục đã về đúng nhóm.
   đây chỉ một chiều được kiểm tra.
 - Nhãn được tính lại mỗi lần mở menu, nên trạng thái `[ON]`, WiFi connected/AP mode và
   WebUI starting không còn bị cũ.
+- Menu WiFi giữ nguyên cấp đang mở sau khi thoát một nhóm; trước đây chọn một mục là rơi
+  thẳng về Main Menu. Esc ở cấp WiFi đóng menu, Esc trong nhóm con quay về cấp WiFi.
+- `Network info` dùng chung cho STA và AP-only; trước đây chế độ chỉ có AP không xem được
+  SSID/IP của AP.
+- Nhãn mới được cập nhật trong Feature Guide (`Packet Sniffer`, `2.4 GHz Analyzer`,
+  `WIDS / Deauth Guard`, `ARP Scan Hosts`) để giữ nguyên nội dung hướng dẫn.
 
 ## Kiểm thử
 

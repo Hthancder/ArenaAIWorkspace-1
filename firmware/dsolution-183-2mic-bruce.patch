@@ -9270,7 +9270,7 @@ index 00000000..c56d7aef
 +#endif
 diff --git a/src/core/feature_guide.cpp b/src/core/feature_guide.cpp
 new file mode 100644
-index 00000000..44314dbf
+index 00000000..4db9e473
 --- /dev/null
 +++ b/src/core/feature_guide.cpp
 @@ -0,0 +1,1105 @@
@@ -9512,7 +9512,7 @@ index 00000000..44314dbf
 +        "- For authorized security awareness testing and demos only."
 +    },
 +    {
-+        "Sniffer",
++        "Packet Sniffer",
 +        "WIFI",
 +        "Packet Sniffer",
 +        "Monitor 802.11 frames & handshakes",
@@ -9527,7 +9527,7 @@ index 00000000..44314dbf
 +        "- Stops background WebUI automatically while monitoring."
 +    },
 +    {
-+        "Channel Analyzer",
++        "2.4 GHz Analyzer",
 +        "WIFI",
 +        "2.4G Estimated Load & Hidden SSID",
 +        "CH1-13 spectrum, advisor & decloak",
@@ -9581,7 +9581,7 @@ index 00000000..44314dbf
 +        "- Vol-/+ scrolls devices, Boot toggles Watch Alert or PNL view; Hold Boot exits."
 +    },
 +    {
-+        "WIDS Guard",
++        "WIDS / Deauth Guard",
 +        "WIFI",
 +        "Wi-Fi Observation Guard",
 +        "Deauth, beacon and BSSID observations",
@@ -9665,7 +9665,7 @@ index 00000000..44314dbf
 +        "2. Plug into PC -> press Boot to fire the DuckyScript payload -> Vol+ saves drive files to /usb_vault."
 +    },
 +    {
-+        "Scan Hosts",
++        "ARP Scan Hosts",
 +        "WIFI",
 +        "LAN Host Scanner",
 +        "Discover IPs & open ports on LAN",
@@ -11215,7 +11215,7 @@ index 00000000..d4117a2c
 +};
 +#endif
 diff --git a/src/core/menu_items/WifiMenu.cpp b/src/core/menu_items/WifiMenu.cpp
-index 2e6512c1..41aeb94e 100644
+index 2e6512c1..2fb19429 100644
 --- a/src/core/menu_items/WifiMenu.cpp
 +++ b/src/core/menu_items/WifiMenu.cpp
 @@ -16,6 +16,8 @@
@@ -11227,7 +11227,7 @@ index 2e6512c1..41aeb94e 100644
  #include "modules/wifi/sniffer.h"
  #include "modules/wifi/wifi_atks.h"
  
-@@ -26,139 +28,237 @@
+@@ -26,139 +28,251 @@
  #include "modules/wifi/dual_band_analyzer.h"
  #endif
  #include "modules/wifi/jam_detect.h"
@@ -11290,6 +11290,15 @@ index 2e6512c1..41aeb94e 100644
 +    wifiDisconnect();
 +}
 +
++void showWifiInfo() {
++    if (WiFi.isConnected()) { displayAPInfo(); return; }
++    if (WiFi.AP.started()) {
++        displayInfo("AP " + WiFi.softAPSSID() + "  " + WiFi.softAPIP().toString(), true);
++        return;
++    }
++    displayInfo("WiFi is off", true);
++}
++
 +void startWifiAp() {
 +    if (!wifiConnectMenu(WIFI_AP)) { displayInfo("AP not started", true); return; }
 +    if (WiFi.AP.started()) displayInfo("pwd: " + bruceConfig.wifiAp.pwd, true);
@@ -11307,28 +11316,33 @@ index 2e6512c1..41aeb94e 100644
 +
  void WifiMenu::optionsMenu() {
      returnToMenu = false;
++    // loopOptions() returns after a selection, so rebuild this level instead of falling
++    // through to the main menu. That also refreshes [ON]/connected labels after a feature.
++    while (!returnToMenu) {
++        options.clear();
++        // Every feature stops the WebUI itself when it needs the radio, so this menu can
++        // stay usable while the WebUI is running.
++
++        String webUiLabel = isWebUiStarting() ? "WebUI [starting]"
++                            : (isWebUIActive ? "WebUI control [ON]" : "WebUI control");
++
++        options.push_back({connectionLabel(), [this]() { connectionMenu(); }});
++        options.push_back({webUiLabel, loopOptionsWebUi});
++        options.push_back({"WiFi Tools", [this]() { toolsMenu(); }});
++#ifndef LITE_VERSION
++        options.push_back({"Scan & Analyze", [this]() { scanMenu(); }});
++        options.push_back({"Defense", [this]() { defenseMenu(); }});
++        options.push_back({"LAN & HTTP", [this]() { lanMenu(); }});
++        options.push_back({"Remote Access", [this]() { remoteMenu(); }});
++#endif
++        addOptionToMainMenu();
++
++        int chosen = loopOptions(options, MENU_TYPE_SUBMENU, "WiFi");
++        if (chosen < 0) break; // Esc closes the WiFi menu
++    }
      options.clear();
 -    // Note: WiFi features will cleanly stop WebUI automatically when they start
 -    // User can navigate menu normally even with WebUI active
-+    // Every feature stops the WebUI itself when it needs the radio, so this menu can stay
-+    // usable while the WebUI is running.
-+
-+    String webUiLabel = isWebUiStarting() ? "WebUI [starting]"
-+                        : (isWebUIActive ? "WebUI control [ON]" : "WebUI control");
-+
-+    options.push_back({connectionLabel(), [this]() { connectionMenu(); }});
-+    options.push_back({webUiLabel, loopOptionsWebUi});
-+    options.push_back({"WiFi Tools", [this]() { toolsMenu(); }});
-+#ifndef LITE_VERSION
-+    options.push_back({"Scan & Analyze", [this]() { scanMenu(); }});
-+    options.push_back({"Defense", [this]() { defenseMenu(); }});
-+    options.push_back({"LAN & HTTP", [this]() { lanMenu(); }});
-+    options.push_back({"Remote Access", [this]() { remoteMenu(); }});
-+#endif
-+    addOptionToMainMenu();
-+
-+    loopOptions(options, MENU_TYPE_SUBMENU, "WiFi");
-+    options.clear();
 +}
 +
 +void WifiMenu::connectionMenu() {
@@ -11341,13 +11355,13 @@ index 2e6512c1..41aeb94e 100644
 -                 displayInfo("pwd: " + bruceConfig.wifiAp.pwd, true);
 -             }},
 -        };
--    }
--    if (WiFi.getMode() != WIFI_MODE_NULL) { options.push_back({"Turn Off WiFi", wifiDisconnect}); }
--    if (WiFi.getMode() & WIFI_MODE_STA && WiFi.isConnected()) {
--        options.push_back({"AP info", displayAPInfo});
 +        list.push_back({"Connect to WiFi", []() { wifiConnectMenu(WIFI_STA); }});
 +        list.push_back({"Start WiFi AP", startWifiAp});
      }
+-    if (WiFi.getMode() != WIFI_MODE_NULL) { options.push_back({"Turn Off WiFi", wifiDisconnect}); }
+-    if (WiFi.getMode() & WIFI_MODE_STA && WiFi.isConnected()) {
+-        options.push_back({"AP info", displayAPInfo});
+-    }
 -    options.push_back({"Wifi Atks", wifi_atk_menu});
 -    options.push_back({"Evil Portal", [=]() {
 -                           // WebUI cleanup now handled automatically inside EvilPortal constructor
@@ -11356,7 +11370,7 @@ index 2e6512c1..41aeb94e 100644
 -    options.push_back({"NetCut", [=]() { netcutMenu(); }});
 -    // options.push_back({"ReverseShell", [=]()       { ReverseShell(); }});
 +    if (WiFi.getMode() != WIFI_MODE_NULL) list.push_back({"Turn Off WiFi", turnOffWifi});
-+    if ((WiFi.getMode() & WIFI_MODE_STA) && WiFi.isConnected()) list.push_back({"AP info", displayAPInfo});
++    if (WiFi.getMode() != WIFI_MODE_NULL) list.push_back({"Network info", showWifiInfo});
 +    list.push_back({"Change MAC", wifiMACMenu});
 +    list.push_back(backOption());
 +    loopOptions(list, MENU_TYPE_SUBMENU, "WiFi Connection");
@@ -11383,8 +11397,7 @@ index 2e6512c1..41aeb94e 100644
 -    options.push_back({"Jam Detect", jam_detect_setup});
 -#if defined(CONFIG_IDF_TARGET_ESP32S3) && !defined(BRUCE_NO_SDR_JAMMER)
 -    options.push_back({"SDR", sdr_menu});
-+        list.push_back({"5 GHz Analyzer", dual_band_analyzer_setup});
- #endif
+-#endif
 -    options.push_back({"Scan Hosts", [=]() {
 -                           bool doScan = true;
 -                           if (!WiFi.isConnected()) doScan = wifiConnectMenu();
@@ -11404,7 +11417,8 @@ index 2e6512c1..41aeb94e 100644
 -    options.push_back({"Brucegotchi", brucegotchi_start});
 -#if defined(CONFIG_IDF_TARGET_ESP32S3)
 -    options.push_back({"WiFite", wifite_menu});
--#endif
++        list.push_back({"5 GHz Analyzer", dual_band_analyzer_setup});
+ #endif
 -    options.push_back({"WiFi Pass Recovery", wifi_recover_menu});
 -#endif
 -
@@ -11572,7 +11586,7 @@ index 2e6512c1..41aeb94e 100644
  }
  
  void WifiMenu::drawIcon(float scale) {
-@@ -168,23 +268,11 @@ void WifiMenu::drawIcon(float scale) {
+@@ -168,23 +282,11 @@ void WifiMenu::drawIcon(float scale) {
  
      tft.fillCircle(iconCenterX, iconCenterY + deltaY, radius, bruceConfig.priColor);
      tft.drawArc(
