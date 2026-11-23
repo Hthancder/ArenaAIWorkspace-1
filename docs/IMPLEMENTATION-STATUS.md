@@ -713,6 +713,30 @@ trước khi gửi và khôi phục trong đáp án — người dùng vẫn đ�
   bật). Ẩn nhầm một con số vô hại rẻ hơn nhiều so với lộ số điện thoại, nên mặc
   định bật là lựa chọn có chủ ý.
 
+### Vòng công cụ: hai lỗi thật trong SXToolkit
+
+- **Chữ ký bộ nhớ đệm phụ thuộc thứ tự khoá.** Bộ nhớ đệm trong lượt dùng
+  `NSJSONWritingSortedKeys`, nhưng thứ tự đó không được bảo đảm ổn định giữa các
+  lần gọi trên mọi bản Foundation. Hai lời gọi y hệt chỉ khác thứ tự khoá JSON có
+  thể sinh hai chữ ký khác nhau ⇒ model gọi lại cùng một công cụ và handler chạy
+  **hai lần**. Nay khoá được sắp đệ quy trước khi serialize; test dựng hai
+  dictionary cùng nội dung khác thứ tự chèn và khẳng định handler chạy một lần.
+- **Handler trên luồng chính không có trần thời gian.** Nhánh "đã ở luồng chính"
+  của `SXRunHandler` chạy handler trực tiếp mà **không** kiểm `tool.timeout`,
+  trong khi mọi nhánh khác đều có trần. Một handler treo (chờ mạng, chờ khoá) làm
+  đứng luồng chính — tức đứng Preferences/SpringBoard — vô hạn. Nay nó đo thời
+  gian chạy và trả 504 giống nhánh bất đồng bộ.
+- Lint mới: công cụ `requiresMainThread` phải có `timeout` ≤ 5 s (mỗi giây giữ
+  luồng UI là một giây giao diện đứng hình).
+
+### Cổng kiểm tra cục bộ mạnh hơn
+
+`scripts/local-check.sh` nay biên dịch thử **mọi** `tests/*.m` bằng SDK iOS trước
+khi cho push. Ba vòng CI trước đó đỏ chỉ vì lỗi gõ trong tệp test (dấu phẩy trong
+`assert(...)`, thiếu `__block`, sai selector) — những lỗi mà `local-check.sh` trên
+Linux không thấy vì chỉ chạy test C thuần. Đã kiểm chứng: cố tình làm hỏng tệp
+test thì cổng đỏ ngay tại máy, sửa lại thì xanh.
+
 ### Cần kiểm trên thiết bị (1.3.0)
 
 1. Cài đặt → SiriX → Ghi nhớ: xoá từng mục và xoá tất cả.

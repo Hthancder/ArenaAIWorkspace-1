@@ -125,7 +125,7 @@ cd /tmp/theos-check && git submodule update --init vendor/logos vendor/include
 git clone --depth 1 --filter=blob:none --sparse https://github.com/theos/sdks /tmp/sdks
 cd /tmp/sdks && git sparse-checkout set iPhoneOS15.6.sdk
 
-./scripts/local-check.sh         # Logos → compile toàn bộ (aarch64-ios, -Werror) → validate plist
+./scripts/local-check.sh         # Logos → compile toàn bộ (aarch64-ios, -Werror) → cú pháp tests/*.m → validate plist
 ./scripts/test-net-policy.sh     # luật chặn địa chỉ nội bộ của web_fetch (C thuần, không cần SDK)
 ./scripts/test-log-file.sh       # ghi đủ dòng khi write ngắn/EINTR + xoay vòng (C thuần)
 ./scripts/check-prefs.sh         # lint tầng Settings (plist, selector, cân bằng ngoặc)
