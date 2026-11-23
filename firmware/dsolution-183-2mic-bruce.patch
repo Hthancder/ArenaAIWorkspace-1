@@ -165,10 +165,10 @@ index 00000000..d021320f
 +#endif // DSOLUTION_NV3023_PANEL_H
 diff --git a/boards/dsolution-183-2mic/README.md b/boards/dsolution-183-2mic/README.md
 new file mode 100644
-index 00000000..a6aaafa7
+index 00000000..0a5308a2
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/README.md
-@@ -0,0 +1,263 @@
+@@ -0,0 +1,262 @@
 +# DSolution 1.83" 2-Mic
 +
 +Bruce port for the **DSolution 1.83 inch 2-Mic** board (ESP32-S3 + NV3023 panel +
@@ -420,10 +420,9 @@ index 00000000..a6aaafa7
 +  Favorites, recent item and the menu-tone setting are stored in the `dsquick` NVS namespace.
 +* **Config → Audio Config** controls system sound, volume, menu tones (off = alerts only), and
 +  **Test speaker**. The test reports whether samples were sent, not whether a sound was heard.
-+* Dashboard → **Find device** sends at most three short tones and uses the normal LED-blink
-+  preference. It runs only when the device menu loop is active, expires after 15 seconds,
-+  respects sound mute/volume and refuses to take the audio bus when busy. LED blinks can still run
-+  when muted if enabled. Stop cancels future tones.
++* Dashboard → **Find device** repeats the chosen sound until stopped, while the WebUI screen
++  or a menu services it; it pauses in some apps and during OTA. It respects sound mute/volume
++  and the LED-blink preference. Stop cancels future clips; a current clip can take up to 1 s.
 +* The speaker path uses ES8311 I2C 0x18, I2S MCLK 5 / BCLK 15 / WS 16 / DOUT 6 and PA GPIO4.
 +  Short UI tones use 48 kHz / 256× MCLK. The serial log reports an ES8311 I2C NACK.
 +  A software test or successful I2S write **does not verify the speaker hardware**. Test at a
@@ -1480,10 +1479,10 @@ index 00000000..fcf16fef
 +spiffs,   data, spiffs,   0x810000, 0x7E0000,
 +coredump, data, coredump, 0xFF0000, 0x10000,
 diff --git a/embedded_resources/web_interface/index.css b/embedded_resources/web_interface/index.css
-index bda7b42a..6d8080e0 100644
+index bda7b42a..74ac0494 100644
 --- a/embedded_resources/web_interface/index.css
 +++ b/embedded_resources/web_interface/index.css
-@@ -1,584 +1,703 @@
+@@ -1,584 +1,712 @@
  :root {
 -  --color: #ff3ec8;
 -  --background: #242424;
@@ -2700,11 +2699,20 @@ index bda7b42a..6d8080e0 100644
 +@media (max-width: 600px) { .quick-grid .btn-action, .ux-settings .btn-action { min-height: 44px; } }
 +
 +:focus-visible { outline: 2px solid var(--color); outline-offset: 2px; }
++
++/* The device's grid/carousel choice also changes the browser's visual treatment.
++   The browser remains responsive rather than pretending to be a pixel mirror. */
++html[data-menu-style="1"] body { background: var(--background); }
++html[data-menu-style="1"] .container,
++html[data-menu-style="1"] .dash-card,
++html[data-menu-style="1"] .tele-pill { border-radius: 2px; box-shadow: none; }
++html[data-menu-style="1"] .header { border-bottom: 2px solid var(--color); }
++html[data-menu-style="1"] .tab-bar { letter-spacing: .08em; text-transform: uppercase; }
 diff --git a/embedded_resources/web_interface/index.html b/embedded_resources/web_interface/index.html
-index 5290300b..d8ce3c86 100644
+index 5290300b..2eca575d 100644
 --- a/embedded_resources/web_interface/index.html
 +++ b/embedded_resources/web_interface/index.html
-@@ -1,700 +1,937 @@
+@@ -1,700 +1,942 @@
  <!doctype html>
  <html lang="en">
 -  <head>
@@ -2806,7 +2814,7 @@ index 5290300b..d8ce3c86 100644
 +            <label for="ux-brightness">Brightness <output id="ux-brightness-label">--</output>%</label>
 +            <input id="ux-brightness" type="range" min="5" max="100" step="5" />
 +            <button type="button" class="btn-action" id="ux-save">Save sound &amp; display</button>
-+            <small>Find waits for a device menu (up to 15 seconds). Sound and LED settings are respected.</small>
++            <small>Find repeats until Stop while the WebUI screen or a device menu is servicing it. Playback pauses in some apps and during OTA. Sound and LED settings are respected.</small>
 +            <details class="ux-sound-upload">
 +              <summary>Upload a custom UI sound</summary>
 +              <p>Use a 48 kHz, 16-bit PCM WAV (mono or stereo). Longer clips are trimmed after confirmation. Existing event files are overwritten.</p>
@@ -3621,6 +3629,11 @@ index 5290300b..d8ce3c86 100644
 +                <input type="text" id="pers-appwd" maxlength="63" placeholder="brucenet" />
 +              </div>
 +            </div>
++            <div class="field">
++              <label for="pers-style">Main menu layout &amp; WebUI style</label>
++              <select id="pers-style"><option value="0">Carousel · rounded</option><option value="1">Grid · technical</option></select>
++              <small>Same setting as Config → Display &amp; UI → Menu Layout. Custom JSON theme images apply to the device only.</small>
++            </div>
 +            <div class="color-grid">
 +              <label class="color-box">
 +                <span>Primary</span>
@@ -3770,7 +3783,7 @@ index 5290300b..d8ce3c86 100644
 +            <div class="kv-item"><span>Carrier / Sens</span><b id="sl-sonar-cfg">--</b></div>
 +            <div class="kv-item"><span>Alert Action</span><b id="sl-sonar-act">--</b></div>
 +            <div class="kv-item"><span>Motion Peak</span><b id="sl-sonar-pk">0%</b></div>
-+            <div class="kv-item"><span>Direction</span><b id="sl-sonar-dir">--</b></div>
++            <div class="kv-item"><span>Signal status</span><b id="sl-sonar-dir">--</b></div>
 +          </div>
 +          <div class="sl-row sl-mt">
 +            <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/sonar_guard.log')">View Guard Log</button>
@@ -4268,7 +4281,7 @@ index 5290300b..d8ce3c86 100644
 +</body>
  </html>
 diff --git a/embedded_resources/web_interface/index.js b/embedded_resources/web_interface/index.js
-index fd616029..9df58c7f 100644
+index fd616029..e06effff 100644
 --- a/embedded_resources/web_interface/index.js
 +++ b/embedded_resources/web_interface/index.js
 @@ -6,20 +6,17 @@ const T = {
@@ -4751,7 +4764,7 @@ index fd616029..9df58c7f 100644
  }
  
  function renderFileRow(fileList) {
-@@ -346,251 +332,497 @@ function renderFileRow(fileList) {
+@@ -346,251 +332,499 @@ function renderFileRow(fileList) {
      .sort((a, b) => {
        let [aFirst, ...aRest] = a.split(":");
        let [bFirst, ...bRest] = b.split(":");
@@ -4890,8 +4903,9 @@ index fd616029..9df58c7f 100644
 -  // Update URL state (preserving edit file if still valid)
 -  const urlParams = getURLParams();
 -  updateURL(drive, path, urlParams.editFile);
-+function applyThemeCss(pri, sec, bg) {
++function applyThemeCss(pri, sec, bg, style) {
 +  const root = document.documentElement.style;
++  if (style !== undefined) document.documentElement.dataset.menuStyle = String(style);
 +  if (pri) root.setProperty("--color", pri);
 +  if (sec) root.setProperty("--sec-color", sec);
 +  if (bg) root.setProperty("--background", bg);
@@ -4924,6 +4938,7 @@ index fd616029..9df58c7f 100644
 +  try {
 +    let info = JSON.parse(await requestGet("/systeminfo"));
 +    lastSysInfo = info;
++    applyThemeCss(info.PRI_COLOR, info.SEC_COLOR, info.BG_COLOR, info.MENU_STYLE);
 +    $(".bruce-version").textContent = info.BRUCE_VERSION || "dev";
 +    if ($("#owner-badge")) $("#owner-badge").textContent = info.OWNER || "DSolution";
 +    if ($("#tele-board")) $("#tele-board").textContent = `${info.BOARD || "Bruce"} • ${info.MDNS || "bruce"}.local`;
@@ -5385,7 +5400,7 @@ index fd616029..9df58c7f 100644
      });
    };
  
-@@ -599,7 +831,6 @@ async function renderTFT(data) {
+@@ -599,7 +833,6 @@ async function renderTFT(data) {
      let img = await loadImage(img_url);
      let drawX = input.x;
      let drawY = input.y;
@@ -5393,7 +5408,7 @@ index fd616029..9df58c7f 100644
      if (input.center === 1) {
        drawX += (canvas.width - img.width) / 2;
        drawY += (canvas.height - img.height) / 2;
-@@ -607,12 +838,7 @@ async function renderTFT(data) {
+@@ -607,12 +840,7 @@ async function renderTFT(data) {
      ctx.drawImage(img, drawX, drawY);
    };
  
@@ -5407,7 +5422,7 @@ index fd616029..9df58c7f 100644
  
    const drawRoundRect = (ctx, input, fill) => {
      const { x, y, w, h, r } = input;
-@@ -629,60 +855,45 @@ async function renderTFT(data) {
+@@ -629,60 +857,45 @@ async function renderTFT(data) {
  
    let startData = 0;
    const getByteValue = (dataType) => {
@@ -5491,7 +5506,7 @@ index fd616029..9df58c7f 100644
        }
      }
      return r;
-@@ -690,279 +901,563 @@ async function renderTFT(data) {
+@@ -690,279 +903,570 @@ async function renderTFT(data) {
  
    let offset = 0;
    ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -5828,6 +5843,8 @@ index fd616029..9df58c7f 100644
 +    $("#pers-sec").value = p.secColor || "#50aebd";
 +    $("#pers-bg").value = p.bgColor || "#070d12";
 +    $("#pers-bright").value = p.bright || 80;
++    $("#pers-style").value = String(p.menuStyle ?? 0);
++    applyThemeCss(p.priColor, p.secColor, p.bgColor, p.menuStyle);
 +    updateBootPreview();
 +  } catch (err) {
 +    console.error("Personalize load failed:", err);
@@ -5872,8 +5889,13 @@ index fd616029..9df58c7f 100644
 +      secColor: $("#pers-sec").value,
 +      bgColor: $("#pers-bg").value,
 +      bright: $("#pers-bright").value,
++      menuStyle: $("#pers-style").value,
 +    }));
-+    applyThemeCss(res.priColor, res.secColor, res.bgColor);
++    applyThemeCss(res.priColor, res.secColor, res.bgColor, res.menuStyle);
++    $("#pers-pri").value = res.priColor;
++    $("#pers-sec").value = res.secColor;
++    $("#pers-bg").value = res.bgColor;
++    updateBootPreview();
 +    st.className = "ota-status ok";
 +    st.textContent = res.msg || "Saved!";
 +    fetchSystemInfo(true);
@@ -6229,7 +6251,7 @@ index fd616029..9df58c7f 100644
      fetchFiles(drive, path);
      return;
    }
-@@ -970,37 +1465,8 @@ $(".container").addEventListener("click", async (e) => {
+@@ -970,37 +1474,8 @@ $(".container").addEventListener("click", async (e) => {
    let editFileAction = e.target.closest(".act-edit-file");
    if (editFileAction) {
      e.preventDefault();
@@ -6268,7 +6290,7 @@ index fd616029..9df58c7f 100644
      return;
    }
  
-@@ -1009,24 +1475,17 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1009,24 +1484,17 @@ $(".container").addEventListener("click", async (e) => {
      e.preventDefault();
      let action = oActionOInput.getAttribute("data-action");
      if (!action) return;
@@ -6298,7 +6320,7 @@ index fd616029..9df58c7f 100644
      Dialog.showOneInput(action, value, data);
      return;
    }
-@@ -1034,27 +1493,16 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1034,27 +1502,16 @@ $(".container").addEventListener("click", async (e) => {
    let actDeleteFile = e.target.closest(".act-delete");
    if (actDeleteFile) {
      e.preventDefault();
@@ -6335,7 +6357,7 @@ index fd616029..9df58c7f 100644
      return;
    }
  
-@@ -1062,662 +1510,894 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1062,662 +1519,898 @@ $(".container").addEventListener("click", async (e) => {
    if (actPlay) {
      e.preventDefault();
      let cmd = actPlay.getAttribute("data-cmd");
@@ -7101,7 +7123,7 @@ index fd616029..9df58c7f 100644
 +    if ($("#sl-sonar-cfg")) $("#sl-sonar-cfg").textContent = sn.carrierHz ? `${sn.carrierHz} Hz / ${sn.sens || "-"}` : "Not run yet";
 +    if ($("#sl-sonar-act")) $("#sl-sonar-act").textContent = sn.action || "--";
 +    if ($("#sl-sonar-pk")) $("#sl-sonar-pk").textContent = `${sn.peak || 0}%`;
-+    if ($("#sl-sonar-dir")) $("#sl-sonar-dir").textContent = sn.lastDir || "--";
++    if ($("#sl-sonar-dir")) $("#sl-sonar-dir").textContent = sn.signal || "--";
 +    if ($("#sl-sonar-events")) {
 +      $("#sl-sonar-events").innerHTML = (sn.events || []).slice().reverse().map((ev) => {
 +        const right = ev.wav
@@ -7622,7 +7644,28 @@ index fd616029..9df58c7f 100644
 +}
  
 -  await fetchFiles(initialDrive, initialPath);
--
++$("#ux-wav-upload")?.addEventListener("click", async () => {
++  const status = $("#ux-wav-status"), button = $("#ux-wav-upload");
++  const file = $("#ux-wav-file").files[0], event = $("#ux-wav-event").value;
++  if (!file) { status.textContent = "Choose a WAV file first."; return; }
++  if (file.size > 2 * 1024 * 1024) { status.textContent = "File exceeds the 2 MB preparation limit."; return; }
++  if (_runningUpload || otaBusy) { status.textContent = "Wait for the current upload or OTA to finish."; return; }
++  button.disabled = true;
++  try {
++    const prepared = prepareUiSound(await file.arrayBuffer(), event);
++    const note = prepared.trimmed ? ` It will be trimmed to ${prepared.maxMs} ms.` : "";
++    if (!confirm(`Upload ${event}.wav to LittleFS? Any existing ${event}.wav will be overwritten.${note}`)) return;
++    if (_runningUpload || otaBusy) throw new Error("Another upload has started. Try again.");
++    _uploadFailures = 0;
++    $(".dialog.upload .dialog-body").innerHTML = "";
++    const normalized = new File([prepared.bytes], `${event}.wav`, {type:"audio/wav"});
++    appendFileToQueue([normalized], "LittleFS", "/ui-sounds");
++    status.textContent = "See upload status. Then enable WAV for this event on the device.";
++    uploadFile();
++  } catch (error) { status.textContent = `Cannot prepare sound: ${error.message}`; }
++  finally { button.disabled = false; }
++});
+ 
 -  // If there's an edit file parameter, open the file editor
 -  if (editFile) {
 -    setTimeout(async () => {
@@ -7650,38 +7693,6 @@ index fd616029..9df58c7f 100644
 -        } else {
 -          $(".act-run-edit-file").classList.remove("hidden");
 -        }
-+$("#ux-wav-upload")?.addEventListener("click", async () => {
-+  const status = $("#ux-wav-status"), button = $("#ux-wav-upload");
-+  const file = $("#ux-wav-file").files[0], event = $("#ux-wav-event").value;
-+  if (!file) { status.textContent = "Choose a WAV file first."; return; }
-+  if (file.size > 2 * 1024 * 1024) { status.textContent = "File exceeds the 2 MB preparation limit."; return; }
-+  if (_runningUpload || otaBusy) { status.textContent = "Wait for the current upload or OTA to finish."; return; }
-+  button.disabled = true;
-+  try {
-+    const prepared = prepareUiSound(await file.arrayBuffer(), event);
-+    const note = prepared.trimmed ? ` It will be trimmed to ${prepared.maxMs} ms.` : "";
-+    if (!confirm(`Upload ${event}.wav to LittleFS? Any existing ${event}.wav will be overwritten.${note}`)) return;
-+    if (_runningUpload || otaBusy) throw new Error("Another upload has started. Try again.");
-+    _uploadFailures = 0;
-+    $(".dialog.upload .dialog-body").innerHTML = "";
-+    const normalized = new File([prepared.bytes], `${event}.wav`, {type:"audio/wav"});
-+    appendFileToQueue([normalized], "LittleFS", "/ui-sounds");
-+    status.textContent = "See upload status. Then enable WAV for this event on the device.";
-+    uploadFile();
-+  } catch (error) { status.textContent = `Cannot prepare sound: ${error.message}`; }
-+  finally { button.disabled = false; }
-+});
- 
--        Dialog.loading.hide();
--        Dialog.show("editor");
--      } catch (error) {
--        console.error("Failed to open file for editing:", error);
--        // Remove edit parameter from URL if file loading fails
--        updateURL(currentDrive, currentPath, null);
--      }
--    }, 100); // Small delay to ensure the file list is loaded first
--  }
--})();
 +// Board controls: all mutations use a custom same-origin header; the endpoint
 +// still checks the authenticated WebUI session. Saving is explicit, not on drag.
 +async function uxPost(action, value) {
@@ -7752,7 +7763,7 @@ index fd616029..9df58c7f 100644
 +    finally { uxFindStartRequest = null; }
 +    if (generation !== uxGeneration) return;
 +    status.textContent = data.msg;
-+    for (let i = 0; i < 9 && generation === uxGeneration; i++) {
++    while (generation === uxGeneration) {
 +      await new Promise(resolve => setTimeout(resolve, 2000));
 +      if (generation === uxGeneration) await uxLoad(false, generation);
 +    }
@@ -7774,6 +7785,20 @@ index fd616029..9df58c7f 100644
 +  finally { stopButton.disabled = false; if (generation === uxGeneration) findButton.disabled = false; }
 +});
 +if ($("#ux-status")) uxLoad(true);
+ 
+-        Dialog.loading.hide();
+-        Dialog.show("editor");
+-      } catch (error) {
+-        console.error("Failed to open file for editing:", error);
+-        // Remove edit parameter from URL if file loading fails
+-        updateURL(currentDrive, currentPath, null);
+-      }
+-    }, 100); // Small delay to ensure the file list is loaded first
+-  }
+-})();
++// Keep the browser's applied palette/layout in sync with device-side changes.
++// Do not overwrite a potentially unsaved Personalize form.
++if (typeof setInterval === "function") setInterval(() => { if (!document.hidden && !otaBusy) fetchSystemInfo(true).catch(() => {}); }, 15000);
 diff --git a/embedded_resources/web_interface/login.html b/embedded_resources/web_interface/login.html
 index f3947c88..c165f33b 100644
 --- a/embedded_resources/web_interface/login.html
@@ -8940,10 +8965,10 @@ index 0345168b..7502c904 100644
  
 diff --git a/src/core/dsolution_ux.cpp b/src/core/dsolution_ux.cpp
 new file mode 100644
-index 00000000..c5e88f71
+index 00000000..b49f5b4a
 --- /dev/null
 +++ b/src/core/dsolution_ux.cpp
-@@ -0,0 +1,274 @@
+@@ -0,0 +1,269 @@
 +#include "dsolution_ux.h"
 +#if defined(DSOLUTION_183_2MIC)
 +#include "core/led_control.h"
@@ -8965,11 +8990,10 @@ index 00000000..c5e88f71
 +static volatile bool s_uiFeedback = true;
 +static portMUX_TYPE s_mux = portMUX_INITIALIZER_UNLOCKED;
 +static bool s_find = false;
-+static unsigned s_findPlayed = 0;
++static bool s_findPlayed = false;
 +static uint32_t s_findGeneration = 0;
-+static uint32_t s_findStart = 0, s_findLast = 0, s_findCooldown = 0;
++static uint32_t s_findLast = 0, s_findCooldown = 0;
 +static bool s_findAttempted = false;
-+static bool s_findAudioSent = false;
 +static const char *s_result = "idle";
 +static uint8_t s_soundModes[5] = {0, 0, 0, 0, 0};
 +static const char *const s_soundKeys[] = {"select", "back", "success", "warning", "find"};
@@ -9178,28 +9202,25 @@ index 00000000..c5e88f71
 +bool uxFindStart(const char **error) {
 +    uint32_t now = millis();
 +    portENTER_CRITICAL(&s_mux);
-+    if (s_find && (uint32_t)(now - s_findStart) > 15000) { s_find = false; s_result = "expired"; }
 +    if (s_find) { if (error) *error = "Find is already running"; portEXIT_CRITICAL(&s_mux); return false; }
 +    if (s_findAttempted && (uint32_t)(now - s_findCooldown) < 10000) {
 +        if (error) *error = "Please wait 10 seconds before trying again";
 +        portEXIT_CRITICAL(&s_mux); return false;
 +    }
 +    s_findAttempted = true; s_findCooldown = now; s_find = true; s_findPlayed = 0; ++s_findGeneration;
-+    s_findStart = now; s_findLast = 0; s_findAudioSent = false; s_result = "queued";
++    s_findLast = 0; s_result = "queued";
 +    portEXIT_CRITICAL(&s_mux);
 +    return true;
 +}
 +void uxFindStop() { portENTER_CRITICAL(&s_mux); s_find = false; ++s_findGeneration; s_result = "cancelled"; portEXIT_CRITICAL(&s_mux); }
 +String uxFindStatus() {
 +    portENTER_CRITICAL(&s_mux);
-+    if (s_find && (uint32_t)(millis() - s_findStart) > 15000) { s_find = false; s_result = "expired"; }
 +    const char *r = s_result; portEXIT_CRITICAL(&s_mux);
 +    return String(r);
 +}
 +void uxService() {
 +    uint32_t now = millis(); bool play = false; uint32_t generation = 0;
 +    portENTER_CRITICAL(&s_mux);
-+    if (s_find && (uint32_t)(now - s_findStart) > 15000) { s_find = false; s_result = "expired"; }
 +    if (s_find && (s_findPlayed == 0 || (uint32_t)(now - s_findLast) >= 700)) {
 +        s_findLast = now; play = true; generation = s_findGeneration;
 +    }
@@ -9210,10 +9231,9 @@ index 00000000..c5e88f71
 +    blinkLed(70);
 +    portENTER_CRITICAL(&s_mux);
 +    if (s_find && generation == s_findGeneration) {
-+        s_findAudioSent = s_findAudioSent || played;
-+        if (++s_findPlayed >= 3) {
-+            s_find = false; s_result = s_findAudioSent ? "finished" : "silent_or_busy";
-+        } else s_result = played ? "playing" : "playing_silent";
++        s_findPlayed = true;
++        s_findLast = millis(); // leave UI time between even long WAV clips
++        s_result = played ? "playing" : "playing_silent";
 +    }
 +    portEXIT_CRITICAL(&s_mux);
 +}
@@ -12905,6 +12925,25 @@ index eed52ee9..063a2f70 100644
  void setClock();
  
  void runClockLoop(bool showMenuHint = false);
+diff --git a/src/core/settingsColor.h b/src/core/settingsColor.h
+index 035a8164..bad7141a 100644
+--- a/src/core/settingsColor.h
++++ b/src/core/settingsColor.h
+@@ -57,6 +57,14 @@ struct ColorEntry {
+ };
+ 
+ static constexpr ColorEntry UI_COLORS[] = {
++#if defined(DSOLUTION_183_2MIC)
++    {"Cyber Cyan", 0x079F, 0x5577, 0x0062},
++    {"Matrix Green", 0x2F33, 0x4CEF, 0x0061},
++    {"Amber Ops", 0xFD84, 0xBC27, 0x0840},
++    {"Crimson Red", 0xFAAC, 0xB2CD, 0x1021},
++    {"Ultraviolet", 0xB3FF, 0x8B58, 0x0822},
++    {"Arctic Ice", 0xEFBF, 0x8D99, 0x0862},
++#endif
+     {"Default",       UI_COLOR_DEFAULT_PRI,       UI_COLOR_DEFAULT_SEC,       UI_COLOR_DEFAULT_BG      },
+     {"White",         UI_COLOR_WHITE_PRI,         UI_COLOR_WHITE_SEC,         UI_COLOR_WHITE_BG        },
+     {"Dark Gray",     UI_COLOR_DARK_GRAY_PRI,     UI_COLOR_DARK_GRAY_SEC,     UI_COLOR_DARK_GRAY_BG    },
 diff --git a/src/core/startup_app.cpp b/src/core/startup_app.cpp
 index 4663a0d5..7e647cc0 100644
 --- a/src/core/startup_app.cpp
@@ -14673,7 +14712,7 @@ index 00000000..a28c8b56
 +
 +#endif
 diff --git a/src/core/wifi/webInterface.cpp b/src/core/wifi/webInterface.cpp
-index a8679bd6..953bb09a 100644
+index a8679bd6..dfed7bf3 100644
 --- a/src/core/wifi/webInterface.cpp
 +++ b/src/core/wifi/webInterface.cpp
 @@ -1,19 +1,45 @@
@@ -15833,7 +15872,7 @@ index a8679bd6..953bb09a 100644
  
      RAM_LOG("after MDNS");
      return true;
-@@ -460,59 +1270,853 @@ void configureWebServer() {
+@@ -460,59 +1270,863 @@ void configureWebServer() {
      // System Info
      server->on("/systeminfo", HTTP_GET, [](AsyncWebServerRequest *request) {
          if (checkUserWebAuth(request)) {
@@ -15905,7 +15944,9 @@ index a8679bd6..953bb09a 100644
 +            resp += color565ToWebHex(bruceConfig.secColor);
 +            resp += "\",\"BG_COLOR\":\"";
 +            resp += color565ToWebHex(bruceConfig.bgColor);
-+            resp += "\",\"BRIGHT\":";
++            resp += "\",\"MENU_STYLE\":";
++            resp += String(bruceConfig.mainMenuStyle);
++            resp += ",\"BRIGHT\":";
 +            resp += String(bruceConfig.bright);
 +            resp += ",\"HAS_SD\":";
 +            resp += (hasSdHw ? "true" : "false");
@@ -15989,7 +16030,9 @@ index a8679bd6..953bb09a 100644
 +        json += color565ToWebHex(bruceConfig.secColor);
 +        json += "\",\"bgColor\":\"";
 +        json += color565ToWebHex(bruceConfig.bgColor);
-+        json += "\",\"bright\":";
++        json += "\",\"menuStyle\":";
++        json += String(bruceConfig.mainMenuStyle);
++        json += ",\"bright\":";
 +        json += String(bruceConfig.bright);
 +        json += ",\"webUser\":\"";
 +        json += jsonEscape(bruceConfig.webUI.user);
@@ -16032,6 +16075,10 @@ index a8679bd6..953bb09a 100644
 +        if (request->hasArg("secColor") && parseWebHexTo565(request->arg("secColor"), sec)) colorChanged = true;
 +        if (request->hasArg("bgColor") && parseWebHexTo565(request->arg("bgColor"), bg)) colorChanged = true;
 +        if (colorChanged) { bruceConfig.setUiColor(pri, &sec, &bg); }
++        if (request->hasArg("menuStyle")) {
++            String style = request->arg("menuStyle");
++            if (style == "0" || style == "1") bruceConfig.setMainMenuStyle(style.toInt());
++        }
 +        if (request->hasArg("bright")) {
 +            int br = request->arg("bright").toInt();
 +            if (br >= 10 && br <= 100) {
@@ -16070,7 +16117,9 @@ index a8679bd6..953bb09a 100644
 +        json += color565ToWebHex(bruceConfig.secColor);
 +        json += "\",\"bgColor\":\"";
 +        json += color565ToWebHex(bruceConfig.bgColor);
-+        json += "\",\"bright\":";
++        json += "\",\"menuStyle\":";
++        json += String(bruceConfig.mainMenuStyle);
++        json += ",\"bright\":";
 +        json += String(bruceConfig.bright);
 +        json += ",\"msg\":\"Saved! Theme & identity updated.\"}";
 +        request->send(200, "application/json", json);
@@ -16725,7 +16774,7 @@ index a8679bd6..953bb09a 100644
          }
      });
  
-@@ -544,25 +2148,70 @@ void configureWebServer() {
+@@ -544,25 +2158,70 @@ void configureWebServer() {
          if (!checkUserWebAuth(request)) { return; }
          if (request->hasArg("cmnd")) {
              String cmnd = request->arg("cmnd");
@@ -16815,7 +16864,7 @@ index a8679bd6..953bb09a 100644
                  }
              } else {
                  if (parseSerialCommand(cmnd, false)) {
-@@ -576,9 +2225,28 @@ void configureWebServer() {
+@@ -576,9 +2235,28 @@ void configureWebServer() {
          }
      });
  
@@ -16846,7 +16895,7 @@ index a8679bd6..953bb09a 100644
      });
  
      // List files
-@@ -632,6 +2300,11 @@ void configureWebServer() {
+@@ -632,6 +2310,11 @@ void configureWebServer() {
                  } else {
                      if (strcmp(fileAction.c_str(), "download") == 0) {
                          request->send(*fs, fileName, "application/octet-stream", true);
@@ -16858,7 +16907,7 @@ index a8679bd6..953bb09a 100644
                      } else if (strcmp(fileAction.c_str(), "image") == 0) {
                          String extension = fileName.substring(fileName.lastIndexOf('.') + 1);
                          // https://www.iana.org/assignments/media-types/media-types.xhtml#image
-@@ -700,7 +2373,7 @@ void configureWebServer() {
+@@ -700,7 +2383,7 @@ void configureWebServer() {
  
                  File editFile = fs->open(fileName, FILE_WRITE);
                  if (editFile) {
@@ -16867,7 +16916,7 @@ index a8679bd6..953bb09a 100644
                          request->send(200, "text/plain", "File edited: " + fileName);
                      } else {
                          request->send(500, "text/plain", "Failed to write to file: " + fileName);
-@@ -720,7 +2393,13 @@ void configureWebServer() {
+@@ -720,7 +2403,13 @@ void configureWebServer() {
      server->on(
          "/upload",
          HTTP_POST,
@@ -16882,7 +16931,7 @@ index a8679bd6..953bb09a 100644
          handleUpload
      );
  
-@@ -737,6 +2416,348 @@ void configureWebServer() {
+@@ -737,6 +2426,348 @@ void configureWebServer() {
              }
          }
      });
@@ -17231,7 +17280,7 @@ index a8679bd6..953bb09a 100644
      server->begin();
      Serial.println("Webserver started");
  }
-@@ -745,25 +2766,78 @@ void configureWebServer() {
+@@ -745,25 +2776,78 @@ void configureWebServer() {
  **  Function: startWebUi
  **  Start the WebUI
  **********************************************************************/
@@ -17319,7 +17368,7 @@ index a8679bd6..953bb09a 100644
          new (server) AsyncWebServer(default_webserverporthttp);
  
          configureWebServer();
-@@ -771,24 +2845,198 @@ void startWebUi(bool mode_ap) {
+@@ -771,24 +2855,198 @@ void startWebUi(bool mode_ap) {
          isWebUIActive = true;
      }
      tft.setLogging();
@@ -22498,12 +22547,13 @@ index ca5806a0..18d2aa25 100644
      std::function<bool(void)> onProgress = nullptr
 diff --git a/src/modules/others/sonar_guard.cpp b/src/modules/others/sonar_guard.cpp
 new file mode 100644
-index 00000000..274ab85b
+index 00000000..9976780c
 --- /dev/null
 +++ b/src/modules/others/sonar_guard.cpp
-@@ -0,0 +1,746 @@
+@@ -0,0 +1,727 @@
 +#if defined(HAS_MICROPHONE) && !defined(LITE_VERSION)
 +#include "sonar_guard.h"
++#include "sonar_signal.h"
 +
 +#include "core/display.h"
 +#include "core/led_control.h"
@@ -22526,6 +22576,7 @@ index 00000000..274ab85b
 +extern void _setup_codec_speaker(bool enable);
 +#if defined(DSOLUTION_183_2MIC)
 +extern bool isBoardMicReady();
++extern bool isBoardSpeakerReady();
 +#endif
 +
 +namespace {
@@ -22557,6 +22608,7 @@ index 00000000..274ab85b
 +static i2s_chan_handle_t s_txChan = nullptr;
 +static i2s_chan_handle_t s_rxChan = nullptr;
 +static bool s_txCodecOn = false;
++static const char *s_signalStatus = "starting";
 +
 +static bool initFullDuplexSonarI2S() {
 +    i2s_chan_config_t chanCfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
@@ -22612,6 +22664,16 @@ index 00000000..274ab85b
 +#endif
 +    _setup_codec_speaker(true);
 +    s_txCodecOn = true;
++#if defined(DSOLUTION_183_2MIC)
++    if (!isBoardSpeakerReady()) {
++        _setup_codec_speaker(false);
++        _setup_codec_mic(false);
++        s_txCodecOn = false;
++        i2s_del_channel(s_txChan); i2s_del_channel(s_rxChan);
++        s_txChan = s_rxChan = nullptr;
++        return false;
++    }
++#endif
 +
 +    if (i2s_channel_enable(s_txChan) != ESP_OK || i2s_channel_enable(s_rxChan) != ESP_OK) {
 +        _setup_codec_speaker(false);
@@ -22644,27 +22706,6 @@ index 00000000..274ab85b
 +    }
 +}
 +
-+// Fast Goertzel power at target frequency (Hz) on channel offset (0=Left/MIC1, 1=Right/MIC2)
-+static float goertzelStereo(const int16_t *stereo, size_t frames, float targetHz, int chOffset) {
-+    float k = 0.5f + ((float)frames * targetHz) / (float)kSonarRate;
-+    float w = (2.0f * (float)M_PI / (float)frames) * k;
-+    float coeff = 2.0f * cosf(w);
-+    float q0 = 0.0f, q1 = 0.0f, q2 = 0.0f;
-+    for (size_t i = 0; i < frames; i++) {
-+        // Apply Hann window cheaply via symmetric slope approximation or direct sample
-+        float x = (float)stereo[i * 2 + chOffset] / 32768.0f;
-+        q0 = coeff * q1 - q2 + x;
-+        q2 = q1;
-+        q1 = q0;
-+    }
-+    float pwr = q1 * q1 + q2 * q2 - q1 * q2 * coeff;
-+    return pwr > 0.0f ? sqrtf(pwr) : 0.0f;
-+}
-+
-+static const char *sonarDirStr(int8_t d) {
-+    return (d < 0) ? "LEFT" : ((d > 0) ? "RIGHT" : "CENTER");
-+}
-+
 +static void saveSonarStateAndLog(
 +    bool armed, SonarActionMode actMode, SonarSensitivity sens, uint16_t carrierHz,
 +    uint8_t curMotion, uint8_t sessionPeak, const char *lastDir, bool triggered,
@@ -22673,13 +22714,10 @@ index 00000000..274ab85b
 +    if (newEv) {
 +        File lf = LittleFS.open("/sonar_guard.log", LittleFS.exists("/sonar_guard.log") ? FILE_APPEND : FILE_WRITE);
 +        if (lf) {
-+            const char *dirStr = sonarDirStr(newEv->dir);
 +            lf.printf(
-+                "[%lus] MOTION score=%u%% dir=%s %s%s%s\n",
++                "[%lus] SIGNAL CHANGE score=%u%% %s%s\n",
 +                (unsigned long)newEv->tsSec,
 +                (unsigned)newEv->score,
-+                dirStr,
-+                newEv->approach ? "APPROACH" : "RECEDE",
 +                newEv->wavFile[0] ? " wav=" : "",
 +                newEv->wavFile[0] ? newEv->wavFile : ""
 +            );
@@ -22694,7 +22732,7 @@ index 00000000..274ab85b
 +    const char *sensName = (sens == SONAR_SENS_LOW) ? "Low" : ((sens == SONAR_SENS_MED) ? "Med" : "High");
 +    sf.printf(
 +        "{\"armed\":%s,\"alarm\":%s,\"triggered\":%s,\"action\":\"%s\",\"sens\":\"%s\",\"carrierHz\":%u,"
-+        "\"motion\":%u,\"peak\":%u,\"lastDir\":\"%s\",\"events\":[",
++        "\"motion\":%u,\"peak\":%u,\"lastDir\":\"%s\",\"signal\":\"%s\",\"events\":[",
 +        armed ? "true" : "false",
 +        triggered ? "true" : "false",
 +        triggered ? "true" : "false",
@@ -22703,19 +22741,17 @@ index 00000000..274ab85b
 +        (unsigned)carrierHz,
 +        (unsigned)curMotion,
 +        (unsigned)sessionPeak,
-+        (lastDir && lastDir[0]) ? lastDir : "--"
++        (lastDir && lastDir[0]) ? lastDir : "--", s_signalStatus
 +    );
 +    int n = (int)events.size();
 +    for (int i = 0; i < n; i++) {
 +        const auto &e = events[i];
 +        if (i > 0) sf.print(",");
 +        sf.printf(
-+            "{\"ts\":%lu,\"score\":%u,\"pct\":%u,\"dir\":\"%s\",\"approach\":%s,\"wav\":\"%s\"}",
++            "{\"ts\":%lu,\"score\":%u,\"pct\":%u,\"dir\":\"unknown\",\"approach\":null,\"wav\":\"%s\"}",
 +            (unsigned long)e.tsSec,
 +            (unsigned)e.score,
 +            (unsigned)e.score,
-+            sonarDirStr(e.dir),
-+            e.approach ? "true" : "false",
 +            e.wavFile
 +        );
 +    }
@@ -22858,7 +22894,7 @@ index 00000000..274ab85b
 +    frame.setColorDepth(16);
 +    bool hasSprite = (frame.createSprite(tftWidth, tftHeight) != nullptr);
 +
-+    SonarActionMode actionMode = SONAR_ACT_SIREN_LED;
++    SonarActionMode actionMode = SONAR_ACT_SILENT_LOG;
 +    SonarSensitivity sens = SONAR_SENS_MED;
 +    uint16_t carrierHz = 18500;
 +    bool armed = false;
@@ -22867,14 +22903,13 @@ index 00000000..274ab85b
 +
 +    bool calibrating = true;
 +    uint32_t calibStart = millis();
-+    double calibSum = 0.0;
++    double calibSum = 0.0, calibSquare = 0.0;
++    float noiseFloor = 0.0f;
++    SonarGate gate;
 +    int calibCount = 0;
 +    float baselineSide = 0.01f;
 +
 +    float smoothMotion = 0.0f;
-+    float smoothDir = 0.0f; // -1..+1
-+    bool smoothApproach = true;
-+    int consecHits = 0;
 +    uint32_t lastAlertAt = 0;
 +    uint32_t alertBannerUntil = 0;
 +    uint32_t armedStartedMs = 0;
@@ -22883,10 +22918,13 @@ index 00000000..274ab85b
 +    const char *lastDirLbl = "--";
 +    uint32_t lastJsonSync = 0;
 +    std::vector<SonarEventRec> events;
++    s_signalStatus = "calibrating";
 +    saveSonarStateAndLog(false, actionMode, sens, carrierHz, 0, 0, lastDirLbl, false, events, nullptr);
 +
 +    float txPhase = 0.0f;
 +    uint32_t lastDraw = 0;
++    unsigned ioErrors = 0;
++    bool streamFailed = false;
 +    returnToMenu = false;
 +
 +    while (!returnToMenu) {
@@ -22945,12 +22983,14 @@ index 00000000..274ab85b
 +                    else carrierHz = 18500;
 +                    calibrating = true;
 +                    calibStart = millis();
-+                    calibSum = 0.0;
++                    calibSum = calibSquare = 0.0;
++                    gate.reset();
 +                    calibCount = 0;
 +                } else if (act == 3) {
 +                    calibrating = true;
 +                    calibStart = millis();
-+                    calibSum = 0.0;
++                    calibSum = calibSquare = 0.0;
++                    gate.reset();
 +                    calibCount = 0;
 +                    sessionPeak = 0;
 +                } else if (act == 4) {
@@ -22968,9 +23008,9 @@ index 00000000..274ab85b
 +            armedStartedMs = millis();
 +            calibrating = true;
 +            calibStart = millis();
-+            calibSum = 0.0;
++            calibSum = calibSquare = 0.0;
++            gate.reset();
 +            calibCount = 0;
-+            consecHits = 0;
 +            sessionPeak = 0;
 +            saveSonarStateAndLog(true, actionMode, sens, carrierHz, 0, 0, lastDirLbl, false, events, nullptr);
 +        }
@@ -22986,62 +23026,60 @@ index 00000000..274ab85b
 +        }
 +
 +        size_t wr = 0, rd = 0;
-+        i2s_channel_write(s_txChan, txBuf, kSonarFrames * 4, &wr, pdMS_TO_TICKS(30));
-+        if (i2s_channel_read(s_rxChan, rxBuf, kSonarFrames * 4, &rd, pdMS_TO_TICKS(30)) != ESP_OK ||
-+            rd < kSonarFrames * 4) {
++        esp_err_t txResult = i2s_channel_write(s_txChan, txBuf, kSonarFrames * 4, &wr, pdMS_TO_TICKS(30));
++        esp_err_t rxResult = i2s_channel_read(s_rxChan, rxBuf, kSonarFrames * 4, &rd, pdMS_TO_TICKS(30));
++        if (txResult != ESP_OK || wr != kSonarFrames * 4 || rxResult != ESP_OK || rd != kSonarFrames * 4) {
++            gate.update(millis(), 0, 1, false);
++            calibrating = true; calibStart = millis(); calibSum = calibSquare = 0; calibCount = 0;
++            if (++ioErrors >= 25) { streamFailed = true; break; }
++            vTaskDelay(pdMS_TO_TICKS(5));
 +            continue;
 +        }
++        ioErrors = 0;
 +
-+        // Evaluate symmetric Doppler sidebands around carrierHz on MIC1 (L) and MIC2 (R)
-+        static const float kOffsets[4] = {45.0f, 95.0f, 150.0f, 220.0f};
-+        float sideL = 0.0f, sideR = 0.0f, posSum = 0.0f, negSum = 0.0f;
-+        for (float df : kOffsets) {
-+            float pL = goertzelStereo(rxBuf, kSonarFrames, (float)carrierHz + df, 0);
-+            float nL = goertzelStereo(rxBuf, kSonarFrames, (float)carrierHz - df, 0);
-+            float pR = goertzelStereo(rxBuf, kSonarFrames, (float)carrierHz + df, 1);
-+            float nR = goertzelStereo(rxBuf, kSonarFrames, (float)carrierHz - df, 1);
-+            sideL += pL + nL;
-+            sideR += pR + nR;
-+            posSum += pL + pR;
-+            negSum += nL + nR;
++        // Reject clipped or absent carrier. Short blocks cannot resolve direction,
++        // range or very slow Doppler; this is an experimental signal-change alarm.
++        size_t clipped = 0;
++        for (size_t i = 0; i < kSonarFrames * 2; ++i)
++            if (rxBuf[i] >= 32000 || rxBuf[i] <= -32000) ++clipped;
++        float carrier = sonarMagnitude(rxBuf, kSonarFrames, carrierHz, 0, kSonarRate) +
++                        sonarMagnitude(rxBuf, kSonarFrames, carrierHz, 1, kSonarRate);
++        bool signalValid = carrier > 0.08f && clipped < kSonarFrames / 20;
++        static const float offsets[] = {300.0f, 400.0f, 500.0f};
++        float totalSide = 0;
++        for (float df : offsets) for (int ch = 0; ch < 2; ++ch) {
++            totalSide += sonarMagnitude(rxBuf, kSonarFrames, carrierHz + df, ch, kSonarRate);
++            totalSide += sonarMagnitude(rxBuf, kSonarFrames, carrierHz - df, ch, kSonarRate);
 +        }
-+        float totalSide = 0.5f * (sideL + sideR);
-+
-+        if (calibrating) {
-+            // Skip first 250ms settling
++        s_signalStatus = !signalValid ? "no signal / clipping" : (calibrating ? "calibrating" : "monitoring");
++        if (isWebUIActive && (millis() - lastJsonSync) >= 3000UL && (calibrating || !signalValid)) {
++            lastJsonSync = millis();
++            saveSonarStateAndLog(armed, actionMode, sens, carrierHz, 0, sessionPeak, lastDirLbl, false, events, nullptr);
++        }
++        if (!signalValid) {
++            gate.update(millis(), 0, 1, false);
++            calibrating = true; calibStart = millis(); calibSum = calibSquare = 0; calibCount = 0;
++            smoothMotion = 0;
++        } else if (calibrating) {
 +            if (millis() - calibStart > 250) {
-+                calibSum += totalSide;
-+                calibCount++;
++                calibSum += totalSide; calibSquare += totalSide * totalSide; ++calibCount;
 +            }
-+            if (millis() - calibStart >= 1400 && calibCount >= 10) {
++            if (millis() - calibStart >= 2000 && calibCount >= 20) {
 +                baselineSide = std::max(0.012f, (float)(calibSum / calibCount));
-+                calibrating = false;
-+                smoothMotion = 0.0f;
++                float variance = (float)(calibSquare / calibCount) - baselineSide * baselineSide;
++                noiseFloor = sqrtf(std::max(0.0f, variance));
++                calibrating = false; smoothMotion = 0.0f; gate.reset();
 +            }
 +        } else {
-+            float ratio = (totalSide - baselineSide) / (baselineSide * 1.65f);
-+            if (ratio < 0.0f) ratio = 0.0f;
-+            float pct = std::min(100.0f, ratio * 100.0f);
-+            smoothMotion = smoothMotion * 0.62f + pct * 0.38f;
-+
-+            float denom = sideL + sideR + 0.005f;
-+            float rawDir = (sideR - sideL) / denom; // >0 = Right stronger, <0 = Left stronger
-+            rawDir = std::max(-1.0f, std::min(1.0f, rawDir * 2.2f));
-+            smoothDir = smoothDir * 0.72f + rawDir * 0.28f;
-+            smoothApproach = (posSum >= negSum);
-+
-+            // Slowly adapt baseline only when completely still
-+            if (smoothMotion < 8.0f) {
-+                baselineSide = baselineSide * 0.992f + totalSide * 0.008f;
-+            }
-+
++            float excess = std::max(0.0f, totalSide - baselineSide - 3.0f * noiseFloor);
++            float pct = std::min(100.0f, excess * 100.0f / std::max(0.05f, baselineSide));
++            smoothMotion = smoothMotion * 0.88f + pct * 0.12f;
++            if (smoothMotion < 4.0f && !gate.latched)
++                baselineSide = baselineSide * 0.998f + totalSide * 0.002f;
 +            float thresh = (sens == SONAR_SENS_LOW) ? 45.0f : ((sens == SONAR_SENS_MED) ? 28.0f : 16.0f);
 +            uint8_t mPct = (uint8_t)std::min(100.0f, smoothMotion);
 +            if (mPct > sessionPeak) sessionPeak = mPct;
-+            lastDirLbl = (smoothDir < -0.22f) ? "LEFT" : ((smoothDir > 0.22f) ? "RIGHT" : "CENTER");
-+            if (smoothMotion >= thresh) consecHits++;
-+            else consecHits = 0;
-+
++            bool hit = gate.update(millis(), smoothMotion, thresh, true);
 +            if (isWebUIActive && (millis() - lastJsonSync) >= 3000UL) {
 +                lastJsonSync = millis();
 +                saveSonarStateAndLog(
@@ -23050,14 +23088,12 @@ index 00000000..274ab85b
 +                );
 +            }
 +
-+            if (armed && consecHits >= 3 && (millis() - lastAlertAt) > 6000UL) {
++            if (armed && hit && (millis() - lastAlertAt) > 6000UL) {
 +                lastAlertAt = millis();
 +                alertBannerUntil = millis() + 4500UL;
 +                SonarEventRec ev = {};
 +                ev.tsSec = millis() / 1000UL;
 +                ev.score = mPct;
-+                ev.dir = (smoothDir < -0.22f) ? -1 : ((smoothDir > 0.22f) ? 1 : 0);
-+                ev.approach = smoothApproach;
 +                ev.wavFile[0] = '\0';
 +
 +                if (actionMode == SONAR_ACT_AUTOREC_WAV) {
@@ -23070,12 +23106,16 @@ index 00000000..274ab85b
 +                    setBrightness(bruceConfig.bright, false);
 +                    playSirenBurst(txBuf, rxBuf);
 +                }
++                // Recording/siren disturbs the carrier path: discard the old baseline.
++                if (actionMode != SONAR_ACT_SILENT_LOG) {
++                    calibrating = true; calibStart = millis();
++                    calibSum = calibSquare = 0; calibCount = 0;
++                }
 +
 +                if ((int)events.size() >= kMaxSonarHistory) events.erase(events.begin());
 +                events.push_back(ev);
 +                lastJsonSync = millis();
 +                saveSonarStateAndLog(true, actionMode, sens, carrierHz, mPct, sessionPeak, lastDirLbl, true, events, &ev);
-+                consecHits = 0;
 +                if (returnToMenu) break;
 +            }
 +        }
@@ -23107,8 +23147,8 @@ index 00000000..274ab85b
 +                frame.setTextDatum(ML_DATUM);
 +                frame.setTextColor(triggered ? TFT_WHITE : pri, hdrBg);
 +                frame.drawString(
-+                    triggered ? "!! MOTION TRIGGERED !!"
-+                              : (armed ? "SONAR GUARD [ARMED]" : "2-MIC SONAR RADAR"),
++                    triggered ? "!! SIGNAL CHANGE !!"
++                              : (armed ? "SONAR GUARD [ARMED]" : "ACOUSTIC GUARD (EXP)"),
 +                    8,
 +                    12
 +                );
@@ -23155,9 +23195,7 @@ index 00000000..274ab85b
 +                    // Direction labels around radar arc (284px wide display)
 +                    frame.setTextDatum(MC_DATUM);
 +                    frame.setTextColor(sec, bg);
-+                    frame.drawString("L", rCx - maxR - 10, rCy - 6);
-+                    frame.drawString("C", rCx, rCy - maxR - 8);
-+                    frame.drawString("R", rCx + maxR + 10, rCy - 6);
++                    frame.drawString("SIGNAL", rCx, rCy - maxR - 8);
 +                    frame.setTextDatum(ML_DATUM);
 +                    const char *actTag = (actionMode == SONAR_ACT_SIREN_LED) ? "SIREN"
 +                                         : ((actionMode == SONAR_ACT_SILENT_LOG) ? "SILENT" : "WAV");
@@ -23173,18 +23211,12 @@ index 00000000..274ab85b
 +                    if (calibrating) {
 +                        frame.setTextDatum(MC_DATUM);
 +                        frame.setTextColor(warnCol, bg);
-+                        frame.drawString("Calibrating quiet room...", rCx, 94);
++                        frame.drawString(signalValid ? "Calibrating quiet room..." : "No signal / clipping", rCx, 94);
 +                    } else {
-+                        // Draw motion blip along estimated L/C/R angle and distance inversely proportional to score
-+                        float angRad = (float)M_PI * 0.5f - smoothDir * 1.05f;
-+                        float distNorm = 1.0f - std::min(0.88f, smoothMotion / 100.0f);
-+                        int bx = rCx + (int)(cosf(angRad) * (maxR * distNorm));
-+                        int by = rCy - (int)(sinf(angRad) * (maxR * distNorm));
++                        // Decorative pulse only: no inferred position or range.
 +                        uint16_t blipCol = (smoothMotion >= thresh) ? errCol : ((smoothMotion >= thresh * 0.6f) ? warnCol : okCol);
 +                        int br = 4 + (int)(smoothMotion / 14.0f);
-+                        frame.fillCircle(bx, by, br + 3, blendColors(bg, blipCol, 85));
-+                        frame.fillCircle(bx, by, br, blipCol);
-+                        frame.drawLine(rCx, rCy, bx, by, blipCol);
++                        frame.fillCircle(rCx, rCy - maxR / 2, br, blipCol);
 +
 +                        // Status bar below radar
 +                        int barX = 14, barY = 166, barW = tftWidth - 28, barH = 14;
@@ -23196,11 +23228,7 @@ index 00000000..274ab85b
 +
 +                        frame.setTextDatum(ML_DATUM);
 +                        frame.setTextColor(TFT_WHITE, bg);
-+                        const char *dirTxt = (smoothDir < -0.22f) ? "LEFT" : ((smoothDir > 0.22f) ? "RIGHT" : "CENTER");
-+                        String st = (smoothMotion >= thresh)
-+                                        ? (String("MOTION ") + dirTxt + (smoothApproach ? " [NEAR]" : " [AWAY]"))
-+                                        : "Room Clear";
-+                        frame.drawString(st, 14, 196);
++                        frame.drawString(smoothMotion >= thresh ? "Signal change" : "Monitoring", 14, 196);
 +                        frame.setTextDatum(MR_DATUM);
 +                        frame.setTextColor(blipCol, bg);
 +                        frame.drawString(String((int)smoothMotion) + "%  Ev:" + String(events.size()), tftWidth - 14, 196);
@@ -23224,6 +23252,7 @@ index 00000000..274ab85b
 +
 +    setBrightness(bruceConfig.bright, false);
 +    setLedColor(CRGB::Black);
++    s_signalStatus = streamFailed ? "stream failed" : "stopped";
 +    saveSonarStateAndLog(false, actionMode, sens, carrierHz, 0, sessionPeak, lastDirLbl, false, events, nullptr);
 +    if (hasSprite) frame.deleteSprite();
 +    deinitFullDuplexSonarI2S();
@@ -23244,6 +23273,7 @@ index 00000000..274ab85b
 +    free(rxBuf);
 +    free(txSilence);
 +    tft.fillScreen(bruceConfig.bgColor);
++    if (streamFailed) displayError("Sonar I2S stream failed", true);
 +}
 +#else
 +void sonar_guard_setup() {}
@@ -23260,6 +23290,58 @@ index 00000000..028022a3
 +void sonar_guard_setup();
 +
 +#endif
+diff --git a/src/modules/others/sonar_signal.h b/src/modules/others/sonar_signal.h
+new file mode 100644
+index 00000000..21043031
+--- /dev/null
++++ b/src/modules/others/sonar_signal.h
+@@ -0,0 +1,46 @@
++#pragma once
++#include <cmath>
++#include <cstddef>
++#include <cstdint>
++
++// Arbitrary-frequency Goertzel with a Hann window. No FFT-bin rounding: the
++// oscillator below evaluates exactly the requested frequency.
++inline float sonarMagnitude(const int16_t *stereo, size_t frames, float hz, int channel, float rate) {
++    if (frames < 2 || channel < 0 || channel > 1) return 0;
++    constexpr float pi = 3.14159265358979323846f;
++    const float coeff = 2.0f * cosf(2.0f * pi * hz / rate);
++    const float wc = 2.0f * cosf(2.0f * pi / (frames - 1));
++    float c0 = 1.0f, c1 = cosf(2.0f * pi / (frames - 1));
++    float q1 = 0, q2 = 0;
++    for (size_t i = 0; i < frames; ++i) {
++        float window = 0.5f - 0.5f * c0;
++        float q0 = coeff * q1 - q2 + stereo[2 * i + channel] * (window / 32768.0f);
++        q2 = q1; q1 = q0;
++        float next = wc * c1 - c0; c0 = c1; c1 = next;
++    }
++    float power = q1 * q1 + q2 * q2 - coeff * q1 * q2;
++    return power > 0 ? sqrtf(power) : 0;
++}
++
++// Debounce in wall time, not frame count, and latch until a sustained quiet
++// period. Invalid input cannot trigger or re-arm the detector.
++struct SonarGate {
++    uint32_t aboveSince = 0, quietSince = 0;
++    bool above = false, quiet = false, latched = false;
++    void reset() { above = quiet = latched = false; }
++    bool update(uint32_t now, float score, float threshold, bool valid) {
++        if (!valid) { above = quiet = false; return false; }
++        if (latched) {
++            if (score < threshold * 0.5f) {
++                if (!quiet) { quiet = true; quietSince = now; }
++                if (uint32_t(now - quietSince) >= 1200) { latched = false; quiet = false; }
++            } else quiet = false;
++            return false;
++        }
++        if (score >= threshold) {
++            if (!above) { above = true; aboveSince = now; }
++            if (uint32_t(now - aboveSince) >= 400) { latched = true; above = false; return true; }
++        } else above = false;
++        return false;
++    }
++};
 diff --git a/src/modules/others/tururururu.cpp b/src/modules/others/tururururu.cpp
 index 4d2ea723..6d3408a4 100644
 --- a/src/modules/others/tururururu.cpp

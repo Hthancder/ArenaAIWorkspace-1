@@ -20,3 +20,4 @@ g++ -std=c++17 -Wall -Wextra -Werror -I"$src/src" "$root/tests/device-ux/pet-lay
 "$tmp/pet-layout-test"
 python3 "$root/tests/device-ux/prepare-sound-test.py"
 node "$root/tests/device-ux/wav-browser-test.js" "$src/embedded_resources/web_interface/index.js"
+python3 "$root/tests/device-ux/theme-test.py" "$src"

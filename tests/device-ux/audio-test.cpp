@@ -71,12 +71,13 @@ int main() {
     assert(starts == before + 2);
     const char *err = nullptr; assert(uxFindStart(&err)); assert(uxFindStatus() == "queued");
     assert(!uxFindStart(&err)); uxService(); assert(uxFindStatus() == "playing" && blinks == 1);
-    nowMs += 700; uxService(); nowMs += 700; uxService(); assert(uxFindStatus() == "finished" && blinks == 3);
-    assert(!uxFindStart(&err)); nowMs += 10000; assert(uxFindStart(&err)); uxFindStop(); assert(uxFindStatus() == "cancelled");
-    nowMs += 10000; assert(uxFindStart(&err)); nowMs += 15001; assert(uxFindStatus() == "expired");
-    nowMs += 10000; assert(uxFindStart(&err)); bruceConfig.soundEnabled = 0; uxService(); assert(uxFindStatus() == "playing_silent");
-    nowMs += 700; uxService(); nowMs += 700; uxService(); assert(uxFindStatus() == "silent_or_busy" && blinks == 6);
-    bruceConfig.soundEnabled = 1; nowMs += 10000; assert(uxFindStart(&err));
+    for (int i = 0; i < 30; ++i) { nowMs += 700; uxService(); }
+    assert(uxFindStatus() == "playing" && blinks == 31); // continues past old 15s limit
+    assert(!uxFindStart(&err)); uxFindStop(); assert(uxFindStatus() == "cancelled");
+    nowMs += 10000; assert(uxFindStart(&err)); nowMs += 15001; assert(uxFindStatus() == "queued");
+    bruceConfig.soundEnabled = 0; uxService(); assert(uxFindStatus() == "playing_silent");
+    nowMs += 700; uxService(); assert(uxFindStatus() == "playing_silent");
+    uxFindStop(); bruceConfig.soundEnabled = 1; nowMs += 10000; assert(uxFindStart(&err));
     restartFindDuringWrite = true; uxService();
     assert(uxFindStatus() == "queued"); // old audio must not finish the replacement request
     uxService(); assert(uxFindStatus() == "playing");
