@@ -2758,10 +2758,10 @@ index bda7b42..0bbd995 100644
 +.monitor-bar { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
 +#mon-last { font-size:11px; }
 diff --git a/embedded_resources/web_interface/index.html b/embedded_resources/web_interface/index.html
-index 5290300..654e707 100644
+index 5290300..42afb3e 100644
 --- a/embedded_resources/web_interface/index.html
 +++ b/embedded_resources/web_interface/index.html
-@@ -1,700 +1,1218 @@
+@@ -1,700 +1,1249 @@
  <!doctype html>
  <html lang="en">
 -  <head>
@@ -2943,8 +2943,8 @@ index 5290300..654e707 100644
 +          <label class="sl-inline-label" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="mon-auto" checked /> Auto 3s</label>
 +          <button type="button" class="btn-action btn-default" id="mon-refresh">Refresh Now</button>
 +          <span id="mon-last" class="mono muted-sm">--</span>
-         </div>
-       </div>
++        </div>
++      </div>
 +
 +      <div class="seclab-subtabs" role="tablist" aria-label="Monitor sections">
 +        <button type="button" class="slab-btn active" data-monslab="overview" aria-selected="true">Tổng quan</button>
@@ -3089,8 +3089,8 @@ index 5290300..654e707 100644
 +          <label class="sl-inline-label" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="st-auto" checked /> Auto 3s</label>
 +          <button type="button" class="btn-action btn-default" id="st-refresh">Refresh Now</button>
 +          <span id="st-last" class="mono muted-sm">--</span>
-+        </div>
-+      </div>
+         </div>
+       </div>
 +
 +      <div class="seclab-subtabs" role="tablist" aria-label="Studio sections">
 +        <button type="button" class="slab-btn active" data-stslab="overview" aria-selected="true">Tổng quan</button>
@@ -3760,15 +3760,7 @@ index 5290300..654e707 100644
 -                    fill="currentColor"
 -                    d="M43.7,38H8.3c-1,0-1.7-1.3-0.9-2.2l17.3-21.2c0.6-0.8,1.9-0.8,2.5,0l17.5,21.2C45.4,36.7,44.8,38,43.7,38z"
 -                  />
-+              </button>
-+              <button type="button" class="nav nav-up" data-direction="Up" title="Up" aria-label="Up">
-+                <svg width="18" height="18" viewBox="0 0 52 52"><path fill="currentColor" d="M43.7,38H8.3c-1,0-1.7-1.3-0.9-2.2l17.3-21.2c0.6-0.8,1.9-0.8,2.5,0l17.5,21.2C45.4,36.7,44.8,38,43.7,38z"/></svg>
-+              </button>
-+              <button type="button" class="nav nav-menu" data-direction="Menu" title="Hold Select (Back)" aria-label="Hold Select (Back)">
-+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-+                  <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
-+                  <circle cx="12" cy="12" r="3" fill="currentColor"/>
-                 </svg>
+-                </svg>
 -              </div>
 -              <div
 -                class="nav nav-menu"
@@ -3813,7 +3805,15 @@ index 5290300..654e707 100644
 -                    cy="128"
 -                    r="112"
 -                  />
--                </svg>
++              </button>
++              <button type="button" class="nav nav-up" data-direction="Up" title="Up" aria-label="Up">
++                <svg width="18" height="18" viewBox="0 0 52 52"><path fill="currentColor" d="M43.7,38H8.3c-1,0-1.7-1.3-0.9-2.2l17.3-21.2c0.6-0.8,1.9-0.8,2.5,0l17.5,21.2C45.4,36.7,44.8,38,43.7,38z"/></svg>
++              </button>
++              <button type="button" class="nav nav-menu" data-direction="Menu" title="Hold Select (Back)" aria-label="Hold Select (Back)">
++                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
++                  <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
++                  <circle cx="12" cy="12" r="3" fill="currentColor"/>
+                 </svg>
 -              </div>
 +              </button>
              </div>
@@ -4123,8 +4123,11 @@ index 5290300..654e707 100644
 +          <input type="text" id="console-in" placeholder="Enter Bruce CLI command (Arrow Up/Down for history)..." autocomplete="off" />
 +          <button type="button" class="btn-action btn-default" id="console-run">Run</button>
 +          <button type="button" class="btn-action" id="console-clear">Clear</button>
-+        </div>
-+      </div>
+         </div>
+       </div>
+-      <div class="dialog editor hidden">
+-        <div class="dialog-head">
+-          Edit: <span class="editor-file-name"></span>
 +    </section>
 +
 +    <!-- TAB 6: SECLAB -->
@@ -4139,10 +4142,11 @@ index 5290300..654e707 100644
 +          <button type="button" class="btn-action" id="sl-refresh">Refresh Now</button>
 +          <button type="button" class="btn-action btn-danger" data-sl-action="stop_all" data-sl-confirm="Stop all stoppable SecLab+ tools? An in-progress pairing audit will finish on its own.">Stop All</button>
          </div>
-       </div>
--      <div class="dialog editor hidden">
--        <div class="dialog-head">
--          Edit: <span class="editor-file-name"></span>
+-        <div class="dialog-body">
+-          <div class="editor-container">
+-            <div class="line-numbers"></div>
+-            <textarea class="file-content" style="resize: none"></textarea>
++      </div>
 +
 +      <!-- Sub-tabs inside SecLab -->
 +      <div class="seclab-subtabs" role="tablist" aria-label="SecLab sections">
@@ -4198,11 +4202,7 @@ index 5290300..654e707 100644
 +          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/napt_http_findings.json')">HTTP Findings</button>
 +          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/led_link/exfil.txt')">LED Exfil</button>
 +          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/ble_security_audit.json')">GATT Audit</button>
-         </div>
--        <div class="dialog-body">
--          <div class="editor-container">
--            <div class="line-numbers"></div>
--            <textarea class="file-content" style="resize: none"></textarea>
++        </div>
 +        <strong class="sl-sub sl-mt">Live SecLab+ Feed</strong>
 +        <div id="sl-plus-feed" class="sl-scroll sl-mt"></div>
 +      </div>
@@ -4301,6 +4301,37 @@ index 5290300..654e707 100644
 +            <button type="button" class="btn-action" data-sl-action="portal_start">Portal-NAPT Start</button>
 +            <button type="button" class="btn-action" data-sl-action="portal_stop">Stop</button>
 +            <button type="button" class="btn-action" data-sl-action="portal_handoff" data-sl-toggle="portalHandoff" data-sl-label-on="Auto Handoff: ON" data-sl-label-off="Auto Handoff: OFF" aria-pressed="false">Auto Handoff: --</button>
++          </div>
++        </details>
++
++        <details class="sl-group" open>
++          <summary><strong>Evil Portal Templates</strong> <small>dễ sửa từ WebUI</small><span id="sl-portal-badge" class="sl-badge">--</span></summary>
++          <p class="muted-sm sl-mt">Tạo / sửa / xoá mẫu đăng nhập giả mạo ngay trên trình duyệt — không cần cắm cáp. Mẫu đang <b>Active</b> sẽ được Evil Portal dùng khi bạn bấm <b>Portal-NAPT Start</b>.</p>
++          <div class="sl-row sl-mt">
++            <button type="button" class="btn-action btn-default" id="pt-refresh">Làm mới danh sách</button>
++            <button type="button" class="btn-action" id="pt-new">+ Mẫu mới</button>
++            <button type="button" class="btn-action" id="pt-import">Nhập từ dán (paste)</button>
++            <label class="btn-action sl-file-btn">Tải file .html<input type="file" id="pt-file" accept=".html,.htm,.txt" /></label>
++            <button type="button" class="btn-action" id="pt-clearactive">Bỏ Active (về mặc định)</button>
++          </div>
++          <div id="pt-msg" class="ota-status hidden" style="margin:8px 0"></div>
++          <div class="kv-grid sl-mt">
++            <div class="kv-item"><span>Mẫu đang Active</span><b id="pt-active">--</b></div>
++            <div class="kv-item"><span>Tổng số mẫu</span><b id="pt-count">0</b></div>
++          </div>
++          <div id="pt-list" class="sl-scroll sl-mt" style="max-height:260px"></div>
++          <div class="sl-group sl-mt" style="border:1px solid var(--border);border-radius:8px;padding:12px">
++            <div class="sl-row">
++              <input type="text" id="pt-name" placeholder="Tên file: google.html" class="sl-input" style="flex:1;min-width:160px" />
++              <input type="text" id="pt-ap" placeholder="AP name hiện ở dòng đầu: <!-- AP=&quot;Free Wifi&quot; --> (tuỳ chọn)" class="sl-input" style="flex:1;min-width:160px" />
++            </div>
++            <textarea id="pt-content" placeholder="Dán HTML mẫu vào đây... (giữ nguyên <form action=&quot;/post&quot;> để bắt password)" class="sl-input sl-mt" style="width:100%;min-height:180px;font-family:monospace;font-size:12px"></textarea>
++            <div class="sl-row sl-mt">
++              <button type="button" class="btn-action btn-default" id="pt-save">Lưu mẫu</button>
++              <button type="button" class="btn-action" id="pt-preview">Xem trước (mở tab)</button>
++              <button type="button" class="btn-action" id="pt-cancel">Huỷ</button>
++              <small class="muted-sm" style="margin-left:auto">Mẹo: copy mã HTML từ <a href="https://github.com" target="_blank">mẫu có sẵn</a> rồi dán vào ô trên → Lưu → Chọn <b>Dùng</b> để Active.</small>
++            </div>
 +          </div>
 +        </details>
 +      </div>
@@ -4496,9 +4527,7 @@ index 5290300..654e707 100644
 +        <button id="ota-start-btn" class="btn-action btn-default" disabled>Flash OTA Firmware</button>
 +        <button class="btn-action act-dialog-close act-escape">Close</button>
 +      </div>
-     </div>
--    <div class="loading-area hidden">
--      <div class="text"></div>
++    </div>
 +
 +    <div class="dialog wifi hidden">
 +      <div class="dialog-head">
@@ -4560,10 +4589,7 @@ index 5290300..654e707 100644
 +      <div class="dialog-footer">
 +        <button class="btn-action act-dialog-close act-escape">Close</button>
 +      </div>
-     </div>
--    <div class="upload-area hidden"></div>
--    <script src="/index.js"></script>
--  </body>
++    </div>
 +
 +    <div class="dialog oinput hidden">
 +      <div class="dialog-head">
@@ -4592,7 +4618,9 @@ index 5290300..654e707 100644
 +        <button class="btn-action btn-default act-save-credential">Save</button>
 +        <button class="btn-action act-escape" onclick="Dialog.show('settings')">Back</button>
 +      </div>
-+    </div>
+     </div>
+-    <div class="loading-area hidden">
+-      <div class="text"></div>
 +
 +    <div class="dialog editor hidden">
 +      <div class="dialog-head">Edit: <span class="editor-file-name mono"></span></div>
@@ -4607,7 +4635,10 @@ index 5290300..654e707 100644
 +        <button class="btn-action btn-default act-run-edit-file" title="ALT + ENTER">Run</button>
 +        <button class="btn-action act-dialog-close act-escape">Close</button>
 +      </div>
-+    </div>
+     </div>
+-    <div class="upload-area hidden"></div>
+-    <script src="/index.js"></script>
+-  </body>
 +  </div>
 +
 +  <div class="loading-area hidden"><div class="text"></div></div>
@@ -4616,7 +4647,7 @@ index 5290300..654e707 100644
 +</body>
  </html>
 diff --git a/embedded_resources/web_interface/index.js b/embedded_resources/web_interface/index.js
-index fd61602..1b39823 100644
+index fd61602..c16994c 100644
 --- a/embedded_resources/web_interface/index.js
 +++ b/embedded_resources/web_interface/index.js
 @@ -6,20 +6,17 @@ const T = {
@@ -6697,7 +6728,7 @@ index fd61602..1b39823 100644
      return;
    }
  
-@@ -1062,662 +1531,1470 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1062,662 +1531,1567 @@ $(".container").addEventListener("click", async (e) => {
    if (actPlay) {
      e.preventDefault();
      let cmd = actPlay.getAttribute("data-cmd");
@@ -6988,6 +7019,20 @@ index fd61602..1b39823 100644
 -    } else {
 -      textarea.setSelectionRange(newStart, newStart);
 -    }
+-  };
+-
+-  const getCurrentLine = (pos) => {
+-    const lineStart = textarea.value.lastIndexOf("\n", pos - 1) + 1;
+-    const lineEnd = textarea.value.indexOf("\n", pos);
+-    const line = textarea.value.slice(
+-      lineStart,
+-      lineEnd === -1 ? undefined : lineEnd,
+-    );
+-    return {
+-      line,
+-      lineStart,
+-      lineEnd: lineEnd === -1 ? textarea.value.length : lineEnd,
+-    };
 +    textarea.setSelectionRange(newStart, newEnd);
    };
 +  if (e.key === "Tab") {
@@ -7010,28 +7055,6 @@ index fd61602..1b39823 100644
 +  }
 +});
  
--  const getCurrentLine = (pos) => {
--    const lineStart = textarea.value.lastIndexOf("\n", pos - 1) + 1;
--    const lineEnd = textarea.value.indexOf("\n", pos);
--    const line = textarea.value.slice(
--      lineStart,
--      lineEnd === -1 ? undefined : lineEnd,
--    );
--    return {
--      line,
--      lineStart,
--      lineEnd: lineEnd === -1 ? textarea.value.length : lineEnd,
--    };
--  };
-+$(".file-content").addEventListener("keyup", (e) => {
-+  if ($(".dialog.editor:not(.hidden)")) {
-+    $(".act-save-edit-file").disabled = !isModified(e.target);
-+    updateLineNumbers();
-+  }
-+});
-+$(".file-content").addEventListener("scroll", () => { if ($(".dialog.editor:not(.hidden)")) syncScrolling(); });
-+$(".file-content").addEventListener("input", (e) => { if ($(".dialog.editor:not(.hidden)")) { updateLineNumbers(); $(".act-save-edit-file").disabled = editorSaving || !isModified(e.target); } });
- 
 -  const handleTab = (shift) => {
 -    if (start === end) {
 -      const { line, lineStart, lineEnd } = getCurrentLine(start);
@@ -7048,6 +7071,30 @@ index fd61602..1b39823 100644
 -      }
 -      return;
 -    }
+-
+-    // Expand selection to full first and last lines
+-    const { lineStart: firstLineStart } = getCurrentLine(start);
+-    const { lineEnd: lastLineEnd } = getCurrentLine(
+-      end === start ? end : end - 1,
+-    );
+-
+-    const selectedFullText = textarea.value.slice(firstLineStart, lastLineEnd);
+-    const fullLines = selectedFullText.split("\n");
+-
+-    let totalChange = 0;
+-    const newTextLines = fullLines.map((line, idx) => {
+-      const isLast = idx === fullLines.length - 1;
+-      const skipLast = isLast && /^\s*$/.test(line);
++$(".file-content").addEventListener("keyup", (e) => {
++  if ($(".dialog.editor:not(.hidden)")) {
++    $(".act-save-edit-file").disabled = !isModified(e.target);
++    updateLineNumbers();
++  }
++});
++$(".file-content").addEventListener("scroll", () => { if ($(".dialog.editor:not(.hidden)")) syncScrolling(); });
++$(".file-content").addEventListener("input", (e) => { if ($(".dialog.editor:not(.hidden)")) { updateLineNumbers(); $(".act-save-edit-file").disabled = editorSaving || !isModified(e.target); } });
+ 
+-      if (skipLast) return line;
 +$(".oinput-text-submit").addEventListener("keyup", function (e) {
 +  if (e.key === "Enter" || e.keyCode === 13) {
 +    e.preventDefault();
@@ -7055,11 +7102,7 @@ index fd61602..1b39823 100644
 +  }
 +});
  
--    // Expand selection to full first and last lines
--    const { lineStart: firstLineStart } = getCurrentLine(start);
--    const { lineEnd: lastLineEnd } = getCurrentLine(
--      end === start ? end : end - 1,
--    );
+-      const leadingSpaces = line.match(leadingSpacesRegex)[0].length;
 +(async function () {
 +  try { await fetchSystemInfo(); } catch (_) { /* Folder view remains available for retry. */ }
 +  const urlParams = getURLParams();
@@ -7067,17 +7110,30 @@ index fd61602..1b39823 100644
 +  let initialPath = urlParams.path || "/";
 +  await fetchFiles(initialDrive, initialPath);
  
--    const selectedFullText = textarea.value.slice(firstLineStart, lastLineEnd);
--    const fullLines = selectedFullText.split("\n");
+-      if (shift) {
+-        const remove = Math.min(leadingSpaces, TAB_SIZE);
+-        totalChange -= remove;
+-        return line.slice(remove);
+-      } else {
+-        const add = TAB_SIZE - (leadingSpaces % TAB_SIZE);
+-        totalChange += add;
+-        return " ".repeat(add) + line;
+-      }
+-    });
 +  if (urlParams.editFile) {
 +    switchTab("files");
 +    setTimeout(() => openFileInEditor(currentDrive, urlParams.editFile), 100);
 +  }
  
--    let totalChange = 0;
--    const newTextLines = fullLines.map((line, idx) => {
--      const isLast = idx === fullLines.length - 1;
--      const skipLast = isLast && /^\s*$/.test(line);
+-    // Replace the expanded selection using execCommand to preserve undo
+-    // This may become an issue when execCommand is removed since it's deprecated but only way to preserve undo for now
+-    textarea.setSelectionRange(firstLineStart, lastLineEnd);
+-    document.execCommand("insertText", false, newTextLines.join("\n"));
+-    textarea.setSelectionRange(
+-      firstLineStart,
+-      firstLineStart + newTextLines.join("\n").length,
+-    );
+-  };
 +  setInterval(() => {
 +    if ($(".dialog-background.hidden") && !_runningUpload && !otaBusy) {
 +      fetchSystemInfo(true).catch(() => {});
@@ -7085,7 +7141,31 @@ index fd61602..1b39823 100644
 +  }, 15000);
 +})();
  
--      if (skipLast) return line;
+-  const handleEnter = () => {
+-    const { line } = getCurrentLine(start);
+-    const indentation = line.match(leadingSpacesRegex)[0] || "";
+-
+-    const nextChar = start < textarea.value.length ? textarea.value[start] : "";
+-    const prevChar = start > 0 ? textarea.value[start - 1] : "";
+-    const pairs = { "{": "}", "(": ")", "[": "]" };
+-
+-    if (pairs[prevChar] === nextChar) {
+-      const extraIndent = " ".repeat(TAB_SIZE);
+-      const insert = `\n${indentation + extraIndent}\n${indentation}`;
+-      insertText(
+-        insert,
+-        start + indentation.length + extraIndent.length + 1,
+-        start + indentation.length + extraIndent.length + 1,
+-      );
+-    } else {
+-      const closingLine = closingCharRegex.test(nextChar)
+-        ? "\n" + indentation
+-        : "";
+-      insertText(
+-        "\n" + indentation + closingLine,
+-        start + indentation.length + 1,
+-        start + indentation.length + 1,
+-      );
 +// ============ SECLAB DASHBOARD ============
 +let secLabTimer = null;
 +let secLabBusy = false;
@@ -7103,7 +7183,8 @@ index fd61602..1b39823 100644
 +  secLabTimer = setInterval(() => {
 +    if (activeTab === "seclab" && $(".dialog-background.hidden") && !otaBusy) {
 +      refreshSecLab().catch(() => {});
-+    }
+     }
+-  };
 +  }, 2600);
 +}
 +function stopSecLabPoll() {
@@ -7173,6 +7254,80 @@ index fd61602..1b39823 100644
 +  try{ const raw=await requestPost("/badusb/autorun",{action:"setrunonce", runOncePerPlug:ro}); const d=JSON.parse(raw); if(msgBox){ msgBox.className="ota-status "+(d.ok?"ok":"err"); msgBox.textContent=d.msg||""; msgBox.classList.remove("hidden"); } refreshStudio(); } catch(e){ if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message; msgBox.classList.remove("hidden"); } }
 +});
 +document.getElementById("st-badusb-path")?.addEventListener("input", (e)=>{ e.target.dataset.touched="1"; });
+ 
+-  const handleAutoPair = (key) => {
+-    const pairs = {
+-      "(": ")",
+-      "{": "}",
+-      "[": "]",
+-      '"': '"',
+-      "'": "'",
+-      "`": "`",
+-      "<": ">",
+-    };
+ 
+-    if (start === end) {
+-      // No selection - insert pair at cursor
+-      insertText(key + pairs[key], start + 1, start + 1, false);
+-    } else {
+-      // Has selection - wrap selected text with pair
+-      const selectedText = textarea.value.slice(start, end);
+-      const wrappedText = key + selectedText + pairs[key];
+-      insertText(wrappedText, start + 1, start + 1 + selectedText.length, true);
++document.getElementById("pt-refresh")?.addEventListener("click", portalRefresh);
++document.getElementById("pt-save")?.addEventListener("click", portalSave);
++document.getElementById("pt-cancel")?.addEventListener("click", ()=> portalSetForm("", "", ""));
++document.getElementById("pt-new")?.addEventListener("click", ()=>{
++  const base=`<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:sans-serif;max-width:420px;margin:40px auto;padding:20px}input{width:100%;padding:10px;margin:8px 0;border:1px solid #ccc;border-radius:6px}button{width:100%;padding:12px;background:#0b57d0;color:#fff;border:none;border-radius:6px}h2{text-align:center}</style></head><body><h2>Free Wifi — Đăng nhập</h2><p>Vui lòng nhập mật khẩu WiFi để tiếp tục</p><form action="/post"><input name="email" placeholder="Email" required><input name="password" type="password" placeholder="Mật khẩu" required><button type="submit">Kết nối</button></form></body></html>`;
++  portalSetForm("my-portal.html","<!-- AP=\"Free Wifi\" -->\n"+base,"Free Wifi");
++});
++document.getElementById("pt-clearactive")?.addEventListener("click", async ()=>{
++  const msg=document.getElementById("pt-msg");
++  try{ const raw=await requestPost("/portal/templates",{action:"clearactive"}); const j=JSON.parse(raw); if(msg){ msg.className="ota-status "+(j.ok?"ok":"err"); msg.textContent=j.msg; msg.classList.remove("hidden"); } portalRefresh(); }catch(e){ if(msg){ msg.className="ota-status err"; msg.textContent=e.message; msg.classList.remove("hidden"); } }
++});
++document.getElementById("pt-preview")?.addEventListener("click", ()=>{
++  const c=document.getElementById("pt-content")?.value||"";
++  if(!c.trim()) return;
++  const w=window.open(); w.document.write(c); w.document.close();
++});
++document.getElementById("pt-import")?.addEventListener("click", async ()=>{
++  const txt=prompt("Dán toàn bộ HTML mẫu vào đây (Ctrl+V), sẽ tạo file mới:");
++  if(!txt) return;
++  const name=prompt("Đặt tên file (vd facebook.html):","imported.html");
++  if(!name) return;
++  const msg=document.getElementById("pt-msg");
++  try{ const raw=await requestPost("/portal/templates",{action:"save", name, content:txt}); const j=JSON.parse(raw); if(msg){ msg.className="ota-status "+(j.ok?"ok":"err"); msg.textContent=j.msg; msg.classList.remove("hidden"); } portalRefresh(); }catch(e){ if(msg){ msg.className="ota-status err"; msg.textContent=e.message; msg.classList.remove("hidden"); } }
++});
++document.getElementById("pt-file")?.addEventListener("change", async (e)=>{
++  const f=e.target.files[0]; if(!f) return;
++  const txt=await f.text();
++  portalSetForm(f.name, txt, "");
++  const msg=document.getElementById("pt-msg");
++  if(msg){ msg.className="ota-status ok"; msg.textContent="Đã nạp file "+f.name+" vào ô soạn — bấm Lưu mẫu để lưu lên thiết bị"; msg.classList.remove("hidden"); }
++});
++document.getElementById("pt-list")?.addEventListener("click", async (e)=>{
++  const t=e.target;
++  const use=t.closest("[data-pt-use]")?.getAttribute("data-pt-use");
++  const edit=t.closest("[data-pt-edit]")?.getAttribute("data-pt-edit");
++  const dup=t.closest("[data-pt-dup]")?.getAttribute("data-pt-dup");
++  const del=t.closest("[data-pt-del]")?.getAttribute("data-pt-del");
++  const msg=document.getElementById("pt-msg");
++  if(use){
++    try{ const raw=await requestPost("/portal/templates",{action:"active", path:use}); const j=JSON.parse(raw); if(msg){ msg.className="ota-status "+(j.ok?"ok":"err"); msg.textContent=j.msg; msg.classList.remove("hidden"); } portalRefresh(); }catch(err){ if(msg){ msg.className="ota-status err"; msg.textContent=err.message; msg.classList.remove("hidden"); } }
++  } else if(edit){
++    try{ const raw=await requestPost("/portal/templates",{action:"get", path:edit}); const j=JSON.parse(raw); if(j.ok){ let ap=j.content.match(/<!-- AP="([^"]+)" -->/); portalSetForm(edit.split("/").pop(), j.content.replace(/<!-- AP="[^"]+" -->\n?/,""), ap?ap[1]:""); if(msg){ msg.className="ota-status ok"; msg.textContent="Đã nạp để sửa: "+edit; msg.classList.remove("hidden"); } document.getElementById("pt-content")?.scrollIntoView({behavior:"smooth"}); } }catch(err){ if(msg){ msg.className="ota-status err"; msg.textContent=err.message; msg.classList.remove("hidden"); } }
++  } else if(dup){
++    const newName=prompt("Tên file nhân bản:", dup.split("/").pop().replace(".html","-copy.html"));
++    if(!newName) return;
++    try{ const raw=await requestPost("/portal/templates",{action:"get", path:dup}); const j=JSON.parse(raw); if(j.ok){ const raw2=await requestPost("/portal/templates",{action:"save", name:newName, content:j.content}); const k=JSON.parse(raw2); if(msg){ msg.className="ota-status "+(k.ok?"ok":"err"); msg.textContent=k.msg; msg.classList.remove("hidden"); } portalRefresh(); } }catch(err){ if(msg){ msg.className="ota-status err"; msg.textContent=err.message; msg.classList.remove("hidden"); } }
++  } else if(del){
++    if(!confirm("Xoá mẫu "+del+" ?")) return;
++    try{ const raw=await requestPost("/portal/templates",{action:"delete", path:del}); const j=JSON.parse(raw); if(msg){ msg.className="ota-status "+(j.ok?"ok":"err"); msg.textContent=j.msg; msg.classList.remove("hidden"); } portalRefresh(); }catch(err){ if(msg){ msg.className="ota-status err"; msg.textContent=err.message; msg.classList.remove("hidden"); } }
++  }
++});
++// auto refresh when opening WiFi slab
++document.querySelectorAll('[data-slab="wifi"]').forEach(b=> b.addEventListener("click", ()=> setTimeout(portalRefresh, 300)));
++if(document.getElementById("pt-list")) setTimeout(portalRefresh, 800);
 +
 +function startStudioPoll(){
 +  stopStudioPoll();
@@ -7180,7 +7335,12 @@ index fd61602..1b39823 100644
 +    const auto = document.getElementById("st-auto");
 +    if(activeTab==="studio" && (!auto || auto.checked) && !document.hidden && !otaBusy){
 +      refreshStudio().catch(()=>{});
-+    }
+     }
+-  };
+-
+-  const handleSkipCloser = () => {
+-    textarea.setSelectionRange(start + 1, start + 1);
+-  };
 +  }, 3000);
 +}
 +function stopStudioPoll(){ if(studioTimer){ clearInterval(studioTimer); studioTimer=null; } }
@@ -7208,7 +7368,28 @@ index fd61602..1b39823 100644
 +document.getElementById("st-dual-xiaozhi")?.addEventListener("click", ()=> requestGet("/reboot?target=xiaozhi").then(()=>{}).catch(()=>{}));
 +document.getElementById("st-dual-menu")?.addEventListener("click", ()=> requestGet("/reboot?target=menu").then(()=>{}).catch(()=>{}));
  
--      const leadingSpaces = line.match(leadingSpacesRegex)[0].length;
+-  const handleComment = (commentStr) => {
+-    const toggleComment = (line) => {
+-      const indentation = line.match(leadingSpacesRegex)[0] || "";
+-      const content = line.slice(indentation.length);
+-
+-      if (content.startsWith(commentStr + " ")) {
+-        return {
+-          line: indentation + content.slice(commentStr.length + 1),
+-          offset: -(commentStr.length + 1),
+-        };
+-      } else if (content.startsWith(commentStr)) {
+-        return {
+-          line: indentation + content.slice(commentStr.length),
+-          offset: -commentStr.length,
+-        };
+-      } else {
+-        return {
+-          line: indentation + commentStr + " " + content,
+-          offset: commentStr.length + 1,
+-        };
+-      }
+-    };
 +// delegated actions for QR preview/delete
 +document.addEventListener("click", (e)=>{
 +  const t=e.target.closest("[data-st-qr-show]");
@@ -7227,57 +7408,29 @@ index fd61602..1b39823 100644
 +  if(t){ e.preventDefault(); const nm=t.dataset.stQrDevice||""; if(nm && window.quickCli) quickCli("qrcode \""+nm.replace(/"/g,'\\"')+"\""); }
 +});
  
--      if (shift) {
--        const remove = Math.min(leadingSpaces, TAB_SIZE);
--        totalChange -= remove;
--        return line.slice(remove);
--      } else {
--        const add = TAB_SIZE - (leadingSpaces % TAB_SIZE);
--        totalChange += add;
--        return " ".repeat(add) + line;
--      }
--    });
+-    const isCommented = (line) => {
+-      const content = line.slice(
+-        (line.match(leadingSpacesRegex)[0] || "").length,
+-      );
+-      return (
+-        content.startsWith(commentStr + " ") || content.startsWith(commentStr)
+-      );
+-    };
  
--    // Replace the expanded selection using execCommand to preserve undo
--    // This may become an issue when execCommand is removed since it's deprecated but only way to preserve undo for now
--    textarea.setSelectionRange(firstLineStart, lastLineEnd);
--    document.execCommand("insertText", false, newTextLines.join("\n"));
--    textarea.setSelectionRange(
--      firstLineStart,
--      firstLineStart + newTextLines.join("\n").length,
--    );
--  };
+-    if (start === end) {
+-      // Single line - toggle comment
+-      const { line, lineStart, lineEnd } = getCurrentLine(start);
+-      const { line: newLine, offset: cursorOffset } = toggleComment(line);
 +function switchMonSlab(name){
 +  document.querySelectorAll('[id^="monslab-"]').forEach(v=>v.classList.toggle("hidden", v.id!=="monslab-"+name));
 +  document.querySelectorAll("[data-monslab]").forEach(b=>{ const on=b.dataset.monslab===name; b.classList.toggle("active", on); b.setAttribute("aria-selected", on?"true":"false"); });
 +  try{ localStorage.setItem("monitorSlab", name);}catch(e){}
 +}
  
--  const handleEnter = () => {
--    const { line } = getCurrentLine(start);
--    const indentation = line.match(leadingSpacesRegex)[0] || "";
--
--    const nextChar = start < textarea.value.length ? textarea.value[start] : "";
--    const prevChar = start > 0 ? textarea.value[start - 1] : "";
--    const pairs = { "{": "}", "(": ")", "[": "]" };
--
--    if (pairs[prevChar] === nextChar) {
--      const extraIndent = " ".repeat(TAB_SIZE);
--      const insert = `\n${indentation + extraIndent}\n${indentation}`;
--      insertText(
--        insert,
--        start + indentation.length + extraIndent.length + 1,
--        start + indentation.length + extraIndent.length + 1,
--      );
--    } else {
--      const closingLine = closingCharRegex.test(nextChar)
--        ? "\n" + indentation
--        : "";
--      insertText(
--        "\n" + indentation + closingLine,
--        start + indentation.length + 1,
--        start + indentation.length + 1,
--      );
+-      textarea.setSelectionRange(lineStart, lineEnd);
+-      document.execCommand("insertText", false, newLine);
+-      textarea.setSelectionRange(start + cursorOffset, start + cursorOffset);
+-      return;
 +async function refreshMonitor(){
 +  const msgBox=document.getElementById("mon-msg");
 +  const lastEl=document.getElementById("mon-last");
@@ -7292,7 +7445,6 @@ index fd61602..1b39823 100644
 +    if(!monLastSys && isPreview){
 +      monLastSys = {BRUCE_VERSION:"1.17-preview", BOARD:"DSolution 1.83 2-Mic", OWNER:"DSolution", MAC:"AA:BB:CC:DD:EE:FF", UPTIME_SEC: 3421, BAT: 76, BAT_MV: 3980, CHG:true, CPU_MHZ:240, HEAP_FREE:"68 KB", PSRAM_FREE:"2.1 MB", DMA_FREE:"41 KB", DMA_BLOCK:"32 KB", DUALBOOT:true, OTA_SLOT:"ota_1", OTA_NEXT:"ota_0", OTA_MAX:"4.0 MB", WIFI_MODE:"AP", WIFI_IP:"192.168.4.1", WIFI_SSID:"", WIFI_RSSI:0, AP_SSID:"BruceNet", MDNS:"bruce", SD:{free:"1.2 GB", used:"800 MB", total:"2.0 GB"}, LittleFS:{free:"1.4 MB", used:"600 KB", total:"2.0 MB"}, HAS_SD:true, WIDS_LOG:true, BLE_LOG:true, PRI_COLOR:"#00f0ff", SEC_COLOR:"#50aebd", BG_COLOR:"#070d12", MENU_STYLE:0, BRIGHT:80};
      }
--  };
 +    if(!monLastSecLab && isPreview){
 +      monLastSecLab = {napt:{running:true, starting:false, uptimeSec:128, staConnected:true, staSsid:"MyHomeWiFi", staIp:"192.168.1.23", apSsid:"BruceNet", apIp:"192.168.4.1", clients:[{ip:"192.168.4.2", mac:"11:22:33:44:55:66"}], total:24, blocked:3, trackers:5, autoBlock:true, blockList:["ads.example.com"], feed:[{dom:"ads.example.com", ip:"0.0.0.0", blk:true},{dom:"api.example.com", ip:"1.2.3.4", trk:true}]}, probe:{devices:[{id:1, os:"iPhone", rot:2, pnls:["MyHomeWiFi"], rssi:-52, watched:false}], totalMacs:3}, bleGatt:{mode:"SCAN", txPhy:"1M", connected:false, profiles:[{name:"HeartRate", addr:"AA:BB:CC:DD:EE:01", path:"/ble_gatt/hr.json", services:2, chars:5}]}, airtime:{bestCh:6, bestScore:78, channels:[{ch:1, load:22, retry:5, rssi:-45, sampled:true},{ch:6, load:12, retry:2, rssi:-52, sampled:true},{ch:11, load:65, retry:12, rssi:-60, sampled:true}], hidden:[{ssid:"HiddenNet", bssid:"AA:BB:CC:DD:EE:FF", ch:6, rssi:-58, decloaked:true}]}, sonar:{armed:true, alarm:false, carrierHz:18000, sens:"mid", peak:12, signal:"OK", events:[{dir:"left", pct:34, ts:12}]}, usb:{psramFree:2100000, flashImgBytes:65536, vaultFiles:[{name:"payload.txt", size:124}]}, plus:{available:true, osProfile:"windows", portalHandoff:true, httpAuto:true, httpRedact:true, bleSafeFuzzer:false, lanGuardAuto:true, permissionCheck:true, pairJustWorks:true, hidAutoArm:false, hidTimeoutSec:25, httpPort:3128, osWarn:true, pmkidAutoExport:false, csaChannel:1, csaBursts:3}, pmkid:{running:false, hashes:2}, csa:{running:false}, portal:{running:false, armed:true, napt:false, handoffDone:false}, lanAudit:{running:false, devices:3, findings:1, findingList:[{ip:"192.168.4.1", port:80, proto:"http", verdict:"open", risk:"HIGH"}]}, responderPlus:{running:false}, lanGuard:{running:true, alerts:[{kind:"ARP", ip:"192.168.4.5", detail:"new MAC"}], arpChanges:1, dhcpMismatch:0, arpWatch:true, dhcpSniff:true, dhcpComparison:"ok"}, httpInspector:{running:false, port:3128, findings:[{host:"example.com", kind:"GET", detail:"cleartext"}]}, ledLink:{running:false, bytes:0}, bleAudit:{findings:2, findingList:[{verdict:"WEAK", uuid:"0x1800", detail:"no auth"}]}, pairAudit:{verdict:"NOT_RUN"}, tagBeacon:{running:false}, chain:{running:[{id:"evil-twin-route", step:"Verify", status:"RUN"}]}};
 +    }
@@ -7446,20 +7598,80 @@ index fd61602..1b39823 100644
 +  }
 +}
  
--  const handleAutoPair = (key) => {
--    const pairs = {
--      "(": ")",
--      "{": "}",
--      "[": "]",
--      '"': '"',
--      "'": "'",
--      "`": "`",
--      "<": ">",
--    };
+-    // Multiple lines - toggle comment for all lines
+-    const { lineStart: firstLineStart } = getCurrentLine(start);
+-    const { lineEnd: lastLineEnd } = getCurrentLine(
+-      end === start ? end : end - 1,
+-    );
+-    const fullLines = textarea.value
+-      .slice(firstLineStart, lastLineEnd)
+-      .split("\n");
+-
+-    // Find the minimum indentation level (excluding empty lines)
+-    const nonEmptyLines = fullLines.filter((line) => line.trim().length > 0);
+-    const minIndentation = Math.min(
+-      ...nonEmptyLines.map(
+-        (line) => (line.match(leadingSpacesRegex)[0] || "").length,
+-      ),
+-    );
+-    const commentIndent = " ".repeat(minIndentation);
+-
+-    const allCommented = nonEmptyLines.every(isCommented);
+-
+-    const newTextLines = fullLines.map((line, idx) => {
+-      const isLast = idx === fullLines.length - 1;
+-      const skipLast = isLast && /^\s*$/.test(line);
+-
+-      if (skipLast || line.trim().length === 0) return line;
+-
+-      const indentation = line.match(leadingSpacesRegex)[0] || "";
+-      const content = line.slice(indentation.length);
+-
+-      if (allCommented) {
+-        // Remove comments
+-        if (content.startsWith(commentStr + " ")) {
+-          return indentation + content.slice(commentStr.length + 1);
+-        } else if (content.startsWith(commentStr)) {
+-          return indentation + content.slice(commentStr.length);
+-        }
+-        return line;
+-      } else {
+-        // Add comments at minimum indentation level
+-        return commentIndent + commentStr + " " + line.slice(minIndentation);
+-      }
+-    });
+-
+-    textarea.setSelectionRange(firstLineStart, lastLineEnd);
+-    document.execCommand("insertText", false, newTextLines.join("\n"));
+-    textarea.setSelectionRange(
+-      firstLineStart,
+-      firstLineStart + newTextLines.join("\n").length,
+-    );
+-  };
  
--    if (start === end) {
--      // No selection - insert pair at cursor
--      insertText(key + pairs[key], start + 1, start + 1, false);
+-  switch (e.key) {
+-    case "Tab":
+-      e.preventDefault();
+-      handleTab(e.shiftKey);
+-      return;
+-    case "Enter":
+-      e.preventDefault();
+-      handleEnter();
+-      return;
+-    case "/":
+-      if (e.ctrlKey || e.metaKey) {
+-        e.preventDefault();
+-        handleComment("//");
+-        return;
+-      }
+-      break;
+-    case "#":
+-      if (e.ctrlKey || e.metaKey) {
+-        e.preventDefault();
+-        handleComment("#");
+-        return;
+-      }
+-      break;
 +async function refreshStudio(){
 +  const msgBox=document.getElementById("st-msg");
 +  const lastEl=document.getElementById("st-last");
@@ -7501,7 +7713,13 @@ index fd61602..1b39823 100644
 +  }catch(e){
 +    if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message||"Studio refresh failed"; msgBox.classList.remove("hidden"); }
 +    console.warn("refreshStudio",e);
-+  }
+   }
+-
+-  const nextChar = start < textarea.value.length ? textarea.value[start] : "";
+-  const closers = [")", "}", "]", ">", '"', "'", "`"];
+-  if (closers.includes(e.key) && nextChar === e.key) {
+-    e.preventDefault();
+-    handleSkipCloser();
 +}
 +function renderStudioOverview(sys, sec, qr){
 +  if(!sys && !sec) { sys=studioLastSys||{}; sec=studioLastSecLab||{}; } else { sys=sys||studioLastSys||{}; sec=sec||studioLastSecLab||{}; }
@@ -7572,8 +7790,8 @@ index fd61602..1b39823 100644
 +  if(!box) return;
 +  if(!list.length){
 +    box.innerHTML=`<div class="sl-item muted-sm">No QRCodes yet \u2014 add one above or via device <b>Studio \u2192 QRCodes \u2192 Save&amp;Display</b></div>`;
-+    return;
-+  }
+     return;
+   }
 +  box.innerHTML = list.map(q=> `<div class="sl-item"><span><strong>${slEsc(q.name||q.menuName)}</strong><br><small class="mono muted-sm">${slEsc((q.content||"").slice(0,64))}${(q.content||"").length>64?"\u2026":""}</small></span><span style="display:flex;gap:6px"><button type="button" class="sl-tag ok" data-st-qr-show="${slEsc(q.name||q.menuName)}" data-st-qr-content="${slEsc(q.content||"")}">View</button><button type="button" class="sl-tag blk" data-st-qr-del="${slEsc(q.name||q.menuName)}">Del</button></span></div>`).join("");
 +}
 +function renderStudioClock(sys){
@@ -7591,7 +7809,20 @@ index fd61602..1b39823 100644
 +  const b=document.getElementById("st-dual-badge");
 +  if(b){ b.textContent=sys.DUALBOOT?"DUAL":"single"; b.className="sl-badge "+(sys.DUALBOOT?"on":""); }
 +}
-+
+ 
+-  const pairs = {
+-    "(": ")",
+-    "{": "}",
+-    "[": "]",
+-    '"': '"',
+-    "'": "'",
+-    "`": "`",
+-    "<": ">",
+-  };
+-  if (e.key in pairs) {
+-    e.preventDefault();
+-    handleAutoPair(e.key);
+-    return;
 +function renderStudioBadusb(b){
 +  const d=b||studioLastBadusb||{};
 +  const set=(id,txt)=>{ const el=document.getElementById(id); if(el) el.textContent=txt; };
@@ -7613,6 +7844,53 @@ index fd61602..1b39823 100644
 +  const trigEl=document.getElementById("st-badusb-trigger-sel"); if(trigEl) trigEl.value=String(d.trigger||0);
 +  const cmEl=document.getElementById("st-badusb-confirmMs"); if(cmEl) cmEl.placeholder=String(d.confirmMs||3000);
 +}
++
++let portalTemplates=[], portalActive="";
++async function portalRefresh(){
++  const msg=document.getElementById("pt-msg");
++  const badge=document.getElementById("sl-portal-badge");
++  const activeEl=document.getElementById("pt-active");
++  const countEl=document.getElementById("pt-count");
++  const listEl=document.getElementById("pt-list");
++  try{
++    const raw=await requestGet("/portal/templates");
++    const j=JSON.parse(raw);
++    portalTemplates=j.templates||[];
++    portalActive=j.active||"";
++    if(activeEl) activeEl.textContent=portalActive||"(mặc định Google/Router)";
++    if(countEl) countEl.textContent=String(portalTemplates.length);
++    if(badge) { badge.textContent=portalActive?portalActive.split("/").pop():"mặc định"; badge.className="sl-badge "+(portalActive?"on":""); }
++    if(listEl){
++      if(!portalTemplates.length) listEl.innerHTML=`<div class="sl-item muted-sm">Chưa có mẫu nào — bấm <b>+ Mẫu mới</b> hoặc <b>Tải file .html</b> để thêm. Mẫu sẽ lưu ở <code>/portal_templates/</code></div>`;
++      else listEl.innerHTML=portalTemplates.map(x=>`<div class="sl-item"><span><strong>${slEsc(x.name)}</strong><br><small class="mono muted-sm">${slEsc(x.path)} · ${x.size}B ${x.ap?`· AP: ${slEsc(x.ap)}`:""} ${portalActive===x.path?`· <b>Active</b>`:""}</small></span><span style="display:flex;gap:6px"><button type="button" class="sl-tag ok" data-pt-use="${slEsc(x.path)}">Dùng</button><button type="button" class="sl-tag" data-pt-edit="${slEsc(x.path)}">Sửa</button><button type="button" class="sl-tag" data-pt-dup="${slEsc(x.path)}">Nhân bản</button><button type="button" class="sl-tag blk" data-pt-del="${slEsc(x.path)}">Xoá</button></span></div>`).join("");
++    }
++    if(msg){ msg.classList.add("hidden"); }
++  }catch(e){
++    if(msg){ msg.className="ota-status err"; msg.textContent=e.message||"Không tải được danh sách"; msg.classList.remove("hidden"); }
+   }
+-});
++}
++function portalSetForm(name, content, ap){
++  const n=document.getElementById("pt-name"), c=document.getElementById("pt-content"), a=document.getElementById("pt-ap");
++  if(n) n.value=name||"";
++  if(c) c.value=content||"";
++  if(a) a.value=ap||"";
++}
++async function portalSave(){
++  const n=document.getElementById("pt-name")?.value.trim();
++  const c=document.getElementById("pt-content")?.value||"";
++  const ap=document.getElementById("pt-ap")?.value.trim()||"";
++  const msg=document.getElementById("pt-msg");
++  if(!n){ if(msg){ msg.className="ota-status err"; msg.textContent="Thiếu tên file (vd google.html)"; msg.classList.remove("hidden"); } return; }
++  if(!c.trim()){ if(msg){ msg.className="ota-status err"; msg.textContent="Thiếu nội dung HTML"; msg.classList.remove("hidden"); } return; }
++  try{ const raw=await requestPost("/portal/templates",{action:"save", name:n, content:c, apName:ap}); const j=JSON.parse(raw); if(msg){ msg.className="ota-status "+(j.ok?"ok":"err"); msg.textContent=j.msg||""; msg.classList.remove("hidden"); } if(j.ok) { portalRefresh(); } }catch(e){ if(msg){ msg.className="ota-status err"; msg.textContent=e.message; msg.classList.remove("hidden"); } }
++}
+ 
+-$(".file-content").addEventListener("keyup", function (e) {
+-  if ($(".dialog.editor:not(.hidden)")) {
+-    $(".act-save-edit-file").disabled = !isModified(e.target);
+-    // Update line numbers when content changes
+-    updateLineNumbers();
 +function slEsc(s) {
 +  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 +}
@@ -7628,7 +7906,8 @@ index fd61602..1b39823 100644
 +      box.classList.add("hidden");
 +      secLabMsgTimers.delete(box);
 +    }, autoHideMs));
-+  }
+   }
+-});
 +}
 +function slErrorText(e, fallback) {
 +  let msg = e?.message || fallback;
@@ -7650,7 +7929,11 @@ index fd61602..1b39823 100644
 +  const box = $("#sl-napt-msg");
 +  if (box) box.setAttribute("aria-busy", busy ? "true" : "false");
 +}
-+
+ 
+-$(".file-content").addEventListener("scroll", function (e) {
+-  if ($(".dialog.editor:not(.hidden)")) {
+-    // Sync scrolling between textarea and line numbers
+-    syncScrolling();
 +async function naptPost(params) {
 +  if (params.action === "block" || params.action === "unblock") {
 +    const domain = String(params.domain || "").trim();
@@ -7659,7 +7942,8 @@ index fd61602..1b39823 100644
 +      return false;
 +    }
 +    params.domain = domain;
-+  }
+   }
+-});
 +  if (secLabNaptBusy) return false;
 +  secLabNaptBusy = true;
 +  secLabLastNaptActionAt = Date.now();
@@ -7680,7 +7964,11 @@ index fd61602..1b39823 100644
 +  }
 +  return ok;
 +}
-+
+ 
+-$(".file-content").addEventListener("input", function (e) {
+-  if ($(".dialog.editor:not(.hidden)")) {
+-    // Update line numbers on any input change
+-    updateLineNumbers();
 +async function seclabPlusPost(params) {
 +  if (secLabBusy) return;
 +  secLabBusy = true;
@@ -7692,26 +7980,26 @@ index fd61602..1b39823 100644
 +    const d = JSON.parse(raw);
 +    if (d.ok === false) {
 +      slShowMsg(box, d.msg || "SecLab+ action failed", false, 0);
-     } else {
--      // Has selection - wrap selected text with pair
--      const selectedText = textarea.value.slice(start, end);
--      const wrappedText = key + selectedText + pairs[key];
--      insertText(wrappedText, start + 1, start + 1 + selectedText.length, true);
++    } else {
 +      slShowMsg(box, d.msg || "SecLab+ action OK", true, 4500);
-     }
--  };
++    }
 +    await refreshSecLab();
 +  } catch (e) {
 +    slShowMsg(box, slErrorText(e, "SecLab+ action failed"), false, 0);
 +  } finally {
 +    secLabBusy = false;
 +    slBusyButtons(false);
-+  }
+   }
+-});
 +}
  
--  const handleSkipCloser = () => {
--    textarea.setSelectionRange(start + 1, start + 1);
--  };
+-$(".oinput-text-submit").addEventListener("keyup", function (e) {
+-  // Submit using default button on Enter key
+-  if (e.key === "Enter" || e.keyCode === 13) {
+-    e.preventDefault();
+-    const dialog = this.closest(".dialog");
+-    const btn = dialog.querySelector(".btn-default");
+-    if (btn) btn.click();
 +function slNumber(id, min, max, label) {
 +  const el = $(id);
 +  const raw = el ? String(el.value || "").trim() : "";
@@ -7766,30 +8054,10 @@ index fd61602..1b39823 100644
 +    p.addr = addr;
 +    p.type = $("#sl-plus-pair-type")?.value || "0";
 +    p.justworks = ($("#sl-plus-pair-mode")?.value || "justworks") === "justworks" ? "1" : "0";
-+  }
+   }
 +  return p;
 +}
- 
--  const handleComment = (commentStr) => {
--    const toggleComment = (line) => {
--      const indentation = line.match(leadingSpacesRegex)[0] || "";
--      const content = line.slice(indentation.length);
--
--      if (content.startsWith(commentStr + " ")) {
--        return {
--          line: indentation + content.slice(commentStr.length + 1),
--          offset: -(commentStr.length + 1),
--        };
--      } else if (content.startsWith(commentStr)) {
--        return {
--          line: indentation + content.slice(commentStr.length),
--          offset: -commentStr.length,
--        };
--      } else {
--        return {
--          line: indentation + commentStr + " " + content,
--          offset: commentStr.length + 1,
--        };
++
 +document.querySelectorAll("[data-sl-action]").forEach((btn) => {
 +  btn.addEventListener("click", () => {
 +    if (secLabBusy) return;
@@ -7801,20 +8069,57 @@ index fd61602..1b39823 100644
 +        !window.confirm("Boundary writes may modify or disrupt the target. Enable only for authorized devices?")) return;
 +    seclabPlusPost(p);
 +  });
-+});
-+
+ });
+ 
+-// Handle browser back/forward navigation
+-window.addEventListener("popstate", (event) => {
+-  if (event.state && event.state.drive && event.state.path) {
+-    fetchFiles(event.state.drive, event.state.path);
 +$("#sl-plus-pair-mode")?.addEventListener("change", (ev) => {
 +  const jw = ev.target.value === "justworks";
 +  secLabPlusState.pairJustWorks = jw;
 +  slSyncSecLabToggles(secLabPlusState);
 +  seclabPlusPost({ action: "pair_mode", enable: jw ? "1" : "0" });
 +});
-+
+ 
+-    // Restore edit state if present
+-    if (event.state.editFile) {
+-      setTimeout(async () => {
+-        try {
+-          let editor = $(".dialog.editor .file-content");
+-          $(".dialog.editor .editor-file-name").textContent =
+-            event.state.editFile;
+-          editor.value = "";
+-
+-          Dialog.loading.show("Fetching content...");
+-          let r = await requestGet(
+-            `/file?fs=${event.state.drive}&name=${encodeURIComponent(event.state.editFile)}&action=edit`,
+-          );
+-          editor.value = r;
+-          editor.setAttribute("data-hash", calcHash(r));
+-
+-          // Update line numbers
+-          updateLineNumbers();
+-
+-          $(".act-save-edit-file").disabled = true;
+-
+-          let serial = getSerialCommand(event.state.editFile);
+-          if (serial === undefined) {
+-            $(".act-run-edit-file").classList.add("hidden");
+-          } else {
+-            $(".act-run-edit-file").classList.remove("hidden");
+-          }
 +function slSetInput(id, value) {
 +  const el = $(id);
 +  if (el && document.activeElement !== el) el.value = String(value);
 +}
-+
+ 
+-          Dialog.loading.hide();
+-          Dialog.show("editor");
+-        } catch (error) {
+-          console.error("Failed to restore file editor:", error);
+-        }
+-      }, 100);
 +function slSyncSecLabToggles(plus) {
 +  document.querySelectorAll("[data-sl-toggle]").forEach((btn) => {
 +    const key = btn.dataset.slToggle;
@@ -7865,8 +8170,7 @@ index fd61602..1b39823 100644
 +      if (Date.now() - secLabLastNaptActionAt > 8000 &&
 +          (box.classList.contains("hidden") || box.className.indexOf(" ok") >= 0)) {
 +        slShowMsg(box, n.lastErr, false, 0);
-       }
--    };
++      }
 +    }
 +    if ($("#sl-napt-up")) $("#sl-napt-up").textContent = n.staConnected ? `${n.staSsid} (${n.staIp})` : "Not connected";
 +    if ($("#sl-napt-ap")) $("#sl-napt-ap").textContent = `${n.apSsid || "BruceNet"} (${n.apIp || "192.168.4.1"})`;
@@ -7877,16 +8181,41 @@ index fd61602..1b39823 100644
 +      naptAuto.textContent = `Auto-Block Trackers: ${n.autoBlock ? "ON" : "OFF"}`;
 +      naptAuto.classList.toggle("btn-default", !!n.autoBlock);
 +      naptAuto.setAttribute("aria-pressed", n.autoBlock ? "true" : "false");
-+    }
+     }
+-  } else {
+-    // Fallback: parse URL parameters
+-    const urlParams = getURLParams();
+-    const drive = urlParams.drive || (sdCardAvailable ? "SD" : "LittleFS");
+-    const path = urlParams.path || "/";
+-    fetchFiles(drive, path);
  
--    const isCommented = (line) => {
--      const content = line.slice(
--        (line.match(leadingSpacesRegex)[0] || "").length,
--      );
--      return (
--        content.startsWith(commentStr + " ") || content.startsWith(commentStr)
--      );
--    };
+-    // Handle edit file restoration from URL
+-    if (urlParams.editFile) {
+-      setTimeout(async () => {
+-        try {
+-          let editor = $(".dialog.editor .file-content");
+-          $(".dialog.editor .editor-file-name").textContent =
+-            urlParams.editFile;
+-          editor.value = "";
+-
+-          Dialog.loading.show("Fetching content...");
+-          let r = await requestGet(
+-            `/file?fs=${drive}&name=${encodeURIComponent(urlParams.editFile)}&action=edit`,
+-          );
+-          editor.value = r;
+-          editor.setAttribute("data-hash", calcHash(r));
+-
+-          // Update line numbers
+-          updateLineNumbers();
+-
+-          $(".act-save-edit-file").disabled = true;
+-
+-          let serial = getSerialCommand(urlParams.editFile);
+-          if (serial === undefined) {
+-            $(".act-run-edit-file").classList.add("hidden");
+-          } else {
+-            $(".act-run-edit-file").classList.remove("hidden");
+-          }
 +    if ($("#sl-blk-chips")) {
 +      $("#sl-blk-chips").innerHTML = (n.blockList || []).map((dom) =>
 +        `<span class="sl-chip">${slEsc(dom)}<button type="button" data-napt-action="unblock" data-napt-domain="${slEsc(dom)}" aria-label="Unblock ${slEsc(dom)}">&times;</button></span>`
@@ -7904,7 +8233,14 @@ index fd61602..1b39823 100644
 +        `<div class="sl-item"><span>${slEsc(c.ip)}</span><small class="muted-sm">${slEsc(c.mac)}</small></div>`
 +      ).join("") || `<div class="sl-item muted-sm">No clients connected to AP</div>`;
 +    }
-+
+ 
+-          Dialog.loading.hide();
+-          Dialog.show("editor");
+-        } catch (error) {
+-          console.error("Failed to restore file editor from URL:", error);
+-          updateURL(drive, path, null);
+-        }
+-      }, 100);
 +    // #6 Sonar
 +    const sn = d.sonar || {};
 +    if ($("#sl-sonar-badge")) {
@@ -7922,12 +8258,12 @@ index fd61602..1b39823 100644
 +          : `<small class="muted-sm">${ev.ts || 0}s</small>`;
 +        return `<div class="sl-item"><span>${slEsc(ev.dir)} (${ev.pct ?? ev.score ?? 0}%)</span>${right}</div>`;
 +      }).join("") || `<div class="sl-item muted-sm">Launch Others -> Sonar Guard on device</div>`;
-+    }
+     }
+-  }
+-});
  
--    if (start === end) {
--      // Single line - toggle comment
--      const { line, lineStart, lineEnd } = getCurrentLine(start);
--      const { line: newLine, offset: cursorOffset } = toggleComment(line);
+-(async function () {
+-  await fetchSystemInfo();
 +    // #8 Virtual USB Vault
 +    const u = d.usb || {};
 +    const vaultFiles = u.vaultFiles || [];
@@ -7945,10 +8281,11 @@ index fd61602..1b39823 100644
 +      }).join("") || `<div class="sl-item muted-sm">/usb_vault is empty. Upload files or Ducky .txt!</div>`;
 +    }
  
--      textarea.setSelectionRange(lineStart, lineEnd);
--      document.execCommand("insertText", false, newLine);
--      textarea.setSelectionRange(start + cursorOffset, start + cursorOffset);
--      return;
+-  // Get initial state from URL parameters or use defaults
+-  const urlParams = getURLParams();
+-  let initialDrive = urlParams.drive;
+-  let initialPath = urlParams.path;
+-  let editFile = urlParams.editFile;
 +    // #4 Air-Time & Hidden SSID
 +    const air = d.airtime || {};
 +    if ($("#sl-air-best")) {
@@ -7963,50 +8300,14 @@ index fd61602..1b39823 100644
 +      $("#sl-air-hidden").innerHTML = (air.hidden || []).map((h) =>
 +        `<div class="sl-item"><span>${slEsc(h.decloaked ? h.ssid : "<Hidden>")} <small class="muted-sm">${slEsc(h.bssid)}</small></span><span class="sl-tag ${h.decloaked ? "ok" : ""}">C${h.ch} ${h.rssi}dB</span></div>`
 +      ).join("") || `<div class="sl-item muted-sm">No hidden SSIDs cached</div>`;
-     }
++    }
  
--    // Multiple lines - toggle comment for all lines
--    const { lineStart: firstLineStart } = getCurrentLine(start);
--    const { lineEnd: lastLineEnd } = getCurrentLine(
--      end === start ? end : end - 1,
--    );
--    const fullLines = textarea.value
--      .slice(firstLineStart, lastLineEnd)
--      .split("\n");
--
--    // Find the minimum indentation level (excluding empty lines)
--    const nonEmptyLines = fullLines.filter((line) => line.trim().length > 0);
--    const minIndentation = Math.min(
--      ...nonEmptyLines.map(
--        (line) => (line.match(leadingSpacesRegex)[0] || "").length,
--      ),
--    );
--    const commentIndent = " ".repeat(minIndentation);
--
--    const allCommented = nonEmptyLines.every(isCommented);
--
--    const newTextLines = fullLines.map((line, idx) => {
--      const isLast = idx === fullLines.length - 1;
--      const skipLast = isLast && /^\s*$/.test(line);
--
--      if (skipLast || line.trim().length === 0) return line;
--
--      const indentation = line.match(leadingSpacesRegex)[0] || "";
--      const content = line.slice(indentation.length);
--
--      if (allCommented) {
--        // Remove comments
--        if (content.startsWith(commentStr + " ")) {
--          return indentation + content.slice(commentStr.length + 1);
--        } else if (content.startsWith(commentStr)) {
--          return indentation + content.slice(commentStr.length);
--        }
--        return line;
--      } else {
--        // Add comments at minimum indentation level
--        return commentIndent + commentStr + " " + line.slice(minIndentation);
--      }
--    });
+-  // Validate and fallback to defaults if needed
+-  if (!initialDrive) {
+-    initialDrive = sdCardAvailable ? "SD" : "LittleFS";
+-  }
+-  if (!initialPath) {
+-    initialPath = "/";
 +    // #2 Probe Radar & #12 BLE GATT
 +    const prb = d.probe || {};
 +    if ($("#sl-prb-stat")) $("#sl-prb-stat").textContent = `${(prb.devices || []).length} / ${prb.totalMacs || 0}`;
@@ -8015,14 +8316,7 @@ index fd61602..1b39823 100644
 +        `<div class="sl-item"><span>#${p.id} ${slEsc(p.os)} (${p.rot} MACs) <small class="muted-sm">${slEsc((p.pnls || []).join(", "))}</small></span><span class="sl-tag ${p.watched ? "blk" : ""}">${p.rssi}dB</span></div>`
 +      ).join("") || `<div class="sl-item muted-sm">Run WiFi -> Probe Radar to cluster devices</div>`;
 +    }
- 
--    textarea.setSelectionRange(firstLineStart, lastLineEnd);
--    document.execCommand("insertText", false, newTextLines.join("\n"));
--    textarea.setSelectionRange(
--      firstLineStart,
--      firstLineStart + newTextLines.join("\n").length,
--    );
--  };
++
 +    const bg = d.bleGatt || {};
 +    if ($("#sl-ble-phy")) {
 +      $("#sl-ble-phy").textContent = `PHY ${bg.txPhy || "1M"}`;
@@ -8034,31 +8328,7 @@ index fd61602..1b39823 100644
 +        `<div class="sl-item"><span>${slEsc(gp.name)} <small class="muted-sm">${slEsc(gp.addr)}</small></span><button type="button" class="sl-tag" data-sl-open-file="${slEsc(gp.path)}">${gp.services}S/${gp.chars}C</button></div>`
 +      ).join("") || `<div class="sl-item muted-sm">No saved GATT profiles in /ble_gatt</div>`;
 +    }
- 
--  switch (e.key) {
--    case "Tab":
--      e.preventDefault();
--      handleTab(e.shiftKey);
--      return;
--    case "Enter":
--      e.preventDefault();
--      handleEnter();
--      return;
--    case "/":
--      if (e.ctrlKey || e.metaKey) {
--        e.preventDefault();
--        handleComment("//");
--        return;
--      }
--      break;
--    case "#":
--      if (e.ctrlKey || e.metaKey) {
--        e.preventDefault();
--        handleComment("#");
--        return;
--      }
--      break;
--  }
++
 +    // SecLab+ 1A-4B control center
 +    const plus = d.plus || {};
 +    secLabPlusState = plus;
@@ -8104,13 +8374,7 @@ index fd61602..1b39823 100644
 +    if (pairMode && document.activeElement !== pairMode) {
 +      pairMode.value = plus.pairJustWorks ? "justworks" : "mitm";
 +    }
- 
--  const nextChar = start < textarea.value.length ? textarea.value[start] : "";
--  const closers = [")", "}", "]", ">", '"', "'", "`"];
--  if (closers.includes(e.key) && nextChar === e.key) {
--    e.preventDefault();
--    handleSkipCloser();
--    return;
++
 +    const feed = [];
 +    const push = (label, value, cls) => feed.push(`<div class="sl-item"><span>${slEsc(label)}</span><span class="sl-tag ${cls || ""}">${slEsc(value)}</span></div>`);
 +    if (pm.lastErr) push("1A PMKID", pm.lastErr, "blk");
@@ -8139,21 +8403,7 @@ index fd61602..1b39823 100644
    }
 +}
  
--  const pairs = {
--    "(": ")",
--    "{": "}",
--    "[": "]",
--    '"': '"',
--    "'": "'",
--    "`": "`",
--    "<": ">",
--  };
--  if (e.key in pairs) {
--    e.preventDefault();
--    handleAutoPair(e.key);
--    return;
--  }
--});
+-  await fetchFiles(initialDrive, initialPath);
 +function playSonarWav(path) {
 +  const pl = $("#sl-sonar-player");
 +  if (!pl) return;
@@ -8161,294 +8411,6 @@ index fd61602..1b39823 100644
 +  pl.src = (IS_DEV ? "/bruce" : "") + "/file?fs=LittleFS&action=audio&name=" + encodeURIComponent(path);
 +  pl.play().catch(() => {});
 +}
- 
--$(".file-content").addEventListener("keyup", function (e) {
--  if ($(".dialog.editor:not(.hidden)")) {
--    $(".act-save-edit-file").disabled = !isModified(e.target);
--    // Update line numbers when content changes
--    updateLineNumbers();
--  }
--});
-+async function deleteVaultFile(path) {
-+  if (!confirm("Delete " + path + "?")) return;
-+  await requestGet("/file", { fs: "LittleFS", action: "delete", name: path });
-+  refreshSecLab();
-+}
- 
--$(".file-content").addEventListener("scroll", function (e) {
--  if ($(".dialog.editor:not(.hidden)")) {
--    // Sync scrolling between textarea and line numbers
--    syncScrolling();
--  }
-+function slDelegatedAction(containerId, selector, handler) {
-+  const root = $(containerId);
-+  if (!root) return;
-+  root.addEventListener("click", (ev) => {
-+    const target = ev.target instanceof Element ? ev.target.closest(selector) : null;
-+    if (target && root.contains(target)) handler(target);
-+  });
-+}
-+slDelegatedAction("#sl-blk-chips", "[data-napt-domain]", (el) => {
-+  naptPost({ action: el.dataset.naptAction || "unblock", domain: el.dataset.naptDomain || "" });
- });
--
--$(".file-content").addEventListener("input", function (e) {
--  if ($(".dialog.editor:not(.hidden)")) {
--    // Update line numbers on any input change
--    updateLineNumbers();
--  }
-+slDelegatedAction("#sl-dns-feed", "[data-napt-domain]", (el) => {
-+  naptPost({ action: el.dataset.naptAction || "block", domain: el.dataset.naptDomain || "" });
-+});
-+slDelegatedAction("#sl-sonar-events", "[data-sl-play-wav]", (el) => {
-+  if (el.dataset.slPlayWav) playSonarWav(el.dataset.slPlayWav);
-+});
-+slDelegatedAction("#sl-vault-list", "[data-sl-delete-vault]", (el) => {
-+  if (el.dataset.slDeleteVault) deleteVaultFile(el.dataset.slDeleteVault);
-+});
-+slDelegatedAction("#sl-ble-profs", "[data-sl-open-file]", (el) => {
-+  if (el.dataset.slOpenFile) openFileInEditor("LittleFS", el.dataset.slOpenFile);
- });
- 
--$(".oinput-text-submit").addEventListener("keyup", function (e) {
--  // Submit using default button on Enter key
--  if (e.key === "Enter" || e.keyCode === 13) {
--    e.preventDefault();
--    const dialog = this.closest(".dialog");
--    const btn = dialog.querySelector(".btn-default");
--    if (btn) btn.click();
-+$("#sl-refresh")?.addEventListener("click", () => refreshSecLab());
-+$("#sl-napt-start")?.addEventListener("click", () => {
-+  const ssid = $("#sl-napt-ssid")?.value.trim() || "";
-+  const pwd = $("#sl-napt-pwd")?.value || "";
-+  const p = { action: "start" };
-+  if (ssid) {
-+    p.ssid = ssid;
-+    p.pwd = pwd;
-   }
-+  naptPost(p);
-+});
-+$("#sl-napt-stop")?.addEventListener("click", () => naptPost({ action: "stop" }));
-+$("#sl-napt-auto")?.addEventListener("click", () => {
-+  const enable = secLabNaptState.autoBlock ? "0" : "1";
-+  naptPost({ action: "autoblock", enable });
-+});
-+$("#sl-napt-export")?.addEventListener("click", async () => {
-+  if (await naptPost({ action: "export" })) openFileInEditor("LittleFS", "/napt_dns.log");
-+});
-+$("#sl-napt-clear")?.addEventListener("click", () => {
-+  if (!window.confirm("Clear the NAPT DNS feed log?")) return;
-+  naptPost({ action: "clear" });
-+});
-+$("#sl-blk-add")?.addEventListener("click", () => {
-+  const inp = $("#sl-blk-input");
-+  const dom = inp?.value.trim();
-+  if (!dom) return;
-+  inp.value = "";
-+  naptPost({ action: "block", domain: dom });
- });
- 
--// Handle browser back/forward navigation
--window.addEventListener("popstate", (event) => {
--  if (event.state && event.state.drive && event.state.path) {
--    fetchFiles(event.state.drive, event.state.path);
--
--    // Restore edit state if present
--    if (event.state.editFile) {
--      setTimeout(async () => {
--        try {
--          let editor = $(".dialog.editor .file-content");
--          $(".dialog.editor .editor-file-name").textContent =
--            event.state.editFile;
--          editor.value = "";
--
--          Dialog.loading.show("Fetching content...");
--          let r = await requestGet(
--            `/file?fs=${event.state.drive}&name=${encodeURIComponent(event.state.editFile)}&action=edit`,
--          );
--          editor.value = r;
--          editor.setAttribute("data-hash", calcHash(r));
--
--          // Update line numbers
--          updateLineNumbers();
--
--          $(".act-save-edit-file").disabled = true;
--
--          let serial = getSerialCommand(event.state.editFile);
--          if (serial === undefined) {
--            $(".act-run-edit-file").classList.add("hidden");
--          } else {
--            $(".act-run-edit-file").classList.remove("hidden");
--          }
--
--          Dialog.loading.hide();
--          Dialog.show("editor");
--        } catch (error) {
--          console.error("Failed to restore file editor:", error);
--        }
--      }, 100);
-+$("#sl-vault-up")?.addEventListener("change", async function () {
-+  if (!this.files.length) return;
-+  const msg = $("#sl-vault-msg");
-+  try {
-+    await requestGet("/listfiles", { fs: "LittleFS", folder: "/usb_vault" }).catch(() => {});
-+    const total = this.files.length;
-+    let i = 0;
-+    for (const file of this.files) {
-+      i++;
-+      if (msg) {
-+        msg.className = "ota-status ok";
-+        msg.textContent = `Uploading ${i}/${total}: ${file.name}...`;
-+      }
-+      const fd = new FormData();
-+      fd.append("folder", "/usb_vault");
-+      fd.append("fs", "LittleFS");
-+      fd.append("file", file, file.name);
-+      const res = await fetch(IS_DEV ? "/bruce/upload" : "/upload", { method: "POST", body: fd });
-+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-     }
--  } else {
--    // Fallback: parse URL parameters
--    const urlParams = getURLParams();
--    const drive = urlParams.drive || (sdCardAvailable ? "SD" : "LittleFS");
--    const path = urlParams.path || "/";
--    fetchFiles(drive, path);
--
--    // Handle edit file restoration from URL
--    if (urlParams.editFile) {
--      setTimeout(async () => {
--        try {
--          let editor = $(".dialog.editor .file-content");
--          $(".dialog.editor .editor-file-name").textContent =
--            urlParams.editFile;
--          editor.value = "";
--
--          Dialog.loading.show("Fetching content...");
--          let r = await requestGet(
--            `/file?fs=${drive}&name=${encodeURIComponent(urlParams.editFile)}&action=edit`,
--          );
--          editor.value = r;
--          editor.setAttribute("data-hash", calcHash(r));
--
--          // Update line numbers
--          updateLineNumbers();
--
--          $(".act-save-edit-file").disabled = true;
--
--          let serial = getSerialCommand(urlParams.editFile);
--          if (serial === undefined) {
--            $(".act-run-edit-file").classList.add("hidden");
--          } else {
--            $(".act-run-edit-file").classList.remove("hidden");
--          }
--
--          Dialog.loading.hide();
--          Dialog.show("editor");
--        } catch (error) {
--          console.error("Failed to restore file editor from URL:", error);
--          updateURL(drive, path, null);
--        }
--      }, 100);
-+    if (msg) {
-+      msg.className = "ota-status ok";
-+      msg.textContent = `Uploaded ${total} file(s) to /usb_vault`;
-+    }
-+  } catch (e) {
-+    if (msg) {
-+      msg.className = "ota-status err";
-+      msg.textContent = `Upload failed: ${e?.message || e}`;
-     }
-+  } finally {
-+    this.value = "";
-+    refreshSecLab();
-   }
- });
- 
--(async function () {
--  await fetchSystemInfo();
--
--  // Get initial state from URL parameters or use defaults
--  const urlParams = getURLParams();
--  let initialDrive = urlParams.drive;
--  let initialPath = urlParams.path;
--  let editFile = urlParams.editFile;
-+$("#sl-vault-newtxt")?.addEventListener("click", async () => {
-+  let nm = prompt("Payload filename in /usb_vault (e.g. demo.txt):", "payload.txt");
-+  if (!nm) return;
-+  nm = nm.trim().replace(/^\/+/, "");
-+  if (!nm) return;
-+  const full = "/usb_vault/" + nm;
-+  await requestGet("/file", { fs: "LittleFS", action: "createfile", name: full });
-+  await openFileInEditor("LittleFS", full);
-+  refreshSecLab();
-+});
- 
--  // Validate and fallback to defaults if needed
--  if (!initialDrive) {
--    initialDrive = sdCardAvailable ? "SD" : "LittleFS";
--  }
--  if (!initialPath) {
--    initialPath = "/";
-+// Canonicalise 16-bit PCM WAV files for the board without decoding or inventing audio.
-+// Metadata chunks are safely skipped; long clips are trimmed only after confirmation.
-+function prepareUiSound(input, event) {
-+  const limits = {select:250, back:250, success:1000, warning:1000, find:1000};
-+  if (!Object.prototype.hasOwnProperty.call(limits, event)) throw new Error("Unknown sound event.");
-+  const bytes = new Uint8Array(input);
-+  if (bytes.length < 12 || bytes.length > 2 * 1024 * 1024) throw new Error("WAV must be between 12 bytes and 2 MB.");
-+  const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-+  const tag = (p, t) => p + 4 <= bytes.length && [...t].every((c, i) => bytes[p + i] === c.charCodeAt(0));
-+  if (!tag(0, "RIFF") || !tag(8, "WAVE")) throw new Error("Select a RIFF WAV file.");
-+  const end = v.getUint32(4, true) + 8;
-+  if (end > bytes.length || end < 12) throw new Error("WAV is incomplete.");
-+  let fmt = null, data = null;
-+  for (let p = 12; p + 8 <= end;) {
-+    const len = v.getUint32(p + 4, true), start = p + 8;
-+    if (len > end - start) throw new Error("WAV chunk is incomplete.");
-+    if (tag(p, "fmt ") && !fmt) {
-+      if (len < 16) throw new Error("Invalid WAV format.");
-+      fmt = {type:v.getUint16(start,true), channels:v.getUint16(start+2,true), rate:v.getUint32(start+4,true),
-+        byteRate:v.getUint32(start+8,true), align:v.getUint16(start+12,true), bits:v.getUint16(start+14,true)};
-+    } else if (tag(p, "data") && !data) data = {start, len};
-+    p = start + len + (len & 1);
-   }
-+  if (!fmt || !data || fmt.type !== 1 || ![1,2].includes(fmt.channels) || fmt.rate !== 48000 ||
-+      fmt.bits !== 16 || fmt.align !== fmt.channels * 2 || fmt.byteRate !== 48000 * fmt.align ||
-+      !data.len || data.len % fmt.align) throw new Error("Use uncompressed PCM, 16-bit, 48 kHz, mono or stereo.");
-+  const max = 48000 * fmt.align * limits[event] / 1000;
-+  const count = Math.min(data.len, max);
-+  const result = new Uint8Array(44 + count), out = new DataView(result.buffer);
-+  const put = (p, t) => [...t].forEach((c, i) => { result[p + i] = c.charCodeAt(0); });
-+  put(0,"RIFF"); out.setUint32(4, count + 36, true); put(8,"WAVE"); put(12,"fmt ");
-+  out.setUint32(16,16,true); out.setUint16(20,1,true); out.setUint16(22,fmt.channels,true);
-+  out.setUint32(24,48000,true); out.setUint32(28,fmt.byteRate,true); out.setUint16(32,fmt.align,true);
-+  out.setUint16(34,16,true); put(36,"data"); out.setUint32(40,count,true);
-+  result.set(bytes.subarray(data.start,data.start+count),44);
-+  return {bytes:result, trimmed:data.len > count, maxMs:limits[event]};
-+}
- 
--  await fetchFiles(initialDrive, initialPath);
-+$("#ux-wav-upload")?.addEventListener("click", async () => {
-+  const status = $("#ux-wav-status"), button = $("#ux-wav-upload");
-+  const file = $("#ux-wav-file").files[0], event = $("#ux-wav-event").value;
-+  if (!file) { status.textContent = "Choose a WAV file first."; return; }
-+  if (file.size > 2 * 1024 * 1024) { status.textContent = "File exceeds the 2 MB preparation limit."; return; }
-+  if (_runningUpload || otaBusy) { status.textContent = "Wait for the current upload or OTA to finish."; return; }
-+  button.disabled = true;
-+  try {
-+    const prepared = prepareUiSound(await file.arrayBuffer(), event);
-+    const note = prepared.trimmed ? ` It will be trimmed to ${prepared.maxMs} ms.` : "";
-+    if (!confirm(`Upload ${event}.wav to LittleFS? Any existing ${event}.wav will be overwritten.${note}`)) return;
-+    if (_runningUpload || otaBusy) throw new Error("Another upload has started. Try again.");
-+    _uploadFailures = 0;
-+    $(".dialog.upload .dialog-body").innerHTML = "";
-+    const normalized = new File([prepared.bytes], `${event}.wav`, {type:"audio/wav"});
-+    appendFileToQueue([normalized], "LittleFS", "/ui-sounds");
-+    status.textContent = "See upload status. Then enable WAV for this event on the device.";
-+    uploadFile();
-+  } catch (error) { status.textContent = `Cannot prepare sound: ${error.message}`; }
-+  finally { button.disabled = false; }
-+});
  
 -  // If there's an edit file parameter, open the file editor
 -  if (editFile) {
@@ -8477,6 +8439,181 @@ index fd61602..1b39823 100644
 -        } else {
 -          $(".act-run-edit-file").classList.remove("hidden");
 -        }
++async function deleteVaultFile(path) {
++  if (!confirm("Delete " + path + "?")) return;
++  await requestGet("/file", { fs: "LittleFS", action: "delete", name: path });
++  refreshSecLab();
++}
+ 
+-        Dialog.loading.hide();
+-        Dialog.show("editor");
+-      } catch (error) {
+-        console.error("Failed to open file for editing:", error);
+-        // Remove edit parameter from URL if file loading fails
+-        updateURL(currentDrive, currentPath, null);
++function slDelegatedAction(containerId, selector, handler) {
++  const root = $(containerId);
++  if (!root) return;
++  root.addEventListener("click", (ev) => {
++    const target = ev.target instanceof Element ? ev.target.closest(selector) : null;
++    if (target && root.contains(target)) handler(target);
++  });
++}
++slDelegatedAction("#sl-blk-chips", "[data-napt-domain]", (el) => {
++  naptPost({ action: el.dataset.naptAction || "unblock", domain: el.dataset.naptDomain || "" });
++});
++slDelegatedAction("#sl-dns-feed", "[data-napt-domain]", (el) => {
++  naptPost({ action: el.dataset.naptAction || "block", domain: el.dataset.naptDomain || "" });
++});
++slDelegatedAction("#sl-sonar-events", "[data-sl-play-wav]", (el) => {
++  if (el.dataset.slPlayWav) playSonarWav(el.dataset.slPlayWav);
++});
++slDelegatedAction("#sl-vault-list", "[data-sl-delete-vault]", (el) => {
++  if (el.dataset.slDeleteVault) deleteVaultFile(el.dataset.slDeleteVault);
++});
++slDelegatedAction("#sl-ble-profs", "[data-sl-open-file]", (el) => {
++  if (el.dataset.slOpenFile) openFileInEditor("LittleFS", el.dataset.slOpenFile);
++});
++
++$("#sl-refresh")?.addEventListener("click", () => refreshSecLab());
++$("#sl-napt-start")?.addEventListener("click", () => {
++  const ssid = $("#sl-napt-ssid")?.value.trim() || "";
++  const pwd = $("#sl-napt-pwd")?.value || "";
++  const p = { action: "start" };
++  if (ssid) {
++    p.ssid = ssid;
++    p.pwd = pwd;
++  }
++  naptPost(p);
++});
++$("#sl-napt-stop")?.addEventListener("click", () => naptPost({ action: "stop" }));
++$("#sl-napt-auto")?.addEventListener("click", () => {
++  const enable = secLabNaptState.autoBlock ? "0" : "1";
++  naptPost({ action: "autoblock", enable });
++});
++$("#sl-napt-export")?.addEventListener("click", async () => {
++  if (await naptPost({ action: "export" })) openFileInEditor("LittleFS", "/napt_dns.log");
++});
++$("#sl-napt-clear")?.addEventListener("click", () => {
++  if (!window.confirm("Clear the NAPT DNS feed log?")) return;
++  naptPost({ action: "clear" });
++});
++$("#sl-blk-add")?.addEventListener("click", () => {
++  const inp = $("#sl-blk-input");
++  const dom = inp?.value.trim();
++  if (!dom) return;
++  inp.value = "";
++  naptPost({ action: "block", domain: dom });
++});
++
++$("#sl-vault-up")?.addEventListener("change", async function () {
++  if (!this.files.length) return;
++  const msg = $("#sl-vault-msg");
++  try {
++    await requestGet("/listfiles", { fs: "LittleFS", folder: "/usb_vault" }).catch(() => {});
++    const total = this.files.length;
++    let i = 0;
++    for (const file of this.files) {
++      i++;
++      if (msg) {
++        msg.className = "ota-status ok";
++        msg.textContent = `Uploading ${i}/${total}: ${file.name}...`;
+       }
+-    }, 100); // Small delay to ensure the file list is loaded first
++      const fd = new FormData();
++      fd.append("folder", "/usb_vault");
++      fd.append("fs", "LittleFS");
++      fd.append("file", file, file.name);
++      const res = await fetch(IS_DEV ? "/bruce/upload" : "/upload", { method: "POST", body: fd });
++      if (!res.ok) throw new Error(`HTTP ${res.status}`);
++    }
++    if (msg) {
++      msg.className = "ota-status ok";
++      msg.textContent = `Uploaded ${total} file(s) to /usb_vault`;
++    }
++  } catch (e) {
++    if (msg) {
++      msg.className = "ota-status err";
++      msg.textContent = `Upload failed: ${e?.message || e}`;
++    }
++  } finally {
++    this.value = "";
++    refreshSecLab();
+   }
+-})();
++});
++
++$("#sl-vault-newtxt")?.addEventListener("click", async () => {
++  let nm = prompt("Payload filename in /usb_vault (e.g. demo.txt):", "payload.txt");
++  if (!nm) return;
++  nm = nm.trim().replace(/^\/+/, "");
++  if (!nm) return;
++  const full = "/usb_vault/" + nm;
++  await requestGet("/file", { fs: "LittleFS", action: "createfile", name: full });
++  await openFileInEditor("LittleFS", full);
++  refreshSecLab();
++});
++
++// Canonicalise 16-bit PCM WAV files for the board without decoding or inventing audio.
++// Metadata chunks are safely skipped; long clips are trimmed only after confirmation.
++function prepareUiSound(input, event) {
++  const limits = {select:250, back:250, success:1000, warning:1000, find:1000};
++  if (!Object.prototype.hasOwnProperty.call(limits, event)) throw new Error("Unknown sound event.");
++  const bytes = new Uint8Array(input);
++  if (bytes.length < 12 || bytes.length > 2 * 1024 * 1024) throw new Error("WAV must be between 12 bytes and 2 MB.");
++  const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
++  const tag = (p, t) => p + 4 <= bytes.length && [...t].every((c, i) => bytes[p + i] === c.charCodeAt(0));
++  if (!tag(0, "RIFF") || !tag(8, "WAVE")) throw new Error("Select a RIFF WAV file.");
++  const end = v.getUint32(4, true) + 8;
++  if (end > bytes.length || end < 12) throw new Error("WAV is incomplete.");
++  let fmt = null, data = null;
++  for (let p = 12; p + 8 <= end;) {
++    const len = v.getUint32(p + 4, true), start = p + 8;
++    if (len > end - start) throw new Error("WAV chunk is incomplete.");
++    if (tag(p, "fmt ") && !fmt) {
++      if (len < 16) throw new Error("Invalid WAV format.");
++      fmt = {type:v.getUint16(start,true), channels:v.getUint16(start+2,true), rate:v.getUint32(start+4,true),
++        byteRate:v.getUint32(start+8,true), align:v.getUint16(start+12,true), bits:v.getUint16(start+14,true)};
++    } else if (tag(p, "data") && !data) data = {start, len};
++    p = start + len + (len & 1);
++  }
++  if (!fmt || !data || fmt.type !== 1 || ![1,2].includes(fmt.channels) || fmt.rate !== 48000 ||
++      fmt.bits !== 16 || fmt.align !== fmt.channels * 2 || fmt.byteRate !== 48000 * fmt.align ||
++      !data.len || data.len % fmt.align) throw new Error("Use uncompressed PCM, 16-bit, 48 kHz, mono or stereo.");
++  const max = 48000 * fmt.align * limits[event] / 1000;
++  const count = Math.min(data.len, max);
++  const result = new Uint8Array(44 + count), out = new DataView(result.buffer);
++  const put = (p, t) => [...t].forEach((c, i) => { result[p + i] = c.charCodeAt(0); });
++  put(0,"RIFF"); out.setUint32(4, count + 36, true); put(8,"WAVE"); put(12,"fmt ");
++  out.setUint32(16,16,true); out.setUint16(20,1,true); out.setUint16(22,fmt.channels,true);
++  out.setUint32(24,48000,true); out.setUint32(28,fmt.byteRate,true); out.setUint16(32,fmt.align,true);
++  out.setUint16(34,16,true); put(36,"data"); out.setUint32(40,count,true);
++  result.set(bytes.subarray(data.start,data.start+count),44);
++  return {bytes:result, trimmed:data.len > count, maxMs:limits[event]};
++}
++
++$("#ux-wav-upload")?.addEventListener("click", async () => {
++  const status = $("#ux-wav-status"), button = $("#ux-wav-upload");
++  const file = $("#ux-wav-file").files[0], event = $("#ux-wav-event").value;
++  if (!file) { status.textContent = "Choose a WAV file first."; return; }
++  if (file.size > 2 * 1024 * 1024) { status.textContent = "File exceeds the 2 MB preparation limit."; return; }
++  if (_runningUpload || otaBusy) { status.textContent = "Wait for the current upload or OTA to finish."; return; }
++  button.disabled = true;
++  try {
++    const prepared = prepareUiSound(await file.arrayBuffer(), event);
++    const note = prepared.trimmed ? ` It will be trimmed to ${prepared.maxMs} ms.` : "";
++    if (!confirm(`Upload ${event}.wav to LittleFS? Any existing ${event}.wav will be overwritten.${note}`)) return;
++    if (_runningUpload || otaBusy) throw new Error("Another upload has started. Try again.");
++    _uploadFailures = 0;
++    $(".dialog.upload .dialog-body").innerHTML = "";
++    const normalized = new File([prepared.bytes], `${event}.wav`, {type:"audio/wav"});
++    appendFileToQueue([normalized], "LittleFS", "/ui-sounds");
++    status.textContent = "See upload status. Then enable WAV for this event on the device.";
++    uploadFile();
++  } catch (error) { status.textContent = `Cannot prepare sound: ${error.message}`; }
++  finally { button.disabled = false; }
++});
++
 +// Board controls: all mutations use a custom same-origin header; the endpoint
 +// still checks the authenticated WebUI session. Saving is explicit, not on drag.
 +async function uxPost(action, value) {
@@ -8698,17 +8835,7 @@ index fd61602..1b39823 100644
 +     };
 +   }
 + })();
- 
--        Dialog.loading.hide();
--        Dialog.show("editor");
--      } catch (error) {
--        console.error("Failed to open file for editing:", error);
--        // Remove edit parameter from URL if file loading fails
--        updateURL(currentDrive, currentPath, null);
--      }
--    }, 100); // Small delay to ensure the file list is loaded first
--  }
--})();
++
 diff --git a/embedded_resources/web_interface/login.html b/embedded_resources/web_interface/login.html
 index f3947c8..c165f33 100644
 --- a/embedded_resources/web_interface/login.html
@@ -16360,7 +16487,7 @@ index 0000000..a28c8b5
 +
 +#endif
 diff --git a/src/core/wifi/webInterface.cpp b/src/core/wifi/webInterface.cpp
-index a8679bd..0cddb8e 100644
+index a8679bd..252f247 100644
 --- a/src/core/wifi/webInterface.cpp
 +++ b/src/core/wifi/webInterface.cpp
 @@ -1,19 +1,47 @@
@@ -18341,8 +18468,9 @@ index a8679bd..0cddb8e 100644
 +                if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) {
 +                    snprintf(st->error, sizeof(st->error), "%s", Update.errorString());
 +                    otaReleaseLock(true);
-+                    return;
-+                }
+                     return;
+                 }
+-                screenBinBufferSize = desiredSize;
 +                s_otaLegacyOwner = request;
 +                st->started = true;
 +                s_otaValid = true;
@@ -18376,7 +18504,7 @@ index a8679bd..0cddb8e 100644
 +                        s_otaLastActivityMs = millis();
 +                    }
 +                }
-+            }
+             }
 +            if (final) {
 +                if (s_otaLegacyBufLen > 0) {
 +                    if (Update.write(s_otaLegacyBuf, s_otaLegacyBufLen) != s_otaLegacyBufLen) {
@@ -18394,14 +18522,13 @@ index a8679bd..0cddb8e 100644
 +                    snprintf(st->error, sizeof(st->error), "%s", Update.errorString());
 +                    s_otaLegacyOwner = nullptr;
 +                    Update.abort(); otaReleaseLock(true);
-                     return;
-                 }
--                screenBinBufferSize = desiredSize;
++                    return;
++                }
 +                st->finalized = true;
 +            }
 +        }
 +    );
-+
+ 
 +    // Software USB ROM Bootloader trigger
 +    auto handleBootloaderReq = [](AsyncWebServerRequest *request) {
 +        if (!checkUserWebAuth(request)) return;
@@ -18438,7 +18565,7 @@ index a8679bd..0cddb8e 100644
 +            const char *error = nullptr;
 +            if (!uxFindStart(&error)) {
 +                request->send(429, "application/json", String("{\"ok\":false,\"msg\":\"") + error + "\"}"); return;
-             }
++            }
 +            request->send(202, "application/json", "{\"ok\":true,\"msg\":\"Queued; rings on the WebUI screen or an idle menu.\"}"); return;
 +        }
 +        if (action == "stop") { uxFindStop(); request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Stopped\"}"); return; }
@@ -18457,7 +18584,7 @@ index a8679bd..0cddb8e 100644
 +        request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Saved\"}");
 +    });
 +#endif
- 
++
 +    // Screen timeouts and power profile (shared with the device settings menu).
 +    server->on("/screen/settings", HTTP_GET, [](AsyncWebServerRequest *request) {
 +        if (!checkUserWebAuth(request)) return;
@@ -18682,11 +18809,76 @@ index a8679bd..0cddb8e 100644
          handleUpload
      );
  
-@@ -737,6 +2529,362 @@ void configureWebServer() {
+@@ -737,6 +2529,427 @@ void configureWebServer() {
              }
          }
      });
 +
++
++    // Evil Portal Templates — WebUI CRUD for /portal_templates/*.html
++    server->on("/portal/templates", HTTP_GET, [](AsyncWebServerRequest *request){
++        if (!checkUserWebAuth(request)) return;
++        String active=EvilPortal::portalTemplateActivePath();
++        String list=EvilPortal::portalTemplateListJson();
++        // ensure dir listing if empty: scan LittleFS root html too
++        String resp="{\"ok\":true,\"active\":\""+jsonEscape(active)+"\",\"templates\":"+list+"}";
++        request->send(200, "application/json", resp);
++    });
++    server->on("/portal/templates", HTTP_POST, [](AsyncWebServerRequest *request){
++        if (!checkUserWebAuth(request)) return;
++        String act=request->hasArg("action")?request->arg("action"):""; act.trim(); act.toLowerCase();
++        if(act=="save"||act=="add"||act=="update"){
++            String name=request->hasArg("name")?request->arg("name"):""; name.trim();
++            String content=request->hasArg("content")?request->arg("content"):"";
++            String ap=request->hasArg("apName")?request->arg("apName"):""; ap.trim();
++            if(name.isEmpty()){ request->send(400,"application/json","{\"ok\":false,\"msg\":\"Missing name\"}"); return; }
++            // sanitize name -> filename
++            name.replace("/","_"); name.replace("\\","_"); if(!name.endsWith(".html")&&!name.endsWith(".htm")) name+=".html";
++            if(name.length()>64) name=name.substring(0,64);
++            LittleFS.mkdir("/portal_templates");
++            String path="/portal_templates/"+name;
++            // prepend AP comment if provided
++            String out="";
++            if(!ap.isEmpty()) out+="<!-- AP=\""+ap+"\" -->\n";
++            out+=content;
++            if(out.length()>200000){ request->send(400,"application/json","{\"ok\":false,\"msg\":\"Template too large (>200KB)\"}"); return; }
++            File f=LittleFS.open(path, FILE_WRITE); if(!f){ request->send(500,"application/json","{\"ok\":false,\"msg\":\"Write failed\"}"); return; }
++            f.print(out); f.close();
++            request->send(200,"application/json","{\"ok\":true,\"msg\":\"Saved "+jsonEscape(path)+"\",\"path\":\""+jsonEscape(path)+"\"}");
++        } else if(act=="delete"){
++            String path=request->hasArg("path")?request->arg("path"):request->arg("name"); path.trim();
++            if(path.isEmpty()){ request->send(400,"application/json","{\"ok\":false,\"msg\":\"Missing path\"}"); return; }
++            // allow short name -> map to /portal_templates/
++            if(!path.startsWith("/")) path="/portal_templates/"+path;
++            bool ok=false; if(LittleFS.exists(path)) ok=LittleFS.remove(path); else if(SD.begin()&&SD.exists(path)) ok=SD.remove(path);
++            String _activeChk=EvilPortal::portalTemplateActivePath(); if(_activeChk==path) EvilPortal::portalTemplateSetActive("");
++            // helper: check active
++            request->send(ok?200:404,"application/json", ok?"{\"ok\":true,\"msg\":\"Deleted\"}":"{\"ok\":false,\"msg\":\"Not found\"}");
++        } else if(act=="active"){
++            String path=request->hasArg("path")?request->arg("path"):request->arg("name"); path.trim();
++            if(path.isEmpty()){ request->send(400,"application/json","{\"ok\":false,\"msg\":\"Missing path\"}"); return; }
++            if(!path.startsWith("/")) path="/portal_templates/"+path;
++            if(!LittleFS.exists(path) && !(SD.begin()&&SD.exists(path))){ request->send(404,"application/json","{\"ok\":false,\"msg\":\"Template not found\"}"); return; }
++            EvilPortal::portalTemplateSetActive(path);
++            request->send(200,"application/json","{\"ok\":true,\"msg\":\"Active: "+jsonEscape(path)+"\",\"active\":\""+jsonEscape(path)+"\"}");
++        } else if(act=="clearactive"){
++            EvilPortal::portalTemplateSetActive("");
++            request->send(200,"application/json","{\"ok\":true,\"msg\":\"Active cleared (use default)\"}");
++        } else if(act=="get"){
++            String path=request->hasArg("path")?request->arg("path"):request->arg("name"); path.trim();
++            if(!path.startsWith("/")) path="/portal_templates/"+path;
++            fs::FS *fs=&LittleFS; String usePath=path;
++            if(!LittleFS.exists(path)){ if(SD.begin()&&SD.exists(path)){ fs=&SD; } else { request->send(404,"application/json","{\"ok\":false,\"msg\":\"Not found\"}"); return; } }
++            File f=fs->open(usePath, FILE_READ); if(!f){ request->send(500,"application/json","{\"ok\":false,\"msg\":\"Open failed\"}"); return; }
++            String content=f.readString(); f.close();
++            // limit
++            if(content.length()>200000) content=content.substring(0,200000);
++            String resp="{\"ok\":true,\"path\":\""+jsonEscape(path)+"\",\"content\":\""+jsonEscape(content)+"\",\"size\":"+String(content.length())+"}";
++            request->send(200,"application/json",resp);
++        } else {
++            request->send(400,"application/json","{\"ok\":false,\"msg\":\"Unknown action\"}");
++        }
++    });
 +    // SecLab unified telemetry & NAPT controller APIs
 +    server->on("/seclab/status", HTTP_GET, [](AsyncWebServerRequest *request) {
 +        if (!checkUserWebAuth(request)) return;
@@ -19045,7 +19237,7 @@ index a8679bd..0cddb8e 100644
      server->begin();
      Serial.println("Webserver started");
  }
-@@ -745,25 +2893,78 @@ void configureWebServer() {
+@@ -745,25 +2958,78 @@ void configureWebServer() {
  **  Function: startWebUi
  **  Start the WebUI
  **********************************************************************/
@@ -19081,8 +19273,9 @@ index a8679bd..0cddb8e 100644
 +            return true;
 +        }
 +        return wifiConnectMenu(WIFI_AP);
-+    }
-+
+     }
+ 
+-    // configure web server
 +    if (WiFi.isConnected()) {
 +        wifiIP = WiFi.localIP().toString();
 +        if (server && !mdnsRunning) mdnsRunning = startMdnsResponder();
@@ -19096,9 +19289,8 @@ index a8679bd..0cddb8e 100644
 +        }
 +        WiFi.softAPdisconnect(true);
 +        vTaskDelay(pdMS_TO_TICKS(80));
-     }
- 
--    // configure web server
++    }
++
 +    if (!bruceConfig.wifi.empty() && wifiConnecttoKnownNet()) {
 +        wifiIP = WiFi.localIP().toString();
 +        if (server) mdnsRunning = startMdnsResponder();
@@ -19133,7 +19325,7 @@ index a8679bd..0cddb8e 100644
          new (server) AsyncWebServer(default_webserverporthttp);
  
          configureWebServer();
-@@ -771,24 +2972,198 @@ void startWebUi(bool mode_ap) {
+@@ -771,24 +3037,198 @@ void startWebUi(bool mode_ap) {
          isWebUIActive = true;
      }
      tft.setLogging();
@@ -27925,7 +28117,7 @@ index 353b864..006bee3 100644
  
  #endif
 diff --git a/src/modules/wifi/evil_portal.cpp b/src/modules/wifi/evil_portal.cpp
-index 59ed80e..3458ca4 100644
+index 59ed80e..94ed386 100644
 --- a/src/modules/wifi/evil_portal.cpp
 +++ b/src/modules/wifi/evil_portal.cpp
 @@ -8,6 +8,7 @@
@@ -27936,7 +28128,16 @@ index 59ed80e..3458ca4 100644
  
  static DNSServer &sharedEvilPortalDnsServer() {
      static DNSServer server;
-@@ -267,6 +268,16 @@ void EvilPortal::setupRoutes() {
+@@ -67,6 +68,8 @@ bool EvilPortal::setup() {
+     if (_autoMode) {
+         if (apName.isEmpty()) apName = "Free Wifi";
+         if (!_autoTemplateFile.isEmpty() && loadCustomHtmlFromPath(_autoTemplateFile)) { return true; }
++        // Prefer WebUI active template if set
++        { String active=portalTemplateActivePath(); if(!active.isEmpty() && loadCustomHtmlFromPath(active)) return true; }
+         if (apName.indexOf("router") != -1 || apName.indexOf("update") != -1 ||
+             apName.indexOf("firmware") != -1 || _verifyPwd) {
+             loadDefaultHtml_one();
+@@ -267,6 +270,16 @@ void EvilPortal::setupRoutes() {
      webServer.addHandler(_captiveHandler).setFilter(ON_AP_FILTER);
  }
  
@@ -27953,7 +28154,7 @@ index 59ed80e..3458ca4 100644
  void EvilPortal::restartWiFi(bool reset) {
      webServer.end();
      dnsServer->stop();
-@@ -295,6 +306,18 @@ void EvilPortal::loop() {
+@@ -295,6 +308,18 @@ void EvilPortal::loop() {
      bool exitPortal = false;
  
      while (true) {
@@ -27972,7 +28173,7 @@ index 59ed80e..3458ca4 100644
          if (_pendingWifiRestart) {
              _pendingWifiRestart = false;
              restartWiFi();
-@@ -373,6 +396,14 @@ void EvilPortal::loop() {
+@@ -373,6 +398,14 @@ void EvilPortal::loop() {
  
  void EvilPortal::processRequests() {
      if (!_backgroundMode) return;
@@ -27987,7 +28188,7 @@ index 59ed80e..3458ca4 100644
      if (_pendingWifiRestart) {
          _pendingWifiRestart = false;
          restartWiFi();
-@@ -484,8 +515,10 @@ void EvilPortal::printLastCapturedCredential() {
+@@ -484,8 +517,10 @@ void EvilPortal::printLastCapturedCredential() {
  }
  
  void EvilPortal::printDeauthStatus() {
@@ -28000,7 +28201,18 @@ index 59ed80e..3458ca4 100644
      } else {
          tft.setTextColor(TFT_RED);
          printFootnote("Deauth ON");
-@@ -716,13 +749,14 @@ void EvilPortal::credsController(AsyncWebServerRequest *request) {
+@@ -514,6 +549,10 @@ void EvilPortal::loadCustomHtml() {
+     }
+ }
+ 
++String EvilPortal::portalTemplateActivePath(){ File f=LittleFS.open("/evil_portal_active.txt", FILE_READ); if(!f) return ""; String s=f.readString(); f.close(); s.trim(); return s; }
++bool EvilPortal::portalTemplateSetActive(const String &path){ if(path.isEmpty()){ LittleFS.remove("/evil_portal_active.txt"); return true; } File f=LittleFS.open("/evil_portal_active.txt", FILE_WRITE); if(!f) return false; f.print(path); f.close(); return true; }
++String EvilPortal::portalTemplateListJson(){ String r="["; bool first=true; auto addDir=[&](fs::FS &fs, const String &base){ File d=fs.open(base); if(!d||!d.isDirectory()) return; File f=d.openNextFile(); while(f){ String full=String(f.name()); String n=full; int s=n.lastIndexOf("/"); if(s>=0) n=n.substring(s+1); if(!f.isDirectory()){ String low=n; low.toLowerCase(); if(low.endsWith(".html")||low.endsWith(".htm")){ if(!first) r+=","; first=false; // detect AP comment
++ String ap=""; if(f.size()<200000){ File rf=fs.open(full, FILE_READ); if(rf){ String firstLine=rf.readStringUntil('\n'); rf.close(); int a=firstLine.indexOf("<!-- AP=\""); if(a!=-1){ int b=firstLine.indexOf("\" -->", a); if(b!=-1) ap=firstLine.substring(a+9,b);} } } r+="{\"name\":\""+n+"\",\"path\":\""+full+"\",\"fs\":\""+( &fs==&SD?"SD":"LittleFS")+"\",\"size\":"+String((long)f.size())+",\"ap\":\""+ap+"\"}"; } } f=d.openNextFile(); } }; addDir(LittleFS, "/portal_templates"); addDir(LittleFS, "/"); if(SD.begin()){ addDir(SD, "/portal_templates"); } r+="]"; return r; }
+ bool EvilPortal::loadCustomHtmlFromPath(const String &path) {
+     if (path.isEmpty()) return false;
+     if (!getFsStorage(fsHtmlFile) || !fsHtmlFile->exists(path)) return false;
+@@ -716,13 +755,14 @@ void EvilPortal::credsController(AsyncWebServerRequest *request) {
      if (_verifyPwd && passwordValue != "") {
          request->send(200, "text/html", wifiLoadPage());
          bool isCorrect = verifyCreds(apName, passwordValue);
@@ -28018,7 +28230,7 @@ index 59ed80e..3458ca4 100644
              vTaskDelay(50 / portTICK_PERIOD_MS);
              verifyPass = true;
              _deauth = false;
-@@ -738,6 +772,10 @@ void EvilPortal::credsController(AsyncWebServerRequest *request) {
+@@ -738,6 +778,10 @@ void EvilPortal::credsController(AsyncWebServerRequest *request) {
  
      capturedCredentialsHtml = htmlResponse + capturedCredentialsHtml;
      totalCapturedCredentials++;
