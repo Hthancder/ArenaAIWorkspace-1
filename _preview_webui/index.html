@@ -1,0 +1,1256 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bruce SecLab WebUI</title>
+  <link rel="stylesheet" href="/index.css" />
+  <link rel="stylesheet" href="/theme.css" />
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="brand-title title" onclick="Dialog.show('info')" title="About Bruce">
+        <svg class="shark-logo" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M8 38C15 35 22 25 32 13C34 22 39 27 48 28C54 29 58 32 58 36C58 41 51 45 40 46L34 52L32 46C22 46 14 43 8 38Z" fill="currentColor" fill-opacity="0.22" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/>
+          <path d="M6 34L14 39L8 46" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="47" cy="34" r="2.3" fill="currentColor"/>
+        </svg>
+        <div class="title-text">
+          <div class="brand-row">
+            <strong>BRUCE [<span class="bruce-version">dev</span>]</strong>
+            <span id="owner-badge" class="owner-badge">DSolution</span>
+          </div>
+          <small id="tele-board">ESP32-S3 Security Lab</small>
+        </div>
+      </div>
+      <div class="nav-actions">
+        <button class="btn-action" onclick="openWifiModal()">LAN WiFi</button>
+        <button class="btn-action" onclick="openOtaModal()">WebOTA</button>
+        <button class="btn-action" onclick="Dialog.show('settings')">Settings</button>
+        <button class="btn-action" onclick="window.location.href='/logout'">Log Out</button>
+      </div>
+    </div>
+
+    <div class="telemetry-bar">
+      <span class="tele-pill">Bat: <b id="tele-bat">--%</b></span>
+      <span class="tele-pill">DMA: <b id="tele-dma">-- / --</b></span>
+      <span class="tele-pill">Heap / PSRAM: <b id="tele-ram">-- / --</b></span>
+      <span class="tele-pill">CPU: <b id="tele-cpu">-- MHz</b></span>
+      <span class="tele-pill">OTA: <b id="tele-ota">--</b></span>
+      <button type="button" class="tele-pill tele-pill-btn" onclick="openWifiModal()" title="Configure LAN WiFi (192.168.x.x)">Net: <b id="tele-net">--</b></button>
+    </div>
+
+    <div class="tab-bar" role="tablist">
+      <button type="button" class="tab-btn active" data-tab="dashboard">Dashboard</button>
+      <button type="button" class="tab-btn" data-tab="monitor">Monitor</button>
+      <button type="button" class="tab-btn" data-tab="studio">Studio</button>
+      <button type="button" class="tab-btn" data-tab="files">Files</button>
+      <button type="button" class="tab-btn" data-tab="screen">Screen</button>
+      <button type="button" class="tab-btn" data-tab="personalize">Personalize</button>
+      <button type="button" class="tab-btn" data-tab="console">Console</button>
+      <button type="button" class="tab-btn" data-tab="seclab">SecLab</button>
+    </div>
+
+    <!-- TAB 1: DASHBOARD -->
+    <section id="tab-dashboard" class="tab-pane">
+      <div class="dash-grid">
+        <div class="dash-card">
+          <div class="dash-card-head">
+            <h3>Quick Controls</h3>
+            <span class="mono muted-sm" id="dash-mdns">http://bruce.local</span>
+          </div>
+          <div class="quick-grid">
+            <button type="button" class="btn-action" id="act-sync-time">Sync Browser Time</button>
+            <button type="button" class="btn-action" id="ux-find">Find device</button>
+            <button type="button" class="btn-action" id="ux-stop">Stop finding</button>
+            <button type="button" class="btn-action" id="act-led-theme">LED Theme Glow</button>
+            <button type="button" class="btn-action" onclick="quickCli('led off')">LED Off</button>
+            <button type="button" class="btn-action" onclick="switchTab('screen')">Live Screen Mirror</button>
+            <button type="button" class="btn-action" onclick="switchTab('personalize')">Theme &amp; Identity</button>
+            <button type="button" class="btn-action" onclick="openWifiModal()">LAN WiFi Switch</button>
+            <button type="button" class="btn-action btn-default" onclick="openOtaModal()">WebOTA Flash</button>
+            <button type="button" class="btn-action btn-warn act-reboot">Reboot Device</button>
+            <button type="button" class="btn-action btn-danger act-bootloader">USB Bootloader</button>
+          </div>
+          <div class="ux-settings" aria-label="Device sound and display">
+            <label><input type="checkbox" id="ux-sound" /> System sounds</label>
+            <label><input type="checkbox" id="ux-menu-tones" /> Menu tones (off = alerts only)</label>
+            <label for="ux-volume">Volume <output id="ux-volume-label">--</output>%</label>
+            <input id="ux-volume" type="range" min="0" max="100" step="5" />
+            <label for="ux-brightness">Brightness <output id="ux-brightness-label">--</output>%</label>
+            <input id="ux-brightness" type="range" min="5" max="100" step="5" />
+            <button type="button" class="btn-action" id="ux-save">Save sound &amp; display</button>
+            <small>Find repeats until Stop while the WebUI screen or a device menu is servicing it. Playback pauses in some apps and during OTA. Sound and LED settings are respected.</small>
+            <details class="ux-sound-upload">
+              <summary>Upload a custom UI sound</summary>
+              <p>Use a 48 kHz, 16-bit PCM WAV (mono or stereo). Longer clips are trimmed after confirmation. Existing event files are overwritten.</p>
+              <label for="ux-wav-event">Event</label>
+              <select id="ux-wav-event"><option value="select">Select (250 ms)</option><option value="back">Back (250 ms)</option><option value="success">Success (1 s)</option><option value="warning">Warning (1 s)</option><option value="find">Find (1 s)</option></select>
+              <label for="ux-wav-file">Sound file</label>
+              <input id="ux-wav-file" type="file" accept=".wav,audio/wav" />
+              <button type="button" class="btn-action" id="ux-wav-upload">Prepare and upload</button>
+              <small>After uploading, select WAV for that event in Config → Audio Config → UI sound events on the device.</small>
+              <div id="ux-wav-status" role="status" aria-live="polite"></div>
+            </details>
+            <div id="ux-status" role="status" aria-live="polite">Loading controls...</div>
+          </div>
+          <div id="dash-action-status" class="ota-status hidden"></div>
+        </div>
+
+        <div class="dash-card">
+          <div class="dash-card-head">
+            <h3>Security &amp; System Telemetry</h3>
+            <span class="mono muted-sm" id="dash-uptime">Up 0s</span>
+          </div>
+          <div class="kv-grid">
+            <div class="kv-item"><span>Board</span><b id="kv-board">--</b></div>
+            <div class="kv-item"><span>Owner / Tag</span><b id="kv-owner">--</b></div>
+            <div class="kv-item"><span>MAC Addr</span><b id="kv-mac" class="mono">--</b></div>
+            <div class="kv-item"><span>DMA Free / Max</span><b id="kv-dma" class="mono">--</b></div>
+            <div class="kv-item"><span>Heap Free</span><b id="kv-heap" class="mono">--</b></div>
+            <div class="kv-item"><span>PSRAM Free</span><b id="kv-psram" class="mono">--</b></div>
+          </div>
+          <div class="log-links">
+            <div class="log-pill">
+              <div>
+                <strong>WIDS Alert Log</strong>
+                <small id="wids-log-st">Checking...</small>
+              </div>
+              <button type="button" class="btn-action" id="btn-open-wids">Inspect</button>
+            </div>
+            <div class="log-pill">
+              <div>
+                <strong>BLE Guard Log</strong>
+                <small id="ble-log-st">Checking...</small>
+              </div>
+              <button type="button" class="btn-action" id="btn-open-ble">Inspect</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="dash-dualboot-card" class="dash-card dash-card-wide hidden">
+          <div class="dash-card-head">
+            <h3>Dual-Boot OS Switcher (16 MB Flash)</h3>
+            <span class="mono muted-sm">ota_0: XiaoZhi HeyLily &bull; ota_1: Bruce SecLab</span>
+          </div>
+          <div class="dualboot-row">
+            <button type="button" class="btn-action btn-default" id="btn-switch-xiaozhi">Switch to XiaoZhi HeyLily</button>
+            <button type="button" class="btn-action" id="btn-switch-bootmenu">Reboot to Dual-Boot Menu</button>
+          </div>
+        </div>
+
+    <!-- TAB 1.5: MONITOR — Network + System + Alerts dashboard tổng -->
+    <section id="tab-monitor" class="tab-pane hidden">
+      <div class="seclab-bar">
+        <div>
+          <strong>Live Monitor Center</strong>
+          <small class="muted-sm">System · Network · Wi-Fi · WIDS/BLE/Sonar feeds — live từ <code>/systeminfo</code> + <code>/seclab/status</code></small>
+        </div>
+        <div class="seclab-bar-actions">
+          <label class="sl-inline-label" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="mon-auto" checked /> Auto 3s</label>
+          <button type="button" class="btn-action btn-default" id="mon-refresh">Refresh Now</button>
+          <span id="mon-last" class="mono muted-sm">--</span>
+        </div>
+      </div>
+
+      <div class="seclab-subtabs" role="tablist" aria-label="Monitor sections">
+        <button type="button" class="slab-btn active" data-monslab="overview" aria-selected="true">Tổng quan</button>
+        <button type="button" class="slab-btn" data-monslab="network">Network & Wi-Fi</button>
+        <button type="button" class="slab-btn" data-monslab="system">System & Storage</button>
+        <button type="button" class="slab-btn" data-monslab="alerts">Alerts Feed</button>
+      </div>
+      <div id="mon-msg" class="ota-status hidden" role="status" aria-live="polite" style="margin:10px 16px 0"></div>
+
+      <!-- Overview -->
+      <div id="monslab-overview" class="slab-view">
+        <div class="overview-grid">
+          <div class="ov-tile"><strong>Device</strong><b id="mon-ov-device">--</b><small class="muted-sm" id="mon-ov-device-sub">MAC -- · Up --</small><span id="mon-ov-device-badge" class="sl-badge">--</span></div>
+          <div class="ov-tile"><strong>Power & CPU</strong><b id="mon-ov-power">--</b><small class="muted-sm" id="mon-ov-power-sub">Bat --% · --V · CPU --MHz</small><span id="mon-ov-power-badge" class="sl-badge">--</span></div>
+          <div class="ov-tile"><strong>Memory</strong><b id="mon-ov-mem">--</b><small class="muted-sm" id="mon-ov-mem-sub">Heap -- · PSRAM -- · DMA --</small><span id="mon-ov-mem-badge" class="sl-badge">OK</span></div>
+          <div class="ov-tile"><strong>Network</strong><b id="mon-ov-net">--</b><small class="muted-sm" id="mon-ov-net-sub">--</small><span id="mon-ov-net-badge" class="sl-badge">--</span>
+            <div class="sl-row sl-mt"><button type="button" class="btn-action" data-monslab-jump="network">Mở Network →</button><button type="button" class="btn-action" onclick="openWifiModal()">LAN WiFi</button></div>
+          </div>
+          <div class="ov-tile"><strong>NAPT Router</strong><b id="mon-ov-napt">OFF</b><small class="muted-sm" id="mon-ov-napt-sub">Clients 0 · Queries 0 · Trackers 0</small>
+            <div class="sl-row sl-mt"><button type="button" class="btn-action" data-jump-tab="seclab" data-jump-slab="wifi">Mở NAPT →</button><button type="button" class="btn-action" id="mon-napt-toggle">Start/Stop</button></div>
+          </div>
+          <div class="ov-tile"><strong>Alerts</strong><b id="mon-ov-alerts">0 alerts</b><small class="muted-sm" id="mon-ov-alerts-sub">WIDS · LAN Guard · Sonar · BLE</small><span id="mon-ov-alerts-badge" class="sl-badge">IDLE</span>
+            <div class="sl-row sl-mt"><button type="button" class="btn-action" data-monslab-jump="alerts">Xem Alerts →</button><button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/wids_alerts.txt')">WIDS Log</button></div>
+          </div>
+        </div>
+        <div class="dash-grid sl-mt" style="padding:0">
+          <div class="dash-card">
+            <div class="dash-card-head"><h3>Active Chains & Tools</h3><span id="mon-ov-chain-badge" class="sl-badge">IDLE</span></div>
+            <div id="mon-ov-chains" class="sl-scroll" style="max-height:132px"></div>
+            <div class="sl-row sl-mt"><button type="button" class="btn-action" data-jump-tab="seclab" data-jump-slab="lan">Mở SecLab →</button><button type="button" class="btn-action" onclick="switchTab('console')">Console</button></div>
+          </div>
+          <div class="dash-card">
+            <div class="dash-card-head"><h3>Quick Wi-Fi Scan</h3><span class="sl-badge" id="mon-ov-wifi-badge">2.4 GHz</span></div>
+            <div class="sl-row"><button type="button" class="btn-action btn-default" id="mon-wifi-scan">Scan APs</button><button type="button" class="btn-action" onclick="openWifiModal()">LAN WiFi Modal</button></div>
+            <div id="mon-wifi-list" class="sl-scroll sl-mt"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Network -->
+      <div id="monslab-network" class="slab-view hidden">
+        <div class="dash-card dash-card-wide">
+          <div class="dash-card-head"><h3>Wi-Fi Connection</h3><span id="mon-wifi-mode" class="sl-badge">--</span></div>
+          <div class="kv-grid">
+            <div class="kv-item"><span>Mode / IP</span><b id="mon-net-mode">--</b></div>
+            <div class="kv-item"><span>SSID / RSSI</span><b id="mon-net-ssid">--</b></div>
+            <div class="kv-item"><span>AP Hotspot</span><b id="mon-net-ap">--</b></div>
+            <div class="kv-item"><span>mDNS</span><b id="mon-net-mdns">--</b></div>
+          </div>
+          <div class="sl-row sl-mt"><button type="button" class="btn-action btn-default" id="mon-net-scan">Scan APs (2.4 GHz)</button><button type="button" class="btn-action" onclick="openWifiModal()">Open WiFi Modal</button><button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/probe_radar.csv')">Probe CSV</button></div>
+          <div id="mon-net-scanlist" class="sl-scroll sl-mt" style="max-height:220px"></div>
+        </div>
+
+        <details class="sl-group" open>
+          <summary><span>NAPT Router — live</span><span id="mon-napt-badge" class="sl-badge">OFF</span></summary>
+          <div class="kv-grid sl-mt">
+            <div class="kv-item"><span>Uplink Wi-Fi</span><b id="mon-napt-up">--</b></div>
+            <div class="kv-item"><span>Hotspot AP</span><b id="mon-napt-ap">192.168.4.1</b></div>
+            <div class="kv-item"><span>Clients / Queries</span><b id="mon-napt-stat">0 / 0</b></div>
+            <div class="kv-item"><span>Blocked / Trackers</span><b id="mon-napt-blk">0 / 0</b></div>
+          </div>
+          <div class="sl-row sl-mt"><button type="button" class="btn-action btn-default" data-jump-tab="seclab" data-jump-slab="wifi">Điều khiển NAPT →</button><button type="button" class="btn-action" id="mon-napt-export">Export DNS Log</button></div>
+          <div class="sl-split sl-mt"><div><strong class="sl-sub">Live DNS Queries (last 12)</strong><div id="mon-napt-dns" class="sl-scroll"></div></div><div><strong class="sl-sub">Connected Clients</strong><div id="mon-napt-clients" class="sl-scroll"></div></div></div>
+        </details>
+
+        <details class="sl-group">
+          <summary><span>Airtime & Probe Radar</span><span id="mon-air-badge" class="sl-badge">BEST CH --</span></summary>
+          <div id="mon-air-bars" class="sl-bars sl-mt"></div>
+          <div class="sl-split sl-mt"><div><strong class="sl-sub">Hidden & Decloaked APs</strong><div id="mon-air-hidden" class="sl-scroll"></div></div><div><strong class="sl-sub">Probe Clusters</strong><div id="mon-probe-list" class="sl-scroll"></div></div></div>
+          <div class="sl-row sl-mt"><button type="button" class="btn-action" data-jump-tab="seclab" data-jump-slab="wifi">Mở Wi-Fi chi tiết →</button></div>
+        </details>
+      </div>
+
+      <!-- System -->
+      <div id="monslab-system" class="slab-view hidden">
+        <div class="kv-grid">
+          <div class="kv-item"><span>Uptime</span><b id="mon-sys-uptime">--</b></div>
+          <div class="kv-item"><span>Battery / Charging</span><b id="mon-sys-bat">--</b></div>
+          <div class="kv-item"><span>CPU / Board</span><b id="mon-sys-cpu">--</b></div>
+          <div class="kv-item"><span>OTA Slot</span><b id="mon-sys-ota">--</b></div>
+        </div>
+        <div class="kv-grid sl-mt">
+          <div class="kv-item"><span>Heap Free</span><b id="mon-sys-heap" class="mono">--</b></div>
+          <div class="kv-item"><span>PSRAM Free</span><b id="mon-sys-psram" class="mono">--</b></div>
+          <div class="kv-item"><span>DMA Free / Max Block</span><b id="mon-sys-dma" class="mono">--</b></div>
+          <div class="kv-item"><span>Build / Menu Style</span><b id="mon-sys-build">--</b></div>
+        </div>
+        <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="fetchSystemInfo()">Refresh SystemInfo</button><button type="button" class="btn-action" onclick="quickCli('free')">CLI: free</button><button type="button" class="btn-action" onclick="quickCli('info')">CLI: info</button></div>
+
+        <div class="dash-grid sl-mt" style="padding:0">
+          <div class="dash-card">
+            <div class="dash-card-head"><h3>LittleFS</h3><span id="mon-fs-free" class="sl-badge">--</span></div>
+            <div class="drive-meter"><i id="mon-meter-fs"></i></div>
+            <div class="kv-grid sl-mt"><div class="kv-item"><span>Used / Total</span><b id="mon-fs-used">--</b></div><div class="kv-item"><span>Free</span><b id="mon-fs-free2">--</b></div></div>
+            <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/')">Open Files →</button></div>
+          </div>
+          <div class="dash-card">
+            <div class="dash-card-head"><h3>SDCard</h3><span id="mon-sd-free" class="sl-badge">--</span></div>
+            <div class="drive-meter"><i id="mon-meter-sd"></i></div>
+            <div class="kv-grid sl-mt"><div class="kv-item"><span>Used / Total</span><b id="mon-sd-used">--</b></div><div class="kv-item"><span>Free</span><b id="mon-sd-free2">--</b></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Alerts -->
+      <div id="monslab-alerts" class="slab-view hidden">
+        <div class="sl-row sticky-alert-filter" style="position:sticky;top:0;z-index:1;background:var(--surface);padding:6px;border:1px solid var(--border);border-radius:8px">
+          <button type="button" class="btn-action btn-default mon-filter active" data-filter="all">All</button>
+          <button type="button" class="btn-action mon-filter" data-filter="wids">WIDS</button>
+          <button type="button" class="btn-action mon-filter" data-filter="guard">LAN Guard</button>
+          <button type="button" class="btn-action mon-filter" data-filter="http">HTTP</button>
+          <button type="button" class="btn-action mon-filter" data-filter="sonar">Sonar</button>
+          <button type="button" class="btn-action mon-filter" data-filter="ble">BLE</button>
+          <button type="button" class="btn-action mon-filter" data-filter="chain">Chains</button>
+          <button type="button" class="btn-action" id="mon-alerts-clear" style="margin-left:auto">Clear view filter</button>
+        </div>
+        <div id="mon-alerts-feed" class="sl-scroll sl-mt" style="max-height:360px"></div>
+        <div class="sl-row sl-mt">
+          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/wids_alerts.txt')">WIDS Log</button>
+          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/ble_guard.log')">BLE Guard Log</button>
+          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/sonar_guard.log')">Sonar Log</button>
+          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/lan_audit.json')">LAN JSON</button>
+          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/napt_http_findings.json')">HTTP Findings</button>
+        </div>
+        <strong class="sl-sub sl-mt">SecLab+ Live Feed (mirror)</strong>
+        <div id="mon-plus-feed" class="sl-scroll sl-mt"></div>
+      </div>
+
+    </section>
+      </div>
+    </section>
+
+
+    <!-- TAB 1.6: STUDIO — Mic & Media Tools (non-pentest) -->
+    <section id="tab-studio" class="tab-pane hidden">
+      <div class="seclab-bar">
+        <div>
+          <strong>Studio — Mic & Media Tools</strong>
+          <small class="muted-sm">Clock, Microphone, QRCodes & Megalodon · non-pentest — mirror <code>/studio/status</code> + <code>/systeminfo</code></small>
+        </div>
+        <div class="seclab-bar-actions">
+          <label class="sl-inline-label" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="st-auto" checked /> Auto 3s</label>
+          <button type="button" class="btn-action btn-default" id="st-refresh">Refresh Now</button>
+          <span id="st-last" class="mono muted-sm">--</span>
+        </div>
+      </div>
+
+      <div class="seclab-subtabs" role="tablist" aria-label="Studio sections">
+        <button type="button" class="slab-btn active" data-stslab="overview" aria-selected="true">Tổng quan</button>
+        <button type="button" class="slab-btn" data-stslab="mic">Mic & Sonar</button>
+        <button type="button" class="slab-btn" data-stslab="qr">QRCodes</button>
+        <button type="button" class="slab-btn" data-stslab="clock">Clock & More</button>
+        <button type="button" class="slab-btn" data-stslab="badusb">BadUSB Auto-Run</button>
+      </div>
+      <div id="st-msg" class="ota-status hidden" role="status" aria-live="polite" style="margin:10px 16px 0"></div>
+
+      <!-- Studio Overview -->
+      <div id="stslab-overview" class="slab-view">
+        <div class="overview-grid">
+          <div class="ov-tile"><strong>Clock</strong><b id="st-ov-clock">--:--</b><small class="muted-sm" id="st-ov-clock-sub">NTP -- · Timer idle</small><span id="st-ov-clock-badge" class="sl-badge">TIME</span>
+            <div class="sl-row sl-mt"><button type="button" class="btn-action" data-stslab-jump="clock">Mở Clock →</button><button type="button" class="btn-action" id="st-sync-time">Sync Browser Time</button></div>
+          </div>
+          <div class="ov-tile"><strong>Microphone</strong><b id="st-ov-mic">--</b><small class="muted-sm" id="st-ov-mic-sub">Spectrum / Record / dB</small><span id="st-ov-mic-badge" class="sl-badge">ES7210</span>
+            <div class="sl-row sl-mt"><button type="button" class="btn-action" data-stslab-jump="mic">Mở Mic →</button><button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/BruceMIC')">Recordings →</button></div>
+          </div>
+          <div class="ov-tile"><strong>Sonar Guard</strong><b id="st-ov-sonar">IDLE</b><small class="muted-sm" id="st-ov-sonar-sub">Carrier --Hz · Sens --</small><span id="st-ov-sonar-badge" class="sl-badge">IDLE</span>
+            <div class="sl-row sl-mt"><button type="button" class="btn-action" data-stslab-jump="mic">Mở Sonar →</button></div>
+          </div>
+          <div class="ov-tile"><strong>QRCodes</strong><b id="st-ov-qr">-- codes</b><small class="muted-sm" id="st-ov-qr-sub">Tap để hiện trên device</small><span id="st-ov-qr-badge" class="sl-badge">QR</span>
+            <div class="sl-row sl-mt"><button type="button" class="btn-action" data-stslab-jump="qr">Mở QR →</button></div>
+          </div>
+          <div class="ov-tile"><strong>Megalodon</strong><b id="st-ov-mega">Ready</b><small class="muted-sm" id="st-ov-mega-sub">Soundboard · shark game</small><span id="st-ov-mega-badge" class="sl-badge">♪</span>
+            <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="quickCli('megalodon')">Launch via Console</button></div>
+          </div>
+          <div class="ov-tile"><strong>Dual-Boot</strong><b id="st-ov-dual">--</b><small class="muted-sm" id="st-ov-dual-sub">ota_0 / ota_1</small><span id="st-ov-dual-badge" class="sl-badge">--</span>
+            <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/bruce.conf')">bruce.conf</button></div>
+          </div>
+        </div>
+        <div class="dash-grid sl-mt" style="padding:0">
+          <div class="dash-card">
+            <div class="dash-card-head"><h3>Mic Recent Files</h3><span id="st-ov-mic-badge2" class="sl-badge">WAV</span></div>
+            <div id="st-ov-mic-files" class="sl-scroll" style="max-height:132px"></div>
+            <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/BruceMIC')">Open /BruceMIC →</button><button type="button" class="btn-action" onclick="quickCli('mic record')">CLI: mic</button></div>
+          </div>
+          <div class="dash-card">
+            <div class="dash-card-head"><h3>Sonar Events</h3><span id="st-ov-sonar-badge2" class="sl-badge">LIVE</span></div>
+            <div id="st-ov-sonar-events" class="sl-scroll" style="max-height:132px"></div>
+            <div class="sl-row sl-mt"><button type="button" class="btn-action" data-stslab-jump="mic">Chi tiết →</button></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mic & Sonar -->
+      <div id="stslab-mic" class="slab-view hidden">
+        <div class="dash-card dash-card-wide">
+          <div class="dash-card-head"><h3>Microphone — ES7210 Dual-Mic</h3><span class="sl-badge">48 kHz</span></div>
+          <div class="kv-grid">
+            <div class="kv-item"><span>Mode</span><b id="st-mic-mode">Spectrum / dB / Record</b></div>
+            <div class="kv-item"><span>Last WAV</span><b id="st-mic-last">--</b></div>
+            <div class="kv-item"><span>Storage</span><b id="st-mic-storage">LittleFS /BruceMIC</b></div>
+            <div class="kv-item"><span>Gain</span><b id="st-mic-gain">24 dB</b></div>
+          </div>
+          <div class="sl-row sl-mt"><button type="button" class="btn-action btn-default" onclick="quickCli('mic spectrum')">Spectrum (device)</button><button type="button" class="btn-action" onclick="quickCli('mic db')">dB Meter</button><button type="button" class="btn-action" onclick="quickCli('mic record')">Record WAV</button><button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/BruceMIC')">Open Recordings</button></div>
+          <strong class="sl-sub sl-mt">Recent WAV Recordings</strong>
+          <div id="st-mic-files" class="sl-scroll sl-mt"></div>
+        </div>
+        <details class="sl-group" open>
+          <summary><span>Sonar Motion Guard — Acoustic Doppler</span><span id="st-sonar-badge" class="sl-badge">IDLE</span></summary>
+          <div class="kv-grid sl-mt">
+            <div class="kv-item"><span>Carrier / Sens</span><b id="st-sonar-cfg">--</b></div>
+            <div class="kv-item"><span>Alert Action</span><b id="st-sonar-act">--</b></div>
+            <div class="kv-item"><span>Motion Peak</span><b id="st-sonar-pk">0%</b></div>
+            <div class="kv-item"><span>Signal</span><b id="st-sonar-dir">--</b></div>
+          </div>
+          <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="quickCli('sonar')">Launch Sonar Guard (device)</button><button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/sonar_guard.log')">View Log</button><button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/BruceMIC')">Audio Clips</button></div>
+          <audio id="st-sonar-player" class="sl-audio hidden" controls preload="none"></audio>
+          <div id="st-sonar-events" class="sl-scroll sl-mt"></div>
+        </details>
+      </div>
+
+      <!-- QR Codes -->
+      <div id="stslab-qr" class="slab-view hidden">
+        <div class="dash-card dash-card-wide">
+          <div class="dash-card-head"><h3>QRCodes — Wi-Fi Share & Links</h3><span id="st-qr-count" class="sl-badge">--</span></div>
+          <div class="sl-row sl-mt"><input type="text" id="st-qr-name" placeholder="Name (e.g. MyWiFi)" class="sl-input" style="flex:1;min-width:120px" /><input type="text" id="st-qr-content" placeholder="WIFI:T:WPA;S:MySSID;... hoặc https://..." class="sl-input" style="flex:2;min-width:160px" /><button type="button" class="btn-action btn-default" id="st-qr-add">Add QR</button></div>
+          <div id="st-qr-msg" class="ota-status hidden" style="margin-top:8px"></div>
+          <div id="st-qr-list" class="sl-scroll sl-mt" style="max-height:340px"></div>
+          <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/')">Files</button><button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/bruce.conf')">Edit bruce.conf (qrCodes)</button></div>
+        </div>
+        <div id="st-qr-preview" class="dash-card dash-card-wide hidden" style="text-align:center;padding:16px">
+          <h3 id="st-qr-preview-title">QR Preview</h3>
+          <div id="st-qr-preview-box" style="margin:12px auto;max-width:260px"></div>
+          <small class="muted-sm" id="st-qr-preview-content">--</small>
+          <div class="sl-row sl-mt" style="justify-content:center"><button type="button" class="btn-action" onclick="document.getElementById('st-qr-preview').classList.add('hidden')">Close</button></div>
+        </div>
+      </div>
+
+      <!-- Clock & More -->
+      <div id="stslab-clock" class="slab-view hidden">
+        <div class="kv-grid">
+          <div class="kv-item"><span>Device Time (NTP RTC)</span><b id="st-clock-time">--:--:--</b></div>
+          <div class="kv-item"><span>Timezone / DST</span><b id="st-clock-tz">UTC+0 · DST off</b></div>
+          <div class="kv-item"><span>Uptime</span><b id="st-clock-uptime">--</b></div>
+          <div class="kv-item"><span>NTP Sync</span><b id="st-clock-ntp">--</b></div>
+        </div>
+        <div class="sl-row sl-mt"><button type="button" class="btn-action btn-default" id="st-clock-sync">Sync Browser Time → Device</button><button type="button" class="btn-action" onclick="quickCli('date')">CLI: date</button><button type="button" class="btn-action" onclick="quickCli('timer')">Timer (device)</button><button type="button" class="btn-action" onclick="switchTab('screen')">Open Screen Mirror</button></div>
+        <details class="sl-group" open>
+          <summary><span>Megalodon — Soundboard & Game</span><span class="sl-badge">♪</span></summary>
+          <p class="muted-sm sl-mt">Retro shark game + soundboard trên device. Chạy trực tiếp trên màn hình 1.83″.</p>
+          <div class="sl-row sl-mt"><button type="button" class="btn-action btn-default" onclick="quickCli('megalodon')">Launch Megalodon (device)</button><button type="button" class="btn-action" onclick="quickCli('tone 1000 500')">Test Tone</button></div>
+        </details>
+        <details class="sl-group">
+          <summary><span>Dual-Boot Switcher</span><span id="st-dual-badge" class="sl-badge">--</span></summary>
+          <div id="st-dual-info" class="kv-grid sl-mt">
+            <div class="kv-item"><span>Running Slot</span><b id="st-dual-slot">--</b></div>
+            <div class="kv-item"><span>Next Slot</span><b id="st-dual-next">--</b></div>
+            <div class="kv-item"><span>Dual-Boot</span><b id="st-dual-active">--</b></div>
+            <div class="kv-item"><span>OTA Max</span><b id="st-dual-max">--</b></div>
+          </div>
+          <div class="sl-row sl-mt"><button type="button" class="btn-action" id="st-dual-xiaozhi">Switch to XiaoZhi</button><button type="button" class="btn-action" id="st-dual-menu">Reboot to Boot Menu</button></div>
+        </details>
+      </div>
+
+      <!-- BadUSB Auto-Run -->
+      <div id="stslab-badusb" class="slab-view hidden">
+        <div class="dash-card dash-card-wide">
+          <div class="dash-card-head"><h3>BadUSB Auto-Run — Plug & Run Payload</h3><span id="st-badusb-badge" class="sl-badge">OFF</span></div>
+          <p class="muted-sm">Cắm vào máy là chạy luôn DuckyScript đã chuẩn bị. 3s đếm ngược để hủy bằng bất kỳ nút nào. Lưu trong <code>bruce.conf</code>.</p>
+          <div class="kv-grid sl-mt">
+            <div class="kv-item"><span>Enabled</span><b id="st-badusb-enabled">--</b></div>
+            <div class="kv-item"><span>Armed</span><b id="st-badusb-armed">--</b></div>
+            <div class="kv-item"><span>Payload</span><b id="st-badusb-payload">--</b></div>
+            <div class="kv-item"><span>Trigger / RunOnce</span><b id="st-badusb-trigger">--</b></div>
+            <div class="kv-item"><span>Delay after mount</span><b id="st-badusb-delay">--</b></div>
+            <div class="kv-item"><span>Confirm Window</span><b id="st-badusb-confirm">--</b></div>
+          </div>
+          <div class="sl-row sl-mt">
+            <label class="sl-inline-label" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="st-badusb-enabled-toggle" /> Enable Auto-Run</label>
+            <button type="button" class="btn-action" id="st-badusb-test">Test Run Now</button>
+            <button type="button" class="btn-action" id="st-badusb-clear">Clear Payload</button>
+          </div>
+          <div class="sl-row sl-mt">
+            <input type="text" id="st-badusb-fs" placeholder="FS (LittleFS or SD)" class="sl-input" style="max-width:140px" value="LittleFS" />
+            <input type="text" id="st-badusb-path" placeholder="/payload.txt or /badusb/demo.txt" class="sl-input" style="flex:1;min-width:180px" />
+            <button type="button" class="btn-action btn-default" id="st-badusb-set-payload">Set Payload</button>
+          </div>
+          <div class="sl-row sl-mt">
+            <input type="number" id="st-badusb-delayMs" min="0" max="10000" step="100" placeholder="delayMs" class="sl-input" style="max-width:120px" />
+            <button type="button" class="btn-action" id="st-badusb-set-delay">Set Delay (ms)</button>
+            <select id="st-badusb-trigger-sel" class="sl-input" style="max-width:160px"><option value="0">On Enumeration</option><option value="1">On VBUS</option><option value="2">Delayed +2s</option></select>
+            <button type="button" class="btn-action" id="st-badusb-set-trigger">Set Trigger</button>
+          </div>
+          <div class="sl-row sl-mt">
+            <label class="sl-inline-label" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="st-badusb-confirm-toggle" /> Confirm 3s window</label>
+            <input type="number" id="st-badusb-confirmMs" min="1000" max="10000" step="500" placeholder="confirmMs" class="sl-input" style="max-width:120px" />
+            <button type="button" class="btn-action" id="st-badusb-set-confirm">Set Confirm</button>
+            <label class="sl-inline-label" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="st-badusb-once-toggle" /> Run once per plug</label>
+            <button type="button" class="btn-action" id="st-badusb-set-once">Set Once</button>
+          </div>
+          <div class="sl-row sl-mt"><button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/')">Browse Files → Pick payload</button><button type="button" class="btn-action" onclick="quickCli('badusb')">Open BadUSB (device)</button></div>
+          <div id="st-badusb-msg" class="ota-status hidden" style="margin-top:8px"></div>
+        </div>
+        <details class="sl-group" open>
+          <summary><span>How it works</span><span class="sl-badge">3s cancel</span></summary>
+          <p class="muted-sm sl-mt">1. Chọn payload DuckyScript trong <b>LittleFS</b> hoặc <b>SD</b> (ví dụ <code>/payload.txt</code>). 2. Bật <b>Enable</b>. 3. Cắm USB vào host — firmware đợi <b>delayMs</b> sau khi <code>tud_mounted()</code>, hiện countdown <b>confirmMs</b> (mặc định 3000ms), bấm bất kỳ nút để hủy, không thì chạy <code>key_input()</code>. Lưu persistent trong <code>bruce.conf → badUsbAutoRun</code>. Trigger: Enumeration (mặc định), VBUS, hoặc Delayed thêm 2s.</p>
+        </details>
+      </div>
+
+    </section>
+
+    <!-- TAB 2: FILES -->
+    <!-- TAB 2: FILES -->
+    <section id="tab-files" class="tab-pane hidden">
+      <div class="free-space">
+        <div class="act-browse block-space free-sd" data-path="/" data-drive="SD">
+          <div class="drive-top">
+            <strong>SDCard</strong>
+            <span>0 B / 0 B</span>
+          </div>
+          <div class="drive-meter"><i id="meter-sd"></i></div>
+        </div>
+        <div class="act-browse block-space free-fs" data-path="/" data-drive="LittleFS">
+          <div class="drive-top">
+            <strong>LittleFS</strong>
+            <span>0 B / 0 B</span>
+          </div>
+          <div class="drive-meter"><i id="meter-fs"></i></div>
+        </div>
+      </div>
+
+      <div class="action-content">
+        <span class="breadcrumb">
+          <button class="icon-action" id="refresh-folder" title="Refresh folder" onclick="fetchFiles(currentDrive, currentPath)">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M21 12C21 16.97 16.97 21 12 21C9.69 21 7.59 20.13 6 18.71L3 16M3 12C3 7.03 7.03 3 12 3C14.31 3 16.41 3.87 18 5.29L21 8M3 21V16H8M21 3V8H16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M3 6a2 2 0 0 1 2-2h4.6a2 2 0 0 1 1.6.8l1.2 1.6H19a2 2 0 0 1 2 2v9.6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6Z" stroke="currentColor" stroke-width="2"/>
+          </svg>
+          <span class="current-path">LittleFS://</span>
+        </span>
+        <div class="body-actions">
+          <label class="icon-action" title="Upload files to current folder">
+            <input type="file" class="inp-uploader" aria-label="Upload files to current folder" multiple />
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M12 16V7m0 0-3.5 3.5M12 7l3.5 3.5M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </label>
+          <label class="icon-action" title="Upload folder to current folder">
+            <input type="file" class="inp-uploader" aria-label="Upload folder to current folder" webkitdirectory directory multiple />
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Zm9 8v-5m0 0-2.5 2.5M12 10l2.5 2.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </label>
+          <button class="icon-action act-oinput ml-10" data-action="createFile" title="Create new file">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Zm0 0v5h5M12 11v6m-3-3h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <button class="icon-action act-oinput" data-action="createFolder" title="Create new folder">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Zm9 4v4m-2-2h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <p class="muted-sm">Uploads overwrite files with the same name. A lost connection can leave an incomplete file; back up important files first.</p>
+      <div class="content">
+        <table class="table explorer">
+          <thead>
+            <tr>
+              <th class="col-name">Name</th>
+              <th class="col-size">Size</th>
+              <th class="col-action">Actions</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TAB 3: SCREEN MIRROR & REMOTE CONTROL -->
+    <section id="tab-screen" class="tab-pane hidden">
+      <div class="screen-toolbar">
+        <div class="screen-tb-left">
+          <strong>Live 1.83" Display Mirror</strong>
+          <small class="muted-sm">Arrows / Enter / Backspace / M (Back) / R (Refresh)</small>
+        </div>
+        <div class="screen-tb-right">
+          <button id="force-reload" class="icon-action" title="Reload Screen">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M21 12C21 16.97 16.97 21 12 21C9.69 21 7.59 20.13 6 18.71L3 16M3 12C3 7.03 7.03 3 12 3C14.31 3 16.41 3.87 18 5.29L21 8M3 21V16H8M21 3V8H16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <select id="navigator-auto-reload">
+            <option value="0">Reload After Nav</option>
+            <option value="600">Auto: 600ms</option>
+            <option value="1000" selected>Auto: 1s</option>
+            <option value="2000">Auto: 2s</option>
+            <option value="5000">Auto: 5s</option>
+          </select>
+          <button type="button" class="btn-action" id="btn-save-png">Save PNG</button>
+          <button type="button" class="btn-action" onclick="Dialog.show('navigator-shortcut')">Keys</button>
+        </div>
+      </div>
+      <details class="sl-group">
+        <summary>Advanced display &amp; power settings</summary>
+        <div class="sl-row sl-mt">
+          <label for="screen-dimmer">Dim after (seconds, 0 = never)</label>
+          <input class="sl-input" id="screen-dimmer" type="number" min="0" max="600" step="1">
+          <label for="screen-off">Backlight off (seconds; 0 = never; -1 = dim + 5s)</label>
+          <input class="sl-input" id="screen-off" type="number" min="-1" max="600" step="1">
+          <label for="screen-power">Power profile</label>
+          <select id="screen-power"><option value="0">Balanced</option><option value="1">Eco</option><option value="2">Performance</option></select>
+          <button type="button" class="btn-action" id="screen-settings-save">Save display settings</button>
+        </div>
+        <small class="muted-sm">Saved on the device. While WebUI is active, the display controller stays awake with the backlight off; this consumes more power.</small>
+        <div id="screen-settings-status" class="ota-status hidden" role="status" aria-live="polite"></div>
+      </details>
+      <div class="screen-stage">
+        <div id="screen-status" class="navigator-warning" role="status" aria-live="polite">Connecting to screen…</div>
+        <small class="muted-sm">Command-based mirror: custom sprites, raw pixels, fonts and animations may differ. The panel stays active with backlight off while WebUI is running.</small>
+        <div id="wifi-warning" class="navigator-warning hidden">Wi-Fi / BLE radio tools will pause WebUI while active</div>
+        <div class="screen-layout">
+          <canvas id="navigator-screen" width="284" height="240"></canvas>
+          <div class="navigator-canvas">
+            <div class="p-up">
+              <button type="button" class="nav nav-page-up" data-direction="NextPage" title="Next Page" aria-label="Next Page">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path d="M15.5 12L5.72 19.11V4.89L15.5 12Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+                  <line x1="18.2" y1="4.9" x2="18.2" y2="19.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                </svg>
+              </button>
+              <button type="button" class="nav nav-up" data-direction="Up" title="Up" aria-label="Up">
+                <svg width="18" height="18" viewBox="0 0 52 52"><path fill="currentColor" d="M43.7,38H8.3c-1,0-1.7-1.3-0.9-2.2l17.3-21.2c0.6-0.8,1.9-0.8,2.5,0l17.5,21.2C45.4,36.7,44.8,38,43.7,38z"/></svg>
+              </button>
+              <button type="button" class="nav nav-menu" data-direction="Menu" title="Hold Select (Back)" aria-label="Hold Select (Back)">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
+                  <circle cx="12" cy="12" r="3" fill="currentColor"/>
+                </svg>
+              </button>
+            </div>
+            <div class="p-mid">
+              <button type="button" class="nav nav-left" data-direction="Prev" title="Left" aria-label="Left">
+                <svg width="18" height="18" viewBox="0 0 52 52"><path fill="currentColor" d="M43.7,38H8.3c-1,0-1.7-1.3-0.9-2.2l17.3-21.2c0.6-0.8,1.9-0.8,2.5,0l17.5,21.2C45.4,36.7,44.8,38,43.7,38z"/></svg>
+              </button>
+              <button type="button" class="nav nav-ok" data-direction="Sel" title="OK / Select" aria-label="OK / Select"></button>
+              <button type="button" class="nav nav-right" data-direction="Next" title="Right" aria-label="Right">
+                <svg width="18" height="18" viewBox="0 0 52 52"><path fill="currentColor" d="M43.7,38H8.3c-1,0-1.7-1.3-0.9-2.2l17.3-21.2c0.6-0.8,1.9-0.8,2.5,0l17.5,21.2C45.4,36.7,44.8,38,43.7,38z"/></svg>
+              </button>
+            </div>
+            <div class="p-bot">
+              <button type="button" class="nav nav-page-down" data-direction="PrevPage" title="Previous Page" aria-label="Previous Page">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path d="M15.5 12L5.72 19.11V4.89L15.5 12Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+                  <line x1="18.2" y1="4.9" x2="18.2" y2="19.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                </svg>
+              </button>
+              <button type="button" class="nav nav-down" data-direction="Down" title="Down" aria-label="Down">
+                <svg width="18" height="18" viewBox="0 0 52 52"><path fill="currentColor" d="M43.7,38H8.3c-1,0-1.7-1.3-0.9-2.2l17.3-21.2c0.6-0.8,1.9-0.8,2.5,0l17.5,21.2C45.4,36.7,44.8,38,43.7,38z"/></svg>
+              </button>
+              <button type="button" class="nav" data-direction="Esc" title="Back" aria-label="Back">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path d="M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: PERSONALIZE -->
+    <section id="tab-personalize" class="tab-pane hidden">
+      <div class="pers-layout">
+        <div class="pers-preview-col">
+          <div class="dash-card">
+            <div class="dash-card-head">
+              <h3>Live 1.83" Display Preview</h3>
+              <span class="mono muted-sm">284&times;240 NV3023</span>
+            </div>
+            <div id="boot-preview" class="boot-mockup">
+              <div class="bm-status">
+                <span id="bm-owner-pill" class="bm-pill">DSolution</span>
+                <span class="bm-bat">98%</span>
+              </div>
+              <div class="bm-center">
+                <div class="bm-fin"></div>
+                <div id="bm-title" class="bm-title">DSolution</div>
+                <div id="bm-sub" class="bm-sub">ESP32-S3 SEC LAB</div>
+                <div class="bm-bar"><i></i></div>
+              </div>
+              <div class="bm-foot">v1.14 &bull; <span id="bm-mdns">http://bruce.local</span></div>
+            </div>
+            <div class="preset-row">
+              <button type="button" class="preset-chip" data-pri="#00F0FF" data-sec="#50AEBD" data-bg="#070D12">Cyber Cyan</button>
+              <button type="button" class="preset-chip" data-pri="#2CE59B" data-sec="#4F9E7E" data-bg="#050D09">Matrix Green</button>
+              <button type="button" class="preset-chip" data-pri="#FFB020" data-sec="#B8873B" data-bg="#0E0A05">Amber Ops</button>
+              <button type="button" class="preset-chip" data-pri="#FF5566" data-sec="#B55B68" data-bg="#100608">Crimson Red</button>
+              <button type="button" class="preset-chip" data-pri="#B77CFF" data-sec="#8D6BC4" data-bg="#090612">Ultraviolet</button>
+              <button type="button" class="preset-chip" data-pri="#E8F6FF" data-sec="#8CB2CC" data-bg="#080D12">Arctic Ice</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="pers-form-col">
+          <div class="dash-card">
+            <div class="dash-card-head">
+              <h3>Device Identity, Theme &amp; Access Point</h3>
+            </div>
+            <div class="form-grid">
+              <div class="field">
+                <label for="pers-owner">Owner / Handle (max 24)</label>
+                <input type="text" id="pers-owner" maxlength="24" placeholder="DSolution" />
+              </div>
+              <div class="field">
+                <label for="pers-tag">Boot Banner Subtitle (max 28)</label>
+                <input type="text" id="pers-tag" maxlength="28" placeholder="ESP32-S3 SEC LAB" />
+              </div>
+              <div class="field">
+                <label for="pers-mdns">mDNS Hostname (.local)</label>
+                <input type="text" id="pers-mdns" maxlength="24" placeholder="bruce" />
+              </div>
+              <div class="field">
+                <label for="pers-bright">LCD Brightness: <b id="pers-bright-val">80%</b></label>
+                <input type="range" id="pers-bright" min="10" max="100" value="80" />
+              </div>
+              <div class="field">
+                <label for="pers-apssid">AP Hotspot SSID</label>
+                <input type="text" id="pers-apssid" maxlength="32" placeholder="BruceNet" />
+              </div>
+              <div class="field">
+                <label for="pers-appwd">AP Password (8+ chars or blank)</label>
+                <input type="text" id="pers-appwd" maxlength="63" placeholder="brucenet" />
+              </div>
+            </div>
+            <div class="field">
+              <label for="pers-style">Main menu layout &amp; WebUI style</label>
+              <select id="pers-style"><option value="0">Carousel · rounded</option><option value="1">Grid · technical</option></select>
+              <small>Same setting as Config → Display &amp; UI → Menu Layout. Custom JSON theme images apply to the device only.</small>
+            </div>
+            <div class="color-grid">
+              <label class="color-box">
+                <span>Primary</span>
+                <input type="color" id="pers-pri" value="#00f0ff" />
+              </label>
+              <label class="color-box">
+                <span>Secondary</span>
+                <input type="color" id="pers-sec" value="#50aebd" />
+              </label>
+              <label class="color-box">
+                <span>Background</span>
+                <input type="color" id="pers-bg" value="#070d12" />
+              </label>
+            </div>
+            <div class="pers-actions">
+              <button type="button" class="btn-action btn-default" id="btn-save-pers">Apply &amp; Save to Flash</button>
+              <button type="button" class="btn-action" id="btn-reload-pers">Reset Form</button>
+            </div>
+            <div id="pers-status" class="ota-status hidden"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 5: CONSOLE -->
+    <section id="tab-console" class="tab-pane hidden">
+      <div class="console-wrap">
+        <div class="console-chips">
+          <button type="button" class="chip-cmd" data-cmd="info">info</button>
+          <button type="button" class="chip-cmd" data-cmd="free">free</button>
+          <button type="button" class="chip-cmd" data-cmd="uptime">uptime</button>
+          <button type="button" class="chip-cmd" data-cmd="date">date</button>
+          <button type="button" class="chip-cmd" data-cmd="i2c">i2c</button>
+          <button type="button" class="chip-cmd" data-cmd="help">help</button>
+          <button type="button" class="chip-cmd" data-cmd="settings">settings</button>
+          <button type="button" class="chip-cmd" data-cmd="tone 2400 120">tone 2400 120</button>
+          <button type="button" class="chip-cmd" data-cmd="led hex 00F0FF">led hex 00F0FF</button>
+          <button type="button" class="chip-cmd" data-cmd="led off">led off</button>
+        </div>
+        <pre id="console-out" class="console-out">Bruce SecLab Serial Console Ready. Type 'help' or click a command chip above.&#10;</pre>
+        <div class="console-input-row">
+          <span class="mono prompt-pfx">#</span>
+          <input type="text" id="console-in" placeholder="Enter Bruce CLI command (Arrow Up/Down for history)..." autocomplete="off" />
+          <button type="button" class="btn-action btn-default" id="console-run">Run</button>
+          <button type="button" class="btn-action" id="console-clear">Clear</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 6: SECLAB -->
+    <!-- TAB 6: SECLAB — compact: overview + detail subtabs + accordions -->
+    <section id="tab-seclab" class="tab-pane hidden">
+      <div class="seclab-bar">
+        <div>
+          <strong>DSolution 1.83″ SecLab Center</strong>
+          <small class="muted-sm">NAPT, PMKID/CSA, Portal-NAPT, LAN Audit, Responder+, HTTP Inspector, HID LED Link, BLE Audit &amp; USB Vault — mở nhóm khi cần</small>
+        </div>
+        <div class="seclab-bar-actions">
+          <button type="button" class="btn-action" id="sl-refresh">Refresh Now</button>
+          <button type="button" class="btn-action btn-danger" data-sl-action="stop_all" data-sl-confirm="Stop all stoppable SecLab+ tools? An in-progress pairing audit will finish on its own.">Stop All</button>
+        </div>
+      </div>
+
+      <!-- Sub-tabs inside SecLab -->
+      <div class="seclab-subtabs" role="tablist" aria-label="SecLab sections">
+        <button type="button" class="slab-btn active" data-slab="overview" aria-selected="true">Tổng quan</button>
+        <button type="button" class="slab-btn" data-slab="wifi">Wi-Fi & NAPT</button>
+        <button type="button" class="slab-btn" data-slab="lan">LAN & HTTP</button>
+        <button type="button" class="slab-btn" data-slab="ble">BLE & HID</button>
+        <button type="button" class="slab-btn" data-slab="studio">USB Vault</button>
+      </div>
+      <div id="sl-plus-msg" class="ota-status hidden" role="status" aria-live="polite" aria-busy="false" style="margin:10px 16px 0"></div>
+
+      <!-- ========== OVERVIEW ========== -->
+      <div id="slab-overview" class="slab-view">
+        <div class="sl-note">
+          <strong>Authorized security audits only.</strong> Chỉ dùng trên hệ thống bạn sở hữu/được phép. 2C proxy chỉ xử lý cleartext HTTP/1.0 — TLS <code>CONNECT</code> luôn bị từ chối.
+        </div>
+
+        <!-- Compact status tiles — 1 line overview -->
+        <div class="overview-grid sl-mt">
+          <div class="ov-tile"><strong>NAPT Router</strong><b><span id="ov-napt" class="mono">--</span> <span id="ov-napt-badge" class="sl-badge">OFF</span></b><small class="muted-sm"><span id="ov-napt-detail">Clients 0 · Queries 0</span></small><button type="button" class="btn-action sl-mt" data-slab-jump="wifi">Mở Wi-Fi & NAPT →</button></div>
+          <div class="ov-tile"><strong>Air & Hidden</strong><b id="ov-air">BEST CH --</b><small class="muted-sm"><span id="ov-air-detail">Ch load —</span></small><button type="button" class="btn-action sl-mt" data-slab-jump="wifi">Xem Air →</button></div>
+          <div class="ov-tile"><strong>Probe & BLE GATT</strong><b id="ov-probe">0 / 0 · PHY 1M</b><small class="muted-sm"><span id="ov-probe-detail">Clusters/MACs</span></small><button type="button" class="btn-action sl-mt" data-slab-jump="wifi">Xem Radar →</button></div>
+          <div class="ov-tile"><strong>LAN Audit</strong><b id="ov-lan">0 / 0</b><small class="muted-sm">Devices / Findings</small><button type="button" class="btn-action sl-mt" data-slab-jump="lan">Mở LAN & HTTP →</button></div>
+          <div class="ov-tile"><strong>BLE / HID</strong><b id="ov-ble">IDLE</b><small class="muted-sm"><span id="ov-ble-detail">GATT findings · LED link</span></small><button type="button" class="btn-action sl-mt" data-slab-jump="ble">Mở BLE & HID →</button></div>
+          <div class="ov-tile"><strong>USB Vault</strong><b id="ov-studio">IDLE · 0 files</b><small class="muted-sm"><span id="ov-studio-detail">/usb_vault · BadUSB payloads</span></small><button type="button" class="btn-action sl-mt" data-slab-jump="studio">Mở USB Vault →</button></div>
+        </div>
+
+        <!-- Hidden compact kv summary (IDs kept for JS, visually compact) -->
+        <div class="ov-kv-compact sl-mt">
+          <div class="kv-grid">
+            <div class="kv-item"><span>1A PMKID / .hc22000</span><b id="sl-plus-pmkid">--</b></div>
+            <div class="kv-item"><span>1B CSA / Portal-NAPT</span><b id="sl-plus-csa">--</b></div>
+            <div class="kv-item"><span>2A LAN Devices / Findings</span><b id="sl-plus-lan">0 / 0</b></div>
+            <div class="kv-item"><span>2B Responder+ / Guard</span><b id="sl-plus-guard">--</b></div>
+            <div class="kv-item"><span>2C Cleartext HTTP</span><b id="sl-plus-http">--</b></div>
+            <div class="kv-item"><span>3A HID LED Link</span><b id="sl-plus-led">--</b></div>
+            <div class="kv-item"><span>3B Permission / Auto-arm</span><b id="sl-plus-perm">--</b></div>
+            <div class="kv-item"><span>4A GATT Audit / Fuzzer</span><b id="sl-plus-ble">--</b></div>
+            <div class="kv-item"><span>4B Pairing / Tag Beacon</span><b id="sl-plus-pair">--</b></div>
+            <div class="kv-item"><span>Proxy / Redaction</span><b id="sl-plus-network">--</b></div>
+            <div class="kv-item"><span>Pair Mode / CSA Defaults</span><b id="sl-plus-settings">--</b></div>
+            <div class="kv-item"><span>Build / OS / LED Timeout</span><b id="sl-plus-active">--</b></div>
+          </div>
+          <div class="sl-row sl-mt">
+            <span id="sl-plus-badge" class="sl-badge">READY</span>
+            <small class="muted-sm">Dừng nhanh: <em>Stop All</em> không hủy pairing audit đang chạy.</small>
+          </div>
+        </div>
+
+        <div class="sl-row sl-mt">
+          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/pmkid/all.hc22000')">PMKID Hash</button>
+          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/lan_audit.json')">LAN JSON</button>
+          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/napt_http_findings.json')">HTTP Findings</button>
+          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/led_link/exfil.txt')">LED Exfil</button>
+          <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/ble_security_audit.json')">GATT Audit</button>
+        </div>
+        <strong class="sl-sub sl-mt">Live SecLab+ Feed</strong>
+        <div id="sl-plus-feed" class="sl-scroll sl-mt"></div>
+      </div>
+
+      <!-- ========== WI-FI & NAPT ========== -->
+      <div id="slab-wifi" class="slab-view hidden">
+        <!-- NAPT — kept as primary wide card -->
+        <div class="dash-card dash-card-wide">
+          <div class="dash-card-head">
+            <h3>#1 Wi-Fi NAPT Travel Router &amp; Live DNS Blocker</h3>
+            <span id="sl-napt-badge" class="sl-badge">OFF</span>
+          </div>
+          <div class="sl-napt-creds sl-mt">
+            <input type="text" id="sl-napt-ssid" placeholder="Optional uplink SSID (blank = current STA)" />
+            <input type="password" id="sl-napt-pwd" placeholder="Uplink Wi-Fi password (if needed)" />
+            <button type="button" class="btn-action" onclick="openWifiModal()">Scan WiFi</button>
+          </div>
+          <div class="sl-row sl-mt">
+            <button type="button" class="btn-action btn-default" id="sl-napt-start">Start NAPT Router</button>
+            <button type="button" class="btn-action btn-danger" id="sl-napt-stop">Stop NAPT</button>
+            <button type="button" class="btn-action btn-default" id="sl-napt-auto" aria-pressed="true">Auto-Block Trackers: ON</button>
+            <button type="button" class="btn-action" id="sl-napt-export">Export Log</button>
+            <button type="button" class="btn-action" id="sl-napt-clear">Clear Feed</button>
+          </div>
+          <div id="sl-napt-msg" class="ota-status hidden" role="status" aria-live="polite" aria-busy="false"></div>
+          <div class="kv-grid sl-mt">
+            <div class="kv-item"><span>Uplink Wi-Fi</span><b id="sl-napt-up">--</b></div>
+            <div class="kv-item"><span>Hotspot AP</span><b id="sl-napt-ap">192.168.4.1</b></div>
+            <div class="kv-item"><span>Clients / Queries</span><b id="sl-napt-stat">0 / 0</b></div>
+            <div class="kv-item"><span>Blocked / Trackers</span><b id="sl-napt-blk">0 / 0</b></div>
+          </div>
+          <div class="sl-block-row sl-mt">
+            <input type="text" id="sl-blk-input" placeholder="Block domain (e.g. ads.example.com)..." />
+            <button type="button" class="btn-action btn-default" id="sl-blk-add">Block</button>
+          </div>
+          <div id="sl-blk-chips" class="sl-chips"></div>
+          <details class="sl-group sl-mt">
+            <summary>Live DNS &amp; Clients </summary>
+            <div class="sl-split sl-mt">
+              <div>
+                <strong class="sl-sub">Live DNS Queries</strong>
+                <div id="sl-dns-feed" class="sl-scroll"></div>
+              </div>
+              <div>
+                <strong class="sl-sub">Connected Clients</strong>
+                <div id="sl-napt-clients" class="sl-scroll"></div>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <details class="sl-group">
+          <summary><span>CH1–13 Estimated Load &amp; Hidden SSIDs <small class="muted-sm">— packet-based, not measured airtime</small></span><span id="sl-air-best" class="sl-badge">BEST CH --</span></summary>
+          <p class="muted-sm sl-mt">Unavailable channels and non-Wi-Fi interference may be missed.</p>
+          <div id="sl-air-bars" class="sl-bars"></div>
+          <strong class="sl-sub sl-mt">Hidden &amp; Decloaked APs</strong>
+          <div id="sl-air-hidden" class="sl-scroll"></div>
+        </details>
+
+        <details class="sl-group">
+          <summary><span>#2 Probe Radar &amp; #12 BLE GATT — sniffer</span><span id="sl-ble-phy" class="sl-badge">PHY 1M</span></summary>
+          <div class="kv-grid sl-mt">
+            <div class="kv-item"><span>Probe Clusters / MACs</span><b id="sl-prb-stat">0 / 0</b></div>
+            <div class="kv-item"><span>BLE GATT Mode</span><b id="sl-ble-mode">IDLE</b></div>
+          </div>
+          <div class="sl-row sl-mt">
+            <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/probe_radar.csv')">Probe CSV</button>
+            <button type="button" class="btn-action" onclick="openFileInEditor('LittleFS','/ble_clone_writes.log')">Clone Writes Log</button>
+          </div>
+          <div id="sl-prb-list" class="sl-scroll sl-mt"></div>
+          <strong class="sl-sub sl-mt">Saved BLE GATT Profiles</strong>
+          <div id="sl-ble-profs" class="sl-scroll"></div>
+        </details>
+
+        <details class="sl-group">
+          <summary><strong>1A / 1B</strong> <small>PMKID, CSA/PMF &amp; Portal handoff</small></summary>
+          <div class="sl-row sl-mt">
+            <button type="button" class="btn-action btn-default" data-sl-action="pmkid_start">PMKID Start</button>
+            <button type="button" class="btn-action" data-sl-action="pmkid_stop">Stop</button>
+            <button type="button" class="btn-action" data-sl-action="pmkid_export">Export .hc22000</button>
+            <button type="button" class="btn-action" data-sl-action="pmkid_clear" data-sl-confirm="Clear captured PMKID hashes from memory and storage?">Clear</button>
+            <button type="button" class="btn-action" data-sl-action="pmkid_auto" data-sl-toggle="pmkidAutoExport" data-sl-label-on="Auto-Export: ON" data-sl-label-off="Auto-Export: OFF" aria-pressed="false">Auto-Export: --</button>
+          </div>
+          <div class="sl-row">
+            <button type="button" class="btn-action btn-default" data-sl-action="csa_start">CSA/PMF Start</button>
+            <button type="button" class="btn-action" data-sl-action="csa_stop">Stop</button>
+            <button type="button" class="btn-action" data-sl-action="csa_clear" data-sl-confirm="Clear CSA/PMF test state and logs?">Clear</button>
+            <label class="sl-inline-label" for="sl-plus-csa-channel">CH</label><input class="sl-input" type="number" id="sl-plus-csa-channel" min="1" max="14" value="1" />
+            <label class="sl-inline-label" for="sl-plus-csa-bursts">Bursts</label><input class="sl-input" type="number" id="sl-plus-csa-bursts" min="1" max="20" value="3" />
+            <button type="button" class="btn-action" data-sl-action="csa_config">Save CSA Defaults</button>
+          </div>
+          <div class="sl-row">
+            <button type="button" class="btn-action" data-sl-action="portal_start">Portal-NAPT Start</button>
+            <button type="button" class="btn-action" data-sl-action="portal_stop">Stop</button>
+            <button type="button" class="btn-action" data-sl-action="portal_handoff" data-sl-toggle="portalHandoff" data-sl-label-on="Auto Handoff: ON" data-sl-label-off="Auto Handoff: OFF" aria-pressed="false">Auto Handoff: --</button>
+          </div>
+        </details>
+
+        <details class="sl-group" open>
+          <summary><strong>Evil Portal Templates</strong> <small>dễ sửa từ WebUI</small><span id="sl-portal-badge" class="sl-badge">--</span></summary>
+          <p class="muted-sm sl-mt">Tạo / sửa / xoá mẫu đăng nhập giả mạo ngay trên trình duyệt — không cần cắm cáp. Mẫu đang <b>Active</b> sẽ được Evil Portal dùng khi bạn bấm <b>Portal-NAPT Start</b>.</p>
+          <div class="sl-row sl-mt">
+            <button type="button" class="btn-action btn-default" id="pt-refresh">Làm mới danh sách</button>
+            <button type="button" class="btn-action" id="pt-new">+ Mẫu mới</button>
+            <button type="button" class="btn-action" id="pt-import">Nhập từ dán (paste)</button>
+            <label class="btn-action sl-file-btn">Tải file .html<input type="file" id="pt-file" accept=".html,.htm,.txt" /></label>
+            <button type="button" class="btn-action" id="pt-clearactive">Bỏ Active (về mặc định)</button>
+          </div>
+          <div id="pt-msg" class="ota-status hidden" style="margin:8px 0"></div>
+          <div class="kv-grid sl-mt">
+            <div class="kv-item"><span>Mẫu đang Active</span><b id="pt-active">--</b></div>
+            <div class="kv-item"><span>Tổng số mẫu</span><b id="pt-count">0</b></div>
+          </div>
+          <div id="pt-list" class="sl-scroll sl-mt" style="max-height:260px"></div>
+          <div class="sl-group sl-mt" style="border:1px solid var(--border);border-radius:8px;padding:12px">
+            <div class="sl-row">
+              <select id="pt-preset" class="sl-input" style="flex:1;min-width:160px"><option value="">-- Chọn mẫu nhanh (preset) --</option><option value="google">Google Login (mặc định)</option><option value="rickroll">🎵 Rickroll Portal (video rickroll + bắt pass)</option><option value="rickroll-custom">🎵 Rickroll tuỳ biến (đổi video/tiêu đề)</option><option value="fake-update">Router Update (giả cập nhật)</option><option value="wifi-login">Wifi Login đơn giản</option><option value="custom">Trống (tự viết)</option></select>
+              <input type="text" id="pt-name" placeholder="Tên file: google.html" class="sl-input" style="flex:1;min-width:160px" />
+              <input type="text" id="pt-ap" placeholder="AP: <!-- AP=&quot;Free Wifi&quot; -->" class="sl-input" style="flex:1;min-width:160px" />
+            </div>
+            <div id="pt-rickroll-custom" class="sl-group sl-mt hidden" style="border:1px dashed var(--border);padding:8px">
+              <strong class="sl-sub">Tuỳ biến Rickroll (không cần viết HTML):</strong>
+              <div class="sl-row sl-mt"><input type="text" id="pt-rr-title" placeholder="Tiêu đề: Free Wifi Connected! 🎉" class="sl-input" style="flex:1" /><input type="text" id="pt-rr-msg" placeholder="Lời nhắn: Enter password to stay connected" class="sl-input" style="flex:1" /></div>
+              <div class="sl-row"><input type="text" id="pt-rr-video" placeholder="Video URL (mp4 hoặc YouTube embed): https://.../mov_bbb.mp4" class="sl-input" style="flex:1" /><input type="text" id="pt-rr-btn" placeholder="Nút: Connect / Update" class="sl-input" style="flex:1;max-width:160px" /></div>
+              <div class="sl-row"><button type="button" class="btn-action btn-default" id="pt-rr-generate">Tạo HTML Rickroll → đổ xuống ô dưới</button><small class="muted-sm">Đổi video thành link YouTube, TikTok, hoặc mp4 riêng — không bị hardcode rickroll</small></div>
+            </div>
+            <textarea id="pt-content" placeholder="Dán HTML mẫu vào đây... (giữ nguyên <form action=&quot;/post&quot;> để bắt password)" class="sl-input sl-mt" style="width:100%;min-height:180px;font-family:monospace;font-size:12px"></textarea>
+            <div class="sl-row sl-mt">
+              <button type="button" class="btn-action btn-default" id="pt-save">Lưu mẫu</button>
+              <button type="button" class="btn-action" id="pt-preview">Xem trước (mở tab)</button>
+              <button type="button" class="btn-action" id="pt-cancel">Huỷ</button>
+              <small class="muted-sm" style="margin-left:auto">Preset Rickroll có thể đổi video/tiêu đề — không hardcode. Xong bấm <b>Lưu → Dùng</b> để Active.</small>
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <!-- ========== LAN & HTTP ========== -->
+      <div id="slab-lan" class="slab-view hidden">
+        <details class="sl-group" open>
+          <summary><strong>2A</strong> <small>LAN audit — scan subnet</small></summary>
+          <div class="sl-row sl-mt">
+            <select id="sl-plus-lan-mode" aria-label="LAN audit mode"><option value="1">Deep probes</option><option value="0">Quick scan</option></select>
+            <button type="button" class="btn-action btn-default" data-sl-action="lan_start">LAN Audit</button>
+            <button type="button" class="btn-action" data-sl-action="lan_stop">Stop</button>
+            <button type="button" class="btn-action" data-sl-action="lan_export">Export JSON/CSV</button>
+            <button type="button" class="btn-action" data-sl-action="lan_clear" data-sl-confirm="Clear the LAN audit report?">Clear</button>
+          </div>
+        </details>
+        <details class="sl-group">
+          <summary><strong>2B</strong> <small>Responder+ &amp; LAN Guard</small></summary>
+          <div class="sl-row sl-mt">
+            <button type="button" class="btn-action" data-sl-action="responder_start">Responder+</button>
+            <button type="button" class="btn-action" data-sl-action="responder_stop">Stop</button>
+            <button type="button" class="btn-action" data-sl-action="responder_clear" data-sl-confirm="Clear Responder+ hits?">Clear Hits</button>
+          </div>
+          <div class="sl-row">
+            <button type="button" class="btn-action" data-sl-action="guard_start">LAN Guard Start</button>
+            <button type="button" class="btn-action" data-sl-action="guard_stop">Stop</button>
+            <button type="button" class="btn-action" data-sl-action="guard_clear" data-sl-confirm="Clear LAN Guard alerts?">Clear Alerts</button>
+            <button type="button" class="btn-action" data-sl-action="guard_auto" data-sl-toggle="lanGuardAuto" data-sl-label-on="Auto-Arm: ON" data-sl-label-off="Auto-Arm: OFF" aria-pressed="false">Auto-Arm: --</button>
+          </div>
+          <p class="muted-sm sl-mt">LAN Guard observations are not proof of an attack. DHCP monitoring may be unavailable.</p>
+        </details>
+        <details class="sl-group">
+          <summary><strong>2C</strong> <small>Cleartext HTTP inspector / WPAD proxy</small></summary>
+          <div class="sl-row sl-mt">
+            <button type="button" class="btn-action btn-default" data-sl-action="http_start">HTTP Inspector</button>
+            <button type="button" class="btn-action" data-sl-action="http_stop">Stop</button>
+            <button type="button" class="btn-action" data-sl-action="http_export">Export Findings</button>
+            <button type="button" class="btn-action" data-sl-action="http_clear" data-sl-confirm="Clear cleartext HTTP findings?">Clear</button>
+          </div>
+          <div class="sl-row">
+            <button type="button" class="btn-action" data-sl-action="http_auto" data-sl-toggle="httpAuto" data-sl-label-on="Auto w/ NAPT: ON" data-sl-label-off="Auto w/ NAPT: OFF" aria-pressed="false">Auto w/ NAPT: --</button>
+            <button type="button" class="btn-action" data-sl-action="http_redact" data-sl-toggle="httpRedact" data-sl-label-on="Redact: ON" data-sl-label-off="Redact: OFF" aria-pressed="false">Redact: --</button>
+            <label class="sl-inline-label" for="sl-plus-http-port">Proxy port</label><input class="sl-input" type="number" id="sl-plus-http-port" min="1024" max="65535" value="3128" />
+            <button type="button" class="btn-action" data-sl-action="http_port">Save Port</button>
+          </div>
+        </details>
+      </div>
+
+      <!-- ========== BLE & HID ========== -->
+      <div id="slab-ble" class="slab-view hidden">
+        <details class="sl-group" open>
+          <summary><strong>3A / 3B</strong> <small>Smart BadUSB · LED Link · safety</small></summary>
+          <div class="sl-row sl-mt">
+            <select id="sl-plus-os" aria-label="BadUSB OS profile"><option value="windows">Windows</option><option value="macos">macOS</option><option value="linux">Linux</option></select>
+            <button type="button" class="btn-action" data-sl-action="os_profile">Save OS Profile</button>
+            <button type="button" class="btn-action btn-default" data-sl-action="led_generate">Generate Payload</button>
+            <button type="button" class="btn-action" data-sl-action="perm_check" data-sl-toggle="permissionCheck" data-sl-label-on="Permission Check: ON" data-sl-label-off="Permission Check: OFF" aria-pressed="false">Permission Check: --</button>
+          </div>
+          <div class="sl-row">
+            <button type="button" class="btn-action" data-sl-action="hid_auto" data-sl-toggle="hidAutoArm" data-sl-label-on="Auto-Arm LED: ON" data-sl-label-off="Auto-Arm LED: OFF" aria-pressed="false">Auto-Arm LED: --</button>
+            <button type="button" class="btn-action" data-sl-action="os_warn" data-sl-toggle="osWarn" data-sl-label-on="First-Run Warning: ON" data-sl-label-off="First-Run Warning: OFF" aria-pressed="false">First-Run Warning: --</button>
+            <label class="sl-inline-label" for="sl-plus-hid-timeout">Timeout</label><input class="sl-input" type="number" id="sl-plus-hid-timeout" min="3" max="300" value="25" /><span class="muted-sm">seconds</span>
+            <button type="button" class="btn-action" data-sl-action="hid_timeout">Save Timeout</button>
+          </div>
+          <div class="sl-row">
+            <button type="button" class="btn-action" data-sl-action="led_start">Arm LED Receiver</button>
+            <button type="button" class="btn-action" data-sl-action="led_stop">Stop</button>
+            <button type="button" class="btn-action" data-sl-action="led_export">Export Exfil</button>
+            <button type="button" class="btn-action" data-sl-action="led_clear" data-sl-confirm="Clear captured LED Link exfil data?">Clear</button>
+          </div>
+        </details>
+        <details class="sl-group">
+          <summary><strong>4A / 4B</strong> <small>GATT audit · pairing · tag beacon</small></summary>
+          <div class="sl-row sl-mt">
+            <button type="button" class="btn-action" data-sl-action="ble_fuzzer" data-sl-toggle="bleSafeFuzzer" data-sl-label-on="Boundary writes: ON" data-sl-label-off="Boundary writes: OFF" aria-pressed="false">Boundary writes: --</button>
+            <button type="button" class="btn-action" data-sl-action="ble_export">Export GATT Audit</button>
+            <button type="button" class="btn-action" data-sl-action="ble_clear" data-sl-confirm="Clear all BLE security reports?">Clear BLE Reports</button>
+          </div>
+          <p class="muted-sm">Boundary writes can change/disrupt the target — use only on authorized devices.</p>
+          <div class="sl-row">
+            <button type="button" class="btn-action btn-default" data-sl-action="tag_start">Tag Beacon</button>
+            <label class="sl-inline-label" for="sl-plus-tag-duration">Duration</label><input class="sl-input" type="number" id="sl-plus-tag-duration" min="5" max="300" value="60" /><span class="muted-sm">s</span>
+            <button type="button" class="btn-action" data-sl-action="tag_stop">Stop Beacon</button>
+          </div>
+          <div class="sl-row">
+            <input class="sl-input-wide" type="text" id="sl-plus-addr" placeholder="BLE AA:BB:CC:DD:EE:FF" aria-label="BLE target MAC" spellcheck="false" autocomplete="off" />
+            <select id="sl-plus-pair-type" aria-label="BLE address type"><option value="0">Public (0)</option><option value="1">Random (1)</option></select>
+            <select id="sl-plus-pair-mode" aria-label="Pairing audit mode"><option value="justworks">Just Works</option><option value="mitm">MITM baseline</option></select>
+            <button type="button" class="btn-action" data-sl-action="pair_mode" data-sl-toggle="pairJustWorks" data-sl-label-on="Pair Mode: Just Works" data-sl-label-off="Pair Mode: MITM" aria-pressed="false">Pair Mode: --</button>
+            <button type="button" class="btn-action btn-default" data-sl-action="pair_audit" data-sl-confirm="Run a BLE pairing audit against this MAC? Use authorized targets only.">Run Pairing Audit</button>
+          </div>
+        </details>
+      </div>
+
+      <!-- ========== USB VAULT — Sonar moved to Studio tab ========== -->
+      <div id="slab-studio" class="slab-view hidden">
+        <div class="sl-note">Sonar Guard đã chuyển sang <b>Studio → Mic & Sonar</b> để SecLab tập trung pentest. Ở đây chỉ còn USB Vault phục vụ BadUSB HID.</div>
+        <div class="sl-row sl-mt"><button type="button" class="btn-action btn-default" onclick="switchTab('studio')">Mở Studio → Mic & Sonar</button></div>
+        <details class="sl-group" open>
+          <summary><span>#8 Virtual USB Drive &amp; /usb_vault</span><span id="sl-usb-badge" class="sl-badge">PSRAM + FLASH</span></summary>
+          <div class="kv-grid sl-mt">
+            <div class="kv-item"><span>PSRAM / Vault</span><b id="sl-usb-psram">--</b></div>
+            <div class="kv-item"><span>Saved /usb_disk.img</span><b id="sl-usb-img">None</b></div>
+          </div>
+          <div class="sl-row sl-mt">
+            <label class="btn-action btn-default sl-file-btn">Upload to /usb_vault<input type="file" id="sl-vault-up" multiple /></label>
+            <button type="button" class="btn-action" id="sl-vault-newtxt">+ New Ducky .txt</button>
+            <button type="button" class="btn-action" onclick="switchTab('files');fetchFiles('LittleFS','/usb_vault')">Open Folder</button>
+          </div>
+          <div id="sl-vault-msg" class="ota-status hidden"></div>
+          <div id="sl-vault-list" class="sl-scroll sl-mt"></div>
+        </details>
+      </div>
+
+    </section>
+
+  <template id="t">
+    <table>
+      <tr class="path-row">
+        <td colspan="3">.. (Parent Directory)</td>
+      </tr>
+      <tr class="file-row">
+        <td class="col-name"></td>
+        <td class="col-size"></td>
+        <td class="col-action">
+          <button class="icon-action act-play" title="Run this file">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M7 5v14l11-7-11-7Z" fill="currentColor"/>
+            </svg>
+          </button>
+          <a class="icon-action act-download" title="Download">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </a>
+          <button class="icon-action act-oinput act-rename" data-action="" title="Rename">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <button class="icon-action act-delete" title="Delete">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M3 6h18M8 6V4h8v2m-9 0v14a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V6M10 11v6m4-6v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </td>
+      </tr>
+    </table>
+    <div class="upload-loading">
+      <span class="upload-name"></span>
+      <div class="bar"></div>
+    </div>
+  </template>
+
+  <div class="dialog-background hidden">
+    <div class="dialog upload hidden">
+      <div class="dialog-head">Uploading Files</div>
+      <div class="dialog-body"></div>
+      <div class="dialog-footer"><span class="upload-summary" role="status" aria-live="polite"></span><button type="button" class="btn-action act-dialog-close upload-close" disabled>Close</button></div>
+    </div>
+
+    <div class="dialog ota hidden">
+      <div class="dialog-head">
+        <span>Wireless Dual-OTA Update</span>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button type="button" class="btn-action" onclick="openWifiModal()" style="padding:3px 8px;font-size:11px">LAN WiFi</button>
+          <a class="btn-action" href="/ota" target="_blank" style="padding:3px 8px;font-size:11px">Standalone Page</a>
+        </div>
+      </div>
+      <div class="dialog-body">
+        <p style="font-size:12px;color:var(--muted);margin-bottom:6px">
+          Active: <b id="ota-cur-slot" style="color:var(--color)">--</b> &bull;
+          Target: <b id="ota-nxt-slot" style="color:var(--color)">--</b> &bull;
+          Max: <b id="ota-max-sz">--</b>
+        </p>
+        <p id="ota-net-line" style="font-size:11.5px;color:var(--sec-color);margin:0 0 10px">Network: --</p>
+        <label class="ota-drop" id="ota-drop-zone">
+          <input type="file" id="ota-file-input" accept=".bin" />
+          <strong>Choose or Drop OTA Binary (.bin)</strong>
+          <small>Upload <b>DSolution-183-2mic-ota.bin</b>.<br/>Bootloader / <code>factory.bin</code> images are automatically blocked.</small>
+        </label>
+        <div id="ota-status" class="ota-status hidden"></div>
+        <div id="ota-prog" class="ota-prog hidden">
+          <div class="ota-bar-bg"><div id="ota-bar-fill" class="ota-bar-fill"></div></div>
+          <div class="ota-prog-txt"><span id="ota-prog-msg">Uploading...</span><span id="ota-prog-pct">0%</span></div>
+        </div>
+      </div>
+      <div class="dialog-footer">
+        <button id="ota-cancel-btn" class="btn-action btn-danger hidden">Cancel</button>
+        <button id="ota-start-btn" class="btn-action btn-default" disabled>Flash OTA Firmware</button>
+        <button class="btn-action act-dialog-close act-escape">Close</button>
+      </div>
+    </div>
+
+    <div class="dialog wifi hidden">
+      <div class="dialog-head">
+        <span>LAN Wi-Fi Setup (192.168.x.x)</span>
+        <button type="button" id="wifi-rescan-btn" class="btn-action" style="padding:3px 9px;font-size:11px">Rescan</button>
+      </div>
+      <div class="dialog-body">
+        <p id="wifi-cur-status" style="font-size:12px;color:var(--muted);margin:0 0 8px">Checking Wi-Fi status...</p>
+        <div id="wifi-scan-list" class="wifi-scan-list"></div>
+        <label for="wifi-ssid-input" class="oinput-label">Wi-Fi SSID</label>
+        <input type="text" id="wifi-ssid-input" placeholder="Select a network above or type SSID" style="margin-bottom:8px" />
+        <label for="wifi-pwd-input" class="oinput-label">Password</label>
+        <input type="password" id="wifi-pwd-input" placeholder="Leave blank if already saved or open network" />
+        <div id="wifi-conn-msg" class="ota-status hidden"></div>
+      </div>
+      <div class="dialog-footer">
+        <button type="button" id="wifi-connect-btn" class="btn-action btn-default">Connect &amp; Switch to LAN</button>
+        <button class="btn-action act-dialog-close act-escape">Close</button>
+      </div>
+    </div>
+
+    <div class="dialog settings hidden">
+      <div class="dialog-head">Device Settings &amp; Power</div>
+      <div class="dialog-body">
+        <button class="btn-action act-cred" onclick="Dialog.show('credential')">Change WebUI Credentials</button>
+        <button class="btn-action act-hide-show-navigating"></button>
+        <button class="btn-action btn-warn act-reboot">Reboot Device</button>
+        <button class="btn-action btn-danger act-bootloader">Enter USB ROM Bootloader</button>
+      </div>
+      <div class="dialog-footer">
+        <button class="btn-action act-dialog-close act-escape">Close</button>
+      </div>
+    </div>
+
+    <div class="dialog navigator-shortcut hidden">
+      <div class="dialog-head">Screen Keyboard Shortcuts</div>
+      <div class="dialog-body">
+        <p>Control the device from your keyboard while the Screen tab is open:</p>
+        <ul>
+          <li>Arrow Keys — Up / Down / Left / Right</li>
+          <li>Enter — OK / Select</li>
+          <li>M — Hold Select (Back)</li>
+          <li>Backspace — Back / Esc</li>
+          <li>Page Up / Page Down — Page Up / Down</li>
+          <li>R — Reload Screen</li>
+        </ul>
+      </div>
+      <div class="dialog-footer">
+        <button class="btn-action act-dialog-close act-escape">Close</button>
+      </div>
+    </div>
+
+    <div class="dialog info hidden">
+      <div class="dialog-head">About Bruce SecLab WebUI</div>
+      <div class="dialog-body">
+        <p>Customized ESP32-S3 multipurpose security firmware for DSolution 1.83" 2-Mic (NV3023 284&times;240, ES7210/ES8311) hardware.</p>
+        <p>Includes NAPT Travel Router &amp; DNS Blocker, Probe Request IE Radar, CH1-13 Estimated Load &amp; Hidden SSID Decloaker, Acoustic Sonar Motion Guard, Virtual USB MSC + BadUSB, BLE 5.x GATT Explorer/Cloner, WIDS/CSI/FTM, BLE Privacy Guard, Personalization, Live Screen Mirror, WebOTA &amp; Dual-Boot control.</p>
+      </div>
+      <div class="dialog-footer">
+        <button class="btn-action act-dialog-close act-escape">Close</button>
+      </div>
+    </div>
+
+    <div class="dialog oinput hidden">
+      <div class="dialog-head">
+        <span class="oinput-title"></span>
+        <span class="oinput-text"></span>
+      </div>
+      <div class="dialog-body">
+        <label for="oinput-input" class="oinput-label"></label>
+        <input type="text" id="oinput-input" class="oinput-text-submit" />
+      </div>
+      <div class="dialog-footer">
+        <button class="btn-action btn-default act-save-oinput-file"></button>
+        <button class="btn-action act-dialog-close act-escape">Close</button>
+      </div>
+    </div>
+
+    <div class="dialog credential hidden">
+      <div class="dialog-head">Change WebUI Credentials</div>
+      <div class="dialog-body">
+        <label for="cred-username" class="oinput-label">Username</label>
+        <input type="text" id="cred-username" class="oinput-text-submit" style="margin-bottom: 10px" />
+        <label for="cred-password" class="oinput-label">Password</label>
+        <input type="text" id="cred-password" class="oinput-text-submit" />
+      </div>
+      <div class="dialog-footer">
+        <button class="btn-action btn-default act-save-credential">Save</button>
+        <button class="btn-action act-escape" onclick="Dialog.show('settings')">Back</button>
+      </div>
+    </div>
+
+    <div class="dialog editor hidden">
+      <div class="dialog-head">Edit: <span class="editor-file-name mono"></span></div>
+      <div class="dialog-body">
+        <div class="editor-container">
+          <div class="line-numbers"></div>
+          <textarea class="file-content" spellcheck="false"></textarea>
+        </div>
+      </div>
+      <div class="dialog-footer">
+        <button class="btn-action act-save-edit-file" title="CTRL + S">Save</button>
+        <button class="btn-action btn-default act-run-edit-file" title="ALT + ENTER">Run</button>
+        <button class="btn-action act-dialog-close act-escape">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="loading-area hidden"><div class="text"></div></div>
+  <div class="upload-area hidden"></div>
+  <script src="/index.js"></script>
+</body>
+</html>

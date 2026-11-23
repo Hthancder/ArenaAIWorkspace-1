@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bruce WebUI — Login</title>
+  <link rel="stylesheet" href="/index.css" />
+  <link rel="stylesheet" href="/theme.css" />
+</head>
+<body class="login-page">
+  <div class="login-shell">
+    <form class="dialog login-card" action="/login" method="POST">
+      <div class="login-brand">
+        <svg class="shark-logo" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M8 38C15 35 22 25 32 13C34 22 39 27 48 28C54 29 58 32 58 36C58 41 51 45 40 46L34 52L32 46C22 46 14 43 8 38Z" fill="currentColor" fill-opacity="0.22" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/>
+          <path d="M6 34L14 39L8 46" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="47" cy="34" r="2.3" fill="currentColor"/>
+        </svg>
+        <div>
+          <h1>BRUCE WebUI</h1>
+          <p>Authenticate to manage device files &amp; OTA</p>
+        </div>
+      </div>
+      <div class="dialog-body">
+        <div id="notice" class="login-notice hidden"></div>
+        <label for="username" class="oinput-label">Username</label>
+        <input type="text" name="username" id="username" class="oinput-text-submit" autocomplete="username" />
+        <label for="password" class="oinput-label" style="margin-top: 12px">Password</label>
+        <input type="password" name="password" id="password" class="oinput-text-submit" autocomplete="current-password" />
+      </div>
+      <div class="dialog-footer">
+        <button type="submit" class="btn-action btn-default" style="width: 100%; padding: 9px 14px">Sign In</button>
+      </div>
+    </form>
+  </div>
+  <script>
+    document.getElementById("username").focus();
+    const params = new URLSearchParams(location.search);
+    const notice = document.getElementById("notice");
+    if (params.has("failed")) {
+      notice.classList.remove("hidden");
+      notice.classList.add("err");
+      notice.textContent = "Login failed. Check your username or password.";
+    } else if (params.has("loggedout")) {
+      notice.classList.remove("hidden");
+      notice.textContent = "You have been logged out.";
+    }
+  </script>
+</body>
+</html>
