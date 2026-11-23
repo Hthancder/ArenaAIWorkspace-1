@@ -358,6 +358,56 @@ if os.path.exists(CATALOG):
             fail(f"{CATALOG}:{line}: công cụ “{var}” chạy trên luồng chính với trần "
                  f"{value:g}s (>5s) — giao diện sẽ đứng hình")
 
+# ---------------------- plist: mọi hàng phải trỏ tới thứ THẬT SỰ tồn tại
+# Ba lớp lỗi từng làm Settings văng ngay khi chạm một hàng:
+#   1. `validValues` và `validTitles` lệch số phần tử ⇒ trang chọn truy cập
+#      ngoài phạm vi khi vẽ bảng.
+#   2. `detail` trỏ tới lớp không được biên dịch vào bundle ⇒ `NSClassFromString`
+#      trả nil, Preferences đẩy một controller nil.
+#   3. `configPlist` trỏ tới plist không có trong Resources ⇒ trang trắng.
+# Kiểm ở đây (trước khi build) rẻ hơn nhiều so với một vòng cài trên máy.
+PREFS_DIR = "Prefs"
+objc_text = "\n".join(read(f) for f in sorted(
+    glob.glob("Prefs/*.m") + glob.glob("Prefs/*.h")))
+implemented = set(re.findall(r"@implementation\s+(\w+)", objc_text))
+exported = set(re.findall(r"\b(\w+)\s*\(", objc_text)) | implemented
+resources = {os.path.splitext(os.path.basename(f))[0]
+             for f in glob.glob("Prefs/Resources/*.plist")}
+for plist_path in sorted(glob.glob("Prefs/Resources/*.plist")):
+    try:
+        data = plistlib.load(open(plist_path, "rb"))
+    except Exception:
+        continue   # đã báo ở bước validate plist
+    items = data.get("items") if isinstance(data, dict) else None
+    if not isinstance(items, list):
+        continue
+    for index, row in enumerate(items):
+        if not isinstance(row, dict):
+            fail(f"{plist_path}: mục {index} không phải dictionary"); continue
+        label = row.get("label", f"#{index}")
+        values = row.get("validValues")
+        titles = row.get("validTitles")
+        if isinstance(values, list) or isinstance(titles, list):
+            values = values if isinstance(values, list) else []
+            titles = titles if isinstance(titles, list) else []
+            if len(values) != len(titles):
+                fail(f"{plist_path}: hàng “{label}” có {len(values)} validValues "
+                     f"nhưng {len(titles)} validTitles — trang chọn sẽ truy cập ngoài phạm vi")
+            for entry in values:
+                if not isinstance(entry, str):
+                    fail(f"{plist_path}: hàng “{label}” có validValue không phải chuỗi: {entry!r}")
+        detail = row.get("detail")
+        if isinstance(detail, str) and detail and detail not in exported:
+            fail(f"{plist_path}: hàng “{label}” trỏ tới detail “{detail}” "
+                 "nhưng không có lớp/hàm nào như vậy được biên dịch vào bundle")
+        config = row.get("configPlist")
+        if isinstance(config, str) and config and config not in resources:
+            fail(f"{plist_path}: hàng “{label}” trỏ tới configPlist “{config}” "
+                 "nhưng không có tệp đó trong Prefs/Resources")
+        cell_class = row.get("cellClass")
+        if isinstance(cell_class, str) and cell_class and cell_class not in exported:
+            fail(f"{plist_path}: hàng “{label}” dùng cellClass “{cell_class}” không tồn tại")
+
 # ---------------------------------------------------------------- report
 for message in WARNINGS:
     print(f"⚠️  {message}")

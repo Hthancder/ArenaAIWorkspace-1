@@ -5,6 +5,10 @@
 #import "SXLog.h"
 #import <notify.h>
 
+/// Ghi chẩn đoán chi tiết của bộ chọn. Bật bằng Cài đặt → Gỡ lỗi → Nhật ký chi
+/// tiết (khoá `verbose`), để log thường không bị nhiễu.
+static BOOL gSXAPIChoiceVerboseLogging = YES;
+
 @interface SXAPIChoiceController () <UITableViewDataSource, UITableViewDelegate>
 // Không khai báo lại `table`: PSListController đã có thuộc tính này, khai báo
 // trùng làm clang báo -Wobjc-property-synthesis (thành lỗi vì -Werror).
@@ -13,7 +17,28 @@
 @property (nonatomic, strong) NSArray<NSString *> *hints;
 @property (nonatomic, copy) NSString *prefsKey;
 @property (nonatomic, copy) NSString *screenTitle;
+/// Đã dọn reference `sxParent` ở specifier NÀY chưa (xem `sx_customizeOptions:`).
+@property (nonatomic) BOOL sxDidCustomize;
+/// Giá trị đang lưu, đọc một lần mỗi lần hiện trang (xem `-sx_current`).
+@property (nonatomic, copy) NSString *sx_currentCache;
 @end
+
+/// Chuẩn hoá `validValues`/`validTitles` từ plist thành mảng CHUỖI.
+///
+/// Vì sao cần: trang này được dựng bằng tay, nên một plist sai kiểu (số thay vì
+/// chuỗi, NSNull, từ điển lồng) từng làm `titles[i]` sai kiểu ⇒
+/// `-[__NSCFNumber length]: unrecognized selector` ngay khi bảng hỏi số hàng —
+/// biểu hiện đúng là “bấm vào là văng”. Mảng rỗng/hỏng thì trả @[] để trang hiện
+/// khối dự phòng, không văng.
+static NSArray<NSString *> *SXAPIChoiceStringList(id raw) {
+	if (![raw isKindOfClass:[NSArray class]]) return @[];
+	NSMutableArray<NSString *> *out = [NSMutableArray array];
+	for (id item in (NSArray *)raw) {
+		if ([item isKindOfClass:[NSString class]]) [out addObject:item];
+		else if ([item isKindOfClass:[NSNumber class]]) [out addObject:[(NSNumber *)item stringValue]];
+	}
+	return out;
+}
 
 @implementation SXAPIChoiceController
 
@@ -29,9 +54,22 @@
 	self.view = table;
 }
 
+/// Bọc một khối dựng giao diện: nếu có ngoại lệ thì ghi log rõ ràng và để trang
+/// hiện khối dự phòng, KHÔNG để ngoại lệ nổi lên Preferences (làm văng app).
+/// Người dùng báo “bấm vào là văng” mà log không có dòng nào thì không sửa được;
+/// log + khối dự phòng biến một lần văng thành một báo cáo đọc được.
+- (void)sx_guarded:(NSString *)what run:(void (^)(void))block {
+	@try {
+		block();
+	} @catch (NSException *exception) {
+		SXLogErr(@"pref", @"bộ chọn %@: lỗi khi %@ — %@: %@", self.prefsKey ?: @"(trống)",
+				 what, exception.name, exception.reason);
+	}
+}
+
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	[self sx_loadFromSpecifier];
+	[self sx_guarded:@"nạp lựa chọn" run:^{ [self sx_loadFromSpecifier]; }];
 	self.title = self.screenTitle.length ? self.screenTitle : @"Chọn giá trị";
 
 	// Bảng đã được dựng ở `loadView` (cell của Preferences chỉ hiện chữ ở ô
@@ -41,6 +79,69 @@
 	SXLogDbg(@"pref", @"bộ chọn giá trị mở: key=%@, %lu lựa chọn, specifier=%@",
 			 self.prefsKey ?: @"(trống)", (unsigned long)self.values.count,
 			 NSStringFromClass([self.specifier class]));
+}
+
+#pragma mark - Không route "detail" thêm lần nữa
+
+/// Gỡ reference `sxParent` khỏi các hàng của chính mình.
+///
+/// Vì sao phải làm: hàng “Nhà cung cấp” (và 3 hàng chọn chuỗi khác) khai báo
+/// `detail` = `SXAPIChoiceController` trong Root.plist. `PSListController` giữ
+/// controller vừa đẩy trong một ivar **có tiền tố `_`** xoá mọi thuộc tính khai
+/// báo `detail` trên từng specifier (đó là cách nó nhớ “hàng này đã push”), rồi
+/// ở `viewWillAppear:` của trang cha nó lặp lại việc xoá đó. Ta tự dựng bảng và
+/// tự xử lý chạm, nên thuộc tính `detail` không còn tác dụng — nhưng nếu để
+/// nguyên thì trang cha còn tham chiếu tới controller này và có thể đẩy nó thêm
+/// một lần nữa (màn hình mở hai lần / đẩy một controller đã bị gỡ ⇒ văng).
+/// Gỡ từ phía ta thì không phải đoán tên ivar nội bộ nào của Apple.
+- (void)sx_customizeOptions:(PSSpecifier *)row {
+	if (!row || self.sxDidCustomize) return;
+	self.sxDidCustomize = YES;
+	// Quét MỌI khoá thay vì đoán tên (`sxParent` là một trong các tên đã thấy ở
+	// các bản Preferences khác nhau): khoá nào đang giữ một UIViewController mà
+	// không phải `detail` thì đó chính là “đã push” — gỡ đi.
+	NSMutableDictionary *properties = [row.properties isKindOfClass:[NSMutableDictionary class]]
+		? row.properties : nil;
+	if (!properties) return;
+	NSMutableArray *staleKeys = [NSMutableArray array];
+	for (id key in [properties allKeys]) {
+		if (![key isKindOfClass:[NSString class]]) continue;
+		if ([key isEqualToString:PSCellClassKey] || [key isEqualToString:@"detail"]) continue;
+		// Chỉ gỡ giá trị là CONTROLLER: đó là dấu hiệu "hàng này đã push".
+		// (Không gỡ NSValue/UIView — chúng có thể là dữ liệu hợp lệ của cell.)
+		id value = properties[key];
+		if ([value isKindOfClass:[UIViewController class]]) [staleKeys addObject:key];
+	}
+	for (NSString *key in staleKeys) {
+		[row removePropertyForKey:key];
+		SXLogDbg(@"pref", @"bộ chọn %@: gỡ khoá “%@” khỏi hàng gọi", self.prefsKey ?: @"(trống)", key);
+	}
+	// `detail` để nguyên cho lần mở sau (hàng vẫn hiện mũi tên), nhưng ta không
+	// phụ thuộc vào nó: bảng dưới đây là bảng thật.
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+	[super viewWillAppear:animated];
+	// `specifier` có thể tới muộn; thử lại ở đây một lần.
+	[self sx_customizeOptions:self.specifier];
+	// Đọc lại trong `viewWillAppear` (không phải viewDidLoad): lúc này specifier
+	// chắc chắn đã có, và người dùng quay lại trang này sau khi đổi cài đặt ở nơi
+	// khác cũng thấy đúng dấu ✓.
+	self.sx_currentCache = nil;   // đọc lại prefs đúng một lần cho lần hiện này
+	[self sx_refreshFromSpecifierIfNeeded];
+	if ([self.view isKindOfClass:[UITableView class]]) [(UITableView *)self.view reloadData];
+	[self sx_logDiagnostics];
+}
+
+/// Ghi lại đúng những gì trang nhận được. Khi người dùng báo “bấm vào là văng”,
+/// dòng log này là thứ phân biệt “không có dữ liệu” với “dữ liệu sai kiểu” —
+/// không phải đoán.
+- (void)sx_logDiagnostics {
+	if (!gSXAPIChoiceVerboseLogging) return;
+	PSSpecifier *row = self.specifier;
+	SXLogDbg(@"pref", @"bộ chọn %@ · specifier=%@ · values=%lu · titles=%lu",
+			 self.prefsKey ?: @"(trống)", row ? NSStringFromClass(row.class) : @"(nil)",
+			 (unsigned long)self.values.count, (unsigned long)self.titles.count);
 }
 
 #pragma mark - Bảng
@@ -53,7 +154,9 @@
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
 	(void)tableView;
 	(void)section;
-	return (NSInteger)self.values.count;
+	// Dùng MIN của hai mảng: `titles` ngắn hơn `values` (plist lệch) từng làm
+	// cellForRow lấy `titles[i]` ngoài phạm vi ⇒ văng khi bảng hỏi hàng.
+	return (NSInteger)MIN(self.values.count, self.titles.count);
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
@@ -69,18 +172,19 @@
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	if (indexPath.row < 0 || (NSUInteger)indexPath.row >= self.values.count) {
+	NSUInteger row = (NSUInteger)indexPath.row;
+	if (indexPath.row < 0 || row >= self.values.count || row >= self.titles.count) {
 		return [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil];
 	}
 	NSString *current = [self sx_current];
-	NSString *value = [self sx_storedValueAtIndex:(NSUInteger)indexPath.row];
-	NSString *title = self.titles[(NSUInteger)indexPath.row];
+	NSString *value = [self sx_storedValueAtIndex:row];
+	NSString *title = self.titles[row];
 	PSSpecifier *specifier = [PSSpecifier preferenceSpecifierNamed:title
 															target:nil set:NULL get:NULL
 															detail:nil cell:PSListItemCell edit:nil];
 	[specifier setProperty:@(SXChoiceCellModeOption) forKey:SXChoiceModeKey];
 	[specifier setProperty:@([value isEqualToString:current]) forKey:SXChoiceActiveKey];
-	[specifier setProperty:[self sx_hintAtIndex:(NSUInteger)indexPath.row] forKey:SXChoiceHintKey];
+	[specifier setProperty:[self sx_hintAtIndex:row] ?: @"" forKey:SXChoiceHintKey];
 	return [SXChoiceRow cellForTable:tableView specifier:specifier];
 }
 
@@ -107,6 +211,15 @@
 
 - (void)viewDidAppear:(BOOL)animated {
 	[super viewDidAppear:animated];
+	// Nếu `specifier` chỉ tới sau khi bảng đã dựng, số hàng sẽ là 0 và màn hình
+	// trống. Thử đọc lại một lần trước khi hiện khối dự phòng, để người dùng
+	// không phải thoát ra vào lại.
+	if (!self.values.count && self.specifier) {
+		[self sx_loadFromSpecifier];
+		if (self.values.count && [self.view isKindOfClass:[UITableView class]]) {
+			[(UITableView *)self.view reloadData];
+		}
+	}
 	SXShowContentFallbackIfNeeded(self, self.screenTitle ?: @"Chọn giá trị",
 								  @"không đọc được danh sách lựa chọn");
 }
@@ -123,6 +236,10 @@
 		if (!key.length) key = [specifier propertyForKey:PSKeyNameKey];
 		if (![key isKindOfClass:[NSString class]] || !key.length) return;
 		if ([key isEqualToString:self.prefsKey]) return;
+		// Khoá KHÁC ⇒ trang đang sử dụng dữ liệu của hàng khác (thường vì
+		// `specifier` tới sau `viewDidLoad`). Gán lại rồi nạp lại từ đầu, kể cả
+		// khi lần nạp trước đã suy ra nhầm nhánh `openaiApi`.
+		self.prefsKey = key;
 		[self sx_loadFromSpecifier];
 		self.title = self.screenTitle.length ? self.screenTitle : @"Chọn giá trị";
 		_specifiers = nil;
@@ -136,6 +253,7 @@
 /// nên không còn lớp Apple nào phải đoán dữ liệu nằm ở đâu.
 - (void)sx_loadFromSpecifier {
 	PSSpecifier *specifier = self.specifier;
+	[self sx_customizeOptions:specifier];
 	NSString *key = [specifier propertyForKey:@"configKey"];
 	if (!key.length) key = [specifier propertyForKey:@"key"];
 	if (!key.length) key = [specifier propertyForKey:PSKeyNameKey];
@@ -143,8 +261,8 @@
 	// trang sẽ thấy 3 lựa chọn giao thức cho một khoá khác hẳn.
 	self.prefsKey = ([key isKindOfClass:[NSString class]] && key.length) ? key : nil;
 	self.screenTitle = [specifier propertyForKey:@"label"];
-	NSArray *values = [specifier propertyForKey:@"validValues"];
-	NSArray *titles = [specifier propertyForKey:@"validTitles"];
+	NSArray *values = SXAPIChoiceStringList([specifier propertyForKey:@"validValues"]);
+	NSArray *titles = SXAPIChoiceStringList([specifier propertyForKey:@"validTitles"]);
 	if (![values isKindOfClass:[NSArray class]] || !values.count) {
 		// Chỉ trang “Giao thức API” mới không khai báo validValues trong plist.
 		if ([self.prefsKey isEqualToString:@"openaiApi"]) {
@@ -173,12 +291,18 @@
 /// không hiện ✓ cũ. Dùng chung phép chuẩn hoá với lúc ghi.
 - (NSString *)sx_current {
 	if (!self.prefsKey.length) return [self sx_defaultValue];
+	// Đọc lại prefs MỘT lần cho mỗi lần hiện trang (`sx_currentCache`), không phải
+	// mỗi cell: bản cũ gọi `-reload` (CFPreferences + đọc tệp plist dự phòng)
+	// trong từng `cellForRow`, tức I/O trên luồng chính N lần cho N hàng.
+	if (self.sx_currentCache) return self.sx_currentCache;
 	[[SXPrefs shared] reload];
 	if ([self.prefsKey isEqualToString:@"openaiApi"]) {
 		return SXOpenAIApiStorageKey([SXPrefs shared].openaiApi);
 	}
 	NSString *value = [SXPrefs stringForKey:self.prefsKey];
-	return value.length ? value : [self sx_defaultValue];
+	if (!value.length) value = [self sx_defaultValue];
+	self.sx_currentCache = value;
+	return value;
 }
 
 - (NSString *)sx_defaultValue {
@@ -210,6 +334,7 @@
 	if (index >= self.values.count) return;
 	NSString *stored = [self sx_storedValueAtIndex:index];
 	[SXPrefs setString:stored forKey:self.prefsKey];
+	self.sx_currentCache = nil;
 	[[SXPrefs shared] reload];
 	notify_post("com.sirix.tweak/prefs.changed");
 	[SXUI tapFeedback];
