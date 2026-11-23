@@ -12635,10 +12635,10 @@ index 0000000..0fb739c
 +
 +#endif
 diff --git a/src/core/menu_items/WifiMenu.cpp b/src/core/menu_items/WifiMenu.cpp
-index 2e6512c..e3f6d5d 100644
+index 2e6512c..5501dd1 100644
 --- a/src/core/menu_items/WifiMenu.cpp
 +++ b/src/core/menu_items/WifiMenu.cpp
-@@ -16,149 +16,279 @@
+@@ -16,149 +16,268 @@
  #include "modules/wifi/netcut.h"
  #include "modules/wifi/responder.h"
  #include "modules/wifi/scan_hosts.h"
@@ -12646,7 +12646,6 @@ index 2e6512c..e3f6d5d 100644
 +#include "modules/wifi/pmkid_capture.h"
  #include "modules/wifi/sniffer.h"
  #include "modules/wifi/wifi_atks.h"
-+#include "modules/gps/wardriving.h"
  
  #ifndef LITE_VERSION
  #include "modules/pwnagotchi/pwnagotchi.h"
@@ -12737,15 +12736,6 @@ index 2e6512c..e3f6d5d 100644
 +    ARPScanner{netif};
 +}
 +
-+void localWifiWardrive() {
-+    std::vector<Option> consent = {
-+        {"Start WiFi-only local survey", []() {}},
-+        {"Cancel", []() {}},
-+    };
-+    if (loopOptions(consent, MENU_TYPE_SUBMENU, "AP + GPS saved locally; no upload") == 0) {
-+        Wardriving(true, false);
-+    }
-+}
 +
 +} // namespace
 +
@@ -12791,13 +12781,13 @@ index 2e6512c..e3f6d5d 100644
 -                 displayInfo("pwd: " + bruceConfig.wifiAp.pwd, true);
 -             }},
 -        };
--    }
--    if (WiFi.getMode() != WIFI_MODE_NULL) { options.push_back({"Turn Off WiFi", wifiDisconnect}); }
--    if (WiFi.getMode() & WIFI_MODE_STA && WiFi.isConnected()) {
--        options.push_back({"AP info", displayAPInfo});
 +        list.push_back({"Connect to WiFi", []() { wifiConnectMenu(WIFI_STA); }});
 +        list.push_back({"Start WiFi AP", startWifiAp});
      }
+-    if (WiFi.getMode() != WIFI_MODE_NULL) { options.push_back({"Turn Off WiFi", wifiDisconnect}); }
+-    if (WiFi.getMode() & WIFI_MODE_STA && WiFi.isConnected()) {
+-        options.push_back({"AP info", displayAPInfo});
+-    }
 -    options.push_back({"Wifi Atks", wifi_atk_menu});
 -    options.push_back({"Evil Portal", [=]() {
 -                           // WebUI cleanup now handled automatically inside EvilPortal constructor
@@ -12827,7 +12817,6 @@ index 2e6512c..e3f6d5d 100644
 +        std::vector<Option> list;
 +        list.push_back({"Probe Radar (local report)", probe_radar_setup});
 +        list.push_back({"2.4 GHz Analyzer", channel_analyzer_setup});
-+        list.push_back({"GPS Wardrive (local, WiFi only)", localWifiWardrive});
  #if defined(CONFIG_IDF_TARGET_ESP32C5)
 -    options.push_back({"Dual Band Analyzer", dual_band_analyzer_setup});
 -#endif
@@ -12854,10 +12843,12 @@ index 2e6512c..e3f6d5d 100644
 -    options.push_back({"Brucegotchi", brucegotchi_start});
 -#if defined(CONFIG_IDF_TARGET_ESP32S3)
 -    options.push_back({"WiFite", wifite_menu});
--#endif
--    options.push_back({"WiFi Pass Recovery", wifi_recover_menu});
 +        list.push_back({"5 GHz Analyzer", dual_band_analyzer_setup});
  #endif
+-    options.push_back({"WiFi Pass Recovery", wifi_recover_menu});
+-#endif
+-
+-    options.push_back({"Config", [this]() { configMenu(); }});
 +        list.push_back({"Packet Sniffer (PCAP)", sniffer_setup});
 +        list.push_back({"FTM Distance", ftm_ranging_setup});
 +        list.push_back({"CSI Motion Radar", csi_radar_setup});
@@ -12867,8 +12858,6 @@ index 2e6512c..e3f6d5d 100644
 +    }
 +}
  
--    options.push_back({"Config", [this]() { configMenu(); }});
--
 -    addOptionToMainMenu();
 +void WifiMenu::defenseMenu() {
 +    std::vector<Option> list;
@@ -12921,8 +12910,6 @@ index 2e6512c..e3f6d5d 100644
 +    }
  }
 +#endif
-+
-+void WifiMenu::chainsMenu() { chain_orchestrator_setup(); }
  
 -void WifiMenu::configMenu() {
 -    std::vector<Option> wifiOptions;
@@ -12962,6 +12949,8 @@ index 2e6512c..e3f6d5d 100644
 -        });
 -
 -        wifiOptions.push_back(opt);
++void WifiMenu::chainsMenu() { chain_orchestrator_setup(); }
++
 +void WifiMenu::toolsMenu() {
 +    bool rebuild = true;
 +    while (rebuild) {
@@ -13025,7 +13014,7 @@ index 2e6512c..e3f6d5d 100644
  }
  
  void WifiMenu::drawIcon(float scale) {
-@@ -168,23 +298,11 @@ void WifiMenu::drawIcon(float scale) {
+@@ -168,23 +287,11 @@ void WifiMenu::drawIcon(float scale) {
  
      tft.fillCircle(iconCenterX, iconCenterY + deltaY, radius, bruceConfig.priColor);
      tft.drawArc(
