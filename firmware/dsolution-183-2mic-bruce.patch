@@ -34292,10 +34292,9 @@ index 00000000..021ceb4c
 +#endif
 diff --git a/src/modules/wifi/portal_napt.cpp b/src/modules/wifi/portal_napt.cpp
 new file mode 100644
-index 00000000..2f16596b
 --- /dev/null
 +++ b/src/modules/wifi/portal_napt.cpp
-@@ -0,0 +1,691 @@
+@@ -0,0 +1,692 @@
 +#include "portal_napt.h"
 +#if !defined(LITE_VERSION)
 +
@@ -34314,6 +34313,7 @@ index 00000000..2f16596b
 +#include <LittleFS.h>
 +#include <WiFi.h>
 +#include <cstring>
++#include "esp_wifi.h"
 +#include <globals.h>
 +
 +namespace {
