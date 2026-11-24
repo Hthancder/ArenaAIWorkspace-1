@@ -29406,7 +29406,21 @@ diff --git a/src/modules/wifi/evil_portal.cpp b/src/modules/wifi/evil_portal.cpp
          }
  
          if (totalCapturedCredentials != (previousTotalCapturedCredentials + 1)) {
-@@ -373,11 +468,13 @@ void EvilPortal::loop() {
+@@ -365,7 +460,12 @@ void EvilPortal::loop() {
+         }
+ 
+         if (verifyPass) {
+-            wifiDisconnect();
++            // A verified key used to tear the whole radio down here
++            // (wifiDisconnect() also does softAPdisconnect() + WIFI_OFF), which
++            // ejected the victim from the clone it had just joined -- the
++            // classic "phone connects, then drops to mobile data" report.
++            // Release only the STA side: keep the clone AP and its DHCP alive.
++            WiFi.disconnect(false, false);
+             verifyPass = false;
+         }
+     }
+@@ -373,11 +473,13 @@ void EvilPortal::loop() {
  
  void EvilPortal::processRequests() {
      if (!_backgroundMode) return;
@@ -29421,7 +29435,7 @@ diff --git a/src/modules/wifi/evil_portal.cpp b/src/modules/wifi/evil_portal.cpp
      if (totalCapturedCredentials != (previousTotalCapturedCredentials + 1)) {
          previousTotalCapturedCredentials = totalCapturedCredentials - 1;
      }
-@@ -484,8 +581,10 @@ void EvilPortal::printLastCapturedCreden
+@@ -484,8 +586,10 @@ void EvilPortal::printLastCapturedCreden
  }
  
  void EvilPortal::printDeauthStatus() {
@@ -29434,7 +29448,7 @@ diff --git a/src/modules/wifi/evil_portal.cpp b/src/modules/wifi/evil_portal.cpp
      } else {
          tft.setTextColor(TFT_RED);
          printFootnote("Deauth ON");
-@@ -514,6 +613,40 @@ void EvilPortal::loadCustomHtml() {
+@@ -514,6 +618,40 @@ void EvilPortal::loadCustomHtml() {
      }
  }
  
@@ -29475,7 +29489,7 @@ diff --git a/src/modules/wifi/evil_portal.cpp b/src/modules/wifi/evil_portal.cpp
  bool EvilPortal::loadCustomHtmlFromPath(const String &path) {
      if (path.isEmpty()) return false;
      if (!getFsStorage(fsHtmlFile) || !fsHtmlFile->exists(path)) return false;
-@@ -714,15 +847,30 @@ void EvilPortal::credsController(AsyncWe
+@@ -714,15 +852,30 @@ void EvilPortal::credsController(AsyncWe
      htmlResponse += "</li>\n";
  
      if (_verifyPwd && passwordValue != "") {
@@ -29509,7 +29523,7 @@ diff --git a/src/modules/wifi/evil_portal.cpp b/src/modules/wifi/evil_portal.cpp
              vTaskDelay(50 / portTICK_PERIOD_MS);
              verifyPass = true;
              _deauth = false;
-@@ -738,6 +886,181 @@ void EvilPortal::credsController(AsyncWe
+@@ -738,6 +891,181 @@ void EvilPortal::credsController(AsyncWe
  
      capturedCredentialsHtml = htmlResponse + capturedCredentialsHtml;
      totalCapturedCredentials++;

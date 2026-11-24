@@ -204,6 +204,14 @@ assert "if (!vOk && _chainKick && apClientCount() == 0)" in loop, \
 # The old unconditional flood may only survive as a removed line.
 assert all(ln.startswith("-") for ln in evil_portal_raw.splitlines() if "> 250 && _deauth" in ln)
 
+# A verified key must not tear the radio down: wifiDisconnect() also does
+# softAPdisconnect() + WIFI_OFF, i.e. it ejects the victim from the clone it just
+# joined. Only the STA side may be released.
+assert all(ln.startswith("-") for ln in evil_portal_raw.splitlines()
+           if "wifiDisconnect();" in ln), \
+    "the portal loop must not call wifiDisconnect() (it drops the clone AP)"
+assert "WiFi.disconnect(false, false);" in evil_portal, "release only the STA side after verify"
+
 evil_portal_h = section("src/modules/wifi/evil_portal.h")
 for field in ("_chainKick", "_kickBursts", "_lastKickMs", "_asyncVerify"):
     assert field in evil_portal_h, f"missing portal state: {field}"
