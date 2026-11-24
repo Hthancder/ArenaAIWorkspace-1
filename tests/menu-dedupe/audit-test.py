@@ -46,6 +46,10 @@ badusb_rows = ["USB Descriptor Info", "USB Keyboard", "Smart BadUSB Suite", "Vir
 for row in badusb_rows:
     holders = [name for name, code in (("BadUsbMenu", read("BadUsbMenu")), ("OthersMenu", others)) if f'"{row}"' in code]
     assert holders == ["BadUsbMenu"], f"{row} must only be listed in BadUsbMenu, found {holders}"
+# Forwards need the real MainMenu definition, and every include must be the
+# src-relative path (a bare "main_menu.h" only resolves inside src/core).
+assert '#include "core/main_menu.h"' in others
+assert '#include "main_menu.h"' not in others, "include path must be src-relative"
 assert "mainMenu.badUsbMenu.optionsMenu()" in others, "Others must forward to the single BadUSB menu"
 assert "ducky_setup" not in others.replace("mainMenu.badUsbMenu", ""), "Others kept a second BadUSB list"
 

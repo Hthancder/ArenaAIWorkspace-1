@@ -14933,13 +14933,13 @@ index 00000000..b5b5ff4a
 +
 +} // namespace menu_groups
 diff --git a/src/core/menu_items/OthersMenu.cpp b/src/core/menu_items/OthersMenu.cpp
-index 40f99560..432cd579 100644
+index 40f99560..d832fb86 100644
 --- a/src/core/menu_items/OthersMenu.cpp
 +++ b/src/core/menu_items/OthersMenu.cpp
 @@ -1,16 +1,18 @@
  #include "OthersMenu.h"
  
-+#include "main_menu.h"
++#include "core/main_menu.h"
 +
  #include "core/display.h"
  #include "core/utils.h"
