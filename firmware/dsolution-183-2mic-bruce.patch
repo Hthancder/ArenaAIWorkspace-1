@@ -4659,7 +4659,7 @@ index 5290300b..b27bf10a 100644
 +</body>
  </html>
 diff --git a/embedded_resources/web_interface/index.js b/embedded_resources/web_interface/index.js
-index fd616029..4da04155 100644
+index fd616029..7aa2b385 100644
 --- a/embedded_resources/web_interface/index.js
 +++ b/embedded_resources/web_interface/index.js
 @@ -6,20 +6,17 @@ const T = {
@@ -4778,7 +4778,7 @@ index fd616029..4da04155 100644
      window.location.href = "/";
    } else {
      Dialog.loading.hide();
-@@ -132,151 +93,201 @@ function handleAuthError() {
+@@ -132,151 +93,207 @@ function handleAuthError() {
  async function requestGet(url, data) {
    return new Promise((resolve, reject) => {
      let req = new XMLHttpRequest();
@@ -4809,6 +4809,9 @@ index fd616029..4da04155 100644
 +      } else reject(new Error(`Request failed (${req.status})`));
      };
 +    req.onerror = () => reject(new Error("Network error"));
++    req.ontimeout = () => reject(new Error("Request timed out"));
++    req.onabort = () => reject(new Error("Request aborted"));
++    req.timeout = 30000;
      req.send();
    });
  }
@@ -4849,6 +4852,9 @@ index fd616029..4da04155 100644
      };
 -    req.onerror = () => reject(new Error("Network error"));
 +    req.onerror = () => reject(httpRequestError("Network error", req));
++    req.ontimeout = () => reject(httpRequestError("Request timed out", req));
++    req.onabort = () => reject(httpRequestError("Request aborted", req));
++    req.timeout = 30000;
      req.send(fd);
    });
  }
@@ -5088,7 +5094,7 @@ index fd616029..4da04155 100644
  }
  
  async function runCommand(cmd) {
-@@ -290,13 +301,21 @@ async function runCommand(cmd) {
+@@ -290,13 +307,21 @@ async function runCommand(cmd) {
    }
  }
  
@@ -5115,7 +5121,7 @@ index fd616029..4da04155 100644
    return undefined;
  }
  
-@@ -304,39 +323,25 @@ function calcHash(str) {
+@@ -304,39 +329,25 @@ function calcHash(str) {
    let hash = 5381;
    str = str.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
    for (let i = 0; i < str.length; i++) {
@@ -5161,7 +5167,7 @@ index fd616029..4da04155 100644
  }
  
  function renderFileRow(fileList) {
-@@ -346,251 +351,528 @@ function renderFileRow(fileList) {
+@@ -346,251 +357,532 @@ function renderFileRow(fileList) {
      .sort((a, b) => {
        let [aFirst, ...aRest] = a.split(":");
        let [bFirst, ...bRest] = b.split(":");
@@ -5249,6 +5255,7 @@ index fd616029..4da04155 100644
  let currentDrive;
  let currentPath;
 +let lastSysInfo = {};
++let systemInfoRefreshBusy = false;
 +let filesRequestGeneration = 0;
 +let payloadPickerActive = false;
 +function startPayloadPicker() {
@@ -5355,6 +5362,8 @@ index fd616029..4da04155 100644
 -  sdCardAvailable = info.SD.total != "0 B";
 -  Dialog.loading.hide();
 +async function fetchSystemInfo(silent = false) {
++  if (systemInfoRefreshBusy) return;
++  systemInfoRefreshBusy = true;
 +  if (!silent) Dialog.loading.show("Fetching system info...");
 +  try {
 +    let info = JSON.parse(await requestGet("/systeminfo"));
@@ -5414,6 +5423,7 @@ index fd616029..4da04155 100644
 +    if ($("#meter-fs")) $("#meter-fs").style.width = fsTotalBytes > 0 ? Math.min(100, (fsUsedBytes * 100) / fsTotalBytes).toFixed(1) + "%" : "0%";
 +  } finally {
 +    if (!silent) Dialog.loading.hide();
++    systemInfoRefreshBusy = false;
 +  }
  }
  
@@ -5826,7 +5836,7 @@ index fd616029..4da04155 100644
      });
    };
  
-@@ -599,7 +881,6 @@ async function renderTFT(data) {
+@@ -599,7 +891,6 @@ async function renderTFT(data) {
      let img = await loadImage(img_url);
      let drawX = input.x;
      let drawY = input.y;
@@ -5834,7 +5844,7 @@ index fd616029..4da04155 100644
      if (input.center === 1) {
        drawX += (canvas.width - img.width) / 2;
        drawY += (canvas.height - img.height) / 2;
-@@ -607,12 +888,7 @@ async function renderTFT(data) {
+@@ -607,12 +898,7 @@ async function renderTFT(data) {
      ctx.drawImage(img, drawX, drawY);
    };
  
@@ -5848,7 +5858,7 @@ index fd616029..4da04155 100644
  
    const drawRoundRect = (ctx, input, fill) => {
      const { x, y, w, h, r } = input;
-@@ -629,60 +905,45 @@ async function renderTFT(data) {
+@@ -629,60 +915,45 @@ async function renderTFT(data) {
  
    let startData = 0;
    const getByteValue = (dataType) => {
@@ -5932,7 +5942,7 @@ index fd616029..4da04155 100644
        }
      }
      return r;
-@@ -690,279 +951,584 @@ async function renderTFT(data) {
+@@ -690,279 +961,583 @@ async function renderTFT(data) {
  
    let offset = 0;
    ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -6589,7 +6599,6 @@ index fd616029..4da04155 100644
 +    $("#wifi-connect-btn").disabled = false;
 +  }
 +});
-+
 +window.ondragenter = (e) => {
 +  if ($(".dialog.ota:not(.hidden)") || activeTab !== "files") return;
 +  if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files")) {
@@ -6686,7 +6695,7 @@ index fd616029..4da04155 100644
      fetchFiles(drive, path);
      return;
    }
-@@ -970,37 +1536,8 @@ $(".container").addEventListener("click", async (e) => {
+@@ -970,37 +1545,8 @@ $(".container").addEventListener("click", async (e) => {
    let editFileAction = e.target.closest(".act-edit-file");
    if (editFileAction) {
      e.preventDefault();
@@ -6725,7 +6734,7 @@ index fd616029..4da04155 100644
      return;
    }
  
-@@ -1009,24 +1546,17 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1009,24 +1555,17 @@ $(".container").addEventListener("click", async (e) => {
      e.preventDefault();
      let action = oActionOInput.getAttribute("data-action");
      if (!action) return;
@@ -6755,7 +6764,7 @@ index fd616029..4da04155 100644
      Dialog.showOneInput(action, value, data);
      return;
    }
-@@ -1034,27 +1564,16 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1034,27 +1573,16 @@ $(".container").addEventListener("click", async (e) => {
    let actDeleteFile = e.target.closest(".act-delete");
    if (actDeleteFile) {
      e.preventDefault();
@@ -6792,7 +6801,7 @@ index fd616029..4da04155 100644
      return;
    }
  
-@@ -1062,662 +1581,1665 @@ $(".container").addEventListener("click", async (e) => {
+@@ -1062,662 +1590,1676 @@ $(".container").addEventListener("click", async (e) => {
    if (actPlay) {
      e.preventDefault();
      let cmd = actPlay.getAttribute("data-cmd");
@@ -7083,6 +7092,20 @@ index fd616029..4da04155 100644
 -    } else {
 -      textarea.setSelectionRange(newStart, newStart);
 -    }
+-  };
+-
+-  const getCurrentLine = (pos) => {
+-    const lineStart = textarea.value.lastIndexOf("\n", pos - 1) + 1;
+-    const lineEnd = textarea.value.indexOf("\n", pos);
+-    const line = textarea.value.slice(
+-      lineStart,
+-      lineEnd === -1 ? undefined : lineEnd,
+-    );
+-    return {
+-      line,
+-      lineStart,
+-      lineEnd: lineEnd === -1 ? textarea.value.length : lineEnd,
+-    };
 +    textarea.setSelectionRange(newStart, newEnd);
    };
 +  if (e.key === "Tab") {
@@ -7105,20 +7128,6 @@ index fd616029..4da04155 100644
 +  }
 +});
  
--  const getCurrentLine = (pos) => {
--    const lineStart = textarea.value.lastIndexOf("\n", pos - 1) + 1;
--    const lineEnd = textarea.value.indexOf("\n", pos);
--    const line = textarea.value.slice(
--      lineStart,
--      lineEnd === -1 ? undefined : lineEnd,
--    );
--    return {
--      line,
--      lineStart,
--      lineEnd: lineEnd === -1 ? textarea.value.length : lineEnd,
--    };
--  };
--
 -  const handleTab = (shift) => {
 -    if (start === end) {
 -      const { line, lineStart, lineEnd } = getCurrentLine(start);
@@ -7199,7 +7208,7 @@ index fd616029..4da04155 100644
 -    );
 -  };
 +  setInterval(() => {
-+    if ($(".dialog-background.hidden") && !_runningUpload && !otaBusy) {
++    if (!document.hidden && $(".dialog-background.hidden") && !_runningUpload && !otaBusy) {
 +      fetchSystemInfo(true).catch(() => {});
 +    }
 +  }, 15000);
@@ -7233,6 +7242,7 @@ index fd616029..4da04155 100644
 +// ============ SECLAB DASHBOARD ============
 +let secLabTimer = null;
 +let secLabBusy = false;
++let secLabRefreshBusy = false;
 +let secLabStatusOk = true;
 +let secLabPlusState = {};
 +let secLabNaptState = {};
@@ -7245,16 +7255,17 @@ index fd616029..4da04155 100644
 +function startSecLabPoll() {
 +  stopSecLabPoll();
 +  secLabTimer = setInterval(() => {
-+    if (activeTab === "seclab" && $(".dialog-background.hidden") && !otaBusy) {
++    if (activeTab === "seclab" && !document.hidden && $(".dialog-background.hidden") && !otaBusy) {
 +      refreshSecLab().catch(() => {});
      }
 -  };
-+  }, 2600);
++  }, 8000);
 +}
 +function stopSecLabPoll() {
 +  if (secLabTimer) { clearInterval(secLabTimer); secLabTimer = null; }
 +}
 +let monTimer = null;
++let monRefreshBusy = false;
 +let monLastSys = null;
 +let monLastSecLab = null;
 +let monFilter = "all";
@@ -7265,11 +7276,12 @@ index fd616029..4da04155 100644
 +    if(activeTab==="monitor" && (!auto || auto.checked) && !document.hidden && !otaBusy){
 +      refreshMonitor().catch(()=>{});
 +    }
-+  }, 3000);
++  }, 8000);
 +}
 +function stopMonitorPoll(){ if(monTimer){ clearInterval(monTimer); monTimer=null; } }
 +
 +let studioTimer = null;
++let studioRefreshBusy = false;
 +let studioLastSys = null;
 +let studioLastSecLab = null;
 +let studioLastQr = null;
@@ -7442,7 +7454,7 @@ index fd616029..4da04155 100644
 -  const handleSkipCloser = () => {
 -    textarea.setSelectionRange(start + 1, start + 1);
 -  };
-+  }, 3000);
++  }, 10000);
 +}
 +function stopStudioPoll(){ if(studioTimer){ clearInterval(studioTimer); studioTimer=null; } }
 +function switchStSlab(name){
@@ -7562,6 +7574,8 @@ index fd616029..4da04155 100644
 -      textarea.setSelectionRange(start + cursorOffset, start + cursorOffset);
 -      return;
 +async function refreshMonitor(){
++  if (monRefreshBusy) return;
++  monRefreshBusy = true;
 +  const msgBox=document.getElementById("mon-msg");
 +  const lastEl=document.getElementById("mon-last");
 +  const isPreview = window.location.hostname==="127.0.0.1" || window.location.hostname==="localhost" || window.location.port==="8002" || window.location.port==="8001";
@@ -7592,6 +7606,8 @@ index fd616029..4da04155 100644
 +  }catch(e){
 +    if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message||"Monitor refresh failed"; msgBox.classList.remove("hidden"); }
 +    console.warn("refreshMonitor",e);
++  } finally {
++    monRefreshBusy = false;
 +  }
 +}
 +function renderMonitorOverview(sys, sec){
@@ -7810,6 +7826,8 @@ index fd616029..4da04155 100644
 -      }
 -      break;
 +async function refreshStudio(){
++  if (studioRefreshBusy) return;
++  studioRefreshBusy = true;
 +  const generation = ++studioRefreshGeneration;
 +  const msgBox=document.getElementById("st-msg");
 +  const lastEl=document.getElementById("st-last");
@@ -7856,6 +7874,8 @@ index fd616029..4da04155 100644
 +    if (lastEl) lastEl.textContent = "Không cập nhật được — dữ liệu có thể cũ";
 +    if(msgBox){ msgBox.className="ota-status err"; msgBox.textContent=e.message||"Studio refresh failed"; msgBox.classList.remove("hidden"); }
 +    console.warn("refreshStudio",e);
++  } finally {
++    studioRefreshBusy = false;
    }
 -
 -  const nextChar = start < textarea.value.length ? textarea.value[start] : "";
@@ -8300,6 +8320,8 @@ index fd616029..4da04155 100644
 +}
 +
 +async function refreshSecLab() {
++  if (secLabRefreshBusy) return;
++  secLabRefreshBusy = true;
 +  try {
 +    const raw = await requestGet("/seclab/status");
 +    const d = JSON.parse(raw);
@@ -8547,6 +8569,8 @@ index fd616029..4da04155 100644
 +      slShowMsg($("#sl-plus-msg"), slErrorText(e, "SecLab+ status unavailable; retrying..."), false, 0);
 +      secLabStatusErrShown = true;
 +    }
++  } finally {
++    secLabRefreshBusy = false;
    }
 +}
  
@@ -8853,10 +8877,6 @@ index fd616029..4da04155 100644
 +  finally { stopButton.disabled = false; if (generation === uxGeneration) findButton.disabled = false; }
 +});
 +if ($("#ux-status")) uxLoad(true);
-+
-+// Keep the browser's applied palette/layout in sync with device-side changes.
-+// Do not overwrite a potentially unsaved Personalize form.
-+if (typeof setInterval === "function") setInterval(() => { if (!document.hidden && !otaBusy) fetchSystemInfo(true).catch(() => {}); }, 15000);
 +
 + // ==== SecLab compact subtabs + overview mirror (2026-11) ====
 + function switchSlab(name){
@@ -16728,7 +16748,7 @@ index 0000000..a28c8b5
 +
 +#endif
 diff --git a/src/core/wifi/webInterface.cpp b/src/core/wifi/webInterface.cpp
-index a8679bd6..c64f5717 100644
+index a8679bd6..9e0bb1ae 100644
 --- a/src/core/wifi/webInterface.cpp
 +++ b/src/core/wifi/webInterface.cpp
 @@ -1,19 +1,49 @@
@@ -17877,7 +17897,28 @@ index a8679bd6..c64f5717 100644
  
  #if defined(HAS_TOUCH)
      TouchFooter();
-@@ -379,11 +1192,12 @@ void serveWebUIFile(
+@@ -348,11 +1161,16 @@ void serveWebUIFile(
+ ) {
+     AsyncWebServerResponse *response = nullptr;
+     FS *fs = NULL;
+-    if (setupSdCard()) {
+-        if (SD.exists("/BruceWebUI/" + filename)) fs = &SD;
+-    } else if (LittleFS.exists("/BruceWebUI/" + filename)) {
+-        fs = &LittleFS;
++    // Static WebUI assets are requested in parallel by the browser. If an SD
++    // card is absent, repeatedly trying SD.begin() for index.html, CSS and JS
++    // can stall the async server (and concurrent mount attempts race on SPI).
++    // Probe once per boot; other code can still mount the SD later.
++    static std::atomic<bool> sdProbeAttempted{false};
++    const bool shouldProbeSd = sdcardMounted || !sdProbeAttempted.exchange(true);
++    if (shouldProbeSd && (sdcardMounted || setupSdCard()) && SD.exists("/BruceWebUI/" + filename)) {
++        fs = &SD;
+     }
++    if (!fs && LittleFS.exists("/BruceWebUI/" + filename)) fs = &LittleFS;
+     if (fs) {
+         response = request->beginResponse(*fs, "/BruceWebUI/" + filename, contentType);
+     } else {
+@@ -379,11 +1197,12 @@ void serveWebUIFile(
  static bool startMdnsResponder() {
      RAM_LOG("before MDNS");
  
@@ -17892,7 +17933,7 @@ index a8679bd6..c64f5717 100644
  
      RAM_LOG("after MDNS");
      return true;
-@@ -456,63 +1270,1009 @@ void configureWebServer() {
+@@ -456,63 +1275,1009 @@ void configureWebServer() {
      server->on("/index.js", HTTP_GET, [](AsyncWebServerRequest *request) {
          serveWebUIFile(request, "index.js", "text/javascript", true, index_js, index_js_size);
      });
@@ -18940,7 +18981,7 @@ index a8679bd6..c64f5717 100644
          }
      });
  
-@@ -544,25 +2304,70 @@ void configureWebServer() {
+@@ -544,25 +2309,70 @@ void configureWebServer() {
          if (!checkUserWebAuth(request)) { return; }
          if (request->hasArg("cmnd")) {
              String cmnd = request->arg("cmnd");
@@ -19030,7 +19071,7 @@ index a8679bd6..c64f5717 100644
                  }
              } else {
                  if (parseSerialCommand(cmnd, false)) {
-@@ -576,9 +2381,28 @@ void configureWebServer() {
+@@ -576,9 +2386,28 @@ void configureWebServer() {
          }
      });
  
@@ -19061,7 +19102,7 @@ index a8679bd6..c64f5717 100644
      });
  
      // List files
-@@ -632,6 +2456,11 @@ void configureWebServer() {
+@@ -632,6 +2461,11 @@ void configureWebServer() {
                  } else {
                      if (strcmp(fileAction.c_str(), "download") == 0) {
                          request->send(*fs, fileName, "application/octet-stream", true);
@@ -19073,7 +19114,7 @@ index a8679bd6..c64f5717 100644
                      } else if (strcmp(fileAction.c_str(), "image") == 0) {
                          String extension = fileName.substring(fileName.lastIndexOf('.') + 1);
                          // https://www.iana.org/assignments/media-types/media-types.xhtml#image
-@@ -700,7 +2529,7 @@ void configureWebServer() {
+@@ -700,7 +2534,7 @@ void configureWebServer() {
  
                  File editFile = fs->open(fileName, FILE_WRITE);
                  if (editFile) {
@@ -19082,7 +19123,7 @@ index a8679bd6..c64f5717 100644
                          request->send(200, "text/plain", "File edited: " + fileName);
                      } else {
                          request->send(500, "text/plain", "Failed to write to file: " + fileName);
-@@ -720,7 +2549,13 @@ void configureWebServer() {
+@@ -720,7 +2554,13 @@ void configureWebServer() {
      server->on(
          "/upload",
          HTTP_POST,
@@ -19097,7 +19138,7 @@ index a8679bd6..c64f5717 100644
          handleUpload
      );
  
-@@ -737,6 +2572,427 @@ void configureWebServer() {
+@@ -737,6 +2577,427 @@ void configureWebServer() {
              }
          }
      });
@@ -19525,7 +19566,7 @@ index a8679bd6..c64f5717 100644
      server->begin();
      Serial.println("Webserver started");
  }
-@@ -745,25 +3001,78 @@ void configureWebServer() {
+@@ -745,25 +3006,78 @@ void configureWebServer() {
  **  Function: startWebUi
  **  Start the WebUI
  **********************************************************************/
@@ -19613,7 +19654,7 @@ index a8679bd6..c64f5717 100644
          new (server) AsyncWebServer(default_webserverporthttp);
  
          configureWebServer();
-@@ -771,24 +3080,198 @@ void startWebUi(bool mode_ap) {
+@@ -771,24 +3085,198 @@ void startWebUi(bool mode_ap) {
          isWebUIActive = true;
      }
      tft.setLogging();

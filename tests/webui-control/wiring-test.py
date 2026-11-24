@@ -16,6 +16,9 @@ assert 'toggleWebUiAutoStartFromMenu()' in menu
 assert 'if (appName == "WebUI") continue;' in settings
 assert 'case 4: loopOptionsWebUi();' in quick
 assert 'stopWebUiFromMenu(true)' in wifi
+assert 'static std::atomic<bool> sdProbeAttempted{false};' in web
+assert '!sdProbeAttempted.exchange(true)' in web
+assert 'if (!fs && LittleFS.exists("/BruceWebUI/" + filename)) fs = &LittleFS;' in web
 portal = (root / 'src/modules/wifi/evil_portal.cpp').read_text()
 assert 'printFootnote("Deauth not configured")' in portal
 assert 'printFootnote("Deauth paused")' in portal
