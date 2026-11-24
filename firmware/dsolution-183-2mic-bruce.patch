@@ -14933,7 +14933,7 @@ index 00000000..b5b5ff4a
 +
 +} // namespace menu_groups
 diff --git a/src/core/menu_items/OthersMenu.cpp b/src/core/menu_items/OthersMenu.cpp
-index 40f99560..d832fb86 100644
+index 40f99560..ede44951 100644
 --- a/src/core/menu_items/OthersMenu.cpp
 +++ b/src/core/menu_items/OthersMenu.cpp
 @@ -1,16 +1,18 @@
@@ -14951,7 +14951,7 @@ index 40f99560..d832fb86 100644
 +#endif
  #include "modules/others/mic.h"
  #include "modules/others/qrcode_menu.h"
-+#if !defined(LITE_VERSION)
++#if defined(HAS_MICROPHONE) && !defined(LITE_VERSION)
 +#include "modules/others/sonar_guard.h"
 +#endif
  #include "modules/others/tururururu.h"
@@ -14967,7 +14967,7 @@ index 40f99560..d832fb86 100644
 -// New consolidated BadUSB & HID submenu
 +        // Sonar Guard is its own tool, not a microphone setting, and on boards
 +        // without Studio this list is its only home.
-+#if !defined(LITE_VERSION) && !defined(DSOLUTION_183_2MIC)
++#if defined(HAS_MICROPHONE) && !defined(LITE_VERSION) && !defined(DSOLUTION_183_2MIC)
 +        {"Sonar Guard",  sonar_guard_setup            },
 +#endif
 +
@@ -14992,24 +14992,24 @@ index 40f99560..d832fb86 100644
 -        {"BadUSB",       [=]() { ducky_setup(hid_usb, false); }   },
 -        {"USB Keyboard", [=]() { ducky_keyboard(hid_usb, false); }},
 -#endif
-+// One BadUSB tree on the device: this used to be a verbatim copy of BadUsbMenu's
-+// list, so the same rows existed twice with a different order and different guards.
-+void OthersMenu::badUsbHidMenu() { mainMenu.badUsbMenu.optionsMenu(); }
- 
+-
 -#ifdef USB_as_HID
 -        {"USB Clicker",  clicker_setup                            },
 -        {"USB U2F",      u2f_setup                                },
 -#endif
+-
+-        {"Back",         [this]() { optionsMenu(); }              },
+-    };
++// One BadUSB tree on the device: this used to be a verbatim copy of BadUsbMenu's
++// list, so the same rows existed twice with a different order and different guards.
++void OthersMenu::badUsbHidMenu() { mainMenu.badUsbMenu.optionsMenu(); }
+ 
+-    loopOptions(options, MENU_TYPE_SUBMENU, "BadUSB & HID");
+-}
 +// Microphone has exactly one submenu on the device (Studio's), so this forwards
 +// to it instead of keeping a second, shorter list under the same title.
 +void OthersMenu::micMenu() { mainMenu.studioMenu.micMenu(); }
  
--        {"Back",         [this]() { optionsMenu(); }              },
--    };
--
--    loopOptions(options, MENU_TYPE_SUBMENU, "BadUSB & HID");
--}
--
 -void OthersMenu::micMenu() {
 -    options = {
 -#if defined(HAS_MICROPHONE)
@@ -15131,10 +15131,10 @@ index 00000000..d4117a2c
 +#endif
 diff --git a/src/core/menu_items/StudioMenu.cpp b/src/core/menu_items/StudioMenu.cpp
 new file mode 100644
-index 00000000..c3879ae6
+index 00000000..8ce95c20
 --- /dev/null
 +++ b/src/core/menu_items/StudioMenu.cpp
-@@ -0,0 +1,78 @@
+@@ -0,0 +1,80 @@
 +#include "StudioMenu.h"
 +#include "core/main_menu.h"
 +#include "core/display.h"
@@ -15146,7 +15146,7 @@ index 00000000..c3879ae6
 +#if defined(HAS_MICROPHONE)
 +#include "modules/others/mic.h"
 +#endif
-+#if !defined(LITE_VERSION)
++#if defined(HAS_MICROPHONE) && !defined(LITE_VERSION)
 +#include "modules/others/sonar_guard.h"
 +#endif
 +#include "modules/others/timer.h"
@@ -15164,7 +15164,9 @@ index 00000000..c3879ae6
 +#if defined(HAS_MICROPHONE)
 +        {"Microphone", [this]() { micMenu(); }},
 +#endif
-+#if !defined(LITE_VERSION)
++        // Sonar needs the microphone hardware, but it is not a "microphone setting":
++        // it used to appear twice (here and inside the microphone list).
++#if defined(HAS_MICROPHONE) && !defined(LITE_VERSION)
 +        {"Sonar Guard", sonar_guard_setup},
 +#endif
 +#if defined(DSOLUTION_183_2MIC) && !defined(LITE_VERSION)
@@ -27018,7 +27020,7 @@ index 00000000..bafd4e40
 +
 +#endif
 diff --git a/src/modules/ble/ble_sniffer.cpp b/src/modules/ble/ble_sniffer.cpp
-index 496ff9a7..55694505 100644
+index 496ff9a7..9935b4dc 100644
 --- a/src/modules/ble/ble_sniffer.cpp
 +++ b/src/modules/ble/ble_sniffer.cpp
 @@ -1,5 +1,5 @@
@@ -27028,7 +27030,7 @@ index 496ff9a7..55694505 100644
   * Author: Ninja-jr
   * Date: 2026-01-24
   *
-@@ -7,9 +7,20 @@
+@@ -7,9 +7,23 @@
   * parses manufacturer data, and saves to SD/LittleFS.
   */
  
@@ -27037,20 +27039,23 @@ index 496ff9a7..55694505 100644
  #include "core/display.h"
 +#include "core/utils.h"
 +#include <globals.h>
++#include <vector>
 +
-+// One sniffer entry point for every build: the Bluetooth menu links here, while
-+// the capture itself is implemented per build (LITE has its own file, full builds
-+// use the BLE Suite capture). Keeping the wrapper outside the guard means the menu
-+// code never needs to know which variant it is talking to.
-+#if !defined(LITE_VERSION)
-+#include "BLE_Suite.h"
-+#endif
++// One sniffer entry point for every build. The capture itself is implemented per
++// build (this file on LITE, BLE_Suite.cpp otherwise), so the menu code never has
++// to know which variant it is talking to.
++void BLE_SnifferMenu() {
++    std::vector<Option> snifferOptions;
++    snifferOptions.push_back({"Start Sniffer", BLE_Sniffer});
++    snifferOptions.push_back({"Back", []() { returnToMenu = true; }});
++    loopOptions(snifferOptions, MENU_TYPE_SUBMENU, "BLE Sniffer");
++}
 +
 +#if defined(LITE_VERSION)
  #include "core/mykeyboard.h"
  #include "core/sd_functions.h"
  #include "core/utils.h"
-@@ -337,11 +348,4 @@ void BLE_Sniffer() {
+@@ -337,11 +351,4 @@ void BLE_Sniffer() {
      }
  }
  
