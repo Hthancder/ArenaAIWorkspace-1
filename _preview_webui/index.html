@@ -63,7 +63,7 @@
           <div class="quick-grid">
             <button type="button" class="btn-action" id="act-sync-time">Sync Browser Time</button>
             <button type="button" class="btn-action" id="ux-find">Find device</button>
-            <button type="button" class="btn-action" id="ux-stop">Stop finding</button>
+            <button type="button" class="btn-action hidden" id="ux-stop">Stop finding</button>
             <button type="button" class="btn-action" id="act-led-theme">LED Theme Glow</button>
             <button type="button" class="btn-action" onclick="quickCli('led off')">LED Off</button>
             <button type="button" class="btn-action" onclick="switchTab('screen')">Live Screen Mirror</button>
@@ -169,7 +169,7 @@
           <div class="ov-tile"><strong>Power & CPU</strong><b id="mon-ov-power">--</b><small class="muted-sm" id="mon-ov-power-sub">Bat --% · --V · CPU --MHz</small><span id="mon-ov-power-badge" class="sl-badge">--</span></div>
           <div class="ov-tile"><strong>Memory</strong><b id="mon-ov-mem">--</b><small class="muted-sm" id="mon-ov-mem-sub">Heap -- · PSRAM -- · DMA --</small><span id="mon-ov-mem-badge" class="sl-badge">OK</span></div>
           <div class="ov-tile"><strong>Network</strong><b id="mon-ov-net">--</b><small class="muted-sm" id="mon-ov-net-sub">--</small><span id="mon-ov-net-badge" class="sl-badge">--</span>
-            <div class="sl-row sl-mt"><button type="button" class="btn-action" data-monslab-jump="network">Mở Network →</button><button type="button" class="btn-action" onclick="openWifiModal()">LAN WiFi</button></div>
+            <div class="sl-row sl-mt"><button type="button" class="btn-action" data-monslab-jump="network">Mở Network →</button></div>
           </div>
           <div class="ov-tile"><strong>NAPT Router</strong><b id="mon-ov-napt">OFF</b><small class="muted-sm" id="mon-ov-napt-sub">Clients 0 · Queries 0 · Trackers 0</small>
             <div class="sl-row sl-mt"><button type="button" class="btn-action" data-jump-tab="seclab" data-jump-slab="wifi">Mở NAPT →</button><button type="button" class="btn-action" id="mon-napt-toggle">Start/Stop</button></div>
@@ -893,14 +893,14 @@
           <summary><strong>1A / 1B</strong> <small>PMKID, CSA/PMF &amp; Portal handoff</small></summary>
           <div class="sl-row sl-mt">
             <button type="button" class="btn-action btn-default" data-sl-action="pmkid_start">PMKID Start</button>
-            <button type="button" class="btn-action" data-sl-action="pmkid_stop">Stop</button>
+            <button type="button" class="btn-action btn-danger hidden" data-sl-action="pmkid_stop">Stop</button>
             <button type="button" class="btn-action" data-sl-action="pmkid_export">Export .hc22000</button>
             <button type="button" class="btn-action" data-sl-action="pmkid_clear" data-sl-confirm="Clear captured PMKID hashes from memory and storage?">Clear</button>
             <button type="button" class="btn-action" data-sl-action="pmkid_auto" data-sl-toggle="pmkidAutoExport" data-sl-label-on="Auto-Export: ON" data-sl-label-off="Auto-Export: OFF" aria-pressed="false">Auto-Export: --</button>
           </div>
           <div class="sl-row">
             <button type="button" class="btn-action btn-default" data-sl-action="csa_start">CSA/PMF Start</button>
-            <button type="button" class="btn-action" data-sl-action="csa_stop">Stop</button>
+            <button type="button" class="btn-action btn-danger hidden" data-sl-action="csa_stop">Stop</button>
             <button type="button" class="btn-action" data-sl-action="csa_clear" data-sl-confirm="Clear CSA/PMF test state and logs?">Clear</button>
             <label class="sl-inline-label" for="sl-plus-csa-channel">CH</label><input class="sl-input" type="number" id="sl-plus-csa-channel" min="1" max="14" value="1" />
             <label class="sl-inline-label" for="sl-plus-csa-bursts">Bursts</label><input class="sl-input" type="number" id="sl-plus-csa-bursts" min="1" max="20" value="3" />
@@ -908,7 +908,7 @@
           </div>
           <div class="sl-row">
             <button type="button" class="btn-action" data-sl-action="portal_start">Portal-NAPT Start</button>
-            <button type="button" class="btn-action" data-sl-action="portal_stop">Stop</button>
+            <button type="button" class="btn-action btn-danger hidden" data-sl-action="portal_stop">Stop</button>
             <button type="button" class="btn-action" data-sl-action="portal_handoff" data-sl-toggle="portalHandoff" data-sl-label-on="Auto Handoff: ON" data-sl-label-off="Auto Handoff: OFF" aria-pressed="false">Auto Handoff: --</button>
           </div>
         </details>
@@ -959,7 +959,7 @@
           <div class="sl-row sl-mt">
             <select id="sl-plus-lan-mode" aria-label="LAN audit mode"><option value="1">Deep probes</option><option value="0">Quick scan</option></select>
             <button type="button" class="btn-action btn-default" data-sl-action="lan_start">LAN Audit</button>
-            <button type="button" class="btn-action" data-sl-action="lan_stop">Stop</button>
+            <button type="button" class="btn-action btn-danger hidden" data-sl-action="lan_stop">Stop</button>
             <button type="button" class="btn-action" data-sl-action="lan_export">Export JSON/CSV</button>
             <button type="button" class="btn-action" data-sl-action="lan_clear" data-sl-confirm="Clear the LAN audit report?">Clear</button>
           </div>
@@ -968,12 +968,12 @@
           <summary><strong>2B</strong> <small>Responder+ &amp; LAN Guard</small></summary>
           <div class="sl-row sl-mt">
             <button type="button" class="btn-action" data-sl-action="responder_start">Responder+</button>
-            <button type="button" class="btn-action" data-sl-action="responder_stop">Stop</button>
+            <button type="button" class="btn-action btn-danger hidden" data-sl-action="responder_stop">Stop</button>
             <button type="button" class="btn-action" data-sl-action="responder_clear" data-sl-confirm="Clear Responder+ hits?">Clear Hits</button>
           </div>
           <div class="sl-row">
             <button type="button" class="btn-action" data-sl-action="guard_start">LAN Guard Start</button>
-            <button type="button" class="btn-action" data-sl-action="guard_stop">Stop</button>
+            <button type="button" class="btn-action btn-danger hidden" data-sl-action="guard_stop">Stop</button>
             <button type="button" class="btn-action" data-sl-action="guard_clear" data-sl-confirm="Clear LAN Guard alerts?">Clear Alerts</button>
             <button type="button" class="btn-action" data-sl-action="guard_auto" data-sl-toggle="lanGuardAuto" data-sl-label-on="Auto-Arm: ON" data-sl-label-off="Auto-Arm: OFF" aria-pressed="false">Auto-Arm: --</button>
           </div>
@@ -983,7 +983,7 @@
           <summary><strong>2C</strong> <small>Cleartext HTTP inspector / WPAD proxy</small></summary>
           <div class="sl-row sl-mt">
             <button type="button" class="btn-action btn-default" data-sl-action="http_start">HTTP Inspector</button>
-            <button type="button" class="btn-action" data-sl-action="http_stop">Stop</button>
+            <button type="button" class="btn-action btn-danger hidden" data-sl-action="http_stop">Stop</button>
             <button type="button" class="btn-action" data-sl-action="http_export">Export Findings</button>
             <button type="button" class="btn-action" data-sl-action="http_clear" data-sl-confirm="Clear cleartext HTTP findings?">Clear</button>
           </div>
@@ -1014,7 +1014,7 @@
           </div>
           <div class="sl-row">
             <button type="button" class="btn-action" data-sl-action="led_start">Arm LED Receiver</button>
-            <button type="button" class="btn-action" data-sl-action="led_stop">Stop</button>
+            <button type="button" class="btn-action btn-danger hidden" data-sl-action="led_stop">Stop</button>
             <button type="button" class="btn-action" data-sl-action="led_export">Export Exfil</button>
             <button type="button" class="btn-action" data-sl-action="led_clear" data-sl-confirm="Clear captured LED Link exfil data?">Clear</button>
           </div>
@@ -1030,7 +1030,7 @@
           <div class="sl-row">
             <button type="button" class="btn-action btn-default" data-sl-action="tag_start">Tag Beacon</button>
             <label class="sl-inline-label" for="sl-plus-tag-duration">Duration</label><input class="sl-input" type="number" id="sl-plus-tag-duration" min="5" max="300" value="60" /><span class="muted-sm">s</span>
-            <button type="button" class="btn-action" data-sl-action="tag_stop">Stop Beacon</button>
+            <button type="button" class="btn-action btn-danger hidden" data-sl-action="tag_stop">Stop Beacon</button>
           </div>
           <div class="sl-row">
             <input class="sl-input-wide" type="text" id="sl-plus-addr" placeholder="BLE AA:BB:CC:DD:EE:FF" aria-label="BLE target MAC" spellcheck="false" autocomplete="off" />

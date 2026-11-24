@@ -1996,6 +1996,13 @@ function renderMonitorOverview(sys, sec){
   // napt
   set("mon-ov-napt", n.running ? `ON (${ (n.clients||[]).length }c/${n.total||0}q)` : n.starting?"STARTING":"OFF");
   set("mon-ov-napt-sub", `Clients ${(n.clients||[]).length} · Queries ${n.total||0} · Blocked ${n.blocked||0} · Trackers ${n.trackers||0}`);
+  const monNaptBtn = document.getElementById("mon-napt-toggle");
+  if (monNaptBtn) {
+    const active = !!(n.running || n.starting);
+    monNaptBtn.textContent = active ? "Stop NAPT" : "Start NAPT";
+    monNaptBtn.classList.toggle("btn-danger", active);
+    monNaptBtn.classList.toggle("btn-default", !active);
+  }
   // alerts
   const lg = sec?.lanGuard||{}, rp=sec?.responderPlus||{}, hi=sec?.httpInspector||{}, sn=sec?.sonar||{};
   const alertCount = (lg.alerts? lg.alerts.length:0) + (hi.findings? hi.findings.length:0) + (sn.events? sn.events.length:0) + (rp.running?1:0);
@@ -2517,6 +2524,9 @@ async function refreshSecLab() {
       nb.textContent = n.running ? `ON (${n.uptimeSec || 0}s)` : (n.starting ? "STARTING..." : "OFF");
       nb.className = "sl-badge " + (n.running ? "on" : (n.starting ? "alert" : ""));
     }
+    const naptActive = !!(n.running || n.starting);
+    $("#sl-napt-start")?.classList.toggle("hidden", naptActive);
+    $("#sl-napt-stop")?.classList.toggle("hidden", !naptActive);
     if (!n.running && !n.starting && n.lastErr && $("#sl-napt-msg")) {
       const box = $("#sl-napt-msg");
       if (Date.now() - secLabLastNaptActionAt > 8000 &&
@@ -2663,6 +2673,19 @@ async function refreshSecLab() {
       osSel.value = name.startsWith("mac") ? "macos" : (name.startsWith("lin") ? "linux" : "windows");
     }
     slSyncSecLabToggles(plus);
+    const slPair = (startAct, stopAct, active) => {
+      document.querySelector(`[data-sl-action="${startAct}"]`)?.classList.toggle("hidden", !!active);
+      document.querySelector(`[data-sl-action="${stopAct}"]`)?.classList.toggle("hidden", !active);
+    };
+    slPair("pmkid_start", "pmkid_stop", pm.running);
+    slPair("csa_start", "csa_stop", cs.running);
+    slPair("portal_start", "portal_stop", pt.running || pt.napt);
+    slPair("lan_start", "lan_stop", la.running);
+    slPair("responder_start", "responder_stop", rp.running);
+    slPair("guard_start", "guard_stop", lg.running);
+    slPair("http_start", "http_stop", hi.running);
+    slPair("led_start", "led_stop", ll.running);
+    slPair("tag_start", "tag_stop", tb.running);
     slSetInput("#sl-plus-csa-channel", plus.csaChannel || 1);
     slSetInput("#sl-plus-csa-bursts", plus.csaBursts || 3);
     slSetInput("#sl-plus-http-port", plus.httpPort || 3128);
@@ -2912,6 +2935,9 @@ async function uxLoad(showSettings = false, generation = uxGeneration) {
       silent_or_busy: "Speaker muted, busy, or unavailable. Check Sound settings and try again."
     };
     status.textContent = states[data.find] || "Status unavailable.";
+    const finding = data.find === "queued" || data.find === "playing" || data.find === "playing_silent";
+    $("#ux-find")?.classList.toggle("hidden", finding);
+    $("#ux-stop")?.classList.toggle("hidden", !finding);
   } catch (err) { if (generation === uxGeneration) status.textContent = "Controls unavailable. Check your connection or sign in again."; }
 }
 function uxRangeLabels() {
