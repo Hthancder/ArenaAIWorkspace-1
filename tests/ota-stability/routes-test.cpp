@@ -75,7 +75,16 @@ static bool s_otaScreenDirty=false, s_otaScreenDone=false, s_otaValid=false,s_wi
 static std::atomic<uint32_t> s_otaLastActivityMs{0}; static uint32_t s_otaEpoch=0; static size_t s_otaTotal=0,s_otaWritten=0,s_otaLegacyBufLen=0;
 static uint8_t s_otaScreenPct=0,s_otaLegacyBuf[4096]; static uint8_t *s_otaChunkBuf=nullptr; static String s_otaError="";
 static char s_otaSession[33]={}; static AsyncWebServerRequest *s_otaChunkOwner=nullptr,*s_otaLegacyOwner=nullptr;
-bool isOtaInProgress(){return s_otaInProgress && (uint32_t)(millis()-s_otaLastActivityMs)<=kOtaIdleTimeoutMs;}
+static volatile bool s_otaAbortRequested=false;
+static constexpr uint32_t kOtaIdleTimeoutNoDataMs=30000;
+// Mirrors webInterface.cpp: a session with no bytes yet expires quickly, a live
+// transfer keeps the longer write timeout.
+bool isOtaInProgress(){
+  if(!s_otaInProgress) return false;
+  const uint32_t idle=(uint32_t)(millis()-s_otaLastActivityMs);
+  if(s_otaWritten==0) return idle<=kOtaIdleTimeoutNoDataMs;
+  return idle<=kOtaIdleTimeoutMs;
+}
 void otaUiPublish(){} void otaFreeBuf(){free(s_otaChunkBuf);s_otaChunkBuf=nullptr;}
 bool otaAllocChunkBuf(){s_otaChunkBuf=(uint8_t*)malloc(kOtaChunkCap);return s_otaChunkBuf;}
 #include "lifecycle.inc"
@@ -87,6 +96,18 @@ void token(AsyncWebServerRequest &r,const std::string &t){r.headers["X-OTA-Sessi
 int main(){
  installRoutes(); auto &begin=server->routes["/ota/begin1"]; auto &chunk=server->routes["/ota/chunk1"]; auto &abort=server->routes["/ota/abort1"]; auto &commit=server->routes["/ota/commit1"]; auto &legacy=server->routes["/ota1"];
  AsyncWebServerRequest invalid; invalid.args["size"]="65536junk"; begin.req(&invalid); assert(invalid.code==400 && !s_otaInProgress);
+ // A /ota/begin with no following chunk must stop counting as "OTA in progress"
+ // quickly: while it does, the device holds the OTA screen and answers no buttons.
+ {AsyncWebServerRequest idleBegin; idleBegin.args["size"]="65536"; nowMs+=1000; begin.req(&idleBegin);
+  assert(idleBegin.code==200 && s_otaInProgress);
+  nowMs+=kOtaIdleTimeoutNoDataMs+1; assert(!isOtaInProgress());
+  // The "transfer is active" state must have lapsed, so a new session may start.
+  AsyncWebServerRequest takeOver; takeOver.args["size"]="65536"; begin.req(&takeOver);
+  assert(takeOver.code==200 && s_otaInProgress);
+  AsyncWebServerRequest dropIdle; token(dropIdle,std::string(s_otaSession)); abort.req(&dropIdle);
+  assert(dropIdle.code==200 && !s_otaInProgress);
+  Update.aborts = 0; // the scenarios below assert on aborts from here on
+ }
  AsyncWebServerRequest a; a.args["size"]="65536"; begin.req(&a); assert(a.code==200 && s_otaInProgress); std::string session=s_otaSession;
  AsyncWebServerRequest other; other.args["size"]="65536"; begin.req(&other); assert(other.code==409 && Update.aborts==0 && session==s_otaSession);
  AsyncWebServerRequest wrong; token(wrong,"wrong"); abort.req(&wrong); assert(wrong.code==409 && Update.aborts==0);
@@ -104,7 +125,7 @@ int main(){
  chunk.body(&stale,data.data()+32,32,32,64);chunk.req(&stale);assert(stale.code==400 && s_otaWritten==0);stale.close();
  AsyncWebServerRequest badAbort;token(badAbort,session);abort.req(&badAbort);assert(badAbort.code==409 && s_otaInProgress);
  AsyncWebServerRequest badCommit;token(badCommit,session);commit.req(&badCommit);assert(badCommit.code==409 && s_otaInProgress);
- nowMs+=90001;AsyncWebServerRequest recover;recover.args["size"]="65536";begin.req(&recover);assert(recover.code==200 && s_otaInProgress);
+ nowMs+=90001;AsyncWebServerRequest recover;recover.args["size"]="65536";begin.req(&recover);assert(recover.code==200 && s_otaInProgress && !s_otaAbortRequested);
  std::string current=s_otaSession;
  std::vector<uint8_t> big(32768,0x55); big[0]=0xe9;big[32]=0x32;big[33]=0x54;big[34]=0xcd;big[35]=0xab;
  AsyncWebServerRequest first;token(first,current);first.args["offset"]="0";chunk.body(&first,big.data(),big.size(),0,big.size());chunk.req(&first);assert(first.code==200);
@@ -113,5 +134,20 @@ int main(){
  assert(final.code==200 && final.text.str().find("\"restartScheduled\":false")!=std::string::npos && !s_otaRestartPending && !s_otaInProgress);
  AsyncWebServerRequest legacyOk;legacy.upload(&legacyOk,"ota.bin",0,data.data(),data.size(),true);legacy.req(&legacyOk);
  assert(legacyOk.code==200 && legacyOk.text.str().find("\"restartScheduled\":false")!=std::string::npos && !s_otaInProgress);legacyOk.close();
- std::cout<<"OTA route ownership, stale-session, retry, timeout and restart tests passed\n";
+ // On-device cancel: while the OTA screen is up a held key only sets a flag. The
+ // UI task must never call Update.abort()/otaReleaseLock() itself -- the AsyncTCP
+ // task may still be writing into the chunk buffer. The next chunk request owns
+ // the teardown, answers 409 and frees the buffer there.
+ AsyncWebServerRequest reopen; reopen.args["size"]="65536"; begin.req(&reopen);
+ assert(reopen.code==200 && s_otaInProgress && !s_otaAbortRequested);
+ std::string cancelSession=s_otaSession;
+ s_otaAbortRequested=true;
+ AsyncWebServerRequest cancelled;token(cancelled,cancelSession);cancelled.args["offset"]="0";
+ chunk.body(&cancelled,big.data(),big.size(),0,big.size());chunk.req(&cancelled);
+ assert(cancelled.code==409 && !s_otaInProgress && !s_otaAbortRequested && !s_otaChunkBuf);
+ // A stale chunk from the cancelled session may not resurrect it.
+ AsyncWebServerRequest resurrection;token(resurrection,cancelSession);resurrection.args["offset"]="0";
+ chunk.body(&resurrection,big.data(),big.size(),0,big.size());chunk.req(&resurrection);
+ assert(resurrection.code==400 && !s_otaInProgress && s_otaWritten==0);
+ std::cout<<"OTA route ownership, stale-session, retry, timeout, cancel and restart tests passed\n";
 }

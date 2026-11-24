@@ -78,6 +78,21 @@ Menu con **không** dùng chạm để chọn. Điều hướng bằng `Prev` / 
 **nhấn `Sel` (phím giữa) để chọn**. `Sel` giữ 520 ms = Back; `Prev`+`Next` cùng
 lúc cũng = Back. Sau khi menu vừa mở có 600 ms chống nhận nhầm.
 
+
+## WebUI / WebOTA bị đơ (mở trang `/ota` rồi máy không phản hồi)
+
+Triệu chứng: vào WebUI, mở trang cập nhật OTA (hoặc chỉ mở rồi đóng), sau đó bấm
+nút trên máy **không có gì xảy ra**, phải tháo pin. Nguyên nhân là **vòng lặp màn
+hình OTA chiếm task giao diện**:
+
+| Lỗi | Hậu quả | Cách sửa |
+|---|---|---|
+| `otaUiCheckpoint()` chạy `while (isOtaInProgress())` — task menu bị **giữ nguyên** suốt quá trình nạp, tối đa **90 giây** | Bấm nút nào cũng bị ăn, Esc cũng không thoát được, nhìn như treo máy | Mỗi lần gọi chỉ vẽ **một lát tối đa 300 ms** rồi trả về, menu/watchdog vẫn chạy |
+| Mỗi lát lại **xoá sạch phím** (`NextPress = PrevPress = ... = false`) | Người dùng bấm Esc đúng lúc bị xoá ⇒ **không bao giờ thoát** | Không xoá phím nữa; lát ngắn nên phím cũ tự hết hạn |
+| `/ota/begin` thành công nhưng **không có chunk nào** (đóng tab, rớt Wi-Fi) vẫn tính là "đang nạp" **90 s** | Máy ôm màn hình OTA cả phút rưỡi dù chẳng có gì đang ghi | Chưa ghi byte nào thì hết hạn sau **30 s**; đã ghi rồi mới dùng 90 s |
+| Màn hình OTA không có đường thoát | Phải tháo pin | **Giữ `Prev`** khi đang nạp ⇒ huỷ phiên nạp và về menu |
+| Huỷ được gọi từ task giao diện | Có thể `free()` buffer 32 KB trong khi task mạng đang ghi vào đó ⇒ hỏng heap | Task giao diện chỉ **đặt cờ** `s_otaAbortRequested`; task mạng (`AsyncTCP`) mới gọi `Update.abort()` + giải phóng buffer, và trả `409` cho lần gửi chunk kế tiếp |
+
 ## Dùng chung cho các chain khác
 
 1. Trên thiết bị: `WiFi → Chains` rồi chọn 1 chain.

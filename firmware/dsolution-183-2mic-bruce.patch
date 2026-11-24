@@ -16781,7 +16781,6 @@ index 00000000..a28c8b56
 +
 +#endif
 diff --git a/src/core/wifi/webInterface.cpp b/src/core/wifi/webInterface.cpp
-index a8679bd6..b6d5f164 100644
 --- a/src/core/wifi/webInterface.cpp
 +++ b/src/core/wifi/webInterface.cpp
 @@ -1,19 +1,49 @@
@@ -16834,7 +16833,7 @@ index a8679bd6..b6d5f164 100644
  #include <globals.h>
  
  File uploadFile;
-@@ -22,12 +52,601 @@ FS _webFS = LittleFS;
+@@ -22,12 +52,616 @@ FS _webFS = LittleFS;
  const int default_webserverporthttp = 80;
  
  // WiFi as an Access Point
@@ -16908,6 +16907,12 @@ index a8679bd6..b6d5f164 100644
 +
 +static constexpr size_t kOtaChunkCap = 32 * 1024;
 +static constexpr uint32_t kOtaIdleTimeoutMs = 90000UL;
++// /ota/begin can succeed and then never be followed by a chunk (tab closed, Wi-Fi
++// dropped, stale session token). Until the first byte lands nothing is flashing,
++// so the "transfer is active" state must expire quickly: while it is set, the
++// menu task keeps the OTA screen and every button press is swallowed, which on
++// the device reads as "the whole thing froze after opening WebOTA".
++static constexpr uint32_t kOtaIdleTimeoutNoDataMs = 30000UL;
 +static std::atomic<bool> s_otaInProgress{false};
 +static std::atomic<uint32_t> s_otaLastActivityMs{0};
 +static volatile size_t s_otaTotal = 0;
@@ -16929,6 +16934,11 @@ index a8679bd6..b6d5f164 100644
 +static AsyncWebServerRequest *s_otaChunkOwner = nullptr;
 +static AsyncWebServerRequest *s_otaLegacyOwner = nullptr;
 +static bool s_otaRestartPending = false;
++// Set by the UI task when the user asks to leave a stalled transfer. The UI task
++// must never call Update.abort()/otaReleaseLock() itself: the AsyncTCP task may be
++// mid-write into the 32 KiB chunk buffer, and freeing it there would corrupt the
++// heap. The network task owns the teardown and honours this flag.
++static volatile bool s_otaAbortRequested = false;
 +#if defined(DSOLUTION_183_2MIC)
 +struct OtaUiSnapshot { bool active; bool done; uint8_t pct; size_t written; size_t total; };
 +static portMUX_TYPE s_otaUiMux = portMUX_INITIALIZER_UNLOCKED;
@@ -16987,8 +16997,11 @@ index a8679bd6..b6d5f164 100644
 +
 +bool isOtaInProgress() {
 +    if (!s_otaInProgress) return false;
-+    if ((uint32_t)(millis() - s_otaLastActivityMs) > kOtaIdleTimeoutMs) return false;
-+    return true;
++    const uint32_t idle = (uint32_t)(millis() - s_otaLastActivityMs);
++    // Written bytes prove a live transfer; before that a stalled session must not
++    // hold the UI hostage for the full write timeout.
++    if (s_otaWritten == 0) return idle <= kOtaIdleTimeoutNoDataMs;
++    return idle <= kOtaIdleTimeoutMs;
 +}
 +
 +static void otaFreeBuf() {
@@ -17022,6 +17035,7 @@ index a8679bd6..b6d5f164 100644
 +    s_otaScreenPct = 0;
 +    s_otaScreenDirty = true;
 +    s_otaLastActivityMs = millis();
++    s_otaAbortRequested = false;
 +    s_otaInProgress = true;
 +    otaUiPublish();
 +    setCpuFrequencyMhz(CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ);
@@ -17438,7 +17452,7 @@ index a8679bd6..b6d5f164 100644
  
  // Generate random token
  String generateToken(int length = 24) {
-@@ -42,36 +661,73 @@ String generateToken(int length = 24) {
+@@ -42,36 +676,73 @@ String generateToken(int length = 24) {
  **  Turn off the WebUI
  **********************************************************************/
  void stopWebUi() {
@@ -17527,7 +17541,7 @@ index a8679bd6..b6d5f164 100644
  
      // Disconnect WiFi AP mode if it's the WebUI's AP
      // Check if we're in AP or APSTA mode (used by WebUI)
-@@ -82,30 +738,41 @@ void cleanlyStopWebUiForWiFiFeature() {
+@@ -82,30 +753,41 @@ void cleanlyStopWebUiForWiFiFeature() {
          vTaskDelay(pdMS_TO_TICKS(250));
      }
  
@@ -17586,7 +17600,7 @@ index a8679bd6..b6d5f164 100644
  }
  
  /**********************************************************************
-@@ -127,6 +794,7 @@ String humanReadableSize(uint64_t bytes) {
+@@ -127,6 +809,7 @@ String humanReadableSize(uint64_t bytes)
  String listFiles(FS &fs, const String &folder) {
      // log_i("Listfiles Start");
      String returnText = "pa:" + folder + ":0\n";
@@ -17594,7 +17608,7 @@ index a8679bd6..b6d5f164 100644
      // Serial.println("Listing files stored on SD");
  
      _webFS = fs;
-@@ -168,19 +836,26 @@ String listFiles(FS &fs, const String &folder) {
+@@ -168,19 +851,26 @@ String listFiles(FS &fs, const String &f
  ** used by server->on functions to discern whether a user has the correct
  ** httpapitoken OR is authenticated by username and password
  **********************************************************************/
@@ -17633,7 +17647,7 @@ index a8679bd6..b6d5f164 100644
      if (onFailureReturnLoginPage) {
          serveWebUIFile(request, "login.html", "text/html", true, login_html, login_html_size);
      } else {
-@@ -220,49 +895,68 @@ void createDirRecursive(const String &path, FS fs) {
+@@ -220,49 +910,68 @@ void createDirRecursive(const String &pa
  **  Function: handleUpload
  ** handles uploads to the filserver
  **********************************************************************/
@@ -17741,7 +17755,7 @@ index a8679bd6..b6d5f164 100644
      }
  }
  
-@@ -272,43 +966,162 @@ void notFound(AsyncWebServerRequest *request) { request->send(404, "text/plain",
+@@ -272,43 +981,171 @@ void notFound(AsyncWebServerRequest *req
  **  Function: drawWebUiScreen
  **  Draw information on screen of WebUI.
  **********************************************************************/
@@ -17792,7 +17806,11 @@ index a8679bd6..b6d5f164 100644
      tft.setTextSize(FP);
 +    tft.setTextColor(bruceConfig.priColor, cardBg);
 +    tft.drawCentreString(done ? "OTA Complete!" : "WebOTA Flashing", tftWidth / 2, boxY + 12, 1);
-+
+ 
+-    if (mode_ap) {
+-        tft.setCursor(padX, currentY);
+-        tft.print("Net: BruceNet/brucenet");
+-        currentY += LH * FP + 6;
 +    const int barX = boxX + 14;
 +    const int barY = boxY + 42;
 +    const int barW = boxW - 28;
@@ -17801,12 +17819,11 @@ index a8679bd6..b6d5f164 100644
 +    int fillW = ((barW - 4) * (int)pct) / 100;
 +    if (fillW > 0) {
 +        tft.fillRoundRect(barX + 2, barY + 2, fillW, barH - 4, 2, bruceConfig.priColor);
-+    }
+     }
  
--    if (mode_ap) {
--        tft.setCursor(padX, currentY);
--        tft.print("Net: BruceNet/brucenet");
--        currentY += LH * FP + 6;
+-    tft.setCursor(padX, currentY);
+-    if (mdnsRunning) tft.print("Url: http://bruce.local");
+-    currentY += LH * FP + 6;
 +    char progLine[44];
 +    unsigned long kbDone = (unsigned long)(written / 1024);
 +    unsigned long kbTotal = (unsigned long)(total / 1024);
@@ -17814,7 +17831,7 @@ index a8679bd6..b6d5f164 100644
 +        snprintf(progLine, sizeof(progLine), "%u%%  (%lu / %lu KB)", pct, kbDone, kbTotal);
 +    } else {
 +        snprintf(progLine, sizeof(progLine), "%lu KB written", kbDone);
-     }
++    }
 +    tft.setTextSize(1);
 +    tft.setTextColor(TFT_WHITE, cardBg);
 +    tft.drawCentreString(progLine, tftWidth / 2, boxY + 68, 1);
@@ -17822,10 +17839,7 @@ index a8679bd6..b6d5f164 100644
 +    tft.setTextColor(bruceConfig.secColor, cardBg);
 +    tft.drawCentreString("Do not power off device", tftWidth / 2, boxY + 84, 1);
 +}
- 
--    tft.setCursor(padX, currentY);
--    if (mdnsRunning) tft.print("Url: http://bruce.local");
--    currentY += LH * FP + 6;
++
 +#if defined(DSOLUTION_183_2MIC)
 +bool otaUiConsumeRedraw() {
 +    if (!uxIsMenuTask()) return false;
@@ -17837,12 +17851,21 @@ index a8679bd6..b6d5f164 100644
 -    tft.setCursor(padX, currentY);
 -    tft.print("IP:  " + txt);
 -    currentY += LH * FP + 6;
++// The OTA screen is drawn by the UI owner task, but that task must never be
++// parked inside this function for the whole transfer: it also owns every menu,
++// the backlight and the watchdog. The old code looped while the transfer was
++// active, so a stalled or abandoned upload froze the device for up to
++// kOtaIdleTimeoutMs (90 s) with no button response -- the "WebUI hangs" report.
++// Each call now draws one slice and returns; callers keep running.
++static constexpr uint32_t kOtaUiSliceMs = 300;
++
 +void otaUiCheckpoint() {
 +    if (!uxIsMenuTask() || !isOtaInProgress()) return;
 +    wakeUpScreen();
 +    OtaUiSnapshot previous = {};
 +    bool first = true;
-+    while (isOtaInProgress()) {
++    const uint32_t sliceStart = millis();
++    while (isOtaInProgress() && (uint32_t)(millis() - sliceStart) < kOtaUiSliceMs) {
 +        const OtaUiSnapshot current = otaUiSnapshot();
 +        if (first || current.pct != previous.pct || current.written != previous.written ||
 +            current.total != previous.total || current.done != previous.done) {
@@ -17853,12 +17876,12 @@ index a8679bd6..b6d5f164 100644
 +        if (esp_task_wdt_status(nullptr) == ESP_OK) esp_task_wdt_reset();
 +        vTaskDelay(pdMS_TO_TICKS(100));
 +    }
-+    // Discard keys pressed while the transfer owned the screen, so an old
-+    // click cannot launch an action immediately after cancel/failure.
-+    inputLock();
-+    NextPress = PrevPress = UpPress = DownPress = SelPress = EscPress = AnyKeyPress = false;
-+    NextPagePress = PrevPagePress = LongPress = SerialCmdPress = false;
-+    inputUnlock();
++    // Deliberately do NOT clear the key globals here any more. The old code
++    // swallowed every press for as long as the transfer was active, so Esc (and
++    // Sel-after-hold, which is Esc) never reached the caller that was waiting on
++    // it: the device looked frozen" while a stalled upload held the state.
++    // A slice is only a few hundred ms now, so a stale click self-heals on the
++    // next redraw instead of being eaten forever.
 +    s_otaUiNeedsRedraw = true;
 +    s_webUiScreenDirty = true;
 +}
@@ -17930,7 +17953,7 @@ index a8679bd6..b6d5f164 100644
  
  #if defined(HAS_TOUCH)
      TouchFooter();
-@@ -348,11 +1161,16 @@ void serveWebUIFile(
+@@ -348,11 +1185,16 @@ void serveWebUIFile(
  ) {
      AsyncWebServerResponse *response = nullptr;
      FS *fs = NULL;
@@ -17951,7 +17974,7 @@ index a8679bd6..b6d5f164 100644
      if (fs) {
          response = request->beginResponse(*fs, "/BruceWebUI/" + filename, contentType);
      } else {
-@@ -379,11 +1197,12 @@ void serveWebUIFile(
+@@ -379,11 +1221,12 @@ void serveWebUIFile(
  static bool startMdnsResponder() {
      RAM_LOG("before MDNS");
  
@@ -17966,7 +17989,7 @@ index a8679bd6..b6d5f164 100644
  
      RAM_LOG("after MDNS");
      return true;
-@@ -456,63 +1275,1009 @@ void configureWebServer() {
+@@ -456,63 +1299,1028 @@ void configureWebServer() {
      server->on("/index.js", HTTP_GET, [](AsyncWebServerRequest *request) {
          serveWebUIFile(request, "index.js", "text/javascript", true, index_js, index_js_size);
      });
@@ -18547,13 +18570,6 @@ index a8679bd6..b6d5f164 100644
 -        if (checkUserWebAuth(request)) {
 -            static uint8_t *screenBinBuffer = nullptr;
 -            static size_t screenBinBufferSize = 0;
--
--            if (!screenBinBuffer) {
--                size_t desiredSize = MAX_LOG_ENTRIES * MAX_LOG_SIZE;
--                if (psramFound()) screenBinBuffer = static_cast<uint8_t *>(ps_malloc(desiredSize));
--                if (!screenBinBuffer) screenBinBuffer = static_cast<uint8_t *>(malloc(desiredSize));
--                if (!screenBinBuffer) {
--                    request->send(503, "text/plain", "Insufficient memory for screen buffer");
 +    server->on(
 +        "/ota/chunk",
 +        HTTP_POST,
@@ -18569,6 +18585,17 @@ index a8679bd6..b6d5f164 100644
 +            if (!st->authOk) {
 +                free(st);
 +                request->send(401, "text/plain", "Unauthorized");
++                return;
++            }
++            if (s_otaAbortRequested) {
++                s_otaAbortRequested = false;
++                const char *why = st->err[0] ? st->err : "OTA cancelled on device";
++                String msg = String(why);
++                msg.replace("\"", "'");
++                free(st);
++                Update.abort();
++                otaReleaseLock(true);
++                request->send(409, "application/json", "{\"ok\":false,\"msg\":\"" + msg + "\"}");
 +                return;
 +            }
 +            if (st->busy) {
@@ -18622,11 +18649,10 @@ index a8679bd6..b6d5f164 100644
 +                        400, "application/json",
 +                        "{\"ok\":false,\"msg\":\"Invalid OTA image! Upload ota.bin, not factory.bin.\"}"
 +                    );
-                     return;
-                 }
--                screenBinBufferSize = desiredSize;
-             }
- 
++                    return;
++                }
++            }
++
 +            if (offset > s_otaTotal || chunkLen > s_otaTotal - offset) {
 +                Update.abort();
 +                otaReleaseLock(true);
@@ -18672,6 +18698,10 @@ index a8679bd6..b6d5f164 100644
 +                }
 +                if (total == 0 || total > kOtaChunkCap) {
 +                    snprintf(st->err, sizeof(st->err), "Invalid chunk size");
++                    return;
++                }
++                if (s_otaAbortRequested) {
++                    snprintf(st->err, sizeof(st->err), "OTA cancelled on device");
 +                    return;
 +                }
 +                if (!request->hasArg("offset")) {
@@ -18767,7 +18797,13 @@ index a8679bd6..b6d5f164 100644
 +            request->send(200, "text/html", kOtaPageHtml);
 +        }
 +    });
-+
+ 
+-            if (!screenBinBuffer) {
+-                size_t desiredSize = MAX_LOG_ENTRIES * MAX_LOG_SIZE;
+-                if (psramFound()) screenBinBuffer = static_cast<uint8_t *>(ps_malloc(desiredSize));
+-                if (!screenBinBuffer) screenBinBuffer = static_cast<uint8_t *>(malloc(desiredSize));
+-                if (!screenBinBuffer) {
+-                    request->send(503, "text/plain", "Insufficient memory for screen buffer");
 +    // Legacy multipart remains available, but each request owns its errors and
 +    // cannot abort, finish, or overwrite a different active transfer.
 +    struct LegacyOtaState { bool started; bool finalized; char error[128]; };
@@ -18816,6 +18852,10 @@ index a8679bd6..b6d5f164 100644
 +                if (len < 36 || data[0] != 0xE9 || data[32] != 0x32 || data[33] != 0x54 ||
 +                    data[34] != 0xCD || data[35] != 0xAB) {
 +                    snprintf(st->error, sizeof(st->error), "Invalid OTA image; use ota.bin"); return;
++                }
++                if (s_otaAbortRequested) {
++                    s_otaAbortRequested = false;
++                    snprintf(st->error, sizeof(st->error), "OTA cancelled on device"); return;
 +                }
 +                if (isDualBootOtaProtected(esp_ota_get_next_update_partition(NULL))) {
 +                    snprintf(st->error, sizeof(st->error), "Dual-Boot protected; use USB flasher"); return;
@@ -18877,8 +18917,9 @@ index a8679bd6..b6d5f164 100644
 +                    snprintf(st->error, sizeof(st->error), "%s", Update.errorString());
 +                    s_otaLegacyOwner = nullptr;
 +                    Update.abort(); otaReleaseLock(true);
-+                    return;
-+                }
+                     return;
+                 }
+-                screenBinBufferSize = desiredSize;
 +                st->finalized = true;
 +            }
 +        }
@@ -18920,7 +18961,7 @@ index a8679bd6..b6d5f164 100644
 +            const char *error = nullptr;
 +            if (!uxFindStart(&error)) {
 +                request->send(429, "application/json", String("{\"ok\":false,\"msg\":\"") + error + "\"}"); return;
-+            }
+             }
 +            request->send(202, "application/json", "{\"ok\":true,\"msg\":\"Queued; rings on the WebUI screen or an idle menu.\"}"); return;
 +        }
 +        if (action == "stop") { uxFindStop(); request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Stopped\"}"); return; }
@@ -18970,7 +19011,7 @@ index a8679bd6..b6d5f164 100644
 +        applyPowerProfile(isScreenOff);
 +        request->send(200, "application/json", "{\"ok\":true,\"msg\":\"Screen settings saved\"}");
 +    });
-+
+ 
 +    // Get Screen
 +    server->on("/getscreen", HTTP_GET, [](AsyncWebServerRequest *request) {
 +        if (checkUserWebAuth(request)) {
@@ -19014,7 +19055,7 @@ index a8679bd6..b6d5f164 100644
          }
      });
  
-@@ -544,25 +2309,70 @@ void configureWebServer() {
+@@ -544,25 +2352,70 @@ void configureWebServer() {
          if (!checkUserWebAuth(request)) { return; }
          if (request->hasArg("cmnd")) {
              String cmnd = request->arg("cmnd");
@@ -19104,7 +19145,7 @@ index a8679bd6..b6d5f164 100644
                  }
              } else {
                  if (parseSerialCommand(cmnd, false)) {
-@@ -576,9 +2386,28 @@ void configureWebServer() {
+@@ -576,9 +2429,28 @@ void configureWebServer() {
          }
      });
  
@@ -19135,7 +19176,7 @@ index a8679bd6..b6d5f164 100644
      });
  
      // List files
-@@ -632,6 +2461,11 @@ void configureWebServer() {
+@@ -632,6 +2504,11 @@ void configureWebServer() {
                  } else {
                      if (strcmp(fileAction.c_str(), "download") == 0) {
                          request->send(*fs, fileName, "application/octet-stream", true);
@@ -19147,7 +19188,7 @@ index a8679bd6..b6d5f164 100644
                      } else if (strcmp(fileAction.c_str(), "image") == 0) {
                          String extension = fileName.substring(fileName.lastIndexOf('.') + 1);
                          // https://www.iana.org/assignments/media-types/media-types.xhtml#image
-@@ -700,7 +2534,7 @@ void configureWebServer() {
+@@ -700,7 +2577,7 @@ void configureWebServer() {
  
                  File editFile = fs->open(fileName, FILE_WRITE);
                  if (editFile) {
@@ -19156,7 +19197,7 @@ index a8679bd6..b6d5f164 100644
                          request->send(200, "text/plain", "File edited: " + fileName);
                      } else {
                          request->send(500, "text/plain", "Failed to write to file: " + fileName);
-@@ -720,7 +2554,13 @@ void configureWebServer() {
+@@ -720,7 +2597,13 @@ void configureWebServer() {
      server->on(
          "/upload",
          HTTP_POST,
@@ -19171,7 +19212,7 @@ index a8679bd6..b6d5f164 100644
          handleUpload
      );
  
-@@ -737,6 +2577,427 @@ void configureWebServer() {
+@@ -737,6 +2620,427 @@ void configureWebServer() {
              }
          }
      });
@@ -19599,7 +19640,7 @@ index a8679bd6..b6d5f164 100644
      server->begin();
      Serial.println("Webserver started");
  }
-@@ -745,25 +3006,78 @@ void configureWebServer() {
+@@ -745,25 +3049,78 @@ void configureWebServer() {
  **  Function: startWebUi
  **  Start the WebUI
  **********************************************************************/
@@ -19687,7 +19728,7 @@ index a8679bd6..b6d5f164 100644
          new (server) AsyncWebServer(default_webserverporthttp);
  
          configureWebServer();
-@@ -771,24 +3085,198 @@ void startWebUi(bool mode_ap) {
+@@ -771,24 +3128,213 @@ void startWebUi(bool mode_ap) {
          isWebUIActive = true;
      }
      tft.setLogging();
@@ -19718,6 +19759,21 @@ index a8679bd6..b6d5f164 100644
 +                    prevOtaPct = s_otaScreenPct;
 +                    prevOtaDrawn = true;
 +                    drawWebUiOtaOverlay();
++                }
++                // Escape hatch: a transfer that stops making progress (browser
++                // closed, Wi-Fi dropped, device busy) used to leave this screen
++                // unexitable for up to 90 s -- every button press appeared dead.
++                // Holding Previous (Up, the same gesture that leaves a menu)
++                // aborts the stalled transfer and returns to the menu.
++                inputLock();
++                const bool abortRequested = UpPress || PrevPress;
++                if (abortRequested) { UpPress = PrevPress = AnyKeyPress = false; }
++                inputUnlock();
++                if (abortRequested) {
++                    s_otaAbortRequested = true; // network task performs the teardown
++                    displayWarning("OTA cancel requested", true);
++                    prevOtaDrawn = false;
++                    break;
 +                }
 +            } else if (prevOtaDrawn || s_webUiScreenDirty) {
 +                prevOtaDrawn = false;
@@ -19771,9 +19827,10 @@ index a8679bd6..b6d5f164 100644
 +        } else if (choice == 2 || choice == 3) {
 +            if (stopWebUiFromMenu(choice == 3)) exitWebUiLoop = true;
 +        }
-+    }
+     }
 +}
-+
+ 
+-    bool closeServer = false;
 +/**********************************************************************
 +**  Function: startWebUiHeadless
 +**  Silently connects to saved Wi-Fi (or falls back to AP) and starts the
@@ -19784,7 +19841,7 @@ index a8679bd6..b6d5f164 100644
 +    if (s_webUiStarting || s_webUiCancelRequested) {
 +        s_webUiQueued = false;
 +        return false;
-     }
++    }
 +    s_webUiStarting = true;
 +    s_webUiQueued = false;
 +
@@ -19794,8 +19851,7 @@ index a8679bd6..b6d5f164 100644
 +            stopBLEStack();
 +            vTaskDelay(pdMS_TO_TICKS(100));
 +        }
- 
--    bool closeServer = false;
++
 +        if (!s_webUiCancelRequested && radioHasMemForWifi()) {
 +            ensureWifiPlatform();
 +            if (!bruceConfig.wifi.empty() && !s_webUiCancelRequested) {
