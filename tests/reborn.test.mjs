@@ -916,13 +916,13 @@ test('Mode groups are conditional; range adjustment keeps focus/DOM and open sta
   const menu = createMenu(dom.window, config, { retry() {}, stop() {}, diagnostics: () => ({}) });
   try {
     menu.capabilities({ aim: true, prediction: true });
-    assert.ok(menu.root.querySelector('[data-config=assistStrength]')); assert.equal(menu.root.querySelector('[data-config=smooth]').closest('label').hidden, true); assert.ok(menu.root.querySelector('[data-config=humanLikeAim]'));
+    assert.ok(menu.root.querySelector('[data-config=assistStrength]')); assert.equal(menu.root.querySelector('[data-config=smooth]'), null, 'Smooth is Lock-only'); assert.ok(menu.root.querySelector('[data-config=humanLikeAim]'));
     const slider = menu.root.querySelector('[data-config=assistStrength]'); slider.focus(); slider.value = 55; slider.dispatchEvent(new dom.window.Event('input'));
     assert.equal(menu.root.activeElement, slider); assert.equal(menu.root.querySelector('[data-config=assistStrength]'), slider); assert.equal(config.assistStrength, 55);
     const details = slider.closest('details'); details.open = true; details.dispatchEvent(new dom.window.Event('toggle'));
     const mode = menu.root.querySelector('[data-config=aimMode]'); mode.value = 'lock'; mode.dispatchEvent(new dom.window.Event('change'));
-    assert.equal(menu.root.querySelector('[data-config=assistStrength]'), null); assert.ok(menu.root.querySelector('[data-config=humanLikeAim]')); assert.equal(menu.root.querySelector('[data-config=smooth]').closest('label').hidden, true, 'Smooth stays hidden until human-like aim is enabled'); assert.equal(menu.root.querySelector('details').open, true);
-    const human = menu.root.querySelector('[data-config=humanLikeAim]'); human.click(); assert.equal(menu.root.querySelector('[data-config=smooth]').closest('label').hidden, false);
+    assert.equal(menu.root.querySelector('[data-config=assistStrength]'), null); assert.ok(menu.root.querySelector('[data-config=humanLikeAim]')); assert.equal(menu.root.querySelector('[data-config=smooth]').closest('label').hidden, false, 'Human-like is on by default'); assert.equal(menu.root.querySelector('details').open, true);
+    const human = menu.root.querySelector('[data-config=humanLikeAim]'); human.click(); assert.equal(menu.root.querySelector('[data-config=smooth]').closest('label').hidden, true); human.click();
     mode.value = 'off'; // old disconnected control must not be used after rerender
     const currentMode = menu.root.querySelector('[data-config=aimMode]'); currentMode.value = 'off'; currentMode.dispatchEvent(new dom.window.Event('change')); assert.equal(config.aim, false);
     assert.ok(!/SQUAD|ENEMY|legend/.test(menu.root.querySelector('#ui').textContent));

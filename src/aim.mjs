@@ -120,16 +120,23 @@ export function predictShot({ origin, target, track, profile, latency = 0, lead 
   return { mouseLen, state: confidence < 1 ? 'reduced-lead-uncertainty' : track ? 'predicted' : 'direct-no-history', world, dir, distance, muzzle: finalMuzzle, time, error, confidence, approximate: profile.approximate || confidence < 1 };
 }
 export class AimController {
-  reset() { this.angle = null; this.time = null; this.target = null; this.mode = null; }
+  reset() { this.angle = null; this.time = null; this.target = null; this.mode = null; this.angularVelocity = 0; }
   constructor() { this.reset(); }
-  step(native, wanted, { mode, strength, smooth, now, target }) {
+  step(native, wanted, { mode, strength, smooth, now, target, humanLike = smooth > 0 }) {
     const n = unit(native), d = unit(wanted); if (!n || !d || mode === 'off') { this.reset(); return n; }
     const a = Math.atan2(n.y, n.x), b = Math.atan2(d.y, d.x);
     if (mode === 'assist') { this.reset(); const out = a + angleDelta(a, b) * clamp(strength / 100, 0, 1); return { x: Math.cos(out), y: Math.sin(out) }; }
-    if (this.target !== target || this.mode !== mode || this.time === null || now - this.time > 250) this.angle = a;
+    if (this.target !== target || this.mode !== mode || this.time === null || now - this.time > 250) { this.angle = a; this.angularVelocity = 0; }
     const dt = this.time === null ? 1 / 60 : clamp((now - this.time) / 1000, 0, .05);
     const gain = smooth <= 0 ? 1 : 1 - Math.exp(-dt / (.015 + smooth / 500));
-    this.angle += angleDelta(this.angle, b) * gain;
+    const error = angleDelta(this.angle, b);
+    let step = error * gain;
+    // Human-like is a motion-quality limit, not a detection evasion layer or a
+    // random trajectory. Cap angular rate so a large cross-screen acquisition
+    // ramps instead of teleporting the camera/gun.
+    if (humanLike && smooth > 0) step = clamp(step, -8.5 * dt, 8.5 * dt);
+    this.angle += step;
+    this.angularVelocity = dt > 0 ? step / dt : 0;
     this.time = now; this.target = target; this.mode = mode;
     return { x: Math.cos(this.angle), y: Math.sin(this.angle) };
   }

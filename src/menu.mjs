@@ -2,7 +2,7 @@ import { clamp, finite } from './core.mjs';
 import { colorValue, ESP_PALETTE } from './esp.mjs';
 
 export const DEFAULTS = Object.freeze({
-  version: 3, aim: false, aimMode: 'lock', aimActivation: 'fire', directMouseInput: true, assistStrength: 35, latencyCompensation: true, leadAdjustment: 100, humanLikeAim: false, smooth: 50, knocked: false, sticky: true,
+  version: 3, aim: false, aimMode: 'lock', aimActivation: 'fire', directMouseInput: true, assistStrength: 35, latencyCompensation: true, leadAdjustment: 100, humanLikeAim: true, smooth: 50, knocked: false, sticky: true,
   showDot: false, fov: 100, showFov: true, wallcheck: true, predict: true,
   melee: false, autoMelee: false, autoSwitch: false, useOneGun: false, layerSpoofer: false, layerKey: 'KeyT', semi: false, xray: false, darkerSmokes: true, ceilings: true, mapHighlights: false, smallerTrees: true,
   smokeOpacity: 50, treeOpacity: 50, esp: false, nametags: true, lines: false,
@@ -35,8 +35,9 @@ export function normalizeConfig(saved) {
   for (const key of ['espLegend', 'espLabels', 'espDistance', 'espWeapons', 'espHighlightTarget', 'espMarkers', 'espOffscreen']) result[key] = false;
   if (saved.version !== 2) { result.lines = false; result.showDot = false; }
   // v3 separates human-like movement limiting from combat-effective Lock.
-  // Old Smooth Lock installs do not silently keep slowing aim after the upgrade.
-  result.humanLikeAim = typeof saved.humanLikeAim === 'boolean' ? saved.humanLikeAim : false;
+  // New installs start natural/ramped; legacy Smooth Lock maps to human-like,
+  // but users can always disable it for immediate Lock.
+  result.humanLikeAim = typeof saved.humanLikeAim === 'boolean' ? saved.humanLikeAim : typeof saved.smoothEnabled === 'boolean' ? saved.smoothEnabled : true;
   if (result.aimMode === 'off') result.aim = false;
   result.nametags = true; // obsolete hidden master switch: esp now owns native names
   result.version = 3;
@@ -95,7 +96,7 @@ export function createMenu(win, config, { onChange = () => {}, retry, stop, diag
   const style = el('style', { text: CSS });
   const canvas = el('canvas'); canvas.setAttribute('aria-hidden', 'true');
   const shell = el('section', { id: 'ui' }); shell.setAttribute('aria-label', 'Duality Client Reborn');
-  const brand = el('div', { class: 'brand', text: 'Duality Client' }, el('div', { class: 'version', text: 'Reborn 0.5.0-preview.6 • readable debug' }));
+  const brand = el('div', { class: 'brand', text: 'Duality Client' }, el('div', { class: 'version', text: 'Reborn 0.5.0-preview.7 • readable debug' }));
   const nav = el('nav', { class: 'nav' }); nav.setAttribute('aria-label', 'Menu tabs');
   const content = el('main', { class: 'content' });
   const status = el('div', { id: 'status', text: 'Đang chờ Application…' }); status.setAttribute('role', 'status');
@@ -164,7 +165,7 @@ export function createMenu(win, config, { onChange = () => {}, retry, stop, diag
       for (const [name, rows] of GROUPS[tab]) {
         const details = el('details'); details.open = openGroups.get(name) ?? (name.includes('Mode') || name === 'Aim — Prediction');
         details.ontoggle = () => openGroups.set(name, details.open);
-        const visible = rows.filter(([key]) => key !== 'assistStrength' || config.aim && config.aimMode === 'assist');
+        const visible = rows.filter(([key]) => key !== 'assistStrength' || config.aim && config.aimMode === 'assist').filter(([key]) => key !== 'smooth' || config.aimMode === 'lock');
         details.append(el('summary', { text: name }), ...visible.map(row)); panel.append(details);
       }
       refreshRows();

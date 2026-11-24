@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Duality Client Reborn (compatibility preview)
 // @namespace    arena.survev.reborn
-// @version      0.5.0-preview.6
+// @version      0.5.0-preview.7
 // @description  Lightweight menu, validated semantic discovery, bounded hooks and reversible features. Live compatibility unverified.
 // @match        https://survev.io/*
 // @match        https://*.survev.io/*
@@ -7022,11 +7022,12 @@ THE SOFTWARE.
       this.time = null;
       this.target = null;
       this.mode = null;
+      this.angularVelocity = 0;
     }
     constructor() {
       this.reset();
     }
-    step(native, wanted, { mode, strength, smooth, now, target }) {
+    step(native, wanted, { mode, strength, smooth, now, target, humanLike = smooth > 0 }) {
       const n = unit(native), d = unit(wanted);
       if (!n || !d || mode === "off") {
         this.reset();
@@ -7038,10 +7039,17 @@ THE SOFTWARE.
         const out = a + angleDelta(a, b) * clamp(strength / 100, 0, 1);
         return { x: Math.cos(out), y: Math.sin(out) };
       }
-      if (this.target !== target || this.mode !== mode || this.time === null || now - this.time > 250) this.angle = a;
+      if (this.target !== target || this.mode !== mode || this.time === null || now - this.time > 250) {
+        this.angle = a;
+        this.angularVelocity = 0;
+      }
       const dt = this.time === null ? 1 / 60 : clamp((now - this.time) / 1e3, 0, 0.05);
       const gain = smooth <= 0 ? 1 : 1 - Math.exp(-dt / (0.015 + smooth / 500));
-      this.angle += angleDelta(this.angle, b) * gain;
+      const error = angleDelta(this.angle, b);
+      let step = error * gain;
+      if (humanLike && smooth > 0) step = clamp(step, -8.5 * dt, 8.5 * dt);
+      this.angle += step;
+      this.angularVelocity = dt > 0 ? step / dt : 0;
       this.time = now;
       this.target = target;
       this.mode = mode;
@@ -8085,15 +8093,17 @@ THE SOFTWARE.
         const target = this.sourcePos(p), screen = aimPoint(camera, target, pos);
         if (!screen) continue;
         const distance = melee ? Math.hypot(target.x - pos.x, target.y - pos.y) : Math.hypot(screen.x - inputCursor.x, screen.y - inputCursor.y);
-        const radius = melee ? reach : cfg.fov * (cfg.sticky && p.__id === this.stickyId ? 1.15 : 1);
+        const stickyCurrent = !!cfg.sticky && p.__id === this.stickyId;
+        const radius = melee ? reach : cfg.fov * (stickyCurrent ? 1.25 : 1);
         if (distance > radius) {
           reject("outsideFov");
           continue;
         }
-        candidates.push({ p, pos: target, distance });
+        const score = distance * (stickyCurrent ? 0.65 : 1);
+        candidates.push({ p, pos: target, distance, score, stickyCurrent });
       }
-      candidates.sort((a, b) => a.distance - b.distance);
-      const sticky = cfg.sticky && candidates.find((c) => c.p.__id === this.stickyId);
+      candidates.sort((a, b) => a.score - b.score || a.distance - b.distance);
+      const sticky = cfg.sticky && candidates.find((c) => c.stickyCurrent);
       const ordered = sticky ? [sticky, ...candidates.filter((c) => c !== sticky)] : candidates;
       const perks = at2(m.active, [m.schema.netKey, this.sourceFields?.perks]) || [];
       const profile = weaponProfile(this.definitions, localWeapon(m), perks);
@@ -8157,7 +8167,8 @@ THE SOFTWARE.
           strength: cfg.assistStrength ?? 35,
           smooth: melee || !cfg.humanLikeAim ? 0 : cfg.smooth,
           now,
-          target: candidate.p
+          target: candidate.p,
+          humanLike: !!cfg.humanLikeAim
         }) : !melee && mode === "assist" ? this.aimController.step(physical, shot.dir, { mode, strength: cfg.assistStrength ?? 35, now, target: candidate.p }) : shot.dir;
         this.dot = project(camera, shot.world);
         if (melee) {
@@ -8514,7 +8525,7 @@ THE SOFTWARE.
         protocolMatches: this.protocol === VERIFIED_PROTOCOL
       };
       return {
-        version: "0.5.0-preview.6",
+        version: "0.5.0-preview.7",
         protocol: this.protocol,
         sourceProtocol: VERIFIED_PROTOCOL,
         initialized: checks.initialized,
@@ -8555,7 +8566,7 @@ THE SOFTWARE.
     assistStrength: 35,
     latencyCompensation: true,
     leadAdjustment: 100,
-    humanLikeAim: false,
+    humanLikeAim: true,
     smooth: 50,
     knocked: false,
     sticky: true,
@@ -8637,7 +8648,7 @@ THE SOFTWARE.
       result.lines = false;
       result.showDot = false;
     }
-    result.humanLikeAim = typeof saved.humanLikeAim === "boolean" ? saved.humanLikeAim : false;
+    result.humanLikeAim = typeof saved.humanLikeAim === "boolean" ? saved.humanLikeAim : typeof saved.smoothEnabled === "boolean" ? saved.smoothEnabled : true;
     if (result.aimMode === "off") result.aim = false;
     result.nametags = true;
     result.version = 3;
@@ -8705,7 +8716,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
     canvas.setAttribute("aria-hidden", "true");
     const shell = el("section", { id: "ui" });
     shell.setAttribute("aria-label", "Duality Client Reborn");
-    const brand = el("div", { class: "brand", text: "Duality Client" }, el("div", { class: "version", text: "Reborn 0.5.0-preview.6 • readable debug" }));
+    const brand = el("div", { class: "brand", text: "Duality Client" }, el("div", { class: "version", text: "Reborn 0.5.0-preview.7 • readable debug" }));
     const nav = el("nav", { class: "nav" });
     nav.setAttribute("aria-label", "Menu tabs");
     const content = el("main", { class: "content" });
@@ -8823,7 +8834,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
           const details = el("details");
           details.open = openGroups.get(name) ?? (name.includes("Mode") || name === "Aim — Prediction");
           details.ontoggle = () => openGroups.set(name, details.open);
-          const visible = rows.filter(([key]) => key !== "assistStrength" || config.aim && config.aimMode === "assist");
+          const visible = rows.filter(([key]) => key !== "assistStrength" || config.aim && config.aimMode === "assist").filter(([key]) => key !== "smooth" || config.aimMode === "lock");
           details.append(el("summary", { text: name }), ...visible.map(row));
           panel.append(details);
         }
@@ -9022,7 +9033,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
     let menu = null, engine = null, defs = null, mapDefs = null, cancelCapture = null, alive = true;
     let status = "Đang chờ Application…", lastWarning = "", captured = false, captureState = "waiting";
     const startedAt = win.performance.now();
-    win.console?.info?.("[Duality Reborn 0.5.0-preview.6] Script đã chạy. Nếu không có menu, gửi dòng lỗi Console sau thông báo này.");
+    win.console?.info?.("[Duality Reborn 0.5.0-preview.7] Script đã chạy. Nếu không có menu, gửi dòng lỗi Console sau thông báo này.");
     const report = /* @__PURE__ */ __name((level, message) => {
       if (!alive) return;
       if (level === "error" || level === "warning") {
@@ -9032,7 +9043,7 @@ canvas{position:fixed;inset:0;pointer-events:none}#ui{position:fixed;left:24px;t
       status = message;
     }, "report");
     const diagnostics = /* @__PURE__ */ __name(() => ({
-      version: "0.5.0-preview.6",
+      version: "0.5.0-preview.7",
       captured,
       captureState,
       status,

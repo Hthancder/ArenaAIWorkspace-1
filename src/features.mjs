@@ -444,12 +444,17 @@ export class Features {
       if (relation !== 'enemy') { reject(relation === 'unknown' ? 'unknownTeam' : 'teammate'); continue; }
       const target = this.sourcePos(p), screen = aimPoint(camera, target, pos); if (!screen) continue;
       const distance = melee ? Math.hypot(target.x - pos.x, target.y - pos.y) : Math.hypot(screen.x - inputCursor.x, screen.y - inputCursor.y);
-      const radius = melee ? reach : cfg.fov * (cfg.sticky && p.__id === this.stickyId ? 1.15 : 1);
+      const stickyCurrent = !!cfg.sticky && p.__id === this.stickyId;
+      const radius = melee ? reach : cfg.fov * (stickyCurrent ? 1.25 : 1);
       if (distance > radius) { reject('outsideFov'); continue; }
-      candidates.push({ p, pos: target, distance });
+      // A real switch margin prevents two enemies on opposite sides of the FOV from
+      // trading ownership every frame. The current target needs to be meaningfully
+      // better before Lock/Assist changes targets.
+      const score = distance * (stickyCurrent ? 0.65 : 1);
+      candidates.push({ p, pos: target, distance, score, stickyCurrent });
     }
-    candidates.sort((a, b) => a.distance - b.distance);
-    const sticky = cfg.sticky && candidates.find(c => c.p.__id === this.stickyId);
+    candidates.sort((a, b) => a.score - b.score || a.distance - b.distance);
+    const sticky = cfg.sticky && candidates.find(c => c.stickyCurrent);
     const ordered = sticky ? [sticky, ...candidates.filter(c => c !== sticky)] : candidates;
     const perks = at(m.active, [m.schema.netKey, this.sourceFields?.perks]) || [];
     const profile = weaponProfile(this.definitions, localWeapon(m), perks);
@@ -483,7 +488,7 @@ export class Features {
       this.stats.predictionState = shot.state;
       this.stats.aimApproximate = !!shot.approximate;
       const dir = advance ? this.aimController.step(physical, shot.dir, { mode: melee ? 'lock' : mode, strength: cfg.assistStrength ?? 35,
-        smooth: melee || !cfg.humanLikeAim ? 0 : cfg.smooth, now, target: candidate.p }) : !melee && mode === 'assist' ? this.aimController.step(physical, shot.dir, { mode, strength: cfg.assistStrength ?? 35, now, target: candidate.p }) : shot.dir;
+        smooth: melee || !cfg.humanLikeAim ? 0 : cfg.smooth, now, target: candidate.p, humanLike: !!cfg.humanLikeAim }) : !melee && mode === 'assist' ? this.aimController.step(physical, shot.dir, { mode, strength: cfg.assistStrength ?? 35, now, target: candidate.p }) : shot.dir;
       this.dot = project(camera, shot.world);
       if (melee) {
         this.meleeDirection = shot.dir; this.weaponSwitch.reset(); this.switchSlot = null;
@@ -727,7 +732,7 @@ export class Features {
       canvasRenderer: !!this.ctx, mapDefinitions: !!this.mapDefinitions, smokeSource: this.smokeSources.length > 0, definitions: !!this.definitions, lootSource: !!this.lootSource, localData: !!this.local, binds: !!this.binds,
       protocolObserved: this.protocol !== null, protocolMatches: this.protocol === VERIFIED_PROTOCOL,
     };
-    return { version: '0.5.0-preview.6', protocol: this.protocol, sourceProtocol: VERIFIED_PROTOCOL,
+    return { version: '0.5.0-preview.7', protocol: this.protocol, sourceProtocol: VERIFIED_PROTOCOL,
       initialized: checks.initialized, checks,
       autoLoot: { state: this.autoLootStatus(), mode: this.config.lootMode, ...this.joinState },
       mapHighlights: { ...this.mapHighlights.stats },
