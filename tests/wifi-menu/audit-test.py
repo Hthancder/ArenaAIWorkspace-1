@@ -98,6 +98,9 @@ for name in functions[1:]:
 top = bodies["optionsMenu"]
 labels = re.findall(r'\{?"([^"]+)",', top)
 expected = ["WiFi Tools", "Survey & Analyze", "Defense", "LAN & HTTP", "Remote Access"]
+# Turning the radio off must be one tap from the top level, not a nested entry.
+assert "Turn Off WiFi" in top, "WiFi off should be reachable from the top level"
+assert top.count('"Turn Off WiFi"') == 1
 for label in expected:
     assert label in top, f"missing top-level group {label}"
 assert "addOptionToMainMenu()" in top

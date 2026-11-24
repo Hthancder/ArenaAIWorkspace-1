@@ -93,6 +93,35 @@ hình OTA chiếm task giao diện**:
 | Màn hình OTA không có đường thoát | Phải tháo pin | **Giữ `Prev`** khi đang nạp ⇒ huỷ phiên nạp và về menu |
 | Huỷ được gọi từ task giao diện | Có thể `free()` buffer 32 KB trong khi task mạng đang ghi vào đó ⇒ hỏng heap | Task giao diện chỉ **đặt cờ** `s_otaAbortRequested`; task mạng (`AsyncTCP`) mới gọi `Update.abort()` + giải phóng buffer, và trả `409` cho lần gửi chunk kế tiếp |
 
+## Menu trùng lặp — mỗi tính năng một đường vào
+
+Triệu chứng: cùng một mục nằm ở 2–3 menu cha (QRCodes, Microphone, BadUSB, "Pet
+preview", Dual-Boot...), nên menu dài, thứ tự lộn xộn và người dùng phải đoán
+"bản nào mới là bản thật". Đã dọn thành **mỗi tính năng đúng một chỗ**:
+
+| Mục | Trước (mấy bản) | Bây giờ (một chỗ) |
+|---|---|---|
+| QRCodes, Megalodon | Studio + Others | **Studio** |
+| Microphone (Spectrum/Record) | Studio + Others (2 danh sách khác nhau) | **Studio** — Others chỉ chuyển tiếp |
+| BadUSB, USB Keyboard, Smart BadUSB, USB Drive, Clicker, U2F | menu BadUSB + Others ("BadUSB & HID") | **BadUSB** — Others chỉ chuyển tiếp |
+| Dual-Boot Menu, Boot XiaoZhi | Main menu + Studio + Others + Config → Power | **Main menu** (chỉ hiện khi máy có 2 hệ) |
+| BLE Sniffer | Bluetooth + dòng cuối trong "BLE Suite" | **Bluetooth** (mọi bản build, kể cả LITE) |
+| Pet | Config → Display & UI ("Pet preview") + WiFi → WiFi Tools ("Brucegotchi") | **Studio → Pet (offline)** = chỉ xem, không phát sóng; **WiFi → WiFi Tools → Brucegotchi** = bản có phát sóng |
+| WebUI | WiFi + Files | **WiFi** (Files chỉ còn lối tắt khi WebUI đang chạy) |
+| "Clock" | Studio (mở app) và Config (chỉnh giờ) — trùng tên | **Clock** (Studio) / **Set Clock** (Config) |
+| Tắt Wi-Fi | nằm trong "WiFi: connected" (2 lần bấm) | thêm dòng **Turn Off WiFi** ngay ở menu WiFi |
+| Sonar Guard | trong danh sách Microphone + menu riêng | **Studio → Sonar Guard** (board này); board không có Studio giữ ở Others |
+
+Thêm một file dùng chung `src/core/menu_items/MenuGroups.h`:
+`backOption()` (Back không mở lại menu cha), `mainMenuOption()` (về Main Menu),
+`appendDualBootOptions()`. Menu nào cũng dùng cùng một câu chữ ⇒ bấm giống nhau ở
+mọi nơi.
+
+Bản test canh việc này: `tests/menu-dedupe/run.sh` (chạy `bash tests/menu-dedupe/run.sh /tmp/Bruce`).
+Nó kiểm: mỗi nhãn chỉ nằm trong một hàm, BadUSB/mic chỉ còn một danh sách, dual-boot
+chỉ ở `main_menu.cpp`, không còn "Pet preview" trong Config, không còn "BLE Sniffer"
+trong BLE Suite, Files không còn lối vào WebUI thứ hai.
+
 ## Dùng chung cho các chain khác
 
 1. Trên thiết bị: `WiFi → Chains` rồi chọn 1 chain.
